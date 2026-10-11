@@ -2,6 +2,12 @@ name: ASB · Build Release
 
 on:
   workflow_dispatch:
+    inputs:
+      prerelease:
+        description: 'Pre-release tag for a manual build (rc1, rc2, ...); empty = the public version from module.prop'
+        required: false
+        default: ''
+        type: string
   push:
     tags:
       - 'v*'
@@ -363,6 +369,8 @@ jobs:
           done
 
       - name: Package RELEASE zip
+        env:
+          PRERELEASE_INPUT: ${{ github.event.inputs.prerelease }}
         run: |
           PKG_REL="$PWD/pkg-release"
           rm -rf "$PKG_REL"
@@ -513,6 +521,19 @@ jobs:
 
           ASB_VER=$(grep '^version=' module.prop | cut -d= -f2)
           ASB_CODE=$(grep '^versionCode=' module.prop | cut -d= -f2)
+          # A pre-release is the release build (no debug logs) under its own name, V65-rc1:
+          # manual runs only, versionCode unchanged so the public release still updates over it.
+          if [ -n "${PRERELEASE_INPUT:-}" ]; then
+            [ "${GITHUB_EVENT_NAME:-}" = "workflow_dispatch" ] || { echo "::error::prerelease is for manual runs only"; exit 1; }
+            case "$PRERELEASE_INPUT" in
+              rc[1-9]|rc[1-9][0-9]) ;;
+              *) echo "::error::prerelease must be rc1 .. rc99"; exit 1 ;;
+            esac
+            ASB_VER="${ASB_VER}-${PRERELEASE_INPUT}"
+            sed -i "s/^version=.*/version=${ASB_VER}/" "$PKG_REL/module.prop"
+            grep -qx "version=${ASB_VER}" "$PKG_REL/module.prop"
+            grep -qx "versionCode=${ASB_CODE}" "$PKG_REL/module.prop"
+          fi
           ASB_COMMIT=$(git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
           ASB_BIN_SHA=$(sha256sum "$PKG_REL/bin/asb" | awk '{print $1}')
           cat > "$PKG_REL/release-manifest.json" <<EOF
