@@ -2983,17 +2983,21 @@ asb_gfx_today() {   # stdin: dumpsys graphicsstats; stdout: report lines (nothin
         pf[bp[k]] += bf[k]; pj[bp[k]] += bj[k]
       }
       if (F <= 0) exit
-      printf "frames %d  ·  janky %.1f%%  ·  slow UI thread %.1f%%  ·  high input latency %.1f%%\n", \
-        F, 100.0 * J / F, 100.0 * U / F, 100.0 * I / F
+      # High input latency is counted per input EVENT, not per frame (fix127): as a share of
+      # frames it read 46.6% on a phone with 1.2% janky. A count says what it is.
+      printf "frames %d  ·  janky %.1f%%  ·  slow UI thread %.1f%%  ·  high-input-latency events %d\n", \
+        F, 100.0 * J / F, 100.0 * U / F, I
       line = ""
       for (r = 1; r <= 5; r++) {
         best = ""; bj_ = -1
         for (p in pf) if (!(p in done) && pf[p] >= 300 && pj[p] > bj_) { best = p; bj_ = pj[p] }
         if (best == "" || bj_ <= 0) break
         done[best] = 1
-        line = line (line == "" ? "" : "  ·  ") sprintf("%s %.1f%% of %d", best, 100.0 * pj[best] / pf[best], pf[best])
+        line = line (line == "" ? "" : "  ·  ") sprintf("%s %d (%.1f%% of %d)", best, pj[best], 100.0 * pj[best] / pf[best], pf[best])
       }
-      if (line != "") print "most janky: " line
+      # Ranked by janky FRAMES - where the stutter actually was - so the shares are not in
+      # order; the label says so (fix127).
+      if (line != "") print "most janky frames: " line
     }'
 }
 # asb_gfx_today_end
