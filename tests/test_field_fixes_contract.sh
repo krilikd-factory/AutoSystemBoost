@@ -591,4 +591,35 @@ cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 grep -q '|main_by=${_mb}|prime_by=${_pb}"' "$ROOT/tools/logkit/asb_log_full_day.sh" || fail "throttle rows carry no cause"
 echo "PASS: fix126 contract"
 ) || exit 1
+# ---- fix127 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix127: $*"; exit 1; }
+G="$ROOT/src/asb_governor.c"; A="$ROOT/action.sh"; W="$ROOT/webroot/index.html"
+grep -q 'fprintf(f, "forecast_rate_x10=%d\\nforecast_basis=%s\\n", _fr, _fb);' "$G" || fail "governor publishes no forecast"
+grep -q '_frx=$(grep -m1 "^forecast_rate_x10=" /dev/.asb/state' "$A" || fail "action does not read the governor forecast"
+grep -q "const _fRate = parseInt(kv.forecast_rate_x10 || '0', 10);" "$W" || fail "WebUI does not read the governor forecast"
+grep -q '_ton_min=$(( _lvl \* 600 / _eta_rate ))' "$A" || fail "action minutes not percent over rate"
+grep -q 'Math.floor(bcap \* 600 / ewma_x10)' "$W" || fail "WebUI minutes not percent over rate"
+grep -q 'echo "       ${M_PREDICT}: $(_s "$T_ETA_SCREEN" "$_ton_h" "$_ton_m") ${_eta_note}"' "$A" || fail "Smart card prints its own forecast"
+for l in ar de es fr hy id it pt ru tr uk zh; do
+  grep -q '^T_ETA_SCREEN=' "$ROOT/runtime/i18n/action_$l.sh" || fail "T_ETA_SCREEN missing: $l"
+  grep -q '^T_ETA_AVG=".*%s' "$ROOT/runtime/i18n/action_$l.sh" || fail "forecast note without its rate: $l"
+done
+for l in ar de en es fr hy id it pt ru tr uk zh; do
+  grep -q '"lv_avgdrain_tip"' "$ROOT/webroot/i18n/$l.json" || fail "slot tile tooltip missing: $l"
+  grep -q '"unit_pcth"' "$ROOT/webroot/i18n/$l.json" || fail "unit missing: $l"
+done
+grep -q 'high-input-latency events %d' "$ROOT/tools/asb_diag.sh" || fail "asbdiag latency still a share"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+grep -q 'per cluster: the prime sat under a ceiling ASB did not write' "$ROOT/tools/logkit/asb_log_full_day.sh" || fail "verdict ignores the per-cluster cause"
+Y="$ROOT/.github/workflows/build-release.yml"
+grep -q 'prerelease:' "$Y" || fail "release workflow has no prerelease input"
+grep -q 'rc\[1-9\]|rc\[1-9\]\[0-9\]) ;;' "$Y" || fail "prerelease tag not validated"
+grep -q 'ASB_VER="${ASB_VER}-${PRERELEASE_INPUT}"' "$Y" || fail "prerelease does not name the build"
+grep -q '\*conf_tuning_params.json.asbbase) asb_tw_cam_stock "$_bf" && asb_tw_base_rom_ok "$_bf" && continue ;;' "$ROOT/runtime/asb_tweaks.sh" \
+  || fail "orphan prune deletes the stock camera baseline before the installer clones"
+grep -q '\*conf_tuning_params.json.asbbase) asb_tw_base_rom_stamp "$_bp" ;;' "$ROOT/runtime/asb_tweaks.sh" || fail "camera baseline saved without a ROM stamp"
+echo "PASS: fix127 contract"
+) || exit 1
 echo "PASS: field-fix contracts"

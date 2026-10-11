@@ -73,5 +73,37 @@ sed -n '/^asb_save_dynamic_baselines()/,/^}/p' "$ROOT/runtime/asb_tweaks.sh" \
 grep -q '_cam_conf=/data/adb/modules/AutoSystemBoost/config/governor.conf' "$ROOT/runtime/asb_tweaks.sh" \
   || f "install pass grades from the staging dir's shipped config"
 
+# 6. fix127: the installer runs the baseline saver (audio section) BEFORE it clones the camera
+# files, so the fresh staging dir has no camera copy yet. The orphan prune deleted the stock
+# camera baseline there, the clone then fell back to the live file - the previous install's
+# graded overlay - and every second install printed "camera colour graded from a previous
+# build, install again" (OP15 install logs alternate exactly so). A stock camera baseline
+# survives the prune; a graded one and a real orphan do not.
+ST="$T/stage/AutoSystemBoost"; mkdir -p "$ST" "$T/b6"
+printf '%s\n' "$STOCK" > "$T/b6/odm_etc_camera_conf_tuning_params.json.asbbase"
+printf '%s\n' "$STOCK" > "$T/b6/vendor_odm_etc_camera_conf_tuning_params.json.asbbase"
+printf '%s\n' "$STOCK" | sed 's/-0.168736/-0.1/' > "$T/b6/system_odm_bad_conf_tuning_params.json.asbbase"
+echo old > "$T/b6/vendor_etc_audio_mixer_paths_gone.xml.asbbase"
+( set +u; . "$ROOT/runtime/asb_tweaks.sh"; ASB_TWEAK_BASE_DIR="$T/b6"; asb_save_dynamic_baselines "$ST" ) >/dev/null 2>&1
+[ -f "$T/b6/odm_etc_camera_conf_tuning_params.json.asbbase" ] || f "stock camera baseline pruned before the clone"
+[ -f "$T/b6/vendor_odm_etc_camera_conf_tuning_params.json.asbbase" ] || f "stock vendor camera baseline pruned"
+[ -f "$T/b6/system_odm_bad_conf_tuning_params.json.asbbase" ] && f "graded camera baseline kept by the prune"
+[ -f "$T/b6/vendor_etc_audio_mixer_paths_gone.xml.asbbase" ] && f "real orphan kept"
+# ...and since a baseline now lives across installs, it carries the ROM build it came from: a
+# stock table from before an OTA is not this ROM's stock and must not be graded into the new one.
+printf '%s\n' "$STOCK" > "$T/b6/odm_etc_camera_conf_tuning_params.json.asbbase"
+echo "OnePlus/old:15/AP3A.240617.008/release-keys" > "$T/b6/odm_etc_camera_conf_tuning_params.json.asbbase.rom"
+( set +u; . "$ROOT/runtime/asb_tweaks.sh"; ASB_TWEAK_BASE_DIR="$T/b6"; asb_save_dynamic_baselines "$ST" ) >/dev/null 2>&1
+[ -f "$T/b6/odm_etc_camera_conf_tuning_params.json.asbbase" ] && f "baseline from another ROM build kept"
+[ -f "$T/b6/odm_etc_camera_conf_tuning_params.json.asbbase.rom" ] && f "stale ROM stamp left behind"
+mkdir -p "$T/s7/AutoSystemBoost/odm/etc/camera"; printf '%s\n' "$STOCK" > "$T/s7/AutoSystemBoost/odm/etc/camera/conf_tuning_params.json"
+( set +u; . "$ROOT/runtime/asb_tweaks.sh"; ASB_TWEAK_BASE_DIR="$T/b6"
+  asb_tw_save_base "$T/s7/AutoSystemBoost/odm/etc/camera/conf_tuning_params.json" force ) >/dev/null 2>&1
+[ "$(cat "$T/b6/odm_etc_camera_conf_tuning_params.json.asbbase.rom" 2>/dev/null)" = canoe ] || f "camera baseline saved without its ROM stamp"
+( set +u; . "$ROOT/runtime/asb_tweaks.sh"; ASB_TWEAK_BASE_DIR="$T/b6"; asb_save_dynamic_baselines "$ST" ) >/dev/null 2>&1
+[ -f "$T/b6/odm_etc_camera_conf_tuning_params.json.asbbase" ] || f "stamped stock baseline of this ROM pruned"
+grep -q 'if command -v asb_tw_base_rom_ok >/dev/null 2>&1 && ! asb_tw_base_rom_ok "$_ct_bp"; then' "$ROOT/common/install.sh" \
+  || f "installer clones from a baseline of another ROM build"
+
 [ "$fail" = 0 ] && echo "PASS camera boot regrade runtime"
 exit "$fail"

@@ -150,8 +150,8 @@ Number Slow UI thread: 0
 Number High input latency: 0
 EOF
 gd="$(sh -c '. "$1"; asb_gfx_today < "$2"' x "$T/gfx_today.sh" "$T/gd" 2>&1)"
-printf '%s\n' "$gd" | grep -q '^frames 10100  ·  janky 2.5%  ·  slow UI thread 1.0%  ·  high input latency 0.1%$' || f "asbdiag totals wrong (older day must be left out): $gd"
-printf '%s\n' "$gd" | grep -q '^most janky: com.instagram.android 6.0% of 2000  ·  com.android.systemui 1.0% of 8000$' || f "asbdiag ranking wrong (under 300 frames must be left out): $gd"
+printf '%s\n' "$gd" | grep -q '^frames 10100  ·  janky 2.5%  ·  slow UI thread 1.0%  ·  high-input-latency events 10$' || f "asbdiag totals wrong (older day must be left out, latency is a count): $gd"
+printf '%s\n' "$gd" | grep -q '^most janky frames: com.instagram.android 120 (6.0% of 2000)  ·  com.android.systemui 80 (1.0% of 8000)$' || f "asbdiag ranking wrong (under 300 frames must be left out): $gd"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || f "asbdiag copies differ"
 
 # The full-day recorder calls it and prints the section.

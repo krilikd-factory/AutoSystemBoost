@@ -38,6 +38,13 @@ printf '%s\n' "$out" | grep -q 'who held the lower ceiling, per cluster (3 sampl
 printf '%s\n' "$out" | grep -qE '^  main: +asb_trim 2$'  || f "main split wrong: $out"
 printf '%s\n' "$out" | grep -qE '^  prime: +vendor 2$'   || f "prime split wrong: $out"
 
+# The verdict names the vendor when it held the prime in most samples (fix127).
+sed -n '/^lk_emit_cap_ownership_verdict() {/,/^}/p' "$FD" > "$T/v.sh"
+mkdir -p "$T/o"; cp "$T/tt" "$T/o/throttle_trace.txt"
+v="$(LK_OUT_DIR="$T/o" sh -c '. "$1"; lk_emit_cap_ownership_verdict' x "$T/v.sh" 2>&1)"
+printf '%s\n' "$v" | grep -q 'per cluster: the prime sat under a ceiling ASB did not write in 2 of 3 samples' || f "verdict ignores the per-cluster cause: $v"
+printf '%s\n' "$v" | grep -q 'main cores sat under a ceiling' && f "main cores wrongly blamed on the vendor: $v"
+
 # The recorder and the governor.
 grep -q 'lk_state_kv desired_cpu_max_prime' "$FD" || f "prime compared with slot 1, not the prime"
 grep -q '|main_by=${_mb}|prime_by=${_pb}"' "$FD" || f "rows carry no per-cluster cause"
