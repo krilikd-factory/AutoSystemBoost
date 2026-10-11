@@ -1245,6 +1245,7 @@ lk_emit_full_day_report() {
     lk_emit_screenoff_class_summary
     lk_emit_current_soc_consistency
     lk_emit_display_summary
+    lk_emit_jank_summary
     if [ -r "$LK_OUT_DIR/phase_summary.txt" ]; then
       cat "$LK_OUT_DIR/phase_summary.txt"
     fi
@@ -1604,6 +1605,7 @@ lk_bt_reconnect_start
 lk_perf_trace_header
 lk_battery_trace_header
 lk_display_trace_header
+lk_jank_trace_header
 lk_display_config_capture
 lk_charge_trace_header
 lk_asb_feature_header
@@ -1713,6 +1715,8 @@ while : ; do
   lk_capture_perf_trace_row
   lk_capture_battery_trace_row
   lk_capture_display_trace_row "$_phase"
+  # After the display row: it has just read the wakefulness this needs (fix121).
+  lk_capture_jank_row "$_phase" "${_dscr:-0}"
   lk_capture_screenoff_class_row "$_phase"
   lk_capture_fsm_media_trace_row "$_phase"
   lk_wakelock_live_row
