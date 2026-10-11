@@ -919,6 +919,7 @@ T_N_LTE_TIMER="LTE while screen off: on · timer running (90 s after screen off)
 T_N_LTE_ALLOWED="LTE while screen off: on · 5G allowed (screen is on)"
 T_N_LTE_LIGHT_LTE="5G only when needed: on · LTE now (light traffic), 5G returns on a heavy download"
 T_N_LTE_LIGHT_5G="5G only when needed: on · 5G in use, watching the traffic"
+T_N_LTE_LIGHT_HINT="5G only when needed: off · on mobile data, light traffic (music, feeds) costs less over LTE - WebUI → Mobile Network"
 T_N_LTE_NO5G="LTE while screen off: on · 5G is NOT allowed right now - if you did not turn it off, turn it on in the SIM settings"
 T_N_ROUTE="route via %s"
 T_N_ROUTE_RX="%s MB rx"
@@ -1971,6 +1972,14 @@ if [ "$(_cfg net_lte_light)" = "1" ]; then
   case "$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_lte_screenoff.sh" status 2>/dev/null | grep -m1 '^reason=')" in
     reason=light) _f "       $T_N_LTE_LIGHT_LTE" ;;
     *)            _f "       $T_N_LTE_LIGHT_5G" ;;
+  esac
+else
+  # Off, and the phone is on mobile data with 5G allowed right now: the one place the
+  # switch would save something, so say where it is (fix119). Silent on Wi-Fi.
+  _lh_if="$(ip route get 1.1.1.1 2>/dev/null | grep -oE 'dev [a-z0-9_.-]+' | head -1 | cut -d' ' -f2)"
+  case "$_lh_if" in
+    rmnet*|ccmni*|v4-rmnet*|v4-ccmni*)
+      [ "$(sh "$MODDIR/runtime/asb_lte_screenoff.sh" nr 2>/dev/null)" = "yes" ] && _f "       $T_N_LTE_LIGHT_HINT" ;;
   esac
 fi
 if [ "$(_cfg net_screen_off_lte)" = "1" ]; then
