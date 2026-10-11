@@ -39,6 +39,7 @@ asb_profile_baseline_capture_path() {
 asb_profile_baseline_capture_setting() {
   _pb_ns="$1" _pb_key="$2"
   command -v settings >/dev/null 2>&1 || return 0
+  grep -Fq "setting|$_pb_ns:$_pb_key|" "$ASB_PROFILE_BASELINE" 2>/dev/null && return 0
   _pb_val="$(settings get "$_pb_ns" "$_pb_key" 2>/dev/null)"
   [ "$_pb_val" = "null" ] && _pb_val=""
   asb_profile_baseline_record setting "$_pb_ns:$_pb_key" "$_pb_val"

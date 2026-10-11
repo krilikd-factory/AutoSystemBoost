@@ -32,22 +32,30 @@ ASB_LEDGER_MAX="${ASB_LEDGER_MAX:-400}"
 # Values are recorded as given. Callers must not pass secrets or package lists - this file
 # is meant to be pasteable into a bug report without review.
 asb_ledger_note() {
-  _lg_dir="$(dirname "$ASB_LEDGER")"
+  _lg_dir="${ASB_LEDGER%/*}"
   [ -d "$_lg_dir" ] || mkdir -p "$_lg_dir" 2>/dev/null || return 0
-  # Pipe is the field separator, so it cannot survive inside a field.
-  _lg_clean() { printf '%s' "$1" | tr '|\n\r' '_  ' | cut -c1-120; }
-  printf '%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
-    "$(date +%s 2>/dev/null || echo 0)" \
-    "$(_lg_clean "${1:-?}")" "$(_lg_clean "${2:-?}")" \
-    "$(_lg_clean "${3:-}")"  "$(_lg_clean "${4:-}")" \
-    "$(_lg_clean "${5:-}")"  "$(_lg_clean "${6:-unknown}")" \
-    "$(_lg_clean "${7:-}")"  "$(_lg_clean "${8:-}")" \
+  # Pipe is the field separator, so it cannot survive inside a field. Sanitised only when a
+  # field actually carries one (or a line break): this runs for every key of every profile
+  # apply - about 400 times per boot - and the old per-field `$(printf | tr | cut)` cost
+  # some 25 processes per entry, 20 ms each on a desktop CPU (fix129). The 120-character
+  # cap is the printf precision below.
+  _lg_i=0
+  for _lg_f in "${1:-?}" "${2:-?}" "${3:-}" "${4:-}" "${5:-}" "${6:-unknown}" "${7:-}" "${8:-}"; do
+    _lg_i=$((_lg_i + 1))
+    case "$_lg_f" in
+      *'|'*|*"
+"*|*"$_lg_cr"*) _lg_f="$(printf '%s' "$_lg_f" | tr '|\n\r' '_  ')" ;;
+    esac
+    eval "_lg_f$_lg_i=\$_lg_f"
+  done
+  _lg_ts="$(date +%s 2>/dev/null || echo 0)"
+  printf '%s|%.120s|%.120s|%.120s|%.120s|%.120s|%.120s|%.120s|%.120s\n' "$_lg_ts" \
+    "$_lg_f1" "$_lg_f2" "$_lg_f3" "$_lg_f4" "$_lg_f5" "$_lg_f6" "$_lg_f7" "$_lg_f8" \
     >> "$ASB_LEDGER" 2>/dev/null
 
-  # Trim in place, occasionally. Counting lines on every write would cost more than the
-  # write itself on a profile apply that touches sixty keys.
-  case "$(date +%S 2>/dev/null || echo 0)" in
-    0*|3*) _lg_n="$(wc -l < "$ASB_LEDGER" 2>/dev/null || echo 0)"
+  # Trim in place, occasionally - on the same timestamp, not a second `date`.
+  case "$((_lg_ts % 60))" in
+    [0-9]|3[0-9]) _lg_n="$(wc -l < "$ASB_LEDGER" 2>/dev/null || echo 0)"
            case "$_lg_n" in ''|*[!0-9]*) _lg_n=0 ;; esac
            if [ "$_lg_n" -gt "$ASB_LEDGER_MAX" ] 2>/dev/null; then
              tail -n "$ASB_LEDGER_MAX" "$ASB_LEDGER" > "$ASB_LEDGER.tmp" 2>/dev/null \
@@ -56,12 +64,22 @@ asb_ledger_note() {
   esac
   return 0
 }
+_lg_cr="$(printf '\r')"
 
 # asb_ledger_settings <namespace> <key> <value> [reason]
 #
 # Write a settings key and record what the device did with it. Returns 0 whenever the
 # device ended up in the requested state - including "it was already there" - so callers
 # can branch on success without treating a no-op as a failure.
+ASB_SETTINGS_REJECTED="${ASB_SETTINGS_REJECTED:-${ASB_CONFIG_STATE:-/data/adb/asb}/settings_rejected}"
+
+# The ROM build a rejection was seen on. Read once per process, and only when needed.
+_asb_ledger_rom() {
+  [ -n "${_ASB_LEDGER_ROM:-}" ] || _ASB_LEDGER_ROM="$(getprop ro.build.fingerprint 2>/dev/null)"
+  [ -n "$_ASB_LEDGER_ROM" ] || _ASB_LEDGER_ROM=unknown
+  printf '%s' "$_ASB_LEDGER_ROM"
+}
+
 asb_ledger_settings() {
   _ls_ns="$1" _ls_k="$2" _ls_v="$3" _ls_why="${4:-}"
   [ -n "$_ls_ns" ] && [ -n "$_ls_k" ] || return 1
@@ -69,6 +87,11 @@ asb_ledger_settings() {
     asb_ledger_note settings "$_ls_k" "$_ls_v" "" "" unsupported "settings binary absent" ""
     return 1
   }
+  if [ -s "$ASB_SETTINGS_REJECTED" ] && \
+     grep -Fqx "$_ls_ns|$_ls_k|$_ls_v|$(_asb_ledger_rom)" "$ASB_SETTINGS_REJECTED" 2>/dev/null; then
+    asb_ledger_note settings "$_ls_k" "$_ls_v" "" "" not_writable "rejected before on this ROM build - not retried" ""
+    return 1
+  fi
 
   _ls_prev="$(settings get "$_ls_ns" "$_ls_k" 2>/dev/null)"
   [ "$_ls_prev" = "null" ] && _ls_prev=""
@@ -97,6 +120,12 @@ asb_ledger_settings() {
       *)
         asb_ledger_note settings "$_ls_k" "$_ls_v" "$_ls_prev" "$_ls_now" not_writable "write rejected" "" ;;
     esac
+    # Remembered only when nothing moved: a value the ROM stored in another form (1.0 read
+    # back as 1) did take, and must not be skipped later.
+    if [ "$_ls_now" = "$_ls_prev" ]; then
+      mkdir -p "${ASB_SETTINGS_REJECTED%/*}" 2>/dev/null
+      printf '%s|%s|%s|%s\n' "$_ls_ns" "$_ls_k" "$_ls_v" "$(_asb_ledger_rom)" >> "$ASB_SETTINGS_REJECTED" 2>/dev/null
+    fi
   else
     asb_ledger_note settings "$_ls_k" "$_ls_v" "$_ls_prev" "$_ls_now" readback_mismatch \
       "accepted but device reports a different value" ""
