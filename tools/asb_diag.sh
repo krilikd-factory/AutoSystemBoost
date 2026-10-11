@@ -2203,8 +2203,12 @@ _traw="$(_rget thermal_rejected_raw /dev/.asb/state)"
 _sq="$(_rget startup_quarantined /dev/.asb/state)"
 NOTE "control source: ${_tcs:-unknown}  zone: ${_tcz:--1}  confidence: ${_tconf:-0}/2"
 case "${_tconf:-0}" in
-  2) NOTE "-> cross-checked against CPU peers" ;;
-  1) NOTE "-> LOW confidence: derived fallback or source not peer-validated" ;;
+  2) if [ "$(_rget thermal_conf_promotions /dev/.asb/state)" -gt 0 ] 2>/dev/null; then
+       NOTE "-> cross-checked against CPU peers (confirmed after boot - at discovery the cores still disagreed)"
+     else
+       NOTE "-> cross-checked against CPU peers"
+     fi ;;
+  1) NOTE "-> LOW confidence: derived fallback or source not peer-validated (re-checked every 30 s; each load-driven state change waits one extra tick meanwhile)" ;;
   *) NOTE "-> uninitialized or unavailable" ;;
 esac
 if [ -n "$_trej" ]; then
