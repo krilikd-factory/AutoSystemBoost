@@ -639,4 +639,20 @@ grep -q 'animation scales: yours - ASB does not change them' "$ROOT/tools/asb_di
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS: fix128 contract"
 ) || exit 1
+# ---- fix129 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix129: $*"; exit 1; }
+M="$ROOT/src/asb_metrics.h"; L="$ROOT/runtime/asb_apply_ledger.sh"
+grep -q '^static void thermal_conf_recheck(time_t now) {' "$M" || fail "no runtime confidence re-check"
+grep -q '        thermal_conf_recheck(now);' "$M" || fail "re-check not called from the thermal read"
+grep -q 'case_disputed_fallback_promoted_at_runtime();' "$ROOT/tests/test_thermal_socd_validation.c" || fail "no fixture for the promotion"
+grep -q 'thermal_conf_promotions=%lu' "$ROOT/src/asb_governor.c" || fail "promotions not published"
+grep -q 'rejected before on this ROM build - not retried' "$L" || fail "refused settings retried every pass"
+grep -q '_lg_cr="$(printf' "$L" || fail "ledger note still forks per field"
+grep -q "printf '%s|%.120s|%.120s" "$L" || fail "ledger field cap lost"
+grep -q 'grep -Fq "setting|$_pb_ns:$_pb_key|" "$ASB_PROFILE_BASELINE" 2>/dev/null && return 0' "$ROOT/runtime/asb_baseline.sh" || fail "baseline capture reads Android for recorded keys"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix129 contract"
+) || exit 1
 echo "PASS: field-fix contracts"

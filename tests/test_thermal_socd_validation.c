@@ -274,6 +274,33 @@ static void case_percentage_socd_disputed_fallback_stays_low(void) {
     check_i("disputed fallback: confidence stays 1", g_thermal_source_confidence, 1);
 }
 
+/* fix129: a fallback that disagreed at boot earns full confidence once the cores agree. */
+static void case_disputed_fallback_promoted_at_runtime(void) {
+    asb_thermal_t t;
+    fixture_reset();
+    add_zone(0, "socd\n", 25);
+    add_three_cpu_peers(56000, 40000, 41000);
+    thermal_discover();
+    check_i("boot dispute: confidence 1 at discovery", g_thermal_source_confidence, 1);
+    g_thermal_conf_recheck_ts = 0;
+    metrics_read_thermal(&t, 0);
+    check_i("still hot: re-check keeps confidence 1", g_thermal_source_confidence, 1);
+    write_temp(1, 43000);
+    g_thermal_conf_recheck_ts = 0;
+    metrics_read_thermal(&t, 0);
+    check_i("cores agree later: promoted to 2", g_thermal_source_confidence, 2);
+    check_i("promotion counted", (int)g_thermal_conf_promotions, 1);
+    /* A socd that reads like a real temperature is a genuine dispute: no promotion. */
+    fixture_reset();
+    add_zone(0, "socd\n", 70000);
+    add_three_cpu_peers(41000, 40000, 41000);
+    thermal_discover();
+    int conf0 = g_thermal_source_confidence;
+    g_thermal_conf_recheck_ts = 0;
+    metrics_read_thermal(&t, 0);
+    check_i("real-temperature socd dispute: no runtime promotion", g_thermal_source_confidence, conf0);
+}
+
 /* fix123: a Dimensity kernel names its sensors cpu_big0 / cpu_little0 / soc_max. None of
  * them matched, so an MTK OnePlus ran with no CPU thermal source at all. */
 static void case_mediatek_lvts_names(void) {
@@ -329,6 +356,7 @@ int main(void) {
     case_periodic_socd_revalidation_recovers();
     case_percentage_socd_rejected_on_scale();
     case_percentage_socd_disputed_fallback_stays_low();
+    case_disputed_fallback_promoted_at_runtime();
     case_mediatek_lvts_names();
     case_mediatek_helio_single_zone();
     case_qualcomm_keeps_priority();
