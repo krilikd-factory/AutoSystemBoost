@@ -6,9 +6,10 @@ set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 G="$ROOT/src/asb_governor.c"
 fail() { echo "FAIL budget current scale: $*" >&2; exit 1; }
-n="$(awk '/^static int asb_adaptive_budget_trim_pct/,/caps->uclamp_bg_max = target;/' "$G" | grep -c 'asb_ma_ref(m->bat.current_ma) >=')"
+# fix121: the comfort gates read the smoothed draw (asb_ma_ref(_cma)); still on the reference scale.
+n="$(awk '/^static int asb_adaptive_budget_trim_pct/,/caps->uclamp_bg_max = target;/' "$G" | grep -cE 'asb_ma_ref\((m->bat\.current_ma|_cma)\) >=')"
 [ "$n" -ge 6 ] || fail "only $n budget mA gates use the reference scale"
-awk '/^static int asb_adaptive_budget_trim_pct/,/caps->uclamp_bg_max = target;/' "$G" | grep -E 'm->bat\.current_ma >= [0-9c]' && fail "a budget mA gate still compares raw current"
+awk '/^static int asb_adaptive_budget_trim_pct/,/caps->uclamp_bg_max = target;/' "$G" | grep -E '(m->bat\.current_ma|_cma) >= [0-9c]' && fail "a budget mA gate still compares raw current"
 CC=""; for c in gcc clang cc; do command -v "$c" >/dev/null 2>&1 && { CC="$c"; break; }; done
 [ -n "$CC" ] || { echo "PASS budget current scale (source pins only)"; exit 0; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT

@@ -274,6 +274,49 @@ static void case_percentage_socd_disputed_fallback_stays_low(void) {
     check_i("disputed fallback: confidence stays 1", g_thermal_source_confidence, 1);
 }
 
+/* fix123: a Dimensity kernel names its sensors cpu_big0 / cpu_little0 / soc_max. None of
+ * them matched, so an MTK OnePlus ran with no CPU thermal source at all. */
+static void case_mediatek_lvts_names(void) {
+    asb_thermal_t t;
+    fixture_reset();
+    add_zone(0, "soc_max\n", 52000);
+    add_zone(1, "cpu_little0\n", 45000);
+    add_zone(2, "cpu_big0\n", 50000);
+    add_zone(3, "cpu_big1\n", 51000);
+    add_zone(4, "gpu0\n", 60000);
+    add_zone(5, "ap_ntc\n", 38000);
+    thermal_discover();
+    metrics_read_thermal(&t, 0);
+
+    check_s("mtk: hottest big-core sensor is the control source", g_thermal_cpu_type, "cpu_big1");
+    check_i("mtk: control zone", g_thermal_cpu_zone, 3);
+    check_i("mtk: full confidence (nothing rejected)", g_thermal_source_confidence, 2);
+    check_i("mtk: temperature is valid", t.temp_valid, 1);
+    check_i("mtk: control temperature", t.cpu_max_c, 51);
+    check_i("mtk: AP board thermistor is the surface fallback", g_thermal_surface_zone, 5);
+}
+
+static void case_mediatek_helio_single_zone(void) {
+    fixture_reset();
+    add_zone(0, "mtktsAP\n", 40000);
+    add_zone(1, "mtktscpu\n", 47000);
+    add_zone(2, "mtktsbattery\n", 33000);
+    thermal_discover();
+
+    check_s("helio: mtktscpu is the control source", g_thermal_cpu_type, "mtktscpu");
+    check_i("helio: control zone", g_thermal_cpu_zone, 1);
+}
+
+/* A Snapdragon table with an MTK-looking name in it keeps its own sensor. */
+static void case_qualcomm_keeps_priority(void) {
+    fixture_reset();
+    add_three_cpu_peers(44000, 45000, 46000);
+    add_zone(4, "cpu_therm\n", 70000);
+    thermal_discover();
+
+    check_s("qcom: prime sensor still wins over a generic cpu_ zone", g_thermal_cpu_type, "cpu-1-1-0");
+}
+
 int main(void) {
     puts("P0 thermal socd validation fixtures");
     case_high_socd_rebinds_to_live_peer();
@@ -286,6 +329,9 @@ int main(void) {
     case_periodic_socd_revalidation_recovers();
     case_percentage_socd_rejected_on_scale();
     case_percentage_socd_disputed_fallback_stays_low();
+    case_mediatek_lvts_names();
+    case_mediatek_helio_single_zone();
+    case_qualcomm_keeps_priority();
 
     fixture_reset();
     if (g_failures) {

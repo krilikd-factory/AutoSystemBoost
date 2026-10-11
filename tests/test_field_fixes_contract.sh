@@ -438,4 +438,108 @@ grep -q 'touch watch:' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not repor
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS: fix117 contract"
 ) || exit 1
+# ---- fix118 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix118: $*"; exit 1; }
+G="$ROOT/src/asb_governor.c"
+grep -q 'for (int i = 0; i < 20 && !pi; i++)' "$G" && fail "the waiter still gives up after ten minutes"
+grep -q 'if (!pi) sleep(ASB_DISP_FIND_RETRY_S);' "$G" || fail "waiter does not keep looking for the property"
+grep -q 'if (g_disp_waiter_up == 2 && g_uev_parked) { wake_keys_park(epfd, 0); return; }' "$G" || fail "screen-off still unparks the uevent socket with the waiter live"
+grep -q 'if (g_disp_waiter_up == 2 && g_uev_parked) { wake_keys_park(epfd, 1); return; }' "$G" || fail "screen-on leaves the wake keys (touch panel) in epoll"
+grep -q 'int _not_wake = (g_disp_waiter_up == 2 && (_dsr == 1 || _dsr == 3 || _dsr == 4));' "$G" || fail "resume chain not skipped when Android says off/doze"
+grep -q '} else if (g_disp_waiter_up != 2 && g_uev_parked) {' "$G" || fail "uevent socket not given back when the waiter is gone"
+grep -q 'screen_on_resume_skipped=%lu' "$G" || fail "skipped resume chains not published"
+grep -q 'resume re-check(s) skipped' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not report skipped resume chains"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix118 contract"
+) || exit 1
+# ---- fix119 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix119: $*"; exit 1; }
+L="$ROOT/runtime/asb_lte_screenoff.sh"
+grep -q 'case "$_dev" in rmnet\*|ccmni\*|v4-rmnet\*|v4-ccmni\*) return 0 ;; esac' "$L" || fail "CLAT route not read as mobile"
+grep -q '"$_IPB" route show table all' "$L" || fail "VPN check still reads only the main table"
+grep -q 'v4-rmnet\*|v4-ccmni\*) echo mobile' "$ROOT/runtime/asb_net_apply.sh" || fail "net apply does not class CLAT as mobile"
+grep -q 'rmnet\*|ccmni\*|wwan\*|v4-rmnet\*|v4-ccmni\*)' "$ROOT/runtime/asb_net_routes.sh" || fail "route windows do not class CLAT as mobile"
+grep -q '^T_N_LTE_LIGHT_HINT=' "$ROOT/action.sh" || fail "no English hint"
+for l in ar de es fr hy id it pt ru tr uk zh; do
+  grep -q '^T_N_LTE_LIGHT_HINT=' "$ROOT/runtime/i18n/action_$l.sh" || fail "T_N_LTE_LIGHT_HINT missing: $l"
+done
+grep -q 'g_asb_cfg.log_level >= (g_active_by_touch && calm ? 3 : 1)' "$ROOT/src/asb_governor.c" || fail "touch cadence still floods the log"
+echo "PASS: fix119 contract"
+) || exit 1
+# ---- fix120 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix120: $*"; exit 1; }
+G="$ROOT/src/asb_governor.c"
+F="$ROOT/src/asb_fsm.h"
+grep -q 'int cam_open = m->misc.camera_active;' "$G" || fail "camera flag not read by the app-hint inference"
+[ "$(grep -c '} else if (!boot_grace && !cam_open &&' "$G")" = 2 ] || fail "a heat branch still infers a game with the camera open"
+grep -q 'static const char \*_snames\[\]' "$G" && fail "heartbeat still carries its own state-name table"
+grep -q 'asb_state_names\[fsm.state\] : "?",' "$G" || fail "heartbeat does not use the FSM state names"
+# The name table must follow the enum, entry for entry.
+_enum="$(sed -n '/^typedef enum {/,/} asb_state_t;/p' "$F" | grep -oE 'ASB_STATE_[A-Z_]+ *= *[0-9]+' | grep -v COUNT | sort -t= -k2 -n | sed -E 's/ASB_STATE_([A-Z_]+).*/\1/' | tr '\n' ' ')"
+_names="$(sed -n '/^static const char \*asb_state_names\[\] = {/,/};/p' "$F" | grep -oE '"[A-Z_]+"' | tr -d '"' | tr '\n' ' ')"
+[ -n "$_enum" ] || fail "state enum not found"
+[ "$_enum" = "$_names" ] || fail "asb_state_names ($_names) does not follow the enum ($_enum)"
+echo "PASS: fix120 contract"
+) || exit 1
+# ---- fix121 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix121: $*"; exit 1; }
+L="$ROOT/tools/logkit/_asb_logkit_common.sh"
+grep -q '^lk_capture_jank_row() {' "$L" || fail "no jank row capture"
+grep -q 'lk_dumpsys graphicsstats' "$L" || fail "jank trace does not read graphicsstats"
+grep -q '/^Janky frames:/ ' "$L" || fail "legacy janky count could be summed instead of the current one"
+grep -q 'lk_capture_jank_row "$_phase" "${_dscr:-0}"' "$ROOT/tools/logkit/asb_log_full_day.sh" || fail "full-day capture does not record UI smoothness"
+grep -q 'UI smoothness today' "$ROOT/tools/asb_diag.sh" || fail "asbdiag has no UI smoothness line"
+grep -q 'jank_trace.tsv' "$ROOT/docs/log_schemas.md" || fail "jank_trace.tsv schema not documented"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+grep -q 'int _cma = asb_comfort_ma(m);' "$ROOT/src/asb_governor.c" || fail "comfort trims still read one current sample"
+echo "PASS: fix121 contract"
+) || exit 1
+# ---- fix122 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix122: $*"; exit 1; }
+L="$ROOT/runtime/asb_lte_screenoff.sh"
+grep -q '\[ $(( _dk \* DELAY )) -ge $(( OFF_MIN_KIB \* _dt )) \] && break' "$L" || fail "screen-off LTE does not wait for mobile data"
+grep -q '_screen_off_strict || return 0' "$L" || fail "no re-check right before the switch"
+grep -q 'the screen came on during the switch' "$L" || fail "an interrupted switch is not given back"
+grep -q '/ccmni\*; do' "$L" || fail "ccmni links not counted by the scripts"
+grep -q 'ccmni\*/statistics/rx_bytes' "$ROOT/runtime/asb_screenoff_class.sh" || fail "screen-off classifier ignores ccmni"
+grep -q 'strncmp(nm, "ccmni", 5)' "$ROOT/src/asb_metrics.h" || fail "governor does not count ccmni"
+grep -q '"rmnet_ipa0"' "$ROOT/src/asb_metrics.h" && fail "governor still adds the ipa0 transport"
+grep -q 'quiet_windows=' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not report quiet windows"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix122 contract"
+) || exit 1
+# ---- fix123 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix123: $*"; exit 1; }
+M="$ROOT/src/asb_metrics.h"
+grep -q 'strstr(type, "cpu_big") || strstr(type, "cpu-big")' "$M" || fail "MediaTek big-core thermal zones not recognised"
+grep -q 'strcmp(type, "soc_max") == 0 || strcmp(type, "mtktscpu") == 0' "$M" || fail "MediaTek SoC aggregate not recognised"
+grep -q '"/sys/kernel/ged/hal/gpu_utilization",' "$M" || fail "no MediaTek GPU load source"
+grep -q 'case_mediatek_lvts_names();' "$ROOT/tests/test_thermal_socd_validation.c" || fail "no MTK thermal fixture"
+echo "PASS: fix123 contract"
+) || exit 1
+# ---- fix124 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix124: $*"; exit 1; }
+S="$ROOT/src/asb_smart.h"
+grep -q 'if (asb_smart_pkg_via_activity_top(pkg' "$S" && fail "dumpsys activity top still in the probe chain"
+grep -q 'int _topapp = asb_smart_pkg_via_topapp(pkg, sizeof(pkg));' "$S" || fail "top-app cgroup not asked"
+grep -q '"/dev/cpuset/top-app/cgroup.procs"' "$S" || fail "top-app cpuset not read"
+grep -q 'if (_upn - g_user_poll_ts >= 120' "$ROOT/src/asb_governor.c" || fail "user poll still every few ticks"
+grep -q 'from the top-app cgroup' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not report top-app answers"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix124 contract"
+) || exit 1
 echo "PASS: field-fix contracts"

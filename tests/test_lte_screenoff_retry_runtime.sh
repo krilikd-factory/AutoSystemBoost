@@ -24,7 +24,7 @@ cat "$WAKEF" 2>/dev/null
 S
 chmod +x "$T/bin/"*
 export PATH="$T/bin:$PATH" MASK="$T/mask" MODDIR="$T/mod" ASB_LTE_STATE_DIR="$T/st" \
-       ASB_STATE_FILE="$T/state" CALLF="$T/call" WAKEF="$T/wake" ASB_LTE_RETRY_S=3601
+       ASB_STATE_FILE="$T/state" CALLF="$T/call" WAKEF="$T/wake" ASB_LTE_RETRY_S=3601 ASB_LTE_SETTLE_S=0
 L="$ROOT/runtime/asb_lte_screenoff.sh"
 NR_ON=11011111110000000001
 echo "$NR_ON" > "$MASK"

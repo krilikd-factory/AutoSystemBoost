@@ -108,14 +108,14 @@ grep -Fq 'fsm->profile_idx == PROFILE_SMART && g_smart_rt.enabled && g_pkg_detec
 grep -Fq 'g_smart_rt.app_hint <= ASB_APP_MEDIUM' "$SRC" || fail "Smart comfort light/medium app gate missing"
 grep -Fq 'int comfort_current_ma = g_asb_cfg.smart_battery_bias >= 400 ? 250 :' "$SRC" || fail "Smart/Battery comfort current split missing"
 grep -Fq '(smart_screenon_comfort ? 350 : 450);' "$SRC" || fail "Smart moderate-current comfort threshold missing"
-grep -Fq 'asb_ma_ref(m->bat.current_ma) >= comfort_current_ma' "$SRC" || fail "adaptive comfort current evidence gate missing"
+grep -Fq 'asb_ma_ref(_cma) >= (_cin ? comfort_current_ma * 4 / 5 : comfort_current_ma)' "$SRC" || fail "adaptive comfort current evidence gate missing (smoothed, with exit band - fix121)"
 grep -Fq 'screenon_comfort_smart_medium' "$SRC" || fail "early Smart comfort telemetry reason missing"
 # Repeated field captures permit an earlier Smart-only light trim only for a high-current,
 # positively classified light/medium foreground context. It must never become a generic cap.
 grep -Fq 'int smart_high_current_comfort =' "$SRC" || fail "high-current Smart comfort guard missing"
 grep -Fq 'screenon_comfort_smart_high_current' "$SRC" || fail "high-current Smart comfort telemetry reason missing"
-grep -Fq 'asb_ma_ref(m->bat.current_ma) >= 600' "$SRC" || fail "high-current Smart evidence threshold missing"
-grep -Fq 'm->therm.cpu_max_c >= 42' "$SRC" || fail "high-current Smart warmth floor missing"
+grep -Fq 'asb_ma_ref(_cma) >= (_cin ? 480 : 600)' "$SRC" || fail "high-current Smart evidence threshold missing (600 mA entry, fix121 exit band)"
+grep -Fq 'm->therm.cpu_max_c >= (_cin ? 40 : 42)' "$SRC" || fail "high-current Smart warmth floor missing (42 C entry, fix121 exit band)"
 grep -Fq 'm->gpu.load_pct < g_asb_cfg.heavy_gpu_enter' "$SRC" || fail "high-current Smart low-GPU exclusion missing"
 grep -Fq 'fsm->state != ASB_STATE_GAMING && fsm->state != ASB_STATE_SUSTAINED' "$SRC" || fail "high-current Smart game/sustained exclusion missing"
 grep -Fq 'surface_comfort_smart' "$SRC" || fail "surface-hotspot Smart comfort telemetry reason missing"

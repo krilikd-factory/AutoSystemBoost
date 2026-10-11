@@ -24,11 +24,14 @@ echo "mWakefulness=Awake"
 S
 cat > "$T/bin/ip" <<'S'
 #!/bin/sh
-echo "1.1.1.1 via 10.0.0.1 dev $(cat "$ROUTEF") src 10.0.0.2 uid 0"
+case "$*" in
+  "route show table all") cat "$TABLESF" 2>/dev/null ;;
+  *) echo "1.1.1.1 via 10.0.0.1 dev $(cat "$ROUTEF") src 10.0.0.2 uid 0" ;;
+esac
 S
 chmod +x "$T/bin/"*
 export PATH="$T/bin:$PATH" MASK="$T/mask" MODDIR="$T/mod" ASB_LTE_STATE_DIR="$T/st" \
-       ASB_STATE_FILE="$T/state" CALLF="$T/call" ROUTEF="$T/route" ASB_NET_SYS="$T/net" \
+       ASB_STATE_FILE="$T/state" CALLF="$T/call" ROUTEF="$T/route" ASB_NET_SYS="$T/net" TABLESF="$T/tables" \
        ASB_LTE_LIGHT_LOW_TICKS=3
 L="$ROOT/runtime/asb_lte_screenoff.sh"
 NR_ON=11011111110000000001; NR_OFF=1011111110000000001   # binary, as cmd prints it; bit 19 (524288) is NR
@@ -104,6 +107,16 @@ sh "$L" restore >/dev/null 2>&1
 on_mobile() { sh -c '. "$1/hdr.sh"; _on_mobile' _ "$T"; }
 echo wlan0 > "$ROUTEF"; on_mobile && f "Wi-Fi route read as mobile"
 echo rmnet_data3 > "$ROUTEF"; on_mobile || f "rmnet route not read as mobile"
+# fix119: 464XLAT and VPNs. Android keeps defaults per network table; the main table has none.
+echo v4-rmnet_data2 > "$ROUTEF"; on_mobile || f "CLAT (v4-rmnet) route not read as mobile"
+echo tun0 > "$ROUTEF"
+printf 'default via 10.0.0.1 dev rmnet_data2 table rmnet_data2 proto static\ndefault dev tun0 table tun0 proto static\n' > "$T/tables"
+on_mobile || f "VPN over mobile data not read as mobile"
+printf 'default via 192.168.1.1 dev wlan0 table wlan0 proto static\ndefault via 10.0.0.1 dev rmnet_data2 table rmnet_data2 proto static\ndefault dev tun0 table tun0 proto static\n' > "$T/tables"
+on_mobile && f "VPN over Wi-Fi (mobile kept up for handover) read as mobile"
+printf 'default via 192.168.1.1 dev wlan0 table wlan0 proto static\n' > "$T/tables"
+on_mobile && f "VPN over Wi-Fi read as mobile"
+: > "$T/tables"; on_mobile && f "VPN with no default anywhere read as mobile"
 
 # Counters: summed over every rmnet_data*, safe past 2^31 (mksh is 32-bit).
 echo 3000000000 > "$T/net/rmnet_data2/statistics/rx_bytes"; echo 1024 > "$T/net/rmnet_data2/statistics/tx_bytes"

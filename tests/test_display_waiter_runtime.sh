@@ -49,8 +49,11 @@ static uint32_t g_serial = 1;
 static int g_waits = 0;
 int __system_property_get(const char *n, char *v) {
     pthread_mutex_lock(&g_mx); strcpy(v, g_val); pthread_mutex_unlock(&g_mx); return (int)strlen(v); }
+static int g_prop_exists = 0;   /* created at the first display transition after boot */
 const prop_info *__system_property_find(const char *n) {
-    return strcmp(n, "debug.tracing.screen_state") ? NULL : &g_pi; }
+    if (strcmp(n, "debug.tracing.screen_state")) return NULL;
+    pthread_mutex_lock(&g_mx); int e = g_prop_exists; pthread_mutex_unlock(&g_mx);
+    return e ? &g_pi : NULL; }
 uint32_t __system_property_serial(const prop_info *pi) {
     pthread_mutex_lock(&g_mx); uint32_t s = g_serial; pthread_mutex_unlock(&g_mx); return s; }
 _Bool __system_property_wait(const prop_info *pi, uint32_t old, uint32_t *ns, const struct timespec *to) {
@@ -80,7 +83,13 @@ int main(void) {
     CHECK(fd >= 0, "waiter did not start");
     if (fd < 0) return 1;
     usleep(50000);
-    CHECK(g_disp_waiter_up == 2, "waiter not waiting on the property");
+    CHECK(g_disp_waiter_up == 1, "waiter gave up before the property existed");
+    /* the property appears only after the screen stayed on past the old 10-minute limit */
+    usleep(2500000);
+    CHECK(g_disp_waiter_up == 1, "waiter stopped looking");
+    pthread_mutex_lock(&g_mx); g_prop_exists = 1; pthread_mutex_unlock(&g_mx);
+    usleep(1300000);
+    CHECK(g_disp_waiter_up == 2, "waiter did not pick up a property created late");
     setp("2"); CHECK(fired(fd), "OFF -> ON did not reach the main loop");
     setp("3"); CHECK(fired(fd), "ON -> DOZE did not reach the main loop");
     setp("4"); CHECK(!fired(fd), "DOZE -> DOZE_SUSPEND woke the main loop");
@@ -95,7 +104,7 @@ int main(void) {
     return bad;
 }
 X
-"$CC" -std=gnu99 -Wall -Wno-unused-function -pthread -rdynamic -o "$T/t" "$T/t.c" -I"$T" -ldl 2>"$T/cc.err" \
+"$CC" -std=gnu99 -Wall -Wno-unused-function -DASB_DISP_FIND_RETRY_S=1 -pthread -rdynamic -o "$T/t" "$T/t.c" -I"$T" -ldl 2>"$T/cc.err" \
   || { cat "$T/cc.err" >&2; fail "fixture does not compile"; }
 out="$("$T/t")" || fail "$out"
 

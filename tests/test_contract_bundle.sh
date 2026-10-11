@@ -1096,6 +1096,8 @@ if [ -z "$CC_BIN" ]; then echo "PASS uevent parking contract (no C compiler: sou
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 {
   printf '#include <stdio.h>\n#include <string.h>\n#include <errno.h>\n#include <unistd.h>\n#include <fcntl.h>\n#include <sys/ioctl.h>\n#include <linux/input.h>\n#include <sys/epoll.h>\n#include <sys/socket.h>\n'
+  # The display-state waiter flag (fix118) lives above the cut; 0 = not running, old behaviour.
+  printf 'static volatile int g_disp_waiter_up = 0;\n'
   sed -n '/^static int           g_uev_parked = 0;$/,/^static void uev_unpark(int epfd, int uefd) {$/p' "$SRC" | sed '$d'
   sed -n '/^static void uev_unpark(int epfd, int uefd) {$/,/^}$/p' "$SRC"
   cat <<'EOF'
