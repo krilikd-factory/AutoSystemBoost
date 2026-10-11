@@ -1213,9 +1213,13 @@ asb_clone_device_camera_tone() {
               # already graded, and using it as "the pristine original" is what made the damage
               # permanent across reinstalls.
               if [ -n "$(asb_cam_chroma_ok "$_ct_bp")" ]; then
-                _ct_src="$_ct_bp"
+                if command -v asb_tw_base_rom_ok >/dev/null 2>&1 && ! asb_tw_base_rom_ok "$_ct_bp"; then
+                  rm -f "$_ct_bp" "$_ct_bp.rom" 2>/dev/null
+                else
+                  _ct_src="$_ct_bp"
+                fi
               else
-                rm -f "$_ct_bp" 2>/dev/null
+                rm -f "$_ct_bp" "$_ct_bp.rom" 2>/dev/null
                 ASB_CAM_BASE_REPAIRED=1
               fi
             fi
