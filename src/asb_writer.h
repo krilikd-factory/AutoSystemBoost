@@ -856,6 +856,19 @@ static int writer_slot_ceiling(int slot, int want, int thermal_cap) {
     return cpu_floor_ceiling(k, (int)cpu_snap_freq(k, (long)want), thermal_cap);
 }
 
+/* The slot's smallest real step at or above khz, 0 when it has none (fix130). */
+static int writer_slot_step_at_least(int slot, long khz) {
+    int k = writer_slot_path_idx(slot);
+    if (k < 0 || khz <= 0) return 0;
+    cpu_read_freq_tables();
+    long up = 0;
+    for (int i = 0; i < g_cpu_freq_table_len[k]; i++) {
+        long v = g_cpu_freq_tables[k][i];
+        if (v >= khz && (up == 0 || v < up)) up = v;
+    }
+    return (int)up;
+}
+
 #define GPU_PATH_CANDIDATES_MAX 6
 static char g_gpu_max_path[160]      = {0};   /* either pwrlevel or max_freq */
 static char g_gpu_min_path[160]      = {0};

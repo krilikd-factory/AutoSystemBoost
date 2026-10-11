@@ -2356,6 +2356,74 @@ static void asb_active_efficiency_apply_caps(asb_profile_caps_t *caps,
 static int  g_cap_prime_base_khz = 0;
 static int  g_cap_prime_eff_khz  = 0;
 static char g_cap_prime_reason[64] = "profile";  /* "thermal_budget:" + 32-byte reason */
+
+/* Main cores kept level with the prime (fix130).
+ *
+ * The scheduler places a task by each cluster's capacity at its CURRENT ceiling. On a 6+2
+ * part both clusters sit on the 40% race-to-idle floor in light states: OP15 main 1555200
+ * of 3628800 (capacity 762 -> 327), prime 1862400 of 4608000 (1024 -> 414). The two prime
+ * cores then look like the bigger cluster and ordinary screen-on work moves there. Field
+ * captures: an OP15 on V65-debug5 had the prime above its lowest step in 91% of screen-on
+ * samples and the main cores in 39%, the split following the ceilings (main 1440000 ->
+ * prime busy 96-100%; main 1900800 -> 14-41%). Five earlier OP15 captures, MODERATE, the
+ * prime at 1862400: main 1555200 -> prime busy 27-100%, 412 mA mean; main 1900800 -> 9-36%,
+ * 274 mA, at similar load and GPU.
+ *
+ * So in LIGHT_IDLE and MODERATE the main ceiling is raised to the first step whose capacity
+ * matches the prime's ceiling. Nothing else moves: the prime keeps its floor and the work
+ * stays on the cores built for it. Two clusters only, never above 60% of the main cluster's
+ * hardware (a phone whose first cluster is truly little never qualifies), and not while a
+ * thermal cap or a thermal budget trim is in force - lifting six cores is not how a warm
+ * phone cools. A prime burst keeps the level it found. main_capacity_parity=0 turns it off. */
+static int g_parity_cap0 = -2;              /* cpu_capacity, first cpu of policy0; -2 unread */
+static int g_parity_cap1 = -2;              /* ... of the prime policy; -1 unreadable */
+static int g_parity_main_khz = 0;           /* main ceiling raised this pass, 0 = none */
+static unsigned long g_parity_lifts = 0;    /* passes that started a raise */
+
+static int asb_cpu_capacity_of(int cpu) {
+    char p[96];
+    snprintf(p, sizeof(p), "/sys/devices/system/cpu/cpu%d/cpu_capacity", cpu);
+    int v = sysfs_read_int(p, 0);
+    return (v > 0 && v <= 4096) ? v : -1;
+}
+
+static void asb_main_capacity_parity(asb_profile_caps_t *caps, const asb_metrics_t *m,
+                                     const asb_fsm_t *fsm, int trim) {
+    int was = g_parity_main_khz;
+    int lift = 0;
+    int ok = g_asb_cfg.main_capacity_parity && fsm->profile_idx == PROFILE_SMART &&
+             g_cpu_all_count == 2 && g_cpu_policy_ids[0] >= 0 && g_cpu_policy_ids[1] >= 0 &&
+             g_cpu_policy_ids[2] < 0 && m->misc.screen_on && !fsm->thermal_cap && trim <= 0 &&
+             !m->misc.camera_active && m->misc.app_hint < ASB_APP_GAMING &&
+             (fsm->state == ASB_STATE_LIGHT_IDLE || fsm->state == ASB_STATE_MODERATE) &&
+             caps->cpu_max[0] > 0 && caps->cpu_max[1] > 0;
+    if (ok && fsm->prime_escape) {
+        lift = was;
+    } else if (ok) {
+        if (g_parity_cap0 == -2) {
+            g_parity_cap0 = asb_cpu_capacity_of(g_cpu_policy_ids[0]);
+            g_parity_cap1 = asb_cpu_capacity_of(g_cpu_policy_ids[1]);
+        }
+        long long hw0 = g_cpu_slot_hwmax[0], hw1 = g_cpu_slot_hwmax[1];
+        if (g_parity_cap0 > 0 && g_parity_cap1 > 0 && hw0 > 0 && hw1 > 0) {
+            long long p = writer_slot_ceiling(1, caps->cpu_max[1], 0);
+            long long live = (long long)m->cpu.max_freq[1] * 1000LL;
+            if (live > 0 && live < p) p = live;
+            long long den = hw1 * g_parity_cap0;
+            long long need = (p * g_parity_cap1 * hw0 + den - 1) / den;
+            long long m0 = writer_slot_ceiling(0, caps->cpu_max[0], 0);
+            if (p > 0 && need > m0) {
+                long long step = writer_slot_step_at_least(0, (long)need);
+                if (step > 0 && step * 100 <= hw0 * 60) lift = (int)step;
+            }
+        }
+    }
+    if (lift > 0 && caps->cpu_max[0] < lift) caps->cpu_max[0] = lift;
+    else lift = 0;
+    if (lift > 0 && was <= 0) g_parity_lifts++;
+    g_parity_main_khz = lift;
+}
+
 static void asb_apply_adaptive_budget_caps(asb_profile_caps_t *caps,
                                            const asb_metrics_t *m,
                                            const asb_fsm_t *fsm) {
@@ -2391,6 +2459,7 @@ static void asb_apply_adaptive_budget_caps(asb_profile_caps_t *caps,
             snprintf(g_cap_prime_reason, sizeof(g_cap_prime_reason),
                      "%s", "efficiency_envelope");
     }
+    asb_main_capacity_parity(caps, m, fsm, trim);
     g_cap_prime_eff_khz = caps->cpu_max[_ps];
 }
 
@@ -2974,9 +3043,12 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
      * them. -1 marks an empty slot. */
     fprintf(f, "slot_policy_ids=%d,%d,%d\n",
             g_cpu_policy_ids[0], g_cpu_policy_ids[1], g_cpu_policy_ids[2]);
-    fprintf(f, "desired_cpu_max0=%d\ndesired_cpu_maxp=%d\n",
-            writer_slot_ceiling(0, fsm->current_caps.cpu_max[0], fsm->thermal_cap),
-            writer_slot_ceiling(1, fsm->current_caps.cpu_max[1], fsm->thermal_cap));
+    {
+        int _d0 = writer_slot_ceiling(0, fsm->current_caps.cpu_max[0], fsm->thermal_cap);
+        if (g_parity_main_khz > _d0) _d0 = g_parity_main_khz;   /* fix130: the level kept with the prime */
+        fprintf(f, "desired_cpu_max0=%d\ndesired_cpu_maxp=%d\n", _d0,
+                writer_slot_ceiling(1, fsm->current_caps.cpu_max[1], fsm->thermal_cap));
+    }
     /* Published through cpu_floor_ceiling as well: "desired" must be what the writer really
      * sends. Before, it was the raw FSM wish, so whenever that sat under the race-to-idle
      * guard the report read "hardware above the request" - the guard's own 1747200 against
@@ -3015,6 +3087,8 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     fprintf(f, "thermal_cooldown=%d\n", fsm->thermal_cooldown);
     fprintf(f, "prime_escape=%d\nprime_escape_mid=%d\nprime_escape_count=%lu\n",
             fsm->prime_escape, fsm->prime_escape_mid, fsm->prime_escape_count);
+    fprintf(f, "main_parity_khz=%d\nmain_parity_lifts=%lu\nmain_parity_capacity=\"%d,%d\"\n",
+            g_parity_main_khz, g_parity_lifts, g_parity_cap0, g_parity_cap1);
     {
         long _pe_t = g_prime_escape_total_ms;
         if (g_prime_escape_since_ms > 0) _pe_t += asb_clock_ms(CLOCK_BOOTTIME) - g_prime_escape_since_ms;
@@ -9176,6 +9250,7 @@ int main(int argc, char **argv) {
                 /* Per-slot tables (fix126): on a 1+3+2+1 part slot 1 is not table index 1. */
                 int want_p0 = writer_slot_ceiling(0, fsm.current_caps.cpu_max[0], fsm.thermal_cap);
                 int want_p1 = writer_slot_ceiling(1, fsm.current_caps.cpu_max[1], fsm.thermal_cap);
+                if (g_parity_main_khz > want_p0) want_p0 = g_parity_main_khz;   /* fix130 */
                 int leak0 = (actual_p0 > 0 && want_p0 > 0 && actual_p0 > want_p0 + 100000) ? 1 : 0;
                 int leak1 = (actual_p1 > 0 && want_p1 > 0 && actual_p1 > want_p1 + 100000) ? 1 : 0;
 

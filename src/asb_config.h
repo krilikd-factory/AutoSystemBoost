@@ -200,6 +200,7 @@ typedef struct {
     int   heavy_prime_escape;        /* 1=Smart may lift a pinned prime to the Balanced HEAVY rail, briefly */
     int   prime_escape_burst_s;      /* how long one lift may last (s) */
     int   prime_escape_rest_s;       /* pause after a lift before the next one (s) */
+    int   main_capacity_parity;      /* 1=Smart keeps the main ceiling level with the prime (fix130) */
     int   charge_assist_alpha_max;   /* alpha_battery ceiling while assisting, x1000 (default 450) */
     int   charge_temp_warn_dC;       /* batt temp where assist is dropped (default 390 = 39.0C) */
     int   charge_temp_hot_dC;        /* batt temp where cool-charge guard engages (default 415 = 41.5C) */
@@ -360,6 +361,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->charge_aware_enable          = 1;
     c->cool_gaming                  = 1;
     c->heavy_prime_escape           = 1;
+    c->main_capacity_parity         = 1;
     c->prime_escape_burst_s         = 20;
     c->prime_escape_rest_s          = 40;
     c->charge_assist_alpha_max      = 450;
@@ -577,6 +579,7 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "charge_aware_enable"))     c->charge_aware_enable     = atoi(v);
     else if (!strcmp(k, "cool_gaming"))             c->cool_gaming             = atoi(v);
     else if (!strcmp(k, "heavy_prime_escape"))      c->heavy_prime_escape      = atoi(v) ? 1 : 0;
+    else if (!strcmp(k, "main_capacity_parity"))    c->main_capacity_parity    = atoi(v) ? 1 : 0;
     else if (!strcmp(k, "prime_escape_burst_s"))    c->prime_escape_burst_s    = atoi(v);
     else if (!strcmp(k, "prime_escape_rest_s"))     c->prime_escape_rest_s     = atoi(v);
     else if (!strcmp(k, "charge_assist_alpha_max")) c->charge_assist_alpha_max = atoi(v);
