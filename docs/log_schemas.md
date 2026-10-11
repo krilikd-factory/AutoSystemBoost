@@ -317,6 +317,30 @@ silent - the file still parses, the numbers just mean something else.
 
 `sampled_current_distribution.txt` maps each positive raw `battery_trace.txt` discharge-current sample to a concrete ledger interval, then groups the mapped samples by phase. It reports the number of samples, the mean sampled mA, and the **median sampled mA**. The median is intentionally resistant to brief outliers; neither figure is a physical whole-phase current average because suspend and gaps between recorder wake-ups are under-sampled. Charging/zero/invalid samples are excluded, and `current_now` values at or above 100000 are normalized from µA to mA for this derived report.
 
+`jank_trace.tsv` (fix121) - UI smoothness, one row per interval between two consecutive
+screen-on polls (a screen-off poll or a gap over 180 s starts a new baseline):
+
+```
+1  epoch            end of the interval
+2  iso_time
+3  phase            recorder phase at the end
+4  fsm_state        ASB state at both ends, or "mixed" when it changed inside the interval
+5  interval_s
+6  main_at_cap      lowest policy within 2% of its scaling_max_freq at the end (1/0/-)
+7  prime_at_cap     highest policy, same test ("-" on a single-policy SoC)
+8  touches          touch_starts delta from the governor's touch watch (fix117), "-" if absent
+9  frames           HWUI frames rendered by every app (dumpsys graphicsstats, summed)
+10 janky            frames that missed their deadline ("Janky frames", not the legacy count)
+11 deadline_missed  "Number Frame deadline missed"
+12 slow_ui          "Number Slow UI thread"
+13 high_input       "Number High input latency"
+```
+
+The counters are cumulative per package and day, so a delta is what was rendered in the
+interval; a negative step (an old day pruned) writes no row. Games drawing on their own
+GL/Vulkan surface are not HWUI frames. The report section "UI SMOOTHNESS" aggregates janky%
+by phase, by ASB state and by whether a cluster sat at the ASB ceiling.
+
 `mobile_traffic_context.txt` aggregates the existing ledger's selected-rmnet RX+TX counters by phase and lists only phases with at least **32 MiB**. It keeps the phase duration and screen context so a reviewer can identify a potentially material transfer window. It is a report-only context flag: observed bytes may contribute to radio energy in that phase, but they do not prove cause or assign a battery percentage.
 
 ---
