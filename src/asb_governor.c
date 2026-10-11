@@ -2738,24 +2738,30 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                    "smart_q_vendor=%d\nsmart_q_fail=%d\nsmart_budget_src=%d\n",
                 g_smart_q_bat, g_smart_q_heat, g_smart_q_stab,
                 g_smart_q_vendor, g_smart_q_fail, g_smart_budget_src);
-        /* One screen-time forecast for every screen (fix127).
+        /* One screen-time forecast for every screen (fix127), from the ACTUAL drain first
+         * (fix128).
          *
-         * The Monitor card divided by the live window rate, its "average drain" tile showed
-         * the slot's history, and the action sheet printed the budget's forecast next to the
-         * smoothed rate: an OP15 read "5 h 44 m · average" under "Average drain 12.9 %/h",
-         * and "5.7 h at an average drain of 9.4 %/h" beside "this hour usually 12.9 %/h" -
-         * three rates, two of them called "average". The forecast is now the budget's own
-         * (the one Smart acts on), published with the rate it used and where that rate came
-         * from: "recent" (the smoothed drain of recent screen-on sessions, corrected by the
-         * forecast's own track record) or "slot" (what this hour usually costs, used until a
-         * session has been measured). "none" while charging or outside Smart. */
+         * fix127 published the battery budget's forecast - the smoothed drain of recent
+         * sessions, or this hour's history before a session was measured - so every screen
+         * agreed. But it was not what the phone was doing: an OP15 Monitor read "usual this
+         * hour 7.9 %/h" above "2 h 23 m · recent drain 17.1 %/h", and its owner asked the
+         * obvious question - how is the battery doing NOW. The measured screen-on drain
+         * (the battery level falling over the last ten minutes or more, with a real SOC
+         * movement behind it) leads now, as "now"; the budget's rates are the fallback, as
+         * "recent" or "slot", and the screens call those an estimate. The budget itself is
+         * unchanged. "none" while charging or with nothing to go on. */
         {
             int _fr = 0;
             const char *_fb = "none";
-            if (g_smart_rt.enabled && !m->bat.charging &&
-                g_smart_rt.budget_pred_h_x10 > 0 && g_smart_budget_rate_x10 > 0) {
-                _fr = g_smart_budget_rate_x10;
-                _fb = g_smart_budget_src ? "slot" : "recent";
+            if (m && !m->bat.charging) {
+                if (!_live_stale && live_x10 > 0 && _pub_win >= 600 && _bconf >= 2) {
+                    _fr = (int)live_x10;
+                    _fb = "now";
+                } else if (g_smart_rt.enabled && g_smart_rt.budget_pred_h_x10 > 0 &&
+                           g_smart_budget_rate_x10 > 0) {
+                    _fr = g_smart_budget_rate_x10;
+                    _fb = g_smart_budget_src ? "slot" : "recent";
+                }
             }
             fprintf(f, "forecast_rate_x10=%d\nforecast_basis=%s\n", _fr, _fb);
         }
