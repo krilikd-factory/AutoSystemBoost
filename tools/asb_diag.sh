@@ -2949,6 +2949,18 @@ NOTE "anim_speed = $(cfg anim_speed)  ·  UX_MANAGE_TIMEOUTS = $(cfg UX_MANAGE_T
 for _as in window_animation_scale transition_animation_scale animator_duration_scale; do
   P "    live $_as = $(settings get global $_as 2>/dev/null)"
 done
+# Who owns the scales (fix128): an explicit Animation Speed, the profile (UI speed on), or the
+# user - in that last case ASB gave its own value back once and does not touch them again.
+case "$(cfg anim_speed)" in
+  ''|-1|profile)
+    if [ "$(cfg UX_MANAGE_TIMEOUTS)" = "1" ]; then
+      NOTE "animation scales: set by the profile (UI speed management is on)"
+    else
+      NOTE "animation scales: yours - ASB does not change them (its own value was given back once when management was turned off)"
+    fi ;;
+  *) NOTE "animation scales: Animation Speed = $(cfg anim_speed) owns them; the profile does not override it" ;;
+esac
+[ -f "$MODDIR/config/ux_baseline.conf" ] && NOTE "  saved pre-ASB scales waiting to be given back: $(tr '\n' ' ' < "$MODDIR/config/ux_baseline.conf" 2>/dev/null)"
 NOTE "force animation restart = $(cfg UX_ANIM_FORCE_RESTART) (SystemUI is never restarted on a profile switch since V62)"
 # UI smoothness today (fix121): Android's own frame counters, every HWUI app. "Lags" was the
 # one complaint no report could answer - this is what the user actually saw, not what ASB set.
