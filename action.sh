@@ -127,7 +127,7 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_THIS_HOUR="обычно в этот час"
     M_WARM_HERE="тепло для этого телефона — Smart склоняется к экономии"
     M_COOL_HERE="прохладно для этого телефона — Smart разрешает чуть больше"
-    M_SES_LEARNED="сессий изучено"; M_DRAIN_NOW="расход сейчас"
+    M_SES_LEARNED="сессий изучено"; M_DRAIN_NOW="расход по факту"
     M_SES_LEARNED_1="сессия изучена"; M_SES_LEARNED_2="сессии изучено"
     M_SES_BANK_1="сессия накоплена всего"; M_SES_BANK_2="сессии накоплено всего"
     M_DISCARDED_1="сессия отброшена как ненадёжная"; M_DISCARDED_2="сессии отброшено как ненадёжные"
@@ -816,10 +816,10 @@ T_NIGHT_SAFE="Night-safe override active"
 T_VETO_ACTIVE="Thermal veto active"
 T_ETA_CHG="Time to 0%%: not estimated while charging"
 T_ETA="Time to 0%% %s"
-T_ETA_MEASURED="(drain now %s)"
+T_ETA_MEASURED="(actual drain %s)"
 T_ETA_HEUR="(heuristic)"
-T_ETA_AVG="(recent drain %s)"
-T_ETA_SLOT="(usual for this hour %s)"
+T_ETA_AVG="(estimate from recent sessions %s)"
+T_ETA_SLOT="(estimate for this hour %s)"
 T_ETA_SCREEN="~%sh %sm"
 T_ETA_IDLE_MEAS="idle figure measured: %s%%/h with the screen off"
 T_ETA_IDLE_N=" (from %s screen-off window(s) of 1 h+)"
@@ -1079,10 +1079,10 @@ case "$_frx" in ''|*[!0-9]*) _frx=0 ;; esac
 _eta_gov=0
 _ewma_x10=0
 _eta_kind=measured
-if [ "$_frx" -gt 0 ] 2>/dev/null && { [ "$_frb" = recent ] || [ "$_frb" = slot ]; }; then
+if [ "$_frx" -gt 0 ] 2>/dev/null && { [ "$_frb" = now ] || [ "$_frb" = recent ] || [ "$_frb" = slot ]; }; then
   _ewma_x10=$_frx
   _eta_gov=1
-  if [ "$_frb" = slot ]; then _eta_kind=slot; else _eta_kind=average; fi
+  case "$_frb" in now) _eta_kind=measured ;; slot) _eta_kind=slot ;; *) _eta_kind=average ;; esac
 else
   _ewma_x10=$(grep "^smart_drain_pctph_x10=" /dev/.asb/state 2>/dev/null | head -1 | cut -d= -f2)
   case "$_ewma_x10" in ''|*[!0-9]*) _ewma_x10=0 ;; esac
