@@ -140,6 +140,21 @@ This is **not** JSON despite logkit's `lk_status_json()` parsing it. Each line i
 
 **Cap-source diagnostics** (V39 r2+)
 - `cap_gap_p0`, `cap_gap_p1` — `desired - actual` per policy. Positive=vendor clamped down.
+- `desired_cpu_max0`, `desired_cpu_maxp` / `effective_cpu_max0`, `effective_cpu_maxp` — the
+  rail (snapped, floored, before the thermal budget) and the live ceiling for slot 0 and
+  slot 1. Slot 1 is the prime on a two-cluster SoC but a middle cluster on 1+3+2+1 parts.
+- `prime_slot`, `prime_policy_id`, `desired_cpu_max_prime`, `effective_cpu_max_prime` — the
+  same for the prime itself, whatever the topology (fix126).
+- `requested_cpu_max0`, `requested_cpu_max_prime` — what the writer last sent and kept, after
+  the thermal budget and the race-to-idle floor; 0 until ASB has written (fix126). Live below
+  this = a ceiling ASB did not write; live equal to it but below `desired_*` = ASB's own trim.
+- `prime_escape_skip_warm`, `prime_escape_skip_foreign` — prime bursts not opened: the die
+  within 3 C of the sustained-exit mark that would end the burst, or the cores pinned at a
+  lower ceiling ASB does not hold (fix126).
+
+**Screen detection**
+- `screen_on_detect="uevent:N,recheck:N,tick:N,display:N"` — which path noticed each wake.
+- `screen_off_detect="uevent:N,display:N,tick:N"` — the same for screen-off (fix126).
 - `last_sustained_reason` — string label for last SUSTAINED entry cause
 - `highload_mode` — `default` | `burst` | `stable` | `auto`
 
@@ -333,13 +348,32 @@ screen-on polls (a screen-off poll or a gap over 180 s starts a new baseline):
 10 janky            frames that missed their deadline ("Janky frames", not the legacy count)
 11 deadline_missed  "Number Frame deadline missed"
 12 slow_ui          "Number Slow UI thread"
-13 high_input       "Number High input latency"
+13 high_input       "Number High input latency" - a COUNT of input events (it can exceed
+                    frames); the report shows it per screen-on minute, never as a share
+14 main_cap_pct     share of the interval the lowest policy sat at its ceiling, from
+                    cpufreq stats/time_in_state ("-" without kernel stats) - fix125
+15 prime_cap_pct    the same for the highest policy
+16 fg_pkg           the app in front (top-app cgroup, as the governor reads it since
+                    fix124); "-" nothing app-like, "multi" for split screen - fix125
 ```
 
 The counters are cumulative per package and day, so a delta is what was rendered in the
 interval; a negative step (an old day pruned) writes no row. Games drawing on their own
 GL/Vulkan surface are not HWUI frames. The report section "UI SMOOTHNESS" aggregates janky%
 by phase, by ASB state and by whether a cluster sat at the ASB ceiling.
+
+`throttle_trace.txt` - one row per recorder poll where a ceiling sat below ASB's profile
+rail (`desired_*`):
+
+```
+epoch|phase|p0_max=LIVE/HWMAX|p6_max=LIVE/HWMAX|cpu_temp=C|surface=C|cap_owner=WORD|main_by=CAUSE|prime_by=CAUSE
+```
+
+`p6_max` is the last (prime) policy, compared with `desired_cpu_max_prime` since fix126 (it
+was slot 1, a middle cluster on 1+3+2+1 parts). `main_by` / `prime_by` (fix126): `-` at or
+above the rail, `asb_trim` the live ceiling is ASB's own trimmed request, `vendor` it is
+below what ASB wrote (PowerHAL or kernel thermal), `?` no request published. They are
+appended, so readers that split on `cap_owner=` keep working.
 
 `mobile_traffic_context.txt` aggregates the existing ledger's selected-rmnet RX+TX counters by phase and lists only phases with at least **32 MiB**. It keeps the phase duration and screen context so a reviewer can identify a potentially material transfer window. It is a report-only context flag: observed bytes may contribute to radio energy in that phase, but they do not prove cause or assign a battery percentage.
 
