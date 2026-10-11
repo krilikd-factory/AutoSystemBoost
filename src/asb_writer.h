@@ -831,6 +831,31 @@ static void writer_init_paths(void) {
     g_writer_paths_ready = 1;
 }
 
+/* Index of a governor slot's policy in the per-policy tables (frequency steps, floor guard).
+ *
+ * cpu_snap_freq and cpu_floor_ceiling take that index, not a slot. On a two-cluster SoC the
+ * two coincide, which is how the report lines came to pass the slot straight in; on a
+ * 1+3+2+1 part (OP12, Ace 5) slot 1 is the strongest middle policy and slot 2 the prime,
+ * while index 1 is the first middle policy and index 2 the second (fix126). -1 if unknown. */
+static int writer_slot_path_idx(int slot) {
+    if (slot < 0 || slot > 2) return -1;
+    writer_init_paths();
+    if (!g_cpu_max_paths[slot][0]) return -1;
+    for (int k = 0; k < g_cpu_all_paths_n && k < 16; k++)
+        if (g_cpu_all_max_paths[k][0] && strcmp(g_cpu_all_max_paths[k], g_cpu_max_paths[slot]) == 0)
+            return k;
+    return -1;
+}
+
+/* What the writer would send for a slot's ceiling: snapped to that policy's own steps and
+ * lifted to the race-to-idle floor. The report figures go through this so they compare
+ * like with like on every topology (fix126). */
+static int writer_slot_ceiling(int slot, int want, int thermal_cap) {
+    int k = writer_slot_path_idx(slot);
+    if (k < 0 || want <= 0) return want;
+    return cpu_floor_ceiling(k, (int)cpu_snap_freq(k, (long)want), thermal_cap);
+}
+
 #define GPU_PATH_CANDIDATES_MAX 6
 static char g_gpu_max_path[160]      = {0};   /* either pwrlevel or max_freq */
 static char g_gpu_min_path[160]      = {0};
@@ -1552,6 +1577,8 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
                 if (writer_write_int_confirmed((asb_write_node_t)(ASB_WRITE_CPU_MAX0 + i),
                                                g_cpu_max_paths[i], cmax[i]) == 0) {
                     g_wcache.cpu_max[i] = cmax[i];
+                    /* The prime escape compares the live ceiling with this (fix126). */
+                    g_fsm_slot_req_khz[i] = cmax[i];
                     writes++;
                 }
             }

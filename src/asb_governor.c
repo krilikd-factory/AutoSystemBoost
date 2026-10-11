@@ -1437,6 +1437,11 @@ static unsigned long g_wake_by_src[ASB_WAKE_SRC_COUNT];
 static unsigned long g_scr_on_by_uevent = 0, g_scr_on_by_recheck = 0, g_scr_on_by_tick = 0;
 /* ... and by Android's own display state, through the waiter below (fix116). */
 static unsigned long g_scr_on_by_display = 0;
+/* The same for screen OFF (fix126). Every screen-off the waiter reported was logged as
+ * "screen OFF (tick)", because the branch that applies it is the tick's - so a capture could
+ * not tell an immediate screen-off from one found seconds later on the next active tick. */
+static unsigned long g_scr_off_by_uevent = 0, g_scr_off_by_display = 0, g_scr_off_by_tick = 0;
+static time_t        g_disp_prop_off_ts = 0;
 static unsigned long g_disp_prop_events = 0;
 static int           g_disp_prop_evfd = -1;
 /* 0 = not started, 1 = started, 2 = waiting on the property, -1 = unavailable / gave up.
@@ -2532,7 +2537,8 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     fprintf(f, "probe_cache_hits=%lu\nprobe_cache_misses=%lu\n",
             g_stat_probe_hits, g_stat_probe_misses);
     /* Foreground answered from the top-app cgroup, no fork (fix124). */
-    fprintf(f, "probe_topapp=%lu\n", g_stat_probe_topapp);
+    fprintf(f, "probe_topapp=%lu\nprobe_topapp_empty=%lu\nprobe_topapp_ambiguous=%lu\n",
+            g_stat_probe_topapp, g_stat_probe_topapp_empty, g_stat_probe_topapp_ambig);
     fprintf(f, "governor_transitions=%lu\ngovernor_writes=%lu\n"
                "governor_readbacks=%lu\ngovernor_vendor_overrides=%lu\n",
             g_stat_transitions, g_stat_writes, g_stat_readbacks,
@@ -2835,6 +2841,8 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         fprintf(f, "display_state=%d\nscreen_aod_s=%ld\n", g_display_state, g_scr_aod_s);
         fprintf(f, "screen_on_detect=\"uevent:%lu,recheck:%lu,tick:%lu,display:%lu\"\n",
                 g_scr_on_by_uevent, g_scr_on_by_recheck, g_scr_on_by_tick, g_scr_on_by_display);
+        fprintf(f, "screen_off_detect=\"uevent:%lu,display:%lu,tick:%lu\"\n",
+                g_scr_off_by_uevent, g_scr_off_by_display, g_scr_off_by_tick);
         fprintf(f, "display_waiter=%d\ndisplay_state_events=%lu\nscreen_on_resume_skipped=%lu\n",
                 g_disp_waiter_up, g_disp_prop_events, g_scr_resume_skipped);
         /* Screen-on touch watch (fix117): device found, touches that started after a calm
@@ -2934,8 +2942,8 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     fprintf(f, "slot_policy_ids=%d,%d,%d\n",
             g_cpu_policy_ids[0], g_cpu_policy_ids[1], g_cpu_policy_ids[2]);
     fprintf(f, "desired_cpu_max0=%d\ndesired_cpu_maxp=%d\n",
-            cpu_floor_ceiling(0, (int)cpu_snap_freq(0, (long)fsm->current_caps.cpu_max[0]), fsm->thermal_cap),
-            cpu_floor_ceiling(1, (int)cpu_snap_freq(1, (long)fsm->current_caps.cpu_max[1]), fsm->thermal_cap));
+            writer_slot_ceiling(0, fsm->current_caps.cpu_max[0], fsm->thermal_cap),
+            writer_slot_ceiling(1, fsm->current_caps.cpu_max[1], fsm->thermal_cap));
     /* Published through cpu_floor_ceiling as well: "desired" must be what the writer really
      * sends. Before, it was the raw FSM wish, so whenever that sat under the race-to-idle
      * guard the report read "hardware above the request" - the guard's own 1747200 against
@@ -2945,6 +2953,25 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
        two would compare different clusters - I made exactly that mistake once. */
     fprintf(f, "effective_cpu_max0=%d\neffective_cpu_maxp=%d\n",
             tick_scaling_max(0), tick_scaling_max(1));
+    /* The prime itself, and what ASB last wrote (fix126).
+     *
+     * "maxp" above is slot 1: the prime on a 2-cluster SoC, a middle cluster on a 1+3+2+1
+     * part (OP12, Ace 5). The full-day capture compared that slot's request with the LAST
+     * policy's live ceiling, so on those phones a mid-core number judged the prime.
+     *
+     * requested_* is the ceiling the writer sent and kept - after the thermal budget and the
+     * race-to-idle floor - so a capture can split "lower than the profile rail" into ASB's
+     * own trim (live == requested) and somebody else's ceiling (live < requested). desired_*
+     * is the rail before the budget and cannot tell those apart. */
+    {
+        int _pslot = (g_cpu_policy_ids[2] >= 0) ? 2 : 1;
+        fprintf(f, "prime_slot=%d\nprime_policy_id=%d\n", _pslot, g_cpu_policy_ids[_pslot]);
+        fprintf(f, "desired_cpu_max_prime=%d\neffective_cpu_max_prime=%d\n",
+                writer_slot_ceiling(_pslot, fsm->current_caps.cpu_max[_pslot], fsm->thermal_cap),
+                tick_scaling_max(_pslot));
+        fprintf(f, "requested_cpu_max0=%d\nrequested_cpu_max_prime=%d\n",
+                g_fsm_slot_req_khz[0], g_fsm_slot_req_khz[_pslot]);
+    }
     fprintf(f, "reassert_eligible=%d\n", asb_cap_writes_should_back_off() ? 0 : 1);
     fprintf(f, "cap_vendor_passive=%d\n", g_cap_vendor_passive);
     /* Screen-off cooldown clamp, so a night capture can show whether it engaged.
@@ -2959,6 +2986,10 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         long _pe_t = g_prime_escape_total_ms;
         if (g_prime_escape_since_ms > 0) _pe_t += asb_clock_ms(CLOCK_BOOTTIME) - g_prime_escape_since_ms;
         fprintf(f, "prime_escape_total_s=%ld\n", _pe_t / 1000L);
+        /* Bursts the gates kept shut (fix126): die within 3 C of the mark that would end the
+         * burst at once, and spells pinned at a lower ceiling ASB does not hold. */
+        fprintf(f, "prime_escape_skip_warm=%lu\nprime_escape_skip_foreign=%lu\n",
+                g_esc_skip_warm, g_esc_skip_foreign);
     }
     /* The suspend-aware companion to load1: how much of the last tick the CPU was up. */
     fprintf(f, "awake_tick_pct=%d\n", m->cpu.awake_tick_pct);
@@ -7100,6 +7131,7 @@ int main(int argc, char **argv) {
                     }
                 } else {
                     g_disp_prop_on_ts = 0;
+                    g_disp_prop_off_ts = time(NULL);
                     if (metrics.misc.screen_on) need_metrics = 1;
                 }
             }
@@ -7183,7 +7215,7 @@ int main(int argc, char **argv) {
                         if (g_asb_cfg.log_level >= 1) asb_log("screen %s (uevent, drained=%d events)",
                                 confirmed ? "ON" : "OFF", drained);
                         if (confirmed) g_scr_on_by_uevent++;
-                        else g_scr_off_since = time(NULL);
+                        else { g_scr_off_since = time(NULL); g_scr_off_by_uevent++; }
                         need_metrics = 1;
                         if (confirmed) {
                             /* Screen just came on: full cadence immediately, and reset
@@ -7771,7 +7803,16 @@ int main(int argc, char **argv) {
                      * branch used to skip: stats saved, and the screen-off session plan
                      * built and pre-armed, so the sleep rails are not left to chance. */
                     uev_unpark(epfd, uefd);
-                    if (g_asb_cfg.log_level >= 1) asb_log("screen OFF (tick)");
+                    /* Name the path that actually noticed (fix126): the waiter's off edge
+                     * lands here too, within the same second. */
+                    if (g_disp_prop_off_ts && time(NULL) - g_disp_prop_off_ts <= 3) {
+                        g_scr_off_by_display++;
+                        if (g_asb_cfg.log_level >= 1) asb_log("screen OFF (Android display state)");
+                    } else {
+                        g_scr_off_by_tick++;
+                        if (g_asb_cfg.log_level >= 1) asb_log("screen OFF (tick)");
+                    }
+                    g_disp_prop_off_ts = 0;
                     persistent_stats_save(&fsm);
                     if (fsm_profile_is_battery)
                         fsm.bat_screen_off_count++;
@@ -9098,8 +9139,9 @@ int main(int argc, char **argv) {
                  * "leak_observed p0=1440000(want 1269183) p1=1747200(want 1374780)": both
                  * "leaks" were ASB's own floor, and the counter grew on a device where
                  * nothing had raised a cap at all. */
-                int want_p0 = cpu_floor_ceiling(0, (int)cpu_snap_freq(0, (long)fsm.current_caps.cpu_max[0]), fsm.thermal_cap);
-                int want_p1 = cpu_floor_ceiling(1, (int)cpu_snap_freq(1, (long)fsm.current_caps.cpu_max[1]), fsm.thermal_cap);
+                /* Per-slot tables (fix126): on a 1+3+2+1 part slot 1 is not table index 1. */
+                int want_p0 = writer_slot_ceiling(0, fsm.current_caps.cpu_max[0], fsm.thermal_cap);
+                int want_p1 = writer_slot_ceiling(1, fsm.current_caps.cpu_max[1], fsm.thermal_cap);
                 int leak0 = (actual_p0 > 0 && want_p0 > 0 && actual_p0 > want_p0 + 100000) ? 1 : 0;
                 int leak1 = (actual_p1 > 0 && want_p1 > 0 && actual_p1 > want_p1 + 100000) ? 1 : 0;
 
@@ -9130,12 +9172,25 @@ int main(int argc, char **argv) {
                     time_t leak_now = time(NULL);
                     int _lvl = (used0 || used1) ? 1 : 3;
                     if (g_asb_cfg.log_level >= _lvl && leak_now - g_last_leak_reassert >= 60) {
-                        asb_log("vendor_ceiling[%s/%s]: p0=%d(want %d, cur %d MHz) p1=%d(want %d, cur %d MHz) — %s",
+                        /* What the writer last did on the leaking node (fix125).
+                         *
+                         * The OP15 fix124 capture has one of these 4 s after a prime_escape lift
+                         * and release in the same second: p1 still at 3129600 - the escape's own
+                         * rail - against a wish of 1862400, with nothing in the log to say whether
+                         * the lowering write was deferred by a backoff or written and read back
+                         * higher. The node's status and remaining backoff answer that next time. */
+                        const asb_write_health_t *_wh = &g_write_health[leak1 ? ASB_WRITE_CPU_MAX0 + 1
+                                                                               : ASB_WRITE_CPU_MAX0];
+                        long _wr = (_wh->retry_at > leak_now) ? (long)(_wh->retry_at - leak_now) : 0L;
+                        asb_log("vendor_ceiling[%s/%s]: p0=%d(want %d, cur %d MHz) p1=%d(want %d, cur %d MHz) — %s"
+                                " (writer p%d: %s, req %d, holds %lu, backoff %lds)",
                                 asb_state_names[fsm.state],
                                 asb_profile_name(fsm.profile_idx),
                                 actual_p0, want_p0, metrics.cpu.cur_freq[0],
                                 actual_p1, want_p1, metrics.cpu.cur_freq[1],
-                                (used0 || used1) ? "clock ABOVE our limit" : "raised but unused, not contested");
+                                (used0 || used1) ? "clock ABOVE our limit" : "raised but unused, not contested",
+                                leak1 ? 1 : 0, _wh->status[0] ? _wh->status : "-",
+                                _wh->requested, _wh->floor_holds, _wr);
                         g_last_leak_reassert = leak_now;
                         g_leak_reassert_count++;
                     }

@@ -1120,6 +1120,32 @@ static time_t        g_touch_last_ts = 0;
 static int           g_touch_kick = 0;
 static unsigned long g_touch_lifts = 0;
 
+/* Prime escape gates (fix126).
+ *
+ * g_fsm_slot_req_khz: the ceiling ASB last wrote and kept for each slot (the writer sets it
+ * next to its own cache). With it the escape can tell a prime pinned at ASB's ceiling - the
+ * case it exists for - from one pinned at a lower ceiling somebody else holds, where lifting
+ * ASB's request changes nothing but costs two writes and a rest period.
+ *
+ * ASB_ESC_ENTRY_MARGIN_C: a burst opens only this far under the sustained-exit mark that
+ * ends it. The OP15 fix124 capture has a lift at 46 C and its release at 48 C in the same
+ * second (Smart exits at 48): the prime went to the escape rail on a die already rising,
+ * and the lowering write had to chase it. */
+#define ASB_ESC_ENTRY_MARGIN_C 3
+static int           g_fsm_slot_req_khz[3] = {0, 0, 0};
+static unsigned long g_esc_skip_warm = 0;     /* bursts not opened: die within the margin */
+static unsigned long g_esc_skip_foreign = 0;  /* bursts not opened: a lower foreign ceiling */
+
+/* 1 when the slot's live ceiling (MHz) sits clearly below what ASB last wrote (kHz):
+ * someone else holds it, and the cores pinned there are pinned at THEIR limit. One MHz of
+ * slack covers the MHz truncation of the live value. No request recorded = unknown = 0. */
+static int asb_esc_ceiling_foreign(const asb_metrics_t *m, int slot) {
+    if (slot < 0 || slot > 2) return 0;
+    int req = g_fsm_slot_req_khz[slot];
+    if (req <= 0 || m->cpu.max_freq[slot] <= 0) return 0;
+    return (long)m->cpu.max_freq[slot] * 1000L + 1000L < (long)req;
+}
+
 static asb_state_t fsm_desired_base(const asb_metrics_t *m) {
     /* Move the learned idle baseline exactly once per evaluation. */
     asb_ui_quiet_floor_update(m);
@@ -2618,9 +2644,18 @@ if (!can_leave &&
                        m->cpu.cur_freq[_ps] * 100 >= m->cpu.max_freq[_ps] * 98);
         int _pinned_mid = (_ms >= 1 && m->cpu.max_freq[_ms] > 0 &&
                        m->cpu.cur_freq[_ms] * 100 >= m->cpu.max_freq[_ms] * 98);
-        int _pinned = _pinned_prime || _pinned_mid;
+        /* Pinned at ASB's own ceiling, not at a lower one held by the vendor (fix126): the
+         * OP15 fix124 capture has the prime under a 1632000 vendor ceiling against ASB's
+         * 1862400 for the last 25 minutes - a burst there lifts a request that is not the
+         * one in force. */
+        int _pinned_any = _pinned_prime || _pinned_mid;
+        int _pinned = (_pinned_prime && !asb_esc_ceiling_foreign(m, _ps)) ||
+                      (_pinned_mid && !asb_esc_ceiling_foreign(m, _ms));
+        static int _esc_fstreak = 0, _esc_warm_held = 0;
         if (!_ok) {
             _esc_streak = 0;
+            _esc_fstreak = 0;
+            _esc_warm_held = 0;
             if (_was) _esc_rest_until = _now + _esc_rest;
             fsm->prime_escape = 0;
         } else if (_was) {
@@ -2630,14 +2665,29 @@ if (!can_leave &&
                 _esc_rest_until = _now + _esc_rest;
             }
         } else {
-            _esc_streak = _pinned ? _esc_streak + 1 : 0;
             /* MODERATE needs one more pinned tick than HEAVY (fix105): it is where most
              * screen time is spent, so a single busy frame must not open a burst. */
-            if (_esc_streak >= (fsm->state == ASB_STATE_MODERATE ? 3 : 2)) {
-                fsm->prime_escape = 1;
-                _esc_since = _now;
-                _esc_streak = 0;
-                fsm->prime_escape_count++;
+            int _need = (fsm->state == ASB_STATE_MODERATE ? 3 : 2);
+            _esc_streak = _pinned ? _esc_streak + 1 : 0;
+            if (_esc_streak > 1000) _esc_streak = 1000;
+            if (!_pinned) _esc_warm_held = 0;
+            /* One count per spell pinned at a foreign ceiling, not one per tick. */
+            _esc_fstreak = (!_pinned && _pinned_any) ? _esc_fstreak + 1 : 0;
+            if (_esc_fstreak == _need) g_esc_skip_foreign++;
+            if (_esc_streak >= _need) {
+                /* Opens only with room under the mark that would close it (fix126). The
+                 * streak is kept, so the burst opens on the first cooler tick that is still
+                 * pinned instead of needing a fresh streak. */
+                int _exit_c = asb_config_profile_sustained_temp_exit(&g_asb_cfg, fsm->profile_idx);
+                if (m->therm.cpu_max_c > _exit_c - ASB_ESC_ENTRY_MARGIN_C) {
+                    if (!_esc_warm_held) { g_esc_skip_warm++; _esc_warm_held = 1; }
+                } else {
+                    fsm->prime_escape = 1;
+                    _esc_since = _now;
+                    _esc_streak = 0;
+                    _esc_warm_held = 0;
+                    fsm->prime_escape_count++;
+                }
             }
         }
         fsm->prime_escape_mid = 0;

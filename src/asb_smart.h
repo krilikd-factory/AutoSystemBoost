@@ -417,6 +417,10 @@ static void asb_smart_strip_activity(char *s) {
 #define ASB_TOPAPP_PROCS_B "/dev/cpuctl/top-app/cgroup.procs"
 #endif
 static unsigned long g_stat_probe_topapp = 0;
+/* Why the cgroup did not answer (fix125): nothing app-like in front (lock screen, a system
+ * window), or two apps at adj 0 (split screen, a picture-in-picture video). Published so the
+ * next capture says which one sends the governor to the dumpsys fallback. */
+static unsigned long g_stat_probe_topapp_empty = 0, g_stat_probe_topapp_ambig = 0;
 static int asb_read_small(const char *path, char *buf, size_t bufsz) {
     int fd = open(path, O_RDONLY | O_CLOEXEC);
     if (fd < 0) return -1;
@@ -465,7 +469,7 @@ static int asb_smart_pkg_via_topapp(char *out_pkg, size_t outsz) {
         cadj[nc] = adj;
         nc++;
     }
-    if (nc == 0) return 0;
+    if (nc == 0) { g_stat_probe_topapp_empty++; return 0; }
     /* One package among all candidates, or among the adj-0 ones. */
     for (int pass = 0; pass < 2; pass++) {
         const char *pick = NULL;
@@ -480,6 +484,7 @@ static int asb_smart_pkg_via_topapp(char *out_pkg, size_t outsz) {
             return 1;
         }
     }
+    g_stat_probe_topapp_ambig++;
     return 0;
 }
 
@@ -634,6 +639,10 @@ static asb_pkg_status_t asb_smart_detect_foreground_pkg(
      * invalidated on profile change and camera transitions - the events that actually
      * matter arrive as events, not as an expiring timer. */
     int _ttl = !screen_on_now ? 120 : (interacting_now ? 20 : 25);
+    /* Where the cgroup answers as a rule (fix125), a miss is a passing state - the lock
+     * screen, split screen - and the last answer stays good for a minute before a dumpsys is
+     * spent on it. A field OP15: 190 cgroup answers, 16 dumpsys fallbacks in 52 minutes. */
+    if (screen_on_now && g_stat_probe_topapp > 0 && _ttl < 60) _ttl = 60;
         if (g_pkg_cache.pkg[0] && (now - g_pkg_cache.last_seen_ts) < _ttl) {
             if (out_pkg && outsz > 0) {
                 asb_copy_str(out_pkg, g_pkg_cache.pkg, outsz);
