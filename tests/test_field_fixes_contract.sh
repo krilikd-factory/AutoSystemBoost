@@ -655,4 +655,19 @@ grep -q 'grep -Fq "setting|$_pb_ns:$_pb_key|" "$ASB_PROFILE_BASELINE" 2>/dev/nul
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS: fix129 contract"
 ) || exit 1
+# ---- fix130 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix130: $*"; exit 1; }
+G="$ROOT/src/asb_governor.c"; D="$ROOT/tools/asb_diag.sh"
+grep -q '^static void asb_main_capacity_parity(asb_profile_caps_t \*caps, const asb_metrics_t \*m,$' "$G" || fail "no main/prime parity"
+grep -q 'if (g_parity_main_khz > want_p0) want_p0 = g_parity_main_khz;' "$G" || fail "the raised main ceiling would be logged as a leak"
+grep -q 'if (g_parity_main_khz > _d0) _d0 = g_parity_main_khz;' "$G" || fail "desired_cpu_max0 does not include the raise"
+grep -q '^static int writer_slot_step_at_least(int slot, long khz) {' "$ROOT/src/asb_writer.h" || fail "no step-at-or-above helper"
+grep -q 'capacity at the ceilings: main' "$D" || fail "asbdiag does not show which cluster looks bigger"
+grep -q 'main kept level with the prime' "$D" || fail "asbdiag does not report the raise"
+grep -q 'uiAudioRelease(ctx, endAt);' "$ROOT/webroot/index.html" || fail "UI sounds keep the audio output open"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix130 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
