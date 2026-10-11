@@ -3310,7 +3310,7 @@ body.ufo-flying .logo-glyph { opacity: 0; }
         <span class="smart-banner-value" id="bnSes">—</span>
       </div>
       <div class="smart-banner-item">
-        <span class="smart-banner-label" data-i18n="lv_avgdrain">Usual this hour</span>
+        <span class="smart-banner-label" data-i18n="lv_avgdrain">Drain</span>
         <span class="smart-banner-value" id="bnDrain">—</span>
       </div>
       <div class="smart-banner-item">
@@ -8540,7 +8540,7 @@ async function pollLive(visible) {
     let eta_basis = '';
     const _fRate = parseInt(kv.forecast_rate_x10 || '0', 10);
     const _fBasis = String(kv.forecast_basis || '');
-    if (_fRate > 0 && (_fBasis === 'recent' || _fBasis === 'slot')) {
+    if (_fRate > 0 && (_fBasis === 'now' || _fBasis === 'recent' || _fBasis === 'slot')) {
       ewma_x10 = _fRate;
       eta_basis = _fBasis;
     } else {
@@ -8560,19 +8560,21 @@ async function pollLive(visible) {
     let eta_title;
     if (ewma_x10 > 0) {
       on_ma = Math.max(50, Math.round(cap_full_mah * ewma_x10 / 1000));
-      const _rateTxt = ' ' + (ewma_x10 / 10).toFixed(1) + T('unit_pcth', '%/h');
+      /* Short on the card (fix128): "actual" or "estimate"; the rate itself is in the
+       * Drain tile above and in the tooltip. */
+      const _rateTxt = ' (' + (ewma_x10 / 10).toFixed(1) + T('unit_pcth', '%/h') + ')';
       if (eta_basis === 'slot') {
-        eta_note = ' · ' + T('eta_slot', 'usual for this hour') + _rateTxt;
+        eta_note = ' · ' + T('eta_slot', 'estimate');
         eta_title = T('eta_slot_tip',
-          'No screen-on session measured yet since the governor started: based on what this hour usually costs, learned from earlier sessions.');
+          'Estimate: nothing measured since the governor started - based on what this hour usually costs.') + _rateTxt;
       } else if (eta_basis === 'recent') {
-        eta_note = ' · ' + T('eta_average', 'recent drain') + _rateTxt;
+        eta_note = ' · ' + T('eta_average', 'estimate');
         eta_title = T('eta_average_tip',
-          'Based on the smoothed drain of your recent screen-on sessions - the same forecast Smart uses for its battery budget.');
+          'Estimate: no 10-minute measurement with the screen on yet - based on your recent screen-on sessions.') + _rateTxt;
       } else {
-        eta_note = ' · ' + T('eta_measured', 'drain now') + _rateTxt;
+        eta_note = ' · ' + T('eta_measured', 'actual');
         eta_title = T('eta_measured_tip',
-          'Based on the drain measured over the last ' + Math.round(drain_win_s / 60) + ' min.');
+          'From the actual screen-on drain: the battery level falling over the last minutes.') + _rateTxt;
       }
     } else {
       if (profile === 'performance') { on_ma = 650; }
@@ -8896,51 +8898,25 @@ async function pollLive(visible) {
           // different at 1 session than at 200, so the two belong side by side.
           _el('bnSes').textContent = parseInt(kv.smart_sessions_total || '0', 10);
 
-          // Drain in tenths of a percent per hour.
-          const _drEwma = parseInt(kv.smart_drain_ewma_x10 || '0', 10);
-          const _drLast = parseInt(kv.smart_drain_pctph_x10 || '0', 10);
-          /* Measured drain first, long-run average second - the order action.sh uses.
-           *
-           * _drEwma is a bucket average: "what this hour of the week usually costs",
-           * built from days of history. _drLast is the drain measured over the current
-           * window. Preferring the average meant the card showed 17.6%/h while the phone
-           * was actually drawing 7.2 - and action.sh, reading the same state file, showed
-           * both correctly labelled.
-           *
-           * A user comparing the two has no way to tell they are different quantities,
-           * and the number they can verify against the battery screen is the measured
-           * one. Fall back to the average only when no window has closed yet. */
-          const dr = (_drLast > 0) ? _drLast : _drEwma;
-          // Keep the last real reading instead of blanking.
-          // Reported after an auto-switch to Battery, where it is exactly the wrong moment to
-          // lose the number.
-          // Below ~10 minutes of screen-on the reading is arithmetic noise, not a rate.
-          //
-          // The window is short after a reboot and one step of the battery counter is a
-          // whole percent, so a single tick maps to tens of %/h - a phone five minutes off
-          // the charger showed 48 %/h, which is not wrong so much as meaningless. The
-          // governor already knows the window length; below the threshold say so instead
-          // of publishing a number nobody should act on.
-          // The governor now carries the last completed measurement across sessions and
-          // only publishes a rate it considers usable, so gating on window length here
-          // would hide exactly the value that fix produces - the banner would still read
-          // "measuring..." with a perfectly good number sitting in the state file.
-          // Average drain for the learned bucket, not the foreground app's own draw.
-          //
-          // The per-app figure is an attribution the platform itself hedges on, and nobody can
-          // act on "this app is using 3%". The bucket average answers the question people
-          // actually open Monitor to ask: is this phone doing well right now.
           {
-            const bd = parseInt(kv.smart_bucket_drain_x10, 10);
-            if (!isNaN(bd) && bd > 0) {
-              _lastDrain = bd;
-              const _bdEl = _el('bnDrain');
-              _bdEl.textContent = (bd / 10).toFixed(1) + T('unit_pcth', '%/h');
-              /* This hour's history, not today's drain (fix127) - the tile was labelled
-               * "average drain" next to a forecast built from a different rate. */
-              _bdEl.title = T('lv_avgdrain_tip',
-                'What this hour of the week usually costs, learned from earlier sessions - not today\u2019s drain. The forecast below uses your recent drain.');
+            /* The ACTUAL drain (fix128): the battery level falling with the screen on, over
+             * the last ten minutes or more - the figure the forecast below is built from when
+             * it says "actual". It showed this hour's learned history ("usual this hour
+             * 7.9 %/h") above a forecast at 17.1 %/h, which told nobody how the phone was
+             * doing. Until a window is long enough: "measuring". */
+            const _bdEl = _el('bnDrain');
+            let _act = 0;
+            if (String(kv.forecast_basis || '') === 'now') _act = parseInt(kv.forecast_rate_x10 || '0', 10);
+            else if (!('forecast_basis' in kv) && parseInt(kv.smart_drain_window_s || '0', 10) >= 600)
+              _act = parseInt(kv.smart_drain_pctph_x10 || '0', 10);
+            if (_act > 0) {
+              _lastDrain = _act;
+              _bdEl.textContent = (_act / 10).toFixed(1) + T('unit_pcth', '%/h');
+            } else {
+              _bdEl.textContent = T('lv_measuring', 'measuring\u2026');
             }
+            _bdEl.title = T('lv_avgdrain_tip',
+              'Actual screen-on drain: how fast the battery level is falling now, over the last minutes - not a model.');
           }
 
           // Thermal trend is what makes Smart back off, so it explains Alpha moving on its
