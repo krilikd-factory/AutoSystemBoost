@@ -2773,6 +2773,8 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
          * have to pick a thermal zone for itself, which is exactly the guessing this file
          * spent months eliminating. */
         fprintf(f, "cpu_max_c=%d\n", m ? m->therm.cpu_max_c : 0);
+        /* Promotions of the control sensor to full confidence after boot (fix129). */
+        fprintf(f, "thermal_conf_promotions=%lu\n", g_thermal_conf_promotions);
         fprintf(f, "smart_boot_settle=%d\nstartup_quarantined=%lu\n"
                    "thermal_control_source=\"%s\"\nthermal_control_zone=%d\n"
                    "thermal_source_confidence=%d\nthermal_rejected_type=\"%s\"\n"

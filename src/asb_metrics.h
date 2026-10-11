@@ -895,6 +895,11 @@ static void metrics_read_cpu(asb_cpu_t *c) {
 /* Confidence in the current thermal control source: 0 unknown, 1 low (derived or
  * unvalidated), 2 cross-checked against peers. */
 static int g_thermal_source_confidence = 0;
+/* CPU peer zones of the last discovery, for the runtime confidence re-check (fix129). */
+static int g_thermal_cpu_peer_z[24];
+static int g_thermal_cpu_peer_n = 0;
+static time_t g_thermal_conf_recheck_ts = 0;
+static unsigned long g_thermal_conf_promotions = 0;
 
 static int g_thermal_cpu_zone     = -1;
 static int g_thermal_skin_zone    = -1;  /* literal shell_front/frame/back only */
@@ -1168,6 +1173,7 @@ int cpu_prio = -1;
             if (raw >= 1000) peers_milli = 1;
 
             peer_c[np] = c;
+            g_thermal_cpu_peer_z[np] = z;
             np++;
             if (prio < fallback_prio && thermal_sensor_validate(z)) {
                 fallback_zone = z;
@@ -1176,6 +1182,7 @@ int cpu_prio = -1;
             }
         }
 
+        g_thermal_cpu_peer_n = np;
         g_thermal_cpu_fallback_zone = fallback_zone;
         snprintf(g_thermal_cpu_fallback_type, sizeof(g_thermal_cpu_fallback_type),
                  "%s", fallback_type);
@@ -1306,6 +1313,45 @@ static time_t g_last_thermal_read_ts = 0;  /* when we last actually read temp */
 static int    g_last_thermal_value = 0;     /* cached last real temp */
 static time_t g_last_thermal_rescan = 0;    /* periodic rescan if skin zone missing */
 
+/* Re-earn full confidence at runtime (fix129).
+ *
+ * The promotion of a core-zone fallback (socd rejected as "not a temperature") is decided
+ * once, at discovery: within 6 C of the CPU peers' median, or confidence stays 1. Discovery
+ * runs at boot, when one prime core can sit 10 C above the median - an OP15 diag two minutes
+ * after a boot: control cpu-1-1-0 at confidence 1/2, peers 32..45 C; the boot before it had
+ * passed. Confidence 1 adds a confirmation tick to every load-driven state change for the
+ * rest of the session, so whether the phone ramps up 2-6 s later all day was decided by how
+ * busy the boot happened to be. The same check is now repeated every 30 s, on the zones
+ * discovery recorded, until it passes; a genuine dispute keeps failing it and keeps the tick. */
+static void thermal_conf_recheck(time_t now) {
+    if (g_thermal_source_confidence != 1 || g_thermal_cpu_zone < 0) return;
+    if (strcmp(g_thermal_rejected_type, "socd") != 0) return;
+    if (g_thermal_rejected_raw < 0 || g_thermal_rejected_raw >= 1000) return;
+    if (strncmp(g_thermal_cpu_type, "cpu", 3) != 0 || g_thermal_cpu_peer_n < 3) return;
+    if (g_thermal_conf_recheck_ts != 0 && now - g_thermal_conf_recheck_ts < 30 &&
+        now >= g_thermal_conf_recheck_ts) return;
+    g_thermal_conf_recheck_ts = now;
+    char p[128];
+    snprintf(p, sizeof(p), THERMAL_BASE "/thermal_zone%d/temp", g_thermal_cpu_zone);
+    int cur_c = thermal_raw_to_c(sysfs_read_int(p, 0));
+    if (cur_c <= 10 || cur_c >= 120) return;
+    int v[24], n = 0;
+    for (int i = 0; i < g_thermal_cpu_peer_n && i < 24; i++) {
+        snprintf(p, sizeof(p), THERMAL_BASE "/thermal_zone%d/temp", g_thermal_cpu_peer_z[i]);
+        int c = thermal_raw_to_c(sysfs_read_int(p, 0));
+        if (c > 10 && c < 120) v[n++] = c;
+    }
+    if (n < 3) return;
+    for (int a = 0; a < n - 1; a++)
+        for (int b = a + 1; b < n; b++)
+            if (v[b] < v[a]) { int t = v[a]; v[a] = v[b]; v[b] = t; }
+    int gap = cur_c - v[n / 2]; if (gap < 0) gap = -gap;
+    if (gap <= 6) {
+        g_thermal_source_confidence = 2;
+        g_thermal_conf_promotions++;
+    }
+}
+
 static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
     (void)need_headroom;   /* kept for callers; headroom is now always read */
     char path[128];
@@ -1325,6 +1371,7 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
             g_last_thermal_rescan = now;
             thermal_discover();
         }
+        thermal_conf_recheck(now);
     }
 
     t->cpu_max_c  = 0;
