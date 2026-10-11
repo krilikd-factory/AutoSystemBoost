@@ -128,6 +128,7 @@ T_N_LTE_TIMER="LTE écran éteint : activé · minuterie en cours (90 s après e
 T_N_LTE_ALLOWED="LTE écran éteint : activé · 5G autorisée (écran allumé)"
 T_N_LTE_LIGHT_LTE="5G seulement si besoin : oui · LTE maintenant (trafic léger), la 5G revient sur un gros téléchargement"
 T_N_LTE_LIGHT_5G="5G seulement si besoin : oui · 5G utilisée, trafic surveillé"
+T_N_LTE_LIGHT_HINT="5G seulement si besoin : non · en données mobiles, un trafic léger (musique, fils) coûte moins en LTE - WebUI → Réseau mobile"
 T_N_LTE_NO5G="LTE écran éteint : activé · la 5G n'est PAS autorisée actuellement - si vous ne l'avez pas coupée, réactivez-la dans les réglages SIM"
 T_N_ROUTE="route via %s"
 T_N_ROUTE_RX="%s Mo reçus"

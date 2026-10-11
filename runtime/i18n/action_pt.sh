@@ -128,6 +128,7 @@ T_N_LTE_TIMER="LTE com tela desligada: ligado · temporizador correndo (90 s ap�
 T_N_LTE_ALLOWED="LTE com tela desligada: ligado · 5G permitido (tela ligada)"
 T_N_LTE_LIGHT_LTE="5G só quando preciso: ligado · agora LTE (tráfego leve), o 5G volta num download pesado"
 T_N_LTE_LIGHT_5G="5G só quando preciso: ligado · 5G em uso, a vigiar o tráfego"
+T_N_LTE_LIGHT_HINT="5G só quando preciso: desligado · em dados móveis, tráfego leve (música, feeds) gasta menos em LTE - WebUI → Rede móvel"
 T_N_LTE_NO5G="LTE com o ecrã desligado: ligado · 5G NÃO está permitido agora - se não o desligou, ative-o nas definições do SIM"
 T_N_ROUTE="rota via %s"
 T_N_ROUTE_RX="%s MB recebidos"

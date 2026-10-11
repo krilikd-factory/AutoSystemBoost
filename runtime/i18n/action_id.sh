@@ -167,6 +167,7 @@ T_N_LTE_TIMER="LTE saat layar mati: aktif · pengatur waktu berjalan (90 dtk set
 T_N_LTE_ALLOWED="LTE saat layar mati: aktif · 5G diizinkan (layar menyala)"
 T_N_LTE_LIGHT_LTE="5G hanya saat perlu: aktif · sekarang LTE (lalu lintas ringan), 5G kembali saat unduhan berat"
 T_N_LTE_LIGHT_5G="5G hanya saat perlu: aktif · 5G dipakai, lalu lintas dipantau"
+T_N_LTE_LIGHT_HINT="5G hanya saat perlu: mati · di data seluler, lalu lintas ringan (musik, feed) lebih hemat lewat LTE - WebUI → Jaringan seluler"
 T_N_LTE_NO5G="LTE saat layar mati: aktif · 5G saat ini TIDAK diizinkan - jika bukan Anda yang mematikannya, aktifkan di setelan SIM"
 T_N_ROUTE="rute via %s"
 T_N_ROUTE_RX="%s MB diterima"
