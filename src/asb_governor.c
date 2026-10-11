@@ -141,6 +141,10 @@ static int    g_smart_drain_rate_ewma_x10 = 0;
 static int    g_smart_battery_lean_pub = 0;
 static int    g_smart_last_quality = -1;
 static int    g_smart_budget_src = 0;
+/* The rate the budget's forecast was divided by, after the self-correction (fix127). The
+ * forecast is published WITH this rate, so every screen that prints "x h at y %/h" shows a
+ * pair that multiplies back to the battery level. */
+static int    g_smart_budget_rate_x10 = 0;
 static time_t g_gov_start_ts = 0;
 static int    g_smart_boot_settle = 0;
 /* Sessions kept as telemetry but withheld from learning because they landed inside the
@@ -2734,6 +2738,27 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                    "smart_q_vendor=%d\nsmart_q_fail=%d\nsmart_budget_src=%d\n",
                 g_smart_q_bat, g_smart_q_heat, g_smart_q_stab,
                 g_smart_q_vendor, g_smart_q_fail, g_smart_budget_src);
+        /* One screen-time forecast for every screen (fix127).
+         *
+         * The Monitor card divided by the live window rate, its "average drain" tile showed
+         * the slot's history, and the action sheet printed the budget's forecast next to the
+         * smoothed rate: an OP15 read "5 h 44 m · average" under "Average drain 12.9 %/h",
+         * and "5.7 h at an average drain of 9.4 %/h" beside "this hour usually 12.9 %/h" -
+         * three rates, two of them called "average". The forecast is now the budget's own
+         * (the one Smart acts on), published with the rate it used and where that rate came
+         * from: "recent" (the smoothed drain of recent screen-on sessions, corrected by the
+         * forecast's own track record) or "slot" (what this hour usually costs, used until a
+         * session has been measured). "none" while charging or outside Smart. */
+        {
+            int _fr = 0;
+            const char *_fb = "none";
+            if (g_smart_rt.enabled && !m->bat.charging &&
+                g_smart_rt.budget_pred_h_x10 > 0 && g_smart_budget_rate_x10 > 0) {
+                _fr = g_smart_budget_rate_x10;
+                _fb = g_smart_budget_src ? "slot" : "recent";
+            }
+            fprintf(f, "forecast_rate_x10=%d\nforecast_basis=%s\n", _fr, _fb);
+        }
         /* The live control-sensor reading, for consumers outside the governor.
          *
          * Peer counts, rejected sources and confidence are all published; the temperature
@@ -5646,6 +5671,7 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
             if (_budget_rate < 1) _budget_rate = 1;
         }
         g_drain_spike_bump = (g_drain_spike_until > now) ? 1 : 0;
+        g_smart_budget_rate_x10 = _budget_rate;
         asb_smart_apply_energy_budget(battery_pct, charging,
                                       _budget_rate, now, &g_smart_rt);
         /*
