@@ -530,9 +530,16 @@ asb_apply_ux() {
   fi
 
   # ANIMATION SCALES — manage OR restore.
-  if [ -n "$UX_ANIM_SCALE" ] && [ "${UX_MANAGE_TIMEOUTS:-0}" = "1" ]; then
-    # Save the user's stock scales ONCE, before we ever override them, so we can
-    # put them back when the toggle is turned off.
+  local _ux_dd="${ASB_DATA_DIR:-/data/adb/asb}"
+  local _ux_written="$_ux_dd/ux_anim_written"
+  local _ux_legacy="$_ux_dd/ux_anim_legacy_checked"
+  local _ux_speed _ux_speed_set=0 _cur_anim _mine _restore
+  _ux_speed="$(grep -E '^[[:space:]]*anim_speed=' "$_ux_conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  case "$_ux_speed" in ''|-1|profile) _ux_speed_set=0 ;; *) _ux_speed_set=1 ;; esac
+  if [ "$_ux_speed_set" = "1" ]; then
+    [ -r "$MODDIR/runtime/asb_anim_apply.sh" ] && \
+      MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_anim_apply.sh" --if-changed >/dev/null 2>&1
+  elif [ -n "$UX_ANIM_SCALE" ] && [ "${UX_MANAGE_TIMEOUTS:-0}" = "1" ]; then
     if [ ! -f "$_ux_base" ]; then
       mkdir -p "$MODDIR/config" 2>/dev/null
       {
@@ -543,7 +550,6 @@ asb_apply_ux() {
         echo "BASE_MULTI_PRESS=$(settings get secure multi_press_timeout 2>/dev/null)"
       } > "$_ux_base" 2>/dev/null
     fi
-    local _cur_anim
     _cur_anim="$(settings get global window_animation_scale 2>/dev/null)"
     if [ "$_cur_anim" != "$UX_ANIM_SCALE" ]; then
       asb_settings_put global animator_duration_scale "$UX_ANIM_SCALE"
@@ -551,47 +557,46 @@ asb_apply_ux() {
       asb_settings_put global window_animation_scale "$UX_ANIM_SCALE"
       _anim_changed=1
     fi
-  else
-    # Toggle is OFF — if we previously overrode the scales, RESTORE the saved
-    if [ -f "$_ux_base" ]; then
-      . "$_ux_base" 2>/dev/null
-      local _restore=0
-      _cur_anim="$(settings get global window_animation_scale 2>/dev/null)"
-      case "$BASE_WIN_ANIM" in ''|null) BASE_WIN_ANIM=1 ;; esac
-      case "$BASE_TRANS_ANIM" in ''|null) BASE_TRANS_ANIM=1 ;; esac
-      case "$BASE_DUR_ANIM" in ''|null) BASE_DUR_ANIM=1 ;; esac
-      # Refuse a baseline that is obviously our own output rather than the user's.
-      #
-      # The capture happens before the first override, but only on the run that does the
-      # overriding.
-      #
-      # 0.8 and 0.9 are the performance and balanced profile scales; Android's own default is
-      # 1.0 and no OEM ships 0.9 here.
-      case "$BASE_WIN_ANIM" in
-        0.8|0.80|0.9|0.90) BASE_WIN_ANIM=1.0; BASE_TRANS_ANIM=1.0; BASE_DUR_ANIM=1.0 ;;
-      esac
-      if [ "$_cur_anim" != "$BASE_WIN_ANIM" ]; then
-        asb_settings_put global animator_duration_scale "$BASE_DUR_ANIM"
-        asb_settings_put global transition_animation_scale "$BASE_TRANS_ANIM"
-        asb_settings_put global window_animation_scale "$BASE_WIN_ANIM"
-        _restore=1
-      fi
-      [ "$_restore" = "1" ] && _anim_changed=1
+    mkdir -p "$_ux_dd" 2>/dev/null
+    printf '%s\n' "$UX_ANIM_SCALE" > "$_ux_written" 2>/dev/null
+  elif [ -f "$_ux_base" ]; then
+    . "$_ux_base" 2>/dev/null
+    case "$BASE_WIN_ANIM" in ''|null) BASE_WIN_ANIM=1 ;; esac
+    case "$BASE_TRANS_ANIM" in ''|null) BASE_TRANS_ANIM=1 ;; esac
+    case "$BASE_DUR_ANIM" in ''|null) BASE_DUR_ANIM=1 ;; esac
+    case "$BASE_WIN_ANIM" in
+      0.8|0.80|0.9|0.90) BASE_WIN_ANIM=1.0; BASE_TRANS_ANIM=1.0; BASE_DUR_ANIM=1.0 ;;
+    esac
+    _cur_anim="$(settings get global window_animation_scale 2>/dev/null)"
+    _mine="$(cat "$_ux_written" 2>/dev/null)"
+    _restore=0
+    if [ -n "$_mine" ]; then
+      [ "$_cur_anim" = "$_mine" ] && _restore=1
     else
-      # No baseline saved, but the toggle is OFF. An EARLIER build may have
-      _cur_anim="$(settings get global window_animation_scale 2>/dev/null)"
-      case "$_cur_anim" in
-        0.8|0.80|0.9|0.90)
-          asb_settings_put global animator_duration_scale 1.0
-          asb_settings_put global transition_animation_scale 1.0
-          asb_settings_put global window_animation_scale 1.0
-          _anim_changed=1
-          ;;
-      esac
+      case "$_cur_anim" in 0.8|0.80|0.9|0.90) _restore=1 ;; esac
     fi
+    if [ "$_restore" = "1" ] && [ "$_cur_anim" != "$BASE_WIN_ANIM" ]; then
+      asb_settings_put global animator_duration_scale "$BASE_DUR_ANIM"
+      asb_settings_put global transition_animation_scale "$BASE_TRANS_ANIM"
+      asb_settings_put global window_animation_scale "$BASE_WIN_ANIM"
+      _anim_changed=1
+    fi
+    rm -f "$_ux_written" 2>/dev/null
+  elif [ ! -f "$_ux_legacy" ]; then
+    _cur_anim="$(settings get global window_animation_scale 2>/dev/null)"
+    case "$_cur_anim" in
+      0.8|0.80|0.9|0.90)
+        asb_settings_put global animator_duration_scale 1.0
+        asb_settings_put global transition_animation_scale 1.0
+        asb_settings_put global window_animation_scale 1.0
+        _anim_changed=1
+        ;;
+    esac
+    mkdir -p "$_ux_dd" 2>/dev/null
+    true > "$_ux_legacy" 2>/dev/null
   fi
 
-  # TOUCH TIMEOUTS — manage OR restore.
+  # TOUCH TIMEOUTS — manage OR restore once.
   if [ "${UX_MANAGE_TIMEOUTS:-0}" = "1" ]; then
     [ -n "$UX_LONG_PRESS" ] && asb_settings_put secure long_press_timeout "$UX_LONG_PRESS"
     [ -n "$UX_MULTI_PRESS" ] && asb_settings_put secure multi_press_timeout "$UX_MULTI_PRESS"
@@ -601,6 +606,7 @@ asb_apply_ux() {
       asb_settings_put secure long_press_timeout "$BASE_LONG_PRESS"
     [ -n "$BASE_MULTI_PRESS" ] && [ "$BASE_MULTI_PRESS" != "null" ] && \
       asb_settings_put secure multi_press_timeout "$BASE_MULTI_PRESS"
+    rm -f "$_ux_base" 2>/dev/null
   fi
 
   # OEM-owned settings (RAM expansion, adaptive battery, low-heat). These are

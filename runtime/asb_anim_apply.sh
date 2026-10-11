@@ -44,6 +44,12 @@ case "$_sp" in
 esac
 [ -z "$_v" ] && { echo "animations: following the profile"; exit 0; }
 
+if [ "${1:-}" = "--if-changed" ]; then
+  _now="$(settings get global window_animation_scale 2>/dev/null)"
+  awk -v a="$_now" -v b="$_v" 'BEGIN { exit !(a != "" && a != "null" && a + 0 == b + 0) }' \
+    && { echo "animations: scale ${_v}x already set"; exit 0; }
+fi
+
 for _k in window_animation_scale transition_animation_scale animator_duration_scale; do
   _put "$_k" "$_v"
 done
