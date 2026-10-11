@@ -40,11 +40,22 @@ _asb_setting_put() {
   if command -v asb_settings_put >/dev/null 2>&1; then asb_settings_put "$@"; else settings put "$@" >/dev/null 2>&1; fi
 }
 _has() { command -v "$1" >/dev/null 2>&1; }
-_persist() { _has resetprop && resetprop -n "$1" "$2" >/dev/null 2>&1 || setprop "$1" "$2" 2>/dev/null; }
+# Unchanged values are not written again (fix125).
+#
+# "mirror" runs from the Smart tuner on every screen on/off and app-tier change - a few
+# hundred times a day - and republished all ten persist.vendor.asb.dsp.* values each time.
+# Those go through property_service, and init rewrites /data/property/persistent_properties
+# (a whole-file write and an fsync) for every persist.* set, equal value or not: thousands of
+# flash writes a day, several of them on the unlock path, for values that had not moved.
+_persist() {
+  [ "$(getprop "$1" 2>/dev/null)" = "$2" ] && return 0
+  _has resetprop && resetprop -n "$1" "$2" >/dev/null 2>&1 || setprop "$1" "$2" 2>/dev/null
+}
 
 # The vendor-namespace copy is created through property_service rather than with resetprop -n,
 # so it picks up its SELinux context from property_contexts.
 _persist_ctx() {
+  [ "$(getprop "$1" 2>/dev/null)" = "$2" ] && return 0
   _has resetprop && resetprop "$1" "$2" >/dev/null 2>&1 && return 0
   setprop "$1" "$2" 2>/dev/null
 }
