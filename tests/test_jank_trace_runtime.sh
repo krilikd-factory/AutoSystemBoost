@@ -90,30 +90,60 @@ printf '%s\n' "$out" | grep -q 'all screen-on intervals: 2  frames 2200  janky 4
 printf '%s\n' "$out" | grep -qE '^MODERATE +1 +2000 +5.3%' || f "per-state line wrong: $out"
 printf '%s\n' "$out" | grep -q 'main cores at the ASB ceiling (end of interval): yes 4.9% of 2200 frames' || f "ceiling correlation missing: $out"
 
+# fix125: time at the ceiling from time_in_state, and the app in front from the top-app cgroup.
+mkdir -p "$T/cpufreq/policy0/stats" "$T/cpufreq/policy6/stats" "$T/proc/2001" "$T/proc/1000" "$T/out2"
+printf '384000 1000\n1555200 500\n' > "$T/cpufreq/policy0/stats/time_in_state"
+printf '768000 900\n1862400 100\n' > "$T/cpufreq/policy6/stats/time_in_state"
+printf 'Name:\tx\nUid:\t10234\t10234\t10234\t10234\n' > "$T/proc/2001/status"; echo 0 > "$T/proc/2001/oom_score_adj"
+printf 'com.instagram.android\0' > "$T/proc/2001/cmdline"
+printf 'Name:\tx\nUid:\t1000\t1000\t1000\t1000\n' > "$T/proc/1000/status"; echo -900 > "$T/proc/1000/oom_score_adj"
+printf 'system_server\0' > "$T/proc/1000/cmdline"
+printf '1000\n2001\n' > "$T/topapp"
+out2="$(LK_OUT_DIR="$T/out2" ASB_LK_CPUFREQ_ROOT="$T/cpufreq" ASB_LK_TOPAPP_PROCS="$T/topapp" ASB_LK_PROC_ROOT="$T/proc" sh -c '
+  . "$0" >/dev/null 2>&1
+  T="$1"
+  lk_jank_trace_header
+  ASB_LK_STATE_FILE="$T/state1" ASB_LK_GFXSTATS_DUMP="$T/g1" lk_capture_jank_row active 1
+  # 4 s more at 1555200 (the ceiling), 1 s at 384000 on the main cores; prime idle.
+  printf "384000 1100\n1555200 900\n" > "$T/cpufreq/policy0/stats/time_in_state"
+  printf "768000 1400\n1862400 100\n" > "$T/cpufreq/policy6/stats/time_in_state"
+  ASB_LK_STATE_FILE="$T/state2" ASB_LK_GFXSTATS_DUMP="$T/g2" lk_capture_jank_row active 1
+  grep -v "^#" "$LK_OUT_DIR/jank_trace.tsv"
+  echo "--- report"; lk_emit_jank_summary
+' "$C" "$T" 2>&1)"
+r3="$(printf '%s\n' "$out2" | grep '|active|' | head -1)"
+[ "$(printf '%s' "$r3" | cut -d'|' -f14-16)" = "80|0|com.instagram.android" ] || f "time-at-ceiling or app columns wrong: $r3"
+printf '%s\n' "$out2" | grep -q 'main cores, share of the interval AT the ceiling ->  >=60%: 5.3% of 2000' || f "time-at-ceiling split missing: $out2"
+printf '%s\n' "$out2" | grep -qE '^com.instagram.android +2000 +5.3%' || f "per-app line missing: $out2"
+printf '%s\n' "$out2" | grep -q 'high-input-latency events:' || f "input latency not shown as a count"
+printf '%s\n' "$out2" | grep -q 'high input latency [0-9.]*%' && f "input latency still shown as a share of frames"
+
 # asbdiag: today's blocks only (the newest "Stats since"), totals and the most janky apps.
 sed -n '/^# asb_gfx_today_begin$/,/^# asb_gfx_today_end$/p' "$ROOT/tools/asb_diag.sh" > "$T/gfx_today.sh"
 [ -s "$T/gfx_today.sh" ] || f "asbdiag has no asb_gfx_today block"
+# Field shape (fix125): each process's block starts when it first drew - different starts on
+# the same UTC day must all count; yesterday's block must not.
 cat > "$T/gd" <<'EOF'
 Package: com.old.app
-Stats since: 1000ns
+Stats since: 1791590400000000000ns
 Total frames rendered: 90000
 Janky frames: 9000 (10.00%)
 Number Slow UI thread: 10
 Number High input latency: 0
 Package: com.android.systemui
-Stats since: 2000ns
+Stats since: 1791712801000000000ns
 Total frames rendered: 8000
 Janky frames: 80 (1.00%)
 Number Slow UI thread: 40
 Number High input latency: 8
 Package: com.instagram.android
-Stats since: 2000ns
+Stats since: 1791716455000000000ns
 Total frames rendered: 2000
 Janky frames: 120 (6.00%)
 Number Slow UI thread: 60
 Number High input latency: 2
 Package: com.tiny.app
-Stats since: 2000ns
+Stats since: 1791714000000000000ns
 Total frames rendered: 100
 Janky frames: 50 (50.00%)
 Number Slow UI thread: 0

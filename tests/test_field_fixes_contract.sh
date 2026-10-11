@@ -542,4 +542,53 @@ grep -q 'from the top-app cgroup' "$ROOT/tools/asb_diag.sh" || fail "asbdiag doe
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS: fix124 contract"
 ) || exit 1
+# ---- fix125 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix125: $*"; exit 1; }
+UI="$ROOT/webroot/index.html"
+B="$ROOT/tools/asb_config_backup.sh"
+_cell="$(awk '/^\.live-cell \{/{on=1} on{print} on&&/^}/{exit}' "$UI")"
+printf '%s\n' "$_cell" | grep -Eq '^ *min-height: 54px;' || fail "forecast cells do not grow with their text"
+printf '%s\n' "$_cell" | grep -Eq '^ *height: 54px;' && fail "fixed 54px cell height is back"
+grep -q '_bundle_write()' "$B" || fail "no single-file export"
+grep -q '_bundle_import()' "$B" || fail "no single-file import"
+grep -q 'import-path FILE.asb|FILE.conf' "$B" || fail "usage does not name .asb"
+grep -q 'const conf = !dir && /\\.(asb|conf)$/i.test(name);' "$UI" || fail "file browser does not list .asb"
+A="$ROOT/runtime/asb_audio_apply.sh"
+[ "$(grep -c '\[ "$(getprop "$1" 2>/dev/null)" = "$2" \] && return 0' "$A")" -ge 2 ] || fail "persist mirrors still rewritten when unchanged"
+S="$ROOT/src/asb_smart.h"
+grep -q 'if (screen_on_now && g_stat_probe_topapp > 0 && _ttl < 60) _ttl = 60;' "$S" || fail "dumpsys fallback not held back where the cgroup works"
+grep -q 'probe_topapp_empty=%lu' "$ROOT/src/asb_governor.c" || fail "fallback reasons not published"
+grep -q '(writer p%d: %s, req %d, holds %lu, backoff %lds)' "$ROOT/src/asb_governor.c" || fail "vendor_ceiling line lacks the writer status"
+K="$ROOT/tools/logkit/_asb_logkit_common.sh"
+grep -q '^lk_cap_share()' "$K" || fail "no time-at-ceiling from time_in_state"
+grep -q '^lk_topapp_pkg()' "$K" || fail "no app column in the jank trace"
+grep -q 'dstart = int(top / day) \* day' "$ROOT/tools/asb_diag.sh" || fail "asbdiag frames-today still keys on one start time"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix125 contract"
+) || exit 1
+# ---- fix126 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix126: $*"; exit 1; }
+F="$ROOT/src/asb_fsm.h"; G="$ROOT/src/asb_governor.c"; W="$ROOT/src/asb_writer.h"
+grep -q '#define ASB_ESC_ENTRY_MARGIN_C 3' "$F" || fail "no entry margin under the exit mark"
+grep -q 'if (m->therm.cpu_max_c > _exit_c - ASB_ESC_ENTRY_MARGIN_C) {' "$F" || fail "burst opens right under its own exit mark"
+grep -q 'int _pinned = (_pinned_prime && !asb_esc_ceiling_foreign(m, _ps)) ||' "$F" || fail "burst opens under a foreign ceiling"
+grep -q 'g_fsm_slot_req_khz\[i\] = cmax\[i\];' "$W" || fail "writer does not record its kept request"
+grep -q 'prime_escape_skip_warm=%lu\\nprime_escape_skip_foreign=%lu' "$G" || fail "escape refusals not published"
+grep -q 'static int writer_slot_path_idx(int slot)' "$W" || fail "no slot -> policy table mapping"
+grep -q 'writer_slot_ceiling(0, fsm.current_caps.cpu_max\[0\], fsm.thermal_cap);' "$G" || fail "vendor_ceiling still snaps with table index = slot"
+grep -q 'desired_cpu_max_prime=%d\\neffective_cpu_max_prime=%d' "$G" || fail "prime figures not published"
+grep -q 'screen_off_detect=\\"uevent:%lu,display:%lu,tick:%lu\\"' "$G" || fail "screen-off sources not counted"
+grep -q 'asb_log("screen OFF (Android display state)")' "$G" || fail "waiter screen-off still logged as a tick"
+D="$ROOT/tools/asb_diag.sh"
+grep -q 'lifted to the race-to-idle floor (40% of hardware max)' "$D" || fail "asbdiag prime ceiling ignores the floor"
+grep -q "little: ASB's own thermal-budget trim" "$D" || fail "asbdiag blames the vendor for ASB's own trim"
+grep -q 'screen-off noticed by:' "$D" || fail "asbdiag does not show screen-off sources"
+cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+grep -q '|main_by=${_mb}|prime_by=${_pb}"' "$ROOT/tools/logkit/asb_log_full_day.sh" || fail "throttle rows carry no cause"
+echo "PASS: fix126 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
