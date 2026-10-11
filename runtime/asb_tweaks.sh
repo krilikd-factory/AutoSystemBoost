@@ -37,6 +37,26 @@ asb_tw_base_path() {
   printf '%s/%s.asbbase' "$ASB_TWEAK_BASE_DIR" "$(echo "$_rel" | tr '/' '_')"
 }
 
+asb_tw_rom_id() {
+  _rid="$(getprop ro.odm.build.fingerprint 2>/dev/null)"
+  [ -n "$_rid" ] || _rid="$(getprop ro.vendor.build.fingerprint 2>/dev/null)"
+  [ -n "$_rid" ] || _rid="$(getprop ro.build.fingerprint 2>/dev/null)"
+  printf '%s' "$_rid"
+}
+
+asb_tw_base_rom_ok() {
+  [ -f "$1.rom" ] || return 0
+  _rid="$(asb_tw_rom_id)"
+  [ -n "$_rid" ] || return 0
+  [ "$(cat "$1.rom" 2>/dev/null)" = "$_rid" ]
+}
+
+asb_tw_base_rom_stamp() {
+  _rid="$(asb_tw_rom_id)"
+  [ -n "$_rid" ] && printf '%s\n' "$_rid" > "$1.rom" 2>/dev/null
+  return 0
+}
+
 # True when a conf_tuning_params.json still carries the stock BT.601 chroma matrix, i.e.
 # it is safe to use as the pristine baseline. A graded file must never become a baseline:
 # grading from it compounds on every boot.
@@ -277,7 +297,9 @@ asb_tw_save_base() {
   mkdir -p "$ASB_TWEAK_BASE_DIR" 2>/dev/null
   _bp="$(asb_tw_base_path "$_f")"
   [ "$_force" != "force" ] && [ -f "$_bp" ] && return 0
-  cp -f "$_f" "$_bp" 2>/dev/null || true
+  cp -f "$_f" "$_bp" 2>/dev/null || return 0
+  case "$_bp" in *conf_tuning_params.json.asbbase) asb_tw_base_rom_stamp "$_bp" ;; esac
+  return 0
 }
 
 # Restore a file from its baseline if one exists. $1 = module file
@@ -394,8 +416,11 @@ asb_apply_dynamic_tweaks() {
                    "$_md/system/vendor/odm/etc/camera/conf_tuning_params.json"; do
     _cam_bp="$(asb_tw_base_path "$_cam_bchk")"
     if [ -f "$_cam_bp" ] && ! asb_tw_cam_stock "$_cam_bp"; then
-      rm -f "$_cam_bp" 2>/dev/null
+      rm -f "$_cam_bp" "$_cam_bp.rom" 2>/dev/null
       asb_log "camera: dropped a graded baseline ($_cam_bp)" 2>/dev/null
+    elif [ -f "$_cam_bp" ] && ! asb_tw_base_rom_ok "$_cam_bp"; then
+      rm -f "$_cam_bp" "$_cam_bp.rom" 2>/dev/null
+      asb_log "camera: dropped a baseline from another ROM build ($_cam_bp)" 2>/dev/null
     fi
   done
   if [ "$_cam_grade_needed" = 1 ]; then
@@ -410,6 +435,7 @@ asb_apply_dynamic_tweaks() {
         | grep -q -- '-0\.1687[0-9]*' || continue
       mkdir -p "$ASB_TWEAK_BASE_DIR" 2>/dev/null
       cp -f "$_cam_rescue" "$_cam_rb" 2>/dev/null \
+        && asb_tw_base_rom_stamp "$_cam_rb" \
         && asb_log "camera: captured stock baseline from $_cam_rescue (installer had skipped it)"
       break
     done
@@ -507,9 +533,12 @@ asb_save_dynamic_baselines() {
     for _bf in "$ASB_TWEAK_BASE_DIR"/*.asbbase; do
       [ -e "$_bf" ] || continue
       _bn="$(basename "$_bf")"
+      case "$_bn" in
+        *conf_tuning_params.json.asbbase) asb_tw_cam_stock "$_bf" && asb_tw_base_rom_ok "$_bf" && continue ;;
+      esac
       case " $_valid_bases " in
         *" $_bn "*) : ;;                      # still valid — keep
-        *) rm -f "$_bf" 2>/dev/null || true ;;  # orphan — remove
+        *) rm -f "$_bf" "$_bf.rom" 2>/dev/null || true ;;  # orphan — remove
       esac
     done
   fi
