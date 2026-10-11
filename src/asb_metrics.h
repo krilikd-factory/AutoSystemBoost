@@ -55,13 +55,52 @@ extern asb_runtime_config_t g_asb_cfg;
 #define PATH_WLAN_RX        "/sys/class/net/wlan0/statistics/rx_bytes"
 static long sysfs_read_long(const char *path, long def);
 
+/* Mobile data interfaces, found by name (fix122).
+ *
+ * This read a fixed list - rmnet_data0..2 plus rmnet_ipa0. The internet PDN is not always on
+ * those: an OP15 night (24123) moved it from rmnet_data2 to rmnet_data3 after a reconnect,
+ * and from then on every byte of mobile data was invisible here - the DEEP_IDLE "download in
+ * flight" gate, the screen-off radio ticks and the learner's radio share all read an idle
+ * radio. MediaTek names the same interfaces ccmni*, so on a Dimensity phone none of it ever
+ * saw anything. rmnet_ipa0 is the transport underneath the rmnet_data* links, not a link of
+ * its own: adding it counted part of the traffic twice.
+ *
+ * Every rmnet_data* and ccmni* under /sys/class/net, then; the list is refreshed once a
+ * minute (a directory read), and a link that goes away cannot make the rate negative. */
+#ifndef ASB_NET_CLASS_DIR
+#define ASB_NET_CLASS_DIR "/sys/class/net"
+#endif
+#define ASB_MOBILE_IF_MAX 16
+static char   g_mobile_ifs[ASB_MOBILE_IF_MAX][32];
+static int    g_mobile_ifs_n = 0;
+static time_t g_mobile_ifs_scan = 0;
+static void mobile_ifs_refresh(void) {
+    time_t now = time(NULL);
+    if (g_mobile_ifs_scan > 0 && now >= g_mobile_ifs_scan && now - g_mobile_ifs_scan < 60) return;
+    g_mobile_ifs_scan = now;
+    DIR *d = opendir(ASB_NET_CLASS_DIR);
+    if (!d) return;                       /* keep the last list */
+    int n = 0;
+    struct dirent *e;
+    while ((e = readdir(d)) != NULL && n < ASB_MOBILE_IF_MAX) {
+        const char *nm = e->d_name;
+        if (strncmp(nm, "rmnet_data", 10) != 0 && strncmp(nm, "ccmni", 5) != 0) continue;
+        size_t _ln = strlen(nm);
+        if (_ln >= sizeof(g_mobile_ifs[0])) continue;
+        memcpy(g_mobile_ifs[n], nm, _ln + 1);
+        n++;
+    }
+    closedir(d);
+    g_mobile_ifs_n = n;
+}
+
 static long rmnet_read_total(const char *direction) {
     /* direction = "tx_bytes" or "rx_bytes" */
     long total = 0;
-    char path[128];
-    const char *ifaces[] = {"rmnet_data0", "rmnet_data1", "rmnet_data2", "rmnet_ipa0", NULL};
-    for (int i = 0; ifaces[i]; i++) {
-        snprintf(path, sizeof(path), "/sys/class/net/%s/statistics/%s", ifaces[i], direction);
+    char path[256];
+    mobile_ifs_refresh();
+    for (int i = 0; i < g_mobile_ifs_n; i++) {
+        snprintf(path, sizeof(path), ASB_NET_CLASS_DIR "/%.31s/statistics/%.15s", g_mobile_ifs[i], direction);
         long v = sysfs_read_long(path, 0);
         if (v > 0) total += v;
     }
@@ -399,8 +438,14 @@ static void metrics_discover_generic_gpu_devfreq(void) {
 static void metrics_discover_gpu_paths(void) {
     if (g_metrics_gpu_paths_ready) return;
 
+    /* MediaTek GED (fix123): a Mali devfreq node has no load file, so on a Dimensity
+     * OnePlus the GPU read 0% busy forever - no HEAVY or GAMING by GPU, a game held on
+     * the CPU ladder. GED publishes the same figure: "loading idle block" (the first
+     * number is the busy share) or a bare percentage in the module parameter. */
     static const char *load_candidates[] = {
         "/sys/class/kgsl/kgsl-3d0/gpu_busy_percentage",
+        "/sys/kernel/ged/hal/gpu_utilization",
+        "/sys/module/ged/parameters/gpu_loading",
         NULL
     };
     static const char *cur_freq_candidates[] = {
@@ -954,7 +999,31 @@ int cpu_prio = -1;
         } else if (strstr(type, "cpullc-0")) {
             cpu_prio = 5;
             cpu_reason = "priority=5 cpullc-0 little cluster fallback";
-        } else if (strstr(type, "cpu-")) {
+        }
+        /* MediaTek names (fix123).
+         *
+         * Every name above is Qualcomm's. A Dimensity kernel (LVTS) calls the same sensors
+         * cpu_big0/cpu_mid0/cpu_little0 and adds soc_max; Helio parts have one mtktscpu. None
+         * of them matched - not even the "cpu-" last resort, which needs a hyphen - so on an
+         * MTK OnePlus (Nord CE5, Ace 5 Racing/Ultra, Pad Go) the governor had no CPU thermal
+         * source at all: temp_valid=0, and every thermal rule, the sustained clamp included,
+         * stood down. Same ladder as above: the big cores first, the SoC aggregate as their
+         * fallback, the little cores last. Qualcomm zones keep their priorities, so on a
+         * Snapdragon phone nothing here can win. */
+        else if (strstr(type, "cpu_big") || strstr(type, "cpu-big")) {
+            cpu_prio = 2;
+            cpu_reason = "priority=2 MediaTek big-core sensor";
+        } else if (strstr(type, "cpu_mid") || strstr(type, "cpu_med") ||
+                   strstr(type, "cpu-mid") || strstr(type, "cpu-med")) {
+            cpu_prio = 3;
+            cpu_reason = "priority=3 MediaTek mid-core sensor";
+        } else if (strcmp(type, "soc_max") == 0 || strcmp(type, "mtktscpu") == 0) {
+            cpu_prio = 4;
+            cpu_reason = "priority=4 MediaTek SoC/CPU aggregate";
+        } else if (strstr(type, "cpu_little") || strstr(type, "cpu-little")) {
+            cpu_prio = 5;
+            cpu_reason = "priority=5 MediaTek little-core sensor";
+        } else if (strstr(type, "cpu-") || strncmp(type, "cpu_", 4) == 0) {
             cpu_prio = 6;
             cpu_reason = "priority=6 generic cpu-* last resort";
         }
@@ -1048,6 +1117,8 @@ int cpu_prio = -1;
             surface_prio = 2;
         else if (strstr(type, "sys-therm-"))
             surface_prio = 3;  /* any sys-therm as fallback */
+        else if (strcmp(type, "ap_ntc") == 0)
+            surface_prio = 4;  /* MediaTek: the AP board thermistor (fix123) */
 
         if (surface_prio > 0 && surface_prio < best_surface_prio) {
             if (thermal_sensor_validate(z)) {
@@ -1904,6 +1975,9 @@ static void metrics_read_network(asb_misc_t *m, const struct timespec *now) {
             m->wlan_rx_bps = (long)((rx - g_wlan_rx_prev) / dt);
             m->rmnet_tx_bps = (long)((mtx - g_rmnet_tx_prev) / dt);
             m->rmnet_rx_bps = (long)((mrx - g_rmnet_rx_prev) / dt);
+            /* A link that went away takes its counters with it (fix122): no negative rate. */
+            if (m->rmnet_tx_bps < 0) m->rmnet_tx_bps = 0;
+            if (m->rmnet_rx_bps < 0) m->rmnet_rx_bps = 0;
         }
     }
     g_wlan_tx_prev = tx;

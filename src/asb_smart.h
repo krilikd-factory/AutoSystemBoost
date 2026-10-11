@@ -325,7 +325,7 @@ typedef struct {
     uint64_t hash;
     int      hint;
     time_t   last_seen_ts;
-    int      last_source;   /* 1=cmd, 2=activity, 3=window */
+    int      last_source;   /* 2=activity, 3=window, 4=top-app cgroup (1=activity top, retired) */
 } asb_pkg_cache_t;
 
 /* Probe accounting: did the TTL cache save the forks it was added for?
@@ -386,9 +386,108 @@ static void asb_smart_strip_activity(char *s) {
     }
 }
 
+/* Source 4: the top-app cgroup (fix124) - no binder, no dumpsys, nothing asked of the app.
+ *
+ * Source 1 below ran `dumpsys activity top`, and that is not a lookup: for the resumed
+ * activity it calls into the app process and has the app dump its whole view hierarchy - on
+ * the app's MAIN thread, the one drawing the frames. The pipe closes after the first line,
+ * but the request is already queued: the UI thread walks every view of a feed or a game UI
+ * while the user is scrolling it. A field OP15 ran it 129 times in 64 minutes of screen-on
+ * (once every ~30 s, the cache TTL), on whatever app was in front - a stutter on a timer,
+ * which is exactly what "it lags" sounds like, caused by the module that was meant to stop
+ * lags, plus a shell, a dumpsys and a few hundred KiB of text each time.
+ *
+ * Android already says which process is in front: it moves it into the top-app cpuset (and
+ * cpuctl group) and gives it oom_score_adj 0. Reading that is a handful of small files:
+ *   - every pid in top-app/cgroup.procs,
+ *   - kept if its uid is a regular app (appid 10000-19999: no system_server threads, no
+ *     isolated WebView/Chrome renderers),
+ *   - the package is the process name up to ':' (com.foo:remote is com.foo);
+ *   - one package -> that one; several -> the ones at oom_score_adj 0 (a visible keyboard or
+ *     a bound service sits higher); still several (split screen) -> not answered here, and
+ *     the binder chain decides as before.
+ * Cheap enough to ask on every refresh, so an app switch is seen at the next one. */
+#ifndef ASB_PROC_ROOT
+#define ASB_PROC_ROOT "/proc"
+#endif
+#ifndef ASB_TOPAPP_PROCS_A
+#define ASB_TOPAPP_PROCS_A "/dev/cpuset/top-app/cgroup.procs"
+#endif
+#ifndef ASB_TOPAPP_PROCS_B
+#define ASB_TOPAPP_PROCS_B "/dev/cpuctl/top-app/cgroup.procs"
+#endif
+static unsigned long g_stat_probe_topapp = 0;
+static int asb_read_small(const char *path, char *buf, size_t bufsz) {
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return -1;
+    int n = (int)read(fd, buf, bufsz - 1);
+    close(fd);
+    if (n < 0) return -1;
+    buf[n] = '\0';
+    return n;
+}
+static int asb_smart_pkg_via_topapp(char *out_pkg, size_t outsz) {
+    if (!out_pkg || outsz == 0) return 0;
+    out_pkg[0] = '\0';
+    char pids[2048];
+    int n = asb_read_small(ASB_TOPAPP_PROCS_A, pids, sizeof(pids));
+    if (n <= 0) n = asb_read_small(ASB_TOPAPP_PROCS_B, pids, sizeof(pids));
+    if (n <= 0) return 0;
+    enum { MAXC = 12 };
+    char cand[MAXC][128];
+    int  cadj[MAXC];
+    int  nc = 0;
+    char *cur = pids;
+    while (*cur && nc < MAXC) {
+        char *endp = NULL;
+        long pid = strtol(cur, &endp, 10);
+        if (endp == cur) { cur++; continue; }    /* skip a separator */
+        cur = endp;
+        if (pid <= 1) continue;
+        char path[96], buf[1024];
+        snprintf(path, sizeof(path), ASB_PROC_ROOT "/%ld/status", pid);
+        if (asb_read_small(path, buf, sizeof(buf)) <= 0) continue;
+        char *u = strstr(buf, "\nUid:");
+        if (!u) continue;
+        long uid = strtol(u + 5, NULL, 10);
+        long appid = uid % 100000L;
+        if (appid < 10000 || appid > 19999) continue;
+        snprintf(path, sizeof(path), ASB_PROC_ROOT "/%ld/cmdline", pid);
+        char name[128];
+        if (asb_read_small(path, name, sizeof(name)) <= 0) continue;
+        char *colon = strchr(name, ':');
+        if (colon) *colon = '\0';
+        if (!strchr(name, '.')) continue;          /* not a package-shaped process name */
+        snprintf(path, sizeof(path), ASB_PROC_ROOT "/%ld/oom_score_adj", pid);
+        int adj = 1000;
+        if (asb_read_small(path, buf, sizeof(buf)) > 0) adj = (int)strtol(buf, NULL, 10);
+        asb_copy_str(cand[nc], name, sizeof(cand[nc]));
+        cadj[nc] = adj;
+        nc++;
+    }
+    if (nc == 0) return 0;
+    /* One package among all candidates, or among the adj-0 ones. */
+    for (int pass = 0; pass < 2; pass++) {
+        const char *pick = NULL;
+        int ambiguous = 0;
+        for (int i = 0; i < nc; i++) {
+            if (pass == 1 && cadj[i] != 0) continue;
+            if (!pick) pick = cand[i];
+            else if (strcmp(pick, cand[i]) != 0) { ambiguous = 1; break; }
+        }
+        if (pick && !ambiguous) {
+            asb_copy_str(out_pkg, pick, outsz);
+            return 1;
+        }
+    }
+    return 0;
+}
+
 /*
- * Source 1: cmd activity get-current-user-id (Android 10+).
+ * Source 1 (no longer used, fix124): `dumpsys activity top` - see source 4 above for why.
+ * Kept for reference only; nothing calls it.
  */
+#if 0
 static int asb_smart_pkg_via_activity_top(char *out_pkg, size_t outsz) {
     if (!out_pkg || outsz == 0) return 0;
     out_pkg[0] = '\0';
@@ -416,6 +515,7 @@ static int asb_smart_pkg_via_activity_top(char *out_pkg, size_t outsz) {
     pclose(p);
     return got;
 }
+#endif
 
 /* Source 2: dumpsys activity activities | mResumedActivity */
 static int asb_smart_pkg_via_resumed(char *out_pkg, size_t outsz) {
@@ -489,6 +589,14 @@ static asb_pkg_status_t asb_smart_detect_foreground_pkg(
     char pkg[128];
     int source = 0;
     time_t now = time(NULL);
+    /* The top-app cgroup answers without a fork or a binder call (fix124), so it is asked
+     * on every refresh and the TTL below only guards the dumpsys fallbacks. */
+    int _topapp = asb_smart_pkg_via_topapp(pkg, sizeof(pkg));
+    if (_topapp) {
+        source = 4;
+        g_stat_probe_topapp++;
+    }
+    if (!_topapp) {
 
     /* Serve from cache BEFORE probing, not only after every probe has failed.
      *
@@ -538,10 +646,12 @@ static asb_pkg_status_t asb_smart_detect_foreground_pkg(
         }
     }
     g_stat_probe_misses++;   /* cache did not answer: the fork chain runs */
-    if (asb_smart_pkg_via_activity_top(pkg, sizeof(pkg))) source = 1;
-    else if (asb_smart_pkg_via_resumed(pkg, sizeof(pkg))) source = 2;
+    /* No `dumpsys activity top` any more (fix124): it makes the app dump its views on its
+     * UI thread. Both fallbacks stay inside system_server. */
+    if (asb_smart_pkg_via_resumed(pkg, sizeof(pkg))) source = 2;
     else if (asb_smart_pkg_via_window_focus(pkg, sizeof(pkg))) source = 3;
     else pkg[0] = '\0';
+    }   /* !_topapp */
 
     asb_pkg_status_t st;
     if (!pkg[0]) {

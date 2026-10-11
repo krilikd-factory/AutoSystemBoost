@@ -96,7 +96,7 @@ static int                 g_smart_sessions_since_save = 0;
  * /dev/.asb/state for logkit + WebUI.
  */
 static int g_pkg_detect_ok = 0;        /* 1 if last detection got a real pkg */
-static int g_pkg_detect_source = 0;    /* 1=cmd activity top, 2=resumed, 3=window focus */
+static int g_pkg_detect_source = 0;    /* 2=resumed, 3=window focus, 4=top-app cgroup (fix124; 1=activity top, retired) */
 static int g_pkg_detect_status = 0;    /* asb_pkg_status_t code */
 
 /* Opt-in Smart Media Guard runtime. These flags are deliberately separate from the
@@ -1457,6 +1457,9 @@ static volatile int  g_disp_waiter_up = 0;
  * leaves ON. Doze <-> doze-suspend flips of an always-on display (one a minute) wake the
  * thread but never the main loop. Resolved with dlsym: the binary targets API 24 and the
  * call is API 26; where it is missing nothing starts and the old paths work as before. */
+#ifndef ASB_DISP_FIND_RETRY_S
+#define ASB_DISP_FIND_RETRY_S 30
+#endif
 #if defined(__ANDROID__)
 typedef _Bool (*asb_prop_wait_fn)(const prop_info *, uint32_t, uint32_t *, const struct timespec *);
 
@@ -1465,12 +1468,14 @@ static void *asb_disp_waiter(void *arg) {
     asb_prop_wait_fn w = (asb_prop_wait_fn)dlsym(RTLD_DEFAULT, "__system_property_wait");
     if (!w) { g_disp_waiter_up = -1; return NULL; }
     const prop_info *pi = NULL;
-    /* Normally there from early boot; give a late framework ten minutes. */
-    for (int i = 0; i < 20 && !pi; i++) {
+    /* The framework creates the property at the first display transition after boot, not
+     * at boot (fix118): an OP15 kept the screen on for 12 minutes after a reboot and the
+     * first version gave up after ten - seconds before the property appeared. Look every
+     * 30 s for as long as it takes; a sleeping thread costs nothing. */
+    while (!pi) {
         pi = __system_property_find("debug.tracing.screen_state");
-        if (!pi) sleep(30);
+        if (!pi) sleep(ASB_DISP_FIND_RETRY_S);
     }
-    if (!pi) { g_disp_waiter_up = -1; return NULL; }
     g_disp_waiter_up = 2;
     uint32_t serial = __system_property_serial(pi);
     int prev = asb_display_state_read();
@@ -1564,6 +1569,8 @@ static unsigned long g_uev_events_total = 0;
  * few seconds, on rails that are already set for an awake screen. */
 static int           g_uev_parked = 0;
 static unsigned long g_uev_parks = 0, g_uev_unpark_dropped = 0;
+/* Resumes Android reported as off/doze, so no wake re-check chain was armed (fix118). */
+static unsigned long g_scr_resume_skipped = 0;
 
 /* Wake keys as a screen-on hint.
  *
@@ -1743,6 +1750,10 @@ static int touch_watch_set(int epfd, int on) {
 
 static void uev_park(int epfd, int uefd) {
     (void)touch_watch_set(epfd, 1);   /* screen on: watch touches (fix117) */
+    /* The display-state waiter already keeps the uevent socket parked (fix118); the wake
+     * keys still have to come out of epoll - the touch panel's node would otherwise wake
+     * the loop on every frame of a scroll. */
+    if (g_disp_waiter_up == 2 && g_uev_parked) { wake_keys_park(epfd, 1); return; }
     if (uefd < 0 || g_uev_parked) return;
     if (epoll_ctl(epfd, EPOLL_CTL_DEL, uefd, NULL) == 0) {
         g_uev_parked = 1;
@@ -1753,6 +1764,11 @@ static void uev_park(int epfd, int uefd) {
 
 static void uev_unpark(int epfd, int uefd) {
     (void)touch_watch_set(epfd, 0);   /* screen off: the panel is in gesture mode */
+    /* Android's display state is being watched (fix118): it reports every wake, so the
+     * uevent socket stays parked with the screen off too. That socket woke the governor for
+     * every kernel uevent - an OP15 night delivered 250-500 an hour (AOD pulses, battery,
+     * thermal, "other"), each discarded. The wake keys keep listening as the backstop. */
+    if (g_disp_waiter_up == 2 && g_uev_parked) { wake_keys_park(epfd, 0); return; }
     if (uefd < 0 || !g_uev_parked) return;
     char _ub[4096];
     int _k = 0, _guard = 0;
@@ -1781,6 +1797,7 @@ static char g_ses_last_reason[24] = "none";
 /* Current screen-on tick interval, so the timer is only re-armed when it actually
  * changes rather than on every pass. */
 static int g_active_interval = TIMER_ACTIVE_S;
+static int g_active_by_touch = 0;   /* the current 2 s cadence was set by a touch (fix117) */
 
 static int g_budget_trim_pct = 0;
 /* Whether the surface-comfort trim is currently engaged, for hysteresis.
@@ -1952,6 +1969,40 @@ static int asb_ma_ref(int raw_ma) {
     return (int)((long)raw_ma * ASB_CURSCALE_REF_X100 / g_curscale_x100);
 }
 
+/* Discharge current for the comfort trims, smoothed - and a band to leave them (fix121).
+ *
+ * The comfort gates read one current_now sample, and on these phones that is the
+ * instantaneous draw: a frame, a radio burst, a pause. OP15 24817, twelve minutes of a warm
+ * feed: the light trim went on at 391 mA, off at 258, on at 437, off at 328, on at 384 eight
+ * seconds later - thirteen budget changes in 21 minutes, each one a ceiling rewrite, while
+ * nothing about the workload changed. "Draws a lot" is a property of the last half minute,
+ * not of the last sample.
+ *
+ * So the gates see a running mean over about four ticks (8-24 s on the screen-on cadence),
+ * restarted on the charger and with the screen off, updated once per metrics sample however
+ * many callers ask. And a comfort trim that is in force stays while the draw is above 80% of
+ * its entry gate and the die within 2 C of its entry temperature, the same entry/exit band the
+ * surface comfort has had since it was written. Entry thresholds are unchanged. */
+static int  g_comfort_ma_ema = 0;
+static long g_comfort_ma_s = -1, g_comfort_ma_ns = -1;
+static int  g_budget_comfort_engaged = 0;
+static int asb_comfort_ma(const asb_metrics_t *m) {
+    if (m->bat.charging || !m->misc.screen_on || m->bat.current_ma <= 0) {
+        g_comfort_ma_ema = 0;
+        return m->bat.current_ma;
+    }
+    if ((long)m->ts.tv_sec != g_comfort_ma_s || (long)m->ts.tv_nsec != g_comfort_ma_ns) {
+        /* A mean older than half a minute (SUSTAINED or a thermal cap skipped the budget)
+         * describes a different workload: start again from this sample. */
+        int _stale = (g_comfort_ma_s < 0 || (long)m->ts.tv_sec - g_comfort_ma_s > 30);
+        g_comfort_ma_s = (long)m->ts.tv_sec;
+        g_comfort_ma_ns = (long)m->ts.tv_nsec;
+        if (g_comfort_ma_ema <= 0 || _stale) g_comfort_ma_ema = m->bat.current_ma;
+        else g_comfort_ma_ema += (m->bat.current_ma - g_comfort_ma_ema) / 4;
+    }
+    return g_comfort_ma_ema;
+}
+
 static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     int candidate = 0;
     int base_candidate = 0;
@@ -2112,10 +2163,12 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
             (g_smart_rt.app_hint <= ASB_APP_MEDIUM || g_asb_cfg.smart_battery_bias >= 400);
         int comfort_current_ma = g_asb_cfg.smart_battery_bias >= 400 ? 250 :
                                  (smart_screenon_comfort ? 350 : 450);
+        int _cma = asb_comfort_ma(m);
+        int _cin = g_budget_comfort_engaged;
         if (!m->bat.charging && m->misc.screen_on && !m->misc.camera_active &&
             fsm->state != ASB_STATE_GAMING && m->therm.temp_valid &&
-            m->therm.cpu_max_c >= g_asb_cfg.bat_comfort_temp &&
-            asb_ma_ref(m->bat.current_ma) >= comfort_current_ma &&
+            m->therm.cpu_max_c >= g_asb_cfg.bat_comfort_temp - (_cin ? 2 : 0) &&
+            asb_ma_ref(_cma) >= (_cin ? comfort_current_ma * 4 / 5 : comfort_current_ma) &&
             (fsm->profile_idx == PROFILE_BATTERY || smart_screenon_comfort))
             asb_budget_raise(&candidate, &reason,
                              g_asb_cfg.thermal_budget_light_trim_pct,
@@ -2134,7 +2187,7 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
             fsm->state != ASB_STATE_GAMING && fsm->state != ASB_STATE_SUSTAINED;
         if (smart_high_current_comfort && !m->bat.charging && m->misc.screen_on &&
             !m->misc.camera_active && m->therm.temp_valid &&
-            m->therm.cpu_max_c >= 42 && asb_ma_ref(m->bat.current_ma) >= 600)
+            m->therm.cpu_max_c >= (_cin ? 40 : 42) && asb_ma_ref(_cma) >= (_cin ? 480 : 600))
             asb_budget_raise(&candidate, &reason,
                              g_asb_cfg.thermal_budget_light_trim_pct,
                              "screenon_comfort_smart_high_current");
@@ -2165,7 +2218,7 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
             !m->misc.camera_active && fsm->state != ASB_STATE_GAMING &&
             m->therm.temp_valid &&
             m->therm.surface_hotspot_c >= (g_budget_surface_engaged ? 42 : 46) &&
-            asb_ma_ref(m->bat.current_ma) >= 250 &&
+            asb_ma_ref(_cma) >= 250 &&
             (fsm->state != ASB_STATE_SUSTAINED || surface_comfort_sustained))
             asb_budget_raise(&candidate, &reason,
                              g_asb_cfg.thermal_budget_moderate_trim_pct,
@@ -2218,6 +2271,8 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
              * if the exit threshold is checked against a state we actually recorded. */
             g_budget_surface_engaged =
                 (reason && strncmp(reason, "surface_comfort", 15) == 0) ? 1 : 0;
+            g_budget_comfort_engaged =
+                (reason && strncmp(reason, "screenon_comfort", 16) == 0) ? 1 : 0;
             g_budget_trim_changed_at = now;
             g_budget_base_trim_pct = base_candidate;
             g_budget_stage = stage;
@@ -2476,6 +2531,8 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             g_stat_json_written, g_stat_json_skipped);
     fprintf(f, "probe_cache_hits=%lu\nprobe_cache_misses=%lu\n",
             g_stat_probe_hits, g_stat_probe_misses);
+    /* Foreground answered from the top-app cgroup, no fork (fix124). */
+    fprintf(f, "probe_topapp=%lu\n", g_stat_probe_topapp);
     fprintf(f, "governor_transitions=%lu\ngovernor_writes=%lu\n"
                "governor_readbacks=%lu\ngovernor_vendor_overrides=%lu\n",
             g_stat_transitions, g_stat_writes, g_stat_readbacks,
@@ -2778,7 +2835,8 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         fprintf(f, "display_state=%d\nscreen_aod_s=%ld\n", g_display_state, g_scr_aod_s);
         fprintf(f, "screen_on_detect=\"uevent:%lu,recheck:%lu,tick:%lu,display:%lu\"\n",
                 g_scr_on_by_uevent, g_scr_on_by_recheck, g_scr_on_by_tick, g_scr_on_by_display);
-        fprintf(f, "display_waiter=%d\ndisplay_state_events=%lu\n", g_disp_waiter_up, g_disp_prop_events);
+        fprintf(f, "display_waiter=%d\ndisplay_state_events=%lu\nscreen_on_resume_skipped=%lu\n",
+                g_disp_waiter_up, g_disp_prop_events, g_scr_resume_skipped);
         /* Screen-on touch watch (fix117): device found, touches that started after a calm
          * spell, and how many of them lifted light idle on the spot. */
         fprintf(f, "touch_watch=%d\ntouch_starts=%lu\ntouch_lifts=%lu\n",
@@ -5328,15 +5386,34 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
                  */
                 int boot_grace = (g_gov_start_ts > 0 &&
                                   (long)(now - g_gov_start_ts) < 180);
+                /* The camera is not a game (fix120).
+                 *
+                 * The two heat branches below guess "game" from a hot die plus a busy GPU,
+                 * because an unrecognised game looks like that. A camera session looks
+                 * exactly the same: the ISP pipeline, HDR merge and preview render push the
+                 * GPU past 30-50% and the die to 60 C within seconds. An OP15 capture shows
+                 * it - SUSTAINED at 60 C, camera=1 eleven seconds later, and the Smart row
+                 * for that minute carries app_hint=4 with the GPU back at 0-6%.
+                 *
+                 * A game hint is not free. It lifts Smart's proactive ceiling (_game_busy
+                 * in the FSM), relaxes the GPU gate for a GAMING entry and opens the GAMING
+                 * entry itself (pkg_agrees) - the loosest rails ASB has, for a workload that
+                 * already gets its own HEAVY floor and camera QoS. That is heat on the one
+                 * thing users hold in their hand while it runs.
+                 *
+                 * Only the inference is blocked: a package the table names as a game keeps
+                 * its hint with the camera open (an AR game), and so does an FSM that is
+                 * already in GAMING, because it could only have got there with a hint. */
+                int cam_open = m->misc.camera_active;
                 if (fsm->state == ASB_STATE_GAMING && fresh_pkg &&
                     !g_smart_media_pkg_known) {
                     g_smart_rt.app_hint = ASB_APP_GAMING;
-                } else if (!boot_grace &&
+                } else if (!boot_grace && !cam_open &&
                            fsm->state == ASB_STATE_SUSTAINED &&
                            cpu_max_c >= 60 && m->gpu.load_pct >= 30 &&
                            fresh_pkg && !g_smart_media_pkg_known) {
                     g_smart_rt.app_hint = ASB_APP_GAMING;
-                } else if (!boot_grace &&
+                } else if (!boot_grace && !cam_open &&
                            g_asb_cfg.bat_suppress_gaming &&
                            fsm->state == ASB_STATE_HEAVY &&
                            cpu_max_c >= 60 && m->gpu.load_pct >= 45 &&
@@ -6833,13 +6910,18 @@ int main(int argc, char **argv) {
             }
             if (g_last_heartbeat == 0) g_last_heartbeat = _now;
             if (_now - g_last_heartbeat >= 900) {
-                static const char *_snames[] = {"DEEP_IDLE","LIGHT_IDLE","MODERATE","HEAVY","GAMING","SUSTAINED"};
+                /* State names come from the FSM's own table (fix120). This line used to carry
+                 * a private copy with GAMING and SUSTAINED swapped - the enum is SUSTAINED=4,
+                 * GAMING=5 - so every heartbeat during a thermal hold read "state=GAMING". An
+                 * OP15 capture shows it: "heartbeat: state=GAMING ... gpu=5" between
+                 * "FSM: SUSTAINED" and "exit_sustained", with no GAMING transition anywhere.
+                 * A log that names the wrong state sends the analysis after the wrong fix. */
                 static const char *_enames[] = {"quiet","noisy","hostile"};
                 fsm_flush_state_time(&fsm);  /* flush before heartbeat so bat_deep/light/mod are current */
                 int _hb_env = classify_environment(&fsm);
                 asb_log("heartbeat: state=%s profile=%d temp=%d%s headroom=%d%% load=%.1f gpu=%d bat=%d "
                         "ses_heavy=%lds ses_sus=%lds bat_deep=%lds bat_wake=%d env=%s waste=%d sc=%d hc=%d",
-                        (fsm.state >= 0 && fsm.state < 6) ? _snames[fsm.state] : "?",
+                        ((int)fsm.state >= 0 && (int)fsm.state < ASB_STATE_COUNT) ? asb_state_names[fsm.state] : "?",
                         fsm.profile_idx,
                         metrics.therm.cpu_max_c,
                         metrics.therm.temp_valid ? "" : "(stale)",
@@ -6939,9 +7021,13 @@ int main(int argc, char **argv) {
                 if (want_active != g_active_interval && metrics.misc.screen_on) {
                     arm_timerfd_periodic(tfd_active, want_active);
                     g_active_interval = want_active;
-                    if (g_asb_cfg.log_level >= 1)
+                    /* Back to calm after a touch-driven 2 s spell (fix117) is routine - one
+                     * per touch session; at the normal level it filled the 50-line log tail
+                     * the captures keep (fix119). */
+                    if (g_asb_cfg.log_level >= (g_active_by_touch && calm ? 3 : 1))
                         asb_log("adaptive_tick: screen-on interval -> %ds (%s)",
                                 want_active, calm ? "calm" : "busy");
+                    g_active_by_touch = 0;
                 }
             }
             else if (fd == tfd_idle) {
@@ -6991,7 +7077,8 @@ int main(int argc, char **argv) {
                         if (g_active_interval != TIMER_ACTIVE_S) {
                             arm_timerfd_periodic(tfd_active, TIMER_ACTIVE_S);
                             g_active_interval = TIMER_ACTIVE_S;
-                            if (g_asb_cfg.log_level >= 2)
+                            g_active_by_touch = 1;
+                            if (g_asb_cfg.log_level >= 3)
                                 asb_log("adaptive_tick: screen-on interval -> %ds (touch)", TIMER_ACTIVE_S);
                         }
                     }
@@ -7712,10 +7799,34 @@ int main(int argc, char **argv) {
                     if (_rb_prev.tv_sec)
                         _slept = (long)((_rb.tv_sec - _rb_prev.tv_sec) - (_rm.tv_sec - _rm_prev.tv_sec));
                     _rb_prev = _rb; _rm_prev = _rm;
+                    /* With the waiter live, a resume that Android itself reports as off or doze
+                     * is not a wake (fix118): the chain cost up to four extra ticks on every
+                     * maintenance wake of the night, and a real wake is delivered by the
+                     * waiter the moment the display turns on. */
+                    int _dsr = asb_display_state_read();
+                    int _not_wake = (g_disp_waiter_up == 2 && (_dsr == 1 || _dsr == 3 || _dsr == 4));
                     if (_slept >= 5 && !metrics.misc.screen_on && timerfd_state(tfd_active) == 0) {
-                        g_disp_evt_ts = time(NULL); g_disp_retry = 0;
-                        g_scr_resume_chains++;
-                        arm_timerfd_once_ms(tfd_active, 400);
+                        if (_not_wake) {
+                            g_scr_resume_skipped++;
+                        } else {
+                            g_disp_evt_ts = time(NULL); g_disp_retry = 0;
+                            g_scr_resume_chains++;
+                            arm_timerfd_once_ms(tfd_active, 400);
+                        }
+                    }
+                    /* The waiter came up while the screen is off (or went away): move the
+                     * uevent socket to match - parked while Android reports wakes, listening
+                     * when it does not. */
+                    if (!metrics.misc.screen_on && uefd >= 0) {
+                        if (g_disp_waiter_up == 2 && !g_uev_parked) {
+                            if (epoll_ctl(epfd, EPOLL_CTL_DEL, uefd, NULL) == 0) {
+                                g_uev_parked = 1;
+                                g_uev_parks++;
+                                asb_log("display waiter: live - uevent socket parked, wakes come from Android's display state");
+                            }
+                        } else if (g_disp_waiter_up != 2 && g_uev_parked) {
+                            uev_unpark(epfd, uefd);
+                        }
                     }
                 }
                 if (!metrics.misc.screen_on && timerfd_state(tfd_active) == 0 && g_disp_evt_ts &&
@@ -9045,12 +9156,18 @@ int main(int argc, char **argv) {
             }
 
             /*
-             * periodic user ID check (~every 30s when screen on).
+             * Periodic user ID check while the screen is on - every 2 minutes of wall time
+             * (fix124). It counted 6 ticks, i.e. every 12-36 s at the 2-6 s screen-on cadence:
+             * a fork and exec of `cmd` plus a binder call into the user manager, blocking this
+             * loop, a few hundred times per screen-on hour - for a user switch that happens
+             * almost never on a phone (and is also caught at every screen-on edge).
              */
             if (metrics.misc.screen_on && !g_user_quarantine_active) {
-                static int g_user_poll_skip = 0;
-                if (++g_user_poll_skip >= 6) {  /* ~30s at 5s ticks */
-                    g_user_poll_skip = 0;
+                static time_t g_user_poll_ts = 0;
+                time_t _upn = time(NULL);
+                if (g_user_poll_ts == 0) g_user_poll_ts = _upn;
+                if (_upn - g_user_poll_ts >= 120 || _upn < g_user_poll_ts) {
+                    g_user_poll_ts = _upn;
                     int cur_uid = get_current_user_id();
                     if (cur_uid >= 0 && g_last_user_id >= 0 && cur_uid != g_last_user_id) {
                         asb_log("user_quarantine: user switch %d -> %d (poll), active for %ds",
