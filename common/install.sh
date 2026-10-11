@@ -3382,6 +3382,7 @@ rm -f /data/adb/asb/callrec_line_manifest.txt /data/adb/asb/callrec_line.active 
       /data/adb/asb/callrec_boot_pending /data/adb/asb/callrec_blocked \
       /data/adb/asb/callrec_line_state /data/adb/asb/callrec_empty.pcm 2>/dev/null
 rm -rf /data/adb/asb/callrec_patched 2>/dev/null
+rm -f /data/adb/asb/settings_rejected 2>/dev/null
 
 # A real install came back with a zero-byte regular file named "vendor" sitting in the module
 # root.
