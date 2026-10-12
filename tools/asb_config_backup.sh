@@ -79,6 +79,17 @@ smart_save() {
   echo "smart_learning_bytes=$_total"
 }
 
+# Is there any Smart learning on this phone to save? (fix134: the save dialog offers the
+# choice only then.) Prints smart_learning=available|empty and the file count.
+smart_available() {
+  _sa_n=0
+  for _f in buckets.bin buckets.bin.bak smart_appheat.bin night_window.conf session_history.jsonl session_stats.json pstats_battery.json pstats_balanced.json pstats_performance.json; do
+    [ -s "$(_smart_source "$_f")" ] && _sa_n=$((_sa_n + 1))
+  done
+  if [ "$_sa_n" -gt 0 ]; then echo 'smart_learning=available'; else echo 'smart_learning=empty'; fi
+  echo "smart_learning_files=$_sa_n"
+}
+
 # Return saved, empty, invalid or incompatible. An invalid sidecar never invalidates the
 # settings profile: restore may still safely apply the separately checksummed settings.
 smart_status_dir() {
@@ -172,6 +183,10 @@ smart_restore() {
 
 write_profile() {
   _name="$1" _replace="$2"; shift 2
+  # fix134: --no-smart saves the settings without the Smart learning (a configuration to
+  # share with another phone, or to start learning fresh). Default: learning included.
+  _with_smart=1
+  if [ "${1:-}" = "--no-smart" ]; then _with_smart=0; shift; fi
   _profile_ok "$_name" || { echo 'invalid profile name: use 1..32 letters, digits, _ or -' >&2; exit 2; }
   [ "$#" -gt 0 ] || { echo 'profile needs allowed keys' >&2; exit 2; }
   [ -r "$CONF" ] || { echo "config unavailable: $CONF" >&2; exit 1; }
@@ -194,7 +209,13 @@ write_profile() {
   [ "$_count" -gt 0 ] 2>/dev/null || { rm -f "$_tmp"; echo 'profile contains no current user settings' >&2; exit 1; }
   mv -f "$_tmp" "$_out"
   hash_file "$_out" > "$_sum.tmp.$$" && mv -f "$_sum.tmp.$$" "$_sum"
-  _smart="$(smart_save "$_name")"
+  if [ "$_with_smart" = 1 ]; then
+    _smart="$(smart_save "$_name")"
+  else
+    # A replaced profile must not keep the learning of its previous version.
+    rm -rf "$(_smart_dir "$_name")"; rm -f "$(_smart_sum "$_name")"
+    _smart='smart_learning=skipped_by_choice'
+  fi
   echo "profile=$_name"
   echo "keys=$_count"
   echo "checksum=$(cat "$_sum" 2>/dev/null || true)"
@@ -500,6 +521,121 @@ export_path_profile() {
     rm -f "$_dir/$_name.conf" "$_dir/$_name.conf.sha256"; rm -rf "$_dir/$_name.smart"
   fi
 }
+# ---- Older copies that lost a part on the way (fix134) --------------------------------
+#
+# The multi-file copies (NAME.conf + NAME.conf.sha256 + NAME.smart) and the pre-V64
+# whole-config backups (asb_settings_backup.conf) still open through _import_from when they
+# arrive intact. What arrives through a messenger, a cloud drive or a second download is
+# often not intact: the .sha256 and the .smart folder stay behind (a folder cannot be sent),
+# and the file is called "name (1).conf". Those were refused outright ("the checksum file
+# must be next to it", "file name must use 1-32 letters").
+#
+# A checksum guards against a broken copy, not against a hostile one - anyone can recompute
+# it - and every value is validated again when the configuration is applied. So a file that
+# says it is ASB's (its header), or that holds known ASB settings, is read line by line
+# instead: comments and blank lines dropped, "key=value" kept when the key is a known setting
+# and the value a plain token, the first of a repeated key kept. A value the current module
+# rejects (a range that changed since) is left out by name, so one stale line no longer sinks
+# the whole backup. The result goes into the store with a fresh checksum and says what it did.
+_legacy_name() {
+  _ln="${1##*/}"; _ln="${_ln%.conf}"
+  _ln="$(printf '%s' "$_ln" | tr -c 'A-Za-z0-9_-' '-' | tr -s '-' | sed 's/^-*//; s/-*$//' | cut -c1-32)"
+  [ -n "$_ln" ] || _ln=imported
+  printf '%s' "$_ln"
+}
+# Keys a validation message names, so they can be left out (compound rules name a pair).
+_legacy_reject_keys() {
+  case "$1" in
+    *"sustained temperature hysteresis"*) echo 'sustained_temp_enter sustained_temp_exit' ;;
+    *"auto battery thresholds"*)          echo 'auto_battery_low_pct auto_battery_high_pct' ;;
+    *"night quiet hours"*)                echo 'night_quiet_hour_start night_quiet_hour_end' ;;
+    *"headroom thresholds must descend"*) echo 'thermal_budget_light_headroom_pct thermal_budget_moderate_headroom_pct thermal_budget_severe_headroom_pct' ;;
+    *"Smart confidence bounds"*)          echo 'smart_conf_low smart_conf_high' ;;
+    *"invalid value for "*)               printf '%s\n' "${1##*invalid value for }" ;;
+    *) printf '%s\n' "$1" | sed -nE 's/^(missing or non-numeric |missing or non-decimal |invalid decimal |invalid scalar value for |unknown key: )?([A-Za-z0-9_]+).*/\2/p' | head -1 ;;
+  esac
+}
+_legacy_import() {
+  _lf="$1"; _lsrc_dir="${_lf%/*}"; _lorig="${_lf##*/}"; _lorig="${_lorig%.conf}"
+  _lbytes="$(_smart_size "$_lf")"; case "$_lbytes" in ''|*[!0-9]*) _lbytes=0 ;; esac
+  [ "$_lbytes" -gt 0 ] 2>/dev/null && [ "$_lbytes" -le 1048576 ] 2>/dev/null || { echo 'not an ASB configuration' >&2; exit 1; }
+  [ -r "$CONF" ] || { echo "config unavailable: $CONF" >&2; exit 1; }
+  _lname="$(_legacy_name "$_lf")"
+  _prepare_dir
+  _lstage="$PROFILES/.legacy.$$"; _lcand="$PROFILES/.legacy_cand.$$"
+  rm -f "$_lstage" "$_lcand"
+  trap 'rm -f "$_lstage" "$_lcand" "$_lcand.next" "$PROFILES/.legacy_txn.$$"' EXIT
+  _lhead="$(head -n 1 "$_lf" 2>/dev/null | tr -d '\r')"
+  _lknown=0; _lseen=' '
+  {
+    echo '# ASB_PROFILE_SCHEMA=1'
+    echo "# created_at=$(_now)"
+    echo "# imported_from=$(printf '%s' "$_lorig" | tr -c 'A-Za-z0-9_. ()-' '_')"
+  } > "$_lstage"
+  while IFS= read -r _ll || [ -n "$_ll" ]; do
+    _ll="$(printf '%s' "$_ll" | tr -d '\r')"
+    case "$_ll" in ''|'#'*|[[:space:]]'#'*) continue ;; esac
+    case "$_ll" in *=*) : ;; *) continue ;; esac
+    _lk="${_ll%%=*}"; _lv="${_ll#*=}"
+    _lk="$(printf '%s' "$_lk" | tr -d ' \t')"
+    # Trim, do not squeeze: "a b" is not a value this module wrote, and dropping the
+    # space would turn it into one ("ab") the validator does not check for every key.
+    _lv="${_lv%%#*}"; _lv="$(printf '%s' "$_lv" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+    _key_ok "$_lk" || continue
+    case "$_lv" in ''|*[!A-Za-z0-9_.+:-]*) continue ;; esac
+    grep -qE "^[[:space:]]*${_lk}[[:space:]]*=" "$CONF" 2>/dev/null || continue
+    case "$_lseen" in *" $_lk "*) continue ;; esac
+    _lseen="$_lseen$_lk "; _lknown=$((_lknown + 1))
+    printf '%s=%s\n' "$_lk" "$_lv" >> "$_lstage"
+  done < "$_lf"
+  case "$_lhead" in
+    '# ASB_PROFILE_SCHEMA='*|'# ASB_BACKUP_SCHEMA='*) [ "$_lknown" -gt 0 ] || { echo 'this ASB file holds no setting this module knows' >&2; exit 1; } ;;
+    *) [ "$_lknown" -ge 5 ] || { echo 'not an ASB configuration' >&2; exit 1; } ;;
+  esac
+  # Leave out what the current module rejects, by name, up to ten times.
+  _ldropped=""; _ltries=0
+  while [ "$_ltries" -lt 10 ]; do
+    _ltries=$((_ltries + 1))
+    cp -f "$CONF" "$_lcand"
+    while IFS= read -r _ll; do
+      case "$_ll" in ''|'#'*) continue ;; esac
+      _lk="${_ll%%=*}"; _lv="${_ll#*=}"
+      awk -v k="$_lk" -v v="$_lv" '{ p=index($0,"="); key=substr($0,1,p-1); gsub(/^[[:space:]]+|[[:space:]]+$/, "", key); if (p && key==k) {print k "=" v; next} print }' "$_lcand" > "$_lcand.next" && mv -f "$_lcand.next" "$_lcand"
+    done < "$_lstage"
+    _lerr="$(ASB_CONFIG_TXN="$PROFILES/.legacy_txn.$$" sh "$WRITER" validate "$_lcand" 2>&1 >/dev/null)" && break
+    _lbad=""
+    for _lk in $(_legacy_reject_keys "$(printf '%s' "$_lerr" | tail -n 1 | sed 's/^[^:]*: //')"); do
+      grep -q "^$_lk=" "$_lstage" && _lbad="$_lbad $_lk"
+    done
+    [ -n "$_lbad" ] || { echo "cannot use this file: ${_lerr:-validation failed}" >&2; exit 1; }
+    for _lk in $_lbad; do
+      grep -v "^$_lk=" "$_lstage" > "$_lstage.next" && mv -f "$_lstage.next" "$_lstage"
+      _ldropped="$_ldropped${_ldropped:+,}$_lk"
+    done
+  done
+  grep -q '^[A-Za-z0-9_]*=' "$_lstage" || { echo 'no setting in this file can be used' >&2; exit 1; }
+  mv -f "$_lstage" "$(_profile_file "$_lname")" && hash_file "$(_profile_file "$_lname")" > "$(_profile_sha "$_lname")" || {
+    echo 'cannot import the configuration' >&2; exit 1; }
+  # Its Smart folder, if it travelled with it and is intact.
+  _lsmart="$(smart_status_dir "$_lsrc_dir/$_lorig.smart")"
+  if [ "$_lsmart" = saved ]; then
+    _stage="$PROFILES/.$_lname.smart.import.$$"; rm -rf "$_stage"
+    if cp -R "$_lsrc_dir/$_lorig.smart" "$_stage" 2>/dev/null && [ "$(smart_status_dir "$_stage")" = saved ]; then
+      rm -rf "$(_smart_dir "$_lname")"; rm -f "$(_smart_sum "$_lname")"
+      mv -f "$_stage" "$(_smart_dir "$_lname")" && hash_file "$(_smart_dir "$_lname")/manifest" > "$(_smart_sum "$_lname")" || {
+        rm -rf "$_stage" "$(_smart_dir "$_lname")" "$(_smart_sum "$_lname")"; _lsmart=invalid; }
+    else
+      rm -rf "$_stage"; _lsmart=invalid
+    fi
+  else
+    rm -rf "$(_smart_dir "$_lname")"; rm -f "$(_smart_sum "$_lname")"
+  fi
+  echo "imported=$_lname"
+  echo "format=older_checked_line_by_line"
+  echo "keys=$(grep -c '^[A-Za-z0-9_]*=' "$(_profile_file "$_lname")" 2>/dev/null || echo 0)"
+  [ -n "$_ldropped" ] && echo "skipped_keys=$_ldropped"
+  echo "smart_learning=$_lsmart"
+}
 import_path_profile() {
   _file="$1"
   _path_ok "$_file" || { echo 'this location cannot be read' >&2; exit 2; }
@@ -510,8 +646,12 @@ import_path_profile() {
     *) echo 'choose an .asb (or older .conf) configuration' >&2; exit 2 ;;
   esac
   _base="${_file##*/}"; _base="${_base%.conf}"
-  _profile_ok "$_base" || { echo 'file name must use 1-32 letters, digits, _ or -' >&2; exit 2; }
-  _import_from "${_file%/*}" "$_base"
+  # An intact multi-file copy keeps the strict path: name, checksum and Smart folder as saved.
+  if _profile_ok "$_base" && [ -r "${_file%/*}/$_base.conf.sha256" ] && \
+     [ "$(cat "${_file%/*}/$_base.conf.sha256" 2>/dev/null | tr -d ' \r\n')" = "$(hash_file "$_file")" ]; then
+    _import_from "${_file%/*}" "$_base"; return
+  fi
+  _legacy_import "$_file"
 }
 
 list_external_profiles() {
@@ -602,6 +742,7 @@ case "${1:-}" in
   list-external) [ "$#" -eq 2 ] || { echo "usage: $0 list-external {downloads|documents}" >&2; exit 2; }; list_external_profiles "$2" ;;
   export-path) [ "$#" -eq 3 ] || { echo "usage: $0 export-path NAME DIR" >&2; exit 2; }; export_path_profile "$2" "$3" ;;
   import-path) [ "$#" -eq 2 ] || { echo "usage: $0 import-path FILE.asb|FILE.conf" >&2; exit 2; }; import_path_profile "$2" ;;
+  smart-available) smart_available ;;
   import-external) [ "$#" -eq 3 ] || { echo "usage: $0 import-external {downloads|documents} NAME" >&2; exit 2; }; import_external_profile "$2" "$3" ;;
-  *) echo "usage: $0 {list|create|replace|preview|restore|delete|export|list-external|import-external|export-path|import-path} ..." >&2; exit 2 ;;
+  *) echo "usage: $0 {list|create|replace|preview|restore|delete|export|list-external|import-external|export-path|import-path|smart-available} ..." >&2; exit 2 ;;
 esac

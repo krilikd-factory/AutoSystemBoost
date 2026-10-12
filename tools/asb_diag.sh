@@ -1455,31 +1455,32 @@ case "$_dsp_g" in ''|0|off) NOTE "dsp_loudness = off - the effect is released fr
     [ "$_dsp_expected_mb" -gt 2500 ] && _dsp_expected_mb=2500
     # A thermally reduced gain is correct behaviour, not a failed write.
     #
-    # asb_audio_apply backs the gain off to 1200 mB above 55C and 800 above 60. This check
-    # compared against the REQUESTED value and reported FAIL on a phone that was simply
-    # warm - the one state where the reduction is the whole point. A diagnostic that calls
-    # a working safeguard a fault teaches the user to ignore it.
+    # Graded against what the module DECIDED (gain_applied_mb), not against the request: a
+    # deliberate back-off is not a delivery failure. From fix135 the decision is made by
+    # asb_dsp_thermal.sh - battery temperature with hysteresis, loudspeaker only - and it
+    # leaves its reasoning in /dev/.asb/dsp_thermal, which is what is quoted here. The old
+    # rule read the CPU's hottest core at random moments and kept the answer; seven captures
+    # showed want 2500, live 800 or 1200 with the die already back under 55 C.
     _dsp_live_mb="$(gp persist.asb.dsp.gain_mb)"
-    _dsp_t="$(grep -m1 '^cpu_max_c=' /dev/.asb/state 2>/dev/null | cut -d= -f2 | tr -dc '0-9')"
-    case "$_dsp_t" in ''|*[!0-9]*) _dsp_t=0 ;; esac
-    # Grade against what the module DECIDED, which it publishes, not against the request.
-    #
-    # asb_audio_apply.sh writes the thermally reduced target to gain_applied_mb. Guessing
-    # from the die temperature at report time missed every case where the phone had cooled
-    # between the back-off and the report: seven captures showed want 2500, live 800 or
-    # 1200, with the die already under 55 C - a deliberate back-off counted as a failure.
-    # If live matches the published decision, the path works; a mismatch against THAT
-    # value is a real delivery failure and still FAILs below.
     _dsp_decided_mb="$(gp persist.asb.dsp.gain_applied_mb)"
     case "$_dsp_decided_mb" in ''|*[!0-9]*) _dsp_decided_mb="" ;; esac
+    _dsp_th_step="$(sed -n 's/^step=//p' /dev/.asb/dsp_thermal 2>/dev/null | head -1)"
+    _dsp_th_bat="$(sed -n 's/^bat_dC=//p' /dev/.asb/dsp_thermal 2>/dev/null | head -1)"
+    _dsp_th_why="$(sed -n 's/^reason=//p' /dev/.asb/dsp_thermal 2>/dev/null | head -1)"
+    _dsp_th_c="$_dsp_th_bat"
+    case "$_dsp_th_bat" in ''|*[!0-9]*) _dsp_th_c="?" ;; *) _dsp_th_c="$((_dsp_th_bat / 10)).$((_dsp_th_bat % 10))" ;; esac
     if [ -n "$_dsp_decided_mb" ] && [ "$_dsp_decided_mb" -lt "$_dsp_expected_mb" ] 2>/dev/null \
        && [ "$_dsp_live_mb" = "$_dsp_decided_mb" ]; then
-      NOTE "DSP gain ${_dsp_live_mb}mB (requested ${_dsp_expected_mb}) - thermal back-off, applied as decided"
-    elif [ "$_dsp_t" -ge 55 ] 2>/dev/null && [ "$_dsp_live_mb" -lt "$_dsp_expected_mb" ] 2>/dev/null; then
-      NOTE "DSP gain ${_dsp_live_mb}mB (requested ${_dsp_expected_mb}) - reduced on purpose, die at ${_dsp_t}C"
+      if [ "$_dsp_th_why" = "hot_speaker" ]; then
+        NOTE "DSP gain ${_dsp_live_mb}mB (requested ${_dsp_expected_mb}) - heat back-off on the loudspeaker: battery ${_dsp_th_c} C, step ${_dsp_th_step} (full gain again under 40 C)"
+      else
+        NOTE "DSP gain ${_dsp_live_mb}mB (requested ${_dsp_expected_mb}) - lowered earlier, not by the current rule (${_dsp_th_why:-no decision recorded yet}); the minute check in service.sh gives it back"
+      fi
     else
       V "  DSP gain applied (persist.asb.dsp.gain_mb)" "$_dsp_expected_mb" "$_dsp_live_mb"
     fi
+    [ -n "$_dsp_th_step" ] && \
+      NOTE "  heat back-off: step ${_dsp_th_step} (battery ${_dsp_th_c} C, ${_dsp_th_why}) - loudspeaker only; 42/45 C down, 43/40 C back"
     [ "$_dsp_requested_mb" -ne "$_dsp_expected_mb" ] && \
       NOTE "  requested ${_dsp_requested_mb}mB is safely capped to ${_dsp_expected_mb}mB (+25 dB compatibility limit)"
     V "  DSP enabled" "1" "$(gp persist.asb.dsp.enable)" eq
@@ -1566,6 +1567,14 @@ elif [ "$_dsp_on" = "1" ]; then
   # which hid the one result that says the DSP does nothing on this phone.
   if [ -n "$_dsp_reg" ]; then
     V "  effect registered with audioflinger" "present" "$_dsp_reg" present
+    # Registered is not processing (fix135): the live instance, its output, and whether
+    # AudioFlinger has suspended it because an app enabled an effect of its own there.
+    if [ -r "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_dsp_live.sh" ]; then
+      . "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_dsp_live.sh"
+      _dsp_lv="$(asb_dsp_live_state)"
+      NOTE "  live effect: $_dsp_lv"
+      NOTE "    -> $(asb_dsp_live_explain "$_dsp_lv")"
+    fi
   else
     V "  effect registered with audioflinger" "present" "absent" eq
   fi
@@ -1907,7 +1916,17 @@ if [ -f "$_nvf" ]; then
         # qdisc wording under a congestion key described the wrong mechanism.
         NA=$((NA+1))
         case "$_nk" in
-          net_congestion_*) P "  [N/A ] $_nk (no per-route congctl on this kernel - links share the global algorithm)" ;;
+          net_congestion_*)
+            # fix136: the verdict can predate the evidence. A default route carrying
+            # congctl means the kernel takes per-route algorithms - the "unsupported"
+            # came from an apply whose probe failed, and the next network change re-files it.
+            _dipx=ip; [ -x /system/bin/ip ] && _dipx=/system/bin/ip
+            if "$_dipx" route show table all 2>/dev/null | grep '^default' | grep -q ' congctl '; then
+              NA=$((NA-1))
+              NOTE "$_nk = $_nw - filed as unsupported by an apply whose probe failed; per-route congctl works on this kernel (see below), the next network change re-files it"
+            else
+              P "  [N/A ] $_nk (no per-route congctl on this kernel - links share the global algorithm)"
+            fi ;;
           *)                P "  [N/A ] $_nk (link has no queue - the driver owns this interface)" ;;
         esac ;;
       pending)     NOTE "$_nk = $_nw - stored, waiting for a link to apply it to" ;;
@@ -1940,12 +1959,15 @@ esac
 NOTE "net_wifi_leave = ${_nwl_d:-off}"
 case "${_ho_fast:-0}:$_radio_policy" in
   1:1) NOTE "Wi-Fi → mobile handover: fast requested; LPM state: $(cat /dev/.asb/lpm_mode 2>/dev/null || echo not-written)" ;;
-  1:*) NOTE "Wi-Fi → mobile handover: stored but inactive (cellular/radio controls off)" ;;
+  1:*) NOTE "Wi-Fi → mobile handover: mobile data not kept warm (cellular/radio controls off) - leaving still works, mobile data comes up after the release" ;;
   *) NOTE "Wi-Fi → mobile handover: stock/off" ;;
 esac
-case "${_ho_active:-0}:$_radio_policy" in
-  1:1) NOTE "Wi-Fi fallback: active opt-in; $(MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}" sh "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_wifi_fallback.sh" status 2>/dev/null || echo status-unavailable)" ;;
-  1:*) NOTE "Wi-Fi fallback: stored but inactive (cellular/radio controls off)" ;;
+# fix134: the leave watcher runs on every rung, cellular master or not; avoid-bad-Wi-Fi is
+# Android's own switch, set on unusable/aggressive.
+case "$_nwl_d" in
+  weak|unusable|aggressive)
+    NOTE "Wi-Fi leave watch ($_nwl_d, below $(cfg net_wifi_leave_dbm) dBm): $(MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}" sh "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_wifi_fallback.sh" status 2>/dev/null || echo status-unavailable)"
+    NOTE "  Android avoid-bad-Wi-Fi switch: $(settings get global network_avoid_bad_wifi 2>/dev/null | tr -d '\r') (ASB sets 1 on unusable/aggressive)" ;;
   *) NOTE "Wi-Fi fallback: off" ;;
 esac
 # Why it fired, not just whether it is armed.
@@ -2531,7 +2553,9 @@ if [ -s /data/adb/asb/wakelock_fitness_limited ]; then
   done < /data/adb/asb/wakelock_fitness_limited
 fi
 if [ -s /data/adb/asb/wakelock_restricted ]; then
-  NOTE "$(wc -l < /data/adb/asb/wakelock_restricted) app(s) moved to restricted by ASB - undone on uninstall"
+  NOTE "$(wc -l < /data/adb/asb/wakelock_restricted) app(s) moved to restricted by ASB - undone on uninstall:"
+  # Named (fix136): the count alone hid that one of them was Signal.
+  while IFS= read -r _wlr; do [ -n "$_wlr" ] && P "      $_wlr"; done < /data/adb/asb/wakelock_restricted
 fi
 
 SEC "5b. HAPTICS"
