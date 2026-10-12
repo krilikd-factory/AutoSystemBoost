@@ -68,7 +68,12 @@ NET_TCP_WMEM="4096 32768 2097152"
 NET_RMEM_MAX=2097152
 NET_WMEM_MAX=2097152
 NET_OPTMEM_MAX=16384
-NET_BACKLOG=128
+# Per-CPU receive backlog. 128 was a quarter of what even an idle kernel ships (1000), and
+# with "Spread Network Load" on every received packet passes through this queue on its way
+# to the chosen cores: on a capped Battery CPU a 5G burst overflows 128 and the drops come
+# back as TCP retransmits - a slower download that keeps the modem up for longer, which
+# costs more than it saves. The queue length itself costs nothing while it is empty (fix131).
+NET_BACKLOG=1000
 NET_BUDGET=32
 NET_BUDGET_USECS=1500
 NET_DEV_WEIGHT=8
