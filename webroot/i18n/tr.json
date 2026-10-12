@@ -28,7 +28,7 @@
     },
     "dsp_loudness": {
       "name": "DSP ses yükseltme",
-      "desc": "ASB'nin kendi ses motoruyla sistem azamisinin üzerinde ses kazancı. Yumuşak sınırlayıcı sesin boğulmasını engeller: çıkış tasarım gereği sınırlıdır, bu yüzden fazladan desibeller sesin temizliğini değil yoğunluğunu değiştirir."
+      "desc": "ASB'nin kendi ses motoruyla sistem azamisinin üzerinde ses kazancı. Yumuşak sınırlayıcı sesin boğulmasını engeller: çıkış tasarım gereği sınırlıdır, bu yüzden fazladan desibeller sesin temizliğini değil yoğunluğunu değiştirir. Hoparlörde telefon sıcakken (pil 42 °C ve üzeri) kazanç kademeli olarak düşer ve 40 °C altında geri gelir; Bluetooth ve kablolu çıkışlar asla düşürülmez."
     },
     "dsp_bass": {
       "name": "DSP bas yükseltme",
@@ -313,7 +313,7 @@
     },
     "net_wifi_leave": {
       "name": "Bozuk Wi-Fi'dan ayrıl",
-      "desc": "Bağlı ama çalışmayan Wi-Fi, telefonun mobil ağa geçmek yerine denemeye devam etmesine yol açar. Her kademe daha erken ayrılır.",
+      "desc": "Bağlı ama çalışmayan Wi-Fi, telefonun mobil ağa geçmek yerine denemeye devam etmesine yol açar. Her kademe daha erken ayrılır. Nasıl çıkar: ekran açıkken ASB Wi-Fi'yi 30 sn kapatıp yeniden açar; telefon aynı zayıf ağa tekrar bağlanırsa ara 5 dk'ya kadar iki katına çıkar. Hücresel denetim kapalıyken de çalışır.",
       "descOpt": {
         "off": "Varsayılan: Wi-Fi ancak bağlantı gerçekten koptuğunda bırakılır.",
         "weak": "Sinyal -80 dBm altına düşünce ayrıl.",
@@ -863,6 +863,11 @@
   "cfg_profile_saved_to": "Kaydedildi: ",
   "cfg_profile_imported": "Açıldı: ",
   "cfg_profile_imported_tail": " - kullanmak için Uygula'ya dokunun",
+  "cfg_profile_smart_include": "Smart öğrenimini dahil et",
+  "cfg_profile_smart_include_on": "Smart'ın bu telefon hakkında öğrendikleri de dosyaya girer. Geri yüklenince öğrenim geri gelir.",
+  "cfg_profile_smart_include_off": "Yalnızca ayarlar — başka bir telefon için ya da Smart sıfırdan öğrensin diye.",
+  "cfg_profile_imported_older": " · eski kopya, her ayar denetlendi",
+  "cfg_profile_imported_skipped": " · alınmadı: ",
   "dbg_log_running_hint": "yenisini başlatmak için bu klasörü silin",
   "eta_average": "tahmin",
   "eta_average_tip": "Tahmin: ekran açıkken henüz 10 dakikalık ölçüm yok - son oturumlarınıza göre.",

@@ -54,7 +54,7 @@
     },
     "dsp_loudness": {
       "name": "Volume DSP",
-      "desc": "Guadagno di volume del motore audio di ASB, sopra il massimo di sistema. Il limitatore morbido impedisce al suono di saturare: l’uscita è limitata per costruzione, quindi i decibel in più cambiano la densità del suono, non la sua pulizia."
+      "desc": "Guadagno di volume del motore audio di ASB, sopra il massimo di sistema. Il limitatore morbido impedisce al suono di saturare: l’uscita è limitata per costruzione, quindi i decibel in più cambiano la densità del suono, non la sua pulizia. Sull'altoparlante il guadagno scende a gradini finché il telefono è caldo (batteria da 42 °C) e torna sotto i 40 °C; Bluetooth e uscite cablate non vengono mai ridotti."
     },
     "dsp_bass": {
       "name": "Enfasi bassi DSP",
@@ -339,7 +339,7 @@
     },
     "net_wifi_leave": {
       "name": "Abbandona Wi-Fi difettoso",
-      "desc": "Un Wi-Fi connesso ma non funzionante fa insistere il telefono invece di passare alla rete mobile. Ogni livello abbandona prima.",
+      "desc": "Un Wi-Fi connesso ma non funzionante fa insistere il telefono invece di passare alla rete mobile. Ogni livello abbandona prima. Come esce: a schermo acceso ASB spegne il Wi-Fi per 30 s e lo riaccende; se il telefono torna sulla stessa rete debole, la pausa raddoppia fino a 5 min. Funziona anche senza il controllo della rete mobile.",
       "descOpt": {
         "off": "Predefinito: il Wi-Fi viene rilasciato solo quando il collegamento cade davvero.",
         "weak": "Esci quando il segnale scende sotto -80 dBm.",
@@ -863,6 +863,11 @@
   "cfg_profile_saved_to": "Salvato in ",
   "cfg_profile_imported": "Aperta ",
   "cfg_profile_imported_tail": " - premi Applica per usarla",
+  "cfg_profile_smart_include": "Includi l'apprendimento Smart",
+  "cfg_profile_smart_include_on": "Ciò che Smart ha imparato su questo telefono finisce anche nel file. Al ripristino l'apprendimento torna.",
+  "cfg_profile_smart_include_off": "Solo impostazioni: per un altro telefono o per far ripartire Smart da zero.",
+  "cfg_profile_imported_older": " · copia vecchia, ogni impostazione verificata",
+  "cfg_profile_imported_skipped": " · non applicato: ",
   "dbg_log_running_hint": "elimina questa cartella per avviarne uno nuovo",
   "eta_average": "stima",
   "eta_average_tip": "Stima: ancora nessuna misura di 10 minuti a schermo acceso - in base alle tue sessioni recenti.",

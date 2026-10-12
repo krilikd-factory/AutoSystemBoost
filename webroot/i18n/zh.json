@@ -54,7 +54,7 @@
     },
     "dsp_loudness": {
       "name": "DSP 增益",
-      "desc": "在其他一切之后施加的数字增益，配有防削波限制器。\n\n每一档等于 1 分贝。即便 +6 dB 也只是「稍响一点」；超过 +15 dB 时，现代录音会让限制器持续工作，声音变响的同时也失去了呼吸感。\n\n零表示效果完全脱离音频链路，而不是以零值运行。"
+      "desc": "在其他一切之后施加的数字增益，配有防削波限制器。\n\n每一档等于 1 分贝。即便 +6 dB 也只是「稍响一点」；超过 +15 dB 时，现代录音会让限制器持续工作，声音变响的同时也失去了呼吸感。\n\n零表示效果完全脱离音频链路，而不是以零值运行。 在扬声器上，手机发热时（电池 42 °C 起）增益会分级降低，低于 40 °C 后恢复；蓝牙和有线输出从不降低。"
     },
     "dsp_bass": {
       "name": "DSP 低音增强",
@@ -339,7 +339,7 @@
     },
     "net_wifi_leave": {
       "name": "离开故障 Wi-Fi",
-      "desc": "已连接但无法使用的 Wi-Fi 会让手机持续重试，而不是切换到移动网络。每一档都更早离开。",
+      "desc": "已连接但无法使用的 Wi-Fi 会让手机持续重试，而不是切换到移动网络。每一档都更早离开。 离开方式：亮屏时 ASB 关闭 Wi-Fi 30 秒后重新打开；若手机又连回同一个弱网络，暂停时间翻倍，最长 5 分钟。无需开启蜂窝网络控制。",
       "descOpt": {
         "off": "出厂默认：仅在连接真正断开时才放弃 Wi-Fi。",
         "weak": "信号低于 -80 dBm 时离开。",
@@ -863,6 +863,11 @@
   "cfg_profile_saved_to": "已保存到 ",
   "cfg_profile_imported": "已打开 ",
   "cfg_profile_imported_tail": "，点按“应用”即可使用",
+  "cfg_profile_smart_include": "包含 Smart 学习数据",
+  "cfg_profile_smart_include_on": "Smart 对这台手机学到的内容也会写入文件，恢复时学习数据随之恢复。",
+  "cfg_profile_smart_include_off": "仅设置——用于其他手机，或让 Smart 从头学习。",
+  "cfg_profile_imported_older": " · 旧版副本，每项设置均已检查",
+  "cfg_profile_imported_skipped": " · 未采用：",
   "dbg_log_running_hint": "删除此文件夹即可开始新的记录",
   "eta_average": "估算",
   "eta_average_tip": "估算：尚无亮屏 10 分钟的测量——按您近期的会话。",

@@ -28,7 +28,7 @@
     },
     "dsp_loudness": {
       "name": "Volumen DSP",
-      "desc": "Ganancia de volumen del motor de audio de ASB, por encima del máximo del sistema. El limitador suave evita la saturación: la salida está acotada por diseño, así que los decibelios extra cambian la densidad del sonido, no su limpieza."
+      "desc": "Ganancia de volumen del motor de audio de ASB, por encima del máximo del sistema. El limitador suave evita la saturación: la salida está acotada por diseño, así que los decibelios extra cambian la densidad del sonido, no su limpieza. En el altavoz la ganancia baja por pasos mientras el teléfono está caliente (batería desde 42 °C) y vuelve por debajo de 40 °C; Bluetooth y las salidas con cable nunca se reducen."
     },
     "dsp_bass": {
       "name": "Refuerzo de graves DSP",
@@ -313,7 +313,7 @@
     },
     "net_wifi_leave": {
       "name": "Abandonar Wi-Fi defectuoso",
-      "desc": "Un Wi-Fi conectado pero sin funcionar hace que el teléfono siga intentándolo en vez de pasar a datos móviles. Cada nivel abandona antes.",
+      "desc": "Un Wi-Fi conectado pero sin funcionar hace que el teléfono siga intentándolo en vez de pasar a datos móviles. Cada nivel abandona antes. Cómo sale: con la pantalla encendida, ASB apaga el Wi-Fi 30 s y lo vuelve a encender; si el teléfono vuelve a la misma red débil, la pausa se duplica hasta 5 min. Funciona sin el control de red móvil.",
       "descOpt": {
         "off": "De fábrica: el Wi-Fi solo se suelta cuando el enlace realmente cae.",
         "weak": "Salir cuando la señal cae por debajo de -80 dBm.",
@@ -863,6 +863,11 @@
   "cfg_profile_saved_to": "Guardado en ",
   "cfg_profile_imported": "Abierta ",
   "cfg_profile_imported_tail": " - pulsa Aplicar para usarla",
+  "cfg_profile_smart_include": "Incluir el aprendizaje de Smart",
+  "cfg_profile_smart_include_on": "Lo que Smart ha aprendido de este teléfono también va en el archivo. Al restaurarlo, el aprendizaje vuelve.",
+  "cfg_profile_smart_include_off": "Solo ajustes: para otro teléfono o para que Smart aprenda desde cero.",
+  "cfg_profile_imported_older": " · copia antigua, cada ajuste comprobado",
+  "cfg_profile_imported_skipped": " · no aplicado: ",
   "dbg_log_running_hint": "borra esta carpeta para iniciar uno nuevo",
   "eta_average": "estimación",
   "eta_average_tip": "Estimación: aún no hay 10 minutos medidos con la pantalla encendida - según tus sesiones recientes.",

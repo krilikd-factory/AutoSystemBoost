@@ -28,7 +28,7 @@
     },
     "dsp_loudness": {
       "name": "Penguat volume DSP",
-      "desc": "Penguatan volume oleh mesin audio ASB sendiri, di atas maksimum sistem. Pembatas lembut mencegah suara pecah: keluaran dibatasi secara rancangan, jadi desibel tambahan mengubah kepadatan suara, bukan kebersihannya."
+      "desc": "Penguatan volume oleh mesin audio ASB sendiri, di atas maksimum sistem. Pembatas lembut mencegah suara pecah: keluaran dibatasi secara rancangan, jadi desibel tambahan mengubah kepadatan suara, bukan kebersihannya. Di speaker, gain turun bertahap selama ponsel panas (baterai mulai 42 °C) dan kembali di bawah 40 °C; Bluetooth dan output kabel tidak pernah diturunkan."
     },
     "dsp_bass": {
       "name": "Penguat bass DSP",
@@ -313,7 +313,7 @@
     },
     "net_wifi_leave": {
       "name": "Leave Bad Wi-Fi",
-      "desc": "Wi-Fi yang terhubung tapi tidak berfungsi membuat ponsel terus mencoba alih-alih beralih ke data seluler. Setiap tingkat keluar lebih awal: sinyal lemah, lalu tautan tanpa trafik, lalu serah terima tanpa menunggu.",
+      "desc": "Wi-Fi yang terhubung tapi tidak berfungsi membuat ponsel terus mencoba alih-alih beralih ke data seluler. Setiap tingkat keluar lebih awal: sinyal lemah, lalu tautan tanpa trafik, lalu serah terima tanpa menunggu. Cara keluar: saat layar menyala, ASB mematikan Wi-Fi 30 dtk lalu menyalakannya lagi; jika ponsel kembali ke jaringan lemah yang sama, jeda berlipat dua hingga 5 mnt. Berjalan tanpa kontrol seluler.",
       "descOpt": {
         "off": "Bawaan: Wi-Fi hanya dilepas saat koneksi benar-benar terputus.",
         "weak": "Keluar saat sinyal turun di bawah -80 dBm.",
@@ -863,6 +863,11 @@
   "cfg_profile_saved_to": "Disimpan ke ",
   "cfg_profile_imported": "Dibuka: ",
   "cfg_profile_imported_tail": " - tekan Terapkan untuk memakainya",
+  "cfg_profile_smart_include": "Sertakan pembelajaran Smart",
+  "cfg_profile_smart_include_on": "Apa yang telah dipelajari Smart tentang ponsel ini ikut masuk ke berkas. Saat dipulihkan, pembelajarannya kembali.",
+  "cfg_profile_smart_include_off": "Hanya pengaturan — untuk ponsel lain, atau agar Smart belajar dari awal.",
+  "cfg_profile_imported_older": " · salinan lama, setiap pengaturan diperiksa",
+  "cfg_profile_imported_skipped": " · tidak diambil: ",
   "dbg_log_running_hint": "hapus folder ini untuk memulai yang baru",
   "eta_average": "perkiraan",
   "eta_average_tip": "Perkiraan: belum ada pengukuran 10 menit dengan layar menyala - dari sesi terakhir Anda.",

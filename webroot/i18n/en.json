@@ -259,7 +259,7 @@
     },
     "net_wifi_leave": {
       "name": "Leave Bad Wi-Fi",
-      "desc": "Wi-Fi that is connected but not working keeps the phone retrying instead of switching to mobile. Each rung leaves sooner: weak signal, then a link carrying no traffic, then handing over without waiting.",
+      "desc": "Wi-Fi that is connected but not working keeps the phone retrying instead of switching to mobile. Each rung leaves sooner: weak signal, then a link carrying no traffic, then handing over without waiting. How it leaves: with the screen on, ASB switches Wi-Fi off for 30 s and back on; if it keeps rejoining the same weak network, the pause doubles up to 5 min. Works without Cellular controls.",
       "descOpt": {
         "off": "Stock: Wi-Fi is released only when the link actually drops.",
         "weak": "Leave when the signal falls below -80 dBm.",
@@ -655,6 +655,11 @@
   "cfg_profile_saved_to": "Saved to ",
   "cfg_profile_imported": "Opened ",
   "cfg_profile_imported_tail": " - press Apply to use it",
+  "cfg_profile_smart_include": "Include Smart learning",
+  "cfg_profile_smart_include_on": "What Smart has learned about this phone goes into the file too. Restoring it brings the learning back.",
+  "cfg_profile_smart_include_off": "Settings only - for another phone, or to let Smart learn from scratch.",
+  "cfg_profile_imported_older": " · older copy, every setting checked",
+  "cfg_profile_imported_skipped": " · not taken: ",
   "dbg_log_running_hint": "delete this folder to start a new one",
   "eta_average": "estimate",
   "eta_average_tip": "Estimate: no 10-minute measurement with the screen on yet - based on your recent screen-on sessions.",

@@ -223,7 +223,7 @@
       "name": "Volume multimédia"
     },
     "dsp_loudness": {
-      "desc": "Gain de volume du moteur audio d’ASB, au-delà du maximum système. Le limiteur doux empêche la saturation : la sortie est bornée par construction, les décibels supplémentaires changent donc la densité du son, pas sa propreté.",
+      "desc": "Gain de volume du moteur audio d’ASB, au-delà du maximum système. Le limiteur doux empêche la saturation : la sortie est bornée par construction, les décibels supplémentaires changent donc la densité du son, pas sa propreté. Sur le haut-parleur, le gain baisse par paliers tant que le téléphone est chaud (batterie dès 42 °C) et revient sous 40 °C ; le Bluetooth et les sorties filaires ne sont jamais réduits.",
       "name": "Gain DSP"
     },
     "dsp_bass": {
@@ -409,7 +409,7 @@
     },
     "net_wifi_leave": {
       "name": "Quitter le Wi-Fi défaillant",
-      "desc": "Un Wi-Fi connecté mais non fonctionnel fait persister le téléphone au lieu de basculer vers le mobile. Chaque niveau quitte plus tôt.",
+      "desc": "Un Wi-Fi connecté mais non fonctionnel fait persister le téléphone au lieu de basculer vers le mobile. Chaque niveau quitte plus tôt. Comment il quitte : écran allumé, ASB coupe le Wi-Fi 30 s puis le rallume ; si le téléphone revient sur le même réseau faible, la pause double, jusqu'à 5 min. Fonctionne sans le contrôle cellulaire.",
       "descOpt": {
         "off": "D’origine : le Wi-Fi n’est relâché que lorsque la liaison tombe vraiment.",
         "weak": "Quitter quand le signal passe sous -80 dBm.",
@@ -863,6 +863,11 @@
   "cfg_profile_saved_to": "Enregistré dans ",
   "cfg_profile_imported": "Ouverte : ",
   "cfg_profile_imported_tail": " - appuyez sur Appliquer pour l'utiliser",
+  "cfg_profile_smart_include": "Inclure l'apprentissage Smart",
+  "cfg_profile_smart_include_on": "Ce que Smart a appris de ce téléphone va aussi dans le fichier. À la restauration, l'apprentissage revient.",
+  "cfg_profile_smart_include_off": "Réglages seuls – pour un autre téléphone, ou pour que Smart réapprenne de zéro.",
+  "cfg_profile_imported_older": " · ancienne copie, chaque réglage vérifié",
+  "cfg_profile_imported_skipped": " · non repris : ",
   "dbg_log_running_hint": "supprimez ce dossier pour en lancer un nouveau",
   "eta_average": "estimation",
   "eta_average_tip": "Estimation : pas encore 10 minutes mesurées écran allumé - d'après vos sessions récentes.",

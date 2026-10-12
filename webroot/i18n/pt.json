@@ -28,7 +28,7 @@
     },
     "dsp_loudness": {
       "name": "Volume do DSP",
-      "desc": "Ganho de volume do motor de áudio do ASB, acima do máximo do sistema. O limitador suave impede a saturação: a saída é limitada por projeto, então os decibéis extras mudam a densidade do som, não a sua limpeza."
+      "desc": "Ganho de volume do motor de áudio do ASB, acima do máximo do sistema. O limitador suave impede a saturação: a saída é limitada por projeto, então os decibéis extras mudam a densidade do som, não a sua limpeza. No alto-falante o ganho desce em degraus enquanto o telefone está quente (bateria a partir de 42 °C) e volta abaixo de 40 °C; Bluetooth e saídas com fio nunca são reduzidos."
     },
     "dsp_bass": {
       "name": "Reforço de graves DSP",
@@ -313,7 +313,7 @@
     },
     "net_wifi_leave": {
       "name": "Abandonar Wi-Fi com falha",
-      "desc": "Wi-Fi conectado mas sem funcionar faz o telefone insistir em vez de mudar para a rede móvel. Cada nível abandona mais cedo.",
+      "desc": "Wi-Fi conectado mas sem funcionar faz o telefone insistir em vez de mudar para a rede móvel. Cada nível abandona mais cedo. Como sai: com a tela ligada, o ASB desliga o Wi-Fi por 30 s e liga de novo; se o telefone volta à mesma rede fraca, a pausa dobra, até 5 min. Funciona sem o controle de rede móvel.",
       "descOpt": {
         "off": "De fábrica: o Wi-Fi só é largado quando a ligação cai mesmo.",
         "weak": "Sair quando o sinal cai abaixo de -80 dBm.",
@@ -863,6 +863,11 @@
   "cfg_profile_saved_to": "Guardado em ",
   "cfg_profile_imported": "Aberta ",
   "cfg_profile_imported_tail": " - toque em Aplicar para a usar",
+  "cfg_profile_smart_include": "Incluir o aprendizado do Smart",
+  "cfg_profile_smart_include_on": "O que o Smart aprendeu sobre este telefone também vai no arquivo. Ao restaurar, o aprendizado volta.",
+  "cfg_profile_smart_include_off": "Só as configurações — para outro telefone ou para o Smart aprender do zero.",
+  "cfg_profile_imported_older": " · cópia antiga, cada configuração verificada",
+  "cfg_profile_imported_skipped": " · não aplicado: ",
   "dbg_log_running_hint": "apague esta pasta para iniciar um novo",
   "eta_average": "estimativa",
   "eta_average_tip": "Estimativa: ainda sem 10 minutos medidos com a tela ligada - pelas suas sessões recentes.",

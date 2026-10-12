@@ -28,7 +28,7 @@
     },
     "dsp_loudness": {
       "name": "DSP-Lautstärke",
-      "desc": "Lautstärkeverstärkung durch ASBs eigene Audio-Engine, über das Systemmaximum hinaus. Der weiche Begrenzer verhindert Übersteuern: der Ausgang ist konstruktiv begrenzt, zusätzliche Dezibel ändern also die Dichte des Klangs, nicht seine Sauberkeit."
+      "desc": "Lautstärkeverstärkung durch ASBs eigene Audio-Engine, über das Systemmaximum hinaus. Der weiche Begrenzer verhindert Übersteuern: der Ausgang ist konstruktiv begrenzt, zusätzliche Dezibel ändern also die Dichte des Klangs, nicht seine Sauberkeit. Auf dem Lautsprecher wird die Verstärkung stufenweise gesenkt, solange das Telefon heiß ist (Akku ab 42 °C), und kehrt unter 40 °C zurück; Bluetooth und kabelgebundene Ausgänge werden nie gesenkt."
     },
     "dsp_bass": {
       "name": "DSP-Bassanhebung",
@@ -313,7 +313,7 @@
     },
     "net_wifi_leave": {
       "name": "Schlechtes WLAN verlassen",
-      "desc": "Ein verbundenes, aber nicht funktionierendes WLAN lässt das Telefon weiter versuchen, statt auf Mobilfunk zu wechseln. Jede Stufe wechselt früher.",
+      "desc": "Ein verbundenes, aber nicht funktionierendes WLAN lässt das Telefon weiter versuchen, statt auf Mobilfunk zu wechseln. Jede Stufe wechselt früher. So wird verlassen: Bei eingeschaltetem Bildschirm schaltet ASB das WLAN für 30 s aus und wieder ein; verbindet sich das Telefon wieder mit demselben schwachen Netz, verdoppelt sich die Pause bis auf 5 Min. Funktioniert auch ohne Mobilfunksteuerung.",
       "descOpt": {
         "off": "Standard: WLAN wird erst aufgegeben, wenn die Verbindung tatsächlich abbricht.",
         "weak": "Verlassen, wenn das Signal unter -80 dBm fällt.",
@@ -863,6 +863,11 @@
   "cfg_profile_saved_to": "Gespeichert in ",
   "cfg_profile_imported": "Geöffnet: ",
   "cfg_profile_imported_tail": " - tippe auf Anwenden, um sie zu nutzen",
+  "cfg_profile_smart_include": "Smart-Lernstand einschließen",
+  "cfg_profile_smart_include_on": "Was Smart über dieses Telefon gelernt hat, kommt mit in die Datei. Beim Wiederherstellen ist der Lernstand wieder da.",
+  "cfg_profile_smart_include_off": "Nur Einstellungen – für ein anderes Telefon oder damit Smart neu lernt.",
+  "cfg_profile_imported_older": " · ältere Kopie, jede Einstellung geprüft",
+  "cfg_profile_imported_skipped": " · nicht übernommen: ",
   "dbg_log_running_hint": "lösche diesen Ordner, um ein neues zu starten",
   "eta_average": "Schätzung",
   "eta_average_tip": "Schätzung: noch keine 10-Minuten-Messung mit Bildschirm an - aus Ihren letzten Sitzungen.",
