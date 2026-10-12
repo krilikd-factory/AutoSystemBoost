@@ -2075,6 +2075,9 @@ asb_apply_bt_absvol() {
   if [ "$_mode" = "stock" ]; then
     sed -i '/^persist\.bluetooth\.enablenewavrcp=/d' "$_prop" 2>/dev/null
     ASB_BT_ABSVOL_APPLIED="mode=stock (absolute volume ON — loud, synced)"
+    # Say so: the heading above printed with nothing under it on a stock install, which read
+    # as a section that failed (field install log, OP15, KernelSU).
+    ui_print "      + ${ASB_D_BT_STOCK:-BT absolute volume: stock (headset and phone share one scale)}"
     return 0
   fi
   ASB_BT_ABSVOL_APPLIED="mode=disabled (absolute volume OFF — phone-side gain)"

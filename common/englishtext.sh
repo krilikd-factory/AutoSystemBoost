@@ -87,6 +87,7 @@ ASB_D_WIFI_OK="WCNSS Wi-Fi config patched (device-native)"
 ASB_D_WIFI_NONE="no device WCNSS config found — Wi-Fi left stock"
 ASB_D_BT="BT absolute volume: disabled (phone drives gain)"
 ASB_D_BT_NOTE="(headset drives its own level; use 'stock' if BT starts quiet)"
+ASB_D_BT_STOCK="BT absolute volume: stock (headset and phone share one scale)"
 ASB_D_BLUR="blur disabled via system.prop (applies after reboot)"
 ASB_D_BOUNDS="device-adaptive bounds: ON (OP15 — matches shipped tuning)"
 
