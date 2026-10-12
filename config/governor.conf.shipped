@@ -509,6 +509,8 @@ media_loudness=stock
 # so the DSP is switched off there.
 # This is the gain stage the volume curves cannot provide: media_loudness can make every slider
 # position louder but can never exceed 0 dB at 100% (that is unity -- past it you only clip).
+# On the loudspeaker the gain steps down while the phone is hot (battery 42 C: +12 dB max,
+# 45 C: +8 dB max) and returns under 40 C; Bluetooth and wired outputs are never reduced.
 dsp_loudness=0
 # DSP bass boost: off|1..10 (dB of low-shelf lift, needs dsp_loudness above) A shelf at 90 Hz:
 # the full lift lands on the low end, half of it at the corner, and nothing above roughly 1 kHz
