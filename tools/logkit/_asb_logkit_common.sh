@@ -607,7 +607,11 @@ lk_verify_caps() {
       else
         _diff=$((_smax - _expect))
         if [ "$_asb_declared" != "0" ] && [ "$_smax" = "$_asb_declared" ] && [ "$_asb_declared" != "$_expect" ]; then
-          _status="DESYNC_asb_dynamic (profile=$_expect asb_declared=$_asb_declared actual=$_smax diff=$_diff)"
+          # The kernel holds exactly what ASB asked for - that is the healthy state, not a
+          # desync (fix136). Smart and the adaptive rails compute their own ceiling, so it
+          # differs from the static profile baseline by design; every capture of a working
+          # phone printed DESYNC here, and the fix130 audit listed it as a defect.
+          _status="ok_asb_dynamic (actual = ASB's own request; static profile baseline=$_expect, diff=$_diff)"
           _source="asb_dynamic"
         elif [ "$_smax" = "$_expect" ] && [ "$_asb_declared" != "$_expect" ]; then
           _status="DESYNC_thermal_overlay (profile=$_expect asb_declared=$_asb_declared actual=$_smax)"
@@ -2627,6 +2631,15 @@ lk_snapshot_audio() {
     echo "  asb.dsp.outputs = $(lk_get_prop persist.asb.dsp.outputs)"
     echo "  asb.dsp.gain_requested_mb = $(lk_get_prop persist.asb.dsp.gain_requested_mb)"
     echo "  asb.dsp.gain_applied_mb = $(lk_get_prop persist.asb.dsp.gain_applied_mb)"
+    echo "  asb.dsp.gain_live_mb = $(lk_get_prop persist.asb.dsp.gain_mb)"
+    # fix135: why the gain is what it is (heat back-off decision), and what AudioFlinger does
+    # with the effect - processing, idle, released, or SUSPENDED because an app enabled its
+    # own effect on that output. One line each, so a capture can line them up with phases.
+    echo "  asb.dsp.heat = $(tr '\n' ' ' < /dev/.asb/dsp_thermal 2>/dev/null)"
+    if [ "$(lk_get_prop persist.asb.dsp.enable)" = "1" ] && [ -r "$MODDIR/runtime/asb_dsp_live.sh" ]; then
+      . "$MODDIR/runtime/asb_dsp_live.sh"
+      echo "  asb.dsp.effect_live = $(asb_dsp_live_state)"
+    fi
     echo "# codec / offload props"
     for p in persist.bluetooth.a2dp_offload.disabled persist.vendor.bluetooth.a2dp_offload.disabled \
              persist.bluetooth.a2dp.optional_codecs_enabled persist.bluetooth.disableabsvol \
