@@ -155,6 +155,13 @@ This is **not** JSON despite logkit's `lk_status_json()` parsing it. Each line i
   ceiling Smart raised to the prime's capacity in light idle / moderate on a two-cluster SoC
   (0 = not raised now), how many raises started this session, and the `cpu_capacity` values
   it used (-2 not read yet, -1 unreadable). `desired_cpu_max0` includes the raise (fix130).
+- `main_parity_near`, `main_parity_over_khz` — 1 when the raise is the highest main step
+  inside the 60% limit because the level step sat over it (taken only when it reaches 90% of
+  the prime's capacity); the level step that was over the limit, 0 when none (fix132).
+- `writer_hold_bypass` — CPU ceilings/floors sent while their node was backed off after a
+  vendor hold: the held value waits out the five minutes, a NEW request is written at once
+  (fix133). `writer_node_*` keeps the per-node status (`kernel_floor_higher` = a boost read
+  back above ASB's request).
 
 **Screen detection**
 - `screen_on_detect="uevent:N,recheck:N,tick:N,display:N"` — which path noticed each wake.
