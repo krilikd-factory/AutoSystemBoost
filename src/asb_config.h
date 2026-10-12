@@ -15,7 +15,7 @@
  * tests compile asb_smart.h with no FSM at all. Zero when the learner has no opinion, so
  * an unknown app and a freshly installed module both behave exactly as before.
  */
-static int g_asb_appheat_hot = 0;
+static int g_asb_appheat_hot __attribute__((unused)) = 0;   /* unused in test builds without the FSM */
 
 
 typedef struct {

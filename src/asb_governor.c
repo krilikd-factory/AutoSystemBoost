@@ -2374,11 +2374,24 @@ static char g_cap_prime_reason[64] = "profile";  /* "thermal_budget:" + 32-byte 
  * stays on the cores built for it. Two clusters only, never above 60% of the main cluster's
  * hardware (a phone whose first cluster is truly little never qualifies), and not while a
  * thermal cap or a thermal budget trim is in force - lifting six cores is not how a warm
- * phone cools. A prime burst keeps the level it found. main_capacity_parity=0 turns it off. */
+ * phone cools. A prime burst keeps the level it found. main_capacity_parity=0 turns it off.
+ *
+ * Nearest step inside the limit (fix132). A PLQ110 (SM8750, main 792 of 1024 at 3532800,
+ * prime 4320000) never got the raise: 40% of the prime is 1728000, the step under it is
+ * 1689600 (39.1%), so the floor takes 1958400 (45%, capacity 464), and the level main step
+ * is 2227200 = 63% - over the limit, refused. 153 of its 159 screen-on samples had the main
+ * ceiling under the prime's while asbdiag said "not needed right now". When the exact step is
+ * over the limit, the highest step inside it is taken if it reaches 90% of the prime's
+ * capacity: 1996800 there (447 of 464), the same kHz an OP15 is lifted to. A cluster that
+ * cannot get close (a truly little one, or a prime raised well above its floor) still stays
+ * where it was. The state file says which happened (main_parity_near, main_parity_over_khz). */
 static int g_parity_cap0 = -2;              /* cpu_capacity, first cpu of policy0; -2 unread */
 static int g_parity_cap1 = -2;              /* ... of the prime policy; -1 unreadable */
 static int g_parity_main_khz = 0;           /* main ceiling raised this pass, 0 = none */
 static unsigned long g_parity_lifts = 0;    /* passes that started a raise */
+static int g_parity_near = 0;               /* 1 = the raise is the nearest step inside the limit */
+static int g_parity_over_khz = 0;           /* the level step when it sat over the limit, else 0 */
+#define ASB_PARITY_NEAR_PCT 90              /* the nearest step must reach this share of the prime */
 
 static int asb_cpu_capacity_of(int cpu) {
     char p[96];
@@ -2390,7 +2403,7 @@ static int asb_cpu_capacity_of(int cpu) {
 static void asb_main_capacity_parity(asb_profile_caps_t *caps, const asb_metrics_t *m,
                                      const asb_fsm_t *fsm, int trim) {
     int was = g_parity_main_khz;
-    int lift = 0;
+    int lift = 0, near = 0, over = 0;
     int ok = g_asb_cfg.main_capacity_parity && fsm->profile_idx == PROFILE_SMART &&
              g_cpu_all_count == 2 && g_cpu_policy_ids[0] >= 0 && g_cpu_policy_ids[1] >= 0 &&
              g_cpu_policy_ids[2] < 0 && m->misc.screen_on && !fsm->thermal_cap && trim <= 0 &&
@@ -2398,7 +2411,7 @@ static void asb_main_capacity_parity(asb_profile_caps_t *caps, const asb_metrics
              (fsm->state == ASB_STATE_LIGHT_IDLE || fsm->state == ASB_STATE_MODERATE) &&
              caps->cpu_max[0] > 0 && caps->cpu_max[1] > 0;
     if (ok && fsm->prime_escape) {
-        lift = was;
+        lift = was; near = g_parity_near; over = g_parity_over_khz;
     } else if (ok) {
         if (g_parity_cap0 == -2) {
             g_parity_cap0 = asb_cpu_capacity_of(g_cpu_policy_ids[0]);
@@ -2415,13 +2428,26 @@ static void asb_main_capacity_parity(asb_profile_caps_t *caps, const asb_metrics
             if (p > 0 && need > m0) {
                 long long step = writer_slot_step_at_least(0, (long)need);
                 if (step > 0 && step * 100 <= hw0 * 60) lift = (int)step;
+                else {
+                    /* fix132: the highest step inside the limit, if it gets close enough.
+                     * main capacity at top >= 90% of the prime's at p:
+                     * cap0*top/hw0 >= 0.9*cap1*p/hw1. Products stay under 2^63. */
+                    long long top = writer_slot_ceiling(0, (int)(hw0 * 60 / 100), 0);
+                    over = step > 0 ? (int)step : 0;
+                    if (top > m0 && top * 100 <= hw0 * 60 &&
+                        top * g_parity_cap0 * hw1 * 100 >= p * g_parity_cap1 * hw0 * ASB_PARITY_NEAR_PCT) {
+                        lift = (int)top; near = 1;
+                    }
+                }
             }
         }
     }
     if (lift > 0 && caps->cpu_max[0] < lift) caps->cpu_max[0] = lift;
-    else lift = 0;
+    else { lift = 0; near = 0; }
     if (lift > 0 && was <= 0) g_parity_lifts++;
     g_parity_main_khz = lift;
+    g_parity_near = near;
+    g_parity_over_khz = over;
 }
 
 static void asb_apply_adaptive_budget_caps(asb_profile_caps_t *caps,
@@ -3089,6 +3115,7 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             fsm->prime_escape, fsm->prime_escape_mid, fsm->prime_escape_count);
     fprintf(f, "main_parity_khz=%d\nmain_parity_lifts=%lu\nmain_parity_capacity=\"%d,%d\"\n",
             g_parity_main_khz, g_parity_lifts, g_parity_cap0, g_parity_cap1);
+    fprintf(f, "main_parity_near=%d\nmain_parity_over_khz=%d\n", g_parity_near, g_parity_over_khz);
     {
         long _pe_t = g_prime_escape_total_ms;
         if (g_prime_escape_since_ms > 0) _pe_t += asb_clock_ms(CLOCK_BOOTTIME) - g_prime_escape_since_ms;

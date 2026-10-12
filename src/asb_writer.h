@@ -76,6 +76,8 @@ typedef struct {
      * A node that keeps coming back is owned elsewhere - see the drift backoff. */
     unsigned long drift_rewrites;
     unsigned long skipped_backoff;
+    /* Changed requests sent through a vendor-hold back-off (fix133). */
+    unsigned long hold_bypass;
     time_t retry_at;
     int requested;
     int observed;
@@ -161,8 +163,27 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
     asb_write_health_t *h = &g_write_health[node];
     time_t now = time(NULL);
     if (h->retry_at > now) {
-        h->skipped_backoff++;
-        return 1; /* deferred: not an applied write */
+        /* A vendor hold defers the SAME request, not a new one (fix133).
+         *
+         * The holds below back a CPU node off for five minutes after three readbacks above
+         * (or below) ASB's request. That is right for the request that was held: it stays in
+         * the kernel's QoS set and takes effect when the vendor boost ends, so re-sending it
+         * every tick buys nothing. But the back-off also swallowed every OTHER value for
+         * those five minutes. A PLQ110 capture: MODERATE wanted the main ceiling at 1785600,
+         * the node was still backed off from three holds of the light-idle 1555200 (the
+         * boost read back 1785600), so desired 1785600 / requested 1555200 / live 1555200 -
+         * 43 of 48 throttle samples were this, "ASB's own trim" at 35-40 C. On OP15 the
+         * same window kept a MODERATE ceiling into deep idle. A changed request on a held
+         * node is sent; a failing node (holddown, unsupported) still waits. */
+        int _vendor_hold = writer_node_is_cpu(node) &&
+                           (strcmp(h->status, "kernel_floor_higher") == 0 ||
+                            strcmp(h->status, "ceiling_below_min") == 0);
+        if (!_vendor_hold || requested == h->requested) {
+            h->skipped_backoff++;
+            return 1; /* deferred: not an applied write */
+        }
+        h->hold_bypass++;
+        h->retry_at = 0;
     }
     /* Never rewrite the request to what the kernel last reported.
      *
@@ -228,6 +249,10 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
     if (rc == 0 && observed == requested) {
         h->applied++;
         h->consecutive_failures = 0;
+        /* "Three CONSECUTIVE holds" (below) - a clean write ends the run. Only the
+         * already-set path reset it, so after one hold every later hold, however far
+         * apart, started the five-minute back-off at once (fix133). */
+        h->floor_holds = 0;
         h->retry_at = 0;
         snprintf(h->status, sizeof(h->status), "%s", "applied");
         return 0;
@@ -449,18 +474,19 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
 
 static void writer_write_health_dump(FILE *f) {
     if (!f) return;
-    unsigned long attempts = 0, applied = 0, failures = 0, skipped = 0;
+    unsigned long attempts = 0, applied = 0, failures = 0, skipped = 0, bypass = 0;
     time_t next_retry = 0;
     for (int i = 0; i < ASB_WRITE_NODE_COUNT; i++) {
         attempts += g_write_health[i].attempts;
         applied += g_write_health[i].applied;
         failures += g_write_health[i].failures;
         skipped += g_write_health[i].skipped_backoff;
+        bypass += g_write_health[i].hold_bypass;
         if (g_write_health[i].retry_at > next_retry) next_retry = g_write_health[i].retry_at;
     }
     fprintf(f, "writer_attempts=%lu\nwriter_applied=%lu\nwriter_failures=%lu\n"
-               "writer_backoff_skips=%lu\nwriter_next_retry=%ld\n",
-            attempts, applied, failures, skipped, (long)next_retry);
+               "writer_backoff_skips=%lu\nwriter_next_retry=%ld\nwriter_hold_bypass=%lu\n",
+            attempts, applied, failures, skipped, (long)next_retry, bypass);
     for (int i = 0; i < ASB_WRITE_NODE_COUNT; i++) {
         asb_write_health_t *h = &g_write_health[i];
         if (!h->attempts && !h->failures && !h->skipped_backoff) continue;
