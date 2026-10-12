@@ -898,6 +898,7 @@ if [ -r "$_state" ]; then
         _ck0=$(( _cc0 * (_cm0 / 1000) / (_ch0 / 1000) ))
         _ck1=$(( _cc1 * (_cm1 / 1000) / (_ch1 / 1000) ))
         if [ "$_ck0" -ge "$_ck1" ]; then _cks="everyday work stays on the main cores"
+        elif [ $(( _ck0 * 10 )) -ge $(( _ck1 * 9 )) ]; then _cks="nearly level (within 10%) - everyday work stays on the main cores"
         else _cks="the prime looks bigger - everyday work moves to the two prime cores"; fi
         NOTE "capacity at the ceilings: main $_cm0 kHz = $_ck0, prime $_cm1 kHz = $_ck1 (of 1024) - $_cks"
       fi ;;
@@ -905,7 +906,15 @@ if [ -r "$_state" ]; then
     _mpl="$(_rget main_parity_lifts /dev/.asb/state 2>/dev/null)"
     if [ -n "$_mpl" ]; then
       _mpk="$(_rget main_parity_khz /dev/.asb/state 2>/dev/null)"
-      if [ "${_mpk:-0}" -gt 0 ] 2>/dev/null; then _mps="now - main ceiling held at $_mpk kHz"; else _mps="not needed right now"; fi
+      _mpn="$(_rget main_parity_near /dev/.asb/state 2>/dev/null)"
+      _mpo="$(_rget main_parity_over_khz /dev/.asb/state 2>/dev/null)"
+      # fix132: say why there is no raise when the level step is over the 60% limit, instead
+      # of "not needed" next to a capacity line that shows the prime bigger (PLQ110).
+      if [ "${_mpk:-0}" -gt 0 ] 2>/dev/null; then
+        if [ "${_mpn:-0}" = 1 ]; then _mps="now - main ceiling held at $_mpk kHz, the nearest step inside 60% of its maximum (level would need ${_mpo:-?} kHz)"
+        else _mps="now - main ceiling held at $_mpk kHz"; fi
+      elif [ "${_mpo:-0}" -gt 0 ] 2>/dev/null; then _mps="not raised - level needs $_mpo kHz, over 60% of the main maximum, and no step inside the limit gets within 10% of the prime"
+      else _mps="not needed right now"; fi
       NOTE "  main kept level with the prime: $_mps · started $_mpl times this session (main_capacity_parity=$(cfg main_capacity_parity))"
     fi
   fi
@@ -935,6 +944,12 @@ if [ -r "$_state" ]; then
     kernel_floor_higher) NOTE "  skips are kernel_floor_higher: the kernel enforces a higher minimum than requested - expected, not a fault" ;;
     unsupported_*)       NOTE "  skips are $_wskip_why: the node does not exist on this kernel" ;;
     vendor_*)            NOTE "  skips are $_wskip_why: the vendor owns this node right now" ;;
+  esac
+  # fix133: a held node defers only the request that was held; a new ceiling or floor (a
+  # state change) is sent at once. Before, the back-off swallowed it for five minutes.
+  _whb="$(_rget writer_hold_bypass "$_state")"
+  case "$_whb" in ''|*[!0-9]*|0) : ;; *)
+    NOTE "  sent through a vendor hold: $_whb (a new ceiling/floor during the 5-minute back-off; the held value itself waits)" ;;
   esac
   # Separate "this kernel does not have the node" from "the write was refused".
   #
@@ -1971,6 +1986,11 @@ if { [ "$(cfg net_screen_off_lte)" = 1 ] || [ "$(cfg net_lte_light)" = 1 ]; } &&
   fi
   NOTE "screen-off LTE: applied $(printf '%s\n' "$_lst" | sed -n 's/^applies=//p') time(s), restored $(printf '%s\n' "$_lst" | sed -n 's/^restores=//p'), $(printf '%s\n' "$_lst" | sed -n 's/^lte_minutes=//p') min on LTE in total; now applied=$(printf '%s\n' "$_lst" | sed -n 's/^applied=//p') unsupported=$(printf '%s\n' "$_lst" | sed -n 's/^unsupported=//p')"
   NOTE "screen-off LTE: 5G kept in $(printf '%s\n' "$_lst" | sed -n 's/^quiet_windows=//p') screen-off window(s) with no mobile data moving - nothing to save there, and no switch back at the unlock (fix122)"
+  # fix131: downloads keep 5G - how often a transfer was seen, on each side of the screen.
+  _lbs="$(grep -c 'sustained over' /data/adb/asb/lte_screenoff.log 2>/dev/null)"
+  _lbo="$(grep -c '^.* bulk: ' /data/adb/asb/lte_screenoff.log 2>/dev/null)"
+  _lbk="$(grep -c 'is a transfer - 5G kept' /data/adb/asb/lte_screenoff.log 2>/dev/null)"
+  NOTE "transfers and 5G (fix131): given back for a download held on LTE ${_lbs:-0}x (screen on) / ${_lbo:-0}x (screen off) · LTE not chosen during a screen-off transfer ${_lbk:-0}x"
   # Whether 5G is allowed on the data SIM right now - the thing that matters if a restore
   # ever failed. Read the same way the script reads it.
   _l5="$(sh /data/adb/modules/AutoSystemBoost/runtime/asb_lte_screenoff.sh nr 2>/dev/null)"
@@ -1978,7 +1998,7 @@ if { [ "$(cfg net_screen_off_lte)" = 1 ] || [ "$(cfg net_lte_light)" = 1 ]; } &&
     yes) NOTE "5G allowed now: yes" ;;
     no)  NOTE "5G allowed now: NO$([ -f /data/adb/asb/lte_screenoff.saved ] && { grep -q '|light$' /data/adb/asb/lte_screenoff.saved 2>/dev/null && echo ' (parked by ASB, light traffic)' || echo ' (parked by ASB, screen off)'; } || echo ' - and ASB holds no record of removing it: if you did not turn 5G off yourself, turn it back on in Settings')" ;;
   esac
-  grep -E 'restore:|repair:|light' /data/adb/asb/lte_screenoff.log 2>/dev/null | tail -n 3 | while IFS= read -r _l5l; do P "    $_l5l"; done
+  grep -E 'restore:|repair:|light|bulk:|is a transfer' /data/adb/asb/lte_screenoff.log 2>/dev/null | tail -n 4 | while IFS= read -r _l5l; do P "    $_l5l"; done
 fi
 _dip=ip; for _ipb in /system/bin/ip /vendor/bin/ip; do [ -x "$_ipb" ] && { _dip="$_ipb"; break; }; done
 if command -v ip >/dev/null 2>&1 || [ -x "$_dip" ]; then
