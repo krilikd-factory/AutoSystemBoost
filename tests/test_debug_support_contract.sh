@@ -199,6 +199,15 @@ done
 # A killed recorder leaves a known-dead PID. The next action may reclaim only that stale lock.
 kill -KILL "$REC_PID" 2>/dev/null || true
 wait "$REC_PID" 2>/dev/null || true
+# The recorder is not this shell's child, so `wait` returns at once; SIGKILL lands
+# asynchronously. Give it up to 5 s to be gone or a zombie before asking (fix136 - the
+# full regression failed here once in a while on a loaded host, never on a device).
+_dk=0
+while [ "$_dk" -lt 50 ]; do
+  kill -0 "$REC_PID" 2>/dev/null || break
+  case "$(cat "/proc/$REC_PID/stat" 2>/dev/null)" in *') Z '*) break ;; esac
+  sleep 0.1; _dk=$((_dk + 1))
+done
 STALE="$(env "${ENV[@]}" sh "$HELPER" full-day || true)"
 echo "$STALE" | grep -Fq 'status=started' || { echo 'FAIL debug support: known-dead lock not reclaimed' >&2; exit 1; }
 REC_PID="$(printf '%s\n' "$STALE" | sed -n 's/^pid=//p')"

@@ -28,10 +28,13 @@ need "$INSTALL" 'radio_policy_enable net_wifi_leave'
 # Watcher lifecycle is late-boot, exact-process scoped and restored at uninstall.
 need "$SERVICE" 'asb_wifi_fallback.sh" reconcile'
 need "$ROOT/uninstall.sh" 'asb_wifi_fallback.sh" stop'
-need "$ROOT/action.sh" 'Wi-Fi fallback: active opt-in'
-need "$ROOT/tools/asb_diag.sh" 'Wi-Fi fallback: active opt-in'
+# fix134: the leave watcher runs on weak/unusable/aggressive, cellular master or not - the
+# master (and LPM) only decide whether mobile data is kept warm in advance.
+need "$ROOT/action.sh" 'T_N_FB_ACTIVE="Wi-Fi leave watch: %s"'
+need "$ROOT/tools/asb_diag.sh" 'Wi-Fi leave watch ($_nwl_d, below'
 need "$ROOT/runtime/asb_lpm.sh" 'if ! _feat_on LPM || ! _radio_policy_enabled; then'
-need "$ROOT/runtime/asb_wifi_fallback.sh" '_radio_policy_enabled && [ "$(_cfg net_wifi_leave)" = aggressive ]'
+need "$ROOT/runtime/asb_wifi_fallback.sh" '_enabled() { case "$(_cfg net_wifi_leave)" in weak|unusable|aggressive) return 0 ;; esac; return 1; }'
+absent "$ROOT/runtime/asb_wifi_fallback.sh" '_radio_policy_enabled && [ "$(_cfg net_wifi_leave)" = aggressive ]'
 
 # Preference is decided before first paint and the same compact pair appears beside the
 # version badge on all three surfaces.

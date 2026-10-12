@@ -48,7 +48,8 @@ S
 chmod +x "$T/bin/"*
 export PATH="$T/bin:$PATH" PEAK="$T/peak" TOUCH="$T/touch" MODDIR="$T/mod" \
   ASB_LTPO_STATE_DIR="$T/d" ASB_LTPO_RSTATE="$T/rstate" ASB_LTPO_ASOUND="$T/snd" \
-  ASB_LTPO_BACKLIGHT="$T/bl" ASB_LTPO_SF_DUMP="$T/sf" ASB_LTPO_DISPLAY_DUMP="$T/disp" ASB_LTPO_QUIET_S=1
+  ASB_LTPO_BACKLIGHT="$T/bl" ASB_LTPO_SF_DUMP="$T/sf" ASB_LTPO_DISPLAY_DUMP="$T/disp" ASB_LTPO_QUIET_S=1 \
+  ASB_LTPO_REARM_QUIET_S=3
 V="$T/mod/runtime/asb_ltpo_video.sh"
 cleanup() { echo ltpo_video=0 > "$T/mod/config/governor.conf"; sh "$V" stop >/dev/null 2>&1; touch "$T/touch"; sleep 0.3; rm -rf "$T"; }
 trap cleanup EXIT
@@ -76,6 +77,11 @@ grep -q '^orig=165.0$' "$T/d/ltpo_video.lowered" 2>/dev/null || f "original not 
 # First touch: back at once, from the guard itself.
 touch "$T/touch"
 wait_for 165.0 10 || f "first touch did not restore within 1 s (peak $(cat "$T/peak"))"
+[ -s "$T/d/ltpo_video.touch_at" ] || f "touch restore not time-stamped"
+# fix136: right after a touch the next lower waits for the longer quiet (3 s here, 1 s
+# otherwise), so reading comments under a video does not switch the panel every pause.
+sleep 1.6
+[ "$(cat "$T/peak")" = 165.0 ] || f "lowered again on the short quiet right after a touch"
 # Quiet again: lowered again.
 wait_for 60.0 200 || f "did not lower again after the touch went quiet"
 
@@ -104,11 +110,14 @@ sh "$V" reconcile
 # Cost: while not lowered, the SurfaceFlinger dump only happens after the touchscreen was
 # quiet (scrolling a feed must not dump SF every 10 s on its compositing thread), and the
 # peak setting is cached rather than read through `settings` on every touch.
-_ql="$(grep -n '^    _quiet "$_dev"$' "$ROOT/runtime/asb_ltpo_video.sh" | head -1 | cut -d: -f1)"
+_ql="$(grep -n '^    _quiet "$_dev" "$_qs"$' "$ROOT/runtime/asb_ltpo_video.sh" | head -1 | cut -d: -f1)"
 _dl="$(grep -n '_sf_rates="$(_video_rates)"' "$ROOT/runtime/asb_ltpo_video.sh" | head -1 | cut -d: -f1)"
 [ -n "$_ql" ] && [ -n "$_dl" ] && [ "$_ql" -lt "$_dl" ] || f "SurfaceFlinger is dumped before the touch-quiet check"
 grep -q 'if \[ \$(( _tnow - _cur_ts )) -ge 30 \]; then _cur="\$(_get)"' "$ROOT/runtime/asb_ltpo_video.sh" || f "peak setting not cached"
 grep -q 'LOWERED_RECHECK_S="${ASB_LTPO_RECHECK_S:-30}"' "$ROOT/runtime/asb_ltpo_video.sh" || f "lowered re-check interval not 30 s"
+# fix136: never lower on a pick older than the quiet wait, nor with the audio already gone.
+grep -q '{ \[ -n "$_sf_pick" \] && \[ "$_sf_ts" -lt "$_qt0" \]; }' "$ROOT/runtime/asb_ltpo_video.sh" || f "a stale SurfaceFlinger pick can still lower"
+grep -q '^    _audio_live || continue$' "$ROOT/runtime/asb_ltpo_video.sh" || f "lowers without re-checking the audio"
 
 grep -q 'asb_ltpo_video.sh" stop' "$ROOT/uninstall.sh" || f "uninstall does not stop the watcher"
 grep -q 'asb_ltpo_video.sh" reconcile' "$ROOT/service.sh" || f "boot does not reconcile the watcher"

@@ -708,4 +708,66 @@ grep -q 'ASB_DSP_REFERENCE_OPTIONAL' "$ROOT/.github/workflows/build-release.yml"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS: fix133 contract"
 ) || exit 1
+# ---- fix134 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix134: $*"; exit 1; }
+F="$ROOT/runtime/asb_wifi_fallback.sh"; N="$ROOT/runtime/asb_net_apply.sh"; B="$ROOT/tools/asb_config_backup.sh"
+grep -q '^_enabled() { case "$(_cfg net_wifi_leave)" in weak|unusable|aggressive) return 0 ;; esac; return 1; }' "$F" || fail "leave watch still limited to one rung"
+grep -q '^_uses_validation() { case "$(_cfg net_wifi_leave)" in unusable|aggressive)' "$F" || fail "weak rung reads validation"
+grep -q '^_release_window() {' "$F" || fail "no escalating release window"
+grep -q '_sn="${_sl%%\\|\*}"' "$F" || fail "release-window streak split not mksh-safe"
+grep -q '^IDLE_INTERVAL_S=30' "$F" || fail "screen-off watch interval lost"
+grep -q '_abw_prev=/data/adb/asb/avoid_bad_wifi.prev' "$N" || fail "avoid_bad_wifi written without keeping the device value"
+grep -q 'case "$_nwl" in weak|unusable|aggressive) _wf=1' "$N" || fail "wifi_fallback status ignores weak/unusable"
+grep -q 'avoid_bad_wifi.prev ] && _asb_net_any=1' "$ROOT/service.sh" || fail "boot apply skips a pending avoid_bad_wifi restore"
+grep -q 'settings put global network_avoid_bad_wifi "$_abw_old"' "$ROOT/uninstall.sh" || fail "uninstall leaves avoid_bad_wifi=1"
+grep -q 'Wi-Fi leave watch (' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not show the leave watch"
+grep -q 'if \[ "${1:-}" = "--no-smart" \]; then _with_smart=0; shift; fi' "$B" || fail "save cannot leave the learning out"
+grep -q '^smart_available() {' "$B" || fail "no smart-available probe"
+grep -q '^_legacy_import() {' "$B" || fail "older multi-file copies have no line-by-line import"
+grep -q "' --no-smart'" "$ROOT/webroot/index.html" || fail "save dialog does not pass the choice"
+[ -f "$ROOT/tests/test_wifi_leave_rungs_runtime.sh" ] || fail "leave-rungs runtime test missing"
+[ -f "$ROOT/tests/test_config_legacy_import_runtime.sh" ] || fail "legacy import runtime test missing"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix134 contract"
+) || exit 1
+# ---- fix135 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix135: $*"; exit 1; }
+A="$ROOT/runtime/asb_audio_apply.sh"; H="$ROOT/runtime/asb_dsp_thermal.sh"
+[ -f "$H" ] || fail "no shared heat rule for the DSP gain"
+grep -q 'cpu_max_c=' "$A" && fail "the DSP gain still follows the CPU's hottest core"
+grep -q '^ASB_DSP_TH_BAT="${ASB_DSP_TH_BAT:-/sys/class/power_supply/battery/temp}"' "$H" || fail "heat rule not on the battery temperature"
+grep -q 'case "$_tc_r" in bt|wired|call) echo "$_tc_g"; return 0 ;; esac' "$H" || fail "Bluetooth/wired reduced for heat"
+grep -q '1) if \[ "$_ts_t" -ge 450 \]; then echo 2; elif \[ "$_ts_t" -lt 400 \]; then echo 0; else echo 1; fi ;;' "$H" || fail "no hysteresis"
+grep -q 'asb_dsp_thermal_tick' "$ROOT/service.sh" || fail "no minute re-check"
+grep -q 'if \[ "${_mwake:-0}" = 1 \]; then' "$A" || fail "mirror does not wake the attach daemon on a gain change"
+[ -f "$ROOT/runtime/asb_dsp_live.sh" ] || fail "no live effect probe"
+grep -q 'asb_dsp_live_state' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not show the live effect"
+[ -f "$ROOT/tests/test_dsp_heat_backoff_runtime.sh" ] || fail "heat back-off runtime test missing"
+[ -f "$ROOT/tests/test_dsp_live_state_runtime.sh" ] || fail "live state runtime test missing"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix135 contract"
+) || exit 1
+# ---- fix136 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix136: $*"; exit 1; }
+W="$ROOT/runtime/asb_wakelock_watch.sh"; N="$ROOT/runtime/asb_net_apply.sh"; V="$ROOT/runtime/asb_ltpo_video.sh"
+grep -q 'org.thoughtcrime.securesms|im.molly' "$W" || fail "Signal not protected by its real package id"
+grep -q '^_wl_doze_exempt() {' "$W" || fail "apps exempt from battery optimisation can be restricted"
+grep -q '^_wl_release_protected() {' "$W" || fail "a wrong earlier restriction is never released"
+grep -q 'case "$_pall" in \*" congctl "\*) _congctl_ok=1; return 0 ;; esac' "$N" || fail "per-route congctl not decided on evidence"
+grep -q 'cc\[\$_pk\]=\$_pw-pending' "$N" || fail "stale unsupported congestion verdict kept"
+grep -q 'REARM_QUIET_S="${ASB_LTPO_REARM_QUIET_S:-10}"' "$V" || fail "no longer quiet after a touch restore"
+grep -q 'ok_asb_dynamic (actual = ASB' "$ROOT/tools/logkit/_asb_logkit_common.sh" || fail "a matching dynamic cap still reported as DESYNC"
+grep -q 'T_N_SUF_WAIT' "$ROOT/action.sh" || fail "action screen silent about a per-link choice waiting for its link"
+for t in test_wakelock_messenger_guard_runtime.sh test_net_congctl_probe_runtime.sh; do
+  [ -f "$ROOT/tests/$t" ] || fail "$t missing"
+done
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix136 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
