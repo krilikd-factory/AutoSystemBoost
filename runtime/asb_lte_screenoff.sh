@@ -35,6 +35,22 @@
 #   12 Mbit/s gives 5G back at once and holds it for 10 minutes. Never during a call,
 #   tethering, a game in front, or on Wi-Fi. Opt-in, off by default.
 #
+# fix131 - a download is not light traffic, on either side of the screen.
+#   An OP15 evening (capture 25429) spent 4368 s, 1284 s, 4345 s and 5432 s on LTE with the
+#   screen on, and its owner reported slow downloads over mobile data. The give-back asked
+#   for one 30 s window ABOVE 12 Mbit/s - measured on LTE, which on that cell tops out near
+#   12-15 Mbit/s: a 17-minute download at 2-7 Mbit/s never got 5G back, and every give-back
+#   in the log sits at 12.3-14.5 Mbit/s, just over the line. Now:
+#     - while LTE is held for light traffic the watcher samples every 10 s, and two windows in
+#       a row at 3 Mbit/s or more (sustained demand) give 5G back, as one window over
+#       12 Mbit/s still does;
+#     - the drop to LTE needs traffic under 2 Mbit/s (was 4), so the two marks no longer
+#       overlap - between 2 and 3 Mbit/s the link stays where it is;
+#     - screen off: a window at 3 Mbit/s or more is a transfer, not a stream - LTE is not
+#       chosen then, and if LTE is already held the watcher stays on and gives 5G back
+#       (the same evening switched to LTE in the middle of a 5-9 Mbit/s download at 21:59).
+#       A give-back holds 5G for 10 minutes so a bursty transfer cannot flap the modem.
+#
 # Commands: arm | apply | restore | screen_on | status | nr
 
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
@@ -65,11 +81,21 @@ RETRY_MAX=24
 NR_BIT=524288                                   # 1 << (NETWORK_TYPE_NR - 1)
 LPIDF="$STATE_DIR/lte_light.pid"                 # light-traffic watcher (screen on)
 LHOLD="$STATE_DIR/lte_light.hold"               # epoch before which light must not re-apply
-LIGHT_LOW_KBPS="${ASB_LTE_LIGHT_LOW_KBPS:-4000}"
+LIGHT_LOW_KBPS="${ASB_LTE_LIGHT_LOW_KBPS:-2000}"     # drop to LTE below this (fix131: was 4000)
+LIGHT_BUSY_KBPS="${ASB_LTE_LIGHT_BUSY_KBPS:-3000}"   # sustained demand on LTE: 5G back
+LIGHT_BUSY_TICKS="${ASB_LTE_LIGHT_BUSY_TICKS:-2}"
 LIGHT_HIGH_KBPS="${ASB_LTE_LIGHT_HIGH_KBPS:-12000}"
 LIGHT_TICK_S="${ASB_LTE_LIGHT_TICK_S:-30}"
+# Faster sampling while LTE is held for light traffic: a download has to be noticed in
+# seconds, not minutes. Never slower than the normal tick (tests shorten that one).
+LIGHT_TICK_LTE_S="${ASB_LTE_LIGHT_TICK_LTE_S:-10}"
+[ "$LIGHT_TICK_LTE_S" -gt "$LIGHT_TICK_S" ] 2>/dev/null && LIGHT_TICK_LTE_S="$LIGHT_TICK_S"
 LIGHT_LOW_TICKS="${ASB_LTE_LIGHT_LOW_TICKS:-6}"
 LIGHT_HOLD_S="${ASB_LTE_LIGHT_HOLD_S:-600}"
+# Screen off: a window at this rate is a transfer (a download, an update, a backup), which
+# finishes sooner on 5G - not the stream this mode is for (fix131).
+OFF_BULK_KBPS="${ASB_LTE_OFF_BULK_KBPS:-3000}"
+OFF_BULK_HOLD_S="${ASB_LTE_OFF_BULK_HOLD_S:-600}"
 
 mkdir -p "$STATE_DIR" 2>/dev/null
 
@@ -426,6 +452,8 @@ _retry_later() {
   [ "$_rn" -eq 0 ] && _log "apply: skipped, $1 - will retry every ${RETRY_S}s while the screen is off"
   [ "$_rn" -ge "$RETRY_MAX" ] && { _log "apply: still $1 after $_rn retries, giving up until the next screen-off"; rm -f "$RETRYF"; return 0; }
   echo $(( _rn + 1 )) > "$RETRYF" 2>/dev/null
+  # Called from the timer's own loop (fix131): the next window is the retry.
+  [ "${_ASB_LTE_IN_LOOP:-0}" = 1 ] && return 0
   do_arm "$RETRY_S"
 }
 
@@ -433,7 +461,9 @@ do_arm() {
   _arm_delay="${1:-$DELAY}"
   [ "$(_cfg net_screen_off_lte)" = "1" ] || return 0
   [ -f "$UNSUP" ] && return 0
-  [ -f "$SAVE" ] && return 0
+  # A screen-off record means the timer already did its job and exited without counters;
+  # a light record kept at screen-off (both modes on) still needs the bulk watch below.
+  [ -f "$SAVE" ] && [ "$(_saved_reason)" != light ] && return 0
   # One pending timer at a time: this script is called on every screen, profile and
   # thermal change, and only the first screen-off should start the clock.
   if [ -f "$PIDF" ]; then
@@ -445,6 +475,7 @@ do_arm() {
     # The sleep runs as a child the timer can take down with it: a disarm (screen on) kills
     # this subshell, and a plain foreground sleep would be left behind as an orphan.
     trap 'kill "$_sp" 2>/dev/null; exit 0' TERM INT
+    _ASB_LTE_IN_LOOP=1
     # Only when there is mobile data to save (fix122).
     #
     # With the screen off and nothing moving, the modem sits in RRC idle on the LTE anchor -
@@ -454,29 +485,58 @@ do_arm() {
     # (2, 4, 6, 12, 16, 33, 39, 45, 49 s), on a phone that was idle in its pocket.
     #
     # So each window (DELAY seconds on the monotonic clock) is judged by the mobile data it
-    # moved per second of wall time: a stream or a download passes at once - the case this
-    # mode was written for, 47 MiB in 11 minutes - while a phone that slept through the
-    # window moved a few KiB over a long wall time and keeps 5G. The next window starts
-    # where this one ended, for as long as the screen stays off.
-    _k0="$(_rmnet_kib)"; _t0="$(date +%s)"
+    # moved per second of wall time: a stream passes at once - the case this mode was
+    # written for, 47 MiB in 11 minutes - while a phone that slept through the window moved
+    # a few KiB over a long wall time and keeps 5G. The next window starts where this one
+    # ended, for as long as the screen stays off.
+    #
+    # fix131: a window at OFF_BULK_KBPS or more is a transfer, not a stream - LTE is not
+    # chosen for it, and once LTE is held the timer keeps watching (the sleep runs on the
+    # monotonic clock, so a suspended phone costs no wakes) and gives 5G back when one
+    # starts. After a give-back LTE waits OFF_BULK_HOLD_S.
+    _k0="$(_rmnet_kib)"; _t0="$(date +%s)"; _hold=0; _bulk_noted=0
     while :; do
       sleep "$_arm_delay" & _sp=$!
       wait "$_sp"
       _k1="$(_rmnet_kib)"; _t1="$(date +%s)"
       _dk=0; _dt=$(( _t1 - _t0 ))
       case "$_k0$_k1" in *[!0-9]*|'') : ;; *) _dk=$(( _k1 - _k0 )) ;; esac
+      [ "$_dk" -lt 0 ] && _dk=0
       [ "$_dt" -lt "$_arm_delay" ] && _dt="$_arm_delay"
-      [ "$_dk" -gt 0 ] && [ $(( _dk * DELAY )) -ge $(( OFF_MIN_KIB * _dt )) ] && break
-      # Nothing to count on this phone: keep the old behaviour, apply after one window.
-      _mobile_counters || break
-      [ -f "$SAVE" ] && { rm -f "$PIDF"; exit 0; }
-      _screen_off_now || { rm -f "$PIDF"; exit 0; }
-      _qn="$(cat "$QUIETF" 2>/dev/null)"; case "$_qn" in ''|*[!0-9]*) _qn=0 ;; esac
-      echo $(( _qn + 1 )) > "$QUIETF" 2>/dev/null
+      _rate=$(( _dk * 8 / _dt ))          # kbit/s (KiB x 8; the 1.024 is noise here)
       _k0="$_k1"; _t0="$_t1"; _arm_delay="$DELAY"
+      _screen_off_now || { rm -f "$PIDF"; exit 0; }
+      if [ -f "$SAVE" ]; then
+        # LTE held (by this timer, or a light record kept at screen-off): watch for a transfer.
+        _mobile_counters || { rm -f "$PIDF"; exit 0; }
+        if [ "$_rate" -ge "$OFF_BULK_KBPS" ] 2>/dev/null; then
+          do_restore
+          [ -f "$SAVE" ] && continue          # readback failed: try again next window
+          _hold=$(( _t1 + OFF_BULK_HOLD_S ))
+          _log "bulk: ${_rate} kbit/s with the screen off - 5G back for at least ${OFF_BULK_HOLD_S}s"
+        fi
+        continue
+      fi
+      [ "$_t1" -lt "$_hold" ] && continue
+      if _mobile_counters; then
+        if [ "$_rate" -ge "$OFF_BULK_KBPS" ] 2>/dev/null; then
+          [ "$_bulk_noted" = 1 ] || _log "arm: ${_rate} kbit/s with the screen off is a transfer - 5G kept while it runs"
+          _bulk_noted=1
+          continue
+        fi
+        if ! { [ "$_dk" -gt 0 ] && [ $(( _dk * DELAY )) -ge $(( OFF_MIN_KIB * _dt )) ]; }; then
+          _qn="$(cat "$QUIETF" 2>/dev/null)"; case "$_qn" in ''|*[!0-9]*) _qn=0 ;; esac
+          echo $(( _qn + 1 )) > "$QUIETF" 2>/dev/null
+          continue
+        fi
+        do_apply
+        continue
+      fi
+      # Nothing to count on this phone: keep the old behaviour, apply after one window.
+      rm -f "$PIDF"
+      do_apply
+      exit 0
     done
-    rm -f "$PIDF"
-    do_apply
   ) &
   printf '%s\n' "$!" > "$PIDF" 2>/dev/null
 }
@@ -498,17 +558,26 @@ do_light_stop() {
   fi
 }
 
-_light_tick() {   # $1 = kbit/s over the last window; $2 = low-window streak (in/out via _lowN)
+_light_tick() {   # $1 = kbit/s over the last window; streaks in/out via _lowN and _busyN
   _kb="$1"
   if [ -f "$SAVE" ] && [ "$(_saved_reason)" = "light" ]; then
-    if [ "$_kb" -gt "$LIGHT_HIGH_KBPS" ] 2>/dev/null; then
-      do_restore
-      echo $(( $(date +%s) + LIGHT_HOLD_S )) > "$LHOLD" 2>/dev/null
-      _log "light: ${_kb} kbit/s - 5G back for at least ${LIGHT_HOLD_S}s"
-    fi
     _lowN=0
+    # Sustained demand (fix131): LTE caps what can be measured on LTE, so a download held
+    # there may never reach the 12 Mbit/s mark - two windows in a row at the busy mark are
+    # enough to say the user wants the bandwidth.
+    if [ "$_kb" -ge "$LIGHT_BUSY_KBPS" ] 2>/dev/null; then _busyN=$(( ${_busyN:-0} + 1 )); else _busyN=0; fi
+    _why=""
+    if [ "$_kb" -gt "$LIGHT_HIGH_KBPS" ] 2>/dev/null; then _why="${_kb} kbit/s"
+    elif [ "$_busyN" -ge "$LIGHT_BUSY_TICKS" ] 2>/dev/null; then _why="${_kb} kbit/s sustained over ${_busyN} windows"
+    fi
+    [ -n "$_why" ] || return 0
+    do_restore
+    _busyN=0
+    echo $(( $(date +%s) + LIGHT_HOLD_S )) > "$LHOLD" 2>/dev/null
+    _log "light: ${_why} - 5G back for at least ${LIGHT_HOLD_S}s"
     return 0
   fi
+  _busyN=0
   [ -f "$SAVE" ] && { _lowN=0; return 0; }   # a screen-off record is not ours to touch
   if [ "$_kb" -lt "$LIGHT_LOW_KBPS" ] 2>/dev/null; then _lowN=$(( _lowN + 1 )); else _lowN=0; fi
   [ "$_lowN" -ge "$LIGHT_LOW_TICKS" ] || return 0
@@ -522,9 +591,11 @@ _light_tick() {   # $1 = kbit/s over the last window; $2 = low-window streak (in
 }
 
 do_light_loop() {
-  _prev="$(_rmnet_kib)"; _lowN=0
+  _prev="$(_rmnet_kib)"; _lowN=0; _busyN=0
   while :; do
-    sleep "$LIGHT_TICK_S" & _sp=$!
+    _tk="$LIGHT_TICK_S"
+    [ -f "$SAVE" ] && [ "$(_saved_reason)" = "light" ] && _tk="$LIGHT_TICK_LTE_S"
+    sleep "$_tk" & _sp=$!
     wait "$_sp"
     [ "$(_cfg net_lte_light)" = "1" ] || {
       [ -f "$SAVE" ] && [ "$(_saved_reason)" = "light" ] && do_restore
@@ -537,9 +608,9 @@ do_light_loop() {
     case "$_cur" in ''|*[!0-9]*) _cur="$_prev" ;; esac
     _d=$(( _cur - _prev )); _prev="$_cur"
     [ "$_d" -lt 0 ] && _d=0           # an interface went away and its counters with it
-    if ! _on_mobile; then _lowN=0; continue; fi
-    # KiB per window -> kbit/s (x8; the 1.024 is noise next to the 4/12 Mbit/s marks).
-    _light_tick $(( _d * 8 / LIGHT_TICK_S ))
+    if ! _on_mobile; then _lowN=0; _busyN=0; continue; fi
+    # KiB per window -> kbit/s (x8; the 1.024 is noise next to the 2/3/12 Mbit/s marks).
+    _light_tick $(( _d * 8 / _tk ))
   done
   rm -f "$LPIDF"
 }

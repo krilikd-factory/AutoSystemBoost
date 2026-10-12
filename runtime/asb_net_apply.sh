@@ -113,9 +113,14 @@ _probe_congctl() {
   _pr=""
   [ -n "$_pa" ] && _pr="$(_defaults | grep -E -m1 " dev $_pa( |\$)")"
   [ -n "$_pr" ] || _pr="$(_defaults | grep -vE ' dev (lo|dummy[^ ]*|ifb[^ ]*|vgate[^ ]*)( |$)' | head -1)"
-  [ -n "$_pr" ] || return 0
+  # No route to ask (early boot, airplane mode, between networks): the kernel was not
+  # asked, so nothing is known yet (fix131). Treating it as "no per-route congctl" filed
+  # a lasting "unsupported" for the Wi-Fi key on a phone whose kernel does it fine - an
+  # OP15 asbdiag printed "[N/A] net_congestion_wifi (no per-route congctl)" two lines
+  # above "per-route congctl: SUPPORTED".
+  [ -n "$_pr" ] || { _congctl_ok=unknown; return 0; }
   _pc="$(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null)"
-  [ -n "$_pc" ] || return 0
+  [ -n "$_pc" ] || { _congctl_ok=unknown; return 0; }
   _pclean="$(printf '%s' "$_pr" | sed -e 's/ congctl [a-z_]*//')"
   "$ASB_IP" route change $_pclean congctl "$_pc" >/dev/null 2>&1 && _congctl_ok=1
   return 0
@@ -212,7 +217,9 @@ case "$_cc" in
           # asking for something different cannot be served on this kernel at all.
           # Staying silent filed both halves as "not_applied" on a phone where mobile
           # traffic genuinely ran the requested algorithm (OP15 field log, V65).
-          if [ "$_congctl_ok" != "1" ]; then
+          # Unknown capability (no route to probe): no per-link verdict this run - the last
+          # known one stays, and the link watcher re-applies once a network is up.
+          if [ "$_congctl_ok" = "0" ]; then
             for _k2 in wifi mobile; do
               _k2want="$(_cfg "net_congestion_$_k2")"
               case "$_k2want" in ''|auto) continue ;; esac
