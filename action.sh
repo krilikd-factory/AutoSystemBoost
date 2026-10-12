@@ -870,6 +870,8 @@ T_A_ALL="all"
 T_A_ON_PROC="works on: %s · now playing on %s → processed"
 T_A_ON_NOT="works on: %s · now playing on %s → not processed (by your choice)"
 T_A_ON_ROUTE="works on: %s · current route %s"
+T_A_HEAT="gain lowered for heat: battery %s °C, speaker · full again below 40 °C"
+T_A_SUSP="paused by Android: an app has its own sound effect on this output"
 T_C_LEVEL="processing level %s"
 T_C_APPS="%s retouch apps"
 T_C_CFG="retouch config: %s"
@@ -897,6 +899,7 @@ T_N_RUNNING="%s: %s requested · running %s"
 T_N_MOBILE="mobile"
 T_N_SUF_UNSUP="%s NOT SUPPORTED"
 T_N_SUF_FAIL="%s NOT APPLIED"
+T_N_SUF_WAIT="%s waits for the link"
 T_N_BUF_ON="buffers: %s · %s on the default route"
 T_N_BUF_OFF="buffers: %s · not on the route yet (pending or replaced)"
 T_N_REGION_FAIL="Wi-Fi region: %s · NOT APPLIED"
@@ -911,8 +914,8 @@ T_N_LEAVE_WEAK="leave Wi-Fi: on a weak signal (below %s dBm)"
 T_N_LEAVE_UNUSABLE="leave Wi-Fi: weak signal or no working internet"
 T_N_LEAVE_AGGR="leave Wi-Fi: weak, broken or slow - hands over to mobile at once"
 T_N_HO_FAST="Wi-Fi → mobile handover: fast (cellular context kept ready while awake)"
-T_N_HO_STORED="Wi-Fi → mobile handover: stored, inactive (radio controls off)"
-T_N_FB_ACTIVE="Wi-Fi fallback: active opt-in · %s"
+T_N_HO_STORED="Wi-Fi → mobile handover: mobile data is not kept ready (radio controls off) - leaving still works, mobile data takes a few seconds"
+T_N_FB_ACTIVE="Wi-Fi leave watch: %s"
 T_N_FB_STORED="Wi-Fi fallback: stored, inactive (radio controls off)"
 T_N_LTE_STOP="LTE while screen off: on · stopped itself - %s"
 T_N_LTE_PARKED="LTE while screen off: on · 5G parked right now"
@@ -1747,6 +1750,18 @@ if [ "$_a_dsp" != "off" ]; then
       *) _f "       $T_A_ON_ROUTE" "${_dsp_out:-$T_A_ALL}" "$_dsp_rt" ;;
     esac
   fi
+  # fix135: the two ways the sound goes flat with everything above in order - the gain's
+  # heat back-off (loudspeaker, battery-based) and AudioFlinger suspending the effect because
+  # an app enabled one of its own on the same output.
+  if [ "$(sed -n 's/^reason=//p' /dev/.asb/dsp_thermal 2>/dev/null)" = "hot_speaker" ]; then
+    _dsp_hb="$(sed -n 's/^bat_dC=//p' /dev/.asb/dsp_thermal 2>/dev/null)"
+    case "$_dsp_hb" in ''|*[!0-9]*) _dsp_hb="?" ;; *) _dsp_hb="$((_dsp_hb / 10))" ;; esac
+    _f "       $T_A_HEAT" "$_dsp_hb"
+  fi
+  if [ "${_dsp_on:-0}" = "1" ] && [ -r "$MODDIR/runtime/asb_dsp_live.sh" ]; then
+    . "$MODDIR/runtime/asb_dsp_live.sh"
+    case "$(asb_dsp_live_state)" in *suspended=y*) _f "       $T_A_SUSP" ;; esac
+  fi
 fi
 
 echo ""
@@ -1901,8 +1916,10 @@ for _plk in wifi mobile; do
   _pll="       ${_plabel}: ${_pcc:-auto} + ${_pqd:-auto}"
   for _pk in net_congestion_${_plk} net_qdisc_${_plk}; do
     case "$(_nverd "$_pk")" in
-      unavailable) _pll="${_pll} · $(_s "$T_N_SUF_UNSUP" "${_pk#net_}")" ;;
+      unavailable|unsupported) _pll="${_pll} · $(_s "$T_N_SUF_UNSUP" "${_pk#net_}")" ;;
       failed)      _pll="${_pll} · $(_s "$T_N_SUF_FAIL" "${_pk#net_}")" ;;
+      # fix136: the line printed the request as if running while the link was down.
+      pending)     _pll="${_pll} · $(_s "$T_N_SUF_WAIT" "${_pk#net_}")" ;;
     esac
   done
   echo "$_pll"
@@ -1969,10 +1986,11 @@ case "$_handover:$_radio_policy" in
   1:1) _f "       $T_N_HO_FAST" ;;
   1:*) _f "       $T_N_HO_STORED" ;;
 esac
-case "$_handover_active:$_radio_policy" in
-  1:1) _hf="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wifi_fallback.sh" status 2>/dev/null || echo unavailable)"
-       _f "       $T_N_FB_ACTIVE" "$_hf" ;;
-  1:*) _f "       $T_N_FB_STORED" ;;
+# The leave watcher runs on every rung, cellular master or not (fix134).
+case "$_wleave" in
+  weak|unusable|aggressive)
+    _hf="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wifi_fallback.sh" status 2>/dev/null || echo unavailable)"
+    _f "       $T_N_FB_ACTIVE" "$_hf" ;;
 esac
 # 5G only when needed (net_lte_light, fix114): what the screen-on watcher decided.
 if [ "$(_cfg net_lte_light)" = "1" ]; then

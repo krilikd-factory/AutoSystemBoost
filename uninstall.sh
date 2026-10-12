@@ -544,6 +544,16 @@ fi
 # If the active fallback had temporarily released Wi-Fi, restore it before its state is
 # removed; the helper targets only its exact watcher argv and never touches other network tasks.
 [ -f "$MODDIR/runtime/asb_wifi_fallback.sh" ] && MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wifi_fallback.sh" stop >/dev/null 2>&1 || true
+# Android's avoid-bad-Wi-Fi switch, set by the unusable/aggressive rungs: back to the value the
+# phone had before ASB's first write (fix134). Nothing else restores it.
+if [ -f /data/adb/asb/avoid_bad_wifi.prev ]; then
+  _abw_old="$(head -1 /data/adb/asb/avoid_bad_wifi.prev 2>/dev/null | tr -dc '0-9')"
+  if [ -n "$_abw_old" ]; then
+    settings put global network_avoid_bad_wifi "$_abw_old" >/dev/null 2>&1 || true
+  else
+    settings delete global network_avoid_bad_wifi >/dev/null 2>&1 || true
+  fi
+fi
 # Drop a live LTPO bind now, not at the next reboot: after removal nothing re-applies it,
 # but the stock refresh table should be visible again the moment the module is gone.
 [ -f "$MODDIR/runtime/asb_ltpo_apply.sh" ] && MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_ltpo_apply.sh" remove >/dev/null 2>&1 || true

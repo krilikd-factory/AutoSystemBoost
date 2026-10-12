@@ -3369,7 +3369,17 @@ fi
 # attacher immediately, while ordinary unplug/connect transitions remain corrected promptly.
 (
   _prev_route=""
+  # The DSP gain's heat back-off is re-checked here once a minute (fix135): battery
+  # temperature with hysteresis, loudspeaker only. It used to be decided from the CPU's
+  # hottest core at random UI moments and then left alone - see asb_dsp_thermal.sh.
+  [ -r "$MODDIR/runtime/asb_dsp_thermal.sh" ] && . "$MODDIR/runtime/asb_dsp_thermal.sh"
+  _th_at=""
   while true; do
+    _th_now="${SECONDS:-}"; [ -n "$_th_now" ] || _th_now="$(date +%s)"
+    if [ -z "$_th_at" ] || [ $((_th_now - _th_at)) -ge 60 ]; then
+      _th_at="$_th_now"
+      command -v asb_dsp_thermal_tick >/dev/null 2>&1 && asb_dsp_thermal_tick
+    fi
     # Cheap checks first; framework calls only when there is work.
     #
     # This pass asked the device-idle service for the screen state twice - before the
@@ -3851,6 +3861,14 @@ esac
              | head -1 | sed 's/.*=//' | tr -d ' \r')"
       case "$_nv" in ''|auto) : ;; *) _asb_net_any=1 ;; esac
     done
+    # The unusable/aggressive rungs of "Leave bad Wi-Fi" set Android's avoid-bad-Wi-Fi switch
+    # in this pass, and a rung lowered since needs its value put back (fix134). With every
+    # other network key on auto the apply never ran at boot, so the switch was never set.
+    case "$(grep -E '^[[:space:]]*net_wifi_leave=' "$MODDIR/config/governor.conf" 2>/dev/null \
+            | head -1 | sed 's/.*=//' | tr -d ' \r')" in
+      unusable|aggressive) _asb_net_any=1 ;;
+    esac
+    [ -f /data/adb/asb/avoid_bad_wifi.prev ] && _asb_net_any=1
     if [ "$_asb_net_any" = "1" ]; then
       sh "$MODDIR/runtime/asb_net_apply.sh" >/dev/null 2>&1
       asb_log "net settings re-asserted (post-boot)"
