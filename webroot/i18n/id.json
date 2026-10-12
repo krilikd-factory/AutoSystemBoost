@@ -344,11 +344,11 @@
     },
     "net_screen_off_lte": {
       "name": "LTE saat layar mati",
-      "desc": "Setelah layar mati 90 detik, mematikan jalur 5G dan menjaga data tetap di LTE; 5G kembali begitu layar menyala. 5G NSA menjalankan dua radio sekaligus, padahal mendengarkan stream dengan layar gelap cukup dengan LTE. Tidak pernah aktif saat panggilan. Mati secara bawaan: mengubah jenis jaringan yang diizinkan menyambungkan ulang data. Jika ROM menolak perubahan, modul mengembalikan nilai asli dan berhenti mencoba."
+      "desc": "Setelah layar mati 90 detik, mematikan jalur 5G dan menjaga data tetap di LTE; 5G kembali begitu layar menyala. 5G NSA menjalankan dua radio sekaligus, padahal mendengarkan stream dengan layar gelap cukup dengan LTE. Tidak pernah aktif saat panggilan. Mati secara bawaan: mengubah jenis jaringan yang diizinkan menyambungkan ulang data. Jika ROM menolak perubahan, modul mengembalikan nilai asli dan berhenti mencoba. Unduhan tetap di 5G: pengukuran 3 Mbit/s atau lebih adalah transfer, bukan stream — LTE tidak dipilih saat itu, dan jika LTE sudah aktif, 5G kembali setidaknya 10 menit."
     },
     "net_lte_light": {
       "name": "5G hanya saat perlu",
-      "desc": "Saat layar menyala: setelah 3 menit lalu lintas seluler ringan (di bawah 4 Mbit/s - feed, musik, video) kaki 5G dimatikan dan tetap di LTE yang mudah menanganinya; unduhan berat (di atas 12 Mbit/s) segera mengembalikan 5G dan menahannya 10 menit. 5G NSA menyalakan dua radio sekaligus hanya untuk aliran data kecil. Tidak pernah saat panggilan, tethering, game, atau di Wi-Fi. Mati secara bawaan: tiap peralihan mendaftar ulang koneksi data selama satu-dua detik."
+      "desc": "Saat layar menyala: setelah 3 menit lalu lintas seluler ringan (di bawah 2 Mbit/s — feed, musik) mematikan jalur 5G dan tetap di LTE, yang menanganinya dengan mudah. Unduhan mengembalikan 5G dalam sekitar 20 detik (3 Mbit/s atau lebih dalam dua pengukuran 10 detik berturut-turut, atau satu pengukuran di atas 12 Mbit/s) dan mempertahankannya 10 menit. 5G NSA membuat dua radio sibuk untuk aliran data yang tipis. Tidak pernah saat panggilan, tethering, atau game, tidak pernah di Wi-Fi. Mati secara bawaan: setiap peralihan mendaftarkan ulang koneksi data selama satu-dua detik."
     },
     "heavy_prime_escape": {
       "name": "Angkat inti prime",
@@ -874,5 +874,8 @@
   "t_cfg_needs": "ⓘ «{key}» hanya bekerja bersama «{other}»",
   "t_cfg_idle": "ⓘ «{key}» kini tidak berpengaruh tanpa «{other}»",
   "lv_avgdrain_tip": "Konsumsi aktual saat layar menyala: seberapa cepat baterai turun sekarang, beberapa menit terakhir - bukan model.",
-  "unit_pcth": "%/jam"
+  "unit_pcth": "%/jam",
+  "lv_drain_est_note": "Setelah 10 menit layar menyala, angka sebenarnya menggantikannya.",
+  "lv_drain_charging": "mengisi daya",
+  "lv_drain_charging_tip": "Tidak ada konsumsi saat mengisi daya — angka kembali setelah charger dicabut."
 }

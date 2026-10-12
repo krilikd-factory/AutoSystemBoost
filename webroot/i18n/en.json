@@ -295,11 +295,11 @@
     },
     "net_screen_off_lte": {
       "name": "LTE While Screen Off",
-      "desc": "After the screen has been off for 90 seconds, drops the 5G leg and keeps data on LTE; 5G comes back the moment the screen turns on. 5G NSA keeps two radios busy at once, while listening to a stream with the screen dark needs far less than LTE alone carries. Never acts during a call. Off by default: changing the allowed network types re-registers the data link, which takes a few seconds on some ROMs. If the ROM does not accept the change, the module restores the original value and stops trying."
+      "desc": "After the screen has been off for 90 seconds, drops the 5G leg and keeps data on LTE; 5G comes back the moment the screen turns on. 5G NSA keeps two radios busy at once, while listening to a stream with the screen dark needs far less than LTE alone carries. Never acts during a call. Off by default: changing the allowed network types re-registers the data link, which takes a few seconds on some ROMs. If the ROM does not accept the change, the module restores the original value and stops trying. A download keeps 5G: a check at 3 Mbit/s or more is a transfer, not a stream - LTE is not chosen then, and if LTE is already on, 5G comes back for at least 10 minutes."
     },
     "net_lte_light": {
       "name": "5G Only When Needed",
-      "desc": "With the screen on: after 3 minutes of light mobile traffic (under 4 Mbit/s - feeds, music, video) drops the 5G leg and stays on LTE, which carries that easily; a heavy download (over 12 Mbit/s) brings 5G back at once and keeps it for 10 minutes. 5G NSA keeps two radios busy for a trickle of data. Never during a call, tethering or a game, never on Wi-Fi. Off by default: each switch re-registers the data link for a second or two."
+      "desc": "With the screen on: after 3 minutes of light mobile traffic (under 2 Mbit/s - feeds, music) drops the 5G leg and stays on LTE, which carries that easily. A download brings 5G back within about 20 seconds (3 Mbit/s or more in two 10-second checks in a row, or one check over 12 Mbit/s) and keeps it for 10 minutes. 5G NSA keeps two radios busy for a trickle of data. Never during a call, tethering or a game, never on Wi-Fi. Off by default: each switch re-registers the data link for a second or two."
     }
   },
   "cfg_search": "Search",
@@ -665,5 +665,8 @@
   "t_cfg_needs": "ⓘ {key} works only with {other}",
   "t_cfg_idle": "ⓘ {key} now has no effect without {other}",
   "lv_avgdrain_tip": "Actual screen-on drain: how fast the battery level is falling now, over the last minutes - not a model.",
-  "unit_pcth": "%/h"
+  "unit_pcth": "%/h",
+  "lv_drain_est_note": "The actual figure replaces it after 10 minutes with the screen on.",
+  "lv_drain_charging": "charging",
+  "lv_drain_charging_tip": "No drain while charging - the figure comes back after unplugging."
 }

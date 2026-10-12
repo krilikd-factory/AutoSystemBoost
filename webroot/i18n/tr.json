@@ -344,11 +344,11 @@
     },
     "net_screen_off_lte": {
       "name": "Ekran kapalıyken LTE",
-      "desc": "Ekran 90 saniye kapalı kaldıktan sonra 5G bacağını kapatır ve veriyi LTE üzerinde tutar; ekran açılınca 5G hemen geri gelir. 5G NSA iki radyoyu aynı anda çalıştırır; ekran kapalıyken bir yayını dinlemek için LTE fazlasıyla yeter. Arama sırasında asla devreye girmez. Varsayılan olarak kapalı: izin verilen ağ türlerini değiştirmek veri bağlantısını yeniden kurar. ROM değişikliği kabul etmezse modül özgün değeri geri yükler ve tekrar denemez."
+      "desc": "Ekran 90 saniye kapalı kaldıktan sonra 5G bacağını kapatır ve veriyi LTE üzerinde tutar; ekran açılınca 5G hemen geri gelir. 5G NSA iki radyoyu aynı anda çalıştırır; ekran kapalıyken bir yayını dinlemek için LTE fazlasıyla yeter. Arama sırasında asla devreye girmez. Varsayılan olarak kapalı: izin verilen ağ türlerini değiştirmek veri bağlantısını yeniden kurar. ROM değişikliği kabul etmezse modül özgün değeri geri yükler ve tekrar denemez. İndirmeler 5G'de kalır: 3 Mbit/s veya üzeri bir ölçüm akış değil aktarımdır — o zaman LTE seçilmez, LTE zaten açıksa 5G en az 10 dakikalığına geri gelir."
     },
     "net_lte_light": {
       "name": "Yalnızca gerektiğinde 5G",
-      "desc": "Ekran açıkken: 3 dakika hafif mobil trafikten sonra (4 Mbit/s altı - akışlar, müzik, video) 5G bacağını kapatır ve bunu rahatça taşıyan LTE'de kalır; ağır bir indirme (12 Mbit/s üstü) 5G'yi hemen geri getirir ve 10 dakika tutar. 5G NSA ince bir veri akışı için iki radyoyu birden açık tutar. Arama, paylaşım, oyun sırasında ve Wi-Fi'de asla çalışmaz. Varsayılan kapalı: her geçiş veri bağlantısını bir iki saniye yeniden kaydeder."
+      "desc": "Ekran açıkken: 3 dakika boyunca mobil trafik hafifse (2 Mbit/s altı — akışlar, müzik) 5G bacağını kapatır ve bunu rahatça taşıyan LTE'de kalır. Bir indirme 5G'yi yaklaşık 20 saniyede geri getirir (art arda iki 10 saniyelik ölçümde 3 Mbit/s veya üzeri ya da 12 Mbit/s üzerinde tek ölçüm) ve 10 dakika tutar. 5G NSA, ince bir veri akışı için iki radyoyu birden meşgul eder. Arama, internet paylaşımı veya oyun sırasında ve Wi-Fi'de asla devreye girmez. Varsayılan olarak kapalı: her geçiş veri bağlantısını bir iki saniyeliğine yeniden kaydeder."
     },
     "heavy_prime_escape": {
       "name": "Prime çekirdek yükseltme",
@@ -874,5 +874,8 @@
   "t_cfg_needs": "ⓘ «{key}» yalnızca «{other}» ile çalışır",
   "t_cfg_idle": "ⓘ «{key}», «{other}» olmadan artık etkisiz",
   "lv_avgdrain_tip": "Ekran açıkken gerçek tüketim: pil seviyesinin şu an ne hızla düştüğü, son dakikalara göre - model değil.",
-  "unit_pcth": "%/sa"
+  "unit_pcth": "%/sa",
+  "lv_drain_est_note": "Ekran 10 dakika açık kaldıktan sonra yerini gerçek değer alır.",
+  "lv_drain_charging": "şarj oluyor",
+  "lv_drain_charging_tip": "Şarj sırasında tüketim yok — değer şarjdan çıkarınca geri gelir."
 }

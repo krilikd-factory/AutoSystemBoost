@@ -370,11 +370,11 @@
     },
     "net_screen_off_lte": {
       "name": "LTE a schermo spento",
-      "desc": "Dopo 90 secondi a schermo spento disattiva il ramo 5G e mantiene i dati su LTE; il 5G torna appena si accende lo schermo. Il 5G NSA tiene attive due radio insieme, mentre per ascoltare uno stream a schermo spento LTE basta ampiamente. Non interviene mai durante una chiamata. Disattivato di default: cambiare i tipi di rete consentiti riconnette i dati. Se la ROM non accetta la modifica, il modulo ripristina il valore originale e non riprova."
+      "desc": "Dopo 90 secondi a schermo spento disattiva il ramo 5G e mantiene i dati su LTE; il 5G torna appena si accende lo schermo. Il 5G NSA tiene attive due radio insieme, mentre per ascoltare uno stream a schermo spento LTE basta ampiamente. Non interviene mai durante una chiamata. Disattivato di default: cambiare i tipi di rete consentiti riconnette i dati. Se la ROM non accetta la modifica, il modulo ripristina il valore originale e non riprova. I download restano in 5G: una misura da 3 Mbit/s in su è un trasferimento, non uno stream — allora non si passa a LTE e, se LTE è già attivo, il 5G torna per almeno 10 minuti."
     },
     "net_lte_light": {
       "name": "5G solo quando serve",
-      "desc": "Con lo schermo acceso: dopo 3 minuti di traffico mobile leggero (sotto 4 Mbit/s - feed, musica, video) toglie la gamba 5G e resta in LTE, che lo regge senza fatica; un download pesante (oltre 12 Mbit/s) riporta subito il 5G e lo tiene 10 minuti. Il 5G NSA tiene accese due radio per un filo di dati. Mai durante una chiamata, il tethering, un gioco o in Wi-Fi. Disattivato di default: ogni cambio riregistra la connessione dati per un secondo o due."
+      "desc": "Con lo schermo acceso: dopo 3 minuti di traffico mobile leggero (sotto 2 Mbit/s — feed, musica) spegne la tratta 5G e resta in LTE, che lo regge senza fatica. Un download riporta il 5G in circa 20 secondi (3 Mbit/s o più in due misure consecutive da 10 secondi, oppure una misura sopra 12 Mbit/s) e lo mantiene per 10 minuti. Il 5G NSA tiene occupate due radio per un filo di dati. Mai durante una chiamata, il tethering o un gioco, mai in Wi-Fi. Disattivato di default: ogni cambio registra di nuovo la connessione dati per un secondo o due."
     },
     "heavy_prime_escape": {
       "name": "Spinta dei core prime",
@@ -874,5 +874,8 @@
   "t_cfg_needs": "ⓘ «{key}» funziona solo insieme a «{other}»",
   "t_cfg_idle": "ⓘ «{key}» ora non ha effetto senza «{other}»",
   "lv_avgdrain_tip": "Consumo effettivo a schermo acceso: quanto velocemente scende la batteria ora, negli ultimi minuti - non un modello.",
-  "unit_pcth": "%/h"
+  "unit_pcth": "%/h",
+  "lv_drain_est_note": "Dopo 10 minuti a schermo acceso la sostituisce il valore reale.",
+  "lv_drain_charging": "in carica",
+  "lv_drain_charging_tip": "In carica non c'è consumo: il valore torna dopo aver staccato il caricatore."
 }

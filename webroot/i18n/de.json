@@ -344,11 +344,11 @@
     },
     "net_screen_off_lte": {
       "name": "LTE bei ausgeschaltetem Bildschirm",
-      "desc": "Schaltet 90 Sekunden nach dem Ausschalten des Bildschirms den 5G-Zweig ab und lässt Daten über LTE laufen; beim Einschalten kommt 5G sofort zurück. 5G NSA hält zwei Funkteile gleichzeitig aktiv, für einen Stream bei dunklem Bildschirm reicht LTE allein bei Weitem. Greift nie während eines Anrufs. Standardmäßig aus: Das Ändern der erlaubten Netztypen baut die Datenverbindung neu auf. Akzeptiert das ROM die Änderung nicht, stellt das Modul den Ursprungswert wieder her und versucht es nicht erneut."
+      "desc": "Schaltet 90 Sekunden nach dem Ausschalten des Bildschirms den 5G-Zweig ab und lässt Daten über LTE laufen; beim Einschalten kommt 5G sofort zurück. 5G NSA hält zwei Funkteile gleichzeitig aktiv, für einen Stream bei dunklem Bildschirm reicht LTE allein bei Weitem. Greift nie während eines Anrufs. Standardmäßig aus: Das Ändern der erlaubten Netztypen baut die Datenverbindung neu auf. Akzeptiert das ROM die Änderung nicht, stellt das Modul den Ursprungswert wieder her und versucht es nicht erneut. Downloads behalten 5G: Eine Messung mit 3 Mbit/s oder mehr ist eine Übertragung, kein Stream – dann wird nicht auf LTE gewechselt, und ist LTE schon aktiv, kommt 5G für mindestens 10 Minuten zurück."
     },
     "net_lte_light": {
       "name": "5G nur bei Bedarf",
-      "desc": "Bei eingeschaltetem Bildschirm: nach 3 Minuten leichtem Mobilfunkverkehr (unter 4 Mbit/s - Feeds, Musik, Video) wird der 5G-Zweig abgeschaltet und LTE genutzt, das das locker trägt; ein großer Download (über 12 Mbit/s) holt 5G sofort zurück und hält es 10 Minuten. 5G NSA hält für ein Rinnsal an Daten zwei Funkteile wach. Nie während eines Anrufs, Tetherings oder Spiels, nie im WLAN. Standardmäßig aus: jeder Wechsel meldet die Datenverbindung für ein, zwei Sekunden neu an."
+      "desc": "Bei eingeschaltetem Bildschirm: Nach 3 Minuten leichtem Mobilfunkverkehr (unter 2 Mbit/s – Feeds, Musik) wird der 5G-Zweig abgeschaltet und LTE genügt dafür locker. Ein Download holt 5G in etwa 20 Sekunden zurück (3 Mbit/s oder mehr in zwei 10-Sekunden-Messungen hintereinander oder eine Messung über 12 Mbit/s) und hält es 10 Minuten. 5G NSA hält für ein Rinnsal an Daten zwei Funkteile wach. Nie während eines Anrufs, Tetherings oder Spiels, nie im WLAN. Standardmäßig aus: Jeder Wechsel meldet die Datenverbindung für ein, zwei Sekunden neu an."
     },
     "heavy_prime_escape": {
       "name": "Prime-Kern-Anhebung",
@@ -874,5 +874,8 @@
   "t_cfg_needs": "ⓘ „{key}“ wirkt nur zusammen mit „{other}“",
   "t_cfg_idle": "ⓘ „{key}“ wirkt ohne „{other}“ jetzt nicht mehr",
   "lv_avgdrain_tip": "Tatsächlicher Verbrauch mit Bildschirm an: wie schnell der Akkustand gerade fällt, über die letzten Minuten - kein Modell.",
-  "unit_pcth": "%/h"
+  "unit_pcth": "%/h",
+  "lv_drain_est_note": "Nach 10 Minuten mit eingeschaltetem Bildschirm ersetzt sie der gemessene Wert.",
+  "lv_drain_charging": "lädt",
+  "lv_drain_charging_tip": "Beim Laden gibt es keinen Verbrauch – der Wert kommt nach dem Abstecken zurück."
 }

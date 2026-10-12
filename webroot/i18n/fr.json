@@ -436,11 +436,11 @@
     },
     "net_screen_off_lte": {
       "name": "LTE écran éteint",
-      "desc": "90 secondes après l'extinction de l'écran, coupe la branche 5G et garde les données en LTE ; la 5G revient dès que l'écran se rallume. La 5G NSA garde deux radios actives en même temps, alors qu'écouter un flux écran éteint ne demande qu'une fraction de ce que porte le LTE. N'agit jamais pendant un appel. Désactivé par défaut : changer les types de réseau autorisés reconnecte les données. Si la ROM refuse le changement, le module restaure la valeur d'origine et ne réessaie plus."
+      "desc": "90 secondes après l'extinction de l'écran, coupe la branche 5G et garde les données en LTE ; la 5G revient dès que l'écran se rallume. La 5G NSA garde deux radios actives en même temps, alors qu'écouter un flux écran éteint ne demande qu'une fraction de ce que porte le LTE. N'agit jamais pendant un appel. Désactivé par défaut : changer les types de réseau autorisés reconnecte les données. Si la ROM refuse le changement, le module restaure la valeur d'origine et ne réessaie plus. Les téléchargements gardent la 5G : une mesure à 3 Mbit/s ou plus est un transfert, pas un flux — le LTE n'est alors pas choisi et, s'il est déjà actif, la 5G revient pour au moins 10 minutes."
     },
     "net_lte_light": {
       "name": "5G seulement si besoin",
-      "desc": "Écran allumé : après 3 minutes de trafic mobile léger (moins de 4 Mbit/s - fils, musique, vidéo), coupe la branche 5G et reste en LTE, qui suffit largement ; un gros téléchargement (plus de 12 Mbit/s) rétablit la 5G aussitôt et la garde 10 minutes. La 5G NSA garde deux radios actives pour un filet de données. Jamais pendant un appel, un partage de connexion, un jeu ni en Wi-Fi. Désactivé par défaut : chaque bascule réenregistre la liaison de données une ou deux secondes."
+      "desc": "Écran allumé : après 3 minutes de trafic mobile léger (moins de 2 Mbit/s — fils d'actualité, musique), coupe la branche 5G et reste en LTE, qui suffit largement. Un téléchargement rétablit la 5G en une vingtaine de secondes (3 Mbit/s ou plus sur deux mesures de 10 secondes d'affilée, ou une mesure au-delà de 12 Mbit/s) et la conserve 10 minutes. La 5G NSA occupe deux radios pour un filet de données. Jamais pendant un appel, un partage de connexion ou un jeu, jamais en Wi-Fi. Désactivé par défaut : chaque bascule réenregistre la liaison de données pendant une ou deux secondes."
     },
     "heavy_prime_escape": {
       "name": "Relève des cœurs prime",
@@ -874,5 +874,8 @@
   "t_cfg_needs": "ⓘ « {key} » ne fonctionne qu’avec « {other} »",
   "t_cfg_idle": "ⓘ « {key} » n’a plus d’effet sans « {other} »",
   "lv_avgdrain_tip": "Consommation réelle écran allumé : la vitesse à laquelle la batterie baisse maintenant, sur les dernières minutes - pas un modèle.",
-  "unit_pcth": "%/h"
+  "unit_pcth": "%/h",
+  "lv_drain_est_note": "Après 10 minutes écran allumé, la valeur réelle la remplace.",
+  "lv_drain_charging": "en charge",
+  "lv_drain_charging_tip": "Pas de consommation en charge — la valeur revient après débranchement."
 }

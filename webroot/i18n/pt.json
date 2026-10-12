@@ -344,11 +344,11 @@
     },
     "net_screen_off_lte": {
       "name": "LTE com o ecrã apagado",
-      "desc": "Após 90 segundos com o ecrã apagado, desliga o ramo 5G e mantém os dados em LTE; o 5G volta assim que o ecrã liga. O 5G NSA mantém dois rádios ativos ao mesmo tempo, e para ouvir um stream com o ecrã apagado o LTE chega com folga. Nunca atua durante uma chamada. Desligado por padrão: alterar os tipos de rede permitidos reconecta os dados. Se a ROM não aceitar a alteração, o módulo repõe o valor original e não tenta novamente."
+      "desc": "Após 90 segundos com o ecrã apagado, desliga o ramo 5G e mantém os dados em LTE; o 5G volta assim que o ecrã liga. O 5G NSA mantém dois rádios ativos ao mesmo tempo, e para ouvir um stream com o ecrã apagado o LTE chega com folga. Nunca atua durante uma chamada. Desligado por padrão: alterar os tipos de rede permitidos reconecta os dados. Se a ROM não aceitar a alteração, o módulo repõe o valor original e não tenta novamente. Os downloads mantêm o 5G: uma medição de 3 Mbit/s ou mais é uma transferência, não um stream — o LTE não é escolhido e, se já estiver ativo, o 5G volta por pelo menos 10 minutos."
     },
     "net_lte_light": {
       "name": "5G só quando preciso",
-      "desc": "Com o ecrã ligado: após 3 minutos de tráfego móvel leve (menos de 4 Mbit/s - feeds, música, vídeo) desliga a perna 5G e fica em LTE, que aguenta isso à vontade; um download pesado (mais de 12 Mbit/s) traz o 5G de volta logo e mantém-no 10 minutos. O 5G NSA mantém dois rádios ativos por um fio de dados. Nunca durante uma chamada, partilha de internet, jogo ou em Wi-Fi. Desligado por omissão: cada troca volta a registar a ligação de dados por um ou dois segundos."
+      "desc": "Com o ecrã ligado: após 3 minutos de tráfego móvel leve (menos de 2 Mbit/s — feeds, música) desliga a ligação 5G e fica em LTE, que dá conta disso com folga. Um download traz o 5G de volta em cerca de 20 segundos (3 Mbit/s ou mais em duas medições seguidas de 10 segundos, ou uma medição acima de 12 Mbit/s) e mantém-no 10 minutos. O 5G NSA mantém dois rádios ocupados por um fio de dados. Nunca durante uma chamada, partilha de internet ou jogo, nunca em Wi-Fi. Desligado por omissão: cada mudança volta a registar a ligação de dados durante um ou dois segundos."
     },
     "heavy_prime_escape": {
       "name": "Elevação dos núcleos prime",
@@ -874,5 +874,8 @@
   "t_cfg_needs": "ⓘ «{key}» só funciona junto com «{other}»",
   "t_cfg_idle": "ⓘ «{key}» agora não tem efeito sem «{other}»",
   "lv_avgdrain_tip": "Consumo real com a tela ligada: a rapidez com que a bateria cai agora, nos últimos minutos - não é um modelo.",
-  "unit_pcth": "%/h"
+  "unit_pcth": "%/h",
+  "lv_drain_est_note": "Após 10 minutos com o ecrã ligado é substituída pelo valor real.",
+  "lv_drain_charging": "a carregar",
+  "lv_drain_charging_tip": "A carregar não há consumo — o valor volta depois de desligar o carregador."
 }
