@@ -2468,6 +2468,13 @@ body.config-active #livePage.open {
 @keyframes cfgProfileApplyPulse { 0%,100% { transform:scale(1); filter:brightness(1) saturate(1); } 50% { transform:scale(.94); filter:brightness(1.22) saturate(1.24); } }
 .cfg-profile-progress { margin-top:10px; padding:10px 11px; color:#bdf7ea; border:1px solid rgba(44,214,173,.42); border-radius:11px; background:rgba(44,214,173,.08); font-size:11px; line-height:1.4; }
 .cfg-profile-hint { margin-top:9px; color:rgba(231,234,238,.47); font-size:10.5px; line-height:1.35; }
+/* fix134: "Include Smart learning" choice in the save dialog. */
+.cfg-profile-check { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:start; gap:10px; width:100%; box-sizing:border-box; margin-top:12px; padding:11px 12px; text-align:left; color:#edf2f3; border:1px solid rgba(255,255,255,.11); border-radius:12px; background:#050707; font:inherit; }
+.cfg-profile-check.on { border-color:rgba(44,214,173,.62); background:rgba(44,214,173,.08); }
+.cfg-profile-check-box { width:20px; height:20px; margin-top:1px; border-radius:6px; border:1.5px solid rgba(255,255,255,.34); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:900; color:#04120f; }
+.cfg-profile-check.on .cfg-profile-check-box { border-color:#2cd6ad; background:#2cd6ad; }
+.cfg-profile-check-title { font-weight:700; font-size:13px; }
+.cfg-profile-check-sub { margin-top:3px; color:rgba(231,234,238,.52); font-size:11px; line-height:1.35; }
 /* Folder/file browser for saving and opening configurations anywhere on the device.
  * Same family as the configuration sheet - true black, teal gradient contour - laid out like
  * a file manager: a navigation bar (back, clickable path, sort), quick places, the listing,
@@ -2680,6 +2687,11 @@ html[data-asb-theme="light"] .alpha-tag { color:#006e57; background:linear-gradi
 html[data-asb-theme="light"] .cfg-profile-dest button { color:var(--text-secondary) !important; background:#ffffff !important; border-color:var(--border) !important; }
 html[data-asb-theme="light"] .cfg-profile-dest button.active { color:var(--accent) !important; background:rgba(0,143,112,.10) !important; border-color:rgba(0,143,112,.42) !important; }
 html[data-asb-theme="light"] .cfg-profile-close { color:var(--text-secondary) !important; background:#ffffff !important; border-color:var(--border) !important; }
+html[data-asb-theme="light"] .cfg-profile-check { color:var(--text) !important; background:#ffffff !important; border-color:var(--border) !important; }
+html[data-asb-theme="light"] .cfg-profile-check.on { background:rgba(0,143,112,.08) !important; border-color:rgba(0,143,112,.42) !important; }
+html[data-asb-theme="light"] .cfg-profile-check-sub { color:var(--text-secondary) !important; }
+html[data-asb-theme="light"] .cfg-profile-check-box { border-color:var(--border) !important; }
+html[data-asb-theme="light"] .cfg-profile-check.on .cfg-profile-check-box { background:var(--accent) !important; border-color:var(--accent) !important; color:#ffffff !important; }
 /* Contrast pass for elements whose dark design used hard-coded translucent white rather than a
  * theme variable. Keep surfaces calm, but make every operational label readable on near-white. */
 html[data-asb-theme="light"] .theme-toggle { background:transparent !important; border:0 !important; box-shadow:none !important; }
@@ -4603,7 +4615,7 @@ const CFG_ITEMS = [
   { key:'bt_a2dp_offload', type:'seg', def:'auto', opts:['auto','on','off'], name:'Bluetooth Audio Offload',
     desc:'Whether Bluetooth audio is encoded by the dedicated hardware block or by the CPU. Auto is the hands-off setting: ASB writes nothing and whatever the ROM chose stays. On actively writes hardware encoding (usually also what the phone ships with, but ASB sets it rather than leaving it). Off moves it to the CPU, which some codecs and some equaliser apps need in order to work at all. If your Bluetooth equaliser does nothing, off is the setting to try. Auto leaves whatever the device decided.' },
   { key:'dsp_loudness', type:'range', def:'0', min:0, max:25, step:1, name:'DSP Loudness',
-    desc:'ASB\u2019s own DSP engine: gain beyond the system maximum, up to +25 dB. A soft-knee compressor lifts the body of the track and a peak limiter holds the ceiling \u2014 it cannot clip however high you push it. Attaches to music by itself, no companion app. Start at +3; +12 and above squash loud masters hard but stay clip-free. First enable needs a reboot. Switched off entirely while the Audio Profile is set to the equaliser mode: that profile hands the stream to an external engine, and our effect on the same output would stop that engine from seeing the stream.' },
+    desc:'ASB\u2019s own DSP engine: gain beyond the system maximum, up to +25 dB. A soft-knee compressor lifts the body of the track and a peak limiter holds the ceiling \u2014 it cannot clip however high you push it. Attaches to music by itself, no companion app. Start at +3; +12 and above squash loud masters hard but stay clip-free. First enable needs a reboot. Switched off entirely while the Audio Profile is set to the equaliser mode: that profile hands the stream to an external engine, and our effect on the same output would stop that engine from seeing the stream. On the loudspeaker the gain steps down while the phone is hot (battery from 42 \u00b0C) and returns below 40 \u00b0C; Bluetooth and wired outputs are never reduced.' },
   { key:'dsp_bass', type:'range', def:'0', min:0, max:10, step:1, name:'DSP Bass Boost',
     desc:'Needs DSP Loudness above. A low shelf at 90 Hz: the full lift lands on the low end, half of it at the corner, nothing above about 1 kHz \u2014 mids and vocals stay untouched. It runs at the head of the chain, so the added bass is limited like everything else and cannot clip on its own. The trade is headroom: every dB of bass makes the limiter engage sooner, so a big boost on top of a high gain costs overall loudness. 3\u20136 suits most headphones.' },
   { key:'dsp_voice', type:'range', def:'0', min:0, max:10, step:1, name:'DSP Voice Tone',
@@ -6509,6 +6521,13 @@ async function cfgSet(key, val, ctl) {
       // so telling the user to reboot for it was simply wrong.
       if (key === 'radio_policy_enable' || key === 'net_wifi_leave') {
         try { await run('sh ' + MD + '/runtime/asb_lpm.sh refresh >/dev/null 2>&1'); } catch (e) {}
+        /* fix134: the rung also sets (or gives back) Android's avoid-bad-Wi-Fi switch, which
+         * only the net-apply pass writes - it never ran from this card. net_apply reconciles
+         * the watcher itself. */
+        if (key === 'net_wifi_leave') {
+          try { await run('sh ' + MD + '/runtime/asb_net_apply.sh >/dev/null 2>&1'); } catch (e) {}
+          try { await loadNetResult(); } catch (e) {}
+        }
         try { await run('sh ' + MD + '/runtime/asb_wifi_fallback.sh reconcile >/dev/null 2>&1'); } catch (e) {}
         toast(cfgToastText(key, val) + T('t_cfg_live', ' · applied'), cfgToastType(key));
         cfgRender();
@@ -7109,7 +7128,9 @@ async function dozeSaveKeep(box) {
  * any folder the user picks in the file browser; the helper validates the path and the
  * checksum (export-path / import-path). */
 const CFG_PROFILE_HELPER = MD + '/tools/asb_config_backup.sh';
-const _cfgProfile = { mode:'', store:'internal', rows:[], selected:'', replace:'', remove:'', draft:'', busy:false };
+const _cfgProfile = { mode:'', store:'internal', rows:[], selected:'', replace:'', remove:'', draft:'', busy:false,
+  /* fix134: Smart learning in a saved configuration is a choice, offered when there is some. */
+  smartAvail:false, smartFiles:0, withSmart:true };
 function cfgProfileNameOK(name) { return /^[A-Za-z0-9_-]{1,32}$/.test(name || ''); }
 function cfgProfileArgs() { return SNAP_KEYS.map(shQuote).join(' '); }
 function cfgResultText(r) { return ((r && r.stdout) || (r && r.stderr) || '').trim(); }
@@ -7139,8 +7160,18 @@ async function cfgProfileOpen(mode) {
   _cfgProfile.mode = mode; _cfgProfile.store = 'internal'; _cfgProfile.rows = [];
   _cfgProfile.selected = ''; _cfgProfile.replace = ''; _cfgProfile.remove = ''; _cfgProfile.draft = ''; _cfgProfile.busy = false;
   _cfgProfile.dir = ''; cfgFmInit();
+  _cfgProfile.smartAvail = false; _cfgProfile.smartFiles = 0; _cfgProfile.withSmart = true;
   const m = _el('cfgProfileModal'); if (!m) return;
   m.hidden = false; m.setAttribute('aria-hidden', 'false');
+  if (mode === 'save') {
+    try {
+      const sa = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' smart-available');
+      const out = String((sa && sa.stdout) || '');
+      _cfgProfile.smartAvail = /(^|\n)smart_learning=available(\n|$)/.test(out);
+      const fm = /(^|\n)smart_learning_files=(\d+)/.exec(out);
+      _cfgProfile.smartFiles = fm ? parseInt(fm[2], 10) : 0;
+    } catch (e) { _cfgProfile.smartAvail = false; }
+  }
   await cfgProfileRefresh();
 }
 async function cfgProfileRefresh() {
@@ -7211,6 +7242,21 @@ function cfgProfilePaint() {
     inp.value = _cfgProfile.draft || cfgProfileSuggestedName(); inp.autocomplete = 'off'; inp.spellcheck = false;
     inp.oninput = function() { _cfgProfile.draft = inp.value.trim(); _cfgProfile.replace = ''; };
     body.appendChild(inp);
+    if (_cfgProfile.smartAvail) {
+      const chk = document.createElement('button'); chk.type = 'button';
+      chk.className = 'cfg-profile-check' + (_cfgProfile.withSmart ? ' on' : '');
+      chk.setAttribute('role', 'checkbox'); chk.setAttribute('aria-checked', _cfgProfile.withSmart ? 'true' : 'false');
+      chk.disabled = _cfgProfile.busy;
+      const box = document.createElement('span'); box.className = 'cfg-profile-check-box'; box.textContent = _cfgProfile.withSmart ? '\u2713' : '';
+      const txt = document.createElement('span');
+      const t1 = document.createElement('div'); t1.className = 'cfg-profile-check-title'; t1.textContent = T('cfg_profile_smart_include', 'Include Smart learning');
+      const t2 = document.createElement('div'); t2.className = 'cfg-profile-check-sub';
+      t2.textContent = _cfgProfile.withSmart ? T('cfg_profile_smart_include_on', 'What Smart has learned about this phone goes into the file too. Restoring it brings the learning back.')
+                                              : T('cfg_profile_smart_include_off', 'Settings only - for another phone, or to let Smart learn from scratch.');
+      txt.appendChild(t1); txt.appendChild(t2); chk.appendChild(box); chk.appendChild(txt);
+      chk.onclick = function() { if (_cfgProfile.busy) return; _cfgProfile.withSmart = !_cfgProfile.withSmart; _cfgProfile.replace = ''; cfgProfilePaint(); };
+      body.appendChild(chk);
+    }
     cfgProfileDestination(body);
     const primary = cfgProfileButton(_cfgProfile.replace ? T('cfg_profile_replace','Replace saved configuration') : T('cfg_profile_save_action','Save configuration'), 'cfg-profile-primary', cfgProfileSave);
     body.appendChild(primary);
@@ -7259,7 +7305,8 @@ async function cfgProfileSave() {
   _cfgProfile.draft = name;
   if (!cfgProfileNameOK(name)) { toast(T('cfg_profile_invalid','Use 1–32 letters, digits, _ or -'), 'err'); return; }
   const verb = _cfgProfile.replace === name ? 'replace' : 'create';
-  let r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' ' + verb + ' ' + shQuote(name) + ' ' + cfgProfileArgs());
+  const noSmart = (_cfgProfile.smartAvail && !_cfgProfile.withSmart) ? ' --no-smart' : '';
+  let r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' ' + verb + ' ' + shQuote(name) + noSmart + ' ' + cfgProfileArgs());
   if (r && r.errno === 3) { _cfgProfile.replace = name; cfgProfilePaint(); toast(T('cfg_profile_replace_ready','Tap Replace to overwrite this saved configuration.'), 'warn'); return; }
   if (!r || r.errno !== 0) { toast(cfgResultText(r) || T('cfg_export_err','Could not save profile'), 'err'); return; }
   if (_cfgProfile.store === 'device' && _cfgProfile.dir) {
@@ -7272,15 +7319,24 @@ async function cfgProfileSave() {
     return;
   }
   const smartSaved = /(^|\n)smart_learning=saved(\n|$)/.test(String((r && r.stdout) || ''));
+  /* (fix134) smart_learning=skipped_by_choice: the toast simply does not claim it. */
   toast(T('cfg_profile_saved','Saved profile ') + name + (smartSaved ? T('cfg_profile_smart_saved_suffix',' · Smart learning included') : ''), 'ok'); cfgProfileClose();
 }
 async function cfgProfileImportPath(file) {
   const r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' import-path ' + shQuote(file));
   if (!r || r.errno !== 0) { uiSound('error'); toast(cfgResultText(r) || T('cfg_import_err', 'Could not open this configuration'), 'err'); return; }
-  const m = /(^|\n)imported=([A-Za-z0-9_-]+)/.exec(String(r.stdout || ''));
+  const out = String(r.stdout || '');
+  const m = /(^|\n)imported=([A-Za-z0-9_-]+)/.exec(out);
   _cfgProfile.store = 'internal'; await cfgProfileRefresh();
   if (m) { _cfgProfile.selected = m[2]; cfgProfilePaint(); }
-  toast(T('cfg_profile_imported', 'Opened ') + (m ? m[2] : '') + T('cfg_profile_imported_tail', ' - press Apply to use it'), 'ok');
+  /* fix134: an older copy that lost its checksum or was renamed opens line by line; say so,
+   * and name the settings this module could not take. */
+  const older = /(^|\n)format=older_checked_line_by_line(\n|$)/.test(out);
+  const sk = /(^|\n)skipped_keys=([A-Za-z0-9_,]+)/.exec(out);
+  let note = '';
+  if (older) note += T('cfg_profile_imported_older', ' · older copy, every setting checked');
+  if (sk) note += T('cfg_profile_imported_skipped', ' · not taken: ') + sk[2].split(',').join(', ');
+  toast(T('cfg_profile_imported', 'Opened ') + (m ? m[2] : '') + note + T('cfg_profile_imported_tail', ' - press Apply to use it'), sk ? 'warn' : 'ok');
 }
 async function cfgProfileEnsureInternal() {
   if (_cfgProfile.store === 'internal') return true;
