@@ -47,7 +47,14 @@ LOWERED="$STATE_DIR/ltpo_video.lowered"
 STAT="$STATE_DIR/ltpo_video.stats"
 LOG="$STATE_DIR/ltpo_video.log"
 TOUCHDEV="$STATE_DIR/ltpo_video.touchdev"
+TOUCH_AT="$STATE_DIR/ltpo_video.touch_at"
 QUIET_S="${ASB_LTPO_QUIET_S:-3}"
+# Right after a touch gave the rate back, the next lower waits for a longer quiet (fix136).
+# Reading comments under a playing video touched, went quiet for 3 s, touched again: every
+# pause was a 165 -> 60 -> 165 Hz switch, and an LTPO panel can show each switch as a short
+# brightness/gamma step. An OP15 evening: 319 lowers, 319 touch restores in ~3.5 h.
+REARM_S="${ASB_LTPO_REARM_S:-60}"
+REARM_QUIET_S="${ASB_LTPO_REARM_QUIET_S:-10}"
 # While lowered, how often the SurfaceFlinger dump re-checks that the video is still there
 # at the same rate. Playback stopping, the screen going off and a touch are all noticed
 # without it (PCM state, backlight, the touch guard), so it only has to catch a change of
@@ -156,17 +163,19 @@ _touch_dev() {
   printf '%s' "$_td"
 }
 
-# 0 = quiet for QUIET_S, 1 = touched, 2 = cannot tell (then nothing is lowered).
+# 0 = quiet for $2 (default QUIET_S) seconds, 1 = touched, 2 = cannot tell (then nothing is
+# lowered).
 _quiet() {
   _has timeout || return 2
+  _qs="${2:-$QUIET_S}"
   _t0="$(_now)"
-  timeout "$QUIET_S" getevent -qc 1 "$1" >/dev/null 2>&1
+  timeout "$_qs" getevent -qc 1 "$1" >/dev/null 2>&1
   _rc=$?
   [ "$_rc" = 0 ] && return 1
   # timeout's own "timed out" status, and only after the time actually passed: a getevent
   # that could not open the device fails at once, and that must not read as "quiet".
   if [ "$_rc" = 124 ] || [ "$_rc" = 143 ]; then
-    [ $(( $(_now) - _t0 )) -ge $(( QUIET_S - 1 )) ] && return 0
+    [ $(( $(_now) - _t0 )) -ge $(( _qs - 1 )) ] && return 0
   fi
   return 2
 }
@@ -210,6 +219,7 @@ _lower() {   # $1 = mode Hz, $2 = content rate(s)
     [ "$_o" = __unset ] || [ "$(_get)" = "$_o" ] || _put "$_o"
     _since="$(sed -n 's/^since=//p' "$LOWERED" 2>/dev/null | head -1)"
     rm -f "$LOWERED" "$GUARD" 2>/dev/null
+    _now > "$TOUCH_AT" 2>/dev/null
     _stat_bump touch 1
     [ -n "$_since" ] && _stat_bump secs $(( $(_now) - _since ))
   ) &
@@ -299,7 +309,12 @@ _watch() {
     # would ever be lowered) paid ~360 dumps on the exact thread that has to keep the
     # scroll smooth. Now the touchscreen has to be quiet for QUIET_S before the dump is
     # even considered; a touch costs a getevent wake, nothing more.
-    _quiet "$_dev"
+    _qs="$QUIET_S"
+    _ta=""
+    [ -r "$TOUCH_AT" ] && read -r _ta < "$TOUCH_AT" 2>/dev/null
+    case "$_ta" in ''|*[!0-9]*) : ;; *) [ $(( _tnow - _ta )) -lt "$REARM_S" ] && _qs="$REARM_QUIET_S" ;; esac
+    _qt0="$(_now)"
+    _quiet "$_dev" "$_qs"
     case $? in
       0) : ;;
       1) sleep 1; continue ;;
@@ -307,7 +322,11 @@ _watch() {
          _err_logged=1; sleep 30; continue ;;
     esac
     _tnow="$(_now)"
-    if [ $(( _tnow - _sf_ts )) -ge "$_nov" ]; then
+    # A pick taken before the quiet wait began is not used to lower (fix136): the video can
+    # end or the audio stop inside it, and the log had "lowered ... restored (video_gone)"
+    # and "... restored (playback_stopped)" in the same second - two refresh switches for
+    # nothing. Only re-read when it would lead to a lower, so idle music costs nothing more.
+    if [ $(( _tnow - _sf_ts )) -ge "$_nov" ] || { [ -n "$_sf_pick" ] && [ "$_sf_ts" -lt "$_qt0" ]; }; then
       _sf_ts="$_tnow"
       _sf_rates="$(_video_rates)"
       if [ "$_sf_rates" = HIGH ]; then _sf_pick=""; else _sf_pick="$(_modes | _pick "$_sf_rates")"; fi
@@ -316,7 +335,11 @@ _watch() {
     fi
     [ -n "$_sf_pick" ] || { sleep 5; continue; }
     [ "$_ci" -gt "$_sf_pick" ] 2>/dev/null || { sleep 10; continue; }
+    _audio_live || continue
     _lower "$_sf_pick" "$_sf_rates"
+    # The dump this lower stands on is seconds old: the first content re-check is due one
+    # full interval from now, not on the very next pass.
+    _lt="$(_now)"
     _cur_ts=0
   done
   _restore switched_off

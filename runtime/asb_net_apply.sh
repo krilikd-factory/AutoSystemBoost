@@ -109,20 +109,37 @@ _congctl_ok=""
 _probe_congctl() {
   [ -n "$_congctl_ok" ] && return 0
   _congctl_ok=0
-  _pa="$(_active_dev)"
-  _pr=""
-  [ -n "$_pa" ] && _pr="$(_defaults | grep -E -m1 " dev $_pa( |\$)")"
-  [ -n "$_pr" ] || _pr="$(_defaults | grep -vE ' dev (lo|dummy[^ ]*|ifb[^ ]*|vgate[^ ]*)( |$)' | head -1)"
+  _pall="$(_defaults)"
   # No route to ask (early boot, airplane mode, between networks): the kernel was not
   # asked, so nothing is known yet (fix131). Treating it as "no per-route congctl" filed
   # a lasting "unsupported" for the Wi-Fi key on a phone whose kernel does it fine - an
   # OP15 asbdiag printed "[N/A] net_congestion_wifi (no per-route congctl)" two lines
   # above "per-route congctl: SUPPORTED".
-  [ -n "$_pr" ] || { _congctl_ok=unknown; return 0; }
+  [ -n "$_pall" ] || { _congctl_ok=unknown; return 0; }
+  # Evidence first (fix136): a default route that already carries congctl is the kernel
+  # having accepted one. The single probe below could still fail on a route that was being
+  # torn down or had an attribute `ip route change` will not take back - and that one
+  # failure filed Wi-Fi as unsupported again while asbdiag listed rmnet_data2 with
+  # congctl=bbr (OP15, fix133 build).
+  case "$_pall" in *" congctl "*) _congctl_ok=1; return 0 ;; esac
   _pc="$(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null)"
   [ -n "$_pc" ] || { _congctl_ok=unknown; return 0; }
-  _pclean="$(printf '%s' "$_pr" | sed -e 's/ congctl [a-z_]*//')"
-  "$ASB_IP" route change $_pclean congctl "$_pc" >/dev/null 2>&1 && _congctl_ok=1
+  _pa="$(_active_dev)"
+  # Up to three candidates, the active link's first; one that works decides.
+  _pcands="$( { [ -n "$_pa" ] && printf '%s\n' "$_pall" | grep -E " dev $_pa( |\$)"
+               printf '%s\n' "$_pall" | grep -vE ' dev (lo|dummy[^ ]*|ifb[^ ]*|vgate[^ ]*)( |$)'; } \
+             | awk 'NF && !seen[$0]++' | head -3)"
+  [ -n "$_pcands" ] || { _congctl_ok=unknown; return 0; }
+  while IFS= read -r _pr; do
+    [ -n "$_pr" ] || continue
+    _pclean="$(printf '%s' "$_pr" | sed -e 's/ congctl [a-z_]*//')"
+    if "$ASB_IP" route change $_pclean congctl "$_pc" >/dev/null 2>&1; then
+      _congctl_ok=1
+      break
+    fi
+  done <<EOF
+$_pcands
+EOF
   return 0
 }
 
@@ -173,6 +190,16 @@ if [ "$_congctl_ok" = "1" ]; then
     done
     _out="$_out cc[$_kind:$_cif]=$_want"
     _cc_any=1
+  done
+  # A kind with no live link this run keeps its last verdict - except "unsupported": that
+  # was filed by a run that could not probe the kernel, and per-route congctl has just
+  # worked, so the honest state is "waiting for a link" (fix136).
+  for _pk in wifi mobile; do
+    case "$_out" in *"cc[$_pk"*) continue ;; esac
+    _pw="$(_resolve_for net_congestion "$_pk")"
+    case "$_pw" in ''|auto) continue ;; esac
+    grep -qx "net_congestion_$_pk=unsupported" "${ASB_NET_RESULT:-/data/adb/asb/net_apply_result}" 2>/dev/null \
+      && _out="$_out cc[$_pk]=$_pw-pending"
   done
 fi
 # A new route (Wi-Fi rejoined, mobile data re-attached) arrives without our congctl;
@@ -609,8 +636,20 @@ if [ -f "$MODDIR/runtime/asb_wifi_fallback.sh" ]; then
     unusable|aggressive) _abw=1 ;;
     *)                   _abw=0 ;;
   esac
+  # The device's own value, kept in a file of its own (fix134). The profile runtime baseline
+  # below is consumed by a Stock transition and is not replayed on uninstall, so a phone that
+  # had picked "unusable" once kept network_avoid_bad_wifi=1 after going back to off - and
+  # after removing the module. This file is restored the moment the rung drops below
+  # unusable, and by uninstall.sh.
+  _abw_prev=/data/adb/asb/avoid_bad_wifi.prev
   case "$_abw" in
     1)
+      if [ ! -f "$_abw_prev" ]; then
+        _abw_old="$(settings get global network_avoid_bad_wifi 2>/dev/null | tr -d ' \r')"
+        case "$_abw_old" in null|*[!0-9]*) _abw_old="" ;; esac
+        mkdir -p /data/adb/asb 2>/dev/null
+        printf '%s\n' "$_abw_old" > "$_abw_prev" 2>/dev/null
+      fi
       # Capture the device's own value before the first write, so uninstall puts back what
       # was there rather than a guess. The recorder is idempotent - a second capture of an
       # already-recorded key is ignored - so calling it on every apply is safe.
@@ -623,16 +662,27 @@ if [ -f "$MODDIR/runtime/asb_wifi_fallback.sh" ]; then
       fi
       _out="$_out avoid_bad_wifi=on" ;;
     *)
-      # Off means "leave it as the device had it", not "force 0" - the baseline restore on
-      # uninstall owns the original value.
-      _out="$_out avoid_bad_wifi=off" ;;
+      # Off means "as the device had it", not "force 0": put back the value recorded before
+      # ASB's first write, if ASB wrote one (fix134).
+      if [ -f "$_abw_prev" ]; then
+        _abw_old="$(head -1 "$_abw_prev" 2>/dev/null | tr -dc '0-9')"
+        if [ -n "$_abw_old" ]; then
+          settings put global network_avoid_bad_wifi "$_abw_old" >/dev/null 2>&1 || true
+        else
+          settings delete global network_avoid_bad_wifi >/dev/null 2>&1 || true
+        fi
+        rm -f "$_abw_prev" 2>/dev/null
+        _out="$_out avoid_bad_wifi=restored"
+      else
+        _out="$_out avoid_bad_wifi=off"
+      fi ;;
   esac
+  # The leave watcher runs on every rung, master or not (fix134); the master only decides
+  # whether the cellular context is kept warm for the handover (asb_lpm.sh).
+  case "$_nwl" in weak|unusable|aggressive) _wf=1 ;; *) _wf=0 ;; esac
   case "$_rp" in
-    # The fallback is the top rung of net_wifi_leave; the old net_handover_active key is
-    # gone from the config, so reading it always printed wifi_fallback=0.
-    1) case "$_nwl" in aggressive) _wf=1 ;; *) _wf=0 ;; esac
-       _out="$_out radio_policy=on wifi_fallback=$_wf" ;;
-    *) _out="$_out radio_policy=off wifi_fallback=master_off" ;;
+    1) _out="$_out radio_policy=on wifi_fallback=$_wf" ;;
+    *) _out="$_out radio_policy=off wifi_fallback=$_wf" ;;
   esac
 fi
 
@@ -640,7 +690,7 @@ fi
 #
 # Without this the UI can only show what the user picked, not what the kernel accepted - so
 # asking for bbr on a stock kernel left the button lit as though it had worked.
-_res="/data/adb/asb/net_apply_result"
+_res="${ASB_NET_RESULT:-/data/adb/asb/net_apply_result}"
 _res_new="$_res.new"
 mkdir -p /data/adb/asb 2>/dev/null
 {
@@ -651,9 +701,11 @@ mkdir -p /data/adb/asb 2>/dev/null
       congestion=*)                 printf 'net_congestion=ok\n' ;;
       cc\[wifi*-unavailable*)       printf 'net_congestion_wifi=unavailable\n' ;;
       cc\[wifi*-unsupported*)       printf 'net_congestion_wifi=unsupported\n' ;;
+      cc\[wifi*-pending*)           printf 'net_congestion_wifi=pending\n' ;;
       cc\[wifi*)                    printf 'net_congestion_wifi=ok\n' ;;
       cc\[mobile*-unavailable*)     printf 'net_congestion_mobile=unavailable\n' ;;
       cc\[mobile*-unsupported*)     printf 'net_congestion_mobile=unsupported\n' ;;
+      cc\[mobile*-pending*)         printf 'net_congestion_mobile=pending\n' ;;
       cc\[mobile*)                  printf 'net_congestion_mobile=ok\n' ;;
       qdisc=*-unavailable)          printf 'net_qdisc=unavailable\n' ;;
       qdisc=*-pending)              printf 'net_qdisc=pending\n' ;;

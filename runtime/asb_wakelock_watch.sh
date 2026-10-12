@@ -248,8 +248,55 @@ _wl_protected() {
     *line*|*discord*|*slack*|*matrix*|*threema*|*wechat*|*kakao*|\
     *clock*|*alarm*|\
     *health*|*fitness*|*pedometer*|*fitbit*|*garmin*|*strava*|*wear*|*watch*|*band*) return 0 ;;
+    # Messengers, calls and mail whose package id carries none of the words above (fix136).
+    # A field capture had Signal - org.thoughtcrime.securesms - moved to the restricted
+    # bucket: "*signal*" never matched it, and a messenger lost timely delivery.
+    org.thoughtcrime.securesms|im.molly.*|org.thunderdog.challegram|\
+    com.tencent.mm|com.tencent.mobileqq|com.facebook.orca|com.facebook.mlite|\
+    com.skype.*|com.microsoft.teams*|us.zoom.*|im.vector.*|eu.siacs.conversations|\
+    chat.simplex.*|network.loki.messenger|com.wire|com.wire.*|com.vk.im|com.vkontakte.android|\
+    ru.oneme.app|ru.ok.tamtam|com.icq.*|com.google.android.apps.tachyon|\
+    com.google.android.gm|*mail*|*.voip|*.voip.*|\
+    *waze*|*.maps|*.maps.*|*navigation*|*navigator*|*inputmethod*|*keyboard*|com.touchtype.*) return 0 ;;
   esac
   return 1
+}
+
+# Apps Android itself exempts from battery optimisation (fix136): the user's own "not
+# optimised" list and the system's. A messenger is put there for exactly this reason - Signal
+# asks for it at setup - and a watcher that restricts it from the side undoes the user's
+# choice. Read once per pass, and only when something might be restricted or released.
+_WL_DOZE_EX=""
+_wl_doze_exempt_load() {
+  _has dumpsys || return 0
+  _WL_DOZE_EX="$(dumpsys deviceidle whitelist 2>/dev/null \
+                 | sed -n 's/^[[:space:]]*[a-z-]*,\([A-Za-z0-9_.]*\),[0-9]*.*/\1/p')"
+}
+_wl_doze_exempt() {
+  [ -n "$_WL_DOZE_EX" ] || return 1
+  printf '%s\n' "$_WL_DOZE_EX" | grep -qxF "$1"
+}
+
+# Hand back what an earlier pass restricted but would not restrict today (fix136): a
+# messenger the old name list missed, or an app the user has since exempted.
+_wl_release_protected() {
+  [ -s "$D/wakelock_restricted" ] || return 0
+  _has am || return 0
+  true > "$D/wakelock_restricted.tmp" 2>/dev/null || return 0
+  while IFS= read -r _rp; do
+    [ -n "$_rp" ] || continue
+    if _wl_protected "$_rp" || _wl_doze_exempt "$_rp"; then
+      am set-standby-bucket "$_rp" active >/dev/null 2>&1
+      echo "wakelock: $_rp released from the restricted bucket - messengers and apps exempt from battery optimisation are never restricted"
+    else
+      echo "$_rp" >> "$D/wakelock_restricted.tmp"
+    fi
+  done < "$D/wakelock_restricted"
+  if [ -s "$D/wakelock_restricted.tmp" ]; then
+    mv -f "$D/wakelock_restricted.tmp" "$D/wakelock_restricted" 2>/dev/null
+  else
+    rm -f "$D/wakelock_restricted.tmp" "$D/wakelock_restricted" 2>/dev/null
+  fi
 }
 
 # Step counters and workout trackers - the narrow subset of the protected list that
@@ -382,6 +429,8 @@ asb_wl_relax() {
         _v=limited
       elif _wl_protected "$_p"; then
         _v=protected
+      elif _wl_doze_exempt "$_p"; then
+        _v=protected
       elif _wl_in_use "$_p"; then
         _v=in_use
       elif [ "$_act" = 1 ]; then
@@ -506,9 +555,16 @@ case "$(_wl_fit_mode)" in
 esac
 
 if _wl_may_act; then
+  _wl_doze_exempt_load
+  _wl_release_protected
   asb_wl_relax 1
   asb_wl_relax_multicast 1
 else
+  # Not acting this pass, but a wrong restriction from an earlier one is still released.
+  if [ -s "$D/wakelock_restricted" ]; then
+    _wl_doze_exempt_load
+    _wl_release_protected
+  fi
   asb_wl_relax 0
   asb_wl_relax_multicast 0
 fi

@@ -25,6 +25,8 @@
 
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
 CONF="$MODDIR/config/governor.conf"
+# The gain's heat back-off (fix135): battery temperature, hysteresis, loudspeaker only.
+[ -r "$MODDIR/runtime/asb_dsp_thermal.sh" ] && . "$MODDIR/runtime/asb_dsp_thermal.sh"
 [ -f "$CONF" ] || { echo "config not found: $CONF"; exit 1; }
 # DSP activation is controlled by the user's DSP settings and the installer's ABI
 # probe. Do not make an audio effect depend on a separate fingerprint marker: that
@@ -108,30 +110,25 @@ if [ "$_mode" = "mirror" ]; then
         # Both legacy and AIDL DSP cores use the same +25 dB ceiling. The effect still
         # protects output with its true-peak limiter and final hard sample clamp.
         [ "$_mapplied" -gt 2500 ] && _mapplied=2500
-        # Back the gain off while the SoC is hot.
+        # Back the gain off while the phone is hot - on the loudspeaker only, from the battery
+        # temperature, with hysteresis (asb_dsp_thermal.sh; fix135).
         #
-        # A capture shows audio_bt at 29.8 %/h with the screen off and the amplifier holding
-        # +25 dB for the whole session; audio_bt_scr was the hottest phase at 473 mA / 57 C.
-        # Loudness costs power in the amplifier, and the amplifier is next to the SoC.
-        #
-        # Two steps rather than a curve: a curve would move the gain continuously and be
-        # audible as pumping. One reduction at 55 C and a deeper one at 60 C are each a single
-        # audible event, and both stay well above the point where the effect stops working.
-        #
-        # Reads the live control sensor the governor already publishes - no new probe, and no
-        # second opinion about which zone to trust.
-        _mt="$(sed -n 's/^cpu_max_c=//p' /dev/.asb/state 2>/dev/null | head -1 | tr -dc '0-9')"
-        case "$_mt" in ''|*[!0-9]*) _mt=0 ;; esac
-        if [ "$_mt" -ge 60 ] 2>/dev/null; then
-          [ "$_mapplied" -gt 800 ] && _mapplied=800
-        elif [ "$_mt" -ge 55 ] 2>/dev/null; then
-          [ "$_mapplied" -gt 1200 ] && _mapplied=1200
+        # This read cpu_max_c, the hottest core at that instant, and the Smart tuner calls
+        # mirror exactly when that number has just jumped (a heat band crossing) or the
+        # foreground changed - so a volume-panel animation could cut +25 dB to +8 dB and only
+        # the next app switch (opening the WebUI) gave it back. Reported from the field as
+        # "change the volume and the sound sinks and goes flat; open the WebUI and it is back".
+        if command -v asb_dsp_thermal_decide >/dev/null 2>&1; then
+          _mapplied="$(asb_dsp_thermal_decide "$_mrequested")"
         fi
         _persist persist.asb.dsp.gain_requested_mb "$_mrequested"
         _persist persist.asb.dsp.gain_applied_mb "$_mapplied"
         _mhave="$(getprop persist.asb.dsp.gain_mb 2>/dev/null)"
         if [ "$_mhave" != "$_mapplied" ]; then
           _persist persist.asb.dsp.gain_mb "$_mapplied"
+          # The vendor copy follows below; the daemon is woken after it so the effect gets the
+          # new gain now, not at its next 30 s poll.
+          _mwake=1
           echo "dsp gain reconciled from config: requested=${_mrequested}mB applied=${_mapplied}mB"
         fi
       fi
@@ -163,6 +160,10 @@ if [ "$_mode" = "mirror" ]; then
     _v="$(getprop "persist.asb.dsp.$_k" 2>/dev/null)"
     [ -n "$_v" ] && _persist_ctx "persist.vendor.asb.dsp.$_k" "$_v"
   done
+  if [ "${_mwake:-0}" = 1 ]; then
+    pkill -USR1 -f asb_dsp_attach 2>/dev/null \
+      || killall -USR1 asb_dsp_attach 2>/dev/null || true
+  fi
   echo "mirrored dsp props into the vendor namespace"
   exit 0
 fi
@@ -270,9 +271,7 @@ if [ "$_dsp_ok" = "1" ]; then
       _dsp_applied_mb="$_dsp_requested_mb"
       [ "$_dsp_applied_mb" -gt 2500 ] && _dsp_applied_mb=2500
       _persist persist.asb.dsp.gain_requested_mb "$_dsp_requested_mb"
-      _persist persist.asb.dsp.gain_applied_mb "$_dsp_applied_mb"
       _dspp enable 1
-      _dspp gain_mb "$_dsp_applied_mb"
       # Output routing. The library reads this and skips the effect on any sink whose
       # name does not match - previously it attached to everything, so a Bluetooth-only
       # boost also lifted the loudspeaker, which is the driver least able to take it.
@@ -296,13 +295,22 @@ if [ "$_dsp_ok" = "1" ]; then
       # routes to whichever was selected last, not to both.
       _asb_route=""
       if _has dumpsys; then
-        _rt_dump="$(dumpsys audio 2>/dev/null | grep -m1 -iE 'Device[s]?: *(speaker|bt|usb|wired|headset|headphone)')"
+        # The "Devices:" line of the STREAM_MUSIC block, as the route watcher in service.sh
+        # reads it (fix135 here). The first "Devices:" line anywhere in the dump belongs to
+        # whichever stream is listed first - a call or system stream - not to the music.
+        _rt_all="$(dumpsys audio 2>/dev/null)"
+        _rt_dump="$(printf '%s\n' "$_rt_all" | awk '/^[[:space:]]*- STREAM_MUSIC:/ { m = 1; next }
+                    m && /^[[:space:]]*- STREAM_/ { exit }
+                    m && /Devices:/ { print; exit }')"
+        [ -n "$_rt_dump" ] || _rt_dump="$(printf '%s\n' "$_rt_all" | grep -m1 -iE 'Device[s]?: *(speaker|bt|ble|usb|wired|headset|headphone)')"
+        _rt_all=""
         # bt_sco is the CALL link (HFP), not the media one: an app opened a voice channel
         # and the headset was moved off A2DP. Treating it as "bt" let a Bluetooth music
         # boost (a field config had +25 dB) process whatever reached the mix during a VoIP
         # call or voice note. It gets a route of its own that no dsp_outputs value names.
         case "$_rt_dump" in
           *bt_sco*|*BLUETOOTH_SCO*) _asb_route="call" ;;
+          *ble_headset*|*ble_speaker*|*ble_broadcast*|*le_audio*|*BLE_*) _asb_route="bt" ;;
           *bt_a2dp*|*BLUETOOTH_A2DP*|*bt_le*) _asb_route="bt" ;;
           *usb*|*USB*|*wired_headset*|*wired_headphone*|*HEADSET*|*HEADPHONE*) _asb_route="wired" ;;
           *speaker*|*SPEAKER*) _asb_route="speaker" ;;
@@ -316,6 +324,14 @@ if [ "$_dsp_ok" = "1" ]; then
       fi
       [ -n "$_asb_route" ] || _asb_route="speaker"
       _dspp route "$_asb_route"
+      # The gain, now that the route is known: the heat back-off only touches the speaker
+      # (asb_dsp_thermal.sh). Same decision as the Smart tuner's mirror and the minute
+      # watcher, so a slider move cannot hand out a gain the next check takes away.
+      if command -v asb_dsp_thermal_decide >/dev/null 2>&1; then
+        _dsp_applied_mb="$(asb_dsp_thermal_decide "$_dsp_requested_mb" "$_asb_route")"
+      fi
+      _persist persist.asb.dsp.gain_applied_mb "$_dsp_applied_mb"
+      _dspp gain_mb "$_dsp_applied_mb"
       # Say whether the effect is supposed to process the CURRENT route, and why not.
       #
       # enable=1 only means the gain is configured. With dsp_outputs=bt and the sound on

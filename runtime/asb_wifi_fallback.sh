@@ -1,11 +1,17 @@
 #!/system/bin/sh
-# asb_wifi_fallback.sh — opt-in escape hatch for a framework-unvalidated Wi‑Fi route.
+# asb_wifi_fallback.sh — opt-in "Leave bad Wi-Fi" watcher.
 #
-# This does NOT tune RSSI thresholds, preferred network mode or carrier policy. Android normally
-# owns that decision. When the user explicitly enables the active fallback, and Android itself
-# says the current Wi‑Fi is *not validated* while it still owns the default route, ASB briefly
-# releases Wi‑Fi so ConnectivityService can put mobile data on the route. The action is bounded,
-# screen-on only, has a cooldown and turns Wi‑Fi back on afterwards.
+# This does NOT tune preferred network mode or carrier policy. When the user picks a rung of
+# net_wifi_leave, and the Wi-Fi that still owns the default route is out of range (signal under
+# net_wifi_leave_dbm) or - on the unusable/aggressive rungs - not validated by Android, ASB
+# briefly releases Wi-Fi so ConnectivityService can put mobile data on the route. The action
+# is bounded, screen-on only, has a cooldown and turns Wi-Fi back on afterwards.
+#
+# fix134: every rung runs this watcher. Only "aggressive" did, and only with the cellular
+# master on - so "weak" (the card: "leave when the signal falls below -80 dBm") never left
+# anything, and a user who tried weak and unusable with the master off reported that the
+# phone "holds the Wi-Fi to the last". Leaving Wi-Fi is a Wi-Fi decision the user made on its
+# own card; the cellular master still owns mobile_data_always_on (asb_lpm.sh).
 
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
 # `settings` through the fallback wrapper: on some OnePlus builds the cmd bridge answers
@@ -39,7 +45,14 @@ _valid_seconds() {
   [ "$1" -ge "$2" ] 2>/dev/null && [ "$1" -le "$3" ] 2>/dev/null
 }
 INTERVAL_S=8
-RELEASE_S=28
+# Screen off nothing is decided (_try_release needs the screen on), so the loop only keeps
+# the release window honest and looks rarely. The sleep is monotonic: it never wakes a
+# suspended phone (fix134).
+IDLE_INTERVAL_S=30
+RELEASE_S=30
+# A release that comes straight back (Wi-Fi rejoined the same weak link within 10 minutes)
+# doubles the next window, up to this (fix134).
+RELEASE_MAX_S=300
 COOLDOWN_S=150
 _raw_interval="${ASB_WIFI_FALLBACK_INTERVAL_S:-}"
 _raw_release="${ASB_WIFI_FALLBACK_RELEASE_S:-}"
@@ -47,18 +60,38 @@ _raw_cooldown="${ASB_WIFI_FALLBACK_COOLDOWN_S:-}"
 _valid_seconds "$_raw_interval" 1 120 && INTERVAL_S="$_raw_interval"
 _valid_seconds "$_raw_release" 1 120 && RELEASE_S="$_raw_release"
 _valid_seconds "$_raw_cooldown" 1 3600 && COOLDOWN_S="$_raw_cooldown"
+_raw_idle="${ASB_WIFI_FALLBACK_IDLE_INTERVAL_S:-}"
+_valid_seconds "$_raw_idle" 1 300 && IDLE_INTERVAL_S="$_raw_idle"
+[ "$RELEASE_MAX_S" -lt "$RELEASE_S" ] && RELEASE_MAX_S="$RELEASE_S"
+STREAK="$STATE_DIR/wifi_fallback.streak"
 
 _cfg() {
   grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r'
 }
 _radio_policy_enabled() { [ "$(_cfg radio_policy_enable)" = 1 ]; }
-# The fallback runs on the top rung of net_wifi_leave, which is what
-# net_handover_active used to mean on its own.
-_enabled() { _radio_policy_enabled && [ "$(_cfg net_wifi_leave)" = aggressive ]; }
+# Every rung of net_wifi_leave runs the watcher (fix134); see the header.
+_enabled() { case "$(_cfg net_wifi_leave)" in weak|unusable|aggressive) return 0 ;; esac; return 1; }
+# Validation (dumpsys wifi) is read only on the rungs that act on it: weak leaves on signal
+# alone, so it never pays for the dump.
+_uses_validation() { case "$(_cfg net_wifi_leave)" in unusable|aggressive) return 0 ;; esac; return 1; }
 _now() { date +%s 2>/dev/null || echo 0; }
 _log() { mkdir -p "$STATE_DIR" 2>/dev/null; printf '%s wifi_fallback: %s\n' "$(date '+%F %T' 2>/dev/null || echo now)" "$*" >> "$LOG" 2>/dev/null; tail -n 80 "$LOG" > "$LOG.tmp" 2>/dev/null && mv -f "$LOG.tmp" "$LOG" 2>/dev/null || true; }
 
 _screen_on() {
+  # The governor's own verdict first (Android's display state, published in its state file):
+  # a file read instead of a dumpsys every 8 s (fix134). A state file older than five minutes
+  # means no governor to trust, and the old dumpsys path answers.
+  _gs="${ASB_GOV_STATE:-/dev/.asb/state}"
+  if [ -r "$_gs" ]; then
+    _gm="$(stat -c %Y "$_gs" 2>/dev/null)"
+    case "$_gm" in ''|*[!0-9]*) _gm=0 ;; esac
+    if [ $(( $(_now) - _gm )) -le 300 ] 2>/dev/null; then
+      case "$(grep -m1 '^screen=[01]$' "$_gs" 2>/dev/null)" in
+        screen=1) return 0 ;;
+        screen=0) return 1 ;;
+      esac
+    fi
+  fi
   _p="$(dumpsys power 2>/dev/null)"
   printf '%s' "$_p" | grep -Eqi 'mWakefulness=Awake|mInteractive=true|Display Power: state=ON'
 }
@@ -134,6 +167,27 @@ _wifi_enable() {
   svc wifi enable >/dev/null 2>&1 || cmd wifi set-wifi-enabled enabled >/dev/null 2>&1 || return 1
   return 0
 }
+# How long this release keeps Wi-Fi off (fix134). The first one is RELEASE_S; one that follows
+# a release less than 10 minutes ago doubles, up to RELEASE_MAX_S - at the edge of range the
+# phone otherwise rejoins the same weak access point after 28 s and spends most of its time on
+# it again. Ten quiet minutes start over.
+_release_window() {
+  _sl="$(cat "$STREAK" 2>/dev/null)"
+  # Escaped: a bare | is a pattern alternation in mksh, which left the count at 1.
+  _sn="${_sl%%\|*}"; _st="${_sl#*\|}"
+  case "$_sn" in ''|*[!0-9]*) _sn=0 ;; esac
+  case "$_st" in ''|*[!0-9]*) _st=0 ;; esac
+  _sv="$(_now)"
+  [ $(( _sv - _st )) -gt 600 ] 2>/dev/null && _sn=0
+  _sn=$(( _sn + 1 ))
+  printf '%s|%s\n' "$_sn" "$_sv" > "$STREAK" 2>/dev/null
+  _sw="$RELEASE_S"; _si=1
+  while [ "$_si" -lt "$_sn" ] && [ "$_sw" -lt "$RELEASE_MAX_S" ]; do
+    _sw=$(( _sw * 2 )); _si=$(( _si + 1 ))
+  done
+  [ "$_sw" -gt "$RELEASE_MAX_S" ] && _sw="$RELEASE_MAX_S"
+  printf '%s' "$_sw"
+}
 _restore_if_owned() {
   [ -f "$ACTION" ] || return 0
   if _wifi_enable; then
@@ -172,15 +226,22 @@ _in_cooldown() {
 _try_release() {
   _enabled || return 0
   _screen_on || return 0
-  _mobile_allowed || return 0
   # Contract-pinned form: these guards must stay literally as the handover test asserts,
   # so the streak is cleared on the line after rather than folded into the guard.
   _wifi_default || return 0
-  # Validation stays the gate, in the exact form the handover contract pins: RSSI must
-  # never become a second way to reach this decision.
+  # Mobile data allowed: asked once the route is known to be on Wi-Fi, not on every pass of
+  # a phone that is on mobile already (two settings calls each time, fix134).
+  _mobile_allowed || return 0
   # A validated network clears the streak on the way out: confirmation has to measure a
-  # CONTINUOUS failure, not a tally of unrelated blips across the day.
-  if ! _wifi_unvalidated; then rm -f "$CONFIRM" 2>/dev/null; fi
+  # CONTINUOUS failure, not a tally of unrelated blips across the day. Only the rungs that
+  # act on validation read it (fix134); unusable reads it every second pass - Android's own
+  # avoid-bad-Wi-Fi switch, set on that rung, is the first line there.
+  _val_now=0
+  if _uses_validation; then
+    _vp=$(( ${_vp:-0} + 1 ))
+    if [ "$(_cfg net_wifi_leave)" = aggressive ] || [ $(( _vp % 2 )) -eq 1 ]; then _val_now=1; fi
+  fi
+  if [ "$_val_now" = 1 ] && ! _wifi_unvalidated; then rm -f "$CONFIRM" 2>/dev/null; fi
   # Out of range is its own reason to leave, separate from validation.
   #
   # Requested by a user walking away from a hotspot: "it clings to the access point and
@@ -204,7 +265,11 @@ _try_release() {
   _in_cooldown && return 0
 
   # The config key is the user-facing form; the env var stays as an override for testing.
-  if [ -z "${ASB_WIFI_LEAVE_ON_RSSI:-}" ]; then
+  # Read every pass (fix134): the value used to be stored in ASB_WIFI_LEAVE_ON_RSSI on the
+  # first pass, and the -z test below then never ran again - a new net_wifi_leave_dbm from
+  # the WebUI waited for the watcher to restart. The variable stays as a host-test override.
+  _leave_rssi="${ASB_WIFI_LEAVE_ON_RSSI:-}"
+  if [ -z "$_leave_rssi" ]; then
     # Derived from net_wifi_leave now - see asb_lpm.sh for the ladder.
     #
     # The separate net_wifi_leave_rssi picker let a user ask for a threshold while the
@@ -221,26 +286,27 @@ _try_release() {
       weak|unusable|aggressive) _cfg_rssi="$_cfg_dbm" ;;
       *)                        _cfg_rssi=off ;;
     esac
-    case "$_cfg_rssi" in -[0-9]*) ASB_WIFI_LEAVE_ON_RSSI="$_cfg_rssi" ;; esac
+    case "$_cfg_rssi" in -[0-9]*) _leave_rssi="$_cfg_rssi" ;; esac
   fi
-  if [ -n "${ASB_WIFI_LEAVE_ON_RSSI:-}" ]; then
+  if [ -n "$_leave_rssi" ]; then
     _rs_now="$(_wifi_rssi)"
     # Signal recovered: clear the streak. Confirmation has to measure a continuous run
     # of weak samples, not a tally of unrelated dips.
-    if [ -n "$_rs_now" ] && [ "$_rs_now" -ge "$ASB_WIFI_LEAVE_ON_RSSI" ] 2>/dev/null; then
+    if [ -n "$_rs_now" ] && [ "$_rs_now" -ge "$_leave_rssi" ] 2>/dev/null; then
       rm -f "$CONFIRM_RSSI" 2>/dev/null
     fi
-    if [ -n "$_rs_now" ] && [ "$_rs_now" -lt "$ASB_WIFI_LEAVE_ON_RSSI" ] 2>/dev/null; then
+    if [ -n "$_rs_now" ] && [ "$_rs_now" -lt "$_leave_rssi" ] 2>/dev/null; then
       _seen_r="$(cat "$CONFIRM_RSSI" 2>/dev/null | tr -dc '0-9')"
       case "$_seen_r" in '') _seen_r=0 ;; esac
       _seen_r=$(( _seen_r + 1 ))
       { printf '%s\n' "$_seen_r" > "$CONFIRM_RSSI"; } 2>/dev/null || true
       if [ "$_seen_r" -ge "${ASB_WIFI_CONFIRM_PASSES:-3}" ] 2>/dev/null; then
         rm -f "$CONFIRM_RSSI" 2>/dev/null
-        _log "out of range (rssi=${_rs_now}) - releasing Wi-Fi default route"
+        _rw="$(_release_window)"
+        _log "out of range (rssi=${_rs_now}) - releasing Wi-Fi default route for ${_rw}s"
         _nowv="$(_now)"
         if _wifi_disable; then
-          printf '%s|%s\n' "$_nowv" "$(( _nowv + RELEASE_S ))" > "$ACTION" 2>/dev/null
+          printf '%s|%s\n' "$_nowv" "$(( _nowv + _rw ))" > "$ACTION" 2>/dev/null
         fi
         return 0
       fi
@@ -249,6 +315,9 @@ _try_release() {
     fi
   fi
 
+  # Validation path: unusable and aggressive only (fix134), on the passes that read it.
+  _uses_validation || return 0
+  [ "$_val_now" = 1 ] || return 0
   _wifi_unvalidated || return 0
   _in_cooldown && return 0
 
@@ -277,24 +346,27 @@ _try_release() {
   fi
   rm -f "$CONFIRM" 2>/dev/null
 
+  _rw="$(_release_window)"
   _nowv="$(_now)"
-  _until=$((_nowv + RELEASE_S))
+  _until=$((_nowv + _rw))
   if _wifi_disable; then
     printf '%s|%s\n' "$_nowv" "$_until" > "$ACTION" 2>/dev/null
-    _log "released unvalidated Wi-Fi default route for ${RELEASE_S}s"
+    _log "released unvalidated Wi-Fi default route for ${_rw}s"
   else
     _log 'could not disable Wi-Fi; no route action taken'
   fi
 }
 _status() {
-  if ! _radio_policy_enabled; then echo 'radio_policy_off'; return; fi
   if ! _enabled; then echo 'off'; return; fi
   if [ -f "$ACTION" ]; then
     _until="$(cut -d'|' -f2 "$ACTION" 2>/dev/null | tr -dc '0-9')"
     echo "releasing_wifi_until=${_until:-unknown}"; return
   fi
   if _in_cooldown; then echo "cooldown_until=$(cat "$COOLDOWN" 2>/dev/null)"; return; fi
-  if _wifi_default && _wifi_unvalidated; then echo 'unvalidated_wifi_default_detected'; else echo 'armed_waiting_for_unvalidated_wifi_default'; fi
+  if ! _wifi_default; then echo 'waiting_for_wifi_default_route'; return; fi
+  _rs_st="$(_wifi_rssi)"
+  if _uses_validation && _wifi_unvalidated; then echo "unvalidated_wifi_default_detected rssi=${_rs_st:-?}"
+  else echo "watching rssi=${_rs_st:-?} leave_below=$(_cfg net_wifi_leave_dbm)"; fi
 }
 _pid_is_our_watcher() {
   _candidate="$1"
@@ -388,7 +460,7 @@ _stop() {
   _restore_if_owned
   # CONFIRM too: a streak counted before the feature was turned off must not survive to
   # shorten the first decision after it is turned back on.
-  rm -f "$PID" "$COOLDOWN" "$CONFIRM" "$CONFIRM_RSSI" 2>/dev/null
+  rm -f "$PID" "$COOLDOWN" "$CONFIRM" "$CONFIRM_RSSI" "$STREAK" 2>/dev/null
   _lock_owner_alive || rm -rf "$LOCK" 2>/dev/null
 }
 _watch() {
@@ -415,12 +487,22 @@ _watch() {
   _arm_good=0
   while _enabled; do
     _reconcile_action
+    # Screen off: nothing is decided, so do not pay for the route and Wi-Fi reads (fix134).
+    # The release window above still ends on time.
+    if [ ! -f "$ACTION" ] && ! _screen_on; then
+      sleep "$IDLE_INTERVAL_S"
+      continue
+    fi
     if [ ! -f "$ACTION" ]; then
       if ! _wifi_default; then
         [ "$_armed" = "1" ] && _log 'fallback disarmed (Wi-Fi link gone)'
         _armed=0; _arm_good=0
       elif [ "$_armed" = "0" ]; then
-        if _wifi_unvalidated; then
+        if ! _uses_validation; then
+          # weak acts on signal alone: nothing to prove first (fix134).
+          _armed=1
+          _log 'fallback armed (signal watch)'
+        elif _wifi_unvalidated; then
           _arm_good=0
         else
           _arm_good=$(( _arm_good + 1 ))
