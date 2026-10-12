@@ -1347,8 +1347,10 @@ lk_emit_full_day_report() {
     case "$_sw_n" in ''|*[!0-9]*) _sw_n=0 ;; esac
     if [ "$_sw_n" -gt 0 ]; then
       echo "SystemUI restarted $_sw_n time(s) during the capture:"
-      grep '^===== SYSTEMUI RESTART' "$_sw_f" | sed 's/^===== SYSTEMUI RESTART /  /; s/ =====$//'
-      echo "the reason Android recorded (crash / ANR / kill) is in sysui_restarts.txt"
+      # Each restart with the verdict recorded under it (fix133); older files have none.
+      awk '/^===== SYSTEMUI RESTART/ { h = $0; sub(/^===== SYSTEMUI RESTART /, "  ", h); sub(/ =====$/, "", h); print h; next }
+           /^verdict: / { print "      " $0 }' "$_sw_f"
+      echo "the full record (dropbox, crash buffer, logcat) is in sysui_restarts.txt"
     else
       echo "none observed (SystemUI kept the same process for the whole capture)"
     fi
@@ -1495,14 +1497,31 @@ lk_emit_full_day_report() {
   case "$_up" in ''|0) _up="$(cut -d. -f1 /proc/uptime 2>/dev/null | tr -dc '0-9')" ;; esac
         case "$_up" in ''|0) _up=1 ;; esac
         _h=$(( _up / 3600 )); [ "$_h" -lt 1 ] && _h=1
+        # Per hour of the governor's real uptime (fix133). Whole hours floored 17.9 h to 17,
+        # and a 1.9 h capture to 1 - every rate up to twice too high. Under an hour the
+        # totals are still printed as they are (_hu = 3600).
+        _hu="$_up"; [ "$_hu" -lt 3600 ] 2>/dev/null && _hu=3600
+        _ph() { awk -v n="${1:-0}" -v u="$_hu" 'BEGIN { printf "%d", n * 3600 / u }'; }
         echo ""
         echo "── ASB COST (per hour of uptime) ──────────────────────────────"
         # Per hour, like every other line under this header. It printed the lifetime total
         # here, and an audit read "4371 ms" as 4371 ms/h - three times the real figure.
-        printf "  governor cpu             : %s ms/h (%s ms total)\n" "$(( $(_mc_get governor_cpu_ms || echo 0) / _h ))" "$(_mc_get governor_cpu_ms)"
-        printf "  physical writes          : %s/h\n" "$(( $(_mc_get governor_writes || echo 0) / _h ))"
-        printf "  fsm transitions          : %s/h\n" "$(( $(_mc_get governor_transitions || echo 0) / _h ))"
-        printf "  timer wakeups            : %s/h\n" "$(( $(_mc_get governor_timer_wakeups || echo 0) / _h ))"
+        printf "  governor cpu             : %s ms/h (%s ms total)\n" "$(_ph "$(_mc_get governor_cpu_ms)")" "$(_mc_get governor_cpu_ms)"
+        printf "  physical writes          : %s/h\n" "$(_ph "$(_mc_get governor_writes)")"
+        printf "  fsm transitions          : %s/h\n" "$(_ph "$(_mc_get governor_transitions)")"
+        printf "  timer wakeups            : %s/h\n" "$(_ph "$(_mc_get governor_timer_wakeups)")"
+        # Where the ticks were and what they cost (fix133). An audit read 578/h as 578
+        # wake-ups of a sleeping phone and asked for 100-250/h. The governor's timers are
+        # CLOCK_MONOTONIC / plain CLOCK_BOOTTIME, never an _ALARM clock: they fire only while
+        # something else keeps the phone awake, and most are the screen-on cadence (2-6 s).
+        # wake_by_src splits them.
+        _wbs="$(grep -m1 '^wake_by_src=' "$_mc" 2>/dev/null | cut -d= -f2 | tr -d '"')"
+        _wba="$(printf '%s' "$_wbs" | tr ',' '\n' | sed -n 's/^active://p' | tr -dc '0-9')"
+        _wbi="$(printf '%s' "$_wbs" | tr ',' '\n' | sed -n 's/^idle://p' | tr -dc '0-9')"
+        if [ -n "$_wba" ] && [ -n "$_wbi" ]; then
+          printf "    by screen state        : screen on %s/h, screen off %s/h - no alarm clock: none of them wakes a sleeping phone\n" \
+            "$(_ph "$_wba")" "$(_ph "$_wbi")"
+        fi
         # Same unit as the four lines above, or the block compares apples with oranges.
         #
         # These printed running totals beside per-hour rates, so a capture read "923 timer
@@ -1516,12 +1535,12 @@ lk_emit_full_day_report() {
         # confidence change) and the new caps equal the old ones - not on every quiet tick.
         # Labelled "settled ticks", 1/h looked like a writer that never rests; two audits
         # flagged it. It is simply how rarely Smart recomputes.
-        printf "  smart re-slots, no change: %s/h  (Smart slot recomputes only, not every tick)\n" "$(( _nt / _h ))"
+        printf "  smart re-slots, no change: %s/h  (Smart slot recomputes only, not every tick)\n" "$(_ph "$_nt")"
         if [ $(( _js + _jw )) -gt 0 ]; then
           printf "  json publishes avoided   : %s/h (%s%% of attempts)\n" \
-            "$(( _js / _h ))" "$(( _js * 100 / (_js + _jw) ))"
+            "$(_ph "$_js")" "$(( _js * 100 / (_js + _jw) ))"
         else
-          printf "  json publishes avoided   : %s/h\n" "$(( _js / _h ))"
+          printf "  json publishes avoided   : %s/h\n" "$(_ph "$_js")"
         fi
       fi
       echo "── ASB FEATURE ENGAGEMENT ─────────────────────────────────────"

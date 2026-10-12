@@ -1039,7 +1039,8 @@ lk_emit_cluster_work_summary() {
       if ($14 + 0 <= 0 || $16 + 0 <= 0 || $13 == "" || $15 == "") next
       n++
       w0 = ($13 * 4 >= H0); w1 = ($15 * 4 >= H1)
-      lev = (C0 * $14 / H0 >= C1 * $16 / H1) ? 1 : 0
+      k0 = C0 * $14 / H0; k1 = C1 * $16 / H1
+      lev = (k0 >= k1) ? 1 : ((k0 * 10 >= k1 * 9) ? 2 : 0)
       p0 += w0; p1 += w1; kn[lev]++; kb[lev] += w1
     }
     END {
@@ -1047,11 +1048,13 @@ lk_emit_cluster_work_summary() {
       print "===== SCREEN-ON WORK BY CLUSTER (2 clusters) ====="
       printf "screen-on samples %d: prime cores working in %d%%, main cores in %d%%\n", n, 100 * p1 / n, 100 * p0 / n
       if (kn[1]) printf "  main ceiling level with the prime (capacity at the ceilings): %4d samples, prime working in %d%%\n", kn[1], 100 * kb[1] / kn[1]
-      if (kn[0]) printf "  main ceiling below the prime'"'"'s:                              %4d samples, prime working in %d%%\n", kn[0], 100 * kb[0] / kn[0]
+      if (kn[2]) printf "  main ceiling within 10%% of the prime'"'"'s:                       %4d samples, prime working in %d%%\n", kn[2], 100 * kb[2] / kn[2]
+      if (kn[0]) printf "  main ceiling more than 10%% below the prime'"'"'s:                 %4d samples, prime working in %d%%\n", kn[0], 100 * kb[0] / kn[0]
       print "working = above a quarter of the cluster'"'"'s top clock. The scheduler sends work to the cluster"
       print "with more capacity at its ceiling, and the two prime cores do the same work at a higher cost:"
       print "a high prime share with the main ceiling below the prime'"'"'s is the ceilings choosing the dearer"
-      print "cores. Smart keeps them level in light idle and moderate use (fix130)."
+      print "cores. Smart keeps them level in light idle and moderate use (fix130), or within 10% where"
+      print "the level step is over 60% of the main maximum (fix132)."
       print ""
     }' "$_cwd" "$_cwp"
 }
@@ -1756,6 +1759,44 @@ lk_wakelock_live_row() {
 # enough to notice the PID change; only then are the crash/ANR records fetched - the
 # dropbox entries and the crash log buffer are where Android writes the reason (exception,
 # ANR, watchdog, low memory kill) - so the normal cost stays at one cheap call.
+# One line on why SystemUI went away, from the crash buffer (fix133).
+#
+# The restart block printed "dropbox system_app_crash (latest)", which is the latest crash
+# of ANY system app: an OP15 capture showed a Contacts crash there for both SystemUI
+# restarts, while the crash buffer below it held the real ones - SIGSEGV in libart.so
+# (ProfileSaver) inside com.android.systemui, and a SIGBUS in libft2.so (FreeType). The
+# report then said "the reason is in sysui_restarts.txt" and left the reader to find it.
+# Reads the text on stdin; prints one verdict line.
+lk_sysui_verdict() {
+  awk '
+    / >>> com\.android\.systemui <<</ { sui = 1; sig = ""; fr = ""; next }
+    / >>> .* <<</ { sui = 0 }
+    sui && sig == "" && /signal [0-9]+ \(SIG[A-Z]+\)/ {
+      if (match($0, /SIG[A-Z]+/)) sig = substr($0, RSTART, RLENGTH)
+    }
+    sui && fr == "" && /#00 pc / {
+      l = $0; sub(/.*#00 pc [0-9a-f]+ +/, "", l)
+      lib = l; sub(/ .*/, "", lib); n = split(lib, a, "/"); lib = a[n]
+      fn = ""
+      if (match(l, /\(([^()]|\([^()]*\))*\)/)) { fn = substr(l, RSTART + 1, RLENGTH - 2); sub(/\(.*/, "", fn); sub(/\+[0-9]+$/, "", fn); sub(/^void /, "", fn) }
+      if (length(fn) > 60) fn = substr(fn, 1, 60) "..."
+      fr = lib (fn != "" ? " (" fn ")" : "")
+    }
+    sui && sig != "" && fr != "" && !nat { nat = "native crash " sig " in " fr }
+    /AndroidRuntime/ && /Process: com\.android\.systemui/ { jv = 1; next }
+    jv == 1 && /AndroidRuntime/ && /[A-Za-z]+(Exception|Error)/ {
+      l = $0; sub(/.*AndroidRuntime: */, "", l); if (length(l) > 90) l = substr(l, 1, 90) "..."
+      jx = l; jv = 2
+    }
+    /lowmemorykiller/ && /[Kk]ill.*com\.android\.systemui/ { lmk = 1 }
+    END {
+      if (nat != "")      print nat " - inside Android or the ROM, not a kill"
+      else if (jx != "")  print "Java crash: " jx
+      else if (lmk)       print "killed by lowmemorykiller"
+      else                print "no SystemUI crash in the crash buffer - restarted by the system (kill, ANR, theme or settings change)"
+    }'
+}
+
 lk_sysui_watch_row() {
   _sw_f="$LK_OUT_DIR/sysui_restarts.txt"
   _sw_pid="$(pidof com.android.systemui 2>/dev/null | awk '{print $1}')"
@@ -1774,11 +1815,16 @@ lk_sysui_watch_row() {
     lk_dumpsys dropbox --print system_app_anr 2>/dev/null | tail -n 40
     echo "--- dropbox system_app_native_crash (latest) ---"
     lk_dumpsys dropbox --print system_app_native_crash 2>/dev/null | tail -n 30
+    _sw_cb="$(logcat -d -b crash -t 200 2>/dev/null)"
+    _sw_ms="$(logcat -d -b main,system -t 3000 2>/dev/null \
+      | grep -iE 'systemui|Process com\.android\.systemui|has died|ANR in|FATAL|lowmemorykiller|watchdog' | tail -n 60)"
+    # The verdict reads the whole crash buffer: the tombstone header that names the process
+    # sits above the 80 lines kept below.
+    echo "verdict: $(printf '%s\n%s\n' "$_sw_cb" "$_sw_ms" | lk_sysui_verdict)"
     echo "--- logcat crash buffer ---"
-    logcat -d -b crash -t 200 2>/dev/null | tail -n 80
+    printf '%s\n' "$_sw_cb" | tail -n 80
     echo "--- logcat main/system: systemui / ActivityManager around the restart ---"
-    logcat -d -b main,system -t 3000 2>/dev/null \
-      | grep -iE 'systemui|Process com\.android\.systemui|has died|ANR in|FATAL|lowmemorykiller|watchdog' | tail -n 60
+    printf '%s\n' "$_sw_ms"
   } >> "$_sw_f" 2>/dev/null
   LK_SYSUI_PID="$_sw_pid"
   LK_SYSUI_RESTARTS=$(( ${LK_SYSUI_RESTARTS:-0} + 1 ))
@@ -2855,6 +2901,18 @@ lk_bt_lifecycle_record() {
   [ "$LK_BT_RECONNECT_EVENT_COUNT" -lt "$LK_BT_RECONNECT_MAX_EVENTS" ] 2>/dev/null || return 2
   _bt_epoch="$(printf '%s\n' "$_bt_raw" | awk 'match($0,/^[0-9]+([.][0-9]+)?/){print substr($0,RSTART,RLENGTH); exit}' | cut -d. -f1)"
   case "$_bt_epoch" in ''|*[!0-9]*) _bt_epoch="$(date +%s)" ;; esac
+  # One state change, one row (fix131). A2DP logs "0->1", "1->2" and okToConnect for the same
+  # connection, so a CPH2769 capture listed the same second two and three times and counted
+  # "A2DP profile=11/0" for four connections. The same kind within 5 s is the same event;
+  # the stack line itself still goes to the raw evidence file below.
+  if [ "$_bt_kind" = "${LK_BT_LAST_KIND:-}" ] && [ "$_bt_epoch" -ge "${LK_BT_LAST_EPOCH:-0}" ] 2>/dev/null \
+     && [ $(( _bt_epoch - ${LK_BT_LAST_EPOCH:-0} )) -le 5 ] 2>/dev/null; then
+    if [ -n "$LK_BT_RECONNECT_RAW" ]; then
+      printf '%s\t%s\t%s\n' "$_bt_epoch" "dup" "$_bt_raw" | lk_bt_redact_addr >> "$LK_BT_RECONNECT_RAW"
+    fi
+    return 0
+  fi
+  LK_BT_LAST_KIND="$_bt_kind"; LK_BT_LAST_EPOCH="$_bt_epoch"
   _bt_iso="$(date -u -d "@$_bt_epoch" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u '+%Y-%m-%dT%H:%M:%SZ')"
   _bt_source="$(lk_bt_lifecycle_source "$_bt_raw")"
   # Preserve a bounded, address-redacted copy of the triggering stack line. This is the only
