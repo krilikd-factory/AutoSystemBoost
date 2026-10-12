@@ -503,7 +503,7 @@ main_capacity_parity=1
 # dsp_loudness below.
 media_loudness=stock
 
-# ASB DSP loudness: off|1..18 (dB of makeup gain, limiter always on) Ignored when
+# ASB DSP loudness: off|1..25 (dB of makeup gain, limiter always on) Ignored when
 # audio_profile=eq_compat: that profile hands the stream to an external engine (ViPER and
 # friends), and our effect on the same output stops that engine from seeing the stream at all,
 # so the DSP is switched off there.
