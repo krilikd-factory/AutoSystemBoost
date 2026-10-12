@@ -4645,9 +4645,9 @@ const CFG_ITEMS = [
   { key:'night_modem_idle', type:'bool', def:'0', name:'Quiet Radio at Night',
     desc:'Requires Cellular / radio controls above. When they are off, this and every power profile leave Android radio policy untouched. When enabled, it lets the modem settle during the hours the learner worked out from your own nights. Keepalives go to six times the profile value and the probe burst is shortened, so fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state.' },
   { key:'net_screen_off_lte', type:'bool', def:'0', name:'LTE While Screen Off',
-    desc:'After the screen has been off for 90 s, drops the 5G leg and keeps data on LTE; 5G comes back as soon as the screen turns on. Off by default: switching allowed network types re-registers the data link.' },
+    desc:'After the screen has been off for 90 s, drops the 5G leg and keeps data on LTE; 5G comes back as soon as the screen turns on. A download keeps 5G: a check at 3 Mbit/s or more is a transfer, not a stream - LTE is not chosen then, and if LTE is already on, 5G comes back for at least 10 minutes. Off by default: switching allowed network types re-registers the data link.' },
   { key:'net_lte_light', type:'bool', def:'0', name:'5G Only When Needed',
-    desc:'With the screen on: after 3 minutes of light mobile traffic (under 4 Mbit/s - feeds, music, video) drops the 5G leg and stays on LTE, which carries that easily; a heavy download (over 12 Mbit/s) brings 5G back at once and keeps it for 10 minutes. 5G NSA keeps two radios busy for a trickle of data. Never during a call, tethering or a game, never on Wi-Fi. Off by default: each switch re-registers the data link for a second or two.' },
+    desc:'With the screen on: after 3 minutes of light mobile traffic (under 2 Mbit/s - feeds, music) drops the 5G leg and stays on LTE, which carries that easily. A download brings 5G back within about 20 seconds (3 Mbit/s or more in two 10-second checks in a row, or one check over 12 Mbit/s) and keeps it for 10 minutes. 5G NSA keeps two radios busy for a trickle of data. Never during a call, tethering or a game, never on Wi-Fi. Off by default: each switch re-registers the data link for a second or two.' },
   { key:'net_congestion', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'Download Ramp \u00b7 other links',
     desc:'How the phone ramps up when downloading - for links the two cards below do not cover: USB tethering, VPN, Bluetooth tethering, Ethernet. WiFi and mobile take their own values from the cards below. Stock is what the device shipped with. bbr paces to the real measured speed, cubic is the classic. Stock kernels usually lack bbr, and the card will say \u201cnot supported\u201d rather than pretend.' },
   { key:'net_congestion_wifi', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'Download Ramp \u00b7 WiFi',
@@ -8927,18 +8927,40 @@ async function pollLive(visible) {
              * 7.9 %/h") above a forecast at 17.1 %/h, which told nobody how the phone was
              * doing. Until a window is long enough: "measuring". */
             const _bdEl = _el('bnDrain');
+            const _fbs = String(kv.forecast_basis || '');
+            const _frt = parseInt(kv.forecast_rate_x10 || '0', 10);
             let _act = 0;
-            if (String(kv.forecast_basis || '') === 'now') _act = parseInt(kv.forecast_rate_x10 || '0', 10);
+            if (_fbs === 'now') _act = _frt;
             else if (!('forecast_basis' in kv) && parseInt(kv.smart_drain_window_s || '0', 10) >= 600)
               _act = parseInt(kv.smart_drain_pctph_x10 || '0', 10);
+            /* The governor's estimate when nothing is measured yet (fix131).
+             *
+             * The actual figure needs ten minutes of screen-on with the level really moving,
+             * and every screen-off starts the window again - so in ordinary use (short looks
+             * at the phone) this tile read "measuring" nearly all the time, while the action
+             * screen beside it already printed a rate: "estimate from this hour 10.8 %/h". Both
+             * read the same forecast pair; this tile simply refused the estimate half. It now
+             * shows it, marked with "~", until the measured figure replaces it. */
+            const _chg = !!(st && st.charging);
             if (_act > 0) {
               _lastDrain = _act;
               _bdEl.textContent = (_act / 10).toFixed(1) + T('unit_pcth', '%/h');
+              _bdEl.title = T('lv_avgdrain_tip',
+                'Actual screen-on drain: how fast the battery level is falling now, over the last minutes - not a model.');
+            } else if (_frt > 0 && (_fbs === 'recent' || _fbs === 'slot') && !_chg) {
+              _bdEl.textContent = '~' + (_frt / 10).toFixed(1) + T('unit_pcth', '%/h');
+              _bdEl.title = (_fbs === 'slot'
+                  ? T('eta_slot_tip', 'Estimate: nothing measured since the governor started - based on what this hour usually costs.')
+                  : T('eta_average_tip', 'Estimate: no 10-minute measurement with the screen on yet - based on your recent screen-on sessions.'))
+                + ' ' + T('lv_drain_est_note', 'The actual figure replaces it after 10 minutes with the screen on.');
+            } else if (_chg) {
+              _bdEl.textContent = T('lv_drain_charging', 'charging');
+              _bdEl.title = T('lv_drain_charging_tip', 'No drain while charging - the figure comes back after unplugging.');
             } else {
               _bdEl.textContent = T('lv_measuring', 'measuring\u2026');
+              _bdEl.title = T('lv_avgdrain_tip',
+                'Actual screen-on drain: how fast the battery level is falling now, over the last minutes - not a model.');
             }
-            _bdEl.title = T('lv_avgdrain_tip',
-              'Actual screen-on drain: how fast the battery level is falling now, over the last minutes - not a model.');
           }
 
           // Thermal trend is what makes Smart back off, so it explains Alpha moving on its
