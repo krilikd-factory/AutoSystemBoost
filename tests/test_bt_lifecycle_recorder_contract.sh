@@ -77,4 +77,17 @@ grep -Fq 'Bluetooth lifecycle recorder' "$DOC" || fail "schema documentation mis
 grep -Fq 'bt_lifecycle_events.tsv' "$DOC" || fail "event schema missing"
 grep -Fq 'bt_lifecycle_context.tsv' "$DOC" || fail "context schema missing"
 
+# fix131: one connection logs 0->1, 1->2 and okToConnect - one row, not three. A later
+# connection (or a different kind) in between is its own row.
+LK_BT_RECONNECT_EVENT_COUNT=0; LK_BT_RECONNECT_MAX_EVENTS=50; LK_BT_LAST_KIND=""; LK_BT_LAST_EPOCH=0
+printf '%s\n' '# epoch<TAB>iso_utc<TAB>event<TAB>source' > "$LK_BT_RECONNECT_EVENTS"
+lk_bt_lifecycle_record '1787400000.100 A2dpService: connectionStateChanged, state: 0->1'
+lk_bt_lifecycle_record '1787400000.200 A2dpService: connectionStateChanged, state: 1->2'
+lk_bt_lifecycle_record '1787400001.100 A2dpService: okToConnect: device x'
+lk_bt_lifecycle_record '1787400002.100 HeadsetService: connectAudio: device x'
+lk_bt_lifecycle_record '1787400090.100 A2dpService: connectionStateChanged, state: 1->2'
+[ "$(awk '!/^#/ && $3=="a2dp_profile_connect" {n++} END{print n+0}' "$LK_BT_RECONNECT_EVENTS")" = 2 ] \
+  || fail "one A2DP connection counted more than once ($(grep -c a2dp_profile_connect "$LK_BT_RECONNECT_EVENTS"))"
+[ "$(awk '!/^#/ && $3=="hfp_audio_connect" {n++} END{print n+0}' "$LK_BT_RECONNECT_EVENTS")" = 1 ] || fail "a different kind was swallowed"
+
 echo 'PASS Bluetooth lifecycle recorder contract'

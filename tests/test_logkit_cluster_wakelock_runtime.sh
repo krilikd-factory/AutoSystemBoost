@@ -23,12 +23,14 @@ echo "6 7" > "$F/cpufreq/policy6/related_cpus"
 echo "epoch|datetime|phase|screen|bl_raw|bl_max|bl_pct|refresh_hz|bat_mA|wake|disp_state" > "$O/display_trace.txt"
 echo "epoch|x|x|x|x|x|x|x|x|x|x|x|p0_cur|p0_max|p6_cur|p6_max" > "$O/perf_trace.txt"
 i=0
-while [ $i -lt 12 ]; do
+while [ $i -lt 14 ]; do
   e=$((1000 + i * 20))
   echo "$e|d|active|1|1000|4094|25|120|300||" >> "$O/display_trace.txt"
-  # 8 samples main 1555200 / prime 1862400 with the prime working; 4 level (1996800) with it idle.
+  # 8 samples main 1555200 / prime 1862400 with the prime working; 4 level (1996800) with it idle;
+  # 2 within 10% (1900800 = capacity 399 of the prime's 414, fix132) with it idle.
   if [ $i -lt 8 ]; then echo "$e|d|||||||||||883200|1555200|1862400|1862400" >> "$O/perf_trace.txt"
-  else echo "$e|d|||||||||||1996800|1996800|768000|1862400" >> "$O/perf_trace.txt"; fi
+  elif [ $i -lt 12 ]; then echo "$e|d|||||||||||1996800|1996800|768000|1862400" >> "$O/perf_trace.txt"
+  else echo "$e|d|||||||||||1900800|1900800|768000|1862400" >> "$O/perf_trace.txt"; fi
   i=$((i + 1))
 done
 for e in 2000 2020 2040 2060; do
@@ -44,9 +46,10 @@ X
 printf '10383 com.amurcanov.tgwsproxy\n10384 com.whatsapp\n1000 com.oplus.atlas\n10382 org.telegram.messenger\n' > "$O/uid_map.txt"
 
 out="$(LK_CPU_SYSFS="$F" sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit_cluster_work_summary; lk_emit_live_wakelock_holders' "$C" "$O" 2>&1)"
-printf '%s\n' "$out" | grep -q '^screen-on samples 12: prime cores working in 66%, main cores in 33%$' || fail "cluster split: $out"
+printf '%s\n' "$out" | grep -q '^screen-on samples 14: prime cores working in 57%, main cores in 42%$' || fail "cluster split: $out"
 printf '%s\n' "$out" | grep -qE 'level with the prime .*: +4 samples, prime working in 0%' || fail "level bucket: $out"
-printf '%s\n' "$out" | grep -qE "below the prime's: +8 samples, prime working in 100%" || fail "below bucket: $out"
+printf '%s\n' "$out" | grep -qE "more than 10% below the prime's: +8 samples, prime working in 100%" || fail "below bucket: $out"
+printf '%s\n' "$out" | grep -qE "within 10% of the prime's: +2 samples, prime working in 0%" || fail "near bucket: $out"
 printf '%s\n' "$out" | grep -q '^screen-off samples: 4$' || fail "screen-off samples: $out"
 printf '%s\n' "$out" | grep -qE '^  held in  75% of samples, longest hold   62 min  TgWsProxy::ServiceWakeLock  \(com.amurcanov.tgwsproxy\)$' || fail "proxy not ranked first with its longest hold: $out"
 printf '%s\n' "$out" | grep -q 'com.android.contacts/com.whatsapp  (com.whatsapp)' || fail "compact WorkSource uid not resolved: $out"

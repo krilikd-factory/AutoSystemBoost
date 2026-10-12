@@ -1,6 +1,8 @@
 /* tests/test_smart_session2.c — unit test seam */
 
+#ifndef _GNU_SOURCE   /* the build script passes -D_GNU_SOURCE as well */
 #define _GNU_SOURCE
+#endif
 #include <stdio.h>
 #include <string.h>
 #include <time.h>

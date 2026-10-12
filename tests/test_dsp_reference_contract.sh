@@ -10,8 +10,24 @@ MOD="$TMP/module"
 mkdir -p "$MOD/bin" "$MOD/config" "$MOD/runtime"
 cp "$ROOT/config/governor.conf" "$MOD/config/governor.conf"
 cp "$ROOT/runtime/asb_dsp_abi_apply.sh" "$MOD/runtime/asb_dsp_abi_apply.sh"
-cp "$ROOT/src/DSP_AIDL/prebuilt/arm64-v8a/libasbdsp_v3.so" "$MOD/bin/libasbdsp_v3.so"
-cp "$ROOT/src/DSP_AIDL/prebuilt/armeabi-v7a/libasbdsp_v3.so" "$MOD/bin/libasbdsp_v3_32.so"
+# A source-only archive carries no prebuilt libraries (fix133). The static gates below still
+# run; only the staging half needs the .so files. It is skipped ONLY when the caller says so
+# explicitly - a release build never sets this, so a package that lost its libraries still
+# fails here instead of quietly falling back to the legacy effect.
+PB="$ROOT/src/DSP_AIDL/prebuilt"
+_pb_missing=0
+for _pb in arm64-v8a/libasbdsp_v3.so armeabi-v7a/libasbdsp_v3.so arm64-v8a/asb_dsp_attach \
+           arm64-v8a/libasbdsp_v2.so armeabi-v7a/libasbdsp_v2.so; do
+  [ -s "$PB/$_pb" ] || _pb_missing=1
+done
+if [ "$_pb_missing" = 1 ] && [ "${ASB_DSP_REFERENCE_OPTIONAL:-0}" != 1 ]; then
+  echo "FAIL: DSP prebuilt libraries missing under src/DSP_AIDL/prebuilt (set ASB_DSP_REFERENCE_OPTIONAL=1 only for a source-only archive)" >&2
+  exit 1
+fi
+if [ "$_pb_missing" = 0 ]; then
+  cp "$PB/arm64-v8a/libasbdsp_v3.so" "$MOD/bin/libasbdsp_v3.so"
+  cp "$PB/armeabi-v7a/libasbdsp_v3.so" "$MOD/bin/libasbdsp_v3_32.so"
+fi
 
 # The feature remains enabled; user-level dsp_loudness defaults to off, so this
 # does not enable any gain by itself.
@@ -43,11 +59,12 @@ grep -Fq '#define ASB_GAIN_MB_MAX    2500' "$ROOT/src/DSP_AIDL/asb_dsp_core.h" |
 grep -Fq '[ "$_dsp_applied_mb" -gt 2500 ] && _dsp_applied_mb=2500' "$ROOT/runtime/asb_audio_apply.sh" || { echo 'FAIL: runtime DSP cap is not +25 dB' >&2; exit 1; }
 grep -Fq '[ "$_dsp_expected_mb" -gt 2500 ] && _dsp_expected_mb=2500' "$ROOT/tools/asb_diag.sh" || { echo 'FAIL: diagnostic DSP cap is not +25 dB' >&2; exit 1; }
 
+if [ "$_pb_missing" = 1 ]; then
+  printf '%s\n' 'SKIP DSP reference staging: prebuilt libraries absent, ASB_DSP_REFERENCE_OPTIONAL=1 (static gates passed)'
+  exit 0
+fi
 MODDIR="$MOD" sh "$MOD/runtime/asb_dsp_abi_apply.sh" aidl_v3 >/dev/null
 cmp -s "$MOD/bin/libasbdsp_v3.so" "$MOD/system/vendor/lib64/soundfx/libasbdsp.so"
 cmp -s "$MOD/bin/libasbdsp_v3_32.so" "$MOD/system/vendor/lib/soundfx/libasbdsp.so"
-test -s "$ROOT/src/DSP_AIDL/prebuilt/arm64-v8a/asb_dsp_attach"
-test -s "$ROOT/src/DSP_AIDL/prebuilt/arm64-v8a/libasbdsp_v2.so"
-test -s "$ROOT/src/DSP_AIDL/prebuilt/armeabi-v7a/libasbdsp_v2.so"
 
 printf '%s\n' 'PASS DSP reference contract'

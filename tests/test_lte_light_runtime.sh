@@ -150,7 +150,8 @@ i=0; while [ "$i" -lt 40 ] && [ "$(mask)" != "$NR_OFF" ]; do sleep 0.2; i=$((i +
 (
   b=3000000000
   for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
-    b=$((b + 10000000)); echo "$b" > "$T/net/rmnet_data2/statistics/rx_bytes"; sleep 0.2
+    # awk, not $((...)): past 2^31 the shell's arithmetic is 32-bit under mksh (Android's sh).
+    b="$(awk -v x="$b" 'BEGIN { printf "%d", x + 10000000 }')"; echo "$b" > "$T/net/rmnet_data2/statistics/rx_bytes"; sleep 0.2
   done
 ) &
 i=0; while [ "$i" -lt 30 ] && [ "$(mask)" != "$NR_ON" ]; do sleep 0.2; i=$((i + 1)); done

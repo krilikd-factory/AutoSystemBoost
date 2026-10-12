@@ -76,7 +76,11 @@ a="$(run_action "$T/s3")"; w="$(run_web "$T/s3")"
 printf '%s' "$a" | grep -q '(по факту 10.3%/ч)' || fail "live note wrong: $a"
 # 5. The Monitor tile shows the actual drain, in one word.
 grep -q '"lv_avgdrain": "Расход"' "$ROOT/webroot/i18n/ru.json" || fail "drain tile not the actual drain"
-grep -q "if (String(kv.forecast_basis || '') === 'now') _act = parseInt(kv.forecast_rate_x10" "$W" || fail "tile does not show the actual rate"
+grep -q "if (_fbs === 'now') _act = _frt;" "$W" || fail "tile does not show the actual rate"
+# fix131: until a window is measured the tile shows the same estimate the action screen
+# prints (marked "~"), not "measuring" - nearly always the case in short screen-on use.
+grep -Fq "} else if (_frt > 0 && (_fbs === 'recent' || _fbs === 'slot') && !_chg) {" "$W" || fail "tile hides the estimate the action screen shows"
+grep -Fq "_bdEl.textContent = '~' + (_frt / 10).toFixed(1)" "$W" || fail "estimate not marked as one"
 grep -q '_fb = "now";' "$G" || fail "governor forecast does not lead with the actual drain"
 
 echo "PASS forecast one source: actual drain first, same minutes on every screen, short labels"

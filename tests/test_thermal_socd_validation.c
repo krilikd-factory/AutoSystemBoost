@@ -84,7 +84,8 @@ static void fixture_reset(void) {
 }
 
 static void add_zone(int zone, const char *type, int raw) {
-    char dir[256], path[256], raw_text[32];
+    /* path holds dir plus "/type": sized for it, or gcc warns that it may truncate. */
+    char dir[256], path[272], raw_text[32];
     snprintf(dir, sizeof(dir), THERMAL_BASE "/thermal_zone%d", zone);
     ensure_dir(dir);
     snprintf(path, sizeof(path), "%s/type", dir);

@@ -43,7 +43,7 @@ grep -qF 'cc[$_k2]=' "$TMP/emit.sh" || fail 'emission block extracted incomplete
 
 emit() { # $1 = applied global cc; $2 = cfg net_congestion_wifi; $3 = cfg net_congestion_mobile
   W="$2"; M="$3"
-  ( _cc="$1"; _congctl_ok=0; _out="congestion=$1"
+  ( _cc="$1"; _congctl_ok="${4:-0}"; _out="congestion=$1"
     _cfg() { case "$1" in
                net_congestion_wifi)   printf '%s' "$W" ;;
                net_congestion_mobile) printf '%s' "$M" ;;
@@ -58,6 +58,10 @@ emit() { # $1 = applied global cc; $2 = cfg net_congestion_wifi; $3 = cfg net_co
   || fail 'distinct per-link request not flagged unsupported (and auto must stay silent)'
 [ "$(emit bbr '' '')" = 'congestion=bbr' ] \
   || fail 'unset per-link keys must not emit tokens'
+# fix131: no route to probe = capability unknown - no "unsupported" filed for it.
+[ "$(emit bbr cubic cubic unknown)" = 'congestion=bbr' ] \
+  || fail 'an unprobed kernel was filed as having no per-route congctl'
+grep -q '{ _congctl_ok=unknown; return 0; }' "$SRC" || fail 'probe without a route is not "unknown"'
 
 # --- executable pin 2: the REAL verdict mapper against synthetic result lines ---
 sed -n '/^  for _tok in \$_out; do$/,/^  done$/p' "$SRC" > "$TMP/map.sh"

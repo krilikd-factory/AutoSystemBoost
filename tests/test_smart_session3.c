@@ -2,7 +2,9 @@
  * Covers: weights, decay, confidence, fallback hierarchy, blend math,
  *         night override, thermal veto, bucket learning, slot gating. */
 
+#ifndef _GNU_SOURCE   /* the build script passes -D_GNU_SOURCE as well */
 #define _GNU_SOURCE
+#endif
 #include <stdio.h>
 #include <string.h>
 #include <time.h>

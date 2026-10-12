@@ -32,7 +32,10 @@ printf '#!/bin/sh\ncat "$DSF" 2>/dev/null\n' > "$T/bin/getprop"
 chmod +x "$T/bin/"*
 export PATH="$T/bin:$PATH" MASK="$T/mask" MODDIR="$T/mod" ASB_LTE_STATE_DIR="$T/st" \
        ASB_STATE_FILE="$T/state" WAKEF="$T/wake" DSF="$T/ds" ASB_NET_SYS="$T/net" \
-       WAKE_ON_SET="$T/wake_on_set" ASB_LTE_DELAY_S=1 ASB_LTE_SETTLE_S=0
+       WAKE_ON_SET="$T/wake_on_set" ASB_LTE_DELAY_S=1 ASB_LTE_SETTLE_S=0 \
+       ASB_LTE_OFF_BULK_KBPS=1000000
+# ^ fix131: with 1 s windows the minimum stream here (512 KiB/s) is above the real transfer
+#   mark; this file tests the quiet/settle logic, test_lte_bulk_runtime.sh tests transfers.
 L="$ROOT/runtime/asb_lte_screenoff.sh"
 NR_ON=11011111110000000001; NR_OFF=1011111110000000001
 SAVE="$T/st/lte_screenoff.saved"

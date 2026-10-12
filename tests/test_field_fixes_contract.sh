@@ -370,7 +370,10 @@ echo "PASS: fix113 contract"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 fail() { echo "FAIL fix114: $*"; exit 1; }
 L="$ROOT/runtime/asb_lte_screenoff.sh"
-grep -q '^LIGHT_LOW_KBPS="${ASB_LTE_LIGHT_LOW_KBPS:-4000}"' "$L" || fail "light low mark not 4 Mbit/s"
+# fix131: the drop mark moved to 2 Mbit/s and a sustained-demand mark (3 Mbit/s) was added -
+# see test_lte_bulk_runtime.sh.
+grep -q '^LIGHT_LOW_KBPS="${ASB_LTE_LIGHT_LOW_KBPS:-2000}"' "$L" || fail "light low mark not 2 Mbit/s"
+grep -q '^LIGHT_BUSY_KBPS="${ASB_LTE_LIGHT_BUSY_KBPS:-3000}"' "$L" || fail "no sustained-demand mark"
 grep -q '^LIGHT_HIGH_KBPS="${ASB_LTE_LIGHT_HIGH_KBPS:-12000}"' "$L" || fail "light high mark not 12 Mbit/s"
 grep -q '^  screen_on) do_screen_on ;;' "$L" || fail "no screen_on entry"
 grep -Fq 'asb_lte_screenoff.sh screen_on' "$ROOT/runtime/smart_dynamic_tune.sh" || fail "tuner still restores on every screen-on tick"
@@ -507,7 +510,9 @@ echo "PASS: fix121 contract"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 fail() { echo "FAIL fix122: $*"; exit 1; }
 L="$ROOT/runtime/asb_lte_screenoff.sh"
-grep -q '\[ $(( _dk \* DELAY )) -ge $(( OFF_MIN_KIB \* _dt )) \] && break' "$L" || fail "screen-off LTE does not wait for mobile data"
+# fix131 restructured the loop (the timer keeps watching after the switch); the mobile-data
+# gate is the same comparison.
+grep -q '\[ $(( _dk \* DELAY )) -ge $(( OFF_MIN_KIB \* _dt )) \]; }; then' "$L" || fail "screen-off LTE does not wait for mobile data"
 grep -q '_screen_off_strict || return 0' "$L" || fail "no re-check right before the switch"
 grep -q 'the screen came on during the switch' "$L" || fail "an interrupted switch is not given back"
 grep -q '/ccmni\*; do' "$L" || fail "ccmni links not counted by the scripts"
@@ -669,5 +674,38 @@ grep -q 'main kept level with the prime' "$D" || fail "asbdiag does not report t
 grep -q 'uiAudioRelease(ctx, endAt);' "$ROOT/webroot/index.html" || fail "UI sounds keep the audio output open"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS: fix130 contract"
+) || exit 1
+# ---- fix132 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix132: $*"; exit 1; }
+G="$ROOT/src/asb_governor.c"; D="$ROOT/tools/asb_diag.sh"; I="$ROOT/common/install.sh"
+grep -q '^#define ASB_PARITY_NEAR_PCT 90' "$G" || fail "no near-parity share"
+grep -q 'lift = (int)top; near = 1;' "$G" || fail "level step over the limit still refuses everything"
+grep -q 'main_parity_near=%d' "$G" || fail "state does not say the raise is the nearest step"
+grep -q 'not raised - level needs $_mpo kHz, over 60% of the main maximum' "$D" || fail "asbdiag still says not needed when the limit refused it"
+grep -q 'nearly level (within 10%)' "$D" || fail "asbdiag calls a near-level main ceiling the smaller cluster"
+grep -q 'within 10%% of the prime' "$ROOT/tools/logkit/_asb_logkit_common.sh" || fail "full-day report has no near-level bucket"
+grep -q 'ASB_D_BT_STOCK:-BT absolute volume: stock' "$I" || fail "stock BT install prints an empty heading"
+for f in "$ROOT"/common/*text.sh; do grep -q '^ASB_D_BT_STOCK=' "$f" || fail "ASB_D_BT_STOCK missing in ${f##*/}"; done
+grep -q 'LK_BT_LAST_KIND' "$ROOT/tools/logkit/_asb_logkit_common.sh" || fail "BT lifecycle recorder still writes a row per duplicate line"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix132 contract"
+) || exit 1
+# ---- fix133 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix133: $*"; exit 1; }
+W="$ROOT/src/asb_writer.h"; D="$ROOT/tools/asb_diag.sh"; L="$ROOT/tools/logkit"
+grep -q 'if (!_vendor_hold || requested == h->requested) {' "$W" || fail "a vendor hold still swallows a changed request"
+grep -q 'writer_hold_bypass=%lu' "$W" || fail "hold bypasses not published"
+grep -q 'sent through a vendor hold' "$D" || fail "asbdiag does not count hold bypasses"
+grep -q 'by screen state        : screen on' "$L/asb_log_full_day.sh" || fail "timer wakeups not split by screen state"
+grep -q "_ph() { awk" "$L/asb_log_full_day.sh" || fail "cost rates still divide by whole hours"
+grep -q '^lk_sysui_verdict() {' "$L/_asb_logkit_common.sh" || fail "SystemUI restart has no verdict"
+grep -q 'ASB_DSP_REFERENCE_OPTIONAL' "$ROOT/tests/test_dsp_reference_contract.sh" || fail "DSP reference has no explicit source-only switch"
+grep -q 'ASB_DSP_REFERENCE_OPTIONAL' "$ROOT/.github/workflows/build-release.yml" && fail "release build must never skip the DSP reference"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix133 contract"
 ) || exit 1
 echo "PASS: field-fix contracts"
