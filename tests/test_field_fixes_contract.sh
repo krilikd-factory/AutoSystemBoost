@@ -923,4 +923,20 @@ done
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS: fix143 contract"
 ) || exit 1
+# ---- fix144 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix144: $*"; exit 1; }
+G="$ROOT/src/asb_governor.c"
+grep -q 'runtime/asb_reconcile.sh"' "$G" && fail "governor still spawns the no-op reconcile --once"
+grep -q 'runtime/asb_watchdog.sh"' "$G" && fail "governor still spawns the no-op watchdog --once"
+grep -q '^asb_gov_liveness() {' "$ROOT/service.sh" || fail "no governor liveness check"
+grep -q '^    asb_gov_liveness$' "$ROOT/service.sh" || fail "liveness check not on the housekeeping tick"
+grep -q 'stopped cleanly (pid %d)' "$G" || fail "a clean stop leaves no trace"
+grep -q '^asb_gov_starts() {' "$ROOT/tools/asb_diag.sh" || fail "asbdiag cannot tell crashes from boots"
+grep -q 'not set at boot with the native governor' "$ROOT/tools/asb_diag.sh" || fail "asbdiag still names a gmin target nothing applies"
+[ -f "$ROOT/tests/test_gov_liveness_runtime.sh" ] || fail "liveness test missing"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix144 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
