@@ -11,11 +11,15 @@
 # still shows as registered and enabled from the client side.
 #
 # asb_dsp_live_state [dump file] prints one line:
-#   found=1 thread=AudioOut_1D type=MIXER session=0 state=ACTIVE enabled=y suspended=n others_enabled=0
+#   found=1 thread=AudioOut_1D type=MIXER rate=48000 session=0 state=ACTIVE enabled=y suspended=n others_enabled=0
 #   found=0
 # others_enabled counts effects enabled on per-app sessions on the same output - the ones
 # that suspend global effects. The column names are read from the dump's own header line,
 # so a platform that adds or drops a column is still parsed by name.
+# rate (fix139) is the output thread's sample rate - a hi-res output runs at 96 or 192 kHz,
+# and the effect follows it there. Input threads are skipped: the echo canceller and noise
+# suppressor a call or a voice app enables live on capture sessions, which come after the
+# outputs in the dump and were counted against the last output thread as "others_enabled".
 asb_dsp_live_state() {
   if [ -n "${1:-}" ]; then
     cat "$1" 2>/dev/null
@@ -28,6 +32,8 @@ asb_dsp_live_state() {
       ty = t; sub(/.*\(/, "", ty); sub(/\).*/, "", ty)
       cur = nm; curty = ty; next
     }
+    /^[ \t]*(Input|Record) thread / { cur = ""; curty = ""; next }
+    /^[ \t]*Sample rate: [0-9]+ Hz/ { if (cur != "" && !(cur in rt)) rt[cur] = $3; next }
     /Effect ID [0-9]+:/ { hdr = ""; vals = ""; next }
     /Session .*State/ {
       hdr = $0; gsub(/:/, "", hdr)
@@ -48,7 +54,7 @@ asb_dsp_live_state() {
         if (!(found && fst + 0 == 3)) {
           found = 1; fth = cur; fty = curty; fses = ses; fst = st; fen = en; fsu = su
         }
-      } else if (ses != "" && ses + 0 != 0 && en == "y") {
+      } else if (cur != "" && ses != "" && ses + 0 != 0 && en == "y") {
         oth[cur]++
       }
       hdr = ""; vals = ""
@@ -61,8 +67,9 @@ asb_dsp_live_state() {
         nmx = (s == 0) ? "IDLE" : (s == 1) ? "RESTART" : (s == 2) ? "STARTING" : (s == 3) ? "ACTIVE" : \
               (s == 4) ? "STOPPING" : (s == 5) ? "STOPPED" : (s == 6) ? "DESTROYED" : "?"
       }
-      printf "found=1 thread=%s type=%s session=%d state=%s enabled=%s suspended=%s others_enabled=%d\n", \
-             (fth == "" ? "?" : fth), (fty == "" ? "?" : fty), fses + 0, nmx, fen, fsu, oth[fth] + 0
+      printf "found=1 thread=%s type=%s rate=%s session=%d state=%s enabled=%s suspended=%s others_enabled=%d\n", \
+             (fth == "" ? "?" : fth), (fty == "" ? "?" : fty), ((fth in rt) ? rt[fth] : "?"), \
+             fses + 0, nmx, fen, fsu, oth[fth] + 0
     }'
 }
 

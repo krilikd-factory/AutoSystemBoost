@@ -277,6 +277,31 @@ _wl_doze_exempt() {
   printf '%s\n' "$_WL_DOZE_EX" | grep -qxF "$1"
 }
 
+# Used today, by Android's own standby bucket: 5 exempted, 10 active, 20 working_set.
+_wl_used_today() {
+  _has am || return 1
+  _bk="$(am get-standby-bucket "$1" 2>/dev/null | tr -dc '0-9')"
+  case "$_bk" in 5|10|20) return 0 ;; esac
+  return 1
+}
+
+# Restrictions made under the looser pre-fix137 rule (two minutes of any lock, used today or
+# not) are handed back once; an app that still meets the stricter rule is restricted again
+# by a later pass, on its own evidence.
+_wl_rules_migrate() {
+  _mk="$D/wakelock_rules_v137"
+  [ -f "$_mk" ] && return 0
+  if [ -s "$D/wakelock_restricted" ] && _has am; then
+    while IFS= read -r _rp; do
+      [ -n "$_rp" ] && am set-standby-bucket "$_rp" active >/dev/null 2>&1 \
+        && echo "wakelock: $_rp released - restricted under the earlier, looser rule"
+    done < "$D/wakelock_restricted"
+    rm -f "$D/wakelock_restricted" 2>/dev/null
+  fi
+  mkdir -p "$D" 2>/dev/null
+  true > "$_mk" 2>/dev/null
+}
+
 # Hand back what an earlier pass restricted but would not restrict today (fix136): a
 # messenger the old name list missed, or an app the user has since exempted.
 _wl_release_protected() {
@@ -433,6 +458,19 @@ asb_wl_relax() {
         _v=protected
       elif _wl_in_use "$_p"; then
         _v=in_use
+      elif [ "$_act" = 1 ] && [ "$_s" -lt 600 ] 2>/dev/null && [ "$_h" != 1 ]; then
+        # Acting needs a real hold (fix137): ten minutes since the last unplug, or a lock
+        # held past the LONG mark right now. Two minutes is where naming starts, not where
+        # restricting does - an OP15 night restricted com.anthropic.claude for one 3 m 27 s
+        # WorkManager job, while the awake share that opened the gate was Bluetooth audio.
+        # JobScheduler already caps a job at ten minutes and defers it in Doze.
+        _v=report
+      elif [ "$_act" = 1 ] && _wl_used_today "$_p"; then
+        # Android's own usage verdict (fix137): active (10) and working_set (20) mean the
+        # user opened it today. Background trimming already leaves those alone for the
+        # same reason - restricting an app someone uses daily delays its notifications for
+        # a battery saving Android would make by itself once it really goes unused.
+        _v=used_today
       elif [ "$_act" = 1 ]; then
         # forcestop is not used: it kills the app. Standby-bucket restricted tells Android
         # to stop honouring its background requests, which the platform already knows how
@@ -554,6 +592,7 @@ case "$(_wl_fit_mode)" in
   *) _wl_fit_release ;;
 esac
 
+case "$(_cfg wakelock_action)" in 1|on|true) _wl_rules_migrate ;; esac
 if _wl_may_act; then
   _wl_doze_exempt_load
   _wl_release_protected

@@ -198,8 +198,11 @@ if [ "$_congctl_ok" = "1" ]; then
     case "$_out" in *"cc[$_pk"*) continue ;; esac
     _pw="$(_resolve_for net_congestion "$_pk")"
     case "$_pw" in ''|auto) continue ;; esac
-    grep -qx "net_congestion_$_pk=unsupported" "${ASB_NET_RESULT:-/data/adb/asb/net_apply_result}" 2>/dev/null \
-      && _out="$_out cc[$_pk]=$_pw-pending"
+    # ...and a kind with no verdict at all yet (fix138): "no verdict recorded (apply has not
+    # run)" was printed for Wi-Fi on a phone that applies on every boot and route change -
+    # the apply ran, the link was never up.
+    _pv="$(grep -m1 "^net_congestion_$_pk=" "${ASB_NET_RESULT:-/data/adb/asb/net_apply_result}" 2>/dev/null)"
+    case "$_pv" in ''|*=unsupported) _out="$_out cc[$_pk]=$_pw-pending" ;; esac
   done
 fi
 # A new route (Wi-Fi rejoined, mobile data re-attached) arrives without our congctl;
@@ -476,6 +479,15 @@ if [ -n "$_ASB_TC" ]; then
       fi
     fi
   done
+  # A per-link qdisc whose link was not up in this run and has no verdict yet is "waiting for
+  # a link", not "apply has not run" (fix138). An earlier verdict is kept as before.
+  for _pk in wifi mobile; do
+    case "$_out" in *"qdisc[$_pk"*) continue ;; esac
+    _pw="$(_cfg "net_qdisc_$_pk")"
+    case "$_pw" in ''|auto) continue ;; esac
+    grep -q "^net_qdisc_$_pk=" "${ASB_NET_RESULT:-/data/adb/asb/net_apply_result}" 2>/dev/null && continue
+    _out="$_out qdisc[$_pk]=$_pw-pending"
+  done
 else
   _qd_tool=0
 fi
@@ -714,9 +726,11 @@ mkdir -p /data/adb/asb 2>/dev/null
       qdisc=FAILED)                 printf 'net_qdisc=failed\n' ;;
       qdisc=*)                      printf 'net_qdisc=ok\n' ;;
       qdisc\[wifi*noqueue-unsupported*)   printf 'net_qdisc_wifi=unsupported\n' ;;
+      qdisc\[wifi*-pending*)        printf 'net_qdisc_wifi=pending\n' ;;
       qdisc\[wifi*not-applied*)     printf 'net_qdisc_wifi=failed\n' ;;
       qdisc\[wifi*)                 printf 'net_qdisc_wifi=ok\n' ;;
       qdisc\[mobile*noqueue-unsupported*) printf 'net_qdisc_mobile=unsupported\n' ;;
+      qdisc\[mobile*-pending*)      printf 'net_qdisc_mobile=pending\n' ;;
       qdisc\[mobile*not-applied*)   printf 'net_qdisc_mobile=failed\n' ;;
       qdisc\[mobile*)               printf 'net_qdisc_mobile=ok\n' ;;
       wifi_country=FAILED)          printf 'wifi_country=failed\n' ;;

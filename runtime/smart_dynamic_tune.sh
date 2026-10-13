@@ -56,11 +56,22 @@ done
 
 # MGLRU enable + behaviour. 7 = full LRU gen tracking, used during heavy/gaming
 # where reclaim accuracy matters. 5 = relaxed for idle/screen-off.
+#
+# Written only when the node moved (fix138). The kernel keeps the bits it supports: on the
+# OP15 the node reads 0x0001 whatever was asked - yet the tuner rewrote it on every
+# run, dozens of times a day, for no change. The read-back of each request is remembered for
+# this boot; a write happens again only when the node no longer shows it.
 if [ -w /sys/kernel/mm/lru_gen/enabled ]; then
   case "$HINT" in
-    3|4) writef /sys/kernel/mm/lru_gen/enabled 7 ;;
-    *)   writef /sys/kernel/mm/lru_gen/enabled 5 ;;
+    3|4) _lg=7 ;;
+    *)   _lg=5 ;;
   esac
+  _lgf="/dev/.asb/lru_gen_took_$_lg"
+  _lgc="$(cat /sys/kernel/mm/lru_gen/enabled 2>/dev/null)"
+  if [ -z "$_lgc" ] || [ "$_lgc" != "$(cat "$_lgf" 2>/dev/null)" ]; then
+    writef /sys/kernel/mm/lru_gen/enabled "$_lg"
+    cat /sys/kernel/mm/lru_gen/enabled > "$_lgf" 2>/dev/null || true
+  fi
 fi
 
 # The camera guard owns the VM knobs while a capture is streaming: it lowers swappiness for the
