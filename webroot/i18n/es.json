@@ -285,7 +285,7 @@
     },
     "wakelock_action": {
       "name": "Actuar sobre wakelocks",
-      "desc": "Un wakelock es una app diciéndole a Android «aún no duermas». Una sola app haciéndolo toda la noche cuesta más de lo que cualquier ajuste de aquí puede ahorrar.\n\nLa medición siempre está activa; esto decide si ASB actúa. Activado, una app instalada por ti que siga reteniendo un wakelock tras 45+ minutos de pantalla apagada pasa al bucket «restringido» de Android.\n\nNunca se tocan: fuentes del kernel y del sistema, ni apps de autenticación, teléfono, SMS, mensajería y reloj."
+      "desc": "Un wakelock es una app diciéndole a Android «aún no duermas». Una sola app haciéndolo toda la noche cuesta más de lo que cualquier ajuste de aquí puede ahorrar.\n\nLa medición siempre está activa; esto decide si ASB actúa. Activado, una app instalada por ti que siga reteniendo un wakelock tras 45+ minutos de pantalla apagada pasa al bucket «restringido» de Android.\n\nNunca se tocan: fuentes del kernel y del sistema, ni apps de autenticación, teléfono, SMS, mensajería y reloj. En detalle: solo una app que mantuvo la CPU 10+ minutos (o mantiene ahora un bloqueo largo) y que Android no cuenta como usada hoy. Tampoco se tocan las apps que excluiste de la optimización de batería, el correo, la navegación ni los teclados."
     },
     "night_modem_idle": {
       "name": "Quiet Radio at Night",
@@ -882,5 +882,34 @@
   "unit_pcth": "%/h",
   "lv_drain_est_note": "Tras 10 minutos con la pantalla encendida la sustituye la cifra real.",
   "lv_drain_charging": "cargando",
-  "lv_drain_charging_tip": "Mientras carga no hay consumo: la cifra vuelve al desconectar el cargador."
+  "lv_drain_charging_tip": "Mientras carga no hay consumo: la cifra vuelve al desconectar el cargador.",
+  "cfg_res_saved_title": "Configuración guardada",
+  "cfg_res_saved_file_title": "Configuración guardada en un archivo",
+  "cfg_res_partial_title": "Guardada en ASB, pero el archivo no se escribió",
+  "cfg_res_save_failed_title": "Configuración no guardada",
+  "cfg_res_applied_title": "Configuración aplicada",
+  "cfg_res_applied_partial_title": "Ajustes aplicados, el aprendizaje Smart no",
+  "cfg_res_apply_failed_title": "Configuración no aplicada",
+  "cfg_res_apply_failed_body": "No se cambió nada: se mantienen los ajustes actuales.",
+  "cfg_res_name": "Nombre",
+  "cfg_res_keys": "Ajustes",
+  "cfg_res_changed": "cambiados ahora",
+  "cfg_res_where": "Dónde",
+  "cfg_res_where_asb": "en ASB (Abrir → ASB)",
+  "cfg_res_where_both": "también guardada en ASB",
+  "cfg_res_file": "Archivo",
+  "cfg_res_smart": "Aprendizaje Smart",
+  "cfg_res_smart_saved": "guardado con los ajustes",
+  "cfg_res_smart_skipped": "no incluido (por su elección)",
+  "cfg_res_smart_none": "aún no hay nada aprendido",
+  "cfg_res_smart_restored": "restaurado",
+  "cfg_res_smart_not_in_file": "no está en este archivo",
+  "cfg_res_smart_kept_device": "se mantuvo — el archivo es de otro dispositivo",
+  "cfg_res_smart_kept_invalid": "se mantuvo — la copia del archivo está dañada",
+  "cfg_res_smart_kept_failed": "se mantuvo — no se pudo restaurar",
+  "cfg_res_reboot_note": "Reinicie el teléfono para que todos los ajustes restaurados surtan efecto.",
+  "cfg_res_reboot_btn": "Reiniciar",
+  "cfg_res_done": "Listo",
+  "cfg_res_autoclose": "Se cierra en %s s",
+  "cfg_res_opened_banner": "Archivo comprobado y añadido: %s. Aún no aplicado — pulse «Aplicar configuración guardada»."
 }

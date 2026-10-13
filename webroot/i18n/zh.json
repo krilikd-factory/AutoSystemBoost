@@ -311,7 +311,7 @@
     },
     "wakelock_action": {
       "name": "处理唤醒锁",
-      "desc": "唤醒锁是应用在对 Android 说「先别休眠」。一个应用整夜这样做，代价超过这里任何设置能省下的电量。\n\n测量始终开启；此项决定 ASB 是否介入。开启后，你自己安装的应用若在息屏 45 分钟以上仍持有唤醒锁，会被移入 Android 的「受限」分组。\n\n从不触碰：内核和系统来源，以及身份验证器、电话、短信、即时通讯和时钟应用。"
+      "desc": "唤醒锁是应用在对 Android 说「先别休眠」。一个应用整夜这样做，代价超过这里任何设置能省下的电量。\n\n测量始终开启；此项决定 ASB 是否介入。开启后，你自己安装的应用若在息屏 45 分钟以上仍持有唤醒锁，会被移入 Android 的「受限」分组。\n\n从不触碰：内核和系统来源，以及身份验证器、电话、短信、即时通讯和时钟应用。 具体规则：只针对占用 CPU 10 分钟以上（或此刻正持有长时间锁）且 Android 认为今天未使用过的应用。你排除在电池优化之外的应用、邮件、导航和输入法也从不触碰。"
     },
     "night_modem_idle": {
       "name": "Quiet Radio at Night",
@@ -882,5 +882,34 @@
   "unit_pcth": "%/小时",
   "lv_drain_est_note": "亮屏 10 分钟后会被实测数值取代。",
   "lv_drain_charging": "充电中",
-  "lv_drain_charging_tip": "充电时没有耗电——拔掉充电器后数值会恢复。"
+  "lv_drain_charging_tip": "充电时没有耗电——拔掉充电器后数值会恢复。",
+  "cfg_res_saved_title": "配置已保存",
+  "cfg_res_saved_file_title": "配置已保存到文件",
+  "cfg_res_partial_title": "已保存在 ASB 中，但文件未写入",
+  "cfg_res_save_failed_title": "配置未保存",
+  "cfg_res_applied_title": "配置已应用",
+  "cfg_res_applied_partial_title": "设置已应用，Smart 学习未恢复",
+  "cfg_res_apply_failed_title": "配置未应用",
+  "cfg_res_apply_failed_body": "未做任何更改：保留当前设置。",
+  "cfg_res_name": "名称",
+  "cfg_res_keys": "设置项",
+  "cfg_res_changed": "本次更改",
+  "cfg_res_where": "位置",
+  "cfg_res_where_asb": "ASB 内（打开 → ASB）",
+  "cfg_res_where_both": "ASB 内也保留一份",
+  "cfg_res_file": "文件",
+  "cfg_res_smart": "Smart 学习",
+  "cfg_res_smart_saved": "已随设置一起保存",
+  "cfg_res_smart_skipped": "未包含（您的选择）",
+  "cfg_res_smart_none": "尚无学习数据",
+  "cfg_res_smart_restored": "已恢复",
+  "cfg_res_smart_not_in_file": "此文件中没有",
+  "cfg_res_smart_kept_device": "保持不变 — 文件来自其他设备",
+  "cfg_res_smart_kept_invalid": "保持不变 — 文件中的副本已损坏",
+  "cfg_res_smart_kept_failed": "保持不变 — 无法恢复",
+  "cfg_res_reboot_note": "请重启手机，使所有恢复的设置生效。",
+  "cfg_res_reboot_btn": "重启",
+  "cfg_res_done": "完成",
+  "cfg_res_autoclose": "%s 秒后关闭",
+  "cfg_res_opened_banner": "文件已校验并添加：%s。尚未应用 — 请点击“应用已保存的配置”。"
 }

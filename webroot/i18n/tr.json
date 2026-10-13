@@ -285,7 +285,7 @@
     },
     "wakelock_action": {
       "name": "Wakelock'lara müdahale",
-      "desc": "Wakelock, bir uygulamanın Android'e «henüz uyuma» demesidir. Bunu bütün gece yapan tek bir uygulama, buradaki her ayarın kazandırabileceğinden pahalıya mal olur.\n\nÖlçüm her zaman açık; bu, ASB'nin müdahale edip etmeyeceğine karar verir. Açıkken, ekran kapandıktan 45+ dakika sonra hâlâ wakelock tutan, sizin yüklediğiniz bir uygulama Android'in «kısıtlı» kovasına taşınır.\n\nAsla dokunulmaz: çekirdek ve sistem kaynakları ile kimlik doğrulayıcı, telefon, SMS, mesajlaşma ve saat uygulamaları."
+      "desc": "Wakelock, bir uygulamanın Android'e «henüz uyuma» demesidir. Bunu bütün gece yapan tek bir uygulama, buradaki her ayarın kazandırabileceğinden pahalıya mal olur.\n\nÖlçüm her zaman açık; bu, ASB'nin müdahale edip etmeyeceğine karar verir. Açıkken, ekran kapandıktan 45+ dakika sonra hâlâ wakelock tutan, sizin yüklediğiniz bir uygulama Android'in «kısıtlı» kovasına taşınır.\n\nAsla dokunulmaz: çekirdek ve sistem kaynakları ile kimlik doğrulayıcı, telefon, SMS, mesajlaşma ve saat uygulamaları. Ayrıntı: yalnızca işlemciyi 10+ dakika tutmuş (veya şu anda uzun bir kilit tutan) ve Android’in bugün kullanılmış saymadığı bir uygulama. Pil optimizasyonundan hariç tuttuğun uygulamalar, e-posta, navigasyon ve klavyelere de hiç dokunulmaz."
     },
     "night_modem_idle": {
       "name": "Quiet Radio at Night",
@@ -882,5 +882,34 @@
   "unit_pcth": "%/sa",
   "lv_drain_est_note": "Ekran 10 dakika açık kaldıktan sonra yerini gerçek değer alır.",
   "lv_drain_charging": "şarj oluyor",
-  "lv_drain_charging_tip": "Şarj sırasında tüketim yok — değer şarjdan çıkarınca geri gelir."
+  "lv_drain_charging_tip": "Şarj sırasında tüketim yok — değer şarjdan çıkarınca geri gelir.",
+  "cfg_res_saved_title": "Yapılandırma kaydedildi",
+  "cfg_res_saved_file_title": "Yapılandırma bir dosyaya kaydedildi",
+  "cfg_res_partial_title": "ASB'ye kaydedildi, ancak dosya yazılamadı",
+  "cfg_res_save_failed_title": "Yapılandırma kaydedilmedi",
+  "cfg_res_applied_title": "Yapılandırma uygulandı",
+  "cfg_res_applied_partial_title": "Ayarlar uygulandı, Smart öğrenimi uygulanmadı",
+  "cfg_res_apply_failed_title": "Yapılandırma uygulanmadı",
+  "cfg_res_apply_failed_body": "Hiçbir şey değişmedi: mevcut ayarlar korunuyor.",
+  "cfg_res_name": "Ad",
+  "cfg_res_keys": "Ayar",
+  "cfg_res_changed": "şimdi değişen",
+  "cfg_res_where": "Nerede",
+  "cfg_res_where_asb": "ASB içinde (Aç → ASB)",
+  "cfg_res_where_both": "ASB içinde de saklandı",
+  "cfg_res_file": "Dosya",
+  "cfg_res_smart": "Smart öğrenimi",
+  "cfg_res_smart_saved": "ayarlarla birlikte kaydedildi",
+  "cfg_res_smart_skipped": "dahil edilmedi (sizin seçiminiz)",
+  "cfg_res_smart_none": "henüz öğrenilen bir şey yok",
+  "cfg_res_smart_restored": "geri yüklendi",
+  "cfg_res_smart_not_in_file": "bu dosyada yok",
+  "cfg_res_smart_kept_device": "olduğu gibi bırakıldı — dosya başka bir cihazdan",
+  "cfg_res_smart_kept_invalid": "olduğu gibi bırakıldı — dosyadaki kopya bozuk",
+  "cfg_res_smart_kept_failed": "olduğu gibi bırakıldı — geri yüklenemedi",
+  "cfg_res_reboot_note": "Geri yüklenen tüm ayarların etkinleşmesi için telefonu yeniden başlatın.",
+  "cfg_res_reboot_btn": "Yeniden başlat",
+  "cfg_res_done": "Tamam",
+  "cfg_res_autoclose": "%s sn içinde kapanır",
+  "cfg_res_opened_banner": "Dosya kontrol edildi ve eklendi: %s. Henüz uygulanmadı — “Kaydedilmiş yapılandırmayı uygula”ya dokunun."
 }

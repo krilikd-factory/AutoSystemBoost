@@ -285,7 +285,7 @@
     },
     "wakelock_action": {
       "name": "Tindak lanjuti wakelock",
-      "desc": "Wakelock adalah aplikasi yang memberi tahu Android «jangan tidur dulu». Satu aplikasi yang melakukannya semalaman lebih mahal daripada penghematan pengaturan mana pun di sini.\n\nPengukuran selalu aktif; ini menentukan apakah ASB bertindak. Jika aktif, aplikasi yang Anda pasang dan masih memegang wakelock setelah 45+ menit layar mati dipindahkan ke bucket «restricted» Android.\n\nTidak pernah disentuh: sumber kernel dan sistem, serta aplikasi autentikator, telepon, SMS, pesan, dan jam."
+      "desc": "Wakelock adalah aplikasi yang memberi tahu Android «jangan tidur dulu». Satu aplikasi yang melakukannya semalaman lebih mahal daripada penghematan pengaturan mana pun di sini.\n\nPengukuran selalu aktif; ini menentukan apakah ASB bertindak. Jika aktif, aplikasi yang Anda pasang dan masih memegang wakelock setelah 45+ menit layar mati dipindahkan ke bucket «restricted» Android.\n\nTidak pernah disentuh: sumber kernel dan sistem, serta aplikasi autentikator, telepon, SMS, pesan, dan jam. Rinciannya: hanya aplikasi yang menahan CPU 10+ menit (atau sedang menahan kunci panjang) dan yang menurut Android tidak dipakai hari ini. Aplikasi yang kamu kecualikan dari optimasi baterai, email, navigasi, dan keyboard juga tidak pernah disentuh."
     },
     "night_modem_idle": {
       "name": "Quiet Radio at Night",
@@ -882,5 +882,34 @@
   "unit_pcth": "%/jam",
   "lv_drain_est_note": "Setelah 10 menit layar menyala, angka sebenarnya menggantikannya.",
   "lv_drain_charging": "mengisi daya",
-  "lv_drain_charging_tip": "Tidak ada konsumsi saat mengisi daya — angka kembali setelah charger dicabut."
+  "lv_drain_charging_tip": "Tidak ada konsumsi saat mengisi daya — angka kembali setelah charger dicabut.",
+  "cfg_res_saved_title": "Konfigurasi disimpan",
+  "cfg_res_saved_file_title": "Konfigurasi disimpan ke file",
+  "cfg_res_partial_title": "Disimpan di ASB, tetapi file tidak tertulis",
+  "cfg_res_save_failed_title": "Konfigurasi tidak disimpan",
+  "cfg_res_applied_title": "Konfigurasi diterapkan",
+  "cfg_res_applied_partial_title": "Pengaturan diterapkan, pembelajaran Smart tidak",
+  "cfg_res_apply_failed_title": "Konfigurasi tidak diterapkan",
+  "cfg_res_apply_failed_body": "Tidak ada yang diubah: pengaturan saat ini tetap.",
+  "cfg_res_name": "Nama",
+  "cfg_res_keys": "Pengaturan",
+  "cfg_res_changed": "diubah sekarang",
+  "cfg_res_where": "Lokasi",
+  "cfg_res_where_asb": "di dalam ASB (Buka → ASB)",
+  "cfg_res_where_both": "juga disimpan di ASB",
+  "cfg_res_file": "File",
+  "cfg_res_smart": "Pembelajaran Smart",
+  "cfg_res_smart_saved": "disimpan bersama pengaturan",
+  "cfg_res_smart_skipped": "tidak disertakan (pilihan Anda)",
+  "cfg_res_smart_none": "belum ada yang dipelajari",
+  "cfg_res_smart_restored": "dipulihkan",
+  "cfg_res_smart_not_in_file": "tidak ada di file ini",
+  "cfg_res_smart_kept_device": "dibiarkan seperti semula — file dari perangkat lain",
+  "cfg_res_smart_kept_invalid": "dibiarkan seperti semula — salinan di file rusak",
+  "cfg_res_smart_kept_failed": "dibiarkan seperti semula — tidak dapat dipulihkan",
+  "cfg_res_reboot_note": "Mulai ulang ponsel agar semua pengaturan yang dipulihkan berlaku.",
+  "cfg_res_reboot_btn": "Mulai ulang",
+  "cfg_res_done": "Selesai",
+  "cfg_res_autoclose": "Menutup dalam %s dtk",
+  "cfg_res_opened_banner": "File diperiksa dan ditambahkan: %s. Belum diterapkan — tekan “Terapkan konfigurasi tersimpan”."
 }
