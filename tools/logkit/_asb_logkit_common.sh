@@ -898,21 +898,44 @@ lk_capture_display_trace_row() {
 lk_jank_trace_header() {
   {
     echo "# UI smoothness - one row per screen-on poll interval; HWUI frames of every app (dumpsys graphicsstats deltas)"
-    echo "# epoch|iso_time|phase|fsm_state|interval_s|main_at_cap|prime_at_cap|touches|frames|janky|deadline_missed|slow_ui|high_input|main_cap_pct|prime_cap_pct|fg_pkg"
+    echo "# epoch|iso_time|phase|fsm_state|interval_s|main_at_cap|prime_at_cap|touches|frames|janky|deadline_missed|slow_ui|high_input|main_cap_pct|prime_cap_pct|fg_pkg|jank_pkgs"
   } > "$LK_OUT_DIR/jank_trace.tsv"
 }
 
 # Totals over every package block: "frames janky deadline slow_ui high_input", or nothing.
+# $1 (fix143), when given: a file that receives "package frames janky" per package, every
+# block of that package summed - the same counters the totals add up, so a package's step
+# between two polls is what it drew in between.
 lk_gfx_totals() {
   if [ -n "${ASB_LK_GFXSTATS_DUMP:-}" ]; then cat "$ASB_LK_GFXSTATS_DUMP" 2>/dev/null
-  else lk_dumpsys graphicsstats 2>/dev/null; fi | awk '
+  else lk_dumpsys graphicsstats 2>/dev/null; fi | awk -v P="${1:-}" '
     { sub(/^[ \t]+/, "") }
-    /^Total frames rendered:/          { f += $4; seen = 1 }
-    /^Janky frames:/                   { j += $3 }
+    /^Package:/                        { pkg = $2 }
+    /^Total frames rendered:/          { f += $4; seen = 1; if (pkg != "") { pf[pkg] += $4; pj[pkg] += 0 } }
+    /^Janky frames:/                   { j += $3; if (pkg != "") pj[pkg] += $3 }
     /^Number Frame deadline missed:/   { d += $5 }
     /^Number Slow UI thread:/          { u += $5 }
     /^Number High input latency:/      { i += $5 }
-    END { if (seen) printf "%.0f %.0f %.0f %.0f %.0f\n", f, j, d, u, i }'
+    END {
+      if (seen) printf "%.0f %.0f %.0f %.0f %.0f\n", f, j, d, u, i
+      if (P != "") { printf "" > P; for (p in pf) printf "%s %.0f %.0f\n", p, pf[p], pj[p] > P }
+    }'
+}
+
+# Which apps drew the janky frames of one interval (fix143): "pkg:janky:frames" for the four
+# packages with the most janky frames between the two per-package files, comma-separated, or
+# "-". A package missing from the earlier file had drawn nothing yet today; one that went
+# backwards is a pruned day and is left out, like the totals.
+#
+# Capture 26147 had 1.5 janky frames a second in every ASB state and at every frame rate -
+# 59% of frames janky in the quiet intervals (under 5 fps), 2% in the busy ones - and the
+# totals could not say which app drew them.
+lk_gfx_pkg_delta() {
+  [ -s "$1" ] && [ -s "$2" ] || { echo -; return 0; }
+  awk 'NR == FNR { f[$1] = $2; j[$1] = $3; next }
+    { df = $2 - f[$1]; dj = $3 - j[$1]; if (df >= 0 && dj > 0) print dj, $1, df }' "$1" "$2" 2>/dev/null \
+    | sort -rn | head -4 \
+    | awk '{ printf "%s%s:%d:%d", (NR > 1 ? "," : ""), $2, $1, $3 } END { if (NR == 0) printf "-"; printf "\n" }'
 }
 
 # Share of the interval the cluster's clock sat at its ceiling, in percent (fix125), from the
@@ -973,10 +996,10 @@ lk_policy_at_cap() {
 lk_capture_jank_row() {
   _jph="$1"
   if [ "${2:-0}" != 1 ]; then
-    LK_JANK_PREV=""; rm -f "$LK_OUT_DIR/.jank_tis_lo" "$LK_OUT_DIR/.jank_tis_hi" 2>/dev/null; return 0
+    LK_JANK_PREV=""; rm -f "$LK_OUT_DIR/.jank_tis_lo" "$LK_OUT_DIR/.jank_tis_hi" "$LK_OUT_DIR/.jank_pkg_prev" 2>/dev/null; return 0
   fi
-  _jt="$(lk_gfx_totals)"
-  if [ -z "$_jt" ]; then LK_JANK_PREV=""; return 0; fi
+  _jt="$(lk_gfx_totals "$LK_OUT_DIR/.jank_pkg_now")"
+  if [ -z "$_jt" ]; then LK_JANK_PREV=""; rm -f "$LK_OUT_DIR/.jank_pkg_prev" 2>/dev/null; return 0; fi
   _jnow="$(date +%s)"
   _jst="$(lk_state_kv state)"; [ -n "$_jst" ] || _jst="-"
   _jtc="$(lk_state_kv touch_starts | tr -dc '0-9')"
@@ -1008,12 +1031,14 @@ lk_capture_jank_row() {
       _jto="-"
       [ -n "$_jtc" ] && [ -n "${LK_JANK_PREV_TOUCH:-}" ] && [ "$_jtc" -ge "$LK_JANK_PREV_TOUCH" ] 2>/dev/null && \
         _jto=$(( _jtc - LK_JANK_PREV_TOUCH ))
-      printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
+      printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
         "$_jnow" "$(date '+%Y-%m-%dT%H:%M:%S')" "$_jph" "$_jsa" "$(( _jnow - LK_JANK_PREV_TS ))" \
         "$_jmc" "$_jpc" "$_jto" "$_df" "$_dj" "$_dd" "$_du" "$_di" \
-        "$_jmcs" "$_jpcs" "$(lk_topapp_pkg)" >> "$LK_OUT_DIR/jank_trace.tsv"
+        "$_jmcs" "$_jpcs" "$(lk_topapp_pkg)" \
+        "$(lk_gfx_pkg_delta "$LK_OUT_DIR/.jank_pkg_prev" "$LK_OUT_DIR/.jank_pkg_now")" >> "$LK_OUT_DIR/jank_trace.tsv"
     fi
   fi
+  mv -f "$LK_OUT_DIR/.jank_pkg_now" "$LK_OUT_DIR/.jank_pkg_prev" 2>/dev/null
   LK_JANK_PREV="$_jt"; LK_JANK_PREV_TS="$_jnow"; LK_JANK_PREV_STATE="$_jst"; LK_JANK_PREV_TOUCH="$_jtc"
 }
 
@@ -1175,38 +1200,107 @@ lk_emit_jank_summary() {
     /^#/ { next }
     NF < 13 { next }
     { n++; F += $9; J += $10; D += $11; U += $12; I += $13; S += $5
-      ph[$3] += $9; phj[$3] += $10; phn[$3]++
-      st[$4] += $9; stj[$4] += $10; stn[$4]++
-      if ($6 == "1" || $6 == "0") { mc[$6] += $9; mcj[$6] += $10; mcn[$6]++ }
-      if ($7 == "1" || $7 == "0") { pc[$7] += $9; pcj[$7] += $10; pcn[$7]++ }
+      ph[$3] += $9; phj[$3] += $10; phn[$3]++; phs[$3] += $5
+      st[$4] += $9; stj[$4] += $10; stn[$4]++; sts[$4] += $5
+      if ($6 == "1" || $6 == "0") { mc[$6] += $9; mcj[$6] += $10; mcn[$6]++; mcs[$6] += $5 }
+      if ($7 == "1" || $7 == "0") { pc[$7] += $9; pcj[$7] += $10; pcn[$7]++; pcs[$7] += $5 }
       # fix125: share of the interval at the ceiling (time_in_state), and the app in front.
-      if (NF >= 14 && $14 ~ /^[0-9]+$/) { b = ($14 < 20) ? "<20%" : ($14 < 60) ? "20-60%" : ">=60%"; mb[b] += $9; mbj[b] += $10; mbn[b]++ }
-      if (NF >= 15 && $15 ~ /^[0-9]+$/) { b = ($15 < 20) ? "<20%" : ($15 < 60) ? "20-60%" : ">=60%"; pb[b] += $9; pbj[b] += $10; pbn[b]++ }
-      if (NF >= 16 && $16 != "") { ap[$16] += $9; apj[$16] += $10; apn[$16]++
+      if (NF >= 14 && $14 ~ /^[0-9]+$/) { b = ($14 < 20) ? "<20%" : ($14 < 60) ? "20-60%" : ">=60%"; mb[b] += $9; mbj[b] += $10; mbn[b]++; mbs[b] += $5 }
+      if (NF >= 15 && $15 ~ /^[0-9]+$/) { b = ($15 < 20) ? "<20%" : ($15 < 60) ? "20-60%" : ">=60%"; pb[b] += $9; pbj[b] += $10; pbn[b]++; pbs[b] += $5 }
+      if (NF >= 16 && $16 != "") { ap[$16] += $9; apj[$16] += $10; apn[$16]++; aps[$16] += $5
         # fix140: the same app across ASB states, touched or not (see END).
-        k = $16 SUBSEP $4 SUBSEP (($8 + 0 > 0) ? "yes" : "no"); as[k] += $9; asj[k] += $10; asn[k]++ } }
+        k = $16 SUBSEP $4 SUBSEP (($8 + 0 > 0) ? "yes" : "no"); as[k] += $9; asj[k] += $10; asn[k]++; ass[k] += $5 }
+      # fix143: janky frames against how much was drawn. A source that misses a deadline about
+      # once a second whatever is on screen gives the same janky/s in a quiet interval as in a
+      # busy one - and a janky SHARE that only says how few frames there were.
+      if ($5 + 0 > 0) {
+        fps = $9 / $5; fb = (fps < 5) ? 1 : (fps < 20) ? 2 : (fps < 60) ? 3 : 4
+        bn[fb]++; bs[fb] += $5; bff[fb] += $9; bj[fb] += $10
+        # Who drew the janky frames (column 17, fix143): "pkg:janky:frames,..." - the four
+        # packages with the most janky frames in the interval, whatever app was in front.
+        if (NF >= 17 && $17 != "" && $17 != "-") {
+          n17++; S17 += $5
+          m = split($17, kk, ",")
+          for (x = 1; x <= m; x++) {
+            if (split(kk[x], z, ":") < 3) continue
+            gj[z[1]] += z[2]; gf[z[1]] += z[3]; gn[z[1]]++
+            if (fb == 1) { qj[z[1]] += z[2]; QJ += z[2] }
+          }
+        }
+      } }
     function pct(a, b) { return b > 0 ? sprintf("%.1f%%", 100.0 * a / b) : "-" }
+    function rate(a, b) { return b > 0 ? sprintf("%.2f", a / b) : "-" }
     END {
       if (n == 0 || F == 0) { print "no frames recorded with the screen on"; print ""; exit }
       printf "all screen-on intervals: %d  frames %d  janky %s  deadline missed %s  slow UI thread %s\n", \
         n, F, pct(J, F), pct(D, F), pct(U, F)
+      if (S > 0) printf "janky frames per second on screen: %s\n", rate(J, S)
       if (S > 0) printf "high-input-latency events: %.0f per screen-on minute (count, not a share of frames - see below)\n", 60.0 * I / S
       else printf "high-input-latency events: %d (count, not a share of frames - see below)\n", I
-      printf "%-16s %9s %9s %8s\n", "phase", "intervals", "frames", "janky"
-      for (p in ph) printf "%-16s %9d %9d %8s\n", p, phn[p], ph[p], pct(phj[p], ph[p])
-      printf "%-16s %9s %9s %8s\n", "ASB state", "intervals", "frames", "janky"
-      for (s in st) printf "%-16s %9d %9d %8s\n", s, stn[s], st[s], pct(stj[s], st[s])
+      printf "%-16s %9s %9s %8s %8s\n", "phase", "intervals", "frames", "janky", "janky/s"
+      for (p in ph) printf "%-16s %9d %9d %8s %8s\n", p, phn[p], ph[p], pct(phj[p], ph[p]), rate(phj[p], phs[p])
+      printf "%-16s %9s %9s %8s %8s\n", "ASB state", "intervals", "frames", "janky", "janky/s"
+      for (s in st) printf "%-16s %9d %9d %8s %8s\n", s, stn[s], st[s], pct(stj[s], st[s]), rate(stj[s], sts[s])
+      # fix143: the frame-rate bands and, when the quiet intervals miss deadlines about as
+      # often per second as the busy ones, the floor said in words.
+      if (bn[1] + bn[2] + bn[3] + bn[4] > 0) {
+        print "janky frames per second, by how many frames the interval drew:"
+        printf "  %-14s %9s %8s %8s\n", "frames/s", "intervals", "janky/s", "janky"
+        split("under 5|5-20|20-60|60 and over", bl, "|")
+        for (b = 1; b <= 4; b++) if (bn[b]) printf "  %-14s %9d %8s %8s\n", bl[b], bn[b], rate(bj[b], bs[b]), pct(bj[b], bff[b])
+        qr = (bs[1] > 0) ? bj[1] / bs[1] : 0
+        br = (bs[3] + bs[4] > 0) ? (bj[3] + bj[4]) / (bs[3] + bs[4]) : 0
+        if (bn[1] >= 5 && qr >= 0.5 && br > 0 && qr * 2 >= br) {
+          flr = 1
+          printf "steady floor: %.2f janky frames a second while almost nothing was drawn (under 5 frames/s),\n", qr
+          printf "%.2f a second in the busy intervals (20 frames/s and more). Something misses a deadline about\n", br
+          print "that often whatever is in front and whatever the ASB state. On such a floor an interval or a"
+          print "state with few frames shows a high janky share by the count of frames alone:"
+          line = ""
+          for (s in st) if (st[s] > 0 && S > 0 && J > 0 && stj[s] * F >= 2 * J * st[s] && stj[s] * S <= 1.25 * J * sts[s]) \
+            line = line (line == "" ? "" : ", ") sprintf("%s %s janky at %s/s", s, pct(stj[s], st[s]), rate(stj[s], sts[s]))
+          if (line != "") print "  high share, ordinary rate: " line
+          print "compare janky/s between states, not the share."
+        }
+      }
+      # janky/s beside each share (fix143): busy intervals sit at the ceiling more often and
+      # draw more frames, so on a steady floor their share is lower for that reason alone.
       if (mcn["1"] + mcn["0"] > 0)
-        printf "main cores at the ASB ceiling (end of interval): yes %s of %d frames, no %s of %d frames\n", \
-          pct(mcj["1"], mc["1"]), mc["1"], pct(mcj["0"], mc["0"]), mc["0"]
+        printf "main cores at the ASB ceiling (end of interval): yes %s of %d frames (%s/s), no %s of %d frames (%s/s)\n", \
+          pct(mcj["1"], mc["1"]), mc["1"], rate(mcj["1"], mcs["1"]), pct(mcj["0"], mc["0"]), mc["0"], rate(mcj["0"], mcs["0"])
       if (pcn["1"] + pcn["0"] > 0)
-        printf "prime cores at the ASB ceiling (end of interval): yes %s of %d frames, no %s of %d frames\n", \
-          pct(pcj["1"], pc["1"]), pc["1"], pct(pcj["0"], pc["0"]), pc["0"]
+        printf "prime cores at the ASB ceiling (end of interval): yes %s of %d frames (%s/s), no %s of %d frames (%s/s)\n", \
+          pct(pcj["1"], pc["1"]), pc["1"], rate(pcj["1"], pcs["1"]), pct(pcj["0"], pc["0"]), pc["0"], rate(pcj["0"], pcs["0"])
       split("<20% 20-60% >=60%", o, " ")
-      line = ""; for (i = 1; i <= 3; i++) if (mbn[o[i]]) line = line sprintf("  %s: %s of %d", o[i], pct(mbj[o[i]], mb[o[i]]), mb[o[i]])
+      line = ""; for (i = 1; i <= 3; i++) if (mbn[o[i]]) line = line sprintf("  %s: %s of %d (%s/s)", o[i], pct(mbj[o[i]], mb[o[i]]), mb[o[i]], rate(mbj[o[i]], mbs[o[i]]))
       if (line != "") print "main cores, share of the interval AT the ceiling ->" line
-      line = ""; for (i = 1; i <= 3; i++) if (pbn[o[i]]) line = line sprintf("  %s: %s of %d", o[i], pct(pbj[o[i]], pb[o[i]]), pb[o[i]])
+      line = ""; for (i = 1; i <= 3; i++) if (pbn[o[i]]) line = line sprintf("  %s: %s of %d (%s/s)", o[i], pct(pbj[o[i]], pb[o[i]]), pb[o[i]], rate(pbj[o[i]], pbs[o[i]]))
       if (line != "") print "prime cores, share of the interval AT the ceiling ->" line
+      # fix143: who drew them. The tables above credit every frame to the interval, and the
+      # one below to the app in front - a steady source behind it lands on whatever is open.
+      if (n17 > 0) {
+        print "janky frames by the app that drew them (the four with the most janky frames per interval):"
+        printf "  %-40s %8s %9s %8s %s\n", "app", "janky", "frames", "janky/s", "  intervals with janky frames"
+        shown = 0
+        while (shown < 6) {
+          best = ""; bv = 0
+          for (a in gj) if (!(a in gd) && gj[a] > bv) { best = a; bv = gj[a] }
+          if (best == "") break
+          gd[best] = 1
+          printf "  %-40s %8d %9d %8s   %d of %d\n", best, gj[best], gf[best], rate(gj[best], S17), gn[best], n17; shown++
+          if (shown == 1) top1 = best
+        }
+        if (flr && QJ > 0) {
+          qb = ""; qv = 0
+          for (a in qj) if (qj[a] > qv) { qb = a; qv = qj[a] }
+          if (qb != "") printf "the floor: %s drew %s of the janky frames in the quiet intervals.\n", qb, pct(qv, QJ)
+        }
+        if (top1 != "" && gn[top1] * 10 >= n17 * 8) {
+          printf "%s missed deadlines in %d of %d screen-on intervals, whatever app was in front: a steady redraw.\n", top1, gn[top1], n17
+          print "Turn off one thing at a time that it updates every second (in SystemUI: a network-speed meter or"
+          print "seconds on the status-bar clock; a live wallpaper) and compare janky/s in the next capture."
+        }
+      }
       # Apps in front, most frames first (at most eight).
       shown = 0
       while (shown < 8) {
@@ -1214,13 +1308,15 @@ lk_emit_jank_summary() {
         for (a in ap) if (!(a in done) && ap[a] > bf) { best = a; bf = ap[a] }
         if (best == "") break
         done[best] = 1
-        if (shown == 0) { printf "%-40s %9s %8s\n", "app in front", "frames", "janky"; top = best }
-        printf "%-40s %9d %8s\n", best, ap[best], pct(apj[best], ap[best]); shown++
+        if (shown == 0) { printf "%-40s %9s %8s %8s\n", "app in front", "frames", "janky", "janky/s"; top = best }
+        printf "%-40s %9d %8s %8s\n", best, ap[best], pct(apj[best], ap[best]), rate(apj[best], aps[best]); shown++
       }
+      if (shown > 0 && flr) print "(the app in front is credited with every app'"'"'s frames in the interval, the floor included)"
       # fix140: the ASB-state table mixes apps. Capture 2830 read "LIGHT_IDLE 34.8% janky,
       # MODERATE 4.1%" - and YouTube, playing untouched, was most of LIGHT_IDLE: inside YouTube
-      # untouched it was 43.8% in LIGHT_IDLE and 42.3% in mixed. The app in front decided the
-      # share, not the state. The app with the most frames, by state and touch:
+      # untouched it was 43.8% in LIGHT_IDLE and 42.3% in mixed. fix143: capture 26147 showed
+      # what was under those shares - about 1.5 janky frames a second in every state and at
+      # every frame rate, so few frames meant a high share. janky/s is printed beside it.
       if (top != "") {
         split("GAMING SUSTAINED HEAVY MODERATE LIGHT_IDLE DEEP_IDLE mixed", so, " ")
         ns = 0; for (i = 1; i <= 7; i++) { ord[++ns] = so[i]; known[so[i]] = 1 }
@@ -1229,11 +1325,11 @@ lk_emit_jank_summary() {
         for (i = 1; i <= ns; i++) for (t = 1; t <= 2; t++) {
           tk = (t == 1) ? "yes" : "no"; k = top SUBSEP ord[i] SUBSEP tk
           if (!(k in as) || as[k] == 0) continue
-          out = out sprintf("  %-14s %-6s %9d %9d %8s\n", ord[i], tk, asn[k], as[k], pct(asj[k], as[k])); rows++
+          out = out sprintf("  %-14s %-6s %9d %9d %8s %8s\n", ord[i], tk, asn[k], as[k], pct(asj[k], as[k]), rate(asj[k], ass[k])); rows++
         }
         if (rows >= 2) {
           printf "within %s (most frames), by ASB state and touch:\n", top
-          printf "  %-14s %-6s %9s %9s %8s\n", "ASB state", "touch", "intervals", "frames", "janky"
+          printf "  %-14s %-6s %9s %9s %8s %8s\n", "ASB state", "touch", "intervals", "frames", "janky", "janky/s"
           printf "%s", out
           print "  Compare states inside one app: each state saw a different mix of apps, so the ASB-state"
           print "  table above does not by itself show what a state does to smoothness."
@@ -1628,6 +1724,68 @@ lk_wakelock_batterystats_dump() {
   rm -f "$_raw" 2>/dev/null || true
 }
 
+# ── who held a screen-off phase awake, inside that phase (fix143) ──────────────────────
+#
+# phase_wakeholders.txt printed batterystats' running totals under each phase - "15m 2s" of
+# PowerManagerService under a two-minute gap - with a header saying they were not the
+# phase's. Capture 26147 had idle phases at 47-64% awake and the file named no culprit for
+# any of them. Steps, not totals:
+#  * apps: batterystats' per-app partial wakelock timers run only on battery with the screen
+#    off, so between two screen-off phase closes a screen-on phase adds nothing - the step is
+#    the time held in the later screen-off stretch;
+#  * kernel sources run all the time: /sys/class/wakeup is read when the phase opens and
+#    again when it closes.
+
+# stdin: dumpsys batterystats. stdout: "uid<TAB>tag<TAB>ms" per "Wake lock <uid> <tag>: <time>".
+lk_wh_app_parse() {
+  awk '
+    function ms(s,   n, i, t, v) {
+      n = split(s, t, " "); v = 0
+      for (i = 1; i <= n; i++) {
+        if (t[i] ~ /^[0-9]+ms$/) v += t[i] + 0
+        else if (t[i] ~ /^[0-9]+s$/) v += (t[i] + 0) * 1000
+        else if (t[i] ~ /^[0-9]+m$/) v += (t[i] + 0) * 60000
+        else if (t[i] ~ /^[0-9]+h$/) v += (t[i] + 0) * 3600000
+        else if (t[i] ~ /^[0-9]+d$/) v += (t[i] + 0) * 86400000
+        else break
+      }
+      return v
+    }
+    { sub(/^[ \t]+/, "") }
+    /^Wake lock (u[0-9]+a?[0-9]+|[0-9]+) / && / realtime/ {
+      if (!match($0, /: ([0-9]+[dhms] )*[0-9]+ms /)) next
+      head = substr($0, 11, RSTART - 11)
+      sp = index(head, " "); if (sp < 2) next
+      k = substr(head, 1, sp - 1) "\t" substr(head, sp + 1)
+      v[k] += ms(substr($0, RSTART + 2, RLENGTH - 3))
+    }
+    END { for (k in v) printf "%s\t%d\n", k, v[k] }'
+}
+
+# stdout: "name<TAB>total_ms" for every kernel wakeup source, same names summed - the
+# capture's own lock (asb_logkit_<pid>) left out. Nothing (and 1) without /sys/class/wakeup.
+lk_wh_kernel_snap() {
+  _whc="${LK_WAKEUP_CLASS:-/sys/class/wakeup}"
+  [ -d "$_whc" ] || return 1
+  awk 'FNR == 1 { d = FILENAME
+      if (sub(/\/name$/, "", d)) nm[d] = $0
+      else if (sub(/\/total_time_ms$/, "", d)) tt[d] = $0 + 0 }
+    END { for (d in nm) if (d in tt) s[nm[d]] += tt[d]
+      for (k in s) if (k !~ /^asb_logkit/) printf "%s\t%d\n", k, s[k] }' "$_whc"/wakeup*/name "$_whc"/wakeup*/total_time_ms 2>/dev/null
+}
+
+# $1 earlier, $2 later snapshot (key fields, then ms last), $3 how many. stdout: "ms<TAB>key",
+# biggest step first. A counter that went backwards was reset (an unplug): its whole value is new.
+lk_wh_delta() {
+  [ -s "$1" ] && [ -s "$2" ] || return 0
+  awk -F'\t' 'NR == FNR { k = $0; sub(/\t[^\t]*$/, "", k); b[k] = $NF; next }
+    { k = $0; sub(/\t[^\t]*$/, "", k); d = $NF - b[k]; if (d < 0) d = $NF + 0
+      if (d >= 1000) printf "%d\t%s\n", d, k }' "$1" "$2" | sort -rn | head -"${3:-3}"
+}
+
+# ms -> "2m 05s"
+lk_wh_fmt() { awk -v v="${1:-0}" 'BEGIN { printf "%dm %02ds", int(v / 60000), int((v % 60000) / 1000) }'; }
+
 # Parse the raw batterystats into a ranked offenders report. Pure text parsing,
 # no jq/python dependency. The goal: name the top wakelock holders and alarm
 # sources with numbers, so an ASB prop/standby change can target a real culprit.
@@ -1762,7 +1920,14 @@ lk_wakelock_emit_report() {
     # Real format on this build: history lines carrying *walarm*:<name>. Count
     # by alarm name. Also surface the kernel wake_reason tokens (what actually
     # pulled the SoC out of suspend).
-    grep -oE '\*walarm\*:[^"]+' "$_raw" 2>/dev/null \
+    #
+    # Acquisitions only (fix143). The pattern took every "*walarm*:" in the dump: the release
+    # of the same lock ("-wake_lock=...") counted it twice, and the per-app summary lines
+    # ("*walarm*:*job.deadline*: 1 times") came out as separate alarms called "...: 0 times"
+    # and "...: 1 times" with a count that was the number of apps listing them (capture 26147).
+    echo "(each = an alarm that took a wakelock while no other app held one; batterystats history, Android's own window)"
+    grep -oE '\+wake_lock=[^:" ]*:"\*walarm\*:[^"]+"' "$_raw" 2>/dev/null \
+      | sed 's/^[^"]*"//; s/"$//' \
       | sort | uniq -c | sort -rn | head -15 \
       | awk '{n=$1; $1=""; sub(/^ /,""); printf "  x%-4d  %s\n", n+0, $0}'
     echo ""
@@ -1795,14 +1960,27 @@ lk_wakelock_emit_report() {
     #
     # Worth its own line because the response differs: a busy wake source is a candidate
     # for a standby bucket, a suspend failure is a bug report for the ROM.
-    _sf="$(grep -oE 'Abort: Device [^"]*failed to suspend[^"]*' "$_raw" 2>/dev/null \
-           | sort | uniq -c | sort -rn | head -4)"
+    # History events only (fix143), like the wake reasons above: the summary section repeats
+    # the reason with its own total ("...error -16: 40s 561ms (17 times) realtime") and that
+    # line was listed as one more device.
+    _sf="$(grep -oE 'wake_reason=[0-9]*:"Abort: Device [^"]*failed to suspend[^"]*"' "$_raw" 2>/dev/null \
+           | sed 's/^[^"]*"//; s/"$//' | sort | uniq -c | sort -rn | head -4)"
     if [ -n "$_sf" ]; then
       echo "  -- devices that REFUSED to suspend (not wake sources) --"
       printf '%s\n' "$_sf" \
         | awk '{n=$1; $1=""; sub(/^ /,""); printf "  x%-4d  %s\n", n+0, $0}'
-      echo "  (these are driver-level: the suspend attempt failed outright, and no"
-      echo "   standby or wakelock policy can change that)"
+      # alarmtimer is not a driver fault (fix143). The kernel's alarmtimer refuses suspend
+      # with -EBUSY (-16) when the next wake-up alarm is due within two seconds - going down
+      # only to be woken again costs more. Capture 26147: each of these sat on the same
+      # history line as "*walarm*:...aod.HIDE_TIME" or "*walarm*:com.sec.swpedometer".
+      if printf '%s\n' "$_sf" | grep -q 'alarmtimer'; then
+        echo "  (alarmtimer -16: a wake-up alarm was due within 2 s, so the kernel did not suspend -"
+        echo "   the alarms listed above cause it; fewer frequent alarms, fewer of these)"
+      fi
+      if printf '%s\n' "$_sf" | grep -qv 'alarmtimer'; then
+        echo "  (other devices: driver-level - the suspend attempt failed outright, and no"
+        echo "   standby or wakelock policy can change that)"
+      fi
     fi
     echo ""
 

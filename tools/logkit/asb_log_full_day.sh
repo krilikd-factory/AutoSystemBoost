@@ -492,56 +492,72 @@ lk_phase_ledger_row() {
   # whole session, which is useless for a 25-minute window in the middle of it.
   #
   # Only for the screen-off phases: those are the ones where being awake is the anomaly.
-  # dumpsys batterystats is heavy, so this runs once per phase close rather than per tick,
-  # and only when the phase actually spent time awake.
+  # dumpsys batterystats is heavy, so it runs once per screen-off phase close rather than
+  # per tick (fix143: every such close, since each reading is the next one's baseline).
   # Mark a sleep phase that had audio playing through it.
   #
   # Without this the row is indistinguishable from a silent night, and its awake% - which
   # AudioMix legitimately pushes near 100 - looks like a defect instead of a playing
   # stream. One line in the notes file costs nothing and stops the next reader chasing it.
-  if [ "${LK_PHASE_AUDIO_NIGHT:-0}" = "1" ] && [ "$LK_CUR_PHASE" = "sleep" ]; then
+  if [ "${LK_PHASE_AUDIO_NIGHT:-0}" = "1" ] && [ "$LK_CUR_PHASE" = "sleep" ] && [ "${LK_PH_SNAPSHOT:-0}" != 1 ]; then
     printf 'phase=sleep note=audio_played_through awake=%s%%\n' "$_awake" \
       >> "$LK_OUT_DIR/phase_wakeholders.txt" 2>/dev/null || true
   fi
 
-  case "$LK_CUR_PHASE" in
-    gap|idle|sleep)
-      if [ "$_awake" -gt 15 ] 2>/dev/null; then
-        {
-          # The holder lines below are batterystats totals since its last reset, not
-          # time spent inside this phase. An 83-second gap listed PowerManagerService at
-          # 13m48s; reading that as local attribution - which an audit did, and which I did
-          # in an earlier analysis - turns a cumulative counter into a culprit. Say so on
-          # the header itself, where nobody can miss it.
-          printf 'phase=%s awake=%s%% dur=%ss  (holders below: batterystats cumulative totals, NOT time within this phase)\n' "$LK_CUR_PHASE" "$_awake" "$_elapsed"
-            # Match 'realtime' alone - this build does not print 'partial' on the line.
-            #
-            # The pattern required both words on one line. Real output reads "Wake lock
-            # ActivityManager-Sleep realtime" with no "partial" anywhere, so 11 of 14 recorded
-            # phases got a header and no culprit - the section existed and answered nothing,
-            # which is worse than not having it, because it looks like there was no holder.
-          lk_dumpsys batterystats 2>/dev/null \
-            | sed -n '/Wake lock/,/^$/p' \
-            | grep -iE 'wake lock .*realtime' \
-            | head -3 | sed 's/^[[:space:]]*/  /'
-            # Also capture the per-UID wakelock block, where app names live.
-            #
-            # The section above only matches "Kernel Wake lock ...", so a sleep phase reports
-            # PowerManagerService and rmnet and nothing a user can act on. A capture shows 155 MiB
-            # of mobile traffic during DEEP_IDLE in 11 bursts - that is apps waking up, and their
-            # names are what turns the report into something actionable: a standby bucket, an
-            # exemption removed, an app uninstalled.
-            #
-            # batterystats lists these under "Wake lock <uid> <package>"; taking the top three
-            # keeps the cost identical to the kernel list above.
-            lk_dumpsys batterystats 2>/dev/null \
-              | sed -n '/Wake lock/,/^$/p' \
-              | grep -iE 'wake lock u[0-9]+' \
-              | head -3 | sed 's/^[[:space:]]*/  app: /'
-        } >> "$LK_OUT_DIR/phase_wakeholders.txt" 2>/dev/null || true
-      fi
-      ;;
-  esac
+  # The relabel below (a "gap" that lasted minutes) is needed for the holder header too.
+  _pl_name="$LK_CUR_PHASE"
+  if [ "$_pl_name" = "gap" ]; then
+    _pl_dur=$(( _end - LK_PH_START ))
+    if   [ "$_pl_dur" -ge 1200 ] 2>/dev/null; then _pl_name="sleep"
+    elif [ "$_pl_dur" -ge 120 ]  2>/dev/null; then _pl_name="idle"
+    fi
+  fi
+  # Holders inside the phase (fix143) - only when it really closes. The interim report
+  # snapshots the open phase too (LK_PH_SNAPSHOT=1): that ran two batterystats dumps and
+  # appended a block for a phase still in progress - capture 26147 carried "phase=gap
+  # awake=100% dur=2s" entries from it.
+  if [ "${LK_PH_SNAPSHOT:-0}" != 1 ]; then
+    case "$LK_CUR_PHASE" in
+      gap|idle|sleep|audio|audio_bt|audio_spk|audio_wired)
+        # One batterystats read per screen-off close: this phase's holders, and the baseline
+        # for the next screen-off stretch (audio phases keep it current without printing).
+        lk_dumpsys batterystats 2>/dev/null | lk_wh_app_parse > "$LK_OUT_DIR/.wh_a_now" 2>/dev/null
+        case "$LK_CUR_PHASE" in gap|idle|sleep) _wh_show=1 ;; *) _wh_show=0 ;; esac
+        if [ "$_wh_show" = 1 ] && [ "$_awake" -gt 15 ] 2>/dev/null; then
+          lk_wh_kernel_snap > "$LK_OUT_DIR/.wh_k_now" 2>/dev/null || rm -f "$LK_OUT_DIR/.wh_k_now"
+          {
+            printf 'phase=%s awake=%s%% dur=%ss  (time gained inside this phase)\n' "$_pl_name" "$_awake" "$_elapsed"
+            if [ -s "$LK_OUT_DIR/.wh_a_prev" ] && [ -s "$LK_OUT_DIR/.wh_a_now" ]; then
+              _wh_rows="$(lk_wh_delta "$LK_OUT_DIR/.wh_a_prev" "$LK_OUT_DIR/.wh_a_now" 3)"
+              if [ -n "$_wh_rows" ]; then
+                printf '%s\n' "$_wh_rows" | while IFS="$(printf '\t')" read -r _wv _wu _wt; do
+                  printf '  app:    +%s  %s  (%s)\n' "$(lk_wh_fmt "$_wv")" "$_wt" "$_wu"
+                done
+              else
+                echo "  app:    none held a wakelock for a second or more in this stretch"
+              fi
+            elif [ -s "$LK_OUT_DIR/.wh_a_now" ]; then
+              # First screen-off close of the capture: no earlier reading to subtract.
+              sort -t"$(printf '\t')" -k3,3nr "$LK_OUT_DIR/.wh_a_now" | head -3 \
+                | while IFS="$(printf '\t')" read -r _wu _wt _wv; do
+                    printf '  app:    %s  %s  (%s)  since Android'"'"'s last unplug - no earlier reading in this capture\n' "$(lk_wh_fmt "$_wv")" "$_wt" "$_wu"
+                  done
+            fi
+            if [ -s "$LK_OUT_DIR/.wh_k_open" ] && [ -s "$LK_OUT_DIR/.wh_k_now" ]; then
+              lk_wh_delta "$LK_OUT_DIR/.wh_k_open" "$LK_OUT_DIR/.wh_k_now" 3 \
+                | while IFS="$(printf '\t')" read -r _wv _wn; do
+                    printf '  kernel: +%s  %s\n' "$(lk_wh_fmt "$_wv")" "$_wn"
+                  done
+            fi
+          } >> "$LK_OUT_DIR/phase_wakeholders.txt" 2>/dev/null || true
+          rm -f "$LK_OUT_DIR/.wh_k_now" 2>/dev/null
+        fi
+        # No reading (dumpsys failed): drop the baseline rather than let the next step span two stretches.
+        if [ -s "$LK_OUT_DIR/.wh_a_now" ]; then mv -f "$LK_OUT_DIR/.wh_a_now" "$LK_OUT_DIR/.wh_a_prev"
+        else rm -f "$LK_OUT_DIR/.wh_a_now" "$LK_OUT_DIR/.wh_a_prev" 2>/dev/null; fi
+        ;;
+    esac
+  fi
   _maavg=0
     # Blank the average when most readings were unusable.
     #
@@ -583,13 +599,7 @@ EOF
   #
   # Relabel on close, by the duration the phase actually had, using the same thresholds
   # the live classifier uses.
-  _pl_name="$LK_CUR_PHASE"
-  if [ "$_pl_name" = "gap" ]; then
-    _pl_dur=$(( _end - LK_PH_START ))
-    if   [ "$_pl_dur" -ge 1200 ] 2>/dev/null; then _pl_name="sleep"
-    elif [ "$_pl_dur" -ge 120 ]  2>/dev/null; then _pl_name="idle"
-    fi
-  fi
+  # (_pl_name: relabelled above, before the holders.)
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
     "$_pl_name" "$LK_PH_START" "$_end" "$LK_PH_START_PCT" "$_endpct" \
     "$_cavg" "$_savg" "$_p6avg" "$_gavg" \
@@ -604,11 +614,19 @@ lk_phase_ledger_flush() {
 
 lk_phase_ledger_snapshot_open() {
   true > "$LK_OUT_DIR/.phase_open.tsv"
+  # A row for the interim report, not a close: no holders, no batterystats (fix143).
+  LK_PH_SNAPSHOT=1
   lk_phase_ledger_row >> "$LK_OUT_DIR/.phase_open.tsv" 2>/dev/null || true
+  LK_PH_SNAPSHOT=0
 }
 
 lk_phase_ledger_open() {
   LK_CUR_PHASE="$1"
+  # Kernel wakeup sources at the start of a screen-off phase (fix143), for the holders at its close.
+  case "$1" in
+    gap|idle|sleep) lk_wh_kernel_snap > "$LK_OUT_DIR/.wh_k_open" 2>/dev/null || rm -f "$LK_OUT_DIR/.wh_k_open" ;;
+    *) rm -f "$LK_OUT_DIR/.wh_k_open" 2>/dev/null ;;
+  esac
   LK_PH_START=$(date +%s)
   LK_PH_START_UP=$(lk_uptime_s)
   LK_PH_START_MONO=$(lk_mono_s)
