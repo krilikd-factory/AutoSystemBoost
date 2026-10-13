@@ -3594,6 +3594,18 @@ fi
   _wd_last="$_ho_last"
   while true; do
     sleep 300
+    # The fitness limit right after boot (fix143): OPlus' boot-time sweep resets the
+    # WAKE_LOCK app-op and the hourly screen-off pass below was the first to set it again.
+    # The first two ticks (about 5 and 10 minutes of awake time) put it back, screen on or
+    # off - appops for the few fitness apps, and nothing unless wakelock_fitness=limit.
+    if [ "${_fit_boot:-0}" -lt 2 ]; then
+      _fit_boot=$(( ${_fit_boot:-0} + 1 ))
+      if grep -E '^[[:space:]]*wakelock_fitness=' "$MODDIR/config/governor.conf" 2>/dev/null \
+           | head -1 | sed 's/.*=//' | tr -d ' \r' | grep -qix limit \
+         && [ -f "$MODDIR/runtime/asb_wakelock_watch.sh" ]; then
+        MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wakelock_watch.sh" fitness >/dev/null 2>&1
+      fi
+    fi
     _ho_now="$(date +%s 2>/dev/null || echo 0)"
     [ $(( _ho_now - _wd_last )) -ge 1800 ] 2>/dev/null || continue
     _wd_last="$_ho_now"
