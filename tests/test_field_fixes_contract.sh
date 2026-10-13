@@ -826,4 +826,25 @@ grep -q "ASB reconfigure" "$ROOT/tools/asb_diag.sh" || fail "asbdiag silent abou
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS: fix139 contract"
 ) || exit 1
+# ---- fix140 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix140: $*"; exit 1; }
+C="$ROOT/tools/logkit/_asb_logkit_common.sh"
+grep -q '> "\$LK_OUT_DIR/.wl_uid_delta"' "$C" || fail "per-uid batterystats deltas not kept"
+grep -q "not one app's total moved in" "$C" || fail "a stalled batterystats still reads as 'no app held a wakelock'"
+grep -q '^lk_capture_on_battery()' "$C" || fail "stall check not limited to a capture on battery"
+grep -q 'batterystats disagrees with these samples:' "$C" || fail "live holders not checked against batterystats"
+grep -q 'within %s (most frames), by ASB state and touch' "$C" || fail "jank by state not shown inside one app"
+F="$ROOT/tools/logkit/asb_log_full_day.sh"
+grep -n 'echo "' "$F" | grep -q '`' && fail "a backtick inside a double-quoted echo runs a command"
+grep -q "'hfp_audio_disconnect' is an HFP/SCO audio-link detach" "$F" || fail "Bluetooth evidence line still empty"
+grep -q 'Look again for up to 3 s before naming anything' "$ROOT/tools/asb_diag.sh" || fail "asbdiag grades a momentary boost as a vendor floor"
+grep -q 'vendor floor - \$_drv/\$_gov clamps the minimum, not a write failure' "$ROOT/tools/asb_diag.sh" && fail "unproven vendor-floor claim still printed"
+for t in test_logkit_bstats_stall_runtime.sh test_jank_app_state_runtime.sh; do
+  [ -f "$ROOT/tests/$t" ] || fail "$t missing"
+done
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix140 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
