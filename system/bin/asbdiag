@@ -144,6 +144,48 @@ if [ -z "$MODDIR" ]; then
   P ""; exit 0
 fi
 
+# Frames per app while this report runs (fix143). The day totals in 7c cannot show a steady
+# source: capture 26147 had about 1.5 janky frames a second in every ASB state and at every
+# frame rate, and asbdiag only had "since midnight" numbers. Read the counters here and again
+# in 7c; the difference is what each app drew in between, with the phone in the user's hand.
+# asb_gfx_pkg_begin
+asb_gfx_pkg() {   # stdin: dumpsys graphicsstats; stdout: "package frames janky", all blocks summed
+  awk '{ sub(/^[ \t]+/, "") }
+    /^Package:/ { p = $2 }
+    /^Total frames rendered:/ { if (p != "") { f[p] += $4; j[p] += 0 } }
+    /^Janky frames:/ { if (p != "") j[p] += $3 }
+    END { for (k in f) printf "%s %.0f %.0f\n", k, f[k], j[k] }'
+}
+asb_gfx_run_delta() {   # $1 earlier asb_gfx_pkg lines, $2 later ones, $3 seconds between
+  { printf '%s\n' "$1"; echo "--"; printf '%s\n' "$2"; } | awk -v S="${3:-0}" '
+    !sec && $0 == "--" { sec = 1; next }
+    !sec { if (NF == 3) { f[$1] = $2; j[$1] = $3 }; next }
+    NF == 3 { df = $2 - f[$1]; dj = $3 - j[$1]
+      if (df < 0 || dj < 0) next
+      F += df; if (dj > 0) { n++; P[n] = $1; DJ[n] = dj; DF[n] = df } }
+    END {
+      if (S < 5 || F <= 0) exit
+      if (n == 0) { printf "while this report ran (%d s): %d frames drawn, none janky\n", S, F; exit }
+      line = ""
+      for (r = 1; r <= 4; r++) {
+        b = 0
+        for (k = 1; k <= n; k++) if (!(k in used) && (b == 0 || DJ[k] > DJ[b])) b = k
+        if (b == 0) break
+        used[b] = 1
+        line = line (line == "" ? "" : "  ·  ") sprintf("%s %d of %d frames (%.2f/s)", P[b], DJ[b], DF[b], DJ[b] / S)
+        if (r == 1) { tp = P[b]; tj = DJ[b]; tf = DF[b] }
+      }
+      printf "while this report ran (%d s), janky frames by app: %s\n", S, line
+      # One app missing most of what it drew, about every other second or more, while the
+      # user was only waiting for this report: a redraw that runs on its own.
+      if (tj / S >= 0.5 && tj * 2 >= tf)
+        printf "steady: %s missed %d of the %d frames it drew - about %.1f a second while you only waited for this report\n", tp, tj, tf, tj / S
+    }'
+}
+# asb_gfx_pkg_end
+_gfx_run0="$(dumpsys graphicsstats 2>/dev/null | asb_gfx_pkg)"
+_gfx_run0_t="$(date +%s)"
+
 # =====================================================================
 SEC "0. BOOT TIMELINE  (debug-only passive lifecycle evidence)"
 _boot_timeline="/data/adb/asb/boot_timeline.tsv"
@@ -874,7 +916,8 @@ if [ -r "$_state" ]; then
   _ueb="$(grep -m1 '^uevent_by_subsys=' /dev/.asb/state 2>/dev/null | cut -d= -f2- | tr -d '"')"
   _uep="$(grep -m1 '^uevent_parks=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
   _ued="$(grep -m1 '^uevent_dropped_while_parked=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
-  [ -n "$_uet" ] && NOTE "uevents handled: ${_uet} (${_ueb:-?})  ·  skipped while the screen was on: ${_ued:-n/a} over ${_uep:-0} screen-on period(s)"
+  # No subsystem split before the first uevent: "0 (?)" read like an unreadable counter (fix143).
+  [ -n "$_uet" ] && NOTE "uevents handled: ${_uet}${_ueb:+ ($_ueb)}  ·  skipped while the screen was on: ${_ued:-n/a} over ${_uep:-0} screen-on period(s)"
   [ -n "$_wbn" ] && NOTE "writes by node: $_wbn"
   # Vendor contention beside it: passive=1 means ASB stopped reasserting on purpose.
   _vp="$(grep -m1 '^cap_vendor_passive=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
@@ -2649,7 +2692,8 @@ if [ -s /data/adb/asb/wakelock_fitness_limited ]; then
     P "    WAKE_LOCK ignored: $_fp  (was: ${_fo:-default}; now: ${_fnow:-default}; held now: ${_fheld:-0}, of them disabled: ${_fdis:-0})"
     # No WAKE_LOCK entry means the op is back at default: the system reset it (app update,
     # permission reset, boot sweep). The wakelock watcher re-applies it on its next pass.
-    [ "${_fnow:-default}" != ignore ] && NOTE "  limit lapsed - the system reset this app-op; the wakelock watcher re-applies it on its next pass"
+    # fix143: put back about 5 and 10 minutes after boot, then by the hourly screen-off pass.
+    [ "${_fnow:-default}" != ignore ] && NOTE "  limit lapsed - the system reset this app-op (OPlus does at boot); ASB puts it back about 5-10 min after boot, otherwise on the next hourly screen-off pass"
   done < /data/adb/asb/wakelock_fitness_limited
 fi
 if [ -s /data/adb/asb/wakelock_restricted ]; then
@@ -3198,6 +3242,21 @@ if [ -n "$_gfx_lines" ]; then
   NOTE "For lags: run this right after they happen; the full-day capture splits the same counters by ASB state (jank_trace.tsv)."
 else
   NOTE "UI smoothness: no frame counters available (dumpsys graphicsstats empty)"
+fi
+# The same counters between the top of this report and here, per app (fix143).
+if [ -n "$_gfx_run0" ]; then
+  _gfx_run1="$(dumpsys graphicsstats 2>/dev/null | asb_gfx_pkg)"
+  _gfx_run_lines="$(asb_gfx_run_delta "$_gfx_run0" "$_gfx_run1" "$(( $(date +%s) - ${_gfx_run0_t:-0} ))")"
+  if [ -n "$_gfx_run_lines" ]; then
+    printf '%s\n' "$_gfx_run_lines" | while IFS= read -r _gl; do
+      case "$_gl" in
+        steady:*) NOTE "${_gl#steady: }"
+                  NOTE "  a redraw that runs by itself: it lands in every ASB state and every app. In SystemUI, turn off one thing it"
+                  NOTE "  updates every second (network-speed meter, seconds on the clock) and run asbdiag again to compare" ;;
+        *) P "  $_gl" ;;
+      esac
+    done
+  fi
 fi
 
 SEC "8a. SLEEP / DOZE  (the subsystem nobody can observe directly)"
