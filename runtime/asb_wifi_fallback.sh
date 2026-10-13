@@ -526,13 +526,17 @@ case "${1:-reconcile}" in
     if _enabled; then
       if ! _watcher_alive; then
         rm -f "$PID" 2>/dev/null
+        # Out of the WebUI's app cgroups before the watcher is forked (fix141).
+        [ -f "$MODDIR/runtime/asb_cgroup.sh" ] && . "$MODDIR/runtime/asb_cgroup.sh" && asb_cgroup_detach $$ >/dev/null 2>&1
         ( MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wifi_fallback.sh" watch </dev/null >/dev/null 2>&1 & )
       fi
     else
       _stop
     fi
     ;;
-  watch) _watch ;;
+  watch)
+    [ -f "$MODDIR/runtime/asb_cgroup.sh" ] && . "$MODDIR/runtime/asb_cgroup.sh" && asb_cgroup_detach $$ >/dev/null 2>&1
+    _watch ;;
   stop) _stop ;;
   status) _status ;;
   *) echo 'usage: asb_wifi_fallback.sh reconcile|watch|stop|status' >&2; exit 2 ;;

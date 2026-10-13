@@ -371,13 +371,18 @@ case "${1:-reconcile}" in
       fi
       rm -f "$PIDF" 2>/dev/null
       if _enabled; then
+        # Out of the WebUI's app cgroups before the watcher is forked (fix141).
+        [ -f "$MODDIR/runtime/asb_cgroup.sh" ] && . "$MODDIR/runtime/asb_cgroup.sh" && asb_cgroup_detach $$ >/dev/null 2>&1
         ( MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_ltpo_video.sh" watch </dev/null >/dev/null 2>&1 & )
       fi
     elif ! _enabled; then
       _stop
     fi
     ;;
-  watch) _alive && exit 0; _watch ;;
+  watch)
+    _alive && exit 0
+    [ -f "$MODDIR/runtime/asb_cgroup.sh" ] && . "$MODDIR/runtime/asb_cgroup.sh" && asb_cgroup_detach $$ >/dev/null 2>&1
+    _watch ;;
   stop) _stop ;;
   status)
     _l=0; _t=0; _s=0

@@ -258,6 +258,14 @@ _wl_protected() {
     ru.oneme.app|ru.ok.tamtam|com.icq.*|com.google.android.apps.tachyon|\
     com.google.android.gm|*mail*|*.voip|*.voip.*|\
     *waze*|*.maps|*.maps.*|*navigation*|*navigator*|*inputmethod*|*keyboard*|com.touchtype.*) return 0 ;;
+    # fix141, from the package list of the OP15 capture 2830: Wickr and Truecaller are
+    # installed there and matched nothing above. Telegram clients other than the official
+    # one (exteraGram, AyuGram, Nekogram, Nagram, Cherrygram) carry no "telegram" in their id;
+    # the wearable and headphone companions keep a watch or earbuds connected; Moovit is
+    # navigation by another name.
+    *messenger*|*wickr*|com.truecaller|com.truecaller.*|*callerid*|\
+    com.radolyn.ayugram|tw.nekomimi.nekogram|xyz.nextalone.nagram|uz.unnarsx.cherrygram|\
+    com.samsung.accessory.*|com.sony.songpal.*|com.tranzmate|*transit*) return 0 ;;
   esac
   return 1
 }

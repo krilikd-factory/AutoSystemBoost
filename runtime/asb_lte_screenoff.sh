@@ -622,6 +622,9 @@ do_light_start() {
     _lp="$(cat "$LPIDF" 2>/dev/null)"
     [ -n "$_lp" ] && kill -0 "$_lp" 2>/dev/null && return 0
   fi
+  # The WebUI starts this loop when the switch is turned on: out of the manager app's
+  # cgroups first, so the loop runs where the boot-started one does (fix141).
+  [ -f "$MODDIR/runtime/asb_cgroup.sh" ] && . "$MODDIR/runtime/asb_cgroup.sh" && asb_cgroup_detach $$ >/dev/null 2>&1
   (
     exec </dev/null >/dev/null 2>&1
     trap 'kill "$_sp" 2>/dev/null; exit 0' TERM INT
