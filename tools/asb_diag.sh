@@ -1425,7 +1425,15 @@ NOTE "(profile rails: top-app should track UCL_TOP_MAX; perf_ceiling_pct no long
 _gmin_live="$(cat /proc/sys/kernel/sched_util_clamp_min 2>/dev/null)"
 case "$_gmin_live" in
   ''|*[!0-9]*) : ;;
-  *) NOTE "global sched_util_clamp_min = $_gmin_live (ASB target: (UCL_TOP_MIN*1024)/100, floor 205; OxygenOS default 1024)" ;;
+  *)
+    # fix144: with the native governor nothing sets this at boot (the legacy shell policy is
+    # skipped) and the reconcile pass that was meant to watch it never ran - 23 of 24 field
+    # reports read 1024. Say what is true instead of naming a target nobody applies.
+    if [ -f /dev/.asb/governor.pid ] && [ ! -f /data/adb/asb/allow_boot_shell_policy ]; then
+      NOTE "global sched_util_clamp_min = $_gmin_live (not set at boot with the native governor - the ROM's value; a shell-side profile apply lowers it to the profile floor until the next reboot)"
+    else
+      NOTE "global sched_util_clamp_min = $_gmin_live (ASB target: (UCL_TOP_MIN*1024)/100, floor 205; OxygenOS default 1024)"
+    fi ;;
 esac
 
 SEC "0f. LSPOSED LOGGING  (read only — ASB never changes another module's settings)"
@@ -3616,6 +3624,28 @@ for _lg in /data/adb/asb/governor_persist.log "$MODDIR/asb.log" \
            /data/adb/asb/asb.log /data/local/tmp/asb.log; do
   [ -f "$_lg" ] && { P "    log tail ($_lg):"; tail -12 "$_lg" 2>/dev/null | while IFS= read -r _l; do P "      $_l"; done; break; }
 done
+# Starts by kind (fix144): the tail listed twelve starts and could not say which were boots.
+# Lines from fix144 on carry the seconds since boot, and a clean exit writes its own line;
+# a start long after boot with no clean stop before it is a death that was restarted.
+# asb_gov_starts_begin
+asb_gov_starts() {   # stdin: governor_persist.log; stdout: "starts boot after_clean after_crash" or nothing
+  awk '/ stopped cleanly / { clean = 1; next }
+    / started \(pid [0-9]+, [0-9]+s after boot\)/ {
+      s = $0; sub(/.*, /, "", s); sub(/s after boot.*/, "", s); n++
+      if (s + 0 <= 300) b++; else if (clean) r++; else c++
+      clean = 0; next }
+    / started \(pid [0-9]+\)/ { clean = 0 }
+    END { if (n) printf "%d %d %d %d\n", n, b, r, c }'
+}
+# asb_gov_starts_end
+_gst="$(asb_gov_starts < /data/adb/asb/governor_persist.log 2>/dev/null)"
+if [ -n "$_gst" ]; then
+  set -- $_gst
+  NOTE "governor starts (since fix144): $1 - at boot $2, after a clean stop $3 (profile to/from stock, restore, Smart reset), after a crash $4"
+  [ "$4" -gt 0 ] 2>/dev/null && NOTE "  a crash: the process died with no clean stop and the housekeeping check restarted it - the tombstones list above may name it"
+fi
+_gdr="$(grep -c 'governor: pid [0-9]* had died' /dev/.asb_profile_state/runtime_apply.log 2>/dev/null)"
+[ "${_gdr:-0}" -gt 0 ] 2>/dev/null && NOTE "governor found dead and restarted by the housekeeping check since boot: $_gdr time(s)"
 # Pull the most recent screen_aware_caps decision (what the shell INTENDED to
 # write) so it can be compared against the live %-of-hw readout above. A
 # mismatch means something overwrote the shell caps after they were applied.
