@@ -770,4 +770,60 @@ done
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS: fix136 contract"
 ) || exit 1
+# ---- fix137 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix137: $*"; exit 1; }
+W="$ROOT/runtime/asb_wakelock_watch.sh"
+grep -q 'elif \[ "\$_act" = 1 \] && \[ "\$_s" -lt 600 \] 2>/dev/null && \[ "\$_h" != 1 \]; then' "$W" || fail "a two-minute holder can still be restricted"
+grep -q '^_wl_used_today() {' "$W" || fail "an app used today can be restricted"
+grep -q '^_wl_rules_migrate() {' "$W" || fail "old-rule restrictions never handed back"
+grep -q '_idle_due && _force=1 || continue' "$ROOT/service.sh" || fail "idle DSP route never refreshed"
+grep -q 'in the interval the screen changed state' "$ROOT/tools/logkit/asb_log_full_day.sh" || fail "screen-change traffic still silently dropped"
+grep -q "no ASB record of changing it" "$ROOT/tools/asb_diag.sh" || fail "avoid-bad-Wi-Fi owner not named"
+for t in test_dsp_route_idle_runtime.sh test_logkit_traffic_edge_runtime.sh; do
+  [ -f "$ROOT/tests/$t" ] || fail "$t missing"
+done
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix137 contract"
+) || exit 1
+# ---- fix138 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix138: $*"; exit 1; }
+N="$ROOT/runtime/asb_net_apply.sh"
+grep -q '_out="\$_out qdisc\[\$_pk\]=\$_pw-pending"' "$N" || fail "a per-link qdisc with no link still has no verdict"
+grep -qF 'qdisc\[wifi*-pending*)' "$N" || fail "mapper has no pending for the Wi-Fi qdisc"
+w="$(grep -nF 'qdisc\[wifi*-pending*)' "$N" | cut -d: -f1)"; g="$(grep -nF 'qdisc\[wifi*)' "$N" | head -1 | cut -d: -f1)"
+[ "$w" -lt "$g" ] || fail "qdisc pending line after the generic ok line"
+grep -q "case \"\$_pv\" in ''|\*=unsupported)" "$N" || fail "congestion kind without a verdict not filed as pending"
+grep -q '_lgf="/dev/.asb/lru_gen_took_\$_lg"' "$ROOT/runtime/smart_dynamic_tune.sh" || fail "MGLRU node rewritten on every tuner run"
+grep -q 'a bit missing here is one this kernel does not keep' "$ROOT/tools/asb_diag.sh" || fail "MGLRU bits not explained"
+grep -q 'In detail: only an app that held the CPU for 10+ minutes' "$ROOT/webroot/index.html" || fail "wakelock card does not describe the fix137 rule"
+for f in "$ROOT"/webroot/i18n/*.json; do
+  case "${f##*/}" in en.json) continue ;; esac
+  grep -q '10' "$f" || fail "${f##*/} lacks the wakelock rule text"
+done
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix138 contract"
+) || exit 1
+# ---- fix139 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix139: $*"; exit 1; }
+E="$ROOT/src/DSP_AIDL/asb_effect_aidl.cpp"
+grep -q 'void queueCommon(const Parameter::Common& common)' "$E" || fail "AIDL effect has no way to take a new stream format"
+grep -q 'mContext->queueCommon(param.get<Parameter::common>())' "$E" || fail "setParameter does not hand a new Parameter::common to the context"
+grep -q 'if (mCommonPending.load(std::memory_order_acquire)) applyPendingCommonLocked();' "$E" || fail "process() never applies a queued format"
+grep -q 'std::unique_lock<std::mutex> core(mCoreLock, std::try_to_lock);' "$E" || fail "process() waits on a settings push (or does not guard the core)"
+grep -q 'applyTunables(mPushedGainMb);' "$E" || fail "a format change drops the gain pushed over binder"
+grep -q 'mPushedGainMb = gainMb;' "$E" || fail "pushed gain not remembered"
+# The freshness gate must not demand the new literal: an older library keeps working.
+grep -q 'ASB reconfigure' "$ROOT/src/build_ndk_release.sh" && fail "release gate demands the fix139 literal"
+grep -q 'rate=%s session=' "$ROOT/runtime/asb_dsp_live.sh" || fail "live state does not show the output rate"
+grep -q '(Input|Record) thread' "$ROOT/runtime/asb_dsp_live.sh" || fail "capture threads counted against the output"
+grep -q "ASB reconfigure" "$ROOT/tools/asb_diag.sh" || fail "asbdiag silent about a pre-fix139 library on a non-48 kHz output"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix139 contract"
+) || exit 1
 echo "PASS: field-fix contracts"

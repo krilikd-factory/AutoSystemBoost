@@ -59,6 +59,12 @@ L
 S
 cat > "$T/bin/am" <<'S'
 #!/bin/sh
+# get-standby-bucket answers from a fixture (fix137: used-today apps are left alone);
+# everything else is logged as an action.
+if [ "$1" = get-standby-bucket ]; then
+  sed -n "s/^$2 //p" "$AM_LOG.buckets" 2>/dev/null | head -1
+  exit 0
+fi
 echo "$*" >> "$AM_LOG"
 S
 cat > "$T/bin/appops" <<'S'
@@ -103,20 +109,32 @@ run 1 20
 [ ! -s "$T/am.log" ] || f "acted below the awake bar"
 
 # Switched on and over the bar: only the eligible apps are restricted, once.
+printf 'com.example.sync 40\ncom.duolingo 40\n' > "$T/am.log.buckets"
 run 1 40
 grep -q 'set-standby-bucket com.example.sync restricted' "$T/am.log" || f "cached heavy holder not restricted"
-grep -q 'set-standby-bucket com.duolingo restricted' "$T/am.log" || f "job holder not restricted"
+# fix137: a 3 m 10 s job is ordinary background work - named, not restricted.
+grep -q 'set-standby-bucket com.duolingo restricted' "$T/am.log" && f "a three-minute job holder was restricted"
+grep -q '^com.duolingo|190|0|report$' "$A" || f "short job holder not reported"
 grep -q 'shealth\|player' "$T/am.log" && f "protected or in-use app restricted"
 grep -q 'appops set com.example.sync WIFI_MULTICAST ignore' "$T/am.log" || f "cached multicast holder not denied"
 grep -q 'appops set com.example.cast' "$T/am.log" && f "cast app denied multicast"
 grep -qx 'com.example.sync|restricted' "$M" || f "multicast verdict not restricted"
 run 1 40
-[ "$(grep -c 'bucket com.example.sync' "$T/am.log")" = 1 ] && [ "$(grep -c 'appops set com.example.sync' "$T/am.log")" = 1 ] || f "restricted the same app twice"
+[ "$(grep -c 'set-standby-bucket com.example.sync' "$T/am.log")" = 1 ] && [ "$(grep -c 'appops set com.example.sync' "$T/am.log")" = 1 ] || f "restricted the same app twice"
 # The system resets the op: the next pass re-asserts the denial instead of trusting the record.
 echo "com.example.sync WIFI_MULTICAST default" >> "$T/am.log.ops"
 run 1 40
 [ "$(grep -c 'appops set com.example.sync WIFI_MULTICAST ignore' "$T/am.log")" = 2 ] || f "reset multicast denial not re-applied"
 grep -q '^com.example.sync|3720|0|restricted$' "$A" || f "verdict not updated to restricted"
+
+# fix137: an app Android says was used today (active/working_set) is never restricted.
+: > "$T/am.log"; rm -f "$T/d/wakelock_restricted"
+printf 'com.example.sync 10\n' > "$T/am.log.buckets"
+run 1 40
+grep -q 'set-standby-bucket com.example.sync restricted' "$T/am.log" && f "an app used today was restricted"
+grep -q '^com.example.sync|3720|0|used_today$' "$A" || f "used-today verdict not reported"
+printf 'com.example.sync 40\n' > "$T/am.log.buckets"
+run 1 40
 
 # Switched off again: everything ASB restricted is handed back and the records cleared.
 : > "$T/am.log"

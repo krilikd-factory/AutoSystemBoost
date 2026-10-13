@@ -61,7 +61,7 @@ printf '%s\n' 'default via 1.1.1.1 dev rmnet_data2 table bad1' 'default via 1.1.
 [ "$(probe)" = unknown ] || fail "no route was not unknown"
 
 # 5. A stale "unsupported" on a link that is down becomes pending once per-route works.
-grep -q 'grep -qx "net_congestion_$_pk=unsupported"' "$SRC" || fail "stale unsupported verdict never cleared"
+grep -q "case \"\$_pv\" in ''|\*=unsupported) _out=\"\$_out cc\[\$_pk\]=\$_pw-pending\" ;; esac" "$SRC" || fail "stale unsupported verdict never cleared"
 grep -qF 'cc\[wifi*-pending*)' "$SRC" || fail "mapper has no pending for Wi-Fi congestion"
 w="$(grep -nF 'cc\[wifi*-pending*)' "$SRC" | cut -d: -f1)"; g="$(grep -nF 'cc\[wifi*)' "$SRC" | head -1 | cut -d: -f1)"
 [ "$w" -lt "$g" ] || fail "pending line after the generic ok line"

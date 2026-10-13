@@ -21,6 +21,8 @@ ${T}${T}00000   003   y          n       y       n
 ${T}${T}Descriptor:
 ${T}${T}- UUID: 7a8044a0-1a14-11e3-a184-0002a5d5c51b
 Output thread 0xb4000073e985e540, name AudioOut_1D, tid 14691, type 0 (MIXER):
+  I/O handle: 29
+  Sample rate: 48000 Hz
   1 Effect Chains
 ${T}Effect ID 59:
 ${T}${T}Session State Registered Internal Enabled Suspended:
@@ -31,7 +33,7 @@ ${T}${T}- TYPE: fe3199be-aed0-413f-87bb-11260eb63cf1
 ${T}${T}- name: ASB Loudness
 EOF
 out="$(asb_dsp_live_state "$TMP/active.txt")"
-[ "$out" = "found=1 thread=AudioOut_1D type=MIXER session=0 state=ACTIVE enabled=y suspended=n others_enabled=0" ] \
+[ "$out" = "found=1 thread=AudioOut_1D type=MIXER rate=48000 session=0 state=ACTIVE enabled=y suspended=n others_enabled=0" ] \
   || fail "active: $out"
 [ "$(asb_dsp_live_explain "$out")" = processing ] || fail "active explained as: $(asb_dsp_live_explain "$out")"
 
@@ -44,6 +46,7 @@ ${T}${T}Session State Registered Internal Enabled Suspended:
 ${T}${T}00097   003   y          n       y       n
 ${T}${T}- UUID: 0bed4300-ddd6-11db-8f34-0002a5d5c51b
 Output thread 0xb, name AudioOut_1D, tid 2, type 1 (DIRECT):
+  Sample rate: 96000 Hz
 ${T}Effect ID 60:
 ${T}${T}Session State Registered Internal Enabled Suspended:
 ${T}${T}00113   003   y          n       y       n
@@ -54,9 +57,28 @@ ${T}${T}00000   000   y          n       y       y
 ${T}${T}- UUID: a5b10001-7e55-4c60-9f21-415342445350
 EOF
 out="$(asb_dsp_live_state "$TMP/susp.txt")"
-[ "$out" = "found=1 thread=AudioOut_1D type=DIRECT session=0 state=IDLE enabled=y suspended=y others_enabled=1" ] \
+[ "$out" = "found=1 thread=AudioOut_1D type=DIRECT rate=96000 session=0 state=IDLE enabled=y suspended=y others_enabled=1" ] \
   || fail "suspended: $out"
 asb_dsp_live_explain "$out" | grep -q '^SUSPENDED by AudioFlinger' || fail "suspension not named"
+
+# fix139: a call's echo canceller and noise suppressor are enabled on CAPTURE sessions. The
+# input threads come after the outputs in the dump; their effects (and their sample rate) are
+# not the output's business.
+cat "$TMP/active.txt" - > "$TMP/call.txt" <<EOF
+Input thread 0xd, name AudioIn_3E, tid 4, type 3 (RECORD):
+  Sample rate: 16000 Hz
+${T}Effect ID 80:
+${T}${T}Session State Registered Internal Enabled Suspended:
+${T}${T}00145   003   y          n       y       n
+${T}${T}- UUID: bb392ec0-8d4d-11e0-a896-0002a5d5c51b
+${T}Effect ID 81:
+${T}${T}Session State Registered Internal Enabled Suspended:
+${T}${T}00145   003   y          n       y       n
+${T}${T}- UUID: c06c8400-8e06-11e0-9cb6-0002a5d5c51b
+EOF
+out="$(asb_dsp_live_state "$TMP/call.txt")"
+[ "$out" = "found=1 thread=AudioOut_1D type=MIXER rate=48000 session=0 state=ACTIVE enabled=y suspended=n others_enabled=0" ] \
+  || fail "capture-side effects counted against the output: $out"
 
 # Older header without Internal/Suspended: parsed by name, unknown columns say "?".
 cat > "$TMP/old.txt" <<EOF
@@ -67,7 +89,7 @@ ${T}${T}00000   000    003   0xb400007
 ${T}${T}- UUID: a5b10001-7e55-4c60-9f21-415342445350
 EOF
 out="$(asb_dsp_live_state "$TMP/old.txt")"
-[ "$out" = "found=1 thread=AudioOut_15 type=MIXER session=0 state=ACTIVE enabled=? suspended=? others_enabled=0" ] \
+[ "$out" = "found=1 thread=AudioOut_15 type=MIXER rate=? session=0 state=ACTIVE enabled=? suspended=? others_enabled=0" ] \
   || fail "older layout: $out"
 
 # Released by the attach daemon (or never attached).
@@ -85,4 +107,4 @@ grep -q 'asb.dsp.heat' "$ROOT_DIR/tools/logkit/_asb_logkit_common.sh" || fail "c
 for f in "$ROOT_DIR"/runtime/i18n/action_*.sh; do
   grep -q '^T_A_HEAT=' "$f" && grep -q '^T_A_SUSP=' "$f" || fail "heat/suspend lines missing in ${f##*/}"
 done
-echo "PASS dsp live state: processing / idle / released / suspended told apart, in every report"
+echo "PASS dsp live state: processing / idle / released / suspended told apart, output rate shown, capture effects not counted"

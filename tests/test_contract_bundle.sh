@@ -446,7 +446,9 @@ grep -q 'DSP released on purpose' "$ROOT/tools/asb_diag.sh" || fail "asbdiag rep
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 # fix79: with the screen off the route watcher still reacts to a PCM change (one pass)
 grep -q '_sig_off="$(grep -l RUNNING /proc/asound/card\*/pcm\*p/sub\*/status' "$ROOT/service.sh" || fail "screen-off route change is never noticed"
-grep -q '\[ "$_sig_off" != "${_prev_sig:-}" \] || continue' "$ROOT/service.sh" || fail "screen-off pass is not gated on a PCM change"
+# Gated on a PCM change - plus, from fix137, one route look a minute into an idle stretch.
+grep -q 'if \[ "$_sig_off" = "${_prev_sig:-}" \]; then' "$ROOT/service.sh" || fail "screen-off pass is not gated on a PCM change"
+grep -q '_idle_due && _force=1 || continue' "$ROOT/service.sh" || fail "screen-off pass is not gated on a PCM change"
 echo "PASS DSP released off the selected outputs"
 
 ) || { echo "FAIL in bundled contract: dsp_route_release_contract" >&2; exit 1; }

@@ -83,5 +83,17 @@ AM_LOG="$T/am.log" PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_WL_DIR="$T/d" ASB_WL_
 grep -qx 'set-standby-bucket org.thoughtcrime.securesms active' "$T/am.log" || f "not released on a quiet pass"
 [ -e "$T/d/wakelock_restricted" ] && f "empty record left behind"
 
+# fix137: restrictions made under the earlier, looser rule are handed back once - an ordinary
+# app included - and the marker keeps it to once.
+rm -f "$T/d/wakelock_rules_v137"; echo com.example.other > "$T/d/wakelock_restricted"; : > "$T/am.log"
+AM_LOG="$T/am.log" PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_WL_DIR="$T/d" ASB_WL_STATE="$T/state" \
+  sh "$SRC" >/dev/null 2>&1
+grep -qx 'set-standby-bucket com.example.other active' "$T/am.log" || f "old-rule restriction not handed back"
+[ -f "$T/d/wakelock_rules_v137" ] || f "migration marker not written"
+echo com.example.other > "$T/d/wakelock_restricted"; : > "$T/am.log"
+AM_LOG="$T/am.log" PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_WL_DIR="$T/d" ASB_WL_STATE="$T/state" \
+  sh "$SRC" >/dev/null 2>&1
+grep -q 'com.example.other active' "$T/am.log" && f "migration ran twice"
+
 [ "$fail" = 0 ] || exit 1
 echo "PASS wakelock messenger guard: Signal & co. and battery-exempt apps are never restricted, old restrictions released"
