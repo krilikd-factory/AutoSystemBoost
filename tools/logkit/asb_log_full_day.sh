@@ -943,12 +943,23 @@ lk_emit_mobile_traffic_context() {
       # are charged whole to any phase they touch; a 31-minute phase once printed 839 MiB
       # that way while the counters showed 25.8 MiB - two external audits took the 839 for
       # background traffic and built their top recommendation on it.
+      # The interval in which the screen state changed is counted apart (fix137): its
+      # traffic belongs to one side or the other and the counters cannot say which. Left
+      # out without a word, it made the phase table (which counts it) and this line
+      # disagree - a night read "rmnetMiB 168.7" above "measured 45.7 MiB" here, the
+      # difference being 126 MiB moved in the minutes the morning screen came on.
       _meas="$(awk -F'|' -v A="$_a" -v Z="$_z" '$1 ~ /^[0-9]+$/ {
           b = $26 + $27
-          if (pe != "" && pe >= A && $1 <= Z && ps == "0" && $5 == "0" && b >= pb) m += b - pb
+          # An interval that starts inside the phase counts: the row that closes a phase is
+          # the first one of the next, a second after the phase end.
+          if (pe != "" && pe >= A && pe < Z && b >= pb) {
+            if (ps == "0" && $5 == "0" && $1 <= Z) m += b - pb
+            else if (ps != $5) e += b - pb
+          }
           pe = $1; ps = $5; pb = b
-        } END { printf "%d", m + 0 }' "$LK_OUT_DIR/battery_trace.txt" 2>/dev/null)"
-      awk -v A="$_a" -v Z="$_z" -v PH="$_ph" -v MAP="$LK_OUT_DIR/uid_map.txt" -v MEAS="${_meas:-0}" '
+        } END { printf "%d %d", m + 0, e + 0 }' "$LK_OUT_DIR/battery_trace.txt" 2>/dev/null)"
+      _edge="${_meas#* }"; _meas="${_meas%% *}"
+      awk -v A="$_a" -v Z="$_z" -v PH="$_ph" -v MAP="$LK_OUT_DIR/uid_map.txt" -v MEAS="${_meas:-0}" -v EDGE="${_edge:-0}" '
         # Names from pm first: the netstats dump only knows the UIDs it happened to
         # mention, which left the biggest talkers anonymous.
         BEGIN { while ((getline ln < MAP) > 0) { split(ln, f, " "); if (f[1] != "") NAME[f[1]+0]=f[2] } }
@@ -982,6 +993,8 @@ lk_emit_mobile_traffic_context() {
           # that as "no phase qualified" and went looking for a threshold problem.
           if (tot < 8388608) exit
           printf "  %s %d min: measured screen-off mobile traffic %.1f MiB (interface counters)\n", PH, (Z-A)/60, MEAS/1048576
+          if (EDGE >= 1048576)
+            printf "      + %.1f MiB in the interval the screen changed state - the counters cannot place it on\n        either side; the phase table above counts it with this phase\n", EDGE/1048576
           # Under 1 MiB measured there is nothing to attribute. Listing apps from the
           # surrounding 2h buckets beside "0.0 MiB" reads as blame however carefully the
           # caveat is worded - a sleep phase showed Instagram and WhatsApp under a measured

@@ -304,7 +304,10 @@ lk_snapshot_state() {
     # show the pedometer holding the CPU all night and not say whether the fitness limit
     # had been applied, or what the video-refresh watcher did.
     echo "===== ASB WATCHER STATE ====="
+    # wakelock_multicast (fix138): who held Wi-Fi multicast - a day log carried 3 h 27 min of it
+    # and no name. avoid_bad_wifi.prev and wakelock_rules_v137: what ASB changed there and when.
     for _sf in wakelock_apps wakelock_fitness_limited wakelock_restricted multicast_restricted \
+               wakelock_multicast wakelock_rules_v137 avoid_bad_wifi.prev \
                ltpo_video.stats ltpo_range.orig ltpo_video.lowered; do
       [ -f "/data/adb/asb/$_sf" ] || continue
       echo "--- $_sf ---"
