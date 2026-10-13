@@ -337,7 +337,16 @@ SEC "0a4. MEMORY / GC  (MGLRU and the ART collector)"
 # MGLRU is a kernel feature; on 6.1+ the vendor usually enables it, and forcing it from
 # userspace when it is already on changes nothing while looking like it did something.
 if [ -r /sys/kernel/mm/lru_gen/enabled ]; then
-  NOTE "MGLRU: $(cat /sys/kernel/mm/lru_gen/enabled 2>/dev/null) (0x7 = fully on)"
+  # Bit by bit (fix138): "0x0001 (0x7 = fully on)" read as MGLRU half-off on a kernel that
+  # simply has no non-leaf young bit (arm64) - MGLRU itself is on whenever 0x1 is set.
+  _mg_v="$(cat /sys/kernel/mm/lru_gen/enabled 2>/dev/null | tr -d ' \r')"
+  # The kernel prints hex ("0x0001"); anything else reads as 0 rather than reaching $(( )).
+  case "${_mg_v#0x}" in ''|*[!0-9a-fA-F]*) _mg_n=0 ;; *) _mg_n=$(( 0x${_mg_v#0x} )) ;; esac
+  if [ $(( _mg_n & 1 )) -eq 1 ]; then
+    NOTE "MGLRU: $_mg_v - on (0x1 core$( [ $(( _mg_n & 2 )) -ne 0 ] && echo ' + 0x2 page-table walk')$( [ $(( _mg_n & 4 )) -ne 0 ] && echo ' + 0x4 non-leaf young'); a bit missing here is one this kernel does not keep)"
+  else
+    NOTE "MGLRU: ${_mg_v:-?} - OFF"
+  fi
   NOTE "  min_ttl_ms: $(cat /sys/kernel/mm/lru_gen/min_ttl_ms 2>/dev/null)"
 else
   NOTE "MGLRU: not exposed by this kernel"
@@ -1574,6 +1583,17 @@ elif [ "$_dsp_on" = "1" ]; then
       _dsp_lv="$(asb_dsp_live_state)"
       NOTE "  live effect: $_dsp_lv"
       NOTE "    -> $(asb_dsp_live_explain "$_dsp_lv")"
+      # fix139: an AIDL library built before it keeps the format the instance was created
+      # with. On an output that is not 48 kHz (hi-res wired, LDAC, a 44.1 kHz Bluetooth
+      # link) the bass shelf and voice bands sit off-frequency if the effect moved there.
+      case "$_dsp_lv" in
+        *rate=48000*|*rate=\?*|found=0*) : ;;
+        *rate=*)
+          if grep -aq 'ASB createEffect' /vendor/lib64/soundfx/libasbdsp.so 2>/dev/null \
+             && ! grep -aq 'ASB reconfigure' /vendor/lib64/soundfx/libasbdsp.so 2>/dev/null; then
+            NOTE "    -> this output is not 48 kHz and the AIDL library predates fix139: if the effect moved here from another output, bass and voice run tuned for the old rate until the library is rebuilt"
+          fi ;;
+      esac
     fi
   else
     V "  effect registered with audioflinger" "present" "absent" eq
@@ -1930,7 +1950,7 @@ if [ -f "$_nvf" ]; then
           *)                P "  [N/A ] $_nk (link has no queue - the driver owns this interface)" ;;
         esac ;;
       pending)     NOTE "$_nk = $_nw - stored, waiting for a link to apply it to" ;;
-      *)           NOTE "$_nk = $_nw - no verdict recorded yet (apply has not run)" ;;
+      *)           NOTE "$_nk = $_nw - no verdict recorded yet (the network apply has not reached this key since it was set)" ;;
     esac
   done
   [ -n "${_net_auto:-}" ] && OFF "network keys on auto (system default, nothing to verify): $_net_auto" "net:auto"
@@ -1967,7 +1987,14 @@ esac
 case "$_nwl_d" in
   weak|unusable|aggressive)
     NOTE "Wi-Fi leave watch ($_nwl_d, below $(cfg net_wifi_leave_dbm) dBm): $(MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}" sh "${MODDIR:-/data/adb/modules/AutoSystemBoost}/runtime/asb_wifi_fallback.sh" status 2>/dev/null || echo status-unavailable)"
-    NOTE "  Android avoid-bad-Wi-Fi switch: $(settings get global network_avoid_bad_wifi 2>/dev/null | tr -d '\r') (ASB sets 1 on unusable/aggressive)" ;;
+    # Whose value it is (fix137): "1 (ASB sets 1 on unusable/aggressive)" on the weak rung
+    # read as ASB holding it; on OxygenOS 1 is often the device's own default.
+    if [ -f /data/adb/asb/avoid_bad_wifi.prev ]; then
+      _abw_own="set by ASB, device value $(head -1 /data/adb/asb/avoid_bad_wifi.prev 2>/dev/null | tr -dc '0-9' | sed 's/^$/unset/') kept for restore"
+    else
+      _abw_own="no ASB record of changing it - the device's value, or one left by a build before fix134; ASB sets it only on unusable/aggressive"
+    fi
+    NOTE "  Android avoid-bad-Wi-Fi switch: $(settings get global network_avoid_bad_wifi 2>/dev/null | tr -d '\r') ($_abw_own)" ;;
   *) NOTE "Wi-Fi fallback: off" ;;
 esac
 # Why it fired, not just whether it is armed.
