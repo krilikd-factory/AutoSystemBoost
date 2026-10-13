@@ -522,6 +522,33 @@ asb_wl_snapshot_bs() {
   [ -s "$STATE" ]
 }
 
+# fitness: put the user's fitness limit back and nothing else (fix143).
+#
+# OPlus' boot-time sweep resets the WAKE_LOCK app-op, and the hourly screen-off pass was the
+# first thing to set it again - an hour or more after every reboot with the limit off. Capture
+# 26147 began three minutes after a reboot, asbdiag read "limit lapsed", and PedometerLib held
+# the CPU up to 21 minutes at a stretch with the screen off. service.sh runs this on its first
+# two ticks after boot. No measurement, no batterystats: pm and appops for the fitness apps.
+if [ "${1:-}" = fitness ]; then
+  [ "$(_wl_fit_mode)" = limit ] || exit 0
+  _has pm || exit 0
+  _map="$(_wl_pkgmap)"
+  [ -n "$_map" ] || exit 0
+  rm -f "$FIT.reapplied" 2>/dev/null
+  printf '%s\n' "$_map" | while read -r _fu _fp; do
+    [ -n "$_fp" ] && _wl_fitness "$_fp" && _wl_fit_limit "$_fp" >/dev/null
+  done
+  # A verdict "this Android ignores the limit" drawn while the op had lapsed says nothing:
+  # the report shows "limited" until the next full pass checks it again with the op in force.
+  if [ -s "$FIT.reapplied" ] && [ -s "$APPS" ]; then
+    awk -F'|' -v OFS='|' 'NR == FNR { r[$0] = 1; next } ($1 in r) && $4 == "limit_ignored" { $4 = "limited" } { print }' \
+      "$FIT.reapplied" "$APPS" > "$APPS.fit" 2>/dev/null && mv -f "$APPS.fit" "$APPS" 2>/dev/null
+    rm -f "$APPS.fit" 2>/dev/null
+  fi
+  rm -f "$FIT.reapplied" 2>/dev/null
+  exit 0
+fi
+
 asb_wl_snapshot || asb_wl_snapshot_bs || :
 
 # Whether this pass may act. The ranking below runs either way: measure always, report
