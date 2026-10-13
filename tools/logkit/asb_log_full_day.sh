@@ -1400,8 +1400,10 @@ lk_emit_full_day_report() {
     echo "* 'audio_bt' / 'audio_spk' / 'audio_wired' = media was playing on that"
     echo "  route. Compare pct/h and cpuT between BT and speaker playback, and"
     echo "  read audio_trace.txt for codec / offload / effect state per route."
-    echo "* Bluetooth evidence: `hfp_audio_disconnect` is an HFP/SCO audio-link detach, not a device loss;"
-    echo "  `a2dp_profile_disconnect` is the media-profile disconnect evidence. Use context to correlate route/playback."
+    # Single quotes inside the double quotes (fix140): these were backticks, so the shell ran
+    # "hfp_audio_disconnect" as a command and the report printed "Bluetooth evidence:  is ...".
+    echo "* Bluetooth evidence: 'hfp_audio_disconnect' is an HFP/SCO audio-link detach, not a device loss;"
+    echo "  'a2dp_profile_disconnect' is the media-profile disconnect evidence. Use context to correlate route/playback."
     echo "* kernel_params.txt captures governors, sched, io, walt and vm tunables"
     echo "  (stock vs custom kernel); network_trace.txt captures the data path,"
     echo "  signal, tcp tunables and rmnet/wlan counters."

@@ -1120,7 +1120,7 @@ lk_emit_live_wakelock_holders() {
       if (!n) exit
       for (k in cnt) if (cnt[k] * 10 >= n || mx[k] >= 600) {
         split(k, z, "|"); app = (z[2] + 0 >= 10000 && (z[2] in pk)) ? pk[z[2]] : ((z[2] + 0 > 0 && z[2] + 0 < 10000) ? "system uid " z[2] : "uid " z[2])
-        printf "%d|%d|%s|%s\n", 100 * cnt[k] / n, mx[k] / 60, z[1], app
+        printf "%d|%d|%s|%s|%s\n", 100 * cnt[k] / n, mx[k] / 60, z[1], app, z[2]
       }
     }' "$_lwl" 2>/dev/null)"
   _lwn="$(printf '%s\n' "$_lwo" | sed -n 's/^#n=//p')"
@@ -1135,6 +1135,23 @@ lk_emit_live_wakelock_holders() {
     fi
     echo "batterystats does not count wakelocks while the phone is charging; these samples do."
     echo "A foreground service you rely on (a proxy, a VPN, music) is left alone by ASB on purpose."
+    # fix140: batterystats against these samples. One continuous hold seen here is a floor on
+    # what the app held; batterystats counting under half of it over the whole capture is its
+    # accounting not keeping up (capture 2830: YouTube's AudioMix held 20 min at a stretch,
+    # batterystats added 0 s in 9.5 h). Only with no charging seen - on the charger
+    # batterystats counts nothing by design.
+    if [ -n "$_lwr" ] && [ -s "$LK_OUT_DIR/.wl_uid_delta" ] && lk_capture_on_battery; then
+      _lwc="$(printf '%s\n' "$_lwr" | awk -F'|' -v DL="$LK_OUT_DIR/.wl_uid_delta" '
+        BEGIN { while ((getline l < DL) > 0) { split(l, a, " "); dd[a[1]] = a[2] + 0 } }
+        $5 + 0 >= 10000 && $2 + 0 >= 10 && dd[$5] * 2 < $2 * 60 {
+          printf "  %s (%s): held %d min at a stretch here, batterystats added %d s in the whole capture\n", $4, $3, $2, dd[$5] }')"
+      if [ -n "$_lwc" ]; then
+        echo "batterystats disagrees with these samples:"
+        printf '%s\n' "$_lwc"
+        echo "  Android's per-app wakelock accounting did not keep up in this capture (Settings > Battery"
+        echo "  usage reads the same counters); these samples are the measurement here."
+      fi
+    fi
   else
     echo "no screen-off power-manager samples in this capture"
   fi
@@ -1155,7 +1172,9 @@ lk_emit_jank_summary() {
       # fix125: share of the interval at the ceiling (time_in_state), and the app in front.
       if (NF >= 14 && $14 ~ /^[0-9]+$/) { b = ($14 < 20) ? "<20%" : ($14 < 60) ? "20-60%" : ">=60%"; mb[b] += $9; mbj[b] += $10; mbn[b]++ }
       if (NF >= 15 && $15 ~ /^[0-9]+$/) { b = ($15 < 20) ? "<20%" : ($15 < 60) ? "20-60%" : ">=60%"; pb[b] += $9; pbj[b] += $10; pbn[b]++ }
-      if (NF >= 16 && $16 != "") { ap[$16] += $9; apj[$16] += $10; apn[$16]++ } }
+      if (NF >= 16 && $16 != "") { ap[$16] += $9; apj[$16] += $10; apn[$16]++
+        # fix140: the same app across ASB states, touched or not (see END).
+        k = $16 SUBSEP $4 SUBSEP (($8 + 0 > 0) ? "yes" : "no"); as[k] += $9; asj[k] += $10; asn[k]++ } }
     function pct(a, b) { return b > 0 ? sprintf("%.1f%%", 100.0 * a / b) : "-" }
     END {
       if (n == 0 || F == 0) { print "no frames recorded with the screen on"; print ""; exit }
@@ -1185,8 +1204,30 @@ lk_emit_jank_summary() {
         for (a in ap) if (!(a in done) && ap[a] > bf) { best = a; bf = ap[a] }
         if (best == "") break
         done[best] = 1
-        if (shown == 0) printf "%-40s %9s %8s\n", "app in front", "frames", "janky"
+        if (shown == 0) { printf "%-40s %9s %8s\n", "app in front", "frames", "janky"; top = best }
         printf "%-40s %9d %8s\n", best, ap[best], pct(apj[best], ap[best]); shown++
+      }
+      # fix140: the ASB-state table mixes apps. Capture 2830 read "LIGHT_IDLE 34.8% janky,
+      # MODERATE 4.1%" - and YouTube, playing untouched, was most of LIGHT_IDLE: inside YouTube
+      # untouched it was 43.8% in LIGHT_IDLE and 42.3% in mixed. The app in front decided the
+      # share, not the state. The app with the most frames, by state and touch:
+      if (top != "") {
+        split("GAMING SUSTAINED HEAVY MODERATE LIGHT_IDLE DEEP_IDLE mixed", so, " ")
+        ns = 0; for (i = 1; i <= 7; i++) { ord[++ns] = so[i]; known[so[i]] = 1 }
+        for (k in as) { split(k, z, SUBSEP); if (z[1] == top && !(z[2] in known)) { ord[++ns] = z[2]; known[z[2]] = 1 } }
+        rows = 0; out = ""
+        for (i = 1; i <= ns; i++) for (t = 1; t <= 2; t++) {
+          tk = (t == 1) ? "yes" : "no"; k = top SUBSEP ord[i] SUBSEP tk
+          if (!(k in as) || as[k] == 0) continue
+          out = out sprintf("  %-14s %-6s %9d %9d %8s\n", ord[i], tk, asn[k], as[k], pct(asj[k], as[k])); rows++
+        }
+        if (rows >= 2) {
+          printf "within %s (most frames), by ASB state and touch:\n", top
+          printf "  %-14s %-6s %9s %9s %8s\n", "ASB state", "touch", "intervals", "frames", "janky"
+          printf "%s", out
+          print "  Compare states inside one app: each state saw a different mix of apps, so the ASB-state"
+          print "  table above does not by itself show what a state does to smoothness."
+        }
       }
       print "janky = a frame that missed its deadline, as Android counts it (dumpsys graphicsstats)."
       print "Games on their own GL/Vulkan surface are not HWUI frames and are not in these numbers."
@@ -1453,6 +1494,18 @@ lk_bstats_uid_totals() {
           for (u in sum) printf "%d %d %s\n", u, sum[u], tt[u] }'
 }
 
+# 0 when the capture ran on battery (fix140): no charging row, and the level fell by 2 points
+# or more. batterystats counts no wakelock on the charger, and on the OP15 the status node
+# reads "Unknown" while discharging, so a missing charge row alone is not proof - a phone
+# held at a charge limit could read the same. The level falling is.
+lk_capture_on_battery() {
+  [ -f "$LK_OUT_DIR/charge_trace.txt" ] || return 1
+  [ "$(wc -l < "$LK_OUT_DIR/charge_trace.txt" 2>/dev/null)" -le 1 ] 2>/dev/null || return 1
+  awk -F'|' 'NR == 1 { for (i = 1; i <= NF; i++) if ($i == "bat_pct") c = i; next }
+             c && $c ~ /^[0-9]+$/ { if (f == "") f = $c; l = $c }
+             END { exit !(c && f != "" && f - l >= 2) }' "$LK_OUT_DIR/battery_trace.txt" 2>/dev/null
+}
+
 lk_wakelock_batterystats_reset() {
   lk_have lk_dumpsys || return 0
   if [ "$LK_BSTATS_RESET" = 1 ]; then
@@ -1557,6 +1610,7 @@ lk_wakelock_emit_report() {
     # included), this answers "which app kept the CPU up" directly.
     _wl_map="$LK_OUT_DIR/.uid_package_map.tsv"
     lk_bstats_uid_totals "$_raw" > "$LK_OUT_DIR/.wl_uid_now" 2>/dev/null
+    _wl_moved=""; _wl_h=0
     if [ -s "$LK_OUT_DIR/.wl_uid_base" ] || [ -f "$LK_OUT_DIR/.bstats_base_epoch" ]; then
       echo "----- TOP APPS BY HELD WAKELOCK TIME (per uid, during this capture) -----"
       # Difference against the start. A uid whose total went DOWN was reset by Android
@@ -1566,13 +1620,39 @@ lk_wakelock_emit_report() {
            { d = $2 - (b[$1] + 0); if (d < 0) d = $2; if (d >= 5) printf "%d %d %s\n", d, $1, $3 }' \
         "$LK_OUT_DIR/.wl_uid_base" "$LK_OUT_DIR/.wl_uid_now" 2>/dev/null \
         | sort -rn | head -10 > "$LK_OUT_DIR/.wl_apps.tmp" 2>/dev/null
+      # Every uid's difference, kept for the full-day report (fix140): it checks them
+      # against the live power-manager samples. "uid seconds", 0 included.
+      awk 'FILENAME == ARGV[1] { b[$1] = $2; next }
+           { d = $2 - (b[$1] + 0); if (d < 0) d = $2; printf "%d %d\n", $1, d }' \
+        "$LK_OUT_DIR/.wl_uid_base" "$LK_OUT_DIR/.wl_uid_now" > "$LK_OUT_DIR/.wl_uid_delta" 2>/dev/null
+      _wl_moved="$(awk '$2 > 0 { m++ } END { print m + 0 }' "$LK_OUT_DIR/.wl_uid_delta" 2>/dev/null)"
+      _wl_t0="$(cat "$LK_OUT_DIR/.bstats_base_epoch" 2>/dev/null)"; _wl_h=0
+      [ -n "$_wl_t0" ] && _wl_h=$(( ($(date +%s) - _wl_t0) / 3600 )) 2>/dev/null
     else
       echo "----- TOP APPS BY HELD WAKELOCK TIME (per uid, since the last batterystats reset) -----"
       awk '$2 >= 5 { printf "%d %d %s\n", $2, $1, $3 }' "$LK_OUT_DIR/.wl_uid_now" 2>/dev/null \
         | sort -rn | head -10 > "$LK_OUT_DIR/.wl_apps.tmp" 2>/dev/null
     fi
     rm -f "$LK_OUT_DIR/.wl_uid_now" 2>/dev/null
-    [ -s "$LK_OUT_DIR/.wl_apps.tmp" ] || echo "  (no app held a partial wakelock for 5 s or more in this window)"
+    # Capture 2830: "no app held a partial wakelock for 5 s or more" over 9.5 hours in which
+    # the live samples saw YouTube's AudioMix held for 20 minutes at a stretch. Not one app's
+    # total had moved - nor the kernel wakelock totals: batterystats was not updating them.
+    # On a phone in use for hours some app always adds time, so all-zero is the stall, not a
+    # quiet phone; saying "no app" there sent the reader away from the real holders.
+    if [ ! -s "$LK_OUT_DIR/.wl_apps.tmp" ]; then
+      # Not while charging: batterystats does not count wakelocks on the charger at all, so
+      # an all-zero window there is expected.
+      if [ "${_wl_moved:-1}" = 0 ] && [ "${_wl_h:-0}" -ge 2 ] 2>/dev/null \
+         && [ -s "$LK_OUT_DIR/.wl_uid_base" ] && [ -s "$LK_OUT_DIR/.wl_uid_delta" ] \
+         && lk_capture_on_battery; then
+        echo "  not one app's total moved in ${_wl_h} h of capture - batterystats did not update its per-app"
+        echo "  wakelock time in this window (Settings > Battery usage reads the same counters). That is"
+        echo "  not \"no holder\": the full-day report's LIVE WAKELOCK HOLDERS (power-manager samples) is the"
+        echo "  per-app view for this capture."
+      else
+        echo "  (no app held a partial wakelock for 5 s or more in this window)"
+      fi
+    fi
     cat "$LK_OUT_DIR/.wl_apps.tmp" 2>/dev/null | while read -r _ws _wu _wt; do
           _wp="$(awk -F'|' -v u="$_wu" '$1 == u { print $2; exit }' "$_wl_map" 2>/dev/null)"
           printf '  %4dm %02ds  %-45s top tag: %s\n' $((_ws / 60)) $((_ws % 60)) "${_wp:-uid $_wu}" "$_wt"
