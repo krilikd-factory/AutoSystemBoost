@@ -16,8 +16,10 @@
   _lease_remaining=0
   _lease_delays="2 4 14 40"
   _lease_last_reassert_ts=0
-  # --once mirrors asb_watchdog.sh: the governor schedules this now, so the resident
-  # loop is only needed when the governor is absent.
+  # --once mirrors asb_watchdog.sh. The governor used to schedule it; fix144 stopped that:
+  # the --once break below comes before the pass, and run outside service.sh none of the
+  # helpers the pass calls exist - it forked two shells every few minutes to do nothing.
+  # The resident loop (service.sh, governor absent after 90 s) is the only real caller.
   ASB_REC_ONCE=0
   case "$1" in --once) ASB_REC_ONCE=1 ;; esac
   while true; do

@@ -139,9 +139,10 @@ fi
 
 # --once: run a single pass and exit.
 #
-# The governor now drives the schedule from its own loop, so the resident process and its sleep
-# are redundant there - two permanent shell loops with independent timers were two sets of
-# wakeups the device did not need.
+# The governor drove this from its own loop until fix144 - which could never catch its own
+# death, and the spawned copy exited on the first line (ASB_GOV_ENABLED is a service.sh
+# variable, not in the governor's environment). service.sh's housekeeping loop now checks the
+# governor's pid itself and restarts a dead one.
 # The self-looping form is kept for the case where the governor is not running, which is
 # exactly when a watchdog matters most.
 ASB_WD_ONCE=0
