@@ -213,6 +213,41 @@ if command -v dumpsys >/dev/null 2>&1; then
   done
   NOTE "After a hang or a forced reboot, export asbdiag BEFORE using the phone further: the dropbox keeps only a few entries per tag."
 fi
+# Which processes crashed (fix141). The 22:45 asbdiag on the OP15 counted 18 tombstones, the
+# latest about a minute after the reboot, and the 17:33 one 3 - a count and nothing else, so whether the
+# audio HAL with ASB's effect in it was among them could not be told. The text tombstones
+# name the process, the signal and the abort message; the newest few are listed, and one
+# with ASB code in its backtrace is called out.
+_asb_tombstones() {
+  _tb_list="$(ls -t "${ASB_TOMBSTONE_DIR:-/data/tombstones}"/tombstone_[0-9][0-9] 2>/dev/null | head -8)"
+  if [ -n "$_tb_list" ]; then
+    P "  recent native crashes (newest first, /data/tombstones):"
+    _tb_asb_n=0
+    for _tb in $_tb_list; do
+      _tb_ts="$(grep -m1 '^Timestamp:' "$_tb" 2>/dev/null | cut -d' ' -f2-3 | cut -c1-19)"
+      _tb_cmd="$(grep -m1 '^Cmdline:' "$_tb" 2>/dev/null | cut -d' ' -f2- | cut -c1-80)"
+      [ -n "$_tb_cmd" ] || _tb_cmd="$(grep -m1 '>>> .* <<<' "$_tb" 2>/dev/null | sed 's/.*>>> \(.*\) <<<.*/\1/' | cut -c1-80)"
+      _tb_sig="$(grep -m1 '^signal ' "$_tb" 2>/dev/null | cut -d',' -f1)"
+      _tb_ab="$(grep -m1 '^Abort message:' "$_tb" 2>/dev/null | cut -c1-140)"
+      _tb_asb=""
+      # The crashed process and the crashing thread's backtrace only: the memory map further
+      # down lists every library the process had loaded, libasbdsp included in any audio HAL,
+      # whatever crashed it.
+      _tb_bt="$(awk '/^backtrace:/ { b = 1; next } b && /^[[:space:]]*$/ { exit } b' "$_tb" 2>/dev/null)"
+      if printf '%s\n%s\n' "$_tb_cmd" "$_tb_bt" | grep -qE 'libasbdsp|asb_dsp_attach|AutoSystemBoost|/data/adb/asb/'; then
+        _tb_asb="  << ASB code in this crash"; _tb_asb_n=$((_tb_asb_n + 1))
+      fi
+      P "    ${_tb_ts:-?}  ${_tb_cmd:-?}  ${_tb_sig:-}${_tb_asb}"
+      [ -n "$_tb_ab" ] && P "      $_tb_ab"
+    done
+    if [ "$_tb_asb_n" -gt 0 ]; then
+      NOTE "$_tb_asb_n of these crashes have ASB code (the DSP library or its attach daemon) in them - send this asbdiag; dsp_loudness=off takes the effect out of the audio path until it is fixed"
+    else
+      NOTE "none of the listed crashes has ASB code in its backtrace"
+    fi
+  fi
+}
+_asb_tombstones
 
 # =====================================================================
 # Other modules that set the same properties.
@@ -2361,9 +2396,14 @@ esac
 # is what action and the WebUI now use for the idle forecast instead of a fixed guess.
 _odx="$(grep -m1 '^offdrain_pctph_x100=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 _odn="$(grep -m1 '^offdrain_windows=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+_odm="$(grep -m1 '^offdrain_media_skipped=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 case "${_odx:--1}" in
-  -1|''|0) NOTE "screen-off drain: not measured yet - needs one screen-off stretch of 60+ min on battery" ;;
+  -1|''|0) NOTE "screen-off drain: not measured yet - needs one screen-off stretch of 60+ min on battery with nothing playing" ;;
   *) NOTE "screen-off drain: $((_odx / 100)).$(printf '%02d' $((_odx % 100)))%/h measured over ${_odn:-1} window(s)  (good night: 0.3-0.7%/h)" ;;
+esac
+# fix141: stretches with music or a call playing are not idle and are left out of it.
+case "$_odm" in ''|0|*[!0-9]*) : ;; *)
+  NOTE "  left out since the governor started: $_odm screen-off stretch(es) with audio playing (music with the screen off is not idle)" ;;
 esac
 
 SEC "5a6. SCREEN-OFF CLASS  (what the last screen-off stretch actually was)"
