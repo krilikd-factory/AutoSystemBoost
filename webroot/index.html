@@ -2468,6 +2468,33 @@ body.config-active #livePage.open {
 @keyframes cfgProfileApplyPulse { 0%,100% { transform:scale(1); filter:brightness(1) saturate(1); } 50% { transform:scale(.94); filter:brightness(1.22) saturate(1.24); } }
 .cfg-profile-progress { margin-top:10px; padding:10px 11px; color:#bdf7ea; border:1px solid rgba(44,214,173,.42); border-radius:11px; background:rgba(44,214,173,.08); font-size:11px; line-height:1.4; }
 .cfg-profile-hint { margin-top:9px; color:rgba(231,234,238,.47); font-size:10.5px; line-height:1.35; }
+/* fix142: the outcome of a save / an apply, in the window itself */
+.cfg-profile-result { display:flex; flex-direction:column; gap:7px; padding:16px 14px 14px; border-radius:14px; border:1px solid rgba(44,214,173,.45); background:rgba(44,214,173,.07); }
+.cfg-profile-result.warn { border-color:rgba(246,166,35,.55); background:rgba(246,166,35,.08); }
+.cfg-profile-result.err { border-color:rgba(248,113,113,.55); background:rgba(248,113,113,.08); }
+.cfg-profile-result-icon { width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; align-self:center; font-size:22px; font-weight:900; color:#04120f; background:#2cd6ad; animation:cfgProfileResultIn .32s cubic-bezier(.2,.9,.3,1.3); }
+.cfg-profile-result.warn .cfg-profile-result-icon { background:#f6a623; }
+.cfg-profile-result.err .cfg-profile-result-icon { background:#f87171; }
+.cfg-profile-result-title { align-self:center; text-align:center; color:#f4f6f7; font-size:15px; font-weight:800; margin-bottom:4px; }
+.cfg-profile-result-line { display:flex; justify-content:space-between; gap:12px; color:rgba(231,234,238,.80); font-size:12px; line-height:1.4; overflow-wrap:anywhere; }
+.cfg-profile-result-line .k { flex:0 0 auto; color:rgba(231,234,238,.52); }
+.cfg-profile-result-line .v { min-width:0; text-align:right; color:#edf2f3; font-weight:600; }
+.cfg-profile-result-note { margin-top:4px; padding-top:8px; border-top:1px solid rgba(255,255,255,.09); color:#bdf7ea; font-size:11.5px; line-height:1.4; }
+.cfg-profile-result.warn .cfg-profile-result-note, .cfg-profile-result.err .cfg-profile-result-note { color:rgba(231,234,238,.80); }
+.cfg-profile-result-actions { display:grid; grid-template-columns:1fr; gap:8px; }
+.cfg-profile-result-actions.two { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.cfg-profile-result-actions .cfg-profile-primary { margin-top:12px; }
+.cfg-profile-result-reboot { min-height:47px; margin-top:12px; border-radius:12px; border:1px solid rgba(44,214,173,.55); color:#5ce7c3; background:#050707; font-weight:800; font-size:14px; }
+.cfg-profile-opened { margin-top:12px; padding:10px 11px; color:#ffe2a8; border:1px solid rgba(246,166,35,.55); border-radius:11px; background:rgba(246,166,35,.08); font-size:11.5px; line-height:1.4; }
+.cfg-profile-actions button.cfg-profile-apply.is-waiting { box-shadow:0 0 0 2px rgba(246,166,35,.75); }
+@keyframes cfgProfileResultIn { from { transform:scale(.4); opacity:0; } to { transform:scale(1); opacity:1; } }
+@media (prefers-reduced-motion: reduce) { .cfg-profile-result-icon { animation:none; } }
+html[data-asb-theme="light"] .cfg-profile-result-title { color:var(--text) !important; }
+html[data-asb-theme="light"] .cfg-profile-result-line, html[data-asb-theme="light"] .cfg-profile-result-line .v { color:var(--text) !important; }
+html[data-asb-theme="light"] .cfg-profile-result-line .k { color:var(--text-secondary) !important; }
+html[data-asb-theme="light"] .cfg-profile-result-note { color:var(--text) !important; border-top-color:var(--border) !important; }
+html[data-asb-theme="light"] .cfg-profile-result-reboot { color:var(--accent) !important; background:#fff !important; border-color:rgba(0,143,112,.42) !important; }
+html[data-asb-theme="light"] .cfg-profile-opened { color:#6b4300 !important; }
 /* fix134: "Include Smart learning" choice in the save dialog. */
 .cfg-profile-check { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:start; gap:10px; width:100%; box-sizing:border-box; margin-top:12px; padding:11px 12px; text-align:left; color:#edf2f3; border:1px solid rgba(255,255,255,.11); border-radius:12px; background:#050707; font:inherit; }
 .cfg-profile-check.on { border-color:rgba(44,214,173,.62); background:rgba(44,214,173,.08); }
@@ -7130,7 +7157,10 @@ async function dozeSaveKeep(box) {
 const CFG_PROFILE_HELPER = MD + '/tools/asb_config_backup.sh';
 const _cfgProfile = { mode:'', store:'internal', rows:[], selected:'', replace:'', remove:'', draft:'', busy:false,
   /* fix134: Smart learning in a saved configuration is a choice, offered when there is some. */
-  smartAvail:false, smartFiles:0, withSmart:true };
+  smartAvail:false, smartFiles:0, withSmart:true,
+  /* fix142: the outcome of a save or an apply is shown in the window itself, and a file just
+   * opened says plainly that it is not applied yet. */
+  result:null, resultTimer:0, resultLeft:0, opened:null };
 function cfgProfileNameOK(name) { return /^[A-Za-z0-9_-]{1,32}$/.test(name || ''); }
 function cfgProfileArgs() { return SNAP_KEYS.map(shQuote).join(' '); }
 function cfgResultText(r) { return ((r && r.stdout) || (r && r.stderr) || '').trim(); }
@@ -7154,13 +7184,91 @@ function cfgProfileButton(text, cls, click) {
 function cfgProfileClose() {
   if (_cfgProfile.busy) return;
   const m = _el('cfgProfileModal'); if (!m) return;
+  cfgProfileResultStop(); _cfgProfile.result = null; _cfgProfile.opened = null;
   m.hidden = true; m.setAttribute('aria-hidden', 'true'); _cfgProfile.mode = '';
+}
+/* ---- Outcome of a save / an apply (fix142) ------------------------------------------------
+ * A user: "it is not clear whether the backup was saved or applied - the window stays open
+ * until I close it myself". A 2-second toast was the only answer, and saving to a folder left
+ * the dialog exactly as it was. The window now turns into the answer: what was written or
+ * applied, where, how many settings, what happened to Smart learning, and whether a reboot is
+ * needed. A clean success closes itself after a few seconds (with a visible countdown); a
+ * warning or an error stays until it is read. */
+function cfgProfileResultStop() {
+  if (_cfgProfile.resultTimer) { clearInterval(_cfgProfile.resultTimer); _cfgProfile.resultTimer = 0; }
+}
+function cfgProfileShowResult(res) {
+  cfgProfileResultStop();
+  _cfgProfile.result = res; _cfgProfile.opened = null;
+  _cfgProfile.resultLeft = res.kind === 'ok' && !res.keepOpen ? 6 : 0;
+  if (_cfgProfile.resultLeft > 0) {
+    _cfgProfile.resultTimer = setInterval(function() {
+      _cfgProfile.resultLeft -= 1;
+      if (_cfgProfile.resultLeft <= 0) { cfgProfileResultStop(); cfgProfileClose(); return; }
+      const c = _el('cfgProfileResultCount');
+      if (c) c.textContent = T('cfg_res_autoclose', 'Closes in %s s').replace('%s', String(_cfgProfile.resultLeft));
+    }, 1000);
+  }
+  uiSound(res.kind === 'err' ? 'error' : 'success');
+  cfgProfilePaint();
+}
+function cfgProfilePaintResult(body) {
+  const res = _cfgProfile.result;
+  const box = document.createElement('div'); box.className = 'cfg-profile-result ' + res.kind;
+  box.setAttribute('role', res.kind === 'err' ? 'alert' : 'status'); box.setAttribute('aria-live', 'polite');
+  const icon = document.createElement('div'); icon.className = 'cfg-profile-result-icon';
+  icon.textContent = res.kind === 'ok' ? '\u2713' : (res.kind === 'warn' ? '!' : '\u00d7');
+  const title = document.createElement('div'); title.className = 'cfg-profile-result-title'; title.textContent = res.title;
+  box.appendChild(icon); box.appendChild(title);
+  (res.lines || []).forEach(function(l) {
+    if (!l) return;
+    const row = document.createElement('div'); row.className = 'cfg-profile-result-line';
+    if (Array.isArray(l)) {
+      const k = document.createElement('span'); k.className = 'k'; k.textContent = l[0];
+      const v = document.createElement('span'); v.className = 'v'; v.textContent = l[1];
+      row.appendChild(k); row.appendChild(v);
+    } else row.textContent = l;
+    box.appendChild(row);
+  });
+  if (res.note) { const n = document.createElement('div'); n.className = 'cfg-profile-result-note'; n.textContent = res.note; box.appendChild(n); }
+  body.appendChild(box);
+  const acts = document.createElement('div'); acts.className = 'cfg-profile-result-actions' + (res.reboot ? ' two' : '');
+  if (res.reboot) {
+    acts.appendChild(cfgProfileButton(T('cfg_res_reboot_btn', 'Reboot'), 'cfg-profile-result-reboot', function() {
+      cfgProfileResultStop(); const c = _el('cfgProfileResultCount'); if (c) c.textContent = ''; void cfgReboot();
+    }));
+  }
+  acts.appendChild(cfgProfileButton(T('cfg_res_done', 'Done'), 'cfg-profile-primary', function() { cfgProfileResultStop(); cfgProfileClose(); }));
+  body.appendChild(acts);
+  const cnt = document.createElement('div'); cnt.className = 'cfg-profile-hint'; cnt.id = 'cfgProfileResultCount';
+  cnt.textContent = _cfgProfile.resultLeft > 0 ? T('cfg_res_autoclose', 'Closes in %s s').replace('%s', String(_cfgProfile.resultLeft)) : '';
+  body.appendChild(cnt);
+}
+function cfgProfileKV(out, key) {
+  const m = new RegExp('(^|\\n)' + key + '=([^\\n]*)').exec(String(out || ''));
+  return m ? m[2] : '';
+}
+function cfgProfileSmartLine(state) {
+  const map = {
+    saved: T('cfg_res_smart_saved', 'saved with the settings'),
+    skipped_by_choice: T('cfg_res_smart_skipped', 'not included (your choice)'),
+    empty: T('cfg_res_smart_none', 'nothing learned yet'),
+    unavailable: T('cfg_res_smart_none', 'nothing learned yet'),
+    restored: T('cfg_res_smart_restored', 'restored'),
+    none: T('cfg_res_smart_not_in_file', 'not in this file'),
+    skipped_incompatible_device: T('cfg_res_smart_kept_device', 'kept as it was - the file is from another device'),
+    skipped_invalid: T('cfg_res_smart_kept_invalid', 'kept as it was - the copy in the file is damaged'),
+    restore_failed: T('cfg_res_smart_kept_failed', 'kept as it was - it could not be restored'),
+    restore_failed_rolled_back: T('cfg_res_smart_kept_failed', 'kept as it was - it could not be restored')
+  };
+  return state && map[state] ? [T('cfg_res_smart', 'Smart learning'), map[state]] : null;
 }
 async function cfgProfileOpen(mode) {
   _cfgProfile.mode = mode; _cfgProfile.store = 'internal'; _cfgProfile.rows = [];
   _cfgProfile.selected = ''; _cfgProfile.replace = ''; _cfgProfile.remove = ''; _cfgProfile.draft = ''; _cfgProfile.busy = false;
   _cfgProfile.dir = ''; cfgFmInit();
   _cfgProfile.smartAvail = false; _cfgProfile.smartFiles = 0; _cfgProfile.withSmart = true;
+  cfgProfileResultStop(); _cfgProfile.result = null; _cfgProfile.opened = null;
   const m = _el('cfgProfileModal'); if (!m) return;
   m.hidden = false; m.setAttribute('aria-hidden', 'false');
   if (mode === 'save') {
@@ -7190,6 +7298,7 @@ function cfgProfileSetStore(store) {
 }
 function cfgProfileSelect(name) {
   if (_cfgProfile.busy) return;
+  if (_cfgProfile.opened && _cfgProfile.opened.name !== name) _cfgProfile.opened = null;
   _cfgProfile.selected = name; _cfgProfile.remove = ''; cfgProfilePaint();
 }
 function cfgProfileDestination(box) {
@@ -7231,6 +7340,7 @@ function cfgProfilePaint() {
   const close = _el('cfgProfileCloseBtn'); if (close) close.disabled = _cfgProfile.busy;
   const body = _el('cfgProfileBody'); if (!body) return;
   body.textContent = '';
+  if (_cfgProfile.result) { cfgProfilePaintResult(body); return; }
   const save = _cfgProfile.mode === 'save';
   const copy = document.createElement('div'); copy.className = 'cfg-profile-copy';
   copy.textContent = save ? T('cfg_profile_save_copy','Save the current settings and, when available, Smart learning as a named configuration. You can also save a copy to any folder on the device.') :
@@ -7265,6 +7375,13 @@ function cfgProfilePaint() {
     return;
   }
   cfgProfileDestination(body);
+  /* A file just opened is in the list, selected - and NOT applied. Say so where the user looks. */
+  if (_cfgProfile.opened && _cfgProfile.selected === _cfgProfile.opened.name) {
+    const ob = document.createElement('div'); ob.className = 'cfg-profile-opened'; ob.setAttribute('role', 'status');
+    ob.textContent = T('cfg_res_opened_banner', 'File checked and added: %s. Not applied yet - press Apply.').replace('%s', _cfgProfile.opened.name)
+      + (_cfgProfile.opened.note || '');
+    body.appendChild(ob);
+  }
   const list = document.createElement('div'); list.className = 'cfg-profile-list';
   if (!_cfgProfile.rows.length) {
     const empty = document.createElement('div'); empty.className = 'cfg-profile-empty';
@@ -7285,7 +7402,8 @@ function cfgProfilePaint() {
   if (!_cfgProfile.selected) return;
   const actions = document.createElement('div');
   actions.className = 'cfg-profile-actions' + (_cfgProfile.store === 'internal' ? ' has-delete' : '');
-  const apply = cfgProfileButton(_cfgProfile.busy ? T('cfg_profile_apply_active','Applying saved configuration…') : T('cfg_profile_apply','Apply saved configuration'), 'cfg-profile-apply' + (_cfgProfile.busy ? ' is-running' : ''), cfgProfileApply);
+  const apply = cfgProfileButton(_cfgProfile.busy ? T('cfg_profile_apply_active','Applying saved configuration…') : T('cfg_profile_apply','Apply saved configuration'),
+    'cfg-profile-apply' + (_cfgProfile.busy ? ' is-running' : '') + (!_cfgProfile.busy && _cfgProfile.opened && _cfgProfile.selected === _cfgProfile.opened.name ? ' is-waiting' : ''), cfgProfileApply);
   apply.disabled = _cfgProfile.busy; actions.appendChild(apply);
   if (_cfgProfile.store === 'internal') {
     const remove = cfgProfileButton(_cfgProfile.remove === _cfgProfile.selected ? T('cfg_profile_delete_confirm','Delete now') : T('cfg_profile_delete','Delete'), 'danger', cfgProfileDelete);
@@ -7308,19 +7426,33 @@ async function cfgProfileSave() {
   const noSmart = (_cfgProfile.smartAvail && !_cfgProfile.withSmart) ? ' --no-smart' : '';
   let r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' ' + verb + ' ' + shQuote(name) + noSmart + ' ' + cfgProfileArgs());
   if (r && r.errno === 3) { _cfgProfile.replace = name; cfgProfilePaint(); toast(T('cfg_profile_replace_ready','Tap Replace to overwrite this saved configuration.'), 'warn'); return; }
-  if (!r || r.errno !== 0) { toast(cfgResultText(r) || T('cfg_export_err','Could not save profile'), 'err'); return; }
+  if (!r || r.errno !== 0) {
+    cfgProfileShowResult({ kind:'err', title:T('cfg_res_save_failed_title', 'Configuration not saved'),
+      lines:[ (r && r.stderr ? String(r.stderr).trim() : '') || cfgResultText(r) || T('cfg_export_err','Could not save profile') ] });
+    return;
+  }
+  const out = String((r && r.stdout) || '');
+  const keys = cfgProfileKV(out, 'keys');
+  const smartLine = cfgProfileSmartLine(cfgProfileKV(out, 'smart_learning'));
+  const base = [[T('cfg_res_name', 'Name'), name], keys ? [T('cfg_res_keys', 'Settings'), keys] : null, smartLine];
   if (_cfgProfile.store === 'device' && _cfgProfile.dir) {
     const ex = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' export-path ' + shQuote(name) + ' ' + shQuote(_cfgProfile.dir));
-    if (!ex || ex.errno !== 0) { toast(cfgResultText(ex) || T('cfg_profile_export_err','Saved in ASB, but could not copy to the chosen folder'), 'warn'); return; }
+    if (!ex || ex.errno !== 0) {
+      cfgProfileShowResult({ kind:'warn', title:T('cfg_res_partial_title', 'Saved in ASB, but the file was not written'),
+        lines: base.concat([[T('cfg_res_where', 'Where'), T('cfg_res_where_asb', 'inside ASB (Open → ASB)')],
+                            (ex && ex.stderr ? String(ex.stderr).trim() : '') || cfgResultText(ex) || T('cfg_profile_export_err','Saved in ASB, but could not copy to the chosen folder')]) });
+      return;
+    }
     // The helper names the file it wrote: NAME.asb, or NAME.conf where the device has no tar.
     const exm = /(^|\n)exported=([^\n]+)/.exec(String((ex && ex.stdout) || ''));
     const outFile = exm ? exm[2].replace(/^.*\//, '') : name + '.asb';
-    toast(T('cfg_profile_saved_to', 'Saved to ') + _cfgProfile.dir.replace(CFG_FM_HOME, T('cfg_fm_storage', 'Storage')) + '/' + outFile, 'ok');
+    cfgProfileShowResult({ kind:'ok', title:T('cfg_res_saved_file_title', 'Configuration saved to a file'),
+      lines: base.concat([[T('cfg_res_file', 'File'), _cfgProfile.dir.replace(CFG_FM_HOME, T('cfg_fm_storage', 'Storage')) + '/' + outFile],
+                          [T('cfg_res_where', 'Where'), T('cfg_res_where_both', 'also kept inside ASB')]]) });
     return;
   }
-  const smartSaved = /(^|\n)smart_learning=saved(\n|$)/.test(String((r && r.stdout) || ''));
-  /* (fix134) smart_learning=skipped_by_choice: the toast simply does not claim it. */
-  toast(T('cfg_profile_saved','Saved profile ') + name + (smartSaved ? T('cfg_profile_smart_saved_suffix',' · Smart learning included') : ''), 'ok'); cfgProfileClose();
+  cfgProfileShowResult({ kind:'ok', title:T('cfg_res_saved_title', 'Configuration saved'),
+    lines: base.concat([[T('cfg_res_where', 'Where'), T('cfg_res_where_asb', 'inside ASB (Open → ASB)')]]) });
 }
 async function cfgProfileImportPath(file) {
   const r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' import-path ' + shQuote(file));
@@ -7336,7 +7468,10 @@ async function cfgProfileImportPath(file) {
   let note = '';
   if (older) note += T('cfg_profile_imported_older', ' · older copy, every setting checked');
   if (sk) note += T('cfg_profile_imported_skipped', ' · not taken: ') + sk[2].split(',').join(', ');
-  toast(T('cfg_profile_imported', 'Opened ') + (m ? m[2] : '') + note + T('cfg_profile_imported_tail', ' - press Apply to use it'), sk ? 'warn' : 'ok');
+  /* fix142: the file is in ASB and selected, not applied - a banner above the list says so
+   * and the Apply button is marked, instead of a toast gone in two seconds. */
+  if (m) { _cfgProfile.opened = { name:m[2], note:note }; cfgProfilePaint(); }
+  uiSound('option');
 }
 async function cfgProfileEnsureInternal() {
   if (_cfgProfile.store === 'internal') return true;
@@ -7360,17 +7495,29 @@ async function cfgProfileApply() {
   await cfgProfilePaintYield();
   if (!(await cfgProfileEnsureInternal())) { _cfgProfile.busy = false; cfgProfilePaint(); return; }
   const r = await run('sh ' + shQuote(CFG_PROFILE_HELPER) + ' restore ' + shQuote(_cfgProfile.selected) + ' ' + cfgProfileArgs());
-  if (!r || r.errno !== 0) {
-    _cfgProfile.busy = false; cfgProfilePaint(); uiSound('error');
-    toast(cfgResultText(r) || T('cfg_import_err','Could not restore profile'), 'err'); return;
-  }
   const name = _cfgProfile.selected; const detail = String((r && r.stdout) || '');
-  _cfgProfile.busy = false; cfgProfileClose(); await cfgLoad(); cfgRender();
-  const smartDetail = /(^|\n)smart_learning=restored(\n|$)/.test(detail) ? T('cfg_profile_smart_restored',' · Smart learning restored') :
-    (/smart_learning=skipped_incompatible_device/.test(detail) ? T('cfg_profile_smart_skipped_device',' · Smart learning was kept: another device') :
-    (/smart_learning=skipped_invalid/.test(detail) ? T('cfg_profile_smart_skipped_invalid',' · Smart learning backup was invalid') : ''));
-  uiSound('success');
-  toast(T('cfg_profile_restored','Restored profile ') + name + smartDetail + T('cfg_import_reboot',' - reboot to apply'), smartDetail.indexOf('invalid') >= 0 ? 'warn' : 'ok');
+  /* "restored=" is printed only after the settings were written: a failure after it is the
+   * Smart learning part, and the settings are applied. Reporting that as "could not restore"
+   * told the user nothing had changed when everything but the learning had (fix142). */
+  const settingsDone = /(^|\n)restored=/.test(detail);
+  if (!r || (r.errno !== 0 && !settingsDone)) {
+    _cfgProfile.busy = false;
+    cfgProfileShowResult({ kind:'err', title:T('cfg_res_apply_failed_title', 'Configuration not applied'),
+      lines:[[T('cfg_res_name', 'Name'), name],
+             (r && r.stderr ? String(r.stderr).trim() : '') || T('cfg_import_err','Could not restore profile'),
+             T('cfg_res_apply_failed_body', 'Nothing was changed: the current settings are kept.')] });
+    return;
+  }
+  _cfgProfile.busy = false; await cfgLoad(); cfgRender();
+  const keys = cfgProfileKV(detail, 'keys'); const changed = cfgProfileKV(detail, 'changed');
+  const smartState = cfgProfileKV(detail, 'smart_learning');
+  const warn = r.errno !== 0 || /^(skipped_invalid|restore_failed)/.test(smartState);
+  cfgProfileShowResult({ kind: warn ? 'warn' : 'ok', reboot:true, keepOpen:true,
+    title: warn ? T('cfg_res_applied_partial_title', 'Settings applied, Smart learning was not') : T('cfg_res_applied_title', 'Configuration applied'),
+    lines:[[T('cfg_res_name', 'Name'), name],
+           keys ? [T('cfg_res_keys', 'Settings'), keys + (changed !== '' ? ' \u00b7 ' + T('cfg_res_changed', 'changed now') + ': ' + changed : '')] : null,
+           cfgProfileSmartLine(smartState)],
+    note: T('cfg_res_reboot_note', 'Reboot the phone so every restored setting takes effect.') });
 }
 async function cfgProfileDelete() {
   if (!_cfgProfile.selected) return;
