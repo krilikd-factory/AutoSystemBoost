@@ -23,9 +23,11 @@
 // the compiler flags one, check it against the loudnessEnhancer effect in *your* AOSP
 // tree — this file mirrors that structure.
 
+#include <atomic>
 #include <cstdio>
 #include <cstring>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -156,12 +158,46 @@ class AsbLoudnessContext final : public EffectContext {
         mGainMb = gain;
     }
 
-    RetCode setGainMb(int gainMb) { applyTunables(gainMb); return RetCode::SUCCESS; }
+    RetCode setGainMb(int gainMb) {
+        std::lock_guard<std::mutex> lg(mCoreLock);
+        mPushedGainMb = gainMb;
+        applyTunables(gainMb);
+        return RetCode::SUCCESS;
+    }
     int getGainMb() const { return mGainMb; }
+
+    /* The stream format can change under a live instance (fix139).
+     *
+     * The framework hands a new Parameter::Common when the effect moves to another output
+     * thread or the thread changes rate/channels - a hi-fi output switching 48 -> 96 kHz,
+     * the global chain following music to a different output. The instance kept the format
+     * it was created with: the bass shelf, the voice bands and every time constant stayed
+     * computed for the old rate (at 96 kHz the 90 Hz shelf sits at 180 Hz), and a channel
+     * count change would walk the frames with the wrong stride. The legacy effect re-reads
+     * everything on EFFECT_CMD_SET_CONFIG; this is the same thing for AIDL.
+     *
+     * Queued here (binder thread) and applied at the top of the next process() call, on the
+     * audio thread itself, so the core is never rewritten under a running buffer. */
+    void queueCommon(const Parameter::Common& common) {
+        std::lock_guard<std::mutex> lg(mPendingLock);
+        mPendingCommon = common;
+        mCommonPending.store(true, std::memory_order_release);
+    }
 
     IEffect::Status process(float* in, float* out, int samples) {
         IEffect::Status s{STATUS_INVALID_OPERATION, 0, 0};
         if (in == nullptr || out == nullptr || samples <= 0) return s;
+        // A settings push is rewriting the core this instant: pass this one buffer through
+        // instead of waiting on the audio thread (fix139).
+        std::unique_lock<std::mutex> core(mCoreLock, std::try_to_lock);
+        if (!core.owns_lock()) {
+            if (in != out) memcpy(out, in, sizeof(float) * (size_t)samples);
+            s.status = STATUS_OK;
+            s.fmqConsumed = samples;
+            s.fmqProduced = samples;
+            return s;
+        }
+        if (mCommonPending.load(std::memory_order_acquire)) applyPendingCommonLocked();
         int ch = mCore.channels > 0 ? mCore.channels : 2;
         size_t frames = (size_t)samples / (size_t)ch;
         // Rate-limited proof of life. Attaching an effect and processing audio through it
@@ -232,6 +268,31 @@ class AsbLoudnessContext final : public EffectContext {
   private:
     asb_core_t mCore{};
     Parameter::Common mCommon{};
+    // fix139: settings pushes and format changes against the audio thread.
+    std::mutex mCoreLock;
+    std::mutex mPendingLock;
+    std::atomic<bool> mCommonPending{false};
+    Parameter::Common mPendingCommon{};
+    int mPushedGainMb = -1;   // the gain last pushed over binder, -1 = take the property
+
+    // Called with mCoreLock held, from process().
+    void applyPendingCommonLocked() {
+        Parameter::Common next;
+        {
+            std::lock_guard<std::mutex> lg(mPendingLock);
+            next = mPendingCommon;
+            mCommonPending.store(false, std::memory_order_relaxed);
+        }
+        const bool changed = next.input.base.sampleRate != mCommon.input.base.sampleRate ||
+                             !(next.input.base.channelMask == mCommon.input.base.channelMask);
+        mCommon = next;
+        if (!changed) return;
+        LOG(WARNING) << "ASB reconfigure: stream format changed - rate="
+                     << mCommon.input.base.sampleRate;
+        // As the legacy effect does on EFFECT_CMD_SET_CONFIG: envelopes start over.
+        asb_core_reset(&mCore);
+        applyTunables(mPushedGainMb);
+    }
 
     /* Output routing state.
      *
@@ -341,6 +402,10 @@ class AsbLoudnessEffect final : public EffectImpl {
         auto st = EffectImpl::setParameter(param);
         if (mContext && param.getTag() == Parameter::deviceDescription) {
             mContext->setDevices(param.get<Parameter::deviceDescription>());
+        }
+        // A new stream format for this instance (fix139): applied on the audio thread.
+        if (st.isOk() && mContext && param.getTag() == Parameter::common) {
+            mContext->queueCommon(param.get<Parameter::common>());
         }
         return st;
     }
