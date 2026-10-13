@@ -3374,7 +3374,31 @@ fi
   # hottest core at random UI moments and then left alone - see asb_dsp_thermal.sh.
   [ -r "$MODDIR/runtime/asb_dsp_thermal.sh" ] && . "$MODDIR/runtime/asb_dsp_thermal.sh"
   _th_at=""
+  # One look at the route a minute into every stretch with nothing playing (fix137).
+  #
+  # With nothing playing the watcher stops asking - a stream opening forces a dump - so the
+  # route it published stays whatever it was when playback stopped. An OP15 night kept
+  # route=bt from 22:46 to 08:00 while the audio service had gone back to the speaker: with
+  # dsp_outputs=bt the attach daemon held the effect all night, and the next speaker stream
+  # would have started with an enabled global effect - off the low-power offload path - and
+  # boosted until the watcher caught up. Headphones taken off are what usually stops the
+  # music, so one dump a minute later sees the speaker and the effect is let go; still on
+  # Bluetooth, it stays attached and the next track resumes boosted at once.
+  _idle_at=""; _idle_looked=""; _force=""
+  _idle_track() {   # $1 = the PCM signature just read
+    if [ -n "$1" ]; then _idle_at=""; _idle_looked=""; return 0; fi
+    [ -n "$_idle_at" ] && return 0
+    _idle_at="${SECONDS:-}"; [ -n "$_idle_at" ] || _idle_at="$(date +%s)"
+  }
+  _idle_due() {
+    [ -n "${_pcm_known:-}" ] && [ -n "$_idle_at" ] && [ -z "$_idle_looked" ] || return 1
+    _in="${SECONDS:-}"; [ -n "$_in" ] || _in="$(date +%s)"
+    [ $((_in - _idle_at)) -ge 60 ] || return 1
+    _idle_looked=1
+    return 0
+  }
   while true; do
+    _force=""
     _th_now="${SECONDS:-}"; [ -n "$_th_now" ] || _th_now="$(date +%s)"
     if [ -z "$_th_at" ] || [ $((_th_now - _th_at)) -ge 60 ]; then
       _th_at="$_th_now"
@@ -3410,7 +3434,10 @@ fi
         # file read a minute, no binder call unless the PCM set really changed.
         sleep 60
         _sig_off="$(grep -l RUNNING /proc/asound/card*/pcm*p/sub*/status 2>/dev/null | tr '\n' ' ')"
-        [ "$_sig_off" != "${_prev_sig:-}" ] || continue
+        _idle_track "$_sig_off"
+        if [ "$_sig_off" = "${_prev_sig:-}" ]; then
+          _idle_due && _force=1 || continue
+        fi
         ;;
     esac
     # Back off while nothing moves. A dump of the audio service every 5 s is about 720
@@ -3429,14 +3456,18 @@ fi
     sleep 5
     _since=$(( ${_since:-0} + 5 ))
     _sig="$(grep -l RUNNING /proc/asound/card*/pcm*p/sub*/status 2>/dev/null | tr '\n' ' ')"
+    _idle_track "$_sig"
     if [ "$_sig" != "${_prev_sig:-}" ]; then
       _prev_sig="$_sig"; _iv=5
+    elif [ -n "$_force" ]; then
+      :
     elif [ -z "$_sig" ] && [ -n "${_pcm_known:-}" ] && [ -n "$_prev_route" ]; then
       # Nothing is playing and nothing started: the route cannot matter to the effect until
       # a stream opens, and opening one changes $_sig above and forces a dump at once. The
       # 30 s back-off still dumped the audio service twice a minute for as long as the
       # screen was on with nothing playing. Only where the kernel exposes PCM state at all.
-      continue
+      # Except the one look a minute in (fix137, above).
+      _idle_due || continue
     elif [ "$_since" -lt "${_iv:-5}" ]; then
       continue
     fi
