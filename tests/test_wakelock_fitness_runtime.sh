@@ -138,6 +138,35 @@ grep -qx 'com.sec.android.app.shealth' "$T/d/wakelock_fitness_ignored" 2>/dev/nu
 run protect
 [ -f "$T/d/wakelock_fitness_ignored" ] && f "ignored record kept after protect"
 grep -q 'appops set com.sec.android.app.shealth WAKE_LOCK allow' "$T/am.log" || f "protect after re-apply did not restore allow"
+# fix143: "fitness" mode, run by service.sh minutes after boot. OPlus' boot sweep reset the
+# op; the limit comes back without the hourly pass, without batterystats, and a verdict
+# drawn while the op had lapsed is shown as limited again.
+run limit
+grep -qx 'com.sec.android.app.shealth|allow' "$T/d/wakelock_fitness_limited" || f "setup: not limited"
+echo "com.sec.android.app.shealth" > "$T/d/wakelock_fitness_ignored"
+echo "com.sec.android.app.shealth|244|1|limit_ignored" > "$A"
+echo "com.sec.android.app.shealth WAKE_LOCK default" >> "$T/ops"; : > "$T/am.log"
+mkdir -p "$T/bin2"
+printf '#!/bin/sh\necho "dumpsys $*" >> "$AM_LOG"\n' > "$T/bin2/dumpsys"; chmod +x "$T/bin2/dumpsys"
+fit() {
+  printf 'wakelock_action=0\nwakelock_fitness=%s\n' "$1" > "$T/mod/config/governor.conf"
+  OPS="$T/ops" AM_LOG="$T/am.log" PATH="$T/bin2:$T/bin:$PATH" MODDIR="$T/mod" ASB_WL_DIR="$T/d" ASB_WL_STATE="$T/state" \
+    sh "$SRC" fitness >/dev/null 2>&1
+}
+fit limit
+grep -q 'appops set com.sec.android.app.shealth WAKE_LOCK ignore' "$T/am.log" || f "fitness mode did not re-assert the lapsed limit"
+grep -q '^dumpsys' "$T/am.log" && f "fitness mode measured (dumpsys): $(cat "$T/am.log")"
+grep -qx 'com.sec.android.app.shealth|allow' "$T/d/wakelock_fitness_limited" || f "fitness mode lost the original mode"
+grep -qx 'com.sec.android.app.shealth' "$T/d/wakelock_fitness_ignored" 2>/dev/null && f "lapsed-op verdict kept after re-assert"
+grep -qx 'com.sec.android.app.shealth|244|1|limited' "$A" || f "report verdict not corrected: $(cat "$A")"
+[ -e "$T/d/wakelock_fitness_limited.reapplied" ] && f "reapplied marker left behind"
+: > "$T/am.log"; fit limit
+grep -q 'appops set' "$T/am.log" && f "fitness mode re-set an op already in force"
+: > "$T/am.log"; fit protect
+grep -q 'appops set' "$T/am.log" && f "fitness mode acted with wakelock_fitness=protect"
+grep -q 'asb_wakelock_watch.sh" fitness' "$ROOT/service.sh" || f "service.sh does not run the fitness pass after boot"
+run protect
+
 grep -q 'limit_ignored)' "$ROOT/action.sh" || f "action has no wording for limit_ignored"
 grep -q 'limit_ignored)' "$ROOT/tools/asb_diag.sh" || f "asbdiag has no wording for limit_ignored"
 for _l in "$ROOT"/runtime/i18n/action_*.sh; do grep -q '^T_WLV_LIMIT_IGNORED=' "$_l" || f "$(basename "$_l") lacks T_WLV_LIMIT_IGNORED"; done

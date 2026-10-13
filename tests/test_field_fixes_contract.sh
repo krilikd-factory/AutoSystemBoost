@@ -900,4 +900,27 @@ for f in "$ROOT"/runtime/i18n/action_*.sh; do grep -q '^T_S_MC_PAST=' "$f" || fa
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS: fix142 contract"
 ) || exit 1
+# ---- fix143 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix143: $*"; exit 1; }
+C="$ROOT/tools/logkit/_asb_logkit_common.sh"; F="$ROOT/tools/logkit/asb_log_full_day.sh"
+grep -q '^lk_gfx_pkg_delta() {' "$C" || fail "jank trace does not record which app drew the janky frames"
+grep -q '|fg_pkg|jank_pkgs"' "$C" || fail "jank trace header lacks column 17"
+grep -q 'steady floor: %.2f janky frames a second' "$C" || fail "report does not tell a steady floor from lag"
+grep -q 'printf "%-16s %9s %9s %8s %8s\\n", "ASB state", "intervals", "frames", "janky", "janky/s"' "$C" || fail "state table without janky/s"
+grep -q '^asb_gfx_run_delta() {' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not measure frames per app while it runs"
+grep -q 'wake_lock=\[^:" \]\*:"\\\*walarm' "$C" || fail "alarm list still counts releases and summary lines"
+grep -q 'alarmtimer -16: a wake-up alarm was due within 2 s' "$C" || fail "alarmtimer refusals still called driver faults"
+grep -q '^lk_wh_app_parse() {' "$C" || fail "phase holders still batterystats running totals"
+grep -q '^lk_wh_kernel_snap() {' "$C" || fail "kernel holders not measured per phase"
+grep -q 'LK_PH_SNAPSHOT=1' "$F" || fail "interim report snapshot still writes holder blocks"
+grep -q 'asb_wakelock_watch.sh" fitness' "$ROOT/service.sh" || fail "fitness limit not put back after boot"
+grep -q '^if \[ "\${1:-}" = fitness \]; then' "$ROOT/runtime/asb_wakelock_watch.sh" || fail "watcher has no fitness-only pass"
+for t in test_jank_floor_runtime.sh test_phase_wakeholders_runtime.sh; do
+  [ -f "$ROOT/tests/$t" ] || fail "$t missing"
+done
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix143 contract"
+) || exit 1
 echo "PASS: field-fix contracts"

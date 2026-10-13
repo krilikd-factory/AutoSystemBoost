@@ -20,9 +20,9 @@ row 4 MODERATE   3 1300 110 com.google.android.youtube
 row 5 MODERATE   2 900 40 com.rifsxd.ksunext
 out="$(sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit_jank_summary' "$C" "$T" 2>&1)"
 printf '%s\n' "$out" | grep -q '^within com.google.android.youtube (most frames), by ASB state and touch:$' || fail "no per-app table: $out"
-printf '%s\n' "$out" | grep -qE '^  MODERATE +yes +1 +1300 +8\.5%$' || fail "touched MODERATE row: $out"
-printf '%s\n' "$out" | grep -qE '^  LIGHT_IDLE +no +2 +1200 +43\.8%$' || fail "untouched LIGHT_IDLE row: $out"
-printf '%s\n' "$out" | grep -qE '^  mixed +no +1 +600 +42\.3%$' || fail "untouched mixed row: $out"
+printf '%s\n' "$out" | grep -qE '^  MODERATE +yes +1 +1300 +8\.5% +2\.29$' || fail "touched MODERATE row: $out"
+printf '%s\n' "$out" | grep -qE '^  LIGHT_IDLE +no +2 +1200 +43\.8% +5\.48$' || fail "untouched LIGHT_IDLE row: $out"
+printf '%s\n' "$out" | grep -qE '^  mixed +no +1 +600 +42\.3% +5\.29$' || fail "untouched mixed row: $out"
 printf '%s\n' "$out" | grep -q 'ksunext .*yes' && fail "another app's rows in the table: $out"
 # MODERATE before LIGHT_IDLE before mixed - a fixed order, not awk's hash order.
 printf '%s\n' "$out" | awk '/^  MODERATE/ { m = NR } /^  LIGHT_IDLE/ { l = NR } /^  mixed/ { x = NR } END { exit !(m < l && l < x) }' \
