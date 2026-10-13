@@ -46,13 +46,19 @@ printf '%s\n' "$out" | grep -q 'asb_dsp_attach .*<< ASB code' || fail "a crash o
 printf '%s\n' "$out" | grep -q "Abort message: 'FORTIFY" || fail "abort message missing"
 printf '%s\n' "$out" | grep -q '^NOTE 2 of these crashes have ASB code' || fail "summary missing: $out"
 printf '%s\n' "$out" | grep -q 'pb' && fail "a .pb tombstone listed"
+# fix142: whose code asked for the abort, and one message in many processes read as one cause.
+printf '%s\n' "$out" | grep -q 'first frame outside libc: /vendor/lib64/libaudioroute.so$' || fail "first non-libc frame not named: $out"
+printf '%s\n' "$out" | grep -q 'first frame outside libc: /vendor/lib64/soundfx/libasbdsp.so (asb_core_process_f32+88)' || fail "frame function not kept: $out"
+printf '%s\n' "$out" | grep -q '^NOTE 3 of the listed crashes end with the same abort message' || fail "same abort not grouped: $out"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 
 # Full-day report: only tombstones newer than the capture start.
 out="$( (set +u; LK_SCRIPT_DIR="$ROOT/tools/logkit"; . "$ROOT/tools/logkit/_asb_logkit_common.sh" >/dev/null 2>&1
          LK_START_EPOCH="$(date -d '2026-10-12 22:40:30' +%s)" ASB_TOMBSTONE_DIR="$D" lk_emit_native_crashes) )"
-printf '%s\n' "$out" | grep -q 'libasbdsp' && fail "memory-map library leaked into the report"
+# libasbdsp may appear only as the crashing frame of the one crash it is in, never from a map.
+[ "$(printf '%s\n' "$out" | grep -c 'libasbdsp')" = 1 ] || fail "memory-map library leaked into the report: $out"
 [ "$(printf '%s\n' "$out" | grep -c '^  [0-9]')" = 2 ] || fail "capture window not applied: $out"
 printf '%s\n' "$out" | grep -q '^2 of them with ASB code in the crash' || fail "report summary missing: $out"
+printf '%s\n' "$out" | grep -q 'first frame outside libc: /system/lib64/libaudioclient.so' || fail "report does not name the frame: $out"
 grep -q '^    lk_emit_native_crashes$' "$ROOT/tools/logkit/asb_log_full_day.sh" || fail "report does not include the section"
 echo "PASS native crash names: crashed processes named, ASB code told apart from the memory map"

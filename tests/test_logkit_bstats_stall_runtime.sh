@@ -37,6 +37,19 @@ run_dump() {
   BS_FILE="$1" PATH="$B:$PATH" sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_wakelock_batterystats_dump' "$C" "$O" >/dev/null 2>&1
 }
 
+# The screen was off for most of it (fix142: batterystats charges partial wakelocks only with
+# the screen off, so the stall claim needs real screen-off time). Rows 30 min apart at night.
+echo "epoch|datetime|phase|screen|bl_raw|bl_max|bl_pct|refresh_hz|bat_mA|wake|disp_state" > "$O/display_trace.txt"
+for e in 800 2600 4400 6200 8000; do echo "$e|d|sleep|0|0|4094|0||-60||" >> "$O/display_trace.txt"; done
+cp "$O/display_trace.txt" "$T/dt.night"
+
+# 0. Screen on the whole time and nothing moved: batterystats had nothing to charge - no claim.
+echo "epoch|datetime|phase|screen|bl_raw|bl_max|bl_pct|refresh_hz|bat_mA|wake|disp_state" > "$O/display_trace.txt"
+for e in 800 2600 4400 6200 8000; do echo "$e|d|active|1|900|4094|22|120|-400||2" >> "$O/display_trace.txt"; done
+run_dump "$T/bs_frozen.txt"
+grep -q "not one app's total moved" "$O/_wakelock_report.txt" && fail "stall claimed for a capture with the screen on throughout"
+cp "$T/dt.night" "$O/display_trace.txt"
+
 # 1. Nothing moved in 3 h, no charging: the stall is named, "no app" is not printed.
 run_dump "$T/bs_frozen.txt"
 grep -q "not one app's total moved in 3 h of capture" "$O/_wakelock_report.txt" || fail "stall not named: $(sed -n '/TOP APPS/,/^$/p' "$O/_wakelock_report.txt")"
@@ -45,7 +58,8 @@ grep -qx '10658 0' "$O/.wl_uid_delta" || fail "per-uid deltas not kept for the r
 
 # 2. The live samples saw AudioMix (YouTube's worksource) held 20 min at a stretch.
 echo "epoch|datetime|phase|screen|bl_raw|bl_max|bl_pct|refresh_hz|bat_mA|wake|disp_state" > "$O/display_trace.txt"
-for e in 2000 2020 2040; do echo "$e|d|audio_bt|0|0|4094|0||-120||" >> "$O/display_trace.txt"; done
+# Screen off since 800: the 20-minute hold sampled at 2020 lies entirely in the dark.
+for e in 800 2000 2020 2040; do echo "$e|d|audio_bt|0|0|4094|0||-120||" >> "$O/display_trace.txt"; done
 cat > "$O/wake_live.txt" <<'X'
 2000|kactive=0|ktop=|plocks=PARTIAL_WAKE_LOCK                 'AudioMix' ACQ=-5m1s2ms LONG (uid=1041 ws=WorkSource{ chains=WorkChain{(10658), (1041)}});
 2020|kactive=0|ktop=|plocks=PARTIAL_WAKE_LOCK                 'AudioMix' ACQ=-20m3s9ms LONG (uid=1041 ws=WorkSource{ chains=WorkChain{(10658), (1041)}});
@@ -54,8 +68,18 @@ X
 printf '10658 com.google.android.youtube\n' > "$O/uid_map.txt"
 live="$(sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit_live_wakelock_holders' "$C" "$O" 2>&1)"
 printf '%s\n' "$live" | grep -q '^batterystats disagrees with these samples:$' || fail "no disagreement line: $live"
-printf '%s\n' "$live" | grep -q 'com.google.android.youtube (AudioMix): held 20 min at a stretch here, batterystats added 0 s' \
+printf '%s\n' "$live" | grep -q 'com.google.android.youtube (AudioMix): held 20 min at a stretch with the screen off here, batterystats added 0 s' \
   || fail "holder not compared: $live"
+
+# 2b. fix142: the same 20-minute hold, but the screen went off 20 s before the sample - the
+# hold ran with the screen on, which batterystats does not charge. No disagreement.
+cp "$O/display_trace.txt" "$T/dt.keep"
+echo "epoch|datetime|phase|screen|bl_raw|bl_max|bl_pct|refresh_hz|bat_mA|wake|disp_state" > "$O/display_trace.txt"
+for e in 800 1950; do echo "$e|d|active|1|900|4094|22|120|-400||2" >> "$O/display_trace.txt"; done
+for e in 2000 2020 2040; do echo "$e|d|audio_bt|0|0|4094|0||-120||" >> "$O/display_trace.txt"; done
+live="$(sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit_live_wakelock_holders' "$C" "$O" 2>&1)"
+printf '%s\n' "$live" | grep -q 'batterystats disagrees' && fail "a hold that ran with the screen on compared against batterystats: $live"
+cp "$T/dt.keep" "$O/display_trace.txt"
 
 # 3. On the charger batterystats counts nothing by design: no stall claim, no disagreement.
 echo "1|d|Charging" >> "$O/charge_trace.txt"

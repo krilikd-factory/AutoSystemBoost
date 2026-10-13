@@ -878,4 +878,26 @@ done
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS: fix141 contract"
 ) || exit 1
+# ---- fix142 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix142: $*"; exit 1; }
+W="$ROOT/webroot/index.html"; C="$ROOT/tools/logkit/_asb_logkit_common.sh"; F="$ROOT/tools/logkit/asb_log_full_day.sh"
+grep -q 'function cfgProfileShowResult(res)' "$W" || fail "save/apply outcome not shown in the window"
+grep -q 'cfg_res_opened_banner' "$W" || fail "an opened file is not marked as not applied"
+grep -q 'const settingsDone = ' "$W" || fail "a Smart-only failure after the settings were written reads as nothing applied"
+grep -q 'echo "changed=' "$ROOT/tools/asb_config_backup.sh" || fail "restore does not report what it changed"
+grep -q '} > "$_out.part" && mv -f "$_out.part" "$_out"' "$F" || fail "full-day report still rewritten in place"
+grep -q 'phase_summary.txt.part' "$F" || fail "phase summary still rewritten in place"
+grep -q 'oa = age; if (offst > 0 && e - offst < oa) oa = e - offst' "$C" || fail "live holds compared with batterystats including screen-on time"
+grep -q '^lk_screen_off_min() {' "$C" || fail "stall claim without screen-off time"
+grep -q 'first frame outside libc' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not name the crashing code"
+grep -q 'first frame outside libc' "$C" || fail "captures do not name the crashing code"
+grep -q "AIDL library: fix139 build" "$ROOT/tools/asb_diag.sh" || fail "asbdiag cannot tell which DSP library is installed"
+grep -q '^T_S_MC_PAST=' "$ROOT/action.sh" || fail "multicast with Wi-Fi off still reads as a present cost"
+for f in "$ROOT"/runtime/i18n/action_*.sh; do grep -q '^T_S_MC_PAST=' "$f" || fail "T_S_MC_PAST missing in ${f##*/}"; done
+[ -f "$ROOT/tests/test_config_restore_outcome_runtime.sh" ] || fail "outcome test missing"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix142 contract"
+) || exit 1
 echo "PASS: field-fix contracts"

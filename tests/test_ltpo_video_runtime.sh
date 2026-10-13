@@ -77,6 +77,9 @@ grep -q '^orig=165.0$' "$T/d/ltpo_video.lowered" 2>/dev/null || f "original not 
 # First touch: back at once, from the guard itself.
 touch "$T/touch"
 wait_for 165.0 10 || f "first touch did not restore within 1 s (peak $(cat "$T/peak"))"
+# The guard writes the stamp right after the settings write the loop above saw; under a
+# loaded parallel run that is a few milliseconds later - poll briefly instead of racing it.
+_ta=0; while [ ! -s "$T/d/ltpo_video.touch_at" ] && [ "$_ta" -lt 20 ]; do sleep 0.05; _ta=$((_ta + 1)); done
 [ -s "$T/d/ltpo_video.touch_at" ] || f "touch restore not time-stamped"
 # fix136: right after a touch the next lower waits for the longer quiet (3 s here, 1 s
 # otherwise), so reading comments under a video does not switch the panel every pause.

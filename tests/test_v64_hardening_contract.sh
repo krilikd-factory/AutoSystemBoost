@@ -69,7 +69,9 @@ absent "$WEBUI" 'cfg_profile_prepare_apply'
 need "$WEBUI" 'r.errno !== 0'
 absent "$WEBUI" 'CFG_BACKUP_PATH'
 need "$WEBUI" 'cfg_profile_smart_saved'
-need "$WEBUI" 'smart_learning=restored'
+# fix142: the apply outcome reads smart_learning=<state> by key and names each state.
+need "$WEBUI" "cfgProfileKV(detail, 'smart_learning')"
+need "$WEBUI" "restored: T('cfg_res_smart_restored'"
 # night_modem_idle is read after governor config reload, so it must never fall through to
 # the generic reboot-only metadata path.
 need "$WEBUI" 'night_modem_idle:APPLY_LIVE'
