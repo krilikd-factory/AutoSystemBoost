@@ -6473,7 +6473,11 @@ int main(int argc, char **argv) {
         atomic_write_file(ENV_FP_FILE, cur_fp);
     }
 
-    asb_log_critical("asb_governor %s started (pid %d)", ASB_VERSION, getpid());
+    /* Seconds since boot on the persistent line (fix144): the log tail in asbdiag listed
+     * twelve starts and could not say which were boots and which were restarts. A start
+     * long after boot with no "stopped cleanly" before it is a crash that was recovered. */
+    asb_log_critical("asb_governor %s started (pid %d, %lds after boot)", ASB_VERSION, getpid(),
+                     asb_clock_ms(CLOCK_BOOTTIME) / 1000);
     asb_log("persistent stats: sessions=%d avg_t2s=%.0fs avg_temp=%.0fdegC avg_gap=%.0f avg_eff=%.0f degraded=%d",
             g_pstats.session_count, g_pstats.avg_time_to_first_sus,
             g_pstats.avg_max_temp, g_pstats.avg_gap_p0, g_pstats.avg_efficiency,
@@ -8484,29 +8488,11 @@ int main(int argc, char **argv) {
             }
 
             /*
-             * Periodic maintenance, on this loop's clock rather than its own process.
-             * asb_reconcile and asb_watchdog each ran as a permanent shell loop with its own
-             * sleep - two resident processes, two independent timers, and every wake a
-             * separate wakeup for the CPU to come out of idle for.
+             * Periodic maintenance, on this loop's clock rather than its own process: the
+             * config file watch and the night doze window.
              */
             {
-                static time_t _rec_last = 0, _wd_last = 0;
                 time_t _mnow = time(NULL);
-                if (_rec_last == 0) { _rec_last = _mnow; _wd_last = _mnow; }
-                /* Reconcile leans on the screen state the same way its shell loop did. */
-                /* Back off when reconcile keeps finding nothing to fix.
-                 *
-                 * The audit's rule: if attempts do not change live state, the interval should grow
-                 * by itself. Reconcile exists for drift that a vendor HAL introduces, and on a
-                 * device where that never happens it is a shell, a script and a set of sysfs reads
-                 * every two minutes to confirm nothing moved.
-                 *
-                 * The signal is already there: writer no-op ticks. If no cap write has happened
-                 * since the last reconcile, nothing could have drifted that we did not cause, so
-                 * double the interval up to a ceiling. Any real write resets it immediately - the
-                 * backoff must never delay the case it was built for. */
-                static unsigned long _rec_seen_writes = 0;
-                static int _rec_idle_streak = 0;
                 /* Reload governor.conf when it changes on disk.
                  *
                  * Until now only an explicit "asb reload" re-read the file, so a WebUI save of any
@@ -8537,23 +8523,12 @@ int main(int argc, char **argv) {
                         }
                     }
                 }
-                int _rec_period = metrics.misc.screen_on ? 120 : 300;
-                if (g_stat_writes != _rec_seen_writes) { _rec_idle_streak = 0; }
-                else if (_rec_idle_streak < 3)          { /* grow slowly */ }
-                if (_rec_idle_streak > 0) _rec_period <<= (_rec_idle_streak > 3 ? 3 : _rec_idle_streak);
-                if ((_mnow - _rec_last) >= _rec_period) {
-                    _rec_last = _mnow;
-                    /* Grow the streak only when this pass followed a period with no writes. */
-                    if (g_stat_writes == _rec_seen_writes) {
-                        if (_rec_idle_streak < 3) _rec_idle_streak++;
-                    } else {
-                        _rec_idle_streak = 0;
-                    }
-                    _rec_seen_writes = g_stat_writes;
-                    int _rr = system("sh /data/adb/modules/AutoSystemBoost/runtime/asb_reconcile.sh"
-                                     " --once >/dev/null 2>&1 &");
-                    (void)_rr;
-                }
+                /* No reconcile spawn here any more (fix144). "sh asb_reconcile.sh --once" broke
+                 * out of its loop before the first check - the fast branch's --once break sits
+                 * ahead of the pass - and, run outside service.sh, it had none of the helpers the
+                 * pass calls. Every 2-16 minutes it forked two shells to do nothing. The native
+                 * governor owns the CPU policy it would have reconciled; without the governor the
+                 * resident reconcile loop service.sh starts after 90 s is unchanged. */
                 /* doze=night has to be re-evaluated when the window opens and closes,
                  * and boot is the only time anything ran it. Hourly is plenty: the
                  * window has hour granularity, and the script is a no-op unless the
@@ -8580,22 +8555,11 @@ int main(int argc, char **argv) {
                         (void)_dr;
                     }
                 }
-                /* 5 minutes with the screen on, 30 with it off.
-                 *
-                 * asb_watchdog.sh already backs off on its own, but this is a separate spawn from
-                 * the governor and it kept the old cadence - so the fork happened every 5 minutes
-                 * through the night regardless, which is most of what the script's own backoff was
-                 * meant to remove. Each spawn is a shell plus the script.
-                 *
-                 * If the governor dies while the screen is off, nothing observable happens until
-                 * the phone is picked up; a 30-minute detection window is invisible there. */
-                int _wd_period = metrics.misc.screen_on ? 300 : 1800;
-                if ((_mnow - _wd_last) >= _wd_period) {
-                    _wd_last = _mnow;
-                    int _wr = system("sh /data/adb/modules/AutoSystemBoost/runtime/asb_watchdog.sh"
-                                     " --once >/dev/null 2>&1 &");
-                    (void)_wr;
-                }
+                /* No watchdog spawn here either (fix144). The governor cannot be its own
+                 * liveness check - if it dies, nothing it schedules runs - and the spawned
+                 * "asb_watchdog.sh --once" exited on its first line anyway: ASB_GOV_ENABLED is
+                 * a shell variable of service.sh, never in this process's environment. The
+                 * check now lives in service.sh's housekeeping loop. */
             }
 
             /* Hand the app classification to the FSM before it decides.
@@ -9630,6 +9594,7 @@ int main(int argc, char **argv) {
     asb_log("persistent stats saved: sessions=%d degrade=%d", g_pstats.session_count, g_pstats.degrade_count);
     unlink(ASB_SOCK_PATH);
     unlink(PID_FILE);
+    asb_log_critical("asb_governor stopped cleanly (pid %d)", getpid());
     if (g_logf) fclose(g_logf);
     return 0;
 }
