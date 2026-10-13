@@ -3578,6 +3578,41 @@ fi
   rm -f /data/adb/asb/oem_preinstall 2>/dev/null
 ) >/dev/null 2>&1 &
 
+# Governor liveness (fix144). The governor scheduled "asb_watchdog.sh --once" itself - which
+# cannot catch its own death - and that script exited on its first line anyway (ASB_GOV_ENABLED
+# is not in the governor's environment). A governor that crashed left its last ceilings in
+# place until the next reboot: a LIGHT_IDLE cap on the prime is a slow phone, a HEAVY one a
+# warm one. A clean stop (stock, restore, Smart reset, SIGTERM) removes the pid file, so a pid
+# file whose process is gone is a death. Builtins only (read, kill -0) on the housekeeping
+# loop's 5-minute tick; at most three restarts in 30 minutes - a crash loop is logged, not fed.
+# asb_gov_liveness_begin
+asb_gov_liveness() {
+  _glf="${ASB_GOV_PIDFILE:-/dev/.asb/governor.pid}"
+  [ -f "$_glf" ] && [ ! -f "${ASB_SAFE_MODE_FILE:-/dev/.asb/safe_mode}" ] || return 0
+  _gl_pid=""; read -r _gl_pid < "$_glf" 2>/dev/null
+  case "$_gl_pid" in ''|*[!0-9]*) _gl_pid=0 ;; esac
+  [ "$_gl_pid" -gt 1 ] && ! kill -0 "$_gl_pid" 2>/dev/null || return 0
+  _gl_prof=""; read -r _gl_prof < "$MODDIR/current_profile" 2>/dev/null
+  _gl_t="$(date +%s 2>/dev/null || echo 0)"
+  [ $(( _gl_t - ${_gl_w0:-0} )) -ge 1800 ] 2>/dev/null && { _gl_w0="$_gl_t"; _gl_n=0; }
+  if [ "$_gl_prof" = stock ] || ! asb_feature_enabled CPU; then
+    rm -f "$_glf" 2>/dev/null
+  elif [ "${_gl_n:-0}" -lt 3 ]; then
+    _gl_n=$(( ${_gl_n:-0} + 1 ))
+    rm -f "$_glf" 2>/dev/null
+    if asb_governor_start; then
+      asb_log "governor: pid $_gl_pid had died without a clean stop - restarted ($_gl_n in 30 min)"
+    else
+      asb_log "governor: pid $_gl_pid had died without a clean stop - restart failed"
+    fi
+  elif [ "${_gl_n:-0}" -eq 3 ]; then
+    _gl_n=4
+    asb_log "governor: died again after 3 restarts in 30 min - left stopped until the window passes; send asbdiag"
+  fi
+  return 0
+}
+# asb_gov_liveness_end
+
 # Watch what holds the phone awake. This is a night-scale problem, so it must never turn
 # into a periodic screen-on job or be the source of the wakeups it measures.
 (
@@ -3606,6 +3641,7 @@ fi
         MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wakelock_watch.sh" fitness >/dev/null 2>&1
       fi
     fi
+    asb_gov_liveness
     _ho_now="$(date +%s 2>/dev/null || echo 0)"
     [ $(( _ho_now - _wd_last )) -ge 1800 ] 2>/dev/null || continue
     _wd_last="$_ho_now"
