@@ -219,6 +219,7 @@ fi
 # name the process, the signal and the abort message; the newest few are listed, and one
 # with ASB code in its backtrace is called out.
 _asb_tombstones() {
+  _tb_abs=""
   _tb_list="$(ls -t "${ASB_TOMBSTONE_DIR:-/data/tombstones}"/tombstone_[0-9][0-9] 2>/dev/null | head -8)"
   if [ -n "$_tb_list" ]; then
     P "  recent native crashes (newest first, /data/tombstones):"
@@ -237,9 +238,25 @@ _asb_tombstones() {
       if printf '%s\n%s\n' "$_tb_cmd" "$_tb_bt" | grep -qE 'libasbdsp|asb_dsp_attach|AutoSystemBoost|/data/adb/asb/'; then
         _tb_asb="  << ASB code in this crash"; _tb_asb_n=$((_tb_asb_n + 1))
       fi
+      # fix142: the first frame outside libc names the code that asked for the abort. Eight
+      # app processes died at boot on the OP15 with one FORTIFY message and nothing to say
+      # whose memcpy it was.
+      _tb_fr="$(printf '%s\n' "$_tb_bt" | awk '/#[0-9]+ pc / {
+          for (i = 1; i <= NF; i++) if ($i == "pc") { lib = $(i + 2); fn = $(i + 3); break }
+          if (lib ~ /\/(libc|libc\+\+|libbase|liblog|libutils)\.so$/) next
+          if (fn !~ /^\(/) fn = ""
+          print lib (fn != "" ? " " fn : ""); exit }' | cut -c1-110)"
       P "    ${_tb_ts:-?}  ${_tb_cmd:-?}  ${_tb_sig:-}${_tb_asb}"
       [ -n "$_tb_ab" ] && P "      $_tb_ab"
+      [ -n "$_tb_fr" ] && P "      first frame outside libc: $_tb_fr"
+      [ -n "$_tb_ab" ] && _tb_abs="${_tb_abs:-}$_tb_ab
+"
     done
+    # One message across many processes is one cause, not many crashes.
+    if [ -n "${_tb_abs:-}" ]; then
+      _tb_topn="$(printf '%s' "$_tb_abs" | sort | uniq -c | sort -rn | awk 'NR == 1 { print $1 }')"
+      [ "${_tb_topn:-0}" -ge 3 ] 2>/dev/null && NOTE "$_tb_topn of the listed crashes end with the same abort message - one cause in many processes (the frame above names whose code)"
+    fi
     if [ "$_tb_asb_n" -gt 0 ]; then
       NOTE "$_tb_asb_n of these crashes have ASB code (the DSP library or its attach daemon) in them - send this asbdiag; dsp_loudness=off takes the effect out of the audio path until it is fixed"
     else
@@ -1575,6 +1592,17 @@ if [ "$(gp persist.asb.dsp.enable)" = "1" ]; then
 fi
 _sfx64="$(ls -l /vendor/lib64/soundfx/libasbdsp.so 2>/dev/null | awk '{print $5}')"
 NOTE "installed library: ${_sfx64:-<absent>} bytes 64-bit  ·  ABI $(cat /data/adb/modules/AutoSystemBoost/dsp_abi_installed 2>/dev/null)"
+# Which AIDL build it is (fix142). The fix139 library logs "ASB reconfigure" when the effect
+# follows a new stream format; asked "what should the new library change?", the diag could only
+# answer with the byte size.
+case "$(cat /data/adb/modules/AutoSystemBoost/dsp_abi_installed 2>/dev/null)" in
+  aidl*)
+    if grep -aq 'ASB reconfigure' /vendor/lib64/soundfx/libasbdsp.so 2>/dev/null; then
+      NOTE "  AIDL library: fix139 build - re-tunes bass, voice and timing when the output's sample rate or channels change"
+    elif [ -f /vendor/lib64/soundfx/libasbdsp.so ]; then
+      NOTE "  AIDL library: built before fix139 - keeps the stream format it was created with (rebuild with build-dsp-aidl)"
+    fi ;;
+esac
 # The process that loads effects has a different name per HAL generation: QTI's AIDL
 # service on newer builds, the AOSP HIDL service (and its _64 variant) on OP12-era vendor
 # images. Only the first name was tried, so on those phones the check silently vanished
@@ -2584,7 +2612,12 @@ fi
 if [ -s /data/adb/asb/wakelock_multicast ]; then
   _mct="$(sed -n 's/^total|//p' /data/adb/asb/wakelock_multicast | head -1)"
   case "$_mct" in ''|*[!0-9]*) _mct=0 ;; esac
-  NOTE "Wi-Fi multicast held $(( _mct / 60 )) min since the last unplug (radio cannot use its packet filter while held)"
+  if [ "$(cat /sys/class/net/wlan0/operstate 2>/dev/null)" = up ]; then
+    NOTE "Wi-Fi multicast held $(( _mct / 60 )) min since the last unplug (radio cannot use its packet filter while held)"
+  else
+    # batterystats keeps counting a held lock with Wi-Fi off (fix142).
+    NOTE "Wi-Fi multicast held $(( _mct / 60 )) min since the last unplug - Wi-Fi is off now, so a held lock costs nothing"
+  fi
   grep -v '^total|' /data/adb/asb/wakelock_multicast | while IFS='|' read -r _mp _mv; do
     [ -n "$_mp" ] && P "    holding now: $_mp  ·  $_mv"
   done

@@ -275,8 +275,25 @@ list_profiles() {
 restore_profile() {
   _name="$1"; shift; [ "$#" -gt 0 ] || { echo 'restore needs allowed keys' >&2; exit 2; }
   _in="$(verify_profile "$_name")"
-  sh "$WRITER" import "$_in" "$SNAPSHOT" "$@" || { echo 'profile_restore_failed' >&2; return 1; }
-  echo "restored=$_name"; smart_restore "$_name"
+  # What changed, for the WebUI's outcome panel (fix142): the config before the import and
+  # after it, key by key. Best effort - no copy, no figure.
+  _rb_tmp="${TMPDIR:-/data/local/tmp}"; [ -d "$_rb_tmp" ] || _rb_tmp=/tmp
+  _rb_before="$_rb_tmp/asb_restore_before.$$"
+  cp "$CONF" "$_rb_before" 2>/dev/null || _rb_before=""
+  sh "$WRITER" import "$_in" "$SNAPSHOT" "$@" || { [ -n "$_rb_before" ] && rm -f "$_rb_before"; echo 'profile_restore_failed' >&2; return 1; }
+  echo "restored=$_name"
+  echo "keys=$(grep -c '^[A-Za-z0-9_]*=' "$_in" 2>/dev/null || echo 0)"
+  if [ -n "$_rb_before" ]; then
+    echo "changed=$(awk '
+      function kv(line,  p, k) { p = index(line, "="); if (!p) return ""; k = substr(line, 1, p - 1); gsub(/[[:space:]]/, "", k); return k }
+      function val(line,  v) { v = substr(line, index(line, "=") + 1); sub(/#.*/, "", v); gsub(/[[:space:]]/, "", v); return v }
+      /^[[:space:]]*#/ { next }
+      NR == FNR { k = kv($0); if (k != "") b[k] = val($0); next }
+      { k = kv($0); if (k != "" && (!(k in b) || b[k] != val($0))) c++ }
+      END { print c + 0 }' "$_rb_before" "$CONF" 2>/dev/null)"
+    rm -f "$_rb_before"
+  fi
+  smart_restore "$_name"
 }
 delete_profile() {
   _name="$1"; _profile_ok "$_name" || { echo 'invalid profile name' >&2; exit 2; }
