@@ -1240,6 +1240,29 @@ lk_emit_jank_summary() {
     }' "$_jk"
 }
 
+# "cpu|surface" in whole degrees from the zones this capture resolved (fix141) - the prime
+# and performance CPU zones, and sys-therm-6 / board as the governor's surface hotspot
+# takes them. An empty field when none of its zones reads. For a governor reading that
+# is too old to stand for the moment (deep-idle economy).
+lk_direct_temps() {
+  _dc=""; _ds=""
+  for _dz in "${TZ_CPU_PRIME:-}" "${TZ_CPU_PERF:-}"; do
+    [ -n "$_dz" ] || continue
+    _dr="$(cat "${LK_THERMAL_BASE:-/sys/class/thermal}/thermal_zone$_dz/temp" 2>/dev/null)"
+    case "$_dr" in ''|*[!0-9]*) continue ;; esac
+    [ "$_dr" -ge 1000 ] && _dr=$((_dr / 1000))
+    [ -z "$_dc" ] || [ "$_dr" -gt "$_dc" ] && _dc="$_dr"
+  done
+  for _dz in "${TZ_SYSTHERM6:-}" "${TZ_BOARD:-}"; do
+    [ -n "$_dz" ] || continue
+    _dr="$(cat "${LK_THERMAL_BASE:-/sys/class/thermal}/thermal_zone$_dz/temp" 2>/dev/null)"
+    case "$_dr" in ''|*[!0-9]*) continue ;; esac
+    [ "$_dr" -ge 1000 ] && _dr=$((_dr / 1000))
+    [ -z "$_ds" ] || [ "$_dr" -gt "$_ds" ] && _ds="$_dr"
+  done
+  echo "${_dc}|${_ds}"
+}
+
 lk_capture_perf_trace_row() {
   _e=$(date +%s)
   _d=$(date '+%Y-%m-%d %H:%M:%S')
@@ -1915,6 +1938,49 @@ lk_sysui_watch_row() {
   } >> "$_sw_f" 2>/dev/null
   LK_SYSUI_PID="$_sw_pid"
   LK_SYSUI_RESTARTS=$(( ${LK_SYSUI_RESTARTS:-0} + 1 ))
+}
+
+# Native crashes inside the capture window (fix141). An asbdiag right after an install read
+# "dropbox SYSTEM_TOMBSTONE : 18" and nothing else; a crash of the audio HAL that carries
+# ASB's effect, or of the attach daemon, belongs in the report that covers it. Text
+# tombstones newer than the capture start: time, process, signal, abort message, and whether
+# ASB code is in the crashed process or the crashing thread's backtrace (not the memory map,
+# which lists every library the process had loaded).
+lk_emit_native_crashes() {
+  _nc_dir="${ASB_TOMBSTONE_DIR:-/data/tombstones}"
+  _nc_t0="${LK_START_EPOCH:-0}"
+  echo "----- NATIVE CRASHES (tombstones written during the capture) -----"
+  _nc_n=0; _nc_asb=0
+  for _nc in $(ls -t "$_nc_dir"/tombstone_[0-9][0-9] 2>/dev/null); do
+    _nc_m="$(stat -c %Y "$_nc" 2>/dev/null)"
+    case "$_nc_m" in ''|*[!0-9]*) continue ;; esac
+    [ "$_nc_m" -ge "$_nc_t0" ] 2>/dev/null || continue
+    _nc_n=$((_nc_n + 1))
+    [ "$_nc_n" -le 10 ] || continue
+    _nc_cmd="$(grep -m1 '^Cmdline:' "$_nc" 2>/dev/null | cut -d' ' -f2- | cut -c1-80)"
+    [ -n "$_nc_cmd" ] || _nc_cmd="$(grep -m1 '>>> .* <<<' "$_nc" 2>/dev/null | sed 's/.*>>> \(.*\) <<<.*/\1/' | cut -c1-80)"
+    _nc_sig="$(grep -m1 '^signal ' "$_nc" 2>/dev/null | cut -d',' -f1)"
+    _nc_ab="$(grep -m1 '^Abort message:' "$_nc" 2>/dev/null | cut -c1-140)"
+    _nc_bt="$(awk '/^backtrace:/ { b = 1; next } b && /^[[:space:]]*$/ { exit } b' "$_nc" 2>/dev/null)"
+    _nc_flag=""
+    if printf '%s\n%s\n' "$_nc_cmd" "$_nc_bt" | grep -qE 'libasbdsp|asb_dsp_attach|AutoSystemBoost|/data/adb/asb/'; then
+      _nc_flag="  << ASB code in this crash"; _nc_asb=$((_nc_asb + 1))
+    fi
+    echo "  $(date -d "@$_nc_m" '+%m-%d %H:%M:%S' 2>/dev/null || echo "$_nc_m")  ${_nc_cmd:-?}  ${_nc_sig}${_nc_flag}"
+    [ -n "$_nc_ab" ] && echo "      $_nc_ab"
+  done
+  if [ "$_nc_n" -eq 0 ]; then
+    if [ -d "$_nc_dir" ]; then echo "none (no tombstone newer than the capture start)"
+    else echo "not readable here ($_nc_dir)"; fi
+  else
+    [ "$_nc_n" -gt 10 ] && echo "  ... $_nc_n in total, the newest 10 listed"
+    if [ "$_nc_asb" -gt 0 ]; then
+      echo "$_nc_asb of them with ASB code in the crash - the full tombstones are in /data/tombstones on the phone"
+    else
+      echo "none with ASB code in the crashed process or the crashing thread's backtrace"
+    fi
+  fi
+  echo ""
 }
 
 lk_oem_toggle_row() {
@@ -3109,16 +3175,24 @@ lk_bt_reconnect_stop() {
 # runs WebUI commands - was fine. Move this recorder (and with it every child it starts) to
 # the root groups, which nothing freezes or kills as an app.
 # Prints what it did: moved:<n> / not_needed / failed.
+#
+# fix141: the v1 groups too. Capture 2830 ran "cpuset:/top-app cpu:/top-app memory:/apps" all
+# night and reported cgroup_escape=not_needed - the pattern wanted "/apps/" with a slash and
+# knew nothing of top-app. The recorder then ran every sample on top-app's cores and uclamp
+# boost, which the night's own figures include. Same rule as runtime/asb_cgroup.sh.
 lk_escape_app_cgroup() {
   _ec_pid="${1:-$$}"
   _ec_cg="${ASB_LK_CG_FILE:-/proc/$_ec_pid/cgroup}"
-  grep -qE 'uid_[0-9]+|/apps/|frozen' "$_ec_cg" 2>/dev/null || { echo not_needed; return 0; }
+  grep -qE 'uid_[0-9]+|/apps|/top-app|/foreground|frozen' "$_ec_cg" 2>/dev/null || { echo not_needed; return 0; }
   _ec_n=0
-  for _ec_g in ${ASB_LK_CG_ROOTS:-/sys/fs/cgroup/cgroup.procs /acct/cgroup.procs /dev/freezer/cgroup.procs}; do
+  for _ec_g in ${ASB_LK_CG_ROOTS:-/sys/fs/cgroup/cgroup.procs /acct/cgroup.procs /dev/freezer/cgroup.procs \
+      /dev/cpuset/cgroup.procs /dev/cpuctl/cgroup.procs /dev/memcg/cgroup.procs /dev/stune/cgroup.procs}; do
     [ -w "$_ec_g" ] || continue
     echo "$_ec_pid" > "$_ec_g" 2>/dev/null && _ec_n=$((_ec_n + 1))
   done
-  if grep -qE 'uid_[0-9]+' "$_ec_cg" 2>/dev/null; then echo "failed"; else echo "moved:$_ec_n"; fi
+  if grep -qE 'uid_[0-9]+' "$_ec_cg" 2>/dev/null; then echo "failed"
+  elif grep -qE '/apps|/top-app|/foreground' "$_ec_cg" 2>/dev/null; then echo "partial:$_ec_n"
+  else echo "moved:$_ec_n"; fi
 }
 
 lk_init() {

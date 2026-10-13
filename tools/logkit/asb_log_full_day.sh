@@ -625,6 +625,15 @@ lk_phase_ledger_accumulate() {
   _j=$(lk_status_json)
   _temp=$(echo "$_j" | awk -F'"temp":' '{print $2}' | awk -F, '{print $1}' | tr -dc '0-9')
   _surf=$(echo "$_j" | awk -F'"surface_hotspot":' '{print $2}' | awk -F, '{print $1}' | tr -dc '0-9')
+  # The governor's reading can be hours old (fix141): deep-idle economy skips the zones, so
+  # capture 2830's sleep row read "cpuT 41 surfT 36" - mostly the 01:03 value, held for 7 h - while the
+  # capture's own zone reads sat at 26-35 C. Older than two minutes: read the zones here.
+  _tre=$(echo "$_j" | awk -F'"temp_read_epoch":' '{print $2}' | awk -F, '{print $1}' | tr -dc '0-9')
+  if [ -n "$_tre" ] && [ "$_tre" -gt 0 ] 2>/dev/null && [ $(( $(date +%s) - _tre )) -gt 120 ] 2>/dev/null; then
+    IFS='|' read -r _temp _surf <<EOF
+$(lk_direct_temps)
+EOF
+  fi
   # The top cluster wherever it is: a hard-coded policy6 read nothing on a 4-cluster SoC
   # (SM8650 is policy0/2/5/7), and an OnePlus 12 capture printed p6MHz 0 for every phase.
   _p6=$(cat "${LK_PRIME_POL:-/sys/devices/system/cpu/cpufreq/policy6}/scaling_cur_freq" 2>/dev/null)
@@ -1368,6 +1377,7 @@ lk_emit_full_day_report() {
       echo "none observed (SystemUI kept the same process for the whole capture)"
     fi
     echo ""
+    lk_emit_native_crashes
     echo "----- BLUETOOTH LIFECYCLE (read-only, addresses redacted) -----"
     _bt_ev="$LK_OUT_DIR/bt_lifecycle_events.tsv"
     _bt_ctx="$LK_OUT_DIR/bt_lifecycle_context.tsv"
