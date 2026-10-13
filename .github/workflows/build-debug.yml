@@ -501,6 +501,7 @@ jobs:
             "runtime/asb_audio_apply.sh" \
             "runtime/asb_dsp_thermal.sh" \
             "runtime/asb_dsp_live.sh" \
+            "runtime/asb_cgroup.sh" \
             "runtime/asb_volume_curves.sh" \
             "runtime/asb_media_apply.sh" \
             "runtime/asb_blur_apply.sh" \
