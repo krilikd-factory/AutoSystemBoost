@@ -972,6 +972,7 @@ T_WLV_REPORT="report only"
 T_WLV_LIMITED="wakelocks limited by your fitness setting"
 T_WLV_LIMIT_IGNORED="limit set, but this Android ignores it - the app still holds the CPU (turn it off in the app itself, or Battery -> Restricted)"
 T_S_MC="Wi-Fi multicast held %s min since unplug - the Wi-Fi radio cannot doze (now: %s)"
+T_S_MC_PAST="Wi-Fi multicast held %s min since unplug - Wi-Fi is off now, and with the radio off a multicast lock costs nothing"
 T_S_MC_NONE="nobody"
 T_S_VPN="VPN is on (%s) and the mobile data path (rmnet/IPA) is what keeps the phone awake most: the tunnel's keepalives wake the modem and CPU all night. ASB cannot change that - the VPN app's keepalive / always-on settings, split tunnelling or Wi-Fi at night can"
 T_Y_BG_RELAX="background processes: unlimited (phantom monitor off)"
@@ -2212,7 +2213,15 @@ echo "  🌙  ${H_SLEEP}"
     case "$_mct" in ''|*[!0-9]*) _mct=0 ;; esac
     if [ "$_mct" -ge 600 ]; then
       _mch="$(grep -v '^total|' /data/adb/asb/wakelock_multicast | cut -d'|' -f1 | head -2 | tr '\n' ',' | sed 's/,$//; s/,/, /g')"
-      _f "       $T_S_MC" "$((_mct / 60))" "${_mch:-$T_S_MC_NONE}"
+      # The figure is batterystats' total since the last charge, and it grows while a lock is
+      # held whether or not Wi-Fi is on: the OP15 went from 207 to 337 min in three hours with
+      # wlan0 down throughout. "The Wi-Fi radio cannot doze" with the radio off was a cost that
+      # does not exist (fix142).
+      if [ "$(cat /sys/class/net/wlan0/operstate 2>/dev/null)" != up ]; then
+        _f "       $T_S_MC_PAST" "$((_mct / 60))"
+      else
+        _f "       $T_S_MC" "$((_mct / 60))" "${_mch:-$T_S_MC_NONE}"
+      fi
     fi
   fi
   # A VPN over mobile data is the commonest screen-off drain ASB cannot fix: a CPH2769 and an
