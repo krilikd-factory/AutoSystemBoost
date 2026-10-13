@@ -1085,7 +1085,9 @@ lk_emit_live_wakelock_holders() {
       lo = 1
       while ((getline l < MAP) > 0) { split(l, a, " "); if (a[1] != "" && !(a[1] in pk)) pk[a[1]] = a[2] }
       hd = 1
-      while ((getline l < DT) > 0) { if (hd) { hd = 0; continue }; split(l, d, "|"); de[++nd] = d[1] + 0; ds[nd] = d[4] }
+      while ((getline l < DT) > 0) { if (hd) { hd = 0; continue }; split(l, d, "|"); de[++nd] = d[1] + 0; ds[nd] = d[4]
+        # fix142: when the current screen-off stretch began (first off row after an on row).
+        offs[nd] = (ds[nd] == 1) ? 0 : ((nd > 1 && ds[nd - 1] != 1 && offs[nd - 1] > 0) ? offs[nd - 1] : de[nd]) }
     }
     {
       split($0, r, "|"); e = r[1] + 0; scr = -1
@@ -1093,7 +1095,7 @@ lk_emit_live_wakelock_holders() {
         best = 0; bd = 99
         for (i = lo; i <= nd; i++) { x = de[i] - e; if (x < 0) x = -x; if (x < bd) { bd = x; best = i }; if (de[i] > e + 5) break }
         if (best > 3) lo = best - 3
-        if (best && bd <= 5) scr = ds[best]
+        if (best && bd <= 5) { scr = ds[best]; offst = offs[best] } else offst = 0
       }
       if (scr == 1) next
       n++
@@ -1113,6 +1115,10 @@ lk_emit_live_wakelock_holders() {
         k = tag "|" uid
         if (k in seen) continue
         seen[k] = 1; cnt[k]++; if (age > mx[k]) mx[k] = age
+        # The part of this hold that fell inside the screen-off stretch: batterystats charges
+        # partial wakelocks only on battery with the screen off, so that is what compares.
+        oa = age; if (offst > 0 && e - offst < oa) oa = e - offst; if (oa < 0) oa = 0
+        if (oa > mxo[k]) mxo[k] = oa
       }
     }
     END {
@@ -1120,7 +1126,7 @@ lk_emit_live_wakelock_holders() {
       if (!n) exit
       for (k in cnt) if (cnt[k] * 10 >= n || mx[k] >= 600) {
         split(k, z, "|"); app = (z[2] + 0 >= 10000 && (z[2] in pk)) ? pk[z[2]] : ((z[2] + 0 > 0 && z[2] + 0 < 10000) ? "system uid " z[2] : "uid " z[2])
-        printf "%d|%d|%s|%s|%s\n", 100 * cnt[k] / n, mx[k] / 60, z[1], app, z[2]
+        printf "%d|%d|%s|%s|%s|%d\n", 100 * cnt[k] / n, mx[k] / 60, z[1], app, z[2], mxo[k] / 60
       }
     }' "$_lwl" 2>/dev/null)"
   _lwn="$(printf '%s\n' "$_lwo" | sed -n 's/^#n=//p')"
@@ -1140,11 +1146,15 @@ lk_emit_live_wakelock_holders() {
     # accounting not keeping up (capture 2830: YouTube's AudioMix held 20 min at a stretch,
     # batterystats added 0 s in 9.5 h). Only with no charging seen - on the charger
     # batterystats counts nothing by design.
+    # fix142: and only the screen-off part of a hold ($6). batterystats charges a partial
+    # wakelock only on battery with the screen off; capture 26147 flagged Samsung Health's
+    # PedometerLib "held 21 min, batterystats added 367 s" for a hold that began with the
+    # screen on - the two were measuring different things.
     if [ -n "$_lwr" ] && [ -s "$LK_OUT_DIR/.wl_uid_delta" ] && lk_capture_on_battery; then
       _lwc="$(printf '%s\n' "$_lwr" | awk -F'|' -v DL="$LK_OUT_DIR/.wl_uid_delta" '
         BEGIN { while ((getline l < DL) > 0) { split(l, a, " "); dd[a[1]] = a[2] + 0 } }
-        $5 + 0 >= 10000 && $2 + 0 >= 10 && dd[$5] * 2 < $2 * 60 {
-          printf "  %s (%s): held %d min at a stretch here, batterystats added %d s in the whole capture\n", $4, $3, $2, dd[$5] }')"
+        $5 + 0 >= 10000 && $6 + 0 >= 10 && dd[$5] * 2 < $6 * 60 {
+          printf "  %s (%s): held %d min at a stretch with the screen off here, batterystats added %d s in the whole capture\n", $4, $3, $6, dd[$5] }')"
       if [ -n "$_lwc" ]; then
         echo "batterystats disagrees with these samples:"
         printf '%s\n' "$_lwc"
@@ -1529,6 +1539,16 @@ lk_capture_on_battery() {
              END { exit !(c && f != "" && f - l >= 2) }' "$LK_OUT_DIR/battery_trace.txt" 2>/dev/null
 }
 
+# Minutes of screen-off time in this capture, from display_trace.txt (fix142). A gap with the
+# screen off at both ends counts whole (the recorder samples sparsely at night, 15-30 min
+# apart); a gap that ends with the screen on counts three minutes at most.
+lk_screen_off_min() {
+  awk -F'|' 'NR == 1 { next }
+    { if (pe > 0 && ps == "0") { g = $1 - pe; if (g > 0) t += ($4 == "0") ? (g > 10800 ? 10800 : g) : (g > 180 ? 180 : g) }
+      pe = $1 + 0; ps = $4 }
+    END { printf "%d\n", t / 60 }' "$LK_OUT_DIR/display_trace.txt" 2>/dev/null || echo 0
+}
+
 lk_wakelock_batterystats_reset() {
   lk_have lk_dumpsys || return 0
   if [ "$LK_BSTATS_RESET" = 1 ]; then
@@ -1665,9 +1685,11 @@ lk_wakelock_emit_report() {
     if [ ! -s "$LK_OUT_DIR/.wl_apps.tmp" ]; then
       # Not while charging: batterystats does not count wakelocks on the charger at all, so
       # an all-zero window there is expected.
+      # fix142: batterystats charges partial wakelocks only with the screen off, so an
+      # all-zero window says something only after real screen-off time - an hour of it.
       if [ "${_wl_moved:-1}" = 0 ] && [ "${_wl_h:-0}" -ge 2 ] 2>/dev/null \
          && [ -s "$LK_OUT_DIR/.wl_uid_base" ] && [ -s "$LK_OUT_DIR/.wl_uid_delta" ] \
-         && lk_capture_on_battery; then
+         && lk_capture_on_battery && [ "$(lk_screen_off_min)" -ge 60 ] 2>/dev/null; then
         echo "  not one app's total moved in ${_wl_h} h of capture - batterystats did not update its per-app"
         echo "  wakelock time in this window (Settings > Battery usage reads the same counters). That is"
         echo "  not \"no holder\": the full-day report's LIVE WAKELOCK HOLDERS (power-manager samples) is the"
@@ -1793,7 +1815,7 @@ lk_wakelock_emit_report() {
     echo "  user-facing features, so weigh battery vs the feature before cutting."
     echo "* Cross-check timestamps against phase_timeline.txt — wakeups during"
     echo "  'sleep'/'idle' phases are the ones that actually cost standby battery."
-  } > "$_out"
+  } > "$_out.part" && mv -f "$_out.part" "$_out"   # whole or the previous one (fix142)
 }
 
 # Build a local UID→package cache once for a voluntary debug capture. The governor never
@@ -1966,8 +1988,14 @@ lk_emit_native_crashes() {
     if printf '%s\n%s\n' "$_nc_cmd" "$_nc_bt" | grep -qE 'libasbdsp|asb_dsp_attach|AutoSystemBoost|/data/adb/asb/'; then
       _nc_flag="  << ASB code in this crash"; _nc_asb=$((_nc_asb + 1))
     fi
+    _nc_fr="$(printf '%s\n' "$_nc_bt" | awk '/#[0-9]+ pc / {
+        for (i = 1; i <= NF; i++) if ($i == "pc") { lib = $(i + 2); fn = $(i + 3); break }
+        if (lib ~ /\/(libc|libc\+\+|libbase|liblog|libutils)\.so$/) next
+        if (fn !~ /^\(/) fn = ""
+        print lib (fn != "" ? " " fn : ""); exit }' | cut -c1-110)"
     echo "  $(date -d "@$_nc_m" '+%m-%d %H:%M:%S' 2>/dev/null || echo "$_nc_m")  ${_nc_cmd:-?}  ${_nc_sig}${_nc_flag}"
     [ -n "$_nc_ab" ] && echo "      $_nc_ab"
+    [ -n "$_nc_fr" ] && echo "      first frame outside libc: $_nc_fr"
   done
   if [ "$_nc_n" -eq 0 ]; then
     if [ -d "$_nc_dir" ]; then echo "none (no tombstone newer than the capture start)"

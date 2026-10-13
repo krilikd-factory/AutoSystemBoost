@@ -1175,9 +1175,11 @@ lk_emit_phase_summary() {
     echo "        night(longest)=longest continuous screen-off block >=3h — the pure"
     echo "        overnight rate; compare IT (not the mixed idle row) against 0.3-0.7 %/h."
     echo "        The currently-open phase is included, so interim reports are complete."
-  } > "$LK_OUT_DIR/phase_summary.txt"
-  lk_emit_sampled_current_distribution "$_all" > "$LK_OUT_DIR/sampled_current_distribution.txt"
-  lk_emit_mobile_traffic_context "$_all" > "$LK_OUT_DIR/mobile_traffic_context.txt"
+  } > "$LK_OUT_DIR/phase_summary.txt.part" && mv -f "$LK_OUT_DIR/phase_summary.txt.part" "$LK_OUT_DIR/phase_summary.txt"
+  lk_emit_sampled_current_distribution "$_all" > "$LK_OUT_DIR/sampled_current_distribution.txt.part" \
+    && mv -f "$LK_OUT_DIR/sampled_current_distribution.txt.part" "$LK_OUT_DIR/sampled_current_distribution.txt"
+  lk_emit_mobile_traffic_context "$_all" > "$LK_OUT_DIR/mobile_traffic_context.txt.part" \
+    && mv -f "$LK_OUT_DIR/mobile_traffic_context.txt.part" "$LK_OUT_DIR/mobile_traffic_context.txt"
   rm -f "$_all" "$LK_OUT_DIR/.phase_open.tsv" 2>/dev/null
 }
 
@@ -1586,7 +1588,11 @@ lk_emit_full_day_report() {
 
     echo ""
     echo "Send the whole output folder back for a targeted ASB tuning pass."
-  } > "$_out"
+  } > "$_out.part" && mv -f "$_out.part" "$_out"
+  # Written aside and renamed (fix142): the report is rebuilt every 15 minutes and a
+  # batterystats dump inside it takes seconds, so a folder zipped at that moment carried a
+  # 261-byte report that stopped at its first heading (capture 26147, zipped 13:41, report
+  # started 13:41:23). Now a folder taken at any instant holds a whole report.
 }
 
 # ── report-only validity and attribution helpers ───────────────────────────
