@@ -3224,16 +3224,29 @@ for _pol in /sys/devices/system/cpu/cpufreq/policy*; do
   P "        lowest_opp: ${_lowest:-unknown}"
   case "$_state_live" in DEEP_IDLE|LIGHT_IDLE|MODERATE|SUSTAINED) _smart_low_floor_state=1 ;; *) _smart_low_floor_state=0 ;; esac
   if [ "$_prof_live" = "smart" ] && [ "$_smart_low_floor_state" = "1" ] && [ -n "$_lowest" ]; then
-    if [ "$_smin" = "$_lowest" ]; then
+    # A higher minimum is usually a moment, not a floor (fix140). The same SM8850 read
+    # min=384000 in one asbdiag and 787200 / 1036800 in others, and the line called each of
+    # those "vendor floor - scmi/walt clamps the minimum": the platform raises the minimum for
+    # a second or two on a touch or an app launch (perf/PowerHAL boosts), and running asbdiag
+    # is a touch. Look again for up to 3 s before naming anything.
+    _smin_w=0
+    while [ "$_smin" != "$_lowest" ] && [ "$_smin_w" -lt 3 ]; do
+      sleep 1; _smin_w=$((_smin_w + 1))
+      _smin=$(cat "$_pol/scaling_min_freq" 2>/dev/null)
+    done
+    if [ "$_smin" = "$_lowest" ] && [ "$_smin_w" -gt 0 ]; then
+      P "        smart minimum: [PASS] Smart requested hardware lowest OPP (the minimum was raised for under ${_smin_w} s - a short platform boost, as on a touch or an app launch)"
+    elif [ "$_smin" = "$_lowest" ]; then
       P "        smart minimum: [PASS] Smart requested hardware lowest OPP"
     else
       case "$_drv:$_gov" in
         *scmi*|*walt*)
-          # SCMI/walt enforces a vendor floor in firmware: the write lands, the driver
-          # clamps it back. Naming the owner here ends the "did ASB fail to write?" hunt.
-          P "        smart minimum: [WARN] want=$_lowest live=${_smin:-unknown} (vendor floor - $_drv/$_gov clamps the minimum, not a write failure)" ;;
+          # The write lands and the platform holds the minimum higher - a longer boost or a
+          # vendor floor. Either way it is not ASB's write that limits it; writer health
+          # counts these as kernel_floor_higher.
+          P "        smart minimum: [NOTE] want=$_lowest live=${_smin:-unknown} for 3 s - the platform holds a higher minimum right now (a longer perf/PowerHAL boost or a vendor floor on $_drv/$_gov); ASB's write is not the limit" ;;
         *)
-          P "        smart minimum: [WARN] want=$_lowest live=${_smin:-unknown} (vendor/kernel override or write failure)" ;;
+          P "        smart minimum: [WARN] want=$_lowest live=${_smin:-unknown} for 3 s (vendor/kernel override or write failure)" ;;
       esac
     fi
   else
