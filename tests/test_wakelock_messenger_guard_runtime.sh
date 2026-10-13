@@ -95,5 +95,17 @@ AM_LOG="$T/am.log" PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_WL_DIR="$T/d" ASB_WL_
   sh "$SRC" >/dev/null 2>&1
 grep -q 'com.example.other active' "$T/am.log" && f "migration ran twice"
 
+# fix141: apps installed on the OP15 of capture 2830 that the list missed, and Telegram
+# clients without "telegram" in their id. A game or a shop stays restrictable.
+sed -n '/^_wl_protected() {$/,/^}$/p' "$SRC" > "$T/prot.sh"
+. "$T/prot.sh"
+for p in com.mywickr.wickr2 com.truecaller com.exteragram.messenger com.radolyn.ayugram tw.nekomimi.nekogram \
+         com.samsung.accessory.paranmgr com.sony.songpal.mdr com.tranzmate org.thoughtcrime.securesms; do
+  _wl_protected "$p" || f "$p not protected"
+done
+for p in com.activision.callofduty.shooter com.alibaba.aliexpresshd com.anthropic.claude; do
+  _wl_protected "$p" && f "$p protected (it is not a messenger, call, mail, map or wearable app)"
+done
+
 [ "$fail" = 0 ] || exit 1
 echo "PASS wakelock messenger guard: Signal & co. and battery-exempt apps are never restricted, old restrictions released"

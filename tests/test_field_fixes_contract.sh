@@ -847,4 +847,35 @@ done
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS: fix140 contract"
 ) || exit 1
+# ---- fix141 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix141: $*"; exit 1; }
+M="$ROOT/src/asb_metrics.h"; G="$ROOT/src/asb_governor.c"
+grep -q 'No camera guard while the screen is off (fix141)' "$M" || fail "camera guard still runs with the screen off"
+awk '/static int metrics_camera_active/ { f = 1 } f && /if \(!g_cam_scr_prev\) \{/ { ok = 1; exit } END { exit !ok }' "$M" || fail "screen-off check not in the camera probe"
+grep -q '^static int metrics_pcm_playing(void)' "$M" || fail "no PCM playback probe"
+grep -q 'if (!g_offdrain_media && metrics_pcm_playing() == 1) g_offdrain_media = 1;' "$G" || fail "screen-off drain does not notice playback"
+grep -q 'g_offdrain_media_skipped++;' "$G" || fail "a window with music still counts as idle"
+grep -q 'if (got >= 3 && fmt == ASB_OFFDRAIN_FMT' "$G" || fail "a pre-fix141 idle figure (music mixed in) is still trusted"
+grep -q 'offdrain_media_skipped=%d' "$G" || fail "skipped windows not published"
+grep -q 'if (!need_thermal && metrics.misc.screen_on && g_last_thermal_read_ts > 0 &&' "$G" || fail "a screen-on tick can still decide on an hours-old temperature"
+grep -q 'not below the race-to-idle floor' "$G" || fail "cooldown log still claims the hardware minimum"
+grep -q '^asb_cgroup_detach()' "$ROOT/runtime/asb_cgroup.sh" || fail "no cgroup detach helper"
+for f in asb_ltpo_video.sh asb_wifi_fallback.sh asb_lte_screenoff.sh; do
+  grep -q 'asb_cgroup_detach \$\$' "$ROOT/runtime/$f" || fail "$f watcher stays in the WebUI's app cgroups"
+done
+grep -q "uid_\[0-9\]+|/apps|/top-app|/foreground|frozen" "$ROOT/tools/logkit/_asb_logkit_common.sh" || fail "recorder still calls top-app not_needed"
+grep -q '"runtime/asb_cgroup.sh"' "$ROOT/.github/workflows/build-release.yml" || fail "release build does not require asb_cgroup.sh"
+grep -q '^_asb_tombstones() {' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not name crashed processes"
+grep -q '^lk_emit_native_crashes() {' "$ROOT/tools/logkit/_asb_logkit_common.sh" || fail "captures do not name crashed processes"
+grep -q '^lk_direct_temps() {' "$ROOT/tools/logkit/_asb_logkit_common.sh" || fail "stale governor temperatures still in the phase table"
+grep -q 'com.radolyn.ayugram' "$ROOT/runtime/asb_wakelock_watch.sh" || fail "Telegram forks not protected"
+for t in test_camera_pcm_native_runtime.sh test_cgroup_detach_runtime.sh test_native_crash_names_runtime.sh test_logkit_stale_temp_runtime.sh; do
+  [ -f "$ROOT/tests/$t" ] || fail "$t missing"
+done
+[ -f "$ROOT/tests/test_camera_pcm_native.c" ] || fail "native fixture source missing"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix141 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
