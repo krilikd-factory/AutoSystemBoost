@@ -230,6 +230,9 @@ static long asb_clock_ms(clockid_t which) {
  * whole percent, and anything shorter is rounding, not drain. Smoothed 3:1 and kept on disk
  * so one good night survives a reboot. */
 #define ASB_OFFDRAIN_FILE "/data/adb/asb/offdrain_pctph_x100"
+/* File format "rate windows 2". The trailing 2 marks a figure measured without music
+ * (fix141); a file without it is discarded once, see below. */
+#define ASB_OFFDRAIN_FMT 2
 static int    g_offdrain_x100 = -1;      /* -1 = never measured */
 static int    g_offdrain_n = 0;          /* windows that counted */
 static int    g_offdrain_loaded = 0;
@@ -237,24 +240,50 @@ static long   g_offdrain_start_ms = 0;   /* boottime ms at window open, 0 = clos
 static int    g_offdrain_start_pct = -1;
 static long   g_offdrain_on_ms = 0;      /* boottime ms the screen came on, 0 = still off */
 static int    g_offdrain_on_pct = -1;
+/* Playback seen in the open window, and windows left out for it (fix141).
+ *
+ * "Idle" on the action screen read 1.48 %/h on an OP15 whose night measured 0.59 %/h in the
+ * same capture (2830): every screen-off hour counted, and this user listens to YouTube over
+ * Bluetooth with the screen off (2.96 %/h, 100% awake) - music, not idle. A window in which
+ * a playback stream ran is no longer an idle sample. The kernel's PCM state is read only on
+ * screen-off ticks and only until the window is marked; with no readable /proc/asound
+ * (-1) every window counts, as before. */
+static int    g_offdrain_media = 0;
+static int    g_offdrain_media_skipped = 0;
+static void asb_offdrain_save(void) {
+    FILE *f = fopen(ASB_OFFDRAIN_FILE ".tmp", "w");
+    if (f) {
+        fprintf(f, "%d %d %d\n", g_offdrain_x100, g_offdrain_n, ASB_OFFDRAIN_FMT);
+        fclose(f);
+        rename(ASB_OFFDRAIN_FILE ".tmp", ASB_OFFDRAIN_FILE);
+    }
+}
 static void asb_offdrain_track(int screen_on, int pct, int charging) {
     if (!g_offdrain_loaded) {
         g_offdrain_loaded = 1;
         FILE *f = fopen(ASB_OFFDRAIN_FILE, "r");
         if (f) {
-            int v = -1, n = 0;
-            if (fscanf(f, "%d %d", &v, &n) >= 1 && v > 0 && v < 5000) { g_offdrain_x100 = v; g_offdrain_n = n > 0 ? n : 1; }
+            int v = -1, n = 0, fmt = 0;
+            int got = fscanf(f, "%d %d %d", &v, &n, &fmt);
             fclose(f);
+            /* A figure from before fix141 mixed music windows into "idle" and only one
+             * clean night replaces it - start over instead of averaging into it. */
+            if (got >= 3 && fmt == ASB_OFFDRAIN_FMT && v > 0 && v < 5000) {
+                g_offdrain_x100 = v; g_offdrain_n = n > 0 ? n : 1;
+            } else if (got >= 1) {
+                unlink(ASB_OFFDRAIN_FILE);
+            }
         }
     }
     long now = asb_clock_ms(CLOCK_BOOTTIME);
     if (pct <= 0 || pct > 100) return;
-    if (charging) { g_offdrain_start_ms = 0; g_offdrain_on_ms = 0; return; }   /* the charger */
+    if (charging) { g_offdrain_start_ms = 0; g_offdrain_on_ms = 0; g_offdrain_media = 0; return; }   /* the charger */
     /* A glance at the clock at 3 am must not split the night into two windows too short
      * to count: a screen-on of under two minutes is folded into the surrounding window. */
     if (!screen_on) {
         g_offdrain_on_ms = 0;
-        if (g_offdrain_start_ms == 0) { g_offdrain_start_ms = now; g_offdrain_start_pct = pct; }
+        if (g_offdrain_start_ms == 0) { g_offdrain_start_ms = now; g_offdrain_start_pct = pct; g_offdrain_media = 0; }
+        if (!g_offdrain_media && metrics_pcm_playing() == 1) g_offdrain_media = 1;
         return;
     }
     if (g_offdrain_start_ms > 0 && g_offdrain_on_ms == 0) {
@@ -263,19 +292,18 @@ static void asb_offdrain_track(int screen_on, int pct, int charging) {
     if (g_offdrain_start_ms > 0 && now - g_offdrain_on_ms >= 120000L) {
         long dur = g_offdrain_on_ms - g_offdrain_start_ms;
         int dpct = g_offdrain_start_pct - g_offdrain_on_pct;
+        int media = g_offdrain_media;
         g_offdrain_start_ms = 0;
         g_offdrain_on_ms = 0;
+        g_offdrain_media = 0;
         if (dur >= 3600000L && dpct >= 2) {
             long r = (long)dpct * 100L * 3600000L / dur;
-            if (r > 0 && r < 5000) {
+            if (media) {
+                g_offdrain_media_skipped++;
+            } else if (r > 0 && r < 5000) {
                 g_offdrain_x100 = (g_offdrain_x100 > 0) ? (int)((g_offdrain_x100 * 3L + r) / 4L) : (int)r;
                 g_offdrain_n++;
-                FILE *f = fopen(ASB_OFFDRAIN_FILE ".tmp", "w");
-                if (f) {
-                    fprintf(f, "%d %d\n", g_offdrain_x100, g_offdrain_n);
-                    fclose(f);
-                    rename(ASB_OFFDRAIN_FILE ".tmp", ASB_OFFDRAIN_FILE);
-                }
+                asb_offdrain_save();
             }
         }
     }
@@ -2743,7 +2771,8 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
      * showing a drain figure and leaving the user to guess why. */
     fprintf(f, "awake_pct_screenoff=%d\nawake_window_min=%ld\n",
             g_awake_pct, g_awake_win_boot_ms / 60000L);
-    fprintf(f, "offdrain_pctph_x100=%d\noffdrain_windows=%d\n", g_offdrain_x100, g_offdrain_n);
+    fprintf(f, "offdrain_pctph_x100=%d\noffdrain_windows=%d\noffdrain_media_skipped=%d\n",
+            g_offdrain_x100, g_offdrain_n, g_offdrain_media_skipped);
     fprintf(f, "smart_sessions_total=%d\nsmart_last_confidence=%d\n",
             g_smart_sessions_total, g_smart_last_confidence);
     {
@@ -7886,6 +7915,20 @@ int main(int argc, char **argv) {
                 }
             }
             metrics_read_all(&metrics, need_hr, need_thermal);
+            /* A screen-on tick never decides on an old temperature (fix141).
+             *
+             * Deep-idle economy and the quiet-night wake ramp both skip the zones, and both
+             * look at the screen state of the PREVIOUS tick - so the tick that sees the screen
+             * come on still skipped. Capture 2830: the last read was at 01:03 (43 C), the
+             * capture's own zone reads through the night were 26-35 C, and the 08:02:41
+             * screen-on still decided MODERATE with "t=43degC"; the state file published
+             * 43/34/37 C all night. One read of the zones when the screen is on and the
+             * reading is over a minute old. */
+            if (!need_thermal && metrics.misc.screen_on && g_last_thermal_read_ts > 0 &&
+                time(NULL) - g_last_thermal_read_ts > 60) {
+                metrics_read_thermal(&metrics.therm, need_hr);
+                need_thermal = 1;
+            }
             /* Remember the last real reading: on a skipped tick the struct still holds it,
              * and the distance check above needs a value it can trust. */
             if (need_thermal && metrics.therm.cpu_max_c > 0)
@@ -8887,8 +8930,12 @@ int main(int argc, char **argv) {
                  *
                  * Outside the state-change block: the clamp usually flips while the FSM stays in
                  * DEEP_IDLE, and an edge seen only on a state change was logged late or not at all. */
+                /* "clamping to hw minimum" was not what reached the kernel on the OP15: the
+                 * writer's race-to-idle floor (40% of hardware max) lifts the clamp, so the
+                 * night ceilings read 1555/1862 MHz in capture 2830 with cooldown engaged.
+                 * Say what is asked, and that the floor still applies (fix141). */
                 if (fsm.cooldown_edge > 0)
-                    asb_log("cooldown: enter die=%dC (screen off, clamping to hw minimum)",
+                    asb_log("cooldown: enter die=%dC (screen off: ceilings lowered toward the hw minimum, not below the race-to-idle floor)",
                             fsm.cooldown_die_c);
                 else if (fsm.cooldown_edge < 0)
                     asb_log("cooldown: exit die=%dC (screen on or cool enough, profile rails restored)",

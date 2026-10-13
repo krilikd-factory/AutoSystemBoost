@@ -2151,6 +2151,23 @@ static int metrics_camera_active(const struct timespec *now) {
         g_cam_hold_until = 0;
         return 0;
     }
+    /* No camera guard while the screen is off (fix141).
+     *
+     * The guard exists for preview, focus and the shot - things someone is looking at. OP15
+     * capture 2830 recorded camera_hold=1 three times, every one with the screen off or in
+     * always-on doze (23:10:44, 00:42:09, 00:42:55), and the earlier OP15 and CPH2747
+     * captures show the same: a face-unlock burst at a wake that ran past the 5 s unlock
+     * window, then the 20 s grace carried uclamp 100 on every tier, all cores open and
+     * swappiness 10 into the dark. Android stops a camera app when the screen goes off, so
+     * nothing a user could see is lost. Dropping the hold here also ends the tail at once,
+     * and the provider is not sampled at all with the screen off - not a /proc walk on a
+     * sleeping phone. g_cam_scr_prev is this tick's screen state (set just before the
+     * call in metrics_read_all). */
+    if (!g_cam_scr_prev) {
+        g_cam_hold_until = 0;
+        g_cam_jif_prev = 0ULL;
+        return 0;
+    }
     time_t wall = time(NULL);
     /* The set is refreshed every five minutes even while one member lives: cameraserver
      * outlives a provider that crashed and restarted under a new pid, and the sum would
@@ -2233,6 +2250,74 @@ static int metrics_camera_active(const struct timespec *now) {
         return 1;
     }
     return (wall < g_cam_hold_until) ? 1 : 0;
+}
+
+/* Is any playback stream running right now? (fix141)
+ *
+ * 1 = a playback substream reports RUNNING, 0 = none does, -1 = /proc/asound cannot be read
+ * here. The kernel's own PCM state - the same signal service.sh's DSP route watcher uses -
+ * so it covers the speaker, wired and the Bluetooth offload path alike without a dumpsys.
+ * The status paths are listed once and re-listed every ten minutes (cards and PCM devices do
+ * not come and go during a session); a call then costs one small read per playback
+ * substream. Used by the screen-off drain tracker to tell an idle stretch from music
+ * playing with the screen off. */
+#ifndef ASOUND_BASE
+#define ASOUND_BASE "/proc/asound"
+#endif
+#define ASB_PCM_PATHS_MAX 96
+static char   g_pcm_paths[ASB_PCM_PATHS_MAX][112];
+static int    g_pcm_npaths = -1;      /* -1 = never listed */
+static time_t g_pcm_list_ts = 0;
+static void metrics_pcm_list(void) {
+    g_pcm_npaths = 0;
+    DIR *dc = opendir(ASOUND_BASE);
+    if (!dc) { g_pcm_npaths = -1; return; }
+    struct dirent *ec;
+    while ((ec = readdir(dc)) != NULL && g_pcm_npaths < ASB_PCM_PATHS_MAX) {
+        if (strncmp(ec->d_name, "card", 4) != 0 || !isdigit((unsigned char)ec->d_name[4])) continue;
+        char cdir[48];
+        snprintf(cdir, sizeof(cdir), ASOUND_BASE "/%.16s", ec->d_name);
+        DIR *dp = opendir(cdir);
+        if (!dp) continue;
+        struct dirent *ep;
+        while ((ep = readdir(dp)) != NULL && g_pcm_npaths < ASB_PCM_PATHS_MAX) {
+            size_t ln = strlen(ep->d_name);
+            /* pcmNp only: capture streams (pcmNc) are microphones, not playback. */
+            if (strncmp(ep->d_name, "pcm", 3) != 0 || ln < 5 || ep->d_name[ln - 1] != 'p') continue;
+            char pdir[80];
+            snprintf(pdir, sizeof(pdir), "%s/%.24s", cdir, ep->d_name);
+            DIR *ds = opendir(pdir);
+            if (!ds) continue;
+            struct dirent *es;
+            while ((es = readdir(ds)) != NULL && g_pcm_npaths < ASB_PCM_PATHS_MAX) {
+                if (strncmp(es->d_name, "sub", 3) != 0 || !isdigit((unsigned char)es->d_name[3])) continue;
+                snprintf(g_pcm_paths[g_pcm_npaths], sizeof(g_pcm_paths[0]), "%s/%.8s/status", pdir, es->d_name);
+                g_pcm_npaths++;
+            }
+            closedir(ds);
+        }
+        closedir(dp);
+    }
+    closedir(dc);
+}
+static int metrics_pcm_playing(void) {
+    time_t now = time(NULL);
+    if (g_pcm_npaths < 0 || now - g_pcm_list_ts >= 600 || now < g_pcm_list_ts) {
+        g_pcm_list_ts = now;
+        metrics_pcm_list();
+    }
+    if (g_pcm_npaths < 0) return -1;
+    for (int i = 0; i < g_pcm_npaths; i++) {
+        int fd = open(g_pcm_paths[i], O_RDONLY | O_CLOEXEC);
+        if (fd < 0) continue;
+        char buf[40];
+        int n = (int)read(fd, buf, sizeof(buf) - 1);
+        close(fd);
+        if (n <= 0) continue;
+        buf[n] = '\0';
+        if (strstr(buf, "RUNNING")) return 1;
+    }
+    return 0;
 }
 
 static void metrics_read_all(asb_metrics_t *m, int need_headroom, int need_thermal) {
