@@ -201,6 +201,9 @@ typedef struct {
     int   prime_escape_burst_s;      /* how long one lift may last (s) */
     int   prime_escape_rest_s;       /* pause after a lift before the next one (s) */
     int   main_capacity_parity;      /* 1=Smart keeps the main ceiling level with the prime (fix130) */
+    int   unlock_lift_s;             /* Smart: seconds the ceilings stay lifted after a wake (fix150), 0=off */
+    int   unlock_lift_pct;           /* ... lifted to this share of each cluster's hardware max, 50-100 */
+    int   smart_night_awake;         /* 1=Smart night slots with the screen on lean no harder than the evening (fix150) */
     int   charge_assist_alpha_max;   /* alpha_battery ceiling while assisting, x1000 (default 450) */
     int   charge_temp_warn_dC;       /* batt temp where assist is dropped (default 390 = 39.0C) */
     int   charge_temp_hot_dC;        /* batt temp where cool-charge guard engages (default 415 = 41.5C) */
@@ -362,6 +365,9 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->cool_gaming                  = 1;
     c->heavy_prime_escape           = 1;
     c->main_capacity_parity         = 1;
+    c->unlock_lift_s                = 3;
+    c->unlock_lift_pct              = 80;
+    c->smart_night_awake            = 1;
     c->prime_escape_burst_s         = 20;
     c->prime_escape_rest_s          = 40;
     c->charge_assist_alpha_max      = 450;
@@ -580,6 +586,19 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "cool_gaming"))             c->cool_gaming             = atoi(v);
     else if (!strcmp(k, "heavy_prime_escape"))      c->heavy_prime_escape      = atoi(v) ? 1 : 0;
     else if (!strcmp(k, "main_capacity_parity"))    c->main_capacity_parity    = atoi(v) ? 1 : 0;
+    else if (!strcmp(k, "unlock_lift_s")) {
+        int _ul = atoi(v);
+        if (_ul < 0) _ul = 0;
+        if (_ul > 10) _ul = 10;
+        c->unlock_lift_s = _ul;
+    }
+    else if (!strcmp(k, "unlock_lift_pct")) {
+        int _up = atoi(v);
+        if (_up < 50) _up = 50;
+        if (_up > 100) _up = 100;
+        c->unlock_lift_pct = _up;
+    }
+    else if (!strcmp(k, "smart_night_awake"))       c->smart_night_awake       = atoi(v) ? 1 : 0;
     else if (!strcmp(k, "prime_escape_burst_s"))    c->prime_escape_burst_s    = atoi(v);
     else if (!strcmp(k, "prime_escape_rest_s"))     c->prime_escape_rest_s     = atoi(v);
     else if (!strcmp(k, "charge_assist_alpha_max")) c->charge_assist_alpha_max = atoi(v);

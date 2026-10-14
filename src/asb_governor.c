@@ -2478,6 +2478,103 @@ static void asb_main_capacity_parity(asb_profile_caps_t *caps, const asb_metrics
     g_parity_over_khz = over;
 }
 
+/* Unlock lift (fix150).
+ *
+ * "Slideshow at unlock after a short idle, then smooth again" - several users of the same
+ * build. The owner's capture 28442 (OP15, Smart) could not record the unlock itself (the
+ * recorder dropped its baseline with the screen off - fixed beside this), but the first
+ * recorded interval after two wakes drew the launcher with 31 of 262 and 18 of 39 frames
+ * janky, against 1.7% over the whole capture, and every wake landed on Smart's MODERATE
+ * ceilings: main 1996800 of 3628800 (55%), prime 1862400 of 4608000 (40%), top-app uclamp 50.
+ * A boost asks for more by raising scaling_min_freq, and the kernel clamps a minimum to the
+ * maximum: the capture's first kernel snapshot reads policy0 min 1785600 / max 1996800 and
+ * policy6 min = max = 1862400 - a floor somebody else raised, held at ASB's ceiling. The unlock
+ * animation, the resumed app and the work Doze held back all run under ceilings sized for
+ * ordinary use.
+ *
+ * For unlock_lift_s seconds after the screen comes on - and once more at the first touch
+ * within 20 s of it, the swipe that dismisses the lock screen on a phone woken by the power key
+ * - every managed CPU ceiling is lifted to unlock_lift_pct of its cluster's hardware maximum,
+ * and the top-app uclamp ceiling to the same share. Ceilings only: no floor is raised, so the
+ * clocks climb only if the unlock asks for it, and the vendor's own boost is honoured again.
+ * Smart only (in Battery and Balanced the shell owns the ceilings and the governor does not
+ * write them), not while thermally capped, not on a die already at the comfort mark. */
+#define ASB_UNLOCK_TOUCH_WINDOW_MS 20000L
+static int    g_unlock_prev_screen = -1;  /* screen state of the last pass, -1 before the first */
+static long   g_unlock_on_ms       = 0;   /* boottime ms the screen last came on, 0 = off */
+static long   g_unlock_until_ms    = 0;   /* boottime ms the running lift ends, 0 = none */
+static int    g_unlock_touch_used  = 0;   /* the touch re-arm is spent for this screen-on */
+static int    g_unlock_lift_now    = 0;   /* the lift is in force for this pass */
+static int    g_unlock_applied     = 0;   /* the last caps written carried the lift */
+static int    g_unlock_edge        = 0;   /* the lift started or ended: this pass must apply */
+static unsigned long g_unlock_lifts = 0;  /* lifts started: screen-on edges and touch re-arms */
+static unsigned long g_unlock_skips = 0;  /* edges that did not lift */
+static char   g_unlock_skip_why[16] = "-";/* why the last one did not: off/profile/thermal/warm */
+
+static int asb_unlock_lift_update(int screen_on, int touch_kick, long now_ms, int profile_idx,
+                                  int thermal_cap, int die_c) {
+    int prev = g_unlock_prev_screen;
+    int arm = 0;
+    g_unlock_prev_screen = screen_on ? 1 : 0;
+    if (!screen_on) {
+        g_unlock_on_ms = 0;
+        g_unlock_until_ms = 0;
+        g_unlock_touch_used = 0;
+        g_unlock_lift_now = 0;
+        return 0;
+    }
+    if (prev == 0) {
+        g_unlock_on_ms = now_ms;
+        g_unlock_touch_used = 0;
+        arm = 1;
+    } else if (touch_kick && !g_unlock_touch_used && g_unlock_on_ms > 0 &&
+               now_ms - g_unlock_on_ms <= ASB_UNLOCK_TOUCH_WINDOW_MS) {
+        g_unlock_touch_used = 1;
+        arm = 1;
+    }
+    if (arm) {
+        const char *why = NULL;
+        if (g_asb_cfg.unlock_lift_s <= 0) why = "off";
+        else if (profile_idx != PROFILE_SMART) why = "profile";
+        else if (thermal_cap) why = "thermal";
+        else if (die_c > 0 && g_asb_cfg.bat_comfort_temp > 0 &&
+                 die_c >= g_asb_cfg.bat_comfort_temp) why = "warm";
+        if (why) {
+            g_unlock_skips++;
+            snprintf(g_unlock_skip_why, sizeof(g_unlock_skip_why), "%s", why);
+        } else {
+            long until = now_ms + (long)g_asb_cfg.unlock_lift_s * 1000L;
+            if (until > g_unlock_until_ms) g_unlock_until_ms = until;
+            g_unlock_lifts++;
+        }
+    }
+    if (g_unlock_until_ms > 0 &&
+        (thermal_cap || profile_idx != PROFILE_SMART || now_ms >= g_unlock_until_ms))
+        g_unlock_until_ms = 0;
+    g_unlock_lift_now = (g_unlock_until_ms > 0);
+    return g_unlock_lift_now;
+}
+
+static void asb_unlock_lift_apply(asb_profile_caps_t *caps) {
+    int pct = g_asb_cfg.unlock_lift_pct;
+    if (pct < 50) pct = 50;
+    if (pct > 100) pct = 100;
+    for (int i = 0; i < 3; i++) {
+        long hw = g_cpu_slot_hwmax[i];
+        /* 0 is "not managed" (an empty slot, or a prime left to the vendor): nothing to lift. */
+        if (hw <= 0 || caps->cpu_max[i] <= 0) continue;
+        int want = (int)(hw * pct / 100);
+        if (caps->cpu_max[i] < want) caps->cpu_max[i] = want;
+    }
+    if (caps->uclamp_top_max > 0 && caps->uclamp_top_max < pct) caps->uclamp_top_max = pct;
+}
+
+/* Smart night slot with the screen on (fix150) - see asb_smart_night_awake. */
+static int g_smart_night_awake_on = 0;      /* the evening values replaced the night ones */
+static int g_smart_night_awake_from = 0;    /* the night slot's own alpha before that */
+static int g_smart_night_awake_to = 0;      /* the evening slot's alpha it took instead */
+static unsigned long g_smart_night_awake_ticks = 0;
+
 static void asb_apply_adaptive_budget_caps(asb_profile_caps_t *caps,
                                            const asb_metrics_t *m,
                                            const asb_fsm_t *fsm) {
@@ -2759,6 +2856,11 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             g_smart_media_guard_since > 0 ? (long)(time(NULL) - g_smart_media_guard_since) : 0L,
             g_smart_media_guard_reason);
     fprintf(f, "camera_hold=%d\n", g_cam_guard_on ? 1 : 0);
+    /* fix150: a night slot with the screen on took the evening's lean (alpha before it). */
+    fprintf(f, "smart_night_awake=%d\nsmart_night_awake_from=%d\nsmart_night_awake_to=%d\n"
+               "smart_night_awake_ticks=%lu\n",
+            g_smart_night_awake_on, g_smart_night_awake_from, g_smart_night_awake_to,
+            g_smart_night_awake_ticks);
     fprintf(f, "smart_lowbat_override=%d\nsmart_thermal_trend=%d\nsmart_trend_slope=%d\n",
             g_smart_rt.low_battery_override ? 1 : 0,
             g_smart_rt.thermal_trend_bump,
@@ -3145,6 +3247,10 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     fprintf(f, "main_parity_khz=%d\nmain_parity_lifts=%lu\nmain_parity_capacity=\"%d,%d\"\n",
             g_parity_main_khz, g_parity_lifts, g_parity_cap0, g_parity_cap1);
     fprintf(f, "main_parity_near=%d\nmain_parity_over_khz=%d\n", g_parity_near, g_parity_over_khz);
+    /* Unlock lift (fix150): in force on the last write, lifts started (wakes and first
+     * touches), wakes that did not lift and why the last one did not. */
+    fprintf(f, "unlock_lift=%d\nunlock_lifts=%lu\nunlock_lift_skips=%lu\nunlock_lift_skip_why=%s\n",
+            g_unlock_applied, g_unlock_lifts, g_unlock_skips, g_unlock_skip_why);
     {
         long _pe_t = g_prime_escape_total_ms;
         if (g_prime_escape_since_ms > 0) _pe_t += asb_clock_ms(CLOCK_BOOTTIME) - g_prime_escape_since_ms;
@@ -5476,6 +5582,51 @@ static void asb_smart_media_guard_apply_caps(asb_profile_caps_t *caps) {
  * Returns: 1 if g_smart_bounds was updated this tick (caller should refresh FSM caps
  * immediately so they reflect the new bounds), 0 otherwise.
  */
+/* A night slot with the screen on (fix150).
+ *
+ * The SLEEP (00-06) and LATE (21-24) slots are seeded at alpha 950 and 750 with an interactive
+ * bonus of 0 and 20 - "battery-lean at night", for a phone that is asleep. The evening slot
+ * starts at 400 with a bonus of 80. Learning moves a slot by a few thousandths per session, so
+ * those seeds stay in force for months, and they apply whenever the clock says night - screen
+ * on included. Asleep, they buy nothing: screen-off already has the DEEP_IDLE rails and the
+ * night override lifts alpha to 900 on its own. Awake, they are what a user describes as "when
+ * I stay up late the animations get less smooth" - the same phone seeded 350 points closer to
+ * Battery at 23:30 than at 20:30 (750 against 400) and 550 closer after midnight, with a
+ * quarter of the evening's touch bonus, or none.
+ *
+ * So with the screen on, a night slot leans no harder toward economy than this phone's evening
+ * slot (the same weekday/weekend half, computed the same way), and gets at least its bonus.
+ * Everything after this - the user's bias, low battery, the thermal veto and trend - still
+ * applies on top, and screen-off is untouched. smart_night_awake=0 turns it off. */
+
+static void asb_smart_night_awake(int screen_on, int daypart, int is_weekend, time_t now) {
+    g_smart_night_awake_on = 0;
+    g_smart_night_awake_from = 0;
+    g_smart_night_awake_to = 0;
+    if (!g_asb_cfg.smart_night_awake || !screen_on) return;
+    if (daypart != ASB_DAYPART_SLEEP && daypart != ASB_DAYPART_LATE) return;
+    int fb = 0;
+    asb_smart_bucket_t *eb = asb_smart_lookup_bucket(&g_smart_store, ASB_DAYPART_EVE,
+                                                     is_weekend, now, &fb);
+    if (!eb) return;
+    asb_smart_runtime_t ev = g_smart_rt;
+    asb_smart_compute_effective(eb, asb_smart_confidence_x1000(eb, now), &g_smart_store, &ev);
+    if (ev.alpha_battery_x1000 < g_smart_rt.alpha_battery_x1000) {
+        g_smart_night_awake_from = g_smart_rt.alpha_battery_x1000;
+        g_smart_rt.alpha_battery_x1000 = ev.alpha_battery_x1000;
+        g_smart_night_awake_on = 1;
+    }
+    if (ev.interactive_bonus_x1000 > g_smart_rt.interactive_bonus_x1000) {
+        if (!g_smart_night_awake_on) g_smart_night_awake_from = g_smart_rt.alpha_battery_x1000;
+        g_smart_rt.interactive_bonus_x1000 = ev.interactive_bonus_x1000;
+        g_smart_night_awake_on = 1;
+    }
+    if (g_smart_night_awake_on) {
+        g_smart_night_awake_to = g_smart_rt.alpha_battery_x1000;
+        g_smart_night_awake_ticks++;
+    }
+}
+
 static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     if (!m) return 0;
     /* Defensive consistency: if FSM is in PROFILE_SMART, ensure runtime flag
@@ -5662,6 +5813,7 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
 
     int conf = asb_smart_confidence_x1000(b, now);
     asb_smart_compute_effective(b, conf, &g_smart_store, &g_smart_rt);
+    asb_smart_night_awake(screen_on, daypart, is_weekend, now);
 
     /*
      * Optional user autonomy dial: smart_battery_bias (governor.conf, x1000, default 0 =
@@ -7091,6 +7243,9 @@ int main(int argc, char **argv) {
                             fsm.current_caps = _new_caps;
                             asb_profile_caps_t _effective_caps = fsm.current_caps;
                             asb_apply_adaptive_budget_caps(&_effective_caps, &metrics, &fsm);
+                            /* A heartbeat refresh inside the unlock window keeps the lift (fix150). */
+                            if (g_unlock_lift_now && !fsm.thermal_cap && metrics.misc.screen_on)
+                                asb_unlock_lift_apply(&_effective_caps);
                             int _w = writer_apply_caps(&_effective_caps, 1, fsm.state, fsm.thermal_cap);
                             if (_w > 0) { g_total_writes += _w; g_last_write_ts = time(NULL); }
                             if (g_asb_cfg.smart_debug_log) {
@@ -7200,7 +7355,9 @@ int main(int argc, char **argv) {
                     if (touch_watch_set(epfd, 1)) g_touch_last_ts = time(NULL);
                     g_touch_rearm = 0;
                 }
-                int calm = !metrics.misc.camera_active &&
+                /* Not calm while the unlock lift runs (fix150): the tick that ends it must come
+                 * on the 2 s cadence, not 6 s later. */
+                int calm = !metrics.misc.camera_active && !g_unlock_lift_now &&
                            !(g_touch_last_ts > 0 && time(NULL) - g_touch_last_ts <= ASB_TOUCH_RECENT_S) &&
                            (fsm.state <= ASB_STATE_LIGHT_IDLE ||
                             (fsm.state == ASB_STATE_MODERATE &&
@@ -8577,6 +8734,34 @@ int main(int argc, char **argv) {
             metrics.misc.app_hint = g_smart_rt.app_hint;
             /* Tell the writer whether anyone is looking, before it writes anything. */
             fsm_screen_is_on = metrics.misc.screen_on;
+            /* Unlock lift (fix150): decided before the touch kick is answered below, because
+             * the first touch after a wake re-arms it. Lifting forces the write - the writer
+             * otherwise holds a ceiling for 10 s while the state does not move, which is the
+             * touch re-arm's case. Ending it only asks for a pass (g_unlock_edge): a live
+             * ceiling above the request is always rewritten, and so is a changed uclamp. */
+            {
+                int _ul_was = g_unlock_applied;
+                int _ul = asb_unlock_lift_update(metrics.misc.screen_on, g_touch_kick,
+                                                 asb_clock_ms(CLOCK_BOOTTIME), fsm.profile_idx,
+                                                 fsm.thermal_cap, metrics.therm.cpu_max_c);
+                if (_ul != _ul_was) {
+                    g_unlock_edge = 1;
+                    /* Screen off inside the window: the screen-off write must get through the
+                     * deep-idle back-off, and the edge is answered here so it is logged once. */
+                    if (_ul || !metrics.misc.screen_on) force_write = 1;
+                    if (!metrics.misc.screen_on) g_unlock_applied = 0;
+                    if (g_asb_cfg.log_level >= 2) {
+                        if (_ul)
+                            asb_log("unlock_lift: on (%s, ceilings to %d%% of hw for %d s, die=%dC)",
+                                    g_unlock_touch_used ? "first touch" : "screen on",
+                                    g_asb_cfg.unlock_lift_pct, g_asb_cfg.unlock_lift_s,
+                                    metrics.therm.cpu_max_c);
+                        else
+                            asb_log("unlock_lift: off (%s)",
+                                    metrics.misc.screen_on ? "time up" : "screen off");
+                    }
+                }
+            }
             int changed = fsm_update(&fsm, &metrics);
             g_touch_kick = 0;   /* answered (fix117) */
 
@@ -8842,8 +9027,9 @@ int main(int argc, char **argv) {
              *
              * The periodic pass is for drift the module can legitimately fix, not a way
              * around the module's own restraint. */
-            int want_apply = (changed || force_write ||
+            int want_apply = (changed || force_write || g_unlock_edge ||
                               (time(NULL) - g_last_caps_reassert) >= 30);
+            g_unlock_edge = 0;
 
             if (want_apply && g_cap_detente_active) {
                 g_cap_detente_skipped++;
@@ -8861,6 +9047,14 @@ int main(int argc, char **argv) {
                 asb_profile_caps_t _effective_caps = fsm.current_caps;
                 asb_apply_adaptive_budget_caps(&_effective_caps, &metrics, &fsm);
                 asb_smart_media_guard_apply_caps(&_effective_caps);
+                /* fix150: the unlock lift, after every trim - it only ever raises a ceiling,
+                 * and only for the seconds after a wake (see asb_unlock_lift_update). */
+                if (g_unlock_lift_now && !fsm.thermal_cap && metrics.misc.screen_on) {
+                    asb_unlock_lift_apply(&_effective_caps);
+                    g_unlock_applied = 1;
+                } else {
+                    g_unlock_applied = 0;
+                }
 
                 /* Floor the top-app ceiling while the screen is on.
                  *
