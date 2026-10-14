@@ -109,7 +109,7 @@ pid_is_live() {
   # Falls through to the kill -0 answer where /proc is unavailable.
   if [ -r "/proc/$_pl_pid/stat" ]; then
     case "$(cat "/proc/$_pl_pid/stat" 2>/dev/null)" in
-      *') Z '*) return 1 ;;
+      *') Z '*|*') X '*|*') x '*) return 1 ;;
     esac
   fi
   return 0
@@ -255,8 +255,11 @@ full_day_cancel_orphan() {
   # stop the recorder" although it had. Only the recorder's own kill decides.
   [ -n "$_fdco_kids" ] && kill -KILL $_fdco_kids 2>/dev/null
   kill -KILL "$_fdco_pid" 2>/dev/null || { full_day_recovery_note "skip=kill_failed pid=$_fdco_pid"; return 1; }
+  # Up to 3 s, then 2 s more after a second KILL (fix146): a loaded machine took longer than
+  # the 1.7 s this allowed - a CI run read the recorder as alive, kept the lock and answered
+  # "already running" to a cancellation that had in fact worked.
   _fdco_try=0
-  while [ "$_fdco_try" -lt 12 ]; do
+  while [ "$_fdco_try" -lt 30 ]; do
     pid_is_live "$_fdco_pid" || break
     sleep 0.1
     _fdco_try=$(( _fdco_try + 1 ))
@@ -264,7 +267,7 @@ full_day_cancel_orphan() {
   if pid_is_live "$_fdco_pid"; then
     kill -KILL "$_fdco_pid" 2>/dev/null || return 1
     _fdco_try=0
-    while [ "$_fdco_try" -lt 5 ]; do
+    while [ "$_fdco_try" -lt 20 ]; do
       pid_is_live "$_fdco_pid" || break
       sleep 0.1
       _fdco_try=$(( _fdco_try + 1 ))
