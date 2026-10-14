@@ -168,7 +168,15 @@ ORPHAN_OUT="$(cat "$TMP/state/full_day_webui.lock/output_dir")"
 [ -d "$ORPHAN_OUT" ] || { echo 'FAIL debug support: recorder did not publish output dir' >&2; exit 1; }
 rm -rf "$ORPHAN_OUT"
 RECOVERED="$(PATH="$TMP/ps-truncated:$PATH" env "${ENV[@]}" sh "$HELPER" full-day || true)"
-printf '%s\n' "$RECOVERED" | grep -Fq 'status=started' || { echo 'FAIL debug support: removed output dir did not recover capture slot' >&2; exit 1; }
+printf '%s\n' "$RECOVERED" | grep -Fq 'status=started' || {
+  echo 'FAIL debug support: removed output dir did not recover capture slot' >&2
+  # What the helper answered and why (fix146: a CI run failed here with nothing to read).
+  printf '  helper: %s\n' "$RECOVERED" >&2
+  sed 's/^/  recovery log: /' "$TMP/state/full_day_webui.recovery.log" >&2 2>/dev/null || true
+  _rp="$(printf '%s\n' "$START1" | sed -n 's/^pid=//p')"
+  [ -n "$_rp" ] && { printf '  recorder %s: ' "$_rp"; cat "/proc/$_rp/stat" 2>/dev/null || echo gone; } >&2
+  exit 1
+}
 grep -Fq 'recovered=output_removed' "$TMP/state/full_day_webui.recovery.log" || { echo 'FAIL debug support: orphan recovery evidence missing' >&2; exit 1; }
 REC_PID="$(printf '%s\n' "$RECOVERED" | sed -n 's/^pid=//p')"
 [ -n "$REC_PID" ] && kill -0 "$REC_PID" 2>/dev/null || { echo 'FAIL debug support: recovered recorder missing' >&2; exit 1; }
