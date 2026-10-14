@@ -200,7 +200,9 @@ _lower() {   # $1 = mode Hz, $2 = content rate(s)
     return 1
   fi
   _stat_bump lowers 1
-  _log "lowered peak ${_orig} -> $1 Hz for ${2} fps video"
+  # Several layers give several rates, one per line: joined, or the log line broke in two
+  # ("for 30" / "60 fps video" in a CPH2769 capture, fix148).
+  _log "lowered peak ${_orig} -> $1 Hz for $(printf '%s' "$2" | tr '\n' ',' | sed 's/,$//') fps video"
   # The first touch puts the old value back straight from here - no polling interval in
   # between - and only then tells the loop. Fastest path: one settings put, no reads.
   (

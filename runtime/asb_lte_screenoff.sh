@@ -297,6 +297,16 @@ _on_mobile() {
   # plain "ip route" look never matched: for VPN users the mode was dead. Every table, then:
   # mobile underneath when a cellular default exists and a Wi-Fi one does not.
   case "$_dev" in tun*|wg*|ppp*|ipsec*)
+    # netd's rule for unmarked local traffic with no uid range names the system default
+    # network's table (fix148) - the one the tunnel rides on. A Wi-Fi that is connected but
+    # not the default (no internet, mobile preferred) keeps a default route in its own table,
+    # which the table scan below took for "on Wi-Fi".
+    _sysdef="$("$_IPB" rule show 2>/dev/null | grep -E 'fwmark 0x0/0xffff iif lo .*lookup ' | grep -v uidrange \
+      | sed -n 's/.* lookup \([^ ]*\).*/\1/p' | head -1)"
+    case "$_sysdef" in
+      rmnet*|ccmni*|v4-rmnet*|v4-ccmni*) return 0 ;;
+      wlan*) return 1 ;;
+    esac
     _defs="$("$_IPB" route show table all 2>/dev/null | grep '^default')"
     printf '%s\n' "$_defs" | grep -q ' dev wlan' && return 1
     printf '%s\n' "$_defs" | grep -qE ' dev (rmnet|ccmni|v4-rmnet|v4-ccmni)' && return 0 ;;

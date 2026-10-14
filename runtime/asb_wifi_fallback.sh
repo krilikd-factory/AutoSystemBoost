@@ -102,7 +102,17 @@ _mobile_allowed() {
   [ "$(settings get global mobile_data 2>/dev/null | tr -d ' \r')" != 0 ]
 }
 _wifi_default() {
-  ip route get 1.1.1.1 2>/dev/null | grep -Eq '(^| )dev wlan[0-9A-Za-z_.-]*([[:space:]]|$)'
+  _wd_rt="$(ip route get 1.1.1.1 2>/dev/null)"
+  printf '%s\n' "$_wd_rt" | grep -Eq '(^| )dev wlan[0-9A-Za-z_.-]*([[:space:]]|$)' && return 0
+  # Behind a VPN (fix148) the route names the tunnel, never Wi-Fi: CPH2769 ran a proxy app
+  # all day ("1.1.1.1 dev tun0 table tun0"), Wi-Fi up under it, and the watcher sat at
+  # "waiting_for_wifi_default_route" for the whole capture - "leave bad Wi-Fi" could not act
+  # for anyone with a VPN on. What the tunnel rides on is the system default network: netd's
+  # rule for unmarked traffic from this host with no uid range ("fwmark 0x0/0xffff iif lo
+  # lookup <table>"). When that table is Wi-Fi's, so is the default.
+  printf '%s\n' "$_wd_rt" | grep -Eq '(^| )dev (tun|ppp|ipsec|wg|tap|vgate)[0-9A-Za-z_.-]*([[:space:]]|$)' || return 1
+  ip rule show 2>/dev/null | grep -E 'fwmark 0x0/0xffff iif lo .*lookup ' | grep -v 'uidrange' \
+    | grep -Eq 'lookup wlan[0-9A-Za-z_.-]*([[:space:]]|$)'
 }
 _wifi_unvalidated() {
   _w="$(dumpsys wifi 2>/dev/null)"
