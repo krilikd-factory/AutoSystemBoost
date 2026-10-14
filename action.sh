@@ -805,6 +805,7 @@ T_CPU_BATT="%s°C CPU  ·  %s°C battery"
 T_CPU_ONLY="%s°C CPU"
 T_CHARGING="⚡ charging"
 T_FULL="⚡ full, on charger"
+T_HELD="⚡ on charger, charging paused (battery protection)"
 T_AUTO_BAT_ACTIVE="Auto-battery active"
 T_NQ_ACTIVE="Night-quiet active"
 T_FB1="daypart fallback"
@@ -1293,9 +1294,17 @@ fi
 # Charging state next to the level: "100%" alone does not say whether the phone is on the
 # charger, and the time-to-empty below means nothing while it is.
 _bstat="$(cat /sys/class/power_supply/battery/status 2>/dev/null)"
+# "Not charging" with a charger online is battery protection holding the level (fix148):
+# on the cable, so no time-to-empty either.
+if [ "$_bstat" = "Not charging" ]; then
+  for _bsp in usb ac dc wireless wls pc_port; do
+    [ "$(cat /sys/class/power_supply/$_bsp/online 2>/dev/null)" = 1 ] && { _bstat=Held; break; }
+  done
+fi
 case "$_bstat" in
   Charging) _bst_l="  ·  $T_CHARGING" ;;
   Full)     _bst_l="  ·  $T_FULL" ;;
+  Held)     _bst_l="  ·  $T_HELD" ;;
   *)        _bst_l="" ;;
 esac
 echo "  🔋  ${_lvl:-?}%${_bst_l}"
@@ -1321,7 +1330,7 @@ if [ "$_smart_enabled" = "1" ]; then
 fi
 echo ""
 case "$_bstat" in
-  Charging|Full)
+  Charging|Full|Held)
     _f "  ⏳  $T_ETA_CHG" ;;
   *)
     _f "  ⏳  $T_ETA" "$_eta_note"
