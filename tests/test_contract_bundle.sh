@@ -199,7 +199,12 @@ grep -Fq 'nsenter -t 1 -m -- umount "$_ct_live"' "$I" || f 'installer does not t
 # fix112: the skipped install ships no tone file and the install wipes odm_patched and the
 # bind manifest, so after its reboot one more install finds stock - no disable step needed.
 grep -q 'ASB_L_CAM_LIVE_DIRTY2=".*after the reboot just install ASB once more' "$ROOT/common/englishtext.sh" || f 'dirty-camera advice does not say "install once more after the reboot"'
-grep -Fq 'rm -rf "$_ob_root" 2>/dev/null' "$I" || f 'install no longer wipes the old odm payloads (the advice depends on it)'
+# fix146: the wipe moved to asb_reset_odm_binds (before the audio stage); payloads and the
+# manifest still go, only the partition's stock snapshots are kept.
+_rb="$(sed -n '/^asb_reset_odm_binds() {/,/^}/p' "$I")"
+printf '%s\n' "$_rb" | grep -Fq "find \"\$_rb_root\" -type f ! -name '*.stock' ! -name '.base_fp' -delete" \
+  && printf '%s\n' "$_rb" | grep -Fq 'rm -f "${ASB_ODM_MAN:-/data/adb/asb/odm_bind_manifest.txt}"' \
+  || f 'install no longer wipes the old odm payloads and the manifest (the advice depends on it)'
 [ "$fail" = 0 ] && echo "PASS camera bind requeue contract"
 exit "$fail"
 

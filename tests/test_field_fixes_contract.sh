@@ -835,7 +835,7 @@ grep -q '> "\$LK_OUT_DIR/.wl_uid_delta"' "$C" || fail "per-uid batterystats delt
 grep -q "not one app's total moved in" "$C" || fail "a stalled batterystats still reads as 'no app held a wakelock'"
 grep -q '^lk_capture_on_battery()' "$C" || fail "stall check not limited to a capture on battery"
 grep -q 'batterystats disagrees with these samples:' "$C" || fail "live holders not checked against batterystats"
-grep -q 'within %s (most frames), by ASB state and touch' "$C" || fail "jank by state not shown inside one app"
+grep -q 'within %s (%s), by ASB state and touch' "$C" && grep -q 'wn += within(top, "most frames")' "$C" || fail "jank by state not shown inside one app"
 F="$ROOT/tools/logkit/asb_log_full_day.sh"
 grep -n 'echo "' "$F" | grep -q '`' && fail "a backtick inside a double-quoted echo runs a command"
 grep -q "'hfp_audio_disconnect' is an HFP/SCO audio-link detach" "$F" || fail "Bluetooth evidence line still empty"
@@ -938,5 +938,42 @@ grep -q 'not set at boot with the native governor' "$ROOT/tools/asb_diag.sh" || 
 [ -f "$ROOT/tests/test_gov_liveness_runtime.sh" ] || fail "liveness test missing"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS: fix144 contract"
+) || exit 1
+# ---- fix145 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix145: $*"; exit 1; }
+W="$ROOT/webroot/index.html"; D="$ROOT/tools/asb_diag.sh"
+grep -q 'id="cfgSoundBtn" onclick="uiSoundToggle()"' "$W" || fail "no switch for the interface sounds"
+grep -q '^function uiOtherAudioRefresh() {' "$W" || fail "cues still play over another app's audio"
+grep -q "if (_screen !== _cfgShownScreen) {" "$W" || fail "settings entrance runs on every repaint (cards twitch)"
+grep -q '^_vlim="$(dumpsys audio' "$D" || fail "asbdiag does not show Android's volume limits"
+grep -q 'disabled|on) V "BT absolute volume disabled' "$D" || fail "asbdiag ignores bt_absvol_mode=disabled"
+grep -q 'dsp_load_check.txt' "$D" || fail "asbdiag does not print the boot DSP load check"
+grep -q '_dlc=/data/adb/asb/dsp_load_check.txt' "$ROOT/service.sh" || fail "no DSP load check a minute after boot"
+grep -q '# volume limits (safe media volume, sound dose, absolute volume)' "$ROOT/tools/logkit/_asb_logkit_common.sh" \
+  || fail "full-day audio snapshot without the volume limits"
+[ -f "$ROOT/tests/test_webui_quiet_ui_runtime.sh" ] || fail "quiet-ui test missing"
+cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix145 contract"
+) || exit 1
+# ---- fix146 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix146: $*"; exit 1; }
+I="$ROOT/common/install.sh"; C="$ROOT/tools/logkit/_asb_logkit_common.sh"; D="$ROOT/tools/asb_diag.sh"
+grep -q '^asb_reset_odm_binds() {' "$I" || fail "no odm bind reset ahead of the audio stage"
+grep -q '^asb_odm_bound_by_asb() {' "$I" || fail "the generator cannot tell its own bind from stock"
+sed -n '/^asb_generate_odm_binds() {/,/^}/p' "$I" | grep -q 'rm -rf "$_ob_root"' && fail "the generator wipes the DSP registration's bind again"
+grep -q '^lk_cluster_roles() {' "$C" || fail "jank trace still guesses main/prime from policy numbers"
+grep -q 'wn += within(topj, "most janky frames")' "$C" || fail "no table for the app with the most janky frames"
+grep -q 'the little cluster (%s) runs no UI' "$C" || fail "report does not name the clusters on a 4-cluster part"
+grep -q '_tier="little"; \[ "$_npol" -eq 2 \] && _tier="main"' "$D" || fail "asbdiag calls the six main cores little"
+grep -q 'no ASB entry and no runtime bind queued - it is read before /vendor/etc' "$D" || fail "asbdiag does not explain a stock /odm effects config"
+for t in test_cluster_roles_runtime.sh test_odm_bind_reinstall_runtime.sh; do
+  [ -f "$ROOT/tests/$t" ] || fail "$t missing"
+done
+cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix146 contract"
 ) || exit 1
 echo "PASS: field-fix contracts"
