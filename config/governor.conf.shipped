@@ -496,6 +496,18 @@ prime_escape_rest_s=40
 # prime's, so everyday work stays on the six main cores instead of waking the two prime cores.
 # 1 = on (default), 0 = off.
 main_capacity_parity=1
+# Smart: for a few seconds after the screen comes on - and once more at the first touch after
+# it, the swipe that dismisses the lock screen - the CPU ceilings are lifted to unlock_lift_pct
+# of each cluster's maximum and the app in front may ask for the same share. Ceilings only: the
+# clocks rise only if the unlock actually needs them. Not while thermally capped or warm.
+# unlock_lift_s: 0 = off, 1-10 s (default 3). unlock_lift_pct: 50-100 (default 80).
+unlock_lift_s=3
+unlock_lift_pct=80
+# Smart: the night time slots (21:00-06:00) start strongly economy-leaning because the phone is
+# normally asleep then. With the screen on, someone is using it - so a night slot then leans no
+# harder toward economy than your evening slot does. Screen-off behaviour is unchanged.
+# 1 = on (default), 0 = off.
+smart_night_awake=1
 
 # Media loudness: stock|mild|strong|max Reshapes the audio-policy volume CURVES so every slider
 # position is genuinely louder.
