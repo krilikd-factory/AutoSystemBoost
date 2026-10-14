@@ -1634,7 +1634,13 @@ if [ "$(cfg dsp_loudness)" = "off" ] || [ "$(cfg dsp_loudness)" = "0" ] || [ "$(
 else
   V "  DSP outputs live (persist.asb.dsp.outputs)" "${_dsp_o:-all}" "$(gp persist.asb.dsp.outputs)" eq
 fi
-NOTE "  DSP requested/applied gain: requested=$(gp persist.asb.dsp.gain_requested_mb)mB  ·  applied=$(gp persist.asb.dsp.gain_applied_mb)mB  ·  published_route=$(gp persist.asb.dsp.route)"
+# With dsp_outputs=all nothing tracks the route (fix145): the value is whatever was published
+# last, and a CPH2691 report read "published_route=speaker" during Bluetooth playback.
+case "$(gp persist.asb.dsp.outputs)" in
+  ''|all) _pr_note=" (not tracked with dsp_outputs=all - the last value published, not the live route)" ;;
+  *)      _pr_note="" ;;
+esac
+NOTE "  DSP requested/applied gain: requested=$(gp persist.asb.dsp.gain_requested_mb)mB  ·  applied=$(gp persist.asb.dsp.gain_applied_mb)mB  ·  published_route=$(gp persist.asb.dsp.route)$_pr_note"
 # Unset is expected while the engine is off - routing is not published then.
 if [ "$(gp persist.asb.dsp.enable)" = "1" ]; then
   case "$(gp persist.asb.dsp.outputs)" in
@@ -1741,6 +1747,19 @@ elif [ "$_dsp_on" = "1" ]; then
       if grep -q 'asbdsp' "$_dwin" 2>/dev/null; then NOTE "  first $_dn in lookup order (read by the HAL): $_dwin - lists ASB"
       else NOTE "  first $_dn in lookup order (read by the HAL): $_dwin - does NOT list ASB"; fi
     done
+    # The /odm copy is read before /vendor/etc (fix146). Before fix146 an install over a
+    # running module dropped its runtime bind on non-reference phones (PLQ110: "effects
+    # config WITHOUT ASB: /odm/etc/audio_effects_config.xml" next to /vendor copies that
+    # listed it) - say which of the two it is: never queued, or queued and not live.
+    for _dodm in /odm/etc/audio_effects_config.xml /odm/etc/audio_effects.xml; do
+      [ -f "$_dodm" ] || continue
+      grep -qE 'asbdsp|asb_loudness' "$_dodm" 2>/dev/null && continue
+      if grep -q "^$_dodm|" /data/adb/asb/odm_bind_manifest.txt 2>/dev/null; then
+        NOTE "  $_dodm: a runtime bind is queued, but the live file is stock - the bind did not take this boot (odm_bind lines in vendor_mounts.log)"
+      else
+        NOTE "  $_dodm: no ASB entry and no runtime bind queued - it is read before /vendor/etc, so the copies there do not count. Reinstall once (an install over a running module dropped this bind before fix146)"
+      fi
+    done
     if [ -f /data/adb/asb/dsp_effects_blocked ]; then
       NOTE "  effects crash fuse TRIPPED ($(cat /data/adb/asb/dsp_effects_blocked 2>/dev/null)): audioserver kept restarting with the effect registered, so it was removed"
       NOTE "  to try again: delete /data/adb/asb/dsp_effects_blocked and reinstall"
@@ -1751,6 +1770,14 @@ elif [ "$_dsp_on" = "1" ]; then
     done
     logcat -d -t 4000 2>/dev/null | grep -iE 'asbdsp|asb_loudness|EffectsFactory.*(fail|error|cannot|could not)|loadLibrary|dlopen.*soundfx' \
       | tail -n 8 | while IFS= read -r _dl; do P "    log: $(printf '%s' "$_dl" | cut -c1-200)"; done
+    # What the HAL logged about the library a minute after boot (fix145) - the log above has
+    # usually rotated past the HAL's start by the time anyone runs this.
+    if [ -s /data/adb/asb/dsp_load_check.txt ]; then
+      NOTE "  at boot (saved a minute in):"
+      head -n 13 /data/adb/asb/dsp_load_check.txt | while IFS= read -r _dl; do P "    $_dl"; done
+    fi
+    # The attach daemon's own account, when debug keeps its log (create failed: set=-19 ...).
+    [ -s /data/adb/asb/dsp_attach.log ] && tail -n 3 /data/adb/asb/dsp_attach.log | while IFS= read -r _dl; do P "    attach: $_dl"; done
   fi
 else
   OFF "DSP effect registration - the DSP engine is off" "dsp"
@@ -1779,10 +1806,30 @@ done
 _absvol="$(settings get global bluetooth_disable_absolute_volume 2>/dev/null)"
 NOTE "settings global bluetooth_disable_absolute_volume = ${_absvol:-<unset>}"
 case "${_btmode:-auto}" in
-  on)  V "BT absolute volume disabled (mode=on)" "1" "$_absvol" eq ;;
-  off) V "BT absolute volume kept (mode=off)" "0" "$_absvol" eq ;;
-  *)   NOTE "BT mode auto — no forced expectation" ;;
+  # The WebUI's values are stock|disabled (fix145): only the legacy on/off were checked, so
+  # every current install printed "auto - no forced expectation" whatever the setting was.
+  disabled|on) V "BT absolute volume disabled (phone drives the gain)" "1" "$_absvol" eq ;;
+  off)         V "BT absolute volume kept (mode=off)" "0" "$_absvol" eq ;;
+  stock)       NOTE "BT absolute volume as the system has it - headset and phone share one scale" ;;
+  *)           NOTE "BT mode auto — no forced expectation" ;;
 esac
+# What Android itself does to the level on headphones and Bluetooth (fix145). A CPH2691 user
+# reported Bluetooth playback much quieter - the maximum barely audible, on two headsets and a
+# car - and nothing here showed whether Android was holding the stream down. The safe media
+# volume state, sound dose (CSD) and absolute volume lines of the audio service, as printed.
+_vlim="$(dumpsys audio 2>/dev/null | grep -iE 'safe_?media|safemedia|csd|sound_?dose|absolute_?vol|absvol' \
+         | sed 's/^[[:space:]]*//' | cut -c1-170 | head -12)"
+if [ -n "$_vlim" ]; then
+  P "  volume limits Android applies (safe media volume, sound dose, absolute volume):"
+  printf '%s\n' "$_vlim" | while IFS= read -r _vl; do P "    $_vl"; done
+  # ASB's limiter switch writes audio_safe_volume_state=0 at boot. If the dump still reads
+  # ACTIVE, Android armed the limiter again after that - say so instead of the install claim.
+  if [ "$(cfg audio_remove_volume_limit)" = 1 ] && printf '%s\n' "$_vlim" | grep -qiE 'SAFE_MEDIA_VOLUME_ACTIVE|SafeMediaVolumeState[=: ]+3'; then
+    NOTE "audio_remove_volume_limit=1, but Android reports the safe media volume ACTIVE: the system armed the limiter again after boot, so headphone/Bluetooth volume can be capped below the slider"
+  fi
+else
+  NOTE "volume limits: the audio service printed no safe-volume / sound-dose / absolute-volume lines on this build"
+fi
 
 # =====================================================================
 SEC "3. GPS / LOCATION"
@@ -3004,7 +3051,9 @@ for _pol in $_pol_dirs; do
   fi
   _tier="big/prime"
   if [ "$_pol" = "$_first_pol" ]; then
-    _tier="little"
+    # Six of the eight cores on a 6+2 part (fix146): "little" there read as "the weak
+    # cores are capped at 52%" when they carry most of the phone's work.
+    _tier="little"; [ "$_npol" -eq 2 ] && _tier="main"
   elif [ "$_pol" = "$_last_pol" ]; then
     _tier="prime"
   elif [ "$_npol" -ge 3 ]; then
@@ -3248,6 +3297,13 @@ if [ -n "$_gfx_lines" ]; then
   printf '%s\n' "$_gfx_lines" | while IFS= read -r _gl; do P "    $_gl"; done
   NOTE "janky = a frame that missed its deadline. Games on their own GL/Vulkan surface are not counted."
   NOTE "For lags: run this right after they happen; the full-day capture splits the same counters by ASB state (jank_trace.tsv)."
+  # SystemUI was the steady source in the first captures that could name one (fix145): OP15
+  # 1.1 janky frames a second in all 367 screen-on intervals, CPH2691 0.5-0.7. The settings
+  # that make it redraw every second, as this ROM names them, so the user knows what to try.
+  _sbs="$(for _ns in system secure global; do settings list "$_ns" 2>/dev/null | sed "s/^/$_ns:/"; done \
+          | grep -iE 'net(work)?_?speed|speed_?(indicator|display|show|switch)|clock_?seconds|show_?seconds|seconds_?clock' \
+          | head -6 | tr '\n' ' ')"
+  [ -n "$_sbs" ] && NOTE "status-bar settings that can redraw every second (SystemUI): $_sbs"
 else
   NOTE "UI smoothness: no frame counters available (dumpsys graphicsstats empty)"
 fi
@@ -3432,6 +3488,7 @@ case "$_spm" in
         # Name by position among the populated slots: the highest populated slot is
         # always the prime, whatever its index.
         _role=little
+        [ "$_ncl" -eq 2 ] && _role=main
         [ "$_sn" -gt 0 ] && _role=mid
         _hi=-1; _k=0; for _q in $(echo "$_spm" | tr ',' ' '); do [ "$_q" -ge 0 ] 2>/dev/null && _hi=$_k; _k=$((_k+1)); done
         [ "$_sn" -eq "$_hi" ] && [ "$_ncl" -gt 1 ] && _role=prime
@@ -3445,7 +3502,8 @@ case "$_spm" in
     _first=""; _last=""
     for _id in $_pol_ids; do [ -z "$_first" ] && _first="$_id"; _last="$_id"; done
     for _id in $_pol_ids; do
-      if [ "$_id" = "$_first" ]; then P "    policy$_id -> slot0 (little)"
+      if [ "$_id" = "$_first" ]; then
+        if [ "$(echo $_pol_ids | wc -w)" -eq 2 ]; then P "    policy$_id -> slot0 (main)"; else P "    policy$_id -> slot0 (little)"; fi
       elif [ "$_id" = "$_last" ]; then P "    policy$_id -> slot2 (prime)"
       else P "    policy$_id -> slot1 (big)"; fi
     done
