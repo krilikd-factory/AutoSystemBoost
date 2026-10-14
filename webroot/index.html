@@ -3559,6 +3559,8 @@ body.ufo-flying .logo-glyph { opacity: 0; }
         <button class="cfg-lang-btn" id="cfgLangBtn" onclick="cfgToggleLangPop(event)" aria-label="Language">🌐</button>
         <div class="cfg-lang-pop" id="cfgLangPop" hidden></div>
       </div>
+      <!-- Interface sounds on/off (fix145); quiet anyway while another app plays. -->
+      <button class="cfg-lang-btn" id="cfgSoundBtn" onclick="uiSoundToggle()" aria-label="Interface sounds" aria-pressed="true">🔊</button>
     </div>
 
     <!-- Profile actions share one compact row so the config hub has the same footer level
@@ -3849,8 +3851,57 @@ function uiAudioRelease(ctx, endAt) {
 }
 document.addEventListener('visibilitychange', function () {
   if (document.hidden && _uiAudioCtx) { try { _uiAudioCtx.suspend(); } catch (e) { /* already gone */ } }
+  // Coming back: someone may have started music meanwhile (fix145).
+  if (!document.hidden && _uiSoundOn) uiOtherAudioRefresh();
 });
+/* Interface sounds: switchable, and quiet while another app is playing (fix145).
+ *
+ * Each cue opens a second audio stream from the root manager's WebView for about 1.5 s. A
+ * CPH2691 user listening over Bluetooth heard the music dip in loudness and bass for about a
+ * second when he opened the Audio category, and recover - the length of that stream. The
+ * WebUI does nothing else to audio when a category opens, and tuning sound while music
+ * plays is exactly when a click in the mix is unwelcome. So: a switch beside the language
+ * button (kept in this WebView's own storage), and no cue while dumpsys audio lists another
+ * player as started - music, video, a game or a call. The look is lazy: at most every 15 s,
+ * only when a cue is asked for, and never while this page's own stream could be the one
+ * counted (its context running, or a cue in the last 4 s). */
+let _uiSoundOn = (function () { try { return localStorage.getItem('asb_ui_sound') !== '0'; } catch (e) { return true; } })();
+let _uiOtherAudio = false, _uiOtherAudioAt = -1e9, _uiOtherAudioBusy = false, _uiLastCueAt = -1e9;
+function uiOtherAudioRefresh() {
+  if (_uiOtherAudioBusy || typeof run !== 'function') return;
+  if (_uiAudioCtx && _uiAudioCtx.state === 'running') return;
+  if (performance.now() - _uiLastCueAt < 4000) return;
+  _uiOtherAudioBusy = true;
+  run("dumpsys audio 2>/dev/null | grep -cE 'AudioPlaybackConfiguration .*state:started .*usage=USAGE_(MEDIA|GAME|UNKNOWN|VOICE_COMMUNICATION) ' || true")
+    .then(function (r) {
+      _uiOtherAudio = parseInt(((r && r.stdout) || '0').trim(), 10) > 0;
+      _uiOtherAudioAt = performance.now();
+    })
+    .catch(function () {})
+    .then(function () { _uiOtherAudioBusy = false; });
+}
+function uiSoundPaintBtn() {
+  const b = _el('cfgSoundBtn');
+  if (!b) return;
+  b.textContent = _uiSoundOn ? '\uD83D\uDD0A' : '\uD83D\uDD07';
+  b.setAttribute('aria-pressed', _uiSoundOn ? 'true' : 'false');
+  b.setAttribute('aria-label', T('ui_sound_aria', 'Interface sounds'));
+}
+function uiSoundToggle() {
+  _uiSoundOn = !_uiSoundOn;
+  try { localStorage.setItem('asb_ui_sound', _uiSoundOn ? '1' : '0'); } catch (e) {}
+  uiSoundPaintBtn();
+  if (_uiSoundOn) uiSound('toggle_on');
+  toast(_uiSoundOn ? T('ui_sound_on', 'Interface sounds on - quiet while music, video or a call is playing')
+                   : T('ui_sound_off', 'Interface sounds off'));
+}
+// One look shortly after the page opens, so the first tap does not play over music (fix145).
+if (_uiSoundOn) setTimeout(function () { try { uiOtherAudioRefresh(); } catch (e) {} }, 1200);
 function uiSound(kind) {
+  if (!_uiSoundOn) return;
+  if (performance.now() - _uiOtherAudioAt > 15000) uiOtherAudioRefresh();
+  if (_uiOtherAudio) return;
+  _uiLastCueAt = performance.now();
   const seq = UI_SONIC[kind] || UI_SONIC.option;
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
@@ -6267,6 +6318,16 @@ function cfgRender() {
 
   const list = _el('cfgList');
   if (!list) return;
+  /* A repaint of the same screen while its entrance is still running waits for it to end
+   * (fix145). Opening a category for the first time starts two reads (capabilities, camera
+   * grade) that repaint when they return - 50-300 ms in, mid-entrance - and every row
+   * vanished and rose again. Coalesced into one paint once the motion is done. */
+  if (!_cfgSearch && (_cfgGroup || 'hub') === _cfgShownScreen && performance.now() < _cfgEnterUntil) {
+    if (!_cfgRepaintTimer) _cfgRepaintTimer = setTimeout(function () {
+      _cfgRepaintTimer = 0; try { cfgRender(); } catch (e) {}
+    }, Math.max(0, _cfgEnterUntil - performance.now()) + 16);
+    return;
+  }
   list.innerHTML = '';
   cfgSyncChrome();
   /* Search across every setting, whichever category it lives in.
@@ -6284,10 +6345,25 @@ function cfgRender() {
    * animating that flickers the whole list under the user's finger. */
   list.classList.remove('cfg-stagger');
   if (_cfgSearch) { cfgRenderMatches(list); return; }
-  list.classList.add('cfg-stagger');
+  /* And only when the SCREEN changes (fix145). Opening Settings painted the hub, slid the
+   * page in, then painted it again with the loaded values - and the six category cards
+   * vanished and rose a second time: "the cards twitch every time I open the page". Every
+   * setting change re-ran the entrance for the whole category the same way. A repaint of
+   * the screen already showing keeps still; hub -> category and back still move. */
+  const _screen = _cfgGroup || 'hub';
+  if (_screen !== _cfgShownScreen) {
+    list.classList.add('cfg-stagger');
+    // .32 s per row, the last delayed .27 s (the .cfg-stagger rules) - and a little slack.
+    _cfgEnterUntil = performance.now() + 650;
+  }
+  _cfgShownScreen = _screen;
   if (!_cfgGroup) { cfgRenderHub(list); return; }
   cfgRenderGroup(list, _cfgGroup);
 }
+// The screen the list last showed ('hub' or a category id); null before the first paint.
+var _cfgShownScreen = null;
+// When the running entrance ends, and the one repaint waiting for it (fix145).
+var _cfgEnterUntil = 0, _cfgRepaintTimer = 0;
 
 function shQuote(v) {
   return "'" + String(v).replace(/'/g, "'\\''") + "'";
@@ -7974,6 +8050,9 @@ function openConfigPage() {
   const p = _el('configPage');
   if (!p) return;
   _cfgGroup = null;   // always open on the hub, never mid-drill from last time
+  /* The slide is this screen's entrance (fix145): the hub painted under it must not rise
+   * on its own as well, and the repaint with loaded values must not run it again. */
+  _cfgShownScreen = 'hub';
   try {
     _el('cfgDeviceLine').textContent = _el('deviceLine').textContent;
     _el('cfgSocBadge').textContent   = _el('socBadge').textContent;
@@ -8038,7 +8117,7 @@ function cfgSyncChrome() {
   const rw = _el('cfgRebootWrap');
   if (rw) rw.style.display = _cfgGroup ? 'none' : '';
   const tr = _el('cfgToolsRow');
-  if (tr) { tr.style.display = _cfgGroup ? 'none' : 'flex'; cfgFillLangs(); }
+  if (tr) { tr.style.display = _cfgGroup ? 'none' : 'flex'; cfgFillLangs(); uiSoundPaintBtn(); }
   /* The back chip only means something inside a category.
    *
    * It used to double as "leave Config entirely", which is why it was always visible. The
