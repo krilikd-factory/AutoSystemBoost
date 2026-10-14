@@ -845,6 +845,8 @@ T_PRIME_CEIL="prime ceiling: %s MHz · %s"
 T_BURST_ON="⚡ burst boost ACTIVE - prime lifted for heavy work (max 20 s)"
 T_BURST_N="burst boosts this session: %s"
 T_BURST_MID="  + middle cluster lifted too (this SoC has more than two clusters)"
+T_UNLOCK_N="unlock lift this session: %s (ceilings raised for %s s after a wake)"
+T_NIGHT_AWAKE="night slot, screen on: leaning no harder than in your evening"
 T_HEADROOM="thermal headroom %s%%"
 T_SENS_OK="temp sensor: verified"
 T_SENS_UNV="temp sensor: unverified"
@@ -917,6 +919,12 @@ T_N_LEAVE_AGGR="leave Wi-Fi: weak, broken or slow - hands over to mobile at once
 T_N_HO_FAST="Wi-Fi → mobile handover: fast (cellular context kept ready while awake)"
 T_N_HO_STORED="Wi-Fi → mobile handover: mobile data is not kept ready (radio controls off) - leaving still works, mobile data takes a few seconds"
 T_N_FB_ACTIVE="Wi-Fi leave watch: %s"
+T_N_FB_WAIT="Wi-Fi leave watch: waiting - Wi-Fi is not carrying the default route (mobile data, or no Wi-Fi)"
+T_N_FB_WATCH="Wi-Fi leave watch: watching · signal %s dBm, leaves below %s dBm"
+T_N_FB_UNVAL="Wi-Fi leave watch: Wi-Fi without internet detected · signal %s dBm"
+T_N_FB_COOL="Wi-Fi leave watch: pause after the last switch, %s min left"
+T_N_FB_REL="Wi-Fi leave watch: Wi-Fi released, %s min left"
+T_N_FB_OFF="Wi-Fi leave watch: off"
 T_N_FB_STORED="Wi-Fi fallback: stored, inactive (radio controls off)"
 T_N_LTE_STOP="LTE while screen off: on · stopped itself - %s"
 T_N_LTE_PARKED="LTE while screen off: on · 5G parked right now"
@@ -1471,6 +1479,10 @@ if [ -n "$_g_state" ]; then
   elif [ "${_pec:-0}" -gt 0 ] 2>/dev/null; then
     _f "       $T_BURST_N" "$_pec"
   fi
+  # Unlock lift (fix150): ceilings raised for a few seconds after each wake.
+  _ull="$(_st unlock_lifts)"
+  _uls="$(_cfg unlock_lift_s)"
+  [ "${_ull:-0}" -gt 0 ] 2>/dev/null && _f "       $T_UNLOCK_N" "$_ull" "${_uls:-3}"
 
   _gl=""
   [ -n "$_g_head" ] && _gl="$(_join "$_gl" "$(_s "$T_HEADROOM" "$_g_head")")"
@@ -1615,6 +1627,8 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
       echo "       ${M_RIGHTNOW}: ${_lean} (${_alpha}/1000)"
       [ -n "$_ib" ] && [ "$_ib" -gt 0 ] 2>/dev/null \
         && echo "         ${M_TOUCH_BOOST} (+${_ib})"
+      # fix150: a night slot with the screen on takes the evening's lean.
+      [ "$(_st smart_night_awake)" = "1" ] && _f "         $T_NIGHT_AWAKE"
     fi
 
     # --- 5. what it is watching in real time -----------------------------------------
@@ -2000,7 +2014,24 @@ esac
 case "$_wleave" in
   weak|unusable|aggressive)
     _hf="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wifi_fallback.sh" status 2>/dev/null || echo unavailable)"
-    _f "       $T_N_FB_ACTIVE" "$_hf" ;;
+    # The watcher's status is an internal token ("waiting_for_wifi_default_route" stood on the
+    # action screen as is, fix150); said in words, the raw token only for something unknown.
+    _hfr="$(printf '%s' "$_hf" | sed -n 's/.*rssi=\(-\{0,1\}[0-9][0-9]*\).*/\1/p')"
+    _hfl="$(printf '%s' "$_hf" | sed -n 's/.*leave_below=\(-\{0,1\}[0-9][0-9]*\).*/\1/p')"
+    _hfu="$(printf '%s' "$_hf" | sed -n 's/^[a-z_]*_until=\([0-9][0-9]*\).*/\1/p')"
+    _hfm=""
+    if [ -n "$_hfu" ]; then
+      _hfm=$(( (_hfu - $(date +%s)) / 60 )); [ "$_hfm" -lt 0 ] 2>/dev/null && _hfm=0
+    fi
+    case "$_hf" in
+      off) _f "       $T_N_FB_OFF" ;;
+      waiting_for_wifi_default_route) _f "       $T_N_FB_WAIT" ;;
+      watching*) _f "       $T_N_FB_WATCH" "${_hfr:-?}" "${_hfl:-?}" ;;
+      unvalidated_wifi_default_detected*) _f "       $T_N_FB_UNVAL" "${_hfr:-?}" ;;
+      cooldown_until=*) _f "       $T_N_FB_COOL" "${_hfm:-?}" ;;
+      releasing_wifi_until=*) _f "       $T_N_FB_REL" "${_hfm:-?}" ;;
+      *) _f "       $T_N_FB_ACTIVE" "$_hf" ;;
+    esac ;;
 esac
 # 5G only when needed (net_lte_light, fix114): what the screen-on watcher decided.
 if [ "$(_cfg net_lte_light)" = "1" ]; then
