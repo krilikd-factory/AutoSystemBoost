@@ -611,6 +611,28 @@ asb_migrate_governor_conf
         _att_how="linker64"
       fi
       echo "ts=$(date +%s) action=dsp_attach_started via=$_att_how" >> /data/adb/asb/vendor_mounts.log 2>/dev/null
+      # Whether the audio HAL loaded the library this boot, and if not, what it logged
+      # (fix145). PLQ110 on the fix139 aidl_v2 build: "library mapped into the audio HAL:
+      # absent" where the previous build had loaded - and by the time asbdiag ran, the boot
+      # log holding the dlopen error had rotated away. One look a minute in, kept in a small
+      # file asbdiag prints; with the library mapped the file is removed and nothing is kept.
+      ( exec </dev/null >/dev/null 2>&1
+        sleep 45
+        _dlc=/data/adb/asb/dsp_load_check.txt
+        rm -f "$_dlc" 2>/dev/null
+        [ -f /vendor/lib64/soundfx/libasbdsp.so ] || exit 0
+        _dlp=""
+        for _dlh in audiohalservice.qti android.hardware.audio.service android.hardware.audio.service_64 \
+                    vendor.audio-hal vendor.audio-hal-aidl android.hardware.audio.service.qti; do
+          _dlp="$(pidof "$_dlh" 2>/dev/null | awk '{print $1}')"
+          [ -n "$_dlp" ] && break
+        done
+        [ -n "$_dlp" ] || exit 0
+        grep -q 'libasbdsp' "/proc/$_dlp/maps" 2>/dev/null && exit 0
+        { echo "$(date '+%Y-%m-%d %H:%M:%S') $_dlh (pid $_dlp) has not loaded libasbdsp.so - ABI $(cat "$MODDIR/dsp_abi_installed" 2>/dev/null), $(ls -l /vendor/lib64/soundfx/libasbdsp.so 2>/dev/null | awk '{print $5}') bytes"
+          logcat -d -b main,system,crash 2>/dev/null | grep -iE 'asbdsp|ASB Loudness' | tail -n 12 | cut -c1-240
+        } > "$_dlc.tmp" 2>/dev/null && mv -f "$_dlc.tmp" "$_dlc" 2>/dev/null
+      ) &
       # Publish the DSP properties the effect reads.
       #
       # "mirror" only republishes what the property store already holds, and that is the right
