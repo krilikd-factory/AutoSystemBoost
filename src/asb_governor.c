@@ -7239,20 +7239,28 @@ int main(int argc, char **argv) {
                 timerfd_drain(fd);
                 g_governor_timer_wakeups++;
                 g_wake_by_src[ASB_WAKE_HOURLY]++;
-                float avg_drain = 0, avg_screen = 0;
-                if (accum.drain_count > 0) {
-                    avg_drain  = accum.drain_sum / accum.drain_count;
-                    avg_screen = accum.total_ticks > 0
-                                 ? (float)accum.screen_on_ticks / accum.total_ticks
-                                 : 0.0f;
+                float avg_drain = -1.0f, avg_screen = 0;
+                /* An hour on the charger has screen ticks but no drain sample (fix148): the
+                 * screen share is still learned, the drain is left as it was. */
+                if (accum.total_ticks > 0) {
+                    if (accum.drain_count > 0) avg_drain = accum.drain_sum / accum.drain_count;
+                    avg_screen = (float)accum.screen_on_ticks / accum.total_ticks;
                     learner_update(&learn, avg_drain, avg_screen);
                     cur_pred = learner_predict(&learn);
                     learner_adjust_windows(&learn,
                                           &fsm.up_window, &fsm.down_window);
-                    if (g_asb_cfg.log_level >= 1) asb_log("learner updated: drain=%.1fmA screen=%.0f%% "
-                            "predict=%d windows=%d/%d",
-                            avg_drain, avg_screen * 100,
-                            cur_pred, fsm.up_window, fsm.down_window);
+                    if (g_asb_cfg.log_level >= 1) {
+                        if (avg_drain >= 0)
+                            asb_log("learner updated: drain=%.1fmA screen=%.0f%% "
+                                    "predict=%d windows=%d/%d",
+                                    avg_drain, avg_screen * 100,
+                                    cur_pred, fsm.up_window, fsm.down_window);
+                        else
+                            asb_log("learner updated: drain=n/a (on the charger) screen=%.0f%% "
+                                    "predict=%d windows=%d/%d",
+                                    avg_screen * 100,
+                                    cur_pred, fsm.up_window, fsm.down_window);
+                    }
                     accum.drain_sum       = 0;
                     accum.drain_count     = 0;
                     accum.screen_on_ticks = 0;
@@ -8257,7 +8265,7 @@ int main(int argc, char **argv) {
 
             float dummy_drain, dummy_screen;
             if (accum_tick(&accum,
-                           metrics.bat.current_ma,
+                           metrics.bat.charging ? -1 : metrics.bat.current_ma,
                            metrics.misc.screen_on,
                            &dummy_drain, &dummy_screen)) {
                 learner_update(&learn, dummy_drain, dummy_screen);

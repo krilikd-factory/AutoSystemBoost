@@ -125,13 +125,15 @@ static void learner_update(asb_learn_db_t *db,
     int slot = learner_slot();
     asb_slot_t *s = &db->slots[slot];
 
+    /* drain_ma_avg < 0: no drain sample in the hour (on the charger) - keep the drain. */
     if (s->samples == 0) {
-        s->drain_ma_ema  = drain_ma_avg;
+        if (drain_ma_avg >= 0) s->drain_ma_ema = drain_ma_avg;
         s->screen_on_ema = screen_on_frac;
     } else {
         float alpha = LEARN_ALPHA;
         if (s->samples > 20) alpha = 0.08f;
-        s->drain_ma_ema  = alpha * drain_ma_avg  + (1 - alpha) * s->drain_ma_ema;
+        if (drain_ma_avg >= 0)
+            s->drain_ma_ema = alpha * drain_ma_avg + (1 - alpha) * s->drain_ma_ema;
         s->screen_on_ema = alpha * screen_on_frac + (1 - alpha) * s->screen_on_ema;
     }
     if (s->samples < 0xFFFFFFFF) s->samples++;
@@ -200,23 +202,24 @@ static void accum_init(asb_accum_t *a) {
 static int accum_tick(asb_accum_t *a, int drain_ma, int screen_on,
                       float *out_drain, float *out_screen)
 {
-    a->drain_sum     += (float)drain_ma;
-    a->drain_count++;
+    /* A negative reading is "not a drain sample" - the phone is on the charger (fix148).
+     * The caller passed the current's magnitude whatever its direction, so the hours of a
+     * charge were learned as drain: CPH2769's log read "learner updated: drain=2317.0mA
+     * screen=0%" for an hour spent charging at 3.4 A. */
+    if (drain_ma >= 0) {
+        a->drain_sum     += (float)drain_ma;
+        a->drain_count++;
+    }
     if (screen_on) a->screen_on_ticks++;
     a->total_ticks++;
 
     time_t t = time(NULL);
     int hour = localtime(&t)->tm_hour;
     if (hour != a->last_hour) {
-        if (a->drain_count > 0) {
-            *out_drain  = a->drain_sum / a->drain_count;
-            *out_screen = (a->total_ticks > 0)
-                          ? (float)a->screen_on_ticks / a->total_ticks
-                          : 0.0f;
-        } else {
-            *out_drain  = 0.0f;
-            *out_screen = 0.0f;
-        }
+        *out_drain  = (a->drain_count > 0) ? a->drain_sum / a->drain_count : -1.0f;
+        *out_screen = (a->total_ticks > 0)
+                      ? (float)a->screen_on_ticks / a->total_ticks
+                      : 0.0f;
         a->drain_sum        = 0;
         a->drain_count      = 0;
         a->screen_on_ticks  = 0;

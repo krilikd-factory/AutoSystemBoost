@@ -387,11 +387,16 @@ static void metrics_read_battery(asb_battery_t *b) {
      *
      * "Full" was also read as not charging, though it means plugged in with a full battery.
      *
-     * Order: an explicit status wins (Charging/Full -> 1, Discharging/Not charging -> 0);
-     * only when the driver says nothing useful are the supplies asked directly. A device
-     * with neither keeps the old result, 0, so nothing regresses. */
+     * Order: an explicit status wins (Charging/Full -> 1, Discharging -> 0); only when the
+     * driver says nothing useful are the supplies asked directly. A device with neither
+     * keeps the old result, 0, so nothing regresses.
+     *
+     * "Not charging" asks the supplies too (fix148): it is what OnePlus battery protection
+     * reports while it parks the level at 80% with the cable in. Read as "on battery", a
+     * CPH2769 night held at 80% for 209 minutes at 0 mA was a screen-off window with no
+     * drain - the off-screen learner averages exactly such windows into its idle figure. */
     if (st[0] == 'C' || st[0] == 'F')      b->charging = 1;
-    else if (st[0] == 'D' || st[0] == 'N') b->charging = 0;
+    else if (st[0] == 'D')                 b->charging = 0;
     else                                   b->charging = asb_supply_online();
 }
 
