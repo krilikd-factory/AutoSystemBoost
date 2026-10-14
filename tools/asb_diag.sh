@@ -799,7 +799,10 @@ if [ -r "$_state" ]; then
     # "prime" put a mid-core number next to the word prime.
     _sp2="$(_rget slot_policy_ids "$_state" | cut -d, -f3)"
     case "$_sp2" in ''|-1) _s1n="prime" ;; *) _s1n="mid" ;; esac
-    P "  cap desired/effective : little $_dw0 -> $_ew0 kHz, $_s1n $_dwp -> $_ewp kHz"
+    # Slot 0 is the six main cores on a 6+2 part (OP15/OP13) and the little cluster only on a
+    # 3+ cluster one (fix150: "little 1996800" on an OP15 named the cores that run the UI).
+    _s0n="little"; [ "$_s1n" = "prime" ] && _s0n="main"
+    P "  cap desired/effective : $_s0n $_dw0 -> $_ew0 kHz, $_s1n $_dwp -> $_ewp kHz"
     # The prime itself on 3+ cluster parts (fix126) - slot 1 above is a middle cluster there.
     if [ "$_s1n" = "mid" ]; then
       _dpp="$(_rget desired_cpu_max_prime "$_state")"; _epp="$(_rget effective_cpu_max_prime "$_state")"
@@ -809,7 +812,7 @@ if [ -r "$_state" ]; then
     # ceiling ASB did not write; live equal to it but below "desired" is ASB's own trim.
     _rq0="$(_rget requested_cpu_max0 "$_state")"; _rqp="$(_rget requested_cpu_max_prime "$_state")"
     case "$_rq0$_rqp" in ''|*[!0-9]*) : ;; *)
-      P "  cap written by ASB    : little $_rq0 kHz, prime $_rqp kHz (after the thermal budget; 0 = not written yet)" ;;
+      P "  cap written by ASB    : $_s0n $_rq0 kHz, prime $_rqp kHz (after the thermal budget; 0 = not written yet)" ;;
     esac
     if [ "$_ew0" -lt "$_dw0" ] 2>/dev/null; then
       # "desired" is the rail before ASB's own thermal budget. When the live ceiling equals
@@ -817,7 +820,7 @@ if [ -r "$_state" ]; then
       # blamed the vendor for ASB's own surface-comfort trim (1670400 -> 1555200).
       _rqa="$(_rget requested_cpu_max0 "$_state")"
       if [ -n "$_rqa" ] && [ "$_rqa" = "$_ew0" ] 2>/dev/null; then
-        P "    (little: ASB's own thermal-budget trim - the live ceiling is what ASB wrote)"
+        P "    ($_s0n: ASB's own thermal-budget trim - the live ceiling is what ASB wrote)"
       else
         P "    (hardware is stricter than ASB asked - vendor or thermal owns the cap)"
       fi
@@ -982,6 +985,27 @@ if [ -r "$_state" ]; then
       NOTE "  burst scope: prime + middle cluster (${_pcl} clusters)$([ "$(grep -m1 '^prime_escape_mid=' /dev/.asb/state 2>/dev/null | cut -d= -f2)" = 1 ] && echo ' · mid lifted now')"
     else
       NOTE "  burst scope: big cluster (${_pcl:-?} clusters)"
+    fi
+  fi
+  # Unlock lift (fix150): ceilings lifted for a few seconds after a wake and at the first
+  # touch after it. Counts, not a judgement - the jank line of a capture says whether it helps.
+  _ull="$(_rget unlock_lifts /dev/.asb/state 2>/dev/null)"
+  if [ -n "$_ull" ]; then
+    _uls="$(_rget unlock_lift_skips /dev/.asb/state 2>/dev/null)"
+    _ulw="$(_rget unlock_lift_skip_why /dev/.asb/state 2>/dev/null)"
+    _ulsec="$(cfg unlock_lift_s)"
+    case "$_ulw" in
+      off) _ulwt="unlock_lift_s=0" ;;
+      profile) _ulwt="not Smart - the shell owns the ceilings in this profile" ;;
+      thermal) _ulwt="thermal cap in force" ;;
+      warm) _ulwt="die at or above bat_comfort_temp" ;;
+      *) _ulwt="${_ulw:--}" ;;
+    esac
+    if [ "${_ulsec:-3}" = 0 ]; then
+      NOTE "unlock lift: off (unlock_lift_s=0)"
+    else
+      NOTE "unlock lift: $([ "$(_rget unlock_lift /dev/.asb/state 2>/dev/null)" = 1 ] && echo 'ACTIVE now' || echo idle) · ${_ull} lift(s) this session (wakes + first touches) · ceilings to $(cfg unlock_lift_pct)% of hardware max for ${_ulsec:-3} s"
+      [ "${_uls:-0}" -gt 0 ] 2>/dev/null && NOTE "  wakes not lifted: ${_uls} (last: ${_ulwt})"
     fi
   fi
   # Which cluster looks bigger to the scheduler right now (fix130). Work goes where the
@@ -2307,6 +2331,17 @@ case "$_vr" in
   5) NOTE "thermal veto: ON - recovery window" ;;
 esac
 NOTE "bucket avg temp = ${_sb_t:-0} (tenths C)  ·  avg drain = ${_sb_d:-0} (tenths %/h)"
+# Night slot with the screen on (fix150): the evening's lean replaces the night seed.
+_sna="$(_rget smart_night_awake /dev/.asb/state 2>/dev/null)"
+if [ "$_sna" = 1 ]; then
+  _snf="$(_rget smart_night_awake_from /dev/.asb/state 2>/dev/null)"
+  _snt="$(_rget smart_night_awake_to /dev/.asb/state 2>/dev/null)"
+  if [ -n "$_snf" ] && [ "$_snf" != "$_snt" ]; then
+    NOTE "night slot, screen on: leaning like your evening slot - learned lean $_snt instead of the night slot's $_snf, before your bias and the safety layers (smart_night_awake=$(cfg smart_night_awake))"
+  else
+    NOTE "night slot, screen on: the evening slot's touch bonus applies (the lean itself is no harder than the evening's; smart_night_awake=$(cfg smart_night_awake))"
+  fi
+fi
 _tw="$(grep -m1 '^smart_therm_warm_x10=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 _tc="$(grep -m1 '^smart_therm_cool_x10=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 # Learned from this device's own median, not hardcoded - a OnePlus 12 and a 15 idle at
