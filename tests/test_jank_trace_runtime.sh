@@ -71,7 +71,8 @@ out="$(LK_OUT_DIR="$T/out" ASB_LK_CPUFREQ_ROOT="$T/cpufreq" sh -c '
   ASB_LK_STATE_FILE="$T/state2" ASB_LK_GFXSTATS_DUMP="$T/g2" lk_capture_jank_row active 1
   ASB_LK_STATE_FILE="$T/state3" ASB_LK_GFXSTATS_DUMP="$T/g3" lk_capture_jank_row audio_bt_scr 1
   ASB_LK_STATE_FILE="$T/state3" ASB_LK_GFXSTATS_DUMP="$T/g4" lk_capture_jank_row audio_bt_scr 1
-  # Screen off resets the baseline: the next screen-on poll writes no row.
+  # Screen off keeps the last screen-on baseline (fix150); this wake went backwards against
+  # it (a pruned day), so the first screen-on poll after it writes no row.
   ASB_LK_STATE_FILE="$T/state3" ASB_LK_GFXSTATS_DUMP="$T/g4" lk_capture_jank_row idle 0
   ASB_LK_STATE_FILE="$T/state3" ASB_LK_GFXSTATS_DUMP="$T/g1" lk_capture_jank_row active 1
   echo "--- trace"; cat "$LK_OUT_DIR/jank_trace.tsv"
@@ -89,6 +90,39 @@ r2="$(printf '%s\n' "$out" | grep '|audio_bt_scr|' | head -1)"
 printf '%s\n' "$out" | grep -q 'all screen-on intervals: 2  frames 2200  janky 4.9%' || f "overall janky share wrong: $out"
 printf '%s\n' "$out" | grep -qE '^MODERATE +1 +2000 +5.3%' || f "per-state line wrong: $out"
 printf '%s\n' "$out" | grep -q 'main cores at the ASB ceiling (end of interval): yes 4.9% of 2200 frames' || f "ceiling correlation missing: $out"
+
+# fix150: the wake itself. The last screen-on baseline survives the screen-off stretch and the
+# first screen-on poll after it writes one row marked "wake" (column 18); the report keeps
+# those rows apart - their seconds are mostly screen-off.
+mkdir -p "$T/outw"
+outw="$(LK_OUT_DIR="$T/outw" ASB_LK_CPUFREQ_ROOT="$T/cpufreq" sh -c '
+  . "$0" >/dev/null 2>&1
+  T="$1"
+  lk_jank_trace_header
+  ASB_LK_STATE_FILE="$T/state1" ASB_LK_GFXSTATS_DUMP="$T/g1" lk_capture_jank_row active 1
+  ASB_LK_STATE_FILE="$T/state2" ASB_LK_GFXSTATS_DUMP="$T/g2" lk_capture_jank_row active 1
+  ASB_LK_STATE_FILE="$T/state3" ASB_LK_GFXSTATS_DUMP="$T/g2" lk_capture_jank_row idle 0
+  ASB_LK_STATE_FILE="$T/state3" ASB_LK_GFXSTATS_DUMP="$T/g2" lk_capture_jank_row idle 0
+  ASB_LK_STATE_FILE="$T/state2" ASB_LK_GFXSTATS_DUMP="$T/g3" lk_capture_jank_row post_wake 1
+  ASB_LK_STATE_FILE="$T/state2" ASB_LK_GFXSTATS_DUMP="$T/g3" lk_capture_jank_row post_wake 1
+  echo "--- trace"; grep -v "^#" "$LK_OUT_DIR/jank_trace.tsv"
+  echo "--- report"; lk_emit_jank_summary
+' "$C" "$T" 2>&1)"
+rw="$(printf '%s\n' "$outw" | grep '|wake$')"
+[ "$(printf '%s\n' "$rw" | grep -c .)" = 1 ] || f "expected one wake row: $outw"
+[ "$(printf '%s' "$rw" | cut -d'|' -f3-4)" = "post_wake|MODERATE" ] || f "wake row phase/state: $rw"
+[ "$(printf '%s' "$rw" | cut -d'|' -f6-10)" = "-|-|0|200|2" ] || f "wake row deltas (against the last screen-on poll): $rw"
+case "$(printf '%s' "$rw" | cut -d'|' -f17)" in
+  "com.android.systemui:1:100,com.google.android.youtube:1:100"|"com.google.android.youtube:1:100,com.android.systemui:1:100") : ;;
+  *) f "wake row apps: $rw" ;;
+esac
+[ "$(printf '%s\n' "$outw" | sed -n '/^--- trace/,/^--- report/p' | grep -c '|')" = 3 ] || f "wake must not replace the ordinary rows: $outw"
+printf '%s\n' "$outw" | grep -q 'all screen-on intervals: 2  frames 2000  janky 5.3%' || f "a wake row leaked into the ordinary figures: $outw"
+printf '%s\n' "$outw" | grep -q 'the wake itself: 1 wake(s), last screen-on poll before each to the first after it - frames 200, janky 1.0% (ordinary screen-on intervals: 5.3%)' \
+  || f "wake summary missing: $outw"
+printf '%s\n' "$outw" | grep -q '  at the wakes, by app: com.android.systemui 1 of 100 janky (1.0%), com.google.android.youtube 1 of 100 janky (1.0%)' \
+  || printf '%s\n' "$outw" | grep -q '  at the wakes, by app: com.google.android.youtube 1 of 100 janky (1.0%), com.android.systemui 1 of 100 janky (1.0%)' \
+  || f "wake apps missing: $outw"
 
 # fix125: time at the ceiling from time_in_state, and the app in front from the top-app cgroup.
 mkdir -p "$T/cpufreq/policy0/stats" "$T/cpufreq/policy6/stats" "$T/proc/2001" "$T/proc/1000" "$T/out2"

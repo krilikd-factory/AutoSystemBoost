@@ -19,7 +19,8 @@ CC=""; for c in gcc clang cc; do command -v "$c" >/dev/null 2>&1 && { CC="$c"; b
 [ -n "$CC" ] || { echo "SKIP main capacity parity: no C compiler"; exit 0; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 
-sed -n '/^static int g_parity_cap0 = -2;/,/^static void asb_apply_adaptive_budget_caps(/p' "$G" \
+# Up to the next block (the fix150 unlock lift sits between parity and the budget caps).
+sed -n '/^static int g_parity_cap0 = -2;/,/^\/\* Unlock lift (fix150)\./p' "$G" \
   | sed '$d' > "$T/p.c"
 grep -q 'asb_main_capacity_parity' "$T/p.c" || fail "parity block not found"
 grep -q '    asb_main_capacity_parity(caps, m, fsm, trim);' "$G" || fail "parity not applied with the budget caps"

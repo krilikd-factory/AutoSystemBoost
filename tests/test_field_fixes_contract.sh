@@ -590,7 +590,7 @@ grep -q 'screen_off_detect=\\"uevent:%lu,display:%lu,tick:%lu\\"' "$G" || fail "
 grep -q 'asb_log("screen OFF (Android display state)")' "$G" || fail "waiter screen-off still logged as a tick"
 D="$ROOT/tools/asb_diag.sh"
 grep -q 'lifted to the race-to-idle floor (40% of hardware max)' "$D" || fail "asbdiag prime ceiling ignores the floor"
-grep -q "little: ASB's own thermal-budget trim" "$D" || fail "asbdiag blames the vendor for ASB's own trim"
+grep -q "_s0n: ASB's own thermal-budget trim" "$D" || fail "asbdiag blames the vendor for ASB's own trim"
 grep -q 'screen-off noticed by:' "$D" || fail "asbdiag does not show screen-off sources"
 cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 grep -q '|main_by=${_mb}|prime_by=${_pb}"' "$ROOT/tools/logkit/asb_log_full_day.sh" || fail "throttle rows carry no cause"
@@ -906,7 +906,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 fail() { echo "FAIL fix143: $*"; exit 1; }
 C="$ROOT/tools/logkit/_asb_logkit_common.sh"; F="$ROOT/tools/logkit/asb_log_full_day.sh"
 grep -q '^lk_gfx_pkg_delta() {' "$C" || fail "jank trace does not record which app drew the janky frames"
-grep -q '|fg_pkg|jank_pkgs"' "$C" || fail "jank trace header lacks column 17"
+grep -q '|fg_pkg|jank_pkgs|wake"' "$C" || fail "jank trace header lacks column 17"
 grep -q 'steady floor: %.2f janky frames a second' "$C" || fail "report does not tell a steady floor from lag"
 grep -q 'printf "%-16s %9s %9s %8s %8s\\n", "ASB state", "intervals", "frames", "janky", "janky/s"' "$C" || fail "state table without janky/s"
 grep -q '^asb_gfx_run_delta() {' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not measure frames per app while it runs"
@@ -1004,5 +1004,22 @@ grep -q 'metrics.bat.charging ? -1 : metrics.bat.current_ma' "$ROOT/src/asb_gove
 grep -q "tr '\\\\n' ',' | sed 's/,\$//') fps video" "$ROOT/runtime/asb_ltpo_video.sh" || fail "LTPO log line breaks on two rates"
 for t in test_wifi_default_vpn_runtime.sh test_learner_charging_runtime.sh; do [ -f "$ROOT/tests/$t" ] || fail "$t missing"; done
 echo "PASS: fix149 contract"
+) || exit 1
+# ---- fix150 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix150: $*"; exit 1; }
+G="$ROOT/src/asb_governor.c"; C="$ROOT/tools/logkit/_asb_logkit_common.sh"; D="$ROOT/tools/asb_diag.sh"
+grep -q '^static int asb_unlock_lift_update(int screen_on, int touch_kick, long now_ms, int profile_idx,$' "$G" || fail "no unlock lift"
+grep -q '^static void asb_smart_night_awake(int screen_on, int daypart, int is_weekend, time_t now) {$' "$G" || fail "no night-awake lean"
+grep -q '^unlock_lift_s=3$' "$ROOT/config/governor.conf" && grep -q '^smart_night_awake=1$' "$ROOT/config/governor.conf" || fail "not shipped on"
+cmp -s "$ROOT/config/governor.conf" "$ROOT/config/governor.conf.shipped" || fail "shipped governor.conf differs"
+grep -q 'NF >= 18 && $18 == "wake" {' "$C" || fail "wake rows mixed into the ordinary jank figures"
+grep -q '"wake" >> "$LK_OUT_DIR/jank_trace.tsv"' "$C" || fail "the wake itself is still in no row"
+grep -q '_s0n="little"; \[ "$_s1n" = "prime" \] && _s0n="main"' "$D" || fail "asbdiag cap line calls the main cores little"
+grep -q 'waiting_for_wifi_default_route) _f "       $T_N_FB_WAIT" ;;' "$ROOT/action.sh" || fail "action screen prints the watcher's raw token"
+for t in test_unlock_lift_runtime.sh test_smart_night_awake_runtime.sh; do [ -f "$ROOT/tests/$t" ] || fail "$t missing"; done
+cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix150 contract"
 ) || exit 1
 echo "PASS: field-fix contracts"
