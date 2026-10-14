@@ -911,5 +911,8 @@
   "cfg_res_reboot_btn": "Reiniciar",
   "cfg_res_done": "Listo",
   "cfg_res_autoclose": "Se cierra en %s s",
-  "cfg_res_opened_banner": "Archivo comprobado y añadido: %s. Aún no aplicado — pulse «Aplicar configuración guardada»."
+  "cfg_res_opened_banner": "Archivo comprobado y añadido: %s. Aún no aplicado — pulse «Aplicar configuración guardada».",
+  "ui_sound_aria": "Sonidos de la interfaz",
+  "ui_sound_on": "Sonidos de la interfaz activados: callan mientras suena música, un vídeo o una llamada",
+  "ui_sound_off": "Sonidos de la interfaz desactivados"
 }

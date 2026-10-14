@@ -702,5 +702,8 @@
   "cfg_res_reboot_btn": "Reboot",
   "cfg_res_done": "Done",
   "cfg_res_autoclose": "Closes in %s s",
-  "cfg_res_opened_banner": "File checked and added: %s. Not applied yet — press “Apply saved configuration”."
+  "cfg_res_opened_banner": "File checked and added: %s. Not applied yet — press “Apply saved configuration”.",
+  "ui_sound_aria": "Interface sounds",
+  "ui_sound_on": "Interface sounds on - quiet while music, video or a call is playing",
+  "ui_sound_off": "Interface sounds off"
 }

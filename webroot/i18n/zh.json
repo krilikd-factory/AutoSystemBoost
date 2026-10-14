@@ -911,5 +911,8 @@
   "cfg_res_reboot_btn": "重启",
   "cfg_res_done": "完成",
   "cfg_res_autoclose": "%s 秒后关闭",
-  "cfg_res_opened_banner": "文件已校验并添加：%s。尚未应用 — 请点击“应用已保存的配置”。"
+  "cfg_res_opened_banner": "文件已校验并添加：%s。尚未应用 — 请点击“应用已保存的配置”。",
+  "ui_sound_aria": "界面音效",
+  "ui_sound_on": "界面音效已开启 - 播放音乐、视频或通话时保持静音",
+  "ui_sound_off": "界面音效已关闭"
 }

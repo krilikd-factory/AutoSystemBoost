@@ -911,5 +911,8 @@
   "cfg_res_reboot_btn": "Redémarrer",
   "cfg_res_done": "Terminé",
   "cfg_res_autoclose": "Fermeture dans %s s",
-  "cfg_res_opened_banner": "Fichier vérifié et ajouté : %s. Pas encore appliqué — appuyez sur « Appliquer la configuration enregistrée »."
+  "cfg_res_opened_banner": "Fichier vérifié et ajouté : %s. Pas encore appliqué — appuyez sur « Appliquer la configuration enregistrée ».",
+  "ui_sound_aria": "Sons de l'interface",
+  "ui_sound_on": "Sons de l'interface activés - silencieux pendant la musique, une vidéo ou un appel",
+  "ui_sound_off": "Sons de l'interface désactivés"
 }

@@ -911,5 +911,8 @@
   "cfg_res_reboot_btn": "Riavvia",
   "cfg_res_done": "Fatto",
   "cfg_res_autoclose": "Si chiude tra %s s",
-  "cfg_res_opened_banner": "File verificato e aggiunto: %s. Non ancora applicato — premi «Applica configurazione salvata»."
+  "cfg_res_opened_banner": "File verificato e aggiunto: %s. Non ancora applicato — premi «Applica configurazione salvata».",
+  "ui_sound_aria": "Suoni dell'interfaccia",
+  "ui_sound_on": "Suoni dell'interfaccia attivi - tacciono mentre suona musica, un video o una chiamata",
+  "ui_sound_off": "Suoni dell'interfaccia disattivati"
 }

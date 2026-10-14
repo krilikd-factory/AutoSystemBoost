@@ -911,5 +911,8 @@
   "cfg_res_reboot_btn": "Reiniciar",
   "cfg_res_done": "Concluído",
   "cfg_res_autoclose": "Fecha em %s s",
-  "cfg_res_opened_banner": "Ficheiro verificado e adicionado: %s. Ainda não aplicado — toque em «Aplicar configuração guardada»."
+  "cfg_res_opened_banner": "Ficheiro verificado e adicionado: %s. Ainda não aplicado — toque em «Aplicar configuração guardada».",
+  "ui_sound_aria": "Sons da interface",
+  "ui_sound_on": "Sons da interface ligados - ficam em silêncio enquanto toca música, vídeo ou uma chamada",
+  "ui_sound_off": "Sons da interface desligados"
 }

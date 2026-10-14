@@ -911,5 +911,8 @@
   "cfg_res_reboot_btn": "Neustart",
   "cfg_res_done": "Fertig",
   "cfg_res_autoclose": "Schließt in %s s",
-  "cfg_res_opened_banner": "Datei geprüft und hinzugefügt: %s. Noch nicht angewendet — tippen Sie auf „Gespeicherte Konfiguration anwenden“."
+  "cfg_res_opened_banner": "Datei geprüft und hinzugefügt: %s. Noch nicht angewendet — tippen Sie auf „Gespeicherte Konfiguration anwenden“.",
+  "ui_sound_aria": "Oberflächentöne",
+  "ui_sound_on": "Oberflächentöne an - still, solange Musik, ein Video oder ein Anruf läuft",
+  "ui_sound_off": "Oberflächentöne aus"
 }

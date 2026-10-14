@@ -911,5 +911,8 @@
   "cfg_res_reboot_btn": "Yeniden başlat",
   "cfg_res_done": "Tamam",
   "cfg_res_autoclose": "%s sn içinde kapanır",
-  "cfg_res_opened_banner": "Dosya kontrol edildi ve eklendi: %s. Henüz uygulanmadı — “Kaydedilmiş yapılandırmayı uygula”ya dokunun."
+  "cfg_res_opened_banner": "Dosya kontrol edildi ve eklendi: %s. Henüz uygulanmadı — “Kaydedilmiş yapılandırmayı uygula”ya dokunun.",
+  "ui_sound_aria": "Arayüz sesleri",
+  "ui_sound_on": "Arayüz sesleri açık - müzik, video veya arama sürerken susar",
+  "ui_sound_off": "Arayüz sesleri kapalı"
 }

@@ -911,5 +911,8 @@
   "cfg_res_reboot_btn": "Mulai ulang",
   "cfg_res_done": "Selesai",
   "cfg_res_autoclose": "Menutup dalam %s dtk",
-  "cfg_res_opened_banner": "File diperiksa dan ditambahkan: %s. Belum diterapkan — tekan “Terapkan konfigurasi tersimpan”."
+  "cfg_res_opened_banner": "File diperiksa dan ditambahkan: %s. Belum diterapkan — tekan “Terapkan konfigurasi tersimpan”.",
+  "ui_sound_aria": "Suara antarmuka",
+  "ui_sound_on": "Suara antarmuka aktif - diam saat musik, video, atau panggilan berjalan",
+  "ui_sound_off": "Suara antarmuka nonaktif"
 }
