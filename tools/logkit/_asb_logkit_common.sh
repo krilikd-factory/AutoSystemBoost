@@ -904,7 +904,8 @@ lk_capture_display_trace_row() {
 lk_jank_trace_header() {
   {
     echo "# UI smoothness - one row per screen-on poll interval; HWUI frames of every app (dumpsys graphicsstats deltas)"
-    echo "# epoch|iso_time|phase|fsm_state|interval_s|main_at_cap|prime_at_cap|touches|frames|janky|deadline_missed|slow_ui|high_input|main_cap_pct|prime_cap_pct|fg_pkg|jank_pkgs"
+    echo "# epoch|iso_time|phase|fsm_state|interval_s|main_at_cap|prime_at_cap|touches|frames|janky|deadline_missed|slow_ui|high_input|main_cap_pct|prime_cap_pct|fg_pkg|jank_pkgs|wake"
+    echo "# wake (column 18): the row spans a screen-off stretch - last screen-on poll before it to the first after it (fix150)"
   } > "$LK_OUT_DIR/jank_trace.tsv"
   lk_cluster_layout_write
 }
@@ -1039,16 +1040,46 @@ lk_policy_at_cap() {
 }
 
 # $1 = phase, $2 = 1 when the screen is on (the display row's wakefulness read).
+# The wake itself (fix150). A screen-off poll used to drop the baseline, so the first
+# screen-on poll after a wake only set a new one: the unlock, the lock-screen swipe and the
+# first seconds of use - up to a poll interval - were in no row at all. Capture 28442 had
+# "slideshow at unlock" reports and not one frame of an unlock to look at. The last screen-on
+# baseline is now kept through the screen-off stretch, and the first screen-on poll after it
+# writes one row marked "wake" in column 18: from the last poll before the screen went off to
+# the first after it came on. The summary reports those rows apart from the ordinary ones.
 lk_capture_jank_row() {
   _jph="$1"
   if [ "${2:-0}" != 1 ]; then
+    if [ -n "${LK_JANK_PREV:-}" ]; then
+      LK_JANK_OFF="$LK_JANK_PREV"; LK_JANK_OFF_TS="${LK_JANK_PREV_TS:-0}"; LK_JANK_OFF_TOUCH="${LK_JANK_PREV_TOUCH:-}"
+      mv -f "$LK_OUT_DIR/.jank_pkg_prev" "$LK_OUT_DIR/.jank_pkg_off" 2>/dev/null || rm -f "$LK_OUT_DIR/.jank_pkg_off" 2>/dev/null
+    fi
     LK_JANK_PREV=""; rm -f "$LK_OUT_DIR/.jank_tis_lo" "$LK_OUT_DIR/.jank_tis_hi" "$LK_OUT_DIR/.jank_pkg_prev" 2>/dev/null; return 0
   fi
   _jt="$(lk_gfx_totals "$LK_OUT_DIR/.jank_pkg_now")"
-  if [ -z "$_jt" ]; then LK_JANK_PREV=""; rm -f "$LK_OUT_DIR/.jank_pkg_prev" 2>/dev/null; return 0; fi
+  if [ -z "$_jt" ]; then LK_JANK_PREV=""; LK_JANK_OFF=""; rm -f "$LK_OUT_DIR/.jank_pkg_prev" "$LK_OUT_DIR/.jank_pkg_off" 2>/dev/null; return 0; fi
   _jnow="$(date +%s)"
   _jst="$(lk_state_kv state)"; [ -n "$_jst" ] || _jst="-"
   _jtc="$(lk_state_kv touch_starts | tr -dc '0-9')"
+  if [ -z "${LK_JANK_PREV:-}" ] && [ -n "${LK_JANK_OFF:-}" ]; then
+    _jwg=$(( _jnow - ${LK_JANK_OFF_TS:-0} ))
+    if [ "$_jwg" -ge 0 ] && [ "$_jwg" -le "${ASB_LK_JANK_WAKE_MAX_S:-14400}" ]; then
+      set -- $LK_JANK_OFF; _pf=$1; _pj=$2; _pd=$3; _pu=$4; _pi=$5
+      set -- $_jt;         _cf=$1; _cj=$2; _cd=$3; _cu=$4; _ci=$5
+      _df=$(( _cf - _pf )); _dj=$(( _cj - _pj )); _dd=$(( _cd - _pd ))
+      _du=$(( _cu - _pu )); _di=$(( _ci - _pi ))
+      if [ "$_df" -ge 0 ] && [ "$_dj" -ge 0 ] && [ "$_dd" -ge 0 ] && [ "$_du" -ge 0 ] && [ "$_di" -ge 0 ]; then
+        _jto="-"
+        [ -n "$_jtc" ] && [ -n "${LK_JANK_OFF_TOUCH:-}" ] && [ "$_jtc" -ge "$LK_JANK_OFF_TOUCH" ] 2>/dev/null && \
+          _jto=$(( _jtc - LK_JANK_OFF_TOUCH ))
+        printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
+          "$_jnow" "$(date '+%Y-%m-%dT%H:%M:%S')" "$_jph" "$_jst" "$_jwg" \
+          "-" "-" "$_jto" "$_df" "$_dj" "$_dd" "$_du" "$_di" "-" "-" "$(lk_topapp_pkg)" \
+          "$(lk_gfx_pkg_delta "$LK_OUT_DIR/.jank_pkg_off" "$LK_OUT_DIR/.jank_pkg_now")" "wake" >> "$LK_OUT_DIR/jank_trace.tsv"
+      fi
+    fi
+    LK_JANK_OFF=""; rm -f "$LK_OUT_DIR/.jank_pkg_off" 2>/dev/null
+  fi
   _jroot="${ASB_LK_CPUFREQ_ROOT:-/sys/devices/system/cpu/cpufreq}"
   _jlo=""; _jhi=""; _jlon=999; _jhin=-1
   # Main and prime as the governor assigns them (fix146); kept once read, the map is fixed
@@ -1260,6 +1291,16 @@ lk_emit_jank_summary() {
   awk -F'|' -v LM="$_jkm" -v LP="$_jkp" -v LT="$_jkt" -v LA="$_jka" '
     /^#/ { next }
     NF < 13 { next }
+    # fix150: a row across a screen-off stretch is the wake itself - kept apart, its seconds
+    # are mostly screen-off and would dilute every per-second figure below.
+    NF >= 18 && $18 == "wake" {
+      wkn++; wF += $9; wJ += $10
+      if ($17 != "" && $17 != "-") {
+        m = split($17, kk, ",")
+        for (x = 1; x <= m; x++) { if (split(kk[x], z, ":") < 3) continue; wgj[z[1]] += z[2]; wgf[z[1]] += z[3]; wgn[z[1]]++ }
+      }
+      next
+    }
     { n++; F += $9; J += $10; D += $11; U += $12; I += $13; S += $5
       ph[$3] += $9; phj[$3] += $10; phn[$3]++; phs[$3] += $5
       st[$4] += $9; stj[$4] += $10; stn[$4]++; sts[$4] += $5
@@ -1319,6 +1360,21 @@ lk_emit_jank_summary() {
       for (p in ph) printf "%-16s %9d %9d %8s %8s\n", p, phn[p], ph[p], pct(phj[p], ph[p]), rate(phj[p], phs[p])
       printf "%-16s %9s %9s %8s %8s\n", "ASB state", "intervals", "frames", "janky", "janky/s"
       for (s in st) printf "%-16s %9d %9d %8s %8s\n", s, stn[s], st[s], pct(stj[s], st[s]), rate(stj[s], sts[s])
+      # fix150: the wakes, apart. Janky share only - a wake row spans the screen-off time.
+      if (wkn > 0) {
+        printf "the wake itself: %d wake(s), last screen-on poll before each to the first after it - frames %d, janky %s (ordinary screen-on intervals: %s)\n", \
+          wkn, wF, pct(wJ, wF), pct(J, F)
+        shown = 0; line = ""
+        while (shown < 4) {
+          best = ""; bv = 0
+          for (a in wgj) if (!(a in wgd) && wgj[a] > bv) { best = a; bv = wgj[a] }
+          if (best == "") break
+          wgd[best] = 1
+          line = line (line == "" ? "" : ", ") sprintf("%s %d of %d janky (%s)", best, wgj[best], wgf[best], pct(wgj[best], wgf[best])); shown++
+        }
+        if (line != "") print "  at the wakes, by app: " line
+        print "  (the unlock, the lock-screen swipe and the first seconds of use; an always-on display adds its few frames)"
+      }
       # fix143: the frame-rate bands and, when the quiet intervals miss deadlines about as
       # often per second as the busy ones, the floor said in words.
       if (bn[1] + bn[2] + bn[3] + bn[4] > 0) {

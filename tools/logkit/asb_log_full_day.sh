@@ -1628,6 +1628,16 @@ lk_emit_full_day_report() {
           if (!shown) printf "not published - the LPM feature or the cellular power policy (radio_policy_enable, off by default) is off"
           printf "\n"
         }' "$LK_OUT_DIR/asb_features.txt" 2>/dev/null
+      # fix150: the unlock lift and the night slot with the screen on, from the live state -
+      # counters since the governor started, not since the capture did.
+      _ulc="$(lk_state_kv unlock_lifts | tr -dc '0-9')"
+      if [ -n "$_ulc" ]; then
+        _ulk="$(lk_state_kv unlock_lift_skips | tr -dc '0-9')"
+        printf "  unlock lift              : %s lift(s), %s wake(s) not lifted (last: %s) - since the governor started\n" \
+          "$_ulc" "${_ulk:-0}" "$(lk_state_kv unlock_lift_skip_why)"
+      fi
+      _nat="$(lk_state_kv smart_night_awake_ticks | tr -dc '0-9')"
+      [ -n "$_nat" ] && printf "  night slot, screen on    : evening lean taken in %s Smart tick(s) since the governor started\n" "$_nat"
     fi
 
     echo ""
