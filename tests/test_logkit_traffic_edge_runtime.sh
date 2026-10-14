@@ -14,17 +14,21 @@ fail() { echo "FAIL logkit traffic edge: $*" >&2; exit 1; }
 # The program between the quotes of  _meas="$(awk -F'|' -v A=.. -v Z=.. '<program>' file)".
 awk '/_meas="\$\(awk -F.\|. -v A="\$_a" -v Z="\$_z" .\$1/ { on = 1 }
      on { print }
-     on && /END \{ printf "%d %d", m \+ 0, e \+ 0 \}/ { exit }' "$SRC" \
+     on && /END \{ printf "%d %d %d", m \+ 0, e \+ 0, wf \+ 0 \}/ { exit }' "$SRC" \
   | sed -e "1s/^.*-v Z=\"\$_z\" '//" -e "\$s/' \"\$LK_OUT_DIR.*\$//" > "$TMP/meas.awk"
 grep -q 'else if (ps != \$5) e += b - pb' "$TMP/meas.awk" || fail "edge accounting not found"
-# epoch|...|screen(5)|...|rmnet_rx(26)|rmnet_tx(27): only the columns the program reads matter.
-row() { printf '%s|x|x|x|%s|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|%s|%s\n' "$1" "$2" "$3" "$4"; }
-{ row 1000 1 100 0        # screen on before the phase
-  row 1100 0 200 0        # phase starts (screen off)
-  row 1200 0 1048776 0    # +1 MiB with the screen off
-  row 1300 0 3145928 0    # +2 MiB
-  row 1302 1 9437384 0; } > "$TMP/bt.txt"   # the morning: +6 MiB across the screen-on edge
+# epoch|...|screen(5)|...|wifi_rx(24)|wifi_tx(25)|rmnet_rx(26)|rmnet_tx(27): only the columns
+# the program reads matter. fix148: Wi-Fi with the screen off is the third figure; a Wi-Fi
+# counter that went backwards (interface restarted) adds nothing.
+row() { printf '%s|x|x|x|%s|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|%s|0|%s|%s\n' "$1" "$2" "$5" "$3" "$4"; }
+{ row 1000 1 100 0 0          # screen on before the phase
+  row 1100 0 200 0 1000       # phase starts (screen off)
+  row 1200 0 1048776 0 2098152  # +1 MiB mobile, +2 MiB Wi-Fi with the screen off
+  row 1250 0 2097352 0 500    # +1 MiB mobile; Wi-Fi counter reset
+  row 1300 0 3145928 0 1049076  # +1 MiB mobile, +1 MiB Wi-Fi
+  row 1302 1 9437384 0 9999999; } > "$TMP/bt.txt"   # the morning: +6 MiB across the screen-on edge
 out="$(awk -F'|' -v A=1100 -v Z=1301 -f "$TMP/meas.awk" "$TMP/bt.txt")"
-[ "$out" = "3145728 6291456" ] || fail "measured/edge split wrong: $out"
+[ "$out" = "3145728 6291456 3145728" ] || fail "measured/edge/Wi-Fi split wrong: $out"
 grep -q 'in the interval the screen changed state' "$SRC" || fail "edge traffic not printed"
-echo "PASS logkit traffic edge: screen-off measured and screen-change edge reported apart, adding up to the table"
+grep -q 'measured screen-off mobile traffic %.1f MiB, Wi-Fi %.1f MiB' "$SRC" || fail "Wi-Fi not printed beside mobile"
+echo "PASS logkit traffic edge: screen-off measured and screen-change edge reported apart, adding up to the table, Wi-Fi beside mobile"

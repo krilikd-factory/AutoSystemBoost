@@ -976,4 +976,33 @@ done
 cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS: fix146 contract"
 ) || exit 1
+# ---- fix148 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix148: $*"; exit 1; }
+C="$ROOT/tools/logkit/_asb_logkit_common.sh"; F="$ROOT/tools/logkit/asb_log_full_day.sh"
+grep -q '^lk_power_state() {' "$C" || fail "no power state that knows a paused charge"
+grep -q 'case "$(lk_power_state "$_cs")" in' "$F" || fail "a battery-protection hold is filed as sleep again"
+grep -q 'longest stretch off the charger was' "$F" || fail "night verdict counts the charger"
+grep -q 'kernel holder on the charger:' "$F" || fail "charging-idle verdict names no kernel holder"
+grep -q "else if (st\[0\] == 'D')                 b->charging = 0;" "$ROOT/src/asb_metrics.h" || fail "governor reads Not charging as on battery"
+[ -f "$ROOT/tests/test_charge_hold_runtime.sh" ] || fail "charge hold test missing"
+echo "PASS: fix148 contract"
+) || exit 1
+# ---- fix149 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix149: $*"; exit 1; }
+C="$ROOT/tools/logkit/_asb_logkit_common.sh"; F="$ROOT/tools/logkit/asb_log_full_day.sh"
+grep -q '^lk_bt_dump_filter() {' "$C" || fail "BT evidence still crowded out by Android 16 flag lines"
+[ "$(grep -c 'lk_dumpsys bluetooth_manager 2>/dev/null | lk_bt_dump_filter' "$C")" = 2 ] || fail "a BT dump left unfiltered"
+grep -q 'fwmark 0x0/0xffff iif lo .*lookup ' "$ROOT/runtime/asb_wifi_fallback.sh" || fail "leave-bad-Wi-Fi blind under a VPN"
+grep -q 'fwmark 0x0/0xffff iif lo .*lookup ' "$ROOT/runtime/asb_lte_screenoff.sh" || fail "LTE check guesses the network under a VPN"
+grep -q 'measured screen-off mobile traffic %.1f MiB, Wi-Fi %.1f MiB' "$F" || fail "screen-off traffic counts mobile only"
+grep -q '_label="LITTLE"; \[ "$_cv_np" -eq 2 \] && _label="MAIN"' "$C" || fail "cap_verify calls the six main cores LITTLE"
+grep -q 'metrics.bat.charging ? -1 : metrics.bat.current_ma' "$ROOT/src/asb_governor.c" || fail "hourly learner takes charging current as drain"
+grep -q "tr '\\\\n' ',' | sed 's/,\$//') fps video" "$ROOT/runtime/asb_ltpo_video.sh" || fail "LTPO log line breaks on two rates"
+for t in test_wifi_default_vpn_runtime.sh test_learner_charging_runtime.sh; do [ -f "$ROOT/tests/$t" ] || fail "$t missing"; done
+echo "PASS: fix149 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
