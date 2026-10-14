@@ -555,6 +555,9 @@ lk_verify_caps() {
     echo "# asb_declared_p6:         ${_asb_p6_cap}"
     echo "# governor_cap_source_p0:  ${_gov_src_p0}"
     echo "# governor_cap_source_p6:  ${_gov_src_p6}"
+    # Six of eight cores on a 6+2 part are policy0 (fix148): "LITTLE" there read as the
+    # weak cores, as asbdiag's own list did until fix146.
+    _cv_np=0; for pd in /sys/devices/system/cpu/cpufreq/policy*; do [ -d "$pd" ] && _cv_np=$((_cv_np + 1)); done
     for pd in /sys/devices/system/cpu/cpufreq/policy*; do
       [ -d "$pd" ] || continue
       _p="${pd##*policy}"
@@ -584,7 +587,7 @@ lk_verify_caps() {
         _gov_src="$_gov_src_p6"
       else
         _expect="$CPU_CAP_LITTLE"
-        _label="LITTLE"
+        _label="LITTLE"; [ "$_cv_np" -eq 2 ] && _label="MAIN"
         _asb_declared="$_asb_p0_cap"
         _vendor_cap="$_vendor_p0_cap"
         _gov_src="$_gov_src_p0"
@@ -698,7 +701,10 @@ lk_emit_cap_source_summary() {
   # of every source ("endor_clamp"). Parenthesised, and the offsets corrected.
   _src="$LK_OUT_DIR/status_watch.txt"
   [ -f "$_src" ] || return 0
-  awk '
+  _cs_l0=LITTLE; _cs_np=0
+  for _cs_pd in /sys/devices/system/cpu/cpufreq/policy*; do [ -d "$_cs_pd" ] && _cs_np=$((_cs_np + 1)); done
+  [ "$_cs_np" -eq 2 ] && _cs_l0=MAIN
+  awk -v L0="$_cs_l0" '
     /"cap_source_p0":"[^"]*"/ {
       match($0, /"cap_source_p0":"[^"]*"/)
       s=substr($0, RSTART+17, RLENGTH-18)
@@ -713,7 +719,7 @@ lk_emit_cap_source_summary() {
     }
     END {
       print "===== cap_source summary (tick counts from status_watch) ====="
-      printf "policy0 (LITTLE)  total_ticks=%d\n", tot0
+      printf "policy0 (%s)  total_ticks=%d\n", L0, tot0
       for (k in p0) printf "  %-16s %6d  (%5.1f%%)\n", k, p0[k], (tot0>0 ? 100*p0[k]/tot0 : 0)
       printf "prime (BIG)       total_ticks=%d\n", tot6
       for (k in p6) printf "  %-16s %6d  (%5.1f%%)\n", k, p6[k], (tot6>0 ? 100*p6[k]/tot6 : 0)
@@ -2345,6 +2351,38 @@ lk_smart_trace_header() {
 }
 
 # Extract a single key=value from /dev/.asb/state (returns "" if missing)
+# bluetooth_manager without what crowds the evidence out (fix148): Android 16's feature-flag
+# list ("[■]: a2dp_lhdc_api", 44 of the 120 lines kept) and the connection-policy line of
+# every bonded device (another 30+), so the state machines and the codec in use fit.
+lk_bt_dump_filter() {
+  grep -vE '^[[:space:]]*\[[^]]*\]: [A-Za-z0-9_]+[[:space:]]*$|profile connection policy\('
+}
+
+# Where the phone's power comes from (fix148): charging | full | held | battery.
+#
+# "held" is a charger online with the battery status "Not charging": OnePlus battery
+# protection (smart charging) parks the level at 80% overnight with the cable in. CPH2769
+# capture 13290: 161 + 48 min at 80%, 0 mA, the kernel's "wired wakelock" held throughout -
+# filed as "sleep" at 99% awake and 0 %/h, beside a valid-looking night verdict. A status
+# the driver does not fill in (OxygenOS 16 on the OP15 reads "Unknown") is charging when a
+# supply is online, as the governor reads it. $1 = the status if already read.
+lk_power_state() {
+  _pws="${1-$(cat "${ASB_LK_PSY:-/sys/class/power_supply}/battery/status" 2>/dev/null)}"
+  case "$_pws" in
+    Charging) echo charging; return 0 ;;
+    Full) echo full; return 0 ;;
+    Discharging) echo battery; return 0 ;;
+  esac
+  _pwo=0
+  for _pwn in usb ac dc wireless wls pc_port; do
+    [ "$(cat "${ASB_LK_PSY:-/sys/class/power_supply}/$_pwn/online" 2>/dev/null)" = 1 ] && { _pwo=1; break; }
+  done
+  if [ "$_pwo" = 0 ]; then echo battery
+  elif [ "$_pws" = "Not charging" ]; then echo held
+  else echo charging
+  fi
+}
+
 lk_state_kv() {
   _k="$1"
   grep -m1 "^${_k}=" "${ASB_LK_STATE_FILE:-/dev/.asb/state}" 2>/dev/null | sed "s/^${_k}=//"
@@ -2477,19 +2515,14 @@ lk_capture_smart_trace_row() {
   esac
 
   # Charging state from battery status
-  _chg_raw=$(cat /sys/class/power_supply/battery/status 2>/dev/null)
-  case "$_chg_raw" in
-    Charging|Full) _chg=1 ;;
-    Discharging|"Not charging") _chg=0 ;;
-      *)
-        # OxygenOS 16 reports "Unknown" here in every state, so this column was "-" on
-        # every row - and the drain and off-screen sections of the Smart summary filter on
-        # charging == 0, so they printed "no samples" for the whole capture. Ask the
-        # supplies directly, as the governor now does; 0 when none is online.
-        _chg=0
-        for _ps in usb ac dc wireless wls pc_port; do
-          [ "$(cat /sys/class/power_supply/$_ps/online 2>/dev/null)" = "1" ] && { _chg=1; break; }
-        done ;;
+  # OxygenOS 16 reports "Unknown" here in every state, so this column was "-" on every
+  # row - and the drain and off-screen sections of the Smart summary filter on charging ==
+  # 0, so they printed "no samples" for the whole capture. The supplies are asked when the
+  # status says nothing, and (fix148) a charger online at "Not charging" - battery
+  # protection holding 80% - is on the charger too, not a drain sample.
+  case "$(lk_power_state)" in
+    battery) _chg=0 ;;
+    *) _chg=1 ;;
   esac
 
   # --- autonomy fields (added so drain correlates with Smart state in one row) ---
@@ -2917,9 +2950,10 @@ lk_charge_trace_header() {
 lk_charge_trace_row() {
   _cg() { cat "$1" 2>/dev/null; }
   _cst="$(_cg /sys/class/power_supply/battery/status)"
-  case "$_cst" in
-    Charging|Full) : ;;
-    *) return 0 ;;
+  # Rows while battery protection holds the level with the cable in too (fix148): status
+  # "Not charging", 0 mA - the report counts them apart.
+  case "$(lk_power_state "$_cst")" in
+    battery) return 0 ;;
   esac
   _ce=$(date +%s); _cd=$(date '+%Y-%m-%d %H:%M:%S')
   _ctype="$(_cg /sys/class/power_supply/battery/charge_type)"
@@ -3150,7 +3184,11 @@ lk_snapshot_audio() {
     lk_dumpsys audio 2>/dev/null | grep -iE 'safe_?media|safemedia|csd|sound_?dose|absolute_?vol|absvol' \
       | sed 's/^[[:space:]]*/  /' | cut -c1-180 | head -12
     echo "# bt codec"
-    lk_dumpsys bluetooth_manager 2>/dev/null | grep -iE 'codec|sample_?rate|bits_?per|channel|LHDC|LDAC|aptX|SBC|AAC|state: connected' | head -20
+    # Android 16 prints its feature flags ("[■]: a2dp_lhdc_api") and one connection-policy
+    # line per bonded device first: they filled all 20 lines in every BT section of capture
+    # 13290 and the codec in use never showed (fix148).
+    lk_dumpsys bluetooth_manager 2>/dev/null | lk_bt_dump_filter \
+      | grep -iE 'codec|sample_?rate|bits_?per|channel_?mode|LHDC|LDAC|aptX|SBC|AAC|state: connected|mIsPlaying' | head -20 | cut -c1-260
     echo "# audioflinger effects/output"
     lk_dumpsys media.audio_flinger 2>/dev/null | grep -iE 'Effect|session|viper|Output thread|sampleRate|format|Latency|Frame' | head -25
     echo "# alsa pcm status"
@@ -3435,7 +3473,7 @@ lk_bt_reconnect_snapshot() {
     echo "audio.playing=${LK_AUDIO_PLAY:-unknown} audio.route=${LK_AUDIO_ROUTE:-unknown} audio.mode=${LK_AUDIO_MODE:-unknown}"
     [ -n "${LK_AUDIO_MODE_OWNER:-}" ] && echo "audio.mode_owner: $LK_AUDIO_MODE_OWNER"
     echo "# connection/profile evidence (MAC addresses redacted)"
-    lk_dumpsys bluetooth_manager 2>/dev/null \
+    lk_dumpsys bluetooth_manager 2>/dev/null | lk_bt_dump_filter \
       | grep -iE 'adapter.*state|connection.*state|connected|connecting|disconnect|a2dp|headset|hfp|le_audio|gatt|avrcp|codec' \
       | head -120 | lk_bt_redact_addr
     echo "# active audio route evidence"

@@ -259,9 +259,10 @@ lk_detect_phase() {
   read -r _l1 _rest < /proc/loadavg
   _l1i=$(echo "$_l1" | tr -dc '0-9')      # e.g. 3.42 -> 342, compared *100
 
-  # charging branches
-  case "$_cs" in
-    Charging|Full)
+  # charging branches - a charger online while battery protection holds the level counts
+  # (fix148): the phone is not running on its battery then.
+  case "$(lk_power_state "$_cs")" in
+    charging|full|held)
       LK_IN_GAMING=0; LK_GPU_HI_STREAK=0; LK_GPU_LO_STREAK=0
       if [ "$_scr" = "Awake" ]; then _charge_phase="charging_active"; else _charge_phase="charging_idle"; fi
       lk_stabilize_charging_phase "$_charge_phase" "$_now"
@@ -556,6 +557,22 @@ lk_phase_ledger_row() {
         if [ -s "$LK_OUT_DIR/.wh_a_now" ]; then mv -f "$LK_OUT_DIR/.wh_a_now" "$LK_OUT_DIR/.wh_a_prev"
         else rm -f "$LK_OUT_DIR/.wh_a_now" "$LK_OUT_DIR/.wh_a_prev" 2>/dev/null; fi
         ;;
+      charging_idle)
+        # On the charger (fix148): batterystats counts no app wakelock there, but the kernel's
+        # wakeup sources do - CPH2769 held "wired wakelock", the charger's own, through a
+        # 209-minute battery-protection hold. Kernel holders only, no batterystats read.
+        if [ "$_awake" -gt 15 ] 2>/dev/null && [ -s "$LK_OUT_DIR/.wh_k_open" ] \
+           && lk_wh_kernel_snap > "$LK_OUT_DIR/.wh_k_now" 2>/dev/null; then
+          {
+            printf 'phase=charging_idle awake=%s%% dur=%ss  (time gained inside this phase; kernel only - batterystats counts no app wakelock on the charger)\n' "$_awake" "$_elapsed"
+            lk_wh_delta "$LK_OUT_DIR/.wh_k_open" "$LK_OUT_DIR/.wh_k_now" 3 \
+              | while IFS="$(printf '\t')" read -r _wv _wn; do
+                  printf '  kernel: +%s  %s\n' "$(lk_wh_fmt "$_wv")" "$_wn"
+                done
+          } >> "$LK_OUT_DIR/phase_wakeholders.txt" 2>/dev/null || true
+        fi
+        rm -f "$LK_OUT_DIR/.wh_k_now" 2>/dev/null
+        ;;
     esac
   fi
   _maavg=0
@@ -624,7 +641,7 @@ lk_phase_ledger_open() {
   LK_CUR_PHASE="$1"
   # Kernel wakeup sources at the start of a screen-off phase (fix143), for the holders at its close.
   case "$1" in
-    gap|idle|sleep) lk_wh_kernel_snap > "$LK_OUT_DIR/.wh_k_open" 2>/dev/null || rm -f "$LK_OUT_DIR/.wh_k_open" ;;
+    gap|idle|sleep|charging_idle) lk_wh_kernel_snap > "$LK_OUT_DIR/.wh_k_open" 2>/dev/null || rm -f "$LK_OUT_DIR/.wh_k_open" ;;
     *) rm -f "$LK_OUT_DIR/.wh_k_open" 2>/dev/null ;;
   esac
   LK_PH_START=$(date +%s)
@@ -975,18 +992,21 @@ lk_emit_mobile_traffic_context() {
       # out without a word, it made the phase table (which counts it) and this line
       # disagree - a night read "rmnetMiB 168.7" above "measured 45.7 MiB" here, the
       # difference being 126 MiB moved in the minutes the morning screen came on.
+      # Wi-Fi beside it (fix148, the third figure): CPH2769 was on Wi-Fi under a proxy for
+      # most of capture 13290 - 3893 kernel wakeups from the Wi-Fi chip - while every phase
+      # here read "0.0 MiB, the radio was idle", the mobile radio being the only one counted.
       _meas="$(awk -F'|' -v A="$_a" -v Z="$_z" '$1 ~ /^[0-9]+$/ {
-          b = $26 + $27
+          b = $26 + $27; w = $24 + $25
           # An interval that starts inside the phase counts: the row that closes a phase is
           # the first one of the next, a second after the phase end.
           if (pe != "" && pe >= A && pe < Z && b >= pb) {
-            if (ps == "0" && $5 == "0" && $1 <= Z) m += b - pb
+            if (ps == "0" && $5 == "0" && $1 <= Z) { m += b - pb; if (w >= pw) wf += w - pw }
             else if (ps != $5) e += b - pb
           }
-          pe = $1; ps = $5; pb = b
-        } END { printf "%d %d", m + 0, e + 0 }' "$LK_OUT_DIR/battery_trace.txt" 2>/dev/null)"
-      _edge="${_meas#* }"; _meas="${_meas%% *}"
-      awk -v A="$_a" -v Z="$_z" -v PH="$_ph" -v MAP="$LK_OUT_DIR/uid_map.txt" -v MEAS="${_meas:-0}" -v EDGE="${_edge:-0}" '
+          pe = $1; ps = $5; pb = b; pw = w
+        } END { printf "%d %d %d", m + 0, e + 0, wf + 0 }' "$LK_OUT_DIR/battery_trace.txt" 2>/dev/null)"
+      set -- $_meas; _meas="${1:-0}"; _edge="${2:-0}"; _wmeas="${3:-0}"
+      awk -v A="$_a" -v Z="$_z" -v PH="$_ph" -v MAP="$LK_OUT_DIR/uid_map.txt" -v MEAS="${_meas:-0}" -v EDGE="${_edge:-0}" -v WIFI="${_wmeas:-0}" '
         # Names from pm first: the netstats dump only knows the UIDs it happened to
         # mention, which left the biggest talkers anonymous.
         BEGIN { while ((getline ln < MAP) > 0) { split(ln, f, " "); if (f[1] != "") NAME[f[1]+0]=f[2] } }
@@ -1019,18 +1039,18 @@ lk_emit_mobile_traffic_context() {
           # every phase, so the section printed its header and nothing else - twice I read
           # that as "no phase qualified" and went looking for a threshold problem.
           if (tot < 8388608) exit
-          printf "  %s %d min: measured screen-off mobile traffic %.1f MiB (interface counters)\n", PH, (Z-A)/60, MEAS/1048576
+          printf "  %s %d min: measured screen-off mobile traffic %.1f MiB, Wi-Fi %.1f MiB (interface counters)\n", PH, (Z-A)/60, MEAS/1048576, WIFI/1048576
           if (EDGE >= 1048576)
             printf "      + %.1f MiB in the interval the screen changed state - the counters cannot place it on\n        either side; the phase table above counts it with this phase\n", EDGE/1048576
           # Under 1 MiB measured there is nothing to attribute. Listing apps from the
           # surrounding 2h buckets beside "0.0 MiB" reads as blame however carefully the
           # caveat is worded - a sleep phase showed Instagram and WhatsApp under a measured
           # zero. Say what was measured and stop.
-          if (MEAS < 1048576) {
-            printf "      nothing to attribute: the radio was idle in this phase\n"
+          if (MEAS + WIFI < 1048576) {
+            printf "      nothing to attribute: neither mobile data nor Wi-Fi moved 1 MiB in this phase\n"
             exit
           }
-          if (tot > 3 * MEAS)
+          if (tot > 3 * (MEAS + WIFI))
             printf "      the 2h usage buckets around it hold %.0f MiB - mostly screen-on use; the apps below\n      used data AROUND this phase, which is not proof of background transfer\n", tot/1048576
           else
             printf "      2h usage buckets around it: %.0f MiB; apps active in that window:\n", tot/1048576
@@ -1462,6 +1482,7 @@ lk_emit_full_day_report() {
         NR<=1 { next }
         {
           n++
+          if ($3 == "Not charging") { held++; hpct = $8 }
           if (first=="") { first=$2; fpct=$8; fcc=$12 }
           last=$2; lpct=$8; lcc=$12
           # current_now is already mA on OnePlus (uA elsewhere); charge is negative.
@@ -1477,6 +1498,7 @@ lk_emit_full_day_report() {
         END {
           if (n==0) exit
           printf "  samples while plugged in : %d\n", n
+          if (held > 0) printf "  held, not charging       : %d samples at %s%% - the phone paused the charge (battery protection / smart charging); counted as on the charger\n", held, hpct
           printf "  battery                  : %s%% -> %s%%\n", fpct, lpct
           if (fcc+0>0 && lcc+0>0) printf "  charge counter delta     : %.0f mAh\n", (lcc-fcc)/1000
           if (nc>0) printf "  charge current  avg/peak : %.0f / %.0f mA  (%d charging samples)\n", sum/nc, peak, nc
@@ -1629,8 +1651,16 @@ lk_emit_capture_validity() {
   else
     echo "runtime verdict: extended capture (${_lv_elapsed}s captured)."
   fi
-  if [ "$LK_SCREENOFF_LONGEST_S" -ge 10800 ] 2>/dev/null; then
-    echo "night verdict: valid (longest continuous screen-off $((LK_SCREENOFF_LONGEST_S / 60)) min >=180 min)."
+  # The verdict follows the night(longest) row (fix148): the longest single idle/sleep phase,
+  # which is on battery. The screen-off span counts the charger too - CPH2769 read "valid
+  # (226 min)" for a night spent on the cable, with no night row below to back it.
+  _lv_bat="$(cat "$LK_OUT_DIR/phase_ledger.tsv" "$LK_OUT_DIR/.phase_open.tsv" 2>/dev/null \
+    | awk -F'\t' '($1 == "idle" || $1 == "sleep") { d = $3 - $2; if (d > m) m = d } END { print m + 0 }')"
+  case "$_lv_bat" in ''|*[!0-9]*) _lv_bat=0 ;; esac
+  if [ "$_lv_bat" -ge 10800 ] 2>/dev/null; then
+    echo "night verdict: valid (longest screen-off stretch on battery $((_lv_bat / 60)) min >=180 min)."
+  elif [ "$LK_SCREENOFF_LONGEST_S" -ge 10800 ] 2>/dev/null; then
+    echo "night verdict: unavailable on battery (screen off up to $((LK_SCREENOFF_LONGEST_S / 60)) min, but the longest stretch off the charger was $((_lv_bat / 60)) min; need >=180 min)."
   else
     echo "night verdict: unavailable (longest continuous screen-off $((LK_SCREENOFF_LONGEST_S / 60)) min; need >=180 min)."
   fi
@@ -1679,6 +1709,18 @@ lk_emit_charging_idle_anomaly() {
   echo "charging_idle: $((_lci_sec / 60)) min, awake ${_lci_awake}%, audio samples ${_lci_audio_pct}%, debounce-coalesced samples ${LK_CHG_IDLE_COALESCED}"
   if [ "$_lci_sec" -ge 900 ] && awk -v a="$_lci_awake" 'BEGIN{exit !(a >= 50)}' && [ "$_lci_audio_pct" -le 10 ]; then
     echo "anomaly: sustained screen-off charging idle stayed awake. LIVE WAKELOCK HOLDERS below names who held the CPU (batterystats counts nothing while charging); ASB does not alter charge current or kill apps automatically."
+    # The kernel holders of those phases (fix148). The charger's own wakeup source holding
+    # the CPU is the phone's design, not an app and not a fault.
+    _lci_k="$(awk '/^phase=charging_idle/ { f = 1; next } /^phase=/ { f = 0 }
+      f && /^  kernel: \+/ { t = $2; sub(/^\+/, "", t); split(t, z, "m"); s = z[1] * 60 + $3; n = ""; for (i = 4; i <= NF; i++) n = n (i > 4 ? " " : "") $i; K[n] += s }
+      END { for (k in K) printf "%d\t%s\n", K[k], k }' "$LK_OUT_DIR/phase_wakeholders.txt" 2>/dev/null | sort -rn | head -3)"
+    if [ -n "$_lci_k" ]; then
+      printf '%s\n' "$_lci_k" | while IFS="$(printf '\t')" read -r _lks _lkn; do
+        echo "  kernel holder on the charger: $_lkn $((_lks / 60)) min"
+      done
+      printf '%s\n' "$_lci_k" | grep -qiE 'wired|charger|usb|vbus|pd_|chg' \
+        && echo "  a charger/USB wakeup source of the kernel keeps the CPU up while the cable is in: the phone's own design, nothing an app or ASB holds."
+    fi
   else
     echo "verdict: no sustained no-audio charging-idle awake anomaly established."
   fi

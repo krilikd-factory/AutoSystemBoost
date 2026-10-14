@@ -40,7 +40,9 @@ ab_capture() {
     echo "## audio_flinger — effects / sessions"
     dumpsys media.audio_flinger 2>/dev/null | grep -iE 'Effect|session|viper|v4a|Suspended|Enabled|Chains' | head -80
     echo "## bt codec"
-    dumpsys bluetooth_manager 2>/dev/null | grep -iE 'current codec|sample_?rate|bits_?per|LHDC|LDAC|aptX|SBC|AAC' | head -12
+    # Without Android 16's feature-flag lines ("[■]: a2dp_lhdc_api"), which matched first (fix148).
+    dumpsys bluetooth_manager 2>/dev/null | grep -vE '^[[:space:]]*\[[^]]*\]: [A-Za-z0-9_]+[[:space:]]*$|profile connection policy\(' \
+      | grep -iE 'current codec|codecName|mCodecConfig|sample_?rate|bits_?per|LHDC|LDAC|aptX|SBC|AAC' | head -12 | cut -c1-260
     echo ""
   } > "$_file" 2>/dev/null
 }
