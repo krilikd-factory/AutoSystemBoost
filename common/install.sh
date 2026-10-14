@@ -2264,28 +2264,105 @@ asb_prune_non_op15_vendor_overlays() {
   find "$MODPATH/system" -type d -empty -print -delete 2>/dev/null || true
 }
 
+# Start the /odm runtime binds of this install from nothing (fix146).
+#
+# This reset lived at the top of asb_generate_odm_binds, which runs AFTER the audio stage -
+# so it deleted the effects-config bind that asb_register_dsp_all_configs had queued a
+# moment earlier, payload, stock snapshot and manifest line together. The generator then
+# patched its own copy of the live /odm/etc/audio_effects_config.xml and dropped it as
+# "identical to the live file": after an update the live file IS the previous install's
+# bind, so the copy always matched. Every install over a running module therefore removed
+# the DSP from the only config the HAL reads on a phone that ships one, and the next install
+# put it back - PLQ110 (Ace 6): "effects config WITHOUT ASB: /odm/etc/audio_effects_config.xml",
+# "library mapped into the audio HAL: absent", and no "odm-side audio/media" line in its
+# install log; the earlier v2 builds that worked had been installed over a stock /odm.
+# Payloads go; the *.stock snapshots stay - they are the partition's own files, and the
+# live path cannot give them back while a bind is in front of it.
+asb_reset_odm_binds() {
+  _rb_root="${ASB_ODM_PATCHED:-/data/adb/asb/odm_patched}"
+  rm -f "${ASB_ODM_MAN:-/data/adb/asb/odm_bind_manifest.txt}" 2>/dev/null
+  [ -d "$_rb_root" ] || return 0
+  find "$_rb_root" -type f ! -name '*.stock' ! -name '.base_fp' -delete 2>/dev/null
+  # A system update since the snapshots were taken: they describe the old partition. The
+  # effects-config one is taken again from the live path; the generator decides for its own.
+  _rb_fp="$(asb_odm_fingerprint)"; _rb_fp0="$(cat "$_rb_root/.base_fp" 2>/dev/null)"
+  if [ -n "$_rb_fp" ] && [ -n "$_rb_fp0" ] && [ "$_rb_fp" != "$_rb_fp0" ]; then
+    find "$_rb_root" -type f -name 'audio_effects*.xml.stock' -delete 2>/dev/null
+  fi
+  find "$_rb_root" -type d -empty -delete 2>/dev/null || true
+}
+
+# The /odm build the snapshots belong to.
+asb_odm_fingerprint() {
+  _of="$(getprop ro.odm.build.fingerprint 2>/dev/null)"
+  [ -n "$_of" ] || _of="$(getprop ro.vendor.build.fingerprint 2>/dev/null)"
+  [ -n "$_of" ] || _of="$(getprop ro.build.fingerprint 2>/dev/null)"
+  printf '%s' "$_of"
+}
+
+# 0 when a bind of an ASB payload (a file under .../asb/odm_patched) sits on $1 in init's
+# namespace (fix146) - the runtime rebind mounts there. A payload the reset above already
+# deleted still matches: mountinfo keeps its path with a "//deleted" suffix.
+asb_odm_bound_by_asb() {
+  # The kernel records the resolved path: where /odm is a link to /vendor/odm, the mount
+  # point reads /vendor/odm/etc/... while the manifest says /odm/etc/....
+  _obr="$(readlink -f "${ASB_ODM_LIVE_PREFIX:-}$1" 2>/dev/null)"; _obr="${_obr#${ASB_ODM_LIVE_PREFIX:-}}"
+  awk -v t="$1" -v r="${_obr:-$1}" '($5 == t || $5 == r) && index($4, "odm_patched") { f = 1 } END { exit !f }' \
+    "${ASB_ODM_MOUNTINFO:-/proc/1/mountinfo}" 2>/dev/null
+}
+
 asb_generate_odm_binds() {
-  _ob_root="/data/adb/asb/odm_patched"
-  _ob_man="/data/adb/asb/odm_bind_manifest.txt"
-  rm -rf "$_ob_root" 2>/dev/null
-  rm -f "$_ob_man" 2>/dev/null
+  _ob_root="${ASB_ODM_PATCHED:-/data/adb/asb/odm_patched}"
+  _ob_man="${ASB_ODM_MAN:-/data/adb/asb/odm_bind_manifest.txt}"
+  _ob_live="${ASB_ODM_LIVE_PREFIX:-}"
   [ -f /data/adb/asb/vendor_overlay_blocked ] && return 0
   [ "$ASB_AUDIO" = "true" ] || [ "$ASB_MEDIA" = "true" ] || return 0
   _ob_canoe=0
   # Every access below touches LIVE /odm paths.
   _ob_to=""
   command -v timeout >/dev/null 2>&1 && _ob_to="timeout 20"
+  # What the partition is now, to tell a stock snapshot from before a system update.
+  _ob_fp="$(asb_odm_fingerprint)"
+  _ob_fp0="$(cat "$_ob_root/.base_fp" 2>/dev/null)"
+  _ob_upd=0
+  [ -n "$_ob_fp" ] && [ -n "$_ob_fp0" ] && [ "$_ob_fp" != "$_ob_fp0" ] && _ob_upd=1
+  _ob_own=""; _ob_held=0
+  # The effects config is not here (fix146): asb_register_dsp_all_configs delivers it from
+  # its own stock snapshot, and two writers for one target is how it was lost.
   for _ob_t in \
       /odm/etc/audio/audio_policy_configuration.xml \
       /odm/etc/mixer_paths.xml \
-      /odm/etc/audio_effects_config.xml \
       /odm/etc/media_profiles_V1_0.xml \
       /odm/etc/camera/media_profiles.xml; do
     ui_print "    . odm-bind check: ${_ob_t}"
     _ob_p="$_ob_root$_ob_t"
     mkdir -p "$(dirname "$_ob_p")" 2>/dev/null
-    # guarded cp covers existence, read AND a stalled-mount timeout in one step
-    $_ob_to cp -f "$_ob_t" "$_ob_p" 2>/dev/null || continue
+    # The base to patch and to compare with (fix146) is the partition's own file. With no
+    # ASB bind in front, the live path is that file: snapshot it. With one in front, the
+    # live path is the previous install's output, so the snapshot taken back then is the
+    # base; without a snapshot (an install from before fix146) the live copy is patched
+    # again - the patchers are idempotent - and queued, since comparing it with itself
+    # proves nothing. After a system update a snapshot is stale and the live path is still
+    # ours: nothing is queued, the stock file comes back with the reboot, and the next
+    # install snapshots the new one.
+    _ob_force=0
+    if asb_odm_bound_by_asb "$_ob_t"; then
+      if [ "$_ob_upd" = 1 ]; then
+        rm -f "$_ob_p.stock" 2>/dev/null
+        _ob_held=$((_ob_held + 1))
+        continue
+      fi
+      if [ -s "$_ob_p.stock" ]; then
+        cp -f "$_ob_p.stock" "$_ob_p" 2>/dev/null || continue
+      else
+        $_ob_to cp -f "$_ob_live$_ob_t" "$_ob_p" 2>/dev/null || continue
+        _ob_force=1
+      fi
+    else
+      # guarded cp covers existence, read AND a stalled-mount timeout in one step
+      $_ob_to cp -f "$_ob_live$_ob_t" "$_ob_p.stock" 2>/dev/null || { rm -f "$_ob_p.stock"; continue; }
+      cp -f "$_ob_p.stock" "$_ob_p" 2>/dev/null || continue
+    fi
     case "$_ob_t" in
       *audio_policy_configuration.xml)
         [ "$ASB_AUDIO" = "true" ] || { rm -f "$_ob_p"; continue; }
@@ -2299,35 +2376,37 @@ asb_generate_odm_binds() {
         [ "$ASB_MEDIA" = "true" ] || { rm -f "$_ob_p"; continue; }
         asb_media_lift_file "$_ob_p" "$_ob_canoe"
         ;;
-      *audio_effects_config.xml)
-        [ "$ASB_AUDIO" = "true" ] || { rm -f "$_ob_p"; continue; }
-        asb_register_dsp_effect "$_ob_p"
-        ;;
     esac
-  done
-  ui_print "    . odm-bind: volume libs"
-  [ "$ASB_AUDIO" = "true" ] && asb_audio_ensure_volume_libs "$_ob_root/odm/etc"
-  ui_print "    . odm-bind: building manifest"
-  true > "$_ob_man"
-  for _ob_p in $(find "$_ob_root" -type f 2>/dev/null); do
-    _ob_t="${_ob_p#$_ob_root}"
-    if $_ob_to cmp -s "$_ob_p" "$_ob_t" 2>/dev/null; then
+    if [ "$_ob_force" = 0 ] && [ -s "$_ob_p.stock" ] && cmp -s "$_ob_p" "$_ob_p.stock" 2>/dev/null; then
       rm -f "$_ob_p" 2>/dev/null
       continue
     fi
+    _ob_own="$_ob_own $_ob_t"
+  done
+  [ -n "$_ob_fp" ] && { mkdir -p "$_ob_root" 2>/dev/null; echo "$_ob_fp" > "$_ob_root/.base_fp" 2>/dev/null; }
+  ui_print "    . odm-bind: volume libs"
+  [ "$ASB_AUDIO" = "true" ] && asb_audio_ensure_volume_libs "$_ob_root/odm/etc"
+  ui_print "    . odm-bind: building manifest"
+  touch "$_ob_man" 2>/dev/null
+  _ob_n=0
+  for _ob_t in $_ob_own; do
+    _ob_p="$_ob_root$_ob_t"
+    [ -s "$_ob_p" ] || continue
     chmod 0644 "$_ob_p" 2>/dev/null
-    _ob_ctx="$($_ob_to ls -Zd "$_ob_t" 2>/dev/null | awk '{print $1}')"
+    _ob_ctx="$($_ob_to ls -Zd "$_ob_live$_ob_t" 2>/dev/null | awk '{print $1}')"
     case "$_ob_ctx" in
       ?*:?*:?*:?*) chcon "$_ob_ctx" "$_ob_p" 2>/dev/null || true ;;
     esac
-    echo "$_ob_t|$_ob_p" >> "$_ob_man"
+    grep -q "^${_ob_t}|" "$_ob_man" 2>/dev/null || echo "$_ob_t|$_ob_p" >> "$_ob_man"
+    _ob_n=$((_ob_n + 1))
   done
-  if [ -s "$_ob_man" ]; then
-    ui_print "[*] odm-side audio/media: $(wc -l < "$_ob_man") file(s) patched for runtime bind (the /odm partition itself is never modified)"
-  else
-    rm -f "$_ob_man" 2>/dev/null
-    rm -rf "$_ob_root" 2>/dev/null
+  [ "$_ob_held" -gt 0 ] && \
+    ui_print "    . odm-bind: $_ob_held file(s) changed with a system update - stock after this reboot, patched again on the next install"
+  if [ "$_ob_n" -gt 0 ]; then
+    ui_print "[*] odm-side audio/media: $_ob_n file(s) patched for runtime bind (the /odm partition itself is never modified)"
   fi
+  [ -s "$_ob_man" ] || rm -f "$_ob_man" 2>/dev/null
+  return 0
 }
 
 # Register the ASB DSP effect on ANY device, not just the reference model.
@@ -2721,16 +2800,16 @@ asb_register_dsp_all_configs() {
 # One odm effects config, delivered through the fuse-guarded runtime bind.
 asb_bind_register_odm_effects() {
   _oecl="$1"
-  _oecs="/data/adb/asb/odm_patched${_oecl}"
+  _oecs="${ASB_ODM_PATCHED:-/data/adb/asb/odm_patched}${_oecl}"
   _oecs_src="${_oecs}.stock"
-  _oecm="/data/adb/asb/odm_bind_manifest.txt"
+  _oecm="${ASB_ODM_MAN:-/data/adb/asb/odm_bind_manifest.txt}"
   mkdir -p "$(dirname "$_oecs")" 2>/dev/null
   # Never snapshot from the live path once an earlier bind is mounted: at that point
   # /odm/etc/audio_effects_config.xml IS "$_oecs", and copying it onto itself truncates the
   # file, which is how a device ended up with a bound config carrying zero ASB lines while
   # every reinstall reported success.
   if [ ! -s "$_oecs_src" ]; then
-    cp -f "$_oecl" "$_oecs_src" 2>/dev/null
+    cp -f "${ASB_ODM_LIVE_PREFIX:-}$_oecl" "$_oecs_src" 2>/dev/null
   fi
   cp -f "$_oecs_src" "$_oecs" 2>/dev/null || return 1
   asb_register_dsp_effect "$_oecs"
@@ -3312,6 +3391,8 @@ else
       done
     else
       echo generic > "$MODPATH/overlay_device_class" 2>/dev/null
+      # Before the audio stage, which queues the effects-config bind (fix146).
+      asb_reset_odm_binds
       asb_apply_device_native_tuning "$ASB_DEVICE_NAME" "OnePlus"
       rm -rf "$MODPATH/system/odm" "$MODPATH/system/my_product" 2>/dev/null || true
       ui_print "[*] preparing odm runtime binds"
