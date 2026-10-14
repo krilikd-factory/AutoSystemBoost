@@ -1599,7 +1599,11 @@ lk_emit_full_day_report() {
           printf "  thermal veto active      : %d (%.1f%%)\n", veto+0, (veto*100.0)/n
           printf "  DSP live (effect attached): %d (%.1f%%)  abi=%s\n", dsp+0, (dsp*100.0)/n, abi
           printf "  modem LPM mode           : "
-          for (k in lpm) if (k!="") printf "%s(%d) ", k, lpm[k]
+          shown = 0
+          for (k in lpm) if (k!="") { printf "%s(%d) ", k, lpm[k]; shown++ }
+          # fix146: the CPH2691 captures printed the label and nothing. asb_lpm.sh publishes
+          # its mode only with the LPM feature AND the cellular power policy on.
+          if (!shown) printf "not published - the LPM feature or the cellular power policy (radio_policy_enable, off by default) is off"
           printf "\n"
         }' "$LK_OUT_DIR/asb_features.txt" 2>/dev/null
     fi
@@ -1651,7 +1655,8 @@ lk_emit_cap_ownership_verdict() {
   _lc_mv=$(grep -c 'main_by=vendor' "$_lc_trace" 2>/dev/null)
   if [ "${_lc_n:-0}" -ge 3 ] 2>/dev/null; then
     [ $(( _lc_pv * 2 )) -gt "$_lc_n" ] && echo "per cluster: the prime sat under a ceiling ASB did not write in $_lc_pv of $_lc_n samples - there the prime clock is the vendor's (PowerHAL or kernel thermal), not ASB's."
-    [ $(( _lc_mv * 2 )) -gt "$_lc_n" ] && echo "per cluster: the main cores sat under a ceiling ASB did not write in $_lc_mv of $_lc_n samples."
+    if grep -q '^little=' "$LK_OUT_DIR/cluster_layout.txt" 2>/dev/null; then _lc_mn="little cores"; else _lc_mn="main cores"; fi
+    [ $(( _lc_mv * 2 )) -gt "$_lc_n" ] && echo "per cluster: the $_lc_mn sat under a ceiling ASB did not write in $_lc_mv of $_lc_n samples."
   fi
   return 0
 }

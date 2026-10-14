@@ -900,6 +900,46 @@ lk_jank_trace_header() {
     echo "# UI smoothness - one row per screen-on poll interval; HWUI frames of every app (dumpsys graphicsstats deltas)"
     echo "# epoch|iso_time|phase|fsm_state|interval_s|main_at_cap|prime_at_cap|touches|frames|janky|deadline_missed|slow_ui|high_input|main_cap_pct|prime_cap_pct|fg_pkg|jank_pkgs"
   } > "$LK_OUT_DIR/jank_trace.tsv"
+  lk_cluster_layout_write
+}
+
+# The governor's own cluster roles (fix146), from slot_policy_ids in its state file:
+# "0,6,-1" on a 6+2 part (main = policy0, prime = policy6), "0,2,7" on a 1+3+2+1 part
+# (little = policy0, main = the middle slot, policy2, whose ceiling the writer also puts
+# on policy5; prime = policy7). Prints "main prime little", little "-" on two clusters;
+# nothing when the state holds no map (governor off, or older than the map).
+#
+# The jank trace took the lowest and the highest policy number for main and prime. Right
+# on a 6+2 part; on the CPH2691 (SM8650) "main" was the pair of A520 efficiency cores,
+# which run no UI, so every "main cores at the ASB ceiling" line of its captures described
+# the wrong cores - the same mistake fix109 took out of the light-idle escalation.
+lk_cluster_roles() {
+  _crs="$(lk_state_kv slot_policy_ids | tr -dc '0-9,-')"
+  case "$_crs" in *,*,*) : ;; *) return 0 ;; esac
+  _cr0="${_crs%%,*}"; _crr="${_crs#*,}"; _cr1="${_crr%%,*}"; _cr2="${_crr#*,}"
+  case "$_cr0" in ''|*[!0-9]*) return 0 ;; esac
+  case "$_cr1" in ''|*[!0-9]*) return 0 ;; esac
+  case "$_cr2" in ''|-*|*[!0-9]*) echo "$_cr0 $_cr1 -" ;; *) echo "$_cr1 $_cr2 $_cr0" ;; esac
+}
+
+# cluster_layout.txt (fix146): which policies the report's "main" and "prime" are, read
+# once at capture start, so a report rebuilt on another machine still names them.
+lk_cluster_layout_write() {
+  _clr="$(lk_cluster_roles)"
+  [ -n "$_clr" ] || return 0
+  set -- $_clr
+  _clp=""
+  for _clq in "${ASB_LK_CPUFREQ_ROOT:-/sys/devices/system/cpu/cpufreq}"/policy*; do
+    [ -d "$_clq" ] || continue
+    _clp="$_clp${_clp:+ }${_clq##*policy}"
+  done
+  {
+    echo "# cpufreq clusters as the governor uses them (slot_policy_ids=$(lk_state_kv slot_policy_ids | tr -dc '0-9,-'))"
+    echo "policies=$_clp"
+    echo "main=policy$1"
+    echo "prime=policy$2"
+    [ "$3" != "-" ] && echo "little=policy$3"
+  } > "$LK_OUT_DIR/cluster_layout.txt" 2>/dev/null || true
 }
 
 # Totals over every package block: "frames janky deadline slow_ui high_input", or nothing.
@@ -1005,13 +1045,21 @@ lk_capture_jank_row() {
   _jtc="$(lk_state_kv touch_starts | tr -dc '0-9')"
   _jroot="${ASB_LK_CPUFREQ_ROOT:-/sys/devices/system/cpu/cpufreq}"
   _jlo=""; _jhi=""; _jlon=999; _jhin=-1
-  for _jp in "$_jroot"/policy*; do
-    [ -d "$_jp" ] || continue
-    _jn="${_jp##*policy}"
-    case "$_jn" in ''|*[!0-9]*) continue ;; esac
-    [ "$_jn" -lt "$_jlon" ] && { _jlon="$_jn"; _jlo="$_jp"; }
-    [ "$_jn" -gt "$_jhin" ] && { _jhin="$_jn"; _jhi="$_jp"; }
-  done
+  # Main and prime as the governor assigns them (fix146); kept once read, the map is fixed
+  # for the boot. Without it, the lowest and the highest policy as before.
+  [ -n "${LK_JANK_ROLES:-}" ] || LK_JANK_ROLES="$(lk_cluster_roles)"
+  set -- $LK_JANK_ROLES
+  if [ "$#" -ge 2 ] && [ -d "$_jroot/policy$1" ] && [ -d "$_jroot/policy$2" ]; then
+    _jlo="$_jroot/policy$1"; _jhi="$_jroot/policy$2"
+  else
+    for _jp in "$_jroot"/policy*; do
+      [ -d "$_jp" ] || continue
+      _jn="${_jp##*policy}"
+      case "$_jn" in ''|*[!0-9]*) continue ;; esac
+      [ "$_jn" -lt "$_jlon" ] && { _jlon="$_jn"; _jlo="$_jp"; }
+      [ "$_jn" -gt "$_jhin" ] && { _jhin="$_jn"; _jhi="$_jp"; }
+    done
+  fi
   # Time at the ceiling over the interval (fix125); read on every screen-on poll so the next
   # interval has its baseline.
   _jmcs="-"; _jpcs="-"
@@ -1196,7 +1244,14 @@ lk_emit_jank_summary() {
   _jk="$LK_OUT_DIR/jank_trace.tsv"
   [ -s "$_jk" ] || return 0
   echo "===== UI SMOOTHNESS (screen-on, HWUI frames of every app) ====="
-  awk -F'|' '
+  # Which clusters "main" and "prime" are (fix146) - said only where it is not the obvious
+  # pair: on a 1+3+2+1 part main is the governor's middle slot, not policy0.
+  _jkl="$LK_OUT_DIR/cluster_layout.txt"
+  _jkm="$(sed -n 's/^main=//p' "$_jkl" 2>/dev/null | head -1)"
+  _jkp="$(sed -n 's/^prime=//p' "$_jkl" 2>/dev/null | head -1)"
+  _jkt="$(sed -n 's/^little=//p' "$_jkl" 2>/dev/null | head -1)"
+  _jka="$(sed -n 's/^policies=//p' "$_jkl" 2>/dev/null | head -1)"
+  awk -F'|' -v LM="$_jkm" -v LP="$_jkp" -v LT="$_jkt" -v LA="$_jka" '
     /^#/ { next }
     NF < 13 { next }
     { n++; F += $9; J += $10; D += $11; U += $12; I += $13; S += $5
@@ -1230,6 +1285,23 @@ lk_emit_jank_summary() {
       } }
     function pct(a, b) { return b > 0 ? sprintf("%.1f%%", 100.0 * a / b) : "-" }
     function rate(a, b) { return b > 0 ? sprintf("%.2f", a / b) : "-" }
+    # One app across ASB states, touched or not (fix140); 1 when a table was printed.
+    function within(app, why,   so, ord, known, ns, i, t, k, z, tk, rows, out) {
+      split("GAMING SUSTAINED HEAVY MODERATE LIGHT_IDLE DEEP_IDLE mixed", so, " ")
+      ns = 0; for (i = 1; i <= 7; i++) { ord[++ns] = so[i]; known[so[i]] = 1 }
+      for (k in as) { split(k, z, SUBSEP); if (z[1] == app && !(z[2] in known)) { ord[++ns] = z[2]; known[z[2]] = 1 } }
+      rows = 0; out = ""
+      for (i = 1; i <= ns; i++) for (t = 1; t <= 2; t++) {
+        tk = (t == 1) ? "yes" : "no"; k = app SUBSEP ord[i] SUBSEP tk
+        if (!(k in as) || as[k] == 0) continue
+        out = out sprintf("  %-14s %-6s %9d %9d %8s %8s\n", ord[i], tk, asn[k], as[k], pct(asj[k], as[k]), rate(asj[k], ass[k])); rows++
+      }
+      if (rows < 2) return 0
+      printf "within %s (%s), by ASB state and touch:\n", app, why
+      printf "  %-14s %-6s %9s %9s %8s %8s\n", "ASB state", "touch", "intervals", "frames", "janky", "janky/s"
+      printf "%s", out
+      return 1
+    }
     END {
       if (n == 0 || F == 0) { print "no frames recorded with the screen on"; print ""; exit }
       printf "all screen-on intervals: %d  frames %d  janky %s  deadline missed %s  slow UI thread %s\n", \
@@ -1265,6 +1337,11 @@ lk_emit_jank_summary() {
       }
       # janky/s beside each share (fix143): busy intervals sit at the ceiling more often and
       # draw more frames, so on a steady floor their share is lower for that reason alone.
+      if (LT != "" && LM != "" && LP != "" && mcn["1"] + mcn["0"] + mbn["<20%"] + mbn["20-60%"] + mbn[">=60%"] > 0) {
+        mids = ""; m = split(LA, pl, " ")
+        for (i = 1; i <= m; i++) if ("policy" pl[i] != LT && "policy" pl[i] != LP && "policy" pl[i] != LM) mids = mids " and policy" pl[i]
+        printf "main cores below = %s%s (the middle clusters, under one ceiling), prime = %s; the little cluster (%s) runs no UI and is not in these lines.\n", LM, mids, LP, LT
+      }
       if (mcn["1"] + mcn["0"] > 0)
         printf "main cores at the ASB ceiling (end of interval): yes %s of %d frames (%s/s), no %s of %d frames (%s/s)\n", \
           pct(mcj["1"], mc["1"]), mc["1"], rate(mcj["1"], mcs["1"]), pct(mcj["0"], mc["0"]), mc["0"], rate(mcj["0"], mcs["0"])
@@ -1317,23 +1394,21 @@ lk_emit_jank_summary() {
       # untouched it was 43.8% in LIGHT_IDLE and 42.3% in mixed. fix143: capture 26147 showed
       # what was under those shares - about 1.5 janky frames a second in every state and at
       # every frame rate, so few frames meant a high share. janky/s is printed beside it.
-      if (top != "") {
-        split("GAMING SUSTAINED HEAVY MODERATE LIGHT_IDLE DEEP_IDLE mixed", so, " ")
-        ns = 0; for (i = 1; i <= 7; i++) { ord[++ns] = so[i]; known[so[i]] = 1 }
-        for (k in as) { split(k, z, SUBSEP); if (z[1] == top && !(z[2] in known)) { ord[++ns] = z[2]; known[z[2]] = 1 } }
-        rows = 0; out = ""
-        for (i = 1; i <= ns; i++) for (t = 1; t <= 2; t++) {
-          tk = (t == 1) ? "yes" : "no"; k = top SUBSEP ord[i] SUBSEP tk
-          if (!(k in as) || as[k] == 0) continue
-          out = out sprintf("  %-14s %-6s %9d %9d %8s %8s\n", ord[i], tk, asn[k], as[k], pct(asj[k], as[k]), rate(asj[k], ass[k])); rows++
-        }
-        if (rows >= 2) {
-          printf "within %s (most frames), by ASB state and touch:\n", top
-          printf "  %-14s %-6s %9s %9s %8s %8s\n", "ASB state", "touch", "intervals", "frames", "janky", "janky/s"
-          printf "%s", out
-          print "  Compare states inside one app: each state saw a different mix of apps, so the ASB-state"
-          print "  table above does not by itself show what a state does to smoothness."
-        }
+      wn = 0
+      if (top != "") wn += within(top, "most frames")
+      # fix146: and the app in front with the most janky frames, when that is another app.
+      # PLQ110 capture 28616: the table went to the app store (most frames, 0.8% janky) while
+      # the "LIGHT_IDLE 25.6% janky" above was YouTube playing untouched - in LIGHT_IDLE and
+      # in MODERATE alike, which only a table for YouTube shows.
+      topj = ""; jv = 0
+      for (a in apj) if (a != "multi" && a != "-" && apj[a] > jv) { topj = a; jv = apj[a] }
+      if (topj != "" && topj != top) wn += within(topj, "most janky frames")
+      if (wn > 0) {
+        print "  Compare states inside one app: each state saw a different mix of apps, so the ASB-state"
+        print "  table above does not by itself show what a state does to smoothness."
+        # fix146: the governor counts a touch that begins after 3 s without one, so steady
+        # typing reads "no" - CPH2691 Nagram "no touch" rows were typing, Gboard drawing too.
+        print "  touch = a touch began after 3 s without one; steady typing or scrolling can read no."
       }
       print "janky = a frame that missed its deadline, as Android counts it (dumpsys graphicsstats)."
       print "Games on their own GL/Vulkan surface are not HWUI frames and are not in these numbers."
@@ -2295,7 +2370,10 @@ lk_cap_cause() {
 lk_emit_cap_cause_split() {
   _ccf="$1"
   [ -s "$_ccf" ] || return 0
-  awk -F'|' '
+  # The trace's first cluster is the governor's slot 0 (fix146): the main cores on a 6+2
+  # part, the little pair on a 1+3+2+1 one, where it was still printed as "main".
+  _ccl="$(sed -n 's/^little=//p' "${2:-$LK_OUT_DIR/cluster_layout.txt}" 2>/dev/null | head -1)"
+  awk -F'|' -v L0="$_ccl" '
     NR == 1 && $0 ~ /^#/ { next }
     {
       mb = ""; pb = ""
@@ -2319,7 +2397,9 @@ lk_emit_cap_cause_split() {
     END {
       if (n == 0) exit
       print "who held the lower ceiling, per cluster (" n " samples):"
-      line("main", m); line("prime", p)
+      if (L0 != "") line("little", m); else line("main", m)
+      line("prime", p)
+      if (L0 != "") print "  little = " L0 ", the efficiency cores - the middle clusters are not in this trace"
       print "  asb_trim = ASB'"'"'s own thermal-budget/comfort trim (live == what ASB wrote)"
       print "  vendor   = a ceiling ASB did not write - PowerHAL or kernel thermal (live < what ASB wrote)"
     }' "$_ccf"
@@ -3062,6 +3142,13 @@ lk_snapshot_audio() {
     lk_dumpsys audio 2>/dev/null | grep -iE 'Devices for|Device for|Sink:|Communication device|mConnectedDevices|routed|BLE_|A2DP|SPEAKER|WIRED' | head -20
     echo "# stream volumes"
     lk_dumpsys audio 2>/dev/null | grep -iE 'STREAM_MUSIC|Current:|Muted:|- STREAM_' | head -14
+    # What Android itself does to the level on headphones and Bluetooth (fix145): the safe
+    # media volume state, sound dose (CSD) and absolute volume. A CPH2691 user: "Bluetooth
+    # got quieter - half volume used to be enough, now the maximum is barely audible", on two
+    # headsets and a car - and no capture said whether Android was capping the stream.
+    echo "# volume limits (safe media volume, sound dose, absolute volume)"
+    lk_dumpsys audio 2>/dev/null | grep -iE 'safe_?media|safemedia|csd|sound_?dose|absolute_?vol|absvol' \
+      | sed 's/^[[:space:]]*/  /' | cut -c1-180 | head -12
     echo "# bt codec"
     lk_dumpsys bluetooth_manager 2>/dev/null | grep -iE 'codec|sample_?rate|bits_?per|channel|LHDC|LDAC|aptX|SBC|AAC|state: connected' | head -20
     echo "# audioflinger effects/output"
