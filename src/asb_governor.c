@@ -2401,8 +2401,8 @@ static char g_cap_prime_reason[64] = "profile";  /* "thermal_budget:" + 32-byte 
  * matches the prime's ceiling. Nothing else moves: the prime keeps its floor and the work
  * stays on the cores built for it. Two clusters only, never above 60% of the main cluster's
  * hardware (a phone whose first cluster is truly little never qualifies), and not while a
- * thermal cap or a thermal budget trim is in force - lifting six cores is not how a warm
- * phone cools. A prime burst keeps the level it found. main_capacity_parity=0 turns it off.
+ * thermal cap is in force (a thermal budget trim was excluded too until fix156 - see below).
+ * A prime burst keeps the level it found. main_capacity_parity=0 turns it off.
  *
  * Nearest step inside the limit (fix132). A PLQ110 (SM8750, main 792 of 1024 at 3532800,
  * prime 4320000) never got the raise: 40% of the prime is 1728000, the step under it is
@@ -2412,7 +2412,18 @@ static char g_cap_prime_reason[64] = "profile";  /* "thermal_budget:" + 32-byte 
  * over the limit, the highest step inside it is taken if it reaches 90% of the prime's
  * capacity: 1996800 there (447 of 464), the same kHz an OP15 is lifted to. A cluster that
  * cannot get close (a truly little one, or a prime raised well above its floor) still stays
- * where it was. The state file says which happened (main_parity_near, main_parity_over_khz). */
+ * where it was. The state file says which happened (main_parity_near, main_parity_over_khz).
+ *
+ * Also under a trim, in HEAVY and in SUSTAINED (fix156). Those were left out on the reasoning
+ * that lifting six cores is not how a warm phone cools - and the captures show the opposite.
+ * The budget trim and SUSTAINED's 49% rail take the main ceiling to 1555200-1785600 while the
+ * prime cannot follow (its 40% floor holds it at 1862400), so the prime becomes the bigger
+ * cluster exactly when the phone is warm. Nine OP15 captures, warm (surface 40 C+) MODERATE
+ * screen-on samples: main level with the prime - prime working in 9%, 337 mA, die 44.1 C;
+ * main more than 10% below it - prime working in 67%, 456 mA, die 47.7 C. SUSTAINED: 73-86%
+ * prime, 52-56 C. The trim still lowers the GPU and the background tier, and a real thermal
+ * cap (throttling or a hard vendor clamp) still keeps the raise out. GAMING keeps its own path.
+ * main_parity_cooling says the raise is the one held under a trim or in HEAVY/SUSTAINED. */
 static int g_parity_cap0 = -2;              /* cpu_capacity, first cpu of policy0; -2 unread */
 static int g_parity_cap1 = -2;              /* ... of the prime policy; -1 unreadable */
 static int g_parity_main_khz = 0;           /* main ceiling raised this pass, 0 = none */
@@ -2420,6 +2431,8 @@ static unsigned long g_parity_lifts = 0;    /* passes that started a raise */
 static int g_parity_near = 0;               /* 1 = the raise is the nearest step inside the limit */
 static int g_parity_over_khz = 0;           /* the level step when it sat over the limit, else 0 */
 #define ASB_PARITY_NEAR_PCT 90              /* the nearest step must reach this share of the prime */
+static int g_parity_cooling = 0;            /* fix156: the raise is held under a trim or in HEAVY/SUSTAINED */
+static unsigned long g_parity_cool_lifts = 0;
 
 static int asb_cpu_capacity_of(int cpu) {
     char p[96];
@@ -2434,9 +2447,9 @@ static void asb_main_capacity_parity(asb_profile_caps_t *caps, const asb_metrics
     int lift = 0, near = 0, over = 0;
     int ok = g_asb_cfg.main_capacity_parity && fsm->profile_idx == PROFILE_SMART &&
              g_cpu_all_count == 2 && g_cpu_policy_ids[0] >= 0 && g_cpu_policy_ids[1] >= 0 &&
-             g_cpu_policy_ids[2] < 0 && m->misc.screen_on && !fsm->thermal_cap && trim <= 0 &&
+             g_cpu_policy_ids[2] < 0 && m->misc.screen_on && !fsm->thermal_cap &&
              !m->misc.camera_active && m->misc.app_hint < ASB_APP_GAMING &&
-             (fsm->state == ASB_STATE_LIGHT_IDLE || fsm->state == ASB_STATE_MODERATE) &&
+             fsm->state >= ASB_STATE_LIGHT_IDLE && fsm->state <= ASB_STATE_SUSTAINED &&
              caps->cpu_max[0] > 0 && caps->cpu_max[1] > 0;
     if (ok && fsm->prime_escape) {
         lift = was; near = g_parity_near; over = g_parity_over_khz;
@@ -2473,6 +2486,11 @@ static void asb_main_capacity_parity(asb_profile_caps_t *caps, const asb_metrics
     if (lift > 0 && caps->cpu_max[0] < lift) caps->cpu_max[0] = lift;
     else { lift = 0; near = 0; }
     if (lift > 0 && was <= 0) g_parity_lifts++;
+    {
+        int cool = (lift > 0 && (trim > 0 || fsm->state >= ASB_STATE_HEAVY));
+        if (cool && !g_parity_cooling) g_parity_cool_lifts++;
+        g_parity_cooling = cool;
+    }
     g_parity_main_khz = lift;
     g_parity_near = near;
     g_parity_over_khz = over;
@@ -3247,6 +3265,7 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     fprintf(f, "main_parity_khz=%d\nmain_parity_lifts=%lu\nmain_parity_capacity=\"%d,%d\"\n",
             g_parity_main_khz, g_parity_lifts, g_parity_cap0, g_parity_cap1);
     fprintf(f, "main_parity_near=%d\nmain_parity_over_khz=%d\n", g_parity_near, g_parity_over_khz);
+    fprintf(f, "main_parity_cooling=%d\nmain_parity_cool_lifts=%lu\n", g_parity_cooling, g_parity_cool_lifts);
     /* Unlock lift (fix150): in force on the last write, lifts started (wakes and first
      * touches), wakes that did not lift and why the last one did not. */
     fprintf(f, "unlock_lift=%d\nunlock_lifts=%lu\nunlock_lift_skips=%lu\nunlock_lift_skip_why=%s\n",
