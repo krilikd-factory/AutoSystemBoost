@@ -3740,6 +3740,8 @@ const TECH_ICON_PATHS = {
   audio_profile: '<path d="M7 4v3.2M7 11.6v8.4M12 4v8.2M12 17.4v2.6M17 4v5.2M17 14.6v5.4"/><circle cx="7" cy="9.4" r="1.9"/><circle cx="12" cy="15.2" r="1.9"/><circle cx="17" cy="12.4" r="1.9"/>',
   dac: '<rect x="6" y="6" width="12" height="12" rx="2.4"/><path d="M9 3.2v1.6M12 3.2v1.6M15 3.2v1.6M9 19.2v1.6M12 19.2v1.6M15 19.2v1.6"/><path d="M8.4 12h1.3l1-2.2 1.5 4.4 1-2.2h2.4"/>',
   media_volume: '<path d="M4.5 9.6v4.8h3L12 18.4V5.6L7.5 9.6z"/><path d="M15.3 9.4a4 4 0 0 1 0 5.2M17.9 7a7.6 7.6 0 0 1 0 10"/>',
+  resampler: '<path d="M3 13.4l2.1-4.2 2.1 7.2 2.1-5"/><path d="M11.2 12h2.6M12.6 10.6l1.4 1.4-1.4 1.4"/><path d="M15.6 12c.9-2.4 1.8-2.4 2.7 0s1.8 2.4 2.7 0"/>',
+  vol_steps: '<path d="M4.5 19.5v-2M7.5 19.5v-4M10.5 19.5v-6M13.5 19.5v-8M16.5 19.5v-10M19.5 19.5v-12"/>',
   volume_sync: '<path d="M4 10v4h2.8l4 3.4V6.6L6.8 10z"/><path d="M13.6 8.6a5 5 0 0 1 0 6.8"/><path d="M17.6 5.4v13.2M17.6 5.4 15.8 7.2M17.6 5.4l1.8 1.8M17.6 18.6l-1.8-1.8M17.6 18.6l1.8-1.8"/>',
   bluetooth_offload: '<path d="M7.2 7.6l9.6 8-4.8 3.9V4.5l4.8 3.9-9.6 8"/><rect x="14.6" y="14.6" width="6.4" height="6.4" rx="1.6"/>',
   loudness: '<path d="M4.5 9.6v4.8h3L12 18.4V5.6L7.5 9.6z"/><path d="M15.5 12h5M18 9.5v5"/>',
@@ -4691,6 +4693,8 @@ const SNAP_KEYS = [
   'dsp_outputs',
   'gms_trim',
   'audio_remove_volume_limit',
+  'audio_resampler',
+  'media_vol_steps',
   'purge_vendor_logs',
   'doze_trim_whitelist',
   'gms_freeze',
@@ -4723,10 +4727,14 @@ const CFG_ITEMS = [
   { key:'dsp_compressor', type:'seg', def:'on', opts:['on','off'], name:'DSP Compressor',
     desc:'On suits large gain: it holds the body of a track down so peaks stay clean. Off suits modest gain (+2..+4 dB), where the compressor only squashes dynamics that never needed it. The true-peak limiter stays either way, so off cannot clip - but at high gain it makes the limiter work constantly, which sounds worse. Does nothing while DSP Loudness is off.' },
   // --- Audio ---,
-  { key:'dsp_outputs', type:'seg', def:'all', stock:'all', opts:['all','speaker','wired','bt','speaker+wired','speaker+bt','wired+bt'], name:'DSP Outputs',
-    desc:'Which outputs the DSP is allowed to work on. It used to attach to all of them at once, so a boost meant for Bluetooth headphones also lifted the loudspeaker - the smallest driver in the phone and the one least able to take extra gain. Pick only what you actually want processed: speaker is the built-in one, wired covers headphone jack and USB DACs, bt is Bluetooth. Outputs this phone does not have are simply never matched. Bluetooth and battery: an audio effect on the wireless output can take the stream off the offloaded playback path, so the CPU stays awake as long as audio plays with the screen off - one full-day capture showed 100% awake during Bluetooth listening with gain on. If battery life during long screen-off listening matters, leave Bluetooth out.' },
+  { key:'dsp_outputs', type:'seg', def:'all', stock:'all', opts:['off','all','speaker','wired','bt','speaker+wired','speaker+bt','wired+bt'], name:'DSP Outputs',
+    desc:'Off switches the whole DSP off in one step - loudness, bass, voice tone and compressor keep their positions and come back as they were when you pick an output again.\n\nWhich outputs the DSP is allowed to work on. It used to attach to all of them at once, so a boost meant for Bluetooth headphones also lifted the loudspeaker - the smallest driver in the phone and the one least able to take extra gain. Pick only what you actually want processed: speaker is the built-in one, wired covers headphone jack and USB DACs, bt is Bluetooth. Outputs this phone does not have are simply never matched. Bluetooth and battery: an audio effect on the wireless output can take the stream off the offloaded playback path, so the CPU stays awake as long as audio plays with the screen off - one full-day capture showed 100% awake during Bluetooth listening with gain on. If battery life during long screen-off listening matters, leave Bluetooth out.' },
   { key:'audio_remove_volume_limit', type:'seg', def:'0', stock:'0', opts:['0','1'], name:'Headphone Volume Limit',
     desc:'Android caps headphone output above the level the EU considers unsafe for sustained listening, and warns you when you cross it. Removing that cap lets the existing volume slider go further - it does not make anything louder by itself.\n\nASB used to remove it silently as part of another category. It is now a choice, off by default, because how loud is too loud in your ears is not a decision a performance module should make for you.\n\nHearing damage from sustained loud listening is cumulative and permanent. If you remove the cap, watch the duration as much as the level.' },
+  { key:'audio_resampler', type:'seg', def:'stock', stock:'stock', opts:['stock','high','max'], name:'Resampler Quality',
+    desc:'How Android converts audio between sample rates. It only matters when a track and the output run at different rates - typically 44.1 kHz music on a 48 kHz output, which covers most streaming and most local files. Stock keeps the resampler exactly as the ROM ships it.\n\nHigh gives that conversion a longer, steeper filter (140 dB stopband instead of about 90, five times the length) on every output from 44.1 kHz up: less aliasing, a cleaner top octave. Max goes further still (179 dB, ten times the length). The difference is measurable; whether you hear it depends on your ears and headphones - for most people on most material it is inaudible.\n\nNot affected: playback that already runs at the output rate, offloaded playback (the audio DSP converts there on its own) and the Bluetooth codec itself. The cost is CPU while audio plays: small on High, noticeably more on Max. Reboot to apply - the audio server reads it only at start.' },
+  { key:'media_vol_steps', type:'seg', def:'stock', stock:'stock', opts:['stock','30','50'], name:'Media Volume Steps',
+    desc:'How many positions the media volume slider has. Stock keeps what the phone ships with (15 on plain Android; some ROMs use more). 30 or 50 make each step smaller, so you can set the level you want instead of choosing between a bit too quiet and a bit too loud - useful at night and with sensitive headphones.\n\nThe loudest position stays exactly as loud as before; only the spacing changes. After the reboot the slider keeps its saved step number, so the first playback can be quieter than you left it - raise it once. Some ROMs ignore this setting; the action button and asbdiag show the number of steps the system actually uses. Reboot to apply.' },
   { key:'CAMERA_LEVEL', type:'range', def:'0', min:0, max:10, step:1, name:'Camera Grade',
     desc:'Photo + video colour, detail and sharpness: 0 = stock. Levels 1–6 are progressive, while 7–10 are deliberately strong and visibly stylised. The grade multiplies your firmware’s own values, so it works across different OnePlus tuning files. Level 10 reaches 2.5× chroma, 3.4× AI blend and 3.5× sharpness before capability clamps. Reboot to re-grade from a clean baseline; high levels can band in deep shadows.' },
   { key:'CAMERA_CONTRAST', type:'range', def:'3', min:0, max:10, step:1, name:'Contrast & Colour Depth',
@@ -4905,7 +4913,7 @@ const CFG_CAT = {
   heavy_prime_escape:'battery', prime_escape_burst_s:'battery', prime_escape_rest_s:'battery', wakelock_fitness:'battery',
   bt_a2dp_offload:'audio', bat_suppress_gaming:'battery',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
-  dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_compressor:'audio', dsp_outputs:'audio', audio_remove_volume_limit:'audio', bt_absvol_mode:'audio', bt_link_stability:'audio',
+  dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_compressor:'audio', dsp_outputs:'audio', audio_remove_volume_limit:'audio', audio_resampler:'audio', media_vol_steps:'audio', bt_absvol_mode:'audio', bt_link_stability:'audio',
   CAMERA_LEVEL:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_PORTRAIT:'camera', CAMERA_CONTRAST:'camera', CAMERA_GRAIN:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   cool_gaming:'battery',
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery',
@@ -4963,7 +4971,7 @@ const CFG_GROUP_OF = {
   camera_hold_enable:'camera', bt_a2dp_offload:'audio',
   night_quiet_enable:'battery', bat_suppress_gaming:'battery', log_level:'ui', phantom_procs:'ui',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
-  dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_compressor:'audio', dsp_outputs:'audio', audio_remove_volume_limit:'audio',
+  dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_compressor:'audio', dsp_outputs:'audio', audio_remove_volume_limit:'audio', audio_resampler:'audio', media_vol_steps:'audio',
   bt_absvol_mode:'audio', bt_link_stability:'audio',
   CAMERA_LEVEL:'camera', CAMERA_GRAIN:'camera', CAMERA_CONTRAST:'camera',
   CAMERA_PORTRAIT:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
@@ -4984,7 +4992,7 @@ const CFG_GROUP_SECTIONS = {
     { id:'playback', icon:'headphones', titleKey:'cfg_audio_section_playback',
       title:'Playback & Bluetooth', hintKey:'cfg_audio_section_playback_hint',
       hint:'Choose the audio path and Bluetooth behaviour.',
-      keys:['audio_profile','audio_dac_hifi','media_loudness','bt_absvol_mode','bt_a2dp_offload','bt_link_stability'] },
+      keys:['audio_profile','audio_dac_hifi','media_loudness','media_vol_steps','audio_resampler','bt_absvol_mode','bt_a2dp_offload','bt_link_stability'] },
     { id:'dsp', icon:'dsp', titleKey:'cfg_audio_section_dsp',
       title:'ASB DSP Engine', hintKey:'cfg_audio_section_dsp_hint',
       hint:'Optional gain, bass and dynamics processing on the outputs you select.',
@@ -5240,7 +5248,7 @@ const CFG_ICONS = {
   net_wifi_leave:'wifileave',
   mglru_hold:'memhold',
   audio_profile:'audio_profile', audio_dac_hifi:'dac', media_loudness:'media_volume', bt_absvol_mode:'volume_sync', bt_a2dp_offload:'bluetooth_offload',
-  dsp_loudness:'loudness', dsp_bass:'bass', dsp_voice:'voice', dsp_compressor:'compressor', dsp_outputs:'audio_route', audio_remove_volume_limit:'ear_safe',
+  dsp_loudness:'loudness', dsp_bass:'bass', dsp_voice:'voice', dsp_compressor:'compressor', dsp_outputs:'audio_route', audio_remove_volume_limit:'ear_safe', audio_resampler:'resampler', media_vol_steps:'vol_steps',
   CAMERA_LEVEL:'camera_level', CAMERA_CONTRAST:'contrast', CAMERA_GRAIN:'grain', CAMERA_PORTRAIT:'portrait', CAMERA_LOWLIGHT:'lowlight', camera_hold_enable:'camera_hold', CAMERA_AGGRESSIVE:'camera_aggressive', CAMERA_AGGRESSIVE_INJECT:'camera_inject',
   UX_MANAGE_TIMEOUTS:'timeout', anim_speed:'anim_speed', UX_ANIM_FORCE_RESTART:'anim_restart', disable_blur:'blur', ui_effects_level:'effects',
   net_congestion:'congestion', net_congestion_wifi:'wifi_congestion', net_congestion_mobile:'mobile_congestion', net_qdisc:'qdisc', net_qdisc_wifi:'wifi_queue', net_qdisc_mobile:'mobile_queue',
@@ -5522,6 +5530,10 @@ function cfgStatus(it, cur) {
   // dsp_outputs only means anything while the DSP is actually processing. Showing it in
   // the same active state as a working setting invites the reading that routing is on
   // when nothing is being routed.
+  if (_cfgVals['dsp_outputs'] === 'off' &&
+      ['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_compressor'].indexOf(it.key) >= 0) {
+    return { cls:'neutral', text:T('dsp_idle', 'DSP off') };
+  }
   if (it.key === 'dsp_outputs') {
     const g = parseInt(_cfgVals['dsp_loudness'] || '0', 10);
     const b = parseInt(_cfgVals['dsp_bass'] || '0', 10);
@@ -5586,6 +5598,8 @@ function cfgIsActive(it, cur) {
     const n = parseInt(cur, 10);
     return !(n === -1 || n === 6);
   }
+  if (_cfgVals['dsp_outputs'] === 'off' &&
+      ['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_compressor'].indexOf(it.key) >= 0) return false;
   if (it.key === 'dsp_outputs') {
     const g = parseInt(_cfgVals['dsp_loudness'] || '0', 10);
     const b = parseInt(_cfgVals['dsp_bass'] || '0', 10);
@@ -5740,6 +5754,8 @@ const APPLY_MODE = {
   net_txqueue:APPLY_LIVE,
   athena_service:APPLY_NEXT,
   audio_remove_volume_limit:APPLY_REBOOT,
+  audio_resampler:APPLY_REBOOT,
+  media_vol_steps:APPLY_REBOOT,
   doze_trim_whitelist:APPLY_LIVE,
   dsp_outputs:APPLY_LIVE,
   phantom_procs:APPLY_NEXT
