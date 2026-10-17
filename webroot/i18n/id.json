@@ -951,5 +951,17 @@
   "doze_tag_give": "dikecualikan saat Selesai",
   "doze_keep_day": "Tidur dalam disetel ke malam: ASB memangkas hanya di dalam jendela tidur (%s). Sekarang jendela tertutup, jadi semua aplikasi yang dipangkas sudah kembali dan Dipangkas kosong sampai malam. Aplikasi yang dicentang tetap dikecualikan siang dan malam.",
   "doze_keep_legend_title": "Arti label",
-  "doze_keep_legend": "Dikecualikan - Android sendiri mengecualikan aplikasi ini: Anda mengizinkannya (Baterai > Tidak dibatasi) atau aplikasi memintanya. ASB tidak menyentuhnya.\nDikecualikan ASB - Android tidak mengecualikannya; ASB memberikannya karena Anda mencentang aplikasi. Hapus centang dan ASB mencabutnya.\nDipangkas ASB - aplikasi tadinya dikecualikan dan ASB mencabut pengecualiannya. Centang dan pengecualian kembali.\nTidak dipangkas - dilindungi aturan ASB sendiri: autentikator, Bluetooth, jam dan gelang, ID penelepon.\nDicentang - daftar Anda: ASB tidak pernah memangkas aplikasi ini dan menjaganya tetap dikecualikan.\nDipangkas - aplikasi yang pengecualiannya sedang dicabut ASB. Dengan Tidur dalam di mode malam, daftar ini hanya terisi di dalam jendela tidur."
+  "doze_keep_legend": "Dikecualikan - Android sendiri mengecualikan aplikasi ini: Anda mengizinkannya (Baterai > Tidak dibatasi) atau aplikasi memintanya. ASB tidak menyentuhnya.\nDikecualikan ASB - Android tidak mengecualikannya; ASB memberikannya karena Anda mencentang aplikasi. Hapus centang dan ASB mencabutnya.\nDipangkas ASB - aplikasi tadinya dikecualikan dan ASB mencabut pengecualiannya. Centang dan pengecualian kembali.\nTidak dipangkas - dilindungi aturan ASB sendiri: autentikator, Bluetooth, jam dan gelang, ID penelepon.\nDicentang - daftar Anda: ASB tidak pernah memangkas aplikasi ini dan menjaganya tetap dikecualikan.\nDipangkas - aplikasi yang pengecualiannya sedang dicabut ASB. Dengan Tidur dalam di mode malam, daftar ini hanya terisi di dalam jendela tidur.",
+  "lv_slot_temp": "Puncak biasa",
+  "lv_scr_on": "Layar menyala",
+  "lv_scr_off": "Layar mati",
+  "lv_drain_title": "Pemakaian baterai",
+  "lv_drain_on_now": "diukur dalam %s menit terakhir dengan layar menyala",
+  "lv_drain_on_recent": "perkiraan dari pemakaian layar menyala terakhir Anda - hasil ukur menggantikannya setelah 10 menit layar menyala",
+  "lv_drain_on_slot": "perkiraan dari biaya biasa jam ini - belum ada yang diukur sejak mulai",
+  "lv_drain_on_wait": "butuh 10 menit dengan layar menyala dan level baterai turun",
+  "lv_drain_off_measured": "diukur dari %s periode layar mati satu jam atau lebih, tanpa mengisi daya dan musik",
+  "lv_drain_off_wait": "butuh satu jam dengan layar mati, tanpa mengisi daya dan musik",
+  "lv_drain_left": "sampai 0%: %s",
+  "lv_drain_note": "Kedua angka berasal dari level baterai itu sendiri, bukan sensor arus: lebih lambat stabil, tetapi cocok dengan layar baterai."
 }

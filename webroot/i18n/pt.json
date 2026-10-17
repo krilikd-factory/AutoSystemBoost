@@ -951,5 +951,17 @@
   "doze_tag_give": "isenta ao tocar Concluído",
   "doze_keep_day": "Sono profundo está em à noite: o ASB remove isenções só dentro da janela de sono (%s). Agora ela está fechada, então todos os apps removidos voltaram e Removidas fica vazia até a noite. Apps assinalados mantêm a isenção de dia e de noite.",
   "doze_keep_legend_title": "O que as etiquetas significam",
-  "doze_keep_legend": "Isenta - o próprio Android isenta este app: você permitiu (Bateria > Sem restrições) ou o app pediu. O ASB não mexeu nele.\nIsenção do ASB - o Android não o isentava; o ASB deu a isenção porque você assinalou o app. Desmarque e o ASB a retira.\nRemovida pelo ASB - o app era isento e o ASB tirou a isenção. Assinale-o e a isenção volta.\nNunca reduzida - protegida pelas regras do ASB: autenticadores, Bluetooth, relógios e pulseiras, identificador de chamadas.\nAssinaladas - sua lista: o ASB nunca mexe nesses apps e os mantém isentos.\nRemovidas - os apps dos quais o ASB tirou a isenção agora. Com Sono profundo à noite, essa lista só se preenche dentro da janela de sono."
+  "doze_keep_legend": "Isenta - o próprio Android isenta este app: você permitiu (Bateria > Sem restrições) ou o app pediu. O ASB não mexeu nele.\nIsenção do ASB - o Android não o isentava; o ASB deu a isenção porque você assinalou o app. Desmarque e o ASB a retira.\nRemovida pelo ASB - o app era isento e o ASB tirou a isenção. Assinale-o e a isenção volta.\nNunca reduzida - protegida pelas regras do ASB: autenticadores, Bluetooth, relógios e pulseiras, identificador de chamadas.\nAssinaladas - sua lista: o ASB nunca mexe nesses apps e os mantém isentos.\nRemovidas - os apps dos quais o ASB tirou a isenção agora. Com Sono profundo à noite, essa lista só se preenche dentro da janela de sono.",
+  "lv_slot_temp": "Pico habitual",
+  "lv_scr_on": "Tela ligada",
+  "lv_scr_off": "Tela desligada",
+  "lv_drain_title": "Consumo da bateria",
+  "lv_drain_on_now": "medido nos últimos %s min com a tela ligada",
+  "lv_drain_on_recent": "estimativa pelo seu uso recente com a tela ligada - a medição a substitui após 10 minutos com a tela ligada",
+  "lv_drain_on_slot": "estimativa pelo custo habitual desta hora - nada medido desde o início",
+  "lv_drain_on_wait": "precisa de 10 minutos com a tela ligada e o nível da bateria caindo",
+  "lv_drain_off_measured": "medido em %s período(s) com a tela desligada de uma hora ou mais, sem carregar nem música",
+  "lv_drain_off_wait": "precisa de uma hora com a tela desligada, sem carregar nem música",
+  "lv_drain_left": "até 0%: %s",
+  "lv_drain_note": "Os dois valores vêm do próprio nível da bateria, não do sensor de corrente: demoram mais a assentar, mas batem com a tela de bateria."
 }

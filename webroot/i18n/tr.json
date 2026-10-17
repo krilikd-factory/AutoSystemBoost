@@ -951,5 +951,17 @@
   "doze_tag_give": "Tamam ile muaf olur",
   "doze_keep_day": "Derin uyku geceleri modunda: ASB yalnızca uyku penceresinde kırpar (%s). Pencere şu an kapalı; kırpılan tüm uygulamalar geri verildi ve Kırpılan bu geceye kadar boş kalır. İşaretli uygulamalar muafiyetlerini gece gündüz korur.",
   "doze_keep_legend_title": "Etiketlerin anlamı",
-  "doze_keep_legend": "Muaf - Android bu uygulamayı kendisi muaf tutuyor: siz izin verdiniz (Pil > Kısıtlamasız) ya da uygulama istedi. ASB dokunmadı.\nASB muafiyeti - Android'de muafiyeti yoktu; uygulamayı işaretlediğiniz için ASB verdi. İşareti kaldırırsanız ASB geri alır.\nASB kırptı - uygulama muaftı ve ASB muafiyeti kaldırdı. İşaretlerseniz muafiyet geri gelir.\nKırpılmaz - ASB'nin kendi kurallarıyla korunur: kimlik doğrulayıcılar, Bluetooth, saatler ve bileklikler, arayan kimliği.\nİşaretli - sizin listeniz: ASB bu uygulamaları asla kırpmaz ve muaf tutar.\nKırpılan - ASB'nin şu anda muafiyetini kaldırdığı uygulamalar. Derin uyku geceleri modundayken bu liste yalnızca uyku penceresinde dolar."
+  "doze_keep_legend": "Muaf - Android bu uygulamayı kendisi muaf tutuyor: siz izin verdiniz (Pil > Kısıtlamasız) ya da uygulama istedi. ASB dokunmadı.\nASB muafiyeti - Android'de muafiyeti yoktu; uygulamayı işaretlediğiniz için ASB verdi. İşareti kaldırırsanız ASB geri alır.\nASB kırptı - uygulama muaftı ve ASB muafiyeti kaldırdı. İşaretlerseniz muafiyet geri gelir.\nKırpılmaz - ASB'nin kendi kurallarıyla korunur: kimlik doğrulayıcılar, Bluetooth, saatler ve bileklikler, arayan kimliği.\nİşaretli - sizin listeniz: ASB bu uygulamaları asla kırpmaz ve muaf tutar.\nKırpılan - ASB'nin şu anda muafiyetini kaldırdığı uygulamalar. Derin uyku geceleri modundayken bu liste yalnızca uyku penceresinde dolar.",
+  "lv_slot_temp": "Olağan zirve",
+  "lv_scr_on": "Ekran açık",
+  "lv_scr_off": "Ekran kapalı",
+  "lv_drain_title": "Pil tüketimi",
+  "lv_drain_on_now": "ekran açıkken son %s dakikada ölçüldü",
+  "lv_drain_on_recent": "ekran açık son kullanımınıza göre tahmin - ekran açık 10 dakika sonra ölçüm yerini alır",
+  "lv_drain_on_slot": "bu saatin olağan tüketimine göre tahmin - başlangıçtan beri henüz ölçüm yok",
+  "lv_drain_on_wait": "ekran açık ve pil seviyesi düşerken 10 dakika gerekir",
+  "lv_drain_off_measured": "şarj ve müzik olmadan, bir saat veya daha uzun %s ekran kapalı dönemde ölçüldü",
+  "lv_drain_off_wait": "şarj ve müzik olmadan ekran kapalı bir saat gerekir",
+  "lv_drain_left": "%0’a kadar: %s",
+  "lv_drain_note": "İki değer de akım sensöründen değil, pil seviyesinin kendisinden gelir: daha yavaş oturur ama pil ekranıyla örtüşür."
 }
