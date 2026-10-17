@@ -137,7 +137,7 @@ static void on_wake(int) { g_wake = 1; }
 static void asb_tunables_sig(char *out, size_t n) {
     char a[PROP_VALUE_MAX] = {0}, b[PROP_VALUE_MAX] = {0}, c[PROP_VALUE_MAX] = {0};
     char d[PROP_VALUE_MAX] = {0}, e[PROP_VALUE_MAX] = {0}, f[PROP_VALUE_MAX] = {0};
-    char g[PROP_VALUE_MAX] = {0}, h[PROP_VALUE_MAX] = {0};
+    char g[PROP_VALUE_MAX] = {0}, h[PROP_VALUE_MAX] = {0}, w[PROP_VALUE_MAX] = {0};
     __system_property_get("persist.asb.dsp.ceiling_mb", a);
     __system_property_get("persist.asb.dsp.comp", b);
     __system_property_get("persist.asb.dsp.comp_ratio_x10", c);
@@ -146,7 +146,8 @@ static void asb_tunables_sig(char *out, size_t n) {
     __system_property_get("persist.asb.dsp.postgain_x100", f);
     __system_property_get("persist.asb.dsp.bass_db", g);
     __system_property_get("persist.asb.dsp.voice", h);   // fix75 voice tone
-    snprintf(out, n, "%s|%s|%s|%s|%s|%s|%s|%s", a, b, c, d, e, f, g, h);
+    __system_property_get("persist.asb.dsp.width", w);   // fix160 stereo width
+    snprintf(out, n, "%s|%s|%s|%s|%s|%s|%s|%s|%s", a, b, c, d, e, f, g, h, w);
 }
 
 int main(int /*argc*/, char** /*argv*/) {

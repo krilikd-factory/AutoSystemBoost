@@ -44,6 +44,14 @@
 #define ASB_VOICE_PRES_HZ   3200.0f
 #define ASB_VOICE_PRES_Q    1.0f
 #define ASB_VOICE_PRES_DB  (-0.6f)
+/* Stereo width ("dsp_width", 0..10). Mid/side: the side signal above ASB_WIDTH_HP_HZ is
+ * raised by ASB_WIDTH_STEP per level (level 10 = side x2.0, +6 dB), the mid is untouched.
+ * A centred voice or a mono recording therefore comes out exactly as it went in, and the
+ * low end stays mono - widening bass only smears it and wastes the speaker's excursion.
+ * Two-channel streams only. */
+#define ASB_WIDTH_MAX       10
+#define ASB_WIDTH_STEP      0.1f
+#define ASB_WIDTH_HP_HZ     180.0f
 #define ASB_CEIL_MB_MIN   (-600)
 #define ASB_CEIL_MB_MAX   (-30)
 #define ASB_RATIO_MIN      10
@@ -100,6 +108,12 @@ typedef struct {
     float    vc[2][5];                              /* b0 b1 b2 a1 a2 per band, a0-normalised */
     float    vx1[2][ASB_MAX_CH], vx2[2][ASB_MAX_CH];
     float    vy1[2][ASB_MAX_CH], vy2[2][ASB_MAX_CH];
+    /* Stereo width: after the tone stages and before the detector, for the same reason -
+     * the limiter has to see the wider signal. */
+    int      width_on;
+    float    wside;                                 /* extra side gain, 0.1 .. 1.0 */
+    float    whp_a;                                 /* one-pole high-pass on the side */
+    float    whp_x1, whp_y1;
 } asb_core_t;
 
 static inline int  asb_core_clamp(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
@@ -265,6 +279,30 @@ static inline float asb_core_voice_step(asb_core_t *c, int k, float x) {
     return x;
 }
 
+/* Stereo width level 0..10; 0 disables the stage and the samples pass untouched.
+ * Called after asb_core_configure*(), like the tone stages: it needs the channel count. */
+static inline void asb_core_set_width(asb_core_t *c, int level, uint32_t rate) {
+    c->whp_x1 = c->whp_y1 = 0.0f;
+    if (level < 0) level = 0;
+    if (level > ASB_WIDTH_MAX) level = ASB_WIDTH_MAX;
+    c->width_on = 0;
+    if (level == 0 || c->channels != 2 || rate == 0) return;
+    c->wside = ASB_WIDTH_STEP * (float)level;
+    c->whp_a = expf(-2.0f * 3.14159265358979f * ASB_WIDTH_HP_HZ / (float)rate);
+    c->width_on = 1;
+}
+
+static inline void asb_core_width_step(asb_core_t *c, float *l, float *r) {
+    float m  = 0.5f * (*l + *r);
+    float s  = 0.5f * (*l - *r);
+    float hp = c->whp_a * (c->whp_y1 + s - c->whp_x1);
+    c->whp_x1 = s;
+    c->whp_y1 = hp;
+    s += c->wside * hp;
+    *l = m + s;
+    *r = m - s;
+}
+
 static inline void asb_core_reset(asb_core_t *c) {
     c->env = 0.0f; c->cenv = 0.0f; c->cg_hold = c->cmakeup; c->cg_count = 0;
 }
@@ -331,11 +369,12 @@ static inline void asb_core_process_f32(asb_core_t *c, const float *in, float *o
         /* Bass first: the detector below must measure the boosted signal, otherwise the
          * extra low end bypasses the compressor and the limiter and clips on output. */
         float bs[ASB_MAX_CH];
-        if (c->bass_on || c->voice_on) {
+        if (c->bass_on || c->voice_on || c->width_on) {
             for (int k = 0; k < ch; k++) {
                 float x = c->bass_on ? asb_core_bass_step(c, k, src[k]) : src[k];
                 bs[k] = c->voice_on ? asb_core_voice_step(c, k, x) : x;
             }
+            if (c->width_on) asb_core_width_step(c, &bs[0], &bs[1]);
             src = bs;
         }
         float peak = 0.0f;
@@ -378,6 +417,7 @@ static inline void asb_core_process_s16(asb_core_t *c, const int16_t *in, int16_
             if (c->voice_on) x = asb_core_voice_step(c, k, x);
             bs[k] = x;
         }
+        if (c->width_on) asb_core_width_step(c, &bs[0], &bs[1]);
         float peak = 0.0f;
         for (int k = 0; k < ch; k++) { float a = fabsf(bs[k]); if (a > peak) peak = a; }
         float cg = asb_core_comp_step(c, peak);

@@ -139,6 +139,7 @@ class AsbLoudnessContext final : public EffectContext {
         int post   = asb_dsp_prop("postgain_x100", 300);
         int bass   = asb_dsp_prop("bass_db", 0);
         int voice  = asb_dsp_prop("voice", 0);
+        int width  = asb_dsp_prop("width", 0);
         if (gainOverrideMb >= 0) {
             gain = gainOverrideMb;
             if (gain > 0) enable = 1;
@@ -147,7 +148,7 @@ class AsbLoudnessContext final : public EffectContext {
                      << " ceiling_mb=" << ceil << " comp=" << comp << " ratio=" << ratio
                      << " thresh_mb=" << thresh << " softclip=" << soft
                      << " postgain_x100=" << post << " bass_db=" << bass
-                     << " voice=" << voice
+                     << " voice=" << voice << " stereo_width=" << width
                      << " rate=" << rate << " ch=" << ch
                      << (gainOverrideMb >= 0 ? " (gain from parameter)" : " (gain from property)");
         asb_core_configure_ex(&mCore, enable, gain, ceil, comp, ratio, thresh, ch,
@@ -155,6 +156,7 @@ class AsbLoudnessContext final : public EffectContext {
         // After configure: it is what sets the channel count the shelf needs.
         asb_core_set_bass(&mCore, bass, (uint32_t)rate);
         asb_core_set_voice(&mCore, voice, (uint32_t)rate);
+        asb_core_set_width(&mCore, width, (uint32_t)rate);
         mGainMb = gain;
     }
 
