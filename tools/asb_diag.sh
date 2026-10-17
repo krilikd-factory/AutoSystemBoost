@@ -2687,6 +2687,14 @@ esac
 case "$_odm" in ''|0|*[!0-9]*) : ;; *)
   NOTE "  left out since the governor started: $_odm screen-off stretch(es) with audio playing (music with the screen off is not idle)" ;;
 esac
+_dmf=/dev/.asb_drain_meter; [ -s "$_dmf" ] || _dmf=/data/adb/asb/drain_meter
+if [ -s "$_dmf" ]; then
+  NOTE "drain by profile (the same meter for each, Stock included):"
+  awk '$1 != "current" && NF >= 6 {
+         on = ($2 >= 600 && $3 > 0) ? sprintf("%.1f%%/h over %d min", $3 * 36 / $2, $2 / 60) : "not measured";
+         off = ($6 >= 1 && $4 > 0) ? sprintf("%.2f%%/h over %d window(s)", $5 * 36 / $4, $6) : "not measured";
+         printf "    %-12s screen on %s · screen off %s\n", $1, on, off }' "$_dmf" 2>/dev/null | while IFS= read -r _dml; do P "$_dml"; done
+fi
 
 SEC "5a6. SCREEN-OFF CLASS  (what the last screen-off stretch actually was)"
 # Two identical-looking idle hours can be deep sleep or Bluetooth playback. Naming which
@@ -3983,7 +3991,7 @@ P "     not an install error - it works the moment you turn it on."
 P ""
 P "  B. WHAT IS REALLY IN EFFECT ON THE DEVICE  (every live check above, one line each)"
 if [ -n "$CHK_LIST" ]; then
-  printf '%s' "$CHK_LIST" | while IFS='	' read -r _cs _cl _ce _ca; do
+  printf '%s' "$CHK_LIST" | awk -F'	' 'BEGIN { OFS = "	" } { sub(/^ +/, "", $2) } NF && !seen[$1 FS $2 FS $4]++ { print $1, $2, $3, $4 }' | while IFS='	' read -r _cs _cl _ce _ca; do
     [ -n "$_cs" ] || continue
     [ "${#_ca}" -gt 48 ] && _ca="$(printf '%s' "$_ca" | cut -c1-45)..."
     P "     [$_cs] $_cl  ->  ${_ca:-<none>}"
