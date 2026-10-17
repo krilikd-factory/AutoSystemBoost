@@ -914,5 +914,22 @@
   "cfg_res_opened_banner": "文件已校验并添加：%s。尚未应用 — 请点击“应用已保存的配置”。",
   "ui_sound_aria": "界面音效",
   "ui_sound_on": "界面音效已开启 - 播放音乐、视频或通话时保持静音",
-  "ui_sound_off": "界面音效已关闭"
+  "ui_sound_off": "界面音效已关闭",
+  "doze_keep_title": "永不精简的应用",
+  "doze_keep_copy": "勾选的应用保持 Doze 豁免：ASB 不会精简它们；如果 Android 没有给某个应用豁免，ASB 会自行授予。请勾选夜间通知必须准时送达的聊天、邮件和 VPN 应用。关闭此窗口时应用更改。",
+  "doze_keep_search": "按名称或包名搜索",
+  "doze_keep_done": "完成",
+  "doze_keep_loading": "正在读取已安装的应用...",
+  "doze_keep_off": "精简当前未生效：需要打开此开关，并将深度休眠设为激进或仅夜间。列表会保留，生效后即按它执行。",
+  "doze_keep_nolabel": "此 root 管理器不向页面提供应用名称——请按包名搜索，例如 telegram 或 whatsapp。",
+  "doze_tag_always": "不会精简",
+  "doze_tag_trimmed": "已被 ASB 精简",
+  "doze_tag_granted": "ASB 授予豁免",
+  "doze_tag_exempt": "已豁免",
+  "doze_chip_all": "全部",
+  "doze_chip_kept": "已勾选",
+  "doze_chip_trimmed": "已精简",
+  "doze_keep_err": "无法保存列表",
+  "doze_keep_saved_off": "已保留：%s · 精简生效后执行",
+  "doze_keep_saved": "已保留：%s · 已应用"
 }

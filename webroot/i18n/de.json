@@ -914,5 +914,22 @@
   "cfg_res_opened_banner": "Datei geprüft und hinzugefügt: %s. Noch nicht angewendet — tippen Sie auf „Gespeicherte Konfiguration anwenden“.",
   "ui_sound_aria": "Oberflächentöne",
   "ui_sound_on": "Oberflächentöne an - still, solange Musik, ein Video oder ein Anruf läuft",
-  "ui_sound_off": "Oberflächentöne aus"
+  "ui_sound_off": "Oberflächentöne aus",
+  "doze_keep_title": "Nie gekürzte Apps",
+  "doze_keep_copy": "Angehakte Apps bleiben von Doze ausgenommen: ASB kürzt sie nie, und hat Android für eine keine Ausnahme, erteilt ASB sie selbst. Haken Sie Messenger, Mail und VPN an, deren Benachrichtigungen nachts pünktlich ankommen müssen. Änderungen gelten beim Schließen dieses Fensters.",
+  "doze_keep_search": "Suche nach Name oder Paket",
+  "doze_keep_done": "Fertig",
+  "doze_keep_loading": "Installierte Apps werden gelesen...",
+  "doze_keep_off": "Das Kürzen ist gerade nicht aktiv: Dieser Schalter muss an sein und Tiefschlaf auf aggressiv oder nachts stehen. Die Liste bleibt gespeichert und gilt, sobald es aktiv ist.",
+  "doze_keep_nolabel": "Dieser Root-Manager gibt der Seite keine App-Namen - suchen Sie nach dem Paketnamen, zum Beispiel telegram oder whatsapp.",
+  "doze_tag_always": "nie gekürzt",
+  "doze_tag_trimmed": "von ASB gekürzt",
+  "doze_tag_granted": "Ausnahme durch ASB",
+  "doze_tag_exempt": "ausgenommen",
+  "doze_chip_all": "Alle",
+  "doze_chip_kept": "Angehakt",
+  "doze_chip_trimmed": "Gekürzt",
+  "doze_keep_err": "Liste konnte nicht gespeichert werden",
+  "doze_keep_saved_off": "Behalten: %s · gilt, sobald das Kürzen aktiv ist",
+  "doze_keep_saved": "Behalten: %s · angewendet"
 }

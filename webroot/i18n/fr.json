@@ -914,5 +914,22 @@
   "cfg_res_opened_banner": "Fichier vérifié et ajouté : %s. Pas encore appliqué — appuyez sur « Appliquer la configuration enregistrée ».",
   "ui_sound_aria": "Sons de l'interface",
   "ui_sound_on": "Sons de l'interface activés - silencieux pendant la musique, une vidéo ou un appel",
-  "ui_sound_off": "Sons de l'interface désactivés"
+  "ui_sound_off": "Sons de l'interface désactivés",
+  "doze_keep_title": "Applis jamais réduites",
+  "doze_keep_copy": "Les applis cochées restent exemptées de Doze : ASB ne les retire jamais et, si Android ne les exempte pas, ASB leur accorde l’exemption. Cochez les messageries, le mail et le VPN dont les notifications doivent arriver à l’heure la nuit. Les changements s’appliquent à la fermeture de cette fenêtre.",
+  "doze_keep_search": "Rechercher par nom ou paquet",
+  "doze_keep_done": "Terminé",
+  "doze_keep_loading": "Lecture des applis installées...",
+  "doze_keep_off": "La réduction n’est pas active pour l’instant : il faut cet interrupteur activé et le Sommeil profond en agressif ou nuit. La liste est conservée et s’appliquera dès qu’elle le sera.",
+  "doze_keep_nolabel": "Ce gestionnaire root ne transmet pas les noms des applis à la page : cherchez par nom de paquet, par exemple telegram ou whatsapp.",
+  "doze_tag_always": "jamais réduite",
+  "doze_tag_trimmed": "retirée par ASB",
+  "doze_tag_granted": "exemptée par ASB",
+  "doze_tag_exempt": "exemptée",
+  "doze_chip_all": "Toutes",
+  "doze_chip_kept": "Cochées",
+  "doze_chip_trimmed": "Retirées",
+  "doze_keep_err": "Impossible d’enregistrer la liste",
+  "doze_keep_saved_off": "Gardées : %s · s’appliquera quand la réduction sera active",
+  "doze_keep_saved": "Gardées : %s · appliqué"
 }

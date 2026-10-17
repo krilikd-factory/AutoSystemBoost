@@ -914,5 +914,22 @@
   "cfg_res_opened_banner": "Ficheiro verificado e adicionado: %s. Ainda não aplicado — toque em «Aplicar configuração guardada».",
   "ui_sound_aria": "Sons da interface",
   "ui_sound_on": "Sons da interface ligados - ficam em silêncio enquanto toca música, vídeo ou uma chamada",
-  "ui_sound_off": "Sons da interface desligados"
+  "ui_sound_off": "Sons da interface desligados",
+  "doze_keep_title": "Apps nunca reduzidas",
+  "doze_keep_copy": "As apps assinaladas continuam isentas do Doze: o ASB nunca as remove e, se o Android não lhes der isenção, o ASB concede-a. Assinale mensageiros, e-mail e VPN cujas notificações têm de chegar a horas durante a noite. As alterações aplicam-se ao fechar esta janela.",
+  "doze_keep_search": "Pesquisar por nome ou pacote",
+  "doze_keep_done": "Concluído",
+  "doze_keep_loading": "A ler as apps instaladas...",
+  "doze_keep_off": "A redução não está ativa agora: precisa deste interruptor ligado e do Sono profundo em agressivo ou à noite. A lista fica guardada e passa a valer assim que estiver.",
+  "doze_keep_nolabel": "Este gestor root não entrega os nomes das apps à página: pesquise pelo nome do pacote, por exemplo telegram ou whatsapp.",
+  "doze_tag_always": "nunca reduzida",
+  "doze_tag_trimmed": "removida pelo ASB",
+  "doze_tag_granted": "isenção do ASB",
+  "doze_tag_exempt": "isenta",
+  "doze_chip_all": "Todas",
+  "doze_chip_kept": "Assinaladas",
+  "doze_chip_trimmed": "Removidas",
+  "doze_keep_err": "Não foi possível guardar a lista",
+  "doze_keep_saved_off": "Mantidas: %s · vale quando a redução estiver ativa",
+  "doze_keep_saved": "Mantidas: %s · aplicado"
 }

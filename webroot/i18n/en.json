@@ -705,5 +705,22 @@
   "cfg_res_opened_banner": "File checked and added: %s. Not applied yet — press “Apply saved configuration”.",
   "ui_sound_aria": "Interface sounds",
   "ui_sound_on": "Interface sounds on - quiet while music, video or a call is playing",
-  "ui_sound_off": "Interface sounds off"
+  "ui_sound_off": "Interface sounds off",
+  "doze_keep_title": "Apps never trimmed",
+  "doze_keep_copy": "Ticked apps stay exempt from Doze: ASB never trims them, and if Android has no exemption for one, ASB gives it. Tick the messengers, mail and VPN whose notifications must arrive on time at night. Changes apply when this window closes.",
+  "doze_keep_search": "Search by name or package",
+  "doze_keep_done": "Done",
+  "doze_keep_loading": "Reading the installed apps...",
+  "doze_keep_off": "Trimming is not working right now: it needs this switch on and Deep Sleep set to aggressive or night. The list is kept and takes effect as soon as it is.",
+  "doze_keep_nolabel": "This root manager does not give app names to the page - search by package name, for example telegram or whatsapp.",
+  "doze_tag_always": "never trimmed",
+  "doze_tag_trimmed": "trimmed by ASB",
+  "doze_tag_granted": "exempt via ASB",
+  "doze_tag_exempt": "exempt",
+  "doze_chip_all": "All",
+  "doze_chip_kept": "Ticked",
+  "doze_chip_trimmed": "Trimmed",
+  "doze_keep_err": "Could not save the list",
+  "doze_keep_saved_off": "Kept: %s · takes effect once trimming works",
+  "doze_keep_saved": "Kept: %s · applied"
 }

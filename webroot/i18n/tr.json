@@ -914,5 +914,22 @@
   "cfg_res_opened_banner": "Dosya kontrol edildi ve eklendi: %s. Henüz uygulanmadı — “Kaydedilmiş yapılandırmayı uygula”ya dokunun.",
   "ui_sound_aria": "Arayüz sesleri",
   "ui_sound_on": "Arayüz sesleri açık - müzik, video veya arama sürerken susar",
-  "ui_sound_off": "Arayüz sesleri kapalı"
+  "ui_sound_off": "Arayüz sesleri kapalı",
+  "doze_keep_title": "Hiç kırpılmayan uygulamalar",
+  "doze_keep_copy": "İşaretli uygulamalar Doze’dan muaf kalır: ASB onları asla kırpmaz, Android muafiyet vermemişse ASB kendisi verir. Bildirimleri gece zamanında gelmesi gereken mesajlaşma, e-posta ve VPN uygulamalarını işaretleyin. Değişiklikler bu pencere kapanınca uygulanır.",
+  "doze_keep_search": "Ad veya paket ara",
+  "doze_keep_done": "Tamam",
+  "doze_keep_loading": "Yüklü uygulamalar okunuyor...",
+  "doze_keep_off": "Kırpma şu an çalışmıyor: bu anahtarın açık ve Derin uykunun agresif ya da geceleri olması gerekir. Liste saklanır ve kırpma çalışır çalışmaz geçerli olur.",
+  "doze_keep_nolabel": "Bu root yöneticisi uygulama adlarını sayfaya vermiyor - paket adıyla arayın, örneğin telegram veya whatsapp.",
+  "doze_tag_always": "kırpılmaz",
+  "doze_tag_trimmed": "ASB kırptı",
+  "doze_tag_granted": "ASB muafiyeti",
+  "doze_tag_exempt": "muaf",
+  "doze_chip_all": "Tümü",
+  "doze_chip_kept": "İşaretli",
+  "doze_chip_trimmed": "Kırpılan",
+  "doze_keep_err": "Liste kaydedilemedi",
+  "doze_keep_saved_off": "Tutulan: %s · kırpma çalışınca geçerli",
+  "doze_keep_saved": "Tutulan: %s · uygulandı"
 }

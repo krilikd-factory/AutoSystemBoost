@@ -914,5 +914,22 @@
   "cfg_res_opened_banner": "File verificato e aggiunto: %s. Non ancora applicato — premi «Applica configurazione salvata».",
   "ui_sound_aria": "Suoni dell'interfaccia",
   "ui_sound_on": "Suoni dell'interfaccia attivi - tacciono mentre suona musica, un video o una chiamata",
-  "ui_sound_off": "Suoni dell'interfaccia disattivati"
+  "ui_sound_off": "Suoni dell'interfaccia disattivati",
+  "doze_keep_title": "App mai ridotte",
+  "doze_keep_copy": "Le app spuntate restano esenti da Doze: ASB non le rimuove mai e, se Android non le esenta, l’esenzione la concede ASB. Spunti messaggistica, posta e VPN le cui notifiche devono arrivare puntuali di notte. Le modifiche si applicano alla chiusura di questa finestra.",
+  "doze_keep_search": "Cerca per nome o pacchetto",
+  "doze_keep_done": "Fatto",
+  "doze_keep_loading": "Lettura delle app installate...",
+  "doze_keep_off": "La riduzione ora non è attiva: servono questo interruttore acceso e Sonno profondo su aggressivo o di notte. L’elenco resta salvato e varrà appena sarà attiva.",
+  "doze_keep_nolabel": "Questo root manager non fornisce i nomi delle app alla pagina: cerchi per nome del pacchetto, per esempio telegram o whatsapp.",
+  "doze_tag_always": "mai ridotta",
+  "doze_tag_trimmed": "rimossa da ASB",
+  "doze_tag_granted": "esenzione da ASB",
+  "doze_tag_exempt": "esente",
+  "doze_chip_all": "Tutte",
+  "doze_chip_kept": "Spuntate",
+  "doze_chip_trimmed": "Rimosse",
+  "doze_keep_err": "Impossibile salvare l’elenco",
+  "doze_keep_saved_off": "Mantenute: %s · varrà quando la riduzione sarà attiva",
+  "doze_keep_saved": "Mantenute: %s · applicato"
 }

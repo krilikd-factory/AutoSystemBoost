@@ -914,5 +914,22 @@
   "cfg_res_opened_banner": "File diperiksa dan ditambahkan: %s. Belum diterapkan — tekan “Terapkan konfigurasi tersimpan”.",
   "ui_sound_aria": "Suara antarmuka",
   "ui_sound_on": "Suara antarmuka aktif - diam saat musik, video, atau panggilan berjalan",
-  "ui_sound_off": "Suara antarmuka nonaktif"
+  "ui_sound_off": "Suara antarmuka nonaktif",
+  "doze_keep_title": "Aplikasi yang tidak pernah dipangkas",
+  "doze_keep_copy": "Aplikasi yang dicentang tetap dikecualikan dari Doze: ASB tidak pernah memangkasnya, dan jika Android tidak memberinya pengecualian, ASB yang memberikannya. Centang aplikasi pesan, email, dan VPN yang notifikasinya harus tepat waktu di malam hari. Perubahan diterapkan saat jendela ini ditutup.",
+  "doze_keep_search": "Cari nama atau paket",
+  "doze_keep_done": "Selesai",
+  "doze_keep_loading": "Membaca aplikasi terpasang...",
+  "doze_keep_off": "Pemangkasan sedang tidak aktif: sakelar ini harus menyala dan Tidur dalam diatur ke agresif atau malam. Daftar tetap tersimpan dan berlaku begitu pemangkasan aktif.",
+  "doze_keep_nolabel": "Root manager ini tidak memberikan nama aplikasi ke halaman - cari dengan nama paket, misalnya telegram atau whatsapp.",
+  "doze_tag_always": "tidak dipangkas",
+  "doze_tag_trimmed": "dipangkas ASB",
+  "doze_tag_granted": "dikecualikan ASB",
+  "doze_tag_exempt": "dikecualikan",
+  "doze_chip_all": "Semua",
+  "doze_chip_kept": "Dicentang",
+  "doze_chip_trimmed": "Dipangkas",
+  "doze_keep_err": "Gagal menyimpan daftar",
+  "doze_keep_saved_off": "Dipertahankan: %s · berlaku saat pemangkasan aktif",
+  "doze_keep_saved": "Dipertahankan: %s · diterapkan"
 }

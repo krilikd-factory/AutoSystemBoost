@@ -914,5 +914,22 @@
   "cfg_res_opened_banner": "Archivo comprobado y añadido: %s. Aún no aplicado — pulse «Aplicar configuración guardada».",
   "ui_sound_aria": "Sonidos de la interfaz",
   "ui_sound_on": "Sonidos de la interfaz activados: callan mientras suena música, un vídeo o una llamada",
-  "ui_sound_off": "Sonidos de la interfaz desactivados"
+  "ui_sound_off": "Sonidos de la interfaz desactivados",
+  "doze_keep_title": "Apps que nunca se recortan",
+  "doze_keep_copy": "Las apps marcadas siguen exentas de Doze: ASB nunca las recorta y, si Android no les da exención, ASB se la concede. Marque mensajería, correo y VPN cuyas notificaciones deban llegar a tiempo de noche. Los cambios se aplican al cerrar esta ventana.",
+  "doze_keep_search": "Buscar por nombre o paquete",
+  "doze_keep_done": "Listo",
+  "doze_keep_loading": "Leyendo las apps instaladas...",
+  "doze_keep_off": "El recorte no está activo ahora: requiere este interruptor activado y Sueño profundo en agresivo o de noche. La lista se guarda y se aplicará en cuanto lo esté.",
+  "doze_keep_nolabel": "Este gestor root no entrega los nombres de las apps a la página: busque por nombre de paquete, por ejemplo telegram o whatsapp.",
+  "doze_tag_always": "nunca se recorta",
+  "doze_tag_trimmed": "recortada por ASB",
+  "doze_tag_granted": "exención de ASB",
+  "doze_tag_exempt": "exenta",
+  "doze_chip_all": "Todas",
+  "doze_chip_kept": "Marcadas",
+  "doze_chip_trimmed": "Recortadas",
+  "doze_keep_err": "No se pudo guardar la lista",
+  "doze_keep_saved_off": "Conservadas: %s · se aplicará cuando el recorte esté activo",
+  "doze_keep_saved": "Conservadas: %s · aplicado"
 }
