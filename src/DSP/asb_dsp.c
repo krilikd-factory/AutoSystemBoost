@@ -143,6 +143,7 @@ static void asb_refresh(asb_ctx_t *c) {
     /* After configure: it sets the channel count the shelf needs. */
     asb_core_set_bass(&c->core, asb_dsp_prop("bass_db", 0), rate);
     asb_core_set_voice(&c->core, asb_dsp_prop("voice", 0), rate);
+    asb_core_set_width(&c->core, asb_dsp_prop("width", 0), rate);
 }
 
 /* Copy or accumulate without touching the samples. */
