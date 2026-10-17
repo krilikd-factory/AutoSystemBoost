@@ -334,6 +334,28 @@ if command -v resetprop >/dev/null 2>&1 && asb_feature_enabled AUDIO \
   resetprop -n audio.safemedia.bypass true >/dev/null 2>&1 || true
 fi
 
+if command -v resetprop >/dev/null 2>&1 && asb_feature_enabled AUDIO \
+   && command -v asb_device_pack_allows >/dev/null 2>&1 && asb_device_pack_allows properties; then
+  _rs_q="$(grep -E '^[[:space:]]*audio_resampler=' "$MODDIR/config/governor.conf" 2>/dev/null \
+           | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  case "$_rs_q" in
+    high) _rs_sb=140; _rs_hl=160; _rs_co=100 ;;
+    max)  _rs_sb=179; _rs_hl=320; _rs_co=99 ;;
+    *)    _rs_sb="" ;;
+  esac
+  if [ -n "$_rs_sb" ]; then
+    resetprop -n ro.audio.resampler.psd.enable_at_samplerate 44100 >/dev/null 2>&1 || true
+    resetprop -n ro.audio.resampler.psd.stopband "$_rs_sb" >/dev/null 2>&1 || true
+    resetprop -n ro.audio.resampler.psd.halflength "$_rs_hl" >/dev/null 2>&1 || true
+    resetprop -n ro.audio.resampler.psd.cutoff_percent "$_rs_co" >/dev/null 2>&1 || true
+  fi
+  _mv_st="$(grep -E '^[[:space:]]*media_vol_steps=' "$MODDIR/config/governor.conf" 2>/dev/null \
+            | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  case "$_mv_st" in
+    30|50) resetprop -n ro.config.media_vol_steps "$_mv_st" >/dev/null 2>&1 || true ;;
+  esac
+fi
+
 _abi_conf="$MODDIR/config/governor.conf"
 if asb_feature_enabled AUDIO \
    && [ -f "$_abi_conf" ] && [ -f "$MODDIR/runtime/asb_dsp_abi_apply.sh" ]; then
