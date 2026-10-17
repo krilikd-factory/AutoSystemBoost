@@ -1,0 +1,839 @@
+{
+ "label": "fix150 field logs (2026-10-15..16)",
+ "captures": [
+  {
+   "kind": "capture",
+   "path": "asb_log_full_day_2708",
+   "model": "CPH2691",
+   "version": "V65-debug8",
+   "oem_build": "CPH2691_16.0.10.500(EX01)",
+   "build_date": "2026-10-15 16:59:39",
+   "start_epoch": 1792073107,
+   "elapsed_min": 675,
+   "phases": {
+    "post_wake": {
+     "min": 47.6,
+     "d_pct": 12.0,
+     "pct_h": 15.14,
+     "rough": false,
+     "mA": 688.0,
+     "rmnet_mib": 496.4,
+     "awake": 94.7
+    },
+    "audio_bt_scr": {
+     "min": 57.3,
+     "d_pct": 12.0,
+     "pct_h": 12.56,
+     "rough": false,
+     "mA": 714.0,
+     "rmnet_mib": 564.5,
+     "awake": 96.8
+    },
+    "active": {
+     "min": 29.5,
+     "d_pct": 5.0,
+     "pct_h": 10.16,
+     "rough": false,
+     "mA": 679.0,
+     "rmnet_mib": 295.7,
+     "awake": 100.0
+    },
+    "idle": {
+     "min": 98.2,
+     "d_pct": 9.0,
+     "pct_h": 5.5,
+     "rough": false,
+     "mA": 398.0,
+     "rmnet_mib": 1024.9,
+     "awake": 87.7
+    },
+    "audio_bt": {
+     "min": 24.2,
+     "d_pct": 2.0,
+     "pct_h": 4.97,
+     "rough": true,
+     "mA": 285.0,
+     "rmnet_mib": 56.7,
+     "awake": 100.0
+    },
+    "sleep": {
+     "min": 215.7,
+     "d_pct": 10.0,
+     "pct_h": 2.78,
+     "rough": false,
+     "mA": 259.0,
+     "rmnet_mib": 1076.5,
+     "awake": 63.9
+    },
+    "gap": {
+     "min": 10.2,
+     "d_pct": 0.0,
+     "pct_h": 0.0,
+     "rough": true,
+     "mA": 577.0,
+     "rmnet_mib": 116.6,
+     "awake": 93.1
+    },
+    "audio_spk_scr": {
+     "min": 1.7,
+     "d_pct": 0.0,
+     "pct_h": 0.0,
+     "rough": true,
+     "mA": 1041.0,
+     "rmnet_mib": 38.4,
+     "awake": 100.0
+    },
+    "charging_idle": {
+     "min": 132.5,
+     "d_pct": -32.0,
+     "pct_h": -14.49,
+     "rough": true,
+     "mA": 0.0,
+     "rmnet_mib": 480.8,
+     "awake": 99.5
+    },
+    "charging_active": {
+     "min": 56.2,
+     "d_pct": -19.0,
+     "pct_h": -20.28,
+     "rough": true,
+     "mA": 0.0,
+     "rmnet_mib": 614.1,
+     "awake": 100.0
+    }
+   },
+   "night": null,
+   "screen_on_min": 136.1,
+   "screen_on_pct_h": 12.78,
+   "screen_off_min": 338.1,
+   "mobile_mib": 4764.6,
+   "idle": {
+    "min": 98.2,
+    "d_pct": 9.0,
+    "pct_h": 5.5,
+    "rough": false,
+    "mA": 398.0,
+    "rmnet_mib": 1024.9,
+    "awake": 87.7
+   },
+   "asb_cpu_s_h": 3.46,
+   "ui_janky_pct": 4.0,
+   "ui_janky_s": 1.94,
+   "ui_floor_s": 1.54,
+   "ui_busy_s": 2.15,
+   "ui_sysui_s": 0.62,
+   "ui_states": {
+    "MODERATE": {
+     "frames": 383971,
+     "janky_pct": 4.3,
+     "janky_s": 1.97
+    },
+    "SUSTAINED": {
+     "frames": 11874,
+     "janky_pct": 2.5,
+     "janky_s": 2.44
+    },
+    "mixed": {
+     "frames": 78681,
+     "janky_pct": 2.8,
+     "janky_s": 1.72
+    }
+   },
+   "prime_work_pct": null,
+   "throttle": {
+    "asb": 252,
+    "vendor": 6
+   },
+   "wifi_releases": null,
+   "wifi_leave_median_s": null,
+   "wifi_leave_max_s": null
+  },
+  {
+   "kind": "capture",
+   "path": "asb_log_full_day_944",
+   "model": "CPH2745",
+   "version": "V65-debug8",
+   "oem_build": "CPH2745_16.0.10.601(EX01)",
+   "build_date": "2026-10-16 14:58:30",
+   "start_epoch": 1792155798,
+   "elapsed_min": 1082,
+   "phases": {
+    "gap": {
+     "min": 2.4,
+     "d_pct": 1.0,
+     "pct_h": 24.66,
+     "rough": true,
+     "mA": 202.0,
+     "rmnet_mib": 14.8,
+     "awake": 97.9
+    },
+    "active": {
+     "min": 142.2,
+     "d_pct": 26.0,
+     "pct_h": 10.97,
+     "rough": false,
+     "mA": 297.0,
+     "rmnet_mib": 1420.4,
+     "awake": 98.1
+    },
+    "audio_spk_scr": {
+     "min": 199.8,
+     "d_pct": 31.0,
+     "pct_h": 9.31,
+     "rough": false,
+     "mA": 321.0,
+     "rmnet_mib": 2535.3,
+     "awake": 98.6
+    },
+    "post_wake": {
+     "min": 43.9,
+     "d_pct": 3.0,
+     "pct_h": 4.1,
+     "rough": true,
+     "mA": 254.0,
+     "rmnet_mib": 218.2,
+     "awake": 92.0
+    },
+    "idle": {
+     "min": 126.3,
+     "d_pct": 4.0,
+     "pct_h": 1.9,
+     "rough": false,
+     "mA": 182.0,
+     "rmnet_mib": 106.1,
+     "awake": 23.5
+    },
+    "sleep": {
+     "min": 553.9,
+     "d_pct": 6.0,
+     "pct_h": 0.65,
+     "rough": false,
+     "mA": 155.0,
+     "rmnet_mib": 113.2,
+     "awake": 5.1
+    },
+    "audio_spk": {
+     "min": 10.8,
+     "d_pct": 0.0,
+     "pct_h": 0.0,
+     "rough": true,
+     "mA": 110.0,
+     "rmnet_mib": 23.9,
+     "awake": 88.5
+    },
+    "night(longest)": {
+     "min": 538.2,
+     "d_pct": 5.0,
+     "pct_h": 0.56,
+     "rough": false,
+     "mA": 154.0,
+     "rmnet_mib": null,
+     "awake": 4.0
+    }
+   },
+   "night": {
+    "min": 538.2,
+    "d_pct": 5.0,
+    "pct_h": 0.56,
+    "rough": false,
+    "mA": 154.0,
+    "rmnet_mib": null,
+    "awake": 4.0
+   },
+   "screen_on_min": 385.9,
+   "screen_on_pct_h": 9.33,
+   "screen_off_min": 691.0,
+   "mobile_mib": 4431.9,
+   "idle": {
+    "min": 126.3,
+    "d_pct": 4.0,
+    "pct_h": 1.9,
+    "rough": false,
+    "mA": 182.0,
+    "rmnet_mib": 106.1,
+    "awake": 23.5
+   },
+   "asb_cpu_s_h": 1.76,
+   "ui_janky_pct": 4.2,
+   "ui_janky_s": 2.08,
+   "ui_floor_s": 1.11,
+   "ui_busy_s": 1.73,
+   "ui_sysui_s": 1.07,
+   "ui_states": {
+    "MODERATE": {
+     "frames": 756613,
+     "janky_pct": 3.0,
+     "janky_s": 1.7
+    },
+    "HEAVY": {
+     "frames": 57311,
+     "janky_pct": 1.8,
+     "janky_s": 1.7
+    },
+    "LIGHT_IDLE": {
+     "frames": 44071,
+     "janky_pct": 28.1,
+     "janky_s": 3.92
+    },
+    "SUSTAINED": {
+     "frames": 21014,
+     "janky_pct": 1.7,
+     "janky_s": 0.95
+    },
+    "mixed": {
+     "frames": 220000,
+     "janky_pct": 4.2,
+     "janky_s": 2.09
+    }
+   },
+   "prime_work_pct": 14,
+   "throttle": {
+    "asb": 91,
+    "vendor": 3
+   },
+   "wifi_releases": null,
+   "wifi_leave_median_s": null,
+   "wifi_leave_max_s": null
+  },
+  {
+   "kind": "capture",
+   "path": "asb_log_full_day_757",
+   "model": "CPH2747",
+   "version": "V65-debug8",
+   "oem_build": "CPH2747_16.0.10.601(EX01)",
+   "build_date": "2026-10-15 17:20:59",
+   "start_epoch": 1792061977,
+   "elapsed_min": 1435,
+   "phases": {
+    "audio_spk_scr": {
+     "min": 264.6,
+     "d_pct": 30.0,
+     "pct_h": 6.8,
+     "rough": false,
+     "mA": 241.0,
+     "rmnet_mib": 0.0,
+     "awake": 99.5
+    },
+    "active": {
+     "min": 131.5,
+     "d_pct": 14.0,
+     "pct_h": 6.39,
+     "rough": false,
+     "mA": 257.0,
+     "rmnet_mib": 0.0,
+     "awake": 99.7
+    },
+    "post_wake": {
+     "min": 51.2,
+     "d_pct": 4.0,
+     "pct_h": 4.69,
+     "rough": false,
+     "mA": 187.0,
+     "rmnet_mib": 0.0,
+     "awake": 91.5
+    },
+    "idle": {
+     "min": 53.5,
+     "d_pct": 3.0,
+     "pct_h": 3.36,
+     "rough": true,
+     "mA": 84.0,
+     "rmnet_mib": 0.0,
+     "awake": 54.2
+    },
+    "sleep": {
+     "min": 372.3,
+     "d_pct": 3.0,
+     "pct_h": 0.48,
+     "rough": true,
+     "mA": 49.0,
+     "rmnet_mib": 0.0,
+     "awake": 11.0
+    },
+    "gap": {
+     "min": 7.4,
+     "d_pct": 0.0,
+     "pct_h": 0.0,
+     "rough": true,
+     "mA": 91.0,
+     "rmnet_mib": 0.0,
+     "awake": 100.0
+    },
+    "charging_active": {
+     "min": 81.4,
+     "d_pct": -8.0,
+     "pct_h": -5.9,
+     "rough": true,
+     "mA": 353.0,
+     "rmnet_mib": 245.4,
+     "awake": 99.8
+    },
+    "charging_idle": {
+     "min": 472.0,
+     "d_pct": -80.0,
+     "pct_h": -10.17,
+     "rough": true,
+     "mA": 78.0,
+     "rmnet_mib": 101.6,
+     "awake": 99.9
+    },
+    "night(longest)": {
+     "min": 372.3,
+     "d_pct": 3.0,
+     "pct_h": 0.48,
+     "rough": false,
+     "mA": 49.0,
+     "rmnet_mib": null,
+     "awake": 11.0
+    }
+   },
+   "night": {
+    "min": 372.3,
+    "d_pct": 3.0,
+    "pct_h": 0.48,
+    "rough": false,
+    "mA": 49.0,
+    "rmnet_mib": null,
+    "awake": 11.0
+   },
+   "screen_on_min": 447.3,
+   "screen_on_pct_h": 6.44,
+   "screen_off_min": 425.8,
+   "mobile_mib": 347.0,
+   "idle": {
+    "min": 53.5,
+    "d_pct": 3.0,
+    "pct_h": 3.36,
+    "rough": true,
+    "mA": 84.0,
+    "rmnet_mib": 0.0,
+    "awake": 54.2
+   },
+   "asb_cpu_s_h": 2.02,
+   "ui_janky_pct": 3.5,
+   "ui_janky_s": 1.14,
+   "ui_floor_s": null,
+   "ui_busy_s": null,
+   "ui_sysui_s": 0.1,
+   "ui_states": {
+    "MODERATE": {
+     "frames": 650207,
+     "janky_pct": 3.3,
+     "janky_s": 1.17
+    },
+    "HEAVY": {
+     "frames": 105813,
+     "janky_pct": 0.4,
+     "janky_s": 0.29
+    },
+    "LIGHT_IDLE": {
+     "frames": 21040,
+     "janky_pct": 21.0,
+     "janky_s": 1.48
+    },
+    "SUSTAINED": {
+     "frames": 16187,
+     "janky_pct": 1.6,
+     "janky_s": 0.37
+    },
+    "mixed": {
+     "frames": 141159,
+     "janky_pct": 4.2,
+     "janky_s": 1.17
+    }
+   },
+   "prime_work_pct": 17,
+   "throttle": {
+    "asb": 41,
+    "vendor": 39
+   },
+   "wifi_releases": null,
+   "wifi_leave_median_s": null,
+   "wifi_leave_max_s": null
+  },
+  {
+   "kind": "capture",
+   "path": "x_asb_log_full_day_15588",
+   "model": "CPH2769",
+   "version": "V65-debug8",
+   "oem_build": "CPH2769_16.0.10.600(EX01)",
+   "build_date": "2026-10-15 13:23:04",
+   "start_epoch": 1792083247,
+   "elapsed_min": 1258,
+   "phases": {
+    "gap": {
+     "min": 37.6,
+     "d_pct": 5.0,
+     "pct_h": 7.97,
+     "rough": false,
+     "mA": 412.0,
+     "rmnet_mib": 18.4,
+     "awake": 87.9
+    },
+    "active": {
+     "min": 125.6,
+     "d_pct": 15.0,
+     "pct_h": 7.16,
+     "rough": false,
+     "mA": 663.0,
+     "rmnet_mib": 16.5,
+     "awake": 96.1
+    },
+    "post_wake": {
+     "min": 189.4,
+     "d_pct": 21.0,
+     "pct_h": 6.65,
+     "rough": false,
+     "mA": 569.0,
+     "rmnet_mib": 40.2,
+     "awake": 89.7
+    },
+    "audio_bt_scr": {
+     "min": 152.8,
+     "d_pct": 15.0,
+     "pct_h": 5.89,
+     "rough": false,
+     "mA": 559.0,
+     "rmnet_mib": 6.1,
+     "awake": 99.7
+    },
+    "audio_spk_scr": {
+     "min": 14.2,
+     "d_pct": 1.0,
+     "pct_h": 4.22,
+     "rough": true,
+     "mA": 564.0,
+     "rmnet_mib": 2.9,
+     "awake": 95.2
+    },
+    "sleep": {
+     "min": 39.5,
+     "d_pct": 2.0,
+     "pct_h": 3.04,
+     "rough": true,
+     "mA": 281.0,
+     "rmnet_mib": 3.1,
+     "awake": 60.7
+    },
+    "idle": {
+     "min": 323.0,
+     "d_pct": 12.0,
+     "pct_h": 2.23,
+     "rough": false,
+     "mA": 295.0,
+     "rmnet_mib": 38.4,
+     "awake": 55.6
+    },
+    "audio_spk": {
+     "min": 2.7,
+     "d_pct": 0.0,
+     "pct_h": 0.0,
+     "rough": true,
+     "mA": 294.0,
+     "rmnet_mib": 0.0,
+     "awake": 42.0
+    },
+    "charging_idle": {
+     "min": 363.1,
+     "d_pct": -76.0,
+     "pct_h": -12.56,
+     "rough": true,
+     "mA": 0.0,
+     "rmnet_mib": 0.1,
+     "awake": 100.0
+    },
+    "charging_active": {
+     "min": 4.1,
+     "d_pct": -2.0,
+     "pct_h": -29.03,
+     "rough": true,
+     "mA": 0.0,
+     "rmnet_mib": 0.0,
+     "awake": 100.0
+    }
+   },
+   "night": null,
+   "screen_on_min": 482.0,
+   "screen_on_pct_h": 6.47,
+   "screen_off_min": 365.2,
+   "mobile_mib": 125.7,
+   "idle": {
+    "min": 323.0,
+    "d_pct": 12.0,
+    "pct_h": 2.23,
+    "rough": false,
+    "mA": 295.0,
+    "rmnet_mib": 38.4,
+    "awake": 55.6
+   },
+   "asb_cpu_s_h": 1.83,
+   "ui_janky_pct": 1.6,
+   "ui_janky_s": 0.56,
+   "ui_floor_s": null,
+   "ui_busy_s": null,
+   "ui_sysui_s": 0.13,
+   "ui_states": {
+    "MODERATE": {
+     "frames": 634822,
+     "janky_pct": 1.4,
+     "janky_s": 0.61
+    },
+    "HEAVY": {
+     "frames": 45340,
+     "janky_pct": 1.2,
+     "janky_s": 1.14
+    },
+    "DEEP_IDLE": {
+     "frames": 3110,
+     "janky_pct": 1.5,
+     "janky_s": 0.07
+    },
+    "LIGHT_IDLE": {
+     "frames": 26125,
+     "janky_pct": 4.0,
+     "janky_s": 0.31
+    },
+    "SUSTAINED": {
+     "frames": 2224,
+     "janky_pct": 3.3,
+     "janky_s": 1.42
+    },
+    "mixed": {
+     "frames": 164390,
+     "janky_pct": 1.8,
+     "janky_s": 0.58
+    }
+   },
+   "prime_work_pct": 10,
+   "throttle": {
+    "asb": 19,
+    "vendor": 2
+   },
+   "wifi_releases": null,
+   "wifi_leave_median_s": null,
+   "wifi_leave_max_s": null
+  },
+  {
+   "kind": "capture",
+   "path": "asb_log_full_day_24909",
+   "model": "PLQ110",
+   "version": "V65-debug8",
+   "oem_build": "PLQ110_16.0.10.500(CN01)",
+   "build_date": "2026-10-15 12:27:37",
+   "start_epoch": 1792056599,
+   "elapsed_min": 129,
+   "phases": {
+    "post_wake": {
+     "min": 10.6,
+     "d_pct": 2.0,
+     "pct_h": 11.32,
+     "rough": true,
+     "mA": 143.0,
+     "rmnet_mib": 0.4,
+     "awake": 60.0
+    },
+    "audio_spk_scr": {
+     "min": 25.3,
+     "d_pct": 5.0,
+     "pct_h": 11.84,
+     "rough": false,
+     "mA": 272.0,
+     "rmnet_mib": 4.9,
+     "awake": 100.0
+    },
+    "gaming": {
+     "min": 8.5,
+     "d_pct": 1.0,
+     "pct_h": 7.06,
+     "rough": true,
+     "mA": 398.0,
+     "rmnet_mib": 0.5,
+     "awake": 99.0
+    },
+    "active": {
+     "min": 18.9,
+     "d_pct": 2.0,
+     "pct_h": 6.35,
+     "rough": true,
+     "mA": 226.0,
+     "rmnet_mib": 7.2,
+     "awake": 100.0
+    },
+    "idle": {
+     "min": 40.3,
+     "d_pct": 1.0,
+     "pct_h": 1.49,
+     "rough": true,
+     "mA": 86.0,
+     "rmnet_mib": 9.0,
+     "awake": 43.6
+    },
+    "sleep": {
+     "min": 24.9,
+     "d_pct": 0.0,
+     "pct_h": 0.0,
+     "rough": true,
+     "mA": 85.0,
+     "rmnet_mib": 7.5,
+     "awake": 33.0
+    }
+   },
+   "night": null,
+   "screen_on_min": 63.3,
+   "screen_on_pct_h": 9.48,
+   "screen_off_min": 65.2,
+   "mobile_mib": 29.5,
+   "idle": {
+    "min": 40.3,
+    "d_pct": 1.0,
+    "pct_h": 1.49,
+    "rough": true,
+    "mA": 86.0,
+    "rmnet_mib": 9.0,
+    "awake": 43.6
+   },
+   "asb_cpu_s_h": null,
+   "ui_janky_pct": 1.0,
+   "ui_janky_s": 0.35,
+   "ui_floor_s": null,
+   "ui_busy_s": null,
+   "ui_sysui_s": 0.06,
+   "ui_states": {
+    "MODERATE": {
+     "frames": 118629,
+     "janky_pct": 0.9,
+     "janky_s": 0.52
+    }
+   },
+   "prime_work_pct": 51,
+   "throttle": {
+    "asb": 42,
+    "vendor": 1
+   },
+   "wifi_releases": null,
+   "wifi_leave_median_s": null,
+   "wifi_leave_max_s": null
+  }
+ ],
+ "diags": [
+  {
+   "kind": "diag",
+   "path": "asb_diag_report (2).txt",
+   "model": "CPH2691",
+   "version": "V65-debug8",
+   "date": "Thu Oct 15 21:36:08 MSK 2026",
+   "vol_limit_off": "1",
+   "safe_media": "SAFE_MEDIA_VOLUME_ACTIVE",
+   "safemedia_bypass": null,
+   "txqueue": [
+    "short",
+    1024
+   ],
+   "asb_cpu_s_h": null,
+   "doze_trim": null
+  },
+  {
+   "kind": "diag",
+   "path": "asbdiag_20261016_100902.txt",
+   "model": "CPH2745",
+   "version": "V65-debug8",
+   "date": "Fri Oct 16 10:09:02 CEST 2026",
+   "vol_limit_off": "1",
+   "safe_media": "SAFE_MEDIA_VOLUME_INACTIVE",
+   "safemedia_bypass": null,
+   "txqueue": [
+    "short",
+    1024
+   ],
+   "asb_cpu_s_h": null,
+   "doze_trim": null
+  },
+  {
+   "kind": "diag",
+   "path": "asbdiag_20261016_150256.txt",
+   "model": "CPH2745",
+   "version": "V65-debug8",
+   "date": "Fri Oct 16 15:02:56 CEST 2026",
+   "vol_limit_off": "1",
+   "safe_media": "SAFE_MEDIA_VOLUME_INACTIVE",
+   "safemedia_bypass": null,
+   "txqueue": [
+    "short",
+    1024
+   ],
+   "asb_cpu_s_h": null,
+   "doze_trim": null
+  },
+  {
+   "kind": "diag",
+   "path": "asbdiag_20261016_154351.txt",
+   "model": "CPH2745",
+   "version": "V65-debug8",
+   "date": "Fri Oct 16 15:43:51 CEST 2026",
+   "vol_limit_off": "1",
+   "safe_media": "SAFE_MEDIA_VOLUME_INACTIVE",
+   "safemedia_bypass": null,
+   "txqueue": [
+    "short",
+    1024
+   ],
+   "asb_cpu_s_h": null,
+   "doze_trim": null
+  },
+  {
+   "kind": "diag",
+   "path": "asbdiag_20261015_172456.txt",
+   "model": "CPH2747",
+   "version": "V65-debug8",
+   "date": "Thu Oct 15 17:24:56 +07 2026",
+   "vol_limit_off": "0",
+   "safe_media": "SAFE_MEDIA_VOLUME_ACTIVE",
+   "safemedia_bypass": null,
+   "txqueue": null,
+   "asb_cpu_s_h": null,
+   "doze_trim": null
+  },
+  {
+   "kind": "diag",
+   "path": "asb_diag_report (7).txt",
+   "model": "CPH2769",
+   "version": "V65-debug8",
+   "date": "Fri Oct 16 16:57:05 MSK 2026",
+   "vol_limit_off": "1",
+   "safe_media": "SAFE_MEDIA_VOLUME_INACTIVE",
+   "safemedia_bypass": null,
+   "txqueue": null,
+   "asb_cpu_s_h": null,
+   "doze_trim": null
+  },
+  {
+   "kind": "diag",
+   "path": "asbdiag_20261015_185020.txt",
+   "model": "CPH2769",
+   "version": "V65-debug8",
+   "date": "Thu Oct 15 18:50:20 MSK 2026",
+   "vol_limit_off": "1",
+   "safe_media": "SAFE_MEDIA_VOLUME_ACTIVE",
+   "safemedia_bypass": null,
+   "txqueue": null,
+   "asb_cpu_s_h": null,
+   "doze_trim": null
+  },
+  {
+   "kind": "diag",
+   "path": "asb_diag_report (1).txt",
+   "model": "PLQ110",
+   "version": "V65-debug8",
+   "date": "Thu Oct 15 19:45:50 MSK 2026",
+   "vol_limit_off": "1",
+   "safe_media": "SAFE_MEDIA_VOLUME_INACTIVE",
+   "safemedia_bypass": null,
+   "txqueue": [
+    "shorter",
+    1024
+   ],
+   "asb_cpu_s_h": null,
+   "doze_trim": null
+  }
+ ]
+}
