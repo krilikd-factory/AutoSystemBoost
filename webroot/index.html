@@ -1407,6 +1407,36 @@ body.config-active #livePage.open {
   align-items: baseline;
   font: 11px/1.2 var(--sans);
 }
+.smart-drain {
+  display: flex; align-items: center; gap: 10px; width: 100%; margin: 0; padding: 9px 10px 9px 12px;
+  border-radius: 12px; border: 1px solid rgba(0,225,200,0.22); background: rgba(0,225,200,0.07);
+  color: inherit; font: inherit; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.smart-drain:active { background: rgba(0,225,200,0.13); }
+.smart-drain-half { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 8px; }
+.smart-drain-ico { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 8px; display: flex;
+  align-items: center; justify-content: center; color: #9ef2e4; background: rgba(0,225,200,0.12); }
+.smart-drain-ico .tech-icon { width: 16px; height: 16px; }
+.smart-drain-txt { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.smart-drain-lbl { font: 8px/1 var(--mono); color: var(--text-tertiary); letter-spacing: 0.05em;
+  text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.smart-drain-val { font: 700 15px/1.1 var(--sans); color: #9ef2e4; font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.smart-drain-sep { flex: 0 0 1px; align-self: stretch; background: rgba(0,225,200,0.20); }
+.smart-drain-more { flex: 0 0 auto; font-size: 18px; line-height: 1; color: rgba(158,242,228,0.70); }
+.live-drain-body { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+.live-drain-block { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border-radius: 14px;
+  border: 1px solid var(--border); background: rgba(255,255,255,0.03); }
+.live-drain-ico { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 10px; display: flex;
+  align-items: center; justify-content: center; color: #5ce7c3; background: rgba(44,214,173,0.10); }
+.live-drain-ico .tech-icon { width: 19px; height: 19px; }
+.live-drain-txt { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.live-drain-lbl { font: 9px/1.1 var(--mono); color: var(--text-tertiary); letter-spacing: 0.06em; text-transform: uppercase; }
+.live-drain-val { font: 700 22px/1.1 var(--sans); color: var(--text); font-variant-numeric: tabular-nums; }
+.live-drain-basis { font-size: 12px; line-height: 1.4; color: var(--text-secondary); }
+.live-drain-left { font-size: 12px; line-height: 1.4; color: var(--text); font-weight: 600; }
+.live-drain-note { font-size: 11px; line-height: 1.45; color: var(--text-tertiary); padding: 2px 2px 0; }
+.live-drain-done { margin-top: 12px; }
 .smart-banner-row.tags {
   display: flex;
   flex-wrap: wrap;
@@ -2734,7 +2764,7 @@ html[data-asb-theme="light"] :is(input,select,textarea,.seg,.seg-opt,.cfg-profil
 html[data-asb-theme="light"] :is(.cfg-modal,.cfg-profile-modal,.cfg-reset-modal,.diag-wait-modal,.debug-action-wait,[class*="overlay"]) { background:rgba(15,31,27,.58) !important; }
 html[data-asb-theme="light"] :is(.cfg-profile-row.selected,.cfg-tile.active,.cfg-reset-choice.armed,.theme-choice.active,.seg-opt.active,.seg button.active,.p-card.active,.profile-card.active) { border-color:var(--accent) !important; }
 html[data-asb-theme="light"] .cfg-reset-choice.armed { color:#201300 !important; background:linear-gradient(135deg,#ffd166,#f6a623) !important; }
-html[data-asb-theme="light"] :is(.app-name,.status-val,.live-cell-value,.cfg-tile-count.has-on,.tg-link-main,.theme-choice.active) { color:var(--accent) !important; }
+html[data-asb-theme="light"] :is(.app-name,.status-val,.cfg-tile-count.has-on,.tg-link-main,.theme-choice.active) { color:var(--accent) !important; }
 html[data-asb-theme="light"] :is(.cfg-profile-primary,.cfg-profile-apply,.cfg-reset-choice.armed,.theme-choice.active) { color:#04120f !important; }
 html[data-asb-theme="light"] :is(.cfg-profile-copy,.cfg-profile-row-meta,.cfg-profile-hint,.cfg-reset-copy,.cfg-reset-choice-copy,.live-cell-label,.device-line,.tg-link-sub) { color:var(--text-secondary) !important; }
 /* Smart normally has a dark AI gradient. In light mode retain its semantic teal/cyan identity,
@@ -2838,6 +2868,71 @@ html[data-asb-theme="light"] .cfg-pending { color:#765000; background:#fff5d6; b
 html[data-asb-theme="light"] :is(.cfg-profile-title,.cfg-reset-title,.debug-action-wait-title) { color:var(--text) !important; }
 html[data-asb-theme="light"] :is(.cfg-profile-close,.cfg-reset-close) { color:var(--text-secondary) !important; background:#fff !important; border-color:var(--border) !important; }
 html[data-asb-theme="light"] .logo-inner { filter:drop-shadow(0 4px 8px rgba(0,124,99,.28)); }
+/* Light theme harmony pass (fix159).
+ *
+ * The light theme had drifted into green: green-grey text tokens, every Monitor value and
+ * category counter painted in the accent, the wordmark glowing cyan on a pale page and every
+ * category title in the same red. The dark theme keeps its values white and lets colour mean
+ * something - the same rule here. Text is neutral ink, the accent marks what is selected, on
+ * or Smart's own card, and each category keeps its own hue, deepened for a light page. */
+html[data-asb-theme="light"] {
+  --bg:#f2f4f6; --surface-hover:#e8ecef;
+  --text:#15191e; --text-secondary:#4a5561; --text-tertiary:#6b7581;
+  --border:rgba(16,24,32,.12); --border-active:rgba(16,24,32,.24);
+}
+html[data-asb-theme="light"] .app-name {
+  background:
+    linear-gradient(105deg, transparent 0%, rgba(255,255,255,0) 40%, rgba(255,255,255,.78) 50%, rgba(255,255,255,0) 60%, transparent 100%),
+    linear-gradient(180deg, #0e7a65 0%, #0b6a6f 55%, #0b5877 100%) !important;
+  background-size: 300% 100%, 100% 100% !important;
+  background-repeat: no-repeat !important;
+  -webkit-background-clip: text !important; background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  filter: none !important;
+}
+html[data-asb-theme="light"] .logo-glow { opacity:.16; filter:blur(10px); }
+html[data-asb-theme="light"] .logo-ring { opacity:.38; }
+html[data-asb-theme="light"] .logo-inner { background:linear-gradient(135deg,#e9f6f2,#e4f1f6); border-color:rgba(16,24,32,.10);
+  box-shadow:inset 0 1px 1px rgba(255,255,255,.9),0 6px 18px rgba(16,24,32,.12); filter:none; }
+html[data-asb-theme="light"] .device-line { color:var(--text-secondary) !important; }
+html[data-asb-theme="light"] .sec-label { color:var(--text-tertiary) !important; }
+html[data-asb-theme="light"] .sec-line { background:linear-gradient(90deg,transparent,rgba(16,24,32,.18),transparent) !important; }
+html[data-asb-theme="light"] .live-cell { background:#ffffff !important; border-color:var(--border) !important; box-shadow:0 1px 2px rgba(16,24,32,.05) !important; }
+html[data-asb-theme="light"] .live-cell-label { color:var(--text-tertiary) !important; }
+html[data-asb-theme="light"] .live-cell-value { color:var(--text) !important; }
+html[data-asb-theme="light"] .live-cell-value.cap-asb { color:var(--text) !important; }
+html[data-asb-theme="light"] .live-cell-value.cap-clamp { color:#b42318 !important; }
+html[data-asb-theme="light"] .live-cell-value.cap-raised { color:#8a5700 !important; }
+html[data-asb-theme="light"] .live-cell-value.cap-shell { color:#0b5f86 !important; }
+html[data-asb-theme="light"] .smart-banner { background:linear-gradient(135deg,rgba(0,124,99,.11),rgba(0,111,155,.05) 60%,#ffffff 100%) !important; border-color:rgba(0,124,99,.26) !important; }
+html[data-asb-theme="light"] .smart-banner-label { color:#5d6b72 !important; }
+html[data-asb-theme="light"] .smart-banner-value { color:#00634f !important; }
+html[data-asb-theme="light"] .smart-banner-value.cap-clamp { color:#b42318 !important; }
+html[data-asb-theme="light"] .smart-banner-value.cap-raised { color:#08753c !important; }
+html[data-asb-theme="light"] .smart-drain { background:rgba(255,255,255,.72) !important; border-color:rgba(0,124,99,.24) !important; }
+html[data-asb-theme="light"] .smart-drain:active { background:rgba(0,124,99,.08) !important; }
+html[data-asb-theme="light"] .smart-drain-ico { color:#007c63 !important; background:rgba(0,124,99,.10) !important; }
+html[data-asb-theme="light"] .smart-drain-lbl { color:#5d6b72 !important; }
+html[data-asb-theme="light"] .smart-drain-val { color:#00634f !important; }
+html[data-asb-theme="light"] .smart-drain-sep { background:rgba(0,124,99,.18) !important; }
+html[data-asb-theme="light"] .smart-drain-more { color:rgba(0,99,79,.55) !important; }
+html[data-asb-theme="light"] .live-drain-block { background:#f7f9fa !important; border-color:var(--border) !important; }
+html[data-asb-theme="light"] .live-drain-ico { color:#007c63 !important; background:rgba(0,124,99,.10) !important; }
+html[data-asb-theme="light"] :is(.cfg-tile-count,.cfg-tile-count.has-on) { color:var(--text-secondary) !important; }
+html[data-asb-theme="light"] .cfg-tile-name { color:var(--text) !important; }
+html[data-asb-theme="light"] .cfg-section.cat-audio   { --section-accent:#c0362c; --tech-icon:#c0362c; }
+html[data-asb-theme="light"] .cfg-section.cat-camera  { --section-accent:#1f63b6; --tech-icon:#1f63b6; }
+html[data-asb-theme="light"] .cfg-section.cat-battery { --section-accent:#127a45; --tech-icon:#127a45; }
+html[data-asb-theme="light"] .cfg-section.cat-ux      { --section-accent:#9a5a00; --tech-icon:#9a5a00; }
+html[data-asb-theme="light"] .cfg-section.cat-net     { --section-accent:#0b6f86; --tech-icon:#0b6f86; }
+html[data-asb-theme="light"] .cfg-section.cat-iface   { --section-accent:#7442b8; --tech-icon:#7442b8; }
+html[data-asb-theme="light"] .cfg-section.cat-system  { --section-accent:#4a5f75; --tech-icon:#4a5f75; }
+html[data-asb-theme="light"] .cfg-section-title { color:var(--section-accent,#a52620) !important; }
+html[data-asb-theme="light"] .cfg-row:not(.is-on) { box-shadow:0 1px 2px rgba(16,24,32,.05); }
+html[data-asb-theme="light"] .cfg-row.is-on { background:linear-gradient(160deg,rgba(0,124,99,.07),#fff 70%) !important; border-color:rgba(0,124,99,.30) !important; }
+html[data-asb-theme="light"] .cfg-icon { background:#f3f5f7; }
+html[data-asb-theme="light"] .badge-a { background:#ffffff !important; border-color:rgba(0,124,99,.30) !important; color:#00634f !important; box-shadow:0 1px 3px rgba(16,24,32,.06) !important; }
+html[data-asb-theme="light"] .tg-link-sub { color:var(--text-secondary) !important; }
 
 
 /* Unavailable-on-this-device badge.
@@ -3380,8 +3475,8 @@ body.ufo-flying .logo-glyph { opacity: 0; }
         <span class="smart-banner-value" id="bnSes">—</span>
       </div>
       <div class="smart-banner-item">
-        <span class="smart-banner-label" data-i18n="lv_avgdrain">Drain</span>
-        <span class="smart-banner-value" id="bnDrain">—</span>
+        <span class="smart-banner-label" data-i18n="lv_slot_temp">Usual peak</span>
+        <span class="smart-banner-value" id="bnSlotTemp">—</span>
       </div>
       <div class="smart-banner-item">
         <span class="smart-banner-label" data-i18n="lv_trend">Trend</span>
@@ -3392,6 +3487,18 @@ body.ufo-flying .logo-glyph { opacity: 0; }
         <span class="smart-banner-value" id="bnLpm">—</span>
       </div>
     </div>
+    <button type="button" class="smart-drain" id="bnDrainStrip" onclick="liveDrainOpen()" aria-haspopup="dialog">
+      <span class="smart-drain-half">
+        <span class="smart-drain-ico" data-tech-icon="sun"></span>
+        <span class="smart-drain-txt"><span class="smart-drain-lbl" data-i18n="lv_scr_on">Screen on</span><span class="smart-drain-val" id="bnDrain">—</span></span>
+      </span>
+      <span class="smart-drain-sep" aria-hidden="true"></span>
+      <span class="smart-drain-half">
+        <span class="smart-drain-ico" data-tech-icon="theme_moon"></span>
+        <span class="smart-drain-txt"><span class="smart-drain-lbl" data-i18n="lv_scr_off">Screen off</span><span class="smart-drain-val" id="bnDrainOff">—</span></span>
+      </span>
+      <span class="smart-drain-more" aria-hidden="true">›</span>
+    </button>
     <div class="smart-banner-row tags" id="bnTagRow">
       <span class="smart-banner-tag" id="bnFb">cold start</span>
     </div>
@@ -4614,10 +4721,158 @@ function closeLivePage() {
   if (_liveTimer) { clearInterval(_liveTimer); _liveTimer = null; }
 }
 
-window.addEventListener('popstate', () => {
+/* Back gesture inside the WebUI (fix159).
+ *
+ * The root manager's WebView goes back through the page history and closes the WebUI only
+ * when there is none - and this page never made any, so the back gesture left the WebUI from
+ * a settings category, from Monitor and from any open window. Each level on screen now owns
+ * one history entry: a page other than Home, a category inside Settings, every open window.
+ * Back closes the top one - a window, then the category (to the Settings hub), then the page
+ * (to Home) - and only on Home, with nothing left, does the gesture leave the WebUI. Levels
+ * opened or closed by a tap, a swipe or a tab keep the history in step (navSync), so the next
+ * back always does the next visible thing. */
+const NAV_OVERLAYS = [
+  { id: 'logMenu',          close: function () { asbCloseLogMenu(); } },
+  { id: 'liveDrainSheet',   close: function () { liveDrainClose(); } },
+  { id: 'cfgFm',            close: function () { cfgFmClose(); } },
+  { id: 'dozeKeepModal',    close: function () { dozeKeepClose(); } },
+  { id: 'cfgResetModal',    close: function () { cfgResetDialogClose(); } },
+  { id: 'cfgProfileModal',  close: function () { cfgProfileClose(); } }
+];
+const _nav = { depth: 0, pending: false, queued: false };
+function navOverlaysOpen() {
+  return NAV_OVERLAYS.filter(function (o) { const m = _el(o.id); return !!m && !m.hidden; });
+}
+function navUiDepth() {
+  let d = 0;
+  if (_liveOpen || _cfgOpen) d++;
+  if (_cfgOpen && _cfgGroup) d++;
+  return d + navOverlaysOpen().length;
+}
+function navSync() {
+  if (_nav.pending || !window.history || !history.pushState) return;
+  const want = navUiDepth();
+  try {
+    while (_nav.depth < want) { _nav.depth++; history.pushState({ asbNav: _nav.depth }, ''); }
+    if (_nav.depth > want) {
+      const n = _nav.depth - want;
+      _nav.depth = want;
+      _nav.pending = true;
+      history.go(-n);
+    }
+  } catch (e) { _nav.pending = false; }
+}
+function navSyncSoon() {
+  if (_nav.queued) return;
+  _nav.queued = true;
+  Promise.resolve().then(function () { _nav.queued = false; navSync(); });
+}
+function navBackAction() {
+  const o = navOverlaysOpen();
+  if (o.length) { o[0].close(); return; }
+  if (_cfgOpen && _cfgGroup) { cfgBack(); return; }
+  if (_cfgOpen) { uiSound('nav'); closeConfigPage(true); return; }
   if (_liveOpen) closeLivePage();
-  if (_cfgOpen) closeConfigPage(true);
+}
+/* Monitor: battery drain with the screen on and off (fix159). The two figures sit in the Smart
+ * card; a tap opens what each one is based on and how long the battery would last. */
+const _lvDrain = { on: 'wait', off: 'wait', winS: 0, offN: 0 };
+function liveDrainIsOpen() { const m = _el('liveDrainSheet'); return !!m && !m.hidden; }
+function liveDrainEnsure() {
+  let m = _el('liveDrainSheet');
+  if (m) return m;
+  m = document.createElement('div');
+  m.className = 'cfg-profile-modal live-drain-modal';
+  m.id = 'liveDrainSheet';
+  m.hidden = true;
+  m.setAttribute('aria-hidden', 'true');
+  m.innerHTML = '<div class="cfg-profile-sheet live-drain-sheet" role="dialog" aria-modal="true" aria-labelledby="liveDrainTitle">'
+    + '<div class="cfg-profile-head"><div class="cfg-profile-title" id="liveDrainTitle"></div>'
+    + '<button class="cfg-profile-close" id="liveDrainX" type="button" aria-label="Close">\u00d7</button></div>'
+    + '<div class="live-drain-body" id="liveDrainBody"></div>'
+    + '<button class="cfg-profile-primary live-drain-done" id="liveDrainDone" type="button"></button></div>';
+  document.body.appendChild(m);
+  m.addEventListener('click', function (e) { if (e.target === m) liveDrainClose(); });
+  _el('liveDrainX').onclick = liveDrainClose;
+  _el('liveDrainDone').onclick = liveDrainClose;
+  return m;
+}
+function liveDrainBlock(icon, label, value, basis, left) {
+  const b = document.createElement('div');
+  b.className = 'live-drain-block';
+  const ic = document.createElement('span');
+  ic.className = 'live-drain-ico';
+  ic.innerHTML = techIcon(icon);
+  b.appendChild(ic);
+  const tx = document.createElement('div');
+  tx.className = 'live-drain-txt';
+  [['live-drain-lbl', label], ['live-drain-val', value], ['live-drain-basis', basis], ['live-drain-left', left]].forEach(function (p) {
+    if (!p[1]) return;
+    const e = document.createElement('div');
+    e.className = p[0];
+    e.textContent = p[1];
+    tx.appendChild(e);
+  });
+  b.appendChild(tx);
+  return b;
+}
+function liveDrainPaint() {
+  const body = _el('liveDrainBody');
+  if (!body) return;
+  _el('liveDrainTitle').textContent = T('lv_drain_title', 'Battery drain');
+  _el('liveDrainDone').textContent = T('doze_keep_done', 'Done');
+  const onV = (_el('bnDrain') || {}).textContent || '\u2014';
+  const offV = (_el('bnDrainOff') || {}).textContent || '\u2014';
+  const etaOn = (_el('liveEtaOn') || {}).textContent || '';
+  const etaOff = (_el('liveEtaOff') || {}).textContent || '';
+  const mins = Math.round((_lvDrain.winS || 0) / 60);
+  const onBasis = {
+    now: T('lv_drain_on_now', 'measured over the last %s min with the screen on').replace('%s', String(mins)),
+    recent: T('lv_drain_on_recent', 'estimate from your recent screen-on use - the measured figure replaces it after 10 minutes with the screen on'),
+    slot: T('lv_drain_on_slot', 'estimate from what this hour usually costs - nothing measured since the start yet'),
+    charging: T('lv_drain_charging_tip', 'No drain while charging - the figure comes back after unplugging.'),
+    wait: T('lv_drain_on_wait', 'needs 10 minutes with the screen on and the battery level moving')
+  }[_lvDrain.on] || '';
+  const offBasis = _lvDrain.off === 'measured'
+    ? T('lv_drain_off_measured', 'measured over %s screen-off stretch(es) of an hour or more, without charging or music').replace('%s', String(_lvDrain.offN))
+    : T('lv_drain_off_wait', 'needs an hour with the screen off, without charging or music');
+  const left = T('lv_drain_left', 'to 0%: %s');
+  body.textContent = '';
+  body.appendChild(liveDrainBlock('sun', T('lv_scr_on', 'Screen on'), onV, onBasis,
+    (etaOn && _lvDrain.on !== 'charging') ? left.replace('%s', etaOn) : ''));
+  body.appendChild(liveDrainBlock('theme_moon', T('lv_scr_off', 'Screen off'), offV, offBasis,
+    etaOff ? left.replace('%s', etaOff) : ''));
+  const note = document.createElement('div');
+  note.className = 'live-drain-note';
+  note.textContent = T('lv_drain_note', 'Both figures come from the battery level itself, not from the current sensor: slower to settle, but they match what the battery screen shows.');
+  body.appendChild(note);
+}
+function liveDrainOpen() {
+  uiSound('option');
+  const m = liveDrainEnsure();
+  liveDrainPaint();
+  m.hidden = false;
+  m.setAttribute('aria-hidden', 'false');
+}
+function liveDrainClose() {
+  const m = _el('liveDrainSheet');
+  if (!m || m.hidden) return;
+  m.hidden = true;
+  m.setAttribute('aria-hidden', 'true');
+}
+window.addEventListener('popstate', function (e) {
+  const at = (e && e.state && e.state.asbNav) || 0;
+  _nav.depth = at;
+  if (_nav.pending) { _nav.pending = false; navSync(); return; }
+  navBackAction();
+  navSync();
 });
+(function navWatch() {
+  try {
+    const mo = new MutationObserver(navSyncSoon);
+    mo.observe(document.body, { attributes: true, attributeFilter: ['class', 'hidden'], subtree: true });
+  } catch (e) {}
+})();
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && _liveOpen) closeLivePage();
   if (e.key === 'Escape' && _cfgOpen) closeConfigPage(true);
@@ -8356,6 +8611,7 @@ function cfgSyncChrome() {
   const bc = _el('cfgBackChip');
   if (bc) bc.style.display = _cfgGroup ? 'inline-flex' : 'none';
   const ar = _el('cfgActionsRow'); if (ar) ar.style.display = _cfgGroup ? 'none' : 'grid';
+  if (typeof navSyncSoon === 'function') navSyncSoon();
 }
 
 function cfgBack() {
@@ -9472,6 +9728,25 @@ async function pollLive(visible) {
               _bdEl.title = T('lv_avgdrain_tip',
                 'Actual screen-on drain: how fast the battery level is falling now, over the last minutes - not a model.');
             }
+            _lvDrain.on = _act > 0 ? 'now' : (_chg ? 'charging' : ((_frt > 0 && (_fbs === 'recent' || _fbs === 'slot')) ? _fbs : 'wait'));
+            _lvDrain.winS = parseInt(kv.smart_drain_window_s || '0', 10);
+            const _offx = parseInt(kv.offdrain_pctph_x100 || '0', 10);
+            const _offn = parseInt(kv.offdrain_windows || '0', 10);
+            _lvDrain.offN = _offn;
+            const _doEl = _el('bnDrainOff');
+            if (_doEl) {
+              if (_offx > 0 && _offn > 0) {
+                _doEl.textContent = (_offx / 100).toFixed(_offx >= 100 ? 1 : 2) + T('unit_pcth', '%/h');
+                _lvDrain.off = 'measured';
+              } else {
+                _doEl.textContent = T('lv_measuring', 'measuring\u2026');
+                _lvDrain.off = 'wait';
+              }
+            }
+            const _stx = parseInt(kv.smart_bucket_temp_x10 || '0', 10);
+            const _stEl = _el('bnSlotTemp');
+            if (_stEl) _stEl.textContent = _stx > 0 ? (_stx / 10).toFixed(1) + '\u00b0C' : '\u2014';
+            if (liveDrainIsOpen()) liveDrainPaint();
           }
 
           // Thermal trend is what makes Smart back off, so it explains Alpha moving on its
