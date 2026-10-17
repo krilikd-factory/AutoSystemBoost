@@ -20,13 +20,13 @@ b = s[s.index('id="liveSmartBanner"'):s.index('id="liveStockRomBanner"')]
 assert b.index('id="bnTagRow"') < b.index('id="bnDrainStrip"') < b.index('id="bnBucket"'), "drain pair is not the first row of the Smart card"
 assert 'data-i18n="lv_slot_heat"' in b and 'lv_slot_temp' not in b, "the usual-peak tile is still a bare temperature"
 st = s[s.index('id="liveStockRomBanner"'):s.index('<div class="live-metrics">')]
-assert 'id="bnStockTagRow"' in st and st.index('id="bnStockTagRow"') < st.index('id="bnStockDrain"'), "stock card tags not on its top edge"
+assert 'id="bnStockTagRow"' in st and st.index('id="bnStockTagRow"') < st.index('id="bnStockDrain"'), "stock card tags not in its title row"
 g = s[s.index('<div class="live-metrics">'):s.index('<section class="stock-telemetry"')]
 rows = g.count('<div class="live-row">')
 assert rows == 4, "metric grid has %d rows, want 4" % rows
 for i in ("liveCpu", "liveSkin", "liveSurface", "liveState", "liveGpu", "liveHeadroom", "liveEtaOn", "liveEtaOff", "liveCapSrc", "liveClamp", "liveLearner"):
     assert ('id="%s"' % i) in g, "metric %s lost" % i
-assert ".live-page .smart-banner-row.tags { position: absolute;" in s, "tags still take a row"
+assert b.index('class="smart-banner-head"') < b.index('id="bnTagRow"') < b.index('id="bnDrainStrip"'), "tags are not in the card's title row"
 assert ".live-page .header { margin-bottom: 22px; }" in s, "header gap unchanged"
 r = s[s.index('<div id="cfgRebootWrap" class="cfg-reboot-row">'):]
 r = r[:r.index('</div>')]
@@ -63,4 +63,4 @@ EOF
 } > "$T/t.js"
 out="$(node "$T/t.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo "PASS webui monitor compact: drain pair first in the card on every profile, tags on the edge, four metric rows, heat against the phone's own norm, restarts as one row of tiles"
+echo "PASS webui monitor compact: drain pair first in the card on every profile, tags in the title row, four metric rows, heat against the phone's own norm, restarts as one row of tiles"

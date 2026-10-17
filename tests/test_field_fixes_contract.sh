@@ -1201,4 +1201,16 @@ grep -q 'берегите слух' "$ROOT/common/russiantext.sh" && fail "the h
 for t in test_drain_meter_runtime.sh test_tree_check_runtime.sh test_webui_monitor_compact_runtime.sh; do [ -f "$ROOT/tests/$t" ] || fail "$t missing"; done
 echo "PASS: fix161 contract"
 ) || exit 1
+# ---- fix162 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix162: $*"; exit 1; }
+H="$ROOT/webroot/index.html"
+grep -q '<div class="smart-banner-head">' "$H" || fail "the Monitor card has no title row for its chips"
+grep -q 'top: -8px' "$H" && fail "a chip is still pinned to the card border"
+grep -q '🤖 Bucket' "$H" && fail "the Smart card still has untranslated labels"
+grep -q "batteryStatus !== 'discharging' &&" "$H" || fail "Stock can still read an explicit Discharging as charging"
+[ -f "$ROOT/tests/test_webui_monitor_card_head_runtime.sh" ] || fail "test_webui_monitor_card_head_runtime.sh missing"
+echo "PASS: fix162 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
