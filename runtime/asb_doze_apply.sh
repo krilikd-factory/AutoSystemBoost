@@ -67,6 +67,38 @@ _doze_list_file() {
   done < "$_DZ_DIR/doze_whitelist_$1"
 }
 
+_doze_night_window() {
+  _nw="$_DZ_DIR/night_window.conf"
+  _min_s="$(_cfg night_quiet_auto_min_samples)"; case "$_min_s" in ''|*[!0-9]*) _min_s=3 ;; esac
+  _auto="$(_cfg night_quiet_auto)"
+  _s_min=""; _e_min=""
+  if [ "$_auto" = "1" ] && [ -f "$_nw" ]; then
+    _sm="$(grep -E '^sleep_min=' "$_nw" 2>/dev/null | head -1 | sed 's/.*=//')"
+    _wm="$(grep -E '^wake_min='  "$_nw" 2>/dev/null | head -1 | sed 's/.*=//')"
+    _ns="$(grep -E '^samples='   "$_nw" 2>/dev/null | head -1 | sed 's/.*=//')"
+    case "$_sm$_wm$_ns" in *[!0-9]*|'') : ;; *)
+      if [ "$_ns" -ge "$_min_s" ] 2>/dev/null; then
+        _s_min=$(( (_sm + 15) % 1440 ))
+        _e_min=$(( (_wm - 20 + 1440) % 1440 ))
+      fi ;;
+    esac
+  fi
+  if [ -z "$_s_min" ]; then
+    _nq_s="$(_cfg night_quiet_hour_start)"; _nq_e="$(_cfg night_quiet_hour_end)"
+    case "$_nq_s" in ''|*[!0-9]*) _nq_s=23 ;; esac
+    case "$_nq_e" in ''|*[!0-9]*) _nq_e=6  ;; esac
+    _s_min=$(( _nq_s * 60 )); _e_min=$(( _nq_e * 60 ))
+  fi
+  _now_min="$(date +%H:%M 2>/dev/null | awk -F: '{print ($1*60)+$2}')"
+  case "$_now_min" in ''|*[!0-9]*) _now_min=720 ;; esac
+  _in_night=0
+  if [ "$_s_min" -gt "$_e_min" ] 2>/dev/null; then
+    { [ "$_now_min" -ge "$_s_min" ] || [ "$_now_min" -lt "$_e_min" ]; } 2>/dev/null && _in_night=1
+  else
+    { [ "$_now_min" -ge "$_s_min" ] && [ "$_now_min" -lt "$_e_min" ]; } 2>/dev/null && _in_night=1
+  fi
+}
+
 if [ "${1:-}" = list ]; then
   _tr=0
   case "$(_cfg doze_trim_whitelist)" in
@@ -74,6 +106,11 @@ if [ "${1:-}" = list ]; then
   esac
   echo "trim=$_tr"
   echo "level=$_lvl"
+  if [ "$_lvl" = night ]; then
+    _doze_night_window
+    echo "window=$_in_night"
+    printf 'night=%02d:%02d-%02d:%02d\n' $((_s_min / 60)) $((_s_min % 60)) $((_e_min / 60)) $((_e_min % 60))
+  fi
   for _p in $(pm list packages -3 2>/dev/null | sed 's/^package://'); do
     case "$_p" in *[!A-Za-z0-9_.]*|'') continue ;; esac
     if _doze_rule_protected "$_p"; then echo "A $_p p"; else echo "A $_p -"; fi
@@ -140,43 +177,14 @@ case "$_lvl" in
     #
     # Minute granularity, because that is what the learner produces. Below the sample
     # threshold the learned value is not trusted yet and the configured hours stand.
-    _nw="/data/adb/asb/night_window.conf"
-    _min_s="$(_cfg night_quiet_auto_min_samples)"; case "$_min_s" in ''|*[!0-9]*) _min_s=3 ;; esac
-    _auto="$(_cfg night_quiet_auto)"
-    _s_min=""; _e_min=""
-    if [ "$_auto" = "1" ] && [ -f "$_nw" ]; then
-      _sm="$(grep -E '^sleep_min=' "$_nw" 2>/dev/null | head -1 | sed 's/.*=//')"
-      _wm="$(grep -E '^wake_min='  "$_nw" 2>/dev/null | head -1 | sed 's/.*=//')"
-      _ns="$(grep -E '^samples='   "$_nw" 2>/dev/null | head -1 | sed 's/.*=//')"
-      case "$_sm$_wm$_ns" in *[!0-9]*|'') : ;; *)
-        if [ "$_ns" -ge "$_min_s" ] 2>/dev/null; then
-          # Same margins the governor uses on this window (asb_smart_defs.h): start 15
-          # minutes late and end 20 minutes early. The learned time is an average, so the
-          # real one moves either side of it by a few minutes on any given night - hugging
-          # the average exactly means being wrong half the time, and being wrong at the
-          # END means the phone is still in aggressive doze when the alarm-adjacent apps
-          # need to catch up. Erring inward costs a few minutes of saving and cannot make
-          # the user miss anything.
-          _s_min=$(( (_sm + 15) % 1440 ))
-          _e_min=$(( (_wm - 20 + 1440) % 1440 ))
-        fi ;;
-      esac
-    fi
-    if [ -z "$_s_min" ]; then
-      _nq_s="$(_cfg night_quiet_hour_start)"; _nq_e="$(_cfg night_quiet_hour_end)"
-      case "$_nq_s" in ''|*[!0-9]*) _nq_s=23 ;; esac
-      case "$_nq_e" in ''|*[!0-9]*) _nq_e=6  ;; esac
-      _s_min=$(( _nq_s * 60 )); _e_min=$(( _nq_e * 60 ))
-    fi
-    _now_min="$(date +%H:%M 2>/dev/null | awk -F: '{print ($1*60)+$2}')"
-    case "$_now_min" in ''|*[!0-9]*) _now_min=720 ;; esac
-    _in_night=0
-    if [ "$_s_min" -gt "$_e_min" ] 2>/dev/null; then
-      # window crosses midnight
-      { [ "$_now_min" -ge "$_s_min" ] || [ "$_now_min" -lt "$_e_min" ]; } 2>/dev/null && _in_night=1
-    else
-      { [ "$_now_min" -ge "$_s_min" ] && [ "$_now_min" -lt "$_e_min" ]; } 2>/dev/null && _in_night=1
-    fi
+    # Same margins the governor uses on this window (asb_smart_defs.h): start 15
+    # minutes late and end 20 minutes early. The learned time is an average, so the
+    # real one moves either side of it by a few minutes on any given night - hugging
+    # the average exactly means being wrong half the time, and being wrong at the
+    # END means the phone is still in aggressive doze when the alarm-adjacent apps
+    # need to catch up. Erring inward costs a few minutes of saving and cannot make
+    # the user miss anything.
+    _doze_night_window
     if [ "$_in_night" = "1" ]; then
       _c="inactive_to=120000,idle_after_inactive_to=120000,motion_inactive_to=120000,sensing_to=60000,locating_to=15000"
       _c="${_c},light_after_inactive_to=10000,light_idle_to=30000,light_idle_factor=4.0"
@@ -273,33 +281,11 @@ _doze_protected() {
   return 1
 }
 
-asb_doze_trim_whitelist() {
+asb_doze_keep_grants() {
   command -v dumpsys >/dev/null 2>&1 || return 0
-  command -v pm >/dev/null 2>&1 || return 0
-  _wl_file="${_DZ_DIR}/doze_whitelist_removed"
-  mkdir -p "$_DZ_DIR" 2>/dev/null
-  # Third-party packages only: pm list packages -3 is the definition Android itself uses.
-  _third="$(pm list packages -3 2>/dev/null | sed 's/^package://')"
+  [ -n "${_third:-}" ] || _third="$(pm list packages -3 2>/dev/null | sed 's/^package://')"
   [ -n "$_third" ] || return 0
-
-  # Give back what an earlier run trimmed and the rules now protect (or the user has since
-  # put on the keep-list, or a system app the old substring test let through): the record
-  # says we took it, so we return it.
-  if [ -s "$_wl_file" ]; then
-    _wl_keep=""
-    while IFS= read -r _p; do
-      [ -n "$_p" ] || continue
-      if _doze_protected "$_p" || ! printf '%s\n' "$_third" | grep -qxF "$_p"; then
-        dumpsys deviceidle whitelist "+$_p" >/dev/null 2>&1
-        echo "doze: $_p exempt again (protected or not a user app)"
-      else
-        _wl_keep="${_wl_keep}${_p}
-"
-      fi
-    done < "$_wl_file"
-    printf '%s' "$_wl_keep" > "$_wl_file" 2>/dev/null
-  fi
-
+  mkdir -p "$_DZ_DIR" 2>/dev/null
   _ga_file="${_DZ_DIR}/doze_whitelist_added"
   _kp_file="${_DZ_DIR}/doze_whitelist_keep"
   if [ -s "$_ga_file" ]; then
@@ -328,6 +314,36 @@ asb_doze_trim_whitelist() {
       fi
     done < "$_kp_file"
   fi
+}
+
+asb_doze_trim_whitelist() {
+  command -v dumpsys >/dev/null 2>&1 || return 0
+  command -v pm >/dev/null 2>&1 || return 0
+  _wl_file="${_DZ_DIR}/doze_whitelist_removed"
+  mkdir -p "$_DZ_DIR" 2>/dev/null
+  # Third-party packages only: pm list packages -3 is the definition Android itself uses.
+  _third="$(pm list packages -3 2>/dev/null | sed 's/^package://')"
+  [ -n "$_third" ] || return 0
+
+  # Give back what an earlier run trimmed and the rules now protect (or the user has since
+  # put on the keep-list, or a system app the old substring test let through): the record
+  # says we took it, so we return it.
+  if [ -s "$_wl_file" ]; then
+    _wl_keep=""
+    while IFS= read -r _p; do
+      [ -n "$_p" ] || continue
+      if _doze_protected "$_p" || ! printf '%s\n' "$_third" | grep -qxF "$_p"; then
+        dumpsys deviceidle whitelist "+$_p" >/dev/null 2>&1
+        echo "doze: $_p exempt again (protected or not a user app)"
+      else
+        _wl_keep="${_wl_keep}${_p}
+"
+      fi
+    done < "$_wl_file"
+    printf '%s' "$_wl_keep" > "$_wl_file" 2>/dev/null
+  fi
+
+  asb_doze_keep_grants
 
   for _p in $(dumpsys deviceidle whitelist 2>/dev/null \
               | grep -E '^user,' | cut -d, -f2); do
@@ -351,7 +367,7 @@ asb_doze_trim_whitelist() {
 
 # Put them all back. Called when the level returns to stock and from uninstall.sh - an
 # exemption the user granted deliberately must survive the module being removed.
-asb_doze_restore_whitelist() {
+asb_doze_withdraw_added() {
   command -v dumpsys >/dev/null 2>&1 || return 0
   _ga_file="${_DZ_DIR}/doze_whitelist_added"
   if [ -f "$_ga_file" ]; then
@@ -362,6 +378,10 @@ asb_doze_restore_whitelist() {
     rm -f "$_ga_file" 2>/dev/null
     echo "doze: exemptions ASB gave to kept apps withdrawn"
   fi
+}
+
+asb_doze_restore_removed() {
+  command -v dumpsys >/dev/null 2>&1 || return 0
   _wl_file="${_DZ_DIR}/doze_whitelist_removed"
   [ -f "$_wl_file" ] || return 0
   while IFS= read -r _p; do
@@ -371,15 +391,31 @@ asb_doze_restore_whitelist() {
   echo "doze: exemption list restored"
 }
 
+asb_doze_restore_whitelist() {
+  asb_doze_withdraw_added
+  asb_doze_restore_removed
+}
+
+_doze_off_restore() {
+  case "$(_cfg doze_trim_whitelist)" in 1|on|true) _dz_trim_on=1 ;; *) _dz_trim_on=0 ;; esac
+  if [ "$_lvl" = night ] && [ "$_dz_trim_on" = 1 ]; then
+    asb_doze_restore_removed
+    asb_doze_keep_grants
+    echo "doze: night - outside the sleep window trimmed apps are back, ticked apps keep their exemption"
+  else
+    asb_doze_restore_whitelist
+  fi
+}
+
 if [ "$_lvl" = "stock" ] || [ -z "$_c" ]; then
   if [ -n "$(asb_set_get global device_idle_constants)" ]; then
     asb_set_del global device_idle_constants
-    asb_doze_restore_whitelist
+    _doze_off_restore
     echo "doze: stock - Android's own timings, nothing set by ASB"
   else
     # The exemptions are their own record: a constants write the ROM refused still left
     # trimmed apps behind, and they came back only on uninstall.
-    asb_doze_restore_whitelist
+    _doze_off_restore
     echo "doze: stock (no constants had been set)"
   fi
   exit 0
