@@ -2107,21 +2107,36 @@ body.config-active #livePage.open {
   border-radius: 10px; border: 1px solid var(--border, rgba(255,255,255,0.12));
   background: rgba(255,255,255,0.04); color: #e7eaee; font-size: 12.5px; font-weight: 600;
 }
-.doze-edit { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
-.doze-edit-row { display: flex; align-items: center; gap: 9px; font-size: 12.5px;
-  color: rgba(231,234,238,0.8); padding: 5px 2px; }
-.doze-edit-row input { width: 16px; height: 16px; accent-color: var(--accent, #22d3ee); }
-/* Envelope marking a messenger. Monochrome on purpose: it groups the rows that matter,
-   it is not decoration, and a colour emoji beside a package name looks like a sticker. */
-.doze-msg-ico { flex: 0 0 auto; font-size: 13px; opacity: .7; filter: grayscale(1); color: #e7eaee; }
-.doze-edit-row.is-msg .doze-pkg { color: rgba(231,234,238,0.95); }
-.doze-pkg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.doze-not-exempt {
-  margin-left: auto; flex: 0 0 auto;
-  font-size: 10px; letter-spacing: .3px; text-transform: uppercase;
-  color: rgba(231,234,238,0.36);
-}
-.doze-edit-hint { font-size: 11.5px; color: rgba(231,234,238,0.45); margin-top: 4px; }
+.doze-keep-sheet { display: flex; flex-direction: column; overflow: hidden;
+  height: min(88vh, 780px); height: min(88dvh, 780px); }
+.doze-keep-sheet > .cfg-profile-head, .doze-keep-copy, .doze-keep-off, .doze-keep-search,
+.doze-keep-nolabel, .doze-keep-chips, .doze-keep-done { flex: 0 0 auto; }
+.doze-keep-copy { margin-bottom: 10px; }
+.doze-keep-off { margin: 0 0 10px; padding: 9px 11px; border-radius: 11px; font-size: 11.5px; line-height: 1.4;
+  color: #ffe2a8; border: 1px solid rgba(246,166,35,.55); background: rgba(246,166,35,.08); }
+.doze-keep-off[hidden], .doze-keep-nolabel[hidden], .doze-keep-row[hidden] { display: none !important; }
+.doze-keep-nolabel { margin: 7px 0 0; }
+.doze-keep-chips { margin-top: 10px; }
+.doze-keep-chips button { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.doze-keep-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch; margin-top: 10px; padding-right: 2px; }
+.cfg-profile-check.doze-keep-row { grid-template-columns: auto auto minmax(0,1fr) auto; align-items: center;
+  margin-top: 0; margin-bottom: 6px; padding: 9px 11px; }
+.doze-keep-list.no-ico .cfg-profile-check.doze-keep-row { grid-template-columns: auto minmax(0,1fr) auto; }
+.doze-keep-row .cfg-profile-check-box { margin-top: 0; flex: 0 0 auto; }
+.doze-keep-ico { position: relative; width: 30px; height: 30px; border-radius: 9px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800;
+  color: #5ce7c3; background: rgba(44,214,173,.10); }
+.doze-keep-ico img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.doze-keep-ico.has-img { background: transparent; color: transparent; }
+.doze-keep-text { min-width: 0; display: flex; flex-direction: column; }
+.doze-keep-text .cfg-profile-check-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doze-keep-text .cfg-profile-check-sub { margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doze-keep-tag { flex: 0 0 auto; max-width: 96px; text-align: right; font-size: 9.5px; letter-spacing: .3px;
+  line-height: 1.25; text-transform: uppercase; color: rgba(231,234,238,.40); }
+.doze-keep-tag.is-trimmed { color: var(--bal, #d08700); }
+.doze-keep-tag.is-granted, .doze-keep-tag.is-exempt { color: #5ce7c3; }
+.doze-keep-done { margin-top: 10px; }
 
 .cfg-desc-opts { margin-top: 10px; display: flex; flex-direction: column; gap: 7px; }
 .cfg-desc-opt {
@@ -2714,6 +2729,11 @@ html[data-asb-theme="light"] .alpha-tag { color:#006e57; background:linear-gradi
 html[data-asb-theme="light"] .cfg-profile-dest button { color:var(--text-secondary) !important; background:#ffffff !important; border-color:var(--border) !important; }
 html[data-asb-theme="light"] .cfg-profile-dest button.active { color:var(--accent) !important; background:rgba(0,143,112,.10) !important; border-color:rgba(0,143,112,.42) !important; }
 html[data-asb-theme="light"] .cfg-profile-close { color:var(--text-secondary) !important; background:#ffffff !important; border-color:var(--border) !important; }
+html[data-asb-theme="light"] .doze-keep-off { color:#6b4300 !important; }
+html[data-asb-theme="light"] .doze-keep-tag { color:var(--text-secondary) !important; }
+html[data-asb-theme="light"] .doze-keep-tag.is-trimmed { color:#8a5a00 !important; }
+html[data-asb-theme="light"] :is(.doze-keep-tag.is-granted,.doze-keep-tag.is-exempt,.doze-keep-ico) { color:var(--accent) !important; }
+html[data-asb-theme="light"] .doze-keep-ico.has-img { color:transparent !important; }
 html[data-asb-theme="light"] .cfg-profile-check { color:var(--text) !important; background:#ffffff !important; border-color:var(--border) !important; }
 html[data-asb-theme="light"] .cfg-profile-check.on { background:rgba(0,143,112,.08) !important; border-color:rgba(0,143,112,.42) !important; }
 html[data-asb-theme="light"] .cfg-profile-check-sub { color:var(--text-secondary) !important; }
@@ -2772,7 +2792,7 @@ html[data-asb-theme="light"] .smart-banner { background:linear-gradient(135deg,r
 html[data-asb-theme="light"] .smart-banner-label { color:var(--text-tertiary); }
 html[data-asb-theme="light"] .smart-banner-value { color:#006c56; }
 html[data-asb-theme="light"] .smart-banner-tag { color:#006c56; background:rgba(0,124,99,.12); border-color:rgba(0,124,99,.28); }
-html[data-asb-theme="light"] :is(.cfg-section,.cfg-section-hint,.cfg-tile-count,.cfg-sub-label,.cfg-sub-hint,.cfg-trial-info,.doze-edit-row,.doze-msg-ico,.doze-pkg,.doze-not-exempt,.doze-edit-hint,.cfg-desc-opt) { color:var(--text-secondary) !important; opacity:1; }
+html[data-asb-theme="light"] :is(.cfg-section,.cfg-section-hint,.cfg-tile-count,.cfg-sub-label,.cfg-sub-hint,.cfg-trial-info,.cfg-desc-opt) { color:var(--text-secondary) !important; opacity:1; }
 html[data-asb-theme="light"] .cfg-section-title { color:#a52620 !important; }
 html[data-asb-theme="light"] :is(.cfg-tile,.cfg-row) { background:#fff !important; border-color:var(--border) !important; }
 html[data-asb-theme="light"] .cfg-tile-count.has-on { color:var(--accent) !important; }
@@ -3016,15 +3036,6 @@ html[data-asb-theme="light"] .log-menu {
 .tg-link-wrap { display: none; }
 
 
-/* A ticked app that Android is still dozing is the one case worth drawing the eye to:
-   the user has asked ASB to protect something that has nothing to protect yet. Amber, not
-   red - nothing is broken, there is simply an action left to take in system settings. */
-.doze-not-exempt.is-pending {
-  color: var(--bal, #d08700);
-  opacity: 1;
-}
-
-.doze-pending-hint { color: var(--bal, #d08700); opacity: 1; }
 
 
 /* ── Density scaling ───────────────────────────────────────────────────────────────
@@ -4783,7 +4794,7 @@ const CFG_ITEMS = [
   { key:'doze_level', type:'seg', def:'stock', stock:'stock', opts:['stock','night','moderate','aggressive'], name:'Deep Sleep',
     desc:'How soon Android puts the phone into Doze once the screen is off. Stock waits 30 minutes, which on a phone picked up every few minutes is 30 minutes that never elapse - a full-day capture showed the idle phase awake 45% of the time against a 5% target. Moderate starts idle after 5 minutes, aggressive after 2. THE COST: in Doze the system holds background network until the next maintenance window, so an app that polls on its own can be late - high-priority push still breaks through. If messages arriving on time matter more than standby drain, leave this on stock. Only ever writes one setting, and stock deletes it.' },
   { key:'doze_trim_whitelist', type:'seg', def:'0', stock:'0', opts:['0','1'], name:'Trim Doze Exemptions',
-    desc:'Deep Sleep decides how soon Doze starts. This decides who ignores it.\n\nApps on Android\u2019s exemption list keep their alarms and network through every idle window, so a phone can sit in deep doze all night while three exempted apps wake it anyway - which is why tuning only the timings can look like it changed nothing.\n\nOnly user-installed apps are touched. The dialer, SMS app, clock and your root manager are never removed, because that is how a module ends up blamed for a missed alarm. Every removal is recorded and put back when you set this to 0 or uninstall ASB.\n\nApplies with Deep Sleep set to aggressive or night.' },
+    desc:'Deep Sleep decides how soon Doze starts. This decides who ignores it.\n\nApps on Android\u2019s exemption list keep their alarms and network through every idle window, so a phone can sit in deep doze all night while three exempted apps wake it anyway - which is why tuning only the timings can look like it changed nothing.\n\nOnly user-installed apps are touched. The dialer, SMS app, clock and your root manager are never removed, because that is how a module ends up blamed for a missed alarm. Every removal is recorded and put back when you set this to 0 or uninstall ASB.\n\nThe button under the switch opens your apps with a search. Ticked apps are never trimmed, and if one has no exemption, ASB gives it - undone the same way at 0 or on uninstall. Tick the messengers, mail and VPN whose notifications must arrive on time at night.\n\nApplies with Deep Sleep set to aggressive, or to night - then only inside the sleep window.' },
   { key:'wakelock_action', type:'seg', def:'0', stock:'0', opts:['0','1'], name:'Act on Wakelocks',
     desc:'A wakelock is an app telling Android \u201Cdo not sleep yet\u201D. One app holding one all night is the single most expensive thing that can happen to a battery - more than any setting here can save - and no amount of tuning helps, because the phone never reaches the states those settings govern.\n\nMeasuring is always on; this decides whether ASB acts. With it on, a user-installed app still holding a wakelock after 45+ minutes of screen-off, on a phone that is measurably staying awake, is moved to Android\u2019s restricted bucket.\n\nNever touched: kernel and system sources - modem, display, alarm timer, sensors - and authenticators, dialer, SMS, messaging and clock apps. Nothing is force-stopped; restricted is a state Android manages and can undo.\n\nLeave it off if you would rather see the name and decide yourself. The report names the holder either way. In detail: only an app that held the CPU for 10+ minutes (or holds a long lock right now) and that Android does not count as used today. Also never touched: apps you exempted from battery optimisation, mail, navigation and keyboards.' },
   { key:'wakelock_fitness', type:'seg', def:'protect', stock:'protect', opts:['protect','limit'], name:'Fitness Apps & Wakelocks',
@@ -6069,7 +6080,7 @@ const _unav = ASB_CAP_REQUIRES[it.key];
       const eb = document.createElement('button');
       eb.className = 'doze-edit-btn';
       eb.textContent = T('doze_edit', 'Choose apps to keep exempt');
-      eb.onclick = (e) => { e.stopPropagation(); dozeOpenEditor(row); };
+      eb.onclick = (e) => { e.stopPropagation(); uiSound('option'); dozeOpenEditor(); };
       row.appendChild(eb);
     }
 
@@ -7077,8 +7088,7 @@ const DOZE_KEEP_PATH = '/data/adb/asb/doze_whitelist_keep';
  * The setting was a 0/1 switch and a user said plainly that it tells them nothing - fair,
  * because the interesting question is not "trim the list" but "which of MY apps stays
  * exempt". Alarm clocks, work chat and health trackers are exactly the ones people need to
- * reach them late. This lists the user-installed apps currently exempt and lets each be
- * kept, writing one package per line to a file the applier reads.
+ * reach them late. The picker writes one package per line to a file the applier reads.
  *
  * Package names are validated here as well as in the shell: they end up in a command, and
  * a name is [A-Za-z0-9_.] by Android's own rules, so anything else is a bug or an attack
@@ -7086,12 +7096,7 @@ const DOZE_KEEP_PATH = '/data/adb/asb/doze_whitelist_keep';
  */
 function dozePkgOk(p) { return /^[A-Za-z0-9_.]+$/.test(p); }
 
-/* Messengers, marked and offered even when not currently exempt.
- *
- * The editor only listed apps ALREADY on the exemption list, which is the wrong list to
- * choose from: the apps people actually want kept awake - the messengers - are usually the
- * ones OxygenOS has already removed, so they never appeared. Offering every installed
- * messenger lets someone tick Telegram before it goes quiet rather than after.
+/* Messengers, ranked right after the exempt apps in the picker.
  *
  * The list is prefixes, not exact names: forks and regional builds append suffixes
  * (org.telegram.plus, com.whatsapp.w4b), and matching the prefix catches them without
@@ -7118,112 +7123,280 @@ function dozeIsMessenger(pkg) {
   return false;
 }
 
-async function dozeOpenEditor(row) {
-  let box = row.querySelector('.doze-edit');
-  if (box) { box.remove(); return; }
-  box = document.createElement('div');
-  box.className = 'doze-edit';
-  box.textContent = T('doze_loading', 'Reading the exemption list...');
-  row.appendChild(box);
-  try {
-      const r = await run("sh -c 'dumpsys deviceidle whitelist 2>/dev/null | grep -E \"^user,\" | cut -d, -f2'");
-      const keepR = await run('cat ' + DOZE_KEEP_PATH + ' 2>/dev/null');
-      /* Installed third-party packages, so a messenger can be ticked BEFORE it is dropped
-         from the exemption list rather than after someone notices missed messages. */
-      const instR = await run("sh -c 'pm list packages -3 2>/dev/null | sed \"s/^package://\"'");
-      const keep = ((keepR && keepR.stdout) || '').split('\n').map(x => x.trim()).filter(Boolean);
-      const exempt = ((r && r.stdout) || '').split('\n').map(x => x.trim()).filter(dozePkgOk);
-      const installed = ((instR && instR.stdout) || '').split('\n').map(x => x.trim()).filter(dozePkgOk);
-      /* Messengers first: they are what this list is for, and burying them among forty
-         other packages is the same as not listing them. */
-      const seen = {}; const pkgs = [];
-      installed.filter(dozeIsMessenger).concat(exempt).forEach(function (pk) {
-        if (!seen[pk]) { seen[pk] = 1; pkgs.push(pk); }
-      });
-      box.textContent = '';
-      if (!pkgs.length) {
-        box.textContent = T('doze_empty', 'No user apps are exempt right now.');
-        return;
-      }
-      pkgs.forEach(function (pk) {
-        const line = document.createElement('label');
-        const isMsg = dozeIsMessenger(pk);
-        line.className = 'doze-edit-row' + (isMsg ? ' is-msg' : '');
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.checked = keep.indexOf(pk) >= 0;
-        cb.onchange = function () { dozeSaveKeep(box); };
-        line.appendChild(cb);
-        if (isMsg) {
-          /* Monochrome envelope: a coloured emoji next to a package name reads as
-             decoration, and this mark is there to group, not to shout. */
-          const ico = document.createElement('span');
-          ico.className = 'doze-msg-ico';
-          ico.textContent = '\u2709';
-          line.appendChild(ico);
-        }
-        const nm = document.createElement('span');
-        nm.className = 'doze-pkg';
-        nm.textContent = pk;
-        line.appendChild(nm);
-        if (exempt.indexOf(pk) < 0) {
-          /* Name WHOSE decision this is, and say what to do about it.
-           *
-           * "not exempt" beside a ticked box reads as a contradiction: the user ticked it,
-           * so why does it say no? They are about different things. The tick is ASB's promise
-           * to preserve an exemption; the label is Android reporting there is none to
-           * preserve, because the app never asked or was never granted one.
-           *
-           * Ticking such an app is not wrong - it takes effect the day Android does exempt
-           * it - but alone it changes nothing, and a messenger the user believes is protected
-           * while Android keeps dozing it is the worst outcome this screen can produce. */
-          const tag = document.createElement("span");
-          tag.className = "doze-not-exempt" + (keep.indexOf(pk) >= 0 ? " is-pending" : "");
-          tag.textContent = T("doze_android_dozes", "Android dozes it");
-          tag.title = T("doze_android_dozes_hint",
-            "Android has no battery exemption for this app, so ASB has none to keep. Grant it in Settings > Apps > this app > Battery > Unrestricted.");
-          line.appendChild(tag);
-        }
-        line.dataset.pkg = pk;
-        box.appendChild(line);
-      });
-    const hint = document.createElement('div');
-    hint.className = 'doze-edit-hint';
-    hint.textContent = T('doze_hint', 'Ticked apps stay exempt from Doze.');
-    box.appendChild(hint);
-    /* A second line, only when it applies.
-     *
-     * The tooltip on the label is unreachable on a touch screen - there is no hover - so
-     * the explanation has to live somewhere a thumb can find it. Shown only when at least
-     * one ticked app is in this state, because a permanent warning about a situation the
-     * user does not have is noise. */
-    if (keep.some(function (k) { return exempt.indexOf(k) < 0; })) {
-      const warn = document.createElement("div");
-      warn.className = "doze-edit-hint doze-pending-hint";
-      warn.textContent = T("doze_pending_note",
-        "Some ticked apps are not exempt in Android yet, so there is nothing to keep for them. Grant it in Settings > Apps > the app > Battery > Unrestricted.");
-      box.appendChild(warn);
-    }
-  } catch (e) {
-    box.textContent = T('doze_err', 'Could not read the list');
-  }
+const _dozeKeep = { apps: [], keep: {}, trim: false, labels: false, filter: 'all', q: '',
+  dirty: false, failed: false, tok: 0, chain: Promise.resolve() };
+
+function dozeKeepParse(out) {
+  const res = { trim: false, apps: [], E: {}, R: {}, G: {}, K: {} };
+  String(out || '').split('\n').forEach(function (ln) {
+    ln = ln.trim();
+    if (ln === 'trim=1') { res.trim = true; return; }
+    const m = /^([AERGK]) ([A-Za-z0-9_.]+)(?: ([p-]))?$/.exec(ln);
+    if (!m) return;
+    if (m[1] === 'A') res.apps.push({ pkg: m[2], prot: m[3] === 'p' });
+    else res[m[1]][m[2]] = 1;
+  });
+  return res;
 }
 
-async function dozeSaveKeep(box) {
-  const keep = [];
-  box.querySelectorAll('.doze-edit-row').forEach(function (l) {
-    const cb = l.querySelector('input');
-    if (cb && cb.checked && dozePkgOk(l.dataset.pkg)) keep.push(l.dataset.pkg);
-  });
+function dozeKeepLabels(pkgs) {
+  const map = {};
   try {
-    /* Written with printf and a single-quoted list: the names are already validated, and
-       building the file line by line with echo would break on the first odd one. */
-    const body = keep.join('\n');
-    await run("sh -c 'mkdir -p /data/adb/asb; printf \"%s\" \"" + body + "\" > " + DOZE_KEEP_PATH + "'");
-    toast(T('doze_saved', 'Kept ') + keep.length, 'ok');
-  } catch (e) {
-    toast(T('doze_err', 'Could not save'), 'err');
+    if (typeof ksu === 'undefined' || typeof ksu.getPackagesInfo !== 'function' || !pkgs.length) return map;
+    const raw = ksu.getPackagesInfo(JSON.stringify(pkgs));
+    const arr = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    (Array.isArray(arr) ? arr : []).forEach(function (x) {
+      const l = x && x.appLabel != null ? String(x.appLabel).trim() : '';
+      if (x && x.packageName && l && l !== x.packageName) map[x.packageName] = l;
+    });
+  } catch (e) {}
+  return map;
+}
+
+function dozeKeepRank(a) {
+  if (a.kept0) return 0;
+  if (a.prot) return 5;
+  if (a.r) return 1;
+  if (a.e || a.g) return 2;
+  if (a.msg) return 3;
+  return 4;
+}
+
+function dozeKeepEnsure() {
+  let m = _el('dozeKeepModal');
+  if (m) return m;
+  m = document.createElement('div');
+  m.className = 'cfg-profile-modal doze-keep-modal';
+  m.id = 'dozeKeepModal';
+  m.hidden = true;
+  m.setAttribute('aria-hidden', 'true');
+  m.innerHTML = '<div class="cfg-profile-sheet doze-keep-sheet" role="dialog" aria-modal="true" aria-labelledby="dozeKeepTitle">'
+    + '<div class="cfg-profile-head"><div class="cfg-profile-title" id="dozeKeepTitle"></div>'
+    + '<button class="cfg-profile-close" id="dozeKeepX" type="button" aria-label="Close">×</button></div>'
+    + '<div class="cfg-profile-copy doze-keep-copy" id="dozeKeepCopy"></div>'
+    + '<div class="doze-keep-off" id="dozeKeepOff" hidden></div>'
+    + '<input class="cfg-profile-name doze-keep-search" id="dozeKeepSearch" type="search" autocomplete="off" autocapitalize="off" spellcheck="false">'
+    + '<div class="cfg-profile-hint doze-keep-nolabel" id="dozeKeepNoLabel" hidden></div>'
+    + '<div class="cfg-profile-dest doze-keep-chips" id="dozeKeepChips"></div>'
+    + '<div class="doze-keep-list" id="dozeKeepList"></div>'
+    + '<button class="cfg-profile-primary doze-keep-done" id="dozeKeepDone" type="button"></button></div>';
+  document.body.appendChild(m);
+  m.addEventListener('click', function (e) { if (e.target === m) dozeKeepClose(); });
+  _el('dozeKeepX').onclick = dozeKeepClose;
+  _el('dozeKeepDone').onclick = dozeKeepClose;
+  const s = _el('dozeKeepSearch');
+  s.oninput = function () { _dozeKeep.q = s.value.trim().toLowerCase(); dozeKeepFilter(); };
+  return m;
+}
+
+async function dozeOpenEditor() {
+  const m = dozeKeepEnsure();
+  const tok = ++_dozeKeep.tok;
+  _dozeKeep.q = ''; _dozeKeep.filter = 'all'; _dozeKeep.dirty = false; _dozeKeep.failed = false;
+  _dozeKeep.apps = []; _dozeKeep.keep = {};
+  _el('dozeKeepTitle').textContent = T('doze_keep_title', 'Apps never trimmed');
+  _el('dozeKeepCopy').textContent = T('doze_keep_copy',
+    'Ticked apps stay exempt from Doze: ASB never trims them, and if Android has no exemption for one, ASB gives it. Tick the messengers, mail and VPN whose notifications must arrive on time at night. Changes apply when this window closes.');
+  const s = _el('dozeKeepSearch');
+  s.value = '';
+  s.placeholder = '🔍  ' + T('doze_keep_search', 'Search by name or package');
+  _el('dozeKeepDone').textContent = T('doze_keep_done', 'Done');
+  _el('dozeKeepOff').hidden = true;
+  _el('dozeKeepNoLabel').hidden = true;
+  _el('dozeKeepChips').textContent = '';
+  const list = _el('dozeKeepList');
+  list.textContent = '';
+  const ld = document.createElement('div');
+  ld.className = 'cfg-profile-empty';
+  ld.textContent = T('doze_keep_loading', 'Reading the installed apps...');
+  list.appendChild(ld);
+  m.hidden = false;
+  m.setAttribute('aria-hidden', 'false');
+  let r = null;
+  try { r = await run('sh ' + shQuote(MD + '/runtime/asb_doze_apply.sh') + ' list 2>/dev/null'); } catch (e) { r = null; }
+  if (tok !== _dozeKeep.tok) return;
+  const d = dozeKeepParse(r && r.stdout);
+  if (!d.apps.length) { ld.textContent = T('doze_err', 'Could not read the list'); return; }
+  const labels = dozeKeepLabels(d.apps.map(function (a) { return a.pkg; }));
+  if (tok !== _dozeKeep.tok) return;
+  _dozeKeep.labels = Object.keys(labels).length > 0;
+  _dozeKeep.trim = d.trim;
+  Object.keys(d.K).forEach(function (k) { _dozeKeep.keep[k] = 1; });
+  _dozeKeep.apps = d.apps.map(function (a) {
+    const name = labels[a.pkg] || '';
+    return { pkg: a.pkg, name: name, prot: a.prot, e: !!d.E[a.pkg], r: !!d.R[a.pkg], g: !!d.G[a.pkg],
+      msg: dozeIsMessenger(a.pkg), kept0: !!d.K[a.pkg], q: (name + ' ' + a.pkg).toLowerCase() };
+  });
+  _dozeKeep.apps.sort(function (x, y) {
+    const a = dozeKeepRank(x), b = dozeKeepRank(y);
+    if (a !== b) return a - b;
+    return (x.name || x.pkg).toLowerCase().localeCompare((y.name || y.pkg).toLowerCase());
+  });
+  if (!d.trim) {
+    const off = _el('dozeKeepOff');
+    off.textContent = T('doze_keep_off',
+      'Trimming is not working right now: it needs this switch on and Deep Sleep set to aggressive or night. The list is kept and takes effect as soon as it is.');
+    off.hidden = false;
   }
+  if (!_dozeKeep.labels) {
+    const nl = _el('dozeKeepNoLabel');
+    nl.textContent = T('doze_keep_nolabel', 'This root manager does not give app names to the page - search by package name, for example telegram or whatsapp.');
+    nl.hidden = false;
+  }
+  list.textContent = '';
+  if (!_dozeKeep.labels) list.classList.add('no-ico'); else list.classList.remove('no-ico');
+  _dozeKeep.apps.forEach(function (a) { list.appendChild(dozeKeepRow(a)); });
+  const none = document.createElement('div');
+  none.className = 'cfg-profile-empty';
+  none.id = 'dozeKeepNone';
+  none.hidden = true;
+  none.textContent = T('cfg_search_none', 'Nothing matches that');
+  list.appendChild(none);
+  dozeKeepChips();
+  dozeKeepFilter();
+}
+
+function dozeKeepTag(a) {
+  if (a.prot) return ['always', T('doze_tag_always', 'never trimmed')];
+  if (a.r) return ['trimmed', T('doze_tag_trimmed', 'trimmed by ASB')];
+  if (a.g) return ['granted', T('doze_tag_granted', 'exempt via ASB')];
+  if (a.e) return ['exempt', T('doze_tag_exempt', 'exempt')];
+  return null;
+}
+
+function dozeKeepRow(a) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'cfg-profile-check doze-keep-row';
+  b.dataset.pkg = a.pkg;
+  const box = document.createElement('span');
+  box.className = 'cfg-profile-check-box';
+  b.appendChild(box);
+  if (_dozeKeep.labels) {
+    const ic = document.createElement('span');
+    ic.className = 'doze-keep-ico';
+    ic.textContent = (a.name || a.pkg).charAt(0).toUpperCase();
+    const img = document.createElement('img');
+    img.alt = '';
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.onload = function () { ic.classList.add('has-img'); };
+    img.onerror = function () { img.remove(); };
+    img.src = 'ksu://icon/' + a.pkg;
+    ic.appendChild(img);
+    b.appendChild(ic);
+  }
+  const tx = document.createElement('span');
+  tx.className = 'doze-keep-text';
+  const t1 = document.createElement('span');
+  t1.className = 'cfg-profile-check-title';
+  t1.textContent = a.name || a.pkg;
+  tx.appendChild(t1);
+  if (a.name) {
+    const t2 = document.createElement('span');
+    t2.className = 'cfg-profile-check-sub';
+    t2.textContent = a.pkg;
+    tx.appendChild(t2);
+  }
+  b.appendChild(tx);
+  const st = dozeKeepTag(a);
+  const tag = document.createElement('span');
+  tag.className = 'doze-keep-tag' + (st ? ' is-' + st[0] : '');
+  tag.textContent = st ? st[1] : '';
+  b.appendChild(tag);
+  b.onclick = function () { dozeKeepToggle(a, b); };
+  dozeKeepPaintRow(a, b);
+  return b;
+}
+
+function dozeKeepPaintRow(a, b) {
+  const on = !!_dozeKeep.keep[a.pkg];
+  b.classList.toggle('on', on);
+  b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  b.querySelector('.cfg-profile-check-box').textContent = on ? '✓' : '';
+}
+
+function dozeKeepToggle(a, b) {
+  if (_dozeKeep.keep[a.pkg]) delete _dozeKeep.keep[a.pkg]; else _dozeKeep.keep[a.pkg] = 1;
+  _dozeKeep.dirty = true;
+  uiSound(_dozeKeep.keep[a.pkg] ? 'toggle_on' : 'toggle_off');
+  dozeKeepPaintRow(a, b);
+  dozeKeepChips();
+  dozeKeepWrite();
+}
+
+function dozeKeepWrite() {
+  const pk = Object.keys(_dozeKeep.keep).filter(dozePkgOk).sort();
+  const cmd = 'mkdir -p ' + shQuote(DOZE_KEEP_PATH.replace(/\/[^/]*$/, '')) + ' && '
+    + (pk.length ? "printf '%s\\n' " + pk.map(shQuote).join(' ') : ':') + ' > ' + DOZE_KEEP_PATH;
+  _dozeKeep.chain = _dozeKeep.chain
+    .then(function () { return run(cmd); })
+    .then(function (r) { if (!r || r.errno !== 0) _dozeKeep.failed = true; },
+          function () { _dozeKeep.failed = true; });
+  return _dozeKeep.chain;
+}
+
+function dozeKeepMatch(a) {
+  if (_dozeKeep.filter === 'kept' && !_dozeKeep.keep[a.pkg]) return false;
+  if (_dozeKeep.filter === 'trimmed' && !a.r) return false;
+  return !_dozeKeep.q || a.q.indexOf(_dozeKeep.q) >= 0;
+}
+
+function dozeKeepFilter() {
+  const list = _el('dozeKeepList');
+  if (!list) return;
+  const by = {};
+  _dozeKeep.apps.forEach(function (a) { by[a.pkg] = a; });
+  let shown = 0;
+  list.querySelectorAll('.doze-keep-row').forEach(function (b) {
+    const a = by[b.dataset.pkg];
+    const ok = !!a && dozeKeepMatch(a);
+    b.hidden = !ok;
+    if (ok) shown++;
+  });
+  const none = _el('dozeKeepNone');
+  if (none) none.hidden = shown > 0 || !_dozeKeep.apps.length;
+}
+
+function dozeKeepChips() {
+  const c = _el('dozeKeepChips');
+  if (!c) return;
+  const nK = _dozeKeep.apps.filter(function (a) { return !!_dozeKeep.keep[a.pkg]; }).length;
+  const nR = _dozeKeep.apps.filter(function (a) { return a.r; }).length;
+  c.textContent = '';
+  [['all', T('doze_chip_all', 'All'), _dozeKeep.apps.length],
+   ['kept', T('doze_chip_kept', 'Ticked'), nK],
+   ['trimmed', T('doze_chip_trimmed', 'Trimmed'), nR]].forEach(function (d) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = d[1] + ' · ' + d[2];
+    if (_dozeKeep.filter === d[0]) b.className = 'active';
+    b.onclick = function () { _dozeKeep.filter = d[0]; uiSound('option'); dozeKeepChips(); dozeKeepFilter(); };
+    c.appendChild(b);
+  });
+}
+
+async function dozeKeepClose() {
+  const m = _el('dozeKeepModal');
+  if (!m || m.hidden) return;
+  m.hidden = true;
+  m.setAttribute('aria-hidden', 'true');
+  _dozeKeep.tok++;
+  if (!_dozeKeep.dirty) return;
+  _dozeKeep.dirty = false;
+  await _dozeKeep.chain;
+  const n = Object.keys(_dozeKeep.keep).filter(dozePkgOk).length;
+  if (_dozeKeep.failed) {
+    _dozeKeep.failed = false;
+    toast(T('doze_keep_err', 'Could not save the list'), 'err');
+    return;
+  }
+  if (!_dozeKeep.trim) {
+    toast(T('doze_keep_saved_off', 'Kept: %s · takes effect once trimming works').replace('%s', String(n)), 'ok');
+    return;
+  }
+  try { await run('sh ' + shQuote(MD + '/runtime/asb_doze_apply.sh') + ' >/dev/null 2>&1'); } catch (e) {}
+  toast(T('doze_keep_saved', 'Kept: %s · applied').replace('%s', String(n)), 'ok');
 }
 
 /* Saved configurations use one in-page manager instead of browser prompt()/confirm(). The
