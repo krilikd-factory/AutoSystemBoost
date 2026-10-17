@@ -3382,6 +3382,10 @@ if [ -f /data/adb/asb/lockscreen_prev ]; then
   asb_log "lockscreen tweak removed - the setting it wrote has been put back"
 fi
 
+if [ -f "$MODDIR/runtime/asb_drain_meter.sh" ]; then
+  ASB_DM_PROFILE="$MODDIR/current_profile" sh "$MODDIR/runtime/asb_drain_meter.sh" run >/dev/null 2>&1 &
+fi
+
 # Doze timings: re-assert at boot, the key does not survive one.
 # Keep persist.asb.dsp.route honest while the phone is running.
 #
