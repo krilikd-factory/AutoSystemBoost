@@ -1098,7 +1098,7 @@ grep -q "opts:\['off','all','speaker','wired','bt','speaker+wired','speaker+bt',
 grep -q '^_dsp_out_off=0$' "$ROOT/runtime/asb_audio_apply.sh" || fail "the applier does not know DSP Outputs = off"
 grep -q '_dspp inactive_reason "outputs_off"' "$ROOT/runtime/asb_audio_apply.sh" || fail "DSP Outputs = off does not record why the DSP is off"
 grep -q "{ key:'audio_resampler', type:'seg', def:'stock', stock:'stock', opts:\['stock','high','max'\]" "$H" || fail "no resampler card"
-grep -q "{ key:'media_vol_steps', type:'seg', def:'stock', stock:'stock', opts:\['stock','30','50'\]" "$H" || fail "no volume steps card"
+grep -q "{ key:'media_vol_steps', type:'range', def:'stock', stock:'stock'" "$H" || fail "no volume steps card"
 grep -q '^  audio_resampler:APPLY_REBOOT,$' "$H" || fail "the resampler card does not ask for a reboot"
 grep -q '^  media_vol_steps:APPLY_REBOOT,$' "$H" || fail "the volume steps card does not ask for a reboot"
 for k in audio_resampler media_vol_steps; do
@@ -1166,5 +1166,23 @@ grep -q 'html\[data-asb-theme="light"\] .live-cell-value { color:var(--text) !im
 grep -q '## status bar redraw settings' "$ROOT/tools/logkit/_asb_logkit_common.sh" || fail "captures do not record the status-bar redraw settings"
 for t in test_dsp_route_wake_runtime.sh test_asbdiag_settings_summary_runtime.sh test_webui_back_nav_runtime.sh test_logkit_sysui_redraw_runtime.sh; do [ -f "$ROOT/tests/$t" ] || fail "$t missing"; done
 echo "PASS: fix159 contract"
+) || exit 1
+# ---- fix160 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix160: $*"; exit 1; }
+H="$ROOT/webroot/index.html"; G="$ROOT/src/asb_governor.c"
+grep -q 'asb_core_set_width' "$ROOT/src/DSP_AIDL/asb_dsp_core.h" || fail "no stereo width stage in the DSP core"
+grep -q "{ key:'dsp_width', type:'range'" "$H" || fail "no Stereo Width card"
+grep -q '^dsp_width=0$' "$ROOT/config/governor.conf.shipped" || fail "dsp_width not shipped off"
+grep -q '^dsp_width|advanced|' "$ROOT/config/key_ownership.tsv" || fail "dsp_width not registered"
+grep -q '_dspp width "$_wdx"' "$ROOT/runtime/asb_audio_apply.sh" || fail "width not published"
+grep -q "{ key:'media_vol_steps', type:'range', def:'stock', stock:'stock', stockAt:15, min:15, max:100, step:5" "$H" || fail "media volume steps is not a slider"
+grep -q 'if \[ "$_mv_st" -ge 16 \] && \[ "$_mv_st" -le 100 \]' "$ROOT/post-fs-data.sh" || fail "slider values are not applied"
+grep -q 'asb_trend_body_cool' "$G" || fail "trend trims still fire on a cool body"
+grep -q 'ASB_CEIL_OVER_OWN' "$G" || fail "ASB's own lifts still read as vendor raises"
+for l in ar de es fr hy id it pt ru tr uk zh; do grep -q '^T_A_WIDTH=' "$ROOT/runtime/i18n/action_$l.sh" || fail "action_$l lacks T_A_WIDTH"; done
+for t in test_dsp_stereo_width_runtime.sh test_smart_trend_cool_runtime.sh; do [ -f "$ROOT/tests/$t" ] || fail "$t missing"; done
+echo "PASS: fix160 contract"
 ) || exit 1
 echo "PASS: field-fix contracts"

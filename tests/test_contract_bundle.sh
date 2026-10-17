@@ -447,7 +447,7 @@ grep -q 'logline("released (route not selected)");' "$A" || fail "release not lo
 _rel="$(grep -n 'if (want_on && !route_ok) {' "$A" | cut -d: -f1)"
 _att="$(grep -n 'next->set(&kAsbTypeUuid' "$A" | cut -d: -f1)"
 [ "$_rel" -lt "$_att" ] || fail "release branch after the attach path"
-grep -q '"released (route not selected)"; do' "$ROOT/src/build_ndk_release.sh" || fail "freshness gate misses the release marker"
+grep -q '"released (route not selected)"[^;]*; do' "$ROOT/src/build_ndk_release.sh" || fail "freshness gate misses the release marker"
 grep -q 'persist.asb.dsp.voice' "$A" || fail "voice edits do not trigger a push"
 grep -q 'DSP released on purpose' "$ROOT/tools/asb_diag.sh" || fail "asbdiag reports the intended release as a failure"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
