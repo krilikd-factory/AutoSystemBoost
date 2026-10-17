@@ -1130,4 +1130,20 @@ grep -q '"warm_below_pct"' "$ROOT/docs/field_baseline/fix150.json" || fail "the 
 for t in test_main_capacity_parity_runtime.sh test_capture_compare_warm_runtime.sh test_logkit_cluster_wakelock_runtime.sh; do [ -f "$ROOT/tests/$t" ] || fail "$t missing"; done
 echo "PASS: fix156 contract"
 ) || exit 1
+# ---- fix158 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix158: $*"; exit 1; }
+Z="$ROOT/runtime/asb_doze_apply.sh"
+grep -q '^_doze_night_window() {$' "$Z" || fail "the night window is not one shared function"
+grep -q '^_doze_off_restore() {$' "$Z" || fail "the day path still withdraws the ticked apps' exemptions"
+grep -q '^asb_doze_keep_grants() {$' "$Z" || fail "no grant routine of its own"
+grep -q 'echo "window=$_in_night"' "$Z" || fail "list does not say whether the sleep window is open"
+grep -q 'asb_doze_restore_whitelist' "$Z" || fail "trim off no longer restores everything"
+H="$ROOT/webroot/index.html"
+grep -q 'id="dozeKeepLegend"' "$H" || fail "the picker does not explain its labels"
+grep -q "doze_tag_back" "$H" || fail "a ticked trimmed app does not say it comes back"
+for t in test_doze_night_keep_runtime.sh test_webui_doze_keep_tags_runtime.sh; do [ -f "$ROOT/tests/$t" ] || fail "$t missing"; done
+echo "PASS: fix158 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
