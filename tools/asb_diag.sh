@@ -1611,7 +1611,9 @@ SEC "1b. DSP ENGINE  (what the effect is actually doing)"
 # is the only way to tell "configured" from "in force": the library reads the properties,
 # not governor.conf.
 _dsp_g="$(cfg dsp_loudness)"
+[ "$(cfg dsp_outputs)" = "off" ] && _dsp_g=outputs_off
 case "$_dsp_g" in ''|0|off) NOTE "dsp_loudness = off - the effect is released from the audio path entirely" ;;
+  outputs_off) NOTE "dsp_outputs = off - the DSP is switched off (enable=$(gp persist.asb.dsp.enable)); loudness $(cfg dsp_loudness), bass $(cfg dsp_bass), voice $(cfg dsp_voice) are kept for when an output is picked again" ;;
   *)
     _dsp_requested_mb=$((_dsp_g * 100))
     _dsp_expected_mb="$_dsp_requested_mb"
@@ -1887,6 +1889,32 @@ if [ -n "$_vlim" ]; then
 else
   NOTE "volume limits: the audio service printed no safe-volume / sound-dose / absolute-volume lines on this build"
 fi
+_rs_c="$(cfg audio_resampler)"
+_rs_live="$(gp ro.audio.resampler.psd.stopband)/$(gp ro.audio.resampler.psd.halflength)"
+[ "$_rs_live" = "/" ] && _rs_live=""
+case "$_rs_c" in
+  high|max)
+    _rs_w="140/160"; [ "$_rs_c" = max ] && _rs_w="179/320"
+    if [ "$_rs_live" = "$_rs_w" ]; then
+      V "resampler $_rs_c (ro.audio.resampler.psd stopband/halflength, from $(gp ro.audio.resampler.psd.enable_at_samplerate) Hz)" "$_rs_w" "$_rs_live" eq
+    else
+      NOTE "audio_resampler=$_rs_c is not live yet (stopband/halflength ${_rs_live:-<ROM default>}): it is set before Android starts - reboot once after changing it"
+    fi ;;
+  *) OFF "resampler quality - audio_resampler=stock, stopband/halflength ${_rs_live:-<ROM default>}" "audio_resampler" ;;
+esac
+_mv_c="$(cfg media_vol_steps)"
+_mv_live="$(dumpsys audio 2>/dev/null | awk '/^- STREAM_MUSIC:/{f=1;next} f&&/^- STREAM_/{exit} f&&$1=="Max:"{print $2; exit}')"
+case "$_mv_c" in
+  30|50)
+    if [ "$_mv_live" = "$_mv_c" ]; then
+      V "media volume steps (STREAM_MUSIC Max)" "$_mv_c" "$_mv_live" eq
+    elif [ -n "$_mv_live" ] && [ "$(gp ro.config.media_vol_steps)" = "$_mv_c" ]; then
+      NOTE "ro.config.media_vol_steps=$_mv_c is set, yet the audio service uses $_mv_live steps: this ROM sets its own media volume scale and ignores the property"
+    else
+      NOTE "media_vol_steps=$_mv_c is not live yet (Android uses ${_mv_live:-?} steps): it is read when Android starts - reboot once"
+    fi ;;
+  *) OFF "media volume steps - media_vol_steps=stock, Android uses ${_mv_live:-?} steps" "media_vol_steps" ;;
+esac
 
 # =====================================================================
 SEC "3. GPS / LOCATION"

@@ -854,6 +854,36 @@ PYEOF
   case "$_miss" in ''|0) : ;; *) warn "$_ln.json: $_miss cards have a name but no description"; _desc_bad=1 ;; esac
 done
 [ "$_desc_bad" = "0" ] && ok "every language describes every card"
+_cyr_bad="$(python3 - <<'PYEOF_CYR' 2>/dev/null
+import json, re, glob
+cyr = re.compile('[\u0400-\u04FF]')
+out = []
+for f in sorted(glob.glob('webroot/i18n/*.json')):
+    l = f.split('/')[-1][:-5]
+    if l in ('ru', 'uk'):
+        continue
+    try:
+        d = json.load(open(f, encoding='utf-8'))
+    except Exception:
+        continue
+    hits = []
+    def walk(x, path):
+        if isinstance(x, dict):
+            for k, v in x.items():
+                walk(v, path + '.' + k)
+        elif isinstance(x, str) and cyr.search(x):
+            hits.append(path.lstrip('.'))
+    walk(d, '')
+    if hits:
+        out.append('%s.json: %s' % (l, ', '.join(hits[:4])))
+print('; '.join(out))
+PYEOF_CYR
+)"
+if [ -n "$_cyr_bad" ]; then
+  err "Cyrillic text in a non-Cyrillic language file - $_cyr_bad"
+else
+  ok "no Cyrillic leftovers outside ru/uk"
+fi
 echo ""
 
 echo "🖼  Card icons"
