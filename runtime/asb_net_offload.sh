@@ -28,17 +28,32 @@
 
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
 CONF="$MODDIR/config/governor.conf"
-STATE="/data/adb/asb/net_offload_prev"
+STATE="${ASB_NET_OFFLOAD_STATE:-/data/adb/asb/net_offload_prev}"
+NETSYS="${ASB_NET_SYSFS:-/sys/class/net}"
 
 _cfg() {
   grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r'
+}
+
+_txq_set() {
+  case "$2" in ''|*[!0-9]*) return 1 ;; esac
+  _tq="$NETSYS/$1/tx_queue_len"
+  if [ -w "$_tq" ]; then
+    echo "$2" > "$_tq" 2>/dev/null
+    [ "$(cat "$_tq" 2>/dev/null)" = "$2" ] && return 0
+  fi
+  for _tb in /system/bin/ip /system/xbin/ip /vendor/bin/ip; do
+    [ -x "$_tb" ] || continue
+    "$_tb" link set dev "$1" txqueuelen "$2" >/dev/null 2>&1 && return 0
+  done
+  return 1
 }
 
 # Only real network interfaces, and only ones that are up. Writing to a down interface
 # succeeds and is then undone by the driver when it comes up, which looks like the setting
 # silently failing.
 _ifaces() {
-  for _d in /sys/class/net/*; do
+  for _d in "$NETSYS"/*; do
     _n="$(basename "$_d")"
     # Skip tunnels, mirrors and stubs - RPS there costs setup and moves no packets.
     #
@@ -80,8 +95,8 @@ _restore_iface_stock() {
   [ -f "$STATE" ] || return 0
   while IFS= read -r _line; do
     case "$_line" in
-      "TXQ:$_ri="*) _v="${_line#*=}"; [ -n "$_v" ] && ip link set dev "$_ri" txqueuelen "$_v" >/dev/null 2>&1 ;;
-      "RPS:/sys/class/net/$_ri/queues/"*)
+      "TXQ:$_ri="*) _v="${_line#*=}"; [ -n "$_v" ] && _txq_set "$_ri" "$_v" ;;
+      "RPS:$NETSYS/$_ri/queues/"*)
         _q="${_line#RPS:}"; _q="${_q%%=*}"; _v="${_line#*=}"
         [ -w "$_q/rps_cpus" ] && echo "${_v:-0}" > "$_q/rps_cpus" 2>/dev/null ;;
     esac
@@ -117,8 +132,8 @@ _save_once() {
   {
     printf 'RFS_ENTRIES=%s\n' "$(cat /proc/sys/net/core/rps_sock_flow_entries 2>/dev/null)"
     for _i in $(_ifaces); do
-      printf 'TXQ:%s=%s\n' "$_i" "$(cat /sys/class/net/$_i/tx_queue_len 2>/dev/null)"
-      for _q in /sys/class/net/$_i/queues/rx-*; do
+      printf 'TXQ:%s=%s\n' "$_i" "$(cat "$NETSYS/$_i/tx_queue_len" 2>/dev/null)"
+      for _q in "$NETSYS/$_i"/queues/rx-*; do
         [ -r "$_q/rps_cpus" ] || continue
         printf 'RPS:%s=%s\n' "$_q" "$(cat "$_q/rps_cpus" 2>/dev/null)"
       done
@@ -140,7 +155,7 @@ _restore_kind() {
       "$_rk":*)
         case "$_line" in
           TXQ:*) _if="${_line#TXQ:}"; _if="${_if%%=*}"; _v="${_line#*=}"
-                 [ -n "$_v" ] && ip link set dev "$_if" txqueuelen "$_v" >/dev/null 2>&1 ;;
+                 [ -n "$_v" ] && _txq_set "$_if" "$_v" ;;
           RPS:*) _q="${_line#RPS:}"; _q="${_q%%=*}"; _v="${_line#*=}"
                  [ -w "$_q/rps_cpus" ] && echo "${_v:-0}" > "$_q/rps_cpus" 2>/dev/null ;;
         esac
@@ -159,7 +174,7 @@ _restore() {
     case "$_line" in
       RFS_ENTRIES=*) echo "${_line#*=}" > /proc/sys/net/core/rps_sock_flow_entries 2>/dev/null ;;
       TXQ:*)  _if="${_line#TXQ:}"; _if="${_if%%=*}"; _v="${_line#*=}"
-              [ -n "$_v" ] && ip link set dev "$_if" txqueuelen "$_v" >/dev/null 2>&1 ;;
+              [ -n "$_v" ] && _txq_set "$_if" "$_v" ;;
       RPS:*)  _q="${_line#RPS:}"; _q="${_q%%=*}"; _v="${_line#*=}"
               [ -w "$_q/rps_cpus" ] && echo "${_v:-0}" > "$_q/rps_cpus" 2>/dev/null ;;
     esac
@@ -207,7 +222,7 @@ if [ "$_rps" != "stock" ]; then
   _n=0
   for _i in $(_ifaces); do
     if _is_cellular "$_i"; then _restore_iface_stock "$_i"; continue; fi
-    for _q in /sys/class/net/$_i/queues/rx-*; do
+    for _q in "$NETSYS/$_i"/queues/rx-*; do
       [ -w "$_q/rps_cpus" ] || continue
       echo "$_m" > "$_q/rps_cpus" 2>/dev/null
       [ -w "$_q/rps_flow_cnt" ] && echo 4096 > "$_q/rps_flow_cnt" 2>/dev/null
@@ -222,7 +237,7 @@ if [ "$_txq" != "stock" ]; then
   _n=0
   for _i in $(_ifaces); do
     if _is_cellular "$_i"; then _restore_iface_stock "$_i"; continue; fi
-    ip link set dev "$_i" txqueuelen "$_len" >/dev/null 2>&1 && _n=$(( _n + 1 ))
+    _txq_set "$_i" "$_len" && _n=$(( _n + 1 ))
   done
   echo "net offload: tx queue $_len on $_n interface(s)"
 fi

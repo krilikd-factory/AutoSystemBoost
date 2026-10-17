@@ -62,6 +62,10 @@ _valid_seconds "$_raw_release" 1 120 && RELEASE_S="$_raw_release"
 _valid_seconds "$_raw_cooldown" 1 3600 && COOLDOWN_S="$_raw_cooldown"
 _raw_idle="${ASB_WIFI_FALLBACK_IDLE_INTERVAL_S:-}"
 _valid_seconds "$_raw_idle" 1 300 && IDLE_INTERVAL_S="$_raw_idle"
+CONFIRM_INTERVAL_S=3
+_raw_confirm="${ASB_WIFI_FALLBACK_CONFIRM_INTERVAL_S:-}"
+_valid_seconds "$_raw_confirm" 1 30 && CONFIRM_INTERVAL_S="$_raw_confirm"
+[ "$CONFIRM_INTERVAL_S" -gt "$INTERVAL_S" ] && CONFIRM_INTERVAL_S="$INTERVAL_S"
 [ "$RELEASE_MAX_S" -lt "$RELEASE_S" ] && RELEASE_MAX_S="$RELEASE_S"
 STREAK="$STATE_DIR/wifi_fallback.streak"
 
@@ -321,6 +325,7 @@ _try_release() {
         return 0
       fi
       _log "out of range (rssi=${_rs_now}) pass ${_seen_r}/${ASB_WIFI_CONFIRM_PASSES:-3}"
+      _fast=1
       return 0
     fi
   fi
@@ -352,6 +357,7 @@ _try_release() {
   { printf '%s\n' "$_seen" > "$CONFIRM"; } 2>/dev/null || true
   if [ "$_seen" -lt "$_need" ] 2>/dev/null; then
     _log "unvalidated Wi-Fi pass ${_seen}/${_need} (rssi=$(_wifi_rssi 2>/dev/null || echo '?')) - waiting"
+    [ "$(_cfg net_wifi_leave)" = aggressive ] && _fast=1
     return 0
   fi
   rm -f "$CONFIRM" 2>/dev/null
@@ -522,9 +528,10 @@ _watch() {
           fi
         fi
       fi
+      _fast=0
       [ "$_armed" = "1" ] && _try_release
     fi
-    sleep "$INTERVAL_S"
+    if [ "${_fast:-0}" = 1 ]; then sleep "$CONFIRM_INTERVAL_S"; else sleep "$INTERVAL_S"; fi
   done
   _watch_cleanup
   rm -f "$COOLDOWN" 2>/dev/null
