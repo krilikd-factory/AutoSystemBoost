@@ -37,6 +37,10 @@
    */
   --page-anim-dur: 0.32s;
   --page-anim-ease: cubic-bezier(0.45, 0, 0.25, 1);
+  --page-fade-out: 0.16s;
+  --page-fade-in: 0.26s;
+  --page-fade-delay: 0.06s;
+  --page-fade-ease: cubic-bezier(0.2, 0.7, 0.25, 1);
 
   --bg: #000000;
   --surface: rgba(255,255,255,0.04);
@@ -268,6 +272,8 @@ body::before, body::after {
 
 /* The sweep is decoration; the wordmark has to hold up without it. */
 @media (prefers-reduced-motion: reduce) {
+  .live-page, .live-page.open, body.config-active #livePage.open { transform: translateX(-50%) !important; }
+  body.live-active .page:not(.live-page), .page:not(.live-page) { transform: none !important; }
   .app-name { animation: none; background-position: -70% 0, 0 0; }
   .cfg-stagger > *, .profiles > * { animation: none !important; }
 }
@@ -1230,9 +1236,11 @@ html[data-asb-theme="light"] .tg-link-sub { color:#315a4f !important; }
   padding-top: calc(var(--window-inset-top) + var(--page-top));
   padding-bottom: calc(var(--window-inset-bottom) + 22px);
   box-sizing: border-box;
-  transform: translateX(-50%) translateX(120%);
-  transition: transform var(--page-anim-dur) var(--page-anim-ease),
-              visibility 0s linear var(--page-anim-dur);
+  opacity: 0;
+  transform: translateX(-50%) scale(0.985);
+  transition: opacity var(--page-fade-out) ease-out,
+              transform var(--page-fade-out) ease-out,
+              visibility 0s linear var(--page-fade-out);
   overflow-y: hidden;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
@@ -1242,7 +1250,7 @@ html[data-asb-theme="light"] .tg-link-sub { color:#315a4f !important; }
      only created when the page turns visible - an extra paint landing on the very first
      frame of the slide. (contain: paint was considered and left out: it would clip any
      sheet or popup inside the page to the 420 px column on a wider screen.) */
-  will-change: transform;
+  will-change: opacity, transform;
 }
 .live-inner {
   width: 100%;
@@ -1252,10 +1260,12 @@ html[data-asb-theme="light"] .tg-link-sub { color:#315a4f !important; }
   flex: 0 0 auto;
 }
 .live-page.open {
-  transform: translateX(-50%) translateX(0);
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
   pointer-events: auto;
   visibility: visible;
-  transition: transform var(--page-anim-dur) var(--page-anim-ease),
+  transition: opacity var(--page-fade-in) var(--page-fade-ease) var(--page-fade-delay),
+              transform var(--page-fade-in) var(--page-fade-ease) var(--page-fade-delay),
               visibility 0s linear 0s;
 }
 body.live-active {
@@ -1263,19 +1273,19 @@ body.live-active {
 }
 /*
  * Main page fades and eases back slightly (no horizontal translate — it's a position:relative
- * page, so sliding it could shift layout) while a live-page slides over it.
+ * page, so sliding it could shift layout) while a live-page fades in over it.
  */
 body.live-active .page:not(.live-page) {
   opacity: 0;
-  transform: scale(0.97);
-  transition: opacity var(--page-anim-dur) var(--page-anim-ease),
-              transform var(--page-anim-dur) var(--page-anim-ease);
+  transform: scale(0.985);
+  transition: opacity var(--page-fade-out) ease-out,
+              transform var(--page-fade-out) ease-out;
   pointer-events: none;
 }
 .page:not(.live-page) {
   transform-origin: center center;
-  transition: opacity var(--page-anim-dur) var(--page-anim-ease),
-              transform var(--page-anim-dur) var(--page-anim-ease);
+  transition: opacity var(--page-fade-in) var(--page-fade-ease) var(--page-fade-delay),
+              transform var(--page-fade-in) var(--page-fade-ease) var(--page-fade-delay);
 }
 .live-metrics {
   width: 100%;
@@ -1343,7 +1353,7 @@ body.live-active .page:not(.live-page) {
 .live-page .sec { margin-top: 14px !important; margin-bottom: 6px !important; }
 .config-page .sec { margin-top: 0 !important; }
 /*
- * Config sits one layer ABOVE Live so the Live↔Config transition is a clean slide of Config
+ * Config sits one layer ABOVE Live so the Live↔Config transition is a clean fade of Config
  * over Live, instead of two same-z pages fighting (which made that specific transition feel
  * janky).
  */
@@ -1351,7 +1361,7 @@ body.live-active .page:not(.live-page) {
   z-index: 120;
 }
 #configPage.open {
-  transform: translateX(-50%) translateX(0);
+  transform: translateX(-50%) scale(1);
 }
 /* While Config is open *after coming from Live*, push the still-mounted Live
    page out to the left so the two move as a coherent left/right pair. Only set
@@ -1362,10 +1372,11 @@ body.live-active .page:not(.live-page) {
  */
 body.config-active #livePage.open {
   opacity: 0;
-  transform: translateX(-50%) scale(0.97);
-  transition: opacity var(--page-anim-dur) var(--page-anim-ease),
-              transform var(--page-anim-dur) var(--page-anim-ease);
+  transform: translateX(-50%) scale(0.985);
+  transition: opacity var(--page-fade-out) ease-out,
+              transform var(--page-fade-out) ease-out;
   visibility: visible;
+  pointer-events: none;
 }
 
 /* Smart Mode info banner — shows under Profile row on Live page */
@@ -5728,7 +5739,7 @@ const APPLY_MODE = {
   net_rps:APPLY_LIVE,
   net_txqueue:APPLY_LIVE,
   athena_service:APPLY_NEXT,
-  audio_remove_volume_limit:APPLY_LIVE,
+  audio_remove_volume_limit:APPLY_REBOOT,
   doze_trim_whitelist:APPLY_LIVE,
   dsp_outputs:APPLY_LIVE,
   phantom_procs:APPLY_NEXT
@@ -6597,15 +6608,13 @@ async function cfgSet(key, val, ctl) {
         if (ctl) ctl.classList.remove('busy');
         return;
       }
-      // Removing the headphone limiter is a single settings write - no script needed, but
-      // it does need doing here rather than waiting for the next boot.
       if (key === 'audio_remove_volume_limit') {
-        if (String(val) === '1') {
-          try { await run('settings put global audio_safe_volume_state 0'); } catch (e) {}
-        } else {
-          try { await run('settings put global audio_safe_volume_state 3'); } catch (e) {}
-        }
-        toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
+        try {
+          await run(String(val) === '1'
+            ? 'command -v resetprop >/dev/null 2>&1 && resetprop -n audio.safemedia.bypass true'
+            : 'command -v resetprop >/dev/null 2>&1 && resetprop --delete audio.safemedia.bypass');
+        } catch (e) {}
+        toast(cfgToastText(key, val) + T('t_cfg_saved', ' \u00b7 reboot to apply'), cfgToastType(key));
         cfgRender();
         if (ctl) ctl.classList.remove('busy');
         return;
