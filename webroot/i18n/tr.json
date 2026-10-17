@@ -240,6 +240,14 @@
       "name": "Kulaklık ses sınırı",
       "desc": "AB düzenlemelerinin gerektirdiği kulaklık ses sınırını kaldırır. DİKKAT: uzun süre yüksek sesle dinlemek işitmeye zarar verir. Tam da bu yüzden varsayılan olarak kapalı."
     },
+    "audio_resampler": {
+      "name": "Yeniden örnekleyici kalitesi",
+      "desc": "Android’in sesi örnekleme hızları arasında nasıl dönüştürdüğü. Yalnızca parça ile çıkış farklı hızlarda çalışırken önemlidir – genellikle 48 kHz çıkışta 44,1 kHz müzik; yani akışların ve yerel dosyaların çoğu. Varsayılan, yeniden örnekleyiciyi ROM’un sunduğu gibi bırakır.\n\nYüksek, bu dönüşüme 44,1 kHz’den itibaren daha uzun ve dik bir filtre verir (yaklaşık 90 yerine 140 dB bastırma, beş kat uzunluk): daha az aliasing, daha temiz üst oktav. Maksimum daha da ileri gider (179 dB, on kat uzunluk). Fark ölçülebilir; duyup duymamanız kulaklarınıza ve kulaklığınıza bağlıdır – çoğu kişi için duyulmaz.\n\nEtkilenmeyenler: zaten çıkış hızında çalan ses, offload oynatma ve Bluetooth codec’inin kendisi. Ses çalarken CPU harcar: Yüksek’te az, Maksimum’da belirgin şekilde fazla. Yeniden başlatma gerekir – ses sunucusu bunu yalnızca açılışta okur."
+    },
+    "media_vol_steps": {
+      "name": "Medya sesi adımları",
+      "desc": "Medya ses kaydırıcısının kaç konumu olduğu. Varsayılan, telefonun değerini korur (saf Android’de 15, bazı ROM’larda daha fazla). 30 veya 50 her adımı daha ince yapar – gece ve hassas kulaklıklarla kullanışlıdır.\n\nEn yüksek konum aynı yükseklikte kalır; yalnızca aralık değişir. Yeniden başlatmadan sonra kaydırıcı adım numarasını korur, bu yüzden ilk çalma daha kısık gelebilir – bir kez artırın. Bazı ROM’lar bu ayarı yok sayar; eylem düğmesi ve asbdiag gerçekte kullanılan adımları gösterir. Yeniden başlatma gerekir."
+    },
     "doze_trim_whitelist": {
       "name": "Doze muafiyetlerini kırp",
       "desc": "Uygulamalarınızı derin uyku muafiyet listesinden çıkarır; sistem uygulamalarına (telefon, SMS, saat, root yöneticisi) dokunulmaz. Aşağıdaki düğme şu anda hangi uygulamaların muaf olduğunu gösterir ve ihtiyacınız olanları korumanızı sağlar."
@@ -435,6 +443,10 @@
       "0": "bırak",
       "1": "kaldır"
     },
+    "audio_resampler": {
+      "high": "yüksek",
+      "max": "maksimum"
+    },
     "doze_level": {
       "aggressive": "agresif",
       "moderate": "ılımlı",
@@ -446,6 +458,7 @@
       "1": "kırp"
     },
     "dsp_outputs": {
+      "off": "kapalı",
       "all": "tümü",
       "bt": "BT",
       "speaker": "hoparlör",

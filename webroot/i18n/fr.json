@@ -101,6 +101,14 @@
       "desc": "Retire la limite de volume du casque imposée par la réglementation européenne. ATTENTION : une écoute prolongée à fort volume abîme l’audition. Désactivé par défaut pour cette raison.",
       "name": "Limite de volume du casque"
     },
+    "audio_resampler": {
+      "name": "Qualité du rééchantillonneur",
+      "desc": "Comment Android convertit l’audio d’une fréquence d’échantillonnage à une autre. Cela ne compte que si la piste et la sortie tournent à des fréquences différentes – souvent de la musique en 44,1 kHz sur une sortie 48 kHz, soit l’essentiel du streaming et des fichiers locaux. Stock garde le rééchantillonneur tel que livré par la ROM.\n\nÉlevé donne à cette conversion, dès 44,1 kHz, un filtre plus long et plus raide (140 dB d’atténuation au lieu d’environ 90, cinq fois plus long) : moins de repliement, une octave haute plus propre. Max va encore plus loin (179 dB, dix fois plus long). La différence se mesure ; l’entendre dépend de vos oreilles et de votre casque – pour la plupart des gens elle est inaudible.\n\nSans effet : la lecture déjà à la fréquence de sortie, la lecture offload et le codec Bluetooth lui-même. Coûte du CPU pendant la lecture : peu en Élevé, nettement plus en Max. Redémarrage requis – le serveur audio ne le lit qu’au démarrage."
+    },
+    "media_vol_steps": {
+      "name": "Crans du volume multimédia",
+      "desc": "Combien de crans a le curseur de volume multimédia. Stock garde la valeur du téléphone (15 sous Android pur, certaines ROM en ont plus). 30 ou 50 rendent chaque cran plus fin – pratique la nuit et avec un casque sensible.\n\nLa position la plus forte reste aussi forte ; seul l’écart change. Après le redémarrage, le curseur garde son numéro de cran, la première lecture peut donc être plus faible – remontez-le une fois. Certaines ROM ignorent ce réglage ; le bouton d’action et asbdiag montrent les crans réellement utilisés. Redémarrage requis."
+    },
     "gms_trim": {
       "descOpt": {
         "stock": "Les services Google planifient leur travail de fond comme ils veulent.",
@@ -467,23 +475,23 @@
     "3": "+3 dB",
     "6": "+6 dB",
     "9": "+9 dB",
-    "auto": "авто",
-    "on": "вкл",
-    "off": "выкл",
-    "safe": "безопасно",
-    "aggressive": "агрессивно",
-    "stock": "сток",
-    "disabled": "откл",
-    "mild": "умеренно",
-    "strong": "сильно",
-    "max": "макс",
-    "light": "слабо",
-    "medium": "средне",
-    "flat": "плоско",
-    "eq_compat": "под эквалайзер",
+    "auto": "auto",
+    "on": "on",
+    "off": "off",
+    "safe": "sûr",
+    "aggressive": "agressif",
+    "stock": "stock",
+    "disabled": "désactivé",
+    "mild": "modéré",
+    "strong": "fort",
+    "max": "max",
+    "light": "léger",
+    "medium": "moyen",
+    "flat": "plat",
+    "eq_compat": "pour égaliseur",
     "hifi": "hi-fi",
-    "manual": "ручное",
-    "smart": "умное"
+    "manual": "manuel",
+    "smart": "intelligent"
   },
   "optFor": {
     "doze_level": {
@@ -505,6 +513,7 @@
       "flat": "Simplified"
     },
     "dsp_outputs": {
+      "off": "off",
       "all": "all",
       "speaker": "speaker",
       "wired": "USB",
@@ -526,6 +535,10 @@
     "audio_remove_volume_limit": {
       "0": "keep limit",
       "1": "remove limit"
+    },
+    "audio_resampler": {
+      "high": "élevé",
+      "max": "max"
     },
     "doze_trim_whitelist": {
       "0": "leave alone",

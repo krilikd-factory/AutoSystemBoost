@@ -33,6 +33,7 @@
       "1": "Fast"
     },
     "dsp_outputs": {
+      "off": "off",
       "all": "all",
       "speaker": "speaker",
       "wired": "USB",
@@ -90,6 +91,10 @@
     "audio_remove_volume_limit": {
       "0": "keep limit",
       "1": "remove limit"
+    },
+    "audio_resampler": {
+      "high": "High",
+      "max": "Max"
     },
     "net_route_tune": {
       "auto": "smart",

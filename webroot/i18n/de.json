@@ -240,6 +240,14 @@
       "name": "Kopfhörer-Lautstärkegrenze",
       "desc": "Hebt die EU-Lautstärkebegrenzung für Kopfhörer auf. ACHTUNG: dauerhaft hohe Lautstärke schädigt das Gehör. Genau deshalb standardmäßig aus."
     },
+    "audio_resampler": {
+      "name": "Resampler-Qualität",
+      "desc": "Wie Android Audio zwischen Abtastraten umrechnet. Wirkt nur, wenn Titel und Ausgang verschiedene Raten haben – meist 44,1-kHz-Musik auf einem 48-kHz-Ausgang, also der Großteil von Streaming und lokalen Dateien. Standard lässt den Resampler so, wie das ROM ihn liefert.\n\nHoch gibt dieser Umrechnung ab 44,1 kHz einen längeren, steileren Filter (140 dB Sperrdämpfung statt etwa 90, fünffache Länge): weniger Aliasing, sauberere obere Oktave. Maximal geht noch weiter (179 dB, zehnfache Länge). Der Unterschied ist messbar; ob man ihn hört, hängt von Ohren und Kopfhörern ab – für die meisten ist er unhörbar.\n\nNicht betroffen: Wiedergabe, die schon mit der Ausgangsrate läuft, Offload-Wiedergabe und der Bluetooth-Codec selbst. Kostet CPU während der Wiedergabe: wenig auf Hoch, deutlich mehr auf Maximal. Neustart erforderlich – der Audioserver liest es nur beim Start."
+    },
+    "media_vol_steps": {
+      "name": "Medienlautstärke-Stufen",
+      "desc": "Wie viele Stufen der Medienlautstärke-Regler hat. Standard behält den Wert des Telefons (15 bei reinem Android, manche ROMs haben mehr). 30 oder 50 machen jede Stufe feiner – praktisch nachts und mit empfindlichen Kopfhörern.\n\nDie lauteste Stufe bleibt genauso laut, nur die Abstände ändern sich. Nach dem Neustart behält der Regler seine Stufennummer, daher kann die erste Wiedergabe leiser sein – einmal lauter stellen. Manche ROMs ignorieren die Einstellung; Aktionsknopf und asbdiag zeigen die tatsächlich genutzten Stufen. Neustart erforderlich."
+    },
     "doze_trim_whitelist": {
       "name": "Doze-Ausnahmen kürzen",
       "desc": "Nimmt deine Apps von der Ausnahmeliste des Tiefschlafs; Systemapps (Telefon, SMS, Uhr, Root-Manager) bleiben unangetastet. Die Schaltfläche darunter zeigt, welche Apps gerade ausgenommen sind, und lässt die behalten, die du brauchst."
@@ -435,6 +443,10 @@
       "0": "behalten",
       "1": "aufheben"
     },
+    "audio_resampler": {
+      "high": "hoch",
+      "max": "maximal"
+    },
     "doze_level": {
       "aggressive": "aggressiv",
       "moderate": "moderat",
@@ -446,6 +458,7 @@
       "1": "beschneiden"
     },
     "dsp_outputs": {
+      "off": "aus",
       "all": "alle",
       "bt": "BT",
       "speaker": "Lautsprecher",

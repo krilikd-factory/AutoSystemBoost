@@ -266,6 +266,14 @@
       "name": "Limite volume cuffie",
       "desc": "Rimuove il limite di volume delle cuffie previsto dalle norme UE. ATTENZIONE: l’ascolto prolungato ad alto volume danneggia l’udito. Disattivato di default proprio per questo."
     },
+    "audio_resampler": {
+      "name": "Qualità del ricampionatore",
+      "desc": "Come Android converte l’audio tra frequenze di campionamento. Conta solo quando brano e uscita usano frequenze diverse – di solito musica a 44,1 kHz su un’uscita a 48 kHz, cioè quasi tutto lo streaming e i file locali. Predefinito lascia il ricampionatore come lo fornisce la ROM.\n\nAlto dà a questa conversione, da 44,1 kHz in su, un filtro più lungo e ripido (140 dB di attenuazione invece di circa 90, cinque volte più lungo): meno aliasing, ottava alta più pulita. Massimo va oltre (179 dB, dieci volte più lungo). La differenza è misurabile; sentirla dipende da orecchie e cuffie – per la maggior parte delle persone non è udibile.\n\nNon tocca: la riproduzione già alla frequenza di uscita, la riproduzione offload e il codec Bluetooth stesso. Costa CPU durante l’ascolto: poca su Alto, molta di più su Massimo. Serve un riavvio – il server audio lo legge solo all’avvio."
+    },
+    "media_vol_steps": {
+      "name": "Passi del volume multimediale",
+      "desc": "Quante posizioni ha il cursore del volume multimediale. Predefinito mantiene il valore del telefono (15 su Android puro, alcune ROM ne hanno di più). 30 o 50 rendono ogni passo più fine – utile di notte e con cuffie sensibili.\n\nLa posizione più alta resta ugualmente forte; cambia solo la spaziatura. Dopo il riavvio il cursore conserva il numero di passo, quindi la prima riproduzione può suonare più piano – alzalo una volta. Alcune ROM ignorano questa impostazione; il pulsante azione e asbdiag mostrano i passi realmente usati. Serve un riavvio."
+    },
     "doze_trim_whitelist": {
       "name": "Riduci esenzioni Doze",
       "desc": "Toglie le tue app dall’elenco delle esenzioni dal sonno profondo; quelle di sistema (telefono, SMS, orologio, gestore root) non vengono toccate. Il pulsante qui sotto mostra quali app sono esenti ora e permette di conservare quelle che ti servono."
@@ -435,6 +443,10 @@
       "0": "mantieni",
       "1": "rimuovi"
     },
+    "audio_resampler": {
+      "high": "alto",
+      "max": "massimo"
+    },
     "doze_level": {
       "aggressive": "aggressivo",
       "moderate": "moderato",
@@ -446,6 +458,7 @@
       "1": "limita"
     },
     "dsp_outputs": {
+      "off": "off",
       "all": "tutti",
       "bt": "BT",
       "speaker": "altoparlante",

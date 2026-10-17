@@ -240,6 +240,14 @@
       "name": "Límite de volumen de auriculares",
       "desc": "Quita el límite de volumen de auriculares que exige la normativa de la UE. ATENCIÓN: escuchar mucho tiempo a volumen alto daña la audición. Desactivado por defecto justamente por eso."
     },
+    "audio_resampler": {
+      "name": "Calidad del remuestreador",
+      "desc": "Cómo Android convierte el audio entre frecuencias de muestreo. Solo importa cuando la pista y la salida van a frecuencias distintas – normalmente música a 44,1 kHz en una salida de 48 kHz, que es casi todo el streaming y los archivos locales. Original deja el remuestreador tal como viene en la ROM.\n\nAlto da a esa conversión, desde 44,1 kHz, un filtro más largo y pronunciado (140 dB de atenuación en lugar de unos 90, cinco veces más largo): menos aliasing y una octava alta más limpia. Máximo va aún más lejos (179 dB, diez veces más largo). La diferencia es medible; que la oigas depende de tus oídos y auriculares – para la mayoría es inaudible.\n\nNo afecta: la reproducción que ya va a la frecuencia de salida, la reproducción offload ni el códec Bluetooth en sí. Cuesta CPU mientras suena audio: poco en Alto, bastante más en Máximo. Requiere reinicio – el servidor de audio solo lo lee al arrancar."
+    },
+    "media_vol_steps": {
+      "name": "Pasos de volumen multimedia",
+      "desc": "Cuántas posiciones tiene el control de volumen multimedia. Original mantiene lo del teléfono (15 en Android puro, algunas ROM usan más). 30 o 50 hacen cada paso más fino – útil de noche y con auriculares sensibles.\n\nLa posición más alta suena igual de fuerte; solo cambia la separación. Tras reiniciar, el control conserva su número de paso, así que la primera reproducción puede sonar más baja – súbelo una vez. Algunas ROM ignoran este ajuste; el botón de acción y asbdiag muestran los pasos que el sistema usa de verdad. Requiere reinicio."
+    },
     "doze_trim_whitelist": {
       "name": "Recortar exenciones de Doze",
       "desc": "Quita tus aplicaciones de la lista de exenciones del sueño profundo; las del sistema (teléfono, SMS, reloj, gestor root) no se tocan. El botón de abajo muestra qué aplicaciones están exentas ahora y permite conservar las que necesitas."
@@ -435,6 +443,10 @@
       "0": "dejar",
       "1": "quitar"
     },
+    "audio_resampler": {
+      "high": "alto",
+      "max": "máximo"
+    },
     "doze_level": {
       "aggressive": "agresivo",
       "moderate": "moderado",
@@ -446,6 +458,7 @@
       "1": "recortar"
     },
     "dsp_outputs": {
+      "off": "apagado",
       "all": "todos",
       "bt": "BT",
       "speaker": "altavoz",

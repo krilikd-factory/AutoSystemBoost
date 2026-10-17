@@ -240,6 +240,14 @@
       "name": "Batas volume headphone",
       "desc": "Menghapus batas volume headphone yang diwajibkan regulasi UE. PERHATIAN: mendengarkan lama pada volume tinggi merusak pendengaran. Justru karena itu mati secara bawaan."
     },
+    "audio_resampler": {
+      "name": "Kualitas resampler",
+      "desc": "Cara Android mengonversi audio antar laju sampel. Hanya berpengaruh saat lagu dan output berjalan pada laju berbeda – biasanya musik 44,1 kHz pada output 48 kHz, yaitu sebagian besar streaming dan file lokal. Standar membiarkan resampler seperti bawaan ROM.\n\nTinggi memberi konversi itu, mulai 44,1 kHz, filter yang lebih panjang dan curam (redaman 140 dB, bukan sekitar 90, lima kali lebih panjang): aliasing berkurang, oktaf atas lebih bersih. Maksimum lebih jauh lagi (179 dB, sepuluh kali lebih panjang). Perbedaannya terukur; terdengar atau tidak tergantung telinga dan headphone – bagi kebanyakan orang tidak terdengar.\n\nTidak terpengaruh: pemutaran yang sudah pada laju output, pemutaran offload, dan codec Bluetooth itu sendiri. Memakai CPU selama audio diputar: sedikit pada Tinggi, jauh lebih banyak pada Maksimum. Perlu reboot – server audio hanya membacanya saat mulai."
+    },
+    "media_vol_steps": {
+      "name": "Langkah volume media",
+      "desc": "Berapa banyak posisi pada penggeser volume media. Standar mempertahankan nilai ponsel (15 di Android murni, beberapa ROM lebih banyak). 30 atau 50 membuat setiap langkah lebih halus – berguna di malam hari dan dengan headphone sensitif.\n\nPosisi paling keras tetap sama kerasnya; hanya jaraknya yang berubah. Setelah reboot, penggeser mempertahankan nomor langkahnya, jadi pemutaran pertama bisa terdengar lebih pelan – naikkan sekali. Beberapa ROM mengabaikan pengaturan ini; tombol aksi dan asbdiag menunjukkan langkah yang benar-benar dipakai. Perlu reboot."
+    },
     "doze_trim_whitelist": {
       "name": "Pangkas pengecualian Doze",
       "desc": "Mengeluarkan aplikasi Anda dari daftar pengecualian tidur nyenyak; aplikasi sistem (telepon, SMS, jam, pengelola root) tidak disentuh. Tombol di bawah menunjukkan aplikasi mana yang kini dikecualikan dan memungkinkan Anda mempertahankan yang dibutuhkan."
@@ -435,6 +443,10 @@
       "0": "biarkan",
       "1": "hapus"
     },
+    "audio_resampler": {
+      "high": "tinggi",
+      "max": "maksimum"
+    },
     "doze_level": {
       "aggressive": "agresif",
       "moderate": "sedang",
@@ -446,6 +458,7 @@
       "1": "pangkas"
     },
     "dsp_outputs": {
+      "off": "mati",
       "all": "semua",
       "bt": "BT",
       "speaker": "speaker",

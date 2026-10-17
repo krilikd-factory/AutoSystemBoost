@@ -240,6 +240,14 @@
       "name": "Limite de volume dos fones",
       "desc": "Remove o limite de volume dos fones exigido pelas normas da UE. ATENÇÃO: ouvir por muito tempo em volume alto prejudica a audição. Desativado por padrão justamente por isso."
     },
+    "audio_resampler": {
+      "name": "Qualidade do reamostrador",
+      "desc": "Como o Android converte o áudio entre taxas de amostragem. Só importa quando a faixa e a saída usam taxas diferentes – normalmente música a 44,1 kHz numa saída de 48 kHz, ou seja, quase todo o streaming e os arquivos locais. Padrão mantém o reamostrador como a ROM o entrega.\n\nAlto dá a essa conversão, a partir de 44,1 kHz, um filtro mais longo e íngreme (140 dB de atenuação em vez de cerca de 90, cinco vezes mais longo): menos aliasing, oitava alta mais limpa. Máximo vai além (179 dB, dez vezes mais longo). A diferença é mensurável; ouvi-la depende dos seus ouvidos e fones – para a maioria é inaudível.\n\nNão afeta: a reprodução que já está na taxa de saída, a reprodução offload e o codec Bluetooth em si. Custa CPU durante a reprodução: pouco no Alto, bem mais no Máximo. Requer reinicialização – o servidor de áudio só lê isso ao iniciar."
+    },
+    "media_vol_steps": {
+      "name": "Passos do volume de mídia",
+      "desc": "Quantas posições tem o controle de volume de mídia. Padrão mantém o valor do telefone (15 no Android puro, algumas ROMs usam mais). 30 ou 50 deixam cada passo mais fino – útil à noite e com fones sensíveis.\n\nA posição mais alta continua igualmente alta; só muda o espaçamento. Após reiniciar, o controle mantém o número do passo, então a primeira reprodução pode soar mais baixa – aumente uma vez. Algumas ROMs ignoram este ajuste; o botão de ação e o asbdiag mostram os passos realmente usados. Requer reinicialização."
+    },
     "doze_trim_whitelist": {
       "name": "Reduzir isenções do Doze",
       "desc": "Remove os seus aplicativos da lista de isenções do sono profundo; os do sistema (telefone, SMS, relógio, gerenciador root) não são tocados. O botão abaixo mostra quais aplicativos estão isentos agora e permite manter os de que você precisa."
@@ -435,6 +443,10 @@
       "0": "manter",
       "1": "remover"
     },
+    "audio_resampler": {
+      "high": "alto",
+      "max": "máximo"
+    },
     "doze_level": {
       "aggressive": "agressivo",
       "moderate": "moderado",
@@ -446,6 +458,7 @@
       "1": "limitar"
     },
     "dsp_outputs": {
+      "off": "desligado",
       "all": "todos",
       "bt": "BT",
       "speaker": "altifalante",
