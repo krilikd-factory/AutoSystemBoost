@@ -1437,6 +1437,14 @@ body.config-active #livePage.open {
 .live-drain-left { font-size: 12px; line-height: 1.4; color: var(--text); font-weight: 600; }
 .live-drain-note { font-size: 11px; line-height: 1.45; color: var(--text-tertiary); padding: 2px 2px 0; }
 .live-drain-done { margin-top: 12px; }
+.live-drain-cmp { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 14px;
+  border: 1px solid var(--border); background: rgba(255,255,255,0.02); }
+.live-drain-cmp-row { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center;
+  font-size: 12.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.live-drain-cmp-row.cur { color: var(--text); font-weight: 700; }
+.live-drain-cmp-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.live-drain-cmp-val { display: inline-flex; align-items: center; gap: 4px; min-width: 64px; justify-content: flex-end; }
+.live-drain-cmp-val .tech-icon { width: 12px; height: 12px; opacity: .7; }
 .smart-banner-row.tags {
   display: flex;
   flex-wrap: wrap;
@@ -1498,6 +1506,36 @@ body.config-active #livePage.open {
   border-color: rgba(239,68,68,0.35);
   color: #fca5a5;
 }
+/* Monitor, compact (fix161). The drain pair moved to the top of the card on one line, the tags
+ * sit on the card's top edge instead of a row of their own, the grid below is four rows, and
+ * the gap under the header is the page's own - together about 150 px handed back to the space
+ * above the tab bar. */
+.live-page .header { margin-bottom: 22px; }
+.live-page .smart-banner { position: relative; margin-top: 4px; margin-bottom: 12px; padding: 14px 12px 11px; gap: 10px; }
+.live-page .smart-banner-row.tags { position: absolute; top: -8px; right: 12px; gap: 4px; z-index: 1; }
+.live-page .smart-banner-tag {
+  background: linear-gradient(rgba(0,225,200,0.18), rgba(0,225,200,0.18)), var(--bg);
+  padding: 3px 7px; border-radius: 7px; font-size: 8.5px;
+}
+.live-page .smart-banner-tag.warn { background: linear-gradient(rgba(245,158,11,0.18), rgba(245,158,11,0.18)), var(--bg); }
+.live-page .smart-banner-tag.veto { background: linear-gradient(rgba(239,68,68,0.18), rgba(239,68,68,0.18)), var(--bg); }
+.live-page .smart-banner-row:not(.tags) { gap: 10px 8px; }
+.live-page .smart-drain { padding: 5px 8px 5px 7px; gap: 8px; border-radius: 11px; }
+.live-page .smart-drain-half { gap: 7px; }
+.live-page .smart-drain-ico { width: 22px; height: 22px; border-radius: 7px; }
+.live-page .smart-drain-ico .tech-icon { width: 13px; height: 13px; }
+.live-page .smart-drain-txt { gap: 1px; }
+.live-page .smart-drain-lbl { font-size: 7.5px; }
+.live-page .smart-drain-val { font-size: 13.5px; line-height: 1.05; }
+.live-page .smart-drain-more { font-size: 16px; }
+.live-page .smart-banner-value.heat-warm { color: #f5c26b; }
+.live-page .sec { margin-top: 4px !important; margin-bottom: 8px !important; }
+.live-page .live-metrics { gap: 6px; }
+.live-page .live-row { gap: 6px; }
+.live-page .live-cell { min-height: 46px; padding: 7px 10px; border-radius: 12px; }
+.live-page .live-cell-label { font-size: 8.5px; margin-bottom: 2px; }
+.live-page .live-cell-value { font-size: 13px; }
+
 
 /*
  * tablet + large-screen adaptation Default mobile-first layout uses max-width: 420px (set on
@@ -2687,6 +2725,28 @@ html[data-asb-theme="light"] .cfg-profile-folder { color:var(--text) !important;
   gap: 8px;
 }
 #cfgRebootWrap .cfg-reboot { margin-top: 0; padding: 10px 0; }
+/* Restarts as three small tiles in one row (fix161): three full-width bars under the six
+ * category tiles read heavier than the categories themselves. */
+#cfgRebootWrap.cfg-reboot-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+.cfg-reboot-tile {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  min-height: 74px; padding: 10px 6px; border-radius: 16px; text-align: center;
+  border: 1px solid rgba(255,255,255,0.07);
+  background: linear-gradient(160deg, rgba(255,255,255,0.035), rgba(255,255,255,0.012));
+  color: inherit; font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  transition: transform 0.13s ease, border-color 0.18s ease;
+}
+.cfg-reboot-tile:active { transform: scale(0.975); border-color: var(--rb); }
+.cfg-reboot-tile.hard  { --rb: #ff6b6b; }
+.cfg-reboot-tile.soft  { --rb: #ffa94d; }
+.cfg-reboot-tile.sysui { --rb: #ffd43b; }
+.cfg-reboot-tile { --tech-icon: var(--rb); }
+.cfg-reboot-ico {
+  width: 30px; height: 30px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); color: var(--rb);
+}
+.cfg-reboot-ico .tech-icon { width: 17px; height: 17px; }
+.cfg-reboot-lbl { font-size: 11px; font-weight: 600; line-height: 1.2; color: var(--text-secondary); }
 /* The gap above the tiles is owned by the actions row alone.
    #cfgActionsRow already ends with 14px, and this added 14px of its own on top - the two
    stacked into 28px, which is both wider than every other gap on the page and the last
@@ -2916,10 +2976,20 @@ html[data-asb-theme="light"] .smart-drain-lbl { color:#5d6b72 !important; }
 html[data-asb-theme="light"] .smart-drain-val { color:#00634f !important; }
 html[data-asb-theme="light"] .smart-drain-sep { background:rgba(0,124,99,.18) !important; }
 html[data-asb-theme="light"] .smart-drain-more { color:rgba(0,99,79,.55) !important; }
+html[data-asb-theme="light"] .live-page .smart-banner-tag { background:linear-gradient(rgba(0,124,99,.10),rgba(0,124,99,.10)),#ffffff !important; border-color:rgba(0,124,99,.30) !important; color:#00634f !important; }
+html[data-asb-theme="light"] .live-page .smart-banner-tag.warn { background:linear-gradient(rgba(180,110,0,.10),rgba(180,110,0,.10)),#ffffff !important; border-color:rgba(180,110,0,.35) !important; color:#8a5700 !important; }
+html[data-asb-theme="light"] .live-page .smart-banner-tag.veto { background:linear-gradient(rgba(180,35,24,.10),rgba(180,35,24,.10)),#ffffff !important; border-color:rgba(180,35,24,.35) !important; color:#b42318 !important; }
+html[data-asb-theme="light"] .live-page .smart-banner-value.heat-warm { color:#8a5700 !important; }
 html[data-asb-theme="light"] .live-drain-block { background:#f7f9fa !important; border-color:var(--border) !important; }
+html[data-asb-theme="light"] .live-drain-cmp { background:#f7f9fa !important; }
 html[data-asb-theme="light"] .live-drain-ico { color:#007c63 !important; background:rgba(0,124,99,.10) !important; }
 html[data-asb-theme="light"] :is(.cfg-tile-count,.cfg-tile-count.has-on) { color:var(--text-secondary) !important; }
 html[data-asb-theme="light"] .cfg-tile-name { color:var(--text) !important; }
+html[data-asb-theme="light"] .cfg-reboot-tile { background:#ffffff !important; border-color:var(--border) !important; box-shadow:0 1px 2px rgba(16,24,32,.05); }
+html[data-asb-theme="light"] .cfg-reboot-ico { background:#f3f5f7 !important; border-color:rgba(16,24,32,.08) !important; }
+html[data-asb-theme="light"] .cfg-reboot-tile.hard  { --rb:#c0362c; }
+html[data-asb-theme="light"] .cfg-reboot-tile.soft  { --rb:#b25b00; }
+html[data-asb-theme="light"] .cfg-reboot-tile.sysui { --rb:#9a7300; }
 html[data-asb-theme="light"] .cfg-section.cat-audio   { --section-accent:#c0362c; --tech-icon:#c0362c; }
 html[data-asb-theme="light"] .cfg-section.cat-camera  { --section-accent:#1f63b6; --tech-icon:#1f63b6; }
 html[data-asb-theme="light"] .cfg-section.cat-battery { --section-accent:#127a45; --tech-icon:#127a45; }
@@ -3453,6 +3523,21 @@ body.ufo-flying .logo-glyph { opacity: 0; }
 
   <!-- Smart Mode info banner (hidden when Smart Mode disabled) -->
   <div class="smart-banner" id="liveSmartBanner" style="display:none;">
+    <div class="smart-banner-row tags" id="bnTagRow">
+      <span class="smart-banner-tag" id="bnFb">cold start</span>
+    </div>
+    <button type="button" class="smart-drain" id="bnDrainStrip" onclick="liveDrainOpen()" aria-haspopup="dialog">
+      <span class="smart-drain-half">
+        <span class="smart-drain-ico" data-tech-icon="sun"></span>
+        <span class="smart-drain-txt"><span class="smart-drain-lbl" data-i18n="lv_scr_on">Screen on</span><span class="smart-drain-val" id="bnDrain">—</span></span>
+      </span>
+      <span class="smart-drain-sep" aria-hidden="true"></span>
+      <span class="smart-drain-half">
+        <span class="smart-drain-ico" data-tech-icon="theme_moon"></span>
+        <span class="smart-drain-txt"><span class="smart-drain-lbl" data-i18n="lv_scr_off">Screen off</span><span class="smart-drain-val" id="bnDrainOff">—</span></span>
+      </span>
+      <span class="smart-drain-more" aria-hidden="true">›</span>
+    </button>
     <div class="smart-banner-row">
       <div class="smart-banner-item">
         <span class="smart-banner-label">🤖 Bucket</span>
@@ -3475,7 +3560,7 @@ body.ufo-flying .logo-glyph { opacity: 0; }
         <span class="smart-banner-value" id="bnSes">—</span>
       </div>
       <div class="smart-banner-item">
-        <span class="smart-banner-label" data-i18n="lv_slot_temp">Usual peak</span>
+        <span class="smart-banner-label" data-i18n="lv_slot_heat">Usual heat</span>
         <span class="smart-banner-value" id="bnSlotTemp">—</span>
       </div>
       <div class="smart-banner-item">
@@ -3487,25 +3572,13 @@ body.ufo-flying .logo-glyph { opacity: 0; }
         <span class="smart-banner-value" id="bnLpm">—</span>
       </div>
     </div>
-    <button type="button" class="smart-drain" id="bnDrainStrip" onclick="liveDrainOpen()" aria-haspopup="dialog">
-      <span class="smart-drain-half">
-        <span class="smart-drain-ico" data-tech-icon="sun"></span>
-        <span class="smart-drain-txt"><span class="smart-drain-lbl" data-i18n="lv_scr_on">Screen on</span><span class="smart-drain-val" id="bnDrain">—</span></span>
-      </span>
-      <span class="smart-drain-sep" aria-hidden="true"></span>
-      <span class="smart-drain-half">
-        <span class="smart-drain-ico" data-tech-icon="theme_moon"></span>
-        <span class="smart-drain-txt"><span class="smart-drain-lbl" data-i18n="lv_scr_off">Screen off</span><span class="smart-drain-val" id="bnDrainOff">—</span></span>
-      </span>
-      <span class="smart-drain-more" aria-hidden="true">›</span>
-    </button>
-    <div class="smart-banner-row tags" id="bnTagRow">
-      <span class="smart-banner-tag" id="bnFb">cold start</span>
-    </div>
   </div>
 
   <!-- Stock has no Smart/FSM policy, but direct ROM readings still belong in Monitor. -->
   <div class="smart-banner stock-rom-banner" id="liveStockRomBanner" style="display:none;" aria-live="polite">
+    <div class="smart-banner-row tags" id="bnStockTagRow">
+      <span class="smart-banner-tag" id="bnStockSrc">rom</span>
+    </div>
     <div class="smart-banner-row">
       <div class="smart-banner-item"><span class="smart-banner-label" id="bnStockDrainLabel" data-i18n="stock_battery_current">Battery current</span><span class="smart-banner-value" id="bnStockDrain">—</span></div>
       <div class="smart-banner-item"><span class="smart-banner-label" id="bnStockTrendLabel" data-i18n="stock_thermal_trend">ROM thermal trend</span><span class="smart-banner-value" id="bnStockTrend">—</span></div>
@@ -3516,9 +3589,6 @@ body.ufo-flying .logo-glyph { opacity: 0; }
       <div class="smart-banner-item"><span class="smart-banner-label" data-i18n="stock_battery">Battery</span><span class="smart-banner-value" id="bnStockBattery">—</span></div>
       <div class="smart-banner-item"><span class="smart-banner-label" data-i18n="stock_uptime">Uptime</span><span class="smart-banner-value" id="bnStockUptime">—</span></div>
     </div>
-    <div class="smart-banner-row tags" id="bnStockTagRow">
-      <span class="smart-banner-tag" id="bnStockSrc">rom</span>
-    </div>
   </div>
 
   <div class="sec">
@@ -3528,18 +3598,6 @@ body.ufo-flying .logo-glyph { opacity: 0; }
   </div>
 
   <div class="live-metrics">
-
-    <!-- Thermal & power -->
-    <div class="live-row">
-      <div class="live-cell live-cell-wide">
-        <div class="live-cell-label" id="liveStateLabel" data-i18n="lv_fsm">FSM</div>
-        <div class="live-cell-value" id="liveState">—</div>
-      </div>
-      <div class="live-cell live-cell-wide">
-        <div class="live-cell-label" id="liveClampLabel" data-i18n="lv_clamp">Clamp 1h / total</div>
-        <div class="live-cell-value" id="liveClamp">—</div>
-      </div>
-    </div>
 
     <div class="live-row">
       <div class="live-cell">
@@ -3556,7 +3614,21 @@ body.ufo-flying .logo-glyph { opacity: 0; }
       </div>
     </div>
 
-    <!-- Battery ETA -->
+    <div class="live-row">
+      <div class="live-cell">
+        <div class="live-cell-label" id="liveStateLabel" data-i18n="lv_fsm">FSM</div>
+        <div class="live-cell-value" id="liveState">—</div>
+      </div>
+      <div class="live-cell">
+        <div class="live-cell-label" id="liveGpuLabel" data-i18n="lv_gpuload">GPU Load</div>
+        <div class="live-cell-value" id="liveGpu">—</div>
+      </div>
+      <div class="live-cell">
+        <div class="live-cell-label" id="liveHeadroomLabel" data-i18n="lv_headroom">Headroom</div>
+        <div class="live-cell-value" id="liveHeadroom">—</div>
+      </div>
+    </div>
+
     <div class="live-row">
       <div class="live-cell live-cell-wide">
         <div class="live-cell-label" id="liveEtaOnLabel" data-i18n="lv_est_on">Est. on</div>
@@ -3568,27 +3640,18 @@ body.ufo-flying .logo-glyph { opacity: 0; }
       </div>
     </div>
 
-    <!-- Governor diagnostics -->
     <div class="live-row">
-      <div class="live-cell live-cell-wide">
+      <div class="live-cell">
         <div class="live-cell-label" id="liveCapSrcLabel" data-i18n="lv_capsrc">Cap Src</div>
         <div class="live-cell-value" id="liveCapSrc">—</div>
       </div>
-      <div class="live-cell live-cell-wide">
+      <div class="live-cell">
+        <div class="live-cell-label" id="liveClampLabel" data-i18n="lv_clamp">Clamp 1h / total</div>
+        <div class="live-cell-value" id="liveClamp">—</div>
+      </div>
+      <div class="live-cell">
         <div class="live-cell-label" id="liveLearnerLabel" data-i18n="lv_learner">Learner</div>
         <div class="live-cell-value" id="liveLearner">—</div>
-      </div>
-    </div>
-
-    <!-- GPU & headroom -->
-    <div class="live-row">
-      <div class="live-cell live-cell-wide">
-        <div class="live-cell-label" id="liveGpuLabel" data-i18n="lv_gpuload">GPU Load</div>
-        <div class="live-cell-value" id="liveGpu">—</div>
-      </div>
-      <div class="live-cell live-cell-wide">
-        <div class="live-cell-label" id="liveHeadroomLabel" data-i18n="lv_headroom">Headroom</div>
-        <div class="live-cell-value" id="liveHeadroom">—</div>
       </div>
     </div>
 
@@ -3714,10 +3777,10 @@ body.ufo-flying .logo-glyph { opacity: 0; }
   <!-- Reboot actions. cfgSyncChrome shows them on the hub and hides them inside a
        category, where a full reboot button under a list of settings is easy to hit by
        accident while still choosing. -->
-  <div id="cfgRebootWrap">
-    <button class="cfg-reboot" onclick="cfgReboot()" data-i18n="cfg_reboot">↻ Reboot device</button>
-    <button class="cfg-reboot soft" onclick="cfgSoftReboot()" data-i18n="cfg_soft_reboot">⟳ Soft reboot</button>
-    <button class="cfg-reboot sysui" onclick="cfgRestartSysUI()" data-i18n="cfg_restart_sysui">▤ Restart SystemUI</button>
+  <div id="cfgRebootWrap" class="cfg-reboot-row">
+    <button class="cfg-reboot-tile hard" type="button" onclick="cfgReboot()"><span class="cfg-reboot-ico" data-tech-icon="power_cycle"></span><span class="cfg-reboot-lbl" data-i18n="cfg_reboot_tile">Reboot</span></button>
+    <button class="cfg-reboot-tile soft" type="button" onclick="cfgSoftReboot()"><span class="cfg-reboot-ico" data-tech-icon="soft_restart"></span><span class="cfg-reboot-lbl" data-i18n="cfg_soft_tile">Soft reboot</span></button>
+    <button class="cfg-reboot-tile sysui" type="button" onclick="cfgRestartSysUI()"><span class="cfg-reboot-ico" data-tech-icon="panel"></span><span class="cfg-reboot-lbl" data-i18n="cfg_sysui_tile">Restart SystemUI</span></button>
   </div>
   </div>
 
@@ -3859,6 +3922,8 @@ const TECH_ICON_PATHS = {
   resampler: '<path d="M3 13.4l2.1-4.2 2.1 7.2 2.1-5"/><path d="M11.2 12h2.6M12.6 10.6l1.4 1.4-1.4 1.4"/><path d="M15.6 12c.9-2.4 1.8-2.4 2.7 0s1.8 2.4 2.7 0"/>',
   vol_steps: '<path d="M4.5 19.5v-2M7.5 19.5v-4M10.5 19.5v-6M13.5 19.5v-8M16.5 19.5v-10M19.5 19.5v-12"/>',
   stereo_width: '<path d="M12 7.5v9"/><path d="M9.4 12H3.6M5.8 9.8 3.6 12l2.2 2.2"/><path d="M14.6 12h5.8M18.2 9.8l2.2 2.2-2.2 2.2"/>',
+  power_cycle: '<path d="M19.2 12a7.2 7.2 0 1 1-2.1-5.1"/><path d="M19.4 4.4v3.8h-3.8"/><path d="M12 8.4v4"/>',
+  soft_restart: '<path d="M19.2 12a7.2 7.2 0 1 1-2.1-5.1"/><path d="M19.4 4.4v3.8h-3.8"/><path d="M12.7 8.6 10.6 12.3h3l-2.1 3.6"/>',
   volume_sync: '<path d="M4 10v4h2.8l4 3.4V6.6L6.8 10z"/><path d="M13.6 8.6a5 5 0 0 1 0 6.8"/><path d="M17.6 5.4v13.2M17.6 5.4 15.8 7.2M17.6 5.4l1.8 1.8M17.6 18.6l-1.8-1.8M17.6 18.6l1.8-1.8"/>',
   bluetooth_offload: '<path d="M7.2 7.6l9.6 8-4.8 3.9V4.5l4.8 3.9-9.6 8"/><rect x="14.6" y="14.6" width="6.4" height="6.4" rx="1.6"/>',
   loudness: '<path d="M4.5 9.6v4.8h3L12 18.4V5.6L7.5 9.6z"/><path d="M15.5 12h5M18 9.5v5"/>',
@@ -4775,6 +4840,71 @@ function navBackAction() {
   if (_cfgOpen) { uiSound('nav'); closeConfigPage(true); return; }
   if (_liveOpen) closeLivePage();
 }
+/* Usual heat of this hour against this phone's own norm (fix161). The bare typical CPU peak -
+ * 51.8 C - read as the phone running hot, when it is the hottest core at its busiest moment,
+ * and the norm it is judged against is this phone's own (41-49 C on the owner's OP15). The tile
+ * says where the hour sits in that band; the number stays in the tooltip. */
+function lvSlotHeat(tx10, coolx10, warmx10) {
+  if (!(tx10 > 0)) return { text: '\u2014', tip: '', warm: false };
+  const t = (tx10 / 10).toFixed(1);
+  let key = 'lv_heat_norm', def = 'normal', warm = false;
+  if (warmx10 > 0 && tx10 > warmx10) { key = 'lv_heat_warm'; def = 'above normal'; warm = true; }
+  else if (coolx10 > 0 && tx10 < coolx10) { key = 'lv_heat_cool'; def = 'below normal'; }
+  const band = (coolx10 > 0 && warmx10 > 0)
+    ? Math.round(coolx10 / 10) + '\u2013' + Math.round(warmx10 / 10) + '\u00b0C' : '\u2014';
+  const tip = T('lv_heat_tip', 'Usual CPU peak this hour: %s; normal for this phone: %s')
+    .replace('%s', t + '\u00b0C').replace('%s', band);
+  return { text: T(key, def), tip: tip, warm: warm };
+}
+/* One drain strip, carried into whichever card is on screen (fix161). */
+function lvDrainHome(banner) {
+  const st = _el('bnDrainStrip');
+  if (!st || !banner || st.parentElement === banner) return;
+  const tags = banner.querySelector('.smart-banner-row.tags');
+  banner.insertBefore(st, tags ? tags.nextSibling : banner.firstChild);
+}
+/* The profile-independent drain meter (runtime/asb_drain_meter.sh, fix161): the same method
+ * for every profile, Stock included, kept per profile so they can be compared. */
+const _lvMeter = { at: 0, cur: '', p: {} };
+function lvMeterParse(text) {
+  const out = { cur: '', p: {} };
+  String(text || '').split('\n').forEach(function (ln) {
+    const f = ln.trim().split(/\s+/);
+    if (f[0] === 'current') { out.cur = f[1] || ''; return; }
+    if (f.length < 6) return;
+    const n = f.slice(1, 6).map(function (x) { return parseInt(x, 10) || 0; });
+    out.p[f[0]] = {
+      on: (n[0] >= 600 && n[1] > 0) ? Math.round(n[1] * 360 / n[0]) : 0,
+      onMin: Math.round(n[0] / 60),
+      off: (n[4] >= 1 && n[2] > 0) ? Math.round(n[3] * 3600 / n[2]) : 0,
+      offN: n[4]
+    };
+  });
+  return out;
+}
+async function lvMeterPoll(force) {
+  if (!force && Date.now() - _lvMeter.at < 30000) return;
+  _lvMeter.at = Date.now();
+  try {
+    const r = await run('cat /dev/.asb_drain_meter 2>/dev/null || cat /data/adb/asb/drain_meter 2>/dev/null');
+    const m = lvMeterParse((r && r.stdout) || '');
+    _lvMeter.cur = m.cur; _lvMeter.p = m.p;
+  } catch (e) {}
+}
+function lvPct(x, div, digits) {
+  return (x / div).toFixed(digits) + T('unit_pcth', '%/h');
+}
+function lvMeterPaint(profile) {
+  const e = (_lvMeter.p && _lvMeter.p[profile]) || null;
+  const onEl = _el('bnDrain'), offEl = _el('bnDrainOff');
+  if (onEl) onEl.textContent = (e && e.on > 0) ? lvPct(e.on, 10, 1) : T('lv_measuring', 'measuring\u2026');
+  if (offEl) offEl.textContent = (e && e.off > 0) ? lvPct(e.off, 100, e.off >= 100 ? 1 : 2) : T('lv_measuring', 'measuring\u2026');
+  _lvDrain.on = (e && e.on > 0) ? 'meter' : 'meter_wait';
+  _lvDrain.off = (e && e.off > 0) ? 'measured' : 'wait';
+  _lvDrain.offN = e ? e.offN : 0;
+  _lvDrain.winS = e ? e.onMin * 60 : 0;
+  if (liveDrainIsOpen()) liveDrainPaint();
+}
 /* Monitor: battery drain with the screen on and off (fix159). The two figures sit in the Smart
  * card; a tap opens what each one is based on and how long the battery would last. */
 const _lvDrain = { on: 'wait', off: 'wait', winS: 0, offN: 0 };
@@ -4832,7 +4962,9 @@ function liveDrainPaint() {
     recent: T('lv_drain_on_recent', 'estimate from your recent screen-on use - the measured figure replaces it after 10 minutes with the screen on'),
     slot: T('lv_drain_on_slot', 'estimate from what this hour usually costs - nothing measured since the start yet'),
     charging: T('lv_drain_charging_tip', 'No drain while charging - the figure comes back after unplugging.'),
-    wait: T('lv_drain_on_wait', 'needs 10 minutes with the screen on and the battery level moving')
+    wait: T('lv_drain_on_wait', 'needs 10 minutes with the screen on and the battery level moving'),
+    meter: T('lv_drain_on_meter', 'measured by ASB over %s min with the screen on in this profile').replace('%s', String(mins)),
+    meter_wait: T('lv_drain_on_wait', 'needs 10 minutes with the screen on and the battery level moving')
   }[_lvDrain.on] || '';
   const offBasis = _lvDrain.off === 'measured'
     ? T('lv_drain_off_measured', 'measured over %s screen-off stretch(es) of an hour or more, without charging or music').replace('%s', String(_lvDrain.offN))
@@ -4843,15 +4975,50 @@ function liveDrainPaint() {
     (etaOn && _lvDrain.on !== 'charging') ? left.replace('%s', etaOn) : ''));
   body.appendChild(liveDrainBlock('theme_moon', T('lv_scr_off', 'Screen off'), offV, offBasis,
     etaOff ? left.replace('%s', etaOff) : ''));
+  const cmp = liveDrainCompare();
+  if (cmp) body.appendChild(cmp);
   const note = document.createElement('div');
   note.className = 'live-drain-note';
   note.textContent = T('lv_drain_note', 'Both figures come from the battery level itself, not from the current sensor: slower to settle, but they match what the battery screen shows.');
   body.appendChild(note);
 }
-function liveDrainOpen() {
+function liveDrainCompare() {
+  const p = _lvMeter.p || {};
+  const order = ['smart', 'balanced', 'battery', 'performance', 'stock'];
+  const any = order.some(function (k) { return p[k] && (p[k].on > 0 || p[k].off > 0); });
+  if (!any) return null;
+  const box = document.createElement('div');
+  box.className = 'live-drain-cmp';
+  const h = document.createElement('div');
+  h.className = 'live-drain-lbl';
+  h.textContent = T('lv_drain_cmp', 'By profile - the same measurement for each');
+  box.appendChild(h);
+  order.forEach(function (k) {
+    const e = p[k];
+    if (!e || (!(e.on > 0) && !(e.off > 0))) return;
+    const row = document.createElement('div');
+    row.className = 'live-drain-cmp-row' + (k === _selectedProfile ? ' cur' : '');
+    const name = document.createElement('span');
+    name.className = 'live-drain-cmp-name';
+    name.textContent = T('prof_' + k, k);
+    const on = document.createElement('span');
+    on.className = 'live-drain-cmp-val';
+    on.innerHTML = techIcon('sun');
+    on.appendChild(document.createTextNode(e.on > 0 ? lvPct(e.on, 10, 1) : '\u2014'));
+    const off = document.createElement('span');
+    off.className = 'live-drain-cmp-val';
+    off.innerHTML = techIcon('theme_moon');
+    off.appendChild(document.createTextNode(e.off > 0 ? lvPct(e.off, 100, e.off >= 100 ? 1 : 2) : '\u2014'));
+    row.appendChild(name); row.appendChild(on); row.appendChild(off);
+    box.appendChild(row);
+  });
+  return box;
+}
+async function liveDrainOpen() {
   uiSound('option');
   const m = liveDrainEnsure();
   liveDrainPaint();
+  lvMeterPoll(true).then(function () { if (_selectedProfile !== 'smart') lvMeterPaint(_selectedProfile); else if (liveDrainIsOpen()) liveDrainPaint(); });
   m.hidden = false;
   m.setAttribute('aria-hidden', 'false');
 }
@@ -8947,14 +9114,14 @@ function paintStockLive(stockKv = null) {
   const stock = T('prof_stock', 'Stock');
   const off = T('prof_stock_sub', 'ASB policy off');
   const profile = _el('liveCurProfile');
-  if (profile) profile.textContent = stock;
+  if (profile && _selectedProfile === 'stock') profile.textContent = stock;
   const state = _el('liveState');
   /* Only claim "Stock · ASB policy off" when that is actually true.
    *
    * This function now paints the panel on Battery and Balanced too, and on those the
    * governor IS running - overwriting the state line with "policy off" would be a plain
    * lie about what the module is doing. Leave the line to whoever owns it there. */
-  if (state && _selectedProfile === 'stock') state.textContent = stock + ' · ' + off;
+  if (state && _selectedProfile === 'stock') { state.textContent = stock; state.title = off; }
   // The ordinary Monitor labels describe ASB concepts (FSM, forecast, cap source, learner).
   // In Stock the values below are direct ROM readings, so rename the cards before painting them.
   setLiveLabel('liveStateLabel', 'stock_rom_status', 'ROM status');
@@ -8965,7 +9132,7 @@ function paintStockLive(stockKv = null) {
   setLiveLabel('liveLearnerLabel', 'stock_asb_learner', 'ASB learner');
   setLiveLabel('liveGpuLabel', 'stock_gpu_load', 'GPU load');
   setLiveLabel('liveHeadroomLabel', 'stock_ram_available', 'RAM available');
-  setLiveLabel('bnStockDrainLabel', 'lv_drain', 'Screen drain');
+  setLiveLabel('bnStockDrainLabel', 'stock_battery_current', 'Battery current');
   setLiveLabel('bnStockTrendLabel', 'stock_thermal_trend', 'ROM thermal trend');
   setLiveLabel('bnStockLpmLabel', 'stock_lpm_state', 'Modem state');
   setLiveLabel('bnStockRamLabel', 'stock_ram_available', 'RAM available');
@@ -9001,7 +9168,7 @@ function paintStockLive(stockKv = null) {
   const chargeFullRaw = n(kv['battery.charge_full']);
   const chargeFullMah = chargeFullRaw > 10000 ? chargeFullRaw / 1000 : chargeFullRaw;
   const batteryStatus = String(kv['battery.status'] || '').toLowerCase();
-  const isCharging = /charg/.test(batteryStatus) || ma < 0;
+  const isCharging = batteryStatus === 'charging' || batteryStatus === 'full' || ma < 0;
   const pctph = (!isCharging && chargeFullMah > 0 && Math.abs(ma) > 0)
     ? (Math.abs(ma) * 100 / chargeFullMah) : 0;
   const sampleTs = n(kv.ts) * 1000;
@@ -9029,7 +9196,7 @@ function paintStockLive(stockKv = null) {
   if (_selectedProfile === 'stock') set('liveCapSrc', 'ROM', off);
   const cap = _el('liveCapSrc');
   if (cap) cap.className = 'live-cell-value';
-  if (_selectedProfile === 'stock') set('liveLearner', off);
+  if (_selectedProfile === 'stock') set('liveLearner', T('st_off', 'Disabled'), off);
   set('liveGpu', gpu > 0 ? gpu + '%' : '—');
   set('liveHeadroom', ramGb, 'MemAvailable from /proc/meminfo (read-only).');
 
@@ -9075,24 +9242,14 @@ function paintStockLive(stockKv = null) {
     if (stockTag) stockTag.textContent = T('lv_src_rom', 'direct ROM reading');
   }
   if (stockBanner) stockBanner.style.display = Object.keys(kv).length ? '' : 'none';
+  if (stockBanner) { lvDrainHome(stockBanner); lvMeterPaint(_selectedProfile); }
   // This is a live, current-derived screen-on estimate while the Monitor is open;
   // it is not a Smart learner forecast or a battery-cause attribution.
-  /* Prefer the measured window over the instantaneous current.
-   *
-   * pctph is current_now scaled by charge_full - a single sample. On a phone drawing
-   * 876 mA at the moment of the read it printed 14.6%/h while the governor's own window
-   * had measured 7.8, and action.sh showed the two side by side with different labels.
-   * The instantaneous value is real but it is a spike, not a rate: it swings by a factor
-   * of two between consecutive reads and cannot be checked against anything.
-   *
-   * smart_drain_pctph_x10 is the drain over the window the governor just closed - the
-   * figure a user can compare with the battery screen. The mA stay on the line because
-   * they are useful, just not as a rate. */
-  const _liveDrain = parseInt(kv.smart_drain_pctph_x10 || '0', 10);
-  const _shownPctph = _liveDrain > 0 ? (_liveDrain / 10) : pctph;
+  /* The screen-on and screen-off rates are in the drain strip (fix161), measured over
+   * windows by the drain meter; this tile keeps the instantaneous current. */
 
   bset('bnStockDrain', (!isCharging && Math.abs(ma) > 0)
-    ? ((_shownPctph > 0 ? _shownPctph.toFixed(1) + '%/h · ' : '') + Math.abs(ma) + ' mA') : '—',
+    ? Math.abs(ma) + ' mA' : (isCharging ? T('lv_drain_charging', 'charging') : '—'),
     'Live read-only screen-on estimate from battery current and charge_full; Stock does not use ASB drain learning.');
   bset('bnStockTrend', trend, 'CPU thermal delta between consecutive direct ROM samples.', trendCls);
   bset('bnStockLpm', lpmHeld ? T('lv_lpm_fast', 'fast') : T('lv_lpm_normal', 'normal'),
@@ -9142,6 +9299,7 @@ async function pollStockTelemetry(visible, force = false) {
   try {
     const cmd = "sh -c 'printf \"ts=%s\\n\" \"$(date +%s)\"; printf \"uptime=%s\\n\" \"$(cut -d\" \" -f1 /proc/uptime 2>/dev/null)\"; printf \"loadavg=%s\\n\" \"$(cut -d\" \" -f1-3 /proc/loadavg 2>/dev/null)\"; for f in capacity current_now voltage_now temp status charge_full; do printf \"battery.%s=%s\\n\" \"$f\" \"$(cat /sys/class/power_supply/battery/$f 2>/dev/null)\"; done; printf \"settings.global.mobile_data_always_on=%s\\n\" \"$(settings get global mobile_data_always_on 2>/dev/null)\"; grep -E \"^(MemTotal|MemAvailable|MemFree|Cached|SwapFree):\" /proc/meminfo 2>/dev/null; for d in /sys/devices/system/cpu/cpufreq/policy*; do [ -d \"$d\" ] || continue; n=${d##*/}; for f in scaling_min_freq scaling_max_freq scaling_cur_freq scaling_governor cpuinfo_max_freq; do printf \"cpu.%s.%s=%s\\n\" \"$n\" \"$f\" \"$(cat \"$d/$f\" 2>/dev/null)\"; done; done; g=/sys/class/kgsl/kgsl-3d0; for f in gpuclk gpu_busy_percentage gpubusy max_pwrlevel min_pwrlevel thermal_pwrlevel; do printf \"gpu.%s=%s\\n\" \"$f\" \"$(cat \"$g/$f\" 2>/dev/null | head -1)\"; done; for z in /sys/class/thermal/thermal_zone*; do [ -r \"$z/temp\" ] || continue; label=$(cat \"$z/type\" 2>/dev/null); temp=$(cat \"$z/temp\" 2>/dev/null); [ -n \"$temp\" ] && printf \"thermal.%s=%s\\n\" \"$label\" \"$temp\"; done'";
     const r = await run(cmd);
+    await lvMeterPoll(false);
     const text = ((r && r.stdout) || '').trim();
     _stockTelemetryKv = parseStockTelemetry(text);
     paintStockLive(_stockTelemetryKv);
@@ -9571,7 +9729,9 @@ async function pollLive(visible) {
         const conf = sm.last_confidence || 0;
         const stier = conf >= 650 ? T('learn_strong', 'strong')
                     : (conf >= 350 ? T('learn_active', 'active') : T('learn_learning', 'learning'));
-        _el('liveLearner').textContent = stier + ' ' + Math.round(conf / 10) + '% · ' + sm.total + ' ' + _ses;
+        _el('liveLearner').textContent = Math.round(conf / 10) + '% · ' + sm.total;
+        _el('liveLearner').title = stier + ' ' + Math.round(conf / 10) + '% · ' + sm.total + ' ' + _ses;
+        if (conf >= 650) _el('liveLearner').className = 'live-cell-value cap-asb';
       } else {
         /*
          * trust_tier is emitted as a bare English token ("unknown"), which then sat in a
@@ -9583,7 +9743,7 @@ async function pollLive(visible) {
         const tierRaw = learner.trust_tier || '';
         const tier = tierRaw ? T('learn_' + tierRaw, tierRaw) : '—';
         const sessions = (learner.sessions && learner.sessions.battery) || 0;
-        _el('liveLearner').textContent = tier + ' · ' + sessions + ' ' + _ses;
+        _el('liveLearner').textContent = tier + ' · ' + sessions;
         _el('liveLearner').title = (sessions === 0)
           ? T('learn_tip_none',
               'No completed session yet for this profile. The Smart card line above comes from the Smart blender, which is a separate subsystem and can already show a daypart.')
@@ -9754,9 +9914,16 @@ async function pollLive(visible) {
                 _lvDrain.off = 'wait';
               }
             }
-            const _stx = parseInt(kv.smart_bucket_temp_x10 || '0', 10);
             const _stEl = _el('bnSlotTemp');
-            if (_stEl) _stEl.textContent = _stx > 0 ? (_stx / 10).toFixed(1) + '\u00b0C' : '\u2014';
+            if (_stEl) {
+              const _h = lvSlotHeat(parseInt(kv.smart_bucket_temp_x10 || '0', 10),
+                                    parseInt(kv.smart_therm_cool_x10 || '0', 10),
+                                    parseInt(kv.smart_therm_warm_x10 || '0', 10));
+              _stEl.textContent = _h.text;
+              _stEl.title = _h.tip;
+              _stEl.className = 'smart-banner-value' + (_h.warm ? ' heat-warm' : '');
+            }
+            lvDrainHome(_el('liveSmartBanner'));
             if (liveDrainIsOpen()) liveDrainPaint();
           }
 
