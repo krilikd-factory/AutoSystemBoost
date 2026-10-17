@@ -6,11 +6,14 @@
 # work moved to the two prime cores: prime busy in 91% of screen-on samples on one phone,
 # 27-100% on another whenever the main ceiling sat under the prime's. The REAL parity block
 # is cut out of asb_governor.c and run on OP15 tables: light idle and moderate get the first
-# main step at the prime's capacity; a vendor-held prime lowers the target; HEAVY, a thermal
-# trim, a 4-cluster part, a truly little first cluster and the switch turned off change
+# main step at the prime's capacity; a vendor-held prime lowers the target; a thermal cap,
+# GAMING, a 4-cluster part, a truly little first cluster and the switch turned off change
 # nothing; a prime burst keeps the level it found. fix132: when the level step is over 60% of
 # the main maximum (PLQ110, SM8750: 2227200 = 63%) the highest step inside the limit is taken
-# if it reaches 90% of the prime's capacity, and the state says so.
+# if it reaches 90% of the prime's capacity, and the state says so. fix156: a thermal budget
+# trim, HEAVY and SUSTAINED keep the level too - warm OP15 samples with the main under the prime
+# had the prime working in 67% at 456 mA against 9% at 337 mA level - and the state says when
+# the raise is the one held while the phone cools.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 G="$ROOT/src/asb_governor.c"
@@ -27,6 +30,7 @@ grep -q '    asb_main_capacity_parity(caps, m, fsm, trim);' "$G" || fail "parity
 grep -q '^main_capacity_parity=1$' "$ROOT/config/governor.conf" || fail "switch not shipped on"
 grep -q '^main_capacity_parity|internal|' "$ROOT/config/key_ownership.tsv" || fail "switch not registered"
 grep -q 'main_parity_khz=%d' "$G" || fail "state file does not say what parity did"
+grep -q 'main_parity_cooling=%d' "$G" || fail "state file does not say the raise is held while cooling"
 
 cat > "$T/t.c" <<'X'
 #include <stdio.h>
@@ -103,8 +107,22 @@ int main(void) {
     WANT(run(ASB_STATE_MODERATE, 1555200, 1862400, 1632, 0), 1785600, "prime held at 1632 MHz by the vendor");
     WANT(run(ASB_STATE_MODERATE, 2112000, 1862400, 1862, 0), 2112000, "main already above the prime");
     if (g_parity_main_khz != 0) { printf("no raise must publish 0\n"); bad = 1; }
-    WANT(run(ASB_STATE_HEAVY, 1555200, 1862400, 1862, 0), 1555200, "HEAVY");
-    WANT(run(ASB_STATE_MODERATE, 1555200, 1862400, 1862, 18), 1555200, "thermal budget trim");
+    WANT(run(ASB_STATE_HEAVY, 1996800, 1862400, 1862, 0), 1996800, "HEAVY already level");
+    if (g_parity_main_khz != 0 || g_parity_cooling != 0) { printf("HEAVY already level counted as a raise\n"); bad = 1; }
+    WANT(run(ASB_STATE_HEAVY, 1555200, 1862400, 1862, 18), 1996800, "HEAVY with the main trimmed");
+    if (g_parity_cooling != 1 || g_parity_cool_lifts != 1) { printf("HEAVY trim raise not published: %d %lu\n", g_parity_cooling, g_parity_cool_lifts); bad = 1; }
+    WANT(run(ASB_STATE_MODERATE, 1555200, 1862400, 1862, 18), 1996800, "thermal budget trim");
+    if (g_parity_cooling != 1 || g_parity_cool_lifts != 1) { printf("a held cooling raise counted again: %d %lu\n", g_parity_cooling, g_parity_cool_lifts); bad = 1; }
+    WANT(run(ASB_STATE_MODERATE, 1900800, 1862400, 1862, 8), 1996800, "light trim within 10% of the prime");
+    WANT(run(ASB_STATE_SUSTAINED, 1785600, 1862400, 1862, 0), 1996800, "SUSTAINED rail under the prime");
+    WANT(run(ASB_STATE_SUSTAINED, 1555200, 1632000, 1632, 0), 1785600, "SUSTAINED with the vendor holding the prime");
+    WANT(run(ASB_STATE_MODERATE, 1555200, 1862400, 1862, 0), 1996800, "moderate without a trim");
+    if (g_parity_cooling != 0) { printf("an ordinary raise published as cooling\n"); bad = 1; }
+    WANT(run(ASB_STATE_SUSTAINED, 1785600, 1862400, 1862, 0), 1996800, "SUSTAINED again");
+    if (g_parity_cool_lifts != 2) { printf("a new cooling raise not counted: %lu\n", g_parity_cool_lifts); bad = 1; }
+    WANT(run(ASB_STATE_GAMING, 1555200, 1862400, 1862, 0), 1555200, "GAMING");
+    if (g_parity_cooling != 0 || g_parity_main_khz != 0) { printf("GAMING kept a raise\n"); bad = 1; }
+    F.thermal_cap = 1; WANT(run(ASB_STATE_SUSTAINED, 1555200, 1862400, 1862, 0), 1555200, "SUSTAINED under a thermal cap"); F.thermal_cap = 0;
     F.thermal_cap = 1; WANT(run(ASB_STATE_MODERATE, 1555200, 1862400, 1862, 0), 1555200, "thermal cap"); F.thermal_cap = 0;
     M.misc.screen_on = 0; WANT(run(ASB_STATE_LIGHT_IDLE, 1555200, 1862400, 1862, 0), 1555200, "screen off"); M.misc.screen_on = 1;
     M.misc.camera_active = 1; WANT(run(ASB_STATE_MODERATE, 1555200, 1862400, 1862, 0), 1555200, "camera"); M.misc.camera_active = 0;
@@ -137,11 +155,12 @@ int main(void) {
     if (g_parity_near != 0) { printf("PLQ110 exact level published as near\n"); bad = 1; }
     WANT(run(ASB_STATE_MODERATE, 1555200, 2649600, 2649, 0), 1555200, "PLQ110 prime well above its floor: no step gets close");
     if (g_parity_main_khz != 0 || g_parity_over_khz != 2918400) { printf("PLQ110 refusal not published: %d %d\n", g_parity_main_khz, g_parity_over_khz); bad = 1; }
-    WANT(run(ASB_STATE_HEAVY, 1555200, 1958400, 1958, 0), 1555200, "PLQ110 HEAVY");
-    if (g_parity_over_khz != 0) { printf("HEAVY kept a stale over value\n"); bad = 1; }
+    WANT(run(ASB_STATE_HEAVY, 1555200, 1958400, 1958, 0), 1996800, "PLQ110 HEAVY under the prime");
+    WANT(run(ASB_STATE_GAMING, 1555200, 1958400, 1958, 0), 1555200, "PLQ110 GAMING");
+    if (g_parity_over_khz != 0 || g_parity_near != 0) { printf("GAMING kept a stale over value\n"); bad = 1; }
     return bad;
 }
 X
 "$CC" -O2 -Wall -Werror -Wno-unused-function -I"$T" -o "$T/t" "$T/t.c" 2>"$T/cc.log" || { cat "$T/cc.log" >&2; fail "fixture did not compile"; }
 "$T/t" || fail "parity wrong"
-echo "PASS main capacity parity: light work keeps the main cores level with the prime, nothing else moves"
+echo "PASS main capacity parity: the main cores stay level with the prime in light work, under a trim, in HEAVY and SUSTAINED; a thermal cap and GAMING keep their own path"

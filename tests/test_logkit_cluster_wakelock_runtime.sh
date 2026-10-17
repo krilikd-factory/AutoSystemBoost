@@ -28,9 +28,13 @@ while [ $i -lt 14 ]; do
   echo "$e|d|active|1|1000|4094|25|120|300||" >> "$O/display_trace.txt"
   # 8 samples main 1555200 / prime 1862400 with the prime working; 4 level (1996800) with it idle;
   # 2 within 10% (1900800 = capacity 399 of the prime's 414, fix132) with it idle.
-  if [ $i -lt 8 ]; then echo "$e|d|||||||||||883200|1555200|1862400|1862400" >> "$O/perf_trace.txt"
-  elif [ $i -lt 12 ]; then echo "$e|d|||||||||||1996800|1996800|768000|1862400" >> "$O/perf_trace.txt"
-  else echo "$e|d|||||||||||1900800|1900800|768000|1862400" >> "$O/perf_trace.txt"; fi
+  # fix156: discharge current in column 22, surface temperature in column 36; the first five
+  # below-the-prime samples and two level ones are warm.
+  sf=33; [ $i -lt 5 ] && sf=41; [ $i -eq 8 ] || [ $i -eq 9 ] && sf=42
+  if [ $i -lt 8 ]; then row="883200|1555200|1862400|1862400"; ma=480
+  elif [ $i -lt 12 ]; then row="1996800|1996800|768000|1862400"; ma=320
+  else row="1900800|1900800|768000|1862400"; ma=400; fi
+  echo "$e|d|||||||||||$row||||||$ma||||||||||||||$sf" >> "$O/perf_trace.txt"
   i=$((i + 1))
 done
 for e in 2000 2020 2040 2060; do
@@ -49,7 +53,12 @@ out="$(LK_CPU_SYSFS="$F" sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit
 printf '%s\n' "$out" | grep -q '^screen-on samples 14: prime cores working in 57%, main cores in 42%$' || fail "cluster split: $out"
 printf '%s\n' "$out" | grep -qE 'level with the prime .*: +4 samples, prime working in 0%' || fail "level bucket: $out"
 printf '%s\n' "$out" | grep -qE "more than 10% below the prime's: +8 samples, prime working in 100%" || fail "below bucket: $out"
-printf '%s\n' "$out" | grep -qE "within 10% of the prime's: +2 samples, prime working in 0%" || fail "near bucket: $out"
+printf '%s\n' "$out" | grep -qE "within 10% of the prime's: +2 samples, prime working in 0%, mean 400 mA$" || fail "near bucket: $out"
+printf '%s\n' "$out" | grep -qE "more than 10% below the prime's: +8 samples, prime working in 100%, mean 480 mA$" || fail "below bucket current: $out"
+printf '%s\n' "$out" | grep -q '^  warm (surface 40 C and above), 7 samples:$' || fail "warm split: $out"
+printf '%s\n' "$out" | grep -qE '^    main level with the prime: +2 samples, prime working in 0%, mean 320 mA$' || fail "warm level row: $out"
+printf '%s\n' "$out" | grep -qE '^    main more than 10% below it: +5 samples, prime working in 100%, mean 480 mA$' || fail "warm below row: $out"
+printf '%s\n' "$out" | grep -q 'main within 10% of the prime.s:   ' && fail "a warm row printed with no warm samples: $out"
 printf '%s\n' "$out" | grep -q '^screen-off samples: 4$' || fail "screen-off samples: $out"
 printf '%s\n' "$out" | grep -qE '^  held in  75% of samples, longest hold   62 min  TgWsProxy::ServiceWakeLock  \(com.amurcanov.tgwsproxy\)$' || fail "proxy not ranked first with its longest hold: $out"
 printf '%s\n' "$out" | grep -q 'com.android.contacts/com.whatsapp  (com.whatsapp)' || fail "compact WorkSource uid not resolved: $out"

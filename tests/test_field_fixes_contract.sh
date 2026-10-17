@@ -1113,4 +1113,21 @@ for t in test_dsp_outputs_off_runtime.sh test_audio_prop_tweaks_runtime.sh; do [
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS: fix155 contract"
 ) || exit 1
+# ---- fix156 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix156: $*"; exit 1; }
+G="$ROOT/src/asb_governor.c"
+grep -q 'fsm->state >= ASB_STATE_LIGHT_IDLE && fsm->state <= ASB_STATE_SUSTAINED &&' "$G" || fail "parity still limited to light idle and moderate"
+grep -q 'g_cpu_policy_ids\[2\] < 0 && m->misc.screen_on && !fsm->thermal_cap &&$' "$G" || fail "parity gate changed beyond the trim"
+grep -q 'trim <= 0' "$G" && fail "a thermal budget trim still turns parity off"
+grep -q 'main_parity_cooling=%d' "$G" || fail "state does not say the raise is held while cooling"
+grep -q 'main_parity_cool_lifts' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not report cooling raises"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+grep -q 'warm (surface 40 C and above), %d samples:' "$ROOT/tools/logkit/_asb_logkit_common.sh" || fail "the capture report has no warm split"
+grep -q '"warm_below_pct"' "$ROOT/tools/asb_capture_compare.py" || fail "the comparison does not read the warm split"
+grep -q '"warm_below_pct"' "$ROOT/docs/field_baseline/fix150.json" || fail "the fix150 baseline has no warm figures"
+for t in test_main_capacity_parity_runtime.sh test_capture_compare_warm_runtime.sh test_logkit_cluster_wakelock_runtime.sh; do [ -f "$ROOT/tests/$t" ] || fail "$t missing"; done
+echo "PASS: fix156 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
