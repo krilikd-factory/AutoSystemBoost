@@ -1302,6 +1302,63 @@ lk_emit_display_summary() {
   echo ""
 }
 
+lk_wifi_leave_collect() {
+  _wlf="${LK_WIFI_FALLBACK_LOG:-/data/adb/asb/wifi_fallback.log}"
+  [ -s "$_wlf" ] || return 0
+  _wlo="$LK_OUT_DIR/wifi_leave_events.log"
+  _wll="$(tail -n 1 "$_wlo" 2>/dev/null)"
+  if [ -n "$_wll" ]; then _wlt="${_wll%% wifi_fallback:*}"; else _wlt="${LK_WIFI_SINCE:-}"; fi
+  awk -v last="$_wll" -v lts="$_wlt" '
+    { l[NR] = $0; if (last != "" && $0 == last) p = NR }
+    END { for (i = 1; i <= NR; i++) if ((p && i > p) || (!p && substr(l[i], 1, 19) > lts)) print l[i] }
+  ' "$_wlf" >> "$_wlo" 2>/dev/null
+}
+
+lk_emit_wifi_leave_summary() {
+  _wlo="$LK_OUT_DIR/wifi_leave_events.log"
+  _wlm="${LK_MODDIR:-${MODDIR:-/data/adb/modules/AutoSystemBoost}}/config/governor.conf"
+  _wlr="$(grep -E '^[[:space:]]*net_wifi_leave=' "$_wlm" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  _wld="$(grep -E '^[[:space:]]*net_wifi_leave_dbm=' "$_wlm" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
+  echo "===== WI-FI LEAVE (the leave-bad-Wi-Fi watcher, this capture) ====="
+  echo "rung now: ${_wlr:-off}, threshold ${_wld:--80} dBm"
+  if [ ! -s "$_wlo" ]; then
+    echo "no watcher events in this capture"
+    echo ""
+    return 0
+  fi
+  awk '
+    function sec(s,  y, m, d) {
+      y = substr(s, 1, 4) + 0; m = substr(s, 6, 2) + 0; d = substr(s, 9, 2) + 0
+      if (m <= 2) { y--; m += 12 }
+      return (365 * y + int(y / 4) - int(y / 100) + int(y / 400) + int((153 * (m - 3) + 2) / 5) + d) * 86400 \
+             + substr(s, 12, 2) * 3600 + substr(s, 15, 2) * 60 + substr(s, 18, 2)
+    }
+    function released(t) {
+      rel++
+      if (st && t - st <= 300) lat[++nl] = t - st
+      else lat[++nl] = 0
+      st = 0
+    }
+    { t = sec($0) }
+    / pass 1\// { if (st) back++; st = t; next }
+    /out of range .* - releasing/ { rr++; released(t); next }
+    /released unvalidated Wi-Fi/ { ru++; released(t); next }
+    /re-enabled after ASB fallback window/ { ren++; next }
+    /could not disable Wi-Fi/ { nd++; next }
+    END {
+      if (st) back++
+      printf "releases: %d (out of range %d, no internet %d) - Wi-Fi given back after the window: %d, could not disable: %d\n", rel + 0, rr + 0, ru + 0, ren + 0, nd + 0
+      if (nl > 0) {
+        for (i = 2; i <= nl; i++) { v = lat[i]; j = i - 1; while (j > 0 && lat[j] > v) { lat[j + 1] = lat[j]; j-- } lat[j + 1] = v }
+        med = (nl % 2) ? lat[(nl + 1) / 2] : (lat[nl / 2] + lat[nl / 2 + 1]) / 2
+        printf "first failing reading to the release: median %d s, longest %d s (%d release(s))\n", med, lat[nl], nl
+      }
+      printf "failing streaks that recovered before a release: %d\n", back + 0
+    }' "$_wlo"
+  echo "the events themselves: wifi_leave_events.log"
+  echo ""
+}
+
 lk_emit_full_day_report() {
   _led="$LK_OUT_DIR/phase_ledger.tsv"
   _out="$LK_OUT_DIR/_full_day_report.txt"
@@ -1319,6 +1376,7 @@ lk_emit_full_day_report() {
     lk_emit_screenoff_class_summary
     lk_emit_current_soc_consistency
     lk_emit_display_summary
+    lk_emit_wifi_leave_summary
     lk_emit_cluster_work_summary
     lk_emit_jank_summary
     if [ -r "$LK_OUT_DIR/phase_summary.txt" ]; then
@@ -1783,6 +1841,7 @@ lk_finalize() {
   lk_wakelock_kernel_delta
   lk_wakelock_batterystats_dump
   lk_oem_ram_expand_probe "end"
+  lk_wifi_leave_collect
   lk_emit_phase_summary
   lk_emit_full_day_report
   lk_snapshot_state "after"
@@ -1794,6 +1853,7 @@ lk_finalize() {
 trap 'lk_finalize; lk_webui_guard_release; exit 0' TERM INT HUP
 
 echo "[$(date '+%H:%M:%S')] FULL-DAY capture running up to ${LK_HOURS}h. Use the phone normally."
+LK_WIFI_SINCE="$(date '+%Y-%m-%d %H:%M:%S')"
 
 _last_snapshot=$(date +%s)
 _last_report=$(date +%s)
@@ -1879,6 +1939,7 @@ while : ; do
   lk_charge_trace_row
   lk_asb_feature_row
   lk_charge_idle_observe "$_phase"
+  lk_wifi_leave_collect
   lk_phase_ledger_accumulate
   LK_TICK_COUNT=$((LK_TICK_COUNT + 1))
 
