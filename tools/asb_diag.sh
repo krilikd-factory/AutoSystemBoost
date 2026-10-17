@@ -1071,6 +1071,14 @@ if [ -r "$_state" ]; then
     fi
   fi
   P "  writer health         : attempts=${_wattempts:-0} applied=${_wapplied:-0} failures=${_wfail:-0} backoff_skips=${_wskip:-0}"
+  _vct="$(_rget vendor_ceiling_ticks /dev/.asb/state 2>/dev/null)"
+  _vcu="$(_rget vendor_ceiling_used_ticks /dev/.asb/state 2>/dev/null)"
+  _owc="$(_rget own_ceiling_ticks /dev/.asb/state 2>/dev/null)"
+  _thc="$(_rget trend_trim_held_cool /dev/.asb/state 2>/dev/null)"
+  if [ -n "$_owc" ]; then
+    NOTE "  ceilings above Smart's wish: raised by the ROM in ${_vct:-0} ticks (clock above ASB's limit in ${_vcu:-0}), by ASB's own lifts in $_owc ticks (unlock lift, prime burst, a lowering write still to land)"
+  fi
+  [ -n "$_thc" ] && NOTE "  thermal-trend trims held on a cool body: $_thc ticks (skin more than 8 C under thermal_skin_c=$(cfg thermal_skin_c) - a burst, not heat)"
   # Say what the two numbers count, because they do not count the same thing.
   #
   # A capture reads attempts=292 backoff_skips=455 - more skips than attempts, which
@@ -1619,7 +1627,7 @@ SEC "1b. DSP ENGINE  (what the effect is actually doing)"
 _dsp_g="$(cfg dsp_loudness)"
 [ "$(cfg dsp_outputs)" = "off" ] && _dsp_g=outputs_off
 case "$_dsp_g" in ''|0|off) NOTE "dsp_loudness = off - the effect is released from the audio path entirely" ;;
-  outputs_off) NOTE "dsp_outputs = off - the DSP is switched off (enable=$(gp persist.asb.dsp.enable)); loudness $(cfg dsp_loudness), bass $(cfg dsp_bass), voice $(cfg dsp_voice) are kept for when an output is picked again" ;;
+  outputs_off) NOTE "dsp_outputs = off - the DSP is switched off (enable=$(gp persist.asb.dsp.enable)); loudness $(cfg dsp_loudness), bass $(cfg dsp_bass), voice $(cfg dsp_voice), width $(cfg dsp_width) are kept for when an output is picked again" ;;
   *)
     _dsp_requested_mb=$((_dsp_g * 100))
     _dsp_expected_mb="$_dsp_requested_mb"
@@ -1675,6 +1683,26 @@ case "$(cfg dsp_voice)" in
       else
         NOTE "  voice tone: $_vt_lib predates it - the slider has no effect until the DSP library is rebuilt"
       fi
+    fi
+    ;;
+esac
+NOTE "dsp_width = $(cfg dsp_width)  ·  live: $(gp persist.asb.dsp.width)"
+case "$(cfg dsp_width)" in
+  ''|0|off) : ;;
+  *)
+    _sw_lib=""
+    for _sw_c in /vendor/lib64/soundfx/libasbdsp.so /vendor/lib/soundfx/libasbdsp.so; do
+      [ -f "$_sw_c" ] && { _sw_lib="$_sw_c"; break; }
+    done
+    if [ -n "$_sw_lib" ]; then
+      if grep -aq ' stereo_width=' "$_sw_lib" 2>/dev/null || { grep -aq 'persist.vendor.asb.dsp.%s' "$_sw_lib" 2>/dev/null && grep -aq 'width' "$_sw_lib" 2>/dev/null; }; then
+        NOTE "  stereo width: supported by $_sw_lib"
+      else
+        NOTE "  stereo width: $_sw_lib predates it - the slider has no effect until the DSP library is rebuilt"
+      fi
+    fi
+    if [ -f /data/adb/asb/asb_dsp_attach ] && ! grep -aq 'persist.asb.dsp.width' /data/adb/asb/asb_dsp_attach 2>/dev/null; then
+      NOTE "  stereo width: the attach daemon predates it - a width change lands with the next gain or tone change"
     fi
     ;;
 esac
@@ -1926,9 +1954,11 @@ case "$_rs_c" in
   *) OFF "resampler quality - audio_resampler=stock, stopband/halflength ${_rs_live:-<ROM default>}" "audio_resampler" ;;
 esac
 _mv_c="$(cfg media_vol_steps)"
+case "$_mv_c" in ''|*[!0-9]*) _mv_c=stock ;; *) [ "$_mv_c" -ge 16 ] && [ "$_mv_c" -le 100 ] || _mv_c=stock ;; esac
 _mv_live="$(dumpsys audio 2>/dev/null | awk '/^- STREAM_MUSIC:/{f=1;next} f&&/^- STREAM_/{exit} f&&$1=="Max:"{print $2; exit}')"
 case "$_mv_c" in
-  30|50)
+  stock) OFF "media volume steps - media_vol_steps=stock, Android uses ${_mv_live:-?} steps" "media_vol_steps" ;;
+  *)
     if [ "$_mv_live" = "$_mv_c" ]; then
       V "media volume steps (STREAM_MUSIC Max)" "$_mv_c" "$_mv_live" eq
     elif [ -n "$_mv_live" ] && [ "$(gp ro.config.media_vol_steps)" = "$_mv_c" ]; then
@@ -1936,7 +1966,6 @@ case "$_mv_c" in
     else
       NOTE "media_vol_steps=$_mv_c is not live yet (Android uses ${_mv_live:-?} steps): it is read when Android starts - reboot once"
     fi ;;
-  *) OFF "media volume steps - media_vol_steps=stock, Android uses ${_mv_live:-?} steps" "media_vol_steps" ;;
 esac
 
 # =====================================================================
