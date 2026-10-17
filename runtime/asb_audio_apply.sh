@@ -156,7 +156,17 @@ if [ "$_mode" = "mirror" ]; then
       fi
       ;;
   esac
-  for _k in enable gain_mb ceiling_mb comp comp_ratio_x10 comp_thresh_mb softclip postgain_x100 bass_db voice; do
+  _mwidth="$(_cfg dsp_width)"
+  case "$_mwidth" in
+    ''|off|*[!0-9]*) : ;;
+    *)
+      if [ "$_mwidth" -ge 0 ] 2>/dev/null && [ "$_mwidth" -le 10 ] 2>/dev/null; then
+        _mwhave="$(getprop persist.asb.dsp.width 2>/dev/null)"
+        [ "$_mwhave" != "$_mwidth" ] && _persist persist.asb.dsp.width "$_mwidth"
+      fi
+      ;;
+  esac
+  for _k in enable gain_mb ceiling_mb comp comp_ratio_x10 comp_thresh_mb softclip postgain_x100 bass_db voice width; do
     _v="$(getprop "persist.asb.dsp.$_k" 2>/dev/null)"
     [ -n "$_v" ] && _persist_ctx "persist.vendor.asb.dsp.$_k" "$_v"
   done
@@ -434,6 +444,15 @@ case "$_vo" in
 esac
 _dspp voice "$_vox"
 [ "$_vox" = "0" ] && changed="${changed}voice=off " || changed="${changed}voice=${_vox} "
+
+_wd="$(_cfg dsp_width)"
+case "$_wd" in
+  ''|off|0)  _wdx=0 ;;
+  *[!0-9]*)  _wdx=0 ;;
+  *) if [ "$_wd" -ge 1 ] 2>/dev/null && [ "$_wd" -le 10 ] 2>/dev/null; then _wdx="$_wd"; else _wdx=0; fi ;;
+esac
+_dspp width "$_wdx"
+[ "$_wdx" = "0" ] && changed="${changed}width=off " || changed="${changed}width=${_wdx} "
 
 # ---- go live ----------------------------------------------------------------------
 # Wake the attach helper on every run, not only in "dsp" mode.
