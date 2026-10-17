@@ -1061,7 +1061,10 @@ if [ -r "$_state" ]; then
         else _mps="now - main ceiling held at $_mpk kHz"; fi
       elif [ "${_mpo:-0}" -gt 0 ] 2>/dev/null; then _mps="not raised - level needs $_mpo kHz, over 60% of the main maximum, and no step inside the limit gets within 10% of the prime"
       else _mps="not needed right now"; fi
-      NOTE "  main kept level with the prime: $_mps · started $_mpl times this session (main_capacity_parity=$(cfg main_capacity_parity))"
+      _mpc="$(_rget main_parity_cooling /dev/.asb/state 2>/dev/null)"
+      _mpcl="$(_rget main_parity_cool_lifts /dev/.asb/state 2>/dev/null)"
+      [ "${_mpc:-0}" = 1 ] && _mps="$_mps, held while the phone cools (trim, HEAVY or SUSTAINED) - the prime is not left the bigger cluster"
+      NOTE "  main kept level with the prime: $_mps · started $_mpl times this session, ${_mpcl:-0} of them while cooling (main_capacity_parity=$(cfg main_capacity_parity))"
     fi
   fi
   P "  writer health         : attempts=${_wattempts:-0} applied=${_wapplied:-0} failures=${_wfail:-0} backoff_skips=${_wskip:-0}"

@@ -15,6 +15,7 @@ A capture sent twice (same phone, same start) is counted once. Figures marked '~
 report (too short to mean anything) are not used for a comparison.
 """
 import argparse
+import bisect
 import io
 import json
 import os
@@ -100,6 +101,67 @@ def _read(path):
             return f.read()
     except OSError:
         return ""
+
+
+def warm_cluster(d):
+    """Warm screen-on samples (surface 40 C and above) from the raw traces (fix156).
+
+    The figure fix156 changes: whether the main cores were left under the prime while the
+    phone was warm, how often the prime then carried the work, and the sampled current. Read
+    from perf_trace/display_trace so captures made before the report printed it compare too.
+    """
+    out = {"warm_on_n": None, "warm_below_pct": None, "warm_prime_pct": None, "warm_on_ma": None}
+    perf = _read(os.path.join(d, "perf_trace.txt"))
+    disp = _read(os.path.join(d, "display_trace.txt"))
+    thr = _read(os.path.join(d, "throttle_trace.txt"))
+    h0 = [int(x) for x in re.findall(r"p0_max=\d+/(\d+)", thr)]
+    h1 = [int(x) for x in re.findall(r"p6_max=\d+/(\d+)", thr)]
+    if not perf or not disp or not h0 or not h1:
+        return out
+    hw0, hw1 = max(h0), max(h1)
+    cap0 = cap1 = None
+    for fn in sorted(os.listdir(d)):
+        if fn.startswith("snapshot_") and fn.endswith(".txt"):
+            mm = re.search(r'^main_parity_capacity="(\d+),(\d+)"', _read(os.path.join(d, fn)), re.M)
+            if mm:
+                cap0, cap1 = int(mm.group(1)), int(mm.group(2))
+    scr = []
+    for line in disp.splitlines():
+        c = line.split("|")
+        if len(c) > 3 and c[0].isdigit():
+            scr.append((int(c[0]), c[3] == "1"))
+    scr.sort()
+    se = [e for e, _ in scr]
+    n = below = prime = 0
+    ma = []
+    for line in perf.splitlines():
+        c = line.split("|")
+        if len(c) < 36 or not c[0].isdigit():
+            continue
+        e = int(c[0])
+        i = bisect.bisect_left(se, e)
+        near = [j for j in (i - 1, i) if 0 <= j < len(se)]
+        if not near:
+            continue
+        j = min(near, key=lambda k: abs(se[k] - e))
+        if abs(se[j] - e) > 5 or not scr[j][1]:
+            continue
+        p0m, p6c, p6m, cur, surf = (_num(c[13]), _num(c[14]), _num(c[15]), _num(c[21]), _num(c[35]))
+        if None in (p0m, p6c, p6m, surf) or p0m <= 0 or p6m <= 0 or surf < 40:
+            continue
+        n += 1
+        prime += (p6c * 4 >= hw1)
+        if cap0 and cap1 and cap0 * p0m / hw0 * 10 < cap1 * p6m / hw1 * 9:
+            below += 1
+        if cur and cur > 0:
+            ma.append(cur)
+    if n < 5:
+        return out
+    out["warm_on_n"] = n
+    out["warm_prime_pct"] = round(100.0 * prime / n, 1)
+    out["warm_below_pct"] = round(100.0 * below / n, 1) if cap0 and cap1 else None
+    out["warm_on_ma"] = round(sum(ma) / len(ma)) if ma else None
+    return out
 
 
 def parse_capture(d):
@@ -189,6 +251,7 @@ def parse_capture(d):
     mm = re.search(r"first failing reading to the release: median (\d+) s, longest (\d+) s", rep)
     m["wifi_leave_median_s"] = int(mm.group(1)) if mm else None
     m["wifi_leave_max_s"] = int(mm.group(2)) if mm else None
+    m.update(warm_cluster(d))
     return m
 
 
@@ -294,6 +357,9 @@ METRICS = [
     ("LIGHT_IDLE janky/s", lambda c: (c.get("ui_states") or {}).get("LIGHT_IDLE", {}).get("janky_s"), True),
     ("MODERATE janky/s", lambda c: (c.get("ui_states") or {}).get("MODERATE", {}).get("janky_s"), True),
     ("prime working %", lambda c: c.get("prime_work_pct"), True),
+    ("warm: main under prime %", lambda c: c.get("warm_below_pct"), True),
+    ("warm: prime working %", lambda c: c.get("warm_prime_pct"), True),
+    ("warm screen-on mA", lambda c: c.get("warm_on_ma"), True),
     ("ASB CPU s/h", lambda c: c.get("asb_cpu_s_h"), True),
     ("Wi-Fi leave median s", lambda c: c.get("wifi_leave_median_s"), True),
 ]
