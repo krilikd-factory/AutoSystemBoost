@@ -140,14 +140,6 @@ run_optional 'V62-to-V64 migration' tests/test_v62_to_v64_migration.sh bash
 _listed="$(grep -oE 'tests/test_[A-Za-z0-9_]+\.sh' "$0" | sort -u)"
 for test_file in tests/test_*.sh; do
   printf '%s\n' "$_listed" | grep -qxF "$test_file" && continue
-  # Disabled by project request: this legacy stereo-width runtime fixture is not a
-  # reliable CI gate on the current checkout. The fix160 contract and source checks
-  # remain enabled; only the runtime fixture is omitted from execution.
-  if [ "$(basename "$test_file")" = "test_dsp_stereo_width_runtime.sh" ]; then
-    printf '\n== test_dsp_stereo_width_runtime (disabled) ==\n'
-    printf '%s\n' 'SKIP: disabled by project configuration'
-    continue
-  fi
   queue "$(basename "$test_file" .sh)" bash "$test_file"
 done
 run_queue
