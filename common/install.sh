@@ -4446,7 +4446,7 @@ AutoSystemBoost' $APIOCXM
 	  if [ "$(grep -E '^[[:space:]]*audio_remove_volume_limit=' "$MODPATH/config/governor.conf" 2>/dev/null \
 	          | head -1 | sed 's/.*=//' | tr -d ' \r')" = "1" ]; then
 	    settings put global audio_safe_volume_state 0
-	    ui_print "      ! ${ASB_SEC_AUDIO:-AUDIO}: ${ASB_I_HP_LIMIT:-headphone volume limiter removed - protect your hearing}"
+	    ui_print "      + ${ASB_SEC_AUDIO:-AUDIO}: ${ASB_I_HP_LIMIT:-headphone volume limiter removed, as you chose}"
 	  fi
 	fi
 	
