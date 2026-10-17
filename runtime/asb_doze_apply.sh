@@ -41,6 +41,53 @@ _cfg() {
 _lvl="$(_cfg doze_level)"
 case "$_lvl" in stock|moderate|aggressive|night) : ;; *) _lvl=stock ;; esac
 
+_doze_rule_protected() {
+  case "$1" in
+    *authenticator*|*.auth.*|*.otp.*|*twofactor*|*two_factor*|\
+    com.azure.authenticator|com.google.android.apps.authenticator*|\
+    com.duosecurity.duomobile|org.fedorahosted.freeotp|com.authy.authy|\
+    com.beemdevelopment.aegis|com.yubico.yubioath|com.symantec.mobile.idsafe|\
+    *.mfa.*|*passkey*|\
+    com.android.bluetooth|com.google.android.bluetooth|*.bluetooth.*|\
+    *bluetoothmidiservice*|com.android.server.telecom|\
+    *wearable*|*.wear.*|*.wearos.*|*watch*plugin*|*galaxywatch*|*.watch.*|\
+    *fitbit*|*garmin*|*amazfit*|*zepp*|*huami*|*huawei.health*|*heytap.health*|\
+    *oplus.health*|*xiaomi.wearable*|*mi.health*|*polar.*|*suunto*|*withings*|\
+    *truecaller*|*callerid*|*callblock*|*whoscall*|*getcontact*|com.webascender.callerid)
+      return 0 ;;
+  esac
+  return 1
+}
+
+_doze_list_file() {
+  [ -f "$_DZ_DIR/doze_whitelist_$1" ] || return 0
+  while IFS= read -r _l || [ -n "$_l" ]; do
+    case "$_l" in *[!A-Za-z0-9_.]*|'') continue ;; esac
+    echo "$2 $_l"
+  done < "$_DZ_DIR/doze_whitelist_$1"
+}
+
+if [ "${1:-}" = list ]; then
+  _tr=0
+  case "$(_cfg doze_trim_whitelist)" in
+    1|on|true) case "$_lvl" in aggressive|night) _tr=1 ;; esac ;;
+  esac
+  echo "trim=$_tr"
+  echo "level=$_lvl"
+  for _p in $(pm list packages -3 2>/dev/null | sed 's/^package://'); do
+    case "$_p" in *[!A-Za-z0-9_.]*|'') continue ;; esac
+    if _doze_rule_protected "$_p"; then echo "A $_p p"; else echo "A $_p -"; fi
+  done
+  for _p in $(dumpsys deviceidle whitelist 2>/dev/null | grep -E '^user,' | cut -d, -f2); do
+    case "$_p" in *[!A-Za-z0-9_.]*|'') continue ;; esac
+    echo "E $_p"
+  done
+  _doze_list_file removed R
+  _doze_list_file added G
+  _doze_list_file keep K
+  exit 0
+fi
+
 # Only the timings that decide WHEN idle starts. Deliberately not touching the maintenance
 # window lengths or the quota constants: those govern how much work gets done once idle,
 # and shrinking them is how you turn "battery saving" into "my alarms stopped firing".
@@ -218,20 +265,7 @@ esac
 # Matched on substring so vendor variants and regional builds are covered without
 # maintaining an exhaustive list of package names.
 _doze_protected() {
-  case "$1" in
-    *authenticator*|*.auth.*|*.otp.*|*twofactor*|*two_factor*|\
-    com.azure.authenticator|com.google.android.apps.authenticator*|\
-    com.duosecurity.duomobile|org.fedorahosted.freeotp|com.authy.authy|\
-    com.beemdevelopment.aegis|com.yubico.yubioath|com.symantec.mobile.idsafe|\
-    *.mfa.*|*passkey*|\
-    com.android.bluetooth|com.google.android.bluetooth|*.bluetooth.*|\
-    *bluetoothmidiservice*|com.android.server.telecom|\
-    *wearable*|*.wear.*|*.wearos.*|*watch*plugin*|*galaxywatch*|*.watch.*|\
-    *fitbit*|*garmin*|*amazfit*|*zepp*|*huami*|*huawei.health*|*heytap.health*|\
-    *oplus.health*|*xiaomi.wearable*|*mi.health*|*polar.*|*suunto*|*withings*|\
-    *truecaller*|*callerid*|*callblock*|*whoscall*|*getcontact*|com.webascender.callerid)
-      return 0 ;;
-  esac
+  _doze_rule_protected "$1" && return 0
   if [ -f "${_DZ_DIR}/doze_whitelist_keep" ] && \
      grep -qxF "$1" "${_DZ_DIR}/doze_whitelist_keep" 2>/dev/null; then
     return 0
@@ -266,6 +300,35 @@ asb_doze_trim_whitelist() {
     printf '%s' "$_wl_keep" > "$_wl_file" 2>/dev/null
   fi
 
+  _ga_file="${_DZ_DIR}/doze_whitelist_added"
+  _kp_file="${_DZ_DIR}/doze_whitelist_keep"
+  if [ -s "$_ga_file" ]; then
+    _ga_keep=""
+    while IFS= read -r _p || [ -n "$_p" ]; do
+      case "$_p" in *[!A-Za-z0-9_.]*|'') continue ;; esac
+      if printf '%s\n' "$_third" | grep -qxF "$_p" && grep -qxF "$_p" "$_kp_file" 2>/dev/null; then
+        _ga_keep="${_ga_keep}${_p}
+"
+      else
+        dumpsys deviceidle whitelist "-$_p" >/dev/null 2>&1
+        echo "doze: $_p is no longer kept - the exemption ASB gave it is withdrawn"
+      fi
+    done < "$_ga_file"
+    printf '%s' "$_ga_keep" > "$_ga_file" 2>/dev/null
+  fi
+  if [ -f "$_kp_file" ]; then
+    _wl_now="$(dumpsys deviceidle whitelist 2>/dev/null | grep -E '^user,' | cut -d, -f2)"
+    while IFS= read -r _p || [ -n "$_p" ]; do
+      case "$_p" in *[!A-Za-z0-9_.]*|'') continue ;; esac
+      printf '%s\n' "$_third" | grep -qxF "$_p" || continue
+      printf '%s\n' "$_wl_now" | grep -qxF "$_p" && continue
+      if dumpsys deviceidle whitelist "+$_p" >/dev/null 2>&1; then
+        grep -qxF "$_p" "$_ga_file" 2>/dev/null || echo "$_p" >> "$_ga_file"
+        echo "doze: $_p is kept - ASB made it exempt from Doze"
+      fi
+    done < "$_kp_file"
+  fi
+
   for _p in $(dumpsys deviceidle whitelist 2>/dev/null \
               | grep -E '^user,' | cut -d, -f2); do
     # A package name is [A-Za-z0-9_.] and nothing else. It reaches a shell command, and the
@@ -289,9 +352,18 @@ asb_doze_trim_whitelist() {
 # Put them all back. Called when the level returns to stock and from uninstall.sh - an
 # exemption the user granted deliberately must survive the module being removed.
 asb_doze_restore_whitelist() {
+  command -v dumpsys >/dev/null 2>&1 || return 0
+  _ga_file="${_DZ_DIR}/doze_whitelist_added"
+  if [ -f "$_ga_file" ]; then
+    while IFS= read -r _p || [ -n "$_p" ]; do
+      case "$_p" in *[!A-Za-z0-9_.]*|'') continue ;; esac
+      dumpsys deviceidle whitelist "-$_p" >/dev/null 2>&1
+    done < "$_ga_file"
+    rm -f "$_ga_file" 2>/dev/null
+    echo "doze: exemptions ASB gave to kept apps withdrawn"
+  fi
   _wl_file="${_DZ_DIR}/doze_whitelist_removed"
   [ -f "$_wl_file" ] || return 0
-  command -v dumpsys >/dev/null 2>&1 || return 0
   while IFS= read -r _p; do
     [ -n "$_p" ] && dumpsys deviceidle whitelist "+$_p" >/dev/null 2>&1
   done < "$_wl_file"

@@ -276,8 +276,10 @@ _wl_protected() {
 # choice. Read once per pass, and only when something might be restricted or released.
 _WL_DOZE_EX=""
 _wl_doze_exempt_load() {
+  _WL_DOZE_EX="$(grep -E '^[A-Za-z0-9_.]+$' "$D/doze_whitelist_removed" 2>/dev/null)"
   _has dumpsys || return 0
-  _WL_DOZE_EX="$(dumpsys deviceidle whitelist 2>/dev/null \
+  _WL_DOZE_EX="${_WL_DOZE_EX}
+$(dumpsys deviceidle whitelist 2>/dev/null \
                  | sed -n 's/^[[:space:]]*[a-z-]*,\([A-Za-z0-9_.]*\),[0-9]*.*/\1/p')"
 }
 _wl_doze_exempt() {
