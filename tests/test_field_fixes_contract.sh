@@ -1089,4 +1089,28 @@ grep -q 'ASB_DOZE_KEEP:-/data/adb/asb/doze_whitelist_keep' "$ROOT/service.sh" ||
 for t in test_lte_light_flap_runtime.sh test_keep_list_guards_runtime.sh; do [ -f "$ROOT/tests/$t" ] || fail "$t missing"; done
 echo "PASS: fix154 contract"
 ) || exit 1
+# ---- fix155 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix155: $*"; exit 1; }
+H="$ROOT/webroot/index.html"
+grep -q "opts:\['off','all','speaker','wired','bt','speaker+wired','speaker+bt','wired+bt'\], name:'DSP Outputs'" "$H" || fail "DSP Outputs has no off"
+grep -q '^_dsp_out_off=0$' "$ROOT/runtime/asb_audio_apply.sh" || fail "the applier does not know DSP Outputs = off"
+grep -q '_dspp inactive_reason "outputs_off"' "$ROOT/runtime/asb_audio_apply.sh" || fail "DSP Outputs = off does not record why the DSP is off"
+grep -q "{ key:'audio_resampler', type:'seg', def:'stock', stock:'stock', opts:\['stock','high','max'\]" "$H" || fail "no resampler card"
+grep -q "{ key:'media_vol_steps', type:'seg', def:'stock', stock:'stock', opts:\['stock','30','50'\]" "$H" || fail "no volume steps card"
+grep -q '^  audio_resampler:APPLY_REBOOT,$' "$H" || fail "the resampler card does not ask for a reboot"
+grep -q '^  media_vol_steps:APPLY_REBOOT,$' "$H" || fail "the volume steps card does not ask for a reboot"
+for k in audio_resampler media_vol_steps; do
+  grep -q "^$k=stock$" "$ROOT/config/governor.conf" || fail "$k not shipped as stock"
+  grep -q "^$k|advanced|webui_sensitive$" "$ROOT/config/key_ownership.tsv" || fail "$k has no owner"
+  [ "$(grep -c " $k " "$ROOT/common/install.sh")" -ge 2 ] || fail "$k is not carried over on update"
+done
+grep -q 'resetprop -n ro.config.media_vol_steps "$_mv_st"' "$ROOT/post-fs-data.sh" || fail "volume steps are not set before Android starts"
+grep -q 'resetprop -n ro.audio.resampler.psd.stopband "$_rs_sb"' "$ROOT/post-fs-data.sh" || fail "the resampler is not set before Android starts"
+grep -q 'cyr = re.compile' "$ROOT/tools/asb_lint.sh" || fail "lint does not catch Cyrillic in other languages"
+for t in test_dsp_outputs_off_runtime.sh test_audio_prop_tweaks_runtime.sh; do [ -f "$ROOT/tests/$t" ] || fail "$t missing"; done
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix155 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
