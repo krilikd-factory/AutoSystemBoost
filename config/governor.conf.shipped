@@ -1,4 +1,4 @@
-# CONFIG_SHAPE=e216b934e5a8
+# CONFIG_SHAPE=3b50953ef701
 # Fingerprint of every option list and slider range in the WebUI. asb_lint.sh compares
 # against it: if the shape moves and this does not, a stored value may now mean something
 # different from what the user chose, and the schema number in install.sh needs bumping
@@ -537,6 +537,10 @@ dsp_bass=0
 # (level 10 = +5 / -6 dB). The 90 Hz bass shelf above is mostly below what a phone speaker
 # reproduces; this band is not. Runs before the compressor and limiter, so it cannot clip.
 dsp_voice=0
+# DSP stereo width: 0..10 (needs dsp_loudness above). Wider, more spacious sound: the
+# left-right difference above 180 Hz is raised 10% per step (level 10 = twice as wide).
+# The centre (vocals, dialogue, mono recordings) and the bass are not touched. Stereo only.
+dsp_width=0
 # DSP compressor: on | off On by default, and that is right for large gain: 6:1 above -24 dBFS
 # holds the body of a track down so the peaks stay clean.
 # Turning it off does NOT remove the true-peak limiter, so this cannot clip.
@@ -570,7 +574,7 @@ audio_remove_volume_limit=0
 #   Not used by offloaded playback or when the rates already match.
 audio_resampler=stock
 
-# Media volume steps: stock | 30 | 50  (applies at the next boot)
+# Media volume steps: stock | 20..100  (the WebUI slider moves in steps of 5; applies at the next boot)
 #   ro.config.media_vol_steps, read by Android's audio service when it starts. More steps
 #   mean finer volume control; the stored step stays the same, so it sounds quieter after
 #   the reboot. asbdiag and the action screen show the steps Android actually uses.
