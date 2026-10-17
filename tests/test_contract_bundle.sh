@@ -416,7 +416,9 @@ S="$ROOT/service.sh"
 fail=0; f() { echo "FAIL dsp route backoff: $*" >&2; fail=1; }
 blk="$(sed -n '/_prev_route=""/,/persist.asb.dsp.route "\$_now"/p' "$S")"
 [ -n "$blk" ] || { echo "FAIL dsp route backoff: watcher block not found" >&2; exit 1; }
-printf '%s\n' "$blk" | grep -q 'grep -l RUNNING /proc/asound/card\*/pcm\*p/sub\*/status' || f "no PCM-state pull-forward"
+printf '%s\n' "$blk" | grep -q '_sig="$_aa_sig"' || f "no playback-state pull-forward"
+grep -q 'grep -l RUNNING "$_aa_snd"/card\*/pcm\*p/sub\*/status' "$ROOT/runtime/asb_audio_activity.sh" || f "PCM state no longer read where the kernel has it"
+grep -q 'AudioOut_\*) _aa_outs=' "$ROOT/runtime/asb_audio_activity.sh" || f "no playback signal on kernels without PCM state"
 printf '%s\n' "$blk" | grep -q '\[ "$_since" -lt "${_iv:-5}" \]' || f "dump not gated by the interval"
 printf '%s\n' "$blk" | grep -q '_ivmax=30; \[ "$_play_now" = 1 \] && _ivmax=15' || f "back-off ceilings changed"
 # The dump must come after the gate, never straight after a fixed sleep.
@@ -450,7 +452,7 @@ grep -q 'persist.asb.dsp.voice' "$A" || fail "voice edits do not trigger a push"
 grep -q 'DSP released on purpose' "$ROOT/tools/asb_diag.sh" || fail "asbdiag reports the intended release as a failure"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 # fix79: with the screen off the route watcher still reacts to a PCM change (one pass)
-grep -q '_sig_off="$(grep -l RUNNING /proc/asound/card\*/pcm\*p/sub\*/status' "$ROOT/service.sh" || fail "screen-off route change is never noticed"
+grep -q '_sig_off="$_aa_sig"' "$ROOT/service.sh" || fail "screen-off route change is never noticed"
 # Gated on a PCM change - plus, from fix137, one route look a minute into an idle stretch.
 grep -q 'if \[ "$_sig_off" = "${_prev_sig:-}" \]; then' "$ROOT/service.sh" || fail "screen-off pass is not gated on a PCM change"
 grep -q '_idle_due && _force=1 || continue' "$ROOT/service.sh" || fail "screen-off pass is not gated on a PCM change"

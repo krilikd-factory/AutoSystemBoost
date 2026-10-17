@@ -1146,4 +1146,25 @@ grep -q "doze_tag_back" "$H" || fail "a ticked trimmed app does not say it comes
 for t in test_doze_night_keep_runtime.sh test_webui_doze_keep_tags_runtime.sh; do [ -f "$ROOT/tests/$t" ] || fail "$t missing"; done
 echo "PASS: fix158 contract"
 ) || exit 1
+# ---- fix159 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix159: $*"; exit 1; }
+S="$ROOT/service.sh"; H="$ROOT/webroot/index.html"; A="$ROOT/runtime/asb_audio_activity.sh"
+[ -f "$A" ] || fail "no audio activity reader"
+grep -q '. "$MODDIR/runtime/asb_audio_activity.sh"' "$S" || fail "the route watcher does not load the activity reader"
+grep -q 'if \[ "$_so" -lt 12 \]; then _wake=1; _iv=5; continue; fi' "$S" || fail "screen on is not noticed inside the screen-off nap"
+grep -q '\[ "$(getprop persist.asb.dsp.route 2>/dev/null)" = "$_now" \] && continue' "$S" || fail "an overwritten route is never republished"
+grep -q 'route lag: music is on' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not show a lagging DSP route"
+grep -q 'SEC "11. YOUR SETTINGS vs WHAT IS LIVE' "$ROOT/tools/asb_diag.sh" || fail "asbdiag has no settings-vs-live summary"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+grep -q 'governor.boot.conf' "$ROOT/post-fs-data.sh" || fail "the config this boot used is not kept"
+[ "$(grep -c "addEventListener('popstate'" "$H")" = 1 ] || fail "back is handled twice"
+grep -q '^const NAV_OVERLAYS = \[' "$H" || fail "no in-page back navigation"
+grep -q 'id="bnDrainStrip"' "$H" || fail "Smart card has no screen-on/off drain"
+grep -q 'html\[data-asb-theme="light"\] .live-cell-value { color:var(--text) !important; }' "$H" || fail "Monitor values are green in the light theme"
+grep -q '## status bar redraw settings' "$ROOT/tools/logkit/_asb_logkit_common.sh" || fail "captures do not record the status-bar redraw settings"
+for t in test_dsp_route_wake_runtime.sh test_asbdiag_settings_summary_runtime.sh test_webui_back_nav_runtime.sh test_logkit_sysui_redraw_runtime.sh; do [ -f "$ROOT/tests/$t" ] || fail "$t missing"; done
+echo "PASS: fix159 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
