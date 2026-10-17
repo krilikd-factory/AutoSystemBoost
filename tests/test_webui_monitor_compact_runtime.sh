@@ -17,22 +17,20 @@ python3 - "$H" <<'P' || fail "layout"
 import re, sys
 s = open(sys.argv[1], encoding="utf-8").read()
 b = s[s.index('id="liveSmartBanner"'):s.index('id="liveStockRomBanner"')]
-assert b.index('id="bnTagRow"') < b.index('id="bnDrainStrip"') < b.index('id="bnBucket"'), "drain pair is not the first row of the Smart card"
+assert b.index('id="bnDrainStrip"') < b.index('id="bnBucket"'), "drain pair is not the first row of the Smart card"
 assert 'data-i18n="lv_slot_heat"' in b and 'lv_slot_temp' not in b, "the usual-peak tile is still a bare temperature"
 st = s[s.index('id="liveStockRomBanner"'):s.index('<div class="live-metrics">')]
-assert 'id="bnStockTagRow"' in st and st.index('id="bnStockTagRow"') < st.index('id="bnStockDrain"'), "stock card tags not in its title row"
+assert 'id="bnStockDrain"' in st, "stock card lost its battery current"
 g = s[s.index('<div class="live-metrics">'):s.index('<section class="stock-telemetry"')]
-rows = g.count('<div class="live-row">')
-assert rows == 4, "metric grid has %d rows, want 4" % rows
-for i in ("liveCpu", "liveSkin", "liveSurface", "liveState", "liveGpu", "liveHeadroom", "liveEtaOn", "liveEtaOff", "liveCapSrc", "liveClamp", "liveLearner"):
+for i in ("liveCpu", "liveSkin", "liveSurface", "liveState", "liveGpu", "liveHeadroom", "liveCapSrc", "liveClamp", "liveLearner"):
     assert ('id="%s"' % i) in g, "metric %s lost" % i
-assert b.index('class="smart-banner-head"') < b.index('id="bnTagRow"') < b.index('id="bnDrainStrip"'), "tags are not in the card's title row"
-assert ".live-page .header { margin-bottom: 22px; }" in s, "header gap unchanged"
+for i in ("liveEtaOn", "liveEtaOff"):
+    assert ('id="%s"' % i) in b, "time to empty %s is not beside the drain figures" % i
 r = s[s.index('<div id="cfgRebootWrap" class="cfg-reboot-row">'):]
 r = r[:r.index('</div>')]
 assert r.count('class="cfg-reboot-tile') == 3, "restarts are not three tiles"
 assert "#cfgRebootWrap.cfg-reboot-row { display: grid; grid-template-columns: repeat(3, 1fr);" in s, "restart tiles not in one row"
-assert "if (stockBanner) { lvDrainHome(stockBanner); lvMeterPaint(_selectedProfile); }" in s, "other profiles do not get the drain pair"
+assert re.search(r"if \(stockBanner\) \{ lvDrainHome\(stockBanner\);[^}]*lvMeterPaint\(_selectedProfile\); \}", s), "other profiles do not get the drain pair"
 P
 for l in en ru uk de es fr it pt tr id ar hy zh; do
   for k in lv_slot_heat lv_heat_cool lv_heat_norm lv_heat_warm lv_heat_tip lv_drain_on_meter lv_drain_cmp cfg_reboot_tile cfg_soft_tile cfg_sysui_tile; do
@@ -63,4 +61,4 @@ EOF
 } > "$T/t.js"
 out="$(node "$T/t.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo "PASS webui monitor compact: drain pair first in the card on every profile, tags in the title row, four metric rows, heat against the phone's own norm, restarts as one row of tiles"
+echo "PASS webui monitor compact: drain pair first in the card on every profile, heat against the phone's own norm, restarts as one row of tiles"

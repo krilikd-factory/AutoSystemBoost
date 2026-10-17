@@ -144,7 +144,7 @@ need "$UI" "const off = T('prof_stock_sub', 'ASB policy off');"
 need "$UI" 'function stockMonitorReset() {'
 need "$UI" 'function restoreManagedLiveLabels() {'
 need "$UI" "setLiveLabel('liveStateLabel', 'stock_rom_status', 'ROM status');"
-need "$UI" "setLiveLabel('liveEtaOnLabel', 'stock_live_drain', 'Battery current');"
+grep -q "set('liveEtaOn'" "$UI" && fail 'Stock writes battery current into the time-to-empty line of the drain tiles'
 need "$UI" "setLiveLabel('liveCapSrcLabel', 'stock_cap_owner', 'Cap owner');"
 need "$UI" "setLiveLabel('liveLearnerLabel', 'stock_asb_learner', 'ASB learner');"
 need "$UI" 'stockProfileCommit'

@@ -1206,11 +1206,23 @@ echo "PASS: fix161 contract"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 fail() { echo "FAIL fix162: $*"; exit 1; }
 H="$ROOT/webroot/index.html"
-grep -q '<div class="smart-banner-head">' "$H" || fail "the Monitor card has no title row for its chips"
 grep -q 'top: -8px' "$H" && fail "a chip is still pinned to the card border"
 grep -q '🤖 Bucket' "$H" && fail "the Smart card still has untranslated labels"
 grep -q "batteryStatus !== 'discharging' &&" "$H" || fail "Stock can still read an explicit Discharging as charging"
 [ -f "$ROOT/tests/test_webui_monitor_card_head_runtime.sh" ] || fail "test_webui_monitor_card_head_runtime.sh missing"
 echo "PASS: fix162 contract"
+) || exit 1
+# ---- fix163 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix163: $*"; exit 1; }
+H="$ROOT/webroot/index.html"
+grep -q 'id="liveTopSecLabel"' "$H" || fail "the Monitor has no section title over its card"
+grep -q 'class="smart-banner-head"' "$H" && fail "the card still carries a title row"
+grep -q '<span id="liveEtaOn">' "$H" || fail "time to empty is not under the drain figure"
+grep -q 'id="bnBasis"' "$H" || fail "the Smart card does not say what it leans on"
+grep -q "function lvEtaPaint()" "$H" || fail "no single owner for the time to empty"
+[ -f "$ROOT/tests/test_webui_monitor_card_head_runtime.sh" ] || fail "test_webui_monitor_card_head_runtime.sh missing"
+echo "PASS: fix163 contract"
 ) || exit 1
 echo "PASS: field-fix contracts"
