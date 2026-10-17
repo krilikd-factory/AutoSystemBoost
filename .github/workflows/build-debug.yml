@@ -181,7 +181,10 @@ jobs:
           MODDIR="$(pwd)" bash tools/asb_lint.sh
 
       - name: Run canonical host regression
-        run: bash tools/asb_full_regression.sh
+        # The debug job validates a source archive; AIDL prebuilts are produced by the
+        # separate Soong workflow. Keep the release workflow strict when prebuilts are
+        # absent, but do not fail this source-only host pass for that expected condition.
+        run: ASB_DSP_REFERENCE_OPTIONAL=1 bash tools/asb_full_regression.sh
 
       - name: Verify runner tools
         shell: bash
@@ -500,6 +503,7 @@ jobs:
             "runtime/asb_utils.sh" \
             "runtime/asb_audio_apply.sh" \
             "runtime/asb_dsp_thermal.sh" \
+            "runtime/asb_audio_activity.sh" \
             "runtime/asb_dsp_live.sh" \
             "runtime/asb_cgroup.sh" \
             "runtime/asb_volume_curves.sh" \
