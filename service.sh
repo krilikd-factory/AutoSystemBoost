@@ -1936,6 +1936,7 @@ asb_bg_trim_screen_off() {
 
 asb_bg_trim_pkg() {
   local _pkg="$1" _level="$2"
+  grep -qxF "$_pkg" "${ASB_DOZE_KEEP:-/data/adb/asb/doze_whitelist_keep}" 2>/dev/null && return 0
   asb_bg_trim_is_top "$_pkg" && return 0
   local _pids
   _pids=$(pidof "$_pkg" 2>/dev/null)
@@ -2007,6 +2008,7 @@ asb_bg_trim_apply_buckets() {
 # pass, so an app the user starts using again is left alone from then on.
 asb_bg_bucket_demote_idle() {   # <pkg> <bucket>
   local _cur
+  grep -qxF "$1" "${ASB_DOZE_KEEP:-/data/adb/asb/doze_whitelist_keep}" 2>/dev/null && return 0
   _cur="$(am get-standby-bucket "$1" 2>/dev/null | tr -dc '0-9')"
   case "$_cur" in ''|*[!0-9]*) return 0 ;; esac
   [ "$_cur" -ge 30 ] 2>/dev/null || return 0

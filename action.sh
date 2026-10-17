@@ -862,6 +862,8 @@ T_A_DAC="hi-fi DAC"
 T_A_LOUD="loudness: %s"
 T_A_DSPGAIN="DSP +%s dB"
 T_A_BTVOL="BT volume: phone drives gain (independent scales)"
+T_A_LIMIT_OFF="headphone volume limit: off (Android confirms)"
+T_A_LIMIT_ON="headphone volume limit: still on in Android - reboot once to remove it"
 T_A_COMP_OFF="compressor: off  ·  limiter only"
 T_A_COMP_ON="compressor: on  ·  6:1 above -24 dBFS"
 T_A_BASS="bass shelf: +%s dB @ 90 Hz"
@@ -1699,6 +1701,12 @@ _loud_l="$(_s "$T_A_LOUD" "$_a_loud")"
 [ "$_a_dsp" != "off" ] && _loud_l="$(_join "$_loud_l" "$(_s "$T_A_DSPGAIN" "$_a_dsp")")"
 printf '       %s\n' "$_loud_l"
 [ "$_a_bt" = "disabled" ] && _f "       $T_A_BTVOL"
+if [ "$(_cfg audio_remove_volume_limit)" = "1" ]; then
+  case "$(dumpsys audio 2>/dev/null | sed -n 's/^[[:space:]]*mSafeMediaVolumeState=//p' | head -1)" in
+    SAFE_MEDIA_VOLUME_ACTIVE) _f "       $T_A_LIMIT_ON" ;;
+    SAFE_MEDIA_VOLUME_DISABLED|SAFE_MEDIA_VOLUME_INACTIVE) _f "       $T_A_LIMIT_OFF" ;;
+  esac
+fi
 # The compressor only exists while the DSP is on - saying "compressor: on" next to a
 # disabled DSP describes a setting, not the device.
 if [ "$_a_dsp" != "off" ]; then
