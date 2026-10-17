@@ -265,6 +265,11 @@ if [ "$_ap" = "eq_compat" ] && [ "$_dsp_ok" = "1" ]; then
   _dsp_ok=0
   _dsp_eq_off=1
 fi
+_dsp_out_off=0
+if [ "$(_cfg dsp_outputs)" = "off" ] && [ "$_dsp_ok" = "1" ]; then
+  _dsp_ok=0
+  _dsp_out_off=1
+fi
 if [ "$_dsp_ok" = "1" ]; then
     if [ -f /vendor/lib64/soundfx/libasbdsp.so ] || [ -f /vendor/lib/soundfx/libasbdsp.so ]; then
       _dsp_requested_mb="$((_dsp * 100))"
@@ -386,6 +391,11 @@ elif [ "$_dsp_eq_off" = "1" ]; then
     _dspp route_allowed 0
     _dspp inactive_reason "eq_compat"
     changed="${changed}dsp=off(eq_compat) "
+elif [ "$_dsp_out_off" = "1" ]; then
+    _dspp enable 0
+    _dspp route_allowed 0
+    _dspp inactive_reason "outputs_off"
+    changed="${changed}dsp=off(outputs) "
 else
     _dspp enable 0
     _dspp route_allowed 0
@@ -471,6 +481,11 @@ echo ""
 echo "live state after audioserver restart:"
 printf '  %-42s = %s\n' "audio_profile (config)"          "$_ap"
 printf '  %-42s = %s\n' "af.resampler.quality"            "$(getprop af.resampler.quality 2>/dev/null)"
+printf '  %-42s = %s\n' "audio_resampler (config)"        "$(_cfg audio_resampler)"
+printf '  %-42s = %s\n' "ro.audio.resampler.psd.stopband"  "$(getprop ro.audio.resampler.psd.stopband 2>/dev/null)"
+printf '  %-42s = %s\n' "ro.audio.resampler.psd.halflength" "$(getprop ro.audio.resampler.psd.halflength 2>/dev/null)"
+printf '  %-42s = %s\n' "media_vol_steps (config)"        "$(_cfg media_vol_steps)"
+printf '  %-42s = %s\n' "ro.config.media_vol_steps"       "$(getprop ro.config.media_vol_steps 2>/dev/null)"
 printf '  %-42s = %s\n' "persist.audio.uhqa"              "$(getprop persist.audio.uhqa 2>/dev/null)"
 printf '  %-42s = %s\n' "persist.vendor.audio.uhqa"       "$(getprop persist.vendor.audio.uhqa 2>/dev/null)"
 printf '  %-42s = %s\n' "persist.audio.hifi.int_codec"    "$(getprop persist.audio.hifi.int_codec 2>/dev/null)"
