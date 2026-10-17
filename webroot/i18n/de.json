@@ -38,6 +38,10 @@
       "name": "DSP\nStimmklang",
       "desc": "Benötigt DSP-Lautstärke. Für Stimmen, die auf dem Telefonlautsprecher dünn oder schrill klingen. Zwei breite Bänder bewegen sich gemeinsam: Körper bei 350 Hz steigt (+0,5 dB pro Stufe), die Schärfe bei 3 kHz sinkt (−0,6 dB pro Stufe); Stufe 10 = +5 / −6 dB. Der Bass-Boost wirkt bei 90 Hz, meist unterhalb dessen, was ein Telefonlautsprecher wiedergibt; dieses Band liegt dort, wo er noch klingt. Läuft vor dem Limiter, kann nicht übersteuern. Mit 4–6 beginnen; nur für den Lautsprecher über DSP-Ausgänge."
     },
+    "dsp_width": {
+      "name": "DSP\nStereobreite",
+      "desc": "Braucht DSP-Lautstärke oben. Macht den Klang breiter und räumlicher: Der Unterschied zwischen linkem und rechtem Kanal wird oberhalb von 180 Hz um 10 % pro Stufe angehoben, Stufe 10 ist doppelt so breit. Was in der Mitte liegt - Gesang, Sprache, eine Mono-Aufnahme - bleibt völlig unverändert, und der Bass bleibt in der Mitte und behält seinen Druck. Am stärksten mit Kopfhörern und Bluetooth; die zwei Lautsprecher eines Handys liegen nah beieinander, dort ist der Effekt kleiner. Mit 3-5 anfangen. Läuft vor dem Limiter und kann nicht übersteuern. Nur Stereo-Titel."
+    },
     "dsp_compressor": {
       "name": "DSP-Kompressor",
       "desc": "Verdichtet den Dynamikumfang: Leises wird hörbar, Lautes schlägt nicht mehr zu. Nützlich unterwegs und auf der Straße, überflüssig beim konzentrierten Hören zu Hause."
@@ -246,7 +250,7 @@
     },
     "media_vol_steps": {
       "name": "Medienlautstärke-Stufen",
-      "desc": "Wie viele Stufen der Medienlautstärke-Regler hat. Standard behält den Wert des Telefons (15 bei reinem Android, manche ROMs haben mehr). 30 oder 50 machen jede Stufe feiner – praktisch nachts und mit empfindlichen Kopfhörern.\n\nDie lauteste Stufe bleibt genauso laut, nur die Abstände ändern sich. Nach dem Neustart behält der Regler seine Stufennummer, daher kann die erste Wiedergabe leiser sein – einmal lauter stellen. Manche ROMs ignorieren die Einstellung; Aktionsknopf und asbdiag zeigen die tatsächlich genutzten Stufen. Neustart erforderlich."
+      "desc": "Wie viele Stufen der Medienlautstärke-Regler hat. Standard behält den Wert des Telefons (15 bei reinem Android, manche ROMs haben mehr). 20 bis 100 (Reglerschritt 5) machen jede Stufe feiner – praktisch nachts und mit empfindlichen Kopfhörern.\n\nDie lauteste Stufe bleibt genauso laut, nur die Abstände ändern sich. Nach dem Neustart behält der Regler seine Stufennummer, daher kann die erste Wiedergabe leiser sein – einmal lauter stellen. Manche ROMs ignorieren die Einstellung; Aktionsknopf und asbdiag zeigen die tatsächlich genutzten Stufen. Neustart erforderlich."
     },
     "doze_trim_whitelist": {
       "name": "Doze-Ausnahmen kürzen",

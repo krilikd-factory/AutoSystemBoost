@@ -38,6 +38,10 @@
       "name": "DSP\nTono de voz",
       "desc": "Requiere Volumen DSP. Para voces que suenan finas o chillonas en el altavoz del teléfono. Dos bandas amplias se mueven juntas: el cuerpo a 350 Hz sube (+0,5 dB por paso) y la aspereza a 3 kHz baja (−0,6 dB por paso); nivel 10 = +5 / −6 dB. El refuerzo de graves actúa a 90 Hz, casi por debajo de lo que reproduce un altavoz de teléfono; esta banda está donde aún suena. Va antes del limitador, no puede saturar. Empieza en 4–6; para solo el altavoz, usa Salidas DSP."
     },
+    "dsp_width": {
+      "name": "DSP\nAmplitud estéreo",
+      "desc": "Requiere DSP Volumen arriba. Hace el sonido más ancho y espacioso: la diferencia entre el canal izquierdo y el derecho se eleva por encima de 180 Hz un 10% por paso, así que el nivel 10 es el doble de ancho. Lo que está en el centro - voces, diálogos, una grabación mono - no se toca en absoluto, y el bajo se queda centrado y conserva su pegada. Se nota más con auriculares y Bluetooth; los dos altavoces de un teléfono están muy juntos, así que ahí el efecto es menor. Empieza en 3-5. Va antes del limitador y no puede saturar. Solo pistas estéreo."
+    },
     "dsp_compressor": {
       "name": "Compresor DSP",
       "desc": "Comprime el rango dinámico: lo bajo se oye, lo alto deja de golpear. Útil en transporte y en la calle, innecesario para escuchar con atención en casa."
@@ -246,7 +250,7 @@
     },
     "media_vol_steps": {
       "name": "Pasos de volumen multimedia",
-      "desc": "Cuántas posiciones tiene el control de volumen multimedia. Original mantiene lo del teléfono (15 en Android puro, algunas ROM usan más). 30 o 50 hacen cada paso más fino – útil de noche y con auriculares sensibles.\n\nLa posición más alta suena igual de fuerte; solo cambia la separación. Tras reiniciar, el control conserva su número de paso, así que la primera reproducción puede sonar más baja – súbelo una vez. Algunas ROM ignoran este ajuste; el botón de acción y asbdiag muestran los pasos que el sistema usa de verdad. Requiere reinicio."
+      "desc": "Cuántas posiciones tiene el control de volumen multimedia. Original mantiene lo del teléfono (15 en Android puro, algunas ROM usan más). De 20 a 100 (en pasos de 5) hacen cada paso más fino – útil de noche y con auriculares sensibles.\n\nLa posición más alta suena igual de fuerte; solo cambia la separación. Tras reiniciar, el control conserva su número de paso, así que la primera reproducción puede sonar más baja – súbelo una vez. Algunas ROM ignoran este ajuste; el botón de acción y asbdiag muestran los pasos que el sistema usa de verdad. Requiere reinicio."
     },
     "doze_trim_whitelist": {
       "name": "Recortar exenciones de Doze",

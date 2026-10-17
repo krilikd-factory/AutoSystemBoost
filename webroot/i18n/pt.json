@@ -38,6 +38,10 @@
       "name": "DSP\nTimbre da voz",
       "desc": "Requer o Volume DSP. Para vozes finas ou estridentes no alto-falante do telefone. Duas bandas largas movem-se juntas: o corpo em 350 Hz sobe (+0,5 dB por passo) e a aspereza em 3 kHz desce (−0,6 dB por passo); nível 10 = +5 / −6 dB. O reforço de graves atua em 90 Hz, quase abaixo do que um alto-falante de telefone reproduz; esta banda está onde ele ainda soa. Fica antes do limitador, não distorce. Comece em 4–6; só no alto-falante, use Saídas DSP."
     },
+    "dsp_width": {
+      "name": "DSP\nAmplitude estéreo",
+      "desc": "Precisa do DSP Volume acima. Deixa o som mais largo e espaçoso: a diferença entre os canais esquerdo e direito é aumentada acima de 180 Hz em 10% por passo, então o nível 10 é duas vezes mais largo. O que fica no centro - vozes, diálogos, uma gravação mono - não é tocado, e o grave continua centralizado e mantém o impacto. Mais forte em fones e Bluetooth; os dois alto-falantes de um celular ficam próximos, então ali o efeito é menor. Comece em 3-5. Fica antes do limitador e não distorce. Só faixas estéreo."
+    },
     "dsp_compressor": {
       "name": "Compressor DSP",
       "desc": "Comprime a faixa dinâmica: o baixo fica audível, o alto deixa de bater. Útil no transporte e na rua, dispensável para uma escuta atenta em casa."
@@ -246,7 +250,7 @@
     },
     "media_vol_steps": {
       "name": "Passos do volume de mídia",
-      "desc": "Quantas posições tem o controle de volume de mídia. Padrão mantém o valor do telefone (15 no Android puro, algumas ROMs usam mais). 30 ou 50 deixam cada passo mais fino – útil à noite e com fones sensíveis.\n\nA posição mais alta continua igualmente alta; só muda o espaçamento. Após reiniciar, o controle mantém o número do passo, então a primeira reprodução pode soar mais baixa – aumente uma vez. Algumas ROMs ignoram este ajuste; o botão de ação e o asbdiag mostram os passos realmente usados. Requer reinicialização."
+      "desc": "Quantas posições tem o controle de volume de mídia. Padrão mantém o valor do telefone (15 no Android puro, algumas ROMs usam mais). De 20 a 100 (em passos de 5) deixam cada passo mais fino – útil à noite e com fones sensíveis.\n\nA posição mais alta continua igualmente alta; só muda o espaçamento. Após reiniciar, o controle mantém o número do passo, então a primeira reprodução pode soar mais baixa – aumente uma vez. Algumas ROMs ignoram este ajuste; o botão de ação e o asbdiag mostram os passos realmente usados. Requer reinicialização."
     },
     "doze_trim_whitelist": {
       "name": "Reduzir isenções do Doze",

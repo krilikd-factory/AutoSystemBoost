@@ -38,6 +38,10 @@
       "name": "DSP\nSes tonu",
       "desc": "DSP Ses Yüksekliği gerekir. Telefon hoparlöründe ince veya cırtlak duyulan sesler için. İki geniş bant birlikte hareket eder: 350 Hz’deki gövde yükselir (adım başına +0,5 dB), 3 kHz’deki sertlik azalır (adım başına −0,6 dB); seviye 10 = +5 / −6 dB. Bas güçlendirme 90 Hz’de çalışır, çoğunlukla telefon hoparlörünün çalabildiğinin altında; bu bant hoparlörün hâlâ ses verdiği yerdedir. Sınırlayıcıdan önce çalışır, kırpma yapmaz. 4–6 ile başlayın; yalnızca hoparlör için DSP Çıkışları’nı kullanın."
     },
+    "dsp_width": {
+      "name": "DSP\nStereo genişlik",
+      "desc": "Yukarıdaki DSP Ses Yüksekliği gerekir. Sesi daha geniş ve ferah yapar: sol ve sağ kanal arasındaki fark 180 Hz'in üstünde adım başına %10 artırılır, yani 10. seviye iki kat geniştir. Merkezdekiler - vokal, konuşma, mono kayıt - hiç değişmez; bas merkezde kalır ve vuruşunu korur. En çok kulaklık ve Bluetooth'ta duyulur; telefonun iki hoparlörü birbirine yakın olduğundan orada etki daha azdır. 3-5 ile başlayın. Sınırlayıcıdan önce çalışır, kırpma yapamaz. Yalnızca stereo parçalar."
+    },
     "dsp_compressor": {
       "name": "DSP kompresör",
       "desc": "Dinamik aralığı sıkıştırır: kısık sesler duyulur olur, yüksekler vurmayı bırakır. Yolda ve sokakta faydalı, evde dikkatli dinlemede gereksiz."
@@ -246,7 +250,7 @@
     },
     "media_vol_steps": {
       "name": "Medya sesi adımları",
-      "desc": "Medya ses kaydırıcısının kaç konumu olduğu. Varsayılan, telefonun değerini korur (saf Android’de 15, bazı ROM’larda daha fazla). 30 veya 50 her adımı daha ince yapar – gece ve hassas kulaklıklarla kullanışlıdır.\n\nEn yüksek konum aynı yükseklikte kalır; yalnızca aralık değişir. Yeniden başlatmadan sonra kaydırıcı adım numarasını korur, bu yüzden ilk çalma daha kısık gelebilir – bir kez artırın. Bazı ROM’lar bu ayarı yok sayar; eylem düğmesi ve asbdiag gerçekte kullanılan adımları gösterir. Yeniden başlatma gerekir."
+      "desc": "Medya ses kaydırıcısının kaç konumu olduğu. Varsayılan, telefonun değerini korur (saf Android’de 15, bazı ROM’larda daha fazla). 20 ile 100 arası (5'er adımla) her adımı daha ince yapar – gece ve hassas kulaklıklarla kullanışlıdır.\n\nEn yüksek konum aynı yükseklikte kalır; yalnızca aralık değişir. Yeniden başlatmadan sonra kaydırıcı adım numarasını korur, bu yüzden ilk çalma daha kısık gelebilir – bir kez artırın. Bazı ROM’lar bu ayarı yok sayar; eylem düğmesi ve asbdiag gerçekte kullanılan adımları gösterir. Yeniden başlatma gerekir."
     },
     "doze_trim_whitelist": {
       "name": "Doze muafiyetlerini kırp",
