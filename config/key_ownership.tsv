@@ -173,6 +173,8 @@ dsp_voice|advanced|webui_sensitive
 dsp_compressor|advanced|webui_sensitive
 dsp_outputs|advanced|webui_sensitive
 audio_remove_volume_limit|advanced|webui_sensitive
+audio_resampler|advanced|webui_sensitive
+media_vol_steps|advanced|webui_sensitive
 purge_vendor_logs|internal|engine_or_derived
 dsp_effect_abi|internal|engine_or_derived
 bt_absvol_mode|user|webui_standard
