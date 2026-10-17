@@ -2145,8 +2145,15 @@ body.config-active #livePage.open {
 .doze-keep-text .cfg-profile-check-sub { margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .doze-keep-tag { flex: 0 0 auto; max-width: 96px; text-align: right; font-size: 9.5px; letter-spacing: .3px;
   line-height: 1.25; text-transform: uppercase; color: rgba(231,234,238,.40); }
-.doze-keep-tag.is-trimmed { color: var(--bal, #d08700); }
-.doze-keep-tag.is-granted, .doze-keep-tag.is-exempt { color: #5ce7c3; }
+.doze-keep-tag.is-trimmed, .doze-keep-tag.is-drop { color: var(--bal, #d08700); }
+.doze-keep-tag.is-granted, .doze-keep-tag.is-exempt, .doze-keep-tag.is-back, .doze-keep-tag.is-give { color: #5ce7c3; }
+.doze-keep-legend { flex: 0 0 auto; margin-top: 8px; font-size: 11px; line-height: 1.45; color: rgba(231,234,238,.62); }
+.doze-keep-legend summary { cursor: pointer; list-style: none; font-weight: 700; color: rgba(231,234,238,.80); }
+.doze-keep-legend summary::-webkit-details-marker { display: none; }
+.doze-keep-legend summary::before { content: '\25B8\00A0'; }
+.doze-keep-legend[open] summary::before { content: '\25BE\00A0'; }
+.doze-keep-legend[open] { max-height: 26vh; overflow-y: auto; overscroll-behavior: contain; }
+.doze-keep-legend > div { margin-top: 6px; white-space: pre-line; }
 .doze-keep-done { margin-top: 10px; }
 
 .cfg-desc-opts { margin-top: 10px; display: flex; flex-direction: column; gap: 7px; }
@@ -2742,8 +2749,10 @@ html[data-asb-theme="light"] .cfg-profile-dest button.active { color:var(--accen
 html[data-asb-theme="light"] .cfg-profile-close { color:var(--text-secondary) !important; background:#ffffff !important; border-color:var(--border) !important; }
 html[data-asb-theme="light"] .doze-keep-off { color:#6b4300 !important; }
 html[data-asb-theme="light"] .doze-keep-tag { color:var(--text-secondary) !important; }
-html[data-asb-theme="light"] .doze-keep-tag.is-trimmed { color:#8a5a00 !important; }
-html[data-asb-theme="light"] :is(.doze-keep-tag.is-granted,.doze-keep-tag.is-exempt,.doze-keep-ico) { color:var(--accent) !important; }
+html[data-asb-theme="light"] :is(.doze-keep-tag.is-trimmed,.doze-keep-tag.is-drop) { color:#8a5a00 !important; }
+html[data-asb-theme="light"] :is(.doze-keep-tag.is-granted,.doze-keep-tag.is-exempt,.doze-keep-tag.is-back,.doze-keep-tag.is-give,.doze-keep-ico) { color:var(--accent) !important; }
+html[data-asb-theme="light"] .doze-keep-legend { color:var(--text-secondary) !important; }
+html[data-asb-theme="light"] .doze-keep-legend summary { color:var(--text) !important; }
 html[data-asb-theme="light"] .doze-keep-ico.has-img { color:transparent !important; }
 html[data-asb-theme="light"] .cfg-profile-check { color:var(--text) !important; background:#ffffff !important; border-color:var(--border) !important; }
 html[data-asb-theme="light"] .cfg-profile-check.on { background:rgba(0,143,112,.08) !important; border-color:rgba(0,143,112,.42) !important; }
@@ -4813,7 +4822,7 @@ const CFG_ITEMS = [
   { key:'doze_level', type:'seg', def:'stock', stock:'stock', opts:['stock','night','moderate','aggressive'], name:'Deep Sleep',
     desc:'How soon Android puts the phone into Doze once the screen is off. Stock waits 30 minutes, which on a phone picked up every few minutes is 30 minutes that never elapse - a full-day capture showed the idle phase awake 45% of the time against a 5% target. Moderate starts idle after 5 minutes, aggressive after 2. THE COST: in Doze the system holds background network until the next maintenance window, so an app that polls on its own can be late - high-priority push still breaks through. If messages arriving on time matter more than standby drain, leave this on stock. Only ever writes one setting, and stock deletes it.' },
   { key:'doze_trim_whitelist', type:'seg', def:'0', stock:'0', opts:['0','1'], name:'Trim Doze Exemptions',
-    desc:'Deep Sleep decides how soon Doze starts. This decides who ignores it.\n\nApps on Android\u2019s exemption list keep their alarms and network through every idle window, so a phone can sit in deep doze all night while three exempted apps wake it anyway - which is why tuning only the timings can look like it changed nothing.\n\nOnly user-installed apps are touched. The dialer, SMS app, clock and your root manager are never removed, because that is how a module ends up blamed for a missed alarm. Every removal is recorded and put back when you set this to 0 or uninstall ASB.\n\nThe button under the switch opens your apps with a search. Ticked apps are never trimmed, and if one has no exemption, ASB gives it - undone the same way at 0 or on uninstall. Tick the messengers, mail and VPN whose notifications must arrive on time at night.\n\nApplies with Deep Sleep set to aggressive, or to night - then only inside the sleep window.' },
+    desc:'Deep Sleep decides how soon Doze starts. This decides who ignores it.\n\nApps on Android\u2019s exemption list keep their alarms and network through every idle window, so a phone can sit in deep doze all night while three exempted apps wake it anyway - which is why tuning only the timings can look like it changed nothing.\n\nOnly user-installed apps are touched. The dialer, SMS app, clock and your root manager are never removed, because that is how a module ends up blamed for a missed alarm. Every removal is recorded and put back when you set this to 0 or uninstall ASB.\n\nThe button under the switch opens your apps with a search. Ticked apps are never trimmed, and if one has no exemption, ASB gives it - undone the same way at 0 or on uninstall. Tick the messengers, mail and VPN whose notifications must arrive on time at night.\n\nApplies with Deep Sleep set to aggressive, or to night - then only inside the sleep window. Ticked apps stay exempt around the clock either way, by day too.' },
   { key:'wakelock_action', type:'seg', def:'0', stock:'0', opts:['0','1'], name:'Act on Wakelocks',
     desc:'A wakelock is an app telling Android \u201Cdo not sleep yet\u201D. One app holding one all night is the single most expensive thing that can happen to a battery - more than any setting here can save - and no amount of tuning helps, because the phone never reaches the states those settings govern.\n\nMeasuring is always on; this decides whether ASB acts. With it on, a user-installed app still holding a wakelock after 45+ minutes of screen-off, on a phone that is measurably staying awake, is moved to Android\u2019s restricted bucket.\n\nNever touched: kernel and system sources - modem, display, alarm timer, sensors - and authenticators, dialer, SMS, messaging and clock apps. Nothing is force-stopped; restricted is a state Android manages and can undo.\n\nLeave it off if you would rather see the name and decide yourself. The report names the holder either way. In detail: only an app that held the CPU for 10+ minutes (or holds a long lock right now) and that Android does not count as used today. Also never touched: apps you exempted from battery optimisation, mail, navigation and keyboards.' },
   { key:'wakelock_fitness', type:'seg', def:'protect', stock:'protect', opts:['protect','limit'], name:'Fitness Apps & Wakelocks',
@@ -7148,14 +7157,17 @@ function dozeIsMessenger(pkg) {
   return false;
 }
 
-const _dozeKeep = { apps: [], keep: {}, trim: false, labels: false, filter: 'all', q: '',
+const _dozeKeep = { apps: [], keep: {}, trim: false, live: false, labels: false, filter: 'all', q: '',
   dirty: false, failed: false, tok: 0, chain: Promise.resolve() };
 
 function dozeKeepParse(out) {
-  const res = { trim: false, apps: [], E: {}, R: {}, G: {}, K: {} };
+  const res = { trim: false, window: null, night: '', apps: [], E: {}, R: {}, G: {}, K: {} };
   String(out || '').split('\n').forEach(function (ln) {
     ln = ln.trim();
     if (ln === 'trim=1') { res.trim = true; return; }
+    if (ln === 'window=1' || ln === 'window=0') { res.window = ln === 'window=1'; return; }
+    const nw = /^night=(\d\d:\d\d-\d\d:\d\d)$/.exec(ln);
+    if (nw) { res.night = nw[1]; return; }
     const m = /^([AERGK]) ([A-Za-z0-9_.]+)(?: ([p-]))?$/.exec(ln);
     if (!m) return;
     if (m[1] === 'A') res.apps.push({ pkg: m[2], prot: m[3] === 'p' });
@@ -7203,6 +7215,7 @@ function dozeKeepEnsure() {
     + '<input class="cfg-profile-name doze-keep-search" id="dozeKeepSearch" type="search" autocomplete="off" autocapitalize="off" spellcheck="false">'
     + '<div class="cfg-profile-hint doze-keep-nolabel" id="dozeKeepNoLabel" hidden></div>'
     + '<div class="cfg-profile-dest doze-keep-chips" id="dozeKeepChips"></div>'
+    + '<details class="doze-keep-legend" id="dozeKeepLegend"><summary id="dozeKeepLegendT"></summary><div id="dozeKeepLegendB"></div></details>'
     + '<div class="doze-keep-list" id="dozeKeepList"></div>'
     + '<button class="cfg-profile-primary doze-keep-done" id="dozeKeepDone" type="button"></button></div>';
   document.body.appendChild(m);
@@ -7226,6 +7239,9 @@ async function dozeOpenEditor() {
   s.value = '';
   s.placeholder = '🔍  ' + T('doze_keep_search', 'Search by name or package');
   _el('dozeKeepDone').textContent = T('doze_keep_done', 'Done');
+  _el('dozeKeepLegendT').textContent = T('doze_keep_legend_title', 'What the labels mean');
+  _el('dozeKeepLegendB').textContent = T('doze_keep_legend',
+    'Exempt - Android itself has this app exempt: you allowed it (Battery > Unrestricted) or the app asked for it. ASB has not touched it.\nExempt via ASB - Android had no exemption for it; ASB gave one because you ticked the app. Untick it and ASB takes it back.\nTrimmed by ASB - the app was exempt and ASB took the exemption away. Tick it and the exemption comes back.\nNever trimmed - kept by ASB\'s own rules: authenticators, Bluetooth, watches and bands, caller ID.\nTicked - your list: ASB never trims these apps and keeps them exempt.\nTrimmed - the apps ASB has taken the exemption from right now. With Deep Sleep on night this list fills only inside the sleep window.');
   _el('dozeKeepOff').hidden = true;
   _el('dozeKeepNoLabel').hidden = true;
   _el('dozeKeepChips').textContent = '';
@@ -7246,6 +7262,7 @@ async function dozeOpenEditor() {
   if (tok !== _dozeKeep.tok) return;
   _dozeKeep.labels = Object.keys(labels).length > 0;
   _dozeKeep.trim = d.trim;
+  _dozeKeep.live = d.trim && d.window !== false;
   Object.keys(d.K).forEach(function (k) { _dozeKeep.keep[k] = 1; });
   _dozeKeep.apps = d.apps.map(function (a) {
     const name = labels[a.pkg] || '';
@@ -7261,6 +7278,11 @@ async function dozeOpenEditor() {
     const off = _el('dozeKeepOff');
     off.textContent = T('doze_keep_off',
       'Trimming is not working right now: it needs this switch on and Deep Sleep set to aggressive or night. The list is kept and takes effect as soon as it is.');
+    off.hidden = false;
+  } else if (d.window === false) {
+    const off = _el('dozeKeepOff');
+    off.textContent = T('doze_keep_day',
+      'Deep Sleep is set to night: ASB trims only inside the sleep window (%s). It is closed now, so every trimmed app is back and Trimmed stays empty until tonight. Ticked apps keep their exemption day and night.').replace('%s', d.night || '-');
     off.hidden = false;
   }
   if (!_dozeKeep.labels) {
@@ -7282,10 +7304,15 @@ async function dozeOpenEditor() {
 }
 
 function dozeKeepTag(a) {
+  const k = !!_dozeKeep.keep[a.pkg];
   if (a.prot) return ['always', T('doze_tag_always', 'never trimmed')];
-  if (a.r) return ['trimmed', T('doze_tag_trimmed', 'trimmed by ASB')];
-  if (a.g) return ['granted', T('doze_tag_granted', 'exempt via ASB')];
-  if (a.e) return ['exempt', T('doze_tag_exempt', 'exempt')];
+  if (a.r) return (k && _dozeKeep.trim) ? ['back', T('doze_tag_back', 'returns on Done')]
+                                         : ['trimmed', T('doze_tag_trimmed', 'trimmed by ASB')];
+  if (a.g) return (!k && _dozeKeep.trim) ? ['drop', T('doze_tag_drop', 'exemption removed on Done')]
+                                          : ['granted', T('doze_tag_granted', 'exempt via ASB')];
+  if (a.e) return (!k && a.kept0 && _dozeKeep.live) ? ['drop', T('doze_tag_willtrim', 'trimmed on Done')]
+                                                     : ['exempt', T('doze_tag_exempt', 'exempt')];
+  if (k && _dozeKeep.trim) return ['give', T('doze_tag_give', 'exempt on Done')];
   return null;
 }
 
@@ -7324,10 +7351,8 @@ function dozeKeepRow(a) {
     tx.appendChild(t2);
   }
   b.appendChild(tx);
-  const st = dozeKeepTag(a);
   const tag = document.createElement('span');
-  tag.className = 'doze-keep-tag' + (st ? ' is-' + st[0] : '');
-  tag.textContent = st ? st[1] : '';
+  tag.className = 'doze-keep-tag';
   b.appendChild(tag);
   b.onclick = function () { dozeKeepToggle(a, b); };
   dozeKeepPaintRow(a, b);
@@ -7339,6 +7364,12 @@ function dozeKeepPaintRow(a, b) {
   b.classList.toggle('on', on);
   b.setAttribute('aria-pressed', on ? 'true' : 'false');
   b.querySelector('.cfg-profile-check-box').textContent = on ? '✓' : '';
+  const tag = b.querySelector('.doze-keep-tag');
+  if (tag) {
+    const st = dozeKeepTag(a);
+    tag.className = 'doze-keep-tag' + (st ? ' is-' + st[0] : '');
+    tag.textContent = st ? st[1] : '';
+  }
 }
 
 function dozeKeepToggle(a, b) {
