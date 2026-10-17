@@ -41,8 +41,20 @@ run_pfd "audio_resampler=stock
 media_vol_steps=stock"
 [ ! -s "$T/rp" ] || fail "stock wrote properties: $(cat "$T/rp")"
 run_pfd "audio_resampler=ultra
-media_vol_steps=99"
+media_vol_steps=250"
 [ ! -s "$T/rp" ] || fail "an unknown value wrote properties: $(cat "$T/rp")"
+run_pfd "audio_resampler=stock
+media_vol_steps=12"
+[ ! -s "$T/rp" ] || fail "fewer steps than stock were written: $(cat "$T/rp")"
+run_pfd "audio_resampler=stock
+media_vol_steps=7x"
+[ ! -s "$T/rp" ] || fail "a malformed step count was written: $(cat "$T/rp")"
+run_pfd "audio_resampler=stock
+media_vol_steps=75"
+[ "$(cat "$T/rp")" = "-n ro.config.media_vol_steps 75" ] || fail "a slider value (75) not written: $(cat "$T/rp")"
+run_pfd "audio_resampler=stock
+media_vol_steps=100"
+[ "$(cat "$T/rp")" = "-n ro.config.media_vol_steps 100" ] || fail "the slider maximum (100) not written: $(cat "$T/rp")"
 run_pfd "audio_resampler=high
 media_vol_steps=stock"
 [ "$(cat "$T/rp")" = "-n ro.audio.resampler.psd.enable_at_samplerate 44100
