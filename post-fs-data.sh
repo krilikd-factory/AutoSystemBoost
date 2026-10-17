@@ -14,6 +14,8 @@ if [ -f "$MODDIR/bin/asb_dsp_attach" ]; then
 fi
 
 chmod 0755 "$MODDIR/system/bin/asb" 2>/dev/null
+mkdir -p /dev/.asb_profile_state 2>/dev/null
+cp -f "$MODDIR/config/governor.conf" /dev/.asb_profile_state/governor.boot.conf 2>/dev/null || true
 
 mkdir -p /data/adb/asb 2>/dev/null
 # Debug builds record only lifecycle markers; this must remain a no-op in release builds.

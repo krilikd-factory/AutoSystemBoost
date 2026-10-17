@@ -3397,7 +3397,9 @@ fi
   # temperature with hysteresis, loudspeaker only. It used to be decided from the CPU's
   # hottest core at random UI moments and then left alone - see asb_dsp_thermal.sh.
   [ -r "$MODDIR/runtime/asb_dsp_thermal.sh" ] && . "$MODDIR/runtime/asb_dsp_thermal.sh"
+  [ -r "$MODDIR/runtime/asb_audio_activity.sh" ] && . "$MODDIR/runtime/asb_audio_activity.sh"
   _th_at=""
+  _wake=""
   # One look at the route a minute into every stretch with nothing playing (fix137).
   #
   # With nothing playing the watcher stops asking - a stream opening forces a dump - so the
@@ -3422,7 +3424,7 @@ fi
     return 0
   }
   while true; do
-    _force=""
+    _force="$_wake"; _wake=""
     _th_now="${SECONDS:-}"; [ -n "$_th_now" ] || _th_now="$(date +%s)"
     if [ -z "$_th_at" ] || [ $((_th_now - _th_at)) -ge 60 ]; then
       _th_at="$_th_now"
@@ -3454,10 +3456,18 @@ fi
         # still gets one pass. Bluetooth connecting with the screen off moves music to a
         # new PCM; without this the published route stayed on the old output until the
         # screen came on, and with a filter set the effect kept boosting (or kept
-        # releasing - fix77) for the wrong output for the whole listening session. One
-        # file read a minute, no binder call unless the PCM set really changed.
-        sleep 60
-        _sig_off="$(grep -l RUNNING /proc/asound/card*/pcm*p/sub*/status 2>/dev/null | tr '\n' ' ')"
+        # releasing - fix77) for the wrong output for the whole listening session.
+        command -v asb_audio_screen >/dev/null 2>&1 && asb_audio_screen
+        _s0="${_aa_s:-}"; _so=0
+        while [ "$_so" -lt 12 ]; do
+          sleep 5; _so=$((_so + 1))
+          command -v asb_audio_screen >/dev/null 2>&1 || continue
+          asb_audio_screen
+          [ "${_aa_s:-}" = 1 ] && [ "$_s0" != 1 ] && break
+        done
+        if [ "$_so" -lt 12 ]; then _wake=1; _iv=5; continue; fi
+        _aa_sig=""; command -v asb_audio_sig >/dev/null 2>&1 && asb_audio_sig
+        _sig_off="$_aa_sig"
         _idle_track "$_sig_off"
         if [ "$_sig_off" = "${_prev_sig:-}" ]; then
           _idle_due && _force=1 || continue
@@ -3479,7 +3489,8 @@ fi
     # landing on a video that just started.
     sleep 5
     _since=$(( ${_since:-0} + 5 ))
-    _sig="$(grep -l RUNNING /proc/asound/card*/pcm*p/sub*/status 2>/dev/null | tr '\n' ' ')"
+    _aa_sig=""; command -v asb_audio_sig >/dev/null 2>&1 && asb_audio_sig
+    _sig="$_aa_sig"
     _idle_track "$_sig"
     if [ "$_sig" != "${_prev_sig:-}" ]; then
       _prev_sig="$_sig"; _iv=5
@@ -3495,7 +3506,7 @@ fi
     elif [ "$_since" -lt "${_iv:-5}" ]; then
       continue
     fi
-    [ -n "${_pcm_known:-}" ] || { ls /proc/asound/card*/pcm*p/sub*/status >/dev/null 2>&1 && _pcm_known=1; }
+    if [ -n "${_aa_mode:-}" ]; then _pcm_known=1; else _pcm_known=""; fi
     _since=0
     _adump="$(dumpsys audio 2>/dev/null)"
     _now=""
@@ -3543,7 +3554,7 @@ fi
       _iv=5
     fi
     _prev_play="$_play_now"
-    [ "$_now" = "$_prev_route" ] && continue
+    [ "$_now" = "$_prev_route" ] && [ "$(getprop persist.asb.dsp.route 2>/dev/null)" = "$_now" ] && continue
     _prev_route="$_now"
     resetprop -n persist.asb.dsp.route "$_now" >/dev/null 2>&1 \
       || setprop persist.asb.dsp.route "$_now" >/dev/null 2>&1
