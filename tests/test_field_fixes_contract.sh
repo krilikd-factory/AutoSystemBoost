@@ -1022,4 +1022,21 @@ for t in test_unlock_lift_runtime.sh test_smart_night_awake_runtime.sh; do [ -f 
 cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS: fix150 contract"
 ) || exit 1
+# ---- fix151 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix151: $*"; exit 1; }
+D="$ROOT/tools/asb_diag.sh"
+_ln_nv="$(grep -n '^\[ -n "\$NVBASE" \] || NVBASE=/data/adb$' "$ROOT/customize.sh" | cut -d: -f1)"
+_ln_fn="$(grep -n '^\. \$TMPDIR/functions.sh$' "$ROOT/customize.sh" | cut -d: -f1)"
+[ -n "$_ln_nv" ] && [ -n "$_ln_fn" ] && [ "$_ln_nv" -lt "$_ln_fn" ] || fail "NVBASE not defaulted before the template reads it"
+grep -q '  resetprop -n audio.safemedia.bypass true >/dev/null 2>&1 || true' "$ROOT/post-fs-data.sh" || fail "limiter switch does not set the bypass before Android starts"
+grep -q 'audio.safemedia.bypass = ${_smb:-<unset>}' "$D" || fail "asbdiag does not show the bypass"
+grep -q '_no_now="$(ls -d /sys/class/net/\*/queues/rx-\* 2>/dev/null | wc -l):$(cat /sys/class/net/wlan\*/tx_queue_len' "$ROOT/service.sh" || fail "a Wi-Fi queue reset by the driver is not noticed"
+grep -q 'the queue did not take (send this diag)' "$D" || fail "asbdiag does not judge the Wi-Fi queue"
+grep -q '^CONFIRM_INTERVAL_S=3$' "$ROOT/runtime/asb_wifi_fallback.sh" || fail "no fast confirmation"
+for t in test_net_txqueue_runtime.sh test_wifi_leave_fast_confirm_runtime.sh test_asbdiag_report_host_runtime.sh; do [ -f "$ROOT/tests/$t" ] || fail "$t missing"; done
+cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix151 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
