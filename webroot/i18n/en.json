@@ -727,5 +727,12 @@
   "doze_chip_trimmed": "Trimmed",
   "doze_keep_err": "Could not save the list",
   "doze_keep_saved_off": "Kept: %s · takes effect once trimming works",
-  "doze_keep_saved": "Kept: %s · applied"
+  "doze_keep_saved": "Kept: %s · applied",
+  "doze_tag_back": "returns on Done",
+  "doze_tag_drop": "exemption removed on Done",
+  "doze_tag_willtrim": "trimmed on Done",
+  "doze_tag_give": "exempt on Done",
+  "doze_keep_day": "Deep Sleep is set to night: ASB trims only inside the sleep window (%s). It is closed now, so every trimmed app is back and Trimmed stays empty until tonight. Ticked apps keep their exemption day and night.",
+  "doze_keep_legend_title": "What the labels mean",
+  "doze_keep_legend": "Exempt - Android itself has this app exempt: you allowed it (Battery > Unrestricted) or the app asked for it. ASB has not touched it.\nExempt via ASB - Android had no exemption for it; ASB gave one because you ticked the app. Untick it and ASB takes it back.\nTrimmed by ASB - the app was exempt and ASB took the exemption away. Tick it and the exemption comes back.\nNever trimmed - kept by ASB's own rules: authenticators, Bluetooth, watches and bands, caller ID.\nTicked - your list: ASB never trims these apps and keeps them exempt.\nTrimmed - the apps ASB has taken the exemption from right now. With Deep Sleep on night this list fills only inside the sleep window."
 }

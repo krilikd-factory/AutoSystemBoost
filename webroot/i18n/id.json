@@ -944,5 +944,12 @@
   "doze_chip_trimmed": "Dipangkas",
   "doze_keep_err": "Gagal menyimpan daftar",
   "doze_keep_saved_off": "Dipertahankan: %s · berlaku saat pemangkasan aktif",
-  "doze_keep_saved": "Dipertahankan: %s · diterapkan"
+  "doze_keep_saved": "Dipertahankan: %s · diterapkan",
+  "doze_tag_back": "kembali saat Selesai",
+  "doze_tag_drop": "pengecualian dicabut saat Selesai",
+  "doze_tag_willtrim": "dipangkas saat Selesai",
+  "doze_tag_give": "dikecualikan saat Selesai",
+  "doze_keep_day": "Tidur dalam disetel ke malam: ASB memangkas hanya di dalam jendela tidur (%s). Sekarang jendela tertutup, jadi semua aplikasi yang dipangkas sudah kembali dan Dipangkas kosong sampai malam. Aplikasi yang dicentang tetap dikecualikan siang dan malam.",
+  "doze_keep_legend_title": "Arti label",
+  "doze_keep_legend": "Dikecualikan - Android sendiri mengecualikan aplikasi ini: Anda mengizinkannya (Baterai > Tidak dibatasi) atau aplikasi memintanya. ASB tidak menyentuhnya.\nDikecualikan ASB - Android tidak mengecualikannya; ASB memberikannya karena Anda mencentang aplikasi. Hapus centang dan ASB mencabutnya.\nDipangkas ASB - aplikasi tadinya dikecualikan dan ASB mencabut pengecualiannya. Centang dan pengecualian kembali.\nTidak dipangkas - dilindungi aturan ASB sendiri: autentikator, Bluetooth, jam dan gelang, ID penelepon.\nDicentang - daftar Anda: ASB tidak pernah memangkas aplikasi ini dan menjaganya tetap dikecualikan.\nDipangkas - aplikasi yang pengecualiannya sedang dicabut ASB. Dengan Tidur dalam di mode malam, daftar ini hanya terisi di dalam jendela tidur."
 }

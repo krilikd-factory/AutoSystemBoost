@@ -944,5 +944,12 @@
   "doze_chip_trimmed": "Recortadas",
   "doze_keep_err": "No se pudo guardar la lista",
   "doze_keep_saved_off": "Conservadas: %s · se aplicará cuando el recorte esté activo",
-  "doze_keep_saved": "Conservadas: %s · aplicado"
+  "doze_keep_saved": "Conservadas: %s · aplicado",
+  "doze_tag_back": "vuelve al pulsar Listo",
+  "doze_tag_drop": "pierde la exención al pulsar Listo",
+  "doze_tag_willtrim": "se recorta al pulsar Listo",
+  "doze_tag_give": "exenta al pulsar Listo",
+  "doze_keep_day": "Sueño profundo está en de noche: ASB recorta solo dentro de la ventana de sueño (%s). Ahora está cerrada, así que todas las apps recortadas han vuelto y Recortadas queda vacía hasta la noche. Las apps marcadas conservan su exención de día y de noche.",
+  "doze_keep_legend_title": "Qué significan las etiquetas",
+  "doze_keep_legend": "Exenta - Android mismo tiene esta app exenta: tú lo permitiste (Batería > Sin restricciones) o la app lo pidió. ASB no la ha tocado.\nExención de ASB - Android no tenía exención para ella; ASB se la dio porque marcaste la app. Desmárcala y ASB la retira.\nRecortada por ASB - la app estaba exenta y ASB le quitó la exención. Márcala y la exención vuelve.\nNunca se recorta - protegida por las reglas de ASB: autenticadores, Bluetooth, relojes y pulseras, identificador de llamadas.\nMarcadas - tu lista: ASB nunca recorta estas apps y las mantiene exentas.\nRecortadas - las apps a las que ASB ha quitado la exención ahora mismo. Con Sueño profundo en de noche, esta lista solo se llena dentro de la ventana de sueño."
 }

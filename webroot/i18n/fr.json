@@ -496,9 +496,9 @@
   "optFor": {
     "doze_level": {
       "stock": "stock",
-      "night": "night only",
-      "moderate": "moderate",
-      "aggressive": "aggressive"
+      "night": "la nuit",
+      "moderate": "modéré",
+      "aggressive": "agressif"
     },
     "log_level": {
       "0": "extreme",
@@ -944,5 +944,12 @@
   "doze_chip_trimmed": "Retirées",
   "doze_keep_err": "Impossible d’enregistrer la liste",
   "doze_keep_saved_off": "Gardées : %s · s’appliquera quand la réduction sera active",
-  "doze_keep_saved": "Gardées : %s · appliqué"
+  "doze_keep_saved": "Gardées : %s · appliqué",
+  "doze_tag_back": "revient avec Terminé",
+  "doze_tag_drop": "exemption retirée avec Terminé",
+  "doze_tag_willtrim": "retirée avec Terminé",
+  "doze_tag_give": "exemptée avec Terminé",
+  "doze_keep_day": "Sommeil profond est réglé sur la nuit : ASB ne retire les exemptions que dans la fenêtre de sommeil (%s). Elle est fermée, donc toutes les apps retirées sont revenues et « Retirées » reste vide jusqu’à ce soir. Les apps cochées gardent leur exemption jour et nuit.",
+  "doze_keep_legend_title": "Ce que veulent dire les étiquettes",
+  "doze_keep_legend": "Exemptée - Android lui-même exempte cette app : vous l’avez autorisé (Batterie > Non restreinte) ou l’app l’a demandé. ASB n’y a pas touché.\nExemptée par ASB - Android ne l’exemptait pas ; ASB l’a fait parce que vous avez coché l’app. Décochez-la et ASB retire l’exemption.\nRetirée par ASB - l’app était exemptée et ASB lui a retiré l’exemption. Cochez-la et elle revient.\nJamais réduite - protégée par les règles d’ASB : authentificateurs, Bluetooth, montres et bracelets, identification d’appel.\nCochées - votre liste : ASB ne touche jamais ces apps et les garde exemptées.\nRetirées - les apps dont ASB a retiré l’exemption en ce moment. Avec Sommeil profond la nuit, cette liste ne se remplit que dans la fenêtre de sommeil."
 }

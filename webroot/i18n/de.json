@@ -944,5 +944,12 @@
   "doze_chip_trimmed": "Gekürzt",
   "doze_keep_err": "Liste konnte nicht gespeichert werden",
   "doze_keep_saved_off": "Behalten: %s · gilt, sobald das Kürzen aktiv ist",
-  "doze_keep_saved": "Behalten: %s · angewendet"
+  "doze_keep_saved": "Behalten: %s · angewendet",
+  "doze_tag_back": "kommt mit Fertig zurück",
+  "doze_tag_drop": "Ausnahme endet mit Fertig",
+  "doze_tag_willtrim": "wird mit Fertig gekürzt",
+  "doze_tag_give": "Ausnahme mit Fertig",
+  "doze_keep_day": "Tiefschlaf steht auf nachts: ASB kürzt nur im Schlaffenster (%s). Es ist gerade geschlossen, daher sind alle gekürzten Apps zurück und „Gekürzt“ bleibt bis heute Nacht leer. Angehakte Apps behalten ihre Ausnahme Tag und Nacht.",
+  "doze_keep_legend_title": "Was die Markierungen bedeuten",
+  "doze_keep_legend": "Ausgenommen - Android selbst nimmt die App aus: Du hast es erlaubt (Akku > Uneingeschränkt) oder die App hat darum gebeten. ASB hat sie nicht angefasst.\nAusnahme durch ASB - Android hatte keine Ausnahme; ASB hat eine gegeben, weil du die App angehakt hast. Haken weg, und ASB nimmt sie zurück.\nVon ASB gekürzt - die App war ausgenommen und ASB hat die Ausnahme entfernt. Anhaken, und sie kommt zurück.\nNie gekürzt - durch ASBs eigene Regeln geschützt: Authenticator, Bluetooth, Uhren und Bänder, Anrufer-ID.\nAngehakt - deine Liste: diese Apps kürzt ASB nie und hält sie ausgenommen.\nGekürzt - Apps, denen ASB gerade die Ausnahme genommen hat. Mit Tiefschlaf auf nachts füllt sich die Liste nur im Schlaffenster."
 }

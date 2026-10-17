@@ -944,5 +944,12 @@
   "doze_chip_trimmed": "已精简",
   "doze_keep_err": "无法保存列表",
   "doze_keep_saved_off": "已保留：%s · 精简生效后执行",
-  "doze_keep_saved": "已保留：%s · 已应用"
+  "doze_keep_saved": "已保留：%s · 已应用",
+  "doze_tag_back": "点“完成”后恢复",
+  "doze_tag_drop": "点“完成”后撤销豁免",
+  "doze_tag_willtrim": "点“完成”后精简",
+  "doze_tag_give": "点“完成”后豁免",
+  "doze_keep_day": "深度休眠设为仅夜间：ASB 只在睡眠时段内精简（%s）。现在不在该时段，所以被精简的应用都已恢复，“已精简”在今晚之前为空。已勾选的应用全天保持豁免。",
+  "doze_keep_legend_title": "标签含义",
+  "doze_keep_legend": "已豁免 — Android 本身豁免了此应用：你允许了（电池 > 不受限制）或应用自己请求过。ASB 没有动它。\nASB 授予豁免 — Android 原本没有豁免；因为你勾选了它，ASB 给予了豁免。取消勾选，ASB 会收回。\n已被 ASB 精简 — 应用原本被豁免，ASB 撤销了豁免。勾选它，豁免就会恢复。\n不会精简 — 受 ASB 自身规则保护：验证器、蓝牙、手表和手环、来电识别。\n已勾选 — 你的列表：ASB 从不精简这些应用，并保持它们被豁免。\n已精简 — ASB 当前撤销了豁免的应用。深度休眠设为仅夜间时，此列表只在睡眠时段内出现。"
 }

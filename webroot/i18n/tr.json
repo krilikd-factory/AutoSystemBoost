@@ -944,5 +944,12 @@
   "doze_chip_trimmed": "Kırpılan",
   "doze_keep_err": "Liste kaydedilemedi",
   "doze_keep_saved_off": "Tutulan: %s · kırpma çalışınca geçerli",
-  "doze_keep_saved": "Tutulan: %s · uygulandı"
+  "doze_keep_saved": "Tutulan: %s · uygulandı",
+  "doze_tag_back": "Tamam ile geri gelir",
+  "doze_tag_drop": "muafiyet Tamam ile kalkar",
+  "doze_tag_willtrim": "Tamam ile kırpılır",
+  "doze_tag_give": "Tamam ile muaf olur",
+  "doze_keep_day": "Derin uyku geceleri modunda: ASB yalnızca uyku penceresinde kırpar (%s). Pencere şu an kapalı; kırpılan tüm uygulamalar geri verildi ve Kırpılan bu geceye kadar boş kalır. İşaretli uygulamalar muafiyetlerini gece gündüz korur.",
+  "doze_keep_legend_title": "Etiketlerin anlamı",
+  "doze_keep_legend": "Muaf - Android bu uygulamayı kendisi muaf tutuyor: siz izin verdiniz (Pil > Kısıtlamasız) ya da uygulama istedi. ASB dokunmadı.\nASB muafiyeti - Android'de muafiyeti yoktu; uygulamayı işaretlediğiniz için ASB verdi. İşareti kaldırırsanız ASB geri alır.\nASB kırptı - uygulama muaftı ve ASB muafiyeti kaldırdı. İşaretlerseniz muafiyet geri gelir.\nKırpılmaz - ASB'nin kendi kurallarıyla korunur: kimlik doğrulayıcılar, Bluetooth, saatler ve bileklikler, arayan kimliği.\nİşaretli - sizin listeniz: ASB bu uygulamaları asla kırpmaz ve muaf tutar.\nKırpılan - ASB'nin şu anda muafiyetini kaldırdığı uygulamalar. Derin uyku geceleri modundayken bu liste yalnızca uyku penceresinde dolar."
 }

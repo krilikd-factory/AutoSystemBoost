@@ -944,5 +944,12 @@
   "doze_chip_trimmed": "Rimosse",
   "doze_keep_err": "Impossibile salvare l’elenco",
   "doze_keep_saved_off": "Mantenute: %s · varrà quando la riduzione sarà attiva",
-  "doze_keep_saved": "Mantenute: %s · applicato"
+  "doze_keep_saved": "Mantenute: %s · applicato",
+  "doze_tag_back": "torna con Fatto",
+  "doze_tag_drop": "esenzione rimossa con Fatto",
+  "doze_tag_willtrim": "rimossa con Fatto",
+  "doze_tag_give": "esente con Fatto",
+  "doze_keep_day": "Sonno profondo è su di notte: ASB rimuove le esenzioni solo nella finestra di sonno (%s). Ora è chiusa, quindi tutte le app rimosse sono tornate e Rimosse resta vuota fino a stanotte. Le app spuntate mantengono l’esenzione giorno e notte.",
+  "doze_keep_legend_title": "Cosa significano le etichette",
+  "doze_keep_legend": "Esente - Android stesso esenta questa app: l’hai permesso tu (Batteria > Senza restrizioni) o l’app l’ha chiesto. ASB non l’ha toccata.\nEsenzione da ASB - Android non la esentava; ASB l’ha esentata perché hai spuntato l’app. Togli la spunta e ASB la ritira.\nRimossa da ASB - l’app era esente e ASB le ha tolto l’esenzione. Spuntala e l’esenzione torna.\nMai ridotta - protetta dalle regole di ASB: autenticatori, Bluetooth, orologi e braccialetti, ID chiamante.\nSpuntate - la tua lista: ASB non tocca mai queste app e le tiene esenti.\nRimosse - le app a cui ASB ha tolto l’esenzione in questo momento. Con Sonno profondo di notte la lista si riempie solo nella finestra di sonno."
 }

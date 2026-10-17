@@ -944,5 +944,12 @@
   "doze_chip_trimmed": "Removidas",
   "doze_keep_err": "Não foi possível guardar a lista",
   "doze_keep_saved_off": "Mantidas: %s · vale quando a redução estiver ativa",
-  "doze_keep_saved": "Mantidas: %s · aplicado"
+  "doze_keep_saved": "Mantidas: %s · aplicado",
+  "doze_tag_back": "volta ao tocar Concluído",
+  "doze_tag_drop": "isenção removida ao tocar Concluído",
+  "doze_tag_willtrim": "removida ao tocar Concluído",
+  "doze_tag_give": "isenta ao tocar Concluído",
+  "doze_keep_day": "Sono profundo está em à noite: o ASB remove isenções só dentro da janela de sono (%s). Agora ela está fechada, então todos os apps removidos voltaram e Removidas fica vazia até a noite. Apps assinalados mantêm a isenção de dia e de noite.",
+  "doze_keep_legend_title": "O que as etiquetas significam",
+  "doze_keep_legend": "Isenta - o próprio Android isenta este app: você permitiu (Bateria > Sem restrições) ou o app pediu. O ASB não mexeu nele.\nIsenção do ASB - o Android não o isentava; o ASB deu a isenção porque você assinalou o app. Desmarque e o ASB a retira.\nRemovida pelo ASB - o app era isento e o ASB tirou a isenção. Assinale-o e a isenção volta.\nNunca reduzida - protegida pelas regras do ASB: autenticadores, Bluetooth, relógios e pulseiras, identificador de chamadas.\nAssinaladas - sua lista: o ASB nunca mexe nesses apps e os mantém isentos.\nRemovidas - os apps dos quais o ASB tirou a isenção agora. Com Sono profundo à noite, essa lista só se preenche dentro da janela de sono."
 }
