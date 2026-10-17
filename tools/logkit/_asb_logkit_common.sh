@@ -833,6 +833,12 @@ lk_display_config_capture() {
     for _ns in system secure global; do
       settings list "$_ns" 2>/dev/null | grep -iE 'refresh|frame_rate|fps|ltpo|vrr' | sed "s/^/$_ns: /"
     done
+    echo "## status bar redraw settings"
+    for _ns in system secure global; do
+      settings list "$_ns" 2>/dev/null \
+        | grep -iE 'network_speed|net_speed|netspeed|speed_indicator|clock_seconds|show_seconds|status_bar_clock|battery_percent|battery_percentage|statusbar_battery' \
+        | head -8 | sed "s/^/$_ns: /"
+    done
     echo "## dumpsys display (modes and rates)"
     dumpsys display 2>/dev/null | grep -iE 'refresh|frameRate|fps=|supportedModes|mActiveMode|modeId' | head -60
     echo "## LTPO table in front of the display stack"
@@ -1303,7 +1309,9 @@ lk_emit_jank_summary() {
   _jkp="$(sed -n 's/^prime=//p' "$_jkl" 2>/dev/null | head -1)"
   _jkt="$(sed -n 's/^little=//p' "$_jkl" 2>/dev/null | head -1)"
   _jka="$(sed -n 's/^policies=//p' "$_jkl" 2>/dev/null | head -1)"
-  awk -F'|' -v LM="$_jkm" -v LP="$_jkp" -v LT="$_jkt" -v LA="$_jka" '
+  _jkr="$(sed -n '/^## status bar redraw settings$/,/^## dumpsys/p' "$LK_OUT_DIR/display_config.txt" 2>/dev/null \
+          | grep -v '^## ' | tr -d '|' | head -8 | tr '\n' '|')"
+  awk -F'|' -v LM="$_jkm" -v LP="$_jkp" -v LT="$_jkt" -v LA="$_jka" -v RD="$_jkr" '
     /^#/ { next }
     NF < 13 { next }
     # fix150: a row across a screen-off stretch is the wake itself - kept apart, its seconds
@@ -1453,6 +1461,11 @@ lk_emit_jank_summary() {
           printf "%s missed deadlines in %d of %d screen-on intervals, whatever app was in front: a steady redraw.\n", top1, gn[top1], n17
           print "Turn off one thing at a time that it updates every second (in SystemUI: a network-speed meter or"
           print "seconds on the status-bar clock; a live wallpaper) and compare janky/s in the next capture."
+          if (top1 == "com.android.systemui" && RD != "") {
+            nrd = split(RD, rdv, "|")
+            print "status-bar settings read on this phone at the start of the capture:"
+            for (i = 1; i <= nrd; i++) if (rdv[i] != "") printf "  %s\n", rdv[i]
+          }
         }
       }
       # Apps in front, most frames first (at most eight).
