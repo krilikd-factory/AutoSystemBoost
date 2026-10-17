@@ -134,7 +134,7 @@ if [ -n "$DSP_SRC" ]; then
       # until one is available. Without the rebuild these features are simply absent on AIDL
       # phones; asbdiag says so ("voice tone: ... predates it").
       #   " voice=" (fix75): the voice-tone stage
-      for _lit in " voice="; do
+      for _lit in " voice=" " stereo_width="; do
         grep -q "$_lit" "$_src_fx" 2>/dev/null || continue
         grep -aq "$_lit" "$_dout/libasbdsp.so" 2>/dev/null && continue
         echo "[ASB] WARNING: $_abi prebuilt libasbdsp lacks \"$_lit\" - rebuild it (build-dsp-aidl)"
@@ -217,7 +217,7 @@ if [ -n "$DSP_SRC" ]; then
     done
     # Newer behaviour: warn only (see the library gate above).
     #   "released (route not selected)" (fix77): release the effect off the selected outputs
-    for _lit in "released (route not selected)"; do
+    for _lit in "released (route not selected)" "persist.asb.dsp.width"; do
       grep -q "$_lit" "$_src_att" 2>/dev/null || continue
       grep -aq "$_lit" "$_att_pre" 2>/dev/null && continue
       echo "[ASB] WARNING: prebuilt asb_dsp_attach lacks \"$_lit\" - rebuild it for that behaviour."

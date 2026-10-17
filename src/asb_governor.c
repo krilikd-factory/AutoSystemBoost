@@ -446,6 +446,19 @@ static int    g_leak_reassert_count   = 0;
  * that it happened. */
 static unsigned long g_leak_ceiling_ticks = 0;
 static unsigned long g_leak_used_ticks    = 0;
+/* fix160: a ceiling above the FSM's wish that ASB itself asked for - the unlock lift, a prime
+ * burst, or a lowering write not landed yet. The owner's OP15 action screen read "vendor
+ * ceiling above ASB's in 100 checks, the clock above our limit in 59"; both log lines behind
+ * it said "writer p1: ..., req 3648000" - the 80% unlock-lift rail ASB had just written. A
+ * request of our own is not a vendor raise, and counting it as one sent the reader looking for
+ * a PowerHAL fight that was not there. Counted apart, published as own_ceiling_ticks. */
+static unsigned long g_own_ceiling_ticks  = 0;
+enum { ASB_CEIL_OVER_NONE = 0, ASB_CEIL_OVER_OWN = 1, ASB_CEIL_OVER_VENDOR = 2 };
+static int asb_ceiling_over_kind(int actual, int want, int requested) {
+    if (actual <= 0 || want <= 0 || actual <= want + 100000) return ASB_CEIL_OVER_NONE;
+    if (requested > 0 && actual <= requested + 100000) return ASB_CEIL_OVER_OWN;
+    return ASB_CEIL_OVER_VENDOR;
+}
 static int g_msm_boost_active = 0;
 
 #define AC_STAGE_IDLE    0
@@ -2006,6 +2019,23 @@ static int asb_ma_ref(int raw_ma) {
     return (int)((long)raw_ma * ASB_CURSCALE_REF_X100 / g_curscale_x100);
 }
 
+/* A fast trend on a cool body is a burst, not heat (fix160).
+ *
+ * The trend sums the last rises of the hottest CPU sensor, and that hotspot follows load, not
+ * the phone: an app launch, a camera start or a feed full of video lifts it past the warm mark
+ * in a couple of ticks. The owner's OP15 day (31599) has every trend trim of the captured log
+ * tails at a skin of 28-31 C with the HAL headroom at 83-100% - stage 3, CPU and GPU ceilings
+ * cut by 34% for the next dwell window, exactly while the burst wanted them - and "cool" 30-60 s
+ * later. The trend exists to get ahead of heat the user will feel, so it now also needs the
+ * skin in the same pre-lean band the light headroom stage uses: within 8 C of thermal_skin_c.
+ * A die that really runs away is still caught by SUSTAINED, the hot guard, the junction guard
+ * and the headroom stages, none of which read this. No usable skin keeps the old behaviour. */
+static unsigned long g_trend_held_cool = 0;
+static int asb_trend_body_cool(int temp_valid, int skin_c, int skin_limit_c) {
+    if (!temp_valid || skin_c <= 20 || skin_c >= 70 || skin_limit_c <= 0) return 0;
+    return skin_c < skin_limit_c - 8;
+}
+
 /* Discharge current for the comfort trims, smoothed - and a band to leave them (fix121).
  *
  * The comfort gates read one current_now sample, and on these phones that is the
@@ -2175,6 +2205,11 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
             g_smart_rt.therm_warm_x10 / 10 > _trend_mark)
             _trend_mark = g_smart_rt.therm_warm_x10 / 10;
         int _trend_warm = (!m->therm.temp_valid) || m->therm.cpu_max_c >= _trend_mark;
+        if (_trend_warm && fsm->thermal_trend >= 6 &&
+            asb_trend_body_cool(m->therm.temp_valid, m->therm.skin_temp_c, g_asb_cfg.thermal_skin_c)) {
+            _trend_warm = 0;
+            g_trend_held_cool++;
+        }
         if (_trend_warm && fsm->thermal_trend >= 10)
             asb_budget_raise(&candidate, &reason, g_asb_cfg.thermal_budget_severe_trim_pct, "thermal_trend_fast");
         else if (_trend_warm && fsm->thermal_trend >= 6)
@@ -3285,8 +3320,9 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     fprintf(f, "device_bounds_applied=%d\n", g_device_bounds_applied);
     fprintf(f, "surface_source=%s\n", g_surface_from_skin ? "skin" :
                (g_thermal_surface_zone >= 0 ? "zone" : (g_thermal_board_zone >= 0 ? "board" : "none")));
-    fprintf(f, "vendor_ceiling_ticks=%lu\nvendor_ceiling_used_ticks=%lu\n",
-            g_leak_ceiling_ticks, g_leak_used_ticks);
+    fprintf(f, "vendor_ceiling_ticks=%lu\nvendor_ceiling_used_ticks=%lu\nown_ceiling_ticks=%lu\n",
+            g_leak_ceiling_ticks, g_leak_used_ticks, g_own_ceiling_ticks);
+    fprintf(f, "trend_trim_held_cool=%lu\n", g_trend_held_cool);
     fprintf(f, "fg_guard_fixes=%lu\n", g_fg_fix_total);
     fprintf(f, "cap_owner=%s\ncap_owner_since=%ld\ncap_vendor_holddown=%d\n",
             asb_cap_owner_name(g_cap_owner_eff),
@@ -9510,8 +9546,11 @@ int main(int argc, char **argv) {
                 int want_p0 = writer_slot_ceiling(0, fsm.current_caps.cpu_max[0], fsm.thermal_cap);
                 int want_p1 = writer_slot_ceiling(1, fsm.current_caps.cpu_max[1], fsm.thermal_cap);
                 if (g_parity_main_khz > want_p0) want_p0 = g_parity_main_khz;   /* fix130 */
-                int leak0 = (actual_p0 > 0 && want_p0 > 0 && actual_p0 > want_p0 + 100000) ? 1 : 0;
-                int leak1 = (actual_p1 > 0 && want_p1 > 0 && actual_p1 > want_p1 + 100000) ? 1 : 0;
+                int k0 = asb_ceiling_over_kind(actual_p0, want_p0, g_write_health[ASB_WRITE_CPU_MAX0].requested);
+                int k1 = asb_ceiling_over_kind(actual_p1, want_p1, g_write_health[ASB_WRITE_CPU_MAX0 + 1].requested);
+                int leak0 = (k0 == ASB_CEIL_OVER_VENDOR);
+                int leak1 = (k1 == ASB_CEIL_OVER_VENDOR);
+                if ((k0 == ASB_CEIL_OVER_OWN || k1 == ASB_CEIL_OVER_OWN) && !leak0 && !leak1) g_own_ceiling_ticks++;
 
                 g_leak_streak_p0 = leak0 ? (g_leak_streak_p0 + 1) : 0;
                 g_leak_streak_p1 = leak1 ? (g_leak_streak_p1 + 1) : 0;
