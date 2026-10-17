@@ -1039,4 +1039,39 @@ for t in test_net_txqueue_runtime.sh test_wifi_leave_fast_confirm_runtime.sh tes
 cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS: fix151 contract"
 ) || exit 1
+# ---- fix152 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix152: $*"; exit 1; }
+D="$ROOT/tools/asb_diag.sh"
+Z="$ROOT/runtime/asb_doze_apply.sh"
+H="$ROOT/webroot/index.html"
+grep -q '^if \[ "${1:-}" = list \]; then$' "$Z" || fail "the applier has no list for the picker"
+_ln_l="$(grep -n '^if \[ "${1:-}" = list \]; then$' "$Z" | cut -d: -f1)"
+_ln_c="$(grep -n '^case "$_lvl" in$' "$Z" | head -1 | cut -d: -f1)"
+[ -n "$_ln_l" ] && [ -n "$_ln_c" ] && [ "$_ln_l" -lt "$_ln_c" ] || fail "list runs after the night block that pauses AOD"
+grep -q '_ga_file="${_DZ_DIR}/doze_whitelist_added"' "$Z" || fail "no record of the exemptions ASB grants"
+grep -q 'done < /data/adb/asb/doze_whitelist_added' "$ROOT/uninstall.sh" || fail "uninstall leaves ASB's grants behind"
+grep -q "_WL_DOZE_EX=\"\$(grep -E '^\[A-Za-z0-9_.\]+\$' \"\$D/doze_whitelist_removed\" 2>/dev/null)\"" "$ROOT/runtime/asb_wakelock_watch.sh" || fail "wakelock watcher forgets apps the trim removed"
+grep -q '^async function dozeOpenEditor() {$' "$H" || fail "no picker"
+grep -q 'id="dozeKeepSearch" type="search"' "$H" || fail "the picker has no search"
+grep -q 'made exempt by ASB: $(_dzn added)' "$D" || fail "asbdiag does not show the trim's records"
+for t in test_doze_keep_list_runtime.sh test_webui_doze_keep_picker_runtime.sh test_wakelock_trimmed_exempt_runtime.sh; do [ -f "$ROOT/tests/$t" ] || fail "$t missing"; done
+cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix152 contract"
+) || exit 1
+# ---- fix153 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix153: $*"; exit 1; }
+D="$ROOT/tools/asb_diag.sh"
+grep -q ' s of CPU per hour"$' "$D" || fail "asbdiag does not put ASB's CPU per hour"
+grep -q '^    lk_emit_wifi_leave_summary$' "$ROOT/tools/logkit/asb_log_full_day.sh" || fail "the capture does not report Wi-Fi leaving"
+grep -q '^  lk_wifi_leave_collect$' "$ROOT/tools/logkit/asb_log_full_day.sh" || fail "the capture does not keep the watcher's events"
+[ -s "$ROOT/docs/field_baseline/fix150.json" ] || fail "no fix150 baseline to compare against"
+[ -f "$ROOT/tools/asb_capture_compare.py" ] || fail "no comparison tool"
+for t in test_logkit_wifi_leave_runtime.sh test_capture_compare_runtime.sh; do [ -f "$ROOT/tests/$t" ] || fail "$t missing"; done
+cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS: fix153 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
