@@ -38,7 +38,7 @@ P()  { printf '%s\n' "$1"; [ -n "$OUT1" ] && printf '%s\n' "$1" >> "$OUT1"; [ -n
 HR() { P "----------------------------------------------------------------"; }
 SEC(){ P ""; P "================================================================"; P " $1"; P "================================================================"; }
 
-PASS=0; FAIL=0; NA=0; INFO=0; OFFN=0; OFF_LIST=""
+PASS=0; FAIL=0; NA=0; INFO=0; OFFN=0; OFF_LIST=""; CHK_LIST=""
 # verdict: $1 label  $2 expected  $3 actual  $4 mode(eq|has|ge|present)
 V() {
   _l="$1"; _e="$2"; _a="$3"; _m="${4:-eq}"; _st="FAIL"
@@ -54,6 +54,8 @@ V() {
   else FAIL=$((FAIL+1)); fi
   P "  [$_st] $_l"
   [ "$_m" != "info" ] && P "         want: $_e   live: ${_a:-<none>}"
+  CHK_LIST="${CHK_LIST}${_st}	${_l}	${_e}	${_a}
+"
 }
 NOTE(){ P "  (i) $1"; INFO=$((INFO+1)); }
 # A check that was not run because the user's setting turns the feature off (or leaves it
@@ -394,6 +396,7 @@ fi
 # ===================================================================== EFFECTIVE STATE — the
 # computed source-of-truth summary.
 SEC "0. EFFECTIVE STATE  (computed source-of-truth — read this first)"
+P "  (short answer first: section 11 at the end lists what you changed in the WebUI, what is live and any FAIL)"
 # --- Smart enable: file-flag is truth, config is fallback ---
 _sm_flag="$(cat /data/adb/asb/smart_mode_enabled 2>/dev/null)"
 _sm_cfg="$(cfg smart_mode_enabled)"
@@ -1697,6 +1700,23 @@ case "$(gp persist.asb.dsp.outputs)" in
   *)      _pr_note="" ;;
 esac
 NOTE "  DSP requested/applied gain: requested=$(gp persist.asb.dsp.gain_requested_mb)mB  ·  applied=$(gp persist.asb.dsp.gain_applied_mb)mB  ·  published_route=$(gp persist.asb.dsp.route)$_pr_note"
+_lr_d="$(printf '%s\n' "${_ap:-}" | awk '/^[[:space:]]*- STREAM_MUSIC:/ { m = 1; next } m && /^[[:space:]]*- STREAM_/ { exit } m && /Devices:/ { print; exit }')"
+case "$_lr_d" in
+  *bt_sco*|*BLUETOOTH_SCO*) _lr="call" ;;
+  *ble_headset*|*ble_speaker*|*ble_broadcast*|*le_audio*|*BLE_*|*bt_a2dp*|*BLUETOOTH_A2DP*|*bt_le*) _lr="bt" ;;
+  *usb*|*USB*|*wired_headset*|*wired_headphone*|*HEADSET*|*HEADPHONE*|*headset*|*headphone*) _lr="wired" ;;
+  *speaker*|*SPEAKER*) _lr="speaker" ;;
+  *) _lr="" ;;
+esac
+case "$(gp persist.asb.dsp.outputs)" in
+  ''|all|off) : ;;
+  *)
+    if [ -n "$_lr" ] && [ "$_lr" != "$(gp persist.asb.dsp.route)" ]; then
+      NOTE "  route lag: music is on $_lr now, the DSP still follows $(gp persist.asb.dsp.route) - the route watcher republishes within seconds; run asbdiag again if this persists"
+    else
+      [ -n "$_lr" ] && NOTE "  route check: music is on $_lr and the DSP follows $_lr"
+    fi ;;
+esac
 # Unset is expected while the engine is off - routing is not published then.
 if [ "$(gp persist.asb.dsp.enable)" = "1" ]; then
   case "$(gp persist.asb.dsp.outputs)" in
@@ -3850,6 +3870,136 @@ P "      'available' table. If a battery cap doesn't line up with an actual"
 P "      frequency step for THIS SoC's clusters, the governor may be pinning the"
 P "      wrong cluster low (the likely cause of OP12 battery-mode sluggishness)."
 
+SEC "11. YOUR SETTINGS vs WHAT IS LIVE  (the short answer)"
+_ux_ship="$MODDIR/config/governor.conf.shipped"
+_ux_own="$MODDIR/config/key_ownership.tsv"
+_ux_web="$MODDIR/webroot/index.html"
+_ux_boot="${ASB_DIAG_BOOT_CONF:-/dev/.asb_profile_state/governor.boot.conf}"
+_ux_conf_rows() {
+  awk -v t="$1" '
+    /^[[:space:]]*#/ { next }
+    {
+      i = index($0, "="); if (i < 2) next
+      k = substr($0, 1, i - 1); gsub(/[[:space:]]/, "", k)
+      if (k !~ /^[A-Za-z0-9_]+$/) next
+      v = substr($0, i + 1); gsub(/\r/, "", v); sub(/^[[:space:]]+/, "", v); sub(/[[:space:]]+$/, "", v)
+      print t "|" k "|" v
+    }' "$2" 2>/dev/null
+}
+_ux_web_rows() {
+  awk '
+    BEGIN { q = sprintf("%c", 39); rk = "[{] key:" q "[A-Za-z0-9_]+" q; rn = " name:" q "[^" q "]*" q
+            rg = "[A-Za-z0-9_]+:" q "(audio|camera|iface|net|battery|ui)" q; rr = "[A-Za-z0-9_]+:APPLY_REBOOT" }
+    /^const CFG_ITEMS = \[/ { it = 1 }
+    /^const CFG_GROUP_OF = [{]/ { gr = 1 }
+    /^const APPLY_MODE = [{]/ { am = 1 }
+    it && match($0, rk) { pk = substr($0, RSTART + 7, RLENGTH - 8) }
+    it && pk != "" && match($0, rn) {
+      n = substr($0, RSTART + 7, RLENGTH - 8)
+      gsub(/\\u00[bB]7/, "/", n); gsub(/\\u201[34]/, "-", n); gsub(/\\u2019/, q, n); gsub(/\\u[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]/, "?", n)
+      print "N|" pk "|" n; pk = ""
+    }
+    gr { s = $0; while (match(s, rg)) { m = substr(s, RSTART, RLENGTH); c = index(m, ":"); print "G|" substr(m, 1, c - 1) "|" substr(m, c + 2, length(m) - c - 2); s = substr(s, RSTART + RLENGTH) } }
+    am { s = $0; while (match(s, rr)) { m = substr(s, RSTART, RLENGTH); print "R|" substr(m, 1, index(m, ":") - 1) "|1"; s = substr(s, RSTART + RLENGTH) } }
+    /^\];/ { it = 0 }
+    /^[}];/ { gr = 0; am = 0 }' "$_ux_web" 2>/dev/null
+}
+_ux_rows="$( {
+  _ux_web_rows
+  awk -F'|' '!/^#/ && NF >= 2 { print "O|" $1 "|" $2 }' "$_ux_own" 2>/dev/null
+  _ux_conf_rows S "$_ux_ship"
+  _ux_conf_rows C "$CONF"
+  _ux_conf_rows B "$_ux_boot"
+} | awk -F'|' '
+  function cut(v) { return length(v) > 36 ? substr(v, 1, 33) "..." : v }
+  { t = $1; k = $2; v = substr($0, length(t) + length(k) + 3) }
+  t == "N" && !(k in N) { N[k] = v }
+  t == "G" { G[k] = v }
+  t == "R" { R[k] = 1 }
+  t == "O" { O[k] = v }
+  t == "S" && !(k in S) { S[k] = v }
+  t == "C" && !(k in C) { C[k] = v }
+  t == "B" && !(k in B) { B[k] = v; nb++ }
+  END {
+    split("audio camera iface net battery ui", go, " "); split("Audio Camera Interface Network Battery System", gn, " ")
+    for (i = 1; i <= 6; i++) gi[go[i]] = i
+    for (k in O) {
+      if (O[k] != "user" && O[k] != "advanced") continue
+      tot++
+      if (!(k in S) || !(k in C) || S[k] == C[k]) continue
+      g = (k in G) ? G[k] : "ui"; x = (g in gi) ? gi[g] : 6
+      p = (nb && (k in R) && (k in B) && B[k] != C[k]) ? 1 : 0
+      printf "A|%d|%s|%s|%s|%s|%s|%d\n", x, gn[x], (k in N) ? N[k] : k, k, cut(S[k]), cut(C[k]), p
+    }
+    for (k in R) if (nb && (k in B) && (k in C) && B[k] != C[k]) printf "P|%s|%s|%s|%s\n", (k in N) ? N[k] : k, k, cut(B[k]), cut(C[k])
+    printf "T|%d|%d\n", tot, nb ? 1 : 0
+  }' | sort -t'|' -k1,1 -k2,2n -k4,4)"
+P ""
+P "  A. WHAT YOU CHOSE  (WebUI settings that differ from the shipped default)"
+_ux_tot="$(printf '%s\n' "$_ux_rows" | awk -F'|' '$1 == "T" { print $2; exit }')"
+_ux_n="$(printf '%s\n' "$_ux_rows" | grep -c '^A|')"
+if [ ! -r "$_ux_ship" ] || [ ! -r "$CONF" ]; then
+  P "     shipped defaults or your config not readable - cannot compare"
+elif [ "${_ux_n:-0}" -eq 0 ]; then
+  P "     nothing - every setting is at its shipped default"
+else
+  printf '%s\n' "$_ux_rows" | awk -F'|' '$1 == "A" {
+      if ($3 != g) { printf "     %s\n", $3; g = $3 }
+      printf "       %-30s %s -> %s%s   [%s]\n", $4, $6, $7, ($8 == 1 ? "  (waits for a reboot)" : ""), $5
+    }' | while IFS= read -r _ux_l; do P "$_ux_l"; done
+  P "     ${_ux_n} of ${_ux_tot:-?} WebUI settings changed; the rest are at the default."
+fi
+P "     A tweak left at its default is simply not in use. It is not checked below and it is"
+P "     not an install error - it works the moment you turn it on."
+P ""
+P "  B. WHAT IS REALLY IN EFFECT ON THE DEVICE  (every live check above, one line each)"
+if [ -n "$CHK_LIST" ]; then
+  printf '%s' "$CHK_LIST" | while IFS='	' read -r _cs _cl _ce _ca; do
+    [ -n "$_cs" ] || continue
+    [ "${#_ca}" -gt 48 ] && _ca="$(printf '%s' "$_ca" | cut -c1-45)..."
+    P "     [$_cs] $_cl  ->  ${_ca:-<none>}"
+  done
+else
+  P "     no live checks ran"
+fi
+[ "$OFFN" -gt 0 ] && P "     not checked, the setting is off or on auto: $OFF_LIST"
+_ux_led="${ASB_CONFIG_STATE:-/data/adb/asb}/apply_ledger"
+if [ -s "$_ux_led" ]; then
+  _ux_ls="$(awk -F'|' '$2 != "reconcile" { k = $2 "/" $3; last[k] = $7; req[k] = $4; now[k] = $6 }
+    END { for (k in last) { c[last[k]]++; if (last[k] == "not_writable" || last[k] == "readback_mismatch") printf "X|%s|%s|%s\n", k, req[k], now[k] }
+          printf "C|%d|%d|%d\n", c["applied"], c["already_set"], c["not_writable"] + c["readback_mismatch"] }' "$_ux_led" 2>/dev/null)"
+  _ux_c="$(printf '%s\n' "$_ux_ls" | grep '^C|')"
+  P "     system settings ASB writes (by key, last result): applied $(printf '%s' "$_ux_c" | cut -d'|' -f2) · already set $(printf '%s' "$_ux_c" | cut -d'|' -f3) · refused by Android $(printf '%s' "$_ux_c" | cut -d'|' -f4)"
+  printf '%s\n' "$_ux_ls" | grep '^X|' | sort | head -10 | while IFS='|' read -r _x _xk _xr _xn; do
+    P "       refused, not in effect: $_xk (wanted ${_xr:-?}, device keeps ${_xn:-?}) - the ROM blocks this write"
+  done
+fi
+_ux_pn="$(printf '%s\n' "$_ux_rows" | grep -c '^P|')"
+if [ ! -r "$_ux_boot" ]; then
+  P "     waiting for a reboot: unknown (no copy of the config from this boot)"
+elif [ "${_ux_pn:-0}" -eq 0 ]; then
+  P "     waiting for a reboot: nothing - every boot-time setting is the one this boot used"
+else
+  P "     waiting for a reboot (changed after this boot, read only at boot):"
+  printf '%s\n' "$_ux_rows" | grep '^P|' | while IFS='|' read -r _x _pn _pk _pb _pc; do
+    P "       $_pn: $_pb -> $_pc   [$_pk]"
+  done
+fi
+P ""
+P "  C. VERDICT"
+if [ "$FAIL" -eq 0 ]; then
+  P "     FAIL=0 - everything this report can check for your settings is in effect."
+else
+  P "     FAIL=$FAIL - these did not take effect (details in the sections above):"
+  printf '%s' "$CHK_LIST" | while IFS='	' read -r _cs _cl _ce _ca; do
+    [ "$_cs" = FAIL ] || continue
+    P "       $_cl: want $_ce, live ${_ca:-<none>}"
+  done
+fi
+P "     Why another phone shows a different PASS count: every PASS is one check of a tweak that"
+P "     is ON on that phone. More tweaks on means more checks, fewer tweaks on means fewer -"
+P "     11 PASS and 30 PASS with FAIL=0 are both healthy installs. Read FAIL, not PASS."
+P ""
 P "  PASS=$PASS   FAIL=$FAIL   N/A=$NA   OFF=$OFFN   info=$INFO"
 [ "$OFFN" -gt 0 ] && P "  OFF = checks not run because the setting is off/auto here: $OFF_LIST"
 # Normalized score so devices are comparable. Raw PASS counts mislead (a device

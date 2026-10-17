@@ -423,6 +423,8 @@ def compare(base, new):
         for label, get in (("capture min", lambda c: c.get("elapsed_min")),
                            ("night length min", lambda c: (c.get("night") or {}).get("min")),
                            ("screen-on min", lambda c: c.get("screen_on_min")),
+                           ("screen-on share %", lambda c: round(100.0 * c["screen_on_min"] / c["elapsed_min"])
+                            if c.get("elapsed_min") and c.get("screen_on_min") is not None else None),
                            ("mobile MiB", lambda c: c.get("mobile_mib"))):
             ctx.append("%s %s -> %s" % (label, _fmt(_median([get(c) for c in b]), "", 0),
                                          _fmt(_median([get(c) for c in n]), "", 0)))
@@ -475,6 +477,7 @@ def main():
         print(compare_diags(base, diags))
         print("")
         print("UI figures follow the apps used; drain follows screen time, signal and traffic - read the context lines.")
+        print("ASB CPU s/h grows with the screen-on share: the governor ticks every 2-6 s with the screen on and rarely with it off.")
     return 0
 
 
