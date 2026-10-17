@@ -1052,7 +1052,7 @@ _ln_c="$(grep -n '^case "$_lvl" in$' "$Z" | head -1 | cut -d: -f1)"
 [ -n "$_ln_l" ] && [ -n "$_ln_c" ] && [ "$_ln_l" -lt "$_ln_c" ] || fail "list runs after the night block that pauses AOD"
 grep -q '_ga_file="${_DZ_DIR}/doze_whitelist_added"' "$Z" || fail "no record of the exemptions ASB grants"
 grep -q 'done < /data/adb/asb/doze_whitelist_added' "$ROOT/uninstall.sh" || fail "uninstall leaves ASB's grants behind"
-grep -q "_WL_DOZE_EX=\"\$(grep -E '^\[A-Za-z0-9_.\]+\$' \"\$D/doze_whitelist_removed\" 2>/dev/null)\"" "$ROOT/runtime/asb_wakelock_watch.sh" || fail "wakelock watcher forgets apps the trim removed"
+grep -q 'doze_whitelist_removed" "$D/doze_whitelist_keep" 2>/dev/null' "$ROOT/runtime/asb_wakelock_watch.sh" || fail "wakelock watcher forgets apps the trim removed"
 grep -q '^async function dozeOpenEditor() {$' "$H" || fail "no picker"
 grep -q 'id="dozeKeepSearch" type="search"' "$H" || fail "the picker has no search"
 grep -q 'made exempt by ASB: $(_dzn added)' "$D" || fail "asbdiag does not show the trim's records"
@@ -1073,5 +1073,20 @@ grep -q '^  lk_wifi_leave_collect$' "$ROOT/tools/logkit/asb_log_full_day.sh" || 
 for t in test_logkit_wifi_leave_runtime.sh test_capture_compare_runtime.sh; do [ -f "$ROOT/tests/$t" ] || fail "$t missing"; done
 cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS: fix153 contract"
+) || exit 1
+# ---- fix154 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix154: $*"; exit 1; }
+H="$ROOT/webroot/index.html"
+grep -q '^  --page-fade-in: 0.26s;$' "$H" || fail "no fade timing"
+grep -q 'translateX(-50%) translateX(120%)' "$H" && fail "pages still slide in from the right"
+grep -q '^  audio_remove_volume_limit:APPLY_REBOOT,$' "$H" || fail "the limiter card still claims to apply at once"
+grep -q "resetprop -n audio.safemedia.bypass true'" "$H" || fail "the limiter switch does not set the bypass"
+grep -q '^LIGHT_HOLD_MAX_S="${ASB_LTE_LIGHT_HOLD_MAX_S:-2400}"$' "$ROOT/runtime/asb_lte_screenoff.sh" || fail "no growing 5G hold"
+grep -q 'T_A_LIMIT_ON=' "$ROOT/action.sh" || fail "action screen does not show the limiter"
+grep -q 'ASB_DOZE_KEEP:-/data/adb/asb/doze_whitelist_keep' "$ROOT/service.sh" || fail "background trim ignores the keep list"
+for t in test_lte_light_flap_runtime.sh test_keep_list_guards_runtime.sh; do [ -f "$ROOT/tests/$t" ] || fail "$t missing"; done
+echo "PASS: fix154 contract"
 ) || exit 1
 echo "PASS: field-fix contracts"
