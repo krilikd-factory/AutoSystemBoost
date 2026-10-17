@@ -37,6 +37,7 @@ if [ ! -f "$TMPDIR/functions.sh" ]; then
   # Last resort: some builds keep it at the root already.
   unzip -qjo "$ZIPFILE" 'functions.sh' '*/functions.sh' -d $TMPDIR >/dev/null 2>&1
 fi
+[ -n "$NVBASE" ] || NVBASE=/data/adb
 . $TMPDIR/functions.sh
 
 # Installer strings, extracted alongside functions.sh.

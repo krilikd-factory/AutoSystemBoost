@@ -3935,7 +3935,7 @@ esac
           fi
           continue ;;
       esac
-      _no_now="$(ls -d /sys/class/net/*/queues/rx-* 2>/dev/null | wc -l)"
+      _no_now="$(ls -d /sys/class/net/*/queues/rx-* 2>/dev/null | wc -l):$(cat /sys/class/net/wlan*/tx_queue_len 2>/dev/null | tr '\n' ,)"
       [ "$_no_now" = "$_no_prev" ] && continue
       _no_prev="$_no_now"
       [ -f "$MODDIR/runtime/asb_net_offload.sh" ] && \
