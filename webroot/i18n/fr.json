@@ -956,7 +956,6 @@
   "doze_keep_day": "Sommeil profond est réglé sur la nuit : ASB ne retire les exemptions que dans la fenêtre de sommeil (%s). Elle est fermée, donc toutes les apps retirées sont revenues et « Retirées » reste vide jusqu’à ce soir. Les apps cochées gardent leur exemption jour et nuit.",
   "doze_keep_legend_title": "Ce que veulent dire les étiquettes",
   "doze_keep_legend": "Exemptée - Android lui-même exempte cette app : vous l’avez autorisé (Batterie > Non restreinte) ou l’app l’a demandé. ASB n’y a pas touché.\nExemptée par ASB - Android ne l’exemptait pas ; ASB l’a fait parce que vous avez coché l’app. Décochez-la et ASB retire l’exemption.\nRetirée par ASB - l’app était exemptée et ASB lui a retiré l’exemption. Cochez-la et elle revient.\nJamais réduite - protégée par les règles d’ASB : authentificateurs, Bluetooth, montres et bracelets, identification d’appel.\nCochées - votre liste : ASB ne touche jamais ces apps et les garde exemptées.\nRetirées - les apps dont ASB a retiré l’exemption en ce moment. Avec Sommeil profond la nuit, cette liste ne se remplit que dans la fenêtre de sommeil.",
-  "lv_slot_temp": "Pic habituel",
   "lv_scr_on": "Écran allumé",
   "lv_scr_off": "Écran éteint",
   "lv_drain_title": "Consommation de la batterie",
@@ -967,5 +966,15 @@
   "lv_drain_off_measured": "mesuré sur %s période(s) écran éteint d’au moins une heure, sans charge ni musique",
   "lv_drain_off_wait": "il faut une heure écran éteint, sans charge ni musique",
   "lv_drain_left": "jusqu’à 0 % : %s",
-  "lv_drain_note": "Les deux chiffres viennent du niveau de batterie lui-même, pas du capteur de courant : plus lents à se stabiliser, mais conformes à l’écran Batterie."
+  "lv_drain_note": "Les deux chiffres viennent du niveau de batterie lui-même, pas du capteur de courant : plus lents à se stabiliser, mais conformes à l’écran Batterie.",
+  "lv_slot_heat": "Chaleur habituelle",
+  "lv_heat_cool": "basse",
+  "lv_heat_norm": "normale",
+  "lv_heat_warm": "élevée",
+  "lv_heat_tip": "Pic CPU habituel à cette heure : %s ; normal pour ce téléphone : %s",
+  "lv_drain_on_meter": "mesuré par ASB sur %s min écran allumé dans ce profil",
+  "lv_drain_cmp": "Par profil - la même mesure pour chacun",
+  "cfg_reboot_tile": "Redémarrer",
+  "cfg_soft_tile": "Redémarrage rapide",
+  "cfg_sysui_tile": "Relancer SystemUI"
 }

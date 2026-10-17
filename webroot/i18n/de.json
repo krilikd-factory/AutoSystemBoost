@@ -956,7 +956,6 @@
   "doze_keep_day": "Tiefschlaf steht auf nachts: ASB kürzt nur im Schlaffenster (%s). Es ist gerade geschlossen, daher sind alle gekürzten Apps zurück und „Gekürzt“ bleibt bis heute Nacht leer. Angehakte Apps behalten ihre Ausnahme Tag und Nacht.",
   "doze_keep_legend_title": "Was die Markierungen bedeuten",
   "doze_keep_legend": "Ausgenommen - Android selbst nimmt die App aus: Du hast es erlaubt (Akku > Uneingeschränkt) oder die App hat darum gebeten. ASB hat sie nicht angefasst.\nAusnahme durch ASB - Android hatte keine Ausnahme; ASB hat eine gegeben, weil du die App angehakt hast. Haken weg, und ASB nimmt sie zurück.\nVon ASB gekürzt - die App war ausgenommen und ASB hat die Ausnahme entfernt. Anhaken, und sie kommt zurück.\nNie gekürzt - durch ASBs eigene Regeln geschützt: Authenticator, Bluetooth, Uhren und Bänder, Anrufer-ID.\nAngehakt - deine Liste: diese Apps kürzt ASB nie und hält sie ausgenommen.\nGekürzt - Apps, denen ASB gerade die Ausnahme genommen hat. Mit Tiefschlaf auf nachts füllt sich die Liste nur im Schlaffenster.",
-  "lv_slot_temp": "Übliche Spitze",
   "lv_scr_on": "Bildschirm an",
   "lv_scr_off": "Bildschirm aus",
   "lv_drain_title": "Akkuverbrauch",
@@ -967,5 +966,15 @@
   "lv_drain_off_measured": "gemessen über %s Phase(n) mit ausgeschaltetem Bildschirm ab einer Stunde, ohne Laden und Musik",
   "lv_drain_off_wait": "braucht eine Stunde mit ausgeschaltetem Bildschirm, ohne Laden und Musik",
   "lv_drain_left": "bis 0 %: %s",
-  "lv_drain_note": "Beide Werte kommen aus dem Akkustand selbst, nicht vom Stromsensor: sie stellen sich langsamer ein, passen aber zur Akku-Anzeige."
+  "lv_drain_note": "Beide Werte kommen aus dem Akkustand selbst, nicht vom Stromsensor: sie stellen sich langsamer ein, passen aber zur Akku-Anzeige.",
+  "lv_slot_heat": "Übliche Wärme",
+  "lv_heat_cool": "niedrig",
+  "lv_heat_norm": "normal",
+  "lv_heat_warm": "hoch",
+  "lv_heat_tip": "Übliche CPU-Spitze zu dieser Stunde: %s; normal für dieses Handy: %s",
+  "lv_drain_on_meter": "von ASB über %s Min. mit Bildschirm an in diesem Profil gemessen",
+  "lv_drain_cmp": "Nach Profil - für jedes dieselbe Messung",
+  "cfg_reboot_tile": "Neustart",
+  "cfg_soft_tile": "Schneller Neustart",
+  "cfg_sysui_tile": "SystemUI neu starten"
 }

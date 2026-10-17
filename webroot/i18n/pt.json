@@ -956,7 +956,6 @@
   "doze_keep_day": "Sono profundo está em à noite: o ASB remove isenções só dentro da janela de sono (%s). Agora ela está fechada, então todos os apps removidos voltaram e Removidas fica vazia até a noite. Apps assinalados mantêm a isenção de dia e de noite.",
   "doze_keep_legend_title": "O que as etiquetas significam",
   "doze_keep_legend": "Isenta - o próprio Android isenta este app: você permitiu (Bateria > Sem restrições) ou o app pediu. O ASB não mexeu nele.\nIsenção do ASB - o Android não o isentava; o ASB deu a isenção porque você assinalou o app. Desmarque e o ASB a retira.\nRemovida pelo ASB - o app era isento e o ASB tirou a isenção. Assinale-o e a isenção volta.\nNunca reduzida - protegida pelas regras do ASB: autenticadores, Bluetooth, relógios e pulseiras, identificador de chamadas.\nAssinaladas - sua lista: o ASB nunca mexe nesses apps e os mantém isentos.\nRemovidas - os apps dos quais o ASB tirou a isenção agora. Com Sono profundo à noite, essa lista só se preenche dentro da janela de sono.",
-  "lv_slot_temp": "Pico habitual",
   "lv_scr_on": "Tela ligada",
   "lv_scr_off": "Tela desligada",
   "lv_drain_title": "Consumo da bateria",
@@ -967,5 +966,15 @@
   "lv_drain_off_measured": "medido em %s período(s) com a tela desligada de uma hora ou mais, sem carregar nem música",
   "lv_drain_off_wait": "precisa de uma hora com a tela desligada, sem carregar nem música",
   "lv_drain_left": "até 0%: %s",
-  "lv_drain_note": "Os dois valores vêm do próprio nível da bateria, não do sensor de corrente: demoram mais a assentar, mas batem com a tela de bateria."
+  "lv_drain_note": "Os dois valores vêm do próprio nível da bateria, não do sensor de corrente: demoram mais a assentar, mas batem com a tela de bateria.",
+  "lv_slot_heat": "Calor habitual",
+  "lv_heat_cool": "baixo",
+  "lv_heat_norm": "normal",
+  "lv_heat_warm": "alto",
+  "lv_heat_tip": "Pico habitual de CPU nesta hora: %s; normal para este celular: %s",
+  "lv_drain_on_meter": "medido pelo ASB em %s min com a tela ligada neste perfil",
+  "lv_drain_cmp": "Por perfil - a mesma medição para cada um",
+  "cfg_reboot_tile": "Reiniciar",
+  "cfg_soft_tile": "Reinício rápido",
+  "cfg_sysui_tile": "Reiniciar SystemUI"
 }

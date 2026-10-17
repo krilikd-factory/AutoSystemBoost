@@ -735,7 +735,6 @@
   "doze_keep_day": "Deep Sleep is set to night: ASB trims only inside the sleep window (%s). It is closed now, so every trimmed app is back and Trimmed stays empty until tonight. Ticked apps keep their exemption day and night.",
   "doze_keep_legend_title": "What the labels mean",
   "doze_keep_legend": "Exempt - Android itself has this app exempt: you allowed it (Battery > Unrestricted) or the app asked for it. ASB has not touched it.\nExempt via ASB - Android had no exemption for it; ASB gave one because you ticked the app. Untick it and ASB takes it back.\nTrimmed by ASB - the app was exempt and ASB took the exemption away. Tick it and the exemption comes back.\nNever trimmed - kept by ASB's own rules: authenticators, Bluetooth, watches and bands, caller ID.\nTicked - your list: ASB never trims these apps and keeps them exempt.\nTrimmed - the apps ASB has taken the exemption from right now. With Deep Sleep on night this list fills only inside the sleep window.",
-  "lv_slot_temp": "Usual peak",
   "lv_scr_on": "Screen on",
   "lv_scr_off": "Screen off",
   "lv_drain_title": "Battery drain",
@@ -746,5 +745,15 @@
   "lv_drain_off_measured": "measured over %s screen-off stretch(es) of an hour or more, without charging or music",
   "lv_drain_off_wait": "needs an hour with the screen off, without charging or music",
   "lv_drain_left": "to 0%: %s",
-  "lv_drain_note": "Both figures come from the battery level itself, not from the current sensor: slower to settle, but they match what the battery screen shows."
+  "lv_drain_note": "Both figures come from the battery level itself, not from the current sensor: slower to settle, but they match what the battery screen shows.",
+  "lv_slot_heat": "Usual heat",
+  "lv_heat_cool": "below norm",
+  "lv_heat_norm": "normal",
+  "lv_heat_warm": "above norm",
+  "lv_heat_tip": "Usual CPU peak this hour: %s; normal for this phone: %s",
+  "lv_drain_on_meter": "measured by ASB over %s min with the screen on in this profile",
+  "lv_drain_cmp": "By profile - the same measurement for each",
+  "cfg_reboot_tile": "Reboot",
+  "cfg_soft_tile": "Soft reboot",
+  "cfg_sysui_tile": "Restart SystemUI"
 }

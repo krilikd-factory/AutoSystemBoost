@@ -956,7 +956,6 @@
   "doze_keep_day": "Sonno profondo è su di notte: ASB rimuove le esenzioni solo nella finestra di sonno (%s). Ora è chiusa, quindi tutte le app rimosse sono tornate e Rimosse resta vuota fino a stanotte. Le app spuntate mantengono l’esenzione giorno e notte.",
   "doze_keep_legend_title": "Cosa significano le etichette",
   "doze_keep_legend": "Esente - Android stesso esenta questa app: l’hai permesso tu (Batteria > Senza restrizioni) o l’app l’ha chiesto. ASB non l’ha toccata.\nEsenzione da ASB - Android non la esentava; ASB l’ha esentata perché hai spuntato l’app. Togli la spunta e ASB la ritira.\nRimossa da ASB - l’app era esente e ASB le ha tolto l’esenzione. Spuntala e l’esenzione torna.\nMai ridotta - protetta dalle regole di ASB: autenticatori, Bluetooth, orologi e braccialetti, ID chiamante.\nSpuntate - la tua lista: ASB non tocca mai queste app e le tiene esenti.\nRimosse - le app a cui ASB ha tolto l’esenzione in questo momento. Con Sonno profondo di notte la lista si riempie solo nella finestra di sonno.",
-  "lv_slot_temp": "Picco abituale",
   "lv_scr_on": "Schermo acceso",
   "lv_scr_off": "Schermo spento",
   "lv_drain_title": "Consumo batteria",
@@ -967,5 +966,15 @@
   "lv_drain_off_measured": "misurato su %s periodo/i a schermo spento di un’ora o più, senza ricarica né musica",
   "lv_drain_off_wait": "serve un’ora a schermo spento, senza ricarica né musica",
   "lv_drain_left": "fino a 0%: %s",
-  "lv_drain_note": "Entrambe le cifre vengono dal livello della batteria, non dal sensore di corrente: si stabilizzano più lentamente, ma coincidono con la schermata Batteria."
+  "lv_drain_note": "Entrambe le cifre vengono dal livello della batteria, non dal sensore di corrente: si stabilizzano più lentamente, ma coincidono con la schermata Batteria.",
+  "lv_slot_heat": "Calore abituale",
+  "lv_heat_cool": "basso",
+  "lv_heat_norm": "nella norma",
+  "lv_heat_warm": "alto",
+  "lv_heat_tip": "Picco CPU abituale a quest’ora: %s; normale per questo telefono: %s",
+  "lv_drain_on_meter": "misurato da ASB in %s min con lo schermo acceso in questo profilo",
+  "lv_drain_cmp": "Per profilo - la stessa misura per ciascuno",
+  "cfg_reboot_tile": "Riavvia",
+  "cfg_soft_tile": "Riavvio rapido",
+  "cfg_sysui_tile": "Riavvia SystemUI"
 }

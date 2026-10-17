@@ -956,7 +956,6 @@
   "doze_keep_day": "Sueño profundo está en de noche: ASB recorta solo dentro de la ventana de sueño (%s). Ahora está cerrada, así que todas las apps recortadas han vuelto y Recortadas queda vacía hasta la noche. Las apps marcadas conservan su exención de día y de noche.",
   "doze_keep_legend_title": "Qué significan las etiquetas",
   "doze_keep_legend": "Exenta - Android mismo tiene esta app exenta: tú lo permitiste (Batería > Sin restricciones) o la app lo pidió. ASB no la ha tocado.\nExención de ASB - Android no tenía exención para ella; ASB se la dio porque marcaste la app. Desmárcala y ASB la retira.\nRecortada por ASB - la app estaba exenta y ASB le quitó la exención. Márcala y la exención vuelve.\nNunca se recorta - protegida por las reglas de ASB: autenticadores, Bluetooth, relojes y pulseras, identificador de llamadas.\nMarcadas - tu lista: ASB nunca recorta estas apps y las mantiene exentas.\nRecortadas - las apps a las que ASB ha quitado la exención ahora mismo. Con Sueño profundo en de noche, esta lista solo se llena dentro de la ventana de sueño.",
-  "lv_slot_temp": "Pico habitual",
   "lv_scr_on": "Pantalla encendida",
   "lv_scr_off": "Pantalla apagada",
   "lv_drain_title": "Consumo de batería",
@@ -967,5 +966,15 @@
   "lv_drain_off_measured": "medido en %s tramo(s) con la pantalla apagada de una hora o más, sin carga ni música",
   "lv_drain_off_wait": "necesita una hora con la pantalla apagada, sin carga ni música",
   "lv_drain_left": "hasta 0 %: %s",
-  "lv_drain_note": "Ambas cifras salen del propio nivel de batería, no del sensor de corriente: tardan más en asentarse, pero coinciden con la pantalla de batería."
+  "lv_drain_note": "Ambas cifras salen del propio nivel de batería, no del sensor de corriente: tardan más en asentarse, pero coinciden con la pantalla de batería.",
+  "lv_slot_heat": "Calor habitual",
+  "lv_heat_cool": "bajo",
+  "lv_heat_norm": "normal",
+  "lv_heat_warm": "alto",
+  "lv_heat_tip": "Pico habitual de CPU a esta hora: %s; normal para este teléfono: %s",
+  "lv_drain_on_meter": "medido por ASB durante %s min con la pantalla encendida en este perfil",
+  "lv_drain_cmp": "Por perfil: la misma medición para cada uno",
+  "cfg_reboot_tile": "Reiniciar",
+  "cfg_soft_tile": "Reinicio rápido",
+  "cfg_sysui_tile": "Reiniciar SystemUI"
 }
