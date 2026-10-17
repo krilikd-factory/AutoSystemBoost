@@ -29,6 +29,11 @@ jobs:
           # runtime helpers are explicitly executed by their safety contracts below.
           chmod 0755 runtime/asb_active_efficiency_envelope.sh runtime/asb_boot_timeline.sh runtime/asb_debug_support.sh runtime/asb_stock_policy.sh runtime/asb_overlay_guard.sh runtime/asb_wifi_fallback.sh tools/asb_kernel_uv_coexist.sh
 
+      - name: Check the tree against the delivered archive
+        # Names every file that differs from tools/asb_tree.sha256 - a file not uploaded with a
+        # delivery shows up here by name instead of as a failing test further down.
+        run: sh tools/asb_tree_check.sh check
+
       - name: Validate required source files
         run: |
           for f in \
@@ -181,10 +186,7 @@ jobs:
           MODDIR="$(pwd)" bash tools/asb_lint.sh
 
       - name: Run canonical host regression
-        # The debug job validates a source archive; AIDL prebuilts are produced by the
-        # separate Soong workflow. Keep the release workflow strict when prebuilts are
-        # absent, but do not fail this source-only host pass for that expected condition.
-        run: ASB_DSP_REFERENCE_OPTIONAL=1 bash tools/asb_full_regression.sh
+        run: bash tools/asb_full_regression.sh
 
       - name: Verify runner tools
         shell: bash
@@ -504,6 +506,7 @@ jobs:
             "runtime/asb_audio_apply.sh" \
             "runtime/asb_dsp_thermal.sh" \
             "runtime/asb_audio_activity.sh" \
+            "runtime/asb_drain_meter.sh" \
             "runtime/asb_dsp_live.sh" \
             "runtime/asb_cgroup.sh" \
             "runtime/asb_volume_curves.sh" \
