@@ -207,7 +207,7 @@ def parse_diag(path):
     m["safe_media"] = mm.group(1) if mm else None
     mm = re.search(r"audio\.safemedia\.bypass = (\S+)", t)
     m["safemedia_bypass"] = mm.group(1) if mm else None
-    mm = re.search(r"net_txqueue=(\S+) - live: .*?\bwlan0=(\d+)", t)
+    mm = re.search(r"net_txqueue=(\S+)[^\n]*? - live: [^\n]*?\bwlan0=(\d+)", t)
     m["txqueue"] = (mm.group(1), int(mm.group(2))) if mm else None
     mm = re.search(r"cpu_ms=\d+ over .*? = ([\d.]+) s of CPU per hour", t)
     m["asb_cpu_s_h"] = _num(mm.group(1)) if mm else None
@@ -277,11 +277,17 @@ def diag_rows(diags):
 
 DHEAD = ["model", "version", "date", "safe media", "bypass", "txqueue", "ASB CPU", "doze trim/kept/granted"]
 
+def _solid(ph, key):
+    if not ph or ph.get("rough") or (ph.get("min") or 0) < 30:
+        return None
+    return ph.get(key)
+
+
 METRICS = [
     ("night %/h", lambda c: None if not c.get("night") or c["night"].get("rough") else c["night"].get("pct_h"), True),
-    ("night awake %", lambda c: (c.get("night") or {}).get("awake"), True),
-    ("idle %/h", lambda c: None if not c.get("idle") or c["idle"].get("rough") else c["idle"].get("pct_h"), True),
-    ("idle awake %", lambda c: (c.get("idle") or {}).get("awake"), True),
+    ("night awake %", lambda c: _solid(c.get("night"), "awake"), True),
+    ("idle %/h", lambda c: _solid(c.get("idle"), "pct_h"), True),
+    ("idle awake %", lambda c: _solid(c.get("idle"), "awake"), True),
     ("screen-on %/h", lambda c: c.get("screen_on_pct_h"), True),
     ("janky frames/s", lambda c: c.get("ui_janky_s"), True),
     ("janky floor/s", lambda c: c.get("ui_floor_s"), True),
@@ -348,7 +354,8 @@ def compare(base, new):
                 verdict = "better" if (delta < 0) == lower_better else "worse"
             rows.append([name, _fmt(bv), _fmt(nv), "%+.2f (%+.0f%%)" % (delta, rel), verdict])
         ctx = []
-        for label, get in (("night length min", lambda c: (c.get("night") or {}).get("min")),
+        for label, get in (("capture min", lambda c: c.get("elapsed_min")),
+                           ("night length min", lambda c: (c.get("night") or {}).get("min")),
                            ("screen-on min", lambda c: c.get("screen_on_min")),
                            ("mobile MiB", lambda c: c.get("mobile_mib"))):
             ctx.append("%s %s -> %s" % (label, _fmt(_median([get(c) for c in b]), "", 0),
