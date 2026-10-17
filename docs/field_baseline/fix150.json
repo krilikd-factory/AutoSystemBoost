@@ -146,7 +146,11 @@
    },
    "wifi_releases": null,
    "wifi_leave_median_s": null,
-   "wifi_leave_max_s": null
+   "wifi_leave_max_s": null,
+   "warm_on_n": 36,
+   "warm_below_pct": null,
+   "warm_prime_pct": 30.6,
+   "warm_on_ma": 729
   },
   {
    "kind": "capture",
@@ -293,7 +297,11 @@
    },
    "wifi_releases": null,
    "wifi_leave_median_s": null,
-   "wifi_leave_max_s": null
+   "wifi_leave_max_s": null,
+   "warm_on_n": 107,
+   "warm_below_pct": 24.3,
+   "warm_prime_pct": 41.1,
+   "warm_on_ma": 451
   },
   {
    "kind": "capture",
@@ -449,7 +457,11 @@
    },
    "wifi_releases": null,
    "wifi_leave_median_s": null,
-   "wifi_leave_max_s": null
+   "wifi_leave_max_s": null,
+   "warm_on_n": 64,
+   "warm_below_pct": 14.1,
+   "warm_prime_pct": 31.2,
+   "warm_on_ma": 412
   },
   {
    "kind": "capture",
@@ -611,7 +623,11 @@
    },
    "wifi_releases": null,
    "wifi_leave_median_s": null,
-   "wifi_leave_max_s": null
+   "wifi_leave_max_s": null,
+   "warm_on_n": null,
+   "warm_below_pct": null,
+   "warm_prime_pct": null,
+   "warm_on_ma": null
   },
   {
    "kind": "capture",
@@ -712,7 +728,11 @@
    },
    "wifi_releases": null,
    "wifi_leave_median_s": null,
-   "wifi_leave_max_s": null
+   "wifi_leave_max_s": null,
+   "warm_on_n": 39,
+   "warm_below_pct": 5.1,
+   "warm_prime_pct": 94.9,
+   "warm_on_ma": 384
   }
  ],
  "diags": [
