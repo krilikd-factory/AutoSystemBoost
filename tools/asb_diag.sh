@@ -1115,7 +1115,16 @@ if [ -r "$_state" ]; then
   # A capture shows events=10546 next to timer_wakeups=1963, which invites the reading
   # that the governor handles five events per wake. It does not: both are wakeup
   # counts, one from epoll and one from the timer, and their sum is the real total.
-  P "  ASB overhead          : event_wakeups=$(_rget governor_event_wakeups "$_state") timer_wakeups=$(_rget governor_timer_wakeups "$_state") cpu_ms=$(_rget governor_cpu_ms "$_state")"
+  _oh_ms="$(_rget governor_cpu_ms "$_state")"; _oh_up="$(_rget governor_uptime_s "$_state")"
+  _oh_rate=""
+  case "$_oh_ms:$_oh_up" in
+    *[!0-9:]*|:*|*:) : ;;
+    *) if [ "$_oh_up" -ge 600 ] 2>/dev/null; then
+         _oh_mh=$(( _oh_ms * 3600 / _oh_up ))
+         _oh_rate=" over $(( _oh_up / 3600 )) h $(( _oh_up % 3600 / 60 )) min = $(( _oh_mh / 1000 )).$(( _oh_mh % 1000 / 100 )) s of CPU per hour"
+       fi ;;
+  esac
+  P "  ASB overhead          : event_wakeups=$(_rget governor_event_wakeups "$_state") timer_wakeups=$(_rget governor_timer_wakeups "$_state") cpu_ms=${_oh_ms}${_oh_rate}"
   # Attribution, not just a total.
   #
   # The line above says how much overhead there was; this one says where it came from.
@@ -3428,6 +3437,11 @@ fi
 [ -f /data/adb/asb/aod_baseline ] \
   && NOTE "AOD currently paused by ASB (original: $(cat /data/adb/asb/aod_baseline 2>/dev/null))" \
   || NOTE "AOD not currently held by ASB (doze_always_on = $(settings get secure doze_always_on 2>/dev/null))"
+_dzn() { _n=0; [ -f "/data/adb/asb/doze_whitelist_$1" ] && _n="$(grep -c . "/data/adb/asb/doze_whitelist_$1" 2>/dev/null)"; echo "${_n:-0}"; }
+NOTE "doze_trim_whitelist = $(cfg doze_trim_whitelist) · trimmed by ASB: $(_dzn removed) · kept (WebUI list): $(_dzn keep) · made exempt by ASB: $(_dzn added)"
+[ -s /data/adb/asb/doze_whitelist_removed ] && NOTE "  trimmed: $(grep . /data/adb/asb/doze_whitelist_removed | tr '\n' ' ')"
+[ -s /data/adb/asb/doze_whitelist_keep ] && NOTE "  kept: $(grep . /data/adb/asb/doze_whitelist_keep | tr '\n' ' ')"
+[ -s /data/adb/asb/doze_whitelist_added ] && NOTE "  made exempt by ASB: $(grep . /data/adb/asb/doze_whitelist_added | tr '\n' ' ')"
 
 # =====================================================================
 SEC "8b. INTERFACE / SYSTEM TWEAKS"
