@@ -354,7 +354,8 @@ if command -v resetprop >/dev/null 2>&1 && asb_feature_enabled AUDIO \
   _mv_st="$(grep -E '^[[:space:]]*media_vol_steps=' "$MODDIR/config/governor.conf" 2>/dev/null \
             | head -1 | sed 's/.*=//' | tr -d ' \r')"
   case "$_mv_st" in
-    30|50) resetprop -n ro.config.media_vol_steps "$_mv_st" >/dev/null 2>&1 || true ;;
+    ''|*[!0-9]*) : ;;
+    *) if [ "$_mv_st" -ge 16 ] && [ "$_mv_st" -le 100 ]; then resetprop -n ro.config.media_vol_steps "$_mv_st" >/dev/null 2>&1 || true; fi ;;
   esac
 fi
 

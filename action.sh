@@ -874,6 +874,7 @@ T_A_COMP_OFF="compressor: off  ·  limiter only"
 T_A_COMP_ON="compressor: on  ·  6:1 above -24 dBFS"
 T_A_BASS="bass shelf: +%s dB @ 90 Hz"
 T_A_VOICE="voice tone: level %s (+%s dB @ 350 Hz, -%s dB @ 3 kHz)"
+T_A_WIDTH="stereo width: level %s (sides +%s%% above 180 Hz, centre untouched)"
 T_A_LIB="libasbdsp: 64-bit %s  ·  32-bit %s  ·  ABI %s"
 T_A_REG="effect registered in: %s"
 T_A_STATUS="DSP status: requested +%sdB · live +%sdB · enabled=%s · attacher %s · registered %s"
@@ -1727,8 +1728,10 @@ case "$_a_rs" in
     fi ;;
 esac
 _a_vs="$(_cfg media_vol_steps)"
+case "$_a_vs" in ''|*[!0-9]*) _a_vs=stock ;; *) [ "$_a_vs" -ge 16 ] && [ "$_a_vs" -le 100 ] || _a_vs=stock ;; esac
 case "$_a_vs" in
-  30|50)
+  stock) : ;;
+  *)
     _a_vs_live="$(dumpsys audio 2>/dev/null | awk '/^- STREAM_MUSIC:/{f=1;next} f&&/^- STREAM_/{exit} f&&$1=="Max:"{print $2; exit}')"
     if [ "$_a_vs_live" = "$_a_vs" ]; then
       _f "       $T_A_VS_OK" "$_a_vs"
@@ -1760,6 +1763,12 @@ case "$_a_voice" in
     _vb=$((_a_voice * 5)); _vh=$((_a_voice * 6))
     _f "       $T_A_VOICE" "$_a_voice" "$((_vb / 10)).$((_vb % 10))" "$((_vh / 10)).$((_vh % 10))"
     ;;
+esac
+_a_width="$(_cfg dsp_width)"
+[ "$_a_dsp" = "off" ] && _a_width=0
+case "$_a_width" in
+  ''|off|0|*[!0-9]*) : ;;
+  *) _f "       $T_A_WIDTH" "$_a_width" "$((_a_width * 10))" ;;
 esac
 if [ "$_a_dsp" != "off" ]; then
   _l64="✗"; _l32="✗"
