@@ -393,6 +393,18 @@ the main ceiling's capacity (`cpu_capacity` x ceiling / hardware max) is at leas
 with the screen off: share of samples and the longest single hold, package from `uid_map.txt`
 (system uids are named as such). Unlike batterystats it also works while charging.
 
+`wifi_leave_events.log` (fix152) - the leave-bad-Wi-Fi watcher's own lines
+(`/data/adb/asb/wifi_fallback.log`, which keeps only 80), copied on every poll from the start
+of the capture, each line once: `YYYY-MM-DD HH:MM:SS wifi_fallback: <event>`. The report section
+**WI-FI LEAVE** counts releases by reason (out of range, no internet), Wi-Fi given back after
+the window and failed disables, the time from the first failing reading of a streak
+(`pass 1/N`) to its release (median and longest), and streaks that recovered on their own.
+
+`tools/asb_capture_compare.py` (fix152, host) reads captures and asbdiag reports from folders
+or zips and prints these figures per phone model; `--json` saves them, `--baseline` compares a
+new set with a saved one. `docs/field_baseline/fix150.json` is the set from the fix150 field
+logs.
+
 `mobile_traffic_context.txt` aggregates the existing ledger's selected-rmnet RX+TX counters by phase and lists only phases with at least **32 MiB**. It keeps the phase duration and screen context so a reviewer can identify a potentially material transfer window. It is a report-only context flag: observed bytes may contribute to radio energy in that phase, but they do not prove cause or assign a battery percentage.
 
 ---
