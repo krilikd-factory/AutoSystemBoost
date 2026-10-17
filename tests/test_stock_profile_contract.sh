@@ -114,7 +114,7 @@ need "$UI" "const colon = line.indexOf(':');"
 need "$UI" 'const cut = eq > 0 ? eq : colon;'
 need "$UI" 'function fmtStockLoad(raw) {'
 need "$UI" "T('stock_load_now', '1 min')"
-need "$UI" "setLiveLabel('bnStockDrainLabel', 'lv_drain', 'Screen drain');"
+need "$UI" "setLiveLabel('bnStockDrainLabel', 'stock_battery_current', 'Battery current');"
 need "$UI" 'Live read-only screen-on estimate from battery current and charge_full'
 need "$UI" 'id="stockTelemetry"'
 need "$UI" '.stock-telemetry { display:none !important;'

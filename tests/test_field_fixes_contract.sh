@@ -1185,4 +1185,20 @@ for l in ar de es fr hy id it pt ru tr uk zh; do grep -q '^T_A_WIDTH=' "$ROOT/ru
 for t in test_dsp_stereo_width_runtime.sh test_smart_trend_cool_runtime.sh; do [ -f "$ROOT/tests/$t" ] || fail "$t missing"; done
 echo "PASS: fix160 contract"
 ) || exit 1
+# ---- fix161 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix161: $*"; exit 1; }
+H="$ROOT/webroot/index.html"
+[ -f "$ROOT/runtime/asb_drain_meter.sh" ] || fail "no profile-independent drain meter"
+grep -q 'runtime/asb_drain_meter.sh" run' "$ROOT/service.sh" || fail "the meter is not started"
+[ -f "$ROOT/tools/asb_tree_check.sh" ] || fail "no tree check"
+[ -s "$ROOT/tools/asb_tree.sha256" ] || fail "no delivered-tree manifest"
+grep -q 'data-i18n="lv_slot_heat"' "$H" || fail "the usual-peak tile is still a bare temperature"
+grep -q 'class="cfg-reboot-row"' "$H" || fail "restarts are still three full-width bars"
+grep -q '^	    ui_print "      + ${ASB_SEC_AUDIO:-AUDIO}: ${ASB_I_HP_LIMIT' "$ROOT/common/install.sh" || fail "the headphone limiter is still a warning"
+grep -q 'берегите слух' "$ROOT/common/russiantext.sh" && fail "the hearing warning text is still there"
+for t in test_drain_meter_runtime.sh test_tree_check_runtime.sh test_webui_monitor_compact_runtime.sh; do [ -f "$ROOT/tests/$t" ] || fail "$t missing"; done
+echo "PASS: fix161 contract"
+) || exit 1
 echo "PASS: field-fix contracts"

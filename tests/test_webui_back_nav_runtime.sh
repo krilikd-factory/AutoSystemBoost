@@ -21,7 +21,7 @@ for id in bnDrainStrip bnDrainOff bnSlotTemp bnDrain; do grep -q "id=\"$id\"" "$
 grep -q 'onclick="liveDrainOpen()"' "$H" || fail "the drain strip does not open the sheet"
 for l in en ru uk de es fr it pt tr id ar hy zh; do
   J="$ROOT/webroot/i18n/$l.json"
-  for k in lv_slot_temp lv_scr_on lv_scr_off lv_drain_title lv_drain_on_now lv_drain_on_recent lv_drain_on_slot lv_drain_on_wait lv_drain_off_measured lv_drain_off_wait lv_drain_left lv_drain_note; do
+  for k in lv_slot_heat lv_heat_cool lv_heat_norm lv_heat_warm lv_heat_tip lv_drain_on_meter lv_drain_cmp lv_scr_on lv_scr_off lv_drain_title lv_drain_on_now lv_drain_on_recent lv_drain_on_slot lv_drain_on_wait lv_drain_off_measured lv_drain_off_wait lv_drain_left lv_drain_note; do
     grep -q "\"$k\"" "$J" || fail "$l.json lacks $k"
   done
   for k in lv_drain_on_now lv_drain_off_measured lv_drain_left; do
