@@ -430,6 +430,13 @@ esac
 #
 # Recorded per package rather than replayed wholesale: an exemption the user granted
 # deliberately must come back, and one they never had must not appear.
+if [ -f /data/adb/asb/doze_whitelist_added ] && command -v dumpsys >/dev/null 2>&1; then
+  while IFS= read -r _p || [ -n "$_p" ]; do
+    case "$_p" in *[!A-Za-z0-9_.]*|'') continue ;; esac
+    dumpsys deviceidle whitelist "-$_p" >/dev/null 2>&1
+  done < /data/adb/asb/doze_whitelist_added
+  rm -f /data/adb/asb/doze_whitelist_added 2>/dev/null
+fi
 if [ -f /data/adb/asb/doze_whitelist_removed ] && command -v dumpsys >/dev/null 2>&1; then
   while IFS= read -r _p; do
     [ -n "$_p" ] && dumpsys deviceidle whitelist "+$_p" >/dev/null 2>&1
