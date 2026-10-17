@@ -1506,26 +1506,29 @@ body.config-active #livePage.open {
   border-color: rgba(239,68,68,0.35);
   color: #fca5a5;
 }
-/* Monitor, compact (fix161). The drain pair moved to the top of the card on one line, the tags
- * sit on the card's top edge instead of a row of their own, the grid below is four rows, and
- * the gap under the header is the page's own - together about 150 px handed back to the space
- * above the tab bar. */
+/* Monitor, compact (fix161, header fix162). The drain pair is the first row of the card, the
+ * grid below is four rows, and the gap under the header is the page's own. The tags sat on the
+ * card's top border in fix161 and read as a sticker half off the card; they now share a slim
+ * title row inside it, the way the Home card carries its version chip beside the name. */
 .live-page .header { margin-bottom: 22px; }
-.live-page .smart-banner { position: relative; margin-top: 4px; margin-bottom: 12px; padding: 14px 12px 11px; gap: 10px; }
-.live-page .smart-banner-row.tags { position: absolute; top: -8px; right: 12px; gap: 4px; z-index: 1; }
-.live-page .smart-banner-tag {
-  background: linear-gradient(rgba(0,225,200,0.18), rgba(0,225,200,0.18)), var(--bg);
-  padding: 3px 7px; border-radius: 7px; font-size: 8.5px;
-}
-.live-page .smart-banner-tag.warn { background: linear-gradient(rgba(245,158,11,0.18), rgba(245,158,11,0.18)), var(--bg); }
-.live-page .smart-banner-tag.veto { background: linear-gradient(rgba(239,68,68,0.18), rgba(239,68,68,0.18)), var(--bg); }
+.live-page .smart-banner { margin-top: 4px; margin-bottom: 12px; padding: 10px 12px 11px; gap: 9px; }
+.smart-banner-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 18px; }
+.smart-banner-title { flex: 1 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: 7px;
+  font: 600 9px/1.2 var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--text-tertiary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.smart-banner-title > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.smart-banner-dot { flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; background: #2ee6c4;
+  box-shadow: 0 0 6px rgba(46,230,196,0.65); }
+.smart-banner-head .smart-banner-row.tags { flex: 0 1 auto; min-width: 0; justify-content: flex-end; gap: 4px; }
+.live-page .smart-banner-tag { padding: 3px 7px; border-radius: 7px; font-size: 8.5px; letter-spacing: 0.06em; }
 .live-page .smart-banner-row:not(.tags) { gap: 10px 8px; }
+.smart-banner-sub { margin-left: 4px; font: 500 9.5px/1 var(--sans); color: var(--text-tertiary); }
 .live-page .smart-drain { padding: 5px 8px 5px 7px; gap: 8px; border-radius: 11px; }
 .live-page .smart-drain-half { gap: 7px; }
 .live-page .smart-drain-ico { width: 22px; height: 22px; border-radius: 7px; }
 .live-page .smart-drain-ico .tech-icon { width: 13px; height: 13px; }
 .live-page .smart-drain-txt { gap: 1px; }
-.live-page .smart-drain-lbl { font-size: 7.5px; }
+.live-page .smart-drain-lbl { font-size: 8px; line-height: 1.25; }
 .live-page .smart-drain-val { font-size: 13.5px; line-height: 1.05; }
 .live-page .smart-drain-more { font-size: 16px; }
 .live-page .smart-banner-value.heat-warm { color: #f5c26b; }
@@ -2979,6 +2982,7 @@ html[data-asb-theme="light"] .smart-drain-more { color:rgba(0,99,79,.55) !import
 html[data-asb-theme="light"] .live-page .smart-banner-tag { background:linear-gradient(rgba(0,124,99,.10),rgba(0,124,99,.10)),#ffffff !important; border-color:rgba(0,124,99,.30) !important; color:#00634f !important; }
 html[data-asb-theme="light"] .live-page .smart-banner-tag.warn { background:linear-gradient(rgba(180,110,0,.10),rgba(180,110,0,.10)),#ffffff !important; border-color:rgba(180,110,0,.35) !important; color:#8a5700 !important; }
 html[data-asb-theme="light"] .live-page .smart-banner-tag.veto { background:linear-gradient(rgba(180,35,24,.10),rgba(180,35,24,.10)),#ffffff !important; border-color:rgba(180,35,24,.35) !important; color:#b42318 !important; }
+html[data-asb-theme="light"] .smart-banner-dot { background:#00a383; box-shadow:none; }
 html[data-asb-theme="light"] .live-page .smart-banner-value.heat-warm { color:#8a5700 !important; }
 html[data-asb-theme="light"] .live-drain-block { background:#f7f9fa !important; border-color:var(--border) !important; }
 html[data-asb-theme="light"] .live-drain-cmp { background:#f7f9fa !important; }
@@ -3523,8 +3527,11 @@ body.ufo-flying .logo-glyph { opacity: 0; }
 
   <!-- Smart Mode info banner (hidden when Smart Mode disabled) -->
   <div class="smart-banner" id="liveSmartBanner" style="display:none;">
-    <div class="smart-banner-row tags" id="bnTagRow">
-      <span class="smart-banner-tag" id="bnFb">cold start</span>
+    <div class="smart-banner-head">
+      <span class="smart-banner-title"><span class="smart-banner-dot" aria-hidden="true"></span><span data-i18n="lv_card_smart">Smart learning</span></span>
+      <div class="smart-banner-row tags" id="bnTagRow">
+        <span class="smart-banner-tag" id="bnFb">cold start</span>
+      </div>
     </div>
     <button type="button" class="smart-drain" id="bnDrainStrip" onclick="liveDrainOpen()" aria-haspopup="dialog">
       <span class="smart-drain-half">
@@ -3540,19 +3547,19 @@ body.ufo-flying .logo-glyph { opacity: 0; }
     </button>
     <div class="smart-banner-row">
       <div class="smart-banner-item">
-        <span class="smart-banner-label">🤖 Bucket</span>
+        <span class="smart-banner-label" data-i18n="lv_bucket">Slot</span>
         <span class="smart-banner-value" id="bnBucket">—</span>
       </div>
       <div class="smart-banner-item">
-        <span class="smart-banner-label">Conf</span>
+        <span class="smart-banner-label" data-i18n="lv_conf">Confidence</span>
         <span class="smart-banner-value" id="bnConf">—</span>
       </div>
       <div class="smart-banner-item">
-        <span class="smart-banner-label" data-i18n="lv_alpha">Alpha</span>
+        <span class="smart-banner-label" data-i18n="lv_alpha">Battery lean</span>
         <span class="smart-banner-value" id="bnAlpha">—</span>
       </div>
       <div class="smart-banner-item">
-        <span class="smart-banner-label" data-i18n="lv_app">App</span>
+        <span class="smart-banner-label" data-i18n="lv_app">Load</span>
         <span class="smart-banner-value" id="bnApp">—</span>
       </div>
       <div class="smart-banner-item">
@@ -3576,8 +3583,11 @@ body.ufo-flying .logo-glyph { opacity: 0; }
 
   <!-- Stock has no Smart/FSM policy, but direct ROM readings still belong in Monitor. -->
   <div class="smart-banner stock-rom-banner" id="liveStockRomBanner" style="display:none;" aria-live="polite">
-    <div class="smart-banner-row tags" id="bnStockTagRow">
-      <span class="smart-banner-tag" id="bnStockSrc">rom</span>
+    <div class="smart-banner-head">
+      <span class="smart-banner-title"><span class="smart-banner-dot" aria-hidden="true"></span><span data-i18n="lv_card_rom">Battery &amp; system</span></span>
+      <div class="smart-banner-row tags" id="bnStockTagRow">
+        <span class="smart-banner-tag" id="bnStockSrc">rom</span>
+      </div>
     </div>
     <div class="smart-banner-row">
       <div class="smart-banner-item"><span class="smart-banner-label" id="bnStockDrainLabel" data-i18n="stock_battery_current">Battery current</span><span class="smart-banner-value" id="bnStockDrain">—</span></div>
@@ -4860,8 +4870,8 @@ function lvSlotHeat(tx10, coolx10, warmx10) {
 function lvDrainHome(banner) {
   const st = _el('bnDrainStrip');
   if (!st || !banner || st.parentElement === banner) return;
-  const tags = banner.querySelector('.smart-banner-row.tags');
-  banner.insertBefore(st, tags ? tags.nextSibling : banner.firstChild);
+  const head = banner.querySelector('.smart-banner-head');
+  banner.insertBefore(st, head ? head.nextSibling : banner.firstChild);
 }
 /* The profile-independent drain meter (runtime/asb_drain_meter.sh, fix161): the same method
  * for every profile, Stock included, kept per profile so they can be compared. */
@@ -8953,8 +8963,8 @@ function renderSmartSubLine(kv) {
       const fb    = parseInt(kv.smart_fallback_level || '0',   10);
       const night = parseInt(kv.smart_sleep_override || '0',   10);
       const veto  = parseInt(kv.smart_thermal_veto   || '0',   10);
-      const dpNames = ['sleep','wake','morn','day','evening','late'];
-      const dpName = (dp >= 0 && dp < dpNames.length) ? dpNames[dp] : '?';
+      const dpNames = ['sleep','wake','morning','day','evening','late'];
+      const dpName = (dp >= 0 && dp < dpNames.length) ? T('lv_dp_' + dp, dpNames[dp]) : '?';
       /* Engine version on the badge beside the profile name.
        *
        * That badge said "alpha", which described the module's maturity when Smart was new
@@ -9168,7 +9178,7 @@ function paintStockLive(stockKv = null) {
   const chargeFullRaw = n(kv['battery.charge_full']);
   const chargeFullMah = chargeFullRaw > 10000 ? chargeFullRaw / 1000 : chargeFullRaw;
   const batteryStatus = String(kv['battery.status'] || '').toLowerCase();
-  const isCharging = batteryStatus === 'charging' || batteryStatus === 'full' || ma < 0;
+  const isCharging = batteryStatus !== 'discharging' && (batteryStatus === 'charging' || batteryStatus === 'full' || ma < 0);
   const pctph = (!isCharging && chargeFullMah > 0 && Math.abs(ma) > 0)
     ? (Math.abs(ma) * 100 / chargeFullMah) : 0;
   const sampleTs = n(kv.ts) * 1000;
@@ -9224,9 +9234,9 @@ function paintStockLive(stockKv = null) {
   }
   const uptimeSec = Math.floor(parseFloat(kv.uptime || '0'));
   const uptime = uptimeSec > 0
-    ? (Math.floor(uptimeSec / 86400) ? Math.floor(uptimeSec / 86400) + 'd ' : '')
-      + Math.floor((uptimeSec % 86400) / 3600) + 'h '
-      + Math.floor((uptimeSec % 3600) / 60) + 'm'
+    ? (Math.floor(uptimeSec / 86400) ? Math.floor(uptimeSec / 86400) + T('unit_d', 'd') + ' ' : '')
+      + Math.floor((uptimeSec % 86400) / 3600) + T('unit_h', 'h') + ' '
+      + Math.floor((uptimeSec % 3600) / 60) + T('unit_m', 'm')
     : '—';
   const lpmHeld = n(kv['settings.global.mobile_data_always_on']) === 1;
   /* Tag row, so the card is the same height as Smart's.
@@ -9836,8 +9846,8 @@ async function pollLive(visible) {
           const night = parseInt(kv.smart_sleep_override || '0', 10);
           const veto  = parseInt(kv.smart_thermal_veto   || '0', 10);
           const appH  = parseInt(kv.smart_app_hint || '0', 10);
-          const dpNames = ['sleep','wake','morn','day','eve','late'];
-          const fbNames = ['exact','daypart','class','global','cold start'];
+          const dpNames = ['sleep','wake','morning','day','evening','late'];
+          const fbNames = ['exact slot','other day type','similar hours','best slot','cold start'];
           const appNames = ['idle','light','medium','heavy','gaming'];
 
           // Warm-up: the governor publishes state from its first tick, before it has sampled a
@@ -9847,10 +9857,20 @@ async function pollLive(visible) {
           // Smart profile, both correcting themselves seconds later - which reads as a bug
           // because it is one.
           const warm = (kv.state_warmup === '1');
-          _el('bnBucket').textContent = '#' + bid + ' ' + (dpNames[dp] || '?') + (we ? '·we' : '·wd');
+          {
+            const bEl = _el('bnBucket');
+            const dpTxt = T('lv_dp_' + dp, dpNames[dp] || '?');
+            const dtTxt = we ? T('lv_we_short', 'wknd') : T('lv_wd_short', 'wkday');
+            bEl.textContent = dpTxt;
+            const sub = document.createElement('span');
+            sub.className = 'smart-banner-sub';
+            sub.textContent = dtTxt;
+            bEl.appendChild(sub);
+            bEl.title = '#' + bid + ' \u00b7 ' + dpTxt + ' \u00b7 ' + dtTxt;
+          }
           _el('bnConf').textContent = Math.round(conf / 10) + '%';
-          _el('bnAlpha').textContent = Math.round(alpha / 10) + '% bat';
-          _el('bnApp').textContent = warm ? '\u2026' : (appNames[appH] || '?');
+          _el('bnAlpha').textContent = Math.round(alpha / 10) + '%';
+          _el('bnApp').textContent = warm ? '\u2026' : T('lv_app_' + appH, appNames[appH] || '?');
 
           // Second row: four more Smart-owned readings, so the card is two full rows instead
           // of one row plus an orphan hanging under Bucket.
@@ -9959,7 +9979,8 @@ async function pollLive(visible) {
             const fbTag = document.createElement('span');
             fbTag.className = 'smart-banner-tag';
             if (fb === 4) fbTag.classList.add('warn');
-            fbTag.textContent = (fbNames[fb] || 'fallback') + (fb > 0 && fb < 4 ? ' fallback' : '');
+            fbTag.textContent = T('lv_fb_' + fb, fbNames[fb] || 'fallback');
+            fbTag.title = T('lv_fb_tip', 'Which learned slot Smart follows now: its own for this time of day and day type, or a borrowed one while its own still has too little history.');
             tagRow.appendChild(fbTag);
             if (night) {
               const t = document.createElement('span');
