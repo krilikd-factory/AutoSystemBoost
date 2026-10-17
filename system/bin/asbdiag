@@ -156,8 +156,23 @@ asb_gfx_pkg() {   # stdin: dumpsys graphicsstats; stdout: "package frames janky"
     /^Janky frames:/ { if (p != "") j[p] += $3 }
     END { for (k in f) printf "%s %.0f %.0f\n", k, f[k], j[k] }'
 }
-asb_gfx_run_delta() {   # $1 earlier asb_gfx_pkg lines, $2 later ones, $3 seconds between
-  { printf '%s\n' "$1"; echo "--"; printf '%s\n' "$2"; } | awk -v S="${3:-0}" '
+asb_report_host() {
+  _rh_pr="${ASB_PROC_ROOT:-/proc}"
+  for _rh_p in $(cat "${ASB_CPUSET_ROOT:-/dev/cpuset}/top-app/cgroup.procs" 2>/dev/null); do
+    case "$_rh_p" in ''|*[!0-9]*) continue ;; esac
+    [ "$(cat "$_rh_pr/$_rh_p/oom_score_adj" 2>/dev/null)" = 0 ] || continue
+    _rh_u="$(awk '/^Uid:/ {print $2; exit}' "$_rh_pr/$_rh_p/status" 2>/dev/null)"
+    case "$_rh_u" in ''|*[!0-9]*) continue ;; esac
+    [ "$_rh_u" -ge 10000 ] || continue
+    _rh_c="$(tr '\000' '\n' < "$_rh_pr/$_rh_p/cmdline" 2>/dev/null | head -1)"
+    case "$_rh_c" in ''|*/*|*' '*) continue ;; esac
+    printf '%s' "${_rh_c%%:*}"
+    return 0
+  done
+  return 0
+}
+asb_gfx_run_delta() {   # $1 earlier asb_gfx_pkg lines, $2 later ones, $3 seconds between, $4 app in front at the start
+  { printf '%s\n' "$1"; echo "--"; printf '%s\n' "$2"; } | awk -v S="${3:-0}" -v H="${4:-}" '
     !sec && $0 == "--" { sec = 1; next }
     !sec { if (NF == 3) { f[$1] = $2; j[$1] = $3 }; next }
     NF == 3 { df = $2 - f[$1]; dj = $3 - j[$1]
@@ -172,19 +187,22 @@ asb_gfx_run_delta() {   # $1 earlier asb_gfx_pkg lines, $2 later ones, $3 second
         for (k = 1; k <= n; k++) if (!(k in used) && (b == 0 || DJ[k] > DJ[b])) b = k
         if (b == 0) break
         used[b] = 1
-        line = line (line == "" ? "" : "  ·  ") sprintf("%s %d of %d frames (%.2f/s)", P[b], DJ[b], DF[b], DJ[b] / S)
+        line = line (line == "" ? "" : "  ·  ") sprintf("%s %d of %d frames (%.2f/s%s)", P[b], DJ[b], DF[b], DJ[b] / S, (H != "" && P[b] == H) ? ", the window this report is printed in" : "")
         if (r == 1) { tp = P[b]; tj = DJ[b]; tf = DF[b] }
       }
       printf "while this report ran (%d s), janky frames by app: %s\n", S, line
       # One app missing most of what it drew, about every other second or more, while the
       # user was only waiting for this report: a redraw that runs on its own.
-      if (tj / S >= 0.5 && tj * 2 >= tf)
+      if (tj / S >= 0.5 && tj * 2 >= tf && H != "" && tp == H)
+        printf "host: %s missed %d of the %d frames it drew - the report scrolling in it, not a lag\n", tp, tj, tf
+      else if (tj / S >= 0.5 && tj * 2 >= tf)
         printf "steady: %s missed %d of the %d frames it drew - about %.1f a second while you only waited for this report\n", tp, tj, tf, tj / S
     }'
 }
 # asb_gfx_pkg_end
 _gfx_run0="$(dumpsys graphicsstats 2>/dev/null | asb_gfx_pkg)"
 _gfx_run0_t="$(date +%s)"
+_gfx_host="$(asb_report_host)"
 
 # =====================================================================
 SEC "0. BOOT TIMELINE  (debug-only passive lifecycle evidence)"
@@ -1846,10 +1864,16 @@ _vlim="$(dumpsys audio 2>/dev/null | grep -iE 'safe_?media|safemedia|csd|sound_?
 if [ -n "$_vlim" ]; then
   P "  volume limits Android applies (safe media volume, sound dose, absolute volume):"
   printf '%s\n' "$_vlim" | while IFS= read -r _vl; do P "    $_vl"; done
-  # ASB's limiter switch writes audio_safe_volume_state=0 at boot. If the dump still reads
-  # ACTIVE, Android armed the limiter again after that - say so instead of the install claim.
-  if [ "$(cfg audio_remove_volume_limit)" = 1 ] && printf '%s\n' "$_vlim" | grep -qiE 'SAFE_MEDIA_VOLUME_ACTIVE|SafeMediaVolumeState[=: ]+3'; then
-    NOTE "audio_remove_volume_limit=1, but Android reports the safe media volume ACTIVE: the system armed the limiter again after boot, so headphone/Bluetooth volume can be capped below the slider"
+  if [ "$(cfg audio_remove_volume_limit)" = 1 ]; then
+    _smb="$(getprop audio.safemedia.bypass 2>/dev/null)"
+    NOTE "audio.safemedia.bypass = ${_smb:-<unset>} (set before Android starts while audio_remove_volume_limit=1)"
+    if printf '%s\n' "$_vlim" | grep -qiE 'SAFE_MEDIA_VOLUME_ACTIVE|SafeMediaVolumeState[=: ]+3'; then
+      if [ "$_smb" = true ]; then
+        NOTE "audio_remove_volume_limit=1 and the bypass is set, yet Android reports the safe media volume ACTIVE: this ROM keeps its own limiter - headphone/Bluetooth volume can still be capped below the slider"
+      else
+        NOTE "audio_remove_volume_limit=1, but Android reports the safe media volume ACTIVE and the bypass is not set: reboot once after turning the switch on - Android decides the limiter at boot"
+      fi
+    fi
   fi
 else
   NOTE "volume limits: the audio service printed no safe-volume / sound-dose / absolute-volume lines on this build"
@@ -2033,15 +2057,23 @@ if [ -n "$_txq_want" ] && [ "$_txq_want" != "stock" ]; then
   # This read rmnet_data0 and fell back to wlan0, so a phone on Wi-Fi with the modem
   # idle reported the modem's untouched 1000 and looked like the tweak had failed.
   # Naming each interface with its own value says plainly which ones took the setting.
-  _txq_seen=""
+  _txq_seen=""; _txq_mob=""; _txq_bad=""
+  case "$_txq_want" in short) _txq_len=256 ;; shorter) _txq_len=128 ;; *) _txq_len="" ;; esac
   for _td in /sys/class/net/*/tx_queue_len; do
     [ -r "$_td" ] || continue
     _tn="$(echo "$_td" | cut -d/ -f5)"
-    case "$_tn" in lo|dummy*|ifb*|gre*|erspan*|*vti*|ovnet*|p2p*|sit*|ip6tnl*) continue ;; esac
+    case "$_tn" in lo|dummy*|ifb*|gre*|ip6gre*|erspan*|*vti*|ovnet*|p2p*|sit*|ip6tnl*|tun*|tap*) continue ;; esac
     _tv="$(cat "$_td" 2>/dev/null)"
-    [ -n "$_tv" ] && _txq_seen="$_txq_seen $_tn=$_tv"
+    [ -n "$_tv" ] || continue
+    case "$_tn" in
+      rmnet*|r_rmnet*|rev_rmnet*|ccmni*) _txq_mob="$_txq_mob $_tn=$_tv" ;;
+      *) _txq_seen="$_txq_seen $_tn=$_tv"
+         case "$_tn" in wlan*) [ -n "$_txq_len" ] && [ "$_tv" != "$_txq_len" ] && _txq_bad="$_txq_bad $_tn" ;; esac ;;
+    esac
   done
-  NOTE "net_txqueue=$_txq_want - live:${_txq_seen:- unreadable}"
+  NOTE "net_txqueue=$_txq_want (${_txq_len:-?} on Wi-Fi) - live:${_txq_seen:- unreadable}"
+  [ -n "$_txq_mob" ] && NOTE "  mobile links left to the platform:$_txq_mob"
+  [ -n "$_txq_bad" ] && NOTE "  WARN:$_txq_bad not at ${_txq_len} - the queue did not take (send this diag)"
 fi
 
 
@@ -3345,10 +3377,12 @@ fi
 # The same counters between the top of this report and here, per app (fix143).
 if [ -n "$_gfx_run0" ]; then
   _gfx_run1="$(dumpsys graphicsstats 2>/dev/null | asb_gfx_pkg)"
-  _gfx_run_lines="$(asb_gfx_run_delta "$_gfx_run0" "$_gfx_run1" "$(( $(date +%s) - ${_gfx_run0_t:-0} ))")"
+  _gfx_run_lines="$(asb_gfx_run_delta "$_gfx_run0" "$_gfx_run1" "$(( $(date +%s) - ${_gfx_run0_t:-0} ))" "$_gfx_host")"
   if [ -n "$_gfx_run_lines" ]; then
     printf '%s\n' "$_gfx_run_lines" | while IFS= read -r _gl; do
       case "$_gl" in
+        host:*) NOTE "${_gl#host: }"
+                NOTE "  a terminal or root manager redraws on every line of output - read the other apps' figures, and judge lags from the full-day capture" ;;
         steady:*) NOTE "${_gl#steady: }"
                   NOTE "  a redraw that runs by itself: it lands in every ASB state and every app. In SystemUI, turn off one thing it"
                   NOTE "  updates every second (network-speed meter, seconds on the clock) and run asbdiag again to compare" ;;
