@@ -1159,19 +1159,34 @@ lk_emit_cluster_work_summary() {
       k0 = C0 * $14 / H0; k1 = C1 * $16 / H1
       lev = (k0 >= k1) ? 1 : ((k0 * 10 >= k1 * 9) ? 2 : 0)
       p0 += w0; p1 += w1; kn[lev]++; kb[lev] += w1
+      ma = $22 + 0
+      if (ma > 0) { kma[lev] += ma; kmn[lev]++ }
+      if ($36 + 0 >= 40) {
+        wt++; wn[lev]++; wb[lev] += w1
+        if (ma > 0) { wma[lev] += ma; wmn[lev]++ }
+      }
     }
+    function mean_ma(s, c) { return c ? sprintf(", mean %d mA", s / c) : "" }
     END {
       if (n < 10) exit
       print "===== SCREEN-ON WORK BY CLUSTER (2 clusters) ====="
       printf "screen-on samples %d: prime cores working in %d%%, main cores in %d%%\n", n, 100 * p1 / n, 100 * p0 / n
-      if (kn[1]) printf "  main ceiling level with the prime (capacity at the ceilings): %4d samples, prime working in %d%%\n", kn[1], 100 * kb[1] / kn[1]
-      if (kn[2]) printf "  main ceiling within 10%% of the prime'"'"'s:                       %4d samples, prime working in %d%%\n", kn[2], 100 * kb[2] / kn[2]
-      if (kn[0]) printf "  main ceiling more than 10%% below the prime'"'"'s:                 %4d samples, prime working in %d%%\n", kn[0], 100 * kb[0] / kn[0]
+      if (kn[1]) printf "  main ceiling level with the prime (capacity at the ceilings): %4d samples, prime working in %d%%%s\n", kn[1], 100 * kb[1] / kn[1], mean_ma(kma[1], kmn[1])
+      if (kn[2]) printf "  main ceiling within 10%% of the prime'"'"'s:                       %4d samples, prime working in %d%%%s\n", kn[2], 100 * kb[2] / kn[2], mean_ma(kma[2], kmn[2])
+      if (kn[0]) printf "  main ceiling more than 10%% below the prime'"'"'s:                 %4d samples, prime working in %d%%%s\n", kn[0], 100 * kb[0] / kn[0], mean_ma(kma[0], kmn[0])
+      if (wt >= 5) {
+        printf "  warm (surface 40 C and above), %d samples:\n", wt
+        if (wn[1]) printf "    main level with the prime:        %4d samples, prime working in %d%%%s\n", wn[1], 100 * wb[1] / wn[1], mean_ma(wma[1], wmn[1])
+        if (wn[2]) printf "    main within 10%% of the prime'"'"'s:   %4d samples, prime working in %d%%%s\n", wn[2], 100 * wb[2] / wn[2], mean_ma(wma[2], wmn[2])
+        if (wn[0]) printf "    main more than 10%% below it:      %4d samples, prime working in %d%%%s\n", wn[0], 100 * wb[0] / wn[0], mean_ma(wma[0], wmn[0])
+      }
       print "working = above a quarter of the cluster'"'"'s top clock. The scheduler sends work to the cluster"
       print "with more capacity at its ceiling, and the two prime cores do the same work at a higher cost:"
       print "a high prime share with the main ceiling below the prime'"'"'s is the ceilings choosing the dearer"
       print "cores. Smart keeps them level in light idle and moderate use (fix130), or within 10% where"
-      print "the level step is over 60% of the main maximum (fix132)."
+      print "the level step is over 60% of the main maximum (fix132), and from fix156 also under a comfort"
+      print "trim, in HEAVY and in SUSTAINED - the warm rows are where that shows. mA is the sampled"
+      print "discharge current, a lower bound on screen (see CURRENT / SOC CONSISTENCY)."
       print ""
     }' "$_cwd" "$_cwp"
 }
