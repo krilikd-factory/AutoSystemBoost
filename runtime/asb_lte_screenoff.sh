@@ -92,6 +92,9 @@ LIGHT_TICK_LTE_S="${ASB_LTE_LIGHT_TICK_LTE_S:-10}"
 [ "$LIGHT_TICK_LTE_S" -gt "$LIGHT_TICK_S" ] 2>/dev/null && LIGHT_TICK_LTE_S="$LIGHT_TICK_S"
 LIGHT_LOW_TICKS="${ASB_LTE_LIGHT_LOW_TICKS:-6}"
 LIGHT_HOLD_S="${ASB_LTE_LIGHT_HOLD_S:-600}"
+LIGHT_HOLD_MAX_S="${ASB_LTE_LIGHT_HOLD_MAX_S:-2400}"
+LIGHT_FLAP_S="${ASB_LTE_LIGHT_FLAP_S:-300}"
+LHOLDN="$STATE_DIR/lte_light.holdlen"
 # Screen off: a window at this rate is a transfer (a download, an update, a backup), which
 # finishes sooner on 5G - not the stream this mode is for (fix131).
 OFF_BULK_KBPS="${ASB_LTE_OFF_BULK_KBPS:-3000}"
@@ -581,10 +584,25 @@ _light_tick() {   # $1 = kbit/s over the last window; streaks in/out via _lowN a
     elif [ "$_busyN" -ge "$LIGHT_BUSY_TICKS" ] 2>/dev/null; then _why="${_kb} kbit/s sustained over ${_busyN} windows"
     fi
     [ -n "$_why" ] || return 0
+    _hn="$LIGHT_HOLD_S"
+    _flap=""
+    _st0="$(cat "$SINCE" 2>/dev/null)"
+    case "$_st0" in
+      ''|*[!0-9]*) : ;;
+      *) if [ $(( $(date +%s) - _st0 )) -lt "$LIGHT_FLAP_S" ] 2>/dev/null; then
+           _hp="$(cat "$LHOLDN" 2>/dev/null)"
+           case "$_hp" in ''|*[!0-9]*) _hp="$LIGHT_HOLD_S" ;; esac
+           _hn=$(( _hp * 2 ))
+           [ "$_hn" -gt "$LIGHT_HOLD_MAX_S" ] && _hn="$LIGHT_HOLD_MAX_S"
+           [ "$_hn" -lt "$LIGHT_HOLD_S" ] && _hn="$LIGHT_HOLD_S"
+           _flap=" (LTE lasted $(( $(date +%s) - _st0 ))s)"
+         fi ;;
+    esac
     do_restore
     _busyN=0
-    echo $(( $(date +%s) + LIGHT_HOLD_S )) > "$LHOLD" 2>/dev/null
-    _log "light: ${_why} - 5G back for at least ${LIGHT_HOLD_S}s"
+    echo "$_hn" > "$LHOLDN" 2>/dev/null
+    echo $(( $(date +%s) + _hn )) > "$LHOLD" 2>/dev/null
+    _log "light: ${_why} - 5G back for at least ${_hn}s${_flap}"
     return 0
   fi
   _busyN=0
