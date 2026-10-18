@@ -1710,12 +1710,17 @@ cat > "$T/bin/settings" <<'S'
 #!/bin/sh
 [ "$1" = list ] || exit 0
 case "$2" in
-  system) printf '%s\n' 'peak_refresh_rate=165.0' 'show_network_speed=1' 'status_bar_show_battery_percent=1' 'screen_off_timeout=30000' ;;
-  secure) printf '%s\n' 'clock_seconds=1' 'doze_always_on=0' ;;
+  system) printf '%s\n' 'peak_refresh_rate=165.0' 'show_network_speed=1' 'status_bar_show_battery_percent=1' 'screen_off_timeout=30000' \
+            'oplus.radio.smart5g_apk_cfg=ver_num=9;filetrans=org.zwanoo.android.speedtest,com.Wifi.lte5g.Internetspeed;others=com.antutu.ABenchMark' ;;
+  secure) printf '%s\n' 'clock_seconds=1' 'doze_always_on=0' 'icon_blacklist=rotate,ime,show_network_speed,vpn' ;;
   global) printf '%s\n' 'wifi_on=1' ;;
 esac
 S
-printf '#!/bin/sh\nexit 0\n' > "$T/bin/dumpsys"
+cat > "$T/bin/dumpsys" <<'S'
+#!/bin/sh
+[ "$1" = wallpaper ] || exit 0
+printf '%s\n' 'System wallpaper state:' ' User 0: id=12 mWidth=1440' '  mWallpaperComponent=ComponentInfo{com.example.live/com.example.live.Waves}'
+S
 chmod +x "$T/bin/"*
 PATH="$T/bin:$PATH" sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_display_config_capture' "$C" "$T/a"
 D="$T/a/display_config.txt"
@@ -1723,6 +1728,11 @@ grep -qx '## status bar redraw settings' "$D" || f "no status-bar section in dis
 grep -qx 'system: show_network_speed=1' "$D" || f "network speed meter not recorded"
 grep -qx 'secure: clock_seconds=1' "$D" || f "seconds on the clock not recorded"
 grep -q 'screen_off_timeout\|doze_always_on\|wifi_on' "$D" && f "unrelated settings recorded"
+# fix168: the owner's capture listed oplus.radio.smart5g_apk_cfg - two kilobytes of 5G app
+# lists - because its VALUE holds "Internetspeed". Keys are matched, not values.
+grep -q 'smart5g_apk_cfg' "$D" && f "a setting matched on its value"
+grep -qx 'secure: icon_blacklist=rotate,ime,show_network_speed,vpn' "$D" || f "hidden status-bar icons not recorded"
+grep -qx 'wallpaper: ComponentInfo{com.example.live/com.example.live.Waves} - a wallpaper service; a live one redraws whenever it is visible' "$D" || f "wallpaper not recorded"
 J="$T/a/jank_trace.tsv"
 echo "# epoch|iso_time|phase|fsm_state|interval_s|main_at_cap|prime_at_cap|touches|frames|janky|deadline_missed|slow_ui|high_input|main_cap_pct|prime_cap_pct|fg_pkg|jank_pkgs" > "$J"
 i=0
@@ -1735,6 +1745,7 @@ printf '%s\n' "$out" | grep -q '^com.android.systemui missed deadlines in 10 of 
 printf '%s\n' "$out" | grep -q '^status-bar settings read on this phone at the start of the capture:$' || f "settings heading missing: $out"
 printf '%s\n' "$out" | grep -qx '  system: show_network_speed=1' || f "network speed not listed: $out"
 printf '%s\n' "$out" | grep -qx '  secure: clock_seconds=1' || f "clock seconds not listed: $out"
+printf '%s\n' "$out" | grep -q '^  wallpaper: ComponentInfo{com.example.live' || f "wallpaper not listed: $out"
 cp "$J" "$T/b/jank_trace.tsv"
 out2="$(sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit_jank_summary' "$C" "$T/b" 2>&1)"
 printf '%s\n' "$out2" | grep -q 'missed deadlines in 10 of 10' || f "steady redraw line missing without a config file"
@@ -2257,7 +2268,7 @@ for k in ("lv_bucket", "lv_conf", "lv_alpha", "lv_app", "lv_basis", "lv_slot_hea
 assert 'id="bnSes"' not in sb and 'id="bnBasis"' in sb, "Basis did not take the sessions slot"
 g = s[s.index('<div class="live-metrics">'):s.index('<section class="stock-telemetry"')]
 rows = g.count('<div class="live-row">')
-cells = g.count('<div class="live-cell">')
+cells = len(re.findall(r'<div class="live-cell"(?: data-lvi="[a-z]+")?>', g))
 assert rows == 3 and cells == 9 and "live-cell-wide" not in g, "live grid is %d rows / %d cells, want 3 x 3" % (rows, cells)
 assert "fbTag" not in s and "T('lv_fb_' + fb," in s, "the slot source is still a chip"
 assert "T('lv_mode_guard'," in s and "T('lv_mode_night'," in s, "night and thermal guard are not shown in Basis"
@@ -2521,6 +2532,398 @@ grep -q "(_cfgGroup || 'hub') === _cfgShownScreen && performance.now() < _cfgEnt
 _n="$(grep -c "list.classList.add('cfg-stagger');" "$W")"
 [ "$_n" = 1 ] || fail "cfg-stagger added in $_n places (want exactly the screen-change one)"
 echo "PASS webui quiet ui: cues switchable and quiet over other audio, entrance only on a change of screen"
+)
+
+t_webui_stock_monitor_runtime() (
+# Runtime (fix168): on Stock the Monitor shows nine real ROM readings, never a trip point.
+#
+# Owner's screenshots after switching Smart -> Stock: CPU 95 C on a phone at 43 C, cells left
+# as placeholders, and on a second visit almost nothing at all. The OP15 publishes
+# cpu-hw-trip-0/1 as thermal zones reading a constant 95000 and the CPU filter took them; the
+# page cleared its cells on open and then skipped the read as too recent. The REAL
+# paintStockLive runs in node against a ROM sample shaped like the owner's phone.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui stock monitor: $*" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "SKIP webui stock monitor: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+grep -Fq "if (Object.keys(_stockTelemetryKv).length) paintStockLive(_stockTelemetryKv);" "$H" || fail "a throttled read still leaves the cells empty"
+grep -Fq "    if (_selectedProfile === 'stock') pollStockTelemetry(true, true);" "$H" || fail "opening Monitor on Stock does not read a fresh sample"
+grep -Fq "    paintStockLive(_stockTelemetryKv);" "$H" || fail "opening Monitor does not paint the last ROM sample"
+grep -Fq "const ownGrid = _selectedProfile === 'stock';" "$H" || fail "the ROM sample still repaints the governor's grid on other profiles"
+{
+  cat <<'EOF'
+const _nodes = {};
+function _el(id) { if (!_nodes[id]) _nodes[id] = { id: id, textContent: '', title: '', className: '', style: { display: '' }, classList: { remove() {} } }; return _nodes[id]; }
+function T(k, d) { return d; }
+let _selectedProfile = 'stock';
+let _stockRomHistory = { ts: 0, cpuT: 0 };
+const _stockLiveInfo = { ceil: [] };
+const _lvEta = { cap: 0, chg: false, gov: null };
+function lvTopSecSync() {} function lvDrainHome() {} function lvTopSec() {} function lvMeterPaint() {}
+EOF
+  for fn in fmtTempC setLiveLabel fmtStockLoad paintStockLive; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  cat <<'EOF'
+let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
+const kv = {
+  ts: '1760000000', uptime: '5400.2', loadavg: '6.12 5.80 5.10',
+  'battery.capacity': '88', 'battery.current_now': '412000', 'battery.voltage_now': '4210000',
+  'battery.temp': '331', 'battery.status': 'Discharging', 'battery.charge_full': '5300000',
+  MemAvailable: '5242880 kB', SwapTotal: '8388604 kB', SwapFree: '5420000 kB',
+  'cpu.policy0.scaling_cur_freq': '1785600', 'cpu.policy0.scaling_max_freq': '3628800', 'cpu.policy0.cpuinfo_max_freq': '3628800',
+  'cpu.policy6.scaling_cur_freq': '1132800', 'cpu.policy6.scaling_max_freq': '1632000', 'cpu.policy6.cpuinfo_max_freq': '4608000',
+  'gpu.gpuclk': '220000000', 'gpu.gpu_busy_percentage': '12 %',
+  'thermal.cpu-1-1-0': '43000', 'thermal.cpu-1-1-1': '44500',
+  'thermal.cpu-hw-trip-0': '95000', 'thermal.cpu-hw-trip-1': '95000', 'thermal.pmh0101-bcl-lvl0': '96000',
+  'thermal.shell_frame': '29600', 'thermal.shell_back': '29700', 'thermal.board_temp': '41800',
+  'thermal.gpuss-0': '43200', 'thermal.ddr': '44000'
+};
+paintStockLive(kv);
+const v = (id) => _nodes[id] ? _nodes[id].textContent : '';
+chk(v('liveCpu') === '45°C', 'CPU from the core zones, not the 95 C trip point: ' + v('liveCpu'));
+chk(v('liveSkin') === '30°C', 'shell: ' + v('liveSkin'));
+chk(v('liveSurface') === '42°C' && v('liveSurfaceLabel') === 'Board', 'board sensor: ' + v('liveSurface') + ' / ' + v('liveSurfaceLabel'));
+chk(v('liveState') === '35%' && /cap-raised/.test(_nodes.liveState.className) && v('liveStateLabel') === 'CPU ceiling', 'CPU ceiling on the most limited cluster: ' + v('liveState'));
+chk(_stockLiveInfo.ceil.length === 2 && _stockLiveInfo.ceil[1] === 'policy6: 1.63 / 4.61 GHz', 'ceiling lines for the sheet: ' + JSON.stringify(_stockLiveInfo.ceil));
+chk(v('liveGpu') === '12%' && v('liveHeadroom') === '220 MHz', 'GPU load and clock: ' + v('liveGpu') + ' / ' + v('liveHeadroom'));
+chk(v('liveCapSrc') === '33°C' && v('liveCapSrcLabel') === 'Battery', 'battery temperature: ' + v('liveCapSrc'));
+chk(v('liveClamp') === '2.8 GB' && v('liveClampLabel') === 'zRAM used', 'zRAM in use: ' + v('liveClamp'));
+chk(v('liveLearner') === 'paused' && v('liveLearnerLabel') === 'Smart learning', 'learner: ' + v('liveLearner'));
+chk(v('bnStockLoad') === '6.12', 'system load is a number, not "1 min 6.12": ' + v('bnStockLoad'));
+const tripOnly = { 'thermal.cpu-hw-trip-0': '95000', 'thermal.cpu-hw-trip-1': '95000', 'thermal.socd': '8' };
+paintStockLive(tripOnly);
+chk(v('liveCpu') === '—' && v('liveSurface') === '—', 'trip zones and the socd level are not temperatures: ' + v('liveCpu') + ' / ' + v('liveSurface'));
+_selectedProfile = 'battery';
+_nodes.liveCpu.textContent = '39°C'; _nodes.liveStateLabel.textContent = 'FSM';
+paintStockLive(kv);
+chk(v('liveCpu') === '39°C' && v('liveStateLabel') === 'FSM', 'on Battery the governor keeps its own grid');
+if (bad) process.exit(1);
+console.log('ok');
+EOF
+} > "$T/t.js"
+out="$(node "$T/t.js" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo "PASS webui stock monitor: nine ROM readings on Stock, trip points and alarm zones never read as a temperature, last sample painted on every visit"
+)
+
+t_webui_live_info_runtime() (
+# Runtime (fix168): every live tile opens an explanation in the UI language.
+#
+# Owner's request: a tap on any of the nine Monitor readings shows what it is and how to read
+# it, in every language. Stock swaps five tiles for ROM readings, so it has its own five texts.
+# The REAL liveInfoOpen runs in node against stub cells.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui live info: $*" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "SKIP webui live info: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+python3 - "$ROOT" <<'P' || fail "texts"
+import json, re, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+s = (root / 'webroot' / 'index.html').read_text(encoding='utf-8')
+lvi = s[s.index('const LVI_TEXT = {'):s.index('const LVI_STOCK')]
+pairs = dict(re.findall(r"^  (\w+): \['(lvi_\w+)', ", lvi, re.M))
+stock = dict(re.findall(r"(\w+): '(\w+)'", s[s.index('const LVI_STOCK = {'):].split('\n', 1)[0]))
+cells = re.findall(r'<div class="live-cell" data-lvi="([a-z]+)">', s)
+assert len(cells) == 9 and len(set(cells)) == 9, cells
+for c in cells:
+    assert c in pairs, "tile %s has no explanation" % c
+for pos, key in stock.items():
+    assert pos in cells and key in pairs, "Stock tile %s -> %s has no explanation" % (pos, key)
+assert len(stock) == 5, stock
+en = json.loads((root / 'webroot' / 'i18n' / 'en.json').read_text(encoding='utf-8'))
+for name, key in pairs.items():
+    fb = re.search(r"%s: \['%s', '((?:[^'\\]|\\.)*)'\]" % (name, key), lvi).group(1)
+    fb = re.sub(r'\\u([0-9a-fA-F]{4})', lambda m: chr(int(m.group(1), 16)), fb)
+    assert en.get(key) == fb, "en.json %s differs from the page fallback" % key
+files = sorted((root / 'webroot' / 'i18n').glob('*.json'))
+assert len(files) == 13
+for p in files:
+    d = json.loads(p.read_text(encoding='utf-8'))
+    for key in list(pairs.values()) + ['lvi_now', 'lvi_source', 'lvi_dwell']:
+        assert isinstance(d.get(key), str) and d[key].strip(), "%s lacks %s" % (p.name, key)
+    assert '%s' in d['lvi_dwell'], "%s: lvi_dwell lost its %%s" % p.name
+    if p.name != 'en.json':
+        same = [k for k in pairs.values() if d[k] == en[k]]
+        assert not same, "%s: untranslated %s" % (p.name, same)
+P
+{
+  cat <<'EOF'
+const _nodes = {};
+function mk(id) { const e = { id: id, textContent: '', className: '', hidden: true, title: '', attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, getAttribute(k) { return this.attrs[k]; }, addEventListener() {}, querySelector() { return null; } }; _nodes[id] = e; return e; }
+function _el(id) { return _nodes[id] || null; }
+function T(k, d) { return d; }
+function uiSound() {} function navSyncSoon() {}
+let _selectedProfile = 'smart';
+const _stockLiveInfo = { ceil: ['policy6: 1.63 / 4.61 GHz'] };
+const _lvLast = { st: { thermal_cpu_type: 'cpu-1-1-1' }, kv: { dwell_sec: '210', cpu_max_live: '3628800,1862400' } };
+function liveInfoEnsure() { if (_nodes.liveInfoSheet) return _nodes.liveInfoSheet; ['liveInfoTitle', 'liveInfoNowLbl', 'liveInfoVal', 'liveInfoText', 'liveInfoSrc', 'liveInfoDone'].forEach(mk); return mk('liveInfoSheet'); }
+function cell(pos, label, value, cls, title) {
+  const l = { textContent: label }, v = { textContent: value, className: 'live-cell-value' + (cls ? ' ' + cls : ''), title: title || '' };
+  return { getAttribute() { return pos; }, querySelector(q) { return q === '.live-cell-label' ? l : v; } };
+}
+EOF
+  sed -n "/^const LVI_TEXT = {/,/^};/p; /^const LVI_STOCK = /p" "$H"
+  for fn in liveInfoSource liveInfoOpen liveInfoClose; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  cat <<'EOF'
+let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
+liveInfoOpen(cell('cpu', 'CPU', '41°C'));
+chk(_nodes.liveInfoTitle.textContent === 'CPU' && _nodes.liveInfoVal.textContent === '41°C', 'title and value from the tile');
+chk(_nodes.liveInfoText.textContent.indexOf('CPU cores') >= 0, 'CPU explanation');
+chk(_nodes.liveInfoSrc.textContent === 'Source: cpu-1-1-1' && !_nodes.liveInfoSrc.hidden, 'CPU source zone: ' + _nodes.liveInfoSrc.textContent);
+chk(!_nodes.liveInfoSheet.hidden, 'sheet opens');
+liveInfoClose();
+chk(_nodes.liveInfoSheet.hidden, 'sheet closes');
+liveInfoOpen(cell('fsm', 'FSM', 'MODERATE'));
+chk(_nodes.liveInfoSrc.textContent === 'in this state for 210 s', 'FSM dwell: ' + _nodes.liveInfoSrc.textContent);
+liveInfoOpen(cell('headroom', 'Headroom', '40%'));
+chk(_nodes.liveInfoSrc.textContent === '3.63 · 1.86 GHz', 'live ceilings: ' + _nodes.liveInfoSrc.textContent);
+liveInfoOpen(cell('capsrc', 'Cap Src', 'ASB', 'cap-asb', 'owner=asb\nASB holds the ceiling'));
+chk(_nodes.liveInfoVal.className === 'live-info-val cap-asb', 'value keeps the tile colour: ' + _nodes.liveInfoVal.className);
+chk(_nodes.liveInfoSrc.textContent === 'ASB holds the ceiling', 'tile tooltip without raw key=value lines: ' + _nodes.liveInfoSrc.textContent);
+_selectedProfile = 'stock';
+liveInfoOpen(cell('fsm', 'CPU ceiling', '35%', 'cap-raised'));
+chk(_nodes.liveInfoText.textContent.indexOf('In Stock ASB sets no ceilings') >= 0, 'Stock explains the ROM ceiling, not the FSM');
+chk(_nodes.liveInfoSrc.textContent === 'policy6: 1.63 / 4.61 GHz', 'Stock ceiling per cluster: ' + _nodes.liveInfoSrc.textContent);
+liveInfoOpen(cell('cpu', 'CPU', '45°C'));
+chk(_nodes.liveInfoSrc.hidden, 'Stock shows no governor sensor name');
+liveInfoOpen(cell('learner', 'Smart learning', 'paused'));
+chk(_nodes.liveInfoText.textContent.indexOf('neither learns nor decides') >= 0, 'Stock learner text');
+if (bad) process.exit(1);
+console.log('ok');
+EOF
+} > "$T/t.js"
+out="$(node "$T/t.js" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+grep -Fq "const c = e.target && e.target.closest && e.target.closest('.live-cell[data-lvi]');" "$H" || fail "tiles are not tappable"
+grep -Fq "html[dir=\"rtl\"] .live-page .live-cell[data-lvi]::after { content: '\\2039'; }" "$H" || fail "the tile chevron does not mirror in Arabic"
+echo "PASS webui live info: all nine tiles explain themselves, Stock has its own five, every language translated"
+)
+
+t_webui_fill_pages_runtime() (
+# Runtime (fix168): Home and Settings fill the screen the way Monitor does, at any density.
+#
+# Owner's request: Home and Settings looked empty next to Monitor; bigger, richer profile cards
+# and category tiles that look right on screens of different DPI. The free height is measured
+# and shared out within limits, so a short screen scrolls and a tall one stops before the
+# cards look stretched. The REAL asbFitPages runs in node against measured boxes.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui fill pages: $*" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "SKIP webui fill pages: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+python3 - "$ROOT" <<'P' || fail "markup"
+import json, re, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+s = (root / 'webroot' / 'index.html').read_text(encoding='utf-8')
+assert re.findall(r'<div class="pmeta" data-meter="(\w+)" hidden></div>', s) == ['smart', 'performance', 'balanced', 'battery', 'stock'], "a profile card lacks its measured drain"
+for k in ('prof_performance_desc', 'prof_balanced_desc', 'prof_battery_desc'):
+    assert ('class="pdesc" data-i18n="%s"' % k) in s, "%s card has no description" % k
+assert re.search(r'\.pbtn \{[^}]*min-height: var\(--pbtn-h', s) and re.search(r'\.cfg-tile \{[^}]*min-height: var\(--cfg-tile-h', s), "cards do not take the fitted height"
+assert "'cfg-tile-desc'" in s and "'cfg-tile-bar'" in s, "category tiles lack their description and fill bar"
+assert "sub.className = 'smart-banner-pill' + (we ? ' we' : '');" in s, "weekday/weekend is still glued to the slot name"
+assert "html[data-asb-font=\"device\"] { --sans: 'ASB Device', sans-serif; --mono: 'ASB Device', sans-serif; }" in s, "no device-font switch"
+assert "'px @ '" not in s and "document.documentElement.dataset.asbUi = w + 'px@' + scale;" in s, "the scale reading is still glued to the device line"
+files = sorted((root / 'webroot' / 'i18n').glob('*.json'))
+for p in files:
+    d = json.loads(p.read_text(encoding='utf-8'))
+    for k in ('prof_performance_desc', 'prof_balanced_desc', 'prof_battery_desc') + tuple('grp_%s_desc' % g for g in ('audio', 'camera', 'iface', 'net', 'battery', 'ui')):
+        assert isinstance(d.get(k), str) and d[k].strip(), "%s lacks %s" % (p.name, k)
+P
+{
+  cat <<'EOF'
+let _cfgGroup = null;
+const props = {};
+const root = { style: { setProperty(k, v) { props[k] = v; } } };
+const box = (top, h) => ({ getBoundingClientRect() { return { top: top, height: h }; } });
+let barTop = 1700, profTop = 600, hubTop = 760, live = false, cfgOpen = false;
+const pb = new Array(5).fill(0), tiles = new Array(6).fill(0);
+const prof = { getBoundingClientRect() { return { top: profTop }; }, querySelectorAll() { return pb; } };
+const hub = { getBoundingClientRect() { return { top: hubTop }; }, querySelectorAll() { return tiles; } };
+const page = { scrollTop: 0, getAttribute() { return cfgOpen ? 'false' : 'true'; } };
+const reb = box(0, 84);
+global.window = { _asbUiScale: 1, innerHeight: 1900, scrollY: 0 };
+global.document = {
+  documentElement: root,
+  body: { classList: { contains(c) { return (c === 'live-active' && live) || (c === 'config-active' && cfgOpen); } } },
+  querySelector(q) { if (q === '.asb-tabbar') return box(barTop, 60); if (q.indexOf('.profiles') >= 0) return prof; if (q.indexOf('.cfg-hub') >= 0) return hub; return null; }
+};
+global.getComputedStyle = () => ({ rowGap: '10px', gap: '10px', marginTop: '10px' });
+function _el(id) { return id === 'configPage' ? page : id === 'cfgRebootWrap' ? reb : null; }
+EOF
+  sed -n "/^function asbFitPages(/,/^}/p" "$H"
+  cat <<'EOF'
+let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
+asbFitPages();
+chk(props['--pbtn-h'] === '104px', 'a tall screen stops at the upper limit: ' + props['--pbtn-h']);
+barTop = 1100; asbFitPages();
+chk(props['--pbtn-h'] === '88px', 'shared out to the five cards: ' + props['--pbtn-h']);
+barTop = 800; asbFitPages();
+chk(props['--pbtn-h'] === '68px', 'a short screen keeps the floor and scrolls: ' + props['--pbtn-h']);
+chk(props['--cfg-tile-h'] === undefined, 'Settings closed: tiles untouched');
+cfgOpen = true; barTop = 1200; delete props['--pbtn-h']; asbFitPages();
+chk(props['--pbtn-h'] === undefined, 'Home cards are not refitted while Settings covers them');
+chk(props['--cfg-tile-h'] === '158px', 'two rows of tiles share the height left over the restart row: ' + props['--cfg-tile-h']);
+_cfgGroup = 'audio'; props['--cfg-tile-h'] = 'x'; asbFitPages();
+chk(props['--cfg-tile-h'] === 'x', 'an open category leaves the hub alone');
+_cfgGroup = null; barTop = 2600; asbFitPages();
+chk(props['--cfg-tile-h'] === '176px', 'upper limit on Settings: ' + props['--cfg-tile-h']);
+barTop = 900; asbFitPages();
+chk(props['--cfg-tile-h'] === '104px', 'floor on a short screen: ' + props['--cfg-tile-h']);
+window._asbUiScale = 0.82; barTop = 1120; asbFitPages();
+chk(props['--cfg-tile-h'] === '148px', 'a scaled UI shares out unscaled pixels: ' + props['--cfg-tile-h']);
+if (bad) process.exit(1);
+console.log('ok');
+EOF
+} > "$T/t.js"
+out="$(node "$T/t.js" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+grep -Fq "window.addEventListener('resize', function () { requestAnimationFrame(asbFitPages); });" "$H" || fail "the fit is not redone on resize"
+echo "PASS webui fill pages: profile cards and category tiles take the free height within limits on any screen, with descriptions, measured drain and fill bars"
+)
+
+t_webui_device_font_runtime() (
+# Runtime (fix168): the device-font test variant draws with the font the system UI uses.
+#
+# Owner's request: a variant with the WebUI text in the phone's font. A WebView only knows the
+# families in fonts.xml, so a font applied through the font settings or a font app never reaches
+# it; the variant takes the files the system UI process has mapped, prefers one applied from
+# /data, falls back to the OnePlus system family, copies them next to the page and registers
+# them under one name. The REAL discovery command runs against a fixture maps file and the REAL
+# loader runs in node; the normal build never runs either.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui device font: $*" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "SKIP webui device font: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+grep -q '^<html lang="en">$' "$H" || fail "the normal build must not carry the device-font switch"
+grep -Fq "html[data-asb-font=\"device\"] { --sans: 'ASB Device', sans-serif; --mono: 'ASB Device', sans-serif; }" "$H" || fail "the variant does not draw with the found font"
+mkdir -p "$T/mod/webroot" "$T/data/fonts" "$T/system/fonts"
+printf 'R' > "$T/data/fonts/Custom-Regular.ttf"; printf 'B' > "$T/data/fonts/Custom-Bold.ttf"
+printf 'E' > "$T/data/fonts/NotoColorEmoji.ttf"; printf 'S' > "$T/system/fonts/SysSans-En-Regular.ttf"
+printf 'H' > "$T/system/fonts/SysSans-Hans-Regular.ttf"
+for f in system/fonts/SysSans-En-Regular.ttf system/fonts/SysSans-Hans-Regular.ttf data/fonts/Custom-Regular.ttf data/fonts/Custom-Bold.ttf data/fonts/NotoColorEmoji.ttf; do
+  printf '7000-8000 r--s 00000000 fd:00 1 %s\n' "$T/$f"
+done > "$T/maps"
+printf '7000-8000 r-xp 00000000 fd:00 1 /system/lib64/libc.so\n' >> "$T/maps"
+cat > "$T/cmd.js" <<'EOF'
+const fs = require('fs');
+const [, , html, T] = process.argv;
+const src = fs.readFileSync(html, 'utf8');
+const m = src.match(/const ASB_DEVICE_FONT_CMD = ([\s\S]*?);\nfunction asbDeviceFontWeight/);
+if (!m) { console.log('no command'); process.exit(1); }
+const MD = T + '/mod';
+let cmd = eval(m[1]);
+for (const w of ['settings put', 'resetprop', 'setprop', 'rm ', 'mv ', '/sys/', 'echo ']) if (cmd.indexOf(w) >= 0) { console.log('writes outside its folder: ' + w); process.exit(1); }
+cmd = cmd.replace('$(pidof com.android.systemui)', '1').replace('/proc/$p/maps', T + '/maps').replace('grep "^/data/"', 'grep "^' + T + '/data/"');
+fs.writeFileSync(T + '/cmd.sh', cmd.replace(/^sh -c '/, '').replace(/'$/, '') + '\n');
+EOF
+node "$T/cmd.js" "$H" "$T" || fail "command"
+out="$(sh "$T/cmd.sh")"
+[ "$(printf '%s\n' "$out" | cut -d'|' -f1,2 | tr '\n' ' ')" = "f0.ttf|$T/data/fonts/Custom-Bold.ttf f1.ttf|$T/data/fonts/Custom-Regular.ttf " ] || fail "applied font not preferred: $out"
+cmp -s "$T/mod/webroot/devfont/f1.ttf" "$T/data/fonts/Custom-Regular.ttf" || fail "font not copied next to the page"
+grep -v '/data/fonts/' "$T/maps" > "$T/maps2"; mv "$T/maps2" "$T/maps"
+out="$(sh "$T/cmd.sh")"
+[ "$(printf '%s\n' "$out" | cut -d'|' -f1,2)" = "f0.ttf|$T/system/fonts/SysSans-En-Regular.ttf" ] || fail "no OnePlus family fallback, or a CJK face taken: $out"
+{
+  cat <<'EOF'
+const faces = [];
+global.FontFace = function (fam, src, d) { this.fam = fam; this.src = src; this.d = d; faces.push(this); this.load = () => Promise.resolve(this); };
+const root = { dataset: {} };
+global.document = { documentElement: root, fonts: { add() {}, delete() {} } };
+let ran = 0;
+function run() { ran++; return Promise.resolve({ stdout: 'f0.ttf|/data/x/Custom-Bold.ttf|11\nf1.ttf|/data/x/Custom-Regular.ttf|12\nf2.ttf|/data/x/OPlusSans3.0-VF.ttf|13\nf3.ttf|/data/x/Custom-LightItalic.ttf|14\njunk|/etc/passwd|1\n' }); }
+const MD = '/m';
+EOF
+  sed -n "/^const ASB_DEVICE_FONT_CMD = /,/^function asbDeviceFontWeight/p" "$H" | sed '$d'
+  for fn in asbDeviceFontWeight asbDeviceFont; do sed -n "/^\(async \)\{0,1\}function $fn(/,/^}/p" "$H"; done
+  cat <<'EOF'
+(async () => {
+  let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
+  chk(await asbDeviceFont() === 0 && ran === 0, 'the normal build runs nothing');
+  root.dataset.asbFont = 'device';
+  chk(await asbDeviceFont() === 4, 'four faces registered, the junk line ignored');
+  chk(faces.every(f => f.fam === 'ASB Device'), 'one family name');
+  chk(faces.map(f => f.d.weight).join(',') === '700,400,100 900,300', 'weights from the file names: ' + faces.map(f => f.d.weight).join(','));
+  chk(faces[3].d.style === 'italic' && faces[0].d.style === 'normal', 'italic face');
+  chk(faces[1].src === "url('devfont/f1.ttf?v=12')", 'served next to the page, refreshed when the copy changes: ' + faces[1].src);
+  chk(root.dataset.asbFontSrc.indexOf('/data/x/Custom-Regular.ttf') >= 0, 'source recorded');
+  if (bad) process.exit(1);
+  console.log('ok');
+})();
+EOF
+} > "$T/t.js"
+out="$(node "$T/t.js" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo "PASS webui device font: the variant takes the system UI's own font, an applied one first, and the normal build runs nothing"
+)
+
+t_webui_option_labels_runtime() (
+# Runtime (fix169): option buttons and value badges speak the UI language.
+#
+# Owner's Settings > Network in Russian: Wi-Fi power save offered "выкл / screen_off / always"
+# under a badge reading "OFF", Leave Bad Wi-Fi listed "weak" and "unusable", Act on Wakelocks
+# and Trim Background GPS showed bare "0" / "1", and the Wi-Fi scan slider read "1" where the
+# action screen said "every 10 min". The REAL Topt, cfgScanLabel and cfgStatus run in node with
+# the shipped en.json and ru.json; every language is checked for the labels.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui option labels: $*" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "SKIP webui option labels: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+python3 - "$ROOT/webroot/i18n" <<'P' || fail "locales"
+import json, sys, pathlib
+need = {'bt_link_stability': ['stable'], 'net_wifi_leave': ['weak', 'unusable'],
+        'wifi_powersave': ['screen_off', 'always'], 'wakelock_action': ['0', '1'],
+        'gnss_trim': ['0', '1'], 'mglru_hold': ['hold']}
+files = sorted(pathlib.Path(sys.argv[1]).glob('*.json'))
+assert len(files) == 13
+for p in files:
+    d = json.loads(p.read_text(encoding='utf-8'))
+    for k, opts in need.items():
+        for o in opts:
+            v = d.get('optFor', {}).get(k, {}).get(o) or d.get('opt', {}).get(o)
+            assert v and not (v == o and o.isdigit()), '%s: %s=%s has no label' % (p.name, k, o)
+    assert d.get('wst_every', '').count('%s') == 1 and d.get('wst_free'), p.name + ': scan labels'
+P
+{
+  printf 'const I18N = { en: %s, ru: %s };\n' "$(cat "$ROOT/webroot/i18n/en.json")" "$(cat "$ROOT/webroot/i18n/ru.json")"
+  cat <<'EOF'
+let ASB_LANG = 'ru';
+function T(k, d) { const L = I18N[ASB_LANG]; return (L && typeof L[k] === 'string') ? L[k] : d; }
+function ledgerBadge() { return null; } function trialHoursLeft() { return 0; } function trialExpired() { return false; }
+const _netResult = {}; const _cfgVals = {};
+EOF
+  for fn in Topt cfgScanLabel cfgStatus; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  cat <<'EOF'
+let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
+const seg = (key, stock) => ({ key: key, type: 'seg', stock: stock });
+chk(Topt('screen_off', 'wifi_powersave') === 'экран выкл', 'power-save option: ' + Topt('screen_off', 'wifi_powersave'));
+chk(cfgStatus(seg('wifi_powersave', 'off'), 'off').text === 'ВЫКЛ', 'badge over "выкл" reads OFF: ' + cfgStatus(seg('wifi_powersave', 'off'), 'off').text);
+chk(cfgStatus(seg('wifi_powersave', 'off'), 'always').text === 'ВСЕГДА', 'badge: ' + cfgStatus(seg('wifi_powersave', 'off'), 'always').text);
+chk(cfgStatus(seg('wakelock_action', '0'), '1').text === 'ДЕЙСТВОВАТЬ', 'wakelock badge: ' + cfgStatus(seg('wakelock_action', '0'), '1').text);
+chk(cfgStatus(seg('net_congestion_wifi', 'auto'), 'cubic').text === 'CUBIC', 'technical names unchanged');
+chk(cfgStatus({ key: 'wifi_scan_throttle', type: 'range' }, '1').text === 'раз в 10 мин', 'scan badge: ' + cfgStatus({ key: 'wifi_scan_throttle', type: 'range' }, '1').text);
+chk(cfgScanLabel(0) === 'выкл' && cfgScanLabel(3) === 'раз в 2 мин' && cfgScanLabel(4) === 'без ограничений', 'scan labels');
+chk(cfgStatus({ key: 'dsp_bass', type: 'range' }, '0').text === 'выкл', 'a range at zero says off in the UI language');
+ASB_LANG = 'en';
+chk(cfgScanLabel(2) === 'every 5 min', 'English scan label');
+if (bad) process.exit(1);
+console.log('ok');
+EOF
+} > "$T/t.js"
+out="$(node "$T/t.js" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+grep -Fq "if (it.key === 'wifi_scan_throttle') return cfgScanLabel(v);" "$H" || fail "the slider value is still a bare number"
+grep -Fq '.cfg-row-top > .cfg-range input[type="range"] { flex: 1 1 auto; width: auto; min-width: 0; }' "$H" || fail "a slider on its own row keeps its short track"
+echo "PASS webui option labels: option buttons and value badges are labelled in the UI language, the Wi-Fi scan rate in minutes, sliders use their row"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

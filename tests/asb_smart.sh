@@ -2024,7 +2024,7 @@ typedef struct { int charging; int current_ma; } bat_t;
 typedef struct { int screen_on; } misc_t;
 typedef struct { struct timespec ts; bat_t bat; misc_t misc; } asb_metrics_t;
 X
-  sed -n '/^static int  g_comfort_ma_ema = 0;/,/^static int asb_adaptive_budget_trim_pct/p' "$G" | sed '$d'
+  sed -n '/^static int  g_comfort_ma_ema = 0;/,/^\/\* A warm die, not one hot sample/p' "$G" | sed '$d'
   cat <<'X'
 static asb_metrics_t M;
 static int feed(long sec, int ma) { M.ts.tv_sec = sec; M.ts.tv_nsec = 0; M.bat.current_ma = ma; return asb_comfort_ma(&M); }
@@ -2058,6 +2058,58 @@ X
 "$CC" -O2 -Wall -Werror -o "$T/t" "$T/t.c" || fail "fixture did not compile"
 "$T/t" || fail "smoothing wrong"
 echo "PASS comfort trims: smoothed current, once per sample, restarts, exit band"
+)
+
+t_comfort_burst_hold_runtime() (
+# Runtime (fix169): a screen-on comfort trim needs a warm die, not the peak of a burst.
+#
+# OP15 capture 8689: prime_escape lifted the prime at 41 C, the burst ended at 48-50 C, and on
+# that same tick screenon_comfort_smart_medium trimmed the ceilings by 9% with the shell at
+# 28-31 C; the die was back at 39 C on the next tick, the dwell held the trim for 30 s, and the
+# round repeated four times in eight minutes. Entry now needs the gate to hold for 10 s. The
+# REAL helper is compiled and fed that sequence; the wiring is pinned.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+G="$ROOT/src/asb_governor.c"
+fail() { echo "FAIL comfort burst hold: $*" >&2; exit 1; }
+[ "$(grep -c '_cin, _cnow, &g_comfort_med_hold))' "$G")" = 1 ] || fail "the medium comfort gate is not held"
+[ "$(grep -c '_cin, _cnow, &g_comfort_hc_hold))' "$G")" = 1 ] || fail "the high-current comfort gate is not held"
+grep -q 'fprintf(f, "comfort_trim_burst_skips=%lu\\n", g_comfort_burst_skips);' "$G" || fail "held-back entries not published"
+grep -q 'screen-on comfort trims held back on a die burst' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not show them"
+grep -q 'm->therm.surface_hotspot_c >= (g_budget_surface_engaged ? 42 : 46)' "$G" || fail "the surface comfort must keep reading at once"
+CC=""; for c in gcc clang cc; do command -v "$c" >/dev/null 2>&1 && { CC="$c"; break; }; done
+[ -n "$CC" ] || { echo "PASS comfort burst hold (source pins only)"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+{
+  printf '#include <stdio.h>\n#include <time.h>\n'
+  sed -n '/^#define ASB_COMFORT_ENTER_HOLD_S/,/^static int asb_adaptive_budget_trim_pct/p' "$G" | sed '$d'
+  cat <<'X'
+static int gate(int cond, int engaged, long t) { return asb_comfort_held(cond, engaged, (time_t)t, &g_comfort_med_hold); }
+int main(void) {
+    int bad = 0;
+    (void)g_comfort_hc_hold;
+    /* 8689, 13:36:58: lift at 41 C, release at 49 C on one tick, 39 C ten seconds later. */
+    if (gate(1, 0, 1000)) { printf("one hot reading trimmed\n"); bad = 1; }
+    if (gate(0, 0, 1010)) { printf("cool reading trimmed\n"); bad = 1; }
+    if (g_comfort_burst_skips != 1) { printf("burst not counted: %lu\n", g_comfort_burst_skips); bad = 1; }
+    /* A die that stays warm: on at the 10 s mark, not before. */
+    if (gate(1, 0, 1100) || gate(1, 0, 1104) || gate(1, 0, 1108)) { printf("trimmed before 10 s\n"); bad = 1; }
+    if (!gate(1, 0, 1110)) { printf("a warm die was not trimmed after 10 s\n"); bad = 1; }
+    /* In force: the exit band is not delayed by the hold. */
+    if (!gate(1, 1, 1112)) { printf("an engaged trim was dropped\n"); bad = 1; }
+    if (gate(0, 1, 1116)) { printf("exit did not release\n"); bad = 1; }
+    if (g_comfort_burst_skips != 1) { printf("a release counted as a burst\n"); bad = 1; }
+    /* A reading after a pause over 30 s starts the hold again. */
+    gate(1, 0, 2000);
+    if (gate(1, 0, 2045)) { printf("a stale start let one reading through\n"); bad = 1; }
+    if (!gate(1, 0, 2055)) { printf("hold did not restart from the fresh reading\n"); bad = 1; }
+    return bad;
+}
+X
+} > "$T/t.c"
+"$CC" -O2 -Wall -Werror -o "$T/t" "$T/t.c" || fail "fixture did not compile"
+"$T/t" || fail "hold wrong"
+echo "PASS comfort burst hold: a burst peak does not trim, a die warm for 10 s does, a trim in force leaves on its band"
 )
 
 t_cpu_gpu_portability_contract() (
@@ -2314,7 +2366,11 @@ run_action() {   # $1 state file -> "minutes|note"
 _s="$(grep -n '    let on_ma, eta_note;' "$W" | head -1 | cut -d: -f1)"
 _e="$(grep -n '      : ((remain_mah > 0 && on_ma > 0) ? Math.floor(remain_mah \* 60 / on_ma) : 0);' "$W" | head -1 | cut -d: -f1)"
 [ -n "$_s" ] && [ -n "$_e" ] || fail "WebUI forecast block not found"
-sed -n "${_s},${_e}p" "$W" > "$T/w.js"
+{
+  echo "let _selectedProfile = 'smart'; const _lvMeter = { p: {} };"
+  for fn in lvSlotToMeter lvMeterTip; do sed -n "/^function $fn(/,/^}/p" "$W"; done
+  sed -n "${_s},${_e}p" "$W"
+} > "$T/w.js"
 cat > "$T/run.js" <<'X'
 const fs = require('fs');
 const ru = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
@@ -2358,7 +2414,7 @@ grep -q '"lv_avgdrain": "Расход"' "$ROOT/webroot/i18n/ru.json" || fail "dr
 grep -q "if (_fbs === 'now') _act = _frt;" "$W" || fail "tile does not show the actual rate"
 # fix131: until a window is measured the tile shows the same estimate the action screen
 # prints (marked "~"), not "measuring" - nearly always the case in short screen-on use.
-grep -Fq "} else if (_frt > 0 && (_fbs === 'recent' || _fbs === 'slot') && !_chg) {" "$W" || fail "tile hides the estimate the action screen shows"
+grep -Fq "} else if (_frt > 0 && (_fbs === 'recent' || _fbs === 'slot' || _fbs === 'meter') && !_chg) {" "$W" || fail "tile hides the estimate the action screen shows"
 grep -Fq "_bdEl.textContent = '~' + (_frt / 10).toFixed(1)" "$W" || fail "estimate not marked as one"
 grep -q '_fb = "now";' "$G" || fail "governor forecast does not lead with the actual drain"
 
