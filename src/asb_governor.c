@@ -2140,6 +2140,40 @@ static int asb_comfort_ma(const asb_metrics_t *m) {
     return g_comfort_ma_ema;
 }
 
+/* A warm die, not one hot sample, for the screen-on comfort trims (fix169).
+ *
+ * The comfort gates read the die as it is at this tick, and the die is the fastest sensor on
+ * the phone. OP15 capture 8689: prime_escape lifted the prime at 41 C, the burst ended a few
+ * seconds later at 48-50 C, and on that same tick screenon_comfort_smart_medium trimmed the
+ * ceilings by 9% - with the shell at 28-31 C, and the die back at 39 C on the next tick. The
+ * dwell then held the trim for 30 s, and the next pinned burst started the round again: four
+ * lift / trim / release rounds in eight minutes, ASB answering the heat of its own lift.
+ *
+ * Entry now needs the gate to hold for ASB_COMFORT_ENTER_HOLD_S: two readings at least that
+ * far apart, all of them warm. A burst peak is one reading; a feed or a page that keeps the die
+ * warm passes on the next tick. A trim already in force keeps its exit band and is not
+ * delayed, and every other stage - headroom, skin, trend, surface - reads as before. */
+#define ASB_COMFORT_ENTER_HOLD_S 10
+#define ASB_COMFORT_HOLD_GAP_S   30
+typedef struct { time_t since, last; } asb_comfort_hold_t;
+static asb_comfort_hold_t g_comfort_med_hold = { 0, 0 };
+static asb_comfort_hold_t g_comfort_hc_hold = { 0, 0 };
+static unsigned long g_comfort_burst_skips = 0;
+static int asb_comfort_held(int cond, int engaged, time_t now, asb_comfort_hold_t *h) {
+    if (!cond) {
+        if (h->since > 0 && !engaged) g_comfort_burst_skips++;
+        h->since = 0;
+        h->last = 0;
+        return 0;
+    }
+    /* A reading more than half a minute after the last one (SUSTAINED or a thermal cap
+     * skipped the budget) starts the hold again, as the comfort current does. */
+    if (h->since <= 0 || now < h->since || now - h->last > ASB_COMFORT_HOLD_GAP_S) h->since = now;
+    h->last = now;
+    if (engaged) return 1;
+    return (now - h->since) >= ASB_COMFORT_ENTER_HOLD_S;
+}
+
 static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     int candidate = 0;
     int base_candidate = 0;
@@ -2307,11 +2341,13 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
                                  (smart_screenon_comfort ? 350 : 450);
         int _cma = asb_comfort_ma(m);
         int _cin = g_budget_comfort_engaged;
-        if (!m->bat.charging && m->misc.screen_on && !m->misc.camera_active &&
+        time_t _cnow = time(NULL);
+        if (asb_comfort_held(!m->bat.charging && m->misc.screen_on && !m->misc.camera_active &&
             fsm->state != ASB_STATE_GAMING && m->therm.temp_valid &&
             m->therm.cpu_max_c >= g_asb_cfg.bat_comfort_temp - (_cin ? 2 : 0) &&
             asb_ma_ref(_cma) >= (_cin ? comfort_current_ma * 4 / 5 : comfort_current_ma) &&
-            (fsm->profile_idx == PROFILE_BATTERY || smart_screenon_comfort))
+            (fsm->profile_idx == PROFILE_BATTERY || smart_screenon_comfort),
+            _cin, _cnow, &g_comfort_med_hold))
             asb_budget_raise(&candidate, &reason,
                              g_asb_cfg.thermal_budget_light_trim_pct,
                              smart_screenon_comfort ? "screenon_comfort_smart_medium" : "screenon_comfort");
@@ -2327,9 +2363,10 @@ static int asb_adaptive_budget_trim_pct(const asb_metrics_t *m, const asb_fsm_t 
             g_smart_rt.app_hint <= ASB_APP_MEDIUM && m->gpu.load_valid &&
             m->gpu.load_pct < g_asb_cfg.heavy_gpu_enter &&
             fsm->state != ASB_STATE_GAMING && fsm->state != ASB_STATE_SUSTAINED;
-        if (smart_high_current_comfort && !m->bat.charging && m->misc.screen_on &&
+        if (asb_comfort_held(smart_high_current_comfort && !m->bat.charging && m->misc.screen_on &&
             !m->misc.camera_active && m->therm.temp_valid &&
-            m->therm.cpu_max_c >= (_cin ? 40 : 42) && asb_ma_ref(_cma) >= (_cin ? 480 : 600))
+            m->therm.cpu_max_c >= (_cin ? 40 : 42) && asb_ma_ref(_cma) >= (_cin ? 480 : 600),
+            _cin, _cnow, &g_comfort_hc_hold))
             asb_budget_raise(&candidate, &reason,
                              g_asb_cfg.thermal_budget_light_trim_pct,
                              "screenon_comfort_smart_high_current");
@@ -3420,6 +3457,7 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     fprintf(f, "vendor_ceiling_ticks=%lu\nvendor_ceiling_used_ticks=%lu\nown_ceiling_ticks=%lu\n",
             g_leak_ceiling_ticks, g_leak_used_ticks, g_own_ceiling_ticks);
     fprintf(f, "trend_trim_held_cool=%lu\n", g_trend_held_cool);
+    fprintf(f, "comfort_trim_burst_skips=%lu\n", g_comfort_burst_skips);
     fprintf(f, "fg_guard_fixes=%lu\n", g_fg_fix_total);
     fprintf(f, "cap_owner=%s\ncap_owner_since=%ld\ncap_vendor_holddown=%d\n",
             asb_cap_owner_name(g_cap_owner_eff),
