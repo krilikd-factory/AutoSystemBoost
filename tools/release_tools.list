@@ -1,0 +1,47 @@
+# Release tools manifest - the single source of truth for which top-level tools/*
+# files ship in the release module AND survive installation.
+#
+# Two consumers, one list:
+#   - .github/workflows/build-release.yml copies these into the release package;
+#   - common/install.sh prunes $MODPATH/tools of everything NOT named here.
+#
+# Before this file existed the two lists drifted apart: CI shipped seven tools the
+# installer's whitelist then deleted, so devices lost asb_effective_policy.sh,
+# asb_verify_device.sh and friends while install.sh went on chmod'ing the files it
+# had just removed. A contract test (tests/asb_system.sh) now fails the build if
+# either side stops agreeing with this manifest.
+#
+# Format: one bare file name per line (top level of tools/ only, no path, no inline
+# comments). Blank lines and lines starting with # are ignored. tools/logkit/ has
+# its own list in the workflow - it lives in a subdirectory, which the installer's
+# maxdepth-1 prune never touches.
+#
+# Adding a user-facing tool? Add it HERE, not to one of the consumers.
+
+# User-facing CLI
+asb_smart_mode.sh
+asb_config_backup.sh
+asb_intent.sh
+
+# Diagnostics and support. asb_diag.sh is THE diagnostic users are asked to run;
+# it is also mirrored on-device as system/bin/asbdiag.
+asb_diag.sh
+asb_doctor.sh
+asb_audit_state.sh
+asb_effective_policy.sh
+asb_verify_device.sh
+asb_recents_probe.sh
+asb_sysui_watch.sh
+asb_camera_repair.sh
+asb_state_sampler.sh
+asb_drain_analyzer.sh
+asb_vendor_thermal_probe.sh
+asb_kernel_uv_coexist.sh
+
+# Device-adaptive layer - install/boot run these by path.
+#   asb_discover.sh          writes device_caps.env (facts); service.sh runs it at boot
+#   asb_synthesize_bounds.sh writes device_bounds.env (OP15-ratio bounds)
+#   asb_install_probe.sh     install-time stock-file inventory; install.sh runs it
+asb_discover.sh
+asb_synthesize_bounds.sh
+asb_install_probe.sh
