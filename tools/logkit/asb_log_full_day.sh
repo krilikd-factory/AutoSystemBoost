@@ -1069,6 +1069,29 @@ lk_emit_mobile_traffic_context() {
 }
 
 # ── reporting ──────────────────────────────────────────────────────────────
+lk_night_chain() {
+  cat "$@" 2>/dev/null | awk -F'\t' '!/^#/ && NF >= 5 && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/' \
+    | sort -t "$(printf '\t')" -k2,2n | awk -F'\t' '
+    function fin() {
+      if (cd > bd) { bd = cd; bs = cs; be = ce; bct = cct; bsf = csf; bp6 = cp6; baw = (cawd > 0) ? caw / cawd : -1; bma = (cmad > 0) ? cma / cmad : 0 }
+      cd = 0
+    }
+    {
+      d = $3 - $2
+      if (($1 == "idle" || $1 == "sleep") && d > 0) {
+        if (cd > 0 && $2 - le <= 120) { cd += d; ce = $5 }
+        else { fin(); cd = d; cs = $4; ce = $5; cct = 0; csf = 0; cp6 = 0; caw = 0; cawd = 0; cma = 0; cmad = 0 }
+        if ($6 + 0 > cct) cct = $6 + 0
+        if ($7 + 0 > csf) csf = $7 + 0
+        if ($8 + 0 > cp6) cp6 = $8 + 0
+        if ($12 ~ /^[0-9.]+$/) { caw += ($12 + 0) * d; cawd += d }
+        if ($13 + 0 > 0) { cma += ($13 + 0) * d; cmad += d }
+        le = $3
+      } else { fin(); le = 0 }
+    }
+    END { fin(); if (bd > 0) printf "%d %d %d %d %d %d %s %d\n", bd, bs, be, bct, bsf, bp6, (baw >= 0 ? sprintf("%.1f", baw) : "-"), bma }'
+}
+
 lk_emit_phase_summary() {
   _led="$LK_OUT_DIR/phase_ledger.tsv"
   [ -r "$_led" ] || return 0
@@ -1188,17 +1211,16 @@ lk_emit_phase_summary() {
           printf "  ^ %s: %d of %d samples gained charge (%.0f min) - a charger was connected inside the phase; its pct/h is not a discharge rate\n", ph, CHG[ph], N[ph], CHGD[ph]/60;
       }
     ' "$_all" | sort -k4 -rn
-    awk -F'\t' '
+    lk_night_chain "$_all" | awk '
       # Carry current too, and print as many fields as the rows above.
       # When mA was added this line stayed at ten fields while the header went to eleven,
       # so everything after pct/h printed one column left: CPU temperature appeared under
       # "mA" and surface under "cpuT". It reads as plausible numbers, which is exactly
       # what makes it worth fixing rather than tolerating.
-      !/^#/ && ($1=="idle" || $1=="sleep") { d=$3-$2; if(d>DUR){DUR=d;SP=$4;EP=$5;CT=$6;SF=$7;P6=$8;AW=$12;MAV=$13} }
-      END{ if(DUR>=10800){ aws=(AW>=0)?sprintf("%.1f",AW):"-";
+      $1 >= 10800 {
         printf "%-15s %8.1f %7d %8.2f %6d %9s %8d %8s %9s %7s %9s %8s\n", \
-        "night(longest)", DUR/60.0, SP-EP, (SP-EP)*3600.0/DUR, MAV, "-", CT, (SF>0?sprintf("%d",SF):"-"), (P6>0?sprintf("%d",P6/1000):"-"), "-", "-", aws } }
-    ' "$_all"
+        "night(longest)", $1/60.0, $2-$3, ($2-$3)*3600.0/$1, $8, "-", $4, ($5>0?sprintf("%d",$5):"-"), ($6>0?sprintf("%d",$6/1000):"-"), "-", "-", $7 }
+    '
     echo ""
     echo "Legend: '~' after pct/h = below measurement resolution: the phase was too short or"
   echo "        the battery level moved too few whole steps for the rate to mean anything."
@@ -1210,8 +1232,10 @@ lk_emit_phase_summary() {
     echo "        awake%=awake share = CLOCK_MONOTONIC delta / boottime delta"
     echo "        (Android uptimeMillis/elapsedRealtime); excludes suspend."
     echo "        On sleep/idle blocks target <5%, >15% = something holds the CPU."
-    echo "        night(longest)=longest continuous screen-off block >=3h — the pure"
-    echo "        overnight rate; compare IT (not the mixed idle row) against 0.3-0.7 %/h."
+    echo "        night(longest)=longest screen-off night on battery >=3h: idle and sleep phases"
+    echo "        back to back, so a phase change or a glance too short to become a phase does not"
+    echo "        split it - the pure overnight rate; compare IT (not the mixed idle row) against"
+    echo "        0.3-0.7 %/h."
     echo "        The currently-open phase is included, so interim reports are complete."
   } > "$LK_OUT_DIR/phase_summary.txt.part" && mv -f "$LK_OUT_DIR/phase_summary.txt.part" "$LK_OUT_DIR/phase_summary.txt"
   lk_emit_sampled_current_distribution "$_all" > "$LK_OUT_DIR/sampled_current_distribution.txt.part" \
@@ -1722,8 +1746,7 @@ lk_emit_capture_validity() {
   # The verdict follows the night(longest) row (fix148): the longest single idle/sleep phase,
   # which is on battery. The screen-off span counts the charger too - CPH2769 read "valid
   # (226 min)" for a night spent on the cable, with no night row below to back it.
-  _lv_bat="$(cat "$LK_OUT_DIR/phase_ledger.tsv" "$LK_OUT_DIR/.phase_open.tsv" 2>/dev/null \
-    | awk -F'\t' '($1 == "idle" || $1 == "sleep") { d = $3 - $2; if (d > m) m = d } END { print m + 0 }')"
+  _lv_bat="$(lk_night_chain "$LK_OUT_DIR/phase_ledger.tsv" "$LK_OUT_DIR/.phase_open.tsv" | awk '{ print $1 + 0 }')"
   case "$_lv_bat" in ''|*[!0-9]*) _lv_bat=0 ;; esac
   if [ "$_lv_bat" -ge 10800 ] 2>/dev/null; then
     echo "night verdict: valid (longest screen-off stretch on battery $((_lv_bat / 60)) min >=180 min)."
