@@ -323,9 +323,9 @@ emit "### 6. RUNTIME — props + governor"
 GOV=$(getprop persist.asb.gov.enabled 2>/dev/null)
 [ -z "$GOV" ] && GOV=$(ls -la /data/adb/asb/ 2>/dev/null | grep -c governor)
 _govrun="no/unknown"
-{ pgrep -f asb_governor >/dev/null 2>&1 || pgrep asb_governor >/dev/null 2>&1 \
-  || ps -A 2>/dev/null | grep -q '[a]sb_governor' \
-  || ps 2>/dev/null | grep -q '[a]sb_governor'; } && _govrun="yes"
+{ pgrep -f '/bin/asb$' >/dev/null 2>&1 \
+  || ps -A -o ARGS 2>/dev/null | grep -q '/bin/as[b]$'; } && _govrun="yes"
+[ "$(cat "$ASB_MODDIR/current_profile" 2>/dev/null)" = "stock" ] && _govrun="$_govrun (Stock profile: stopped by design)"
 emit "  ASB governor running: $_govrun"
 BT=$(settings get global bluetooth_disable_absolute_volume 2>/dev/null)
 emit "  bluetooth_disable_absolute_volume (global): ${BT:-<unset>}"
