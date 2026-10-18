@@ -430,10 +430,10 @@ The recorder writes two complementary artifacts:
 
 Addresses and device names are not written to either file. The event log has a conservative default cap of 240 records (`ASB_BT_RECONNECT_MAX_EVENTS` may lower it). The narrow logcat tag list is intentional: an all-day unfiltered dump would be expensive and privacy-hostile, while the diagnostic question only needs Bluetooth lifecycle evidence. Absence of an event remains inconclusive because vendor builds may use unobserved tags.
 
-Lifecycle: `lk_bt_reconnect_start` at capture start, `lk_bt_reconnect_snapshot` at `before`, at audio-phase entry, hourly, and at `end`, then `lk_bt_reconnect_stop`. `_full_day_report.txt` summarizes the three evidence counts and points to both files. `tests/test_donor_telemetry_contract.sh` asserts the functions and call sites so this recorder cannot silently disappear in a merge.
+Lifecycle: `lk_bt_reconnect_start` at capture start, `lk_bt_reconnect_snapshot` at `before`, at audio-phase entry, hourly, and at `end`, then `lk_bt_reconnect_stop`. `_full_day_report.txt` summarizes the three evidence counts and points to both files. `donor_telemetry_contract` in `tests/asb_system.sh` asserts the functions and call sites so this recorder cannot silently disappear in a merge.
 
 
-The same rule runs in `tools/asb_diag.sh` and in `tools/logkit/_asb_logkit_common.sh`, and `tests/test_donor_telemetry_contract.sh` asserts both. The two copies once diverged — the manual report was tightened while every full-day archive kept the weaker single-signal logic — which is why the assertions test for the *shape* of the verdict rather than its wording.
+The same rule runs in `tools/asb_diag.sh` and in `tools/logkit/_asb_logkit_common.sh`, and `donor_telemetry_contract` in `tests/asb_system.sh` asserts both. The two copies once diverged — the manual report was tightened while every full-day archive kept the weaker single-signal logic — which is why the assertions test for the *shape* of the verdict rather than its wording.
 
 `network_trace.txt` records live route and TCP state followed by ASB network provenance. For every `net_congestion` and `net_qdisc` global/per-link key the snapshot reports the requested config and the last result from `net_apply_result` (`ok`, `pending`, `failed`, `unavailable` or `not_applied`). The current kernel qdisc/congestion values remain the live authority.
 
