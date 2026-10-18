@@ -1299,8 +1299,11 @@ body.live-active .page:not(.live-page) {
   gap: 6px;
 }
 .live-cell {
-  background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01));
+  /* Fill raised a notch (fix174): at 0.04/0.01 the nine readings barely lifted off the
+   * page background and read as flat text rather than tappable tiles. */
+  background: linear-gradient(135deg, rgba(255,255,255,0.065), rgba(255,255,255,0.024));
   border: 1px solid var(--border);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.035), 0 1px 4px rgba(0,0,0,0.22);
   border-radius: 14px;
   padding: 8px 12px;
   /* min-height, not height (fix125): a value that wraps to two lines - "10h 10m · typical
@@ -1750,7 +1753,13 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
   border-radius: 16px;
   text-align: center;
   border: 1px solid rgba(255,255,255,0.07);
-  background: linear-gradient(160deg, rgba(255,255,255,0.035), rgba(255,255,255,0.012));
+  /* Hub tiles borrow their category hue (fix174): six neutral cards read as the same
+   * surface as the three restart buttons under them and the two groups blended into
+   * each other. A quiet tint of the tile's own colour lifts the categories off the
+   * page while the restart row stays neutral. */
+  background:
+    linear-gradient(160deg, color-mix(in srgb, var(--tech-icon, var(--accent)) 11%, transparent) 0%, color-mix(in srgb, var(--tech-icon, var(--accent)) 4%, transparent) 58%, rgba(255,255,255,0.02) 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.045), 0 3px 14px -8px color-mix(in srgb, var(--tech-icon, var(--accent)) 40%, transparent);
   color: inherit;
   font: inherit;
   cursor: pointer;
@@ -1803,20 +1812,20 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
 
 /* Each tile borrows its category's hue, so the hub, the card icons behind it and
    the toast that confirms a change all agree on what colour "audio" is. */
-.cfg-tile.cat-audio   { border-color: rgba(255,59,59,0.24); }
-.cfg-tile.cat-audio   .cfg-tile-ico { background: rgba(255,59,59,0.13);  border-color: rgba(255,59,59,0.35); }
-.cfg-tile.cat-camera  { border-color: rgba(58,141,255,0.24); }
-.cfg-tile.cat-camera  .cfg-tile-ico { background: rgba(58,141,255,0.13); border-color: rgba(58,141,255,0.35); }
-.cfg-tile.cat-battery { border-color: rgba(46,213,115,0.24); }
-.cfg-tile.cat-battery .cfg-tile-ico { background: rgba(46,213,115,0.13); border-color: rgba(46,213,115,0.35); }
-.cfg-tile.cat-ux      { border-color: rgba(255,159,28,0.24); }
-.cfg-tile.cat-ux      .cfg-tile-ico { background: rgba(255,159,28,0.13); border-color: rgba(255,159,28,0.35); }
+.cfg-tile.cat-audio   { border-color: rgba(255,59,59,0.34); }
+.cfg-tile.cat-audio   .cfg-tile-ico { background: rgba(255,59,59,0.16);  border-color: rgba(255,59,59,0.44); }
+.cfg-tile.cat-camera  { border-color: rgba(58,141,255,0.34); }
+.cfg-tile.cat-camera  .cfg-tile-ico { background: rgba(58,141,255,0.16); border-color: rgba(58,141,255,0.44); }
+.cfg-tile.cat-battery { border-color: rgba(46,213,115,0.34); }
+.cfg-tile.cat-battery .cfg-tile-ico { background: rgba(46,213,115,0.16); border-color: rgba(46,213,115,0.44); }
+.cfg-tile.cat-ux      { border-color: rgba(255,159,28,0.34); }
+.cfg-tile.cat-ux      .cfg-tile-ico { background: rgba(255,159,28,0.16); border-color: rgba(255,159,28,0.44); }
 /* Two new categories need their own hue or they render grey while the other four are
    coloured - the tile, the icon behind each setting and its toast all key off this. */
-.cfg-tile.cat-net     { border-color: rgba(0,180,216,0.24); }
-.cfg-tile.cat-net     .cfg-tile-ico { background: rgba(0,180,216,0.13); border-color: rgba(0,180,216,0.35); }
-.cfg-tile.cat-iface   { border-color: rgba(186,104,255,0.24); }
-.cfg-tile.cat-iface   .cfg-tile-ico { background: rgba(186,104,255,0.13); border-color: rgba(186,104,255,0.35); }
+.cfg-tile.cat-net     { border-color: rgba(0,180,216,0.34); }
+.cfg-tile.cat-net     .cfg-tile-ico { background: rgba(0,180,216,0.16); border-color: rgba(0,180,216,0.44); }
+.cfg-tile.cat-iface   { border-color: rgba(186,104,255,0.34); }
+.cfg-tile.cat-iface   .cfg-tile-ico { background: rgba(186,104,255,0.16); border-color: rgba(186,104,255,0.44); }
 
 .cfg-row.is-on {
   border-color: rgba(0,225,200,0.28);
@@ -2947,6 +2956,14 @@ html[data-asb-theme="light"] .smart-banner-tag { color:#006c56; background:rgba(
 html[data-asb-theme="light"] :is(.cfg-section,.cfg-section-hint,.cfg-tile-count,.cfg-sub-label,.cfg-sub-hint,.cfg-trial-info,.cfg-desc-opt) { color:var(--text-secondary) !important; opacity:1; }
 html[data-asb-theme="light"] .cfg-section-title { color:#a52620 !important; }
 html[data-asb-theme="light"] :is(.cfg-tile,.cfg-row) { background:#fff !important; border-color:var(--border) !important; }
+/* The six hub categories keep their hue on a light page too (fix174): a whisper of the
+ * category colour over white, so they no longer sit in the same flat white as the three
+ * restart tiles below them. Must follow the flat-white rule above to win on order. */
+html[data-asb-theme="light"] .cfg-tile {
+  background: linear-gradient(160deg, color-mix(in srgb, var(--tech-icon) 9%, #ffffff) 0%, #ffffff 72%) !important;
+  border-color: color-mix(in srgb, var(--tech-icon) 32%, var(--border)) !important;
+  box-shadow: 0 1px 3px rgba(16,24,32,.06);
+}
 html[data-asb-theme="light"] .cfg-tile-count.has-on { color:var(--accent) !important; }
 html[data-asb-theme="light"] .cfg-row.is-on { background:linear-gradient(160deg,rgba(0,124,99,.10),#fff 78%) !important; border-color:rgba(0,124,99,.38) !important; }
 html[data-asb-theme="light"] .cfg-sub { border-top-color:rgba(21,35,32,.13); }
@@ -2999,7 +3016,7 @@ html[data-asb-theme="light"] .logo-inner { background:linear-gradient(135deg,#e9
 html[data-asb-theme="light"] .device-line { color:var(--text-secondary) !important; }
 html[data-asb-theme="light"] .sec-label { color:var(--text-tertiary) !important; }
 html[data-asb-theme="light"] .sec-line { background:linear-gradient(90deg,transparent,rgba(16,24,32,.18),transparent) !important; }
-html[data-asb-theme="light"] .live-cell { background:#ffffff !important; border-color:var(--border) !important; box-shadow:0 1px 2px rgba(16,24,32,.05) !important; }
+html[data-asb-theme="light"] .live-cell { background:#ffffff !important; border-color:var(--border) !important; box-shadow:0 1px 3px rgba(16,24,32,.08) !important; }
 html[data-asb-theme="light"] .live-cell-label { color:var(--text-tertiary) !important; }
 html[data-asb-theme="light"] .live-cell-value { color:var(--text) !important; }
 html[data-asb-theme="light"] .live-cell-value.cap-asb { color:var(--text) !important; }
@@ -5274,6 +5291,20 @@ function liveInfoSource(key, cell) {
   if (tip && lines.indexOf(tip) < 0) lines.push(tip);
   return lines;
 }
+/* A Smart-banner value can carry a pill badge as a child element (the slot name plus
+ * "вых"). Raw textContent glues the badge onto the value ("вечервых") - only the
+ * element's own text nodes are the reading; the badge already shows in the source
+ * box through the tile's title. */
+function liveInfoValText(val) {
+  if (!val) return '—';
+  let t = '';
+  const nodes = val.childNodes || [];
+  for (let i = 0; i < nodes.length; i++) {
+    if (nodes[i].nodeType === 3) t += nodes[i].textContent;
+  }
+  t = t.trim();
+  return t || ((val.textContent || '').trim()) || '—';
+}
 function liveInfoOpen(cell) {
   if (!cell) return;
   const pos = cell.getAttribute('data-lvi');
@@ -5288,7 +5319,7 @@ function liveInfoOpen(cell) {
   const val = cell.querySelector('.live-cell-value') || cell.querySelector('.smart-banner-value');
   _el('liveInfoTitle').textContent = (lbl && lbl.textContent) || '';
   _el('liveInfoNowLbl').textContent = T('lvi_now', 'Now');
-  _el('liveInfoVal').textContent = (val && val.textContent) || '\u2014';
+  _el('liveInfoVal').textContent = liveInfoValText(val);
   _el('liveInfoVal').className = 'live-info-val' + (val ? ' ' + val.className.replace('live-cell-value', '').replace('smart-banner-value', '').trim() : '');
   _el('liveInfoText').textContent = T(txt[0], txt[1]);
   const src = _el('liveInfoSrc');
