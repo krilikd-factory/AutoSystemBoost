@@ -5646,6 +5646,7 @@ async function cfgLoad() {
   await cfgLoadV64State();
   await loadLtpoStatus();
   await loadMmfeedStatus();
+  await loadWlFitStatus();
   /* Never repaint the page while it is still sliding in. openConfigPage already drew
    * the hub before the slide started; if fresh values arrive mid-motion, wait out the
    * remainder and paint once the layer has settled. Other callers leave _cfgAnimUntil
@@ -6035,6 +6036,11 @@ let _netResult = {};
 // verdict from the apply script. Loaded with the config so the card can say "active",
 // "waiting for a reboot" or "nothing to patch on this device" instead of just "Enabled".
 let _ltpoStatus = '', _ltpoState = '', _ltpoVideoStatus = '';
+/* Fitness wakelock limit, as the watcher last found it (fix176): how many step/fitness
+ * apps the limit covers, and how many of them this ROM lets hold the CPU anyway - the
+ * WAKE_LOCK app-op is not enforced on ColorOS/OxygenOS 16, so "limit" can be set and
+ * dead at the same time. The badge below must not claim otherwise. */
+let _wlFitIgnored = 0, _wlFitLimited = 0, _wlFitProbed = false;
 let _mmfeedStatus = '', _mmfeedState = '';
 // Is this the reference model the flat-effects option was validated on?
 //
@@ -6089,6 +6095,16 @@ async function loadLtpoStatus() {
     const _vm = /state=([a-z_]+)(?::([0-9.]+))?/.exec(parts[2] || '');
     _ltpoVideoStatus = _vm ? (_vm[1] + (_vm[2] ? ':' + Math.round(parseFloat(_vm[2])) : '')) : '';
   } catch (e) { _ltpoStatus = ''; _ltpoState = ''; _ltpoVideoStatus = ''; }
+}
+
+async function loadWlFitStatus() {
+  try {
+    const r = await run('for f in wakelock_fitness_ignored wakelock_fitness_limited; do if [ -f /data/adb/asb/$f ]; then wc -l < /data/adb/asb/$f; else echo 0; fi; done');
+    const lines = (((r && r.stdout) || '')).trim().split(/\r?\n/);
+    _wlFitIgnored = parseInt(lines[0], 10) || 0;
+    _wlFitLimited = parseInt(lines[1], 10) || 0;
+    _wlFitProbed = true;
+  } catch (e) { _wlFitIgnored = 0; _wlFitLimited = 0; _wlFitProbed = false; }
 }
 
 // Multimedia telemetry: the same honesty standard as the LTPO card - the badge reads
@@ -6297,6 +6313,17 @@ function cfgStatus(it, cur) {
   // tweak until the user re-arms it (toggle off, then on).
   // the install/apply is waiting for the next boot pass; the state file says why a
   // device cannot have it (old Android, no payload, install failure).
+  /* wakelock_fitness=limit on a ROM that does not enforce the WAKE_LOCK app-op (fix176):
+   * a field capture had Samsung Health's PedometerLib holding the CPU for hours with the
+   * op set to ignore. The watcher records that verdict; a card that keeps claiming
+   * "LIMIT" over it is the lie the ledger badges were built against. */
+  if (it.key === 'wakelock_fitness') {
+    if (cur !== 'limit') return { cls:'neutral', text: String(Topt(cur, it.key)).toUpperCase() };
+    if (_wlFitIgnored > 0) return { cls:'warn', text: T('st_wlf_ignored', 'ROM ignores it') };
+    if (_wlFitLimited > 0) return { cls:'good', text: T('st_on', 'Enabled') };
+    if (_wlFitProbed) return { cls:'neutral', text: T('st_wlf_none', 'no fitness apps') };
+    return { cls:'warn', text: T('st_pending', 'pending') };
+  }
   if (it.type === 'bool') {
     if (cur === '1') return { cls:'good', text:T('st_on', 'Enabled') };
     return { cls:'neutral', text:T('st_off', 'Disabled') };
@@ -7538,8 +7565,14 @@ async function cfgSet(key, val, ctl) {
       if (key === 'wakelock_fitness') {
         try { await run('sh ' + MD + '/runtime/asb_wakelock_watch.sh >/dev/null 2>&1'); } catch (e) {}
         /* Both directions run now: limit applies to the installed step/fitness apps,
-         * protect gives back what limit took. */
-        toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
+         * protect gives back what limit took. After the run we re-probe the fitness
+         * ledgers: on a ROM that does not enforce the WAKE_LOCK app-op (seen on
+         * ColorOS/OxygenOS 16) the badge and this toast say so honestly instead of
+         * claiming success. */
+        await loadWlFitStatus();
+        toast(cfgToastText(key, val) + (String(val) === 'limit' && _wlFitIgnored > 0
+          ? T('t_wlf_ignored', ' \u00b7 this ROM ignores the limit')
+          : T('t_cfg_live', ' \u00b7 applied')), cfgToastType(key));
         cfgRender();
         if (ctl) ctl.classList.remove('busy');
         return;
