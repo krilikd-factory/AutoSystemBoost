@@ -283,6 +283,11 @@ run_worker() {
     sleep 2
     _i=$((_i + 1))
   done
+  if [ "$PROFILE" != "stock" ] && profile_epoch_current; then
+    [ -f "$MODDIR/runtime/asb_net_offload.sh" ] && MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_net_offload.sh" >/dev/null 2>&1
+    [ -f "$MODDIR/runtime/asb_net_apply.sh" ] && MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_net_apply.sh" >/dev/null 2>&1
+    asb_log "profile=$PROFILE: network settings from the WebUI re-asserted over the profile rails"
+  fi
   asb_log "worker done profile=$PROFILE rc=$_rc"
 
   if [ "$_rc" = "0" ]; then

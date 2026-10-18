@@ -2466,7 +2466,7 @@ _add_bad() { _bad="${_bad}${_bad:+
 }       $1"; }
 
 # governor process
-pgrep -f 'asb_governor|/asb$' >/dev/null 2>&1 || _add_bad "$T_B_GOV"
+[ "$PROFILE" = "stock" ] || pgrep -f 'asb_governor|/asb$' >/dev/null 2>&1 || _add_bad "$T_B_GOV"
 
 # audio profile -> UHQA property
 if [ "$_a_prof" = "hifi" ] && [ "$(getprop persist.audio.uhqa 2>/dev/null)" != "1" ]; then
