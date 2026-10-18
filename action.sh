@@ -794,6 +794,7 @@ esac
 T_SMART_HDR="Smart · slot %s/12 · %s (%s) · conf %s%%"
 T_PROFILE_SMART="Profile: %s (Smart picks caps within it)"
 T_PROFILE_MANUAL="Profile: %s (manual — Smart off)"
+T_PROFILE_STOCK="Profile: %s — the ASB governor is stopped: CPU/GPU limits, throttling and night quiet are the ROM's own"
 T_LEAN_NOW="Battery lean: %s%% now"
 T_LEAN_TILT=" (your tilt: +%s%% of the remaining way to Battery)"
 T_TILT_ONLY="Battery tilt: %s%%"
@@ -822,6 +823,7 @@ T_ETA_MEASURED="(actual drain %s)"
 T_ETA_HEUR="(heuristic)"
 T_ETA_AVG="(estimate from recent sessions %s)"
 T_ETA_SLOT="(estimate for this hour %s)"
+T_ETA_METER="(measured earlier with the screen on in this profile: %s over %s min)"
 T_ETA_SCREEN="~%sh %sm"
 T_ETA_IDLE_MEAS="idle figure measured: %s%%/h with the screen off"
 T_ETA_IDLE_N=" (from %s screen-off window(s) of 1 h+)"
@@ -1126,6 +1128,13 @@ else
     _eta_kind=slot
   fi
 fi
+if [ "$_eta_kind" = slot ]; then
+  _dmf=/dev/.asb_drain_meter; [ -s "$_dmf" ] || _dmf=/data/adb/asb/drain_meter
+  _dmr="$(awk -v p="$PROFILE" '$1 == p && $2 >= 600 && $3 > 0 { printf "%d %d\n", int($3 * 360 / $2 + 0.5), int($2 / 60) }' "$_dmf" 2>/dev/null | head -1)"
+  case "$_dmr" in
+    [1-9]*' '[0-9]*) _ewma_x10="${_dmr%% *}"; _dm_min="${_dmr##* }"; _eta_kind=meter ;;
+  esac
+fi
 _on_ma=0
 _eta_rate=0
 if [ "$_ewma_x10" -gt 0 ] 2>/dev/null; then
@@ -1134,6 +1143,7 @@ if [ "$_ewma_x10" -gt 0 ] 2>/dev/null; then
   case "$_eta_kind" in
     measured) _eta_note="$(_s "$T_ETA_MEASURED" "$_rate_txt")" ;;
     slot)     _eta_note="$(_s "$T_ETA_SLOT" "$_rate_txt")" ;;
+    meter)    _eta_note="$(_s "$T_ETA_METER" "$_rate_txt" "$_dm_min")" ;;
     *)        _eta_note="$(_s "$T_ETA_AVG" "$_rate_txt")" ;;
   esac
   if [ -n "$_cap_uah" ] && [ "$_cap_uah" -gt 0 ] 2>/dev/null; then
@@ -1262,6 +1272,8 @@ if [ "$_smart_enabled" = "1" ]; then
   # The profile still matters under Smart: it is the rail the learner moves within, so
   # "Smart" alone does not tell you what the caps are anchored to.
   _f "  🎛  $T_PROFILE_SMART" "$PROFILE"
+elif [ "$PROFILE" = "stock" ]; then
+  _f "  🎛  $T_PROFILE_STOCK" "$PROFILE"
 else
   _f "  🎛  $T_PROFILE_MANUAL" "$PROFILE"
 fi
@@ -1274,7 +1286,9 @@ _bias="$(grep -E '^[[:space:]]*smart_battery_bias=' "$MODDIR/config/governor.con
 _alpha_live="$(grep -m1 '^smart_alpha_battery=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 # One line for both: the live weight and the tilt the user set are related numbers, and three
 # separate lines (lean, tilt, and a "Battery bias" repeat further down) read as three settings.
-if [ -n "$_alpha_live" ]; then
+if [ "$PROFILE" = "stock" ]; then
+  :
+elif [ -n "$_alpha_live" ]; then
   _bl_line="  ⚖️  $(_s "$T_LEAN_NOW" "$((_alpha_live / 10))")"
   [ -n "$_bias" ] && [ "$_bias" != "0" ] && _bl_line="${_bl_line}$(_s "$T_LEAN_TILT" "$((_bias / 10))")"
   printf '%s\n' "$_bl_line"
@@ -1296,7 +1310,7 @@ _feat() {
 }
 
 _ste="$(_cfg sustained_temp_enter)"
-[ -n "$_ste" ] && [ "$_ste" != "65" ] && _f "  🌡️  $T_THROTTLE_TEMP" "$_ste"
+[ "$PROFILE" != "stock" ] && [ -n "$_ste" ] && [ "$_ste" != "65" ] && _f "  🌡️  $T_THROTTLE_TEMP" "$_ste"
 if [ "$_rec_disabled" = "1" ]; then
   _f "  ⚠️  $T_SAFE_MODE" "${_rec_reason:-recovery}"
 elif [ "$_rec_count" -gt 0 ] 2>/dev/null; then
@@ -2357,7 +2371,7 @@ case "$_dz" in
   aggressive) _f "       $T_S_AGGR" ;;
   *)          _f "       $T_S_STOCK" ;;
 esac
-case "$(_cfg night_quiet_enable)" in
+[ "$PROFILE" = "stock" ] || case "$(_cfg night_quiet_enable)" in
   1) _f "       $T_S_NQ" ;;
 esac
 
