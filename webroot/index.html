@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-asb-font="device">
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
@@ -1442,6 +1442,25 @@ body.config-active #livePage.open {
 .live-drain-left { font-size: 12px; line-height: 1.4; color: var(--text); font-weight: 600; }
 .live-drain-note { font-size: 11px; line-height: 1.45; color: var(--text-tertiary); padding: 2px 2px 0; }
 .live-drain-done { margin-top: 12px; }
+.live-info-now { display: flex; flex-direction: column; gap: 4px; margin: 2px 0 12px; padding: 12px 14px;
+  border-radius: 14px; border: 1px solid var(--border); background: rgba(255,255,255,0.03); }
+.live-info-val { font: 700 24px/1.15 var(--sans); color: var(--text); font-variant-numeric: tabular-nums; word-break: break-word; }
+.live-info-val.cap-asb { color: var(--accent); }
+.live-info-val.cap-clamp { color: var(--perf); }
+.live-info-val.cap-raised { color: var(--bal); }
+.live-info-text { font-size: 13px; line-height: 1.5; color: var(--text-secondary); padding: 0 2px; }
+.live-info-src { margin-top: 10px; padding: 9px 12px; border-radius: 12px; background: rgba(255,255,255,0.025);
+  border: 1px dashed var(--border); font: 500 11px/1.5 var(--mono); color: var(--text-tertiary); white-space: pre-line;
+  word-break: break-word; unicode-bidi: plaintext; text-align: start; }
+.live-page .live-cell[data-lvi] { position: relative; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  transition: transform .12s ease, border-color .18s ease; }
+.live-page .live-cell[data-lvi]:active { transform: scale(.97); border-color: var(--border-active); }
+.live-page .live-cell[data-lvi]::after { content: '\203A'; position: absolute; bottom: 11px; inset-inline-end: 10px;
+  font: 600 14px/1 var(--sans); color: var(--text-tertiary); opacity: .55; pointer-events: none; }
+html[dir="rtl"] .live-page .live-cell[data-lvi]::after { content: '\2039'; }
+.live-page .live-cell[data-lvi] .live-cell-value { padding-inline-end: 10px; }
+html[data-asb-theme="light"] .live-info-now { background: #f7f9fa; }
+html[data-asb-theme="light"] .live-info-src { background: #fbfcfc; }
 .live-drain-cmp { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 14px;
   border: 1px solid var(--border); background: rgba(255,255,255,0.02); }
 .live-drain-cmp-row { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center;
@@ -1527,6 +1546,15 @@ body.config-active #livePage.open {
 .live-page .smart-banner-label { line-height: 1.2; }
 .live-page .smart-banner-value { font-size: 13px; }
 .smart-banner-sub { margin-left: 4px; font: 500 9.5px/1 var(--sans); color: var(--text-tertiary); }
+.smart-banner-pill {
+  display: inline-block; margin-left: 6px; padding: 3px 6px 2px; border-radius: 6px;
+  font: 700 8.5px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase;
+  vertical-align: 2px; color: var(--text-secondary);
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.10);
+}
+.smart-banner-pill.we { color: #9ef2e4; background: rgba(0,225,200,.10); border-color: rgba(0,225,200,.28); }
+html[data-asb-theme="light"] .smart-banner-pill { background: rgba(21,35,32,.05); border-color: rgba(21,35,32,.12); }
+html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background: rgba(0,124,99,.08); border-color: rgba(0,124,99,.24); }
 .smart-banner-value.basis-warn { color: #f5c26b; }
 .smart-banner-value.basis-veto { color: #fca5a5; }
 .live-page .smart-banner-value.heat-warm { color: #f5c26b; }
@@ -3307,6 +3335,57 @@ html[data-asb-theme="light"] .cfg-profile-sheet {
  * nest is still there to come back to. */
 .logo-glyph { display: inline-block; transition: opacity .28s ease; }
 body.ufo-flying .logo-glyph { opacity: 0; }
+
+/* ── fix168: Home and Settings as full as Monitor ─────────────────────────────────────────
+ * Monitor ends just above the tab bar; Home and Settings stopped a hundred pixels short and
+ * read as unfinished. Each profile card now says what the profile is for and, once the drain
+ * meter has measured it, what it costs with the screen on and off; each category tile says
+ * what is inside and how much of it is switched on. The heights are not tuned for one phone:
+ * asbFitPages measures the free space between the content and the tab bar on every resize
+ * and gives it to the cards (--pbtn-h) and tiles (--cfg-tile-h), within limits, so a dense
+ * 360-wide screen and a 440-wide one both end at the same place. */
+.pbtn { min-height: var(--pbtn-h, 72px); padding: 12px 16px; gap: 14px; }
+.pbtn .pico { width: 52px; height: 52px; border-radius: 16px; }
+.pbtn .pico .tech-icon { width: 26px; height: 26px; }
+.pinfo, .pbtn-smart .pinfo, .pbtn-stock .pinfo {
+  flex-direction: column; align-items: flex-start; justify-content: center; gap: 5px; }
+.pname { line-height: 1.1; }
+.pdesc { font-size: 12px; line-height: 1.3; color: rgba(186,198,208,0.62); letter-spacing: .01em;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.pbtn.on .pdesc { color: rgba(226,234,240,0.86); }
+.pmeta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.pmeta[hidden] { display: none; }
+.pmeta-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px 3px 6px;
+  border-radius: 8px; font: 600 10.5px/1.15 var(--sans); color: var(--text-secondary);
+  font-variant-numeric: tabular-nums; background: rgba(255,255,255,.045);
+  border: 1px solid rgba(255,255,255,.07); }
+.pmeta-chip .tech-icon { width: 11px; height: 11px; color: var(--c); filter: none; }
+.pbtn.on .pmeta-chip { color: var(--text); border-color: color-mix(in srgb, var(--c) 34%, transparent);
+  background: color-mix(in srgb, var(--c) 9%, transparent); }
+html[data-asb-theme="light"] .pdesc { color: var(--text-secondary); }
+html[data-asb-theme="light"] .pbtn.on .pdesc { color: var(--text); }
+html[data-asb-theme="light"] .pmeta-chip { background: rgba(21,35,32,.04); border-color: rgba(21,35,32,.10); }
+
+.cfg-tile { min-height: var(--cfg-tile-h, 104px); justify-content: flex-start; gap: 5px; padding: 12px 8px 11px; }
+.cfg-tile-ico { width: 42px; height: 42px; margin-bottom: 2px; }
+.cfg-tile-name { font-size: 13.5px; line-height: 1.2; }
+.cfg-tile-desc { font-size: 10px; line-height: 1.25; color: var(--text-tertiary); max-width: 100%;
+  overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.cfg-tile-foot { margin-top: auto; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.cfg-tile-bar { width: 62%; height: 3px; border-radius: 2px; background: rgba(255,255,255,.08); overflow: hidden; }
+.cfg-tile-bar > i { display: block; height: 100%; border-radius: 2px; background: var(--tech-icon, var(--accent));
+  box-shadow: 0 0 6px color-mix(in srgb, var(--tech-icon, var(--accent)) 60%, transparent); }
+html[data-asb-theme="light"] .cfg-tile-bar { background: rgba(21,35,32,.08); }
+
+/* Device font (fix168, test variant): the variant build sets data-asb-font="device" on <html>,
+ * and every text - the monospace labels included - follows the font the phone is set to.
+ * "ASB Device" is the font the system UI itself draws with, found by asbDeviceFont(); until it
+ * loads, or where none is found, the WebView's own sans-serif stands in. Numbers keep
+ * fixed-width digits so live values do not jitter. */
+html[data-asb-font="device"] { --sans: 'ASB Device', sans-serif; --mono: 'ASB Device', sans-serif; }
+html[data-asb-font="device"] body { font-variant-numeric: tabular-nums; }
+html[data-asb-font="device"] .sec-label { letter-spacing: 2.4px; }
 </style>
 </head>
 <body>
@@ -3400,6 +3479,7 @@ body.ufo-flying .logo-glyph { opacity: 0; }
       <div class="pinfo">
         <div class="pname"><span data-i18n="prof_smart">Smart</span> <span class="alpha-tag" id="smartEngineTag" style="display:none"></span></div>
         <div class="psub" id="smartSubLine">adaptive · learning</div>
+        <div class="pmeta" data-meter="smart" hidden></div>
       </div>
       <div class="pload"></div>
       <div class="pchk"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
@@ -3409,6 +3489,8 @@ body.ufo-flying .logo-glyph { opacity: 0; }
       <div class="pico" data-tech-icon="performance"></div>
       <div class="pinfo">
         <div class="pname" data-i18n="prof_performance">Performance</div>
+        <div class="pdesc" data-i18n="prof_performance_desc">Top clocks for games and heavy apps</div>
+        <div class="pmeta" data-meter="performance" hidden></div>
       </div>
       <div class="pload"></div>
       <div class="pchk"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
@@ -3419,6 +3501,8 @@ body.ufo-flying .logo-glyph { opacity: 0; }
       <div class="pico" data-tech-icon="balanced"></div>
       <div class="pinfo">
         <div class="pname" data-i18n="prof_balanced">Balanced</div>
+        <div class="pdesc" data-i18n="prof_balanced_desc">Everyday use - smooth and frugal</div>
+        <div class="pmeta" data-meter="balanced" hidden></div>
       </div>
       <div class="pload"></div>
       <div class="pchk"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
@@ -3428,6 +3512,8 @@ body.ufo-flying .logo-glyph { opacity: 0; }
       <div class="pico" data-tech-icon="battery"></div>
       <div class="pinfo">
         <div class="pname" data-i18n="prof_battery">Battery</div>
+        <div class="pdesc" data-i18n="prof_battery_desc">Longest battery life, lower clocks</div>
+        <div class="pmeta" data-meter="battery" hidden></div>
       </div>
       <div class="pload"></div>
       <div class="pchk"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
@@ -3438,6 +3524,7 @@ body.ufo-flying .logo-glyph { opacity: 0; }
       <div class="pinfo">
         <div class="pname" data-i18n="prof_stock">Stock</div>
         <div class="psub" data-i18n="prof_stock_sub">ASB policy off</div>
+        <div class="pmeta" data-meter="stock" hidden></div>
       </div>
       <div class="pload"></div>
       <div class="pchk"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
@@ -3599,45 +3686,45 @@ body.ufo-flying .logo-glyph { opacity: 0; }
   <div class="live-metrics">
 
     <div class="live-row">
-      <div class="live-cell">
-        <div class="live-cell-label" data-i18n="lv_cpu">CPU</div>
+      <div class="live-cell" data-lvi="cpu">
+        <div class="live-cell-label" id="liveCpuLabel" data-i18n="lv_cpu">CPU</div>
         <div class="live-cell-value" id="liveCpu">—</div>
       </div>
-      <div class="live-cell">
-        <div class="live-cell-label" data-i18n="lv_skin">Skin</div>
+      <div class="live-cell" data-lvi="skin">
+        <div class="live-cell-label" id="liveSkinLabel" data-i18n="lv_skin">Skin</div>
         <div class="live-cell-value" id="liveSkin">—</div>
       </div>
-      <div class="live-cell">
-        <div class="live-cell-label" data-i18n="lv_hotspot">Die · max</div>
+      <div class="live-cell" data-lvi="board">
+        <div class="live-cell-label" id="liveSurfaceLabel" data-i18n="lv_board">Board</div>
         <div class="live-cell-value" id="liveSurface">—</div>
       </div>
     </div>
 
     <div class="live-row">
-      <div class="live-cell">
+      <div class="live-cell" data-lvi="fsm">
         <div class="live-cell-label" id="liveStateLabel" data-i18n="lv_fsm">FSM</div>
         <div class="live-cell-value" id="liveState">—</div>
       </div>
-      <div class="live-cell">
+      <div class="live-cell" data-lvi="gpu">
         <div class="live-cell-label" id="liveGpuLabel" data-i18n="lv_gpuload">GPU Load</div>
         <div class="live-cell-value" id="liveGpu">—</div>
       </div>
-      <div class="live-cell">
+      <div class="live-cell" data-lvi="headroom">
         <div class="live-cell-label" id="liveHeadroomLabel" data-i18n="lv_headroom">Headroom</div>
         <div class="live-cell-value" id="liveHeadroom">—</div>
       </div>
     </div>
 
     <div class="live-row">
-      <div class="live-cell">
+      <div class="live-cell" data-lvi="capsrc">
         <div class="live-cell-label" id="liveCapSrcLabel" data-i18n="lv_capsrc">Cap Src</div>
         <div class="live-cell-value" id="liveCapSrc">—</div>
       </div>
-      <div class="live-cell">
+      <div class="live-cell" data-lvi="clamps">
         <div class="live-cell-label" id="liveClampLabel" data-i18n="lv_clamp">Clamp 1h / total</div>
         <div class="live-cell-value" id="liveClamp">—</div>
       </div>
-      <div class="live-cell">
+      <div class="live-cell" data-lvi="learner">
         <div class="live-cell-label" id="liveLearnerLabel" data-i18n="lv_learner">Learner</div>
         <div class="live-cell-value" id="liveLearner">—</div>
       </div>
@@ -4432,9 +4519,24 @@ async function loadDeviceInfo() {
     const model = prettyModel(d.model_code||'', d.name_code||'');
     const soc   = prettySoc(d.soc_code||'');
     const chip  = (d.soc_code||'').trim().toUpperCase() || 'DEVICE';
-    document.getElementById('deviceLine').textContent = model + ' / ' + soc;
-    document.getElementById('socBadge').textContent   = chip;
+    /* Every page header at once (fix168). Monitor and Settings copied Home's line only from
+     * the governor's poll, so on Stock - no governor - they kept the "OnePlus Device" and
+     * "DEVICE" placeholders. */
+    ['deviceLine', 'liveDeviceLine', 'cfgDeviceLine'].forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = model + ' / ' + soc;
+    });
+    ['socBadge', 'liveSocBadge', 'cfgSocBadge'].forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = chip;
+    });
   } catch(e) {}
+}
+function liveHeaderSync() {
+  [['deviceLine', 'liveDeviceLine'], ['socBadge', 'liveSocBadge'], ['verBadge', 'liveVerBadge']].forEach(function (p) {
+    const a = document.getElementById(p[0]), b = document.getElementById(p[1]);
+    if (a && b && a.textContent) b.textContent = a.textContent;
+  });
 }
 
 let _id = 0;
@@ -4705,6 +4807,7 @@ async function go(p) {
     [1200, 3000, 6000].forEach(function(ms) {
       setTimeout(function() { refreshSmartSubLine(); }, ms);
     });
+    setTimeout(function () { homeMeterRefresh(true); }, 2500);
   } else {
     uiSound('error');
     // Never leave the home screen claiming a profile whose root-side transition failed.
@@ -4757,7 +4860,11 @@ function openLivePage() {
   p.setAttribute('aria-hidden', 'false');
   p.scrollTop = 0;
   _liveOpen = true;
-  if (_selectedProfile !== 'smart') paintStockLive();
+  liveHeaderSync();
+  if (_selectedProfile !== 'smart') {
+    paintStockLive(_stockTelemetryKv);
+    if (_selectedProfile === 'stock') pollStockTelemetry(true, true);
+  }
   pollLive(true);
   if (_liveTimer) clearInterval(_liveTimer);
   _liveTimer = setInterval(() => pollLive(true), 3000);
@@ -4788,6 +4895,7 @@ function closeLivePage() {
 const NAV_OVERLAYS = [
   { id: 'logMenu',          close: function () { asbCloseLogMenu(); } },
   { id: 'liveDrainSheet',   close: function () { liveDrainClose(); } },
+  { id: 'liveInfoSheet',    close: function () { liveInfoClose(); } },
   { id: 'cfgFm',            close: function () { cfgFmClose(); } },
   { id: 'dozeKeepModal',    close: function () { dozeKeepClose(); } },
   { id: 'cfgResetModal',    close: function () { cfgResetDialogClose(); } },
@@ -5072,6 +5180,100 @@ function liveDrainClose() {
   m.hidden = true;
   m.setAttribute('aria-hidden', 'true');
 }
+/* Every Monitor tile explains itself (fix168): a tap opens what the number is, where it comes
+ * from and what is normal. Stock fills the same nine tiles with ROM readings, so the
+ * explanation follows what the tile shows on the current profile, not the tile's position. */
+const LVI_TEXT = {
+  cpu: ['lvi_cpu', 'Temperature of the CPU cores. ASB steers by one core sensor that it checks against its neighbours, so a stuck zone is never trusted; in Stock it is the hottest core. Up to about 45 \u00b0C is cool, short spikes when an app opens are normal, and throttling starts around 60 \u00b0C held for a while.'],
+  skin: ['lvi_skin', 'Temperature of the shell - what your hand feels. It moves slowly and trails the CPU by minutes. Up to about 38 \u00b0C feels neutral, above about 42 \u00b0C the phone feels warm, and around 45 \u00b0C the system starts holding performance back.'],
+  board: ['lvi_board', 'Temperature of the main board under the shell. It sits between the CPU and the shell and shows heat soaking into the phone: after a game or a long charge it stays high even when the CPU has already cooled.'],
+  fsm: ['lvi_fsm', 'What ASB thinks the phone is doing: DEEP_IDLE - asleep with the screen off, LIGHT_IDLE - screen on with nothing to do, MODERATE - ordinary use, HEAVY - an app launch or a heavy page, SUSTAINED - long heavy work with heat, GAMING - a game. Each state has its own frequency ceilings.'],
+  gpu: ['lvi_gpu', 'How busy the graphics processor is, as a share of time. Scrolling and video sit around 5-30%, games at 50-100%. A game state is entered only when the load stays high, not on a single spike.'],
+  headroom: ['lvi_headroom', 'How much of the CPU hardware maximum the current ceilings allow, on the most limited cluster. 100% means nothing holds the CPU back. A low figure on a cool phone is a profile or vendor limit, not heat.'],
+  capsrc: ['lvi_capsrc', 'Who set the CPU frequency ceiling right now: ASB (the profile and Smart), the vendor - the OnePlus thermal or performance service - or a script. When the vendor holds a lower ceiling ASB leaves it alone rather than fighting it.'],
+  clamps: ['lvi_clamps', 'How often the vendor service pushed the ceiling below what ASB asked for: in the last hour, and since ASB started. A few an hour is normal; dozens mean a hot phone or an aggressive vendor mode.'],
+  learner: ['lvi_learner', 'How many stretches of use Smart has learned from, across all twelve time slots. Every 20 minutes of use and every night adds one. The more there are, the more Smart decides from measurements of your phone instead of defaults.'],
+  cpuceil: ['lvi_cpuceil', 'How much of the hardware maximum the ROM lets the CPU reach right now, on the most limited cluster. In Stock ASB sets no ceilings, so anything under 100% here comes from the OnePlus thermal or performance service.'],
+  gpuclk: ['lvi_gpuclk', 'The graphics clock at this moment. It drops to the minimum when nothing is drawn and climbs with load; in Stock ASB does not touch it.'],
+  battemp: ['lvi_battemp', 'Battery temperature. Above about 40 \u00b0C charging slows down and the battery ages faster; above about 45 \u00b0C the system limits performance to protect it.'],
+  zram: ['lvi_zram', 'Compressed memory (zRAM) in use. Android packs apps you have not used for a while here instead of closing them. Several GB is normal with many apps open; it costs CPU time only when an app is unpacked again.'],
+  learnpause: ['lvi_learnpause', 'In Stock Smart neither learns nor decides - the ASB frequency policy is off. Everything it has learned is kept and is used again as soon as you switch back to Smart.']
+};
+const LVI_STOCK = { fsm: 'cpuceil', headroom: 'gpuclk', capsrc: 'battemp', clamps: 'zram', learner: 'learnpause' };
+function liveInfoIsOpen() { const m = _el('liveInfoSheet'); return !!m && !m.hidden; }
+function liveInfoEnsure() {
+  let m = _el('liveInfoSheet');
+  if (m) return m;
+  m = document.createElement('div');
+  m.className = 'cfg-profile-modal live-drain-modal';
+  m.id = 'liveInfoSheet';
+  m.hidden = true;
+  m.setAttribute('aria-hidden', 'true');
+  m.innerHTML = '<div class="cfg-profile-sheet live-drain-sheet live-info-sheet" role="dialog" aria-modal="true" aria-labelledby="liveInfoTitle">'
+    + '<div class="cfg-profile-head"><div class="cfg-profile-title" id="liveInfoTitle"></div>'
+    + '<button class="cfg-profile-close" id="liveInfoX" type="button" aria-label="Close">\u00d7</button></div>'
+    + '<div class="live-info-now"><span class="live-drain-lbl" id="liveInfoNowLbl"></span><span class="live-info-val" id="liveInfoVal"></span></div>'
+    + '<div class="live-info-text" id="liveInfoText"></div>'
+    + '<div class="live-info-src" id="liveInfoSrc" hidden></div>'
+    + '<button class="cfg-profile-primary live-drain-done" id="liveInfoDone" type="button"></button></div>';
+  document.body.appendChild(m);
+  m.addEventListener('click', function (e) { if (e.target === m) liveInfoClose(); });
+  _el('liveInfoX').onclick = liveInfoClose;
+  _el('liveInfoDone').onclick = liveInfoClose;
+  return m;
+}
+function liveInfoSource(key, cell) {
+  const lines = [];
+  const st = _lvLast.st || {};
+  const kv = _lvLast.kv || {};
+  const stock = _selectedProfile === 'stock';
+  if (key === 'cpu' && !stock && st.thermal_cpu_type) lines.push(T('lvi_source', 'Source') + ': ' + st.thermal_cpu_type);
+  if (key === 'fsm' && !stock && kv.dwell_sec) lines.push(T('lvi_dwell', 'in this state for %s s').replace('%s', kv.dwell_sec));
+  if (key === 'headroom' && !stock && kv.cpu_max_live) {
+    const f = String(kv.cpu_max_live).split(',').map(function (x) { return parseInt(x, 10) || 0; }).filter(function (x) { return x > 0; });
+    if (f.length) lines.push(f.map(function (x) { return (x / 1e6).toFixed(2); }).join(' \u00b7 ') + ' GHz');
+  }
+  if (key === 'cpuceil') _stockLiveInfo.ceil.forEach(function (l) { lines.push(l); });
+  const v = cell && cell.querySelector('.live-cell-value');
+  const tip = ((v && v.title) || '').split('\n').filter(function (l) { return l && l.indexOf('=') < 0; }).join('\n');
+  if (tip && lines.indexOf(tip) < 0) lines.push(tip);
+  return lines;
+}
+function liveInfoOpen(cell) {
+  if (!cell) return;
+  const pos = cell.getAttribute('data-lvi');
+  const key = (_selectedProfile === 'stock' && LVI_STOCK[pos]) ? LVI_STOCK[pos] : pos;
+  const txt = LVI_TEXT[key];
+  if (!txt) return;
+  uiSound('option');
+  const m = liveInfoEnsure();
+  const lbl = cell.querySelector('.live-cell-label');
+  const val = cell.querySelector('.live-cell-value');
+  _el('liveInfoTitle').textContent = (lbl && lbl.textContent) || '';
+  _el('liveInfoNowLbl').textContent = T('lvi_now', 'Now');
+  _el('liveInfoVal').textContent = (val && val.textContent) || '\u2014';
+  _el('liveInfoVal').className = 'live-info-val' + (val ? ' ' + val.className.replace('live-cell-value', '').trim() : '');
+  _el('liveInfoText').textContent = T(txt[0], txt[1]);
+  const src = _el('liveInfoSrc');
+  const lines = liveInfoSource(key, cell);
+  src.textContent = lines.join('\n');
+  src.hidden = !lines.length;
+  _el('liveInfoDone').textContent = T('doze_keep_done', 'Done');
+  m.hidden = false;
+  m.setAttribute('aria-hidden', 'false');
+  navSyncSoon();
+}
+function liveInfoClose() {
+  const m = _el('liveInfoSheet');
+  if (!m || m.hidden) return;
+  m.hidden = true;
+  m.setAttribute('aria-hidden', 'true');
+  navSyncSoon();
+}
+document.addEventListener('click', function (e) {
+  const c = e.target && e.target.closest && e.target.closest('.live-cell[data-lvi]');
+  if (c) liveInfoOpen(c);
+});
 window.addEventListener('popstate', function (e) {
   const at = (e && e.state && e.state.asbNav) || 0;
   _nav.depth = at;
@@ -5422,6 +5624,14 @@ function grpName(g) {
   return (ASB_LANG === 'ru' && g.ru) ? g.ru : g.name;
 }
 
+const CFG_GROUP_DESC = {
+  audio: 'Playback, DSP, Bluetooth',
+  camera: 'Photo processing, speed',
+  iface: 'Animations, effects',
+  net: 'Mobile, Wi-Fi, speed',
+  battery: 'Smart, sleep, heat, memory',
+  ui: 'Services, display, haptics'
+};
 const CFG_GROUPS = [
   { id:'audio',   icon:'headphones', name:'Audio',     ru:'\u0410\u0443\u0434\u0438\u043E' },
   { id:'camera',  icon:'camera',     name:'Camera',    ru:'\u041A\u0430\u043C\u0435\u0440\u0430' },
@@ -6125,14 +6335,30 @@ function cfgRenderHub(list) {
     nm.textContent = grpName(g);
     tile.appendChild(nm);
 
+    /* What is inside, and how much of it is on (fix168). */
+    const ds = document.createElement('div');
+    ds.className = 'cfg-tile-desc';
+    ds.textContent = T('grp_' + g.id + '_desc', CFG_GROUP_DESC[g.id] || '');
+    tile.appendChild(ds);
+
+    const foot = document.createElement('div');
+    foot.className = 'cfg-tile-foot';
     const cnt = document.createElement('div');
     cnt.className = 'cfg-tile-count' + (on ? ' has-on' : '');
     cnt.textContent = on ? (on + ' / ' + items.length) : String(items.length);
-    tile.appendChild(cnt);
+    foot.appendChild(cnt);
+    const bar = document.createElement('div');
+    bar.className = 'cfg-tile-bar';
+    const fill = document.createElement('i');
+    fill.style.width = Math.round(on * 100 / items.length) + '%';
+    bar.appendChild(fill);
+    foot.appendChild(bar);
+    tile.appendChild(foot);
 
     hub.appendChild(tile);
   });
   list.appendChild(hub);
+  requestAnimationFrame(asbFitPages);
 }
 
 // Settings whose effect lands in a file, and can therefore be checked.
@@ -8635,18 +8861,125 @@ function asbApplyUiScale() {
        that needs no adjustment this would be noise. One glance answers "is the UI small
        because ASB shrank it, or because the screen is dense", which is the question I could
        not answer from a screenshot. */
-    ['deviceLine', 'liveDeviceLine', 'cfgDeviceLine'].forEach(function (id) {
-      const el = document.getElementById(id);
-      if (!el) return;
-      const base = el.dataset.baseText || (el.dataset.baseText = el.textContent);
-      el.textContent = (scale < 1) ? (base + '  ·  ' + w + 'px @ ' + scale + 'x') : base;
-    });
+    /* The reading stays in the DOM for a debugging glance, but off the visible line
+       (fix168): the line kept the text it saw first, so on a scaled phone the header
+       froze on the "OnePlus Device" placeholder with "427px @ 0.97x" glued to it. */
+    document.documentElement.dataset.asbUi = w + 'px@' + scale;
   } catch (e) {}
+}
+
+/* Fill the screen the way Monitor does (fix168). The free height between the end of the
+ * content and the floating tab bar is measured, not assumed, and shared out to the five
+ * profile cards (Home) and the two rows of category tiles (Settings) within sane limits. On a
+ * short screen the limits win and the page scrolls as before; on a tall one the cards stop
+ * growing before they look stretched. Re-run on resize, when Settings opens and when the hub
+ * is rebuilt, since the header can wrap differently in each language. */
+function asbFitPages() {
+  try {
+    const z = window._asbUiScale || 1;
+    const bar = document.querySelector('.asb-tabbar');
+    const barTop = bar ? bar.getBoundingClientRect().top : window.innerHeight;
+    const stop = barTop - 20 * z;
+    const root = document.documentElement;
+    const prof = document.querySelector('.page:not(.live-page) .profiles');
+    if (prof && !document.body.classList.contains('live-active') && !document.body.classList.contains('config-active')) {
+      const cards = prof.querySelectorAll('.pbtn');
+      if (cards.length) {
+        const top = prof.getBoundingClientRect().top + (window.scrollY || 0);
+        const gap = parseFloat(getComputedStyle(prof).rowGap || getComputedStyle(prof).gap) || 8;
+        let h = ((stop - top) / z - gap * (cards.length - 1)) / cards.length;
+        h = Math.max(68, Math.min(104, Math.floor(h)));
+        root.style.setProperty('--pbtn-h', h + 'px');
+      }
+    }
+    const hub = document.querySelector('#configPage .cfg-hub');
+    const page = _el('configPage');
+    if (hub && page && page.getAttribute('aria-hidden') === 'false' && !_cfgGroup) {
+      const tiles = hub.querySelectorAll('.cfg-tile');
+      const rows = Math.ceil(tiles.length / 3) || 1;
+      const reb = _el('cfgRebootWrap');
+      const rebH = reb ? (reb.getBoundingClientRect().height / z + (parseFloat(getComputedStyle(reb).marginTop) || 0)) : 0;
+      const top = hub.getBoundingClientRect().top + page.scrollTop;
+      const gap = parseFloat(getComputedStyle(hub).rowGap || getComputedStyle(hub).gap) || 9;
+      let h = ((stop - top) / z - rebH - gap * (rows - 1)) / rows;
+      h = Math.max(104, Math.min(176, Math.floor(h)));
+      root.style.setProperty('--cfg-tile-h', h + 'px');
+    }
+  } catch (e) {}
+}
+/* Each profile card carries what the drain meter measured for it (fix168), the same figures
+ * the Monitor sheet compares; a profile not measured yet shows nothing rather than a guess. */
+function homeMeterPaint() {
+  document.querySelectorAll('.pmeta[data-meter]').forEach(function (box) {
+    const e = (_lvMeter.p || {})[box.getAttribute('data-meter')];
+    box.textContent = '';
+    if (!e || (!(e.on > 0) && !(e.off > 0))) { box.hidden = true; return; }
+    [['sun', e.on > 0 ? lvPct(e.on, 10, 1) : ''], ['theme_moon', e.off > 0 ? lvPct(e.off, 100, e.off >= 100 ? 1 : 2) : '']].forEach(function (c) {
+      if (!c[1]) return;
+      const chip = document.createElement('span');
+      chip.className = 'pmeta-chip';
+      chip.innerHTML = techIcon(c[0]);
+      chip.appendChild(document.createTextNode(c[1]));
+      box.appendChild(chip);
+    });
+    box.hidden = false;
+  });
+  requestAnimationFrame(asbFitPages);
+}
+async function homeMeterRefresh(force) {
+  await lvMeterPoll(!!force);
+  homeMeterPaint();
+}
+
+/* Device font, test variant only (fix168). A WebView draws with the families in fonts.xml and
+ * never sees a font applied through the system's font settings or a font app, so "the phone's
+ * font" has to be taken from where it is actually in use: the font files the system UI process
+ * has mapped. One applied from outside the system image lives under /data; without one the
+ * OnePlus system family is taken. The files are copied next to the page (only when changed)
+ * and registered under one family name with the weight their file names give. */
+const ASB_DEVICE_FONT_CMD = "sh -c 'd=" + MD + "/webroot/devfont; mkdir -p \"$d\" || exit 0; "
+  + "m=$(for p in $(pidof com.android.systemui); do grep -oE \"/[^ ]+[.]([tT][tT][fFcC]|[oO][tT][fF])$\" /proc/$p/maps 2>/dev/null; done | sort -u); "
+  + "l=$(printf \"%s\\n\" $m | grep \"^/data/\" | grep -viE \"emoji|mono|symbol\" | head -4); "
+  + "[ -n \"$l\" ] || l=$(printf \"%s\\n\" $m | grep -iE \"syssans|oplussans|oneplussans|opsans\" | grep -viE \"mono|cond|hans|hant|jp|kr|arab|thai|hebr|deva|beng|mya\" | head -4); "
+  + "i=0; for f in $l; do x=${f##*.}; o=\"$d/f$i.$x\"; cmp -s \"$f\" \"$o\" || { cp -f \"$f\" \"$o\" && chmod 0644 \"$o\"; }; [ -s \"$o\" ] && printf \"%s|%s|%s\\n\" \"f$i.$x\" \"$f\" \"$(stat -c %Y \"$o\")\"; i=$((i + 1)); done'";
+function asbDeviceFontWeight(path) {
+  const n = String(path || '').split('/').pop().toLowerCase();
+  if (/(^|[^a-z])(vf|variable)([^a-z]|$)|-vf\b|\[wght/.test(n)) return '100 900';
+  if (/thin|hairline/.test(n)) return '100';
+  if (/extralight|ultralight/.test(n)) return '200';
+  if (/light/.test(n)) return '300';
+  if (/semibold|demibold/.test(n)) return '600';
+  if (/extrabold|ultrabold|heavy|black/.test(n)) return '800';
+  if (/bold/.test(n)) return '700';
+  if (/medium/.test(n)) return '500';
+  return '400';
+}
+async function asbDeviceFont() {
+  const root = document.documentElement;
+  if (root.dataset.asbFont !== 'device' || typeof FontFace === 'undefined' || !document.fonts) return 0;
+  let out = '';
+  try { const r = await run(ASB_DEVICE_FONT_CMD); out = (r && r.stdout) || ''; } catch (e) { return 0; }
+  const used = [];
+  out.split('\n').forEach(function (line) {
+    const a = line.trim().split('|');
+    if (a.length < 3 || !/^f\d\.[A-Za-z]{3}$/.test(a[0])) return;
+    try {
+      const face = new FontFace('ASB Device', "url('devfont/" + a[0] + "?v=" + encodeURIComponent(a[2]) + "')",
+        { weight: asbDeviceFontWeight(a[1]), style: /italic|oblique/i.test(a[1]) ? 'italic' : 'normal' });
+      document.fonts.add(face);
+      face.load().catch(function () { try { document.fonts.delete(face); } catch (e) {} });
+      used.push(a[1]);
+    } catch (e) {}
+  });
+  root.dataset.asbFontSrc = used.join(' ');
+  return used.length;
 }
 
 asbApplyUiScale();
 window.addEventListener('resize', asbApplyUiScale);
 window.addEventListener('orientationchange', asbApplyUiScale);
+window.addEventListener('resize', function () { requestAnimationFrame(asbFitPages); });
+window.addEventListener('load', function () { requestAnimationFrame(asbFitPages); setTimeout(function () { homeMeterRefresh(true); }, 1800); asbDeviceFont(); });
 
 function asbNavCurrent() {
   if (document.body.classList.contains('config-active')) return 'config';
@@ -8804,6 +9137,7 @@ function openConfigPage() {
   // Device class is a shell read the page does not need to start moving - defer it past
   // the slide instead of running it synchronously on the tap.
   setTimeout(function () { try { loadDeviceClass(); } catch (e) {} }, _pageAnimMs() + 40);
+  setTimeout(function () { requestAnimationFrame(asbFitPages); }, _pageAnimMs() + 60);
 }
 
 // The section label and the back chip are the only chrome that has to know which screen
@@ -9101,6 +9435,7 @@ function setLiveLabel(id, key, fallback) {
 }
 function restoreManagedLiveLabels() {
   setLiveLabel('liveStateLabel', 'lv_fsm', 'FSM');
+  { const el = _el('liveState'); if (el) el.className = 'live-cell-value'; }
   // Not restored here: the vendor-period updater owns this label.
   //
   // Three places wrote to liveClampLabel every tick - this restore, the Stock-mode
@@ -9144,7 +9479,9 @@ function parseStockTelemetry(text) {
 function fmtStockLoad(raw) {
   const first = String(raw || '').trim().split(/\s+/)[0];
   const value = Number(first);
-  return Number.isFinite(value) && value >= 0 ? T('stock_load_now', '1 min') + ' ' + value.toFixed(2) : '—';
+  /* The number alone (fix168): "1 min 6.61" under "System load" read as a duration. The
+   * 1/5/15-minute triplet stays in the tooltip. */
+  return Number.isFinite(value) && value >= 0 ? value.toFixed(2) : '—';
 }
 function paintStockLive(stockKv = null) {
   /* Governor-owned cells stay untouched outside Stock.
@@ -9163,15 +9500,23 @@ function paintStockLive(stockKv = null) {
    * This function now paints the panel on Battery and Balanced too, and on those the
    * governor IS running - overwriting the state line with "policy off" would be a plain
    * lie about what the module is doing. Leave the line to whoever owns it there. */
-  if (state && _selectedProfile === 'stock') { state.textContent = stock; state.title = off; }
+  /* The live grid is the governor's on every other profile: only Stock repaints it from the
+   * ROM reading (fix168). Before, this ran for Battery and Balanced too, raced the governor's
+   * own painting and could overwrite its CPU temperature with a ROM-wide maximum. */
+  const ownGrid = _selectedProfile === 'stock';
   // The ordinary Monitor labels describe ASB concepts (FSM, forecast, cap source, learner).
-  // In Stock the values below are direct ROM readings, so rename the cards before painting them.
-  setLiveLabel('liveStateLabel', 'stock_rom_status', 'ROM status');
-  setLiveLabel('liveClampLabel', 'stock_asb_caps', 'ASB caps');
-  setLiveLabel('liveCapSrcLabel', 'stock_cap_owner', 'Cap owner');
-  setLiveLabel('liveLearnerLabel', 'stock_asb_learner', 'ASB learner');
-  setLiveLabel('liveGpuLabel', 'stock_gpu_load', 'GPU load');
-  setLiveLabel('liveHeadroomLabel', 'stock_ram_available', 'RAM available');
+  // In Stock the cells below carry direct ROM readings instead - nine real values, none of
+  // them a placeholder for a policy that is not running (fix168).
+  if (ownGrid) {
+    setLiveLabel('liveCpuLabel', 'lv_cpu', 'CPU');
+    setLiveLabel('liveSkinLabel', 'lv_skin', 'Skin');
+    setLiveLabel('liveStateLabel', 'stock_cpu_ceiling', 'CPU ceiling');
+    setLiveLabel('liveGpuLabel', 'stock_gpu_load', 'GPU load');
+    setLiveLabel('liveHeadroomLabel', 'stock_gpu_clock', 'GPU clock');
+    setLiveLabel('liveCapSrcLabel', 'stock_bat_temp', 'Battery');
+    setLiveLabel('liveClampLabel', 'stock_zram', 'zRAM used');
+    setLiveLabel('liveLearnerLabel', 'stock_smart_learn', 'Smart learning');
+  }
   setLiveLabel('bnStockDrainLabel', 'stock_battery_current', 'Battery current');
   setLiveLabel('bnStockTrendLabel', 'stock_thermal_trend', 'ROM thermal trend');
   setLiveLabel('bnStockLpmLabel', 'stock_lpm_state', 'Modem state');
@@ -9184,14 +9529,20 @@ function paintStockLive(stockKv = null) {
   const kv = stockKv || {};
   const n = (v) => { const m = String(v || '').match(/-?\d+/); return m ? parseInt(m[0], 10) : 0; };
   const c = (v) => { const x = n(v); return x > 1000 || x < -1000 ? Math.round(x / 1000) : x; };
+  /* Trip points and limit levels are not temperatures (fix168). The OP15 publishes
+   * cpu-hw-trip-0/1 as zones that read a constant 95000 - the hardware trip point - and
+   * "cpu" matched them, so Stock showed CPU 95 C on a phone at 43 C. BCL/ibat/vbat "lvl"
+   * zones are current and voltage alarms. */
+  const notTemp = /trip|bcl|lvl|limit|ibat|vbat/i;
   const maxTemp = (re) => {
-    const a = Object.entries(kv).filter(([k]) => k.startsWith('thermal.') && re.test(k))
+    const a = Object.entries(kv).filter(([k]) => k.startsWith('thermal.') && re.test(k) && !notTemp.test(k))
       .map(([, v]) => c(v)).filter(v => v > 0 && v < 120);
     return a.length ? Math.max(...a) : 0;
   };
   const cpuT = maxTemp(/cpu|cpullc|socd/i);
   const skinT = maxTemp(/shell|skin|surface|frame|back|front/i);
   const hotT = maxTemp(/cpu|cpullc|socd|gpu|gpuss|ddr/i);
+  const boardT = maxTemp(/^thermal\.board/i);
   let ma = n(kv['battery.current_now']);
   if (Math.abs(ma) > 10000) ma = Math.round(ma / 1000);
   const capPct = n(kv['battery.capacity']);
@@ -9214,27 +9565,41 @@ function paintStockLive(stockKv = null) {
   const sampleTs = n(kv.ts) * 1000;
   const set = (id, value, title = '') => { const el = _el(id); if (el) { el.textContent = value || '—'; el.title = title; } };
 
-  if (_selectedProfile === 'stock') set('liveClamp', '—', off + ': ROM cap history is not collected in Stock.');
-  set('liveCpu', cpuT ? fmtTempC(cpuT) + '°C' : '—');
-  set('liveSkin', skinT ? skinT + '°C' : '—');
-  /* Label says "die", because that is what this number is.
-   *
-   * It was "Hotspot · internal", which reads as a hotspot on the case - and users compare
-   * it to the shell reading and conclude the phone is overheating. The value is
-   * max(cpu, gpu, ddr): the hottest silicon zone, which sits 10-20 C above the shell on
-   * every phone under load, because heat travels outward. The old wording made a normal
-   * gap look like a fault. */
-  set('liveSurface', hotT ? hotT + '°C' : '—');
-  { const _sl = _el('liveSurface') && _el('liveSurface').parentElement.querySelector('.live-cell-label');
-    if (_sl) _sl.textContent = T('lv_hotspot', 'Die · max'); }
-  { const _hs = _el('liveSurface');
-    if (_hs && _hs.parentElement) _hs.parentElement.title = T('lv_hotspot_tip', ''); }
-  if (_selectedProfile === 'stock') set('liveCapSrc', 'ROM', off);
-  const cap = _el('liveCapSrc');
-  if (cap) cap.className = 'live-cell-value';
-  if (_selectedProfile === 'stock') set('liveLearner', T('st_off', 'Disabled'), off);
-  set('liveGpu', gpu > 0 ? gpu + '%' : '—');
-  set('liveHeadroom', ramGb, 'MemAvailable from /proc/meminfo (read-only).');
+  if (ownGrid) {
+    const cls = (id, c2) => { const el = _el(id); if (el) el.className = 'live-cell-value' + (c2 ? ' ' + c2 : ''); };
+    set('liveCpu', cpuT ? fmtTempC(cpuT) + '°C' : '—');
+    set('liveSkin', skinT ? skinT + '°C' : '—');
+    /* Board, as on every other profile; the hottest silicon zone only where the ROM has no
+     * board sensor. */
+    set('liveSurface', (boardT || hotT) ? (boardT || hotT) + '°C' : '—');
+    setLiveLabel('liveSurfaceLabel', boardT ? 'lv_board' : 'lv_hotspot', boardT ? 'Board' : 'Die · max');
+    const pol = {};
+    Object.entries(kv).forEach(([k, v]) => {
+      const m = k.match(/^cpu\.(policy\d+)\.(scaling_max_freq|cpuinfo_max_freq)$/);
+      if (m) { (pol[m[1]] = pol[m[1]] || {})[m[2]] = n(v); }
+    });
+    let ceilPct = 0;
+    _stockLiveInfo.ceil = [];
+    Object.keys(pol).sort().forEach(function (k) {
+      const p = pol[k];
+      if (!(p.scaling_max_freq > 0 && p.cpuinfo_max_freq > 0)) return;
+      const pct = Math.min(100, Math.round(p.scaling_max_freq * 100 / p.cpuinfo_max_freq));
+      ceilPct = ceilPct ? Math.min(ceilPct, pct) : pct;
+      _stockLiveInfo.ceil.push(k + ': ' + (p.scaling_max_freq / 1e6).toFixed(2) + ' / ' + (p.cpuinfo_max_freq / 1e6).toFixed(2) + ' GHz');
+    });
+    set('liveState', ceilPct ? ceilPct + '%' : '—');
+    cls('liveState', ceilPct && ceilPct < 100 ? 'cap-raised' : '');
+    set('liveGpu', /\d/.test(String(kv['gpu.gpu_busy_percentage'] || kv['gpu.gpubusy'] || '')) ? gpu + '%' : '—');
+    const gclk = n(kv['gpu.gpuclk']);
+    set('liveHeadroom', gclk > 0 ? Math.round(gclk > 100000 ? gclk / 1e6 : gclk) + ' MHz' : '—');
+    set('liveCapSrc', batT > 0 ? batT + '°C' : '—');
+    cls('liveCapSrc', batT >= 40 ? 'cap-raised' : '');
+    const swT = n(kv.SwapTotal), swF = n(kv.SwapFree);
+    set('liveClamp', swT > 0 ? ((swT - swF) / 1048576).toFixed(1) + ' GB' : '—');
+    cls('liveClamp', '');
+    set('liveLearner', T('stock_learn_paused', 'paused'), off);
+    cls('liveLearner', '');
+  }
 
   // Read-only Stock telemetry is deliberately separate from Smart: no bucket, confidence,
   // learner or ASB cap claim survives here. It is a direct ROM snapshot with a local thermal
@@ -9283,7 +9648,7 @@ function paintStockLive(stockKv = null) {
     'smart-banner-value' + (lpmHeld ? ' cap-clamp' : ''));
   bset('bnStockRam', ramGb, 'MemAvailable from /proc/meminfo (read-only).');
   bset('bnStockCpuClock', cpuClock, 'Highest current cpufreq policy clock in this sample.');
-  bset('bnStockLoad', fmtStockLoad(kv.loadavg), '1/5/15 minute /proc/loadavg: ' + (kv.loadavg || 'unavailable') + '.');
+  bset('bnStockLoad', fmtStockLoad(kv.loadavg), T('stock_load_now', '1 min') + ' \u00b7 5 \u00b7 15: ' + (kv.loadavg || '\u2014'));
   bset('bnStockBattery', capPct ? (capPct + '%' + (volt > 0 ? ' · ' + volt.toFixed(2) + 'V' : '')) : '—',
     'Direct battery capacity and voltage.');
   bset('bnStockUptime', uptime, 'Direct /proc/uptime reading.');
@@ -9299,6 +9664,8 @@ function paintStockLive(stockKv = null) {
 
 let _stockTelemetryLastMs = 0;
 let _stockTelemetryKv = {};
+const _stockLiveInfo = { ceil: [] };
+const _lvLast = { st: {}, kv: {} };
 let _stockRomHistory = { ts: 0, cpuT: 0 };
 const STOCK_TELEMETRY_MIN_INTERVAL_MS = 10000;
 async function pollStockTelemetry(visible, force = false) {
@@ -9321,11 +9688,18 @@ async function pollStockTelemetry(visible, force = false) {
     return;
   }
   const now = Date.now();
-  if (!force && (now - _stockTelemetryLastMs) < STOCK_TELEMETRY_MIN_INTERVAL_MS) return;
+  /* Between two ROM reads the cards are painted from the last one (fix168). Returning to
+   * Monitor inside the 10-second window used to clear every cell and hide the battery card
+   * on open, then skip the read as too recent - the page sat on dashes until the window
+   * ran out, which is the "almost nothing shown" screen. */
+  if (!force && (now - _stockTelemetryLastMs) < STOCK_TELEMETRY_MIN_INTERVAL_MS) {
+    if (Object.keys(_stockTelemetryKv).length) paintStockLive(_stockTelemetryKv);
+    return;
+  }
   _stockTelemetryLastMs = now;
   const pre = _el('liveStockTelemetry');
   try {
-    const cmd = "sh -c 'printf \"ts=%s\\n\" \"$(date +%s)\"; printf \"uptime=%s\\n\" \"$(cut -d\" \" -f1 /proc/uptime 2>/dev/null)\"; printf \"loadavg=%s\\n\" \"$(cut -d\" \" -f1-3 /proc/loadavg 2>/dev/null)\"; for f in capacity current_now voltage_now temp status charge_full; do printf \"battery.%s=%s\\n\" \"$f\" \"$(cat /sys/class/power_supply/battery/$f 2>/dev/null)\"; done; printf \"settings.global.mobile_data_always_on=%s\\n\" \"$(settings get global mobile_data_always_on 2>/dev/null)\"; grep -E \"^(MemTotal|MemAvailable|MemFree|Cached|SwapFree):\" /proc/meminfo 2>/dev/null; for d in /sys/devices/system/cpu/cpufreq/policy*; do [ -d \"$d\" ] || continue; n=${d##*/}; for f in scaling_min_freq scaling_max_freq scaling_cur_freq scaling_governor cpuinfo_max_freq; do printf \"cpu.%s.%s=%s\\n\" \"$n\" \"$f\" \"$(cat \"$d/$f\" 2>/dev/null)\"; done; done; g=/sys/class/kgsl/kgsl-3d0; for f in gpuclk gpu_busy_percentage gpubusy max_pwrlevel min_pwrlevel thermal_pwrlevel; do printf \"gpu.%s=%s\\n\" \"$f\" \"$(cat \"$g/$f\" 2>/dev/null | head -1)\"; done; for z in /sys/class/thermal/thermal_zone*; do [ -r \"$z/temp\" ] || continue; label=$(cat \"$z/type\" 2>/dev/null); temp=$(cat \"$z/temp\" 2>/dev/null); [ -n \"$temp\" ] && printf \"thermal.%s=%s\\n\" \"$label\" \"$temp\"; done'";
+    const cmd = "sh -c 'printf \"ts=%s\\n\" \"$(date +%s)\"; printf \"uptime=%s\\n\" \"$(cut -d\" \" -f1 /proc/uptime 2>/dev/null)\"; printf \"loadavg=%s\\n\" \"$(cut -d\" \" -f1-3 /proc/loadavg 2>/dev/null)\"; for f in capacity current_now voltage_now temp status charge_full; do printf \"battery.%s=%s\\n\" \"$f\" \"$(cat /sys/class/power_supply/battery/$f 2>/dev/null)\"; done; printf \"settings.global.mobile_data_always_on=%s\\n\" \"$(settings get global mobile_data_always_on 2>/dev/null)\"; grep -E \"^(MemTotal|MemAvailable|MemFree|Cached|SwapTotal|SwapFree):\" /proc/meminfo 2>/dev/null; for d in /sys/devices/system/cpu/cpufreq/policy*; do [ -d \"$d\" ] || continue; n=${d##*/}; for f in scaling_min_freq scaling_max_freq scaling_cur_freq scaling_governor cpuinfo_max_freq; do printf \"cpu.%s.%s=%s\\n\" \"$n\" \"$f\" \"$(cat \"$d/$f\" 2>/dev/null)\"; done; done; g=/sys/class/kgsl/kgsl-3d0; for f in gpuclk gpu_busy_percentage gpubusy max_pwrlevel min_pwrlevel thermal_pwrlevel; do printf \"gpu.%s=%s\\n\" \"$f\" \"$(cat \"$g/$f\" 2>/dev/null | head -1)\"; done; for z in /sys/class/thermal/thermal_zone*; do [ -r \"$z/temp\" ] || continue; label=$(cat \"$z/type\" 2>/dev/null); temp=$(cat \"$z/temp\" 2>/dev/null); [ -n \"$temp\" ] && printf \"thermal.%s=%s\\n\" \"$label\" \"$temp\"; done'";
     const r = await run(cmd);
     await lvMeterPoll(false);
     const text = ((r && r.stdout) || '').trim();
@@ -9415,6 +9789,7 @@ async function pollLive(visible) {
       if (sj && sj.stdout) st = JSON.parse(sj.stdout);
     } catch(e) {}
 
+    _lvLast.st = st || {}; _lvLast.kv = kv;
     const capSrc = (st && st.cap_source_p0) || '';
     const advActive = (st && st.adv_active) || 0;
     let recCount = 0, recDisabled = 0, recReason = '';
@@ -9868,8 +10243,9 @@ async function pollLive(visible) {
             const dpTxt = T('lv_dp_' + dp, dpNames[dp] || '?');
             const dtTxt = we ? T('lv_we_short', 'wknd') : T('lv_wd_short', 'wkday');
             bEl.textContent = dpTxt;
+            /* A small pill, not a grey suffix (fix168): "morning wknd" read as a typo. */
             const sub = document.createElement('span');
-            sub.className = 'smart-banner-sub';
+            sub.className = 'smart-banner-pill' + (we ? ' we' : '');
             sub.textContent = dtTxt;
             bEl.appendChild(sub);
             bEl.title = '#' + bid + ' \u00b7 ' + dpTxt + ' \u00b7 ' + dtTxt;
