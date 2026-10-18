@@ -2613,7 +2613,8 @@ t_webui_live_info_runtime() (
 # Owner's request: a tap on any of the nine Monitor readings shows what it is and how to read
 # it, in every language. Stock swaps five tiles for ROM readings, so it has its own five texts.
 # fix172 extended the same sheet to the eight Smart-banner readings (slot, confidence, lean,
-# load, basis, heat, trend, LPM). The REAL liveInfoOpen runs in node against stub cells.
+# load, basis, heat, trend, LPM); fix174 stops the weekday pill from gluing itself onto the
+# slot value. The REAL liveInfoOpen runs in node against stub cells.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 H="$ROOT/webroot/index.html"
@@ -2670,8 +2671,11 @@ function cell(pos, label, value, cls, title) {
   const l = { textContent: label }, v = { textContent: value, className: 'live-cell-value' + (cls ? ' ' + cls : ''), title: title || '' };
   return { getAttribute() { return pos; }, querySelector(q) { return q === '.live-cell-label' ? l : v; } };
 }
-function bcell(pos, label, value, cls, title) {
-  const l = { textContent: label }, v = { textContent: value, className: 'smart-banner-value' + (cls ? ' ' + cls : ''), title: title || '' };
+function bcell(pos, label, value, cls, title, pill) {
+  /* With a pill badge the real span reads "value"+"pill" through textContent, exactly
+   * like the DOM the banner builder produces. */
+  const l = { textContent: label }, v = { textContent: value + (pill || ''), className: 'smart-banner-value' + (cls ? ' ' + cls : ''), title: title || '' };
+  if (pill) v.childNodes = [ { nodeType: 3, textContent: value }, { nodeType: 1, textContent: pill } ];
   return { getAttribute() { return pos; }, querySelector(q) {
     if (q === '.smart-banner-label') return l;
     if (q === '.smart-banner-value') return v;
@@ -2680,7 +2684,7 @@ function bcell(pos, label, value, cls, title) {
 }
 EOF
   sed -n "/^const LVI_TEXT = {/,/^};/p; /^const LVI_STOCK = /p" "$H"
-  for fn in liveInfoSource liveInfoOpen liveInfoClose; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  for fn in liveInfoSource liveInfoValText liveInfoOpen liveInfoClose; do sed -n "/^function $fn(/,/^}/p" "$H"; done
   cat <<'EOF'
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
 liveInfoOpen(cell('cpu', 'CPU', '41°C'));
@@ -2714,8 +2718,13 @@ chk(_nodes.liveInfoVal.textContent === 'save', 'banner item value: ' + _nodes.li
 chk(_nodes.liveInfoVal.className === 'live-info-val cap-raised', 'banner value keeps its colour: ' + _nodes.liveInfoVal.className);
 chk(_nodes.liveInfoText.textContent.indexOf('power mode') >= 0, 'LPM explanation: ' + _nodes.liveInfoText.textContent);
 chk(!_nodes.liveInfoSheet.hidden, 'sheet opens from a banner item');
-liveInfoOpen(bcell('slot', 'Slot', 'morning'));
+/* The slot value carries the weekday/weekend pill as a child element; the sheet must
+ * show the slot name alone (the fix174 "вечервых" report). */
+liveInfoOpen(bcell('slot', 'Слот', 'вечер', '', '#9 · вечер · вых', 'вых'));
+chk(_nodes.liveInfoVal.textContent === 'вечер', 'pill badge is not glued onto the value: ' + _nodes.liveInfoVal.textContent);
 chk(_nodes.liveInfoText.textContent.indexOf('twelve two-hour slots') >= 0, 'slot explanation: ' + _nodes.liveInfoText.textContent);
+liveInfoOpen(bcell('slot', 'Slot', 'morning'));
+chk(_nodes.liveInfoVal.textContent === 'morning', 'slot without a pill still reads whole: ' + _nodes.liveInfoVal.textContent);
 liveInfoOpen(bcell('trend', 'Trend', '↑ warming', 'cap-clamp'));
 chk(_nodes.liveInfoText.textContent.indexOf('warming') >= 0, 'trend explanation');
 if (bad) process.exit(1);
@@ -2727,7 +2736,8 @@ out="$(node "$T/t.js" 2>&1)" || fail "$out"
 grep -Fq "e.target.closest('.live-cell[data-lvi], .smart-banner-item[data-lvi]');" "$H" || fail "tiles and banner readings are not tappable"
 grep -Fq "html[dir=\"rtl\"] .live-page .smart-banner-item[data-lvi]::after { content: '\\2039'; }" "$H" || fail "the banner chevron does not mirror in Arabic"
 grep -Fq "html[dir=\"rtl\"] .live-page .live-cell[data-lvi]::after { content: '\\2039'; }" "$H" || fail "the tile chevron does not mirror in Arabic"
-echo "PASS webui live info: all nine tiles and the eight Smart-banner readings explain themselves, Stock has its own five, every language translated"
+grep -Fq 'function liveInfoValText(val)' "$H" || fail "the sheet has no pill-safe value reader"
+echo "PASS webui live info: all nine tiles and the eight Smart-banner readings explain themselves, the pill never glues onto the value, Stock has its own five, every language translated"
 )
 
 t_webui_fill_pages_runtime() (
@@ -2752,6 +2762,11 @@ assert re.findall(r'<div class="pmeta" data-meter="(\w+)" hidden></div>', s) == 
 for k in ('prof_performance_desc', 'prof_balanced_desc', 'prof_battery_desc'):
     assert ('class="pdesc" data-i18n="%s"' % k) in s, "%s card has no description" % k
 assert re.search(r'\.pbtn \{[^}]*min-height: var\(--pbtn-h', s) and re.search(r'\.cfg-tile \{[^}]*min-height: var\(--cfg-tile-h', s), "cards do not take the fitted height"
+# fix174: the six hub categories carry a quiet tint of their own hue so they lift off the
+# neutral restart row, and the nine Monitor tiles are filled a notch stronger.
+assert re.search(r'\.cfg-tile \{[^}]*color-mix\(in srgb, var\(--tech-icon, var\(--accent\)\) 11%', s), "hub tiles lost their category tint"
+assert 'color-mix(in srgb, var(--tech-icon) 9%, #ffffff)' in s, "light hub tiles lost their category tint"
+assert 'background: linear-gradient(135deg, rgba(255,255,255,0.065), rgba(255,255,255,0.024));' in s, "Monitor tiles lost their stronger fill"
 assert "'cfg-tile-desc'" in s and "'cfg-tile-bar'" in s, "category tiles lack their description and fill bar"
 assert "sub.className = 'smart-banner-pill' + (we ? ' we' : '');" in s, "weekday/weekend is still glued to the slot name"
 assert "html[data-asb-font=\"device\"] { --sans: 'ASB Device', sans-serif; --mono: 'ASB Device', sans-serif; }" in s, "no device-font switch"
