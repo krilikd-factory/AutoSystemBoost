@@ -1029,16 +1029,24 @@ sed -n '/^lk_capture_battery_trace_row\|^lk_battery_trace_row/,/^}/p' "$C" | gre
   || grep -q '  case "$(lk_power_state)" in' "$C" || f "battery trace reads the hold as discharging"
 
 # --- 3. night verdict from the battery phases -----------------------------------------------
-awk '/^lk_emit_capture_validity\(\) \{/ { f = 1 } f { print } f && /^}/ { exit }' "$F" > "$T/v.sh"
-[ -s "$T/v.sh" ] || f "lk_emit_capture_validity not found"
+{ awk '/^lk_night_chain\(\) \{/ { f = 1 } f { print } f && /^}/ { exit }' "$F"
+  awk '/^lk_emit_capture_validity\(\) \{/ { f = 1 } f { print } f && /^}/ { exit }' "$F"; } > "$T/v.sh"
+grep -q '^lk_emit_capture_validity() {' "$T/v.sh" && grep -q '^lk_night_chain() {' "$T/v.sh" || f "lk_emit_capture_validity or lk_night_chain not found"
 mkdir -p "$T/o"
-printf 'charging_idle\t1000\t13000\t28\t80\nsleep\t13000\t22660\t80\t80\nidle\t22660\t23800\t80\t79\n' > "$T/o/phase_ledger.tsv"
+printf 'charging_idle\t1000\t13000\t28\t80\nsleep\t13000\t22660\t80\t80\nidle\t22660\t23200\t80\t79\n' > "$T/o/phase_ledger.tsv"
 out="$(LK_OUT_DIR="$T/o" LK_START_EPOCH=$(( $(date +%s) - 30000 )) LK_SCREENOFF_LONGEST_S=13560 sh -c '. "$1"; lk_emit_capture_validity' x "$T/v.sh")"
-printf '%s\n' "$out" | grep -q '^night verdict: unavailable on battery (screen off up to 226 min, but the longest stretch off the charger was 161 min; need >=180 min).$' \
+printf '%s\n' "$out" | grep -q '^night verdict: unavailable on battery (screen off up to 226 min, but the longest stretch off the charger was 170 min; need >=180 min).$' \
   || f "night on the charger read as valid: $out"
-printf 'sleep\t1000\t13000\t90\t86\n' >> "$T/o/phase_ledger.tsv"
+printf 'active\t23200\t30000\t79\t70\nsleep\t30000\t42000\t90\t86\n' >> "$T/o/phase_ledger.tsv"
 out="$(LK_OUT_DIR="$T/o" LK_START_EPOCH=$(( $(date +%s) - 30000 )) LK_SCREENOFF_LONGEST_S=13560 sh -c '. "$1"; lk_emit_capture_validity' x "$T/v.sh")"
 printf '%s\n' "$out" | grep -q '^night verdict: valid (longest screen-off stretch on battery 200 min >=180 min).$' || f "a real night not valid: $out"
+mkdir -p "$T/n"
+printf 'active\t0\t600\t95\t94\nidle\t600\t1800\t94\t94\nidle\t1802\t3200\t94\t93\nsleep\t3202\t11600\t93\t91\n' > "$T/n/phase_ledger.tsv"
+out="$(LK_OUT_DIR="$T/n" LK_START_EPOCH=$(( $(date +%s) - 30000 )) LK_SCREENOFF_LONGEST_S=8520 sh -c '. "$1"; lk_emit_capture_validity' x "$T/v.sh")"
+printf '%s\n' "$out" | grep -q '^night verdict: valid (longest screen-off stretch on battery 183 min >=180 min).$' || f "fix167: a night split into idle and sleep phases is not one night: $out"
+printf 'active\t0\t600\t95\t94\nidle\t600\t6000\t94\t93\nactive\t6000\t6600\t93\t92\nsleep\t6600\t12000\t92\t91\n' > "$T/n/phase_ledger.tsv"
+out="$(LK_OUT_DIR="$T/n" LK_START_EPOCH=$(( $(date +%s) - 30000 )) LK_SCREENOFF_LONGEST_S=5400 sh -c '. "$1"; lk_emit_capture_validity' x "$T/v.sh")"
+printf '%s\n' "$out" | grep -q '^night verdict: unavailable (longest continuous screen-off 90 min; need >=180 min).$' || f "fix167: ten minutes on screen did not split the night: $out"
 
 # --- 4. charging-idle verdict names the kernel holder ---------------------------------------
 awk '/^lk_emit_charging_idle_anomaly\(\) \{/ { f = 1 } f { print } f && /^}/ { exit }' "$F" > "$T/a.sh"

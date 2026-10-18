@@ -2026,7 +2026,7 @@ echo "PASS thermal trend gap contract"
 # Uevent parking: with the screen on, the uevent socket is out of epoll (a field OP15 had
 # 29298 display uevents in ~7 h, each an epoll wake + panel sysfs read); the tick that sees
 # the screen go off puts it back, drops what queued, and runs the screen-off work the
-# uevent path runs (stats save, screen-off session plan + prearm).
+# uevent path runs (stats context, screen-off session plan + prearm).
 # Executable fixture: the REAL park/unpark functions against epoll and a datagram socket.
 set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -2039,7 +2039,7 @@ _off="$(sed -n '/} else if (!metrics.misc.screen_on && _ts == 1) {/,/^          
 printf '%s\n' "$_off" | grep -q 'uev_unpark(epfd, uefd);' || fail "tick screen-off does not unpark"
 printf '%s\n' "$_off" | grep -q 'session_plan_build(&fsm, 0);' || fail "tick screen-off skips the screen-off session plan"
 printf '%s\n' "$_off" | grep -q 'session_plan_apply_prearm(&fsm);' || fail "tick screen-off skips the prearm"
-printf '%s\n' "$_off" | grep -q 'persistent_stats_save(&fsm);' || fail "tick screen-off skips the stats save"
+printf '%s\n' "$_off" | grep -q 'persistent_stats_screen_off(&fsm);' || fail "tick screen-off skips the screen-off stats context"
 grep -q 'uevent_dropped_while_parked=' "$SRC" || fail "parking not published"
 grep -q 'uevent_dropped_while_parked' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not show parking"
 
@@ -3749,6 +3749,17 @@ grep -q 'asb_unlock_gate_die(metrics.therm.cpu_max_c,' "$G" || fail "the unlock 
 grep -q 'temperature reading   : ' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not show how old the temperature is"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag is stale"
 echo "PASS: fix166 contract"
+) || exit 1
+# ---- fix167 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix167: $*"; exit 1; }
+G="$ROOT/src/asb_governor.c"
+asb_has_test test_session_lifecycle_runtime.sh || fail "session lifecycle test missing"
+grep -q '^static void persistent_stats_screen_off(const asb_fsm_t \*fsm) { persistent_stats_save_ex(fsm, 0); }$' "$G" || fail "screen-off still runs the full stats save"
+[ "$(grep -c 'persistent_stats_screen_off(&fsm);' "$G")" = 2 ] || fail "both screen-off paths must keep only the context"
+[ "$(grep -c 'lk_night_chain ' "$ROOT/tools/logkit/asb_log_full_day.sh")" -ge 2 ] || fail "the night row and the night verdict must both chain the phases"
+echo "PASS: fix167 contract"
 ) || exit 1
 echo "PASS: field-fix contracts"
 )
@@ -5869,6 +5880,69 @@ for name in build-debug.yml build-release.yml; do
 done
 
 echo "PASS workflow required-files shell contract"
+)
+
+t_session_lifecycle_runtime() (
+# Runtime (fix167): the boot session exists, a screen-off does not end it, shutdown banks once.
+#
+# The fix163 capture booted at 01:49 and Smart banked nothing until the capture ended at 08:49:
+# smart_sessions_total 726 and smart_quality_last -1 in every snapshot. fsm_init clears the
+# FSM and nothing gave the boot session a start time, so every gate on the session age - the
+# 20-minute Smart bank, the deep-idle boundary, intent, the history line, the bank on shutdown -
+# read 0 until a profile change. The REAL fsm_init and fsm_session_reset, compiled from
+# asb_fsm.h, show the dead clock and the sentinels the reset gives (efficiency -1, headroom
+# minimum 100 - a 0 there read as a vendor clamp); then the governor is checked to reset at
+# startup, to keep the per-profile learning out of the two screen-off paths, and to bank one
+# shutdown session, not two.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+G="$ROOT/src/asb_governor.c"
+fail() { echo "FAIL session lifecycle: $*" >&2; exit 1; }
+awk '/^    fsm_init\(&fsm, profile_idx\);$/{i=NR} /^    fsm_session_reset\(&fsm\);$/{if(i && !r) r=NR}
+     /^    while \(g_running\) \{$/{if(!w) w=NR} END{exit !(i && r > i && r < i + 20 && w > r)}' "$G" \
+  || fail "the governor starts without a session (fsm_session_reset must follow fsm_init in main)"
+for p in '} else if (!metrics.misc.screen_on && _ts == 1) {' '                            disarm_timerfd(tfd_active);'; do
+  _blk="$(awk -v p="$p" 'index($0, p) == 1 || index($0, p) {f=1} f{print; n++} n > 30 {exit}' "$G")"
+  printf '%s\n' "$_blk" | grep -q 'persistent_stats_screen_off(&fsm);' || fail "a screen-off path does not keep the next-session context"
+  printf '%s\n' "$_blk" | grep -q 'persistent_stats_save(&fsm);' && fail "a screen-off path still folds the session into the per-profile learning"
+done
+awk '/^static void persistent_stats_save_ex\(const asb_fsm_t \*fsm, int learn\) \{$/{f=1}
+     f && /g_last_session_env = classify_environment\(fsm\);/{e=NR}
+     f && /if \(!learn\) return;/{l=NR}
+     f && /asb_persistent_stats_t \*ps = &g_pstats_per\[pidx\];/{p=NR; exit}
+     END{exit !(e && l == e + 1 && p > l)}' "$G" || fail "the context-only save does not stop before the learning"
+[ "$(grep -c 'session_history_append_ex(&fsm, "shutdown");' "$G")" = 1 ] || fail "shutdown appends (and banks) the session more than once"
+grep -q 'int _ses_long = fsm.ses_start_ts > 0 && (long)(time(NULL) - fsm.ses_start_ts) >= 1200;' "$G" || fail "a Smart session under 20 minutes is banked on shutdown"
+CC=""; for c in ${HOST_CC:-} gcc clang cc; do command -v "$c" >/dev/null 2>&1 && { CC="$c"; break; }; done
+[ -n "$CC" ] || { echo "PASS session lifecycle (source pins only)"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cat > "$T/t.c" <<'X'
+#include <stdio.h>
+int g_qn_skip_this_tick = 0;
+#include "asb_fsm.h"
+asb_runtime_config_t g_asb_cfg;
+int main(void) {
+    int bad = 0;
+    asb_fsm_t f;
+    fsm_init(&f, 3);
+    if (f.ses_start_ts != 0) { printf("fsm_init now starts the session itself - update this test\n"); bad = 1; }
+    if (f.ses_headroom_min != 0 || f.ses_sustained_efficiency != 0) { printf("fsm_init sentinels changed\n"); bad = 1; }
+    time_t t0 = time(NULL);
+    fsm_session_reset(&f);
+    if (f.ses_start_ts < t0 || f.ses_start_ts > t0 + 2) { printf("reset: no session start\n"); bad = 1; }
+    if (f.ses_sustained_efficiency != -1) { printf("reset: efficiency sentinel %d\n", f.ses_sustained_efficiency); bad = 1; }
+    if (f.ses_headroom_min != 100) { printf("reset: headroom minimum %d (0 reads as a vendor clamp)\n", f.ses_headroom_min); bad = 1; }
+    if (f.profile_idx != 3 || f.state != ASB_STATE_LIGHT_IDLE) { printf("reset touched profile or state\n"); bad = 1; }
+    f.ses_start_ts = t0 - 1200;
+    long age = (f.ses_start_ts > 0) ? (long)(time(NULL) - f.ses_start_ts) : 0;
+    if (age < 1200) { printf("a 20-minute session does not read as 20 minutes\n"); bad = 1; }
+    if (!bad) printf("ok\n");
+    return bad;
+}
+X
+"$CC" -O1 -I"$ROOT/src" -o "$T/t" "$T/t.c" -lm 2>"$T/cc.log" || { cat "$T/cc.log" >&2; fail "harness did not compile"; }
+out="$("$T/t")" || { printf '%s\n' "$out" >&2; fail "session reset wrong"; }
+echo "PASS session lifecycle: the boot session has a start and its sentinels, screen-offs keep context without re-learning, shutdown banks once"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
