@@ -1,7 +1,8 @@
 DM_DIR="${ASB_DM_DIR:-/data/adb/asb}"
 DM_FILE="$DM_DIR/drain_meter"
 DM_LIVE="${ASB_DM_LIVE:-/dev/.asb_drain_meter}"
-DM_PS="${ASB_DM_PS:-/sys/class/power_supply/battery}"
+DM_PSY="${ASB_DM_PSY:-/sys/class/power_supply}"
+DM_PS="${ASB_DM_PS:-$DM_PSY/battery}"
 DM_BL="${ASB_DM_BL:-/sys/class/backlight}"
 DM_PROF_FILE="${ASB_DM_PROFILE:-/data/adb/modules/AutoSystemBoost/current_profile}"
 DM_PROFILES="smart balanced battery performance stock"
@@ -129,8 +130,15 @@ dm_screen() {
 
 dm_charging() {
   _dst=""; [ -r "$DM_PS/status" ] && read -r _dst < "$DM_PS/status" 2>/dev/null
-  case "$_dst" in Discharging|'') return 1 ;; esac
-  return 0
+  case "$_dst" in
+    Charging|Full) return 0 ;;
+    Discharging) return 1 ;;
+  esac
+  for _dsn in usb ac dc wireless wls pc_port; do
+    _dso=""; [ -r "$DM_PSY/$_dsn/online" ] && read -r _dso < "$DM_PSY/$_dsn/online" 2>/dev/null
+    [ "$_dso" = 1 ] && return 0
+  done
+  return 1
 }
 
 dm_loop() {
