@@ -47,6 +47,9 @@ asb_stock_enter() {
   asb_stock_stop_governor
   asb_stock_release_profile_leases
   asb_stock_restore_profile_runtime
+  _asp_moddir="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
+  [ -f "$_asp_moddir/runtime/asb_net_apply.sh" ] && \
+    ( MODDIR="$_asp_moddir" sh "$_asp_moddir/runtime/asb_net_apply.sh" >/dev/null 2>&1 & )
   command -v asb_log >/dev/null 2>&1 && \
     asb_log 'stock profile: native governor stopped; profile-owned baseline restored; no ASB power policy remains active'
 }
