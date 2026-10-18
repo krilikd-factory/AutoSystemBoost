@@ -1112,17 +1112,18 @@ command -v gcc >/dev/null 2>&1 && _lc=gcc
 [ -n "${CC:-}" ] && _lc="$CC"
 if [ -z "$_lc" ]; then
   echo "  (no C compiler on this host — test build skipped; runs in CI/dev)"
-elif [ ! -f "$MODDIR/tests/test_smart_session3.c" ]; then
+elif [ ! -f "$MODDIR/tests/asb_smart.sh" ] || ! command -v bash >/dev/null 2>&1; then
   echo "  (tests/ not present — skipped)"
 else
-  for _t in test_smart_session2 test_smart_session3; do
-    if "$_lc" -I"$MODDIR/src" -D_GNU_SOURCE -Wno-unused-parameter -Wno-sign-compare \
-        -Wno-unused-function "$MODDIR/tests/$_t.c" -o "/tmp/asb_lint_$_t" 2>/dev/null; then
+  for _t in smart_session2 smart_session3; do
+    if bash "$MODDIR/tests/asb_smart.sh" --source "$_t" > "/tmp/asb_lint_$_t.c" 2>/dev/null \
+       && "$_lc" -I"$MODDIR/src" -D_GNU_SOURCE -Wno-unused-parameter -Wno-sign-compare \
+        -Wno-unused-function "/tmp/asb_lint_$_t.c" -o "/tmp/asb_lint_$_t" 2>/dev/null; then
       ok "$_t compiles"
     else
       err "$_t does NOT compile — Smart Mode test barrier is broken"
     fi
-    rm -f "/tmp/asb_lint_$_t"
+    rm -f "/tmp/asb_lint_$_t" "/tmp/asb_lint_$_t.c"
   done
 fi
 
