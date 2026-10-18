@@ -834,9 +834,17 @@ lk_display_config_capture() {
       settings list "$_ns" 2>/dev/null | grep -iE 'refresh|frame_rate|fps|ltpo|vrr' | sed "s/^/$_ns: /"
     done
     echo "## status bar redraw settings"
+    _lk_wp="$(dumpsys wallpaper 2>/dev/null | grep -m1 -oE 'mWallpaperComponent=[^ ]+' | sed 's/^mWallpaperComponent=//')"
+    case "$_lk_wp" in
+      ''|null) : ;;
+      *ImageWallpaper*) echo "wallpaper: static image ($_lk_wp)" ;;
+      *) echo "wallpaper: $_lk_wp - a wallpaper service; a live one redraws whenever it is visible" ;;
+    esac
     for _ns in system secure global; do
       settings list "$_ns" 2>/dev/null \
-        | grep -iE 'network_speed|net_speed|netspeed|speed_indicator|clock_seconds|show_seconds|status_bar_clock|battery_percent|battery_percentage|statusbar_battery' \
+        | awk -F= 'tolower($1) ~ /network_speed|net_speed|netspeed|speed_indicator|clock_seconds|show_seconds|status_bar_clock|battery_percent|battery_percentage|statusbar_battery|^icon_blacklist$/ {
+            v = substr($0, length($1) + 2); if (length(v) > 100) v = substr(v, 1, 97) "..."
+            print $1 "=" v }' \
         | head -8 | sed "s/^/$_ns: /"
     done
     echo "## dumpsys display (modes and rates)"
