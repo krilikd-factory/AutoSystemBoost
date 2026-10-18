@@ -1096,6 +1096,8 @@ if [ -r "$_state" ]; then
     NOTE "  ceilings above Smart's wish: raised by the ROM in ${_vct:-0} ticks (clock above ASB's limit in ${_vcu:-0}), by ASB's own lifts in $_owc ticks (unlock lift, prime burst, a lowering write still to land)"
   fi
   [ -n "$_thc" ] && NOTE "  thermal-trend trims held on a cool body: $_thc ticks (skin more than 8 C under thermal_skin_c=$(cfg thermal_skin_c) - a burst, not heat)"
+  _cbs="$(_rget comfort_trim_burst_skips /dev/.asb/state 2>/dev/null)"
+  [ -n "$_cbs" ] && NOTE "  screen-on comfort trims held back on a die burst: $_cbs (the die read warm for less than 10 s - the heat of a lift, not of the use)"
   # Say what the two numbers count, because they do not count the same thing.
   #
   # A capture reads attempts=292 backoff_skips=455 - more skips than attempts, which
@@ -1326,9 +1328,12 @@ for _fl in disable remove update skip_mount; do
   [ -f "$MODDIR/$_fl" ] && P "    - $_fl present (!!)" || P "    - $_fl absent (ok)"
 done
 # governor process
-_gov_pid="$(pgrep -f 'asb_governor' 2>/dev/null | head -1)"
-[ -z "$_gov_pid" ] && _gov_pid="$(pgrep -f '/asb' 2>/dev/null | head -1)"
-V "ASB governor process alive" "running" "$([ -n "$_gov_pid" ] && echo running)" present
+_gov_pid="$(pgrep -f '/bin/asb$' 2>/dev/null | head -1)"
+if [ "$(cat "$MODDIR/current_profile" 2>/dev/null)" = "stock" ]; then
+  V "ASB governor stopped (Stock profile)" "stopped" "$([ -n "$_gov_pid" ] && echo running || echo stopped)" eq
+else
+  V "ASB governor process alive" "running" "$([ -n "$_gov_pid" ] && echo running || echo stopped)" eq
+fi
 P "  current profile : $(cat "$MODDIR/current_profile" 2>/dev/null || gp persist.asb.profile)"
 # is module's system actually mounted?
 _mounted="$(grep -c "AutoSystemBoost" /proc/mounts 2>/dev/null)"
@@ -2428,6 +2433,9 @@ else
 fi
 
 SEC "5a2. SMART LEARNING  (what the current bucket knows)"
+if [ "$(cat "$MODDIR/current_profile" 2>/dev/null)" = "stock" ] && [ ! -s /dev/.asb/state ]; then
+  NOTE "Stock profile: the governor is stopped, so Smart neither learns nor decides - what it learned is kept and used again after a switch back"
+else
 _sb_t="$(grep -m1 '^smart_bucket_temp_x10=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 _sb_d="$(grep -m1 '^smart_bucket_drain_x10=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
   # The last banked session beside the bucket average.
@@ -2511,6 +2519,7 @@ case "${_sb_t:-0}" in
      fi ;;
 esac
 NOTE "sessions learned = $(grep -m1 '^smart_sessions_total=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+fi
 
 SEC "5a3. BATTERY BEHAVIOUR  (the governor-owned switches)"
 # Is the governor actually quiet while the screen is off?
@@ -2633,6 +2642,9 @@ _tconf="$(_rget thermal_source_confidence /dev/.asb/state)"
 _trej="$(_rget thermal_rejected_type /dev/.asb/state | tr -d '\"')"
 _traw="$(_rget thermal_rejected_raw /dev/.asb/state)"
 _sq="$(_rget startup_quarantined /dev/.asb/state)"
+if [ -z "$_tcs" ] && [ ! -s /dev/.asb/state ] && [ "$(cat "$MODDIR/current_profile" 2>/dev/null)" = "stock" ]; then
+  NOTE "control source: none - Stock profile, the governor is stopped and the ROM's thermal service alone decides"
+else
 NOTE "control source: ${_tcs:-unknown}  zone: ${_tcz:--1}  confidence: ${_tconf:-0}/2"
 case "${_tconf:-0}" in
   2) if [ "$(_rget thermal_conf_promotions /dev/.asb/state)" -gt 0 ] 2>/dev/null; then
@@ -2643,6 +2655,7 @@ case "${_tconf:-0}" in
   1) NOTE "-> LOW confidence: derived fallback or source not peer-validated (re-checked every 30 s; each load-driven state change waits one extra tick meanwhile)" ;;
   *) NOTE "-> uninitialized or unavailable" ;;
 esac
+fi
 if [ -n "$_trej" ]; then
   NOTE "rejected source: $_trej (raw=${_traw:-?}; raw is not displayed as degrees because scale may differ)"
 fi
