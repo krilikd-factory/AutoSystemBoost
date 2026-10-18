@@ -4198,8 +4198,17 @@ absent() { ! grep -Fq "$2" "$1" || fail "unexpected [$2] in $1"; }
 [ -f "$INSTALL" ] || fail 'installer source missing'
 
 # Installer prune must retain both user-visible profile helper and diagnostics-only UV helper.
-need "$INSTALL" '! -name "asb_config_backup.sh"'
-need "$INSTALL" '! -name "asb_kernel_uv_coexist.sh"'
+# The whitelist now lives in tools/release_tools.list (the manifest the release workflow also
+# ships from). Instead of duplicating the prune expression here - the copy is how the old test
+# passed while the installer deleted shipped tools - the REAL block is extracted from
+# install.sh between its markers and executed against a scratch module dir.
+MF="$ROOT/tools/release_tools.list"
+[ -f "$MF" ] || fail 'release tools manifest missing'
+need "$INSTALL" '_rt_list="$MODPATH/tools/release_tools.list"'
+need "$INSTALL" '# asb_tools_prune_begin'
+need "$INSTALL" '# asb_tools_prune_end'
+need "$MF" 'asb_config_backup.sh'
+need "$MF" 'asb_kernel_uv_coexist.sh'
 need "$INSTALL" 'chmod 0755 "$MODPATH/tools/asb_config_backup.sh"'
 need "$INSTALL" 'chmod 0755 "$MODPATH/tools/asb_kernel_uv_coexist.sh"'
 TMP="$(mktemp -d)"
@@ -4207,25 +4216,25 @@ trap 'rm -rf "$TMP"' EXIT HUP INT TERM
 mkdir -p "$TMP/tools"
 cp "$HELPER" "$TMP/tools/asb_config_backup.sh"
 cp "$UV" "$TMP/tools/asb_kernel_uv_coexist.sh"
+cp "$MF" "$TMP/tools/release_tools.list"
 printf '%s\n' '#!/system/bin/sh' > "$TMP/tools/unrelated_dev_tool.sh"
-find "$TMP/tools" -maxdepth 1 -type f \
-  ! -name "asb_state_sampler.sh" \
-  ! -name "asb_drain_analyzer.sh" \
-  ! -name "asb_doctor.sh" \
-  ! -name "asb_lint.sh" \
-  ! -name "asb_session_report.py" \
-  ! -name "asb_compare_sessions.py" \
-  ! -name "asb_analyze.py" \
-  ! -name "asb_camera_repair.sh" \
-  ! -name "asb_sysui_watch.sh" \
-  ! -name "asb_diag.sh" \
-  ! -name "asb_recents_probe.sh" \
-  ! -name "asb_config_backup.sh" \
-  ! -name "asb_kernel_uv_coexist.sh" \
-  -delete
+sed -n '/^# asb_tools_prune_begin$/,/^# asb_tools_prune_end$/p' "$INSTALL" > "$TMP/prune.sh"
+[ -s "$TMP/prune.sh" ] || fail 'no asb_tools_prune block in install.sh'
+MODPATH="$TMP" sh "$TMP/prune.sh" || fail 'extracted installer prune block did not run'
 [ -f "$TMP/tools/asb_config_backup.sh" ] || fail 'installer prune deletes profile helper'
 [ -f "$TMP/tools/asb_kernel_uv_coexist.sh" ] || fail 'installer prune deletes UV helper'
 [ ! -e "$TMP/tools/unrelated_dev_tool.sh" ] || fail 'installer prune no longer removes unrelated tool'
+# The CI-ships-it / install-keeps-it contract, executed for real: with every manifest tool
+# present, the prune must keep ALL of them and still remove a dev-only file.
+for _n in $(sed 's/#.*//; s/[ \t\r]//g; /^$/d' "$MF"); do
+  [ -f "$TMP/tools/$_n" ] || printf '%s\n' '#!/system/bin/sh' > "$TMP/tools/$_n"
+done
+printf '%s\n' '# dev only' > "$TMP/tools/zz_dev_only.py"
+MODPATH="$TMP" sh "$TMP/prune.sh" || fail 'second prune run did not run'
+for _n in $(sed 's/#.*//; s/[ \t\r]//g; /^$/d' "$MF"); do
+  [ -f "$TMP/tools/$_n" ] || fail "installer prune deletes CI-shipped tool: $_n"
+done
+[ ! -e "$TMP/tools/zz_dev_only.py" ] || fail 'installer prune keeps a dev-only tool'
 
 # Both workflows must preserve and verify the exact helpers in their flashable packages.
 for WF in "$REL" "$DBG"; do
@@ -4736,57 +4745,107 @@ echo 'PASS quick restart capability and no-destructive-fallback contract'
 
 t_release_package_tool_contract() (
 # Release ZIP contract: tools/ is intentionally excluded from the module package,
-# then selected runtime/support tools are copied back by name. Every tool required by
-# the ZIP validator must therefore occur in that copy-back section.
+# then the tools named in tools/release_tools.list are copied back. That manifest is
+# the single source of truth for BOTH sides: the workflow ships from it and the
+# installer's whitelist prune keeps exactly what it names. Every tool required by
+# the ZIP validator must therefore be in the manifest, the manifest may name only
+# files that exist, and the installer's inline fallback must match the manifest.
 set -eu
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 WF="$ROOT/.github/workflows/build-release.yml"
+MF="$ROOT/tools/release_tools.list"
+INSTALL="$ROOT/common/install.sh"
 
 [ -f "$WF" ] || { echo "FAIL: release workflow missing: $WF" >&2; exit 1; }
+[ -f "$MF" ] || { echo "FAIL: release tools manifest missing: $MF" >&2; exit 1; }
 grep -Fq -- "--exclude 'tools'" "$WF" || {
   echo "FAIL: test assumes wholesale tools exclusion is present" >&2
   exit 1
 }
 
-# Package RELEASE zip spans through the generated manifest; its selected tool
-# copy-back declarations must cover every tools/... entry in Validate RELEASE zip.
-COPYBACK="$(sed -n '/# V48: ship the Smart Mode user-facing CLI tool/,/ASB_VER=$(grep/p' "$WF")"
+# The manifest is the package step's list: names only, no comments, no paths.
+MANIFEST_NAMES="$(sed 's/#.*//; s/[ \t\r]//g; /^$/d' "$MF" | sort -u)"
+[ -n "$MANIFEST_NAMES" ] || { echo "FAIL: release_tools.list is empty" >&2; exit 1; }
+printf '%s\n' "$MANIFEST_NAMES" | grep -q '/' && {
+  echo "FAIL: release_tools.list must hold bare top-level names, no paths" >&2
+  exit 1
+}
+for name in $MANIFEST_NAMES; do
+  [ -f "$ROOT/tools/$name" ] || {
+    echo "FAIL: release_tools.list names missing source: tools/$name" >&2
+    exit 1
+  }
+done
+
+# The workflow copy-back must read the manifest (not its own inline list).
+grep -Fq 'done < tools/release_tools.list' "$WF" || {
+  echo "FAIL: Package RELEASE zip does not copy tools back from tools/release_tools.list" >&2
+  exit 1
+}
+# And the manifest itself must be in the package, so the on-device installer reads
+# the real list instead of its inline fallback.
+grep -Fq 'install -m 0644 tools/release_tools.list' "$WF" || {
+  echo "FAIL: Package RELEASE zip does not ship tools/release_tools.list" >&2
+  exit 1
+}
+
+# Every tools/... entry in Validate RELEASE zip must be covered: top-level names by
+# the manifest, logkit names by the logkit copy-back loop.
 REQUIRED_TOOLS="$(sed -n '/for required in \\/,/webroot\/index.html"; do/p' "$WF" \
   | grep -oE '"tools/[A-Za-z0-9_./-]+"' \
   | tr -d '"' \
   | sort -u)"
-
 [ -n "$REQUIRED_TOOLS" ] || {
   echo "FAIL: no tools paths found in release ZIP required-file contract" >&2
   exit 1
 }
-
 for path in $REQUIRED_TOOLS; do
   name="${path#tools/}"
   case "$name" in
     logkit/*)
       base="${name#logkit/}"
-      if ! printf '%s\n' "$COPYBACK" | grep -Fq -- 'tools/logkit/$_t' \
-         || ! printf '%s\n' "$COPYBACK" | grep -Fq -- "$base"; then
-        echo "FAIL: release ZIP requires $path but Package RELEASE zip does not copy its logkit entry back" >&2
+      grep -Fq -- 'tools/logkit/$_t' "$WF" || {
+        echo "FAIL: release ZIP requires $path but the logkit copy-back loop is gone" >&2
         exit 1
-      fi
+      }
+      [ -f "$ROOT/$path" ] || {
+        echo "FAIL: release ZIP requires missing source file: $path" >&2
+        exit 1
+      }
+      ;;
+    release_tools.list)
+      : # shipped by the manifest loop itself, checked above
       ;;
     *)
-      if ! printf '%s\n' "$COPYBACK" | grep -Fq -- "$name"; then
-        echo "FAIL: release ZIP requires $path but Package RELEASE zip does not copy it back" >&2
+      printf '%s\n' "$MANIFEST_NAMES" | grep -qxF "$name" || {
+        echo "FAIL: release ZIP requires $path but release_tools.list does not name it" >&2
         exit 1
-      fi
+      }
       ;;
   esac
-  [ -f "$ROOT/$path" ] || {
-    echo "FAIL: release ZIP requires missing source file: $path" >&2
-    exit 1
-  }
 done
 
-printf 'PASS: %s release-required tools are covered by package copy-back\n' \
+# Installer side: the prune must read the manifest, and the inline fallback heredoc
+# must list exactly the manifest's names - a stale fallback is the drift this whole
+# contract exists to prevent.
+grep -Fq '_rt_list="$MODPATH/tools/release_tools.list"' "$INSTALL" || {
+  echo "FAIL: install.sh tools prune does not read tools/release_tools.list" >&2
+  exit 1
+}
+FALLBACK="$(sed -n "/<<'EOF'/,/^EOF\$/p" "$INSTALL" | sed '1d; $d' | sed 's/[ \t\r]//g; /^$/d' | sort -u)"
+[ -n "$FALLBACK" ] || {
+  echo "FAIL: install.sh has no inline fallback list for the tools prune" >&2
+  exit 1
+}
+if [ "$FALLBACK" != "$MANIFEST_NAMES" ]; then
+  echo "FAIL: install.sh fallback whitelist and tools/release_tools.list disagree:" >&2
+  diff <(printf '%s\n' "$MANIFEST_NAMES") <(printf '%s\n' "$FALLBACK") >&2 || true
+  exit 1
+fi
+
+printf 'PASS: %s manifest tools shipped and kept; %s release-required tools covered; installer fallback matches\n' \
+  "$(printf '%s\n' "$MANIFEST_NAMES" | wc -l | tr -d ' ')" \
   "$(printf '%s\n' "$REQUIRED_TOOLS" | wc -l | tr -d ' ')"
 )
 

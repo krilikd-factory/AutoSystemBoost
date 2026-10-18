@@ -2443,7 +2443,7 @@ grep -q '^    asb_gov_liveness$' "$ROOT/service.sh" || f "housekeeping loop does
 sleep 0 & DEAD=$!; wait "$DEAD" 2>/dev/null
 mkdir -p "$T/mod"; echo smart > "$T/mod/current_profile"
 
-out="$(MODDIR="$T/mod" ASB_GOV_PIDFILE="$T/gov.pid" ASB_SAFE_MODE_FILE="$T/safe" T="$T" DEAD="$DEAD" sh -c '
+out="$(MODDIR="$T/mod" ASB_GOV_PIDFILE="$T/gov.pid" ASB_SAFE_MODE_FILE="$T/safe" ASB_WD_RESIDENT_FILE="$T/wdres" T="$T" DEAD="$DEAD" sh -c '
   . "$T/fn.sh"
   asb_feature_enabled() { [ "$(cat "$T/cpu" 2>/dev/null)" != 0 ]; }
   asb_log() { echo "LOG $*"; }
@@ -2464,6 +2464,8 @@ out="$(MODDIR="$T/mod" ASB_GOV_PIDFILE="$T/gov.pid" ASB_SAFE_MODE_FILE="$T/safe"
   echo "-- window"; asb_gov_liveness
   echo 0 > "$T/cpu"; echo "$DEAD" > "$ASB_GOV_PIDFILE"
   echo "-- nocpu"; asb_gov_liveness; [ -e "$ASB_GOV_PIDFILE" ] && echo "PIDFILE KEPT"
+  rm -f "$T/cpu"; echo "$DEAD" > "$ASB_GOV_PIDFILE"; : > "$T/wdres"
+  echo "-- wdres"; asb_gov_liveness
 ' 2>&1)"
 sec() { printf '%s\n' "$out" | awk -v s="-- $1" '$0 == s { f = 1; next } /^-- / { f = 0 } f'; }
 [ -z "$(sec none)" ] || f "acted with no pid file: $(sec none)"
@@ -2481,6 +2483,13 @@ sec loop4 | grep -q 'died again after 3 restarts in 30 min' || f "crash loop not
 [ -z "$(sec loop5)" ] || f "crash-loop line repeated: $(sec loop5)"
 sec window | grep -q 'restarted (1 in 30 min)' || f "no restart once the window passed: $out"
 [ -z "$(sec nocpu)" ] || f "restarted with the CPU feature off: $(sec nocpu)"
+# A resident watchdog loop (the no-governor fallback in service.sh) owns recovery; liveness
+# must defer to its marker instead of racing a second restart path.
+[ -z "$(sec wdres)" ] || f "acted while the resident watchdog owns recovery: $(sec wdres)"
+grep -q 'touch "${ASB_WD_RESIDENT_FILE:-/dev/.asb/watchdog_resident}"' "$ROOT/service.sh" \
+  || f "watchdog fallback does not mark resident ownership"
+grep -q '\[ -f "${ASB_WD_RESIDENT_FILE:-/dev/.asb/watchdog_resident}" \] && return 0' "$ROOT/service.sh" \
+  || f "liveness does not defer to a resident watchdog"
 
 # The governor no longer spawns the two no-op scripts.
 G="$ROOT/src/asb_governor.c"
