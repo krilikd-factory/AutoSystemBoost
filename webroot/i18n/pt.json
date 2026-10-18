@@ -528,6 +528,28 @@
     "wakelock_fitness": {
       "protect": "proteger",
       "limit": "limitar"
+    },
+    "bt_link_stability": {
+      "stable": "estável"
+    },
+    "net_wifi_leave": {
+      "weak": "sinal fraco",
+      "unusable": "inutilizável"
+    },
+    "wifi_powersave": {
+      "screen_off": "tela desligada",
+      "always": "sempre"
+    },
+    "wakelock_action": {
+      "0": "só observar",
+      "1": "agir"
+    },
+    "gnss_trim": {
+      "0": "Desativado",
+      "1": "reduzir"
+    },
+    "mglru_hold": {
+      "hold": "manter"
     }
   },
   "prof_none": "não selecionado",
@@ -1032,5 +1054,8 @@
   "lvi_gpuclk": "O clock gráfico neste momento. Cai ao mínimo quando nada é desenhado e sobe com a carga; no perfil Padrão o ASB não mexe nele.",
   "lvi_battemp": "Temperatura da bateria. Acima de cerca de 40 °C o carregamento fica mais lento e a bateria envelhece mais rápido; acima de cerca de 45 °C o sistema limita o desempenho para protegê-la.",
   "lvi_zram": "Memória comprimida (zRAM) em uso. O Android guarda aqui apps que você não usa há algum tempo em vez de fechá-los. Vários GB é normal com muitos apps abertos; só custa CPU quando um app é descompactado de novo.",
-  "lvi_learnpause": "No perfil Padrão o Smart não aprende nem decide - a política de frequências do ASB está desligada. Tudo o que ele aprendeu é mantido e volta a ser usado assim que você retornar ao Smart."
+  "lvi_learnpause": "No perfil Padrão o Smart não aprende nem decide - a política de frequências do ASB está desligada. Tudo o que ele aprendeu é mantido e volta a ser usado assim que você retornar ao Smart.",
+  "eta_meter_tip": "Estimativa: nada medido desde que o regulador iniciou - com base no consumo com a tela ligada que o ASB mediu antes neste perfil, em %s min.",
+  "wst_every": "a cada %s min",
+  "wst_free": "sem limite"
 }

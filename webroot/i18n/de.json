@@ -528,6 +528,28 @@
     "wakelock_fitness": {
       "protect": "schützen",
       "limit": "begrenzen"
+    },
+    "bt_link_stability": {
+      "stable": "Stabil"
+    },
+    "net_wifi_leave": {
+      "weak": "Schwaches Signal",
+      "unusable": "Unbrauchbar"
+    },
+    "wifi_powersave": {
+      "screen_off": "Bildschirm aus",
+      "always": "Immer"
+    },
+    "wakelock_action": {
+      "0": "Nur beobachten",
+      "1": "Handeln"
+    },
+    "gnss_trim": {
+      "0": "Aus",
+      "1": "Kürzen"
+    },
+    "mglru_hold": {
+      "hold": "Halten"
     }
   },
   "prof_none": "nicht gewählt",
@@ -1032,5 +1054,8 @@
   "lvi_gpuclk": "Der Grafiktakt in diesem Moment. Er fällt aufs Minimum, wenn nichts gezeichnet wird, und steigt mit der Last; im Profil Standard rührt ASB ihn nicht an.",
   "lvi_battemp": "Akkutemperatur. Über etwa 40 °C lädt der Akku langsamer und altert schneller; über etwa 45 °C begrenzt das System die Leistung, um ihn zu schützen.",
   "lvi_zram": "Belegter komprimierter Speicher (zRAM). Android legt hier Apps ab, die länger nicht benutzt wurden, statt sie zu schließen. Mehrere GB sind bei vielen offenen Apps normal; CPU-Zeit kostet es nur, wenn eine App wieder entpackt wird.",
-  "lvi_learnpause": "Im Profil Standard lernt Smart nicht und entscheidet nichts - die Taktsteuerung von ASB ist aus. Alles Gelernte bleibt erhalten und wird wieder genutzt, sobald Sie zu Smart zurückkehren."
+  "lvi_learnpause": "Im Profil Standard lernt Smart nicht und entscheidet nichts - die Taktsteuerung von ASB ist aus. Alles Gelernte bleibt erhalten und wird wieder genutzt, sobald Sie zu Smart zurückkehren.",
+  "eta_meter_tip": "Schätzung: seit dem Start des Governors noch nichts gemessen - nach dem Verbrauch bei eingeschaltetem Bildschirm, den ASB früher in diesem Profil über %s Min. gemessen hat.",
+  "wst_every": "alle %s Min.",
+  "wst_free": "unbegrenzt"
 }

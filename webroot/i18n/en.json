@@ -136,6 +136,28 @@
     "wakelock_fitness": {
       "protect": "protect",
       "limit": "limit"
+    },
+    "bt_link_stability": {
+      "stable": "Stable"
+    },
+    "net_wifi_leave": {
+      "weak": "Weak signal",
+      "unusable": "Unusable"
+    },
+    "wifi_powersave": {
+      "screen_off": "Screen off",
+      "always": "Always"
+    },
+    "wakelock_action": {
+      "0": "Watch only",
+      "1": "Act"
+    },
+    "gnss_trim": {
+      "0": "Off",
+      "1": "Trim"
+    },
+    "mglru_hold": {
+      "hold": "Keep"
     }
   },
   "prof_none": "not selected",
@@ -811,5 +833,8 @@
   "lvi_gpuclk": "The graphics clock at this moment. It drops to the minimum when nothing is drawn and climbs with load; in Stock ASB does not touch it.",
   "lvi_battemp": "Battery temperature. Above about 40 °C charging slows down and the battery ages faster; above about 45 °C the system limits performance to protect it.",
   "lvi_zram": "Compressed memory (zRAM) in use. Android packs apps you have not used for a while here instead of closing them. Several GB is normal with many apps open; it costs CPU time only when an app is unpacked again.",
-  "lvi_learnpause": "In Stock Smart neither learns nor decides - the ASB frequency policy is off. Everything it has learned is kept and is used again as soon as you switch back to Smart."
+  "lvi_learnpause": "In Stock Smart neither learns nor decides - the ASB frequency policy is off. Everything it has learned is kept and is used again as soon as you switch back to Smart.",
+  "eta_meter_tip": "Estimate: nothing measured since the governor started - based on the screen-on drain ASB measured earlier in this profile, over %s min.",
+  "wst_every": "every %s min",
+  "wst_free": "no limit"
 }

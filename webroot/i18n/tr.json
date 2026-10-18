@@ -528,6 +528,28 @@
     "wakelock_fitness": {
       "protect": "koru",
       "limit": "sınırla"
+    },
+    "bt_link_stability": {
+      "stable": "kararlı"
+    },
+    "net_wifi_leave": {
+      "weak": "zayıf sinyal",
+      "unusable": "kullanılamaz"
+    },
+    "wifi_powersave": {
+      "screen_off": "ekran kapalı",
+      "always": "her zaman"
+    },
+    "wakelock_action": {
+      "0": "yalnızca izle",
+      "1": "müdahale et"
+    },
+    "gnss_trim": {
+      "0": "Kapalı",
+      "1": "kısıtla"
+    },
+    "mglru_hold": {
+      "hold": "tut"
     }
   },
   "prof_none": "seçilmedi",
@@ -1032,5 +1054,8 @@
   "lvi_gpuclk": "Şu anki grafik saati. Hiçbir şey çizilmediğinde en düşüğe iner ve yükle yükselir; Stok profilinde ASB ona dokunmaz.",
   "lvi_battemp": "Pil sıcaklığı. Yaklaşık 40 °C üzerinde şarj yavaşlar ve pil daha hızlı yaşlanır; yaklaşık 45 °C üzerinde sistem onu korumak için performansı sınırlar.",
   "lvi_zram": "Kullanılan sıkıştırılmış bellek (zRAM). Android, bir süredir kullanmadığınız uygulamaları kapatmak yerine buraya yerleştirir. Çok sayıda uygulama açıkken birkaç GB normaldir; yalnızca bir uygulama yeniden açıldığında CPU zamanı harcar.",
-  "lvi_learnpause": "Stok profilinde Smart ne öğrenir ne de karar verir - ASB frekans politikası kapalıdır. Öğrendiği her şey saklanır ve Smart’a döner dönmez yeniden kullanılır."
+  "lvi_learnpause": "Stok profilinde Smart ne öğrenir ne de karar verir - ASB frekans politikası kapalıdır. Öğrendiği her şey saklanır ve Smart’a döner dönmez yeniden kullanılır.",
+  "eta_meter_tip": "Tahmin: governor başladığından beri henüz bir ölçüm yok - ASB’nin bu profilde daha önce %s dk boyunca ekran açıkken ölçtüğü tüketime göre.",
+  "wst_every": "%s dk’da bir",
+  "wst_free": "sınırsız"
 }

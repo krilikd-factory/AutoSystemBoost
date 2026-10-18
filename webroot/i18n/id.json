@@ -528,6 +528,28 @@
     "wakelock_fitness": {
       "protect": "lindungi",
       "limit": "batasi"
+    },
+    "bt_link_stability": {
+      "stable": "stabil"
+    },
+    "net_wifi_leave": {
+      "weak": "sinyal lemah",
+      "unusable": "tak terpakai"
+    },
+    "wifi_powersave": {
+      "screen_off": "layar mati",
+      "always": "selalu"
+    },
+    "wakelock_action": {
+      "0": "pantau saja",
+      "1": "bertindak"
+    },
+    "gnss_trim": {
+      "0": "Mati",
+      "1": "pangkas"
+    },
+    "mglru_hold": {
+      "hold": "tahan"
     }
   },
   "prof_none": "belum dipilih",
@@ -1032,5 +1054,8 @@
   "lvi_gpuclk": "Clock grafis saat ini. Turun ke minimum saat tidak ada yang digambar dan naik seiring beban; di profil Bawaan ASB tidak menyentuhnya.",
   "lvi_battemp": "Suhu baterai. Di atas sekitar 40 °C pengisian melambat dan baterai lebih cepat menua; di atas sekitar 45 °C sistem membatasi performa untuk melindunginya.",
   "lvi_zram": "Memori terkompresi (zRAM) yang terpakai. Android menyimpan aplikasi yang sudah lama tidak dipakai di sini alih-alih menutupnya. Beberapa GB itu wajar bila banyak aplikasi terbuka; hanya memakan waktu CPU saat aplikasi dibuka kembali.",
-  "lvi_learnpause": "Di profil Bawaan Smart tidak belajar dan tidak memutuskan apa pun - kebijakan frekuensi ASB mati. Semua yang sudah dipelajari tetap disimpan dan dipakai lagi begitu Anda kembali ke Smart."
+  "lvi_learnpause": "Di profil Bawaan Smart tidak belajar dan tidak memutuskan apa pun - kebijakan frekuensi ASB mati. Semua yang sudah dipelajari tetap disimpan dan dipakai lagi begitu Anda kembali ke Smart.",
+  "eta_meter_tip": "Perkiraan: belum ada yang diukur sejak governor mulai - berdasarkan konsumsi saat layar menyala yang diukur ASB sebelumnya di profil ini selama %s mnt.",
+  "wst_every": "tiap %s mnt",
+  "wst_free": "tanpa batas"
 }

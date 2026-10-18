@@ -528,6 +528,28 @@
     "wakelock_fitness": {
       "protect": "保护",
       "limit": "限制"
+    },
+    "bt_link_stability": {
+      "stable": "稳定"
+    },
+    "net_wifi_leave": {
+      "weak": "信号弱",
+      "unusable": "不可用"
+    },
+    "wifi_powersave": {
+      "screen_off": "熄屏时",
+      "always": "始终"
+    },
+    "wakelock_action": {
+      "0": "仅观察",
+      "1": "处理"
+    },
+    "gnss_trim": {
+      "0": "关闭",
+      "1": "限制"
+    },
+    "mglru_hold": {
+      "hold": "保留"
     }
   },
   "prof_none": "未选择",
@@ -1032,5 +1054,8 @@
   "lvi_gpuclk": "此刻的图形频率。无内容绘制时降到最低，随负载升高；原生配置下 ASB 不会调整它。",
   "lvi_battemp": "电池温度。约 40 °C 以上充电变慢、电池老化加快；约 45 °C 以上系统会限制性能以保护电池。",
   "lvi_zram": "已使用的压缩内存（zRAM）。Android 会把一段时间未用的应用压缩放在这里，而不是直接关闭。开着很多应用时占用几 GB 属正常；只有重新解压应用时才消耗 CPU 时间。",
-  "lvi_learnpause": "原生配置下智能既不学习也不做决定——ASB 的频率策略已关闭。已学到的内容都会保留，一旦切回智能就会继续使用。"
+  "lvi_learnpause": "原生配置下智能既不学习也不做决定——ASB 的频率策略已关闭。已学到的内容都会保留，一旦切回智能就会继续使用。",
+  "eta_meter_tip": "估算：调节器启动后尚未实测——依据 ASB 此前在本配置下亮屏实测的耗电（共 %s 分钟）。",
+  "wst_every": "每 %s 分钟",
+  "wst_free": "不限"
 }
