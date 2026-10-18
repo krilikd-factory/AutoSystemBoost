@@ -2920,7 +2920,9 @@ t_webui_option_labels_runtime() (
 # under a badge reading "OFF", Leave Bad Wi-Fi listed "weak" and "unusable", Act on Wakelocks
 # and Trim Background GPS showed bare "0" / "1", and the Wi-Fi scan slider read "1" where the
 # action screen said "every 10 min". The REAL Topt, cfgScanLabel and cfgStatus run in node with
-# the shipped en.json and ru.json; every language is checked for the labels.
+# the shipped en.json and ru.json; every language is checked for the labels. fix176 adds the
+# wakelock_fitness honesty badge: on a ROM that does not enforce the WAKE_LOCK app-op the badge
+# says so (warn) instead of claiming "Enabled", and all 13 locales carry the strings.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 H="$ROOT/webroot/index.html"
@@ -2941,6 +2943,12 @@ for p in files:
             v = d.get('optFor', {}).get(k, {}).get(o) or d.get('opt', {}).get(o)
             assert v and not (v == o and o.isdigit()), '%s: %s=%s has no label' % (p.name, k, o)
     assert d.get('wst_every', '').count('%s') == 1 and d.get('wst_free'), p.name + ': scan labels'
+    for k in ('st_wlf_ignored', 'st_wlf_none', 't_wlf_ignored'):
+        assert d.get(k), '%s: %s missing' % (p.name, k)
+    assert '·' in d['t_wlf_ignored'], p.name + ': the fitness-limit toast keeps its middle dot'
+    if p.name == 'en.json':
+        assert d['st_wlf_ignored'] == 'ROM ignores it' and d['st_wlf_none'] == 'no fitness apps'
+        assert d['t_wlf_ignored'] == ' · this ROM ignores the limit', 'en.json matches the T() fallbacks'
 P
 {
   printf 'const I18N = { en: %s, ru: %s };\n' "$(cat "$ROOT/webroot/i18n/en.json")" "$(cat "$ROOT/webroot/i18n/ru.json")"
@@ -2949,6 +2957,7 @@ let ASB_LANG = 'ru';
 function T(k, d) { const L = I18N[ASB_LANG]; return (L && typeof L[k] === 'string') ? L[k] : d; }
 function ledgerBadge() { return null; } function trialHoursLeft() { return 0; } function trialExpired() { return false; }
 const _netResult = {}; const _cfgVals = {};
+let _wlFitIgnored = 0, _wlFitLimited = 0, _wlFitProbed = false;
 EOF
   for fn in Topt cfgScanLabel cfgStatus; do sed -n "/^function $fn(/,/^}/p" "$H"; done
   cat <<'EOF'
@@ -2962,8 +2971,20 @@ chk(cfgStatus(seg('net_congestion_wifi', 'auto'), 'cubic').text === 'CUBIC', 'te
 chk(cfgStatus({ key: 'wifi_scan_throttle', type: 'range' }, '1').text === 'раз в 10 мин', 'scan badge: ' + cfgStatus({ key: 'wifi_scan_throttle', type: 'range' }, '1').text);
 chk(cfgScanLabel(0) === 'выкл' && cfgScanLabel(3) === 'раз в 2 мин' && cfgScanLabel(4) === 'без ограничений', 'scan labels');
 chk(cfgStatus({ key: 'dsp_bass', type: 'range' }, '0').text === 'выкл', 'a range at zero says off in the UI language');
+chk(cfgStatus(seg('wakelock_fitness', 'protect'), 'protect').text === String(Topt('protect', 'wakelock_fitness')).toUpperCase(), 'protect badge: ' + cfgStatus(seg('wakelock_fitness', 'protect'), 'protect').text);
+_wlFitIgnored = 1;
+chk(cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').cls === 'warn' && cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text === 'прошивка игнорирует', 'ROM-ignored limit badge: ' + cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text);
+_wlFitIgnored = 0; _wlFitLimited = 2;
+chk(cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').cls === 'good', 'an enforced limit badge is good');
+_wlFitLimited = 0; _wlFitProbed = true;
+chk(cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').cls === 'neutral' && cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text === 'нет фитнес-приложений', 'no fitness apps badge: ' + cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text);
+_wlFitProbed = false;
+chk(cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text === 'ожидает', 'unprobed limit badge: ' + cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text);
 ASB_LANG = 'en';
 chk(cfgScanLabel(2) === 'every 5 min', 'English scan label');
+_wlFitIgnored = 1;
+chk(cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text === 'ROM ignores it', 'English ROM-ignored badge: ' + cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text);
+_wlFitIgnored = 0;
 if (bad) process.exit(1);
 console.log('ok');
 EOF
@@ -2972,7 +2993,9 @@ out="$(node "$T/t.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 grep -Fq "if (it.key === 'wifi_scan_throttle') return cfgScanLabel(v);" "$H" || fail "the slider value is still a bare number"
 grep -Fq '.cfg-row-top > .cfg-range input[type="range"] { flex: 1 1 auto; width: auto; min-width: 0; }' "$H" || fail "a slider on its own row keeps its short track"
-echo "PASS webui option labels: option buttons and value badges are labelled in the UI language, the Wi-Fi scan rate in minutes, sliders use their row"
+grep -Fq "if (it.key === 'wakelock_fitness') {" "$H" || fail "cfgStatus lost the wakelock_fitness honesty branch"
+grep -Fq 'async function loadWlFitStatus()' "$H" || fail "loadWlFitStatus is gone"
+echo "PASS webui option labels: option buttons and value badges are labelled in the UI language, the Wi-Fi scan rate in minutes, sliders use their row, and the fitness limit admits when the ROM ignores it"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
