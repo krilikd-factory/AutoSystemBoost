@@ -2612,7 +2612,8 @@ t_webui_live_info_runtime() (
 #
 # Owner's request: a tap on any of the nine Monitor readings shows what it is and how to read
 # it, in every language. Stock swaps five tiles for ROM readings, so it has its own five texts.
-# The REAL liveInfoOpen runs in node against stub cells.
+# fix172 extended the same sheet to the eight Smart-banner readings (slot, confidence, lean,
+# load, basis, heat, trend, LPM). The REAL liveInfoOpen runs in node against stub cells.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 H="$ROOT/webroot/index.html"
@@ -2631,6 +2632,10 @@ cells = re.findall(r'<div class="live-cell" data-lvi="([a-z]+)">', s)
 assert len(cells) == 9 and len(set(cells)) == 9, cells
 for c in cells:
     assert c in pairs, "tile %s has no explanation" % c
+banner = re.findall(r'<div class="smart-banner-item" data-lvi="([a-z]+)">', s)
+assert len(banner) == 8 and len(set(banner)) == 8, banner
+for b in banner:
+    assert b in pairs, "banner reading %s has no explanation" % b
 for pos, key in stock.items():
     assert pos in cells and key in pairs, "Stock tile %s -> %s has no explanation" % (pos, key)
 assert len(stock) == 5, stock
@@ -2665,6 +2670,14 @@ function cell(pos, label, value, cls, title) {
   const l = { textContent: label }, v = { textContent: value, className: 'live-cell-value' + (cls ? ' ' + cls : ''), title: title || '' };
   return { getAttribute() { return pos; }, querySelector(q) { return q === '.live-cell-label' ? l : v; } };
 }
+function bcell(pos, label, value, cls, title) {
+  const l = { textContent: label }, v = { textContent: value, className: 'smart-banner-value' + (cls ? ' ' + cls : ''), title: title || '' };
+  return { getAttribute() { return pos; }, querySelector(q) {
+    if (q === '.smart-banner-label') return l;
+    if (q === '.smart-banner-value') return v;
+    return null;
+  } };
+}
 EOF
   sed -n "/^const LVI_TEXT = {/,/^};/p; /^const LVI_STOCK = /p" "$H"
   for fn in liveInfoSource liveInfoOpen liveInfoClose; do sed -n "/^function $fn(/,/^}/p" "$H"; done
@@ -2692,15 +2705,29 @@ liveInfoOpen(cell('cpu', 'CPU', '45°C'));
 chk(_nodes.liveInfoSrc.hidden, 'Stock shows no governor sensor name');
 liveInfoOpen(cell('learner', 'Smart learning', 'paused'));
 chk(_nodes.liveInfoText.textContent.indexOf('neither learns nor decides') >= 0, 'Stock learner text');
+_selectedProfile = 'smart';
+/* The eight Smart-banner readings open the same sheet: label and value come from the
+ * banner's own span classes, and the value keeps its colour. */
+liveInfoOpen(bcell('lpm', 'Modem LPM', 'save', 'cap-raised'));
+chk(_nodes.liveInfoTitle.textContent === 'Modem LPM', 'banner item title: ' + _nodes.liveInfoTitle.textContent);
+chk(_nodes.liveInfoVal.textContent === 'save', 'banner item value: ' + _nodes.liveInfoVal.textContent);
+chk(_nodes.liveInfoVal.className === 'live-info-val cap-raised', 'banner value keeps its colour: ' + _nodes.liveInfoVal.className);
+chk(_nodes.liveInfoText.textContent.indexOf('power mode') >= 0, 'LPM explanation: ' + _nodes.liveInfoText.textContent);
+chk(!_nodes.liveInfoSheet.hidden, 'sheet opens from a banner item');
+liveInfoOpen(bcell('slot', 'Slot', 'morning'));
+chk(_nodes.liveInfoText.textContent.indexOf('twelve two-hour slots') >= 0, 'slot explanation: ' + _nodes.liveInfoText.textContent);
+liveInfoOpen(bcell('trend', 'Trend', '↑ warming', 'cap-clamp'));
+chk(_nodes.liveInfoText.textContent.indexOf('warming') >= 0, 'trend explanation');
 if (bad) process.exit(1);
 console.log('ok');
 EOF
 } > "$T/t.js"
 out="$(node "$T/t.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-grep -Fq "const c = e.target && e.target.closest && e.target.closest('.live-cell[data-lvi]');" "$H" || fail "tiles are not tappable"
+grep -Fq "e.target.closest('.live-cell[data-lvi], .smart-banner-item[data-lvi]');" "$H" || fail "tiles and banner readings are not tappable"
+grep -Fq "html[dir=\"rtl\"] .live-page .smart-banner-item[data-lvi]::after { content: '\\2039'; }" "$H" || fail "the banner chevron does not mirror in Arabic"
 grep -Fq "html[dir=\"rtl\"] .live-page .live-cell[data-lvi]::after { content: '\\2039'; }" "$H" || fail "the tile chevron does not mirror in Arabic"
-echo "PASS webui live info: all nine tiles explain themselves, Stock has its own five, every language translated"
+echo "PASS webui live info: all nine tiles and the eight Smart-banner readings explain themselves, Stock has its own five, every language translated"
 )
 
 t_webui_fill_pages_runtime() (
