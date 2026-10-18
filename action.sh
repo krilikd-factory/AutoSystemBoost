@@ -798,6 +798,7 @@ T_LEAN_NOW="Battery lean: %s%% now"
 T_LEAN_TILT=" (your tilt: +%s%% of the remaining way to Battery)"
 T_TILT_ONLY="Battery tilt: %s%%"
 T_THROTTLE_TEMP="Throttling temperature: %s°C (default 65)"
+T_CFG_REFUSED="Governor refused governor.conf (code %s): it runs built-in values, not your settings - send asbdiag"
 T_SAFE_MODE="SAFE MODE: governor disabled (%s)"
 T_RECOVERY="Recovery: %s restart(s) — %s"
 T_HOT="🔥 hot"
@@ -841,6 +842,7 @@ T_CEIL_ASB="CPU ceiling: set by ASB"
 T_CPR_PROFILE="profile rail"
 T_CPR_ENV="efficiency envelope"
 T_CPR_HEAT="heat budget (%s)"
+T_CPR_FLOOR="efficient minimum (asked %s MHz)"
 T_PRIME_CEIL="prime ceiling: %s MHz · %s"
 T_BURST_ON="⚡ burst boost ACTIVE - prime lifted for heavy work (max 20 s)"
 T_BURST_N="burst boosts this session: %s"
@@ -1300,6 +1302,8 @@ if [ "$_rec_disabled" = "1" ]; then
 elif [ "$_rec_count" -gt 0 ] 2>/dev/null; then
   _f "  ⚠️  $T_RECOVERY" "$_rec_count" "${_rec_reason:-unknown}"
 fi
+_cfgrc="$(grep -m1 '^cfg_load_rc=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+case "$_cfgrc" in ''|0) : ;; *) _f "  ⚠️  $T_CFG_REFUSED" "$_cfgrc" ;; esac
 echo ""
 _cpu_note=""
 [ "${_cputemp:-0}" -ge 80 ] 2>/dev/null && _cpu_note="  $T_HOT"
@@ -1462,7 +1466,7 @@ if [ -n "$_g_state" ]; then
 
   # The prime is the cluster that decides both heat and responsiveness - say where it sits
   # and what put it there, using the step the writer really sends.
-  _cpr="$(_st cap_prime_reason)"; _cpe="$(_st cap_prime_eff_khz)"
+  _cpr="$(_st cap_prime_reason)"; _cpe="$(_st cap_prime_eff_khz)"; _cprq="$(_st requested_cpu_max_prime)"
   _sp_top=""
   for _spx in $(_st slot_policy_ids | tr ',' ' '); do
     [ "$_spx" -ge 0 ] 2>/dev/null && _sp_top="$_spx"
@@ -1481,6 +1485,10 @@ if [ -n "$_g_state" ]; then
       thermal_budget:*)    _cpr_t="$(_s "$T_CPR_HEAT" "${_cpr#thermal_budget:}")" ;;
       *)                   _cpr_t="$_cpr" ;;
     esac
+    if [ "${_cprq:-0}" -gt "$_cpe_s" ] 2>/dev/null && [ "$(_st prime_escape)" != 1 ] && [ "$(_st unlock_lift)" != 1 ]; then
+      _cpr_t="$(_s "$T_CPR_FLOOR" "$((_cpe_s / 1000))")"
+      _cpe_s="$_cprq"
+    fi
     _f "       $T_PRIME_CEIL" "$((_cpe_s / 1000))" "$_cpr_t"
   fi
   _pec="$(_st prime_escape_count)"
