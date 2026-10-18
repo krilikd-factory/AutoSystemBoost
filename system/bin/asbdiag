@@ -442,6 +442,17 @@ _rm="other"
 [ -f /data/adb/magisk/magisk ] && _rm="magisk-like"
 P "  root_manager         : $_rm"
 [ "$_rm" = "apatch" ] && NOTE "APatch path: OP12 camera handling is scoped specifically for APatch (real /odm mount)."
+_cfgrc="$(grep -m1 '^cfg_load_rc=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+if [ -n "$_cfgrc" ]; then
+  V "governor accepted governor.conf (it runs your WebUI settings)" "0" "$_cfgrc"
+  case "$_cfgrc" in
+    0) : ;;
+    -16) NOTE "rc=-16: governor.conf has more keys than this governor reads - it runs its last good or built-in values, not your settings; update ASB" ;;
+    -3) NOTE "rc=-3: a key appears twice in governor.conf - the governor keeps its last good or built-in values; save any setting in the WebUI to rewrite the file" ;;
+    -1) NOTE "rc=-1: governor.conf could not be opened - the governor runs its built-in values" ;;
+    *) NOTE "rc=$_cfgrc: a value in governor.conf is out of range or malformed - the governor keeps its last good or built-in values; its log names the refusal (config_reject)" ;;
+  esac
+fi
 
 # =====================================================================
 SEC "0a4. MEMORY / GC  (MGLRU and the ART collector)"
