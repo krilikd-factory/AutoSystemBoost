@@ -4055,6 +4055,7 @@ grep -q 'static void asb_unlock_lift_apply' "$T/u.c" || fail "lift block not fou
 cat > "$T/t.c" <<'X'
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 enum { PROFILE_BATTERY, PROFILE_BALANCED, PROFILE_PERFORMANCE, PROFILE_SMART };
 typedef struct { int cpu_max[3]; int cpu_min[3]; int uclamp_top_max; int uclamp_bg_max; } asb_profile_caps_t;
 static struct { int unlock_lift_s, unlock_lift_pct, bat_comfort_temp; } g_asb_cfg = { 3, 80, 48 };
@@ -4103,6 +4104,16 @@ int main(void) {
     /* A skipped wake still lets the first touch try (the phone may have cooled). */
     up(0, 0, 110000); DIE = 48; up(1, 0, 111000); DIE = 36;
     CHK(up(1, 1, 113000) == 1, "first touch after a warm wake did not lift on a cool die");
+    /* fix166: "warm" is the lower of the die at the wake and the last reading in the dark. */
+    {
+        time_t n = 1792305000;
+        CHK(asb_unlock_gate_die(49, 36, n - 120, n) == 36, "a wake burst on a cool phone counted as warm");
+        CHK(asb_unlock_gate_die(49, 52, n - 120, n) == 49, "a phone that slept hot was not judged warm");
+        CHK(asb_unlock_gate_die(49, 36, n - 1801, n) == 49, "a dark reading older than half an hour was trusted");
+        CHK(asb_unlock_gate_die(49, 0, 0, n) == 49 && asb_unlock_gate_die(49, 36, n + 5, n) == 49, "no or future dark reading");
+        up(0, 0, 120000); DIE = asb_unlock_gate_die(49, 36, n - 120, n);
+        CHK(up(1, 0, 121000) == 1, "29835: the 08:4x wake was skipped warm on a cool phone"); DIE = 36;
+    }
     /* 4-cluster part: the prime slot Smart caps at 62% is lifted; the share is clamped to 100. */
     g_cpu_slot_hwmax[0] = 2265600; g_cpu_slot_hwmax[1] = 3148800; g_cpu_slot_hwmax[2] = 3302400;
     g_asb_cfg.unlock_lift_pct = 130;
@@ -4355,6 +4366,116 @@ X
 "$CC" -O1 -Wall -Wno-unused-function -I"$T" -o "$T/t" "$T/t.c" 2>"$T/cc.log" || { cat "$T/cc.log" >&2; fail "harness did not compile"; }
 "$T/t" "$T/node" || fail "hold bypass wrong"
 echo "PASS writer hold bypass: a held request waits, a new one is sent, a clean write ends the hold run"
+)
+
+t_night_window_chain_runtime() (
+# Runtime (fix166): one night is one dark chain.
+#
+# Capture 29835 logged "onset sample 03:50 -> learned 00:47": asleep about 03:10, a one-minute
+# glance at 03:50, and the second screen-off was learned as bedtime. Older captures carry two or
+# three onsets in one night and "wake sample 13:06 -> learned 12:42" - a phone on a desk summing
+# three hours of darkness by noon. The REAL learner, cut from the governor, runs those days tick
+# by tick: one sample per night, onset = the chain's first screen-off, a glance changes nothing,
+# ten minutes awake ends the chain, a daytime chain teaches nothing, a chain that began in the
+# evening gives its wake but no bedtime, and a wake outside the window is rejected once.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+G="$ROOT/src/asb_governor.c"
+fail() { echo "FAIL night window chain: $*" >&2; exit 1; }
+grep -q 'asb_log("night_window: onset sample' "$G" && fail "the per-screen-off onset sample is back"
+grep -q '^#define ASB_NIGHT_AWAKE_BREAK_S    600$' "$ROOT/src/asb_smart_defs.h" || fail "awake break constant"
+CC=""; for c in ${HOST_CC:-} gcc clang cc; do command -v "$c" >/dev/null 2>&1 && { CC="$c"; break; }; done
+[ -n "$CC" ] || { echo "PASS night window chain (source pins only)"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+awk '/^#define NIGHT_WINDOW_FILE /{on=1} on{print} on&&/^static void asb_night_window_tick\(/{f=1} f&&/^}$/{exit}' "$G" \
+  | sed "s|/data/adb/asb/night_window.conf|$T/nw.conf|" > "$T/n.c"
+grep -q 'asb_night_wake_confirm' "$T/n.c" || fail "learner block not found"
+cat > "$T/t.c" <<'X'
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+#include "asb_smart_defs.h"
+static struct { int night_quiet_auto; int night_quiet_auto_min_samples; } g_asb_cfg = { 1, 3 };
+static char g_last_log[256];
+static void asb_log(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+#include <stdarg.h>
+static void asb_log(const char *fmt, ...) {
+    va_list ap; va_start(ap, fmt); vsnprintf(g_last_log, sizeof(g_last_log), fmt, ap); va_end(ap);
+}
+#include "n.c"
+#define DAY0 1792022400L
+static time_t at(int day, int h, int m) { return (time_t)(DAY0 + day * 86400L + h * 3600L + m * 60L); }
+static time_t g_t;
+static void run(int screen, time_t until) {
+    for (; g_t < until; g_t += 30) asb_night_window_tick(screen, g_t);
+}
+static void fresh(time_t start) {
+    g_night_sleep_min = -1; g_night_wake_min = -1; g_night_samples = 0;
+    g_night_samples_accepted = 0; g_night_samples_rejected = 0;
+    g_night_prev_screen = -1; g_night_off_since = 0; g_night_on_since = 0;
+    asb_night_chain_end();
+    g_last_log[0] = 0;
+    g_t = start;
+}
+static int bad = 0;
+#define CHK(c, what) do { if (!(c)) { printf("%s (sleep=%d wake=%d n=%d acc=%d rej=%d log=%s)\n", what, \
+    g_night_sleep_min, g_night_wake_min, g_night_samples, g_night_samples_accepted, \
+    g_night_samples_rejected, g_last_log); bad = 1; } } while (0)
+int main(void) {
+    /* Capture 29835: on until 03:10, a minute's glance at 03:50, face unlock at 06:20, up at 08:25. */
+    fresh(at(0, 1, 50));
+    run(1, at(0, 3, 10)); run(0, at(0, 3, 50)); run(1, at(0, 3, 51)); run(0, at(0, 6, 20));
+    run(1, at(0, 6, 21)); run(0, at(0, 8, 25)); run(1, at(0, 8, 45));
+    CHK(g_night_samples == 1 && g_night_samples_accepted == 1, "29835: not exactly one night");
+    CHK(g_night_sleep_min == 3 * 60 + 10, "29835: bedtime is not the first screen-off (03:10)");
+    CHK(g_night_wake_min == 8 * 60 + 25, "29835: the face unlock or a glance was learned as the wake");
+    CHK(strstr(g_last_log, "night 03:10-08:25") != NULL, "29835: log line");
+    /* The rest of that morning on a desk: glances under ten minutes, a long pickup at 13:06. */
+    run(0, at(0, 10, 0)); run(1, at(0, 10, 5)); run(0, at(0, 11, 30)); run(1, at(0, 11, 33));
+    run(0, at(0, 13, 6)); run(1, at(0, 13, 30));
+    CHK(g_night_samples == 1 && g_night_wake_min == 8 * 60 + 25 && g_night_samples_rejected == 0,
+        "desk: a midday pickup after three dark hours was learned (or rejected) as a night");
+    /* Asleep at 23:00, a look at the clock at 02:30, up at 07:00: one night, nothing rejected. */
+    fresh(at(1, 22, 0));
+    run(1, at(1, 23, 0)); run(0, at(2, 2, 30)); run(1, at(2, 2, 31)); run(0, at(2, 7, 0)); run(1, at(2, 7, 20));
+    CHK(g_night_samples == 1 && g_night_samples_rejected == 0, "glance at 02:30 rejected or split the night");
+    CHK(g_night_sleep_min == 23 * 60 && g_night_wake_min == 7 * 60, "glance at 02:30 moved bedtime or wake");
+    /* Twenty minutes awake at 00:20 ends the first chain: bedtime is 00:40, learned once. */
+    fresh(at(3, 22, 0));
+    run(1, at(3, 23, 0)); run(0, at(4, 0, 20)); run(1, at(4, 0, 40)); run(0, at(4, 7, 0)); run(1, at(4, 7, 20));
+    CHK(g_night_samples == 1 && g_night_sleep_min == 40 && g_night_wake_min == 7 * 60,
+        "awake at 00:20 for 20 min: want one night 00:40-07:00");
+    /* Phone down at 18:30, a glance at 21:35, up at 07:00: wake learned, bedtime not. */
+    fresh(at(5, 18, 0));
+    run(1, at(5, 18, 30)); run(0, at(5, 21, 35)); run(1, at(5, 21, 36)); run(0, at(6, 7, 0)); run(1, at(6, 7, 20));
+    CHK(g_night_samples == 1 && g_night_sleep_min == -1 && g_night_wake_min == 7 * 60,
+        "evening chain: want the wake and no bedtime");
+    CHK(strstr(g_last_log, "bedtime not learned") != NULL, "evening chain: log line");
+    /* Asleep 23:00, up at 15:00: rejected once, nothing learned. */
+    fresh(at(7, 22, 0));
+    run(1, at(7, 23, 0)); run(0, at(8, 15, 0)); run(1, at(8, 15, 30));
+    CHK(g_night_samples == 0 && g_night_samples_rejected == 1 && g_night_wake_min == -1,
+        "wake at 15:00: want one rejection");
+    /* A wake whose confirming tick never ran: on 12 min, off before the tick saw ten. */
+    fresh(at(9, 22, 0));
+    run(1, at(9, 23, 0)); run(0, at(10, 6, 50));
+    asb_night_window_tick(1, at(10, 6, 50)); asb_night_window_tick(0, at(10, 7, 2));
+    CHK(g_night_samples == 1 && g_night_wake_min == 6 * 60 + 50, "a held wake seen only at the screen-off edge was lost");
+    /* Learned window persists through the real save/load pair. */
+    fresh(at(11, 22, 0));
+    run(1, at(11, 23, 30)); run(0, at(12, 7, 10)); run(1, at(12, 7, 30));
+    g_night_sleep_min = -1; g_night_wake_min = -1; g_night_samples = 0;
+    asb_night_window_load();
+    CHK(g_night_sleep_min == 23 * 60 + 30 && g_night_wake_min == 7 * 60 + 10 && g_night_samples == 1,
+        "save/load round trip");
+    if (!bad) printf("ok\n");
+    return bad;
+}
+X
+TZ=UTC0 "$CC" -O1 -Wall -Wno-unused-function -I"$ROOT/src" -I"$T" -o "$T/t" "$T/t.c" 2>"$T/cc.log" || { cat "$T/cc.log" >&2; fail "harness did not compile"; }
+out="$(TZ=UTC0 "$T/t")" || { printf '%s\n' "$out" >&2; fail "learner wrong"; }
+echo "PASS night window chain: one sample per night, bedtime = the chain's first screen-off, glances and face unlock change nothing, a desk day teaches nothing"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

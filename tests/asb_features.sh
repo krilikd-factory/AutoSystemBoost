@@ -6018,6 +6018,65 @@ need "$ACTION" 'unthrottled (roams sooner, costs battery)'
 echo "PASS wifi scan rungs contract"
 )
 
+t_thermal_keepalive_runtime() (
+# Runtime (fix166): a sleeping phone still reads its temperature now and then.
+#
+# Capture 29835: a 9 s face unlock at 06:20 left the die at 46 C, the screen-off cooldown engaged
+# on that reading, and deep-idle economy then skipped every zone read - the state file said
+# temp=46, temp_age_s=0 and thermal_cooldown=1 until 08:25 while the zones read 30-39 C, because
+# the cooldown releases only on a reading. The REAL keepalive rule, cut from the governor, drives
+# that night against the 40 C release: the cooldown ends within two minutes, a normal deep idle
+# reads every five, never every tick; then the loop is checked to apply it after every skip rule
+# and to publish the true age.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+G="$ROOT/src/asb_governor.c"
+fail() { echo "FAIL thermal keepalive: $*" >&2; exit 1; }
+awk '/asb_therm_keepalive_due\(time\(NULL\), g_last_thermal_read_ts, fsm.thermal_cooldown\)/{k=NR}
+     /if \(fsm.plan.thermal_div > 1\) \{/{d=NR} /int deep_idle_economy = /{e=NR}
+     /if \(g_quiet_wake_ramp >= 3\) \{ need_hr = 0; need_thermal = 0; \}/{r=NR}
+     /metrics_read_all\(&metrics, need_hr, need_thermal\);/{m=NR}
+     /metrics.therm.temp_age_s = \(int\)\(time\(NULL\) - g_last_thermal_read_ts\);/{a=NR}
+     END{exit !(k && e && r && d && k > e && k > r && k > d && m > k && a > m)}' "$G" \
+  || fail "the keepalive must follow every skip rule, precede the read, and the true age must follow it"
+grep -q 'thermal_cooldown=%d\\ntherm_keepalive_reads=%lu\\ntemp_read_epoch=%ld\\n' "$G" || fail "keepalive reads not published"
+CC=""; for c in ${HOST_CC:-} gcc clang cc; do command -v "$c" >/dev/null 2>&1 && { CC="$c"; break; }; done
+[ -n "$CC" ] || { echo "PASS thermal keepalive (source pins only)"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+awk '/^#define ASB_THERM_KEEPALIVE_S /{on=1} on{print} on&&/^static int asb_therm_keepalive_due\(/{f=1} f&&/^}$/{exit}' "$G" > "$T/k.c"
+grep -q 'ASB_THERM_KEEPALIVE_COOL_S' "$T/k.c" || fail "keepalive block not found"
+cat > "$T/t.c" <<'X'
+#include <stdio.h>
+#include <time.h>
+#include "k.c"
+static int zone_at(long s) { return s < 60 ? 46 : (s < 1800 ? 37 : 33); }
+int main(void) {
+    int bad = 0;
+    time_t t0 = 1792297246, last = t0, now;
+    int cool = 1, reads = 0;
+    long released = -1;
+    for (now = t0 + 45; now <= t0 + 2 * 3600; now += 45) {
+        if (!asb_therm_keepalive_due(now, last, cool)) continue;
+        reads++; last = now;
+        int c = zone_at((long)(now - t0));
+        if (c >= 45) cool = 1; else if (c <= 40) cool = 0;
+        if (!cool && released < 0) released = (long)(now - t0);
+    }
+    if (released < 0 || released > 120) { printf("cooldown released at %lds, want <= 120 s\n", released); bad = 1; }
+    if (reads < 20 || reads > 30) { printf("%d reads in two hours of deep idle, want one per ~5 min\n", reads); bad = 1; }
+    if (!asb_therm_keepalive_due(t0, 0, 0)) { printf("never read: not due\n"); bad = 1; }
+    if (!asb_therm_keepalive_due(t0 - 10, t0, 0)) { printf("clock went back: not due\n"); bad = 1; }
+    if (asb_therm_keepalive_due(t0 + 59, t0, 1) || !asb_therm_keepalive_due(t0 + 60, t0, 1)) { printf("cooldown cadence\n"); bad = 1; }
+    if (asb_therm_keepalive_due(t0 + 299, t0, 0) || !asb_therm_keepalive_due(t0 + 300, t0, 0)) { printf("idle cadence\n"); bad = 1; }
+    if (!bad) printf("ok\n");
+    return bad;
+}
+X
+"$CC" -O1 -Wall -Wno-unused-function -Wno-unused-variable -I"$T" -o "$T/t" "$T/t.c" 2>"$T/cc.log" || { cat "$T/cc.log" >&2; fail "harness did not compile"; }
+out="$("$T/t")" || { printf '%s\n' "$out" >&2; fail "keepalive wrong"; }
+echo "PASS thermal keepalive: the 29835 cooldown releases within two minutes, deep idle reads every five, the published age is the real one"
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;

@@ -3736,6 +3736,20 @@ grep -q '^\.live-page \.live-top-sec, \.config-page \.header + \.sec { margin-bo
 [ "$(grep -c '^\.live-page \.sec {' "$H")" = 2 ] || fail "a duplicate Monitor section rule is back"
 echo "PASS: fix165 contract"
 ) || exit 1
+# ---- fix166 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix166: $*"; exit 1; }
+G="$ROOT/src/asb_governor.c"
+grep -q '^static int asb_therm_keepalive_due(time_t now, time_t last_read, int cooldown) {$' "$G" || fail "deep idle can still go hours without a temperature"
+asb_has_test test_thermal_keepalive_runtime.sh || fail "thermal keepalive test missing"
+grep -q '^static void asb_night_wake_confirm(void) {$' "$G" || fail "the night window still learns single screen-offs"
+asb_has_test test_night_window_chain_runtime.sh || fail "night window chain test missing"
+grep -q 'asb_unlock_gate_die(metrics.therm.cpu_max_c,' "$G" || fail "the unlock lift still judges warm on the wake burst alone"
+grep -q 'temperature reading   : ' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not show how old the temperature is"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag is stale"
+echo "PASS: fix166 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
 )
 
