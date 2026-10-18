@@ -4230,7 +4230,23 @@ static int battery_session_trust(const asb_fsm_t *fsm);
 static int classify_environment(const asb_fsm_t *fsm);
 static int battery_fail_cause(const asb_fsm_t *fsm, int iq);
 
-static void persistent_stats_save(const asb_fsm_t *fsm) {
+/* A screen-off is not a session end (fix167).
+ *
+ * Both screen-off paths called the full save, and the save is not only a write to disk: it
+ * folds the session into the per-profile averages and counters - session_count, the max-temp
+ * and efficiency EMAs, hot_fail, degrade_count, cause_streak, the battery night/day split.
+ * The session itself only ends later (Smart's 20-minute bank, the deep-idle boundary, a
+ * profile change), where the same save runs again. So every screen-off inside a session
+ * counted that session once more: in the fix163 capture "cause_streak: vendor_clamp x3
+ * consecutive" at 06:20 was one session seen at its third screen-off, and a single hot
+ * Performance session with two screen-offs reads as two thermal-wall hits - two of those and
+ * Performance is switched to stable.
+ *
+ * What a screen-off does need is the context for whatever comes next - the thermal debt of a
+ * Performance session that just ended, the clean-night reward, the environment the next
+ * session starts in. That part still runs at every screen-off; the learning runs once, when
+ * the session really ends. */
+static void persistent_stats_save_ex(const asb_fsm_t *fsm, int learn) {
     /*
      * battery-aware save gate.
      */
@@ -4272,6 +4288,7 @@ static void persistent_stats_save(const asb_fsm_t *fsm) {
     }
     /* Start-of-session Priming -- save env for next session */
     g_last_session_env = classify_environment(fsm);
+    if (!learn) return;
 
     asb_persistent_stats_t *ps = &g_pstats_per[pidx];
 
@@ -4518,6 +4535,9 @@ static void persistent_stats_save(const asb_fsm_t *fsm) {
         g_pstats.degrade_count++;
     pstats_save_one(PERSISTENT_STATS_FILE, &g_pstats);
 }
+
+static void persistent_stats_save(const asb_fsm_t *fsm) { persistent_stats_save_ex(fsm, 1); }
+static void persistent_stats_screen_off(const asb_fsm_t *fsm) { persistent_stats_save_ex(fsm, 0); }
 
 /* More than half the session spent in the screen-off idle states. */
 static int asb_smart_session_idle_dominant(const asb_fsm_t *fsm, long dur) {
@@ -6880,6 +6900,18 @@ int main(int argc, char **argv) {
 
     asb_fsm_t fsm;
     fsm_init(&fsm, profile_idx);
+    /* The session the "session_start" line announces has to exist (fix167).
+     *
+     * fsm_init clears the struct, and only fsm_session_reset gives a session its start time
+     * and its sentinels (efficiency -1, headroom minimum 100). Nothing called it at startup,
+     * so until the first profile change or reset command ses_start_ts stayed 0 - and every
+     * session clock reads 0 when the start is 0. Smart's 20-minute bank, the deep-idle
+     * session boundary, intent classification, the session history line and the bank on
+     * shutdown are all gated on that age. The fix163 capture booted at 01:49 and banked
+     * nothing until it ended at 08:49: smart_sessions_total held at 726 and
+     * smart_quality_last at -1 for seven hours. The zero headroom minimum also read as a
+     * vendor clamp ("cause_streak: vendor_clamp x3 consecutive" with the vendor quiet). */
+    fsm_session_reset(&fsm);
     fsm_profile_is_battery = (profile_idx == PROFILE_BATTERY);
     fsm_profile_is_performance = (profile_idx == PROFILE_PERFORMANCE);
     fsm_profile_is_smart   = (profile_idx == PROFILE_SMART);
@@ -7732,7 +7764,7 @@ int main(int argc, char **argv) {
                             }
                         } else {
                             disarm_timerfd(tfd_active);
-                            persistent_stats_save(&fsm);
+                            persistent_stats_screen_off(&fsm);
                             if (fsm_profile_is_battery)
                                 fsm.bat_screen_off_count++;
                         }
@@ -8336,7 +8368,7 @@ int main(int argc, char **argv) {
                         if (g_asb_cfg.log_level >= 1) asb_log("screen OFF (tick)");
                     }
                     g_disp_prop_off_ts = 0;
-                    persistent_stats_save(&fsm);
+                    persistent_stats_screen_off(&fsm);
                     if (fsm_profile_is_battery)
                         fsm.bat_screen_off_count++;
                     session_plan_build(&fsm, 0);
@@ -9948,16 +9980,6 @@ int main(int argc, char **argv) {
     session_end_self_tune(&fsm);
     fsm_flush_state_time(&fsm);
     persistent_stats_save(&fsm);
-    session_history_append_ex(&fsm, "shutdown");
-    asb_night_window_save();
-    /* Flush what Smart learned before we go.
-     *
-     * The store is written on a 5-minute timer and nothing wrote it on shutdown, so every
-     * restart threw away up to five minutes of learning - and a phone rebooted often
-     * enough could stay near zero indefinitely. A user reported exactly that: "does smart
-     * mode lose its memory when I restart". Everything else in this block persists on the
-     * way out; the learner was the one thing that did not.
-     */
     /* Bank the session in flight before the store is written.
      *
      * Everything measured since the last bank lived in memory only: drain accumulated
@@ -9967,13 +9989,30 @@ int main(int argc, char **argv) {
      * one session after another and the learner would see almost nothing from it.
      *
      * The same 20-minute floor the periodic path uses applies here: shorter than that and
-     * the drain figure is noise, which is exactly what should not be learned from. */
-    if (g_smart_store_loaded && g_smart_rt.enabled &&
-        fsm.ses_start_ts > 0 &&
-        (long)(time(NULL) - fsm.ses_start_ts) >= 1200) {
-        session_history_append_ex(&fsm, "shutdown");
-        asb_log("smart: session banked on shutdown");
+     * the drain figure is noise, which is exactly what should not be learned from.
+     *
+     * One call, not two (fix167). An unconditional "shutdown" append ran first and banked
+     * the session into Smart's bucket, then the 20-minute block banked the same session a
+     * second time - and a Smart session under 20 minutes, the noise that floor exists to keep
+     * out, went in through the first call anyway. Without Smart the history line is written
+     * as before. */
+    {
+        int _smart_bank = g_smart_store_loaded && g_smart_rt.enabled;
+        int _ses_long = fsm.ses_start_ts > 0 && (long)(time(NULL) - fsm.ses_start_ts) >= 1200;
+        if (!_smart_bank || _ses_long) {
+            session_history_append_ex(&fsm, "shutdown");
+            if (_smart_bank) asb_log("smart: session banked on shutdown");
+        }
     }
+    asb_night_window_save();
+    /* Flush what Smart learned before we go.
+     *
+     * The store is written on a 5-minute timer and nothing wrote it on shutdown, so every
+     * restart threw away up to five minutes of learning - and a phone rebooted often
+     * enough could stay near zero indefinitely. A user reported exactly that: "does smart
+     * mode lose its memory when I restart". Everything else in this block persists on the
+     * way out; the learner was the one thing that did not.
+     */
     if (g_smart_store_loaded) {
         g_smart_store.last_update_ts = (uint32_t)time(NULL);
         if (asb_smart_store_save_atomic(&g_smart_store, ASB_SMART_STORE_FILE) == 0)
