@@ -273,7 +273,22 @@ full_day_cancel_orphan() {
       _fdco_try=$(( _fdco_try + 1 ))
     done
   fi
-  if pid_is_live "$_fdco_pid"; then full_day_recovery_note "skip=still_live pid=$_fdco_pid"; return 1; fi
+  # A KILLed process can still read as alive while it is leaving D-state (the report
+  # writer finishing its I/O on a loaded box): one more short grace, and the still_live
+  # note carries the /proc state so the next flake explains itself instead of guessing.
+  if pid_is_live "$_fdco_pid"; then
+    _fdco_try=0
+    while [ "$_fdco_try" -lt 30 ]; do
+      pid_is_live "$_fdco_pid" || break
+      sleep 0.1
+      _fdco_try=$(( _fdco_try + 1 ))
+    done
+  fi
+  if pid_is_live "$_fdco_pid"; then
+    _fdco_state="$(cat "/proc/$_fdco_pid/stat" 2>/dev/null)"
+    _fdco_state="${_fdco_state##*) }"; _fdco_state="${_fdco_state%% *}"
+    full_day_recovery_note "skip=still_live pid=$_fdco_pid state=${_fdco_state:-unknown}"; return 1
+  fi
   rm -rf "$LOCKDIR" 2>/dev/null || true
   full_day_recovery_note "recovered=output_removed pid=$_fdco_pid"
   return 0
