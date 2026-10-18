@@ -1511,14 +1511,17 @@ body.config-active #livePage.open {
   border-color: rgba(239,68,68,0.35);
   color: #fca5a5;
 }
-/* Monitor (fix162). One rhythm with Home and Settings: a section title under the profile row,
- * the card, the live title, the tiles. The card opens with two equal battery tiles - drain and
- * time to empty side by side, screen on and screen off - over the eight Smart readings; the
- * live grid below is three rows of three. Sized so the page ends just above the tab bar on a
- * 360 x 780 screen instead of leaving a third of it empty. */
+/* Monitor (fix162, fix165). One rhythm with Home and Settings: a section title under the
+ * profile row - at the same height on all three pages, 22 px under the header (18 + 4 here
+ * and on Settings, Home's own margin below) - then the card, the live title, the tiles. The
+ * card opens with two equal battery tiles - drain and time to empty side by side, screen on
+ * and screen off - over the eight Smart readings; the live grid below is three rows of three.
+ * Sized so the page ends just above the tab bar on the reference phone (442 x 963 CSS px). */
 .live-page .header { margin-bottom: 18px; }
-.live-page .sec { margin-top: 0 !important; margin-bottom: 14px !important; }
-.live-page .live-top-sec { margin-bottom: 12px !important; }
+.live-page .sec { margin-top: 4px !important; margin-bottom: 8px !important; }
+.page:not(.live-page) > .header { margin-bottom: 22px; }
+.page:not(.live-page) > .header + .sec { margin-bottom: 12px; }
+.live-page .live-top-sec, .config-page .header + .sec { margin-bottom: 12px !important; }
 .live-page .smart-banner { margin-top: 0; margin-bottom: 24px; padding: 14px 12px 16px; gap: 18px; }
 .live-page .smart-banner-row:not(.tags) { gap: 16px 8px; }
 .live-page .smart-banner-label { line-height: 1.2; }
@@ -1527,7 +1530,6 @@ body.config-active #livePage.open {
 .smart-banner-value.basis-warn { color: #f5c26b; }
 .smart-banner-value.basis-veto { color: #fca5a5; }
 .live-page .smart-banner-value.heat-warm { color: #f5c26b; }
-.live-page .sec { margin-top: 4px !important; margin-bottom: 8px !important; }
 .live-page .live-metrics { gap: 10px; }
 .live-page .live-row { gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .live-page .live-cell { min-width: 0; }
