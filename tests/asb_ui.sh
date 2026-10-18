@@ -2762,11 +2762,18 @@ assert re.findall(r'<div class="pmeta" data-meter="(\w+)" hidden></div>', s) == 
 for k in ('prof_performance_desc', 'prof_balanced_desc', 'prof_battery_desc'):
     assert ('class="pdesc" data-i18n="%s"' % k) in s, "%s card has no description" % k
 assert re.search(r'\.pbtn \{[^}]*min-height: var\(--pbtn-h', s) and re.search(r'\.cfg-tile \{[^}]*min-height: var\(--cfg-tile-h', s), "cards do not take the fitted height"
-# fix174: the six hub categories carry a quiet tint of their own hue so they lift off the
+# fix174: the six hub categories carry a tint of their own hue so they lift off the
 # neutral restart row, and the nine Monitor tiles are filled a notch stronger.
-assert re.search(r'\.cfg-tile \{[^}]*color-mix\(in srgb, var\(--tech-icon, var\(--accent\)\) 11%', s), "hub tiles lost their category tint"
-assert 'color-mix(in srgb, var(--tech-icon) 9%, #ffffff)' in s, "light hub tiles lost their category tint"
+# fix175: the tint went a step stronger on the owner's request, and the sheets' primary
+# button turned tonal - no more full-bleed bright green slab.
+assert re.search(r'\.cfg-tile \{[^}]*color-mix\(in srgb, var\(--tech-icon, var\(--accent\)\) 17%', s), "hub tiles lost their category tint"
+assert 'color-mix(in srgb, var(--tech-icon) 15%, #ffffff)' in s, "light hub tiles lost their category tint"
 assert 'background: linear-gradient(135deg, rgba(255,255,255,0.065), rgba(255,255,255,0.024));' in s, "Monitor tiles lost their stronger fill"
+prim = re.search(r'\.cfg-profile-primary \{([^}]*)\}', s).group(1)
+assert 'background:linear-gradient(135deg,#2cd6ad,#67e4c8)' not in prim, "the poisonous green slab is back on the sheet button"
+assert 'rgba(44,214,173,.16)' in prim and 'border:1px solid rgba(44,214,173,.34)' in prim, "sheet button lost its tonal dark style"
+assert '.cfg-profile-primary:active' in s, "sheet button has no pressed state"
+assert 'html[data-asb-theme="light"] :is(.cfg-profile-primary,.cfg-profile-apply)' in s, "light tonal primary rule is missing"
 assert "'cfg-tile-desc'" in s and "'cfg-tile-bar'" in s, "category tiles lack their description and fill bar"
 assert "sub.className = 'smart-banner-pill' + (we ? ' we' : '');" in s, "weekday/weekend is still glued to the slot name"
 assert "html[data-asb-font=\"device\"] { --sans: 'ASB Device', sans-serif; --mono: 'ASB Device', sans-serif; }" in s, "no device-font switch"
