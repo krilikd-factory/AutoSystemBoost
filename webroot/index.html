@@ -1758,8 +1758,8 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
    * each other. A quiet tint of the tile's own colour lifts the categories off the
    * page while the restart row stays neutral. */
   background:
-    linear-gradient(160deg, color-mix(in srgb, var(--tech-icon, var(--accent)) 11%, transparent) 0%, color-mix(in srgb, var(--tech-icon, var(--accent)) 4%, transparent) 58%, rgba(255,255,255,0.02) 100%);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.045), 0 3px 14px -8px color-mix(in srgb, var(--tech-icon, var(--accent)) 40%, transparent);
+    linear-gradient(160deg, color-mix(in srgb, var(--tech-icon, var(--accent)) 17%, transparent) 0%, color-mix(in srgb, var(--tech-icon, var(--accent)) 8%, transparent) 55%, color-mix(in srgb, var(--tech-icon, var(--accent)) 4%, transparent) 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 16px -8px color-mix(in srgb, var(--tech-icon, var(--accent)) 55%, transparent);
   color: inherit;
   font: inherit;
   cursor: pointer;
@@ -1812,20 +1812,20 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
 
 /* Each tile borrows its category's hue, so the hub, the card icons behind it and
    the toast that confirms a change all agree on what colour "audio" is. */
-.cfg-tile.cat-audio   { border-color: rgba(255,59,59,0.34); }
-.cfg-tile.cat-audio   .cfg-tile-ico { background: rgba(255,59,59,0.16);  border-color: rgba(255,59,59,0.44); }
-.cfg-tile.cat-camera  { border-color: rgba(58,141,255,0.34); }
-.cfg-tile.cat-camera  .cfg-tile-ico { background: rgba(58,141,255,0.16); border-color: rgba(58,141,255,0.44); }
-.cfg-tile.cat-battery { border-color: rgba(46,213,115,0.34); }
-.cfg-tile.cat-battery .cfg-tile-ico { background: rgba(46,213,115,0.16); border-color: rgba(46,213,115,0.44); }
-.cfg-tile.cat-ux      { border-color: rgba(255,159,28,0.34); }
-.cfg-tile.cat-ux      .cfg-tile-ico { background: rgba(255,159,28,0.16); border-color: rgba(255,159,28,0.44); }
+.cfg-tile.cat-audio   { border-color: rgba(255,59,59,0.42); }
+.cfg-tile.cat-audio   .cfg-tile-ico { background: rgba(255,59,59,0.21);  border-color: rgba(255,59,59,0.52); }
+.cfg-tile.cat-camera  { border-color: rgba(58,141,255,0.42); }
+.cfg-tile.cat-camera  .cfg-tile-ico { background: rgba(58,141,255,0.21); border-color: rgba(58,141,255,0.52); }
+.cfg-tile.cat-battery { border-color: rgba(46,213,115,0.42); }
+.cfg-tile.cat-battery .cfg-tile-ico { background: rgba(46,213,115,0.21); border-color: rgba(46,213,115,0.52); }
+.cfg-tile.cat-ux      { border-color: rgba(255,159,28,0.42); }
+.cfg-tile.cat-ux      .cfg-tile-ico { background: rgba(255,159,28,0.21); border-color: rgba(255,159,28,0.52); }
 /* Two new categories need their own hue or they render grey while the other four are
    coloured - the tile, the icon behind each setting and its toast all key off this. */
-.cfg-tile.cat-net     { border-color: rgba(0,180,216,0.34); }
-.cfg-tile.cat-net     .cfg-tile-ico { background: rgba(0,180,216,0.16); border-color: rgba(0,180,216,0.44); }
-.cfg-tile.cat-iface   { border-color: rgba(186,104,255,0.34); }
-.cfg-tile.cat-iface   .cfg-tile-ico { background: rgba(186,104,255,0.16); border-color: rgba(186,104,255,0.44); }
+.cfg-tile.cat-net     { border-color: rgba(0,180,216,0.42); }
+.cfg-tile.cat-net     .cfg-tile-ico { background: rgba(0,180,216,0.21); border-color: rgba(0,180,216,0.52); }
+.cfg-tile.cat-iface   { border-color: rgba(186,104,255,0.42); }
+.cfg-tile.cat-iface   .cfg-tile-ico { background: rgba(186,104,255,0.21); border-color: rgba(186,104,255,0.52); }
 
 .cfg-row.is-on {
   border-color: rgba(0,225,200,0.28);
@@ -2602,7 +2602,12 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
 .cfg-profile-dest { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }
 .cfg-profile-dest button { min-height:39px; padding:7px 5px; color:rgba(231,234,238,.72); border:1px solid rgba(255,255,255,.13); border-radius:10px; background:#050707; font-size:11px; }
 .cfg-profile-dest button.active { color:#5ce7c3; border-color:rgba(44,214,173,.6); background:rgba(44,214,173,.09); }
-.cfg-profile-primary { width:100%; min-height:47px; margin-top:12px; color:#04120f; border:0; border-radius:12px; background:linear-gradient(135deg,#2cd6ad,#67e4c8); font-weight:800; font-size:14px; }
+/* Tonal, not solid (fix175): a full-bleed bright green button was the loudest element in
+ * every sheet and hurt the eyes on a dark page. The action keeps its accent identity as a
+ * quiet tinted surface with a coloured border and label - readable, clearly the primary
+ * action, but no longer a glowing slab. */
+.cfg-profile-primary { width:100%; min-height:47px; margin-top:12px; color:#8ff0d8; border:1px solid rgba(44,214,173,.34); border-radius:12px; background:linear-gradient(135deg,rgba(44,214,173,.16),rgba(44,214,173,.07)); font-weight:700; font-size:14px; transition:background .15s ease,border-color .15s ease,transform .1s ease; }
+.cfg-profile-primary:active { transform:scale(.985); background:linear-gradient(135deg,rgba(44,214,173,.24),rgba(44,214,173,.12)); border-color:rgba(44,214,173,.5); }
 .cfg-profile-list { display:flex; flex-direction:column; gap:8px; margin-top:12px; }
 .cfg-profile-row { width:100%; display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:10px; text-align:left; padding:11px 12px; color:#edf2f3; border:1px solid rgba(255,255,255,.11); border-radius:12px; background:#050707; }
 .cfg-profile-row.selected { border-color:rgba(44,214,173,.72); background:rgba(44,214,173,.09); }
@@ -2613,7 +2618,7 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
 .cfg-profile-actions { display:grid; grid-template-columns:1fr; gap:8px; margin-top:12px; }
 .cfg-profile-actions.has-delete { grid-template-columns:repeat(2,minmax(0,1fr)); }
 .cfg-profile-actions button { min-height:44px; border:1px solid rgba(255,255,255,.16); border-radius:11px; color:#eaf0f1; background:#050707; font-weight:700; }
-.cfg-profile-actions button.cfg-profile-apply { color:#04120f; border:0; background:linear-gradient(135deg,#2cd6ad,#67e4c8); }
+.cfg-profile-actions button.cfg-profile-apply { color:#8ff0d8; border:1px solid rgba(44,214,173,.34); background:linear-gradient(135deg,rgba(44,214,173,.16),rgba(44,214,173,.07)); }
 .cfg-profile-actions button.cfg-profile-apply.is-running { opacity:1; cursor:wait; animation:cfgProfileApplyPulse .46s cubic-bezier(.36,0,.64,1) infinite; box-shadow:0 0 0 1px rgba(120,239,255,.36),0 0 25px rgba(44,214,173,.40); }
 .cfg-profile-actions button.danger { color:#ffaaa7; border-color:rgba(248,113,113,.38); }
 .cfg-profile-actions button:disabled:not(.is-running) { opacity:.48; cursor:wait; }
@@ -2876,7 +2881,9 @@ html[data-asb-theme="light"] :is(.cfg-modal,.cfg-profile-modal,.cfg-reset-modal,
 html[data-asb-theme="light"] :is(.cfg-profile-row.selected,.cfg-tile.active,.cfg-reset-choice.armed,.theme-choice.active,.seg-opt.active,.seg button.active,.p-card.active,.profile-card.active) { border-color:var(--accent) !important; }
 html[data-asb-theme="light"] .cfg-reset-choice.armed { color:#201300 !important; background:linear-gradient(135deg,#ffd166,#f6a623) !important; }
 html[data-asb-theme="light"] :is(.app-name,.status-val,.cfg-tile-count.has-on,.tg-link-main,.theme-choice.active) { color:var(--accent) !important; }
-html[data-asb-theme="light"] :is(.cfg-profile-primary,.cfg-profile-apply,.cfg-reset-choice.armed,.theme-choice.active) { color:#04120f !important; }
+html[data-asb-theme="light"] :is(.cfg-reset-choice.armed,.theme-choice.active) { color:#04120f !important; }
+/* Light counterpart of the tonal primary (fix175): deep teal ink on a pale teal wash. */
+html[data-asb-theme="light"] :is(.cfg-profile-primary,.cfg-profile-apply) { color:#00634f !important; background:linear-gradient(135deg,rgba(0,124,99,.14),rgba(0,124,99,.07)) !important; border-color:rgba(0,124,99,.32) !important; }
 html[data-asb-theme="light"] :is(.cfg-profile-copy,.cfg-profile-row-meta,.cfg-profile-hint,.cfg-reset-copy,.cfg-reset-choice-copy,.live-cell-label,.device-line,.tg-link-sub) { color:var(--text-secondary) !important; }
 /* Smart normally has a dark AI gradient. In light mode retain its semantic teal/cyan identity,
  * but terminate the material in a pale surface so it does not look like an unthemed dark card. */
@@ -2960,8 +2967,8 @@ html[data-asb-theme="light"] :is(.cfg-tile,.cfg-row) { background:#fff !importan
  * category colour over white, so they no longer sit in the same flat white as the three
  * restart tiles below them. Must follow the flat-white rule above to win on order. */
 html[data-asb-theme="light"] .cfg-tile {
-  background: linear-gradient(160deg, color-mix(in srgb, var(--tech-icon) 9%, #ffffff) 0%, #ffffff 72%) !important;
-  border-color: color-mix(in srgb, var(--tech-icon) 32%, var(--border)) !important;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--tech-icon) 15%, #ffffff) 0%, color-mix(in srgb, var(--tech-icon) 6%, #ffffff) 100%) !important;
+  border-color: color-mix(in srgb, var(--tech-icon) 40%, var(--border)) !important;
   box-shadow: 0 1px 3px rgba(16,24,32,.06);
 }
 html[data-asb-theme="light"] .cfg-tile-count.has-on { color:var(--accent) !important; }
