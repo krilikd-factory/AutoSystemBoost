@@ -245,11 +245,13 @@ typedef enum {
 #define ASB_CHARGE_HOT_ALPHA_X1000       800
 #define ASB_CHARGE_SUPER_WARN_BIAS_DC    10
 
-/* V50: night window learner.
- * Minutes-of-day EWMA with circular wrap; onset = screen-off that
- * survives ASB_NIGHT_ONSET_HOLD_S, wake = first screen-on after
- * ASB_NIGHT_MIN_SLEEP_S of cumulative darkness. */
-#define ASB_NIGHT_ONSET_HOLD_S     3600
+/* V50: night window learner (reworked in fix166).
+ * Minutes-of-day EWMA with circular wrap. A night is one dark chain: screen-off
+ * periods joined by checks shorter than ASB_NIGHT_AWAKE_BREAK_S. It counts once
+ * it holds ASB_NIGHT_MIN_SLEEP_S of darkness and one of its dark periods began
+ * inside the onset window; onset = the chain's first screen-off, wake = the
+ * screen-on that then stays on for ASB_NIGHT_AWAKE_BREAK_S. */
+#define ASB_NIGHT_AWAKE_BREAK_S    600
 #define ASB_NIGHT_MIN_SLEEP_S      (3 * 3600)
 #define ASB_NIGHT_EWMA_NUM         1
 #define ASB_NIGHT_EWMA_DEN         4

@@ -533,6 +533,26 @@ int g_qn_skip_this_tick = 0;
 static time_t g_quiet_night_since = 0;
 static int g_quiet_night_ticks = 0;       /* consecutive quiet deep-idle ticks */
 
+/* A sleeping phone still needs a temperature now and then (fix166).
+ *
+ * Deep-idle economy and the quiet-night wake ramp skip the zones for as long as the state
+ * holds, and for the decisions that run in deep idle that is fine. The screen-off cooldown is
+ * the exception: it releases only when a reading says 40 C, and with no reading there is no
+ * release. Capture 29835: a 9 s face unlock at 06:20 left the die at 46 C, the cooldown
+ * engaged on that reading, and for the next two hours the governor published temp=46 with
+ * age 0 while the zones read 30-39 C - thermal_cooldown=1 still held when the capture ended.
+ *
+ * One read every five minutes, every minute while the cooldown holds. The tick runs anyway
+ * on those wakeups, so this adds a few file reads to a wakeup that happens regardless, never
+ * a wakeup of its own. */
+#define ASB_THERM_KEEPALIVE_S      300
+#define ASB_THERM_KEEPALIVE_COOL_S 60
+static unsigned long g_therm_keepalive_reads = 0;
+static int asb_therm_keepalive_due(time_t now, time_t last_read, int cooldown) {
+    if (last_read <= 0 || now < last_read) return 1;
+    return (now - last_read) >= (cooldown ? ASB_THERM_KEEPALIVE_COOL_S : ASB_THERM_KEEPALIVE_S);
+}
+
 static int g_last_bat_clean_night = 0;
 
 #define ENV_QUIET    0
@@ -1293,7 +1313,9 @@ static int    g_night_wake_min  = -1;
 static int    g_night_samples   = 0;
 static time_t g_night_off_since = 0;
 static int    g_night_off_minute = -1;
-static int    g_night_onset_recorded = 0;
+static int    g_night_chain_min = -1;   /* first screen-off minute of the dark chain, -1 = none */
+static int    g_night_chain_night = 0;  /* one of the chain's dark periods began in the onset window */
+static time_t g_night_on_since = 0;     /* when the screen last came on, 0 = screen off */
 static int    g_night_samples_accepted = 0;
 static int    g_night_samples_rejected = 0;
 static int    g_night_reject_reason = 0;
@@ -1368,6 +1390,77 @@ static int asb_night_window_active(time_t now) {
     return asb_min_in_window(m, from, to);
 }
 
+/* One night is one dark chain (fix166).
+ *
+ * The learner used to take an onset from any screen-off that lasted an hour inside
+ * 19:00-05:00, and a wake from any screen-on after three hours of darkness summed since the
+ * last accepted wake. Both read single events as nights:
+ *
+ *   - Capture 29835: asleep about 03:10, a one-minute glance at 03:50, and the 03:50
+ *     screen-off became "onset sample 03:50", moving the learned bedtime from 23:46 to
+ *     00:47. Earlier captures log two and three onsets in one night (23:15, 00:30, 02:00),
+ *     each one an EWMA step of its own.
+ *   - "wake sample 13:06 -> learned 12:42": a phone on a desk since the morning wake, picked
+ *     up for a few minutes now and then, sums three hours of darkness by noon - and the
+ *     midday pickup was learned as the wake. On this OP15 the learned wake reads 08:52
+ *     against real mornings of 06:43-08:10.
+ *
+ * Now the screen-off periods joined by checks shorter than ASB_NIGHT_AWAKE_BREAK_S form a
+ * chain, and ten minutes on screen ends it. The chain is a night only if it holds three
+ * hours of darkness and one of its dark periods began inside the onset window; then onset
+ * and wake are learned together, once, when the wake has held for ten minutes. A chain that
+ * began before the window still gives its wake, but no onset - its first screen-off was the
+ * evening, not bedtime. */
+static void asb_night_chain_end(void) {
+    g_night_dark_accum_s = 0;
+    g_night_chain_min = -1;
+    g_night_chain_night = 0;
+    g_night_pending_wake_min = -1;
+    g_night_pending_wake_ts = 0;
+}
+
+/* A screen-on that held for ten minutes ends the chain; decide what it was.
+ *
+ * Every verdict waits for this point. A glance shorter than that is part of the night, so a
+ * look at the clock at 02:30 neither rejects the night nor restarts it - deciding at the
+ * screen-on edge did both. */
+static void asb_night_wake_confirm(void) {
+    int wake = g_night_pending_wake_min;
+    if (!g_night_chain_night) {
+        /* Three hours of darkness that never began at night: a phone on a desk. */
+        asb_night_chain_end();
+        return;
+    }
+    if (!asb_min_in_window(wake, ASB_NIGHT_WAKE_WIN_FROM, ASB_NIGHT_WAKE_WIN_TO)) {
+        /* Woke outside the plausible wake window — likely an
+           irregular night (nap, travel, odd schedule). Reject the
+           sample rather than dragging the learned wake time toward
+           a one-off outlier. */
+        asb_night_chain_end();
+        g_night_samples_rejected++;
+        g_night_reject_reason = ASB_NIGHT_REJECT_WAKE_OUT_OF_WINDOW;
+        return;
+    }
+    int onset = asb_min_in_window(g_night_chain_min, ASB_NIGHT_ONSET_WIN_FROM,
+                                  ASB_NIGHT_ONSET_WIN_TO) ? g_night_chain_min : -1;
+    if (onset >= 0) asb_night_ewma(&g_night_sleep_min, onset);
+    asb_night_ewma(&g_night_wake_min, wake);
+    if (g_night_samples < 100000) g_night_samples++;
+    g_night_samples_accepted++;
+    if (onset >= 0)
+        asb_log("night_window: night %02d:%02d-%02d:%02d -> learned %02d:%02d-%02d:%02d (n=%d)",
+                onset / 60, onset % 60, wake / 60, wake % 60,
+                g_night_sleep_min / 60, g_night_sleep_min % 60,
+                g_night_wake_min / 60, g_night_wake_min % 60, g_night_samples);
+    else
+        asb_log("night_window: night ?-%02d:%02d (dark since the evening, bedtime not learned)"
+                " -> learned wake %02d:%02d (n=%d)",
+                wake / 60, wake % 60, g_night_wake_min / 60, g_night_wake_min % 60,
+                g_night_samples);
+    asb_night_chain_end();
+    asb_night_window_save();
+}
+
 static void asb_night_window_tick(int screen_on, time_t now) {
     if (!g_asb_cfg.night_quiet_auto) return;
     if (g_night_prev_screen < 0) {
@@ -1375,74 +1468,51 @@ static void asb_night_window_tick(int screen_on, time_t now) {
         if (!screen_on) {
             g_night_off_since = now;
             g_night_off_minute = asb_minute_of_day(now);
+            g_night_chain_min = g_night_off_minute;
+            g_night_chain_night = asb_min_in_window(g_night_off_minute, ASB_NIGHT_ONSET_WIN_FROM,
+                                                    ASB_NIGHT_ONSET_WIN_TO);
+        } else {
+            g_night_on_since = now;
         }
         return;
     }
     if (screen_on != g_night_prev_screen) {
         if (!screen_on) {
-            long pend_age = (g_night_pending_wake_ts > 0)
-                            ? (long)(now - g_night_pending_wake_ts) : -1;
-            if (pend_age >= 0 && pend_age < 600) {
+            /* The tick that should have confirmed may not have run before the screen went
+               off again; the screen-on duration decides, not which tick saw it. */
+            if (g_night_on_since > 0 && now - g_night_on_since >= ASB_NIGHT_AWAKE_BREAK_S) {
+                if (g_night_pending_wake_min >= 0) asb_night_wake_confirm();
+                else asb_night_chain_end();
+            } else {
                 /* mid-night check, not a real wake — keep accumulating */
                 g_night_pending_wake_min = -1;
                 g_night_pending_wake_ts = 0;
             }
             g_night_off_since = now;
             g_night_off_minute = asb_minute_of_day(now);
-            g_night_onset_recorded = 0;
+            if (g_night_chain_min < 0) g_night_chain_min = g_night_off_minute;
+            if (asb_min_in_window(g_night_off_minute, ASB_NIGHT_ONSET_WIN_FROM,
+                                  ASB_NIGHT_ONSET_WIN_TO))
+                g_night_chain_night = 1;
+            g_night_on_since = 0;
         } else {
             long off_dur = (g_night_off_since > 0)
                            ? (long)(now - g_night_off_since) : 0;
             if (off_dur > 0) g_night_dark_accum_s += off_dur;
             if (g_night_dark_accum_s >= ASB_NIGHT_MIN_SLEEP_S) {
-                int m = asb_minute_of_day(now);
-                if (asb_min_in_window(m, ASB_NIGHT_WAKE_WIN_FROM,
-                                      ASB_NIGHT_WAKE_WIN_TO)) {
-                    g_night_pending_wake_min = m;
-                    g_night_pending_wake_ts = now;
-                } else {
-                    /* Woke outside the plausible wake window — likely an
-                       irregular night (nap, travel, odd schedule). Reject the
-                       sample rather than dragging the learned wake time toward
-                       a one-off outlier. */
-                    g_night_dark_accum_s = 0;
-                    g_night_samples_rejected++;
-                    g_night_reject_reason = ASB_NIGHT_REJECT_WAKE_OUT_OF_WINDOW;
-                }
+                g_night_pending_wake_min = asb_minute_of_day(now);
+                g_night_pending_wake_ts = now;
             }
             g_night_off_since = 0;
+            g_night_on_since = now;
         }
         g_night_prev_screen = screen_on;
         return;
     }
-    if (screen_on) {
-        if (g_night_pending_wake_min >= 0 &&
-            now - g_night_pending_wake_ts >= 600) {
-            asb_night_ewma(&g_night_wake_min, g_night_pending_wake_min);
-            if (g_night_samples < 100000) g_night_samples++;
-            g_night_samples_accepted++;
-            asb_log("night_window: wake sample %02d:%02d -> learned %02d:%02d (n=%d)",
-                    g_night_pending_wake_min / 60, g_night_pending_wake_min % 60,
-                    g_night_wake_min / 60, g_night_wake_min % 60, g_night_samples);
-            g_night_pending_wake_min = -1;
-            g_night_pending_wake_ts = 0;
-            g_night_dark_accum_s = 0;
-            asb_night_window_save();
-        }
+    if (!screen_on || g_night_on_since <= 0 || now - g_night_on_since < ASB_NIGHT_AWAKE_BREAK_S)
         return;
-    }
-    if (!g_night_onset_recorded && g_night_off_since > 0 &&
-        g_night_dark_accum_s < ASB_NIGHT_MIN_SLEEP_S &&
-        now - g_night_off_since >= ASB_NIGHT_ONSET_HOLD_S &&
-        asb_min_in_window(g_night_off_minute, ASB_NIGHT_ONSET_WIN_FROM,
-                          ASB_NIGHT_ONSET_WIN_TO)) {
-        asb_night_ewma(&g_night_sleep_min, g_night_off_minute);
-        g_night_onset_recorded = 1;
-        asb_log("night_window: onset sample %02d:%02d -> learned %02d:%02d",
-                g_night_off_minute / 60, g_night_off_minute % 60,
-                g_night_sleep_min / 60, g_night_sleep_min % 60);
-        asb_night_window_save();
-    }
+    if (g_night_pending_wake_min >= 0) asb_night_wake_confirm();
+    else if (g_night_chain_min >= 0 || g_night_dark_accum_s > 0) asb_night_chain_end();
 }
 
 /*
@@ -2566,6 +2636,30 @@ static unsigned long g_unlock_lifts = 0;  /* lifts started: screen-on edges and 
 static unsigned long g_unlock_skips = 0;  /* edges that did not lift */
 static char   g_unlock_skip_why[16] = "-";/* why the last one did not: off/profile/thermal/warm */
 
+/* "Warm" is judged on the die before the wake as well as at it (fix166).
+ *
+ * The screen-on tick reads the zones at the very moment the wake runs every core at once,
+ * and a single-core sensor reads that burst, not the phone. Capture 29835: zones at 34-37 C
+ * at 08:25 and 27-29 C at 08:48, and the one wake in between was not lifted "warm" - the die
+ * read at or above the 48 C comfort mark on that tick. The same burst engaged the screen-off
+ * cooldown at 06:20 on a 46 C reading taken nine seconds into a face unlock.
+ *
+ * With the screen off the die mostly cools, and background work that heats it is read by the
+ * screen-off ticks themselves (every tick outside deep idle, the keepalive inside it), so the
+ * last reading taken in the dark is a fair bound on the phone's own temperature at the wake.
+ * The lower of the two is used: a phone that went to sleep hot is still skipped, a cool one
+ * is not skipped for its own wake. Half an hour bounds it - long enough for any screen-off
+ * between two uses, short enough that a phone left in a hot car is judged on what it reads
+ * now. */
+#define ASB_UNLOCK_DARK_MAX_AGE_S 1800
+static int    g_unlock_dark_c  = 0;       /* last die reading taken with the screen off */
+static time_t g_unlock_dark_ts = 0;
+static int asb_unlock_gate_die(int die_now, int dark_c, time_t dark_ts, time_t now) {
+    if (die_now <= 0 || dark_c <= 0 || dark_ts <= 0 || now < dark_ts ||
+        now - dark_ts > ASB_UNLOCK_DARK_MAX_AGE_S) return die_now;
+    return dark_c < die_now ? dark_c : die_now;
+}
+
 static int asb_unlock_lift_update(int screen_on, int touch_kick, long now_ms, int profile_idx,
                                   int thermal_cap, int die_c) {
     int prev = g_unlock_prev_screen;
@@ -3296,7 +3390,8 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
      * The clamp only fires on a phone that fell asleep warm, which is exactly the night
      * nobody plans to have - so it cannot be triggered on demand, and without this line
      * the only evidence would be an absence of heat, which proves nothing either way. */
-    fprintf(f, "thermal_cooldown=%d\n", fsm->thermal_cooldown);
+    fprintf(f, "thermal_cooldown=%d\ntherm_keepalive_reads=%lu\ntemp_read_epoch=%ld\n",
+            fsm->thermal_cooldown, g_therm_keepalive_reads, (long)g_last_thermal_read_ts);
     fprintf(f, "prime_escape=%d\nprime_escape_mid=%d\nprime_escape_count=%lu\n",
             fsm->prime_escape, fsm->prime_escape_mid, fsm->prime_escape_count);
     fprintf(f, "main_parity_khz=%d\nmain_parity_lifts=%lu\nmain_parity_capacity=\"%d,%d\"\n",
@@ -8127,6 +8222,13 @@ int main(int argc, char **argv) {
                     fsm.plan.sensor_used++;
                 }
             }
+            /* Every skip rule above has had its say; the keepalive overrides them all, so a
+             * cooldown can always see the die cool down (fix166, see asb_therm_keepalive_due). */
+            if (!need_thermal &&
+                asb_therm_keepalive_due(time(NULL), g_last_thermal_read_ts, fsm.thermal_cooldown)) {
+                need_thermal = 1;
+                g_therm_keepalive_reads++;
+            }
             /* Drop last tick's cached ceilings before reading anything new.
              *
              * Placed here rather than at the end of the previous iteration because the loop has
@@ -8162,10 +8264,20 @@ int main(int argc, char **argv) {
                 metrics_read_thermal(&metrics.therm, need_hr);
                 need_thermal = 1;
             }
+            /* A skipped tick keeps the last reading, and it used to keep its age too: the
+             * state JSON said temp_age_s=0 two hours after the read. The value stays (the
+             * decisions above are built for that), the age is the true one (fix166). */
+            if (!need_thermal && g_last_thermal_read_ts > 0)
+                metrics.therm.temp_age_s = (int)(time(NULL) - g_last_thermal_read_ts);
             /* Remember the last real reading: on a skipped tick the struct still holds it,
              * and the distance check above needs a value it can trust. */
             if (need_thermal && metrics.therm.cpu_max_c > 0)
                 g_last_cpu_max_c = metrics.therm.cpu_max_c;
+            if (need_thermal && metrics.therm.cpu_max_c > 0 && metrics.therm.temp_valid &&
+                !metrics.misc.screen_on) {
+                g_unlock_dark_c = metrics.therm.cpu_max_c;
+                g_unlock_dark_ts = time(NULL);
+            }
 
             /* Screen-on cadence must not depend on catching the display uevent.
              *
@@ -8811,7 +8923,11 @@ int main(int argc, char **argv) {
                 int _ul_was = g_unlock_applied;
                 int _ul = asb_unlock_lift_update(metrics.misc.screen_on, g_touch_kick,
                                                  asb_clock_ms(CLOCK_BOOTTIME), fsm.profile_idx,
-                                                 fsm.thermal_cap, metrics.therm.cpu_max_c);
+                                                 fsm.thermal_cap,
+                                                 asb_unlock_gate_die(metrics.therm.cpu_max_c,
+                                                                     g_unlock_dark_c,
+                                                                     g_unlock_dark_ts,
+                                                                     time(NULL)));
                 if (_ul != _ul_was) {
                     g_unlock_edge = 1;
                     /* Screen off inside the window: the screen-off write must get through the
