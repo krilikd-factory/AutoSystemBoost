@@ -727,8 +727,15 @@ static inline int asb_config_validate(const asb_runtime_config_t *c) {
  * partially-written/imported file could therefore give the daemon and shell
  * mutually incompatible thermal and performance policies.
  */
+/* ASB_CFG_MAX_KEYS bounds the duplicate check, it is not a schema: at 192 the shipped
+ * file outgrew it the day fix160 added its 193rd key, and every load - at boot and on every
+ * WebUI save - was refused as "rc=-4", so the governor ran its built-in defaults instead of
+ * the user's settings. Overflow now has its own code (-16), the bound has room to spare, and
+ * a host test loads the shipped governor.conf through this function. */
+#define ASB_CFG_MAX_KEYS 512
+#define ASB_CFG_RC_TOO_MANY_KEYS (-16)
 static inline int asb_config_load_file(const char *path, asb_runtime_config_t *c) {
-    enum { ASB_CFG_MAX_KEYS = 192, ASB_CFG_KEY_LEN = 64 };
+    enum { ASB_CFG_KEY_LEN = 64 };
     char seen[ASB_CFG_MAX_KEYS][ASB_CFG_KEY_LEN];
     int seen_n = 0;
     FILE *f = fopen(path, "r");
@@ -749,7 +756,7 @@ static inline int asb_config_load_file(const char *path, asb_runtime_config_t *c
         for (int i = 0; i < seen_n; i++) {
             if (!strcmp(seen[i], k)) { fclose(f); return -3; }
         }
-        if (seen_n >= ASB_CFG_MAX_KEYS) { fclose(f); return -4; }
+        if (seen_n >= ASB_CFG_MAX_KEYS) { fclose(f); return ASB_CFG_RC_TOO_MANY_KEYS; }
         snprintf(seen[seen_n], ASB_CFG_KEY_LEN, "%s", k);
         seen_n++;
         if (asb_cfg_validate_critical_syntax(k, v) != 0) { fclose(f); return -5; }

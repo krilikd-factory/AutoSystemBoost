@@ -2416,6 +2416,8 @@ static void asb_active_efficiency_apply_caps(asb_profile_caps_t *caps,
  * The prime slot is the one that matters for both heat and responsiveness. "profile"
  * means neither stage below touched it; the figures let anyone see whether the cap ever
  * bit, which in that capture it did not (1.64 GHz ceiling, 1.13 GHz peak demand). */
+static int    g_cfg_load_rc = 0;
+static time_t g_cfg_load_ts = 0;
 static int  g_cap_prime_base_khz = 0;
 static int  g_cap_prime_eff_khz  = 0;
 static char g_cap_prime_reason[64] = "profile";  /* "thermal_budget:" + 32-byte reason */
@@ -3332,6 +3334,9 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
      * field list and the argument list cannot drift apart. */
     fprintf(f, "cap_prime_reason=%s\ncap_prime_base_khz=%d\ncap_prime_eff_khz=%d\n",
             g_cap_prime_reason, g_cap_prime_base_khz, g_cap_prime_eff_khz);
+    /* Whether governor.conf was accepted, at boot or at the last reload (fix165): 0, or the
+     * loader's error code while the governor runs its last good or built-in values. */
+    fprintf(f, "cfg_load_rc=%d\ncfg_load_ts=%ld\n", g_cfg_load_rc, (long)g_cfg_load_ts);
     /* Vendor clamp counters for WebUI Live page */
     fprintf(f, "vendor_clamp_1h=%lu\nvendor_clamp_total=%lu\nvendor_raised_total=%lu\n",
             v44_clamp_1h_now(), g_v44_clamp_total, g_v44_raised_total);
@@ -6572,6 +6577,8 @@ int main(int argc, char **argv) {
 
     asb_config_defaults(&g_asb_cfg);
     int initial_cfg_rc = asb_config_load_file(CONFIG_FILE, &g_asb_cfg);
+    g_cfg_load_rc = initial_cfg_rc;
+    g_cfg_load_ts = time(NULL);
     if (initial_cfg_rc != 0) {
         asb_log("config_reject: startup load failed rc=%d; using built-in safe defaults", initial_cfg_rc);
         asb_config_defaults(&g_asb_cfg);
@@ -7791,6 +7798,8 @@ int main(int argc, char **argv) {
                     asb_runtime_config_t candidate_cfg;
                     asb_config_defaults(&candidate_cfg);
                     int reload_cfg_rc = asb_config_load_file(CONFIG_FILE, &candidate_cfg);
+                    g_cfg_load_rc = reload_cfg_rc;
+                    g_cfg_load_ts = time(NULL);
                     if (reload_cfg_rc != 0) {
                         asb_log("config_reject: reload refused rc=%d; keeping last-known-good policy", reload_cfg_rc);
                         asb_sock_reply(sockfd, &src, srclen, "err:invalid_config");
@@ -8732,9 +8741,13 @@ int main(int argc, char **argv) {
                             _cfg_mtime = _cst.st_mtime;
                         } else if (_cst.st_mtime != _cfg_mtime) {
                             _cfg_mtime = _cst.st_mtime;
-                            asb_runtime_config_t _ncfg = g_asb_cfg;
+                            asb_runtime_config_t _ncfg;
+                            asb_config_defaults(&_ncfg);
                             int _rc = asb_config_load_file(CONFIG_FILE, &_ncfg);
+                            g_cfg_load_rc = _rc;
+                            g_cfg_load_ts = time(NULL);
                             if (_rc == 0) {
+                                asb_config_apply_highload_mode(&_ncfg);
                                 g_asb_cfg = _ncfg;
                                 asb_log("config: reloaded automatically (governor.conf changed on disk)");
                             } else {
