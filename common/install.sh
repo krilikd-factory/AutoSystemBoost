@@ -4450,6 +4450,7 @@ AutoSystemBoost' $APIOCXM
 	  fi
 	fi
 	
+# asb_tools_prune_begin
 	if [ -d "$MODPATH/tools" ]; then
 	  # Whitelist prune: everything at the top of tools/ that is not named here is deleted at
 	  # install time.
@@ -4461,23 +4462,52 @@ AutoSystemBoost' $APIOCXM
 	# capability manifest before the native governor starts. The call is guarded with
 	# [ -f ], so deleting it did not break the boot - it just silently skipped the step,
 	# and the governor came up without the derived policy it was meant to have.
-	  find "$MODPATH/tools" -maxdepth 1 -type f \
-	    ! -name "asb_state_sampler.sh" \
-	    ! -name "asb_drain_analyzer.sh" \
-	    ! -name "asb_doctor.sh" \
-	    ! -name "asb_lint.sh" \
-	    ! -name "asb_session_report.py" \
-	    ! -name "asb_compare_sessions.py" \
-	    ! -name "asb_analyze.py" \
-	    ! -name "asb_camera_repair.sh" \
-	    ! -name "asb_sysui_watch.sh" \
-	    ! -name "asb_diag.sh" \
-	    ! -name "asb_discover.sh" \
-	    ! -name "asb_synthesize_bounds.sh" \
-	    ! -name "asb_recents_probe.sh" \
-	    ! -name "asb_config_backup.sh" \
-	    ! -name "asb_kernel_uv_coexist.sh" \
-	    -delete 2>/dev/null
+	#
+	# The list now comes from tools/release_tools.list - the same manifest the release
+	# workflow ships from, so "CI ships it" and "install keeps it" cannot drift apart
+	# again. They did once: CI shipped seven tools this whitelist deleted, and the
+	# chmod for asb_effective_policy.sh / asb_verify_device.sh below ran on files this
+	# prune had already removed. The inline copy is a fallback for a package built
+	# without the manifest; tests/asb_system.sh fails the build if the two disagree.
+	  _rt_list="$MODPATH/tools/release_tools.list"
+	  if [ ! -r "$_rt_list" ]; then
+	    _rt_list="$MODPATH/.asb_release_tools.fallback"
+	    cat > "$_rt_list" <<'EOF'
+asb_smart_mode.sh
+asb_config_backup.sh
+asb_intent.sh
+asb_diag.sh
+asb_doctor.sh
+asb_audit_state.sh
+asb_effective_policy.sh
+asb_verify_device.sh
+asb_recents_probe.sh
+asb_sysui_watch.sh
+asb_camera_repair.sh
+asb_state_sampler.sh
+asb_drain_analyzer.sh
+asb_vendor_thermal_probe.sh
+asb_kernel_uv_coexist.sh
+asb_discover.sh
+asb_synthesize_bounds.sh
+asb_install_probe.sh
+EOF
+	  fi
+	  # Build a cleaned copy of the manifest (no comments, no blanks) and delete every
+	  # top-level regular file not on it. A glob loop rather than find -delete so the
+	  # whitelist is a plain grep -xF: same deletion set, no find-expression building.
+	  _rt_clean="$MODPATH/.asb_release_tools.clean"
+	  sed 's/#.*//; s/[ \t\r]//g; /^$/d' "$_rt_list" > "$_rt_clean" 2>/dev/null
+	  rm -f "$MODPATH/.asb_release_tools.fallback" 2>/dev/null
+	  if [ -s "$_rt_clean" ]; then
+	    for _rt_f in "$MODPATH/tools"/* "$MODPATH/tools"/.[!.]*; do
+	      [ -f "$_rt_f" ] || continue
+	      grep -qxF "${_rt_f##*/}" "$_rt_clean" 2>/dev/null || rm -f "$_rt_f" 2>/dev/null
+	    done
+	  fi
+	  # An empty/unreadable manifest skips the prune entirely: keeping a few extra
+	  # tools is recoverable, deleting the wrong ones is not.
+	  rm -f "$_rt_clean" 2>/dev/null
 	  # WebUI runs these helpers by path after installation. Keep them above the prune line;
 	  # packaging alone is insufficient when this allowlist deletes unrecognised top-level tools.
 	  chmod 0755 "$MODPATH/tools/asb_camera_repair.sh" 2>/dev/null || true
@@ -4485,6 +4515,7 @@ AutoSystemBoost' $APIOCXM
 	  chmod 0755 "$MODPATH/tools/asb_config_backup.sh" 2>/dev/null || true
 	  chmod 0755 "$MODPATH/tools/asb_kernel_uv_coexist.sh" 2>/dev/null || true
 	fi
+# asb_tools_prune_end
 
 	# Vendor log cleanup - explicit paths, and only when asked for.
 	#
