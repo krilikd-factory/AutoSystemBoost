@@ -879,6 +879,56 @@ static void asb_log(const char *fmt, ...) {
     fflush(g_logf);
 }
 
+/* Module directory for shelling out to our own scripts.
+ *
+ * Every spawn used to hardcode /data/adb/modules/AutoSystemBoost. That path is fixed by
+ * the module id, but only by convention: a renamed module, a manual install into a
+ * different directory, or a root solution with another modules root breaks each of those
+ * references in silence - the command is backgrounded into /dev/null and its failure is
+ * invisible by construction. The governor's own binary lives at <moddir>/bin/asb, so
+ * /proc/self/exe resolves the real install location; the standard path stays as the
+ * fallback for the odd environment where readlink is denied. */
+static const char *asb_moddir(void) {
+    static char md[256];
+    static int resolved = 0;
+    if (!resolved) {
+        resolved = 1;
+        md[0] = '\0';
+        ssize_t n = readlink("/proc/self/exe", md, sizeof(md) - 1);
+        if (n > 0) {
+            md[n] = '\0';
+            char *tail = strstr(md, "/bin/asb");
+            if (tail && strcmp(tail, "/bin/asb") == 0) *tail = '\0';
+            else md[0] = '\0';
+        }
+        if (md[0] == '\0')
+            snprintf(md, sizeof(md), "%s", "/data/adb/modules/AutoSystemBoost");
+    }
+    return md;
+}
+
+/* Spawn a module script in the background, and SAY when it cannot run.
+ *
+ * The old pattern was `system("sh <hardcoded path> ... >/dev/null 2>&1 &")` with the
+ * return value cast to void: a missing or unreadable script failed in complete silence
+ * (the Smart dynamic tuner never ran on any device for exactly this reason - it was
+ * exec'd directly and EACCES'd forever). Check readability first and log nonzero
+ * returns; rc only reflects the shell spawn itself, the script's own exit stays
+ * asynchronous by design. */
+static void asb_run_modscript(const char *relpath, const char *args) {
+    char path[288];
+    snprintf(path, sizeof(path), "%s/%s", asb_moddir(), relpath);
+    if (access(path, R_OK) != 0) {
+        asb_log("modscript not readable: %s (wanted: %s) - skipped", path, args);
+        return;
+    }
+    char cmd[512];
+    snprintf(cmd, sizeof(cmd), "sh %s %s >/dev/null 2>&1 &", path, args);
+    int rc = system(cmd);
+    if (rc != 0)
+        asb_log("modscript %s %s: system() rc=%d", relpath, args, rc);
+}
+
 /* Persistent stats live beside session_history.jsonl in /data/adb/asb, for the same reason:
  * the module directory is replaced on every update. Kept there, the per-profile stats, the
  * session aggregate and the OTA-quarantine fingerprint were all wiped by each update - so
@@ -6390,20 +6440,19 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
                                  ((sig & 1) != (g_smart_last_tune_sig & 1));
             if (sig != g_smart_last_tune_sig &&
                 (screen_changed || (now - g_smart_last_tune_ts) >= 30)) {
-            char cmd[256];
+            char sdt_args[48];
             /*
              * Run it THROUGH sh.
              * Exec'ing the path directly therefore failed with EACCES on every device, and
              * because the command is backgrounded into /dev/null with its return value
              * discarded, it failed in complete silence: the Smart dynamic tuner has never
-             * actually run.
+             * actually run. asb_run_modscript keeps the sh indirection, resolves the module
+             * directory from /proc/self/exe instead of assuming it, and logs when the
+             * script cannot be run at all.
              */
-            snprintf(cmd, sizeof(cmd),
-                     "sh /data/adb/modules/AutoSystemBoost/runtime/smart_dynamic_tune.sh "
-                     "%d %d %d >/dev/null 2>&1 &",
+            snprintf(sdt_args, sizeof(sdt_args), "%d %d %d",
                      g_smart_rt.app_hint, therm_bucket, screen_on_v);
-            int _rc = system(cmd);
-            (void)_rc;
+            asb_run_modscript("runtime/smart_dynamic_tune.sh", sdt_args);
             g_smart_last_tune_sig = sig;
             g_smart_last_tune_ts  = now;
         }
@@ -8887,12 +8936,9 @@ int main(int argc, char **argv) {
          * second failure. strcmp costs nothing here and cannot depend on the toolchain. */
         if ((g_lpm_last == NULL || strcmp(lpm_mode, g_lpm_last) != 0) &&
             (lpm_now - g_lpm_last_ts) >= 15) {
-                    char lcmd[192];
-                    snprintf(lcmd, sizeof(lcmd),
-                             "sh /data/adb/modules/AutoSystemBoost/runtime/asb_lpm.sh %s"
-                             " >/dev/null 2>&1 &", lpm_mode);
-                    int _lrc = system(lcmd);
-                    (void)_lrc;
+                    /* Resolved module dir + logged failure: the old hardcoded spawn
+                     * discarded its return value, so a missing asb_lpm.sh was invisible. */
+                    asb_run_modscript("runtime/asb_lpm.sh", lpm_mode);
                     g_lpm_last    = lpm_mode;
                     g_lpm_last_ts = lpm_now;
                 }
