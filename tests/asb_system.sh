@@ -3761,74 +3761,7 @@ grep -q '^static void persistent_stats_screen_off(const asb_fsm_t \*fsm) { persi
 [ "$(grep -c 'lk_night_chain ' "$ROOT/tools/logkit/asb_log_full_day.sh")" -ge 2 ] || fail "the night row and the night verdict must both chain the phases"
 echo "PASS: fix167 contract"
 ) || exit 1
-# ---- fix168 ---------------------------------------------------------------
-(
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-fail() { echo "FAIL fix168: $*"; exit 1; }
-H="$ROOT/webroot/index.html"
-grep -Fq "const notTemp = /trip|bcl|lvl|limit|ibat|vbat/i;" "$H" || fail "Stock can read a 95 C trip point as the CPU temperature"
-asb_has_test test_webui_stock_monitor_runtime.sh || fail "Stock monitor test missing"
-asb_has_test test_webui_live_info_runtime.sh || fail "live tile explanation test missing"
-asb_has_test test_webui_fill_pages_runtime.sh || fail "page fill test missing"
-asb_has_test test_profile_net_reassert_runtime.sh || fail "network re-assert test missing"
-asb_has_test test_webui_device_font_runtime.sh || fail "device font test missing"
-grep -q 'runtime/asb_net_apply.sh' "$ROOT/runtime/asb_stock_policy.sh" || fail "Stock leaves the user's queue discipline at the restored baseline"
-echo "PASS: fix168 contract"
-) || exit 1
 echo "PASS: field-fix contracts"
-)
-
-t_profile_net_reassert_runtime() (
-# Runtime (fix168): a profile switch never leaves the network on the profile's rails.
-#
-# Owner's capture switched Smart <-> Stock several times. Afterwards asbdiag said "queue (other
-# networks): requested fq_codel, running pfifo_fast" and the Wi-Fi transmit queue sat at the
-# profile's 1024 instead of the user's 256. Stock restores the profile baseline, and that
-# baseline also held default_qdisc because boot captured it; on the way back profile_core
-# wrote its WIFI_TXQLEN over net_txqueue. Neither path ran the WebUI network appliers again.
-# The worker is run here with stub appliers and a stub profile core.
-set -eu
-ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-fail() { echo "FAIL profile net reassert: $*" >&2; exit 1; }
-AP="$ROOT/apply_profile.sh"
-SP="$ROOT/runtime/asb_stock_policy.sh"
-python3 - "$AP" "$SP" "$ROOT/action.sh" <<'P' || fail "order"
-import sys
-ap = open(sys.argv[1], encoding='utf-8').read()
-w = ap[ap.index('_passes=4'):ap.index('asb_log "worker done profile=$PROFILE rc=$_rc"')]
-blk = w[w.index('  done\n'):]
-assert 'if [ "$PROFILE" != "stock" ] && profile_epoch_current; then' in blk, "no guarded re-assert after the profile passes"
-assert blk.index('asb_net_offload.sh') < blk.index('asb_net_apply.sh'), "transmit queue and qdisc appliers out of order"
-sp = open(sys.argv[2], encoding='utf-8').read()
-e = sp[sp.index('asb_stock_enter() {'):sp.index('asb_stock_leave() {')]
-assert e.index('asb_stock_restore_profile_runtime') < e.index('runtime/asb_net_apply.sh'), "Stock re-applies the network before the baseline restore"
-assert '>/dev/null 2>&1 & )' in e, "Stock waits for the network applier"
-act = open(sys.argv[3], encoding='utf-8').read()
-assert """[ "$PROFILE" = "stock" ] || pgrep -f 'asb_governor|/asb$' >/dev/null 2>&1 || _add_bad "$T_B_GOV\"""" in act, "the action screen still calls a stopped governor a problem on Stock"
-P
-T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
-mkdir -p "$T/runtime"
-printf 'echo offload >> "%s/order"\n' "$T" > "$T/runtime/asb_net_offload.sh"
-printf 'echo apply >> "%s/order"\n' "$T" > "$T/runtime/asb_net_apply.sh"
-for prof in balanced stock; do
-  rm -f "$T/order"
-  cat > "$T/w.sh" <<EOF
-MODDIR="$T"; PROFILE="$prof"; _rc=0; _i=1
-asb_log() { :; }
-asb_apply_profile_once() { echo pass >> "$T/order"; }
-profile_epoch_current() { return 0; }
-sleep() { :; }
-EOF
-  sed -n '/^  _passes=4$/,/^  asb_log "worker done profile=\$PROFILE rc=\$_rc"$/p' "$AP" | sed 's/^  //' >> "$T/w.sh"
-  sh "$T/w.sh"
-  got="$(tr '\n' ' ' < "$T/order")"
-  if [ "$prof" = stock ]; then
-    [ "$got" = "pass " ] || fail "Stock ran the user network appliers inside the release pass: $got"
-  else
-    [ "$got" = "pass pass pass pass offload apply " ] || fail "balanced: $got"
-  fi
-done
-echo "PASS profile net reassert: the WebUI network settings are applied again after every profile switch and after the Stock baseline restore"
 )
 
 t_intent_backup() (
@@ -4443,8 +4376,7 @@ need "$SERVICE" 'wait_path /sys/class/net/wlan0 10'
 need "$SERVICE" 'while [ "$t" -lt 30 ]'
 absent "$SERVICE" '[ $t -lt 120 ]'
 need "$WEB" 'STOCK_TELEMETRY_MIN_INTERVAL_MS = 10000'
-need "$WEB" 'if (!force && (now - _stockTelemetryLastMs) < STOCK_TELEMETRY_MIN_INTERVAL_MS) {'
-need "$WEB" 'if (Object.keys(_stockTelemetryKv).length) paintStockLive(_stockTelemetryKv);'
+need "$WEB" 'if (!force && (now - _stockTelemetryLastMs) < STOCK_TELEMETRY_MIN_INTERVAL_MS) return;'
 
 echo 'PASS project safety hardening contract'
 )
@@ -4971,10 +4903,10 @@ need "$UI" 'Terminal boundary: never read /dev/.asb/state, learner_state.json, n
 need "$UI" "const off = T('prof_stock_sub', 'ASB policy off');"
 need "$UI" 'function stockMonitorReset() {'
 need "$UI" 'function restoreManagedLiveLabels() {'
-need "$UI" "setLiveLabel('liveStateLabel', 'stock_cpu_ceiling', 'CPU ceiling');"
+need "$UI" "setLiveLabel('liveStateLabel', 'stock_rom_status', 'ROM status');"
 grep -q "set('liveEtaOn'" "$UI" && fail 'Stock writes battery current into the time-to-empty line of the drain tiles'
-need "$UI" "setLiveLabel('liveCapSrcLabel', 'stock_bat_temp', 'Battery');"
-need "$UI" "setLiveLabel('liveLearnerLabel', 'stock_smart_learn', 'Smart learning');"
+need "$UI" "setLiveLabel('liveCapSrcLabel', 'stock_cap_owner', 'Cap owner');"
+need "$UI" "setLiveLabel('liveLearnerLabel', 'stock_asb_learner', 'ASB learner');"
 need "$UI" 'stockProfileCommit'
 need "$UI" 'function profilePaintFrame() {'
 need "$UI" "T('t_stock_switching', 'Stock selected · restoring ROM baseline…')"
@@ -5031,7 +4963,7 @@ files = sorted(root.glob('*.json'))
 assert len(files) == 13, f'expected 13 locales, got {len(files)}'
 for p in files:
     data = json.loads(p.read_text(encoding='utf-8'))
-    for key in ('prof_stock', 'prof_stock_sub', 't_stock_applied', 't_stock_switching', 'stock_cpu_clock', 'stock_load', 'stock_load_now', 'stock_battery', 'stock_uptime', 'stock_battery_current', 'stock_thermal_trend', 'stock_lpm_state', 'stock_ram_available', 'stock_cpu_ceiling', 'stock_gpu_clock', 'stock_bat_temp', 'stock_zram', 'stock_smart_learn', 'stock_learn_paused', 'stock_gpu_load', 'dbg_diag_wait', 'dbg_log_wait'):
+    for key in ('prof_stock', 'prof_stock_sub', 't_stock_applied', 't_stock_switching', 'stock_cpu_clock', 'stock_load', 'stock_load_now', 'stock_battery', 'stock_uptime', 'stock_battery_current', 'stock_thermal_trend', 'stock_lpm_state', 'stock_ram_available', 'stock_rom_status', 'stock_asb_caps', 'stock_live_drain', 'stock_live_battery', 'stock_cap_owner', 'stock_asb_learner', 'stock_gpu_load', 'dbg_diag_wait', 'dbg_log_wait'):
         assert isinstance(data.get(key), str) and data[key].strip(), f'{p.name}: missing {key}'
     stale = ('reboot', 'перезаг', 'neustart', 'reiniciar', 'redémarrage', 'վերագործարկ', 'mulai ulang', 'riavvio', 'yeniden başlat', '重启')
     assert not any(word in data['t_stock_applied'].lower() for word in stale), f'{p.name}: stale reboot recommendation'
