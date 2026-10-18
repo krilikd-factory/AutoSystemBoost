@@ -430,55 +430,41 @@ jobs:
           fi
           find "$PKG_REL" -name "*.log" -delete
 
-          # V48: ship the Smart Mode user-facing CLI tool (rest of tools/ is dev-only)
-          if [ -f "tools/asb_smart_mode.sh" ]; then
+          # Top-level tools/ ship by ONE list: tools/release_tools.list. The installer's
+          # whitelist prune reads the same manifest, so "CI ships it" and "install keeps
+          # it" cannot drift apart - they did once, and seven shipped tools (among them
+          # asb_diag.sh's companions asb_effective_policy.sh and asb_verify_device.sh)
+          # were deleted at install time on every device. tests/asb_system.sh fails the
+          # build if this loop, the manifest and the installer stop agreeing.
+          # The manifest ships too, so the on-device installer reads the real list rather
+          # than its inline fallback.
+          if [ -f tools/release_tools.list ]; then
             mkdir -p "$PKG_REL/tools"
-            install -m 0755 tools/asb_smart_mode.sh "$PKG_REL/tools/asb_smart_mode.sh"
+            install -m 0644 tools/release_tools.list "$PKG_REL/tools/release_tools.list"
+            while IFS= read -r _t; do
+              _t="$(echo "$_t" | sed 's/#.*//; s/[ \t\r]//g')"
+              [ -n "$_t" ] || continue
+              if [ -f "tools/$_t" ]; then
+                install -m 0755 "tools/$_t" "$PKG_REL/tools/$_t"
+              else
+                echo "::error::release_tools.list names tools/$_t, which does not exist"
+                exit 1
+              fi
+            done < tools/release_tools.list
+          else
+            echo "::error::tools/release_tools.list missing - the release tool set has no source of truth"
+            exit 1
           fi
-          # Ships in release even though the rest of tools/ does not: it repairs a
-          # camera grade compounded by older builds, and someone who needs it is on a
-          # release build by definition.
-          if [ -f "tools/asb_camera_repair.sh" ]; then
-            mkdir -p "$PKG_REL/tools"
-            install -m 0755 tools/asb_camera_repair.sh "$PKG_REL/tools/asb_camera_repair.sh"
-          fi
-          # Diagnostic for "SystemUI restarts a minute after boot" reports. Someone
-          # hitting that is on a release build, so it has to be there to be useful.
-          if [ -f "tools/asb_sysui_watch.sh" ]; then
-            mkdir -p "$PKG_REL/tools"
-            install -m 0755 tools/asb_sysui_watch.sh "$PKG_REL/tools/asb_sysui_watch.sh"
-          fi
-          # The diagnostic itself, and the doctor, belong in release above all.
-          #
-          # tools/ is excluded wholesale and copied back by name, and asb_diag.sh was never
-          # on that list - so the one script users are asked to run when they report a
-          # problem existed only in debug builds. Every diagnostic we have received came
-          # from a tester on debug; a release user had no way to produce one at all.
-          for _t in asb_diag.sh asb_kernel_uv_coexist.sh asb_doctor.sh asb_recents_probe.sh asb_effective_policy.sh asb_intent.sh asb_config_backup.sh asb_state_sampler.sh asb_drain_analyzer.sh asb_vendor_thermal_probe.sh asb_audit_state.sh asb_verify_device.sh; do
-            if [ -f "tools/$_t" ]; then
-              mkdir -p "$PKG_REL/tools"
-              install -m 0755 "tools/$_t" "$PKG_REL/tools/$_t"
-            fi
-          done
 
           # Full-day, battery, audio and Smart logkit are normal on-device support tools.
           # They are POSIX shell scripts and are used to collect the user reports ASB is tuned
           # against; excluding them from release made normal diagnosis debug-only.
+          # (Not in release_tools.list: they live in tools/logkit/, and the installer's
+          # prune is maxdepth 1 - subdirectories are never touched.)
           for _t in _asb_logkit_common.sh asb_audio_ab.sh asb_log_battery_mixed.sh asb_log_battery_sleep.sh asb_log_bgtrim_snapshot.sh asb_log_full_day.sh asb_log_perf.sh asb_log_smart_daily.sh asb_log_smart_gaming.sh asb_log_smart_sleep.sh; do
             if [ -f "tools/logkit/$_t" ]; then
               mkdir -p "$PKG_REL/tools/logkit"
               install -m 0755 "tools/logkit/$_t" "$PKG_REL/tools/logkit/$_t"
-            fi
-          done
-
-          # Device-adaptive layer (must ship so install/boot can run them):
-          #   asb_discover.sh        — writes device_caps.env (facts)
-          #   asb_synthesize_bounds.sh — writes device_bounds.env (OP15-ratio bounds)
-          #   asb_install_probe.sh   — install-time stock-file inventory/analysis
-          for _t in asb_discover.sh asb_synthesize_bounds.sh asb_install_probe.sh; do
-            if [ -f "tools/$_t" ]; then
-              mkdir -p "$PKG_REL/tools"
-              install -m 0755 "tools/$_t" "$PKG_REL/tools/$_t"
             fi
           done
 
@@ -636,6 +622,7 @@ jobs:
             "tools/asb_kernel_uv_coexist.sh" \
             "tools/asb_discover.sh" \
             "tools/asb_synthesize_bounds.sh" \
+            "tools/release_tools.list" \
             "webroot/index.html"; do
             unzip -l "$ZIP_REL" | grep -q "$required" \
               || { echo "ERROR: $ZIP_REL missing $required"; exit 1; }
