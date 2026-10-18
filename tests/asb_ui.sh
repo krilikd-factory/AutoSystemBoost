@@ -1710,12 +1710,17 @@ cat > "$T/bin/settings" <<'S'
 #!/bin/sh
 [ "$1" = list ] || exit 0
 case "$2" in
-  system) printf '%s\n' 'peak_refresh_rate=165.0' 'show_network_speed=1' 'status_bar_show_battery_percent=1' 'screen_off_timeout=30000' ;;
-  secure) printf '%s\n' 'clock_seconds=1' 'doze_always_on=0' ;;
+  system) printf '%s\n' 'peak_refresh_rate=165.0' 'show_network_speed=1' 'status_bar_show_battery_percent=1' 'screen_off_timeout=30000' \
+            'oplus.radio.smart5g_apk_cfg=ver_num=9;filetrans=org.zwanoo.android.speedtest,com.Wifi.lte5g.Internetspeed;others=com.antutu.ABenchMark' ;;
+  secure) printf '%s\n' 'clock_seconds=1' 'doze_always_on=0' 'icon_blacklist=rotate,ime,show_network_speed,vpn' ;;
   global) printf '%s\n' 'wifi_on=1' ;;
 esac
 S
-printf '#!/bin/sh\nexit 0\n' > "$T/bin/dumpsys"
+cat > "$T/bin/dumpsys" <<'S'
+#!/bin/sh
+[ "$1" = wallpaper ] || exit 0
+printf '%s\n' 'System wallpaper state:' ' User 0: id=12 mWidth=1440' '  mWallpaperComponent=ComponentInfo{com.example.live/com.example.live.Waves}'
+S
 chmod +x "$T/bin/"*
 PATH="$T/bin:$PATH" sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_display_config_capture' "$C" "$T/a"
 D="$T/a/display_config.txt"
@@ -1723,6 +1728,11 @@ grep -qx '## status bar redraw settings' "$D" || f "no status-bar section in dis
 grep -qx 'system: show_network_speed=1' "$D" || f "network speed meter not recorded"
 grep -qx 'secure: clock_seconds=1' "$D" || f "seconds on the clock not recorded"
 grep -q 'screen_off_timeout\|doze_always_on\|wifi_on' "$D" && f "unrelated settings recorded"
+# fix168: the owner's capture listed oplus.radio.smart5g_apk_cfg - two kilobytes of 5G app
+# lists - because its VALUE holds "Internetspeed". Keys are matched, not values.
+grep -q 'smart5g_apk_cfg' "$D" && f "a setting matched on its value"
+grep -qx 'secure: icon_blacklist=rotate,ime,show_network_speed,vpn' "$D" || f "hidden status-bar icons not recorded"
+grep -qx 'wallpaper: ComponentInfo{com.example.live/com.example.live.Waves} - a wallpaper service; a live one redraws whenever it is visible' "$D" || f "wallpaper not recorded"
 J="$T/a/jank_trace.tsv"
 echo "# epoch|iso_time|phase|fsm_state|interval_s|main_at_cap|prime_at_cap|touches|frames|janky|deadline_missed|slow_ui|high_input|main_cap_pct|prime_cap_pct|fg_pkg|jank_pkgs" > "$J"
 i=0
@@ -1735,6 +1745,7 @@ printf '%s\n' "$out" | grep -q '^com.android.systemui missed deadlines in 10 of 
 printf '%s\n' "$out" | grep -q '^status-bar settings read on this phone at the start of the capture:$' || f "settings heading missing: $out"
 printf '%s\n' "$out" | grep -qx '  system: show_network_speed=1' || f "network speed not listed: $out"
 printf '%s\n' "$out" | grep -qx '  secure: clock_seconds=1' || f "clock seconds not listed: $out"
+printf '%s\n' "$out" | grep -q '^  wallpaper: ComponentInfo{com.example.live' || f "wallpaper not listed: $out"
 cp "$J" "$T/b/jank_trace.tsv"
 out2="$(sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit_jank_summary' "$C" "$T/b" 2>&1)"
 printf '%s\n' "$out2" | grep -q 'missed deadlines in 10 of 10' || f "steady redraw line missing without a config file"
@@ -2580,9 +2591,9 @@ chk(v('liveCapSrc') === '33°C' && v('liveCapSrcLabel') === 'Battery', 'battery 
 chk(v('liveClamp') === '2.8 GB' && v('liveClampLabel') === 'zRAM used', 'zRAM in use: ' + v('liveClamp'));
 chk(v('liveLearner') === 'paused' && v('liveLearnerLabel') === 'Smart learning', 'learner: ' + v('liveLearner'));
 chk(v('bnStockLoad') === '6.12', 'system load is a number, not "1 min 6.12": ' + v('bnStockLoad'));
-const tripOnly = { 'thermal.cpu-hw-trip-0': '95000', 'thermal.cpu-hw-trip-1': '95000' };
+const tripOnly = { 'thermal.cpu-hw-trip-0': '95000', 'thermal.cpu-hw-trip-1': '95000', 'thermal.socd': '8' };
 paintStockLive(tripOnly);
-chk(v('liveCpu') === '—', 'a phone that publishes only trip zones shows a dash, not 95 C: ' + v('liveCpu'));
+chk(v('liveCpu') === '—' && v('liveSurface') === '—', 'trip zones and the socd level are not temperatures: ' + v('liveCpu') + ' / ' + v('liveSurface'));
 _selectedProfile = 'battery';
 _nodes.liveCpu.textContent = '39°C'; _nodes.liveStateLabel.textContent = 'FSM';
 paintStockLive(kv);
@@ -2851,6 +2862,68 @@ EOF
 out="$(node "$T/t.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 echo "PASS webui device font: the variant takes the system UI's own font, an applied one first, and the normal build runs nothing"
+)
+
+t_webui_option_labels_runtime() (
+# Runtime (fix169): option buttons and value badges speak the UI language.
+#
+# Owner's Settings > Network in Russian: Wi-Fi power save offered "выкл / screen_off / always"
+# under a badge reading "OFF", Leave Bad Wi-Fi listed "weak" and "unusable", Act on Wakelocks
+# and Trim Background GPS showed bare "0" / "1", and the Wi-Fi scan slider read "1" where the
+# action screen said "every 10 min". The REAL Topt, cfgScanLabel and cfgStatus run in node with
+# the shipped en.json and ru.json; every language is checked for the labels.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui option labels: $*" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "SKIP webui option labels: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+python3 - "$ROOT/webroot/i18n" <<'P' || fail "locales"
+import json, sys, pathlib
+need = {'bt_link_stability': ['stable'], 'net_wifi_leave': ['weak', 'unusable'],
+        'wifi_powersave': ['screen_off', 'always'], 'wakelock_action': ['0', '1'],
+        'gnss_trim': ['0', '1'], 'mglru_hold': ['hold']}
+files = sorted(pathlib.Path(sys.argv[1]).glob('*.json'))
+assert len(files) == 13
+for p in files:
+    d = json.loads(p.read_text(encoding='utf-8'))
+    for k, opts in need.items():
+        for o in opts:
+            v = d.get('optFor', {}).get(k, {}).get(o) or d.get('opt', {}).get(o)
+            assert v and not (v == o and o.isdigit()), '%s: %s=%s has no label' % (p.name, k, o)
+    assert d.get('wst_every', '').count('%s') == 1 and d.get('wst_free'), p.name + ': scan labels'
+P
+{
+  printf 'const I18N = { en: %s, ru: %s };\n' "$(cat "$ROOT/webroot/i18n/en.json")" "$(cat "$ROOT/webroot/i18n/ru.json")"
+  cat <<'EOF'
+let ASB_LANG = 'ru';
+function T(k, d) { const L = I18N[ASB_LANG]; return (L && typeof L[k] === 'string') ? L[k] : d; }
+function ledgerBadge() { return null; } function trialHoursLeft() { return 0; } function trialExpired() { return false; }
+const _netResult = {}; const _cfgVals = {};
+EOF
+  for fn in Topt cfgScanLabel cfgStatus; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  cat <<'EOF'
+let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
+const seg = (key, stock) => ({ key: key, type: 'seg', stock: stock });
+chk(Topt('screen_off', 'wifi_powersave') === 'экран выкл', 'power-save option: ' + Topt('screen_off', 'wifi_powersave'));
+chk(cfgStatus(seg('wifi_powersave', 'off'), 'off').text === 'ВЫКЛ', 'badge over "выкл" reads OFF: ' + cfgStatus(seg('wifi_powersave', 'off'), 'off').text);
+chk(cfgStatus(seg('wifi_powersave', 'off'), 'always').text === 'ВСЕГДА', 'badge: ' + cfgStatus(seg('wifi_powersave', 'off'), 'always').text);
+chk(cfgStatus(seg('wakelock_action', '0'), '1').text === 'ДЕЙСТВОВАТЬ', 'wakelock badge: ' + cfgStatus(seg('wakelock_action', '0'), '1').text);
+chk(cfgStatus(seg('net_congestion_wifi', 'auto'), 'cubic').text === 'CUBIC', 'technical names unchanged');
+chk(cfgStatus({ key: 'wifi_scan_throttle', type: 'range' }, '1').text === 'раз в 10 мин', 'scan badge: ' + cfgStatus({ key: 'wifi_scan_throttle', type: 'range' }, '1').text);
+chk(cfgScanLabel(0) === 'выкл' && cfgScanLabel(3) === 'раз в 2 мин' && cfgScanLabel(4) === 'без ограничений', 'scan labels');
+chk(cfgStatus({ key: 'dsp_bass', type: 'range' }, '0').text === 'выкл', 'a range at zero says off in the UI language');
+ASB_LANG = 'en';
+chk(cfgScanLabel(2) === 'every 5 min', 'English scan label');
+if (bad) process.exit(1);
+console.log('ok');
+EOF
+} > "$T/t.js"
+out="$(node "$T/t.js" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+grep -Fq "if (it.key === 'wifi_scan_throttle') return cfgScanLabel(v);" "$H" || fail "the slider value is still a bare number"
+grep -Fq '.cfg-row-top > .cfg-range input[type="range"] { flex: 1 1 auto; width: auto; min-width: 0; }' "$H" || fail "a slider on its own row keeps its short track"
+echo "PASS webui option labels: option buttons and value badges are labelled in the UI language, the Wi-Fi scan rate in minutes, sliders use their row"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

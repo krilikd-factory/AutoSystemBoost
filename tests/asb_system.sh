@@ -3089,7 +3089,7 @@ fail() { echo "FAIL fix127: $*"; exit 1; }
 G="$ROOT/src/asb_governor.c"; A="$ROOT/action.sh"; W="$ROOT/webroot/index.html"
 grep -q 'fprintf(f, "forecast_rate_x10=%d\\nforecast_basis=%s\\n", _fr, _fb);' "$G" || fail "governor publishes no forecast"
 grep -q '_frx=$(grep -m1 "^forecast_rate_x10=" /dev/.asb/state' "$A" || fail "action does not read the governor forecast"
-grep -q "const _fRate = parseInt(kv.forecast_rate_x10 || '0', 10);" "$W" || fail "WebUI does not read the governor forecast"
+grep -Fq "const _fPick = lvSlotToMeter(parseInt(kv.forecast_rate_x10 || '0', 10), String(kv.forecast_basis || ''));" "$W" || fail "WebUI does not read the governor forecast"
 grep -q '_ton_min=$(( _lvl \* 600 / _eta_rate ))' "$A" || fail "action minutes not percent over rate"
 grep -q 'Math.floor(bcap \* 600 / ewma_x10)' "$W" || fail "WebUI minutes not percent over rate"
 grep -q 'echo "       ${M_PREDICT}: $(_s "$T_ETA_SCREEN" "$_ton_h" "$_ton_m") ${_eta_note}"' "$A" || fail "Smart card prints its own forecast"
@@ -3766,7 +3766,7 @@ echo "PASS: fix167 contract"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 fail() { echo "FAIL fix168: $*"; exit 1; }
 H="$ROOT/webroot/index.html"
-grep -Fq "const notTemp = /trip|bcl|lvl|limit|ibat|vbat/i;" "$H" || fail "Stock can read a 95 C trip point as the CPU temperature"
+grep -Fq "const notTemp = /trip|bcl|lvl|limit|ibat|vbat|socd/i;" "$H" || fail "Stock can read a 95 C trip point as the CPU temperature"
 asb_has_test test_webui_stock_monitor_runtime.sh || fail "Stock monitor test missing"
 asb_has_test test_webui_live_info_runtime.sh || fail "live tile explanation test missing"
 asb_has_test test_webui_fill_pages_runtime.sh || fail "page fill test missing"
@@ -3774,6 +3774,19 @@ asb_has_test test_profile_net_reassert_runtime.sh || fail "network re-assert tes
 asb_has_test test_webui_device_font_runtime.sh || fail "device font test missing"
 grep -q 'runtime/asb_net_apply.sh' "$ROOT/runtime/asb_stock_policy.sh" || fail "Stock leaves the user's queue discipline at the restored baseline"
 echo "PASS: fix168 contract"
+) || exit 1
+# ---- fix169 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix169: $*"; exit 1; }
+asb_has_test test_comfort_burst_hold_runtime.sh || fail "comfort burst hold test missing"
+asb_has_test test_asbdiag_stock_governor_runtime.sh || fail "asbdiag governor lookup test missing"
+asb_has_test test_action_stock_header_runtime.sh || fail "action Stock header test missing"
+asb_has_test test_eta_slot_meter_runtime.sh || fail "slot-to-meter forecast test missing"
+asb_has_test test_webui_option_labels_runtime.sh || fail "option label test missing"
+grep -q "awk -F= 'tolower(\$1) ~ /network_speed" "$ROOT/tools/logkit/_asb_logkit_common.sh" || fail "status-bar settings are matched on their values again"
+grep -q "pgrep -f '/bin/asb\$'" "$ROOT/tools/asb_verify_device.sh" || fail "verify_device looks for a process name the governor does not have"
+echo "PASS: fix169 contract"
 ) || exit 1
 echo "PASS: field-fix contracts"
 )
@@ -3829,6 +3842,56 @@ EOF
   fi
 done
 echo "PASS profile net reassert: the WebUI network settings are applied again after every profile switch and after the Stock baseline restore"
+)
+
+t_asbdiag_stock_governor_runtime() (
+# Runtime (fix169): asbdiag finds the governor itself, and on Stock expects it stopped.
+#
+# Owner's Stock asbdiag: "[PASS] ASB governor process alive" ten minutes after the governor
+# stopped. The fallback pattern '/asb' matched any process with that in its command line - the
+# running /system/bin/asbdiag included - so the check could not fail, on Stock or after a crash.
+# Its Smart learning and thermal source sections then read an absent state file as "expected a
+# session by now" and "uninitialized". The REAL lines run with a fake pgrep that answers '/asb'
+# the way the phone did.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+D="$ROOT/tools/asb_diag.sh"
+fail() { echo "FAIL asbdiag stock governor: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/bin" "$T/mod"
+cat > "$T/bin/pgrep" <<'S'
+#!/bin/sh
+shift
+case "$1" in
+  '/bin/asb$') [ "${FAKE_GOV:-0}" = 1 ] && echo 4242 ;;
+  *asb*) echo 777 ;;
+esac
+exit 0
+S
+chmod +x "$T/bin/pgrep"
+for prof in stock smart; do
+  for gov in 0 1; do
+    printf '%s\n' "$prof" > "$T/mod/current_profile"
+    {
+      echo "MODDIR='$T/mod'; OUT1=''; OUT2=''; PASS=0; FAIL=0; NA=0; INFO=0; CHK_LIST=''"
+      echo "gp() { :; }"
+      sed -n '/^P()  { printf/p; /^V() {/,/^}/p; /^NOTE(){ /p' "$D"
+      sed -n '/^_gov_pid="\$(pgrep/,/^fi$/p' "$D"
+    } > "$T/run.sh"
+    out="$(FAKE_GOV=$gov PATH="$T/bin:$PATH" sh "$T/run.sh" 2>&1)"
+    case "$prof/$gov" in
+      stock/0) printf '%s\n' "$out" | grep -q '^  \[PASS\] ASB governor stopped (Stock profile)$' || fail "Stock, stopped: $out" ;;
+      stock/1) printf '%s\n' "$out" | grep -q '^  \[FAIL\] ASB governor stopped (Stock profile)$' || fail "Stock with a governor running must fail: $out" ;;
+      smart/0) printf '%s\n' "$out" | grep -q '^  \[FAIL\] ASB governor process alive$' || fail "a dead governor passed because asbdiag itself matched: $out" ;;
+      smart/1) printf '%s\n' "$out" | grep -q '^  \[PASS\] ASB governor process alive$' || fail "running governor: $out" ;;
+    esac
+  done
+done
+grep -q "pgrep -f '/asb' " "$D" && fail "the loose '/asb' pattern is back"
+grep -q 'NOTE "Stock profile: the governor is stopped, so Smart neither learns nor decides' "$D" || fail "Smart learning section reads an absent state on Stock"
+grep -q 'NOTE "control source: none - Stock profile' "$D" || fail "thermal source section reads an absent state on Stock"
+cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag is stale"
+echo "PASS asbdiag stock governor: the governor is looked up by its own binary, expected stopped on Stock, and the learning sections say why they are empty"
 )
 
 t_intent_backup() (
