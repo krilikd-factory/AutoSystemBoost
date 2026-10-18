@@ -3628,6 +3628,10 @@ fi
 asb_gov_liveness() {
   _glf="${ASB_GOV_PIDFILE:-/dev/.asb/governor.pid}"
   [ -f "$_glf" ] && [ ! -f "${ASB_SAFE_MODE_FILE:-/dev/.asb/safe_mode}" ] || return 0
+  # When the no-governor fallback below started the resident watchdog loop, recovery
+  # belongs to it: it keeps the recovery ledger, the L2/L3 escalation and the lock.
+  # Two restart paths for one governor would race - the watchdog wins because it knows more.
+  [ -f "${ASB_WD_RESIDENT_FILE:-/dev/.asb/watchdog_resident}" ] && return 0
   _gl_pid=""; read -r _gl_pid < "$_glf" 2>/dev/null
   case "$_gl_pid" in ''|*[!0-9]*) _gl_pid=0 ;; esac
   [ "$_gl_pid" -gt 1 ] && ! kill -0 "$_gl_pid" 2>/dev/null || return 0
@@ -4162,7 +4166,13 @@ fi
 (
   sleep 95
   if ! pgrep -f '/bin/asb$' >/dev/null 2>&1 && [ "${ASB_STOCK_PROFILE:-0}" != "1" ]; then
-    [ -r "$MODDIR/runtime/asb_watchdog.sh" ] && . "$MODDIR/runtime/asb_watchdog.sh"
+    if [ -r "$MODDIR/runtime/asb_watchdog.sh" ]; then
+      # The resident watchdog owns governor recovery from here on; asb_gov_liveness defers
+      # to this marker instead of racing a second restart path (see the check there).
+      # touch, not ": >": a failed redirect on the special builtin would abort the script.
+      touch "${ASB_WD_RESIDENT_FILE:-/dev/.asb/watchdog_resident}" 2>/dev/null
+      . "$MODDIR/runtime/asb_watchdog.sh"
+    fi
   fi
 ) >/dev/null 2>&1 &
 
