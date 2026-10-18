@@ -1871,6 +1871,10 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
   /* Narrow or dense screens: give the controls the full row from the start. */
   .cfg-row-top > .cfg-seg,
   .cfg-row-top > .cfg-range { flex: 1 1 100%; margin-left: 57px; }
+  /* A slider on its own row uses that row (fix169): it kept its 116 px and left the rest
+   * of the card empty, a short track that is harder to set precisely. */
+  .cfg-row-top > .cfg-range { display: flex; }
+  .cfg-row-top > .cfg-range input[type="range"] { flex: 1 1 auto; width: auto; min-width: 0; }
 }
 
 /*
@@ -5005,6 +5009,18 @@ async function lvMeterPoll(force) {
 function lvPct(x, div, digits) {
   return (x / div).toFixed(digits) + T('unit_pcth', '%/h');
 }
+/* This hour's learned drain is an average of whole sessions, the screen-off part of them
+ * included, so it understates the screen-on rate (fix169): after a governor start the OP15
+ * forecast "18 h 48 m with the screen on" from a weekend-morning slot at 5.0 %/h, against
+ * 9-11 %/h measured in Smart that same morning. Where the drain meter has measured this
+ * profile with the screen on, that figure stands in for the slot until a live one exists. */
+function lvSlotToMeter(rate, basis) {
+  const e = (basis === 'slot' && _lvMeter.p) ? _lvMeter.p[_selectedProfile] : null;
+  return (e && e.on > 0) ? { rate: e.on, basis: 'meter', min: e.onMin } : { rate: rate, basis: basis, min: 0 };
+}
+function lvMeterTip(min) {
+  return T('eta_meter_tip', 'Estimate: nothing measured since the governor started - based on the screen-on drain ASB measured earlier in this profile, over %s min.').replace('%s', min);
+}
 function lvMeterPaint(profile) {
   const e = (_lvMeter.p && _lvMeter.p[profile]) || null;
   const onEl = _el('bnDrain'), offEl = _el('bnDrainOff');
@@ -6141,6 +6157,15 @@ function ledgerBadge(key) {
   return null;
 }
 
+/* Wi-Fi scan rate as what it does (fix169): the slider and its badge read "1", and only the
+ * action screen said that 1 is every 10 minutes. 0 is off, 4 is the framework unthrottled. */
+function cfgScanLabel(v) {
+  v = parseInt(v, 10);
+  if (v === 0) return Topt('off');
+  if (v === 4) return T('wst_free', 'no limit');
+  const m = { 1: 10, 2: 5, 3: 2 }[v];
+  return m ? T('wst_every', 'every %s min').replace('%s', m) : String(v);
+}
 function cfgStatus(it, cur) {
   // returns {cls, text} — a short colored badge describing the active state Kernel reality
   // first.
@@ -6253,11 +6278,12 @@ function cfgStatus(it, cur) {
   if (it.type === 'range') {
     const n = parseInt(cur, 10);
     if (it.stockAt !== undefined && (isNaN(n) || n <= it.stockAt)) return { cls:'neutral', text:Topt(it.stock, it.key) };
-    if (isNaN(n) || n === 0) return { cls:'neutral', text:'Off' };
+    if (isNaN(n) || n === 0) return { cls:'neutral', text:Topt('off') };
     if (it.key === 'CAMERA_LEVEL') {
       const names = ['Off','Safe','Moderate','Strong','Strong+','High','High+','Extreme','Extreme+'];
       return { cls:'good', text:(names[n] || String(n)) };
     }
+    if (it.key === 'wifi_scan_throttle') return { cls:'good', text:cfgScanLabel(n) };
     return { cls:'good', text:String(n) };
   }
   // "auto" is not a change, so it is not highlighted.
@@ -6267,7 +6293,10 @@ function cfgStatus(it, cur) {
   // treating auto as neutral everywhere would have shown an active override as untouched.
   const _stockVal = it.stock || 'auto';
   const _isNeutral = (cur === _stockVal) || (!it.stock && (cur === 'auto' || cur === 'stock'));
-  return { cls: (_isNeutral ? 'neutral' : 'warn'), text: String(cur).toUpperCase() };
+  /* The option's label, not its stored value (fix169): Russian cards read "OFF" above a
+   * button saying "выкл", and Act on Wakelocks read "0"/"1". Values without a label - bbr,
+   * fq_codel, a country code - come back unchanged. */
+  return { cls: (_isNeutral ? 'neutral' : 'warn'), text: String(Topt(cur, it.key)).toUpperCase() };
 }
 // A card counts as "active" whenever it is not sitting on the shipped default -- not
 // just when a switch is on. A segment parked on "hifi" or a slider at 4 is every bit as
@@ -6660,6 +6689,7 @@ const _unav = ASB_CAP_REQUIRES[it.key];
                          '0.85x', '0.9x', '0.95x', T('as_stock','stock 1x'), '1.25x', '1.5x'];
           return names[v + 1] || String(v);
         }
+        if (it.key === 'wifi_scan_throttle') return cfgScanLabel(v);
         if (it.key === 'haptic_strength') {
           if (v < 0) return Topt('auto');
           return (v === 0) ? Topt('off') : (v + '/10');
@@ -9532,16 +9562,16 @@ function paintStockLive(stockKv = null) {
   /* Trip points and limit levels are not temperatures (fix168). The OP15 publishes
    * cpu-hw-trip-0/1 as zones that read a constant 95000 - the hardware trip point - and
    * "cpu" matched them, so Stock showed CPU 95 C on a phone at 43 C. BCL/ibat/vbat "lvl"
-   * zones are current and voltage alarms. */
-  const notTemp = /trip|bcl|lvl|limit|ibat|vbat/i;
+   * zones are current and voltage alarms, and socd is a state-of-charge level (it reads 5-8). */
+  const notTemp = /trip|bcl|lvl|limit|ibat|vbat|socd/i;
   const maxTemp = (re) => {
     const a = Object.entries(kv).filter(([k]) => k.startsWith('thermal.') && re.test(k) && !notTemp.test(k))
       .map(([, v]) => c(v)).filter(v => v > 0 && v < 120);
     return a.length ? Math.max(...a) : 0;
   };
-  const cpuT = maxTemp(/cpu|cpullc|socd/i);
+  const cpuT = maxTemp(/cpu|cpullc/i);
   const skinT = maxTemp(/shell|skin|surface|frame|back|front/i);
-  const hotT = maxTemp(/cpu|cpullc|socd|gpu|gpuss|ddr/i);
+  const hotT = maxTemp(/cpu|cpullc|gpu|gpuss|ddr/i);
   const boardT = maxTemp(/^thermal\.board/i);
   let ma = n(kv['battery.current_now']);
   if (Math.abs(ma) > 10000) ma = Math.round(ma / 1000);
@@ -9729,6 +9759,7 @@ async function pollLive(visible) {
       return;
     }
     restoreManagedLiveLabels();
+    await lvMeterPoll(false);
     /* Collection happens once per pass, after the governor state is read - see the call
      * further down. Calling it here as well would double the /sys reads for nothing. */
     const r = await run('cat /dev/.asb/state 2>/dev/null');
@@ -9899,9 +9930,10 @@ async function pollLive(visible) {
      * older chain stays for a governor that publishes no forecast (another profile). */
     let ewma_x10 = 0;
     let eta_basis = '';
-    const _fRate = parseInt(kv.forecast_rate_x10 || '0', 10);
-    const _fBasis = String(kv.forecast_basis || '');
-    if (_fRate > 0 && (_fBasis === 'now' || _fBasis === 'recent' || _fBasis === 'slot')) {
+    const _fPick = lvSlotToMeter(parseInt(kv.forecast_rate_x10 || '0', 10), String(kv.forecast_basis || ''));
+    const _fRate = _fPick.rate;
+    const _fBasis = _fPick.basis;
+    if (_fRate > 0 && (_fBasis === 'now' || _fBasis === 'recent' || _fBasis === 'slot' || _fBasis === 'meter')) {
       ewma_x10 = _fRate;
       eta_basis = _fBasis;
     } else {
@@ -9924,7 +9956,10 @@ async function pollLive(visible) {
       /* Short on the card (fix128): "actual" or "estimate"; the rate itself is in the
        * Drain tile above and in the tooltip. */
       const _rateTxt = ' (' + (ewma_x10 / 10).toFixed(1) + T('unit_pcth', '%/h') + ')';
-      if (eta_basis === 'slot') {
+      if (eta_basis === 'meter') {
+        eta_note = ' · ' + T('eta_slot', 'estimate');
+        eta_title = lvMeterTip(_fPick.min) + _rateTxt;
+      } else if (eta_basis === 'slot') {
         eta_note = ' · ' + T('eta_slot', 'estimate');
         eta_title = T('eta_slot_tip',
           'Estimate: nothing measured since the governor started - based on what this hour usually costs.') + _rateTxt;
@@ -10265,8 +10300,9 @@ async function pollLive(visible) {
              * 7.9 %/h") above a forecast at 17.1 %/h, which told nobody how the phone was
              * doing. Until a window is long enough: "measuring". */
             const _bdEl = _el('bnDrain');
-            const _fbs = String(kv.forecast_basis || '');
-            const _frt = parseInt(kv.forecast_rate_x10 || '0', 10);
+            const _fpk = lvSlotToMeter(parseInt(kv.forecast_rate_x10 || '0', 10), String(kv.forecast_basis || ''));
+            const _fbs = _fpk.basis;
+            const _frt = _fpk.rate;
             let _act = 0;
             if (_fbs === 'now') _act = _frt;
             else if (!('forecast_basis' in kv) && parseInt(kv.smart_drain_window_s || '0', 10) >= 600)
@@ -10285,9 +10321,9 @@ async function pollLive(visible) {
               _bdEl.textContent = (_act / 10).toFixed(1) + T('unit_pcth', '%/h');
               _bdEl.title = T('lv_avgdrain_tip',
                 'Actual screen-on drain: how fast the battery level is falling now, over the last minutes - not a model.');
-            } else if (_frt > 0 && (_fbs === 'recent' || _fbs === 'slot') && !_chg) {
+            } else if (_frt > 0 && (_fbs === 'recent' || _fbs === 'slot' || _fbs === 'meter') && !_chg) {
               _bdEl.textContent = '~' + (_frt / 10).toFixed(1) + T('unit_pcth', '%/h');
-              _bdEl.title = (_fbs === 'slot'
+              _bdEl.title = (_fbs === 'meter' ? lvMeterTip(_fpk.min) : _fbs === 'slot'
                   ? T('eta_slot_tip', 'Estimate: nothing measured since the governor started - based on what this hour usually costs.')
                   : T('eta_average_tip', 'Estimate: no 10-minute measurement with the screen on yet - based on your recent screen-on sessions.'))
                 + ' ' + T('lv_drain_est_note', 'The actual figure replaces it after 10 minutes with the screen on.');
@@ -10299,8 +10335,8 @@ async function pollLive(visible) {
               _bdEl.title = T('lv_avgdrain_tip',
                 'Actual screen-on drain: how fast the battery level is falling now, over the last minutes - not a model.');
             }
-            _lvDrain.on = _act > 0 ? 'now' : (_chg ? 'charging' : ((_frt > 0 && (_fbs === 'recent' || _fbs === 'slot')) ? _fbs : 'wait'));
-            _lvDrain.winS = parseInt(kv.smart_drain_window_s || '0', 10);
+            _lvDrain.on = _act > 0 ? 'now' : (_chg ? 'charging' : ((_frt > 0 && (_fbs === 'recent' || _fbs === 'slot' || _fbs === 'meter')) ? _fbs : 'wait'));
+            _lvDrain.winS = _lvDrain.on === 'meter' ? _fpk.min * 60 : parseInt(kv.smart_drain_window_s || '0', 10);
             const _offx = parseInt(kv.offdrain_pctph_x100 || '0', 10);
             const _offn = parseInt(kv.offdrain_windows || '0', 10);
             _lvDrain.offN = _offn;
