@@ -3720,6 +3720,22 @@ asb_has_test test_suite_runner_runtime.sh || fail "suite runner test missing"
 grep -q 'extra: ' "$ROOT/tools/asb_tree_check.sh" || fail "the tree check does not name leftover files"
 echo "PASS: fix164 contract"
 ) || exit 1
+# ---- fix165 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix165: $*"; exit 1; }
+H="$ROOT/webroot/index.html"
+grep -q '^#define ASB_CFG_MAX_KEYS 512$' "$ROOT/src/asb_config.h" || fail "the config reader still stops at 192 keys"
+asb_has_test test_config_shipped_load_runtime.sh || fail "no host test loads the shipped governor.conf"
+grep -q "governor accepted governor.conf" "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not check that the governor took the config"
+grep -q 'T_CFG_REFUSED' "$ROOT/action.sh" || fail "the action screen does not say when the config was refused"
+grep -q 'Charging|Full) return 0 ;;' "$ROOT/runtime/asb_drain_meter.sh" || fail "the drain meter still reads an Unknown status as charging"
+grep -q 'T_CPR_FLOOR' "$ROOT/action.sh" || fail "the action screen still prints the prime wish instead of the written ceiling"
+grep -q '^\.page:not(\.live-page) > \.header { margin-bottom: 22px; }$' "$H" || fail "Home's section title sits lower than Monitor's and Settings'"
+grep -q '^\.live-page \.live-top-sec, \.config-page \.header + \.sec { margin-bottom: 12px !important; }$' "$H" || fail "title-to-content gap differs between pages"
+[ "$(grep -c '^\.live-page \.sec {' "$H")" = 2 ] || fail "a duplicate Monitor section rule is back"
+echo "PASS: fix165 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
 )
 
@@ -4949,6 +4965,76 @@ need "$ROOT/src/asb_writer.h" 'writer_profile_baseline_record_path'
 need "$ROOT/src/asb_writer.h" 'profile_runtime_baseline.v1'
 
 echo 'PASS stock profile contract'
+)
+
+_c_config_shipped_load() {
+  cat <<'ASB_C_EOF'
+#include <stdio.h>
+#include <stdlib.h>
+#include "asb_config.h"
+
+static int load(const char *path, asb_runtime_config_t *c) {
+    asb_config_defaults(c);
+    return asb_config_load_file(path, c);
+}
+
+int main(int argc, char **argv) {
+    (void)g_asb_appheat_hot;
+    if (argc < 3) return 90;
+    asb_runtime_config_t c;
+    int rc = load(argv[1], &c);
+    printf("shipped rc=%d gaming_gpu_enter=%d sustained_temp_enter=%d thermal_skin_c=%d device_bounds_override=%d\n",
+           rc, c.gaming_gpu_enter, c.sustained_temp_enter, c.thermal_skin_c, c.device_bounds_override);
+    if (rc != 0) return 1;
+    char path[512];
+    for (int n = 300; n <= 600; n += 300) {
+        snprintf(path, sizeof(path), "%s/many_%d.conf", argv[2], n);
+        FILE *f = fopen(path, "w");
+        if (!f) return 91;
+        fputs("gaming_gpu_enter=58\n", f);
+        for (int i = 1; i < n; i++) fprintf(f, "asb_future_key_%d=1\n", i);
+        fclose(f);
+        rc = load(path, &c);
+        printf("keys=%d rc=%d gaming_gpu_enter=%d\n", n, rc, c.gaming_gpu_enter);
+        if (n == 300 && (rc != 0 || c.gaming_gpu_enter != 58)) return 2;
+        if (n == 600 && rc != ASB_CFG_RC_TOO_MANY_KEYS) return 3;
+    }
+    snprintf(path, sizeof(path), "%s/dup.conf", argv[2]);
+    FILE *f = fopen(path, "w");
+    if (!f) return 92;
+    fputs("gaming_gpu_enter=58\ngaming_gpu_enter=60\n", f);
+    fclose(f);
+    if (load(path, &c) != -3) return 4;
+    return 0;
+}
+ASB_C_EOF
+}
+
+t_config_shipped_load_runtime() (
+# Runtime (fix165): the shipped governor.conf loads in the governor's own reader.
+#
+# The fix163 capture: "config: auto-reload refused rc=-4; keeping last-known-good" at every
+# WebUI save, and the governor running gaming_gpu=65, sustained 65/55 and highload default
+# against a governor.conf of 55, 64/52 and stable. The reader stopped at 192 keys and the
+# file had 193 since fix160 added dsp_width - so from then on the governor ignored the
+# user's settings and ran its built-in defaults. The REAL asb_config_load_file reads the
+# shipped file, a file with 300 keys, one past the new bound and one with a duplicate.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+CCX="${HOST_CC:-${CC:-}}"
+[ -n "$CCX" ] || for c in cc gcc clang; do command -v "$c" >/dev/null 2>&1 && { CCX="$c"; break; }; done
+[ -n "$CCX" ] || { echo "FAIL config shipped load: no host C compiler" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+_c_config_shipped_load > "$T/t.c"
+"$CCX" -O1 -I "$ROOT/src" "$T/t.c" -lm -o "$T/t" 2>"$T/cc.log" || { cat "$T/cc.log" >&2; echo "FAIL config shipped load: fixture did not build" >&2; exit 1; }
+out="$("$T/t" "$ROOT/config/governor.conf" "$T")" || { printf '%s\n' "$out" >&2; echo "FAIL config shipped load: the governor's reader refuses its own governor.conf (or the key bound is wrong)" >&2; exit 1; }
+want="$(sed -n 's/^gaming_gpu_enter=//p' "$ROOT/config/governor.conf" | head -1)"
+printf '%s\n' "$out" | grep -q "^shipped rc=0 gaming_gpu_enter=$want " || { printf '%s\n' "$out" >&2; echo "FAIL config shipped load: the file's value did not reach the governor" >&2; exit 1; }
+n="$(grep -v '^[[:space:]]*#' "$ROOT/config/governor.conf" | grep -c '=')"
+lim="$(sed -n 's/^#define ASB_CFG_MAX_KEYS \([0-9]*\)$/\1/p' "$ROOT/src/asb_config.h")"
+[ "$n" -lt $((lim / 2)) ] || { echo "FAIL config shipped load: governor.conf has $n keys, the reader stops at $lim - raise it before it bites again" >&2; exit 1; }
+grep -q 'fprintf(f, "cfg_load_rc=%d' "$ROOT/src/asb_governor.c" || { echo "FAIL config shipped load: the governor does not publish whether it accepted governor.conf" >&2; exit 1; }
+echo "PASS config shipped load: the governor reads its own governor.conf ($n keys, bound $lim), 300 keys load, overflow and duplicates are refused with their own codes"
 )
 
 t_suite_runner_runtime() (

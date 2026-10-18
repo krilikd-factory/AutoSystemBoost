@@ -1297,7 +1297,11 @@ exit "$fail"
 )
 
 t_drain_meter_runtime() (
-# Runtime (fix161): one drain measurement for every profile, Stock included, kept per profile.
+# Runtime (fix161, status fix165): one drain measurement for every profile, Stock included,
+# kept per profile. fix165: the OP15 battery status reads "Unknown" in every state, and the
+# meter took anything but "Discharging" for a charger - in the fix163 capture it measured
+# nothing in seven hours. A charger is now a Charging/Full status or a supply online, as the
+# governor and the log kit read it.
 #
 # Asked for: the Monitor's screen-on and screen-off drain on every profile, Stock too, so the
 # profiles can be compared. Screen-on drain was only counted inside the Smart tick, and Stock
@@ -1374,9 +1378,32 @@ mkdir -p "$T/bl/panel0-backlight"; echo 0 > "$T/bl/panel0-backlight/brightness"
 dm_screen && f "a dark backlight read as screen on"
 echo 412 > "$T/bl/panel0-backlight/brightness"
 dm_screen || f "a lit backlight read as screen off"
-mkdir -p "$T/ps"; echo Discharging > "$T/ps/status"; dm_charging && f "Discharging read as charging"
+mkdir -p "$T/ps" "$T/psy/usb"; DM_PSY="$T/psy"; echo 0 > "$T/psy/usb/online"
+echo Discharging > "$T/ps/status"; dm_charging && f "Discharging read as charging"
 echo Charging > "$T/ps/status"; dm_charging || f "Charging not seen"
-echo "Not charging" > "$T/ps/status"; dm_charging || f "a plugged-in full battery counted as discharging"
+echo Unknown > "$T/ps/status"; dm_charging && f "the OP15's Unknown status read as charging with no charger online - the meter never measured"
+echo 1 > "$T/psy/usb/online"; dm_charging || f "Unknown status with a charger online read as discharging"
+echo "Not charging" > "$T/ps/status"; dm_charging || f "a plugged-in held battery counted as discharging"
+echo 0 > "$T/psy/usb/online"; dm_charging && f "Not charging with no charger online read as charging"
+L="$T/loop"; mkdir -p "$L/bin" "$L/ps" "$L/psy/usb" "$L/bl/panel0-backlight"
+echo Unknown > "$L/ps/status"; echo 80 > "$L/ps/capacity"; echo 0 > "$L/psy/usb/online"; echo 300 > "$L/bl/panel0-backlight/brightness"
+echo smart > "$L/profile"; echo 1000 > "$L/clock"
+printf '#!/bin/sh\nn=$(cat "%s"); n=$((n + 30)); echo $n > "%s"; echo $n\n' "$L/clock" "$L/clock" > "$L/bin/date"
+printf '#!/bin/sh\nexec /bin/sleep 0.05\n' > "$L/bin/sleep"
+printf '#!/bin/sh\necho 2\n' > "$L/bin/getprop"
+chmod +x "$L/bin/date" "$L/bin/sleep" "$L/bin/getprop"
+( PATH="$L/bin:$PATH" ASB_DM_DIR="$L/d" ASB_DM_LIVE="$L/live" ASB_DM_PS="$L/ps" ASB_DM_PSY="$L/psy" ASB_DM_BL="$L/bl" \
+    ASB_DM_PROFILE="$L/profile" exec sh "$M" run ) >/dev/null 2>&1 &
+_lp=$!
+_w=0; _on=0
+while [ "$_w" -lt 100 ]; do
+  _on="$(awk '$1 == "smart" { print $2 }' "$L/live" 2>/dev/null)"
+  [ "${_on:-0}" -ge 120 ] 2>/dev/null && break
+  /bin/sleep 0.05; _w=$((_w + 1))
+done
+kill "$_lp" 2>/dev/null; wait "$_lp" 2>/dev/null
+[ "${_on:-0}" -ge 120 ] 2>/dev/null || f "the real loop measured no screen-on time with the OP15's Unknown status (smart on_s=${_on:-none})"
+[ -s "$L/d/drain_meter" ] || f "the real loop never saved its table"
 H="$ROOT/webroot/index.html"
 grep -q "function lvMeterParse(text)" "$H" || f "the Monitor does not read the meter"
 grep -q "const isCharging = batteryStatus !== 'discharging' && (batteryStatus === 'charging' || batteryStatus === 'full' || ma < 0);" "$H" || f "Stock still reads Discharging as charging"
