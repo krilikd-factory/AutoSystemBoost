@@ -1459,6 +1459,15 @@ body.config-active #livePage.open {
   font: 600 14px/1 var(--sans); color: var(--text-tertiary); opacity: .55; pointer-events: none; }
 html[dir="rtl"] .live-page .live-cell[data-lvi]::after { content: '\2039'; }
 .live-page .live-cell[data-lvi] .live-cell-value { padding-inline-end: 10px; }
+/* The Smart banner's eight items open the same explanation sheet as the live cells
+ * (fix172) - same affordance, smaller geometry. */
+.live-page .smart-banner-item[data-lvi] { position: relative; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  transition: transform .12s ease; }
+.live-page .smart-banner-item[data-lvi]:active { transform: scale(.96); }
+.live-page .smart-banner-item[data-lvi]::after { content: '\203A'; position: absolute; bottom: -1px; inset-inline-end: 1px;
+  font: 600 11px/1 var(--sans); color: var(--text-tertiary); opacity: .5; pointer-events: none; }
+html[dir="rtl"] .live-page .smart-banner-item[data-lvi]::after { content: '\2039'; }
+.live-page .smart-banner-item[data-lvi] .smart-banner-value { padding-inline-end: 9px; }
 html[data-asb-theme="light"] .live-info-now { background: #f7f9fa; }
 html[data-asb-theme="light"] .live-info-src { background: #fbfcfc; }
 .live-drain-cmp { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 14px;
@@ -3632,35 +3641,35 @@ html[data-asb-font="device"] .sec-label { letter-spacing: 2.4px; }
       </button>
     </div>
     <div class="smart-banner-row">
-      <div class="smart-banner-item">
+      <div class="smart-banner-item" data-lvi="slot">
         <span class="smart-banner-label" data-i18n="lv_bucket">Slot</span>
         <span class="smart-banner-value" id="bnBucket">—</span>
       </div>
-      <div class="smart-banner-item">
+      <div class="smart-banner-item" data-lvi="conf">
         <span class="smart-banner-label" data-i18n="lv_conf">Confidence</span>
         <span class="smart-banner-value" id="bnConf">—</span>
       </div>
-      <div class="smart-banner-item">
+      <div class="smart-banner-item" data-lvi="alpha">
         <span class="smart-banner-label" data-i18n="lv_alpha">Battery lean</span>
         <span class="smart-banner-value" id="bnAlpha">—</span>
       </div>
-      <div class="smart-banner-item">
+      <div class="smart-banner-item" data-lvi="apphint">
         <span class="smart-banner-label" data-i18n="lv_app">Load</span>
         <span class="smart-banner-value" id="bnApp">—</span>
       </div>
-      <div class="smart-banner-item">
+      <div class="smart-banner-item" data-lvi="basis">
         <span class="smart-banner-label" data-i18n="lv_basis">Basis</span>
         <span class="smart-banner-value" id="bnBasis">—</span>
       </div>
-      <div class="smart-banner-item">
+      <div class="smart-banner-item" data-lvi="slotheat">
         <span class="smart-banner-label" data-i18n="lv_slot_heat">Usual heat</span>
         <span class="smart-banner-value" id="bnSlotTemp">—</span>
       </div>
-      <div class="smart-banner-item">
+      <div class="smart-banner-item" data-lvi="trend">
         <span class="smart-banner-label" data-i18n="lv_trend">Trend</span>
         <span class="smart-banner-value" id="bnTrend">—</span>
       </div>
-      <div class="smart-banner-item">
+      <div class="smart-banner-item" data-lvi="lpm">
         <span class="smart-banner-label" data-i18n="lv_lpm">Modem LPM</span>
         <span class="smart-banner-value" id="bnLpm">—</span>
       </div>
@@ -5198,7 +5207,9 @@ function liveDrainClose() {
 }
 /* Every Monitor tile explains itself (fix168): a tap opens what the number is, where it comes
  * from and what is normal. Stock fills the same nine tiles with ROM readings, so the
- * explanation follows what the tile shows on the current profile, not the tile's position. */
+ * explanation follows what the tile shows on the current profile, not the tile's position.
+ * The eight Smart-banner items (slot, confidence, lean, load, basis, heat, trend, LPM)
+ * open the same sheet (fix172). */
 const LVI_TEXT = {
   cpu: ['lvi_cpu', 'Temperature of the CPU cores. ASB steers by one core sensor that it checks against its neighbours, so a stuck zone is never trusted; in Stock it is the hottest core. Up to about 45 \u00b0C is cool, short spikes when an app opens are normal, and throttling starts around 60 \u00b0C held for a while.'],
   skin: ['lvi_skin', 'Temperature of the shell - what your hand feels. It moves slowly and trails the CPU by minutes. Up to about 38 \u00b0C feels neutral, above about 42 \u00b0C the phone feels warm, and around 45 \u00b0C the system starts holding performance back.'],
@@ -5209,6 +5220,14 @@ const LVI_TEXT = {
   capsrc: ['lvi_capsrc', 'Who set the CPU frequency ceiling right now: ASB (the profile and Smart), the vendor - the OnePlus thermal or performance service - or a script. When the vendor holds a lower ceiling ASB leaves it alone rather than fighting it.'],
   clamps: ['lvi_clamps', 'How often the vendor service pushed the ceiling below what ASB asked for: in the last hour, and since ASB started. A few an hour is normal; dozens mean a hot phone or an aggressive vendor mode.'],
   learner: ['lvi_learner', 'How many stretches of use Smart has learned from, across all twelve time slots. Every 20 minutes of use and every night adds one. The more there are, the more Smart decides from measurements of your phone instead of defaults.'],
+  slot: ['lvi_slot', 'Smart splits the day into twelve two-hour slots and keeps its own measurements for each - this is the slot the phone is in now, with a weekday or weekend marker. What a workday morning costs is not spent on a Sunday morning: each has its own learned numbers.'],
+  conf: ['lvi_conf', 'How much Smart trusts what it has measured for this slot. The figure grows with every stretch of use; while it is low, Smart leans on neighbouring slots and safe defaults instead of guessing from a handful of samples.'],
+  alpha: ['lvi_alpha', 'How far the current policy leans from Balanced toward Battery, in percent, learned from what this slot usually costs. 0% is balanced behaviour; higher values hold the phone back more to save charge. Heat, a game or a camera session pushes it back down on its own.'],
+  apphint: ['lvi_apphint', 'What the foreground load looks like right now: idle, light, medium, heavy or gaming. Smart reads it from the app in front and the load it creates, and gives games and heavy work more frequency headroom than a messenger.'],
+  basis: ['lvi_basis', 'What Smart\u2019s figures are based on right now: this slot\u2019s own history once there is enough of it, a neighbouring or similar slot while there is not, an overall average at first. A learned night window or a thermal guard takes over instead and is named here when it does.'],
+  slotheat: ['lvi_slotheat', 'The temperature Smart usually measures in this slot, from its own history - cool, normal or warm. A slot that usually runs warm gets gentler ceilings before the phone actually heats up, not after.'],
+  trend: ['lvi_trend', 'Where the phone\u2019s temperature is heading: warming, steady or cooling. A warming trend makes Smart back off before a hard thermal limit is reached. Right after a profile switch the trend stays muted for two minutes, so a stale reading cannot steer the new profile.'],
+  lpm: ['lvi_lpm', 'The modem\u2019s power mode, read from the governor\u2019s own state file. normal follows the profile; save lets the radio idle with stretched keepalives (screen off or Battery profile); fast keeps latency low for games and downloads; night stretches idling further inside the night window Smart learned from your routine.'],
   cpuceil: ['lvi_cpuceil', 'How much of the hardware maximum the ROM lets the CPU reach right now, on the most limited cluster. In Stock ASB sets no ceilings, so anything under 100% here comes from the OnePlus thermal or performance service.'],
   gpuclk: ['lvi_gpuclk', 'The graphics clock at this moment. It drops to the minimum when nothing is drawn and climbs with load; in Stock ASB does not touch it.'],
   battemp: ['lvi_battemp', 'Battery temperature. Above about 40 \u00b0C charging slows down and the battery ages faster; above about 45 \u00b0C the system limits performance to protect it.'],
@@ -5250,7 +5269,7 @@ function liveInfoSource(key, cell) {
     if (f.length) lines.push(f.map(function (x) { return (x / 1e6).toFixed(2); }).join(' \u00b7 ') + ' GHz');
   }
   if (key === 'cpuceil') _stockLiveInfo.ceil.forEach(function (l) { lines.push(l); });
-  const v = cell && cell.querySelector('.live-cell-value');
+  const v = cell && (cell.querySelector('.live-cell-value') || cell.querySelector('.smart-banner-value'));
   const tip = ((v && v.title) || '').split('\n').filter(function (l) { return l && l.indexOf('=') < 0; }).join('\n');
   if (tip && lines.indexOf(tip) < 0) lines.push(tip);
   return lines;
@@ -5263,12 +5282,14 @@ function liveInfoOpen(cell) {
   if (!txt) return;
   uiSound('option');
   const m = liveInfoEnsure();
-  const lbl = cell.querySelector('.live-cell-label');
-  const val = cell.querySelector('.live-cell-value');
+  /* Live cells and Smart banner items alike: the label and value span carry different
+   * classes in the two grids, the sheet reads whichever the tapped element has. */
+  const lbl = cell.querySelector('.live-cell-label') || cell.querySelector('.smart-banner-label');
+  const val = cell.querySelector('.live-cell-value') || cell.querySelector('.smart-banner-value');
   _el('liveInfoTitle').textContent = (lbl && lbl.textContent) || '';
   _el('liveInfoNowLbl').textContent = T('lvi_now', 'Now');
   _el('liveInfoVal').textContent = (val && val.textContent) || '\u2014';
-  _el('liveInfoVal').className = 'live-info-val' + (val ? ' ' + val.className.replace('live-cell-value', '').trim() : '');
+  _el('liveInfoVal').className = 'live-info-val' + (val ? ' ' + val.className.replace('live-cell-value', '').replace('smart-banner-value', '').trim() : '');
   _el('liveInfoText').textContent = T(txt[0], txt[1]);
   const src = _el('liveInfoSrc');
   const lines = liveInfoSource(key, cell);
@@ -5287,7 +5308,8 @@ function liveInfoClose() {
   navSyncSoon();
 }
 document.addEventListener('click', function (e) {
-  const c = e.target && e.target.closest && e.target.closest('.live-cell[data-lvi]');
+  /* The nine live cells and the eight Smart-banner items above them share one sheet. */
+  const c = e.target && e.target.closest && e.target.closest('.live-cell[data-lvi], .smart-banner-item[data-lvi]');
   if (c) liveInfoOpen(c);
 });
 window.addEventListener('popstate', function (e) {
