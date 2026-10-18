@@ -818,6 +818,12 @@ if [ -r "$_state" ]; then
     0) P "  cooldown clamp        : idle (not needed - phone is cool or screen is on)" ;;
     *) P "  cooldown clamp        : unknown (governor state not readable)" ;;
   esac
+  _tre="$(_rget temp_read_epoch "$_state")"; _tka="$(_rget therm_keepalive_reads "$_state")"
+  case "$_tre" in ''|0|*[!0-9]*) : ;; *)
+    _tage=$(( $(date +%s) - _tre ))
+    [ "$_tage" -ge 0 ] 2>/dev/null || _tage=0
+    P "  temperature reading   : ${_tage} s old · read in deep idle by the keepalive: ${_tka:-0} time(s)"
+  esac
   # Desired versus effective: how far the hardware is from what ASB asked for.
   #
   # cap_owner names the winner but not the margin. A 5% trim and a total override read
@@ -1030,7 +1036,7 @@ if [ -r "$_state" ]; then
       off) _ulwt="unlock_lift_s=0" ;;
       profile) _ulwt="not Smart - the shell owns the ceilings in this profile" ;;
       thermal) _ulwt="thermal cap in force" ;;
-      warm) _ulwt="die at or above bat_comfort_temp" ;;
+      warm) _ulwt="die at or above bat_comfort_temp both before the wake and at it" ;;
       *) _ulwt="${_ulw:--}" ;;
     esac
     if [ "${_ulsec:-3}" = 0 ]; then
