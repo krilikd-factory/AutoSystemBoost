@@ -5402,7 +5402,8 @@ t_wakelock_trimmed_exempt_runtime() (
 # there. The Doze trim removes exactly those apps from the list at night, so with both
 # tweaks on, a VPN or a mail client the user had marked unrestricted lost that protection
 # and could be moved to the restricted standby bucket - a much harsher state than Doze. The
-# REAL watcher runs on mocked dumpsys / pm / am; the trim's record names the app.
+# REAL watcher runs on mocked dumpsys / pm / am; the trim's record names the app. (A notes
+# sync app, not a VPN: since fix177 a VPN is protected by name.)
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="$ROOT/runtime/asb_wakelock_watch.sh"
@@ -5421,7 +5422,7 @@ B
   power:*) : ;;
   activity:*) cat <<'A'
   #20: cch+ 5 CEM  ----    ---- 5678:com.example.sync/u0a700
-  #18: cch+ 5 CEM  ----    ---- 5680:com.user.vpnclient/u0a750
+  #18: cch+ 5 CEM  ----    ---- 5680:com.user.notesync/u0a750
 A
   ;;
   deviceidle:whitelist) cat <<'W'
@@ -5437,7 +5438,7 @@ cat > "$T/bin/pm" <<'S'
 #!/bin/sh
 cat <<'L'
 package:com.example.sync uid:10700
-package:com.user.vpnclient uid:10750
+package:com.user.notesync uid:10750
 L
 S
 cat > "$T/bin/am" <<'S'
@@ -5451,18 +5452,186 @@ S
 chmod +x "$T/bin/"*
 echo "wakelock_action=1" > "$T/mod/config/governor.conf"
 printf 'awake_pct_screenoff=40\nawake_window_min=90\n' > "$T/state"
-printf '%s\n' com.user.vpnclient 'bad;name' > "$T/d/doze_whitelist_removed"
+printf '%s\n' com.user.notesync 'bad;name' > "$T/d/doze_whitelist_removed"
 run() { AM_LOG="$T/am.log" PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_WL_DIR="$T/d" ASB_WL_STATE="$T/state" sh "$SRC" > "$T/out" 2>&1; }
 run
-grep -q 'set-standby-bucket com.user.vpnclient restricted' "$T/am.log" && f "an app the Doze trim took off the list was restricted"
+grep -q 'set-standby-bucket com.user.notesync restricted' "$T/am.log" && f "an app the Doze trim took off the list was restricted"
 grep -qx 'set-standby-bucket com.example.sync restricted' "$T/am.log" || f "an ordinary cached holder was no longer restricted"
-echo com.user.vpnclient > "$T/d/wakelock_restricted"; : > "$T/am.log"
+echo com.user.notesync > "$T/d/wakelock_restricted"; : > "$T/am.log"
 run
-grep -qx 'set-standby-bucket com.user.vpnclient active' "$T/am.log" || f "an earlier restriction of a trimmed app was not given back"
+grep -qx 'set-standby-bucket com.user.notesync active' "$T/am.log" || f "an earlier restriction of a trimmed app was not given back"
 rm -f "$T/d/doze_whitelist_removed"; : > "$T/am.log"; rm -f "$T/d/wakelock_restricted"
 run
-grep -q 'set-standby-bucket com.user.vpnclient restricted' "$T/am.log" || f "without the trim record the guard protects nothing - the test no longer tells the two apart"
+grep -q 'set-standby-bucket com.user.notesync restricted' "$T/am.log" || f "without the trim record the guard protects nothing - the test no longer tells the two apart"
 [ "$fail" = 0 ] && echo "PASS wakelock trimmed exempt: apps the Doze trim removed keep the user's exemption in the wakelock watcher"
+exit "$fail"
+)
+
+t_wakelock_netpath_fgs_runtime() (
+# Runtime (fix177): a VPN / proxy and an app running a foreground service are never moved to
+# the restricted bucket, and one an earlier pass restricted is given back.
+#
+# Capture 3970 (CPH2747, fix169): com.amurcanov.tgwsproxy - a Telegram WebSocket proxy - held
+# its service wakelock in 78% of the screen-off samples and was restricted, under a report
+# line saying "a proxy, a VPN" is left alone. The REAL watcher runs on mocked dumpsys/pm/am.
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SRC="$ROOT/runtime/asb_wakelock_watch.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail=0; f() { echo "FAIL wakelock net path / FGS: $*" >&2; fail=1; }
+mkdir -p "$T/bin" "$T/mod/config" "$T/d"
+cat > "$T/bin/dumpsys" <<'S'
+#!/bin/sh
+case "$1:${2:-}" in
+  batterystats:*) cat <<'B'
+  All partial wake locks:
+  Wake lock u0a700 SyncLoop: 1h 2m 0s 1ms (40 times) realtime
+  Wake lock u0a751 TgWsProxy::ServiceWakeLock: 32m 12s 1ms (9 times) realtime
+  Wake lock u0a752 AudioMix: 40m 0s 1ms (3 times) realtime
+B
+  ;;
+  power:*) : ;;
+  activity:lru) cat <<'A'
+  #20: cch+ 5 CEM  ----    ---- 5678:com.example.sync/u0a700
+  #18: cch+ 5 CEM  ----    ---- 5680:com.amurcanov.tgwsproxy/u0a751
+  #17: cch+ 5 CEM  ----    ---- 5681:com.badmanners.murglar2/u0a752
+A
+  ;;
+  activity:services)
+    [ "${3:-}" = com.badmanners.murglar2 ] && echo '    isForeground=true foregroundId=7 types=0x00000002'
+    : ;;
+  deviceidle:*) echo false ;;
+  wifi:*) : ;;
+esac
+S
+cat > "$T/bin/pm" <<'S'
+#!/bin/sh
+cat <<'L'
+package:com.example.sync uid:10700
+package:com.amurcanov.tgwsproxy uid:10751
+package:com.badmanners.murglar2 uid:10752
+L
+S
+printf '#!/bin/sh\necho "$*" >> "$AM_LOG"\n' > "$T/bin/am"
+printf '#!/bin/sh\necho "No operations."\n' > "$T/bin/appops"
+chmod +x "$T/bin/"*
+echo "wakelock_action=1" > "$T/mod/config/governor.conf"
+printf 'awake_pct_screenoff=40\nawake_window_min=90\n' > "$T/state"
+run() { AM_LOG="$T/am.log" PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_WL_DIR="$T/d" ASB_WL_STATE="$T/state" sh "$SRC" > "$T/out" 2>&1; }
+run
+grep -q 'set-standby-bucket com.amurcanov.tgwsproxy restricted' "$T/am.log" && f "the proxy was restricted"
+grep -q 'set-standby-bucket com.badmanners.murglar2 restricted' "$T/am.log" && f "an app with a running foreground service was restricted"
+grep -qx 'set-standby-bucket com.example.sync restricted' "$T/am.log" || f "an ordinary cached holder was no longer restricted - the test tells nothing apart"
+grep -q '^com.amurcanov.tgwsproxy|.*|protected$' "$T/d/wakelock_apps" || f "proxy verdict: $(grep tgws "$T/d/wakelock_apps")"
+grep -q '^com.badmanners.murglar2|.*|in_use$' "$T/d/wakelock_apps" || f "FGS verdict: $(grep murglar "$T/d/wakelock_apps")"
+# Given back: both were restricted by a fix169 pass.
+printf '%s\n' com.amurcanov.tgwsproxy com.badmanners.murglar2 > "$T/d/wakelock_restricted"; : > "$T/am.log"
+run
+grep -qx 'set-standby-bucket com.amurcanov.tgwsproxy active' "$T/am.log" || f "the restricted proxy was not given back"
+grep -qx 'set-standby-bucket com.badmanners.murglar2 active' "$T/am.log" || f "the restricted player with a foreground service was not given back"
+for p in com.wireguard.android org.amnezia.vpn com.github.shadowsocks com.github.kr328.clash \
+         org.torproject.android com.adguard.android io.nekohasekai.sfa app.hiddify.com \
+         com.cloudflare.onedotonedotone com.romanvht.byedpi; do
+  ( . /dev/null; sed -n '/^_wl_protected()/,/^}/p' "$SRC" > "$T/p.sh"; echo "_wl_protected $p" >> "$T/p.sh"; sh "$T/p.sh" ) \
+    || f "$p is not protected"
+done
+for p in com.example.sync com.instagram.android ru.wildberries.partners; do
+  ( sed -n '/^_wl_protected()/,/^}/p' "$SRC" > "$T/p.sh"; echo "_wl_protected $p" >> "$T/p.sh"; sh "$T/p.sh" ) \
+    && f "$p is protected - the net-path list is too broad"
+done
+[ "$fail" = 0 ] && echo "PASS wakelock net path / FGS: proxies, VPNs and apps with a foreground service are never restricted, earlier restrictions given back"
+exit "$fail"
+)
+
+t_wakelock_fitness_status_runtime() (
+# Runtime (fix177): "no fitness apps" on a phone with Samsung Health and Renpho.
+#
+# The WebUI badge counted the two ledger files; with limit chosen and the ledger empty it read
+# "no fitness apps". The watcher now answers fitness-status itself (installed, limit in force
+# as Android reads it, ledger, ROM-ignored, refused), and reads the package's own WAKE_LOCK
+# line: appops get prints a "Uid mode:" line FIRST when a per-uid mode is set, and that line
+# was taken for the package's mode. A uid mode that overrides the limit is set too, on its own
+# ledger, and handed back on protect and uninstall. The REAL watcher runs on a stateful appops.
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SRC="$ROOT/runtime/asb_wakelock_watch.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail=0; f() { echo "FAIL wakelock fitness status: $*" >&2; fail=1; }
+mkdir -p "$T/bin" "$T/mod/config" "$T/d"
+printf '#!/bin/sh\ncase "$1" in deviceidle) echo false ;; esac\n' > "$T/bin/dumpsys"
+cat > "$T/bin/pm" <<'S'
+#!/bin/sh
+cat <<'L'
+package:com.sec.android.app.shealth uid:10493
+package:com.renpho.health uid:10489
+package:com.example.notes uid:10500
+L
+S
+printf '#!/bin/sh\necho "$*" >> "$AM_LOG"\n' > "$T/bin/am"
+cat > "$T/bin/appops" <<'S'
+#!/bin/sh
+# Stateful, with uid modes: "get" prints the uid line first, as AppOpsService does.
+echo "appops $*" >> "$AM_LOG"
+case "$1" in
+  get) u="$(sed -n "s/^uid $2 $3 //p" "$OPS" 2>/dev/null | tail -1)"
+       m="$(sed -n "s/^$2 $3 //p" "$OPS" 2>/dev/null | tail -1)"
+       [ -n "$u" ] && echo "Uid mode: $3: $u"
+       if [ -n "$m" ]; then echo "$3: $m; time=+1h"; elif [ -z "$u" ]; then echo "No operations."; fi ;;
+  set) if [ "$2" = --uid ]; then echo "uid $3 $4 $5" >> "$OPS"; else echo "$2 $3 $4" >> "$OPS"; fi ;;
+esac
+S
+chmod +x "$T/bin/"*
+env_run() { OPS="$T/ops" AM_LOG="$T/am.log" PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_WL_DIR="$T/d" ASB_WL_STATE="$T/state" "$@"; }
+st() { env_run sh "$SRC" fitness-status 2>/dev/null; }
+fit() { printf 'wakelock_action=0\nwakelock_fitness=%s\n' "$1" > "$T/mod/config/governor.conf"; env_run sh "$SRC" fitness >/dev/null 2>&1; }
+printf 'wakelock_action=0\nwakelock_fitness=limit\n' > "$T/mod/config/governor.conf"
+: > "$T/ops"
+o="$(st)"
+printf '%s\n' "$o" | grep -qx 'installed=2' || f "installed count: $o"
+printf '%s\n' "$o" | grep -qx 'preset=0' || f "preset count before limiting: $o"
+printf '%s\n' "$o" | grep -qx 'names=com.sec.android.app.shealth,com.renpho.health' || f "names: $o"
+grep -q 'appops set' "$T/am.log" 2>/dev/null && f "fitness-status changed an app-op"
+# A uid mode "allow" sits above the package line (the suspected owner's case).
+printf 'uid com.sec.android.app.shealth WAKE_LOCK allow\n' > "$T/ops"; : > "$T/am.log"
+fit limit
+grep -qx 'com.sec.android.app.shealth|default' "$T/d/wakelock_fitness_limited" || f "a uid line hid the package mode / limit not recorded: $(cat "$T/d/wakelock_fitness_limited" 2>/dev/null)"
+grep -q 'appops set --uid com.sec.android.app.shealth WAKE_LOCK ignore' "$T/am.log" || f "the overriding uid mode was left at allow"
+grep -qx 'com.sec.android.app.shealth|allow' "$T/d/wakelock_fitness_uidmode" || f "uid mode not recorded for hand-back"
+grep -qx 'com.renpho.health|default' "$T/d/wakelock_fitness_limited" || f "Renpho not limited"
+o="$(st)"
+printf '%s\n' "$o" | grep -qx 'preset=0' || f "recorded apps counted as preset: $o"
+printf '%s\n' "$o" | grep -qx 'limited=2' || f "ledger count: $o"
+: > "$T/am.log"; st >/dev/null
+grep -q 'appops get com.sec.android.app.shealth' "$T/am.log" && f "fitness-status asked appops about a recorded app"
+: > "$T/am.log"; fit limit
+grep -q 'appops set' "$T/am.log" && f "re-set ops already in force"
+# protect hands back both the package and the uid mode.
+: > "$T/am.log"
+printf 'wakelock_action=0\nwakelock_fitness=protect\n' > "$T/mod/config/governor.conf"
+env_run sh "$SRC" >/dev/null 2>&1
+grep -q 'appops set --uid com.sec.android.app.shealth WAKE_LOCK allow' "$T/am.log" || f "protect did not give the uid mode back"
+grep -q 'appops set com.sec.android.app.shealth WAKE_LOCK default' "$T/am.log" || f "protect did not give the package mode back"
+[ -e "$T/d/wakelock_fitness_uidmode" ] && f "uid ledger kept after protect"
+# Already ignored by someone else: not recorded, not re-set - but counted as in force.
+printf 'com.sec.android.app.shealth WAKE_LOCK ignore\ncom.renpho.health WAKE_LOCK ignore\n' > "$T/ops"; : > "$T/am.log"
+fit limit
+[ -s "$T/d/wakelock_fitness_limited" ] && f "recorded apps someone else had ignored"
+grep -q 'appops set' "$T/am.log" && f "re-set an externally ignored app"
+printf '%s\n' "$(st)" | grep -qx 'preset=2' || f "an op in force with no record not counted: $(st)"
+# A ROM that will not store the op: rolled back, said, counted as refused.
+printf '#!/bin/sh\necho "appops $*" >> "$AM_LOG"\n[ "$1" = get ] && echo "No operations."\n:\n' > "$T/bin/appops"; chmod +x "$T/bin/appops"
+rm -f "$T/d/wakelock_fitness_limited"; : > "$T/am.log"
+fit limit
+printf '%s\n' "$(st)" | grep -qx 'refused=2' || f "refused not counted: $(st)"
+grep -q 'appops set com.sec.android.app.shealth WAKE_LOCK default' "$T/am.log" || f "a refused op was not rolled back"
+printf 'wakelock_action=0\nwakelock_fitness=protect\n' > "$T/mod/config/governor.conf"
+env_run sh "$SRC" >/dev/null 2>&1
+[ -e "$T/d/wakelock_fitness_refused" ] && f "refused record kept after protect"
+grep -q 'wakelock_fitness_uidmode' "$ROOT/uninstall.sh" || f "uninstall does not hand back uid modes"
+grep -q "appops set --uid \"\$_fp\" WAKE_LOCK" "$ROOT/uninstall.sh" || f "uninstall uid restore"
+grep -q 'asb_wakelock_watch.sh fitness-status' "$ROOT/webroot/index.html" || f "WebUI badge does not ask the watcher"
+grep -q "_wlFitProbed && _wlFitInstalled === 0" "$ROOT/webroot/index.html" || f "'no fitness apps' not tied to the installed count"
+[ "$fail" = 0 ] && echo "PASS wakelock fitness status: installed apps are counted, a uid line no longer hides the package mode, refused ops are rolled back and said"
 exit "$fail"
 )
 

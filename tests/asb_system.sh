@@ -3788,6 +3788,22 @@ grep -q "awk -F= 'tolower(\$1) ~ /network_speed" "$ROOT/tools/logkit/_asb_logkit
 grep -q "pgrep -f '/bin/asb\$'" "$ROOT/tools/asb_verify_device.sh" || fail "verify_device looks for a process name the governor does not have"
 echo "PASS: fix169 contract"
 ) || exit 1
+# ---- fix177 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix177: $*"; exit 1; }
+for t in test_stock_switch_fast_runtime.sh test_wakelock_netpath_fgs_runtime.sh test_wakelock_fitness_status_runtime.sh \
+         test_logkit_stock_battery_row_runtime.sh test_webui_live_info_runtime.sh test_webui_stock_monitor_runtime.sh; do
+  asb_has_test "$t" || fail "$t missing"
+done
+[ -f "$ROOT/runtime/asb_rom_telemetry.sh" ] || fail "no builtin-read ROM snapshot for the Stock Monitor"
+grep -q '^asb_stock_enter_fast() {' "$ROOT/runtime/asb_stock_policy.sh" || fail "Stock still restores every setting inside the WebUI call"
+grep -q '^run_stock_finish() {' "$ROOT/apply_profile.sh" || fail "no background settings pass for Stock"
+grep -q 'fitness-status' "$ROOT/runtime/asb_wakelock_watch.sh" || fail "the watcher does not answer the fitness badge"
+grep -q 'function lviFill(t) {' "$ROOT/webroot/index.html" || fail "sheet texts still carry their own value lists"
+grep -q 'asb_tree_check' "$ROOT/.github/workflows/build-debug.yml" && fail "CI still annotates the tree differences"
+echo "PASS: fix177 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
 )
 
@@ -4948,6 +4964,82 @@ need "$UNINSTALL" '*/haptics_baseline.conf) _restore_ns=system'
 echo 'PASS reversible settings baseline contract (7 audited keys and haptics namespace)'
 )
 
+t_stock_switch_fast_runtime() (
+# Runtime (fix177): choosing Stock returns at once; the settings part of the profile ledger is
+# put back by a background pass that a newer profile stops between keys.
+#
+# Owner (fix176, Smart -> Stock): "Stock selected - restoring ROM baseline..." for about 30 s
+# with the phone frozen and the Smart and Stock cards both half lit. apply_profile.sh ran the
+# whole ledger in the WebUI's root call, and every setting in it is a `settings` process. The
+# REAL asb_profile_baseline_restore runs here on a stub `settings`; the direct path and the
+# background pass are pinned in apply_profile.sh and asb_stock_policy.sh.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL stock switch fast: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/bin" "$T/mod/runtime"
+cp "$ROOT/runtime/asb_baseline.sh" "$T/mod/runtime/"
+printf '#!/bin/sh\necho "$*" >> "$SLOG"\n' > "$T/bin/settings"; chmod +x "$T/bin/settings"
+echo 1996800 > "$T/cpu_max"; echo 100 > "$T/swappiness"
+mk() {
+  printf 'path|%s|3628800\npath|%s|60\nsetting|global:a|1\nsetting|global:b|\nsetting|system:c|x\n' \
+    "$T/cpu_max" "$T/swappiness" > "$T/pb"
+  : > "$T/slog"
+}
+cat > "$T/run.sh" <<EOF
+MODDIR="$T/mod"; ASB_PROFILE_BASELINE="$T/pb"; ASB_BASELINE="$T/b.txt"; PATH="$T/bin:\$PATH"; SLOG="$T/slog"
+export SLOG
+. "$T/mod/runtime/asb_baseline.sh"
+EOF
+mk
+sh -c ". '$T/run.sh'; asb_profile_baseline_restore path" || fail "path pass failed"
+[ "$(cat "$T/cpu_max")" = 3628800 ] && [ "$(cat "$T/swappiness")" = 60 ] || fail "sysfs values not restored by the immediate pass"
+[ -s "$T/slog" ] && fail "the immediate pass started settings: $(cat "$T/slog")"
+[ -f "$T/pb" ] || fail "the immediate pass dropped the ledger the background pass needs"
+[ "$(sh -c ". '$T/run.sh'; asb_profile_baseline_pending_settings")" = 3 ] || fail "pending count"
+# Superseded after the first key: stops, keeps the ledger with the original values.
+cat >> "$T/run.sh" <<'EOF'
+_n=0; guard() { _n=$((_n + 1)); [ "$_n" -le 1 ]; }
+EOF
+rc=0; sh -c ". '$T/run.sh'; ASB_PB_GUARD=guard asb_profile_baseline_restore setting" || rc=$?
+[ "$rc" = 2 ] || fail "a superseded pass did not say so (rc=$rc)"
+[ "$(wc -l < "$T/slog")" = 1 ] || fail "a superseded pass went on: $(cat "$T/slog")"
+grep -q '^setting|global:b|$' "$T/pb" || fail "the ledger lost the original values"
+# Completed: every setting back, an unset one deleted, the ledger gone.
+: > "$T/slog"
+sh -c ". '$T/run.sh'; asb_profile_baseline_restore setting" || fail "settings pass failed"
+[ "$(tr '\n' ';' < "$T/slog")" = 'put global a 1;delete global b;put system c x;' ] || fail "settings restored: $(cat "$T/slog")"
+[ -f "$T/pb" ] && fail "ledger kept after a complete pass"
+# The full transaction (boot, worker) is unchanged: everything, in one pass.
+mk
+sh -c ". '$T/run.sh'; asb_profile_baseline_restore" || fail "full pass"
+[ "$(wc -l < "$T/slog")" = 3 ] && [ ! -f "$T/pb" ] || fail "full restore"
+
+python3 - "$ROOT/apply_profile.sh" "$ROOT/runtime/asb_stock_policy.sh" "$ROOT/webroot/index.html" <<'P' || fail "wiring"
+import sys
+ap, sp, ui = (open(p, encoding='utf-8').read() for p in sys.argv[1:4])
+q = ap[ap.index('quick_return_or_spawn() {'):ap.index('run_worker() {')]
+st = q[q.index('if [ "$PROFILE" = "stock" ]; then'):q.index('exit 0')]
+assert 'asb_stock_enter_fast' in st and 'spawn_stock_finish' in st, 'direct Stock path not split'
+assert st.index('asb_stock_enter_fast') < st.index('spawn_stock_finish'), 'background pass scheduled before the immediate part'
+assert 'spawn_worker' not in st, 'Stock spawns the ordinary worker'
+f = sp[sp.index('asb_stock_enter_fast() {'):sp.index('asb_stock_finish() {')]
+assert 'asb_profile_baseline_restore path' in f, 'immediate part does not restore sysfs'
+assert 'settings' not in f.replace('settings follow', ''), 'immediate part starts settings'
+assert 'asb_net_apply' not in f, 'immediate part runs the network applier'
+g = sp[sp.index('asb_stock_finish() {'):sp.index('asb_stock_leave() {')]
+assert 'asb_profile_baseline_restore setting || return $?' in g, 'background pass ignores supersede'
+assert g.index('asb_profile_baseline_restore setting') < g.index('asb_net_apply.sh'), 'network re-applied before the restore'
+r = ap[ap.index('run_stock_finish() {'):ap.index('quick_return_or_spawn() {')]
+assert 'ASB_PB_GUARD=profile_epoch_current' in r, 'background pass not epoch-guarded'
+assert "trap 'profile_worker_unlock; exit 0' HUP INT TERM" in r, 'a killed pass would go on restoring'
+assert 'profile_worker_lock' in r, 'background pass does not hold the apply lock'
+assert '[ "$MODE" = "stock_finish" ] && run_stock_finish' in ap
+assert 'nohup /system/bin/sh "$MODDIR/apply_profile.sh" --stock-finish' in ap and '</dev/null >/dev/null 2>&1 &' in ap, 'background pass not detached'
+P
+echo "PASS stock switch fast: Stock returns after the sysfs restore, the settings follow in an epoch-guarded background pass"
+)
+
 t_stock_profile_contract() (
 # Contract: Stock is an explicit, persistent no-intervention profile. It must never silently
 # become Balanced, restart the native governor, or move the three-button debug support rail.
@@ -5065,12 +5157,14 @@ need "$UI" 'const cut = eq > 0 ? eq : colon;'
 need "$UI" 'function fmtStockLoad(raw) {'
 need "$UI" "T('stock_load_now', '1 min')"
 need "$UI" "setLiveLabel('bnStockDrainLabel', 'stock_battery_current', 'Battery current');"
-need "$UI" 'Live read-only screen-on estimate from battery current and charge_full'
+need "$UI" 'Each Stock tile opens the Monitor sheet like Smart'"'"'s (fix177)'
 need "$UI" 'id="stockTelemetry"'
 need "$UI" '.stock-telemetry { display:none !important;'
 need "$UI" 'async function pollStockTelemetry(visible, force = false)'
-need "$UI" '/sys/class/power_supply/battery'
-need "$UI" '/sys/devices/system/cpu/cpufreq/policy'
+# fix177: the ROM reads live in a script of builtin reads the page runs.
+need "$UI" "'/runtime/asb_rom_telemetry.sh'"
+need "$ROOT/runtime/asb_rom_telemetry.sh" '/class/power_supply/battery'
+need "$ROOT/runtime/asb_rom_telemetry.sh" '/devices/system/cpu/cpufreq/policy'
 need "$UI" '_stockTelemetryKv = parseStockTelemetry(text);'
 need "$UI" 'paintStockLive(_stockTelemetryKv);'
 need "$UI" "set('liveCpu'"
@@ -5084,9 +5178,10 @@ need "$UI" 'id="bnStockCpuClock"'
 need "$UI" 'id="bnStockLoad"'
 need "$UI" 'id="bnStockBattery"'
 need "$UI" 'id="bnStockUptime"'
-need "$UI" 'settings get global mobile_data_always_on'
+need "$ROOT/runtime/asb_rom_telemetry.sh" 'settings get global mobile_data_always_on'
 need "$UI" 'let _stockRomHistory = { ts: 0, cpuT: 0 };'
 ! grep -A130 'async function pollStockTelemetry' "$UI" | grep -Eq 'settings put|resetprop|tee .*\/sys|echo .*\/sys' || fail 'Stock telemetry contains a write operation'
+! grep -Eq 'settings put|resetprop|tee .*/sys|> *"?\$(_|SYS|_d|_b|_g|_z)' "$ROOT/runtime/asb_rom_telemetry.sh" || fail 'the ROM snapshot script writes somewhere'
 need "$UI" "if (_selectedProfile === 'stock') {"
 need "$UI" "if (visible) await pollStockTelemetry(true);"
 need "$UI" 'Terminal boundary: never read /dev/.asb/state, learner_state.json, native status or'
@@ -5095,7 +5190,7 @@ need "$UI" 'function stockMonitorReset() {'
 need "$UI" 'function restoreManagedLiveLabels() {'
 need "$UI" "setLiveLabel('liveStateLabel', 'stock_cpu_ceiling', 'CPU ceiling');"
 grep -q "set('liveEtaOn'" "$UI" && fail 'Stock writes battery current into the time-to-empty line of the drain tiles'
-need "$UI" "setLiveLabel('liveCapSrcLabel', 'stock_bat_temp', 'Battery');"
+need "$UI" "setLiveLabel('liveCapSrcLabel', 'stock_bat_temp', 'Battery temp');"
 need "$UI" "setLiveLabel('liveLearnerLabel', 'stock_smart_learn', 'Smart learning');"
 need "$UI" 'stockProfileCommit'
 need "$UI" 'function profilePaintFrame() {'
@@ -5327,8 +5422,10 @@ ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 C="$ROOT/tools/asb_tree_check.sh"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 fail=0; f() { echo "FAIL tree check: $*" >&2; fail=1; }
+# fix177: a local tool. The CI step annotated every build with the owner's own repository
+# differences ("Tree differs from the delivered archive"), which told him nothing to act on.
 for w in build-debug build-release; do
-  grep -q 'run: sh tools/asb_tree_check.sh check' "$ROOT/.github/workflows/$w.yml" || f "$w.yml does not check the tree"
+  grep -q 'asb_tree_check' "$ROOT/.github/workflows/$w.yml" && f "$w.yml still runs the tree check"
 done
 mkdir -p "$T/r/src/DSP" "$T/r/tools" "$T/r/.github/workflows" "$T/r/src/DSP_AIDL/prebuilt"
 echo a > "$T/r/src/DSP/asb_dsp.c"; echo b > "$T/r/CHANGELOG.md"; echo c > "$T/r/service.sh"
@@ -5350,13 +5447,12 @@ out="$(sh "$C" check)"
 printf '%s\n' "$out" | grep -q 'this tree is NOT the delivered one - 1 file(s) differ, 1 missing, 1 extra' || f "summary with a leftover: $out"
 printf '%s\n' "$out" | grep -qx '    extra: tests/test_old_runtime.sh' || f "the leftover file is not named: $out"
 out="$(GITHUB_ACTIONS=true GITHUB_STEP_SUMMARY="$T/sum" sh "$C" check)"
-printf '%s\n' "$out" | grep -q '^::warning file=src/DSP/asb_dsp.c::' || f "no CI annotation: $out"
-printf '%s\n' "$out" | grep -q '^::warning file=tests/test_old_runtime.sh::not in the delivered tree' || f "no CI annotation for the leftover: $out"
-grep -q 'differs: `src/DSP/asb_dsp.c`' "$T/sum" || f "no job summary"
+printf '%s\n' "$out" | grep -q '^::warning' && f "CI annotations are back: $out"
+[ -s "$T/sum" ] && f "a job summary was written: $(cat "$T/sum")"
 sh "$C" check --strict >/dev/null 2>&1 && f "--strict passed a differing tree"
 rm -f "$T/r/tools/asb_tree.sha256"
 out="$(sh "$C" check)"; printf '%s\n' "$out" | grep -q 'none in this tree' || f "no manifest should be said, not failed: $out"
-[ "$fail" = 0 ] && echo "PASS tree check: files that differ from the delivered tree, are missing or are left over are named in CI before any test trips over them"
+[ "$fail" = 0 ] && echo "PASS tree check: files that differ from the delivered tree, are missing or are left over are named on request - never as CI annotations"
 exit "$fail"
 )
 

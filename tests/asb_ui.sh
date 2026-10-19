@@ -1690,6 +1690,43 @@ grep -q 'temp_read_epoch' "$ROOT/src/asb_governor.c" || fail "governor no longer
 echo "PASS logkit stale temp: a governor reading over two minutes old is replaced by the capture's own zone reads"
 )
 
+t_logkit_stock_battery_row_runtime() (
+# Runtime (fix177): a Stock capture has a profile, a screen state and temperatures.
+#
+# Owner's 77-minute Stock capture (stock_755): no governor, so its status was empty, and the
+# battery trace carried no profile, no screen and no temperature - the report said "screen on
+# for 0% of the capture (0 min on, 76 min off)" and cpuT 0 / surfT - for every phase. The REAL
+# row function runs with an empty status and a fake thermal tree.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL logkit stock battery row: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/tz/thermal_zone26" "$T/tz/thermal_zone79" "$T/mod" "$T/out"
+echo 41400 > "$T/tz/thermal_zone26/temp"; echo 33100 > "$T/tz/thermal_zone79/temp"
+echo stock > "$T/mod/current_profile"
+row() {
+  ( set +u; LK_SCRIPT_DIR="$ROOT/tools/logkit"; . "$ROOT/tools/logkit/_asb_logkit_common.sh" >/dev/null 2>&1
+    _J="$1"; lk_status_json() { echo "$_J"; }
+    getprop() { :; }
+    MODDIR="$T/mod" LK_OUT_DIR="$T/out" LK_THERMAL_BASE="$T/tz" TZ_CPU_PRIME=26 TZ_CPU_PERF= TZ_SYSTHERM6=79 TZ_BOARD= \
+      LK_LAST_SCREEN="$2" lk_capture_battery_trace_row
+    tail -n 1 "$T/out/battery_trace.txt" )
+}
+r="$(row '{}' Awake)"
+[ "$(printf '%s' "$r" | cut -d'|' -f4)" = stock ] || fail "profile: $r"
+[ "$(printf '%s' "$r" | cut -d'|' -f5)" = 1 ] || fail "screen on not recorded: $r"
+[ "$(printf '%s' "$r" | cut -d'|' -f10)" = 41 ] || fail "CPU temperature: $r"
+[ "$(printf '%s' "$r" | cut -d'|' -f12)" = 33 ] || fail "surface temperature: $r"
+r="$(row '{}' Asleep)"
+[ "$(printf '%s' "$r" | cut -d'|' -f5)" = 0 ] || fail "screen off not recorded: $r"
+# With a governor its own readings stand.
+r="$(row '{"state":"MODERATE","profile":"smart","screen":1,"temp":52,"surface_hotspot":38,' Asleep)"
+[ "$(printf '%s' "$r" | cut -d'|' -f4,5,10,12)" = 'smart|1|52|38' ] || fail "governor reading replaced: $r"
+F="$ROOT/tools/logkit/asb_log_full_day.sh"
+grep -q '|| \[ -z "$_temp" \]; then' "$F" || fail "the phase table still averages an empty Stock temperature as 0"
+echo "PASS logkit stock battery row: a Stock capture records the profile, the screen and the zones' temperatures"
+)
+
 t_logkit_sysui_redraw_runtime() (
 # Runtime (fix159): when SystemUI misses frames in every interval, the report names the
 # status-bar settings that redraw every second.
@@ -2399,21 +2436,38 @@ for l in en ru uk de es fr it pt tr id ar hy zh; do
 done
 {
   echo "var T = function (k, d) { return d; };"
-  for fn in lvSlotHeat lvMeterParse; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  for fn in lvSlotHeat lvMeterParse liveDrainCompare; do sed -n "/^function $fn(/,/^}/p" "$H"; done
   cat <<'EOF'
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
 let h = lvSlotHeat(518, 414, 494);
-chk(h.text === 'above normal' && h.warm === true, 'slot above the norm: ' + JSON.stringify(h));
+chk(h.text === 'warm' && h.warm === true, 'slot above the norm: ' + JSON.stringify(h));
 chk(h.tip.indexOf('51.8') >= 0 && h.tip.indexOf('41') >= 0 && h.tip.indexOf('49') >= 0, 'number kept in the tooltip: ' + h.tip);
-h = lvSlotHeat(487, 414, 494); chk(h.text === 'normal' && !h.warm, 'slot inside the norm: ' + h.text);
-h = lvSlotHeat(400, 414, 494); chk(h.text === 'below normal' && !h.warm, 'slot under the norm: ' + h.text);
+h = lvSlotHeat(487, 414, 494); chk(h.text === 'typical' && !h.warm, 'slot inside the norm: ' + h.text);
+h = lvSlotHeat(400, 414, 494); chk(h.text === 'cool' && !h.warm, 'slot under the norm: ' + h.text);
 h = lvSlotHeat(0, 414, 494); chk(h.text === '—', 'nothing learned shows a dash');
-h = lvSlotHeat(530, 0, 0); chk(h.text === 'normal' && !h.warm, 'no norm known: never "above"');
+h = lvSlotHeat(530, 0, 0); chk(h.text === 'typical' && !h.warm, 'no norm known: never "warm"');
 const m = lvMeterParse('smart 1170 300 7230 100 1\nbattery 300 100 0 0 0\nstock 2400 500 7200 100 1\njunk\ncurrent stock\n');
 chk(m.cur === 'stock', 'current profile');
 chk(m.p.smart.on === 92 && m.p.smart.off === 50, 'smart rates: ' + JSON.stringify(m.p.smart));
 chk(m.p.battery.on === 0, 'under 10 min of screen time is not a rate');
 chk(m.p.stock.on === 75 && m.p.stock.offN === 1, 'stock rates: ' + JSON.stringify(m.p.stock));
+/* fix177: no dash under the moon. A measured screen-off hour whose level did not move is
+ * "below one step over the time measured"; with none at all the current profile borrows the
+ * governor's own screen-off figure, others say they are measuring. */
+const _nodes = {};
+globalThis.document = { createElement: function () { return { className: '', textContent: '', title: '', innerHTML: '', children: [], appendChild(c) { this.children.push(c); }, }; }, createTextNode: function (t) { return { textContent: t }; } };
+globalThis.techIcon = function () { return ''; };
+globalThis.lvPct = function (x, div, digits) { return (x / div).toFixed(digits) + '%/h'; };
+const cell = (row, i) => row.children[i].children.map(function (c) { return c.textContent; }).join('');
+globalThis._lvMeter = { p: lvMeterParse('smart 1200 300 0 0 0\nbattery 1200 300 14400 0 2\nstock 1200 300 0 0 0\n').p };
+globalThis._lvDrain = { off: 'measured', offX: 56 };
+globalThis._selectedProfile = 'smart';
+const box = liveDrainCompare();
+const rows = box.children.slice(1);
+chk(cell(rows[0], 2) === '~0.56%/h', 'current profile without its own screen-off hour: ' + cell(rows[0], 2));
+chk(cell(rows[1], 2) === '<0.25%/h', 'a level that did not move over 4 h: ' + cell(rows[1], 2));
+chk(cell(rows[2], 2) === '\u2026', 'another profile still measuring: ' + cell(rows[2], 2));
+chk(rows.every(function (r) { return cell(r, 2) !== '\u2014'; }), 'a dash under the moon');
 if (bad) process.exit(1);
 console.log('ok');
 EOF
@@ -2550,7 +2604,17 @@ command -v node >/dev/null 2>&1 || { echo "SKIP webui stock monitor: no node"; e
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 grep -Fq "if (Object.keys(_stockTelemetryKv).length) paintStockLive(_stockTelemetryKv);" "$H" || fail "a throttled read still leaves the cells empty"
 grep -Fq "    if (_selectedProfile === 'stock') pollStockTelemetry(true, true);" "$H" || fail "opening Monitor on Stock does not read a fresh sample"
-grep -Fq "    paintStockLive(_stockTelemetryKv);" "$H" || fail "opening Monitor does not paint the last ROM sample"
+grep -Fq "  if (_selectedProfile !== 'smart') paintStockLive(_stockTelemetryKv);" "$H" || fail "opening Monitor does not paint the last ROM sample"
+# fix177: the read waits for the slide, and is a script of builtin reads, not a cat per value.
+python3 - "$H" <<'P' || fail "Monitor open order / ROM read"
+import sys
+s = open(sys.argv[1], encoding='utf-8').read()
+o = s[s.index('function openLivePage() {'):s.index('function closeLivePage() {')]
+assert o.index("paintStockLive(_stockTelemetryKv)") < o.index('setTimeout(function () {') < o.index("pollStockTelemetry(true, true)"), 'the fresh read runs before the page has slid in'
+p = s[s.index('async function pollStockTelemetry('):s.index('async function pollLive(')]
+assert "'/runtime/asb_rom_telemetry.sh'" in p and 'thermal_zone' not in p and 'settings get' not in p, 'Stock still reads the ROM with an inline fork-per-value command'
+assert '(now - _stockSettingsAtMs) >= 60000' in p, 'the settings client is started on every pass'
+P
 grep -Fq "const ownGrid = _selectedProfile === 'stock';" "$H" || fail "the ROM sample still repaints the governor's grid on other profiles"
 {
   cat <<'EOF'
@@ -2559,6 +2623,8 @@ function _el(id) { if (!_nodes[id]) _nodes[id] = { id: id, textContent: '', titl
 function T(k, d) { return d; }
 let _selectedProfile = 'stock';
 let _stockRomHistory = { ts: 0, cpuT: 0 };
+let _stockTrendSamples = [], _stockTrendLast = null;
+const ASB_LANG = 'en';
 const _stockLiveInfo = { ceil: [] };
 const _lvEta = { cap: 0, chg: false, gov: null };
 function lvTopSecSync() {} function lvDrainHome() {} function lvTopSec() {} function lvMeterPaint() {}
@@ -2587,10 +2653,25 @@ chk(v('liveSurface') === '42°C' && v('liveSurfaceLabel') === 'Board', 'board se
 chk(v('liveState') === '35%' && /cap-raised/.test(_nodes.liveState.className) && v('liveStateLabel') === 'CPU ceiling', 'CPU ceiling on the most limited cluster: ' + v('liveState'));
 chk(_stockLiveInfo.ceil.length === 2 && _stockLiveInfo.ceil[1] === 'policy6: 1.63 / 4.61 GHz', 'ceiling lines for the sheet: ' + JSON.stringify(_stockLiveInfo.ceil));
 chk(v('liveGpu') === '12%' && v('liveHeadroom') === '220 MHz', 'GPU load and clock: ' + v('liveGpu') + ' / ' + v('liveHeadroom'));
-chk(v('liveCapSrc') === '33°C' && v('liveCapSrcLabel') === 'Battery', 'battery temperature: ' + v('liveCapSrc'));
+chk(v('liveCapSrc') === '33°C' && v('liveCapSrcLabel') === 'Battery temp', 'battery temperature: ' + v('liveCapSrc'));
 chk(v('liveClamp') === '2.8 GB' && v('liveClampLabel') === 'zRAM used', 'zRAM in use: ' + v('liveClamp'));
 chk(v('liveLearner') === 'paused' && v('liveLearnerLabel') === 'Smart learning', 'learner: ' + v('liveLearner'));
 chk(v('bnStockLoad') === '6.12', 'system load is a number, not "1 min 6.12": ' + v('bnStockLoad'));
+/* fix177: the thermal trend over a window, kept between reads. One sample: measuring, not a
+ * dash. A repaint of the same sample keeps the verdict; 40 s of a warming CPU says warming. */
+chk(v('bnStockTrend') === '\u2026', 'first sample says it is measuring: ' + v('bnStockTrend'));
+const at = (ms, c) => Object.assign({}, kv, { tsms: String(ms), 'thermal.cpu-1-1-0': String(c * 1000), 'thermal.cpu-1-1-1': String(c * 1000) });
+_stockTrendSamples = []; _stockTrendLast = null;
+paintStockLive(at(1000000, 40)); paintStockLive(at(1010000, 40.5)); paintStockLive(at(1020000, 41)); paintStockLive(at(1040000, 42));
+chk(v('bnStockTrend') === '\u2191 warming' && /cap-clamp/.test(_nodes.bnStockTrend.className), 'warming over 40 s: ' + v('bnStockTrend'));
+chk(/per minute over the last 40 s/.test(_nodes.bnStockTrend.title), 'rate in the sheet source: ' + _nodes.bnStockTrend.title);
+paintStockLive(at(1040000, 42));
+chk(v('bnStockTrend') === '\u2191 warming', 'a repaint of the same sample shows a dash again: ' + v('bnStockTrend'));
+/* A one-core spike between steady samples does not flip it. */
+_stockTrendSamples = []; _stockTrendLast = null;
+[0, 10, 20, 30, 40].forEach(function (s2) { paintStockLive(Object.assign(at(2000000 + s2 * 1000, 41), s2 === 20 ? { 'thermal.cpu-1-1-1': '49000' } : {})); });
+chk(v('bnStockTrend') === '\u2192 steady', 'a single-core spike flipped the trend: ' + v('bnStockTrend'));
+chk(_nodes.bnStockLpm.title === 'mobile_data_always_on: \u2014' && _nodes.bnStockCpuClock.title.indexOf('policy6: 1.13 GHz') >= 0, 'Stock sheet sources: ' + _nodes.bnStockLpm.title + ' / ' + _nodes.bnStockCpuClock.title);
 const tripOnly = { 'thermal.cpu-hw-trip-0': '95000', 'thermal.cpu-hw-trip-1': '95000', 'thermal.socd': '8' };
 paintStockLive(tripOnly);
 chk(v('liveCpu') === '—' && v('liveSurface') === '—', 'trip zones and the socd level are not temperatures: ' + v('liveCpu') + ' / ' + v('liveSurface'));
@@ -2605,6 +2686,48 @@ EOF
 out="$(node "$T/t.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 echo "PASS webui stock monitor: nine ROM readings on Stock, trip points and alarm zones never read as a temperature, last sample painted on every visit"
+)
+
+t_rom_telemetry_runtime() (
+# Runtime (fix177): the Stock Monitor's ROM snapshot is builtin reads, in the format the page
+# parses, and never reads a trip zone or starts the settings client in the foreground.
+#
+# "Monitor opens slowly on Stock": the inline command forked two cats per thermal zone (100+
+# zones on an OP15) and ran `settings get` every 10 s, inside a root call that blocks the page.
+# The REAL script runs against a fake /sys and /proc; `settings` is a stub that records calls.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+R="$ROOT/runtime/asb_rom_telemetry.sh"
+fail() { echo "FAIL rom telemetry: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/sys/class/power_supply/battery" "$T/sys/devices/system/cpu/cpufreq/policy0" "$T/proc" "$T/bin"
+for z in 0 1 2 3; do mkdir -p "$T/sys/class/thermal/thermal_zone$z"; done
+echo 77 > "$T/sys/class/power_supply/battery/capacity"; echo 412000 > "$T/sys/class/power_supply/battery/current_now"
+echo 1996800 > "$T/sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq"
+echo cpu-1-1-0 > "$T/sys/class/thermal/thermal_zone0/type"; echo 41200 > "$T/sys/class/thermal/thermal_zone0/temp"
+echo cpu-hw-trip-0 > "$T/sys/class/thermal/thermal_zone1/type"; echo 95000 > "$T/sys/class/thermal/thermal_zone1/temp"
+echo pm8550_tz > "$T/sys/class/thermal/thermal_zone2/type"; echo 30000 > "$T/sys/class/thermal/thermal_zone2/temp"
+printf 'shell_back' > "$T/sys/class/thermal/thermal_zone3/type"; printf '29700' > "$T/sys/class/thermal/thermal_zone3/temp"
+printf '1234.5 999.1\n' > "$T/proc/uptime"; printf '1.50 2.00 3.00 1/200 33\n' > "$T/proc/loadavg"
+printf 'MemTotal:  12000000 kB\nMemAvailable:   5000000 kB\nBuffers: 1 kB\n' > "$T/proc/meminfo"
+printf '#!/bin/sh\necho "$*" >> "%s/settings.log"\necho 1\n' "$T" > "$T/bin/settings"; chmod +x "$T/bin/settings"
+run() { PATH="$T/bin:$PATH" ASB_ROM_TEL_CACHE="$T/mdao" ASB_ROM_TEL_SYS="$T/sys" ASB_ROM_TEL_PROC="$T/proc" sh "$R" "$@"; }
+out="$(run)"
+for want in 'uptime=1234.5' 'loadavg=1.50 2.00 3.00' 'battery.capacity=77' 'battery.current_now=412000' \
+            'cpu.policy0.scaling_max_freq=1996800' 'thermal.cpu-1-1-0=41200' 'thermal.shell_back=29700' \
+            'MemAvailable: 5000000 kB' 'settings.global.mobile_data_always_on='; do
+  printf '%s\n' "$out" | grep -qxF "$want" || fail "missing line [$want] in: $out"
+done
+printf '%s\n' "$out" | grep -q 'trip\|pm8550' && fail "a trip point or an unshown zone was read: $out"
+[ -e "$T/settings.log" ] && fail "the settings client ran without refresh"
+run refresh >/dev/null
+i=0; while [ ! -s "$T/mdao" ] && [ "$i" -lt 30 ]; do sleep 0.1; i=$((i + 1)); done
+[ "$(cat "$T/mdao" 2>/dev/null)" = 1 ] || fail "the background refresh did not fill the cache"
+printf '%s\n' "$(run)" | grep -qx 'settings.global.mobile_data_always_on=1' || fail "the cached value is not printed"
+# Builtins only: no cat, no date, no grep in the foreground part.
+sed -n '/^_r() {/,$p' "$R" | grep -vE '^[[:space:]]*#' | grep -v 'nohup sh -c' | grep -qE '\$\((cat|date|grep|head|cut) ' \
+  && fail "the snapshot forks a reader again"
+echo "PASS rom telemetry: the Stock snapshot is builtin reads of the zones the Monitor shows, the settings value comes from a background cache"
 )
 
 t_webui_live_info_runtime() (
@@ -2626,7 +2749,7 @@ import json, re, sys
 from pathlib import Path
 root = Path(sys.argv[1])
 s = (root / 'webroot' / 'index.html').read_text(encoding='utf-8')
-lvi = s[s.index('const LVI_TEXT = {'):s.index('const LVI_STOCK')]
+lvi = s[s.index('const LVI_TEXT = {'):s.index('function lviFill(t) {')]
 pairs = dict(re.findall(r"^  (\w+): \['(lvi_\w+)', ", lvi, re.M))
 stock = dict(re.findall(r"(\w+): '(\w+)'", s[s.index('const LVI_STOCK = {'):].split('\n', 1)[0]))
 cells = re.findall(r'<div class="live-cell" data-lvi="([a-z]+)">', s)
@@ -2634,7 +2757,8 @@ assert len(cells) == 9 and len(set(cells)) == 9, cells
 for c in cells:
     assert c in pairs, "tile %s has no explanation" % c
 banner = re.findall(r'<div class="smart-banner-item" data-lvi="([a-z]+)">', s)
-assert len(banner) == 8 and len(set(banner)) == 8, banner
+# fix177: the eight Stock-banner readings open the sheet too.
+assert len(banner) == 16 and len(set(banner)) == 16, banner
 for b in banner:
     assert b in pairs, "banner reading %s has no explanation" % b
 for pos, key in stock.items():
@@ -2655,11 +2779,25 @@ for p in files:
     if p.name != 'en.json':
         same = [k for k in pairs.values() if d[k] == en[k]]
         assert not same, "%s: untranslated %s" % (p.name, same)
+    # fix177: a text names the words its tile shows through the tile's own strings - the same
+    # placeholders in every language, and no English value list left behind.
+    for k in pairs.values():
+        assert sorted(set(re.findall(r'\{[a-z0-9]+\}', d[k]))) == sorted(set(re.findall(r'\{[a-z0-9]+\}', en[k]))), \
+            "%s: %s placeholders differ" % (p.name, k)
+    for k, bad in (('lvi_apphint', 'idle, light'), ('lvi_lpm', 'normal follows'), ('lvi_slot', 'two-hour'),
+                   ('lvi_trend', 'warming, steady'), ('lvi_slotheat', 'cool, normal or warm')):
+        assert bad not in d[k], "%s: %s still lists the English values" % (p.name, k)
+    for k in ('lvi_usual', 'lvi_cpu_now', 'lvi_trend_rate', 'lv_lpm_night', 'lv_lpm_night_t'):
+        assert d.get(k), "%s lacks %s" % (p.name, k)
+fills = set(re.findall(r"\{([a-z0-9]+)\}", ' '.join(en[k] for k in pairs.values())))
+lf = s[s.index('function lviFill(t) {'):s.index('const LVI_STOCK')]
+for f in fills:
+    assert ("%s:" % f) in lf or re.sub(r'\d+$', '', f) in ('dp', 'app', 'fb'), "placeholder {%s} is never filled" % f
 P
 {
   cat <<'EOF'
 const _nodes = {};
-function mk(id) { const e = { id: id, textContent: '', className: '', hidden: true, title: '', attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, getAttribute(k) { return this.attrs[k]; }, addEventListener() {}, querySelector() { return null; } }; _nodes[id] = e; return e; }
+function mk(id) { const e = { id: id, textContent: '', className: '', hidden: true, title: '', style: {}, attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, getAttribute(k) { return this.attrs[k]; }, addEventListener() {}, querySelector() { return null; } }; _nodes[id] = e; return e; }
 function _el(id) { return _nodes[id] || null; }
 function T(k, d) { return d; }
 function uiSound() {} function navSyncSoon() {}
@@ -2684,7 +2822,7 @@ function bcell(pos, label, value, cls, title, pill) {
 }
 EOF
   sed -n "/^const LVI_TEXT = {/,/^};/p; /^const LVI_STOCK = /p" "$H"
-  for fn in liveInfoSource liveInfoValText liveInfoOpen liveInfoClose; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  for fn in lviFill liveInfoSource liveInfoValText liveInfoOpen liveInfoClose; do sed -n "/^function $fn(/,/^}/p" "$H"; done
   cat <<'EOF'
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
 liveInfoOpen(cell('cpu', 'CPU', '41°C'));
@@ -2722,11 +2860,32 @@ chk(!_nodes.liveInfoSheet.hidden, 'sheet opens from a banner item');
  * show the slot name alone (the fix174 "вечервых" report). */
 liveInfoOpen(bcell('slot', 'Слот', 'вечер', '', '#9 · вечер · вых', 'вых'));
 chk(_nodes.liveInfoVal.textContent === 'вечер', 'pill badge is not glued onto the value: ' + _nodes.liveInfoVal.textContent);
-chk(_nodes.liveInfoText.textContent.indexOf('twelve two-hour slots') >= 0, 'slot explanation: ' + _nodes.liveInfoText.textContent);
+chk(_nodes.liveInfoText.textContent.indexOf('six parts - sleep 0–6') >= 0 && _nodes.liveInfoText.textContent.indexOf('{') < 0,
+  'slot explanation names the real day parts: ' + _nodes.liveInfoText.textContent);
 liveInfoOpen(bcell('slot', 'Slot', 'morning'));
 chk(_nodes.liveInfoVal.textContent === 'morning', 'slot without a pill still reads whole: ' + _nodes.liveInfoVal.textContent);
 liveInfoOpen(bcell('trend', 'Trend', '↑ warming', 'cap-clamp'));
-chk(_nodes.liveInfoText.textContent.indexOf('warming') >= 0, 'trend explanation');
+chk(_nodes.liveInfoText.textContent.indexOf('“warming”, “steady” or “cooling”') >= 0, 'trend explanation uses the tile words: ' + _nodes.liveInfoText.textContent);
+liveInfoOpen(bcell('apphint', 'Load', 'medium'));
+chk(_nodes.liveInfoText.textContent.indexOf('“idle”, “light”, “medium”, “heavy” or “gaming”') >= 0, 'load words: ' + _nodes.liveInfoText.textContent);
+/* fix177: the sheet value takes the colour the tile is drawn in. */
+globalThis.getComputedStyle = function (el) { return { color: el.className.indexOf('cap-raised') >= 0 ? 'rgb(52, 211, 153)' : (el.className.indexOf('heat-warm') >= 0 ? 'rgb(245, 194, 107)' : 'rgb(255, 255, 255)') }; };
+_nodes.liveInfoVal.style = {};
+liveInfoOpen(bcell('trend', 'Trend', '↓ cooling', 'cap-raised'));
+chk(_nodes.liveInfoVal.style.color === 'rgb(52, 211, 153)', 'cooling keeps the tile green: ' + _nodes.liveInfoVal.style.color);
+mk('liveCpu').textContent = '41°C';
+liveInfoOpen(bcell('slotheat', 'Slot heat', 'warm', 'heat-warm', 'Typical CPU peak in this slot: 51.8°C; this phone’s norm: 41–49°C'));
+chk(_nodes.liveInfoVal.style.color === 'rgb(245, 194, 107)', 'warm keeps the tile amber: ' + _nodes.liveInfoVal.style.color);
+chk(_nodes.liveInfoNowLbl.textContent === 'Usually in this slot', 'slot heat is not labelled "Now": ' + _nodes.liveInfoNowLbl.textContent);
+chk(_nodes.liveInfoSrc.textContent.indexOf('CPU now: 41°C') >= 0, 'the CPU temperature now stands beside the usual heat: ' + _nodes.liveInfoSrc.textContent);
+/* The Stock banner readings explain themselves. */
+_selectedProfile = 'stock';
+liveInfoOpen(bcell('strend', 'Thermal trend', '\u2026', '', '+0.4 °C per minute over the last 40 s'));
+chk(_nodes.liveInfoText.textContent.indexOf('In Stock nothing in ASB') >= 0, 'Stock trend text: ' + _nodes.liveInfoText.textContent);
+chk(_nodes.liveInfoSrc.textContent === '+0.4 °C per minute over the last 40 s', 'Stock trend source: ' + _nodes.liveInfoSrc.textContent);
+liveInfoOpen(bcell('slpm', 'Modem state', 'normal', '', 'mobile_data_always_on: 0'));
+chk(_nodes.liveInfoText.textContent.indexOf('“fast” - kept up') >= 0 && _nodes.liveInfoSrc.textContent === 'mobile_data_always_on: 0', 'Stock modem: ' + _nodes.liveInfoSrc.textContent);
+_selectedProfile = 'smart';
 if (bad) process.exit(1);
 console.log('ok');
 EOF
@@ -2737,7 +2896,7 @@ grep -Fq "e.target.closest('.live-cell[data-lvi], .smart-banner-item[data-lvi]')
 grep -Fq "html[dir=\"rtl\"] .live-page .smart-banner-item[data-lvi]::after { content: '\\2039'; }" "$H" || fail "the banner chevron does not mirror in Arabic"
 grep -Fq "html[dir=\"rtl\"] .live-page .live-cell[data-lvi]::after { content: '\\2039'; }" "$H" || fail "the tile chevron does not mirror in Arabic"
 grep -Fq 'function liveInfoValText(val)' "$H" || fail "the sheet has no pill-safe value reader"
-echo "PASS webui live info: all nine tiles and the eight Smart-banner readings explain themselves, the pill never glues onto the value, Stock has its own five, every language translated"
+echo "PASS webui live info: all nine tiles, the eight Smart-banner and the eight Stock-banner readings explain themselves in the tile's own words and colour, the pill never glues onto the value, every language translated"
 )
 
 t_webui_fill_pages_runtime() (
@@ -2957,7 +3116,7 @@ let ASB_LANG = 'ru';
 function T(k, d) { const L = I18N[ASB_LANG]; return (L && typeof L[k] === 'string') ? L[k] : d; }
 function ledgerBadge() { return null; } function trialHoursLeft() { return 0; } function trialExpired() { return false; }
 const _netResult = {}; const _cfgVals = {};
-let _wlFitIgnored = 0, _wlFitLimited = 0, _wlFitProbed = false;
+let _wlFitIgnored = 0, _wlFitLimited = 0, _wlFitInstalled = 0, _wlFitProbed = false;
 EOF
   for fn in Topt cfgScanLabel cfgStatus; do sed -n "/^function $fn(/,/^}/p" "$H"; done
   cat <<'EOF'
@@ -2976,8 +3135,12 @@ _wlFitIgnored = 1;
 chk(cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').cls === 'warn' && cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text === 'прошивка игнорирует', 'ROM-ignored limit badge: ' + cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text);
 _wlFitIgnored = 0; _wlFitLimited = 2;
 chk(cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').cls === 'good', 'an enforced limit badge is good');
-_wlFitLimited = 0; _wlFitProbed = true;
+_wlFitLimited = 0; _wlFitProbed = true; _wlFitInstalled = 0;
 chk(cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').cls === 'neutral' && cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text === 'нет фитнес-приложений', 'no fitness apps badge: ' + cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text);
+/* fix177: two fitness apps installed, nothing limited yet - never "no fitness apps". */
+_wlFitInstalled = 2;
+chk(cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text === 'ожидает', 'installed apps read as none: ' + cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text);
+_wlFitInstalled = 0;
 _wlFitProbed = false;
 chk(cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text === 'ожидает', 'unprobed limit badge: ' + cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text);
 ASB_LANG = 'en';
@@ -2994,7 +3157,7 @@ out="$(node "$T/t.js" 2>&1)" || fail "$out"
 grep -Fq "if (it.key === 'wifi_scan_throttle') return cfgScanLabel(v);" "$H" || fail "the slider value is still a bare number"
 grep -Fq '.cfg-row-top > .cfg-range input[type="range"] { flex: 1 1 auto; width: auto; min-width: 0; }' "$H" || fail "a slider on its own row keeps its short track"
 grep -Fq "if (it.key === 'wakelock_fitness') {" "$H" || fail "cfgStatus lost the wakelock_fitness honesty branch"
-grep -Fq 'async function loadWlFitStatus()' "$H" || fail "loadWlFitStatus is gone"
+grep -Fq 'async function loadWlFitStatus(force)' "$H" || fail "loadWlFitStatus is gone"
 echo "PASS webui option labels: option buttons and value badges are labelled in the UI language, the Wi-Fi scan rate in minutes, sliders use their row, and the fitness limit admits when the ROM ignores it"
 )
 
