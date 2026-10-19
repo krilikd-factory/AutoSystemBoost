@@ -45,6 +45,12 @@ if [ "$1" = "--worker" ]; then
   PROFILE="${2:-balanced}"
   PROFILE_FLAG="${3:-}"
   WORKER_EPOCH="${4:-}"
+elif [ "$1" = "--stock-finish" ]; then
+  # Background half of the Stock switch (fix177): the settings part of the profile ledger.
+  MODE="stock_finish"
+  PROFILE="stock"
+  PROFILE_FLAG="user"
+  WORKER_EPOCH="${2:-}"
 else
   PROFILE_FLAG="${2:-}"
 fi
@@ -206,6 +212,48 @@ stock_cancel_pending_worker() {
   kill_prev_worker
 }
 
+spawn_stock_finish() {
+  _sf_epoch="$(cat "$EPOCH_FILE" 2>/dev/null)"
+  nohup /system/bin/sh "$MODDIR/apply_profile.sh" --stock-finish "$_sf_epoch" </dev/null >/dev/null 2>&1 &
+  echo $! > "$PIDFILE" 2>/dev/null || true
+  asb_log "stock: settings restore scheduled in the background epoch=$_sf_epoch"
+}
+
+# The settings half of Stock. Holds the worker lock (a profile worker started meanwhile waits
+# for it) and stops between keys the moment the epoch moves on - the ledger then stays, with
+# the original values, for the next Stock.
+run_stock_finish() {
+  if ! profile_epoch_current; then
+    asb_log "stock settings restore superseded before start epoch=$WORKER_EPOCH"
+    exit 0
+  fi
+  _sf_try=0
+  until profile_worker_lock; do
+    _sf_try=$((_sf_try + 1))
+    profile_epoch_current || { asb_log "stock settings restore superseded while waiting for the apply lock"; exit 0; }
+    [ "$_sf_try" -ge 3 ] && { asb_log "stock settings restore deferred: apply lock busy (ledger kept for boot / next Stock)"; exit 0; }
+  done
+  # A newer profile kills this pass (kill_prev_worker): the shell runs the trap once the
+  # settings call in flight returns, and exits - the lock is held until then, so the newer
+  # worker's writes always land after the last restored key, never under it.
+  trap 'profile_worker_unlock' EXIT
+  trap 'profile_worker_unlock; exit 0' HUP INT TERM
+  ASB_PB_GUARD=profile_epoch_current
+  if command -v asb_stock_finish >/dev/null 2>&1; then
+    asb_stock_finish
+    _sf_rc=$?
+  else
+    _sf_rc=0
+  fi
+  unset ASB_PB_GUARD
+  if [ "$_sf_rc" = 2 ]; then
+    asb_log "stock settings restore superseded by a newer profile - ledger kept"
+  else
+    asb_log "stock settings restore done epoch=$WORKER_EPOCH"
+  fi
+  exit 0
+}
+
 quick_return_or_spawn() {
   _prev="$(cat /data/adb/asb/active_profile 2>/dev/null)"
   [ -z "$_prev" ] && _prev="unknown"
@@ -214,12 +262,24 @@ quick_return_or_spawn() {
   echo "$PROFILE" > /data/adb/asb/active_profile 2>/dev/null || true
 
   if [ "$PROFILE" = "stock" ]; then
-    # notify_governor performs the complete synchronous Stock transaction: stop ASB, release
-    # profile leases and restore the captured profile baseline. Starting the ordinary worker
-    # afterwards only repeats that same no-policy branch and can sit behind the old Smart lock.
+    # The immediate part of the Stock transaction (fix177): stop ASB, release profile leases,
+    # put every sysfs value back - then return. The settings part of the ledger is a Java
+    # process per key (about 30 s on the owner's OP15, with the WebUI frozen the whole time),
+    # so it runs in a detached pass that a newer profile supersedes (asb_stock_enter is the
+    # complete transaction boot and the worker still use). Starting the ordinary worker
+    # afterwards would only repeat the same no-policy branch behind the old Smart lock.
     stock_cancel_pending_worker
-    notify_governor
-    update_desc_now
+    if command -v asb_stock_enter_fast >/dev/null 2>&1; then
+      asb_stock_enter_fast
+      update_desc_now
+      # profile_core (sourced by update_desc_now) brings the lease arbiter: release again now
+      # that it is loaded - before, the direct path called the release without it.
+      command -v asb_stock_release_profile_leases >/dev/null 2>&1 && asb_stock_release_profile_leases
+      spawn_stock_finish
+    else
+      notify_governor
+      update_desc_now
+    fi
     asb_log 'stock applied immediately; no duplicate profile worker spawned'
     echo "Stock applied: ASB policy stopped"
     exit 0
@@ -303,4 +363,5 @@ run_worker() {
 }
 
 [ "$MODE" = "worker" ] && run_worker
+[ "$MODE" = "stock_finish" ] && run_stock_finish
 quick_return_or_spawn
