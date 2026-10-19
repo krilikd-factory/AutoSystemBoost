@@ -954,6 +954,35 @@ lk_jank_trace_header() {
     echo "# wake (column 18): the row spans a screen-off stretch - last screen-on poll before it to the first after it (fix150)"
   } > "$LK_OUT_DIR/jank_trace.tsv"
   lk_cluster_layout_write
+  lk_energy_model_write
+}
+
+# energy_model.txt (fix179): the kernel's own power cost of every CPU frequency step, once per
+# capture, where the kernel exposes it (debugfs energy_model; read-only, nothing is mounted).
+#
+# The governor never publishes a ceiling under 40% of a cluster's maximum (the race-to-idle
+# floor), and with the screen off that floor - not Smart's own wish - sets the clock: a
+# CPH2769 night asked for ~0.95 GHz on the main cores and ran up to 1.4 GHz, at that ceiling in
+# 19% of screen-off samples. Whether 1.4 GHz costs more per unit of work than 0.95 GHz is a
+# fact about the silicon, and this table is where it is written down. One row per step:
+# perf domain, kHz, power (mW, the kernel's scale), cost.
+lk_energy_model_write() {
+  _emr="${ASB_LK_EM_ROOT:-/sys/kernel/debug/energy_model}"
+  {
+    echo "# CPU energy model (kernel debugfs) - domain|khz|power|cost; 'unavailable' when not exposed"
+    if [ -d "$_emr" ]; then
+      for _emd in "$_emr"/cpu*; do
+        [ -d "$_emd" ] || continue
+        for _emp in "$_emd"/ps:*; do
+          [ -d "$_emp" ] || continue
+          printf '%s|%s|%s|%s\n' "${_emd##*/}" "$(cat "$_emp/frequency" 2>/dev/null)" \
+            "$(cat "$_emp/power" 2>/dev/null)" "$(cat "$_emp/cost" 2>/dev/null)"
+        done
+      done | sort -t'|' -k1,1 -k2,2n
+    else
+      echo "unavailable"
+    fi
+  } > "$LK_OUT_DIR/energy_model.txt" 2>/dev/null || true
 }
 
 # The governor's own cluster roles (fix146), from slot_policy_ids in its state file:
@@ -1918,6 +1947,24 @@ lk_wakelock_batterystats_dump() {
       | head -30
     echo ""
 
+    # 1b) Wi-Fi multicast by app (fix179). The total above read 3 h 49 min on a CPH2769 whose
+    #     screen-off stretches were awake half the time, and nothing named the holder: the
+    #     watcher sees only who holds the lock at the moment it looks. batterystats keeps the
+    #     per-uid figure under each uid's block ("  u0a123:" ... "WiFi Multicast Wakelock").
+    #     Matched loosely - the exact wording varies by release - and named through the
+    #     capture's uid map; nothing printed means this build keeps no per-uid figure.
+    echo "# --- Wi-Fi multicast by app (since the last unplug) ---"
+    awk -v MAP="$LK_OUT_DIR/uid_map.txt" '
+      BEGIN { while ((getline l < MAP) > 0) { split(l, a, " "); if (a[1] ~ /^[0-9]+$/) pk[a[1]] = a[2] } }
+      /^  (u[0-9]+[ai][0-9]+|[0-9]+):[[:space:]]*$/ { u = $1; sub(/:$/, "", u); next }
+      u != "" && /[Mm]ulticast/ && /[Ww]ake ?lock/ && !/Total/ {
+        n = u
+        if (u ~ /^u[0-9]+a[0-9]+$/) { split(u, b, "a"); n = 10000 + b[2] }
+        line = $0; sub(/^[[:space:]]+/, "", line)
+        printf "%s (%s): %s\n", u, (n in pk) ? pk[n] : (n + 0 < 10000 ? "system" : "?"), substr(line, 1, 120)
+      }' "$_raw" 2>/dev/null | head -8
+    echo ""
+
     # 2) Alarms / scheduled wakeups (the *walarm* and "wakeup" lines). High
     #    wakeup counts = an app polling on a timer; a frequent offender for
     #    standby drain.
@@ -2248,16 +2295,22 @@ lk_audio_wakelock_live_row() {
   _hold="$1" _epoch="${2:-$(date +%s)}"
   case "$_hold" in *AudioMix*) : ;; *) return 0 ;; esac
   _iso=$(date '+%Y-%m-%dT%H:%M:%S')
+  # Only the AudioMix lock itself (fix179). $1 is up to three held locks joined with ';', and
+  # every WorkSource in the whole string was credited to AudioMix: capture 30423 listed
+  # ru.vk.store with 95 "AudioMix" samples and ru.yandex.weatherplugin with 13, from their
+  # WorkManager job locks held beside it - the store was never playing anything.
+  _amix=$(printf '%s\n' "$_hold" | tr ';' '\n' | grep 'AudioMix')
+  [ -n "$_amix" ] || return 0
   # Android 16 emits `WorkSource{ chains=WorkChain{(10658), (1041)}}`.
   # The former double-escaped pattern looked for literal backslashes and silently fell
   # back to `-`, even though the voluntary UID→package map already contained the app.
   # Also accept the compact `WorkSource{10658}` representation from older dumpsys builds.
-  _uids=$(printf '%s\n' "$_hold" | grep -oE 'WorkChain\{\([0-9]+|WorkSource\{[0-9]+' 2>/dev/null \
+  _uids=$(printf '%s\n' "$_amix" | grep -oE 'WorkChain\{\([0-9]+|WorkSource\{[0-9]+' 2>/dev/null \
     | sed -e 's/.*(//' -e 's/.*{//' | sort -u)
   [ -n "$_uids" ] || _uids="-"
+  _clean=$(printf '%s' "$_amix" | tr '\n\r|' '   ' | cut -c1-360)
   for _uid in $_uids; do
     _pkg=$(lk_audio_wakelock_package_for_uid "$_uid")
-    _clean=$(printf '%s' "$_hold" | tr '\n\r|' '   ' | cut -c1-360)
     printf '%s|%s|%s|%s|%s\n' "$_epoch" "$_iso" "$_uid" "$_pkg" "$_clean" \
       >> "$LK_OUT_DIR/audio_wakelock_attribution.tsv" 2>/dev/null || true
   done

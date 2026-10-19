@@ -853,6 +853,18 @@ lk_emit_current_soc_consistency() {
         printf "~scale: current_now reads x%.2f of the SOC-derived drain in every phase type (%.2f-%.2f) - a gauge property (e.g. one cell of a dual-cell pack), not a load; multiply mA by %.1f to compare.\n", R/n, RL, RH, n/R
     }
   ' "$_cc_led" | sort | sed 's/^~scale: /scale: /'
+  # The governor's own gauge check (fix179): it integrates current_now against the SOC drop
+  # over screen-on windows. A CPH2747 read x0.35 over 61 windows - its gauge reports about a
+  # third of the current - while the phase ratios above spread too widely to name a scale, so
+  # every CHECK low was read as the modem drawing outside the gauge.
+  _cc_cs="$(lk_state_kv current_scale_x100 2>/dev/null)"; _cc_cn="$(lk_state_kv current_scale_windows 2>/dev/null)"
+  case "$_cc_cs:$_cc_cn" in
+    *[!0-9:]*|:*|*:) : ;;
+    *) if [ "$_cc_cn" -ge 10 ] && [ "$_cc_cs" -gt 0 ] && { [ "$_cc_cs" -lt 77 ] || [ "$_cc_cs" -gt 130 ]; }; then
+         _cc_f=$(( 1000 / _cc_cs ))
+         echo "governor's gauge check: on screen-on windows current_now integrates to x$(( _cc_cs / 100 )).$(printf '%02d' $(( _cc_cs % 100 ))) of the SOC-derived drain ($_cc_cn windows) - multiply screen-on mA by about $(( _cc_f / 10 )).$(( _cc_f % 10 )); a gauge property, not the load"
+       fi ;;
+  esac
   echo "current_pct/h uses the reported charge_full capacity and sampled discharge current."
   echo "A CHECK result is a measurement-consistency warning, not causal energy attribution."
   echo "CHECK low (>30%): avg_mA under-reports - current_now sees the main supply path, while"
@@ -1259,8 +1271,11 @@ lk_emit_screenoff_sleep() {
         else if(u ~ /m$/){sub(/m/,"",u); v+=u*60}
         else if(u ~ /s$/){sub(/s/,"",u); v+=u} }
       return v }
-    { rt=$1; sub(/ \(.*\)/,"",rt); r=tosec(rt); u=tosec($2)
-      if(r>0){ aw=u*100.0/r
+    # Ten minutes at least (fix179): a CPH2747 report ended seconds after an unplug and printed
+    # "screen-off: 0.0h realtime, CPU awake 0m -> awake 100.0%" - two seconds of screen-off
+    # time, read as a phone that never slept.
+    { rt=$1; sub(/ \(.*\)/,"",rt); r=tosec(rt); u=tosec($2); if (r > 0) short = r
+      if(r>=600){ aw=u*100.0/r
         printf "  screen-off: %.1fh realtime, CPU awake %.0fm -> awake %.1f%% (deep sleep %.1f%%)\n", r/3600.0, u/60.0, aw, 100-aw
         if (ENVIRON["LK_BSTATS_RESET"] == "1") {
           printf "  NOTE: batterystats is reset every %s min, so this covers only the last\n", ENVIRON["LK_BSTATS_WINDOW_MIN"]
@@ -1274,7 +1289,9 @@ lk_emit_screenoff_sleep() {
     # the line exists with 0 realtime, and the section printed nothing at all under its
     # heading, which read as a failed probe.
     END { if (!done) {
-            if (ENVIRON["LK_BSTATS_RESET"] == "1")
+            if (short > 0)
+              printf "  only %ds of screen-off time in Android'"'"'s current window - too short to read as sleep\n", short
+            else if (ENVIRON["LK_BSTATS_RESET"] == "1")
               printf "  no screen-off time in the current batterystats window (screen on since the last reset)\n"
             else
               printf "  batterystats reported no screen-off total on this build\n"
