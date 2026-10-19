@@ -1331,6 +1331,16 @@ done
 _gov_pid="$(pgrep -f '/bin/asb$' 2>/dev/null | head -1)"
 if [ "$(cat "$MODDIR/current_profile" 2>/dev/null)" = "stock" ]; then
   V "ASB governor stopped (Stock profile)" "stopped" "$([ -n "$_gov_pid" ] && echo running || echo stopped)" eq
+  # fix177: the settings part of the Stock switch runs in the background; a ledger still here
+  # means it was superseded or deferred, and those settings still hold profile values.
+  if [ -s /data/adb/asb/profile_runtime_baseline.v1 ]; then
+    _pb_n="$(grep -c '^setting|' /data/adb/asb/profile_runtime_baseline.v1 2>/dev/null)"
+    if pgrep -f 'apply_profile.sh --stock-finish' >/dev/null 2>&1; then
+      NOTE "Stock: $_pb_n profile setting(s) are being put back right now (background pass)"
+    else
+      NOTE "Stock: $_pb_n profile setting(s) not put back yet - choose Stock again or reboot (boot completes the restore)"
+    fi
+  fi
 else
   V "ASB governor process alive" "running" "$([ -n "$_gov_pid" ] && echo running || echo stopped)" eq
 fi
@@ -2931,7 +2941,10 @@ if [ -s /data/adb/asb/wakelock_fitness_limited ]; then
     [ -n "$_fp" ] || continue
     # Proof, not the record: the app-op as Android reads it now, and whether PowerManager
     # actually marks this app's held locks disabled (it prints DISABLED on such a line).
-    _fnow="$(appops get "$_fp" WAKE_LOCK 2>/dev/null | sed -n 's/.*WAKE_LOCK: \([a-z_]*\).*/\1/p' | head -1)"
+    # The package line, not a "Uid mode:" line printed above it (fix177); a uid mode wins.
+    _fnow="$(appops get "$_fp" WAKE_LOCK 2>/dev/null | grep -v 'Uid mode' | sed -n 's/.*WAKE_LOCK: \([a-z_]*\).*/\1/p' | head -1)"
+    _fuidm="$(appops get "$_fp" WAKE_LOCK 2>/dev/null | sed -n 's/.*Uid mode: WAKE_LOCK: \([a-z_]*\).*/\1/p' | head -1)"
+    case "$_fuidm" in ''|default) : ;; *) _fnow="$_fuidm (uid mode)" ;; esac
     _fuid="$(pm list packages -U "$_fp" 2>/dev/null | sed -n "s/^package:$_fp uid:\([0-9]*\).*/\1/p" | head -1)"
     _fheld=""; _fdis=""
     if [ -n "$_fuid" ]; then
@@ -2942,8 +2955,15 @@ if [ -s /data/adb/asb/wakelock_fitness_limited ]; then
     # No WAKE_LOCK entry means the op is back at default: the system reset it (app update,
     # permission reset, boot sweep). The wakelock watcher re-applies it on its next pass.
     # fix143: put back about 5 and 10 minutes after boot, then by the hourly screen-off pass.
-    [ "${_fnow:-default}" != ignore ] && NOTE "  limit lapsed - the system reset this app-op (OPlus does at boot); ASB puts it back about 5-10 min after boot, otherwise on the next hourly screen-off pass"
+    case "${_fnow:-default}" in ignore*) : ;; *) NOTE "  limit lapsed - the system reset this app-op (OPlus does at boot); ASB puts it back about 5-10 min after boot, otherwise on the next hourly screen-off pass" ;; esac
   done < /data/adb/asb/wakelock_fitness_limited
+fi
+if [ "$(cfg wakelock_fitness)" = limit ] && [ ! -s /data/adb/asb/wakelock_fitness_limited ] \
+   && [ -f "$MODDIR/runtime/asb_wakelock_watch.sh" ]; then
+  # fix177: limit chosen and nothing on the ledger - say what the watcher sees, so "no fitness
+  # apps" in the WebUI can be told apart from "apps there, limit not accepted / not yet run".
+  _fst="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wakelock_watch.sh" fitness-status 2>/dev/null)"
+  NOTE "  nothing recorded as limited; fitness apps installed: $(printf '%s\n' "$_fst" | sed -n 's/^installed=//p'), already in force without a record: $(printf '%s\n' "$_fst" | sed -n 's/^preset=//p'), refused by Android: $(printf '%s\n' "$_fst" | sed -n 's/^refused=//p')  [$(printf '%s\n' "$_fst" | sed -n 's/^names=//p')]"
 fi
 if [ -s /data/adb/asb/wakelock_restricted ]; then
   NOTE "$(wc -l < /data/adb/asb/wakelock_restricted) app(s) moved to restricted by ASB - undone on uninstall:"
