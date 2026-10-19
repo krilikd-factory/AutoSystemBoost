@@ -24,6 +24,8 @@ This document describes every file the ASB governor and logkit produce, what fie
 | `<logkit_dir>/phase_summary.txt` | text table | full-day logkit shell | Hourly and final report |
 | `<logkit_dir>/sampled_current_distribution.txt` | text table | full-day logkit shell | Hourly and final report |
 | `<logkit_dir>/mobile_traffic_context.txt` | text table | full-day logkit shell | Hourly and final report |
+| `<logkit_dir>/energy_model.txt` | `domain\|khz\|power\|cost`, or `unavailable` (fix179) | logkit shell, read-only from debugfs `energy_model` | Once at capture start |
+| `<logkit_dir>/wake_sources.txt` → `# --- Wi-Fi multicast by app` | `uid (package): <batterystats line>` (fix179) | full-day logkit shell | Hourly with the batterystats snapshot |
 
 ---
 
