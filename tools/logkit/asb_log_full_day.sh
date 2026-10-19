@@ -1516,6 +1516,24 @@ lk_emit_full_day_report() {
       _bt_gd=$(awk '!/^#/ && $3=="disconnect_generic" {n++} END{print n+0}' "$_bt_ev" 2>/dev/null)
       _bt_r=$(awk '!/^#/ && $3=="reconnect_literal" {n++} END{print n+0}' "$_bt_ev" 2>/dev/null)
       echo "lifecycle events: $_bt_n  A2DP profile=$_bt_a2dp_c/$_bt_a2dp_d (connect/disconnect)  HFP audio=$_bt_hfp_c/$_bt_hfp_d (attach/detach)  generic=$_bt_gc/$_bt_gd  explicit_reconnect=$_bt_r"
+      # The link drops by their HCI reason (fix178): a lost link and one the headset ended look
+      # the same to the listener and have different remedies.
+      awk -F'\t' '!/^#/ && $3 == "acl_disconnect" {
+          r = $4; sub(/^ACL reason=/, "", r); v = r
+          if (r ~ /^0x/) { v = 0; h = tolower(substr(r, 3)); for (i = 1; i <= length(h); i++) v = v * 16 + index("0123456789abcdef", substr(h, i, 1)) - 1 }
+          n++
+          if (v == 8 || v == 34) lost++; else if (v == 19 || v == 21) remote++; else if (v == 22) local++; else other++
+        }
+        END {
+          if (!n) exit
+          printf "link drops (ACL disconnects): %d - lost link (timeout): %d, ended by the headset: %d, ended by this phone: %d, other/unknown: %d\n", n, lost, remote, local, other
+          if (lost) print "  lost link = range, a body or wall in the way, or the radio busy (2.4 GHz Wi-Fi, a second device on a multipoint headset)"
+          if (remote) print "  ended by the headset = it chose to drop this phone - a multipoint headset switching to another device, or its own power saving"
+        }' "$_bt_ev" 2>/dev/null
+      _bt_hpd=$(awk '!/^#/ && $3=="hfp_profile_disconnect" {n++} END{print n+0}' "$_bt_ev" 2>/dev/null)
+      [ "${_bt_hpd:-0}" -gt 0 ] && echo "headset (call) profile disconnects: $_bt_hpd"
+      # The service's own state history (fix178): it outlives a logcat stream that went quiet.
+      lk_bt_history_drops "$LK_OUT_DIR/bt_lifecycle_snapshots.txt"
       echo "HFP audio detach is not a Bluetooth-device disconnect; A2DP profile disconnect is the media-profile evidence."
       echo "see bt_lifecycle_events.tsv for timestamped stack evidence and bt_lifecycle_context.tsv for nearest audio route context."
       echo "A route/context row alone is not counted as a reconnect."

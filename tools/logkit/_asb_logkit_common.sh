@@ -252,6 +252,35 @@ lk_discover_zones() {
 # snapshots on a device where debugfs is closed - the dumpsys fallback right below it was
 # skipped because "command -v dumpsys" found nothing, and not one byte of dumpsys output
 # appears anywhere else in that log either. The binary was there; the lookup was not.
+# The connected Wi-Fi link in one line, without its name (fix178).
+#
+# Every capture so far had an empty "# wifi link": the two patterns matched nothing in the
+# OxygenOS 15/16 wifi dump - and the line they asked for carried the SSID and BSSID, which a
+# shareable archive should not. The band is the part that matters next to Bluetooth: 2.4 GHz
+# Wi-Fi and a Bluetooth headset share the same air. stdin = `cmd wifi status` and/or the wifi
+# dump; the first line holding both a frequency and an RSSI is the connection (scan tables
+# have no "Frequency:" with a colon). Prints e.g. "5180 MHz (5 GHz), RSSI -55 dBm, 573 Mbps, 11ax".
+lk_wifi_link() {
+  awk '
+    # The first occurrence of each field: "Tx Link speed" and "Rx Link speed" follow "Link speed".
+    function fld(re,   v) { if (!match($0, re)) return ""; v = substr($0, RSTART, RLENGTH); sub(/^[^:]*: */, "", v); return v }
+    /Frequency: *[0-9]+/ && /RSSI: *-?[0-9]+/ {
+      f = fld("Frequency: *[0-9]+"); r = fld("RSSI: *-?[0-9]+")
+      if (f + 0 <= 0 || r + 0 <= -127) next
+      l = fld("Link speed: *[0-9]+")
+      w = fld("Wi-Fi standard: *[^,;]+")
+      b = (f + 0 < 3000) ? "2.4 GHz" : (f + 0 < 5925) ? "5 GHz" : "6 GHz"
+      printf "%s MHz (%s), RSSI %s dBm", f, b, r
+      if (l != "") printf ", %s Mbps", l
+      if (w != "") printf ", %s", substr(w, 1, 12)
+      print ""; exit
+    }'
+}
+lk_cmd_wifi_status() {
+  if command -v cmd >/dev/null 2>&1; then cmd wifi status 2>/dev/null
+  elif [ -x /system/bin/cmd ]; then /system/bin/cmd wifi status 2>/dev/null
+  fi
+}
 lk_dumpsys() {
   if command -v dumpsys >/dev/null 2>&1; then dumpsys "$@"
   elif [ -x /system/bin/dumpsys ]; then /system/bin/dumpsys "$@"
@@ -306,9 +335,12 @@ lk_snapshot_state() {
     echo "===== ASB WATCHER STATE ====="
     # wakelock_multicast (fix138): who held Wi-Fi multicast - a day log carried 3 h 27 min of it
     # and no name. avoid_bad_wifi.prev and wakelock_rules_v137: what ASB changed there and when.
-    for _sf in wakelock_apps wakelock_fitness_limited wakelock_restricted multicast_restricted \
+    # drain_meter / offdrain (fix178): the per-profile meter had never recorded a screen-off
+    # window on any phone, and no capture carried its table to show it.
+    for _sf in wakelock_apps wakelock_fitness_limited wakelock_fitness_uidmode wakelock_fitness_refused \
+               wakelock_restricted multicast_restricted \
                wakelock_multicast wakelock_rules_v137 avoid_bad_wifi.prev \
-               ltpo_video.stats ltpo_range.orig ltpo_video.lowered; do
+               ltpo_video.stats ltpo_range.orig ltpo_video.lowered drain_meter offdrain_pctph_x100; do
       [ -f "/data/adb/asb/$_sf" ] || continue
       echo "--- $_sf ---"
       head -20 "/data/adb/asb/$_sf" 2>/dev/null
@@ -3188,9 +3220,14 @@ lk_sample_audio() {
   # Audio mode and its owner: MODE_IN_COMMUNICATION / IN_CALL is what pulls a headset onto
   # the call link, and the owner names the app that asked. audio.mode was printed in every
   # Bluetooth snapshot and never filled in.
-  LK_AUDIO_MODE="$(printf '%s\n' "$_ad" | grep -m1 -E 'mode \(internal\)|mode \(external\)|mMode' \
+  # Android 16 prints "- Actual mode = MODE_NORMAL" and the owner on the lines after
+  # "- Mode owner:" (fix178) - both read empty in every snapshot of a CPH2769 capture with 70
+  # call-link (SCO) openings, so nothing said which app pulled the headset onto the call link.
+  LK_AUDIO_MODE="$(printf '%s\n' "$_ad" | grep -m1 -E 'Actual mode =|mode \(internal\)|mode \(external\)|mMode' \
                    | grep -oE 'MODE_[A-Z_]+' | head -1)"
-  LK_AUDIO_MODE_OWNER="$(printf '%s\n' "$_ad" | grep -m1 -i 'mode owner' | sed 's/^[[:space:]]*//' | cut -c1-120)"
+  LK_AUDIO_MODE_OWNER="$(printf '%s\n' "$_ad" | awk '
+      /[Mm]ode owner/ { sub(/.*[Mm]ode owner:?[ \t]*/, ""); if ($0 != "") { print; exit } own = 1; next }
+      own && NF { sub(/^[ \t]+/, ""); print; exit }' | cut -c1-120)"
   export LK_AUDIO_PLAY LK_AUDIO_ROUTE LK_AUDIO_MODE LK_AUDIO_MODE_OWNER
 }
 
@@ -3407,9 +3444,9 @@ lk_snapshot_network() {
     echo ""
     echo "# wifi link"
     _wl=$(lk_dumpsys wifi 2>/dev/null)
-    printf '%s\n' "$_wl" | grep -m1 -oE 'SSID: [^,]*, BSSID: [^,]*, .*RSSI: -?[0-9]+.*Link speed: [0-9]+.*' | cut -c1-200 | sed 's/^/  /'
     printf '%s\n' "$_wl" | grep -m1 -oE 'Wi-Fi is [A-Za-z]+' | sed 's/^/  /'
-    printf '%s\n' "$_wl" | grep -m1 -oE 'mFrequency=[0-9]+|Frequency: [0-9]+' | sed 's/^/  /'
+    _wll="$({ lk_cmd_wifi_status; printf '%s\n' "$_wl"; } | lk_wifi_link)"
+    echo "  link: ${_wll:-not connected, or the ROM printed no link line}"
     echo "# tcp params (current, ASB may have tuned)"
     echo "  congestion: $(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null)"
     echo "  tcp_rmem: $(cat /proc/sys/net/ipv4/tcp_rmem 2>/dev/null)"
@@ -3456,7 +3493,91 @@ LK_BT_RECONNECT_MAX_EVENTS="${ASB_BT_RECONNECT_MAX_EVENTS:-240}"
 lk_bt_redact_addr() {
   # Device addresses are unnecessary for reconnect diagnosis and must not leave
   # the device in a shareable capture archive.
-  sed -E 's/([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}/<BT_ADDR>/g'
+  #
+  # Device names too (fix178): the AVRCP volume table prints "<addr> : <name> : <vol> : <state>",
+  # and it matched the snapshot filter by its "NotConnected" - capture 30423 carried the user's
+  # headphone model and his car's name in 38 snapshots, under a header saying addresses are
+  # redacted. The name column is replaced; the volume and state stay, they are the evidence.
+  sed -E 's/([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}/<BT_ADDR>/g
+          s/^([[:space:]]*<BT_ADDR> : ).*( : +-?[0-9]+ : [A-Za-z]+[[:space:]]*)$/\1<name>\2/'
+}
+
+# Profile drops in the Bluetooth service's own history (fix178).
+#
+# CPH2769 capture 30423: the user heard his headphones drop and come back three or four times in
+# the last hours, and the logcat recorder kept none of it (its stream had nothing after 10:55Z).
+# Each snapshot carries the last 20 state changes of every profile state machine, stamped with
+# the phone's own clock - four media-profile drops were in them, all reported by the Bluetooth
+# stack (not asked for on the phone), one back in 2 s, others after 7 and 18 minutes.
+#
+# A drop is a Connected -> Disconnecting/Disconnected step. "what=101" is a STACK_EVENT: the
+# native stack reported it - the headset ended it, or the radio link went. "what=2" is a DISCONNECT
+# command on the phone (the user, an app or the system). The call profile (HFP) is checked only
+# where its own history brackets the moment closely; a hole in it is said, not guessed over.
+# Devices are named A, B... in order of appearance, never by address. $1 = the snapshots file.
+lk_bt_history_drops() {
+  [ -r "${1:-}" ] || return 0
+  awk '
+    function secs(t,   a, d, c) {
+      # "MM-DD HH:MM:SS.mmm" -> seconds within the year (the year itself is not printed).
+      split(t, a, /[- :]/); c = substr("000031059090120151181212243273304334", (a[1] - 1) * 3 + 1, 3) + 0
+      return ((c + a[2]) * 86400) + a[3] * 3600 + a[4] * 60 + a[5]
+    }
+    /^=====/ { m = ""; dev = "" }
+    /^Profile: HeadsetService/ { dev = "" }
+    /StateMachine: name=/ { m = "" }
+    /=== A2dpStateMachine for / { dev = $0; sub(/.*for /, "", dev); sub(/[ (=].*/, "", dev); dev = substr(dev, length(dev) - 4) }
+    /StateMachine: name=A2dpStateMachine/ { m = "A2DP" }
+    /StateMachine: name=HeadsetStateMachine/ { m = "HFP" }
+    /rec\[[0-9]+\]: time=[0-9][0-9]-[0-9][0-9] / && m != "" {
+      t = $0; sub(/.*time=/, "", t); t = substr(t, 1, 18)
+      p = $0; sub(/.*processed=/, "", p); sub(/ .*/, "", p)
+      d = $0; sub(/.*dest=/, "", d); sub(/ .*/, "", d)
+      w = $0; sub(/.*what=/, "", w); sub(/[(].*/, "", w)
+      printf "%012.3f\t%s\t%s\t%s\t%s\t%s\t%s\n", secs(t), substr(t, 1, 14), m, (m == "HFP" ? "-" : dev), p, d, w
+    }' "$1" 2>/dev/null | sort -u | awk -F'\t' '
+    {
+      n++; S[n] = $1 + 0; T[n] = $2; M[n] = $3; D[n] = $4; P[n] = $5; X[n] = $6; W[n] = $7
+      if ($3 == "A2DP" && !($4 in L)) { L[$4] = sprintf("%c", 64 + (++nd)) }
+    }
+    function up(st) { return st == "Connected" || st ~ /^Audio/ }
+    function hfp_at(s,   j, jb, ja, sb) {
+      # 1 = the call profile dropped within 5 s; 2 = its nearest kept rows on both sides, each
+      # within 10 min, show it connected and in the same state (a changed state with no row for
+      # the change means rows were lost there); 0 = not knowable from what was kept.
+      jb = 0; ja = 0
+      for (j = 1; j <= n; j++) {
+        if (M[j] != "HFP") continue
+        if (P[j] == "Connected" && (X[j] == "Disconnecting" || X[j] == "Disconnected") && S[j] >= s - 5 && S[j] <= s + 5) return 1
+        if (S[j] <= s) jb = j; else if (!ja) ja = j
+      }
+      if (!jb || !ja || S[jb] < s - 600 || S[ja] > s + 600) return 0
+      sb = (X[jb] == "<null>") ? P[jb] : X[jb]
+      return (up(sb) && sb == P[ja]) ? 2 : 0
+    }
+    END {
+      for (i = 1; i <= n; i++) {
+        if (M[i] != "A2DP" || P[i] != "Connected" || (X[i] != "Disconnecting" && X[i] != "Disconnected")) continue
+        if (!hdr) { print "media-profile drops in the Bluetooth service history (phone clock; last 20 changes per profile, kept across snapshots):"; hdr = 1 }
+        nm++
+        by = (W[i] == "101") ? "reported by the Bluetooth stack (the headset ended it or the radio link went)" : (W[i] == "2") ? "asked for on this phone" : "cause code " W[i]
+        if (W[i] == "101") stack++; else if (W[i] == "2") phone++
+        back = "not back within the kept history"
+        for (j = i + 1; j <= n; j++) {
+          if (M[j] != "A2DP" || D[j] != D[i]) continue
+          if (P[j] == "Connected" && (X[j] == "Disconnecting" || X[j] == "Disconnected")) break
+          if (P[j] == "Connecting" && X[j] == "Connected") { g = int(S[j] - S[i] + 0.5); back = (g < 60) ? "back after " g "s" : "back after " int(g / 60) "m" sprintf("%02d", g % 60) "s"; break }
+        }
+        h = hfp_at(S[i])
+        cp = (h == 1) ? "call profile dropped with it" : (h == 2) ? "call profile stayed connected" : "call profile not in the kept history"
+        if (h == 1) whole++; else if (h == 2) only++
+        printf "  %s  device %s  %s; %s; %s\n", T[i], L[D[i]], by, cp, back
+      }
+      if (!nm) exit
+      printf "media drops: %d (stack-reported %d, asked for on the phone %d); whole device (call profile too): %d; media only (call profile kept): %d\n", nm, stack + 0, phone + 0, whole + 0, only + 0
+      if (only) print "  media only = the radio link held (the call profile rode on it) and the headset closed the media channel - what a multipoint headset does when it hands media to its other device"
+      if (whole) print "  whole device = both profiles went at once - range, the case lid, the headset powering down, or the link lost"
+    }'
 }
 
 lk_bt_lifecycle_kind() {
@@ -3477,6 +3598,16 @@ lk_bt_lifecycle_kind() {
     # connect_generic rows in two seconds, and the report counted a "generic" storm.
     *": 	at "*|*":	at "*|*" 	at "*|*getConnectionState*|*getProfileConnectionState*|*"isConnected("*|*fetchConnectionStatus*) return 0 ;;
     *reconnect*|*Reconnect*|*RECONNECT*) printf '%s' 'reconnect_literal' ;;
+    # The link itself (fix178). A headset that drops and comes back shows up as A2DP connects
+    # only - a CPH2769 capture with a multipoint headset had 8 A2DP connects and 0 disconnects,
+    # because a lost link goes CONNECTED -> DISCONNECTED (2->0) in one step and the state
+    # machine, not A2dpService, says so. The ACL line carries the HCI reason: lost (timeout)
+    # versus ended by the headset (e.g. a multipoint switch) versus ended by this phone.
+    *aclStateChangeCallback*isconnected*|*BluetoothRemoteDevices:*ACL*isconnected*) printf '%s' 'acl_disconnect' ;;
+    *aclStateChangeCallback*onnected*) printf '%s' 'acl_connect' ;;
+    *A2dpStateMachine*-\>DISCONNECTED*|*A2dpStateMachine*-\>Disconnected*|*A2dpService:*connectionStateChanged*state:*2-\>0*) printf '%s' 'a2dp_profile_disconnect' ;;
+    *HeadsetStateMachine*-\>DISCONNECTED*|*HeadsetStateMachine*-\>Disconnected*) printf '%s' 'hfp_profile_disconnect' ;;
+    *A2dpStateMachine*-\>CONNECTED*|*A2dpStateMachine*-\>Connected*) printf '%s' 'a2dp_profile_connect' ;;
     *HeadsetService:*disconnectAudio:*|*BluetoothHeadset:*disconnectAudio:*) printf '%s' 'hfp_audio_disconnect' ;;
     *HeadsetService:*connectAudio:*|*BluetoothHeadset:*connectAudio:*) printf '%s' 'hfp_audio_connect' ;;
     *A2dpService:*connectionStateChanged*state:*2-\>3*|*A2dpService:*connectionStateChanged*state:*3-\>0*) printf '%s' 'a2dp_profile_disconnect' ;;
@@ -3487,6 +3618,17 @@ lk_bt_lifecycle_kind() {
 }
 
 lk_bt_lifecycle_source() {
+  # An ACL disconnect keeps its HCI reason - the one fact that tells a lost link from one
+  # the headset ended (fix178). Only the number leaves the phone.
+  case "$1" in
+    *aclStateChangeCallback*isconnected*|*BluetoothRemoteDevices:*ACL*isconnected*)
+      _bt_rs="$(printf '%s\n' "$1" | sed -nE 's/.*[Rr]eason[:=] *(0x[0-9a-fA-F]+|[0-9]+).*/\1/p' | head -1)"
+      printf 'ACL reason=%s' "${_bt_rs:-?}"; return 0 ;;
+  esac
+  case "$1" in
+    *A2dpStateMachine*) printf '%s' 'A2DP' ; return 0 ;;
+    *HeadsetStateMachine*) printf '%s' 'Headset' ; return 0 ;;
+  esac
   case "$1" in
     *BluetoothManagerService*) printf '%s' 'BluetoothManagerService' ;;
     *AdapterService*)          printf '%s' 'AdapterService' ;;
@@ -3565,7 +3707,8 @@ lk_bt_reconnect_start() {
     logcat -v epoch -T 1 -b main -b system -b radio \
       -s BluetoothManagerService:V AdapterService:V A2dpService:V HeadsetService:V \
          GattService:V BluetoothA2dp:V BluetoothHeadset:V bt_stack:V bt_btif:V \
-         bt_btm:V bt_av:V Avrcp:V *:S 2>/dev/null | while IFS= read -r _bt_line; do
+         bt_btm:V bt_av:V Avrcp:V BluetoothRemoteDevices:V A2dpStateMachine:V \
+         HeadsetStateMachine:V BluetoothAdapterService:V *:S 2>/dev/null | while IFS= read -r _bt_line; do
            lk_bt_lifecycle_record "$_bt_line"; _bt_rc=$?
            [ "$_bt_rc" = 2 ] && break
          done
@@ -3585,10 +3728,14 @@ lk_bt_reconnect_snapshot() {
     echo "adapter.service=$(lk_get_prop init.svc.bluetooth) bluetooth_on=$(settings get global bluetooth_on 2>/dev/null)"
     echo "audio.playing=${LK_AUDIO_PLAY:-unknown} audio.route=${LK_AUDIO_ROUTE:-unknown} audio.mode=${LK_AUDIO_MODE:-unknown}"
     [ -n "${LK_AUDIO_MODE_OWNER:-}" ] && echo "audio.mode_owner: $LK_AUDIO_MODE_OWNER"
-    echo "# connection/profile evidence (MAC addresses redacted)"
+    echo "# connection/profile evidence (MAC addresses and device names redacted)"
+    # 200 lines of at most 360 characters (fix178): all 34 snapshots of capture 30423 hit the old
+    # 120-line cap, some halfway through the call profile's history, while 41% of the bytes were
+    # codec capability lists repeated inside single state-machine rows. The rows keep their
+    # time, states and event; the current codec has its own line.
     lk_dumpsys bluetooth_manager 2>/dev/null | lk_bt_dump_filter \
       | grep -iE 'adapter.*state|connection.*state|connected|connecting|disconnect|a2dp|headset|hfp|le_audio|gatt|avrcp|codec' \
-      | head -120 | lk_bt_redact_addr
+      | lk_bt_redact_addr | cut -c1-360 | head -200
     echo "# active audio route evidence"
     lk_dumpsys audio 2>/dev/null \
       | grep -iE 'Devices:|mConnectedDevices|state:started|A2DP|BLE_|HEADSET|SPEAKER|WIRED' \
