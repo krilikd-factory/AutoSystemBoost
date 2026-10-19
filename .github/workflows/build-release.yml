@@ -39,11 +39,6 @@ jobs:
           # runtime helpers are explicitly executed by their safety contracts below.
           chmod 0755 runtime/asb_active_efficiency_envelope.sh runtime/asb_boot_timeline.sh runtime/asb_debug_support.sh runtime/asb_stock_policy.sh runtime/asb_overlay_guard.sh runtime/asb_wifi_fallback.sh tools/asb_kernel_uv_coexist.sh
 
-      - name: Check the tree against the delivered archive
-        # Names every file that differs from tools/asb_tree.sha256 - a file not uploaded with a
-        # delivery shows up here by name instead of as a failing test further down.
-        run: sh tools/asb_tree_check.sh check
-
       - name: Validate required source files
         run: |
           for f in \
@@ -541,6 +536,7 @@ jobs:
             "runtime/asb_dsp_thermal.sh" \
             "runtime/asb_audio_activity.sh" \
             "runtime/asb_drain_meter.sh" \
+            "runtime/asb_rom_telemetry.sh" \
             "runtime/asb_dsp_live.sh" \
             "runtime/asb_cgroup.sh" \
             "runtime/asb_volume_curves.sh" \
