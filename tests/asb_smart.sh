@@ -4555,6 +4555,57 @@ out="$(TZ=UTC0 "$T/t")" || { printf '%s\n' "$out" >&2; fail "learner wrong"; }
 echo "PASS night window chain: one sample per night, bedtime = the chain's first screen-off, glances and face unlock change nothing, a desk day teaches nothing"
 )
 
+t_current_corroboration_runtime() (
+# Runtime (fix179): battery current corroborates a busy CPU only above THIS phone's idle load.
+#
+# "current >= 250 mA and load1 >= 60% of the MODERATE threshold" read 8.4 on a CPH2769 that
+# idles at 6.3-8.3 with the screen on and draws over 250 mA on any content: it was the only
+# reason for MODERATE in 240 of 535 quiet screen-on samples of capture 30423. The REAL helper
+# is cut out of asb_fsm.h and fed the device floors from the captures.
+set -eu
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+F="$ROOT/src/asb_fsm.h"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL current corroboration: $*" >&2; exit 1; }
+CC="${CC:-cc}"; command -v "$CC" >/dev/null 2>&1 || CC=gcc
+command -v "$CC" >/dev/null 2>&1 || { echo "SKIP current corroboration: no C compiler"; exit 0; }
+awk '/^static float asb_current_corroboration_bar\(/ { f = 1 } f { print } f && /^}/ { exit }' "$F" > "$T/h.c"
+grep -q 'quiet_floor' "$T/h.c" || fail "helper not found"
+# The rule uses it, and the fixed 60% bar is gone from the rule.
+grep -q 'm->cpu.load1 >= asb_current_corroboration_bar(mod_thr, asb_ui_quiet_floor(m)))' "$F" || fail "the current rule does not use the device floor"
+grep -q 'm->cpu.load1 >= mod_thr \* 0.6f)' "$F" && fail "the fixed 60% bar is still in the current rule"
+cat > "$T/t.c" <<'X'
+#include <stdio.h>
+#include <math.h>
+#include "h.c"
+static int bad = 0;
+static void near(float got, float want, const char *msg) {
+    if (fabsf(got - want) > 0.05f) { printf("%s: got %.2f want %.2f\n", msg, got, want); bad = 1; }
+}
+int main(void) {
+    near(asb_current_corroboration_bar(14.0f, -1.0f), 8.4f, "no floor learned keeps the old bar");
+    near(asb_current_corroboration_bar(14.0f, 0.5f),  8.6f, "a phone idling near zero keeps about the old bar");
+    near(asb_current_corroboration_bar(14.0f, 6.27f), 10.91f, "CPH2769 capture 30423 floor");
+    near(asb_current_corroboration_bar(14.0f, 5.86f), 10.74f, "CPH2769 capture 13290 floor");
+    near(asb_current_corroboration_bar(14.0f, 20.0f), 8.4f, "a floor above the threshold is ignored");
+    near(asb_current_corroboration_bar(20.0f, 6.0f),  14.4f, "follows the profile's own threshold");
+    /* Never lower than the old bar: no device gains MODERATE from this. */
+    for (float q = 0.01f; q < 14.0f; q += 0.37f)
+        if (asb_current_corroboration_bar(14.0f, q) < 8.4f - 0.001f) { printf("below the old bar at %.2f\n", q); bad = 1; }
+    /* The quiet CPH2769 loads (median 8.34) no longer clear it; real work near 14 still does. */
+    float qf = 6.27f, b = asb_current_corroboration_bar(14.0f, qf);
+    if (8.34f >= b || 7.74f >= b) { printf("an idle CPH2769 still clears the bar\n"); bad = 1; }
+    if (!(12.5f >= b)) { printf("work just under the threshold no longer corroborates\n"); bad = 1; }
+    if (!bad) printf("ok\n");
+    return bad;
+}
+X
+"$CC" -std=gnu99 -Wall -o "$T/t" "$T/t.c" -lm 2>"$T/cc.err" || { cat "$T/cc.err" >&2; fail "fixture does not compile"; }
+out="$("$T/t")" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo "PASS current corroboration: the battery-current shortcut to MODERATE starts above this phone's own idle load, never below the old bar"
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;
@@ -4568,3 +4619,4 @@ case "${1:-}" in
     [ "$_asb_failed" -eq 0 ]
     ;;
 esac
+

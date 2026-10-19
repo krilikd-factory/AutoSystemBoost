@@ -3822,6 +3822,32 @@ grep -q 'cmd wifi status' "$ROOT/tools/asb_diag.sh" || fail "asbdiag reads the W
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag differs from tools/asb_diag.sh"
 echo "PASS: fix178 contract"
 ) || exit 1
+# ---- fix179 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix179: $*"; exit 1; }
+for t in test_current_corroboration_runtime.sh test_logkit_screenoff_sleep_runtime.sh test_debug_support_contract.sh; do
+  asb_has_test "$t" || fail "$t missing"
+done
+grep -q '^static float asb_current_corroboration_bar(float mod_thr, float quiet_floor) {' "$ROOT/src/asb_fsm.h" || fail "the current shortcut to MODERATE ignores the phone's idle load"
+grep -q "grep 'AudioMix')" "$ROOT/tools/logkit/_asb_logkit_common.sh" || fail "AudioMix attribution credits every held lock again"
+grep -q 'if(r>=600){' "$ROOT/tools/logkit/asb_log_full_day.sh" || fail "seconds of screen-off time are read as a night again"
+echo "PASS: fix179 contract"
+) || exit 1
+# ---- fix180 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix180: $*"; exit 1; }
+for t in test_logkit_energy_model_runtime.sh test_logkit_multicast_by_app_runtime.sh test_asbdiag_write_ratio_runtime.sh \
+         test_asbdiag_wake_paths_runtime.sh test_logkit_capture_quality_contract.sh; do
+  asb_has_test "$t" || fail "$t missing"
+done
+grep -q '^lk_energy_model_write() {' "$ROOT/tools/logkit/_asb_logkit_common.sh" || fail "the capture does not record the CPU energy model"
+grep -q 'Wi-Fi multicast by app' "$ROOT/tools/logkit/_asb_logkit_common.sh" || fail "multicast holders are not named in the capture"
+grep -q 'P "    writes per transition: $_wpt (8+ with little vendor contention' "$ROOT/tools/asb_diag.sh" && fail "asbdiag calls a high write ratio chattering again"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag differs from tools/asb_diag.sh"
+echo "PASS: fix180 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
 )
 

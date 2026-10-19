@@ -3981,6 +3981,13 @@ sh "$V" reconcile
 [ -f "$T/d/ltpo_video.lowered" ] && f "record kept after off"
 
 # Crash/reboot mid-video: the record is repaired by reconcile without a watcher.
+# "Without a watcher" is the premise (fix180): under a loaded regression host the stopped
+# watcher could still be exiting - and restoring its own peak - when the record below was
+# written, which failed this check once in a full run. Wait for it to be gone first.
+_lw=0
+while [ "$_lw" -lt 100 ] && _lp="$(cat "$T/d/ltpo_video.pid" 2>/dev/null | tr -dc '0-9')" && [ -n "$_lp" ] && kill -0 "$_lp" 2>/dev/null; do
+  sleep 0.1; _lw=$((_lw + 1))
+done
 printf 'orig=144.0\nset=60.0\ncontent=30\nsince=1\n' > "$T/d/ltpo_video.lowered"
 echo "60.0" > "$T/peak"
 sh "$V" reconcile
@@ -6509,6 +6516,88 @@ for p in sorted(pathlib.Path(sys.argv[1]).glob('*.json')):
     assert v.count('%s') == 1, p.name
 P
 echo "PASS eta slot meter: after a governor start the screen-on forecast uses the drain measured in this profile, not the slot's session average, on the action screen and in the WebUI"
+)
+
+t_logkit_screenoff_sleep_runtime() (
+# Runtime (fix179): the report's "NIGHT / SCREEN-OFF CPU SLEEP" line needs ten minutes of
+# screen-off time. A CPH2747 report ended seconds after an unplug and printed "0.0h realtime,
+# CPU awake 0m -> awake 100.0%". The REAL function runs against a stub batterystats line.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+FULL="$ROOT/tools/logkit/asb_log_full_day.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL logkit screen-off sleep: $*" >&2; exit 1; }
+sed -n '/^lk_emit_screenoff_sleep() {/,/^}/p' "$FULL" > "$T/f.sh"
+grep -q 'awake' "$T/f.sh" || fail "function not found"
+run() { ( BS="$1"; lk_dumpsys() { printf '%s\n' "$BS"; }; . "$T/f.sh"; lk_emit_screenoff_sleep ); }
+out="$(run '  Time on battery screen off: 7h 36m 0s 0ms realtime, 4h 31m 0s 0ms uptime')"
+printf '%s\n' "$out" | grep -q 'screen-off: 7.6h realtime, CPU awake 271m -> awake 59.4% (deep sleep 40.6%)' || fail "a real window: $out"
+out="$(run '  Time on battery screen off: 2s 300ms realtime, 2s 500ms uptime')"
+printf '%s\n' "$out" | grep -q 'awake 100' && fail "two seconds read as a phone that never slept: $out"
+printf '%s\n' "$out" | grep -q 'only 2s of screen-off time' || fail "short window not named: $out"
+out="$(run '  Time on battery screen off: 0ms realtime, 0ms uptime')"
+printf '%s\n' "$out" | grep -q 'only' && fail "an empty window read as a short one: $out"
+printf '%s\n' "$out" | grep -q 'night(longest)' || fail "no pointer to the overnight figure: $out"
+echo "PASS logkit screen-off sleep: Android's screen-off window is read only from ten minutes up"
+)
+
+t_logkit_multicast_by_app_runtime() (
+# Runtime (fix179): the capture names who held Wi-Fi multicast, from batterystats' per-uid
+# blocks. A CPH2769 total read 3 h 49 min with no holder anywhere in the capture. The REAL
+# lk_wakelock_batterystats_dump runs against a stub dump.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+COMMON="$ROOT/tools/logkit/_asb_logkit_common.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL logkit multicast by app: $*" >&2; exit 1; }
+printf '10345 com.instagram.android\n10436 ru.vk.store\n' > "$T/uid_map.txt"
+cat > "$T/dump" <<'D'
+Statistics since last charge:
+  Total WiFi Multicast wakelock time: 52m 58s 544ms
+  1000:
+    Wake lock *alarm* realtime
+    WiFi Multicast Wakelock count = 12 time = 41m2s3ms
+  u0a345:
+    Wake lock AudioMix: 1m 2s realtime
+    WiFi Multicast Wakelock count = 3 time = 11m56s541ms
+  u0a999:
+    Foreground services: 1s
+D
+out="$( ( set +u; LK_SCRIPT_DIR="$ROOT/tools/logkit"; . "$COMMON" >/dev/null 2>&1
+          LK_OUT_DIR="$T"; LK_WAKELOCK_NAME=asb_logkit_test
+          lk_have() { return 0; }; lk_dumpsys() { cat "$T/dump"; }; lk_wakelock_emit_report() { :; }
+          lk_wakelock_batterystats_dump; cat "$T/wake_sources.txt" ) )"
+sec="$(printf '%s\n' "$out" | sed -n '/^# --- Wi-Fi multicast by app/,/^$/p')"
+[ -n "$sec" ] || fail "no multicast-by-app section: $out"
+printf '%s\n' "$sec" | grep -qx '1000 (system): WiFi Multicast Wakelock count = 12 time = 41m2s3ms' || fail "system uid: $sec"
+printf '%s\n' "$sec" | grep -qx 'u0a345 (com.instagram.android): WiFi Multicast Wakelock count = 3 time = 11m56s541ms' || fail "app uid: $sec"
+printf '%s\n' "$sec" | grep -q 'Total\|u0a999' && fail "the total or an unrelated uid was listed: $sec"
+echo "PASS logkit multicast by app: the capture names the Wi-Fi multicast holders per uid"
+)
+
+t_logkit_energy_model_runtime() (
+# Runtime (fix179): the capture records the kernel's energy model - the power cost of every CPU
+# step - so the screen-off race-to-idle floor can be judged against the silicon instead of
+# argued. The REAL lk_energy_model_write runs against a fake debugfs tree.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+COMMON="$ROOT/tools/logkit/_asb_logkit_common.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL logkit energy model: $*" >&2; exit 1; }
+for d in cpu0/ps:960000 cpu0/ps:1401600 cpu6/ps:537600; do
+  mkdir -p "$T/em/$d"; f="${d##*:}"
+  echo "$f" > "$T/em/$d/frequency"; echo $(( f / 4000 )) > "$T/em/$d/power"; echo $(( f / 1000 )) > "$T/em/$d/cost"
+done
+run() { ( set +u; LK_SCRIPT_DIR="$ROOT/tools/logkit"; . "$COMMON" >/dev/null 2>&1
+          LK_OUT_DIR="$T"; ASB_LK_EM_ROOT="$1"; lk_energy_model_write; cat "$T/energy_model.txt" ); }
+out="$(run "$T/em")"
+[ "$(printf '%s\n' "$out" | sed -n 2p)" = 'cpu0|960000|240|960' ] || fail "first row (steps in kHz order): $out"
+printf '%s\n' "$out" | grep -qx 'cpu0|1401600|350|1401' || fail "second step: $out"
+printf '%s\n' "$out" | grep -qx 'cpu6|537600|134|537' || fail "second domain: $out"
+out="$(run "$T/none")"
+printf '%s\n' "$out" | grep -qx 'unavailable' || fail "missing debugfs not said: $out"
+grep -q '^  lk_energy_model_write$' "$COMMON" || fail "the capture start does not write the energy model"
+echo "PASS logkit energy model: the per-step CPU power table is in the capture where the kernel exposes it"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

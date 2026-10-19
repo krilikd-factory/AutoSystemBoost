@@ -132,8 +132,58 @@ out="$(PATH="$T/bin:$PATH" DUMP=/dev/null CMDOUT="$T/wc" sh "$T/wf.sh")"
 printf 'mWifiInfo SSID: <unknown ssid>, RSSI: -127, Link speed: -1Mbps, Frequency: -1MHz\n' > "$T/wd"
 out="$(PATH="$T/bin:$PATH" DUMP="$T/wd" CMDOUT=/dev/null sh "$T/wf.sh")"
 [ "$out" = '  live wifi link: not connected, or the ROM printed no link line' ] || fail "disconnected link: $out"
+# fix179: who held Wi-Fi multicast since the unplug, from batterystats' per-uid blocks.
+cat > "$T/bin/dumpsys" <<'B'
+#!/bin/sh
+printf '  Total WiFi Multicast wakelock time: 3h 49m\n  1000:\n    WiFi Multicast Wakelock count = 12 time = 41m2s3ms\n  u0a345:\n    WiFi Multicast Wakelock count = 3 time = 11m56s541ms\n'
+B
+cat > "$T/bin/pm" <<'B'
+#!/bin/sh
+printf 'package:com.instagram.android uid:10345\npackage:com.other uid:103450\n'
+B
+chmod +x "$T/bin/dumpsys" "$T/bin/pm"
+{ echo 'P() { echo "$*"; }; _mct=13752'
+  sed -n '/^  if \[ "\$_mct" -ge 600 \]; then$/,/^  fi$/p' "$D"; } > "$T/mc.sh"
+grep -q 'held since the unplug' "$T/mc.sh" || fail "multicast holder block not found"
+out="$(PATH="$T/bin:$PATH" sh "$T/mc.sh")"
+printf '%s\n' "$out" | grep -qx '    held since the unplug: system  ·  WiFi Multicast Wakelock count = 12 time = 41m2s3ms' || fail "system holder: $out"
+printf '%s\n' "$out" | grep -qx '    held since the unplug: com.instagram.android  ·  WiFi Multicast Wakelock count = 3 time = 11m56s541ms' || fail "app holder: $out"
+printf '%s\n' "$out" | grep -q 'com.other' && fail "a uid prefix matched another app: $out"
 cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
-echo "PASS asbdiag wake paths: the display path counts in the wake total, status-bar keys are matched by name, the active codec and the Wi-Fi band are named"
+echo "PASS asbdiag wake paths: the display path counts in the wake total, status-bar keys are matched by name, the active codec, the Wi-Fi band and the multicast holders are named"
+)
+
+t_asbdiag_write_ratio_runtime() (
+# Runtime (fix179): "writes per transition" is judged against the phone's own cpufreq slots,
+# and chatter by how often the state changes. A CPH2691 read "13 (8+ ... suggests the ladder
+# is chattering)" with three slots, 65 unlock lifts, 63 prime bursts, 296 re-sends through a
+# vendor hold and 35 state changes an hour. The REAL block of tools/asb_diag.sh runs.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+D="$ROOT/tools/asb_diag.sh"
+fail() { echo "FAIL asbdiag write ratio: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+awk '/^  if \[ "\$_ov_t" -gt 0 \] 2>\/dev\/null; then$/ { f = 1 } f { print } f && /^  fi$/ { exit }' "$D" > "$T/b.sh"
+grep -q '_ov_nd' "$T/b.sh" || fail "ratio block not found"
+run() {  # $1 transitions, $2 writes, $3 slots, $4 uptime
+  printf 'governor_transitions=%s\ngovernor_writes=%s\nslot_policy_ids=%s\nunlock_lifts=65\nprime_escape_count=63\nwriter_hold_bypass=296\ngovernor_uptime_s=%s\ncap_vendor_passive=0\ngovernor_vendor_overrides=0\n' "$1" "$2" "$3" "$4" > "$T/st"
+  { echo 'P() { echo "$*"; }; _rget() { grep -E "^$1=" "$2" 2>/dev/null | tail -1 | sed "s/^[^=]*=//"; }'
+    echo "_state=$T/st; _ov_t=$1; _ov_w=$2"; cat "$T/b.sh"; } > "$T/r.sh"
+  sh "$T/r.sh"
+}
+out="$(run 224 2940 0,2,5 22800)"
+printf '%s\n' "$out" | grep -q 'chattering$' && fail "the CPH2691 still reads as chattering: $out"
+printf '%s\n' "$out" | grep -q 'above the 9 nodes one transition writes on 3 cpufreq slot(s).*65 unlock lift(s), 63 prime burst(s) and 296 re-send(s)' || fail "OP12 breakdown: $out"
+printf '%s\n' "$out" | grep -q '35 an hour, one every 101 s on average - not a chattering ladder' || fail "OP12 rate: $out"
+out="$(run 628 5544 0,6,-1 86186)"
+printf '%s\n' "$out" | grep -q 'writes per transition: 8 - above the 7 nodes one transition writes on 2 cpufreq slot(s)' || fail "OP15 ratio: $out"
+out="$(run 900 3600 0,6,-1 3600)"
+printf '%s\n' "$out" | grep -q 'normal - one transition writes up to 7 nodes' || fail "normal ratio: $out"
+printf '%s\n' "$out" | grep -q '900 an hour, one every 4 s - the ladder is chattering' || fail "real chatter not named: $out"
+out="$(run 5 40 0,6,-1 3600)"
+printf '%s\n' "$out" | grep -q 'too few to judge' || fail "few transitions: $out"
+cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS asbdiag write ratio: writes per transition against the phone's own slots, chatter by how often the state changes"
 )
 
 t_asbdiag_settings_summary_runtime() (
@@ -756,6 +806,12 @@ lk_audio_wakelock_live_row "PARTIAL_WAKE_LOCK 'AudioMix' WorkSource{10652}" 124
 grep -Fq '123|' "${LK_OUT_DIR}/audio_wakelock_attribution.tsv" || { echo 'FAIL debug support: chained AudioMix row absent' >&2; exit 1; }
 grep -Fq '|10658|pkg.uid.10658|' "${LK_OUT_DIR}/audio_wakelock_attribution.tsv" || { echo 'FAIL debug support: chained WorkSource UID unresolved' >&2; exit 1; }
 grep -Fq '|10652|pkg.uid.10652|' "${LK_OUT_DIR}/audio_wakelock_attribution.tsv" || { echo 'FAIL debug support: compact WorkSource UID unresolved' >&2; exit 1; }
+# fix179: a job lock held beside AudioMix is not AudioMix (capture 30423: ru.vk.store, 95 rows).
+lk_audio_wakelock_live_row "PARTIAL_WAKE_LOCK '*job*r/@androidx.work.systemjobscheduler@ru.vk.store/x' ACQ=-1s (uid=1000 ws=WorkSource{ chains=WorkChain{(10436), (1000, JobScheduler)}});PARTIAL_WAKE_LOCK 'AudioMix' ACQ=-5s (uid=1041 ws=WorkSource{10345});" 125
+grep -Fq '125|' "${LK_OUT_DIR}/audio_wakelock_attribution.tsv" || { echo 'FAIL debug support: AudioMix beside a job lock not recorded' >&2; exit 1; }
+grep -Fq '|10436|' "${LK_OUT_DIR}/audio_wakelock_attribution.tsv" && { echo 'FAIL debug support: a job lock held beside AudioMix was credited to AudioMix' >&2; exit 1; }
+grep -F '125|' "${LK_OUT_DIR}/audio_wakelock_attribution.tsv" | grep -q 'ru.vk.store' && { echo 'FAIL debug support: the job lock text was kept as AudioMix evidence' >&2; exit 1; }
+grep -Fq '125|' "${LK_OUT_DIR}/audio_wakelock_attribution.tsv" && grep -F '125|' "${LK_OUT_DIR}/audio_wakelock_attribution.tsv" | grep -Fq '|10345|pkg.uid.10345|' || { echo 'FAIL debug support: the AudioMix owner beside a job lock was lost' >&2; exit 1; }
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'lk_audio_wakelock_attribution_init'
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'lk_capture_fsm_media_trace_row "$_phase"'
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'rmnetMiB'
@@ -1516,6 +1572,16 @@ _consistency="$(lk_emit_current_soc_consistency)"
 printf '%s\n' "$_consistency" | grep -Eq '^sleep[[:space:]]+60\.0[[:space:]]+2\.00[[:space:]]+2\.00[[:space:]]+0\.0%[[:space:]]+aligned$' || { echo 'FAIL logkit capture-quality: aligned current/SOC verdict' >&2; exit 1; }
 printf '%s\n' "$_consistency" | grep -Eq '^idle[[:space:]]+60\.0[[:space:]]+2\.00[[:space:]]+8\.00[[:space:]]+75\.0%[[:space:]]+CHECK high \(>30%\)$' || { echo 'FAIL logkit capture-quality: current/SOC check verdict' >&2; exit 1; }
 printf '%s\n' "$_consistency" | grep -Fq 'not causal energy attribution' || { echo 'FAIL logkit capture-quality: current/SOC causal disclaimer missing' >&2; exit 1; }
+printf '%s\n' "$_consistency" | grep -q "governor's gauge check" && { echo 'FAIL logkit capture-quality: gauge line without a governor state' >&2; exit 1; }
+# fix179: the governor's own gauge factor is named (a CPH2747 read x0.35 over 61 windows).
+lk_state_kv() { case "$1" in current_scale_x100) echo 35 ;; current_scale_windows) echo 61 ;; esac; }
+_consistency="$(lk_emit_current_soc_consistency)"
+printf '%s\n' "$_consistency" | grep -Fq "governor's gauge check: on screen-on windows current_now integrates to x0.35 of the SOC-derived drain (61 windows) - multiply screen-on mA by about 2.8" || { echo "FAIL logkit capture-quality: governor gauge factor: $_consistency" >&2; exit 1; }
+lk_state_kv() { case "$1" in current_scale_x100) echo 135 ;; current_scale_windows) echo 61 ;; esac; }
+lk_emit_current_soc_consistency | grep -Fq 'integrates to x1.35 of' || { echo 'FAIL logkit capture-quality: gauge factor above 1' >&2; exit 1; }
+lk_state_kv() { case "$1" in current_scale_x100) echo 92 ;; current_scale_windows) echo 61 ;; esac; }
+lk_emit_current_soc_consistency | grep -q "governor's gauge check" && { echo 'FAIL logkit capture-quality: an accurate gauge was flagged' >&2; exit 1; }
+unset -f lk_state_kv
 
 # Per-phase distribution must use raw battery samples mapped to each concrete ledger interval,
 # not a median of phase averages. The outlier makes this distinction visible: mean=250 but
