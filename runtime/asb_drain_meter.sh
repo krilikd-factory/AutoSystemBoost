@@ -14,6 +14,13 @@ dm_prev_scr=""
 dm_off_ts=""
 dm_off_pct=""
 dm_off_media=0
+dm_aud_run=0
+dm_glance_ts=""
+dm_glance_pct=""
+# A glance does not end a night (fix178): a screen-on shorter than this is folded into the
+# screen-off window, as the governor's own screen-off meter does. Checking the time once in
+# the night split every window under the hour, and no profile ever got a screen-off figure.
+DM_GLANCE_S="${ASB_DM_GLANCE_S:-120}"
 dm_dirty=0
 dm_flush_ts=0
 
@@ -82,22 +89,26 @@ dm_step() {
   _n="$1"; _p="$2"; _c="$3"; _s="$4"; _pf="$5"; _m="$6"
   case " $DM_PROFILES " in *" $_pf "*) : ;; *) _pf="" ;; esac
   if [ "$_pf" != "$dm_prof" ]; then
-    dm_prof="$_pf"; dm_prev_ts=""; dm_prev_scr=""; dm_off_ts=""; dm_off_media=0
+    dm_prof="$_pf"; dm_prev_ts=""; dm_prev_scr=""; dm_off_ts=""; dm_off_media=0; dm_aud_run=0; dm_glance_ts=""
   fi
   [ -n "$dm_prof" ] || return 0
   case "$_p" in ''|*[!0-9]*) dm_prev_ts=""; return 0 ;; esac
   case "$_n" in ''|*[!0-9]*) return 0 ;; esac
   if [ "$_c" = 1 ]; then
-    dm_prev_ts=""; dm_off_ts=""; dm_off_media=0; dm_prev_scr="$_s"
+    dm_prev_ts=""; dm_off_ts=""; dm_off_media=0; dm_aud_run=0; dm_glance_ts=""; dm_prev_scr="$_s"
     return 0
   fi
   if [ "$_s" = 1 ]; then
     if [ -n "$dm_off_ts" ]; then
-      _dd=$((_n - dm_off_ts)); _dq=$((dm_off_pct - _p))
-      if [ "$_dd" -ge 3600 ] && [ "$dm_off_media" = 0 ] && [ "$_dq" -ge 0 ] && [ "$_dq" -le 50 ]; then
-        dm_add_off "$_dd" "$_dq"
+      # The window ends where the screen came on, once it has stayed on past a glance.
+      [ -n "$dm_glance_ts" ] || { dm_glance_ts="$_n"; dm_glance_pct="$_p"; }
+      if [ $((_n - dm_glance_ts)) -ge "$DM_GLANCE_S" ]; then
+        _dd=$((dm_glance_ts - dm_off_ts)); _dq=$((dm_off_pct - dm_glance_pct))
+        if [ "$_dd" -ge 3600 ] && [ "$dm_off_media" = 0 ] && [ "$_dq" -ge 0 ] && [ "$_dq" -le 50 ]; then
+          dm_add_off "$_dd" "$_dq"
+        fi
+        dm_off_ts=""; dm_off_media=0; dm_aud_run=0; dm_glance_ts=""
       fi
-      dm_off_ts=""; dm_off_media=0
     fi
     if [ "$dm_prev_scr" = 1 ] && [ -n "$dm_prev_ts" ]; then
       _dd=$((_n - dm_prev_ts)); _dq=$((dm_prev_pct - _p))
@@ -107,8 +118,18 @@ dm_step() {
       fi
     fi
   else
-    if [ -z "$dm_off_ts" ]; then dm_off_ts="$_n"; dm_off_pct="$_p"; dm_off_media=0; fi
-    [ "$_m" = 1 ] && dm_off_media=1
+    # Off again within the glance: the same window goes on.
+    dm_glance_ts=""
+    if [ -z "$dm_off_ts" ]; then dm_off_ts="$_n"; dm_off_pct="$_p"; dm_off_media=0; dm_aud_run=0; fi
+    # Playback, not a sound (fix178): two samples in a row with audio, about a minute of it.
+    # One notification - or the first sample after the screen went off, which saw the screen-on
+    # audio - no longer threw the whole night away.
+    if [ "$_m" = 1 ]; then
+      dm_aud_run=$((dm_aud_run + 1))
+      [ "$dm_aud_run" -ge 2 ] && dm_off_media=1
+    else
+      dm_aud_run=0
+    fi
   fi
   dm_prev_ts="$_n"; dm_prev_pct="$_p"; dm_prev_scr="$_s"
   return 0
@@ -153,6 +174,12 @@ dm_loop() {
     _lf=""; [ -r "$DM_PROF_FILE" ] && read -r _lf < "$DM_PROF_FILE" 2>/dev/null
     _lm=0
     if [ "$_ls" = 0 ] && command -v asb_audio_sig >/dev/null 2>&1; then
+      # The thread-activity probe compares with its previous call, and it is only called with
+      # the screen off - so the first call after a screen-on period counted everything the
+      # audio threads did while the phone was in use (taps, a video) as screen-off playback,
+      # and every window was dropped as "music". The ROMs without readable PCM status (the
+      # OP15 among them) measured no screen-off drain at all (fix178). Start it afresh here.
+      [ "$dm_prev_scr" = 0 ] || _aa_prev=""
       asb_audio_sig
       [ -n "${_aa_sig:-}" ] && _lm=1
     fi
