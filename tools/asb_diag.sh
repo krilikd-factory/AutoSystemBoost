@@ -183,6 +183,11 @@ asb_gfx_run_delta() {   # $1 earlier asb_gfx_pkg lines, $2 later ones, $3 second
     END {
       if (S < 5 || F <= 0) exit
       if (n == 0) { printf "while this report ran (%d s): %d frames drawn, none janky\n", S, F; exit }
+      # A terminal drawing the most janky frames is where the report is being printed (fix178):
+      # on a CPH2691 the top-app lookup found no host, and com.termux - scrolling this very
+      # report - was called "a redraw that runs by itself".
+      if (H == "") { b = 0; for (k = 1; k <= n; k++) if (b == 0 || DJ[k] > DJ[b]) b = k
+        if (P[b] ~ /^(com\.termux|jackpal\.androidterm|com\.offsec\.nhterm|yarolegovich\.materialterminal)$|terminal/) H = P[b] }
       line = ""
       for (r = 1; r <= 4; r++) {
         b = 0
@@ -281,7 +286,7 @@ fi
 # name the process, the signal and the abort message; the newest few are listed, and one
 # with ASB code in its backtrace is called out.
 _asb_tombstones() {
-  _tb_abs=""
+  _tb_abs=""; _tb_injs=""
   _tb_list="$(ls -t "${ASB_TOMBSTONE_DIR:-/data/tombstones}"/tombstone_[0-9][0-9] 2>/dev/null | head -8)"
   if [ -n "$_tb_list" ]; then
     P "  recent native crashes (newest first, /data/tombstones):"
@@ -313,11 +318,22 @@ _asb_tombstones() {
       [ -n "$_tb_fr" ] && P "      first frame outside libc: $_tb_fr"
       [ -n "$_tb_ab" ] && _tb_abs="${_tb_abs:-}$_tb_ab
 "
+      # Code of an installed app inside a system process (fix178): a CPH2691 listed eight
+      # com.oplus.battery/ota aborts whose first frame was LuckyTool's libdexkit.so - a hook
+      # module injected there - and nothing said so.
+      _tb_inj="$(printf '%s\n' "$_tb_fr" | sed -n 's#^/data/app/\(~~[^/]*/\)\{0,1\}\([A-Za-z0-9_.]*\)-[^/]*/.*#\2#p' | head -1)"
+      case "$_tb_inj" in ''|"${_tb_cmd%%:*}") : ;; *) _tb_injs="${_tb_injs:-}$_tb_inj
+" ;; esac
     done
     # One message across many processes is one cause, not many crashes.
     if [ -n "${_tb_abs:-}" ]; then
       _tb_topn="$(printf '%s' "$_tb_abs" | sort | uniq -c | sort -rn | awk 'NR == 1 { print $1 }')"
       [ "${_tb_topn:-0}" -ge 3 ] 2>/dev/null && NOTE "$_tb_topn of the listed crashes end with the same abort message - one cause in many processes (the frame above names whose code)"
+    fi
+    if [ -n "${_tb_injs:-}" ]; then
+      printf '%s' "$_tb_injs" | sort | uniq -c | sort -rn | while read -r _tb_in _tb_ip; do
+        NOTE "$_tb_in of the listed crashes start in code of $_tb_ip, loaded into another app's process (a hook / Xposed module) - its hooks there are the first thing to switch off"
+      done
     fi
     if [ "$_tb_asb_n" -gt 0 ]; then
       NOTE "$_tb_asb_n of these crashes have ASB code (the DSP library or its attach daemon) in them - send this asbdiag; dsp_loudness=off takes the effect out of the audio path until it is fixed"
@@ -946,7 +962,11 @@ if [ -r "$_state" ]; then
     # not a ROM whose display events never arrive - an absolute "> 3" warned on both.
     _sou="$(printf '%s' "$_sod" | sed -n 's/.*uevent:\([0-9]*\).*/\1/p')"
     _sor="$(printf '%s' "$_sod" | sed -n 's/.*recheck:\([0-9]*\).*/\1/p')"
-    _sall=$(( ${_sou:-0} + ${_sor:-0} + ${_sot:-0} ))
+    # The display-state waiter is a path of its own (fix178): left out of the total, an OP12 that
+    # caught 32 wakes there and 4 by the tick read "4 of 4 screen wakes were found only by the
+    # idle tick".
+    _sodp="$(printf '%s' "$_sod" | sed -n 's/.*display:\([0-9]*\).*/\1/p')"
+    _sall=$(( ${_sou:-0} + ${_sor:-0} + ${_sot:-0} + ${_sodp:-0} ))
     if [ "${_sot:-0}" -gt 3 ] 2>/dev/null && [ $(( ${_sot:-0} * 10 )) -gt "$_sall" ] 2>/dev/null; then
       NOTE "WARN: $_sot of $_sall screen wakes were found only by the idle tick - send this diag: the display event path misses them on this ROM"
     fi
@@ -1972,6 +1992,23 @@ if [ -n "$_vlim" ]; then
 else
   NOTE "volume limits: the audio service printed no safe-volume / sound-dose / absolute-volume lines on this build"
 fi
+# The codec on the active A2DP link (fix178). A CPH2769 user's multipoint headphones dropped
+# three or four times in an afternoon on LHDC 48 kHz / 24-bit, and the report did not say which
+# codec ran. A high-bitrate codec needs the most airtime, which a second link to a laptop
+# shares - when drops come with the other device nearby, AAC or a lower quality is the test.
+_btc="$(dumpsys bluetooth_manager 2>/dev/null | awk '/A2dpStateMachine for .*\(Active\)/ { a = 1 }
+  a && /mCodecConfig:/ {
+    n = $0; sub(/.*codecName:/, "", n); sub(/,.*/, "", n)
+    r = $0; sub(/.*mSampleRate:[^(]*\(/, "", r); sub(/\).*/, "", r)
+    b = $0; sub(/.*mBitsPerSample:[^(]*\(/, "", b); sub(/\).*/, "", b)
+    print n " " r " Hz / " b "-bit"; exit }')"
+if [ -n "$_btc" ]; then
+  NOTE "active A2DP codec: $_btc"
+  case "$_btc" in
+    LHDC*|LDAC*|aptX\ Adaptive*|aptX\ HD*)
+      NOTE "a high-bitrate codec: if a dual-connection (multipoint) headset drops while its other device is near, try AAC or a lower quality in the headset's settings" ;;
+  esac
+fi
 _rs_c="$(cfg audio_resampler)"
 _rs_live="$(gp ro.audio.resampler.psd.stopband)/$(gp ro.audio.resampler.psd.halflength)"
 [ "$_rs_live" = "/" ] && _rs_live=""
@@ -2065,7 +2102,23 @@ done
 # supplicant safety
 SUP="$(firstf '/vendor/etc/wifi/wpa_supplicant_overlay.conf' '/odm/etc/wifi/wpa_supplicant_overlay.conf')"
 [ -n "$SUP" ] && V "supplicant keeps p2p_disabled=1 (Wi-Fi-safe)" "1" "$(grep -c 'p2p_disabled=1' "$SUP" 2>/dev/null)" ge
-P "  live wifi link: $(dumpsys wifi 2>/dev/null | grep -m1 -iE 'mWifiInfo|SSID' | sed 's/^[[:space:]]*//' | cut -c1-70)"
+# The connected link: band, signal, speed - not its name (fix178). The line took the first
+# "SSID" anywhere in the dump and printed a state-machine row ("rec[5]: time=... processed=
+# DefaultState") in every report from every phone so far. The band is what matters next to
+# Bluetooth: 2.4 GHz Wi-Fi and a headset share the same air.
+_wfl="$({ cmd wifi status 2>/dev/null; dumpsys wifi 2>/dev/null; } | awk '
+  function fld(re,   v) { if (!match($0, re)) return ""; v = substr($0, RSTART, RLENGTH); sub(/^[^:]*: */, "", v); return v }
+  /Frequency: *[0-9]+/ && /RSSI: *-?[0-9]+/ {
+    f = fld("Frequency: *[0-9]+"); r = fld("RSSI: *-?[0-9]+")
+    if (f + 0 <= 0 || r + 0 <= -127) next
+    l = fld("Link speed: *[0-9]+"); w = fld("Wi-Fi standard: *[^,;]+")
+    b = (f + 0 < 3000) ? "2.4 GHz" : (f + 0 < 5925) ? "5 GHz" : "6 GHz"
+    printf "%s MHz (%s), RSSI %s dBm", f, b, r
+    if (l != "") printf ", %s Mbps", l
+    if (w != "") printf ", %s", substr(w, 1, 12)
+    print ""; exit }')"
+P "  live wifi link: ${_wfl:-not connected, or the ROM printed no link line}"
+case "$_wfl" in *"(2.4 GHz)"*) NOTE "Wi-Fi on 2.4 GHz shares the air with Bluetooth - with a headset that drops, a 5 GHz network is the first thing to try" ;; esac
 
 # =====================================================================
 # Can Settings be reached at all? Ask once, loudly, before anything that depends on it.
@@ -3514,8 +3567,11 @@ if [ -n "$_gfx_lines" ]; then
   # SystemUI was the steady source in the first captures that could name one (fix145): OP15
   # 1.1 janky frames a second in all 367 screen-on intervals, CPH2691 0.5-0.7. The settings
   # that make it redraw every second, as this ROM names them, so the user knows what to try.
+  # Matched on the key only (fix178), as the log kit does since fix169: a CPH2691 matched
+  # oplus.radio.smart5g_apk_cfg because its value - a long app list - contains "Internetspeed",
+  # and the report printed the whole list.
   _sbs="$(for _ns in system secure global; do settings list "$_ns" 2>/dev/null | sed "s/^/$_ns:/"; done \
-          | grep -iE 'net(work)?_?speed|speed_?(indicator|display|show|switch)|clock_?seconds|show_?seconds|seconds_?clock' \
+          | awk -F= 'tolower($1) ~ /net(work)?_?speed|speed_?(indicator|display|show|switch)|clock_?seconds|show_?seconds|seconds_?clock/ { v = substr($0, length($1) + 2); if (length(v) > 24) v = substr(v, 1, 24) "..."; print $1 "=" v }' \
           | head -6 | tr '\n' ' ')"
   [ -n "$_sbs" ] && NOTE "status-bar settings that can redraw every second (SystemUI): $_sbs"
 else
