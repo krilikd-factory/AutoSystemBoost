@@ -1244,10 +1244,35 @@ if [ -r "$_state" ]; then
       # The boot pass writes every node once before the first transition: a field diag
       # read "11 per transition - chattering" from 23 writes over 2 transitions.
       P "    writes per transition: $_wpt  ($_ov_w writes / $_ov_t transitions - too few to judge; the boot pass writes every node once)"
-    elif [ "$_wpt" -gt 8 ]; then
-      P "    writes per transition: $_wpt (8+ with little vendor contention suggests the ladder is chattering)"
     else
-      P "    writes per transition: $_wpt (normal - a transition writes ~4-6 nodes)"
+      # Judged against what a transition writes on THIS phone, and chatter judged by how
+      # often the state changes (fix179). "8+ suggests the ladder is chattering" read 13 on
+      # a CPH2691 - three cpufreq slots, so a transition alone writes up to nine nodes, and
+      # between transitions the writer also served 65 unlock lifts, 63 prime bursts and 296
+      # re-sends through a vendor hold - with 35 state changes an hour, one every 100 s.
+      # Many writes per transition is the writer's extra work; chatter is many transitions.
+      _ov_sl="$(_rget slot_policy_ids "$_state" | tr ',' '\n' | grep -c '^[0-9]')"
+      case "$_ov_sl" in ''|0) _ov_sl=2 ;; esac
+      _ov_nd=$(( 2 * _ov_sl + 3 ))
+      _ov_ul="$(_rget unlock_lifts "$_state")"; _ov_pb="$(_rget prime_escape_count "$_state")"
+      _ov_hb="$(_rget writer_hold_bypass "$_state")"; _ov_up="$(_rget governor_uptime_s "$_state")"
+      case "$_ov_ul" in ''|*[!0-9]*) _ov_ul=0 ;; esac
+      case "$_ov_pb" in ''|*[!0-9]*) _ov_pb=0 ;; esac
+      case "$_ov_hb" in ''|*[!0-9]*) _ov_hb=0 ;; esac
+      case "$_ov_up" in ''|*[!0-9]*) _ov_up=0 ;; esac
+      if [ "$_wpt" -gt "$_ov_nd" ]; then
+        P "    writes per transition: $_wpt - above the $_ov_nd nodes one transition writes on $_ov_sl cpufreq slot(s); between transitions the writer also served $_ov_ul unlock lift(s), $_ov_pb prime burst(s) and $_ov_hb re-send(s) through a vendor hold"
+      else
+        P "    writes per transition: $_wpt (normal - one transition writes up to $_ov_nd nodes on $_ov_sl cpufreq slot(s))"
+      fi
+      if [ "$_ov_up" -ge 3600 ]; then
+        _ov_tph=$(( _ov_t * 3600 / _ov_up ))
+        if [ "$_ov_tph" -ge 360 ]; then
+          P "    state changes    : $_ov_tph an hour, one every $(( _ov_up / _ov_t )) s - the ladder is chattering"
+        else
+          P "    state changes    : $_ov_tph an hour, one every $(( _ov_up / _ov_t )) s on average - not a chattering ladder"
+        fi
+      fi
     fi
   fi
   if [ "${_wfail:-0}" = "0" ]; then
@@ -2976,6 +3001,21 @@ if [ -s /data/adb/asb/wakelock_multicast ]; then
   grep -v '^total|' /data/adb/asb/wakelock_multicast | while IFS='|' read -r _mp _mv; do
     [ -n "$_mp" ] && P "    holding now: $_mp  ·  $_mv"
   done
+  # Who held it, not only who holds it now (fix179): a CPH2769 diag read 229 min with no
+  # holder, because the watcher only sees the lock at the moment it looks. batterystats keeps
+  # the per-uid figure under each uid's block; matched loosely, named through pm.
+  if [ "$_mct" -ge 600 ]; then
+    dumpsys batterystats 2>/dev/null | awk '
+      /^  (u[0-9]+[ai][0-9]+|[0-9]+):[[:space:]]*$/ { u = $1; sub(/:$/, "", u); next }
+      u != "" && /[Mm]ulticast/ && /[Ww]ake ?lock/ && !/Total/ {
+        n = u; if (u ~ /^u[0-9]+a[0-9]+$/) { split(u, b, "a"); n = 10000 + b[2] }
+        line = $0; sub(/^[[:space:]]+/, "", line); print n "|" u "|" substr(line, 1, 100) }' \
+      | head -5 | while IFS='|' read -r _mn _mu _ml; do
+        _mpk="system"
+        [ "$_mn" -ge 10000 ] 2>/dev/null && _mpk="$(pm list packages -U 2>/dev/null | sed -n "s/^package:\([^ ]*\) uid:$_mn\$/\1/p" | head -1)"
+        P "    held since the unplug: ${_mpk:-$_mu}  ·  $_ml"
+      done
+  fi
 fi
 _vpn_if=""
 for _vi in /sys/class/net/tun* /sys/class/net/wg* /sys/class/net/ppp*; do
