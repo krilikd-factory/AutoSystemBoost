@@ -2943,6 +2943,18 @@ printf '%s\n' "$out" | grep -q 'pb' && fail "a .pb tombstone listed"
 printf '%s\n' "$out" | grep -q 'first frame outside libc: /vendor/lib64/libaudioroute.so$' || fail "first non-libc frame not named: $out"
 printf '%s\n' "$out" | grep -q 'first frame outside libc: /vendor/lib64/soundfx/libasbdsp.so (asb_core_process_f32+88)' || fail "frame function not kept: $out"
 printf '%s\n' "$out" | grep -q '^NOTE 3 of the listed crashes end with the same abort message' || fail "same abort not grouped: $out"
+printf '%s\n' "$out" | grep -q 'start in code of' && fail "an injected-module note without one: $out"
+# fix178: a hook module's code inside a system process is named (a CPH2691: LuckyTool's
+# libdexkit.so first in eight com.oplus.battery / com.oplus.ota aborts).
+D2="$T/tomb2"; mkdir -p "$D2"; _keep="$D"; D="$D2"
+_lt='/data/app/~~YGeVTP2n1kPkEgS4384O3Q==/com.luckyzyx.luckytool-aI8mTJHJqW11-BdKHZEvyQ==/base.apk!libdexkit.so (offset 0x1d4000)'
+tomb tombstone_00 com.oplus.battery "$_lt"
+tomb tombstone_01 com.oplus.ota "$_lt"
+tomb tombstone_02 com.example.app '/data/app/~~abc==/com.example.app-xyz==/base.apk!libown.so'
+D="$_keep"
+out="$(P() { echo "$*"; }; NOTE() { echo "NOTE $*"; }; . "$T/fn.sh"; ASB_TOMBSTONE_DIR="$D2" _asb_tombstones)"
+printf '%s\n' "$out" | grep -q '^NOTE 2 of the listed crashes start in code of com.luckyzyx.luckytool, loaded into another app' || fail "injected module not named: $out"
+printf '%s\n' "$out" | grep -q 'code of com.example.app' && fail "an app crashing in its own code was called injected: $out"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 
 # Full-day report: only tombstones newer than the capture start.

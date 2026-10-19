@@ -898,6 +898,41 @@ printf '%s\n' '# epoch<TAB>iso_utc<TAB>event<TAB>source' > "$LK_BT_RECONNECT_EVE
 [ "$(lk_bt_lifecycle_kind '1.0 AdapterService: connected state=2')" = "connect_generic" ] || fail "generic connect classification"
 [ -z "$(lk_bt_lifecycle_kind 'feature disconnect_hid_channels_serially=true')" ] || fail "V63 static feature false positive"
 [ -z "$(lk_bt_lifecycle_kind 'Devices: bt_a2dp(80)')" ] || fail "route snapshot must not become event"
+# fix178: the link drop itself, with its HCI reason, and the one-step 2->0 of a lost link.
+_acl='1.0 BluetoothRemoteDevices: aclStateChangeCallback: Adapter State: ON Disconnected: AA:BB:CC:DD:EE:FF transportLinkType: 1 hciReason: 8'
+[ "$(lk_bt_lifecycle_kind "$_acl")" = acl_disconnect ] || fail "ACL disconnect classification"
+[ "$(lk_bt_lifecycle_source "$_acl")" = "ACL reason=8" ] || fail "ACL reason: $(lk_bt_lifecycle_source "$_acl")"
+[ "$(lk_bt_lifecycle_source '1.0 BluetoothRemoteDevices: aclStateChangeCallback: Adapter State: ON Disconnected: AA:BB:CC:DD:EE:FF reason=0x13')" = "ACL reason=0x13" ] || fail "hex ACL reason"
+[ "$(lk_bt_lifecycle_kind '1.0 BluetoothRemoteDevices: aclStateChangeCallback: Adapter State: ON Connected: AA:BB:CC:DD:EE:FF')" = acl_connect ] || fail "ACL connect classification"
+[ "$(lk_bt_lifecycle_kind '1.0 A2dpStateMachine: Connection state AA:BB:CC:DD:EE:FF: CONNECTED->DISCONNECTED')" = a2dp_profile_disconnect ] || fail "A2DP state machine disconnect"
+[ "$(lk_bt_lifecycle_kind '1.0 A2dpStateMachine: Connection state AA:BB:CC:DD:EE:FF: CONNECTING->CONNECTED')" = a2dp_profile_connect ] || fail "A2DP state machine connect"
+[ "$(lk_bt_lifecycle_kind '1.0 A2dpService: connectionStateChanged, device: AA:BB:CC:DD:EE:FF, state: 2->0')" = a2dp_profile_disconnect ] || fail "A2DP 2->0 lost link"
+[ "$(lk_bt_lifecycle_kind '1.0 HeadsetStateMachine: Connection state AA:BB:CC:DD:EE:FF: CONNECTED->DISCONNECTED')" = hfp_profile_disconnect ] || fail "headset profile disconnect"
+printf '%s\n' "$(lk_bt_lifecycle_source "$_acl")" | grep -q 'AA:BB' && fail "an address in the ACL source"
+grep -q 'BluetoothRemoteDevices:V A2dpStateMachine:V' "$COMMON" || fail "the recorder does not listen to the link and state-machine tags"
+# The report's reason table, on events from a multipoint morning.
+printf '1\tx\tacl_disconnect\tACL reason=8\n2\tx\tacl_disconnect\tACL reason=0x13\n3\tx\tacl_disconnect\tACL reason=19\n4\tx\tacl_disconnect\tACL reason=?\n5\tx\ta2dp_profile_connect\tA2DP\n' > "$TMP/ev.tsv"
+python3 - "$FULL" "$TMP/acl.awk" <<'P'
+import sys
+s = open(sys.argv[1], encoding='utf-8').read()
+a = s.index("'!/^#/ && $3 == \"acl_disconnect\"") + 1
+b = s.index("' \"$_bt_ev\"", a)
+open(sys.argv[2], 'w').write(s[a:b])
+P
+_r="$(awk -F'\t' -f "$TMP/acl.awk" "$TMP/ev.tsv")"
+printf '%s\n' "$_r" | grep -q '^link drops (ACL disconnects): 4 - lost link (timeout): 1, ended by the headset: 2, ended by this phone: 0, other/unknown: 1$' || fail "ACL reason table: $_r"
+printf '%s\n' "$_r" | grep -q 'multipoint headset switching' || fail "no reading of a headset-ended drop: $_r"
+# fix178: the audio mode owner as Android 16 prints it (on the line after the heading).
+_ad='Audio mode:
+- Requested mode = MODE_IN_COMMUNICATION
+- Actual mode = MODE_IN_COMMUNICATION
+- Mode owner: 
+   pid: 4437 uid: 10419 mode: MODE_IN_COMMUNICATION package: org.telegram.messenger'
+_mo="$(printf '%s\n' "$_ad" | awk '
+      /[Mm]ode owner/ { sub(/.*[Mm]ode owner:?[ \t]*/, ""); if ($0 != "") { print; exit } own = 1; next }
+      own && NF { sub(/^[ \t]+/, ""); print; exit }')"
+[ "$_mo" = 'pid: 4437 uid: 10419 mode: MODE_IN_COMMUNICATION package: org.telegram.messenger' ] || fail "mode owner: '$_mo'"
+grep -q "Actual mode =" "$COMMON" || fail "the audio mode is not read from Android 16's line"
 
 # No raw line, BT address, or device name is written. The file is a four-column evidence TSV.
 lk_bt_lifecycle_record '1787300000.100 HeadsetService: disconnectAudio: device AA:BB:CC:DD:EE:FF PixelBuds'
@@ -949,6 +984,59 @@ lk_bt_lifecycle_record '1787400090.100 A2dpService: connectionStateChanged, stat
 [ "$(awk '!/^#/ && $3=="a2dp_profile_connect" {n++} END{print n+0}' "$LK_BT_RECONNECT_EVENTS")" = 2 ] \
   || fail "one A2DP connection counted more than once ($(grep -c a2dp_profile_connect "$LK_BT_RECONNECT_EVENTS"))"
 [ "$(awk '!/^#/ && $3=="hfp_audio_connect" {n++} END{print n+0}' "$LK_BT_RECONNECT_EVENTS")" = 1 ] || fail "a different kind was swallowed"
+
+# fix178: device names in the AVRCP volume table are redacted with the addresses (capture
+# 30423 carried a headphone model and a car name); the volume and state stay.
+_nm="$(printf '      AA:BB:CC:DD:EE:FF : BMW 68311      :   0 : NotConnected\n      AA:BB:CC:DD:EE:01 : OnePlus Bud... : 160 : Connected\n' | lk_bt_redact_addr)"
+printf '%s\n' "$_nm" | grep -q 'BMW\|OnePlus' && fail "a device name survived redaction: $_nm"
+printf '%s\n' "$_nm" | grep -q '^      <BT_ADDR> : <name> :   0 : NotConnected$' || fail "AVRCP row lost its volume/state: $_nm"
+printf '%s\n' "$_nm" | grep -q '<name> : 160 : Connected$' || fail "second AVRCP row: $_nm"
+[ "$(printf 'mCodecConfig: {codecName:LHDC}\n' | lk_bt_redact_addr)" = 'mCodecConfig: {codecName:LHDC}' ] || fail "redaction touched a non-AVRCP line"
+
+# fix178: profile drops from the service's own state history, deduplicated across snapshots.
+# Device A: a whole-device drop (call profile with it) back in 2 s, then a media-only drop
+# (call profile rows on both sides, same state) back after 18 min; device B: asked for on the
+# phone. The A2DP history appears in two snapshots and is counted once.
+_sn="$TMP/snap_hist.txt"
+_hist_a='  === A2dpStateMachine for XX:XX:XX:XX:B8:86 (Active) ===
+    StateMachine: name=A2dpStateMachine state=Connected
+       rec[0]: time=10-18 20:11:48.302 processed=Connected org=Connected dest=Disconnecting what=101(0x65) STACK_EVENT: x
+       rec[1]: time=10-18 20:11:48.310 processed=Disconnecting org=Disconnecting dest=Disconnected what=101(0x65) STACK_EVENT: x
+       rec[2]: time=10-18 20:11:49.788 processed=Disconnected org=Disconnected dest=Connecting what=101(0x65) STACK_EVENT: x
+       rec[3]: time=10-18 20:11:50.100 processed=Connecting org=Connecting dest=Connected what=101(0x65) STACK_EVENT: x
+       rec[4]: time=10-19 12:59:43.736 processed=Connected org=Connected dest=Disconnecting what=101(0x65) STACK_EVENT: x
+       rec[5]: time=10-19 13:17:52.865 processed=Disconnected org=Disconnected dest=Connecting what=101(0x65) STACK_EVENT: x
+       rec[6]: time=10-19 13:17:53.072 processed=Connecting org=Connecting dest=Connected what=101(0x65) STACK_EVENT: x
+  === A2dpStateMachine for XX:XX:XX:XX:9D:9F ===
+    StateMachine: name=A2dpStateMachine state=Disconnected
+       rec[0]: time=10-19 08:24:08.000 processed=Connected org=Connected dest=Disconnecting what=2(0x2) DISCONNECT: x'
+_hist_h='Profile: HeadsetService
+    StateMachine: name=HeadsetStateMachine state=Connected
+       rec[0]: time=10-18 20:11:48.265 processed=Connected org=Connected dest=Disconnecting what=101(0x65) STACK_EVENT: x
+       rec[1]: time=10-19 12:58:00.000 processed=Connected org=Connected dest=<null> what=10(0xa) DEVICE_STATE_CHANGED: x
+       rec[2]: time=10-19 13:01:00.000 processed=Connected org=Connected dest=<null> what=10(0xa) DEVICE_STATE_CHANGED: x'
+{ echo '===== BLUETOOTH [hourly] 2026-10-19T10:00:00Z ====='; printf '%s\n' "$_hist_a" "$_hist_h"
+  echo '===== BLUETOOTH [hourly] 2026-10-19T11:00:00Z ====='; printf '%s\n' "$_hist_a" "$_hist_h"
+  echo '===== BLUETOOTH [other] 2026-10-19T11:30:00Z ====='
+  echo '    StateMachine: name=BondStateMachine state=Stable'
+  echo '       rec[0]: time=10-19 13:00:00.000 processed=Connected org=Connected dest=Disconnected what=101(0x65) x'; } > "$_sn"
+_hd="$(lk_bt_history_drops "$_sn")"
+printf '%s\n' "$_hd" | grep -q '^media drops: 3 (stack-reported 2, asked for on the phone 1); whole device (call profile too): 1; media only (call profile kept): 1$' \
+  || fail "history drop summary: $_hd"
+printf '%s\n' "$_hd" | grep -q '^  10-18 20:11:48  device A  reported by the Bluetooth stack.*call profile dropped with it; back after 2s$' || fail "whole-device drop row: $_hd"
+printf '%s\n' "$_hd" | grep -q '^  10-19 12:59:43  device A .*call profile stayed connected; back after 18m09s$' || fail "media-only drop row: $_hd"
+printf '%s\n' "$_hd" | grep -q '^  10-19 08:24:08  device B  asked for on this phone; call profile not in the kept history; not back within the kept history$' || fail "phone-requested drop row: $_hd"
+printf '%s\n' "$_hd" | grep -q 'B8:86\|9D:9F' && fail "an address fragment reached the report"
+# A state change with no row for it (AudioOn before, Connected after) is a hole, not "stayed".
+sed 's/12:58:00.000 processed=Connected org=Connected dest=<null>/12:58:00.000 processed=AudioOn org=AudioOn dest=<null>/' "$_sn" > "$_sn.2"
+lk_bt_history_drops "$_sn.2" | grep -q '12:59:43 .*call profile not in the kept history' || fail "a history hole read as a kept call profile"
+[ -z "$(lk_bt_history_drops "$TMP/none.txt")" ] || fail "missing snapshots printed something"
+grep -Fq 'lk_bt_history_drops "$LK_OUT_DIR/bt_lifecycle_snapshots.txt"' "$FULL" || fail "full-day report does not read the service history"
+# fix178: the network trace's Wi-Fi link - band, signal and speed, never the SSID/BSSID.
+_wl="$(printf '%s\n' 'WifiInfo: SSID: "home", BSSID: 11:22:33:44:55:66, Wi-Fi standard: 11be, RSSI: -58, Link speed: 2882Mbps, Tx Link speed: 2882Mbps, Rx Link speed: 1441Mbps, Frequency: 6115MHz' | lk_wifi_link)"
+[ "$_wl" = '6115 MHz (6 GHz), RSSI -58 dBm, 2882 Mbps, 11be' ] || fail "wifi link summary: $_wl"
+[ -z "$(printf 'BSSID  Frequency  RSSI\n  aa  2412  -40\n' | lk_wifi_link)" ] || fail "a scan table read as the link"
+grep -q 'SSID: \[\^,\]\*, BSSID' "$COMMON" && fail "the network trace still asks for the SSID and BSSID"
 
 echo 'PASS Bluetooth lifecycle recorder contract'
 )
@@ -1343,18 +1431,46 @@ i=0; while [ $i -lt 40 ]; do
 done
 [ "$(dm_get smart on_s)" = 1170 ] || f "screen-on seconds: $(dm_get smart on_s), want 1170"
 [ "$(rate_on smart)" = 92 ] || f "screen-on rate x10: $(rate_on smart), want 92 (3% in 19.5 min)"
+# The screen coming back on ends a night once it stays on past a glance (fix178): five samples,
+# two minutes.
+wake() { _wk=0; while [ $_wk -lt 5 ]; do _wk=$((_wk + 1)); t=$((t + 30)); dm_step "$t" "$1" 0 1 smart 0; done; }
 t=$((t + 30)); dm_step "$t" 77 0 0 smart 0
 t=$((t + 7200)); dm_step "$t" 76 0 0 smart 0
 t=$((t + 30)); dm_step "$t" 76 0 1 smart 0
+[ "$(dm_get smart off_n)" = 0 ] || f "the night was closed by the first screen-on sample - a glance would end it"
+t=$((t + 120)); dm_step "$t" 76 0 1 smart 0
 [ "$(dm_get smart off_n)" = 1 ] || f "a 2 h night was not counted"
 [ "$(rate_off smart)" = 49 ] || f "screen-off rate x100: $(rate_off smart), want 49 (1% in 2 h 0.5 min)"
+t=$((t + 90)); dm_step "$t" 76 0 1 smart 0
+# A glance in the night - the time checked for a minute - keeps one window (fix178).
 t=$((t + 30)); dm_step "$t" 76 0 0 smart 0
-t=$((t + 30)); dm_step "$t" 76 0 0 smart 1
-t=$((t + 5000)); dm_step "$t" 74 0 1 smart 0
-[ "$(dm_get smart off_n)" = 1 ] || f "a screen-off stretch with music was counted"
-t=$((t + 30)); dm_step "$t" 74 0 0 smart 0
-t=$((t + 1800)); dm_step "$t" 74 0 1 smart 0
-[ "$(dm_get smart off_n)" = 1 ] || f "a 30 min screen-off stretch was counted"
+t=$((t + 2400)); dm_step "$t" 76 0 0 smart 0
+t=$((t + 30)); dm_step "$t" 76 0 1 smart 0
+t=$((t + 30)); dm_step "$t" 76 0 1 smart 0
+t=$((t + 30)); dm_step "$t" 76 0 0 smart 0
+t=$((t + 2400)); dm_step "$t" 75 0 0 smart 0
+wake 75
+[ "$(dm_get smart off_n)" = 2 ] || f "a glance split the night into two windows under the hour (off_n=$(dm_get smart off_n))"
+[ "$(dm_get smart off_s)" = 12150 ] || f "the glanced night: off_s=$(dm_get smart off_s), want 12150"
+# Music: audio on consecutive samples drops the window.
+t=$((t + 30)); dm_step "$t" 75 0 0 smart 0
+t=$((t + 60)); dm_step "$t" 75 0 0 smart 1
+t=$((t + 60)); dm_step "$t" 75 0 0 smart 1
+t=$((t + 5000)); dm_step "$t" 74 0 0 smart 0
+wake 74
+[ "$(dm_get smart off_n)" = 2 ] || f "a screen-off stretch with music was counted"
+# One sound in the night (a notification, or the first probe after the screen went off) is not
+# playback (fix178): every window used to be dropped this way.
+t=$((t + 30)); dm_step "$t" 74 0 0 smart 1
+t=$((t + 60)); dm_step "$t" 74 0 0 smart 0
+t=$((t + 60)); dm_step "$t" 74 0 0 smart 1
+t=$((t + 5000)); dm_step "$t" 73 0 0 smart 0
+wake 73
+[ "$(dm_get smart off_n)" = 3 ] || f "a single sound threw the night away"
+t=$((t + 30)); dm_step "$t" 73 0 0 smart 0
+t=$((t + 1800)); dm_step "$t" 73 0 0 smart 0
+wake 73
+[ "$(dm_get smart off_n)" = 3 ] || f "a 30 min screen-off stretch was counted"
 _before="$(dm_get smart on_s)"
 t=$((t + 30)); dm_step "$t" 74 1 1 smart 0
 t=$((t + 30)); dm_step "$t" 75 1 1 smart 0
@@ -1363,7 +1479,7 @@ t=$((t + 30)); dm_step "$t" 75 0 1 smart 0
 t=$((t + 30)); dm_step "$t" 75 0 0 smart 0
 t=$((t + 3000)); dm_step "$t" 80 1 0 smart 0
 t=$((t + 3000)); dm_step "$t" 80 0 1 smart 0
-[ "$(dm_get smart off_n)" = 1 ] || f "a night with the charger was counted"
+[ "$(dm_get smart off_n)" = 3 ] || f "a night with the charger was counted"
 _before="$(dm_get smart on_s)"
 t=$((t + 600)); dm_step "$t" 79 0 1 smart 0
 [ "$(dm_get smart on_s)" = "$_before" ] || f "a 10 min gap between samples was counted as screen time"
@@ -1374,10 +1490,10 @@ i=0; while [ $i -lt 30 ]; do i=$((i + 1)); t=$((t + 30)); [ $i = 15 ] && dm_step
 dm_step "$((t + 30))" 79 0 1 none 0
 [ -z "$dm_prof" ] || f "an unknown profile was measured"
 dm_flush "$t"
-grep -q '^smart 1170 300 7230 100 1$' "$T/asb/drain_meter" || f "file line for smart: $(grep '^smart' "$T/asb/drain_meter")"
+grep -q '^smart 1770 300 17300 300 3$' "$T/asb/drain_meter" || f "file line for smart: $(grep '^smart' "$T/asb/drain_meter")"
 printf '%s\n' 'smart 99 x 1 1 1' 'bogus 1 1 1 1 1' >> "$T/asb/drain_meter"
 dm_load
-[ "$(dm_get smart on_s)" = 1170 ] && [ "$(dm_get stock on_s)" -gt 0 ] || f "file round trip lost values"
+[ "$(dm_get smart on_s)" = 1770 ] && [ "$(dm_get stock on_s)" -gt 0 ] || f "file round trip lost values"
 dm_set balanced on_s 14390; dm_set balanced on_x 2000; dm_prof=balanced; dm_add_on 30 1
 [ "$(dm_get balanced on_s)" = 7210 ] && [ "$(dm_get balanced on_x)" = 1050 ] || f "screen-on window not halved past 4 h: $(dm_get balanced on_s)/$(dm_get balanced on_x)"
 dm_publish
@@ -1412,6 +1528,26 @@ done
 kill "$_lp" 2>/dev/null; wait "$_lp" 2>/dev/null
 [ "${_on:-0}" -ge 120 ] 2>/dev/null || f "the real loop measured no screen-on time with the OP15's Unknown status (smart on_s=${_on:-none})"
 [ -s "$L/d/drain_meter" ] || f "the real loop never saved its table"
+# fix178: the audio-thread probe is started afresh at each screen-off. The REAL probe and the
+# REAL lines of the loop run on a fake audioserver whose output thread ran during screen-on use.
+A="$T/aud"; mkdir -p "$A/proc/500/task/501" "$A/noasound"
+echo audioserver > "$A/proc/500/comm"; echo AudioOut_D > "$A/proc/500/task/501/comm"
+echo "1 2 100" > "$A/proc/500/task/501/schedstat"
+sed -n '/^    _lm=0$/,/^    fi$/p' "$M" > "$A/probe.sh"
+grep -q '_aa_prev=""' "$A/probe.sh" || f "the loop does not restart the audio probe at screen-off"
+( ASB_AUDIO_ASOUND="$A/noasound"; ASB_AUDIO_PROC="$A/proc"; export ASB_AUDIO_ASOUND ASB_AUDIO_PROC
+  . "$ROOT/runtime/asb_audio_activity.sh"
+  _ls=0; dm_prev_scr=0
+  . "$A/probe.sh"                                    # screen off: baseline
+  echo "1 2 400" > "$A/proc/500/task/501/schedstat"  # the screen comes on: a video plays
+  dm_prev_scr=1; _ls=0
+  . "$A/probe.sh"                                    # first sample after screen-off
+  [ "$_lm" = 0 ] || { echo "screen-on audio counted as screen-off playback" >&2; exit 1; }
+  echo "1 2 430" > "$A/proc/500/task/501/schedstat"
+  dm_prev_scr=0
+  . "$A/probe.sh"
+  [ "$_lm" = 1 ] || { echo "playback with the screen off not seen" >&2; exit 1; }
+) || f "audio probe across a screen-on period"
 H="$ROOT/webroot/index.html"
 grep -q "function lvMeterParse(text)" "$H" || f "the Monitor does not read the meter"
 grep -q "const isCharging = batteryStatus !== 'discharging' && (batteryStatus === 'charging' || batteryStatus === 'full' || ma < 0);" "$H" || f "Stock still reads Discharging as charging"

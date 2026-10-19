@@ -47,9 +47,93 @@ printf '%s\n' "$d" | grep -q '^host: com.termux missed 663 of the 676 frames it 
 printf '%s\n' "$d" | grep -q '^steady:' && fail "the report's own window called a steady redraw: $d"
 d="$(sh -c '. "$1"; asb_gfx_run_delta "$(cat "$2")" "$(cat "$3")" 32 com.rifsxd.ksunext' x "$T/f.sh" "$T/a" "$T/b")"
 printf '%s\n' "$d" | grep -q '^steady: com.termux missed 663' || fail "another app in front still gets the steady verdict: $d"
+# fix178: no host found at all (a CPH2691 run from Termux) - a terminal at the top is the host.
+d="$(sh -c '. "$1"; asb_gfx_run_delta "$(cat "$2")" "$(cat "$3")" 32 ""' x "$T/f.sh" "$T/a" "$T/b")"
+printf '%s\n' "$d" | grep -q '^host: com.termux missed 663' || fail "a terminal at the top without a host lookup: $d"
+printf '%s\n' "$d" | grep -q 'the window this report is printed in' || fail "no host label on the terminal's line: $d"
+printf 'com.example.feed 1000 10\ncom.android.systemui 2000 20\n' > "$T/a2"
+printf 'com.example.feed 1676 673\ncom.android.systemui 3144 44\n' > "$T/b2"
+d="$(sh -c '. "$1"; asb_gfx_run_delta "$(cat "$2")" "$(cat "$3")" 32 ""' x "$T/f.sh" "$T/a2" "$T/b2")"
+printf '%s\n' "$d" | grep -q '^steady: com.example.feed missed 663' || fail "an ordinary app at the top lost its steady verdict: $d"
 grep -q 'asb_gfx_run_delta "$_gfx_run0" "$_gfx_run1" "$(( $(date +%s) - ${_gfx_run0_t:-0} ))" "$_gfx_host"' "$D" || fail "7c does not pass the host"
 cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS asbdiag report host: the window the report prints into is named, not read as lag"
+)
+
+t_asbdiag_wake_paths_runtime() (
+# Runtime (fix178): two asbdiag lines that misread a CPH2691.
+#
+# "WARN: 4 of 4 screen wakes were found only by the idle tick" on a phone whose governor had
+# caught 32 wakes on the display-state path (screen_on_detect=uevent:0,recheck:0,tick:4,display:32)
+# - the total left that path out. And the status-bar settings list printed the whole of
+# oplus.radio.smart5g_apk_cfg, matched on "Internetspeed" inside its value. The REAL lines run.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+D="$ROOT/tools/asb_diag.sh"
+fail() { echo "FAIL asbdiag wake paths: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+{ echo '_sod="uevent:0,recheck:0,tick:4,display:32"; _sot=4'
+  sed -n '/_sou="$(printf .%s. "$_sod" | sed -n .s\/.\*uevent/,/^    _sall=/p' "$D"
+  echo 'echo "$_sall"'; } > "$T/w.sh"
+grep -q '_sodp=' "$T/w.sh" || fail "the display path is not read"
+[ "$(sh "$T/w.sh")" = 36 ] || fail "wake total: $(sh "$T/w.sh"), want 36"
+prog="$(grep -m1 "awk -F= 'tolower(\$1) ~ /net(work)?_?speed" "$D" | sed "s/.*awk -F= '//; s/' *\\\\\$//")"
+[ -n "$prog" ] || fail "status-bar matcher not found"
+out="$(printf '%s\n' 'system:oplus.radio.smart5g_apk_cfg=ver_num=9;filetrans=com.Wifi.lte5g.speedtest.Internetspeed' \
+                     'system:show_network_speed=1' 'secure:clock_seconds=0' 'global:wifi_on=1' | awk -F= "$prog")"
+printf '%s\n' "$out" | grep -q 'smart5g' && fail "a key matched on its value: $out"
+printf '%s\n' "$out" | grep -qx 'system:show_network_speed=1' || fail "network speed key missed: $out"
+printf '%s\n' "$out" | grep -qx 'secure:clock_seconds=0' || fail "clock seconds key missed: $out"
+# fix178: the codec of the ACTIVE A2DP device (an inactive one listed first is not it), and the
+# multipoint hint only for a high-bitrate codec. The REAL block runs against a stub dumpsys.
+mkdir -p "$T/bin"
+cat > "$T/bin/dumpsys" <<'B'
+#!/bin/sh
+cat "$DUMP"
+B
+chmod +x "$T/bin/dumpsys"
+{ echo 'NOTE() { echo "NOTE $*"; }'
+  sed -n '/^_btc="\$(dumpsys bluetooth_manager/,/^fi$/p' "$D"; } > "$T/c.sh"
+grep -q 'mCodecConfig' "$T/c.sh" || fail "codec block not found"
+cat > "$T/dump1" <<'B'
+  === A2dpStateMachine for XX:XX:XX:XX:9D:9F ===
+    mCodecConfig: {codecName:SBC,mCodecType:0,mCodecPriority:1001,mSampleRate:0x1(44100),mBitsPerSample:0x1(16),mChannelMode:0x2(STEREO)}
+  === A2dpStateMachine for XX:XX:XX:XX:B8:86 (Active) ===
+    mConnectionState: STATE_CONNECTED, mLastConnectionState: STATE_CONNECTING
+    mCodecConfig: {codecName:LHDC,mCodecType:19,mCodecPriority:9002,mSampleRate:0x2(48000),mBitsPerSample:0x2(24),mChannelMode:0x2(STEREO)}
+B
+out="$(PATH="$T/bin:$PATH" DUMP="$T/dump1" sh "$T/c.sh")"
+printf '%s\n' "$out" | grep -qx 'NOTE active A2DP codec: LHDC 48000 Hz / 24-bit' || fail "active codec line: $out"
+printf '%s\n' "$out" | grep -q 'multipoint' || fail "no multipoint hint on LHDC: $out"
+sed 's/codecName:LHDC/codecName:AAC/' "$T/dump1" > "$T/dump2"
+out="$(PATH="$T/bin:$PATH" DUMP="$T/dump2" sh "$T/c.sh")"
+printf '%s\n' "$out" | grep -qx 'NOTE active A2DP codec: AAC 48000 Hz / 24-bit' || fail "AAC codec line: $out"
+printf '%s\n' "$out" | grep -q 'multipoint' && fail "multipoint hint on AAC: $out"
+out="$(PATH="$T/bin:$PATH" DUMP=/dev/null sh "$T/c.sh")"
+[ -z "$out" ] || fail "no A2DP device still printed: $out"
+# fix178: the Wi-Fi link line names the band, not the network, and skips state-machine rows.
+cat > "$T/bin/cmd" <<'B'
+#!/bin/sh
+[ "$1 $2" = "wifi status" ] && cat "$CMDOUT"
+B
+chmod +x "$T/bin/cmd"
+{ echo 'P() { echo "$*"; }; NOTE() { echo "NOTE $*"; }'
+  sed -n '/^_wfl="\$({ cmd wifi status/,/^case "\$_wfl" in/p' "$D"; } > "$T/wf.sh"
+grep -q 'Frequency' "$T/wf.sh" || fail "wifi link block not found"
+printf '%s\n' '       rec[5]: time=10-18 18:10:22.130 processed=DefaultState org=EnabledState SSID x' \
+  'mWifiInfo SSID: "home", BSSID: 11:22:33:44:55:66, Wi-Fi standard: 11ax, RSSI: -61, Link speed: 573Mbps, Tx Link speed: 573Mbps, Rx Link speed: 432Mbps, Frequency: 2437MHz' > "$T/wd"
+out="$(PATH="$T/bin:$PATH" DUMP="$T/wd" CMDOUT=/dev/null sh "$T/wf.sh")"
+printf '%s\n' "$out" | grep -qx '  live wifi link: 2437 MHz (2.4 GHz), RSSI -61 dBm, 573 Mbps, 11ax' || fail "wifi link: $out"
+printf '%s\n' "$out" | grep -q 'home\|11:22' && fail "the network name or BSSID reached the report: $out"
+printf '%s\n' "$out" | grep -q '^NOTE Wi-Fi on 2.4 GHz' || fail "no 2.4 GHz note: $out"
+printf '%s\n' 'Wifi is connected to "home"' 'WifiInfo: SSID: "home", RSSI: -50, Link speed: 1200Mbps, Frequency: 5745MHz' > "$T/wc"
+out="$(PATH="$T/bin:$PATH" DUMP=/dev/null CMDOUT="$T/wc" sh "$T/wf.sh")"
+[ "$out" = '  live wifi link: 5745 MHz (5 GHz), RSSI -50 dBm, 1200 Mbps' ] || fail "cmd wifi status link: $out"
+printf 'mWifiInfo SSID: <unknown ssid>, RSSI: -127, Link speed: -1Mbps, Frequency: -1MHz\n' > "$T/wd"
+out="$(PATH="$T/bin:$PATH" DUMP="$T/wd" CMDOUT=/dev/null sh "$T/wf.sh")"
+[ "$out" = '  live wifi link: not connected, or the ROM printed no link line' ] || fail "disconnected link: $out"
+cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS asbdiag wake paths: the display path counts in the wake total, status-bar keys are matched by name, the active codec and the Wi-Fi band are named"
 )
 
 t_asbdiag_settings_summary_runtime() (
@@ -1625,9 +1709,29 @@ D
 X
 chmod +x "$T/bin/dumpsys"
 res="$(PATH="$T/bin:$PATH" run_fn sh -c 'true' ; ( set +u; PATH="$T/bin:$PATH"; LK_SCRIPT_DIR="$ROOT/tools/logkit"; . "$C" >/dev/null 2>&1; lk_dumpsys() { dumpsys "$@"; }; lk_sample_audio; echo "$LK_AUDIO_ROUTE|$LK_AUDIO_MODE|$LK_AUDIO_MODE_OWNER" ))"
+# fix178: the owner is the value after "mode owner:" (the snapshot already labels it).
 case "$res" in
-  "bt_sco|MODE_IN_COMMUNICATION|mode owner: pid: 5555 uid: 10499"*) : ;;
+  "bt_sco|MODE_IN_COMMUNICATION|pid: 5555 uid: 10499"*) : ;;
   *) f "bt_sco/mode not classified: '$res'" ;;
+esac
+# Android 16 prints "- Actual mode = ..." and the owner on the line after "- Mode owner:" -
+# capture 30423 recorded an empty owner in every snapshot.
+cat > "$T/bin/dumpsys" <<'X'
+#!/bin/sh
+cat <<'D'
+Audio mode:
+- Requested mode = MODE_IN_CALL
+- Actual mode = MODE_IN_CALL
+- Mode owner:
+   SetModeDeathHandler: pid: 4437 uid: 1000 mode: MODE_IN_CALL
+- STREAM_MUSIC:
+   Devices: bt_sco
+D
+X
+res="$( ( set +u; PATH="$T/bin:$PATH"; LK_SCRIPT_DIR="$ROOT/tools/logkit"; . "$C" >/dev/null 2>&1; lk_dumpsys() { dumpsys "$@"; }; lk_sample_audio; echo "$LK_AUDIO_MODE|$LK_AUDIO_MODE_OWNER" ))"
+case "$res" in
+  *MODE_IN_CALL*"|SetModeDeathHandler: pid: 4437 uid: 1000 mode: MODE_IN_CALL") : ;;
+  *) f "Android 16 mode/owner not read: '$res'" ;;
 esac
 grep -q 'bt|bt_le|bt_sco) _apn="audio_bt"' "$ROOT/tools/logkit/asb_log_full_day.sh" || f "bt_sco not mapped to a Bluetooth audio phase"
 grep -q '\*bt_sco\*|\*BLUETOOTH_SCO\*) _now="call"' "$ROOT/service.sh" || f "live DSP route watcher still calls SCO bt"

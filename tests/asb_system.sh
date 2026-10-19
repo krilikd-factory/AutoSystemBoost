@@ -3804,6 +3804,24 @@ grep -q 'function lviFill(t) {' "$ROOT/webroot/index.html" || fail "sheet texts 
 grep -q 'asb_tree_check' "$ROOT/.github/workflows/build-debug.yml" && fail "CI still annotates the tree differences"
 echo "PASS: fix177 contract"
 ) || exit 1
+# ---- fix178 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix178: $*"; exit 1; }
+for t in test_drain_meter_runtime.sh test_asbdiag_wake_paths_runtime.sh test_bt_lifecycle_recorder_contract.sh \
+         test_native_crash_names_runtime.sh test_asbdiag_report_host_runtime.sh; do
+  asb_has_test "$t" || fail "$t missing"
+done
+grep -q 'DM_GLANCE_S=' "$ROOT/runtime/asb_drain_meter.sh" || fail "a glance at the clock ends the screen-off window again"
+grep -q '\[ "\$dm_prev_scr" = 0 \] || _aa_prev=""' "$ROOT/runtime/asb_drain_meter.sh" || fail "the audio probe carries the screen-on activity into screen-off"
+grep -q '^lk_bt_history_drops() {' "$ROOT/tools/logkit/_asb_logkit_common.sh" || fail "the Bluetooth service history is not read back"
+grep -q '<name>' "$ROOT/tools/logkit/_asb_logkit_common.sh" || fail "AVRCP device names are not redacted"
+grep -q 'BluetoothRemoteDevices:V' "$ROOT/tools/logkit/_asb_logkit_common.sh" || fail "the ACL disconnect reason tag is not recorded"
+grep -q '^lk_wifi_link() {' "$ROOT/tools/logkit/_asb_logkit_common.sh" || fail "the network trace has no Wi-Fi link reader"
+grep -q 'cmd wifi status' "$ROOT/tools/asb_diag.sh" || fail "asbdiag reads the Wi-Fi link from the first SSID in the dump again"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag differs from tools/asb_diag.sh"
+echo "PASS: fix178 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
 )
 
