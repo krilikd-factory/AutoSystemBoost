@@ -905,6 +905,32 @@ static float asb_ui_quiet_floor(const asb_metrics_t *m) {
     return g_ui_quiet_floor;
 }
 
+/* The load at which battery current may stand in for a CPU that load1 under-reports (fix179).
+ *
+ * The corroboration below fires at 60% of the MODERATE threshold - 8.4 of 14 - a number
+ * taken from a phone that idles near zero. A CPH2769 idles with the screen on at 6.3-8.3
+ * (p1 6.27, median 8.34 in capture 30423; 5.86 / 8.42 in 13290), and a lit OP15 draws more
+ * than 250 mA on any content, so the pair held on an idle screen: it was the only reason for
+ * MODERATE in 240 of 535 quiet screen-on samples (load under 14, GPU under 12%) - 45% - and
+ * in 157 of 439 (36%) of the other capture. Smart sat in MODERATE for 87% of screen-on time.
+ * A CPH2747 gauge reads a third to a half of that current, so there the same rule fired
+ * twice in 247: one profile, two behaviours, from a sensor scale.
+ *
+ * Measured from the device's own quiet level instead: 60% of the way from where this phone
+ * idles with the screen on (the learned floor the GPU and burst gates already use) to the
+ * MODERATE threshold. On a phone idling near zero that is the old bar (0.5 -> 8.6); on the
+ * CPH2769 it is about 10.6-10.9, which the same quiet samples reach 25 times in 535, not 240.
+ * Never below the old bar, so no device gains MODERATE from this; no floor learned yet - the
+ * old bar. Touch, the GPU branch and the pinned-core escalation still lift LIGHT_IDLE at once. */
+static float asb_current_corroboration_bar(float mod_thr, float quiet_floor) {
+    float bar = mod_thr * 0.6f;
+    if (quiet_floor > 0.0f && quiet_floor < mod_thr) {
+        float rel = quiet_floor + 0.6f * (mod_thr - quiet_floor);
+        if (rel > bar) bar = rel;
+    }
+    return bar;
+}
+
 
 static inline int fsm_min_dwell_for_state(asb_state_t st) {
     switch (st) {
@@ -1343,7 +1369,7 @@ if (m->gpu.load_pct >= _gpu_gate) {
          * Tying it to mod_thr also travels: a device with a different threshold gets a
          * proportional bar instead of one derived from an unrelated idle floor. */
         if (ma_valid && m->bat.current_ma >= 250 &&
-            m->cpu.load1 >= mod_thr * 0.6f)
+            m->cpu.load1 >= asb_current_corroboration_bar(mod_thr, asb_ui_quiet_floor(m)))
             return ASB_STATE_MODERATE;
     }
     /*
