@@ -1,4 +1,13 @@
 #!/bin/sh
+# asb_tree_check.sh - compare a working tree with the file list of the delivered archive.
+#
+# A local tool (fix177). It ran as a CI step and annotated every build with "Tree differs from
+# the delivered archive": the owner unpacks each delivery over his repository and keeps files
+# of his own there, so the step listed the same differences on every run and told him nothing
+# he could act on. The workflows no longer run it and it prints no CI annotations; run it by
+# hand when a test fails in a way that looks like a file was not uploaded:
+#   sh tools/asb_tree_check.sh check     name differing, missing and left-over files
+#   sh tools/asb_tree_check.sh write     record the current tree as the delivered one
 set -u
 ROOT="${ASB_TREE_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}"
 MAN="${ASB_TREE_MANIFEST:-$ROOT/tools/asb_tree.sha256}"
@@ -43,14 +52,6 @@ case "${1:-check}" in
       sed 's/^/    differs: /' "$_diff"
       sed 's/^/    missing: /' "$_miss"
       sed 's/^/    extra: /' "$_extra"
-      if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
-        while IFS= read -r _f; do echo "::warning file=$_f::differs from the delivered tree (not uploaded, or edited after delivery)"; done < "$_diff"
-        while IFS= read -r _f; do echo "::warning::$_f is in the delivered tree but missing here"; done < "$_miss"
-        while IFS= read -r _f; do echo "::warning file=$_f::not in the delivered tree (left over from an older delivery - delete it)"; done < "$_extra"
-        if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
-          { echo "### Tree differs from the delivered archive"; echo; sed 's/^/- differs: `/; s/$/`/' "$_diff"; sed 's/^/- missing: `/; s/$/`/' "$_miss"; sed 's/^/- extra: `/; s/$/`/' "$_extra"; } >> "$GITHUB_STEP_SUMMARY"
-        fi
-      fi
       rm -f "$_now" "$_miss" "$_diff" "$_extra"
       [ "${2:-}" = "--strict" ] && exit 1
       exit 0
