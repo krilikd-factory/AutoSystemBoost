@@ -1696,6 +1696,27 @@ EOF_LKMB
   _ct=$(echo "$_j"    | awk -F'"thermal_cpu_type":"'         '{print $2}' | awk -F'"' '{print $1}')
   _fb=$(echo "$_j"    | awk -F'"thermal_cpu_fallback_type":"' '{print $2}' | awk -F'"' '{print $1}')
   _dw=$(echo "$_j"    | awk -F'"dwell_sec":'                 '{print $2}' | awk -F, '{print $1}')
+  # Stock has no governor and so no status (fix177): profile, screen and both temperatures
+  # came out empty, and the owner's 77-minute Stock capture reported "screen on for 0% of the
+  # capture" and cpuT 0 / surfT - in every phase while the screen had been on for most of
+  # it. Without a governor reading, the row takes them from where the capture itself looks:
+  # the profile file, the wakefulness the phase detector read this tick (or the screen-state
+  # property), and the zones this capture resolved.
+  [ -n "$_pr" ] || _pr="$(cat "${MODDIR:-/data/adb/modules/AutoSystemBoost}/current_profile" 2>/dev/null)"
+  if [ -z "$_sc" ]; then
+    case "${LK_LAST_SCREEN:-}" in
+      Awake) _sc=1 ;;
+      Asleep|Dozing) _sc=0 ;;
+      *) case "$(getprop debug.tracing.screen_state 2>/dev/null)" in 2|6) _sc=1 ;; 1|3|4) _sc=0 ;; esac ;;
+    esac
+  fi
+  if [ -z "$_temp" ] || [ -z "$_surf" ]; then
+    IFS='|' read -r _dtc _dts <<EOF_LKDT
+$(lk_direct_temps)
+EOF_LKDT
+    [ -n "$_temp" ] || _temp="$_dtc"
+    [ -n "$_surf" ] || _surf="$_dts"
+  fi
   # gpu_busy last, so existing column indices do not move.
   #
   # The trace had no GPU column at all, and an analysis of mine read column 18

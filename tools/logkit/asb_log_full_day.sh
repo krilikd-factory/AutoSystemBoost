@@ -664,7 +664,10 @@ lk_phase_ledger_accumulate() {
   # capture 2830's sleep row read "cpuT 41 surfT 36" - mostly the 01:03 value, held for 7 h - while the
   # capture's own zone reads sat at 26-35 C. Older than two minutes: read the zones here.
   _tre=$(echo "$_j" | awk -F'"temp_read_epoch":' '{print $2}' | awk -F, '{print $1}' | tr -dc '0-9')
-  if [ -n "$_tre" ] && [ "$_tre" -gt 0 ] 2>/dev/null && [ $(( $(date +%s) - _tre )) -gt 120 ] 2>/dev/null; then
+  # No governor reading at all - Stock (fix177): the phase table printed cpuT 0 and surfT -
+  # for every phase of a Stock capture. The zones are read here instead, as for a stale one.
+  if { [ -n "$_tre" ] && [ "$_tre" -gt 0 ] 2>/dev/null && [ $(( $(date +%s) - _tre )) -gt 120 ] 2>/dev/null; } \
+     || [ -z "$_temp" ]; then
     IFS='|' read -r _temp _surf <<EOF
 $(lk_direct_temps)
 EOF
