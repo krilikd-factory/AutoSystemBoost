@@ -266,8 +266,26 @@ _wl_protected() {
     *messenger*|*wickr*|com.truecaller|com.truecaller.*|*callerid*|\
     com.radolyn.ayugram|tw.nekomimi.nekogram|xyz.nextalone.nagram|uz.unnarsx.cherrygram|\
     com.samsung.accessory.*|com.sony.songpal.*|com.tranzmate|*transit*) return 0 ;;
+    # The network path itself (fix177): a VPN, a proxy or a DNS filter carries every other
+    # app's traffic. In capture 3970 a Telegram WebSocket proxy (com.amurcanov.tgwsproxy) held
+    # its service wakelock in 78% of the screen-off samples and was moved to the restricted
+    # bucket early in the morning, under a report line promising that "a proxy, a VPN" is left
+    # alone. Restricting one saves its own few minutes and cuts the messenger behind it off.
+    *vpn*|*proxy*|*tunnel*|*wireguard*|*v2ray*|*xray*|*clash*|*shadowsocks*|*shadowrocket*|\
+    *singbox*|*sing.box*|*nekobox*|*hiddify*|*amnezia*|*outline*|*orbot*|org.torproject.*|\
+    *adguard*|*nextdns*|*rethinkdns*|*blokada*|*netguard*|*dnsfilter*|*byedpi*|*zapret*|\
+    *psiphon*|*lantern*|*mullvad*|*windscribe*|com.cloudflare.onedotonedotone|\
+    io.nekohasekai.*|moe.nb4a) return 0 ;;
   esac
   return 1
+}
+
+# A foreground service running right now (fix177). The lru label is read once per pass and
+# OxygenOS demotes a service process to "cached" in the middle of the night; the service
+# record says what the app is actually doing. Asked only for an app about to be restricted.
+_wl_fgs_running() {
+  _has dumpsys || return 1
+  dumpsys activity services "$1" 2>/dev/null | grep -q 'isForeground=true'
 }
 
 # Apps Android itself exempts from battery optimisation (fix136): the user's own "not
@@ -320,9 +338,9 @@ _wl_release_protected() {
   true > "$D/wakelock_restricted.tmp" 2>/dev/null || return 0
   while IFS= read -r _rp; do
     [ -n "$_rp" ] || continue
-    if _wl_protected "$_rp" || _wl_doze_exempt "$_rp"; then
+    if _wl_protected "$_rp" || _wl_doze_exempt "$_rp" || _wl_fgs_running "$_rp"; then
       am set-standby-bucket "$_rp" active >/dev/null 2>&1
-      echo "wakelock: $_rp released from the restricted bucket - messengers and apps exempt from battery optimisation are never restricted"
+      echo "wakelock: $_rp released from the restricted bucket - messengers, VPNs/proxies, apps with a foreground service and apps exempt from battery optimisation are never restricted"
     else
       echo "$_rp" >> "$D/wakelock_restricted.tmp"
     fi
@@ -341,6 +359,9 @@ _wl_release_protected() {
 _wl_fitness() {
   case "$1" in
     *health*|*fitness*|*pedometer*|*stepcounter*|*fitbit*|*garmin*|*strava*) return 0 ;;
+    # Step and run trackers whose ids carry none of the words above (fix177).
+    *steptrack*|*runtastic*|*runkeeper*|com.nike.plusgps|cc.pacer.*|com.corusen.*|\
+    *komoot*|*sportstracker*) return 0 ;;
   esac
   return 1
 }
@@ -362,9 +383,41 @@ _wl_fitness() {
 FIT="$D/wakelock_fitness_limited"
 FIT_IGN="$D/wakelock_fitness_ignored"
 _wl_fit_mode() { _cfg wakelock_fitness; }
+# The package's own mode. appops get prints "Uid mode: WAKE_LOCK: <m>" FIRST when a per-uid
+# mode is set (fix177), and this read whichever WAKE_LOCK line came first: with a uid line a
+# freshly set package "ignore" read back as the uid's mode, the limit counted as not accepted
+# and no ledger was written - one way the owner's Samsung Health and Renpho ended up in no
+# ledger with limit chosen, and the WebUI read "no fitness apps".
 _wl_fit_orig() {
-  _o="$(appops get "$1" WAKE_LOCK 2>/dev/null | sed -n 's/.*WAKE_LOCK: \([a-z_]*\).*/\1/p' | head -1)"
+  _o="$(appops get "$1" WAKE_LOCK 2>/dev/null | grep -v 'Uid mode' \
+        | sed -n 's/.*WAKE_LOCK: \([a-z_]*\).*/\1/p' | head -1)"
   printf '%s' "${_o:-default}"
+}
+_wl_fit_uidmode() {
+  appops get "$1" WAKE_LOCK 2>/dev/null | sed -n 's/.*Uid mode: WAKE_LOCK: \([a-z_]*\).*/\1/p' | head -1
+}
+# What Android goes by: AppOpsService checks a uid mode before the package's own.
+_wl_fit_eff() {
+  _fu="$(_wl_fit_uidmode "$1")"
+  case "$_fu" in ''|default) _wl_fit_orig "$1" ;; *) printf '%s' "$_fu" ;; esac
+}
+# A uid mode that would override the package limit is set too, and recorded on its own
+# ledger (pkg|mode) so protect and uninstall hand back exactly that.
+FIT_UID="$D/wakelock_fitness_uidmode"
+FIT_REF="$D/wakelock_fitness_refused"
+_wl_fit_uid_limit() {
+  _fu="$(_wl_fit_uidmode "$1")"
+  case "$_fu" in ''|default|ignore) return 0 ;; esac
+  appops set --uid "$1" WAKE_LOCK ignore >/dev/null 2>&1 || return 0
+  grep -q "^$1|" "$FIT_UID" 2>/dev/null || echo "$1|$_fu" >> "$FIT_UID"
+}
+_wl_fit_uid_release() {
+  [ -s "$FIT_UID" ] || return 0
+  _fl="$(grep "^$1|" "$FIT_UID" 2>/dev/null | head -1)"
+  [ -n "$_fl" ] || return 0
+  appops set --uid "$1" WAKE_LOCK "${_fl#*\|}" >/dev/null 2>&1
+  grep -v "^$1|" "$FIT_UID" > "$FIT_UID.tmp" 2>/dev/null
+  if [ -s "$FIT_UID.tmp" ]; then mv -f "$FIT_UID.tmp" "$FIT_UID"; else rm -f "$FIT_UID.tmp" "$FIT_UID"; fi
 }
 _wl_fit_limit() {
   _has appops || return 1
@@ -375,9 +428,12 @@ _wl_fit_limit() {
   # WAKE_LOCK entry at all) for both fitness apps. Re-assert, keeping the ORIGINAL mode on
   # record - the one to hand back is still what the app had before ASB, not "default".
   if grep -q "^$1|" "$FIT" 2>/dev/null; then
-    [ "$(_wl_fit_orig "$1")" = ignore ] && return 0
-    appops set "$1" WAKE_LOCK ignore >/dev/null 2>&1 || return 1
-    [ "$(_wl_fit_orig "$1")" = ignore ] || return 1
+    [ "$(_wl_fit_eff "$1")" = ignore ] && return 0
+    if [ "$(_wl_fit_orig "$1")" != ignore ]; then
+      appops set "$1" WAKE_LOCK ignore >/dev/null 2>&1 || return 1
+    fi
+    _wl_fit_uid_limit "$1"
+    [ "$(_wl_fit_eff "$1")" = ignore ] || return 1
     # Any "Android does not enforce it" verdict was drawn while the op was not set.
     if [ -s "$FIT_IGN" ]; then
       grep -vxF "$1" "$FIT_IGN" > "$FIT_IGN.tmp" 2>/dev/null
@@ -391,21 +447,38 @@ _wl_fit_limit() {
   fi
   _orig="$(_wl_fit_orig "$1")"
   # Already ignored by someone else (the user, another tool): not ours to record or undo.
-  [ "$_orig" = ignore ] && return 1
-  appops set "$1" WAKE_LOCK ignore >/dev/null 2>&1 || return 1
-  [ "$(_wl_fit_orig "$1")" = ignore ] || return 1
+  [ "$(_wl_fit_eff "$1")" = ignore ] && return 1
+  if [ "$_orig" != ignore ]; then
+    appops set "$1" WAKE_LOCK ignore >/dev/null 2>&1 || return 1
+  fi
+  _wl_fit_uid_limit "$1"
+  if [ "$(_wl_fit_eff "$1")" != ignore ]; then
+    # Not accepted: put back what was changed, so nothing unrecorded is left behind, and
+    # say so - the WebUI badge reads it instead of waiting on "pending" for good (fix177).
+    [ "$_orig" != ignore ] && appops set "$1" WAKE_LOCK "$_orig" >/dev/null 2>&1
+    _wl_fit_uid_release "$1"
+    grep -qxF "$1" "$FIT_REF" 2>/dev/null || echo "$1" >> "$FIT_REF"
+    echo "wakelock: $1 - the WAKE_LOCK app-op did not take (reads back $(_wl_fit_eff "$1")); left as it was"
+    return 1
+  fi
+  if [ -s "$FIT_REF" ]; then
+    grep -vxF "$1" "$FIT_REF" > "$FIT_REF.tmp" 2>/dev/null
+    if [ -s "$FIT_REF.tmp" ]; then mv -f "$FIT_REF.tmp" "$FIT_REF"; else rm -f "$FIT_REF.tmp" "$FIT_REF"; fi
+  fi
   echo "$1|$_orig" >> "$FIT"
   echo "wakelock: $1 may no longer hold the CPU awake (wakelock_fitness=limit)"
   return 0
 }
 _wl_fit_release() {
+  rm -f "$FIT_REF" 2>/dev/null
   [ -s "$FIT" ] || return 0
   _has appops || return 0
   while IFS='|' read -r _fp _fo; do
     [ -n "$_fp" ] || continue
     appops set "$_fp" WAKE_LOCK "${_fo:-default}" >/dev/null 2>&1
+    _wl_fit_uid_release "$_fp"
   done < "$FIT"
-  rm -f "$FIT" "$FIT_IGN" 2>/dev/null
+  rm -f "$FIT" "$FIT_IGN" "$FIT_UID" "$FIT_REF" 2>/dev/null
   echo "wakelock: fitness apps may hold wakelocks again (wakelock_fitness=protect)"
 }
 
@@ -481,6 +554,10 @@ asb_wl_relax() {
         # same reason - restricting an app someone uses daily delays its notifications for
         # a battery saving Android would make by itself once it really goes unused.
         _v=used_today
+      elif [ "$_act" = 1 ] && _wl_fgs_running "$_p"; then
+        # A foreground service is work the user can see in the notification shade - the
+        # report has always said those are left alone (fix177).
+        _v=in_use
       elif [ "$_act" = 1 ]; then
         # forcestop is not used: it kills the app. Standby-bucket restricted tells Android
         # to stop honouring its background requests, which the platform already knows how
@@ -523,6 +600,33 @@ asb_wl_snapshot_bs() {
     | head -1 >> "$STATE" 2>/dev/null
   [ -s "$STATE" ]
 }
+
+# fitness-status (fix177): what the WebUI badge needs, read-only. Installed step/fitness apps
+# (third-party: the class wakelock_fitness acts on), how many ASB recorded as limited, how
+# many have the limit in force with no record (set before - by the user, another tool or an
+# earlier install), how many this ROM was seen ignoring, how many refused the op. The badge
+# counted only the ledger lines and read "no fitness apps" on a phone with two whenever the
+# ledger was empty, whatever the reason.
+if [ "${1:-}" = fitness-status ]; then
+  _fs_n=0; _fs_f=0; _fs_names=""
+  if _has pm; then
+    for _fs_p in $(pm list packages -3 2>/dev/null | sed -n 's/^package://p'); do
+      _wl_fitness "$_fs_p" || continue
+      _fs_n=$((_fs_n + 1)); _fs_names="${_fs_names}${_fs_names:+,}$_fs_p"
+      # Recorded apps are counted from the ledger; appops (a Java client each) only for the
+      # others - the case this exists for, an op already in force with no record.
+      grep -q "^$_fs_p|" "$FIT" 2>/dev/null && continue
+      _has appops && [ "$(_wl_fit_eff "$_fs_p")" = ignore ] && _fs_f=$((_fs_f + 1))
+    done
+  fi
+  _fs_l=0; _fs_i=0; _fs_r=0
+  [ -s "$FIT" ] && _fs_l="$(grep -c '|' "$FIT" 2>/dev/null)"
+  [ -s "$FIT_IGN" ] && _fs_i="$(grep -c . "$FIT_IGN" 2>/dev/null)"
+  [ -s "$FIT_REF" ] && _fs_r="$(grep -c . "$FIT_REF" 2>/dev/null)"
+  printf 'installed=%s\npreset=%s\nlimited=%s\nignored=%s\nrefused=%s\nnames=%s\n' \
+    "$_fs_n" "$_fs_f" "${_fs_l:-0}" "${_fs_i:-0}" "${_fs_r:-0}" "$_fs_names"
+  exit 0
+fi
 
 # fitness: put the user's fitness limit back and nothing else (fix143).
 #

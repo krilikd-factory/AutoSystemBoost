@@ -54,6 +54,35 @@ asb_stock_enter() {
     asb_log 'stock profile: native governor stopped; profile-owned baseline restored; no ASB power policy remains active'
 }
 
+# The direct WebUI switch (fix177): everything that takes effect at once - the marker, the
+# governor stopped, the leases released and every sysfs value put back - and nothing that
+# starts a Java process. apply_profile.sh hands the settings part of the ledger and the
+# network re-apply to a background pass (asb_stock_finish), guarded by the profile epoch.
+# asb_stock_enter above stays the complete, synchronous transaction for boot and the worker.
+asb_stock_enter_fast() {
+  mkdir -p /data/adb/asb 2>/dev/null || true
+  true > /data/adb/asb/stock_profile_active 2>/dev/null || true
+  asb_stock_stop_governor
+  asb_stock_release_profile_leases
+  command -v asb_profile_baseline_restore >/dev/null 2>&1 && \
+    asb_profile_baseline_restore path || true
+  command -v asb_log >/dev/null 2>&1 && \
+    asb_log 'stock profile: native governor stopped, profile sysfs values restored; settings follow in the background'
+}
+
+# The background half. Returns 2 when a newer profile superseded it (ledger kept).
+asb_stock_finish() {
+  if command -v asb_profile_baseline_restore >/dev/null 2>&1; then
+    asb_profile_baseline_restore setting || return $?
+  fi
+  _asp_moddir="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
+  [ -f "$_asp_moddir/runtime/asb_net_apply.sh" ] && \
+    MODDIR="$_asp_moddir" sh "$_asp_moddir/runtime/asb_net_apply.sh" >/dev/null 2>&1 </dev/null
+  command -v asb_log >/dev/null 2>&1 && \
+    asb_log 'stock profile: profile-owned settings restored in the background; no ASB power policy remains active'
+  return 0
+}
+
 asb_stock_leave() {
   rm -f /data/adb/asb/stock_profile_active 2>/dev/null || true
 }

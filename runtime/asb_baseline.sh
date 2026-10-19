@@ -45,9 +45,25 @@ asb_profile_baseline_capture_setting() {
   asb_profile_baseline_record setting "$_pb_ns:$_pb_key" "$_pb_val"
 }
 
+# $1 = all (default) | path | setting.
+#
+# Split for the Stock switch (fix177). A sysfs path is a write that takes microseconds; every
+# setting is a `settings` process start (the Java framework client, 0.5-1 s each on the
+# phone). The WebUI waited for the whole ledger - the owner saw "Stock selected - restoring
+# ROM baseline..." for about 30 s with the screen frozen and two profile cards half lit. The
+# direct switch now restores the paths (CPU, GPU, VM) at once and hands the settings to a
+# background pass.
+#
+# ASB_PB_GUARD, when set, names a function asked before each record: a non-zero answer stops
+# the pass and KEEPS the ledger, so a newer profile that starts writing does not have its
+# values overwritten by a stale restore, and the original values stay recorded for the next
+# Stock. The ledger is removed only once the settings part has completed.
 asb_profile_baseline_restore() {
+  _pb_only="${1:-all}"
   [ -f "$ASB_PROFILE_BASELINE" ] || return 0
   while IFS='|' read -r _pb_type _pb_key _pb_value; do
+    [ "$_pb_only" = all ] || [ "$_pb_only" = "$_pb_type" ] || continue
+    if [ -n "${ASB_PB_GUARD:-}" ] && ! "$ASB_PB_GUARD"; then return 2; fi
     case "$_pb_type" in
       path)
         [ -w "$_pb_key" ] && printf '%s\n' "$_pb_value" > "$_pb_key" 2>/dev/null || true
@@ -55,13 +71,19 @@ asb_profile_baseline_restore() {
       setting)
         _pb_ns="${_pb_key%%:*}"; _pb_name="${_pb_key#*:}"
         [ -n "$_pb_ns" ] && [ -n "$_pb_name" ] || continue
-        if [ -z "$_pb_value" ]; then settings delete "$_pb_ns" "$_pb_name" >/dev/null 2>&1 || true
-        else settings put "$_pb_ns" "$_pb_name" "$_pb_value" >/dev/null 2>&1 || true
+        if [ -z "$_pb_value" ]; then settings delete "$_pb_ns" "$_pb_name" >/dev/null 2>&1 </dev/null || true
+        else settings put "$_pb_ns" "$_pb_name" "$_pb_value" >/dev/null 2>&1 </dev/null || true
         fi
         ;;
     esac
   done < "$ASB_PROFILE_BASELINE"
+  [ "$_pb_only" = path ] && return 0
   rm -f "$ASB_PROFILE_BASELINE" 2>/dev/null || true
+}
+# How many settings the background pass still has to put back (the WebUI shows it).
+asb_profile_baseline_pending_settings() {
+  [ -f "$ASB_PROFILE_BASELINE" ] || { echo 0; return 0; }
+  grep -c '^setting|' "$ASB_PROFILE_BASELINE" 2>/dev/null || echo 0
 }
 
 asb_baseline_init() {
