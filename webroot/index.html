@@ -3686,7 +3686,7 @@ html[data-asb-font="device"] .sec-label { letter-spacing: 2.4px; }
         <span class="smart-banner-value" id="bnBasis">—</span>
       </div>
       <div class="smart-banner-item" data-lvi="slotheat">
-        <span class="smart-banner-label" data-i18n="lv_slot_heat">Usual heat</span>
+        <span class="smart-banner-label" data-i18n="lv_slot_heat">Slot heat</span>
         <span class="smart-banner-value" id="bnSlotTemp">—</span>
       </div>
       <div class="smart-banner-item" data-lvi="trend">
@@ -3694,7 +3694,7 @@ html[data-asb-font="device"] .sec-label { letter-spacing: 2.4px; }
         <span class="smart-banner-value" id="bnTrend">—</span>
       </div>
       <div class="smart-banner-item" data-lvi="lpm">
-        <span class="smart-banner-label" data-i18n="lv_lpm">Modem LPM</span>
+        <span class="smart-banner-label" data-i18n="lv_lpm">Modem mode</span>
         <span class="smart-banner-value" id="bnLpm">—</span>
       </div>
     </div>
@@ -3703,14 +3703,14 @@ html[data-asb-font="device"] .sec-label { letter-spacing: 2.4px; }
   <!-- Stock has no Smart/FSM policy, but direct ROM readings still belong in Monitor. -->
   <div class="smart-banner stock-rom-banner" id="liveStockRomBanner" style="display:none;" aria-live="polite">
     <div class="smart-banner-row">
-      <div class="smart-banner-item"><span class="smart-banner-label" id="bnStockDrainLabel" data-i18n="stock_battery_current">Battery current</span><span class="smart-banner-value" id="bnStockDrain">—</span></div>
-      <div class="smart-banner-item"><span class="smart-banner-label" id="bnStockTrendLabel" data-i18n="stock_thermal_trend">ROM thermal trend</span><span class="smart-banner-value" id="bnStockTrend">—</span></div>
-      <div class="smart-banner-item"><span class="smart-banner-label" id="bnStockLpmLabel" data-i18n="stock_lpm_state">Modem state</span><span class="smart-banner-value" id="bnStockLpm">—</span></div>
-      <div class="smart-banner-item"><span class="smart-banner-label" id="bnStockRamLabel" data-i18n="stock_ram_available">RAM available</span><span class="smart-banner-value" id="bnStockRam">—</span></div>
-      <div class="smart-banner-item"><span class="smart-banner-label" data-i18n="stock_cpu_clock">CPU clock</span><span class="smart-banner-value" id="bnStockCpuClock">—</span></div>
-      <div class="smart-banner-item"><span class="smart-banner-label" data-i18n="stock_load">System load</span><span class="smart-banner-value" id="bnStockLoad">—</span></div>
-      <div class="smart-banner-item"><span class="smart-banner-label" data-i18n="stock_battery">Battery</span><span class="smart-banner-value" id="bnStockBattery">—</span></div>
-      <div class="smart-banner-item"><span class="smart-banner-label" data-i18n="stock_uptime">Uptime</span><span class="smart-banner-value" id="bnStockUptime">—</span></div>
+      <div class="smart-banner-item" data-lvi="sdrain"><span class="smart-banner-label" id="bnStockDrainLabel" data-i18n="stock_battery_current">Battery current</span><span class="smart-banner-value" id="bnStockDrain">—</span></div>
+      <div class="smart-banner-item" data-lvi="strend"><span class="smart-banner-label" id="bnStockTrendLabel" data-i18n="stock_thermal_trend">ROM thermal trend</span><span class="smart-banner-value" id="bnStockTrend">—</span></div>
+      <div class="smart-banner-item" data-lvi="slpm"><span class="smart-banner-label" id="bnStockLpmLabel" data-i18n="stock_lpm_state">Modem state</span><span class="smart-banner-value" id="bnStockLpm">—</span></div>
+      <div class="smart-banner-item" data-lvi="sram"><span class="smart-banner-label" id="bnStockRamLabel" data-i18n="stock_ram_available">RAM available</span><span class="smart-banner-value" id="bnStockRam">—</span></div>
+      <div class="smart-banner-item" data-lvi="sclock"><span class="smart-banner-label" data-i18n="stock_cpu_clock">CPU clock</span><span class="smart-banner-value" id="bnStockCpuClock">—</span></div>
+      <div class="smart-banner-item" data-lvi="sload"><span class="smart-banner-label" data-i18n="stock_load">System load</span><span class="smart-banner-value" id="bnStockLoad">—</span></div>
+      <div class="smart-banner-item" data-lvi="sbattery"><span class="smart-banner-label" data-i18n="stock_battery">Battery</span><span class="smart-banner-value" id="bnStockBattery">—</span></div>
+      <div class="smart-banner-item" data-lvi="suptime"><span class="smart-banner-label" data-i18n="stock_uptime">Uptime</span><span class="smart-banner-value" id="bnStockUptime">—</span></div>
     </div>
   </div>
 
@@ -4801,9 +4801,10 @@ async function go(p) {
   const btn = document.querySelector('[data-p="' + p + '"]');
   if (switching || !btn || btn.classList.contains('on')) return;
 
-  // Applying a profile is deliberately synchronous on the root side: Smart → Stock stops the
-  // governor and restores its profile baseline before reporting success. Do not make the touch
-  // response wait for that safe lifecycle. Optimistically select the requested card now, retain
+  // Applying a profile is synchronous on the root side for its immediate part: Smart → Stock
+  // stops the governor and puts the sysfs values back before reporting success; the settings
+  // part of the ledger follows in a background pass (fix177 - it held this call for ~30 s).
+  // Do not make the touch response wait for that lifecycle either. Optimistically select the requested card now, retain
   // a single in-flight switch, and roll back only if apply_profile.sh actually fails.
   const previousProfile = _selectedProfile;
   switching = true;
@@ -4898,14 +4899,19 @@ function openLivePage() {
   p.scrollTop = 0;
   _liveOpen = true;
   liveHeaderSync();
-  if (_selectedProfile !== 'smart') {
-    paintStockLive(_stockTelemetryKv);
-    if (_selectedProfile === 'stock') pollStockTelemetry(true, true);
-  }
-  pollLive(true);
+  if (_selectedProfile !== 'smart') paintStockLive(_stockTelemetryKv);
+  /* Slide in first, read after (fix177). The root call blocks the page while it runs, and on
+   * Stock it ran here, before the slide had a frame - "Monitor opens slowly on Stock". The
+   * last ROM sample is painted at once; the fresh read starts once the page has moved. */
   if (_liveTimer) clearInterval(_liveTimer);
+  setTimeout(function () {
+    if (!_liveOpen) return;
+    if (_selectedProfile === 'stock') pollStockTelemetry(true, true);
+    pollLive(true);
+  }, LIVE_OPEN_SETTLE_MS);
   _liveTimer = setInterval(() => pollLive(true), 3000);
 }
+const LIVE_OPEN_SETTLE_MS = 320;
 
 function closeLivePage() {
   uiSound('nav');
@@ -4980,12 +4986,15 @@ function navBackAction() {
 function lvSlotHeat(tx10, coolx10, warmx10) {
   if (!(tx10 > 0)) return { text: '\u2014', tip: '', warm: false };
   const t = (tx10 / 10).toFixed(1);
-  let key = 'lv_heat_norm', def = 'normal', warm = false;
-  if (warmx10 > 0 && tx10 > warmx10) { key = 'lv_heat_warm'; def = 'above normal'; warm = true; }
-  else if (coolx10 > 0 && tx10 < coolx10) { key = 'lv_heat_cool'; def = 'below normal'; }
+  /* fix177: the slot, not the moment - "above normal" under "Usual heat" read as the phone
+   * running hot while it sat at 35 C. The tile is "Slot heat" now and says cool / typical /
+   * warm about the slot; the sheet puts the CPU temperature now beside it. */
+  let key = 'lv_heat_norm', def = 'typical', warm = false;
+  if (warmx10 > 0 && tx10 > warmx10) { key = 'lv_heat_warm'; def = 'warm'; warm = true; }
+  else if (coolx10 > 0 && tx10 < coolx10) { key = 'lv_heat_cool'; def = 'cool'; }
   const band = (coolx10 > 0 && warmx10 > 0)
     ? Math.round(coolx10 / 10) + '\u2013' + Math.round(warmx10 / 10) + '\u00b0C' : '\u2014';
-  const tip = T('lv_heat_tip', 'Usual CPU peak this hour: %s; normal for this phone: %s')
+  const tip = T('lv_heat_tip', 'Typical CPU peak in this slot: %s; this phone\u2019s norm: %s')
     .replace('%s', t + '\u00b0C').replace('%s', band);
   return { text: T(key, def), tip: tip, warm: warm };
 }
@@ -5025,7 +5034,8 @@ function lvMeterParse(text) {
       on: (n[0] >= 600 && n[1] > 0) ? Math.round(n[1] * 360 / n[0]) : 0,
       onMin: Math.round(n[0] / 60),
       off: (n[4] >= 1 && n[2] > 0) ? Math.round(n[3] * 3600 / n[2]) : 0,
-      offN: n[4]
+      offN: n[4],
+      offS: n[2]
     };
   });
   return out;
@@ -5108,7 +5118,7 @@ function lvEtaPaint() {
 }
 /* Monitor: battery drain with the screen on and off (fix159). The two figures sit in the Smart
  * card; a tap opens what each one is based on and how long the battery would last. */
-const _lvDrain = { on: 'wait', off: 'wait', winS: 0, offN: 0 };
+const _lvDrain = { on: 'wait', off: 'wait', winS: 0, offN: 0, offX: 0 };
 function liveDrainIsOpen() { const m = _el('liveDrainSheet'); return !!m && !m.hidden; }
 function liveDrainEnsure() {
   let m = _el('liveDrainSheet');
@@ -5186,7 +5196,7 @@ function liveDrainPaint() {
 function liveDrainCompare() {
   const p = _lvMeter.p || {};
   const order = ['smart', 'balanced', 'battery', 'performance', 'stock'];
-  const any = order.some(function (k) { return p[k] && (p[k].on > 0 || p[k].off > 0); });
+  const any = order.some(function (k) { return p[k] && (p[k].on > 0 || p[k].off > 0 || p[k].offN > 0); });
   if (!any) return null;
   const box = document.createElement('div');
   box.className = 'live-drain-cmp';
@@ -5196,7 +5206,7 @@ function liveDrainCompare() {
   box.appendChild(h);
   order.forEach(function (k) {
     const e = p[k];
-    if (!e || (!(e.on > 0) && !(e.off > 0))) return;
+    if (!e || (!(e.on > 0) && !(e.off > 0) && !(e.offN > 0))) return;
     const row = document.createElement('div');
     row.className = 'live-drain-cmp-row' + (k === _selectedProfile ? ' cur' : '');
     const name = document.createElement('span');
@@ -5205,11 +5215,31 @@ function liveDrainCompare() {
     const on = document.createElement('span');
     on.className = 'live-drain-cmp-val';
     on.innerHTML = techIcon('sun');
-    on.appendChild(document.createTextNode(e.on > 0 ? lvPct(e.on, 10, 1) : '\u2014'));
+    on.appendChild(document.createTextNode(e.on > 0 ? lvPct(e.on, 10, 1) : '\u2026'));
+    if (!(e.on > 0)) on.title = T('lv_drain_on_wait', 'needs 10 minutes with the screen on and the battery level moving');
     const off = document.createElement('span');
     off.className = 'live-drain-cmp-val';
     off.innerHTML = techIcon('theme_moon');
-    off.appendChild(document.createTextNode(e.off > 0 ? lvPct(e.off, 100, e.off >= 100 ? 1 : 2) : '\u2014'));
+    /* No dash under the moon (fix177). The meter counts a screen-off hour whose level did not
+     * move at all, so a frugal profile summed to 0 and printed "—" beside a card measuring
+     * 0.56 %/h: that is "below one step of the level over the time measured", said as such.
+     * With no screen-off hour in this profile yet, the current profile borrows the governor's
+     * own screen-off figure (the card above, "~": not per profile); the others say they are
+     * still measuring. */
+    let offTxt, offTip = '';
+    if (e.off > 0) offTxt = lvPct(e.off, 100, e.off >= 100 ? 1 : 2);
+    else if (e.offN > 0 && e.offS > 0) {
+      const ub = Math.max(1, Math.ceil(100 * 3600 / e.offS));
+      offTxt = '<' + lvPct(ub, 100, ub >= 100 ? 1 : 2);
+      offTip = T('lv_drain_off_measured', 'measured over %s screen-off stretch(es) of an hour or more, without charging or music').replace('%s', String(e.offN));
+    } else if (k === _selectedProfile && _lvDrain.off === 'measured' && _lvDrain.offX > 0) {
+      offTxt = '~' + lvPct(_lvDrain.offX, 100, _lvDrain.offX >= 100 ? 1 : 2);
+    } else {
+      offTxt = '\u2026';
+      offTip = T('lv_drain_off_wait', 'needs an hour with the screen off, without charging or music');
+    }
+    off.appendChild(document.createTextNode(offTxt));
+    if (offTip) off.title = offTip;
     row.appendChild(name); row.appendChild(on); row.appendChild(off);
     box.appendChild(row);
   });
@@ -5233,31 +5263,59 @@ function liveDrainClose() {
  * from and what is normal. Stock fills the same nine tiles with ROM readings, so the
  * explanation follows what the tile shows on the current profile, not the tile's position.
  * The eight Smart-banner items (slot, confidence, lean, load, basis, heat, trend, LPM)
- * open the same sheet (fix172). */
+ * open the same sheet (fix172), and so do the eight Stock-banner items (fix177).
+ *
+ * fix177: the words a tile can show are not written into the texts any more - "idle, light,
+ * medium, heavy or gaming" sat under a tile reading "средняя" in every language. A text names
+ * them through {placeholders} that lviFill() replaces with the tile's own strings, so the
+ * sheet and the tile cannot drift apart again. */
 const LVI_TEXT = {
-  cpu: ['lvi_cpu', 'Temperature of the CPU cores. ASB steers by one core sensor that it checks against its neighbours, so a stuck zone is never trusted; in Stock it is the hottest core. Up to about 45 \u00b0C is cool, short spikes when an app opens are normal, and throttling starts around 60 \u00b0C held for a while.'],
-  skin: ['lvi_skin', 'Temperature of the shell - what your hand feels. It moves slowly and trails the CPU by minutes. Up to about 38 \u00b0C feels neutral, above about 42 \u00b0C the phone feels warm, and around 45 \u00b0C the system starts holding performance back.'],
+  cpu: ['lvi_cpu', 'Temperature of the CPU cores. ASB steers by one core sensor that it checks against its neighbours, so a stuck zone is never trusted; in Stock it is the hottest core. Up to about 45 °C is cool, short spikes when an app opens are normal, and throttling starts around 60 °C held for a while.'],
+  skin: ['lvi_skin', 'Temperature of the shell - what your hand feels. It moves slowly and trails the CPU by minutes. Up to about 38 °C feels neutral, above about 42 °C the phone feels warm, and around 45 °C the system starts holding performance back.'],
   board: ['lvi_board', 'Temperature of the main board under the shell. It sits between the CPU and the shell and shows heat soaking into the phone: after a game or a long charge it stays high even when the CPU has already cooled.'],
   fsm: ['lvi_fsm', 'What ASB thinks the phone is doing: DEEP_IDLE - asleep with the screen off, LIGHT_IDLE - screen on with nothing to do, MODERATE - ordinary use, HEAVY - an app launch or a heavy page, SUSTAINED - long heavy work with heat, GAMING - a game. Each state has its own frequency ceilings.'],
   gpu: ['lvi_gpu', 'How busy the graphics processor is, as a share of time. Scrolling and video sit around 5-30%, games at 50-100%. A game state is entered only when the load stays high, not on a single spike.'],
   headroom: ['lvi_headroom', 'How much of the CPU hardware maximum the current ceilings allow, on the most limited cluster. 100% means nothing holds the CPU back. A low figure on a cool phone is a profile or vendor limit, not heat.'],
-  capsrc: ['lvi_capsrc', 'Who set the CPU frequency ceiling right now: ASB (the profile and Smart), the vendor - the OnePlus thermal or performance service - or a script. When the vendor holds a lower ceiling ASB leaves it alone rather than fighting it.'],
+  capsrc: ['lvi_capsrc', 'Who set the CPU frequency ceiling right now: “ASB” - the profile and Smart; “Vendor” - the OnePlus thermal or performance service; “Thermal” - a thermal overlay; “Shell” - the profile script, for a few seconds after a switch until the governor takes over again. When the vendor holds a lower ceiling ASB leaves it alone rather than fighting it.'],
   clamps: ['lvi_clamps', 'How often the vendor service pushed the ceiling below what ASB asked for: in the last hour, and since ASB started. A few an hour is normal; dozens mean a hot phone or an aggressive vendor mode.'],
-  learner: ['lvi_learner', 'How many stretches of use Smart has learned from, across all twelve time slots. Every 20 minutes of use and every night adds one. The more there are, the more Smart decides from measurements of your phone instead of defaults.'],
-  slot: ['lvi_slot', 'Smart splits the day into twelve two-hour slots and keeps its own measurements for each - this is the slot the phone is in now, with a weekday or weekend marker. What a workday morning costs is not spent on a Sunday morning: each has its own learned numbers.'],
+  learner: ['lvi_learner', 'How many stretches of use (“{ses}” on the tile) Smart has learned from, across all twelve slots. Every 20 minutes of use and every night adds one. The more there are, the more Smart decides from measurements of your phone instead of defaults.'],
+  slot: ['lvi_slot', 'Smart splits the day into six parts - {dp0} 0–6, {dp1} 6–9, {dp2} 9–12, {dp3} 12–17, {dp4} 17–21, {dp5} 21–24 - kept apart for weekdays (“{wd}”) and weekends (“{we}”): twelve slots, each with its own measurements. This is the slot the phone is in now. What a workday morning costs is not spent on a Sunday morning.'],
   conf: ['lvi_conf', 'How much Smart trusts what it has measured for this slot. The figure grows with every stretch of use; while it is low, Smart leans on neighbouring slots and safe defaults instead of guessing from a handful of samples.'],
-  alpha: ['lvi_alpha', 'How far the current policy leans from Balanced toward Battery, in percent, learned from what this slot usually costs. 0% is balanced behaviour; higher values hold the phone back more to save charge. Heat, a game or a camera session pushes it back down on its own.'],
-  apphint: ['lvi_apphint', 'What the foreground load looks like right now: idle, light, medium, heavy or gaming. Smart reads it from the app in front and the load it creates, and gives games and heavy work more frequency headroom than a messenger.'],
-  basis: ['lvi_basis', 'What Smart\u2019s figures are based on right now: this slot\u2019s own history once there is enough of it, a neighbouring or similar slot while there is not, an overall average at first. A learned night window or a thermal guard takes over instead and is named here when it does.'],
-  slotheat: ['lvi_slotheat', 'The temperature Smart usually measures in this slot, from its own history - cool, normal or warm. A slot that usually runs warm gets gentler ceilings before the phone actually heats up, not after.'],
-  trend: ['lvi_trend', 'Where the phone\u2019s temperature is heading: warming, steady or cooling. A warming trend makes Smart back off before a hard thermal limit is reached. Right after a profile switch the trend stays muted for two minutes, so a stale reading cannot steer the new profile.'],
-  lpm: ['lvi_lpm', 'The modem\u2019s power mode, read from the governor\u2019s own state file. normal follows the profile; save lets the radio idle with stretched keepalives (screen off or Battery profile); fast keeps latency low for games and downloads; night stretches idling further inside the night window Smart learned from your routine.'],
+  alpha: ['lvi_alpha', 'How far the current policy leans from {bal} toward {bat}, in percent, learned from what this slot usually costs. 0% is {bal} behaviour; higher values hold the phone back more to save charge. Heat, a game or a camera session pushes it back down on its own.'],
+  apphint: ['lvi_apphint', 'What the foreground load looks like right now: “{app0}”, “{app1}”, “{app2}”, “{app3}” or “{app4}”. Smart reads it from the app in front and the load it creates, and gives games and heavy work more frequency headroom than a messenger.'],
+  basis: ['lvi_basis', 'What Smart’s figures are based on right now: “{fb0}” - this slot’s own history, once there is enough of it; “{fb1}” - the same part of the day on the other kind of day (weekday or weekend); “{fb2}” - a slot of the same kind (day or night); “{fb3}” - the best-learned slot of the week; “{fb4}” - nothing learned yet, safe defaults. A learned night window (“{night}”) or a thermal guard (“{guard}”) takes over instead and is shown here when it does.'],
+  slotheat: ['lvi_slotheat', 'Not the temperature now - how warm this slot usually runs. Smart remembers the CPU peak of every stretch of use in each slot and compares this slot with the phone’s own norm, the middle of all its slots: “{hcool}”, “{hnorm}” or “{hwarm}”. A slot that usually runs warm gets slightly gentler ceilings in advance, before the phone heats up; one that runs cool gets a little headroom back.'],
+  trend: ['lvi_trend', 'Where the phone’s temperature is heading: “{up}”, “{fl}” or “{dn}”. A warming trend makes Smart back off before a hard thermal limit is reached; cooling gives the headroom back. Right after a profile switch the trend stays muted for two minutes, so a stale reading cannot steer the new profile.'],
+  lpm: ['lvi_lpm', 'The modem’s power mode, read from the governor’s own state file: “{lnormal}” follows the profile; “{lsave}” lets the radio idle with stretched keepalives (screen off or the {bat} profile); “{lfast}” keeps latency low for games and downloads; “{lnight}” stretches idling further inside the night window Smart learned from your routine.'],
   cpuceil: ['lvi_cpuceil', 'How much of the hardware maximum the ROM lets the CPU reach right now, on the most limited cluster. In Stock ASB sets no ceilings, so anything under 100% here comes from the OnePlus thermal or performance service.'],
   gpuclk: ['lvi_gpuclk', 'The graphics clock at this moment. It drops to the minimum when nothing is drawn and climbs with load; in Stock ASB does not touch it.'],
-  battemp: ['lvi_battemp', 'Battery temperature. Above about 40 \u00b0C charging slows down and the battery ages faster; above about 45 \u00b0C the system limits performance to protect it.'],
+  battemp: ['lvi_battemp', 'Battery temperature. Above about 40 °C charging slows down and the battery ages faster; above about 45 °C the system limits performance to protect it.'],
   zram: ['lvi_zram', 'Compressed memory (zRAM) in use. Android packs apps you have not used for a while here instead of closing them. Several GB is normal with many apps open; it costs CPU time only when an app is unpacked again.'],
-  learnpause: ['lvi_learnpause', 'In Stock Smart neither learns nor decides - the ASB frequency policy is off. Everything it has learned is kept and is used again as soon as you switch back to Smart.']
+  learnpause: ['lvi_learnpause', 'In Stock Smart neither learns nor decides - the ASB frequency policy is off. Everything it has learned is kept and is used again as soon as you switch back to Smart.'],
+  sdrain: ['lvi_sdrain', 'The current flowing out of the battery right now, read straight from the battery driver. It jumps with every tap and falls when the screen goes off - the hourly drain with the screen on and off is in the two tiles above. Below: this current as an hourly rate.'],
+  strend: ['lvi_strend', 'Where the CPU temperature is heading, from ROM readings every 10 seconds over the last two minutes: “{up}”, “{fl}” or “{dn}”. In {stock} nothing in ASB reacts to it; it shows what the phone’s own thermal management is working against. For the first half-minute after Monitor opens it is still measuring (…).'],
+  slpm: ['lvi_slpm', 'Whether the ROM keeps mobile data up while Wi-Fi is connected (the “mobile data always active” developer setting): “{lfast}” - kept up, a faster handover for a little more drain; “{lnormal}” - the ROM’s default. In {stock} ASB applies no modem policy; this is the ROM’s own setting.'],
+  sram: ['lvi_sram', 'Memory available to apps right now without closing anything, next to the phone’s total. Android keeps apps in memory on purpose, so a low figure is not a problem unless apps keep restarting.'],
+  sclock: ['lvi_sclock', 'The highest current clock among the CPU clusters in this reading. It changes many times a second, so one reading says little on its own; below, the clock of every cluster.'],
+  sload: ['lvi_sload', 'System load over the last minute: how many tasks were running or waiting for the CPU, on average. Compare it with the number of cores (8 on most OnePlus phones): below that the CPU keeps up. The 5- and 15-minute figures are below.'],
+  sbattery: ['lvi_sbattery', 'Charge level and voltage, read straight from the battery driver. The voltage falls as the charge goes down and sags briefly under load; below, the battery temperature.'],
+  suptime: ['lvi_suptime', 'Time since the phone was last started. Below, when that was.']
 };
+/* The words the tiles show, by placeholder. */
+function lviFill(t) {
+  const P = {
+    ses: T('lv_sessions_short', 'ses'), wd: T('lv_wd_short', 'wkday'), we: T('lv_we_short', 'wknd'),
+    bal: T('prof_balanced', 'Balanced'), bat: T('prof_battery', 'Battery'), stock: T('prof_stock', 'Stock'),
+    night: T('lv_mode_night', '🌙 night'), guard: T('lv_mode_guard', '🛡 guard'),
+    hcool: T('lv_heat_cool', 'cool'), hnorm: T('lv_heat_norm', 'typical'), hwarm: T('lv_heat_warm', 'warm'),
+    up: T('lv_trend_up', 'warming'), fl: T('lv_trend_fl', 'steady'), dn: T('lv_trend_dn', 'cooling'),
+    lnormal: T('lv_lpm_normal', 'normal'), lsave: T('lv_lpm_save', 'save'), lfast: T('lv_lpm_fast', 'fast'), lnight: T('lv_lpm_night', 'night')
+  };
+  ['sleep', 'wake', 'morning', 'day', 'evening', 'late'].forEach(function (d, i) { P['dp' + i] = T('lv_dp_' + i, d); });
+  ['idle', 'light', 'medium', 'heavy', 'gaming'].forEach(function (d, i) { P['app' + i] = T('lv_app_' + i, d); });
+  ['own slot', 'neighbour', 'similar', 'overall', 'cold start'].forEach(function (d, i) { P['fb' + i] = T('lv_fb_' + i, d); });
+  return String(t).replace(/\{([a-z0-9]+)\}/g, function (m, k) { return Object.prototype.hasOwnProperty.call(P, k) ? P[k] : m; });
+}
 const LVI_STOCK = { fsm: 'cpuceil', headroom: 'gpuclk', capsrc: 'battemp', clamps: 'zram', learner: 'learnpause' };
 function liveInfoIsOpen() { const m = _el('liveInfoSheet'); return !!m && !m.hidden; }
 function liveInfoEnsure() {
@@ -5296,6 +5354,12 @@ function liveInfoSource(key, cell) {
   const v = cell && (cell.querySelector('.live-cell-value') || cell.querySelector('.smart-banner-value'));
   const tip = ((v && v.title) || '').split('\n').filter(function (l) { return l && l.indexOf('=') < 0; }).join('\n');
   if (tip && lines.indexOf(tip) < 0) lines.push(tip);
+  /* The usual heat of a slot next to the temperature now (fix177): "warm" on a phone at
+   * 35 C read as a fault until the two stood side by side. */
+  if (key === 'slotheat') {
+    const cv = ((_el('liveCpu') || {}).textContent || '').trim();
+    if (/\d/.test(cv)) lines.push(T('lvi_cpu_now', 'CPU now: %s').replace('%s', cv));
+  }
   return lines;
 }
 /* A Smart-banner value can carry a pill badge as a child element (the slot name plus
@@ -5325,10 +5389,18 @@ function liveInfoOpen(cell) {
   const lbl = cell.querySelector('.live-cell-label') || cell.querySelector('.smart-banner-label');
   const val = cell.querySelector('.live-cell-value') || cell.querySelector('.smart-banner-value');
   _el('liveInfoTitle').textContent = (lbl && lbl.textContent) || '';
-  _el('liveInfoNowLbl').textContent = T('lvi_now', 'Now');
-  _el('liveInfoVal').textContent = liveInfoValText(val);
-  _el('liveInfoVal').className = 'live-info-val' + (val ? ' ' + val.className.replace('live-cell-value', '').replace('smart-banner-value', '').trim() : '');
-  _el('liveInfoText').textContent = T(txt[0], txt[1]);
+  _el('liveInfoNowLbl').textContent = key === 'slotheat' ? T('lvi_usual', 'Usually in this slot') : T('lvi_now', 'Now');
+  const iv = _el('liveInfoVal');
+  iv.textContent = liveInfoValText(val);
+  iv.className = 'live-info-val' + (val ? ' ' + val.className.replace('live-cell-value', '').replace('smart-banner-value', '').trim() : '');
+  /* The colour the tile is actually drawn in (fix177). The same class means different things
+   * in the two grids - cap-raised is green in the Smart banner (cooling, saving) and amber in
+   * the tile grid - and heat-warm and basis-* had no rule in the sheet at all, so "cooling"
+   * opened in amber and "warm" in white. Copying the computed colour keeps every one of the
+   * seventeen sheets in the tile's colour, in both themes. */
+  iv.style.color = '';
+  try { if (val && typeof getComputedStyle === 'function') iv.style.color = getComputedStyle(val).color || ''; } catch (e) {}
+  _el('liveInfoText').textContent = lviFill(T(txt[0], txt[1]));
   const src = _el('liveInfoSrc');
   const lines = liveInfoSource(key, cell);
   src.textContent = lines.join('\n');
@@ -6040,7 +6112,7 @@ let _ltpoStatus = '', _ltpoState = '', _ltpoVideoStatus = '';
  * apps the limit covers, and how many of them this ROM lets hold the CPU anyway - the
  * WAKE_LOCK app-op is not enforced on ColorOS/OxygenOS 16, so "limit" can be set and
  * dead at the same time. The badge below must not claim otherwise. */
-let _wlFitIgnored = 0, _wlFitLimited = 0, _wlFitProbed = false;
+let _wlFitIgnored = 0, _wlFitLimited = 0, _wlFitInstalled = 0, _wlFitProbed = false;
 let _mmfeedStatus = '', _mmfeedState = '';
 // Is this the reference model the flat-effects option was validated on?
 //
@@ -6097,14 +6169,40 @@ async function loadLtpoStatus() {
   } catch (e) { _ltpoStatus = ''; _ltpoState = ''; _ltpoVideoStatus = ''; }
 }
 
-async function loadWlFitStatus() {
+/* fix177: the watcher's own fitness-status (installed apps, limit in force as Android reads
+ * it with no record, ledger, ROM-ignored). Counting the two ledger files alone read "no fitness apps" on a
+ * phone with Samsung Health and Renpho installed whenever the ledger was empty. */
+function wlFitParse(out) {
+  const kv = {};
+  String(out || '').split(/\r?\n/).forEach(function (l) { const i = l.indexOf('='); if (i > 0) kv[l.slice(0, i)] = l.slice(i + 1); });
+  return {
+    installed: parseInt(kv.installed, 10) || 0,
+    preset: parseInt(kv.preset, 10) || 0,
+    limited: parseInt(kv.limited, 10) || 0,
+    ignored: parseInt(kv.ignored, 10) || 0,
+    refused: parseInt(kv.refused, 10) || 0,
+    ok: Object.prototype.hasOwnProperty.call(kv, 'installed')
+  };
+}
+let _wlFitAt = 0;
+async function loadWlFitStatus(force) {
+  /* Only the limit badge needs it, and the package and app-op reads it makes start Java
+   * clients that hold the page: asked when limit is chosen, at most once a minute unless the
+   * switch was just flipped. */
+  if (!force) {
+    if (String(_cfgVals['wakelock_fitness'] || '') !== 'limit') return;
+    if (_wlFitProbed && Date.now() - _wlFitAt < 60000) return;
+  }
+  _wlFitAt = Date.now();
   try {
-    const r = await run('for f in wakelock_fitness_ignored wakelock_fitness_limited; do if [ -f /data/adb/asb/$f ]; then wc -l < /data/adb/asb/$f; else echo 0; fi; done');
-    const lines = (((r && r.stdout) || '')).trim().split(/\r?\n/);
-    _wlFitIgnored = parseInt(lines[0], 10) || 0;
-    _wlFitLimited = parseInt(lines[1], 10) || 0;
-    _wlFitProbed = true;
-  } catch (e) { _wlFitIgnored = 0; _wlFitLimited = 0; _wlFitProbed = false; }
+    const r = await run('sh ' + MD + '/runtime/asb_wakelock_watch.sh fitness-status 2>/dev/null');
+    const st = wlFitParse(r && r.stdout);
+    _wlFitLimited = st.limited + st.preset;
+    /* An app-op the ROM would not even store is the same news as one it does not enforce. */
+    _wlFitIgnored = st.ignored + (_wlFitLimited === 0 ? st.refused : 0);
+    _wlFitInstalled = st.installed;
+    _wlFitProbed = st.ok;
+  } catch (e) { _wlFitIgnored = 0; _wlFitLimited = 0; _wlFitInstalled = 0; _wlFitProbed = false; }
 }
 
 // Multimedia telemetry: the same honesty standard as the LTPO card - the badge reads
@@ -6321,7 +6419,9 @@ function cfgStatus(it, cur) {
     if (cur !== 'limit') return { cls:'neutral', text: String(Topt(cur, it.key)).toUpperCase() };
     if (_wlFitIgnored > 0) return { cls:'warn', text: T('st_wlf_ignored', 'ROM ignores it') };
     if (_wlFitLimited > 0) return { cls:'good', text: T('st_on', 'Enabled') };
-    if (_wlFitProbed) return { cls:'neutral', text: T('st_wlf_none', 'no fitness apps') };
+    /* "no fitness apps" only when the watcher found none installed (fix177); apps there and
+     * nothing limited yet is pending - the next pass (or the one this toggle ran) sets it. */
+    if (_wlFitProbed && _wlFitInstalled === 0) return { cls:'neutral', text: T('st_wlf_none', 'no fitness apps') };
     return { cls:'warn', text: T('st_pending', 'pending') };
   }
   if (it.type === 'bool') {
@@ -7569,7 +7669,7 @@ async function cfgSet(key, val, ctl) {
          * ledgers: on a ROM that does not enforce the WAKE_LOCK app-op (seen on
          * ColorOS/OxygenOS 16) the badge and this toast say so honestly instead of
          * claiming success. */
-        await loadWlFitStatus();
+        await loadWlFitStatus(true);
         toast(cfgToastText(key, val) + (String(val) === 'limit' && _wlFitIgnored > 0
           ? T('t_wlf_ignored', ' \u00b7 this ROM ignores the limit')
           : T('t_cfg_live', ' \u00b7 applied')), cfgToastType(key));
@@ -9578,6 +9678,8 @@ function stockMonitorReset() {
   _stockTelemetryKv = {};
   _stockTelemetryLastMs = 0;
   _stockRomHistory = { ts: 0, cpuT: 0 };
+  _stockTrendSamples = [];
+  _stockTrendLast = null;
   if (_liveOpen) paintStockLive({});
 }
 // Android emits /proc/meminfo as `MemAvailable: 123456 kB`, while most values in
@@ -9636,7 +9738,7 @@ function paintStockLive(stockKv = null) {
     setLiveLabel('liveStateLabel', 'stock_cpu_ceiling', 'CPU ceiling');
     setLiveLabel('liveGpuLabel', 'stock_gpu_load', 'GPU load');
     setLiveLabel('liveHeadroomLabel', 'stock_gpu_clock', 'GPU clock');
-    setLiveLabel('liveCapSrcLabel', 'stock_bat_temp', 'Battery');
+    setLiveLabel('liveCapSrcLabel', 'stock_bat_temp', 'Battery temp');
     setLiveLabel('liveClampLabel', 'stock_zram', 'zRAM used');
     setLiveLabel('liveLearnerLabel', 'stock_smart_learn', 'Smart learning');
   }
@@ -9732,19 +9834,49 @@ function paintStockLive(stockKv = null) {
     const el = _el(id); if (!el) return;
     el.textContent = value || '—'; el.title = title; el.className = cls;
   };
-  // A single ROM sample has no direction. Showing ASB's generic "measuring…" here looked
-  // like a running policy; leave it neutral until a second direct sample exists.
-  let trend = '—';
-  let trendCls = 'smart-banner-value';
-  if (sampleTs && cpuT) {
-    if (_stockRomHistory.ts && _stockRomHistory.ts !== sampleTs && _stockRomHistory.cpuT > 0) {
-      const elapsedMs = sampleTs - _stockRomHistory.ts;
-      const slopePerMin = elapsedMs > 0 ? ((cpuT - _stockRomHistory.cpuT) * 60000 / elapsedMs) : 0;
-      if (slopePerMin > 0.35) { trend = '↑ ' + T('lv_trend_up', 'warming'); trendCls += ' cap-clamp'; }
-      else if (slopePerMin < -0.35) { trend = '↓ ' + T('lv_trend_dn', 'cooling'); trendCls += ' cap-raised'; }
-      else trend = '→ ' + T('lv_trend_fl', 'steady');
+  /* Thermal trend over a window, not between two 10-second samples (fix177).
+   *
+   * It compared the hottest core of two consecutive reads, so a repaint with no new read
+   * showed "—" (most repaints), and single-core spikes of several degrees flipped it between
+   * warming and cooling. Now: the mean of the CPU zones, a least-squares slope over the
+   * samples of the last two minutes once they span 30 s, and the last verdict kept between
+   * reads. Before 30 s of samples it says it is measuring. */
+  const cpuMean = (function () {
+    const a = Object.entries(kv).filter(([k]) => k.startsWith('thermal.') && /cpu/i.test(k) && !notTemp.test(k))
+      .map(([, v]) => { const x = parseFloat(v); return x > 1000 ? x / 1000 : x; }).filter(v => v > 0 && v < 120);
+    return a.length ? a.reduce((p, q) => p + q, 0) / a.length : 0;
+  })();
+  const sampleMs = n(kv.tsms) || sampleTs;
+  if (sampleMs && cpuMean > 0) {
+    const last = _stockTrendSamples[_stockTrendSamples.length - 1];
+    if (!last || last.t !== sampleMs) {
+      _stockTrendSamples.push({ t: sampleMs, c: cpuMean });
+      _stockTrendSamples = _stockTrendSamples.filter(x => sampleMs - x.t <= 120000);
+      const span = sampleMs - _stockTrendSamples[0].t;
+      if (_stockTrendSamples.length >= 3 && span >= 30000) {
+        const m = _stockTrendSamples.length;
+        const mt = _stockTrendSamples.reduce((p, x) => p + x.t, 0) / m;
+        const mc = _stockTrendSamples.reduce((p, x) => p + x.c, 0) / m;
+        let num = 0, den = 0;
+        _stockTrendSamples.forEach(x => { num += (x.t - mt) * (x.c - mc); den += (x.t - mt) * (x.t - mt); });
+        const perMin = den > 0 ? (num / den) * 60000 : 0;
+        _stockTrendLast = { slope: perMin, span: span };
+      }
     }
-    if (_stockRomHistory.ts !== sampleTs) _stockRomHistory = { ts: sampleTs, cpuT: cpuT };
+  }
+  let trend = '\u2026';
+  let trendCls = 'smart-banner-value';
+  let trendTip = '';
+  if (_stockTrendLast) {
+    const sl = _stockTrendLast.slope;
+    if (sl > 0.5) { trend = '\u2191 ' + T('lv_trend_up', 'warming'); trendCls += ' cap-clamp'; }
+    else if (sl < -0.5) { trend = '\u2193 ' + T('lv_trend_dn', 'cooling'); trendCls += ' cap-raised'; }
+    else trend = '\u2192 ' + T('lv_trend_fl', 'steady');
+    trendTip = T('lvi_trend_rate', '%1 \u00b0C per minute over the last %2 s')
+      .replace('%1', (sl >= 0 ? '+' : '\u2212') + Math.abs(sl).toFixed(1))
+      .replace('%2', String(Math.round(_stockTrendLast.span / 1000)));
+  } else if (!cpuT) {
+    trend = '\u2014';
   }
   const uptimeSec = Math.floor(parseFloat(kv.uptime || '0'));
   const uptime = uptimeSec > 0
@@ -9762,19 +9894,25 @@ function paintStockLive(stockKv = null) {
   /* The screen-on and screen-off rates are in the drain strip (fix161), measured over
    * windows by the drain meter; this tile keeps the instantaneous current. */
 
+  /* Each Stock tile opens the Monitor sheet like Smart's (fix177); its source box shows the
+   * reading behind the tile - data, not the English notes these titles used to carry. */
   bset('bnStockDrain', (!isCharging && Math.abs(ma) > 0)
     ? Math.abs(ma) + ' mA' : (isCharging ? T('lv_drain_charging', 'charging') : '—'),
-    'Live read-only screen-on estimate from battery current and charge_full; Stock does not use ASB drain learning.');
-  bset('bnStockTrend', trend, 'CPU thermal delta between consecutive direct ROM samples.', trendCls);
+    pctph > 0 ? '\u2248 ' + pctph.toFixed(1) + T('unit_pcth', '%/h') + (chargeFullMah > 0 ? ' \u00b7 ' + Math.round(chargeFullMah) + ' mAh' : '') : '');
+  bset('bnStockTrend', trend, trendTip, trendCls);
   bset('bnStockLpm', lpmHeld ? T('lv_lpm_fast', 'fast') : T('lv_lpm_normal', 'normal'),
-    'Direct read of global mobile_data_always_on; Stock itself applies no modem policy.',
+    'mobile_data_always_on: ' + (String(kv['settings.global.mobile_data_always_on'] || '').trim() || '\u2014'),
     'smart-banner-value' + (lpmHeld ? ' cap-clamp' : ''));
-  bset('bnStockRam', ramGb, 'MemAvailable from /proc/meminfo (read-only).');
-  bset('bnStockCpuClock', cpuClock, 'Highest current cpufreq policy clock in this sample.');
+  const memTotKb = n(kv.MemTotal);
+  bset('bnStockRam', ramGb, memTotKb > 0 && ramKb > 0 ? ramGb + ' / ' + (memTotKb / 1048576).toFixed(1) + ' GB' : '');
+  bset('bnStockCpuClock', cpuClock, Object.entries(kv).filter(([k]) => /^cpu\.policy\d+\.scaling_cur_freq$/.test(k))
+    .sort().map(([k, v]) => k.split('.')[1] + ': ' + (n(v) / 1e6).toFixed(2) + ' GHz').join('\n'));
   bset('bnStockLoad', fmtStockLoad(kv.loadavg), T('stock_load_now', '1 min') + ' \u00b7 5 \u00b7 15: ' + (kv.loadavg || '\u2014'));
   bset('bnStockBattery', capPct ? (capPct + '%' + (volt > 0 ? ' · ' + volt.toFixed(2) + 'V' : '')) : '—',
-    'Direct battery capacity and voltage.');
-  bset('bnStockUptime', uptime, 'Direct /proc/uptime reading.');
+    batT > 0 ? T('stock_bat_temp', 'Battery temp') + ': ' + batT + ' \u00b0C' : '');
+  bset('bnStockUptime', uptime, uptimeSec > 0
+    ? new Date(Date.now() - uptimeSec * 1000).toLocaleString(ASB_LANG || undefined, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : '');
 
   // These indicators belong to an active ASB governor. Clear stale values carried over from
   // the previous profile: Stock has no Smart state, learner, LPM policy or ASB recovery state.
@@ -9790,6 +9928,12 @@ let _stockTelemetryKv = {};
 const _stockLiveInfo = { ceil: [] };
 const _lvLast = { st: {}, kv: {} };
 let _stockRomHistory = { ts: 0, cpuT: 0 };
+/* Stock thermal trend (fix177): samples of the mean CPU-zone temperature over the last two
+ * minutes, and the last verdict. A repaint between two ROM reads (every 3 s, reads every
+ * 10 s) recomputed the trend from the same sample and showed "—" - most of the time. */
+let _stockTrendSamples = [];
+let _stockTrendLast = null;
+let _stockSettingsAtMs = 0;
 const STOCK_TELEMETRY_MIN_INTERVAL_MS = 10000;
 async function pollStockTelemetry(visible, force = false) {
   const box = _el('stockTelemetry');
@@ -9822,11 +9966,19 @@ async function pollStockTelemetry(visible, force = false) {
   _stockTelemetryLastMs = now;
   const pre = _el('liveStockTelemetry');
   try {
-    const cmd = "sh -c 'printf \"ts=%s\\n\" \"$(date +%s)\"; printf \"uptime=%s\\n\" \"$(cut -d\" \" -f1 /proc/uptime 2>/dev/null)\"; printf \"loadavg=%s\\n\" \"$(cut -d\" \" -f1-3 /proc/loadavg 2>/dev/null)\"; for f in capacity current_now voltage_now temp status charge_full; do printf \"battery.%s=%s\\n\" \"$f\" \"$(cat /sys/class/power_supply/battery/$f 2>/dev/null)\"; done; printf \"settings.global.mobile_data_always_on=%s\\n\" \"$(settings get global mobile_data_always_on 2>/dev/null)\"; grep -E \"^(MemTotal|MemAvailable|MemFree|Cached|SwapTotal|SwapFree):\" /proc/meminfo 2>/dev/null; for d in /sys/devices/system/cpu/cpufreq/policy*; do [ -d \"$d\" ] || continue; n=${d##*/}; for f in scaling_min_freq scaling_max_freq scaling_cur_freq scaling_governor cpuinfo_max_freq; do printf \"cpu.%s.%s=%s\\n\" \"$n\" \"$f\" \"$(cat \"$d/$f\" 2>/dev/null)\"; done; done; g=/sys/class/kgsl/kgsl-3d0; for f in gpuclk gpu_busy_percentage gpubusy max_pwrlevel min_pwrlevel thermal_pwrlevel; do printf \"gpu.%s=%s\\n\" \"$f\" \"$(cat \"$g/$f\" 2>/dev/null | head -1)\"; done; for z in /sys/class/thermal/thermal_zone*; do [ -r \"$z/temp\" ] || continue; label=$(cat \"$z/type\" 2>/dev/null); temp=$(cat \"$z/temp\" 2>/dev/null); [ -n \"$temp\" ] && printf \"thermal.%s=%s\\n\" \"$label\" \"$temp\"; done'";
+    /* The ROM snapshot comes from a script of builtin reads (fix177): the inline command forked
+     * two cats per thermal zone and started the settings client every pass, and the root call
+     * blocks the page for as long as it runs. The settings value is refreshed in the background
+     * once a minute. */
+    const refresh = (now - _stockSettingsAtMs) >= 60000;
+    if (refresh) _stockSettingsAtMs = now;
+    const cmd = 'sh ' + MD + '/runtime/asb_rom_telemetry.sh' + (refresh ? ' refresh' : '') + ' 2>/dev/null';
     const r = await run(cmd);
     await lvMeterPoll(false);
     const text = ((r && r.stdout) || '').trim();
     _stockTelemetryKv = parseStockTelemetry(text);
+    /* The sample time is the page's own clock in ms (the script runs no `date`). */
+    if (Object.keys(_stockTelemetryKv).length) _stockTelemetryKv.tsms = String(Date.now());
     paintStockLive(_stockTelemetryKv);
     if (pre) pre.textContent = text || T('stock_telemetry_unavailable', 'ROM telemetry unavailable');
   } catch(e) {
@@ -10194,6 +10346,12 @@ async function pollLive(visible) {
           cls += ' cap-clamp';
           txt = T('lv_lpm_fast', 'fast');
           tip = T('lv_lpm_fast_t', 'data call held up (low latency)');
+        } else if (m === 'night') {
+          /* The fourth mode (fix177): night fell through to "normal" here while the modem was
+           * idling hardest of all. */
+          cls += ' cap-raised';
+          txt = T('lv_lpm_night', 'night');
+          tip = T('lv_lpm_night_t', 'night window: idling stretched further');
         }
         lpmEl.textContent = txt;
         lpmEl.className = cls;
@@ -10376,7 +10534,9 @@ async function pollLive(visible) {
             sub.className = 'smart-banner-pill' + (we ? ' we' : '');
             sub.textContent = dtTxt;
             bEl.appendChild(sub);
-            bEl.title = '#' + bid + ' \u00b7 ' + dpTxt + ' \u00b7 ' + dtTxt;
+            const _dpH = [0, 6, 9, 12, 17, 21, 24];
+            bEl.title = '#' + bid + ' \u00b7 ' + dpTxt + ' ' + (_dpH[dp] !== undefined ? _dpH[dp] + '\u2013' + _dpH[dp + 1] : '')
+              + ' \u00b7 ' + dtTxt;
           }
           _el('bnConf').textContent = Math.round(conf / 10) + '%';
           _el('bnAlpha').textContent = Math.round(alpha / 10) + '%';
@@ -10433,6 +10593,7 @@ async function pollLive(visible) {
             const _offx = parseInt(kv.offdrain_pctph_x100 || '0', 10);
             const _offn = parseInt(kv.offdrain_windows || '0', 10);
             _lvDrain.offN = _offn;
+            _lvDrain.offX = (_offx > 0 && _offn > 0) ? _offx : 0;
             const _doEl = _el('bnDrainOff');
             if (_doEl) {
               if (_offx > 0 && _offn > 0) {
@@ -10485,7 +10646,11 @@ async function pollLive(visible) {
           const basisEl = _el('bnBasis');
           if (basisEl) {
             let bTxt = T('lv_fb_' + fb, fbNames[fb] || '?');
-            let bTip = T('lv_fb_tip', 'What Smart leans on now: its own slot for this time of day and day type, or a neighbouring one while its own still has too little history.');
+            /* The source box repeated the explanation above it (fix177); it now shows what
+             * the basis is measured against: the slot and its confidence. */
+            let bTip = T('lv_bucket', 'Slot') + ': ' + T('lv_dp_' + dp, dpNames[dp] || '?') + ' \u00b7 '
+              + (we ? T('lv_we_short', 'wknd') : T('lv_wd_short', 'wkday')) + '\n'
+              + T('lv_conf', 'Confidence') + ': ' + Math.round(conf / 10) + '%';
             let bCls = fb === 4 ? ' basis-warn' : '';
             if (night) {
               bTxt = T('lv_mode_night', '\ud83c\udf19 night');
