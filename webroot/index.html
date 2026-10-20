@@ -5465,6 +5465,14 @@ function lvBasisPaint(kv, fb, dp, we, conf, night, veto) {
       else bTxt = T('lvb_record_ok', 'record \u2713');
     }
   }
+  /* fix190: on the charger the records pause and no drain is learned; the tile said "own
+   * slot" there, the answer for an idle Basis. */
+  if (kv.charging === '1') {
+    bTxt = T('lvb_charge', '\u26a1 charging'); bShort = '\u26a1'; bCls = '';
+    _tip.unshift(T('lvb_charge_tip', 'On the charger: the records and the drain learning pause - charge coming in cannot be measured as drain.')
+      + (kv.smart_charge_cool === '1' ? '\n' + T('lvb_charge_cool_tip', 'The battery warms on the charger: Smart holds the CPU back to protect it.')
+         : (kv.smart_charge_assist === '1' ? '\n' + T('lvb_charge_assist_tip', 'Cool on the charger: Smart allows a little more headroom.') : '')));
+  }
   if (_mwk) { bTxt = T('lvb_brief', '\ud83c\udf19 brief'); bShort = ''; bCls = ''; }
   if (_lowb) { bTxt = T('lvb_lowbat', '\ud83d\udd0b low'); bShort = ''; bCls = ' basis-warn'; }
   if (_cold) { bTxt = T('lvb_cold', '\u2744 cold'); bShort = ''; bCls = ' basis-warn'; }
@@ -10503,7 +10511,13 @@ async function pollLive(visible) {
       }
       if (_was !== JSON.stringify(_lvGovOff.by) + _lvGovOff.x) homeMeterPaint();
     }
-    const capSrc = (st && st.cap_source_p0) || '';
+    /* Whose ceiling binds (fix190): the tile read only the main cluster, so with the vendor's
+     * boot clamp on the prime (1632000, 35 %) it said "ASB" on Performance - which caps
+     * nothing - beside "Headroom 35 %", a figure taken from the most limited cluster. A foreign
+     * owner on either cluster is the one shown; the tooltip names both. */
+    const _cs0 = (st && st.cap_source_p0) || '', _cs1 = (st && st.cap_source_p6) || '';
+    const _csForeign = function (c) { return c === 'vendor_clamp' || c === 'vendor_raised' || c === 'thermal_overlay'; };
+    const capSrc = (_csForeign(_cs1) && !_csForeign(_cs0)) ? _cs1 : (_cs0 || _cs1);
     const advActive = (st && st.adv_active) || 0;
     let recCount = 0, recDisabled = 0, recReason = '';
     try {
@@ -10737,7 +10751,9 @@ async function pollLive(visible) {
     const capLabel = capSrc ? (CAP_SRC_LABELS[capSrc] || capSrc) : '—';
     const capEl = _el('liveCapSrc');
     capEl.textContent = capLabel;
-    capEl.title = CAP_SRC_TIPS[capSrc] || '';
+    capEl.title = (CAP_SRC_TIPS[capSrc] || '')
+      + ((_cs0 && _cs1) ? '\n' + T('cap_tip_clusters', 'main cores: %1 · top cores: %2')
+          .replace('%1', CAP_SRC_LABELS[_cs0] || _cs0).replace('%2', CAP_SRC_LABELS[_cs1] || _cs1) : '');
     capEl.className = 'live-cell-value';
     if (capSrc === 'asb' || capSrc === 'asb_dynamic') capEl.classList.add('cap-asb');
     else if (capSrc === 'vendor_clamp') capEl.classList.add('cap-clamp');
@@ -10926,6 +10942,12 @@ async function pollLive(visible) {
           clampEl.textContent = fmt('cap_clamps_val', '{h}/h · {t} total', {h: c1h, t: cTot});
           clampEl.title = T('cap_clamps_tip',
             'How often the vendor thermal engine took the cap away from ASB: in the last hour, and since boot.');
+          /* fix190: "38/ч · 38 всего" broke onto two lines once the counts had two digits,
+           * the only tile that did. Where it does not fit, the word after the total goes;
+           * the tooltip and the sheet say what the two numbers are. */
+          const _lh = parseFloat((window.getComputedStyle ? getComputedStyle(clampEl).lineHeight : '') || '0');
+          if (_lh > 0 && clampEl.offsetHeight > _lh * 1.5)
+            clampEl.textContent = clampEl.textContent.replace(/(\d+)\s+[^\d\s][^\d]*$/, '$1');
       }
     } catch(e) {}
 
@@ -10976,6 +10998,10 @@ async function pollLive(visible) {
             sub.className = 'smart-banner-pill' + (we ? ' we' : '');
             sub.textContent = dtTxt;
             bEl.appendChild(sub);
+            /* fix190: where the day part and the pill do not fit the quarter-width tile, the
+             * pill goes (the tooltip and the sheet still say weekday or weekend) - "вечер…" cut
+             * the pill off and read as a word cut short. */
+            if (bEl.clientWidth > 0 && bEl.scrollWidth > bEl.clientWidth + 1) sub.remove();
             const _dpH = [0, 6, 9, 12, 17, 21, 24];
             bEl.title = '#' + bid + ' \u00b7 ' + dpTxt + ' ' + (_dpH[dp] !== undefined ? _dpH[dp] + '\u2013' + _dpH[dp + 1] : '')
               + ' \u00b7 ' + dtTxt;
