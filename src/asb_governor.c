@@ -10117,6 +10117,11 @@ int main(int argc, char **argv) {
                  * Backoff: 5 ineffective attempts -> pause 30s */
 
                 int vendor_clamping = 0;
+                /* What this path asks for, per slot (fix191): in a manual profile never under
+                 * the profile's own ceiling in HEAVY/GAMING, never over it in SUSTAINED. */
+                int rtc[3];
+                for (int _rs = 0; _rs < 3; _rs++)
+                    rtc[_rs] = writer_reassert_target(_rs, fsm.current_caps.cpu_max[_rs], fsm.state);
                 if (fsm.plan.ac_eligible && fsm.plan.ac_used < fsm.plan.ac_budget
                     && !g_ac_futile) {
                     time_t now_ac = time(NULL);
@@ -10129,8 +10134,8 @@ int main(int argc, char **argv) {
                         }
                         int actual_p0 = tick_scaling_max(0);
                         int actual_p1 = tick_scaling_max(1);
-                        int desired_p0 = fsm.current_caps.cpu_max[0];
-                        int desired_p1 = fsm.current_caps.cpu_max[1];
+                        int desired_p0 = rtc[0];
+                        int desired_p1 = rtc[1];
                         int gap0 = (desired_p0 > 0 && actual_p0 > 0) ? desired_p0 - actual_p0 : 0;
                         int gap1 = (desired_p1 > 0 && actual_p1 > 0) ? desired_p1 - actual_p1 : 0;
                         int max_gap = (gap0 > gap1) ? gap0 : gap1;
@@ -10195,16 +10200,13 @@ int main(int argc, char **argv) {
                         pre_p1 = tick_scaling_max(1);
                     }
                     /* Write msm_performance */
-                    int ok = msm_perf_write_caps(
-                                fsm.current_caps.cpu_max[0],
-                                fsm.current_caps.cpu_max[1],
-                                fsm.current_caps.cpu_max[2]);
+                    int ok = msm_perf_write_caps(rtc[0], rtc[1], rtc[2]);
                     /* Anti-clamp: force scaling_max_freq on both clusters */
                     if (vendor_clamping) {
                         for (int ci = 0; ci < 2; ci++) {
-                            if (fsm.current_caps.cpu_max[ci] > 0 &&
+                            if (rtc[ci] > 0 &&
                                 sysfs_write_int(cpu_policy_path(ci, "scaling_max_freq"),
-                                               fsm.current_caps.cpu_max[ci]) == 0)
+                                               rtc[ci]) == 0)
                                 writer_mark_slot_held(ci, 2);   /* fix183: handed back after HEAVY in Balanced */
                         }
                         /* Evaluate effectiveness on BOTH clusters */
@@ -10275,8 +10277,8 @@ int main(int argc, char **argv) {
                              * Both columns now come from the same place: what was asked
                              * for after snapping, against what the device holds.
                              */
-                            int _ac_want0 = fsm.current_caps.cpu_max[0];
-                            int _ac_want1 = fsm.current_caps.cpu_max[1];
+                            int _ac_want0 = rtc[0];
+                            int _ac_want1 = rtc[1];
                             for (int _ac_i = 0; _ac_i < 2; _ac_i++) {
                                 int _ac_slot = -1;
                                 for (int _ac_k = 0; _ac_k < g_cpu_all_paths_n && _ac_k < 16; _ac_k++) {

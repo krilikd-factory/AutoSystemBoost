@@ -1659,6 +1659,37 @@ static int writer_slot_final_max(int slot, int want, int thermal_cap,
     return want;
 }
 
+/* The ceiling the HEAVY/GAMING/SUSTAINED reassert asks for on a slot (fix191).
+ *
+ * It registered the FSM rail in msm_performance as it stood - in Battery and Balanced a rail
+ * the shell does not use: on an OP15 Balanced has no screen-on cap at all (3628800/4608000)
+ * while its rail is 2611200/3974400, and Battery's shell holds 1785600/1747200 over a rail of
+ * 1670400/1632000. HEAVY - app launches and heavy pages - was capped harder than ordinary use,
+ * the fix186 bug again on the manual profiles: an OP15 Balanced capture's cap_verify found
+ * msm_performance holding 2361600 on the main cores, exactly the governor's declared rail.
+ *
+ * In a manual profile the profile's own ceiling is the reference: HEAVY and GAMING never ask
+ * for less than it, SUSTAINED (the cooling state) never for more. Then the steps every other
+ * ceiling takes - the table snap and the race-to-idle floor. Smart and Performance own their
+ * ceilings and keep their rail. */
+static int writer_reassert_target(int slot, int rail, asb_state_t state) {
+    if (rail <= 0 || slot < 0 || slot > 2 || !g_cpu_max_paths[slot][0]) return rail;
+    int want = rail, top = 0;
+    if (!fsm_profile_is_smart && !fsm_profile_is_performance) {
+        int prof = fsm_profile_is_battery ? PROFILE_BATTERY : PROFILE_BALANCED;
+        int sh = asb_shell_cap_for_policy(prof, asb_policy_id_of_path(g_cpu_max_paths[slot]));
+        if (sh > 0) {
+            if (state == ASB_STATE_SUSTAINED) want = top = rail < sh ? rail : sh;
+            else want = top = rail > sh ? rail : sh;
+        }
+    }
+    int fin = writer_slot_final_max(slot, want, 0, 0, PROFILE_BALANCED);
+    /* The race-to-idle floor (40 %) is not a reason to go past the profile's own ceiling:
+     * the OP15 Battery prime is 1747200, the floor 1862400. */
+    if (top > 0 && fin > top) fin = top;
+    return fin;
+}
+
 static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_state_t state, int thermal_cap) {
     int writes = 0;
     writer_init_paths();
