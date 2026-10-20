@@ -142,10 +142,10 @@ body::before, body::after {
    * body reserves space for the floating bar with padding-bottom: tabbar-space + the
    * bottom inset, and with border-box that padding comes out of the same 100% height. The
    * page then asked for 100vh minus the insets - exactly tabbar-space MORE than body can
-   * give it. A fixed 78px of overflow on every screen, with or without enough content:
+   * give it. A fixed 78px (now 82px, the fix187 bar is 4px taller) of overflow on every screen, with or without enough content:
    * draggable, springing back. That is the jelly effect users reported. */
   min-height: calc(100vh - var(--window-inset-top) - var(--window-inset-bottom)
-                   - var(--tabbar-space, 78px));
+                   - var(--tabbar-space, 82px));
   padding: var(--page-top) 20px 22px;
   display: flex;
   flex-direction: column;
@@ -3103,6 +3103,12 @@ html[data-asb-theme="light"] .tg-link-sub { color:var(--text-secondary) !importa
   position: fixed;
   left: 12px; right: 12px;
   bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+  /* A capsule, not a strip (fix187): on a wide screen or in landscape three tabs spread
+   * across the whole width put the thumb a long way from each; capped and centred, the
+   * bar keeps the proportions it has on a phone held upright. */
+  max-width: 460px;
+  margin: 0 auto;
+  padding: 0 4px;
   z-index: 200;
   display: flex;
   align-items: stretch;
@@ -3134,9 +3140,11 @@ html[data-asb-theme="light"] .tg-link-sub { color:var(--text-secondary) !importa
     linear-gradient(135deg, rgba(0,240,180,0.04), rgba(0,212,255,0.025)),
     var(--tabbar-bg, #000000);
   border: 1px solid rgba(0,240,180,0.15);
-  border-radius: 26px;
+  border-radius: 31px;
   overflow: hidden;
-  box-shadow: 0 8px 28px rgba(0,0,0,0.55);
+  /* The inner top line is the lit edge a raised surface has; with the outer shadow it is
+   * what separates the bar from cards scrolling underneath without any blur. */
+  box-shadow: 0 10px 30px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05);
   /* No backdrop blur.
    *
    * Blur samples whatever is behind the element and mixes it in. Against a bar pinned to
@@ -3149,48 +3157,84 @@ html[data-asb-theme="light"] .tg-link-sub { color:var(--text-secondary) !importa
 
 .asb-tab {
   flex: 1 1 0;
+  position: relative;
+  z-index: 1;                 /* above the sliding indicator */
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 3px;
-  /* 56px is the floor for a comfortable thumb target; the label sits under the icon so
-     the tap area is the whole column, not just the glyph. */
-  min-height: 56px;
-  padding: 7px 4px 6px;
+  justify-content: flex-start;
+  gap: 2px;
+  /* 60px is above the 56px floor for a comfortable thumb target; the label sits under the
+     icon so the tap area is the whole column, not just the glyph. */
+  min-height: 60px;
+  padding: 6px 4px 6px;
   border: 0;
   background: transparent;
-  color: var(--text-tertiary);
+  /* Secondary, not tertiary: at 30 % white the inactive labels measured about 2.5:1 on the
+   * black bar - legible to some, not to all. */
+  color: var(--text-secondary);
   font: inherit;
   font-size: 11px;
   letter-spacing: 0.2px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: color .16s ease;
+  transition: color .2s ease;
 }
-.asb-tab svg { opacity: .85; transition: opacity .16s ease, transform .16s ease; }
-.asb-tab:active { transform: scale(0.94); }
+/* The icon sits in a box the size of the indicator pill, so the pill frames it exactly. */
+.asb-tab-ico {
+  display: flex; align-items: center; justify-content: center;
+  width: 60px; height: 32px;
+  color: inherit;
+  transition: color .2s ease, transform .18s ease;
+}
+.asb-tab-ico svg { display: block; overflow: visible; }
+/* Duotone when active: the outline stays, the shape inside it fills with a wash of the
+ * accent. Inactive icons are line only, which is how the eye tells them apart even where
+ * the accent and the muted grey look alike. */
+.asb-tab-ico .f { fill: currentColor; fill-opacity: 0; stroke: none; transition: fill-opacity .2s ease; }
+.asb-tab-label { line-height: 14px; font-weight: 500; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.asb-tab:active .asb-tab-ico { transform: scale(0.9); }
 .asb-tab.is-active { color: var(--accent); }
-.asb-tab.is-active svg { opacity: 1; }
-/* A short bar above the active tab reads faster than colour alone, and stays visible
-   for users who cannot distinguish the accent from the muted tone. */
-.asb-tab.is-active::before {
-  content: "";
-  /* Pulled in from the very top: the bar is rounded now, and a marker flush against the
-   * edge gets clipped by the corner radius on the outer tabs. Three pixels down clears
-   * the curve on every tab and reads the same on all of them. */
-  position: absolute;
-  top: 3px;
-  width: 26px;
-  height: 2.5px;
-  border-radius: 3px;
-  background: var(--accent);
+.asb-tab.is-active .asb-tab-ico { color: var(--accent); }
+.asb-tab.is-active .asb-tab-ico .f { fill-opacity: .24; }
+.asb-tab.is-active .asb-tab-label { font-weight: 650; }
+
+/* The active-tab marker (fix187): a tonal pill behind the icon that slides to the tab
+ * chosen, in place of the short line that sat on the bar's top edge. The pill, the filled
+ * icon and the heavier label each mark the tab without relying on colour.
+ *
+ * One element for the whole bar, moved with a transform to the active tab's own box
+ * (measured in asbNavIndicator, so right-to-left layouts and any tab width are right). The
+ * slide is switched on only after the first placement, so the page does not open with the
+ * pill gliding in from the first tab. */
+.asb-tab-ind {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: var(--ind-w, 33.333%);
+  transform: translateX(var(--ind-x, 4px));
+  pointer-events: none;
+  z-index: 0;
 }
-.asb-tab { position: relative; }
+.asb-tab-ind::before {
+  content: "";
+  position: absolute;
+  left: 50%; top: 6px;
+  width: 60px; height: 32px; margin-left: -30px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(0,240,180,0.20), rgba(0,212,255,0.11));
+  box-shadow: inset 0 0 0 1px rgba(0,240,180,0.20);
+}
+.asb-tabbar.ind-anim .asb-tab-ind { transition: transform .34s cubic-bezier(.3,.8,.25,1), width .34s ease; }
+html[data-asb-theme="light"] .asb-tab-ind::before {
+  background: linear-gradient(135deg, rgba(0,124,99,0.15), rgba(0,111,155,0.09));
+  box-shadow: inset 0 0 0 1px rgba(0,124,99,0.20);
+}
+@media (prefers-reduced-motion: reduce) {
+  .asb-tabbar.ind-anim .asb-tab-ind, .asb-tab-ico, .asb-tab-ico .f { transition: none; }
+}
 
 /* Give every page room so its last row is never trapped under the bar. */
 /* Clear the floating bar: its own height, the lift beneath it, and the reported inset. */
-body { padding-bottom: calc(var(--tabbar-space, 78px) + env(safe-area-inset-bottom, 0px)); }
+body { padding-bottom: calc(var(--tabbar-space, 82px) + env(safe-area-inset-bottom, 0px)); }
 
 /* The old header chips are redundant now that navigation is always on screen, and two
    sets of controls for one action is how a UI starts feeling arbitrary. Hidden rather
@@ -3212,7 +3256,7 @@ body { padding-bottom: calc(var(--tabbar-space, 78px) + env(safe-area-inset-bott
 .live-page > *:last-child,
 .live-page .live-scroll,
 .live-page .cfg-scroll {
-  padding-bottom: calc(82px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(86px + env(safe-area-inset-bottom, 0px));
 }
 /* Modals must clear the bar as well: a sheet that stops above it looks broken, and one
    that ends under it hides its own confirm button. */
@@ -4117,6 +4161,8 @@ const TECH_ICON_PATHS = {
   haptic_power: '<rect x="9" y="3.5" width="6" height="17" rx="2"/><path d="M5.5 9c-1.8 1.8-1.8 4.2 0 6M18.5 9c1.8 1.8 1.8 4.2 0 6M3.2 6.5c-2.9 3.2-2.9 7.8 0 11M20.8 6.5c2.9 3.2 2.9 7.8 0 11"/>',
   haptic_touch: '<path d="M9 11.5V6a1.6 1.6 0 0 1 3.2 0v4.5"/><path d="M12.2 10.5V5a1.6 1.6 0 0 1 3.2 0v5.8"/><path d="M15.4 11.2V6.8a1.6 1.6 0 0 1 3.2 0v7c0 3.8-2.6 6.7-6.3 6.7-2.8 0-4.5-1.3-6-4.4l-1.3-2.7a1.5 1.5 0 0 1 2.6-1.5l1.4 2"/>',
   log_detail: '<rect x="5" y="3.5" width="14" height="17" rx="2.4"/><path d="M8.5 8h7M8.5 11.5h7M8.5 15h4.2"/><circle cx="16.6" cy="16.6" r="2.6"/><path d="M16.6 15.2v1.4l1 1"/>',
+  /* fix187: LSPosed's log - a log sheet beside a hook, the thing an Xposed framework does. */
+  log_hook: '<rect x="3" y="3.5" width="10.5" height="17" rx="2.4"/><path d="M6.3 8h4M6.3 11.5h4M6.3 15h2.6"/><path d="M20.5 5v9.5a2.75 2.75 0 0 1-5.5 0V13"/><path d="M13.7 14.3 15 13l1.3 1.3"/>',
   generic: '<path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 8v8M8.5 10l7 4M15.5 10l-7 4"/>',
 };
 function techIcon(kind) {
@@ -5684,6 +5730,7 @@ const SNAP_KEYS = [
   'bat_suppress_gaming',
   'log_level',
   'log_verbosity',
+  'lsposed_verbose',
   'doze_level',
   'phantom_procs',
   'anim_speed',
@@ -5858,6 +5905,8 @@ const CFG_ITEMS = [
     desc:'OxygenOS runs a multimedia feedback collector: audio, video and display diag events with log dumps and uploads, opened by Multimedia_Feedback_List.xml. This patch takes your device\u2019s OWN copy of that file, flips only its isOpen switch to false, and binds the result over the stock file - nothing is copied from another model, and the stock file itself is never modified.\n\nThe patch is prepared while the module installs, and this switch decides whether it is applied: off by default, and turning it on takes effect after a reboot. If the installer found no such file on your device, or the OEM already ships it closed, this switch does nothing - the status badge says which.\n\nLess event logging and fewer dumps means free battery and less I/O; audio and video themselves are untouched.' },
   { key:'log_level', type:'seg', def:'1', stock:'stock', opts:['stock','0','1','2','3'], name:'Log Detail',
     desc:'What the module writes to its log, and how much the DEVICE logs. Stock is the only value that leaves the phone\u2019s own logging untouched. 0 is extreme: it cuts device logging and debug output as far as it goes, which saves the writes and wakeups logging costs - and makes almost any bug report from this phone useless, including ours. 1 is normal, what the module has always done. 2 adds learner updates and screen transitions - switch this on before sending a log about battery behaviour. 3 is verbose and fills the log fast; use it only while reproducing something. Leaving extreme puts your logging back the way it was.' },
+  { key:'lsposed_verbose', type:'seg', def:'keep', stock:'keep', opts:['keep','off'], name:'LSPosed Verbose Log',
+    desc:'LSPosed keeps a detailed log of its own that grows to tens of megabytes (31 MB on one phone). Off writes LSPosed\'s own setting - the same switch as Settings > Verbose log in its manager - and deletes the old verbose log files; LSPosed reads the setting when it starts, so it takes effect after a reboot. Keep leaves LSPosed alone, and if ASB switched the log off, puts back what LSPosed had. Applied once, when you change it: if you turn the log back on in LSPosed later, ASB does not undo that. Turn it on again before reporting a problem to the author of an LSPosed module.' },
 ];
 let _cfgVals = {};
 let _cfgOpen = false;
@@ -5889,6 +5938,7 @@ async function cfgLoad() {
   await loadLtpoStatus();
   await loadMmfeedStatus();
   await loadWlFitStatus();
+  await loadLspStatus();
   /* Never repaint the page while it is still sliding in. openConfigPage already drew
    * the hub before the slide started; if fresh values arrive mid-motion, wait out the
    * remainder and paint once the layer has settled. Other callers leave _cfgAnimUntil
@@ -5920,7 +5970,7 @@ const CFG_CAT = {
   BG_TRIM_LEVEL:'battery', gms_trim:'battery', gms_freeze:'battery',
   UX_MANAGE_OEM_TOGGLES:'system', UX_MANAGE_TIMEOUTS:'iface', anim_speed:'iface', UX_ANIM_FORCE_RESTART:'iface',
   camera_hold_enable:'camera',
-  night_quiet_enable:'battery', log_level:'system', phantom_procs:'system',
+  night_quiet_enable:'battery', log_level:'system', lsposed_verbose:'system', phantom_procs:'system',
   sustained_temp_mode:'battery', doze_level:'battery', doze_trim_whitelist:'battery',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net',
   net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net', radio_policy_enable:'net',
@@ -5977,7 +6027,7 @@ const CFG_GROUP_OF = {
   heavy_prime_escape:'battery', prime_escape_burst_s:'battery', prime_escape_rest_s:'battery', wakelock_fitness:'battery',
   sustained_temp_mode:'battery', doze_level:'battery', doze_trim_whitelist:'battery', wakelock_action:'battery', gnss_trim:'battery',
   camera_hold_enable:'camera', bt_a2dp_offload:'audio',
-  night_quiet_enable:'battery', bat_suppress_gaming:'battery', log_level:'ui', phantom_procs:'ui',
+  night_quiet_enable:'battery', bat_suppress_gaming:'battery', log_level:'ui', lsposed_verbose:'ui', phantom_procs:'ui',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
   dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_width:'audio', dsp_compressor:'audio', dsp_outputs:'audio', audio_remove_volume_limit:'audio', audio_resampler:'audio', media_vol_steps:'audio',
   bt_absvol_mode:'audio', bt_link_stability:'audio',
@@ -6057,8 +6107,8 @@ const CFG_GROUP_SECTIONS = {
       keys:['ltpo_force','ltpo_video','haptic_strength','haptic_touch_strength'] },
     { id:'diag', icon:'log_detail', titleKey:'cfg_ui_section_diag',
       title:'Diagnostics', hintKey:'cfg_ui_section_diag_hint',
-      hint:'How much the module writes to its own logs.',
-      keys:['log_level'] }
+      hint:'How much the module - and LSPosed - write to their logs.',
+      keys:['log_level','lsposed_verbose'] }
   ],
   camera: [
     { id:'processing', icon:'camera_level', titleKey:'cfg_camera_section_processing',
@@ -6264,7 +6314,7 @@ const CFG_ICONS = {
   auto_battery_enable:'battery_auto', smart_battery_bias:'battery_bias', smart_media_guard:'media_guard', charge_aware_enable:'charge_aware', doze_level:'doze', doze_trim_whitelist:'whitelist',
   wakelock_action:'wakelock', gnss_trim:'satellite', night_modem_idle:'radio_moon', net_screen_off_lte:'lte_screenoff', net_lte_light:'lte_light', night_quiet_enable:'quiet_moon', sustained_temp_mode:'thermal_mode', sustained_temp_enter:'thermal_point',
   perf_ceiling_pct:'perf_cap', cool_gaming:'cool_game', bat_suppress_gaming:'game_battery', BG_TRIM_LEVEL:'cleaner', gms_trim:'service_trim', gms_freeze:'service_freeze',
-  UX_MANAGE_OEM_TOGGLES:'oem_switches', athena_service:'athena', phantom_procs:'phantom', haptic_strength:'haptic_power', haptic_touch_strength:'haptic_touch', log_level:'log_detail', ltpo_force:'ltpo', ltpo_video:'ltpo_video', mmfeed_off:'mmfeed',
+  UX_MANAGE_OEM_TOGGLES:'oem_switches', athena_service:'athena', phantom_procs:'phantom', haptic_strength:'haptic_power', haptic_touch_strength:'haptic_touch', log_level:'log_detail', lsposed_verbose:'log_hook', ltpo_force:'ltpo', ltpo_video:'ltpo_video', mmfeed_off:'mmfeed',
   heavy_prime_escape:'prime_lift', prime_escape_burst_s:'prime_burst', prime_escape_rest_s:'prime_rest', wakelock_fitness:'fitness_pulse',
   /* Same family as net_handover_*: the same journey off a dead Wi-Fi, made by the
    * system instead of by us. Reusing the handover glyph says that at a glance. */
@@ -6373,6 +6423,38 @@ async function loadWlFitStatus(force) {
     _wlFitInstalled = st.installed;
     _wlFitProbed = st.ok;
   } catch (e) { _wlFitIgnored = 0; _wlFitLimited = 0; _wlFitInstalled = 0; _wlFitProbed = false; }
+}
+
+/* fix187: LSPosed's verbose log as LSPosed itself has it. The card's value only says what
+ * was asked; the badge says what the database holds, how much log there is, and whether a
+ * write is still waiting for the reboot the LSPosed daemon needs. */
+let _lsp = null;
+function lspParse(out) {
+  const o = {};
+  String(out || '').split(/\r?\n/).forEach(function (l) {
+    const m = /^([a-z_]+)=(\S*)/.exec(l.trim());
+    if (m) o[m[1]] = m[2];
+  });
+  return o.present ? o : null;
+}
+async function loadLspStatus() {
+  try {
+    const r = await run('sh ' + MD + '/runtime/asb_lsposed.sh status 2>/dev/null');
+    _lsp = lspParse((r && r.stdout) || '');
+  } catch (e) { _lsp = null; }
+}
+function lspBadge(lsp, cur) {
+  if (!lsp) return null;
+  if (lsp.present !== '1') return { cls:'neutral', text:T('st_lsp_absent', 'no LSPosed') };
+  const kib = parseInt(lsp.log_kib, 10) || 0;
+  const size = kib >= 1024 ? ' \u00b7 ' + (kib / 1024).toFixed(kib >= 10240 ? 0 : 1) + ' ' + T('unit_mb', 'MB') : '';
+  if (lsp.verbose === 'off')
+    return lsp.pending_reboot === '1'
+      ? { cls:'warn', text:T('st_lsp_reboot', 'off after a reboot') }
+      : { cls: cur === 'off' ? 'good' : 'neutral', text:T('st_lsp_off', 'LSPosed log off') + size };
+  if (lsp.verbose === 'on' || lsp.verbose === 'default_on')
+    return { cls: kib >= 10240 ? 'warn' : 'neutral', text:T('st_lsp_on', 'LSPosed log on') + size };
+  return { cls:'neutral', text:T('st_lsp_unknown', 'set in LSPosed') };
 }
 
 // Multimedia telemetry: the same honesty standard as the LTPO card - the badge reads
@@ -6563,6 +6645,10 @@ function cfgStatus(it, cur) {
     return { cls:'neutral', text:T('st_off', 'Disabled') };
   }
   // mmfeed_off: same badge contract as ltpo_force - active / pending-boot / absent.
+  if (it.key === 'lsposed_verbose') {
+    const _lb2 = lspBadge(_lsp, cur);
+    if (_lb2) return _lb2;
+  }
   if (it.key === 'mmfeed_off') {
     if (cur === '1') {
       if (_mmfeedStatus === 'mmfeed_active') return { cls:'good', text:T('st_on', 'Enabled') };
@@ -6827,6 +6913,8 @@ const APPLY_MODE = {
   // stack only reads that config at boot - so the honest label is reboot.
   ltpo_force:APPLY_REBOOT,
   mmfeed_off:APPLY_REBOOT,
+  /* fix187: written into LSPosed's database at once, read by LSPosed when it starts. */
+  lsposed_verbose:APPLY_REBOOT,
   // label is reboot even though the bind lands on save.
   disable_blur:APPLY_REBOOT, ui_effects_level:APPLY_REBOOT,
   CAMERA_LEVEL:APPLY_REBOOT, CAMERA_CONTRAST:APPLY_REBOOT, CAMERA_GRAIN:APPLY_REBOOT,
@@ -7437,7 +7525,8 @@ function asbTabbarVisibility() {
                      document.body.classList.contains('config-active');
   const bar = document.querySelector('.asb-tabbar');
   if (bar) bar.style.display = inCategory ? 'none' : '';
-  document.documentElement.style.setProperty('--tabbar-space', inCategory ? '16px' : '78px');
+  document.documentElement.style.setProperty('--tabbar-space', inCategory ? '16px' : '82px');
+  if (!inCategory && typeof asbNavIndicator === 'function') asbNavIndicator();
 }
 
 function cfgRender() {
@@ -7692,6 +7781,33 @@ async function cfgSet(key, val, ctl) {
                     'smart_media_guard',
                     /* Prime-core lift: the governor reads all three on reload. */
                     'heavy_prime_escape','prime_escape_burst_s','prime_escape_rest_s'];
+      if (key === 'lsposed_verbose') {
+        /* fix187: LSPosed's own setting, written once on this change (runtime/asb_lsposed.sh).
+         * The toast says what actually happened - LSPosed absent, a schema this does not
+         * know (then its manager opens, where the switch is), written, or restored. */
+        let res = '', freed = 0;
+        try {
+          const r = await run('sh ' + shQuote(MD + '/runtime/asb_lsposed.sh') + ' apply 2>/dev/null');
+          const m = /result=([a-z_]+)/.exec((r && r.stdout) || '');
+          res = m ? m[1] : '';
+          const f = /freed_kib=(\d+)/.exec((r && r.stdout) || '');
+          freed = f ? parseInt(f[1], 10) : 0;
+        } catch (e) {}
+        const mb = freed >= 1024 ? T('t_lsp_freed', ' \u00b7 %s MB of old logs deleted').replace('%s', (freed / 1024).toFixed(freed >= 10240 ? 0 : 1)) : '';
+        if (res === 'off_after_reboot') toast(T('t_lsp_off', 'LSPosed verbose log: off after a reboot') + mb, 'good');
+        else if (res === 'already_off') toast(T('t_lsp_already', 'LSPosed verbose log is already off') + mb, 'good');
+        else if (res === 'restored') toast(T('t_lsp_restored', 'LSPosed setting put back \u00b7 after a reboot'), 'good');
+        else if (res === 'untouched') toast(T('t_lsp_untouched', 'ASB leaves LSPosed alone'), 'good');
+        else if (res === 'absent') toast(T('t_lsp_absent', 'LSPosed is not installed'), 'warn');
+        else {
+          toast(T('t_lsp_manual', 'This LSPosed keeps the setting differently - switch Verbose log off in its manager'), 'warn');
+          try { await run('sh ' + shQuote(MD + '/runtime/asb_lsposed.sh') + ' open 2>/dev/null'); } catch (e) {}
+        }
+        await loadLspStatus();
+        cfgRender();
+        if (ctl) ctl.classList.remove('busy');
+        return;
+      }
       if (key === 'log_level') {
         // Applied live: extreme mode changes device properties, and leaving it restores
         // them - waiting for a reboot would leave the phone in whichever state it was.
@@ -9301,18 +9417,41 @@ function asbFitPages() {
   } catch (e) {}
 }
 /* Each profile card carries what the drain meter measured for it (fix168), the same figures
- * the Monitor sheet compares; a profile not measured yet shows nothing rather than a guess. */
+ * the Monitor sheet compares; a profile not measured yet shows nothing rather than a guess.
+ *
+ * The screen-off chip follows the sheet's own rules (fix187). The home card showed only the
+ * meter's figure, so a Smart card read "8.2 %/h" with no moon while the Monitor sheet beside
+ * it printed "~0.70 %/h" for the same profile - the meter had no hour of screen-off in Smart
+ * without music yet, and the governor had measured five. Now: the meter's figure; with a
+ * screen-off hour whose level did not move, "below one step" (<x); for the running profile
+ * without either, the governor's own measurement marked "~"; otherwise nothing. */
+const _lvGovOff = { x: 0, n: 0, prof: '' };
+function homeOffFigure(profile, e) {
+  if (e && e.off > 0) return { t: lvPct(e.off, 100, e.off >= 100 ? 1 : 2), tip: '' };
+  if (e && e.offN > 0 && e.offS > 0) {
+    const ub = Math.max(1, Math.ceil(100 * 3600 / e.offS));
+    return { t: '<' + lvPct(ub, 100, ub >= 100 ? 1 : 2), tip: '' };
+  }
+  const running = (_lvGovOff.prof || _selectedProfile) === profile && profile === _selectedProfile;
+  if (running && profile !== 'stock' && _lvGovOff.x > 0)
+    return { t: '~' + lvPct(_lvGovOff.x, 100, _lvGovOff.x >= 100 ? 1 : 2),
+             tip: T('lv_drain_off_measured', 'measured over %s screen-off stretch(es) of an hour or more, without charging or music').replace('%s', String(_lvGovOff.n)) };
+  return null;
+}
 function homeMeterPaint() {
   document.querySelectorAll('.pmeta[data-meter]').forEach(function (box) {
-    const e = (_lvMeter.p || {})[box.getAttribute('data-meter')];
+    const prof = box.getAttribute('data-meter');
+    const e = (_lvMeter.p || {})[prof];
+    const off = homeOffFigure(prof, e);
     box.textContent = '';
-    if (!e || (!(e.on > 0) && !(e.off > 0))) { box.hidden = true; return; }
-    [['sun', e.on > 0 ? lvPct(e.on, 10, 1) : ''], ['theme_moon', e.off > 0 ? lvPct(e.off, 100, e.off >= 100 ? 1 : 2) : '']].forEach(function (c) {
+    if (!(e && e.on > 0) && !off) { box.hidden = true; return; }
+    [['sun', (e && e.on > 0) ? lvPct(e.on, 10, 1) : '', ''], ['theme_moon', off ? off.t : '', off ? off.tip : '']].forEach(function (c) {
       if (!c[1]) return;
       const chip = document.createElement('span');
       chip.className = 'pmeta-chip';
       chip.innerHTML = techIcon(c[0]);
       chip.appendChild(document.createTextNode(c[1]));
+      if (c[2]) chip.title = c[2];
       box.appendChild(chip);
     });
     box.hidden = false;
@@ -9389,7 +9528,25 @@ function asbNavSync() {
     el.classList.toggle('is-active', on);
     el.setAttribute('aria-selected', on ? 'true' : 'false');
   });
+  asbNavIndicator();
 }
+
+/* Moves the pill behind the active tab (fix187) to that tab's measured box. A hidden bar
+ * (inside a settings category) measures zero and is left alone; asbTabbarVisibility calls
+ * this again when the bar comes back. The slide is enabled two frames after the first
+ * placement, so the first paint puts the pill in place instead of animating it there. */
+function asbNavIndicator() {
+  const bar = document.getElementById('asbTabbar');
+  const on = bar && bar.querySelector('.asb-tab.is-active');
+  if (!on || !on.offsetWidth) return;
+  bar.style.setProperty('--ind-x', on.offsetLeft + 'px');
+  bar.style.setProperty('--ind-w', on.offsetWidth + 'px');
+  if (!bar.classList.contains('ind-anim') && !bar._indArm) {
+    bar._indArm = true;
+    requestAnimationFrame(function () { requestAnimationFrame(function () { bar.classList.add('ind-anim'); }); });
+  }
+}
+window.addEventListener('resize', function () { requestAnimationFrame(asbNavIndicator); });
 
 function asbNavGo(target) {
   const at = asbNavCurrent();
@@ -10248,6 +10405,15 @@ async function pollLive(visible) {
     } catch(e) {}
 
     _lvLast.st = st || {}; _lvLast.kv = kv;
+    /* The governor's own screen-off measurement, for the home card of the running profile
+     * (fix187) - read on every poll, whichever page is open. */
+    {
+      const _ox = parseInt(kv.offdrain_pctph_x100 || '0', 10), _on = parseInt(kv.offdrain_windows || '0', 10);
+      const _was = _lvGovOff.x;
+      _lvGovOff.x = (_ox > 0 && _on > 0) ? _ox : 0; _lvGovOff.n = _on;
+      _lvGovOff.prof = String(kv.profile || '');
+      if (_was !== _lvGovOff.x) homeMeterPaint();
+    }
     const capSrc = (st && st.cap_source_p0) || '';
     const advActive = (st && st.adv_active) || 0;
     let recCount = 0, recDisabled = 0, recReason = '';
@@ -11140,27 +11306,39 @@ setTimeout(() => pollLive(false), 1500);
   </button>
 </div>
 <nav class="asb-tabbar" id="asbTabbar" role="tablist" aria-label="Sections">
-  <button class="asb-tab" id="tabHome" role="tab" onclick="asbNavGo('home')" aria-label="Home">
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
-         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M3 10.5 12 3l9 7.5"></path><path d="M5.5 9.5V20h13V9.5"></path>
-    </svg>
-    <span data-i18n="nav_home">Home</span>
+  <!-- fix187: Home is the profile picker, so the tab says so - "Profiles", with a gauge, the
+       range the profiles run along (economy to performance). Monitor is the live readout:
+       a pulse on a screen. Settings is the gear. Each icon has a line form and a filled
+       form (class "f") for the active tab. No aria-label on the buttons: their accessible
+       name is the visible, translated label. -->
+  <span class="asb-tab-ind" aria-hidden="true"></span>
+  <button class="asb-tab" id="tabHome" role="tab" onclick="asbNavGo('home')">
+    <span class="asb-tab-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
+         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path class="f" d="M3.34 19A10 10 0 1 1 20.66 19Z"></path>
+      <path d="M3.34 19A10 10 0 1 1 20.66 19"></path>
+      <path d="M12 14l4.4-4.4"></path>
+      <circle cx="12" cy="14" r="1.7" fill="currentColor"></circle>
+    </svg></span>
+    <span class="asb-tab-label" data-i18n="nav_home">Profiles</span>
   </button>
-  <button class="asb-tab" id="tabLive" role="tab" onclick="asbNavGo('live')" aria-label="Monitor">
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
-         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M3 12h3l3-9 4 18 3-9h5"></path>
-    </svg>
-    <span data-i18n="nav_live">Monitor</span>
+  <button class="asb-tab" id="tabLive" role="tab" onclick="asbNavGo('live')">
+    <span class="asb-tab-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
+         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect class="f" x="3" y="4.5" width="18" height="15" rx="4"></rect>
+      <rect x="3" y="4.5" width="18" height="15" rx="4"></rect>
+      <path d="M6.5 12.5h2.3l1.7-3.6 3 7.2 1.7-3.6h2.3"></path>
+    </svg></span>
+    <span class="asb-tab-label" data-i18n="nav_live">Monitor</span>
   </button>
-  <button class="asb-tab" id="tabConfig" role="tab" onclick="asbNavGo('config')" aria-label="Config">
-    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
-         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M4 7h6M14 7h6M4 12h10M18 12h2M4 17h3M11 17h9"></path>
-      <circle cx="12" cy="7" r="2"></circle><circle cx="16" cy="12" r="2"></circle><circle cx="9" cy="17" r="2"></circle>
-    </svg>
-    <span data-i18n="nav_config">Config</span>
+  <button class="asb-tab" id="tabConfig" role="tab" onclick="asbNavGo('config')">
+    <span class="asb-tab-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor"
+         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path class="f" fill-rule="evenodd" d="M9.95 5.31L10.37 2.74A9.4 9.4 0 0 1 13.63 2.74L14.05 5.31A7 7 0 0 1 16.77 6.88L19.2 5.96A9.4 9.4 0 0 1 20.83 8.79L18.82 10.43A7 7 0 0 1 18.82 13.57L20.83 15.21A9.4 9.4 0 0 1 19.2 18.04L16.77 17.12A7 7 0 0 1 14.05 18.69L13.63 21.26A9.4 9.4 0 0 1 10.37 21.26L9.95 18.69A7 7 0 0 1 7.23 17.12L4.8 18.04A9.4 9.4 0 0 1 3.17 15.21L5.18 13.57A7 7 0 0 1 5.18 10.43L3.17 8.79A9.4 9.4 0 0 1 4.8 5.96L7.23 6.88A7 7 0 0 1 9.95 5.31Z M15 12a3 3 0 1 0-6 0 3 3 0 1 0 6 0z"></path>
+      <path d="M9.95 5.31L10.37 2.74A9.4 9.4 0 0 1 13.63 2.74L14.05 5.31A7 7 0 0 1 16.77 6.88L19.2 5.96A9.4 9.4 0 0 1 20.83 8.79L18.82 10.43A7 7 0 0 1 18.82 13.57L20.83 15.21A9.4 9.4 0 0 1 19.2 18.04L16.77 17.12A7 7 0 0 1 14.05 18.69L13.63 21.26A9.4 9.4 0 0 1 10.37 21.26L9.95 18.69A7 7 0 0 1 7.23 17.12L4.8 18.04A9.4 9.4 0 0 1 3.17 15.21L5.18 13.57A7 7 0 0 1 5.18 10.43L3.17 8.79A9.4 9.4 0 0 1 4.8 5.96L7.23 6.88A7 7 0 0 1 9.95 5.31Z"></path>
+      <circle cx="12" cy="12" r="3"></circle>
+    </svg></span>
+    <span class="asb-tab-label" data-i18n="nav_config">Config</span>
   </button>
 </nav>
 </body>
