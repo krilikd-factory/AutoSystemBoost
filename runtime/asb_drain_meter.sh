@@ -23,6 +23,21 @@ dm_glance_pct=""
 DM_GLANCE_S="${ASB_DM_GLANCE_S:-120}"
 dm_dirty=0
 dm_flush_ts=0
+# Screen-off windows that did not count, and why (fix189). An OP15's meter had no screen-off
+# figure for Smart, the profile it runs most, while the governor counted five windows - with
+# nothing on disk to say whether the windows were short, had playback in them or ended on the
+# charger. "media short charge" counts, then the latest: profile:reason:minutes.
+DM_REJ="$DM_DIR/drain_meter.rej"
+dm_rej_media=0; dm_rej_short=0; dm_rej_charge=0; dm_rej_last="-"
+dm_rej() {   # $1 reason  $2 seconds
+  case "$1" in
+    media) dm_rej_media=$((dm_rej_media + 1)) ;;
+    short) dm_rej_short=$((dm_rej_short + 1)) ;;
+    charge) dm_rej_charge=$((dm_rej_charge + 1)) ;;
+  esac
+  dm_rej_last="${dm_prof:-?}:$1:$(($2 / 60))"
+  dm_dirty=1
+}
 
 dm_get() {
   eval "printf '%s' \"\${dm_${1}_${2}:-0}\""
@@ -36,6 +51,10 @@ dm_load() {
   for _dp in $DM_PROFILES; do
     for _df in on_s on_x off_s off_x off_n; do dm_set "$_dp" "$_df" 0; done
   done
+  if [ -r "$DM_REJ" ]; then
+    read -r _rm _rs _rc _rl < "$DM_REJ" 2>/dev/null
+    case "$_rm$_rs$_rc" in ''|*[!0-9]*) : ;; *) dm_rej_media="$_rm"; dm_rej_short="$_rs"; dm_rej_charge="$_rc"; dm_rej_last="${_rl:--}" ;; esac
+  fi
   [ -r "$DM_FILE" ] || return 0
   while read -r _dp _a _b _c _d _e _rest; do
     case " $DM_PROFILES " in *" $_dp "*) : ;; *) continue ;; esac
@@ -62,6 +81,8 @@ dm_publish() {
 dm_flush() {
   mkdir -p "$DM_DIR" 2>/dev/null
   dm_table > "$DM_FILE.tmp" 2>/dev/null && mv -f "$DM_FILE.tmp" "$DM_FILE" 2>/dev/null
+  printf '%s %s %s %s\n' "$dm_rej_media" "$dm_rej_short" "$dm_rej_charge" "$dm_rej_last" > "$DM_REJ.tmp" 2>/dev/null \
+    && mv -f "$DM_REJ.tmp" "$DM_REJ" 2>/dev/null
   dm_dirty=0
   dm_flush_ts="$1"
 }
@@ -95,6 +116,8 @@ dm_step() {
   case "$_p" in ''|*[!0-9]*) dm_prev_ts=""; return 0 ;; esac
   case "$_n" in ''|*[!0-9]*) return 0 ;; esac
   if [ "$_c" = 1 ]; then
+    # A window of ten minutes or more ended by the charger is worth knowing about.
+    [ -n "$dm_off_ts" ] && [ $((_n - dm_off_ts)) -ge 600 ] && dm_rej charge $((_n - dm_off_ts))
     dm_prev_ts=""; dm_off_ts=""; dm_off_media=0; dm_aud_run=0; dm_glance_ts=""; dm_prev_scr="$_s"
     return 0
   fi
@@ -106,6 +129,10 @@ dm_step() {
         _dd=$((dm_glance_ts - dm_off_ts)); _dq=$((dm_off_pct - dm_glance_pct))
         if [ "$_dd" -ge 3600 ] && [ "$dm_off_media" = 0 ] && [ "$_dq" -ge 0 ] && [ "$_dq" -le 50 ]; then
           dm_add_off "$_dd" "$_dq"
+        elif [ "$_dd" -ge 3600 ] && [ "$dm_off_media" = 1 ]; then
+          dm_rej media "$_dd"
+        elif [ "$_dd" -ge 600 ] && [ "$_dd" -lt 3600 ]; then
+          dm_rej short "$_dd"
         fi
         dm_off_ts=""; dm_off_media=0; dm_aud_run=0; dm_glance_ts=""
       fi

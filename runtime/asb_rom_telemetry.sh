@@ -28,6 +28,17 @@ _up=""; read -r _up _x < "$PROC/uptime" 2>/dev/null
 echo "uptime=$_up"
 _l1=""; _l5=""; _l15=""; read -r _l1 _l5 _l15 _x < "$PROC/loadavg" 2>/dev/null
 echo "loadavg=$_l1 $_l5 $_l15"
+# Online CPUs (fix189), so the Monitor can give the load as a share of the cores: the file
+# reads "0-7", or "0-3,6-7" with cores parked.
+_on=""; read -r _on < "$SYS/devices/system/cpu/online" 2>/dev/null
+_nc=0; _rest="${_on:+$_on,}"
+while [ -n "$_rest" ]; do
+  _r="${_rest%%,*}"; _rest="${_rest#*,}"
+  case "$_r" in *-*) _a="${_r%-*}"; _b="${_r#*-}" ;; *) _a="$_r"; _b="$_r" ;; esac
+  case "$_a$_b" in ''|*[!0-9]*) continue ;; esac
+  _nc=$((_nc + _b - _a + 1))
+done
+echo "cpus_online=$_nc"
 
 _b="$SYS/class/power_supply/battery"
 for _f in capacity current_now voltage_now temp status charge_full; do

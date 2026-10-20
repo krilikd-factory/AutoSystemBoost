@@ -11,8 +11,10 @@
 #                          LSPosed had before is put back (on, off, or its own default).
 #   lsposed_verbose=off    LSPosed's own setting is written to off (the same row its manager's
 #                          Settings > Verbose log writes) and the old verbose_*.log files are
-#                          deleted - the newest stays, the daemon still holds it open. LSPosed
-#                          reads the setting when it starts: it takes effect at the next boot.
+#                          emptied - the newest stays, the daemon still holds it open; the
+#                          previous boot's are deleted. LSPosed reads the setting when it
+#                          starts: it takes effect at the next boot. The modules log (what the
+#                          modules write) has no switch in LSPosed and is only reported.
 #
 # Nothing runs at boot. If the user later turns the log back on in the LSPosed manager, that
 # is their choice and ASB does not undo it. Uninstalling ASB puts LSPosed's value back.
@@ -83,6 +85,11 @@ case "${1:-status}" in
       [ "${_v:-unknown}" = unknown ] && echo "reason=$(_reason)"
       echo "log_kib=$(_kib "$LSPD"/log/*.log "$LSPD"/log/*/*.log)"
       echo "verbose_kib=$(_kib "$LSPD"/log/verbose_*.log)"
+      # fix189: the modules log is what LSPosed modules write themselves (XposedBridge.log,
+      # tag LSPosed-Bridge). LSPosed has no switch for it; the verbose setting does not touch
+      # it. An OP15 with the verbose log off showed 20 MB an hour after boot, all of it this.
+      echo "modules_kib=$(_kib "$LSPD"/log/modules_*.log)"
+      echo "oldlog_kib=$(_kib "$LSPD"/log.old/*.log)"
       echo "pending_reboot=$(_pending)"
     fi
     [ -f "$PREV" ] && [ "$(cat "$PREV" 2>/dev/null)" != off ] && echo "asb_changed=1 prev=$(cat "$PREV" 2>/dev/null)"
@@ -108,10 +115,19 @@ case "${1:-status}" in
           _res=already_off
         fi
         # The old verbose logs: every one but the newest, which the daemon still writes to.
+        # Emptied, not deleted (fix189): LSPosed keeps the files of this boot in a list and
+        # deletes the eldest itself once there are ten - an entry ASB had already deleted
+        # fails that delete, stays at the head of the list, and from then on LSPosed deletes
+        # none of its old logs until the next boot. The previous boot's logs (log.old) are
+        # not in that list; LSPosed removes the folder at its next start anyway.
         _freed=0; _n=0
         for _f in $(ls -t "$LSPD"/log/verbose_*.log 2>/dev/null); do
           _n=$((_n + 1))
           [ "$_n" -eq 1 ] && continue
+          _k=$(_kib "$_f"); true > "$_f" 2>/dev/null && _freed=$((_freed + _k))
+        done
+        for _f in "$LSPD"/log.old/verbose_*.log; do
+          [ -f "$_f" ] || continue
           _k=$(_kib "$_f"); rm -f "$_f" 2>/dev/null && _freed=$((_freed + _k))
         done
         echo "result=$_res freed_kib=$_freed"
