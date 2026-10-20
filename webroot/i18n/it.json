@@ -1153,8 +1153,18 @@
   "t_lsp_manual": "Questo LSPosed salva l’impostazione in altro modo – spegnete il log dettagliato nel suo manager",
   "st_lsp_absent": "nessun LSPosed",
   "st_lsp_reboot": "spento dopo il riavvio",
-  "st_lsp_off": "log LSPosed spento",
-  "st_lsp_on": "log LSPosed acceso",
+  "st_lsp_off": "log dettagliato spento",
+  "st_lsp_on": "log dettagliato acceso",
   "st_lsp_unknown": "da impostare in LSPosed",
-  "unit_mb": "MB"
+  "unit_mb": "MB",
+  "st_lsp_mods": "log dei moduli %s",
+  "lv_eta_all_tip": "Stima: questo profilo non ha ancora un’ora propria a schermo spento – dal consumo a schermo spento di tutti i profili insieme, %s.",
+  "learn_clean": "pulita",
+  "learn_partial": "parziale",
+  "learn_noisy": "rumorosa",
+  "learn_dirty": "disturbata",
+  "learn_tip_profile": "Sessioni concluse di questo profilo da cui il governor ha imparato: %s.",
+  "learn_tip_tier": "Ultima sessione del profilo Batteria: %s.",
+  "lvi_learner_prof": "Da quante sessioni di questo profilo («{ses}» sul riquadro) ha imparato il governor. Ognuna registra quanto in fretta il telefono si è scaldato, fino a che temperatura e come hanno tenuto i tetti di frequenza; le soglie del profilo si adattano di conseguenza. In Batteria il riquadro valuta anche l’ultima sessione: pulita, parziale, rumorosa o disturbata.",
+  "stock_load_share": "%1 % di %2 core"
 }

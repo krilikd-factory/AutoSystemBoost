@@ -1153,8 +1153,18 @@
   "t_lsp_manual": "Dieses LSPosed speichert die Einstellung anders – schalten Sie das ausführliche Protokoll in seinem Manager aus",
   "st_lsp_absent": "kein LSPosed",
   "st_lsp_reboot": "aus nach Neustart",
-  "st_lsp_off": "LSPosed-Log aus",
-  "st_lsp_on": "LSPosed-Log an",
+  "st_lsp_off": "Detailprotokoll aus",
+  "st_lsp_on": "Detailprotokoll an",
   "st_lsp_unknown": "in LSPosed einstellen",
-  "unit_mb": "MB"
+  "unit_mb": "MB",
+  "st_lsp_mods": "Modul-Log %s",
+  "lv_eta_all_tip": "Schätzung: Dieses Profil hat noch keine eigene Stunde mit ausgeschaltetem Bildschirm – aus dem Verbrauch aller Profile zusammen, %s.",
+  "learn_clean": "sauber",
+  "learn_partial": "teilweise",
+  "learn_noisy": "unruhig",
+  "learn_dirty": "gestört",
+  "learn_tip_profile": "Abgeschlossene Sitzungen dieses Profils, aus denen der Governor gelernt hat: %s.",
+  "learn_tip_tier": "Letzte Sitzung im Akku-Profil: %s.",
+  "lvi_learner_prof": "Aus wie vielen Sitzungen dieses Profils („{ses}“ auf der Kachel) der Governor gelernt hat. Jede hält fest, wie schnell das Telefon warm wurde, wie heiß es wurde und wie gut die Frequenzgrenzen hielten; danach passen sich die Schwellen des Profils an. Im Akku-Profil bewertet die Kachel außerdem die letzte Sitzung: sauber, teilweise, unruhig oder gestört.",
+  "stock_load_share": "%1 % von %2 Kernen"
 }

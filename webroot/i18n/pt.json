@@ -1153,8 +1153,18 @@
   "t_lsp_manual": "Este LSPosed guarda a configuração de outro jeito – desligue o log detalhado no gerenciador dele",
   "st_lsp_absent": "sem LSPosed",
   "st_lsp_reboot": "desligado após reiniciar",
-  "st_lsp_off": "log do LSPosed desligado",
-  "st_lsp_on": "log do LSPosed ligado",
+  "st_lsp_off": "log detalhado desligado",
+  "st_lsp_on": "log detalhado ligado",
   "st_lsp_unknown": "ajuste no LSPosed",
-  "unit_mb": "MB"
+  "unit_mb": "MB",
+  "st_lsp_mods": "log dos módulos %s",
+  "lv_eta_all_tip": "Estimativa: este perfil ainda não tem uma hora própria de tela desligada – pelo consumo de tela desligada de todos os perfis juntos, %s.",
+  "learn_clean": "limpa",
+  "learn_partial": "parcial",
+  "learn_noisy": "ruidosa",
+  "learn_dirty": "perturbada",
+  "learn_tip_profile": "Sessões concluídas deste perfil com que o governor aprendeu: %s.",
+  "learn_tip_tier": "Última sessão do perfil Bateria: %s.",
+  "lvi_learner_prof": "Com quantas sessões deste perfil («{ses}» no bloco) o governor aprendeu. Cada uma registra quão rápido o telefone esquentou, a que temperatura chegou e como os tetos de frequência se mantiveram; os limiares do perfil se ajustam a partir delas. Em Bateria o bloco também avalia a última sessão: limpa, parcial, ruidosa ou perturbada.",
+  "stock_load_share": "%1 % de %2 núcleos"
 }

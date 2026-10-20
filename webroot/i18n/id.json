@@ -1153,8 +1153,18 @@
   "t_lsp_manual": "LSPosed ini menyimpan pengaturan secara berbeda – matikan log rinci di managernya",
   "st_lsp_absent": "tanpa LSPosed",
   "st_lsp_reboot": "mati setelah reboot",
-  "st_lsp_off": "log LSPosed mati",
-  "st_lsp_on": "log LSPosed nyala",
+  "st_lsp_off": "log rinci mati",
+  "st_lsp_on": "log rinci nyala",
   "st_lsp_unknown": "atur di LSPosed",
-  "unit_mb": "MB"
+  "unit_mb": "MB",
+  "st_lsp_mods": "log modul %s",
+  "lv_eta_all_tip": "Perkiraan: profil ini belum punya jam layar mati sendiri – dari konsumsi layar mati semua profil bersama, %s.",
+  "learn_clean": "bersih",
+  "learn_partial": "sebagian",
+  "learn_noisy": "bising",
+  "learn_dirty": "terganggu",
+  "learn_tip_profile": "Sesi selesai profil ini yang dipelajari governor: %s.",
+  "learn_tip_tier": "Sesi terakhir profil Hemat: %s.",
+  "lvi_learner_prof": "Berapa banyak sesi profil ini («{ses}» di ubin) yang dipelajari governor. Tiap sesi mencatat seberapa cepat ponsel menghangat, sepanas apa, dan seberapa baik batas frekuensi bertahan; ambang profil menyesuaikan dari situ. Di profil Hemat ubin juga menilai sesi terakhir: bersih, sebagian, bising, atau terganggu.",
+  "stock_load_share": "%1 % dari %2 inti"
 }

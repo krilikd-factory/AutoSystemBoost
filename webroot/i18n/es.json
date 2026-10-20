@@ -1153,8 +1153,18 @@
   "t_lsp_manual": "Este LSPosed guarda el ajuste de otra forma – apaga el registro detallado en su gestor",
   "st_lsp_absent": "sin LSPosed",
   "st_lsp_reboot": "apagado tras reiniciar",
-  "st_lsp_off": "registro LSPosed apagado",
-  "st_lsp_on": "registro LSPosed activo",
+  "st_lsp_off": "registro detallado apagado",
+  "st_lsp_on": "registro detallado activo",
   "st_lsp_unknown": "se ajusta en LSPosed",
-  "unit_mb": "MB"
+  "unit_mb": "MB",
+  "st_lsp_mods": "registro de módulos %s",
+  "lv_eta_all_tip": "Estimación: este perfil aún no tiene una hora propia con la pantalla apagada – según el consumo con pantalla apagada de todos los perfiles juntos, %s.",
+  "learn_clean": "limpia",
+  "learn_partial": "parcial",
+  "learn_noisy": "ruidosa",
+  "learn_dirty": "alterada",
+  "learn_tip_profile": "Sesiones completadas de este perfil de las que aprendió el governor: %s.",
+  "learn_tip_tier": "Última sesión del perfil Batería: %s.",
+  "lvi_learner_prof": "De cuántas sesiones de este perfil («{ses}» en la tarjeta) ha aprendido el governor. Cada una registra cuánto tardó el teléfono en calentarse, hasta qué temperatura y cómo aguantaron los techos de frecuencia; los umbrales del perfil se ajustan con ellas. En Batería la tarjeta además valora la última sesión: limpia, parcial, ruidosa o alterada.",
+  "stock_load_share": "%1 % de %2 núcleos"
 }

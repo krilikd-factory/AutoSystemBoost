@@ -930,8 +930,18 @@
   "t_lsp_manual": "This LSPosed keeps the setting differently - switch Verbose log off in its manager",
   "st_lsp_absent": "no LSPosed",
   "st_lsp_reboot": "off after a reboot",
-  "st_lsp_off": "LSPosed log off",
-  "st_lsp_on": "LSPosed log on",
+  "st_lsp_off": "verbose log off",
+  "st_lsp_on": "verbose log on",
   "st_lsp_unknown": "set in LSPosed",
-  "unit_mb": "MB"
+  "unit_mb": "MB",
+  "st_lsp_mods": "modules log %s",
+  "lv_eta_all_tip": "Estimate: this profile has no screen-off hour of its own yet - from the screen-off drain of all profiles together, %s.",
+  "learn_clean": "clean",
+  "learn_partial": "partial",
+  "learn_noisy": "noisy",
+  "learn_dirty": "disturbed",
+  "learn_tip_profile": "Completed sessions of this profile the governor has learned from: %s.",
+  "learn_tip_tier": "Last Battery session: %s.",
+  "lvi_learner_prof": "How many sessions of this profile (“{ses}” on the tile) the governor has learned from. Each records how long the phone took to warm up, how hot it got and how well the ceilings held; the profile’s thresholds adapt from them. On Battery the tile also rates the last session: clean, partial, noisy or disturbed.",
+  "stock_load_share": "%1 % of %2 cores"
 }

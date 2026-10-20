@@ -1153,8 +1153,18 @@
   "t_lsp_manual": "Ce LSPosed stocke le réglage autrement – coupez le journal détaillé dans son gestionnaire",
   "st_lsp_absent": "pas de LSPosed",
   "st_lsp_reboot": "coupé au redémarrage",
-  "st_lsp_off": "journal LSPosed coupé",
-  "st_lsp_on": "journal LSPosed actif",
+  "st_lsp_off": "journal détaillé coupé",
+  "st_lsp_on": "journal détaillé actif",
   "st_lsp_unknown": "réglé dans LSPosed",
-  "unit_mb": "Mo"
+  "unit_mb": "Mo",
+  "st_lsp_mods": "journal des modules %s",
+  "lv_eta_all_tip": "Estimation : ce profil n’a pas encore d’heure écran éteint à lui – d’après la consommation écran éteint de tous les profils ensemble, %s.",
+  "learn_clean": "propre",
+  "learn_partial": "partielle",
+  "learn_noisy": "bruitée",
+  "learn_dirty": "perturbée",
+  "learn_tip_profile": "Sessions terminées de ce profil dont le governor a appris : %s.",
+  "learn_tip_tier": "Dernière session du profil Batterie : %s.",
+  "lvi_learner_prof": "Le nombre de sessions de ce profil (« {ses} » sur la tuile) dont le governor a appris. Chacune note en combien de temps le téléphone a chauffé, jusqu’à quelle température et comment les plafonds ont tenu ; les seuils du profil s’y adaptent. En Batterie, la tuile note aussi la dernière session : propre, partielle, bruitée ou perturbée.",
+  "stock_load_share": "%1 % de %2 cœurs"
 }

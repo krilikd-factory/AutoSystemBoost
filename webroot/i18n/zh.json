@@ -1153,8 +1153,18 @@
   "t_lsp_manual": "此版本 LSPosed 以其他方式保存设置——请在其管理器中关闭详细日志",
   "st_lsp_absent": "未安装 LSPosed",
   "st_lsp_reboot": "重启后关闭",
-  "st_lsp_off": "LSPosed 日志已关",
-  "st_lsp_on": "LSPosed 日志开启",
+  "st_lsp_off": "详细日志已关",
+  "st_lsp_on": "详细日志开启",
   "st_lsp_unknown": "在 LSPosed 中设置",
-  "unit_mb": "MB"
+  "unit_mb": "MB",
+  "st_lsp_mods": "模块日志 %s",
+  "lv_eta_all_tip": "估计：此配置还没有自己的熄屏一小时——按所有配置合计的熄屏耗电，%s。",
+  "learn_clean": "干净",
+  "learn_partial": "部分",
+  "learn_noisy": "嘈杂",
+  "learn_dirty": "受干扰",
+  "learn_tip_profile": "调速器已学习的此配置完成会话数：%s。",
+  "learn_tip_tier": "“省电”上次会话：%s。",
+  "lvi_learner_prof": "调速器已从此配置的多少个会话（磁贴上的“{ses}”）中学习。每个会话记录手机升温多快、温度多高以及频率上限保持得如何；配置的阈值据此调整。在“省电”配置中，磁贴还会评价上一次会话：干净、部分、嘈杂或受干扰。",
+  "stock_load_share": "%2 个核心的 %1 %"
 }

@@ -1153,8 +1153,18 @@
   "t_lsp_manual": "Bu LSPosed ayarı farklı saklıyor – ayrıntılı günlüğü yöneticisinde kapatın",
   "st_lsp_absent": "LSPosed yok",
   "st_lsp_reboot": "yeniden başlatınca kapanır",
-  "st_lsp_off": "LSPosed günlüğü kapalı",
-  "st_lsp_on": "LSPosed günlüğü açık",
+  "st_lsp_off": "ayrıntılı günlük kapalı",
+  "st_lsp_on": "ayrıntılı günlük açık",
   "st_lsp_unknown": "LSPosed’de ayarlanır",
-  "unit_mb": "MB"
+  "unit_mb": "MB",
+  "st_lsp_mods": "modül günlüğü %s",
+  "lv_eta_all_tip": "Tahmin: bu profilin henüz kendine ait ekran kapalı bir saati yok – tüm profillerin birlikte ekran kapalı tüketiminden, %s.",
+  "learn_clean": "temiz",
+  "learn_partial": "kısmi",
+  "learn_noisy": "gürültülü",
+  "learn_dirty": "bozuk",
+  "learn_tip_profile": "Bu profilin, governor’ın öğrendiği tamamlanmış oturumları: %s.",
+  "learn_tip_tier": "Pil profilinin son oturumu: %s.",
+  "lvi_learner_prof": "Governor’ın bu profilin kaç oturumundan («{ses}» kutucukta) öğrendiği. Her biri telefonun ne kadar hızlı ısındığını, ne kadar ısındığını ve frekans tavanlarının nasıl tuttuğunu kaydeder; profilin eşikleri bunlara göre ayarlanır. Pil profilinde kutucuk son oturumu da değerlendirir: temiz, kısmi, gürültülü veya bozuk.",
+  "stock_load_share": "%2 çekirdeğin %%1’i"
 }
