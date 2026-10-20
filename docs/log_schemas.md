@@ -264,6 +264,25 @@ Plain `key=value` sidecar written atomically by `runtime/asb_config_safe.sh` aft
 
 ---
 
+## `runtime/asb_lsposed.sh status` and `/data/adb/asb/lsposed_verbose_prev` — LSPosed's verbose log (fix187)
+
+Read by the WebUI card *LSPosed Verbose Log* (`lsposed_verbose=keep|off`) and by asbdiag section 0f. `status` prints `key=value` lines:
+
+| Field | Meaning |
+|:--|:--|
+| `present` | 1 when `/data/adb/lspd` and its `config/modules_config.db` exist. |
+| `setting` | The card's value in `governor.conf`. |
+| `verbose` | LSPosed's own setting, read from its database by `asb --lspd verbose-get`: `on`, `off`, `default_on` (no row - LSPosed's default, on) or `unknown` (then `reason=no_database|no_sqlite|open_failed|unexpected_schema`). |
+| `log_kib`, `verbose_kib` | Size of LSPosed's log files on disk, all / `verbose_*.log` only. |
+| `pending_reboot` | 1 when ASB wrote the setting after this boot began: the LSPosed daemon reads it only when it starts. |
+| `asb_changed` | `asb_changed=1 prev=<value>` while ASB has switched the log off; `prev` is what LSPosed had before. |
+
+`apply` prints `result=off_after_reboot freed_kib=N`, `already_off freed_kib=N`, `restored prev=<value>`, `untouched`, `absent`, `unsupported reason=...` or `write_failed`. `restore` (uninstall) puts `prev` back whatever the card says.
+
+`/data/adb/asb/lsposed_verbose_prev` holds LSPosed's value from before ASB's first change (`on`, `off`, `default_on`), written once and removed when it is put back; `/data/adb/asb/lsposed_verbose_prev_at` is the epoch second of ASB's last write, for `pending_reboot`. The write is the row (`lspd`, 0, `config`, `enable_verbose_log`) of LSPosed's `configs` table, a Java-serialised `java.lang.Boolean`; any other layout is reported as `unexpected_schema` and left alone. Nothing here runs at boot.
+
+---
+
 ## `/dev/.asb/auto_battery_state` — V42 persistence
 
 Plain text, exactly two integers space-separated on one line: `<active> <restore_idx>`.
