@@ -78,6 +78,7 @@ jobs:
             src/asb_fsm_bounds.generated.h \
             src/asb_smart.h \
             src/asb_smart_defs.h \
+            src/asb_record.h \
             src/build_ndk_release.sh \
             src/DSP/asb_dsp.c \
             src/DSP/asb_effect_abi.h \
