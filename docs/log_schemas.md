@@ -139,6 +139,7 @@ This is **not** JSON despite logkit's `lk_status_json()` parsing it. Each line i
 - `thermal` — thermal cap kHz applied if any (0 if no thermal clamp)
 - `cap_temp` — current `cpu_max_c` from active thermal source
 - `headroom_pct` — current headroom 0-100 or -1 if invalid
+- `msm_asb_hold`, `msm_asb` (fix188) — 1 while ASB holds a HEAVY/GAMING registration in `/sys/kernel/msm_performance/parameters/cpu_max_freq`, and the per-slot kHz it last wrote there (`slot0,slot1,slot2`; the hardware maximum after a release, 0 = never written). asbdiag uses them to tell ASB's values in that node from the vendor's.
 - `headroom_real_pct` (fix186) — the Monitor's "Headroom": the most limited cluster's live `scaling_max_freq` against its hardware maximum, 0-100, -1 unreadable (the action screen prints this one)
 - `perf_cap_p0`, `perf_cap_p6` — what governor declared via msm_performance interface (0 if no_iface)
 - `predict` — next-state prediction string
@@ -279,7 +280,7 @@ Read by the WebUI card *LSPosed Verbose Log* (`lsposed_verbose=keep|off`) and by
 
 `apply` prints `result=off_after_reboot freed_kib=N`, `already_off freed_kib=N`, `restored prev=<value>`, `untouched`, `absent`, `unsupported reason=...` or `write_failed`. `restore` (uninstall) puts `prev` back whatever the card says.
 
-`/data/adb/asb/lsposed_verbose_prev` holds LSPosed's value from before ASB's first change (`on`, `off`, `default_on`), written once and removed when it is put back; `/data/adb/asb/lsposed_verbose_prev_at` is the epoch second of ASB's last write, for `pending_reboot`. The write is the row (`lspd`, 0, `config`, `enable_verbose_log`) of LSPosed's `configs` table, a Java-serialised `java.lang.Boolean`; any other layout is reported as `unexpected_schema` and left alone. Nothing here runs at boot.
+`/data/adb/asb/lsposed_verbose_prev` holds LSPosed's value from before ASB's first change (`on` or `default_on`), written only when ASB actually switches the log off and removed when it is put back (a fix187 build also wrote `off` when the log was already off; that record is discarded); `/data/adb/asb/lsposed_verbose_prev_at` is the epoch second of ASB's last write, for `pending_reboot`. The write is the row (`lspd`, 0, `config`, `enable_verbose_log`) of LSPosed's `configs` table, a Java-serialised `java.lang.Boolean`; any other layout is reported as `unexpected_schema` and left alone. Nothing here runs at boot.
 
 ---
 
