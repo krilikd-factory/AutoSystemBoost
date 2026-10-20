@@ -4013,7 +4013,46 @@ grep -q '"nav_home": "Профили"' "$ROOT/webroot/i18n/ru.json" || fail "the
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag differs from tools/asb_diag.sh"
 echo "PASS: fix187 contract"
 ) || exit 1
+# ---- fix188 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix188: $*"; exit 1; }
+asb_has_test test_asbdiag_msm_owner_runtime.sh || fail "test_asbdiag_msm_owner_runtime.sh missing"
+asb_has_test test_boot_override_noop_runtime.sh || fail "test_boot_override_noop_runtime.sh missing"
+grep -q '"msm_asb_hold=%d' "$ROOT/src/asb_governor.c" || fail "msm_performance ownership not published"
+grep -q 'msm_asb_hold' "$ROOT/docs/log_schemas.md" || fail "msm_asb_hold undocumented"
+grep -q 'if \[ "$_tm_cur" != "$_tm_ovr" \]' "$ROOT/service.sh" || fail "the boot pass rewrites an unchanged override flag"
+grep -q '\[ "$(cat "$PREV" 2>/dev/null)" = off \] && rm -f "$PREV"' "$ROOT/runtime/asb_lsposed.sh" || fail "an already-off LSPosed log is still recorded as ASB's change"
+grep -q 'shared browser code apps load for web pages, not a hook' "$ROOT/tools/asb_diag.sh" || fail "WebView crashes still blamed on a hook module"
+grep -q 'smoothed: not formed yet' "$ROOT/tools/asb_diag.sh" || fail "a peak not formed yet reads as 0 C"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag differs from tools/asb_diag.sh"
+echo "PASS: fix188 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
+)
+
+t_boot_override_noop_runtime() (
+# Runtime (fix188): the boot pass leaves governor.conf alone when the override flag already
+# says what it would write. It used to replace the file on every boot a few seconds after the
+# governor read it - an extra reload, "governor.conf changed after the governor started" in
+# every boot asbdiag, and this write as the "last config transaction" over the user's own.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL boot override noop: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/mod/config" "$T/mod/runtime"
+awk '/^asb_thermal_mode_apply\(\) \{$/ { b = 1 } b { print } b && /^}$/ { exit }' "$ROOT/service.sh" > "$T/fn.sh"
+[ -s "$T/fn.sh" ] || fail "function not found"
+printf 'echo "$*" >> "%s/calls"\n' "$T" > "$T/mod/runtime/asb_config_safe.sh"
+run() { ( MODDIR="$T/mod"; asb_log() { :; }; . "$T/fn.sh"; asb_thermal_mode_apply ) }
+printf 'sustained_temp_mode=manual\nsustained_temp_user_override=1\n' > "$T/mod/config/governor.conf"
+run; [ ! -s "$T/calls" ] || fail "an unchanged flag was written again: $(cat "$T/calls")"
+printf 'sustained_temp_mode=manual\nsustained_temp_user_override=0\n' > "$T/mod/config/governor.conf"
+run; grep -qx 'set sustained_temp_user_override 1' "$T/calls" || fail "a changed flag was not written: $(cat "$T/calls" 2>/dev/null)"
+: > "$T/calls"
+printf 'sustained_temp_mode=smart\nsustained_temp_user_override=1\n' > "$T/mod/config/governor.conf"
+run; grep -qx 'set sustained_temp_user_override 0' "$T/calls" || fail "leaving manual does not clear the flag"
+echo "PASS boot override noop: governor.conf is rewritten at boot only when the flag changes"
 )
 
 t_profile_net_reassert_runtime() (

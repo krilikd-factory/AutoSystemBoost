@@ -2940,6 +2940,39 @@ cc -std=gnu11 -Wall -Wno-unused-function -I"$T" "$T/t.c" -o "$T/t" || fail "fixt
 echo "PASS msm_performance follows the CPU topology"
 )
 
+t_asbdiag_msm_owner_runtime() (
+# Runtime (fix188): asbdiag says whose ceilings msm_performance holds. An OP15 report a minute
+# after boot listed "0:2227200 .. 6:1632000" there, the prime at 35 % beside "cap written by
+# ASB: prime 1862400", and "profile=smart -> prime cluster at 35%" - reading as Smart's cap.
+# The REAL asbdiag block runs against a fake sysfs and the governor's msm_asb_hold/msm_asb.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL asbdiag msm owner: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+D="$ROOT/tools/asb_diag.sh"
+grep -q 'fprintf(f, "msm_asb_hold=%d\\nmsm_asb=%d,%d,%d\\n", g_msm_holding ? 1 : 0,' "$ROOT/src/asb_governor.c" || fail "the governor does not publish what it holds in msm_performance"
+awk '/^if \[ -r \/sys\/kernel\/msm_performance\/parameters\/cpu_max_freq \]; then$/ { b = 1 } b { print } b && /^fi$/ { exit }' "$D" > "$T/blk.sh"
+[ -s "$T/blk.sh" ] || fail "block not found"
+sed -i "s#/sys/kernel/msm_performance/parameters/cpu_max_freq#$T/msm#g; s#/sys/devices/system/cpu/cpufreq#$T/cpufreq#g; s#/dev/.asb/state#$T/state#g" "$T/blk.sh"
+mkdir -p "$T/cpufreq/policy0" "$T/cpufreq/policy6"
+echo '0 1 2 3 4 5' > "$T/cpufreq/policy0/related_cpus"; echo 3628800 > "$T/cpufreq/policy0/cpuinfo_max_freq"
+echo '6 7' > "$T/cpufreq/policy6/related_cpus"; echo 4608000 > "$T/cpufreq/policy6/cpuinfo_max_freq"
+run() { printf '%s\n' "$1" > "$T/msm"; printf '%b' "$2" > "$T/state"; ( P() { echo "$*"; }; . "$T/blk.sh" ); }
+out="$(run '0:2227200 1:2227200 2:2227200 3:2227200 4:2227200 5:2227200 6:1632000 7:1632000' 'msm_asb_hold=0\nmsm_asb=3628800,4608000,0\n')"
+printf '%s\n' "$out" | grep -q "NOT ASB's: .*cpu0 2227200, cpu6 1632000" || fail "a vendor ceiling not named as such: $out"
+out="$(run '0:1996800 1:1996800 2:1996800 3:1996800 4:1996800 5:1996800 6:1862400 7:1862400' 'msm_asb_hold=1\nmsm_asb=1996800,1862400,0\n')"
+printf '%s\n' "$out" | grep -q "ASB's own HEAVY/GAMING registration" || fail "ASB's registration not recognised: $out"
+out="$(run '0:1996800 6:1862400' 'msm_asb_hold=0\nmsm_asb=1996800,1862400,0\n')"
+printf '%s\n' "$out" | grep -q "still in the node" || fail "a release that did not land is blamed on the vendor: $out"
+out="$(run '0:3628800 1:3628800 6:4608000 7:4608000' 'msm_asb_hold=0\n')"
+printf '%s\n' "$out" | grep -q "no ceiling held there" || fail "hardware maximum read as a ceiling: $out"
+out="$(run '0:2227200 6:1632000' '')"
+printf '%s\n' "$out" | grep -q "unknown" || fail "an older governor's state is not admitted as unknown: $out"
+grep -q 'below the ${_prime_req} kHz ASB wrote' "$D" || fail "section 7 still credits a foreign ceiling to the profile"
+cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS asbdiag msm owner: msm_performance's ceilings are named as ASB's, left behind, or the vendor's"
+)
+
 t_native_crash_names_runtime() (
 # Runtime (fix141): asbdiag and the full-day report name the processes behind native crashes
 # and say when ASB code is in one - the crashed process or the crashing thread's backtrace,
@@ -3000,10 +3033,15 @@ _lt='/data/app/~~YGeVTP2n1kPkEgS4384O3Q==/com.luckyzyx.luckytool-aI8mTJHJqW11-Bd
 tomb tombstone_00 com.oplus.battery "$_lt"
 tomb tombstone_01 com.oplus.ota "$_lt"
 tomb tombstone_02 com.example.app '/data/app/~~abc==/com.example.app-xyz==/base.apk!libown.so'
+# fix188: WebView is loaded by every app with a web page - an OP15 com.booking crash in it was
+# reported as a hook module to switch off.
+tomb tombstone_03 com.booking '/data/app/~~GF2kHWKKkBSh4mNzquh6mQ==/com.google.android.webview-jJs3KMob7bK15eAP5Kkmlw==/base.apk!libwebviewchromium.so'
 D="$_keep"
 out="$(P() { echo "$*"; }; NOTE() { echo "NOTE $*"; }; . "$T/fn.sh"; ASB_TOMBSTONE_DIR="$D2" _asb_tombstones)"
 printf '%s\n' "$out" | grep -q '^NOTE 2 of the listed crashes start in code of com.luckyzyx.luckytool, loaded into another app' || fail "injected module not named: $out"
 printf '%s\n' "$out" | grep -q 'code of com.example.app' && fail "an app crashing in its own code was called injected: $out"
+printf '%s\n' "$out" | grep -q 'code of com.google.android.webview' && fail "WebView called a hook module: $out"
+printf '%s\n' "$out" | grep -q '^NOTE 1 of the listed crashes are in Android System WebView, inside com.booking - shared browser code' || fail "WebView crash not named as such: $out"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 
 # Full-day report: only tombstones newer than the capture start.

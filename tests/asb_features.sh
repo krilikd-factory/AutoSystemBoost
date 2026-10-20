@@ -6920,6 +6920,19 @@ echo 'lsposed_verbose=keep' > "$T/mod/config/governor.conf"
 out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=restored prev=default_on' || fail "keep: $out"
 [ "$(row "$D")" = none ] && [ ! -f "$T/asb/prev" ] || fail "LSPosed's default not put back"
 out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=untouched' || fail "keep twice: $out"
+# fix188: LSPosed's log already off (the OP15 user had switched it off in the manager): ASB
+# writes nothing and records nothing, so nothing later claims ASB switched it off.
+"$T/bin/asb" --lspd verbose-set off "$D" >/dev/null
+echo 'lsposed_verbose=off' > "$T/mod/config/governor.conf"
+out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=already_off' || fail "already off: $out"
+[ ! -f "$T/asb/prev" ] || fail "a value ASB never replaced was recorded as its earlier one"
+run status | grep -q '^asb_changed=' && fail "status claims ASB changed LSPosed"
+echo off > "$T/asb/prev"   # what fix187 left on such a phone
+out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=already_off' && [ ! -f "$T/asb/prev" ] || fail "fix187's 'off' record not cleared: $out"
+echo off > "$T/asb/prev"; echo 'lsposed_verbose=keep' > "$T/mod/config/governor.conf"
+out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=untouched' || fail "keep after an already-off claims a restore: $out"
+[ "$("$T/bin/asb" --lspd verbose-get "$D")" = "verbose=off" ] || fail "keep changed a value ASB never wrote"
+grep -q "LSPosed's log was already off when the card was set" "$ROOT/tools/asb_diag.sh" || fail "asbdiag still says ASB switched an already-off log"
 rm -rf "$T/lspd"; echo 'lsposed_verbose=off' > "$T/mod/config/governor.conf"
 out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=absent' || fail "no LSPosed: $out"
 echo "PASS lsposed verbose: LSPosed's own switch written as Java's Boolean, remembered and put back; old logs freed; foreign layouts untouched"
