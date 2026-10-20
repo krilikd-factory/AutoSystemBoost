@@ -28,7 +28,7 @@
  *    home, a cold street, the charge level and battery ageing then change both sides of a
  *    pair alike, and a better result that came from the room is not credited to the setting.
  *    The challenger takes over when the pairs say it is at least 3 % cheaper and the result
- *    clears their spread (t >= 1.7). Screen on it must also not make the cores sit at their
+ *    clears their spread (t >= 2.5, fix186). Screen on it must also not make the cores sit at their
  *    ceiling more often (+8 points at most) - cheaper by being slower is not a win. A
  *    challenger that is clearly dearer is dropped after three pairs.
  *  - A win keeps going in the same direction; a loss turns round. When neither neighbour of
@@ -91,7 +91,15 @@ static const int g_rec_on_offset_x1000[ASB_REC_ARMS] = { -200, -100, 0, 100, 200
 #define ASB_REC_ON_NMIN         8
 #define ASB_REC_ON_NMAX         20
 #define ASB_REC_GAIN_MIN        0.03    /* 3 % cheaper at least */
-#define ASB_REC_T2              2.89    /* t >= 1.7, compared squared (no libm) */
+/* t >= 2.5, compared squared (no libm). fix185 used 1.7 - but the verdict is looked at after
+ * every pair from the 6th/8th to the 16th/20th, and each look is another chance for a setting
+ * that is no better to clear the bar by luck: simulated, that handed it a "win" about one
+ * time in seven (one in twelve screen off). At 2.5 it is about one in twenty, while a real
+ * 8 % saving still wins nine times in ten at the block-to-block spread of screen-off blocks
+ * and of steady screen-on use. Screen-on use is not always steady: an OP15 capture's first
+ * screen-on pair differed by 36 % between neighbouring blocks - such a situation then simply
+ * does not reach a verdict, which is the honest outcome. */
+#define ASB_REC_T2              6.25
 #define ASB_REC_PRESS_SLACK     0.08    /* screen on: at most +8 points of time at the ceiling */
 #define ASB_REC_PRESS_ABORT     0.15
 #define ASB_REC_EARLY_WORSE     0.15    /* >= 15 % dearer over 3 pairs: dropped */
@@ -235,8 +243,14 @@ static unsigned long g_rec_rej[REJ_N];
 static int    g_rec_event = 0;           /* last decision: 1 promoted, 2 held, 3 plateau */
 static char   g_rec_event_msg[200];
 static int    g_rec_smooth_testing = 0;  /* the app in front is in a smoothness test */
+static int    g_rec_kctx = -1;           /* fix186: the situation in force now (-1 none), for the WebUI */
 
 static int asb_rec_is_off(int ctx) { return ctx == ASB_REC_OFF_NIGHT || ctx == ASB_REC_OFF_DAY; }
+static const char *asb_rec_status_name(const asb_rec_ctx_t *c) {
+    return c->converged ? "plateau"
+         : (c->challenger != c->champion) ? "testing"
+         : (c->record_n > 0) ? "holding" : "measuring";
+}
 static int asb_rec_arm_value(int ctx, int arm) {
     if (arm < 0 || arm >= ASB_REC_ARMS) arm = ASB_REC_ARM_DEFAULT;
     return asb_rec_is_off(ctx) ? g_rec_off_scale_x1000[arm] : g_rec_on_offset_x1000[arm];
@@ -530,6 +544,7 @@ static void asb_rec_tick(const asb_rec_in_t *in) {
     g_rec_off_scale = 1000;
     if (!in->enabled || !g_rec_loaded) {
         g_rec_blk.active = 0;
+        g_rec_kctx = -1;
         g_rec_knob_changed |= (old_scale != g_rec_off_scale);
         asb_rec_maybe_save(in->wall);   /* night wakes are learned in every profile */
         return;
@@ -567,6 +582,7 @@ static void asb_rec_tick(const asb_rec_in_t *in) {
      * measurable situation (charging, veto, ...) the champion still applies - that is the
      * point of having learned it - but never under heavy work, a game or a night check. */
     int kctx = g_rec_blk.active ? g_rec_blk.ctx : asb_rec_ctx_of(in, 1);
+    g_rec_kctx = kctx;
     if (kctx >= 0) {
         int arm = g_rec_blk.active ? g_rec_blk.arm : g_rec.ctx[kctx].champion;
         if (asb_rec_is_off(kctx)) {
@@ -846,9 +862,7 @@ static void asb_rec_summary_write(void) {
         asb_rec_arm_label(i, c->champion, best, sizeof(best));
         if (c->challenger != c->champion) asb_rec_arm_label(i, c->challenger, test, sizeof(test));
         else snprintf(test, sizeof(test), "-");
-        const char *st = c->converged ? "plateau"
-                       : (c->challenger != c->champion) ? "testing"
-                       : (c->record_n > 0) ? "holding" : "measuring";
+        const char *st = asb_rec_status_name(c);
         fprintf(f, "%s|%s|%s|%.0f|%.1f|%u|%.1f|%s|%u|%.1f|%u|%u|%u|%.0f\n",
                 g_rec_ctx_names[i], st, best, c->record_mw, c->record_ma, c->record_n,
                 (1.0 - c->gain_total) * 100.0, test, c->pairs, c->pr_mean * 100.0,

@@ -1635,6 +1635,24 @@ static int writer_manual_handback(int profile_idx, asb_state_t state) {
 static const int g_cluster_first_cpu[3] = {0, 6, -1};
 static const int g_cluster_n_cpus[3]   = {6, 2,  0};
 
+/* The ceiling a slot ends up with on its own policy (fix186): writer_slot_ceiling (the
+ * table snap and the race-to-idle floor) plus the manual-profile clamp - the steps the
+ * per-path loop in writer_apply_caps takes. msm_performance must be given THIS number.
+ *
+ * It was given the value before the floor. msm_performance is a second ceiling (a frequency
+ * QoS request) and the kernel takes the lower of the two, so in HEAVY - the one state that
+ * registers with it - the prime ran under the profile's raw 1497600 while scaling_max_freq
+ * said 1862400: an OP15 Smart capture logged it in 20 of 20 throttle samples, all in HEAVY,
+ * as a "vendor" ceiling. HEAVY is app launches and heavy pages; outside a prime-escape
+ * burst it was capped harder than MODERATE. */
+static int writer_slot_final_max(int slot, int want, int thermal_cap,
+                                 int manual_override, int manual_prof_idx) {
+    if (want <= 0 || slot < 0 || slot > 2 || !g_cpu_max_paths[slot][0]) return want;
+    want = writer_slot_ceiling(slot, want, thermal_cap);
+    if (manual_override) want = writer_manual_clamp(manual_prof_idx, g_cpu_max_paths[slot], want);
+    return want;
+}
+
 static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_state_t state, int thermal_cap) {
     int writes = 0;
     writer_init_paths();
@@ -1755,9 +1773,16 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
                           (!g_asb_cfg.msm_perf_boost_only ||
                            ((state == ASB_STATE_HEAVY || state == ASB_STATE_GAMING) && !thermal_cap));
             if (use_msm) {
-                int msm_c0 = (c0_target > 0) ? c0_target : g_msm_cur_max[0];
-                int msm_c1 = (c1_target > 0) ? c1_target : g_msm_cur_max[1];
-                msm_perf_write_caps(msm_c0, msm_c1, cmax[2] > 0 ? cmax[2] : 0);
+                /* The final per-slot ceilings, as scaling_max_freq gets them (fix186). */
+                int msm_c0 = (c0_target > 0)
+                    ? writer_slot_final_max(0, c0_target, thermal_cap, manual_override, manual_prof_idx)
+                    : g_msm_cur_max[0];
+                int msm_c1 = (c1_target > 0)
+                    ? writer_slot_final_max(1, c1_target, thermal_cap, manual_override, manual_prof_idx)
+                    : g_msm_cur_max[1];
+                int msm_c2 = (cmax[2] > 0)
+                    ? writer_slot_final_max(2, cmax[2], thermal_cap, manual_override, manual_prof_idx) : 0;
+                msm_perf_write_caps(msm_c0, msm_c1, msm_c2);
             } else {
                 msm_perf_release();
             }

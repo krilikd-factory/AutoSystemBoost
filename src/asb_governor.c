@@ -133,6 +133,8 @@ static long   g_smart_drain_drop_x100 = 0;
 static long   g_smart_drain_last_x10 = 0;
 static time_t g_smart_drain_last_ts  = 0;
 static int    g_smart_drain_rate_ewma_x10 = 0;
+static long   g_drain_rs_drop_x100 = 0;   /* fix186: decayed sums behind the recent rate */
+static long   g_drain_rs_on_s = 0;
 /* Last computed battery-lean verdict, published for the state file.
  *
  * It decides whether a HEAVY state still gets the modem's fast LPM mode, so it changes
@@ -1737,10 +1739,12 @@ static void asb_smooth_probe_tick(const asb_fsm_t *fsm, const asb_metrics_t *m) 
     uint64_t h = g_smart_rt.app_hash;
     g_smooth_lean = asb_smooth_offset_for(h, now);
     int arm = (g_smooth_lean != 0) ? 1 : 0;
-    if (h != g_smooth_win_hash) {              /* another app: a fresh window */
+    if (h != g_smooth_win_hash)                /* another app: a fresh window */
         asb_smooth_window_reset(h, g_smart_rt.app_pkg_cached);
-        g_smooth_probe_ts = 0;
-    }
+    /* No probe out of turn on an app switch (fix186). It used to probe at once to start the
+     * new app's window, and an OP15 capture counted 91 probes in about 85 minutes of screen
+     * time - one a minute, for 7 complete windows - against "at most every three minutes".
+     * The next regular probe starts the window instead. */
     if (g_smooth_win_arm == -1) g_smooth_win_arm = arm;
     else if (g_smooth_win_arm != arm) g_smooth_win_arm = -2;   /* the arm changed mid-window */
     /* A finished probe: one window (if there was a start), and the start of the next. */
@@ -1773,7 +1777,8 @@ static void asb_smooth_probe_tick(const asb_fsm_t *fsm, const asb_metrics_t *m) 
             g_smooth_win_arm = (g_smooth_lean != 0) ? 1 : 0;
         }
     }
-    if (g_smooth_probe_ts == 0 || now - g_smooth_probe_ts >= ASB_SMOOTH_PROBE_S) {
+    if (g_smooth_probe_ts == 0 || now - g_smooth_probe_ts >= ASB_SMOOTH_PROBE_S ||
+        now < g_smooth_probe_ts) {
         /* The package goes to a shell: only the characters a package name can have. */
         const char *pk = g_smooth_win_pkg;
         int ok = (pk[0] != 0);
@@ -3344,6 +3349,20 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             g_smart_media_guard_since > 0 ? (long)(time(NULL) - g_smart_media_guard_since) : 0L,
             g_smart_media_guard_reason);
     fprintf(f, "camera_hold=%d\n", g_cam_guard_on ? 1 : 0);
+    /* fix186: the Monitor's "Headroom" (the status JSON's headroom_real_pct) for the action
+     * screen - the most limited cluster's live ceiling against its hardware maximum. */
+    {
+        int _hr = -1;
+        int _l0 = sysfs_read_int(cpu_policy_path(0, "scaling_max_freq"), 0);
+        int _l1 = sysfs_read_int(cpu_policy_path(1, "scaling_max_freq"), 0);
+        if (g_cpu_slot_hwmax[0] > 0 && _l0 > 0) _hr = (int)((long)_l0 * 100 / g_cpu_slot_hwmax[0]);
+        if (g_cpu_slot_hwmax[1] > 0 && _l1 > 0) {
+            int _h1 = (int)((long)_l1 * 100 / g_cpu_slot_hwmax[1]);
+            if (_hr < 0 || _h1 < _hr) _hr = _h1;
+        }
+        if (_hr > 100) _hr = 100;
+        fprintf(f, "headroom_real_pct=%d\n", _hr);
+    }
     /* fix150: a night slot with the screen on took the evening's lean (alpha before it). */
     /* fix184: Smart records - the knobs in force and what is being measured. */
     fprintf(f, "rec_enabled=%d\nrec_counter=%d\nrec_on_offset=%d\nrec_off_scale=%d\n"
@@ -3358,6 +3377,25 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             g_mw_active, g_mw_holds, g_rec.mw.total,
             g_smooth_lean, g_rec_smooth_testing, g_smooth_probes, g_smooth_windows,
             g_smart_cold_guard, g_ses_climate_last, g_unplug_age_s);
+    /* fix186: the records' situation in force now and where it stands, for the WebUI's
+     * Basis tile ("own slot" alone said nothing once the learner had history). */
+    {
+        const int _k = g_rec_kctx;
+        const asb_rec_ctx_t *_rc = (_k >= 0 && _k < ASB_REC_CTX_N) ? &g_rec.ctx[_k] : NULL;
+        double _g = _rc ? (1.0 - (double)_rc->gain_total) * 1000.0 : 0.0;
+        fprintf(f, "rec_ctx=%s\nrec_ctx_status=%s\nrec_ctx_best=%d\nrec_ctx_test=%d\nrec_ctx_trial=%d\n"
+                   "rec_ctx_pairs=%u\nrec_ctx_need=%d\nrec_ctx_max=%d\nrec_ctx_n=%u\nrec_ctx_gain_x10=%d\n",
+                _rc ? g_rec_ctx_names[_k] : "-",
+                _rc ? asb_rec_status_name(_rc) : "-",
+                _rc ? asb_rec_arm_value(_k, _rc->champion) : 0,
+                _rc ? asb_rec_arm_value(_k, _rc->challenger) : 0,
+                (_rc && g_rec_blk.active && g_rec_blk.ctx == _k && g_rec_blk.slot == 1) ? 1 : 0,
+                _rc ? _rc->pairs : 0u,
+                (_rc && asb_rec_is_off(_k)) ? ASB_REC_OFF_NMIN : ASB_REC_ON_NMIN,
+                (_rc && asb_rec_is_off(_k)) ? ASB_REC_OFF_NMAX : ASB_REC_ON_NMAX,
+                _rc ? _rc->trial[0].n : 0u,
+                (int)(_g + (_g >= 0 ? 0.5 : -0.5)));
+    }
     fprintf(f, "smart_night_awake=%d\nsmart_night_awake_from=%d\nsmart_night_awake_to=%d\n"
                "smart_night_awake_ticks=%lu\n",
             g_smart_night_awake_on, g_smart_night_awake_from, g_smart_night_awake_to,
@@ -5416,12 +5454,29 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
             if (r > 6000) r = 6000;
             sin.drain_pctph_x10 = (int)r;
         }
+        /* The recent screen-on drain (fix186): a ratio of decayed sums, not a mean of
+         * per-session ratios.
+         *
+         * The battery level moves in whole percent, and a 20-minute session at 8 %/h sees a
+         * step or two - or none. Sessions with no step were left out ("> 0"), while the
+         * ones that caught a step went in at full rate, so the average ran above the real
+         * drain: an OP15 Smart capture forecast 12.5 %/h (7 h to empty) against 8-10 %/h
+         * measured in every screen-on phase and 8.2 %/h in the drain meter. That rate also
+         * sets the battery budget, which trims the phone when the forecast looks short.
+         * Summing the level drop and the screen-on time across sessions - older ones
+         * fading by a quarter each - counts the quiet sessions too and weights each by its
+         * length. A session right after the charger is left out: its level sits at the top. */
+        if (sin.drain_on_sec >= ASB_SMART_DRAIN_MIN_ON_SEC && g_ses_climate_last != 4) {
+            g_drain_rs_drop_x100 = g_drain_rs_drop_x100 * 3 / 4 + g_smart_drain_drop_x100;
+            g_drain_rs_on_s      = g_drain_rs_on_s * 3 / 4 + (long)g_smart_drain_on_sec;
+            if (g_drain_rs_drop_x100 > 0 && g_drain_rs_on_s >= ASB_SMART_DRAIN_MIN_ON_SEC) {
+                long r = (long)(g_drain_rs_drop_x100 * 360L / g_drain_rs_on_s);
+                if (r < 1) r = 1;
+                if (r > 6000) r = 6000;
+                g_smart_drain_rate_ewma_x10 = (int)r;
+            }
+        }
         if (sin.drain_pctph_x10 > 0) {
-            if (g_smart_drain_rate_ewma_x10 <= 0)
-                g_smart_drain_rate_ewma_x10 = sin.drain_pctph_x10;
-            else
-                g_smart_drain_rate_ewma_x10 =
-                    (g_smart_drain_rate_ewma_x10 * 3 + sin.drain_pctph_x10) / 4;
             if (sin.drain_pctph_x10 >= ASB_SMART_APPHEAT_DRAIN_SAMPLE_X10 &&
                 g_smart_rt.app_hash_session_top != 0) {
                 asb_smart_appheat_drain_bump(g_smart_rt.app_hash_session_top, time(NULL));
@@ -6236,6 +6291,15 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     /*
      * app detection: cascading foreground package sources.
      */
+    /* The app in front is read again the moment the screen comes on (fix186). The last
+     * read was made with the screen off and says "idle"; waiting out the ten-second cache
+     * left the Monitor's Load tile at "idle" over a MODERATE phone, and Smart's lean on the
+     * screen-off value, for the first seconds of every wake. */
+    {
+        static int _app_prev_on = -1;
+        if (screen_on && _app_prev_on == 0) g_smart_rt.app_cache_last_refresh = 0;
+        _app_prev_on = screen_on ? 1 : 0;
+    }
     if (now - g_smart_rt.app_cache_last_refresh >= ASB_SMART_APP_CACHE_S) {
         if (!screen_on) {
             g_smart_rt.app_hint = ASB_APP_IDLE;
