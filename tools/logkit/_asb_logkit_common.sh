@@ -1551,8 +1551,17 @@ lk_emit_jank_summary() {
         }
         if (top1 != "" && gn[top1] * 10 >= n17 * 8) {
           printf "%s missed deadlines in %d of %d screen-on intervals, whatever app was in front: a steady redraw.\n", top1, gn[top1], n17
-          print "Turn off one thing at a time that it updates every second (in SystemUI: a network-speed meter or"
-          print "seconds on the status-bar clock; a live wallpaper) and compare janky/s in the next capture."
+          # fix186: an OP15 capture printed this advice under its own evidence that all three
+          # were already off. Then say so and point at what is left.
+          if (top1 == "com.android.systemui" && RD ~ /show_network_speed=0/ && RD ~ /clock_seconds=0/ && RD ~ /ImageWallpaper/) {
+            print "The usual per-second sources are already off on this phone (below): no network-speed meter, no"
+            print "seconds on the clock, a static wallpaper. Look at what else SystemUI keeps drawing - an animated"
+            print "icon or notification, a floating overlay, or a module hooking SystemUI (LSPosed/Xposed status-bar"
+            print "tweaks run inside it) - and switch those off one at a time, comparing janky/s in the next capture."
+          } else {
+            print "Turn off one thing at a time that it updates every second (in SystemUI: a network-speed meter or"
+            print "seconds on the status-bar clock; a live wallpaper) and compare janky/s in the next capture."
+          }
           if (top1 == "com.android.systemui" && RD != "") {
             nrd = split(RD, rdv, "|")
             print "status-bar settings read on this phone at the start of the capture:"
@@ -2647,8 +2656,8 @@ lk_emit_cap_cause_split() {
     }
     function line(name, a,   s, j, k) {
       s = ""
-      for (j = 1; j <= 3; j++) {
-        k = (j == 1) ? "asb_trim" : (j == 2) ? "vendor" : "?"
+      for (j = 1; j <= 4; j++) {
+        k = (j == 1) ? "asb_trim" : (j == 2) ? "asb_msm" : (j == 3) ? "vendor" : "?"
         if (a[k] > 0) s = s sprintf("%s%s %d", (s == "" ? "" : ", "), k, a[k])
       }
       printf "  %-6s %s\n", name ":", (s == "" ? "at or above the rail" : s)
@@ -2660,6 +2669,8 @@ lk_emit_cap_cause_split() {
       line("prime", p)
       if (L0 != "") print "  little = " L0 ", the efficiency cores - the middle clusters are not in this trace"
       print "  asb_trim = ASB'"'"'s own thermal-budget/comfort trim (live == what ASB wrote)"
+      if (m["asb_msm"] + p["asb_msm"] > 0)
+        print "  asb_msm  = ASB'"'"'s own HEAVY/GAMING registration with msm_performance, below its scaling_max_freq (fixed in fix186)"
       print "  vendor   = a ceiling ASB did not write - PowerHAL or kernel thermal (live < what ASB wrote)"
     }' "$_ccf"
 }

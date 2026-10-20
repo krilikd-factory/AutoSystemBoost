@@ -428,6 +428,16 @@ lk_throttle_row() {
   [ "$_cw" = "shell" ] && { _r0="$_d0"; _rp="$_dp"; }
   _mb="$(lk_cap_cause "$_p0" "$_d0" "$_r0")"
   _pb="$(lk_cap_cause "$_p6" "$_dp" "$_rp")"
+  # ASB's own boost-time registration with msm_performance is a second ceiling the kernel
+  # also obeys (fix186). The governor flags a node it wrote itself (headroom reason own_cap);
+  # a live ceiling equal to that node's value is then ASB's, not the vendor's.
+  _hir=$(echo "$_j" | awk -F'"headroom_invalid_reason":"' '{print $2}' | awk -F'"' '{print $1}')
+  if [ "$_hir" = own_cap ]; then
+    _pc0=$(echo "$_j" | awk -F'"perf_cap_p0":' '{print $2}' | awk -F, '{print $1}' | tr -dc '0-9')
+    _pc6=$(echo "$_j" | awk -F'"perf_cap_p6":' '{print $2}' | awk -F, '{print $1}' | tr -dc '0-9')
+    [ "$_mb" = vendor ] && [ -n "$_pc0" ] && [ "$_p0" = "$_pc0" ] && _mb=asb_msm
+    [ "$_pb" = vendor ] && [ -n "$_pc6" ] && [ "$_p6" = "$_pc6" ] && _pb=asb_msm
+  fi
   echo "${_e}|${_ph}|p0_max=${_p0}/${LK_P0_HWMAX}|p6_max=${_p6}/${LK_P6_HWMAX}|cpu_temp=${_temp}|surface=${_surf}|cap_owner=${_own}|main_by=${_mb}|prime_by=${_pb}|writer=${_cw:-asb}" >> "$LK_OUT_DIR/throttle_trace.txt"
   # Count it for the summary as well as the trace.
   #
