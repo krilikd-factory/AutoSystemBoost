@@ -4050,6 +4050,25 @@ grep -q 'offdrain_by_profile' "$ROOT/docs/log_schemas.md" || fail "offdrain_by_p
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag differs from tools/asb_diag.sh"
 echo "PASS: fix189 contract"
 ) || exit 1
+# ---- fix190 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix190: $*"; exit 1; }
+asb_has_test test_webui_monitor_binding_tiles_contract.sh || fail "test_webui_monitor_binding_tiles_contract.sh missing"
+grep -q "if (kv.charging === '1') {" "$ROOT/webroot/index.html" || fail "the Basis tile says 'own slot' on the charger"
+python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert d['lv_sessions_short']=='сес.'" "$ROOT/webroot/i18n/ru.json" || fail "session abbreviation"
+echo "PASS: fix190 contract"
+) || exit 1
+# ---- fix191 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix191: $*"; exit 1; }
+asb_has_test test_reassert_manual_ceiling_runtime.sh || fail "test_reassert_manual_ceiling_runtime.sh missing"
+grep -q '^static int writer_reassert_target(int slot, int rail, asb_state_t state) {' "$ROOT/src/asb_writer.h" || fail "no reassert target"
+grep -q 'ASB applies NO cap in performance' "$ROOT/tools/asb_diag.sh" && fail "asbdiag still says Performance has no ASB cap"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag differs from tools/asb_diag.sh"
+echo "PASS: fix191 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
 )
 

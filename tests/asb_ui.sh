@@ -3438,6 +3438,11 @@ r = paint({}, 4);
 chk(r.txt === 'cold start' && r.cls === ' basis-warn', 'cold start: ' + r.txt);
 r = paint({ rec_enabled: '0' });
 chk(r.txt === 'own slot', 'records off: the slot basis: ' + r.txt);
+/* fix190: on the charger the records pause - "own slot" there answered nothing. */
+r = paint({ charging: '1', rec_ctx: '-', rec_ctx_status: '-', smart_charge_cool: '1' });
+chk(r.txt === '⚡ charging' && r.short === '⚡' && /records and the drain learning pause/.test(r.tip) && /holds the CPU back/.test(r.tip), 'charging: ' + r.txt + ' / ' + r.tip);
+r = paint({ charging: '1', smart_cold_guard: '1' });
+chk(r.txt === '❄ cold', 'the cold guard outranks the charger: ' + r.txt);
 r = paint({ rec_ctx: '-', rec_ctx_status: '-' });
 chk(r.txt === 'own slot', 'no situation now: the slot basis: ' + r.txt);
 r = paint({ ses_climate: '2' });
@@ -3646,6 +3651,25 @@ EOF
 out="$(node "$T/t.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 echo "PASS webui monitor manual tiles: this profile's sessions on the learner tile, the load as a coloured share of the cores"
+)
+
+t_webui_monitor_binding_tiles_contract() (
+# Contract (fix190): from OP15 screenshots taken on the charger a few minutes after a boot.
+# "Who set the limit: ASB" on Performance beside "Headroom 35 %" (the vendor's 1632000 on the
+# prime; the tile read only the main cluster); "38/ч · 38 всего" broken over two lines; the
+# slot tile cut to "вечер…".
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui monitor binding tiles: $*" >&2; exit 1; }
+grep -q "const capSrc = (_csForeign(_cs1) && !_csForeign(_cs0)) ? _cs1 : (_cs0 || _cs1);" "$H" || fail "the owner tile reads only the main cluster"
+grep -q "T('cap_tip_clusters'" "$H" || fail "the owner tile does not name both clusters"
+grep -q "clampEl.offsetHeight > _lh \* 1.5" "$H" || fail "the clamp counts still break onto two lines"
+grep -q 'bEl.scrollWidth > bEl.clientWidth + 1) sub.remove();' "$H" || fail "the slot pill still cuts the slot name"
+for l in en ru uk de fr it pt es id tr zh ar hy; do
+  python3 -c "import json,sys; d=json.load(open(sys.argv[1])); [d[k] for k in ('cap_tip_clusters','lvb_charge','lvb_charge_tip','lvb_charge_cool_tip','lvb_charge_assist_tip')]" "$ROOT/webroot/i18n/$l.json" || fail "$l: strings missing"
+done
+echo "PASS webui monitor binding tiles: the binding cluster's owner, counts on one line, the slot name whole"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

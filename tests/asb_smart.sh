@@ -2887,7 +2887,8 @@ fail() { echo "FAIL msm topology: $*" >&2; exit 1; }
 grep -q 'msm_perf_write_all_max' "$W" "$G" && fail "the fixed 6+2 writer is still referenced"
 grep -q 'msm_perf_release();' "$W" || fail "boost-time registration is never released"
 grep -q '"own_cap"' "$M" || fail "headroom still reads ASB's own msm cap as a kernel clamp"
-grep -q 'fsm.current_caps.cpu_max\[2\]);' "$G" || fail "anti-clamp reassert drops the prime slot"
+# fix191: the reassert passes every slot through writer_reassert_target, the third included.
+grep -Fq 'int ok = msm_perf_write_caps(rtc[0], rtc[1], rtc[2]);' "$G" && grep -Fq 'for (int _rs = 0; _rs < 3; _rs++)' "$G" || fail "anti-clamp reassert drops the prime slot"
 
 awk '/^static int g_asb_msm_written\[3\]/{on=1} on{print} on&&/^static int cpu_slot_of\(/{f=1} f&&/^}/{exit}' "$M" > "$T/topo.c"
 awk '/^#define PATH_MSM_PERF_CPU_MAX/{on=1} on{print} on&&/^static void msm_perf_release\(/{f=1} f&&/^}/{exit}' "$W" > "$T/msm.c"
@@ -5332,6 +5333,90 @@ C
 "$CC" -std=gnu11 -Wall -Werror -Wno-unused-function -o "$T/t" "$T/t.c" || fail "harness does not compile"
 "$T/t" || fail "behaviour"
 echo "PASS msm final ceiling: HEAVY's msm_performance registration carries the floor-lifted ceiling, not the raw one"
+)
+
+t_reassert_manual_ceiling_runtime() (
+# Runtime (fix191): in Battery and Balanced the HEAVY/GAMING reassert asks for no less than the
+# profile's own ceiling, SUSTAINED for no more. It registered the FSM rail in msm_performance -
+# on an OP15 Balanced (no screen-on cap: 3628800/4608000) a rail of 2611200/3974400, on Battery
+# (1785600/1747200) 1670400/1632000 - so app launches ran capped harder than ordinary use; a
+# Balanced capture's cap_verify found msm holding the governor's declared 2361600. The REAL
+# helpers run against the OP15 tables.
+set -eu
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+W="$ROOT/src/asb_writer.h"; G="$ROOT/src/asb_governor.c"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL reassert manual ceiling: $*" >&2; exit 1; }
+CC="${CC:-cc}"; command -v "$CC" >/dev/null 2>&1 || CC=gcc
+command -v "$CC" >/dev/null 2>&1 || { echo "SKIP reassert manual ceiling: no C compiler"; exit 0; }
+grep -Fq 'int ok = msm_perf_write_caps(rtc[0], rtc[1], rtc[2]);' "$G" || fail "the reassert still registers the raw rail"
+grep -Fq 'rtc[_rs] = writer_reassert_target(_rs, fsm.current_caps.cpu_max[_rs], fsm.state);' "$G" || fail "targets not computed"
+grep -Fq 'int desired_p0 = rtc[0];' "$G" || fail "the anti-clamp gap is measured against the raw rail"
+grep -Fq 'sysfs_write_int(cpu_policy_path(ci, "scaling_max_freq"),' "$G" && grep -Fq 'rtc[ci]) == 0)' "$G" || fail "the anti-clamp write uses the raw rail"
+cat > "$T/t.c" <<'C'
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#define PROFILE_BATTERY 0
+#define PROFILE_BALANCED 1
+#define PROFILE_PERFORMANCE 2
+#define PROFILE_SMART 3
+typedef enum { ASB_STATE_DEEP_IDLE, ASB_STATE_LIGHT_IDLE, ASB_STATE_MODERATE, ASB_STATE_HEAVY,
+               ASB_STATE_SUSTAINED, ASB_STATE_GAMING } asb_state_t;
+static int fsm_profile_is_smart = 0, fsm_profile_is_performance = 0, fsm_profile_is_battery = 0;
+static long g_cpu_freq_tables[16][32]; static int g_cpu_freq_table_len[16];
+static char g_cpu_max_paths[3][128]; static char g_cpu_all_max_paths[16][128]; static int g_cpu_all_paths_n;
+static void cpu_read_freq_tables(void) {}
+static void writer_init_paths(void) {}
+static long cpu_snap_freq(int p, long w) { long b=0; for (int i=0;i<g_cpu_freq_table_len[p];i++){long v=g_cpu_freq_tables[p][i]; if(v<=w&&v>b)b=v;} return b?b:w; }
+#define ASB_MIN_CEILING_PCT_OF_HW 40
+static int g_writer_floor_pct = 0;
+static int g_sh[16];
+static int asb_shell_cap_for_policy(int prof, int pol) { (void)prof; return (pol >= 0 && pol < 16) ? g_sh[pol] : 0; }
+static int writer_manual_clamp(int pi, const char *path, int want) { (void)pi; (void)path; return want; }
+C
+awk '/^static int asb_policy_id_of_path/,/^}/' "$W" >> "$T/t.c"
+awk '/^static int cpu_floor_ceiling/,/^}/' "$W" >> "$T/t.c"
+awk '/^static int writer_slot_path_idx/,/^}/' "$W" >> "$T/t.c"
+awk '/^static int writer_slot_ceiling/,/^}/' "$W" >> "$T/t.c"
+awk '/^static int writer_slot_final_max/,/^}/' "$W" >> "$T/t.c"
+awk '/^static int writer_reassert_target/,/^}/' "$W" >> "$T/t.c"
+grep -q 'writer_reassert_target' "$T/t.c" || fail "helper not found"
+cat >> "$T/t.c" <<'C'
+int main(void) {
+  long p0[] = {384000, 1440000, 1670400, 1785600, 2361600, 2611200, 3628800};
+  long p6[] = {768000, 1632000, 1747200, 1862400, 3974400, 4608000};
+  for (int i = 0; i < 7; i++) g_cpu_freq_tables[0][i] = p0[i];
+  for (int i = 0; i < 6; i++) g_cpu_freq_tables[1][i] = p6[i];
+  g_cpu_freq_table_len[0] = 7; g_cpu_freq_table_len[1] = 6;
+  strcpy(g_cpu_max_paths[0], "/sys/devices/system/cpu/cpufreq/policy0/scaling_max_freq");
+  strcpy(g_cpu_max_paths[1], "/sys/devices/system/cpu/cpufreq/policy6/scaling_max_freq");
+  strcpy(g_cpu_all_max_paths[0], g_cpu_max_paths[0]); strcpy(g_cpu_all_max_paths[1], g_cpu_max_paths[1]); g_cpu_all_paths_n = 2;
+  int bad = 0;
+  /* Balanced on an OP15: no screen-on cap. */
+  g_sh[0] = 3628800; g_sh[6] = 4608000;
+  if (writer_reassert_target(0, 2611200, ASB_STATE_HEAVY) != 3628800 || writer_reassert_target(1, 3974400, ASB_STATE_HEAVY) != 4608000) {
+    printf("Balanced HEAVY: %d/%d, want the uncapped 3628800/4608000\n", writer_reassert_target(0, 2611200, ASB_STATE_HEAVY), writer_reassert_target(1, 3974400, ASB_STATE_HEAVY)); bad = 1; }
+  if (writer_reassert_target(0, 2361600, ASB_STATE_SUSTAINED) != 2361600) { puts("Balanced SUSTAINED must keep its cooling rail"); bad = 1; }
+  /* Battery: shell 1785600/1747200, rail 1670400/1632000. */
+  fsm_profile_is_battery = 1; g_sh[0] = 1785600; g_sh[6] = 1747200;
+  if (writer_reassert_target(0, 1670400, ASB_STATE_GAMING) != 1785600 || writer_reassert_target(1, 1632000, ASB_STATE_HEAVY) != 1747200) {
+    printf("Battery HEAVY: %d/%d, want the profile's 1785600/1747200\n", writer_reassert_target(0, 1670400, ASB_STATE_GAMING), writer_reassert_target(1, 1632000, ASB_STATE_HEAVY)); bad = 1; }
+  if (writer_reassert_target(1, 1632000, ASB_STATE_SUSTAINED) != 1747200 && writer_reassert_target(1, 1632000, ASB_STATE_SUSTAINED) != 1632000) { puts("Battery SUSTAINED"); bad = 1; }
+  if (writer_reassert_target(1, 1632000, ASB_STATE_SUSTAINED) > 1747200) { puts("the floor raised a SUSTAINED Battery prime above the profile's ceiling"); bad = 1; }
+  if (writer_reassert_target(1, 2400000, ASB_STATE_SUSTAINED) > 1747200) { puts("SUSTAINED asked for more than the profile's ceiling"); bad = 1; }
+  /* No shell value known: the rail, snapped and floored, as before. */
+  g_sh[0] = 0; g_sh[6] = 0;
+  if (writer_reassert_target(1, 1632000, ASB_STATE_HEAVY) != 1862400) { puts("without a shell value the old path changed"); bad = 1; }
+  /* Performance and Smart keep their rail. */
+  fsm_profile_is_battery = 0; fsm_profile_is_performance = 1; g_sh[0] = 3628800;
+  if (writer_reassert_target(0, 2611200, ASB_STATE_HEAVY) != 2611200) { puts("Performance's own rail was replaced"); bad = 1; }
+  return bad;
+}
+C
+"$CC" -std=gnu11 -Wall -Werror -Wno-unused-function -o "$T/t" "$T/t.c" || fail "harness does not compile"
+"$T/t" || fail "behaviour"
+echo "PASS reassert manual ceiling: HEAVY never under a manual profile's own ceiling, SUSTAINED never over it"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
