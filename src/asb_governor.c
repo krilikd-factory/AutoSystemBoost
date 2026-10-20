@@ -32,6 +32,7 @@
 #include "asb_config.h"
 #include "asb_smart.h"
 #include "asb_record.h"
+#include "asb_lspd.h"   /* fix187 */
 
 #define TIMER_ACTIVE_S  2   /* metrics interval, screen ON, something happening */
 /* Screen on but idle: reading, a feed at rest, music with the display lit. The state
@@ -7149,6 +7150,8 @@ static int asb_smart_init(void) {
 }
 
 int main(int argc, char **argv) {
+    /* fix187: LSPosed's verbose-log switch, for runtime/asb_lsposed.sh - no daemon involved. */
+    if (argc >= 3 && strcmp(argv[1], "--lspd") == 0) return asb_lspd_cli(argc - 2, argv + 2);
     if (argc >= 2) {
         /*
          * expanded status JSON with 6 new thermal fields (skin_temp, surface_hotspot,
