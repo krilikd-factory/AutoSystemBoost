@@ -1306,7 +1306,13 @@ asb_thermal_mode_apply() {
   # -f, not -x: the writer is run with `sh`, and module files are installed 0644. The -x test
   # skipped every publish here in silence - a fix44 diag shows mode=manual next to
   # sustained_temp_user_override=0, so the slider never outranked the profile preset.
-  if [ -f "$MODDIR/runtime/asb_config_safe.sh" ]; then
+  # fix188: only when it changes. Writing the same value replaced governor.conf on every
+  # boot a few seconds after the governor had read it: one more reload, asbdiag saying
+  # "governor.conf changed after the governor started" on every boot report, and this boot
+  # write standing as the "last config transaction" in place of the user's own last change.
+  _tm_cur="$(grep -E '^[[:space:]]*sustained_temp_user_override=' "$MODDIR/config/governor.conf" 2>/dev/null \
+             | tail -1 | sed 's/.*=//; s/#.*//' | tr -d ' \r')"
+  if [ "$_tm_cur" != "$_tm_ovr" ] && [ -f "$MODDIR/runtime/asb_config_safe.sh" ]; then
     sh "$MODDIR/runtime/asb_config_safe.sh" set sustained_temp_user_override "$_tm_ovr" >/dev/null 2>&1 || \
       asb_log "config: could not atomically publish sustained_temp_user_override"
   fi
