@@ -573,6 +573,11 @@ fi
 [ -f "$MODDIR/runtime/asb_ltpo_apply.sh" ] && MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_ltpo_apply.sh" remove >/dev/null 2>&1 || true
 # Same for a live multimedia-telemetry bind: stock list visible the moment we are gone.
 [ -f "$MODDIR/runtime/asb_mmfeed_apply.sh" ] && MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_mmfeed_apply.sh" remove >/dev/null 2>&1 || true
+# LSPosed's verbose-log setting back to what LSPosed had, if the card ever changed it
+# (fix187). It lives in another module's database, so it must not outlive ASB; the record of
+# the earlier value is in /data/adb/asb, which goes on the next line.
+[ -f /data/adb/asb/lsposed_verbose_prev ] && [ -f "$MODDIR/runtime/asb_lsposed.sh" ] && \
+  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_lsposed.sh" restore >/dev/null 2>&1 || true
 rm -rf /data/adb/asb 2>/dev/null
 
 # Remove the module's own persistent properties.
