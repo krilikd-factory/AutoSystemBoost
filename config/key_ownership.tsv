@@ -166,6 +166,9 @@ main_capacity_parity|internal|engine_or_derived
 unlock_lift_s|internal|engine_or_derived
 unlock_lift_pct|internal|engine_or_derived
 smart_night_awake|internal|engine_or_derived
+smart_records|internal|engine_or_derived
+smart_records_explore|internal|engine_or_derived
+smart_microwake|internal|engine_or_derived
 media_loudness|user|webui_standard
 dsp_loudness|advanced|webui_sensitive
 dsp_bass|advanced|webui_sensitive

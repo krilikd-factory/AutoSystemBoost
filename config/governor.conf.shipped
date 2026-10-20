@@ -510,6 +510,21 @@ unlock_lift_pct=80
 # harder toward economy than your evening slot does. Screen-off behaviour is unchanged.
 # 1 = on (default), 0 = off.
 smart_night_awake=1
+# Smart records: Smart measures the battery drain with the screen off (night / day) and on
+# (light apps / feeds and video, dim / bright) from the battery's own charge counter, keeps
+# the setting with the lowest drain for each of those situations, and - with
+# smart_records_explore=1 - keeps trying the neighbouring setting, alternating with the
+# current best, until neither neighbour beats it (the plateau). Screen off it tries the quiet
+# deep-idle CPU ceilings (x0.75..x1.5; music keeps x1), screen on a lean of -0.2..+0.2 toward economy that
+# must not make the cores sit at their ceiling more often. Re-checked every 21 days.
+# 1 = on (default), 0 = off.
+smart_records=1
+smart_records_explore=1
+# Smart night wakes: learns the short check-ins of a night (a few minutes on the phone, then
+# back to sleep) and keeps the night radio mode through them instead of switching the modem
+# to day mode and back. A screen-on that lasts longer is a real wake as before.
+# 1 = on (default), 0 = off.
+smart_microwake=1
 
 # Media loudness: stock|mild|strong|max Reshapes the audio-policy volume CURVES so every slider
 # position is genuinely louder.
