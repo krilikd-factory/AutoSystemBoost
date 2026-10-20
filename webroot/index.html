@@ -5269,6 +5269,168 @@ function liveDrainClose() {
  * medium, heavy or gaming" sat under a tile reading "средняя" in every language. A text names
  * them through {placeholders} that lviFill() replaces with the tile's own strings, so the
  * sheet and the tile cannot drift apart again. */
+/* Smart records in words (fix186): the Basis tile and its sheet. */
+function lvRecCtxName(ctx) {
+  const d = { off_night: 'night, screen off', off_day: 'day, screen off',
+    on_light_dim: 'screen on, light apps, dim', on_light_bright: 'screen on, light apps, bright',
+    on_medium_dim: 'screen on, other apps, dim', on_medium_bright: 'screen on, other apps, bright' };
+  return T('lvr_ctx_' + ctx, d[ctx] || ctx);
+}
+/* A setting as the user reads it: screen off, the quiet-idle CPU ceilings (x1 = as before);
+ * screen on, Smart's lean toward economy in points (0 = as before). */
+function lvRecArm(ctx, v) {
+  v = parseInt(v, 10) || 0;
+  if (/^off_/.test(ctx)) {
+    const x = (v / 1000).toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+    return T('lvr_arm_off', 'ceilings %s').replace('%s', '\u00d7' + x);
+  }
+  const p = Math.round(v / 10);
+  return T('lvr_arm_on', 'lean %s').replace('%s', (p > 0 ? '+' : (p < 0 ? '\u2212' : '\u00b1')) + Math.abs(p));
+}
+/* "x0.875" / "+100" as written in smart_records.txt -> the arm value. */
+function lvRecArmFromLabel(ctx, l) {
+  l = String(l || '');
+  if (/^off_/.test(ctx)) return Math.round((parseFloat(l.replace(/^x/, '')) || 1) * 1000);
+  return parseInt(l, 10) || 0;
+}
+function lvRecLine(ctx, st, best, test, pairs, need, n, gain10, blocks, max) {
+  const g = (gain10 / 10).toFixed(1).replace(/\.0$/, '') + '%';
+  if (st === 'plateau') return gain10 >= 5
+    ? T('lvr_plateau', 'plateau: %1 is the best found, %2 cheaper than the original setting (compared side by side)').replace('%1', lvRecArm(ctx, best)).replace('%2', g)
+    : T('lvr_plateau0', 'plateau: the original setting is the best');
+  if (st === 'holding') return gain10 >= 5
+    ? T('lvr_holding', 'best so far: %1, %2 cheaper than the original setting').replace('%1', lvRecArm(ctx, best)).replace('%2', g)
+    : T('lvr_holding0', 'the original setting holds');
+  if (st === 'testing') return (pairs >= need
+      ? T('lvr_testing_more', 'trial: %1 against %2, %3 pairs - not a clear result yet, up to %4')
+      : T('lvr_testing', 'trial: %1 against %2, %3 of %4 pairs'))
+    .replace('%1', lvRecArm(ctx, test)).replace('%2', lvRecArm(ctx, best)).replace('%3', pairs)
+    .replace('%4', pairs >= need ? (max || need) : need);
+  if (blocks >= 0) return T('lvr_measuring_n', 'measuring: %1 block(s) so far').replace('%1', blocks);
+  return T('lvr_measuring', 'measuring the original setting: %1 of %2 blocks').replace('%1', Math.min(n, need)).replace('%2', need);
+}
+/* The Basis tile (fix186): what Smart's lean rests on now - {txt, tip, cls}. */
+function lvBasisPaint(kv, fb, dp, we, conf, night, veto) {
+  const dpNames = ['sleep', 'wake', 'morning', 'day', 'evening', 'late'];
+  const fbNames = ['own slot', 'neighbour', 'similar', 'overall', 'cold start'];
+  let bTxt = T('lv_fb_' + fb, fbNames[fb] || '?');
+  let bTip = T('lv_bucket', 'Slot') + ': ' + T('lv_dp_' + dp, dpNames[dp] || '?') + ' \u00b7 '
+    + (we ? T('lv_we_short', 'wknd') : T('lv_wd_short', 'wkday')) + ' \u00b7 '
+    + T('lv_fb_' + fb, fbNames[fb] || '?') + '\n'
+    + T('lv_conf', 'Confidence') + ': ' + Math.round(conf / 10) + '%';
+  let bCls = fb === 4 ? ' basis-warn' : '';
+  let bShort = '';
+  const _rc = String(kv.rec_ctx || '-');
+  const _rs = String(kv.rec_ctx_status || '-');
+  const _rOn = kv.rec_enabled === '1' && _rc !== '-' && _rs !== '-';
+  const _rPairs = parseInt(kv.rec_ctx_pairs || '0', 10);
+  const _rNeed = parseInt(kv.rec_ctx_need || '0', 10);
+  const _rN = parseInt(kv.rec_ctx_n || '0', 10);
+  const _rG = parseInt(kv.rec_ctx_gain_x10 || '0', 10);
+  const _smT = kv.smooth_testing === '1';
+  const _smL = parseInt(kv.smooth_lean || '0', 10) < 0;
+  const _cold = kv.smart_cold_guard === '1';
+  const _lowb = kv.smart_lowbat_override === '1';
+  const _mwk = kv.microwake_active === '1';
+  const _tip = [];
+  const _rMax = parseInt(kv.rec_ctx_max || '0', 10);
+  if (_rOn) _tip.push(lvRecCtxName(_rc) + ': ' + lvRecLine(_rc, _rs, kv.rec_ctx_best, kv.rec_ctx_test,
+                                                           _rPairs, _rNeed, _rN, _rG, -1, _rMax));
+  if (_smT) _tip.push(T('lvb_smooth_test_tip', 'This app misses frames: Smart is testing whether a little more CPU headroom helps.'));
+  else if (_smL) _tip.push(T('lvb_smooth_on_tip', 'A little more CPU headroom made this app smoother in a test and is kept for it.'));
+  if (_cold) _tip.push(T('lvb_cold_tip', 'Battery under 5 \u00b0C and under 40 %: lower CPU peaks until it warms up or charges.'));
+  if (_lowb) _tip.push(T('lvb_lowbat_tip', 'Low battery: Smart leans to economy until the phone is charged.'));
+  if (_mwk) _tip.push(T('lvb_brief_tip', 'A short check in the night: the night modem mode is kept, Smart expects you back asleep soon.'));
+  const _cl = parseInt(kv.ses_climate || '0', 10);
+  if (_cl >= 1 && _cl <= 4) {
+    const _cr = [null, T('lvb_clim_1', 'the battery was under 5 \u00b0C'),
+      T('lvb_clim_2', 'a cold battery was warming up or cooling down'),
+      T('lvb_clim_3', 'the battery was cooled by its surroundings'),
+      T('lvb_clim_4', 'it ran right after the charger')];
+    _tip.push(T('lvb_clim', 'The last session taught nothing about drain: %s.').replace('%s', _cr[_cl]));
+  }
+  if (fb === 0) {
+    if (_smT) { bTxt = T('lvb_smooth_test', '\ud83c\udf9e test'); bShort = '\ud83c\udf9e A/B'; }
+    else if (_smL) { bTxt = T('lvb_smooth_on', '\ud83c\udf9e smooth'); bShort = '\ud83c\udf9e \u2191'; }
+    else if (_rOn) {
+      /* Pairs done of the minimum; past it, the count alone (up to the maximum - the sheet
+       * says so). The word gives way to an icon where a language's word does not fit. */
+      const _nums = _rs === 'testing' ? (_rPairs < _rNeed ? _rPairs + '/' + _rNeed : String(_rPairs))
+                                       : Math.min(_rN, _rNeed) + '/' + _rNeed;
+      if (_rs === 'testing') { bTxt = T('lvb_trial', 'trial %s').replace('%s', _nums); bShort = '\ud83e\uddea ' + _nums; }
+      else if (_rs === 'measuring') { bTxt = T('lvb_measure', 'measure %s').replace('%s', _nums); bShort = '\u23f3 ' + _nums; }
+      else if (_rG >= 5) { bTxt = T('lvb_record', '\ud83c\udfc6 %s').replace('%s', '\u2212' + Math.max(1, Math.round(_rG / 10)) + '%'); bCls = ' cap-raised'; }
+      else bTxt = T('lvb_record_ok', 'record \u2713');
+    }
+  }
+  if (_mwk) { bTxt = T('lvb_brief', '\ud83c\udf19 brief'); bShort = ''; bCls = ''; }
+  if (_lowb) { bTxt = T('lvb_lowbat', '\ud83d\udd0b low'); bShort = ''; bCls = ' basis-warn'; }
+  if (_cold) { bTxt = T('lvb_cold', '\u2744 cold'); bShort = ''; bCls = ' basis-warn'; }
+  if (night) {
+    bTxt = T('lv_mode_night', '\ud83c\udf19 night'); bShort = '';
+    _tip.unshift(T('smart_night', '\ud83c\udf19 night-safe override'));
+    bCls = '';
+  }
+  if (veto) {
+    const caps = parseInt(kv.vendor_clamp_1h || '0', 10);
+    bTxt = T('lv_mode_guard', '\ud83d\udee1 guard'); bShort = '';
+    _tip.unshift(caps >= 300
+      ? T('smart_tag_vendor', '\ud83d\udee1 vendor cap pressure')
+      : T('smart_tag_smart', '\ud83d\udee1 Smart thermal protection'));
+    bCls = ' basis-veto';
+  }
+  if (_tip.length) bTip = _tip.join('\n') + '\n' + bTip;
+  return { txt: bTxt, tip: bTip, cls: bCls, short: bShort };
+}
+/* The whole picture, read from the governor's summary when the sheet opens - once, on tap.
+ * tok is the sheet's open count: an answer for a sheet that has since been replaced is dropped. */
+var _lviTok = 0;
+async function lviRecordsAppend(src, tok) {
+  try {
+    const r = await run('cat /dev/.asb/smart_records.txt 2>/dev/null');
+    const txt = (r && r.stdout) || '';
+    if (!/^# ctx\|status\|best\|record_mW/m.test(txt)) return;
+    const out = [T('lvr_title', 'Smart records - power per situation, compared side by side:')];
+    const rej = { charge: 'lvr_rej_charge', climate: 'lvr_rej_climate', radio: 'lvr_rej_radio', busy: 'lvr_rej_busy', meter: 'lvr_rej_meter', other: 'lvr_rej_other' };
+    const rejD = { charge: 'charging', climate: 'climate', radio: 'busy radio', busy: 'CPU kept awake', meter: 'meter', other: 'other' };
+    const tail = [];
+    txt.split('\n').forEach(function (l) {
+      const c = l.split('|');
+      if (/^(off|on)_/.test(c[0]) && c.length >= 14) {
+        const need = /^off_/.test(c[0]) ? 6 : 8, max = /^off_/.test(c[0]) ? 16 : 20;
+        const gain10 = Math.round((parseFloat(c[6]) || 0) * 10);
+        const best = lvRecArmFromLabel(c[0], c[2]);
+        const test = c[7] && c[7] !== '-' ? lvRecArmFromLabel(c[0], c[7]) : best;
+        let line = '\u2022 ' + lvRecCtxName(c[0]) + ': '
+          + lvRecLine(c[0], c[1], best, test, parseInt(c[8], 10) || 0, need, 0, gain10, parseInt(c[12], 10) || 0, max);
+        if ((c[1] === 'plateau' || c[1] === 'holding') && parseFloat(c[3]) > 0) line += ' \u00b7 ' + Math.round(parseFloat(c[3])) + ' ' + T('unit_mw', 'mW');
+        out.push(line);
+      } else if (c[0] === 'rejected') {
+        const parts = [];
+        c.slice(1).forEach(function (kvp) {
+          const m = /^([a-z]+)\D(\d+)$/.exec(kvp);
+          if (m && +m[2] > 0 && rej[m[1]]) parts.push(T(rej[m[1]], rejD[m[1]]) + ' ' + m[2]);
+        });
+        if (parts.length) tail.push(T('lvr_rejected', 'Set aside, credited to no setting: %s').replace('%s', parts.join(', ')));
+      } else if (c[0] === 'microwake') {
+        const f = {};
+        c.slice(1).forEach(function (kvp) { const k = kvp.indexOf('\u003d'); if (k > 0) f[kvp.slice(0, k)] = kvp.slice(k + 1); });
+        tail.push((parseInt(f.learned || '0', 10) > 0)
+          ? T('lvr_mw', 'Night check-ins: %1 over %2 night(s), usually %3, about %4 s')
+              .replace('%1', f.learned).replace('%2', f.nights || '0').replace('%3', f.usual || '-').replace('%4', f.typical_s || '?')
+          : T('lvr_mw0', 'Night check-ins: none learned yet'));
+      } else if (c[0] === 'smooth') {
+        const f = {};
+        c.slice(1).forEach(function (kvp) { const k = kvp.indexOf('\u003d'); if (k > 0) f[kvp.slice(0, k)] = kvp.slice(k + 1); });
+        tail.push(T('lvr_smooth', 'Smoothness: watching %1, testing %2, helped %3, not helped %4')
+          .replace('%1', f.watching || '0').replace('%2', f.testing || '0').replace('%3', f.helped || '0').replace('%4', f.not_helped || '0'));
+      }
+    });
+    if (tok !== _lviTok || !liveInfoIsOpen()) return;
+    src.textContent = (src.textContent ? src.textContent + '\n\n' : '') + out.concat(tail).join('\n');
+    src.hidden = false;
+  } catch (e) {}
+}
 const LVI_TEXT = {
   cpu: ['lvi_cpu', 'Temperature of the CPU cores. ASB steers by one core sensor that it checks against its neighbours, so a stuck zone is never trusted; in Stock it is the hottest core. Up to about 45 °C is cool, short spikes when an app opens are normal, and throttling starts around 60 °C held for a while.'],
   skin: ['lvi_skin', 'Temperature of the shell - what your hand feels. It moves slowly and trails the CPU by minutes. Up to about 38 °C feels neutral, above about 42 °C the phone feels warm, and around 45 °C the system starts holding performance back.'],
@@ -5283,7 +5445,7 @@ const LVI_TEXT = {
   conf: ['lvi_conf', 'How much Smart trusts what it has measured for this slot. The figure grows with every stretch of use; while it is low, Smart leans on neighbouring slots and safe defaults instead of guessing from a handful of samples.'],
   alpha: ['lvi_alpha', 'How far the current policy leans from {bal} toward {bat}, in percent, learned from what this slot usually costs. 0% is {bal} behaviour; higher values hold the phone back more to save charge. Heat, a game or a camera session pushes it back down on its own.'],
   apphint: ['lvi_apphint', 'What the foreground load looks like right now: “{app0}”, “{app1}”, “{app2}”, “{app3}” or “{app4}”. Smart reads it from the app in front and the load it creates, and gives games and heavy work more frequency headroom than a messenger.'],
-  basis: ['lvi_basis', 'What Smart’s figures are based on right now: “{fb0}” - this slot’s own history, once there is enough of it; “{fb1}” - the same part of the day on the other kind of day (weekday or weekend); “{fb2}” - a slot of the same kind (day or night); “{fb3}” - the best-learned slot of the week; “{fb4}” - nothing learned yet, safe defaults. A learned night window (“{night}”) or a thermal guard (“{guard}”) takes over instead and is shown here when it does.'],
+  basis: ['lvi_basis', 'What steers Smart right now. Usually the records for the situation you are in: “{rec}” - a setting cheaper than the original one by the share shown was found, checked by pairs of measurements; “{rok}” - the original setting is already the best; “{trial}” - a neighbouring setting is being tried, pairs done of pairs needed. “{smt}” / “{smo}” - this app’s smoothness is being tested, or the extra headroom that helped it is kept. While this time slot has little history, the tile shows where Smart borrows from: “{fb1}”, “{fb2}”, “{fb3}”, “{fb4}”. Protection comes first: “{cold}”, “{lowb}”, “{brief}”, “{night}”, “{guard}”. Below: the records of every situation.'],
   slotheat: ['lvi_slotheat', 'Not the temperature now - how warm this slot usually runs. Smart remembers the CPU peak of every stretch of use in each slot and compares this slot with the phone’s own norm, the middle of all its slots: “{hcool}”, “{hnorm}” or “{hwarm}”. A slot that usually runs warm gets slightly gentler ceilings in advance, before the phone heats up; one that runs cool gets a little headroom back.'],
   trend: ['lvi_trend', 'Where the phone’s temperature is heading: “{up}”, “{fl}” or “{dn}”. A warming trend makes Smart back off before a hard thermal limit is reached; cooling gives the headroom back. Right after a profile switch the trend stays muted for two minutes, so a stale reading cannot steer the new profile.'],
   lpm: ['lvi_lpm', 'The modem’s power mode, read from the governor’s own state file: “{lnormal}” follows the profile; “{lsave}” lets the radio idle with stretched keepalives (screen off or the {bat} profile); “{lfast}” keeps latency low for games and downloads; “{lnight}” stretches idling further inside the night window Smart learned from your routine.'],
@@ -5314,6 +5476,12 @@ function lviFill(t) {
   ['sleep', 'wake', 'morning', 'day', 'evening', 'late'].forEach(function (d, i) { P['dp' + i] = T('lv_dp_' + i, d); });
   ['idle', 'light', 'medium', 'heavy', 'gaming'].forEach(function (d, i) { P['app' + i] = T('lv_app_' + i, d); });
   ['own slot', 'neighbour', 'similar', 'overall', 'cold start'].forEach(function (d, i) { P['fb' + i] = T('lv_fb_' + i, d); });
+  Object.assign(P, {
+    rec: T('lvb_record', '\ud83c\udfc6 %s').replace('%s', '\u22128%'), rok: T('lvb_record_ok', 'record \u2713'),
+    trial: T('lvb_trial', 'trial %s').replace('%s', '3/8'), meas: T('lvb_measure', 'measure %s').replace('%s', '2/6'),
+    smt: T('lvb_smooth_test', '\ud83c\udf9e test'), smo: T('lvb_smooth_on', '\ud83c\udf9e smooth'),
+    cold: T('lvb_cold', '\u2744 cold'), lowb: T('lvb_lowbat', '\ud83d\udd0b low'), brief: T('lvb_brief', '\ud83c\udf19 brief')
+  });
   return String(t).replace(/\{([a-z0-9]+)\}/g, function (m, k) { return Object.prototype.hasOwnProperty.call(P, k) ? P[k] : m; });
 }
 const LVI_STOCK = { fsm: 'cpuceil', headroom: 'gpuclk', capsrc: 'battemp', clamps: 'zram', learner: 'learnpause' };
@@ -5405,6 +5573,8 @@ function liveInfoOpen(cell) {
   const lines = liveInfoSource(key, cell);
   src.textContent = lines.join('\n');
   src.hidden = !lines.length;
+  const tok = (typeof _lviTok === 'number') ? ++_lviTok : 0;
+  if (key === 'basis' && typeof lviRecordsAppend === 'function') lviRecordsAppend(src, tok);
   _el('liveInfoDone').textContent = T('doze_keep_done', 'Done');
   m.hidden = false;
   m.setAttribute('aria-hidden', 'false');
@@ -10657,29 +10827,21 @@ async function pollLive(visible) {
 
           const basisEl = _el('bnBasis');
           if (basisEl) {
-            let bTxt = T('lv_fb_' + fb, fbNames[fb] || '?');
-            /* The source box repeated the explanation above it (fix177); it now shows what
-             * the basis is measured against: the slot and its confidence. */
-            let bTip = T('lv_bucket', 'Slot') + ': ' + T('lv_dp_' + dp, dpNames[dp] || '?') + ' \u00b7 '
-              + (we ? T('lv_we_short', 'wknd') : T('lv_wd_short', 'wkday')) + '\n'
-              + T('lv_conf', 'Confidence') + ': ' + Math.round(conf / 10) + '%';
-            let bCls = fb === 4 ? ' basis-warn' : '';
-            if (night) {
-              bTxt = T('lv_mode_night', '\ud83c\udf19 night');
-              bTip = T('smart_night', '\ud83c\udf19 night-safe override');
-              bCls = '';
-            }
-            if (veto) {
-              const caps = parseInt(kv.vendor_clamp_1h || '0', 10);
-              bTxt = T('lv_mode_guard', '\ud83d\udee1 guard');
-              bTip = caps >= 300
-                ? T('smart_tag_vendor', '\ud83d\udee1 vendor cap pressure')
-                : T('smart_tag_smart', '\ud83d\udee1 Smart thermal protection');
-              bCls = ' basis-veto';
-            }
-            basisEl.textContent = bTxt;
-            basisEl.title = bTip;
-            basisEl.className = 'smart-banner-value' + bCls;
+            /* What Smart's lean rests on right now (fix186).
+             *
+             * This showed only the learner's fallback level, and once a slot has history that
+             * is "own slot" around the clock - correct, and saying nothing. Since Smart V5 the
+             * lean is shaped by more than the slot: the records' best setting for the
+             * situation (or a trial of its neighbour), a smoothness test or the headroom kept
+             * for the app in front, the cold-battery guard, low battery, a short night check.
+             * The tile shows the one that matters most now; the slot basis keeps its place
+             * whenever the learner is still borrowing from another slot, and the sheet lists
+             * everything, every situation's record included. */
+            const _b = lvBasisPaint(kv, fb, dp, we, conf, night, veto);
+            basisEl.textContent = _b.txt;
+            basisEl.title = _b.tip;
+            basisEl.className = 'smart-banner-value' + _b.cls;
+            if (_b.short && basisEl.scrollWidth > basisEl.clientWidth + 1) basisEl.textContent = _b.short;
           }
         } else {
           banner.style.display = 'none';
