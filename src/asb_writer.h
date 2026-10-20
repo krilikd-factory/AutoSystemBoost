@@ -1543,7 +1543,13 @@ static int asb_shell_cap_for_policy(int profile_idx, int pol) {
     if (pol < 0 || pol >= ASB_SHELL_CAPS_MAXPOL) return 0;
     const char *name = asb_profile_name(profile_idx);
     asb_shell_caps_load(&g_shell_live, ASB_SHELL_CAPS_PATH);
-    if (g_shell_live.valid && strcmp(g_shell_live.profile, name) == 0) return g_shell_live.khz[pol];
+    /* fix189: only a value it actually holds. An OP15 booted into Balanced with the vendor's
+     * boot-time clamp under every ceiling: the shell's writes of the hardware maximum read
+     * back lower, it recorded nothing, and that empty record for "balanced" hid the
+     * precomputed one - the governor's thermal values (1555200/1862400) were never handed
+     * back and Balanced ran at 43 % / 40 % for the whole of a 108-minute capture. */
+    if (g_shell_live.valid && strcmp(g_shell_live.profile, name) == 0 && g_shell_live.khz[pol] > 0)
+        return g_shell_live.khz[pol];
     int k = (profile_idx == PROFILE_BATTERY) ? 0 : 1;
     asb_shell_caps_load(&g_shell_pre[k], k == 0 ? ASB_SHELL_CAPS_PATH ".battery"
                                                 : ASB_SHELL_CAPS_PATH ".balanced");

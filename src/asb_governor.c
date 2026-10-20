@@ -254,6 +254,42 @@ static int    g_offdrain_on_pct = -1;
  * (-1) every window counts, as before. */
 static int    g_offdrain_media = 0;
 static int    g_offdrain_media_skipped = 0;
+/* The same windows, per profile (fix189).
+ *
+ * The figure above is the phone's: every window counts, whatever profile ran. The WebUI put
+ * it on the running profile's card ("~0.70 %/h" on Smart, fix187) - and an OP15 switched to
+ * Balanced showed Smart's 0.70 on Balanced's card a minute later. A window now also counts
+ * for the profile it ran in, when the same profile held from the screen going off to it
+ * coming back on; "offdrain_by_profile" carries those figures, the card shows only them.
+ * Kept in a file of its own ("name rate windows" per line), so the phone-wide figure and its
+ * format stay as they were. Indexed by PROFILE_*, 0..3. */
+#define ASB_OFFDRAIN_PROF_FILE "/data/adb/asb/offdrain_profiles"
+#define ASB_OFFDRAIN_NPROF 4
+static int    g_offdrain_p_x100[ASB_OFFDRAIN_NPROF] = {-1, -1, -1, -1};
+static int    g_offdrain_p_n[ASB_OFFDRAIN_NPROF] = {0, 0, 0, 0};
+static int    g_offdrain_prof = -1;      /* profile at window open */
+static int    g_offdrain_prof_mixed = 0; /* another profile ran during the window */
+static const char *const g_offdrain_p_name[ASB_OFFDRAIN_NPROF] = {"battery", "balanced", "performance", "smart"};
+static void asb_offdrain_prof_save(void) {
+    FILE *f = fopen(ASB_OFFDRAIN_PROF_FILE ".tmp", "w");
+    if (!f) return;
+    for (int i = 0; i < ASB_OFFDRAIN_NPROF; i++)
+        if (g_offdrain_p_x100[i] > 0) fprintf(f, "%s %d %d\n", g_offdrain_p_name[i], g_offdrain_p_x100[i], g_offdrain_p_n[i]);
+    fclose(f);
+    rename(ASB_OFFDRAIN_PROF_FILE ".tmp", ASB_OFFDRAIN_PROF_FILE);
+}
+static void asb_offdrain_prof_load(void) {
+    FILE *f = fopen(ASB_OFFDRAIN_PROF_FILE, "r");
+    if (!f) return;
+    char name[24]; int v = 0, n = 0;
+    while (fscanf(f, "%23s %d %d", name, &v, &n) == 3) {
+        for (int i = 0; i < ASB_OFFDRAIN_NPROF; i++)
+            if (strcmp(name, g_offdrain_p_name[i]) == 0 && v > 0 && v < 5000) {
+                g_offdrain_p_x100[i] = v; g_offdrain_p_n[i] = n > 0 ? n : 1;
+            }
+    }
+    fclose(f);
+}
 static void asb_offdrain_save(void) {
     FILE *f = fopen(ASB_OFFDRAIN_FILE ".tmp", "w");
     if (f) {
@@ -262,9 +298,10 @@ static void asb_offdrain_save(void) {
         rename(ASB_OFFDRAIN_FILE ".tmp", ASB_OFFDRAIN_FILE);
     }
 }
-static void asb_offdrain_track(int screen_on, int pct, int charging) {
+static void asb_offdrain_track(int screen_on, int pct, int charging, int prof) {
     if (!g_offdrain_loaded) {
         g_offdrain_loaded = 1;
+        asb_offdrain_prof_load();
         FILE *f = fopen(ASB_OFFDRAIN_FILE, "r");
         if (f) {
             int v = -1, n = 0, fmt = 0;
@@ -286,20 +323,28 @@ static void asb_offdrain_track(int screen_on, int pct, int charging) {
      * to count: a screen-on of under two minutes is folded into the surrounding window. */
     if (!screen_on) {
         g_offdrain_on_ms = 0;
-        if (g_offdrain_start_ms == 0) { g_offdrain_start_ms = now; g_offdrain_start_pct = pct; g_offdrain_media = 0; }
+        if (g_offdrain_start_ms == 0) {
+            g_offdrain_start_ms = now; g_offdrain_start_pct = pct; g_offdrain_media = 0;
+            g_offdrain_prof = prof; g_offdrain_prof_mixed = 0;
+        }
+        if (prof != g_offdrain_prof) g_offdrain_prof_mixed = 1;
         if (!g_offdrain_media && metrics_pcm_playing() == 1) g_offdrain_media = 1;
         return;
     }
     if (g_offdrain_start_ms > 0 && g_offdrain_on_ms == 0) {
         g_offdrain_on_ms = now; g_offdrain_on_pct = pct;          /* remember where it ended */
+        /* The window closes here; a switch while the screen is on comes after it. */
+        if (prof != g_offdrain_prof) g_offdrain_prof_mixed = 1;
     }
     if (g_offdrain_start_ms > 0 && now - g_offdrain_on_ms >= 120000L) {
         long dur = g_offdrain_on_ms - g_offdrain_start_ms;
         int dpct = g_offdrain_start_pct - g_offdrain_on_pct;
         int media = g_offdrain_media;
+        int wp = g_offdrain_prof_mixed ? -1 : g_offdrain_prof;
         g_offdrain_start_ms = 0;
         g_offdrain_on_ms = 0;
         g_offdrain_media = 0;
+        g_offdrain_prof = -1; g_offdrain_prof_mixed = 0;
         if (dur >= 3600000L && dpct >= 2) {
             long r = (long)dpct * 100L * 3600000L / dur;
             if (media) {
@@ -308,6 +353,12 @@ static void asb_offdrain_track(int screen_on, int pct, int charging) {
                 g_offdrain_x100 = (g_offdrain_x100 > 0) ? (int)((g_offdrain_x100 * 3L + r) / 4L) : (int)r;
                 g_offdrain_n++;
                 asb_offdrain_save();
+                if (wp >= 0 && wp < ASB_OFFDRAIN_NPROF) {
+                    g_offdrain_p_x100[wp] = (g_offdrain_p_x100[wp] > 0)
+                        ? (int)((g_offdrain_p_x100[wp] * 3L + r) / 4L) : (int)r;
+                    g_offdrain_p_n[wp]++;
+                    asb_offdrain_prof_save();
+                }
             }
         }
     }
@@ -3421,6 +3472,11 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             g_awake_pct, g_awake_win_boot_ms / 60000L);
     fprintf(f, "offdrain_pctph_x100=%d\noffdrain_windows=%d\noffdrain_media_skipped=%d\n",
             g_offdrain_x100, g_offdrain_n, g_offdrain_media_skipped);
+    /* fix189: the same measurement per profile, "name:rate:windows" (rate -1 = none yet). */
+    fprintf(f, "offdrain_by_profile=");
+    for (int _i = 0; _i < ASB_OFFDRAIN_NPROF; _i++)
+        fprintf(f, "%s%s:%d:%d", _i ? "," : "", g_offdrain_p_name[_i], g_offdrain_p_x100[_i], g_offdrain_p_n[_i]);
+    fprintf(f, "\n");
     fprintf(f, "smart_sessions_total=%d\nsmart_last_confidence=%d\n",
             g_smart_sessions_total, g_smart_last_confidence);
     {
@@ -7535,7 +7591,7 @@ int main(int argc, char **argv) {
         /* Track suspend before anything else this tick: the numbers come from the
          * clocks, not from the metrics, so they are valid even when a probe failed. */
         asb_awake_track(metrics.misc.screen_on);
-        asb_offdrain_track(metrics.misc.screen_on, metrics.bat.capacity_pct, metrics.bat.charging);
+        asb_offdrain_track(metrics.misc.screen_on, metrics.bat.capacity_pct, metrics.bat.charging, fsm.profile_idx);
         asb_curscale_track(metrics.misc.screen_on, metrics.bat.capacity_pct, metrics.bat.charging, metrics.bat.current_ma);
         int _smart_updated = asb_smart_tick(&metrics, &fsm);
         if (_smart_updated && fsm.profile_idx == PROFILE_SMART) {
@@ -7916,7 +7972,7 @@ int main(int argc, char **argv) {
                      * was computed in the wrong place.
                      */
                     asb_awake_track(metrics.misc.screen_on);
-                    asb_offdrain_track(metrics.misc.screen_on, metrics.bat.capacity_pct, metrics.bat.charging);
+                    asb_offdrain_track(metrics.misc.screen_on, metrics.bat.capacity_pct, metrics.bat.charging, fsm.profile_idx);
                     asb_curscale_track(metrics.misc.screen_on, metrics.bat.capacity_pct, metrics.bat.charging, metrics.bat.current_ma);
                     int _smart_updated = asb_smart_tick(&metrics, &fsm);
                     if (_smart_updated && fsm.profile_idx == PROFILE_SMART) {
