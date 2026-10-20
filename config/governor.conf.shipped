@@ -1,4 +1,4 @@
-# CONFIG_SHAPE=3b50953ef701
+# CONFIG_SHAPE=627001bcca72
 # Fingerprint of every option list and slider range in the WebUI. asb_lint.sh compares
 # against it: if the shape moves and this does not, a stored value may now mean something
 # different from what the user chose, and the schema number in install.sh needs bumping
@@ -161,6 +161,13 @@ wakelock_fitness=protect
 gnss_trim=0
 
 log_level=1
+# LSPosed's own verbose log (fix187): keep | off
+#   keep  ASB leaves LSPosed alone; if ASB had switched the log off, LSPosed's earlier value
+#         is put back.
+#   off   ASB writes LSPosed's own setting (Settings > Verbose log in its manager) to off and
+#         deletes the old verbose_*.log files. Applied once when the card changes, never at
+#         boot; LSPosed reads it when it starts, so it takes effect after a reboot.
+lsposed_verbose=keep
 
 # Background process limit: stock | relaxed | strict
 #   Android kills "phantom" processes - child processes an app spawns outside the normal

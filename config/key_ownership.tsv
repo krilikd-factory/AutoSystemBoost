@@ -60,6 +60,7 @@ wakelock_action|advanced|webui_sensitive
 wakelock_fitness|advanced|webui_sensitive
 gnss_trim|advanced|webui_sensitive
 log_level|user|webui_standard
+lsposed_verbose|advanced|webui_sensitive
 phantom_procs|advanced|webui_sensitive
 athena_service|advanced|webui_sensitive
 log_verbosity|internal|engine_or_derived
