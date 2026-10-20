@@ -537,6 +537,7 @@ jobs:
             "runtime/asb_dsp_thermal.sh" \
             "runtime/asb_audio_activity.sh" \
             "runtime/asb_drain_meter.sh" \
+            "runtime/asb_gfx_probe.sh" \
             "runtime/asb_rom_telemetry.sh" \
             "runtime/asb_dsp_live.sh" \
             "runtime/asb_cgroup.sh" \
