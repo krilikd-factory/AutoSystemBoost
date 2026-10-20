@@ -786,6 +786,10 @@ static void writer_profile_baseline_record_path(const char *path) {
  */
 #define ASB_MIN_CEILING_PCT_OF_HW 40
 
+/* fix184: a lower race-to-idle floor for one write, set by the Smart records while they try
+ * screen-off idle ceilings under x1 (asb_rec_apply_offcaps); 0 = the 40 % above. */
+static int g_writer_floor_pct = 0;
+
 static int cpu_floor_ceiling(int path_idx, int want, int thermal_emergency) {
     if (want <= 0 || thermal_emergency) return want;
     if (path_idx < 0 || path_idx >= 16) return want;
@@ -796,7 +800,8 @@ static int cpu_floor_ceiling(int path_idx, int want, int thermal_emergency) {
     for (int i = 0; i < n; i++)
         if (g_cpu_freq_tables[path_idx][i] > hw) hw = g_cpu_freq_tables[path_idx][i];
     if (hw <= 0) return want;
-    long guard = hw * ASB_MIN_CEILING_PCT_OF_HW / 100;
+    long guard = hw * ((g_writer_floor_pct > 0 && g_writer_floor_pct < ASB_MIN_CEILING_PCT_OF_HW)
+                       ? g_writer_floor_pct : ASB_MIN_CEILING_PCT_OF_HW) / 100;
     if ((long)want >= guard) return want;
     /* Snap the guard UP to the first real step at or above it (fix95).
      *

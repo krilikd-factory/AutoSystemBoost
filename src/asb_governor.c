@@ -31,6 +31,7 @@
 #include "asb_socket.h"
 #include "asb_config.h"
 #include "asb_smart.h"
+#include "asb_record.h"
 
 #define TIMER_ACTIVE_S  2   /* metrics interval, screen ON, something happening */
 /* Screen on but idle: reading, a feed at rest, music with the display lit. The state
@@ -1511,6 +1512,7 @@ static int asb_night_window_active(time_t now) {
  * began before the window still gives its wake, but no onset - its first screen-off was the
  * evening, not bedtime. */
 static void asb_night_chain_end(void) {
+    g_rec.mw.tonight = 0;   /* fix184: the checks of a chain that was not a night are not counted */
     g_night_dark_accum_s = 0;
     g_night_chain_min = -1;
     g_night_chain_night = 0;
@@ -1546,6 +1548,7 @@ static void asb_night_wake_confirm(void) {
     asb_night_ewma(&g_night_wake_min, wake);
     if (g_night_samples < 100000) g_night_samples++;
     g_night_samples_accepted++;
+    asb_mw_night_end();   /* fix184: this night's checks, before the chain is cleared */
     if (onset >= 0)
         asb_log("night_window: night %02d:%02d-%02d:%02d -> learned %02d:%02d-%02d:%02d (n=%d)",
                 onset / 60, onset % 60, wake / 60, wake % 60,
@@ -1586,6 +1589,12 @@ static void asb_night_window_tick(int screen_on, time_t now) {
                 /* mid-night check, not a real wake — keep accumulating */
                 g_night_pending_wake_min = -1;
                 g_night_pending_wake_ts = 0;
+                /* fix184: a check in the middle of a night - an hour of darkness behind it,
+                 * inside this user's learned night or a chain that began at bedtime - is a
+                 * night wake the Smart records learn (time of night, length, how many). */
+                if (g_night_on_since > 0 && g_night_dark_accum_s >= 3600 &&
+                    (g_night_chain_night || asb_night_window_active(g_night_on_since)))
+                    asb_mw_note((long)g_night_on_since, (long)(now - g_night_on_since));
             }
             g_night_off_since = now;
             g_night_off_minute = asb_minute_of_day(now);
@@ -1612,6 +1621,83 @@ static void asb_night_window_tick(int screen_on, time_t now) {
         return;
     if (g_night_pending_wake_min >= 0) asb_night_wake_confirm();
     else if (g_night_chain_min >= 0 || g_night_dark_accum_s > 0) asb_night_chain_end();
+}
+
+/* ---- fix184: Smart records - the governor's side of asb_record.h -------------------- */
+static long long asb_rec_net_bytes(void) {
+    long long w = (long long)sysfs_read_long(PATH_WLAN_RX, 0) + (long long)sysfs_read_long(PATH_WLAN_TX, 0);
+    long long r = (long long)rmnet_read_total("rx_bytes") + (long long)rmnet_read_total("tx_bytes");
+    return w + r;
+}
+static int asb_rec_bright_pct(void) {
+    int b  = sysfs_read_int(PATH_BACKLIGHT, -1);
+    int mx = sysfs_read_int("/sys/class/backlight/panel0-backlight/max_brightness", 0);
+    if (b < 0 || mx <= 0) return -1;
+    return (int)((long)b * 100 / mx);
+}
+/* Screen on: does a cluster sit at its ceiling right now (within one ~100 MHz step)? The
+ * records' comfort guard - a cheaper setting that keeps the cores pinned more is slower, not
+ * better. cur_freq is MHz, the ceiling kHz. */
+static int asb_rec_at_ceiling(const asb_metrics_t *m) {
+    for (int s = 0; s < 3; s++) {
+        if (g_cpu_policy_ids[s] < 0) continue;
+        int live = tick_scaling_max(s);
+        int cur  = m->cpu.cur_freq[s];
+        if (live <= 0 || cur <= 0) continue;
+        if ((long)cur * 1000L >= (long)live - 100000L) return 1;
+    }
+    return 0;
+}
+
+/* Night wakes (fix184). Decided at the screen-on edge from this user's own habit, held for at
+ * most asb_mw_hold_s(); a screen-on that outlasts it is a real wake. */
+static int           g_mw_active    = 0;   /* this screen-on is treated as a night check */
+static int           g_mw_predicted = 0;
+static unsigned long g_mw_holds     = 0;   /* screen-ons kept in the night radio mode */
+static int           g_mw_prev_screen = -1;
+static void asb_mw_update(int screen_on, int smart, time_t now) {
+    if (screen_on != g_mw_prev_screen) {
+        g_mw_predicted = 0;
+        if (screen_on && g_mw_prev_screen == 0 && smart && g_asb_cfg.smart_microwake) {
+            g_mw_predicted = asb_mw_predict((long)now, asb_night_window_active(now),
+                                            g_night_dark_accum_s);
+            if (g_mw_predicted) {
+                g_mw_holds++;
+                asb_log("microwake: screen on after %ld min of darkness - looks like a night check "
+                        "(%u learned, usually %.0f s): night radio mode kept for up to %ld s",
+                        g_night_dark_accum_s / 60, g_rec.mw.total, g_rec.mw.dur_ewma_s, asb_mw_hold_s());
+            }
+        }
+        g_mw_prev_screen = screen_on;
+    }
+    int was = g_mw_active;
+    g_mw_active = screen_on && g_mw_predicted && smart && g_night_on_since > 0 &&
+                  (long)(now - g_night_on_since) < asb_mw_hold_s();
+    if (was && !g_mw_active && screen_on)
+        asb_log("microwake: still on after %ld s - a real wake, day radio mode", (long)(now - g_night_on_since));
+}
+
+/* Screen-off deep-idle ceilings scaled by the records' setting (x0.75..x1.5 of what Smart and
+ * the race-to-idle floor would write). Below x1 the writer's 40 % floor is lowered to 25 % for
+ * exactly this write; the cooldown, a thermal cap and every other state are left alone, and the
+ * records already return x1 while the CPU is kept awake (music). */
+static void asb_rec_apply_offcaps(asb_profile_caps_t *caps, const asb_fsm_t *fsm, int screen_on) {
+    g_writer_floor_pct = 0;
+    if (!caps || !fsm || screen_on || g_rec_off_scale == 1000 || g_rec_off_scale <= 0) return;
+    if (fsm->profile_idx != PROFILE_SMART || fsm->thermal_cap || g_fsm_cooldown_active) return;
+    if (fsm->state != ASB_STATE_DEEP_IDLE) return;   /* busy screen-off (LIGHT_IDLE, music) untouched */
+    for (int i = 0; i < 3; i++) {
+        long hw = g_cpu_slot_hwmax[i];
+        if (hw <= 0 || caps->cpu_max[i] <= 0) continue;
+        long base = caps->cpu_max[i];
+        if (base < hw * 40 / 100) base = hw * 40 / 100;
+        long t = base * g_rec_off_scale / 1000;
+        if (t < hw * 25 / 100) t = hw * 25 / 100;
+        if (t > hw) t = hw;
+        caps->cpu_max[i] = (int)t;
+        if (caps->cpu_min[i] > caps->cpu_max[i]) caps->cpu_min[i] = caps->cpu_max[i];
+    }
+    if (g_rec_off_scale < 1000) g_writer_floor_pct = 25;
 }
 
 /*
@@ -2855,6 +2941,7 @@ static void asb_unlock_lift_apply(asb_profile_caps_t *caps) {
 }
 
 /* Smart night slot with the screen on (fix150) - see asb_smart_night_awake. */
+static int g_rec_on_applied = 0;            /* fix184: the records' screen-on lean in force, x1000 */
 static int g_smart_night_awake_on = 0;      /* the evening values replaced the night ones */
 static int g_smart_night_awake_from = 0;    /* the night slot's own alpha before that */
 static int g_smart_night_awake_to = 0;      /* the evening slot's alpha it took instead */
@@ -3142,6 +3229,15 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             g_smart_media_guard_reason);
     fprintf(f, "camera_hold=%d\n", g_cam_guard_on ? 1 : 0);
     /* fix150: a night slot with the screen on took the evening's lean (alpha before it). */
+    /* fix184: Smart records - the knobs in force and what is being measured. */
+    fprintf(f, "rec_enabled=%d\nrec_counter=%d\nrec_on_offset=%d\nrec_off_scale=%d\n"
+               "rec_block=%s\nrec_block_arm=%d\nrec_blocks_ok=%lu\nrec_blocks_rejected=%lu\n"
+               "microwake_active=%d\nmicrowake_holds=%lu\nmicrowake_learned=%u\n",
+            g_asb_cfg.smart_records, g_rec_cc_state, g_rec_on_applied, g_rec_off_scale,
+            g_rec_blk.active ? g_rec_ctx_names[g_rec_blk.ctx] : "-",
+            g_rec_blk.active ? asb_rec_arm_value(g_rec_blk.ctx, g_rec_blk.arm) : 0,
+            g_rec_blocks_ok, g_rec_blocks_rejected,
+            g_mw_active, g_mw_holds, g_rec.mw.total);
     fprintf(f, "smart_night_awake=%d\nsmart_night_awake_from=%d\nsmart_night_awake_to=%d\n"
                "smart_night_awake_ticks=%lu\n",
             g_smart_night_awake_on, g_smart_night_awake_from, g_smart_night_awake_to,
@@ -6208,6 +6304,18 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
         g_smart_rt.alpha_battery_x1000 = biased;
     }
 
+    /* fix184: the Smart records' lean for this situation, screen on only - the setting being
+     * measured in a block, or the best one found. Before the safety layers, so the thermal
+     * veto, low battery and the charge guard still lift alpha over it. */
+    g_rec_on_applied = 0;
+    if (screen_on && g_rec_on_offset != 0) {
+        int _ra = (int)g_smart_rt.alpha_battery_x1000 + g_rec_on_offset;
+        if (_ra < ASB_SMART_ALPHA_BATTERY_MIN_X1000) _ra = ASB_SMART_ALPHA_BATTERY_MIN_X1000;
+        if (_ra > ASB_SMART_ALPHA_BATTERY_MAX_X1000) _ra = ASB_SMART_ALPHA_BATTERY_MAX_X1000;
+        g_smart_rt.alpha_battery_x1000 = _ra;
+        g_rec_on_applied = g_rec_on_offset;
+    }
+
     /* 4. Safety overrides — these can lift floors but never reduce safety */
     asb_smart_apply_night_override(daypart,
                                    asb_night_window_active(now),
@@ -6756,6 +6864,18 @@ static int asb_smart_init(void) {
     int rc = asb_smart_store_load(&g_smart_store, &outcome);
     asb_smart_appheat_load();
     g_smart_store_loaded = 1;
+    /* fix184: the Smart records and the night-wake habit. */
+    g_rec_read_cc = asb_rec_cc_file;
+    g_rec_read_net = asb_rec_net_bytes;
+    g_rec_read_bright_pct = asb_rec_bright_pct;
+    {
+        int _rl = asb_rec_load();
+        asb_rec_summary_write();
+        asb_log("records: %s (%s); night wakes learned: %u over %u night(s)",
+                _rl ? "loaded" : "fresh start", asb_rec_cc_file() > 0 ? "charge counter readable"
+                                                                      : "no charge counter - not measured",
+                g_rec.mw.total, g_rec.mw.nights);
+    }
 
     /*
      * The runtime session counters reset on every daemon start, which made the WebUI show "0
@@ -7592,7 +7712,9 @@ int main(int argc, char **argv) {
                             /* A heartbeat refresh inside the unlock window keeps the lift (fix150). */
                             if (g_unlock_lift_now && !fsm.thermal_cap && metrics.misc.screen_on)
                                 asb_unlock_lift_apply(&_effective_caps);
+                            asb_rec_apply_offcaps(&_effective_caps, &fsm, metrics.misc.screen_on);   /* fix184 */
                             int _w = writer_apply_caps(&_effective_caps, 1, fsm.state, fsm.thermal_cap);
+                            g_writer_floor_pct = 0;
                             if (_w > 0) { g_total_writes += _w; g_last_write_ts = time(NULL); }
                             if (g_asb_cfg.smart_debug_log) {
                                 asb_log("smart_tick(heartbeat): forced caps refresh");
@@ -8796,6 +8918,7 @@ int main(int argc, char **argv) {
             }
 
             asb_night_window_tick(metrics.misc.screen_on, time(NULL));
+            asb_mw_update(metrics.misc.screen_on, fsm.profile_idx == PROFILE_SMART, time(NULL));
 
             /* radio-aware -- track mobile data activity during battery idle */
             if ((fsm.profile_idx == PROFILE_BATTERY ||
@@ -8981,7 +9104,7 @@ int main(int argc, char **argv) {
                     g_smart_rt.app_hint < ASB_APP_GAMING;
                 g_smart_battery_lean_pub = smart_battery_lean;
                 const char *lpm_mode =
-                    (g_asb_cfg.night_modem_idle && !metrics.misc.screen_on &&
+                    (g_asb_cfg.night_modem_idle && (!metrics.misc.screen_on || g_mw_active) &&
                      asb_night_window_active(time(NULL)))   ? "night" :
                     !metrics.misc.screen_on                 ? "save" :
                     (fsm.profile_idx == PROFILE_BATTERY)    ? "save" :
@@ -9134,6 +9257,46 @@ int main(int argc, char **argv) {
             }
             int changed = fsm_update(&fsm, &metrics);
             g_touch_kick = 0;   /* answered (fix117) */
+            /* fix184: Smart records - one tick of measuring, the knobs read back below. */
+            {
+                asb_rec_in_t _ri;
+                memset(&_ri, 0, sizeof(_ri));
+                _ri.enabled     = g_asb_cfg.smart_records && fsm.profile_idx == PROFILE_SMART &&
+                                  g_smart_rt.enabled;
+                _ri.explore     = g_asb_cfg.smart_records_explore;
+                _ri.screen_on   = metrics.misc.screen_on;
+                _ri.charging    = metrics.bat.charging;
+                /* Quiet deep idle: DEEP_IDLE with the CPU asleep most of the time. Screen-off
+                 * music keeps the CPU awake (100 % in the captures) - it must not run on a
+                 * setting being tried, and a block full of it is not about the setting.
+                 * Hysteresis (busy at 70 %, quiet again under 50 %) so a sync burst does not
+                 * flip the ceilings back and forth. Nor while the cap detente freezes writes:
+                 * the setting would be claimed without being on the hardware. */
+                {
+                    static int _rq_quiet = 1;
+                    int _aw = metrics.cpu.awake_tick_pct;
+                    if (_aw >= 70) _rq_quiet = 0;
+                    else if (_aw >= 0 && _aw < 50) _rq_quiet = 1;
+                    _ri.idle_state = (fsm.state == ASB_STATE_DEEP_IDLE && _rq_quiet &&
+                                      !g_cap_detente_active);
+                }
+                _ri.heavy_state = (fsm.state >= ASB_STATE_HEAVY || g_smart_rt.app_hint >= ASB_APP_HEAVY ||
+                                   metrics.misc.camera_active);
+                _ri.app_medium  = (g_smart_rt.app_hint == ASB_APP_MEDIUM);
+                _ri.thermal_cap = fsm.thermal_cap;
+                _ri.cooldown    = g_fsm_cooldown_active;
+                _ri.veto        = g_smart_rt.thermal_veto;
+                _ri.lowbat      = g_smart_rt.low_battery_override;
+                _ri.night       = asb_night_window_active(time(NULL)) ||
+                                  (!asb_night_window_ready() && g_smart_rt.daypart == ASB_DAYPART_SLEEP);
+                _ri.microwake   = g_mw_active;
+                _ri.at_ceiling  = metrics.misc.screen_on ? asb_rec_at_ceiling(&metrics) : 0;
+                _ri.now_ms      = asb_clock_ms(CLOCK_BOOTTIME);
+                _ri.wall        = (long)time(NULL);
+                asb_rec_tick(&_ri);
+                if (g_rec_event) { asb_log("%s", g_rec_event_msg); g_rec_event = 0; }
+                if (g_rec_knob_changed) { g_rec_knob_changed = 0; force_write = 1; }
+            }
 
             /* rebuild plan on state band cross (idle<->active<->heavy) */
             if (changed) {
@@ -9445,8 +9608,10 @@ int main(int argc, char **argv) {
                     _effective_caps.uclamp_top_max > 0 &&
                     _effective_caps.uclamp_top_max < ASB_BALANCED_FLOOR_UCLAMP_TOP)
                     _effective_caps.uclamp_top_max = ASB_BALANCED_FLOOR_UCLAMP_TOP;
+                asb_rec_apply_offcaps(&_effective_caps, &fsm, metrics.misc.screen_on);   /* fix184 */
                 g_last_caps_reassert = time(NULL);
                 int writes = writer_apply_caps(&_effective_caps, force_write, fsm.state, fsm.thermal_cap);
+                g_writer_floor_pct = 0;
                 if (writes > 0) {
                     g_total_writes += writes;
                     g_last_write_ts = time(NULL);
@@ -10194,6 +10359,8 @@ int main(int argc, char **argv) {
             asb_log("smart store flushed on shutdown");
         asb_smart_appheat_save();
     }
+    /* fix184: the records and night wakes, which save at most every 15 minutes otherwise. */
+    if (g_rec_loaded && g_rec_dirty && asb_rec_save() == 0) asb_log("smart records flushed on shutdown");
     asb_log("persistent stats saved: sessions=%d degrade=%d", g_pstats.session_count, g_pstats.degrade_count);
     unlink(ASB_SOCK_PATH);
     unlink(PID_FILE);
