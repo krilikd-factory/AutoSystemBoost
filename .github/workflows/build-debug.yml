@@ -69,6 +69,7 @@ jobs:
             src/asb_smart.h \
             src/asb_smart_defs.h \
             src/asb_record.h \
+            src/asb_lspd.h \
             src/build_ndk_release.sh \
             src/DSP/asb_dsp.c \
             src/DSP/asb_effect_abi.h \
@@ -466,6 +467,7 @@ jobs:
             "runtime/asb_audio_activity.sh" \
             "runtime/asb_drain_meter.sh" \
             "runtime/asb_gfx_probe.sh" \
+            "runtime/asb_lsposed.sh" \
             "runtime/asb_rom_telemetry.sh" \
             "runtime/asb_dsp_live.sh" \
             "runtime/asb_cgroup.sh" \
