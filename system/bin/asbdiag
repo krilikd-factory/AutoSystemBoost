@@ -1618,18 +1618,15 @@ case "$_gmin_live" in
     fi ;;
 esac
 
-SEC "0f. LSPOSED LOGGING  (read only — ASB never changes another module's settings)"
-# Report it, do not touch it.
+SEC "0f. LSPOSED LOGGING  (ASB changes it only when you set the card)"
+# Report it; change it only on request (fix187).
 #
-# A user asked ASB to switch LSPosed logging off, reasoning that the logging costs battery.
-# ASB will not: LSPosed is a separate root module with its own configuration, and writing
-# into another module's files makes ASB the kind of unannounced second writer this project
-# has spent weeks untangling on the cap path. LSPosed does not know about us and would not
-# put its settings back.
-#
-# What is useful is showing the state, so the answer is one glance instead of a guess. On
-# the capture that prompted this, LSPosed had written zero lines - the noisy tags were
-# ifw_intent_matched, FlagUtils and SmartTempDdsSwitchController, all OxygenOS components.
+# ASB used to only report this: LSPosed is a separate root module, and writing into another
+# module's settings unasked makes ASB an unannounced second writer. A user asked for the
+# switch, so the card "LSPosed Verbose Log" (lsposed_verbose=keep|off) writes LSPosed's own
+# setting once, when it is changed, and puts LSPosed's earlier value back on "keep". The
+# state below is read from LSPosed's database (asb --lspd verbose-get); a verbose_*.log file
+# alone does not say much - old ones stay on disk after the switch is turned off.
 _lsp_dir=""
 for _d in /data/adb/lspd /data/adb/lspd/log /data/misc/lspd; do
   [ -d "$_d" ] && { _lsp_dir="$_d"; break; }
@@ -1638,24 +1635,34 @@ if [ -z "$_lsp_dir" ]; then
   NOTE "LSPosed not present (no /data/adb/lspd) - nothing to report"
 else
   NOTE "LSPosed directory: $_lsp_dir"
-  _lsp_log_bytes=0
+  _lsp_log_bytes=0; _lsp_vb_bytes=0
   for _f in /data/adb/lspd/log/*.log /data/adb/lspd/log/*/*.log; do
     [ -f "$_f" ] || continue
     _sz=$(wc -c < "$_f" 2>/dev/null)
     case "$_sz" in ''|*[!0-9]*) continue ;; esac
     _lsp_log_bytes=$(( _lsp_log_bytes + _sz ))
+    case "$_f" in */verbose_*) _lsp_vb_bytes=$(( _lsp_vb_bytes + _sz )) ;; esac
   done
-  NOTE "log files on disk: $(( _lsp_log_bytes / 1024 )) KiB"
-  # A verbose_* file is the one LSPosed only writes when verbose logging is enabled, so its
-  # presence answers the question directly.
-  _lsp_verbose=0
-  for _f in /data/adb/lspd/log/verbose_*.log; do [ -f "$_f" ] && _lsp_verbose=1; done
-  if [ "$_lsp_verbose" = "1" ]; then
-    NOTE "verbose logging: ON  -  turn it off in the LSPosed manager under Logs, not here"
-  else
-    NOTE "verbose logging: no verbose_*.log present (likely off)"
-  fi
-  NOTE "(ASB reports this and changes nothing: another module's settings are its own)"
+  NOTE "log files on disk: $(( _lsp_log_bytes / 1024 )) KiB, of which verbose: $(( _lsp_vb_bytes / 1024 )) KiB"
+  _lsp_st=""
+  [ -x "$MODDIR/bin/asb" ] && _lsp_st="$("$MODDIR/bin/asb" --lspd verbose-get 2>/dev/null)"
+  _lsp_v="$(echo "$_lsp_st" | sed -n 's/^verbose=//p' | head -1)"
+  _lsp_r="$(echo "$_lsp_st" | sed -n 's/^reason=//p' | head -1)"
+  case "$_lsp_v" in
+    on)         NOTE "verbose logging: ON (LSPosed's own setting)" ;;
+    default_on) NOTE "verbose logging: ON (never set - LSPosed's default)" ;;
+    off)        NOTE "verbose logging: off (LSPosed's own setting; it applies from the boot after it was written)" ;;
+    *)          NOTE "verbose logging: could not be read here (${_lsp_r:-?}) - LSPosed manager > Settings shows it" ;;
+  esac
+  NOTE "card lsposed_verbose=$(cfg lsposed_verbose) - keep: ASB leaves LSPosed alone; off: ASB writes LSPosed's setting once, when the card is changed"
+  [ -f /data/adb/asb/lsposed_verbose_prev ] && NOTE "ASB switched it off; LSPosed's earlier value, put back on keep: $(cat /data/adb/asb/lsposed_verbose_prev 2>/dev/null)"
+  # Written after this boot began: the running daemon still has the old value.
+  _lsp_at="$(cat /data/adb/asb/lsposed_verbose_prev_at 2>/dev/null)"
+  _lsp_up="$(cut -d. -f1 /proc/uptime 2>/dev/null)"; _lsp_now="$(date +%s 2>/dev/null)"
+  case "$_lsp_at$_lsp_up$_lsp_now" in
+    ''|*[!0-9]*) : ;;
+    *) [ "$_lsp_at" -ge $(( _lsp_now - _lsp_up )) ] && NOTE "ASB wrote the setting during this boot - LSPosed picks it up at the next reboot" ;;
+  esac
 fi
 
 SEC "1a2. AUDIO ROUTE  (what the pipeline is doing right now — read only)"
