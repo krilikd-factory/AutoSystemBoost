@@ -2616,8 +2616,9 @@ if [ "$_sna" = 1 ]; then
     NOTE "night slot, screen on: the evening slot's touch bonus applies (the lean itself is no harder than the evening's; smart_night_awake=$(cfg smart_night_awake))"
   fi
 fi
-# Smart records (fix184): the best setting found per situation, measured with the charge
-# counter, and the night-wake habit. Written by the governor to /dev/.asb/smart_records.txt.
+# Smart records (fix184, Smart V5 in fix185): the best setting found per situation, measured
+# as power (charge counter x battery voltage) and compared side by side, plus the night-check
+# habit and the smoothness check. Written by the governor to /dev/.asb/smart_records.txt.
 _srf=/dev/.asb/smart_records.txt
 if [ -r "$_srf" ]; then
   _src="$(sed -n 's/^counter=\([a-z_]*\).*/\1/p' "$_srf" | head -1)"
@@ -2625,20 +2626,33 @@ if [ -r "$_srf" ]; then
   _sbr="$(sed -n 's/.*blocks_rejected=\([0-9]*\).*/\1/p' "$_srf" | head -1)"
   P "  Smart records        : smart_records=$(cfg smart_records) explore=$(cfg smart_records_explore) · meter=${_src:-?} · blocks kept ${_sbo:-0}, set aside ${_sbr:-0}"
   case "$_src" in
-    unavailable) NOTE "the charge counter cannot be read on this phone - drain is not measured and no setting is learned" ;;
+    unavailable) NOTE "the charge counter cannot be read on this phone - power is not measured and no setting is learned" ;;
     not_moving)  NOTE "the charge counter did not move over 10 minutes - those blocks are set aside" ;;
   esac
-  while IFS='|' read -r _c _st _best _rma _rn _bma _vs _test _bn _tn _tr _w _bl; do
+  _rjl="$(grep -m1 '^rejected|' "$_srf")"
+  if [ -n "$_rjl" ] && [ "${_sbr:-0}" -gt 0 ] 2>/dev/null; then
+    _rjs="$(echo "$_rjl" | tr '|' '\n' | awk -F= 'NF == 2 && $2 > 0 {
+      n = $1
+      if (n == "charge") n = "charging / just after"
+      else if (n == "climate") n = "battery warmed or cooled (weather, indoors/outdoors)"
+      else if (n == "radio") n = "radio busy"
+      else if (n == "busy") n = "CPU kept awake"
+      else if (n == "meter") n = "meter"
+      printf "%s%s %s", sep, n, $2; sep = ", " }')"
+    [ -n "$_rjs" ] && NOTE "set aside: $_rjs - not credited to any setting"
+  fi
+  while IFS='|' read -r _c _st _best _rmw _rma _rn _gain _test _pairs _pdiff _tr _w _bl _first; do
     case "$_c" in off_*|on_*) : ;; *) continue ;; esac
     case "$_st" in
       measuring) _sts="measuring - ${_bl:-0} block(s) so far, no figure yet" ;;
-      testing)   _sts="testing $_test against the best $_best: ${_bn%%,*} vs ${_tn%%,*} block(s), ${_bn#*,} vs ${_tn#*,} mA" ;;
-      holding)   _sts="best $_best at $_rma mA over $_rn block(s)" ;;
-      plateau)   _sts="plateau - $_best is the best found, $_rma mA (re-checked every 21 days)" ;;
+      testing)   _sts="testing $_test against the best $_best: ${_pairs:-0} pair(s) side by side, the neighbour ${_pdiff:-0} % against it so far"
+                 case "$_rmw" in ''|0) : ;; *) _sts="$_sts · best $_rmw mW" ;; esac ;;
+      holding)   _sts="best $_best at $_rmw mW ($_rma mA) over $_rn block(s)" ;;
+      plateau)   _sts="plateau - $_best is the best found, $_rmw mW (re-checked every 21 days)" ;;
       *)         _sts="$_st" ;;
     esac
     _vss=""
-    case "$_bma" in ''|0|0.0) : ;; *) [ "$_st" != measuring ] && _vss=" · ${_vs}% against the original setting ($_bma mA)" ;; esac
+    case "$_gain" in ''|0|0.0|-0.0) : ;; *) _vss=" · ${_gain} % below the original setting, measured side by side" ;; esac
     P "    $_c: $_sts$_vss · trials $_tr, won $_w"
   done < "$_srf"
   _mwl="$(grep -m1 '^microwake|' "$_srf")"
@@ -2654,11 +2668,31 @@ if [ -r "$_srf" ]; then
       P "  night wakes          : none learned yet (a check of a few minutes after an hour asleep counts)"
     fi
   fi
+  _sml="$(grep -m1 '^smooth|' "$_srf")"
+  if [ -n "$_sml" ]; then
+    _smw="$(echo "$_sml" | sed -n 's/.*watching=\([0-9]*\).*/\1/p')"
+    _smt="$(echo "$_sml" | sed -n 's/.*testing=\([0-9]*\).*/\1/p')"
+    _smh="$(echo "$_sml" | sed -n 's/.*|helped=\([0-9]*\).*/\1/p')"
+    _smn="$(echo "$_sml" | sed -n 's/.*not_helped=\([0-9]*\).*/\1/p')"
+    _smp="$(_rget smooth_probes /dev/.asb/state 2>/dev/null)"
+    P "  smoothness           : smart_smooth=$(cfg smart_smooth) · apps watched ${_smw:-0}, in a test ${_smt:-0}, helped by headroom ${_smh:-0}, not helped ${_smn:-0} · frame reads ${_smp:-0} since the governor started"
+    _slsm="$(sed -n 's/^last_smooth=//p' "$_srf" | head -1)"
+    [ -n "$_slsm" ] && NOTE "last smoothness decision: $_slsm"
+  fi
   _slast="$(sed -n 's/^last=//p' "$_srf" | head -1)"
   [ -n "$_slast" ] && NOTE "last records decision: $_slast"
 else
   P "  Smart records        : no summary yet (written once the governor has loaded them)"
 fi
+_scg="$(_rget smart_cold_guard /dev/.asb/state 2>/dev/null)"
+[ "$_scg" = 1 ] && NOTE "cold battery under 40 %: Smart holds the CPU peaks down until it warms up or charges (smart_cold_guard=$(cfg smart_cold_guard))"
+_scl="$(_rget ses_climate /dev/.asb/state 2>/dev/null)"
+case "$_scl" in
+  1) NOTE "last session's drain not learned from: the battery was under 5 C" ;;
+  2) NOTE "last session's drain not learned from: a cold battery warming or cooling (outdoors/indoors)" ;;
+  3) NOTE "last session's drain not learned from: the battery was cooled by its surroundings" ;;
+  4) NOTE "last session's drain not learned from: it ran right after the charger" ;;
+esac
 _tw="$(grep -m1 '^smart_therm_warm_x10=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 _tc="$(grep -m1 '^smart_therm_cool_x10=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 # Learned from this device's own median, not hardcoded - a OnePlus 12 and a 15 idle at
