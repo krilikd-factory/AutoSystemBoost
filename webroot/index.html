@@ -9583,6 +9583,10 @@ function renderSmartSubLine(kv) {
           ? T('smart_veto_vendor', '🛡 protective bias · vendor cap pressure')
           : T('smart_veto_smart', '🛡 Smart thermal protection');
       }
+      else if (parseInt(kv.smart_cold_guard || '0', 10) === 1) {
+        /* fix185: a cold pack under 40 % - Smart holds the peaks down until it warms up. */
+        sub = T('smart_cold', '❄ cold battery · gentler peaks');
+      }
       else if (fb === 4) {
         /* Cold start says the learner has no history for this bucket. Same reasoning as
            the pending case: show the count, so "still nothing" and "nearly there" read
@@ -9602,6 +9606,14 @@ function renderSmartSubLine(kv) {
         sub = cs > 0
           ? (T('smart_new_bucket', 'learning this hour \u00b7 ') + cs + smartSesWord(cs) + T('smart_new_bucket_tail', ' banked overall'))
           : T('smart_waiting', 'starting \u00b7 needs a screen-on session');
+      }
+      /* fix185: the smoothness check, for the app in front - a test running, or headroom
+       * kept because the test showed it helps. */
+      if (!night && !veto) {
+        if (parseInt(kv.smooth_testing || '0', 10) === 1)
+          sub += T('smart_smooth_test', ' · checking smoothness');
+        else if (parseInt(kv.smooth_lean || '0', 10) < 0)
+          sub += T('smart_smooth_on', ' · smoother for this app');
       }
       smartSub.textContent = sub;
     } else if (kv && kv._smartPending === 1) {
