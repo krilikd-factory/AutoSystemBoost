@@ -2686,7 +2686,17 @@ apply_cpufreq_caps() {
     # but it needs to be understood before it is acted on - this was a guess, and it cost
     # the user a day of a stuttering phone.
     _actual=""
-    if [ -n "$_want" ] && writef_retry "$_smax" "$_want" 2 0.06; then
+    # fix189: a write the kernel took but holds lower is still this profile's request. At
+    # boot the vendor's clamp reads every ceiling back under the hardware maximum, so an
+    # uncapped Balanced "failed" on both clusters and recorded nothing - and the governor,
+    # finding no value for Balanced, never handed back the thermal ceilings it had written.
+    _wok=0
+    if [ -n "$_want" ]; then
+      if writef_retry "$_smax" "$_want" 2 0.06; then _wok=1
+      elif [ -w "$_smax" ] && [ "$(cat "$_smax" 2>/dev/null)" -le "$_want" ] 2>/dev/null; then _wok=1
+      fi
+    fi
+    if [ "$_wok" = 1 ]; then
       _actual="$(cat "$_smax" 2>/dev/null)"
       command -v asb_arbiter_note >/dev/null 2>&1 && asb_arbiter_note cpu_cap profile profile_apply "$_want" "${_actual:--}" applied || true
       # Record the ceiling the kernel now holds for us. A read-back above the request is the
