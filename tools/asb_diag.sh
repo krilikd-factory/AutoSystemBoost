@@ -3587,7 +3587,16 @@ if [ -n "$_prime_smax" ] && [ -n "$_prime_hmax" ] && [ "$_prime_hmax" -gt 0 ] 2>
 fi
 case "$_prof_now" in
   performance)
-    NOTE "performance: prime live scaling_max=${_prime_pct}% of hw (the OEM governor varies this under load; ASB applies NO cap in performance)"
+    # fix191: the line used to say ASB put no cap on Performance - not true. The governor owns the
+    # ceilings in Performance and runs its state ladder on the Performance rails: lower in
+    # light use, the rail's top under load, and gaming_cpu_max_ceiling_khz in GAMING (the
+    # cool-gaming clamp). The shell writes no cap there - that part was right.
+    _pf_req="$(grep -m1 '^requested_cpu_max_prime=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+    if [ -n "$_prime_smax" ] && [ "${_pf_req:-0}" -gt 0 ] 2>/dev/null && [ "$_prime_smax" -lt "$_pf_req" ] 2>/dev/null; then
+      NOTE "performance: prime live scaling_max=${_prime_pct}% of hw - below the ${_pf_req} kHz ASB wrote: a ceiling ASB did not set holds it (vendor thermal or msm_performance, see section 10)"
+    else
+      NOTE "performance: prime live scaling_max=${_prime_pct}% of hw - the governor's state ladder on the Performance rails (lower in light use, the rail's top under load, gaming_cpu_max_ceiling_khz=$(cfg gaming_cpu_max_ceiling_khz) in GAMING); the shell writes no cap"
+    fi
     ;;
   battery)
     # battery SHOULD cap prime. If the live value is already <=70% that confirms
