@@ -24,7 +24,7 @@
 #
 # 1.
 #
-# Learning data is never touched: buckets.bin, smart_appheat.bin, night_window.conf,
+# Learning data is never touched: buckets.bin, smart_appheat.bin, smart_records.bin, night_window.conf,
 # session_history.jsonl, user_config and the rest of /data/adb/asb stay exactly as they are.
 #
 # Usage:  su -c 'sh /data/adb/modules/AutoSystemBoost/tools/asb_camera_repair.sh'
@@ -114,7 +114,7 @@ fi
 
 echo
 echo "  learning data left untouched:"
-for _f in buckets.bin smart_appheat.bin night_window.conf session_history.jsonl user_config; do
+for _f in buckets.bin smart_appheat.bin smart_records.bin night_window.conf session_history.jsonl user_config; do
   [ -f "$ASB/$_f" ] && printf "    kept  %-24s %s bytes\n" "$_f" "$(wc -c < "$ASB/$_f" 2>/dev/null)"
 done
 

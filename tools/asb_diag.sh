@@ -2616,6 +2616,49 @@ if [ "$_sna" = 1 ]; then
     NOTE "night slot, screen on: the evening slot's touch bonus applies (the lean itself is no harder than the evening's; smart_night_awake=$(cfg smart_night_awake))"
   fi
 fi
+# Smart records (fix184): the best setting found per situation, measured with the charge
+# counter, and the night-wake habit. Written by the governor to /dev/.asb/smart_records.txt.
+_srf=/dev/.asb/smart_records.txt
+if [ -r "$_srf" ]; then
+  _src="$(sed -n 's/^counter=\([a-z_]*\).*/\1/p' "$_srf" | head -1)"
+  _sbo="$(sed -n 's/.*blocks_ok=\([0-9]*\).*/\1/p' "$_srf" | head -1)"
+  _sbr="$(sed -n 's/.*blocks_rejected=\([0-9]*\).*/\1/p' "$_srf" | head -1)"
+  P "  Smart records        : smart_records=$(cfg smart_records) explore=$(cfg smart_records_explore) · meter=${_src:-?} · blocks kept ${_sbo:-0}, set aside ${_sbr:-0}"
+  case "$_src" in
+    unavailable) NOTE "the charge counter cannot be read on this phone - drain is not measured and no setting is learned" ;;
+    not_moving)  NOTE "the charge counter did not move over 10 minutes - those blocks are set aside" ;;
+  esac
+  while IFS='|' read -r _c _st _best _rma _rn _bma _vs _test _bn _tn _tr _w _bl; do
+    case "$_c" in off_*|on_*) : ;; *) continue ;; esac
+    case "$_st" in
+      measuring) _sts="measuring - ${_bl:-0} block(s) so far, no figure yet" ;;
+      testing)   _sts="testing $_test against the best $_best: ${_bn%%,*} vs ${_tn%%,*} block(s), ${_bn#*,} vs ${_tn#*,} mA" ;;
+      holding)   _sts="best $_best at $_rma mA over $_rn block(s)" ;;
+      plateau)   _sts="plateau - $_best is the best found, $_rma mA (re-checked every 21 days)" ;;
+      *)         _sts="$_st" ;;
+    esac
+    _vss=""
+    case "$_bma" in ''|0|0.0) : ;; *) [ "$_st" != measuring ] && _vss=" · ${_vs}% against the original setting ($_bma mA)" ;; esac
+    P "    $_c: $_sts$_vss · trials $_tr, won $_w"
+  done < "$_srf"
+  _mwl="$(grep -m1 '^microwake|' "$_srf")"
+  if [ -n "$_mwl" ]; then
+    _mwn="$(echo "$_mwl" | sed -n 's/.*learned=\([0-9]*\).*/\1/p')"
+    _mwp="$(echo "$_mwl" | sed -n 's/.*per_night=\([0-9.]*\).*/\1/p')"
+    _mwt="$(echo "$_mwl" | sed -n 's/.*typical_s=\([0-9]*\).*/\1/p')"
+    _mwu="$(echo "$_mwl" | sed -n 's/.*usual=\([0-9:-]*\).*/\1/p')"
+    _mwh="$(_rget microwake_holds /dev/.asb/state 2>/dev/null)"
+    if [ "${_mwn:-0}" -gt 0 ] 2>/dev/null; then
+      P "  night wakes          : $_mwn learned · ${_mwp:-?} a night · usually ${_mwt:-?} s · most often ${_mwu:-?} · kept in night radio mode ${_mwh:-0} time(s) since the governor started (smart_microwake=$(cfg smart_microwake))"
+    else
+      P "  night wakes          : none learned yet (a check of a few minutes after an hour asleep counts)"
+    fi
+  fi
+  _slast="$(sed -n 's/^last=//p' "$_srf" | head -1)"
+  [ -n "$_slast" ] && NOTE "last records decision: $_slast"
+else
+  P "  Smart records        : no summary yet (written once the governor has loaded them)"
+fi
 _tw="$(grep -m1 '^smart_therm_warm_x10=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 _tc="$(grep -m1 '^smart_therm_cool_x10=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 # Learned from this device's own median, not hardcoded - a OnePlus 12 and a 15 idle at
