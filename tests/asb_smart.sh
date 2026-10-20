@@ -4842,6 +4842,13 @@ int main(void) {
     if (asb_shell_cap_khz(&f, 0) != 1670400) { puts("the written record must win over the precomputed one"); bad = 1; }
     f.profile_idx = PROFILE_BALANCED;
     if (asb_shell_cap_khz(&f, 0) != 3628800) { puts("a written battery record was used for balanced"); bad = 1; }
+    /* fix189: a written record with no value for a policy (the boot clamp read every write
+     * back lower) must not hide the precomputed rung - Balanced kept 1555200/1862400. */
+    put("$T/shell_cpu_caps", "profile=balanced\nscreen_on=1\nts=3\n");
+    again();
+    if (asb_shell_cap_khz(&f, 0) != 3628800 || asb_shell_cap_khz(&f, 1) != 4608000) { puts("an empty written record hid the precomputed balanced rung"); bad = 1; }
+    put("$T/shell_cpu_caps", "profile=battery\nscreen_on=1\nts=2\npolicy0=1670400\npolicy6=1632000\n");
+    again();
     f.profile_idx = PROFILE_BATTERY;
     if (strcmp(cap_source_classify_shell(1670400, 1670400, 3628800), "shell_applied")) { puts("own cap"); bad = 1; }
     if (strcmp(cap_source_classify_shell(1747200, 1632000, 4608000), "vendor_clamp")) { puts("clamp under the shell cap"); bad = 1; }

@@ -2528,8 +2528,8 @@ const _lvMeter = { at: 0, cur: '', p: {} };
 function liveDrainIsOpen() { return false; }
 function liveDrainPaint() {}
 EOF
-  for fn in lvEtaFmt lvEtaPaint lvTopSec lvTopSecSync lvDrainHome lvMeterPaint lvPct; do sed -n "/^function $fn(/,/^}/p" "$H"; done
-  sed -n "/^const _lvEta = /p; /^const _lvDrain = /p" "$H"
+  for fn in lvEtaFmt lvEtaPaint lvTopSec lvTopSecSync lvDrainHome lvMeterPaint lvPct lvOffFigure; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  sed -n "/^const _lvEta = /p; /^const _lvDrain = /p; /^const _lvGovOff = /p" "$H"
   cat <<'EOF'
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
 function el(id) { const e = { id: id, textContent: '', title: '', style: { display: '' }, parentElement: null }; _nodes[id] = e; return e; }
@@ -2628,7 +2628,7 @@ for l in en ru uk de es fr it pt tr id ar hy zh; do
 done
 {
   echo "var T = function (k, d) { return d; };"
-  for fn in lvSlotHeat lvMeterParse liveDrainCompare; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  for fn in lvSlotHeat lvMeterParse liveDrainCompare lvOffFigure; do sed -n "/^function $fn(/,/^}/p" "$H"; done
   cat <<'EOF'
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
 let h = lvSlotHeat(518, 414, 494);
@@ -2653,10 +2653,16 @@ globalThis.lvPct = function (x, div, digits) { return (x / div).toFixed(digits) 
 const cell = (row, i) => row.children[i].children.map(function (c) { return c.textContent; }).join('');
 globalThis._lvMeter = { p: lvMeterParse('smart 1200 300 0 0 0\nbattery 1200 300 14400 0 2\nstock 1200 300 0 0 0\n').p };
 globalThis._lvDrain = { off: 'measured', offX: 56 };
+globalThis._lvGovOff = { x: 56, n: 5, by: {} };
 globalThis._selectedProfile = 'smart';
-const box = liveDrainCompare();
-const rows = box.children.slice(1);
-chk(cell(rows[0], 2) === '~0.56%/h', 'current profile without its own screen-off hour: ' + cell(rows[0], 2));
+let box = liveDrainCompare();
+let rows = box.children.slice(1);
+/* fix189: the phone-wide figure is not lent to the current profile any more ("~0.56" read as
+ * Smart's own); the governor's figure for the profile itself is used. */
+chk(cell(rows[0], 2) === '\u2026', 'current profile without its own screen-off hour: ' + cell(rows[0], 2));
+_lvGovOff.by = { smart: { x: 62, n: 3 } };
+box = liveDrainCompare(); rows = box.children.slice(1);
+chk(cell(rows[0], 2) === '0.62%/h', 'the governor figure measured in Smart: ' + cell(rows[0], 2));
 chk(cell(rows[1], 2) === '<0.25%/h', 'a level that did not move over 4 h: ' + cell(rows[1], 2));
 chk(cell(rows[2], 2) === '\u2026', 'another profile still measuring: ' + cell(rows[2], 2));
 chk(rows.every(function (r) { return cell(r, 2) !== '\u2014'; }), 'a dash under the moon');
@@ -2821,7 +2827,7 @@ const _stockLiveInfo = { ceil: [] };
 const _lvEta = { cap: 0, chg: false, gov: null };
 function lvTopSecSync() {} function lvDrainHome() {} function lvTopSec() {} function lvMeterPaint() {}
 EOF
-  for fn in fmtTempC setLiveLabel fmtStockLoad paintStockLive; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  for fn in fmtTempC setLiveLabel fmtStockLoad lvLoadShare paintStockLive; do sed -n "/^function $fn(/,/^}/p" "$H"; done
   cat <<'EOF'
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
 const kv = {
@@ -3474,47 +3480,53 @@ echo "PASS webui smart basis: the tile says what shapes Smart now (records, tria
 )
 
 t_webui_home_offdrain_runtime() (
-# Runtime (fix187): the home card of the running profile shows a screen-off figure whenever
-# the Monitor sheet does. An OP15 Smart card read "8.2 %/h" with no moon while the sheet
-# printed "~0.70 %/h": the meter had no screen-off hour in Smart yet, the governor had five.
-# The REAL chooser runs in node: meter figure, "<x" for an hour that did not move the level,
-# the governor's "~" only for the running profile, nothing otherwise (and never for Stock).
+# Runtime (fix187, reworked in fix189): a profile card's screen-off chip is what was measured
+# in that profile. fix187 put the governor's phone-wide figure on the running profile's card,
+# and an OP15 switched from Smart to Balanced showed Smart's 0.70 %/h on Balanced's card a
+# minute later. The REAL chooser runs in node: the meter's figure, "<x" for an hour that did
+# not move the level, the governor's per-profile figure - never the phone-wide one.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 H="$ROOT/webroot/index.html"
 fail() { echo "FAIL webui home offdrain: $*" >&2; exit 1; }
 command -v node >/dev/null 2>&1 || { echo "SKIP webui home offdrain: no node"; exit 0; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
-grep -q 'const off = homeOffFigure(prof, e);' "$H" || fail "the home card does not use the sheet's rules"
-grep -q "if (_was !== _lvGovOff.x) homeMeterPaint();" "$H" || fail "the governor figure never reaches the home card"
+grep -q 'const off = homeOffFigure(prof);' "$H" || fail "the home card does not use the shared rule"
+grep -q "const _of = lvOffFigure(_selectedProfile);" "$H" || fail "the time to empty does not use the shared rule"
+grep -q "const of = lvOffFigure(k);" "$H" || fail "the sheet's rows do not use the shared rule"
+grep -q "cat /data/adb/asb/offdrain_profiles" "$H" || fail "the per-profile figures are not read where the meter is"
 {
   echo "function T(k, d) { return d; }"
   echo "function lvPct(x, div, digits) { return (x / div).toFixed(digits) + '%/h'; }"
-  echo "var _selectedProfile = 'smart';"
+  echo "var _selectedProfile = 'balanced';"
+  sed -n '/^const _lvMeter = /p' "$H" | sed 's/^const /var /'
   sed -n '/^const _lvGovOff = /p' "$H" | sed 's/^const /var /'
+  sed -n '/^function lvGovOffParse(/,/^}/p' "$H"
+  sed -n '/^function lvOffFigure(/,/^}/p' "$H"
   sed -n '/^function homeOffFigure(/,/^}/p' "$H"
   cat <<'EOF'
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
-_lvGovOff.x = 70; _lvGovOff.n = 5; _lvGovOff.prof = 'smart';
-let r = homeOffFigure('smart', { on: 82, off: 0, offN: 0, offS: 0 });
-chk(r && r.t === '~0.70%/h' && /5 screen-off/.test(r.tip), 'running profile borrows the governor figure: ' + JSON.stringify(r));
-r = homeOffFigure('battery', { on: 100, off: 37, offN: 1, offS: 9771 });
-chk(r && r.t === '0.37%/h' && !r.tip, 'meter figure: ' + JSON.stringify(r));
-r = homeOffFigure('balanced', { on: 0, off: 0, offN: 2, offS: 7200 });
+_lvGovOff.x = 70; _lvGovOff.n = 5;   /* phone-wide: never on a card */
+_lvMeter.p = { smart: { on: 82, off: 0, offN: 0, offS: 0 }, battery: { on: 100, off: 37, offN: 1, offS: 9771 },
+               balanced: { on: 154, off: 0, offN: 0, offS: 0 }, stock: { on: 0, off: 0, offN: 2, offS: 7200 } };
+_lvGovOff.by = lvGovOffParse('smart 62 3\nbogus x y\nbattery 0 0\n');
+chk(homeOffFigure('balanced') === null, 'Balanced got the phone-wide figure: ' + JSON.stringify(homeOffFigure('balanced')));
+let r = homeOffFigure('smart');
+chk(r && r.t === '0.62%/h' && r.src === 'gov' && /3 screen-off/.test(r.tip), 'Smart keeps its own governor figure: ' + JSON.stringify(r));
+r = homeOffFigure('battery');
+chk(r && r.t === '0.37%/h' && r.src === 'meter', 'meter figure first: ' + JSON.stringify(r));
+r = homeOffFigure('stock');
 chk(r && r.t === '<0.50%/h', 'an hour that did not move the level: ' + JSON.stringify(r));
-r = homeOffFigure('battery', { on: 100, off: 0, offN: 0, offS: 0 });
-chk(r === null, 'another profile does not borrow the governor figure');
-_selectedProfile = 'stock'; _lvGovOff.prof = 'stock';
-chk(homeOffFigure('stock', { on: 170, off: 0, offN: 0, offS: 0 }) === null, 'Stock runs no governor');
-_selectedProfile = 'smart'; _lvGovOff.prof = 'smart'; _lvGovOff.x = 0;
-chk(homeOffFigure('smart', null) === null, 'nothing measured: nothing shown');
+chk(homeOffFigure('performance') === null, 'nothing measured: nothing shown');
+_selectedProfile = 'smart';
+chk(homeOffFigure('balanced') === null, 'the running profile does not matter');
 if (bad) process.exit(1);
 console.log('ok');
 EOF
 } > "$T/t.js"
 out="$(node "$T/t.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo "PASS webui home offdrain: the running profile's card shows the screen-off figure the Monitor sheet shows"
+echo "PASS webui home offdrain: a card's screen-off figure is the one measured in that profile, never the phone-wide one"
 )
 
 t_webui_navbar_profiles() (
@@ -3575,12 +3587,15 @@ grep -q "if (it.key === 'lsposed_verbose') {" "$H" || fail "the card has no badg
   cat <<'EOF'
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
 const P = (s) => lspParse(s.join('\n'));
-let b = lspBadge(P(['present=1', 'setting=keep', 'verbose=default_on', 'log_kib=31744', 'verbose_kib=30000', 'pending_reboot=0']), 'keep');
-chk(b.cls === 'warn' && b.text === 'LSPosed log on · 31 MB', 'a big verbose log: ' + JSON.stringify(b));
+let b = lspBadge(P(['present=1', 'setting=keep', 'verbose=default_on', 'log_kib=31744', 'verbose_kib=30000', 'modules_kib=1700', 'pending_reboot=0']), 'keep');
+chk(b.cls === 'warn' && b.text === 'verbose log on · 29 MB', 'a big verbose log: ' + JSON.stringify(b));
+/* fix189: verbose off, 20 MB of modules log - named apart, not read as the verbose log */
+b = lspBadge(P(['present=1', 'verbose=off', 'log_kib=20148', 'verbose_kib=37', 'modules_kib=19800', 'pending_reboot=0']), 'off');
+chk(b.cls === 'good' && b.text === 'verbose log off · modules log 19 MB', 'the modules log named apart: ' + JSON.stringify(b));
 b = lspBadge(P(['present=1', 'verbose=off', 'log_kib=2048', 'pending_reboot=1', 'asb_changed=1 prev=default_on']), 'off');
 chk(b.cls === 'warn' && b.text === 'off after a reboot', 'written this boot: ' + JSON.stringify(b));
 b = lspBadge(P(['present=1', 'verbose=off', 'log_kib=512', 'pending_reboot=0']), 'off');
-chk(b.cls === 'good' && b.text === 'LSPosed log off', 'off and in force: ' + JSON.stringify(b));
+chk(b.cls === 'good' && b.text === 'verbose log off', 'off and in force: ' + JSON.stringify(b));
 b = lspBadge(P(['present=1', 'verbose=unknown', 'reason=no_sqlite']), 'off');
 chk(b.text === 'set in LSPosed', 'unreadable: ' + JSON.stringify(b));
 b = lspBadge(P(['present=0', 'setting=keep']), 'keep');
@@ -3593,6 +3608,44 @@ EOF
 out="$(node "$T/t.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 echo "PASS webui lsposed badge: LSPosed's real state, its log size and a pending reboot reach the card"
+)
+
+t_webui_monitor_manual_tiles_runtime() (
+# Runtime (fix189): the Monitor on Battery/Balanced/Performance. Balanced read "Learner:
+# unknown · 2" - Battery's session count (the tile always took learner.sessions.battery) and an
+# untranslated rating of the last Battery session - with ten Balanced sessions recorded. And the
+# system load gets its share of the cores, coloured like the temperatures (asked for).
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui monitor manual tiles: $*" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "SKIP webui monitor manual tiles: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+grep -q 'learner.sessions && learner.sessions.battery' "$H" && fail "the tile still counts Battery's sessions on every profile"
+grep -q 'const sessions = parseInt(sesMap\[profile\], 10) || 0;' "$H" || fail "the tile does not count this profile's sessions"
+grep -q "if (key === 'learner' && _selectedProfile !== 'smart') key = 'learnerp';" "$H" || fail "the sheet explains Smart's learning on a manual profile"
+grep -q 'echo "cpus_online=$_nc"' "$ROOT/runtime/asb_rom_telemetry.sh" || fail "no core count for the load share"
+for l in en ru uk de fr it pt es id tr zh ar hy; do
+  python3 -c "import json,sys; d=json.load(open(sys.argv[1])); [d[k] for k in ('learn_clean','learn_partial','learn_noisy','learn_dirty','lvi_learner_prof','stock_load_share','learn_tip_profile')]" "$ROOT/webroot/i18n/$l.json" \
+    || fail "$l: tile strings missing"
+done
+{
+  sed -n '/^function lvLoadShare(/,/^}/p' "$H"
+  cat <<'EOF'
+let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
+let r = lvLoadShare('9.06 7.13 5.64', '8');
+chk(r && r.pct === 113 && r.cls === 'load-high', 'busy: ' + JSON.stringify(r));
+r = lvLoadShare('2.40 2 2', '8'); chk(r && r.pct === 30 && r.cls === 'load-low', 'light: ' + JSON.stringify(r));
+r = lvLoadShare('4.4 1 1', '8'); chk(r && r.pct === 55 && r.cls === 'load-mid', 'half: ' + JSON.stringify(r));
+r = lvLoadShare('6.0', '6'); chk(r && r.pct === 100 && r.cls === 'load-high', 'parked cores: ' + JSON.stringify(r));
+chk(lvLoadShare('3.0', '') === null && lvLoadShare('', '8') === null && lvLoadShare('x', '8') === null, 'no core count or no load: no share');
+if (bad) process.exit(1);
+console.log('ok');
+EOF
+} > "$T/t.js"
+out="$(node "$T/t.js" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo "PASS webui monitor manual tiles: this profile's sessions on the learner tile, the load as a coloured share of the cores"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

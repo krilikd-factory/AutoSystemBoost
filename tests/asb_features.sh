@@ -1489,8 +1489,13 @@ i=0; while [ $i -lt 30 ]; do i=$((i + 1)); t=$((t + 30)); [ $i = 15 ] && dm_step
 [ "$(dm_get smart on_s)" = "$_before" ] || f "Stock time was booked to Smart"
 dm_step "$((t + 30))" 79 0 1 none 0
 [ -z "$dm_prof" ] || f "an unknown profile was measured"
+# fix189: the windows that did not count, and why - the music night, the 30 minutes, the night
+# that ended on the charger.
+[ "$dm_rej_media $dm_rej_short $dm_rej_charge" = "1 1 1" ] || f "rejections: media=$dm_rej_media short=$dm_rej_short charge=$dm_rej_charge, want 1 1 1"
 dm_flush "$t"
 grep -q '^smart 1770 300 17300 300 3$' "$T/asb/drain_meter" || f "file line for smart: $(grep '^smart' "$T/asb/drain_meter")"
+grep -qx '1 1 1 smart:charge:50' "$T/asb/drain_meter.rej" || f "rejections not kept: $(cat "$T/asb/drain_meter.rej" 2>/dev/null)"
+dm_rej_media=0; dm_load; [ "$dm_rej_media" = 1 ] || f "rejections not read back"
 printf '%s\n' 'smart 99 x 1 1 1' 'bogus 1 1 1 1 1' >> "$T/asb/drain_meter"
 dm_load
 [ "$(dm_get smart on_s)" = 1770 ] && [ "$(dm_get stock on_s)" -gt 0 ] || f "file round trip lost values"
@@ -6674,7 +6679,7 @@ cat > "$T/stubs.sh" <<X
 little_end=5
 CPU_MIN_LITTLE=300000; CPU_MIN_BIG=300000
 ASB_SHELL_CAPS_FILE="$T/shell_cpu_caps"
-writef_retry() { printf '%s\n' "\$2" > "\$1"; [ -n "\${ROUND_UP:-}" ] && case "\$1" in *policy6/scaling_max_freq) echo 1862400 > "\$1" ;; esac; [ -n "\${CLAMP:-}" ] && case "\$1" in *policy0/scaling_max_freq) echo 1440000 > "\$1" ;; esac; return 0; }
+writef_retry() { printf '%s\n' "\$2" > "\$1"; [ -n "\${ROUND_UP:-}" ] && case "\$1" in *policy6/scaling_max_freq) echo 1862400 > "\$1" ;; esac; [ -n "\${CLAMP:-}" ] && case "\$1" in *policy0/scaling_max_freq) echo 1440000 > "\$1" ;; esac; if [ -n "\${HOLD:-}" ]; then case "\$1" in *policy0/scaling_max_freq) echo 1555200 > "\$1" ;; *policy6/scaling_max_freq) echo 1632000 > "\$1" ;; *) return 0 ;; esac; return 1; fi; return 0; }
 asb_pick_nearest_freq() { echo "\$2"; }
 asb_log() { echo "\$*" >> "$T/log"; }
 asb_load_profile() { :; }
@@ -6704,6 +6709,12 @@ grep -qx 'policy6=1862400' "$T/shell_cpu_caps" || fail "rounded-up read-back not
 # a clamp already in place when the shell writes: the request is recorded, not the clamp
 SCREEN=1 GOV=1 CLAMP=1 run
 grep -qx 'policy0=1785600' "$T/shell_cpu_caps" || fail "a vendor clamp was recorded as the shell's cap: $(cat "$T/shell_cpu_caps")"
+# fix189: an uncapped Balanced under the vendor's boot clamp - every write reads back lower and
+# writef_retry gives up - still records the request. An empty record hid the precomputed rung
+# from the governor, and Balanced kept 1555200/1862400 for a whole capture.
+( . "$T/stubs.sh"; . "$T/f.sh"; ASB_PROFILE=balanced; PROFILE=balanced; SCREEN=1; GOV=1; HOLD=1; apply_screen_aware_caps )
+grep -qx 'profile=balanced' "$T/shell_cpu_caps" && grep -qx 'policy0=3628800' "$T/shell_cpu_caps" && grep -qx 'policy6=4608000' "$T/shell_cpu_caps" \
+  || fail "a request held lower by a clamp was not recorded: $(cat "$T/shell_cpu_caps")"
 # fix183: every manual profile's screen-on rung is precomputed - also when Smart runs, and
 # without writing a ceiling.
 grep -qx 'policy6=1747200' "$T/shell_cpu_caps.battery" || fail "battery rung: $(cat "$T/shell_cpu_caps.battery" 2>&1)"
@@ -6897,16 +6908,25 @@ out="$("$T/bin/asb" --lspd verbose-get "$T/none.db" || true)"; printf '%s\n' "$o
 # The script, as the card runs it.
 for i in 1 2 3; do head -c 2048 /dev/zero > "$T/lspd/log/verbose_2026-10-1${i}T10_00_00.log"; touch -d "2026-10-1${i} 10:00" "$T/lspd/log/verbose_2026-10-1${i}T10_00_00.log"; done
 head -c 1024 /dev/zero > "$T/lspd/log/modules_2026-10-13T10_00_00.log"
+mkdir -p "$T/lspd/log.old"; head -c 1024 /dev/zero > "$T/lspd/log.old/verbose_2026-10-10T10_00_00.log"
+head -c 1024 /dev/zero > "$T/lspd/log.old/modules_2026-10-10T10_00_00.log"
 run() { ( MODDIR="$T/mod" ASB_CONF="$T/mod/config/governor.conf" ASB_LSPD_DIR="$T/lspd" ASB_LSPD_PREV="$T/asb/prev" ASB_GOV_BIN="$T/bin/asb" sh "$ROOT/runtime/asb_lsposed.sh" "$@" ); }
 echo 'lsposed_verbose=off' > "$T/mod/config/governor.conf"
-out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=off_after_reboot freed_kib=4$' || fail "apply off: $out"
+out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=off_after_reboot freed_kib=5$' || fail "apply off: $out"
 [ -f "$T/lspd/log/verbose_2026-10-13T10_00_00.log" ] || fail "the newest verbose log (held open) was deleted"
-[ ! -f "$T/lspd/log/verbose_2026-10-11T10_00_00.log" ] && [ ! -f "$T/lspd/log/verbose_2026-10-12T10_00_00.log" ] || fail "old verbose logs kept"
+# Emptied, not deleted (fix189): LSPosed deletes the eldest of this boot's files itself, and a
+# file already gone stalls that for the rest of the boot.
+[ -f "$T/lspd/log/verbose_2026-10-11T10_00_00.log" ] && [ ! -s "$T/lspd/log/verbose_2026-10-11T10_00_00.log" ] \
+  && [ -f "$T/lspd/log/verbose_2026-10-12T10_00_00.log" ] && [ ! -s "$T/lspd/log/verbose_2026-10-12T10_00_00.log" ] || fail "old verbose logs not emptied in place"
+[ -s "$T/lspd/log/verbose_2026-10-13T10_00_00.log" ] || fail "the newest verbose log was emptied"
+[ ! -f "$T/lspd/log.old/verbose_2026-10-10T10_00_00.log" ] || fail "the previous boot's verbose log kept"
+[ -f "$T/lspd/log.old/modules_2026-10-10T10_00_00.log" ] || fail "the previous boot's modules log was touched"
 [ -f "$T/lspd/log/modules_2026-10-13T10_00_00.log" ] || fail "the modules log was touched"
 [ "$(cat "$T/asb/prev")" = default_on ] || fail "LSPosed's earlier value not remembered"
 out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=already_off' || fail "second apply: $out"
 [ "$(cat "$T/asb/prev")" = default_on ] || fail "the remembered value was overwritten by ASB's own"
 out="$(run status)"; printf '%s\n' "$out" | grep -qx 'verbose=off' && printf '%s\n' "$out" | grep -qx 'present=1' || fail "status: $out"
+printf '%s\n' "$out" | grep -qx 'modules_kib=1' && printf '%s\n' "$out" | grep -qx 'oldlog_kib=1' || fail "the modules log is not reported apart: $out"
 # Written during this boot: the daemon still runs with the old value, the card must say so.
 printf '%s\n' "$out" | grep -qx 'pending_reboot=1' || fail "a write from this boot is not reported as waiting for a reboot: $out"
 echo 1000 > "$T/asb/prev_at"
@@ -6936,6 +6956,35 @@ grep -q "LSPosed's log was already off when the card was set" "$ROOT/tools/asb_d
 rm -rf "$T/lspd"; echo 'lsposed_verbose=off' > "$T/mod/config/governor.conf"
 out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=absent' || fail "no LSPosed: $out"
 echo "PASS lsposed verbose: LSPosed's own switch written as Java's Boolean, remembered and put back; old logs freed; foreign layouts untouched"
+)
+
+t_asbdiag_lsposed_modlog_runtime() (
+# Runtime (fix189): asbdiag tells the modules log apart from the verbose log and names who
+# fills it. An OP15 with LSPosed's verbose log off showed 20 MB an hour after boot - the
+# modules log, which LSPosed has no switch for - and the card read "log off" beside it.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL asbdiag lsposed modlog: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+sed -n '/^_asb_lsp_modlog() {$/,/^}$/p' "$ROOT/tools/asb_diag.sh" > "$T/fn.sh"
+[ -s "$T/fn.sh" ] || fail "function not found"
+grep -q '^  _asb_lsp_modlog$' "$ROOT/tools/asb_diag.sh" || fail "section 0f does not call it"
+mkdir -p "$T/log"
+i=0; while [ $i -lt 30 ]; do i=$((i + 1))
+  printf '[ 2026-10-20T17:30:%02d.123    10179:  1234:  1240 I/LSPosed-Bridge  ] LuckyTool: hook statusbar clock %d\n' $((i % 60)) "$i"
+done > "$T/log/modules_2026-10-20T17_00_00.log"
+printf '[ 2026-10-20T17:31:01.125     1000:   999:   999 I/LSPosed-Bridge  ] OtherMod: hooked\n' >> "$T/log/modules_2026-10-20T17_00_00.log"
+printf 'old\n' > "$T/log/modules_2026-10-20T16_00_00.log"; touch -d '2026-10-20 16:00' "$T/log/modules_2026-10-20T16_00_00.log"
+printf 'com.android.systemui 10179 0 /data/user/0/com.android.systemui platform 3003\n' > "$T/pk"
+out="$( NOTE() { echo "NOTE $*"; }; . "$T/fn.sh"; ASB_LSPD_LOG="$T/log" ASB_PKG_LIST="$T/pk" _asb_lsp_modlog )"
+printf '%s\n' "$out" | grep -q 'in 2 file(s) this boot' || fail "size/count line: $out"
+printf '%s\n' "$out" | grep -q 'not the verbose log' || fail "not told apart from the verbose log: $out"
+printf '%s\n' "$out" | sed -n 2p | grep -q '96% of the newest file (30 lines): com.android.systemui | LuckyTool: hook statusbar clock #$' || fail "top writer not named: $out"
+printf '%s\n' "$out" | grep -q 'system | OtherMod: hooked' || fail "uid 1000 not named system: $out"
+out="$( NOTE() { echo "NOTE $*"; }; . "$T/fn.sh"; ASB_LSPD_LOG="$T/none" _asb_lsp_modlog )"
+[ -z "$out" ] || fail "printed something without a modules log: $out"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS asbdiag lsposed modlog: the modules log is reported apart, with the app and message that fill it"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

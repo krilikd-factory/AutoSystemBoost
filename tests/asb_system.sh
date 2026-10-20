@@ -4008,7 +4008,7 @@ grep -q 'asb_lsposed' "$ROOT/service.sh" "$ROOT/post-fs-data.sh" 2>/dev/null && 
 grep -q 'asb_lsposed.sh" restore' "$ROOT/uninstall.sh" || fail "uninstall leaves LSPosed changed"
 grep -q 'asb_lsposed.sh' "$ROOT/docs/log_schemas.md" || fail "asb_lsposed.sh status undocumented"
 grep -q '0f. LSPOSED LOGGING' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not report LSPosed"
-grep -q 'const off = homeOffFigure(prof, e);' "$H" || fail "home card ignores the governor's screen-off figure"
+grep -q 'const off = homeOffFigure(prof);' "$H" || fail "home card does not use the shared screen-off rule"
 grep -q '"nav_home": "Профили"' "$ROOT/webroot/i18n/ru.json" || fail "the first tab is not Profiles"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag differs from tools/asb_diag.sh"
 echo "PASS: fix187 contract"
@@ -4027,6 +4027,28 @@ grep -q 'shared browser code apps load for web pages, not a hook' "$ROOT/tools/a
 grep -q 'smoothed: not formed yet' "$ROOT/tools/asb_diag.sh" || fail "a peak not formed yet reads as 0 C"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag differs from tools/asb_diag.sh"
 echo "PASS: fix188 contract"
+) || exit 1
+# ---- fix189 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix189: $*"; exit 1; }
+for t in test_offdrain_by_profile_runtime.sh test_webui_monitor_manual_tiles_runtime.sh \
+         test_asbdiag_lsposed_modlog_runtime.sh test_webui_home_offdrain_runtime.sh \
+         test_shell_cap_owner_runtime.sh test_shell_caps_publish_runtime.sh test_drain_meter_runtime.sh; do
+  asb_has_test "$t" || fail "$t missing"
+done
+grep -q 'g_shell_live.khz\[pol\] > 0)' "$ROOT/src/asb_writer.h" || fail "an empty shell record still hides the precomputed rung"
+grep -q 'elif \[ -w "$_smax" \] && \[ "$(cat "$_smax" 2>/dev/null)" -le "$_want" \] 2>/dev/null; then _wok=1' "$ROOT/service.sh" || fail "a request held lower by a clamp is not recorded"
+grep -q '"offdrain_by_profile="' "$ROOT/src/asb_governor.c" || fail "no per-profile screen-off figure"
+grep -q 'function lvOffFigure(profile)' "$ROOT/webroot/index.html" || fail "no shared screen-off rule"
+grep -q "if (_lvGovOff.x > 0) return" "$ROOT/webroot/index.html" && fail "a card borrows the phone-wide figure"
+grep -q 'drain_meter.rej' "$ROOT/runtime/asb_drain_meter.sh" || fail "meter rejections not kept"
+grep -q 'drain_meter.rej' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not show meter rejections"
+grep -q 'true > "$_f" 2>/dev/null && _freed=' "$ROOT/runtime/asb_lsposed.sh" || fail "LSPosed's current verbose logs are deleted, not emptied"
+grep -q 'echo "modules_kib=' "$ROOT/runtime/asb_lsposed.sh" || fail "the modules log is not reported apart"
+grep -q 'offdrain_by_profile' "$ROOT/docs/log_schemas.md" || fail "offdrain_by_profile undocumented"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag differs from tools/asb_diag.sh"
+echo "PASS: fix189 contract"
 ) || exit 1
 echo "PASS: field-fix contracts"
 )
@@ -4053,6 +4075,57 @@ run; grep -qx 'set sustained_temp_user_override 1' "$T/calls" || fail "a changed
 printf 'sustained_temp_mode=smart\nsustained_temp_user_override=1\n' > "$T/mod/config/governor.conf"
 run; grep -qx 'set sustained_temp_user_override 0' "$T/calls" || fail "leaving manual does not clear the flag"
 echo "PASS boot override noop: governor.conf is rewritten at boot only when the flag changes"
+)
+
+t_offdrain_by_profile_runtime() (
+# Runtime (fix189): a screen-off window counts for the profile it ran in. The phone-wide
+# figure went onto whichever card was running: an OP15 switched from Smart to Balanced showed
+# Smart's 0.70 %/h on Balanced's card a minute later. The REAL governor code runs: a Smart
+# night counts for Smart, a window with a switch in it counts only phone-wide, both survive a
+# restart through their files.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL offdrain by profile: $*" >&2; exit 1; }
+CC="${CC:-cc}"; command -v "$CC" >/dev/null 2>&1 || CC=gcc
+command -v "$CC" >/dev/null 2>&1 || { echo "SKIP offdrain by profile: no C compiler"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+G="$ROOT/src/asb_governor.c"
+awk '/^#define ASB_OFFDRAIN_FILE /{ b = 1 } b { print } b && /^static void asb_offdrain_track\(/ { t = 1 } t && /^}$/ { exit }' "$G" \
+  | sed "s#/data/adb/asb/offdrain_pctph_x100#$T/od#; s#/data/adb/asb/offdrain_profiles#$T/odp#" > "$T/od.inc"
+grep -q 'g_offdrain_p_x100\[wp\]' "$T/od.inc" || fail "per-profile accounting not found"
+cat > "$T/m.c" <<C
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+static long g_now;
+static long asb_clock_ms(clockid_t w) { (void)w; return g_now; }
+static int metrics_pcm_playing(void) { return -1; }
+#include "$T/od.inc"
+#define MIN 60000L
+int main(void) {
+    /* Smart (3): off 2 h, 3 % down, on for 3 min */
+    g_now = 1000; asb_offdrain_track(0, 80, 0, 3);
+    g_now += 120 * MIN; asb_offdrain_track(1, 77, 0, 3);
+    g_now += 3 * MIN; asb_offdrain_track(1, 77, 0, 3);
+    /* off in Smart, switched to Balanced (1) during the night */
+    g_now += 1 * MIN; asb_offdrain_track(0, 77, 0, 3);
+    g_now += 60 * MIN; asb_offdrain_track(0, 76, 0, 1);
+    g_now += 60 * MIN; asb_offdrain_track(1, 74, 0, 1);
+    g_now += 3 * MIN; asb_offdrain_track(1, 74, 0, 1);
+    printf("%d %d %d %d %d %d\n", g_offdrain_x100, g_offdrain_n, g_offdrain_p_x100[3], g_offdrain_p_n[3], g_offdrain_p_x100[1], g_offdrain_p_n[1]);
+    return 0;
+}
+C
+"$CC" -std=gnu11 -Wall -Werror -o "$T/m" "$T/m.c" || fail "does not compile"
+out="$("$T/m")"
+set -- $out
+[ "$2" = 2 ] || fail "both windows count phone-wide: $out"
+[ "$3" = 150 ] && [ "$4" = 1 ] || fail "the Smart night is not Smart's: $out"
+[ "$5" = -1 ] && [ "$6" = 0 ] || fail "a night with a switch in it was given to Balanced: $out"
+grep -qx 'smart 150 1' "$T/odp" || fail "per-profile figure not kept on disk: $(cat "$T/odp" 2>/dev/null)"
+grep -q '"offdrain_by_profile="' "$G" || fail "not published in the state"
+echo "PASS offdrain by profile: a window counts for the profile that held it from screen-off to screen-on"
 )
 
 t_profile_net_reassert_runtime() (
