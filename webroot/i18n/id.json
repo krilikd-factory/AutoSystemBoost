@@ -381,6 +381,14 @@
     "ltpo_video": {
       "name": "Refresh terendah untuk video",
       "desc": "Saat video diputar, panel tetap pada laju yang dipilih sistem untuk hal lain: pada keluarga ponsel ini 90 Hz untuk streaming 30 fps - tiga penyegaran per frame padahal dua sudah cukup.\n\nJika aktif, ASB menurunkan laju refresh puncak ke mode panel terkecil yang merupakan kelipatan tepat dari video (60 Hz untuk 30 dan 60 fps), sehingga gerakan tetap tanpa patah-patah. Hanya bertindak bila: layar menyala, audio diputar, lapisan video meminta 30 atau 60 fps, tidak ada lapisan yang meminta kelancaran tinggi, dan layar tidak disentuh selama 3 detik.\n\nSentuhan pertama langsung mengembalikan nilai sebelumnya, begitu juga akhir pemutaran, video ditutup, dan layar dimatikan - jadi gulir dan animasi berjalan pada laju penuh. Catatan jujur: beberapa frame pertama setelah sentuhan itu (sekitar 0,1-0,2 dtk) masih bisa pada laju rendah. Video 24, 25 dan 50 fps tidak punya mode lebih rendah yang mulus, jadi dibiarkan. Berlaku seketika."
+    },
+    "lsposed_verbose": {
+      "name": "Log rinci LSPosed",
+      "desc": "LSPosed menyimpan log rinci sendiri yang bisa mencapai puluhan megabyte (31 MB di satu ponsel). Mati menulis pengaturan LSPosed sendiri – sakelar yang sama dengan Pengaturan > Log rinci di managernya – dan menghapus file log rinci lama; LSPosed membaca pengaturan saat mulai, jadi berlaku setelah reboot. Biarkan tidak menyentuh LSPosed dan, jika ASB pernah mematikan log, mengembalikan nilai yang dimiliki LSPosed. Diterapkan sekali saat diubah: jika nanti Anda menyalakan log lagi di LSPosed, ASB tidak membatalkannya. Nyalakan lagi sebelum melaporkan masalah ke pembuat modul LSPosed.",
+      "descOpt": {
+        "keep": "ASB tidak menyentuh pengaturan LSPosed.",
+        "off": "Log rinci LSPosed mati mulai boot berikutnya; file lama dihapus sekarang."
+      }
     }
   },
   "nav_live": "Monitor",
@@ -551,6 +559,10 @@
     },
     "mglru_hold": {
       "hold": "tahan"
+    },
+    "lsposed_verbose": {
+      "keep": "biarkan",
+      "off": "mati"
     }
   },
   "prof_none": "belum dipilih",
@@ -813,7 +825,7 @@
   "cap_clamps_tip": "Seberapa sering mesin termal vendor mengambil alih batas dari ASB.",
   "lv_hotspot_tip": "Zona terpanas di dalam: CPU, GPU, atau memori. Selalu lebih tinggi dari bodi.",
   "lv_src_rom": "pembacaan ROM langsung",
-  "nav_home": "Beranda",
+  "nav_home": "Profil",
   "nav_logs": "Log",
   "nav_channel": "Kanal",
   "doze_android_dozes": "Android menidurkannya",
@@ -878,7 +890,7 @@
   "cfg_ui_section_feel": "Layar & getaran",
   "cfg_ui_section_feel_hint": "Perilaku refresh rate serta rasa getaran dan respons sentuh.",
   "cfg_ui_section_diag": "Diagnostik",
-  "cfg_ui_section_diag_hint": "Seberapa rinci modul menulis log-nya sendiri.",
+  "cfg_ui_section_diag_hint": "Seberapa banyak modul – dan LSPosed – menulis ke lognya.",
   "cfg_camera_section_processing": "Pemrosesan foto",
   "cfg_camera_section_processing_hint": "Seberapa kuat kamera memproses gambar: kontras, butiran, potret, cahaya rendah.",
   "cfg_camera_section_perf": "Performa kamera",
@@ -1131,5 +1143,18 @@
   "lvi_cpu_now": "CPU sekarang: %s",
   "lvi_trend_rate": "%1 °C per menit dalam %2 dtk terakhir",
   "lv_lpm_night": "malam",
-  "lv_lpm_night_t": "jendela malam: masa diam lebih panjang"
+  "lv_lpm_night_t": "jendela malam: masa diam lebih panjang",
+  "t_lsp_off": "Log rinci LSPosed: mati setelah reboot",
+  "t_lsp_already": "Log rinci LSPosed sudah mati",
+  "t_lsp_freed": " · %s MB log lama dihapus",
+  "t_lsp_restored": "Pengaturan LSPosed dikembalikan · setelah reboot",
+  "t_lsp_untouched": "ASB tidak menyentuh LSPosed",
+  "t_lsp_absent": "LSPosed tidak terpasang",
+  "t_lsp_manual": "LSPosed ini menyimpan pengaturan secara berbeda – matikan log rinci di managernya",
+  "st_lsp_absent": "tanpa LSPosed",
+  "st_lsp_reboot": "mati setelah reboot",
+  "st_lsp_off": "log LSPosed mati",
+  "st_lsp_on": "log LSPosed nyala",
+  "st_lsp_unknown": "atur di LSPosed",
+  "unit_mb": "MB"
 }

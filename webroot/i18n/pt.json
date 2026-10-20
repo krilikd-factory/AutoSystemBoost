@@ -381,6 +381,14 @@
     "ltpo_video": {
       "name": "Taxa mínima para vídeo",
       "desc": "Enquanto um vídeo é reproduzido, o painel fica na taxa que o sistema escolheu para tudo o resto: nesta família de telemóveis 90 Hz para um vídeo de 30 fps, três atualizações por fotograma onde duas bastariam.\n\nCom isto ligado, o ASB baixa a taxa máxima para o menor modo do painel que seja múltiplo exato do vídeo (60 Hz para 30 e 60 fps), para que o movimento continue sem solavancos. Só atua quando: o ecrã está ligado, há áudio a tocar, uma camada de vídeo pede 30 ou 60 fps, nenhuma camada pede alta fluidez e o ecrã não foi tocado há 3 segundos.\n\nO primeiro toque repõe o valor anterior de imediato, tal como o fim da reprodução, o fecho do vídeo e o desligar do ecrã - por isso o deslizar e as animações correm à taxa completa. O senão honesto: os primeiríssimos fotogramas após esse toque (cerca de 0,1-0,2 s) ainda podem estar na taxa baixa. Vídeo de 24, 25 e 50 fps não tem modo inferior sem solavancos e não é tocado. Aplica-se de imediato."
+    },
+    "lsposed_verbose": {
+      "name": "Log detalhado do LSPosed",
+      "desc": "O LSPosed mantém um log detalhado próprio que chega a dezenas de megabytes (31 MB num telefone). Desligado grava a configuração do próprio LSPosed – o mesmo interruptor de Configurações > Log detalhado no seu gerenciador – e apaga os arquivos antigos de log detalhado; o LSPosed lê a configuração ao iniciar, então vale após reiniciar. Manter deixa o LSPosed como está e, se o ASB desligou o log, devolve o valor que o LSPosed tinha. Aplicado uma vez, ao mudar: se depois você religar o log no LSPosed, o ASB não desfaz isso. Religue-o antes de relatar um problema ao autor de um módulo LSPosed.",
+      "descOpt": {
+        "keep": "O ASB não mexe nas configurações do LSPosed.",
+        "off": "Log detalhado do LSPosed desligado a partir do próximo boot; arquivos antigos apagados na hora."
+      }
     }
   },
   "nav_live": "Monitor",
@@ -551,6 +559,10 @@
     },
     "mglru_hold": {
       "hold": "manter"
+    },
+    "lsposed_verbose": {
+      "keep": "manter",
+      "off": "desligado"
     }
   },
   "prof_none": "não selecionado",
@@ -813,7 +825,7 @@
   "cap_clamps_tip": "Com que frequência o motor térmico do fabricante tirou o limite do ASB.",
   "lv_hotspot_tip": "A zona mais quente por dentro: CPU, GPU ou memória. Sempre acima da carcaça.",
   "lv_src_rom": "leitura direta da ROM",
-  "nav_home": "Início",
+  "nav_home": "Perfis",
   "nav_logs": "Registos",
   "nav_channel": "Canal",
   "doze_android_dozes": "Android suspende-a",
@@ -878,7 +890,7 @@
   "cfg_ui_section_feel": "Ecrã e vibração",
   "cfg_ui_section_feel_hint": "Taxa de atualização e sensação da vibração e do toque.",
   "cfg_ui_section_diag": "Diagnóstico",
-  "cfg_ui_section_diag_hint": "Quão detalhados são os registos do módulo.",
+  "cfg_ui_section_diag_hint": "Quanto o módulo – e o LSPosed – escrevem nos seus logs.",
   "cfg_camera_section_processing": "Processamento de foto",
   "cfg_camera_section_processing_hint": "Quanto a câmara processa a imagem: contraste, grão, retratos, pouca luz.",
   "cfg_camera_section_perf": "Desempenho da câmara",
@@ -1131,5 +1143,18 @@
   "lvi_cpu_now": "CPU agora: %s",
   "lvi_trend_rate": "%1 °C por minuto nos últimos %2 s",
   "lv_lpm_night": "noite",
-  "lv_lpm_night_t": "janela noturna: ociosidade ainda mais longa"
+  "lv_lpm_night_t": "janela noturna: ociosidade ainda mais longa",
+  "t_lsp_off": "Log detalhado do LSPosed: desligado após reiniciar",
+  "t_lsp_already": "O log detalhado do LSPosed já está desligado",
+  "t_lsp_freed": " · %s MB de logs antigos apagados",
+  "t_lsp_restored": "Configuração do LSPosed restaurada · após reiniciar",
+  "t_lsp_untouched": "O ASB não mexe no LSPosed",
+  "t_lsp_absent": "O LSPosed não está instalado",
+  "t_lsp_manual": "Este LSPosed guarda a configuração de outro jeito – desligue o log detalhado no gerenciador dele",
+  "st_lsp_absent": "sem LSPosed",
+  "st_lsp_reboot": "desligado após reiniciar",
+  "st_lsp_off": "log do LSPosed desligado",
+  "st_lsp_on": "log do LSPosed ligado",
+  "st_lsp_unknown": "ajuste no LSPosed",
+  "unit_mb": "MB"
 }

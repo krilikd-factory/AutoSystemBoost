@@ -475,6 +475,14 @@
     "ltpo_video": {
       "name": "Fréquence minimale pour la vidéo",
       "desc": "Pendant une vidéo, la dalle reste à la fréquence que le système a choisie pour tout le reste : sur cette famille de téléphones 90 Hz pour un flux à 30 i/s, soit trois rafraîchissements par image là où deux suffiraient.\n\nActivé, ASB abaisse la fréquence maximale au plus petit mode de la dalle qui soit un multiple exact de la vidéo (60 Hz pour 30 et 60 i/s), pour un mouvement sans saccades. Il n'agit que si : l'écran est allumé, du son est lu, une couche vidéo demande 30 ou 60 i/s, aucune couche ne demande une fluidité élevée, et l'écran n'a pas été touché depuis 3 secondes.\n\nLe premier toucher rétablit aussitôt la valeur précédente, de même que la fin de la lecture, la fermeture de la vidéo et l'extinction de l'écran - le défilement et les animations tournent donc à pleine fréquence. La limite honnête : les toutes premières images après ce toucher (environ 0,1-0,2 s) peuvent encore être à la fréquence basse. Les vidéos à 24, 25 et 50 i/s n'ont pas de mode inférieur sans saccades et ne sont pas touchées. S'applique immédiatement."
+    },
+    "lsposed_verbose": {
+      "name": "Journal détaillé LSPosed",
+      "desc": "LSPosed tient son propre journal détaillé, qui grossit jusqu’à des dizaines de mégaoctets (31 Mo sur un téléphone). Désactivé écrit le réglage de LSPosed lui-même – le même interrupteur que Paramètres > Journal détaillé dans son gestionnaire – et supprime les anciens fichiers de journal détaillé ; LSPosed lit le réglage au démarrage, il prend donc effet après un redémarrage. Conserver laisse LSPosed tranquille et, si ASB avait coupé le journal, remet la valeur qu’avait LSPosed. Appliqué une seule fois, au changement : si vous réactivez le journal dans LSPosed plus tard, ASB ne l’annule pas. Réactivez-le avant de signaler un problème à l’auteur d’un module LSPosed.",
+      "descOpt": {
+        "keep": "ASB ne touche pas aux réglages de LSPosed.",
+        "off": "Journal détaillé de LSPosed coupé au prochain démarrage ; les anciens fichiers sont supprimés tout de suite."
+      }
     }
   },
   "opt": {
@@ -640,6 +648,10 @@
     },
     "mglru_hold": {
       "hold": "garder"
+    },
+    "lsposed_verbose": {
+      "keep": "conserver",
+      "off": "désactivé"
     }
   },
   "prof_none": "non sélectionné",
@@ -832,7 +844,7 @@
   "cap_clamps_tip": "À quelle fréquence le moteur thermique du fabricant a repris le plafond à ASB.",
   "lv_hotspot_tip": "La zone la plus chaude à l'intérieur : CPU, GPU ou mémoire. Toujours supérieure au châssis.",
   "lv_src_rom": "lecture directe de la ROM",
-  "nav_home": "Accueil",
+  "nav_home": "Profils",
   "nav_logs": "Journaux",
   "nav_channel": "Canal",
   "doze_android_dozes": "Android le met en veille",
@@ -878,7 +890,7 @@
   "cfg_ui_section_feel": "Écran et vibration",
   "cfg_ui_section_feel_hint": "Fréquence de rafraîchissement, ressenti de la vibration et du retour tactile.",
   "cfg_ui_section_diag": "Diagnostic",
-  "cfg_ui_section_diag_hint": "Niveau de détail des journaux du module.",
+  "cfg_ui_section_diag_hint": "Ce que le module – et LSPosed – écrivent dans leurs journaux.",
   "cfg_camera_section_processing": "Traitement photo",
   "cfg_camera_section_processing_hint": "Intensité du traitement photo : contraste, grain, portraits, faible lumière.",
   "cfg_camera_section_perf": "Performances caméra",
@@ -1131,5 +1143,18 @@
   "lvi_cpu_now": "CPU maintenant : %s",
   "lvi_trend_rate": "%1 °C par minute sur les %2 dernières s",
   "lv_lpm_night": "nuit",
-  "lv_lpm_night_t": "fenêtre de nuit : repos encore allongé"
+  "lv_lpm_night_t": "fenêtre de nuit : repos encore allongé",
+  "t_lsp_off": "Journal détaillé LSPosed : coupé après un redémarrage",
+  "t_lsp_already": "Le journal détaillé LSPosed est déjà coupé",
+  "t_lsp_freed": " · %s Mo d’anciens journaux supprimés",
+  "t_lsp_restored": "Réglage LSPosed rétabli · après un redémarrage",
+  "t_lsp_untouched": "ASB laisse LSPosed tranquille",
+  "t_lsp_absent": "LSPosed n’est pas installé",
+  "t_lsp_manual": "Ce LSPosed stocke le réglage autrement – coupez le journal détaillé dans son gestionnaire",
+  "st_lsp_absent": "pas de LSPosed",
+  "st_lsp_reboot": "coupé au redémarrage",
+  "st_lsp_off": "journal LSPosed coupé",
+  "st_lsp_on": "journal LSPosed actif",
+  "st_lsp_unknown": "réglé dans LSPosed",
+  "unit_mb": "Mo"
 }

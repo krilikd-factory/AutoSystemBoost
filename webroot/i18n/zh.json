@@ -408,6 +408,14 @@
     "ltpo_video": {
       "name": "视频最低刷新率",
       "desc": "播放视频时，屏幕会保持系统为其他内容选择的刷新率：在这一系列手机上，30 fps 的视频流会跑在 90 Hz——每帧刷新三次，而两次就足够。\n\n开启后，ASB 会把峰值刷新率降到屏幕支持的、恰为视频帧率整数倍的最低档位（30 和 60 fps 对应 60 Hz），画面依然没有抖动。仅在以下条件同时满足时生效：亮屏、正在播放音频、有视频图层请求 30 或 60 fps、没有任何图层请求高流畅度、且屏幕 3 秒内未被触摸。\n\n第一次触摸会立即恢复原值，播放结束、关闭视频和熄屏也一样——因此滑动和动画都以全刷新率运行。坦白说明：触摸后的最初几帧（约 0.1–0.2 秒）可能仍处于较低刷新率。24、25 和 50 fps 的视频没有更低的无抖动档位，不做改动。即时生效。"
+    },
+    "lsposed_verbose": {
+      "name": "LSPosed 详细日志",
+      "desc": "LSPosed 会保存自己的详细日志，可增长到几十 MB（某台手机上为 31 MB）。“关闭”会写入 LSPosed 自身的设置——即其管理器中“设置 > 详细日志”的同一开关——并删除旧的详细日志文件；LSPosed 在启动时读取该设置，因此重启后生效。“保持”不改动 LSPosed；如果 ASB 曾关闭日志，则恢复 LSPosed 原来的值。仅在更改时应用一次：之后若您在 LSPosed 中重新打开日志，ASB 不会撤销。向 LSPosed 模块作者报告问题前请重新打开它。",
+      "descOpt": {
+        "keep": "ASB 不改动 LSPosed 的设置。",
+        "off": "下次启动起关闭 LSPosed 详细日志；旧日志文件立即删除。"
+      }
     }
   },
   "optFor": {
@@ -551,6 +559,10 @@
     },
     "mglru_hold": {
       "hold": "保留"
+    },
+    "lsposed_verbose": {
+      "keep": "保持",
+      "off": "关闭"
     }
   },
   "prof_none": "未选择",
@@ -813,7 +825,7 @@
   "cap_clamps_tip": "厂商温控引擎从 ASB 手中收回上限的频率。",
   "lv_hotspot_tip": "机身内部最热的区域：CPU、GPU 或内存。始终高于外壳温度。",
   "lv_src_rom": "直接读取 ROM",
-  "nav_home": "主页",
+  "nav_home": "电源配置",
   "nav_logs": "日志",
   "nav_channel": "频道",
   "doze_android_dozes": "Android 会休眠它",
@@ -878,7 +890,7 @@
   "cfg_ui_section_feel": "显示与振动",
   "cfg_ui_section_feel_hint": "刷新率行为以及振动和触控反馈的手感。",
   "cfg_ui_section_diag": "诊断",
-  "cfg_ui_section_diag_hint": "模块写入自身日志的详细程度。",
+  "cfg_ui_section_diag_hint": "模块与 LSPosed 写入各自日志的详细程度。",
   "cfg_camera_section_processing": "照片处理",
   "cfg_camera_section_processing_hint": "相机处理图像的强度：对比度、颗粒、人像、弱光。",
   "cfg_camera_section_perf": "相机性能",
@@ -1131,5 +1143,18 @@
   "lvi_cpu_now": "CPU 当前：%s",
   "lvi_trend_rate": "最近 %2 秒内每分钟 %1 °C",
   "lv_lpm_night": "夜间",
-  "lv_lpm_night_t": "夜间窗口：空闲进一步拉长"
+  "lv_lpm_night_t": "夜间窗口：空闲进一步拉长",
+  "t_lsp_off": "LSPosed 详细日志：重启后关闭",
+  "t_lsp_already": "LSPosed 详细日志已关闭",
+  "t_lsp_freed": " · 已删除 %s MB 旧日志",
+  "t_lsp_restored": "已恢复 LSPosed 设置 · 重启后生效",
+  "t_lsp_untouched": "ASB 不改动 LSPosed",
+  "t_lsp_absent": "未安装 LSPosed",
+  "t_lsp_manual": "此版本 LSPosed 以其他方式保存设置——请在其管理器中关闭详细日志",
+  "st_lsp_absent": "未安装 LSPosed",
+  "st_lsp_reboot": "重启后关闭",
+  "st_lsp_off": "LSPosed 日志已关",
+  "st_lsp_on": "LSPosed 日志开启",
+  "st_lsp_unknown": "在 LSPosed 中设置",
+  "unit_mb": "MB"
 }

@@ -158,6 +158,10 @@
     },
     "mglru_hold": {
       "hold": "Keep"
+    },
+    "lsposed_verbose": {
+      "keep": "keep",
+      "off": "off"
     }
   },
   "prof_none": "not selected",
@@ -327,6 +331,12 @@
     "net_lte_light": {
       "name": "5G Only When Needed",
       "desc": "With the screen on: after 3 minutes of light mobile traffic (under 2 Mbit/s - feeds, music) drops the 5G leg and stays on LTE, which carries that easily. A download brings 5G back within about 20 seconds (3 Mbit/s or more in two 10-second checks in a row, or one check over 12 Mbit/s) and keeps it for 10 minutes. 5G NSA keeps two radios busy for a trickle of data. Never during a call, tethering or a game, never on Wi-Fi. Off by default: each switch re-registers the data link for a second or two."
+    },
+    "lsposed_verbose": {
+      "descOpt": {
+        "keep": "ASB does not touch LSPosed's settings.",
+        "off": "LSPosed's verbose log off from the next boot; old verbose logs deleted now."
+      }
     }
   },
   "cfg_search": "Search",
@@ -561,7 +571,7 @@
   "lv_hotspot": "Die · max",
   "lv_hotspot_tip": "The hottest zone inside the phone: CPU, GPU or memory. Always higher than the shell reading - heat travels outward.",
   "lv_src_rom": "direct ROM reading",
-  "nav_home": "Home",
+  "nav_home": "Profiles",
   "nav_live": "Monitor",
   "nav_config": "Config",
   "nav_logs": "Logs",
@@ -658,7 +668,7 @@
   "cfg_ui_section_feel": "Display & Haptics",
   "cfg_ui_section_feel_hint": "Refresh-rate behaviour and how vibration and touch feedback feel.",
   "cfg_ui_section_diag": "Diagnostics",
-  "cfg_ui_section_diag_hint": "How much the module writes to its own logs.",
+  "cfg_ui_section_diag_hint": "How much the module - and LSPosed - write to their logs.",
   "cfg_camera_section_processing": "Photo Processing",
   "cfg_camera_section_processing_hint": "How strongly the camera processes the image: contrast, grain, portraits, low light.",
   "cfg_camera_section_perf": "Camera Performance",
@@ -910,5 +920,18 @@
   "lvi_cpu_now": "CPU now: %s",
   "lvi_trend_rate": "%1 °C per minute over the last %2 s",
   "lv_lpm_night": "night",
-  "lv_lpm_night_t": "night window: idling stretched further"
+  "lv_lpm_night_t": "night window: idling stretched further",
+  "t_lsp_off": "LSPosed verbose log: off after a reboot",
+  "t_lsp_already": "LSPosed verbose log is already off",
+  "t_lsp_freed": " · %s MB of old logs deleted",
+  "t_lsp_restored": "LSPosed setting put back · after a reboot",
+  "t_lsp_untouched": "ASB leaves LSPosed alone",
+  "t_lsp_absent": "LSPosed is not installed",
+  "t_lsp_manual": "This LSPosed keeps the setting differently - switch Verbose log off in its manager",
+  "st_lsp_absent": "no LSPosed",
+  "st_lsp_reboot": "off after a reboot",
+  "st_lsp_off": "LSPosed log off",
+  "st_lsp_on": "LSPosed log on",
+  "st_lsp_unknown": "set in LSPosed",
+  "unit_mb": "MB"
 }

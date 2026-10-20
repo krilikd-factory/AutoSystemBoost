@@ -381,6 +381,14 @@
     "ltpo_video": {
       "name": "Frecuencia mínima para vídeo",
       "desc": "Mientras se reproduce un vídeo, el panel se queda en la frecuencia que el sistema eligió para todo lo demás: en esta familia de teléfonos 90 Hz para un vídeo de 30 fps, tres refrescos por fotograma donde bastarían dos.\n\nCon esto activado, ASB baja la frecuencia máxima al modo de panel más bajo que sea múltiplo exacto del vídeo (60 Hz para 30 y 60 fps), de modo que el movimiento sigue sin tirones. Solo actúa si: la pantalla está encendida, suena audio, una capa de vídeo pide 30 o 60 fps, ninguna capa pide alta fluidez y no se ha tocado la pantalla en 3 segundos.\n\nEl primer toque restaura el valor anterior al instante, igual que el fin de la reproducción, el cierre del vídeo y el apagado de la pantalla, así que el desplazamiento y las animaciones van a frecuencia completa. La pega honesta: los primerísimos fotogramas tras ese toque (unos 0,1-0,2 s) aún pueden ir a la frecuencia baja. El vídeo de 24, 25 y 50 fps no tiene un modo inferior sin tirones y no se toca. Se aplica al momento."
+    },
+    "lsposed_verbose": {
+      "name": "Registro detallado de LSPosed",
+      "desc": "LSPosed lleva su propio registro detallado, que crece hasta decenas de megabytes (31 MB en un teléfono). Desactivado escribe el ajuste del propio LSPosed – el mismo interruptor que Ajustes > Registro detallado en su gestor – y borra los archivos antiguos del registro detallado; LSPosed lee el ajuste al arrancar, así que se aplica tras reiniciar. Mantener deja LSPosed como está y, si ASB apagó el registro, devuelve el valor que tenía LSPosed. Se aplica una vez, al cambiarlo: si más tarde vuelves a activar el registro en LSPosed, ASB no lo deshace. Vuelve a activarlo antes de informar de un problema al autor de un módulo LSPosed.",
+      "descOpt": {
+        "keep": "ASB no toca los ajustes de LSPosed.",
+        "off": "Registro detallado de LSPosed apagado desde el próximo arranque; los archivos antiguos se borran al momento."
+      }
     }
   },
   "nav_live": "Monitor",
@@ -551,6 +559,10 @@
     },
     "mglru_hold": {
       "hold": "mantener"
+    },
+    "lsposed_verbose": {
+      "keep": "mantener",
+      "off": "desactivado"
     }
   },
   "prof_none": "sin seleccionar",
@@ -813,7 +825,7 @@
   "cap_clamps_tip": "Con qué frecuencia el motor térmico del fabricante le quitó el límite a ASB.",
   "lv_hotspot_tip": "La zona más caliente del interior: CPU, GPU o memoria. Siempre mayor que la carcasa.",
   "lv_src_rom": "lectura directa de la ROM",
-  "nav_home": "Inicio",
+  "nav_home": "Perfiles",
   "nav_logs": "Registros",
   "nav_channel": "Canal",
   "doze_android_dozes": "Android lo duerme",
@@ -878,7 +890,7 @@
   "cfg_ui_section_feel": "Pantalla y vibración",
   "cfg_ui_section_feel_hint": "Frecuencia de actualización y sensación de vibración y respuesta táctil.",
   "cfg_ui_section_diag": "Diagnóstico",
-  "cfg_ui_section_diag_hint": "Cuánto detalle escribe el módulo en sus propios registros.",
+  "cfg_ui_section_diag_hint": "Cuánto escriben en sus registros el módulo y LSPosed.",
   "cfg_camera_section_processing": "Procesado de foto",
   "cfg_camera_section_processing_hint": "Cuánto procesa la cámara la imagen: contraste, grano, retratos, poca luz.",
   "cfg_camera_section_perf": "Rendimiento de cámara",
@@ -1131,5 +1143,18 @@
   "lvi_cpu_now": "CPU ahora: %s",
   "lvi_trend_rate": "%1 °C por minuto en los últimos %2 s",
   "lv_lpm_night": "noche",
-  "lv_lpm_night_t": "ventana nocturna: reposo aún más largo"
+  "lv_lpm_night_t": "ventana nocturna: reposo aún más largo",
+  "t_lsp_off": "Registro detallado de LSPosed: apagado tras reiniciar",
+  "t_lsp_already": "El registro detallado de LSPosed ya está apagado",
+  "t_lsp_freed": " · %s MB de registros antiguos borrados",
+  "t_lsp_restored": "Ajuste de LSPosed restaurado · tras reiniciar",
+  "t_lsp_untouched": "ASB no toca LSPosed",
+  "t_lsp_absent": "LSPosed no está instalado",
+  "t_lsp_manual": "Este LSPosed guarda el ajuste de otra forma – apaga el registro detallado en su gestor",
+  "st_lsp_absent": "sin LSPosed",
+  "st_lsp_reboot": "apagado tras reiniciar",
+  "st_lsp_off": "registro LSPosed apagado",
+  "st_lsp_on": "registro LSPosed activo",
+  "st_lsp_unknown": "se ajusta en LSPosed",
+  "unit_mb": "MB"
 }

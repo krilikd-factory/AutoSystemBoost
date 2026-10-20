@@ -408,6 +408,14 @@
     "ltpo_video": {
       "name": "Frequenza minima per i video",
       "desc": "Mentre scorre un video, il pannello resta alla frequenza scelta dal sistema per tutto il resto: su questa famiglia di telefoni 90 Hz per un flusso a 30 fps, tre aggiornamenti per fotogramma dove ne basterebbero due.\n\nCon questa opzione, ASB abbassa la frequenza massima al più piccolo modo del pannello che sia multiplo esatto del video (60 Hz per 30 e 60 fps), così il movimento resta senza scatti. Agisce solo se: lo schermo è acceso, l'audio è in riproduzione, un livello video chiede 30 o 60 fps, nessun livello chiede alta fluidità e lo schermo non è stato toccato per 3 secondi.\n\nIl primo tocco ripristina subito il valore precedente, così come la fine della riproduzione, la chiusura del video e lo spegnimento dello schermo - quindi scorrimento e animazioni vanno a piena frequenza. Il limite onesto: i primissimi fotogrammi dopo quel tocco (circa 0,1-0,2 s) possono essere ancora alla frequenza bassa. I video a 24, 25 e 50 fps non hanno un modo inferiore senza scatti e non vengono toccati. Si applica subito."
+    },
+    "lsposed_verbose": {
+      "name": "Log dettagliato LSPosed",
+      "desc": "LSPosed tiene un proprio log dettagliato che arriva a decine di megabyte (31 MB su un telefono). Spento scrive l’impostazione di LSPosed stesso – lo stesso interruttore di Impostazioni > Log dettagliato nel suo manager – ed elimina i vecchi file di log dettagliato; LSPosed legge l’impostazione all’avvio, quindi ha effetto dopo un riavvio. Lascia lascia LSPosed com’è e, se ASB aveva spento il log, rimette il valore che aveva LSPosed. Applicato una volta, quando lo cambiate: se in seguito riaccendete il log in LSPosed, ASB non lo annulla. Riaccendetelo prima di segnalare un problema all’autore di un modulo LSPosed.",
+      "descOpt": {
+        "keep": "ASB non tocca le impostazioni di LSPosed.",
+        "off": "Log dettagliato di LSPosed spento dal prossimo avvio; i vecchi file vengono eliminati subito."
+      }
     }
   },
   "optFor": {
@@ -551,6 +559,10 @@
     },
     "mglru_hold": {
       "hold": "tenere"
+    },
+    "lsposed_verbose": {
+      "keep": "lascia",
+      "off": "spento"
     }
   },
   "prof_none": "non selezionato",
@@ -813,7 +825,7 @@
   "cap_clamps_tip": "Quanto spesso il motore termico del produttore ha tolto il limite ad ASB.",
   "lv_hotspot_tip": "La zona più calda all'interno: CPU, GPU o memoria. Sempre superiore alla scocca.",
   "lv_src_rom": "lettura diretta dalla ROM",
-  "nav_home": "Home",
+  "nav_home": "Profili",
   "nav_logs": "Log",
   "nav_channel": "Canale",
   "doze_android_dozes": "Android lo sospende",
@@ -878,7 +890,7 @@
   "cfg_ui_section_feel": "Display e vibrazione",
   "cfg_ui_section_feel_hint": "Comportamento della frequenza di aggiornamento, vibrazione e risposta al tocco.",
   "cfg_ui_section_diag": "Diagnostica",
-  "cfg_ui_section_diag_hint": "Quanto dettagliatamente il modulo scrive i propri log.",
+  "cfg_ui_section_diag_hint": "Quanto scrivono nei loro log il modulo e LSPosed.",
   "cfg_camera_section_processing": "Elaborazione foto",
   "cfg_camera_section_processing_hint": "Quanto la fotocamera elabora l'immagine: contrasto, grana, ritratti, poca luce.",
   "cfg_camera_section_perf": "Prestazioni fotocamera",
@@ -1131,5 +1143,18 @@
   "lvi_cpu_now": "CPU ora: %s",
   "lvi_trend_rate": "%1 °C al minuto negli ultimi %2 s",
   "lv_lpm_night": "notte",
-  "lv_lpm_night_t": "finestra notturna: inattività ancora più lunga"
+  "lv_lpm_night_t": "finestra notturna: inattività ancora più lunga",
+  "t_lsp_off": "Log dettagliato LSPosed: spento dopo un riavvio",
+  "t_lsp_already": "Il log dettagliato LSPosed è già spento",
+  "t_lsp_freed": " · eliminati %s MB di vecchi log",
+  "t_lsp_restored": "Impostazione LSPosed ripristinata · dopo un riavvio",
+  "t_lsp_untouched": "ASB lascia stare LSPosed",
+  "t_lsp_absent": "LSPosed non è installato",
+  "t_lsp_manual": "Questo LSPosed salva l’impostazione in altro modo – spegnete il log dettagliato nel suo manager",
+  "st_lsp_absent": "nessun LSPosed",
+  "st_lsp_reboot": "spento dopo il riavvio",
+  "st_lsp_off": "log LSPosed spento",
+  "st_lsp_on": "log LSPosed acceso",
+  "st_lsp_unknown": "da impostare in LSPosed",
+  "unit_mb": "MB"
 }

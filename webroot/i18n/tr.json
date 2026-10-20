@@ -381,6 +381,14 @@
     "ltpo_video": {
       "name": "Video için en düşük yenileme",
       "desc": "Bir video oynarken panel, sistemin geri kalan her şey için seçtiği hızda kalır: bu telefon ailesinde 30 fps bir yayın için 90 Hz - ikisinin yeteceği yerde kare başına üç yenileme.\n\nBu açıkken ASB, en yüksek yenileme hızını videonun tam katı olan en küçük panel moduna düşürür (30 ve 60 fps için 60 Hz), böylece hareket takılmasız kalır. Yalnızca şu durumda devreye girer: ekran açık, ses çalıyor, bir video katmanı 30 veya 60 fps istiyor, hiçbir katman yüksek akıcılık istemiyor ve ekrana 3 saniyedir dokunulmadı.\n\nİlk dokunuş önceki değeri hemen geri getirir; oynatmanın bitmesi, videonun kapanması ve ekranın kapanması da öyle - bu yüzden kaydırma ve animasyonlar tam hızda çalışır. Dürüst not: o dokunuştan sonraki ilk kareler (yaklaşık 0,1-0,2 sn) hâlâ düşük hızda olabilir. 24, 25 ve 50 fps videonun daha düşük takılmasız modu yoktur, dokunulmaz. Hemen uygulanır."
+    },
+    "lsposed_verbose": {
+      "name": "LSPosed ayrıntılı günlüğü",
+      "desc": "LSPosed, onlarca megabayta varan kendi ayrıntılı günlüğünü tutar (bir telefonda 31 MB). Kapalı, LSPosed’in kendi ayarını yazar – yöneticisindeki Ayarlar > Ayrıntılı günlük ile aynı anahtar – ve eski ayrıntılı günlük dosyalarını siler; LSPosed ayarı başlarken okur, bu yüzden yeniden başlatmadan sonra geçerli olur. Dokunma, LSPosed’e dokunmaz ve ASB günlüğü kapattıysa LSPosed’in önceki değerini geri koyar. Değiştirdiğinizde bir kez uygulanır: daha sonra günlüğü LSPosed’de yeniden açarsanız ASB bunu geri almaz. Bir LSPosed modülünün yazarına sorun bildirmeden önce yeniden açın.",
+      "descOpt": {
+        "keep": "ASB, LSPosed ayarlarına dokunmaz.",
+        "off": "LSPosed ayrıntılı günlüğü bir sonraki açılışta kapanır; eski dosyalar hemen silinir."
+      }
     }
   },
   "nav_live": "İzleme",
@@ -551,6 +559,10 @@
     },
     "mglru_hold": {
       "hold": "tut"
+    },
+    "lsposed_verbose": {
+      "keep": "dokunma",
+      "off": "kapalı"
     }
   },
   "prof_none": "seçilmedi",
@@ -813,7 +825,7 @@
   "cap_clamps_tip": "Üreticinin termal motoru ASB'den sınırı ne sıklıkla aldı.",
   "lv_hotspot_tip": "İçerideki en sıcak bölge: CPU, GPU veya bellek. Kasadan her zaman yüksektir.",
   "lv_src_rom": "doğrudan ROM okuması",
-  "nav_home": "Ana sayfa",
+  "nav_home": "Profiller",
   "nav_logs": "Kayıtlar",
   "nav_channel": "Kanal",
   "doze_android_dozes": "Android uyutuyor",
@@ -878,7 +890,7 @@
   "cfg_ui_section_feel": "Ekran ve titreşim",
   "cfg_ui_section_feel_hint": "Yenileme hızı ile titreşim ve dokunma geri bildirimi hissi.",
   "cfg_ui_section_diag": "Tanılama",
-  "cfg_ui_section_diag_hint": "Modülün kendi günlüklerine ne kadar ayrıntı yazdığı.",
+  "cfg_ui_section_diag_hint": "Modülün – ve LSPosed’in – günlüklerine ne kadar yazdığı.",
   "cfg_camera_section_processing": "Fotoğraf işleme",
   "cfg_camera_section_processing_hint": "Kameranın görüntüyü ne kadar işlediği: kontrast, gren, portre, düşük ışık.",
   "cfg_camera_section_perf": "Kamera performansı",
@@ -1131,5 +1143,18 @@
   "lvi_cpu_now": "CPU şu an: %s",
   "lvi_trend_rate": "son %2 sn’de dakikada %1 °C",
   "lv_lpm_night": "gece",
-  "lv_lpm_night_t": "gece penceresi: boşta kalma daha da uzun"
+  "lv_lpm_night_t": "gece penceresi: boşta kalma daha da uzun",
+  "t_lsp_off": "LSPosed ayrıntılı günlüğü: yeniden başlatmadan sonra kapalı",
+  "t_lsp_already": "LSPosed ayrıntılı günlüğü zaten kapalı",
+  "t_lsp_freed": " · %s MB eski günlük silindi",
+  "t_lsp_restored": "LSPosed ayarı geri kondu · yeniden başlatmadan sonra",
+  "t_lsp_untouched": "ASB, LSPosed’e dokunmuyor",
+  "t_lsp_absent": "LSPosed yüklü değil",
+  "t_lsp_manual": "Bu LSPosed ayarı farklı saklıyor – ayrıntılı günlüğü yöneticisinde kapatın",
+  "st_lsp_absent": "LSPosed yok",
+  "st_lsp_reboot": "yeniden başlatınca kapanır",
+  "st_lsp_off": "LSPosed günlüğü kapalı",
+  "st_lsp_on": "LSPosed günlüğü açık",
+  "st_lsp_unknown": "LSPosed’de ayarlanır",
+  "unit_mb": "MB"
 }

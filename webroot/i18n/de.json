@@ -381,6 +381,14 @@
     "ltpo_video": {
       "name": "Niedrigste Bildrate für Video",
       "desc": "Während ein Video läuft, bleibt das Panel bei der Rate, die das System für alles andere gewählt hat - bei dieser Telefonfamilie 90 Hz für einen 30-fps-Stream, also drei Bildwiederholungen pro Frame, wo zwei genügen.\n\nIst dies an, senkt ASB die Spitzenrate auf den kleinsten Panelmodus, der ein exaktes Vielfaches des Videos ist (60 Hz für 30 und 60 fps), sodass die Bewegung ruckelfrei bleibt. Es greift nur, wenn: der Bildschirm an ist, Ton spielt, eine Videoebene 30 oder 60 fps anfordert, keine Ebene hohe Flüssigkeit anfordert und der Bildschirm 3 Sekunden nicht berührt wurde.\n\nDie erste Berührung stellt den vorherigen Wert sofort wieder her, ebenso das Ende der Wiedergabe, das Schließen des Videos und das Ausschalten des Bildschirms - Scrollen und Animationen laufen also mit voller Rate. Der ehrliche Haken: die allerersten Frames nach der Berührung (etwa 0,1-0,2 s) können noch mit der niedrigeren Rate laufen. Für 24-, 25- und 50-fps-Video gibt es keinen niedrigeren ruckelfreien Modus, es bleibt unverändert. Wirkt sofort."
+    },
+    "lsposed_verbose": {
+      "name": "LSPosed-Detailprotokoll",
+      "desc": "LSPosed führt ein eigenes Detailprotokoll, das auf Dutzende Megabyte anwächst (31 MB auf einem Telefon). Aus schreibt LSPosed’ eigene Einstellung – denselben Schalter wie Einstellungen > Ausführliches Protokoll in seinem Manager – und löscht die alten Detailprotokolle; LSPosed liest die Einstellung beim Start, sie wirkt also nach einem Neustart. Belassen lässt LSPosed in Ruhe und stellt, falls ASB das Protokoll ausgeschaltet hat, den früheren Wert von LSPosed wieder her. Wird einmal beim Ändern angewendet: Schalten Sie das Protokoll später in LSPosed wieder ein, macht ASB das nicht rückgängig. Schalten Sie es wieder ein, bevor Sie dem Autor eines LSPosed-Moduls ein Problem melden.",
+      "descOpt": {
+        "keep": "ASB ändert nichts an LSPosed.",
+        "off": "Detailprotokoll von LSPosed ab dem nächsten Start aus; alte Protokolldateien werden sofort gelöscht."
+      }
     }
   },
   "nav_live": "Monitor",
@@ -551,6 +559,10 @@
     },
     "mglru_hold": {
       "hold": "Halten"
+    },
+    "lsposed_verbose": {
+      "keep": "belassen",
+      "off": "aus"
     }
   },
   "prof_none": "nicht gewählt",
@@ -813,7 +825,7 @@
   "cap_clamps_tip": "Wie oft die Thermik des Herstellers ASB das Limit entzogen hat: in der letzten Stunde und seit dem Start.",
   "lv_hotspot_tip": "Die heißeste Zone im Inneren: CPU, GPU oder Speicher. Immer höher als das Gehäuse.",
   "lv_src_rom": "direkte ROM-Messung",
-  "nav_home": "Start",
+  "nav_home": "Profile",
   "nav_logs": "Logs",
   "nav_channel": "Kanal",
   "doze_android_dozes": "Android dost es",
@@ -878,7 +890,7 @@
   "cfg_ui_section_feel": "Display & Haptik",
   "cfg_ui_section_feel_hint": "Bildwiederholrate sowie Gefühl von Vibration und Touch-Feedback.",
   "cfg_ui_section_diag": "Diagnose",
-  "cfg_ui_section_diag_hint": "Wie ausführlich das Modul eigene Logs schreibt.",
+  "cfg_ui_section_diag_hint": "Wie viel das Modul – und LSPosed – in ihre Protokolle schreiben.",
   "cfg_camera_section_processing": "Fotoverarbeitung",
   "cfg_camera_section_processing_hint": "Wie stark die Kamera das Bild verarbeitet: Kontrast, Körnung, Porträts, wenig Licht.",
   "cfg_camera_section_perf": "Kamera-Leistung",
@@ -1131,5 +1143,18 @@
   "lvi_cpu_now": "CPU jetzt: %s",
   "lvi_trend_rate": "%1 °C pro Minute in den letzten %2 s",
   "lv_lpm_night": "Nacht",
-  "lv_lpm_night_t": "Nachtfenster: Ruhephasen weiter gestreckt"
+  "lv_lpm_night_t": "Nachtfenster: Ruhephasen weiter gestreckt",
+  "t_lsp_off": "LSPosed-Detailprotokoll: aus nach einem Neustart",
+  "t_lsp_already": "LSPosed-Detailprotokoll ist bereits aus",
+  "t_lsp_freed": " · %s MB alte Protokolle gelöscht",
+  "t_lsp_restored": "LSPosed-Einstellung wiederhergestellt · nach einem Neustart",
+  "t_lsp_untouched": "ASB lässt LSPosed in Ruhe",
+  "t_lsp_absent": "LSPosed ist nicht installiert",
+  "t_lsp_manual": "Dieses LSPosed speichert die Einstellung anders – schalten Sie das ausführliche Protokoll in seinem Manager aus",
+  "st_lsp_absent": "kein LSPosed",
+  "st_lsp_reboot": "aus nach Neustart",
+  "st_lsp_off": "LSPosed-Log aus",
+  "st_lsp_on": "LSPosed-Log an",
+  "st_lsp_unknown": "in LSPosed einstellen",
+  "unit_mb": "MB"
 }
