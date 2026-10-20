@@ -141,6 +141,10 @@ static int fsm_screen_is_on = 0;
 static int fsm_profile_is_performance = 0;
 #define fsm_profile_tracks_idle (fsm_profile_is_battery || fsm_profile_is_smart)
 static int fsm_profile_is_balanced = 0;
+/* fix183: the screen-off cooldown clamp is holding (fsm->thermal_cooldown, mirrored for the
+ * writer, which has no fsm). In battery/balanced it is one of the two cases where the
+ * governor writes the CPU ceilings itself - the other is a thermal cap. */
+static int g_fsm_cooldown_active = 0;
 #define PROFILE_BALANCED    1
 #define PROFILE_PERFORMANCE 2
 #define PROFILE_SMART       3
@@ -400,17 +404,30 @@ static inline int lerp_int(int a, int b, float t) {
  *   LIGHT_IDLE (screen on)   55%
  *   MODERATE / HEAVY         62%   (HEAVY prime escape still lifts it when pinned)
  *   SUSTAINED                50%   (the cooling state)
- * Nothing in DEEP_IDLE (the screen-off prime cap handles that), nothing in GAMING, nothing
- * while a known game is busy loading, nothing on a 2-cluster part. Returns 0 = no cap. */
+ * Nothing on a 2-cluster part (returns 0).
+ *
+ * "Nothing" may never be 0 here (fix181). 0 is "unmanaged" and the writer skips an unmanaged
+ * slot - it does not give it back - so whatever was written last stayed. CPH2691 capture 8952:
+ * in 106 of 126 screen-off DEEP_IDLE samples the prime ceiling was the 2035200 that MODERATE
+ * had written (62%), with desired_cpu_max_prime=0; the screen-off prime cap and the screen-off
+ * cooldown both only ever LOWER a non-zero cap, so neither touched it. GAMING and a busy game
+ * had the same fault the other way: meant to run free, they kept the last MODERATE ceiling.
+ *   DEEP_IDLE / LIGHT_IDLE   55%   (screen off, the screen-off prime cap and the cooldown
+ *                                   lower it further from here)
+ *   GAMING, a busy game      100%  (the cap ASB wrote before is lifted, not kept) */
 static int asb_smart_prime_slot_cap_khz(int state, int hw_prime_khz, int policy_count,
                                         int game_busy, int screen_on) {
-    if (policy_count < 3 || hw_prime_khz <= 0 || game_busy) return 0;
+    (void)screen_on;
+    if (policy_count < 3 || hw_prime_khz <= 0) return 0;
+    if (game_busy) return hw_prime_khz;
     int pct = 0;
     switch (state) {
-        case ASB_STATE_LIGHT_IDLE: pct = screen_on ? 55 : 0; break;
+        case ASB_STATE_DEEP_IDLE:
+        case ASB_STATE_LIGHT_IDLE: pct = 55; break;
         case ASB_STATE_MODERATE:
         case ASB_STATE_HEAVY:      pct = 62; break;
         case ASB_STATE_SUSTAINED:  pct = 50; break;
+        case ASB_STATE_GAMING:     pct = 100; break;
         default:                   pct = 0;  break;
     }
     if (pct <= 0) return 0;
@@ -678,6 +695,10 @@ typedef struct {
     time_t          gaming_retry_until;
     int             sustained_reason;
     time_t          sustained_reentry_until;
+    /* SUSTAINED edges, recorded where the transitions really happen (fix181): when it was
+     * last left, and how many times in a row it was re-entered soon after. */
+    time_t          sus_last_exit;
+    int             sus_repeat;
 
     int             ses_gaming_entries;
     int             ses_sustained_entries;
@@ -1552,6 +1573,51 @@ static asb_state_t fsm_desired(const asb_metrics_t *m) {
     return s;
 }
 
+/* SUSTAINED that keeps coming back stays longer each time (fix181).
+ *
+ * CPH2691 capture 8952, messaging on mobile data with the battery at 38-40 C: eight entries
+ * into SUSTAINED in 22 minutes, each left after 20-153 s (median under 40) and re-entered
+ * 16-302 s later. The die - the sensor the exit reads - drops under the exit mark within
+ * half a minute of the lower ceilings, while skin (38-42 C) and battery stayed hot; back on
+ * MODERATE ceilings the die climbs again and the trend path re-enters. A limit cycle: the
+ * body never got the cooling the state exists for, and every turn rewrote every cap.
+ *
+ * Re-entered within five minutes of leaving, the minimum dwell doubles - 24, 48, 96, then
+ * 180 s at most - and resets once five minutes pass without SUSTAINED. A single entry is
+ * held exactly as before; screen off and a die above the entry point still release at once. */
+#define ASB_SUS_REPEAT_WINDOW_S 300
+#define ASB_SUS_DWELL_MAX_S     180
+static int asb_sustained_dwell_s(int base, int repeat) {
+    if (base <= 0 || repeat <= 0) return base;
+    long d = base;
+    for (int i = 0; i < repeat && d < ASB_SUS_DWELL_MAX_S; i++) d *= 2;
+    return (int)(d > ASB_SUS_DWELL_MAX_S ? ASB_SUS_DWELL_MAX_S : d);
+}
+
+/* Arms the SUSTAINED cooldowns and counts quick re-entries, after every transition of the
+ * tick has happened - the forced screen-on/off moves included. */
+static void fsm_sustained_edges(asb_fsm_t *fsm, time_t now) {
+    if (!fsm->state_changed || fsm->prev_state == fsm->state) return;
+    if (fsm->prev_state == ASB_STATE_SUSTAINED) {
+        fsm->sus_last_exit = now;
+        if (g_asb_cfg.gaming_retry_cooldown_s > 0)
+            fsm->gaming_retry_until = now + g_asb_cfg.gaming_retry_cooldown_s;
+        if (g_asb_cfg.sustained_reentry_cooldown_s > 0) {
+            int cd = g_asb_cfg.sustained_reentry_cooldown_s;
+            if (fsm->clamp_hold) cd *= 2;
+            else if (fsm->recovery_cautious_until > 0 && now < fsm->recovery_cautious_until)
+                cd = (int)(cd * 1.5f);
+            fsm->sustained_reentry_until = now + cd;
+        }
+    } else if (fsm->state == ASB_STATE_SUSTAINED) {
+        if (fsm->sus_last_exit > 0 && now - fsm->sus_last_exit < ASB_SUS_REPEAT_WINDOW_S) {
+            if (fsm->sus_repeat < 3) fsm->sus_repeat++;
+        } else {
+            fsm->sus_repeat = 0;
+        }
+    }
+}
+
 static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
     fsm->state_changed = 0;
     fsm->caps_changed  = 0;
@@ -2028,22 +2094,11 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
                 fsm->gaming_retry_until = 0;
             }
         }
-        if (fsm->prev_state == ASB_STATE_SUSTAINED &&
-            fsm->state_changed &&
-            fsm->state != ASB_STATE_SUSTAINED)
-        {
-            time_t now_exit = time(NULL);
-            if (g_asb_cfg.gaming_retry_cooldown_s > 0)
-                fsm->gaming_retry_until = now_exit + g_asb_cfg.gaming_retry_cooldown_s;
-            if (g_asb_cfg.sustained_reentry_cooldown_s > 0) {
-                int cd = g_asb_cfg.sustained_reentry_cooldown_s;
-                if (fsm->clamp_hold) cd *= 2;
-                else if (fsm->recovery_cautious_until > 0 &&
-                         time(NULL) < fsm->recovery_cautious_until)
-                    cd = (int)(cd * 1.5f);
-                fsm->sustained_reentry_until = now_exit + cd;
-            }
-        }
+        /* The re-entry and gaming-retry cooldowns are armed in fsm_sustained_edges(), after
+         * the transitions below (fix181). Armed here they never were: state_changed is reset
+         * at the top of fsm_update and the ladder moves further down, so this branch could
+         * not see a SUSTAINED exit - an OP12 re-entered SUSTAINED 16 s after leaving it,
+         * under a 24 s cooldown. */
 
         int window = (desired > fsm->state)
                      ? fsm->up_window
@@ -2210,6 +2265,8 @@ if (!can_leave &&
                  */
                 int hot_now = (g_asb_cfg.sustained_temp_enter > 0 &&
                                m->therm.cpu_max_c >= g_asb_cfg.sustained_temp_enter);
+                if (fsm->state == ASB_STATE_SUSTAINED)
+                    min_dwell = asb_sustained_dwell_s(min_dwell, fsm->sus_repeat);
                 if (!m->misc.screen_on || hot_now) min_dwell = 0;
 
                 if (min_dwell > 0 && fsm_elapsed_sec(fsm) < min_dwell)
@@ -2223,6 +2280,7 @@ if (!can_leave &&
             }
         }
     }
+    fsm_sustained_edges(fsm, time(NULL));
 
     /* thermal_cap = real thermal OR hard vendor clamp.
      * soft_clamp (headroom 50-70%) does not set thermal_cap. */
@@ -2463,6 +2521,7 @@ if (!can_leave &&
             }
             _cool_active = 0;
             fsm->thermal_cooldown = 0;
+            g_fsm_cooldown_active = 0;
         } else {
             /* Log the edges, not the state: thermal_cooldown is published every tick, so a
                morning diag shows what is true now - the night capture has no record of when
@@ -2607,6 +2666,7 @@ if (!can_leave &&
             /* Publish it: a cooldown that silently does nothing looks identical to one that
                worked, and only the recorded state tells them apart in a capture. */
             fsm->thermal_cooldown = _cool_active;
+            g_fsm_cooldown_active = _cool_active;
         }
     }
     

@@ -1035,6 +1035,55 @@ static inline const char *cap_source_classify(int profile_cap,
     return "mismatch";
 }
 
+/*
+ * fix182: the ceiling the SHELL wrote in a manual profile.
+ *
+ * In battery and balanced the writer leaves the CPU ceilings to service.sh
+ * (manual_cap_skip in asb_writer.h): per-device percentages of each cluster's maximum,
+ * applied by apply_cpufreq_caps. The classifier above never knew those values. It only had
+ * msm_performance (the vendor's own cap, near the hardware maximum outside HEAVY/GAMING) and
+ * the governor's write cache, so every tick on a phone holding the shell's cap read
+ * "vendor_clamp". A OnePlus 15 day on Battery: cpu_max 1785600/1747200 - exactly the
+ * shell's 50/38 % - reported as vendor_clamp, vendor_clamp_1h up to 441, the throttle
+ * report "foreign cap ownership dominated" and cap_verify comparing against a legacy
+ * 921600 that nothing writes any more.
+ *
+ * That count is not only a label. The governor process lives across a profile switch, and
+ * Smart's thermal veto fires on vendor_clamp_1h >= 300 once the body is warm: for up to an
+ * hour after leaving Battery, Smart could be held at alpha_battery >= 700 by clamps that
+ * were the shell's own ceiling.
+ *
+ * service.sh records what it wrote (/dev/.asb/shell_cpu_caps) and, from fix183, the
+ * screen-on rung of every manual profile ahead of time; the reader lives in asb_writer.h
+ * (asb_shell_cap_for_policy), which needs it to hand ceilings back. It is trusted only while
+ * the governor itself stays off the ceiling - a manual profile with no thermal cap and no
+ * screen-off cooldown - and only for the profile that is running.
+ */
+/* The writer's own rule for "the shell owns the CPU ceilings" (manual_cap_skip). */
+static int asb_manual_shell_owns_caps(const asb_fsm_t *fsm) {
+    return fsm && !fsm_profile_is_smart && !fsm_profile_is_performance && !fsm->thermal_cap &&
+           !g_fsm_cooldown_active;
+}
+
+/* The shell's ceiling for a governor slot, or 0 when it is not the owner or not known. */
+static int asb_shell_cap_khz(const asb_fsm_t *fsm, int slot) {
+    if (slot < 0 || slot > 2 || !asb_manual_shell_owns_caps(fsm)) return 0;
+    return asb_shell_cap_for_policy(fsm->profile_idx, g_cpu_policy_ids[slot]);
+}
+
+/* Classification against the shell's value. Equal is the shell's own ceiling; above it
+ * someone raised the node (the existing "shell_overridden_up", counted against the
+ * shell); below it is a ceiling nobody in ASB wrote - a vendor clamp, and only that is
+ * counted as one. */
+static inline const char *cap_source_classify_shell(int shell_cap, int actual_sysfs,
+                                                    int hw_ceiling) {
+    if (actual_sysfs <= 0 || shell_cap <= 0) return "policy_unknown";
+    if (hw_ceiling > 0 && actual_sysfs > hw_ceiling + 50000) return "policy_unknown";
+    if (actual_sysfs == shell_cap) return "shell_applied";
+    if (actual_sysfs >  shell_cap) return "shell_overridden_up";
+    return "vendor_clamp";
+}
+
 static int atomic_write_file(const char *path, const char *content) {
     char tmp[256];
     snprintf(tmp, sizeof(tmp), "%s.tmp", path);
@@ -3436,6 +3485,12 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
      * them. -1 marks an empty slot. */
     fprintf(f, "slot_policy_ids=%d,%d,%d\n",
             g_cpu_policy_ids[0], g_cpu_policy_ids[1], g_cpu_policy_ids[2]);
+    /* fix181: how many quick SUSTAINED re-entries the current dwell is doubled for, and
+     * how long re-entry is still blocked after the last exit. */
+    {
+        long _sre = (fsm->sustained_reentry_until > 0) ? (long)(fsm->sustained_reentry_until - time(NULL)) : 0;
+        fprintf(f, "sustained_repeat=%d\nsustained_reentry_left_s=%ld\n", fsm->sus_repeat, _sre > 0 ? _sre : 0L);
+    }
     {
         int _d0 = writer_slot_ceiling(0, fsm->current_caps.cpu_max[0], fsm->thermal_cap);
         if (g_parity_main_khz > _d0) _d0 = g_parity_main_khz;   /* fix130: the level kept with the prime */
@@ -3469,6 +3524,13 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                 tick_scaling_max(_pslot));
         fprintf(f, "requested_cpu_max0=%d\nrequested_cpu_max_prime=%d\n",
                 g_fsm_slot_req_khz[0], g_fsm_slot_req_khz[_pslot]);
+        /* fix182: who writes the CPU ceilings right now, and - in a manual profile - the
+         * values the shell wrote. desired_* above is the FSM's rail, which the writer does
+         * not send in battery/balanced; a capture compared live ceilings against it and
+         * counted the profile's own cap as a throttle in every sample. 0 = not known. */
+        fprintf(f, "cap_writer=%s\nshell_cpu_max0=%d\nshell_cpu_max_prime=%d\n",
+                asb_manual_shell_owns_caps(fsm) ? "shell" : "asb",
+                asb_shell_cap_khz(fsm, 0), asb_shell_cap_khz(fsm, _pslot));
     }
     fprintf(f, "reassert_eligible=%d\n", asb_cap_writes_should_back_off() ? 0 : 1);
     fprintf(f, "cap_vendor_passive=%d\n", g_cap_vendor_passive);
@@ -4009,14 +4071,22 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
      * classifier gets runtime_declared from msm_performance read (m->therm.perf_cap_*), not
      * from fsm->current_caps.
      */
-    const char *cap_src_p0 = cap_source_classify(profile_cap_p0,
-                                                 m->therm.perf_cap_p0,
-                                                 real_max_p0, hw_ceil_p0,
-                                                 g_wcache.cpu_max[0]);
-    const char *cap_src_p6 = cap_source_classify(profile_cap_p6,
-                                                 m->therm.perf_cap_p6,
-                                                 real_max_p1, hw_ceil_p1,
-                                                 g_wcache.cpu_max[1]);
+    /* fix182: in a manual profile the shell's recorded ceiling is the reference, not the
+     * vendor's msm_performance value or a write cache left over from Smart. */
+    int shell_cap_p0 = asb_shell_cap_khz(fsm, 0);
+    int shell_cap_p1 = asb_shell_cap_khz(fsm, 1);
+    const char *cap_src_p0 = (shell_cap_p0 > 0)
+        ? cap_source_classify_shell(shell_cap_p0, real_max_p0, hw_ceil_p0)
+        : cap_source_classify(profile_cap_p0,
+                              m->therm.perf_cap_p0,
+                              real_max_p0, hw_ceil_p0,
+                              g_wcache.cpu_max[0]);
+    const char *cap_src_p6 = (shell_cap_p1 > 0)
+        ? cap_source_classify_shell(shell_cap_p1, real_max_p1, hw_ceil_p1)
+        : cap_source_classify(profile_cap_p6,
+                              m->therm.perf_cap_p6,
+                              real_max_p1, hw_ceil_p1,
+                              g_wcache.cpu_max[1]);
     /*
      * record conflicts to /dev/.asb/conflicts.json (written below).
      */
@@ -9501,9 +9571,14 @@ int main(int argc, char **argv) {
                         /* sustained_reason=2 set by FSM time-based escape.
                          * When we see it on exit, surface it in the log so the
                          * new mechanism is visible in post-mortem analysis. */
+                        /* Against the exit mark this profile really uses (fix181): judged by
+                         * the global entry point, an OP12 logged "temp_dropped t=51degC
+                         * (exit_thresh=48)" for an exit the screen going off had made. */
                         const char *reason =
                             (fsm.sustained_reason == 2)                                      ? "time_based_escape" :
-                            (metrics.therm.cpu_max_c < g_asb_cfg.sustained_temp_enter)       ? "temp_dropped" :
+                            (!metrics.misc.screen_on)                                        ? "screen_off" :
+                            (metrics.therm.cpu_max_c <
+                             asb_config_profile_sustained_temp_exit(&g_asb_cfg, fsm.profile_idx)) ? "temp_dropped" :
                                                                                                "no_longer_heavy";
                         int _avg_gap = (fsm.ses_gap_samples > 0)
                                        ? (int)(fsm.ses_gap_p0_sum / fsm.ses_gap_samples) : 0;
@@ -9516,11 +9591,11 @@ int main(int argc, char **argv) {
                         if (_eff < 0) _eff = 0;
                         if (fsm.ses_sustained_efficiency < 0 || _eff < fsm.ses_sustained_efficiency)
                             fsm.ses_sustained_efficiency = _eff;
-                        asb_log("exit_sustained: %s t=%ddegC (exit_thresh=%d) -> %s cooldown=%ds efficiency=%d/100",
+                        asb_log("exit_sustained: %s t=%ddegC (exit_thresh=%d) -> %s cooldown=%ds efficiency=%d/100 repeat=%d",
                                 reason, metrics.therm.cpu_max_c,
                                 asb_config_profile_sustained_temp_exit(&g_asb_cfg, fsm.profile_idx),
                                 asb_state_names[fsm.state],
-                                g_asb_cfg.gaming_retry_cooldown_s, _eff);
+                                g_asb_cfg.gaming_retry_cooldown_s, _eff, fsm.sus_repeat);
                         /* Reset reason so the *next* enter_sustained classifies cleanly */
                         if (fsm.sustained_reason == 2) fsm.sustained_reason = 0;
                     }
@@ -9641,9 +9716,10 @@ int main(int argc, char **argv) {
                     /* Anti-clamp: force scaling_max_freq on both clusters */
                     if (vendor_clamping) {
                         for (int ci = 0; ci < 2; ci++) {
-                            if (fsm.current_caps.cpu_max[ci] > 0)
+                            if (fsm.current_caps.cpu_max[ci] > 0 &&
                                 sysfs_write_int(cpu_policy_path(ci, "scaling_max_freq"),
-                                               fsm.current_caps.cpu_max[ci]);
+                                               fsm.current_caps.cpu_max[ci]) == 0)
+                                writer_mark_slot_held(ci, 2);   /* fix183: handed back after HEAVY in Balanced */
                         }
                         /* Evaluate effectiveness on BOTH clusters */
                         int post_p0 = tick_scaling_max(0);
@@ -9791,8 +9867,22 @@ int main(int argc, char **argv) {
                 int want_p0 = writer_slot_ceiling(0, fsm.current_caps.cpu_max[0], fsm.thermal_cap);
                 int want_p1 = writer_slot_ceiling(1, fsm.current_caps.cpu_max[1], fsm.thermal_cap);
                 if (g_parity_main_khz > want_p0) want_p0 = g_parity_main_khz;   /* fix130 */
-                int k0 = asb_ceiling_over_kind(actual_p0, want_p0, g_write_health[ASB_WRITE_CPU_MAX0].requested);
-                int k1 = asb_ceiling_over_kind(actual_p1, want_p1, g_write_health[ASB_WRITE_CPU_MAX0 + 1].requested);
+                int req_p0 = g_write_health[ASB_WRITE_CPU_MAX0].requested;
+                int req_p1 = g_write_health[ASB_WRITE_CPU_MAX0 + 1].requested;
+                /* fix182: in battery/balanced the writer never sends want_p* - the shell
+                 * owns the ceiling - so a live value above the FSM's wish was the profile's
+                 * own cap: "vendor_ceiling[LIGHT_IDLE/battery]: p0=1785600(want 1555200) -
+                 * clock ABOVE our limit" all day on a phone holding exactly the shell's 50 %.
+                 * Compare with what the shell wrote; with no record, there is nothing of
+                 * ours to compare with, so nothing is counted. */
+                const int shell_mode = asb_manual_shell_owns_caps(&fsm);
+                if (shell_mode) {
+                    want_p0 = asb_shell_cap_khz(&fsm, 0);
+                    want_p1 = asb_shell_cap_khz(&fsm, 1);
+                    req_p0 = req_p1 = 0;   /* the governor's write cache is not the owner here */
+                }
+                int k0 = asb_ceiling_over_kind(actual_p0, want_p0, req_p0);
+                int k1 = asb_ceiling_over_kind(actual_p1, want_p1, req_p1);
                 int leak0 = (k0 == ASB_CEIL_OVER_VENDOR);
                 int leak1 = (k1 == ASB_CEIL_OVER_VENDOR);
                 if ((k0 == ASB_CEIL_OVER_OWN || k1 == ASB_CEIL_OVER_OWN) && !leak0 && !leak1) g_own_ceiling_ticks++;
@@ -9835,12 +9925,13 @@ int main(int argc, char **argv) {
                                                                                : ASB_WRITE_CPU_MAX0];
                         long _wr = (_wh->retry_at > leak_now) ? (long)(_wh->retry_at - leak_now) : 0L;
                         asb_log("vendor_ceiling[%s/%s]: p0=%d(want %d, cur %d MHz) p1=%d(want %d, cur %d MHz) — %s"
-                                " (writer p%d: %s, req %d, holds %lu, backoff %lds)",
+                                " [%s cap] (writer p%d: %s, req %d, holds %lu, backoff %lds)",
                                 asb_state_names[fsm.state],
                                 asb_profile_name(fsm.profile_idx),
                                 actual_p0, want_p0, metrics.cpu.cur_freq[0],
                                 actual_p1, want_p1, metrics.cpu.cur_freq[1],
                                 (used0 || used1) ? "clock ABOVE our limit" : "raised but unused, not contested",
+                                shell_mode ? "shell" : "governor",
                                 leak1 ? 1 : 0, _wh->status[0] ? _wh->status : "-",
                                 _wh->requested, _wh->floor_holds, _wr);
                         g_last_leak_reassert = leak_now;

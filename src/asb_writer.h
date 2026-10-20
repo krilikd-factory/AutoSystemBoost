@@ -7,6 +7,7 @@
 #include <dirent.h>
 #include <ctype.h>
 #include <string.h>
+#include <sys/stat.h>
 #include "asb_fsm.h"
 #include "asb_config.h"
 
@@ -1462,6 +1463,170 @@ static void msm_perf_release(void) {
     g_msm_holding = 0;
 }
 
+/*
+ * The shell's manual-profile ceilings, per policy (fix182, generalised in fix183).
+ *
+ * service.sh writes two kinds of record, replaced with mv:
+ *   /dev/.asb/shell_cpu_caps            what apply_cpufreq_caps last WROTE (profile=, policyN=)
+ *   /dev/.asb/shell_cpu_caps.<profile>  the screen-on rung of battery and balanced, computed
+ *                                       ahead of time, so the governor knows a manual profile's
+ *                                       ceilings before the shell has applied them
+ * The written record wins when it names the running profile; the precomputed one covers the
+ * stretch between a profile switch and the shell's next pass.
+ */
+#ifndef ASB_SHELL_CAPS_PATH
+#define ASB_SHELL_CAPS_PATH "/dev/.asb/shell_cpu_caps"
+#endif
+#define ASB_SHELL_CAPS_MAXPOL 16
+typedef struct {
+    int    khz[ASB_SHELL_CAPS_MAXPOL];   /* by policy id; 0 = no value */
+    char   profile[16];
+    ino_t  ino;
+    time_t mtime;
+    off_t  size;
+    time_t checked;
+    int    valid;
+} asb_shell_caps_t;
+static asb_shell_caps_t g_shell_live;          /* shell_cpu_caps */
+static asb_shell_caps_t g_shell_pre[2];        /* .battery, .balanced */
+
+static void asb_shell_caps_load(asb_shell_caps_t *c, const char *path) {
+    time_t now = time(NULL);
+    /* One stat every two seconds at most: the files change on a boot, a profile switch or a
+     * screen rung, not per tick, and the status, state, ceiling-watch and writer paths all
+     * ask. */
+    if (c->checked != 0 && now >= c->checked && now - c->checked < 2) return;
+    c->checked = now;
+    struct stat st;
+    if (stat(path, &st) != 0) {
+        memset(c->khz, 0, sizeof(c->khz));
+        c->profile[0] = 0; c->ino = 0; c->mtime = 0; c->size = -1; c->valid = 0;
+        return;
+    }
+    /* A new write is a new inode (mv); size and mtime catch an in-place rewrite. */
+    if (c->valid && st.st_ino == c->ino && st.st_mtime == c->mtime && st.st_size == c->size) return;
+    c->ino = st.st_ino; c->mtime = st.st_mtime; c->size = st.st_size;
+    int khz[ASB_SHELL_CAPS_MAXPOL];
+    memset(khz, 0, sizeof(khz));
+    char prof[sizeof(c->profile)];
+    prof[0] = 0;
+    FILE *f = fopen(path, "r");
+    if (f) {
+        char line[96];
+        while (fgets(line, sizeof(line), f)) {
+            int pid = -1, v = 0;
+            if (sscanf(line, "policy%d=%d", &pid, &v) == 2) {
+                if (pid < 0 || pid >= ASB_SHELL_CAPS_MAXPOL || v <= 0 || v > 6000000) continue;
+                khz[pid] = v;
+            } else if (strncmp(line, "profile=", 8) == 0) {
+                size_t n = strcspn(line + 8, "\r\n");
+                if (n >= sizeof(prof)) n = sizeof(prof) - 1;
+                memcpy(prof, line + 8, n);
+                prof[n] = 0;
+            }
+        }
+        fclose(f);
+    }
+    memcpy(c->khz, khz, sizeof(c->khz));
+    memcpy(c->profile, prof, sizeof(c->profile));
+    c->valid = (f != NULL);
+}
+
+/* The shell's ceiling for one policy of a manual profile, 0 when it is not known. */
+static int asb_shell_cap_for_policy(int profile_idx, int pol) {
+    if (profile_idx != PROFILE_BATTERY && profile_idx != PROFILE_BALANCED) return 0;
+    if (pol < 0 || pol >= ASB_SHELL_CAPS_MAXPOL) return 0;
+    const char *name = asb_profile_name(profile_idx);
+    asb_shell_caps_load(&g_shell_live, ASB_SHELL_CAPS_PATH);
+    if (g_shell_live.valid && strcmp(g_shell_live.profile, name) == 0) return g_shell_live.khz[pol];
+    int k = (profile_idx == PROFILE_BATTERY) ? 0 : 1;
+    asb_shell_caps_load(&g_shell_pre[k], k == 0 ? ASB_SHELL_CAPS_PATH ".battery"
+                                                : ASB_SHELL_CAPS_PATH ".balanced");
+    if (g_shell_pre[k].valid && strcmp(g_shell_pre[k].profile, name) == 0) return g_shell_pre[k].khz[pol];
+    return 0;
+}
+
+/* "/sys/devices/system/cpu/cpufreq/policy6/scaling_max_freq" -> 6, -1 when not a policy path. */
+static int asb_policy_id_of_path(const char *path) {
+    const char *p = path ? strstr(path, "/policy") : NULL;
+    if (!p) return -1;
+    p += 7;
+    if (*p < '0' || *p > '9') return -1;
+    return atoi(p);
+}
+
+/*
+ * fix183: CPU ceilings the governor wrote and has to give back in a manual profile.
+ *
+ * Three things put a governor value on a battery/balanced ceiling - the Smart or Performance
+ * rail left behind by a profile switch, a thermal cap or the screen-off cooldown, and the
+ * anti-clamp's direct write in HEAVY - and none of them was ever undone, because the writer
+ * stays off the CPU in a manual profile and the shell re-applies only at boot. A CPH2747
+ * day shows the result: switched from Smart to Battery at 11:25 and held there for 5.5 h,
+ * the phone kept Smart's last 1555200/1862400 in every sample and never got the Battery
+ * caps (1785600/1747200) at all.
+ *
+ * Indexed like g_cpu_all_max_paths. 1 = the writer wrote it, 2 = the anti-clamp did (given
+ * back only once HEAVY/GAMING/SUSTAINED are over, the states it runs in).
+ */
+static int g_writer_path_held[16];
+
+static int writer_all_path_index(const char *path) {
+    for (int k = 0; k < g_cpu_all_paths_n && k < 16; k++)
+        if (g_cpu_all_max_paths[k][0] && strcmp(g_cpu_all_max_paths[k], path) == 0) return k;
+    return -1;
+}
+
+/* The anti-clamp wrote a slot's ceiling directly (asb_governor.c). */
+static void writer_mark_slot_held(int slot, int kind) {
+    if (slot < 0 || slot > 2 || !g_cpu_max_paths[slot][0]) return;
+    int k = writer_all_path_index(g_cpu_max_paths[slot]);
+    if (k >= 0 && g_writer_path_held[k] < kind) g_writer_path_held[k] = kind;
+}
+
+/* Never above the profile's own ceiling while the governor overrides a manual profile:
+ * a thermal cap or a cooldown that RAISED the ceiling would be the opposite of its purpose
+ * (the Battery prime is 1747200 on OP15; the writer's race-to-idle floor alone is 1862400). */
+static int writer_manual_clamp(int profile_idx, const char *path, int want) {
+    if (want <= 0) return want;
+    int sh = asb_shell_cap_for_policy(profile_idx, asb_policy_id_of_path(path));
+    return (sh > 0 && want > sh) ? sh : want;
+}
+
+/* Hand every ceiling the governor holds back to the shell's value. Returns writes done.
+ * A path with no shell value stays marked: the shell's own next pass is then the only fix,
+ * and that is what the shell does on a profile switch (asb_reconcile.sh). */
+static int writer_manual_handback(int profile_idx, asb_state_t state) {
+    int writes = 0;
+    int ac_states = (state == ASB_STATE_HEAVY || state == ASB_STATE_GAMING ||
+                     state == ASB_STATE_SUSTAINED);
+    for (int k = 0; k < g_cpu_all_paths_n && k < 16; k++) {
+        int held = g_writer_path_held[k];
+        if (!held || !g_cpu_all_max_paths[k][0]) continue;
+        if (held == 2 && ac_states) continue;
+        int sh = asb_shell_cap_for_policy(profile_idx, asb_policy_id_of_path(g_cpu_all_max_paths[k]));
+        if (sh <= 0) continue;
+        /* Once written it is the shell's value again, whatever a vendor clamp under it reads
+         * back as - retrying would only repeat the same write every pass. */
+        int live = sysfs_read_int(g_cpu_all_max_paths[k], 0);
+        if (live == sh) {
+            g_writer_path_held[k] = 0;
+        } else if (sysfs_write_int(g_cpu_all_max_paths[k], sh) == 0) {
+            g_writer_path_held[k] = 0;
+            writes++;
+        } else {
+            continue;   /* not written: keep it marked, try again on the next pass */
+        }
+        int slot = g_cpu_all_paths_slot[k];
+        if (slot >= 0 && slot <= 2 && g_cpu_max_paths[slot][0] &&
+            strcmp(g_cpu_max_paths[slot], g_cpu_all_max_paths[k]) == 0) {
+            g_wcache.cpu_max[slot] = 0;
+            g_fsm_slot_req_khz[slot] = 0;
+        }
+    }
+    return writes;
+}
+
 static const int g_cluster_first_cpu[3] = {0, 6, -1};
 static const int g_cluster_n_cpus[3]   = {6, 2,  0};
 
@@ -1485,8 +1650,50 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
      * manual_cap_skip: in MANUAL battery/balanced the shell owns caps, so the governor stays
      * out (only thermal net pulls down).
      */
-    int manual_cap_skip = (!fsm_profile_is_smart && !fsm_profile_is_performance && !thermal_cap);
+    /* fix183: in a manual profile the governor also takes the ceiling during the screen-off
+     * cooldown, not only under a thermal cap. The cooldown's own log said "ceilings lowered
+     * toward the hw minimum" while an OP15 on Battery held 1785600/1747200 throughout: the
+     * clamp was computed and then skipped here. While it overrides, every value is held at or
+     * under the profile's own ceiling (writer_manual_clamp); when it stops, the shell's
+     * values go back (writer_manual_handback). */
+    const int manual_profile  = (!fsm_profile_is_smart && !fsm_profile_is_performance);
+    const int manual_prof_idx = fsm_profile_is_battery ? PROFILE_BATTERY : PROFILE_BALANCED;
+    const int manual_override = manual_profile && (thermal_cap || g_fsm_cooldown_active);
+    int manual_cap_skip = manual_profile && !manual_override;
+    /* Smart and Performance own every ceiling they write; nothing is waiting to be handed
+     * back while one of them runs. */
+    if (!manual_profile) memset(g_writer_path_held, 0, sizeof(g_writer_path_held));
+    /* Entering a manual profile from any other profile, the new profile's own ceilings go in
+     * on every policy - Battery -> Balanced included, where the governor wrote nothing and
+     * the Battery caps would otherwise stay. Not at governor start: the shell applies the
+     * boot profile itself, and a restarted governor finds the shell's caps already there. */
+    {
+        static int s_writer_prof_seen = -1;
+        int prof_now = fsm_profile_is_smart ? PROFILE_SMART
+                     : fsm_profile_is_performance ? PROFILE_PERFORMANCE : manual_prof_idx;
+        if (prof_now != s_writer_prof_seen) {
+            if (manual_profile && s_writer_prof_seen >= 0) {
+                for (int k = 0; k < g_cpu_all_paths_n && k < 16; k++)
+                    if (g_cpu_all_max_paths[k][0] && !g_writer_path_held[k]) g_writer_path_held[k] = 1;
+            }
+            s_writer_prof_seen = prof_now;
+        }
+    }
     if (manual_cap_skip) {
+        /* fix182: hand msm_performance back once the anti-clamp states are over.
+         *
+         * In battery/balanced the main loop's reassert still registers the FSM rail in
+         * msm_performance during HEAVY, GAMING and SUSTAINED (the SUSTAINED rail deepens with
+         * temperature - that is the cooling it is there for). The only release lives in the
+         * cap path below, which a manual profile never reaches, so the registration outlived
+         * the episode: a hidden second ceiling under the shell's own, kept through light use
+         * until a Smart session happened to release it. msm_perf_release() is a no-op unless
+         * ASB wrote the node last. */
+        if (state != ASB_STATE_HEAVY && state != ASB_STATE_GAMING && state != ASB_STATE_SUSTAINED)
+            msm_perf_release();
+        /* fix183: and the ceilings themselves - a Smart/Performance rail left by a profile
+         * switch, a thermal cap or cooldown that has ended, an anti-clamp write. */
+        writes += writer_manual_handback(manual_prof_idx, state);
         /* still let GPU / non-cap writes proceed below; just skip CPU caps */
         goto skip_cpu_caps;
     }
@@ -1552,6 +1759,23 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
         }
         for (int i = 0; i < 3; i++) {
             if (!g_cpu_max_paths[i][0]) continue;
+            /* An unmanaged slot (0) is given back, not left where ASB last put it (fix181).
+             * 0 means "ASB holds nothing here" - a Balanced or Performance prime on a 3/4-
+             * cluster part - and skipping the slot kept the ceiling an earlier state or profile
+             * had written: an OP12 leaving Smart for Balanced would keep its prime at Smart's 62%. Once,
+             * to the hardware maximum; the vendor's own lower ceiling still wins in the kernel. */
+            if (cmax[i] <= 0) {
+                if (g_wcache.cpu_max[i] > 0) {
+                    int _rel = g_cpu_slot_hwmax[i];
+                    if (manual_override) _rel = writer_manual_clamp(manual_prof_idx, g_cpu_max_paths[i], _rel);
+                    if (_rel > 0 && writer_write_int_confirmed((asb_write_node_t)(ASB_WRITE_CPU_MAX0 + i),
+                                                               g_cpu_max_paths[i], _rel) == 0)
+                        writes++;
+                    g_wcache.cpu_max[i] = 0;
+                    g_fsm_slot_req_khz[i] = 0;
+                }
+                continue;
+            }
             /* Snap to this cluster's own table before comparing against the cache: caching
              * the unsnapped value would make every tick look like a change, and the log
              * would show a write that the kernel then silently altered. */
@@ -1567,6 +1791,8 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
                     cmax[i] = (int)cpu_snap_freq(_snap_idx, (long)cmax[i]);
                     cmax[i] = cpu_floor_ceiling(_snap_idx, cmax[i], thermal_cap);
                 }
+                if (manual_override)
+                    cmax[i] = writer_manual_clamp(manual_prof_idx, g_cpu_max_paths[i], cmax[i]);
             }
             /* Reassert only when the live ceiling was raised above ASB's requested
              * bound. A lower vendor ceiling is already energy-safe and is accepted by
@@ -1619,6 +1845,8 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
                     /* The prime escape compares the live ceiling with this (fix126). */
                     g_fsm_slot_req_khz[i] = cmax[i];
                     writes++;
+                    int _hk = writer_all_path_index(g_cpu_max_paths[i]);
+                    if (_hk >= 0) g_writer_path_held[_hk] = 1;   /* fix183 */
                 }
             }
         }
@@ -1649,10 +1877,14 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
         target = (int)cpu_snap_freq(j, (long)target);
         /* Last gate before the value reaches the kernel. */
         target = cpu_floor_ceiling(j, target, thermal_cap);
+        if (manual_override)
+            target = writer_manual_clamp(manual_prof_idx, g_cpu_all_max_paths[j], target);
         int cur = sysfs_read_int(g_cpu_all_max_paths[j], 0);
         if (force || cur != target) {
-            if (sysfs_write_int(g_cpu_all_max_paths[j], target) == 0)
+            if (sysfs_write_int(g_cpu_all_max_paths[j], target) == 0) {
                 writes++;
+                g_writer_path_held[j] = 1;   /* fix183 */
+            }
         }
     }
     /* The minimum is maintained even while a thermal cap is active.
