@@ -127,7 +127,7 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_THIS_HOUR="обычно в этот час"
     M_WARM_HERE="тепло для этого телефона — Smart склоняется к экономии"
     M_COOL_HERE="прохладно для этого телефона — Smart разрешает чуть больше"
-    M_SES_LEARNED="сессий изучено"; M_DRAIN_NOW="расход по факту"
+    M_SES_LEARNED="сессий изучено"; M_DRAIN_NOW="расход по факту"; M_DRAIN_WAIT="замеряется — %s из 10 мин с включённым экраном"
     M_SES_LEARNED_1="сессия изучена"; M_SES_LEARNED_2="сессии изучено"
     M_SES_BANK_1="сессия накоплена всего"; M_SES_BANK_2="сессии накоплено всего"
     M_DISCARDED_1="сессия отброшена как ненадёжная"; M_DISCARDED_2="сессии отброшено как ненадёжные"
@@ -183,7 +183,7 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_SES_LEARNED_1="сесію вивчено"; M_SES_LEARNED_2="сесії вивчено"
     M_SES_BANK_1="сесію накопичено загалом"; M_SES_BANK_2="сесії накопичено загалом"
     M_DISCARDED_1="сесію відкинуто як ненадійну"; M_DISCARDED_2="сесії відкинуто як ненадійні"
-    M_DRAIN_NOW="витрата зараз"
+    M_DRAIN_NOW="витрата зараз"; M_DRAIN_WAIT="вимірюється — %s з 10 хв з увімкненим екраном"
     M_BANKED="накопичено — Smart не керує на цьому профілі"
     M_FOREGROUND="активний застосунок"
     M_DP0="ніч"
@@ -238,7 +238,7 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_WARM_HERE="warm für dieses Gerät - Smart neigt hier zum Akku"
     M_COOL_HERE="kühl für dieses Gerät - Smart erlaubt hier etwas mehr"
     M_SES_LEARNED="Sitzungen gelernt"
-    M_DRAIN_NOW="Verbrauch jetzt"
+    M_DRAIN_NOW="Verbrauch jetzt"; M_DRAIN_WAIT="wird gemessen – %s von 10 min mit eingeschaltetem Bildschirm"
     M_BANKED="gesammelt - Smart steuert in diesem Profil nicht"
     M_FOREGROUND="Vordergrund"
     M_DP0="Nacht"
@@ -293,7 +293,7 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_WARM_HERE="cálido para este teléfono - Smart tiende a batería aquí"
     M_COOL_HERE="fresco para este teléfono - Smart permite un poco más aquí"
     M_SES_LEARNED="sesiones aprendidas"
-    M_DRAIN_NOW="consumo ahora"
+    M_DRAIN_NOW="consumo ahora"; M_DRAIN_WAIT="midiendo – %s de 10 min con la pantalla encendida"
     M_BANKED="acumulado - Smart no dirige en este perfil"
     M_FOREGROUND="primer plano"
     M_DP0="noche"
@@ -348,7 +348,7 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_WARM_HERE="quente para este telefone - Smart tende à bateria aqui"
     M_COOL_HERE="fresco para este telefone - Smart permite um pouco mais aqui"
     M_SES_LEARNED="sessões aprendidas"
-    M_DRAIN_NOW="consumo agora"
+    M_DRAIN_NOW="consumo agora"; M_DRAIN_WAIT="medindo – %s de 10 min com a tela ligada"
     M_BANKED="acumulado - Smart não dirige neste perfil"
     M_FOREGROUND="primeiro plano"
     M_DP0="noite"
@@ -403,7 +403,7 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_WARM_HERE="bu telefon için sıcak - Smart burada pile yönelir"
     M_COOL_HERE="bu telefon için serin - Smart burada biraz daha izin verir"
     M_SES_LEARNED="oturum öğrenildi"
-    M_DRAIN_NOW="şu anki tüketim"
+    M_DRAIN_NOW="şu anki tüketim"; M_DRAIN_WAIT="ölçülüyor – ekran açıkken 10 dakikanın %s dakikası"
     M_BANKED="biriktirildi - Smart bu profilde yönetmiyor"
     M_FOREGROUND="ön planda"
     M_DP0="gece"
@@ -458,7 +458,7 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_WARM_HERE="chaud pour ce téléphone — Smart penche ici vers la batterie"
     M_COOL_HERE="frais pour ce téléphone — Smart autorise ici un peu plus"
     M_SES_LEARNED="sessions apprises"
-    M_DRAIN_NOW="consommation actuelle"
+    M_DRAIN_NOW="consommation actuelle"; M_DRAIN_WAIT="mesure en cours – %s sur 10 min écran allumé"
     M_BANKED="accumulé — Smart ne pilote pas sur ce profil"
     M_FOREGROUND="premier plan"
     M_DP0="nuit"
@@ -513,7 +513,7 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_WARM_HERE="տաք է այս հեռախոսի համար — Smart-ը թեքվում է դեպի մարտկոց"
     M_COOL_HERE="զով է այս հեռախոսի համար — Smart-ը թույլ է տալիս մի փոքր ավելին"
     M_SES_LEARNED="սեսիա սովորված"
-    M_DRAIN_NOW="ծախսը հիմա"
+    M_DRAIN_NOW="ծախսը հիմա"; M_DRAIN_WAIT="չափվում է – %s 10 րոպեից՝ միացված էկրանով"
     M_BANKED="կուտակված — Smart-ը այս պրոֆիլում չի կառավարում"
     M_FOREGROUND="ակտիվ հավելված"
     M_DP0="գիշեր"
@@ -568,7 +568,7 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_WARM_HERE="caldo per questo telefono - Smart tende alla batteria qui"
     M_COOL_HERE="fresco per questo telefono - Smart concede un po\u2019 di più qui"
     M_SES_LEARNED="sessioni apprese"
-    M_DRAIN_NOW="consumo ora"
+    M_DRAIN_NOW="consumo ora"; M_DRAIN_WAIT="in misura – %s di 10 min a schermo acceso"
     M_BANKED="accumulato - Smart non guida in questo profilo"
     M_FOREGROUND="in primo piano"
     M_DP0="notte"
@@ -623,7 +623,7 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_WARM_HERE="دافئ لهذا الهاتف — يميل Smart إلى البطارية هنا"
     M_COOL_HERE="بارد لهذا الهاتف — يسمح Smart بقليل إضافي هنا"
     M_SES_LEARNED="جلسة تم تعلمها"
-    M_DRAIN_NOW="الاستهلاك الآن"
+    M_DRAIN_NOW="الاستهلاك الآن"; M_DRAIN_WAIT="قيد القياس – %s من 10 دقائق والشاشة مضاءة"
     M_BANKED="مُجمَّع — Smart لا يتحكم في هذا الملف"
     M_FOREGROUND="التطبيق النشط"
     M_DP0="ليل"
@@ -678,7 +678,7 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_WARM_HERE="对这台手机偏热 —— Smart 在此偏向省电"
     M_COOL_HERE="对这台手机偏凉 —— Smart 在此放宽一些"
     M_SES_LEARNED="已学习会话"
-    M_DRAIN_NOW="当前耗电"
+    M_DRAIN_NOW="当前耗电"; M_DRAIN_WAIT="测量中 – 亮屏 %s/10 分钟"
     M_BANKED="已累计 —— Smart 在此配置下不参与调度"
     M_FOREGROUND="前台应用"
     M_DP0="夜间"
@@ -718,7 +718,7 @@ case "$(printf '%s' "$_asb_loc" | tr '[:upper:]' '[:lower:]')" in
     M_THIS_HOUR="this hour usually"
     M_WARM_HERE="warm for this phone - Smart leans to battery here"
     M_COOL_HERE="cool for this phone - Smart allows a little more here"
-    M_SES_LEARNED="sessions learned"; M_DRAIN_NOW="drain now"
+    M_SES_LEARNED="sessions learned"; M_DRAIN_NOW="drain now"; M_DRAIN_WAIT="measuring – %s of 10 min with the screen on"
     M_BANKED="banked - Smart not steering on this profile"
     M_DP0="night"; M_DP1="early morning"; M_DP2="morning"; M_DP3="midday"; M_DP4="afternoon"; M_DP5="evening"
     M_WEEKEND="weekend"; M_WEEKDAY="weekday"
@@ -851,7 +851,7 @@ T_BURST_N="burst boosts this session: %s"
 T_BURST_MID="  + middle cluster lifted too (this SoC has more than two clusters)"
 T_UNLOCK_N="unlock lift this session: %s (ceilings raised for %s s after a wake)"
 T_NIGHT_AWAKE="night slot, screen on: leaning no harder than in your evening"
-T_HEADROOM="thermal headroom %s%%"
+T_HEADROOM="CPU headroom %s%%"
 T_SENS_OK="temp sensor: verified"
 T_SENS_UNV="temp sensor: unverified"
 T_THERMAL_N="🔥 thermal %s"
@@ -1450,7 +1450,11 @@ _g_cpumax="$(_st cpu_max)"
 _g_dwell="$(_st dwell_sec)"
 _g_iq="$(_st iq)"
 _g_thermal="$(_st thermal)"
-_g_head="$(_st headroom_pct)"
+# The Monitor's "Headroom" figure (fix186): the most limited cluster's live ceiling against
+# its hardware maximum. headroom_pct is the msm_performance read-back of one cluster - it
+# printed "thermal headroom 75%" beside the Monitor's 40% for the same moment.
+_g_head="$(_st headroom_real_pct)"
+case "$_g_head" in ''|-*) _g_head="$(_st headroom_pct)" ;; esac
 if [ -n "$_g_state" ]; then
   echo ""
   echo "  ⚡  ${H_GOV}"
@@ -1544,7 +1548,16 @@ _l_pkg="$(_st smart_pkg)"
 # device - pctph said 114 while ewma said 0), so preferring the EWMA meant the drain line
 # never printed at all. Keep the EWMA as a fallback for older governors that fill it.
 _l_drain="$(_st smart_drain_pctph_x10)"
-case "$_l_drain" in ''|0) _l_drain="$(_st smart_drain_ewma_x10)" ;; esac
+# fix186: the rate of the session in progress, which the governor itself trusts only after
+# ten minutes with the screen on (the forecast above says "estimate" until then). Printed as
+# "drain now: 9.9 %/h" after six minutes it contradicted the forecast two lines higher; under
+# ten minutes this line now says how far the measurement has got instead.
+_l_dwin="$(_st smart_drain_window_s)"
+_l_drain_wait=""
+case "$_l_dwin" in
+  ''|*[!0-9]*) case "$_l_drain" in ''|0) _l_drain="$(_st smart_drain_ewma_x10)" ;; esac ;;   # older governors
+  *) if [ "$_l_dwin" -lt 600 ]; then _l_drain_wait=$((_l_dwin / 60)); _l_drain=""; fi ;;
+esac
 # Not gated on Smart being active.
 #
 # smart_mode_enabled goes to 0 when the profile leaves Smart, and that took the whole LEARNING
@@ -1587,6 +1600,9 @@ if [ -n "${_l_sess}${_l_pkg}" ]; then
   [ -n "$_ll" ] && echo "       ${_ll}"
   if [ -n "$_l_drain" ] && [ "$_l_drain" -gt 0 ] 2>/dev/null; then
     echo "       ${M_DRAIN_NOW}: $((_l_drain / 10)).$((_l_drain % 10))${U_PCTH}"
+  elif [ -n "$_l_drain_wait" ] && [ "$(_st screen)" != 0 ]; then
+    # shellcheck disable=SC2059
+    echo "       ${M_DRAIN_NOW}: $(printf "${M_DRAIN_WAIT:-measuring - %s of 10 min with the screen on}" "$_l_drain_wait")"
   fi
   [ -n "$_l_pkg" ] && echo "       ${M_FOREGROUND}: ${_l_pkg}"
 
