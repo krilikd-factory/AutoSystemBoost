@@ -514,6 +514,9 @@ lk_copy_runtime_artifacts() {
     "/dev/.asb/runtime_apply.log" \
     "/dev/.asb/thermal_pl_audit" \
     "/dev/.asb/drift_rate" \
+    "/dev/.asb/shell_cpu_caps" \
+    "/dev/.asb/shell_cpu_caps.battery" \
+    "/dev/.asb/shell_cpu_caps.balanced" \
     "/dev/.asb/gpu_path_discovery" \
     "/dev/.asb/config_stale_detected" \
     "/dev/.asb/vendor_overrides" \
@@ -572,9 +575,24 @@ lk_verify_caps() {
   [ -n "$_req6" ] && [ "$_req6" -gt 0 ] 2>/dev/null && _asb_p6_cap="$_req6"
   _gov_src_p0="${_gov_src_p0:-?}"
   _gov_src_p6="${_gov_src_p6:-?}"
+  # fix182: in battery/balanced the shell writes the ceilings and records them. The
+  # comparison used the profile file's legacy CPU_CAP_* (921600 on Battery), which nothing
+  # writes any more, and the governor's rail, which its writer does not send there - so
+  # every policy of an OP15 Battery day read DESYNC against values no one had asked for.
+  _cv_writer="$(grep -m1 '^cap_writer=' "${ASB_LK_STATE_FILE:-/dev/.asb/state}" 2>/dev/null | cut -d= -f2 | tr -dc 'a-z')"
+  _cv_shf="${ASB_SHELL_CAPS_FILE:-/dev/.asb/shell_cpu_caps}"
+  _cv_shprof="$(grep -m1 '^profile=' "$_cv_shf" 2>/dev/null | cut -d= -f2)"
+  _cv_shscr="$(grep -m1 '^screen_on=' "$_cv_shf" 2>/dev/null | cut -d= -f2)"
+  _cv_shell=0
+  [ "$_cv_writer" = "shell" ] && [ -n "$_cv_shprof" ] && [ "$_cv_shprof" = "$_profile" ] && _cv_shell=1
 
   {
     echo "# cap_verify v3 at $(date -u '+%Y-%m-%dT%H:%M:%SZ')  profile=$_profile"
+    if [ "$_cv_shell" = "1" ]; then
+      echo "# cap_writer: shell (manual profile). profile_expected below is what service.sh wrote"
+      echo "#   (shell_cpu_caps, screen_on=${_cv_shscr:-?}); the governor only adds a thermal clamp here,"
+      echo "#   so asb_declared is not a request and is not compared."
+    fi
     if [ "$_profile" = "smart" ]; then
       echo "# NOTE: profile_cpu_cap_* below is the STATIC profile baseline."
       echo "# On smart, asb_declared_* is synthesized dynamically from alpha/state"
@@ -624,6 +642,10 @@ lk_verify_caps() {
         _vendor_cap="$_vendor_p0_cap"
         _gov_src="$_gov_src_p0"
       fi
+      if [ "$_cv_shell" = "1" ]; then
+        _cv_shx="$(grep -m1 "^policy${_p}=" "$_cv_shf" 2>/dev/null | cut -d= -f2 | tr -dc '0-9')"
+        if [ -n "$_cv_shx" ]; then _expect="$_cv_shx"; _asb_declared=""; fi
+      fi
 
       if [ -z "$_expect" ] || [ -z "$_smax" ]; then
         _status="unset"
@@ -636,7 +658,7 @@ lk_verify_caps() {
           _status="DESYNC_shell_overridden_up (profile=$_expect actual=$_smax over=+$((_smax - _expect)))"
           _source="shell_overridden_up"
         else
-          _status="shell_overridden_down (profile=$_expect actual=$_smax under=$((_expect - _smax)))"
+          _status="shell_overridden_down (profile=$_expect actual=$_smax under=$((_expect - _smax)) - a ceiling under the profile's own cap: vendor or kernel thermal)"
           _source="shell_overridden_down"
         fi
       elif [ "$_smax" = "$_expect" ] && [ "$_asb_declared" = "$_expect" ]; then
