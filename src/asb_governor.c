@@ -3364,6 +3364,12 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         if (_hr > 100) _hr = 100;
         fprintf(f, "headroom_real_pct=%d\n", _hr);
     }
+    /* fix188: what ASB holds in msm_performance/cpu_max_freq - 1 while it has a HEAVY/GAMING
+     * registration there, and the per-slot values it last wrote. An OP15 asbdiag a minute
+     * after boot read 0:2227200 .. 6:1632000 in that node, the prime held at 35 % with ASB's
+     * own ceiling at 1862400, and nothing said whose numbers they were. */
+    fprintf(f, "msm_asb_hold=%d\nmsm_asb=%d,%d,%d\n", g_msm_holding ? 1 : 0,
+            g_asb_msm_written[0], g_asb_msm_written[1], g_asb_msm_written[2]);
     /* fix150: a night slot with the screen on took the evening's lean (alpha before it). */
     /* fix184: Smart records - the knobs in force and what is being measured. */
     fprintf(f, "rec_enabled=%d\nrec_counter=%d\nrec_on_offset=%d\nrec_off_scale=%d\n"
