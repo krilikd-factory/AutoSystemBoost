@@ -207,6 +207,8 @@ typedef struct {
     int   smart_records;             /* 1=Smart measures drain per situation and keeps the best setting found (fix184) */
     int   smart_records_explore;     /* 1=... and keeps trying a neighbouring setting until none beats it */
     int   smart_microwake;           /* 1=Smart learns short night wakes and keeps the night radio mode through them */
+    int   smart_smooth;              /* 1=Smart reads per-app janky frames and tests more headroom where they pile up */
+    int   smart_cold_guard;          /* 1=Smart leans to lower peaks with a cold pack (<5 C) under 40 % */
     int   charge_assist_alpha_max;   /* alpha_battery ceiling while assisting, x1000 (default 450) */
     int   charge_temp_warn_dC;       /* batt temp where assist is dropped (default 390 = 39.0C) */
     int   charge_temp_hot_dC;        /* batt temp where cool-charge guard engages (default 415 = 41.5C) */
@@ -374,6 +376,8 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->smart_records                = 1;
     c->smart_records_explore        = 1;
     c->smart_microwake              = 1;
+    c->smart_smooth                 = 1;
+    c->smart_cold_guard             = 1;
     c->prime_escape_burst_s         = 20;
     c->prime_escape_rest_s          = 40;
     c->charge_assist_alpha_max      = 450;
@@ -608,6 +612,8 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "smart_records"))           c->smart_records           = atoi(v) ? 1 : 0;
     else if (!strcmp(k, "smart_records_explore"))   c->smart_records_explore   = atoi(v) ? 1 : 0;
     else if (!strcmp(k, "smart_microwake"))         c->smart_microwake         = atoi(v) ? 1 : 0;
+    else if (!strcmp(k, "smart_smooth"))            c->smart_smooth            = atoi(v) ? 1 : 0;
+    else if (!strcmp(k, "smart_cold_guard"))        c->smart_cold_guard        = atoi(v) ? 1 : 0;
     else if (!strcmp(k, "prime_escape_burst_s"))    c->prime_escape_burst_s    = atoi(v);
     else if (!strcmp(k, "prime_escape_rest_s"))     c->prime_escape_rest_s     = atoi(v);
     else if (!strcmp(k, "charge_assist_alpha_max")) c->charge_assist_alpha_max = atoi(v);

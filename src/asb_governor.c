@@ -1677,6 +1677,116 @@ static void asb_mw_update(int screen_on, int smart, time_t now) {
         asb_log("microwake: still on after %ld s - a real wake, day radio mode", (long)(now - g_night_on_since));
 }
 
+/* ---- fix185: smoothness probe ----------------------------------------------------------
+ * Android's frame statistics for the app in front, at most every three minutes of screen-on
+ * time, read in the background (runtime/asb_gfx_probe.sh writes /dev/.asb/gfx.txt: one line
+ * "package frames janky" per package, from dumpsys graphicsstats - served by system_server
+ * from the buffer each app shares with it, so the app itself is not called). The delta
+ * between two probes is one window for asb_smooth_window. A window counts only if the same
+ * app was in front, the screen stayed on and one smoothness arm was in force throughout. */
+#define ASB_GFX_FILE     "/dev/.asb/gfx.txt"
+#define ASB_SMOOTH_PROBE_S 180
+static long     g_unplug_age_s = 1000000L;
+static int      g_smooth_lean = 0;          /* x1000, the smoothness lean for the app in front */
+static uint64_t g_smooth_win_hash = 0;      /* app the current window belongs to */
+static char     g_smooth_win_pkg[64];
+static long     g_smooth_win_frames = -1, g_smooth_win_janky = -1;
+static int      g_smooth_win_arm = -1;      /* arm in force since the window began, -1 = mixed */
+static long     g_smooth_probe_ts = 0;      /* when the last probe was asked for */
+static long     g_smooth_gfx_seen = 0;      /* mtime of the gfx file last parsed */
+static unsigned long g_smooth_probes = 0, g_smooth_windows = 0;
+
+/* "frames janky" of one package in the probe file; 0 found, -1 not. */
+static int asb_gfx_read_pkg(const char *pkg, long *frames, long *janky) {
+    FILE *f = fopen(ASB_GFX_FILE, "r");
+    if (!f || !pkg || !*pkg) { if (f) fclose(f); return -1; }
+    char line[256];
+    size_t pl = strlen(pkg);
+    int rc = -1;
+    while (fgets(line, sizeof(line), f)) {
+        if (strncmp(line, pkg, pl) == 0 && line[pl] == ' ') {
+            long fr = -1, jk = -1;
+            if (sscanf(line + pl + 1, "%ld %ld", &fr, &jk) == 2 && fr >= 0 && jk >= 0) {
+                *frames = fr; *janky = jk; rc = 0;
+            }
+            break;
+        }
+    }
+    fclose(f);
+    return rc;
+}
+
+static void asb_smooth_window_reset(uint64_t hash, const char *pkg) {
+    g_smooth_win_hash = hash;
+    snprintf(g_smooth_win_pkg, sizeof(g_smooth_win_pkg), "%s", pkg ? pkg : "");
+    g_smooth_win_frames = -1; g_smooth_win_janky = -1;
+    g_smooth_win_arm = -1;
+}
+
+static void asb_smooth_probe_tick(const asb_fsm_t *fsm, const asb_metrics_t *m) {
+    long now = (long)time(NULL);
+    int on = g_asb_cfg.smart_smooth && fsm->profile_idx == PROFILE_SMART && g_smart_rt.enabled &&
+             m->misc.screen_on && g_pkg_detect_ok && g_smart_rt.app_hash != 0 &&
+             g_smart_rt.app_hint < ASB_APP_GAMING && !m->misc.camera_active &&
+             g_smart_rt.app_pkg_cached[0] && !asb_smart_is_system_ui(g_smart_rt.app_pkg_cached);
+    if (!on) {
+        g_smooth_lean = 0; g_rec_smooth_testing = 0;
+        if (g_smooth_win_hash) asb_smooth_window_reset(0, NULL);
+        return;
+    }
+    uint64_t h = g_smart_rt.app_hash;
+    g_smooth_lean = asb_smooth_offset_for(h, now);
+    int arm = (g_smooth_lean != 0) ? 1 : 0;
+    if (h != g_smooth_win_hash) {              /* another app: a fresh window */
+        asb_smooth_window_reset(h, g_smart_rt.app_pkg_cached);
+        g_smooth_probe_ts = 0;
+    }
+    if (g_smooth_win_arm == -1) g_smooth_win_arm = arm;
+    else if (g_smooth_win_arm != arm) g_smooth_win_arm = -2;   /* the arm changed mid-window */
+    /* A finished probe: one window (if there was a start), and the start of the next. */
+    struct stat st;
+    if (stat(ASB_GFX_FILE, &st) == 0 && (long)st.st_mtime != g_smooth_gfx_seen &&
+        g_smooth_probe_ts > 0 && (long)st.st_mtime >= g_smooth_probe_ts) {
+        g_smooth_gfx_seen = (long)st.st_mtime;
+        long fr = -1, jk = -1;
+        if (asb_gfx_read_pkg(g_smooth_win_pkg, &fr, &jk) == 0) {
+            if (g_smooth_win_frames >= 0 && fr >= g_smooth_win_frames && jk >= g_smooth_win_janky &&
+                g_smooth_win_arm >= 0) {
+                g_smooth_windows++;
+                /* The log names the app the way the rest of Smart does: by hash, unless this
+                 * is a debug build or smart_pkg_plaintext=1. */
+                char disp[64];
+                if (g_asb_cfg.smart_pkg_plaintext || ASB_DEBUG_BUILD)
+                    snprintf(disp, sizeof(disp), "%s", g_smooth_win_pkg);
+                else
+                    snprintf(disp, sizeof(disp), "app %016llx", (unsigned long long)h);
+                if (asb_smooth_window(h, disp, fr - g_smooth_win_frames,
+                                      jk - g_smooth_win_janky, g_smooth_win_arm, now) && g_smooth_event) {
+                    asb_log("%s", g_smooth_event_msg);
+                    g_smooth_event = 0;
+                    g_rec_saved_ts = 0;
+                }
+            }
+            g_smooth_win_frames = fr; g_smooth_win_janky = jk;
+            /* The next window runs under whatever arm is in force from now on. */
+            g_smooth_lean = asb_smooth_offset_for(h, now);
+            g_smooth_win_arm = (g_smooth_lean != 0) ? 1 : 0;
+        }
+    }
+    if (g_smooth_probe_ts == 0 || now - g_smooth_probe_ts >= ASB_SMOOTH_PROBE_S) {
+        /* The package goes to a shell: only the characters a package name can have. */
+        const char *pk = g_smooth_win_pkg;
+        int ok = (pk[0] != 0);
+        for (const char *c = pk; *c && ok; c++)
+            ok = ((*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') ||
+                  (*c >= '0' && *c <= '9') || *c == '.' || *c == '_');
+        g_smooth_probe_ts = now;
+        if (!ok) return;
+        g_smooth_probes++;
+        asb_run_modscript("runtime/asb_gfx_probe.sh", pk);
+    }
+}
+
 /* Screen-off deep-idle ceilings scaled by the records' setting (x0.75..x1.5 of what Smart and
  * the race-to-idle floor would write). Below x1 the writer's 40 % floor is lowered to 25 % for
  * exactly this write; the cooldown, a thermal cap and every other state are left alone, and the
@@ -1717,6 +1827,11 @@ static time_t g_last_caps_reassert = 0;
  * Fed to the bucket update so drain caused by the radio is not read as evidence that the
  * CPU ceiling is too high. Reset when a session is banked. */
 static long g_ses_net_kib_sum = 0;
+/* fix185: the battery's own temperature across the session and whether it ran right after
+ * the charger - the learner's climate guard (asb_smart_session_input_t.climate). */
+static int g_ses_bat_t0_dc = -10000, g_ses_bat_tmin_dc = 10000, g_ses_bat_tmax_dc = -10000;
+static int g_ses_post_unplug = 0;
+static int g_ses_climate_last = 0;
 static long g_ses_net_samples = 0;
 
 /* Wakeup ledger, by source.
@@ -2942,6 +3057,7 @@ static void asb_unlock_lift_apply(asb_profile_caps_t *caps) {
 
 /* Smart night slot with the screen on (fix150) - see asb_smart_night_awake. */
 static int g_rec_on_applied = 0;            /* fix184: the records' screen-on lean in force, x1000 */
+static int g_smart_cold_guard = 0;          /* fix185: cold pack at low charge - battery rails */
 static int g_smart_night_awake_on = 0;      /* the evening values replaced the night ones */
 static int g_smart_night_awake_from = 0;    /* the night slot's own alpha before that */
 static int g_smart_night_awake_to = 0;      /* the evening slot's alpha it took instead */
@@ -3232,12 +3348,16 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     /* fix184: Smart records - the knobs in force and what is being measured. */
     fprintf(f, "rec_enabled=%d\nrec_counter=%d\nrec_on_offset=%d\nrec_off_scale=%d\n"
                "rec_block=%s\nrec_block_arm=%d\nrec_blocks_ok=%lu\nrec_blocks_rejected=%lu\n"
-               "microwake_active=%d\nmicrowake_holds=%lu\nmicrowake_learned=%u\n",
+               "microwake_active=%d\nmicrowake_holds=%lu\nmicrowake_learned=%u\n"
+               "smooth_lean=%d\nsmooth_testing=%d\nsmooth_probes=%lu\nsmooth_windows=%lu\n"
+               "smart_cold_guard=%d\nses_climate=%d\nunplug_age_s=%ld\n",
             g_asb_cfg.smart_records, g_rec_cc_state, g_rec_on_applied, g_rec_off_scale,
             g_rec_blk.active ? g_rec_ctx_names[g_rec_blk.ctx] : "-",
             g_rec_blk.active ? asb_rec_arm_value(g_rec_blk.ctx, g_rec_blk.arm) : 0,
             g_rec_blocks_ok, g_rec_blocks_rejected,
-            g_mw_active, g_mw_holds, g_rec.mw.total);
+            g_mw_active, g_mw_holds, g_rec.mw.total,
+            g_smooth_lean, g_rec_smooth_testing, g_smooth_probes, g_smooth_windows,
+            g_smart_cold_guard, g_ses_climate_last, g_unplug_age_s);
     fprintf(f, "smart_night_awake=%d\nsmart_night_awake_from=%d\nsmart_night_awake_to=%d\n"
                "smart_night_awake_ticks=%lu\n",
             g_smart_night_awake_on, g_smart_night_awake_from, g_smart_night_awake_to,
@@ -5257,6 +5377,30 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         sin.max_skin_c = fsm->ses_max_skin_temp;
         sin.net_kibps = (g_ses_net_samples > 0)
                       ? (int)(g_ses_net_kib_sum / g_ses_net_samples) : 0;
+        /* fix185: climate. A pack under 5 C (the gauge's percentage shrinks in the cold and
+         * comes back when warm), a cold pack warming or cooling by 3 C (outdoors <-> indoors),
+         * a pack ending 3 C below where it started (use only heats it: the surroundings did
+         * that, or the charger's warmth leaving), or a session in the first 20 minutes after
+         * the charger. Decided from the session's own battery readings. */
+        {
+            int _cl = 0;
+            if (g_ses_bat_t0_dc > -10000) {
+                int _rg = g_ses_bat_tmax_dc - g_ses_bat_tmin_dc;
+                if (g_ses_bat_tmin_dc < 50) _cl = 1;
+                else if (g_ses_bat_tmin_dc < 100 && _rg >= 30) _cl = 2;
+                else if (g_ses_bat_t0_dc - g_ses_bat_tmin_dc >= 30) _cl = 3;
+            }
+            if (!_cl && g_ses_post_unplug) _cl = 4;
+            sin.climate = _cl ? 1 : 0;
+            g_ses_climate_last = _cl;
+            if (_cl)
+                asb_log("smart: session drain set aside - %s (battery %d..%d dC, started %d dC)",
+                        _cl == 1 ? "cold pack" : _cl == 2 ? "cold pack changing temperature" :
+                        _cl == 3 ? "pack cooled by its surroundings" : "right after the charger",
+                        g_ses_bat_tmin_dc, g_ses_bat_tmax_dc, g_ses_bat_t0_dc);
+            g_ses_bat_t0_dc = -10000; g_ses_bat_tmin_dc = 10000; g_ses_bat_tmax_dc = -10000;
+            g_ses_post_unplug = 0;
+        }
         g_ses_net_kib_sum = 0;
         g_ses_net_samples = 0;
         sin.trust = (bat_trust_val >= 0) ? bat_trust_val : ASB_TRUST_PARTIAL;
@@ -6096,6 +6240,7 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
         if (!screen_on) {
             g_smart_rt.app_hint = ASB_APP_IDLE;
             g_smart_rt.app_hash = 0;
+            g_smart_rt.app_pkg_cached[0] = 0;
             g_pkg_detect_ok = 0;
             g_pkg_detect_source = 0;
             g_pkg_detect_status = ASB_PKG_MISSING;
@@ -6121,6 +6266,11 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
                 g_smart_rt.app_hash = fg_hash;
                 g_smart_rt.app_hint = fg_hint;
                 g_pkg_detect_ok = 1;
+                {   /* fix185: the name, for the smoothness probe */
+                    size_t _pl = strnlen(fg_pkg, sizeof(g_smart_rt.app_pkg_cached) - 1);
+                    memcpy(g_smart_rt.app_pkg_cached, fg_pkg, _pl);
+                    g_smart_rt.app_pkg_cached[_pl] = 0;
+                }
                 /* Only a current, positively recognised media package may opt into the
                  * media guard. A stale cache deliberately does not qualify. */
                 g_smart_media_pkg_known = (pst == ASB_PKG_OK &&
@@ -6144,6 +6294,7 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
                 /* No package signal — fall back to load-based heuristic,
                  * but mark detect_ok=0 so observability shows the gap */
                 g_smart_rt.app_hash = 0;
+                g_smart_rt.app_pkg_cached[0] = 0;
                 g_pkg_detect_ok = 0;
                 g_smart_media_pkg_known = 0;
                 if (m->cpu.load1 >= 12.0f) g_smart_rt.app_hint = ASB_APP_HEAVY;
@@ -6308,12 +6459,27 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
      * measured in a block, or the best one found. Before the safety layers, so the thermal
      * veto, low battery and the charge guard still lift alpha over it. */
     g_rec_on_applied = 0;
-    if (screen_on && g_rec_on_offset != 0) {
-        int _ra = (int)g_smart_rt.alpha_battery_x1000 + g_rec_on_offset;
+    /* fix185: plus the smoothness lean of the app in front (more headroom, only where a test
+     * showed it helps, or the test itself). */
+    if (screen_on && (g_rec_on_offset != 0 || g_smooth_lean != 0)) {
+        int _off = g_rec_on_offset + g_smooth_lean;
+        int _ra = (int)g_smart_rt.alpha_battery_x1000 + _off;
         if (_ra < ASB_SMART_ALPHA_BATTERY_MIN_X1000) _ra = ASB_SMART_ALPHA_BATTERY_MIN_X1000;
         if (_ra > ASB_SMART_ALPHA_BATTERY_MAX_X1000) _ra = ASB_SMART_ALPHA_BATTERY_MAX_X1000;
         g_smart_rt.alpha_battery_x1000 = _ra;
-        g_rec_on_applied = g_rec_on_offset;
+        g_rec_on_applied = _off;
+    }
+    /* fix185: cold battery, low charge. A Li-ion pack under 5 C has two to three times its
+     * usual internal resistance, so a burst on the prime pulls the voltage down hard - and
+     * with the pack under 40 % that is how a phone switches itself off in the cold with
+     * charge still showing. Lean to the battery rails (lower peaks, the same floor the
+     * low-battery layer uses at 20 %) until the pack warms up or goes on a charger. The
+     * physics, not a capture: no log so far was taken in the cold. */
+    g_smart_cold_guard = 0;
+    if (g_asb_cfg.smart_cold_guard && !charging && battery_pct >= 0 && battery_pct < 40 &&
+        m->bat.temp_dC > -300 && m->bat.temp_dC < 50) {
+        if (g_smart_rt.alpha_battery_x1000 < 800) g_smart_rt.alpha_battery_x1000 = 800;
+        g_smart_cold_guard = 1;
     }
 
     /* 4. Safety overrides — these can lift floors but never reduce safety */
@@ -6872,7 +7038,8 @@ static int asb_smart_init(void) {
         int _rl = asb_rec_load();
         asb_rec_summary_write();
         asb_log("records: %s (%s); night wakes learned: %u over %u night(s)",
-                _rl ? "loaded" : "fresh start", asb_rec_cc_file() > 0 ? "charge counter readable"
+                _rl == 1 ? "loaded" : _rl == 2 ? "fix184 store: night checks kept, situations re-measured as power"
+                         : "fresh start", asb_rec_cc_file() > 0 ? "charge counter readable"
                                                                       : "no charge counter - not measured",
                 g_rec.mw.total, g_rec.mw.nights);
     }
@@ -9293,7 +9460,32 @@ int main(int argc, char **argv) {
                 _ri.at_ceiling  = metrics.misc.screen_on ? asb_rec_at_ceiling(&metrics) : 0;
                 _ri.now_ms      = asb_clock_ms(CLOCK_BOOTTIME);
                 _ri.wall        = (long)time(NULL);
+                /* fix185: climate and charge - the pack temperature, its voltage (power =
+                 * charge x voltage), the charge level and how long ago the charger came off. */
+                _ri.bat_temp_dc = metrics.bat.temp_dC;
+                _ri.voltage_uv  = metrics.bat.voltage_uv;
+                _ri.soc         = metrics.bat.capacity_pct;
+                {
+                    static int  _rc_prev_chg = -1;
+                    static long long _rc_unplug_ms = 0;
+                    if (_rc_prev_chg == 1 && !metrics.bat.charging) _rc_unplug_ms = _ri.now_ms;
+                    _rc_prev_chg = metrics.bat.charging ? 1 : 0;
+                    _ri.unplug_age_s = (_rc_unplug_ms > 0) ? (long)((_ri.now_ms - _rc_unplug_ms) / 1000)
+                                                           : 1000000L;
+                    g_unplug_age_s = _ri.unplug_age_s;
+                    /* The session's battery temperature, for the learner's climate guard. */
+                    int _bt = metrics.bat.temp_dC;
+                    if (_bt > -300 && _bt < 800) {
+                        if (g_ses_bat_t0_dc == -10000) g_ses_bat_t0_dc = _bt;
+                        if (_bt < g_ses_bat_tmin_dc) g_ses_bat_tmin_dc = _bt;
+                        if (_bt > g_ses_bat_tmax_dc) g_ses_bat_tmax_dc = _bt;
+                    }
+                    if (metrics.misc.screen_on && !metrics.bat.charging &&
+                        _ri.unplug_age_s < ASB_REC_SETTLE_S)
+                        g_ses_post_unplug = 1;
+                }
                 asb_rec_tick(&_ri);
+                asb_smooth_probe_tick(&fsm, &metrics);
                 if (g_rec_event) { asb_log("%s", g_rec_event_msg); g_rec_event = 0; }
                 if (g_rec_knob_changed) { g_rec_knob_changed = 0; force_write = 1; }
             }

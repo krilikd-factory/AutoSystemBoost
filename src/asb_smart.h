@@ -875,6 +875,10 @@ typedef struct {
  */
 static void asb_smart_store_migrate(asb_smart_store_t *st) {
     if (!st || st->version == ASB_SMART_VER) return;
+    if (st->version >= ASB_SMART_VER_KEEP) {   /* V4 -> V5: nothing to undo (fix185) */
+        st->version = ASB_SMART_VER;
+        return;
+    }
     for (int i = 0; i < ASB_SMART_BUCKETS; i++) {
         /* The same neutral values a fresh runtime starts with - taken from the
          * initialiser rather than guessed, so a migrated bucket and a new one behave
@@ -2267,6 +2271,19 @@ typedef struct {
      * radio was the cost. Capping the CPU in that bucket buys nothing and slows the phone
      * the next time it lands there. */
     int net_kibps;
+    /* fix185 (Smart V5): the session's drain says more about the weather than the setting.
+     *
+     * The fuel gauge's percentage is a model of the pack, and the pack's usable capacity
+     * moves with its temperature: out in the cold the percentage falls faster than the
+     * charge drawn, and back in a warm room part of it returns. The first twenty minutes
+     * after the charger are the other half of the same problem - the percentage holds at
+     * the top, the pack is warm and its voltage still relaxing. A session like that looked
+     * dear (cold street) or cheap (warm home, fresh off the charger) for reasons no CPU
+     * ceiling had a part in, and the learner leaned on it - in the cheap case crediting
+     * itself with what the room did. Set by the governor from the battery's own
+     * temperature: the drain verdicts and the drain average are skipped, in both
+     * directions; heat and everything else still teach. */
+    int climate;
 } asb_smart_session_input_t;
 
 static void asb_smart_bucket_update_from_session(
@@ -2306,7 +2323,7 @@ static void asb_smart_bucket_update_from_session(
     int hot = (s->max_temp_c >= 70);
     int very_hot = (s->max_temp_c >= 80);
     int drain_valid = (s->drain_on_sec >= ASB_SMART_DRAIN_MIN_ON_SEC &&
-                       s->drain_pctph_x10 >= 0);
+                       s->drain_pctph_x10 >= 0 && !s->climate);
     int drainy = (drain_valid &&
                   s->drain_pctph_x10 >= ASB_SMART_DRAIN_HEAVY_PCTPH_X10);
     int sustained_heavy = (s->sustained_pct >= 30);
