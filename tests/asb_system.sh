@@ -1917,10 +1917,15 @@ int main(void) {
     EQ(asb_smart_prime_slot_cap_khz(ASB_STATE_HEAVY, hw, 4, 0, 1), hw * 62 / 100, "heavy 62%");
     EQ(asb_smart_prime_slot_cap_khz(ASB_STATE_SUSTAINED, hw, 4, 0, 1), hw * 50 / 100, "sustained 50%");
     EQ(asb_smart_prime_slot_cap_khz(ASB_STATE_LIGHT_IDLE, hw, 4, 0, 1), hw * 55 / 100, "light idle screen on 55%");
-    EQ(asb_smart_prime_slot_cap_khz(ASB_STATE_LIGHT_IDLE, hw, 4, 0, 0), 0, "light idle screen off: screen-off cap owns it");
-    EQ(asb_smart_prime_slot_cap_khz(ASB_STATE_DEEP_IDLE, hw, 4, 0, 0), 0, "deep idle untouched");
-    EQ(asb_smart_prime_slot_cap_khz(ASB_STATE_GAMING, hw, 4, 0, 1), 0, "gaming untouched");
-    EQ(asb_smart_prime_slot_cap_khz(ASB_STATE_MODERATE, hw, 4, 1, 1), 0, "a busy game is left alone");
+    /* fix181: never 0 (unmanaged) on a 3/4-cluster part - the writer skipped such a slot and
+     * the prime kept MODERATE's 62% through the screen-off night (CPH2691 capture 8952) and
+     * through GAMING. Screen off is a defined 55% that the screen-off cap and the cooldown
+     * lower further; GAMING and a busy game get the whole prime back. */
+    EQ(asb_smart_prime_slot_cap_khz(ASB_STATE_LIGHT_IDLE, hw, 4, 0, 0), hw * 55 / 100, "light idle screen off 55%");
+    EQ(asb_smart_prime_slot_cap_khz(ASB_STATE_DEEP_IDLE, hw, 4, 0, 0), hw * 55 / 100, "deep idle 55%, lowered further by the screen-off cap");
+    EQ(asb_smart_prime_slot_cap_khz(ASB_STATE_GAMING, hw, 4, 0, 1), hw, "gaming: the whole prime back");
+    EQ(asb_smart_prime_slot_cap_khz(ASB_STATE_MODERATE, hw, 4, 1, 1), hw, "a busy game: the whole prime back");
+    if (asb_smart_prime_slot_cap_khz(ASB_STATE_DEEP_IDLE, hw, 4, 0, 0) >= asb_smart_prime_slot_cap_khz(ASB_STATE_MODERATE, hw, 4, 0, 1)) { puts("FAIL screen-off prime not below MODERATE"); bad++; }
     EQ(asb_smart_prime_slot_cap_khz(ASB_STATE_MODERATE, 4608000, 2, 0, 1), 0, "2-cluster part: slot 1 is the prime, not this");
     EQ(asb_smart_prime_slot_cap_khz(ASB_STATE_MODERATE, 0, 4, 0, 1), 0, "unknown hw max");
     /* Still the fastest core: above the middle cores' MODERATE share (58%). */
@@ -3079,7 +3084,7 @@ grep -q 'lifted to the race-to-idle floor (40% of hardware max)' "$D" || fail "a
 grep -q "_s0n: ASB's own thermal-budget trim" "$D" || fail "asbdiag blames the vendor for ASB's own trim"
 grep -q 'screen-off noticed by:' "$D" || fail "asbdiag does not show screen-off sources"
 cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
-grep -q '|main_by=${_mb}|prime_by=${_pb}"' "$ROOT/tools/logkit/asb_log_full_day.sh" || fail "throttle rows carry no cause"
+grep -q '|main_by=${_mb}|prime_by=${_pb}|writer=${_cw:-asb}"' "$ROOT/tools/logkit/asb_log_full_day.sh" || fail "throttle rows carry no cause"
 echo "PASS: fix126 contract"
 ) || exit 1
 # ---- fix127 ---------------------------------------------------------------
@@ -3847,6 +3852,58 @@ grep -q 'Wi-Fi multicast by app' "$ROOT/tools/logkit/_asb_logkit_common.sh" || f
 grep -q 'P "    writes per transition: $_wpt (8+ with little vendor contention' "$ROOT/tools/asb_diag.sh" && fail "asbdiag calls a high write ratio chattering again"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag differs from tools/asb_diag.sh"
 echo "PASS: fix180 contract"
+) || exit 1
+# ---- fix181 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix181: $*"; exit 1; }
+for t in test_sustained_repeat_runtime.sh test_logkit_audiomix_summary_runtime.sh; do
+  asb_has_test "$t" || fail "$t missing"
+done
+grep -q '^static void fsm_sustained_edges(asb_fsm_t \*fsm, time_t now) {' "$ROOT/src/asb_fsm.h" || fail "SUSTAINED edges are not recorded after the transitions"
+grep -q 'case ASB_STATE_GAMING:     pct = 100; break;' "$ROOT/src/asb_fsm.h" || fail "GAMING keeps the last Smart prime cap on a 3/4-cluster part"
+grep -q 'case ASB_STATE_DEEP_IDLE:' "$ROOT/src/asb_fsm.h" || fail "the screen-off prime is unmanaged again"
+grep -q 'An unmanaged slot (0) is given back' "$ROOT/src/asb_writer.h" || fail "the writer keeps an old cap on an unmanaged slot"
+grep -q 'sustained_repeat=%d' "$ROOT/src/asb_governor.c" || fail "sustained_repeat is not published"
+echo "PASS: fix181 contract"
+) || exit 1
+# ---- fix182 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix182: $*"; exit 1; }
+for t in test_shell_cap_owner_runtime.sh test_shell_caps_publish_runtime.sh test_logkit_shell_cap_reference_runtime.sh; do
+  asb_has_test "$t" || fail "$t missing"
+done
+grep -q '^asb_shell_caps_publish() {' "$ROOT/service.sh" || fail "service.sh does not record the manual-profile caps"
+grep -q '^static inline const char \*cap_source_classify_shell(' "$ROOT/src/asb_governor.c" || fail "no classification against the shell's own ceiling"
+grep -q 'shell_mode ? "shell" : "governor"' "$ROOT/src/asb_governor.c" || fail "the ceiling watch does not say whose cap it compared with"
+grep -q '_lc_foreign="$_lc_vendor"' "$ROOT/tools/logkit/asb_log_full_day.sh" || fail "the ownership verdict counts the shell as foreign"
+grep -q 'cap profile/effective' "$ROOT/tools/asb_diag.sh" || fail "asbdiag compares manual caps with the governor rail"
+grep -q 'cap_writer' "$ROOT/docs/log_schemas.md" || fail "cap_writer undocumented"
+awk '/int manual_cap_skip = /{on=1} on && /msm_perf_release\(\);/{rel=NR} on && /goto skip_cpu_caps;/{print (rel ? "ok" : "no"); exit}' "$ROOT/src/asb_writer.h" | grep -qx ok || fail "a manual profile keeps ASB's msm_performance registration after HEAVY/SUSTAINED"
+grep -q 'if (state != ASB_STATE_HEAVY && state != ASB_STATE_GAMING && state != ASB_STATE_SUSTAINED)' "$ROOT/src/asb_writer.h" || fail "the msm release does not wait for the anti-clamp states to end"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag differs from tools/asb_diag.sh"
+echo "PASS: fix182 contract"
+) || exit 1
+# ---- fix183 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix183: $*"; exit 1; }
+for t in test_shell_cap_owner_runtime.sh test_shell_caps_publish_runtime.sh; do
+  asb_has_test "$t" || fail "$t missing"
+done
+grep -q '^asb_shell_caps_precompute() {' "$ROOT/service.sh" || fail "the manual rungs are not precomputed"
+grep -q '^asb_manual_cap_pct() {' "$ROOT/service.sh" || fail "the per-device percentages are not shared by the precompute"
+grep -q 'asb_shell_caps_precompute "$_dev"' "$ROOT/service.sh" || fail "apply_screen_aware_caps does not refresh the records"
+grep -q '^static int writer_manual_handback(int profile_idx, asb_state_t state) {' "$ROOT/src/asb_writer.h" || fail "no hand-back of governor-written manual ceilings"
+grep -q 'static int s_writer_prof_seen = -1;' "$ROOT/src/asb_writer.h" || fail "a switch into a manual profile does not put its ceilings in"
+grep -q 'g_fsm_cooldown_active = _cool_active;' "$ROOT/src/asb_fsm.h" || fail "the cooldown is not visible to the writer"
+grep -q 'battery|balanced) asb_feature_enabled CPU && apply_screen_aware_caps ;;' "$ROOT/runtime/asb_reconcile.sh" || fail "the fallback reconcile loop ignores a switch into a manual profile"
+grep -q '/dev/.asb/shell_cpu_caps.battery' "$ROOT/tools/logkit/_asb_logkit_common.sh" || fail "the capture does not carry the precomputed records"
+grep -q 'manual-profile cap records' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not list the records"
+grep -q 'shell_cpu_caps.battery' "$ROOT/docs/log_schemas.md" || fail "the records are undocumented"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag differs from tools/asb_diag.sh"
+echo "PASS: fix183 contract"
 ) || exit 1
 echo "PASS: field-fix contracts"
 )

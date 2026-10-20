@@ -6600,6 +6600,200 @@ grep -q '^  lk_energy_model_write$' "$COMMON" || fail "the capture start does no
 echo "PASS logkit energy model: the per-step CPU power table is in the capture where the kernel exposes it"
 )
 
+t_logkit_audiomix_summary_runtime() (
+# Runtime (fix181): the report's AudioMix holders are data rows only, and a shared system uid
+# is named once. CPH2691 capture 8952 printed the header as a holder ("uid|package=
+# worksource_uid|package") and uid 1000 as a list of every package sharing it.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+FULL="$ROOT/tools/logkit/asb_log_full_day.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL logkit audiomix summary: $*" >&2; exit 1; }
+sed -n '/^lk_emit_audiomix_summary() {/,/^}/p' "$FULL" > "$T/f.sh"
+grep -q 'AUDIOMIX LIVE ATTRIBUTION' "$T/f.sh" || fail "function not found"
+grep -q '^  lk_emit_audiomix_summary$' "$FULL" || fail "the report does not print it"
+cat > "$T/audio_wakelock_attribution.tsv" <<'D'
+# AudioMix attribution — voluntary debug capture only
+# epoch|iso_time|worksource_uid|package|power_manager_hold
+1792445836|t|10596|com.google.android.youtube|PARTIAL_WAKE_LOCK 'AudioMix'
+1792445883|t|10596|com.google.android.youtube|PARTIAL_WAKE_LOCK 'AudioMix'
+1792445900|t|1000|android,com.android.DeviceAsWebcam,com.android.dynsystem|PARTIAL_WAKE_LOCK 'AudioMix'
+1792445950|t|10088|com.a,com.b|PARTIAL_WAKE_LOCK 'AudioMix'
+D
+out="$( LK_OUT_DIR="$T"; . "$T/f.sh"; lk_emit_audiomix_summary )"
+printf '%s\n' "$out" | grep -q 'worksource_uid' && fail "the header was counted: $out"
+printf '%s\n' "$out" | grep -qx 'samples=2  uid|package=10596|com.google.android.youtube' || fail "app row: $out"
+printf '%s\n' "$out" | grep -qx 'samples=1  uid|package=1000|system' || fail "system uid: $out"
+printf '%s\n' "$out" | grep -qx 'samples=1  uid|package=10088|com.a (shared uid)' || fail "shared app uid: $out"
+printf '%s\n' "$out" | grep -q 'DeviceAsWebcam' && fail "the shared-uid package list was printed: $out"
+head -2 "$T/audio_wakelock_attribution.tsv" > "$T/h"; mv "$T/h" "$T/audio_wakelock_attribution.tsv"
+out="$( LK_OUT_DIR="$T"; . "$T/f.sh"; lk_emit_audiomix_summary )"
+printf '%s\n' "$out" | grep -q 'no AudioMix partial wakelock observed' || fail "headers alone read as samples: $out"
+echo "PASS logkit audiomix summary: data rows only, a shared system uid named once"
+)
+
+t_shell_caps_publish_runtime() (
+# Runtime (fix182): the manual-profile caps service.sh writes are recorded for the governor,
+# asbdiag and the logkit, and the screen-off rung is not left behind with the governor up.
+# OP15 Battery capture 25307: the governor had no idea what the shell wrote and called the
+# profile's own 1785600/1747200 a vendor clamp all day. The REAL functions are cut out of
+# service.sh and run against a fake cpufreq tree.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+S="$ROOT/service.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL shell caps publish: $*" >&2; exit 1; }
+{
+  sed -n '/^asb_freq_pick_pct() {/,/^}/p' "$S"
+  sed -n '/^asb_cap_want_for_policy() {/,/^}/p' "$S"
+  sed -n '/^apply_cpufreq_caps() {/,/^}/p' "$S" | sed "s#/sys/devices/system/cpu/cpufreq#$T/cpufreq#g"
+  sed -n '/^asb_shell_caps_publish() {/,/^}/p' "$S"
+  sed -n '/^asb_cap_dev() {/,/^}/p' "$S"
+  sed -n '/^asb_manual_cap_pct() {/,/^}/p' "$S"
+  sed -n '/^asb_shell_caps_precompute() {/,/^}/p' "$S" | sed "s#/sys/devices/system/cpu/cpufreq#$T/cpufreq#g"
+  sed -n '/^apply_screen_aware_caps() {/,/^}/p' "$S"
+} > "$T/f.sh"
+grep -q 'asb_shell_caps_precompute "$_dev"' "$T/f.sh" || fail "apply_screen_aware_caps does not precompute the manual rungs"
+grep -q 'asb_shell_caps_publish "$_shcaps"' "$T/f.sh" || fail "apply_cpufreq_caps does not publish"
+grep -q '_rung_note=' "$T/f.sh" || fail "no screen-off rung guard"
+mk() {  # policy id, related_cpus, hw max, available
+  d="$T/cpufreq/policy$1"; mkdir -p "$d"
+  echo "$2" > "$d/related_cpus"; echo "$3" > "$d/cpuinfo_max_freq"; echo 300000 > "$d/cpuinfo_min_freq"
+  echo "$4" > "$d/scaling_available_frequencies"; echo "$3" > "$d/scaling_max_freq"; echo 300000 > "$d/scaling_min_freq"
+}
+mk 0 "0 1 2 3 4 5" 3628800 "300000 1440000 1785600 1900800 3628800"
+mk 6 "6 7" 4608000 "300000 1152000 1632000 1747200 1862400 4608000"
+cat > "$T/stubs.sh" <<X
+little_end=5
+CPU_MIN_LITTLE=300000; CPU_MIN_BIG=300000
+ASB_SHELL_CAPS_FILE="$T/shell_cpu_caps"
+writef_retry() { printf '%s\n' "\$2" > "\$1"; [ -n "\${ROUND_UP:-}" ] && case "\$1" in *policy6/scaling_max_freq) echo 1862400 > "\$1" ;; esac; [ -n "\${CLAMP:-}" ] && case "\$1" in *policy0/scaling_max_freq) echo 1440000 > "\$1" ;; esac; return 0; }
+asb_pick_nearest_freq() { echo "\$2"; }
+asb_log() { echo "\$*" >> "$T/log"; }
+asb_load_profile() { :; }
+asb_feature_enabled() { return 0; }
+getprop() { [ "\$1" = ro.board.platform ] && echo canoe; return 0; }
+asb_screen_on() { [ "\${SCREEN:-1}" = 1 ]; }
+asb_governor_running() { [ "\${GOV:-0}" = 1 ]; }
+X
+run() { ( . "$T/stubs.sh"; . "$T/f.sh"; ASB_PROFILE=battery; PROFILE=battery; apply_screen_aware_caps ) ; }
+SCREEN=1 GOV=1 run
+grep -qx 'profile=battery' "$T/shell_cpu_caps" || fail "profile not recorded: $(cat "$T/shell_cpu_caps")"
+grep -qx 'screen_on=1' "$T/shell_cpu_caps" || fail "screen rung not recorded"
+grep -qx 'policy0=1785600' "$T/shell_cpu_caps" || fail "main cap: $(cat "$T/shell_cpu_caps")"
+grep -qx 'policy6=1747200' "$T/shell_cpu_caps" || fail "prime cap: $(cat "$T/shell_cpu_caps")"
+ls "$T"/shell_cpu_caps.tmp.* >/dev/null 2>&1 && fail "temp file left behind"
+# screen off with the governor running: the screen-on rung stays (nothing would restore it)
+SCREEN=0 GOV=1 run
+[ "$(cat "$T/cpufreq/policy6/scaling_max_freq")" = 1747200 ] || fail "screen-off rung written with the governor up: $(cat "$T/cpufreq/policy6/scaling_max_freq")"
+tail -1 "$T/log" | grep -q 'governor is running and nothing would restore the screen-on rung' || fail "rung note not logged: $(tail -1 "$T/log")"
+# screen off without the governor: reconcile follows the screen, so the rung applies
+SCREEN=0 GOV=0 run
+[ "$(cat "$T/cpufreq/policy6/scaling_max_freq")" = 1152000 ] || fail "screen-off rung (25 %) not applied without the governor: $(cat "$T/cpufreq/policy6/scaling_max_freq")"
+grep -qx 'screen_on=0' "$T/shell_cpu_caps" || fail "screen-off rung not recorded"
+# a kernel that rounds the request up: the read-back is ours
+SCREEN=1 GOV=1 ROUND_UP=1 run
+grep -qx 'policy6=1862400' "$T/shell_cpu_caps" || fail "rounded-up read-back not recorded: $(cat "$T/shell_cpu_caps")"
+# a clamp already in place when the shell writes: the request is recorded, not the clamp
+SCREEN=1 GOV=1 CLAMP=1 run
+grep -qx 'policy0=1785600' "$T/shell_cpu_caps" || fail "a vendor clamp was recorded as the shell's cap: $(cat "$T/shell_cpu_caps")"
+# fix183: every manual profile's screen-on rung is precomputed - also when Smart runs, and
+# without writing a ceiling.
+grep -qx 'policy6=1747200' "$T/shell_cpu_caps.battery" || fail "battery rung: $(cat "$T/shell_cpu_caps.battery" 2>&1)"
+grep -qx 'policy0=3628800' "$T/shell_cpu_caps.balanced" || fail "OP15 balanced is uncapped on screen-on: $(cat "$T/shell_cpu_caps.balanced" 2>&1)"
+rm -f "$T"/shell_cpu_caps*
+echo 2400000 > "$T/cpufreq/policy0/scaling_max_freq"
+( . "$T/stubs.sh"; . "$T/f.sh"; ASB_PROFILE=smart; PROFILE=smart; SCREEN=1; apply_screen_aware_caps )
+[ -f "$T/shell_cpu_caps.battery" ] && [ -f "$T/shell_cpu_caps.balanced" ] || fail "Smart boot did not precompute the manual rungs"
+[ -f "$T/shell_cpu_caps" ] && fail "Smart wrote a manual record"
+[ "$(cat "$T/cpufreq/policy0/scaling_max_freq")" = 2400000 ] || fail "the precompute wrote a ceiling under Smart"
+# the per-device tables (multi-device): OP13 battery 58/48, OP12 4 clusters with a MID rung
+( . "$T/stubs.sh"; . "$T/f.sh"; asb_manual_cap_pct battery 1 op13; echo "$_P_CPUCAP_L/$_P_CPUCAP_B" ) | grep -qx '58/48' || fail "OP13 battery table"
+( . "$T/stubs.sh"; . "$T/f.sh"; asb_manual_cap_pct balanced 1 op15; echo "[$_P_CPUCAP_L/$_P_CPUCAP_B]" ) | grep -qx '\[/\]' || fail "OP15 balanced screen-on must stay uncapped"
+( . "$T/stubs.sh"; . "$T/f.sh"; asb_manual_cap_pct smart 1 op15 ) && fail "smart is not a shell-capped profile"
+rm -rf "$T/cpufreq"
+mk 0 "0 1" 2265600 "300000 1132800 1363200 2265600"
+mk 2 "2 3 4" 3148800 "300000 1574400 2457600 2496000 3148800"
+mk 5 "5 6" 2956800 "300000 1478400 2265600 2323200 2956800"
+mk 7 "7" 3302400 "300000 1497600 1555200 3302400"
+cat >> "$T/stubs.sh" <<'X'
+little_end=1
+getprop() { [ "$1" = ro.board.platform ] && echo pineapple; return 0; }
+X
+( . "$T/stubs.sh"; . "$T/f.sh"; ASB_PROFILE=smart; PROFILE=smart; SCREEN=1; apply_screen_aware_caps )
+# OP12 battery 60/45, MID halfway: 60 + 40/2 = 80 %
+grep -qx 'policy0=1363200' "$T/shell_cpu_caps.battery" || fail "OP12 little: $(cat "$T/shell_cpu_caps.battery")"
+grep -qx 'policy2=2496000' "$T/shell_cpu_caps.battery" && grep -qx 'policy5=2323200' "$T/shell_cpu_caps.battery" || fail "OP12 mids (80 %): $(cat "$T/shell_cpu_caps.battery")"
+grep -qx 'policy7=1497600' "$T/shell_cpu_caps.battery" || fail "OP12 prime (45 %): $(cat "$T/shell_cpu_caps.battery")"
+echo "PASS shell caps publish: per-policy record, screen-off rung only where something lifts it again"
+)
+
+t_logkit_shell_cap_reference_runtime() (
+# Runtime (fix182): in a manual profile the logkit measures throttling and cap_verify against
+# what the shell wrote. OP15 Battery capture 25307 logged all 224 samples as throttled (the
+# shell's 1747200 prime under the governor's unsent 1862400 rail) and cap_verify compared
+# against a legacy 921600 nothing writes.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+FULL="$ROOT/tools/logkit/asb_log_full_day.sh"; COM="$ROOT/tools/logkit/_asb_logkit_common.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL logkit shell cap reference: $*" >&2; exit 1; }
+{
+  sed -n '/^lk_state_kv() {/,/^}/p' "$COM"
+  sed -n '/^lk_cap_cause() {/,/^}/p' "$COM"
+  sed -n '/^lk_throttle_row() {/,/^}/p' "$FULL" | sed "s#/sys/devices/system/cpu/cpufreq/policy0#$T/policy0#g"
+  sed -n '/^lk_emit_cap_ownership_verdict() {/,/^}/p' "$FULL"
+  sed -n '/^lk_verify_caps() {/,/^}/p' "$COM" | sed "s#/sys/devices/system/cpu/cpufreq#$T/cpufreq#g"
+} > "$T/f.sh"
+grep -q 'lk_throttle_row' "$T/f.sh" && grep -q 'lk_verify_caps' "$T/f.sh" || fail "functions not found"
+mkdir -p "$T/policy0" "$T/policy6" "$T/cpufreq" "$T/mod/profiles"
+ln -s "$T/policy0" "$T/cpufreq/policy0"; ln -s "$T/policy6" "$T/cpufreq/policy6"
+echo "0 1 2 3 4 5" > "$T/policy0/related_cpus"; echo "6 7" > "$T/policy6/related_cpus"
+echo 3628800 > "$T/policy0/cpuinfo_max_freq"; echo 4608000 > "$T/policy6/cpuinfo_max_freq"
+echo battery > "$T/mod/current_profile"
+printf 'CPU_CAP_BIG=921600\nCPU_CAP_LITTLE=921600\n' > "$T/mod/profiles/battery.sh"
+cat > "$T/state" <<'D'
+desired_cpu_max0=1555200
+desired_cpu_maxp=1862400
+desired_cpu_max_prime=1862400
+requested_cpu_max0=0
+requested_cpu_max_prime=0
+cap_writer=shell
+shell_cpu_max0=1785600
+shell_cpu_max_prime=1747200
+D
+printf 'profile=battery\nscreen_on=1\nts=1\npolicy0=1785600\npolicy6=1747200\n' > "$T/shell_cpu_caps"
+run() {
+  ( LK_OUT_DIR="$T"; LK_PRIME_POL="$T/policy6"; LK_P0_HWMAX=3628800; LK_P6_HWMAX=4608000; LK_PH_THROTTLE=0
+    MODDIR="$T/mod"; ASB_LK_STATE_FILE="$T/state"; ASB_SHELL_CAPS_FILE="$T/shell_cpu_caps"
+    . "$T/f.sh"
+    lk_status_json() { printf '{"temp":40,"surface_hotspot":38,"cap_owner":"%s","perf_cap_p0":2361600,"perf_cap_p6":1632000,"cap_source_p0":"shell_applied","cap_source_p6":"%s"}' "${OWN:-shell}" "${SRC:-shell_applied}"; }
+    "$@" )
+}
+echo 1785600 > "$T/policy0/scaling_max_freq"; echo 1747200 > "$T/policy6/scaling_max_freq"
+run lk_throttle_row active
+[ -s "$T/throttle_trace.txt" ] && fail "the profile's own cap was logged as a throttle: $(cat "$T/throttle_trace.txt")"
+echo 1632000 > "$T/policy6/scaling_max_freq"
+OWN=vendor SRC=vendor_clamp run lk_throttle_row active
+grep -q 'prime_by=vendor|writer=shell' "$T/throttle_trace.txt" || fail "a clamp under the shell cap: $(cat "$T/throttle_trace.txt")"
+grep -q 'main_by=-' "$T/throttle_trace.txt" || fail "main at the shell cap is not under it: $(cat "$T/throttle_trace.txt")"
+out="$(run lk_emit_cap_ownership_verdict)"
+printf '%s\n' "$out" | grep -q 'sample(s) were taken in a manual profile' || fail "manual-profile note missing: $out"
+# shell rows count as ASB's own, not foreign
+printf '%s\n' "$(cut -d'|' -f1-6 "$T/throttle_trace.txt")|cap_owner=shell|main_by=vendor|prime_by=-|writer=shell" > "$T/x"
+cat "$T/x" "$T/x" "$T/x" > "$T/throttle_trace.txt"
+out="$(run lk_emit_cap_ownership_verdict)"
+printf '%s\n' "$out" | grep -q 'foreign cap ownership dominated' && fail "the shell was counted as a foreign owner: $out"
+# cap_verify: the shell's values are the expectation, the legacy 921600 is not
+echo 1747200 > "$T/policy6/scaling_max_freq"
+run lk_verify_caps
+grep -q 'cap_writer: shell' "$T/cap_verify.txt" || fail "cap_verify does not say who writes: $(cat "$T/cap_verify.txt")"
+grep -q 'policy0 (MAIN).*profile_expected=1785600.*ok (shell-applied)' "$T/cap_verify.txt" || fail "main: $(cat "$T/cap_verify.txt")"
+grep -q 'policy6 (BIG(prime)).*profile_expected=1747200.*ok (shell-applied)' "$T/cap_verify.txt" || fail "prime: $(cat "$T/cap_verify.txt")"
+grep -q 'DESYNC' "$T/cap_verify.txt" && fail "DESYNC against values nobody wrote: $(cat "$T/cap_verify.txt")"
+echo "PASS logkit shell cap reference: manual-profile throttle and cap_verify use the shell's own ceilings"
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;

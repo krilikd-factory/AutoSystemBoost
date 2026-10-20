@@ -3730,7 +3730,7 @@ _mark="$(grep -n 'int _trend_warm = (!m->therm.temp_valid) || m->therm.cpu_max_c
 [ -n "$_gate" ] && [ -n "$_fast" ] && [ -n "$_mark" ] || fail "trend gate not wired"
 [ "$_mark" -lt "$_gate" ] && [ "$_gate" -lt "$_fast" ] || fail "the cool-body gate is not between the warm mark and the trend trims"
 grep -q 'int leak0 = (k0 == ASB_CEIL_OVER_VENDOR);' "$G" || fail "vendor leak still counts ASB's own requests"
-grep -q 'asb_ceiling_over_kind(actual_p1, want_p1, g_write_health\[ASB_WRITE_CPU_MAX0 + 1\].requested)' "$G" || fail "prime classification does not read the writer's request"
+grep -q 'int req_p1 = g_write_health\[ASB_WRITE_CPU_MAX0 + 1\].requested;' "$G" && grep -q 'asb_ceiling_over_kind(actual_p1, want_p1, req_p1)' "$G" || fail "prime classification does not read the writer's request"
 grep -q 'own_ceiling_ticks=%lu' "$G" || fail "own lifts not published"
 grep -q 'trend_trim_held_cool=%lu' "$G" || fail "held trend trims not published"
 grep -q 'own_ceiling_ticks' "$ROOT/tools/asb_diag.sh" && grep -q 'trend_trim_held_cool' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not show them"
@@ -3826,7 +3826,7 @@ printf '%s\n' "$v" | grep -q 'main cores sat under a ceiling' && f "main cores w
 
 # The recorder and the governor.
 grep -q 'lk_state_kv desired_cpu_max_prime' "$FD" || f "prime compared with slot 1, not the prime"
-grep -q '|main_by=${_mb}|prime_by=${_pb}"' "$FD" || f "rows carry no per-cluster cause"
+grep -q '|main_by=${_mb}|prime_by=${_pb}|writer=${_cw:-asb}"' "$FD" || f "rows carry no per-cluster cause"
 grep -q 'lk_emit_cap_cause_split "$LK_OUT_DIR/throttle_trace.txt"' "$FD" || f "report does not print the split"
 grep -q 'requested_cpu_max0=%d\\nrequested_cpu_max_prime=%d' "$G" || f "governor does not publish what it wrote"
 grep -q 'g_fsm_slot_req_khz\[i\] = cmax\[i\];' "$ROOT/src/asb_writer.h" || f "writer does not record its kept request"
@@ -4604,6 +4604,197 @@ X
 out="$("$T/t")" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 echo "PASS current corroboration: the battery-current shortcut to MODERATE starts above this phone's own idle load, never below the old bar"
+)
+
+t_sustained_repeat_runtime() (
+# Runtime (fix181): SUSTAINED that keeps coming back stays longer, and its cooldowns are armed.
+#
+# CPH2691 capture 8952: eight SUSTAINED entries in 22 minutes, each left after ~30 s, one
+# re-entered 16 s after leaving under a 24 s re-entry cooldown - the hook that armed it sat
+# before the ladder transition, where state_changed could never be set. The REAL helpers are
+# cut out of asb_fsm.h and driven through an enter/exit sequence.
+set -eu
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+F="$ROOT/src/asb_fsm.h"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL sustained repeat: $*" >&2; exit 1; }
+CC="${CC:-cc}"; command -v "$CC" >/dev/null 2>&1 || CC=gcc
+command -v "$CC" >/dev/null 2>&1 || { echo "SKIP sustained repeat: no C compiler"; exit 0; }
+# Placement: armed after every transition of the tick, the dead pre-transition hook gone,
+# and the dwell doubled where SUSTAINED is left.
+grep -q '^    fsm_sustained_edges(fsm, time(NULL));$' "$F" || fail "edges not recorded after the transitions"
+awk '/^static int fsm_update\(/ { f = 1 } f && /fsm_sustained_edges\(fsm, time\(NULL\)\)/ { e = NR } f && /thermal_cap = real thermal OR hard vendor clamp/ { t = NR; exit } END { exit !(e && t && e < t) }' "$F" \
+  || fail "edges recorded after the caps instead of right after the transitions"
+grep -q 'fsm->prev_state == ASB_STATE_SUSTAINED &&$' "$F" && fail "the pre-transition SUSTAINED hook is back"
+grep -q 'min_dwell = asb_sustained_dwell_s(min_dwell, fsm->sus_repeat);' "$F" || fail "the dwell is not doubled on quick re-entries"
+{
+  echo '#include <stdio.h>'
+  echo '#include <time.h>'
+  echo 'enum { ASB_STATE_DEEP_IDLE = 0, ASB_STATE_LIGHT_IDLE, ASB_STATE_MODERATE, ASB_STATE_HEAVY, ASB_STATE_SUSTAINED, ASB_STATE_GAMING };'
+  echo 'typedef struct { int state, prev_state, state_changed, clamp_hold, sus_repeat; time_t recovery_cautious_until, sus_last_exit, gaming_retry_until, sustained_reentry_until; } asb_fsm_t;'
+  echo 'static struct { int gaming_retry_cooldown_s, sustained_reentry_cooldown_s; } g_asb_cfg = { 18, 24 };'
+  sed -n '/^#define ASB_SUS_REPEAT_WINDOW_S/,/^#define ASB_SUS_DWELL_MAX_S/p' "$F"
+  awk '/^static int asb_sustained_dwell_s\(/ { f = 1 } f { print } f && /^}/ { exit }' "$F"
+  awk '/^static void fsm_sustained_edges\(/ { f = 1 } f { print } f && /^}/ { exit }' "$F"
+  cat <<'EOF'
+static int bad = 0;
+#define CHK(c, m) do { if (!(c)) { printf("%s\n", m); bad = 1; } } while (0)
+static asb_fsm_t f;
+static void step(int from, int to, time_t now) { f.prev_state = from; f.state = to; f.state_changed = (from != to); fsm_sustained_edges(&f, now); }
+int main(void) {
+    CHK(asb_sustained_dwell_s(24, 0) == 24, "a single entry keeps its dwell");
+    CHK(asb_sustained_dwell_s(24, 1) == 48 && asb_sustained_dwell_s(24, 2) == 96, "doubling");
+    CHK(asb_sustained_dwell_s(24, 3) == 180 && asb_sustained_dwell_s(100, 3) == 180, "capped at 180 s");
+    CHK(asb_sustained_dwell_s(0, 3) == 0, "no dwell configured stays none");
+    time_t t = 1000;
+    step(ASB_STATE_HEAVY, ASB_STATE_SUSTAINED, t);          CHK(f.sus_repeat == 0, "first entry");
+    step(ASB_STATE_SUSTAINED, ASB_STATE_MODERATE, t + 30);   CHK(f.sus_last_exit == t + 30, "exit time");
+    CHK(f.sustained_reentry_until == t + 30 + 24, "re-entry cooldown armed on an ordinary ladder exit");
+    CHK(f.gaming_retry_until == t + 30 + 18, "gaming retry cooldown armed");
+    step(ASB_STATE_MODERATE, ASB_STATE_MODERATE, t + 40);    CHK(f.sustained_reentry_until == t + 54, "no transition, nothing moves");
+    step(ASB_STATE_HEAVY, ASB_STATE_SUSTAINED, t + 120);     CHK(f.sus_repeat == 1, "re-entered within 5 min");
+    step(ASB_STATE_SUSTAINED, ASB_STATE_MODERATE, t + 170);
+    step(ASB_STATE_HEAVY, ASB_STATE_SUSTAINED, t + 200);     CHK(f.sus_repeat == 2, "again");
+    step(ASB_STATE_SUSTAINED, ASB_STATE_MODERATE, t + 300);
+    step(ASB_STATE_HEAVY, ASB_STATE_SUSTAINED, t + 330);     CHK(f.sus_repeat == 3, "third quick re-entry");
+    step(ASB_STATE_SUSTAINED, ASB_STATE_MODERATE, t + 500);
+    step(ASB_STATE_HEAVY, ASB_STATE_SUSTAINED, t + 520);     CHK(f.sus_repeat == 3, "held at 3");
+    step(ASB_STATE_SUSTAINED, ASB_STATE_DEEP_IDLE, t + 600);  CHK(f.sus_last_exit == t + 600, "a forced screen-off exit counts");
+    step(ASB_STATE_HEAVY, ASB_STATE_SUSTAINED, t + 600 + 301); CHK(f.sus_repeat == 0, "five quiet minutes reset it");
+    f.clamp_hold = 1; step(ASB_STATE_SUSTAINED, ASB_STATE_MODERATE, t + 1000);
+    CHK(f.sustained_reentry_until == t + 1000 + 48, "clamp hold doubles the re-entry cooldown");
+    if (!bad) printf("ok\n");
+    return bad;
+}
+EOF
+} > "$T/t.c"
+"$CC" -std=gnu99 -Wall -Wno-unused-function -o "$T/t" "$T/t.c" 2>"$T/cc.err" || { cat "$T/cc.err" >&2; fail "fixture does not compile"; }
+out="$("$T/t")" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo "PASS sustained repeat: quick SUSTAINED re-entries hold longer (24/48/96/180 s), re-entry and gaming-retry cooldowns armed on every exit"
+)
+
+t_shell_cap_owner_runtime() (
+# Runtime (fix182/fix183): in a manual profile the governor judges the live ceiling against the
+# one the shell wrote, holds a thermal cap or cooldown at or under it, and hands its own writes
+# back. OP15 Battery capture 25307: the shell's own 1785600/1747200 classified vendor_clamp all
+# day; CPH2747 capture 22454: 5.5 h of "Battery" on Smart's last 1555200/1862400. The REAL
+# helpers are cut out of asb_writer.h and asb_governor.c and run against a fake cpufreq tree.
+set -eu
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+G="$ROOT/src/asb_governor.c"; W="$ROOT/src/asb_writer.h"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL shell cap owner: $*" >&2; exit 1; }
+CC="${CC:-cc}"; command -v "$CC" >/dev/null 2>&1 || CC=gcc
+command -v "$CC" >/dev/null 2>&1 || { echo "SKIP shell cap owner: no C compiler"; exit 0; }
+awk '/^#ifndef ASB_SHELL_CAPS_PATH/{on=1} /^static const int g_cluster_first_cpu/{on=0} on' "$W" > "$T/w.c"
+awk '/^static int asb_manual_shell_owns_caps/{on=1} /^static int atomic_write_file/{on=0} on' "$G" > "$T/g.c"
+grep -q 'writer_manual_handback' "$T/w.c" && grep -q 'cap_source_classify_shell' "$T/g.c" || fail "helpers not found"
+grep -Fq 'int shell_cap_p0 = asb_shell_cap_khz(fsm, 0);' "$G" || fail "status classification does not use the shell record"
+grep -Fq 'const int shell_mode = asb_manual_shell_owns_caps(&fsm);' "$G" || fail "ceiling watch does not use the shell record"
+grep -Fq 'cap_writer=%s\nshell_cpu_max0=%d\nshell_cpu_max_prime=%d\n' "$G" || fail "state does not publish cap_writer / shell_cpu_max*"
+grep -Fq 'writes += writer_manual_handback(manual_prof_idx, state);' "$W" || fail "the writer does not hand ceilings back in a manual profile"
+grep -Fq 'const int manual_override = manual_profile && (thermal_cap || g_fsm_cooldown_active);' "$W" || fail "the cooldown still never reaches a manual profile's ceilings"
+[ "$(grep -c 'writer_manual_clamp(manual_prof_idx' "$W")" -ge 3 ] || fail "an override path can still raise a manual ceiling"
+grep -Fq 'writer_mark_slot_held(ci, 2);' "$G" || fail "anti-clamp writes are not handed back"
+for p in 0 6; do mkdir -p "$T/cpufreq/policy$p"; done
+cat > "$T/t.c" <<X
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#define PROFILE_BATTERY 0
+#define PROFILE_BALANCED 1
+#define PROFILE_PERFORMANCE 2
+#define PROFILE_SMART 3
+#define ASB_SHELL_CAPS_PATH "$T/shell_cpu_caps"
+typedef enum { ASB_STATE_DEEP_IDLE, ASB_STATE_LIGHT_IDLE, ASB_STATE_MODERATE, ASB_STATE_HEAVY,
+               ASB_STATE_SUSTAINED, ASB_STATE_GAMING } asb_state_t;
+typedef struct { int profile_idx; int thermal_cap; } asb_fsm_t;
+static int fsm_profile_is_smart = 0, fsm_profile_is_performance = 0, g_fsm_cooldown_active = 0;
+static int g_cpu_policy_ids[3] = {0, 6, -1};
+static char g_cpu_max_paths[3][128];
+static char g_cpu_all_max_paths[16][128];
+static int  g_cpu_all_paths_slot[16];
+static int  g_cpu_all_paths_n = 0;
+static struct { int cpu_max[3]; } g_wcache;
+static int g_fsm_slot_req_khz[3];
+static const char *asb_profile_name(int i) {
+    return i == 0 ? "battery" : i == 2 ? "performance" : i == 3 ? "smart" : "balanced";
+}
+static int sysfs_read_int(const char *p, int d) { FILE *f = fopen(p, "r"); int v = d; if (f) { if (fscanf(f, "%d", &v) != 1) v = d; fclose(f); } return v; }
+static int sysfs_write_int(const char *p, int v) { FILE *f = fopen(p, "w"); if (!f) return -1; fprintf(f, "%d\n", v); fclose(f); return 0; }
+static int g_writes_seen = 0;
+#include "$T/w.c"
+#include "$T/g.c"
+static void put(const char *path, const char *body) { FILE *o = fopen(path, "w"); fputs(body, o); fclose(o); }
+static void again(void) { g_shell_live.checked = 0; g_shell_pre[0].checked = 0; g_shell_pre[1].checked = 0; }
+int main(void) {
+    int bad = 0;
+    asb_fsm_t f = { PROFILE_BATTERY, 0 };
+    if (asb_shell_cap_khz(&f, 0) != 0) { puts("no record must mean unknown"); bad = 1; }
+    /* Booted in Smart: only the precomputed screen-on rungs exist. */
+    put("$T/shell_cpu_caps.battery", "profile=battery\nscreen_on=1\nts=1\nprecomputed=1\npolicy0=1785600\npolicy6=1747200\n");
+    put("$T/shell_cpu_caps.balanced", "profile=balanced\nscreen_on=1\nts=1\nprecomputed=1\npolicy0=3628800\npolicy6=4608000\n");
+    again();
+    if (asb_shell_cap_khz(&f, 0) != 1785600 || asb_shell_cap_khz(&f, 1) != 1747200) { puts("precomputed battery rung not used"); bad = 1; }
+    f.profile_idx = PROFILE_BALANCED;
+    if (asb_shell_cap_khz(&f, 1) != 4608000) { puts("precomputed balanced rung not used"); bad = 1; }
+    /* What the shell actually wrote wins for its own profile. */
+    put("$T/shell_cpu_caps", "profile=battery\nscreen_on=1\nts=2\npolicy0=1670400\npolicy6=1632000\n");
+    again(); f.profile_idx = PROFILE_BATTERY;
+    if (asb_shell_cap_khz(&f, 0) != 1670400) { puts("the written record must win over the precomputed one"); bad = 1; }
+    f.profile_idx = PROFILE_BALANCED;
+    if (asb_shell_cap_khz(&f, 0) != 3628800) { puts("a written battery record was used for balanced"); bad = 1; }
+    f.profile_idx = PROFILE_BATTERY;
+    if (strcmp(cap_source_classify_shell(1670400, 1670400, 3628800), "shell_applied")) { puts("own cap"); bad = 1; }
+    if (strcmp(cap_source_classify_shell(1747200, 1632000, 4608000), "vendor_clamp")) { puts("clamp under the shell cap"); bad = 1; }
+    if (strcmp(cap_source_classify_shell(1785600, 2361600, 3628800), "shell_overridden_up")) { puts("raised above the shell cap"); bad = 1; }
+    if (strcmp(cap_source_classify_shell(1785600, 3700000, 3628800), "policy_unknown")) { puts("above hardware"); bad = 1; }
+    f.thermal_cap = 1;
+    if (asb_shell_cap_khz(&f, 0) != 0) { puts("thermal cap: the governor writes, the shell record must not be the owner"); bad = 1; }
+    f.thermal_cap = 0; g_fsm_cooldown_active = 1;
+    if (asb_manual_shell_owns_caps(&f)) { puts("cooldown: the governor writes, the shell is not the owner"); bad = 1; }
+    g_fsm_cooldown_active = 0;
+    f.profile_idx = PROFILE_SMART; fsm_profile_is_smart = 1;
+    if (asb_manual_shell_owns_caps(&f) || asb_shell_cap_khz(&f, 0) != 0) { puts("Smart owns its ceilings"); bad = 1; }
+    fsm_profile_is_smart = 0; f.profile_idx = PROFILE_BATTERY;
+    /* An override never raises a manual ceiling. */
+    if (writer_manual_clamp(PROFILE_BATTERY, "$T/cpufreq/policy6/scaling_max_freq", 1862400) != 1632000) { puts("the race-to-idle floor raised the Battery prime"); bad = 1; }
+    if (writer_manual_clamp(PROFILE_BATTERY, "$T/cpufreq/policy0/scaling_max_freq", 1440000) != 1440000) { puts("a lower override value was lifted"); bad = 1; }
+    if (asb_policy_id_of_path("$T/cpufreq/policy6/scaling_max_freq") != 6) { puts("policy id"); bad = 1; }
+    /* Hand-back: Smart left its ceilings, a switch to Battery gives the shell's back. */
+    snprintf(g_cpu_all_max_paths[0], 128, "%s", "$T/cpufreq/policy0/scaling_max_freq");
+    snprintf(g_cpu_all_max_paths[1], 128, "%s", "$T/cpufreq/policy6/scaling_max_freq");
+    g_cpu_all_paths_slot[0] = 0; g_cpu_all_paths_slot[1] = 1; g_cpu_all_paths_n = 2;
+    memcpy(g_cpu_max_paths[0], g_cpu_all_max_paths[0], 128);
+    memcpy(g_cpu_max_paths[1], g_cpu_all_max_paths[1], 128);
+    sysfs_write_int(g_cpu_all_max_paths[0], 1555200); sysfs_write_int(g_cpu_all_max_paths[1], 1862400);
+    g_writer_path_held[0] = 1; g_writer_path_held[1] = 1; g_wcache.cpu_max[0] = 1555200; g_wcache.cpu_max[1] = 1862400;
+    int w = writer_manual_handback(PROFILE_BATTERY, ASB_STATE_LIGHT_IDLE);
+    if (w != 2 || sysfs_read_int(g_cpu_all_max_paths[0], 0) != 1670400 || sysfs_read_int(g_cpu_all_max_paths[1], 0) != 1632000) {
+        printf("hand-back after a switch: writes=%d main=%d prime=%d\n", w, sysfs_read_int(g_cpu_all_max_paths[0], 0), sysfs_read_int(g_cpu_all_max_paths[1], 0)); bad = 1; }
+    if (g_writer_path_held[0] || g_writer_path_held[1] || g_wcache.cpu_max[0] || g_wcache.cpu_max[1]) { puts("hand-back left the paths marked as ASB's"); bad = 1; }
+    if (writer_manual_handback(PROFILE_BATTERY, ASB_STATE_LIGHT_IDLE) != 0) { puts("a second pass wrote again"); bad = 1; }
+    /* The anti-clamp's write stays while HEAVY runs, goes back after it. */
+    sysfs_write_int(g_cpu_all_max_paths[0], 2400000); writer_mark_slot_held(0, 2);
+    writer_manual_handback(PROFILE_BALANCED, ASB_STATE_HEAVY);
+    if (sysfs_read_int(g_cpu_all_max_paths[0], 0) != 2400000) { puts("the anti-clamp write was undone during HEAVY"); bad = 1; }
+    writer_manual_handback(PROFILE_BALANCED, ASB_STATE_MODERATE);
+    if (sysfs_read_int(g_cpu_all_max_paths[0], 0) != 3628800) { puts("the anti-clamp write was not handed back after HEAVY"); bad = 1; }
+    /* No record for a path: nothing is written, the mark stays for a later pass. */
+    remove("$T/shell_cpu_caps"); remove("$T/shell_cpu_caps.battery"); again();
+    sysfs_write_int(g_cpu_all_max_paths[1], 1862400); g_writer_path_held[1] = 1;
+    if (writer_manual_handback(PROFILE_BATTERY, ASB_STATE_LIGHT_IDLE) != 0 || !g_writer_path_held[1]) { puts("handed back with no shell value"); bad = 1; }
+    (void)g_writes_seen;
+    return bad;
+}
+X
+"$CC" -std=gnu11 -Wall -Werror -Wno-unused-function -o "$T/t" "$T/t.c" || fail "harness does not compile"
+"$T/t" || fail "behaviour"
+echo "PASS shell cap owner: the shell's ceiling is the reference, overrides stay under it, the governor's writes go back"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
