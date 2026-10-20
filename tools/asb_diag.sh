@@ -1630,6 +1630,40 @@ case "$_gmin_live" in
     fi ;;
 esac
 
+# The modules log and who fills it (fix189). It holds what LSPosed modules write themselves
+# (XposedBridge.log - tag LSPosed-Bridge), with or without the verbose log; LSPosed has no
+# switch for it. An OP15 with the verbose log off showed 20 MB an hour after boot, all of it
+# this, and the card read "log off" beside it. The lines of the newest file are grouped by the
+# app the hook ran in and the start of the message (digits folded), which is usually where a
+# module names itself. LSPosed keeps 10 files of 4 MB per boot and moves them to log.old at the
+# next start.
+_asb_lsp_modlog() {
+  _ml_dir="${ASB_LSPD_LOG:-/data/adb/lspd/log}"
+  _ml_pk="${ASB_PKG_LIST:-/data/system/packages.list}"
+  _ml_b=0; _ml_n=0
+  for _ml_f in "$_ml_dir"/modules_*.log; do
+    [ -f "$_ml_f" ] || continue
+    _ml_s=$(wc -c < "$_ml_f" 2>/dev/null); case "$_ml_s" in ''|*[!0-9]*) continue ;; esac
+    _ml_b=$((_ml_b + _ml_s)); _ml_n=$((_ml_n + 1))
+  done
+  [ "$_ml_n" -gt 0 ] || return 0
+  NOTE "modules log (written by the LSPosed modules themselves - no switch in LSPosed, not the verbose log): $((_ml_b / 1024)) KiB in $_ml_n file(s) this boot"
+  _ml_new="$(ls -t "$_ml_dir"/modules_*.log 2>/dev/null | head -1)"
+  [ -s "$_ml_new" ] || return 0
+  awk -v pk="$_ml_pk" '
+    BEGIN { while ((getline l < pk) > 0) { split(l, q, " "); if (q[2] ~ /^[0-9]+$/ && !(q[2] in name)) name[q[2]] = q[1] } }
+    /^\[ / {
+      i = index($0, "] "); if (!i) next
+      split(substr($0, 1, i), f, " "); u = f[3]; sub(/:$/, "", u)
+      m = substr($0, i + 2); gsub(/[0-9]+/, "#", m); m = substr(m, 1, 56)
+      who = (u in name) ? name[u] : (u == "1000" ? "system" : "uid " u)
+      c[who " | " m]++; n++
+    }
+    END { for (k in c) printf "%d %d %s\n", c[k], int(c[k] * 100 / n), k }' "$_ml_new" 2>/dev/null \
+    | sort -rn | head -3 | while read -r _ml_c _ml_p _ml_k; do
+      NOTE "  ${_ml_p}% of the newest file (${_ml_c} lines): $_ml_k"
+    done
+}
 SEC "0f. LSPOSED LOGGING  (ASB changes it only when you set the card)"
 # Report it; change it only on request (fix187).
 #
@@ -1656,6 +1690,7 @@ else
     case "$_f" in */verbose_*) _lsp_vb_bytes=$(( _lsp_vb_bytes + _sz )) ;; esac
   done
   NOTE "log files on disk: $(( _lsp_log_bytes / 1024 )) KiB, of which verbose: $(( _lsp_vb_bytes / 1024 )) KiB"
+  _asb_lsp_modlog
   _lsp_st=""
   [ -x "$MODDIR/bin/asb" ] && _lsp_st="$("$MODDIR/bin/asb" --lspd verbose-get 2>/dev/null)"
   _lsp_v="$(echo "$_lsp_st" | sed -n 's/^verbose=//p' | head -1)"
@@ -2948,8 +2983,15 @@ _odn="$(grep -m1 '^offdrain_windows=' /dev/.asb/state 2>/dev/null | cut -d= -f2)
 _odm="$(grep -m1 '^offdrain_media_skipped=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 case "${_odx:--1}" in
   -1|''|0) NOTE "screen-off drain: not measured yet - needs one screen-off stretch of 60+ min on battery with nothing playing" ;;
-  *) NOTE "screen-off drain: $((_odx / 100)).$(printf '%02d' $((_odx % 100)))%/h measured over ${_odn:-1} window(s)  (good night: 0.3-0.7%/h)" ;;
+  *) NOTE "screen-off drain: $((_odx / 100)).$(printf '%02d' $((_odx % 100)))%/h measured over ${_odn:-1} window(s), all profiles together  (good night: 0.3-0.7%/h)" ;;
 esac
+# fix189: the same windows per profile - only a window one profile held from screen-off to
+# screen-on counts for it. This, not the figure above, is what a profile card shows.
+_odp="$(grep -m1 '^offdrain_by_profile=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+if [ -n "$_odp" ]; then
+  _odpl="$(printf '%s\n' "$_odp" | tr ',' '\n' | awk -F: '$2 > 0 { printf "%s%s %.2f%%/h (%d)", (n++ ? ", " : ""), $1, $2 / 100, $3 } END { if (!n) printf "none yet" }')"
+  NOTE "  by profile (a window that one profile held throughout): $_odpl"
+fi
 # fix141: stretches with music or a call playing are not idle and are left out of it.
 case "$_odm" in ''|0|*[!0-9]*) : ;; *)
   NOTE "  left out since the governor started: $_odm screen-off stretch(es) with audio playing (music with the screen off is not idle)" ;;
@@ -2961,6 +3003,11 @@ if [ -s "$_dmf" ]; then
          on = ($2 >= 600 && $3 > 0) ? sprintf("%.1f%%/h over %d min", $3 * 36 / $2, $2 / 60) : "not measured";
          off = ($6 >= 1 && $4 > 0) ? sprintf("%.2f%%/h over %d window(s)", $5 * 36 / $4, $6) : "not measured";
          printf "    %-12s screen on %s · screen off %s\n", $1, on, off }' "$_dmf" 2>/dev/null | while IFS= read -r _dml; do P "$_dml"; done
+  # fix189: the screen-off windows of 10+ min the meter did not count, and why.
+  if [ -r /data/adb/asb/drain_meter.rej ]; then
+    read -r _dmrm _dmrs _dmrc _dmrl < /data/adb/asb/drain_meter.rej 2>/dev/null
+    NOTE "  screen-off stretches not counted by the meter: ${_dmrm:-0} with playback (1 h+), ${_dmrs:-0} under an hour, ${_dmrc:-0} ended on the charger · latest: ${_dmrl:--} (profile:reason:minutes)"
+  fi
 fi
 
 SEC "5a6. SCREEN-OFF CLASS  (what the last screen-off stretch actually was)"
