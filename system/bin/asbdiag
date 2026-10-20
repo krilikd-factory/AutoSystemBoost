@@ -830,7 +830,7 @@ if [ -r "$_state" ]; then
   # and "the night was expensive and nothing tried to fix it".
   _cd="$(grep -m1 '^thermal_cooldown=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
   case "$_cd" in
-    1) P "  cooldown clamp        : ACTIVE (screen off, die still warm - caps at hw minimum)" ;;
+    1) P "  cooldown clamp        : ACTIVE (screen off, die still warm - ceilings lowered toward the hw minimum, not below the race-to-idle floor; in Battery/Balanced never above the profile's own caps)" ;;
     0) P "  cooldown clamp        : idle (not needed - phone is cool or screen is on)" ;;
     *) P "  cooldown clamp        : unknown (governor state not readable)" ;;
   esac
@@ -847,6 +847,41 @@ if [ -r "$_state" ]; then
   # writes are being discarded" - and those need opposite responses.
   _dw0="$(_rget desired_cpu_max0 "$_state")"; _ew0="$(_rget effective_cpu_max0 "$_state")"
   _dwp="$(_rget desired_cpu_maxp "$_state")"; _ewp="$(_rget effective_cpu_maxp "$_state")"
+  # fix182: in battery/balanced the shell writes the ceilings (cap_writer=shell) and the
+  # governor's desired_* is a rail its writer does not send there. A Battery diag printed
+  # "main 1670400 -> 2745600" against a ceiling nobody had asked for; the comparison that
+  # means something is the shell's own value against the live one.
+  _cwr="$(_rget cap_writer "$_state")"
+  if [ "$_cwr" = "shell" ]; then
+    _sh0="$(_rget shell_cpu_max0 "$_state")"; _shp="$(_rget shell_cpu_max_prime "$_state")"
+    _epx="$(_rget effective_cpu_max_prime "$_state")"; [ -n "$_epx" ] || _epx="$_ewp"
+    case "$_sh0$_shp" in ''|*[!0-9]*|00)
+      P "  cap profile/effective : shell owns the ceilings (manual profile), but no shell record yet - live main ${_ew0:-?}, prime ${_epx:-?} kHz" ;;
+    *)
+      P "  cap profile/effective : main $_sh0 -> ${_ew0:-?} kHz, prime $_shp -> ${_epx:-?} kHz (written by service.sh; the governor adds only a thermal clamp)"
+      if [ "${_ew0:-0}" -lt "$_sh0" ] 2>/dev/null || [ "${_epx:-0}" -lt "$_shp" ] 2>/dev/null; then
+        P "    (a live ceiling sits under the profile's own cap - vendor or kernel thermal holds it)"
+      fi
+      if [ "${_ew0:-0}" -gt "$_sh0" ] 2>/dev/null || [ "${_epx:-0}" -gt "$_shp" ] 2>/dev/null; then
+        P "    (a live ceiling sits ABOVE the profile's cap - something raised it after the shell wrote it)"
+      fi ;;
+    esac
+    _dw0=""   # the rail below is not a request in this mode
+  fi
+  # fix183: the records the governor hands manual ceilings back from. Without the
+  # precomputed ones a switch into Battery/Balanced keeps the previous profile's ceilings
+  # until the shell next applies them (boot).
+  _scr_line=""
+  for _scf in /dev/.asb/shell_cpu_caps /dev/.asb/shell_cpu_caps.battery /dev/.asb/shell_cpu_caps.balanced; do
+    if [ -r "$_scf" ]; then
+      _scv="$(grep '^policy[0-9]*=' "$_scf" 2>/dev/null | tr '\n' ' ' | sed 's/ $//')"
+      _scp="$(grep -m1 '^profile=' "$_scf" 2>/dev/null | cut -d= -f2)"
+      _scr_line="${_scr_line}${_scr_line:+; }${_scf##*/}: ${_scp:-?} ${_scv:-(empty)}"
+    else
+      _scr_line="${_scr_line}${_scr_line:+; }${_scf##*/}: missing"
+    fi
+  done
+  NOTE "manual-profile cap records: $_scr_line"
   case "$_dw0$_ew0" in ''|*[!0-9]*) : ;; *)
     # The second figure is governor slot 1. That is the prime on a two-cluster SoC
     # (OP13/OP15) but the first mid cluster on a 1+3+2+1 part (OP12), where calling it
@@ -1113,7 +1148,12 @@ if [ -r "$_state" ]; then
   _owc="$(_rget own_ceiling_ticks /dev/.asb/state 2>/dev/null)"
   _thc="$(_rget trend_trim_held_cool /dev/.asb/state 2>/dev/null)"
   if [ -n "$_owc" ]; then
-    NOTE "  ceilings above Smart's wish: raised by the ROM in ${_vct:-0} ticks (clock above ASB's limit in ${_vcu:-0}), by ASB's own lifts in $_owc ticks (unlock lift, prime burst, a lowering write still to land)"
+    if [ "$(_rget cap_writer /dev/.asb/state 2>/dev/null)" = "shell" ]; then
+      # fix182: counted against the shell's own value in a manual profile.
+      NOTE "  ceilings above ASB's cap: raised by the ROM in ${_vct:-0} ticks (clock above it in ${_vcu:-0}) since the governor started - in this manual profile the cap is the one the shell wrote, in Smart it is Smart's own wish"
+    else
+      NOTE "  ceilings above Smart's wish: raised by the ROM in ${_vct:-0} ticks (clock above ASB's limit in ${_vcu:-0}), by ASB's own lifts in $_owc ticks (unlock lift, prime burst, a lowering write still to land)"
+    fi
   fi
   [ -n "$_thc" ] && NOTE "  thermal-trend trims held on a cool body: $_thc ticks (skin more than 8 C under thermal_skin_c=$(cfg thermal_skin_c) - a burst, not heat)"
   _cbs="$(_rget comfort_trim_burst_skips /dev/.asb/state 2>/dev/null)"
