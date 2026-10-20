@@ -6828,6 +6828,103 @@ grep -q 'DESYNC' "$T/cap_verify.txt" && fail "DESYNC against values nobody wrote
 echo "PASS logkit shell cap reference: manual-profile throttle and cap_verify use the shell's own ceilings"
 )
 
+t_lsposed_verbose_runtime() (
+# Runtime (fix187): LSPosed's verbose log, switched only on request.
+#
+# A user's LSPosed had 31 MB of verbose logs. The REAL C helper (asb --lspd, src/asb_lspd.h)
+# runs against a real SQLite database laid out like LSPosed's modules_config.db (host
+# libsqlite3 in place of Android's libsqlite.so), and the REAL runtime/asb_lsposed.sh drives
+# it: off writes LSPosed's own Boolean false, keeps the newest verbose log and deletes the
+# rest, remembers what LSPosed had; keep puts that back (no row = LSPosed's default); a
+# database of another layout is never touched; status says whether a write is still waiting
+# for the reboot LSPosed needs.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL lsposed verbose: $*" >&2; exit 1; }
+CC="${CC:-cc}"; command -v "$CC" >/dev/null 2>&1 || CC=gcc
+command -v "$CC" >/dev/null 2>&1 || { echo "SKIP lsposed verbose: no C compiler"; exit 0; }
+command -v python3 >/dev/null 2>&1 || { echo "SKIP lsposed verbose: no python3"; exit 0; }
+python3 -c 'import sqlite3' 2>/dev/null || { echo "SKIP lsposed verbose: no sqlite3 module"; exit 0; }
+LIB="$(python3 -c 'import ctypes.util; print(ctypes.util.find_library("sqlite3") or "")')"
+[ -n "$LIB" ] || { echo "SKIP lsposed verbose: no libsqlite3 on this host"; exit 0; }
+G="$ROOT/src/asb_governor.c"
+grep -Fq 'if (argc >= 3 && strcmp(argv[1], "--lspd") == 0) return asb_lspd_cli(argc - 2, argv + 2);' "$G" || fail "the governor binary does not answer --lspd"
+grep -q '^lsposed_verbose=keep$' "$ROOT/config/governor.conf" || fail "not shipped as keep"
+grep -q "if (key === 'lsposed_verbose') {" "$ROOT/webroot/index.html" || fail "the card does not run the script"
+grep -q 'asb_lsposed.sh' "$ROOT/service.sh" && fail "the switch must never run at boot"
+cat > "$T/m.c" <<C
+#define ASB_LSPD_SQLITE_LIB "$LIB"
+#include "$ROOT/src/asb_lspd.h"
+int main(int argc, char **argv) { if (argc >= 3 && strcmp(argv[1], "--lspd") == 0) return asb_lspd_cli(argc - 2, argv + 2); return 9; }
+C
+mkdir -p "$T/bin"; "$CC" -std=gnu11 -Wall -Werror -o "$T/bin/asb" "$T/m.c" -ldl || fail "helper does not compile"
+mk_db() {
+  python3 - "$1" "$2" <<'P'
+import sqlite3, sys
+db = sqlite3.connect(sys.argv[1])
+if sys.argv[2] == 'lspd':
+    db.executescript("""
+CREATE TABLE modules (mid integer PRIMARY KEY AUTOINCREMENT, module_pkg_name text NOT NULL UNIQUE, apk_path text NOT NULL, enabled BOOLEAN DEFAULT 0);
+CREATE TABLE configs (module_pkg_name text NOT NULL, user_id integer NOT NULL, `group` text NOT NULL, `key` text NOT NULL, data blob NOT NULL,
+  PRIMARY KEY (module_pkg_name, user_id, `group`, `key`));
+INSERT INTO modules (module_pkg_name, apk_path, enabled) VALUES ('lspd', '/x', 1);
+INSERT INTO configs VALUES ('lspd', 0, 'config', 'misc_path', X'ACED0005740004666F6F');
+""")
+else:
+    db.executescript("CREATE TABLE settings (k text, v text); INSERT INTO settings VALUES ('enable_verbose_log', '1');")
+db.commit()
+P
+}
+row() { python3 -c "
+import sqlite3,sys; db=sqlite3.connect('$1')
+r=db.execute(\"SELECT hex(data) FROM configs WHERE module_pkg_name='lspd' AND user_id=0 AND \`group\`='config' AND \`key\`='enable_verbose_log'\").fetchone()
+print(r[0] if r else 'none')"; }
+D="$T/lspd/config/modules_config.db"; mkdir -p "$T/lspd/config" "$T/lspd/log" "$T/state" "$T/mod/config"
+mk_db "$D" lspd
+[ "$("$T/bin/asb" --lspd verbose-get "$D")" = "verbose=default_on" ] || fail "no row is LSPosed's default (on)"
+out="$("$T/bin/asb" --lspd verbose-set off "$D")"; printf '%s\n' "$out" | grep -qx 'verbose=off' || fail "set off: $out"
+printf '%s\n' "$out" | grep -qx 'before=default_on' || fail "before: $out"
+[ "$(row "$D")" = "ACED0005737200116A6176612E6C616E672E426F6F6C65616ECD207280D59CFAEE0200015A000576616C7565787000" ] || fail "not Java's Boolean false: $(row "$D")"
+"$T/bin/asb" --lspd verbose-set on "$D" >/dev/null; [ "$("$T/bin/asb" --lspd verbose-get "$D")" = "verbose=on" ] || fail "set on"
+"$T/bin/asb" --lspd verbose-unset "$D" >/dev/null; [ "$(row "$D")" = none ] || fail "unset left a row"
+python3 -c "import sqlite3; db=sqlite3.connect('$D'); assert db.execute(\"SELECT count(*) FROM configs WHERE \`key\`='misc_path'\").fetchone()[0]==1" || fail "another row was touched"
+mk_db "$T/other.db" other
+out="$("$T/bin/asb" --lspd verbose-set off "$T/other.db" || true)"
+printf '%s\n' "$out" | grep -q 'reason=unexpected_schema' || fail "another layout was not refused: $out"
+python3 -c "import sqlite3; db=sqlite3.connect('$T/other.db'); assert db.execute('SELECT v FROM settings').fetchone()[0]=='1'" || fail "a foreign database was written"
+out="$("$T/bin/asb" --lspd verbose-get "$T/none.db" || true)"; printf '%s\n' "$out" | grep -q 'reason=no_database' || fail "missing db: $out"
+# The script, as the card runs it.
+for i in 1 2 3; do head -c 2048 /dev/zero > "$T/lspd/log/verbose_2026-10-1${i}T10_00_00.log"; touch -d "2026-10-1${i} 10:00" "$T/lspd/log/verbose_2026-10-1${i}T10_00_00.log"; done
+head -c 1024 /dev/zero > "$T/lspd/log/modules_2026-10-13T10_00_00.log"
+run() { ( MODDIR="$T/mod" ASB_CONF="$T/mod/config/governor.conf" ASB_LSPD_DIR="$T/lspd" ASB_LSPD_PREV="$T/asb/prev" ASB_GOV_BIN="$T/bin/asb" sh "$ROOT/runtime/asb_lsposed.sh" "$@" ); }
+echo 'lsposed_verbose=off' > "$T/mod/config/governor.conf"
+out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=off_after_reboot freed_kib=4$' || fail "apply off: $out"
+[ -f "$T/lspd/log/verbose_2026-10-13T10_00_00.log" ] || fail "the newest verbose log (held open) was deleted"
+[ ! -f "$T/lspd/log/verbose_2026-10-11T10_00_00.log" ] && [ ! -f "$T/lspd/log/verbose_2026-10-12T10_00_00.log" ] || fail "old verbose logs kept"
+[ -f "$T/lspd/log/modules_2026-10-13T10_00_00.log" ] || fail "the modules log was touched"
+[ "$(cat "$T/asb/prev")" = default_on ] || fail "LSPosed's earlier value not remembered"
+out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=already_off' || fail "second apply: $out"
+[ "$(cat "$T/asb/prev")" = default_on ] || fail "the remembered value was overwritten by ASB's own"
+out="$(run status)"; printf '%s\n' "$out" | grep -qx 'verbose=off' && printf '%s\n' "$out" | grep -qx 'present=1' || fail "status: $out"
+# Written during this boot: the daemon still runs with the old value, the card must say so.
+printf '%s\n' "$out" | grep -qx 'pending_reboot=1' || fail "a write from this boot is not reported as waiting for a reboot: $out"
+echo 1000 > "$T/asb/prev_at"
+run status | grep -qx 'pending_reboot=0' || fail "a write from before this boot still reads as pending"
+# Uninstall puts LSPosed's value back whatever the card says.
+grep -q 'asb_lsposed.sh" restore' "$ROOT/uninstall.sh" || fail "uninstall leaves LSPosed's setting changed"
+out="$(run restore)"; printf '%s\n' "$out" | grep -q '^result=restored prev=default_on' || fail "restore: $out"
+[ "$(row "$D")" = none ] && [ ! -f "$T/asb/prev" ] || fail "restore did not put LSPosed's default back"
+out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=off_after_reboot' || fail "off again: $out"
+echo 'lsposed_verbose=keep' > "$T/mod/config/governor.conf"
+out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=restored prev=default_on' || fail "keep: $out"
+[ "$(row "$D")" = none ] && [ ! -f "$T/asb/prev" ] || fail "LSPosed's default not put back"
+out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=untouched' || fail "keep twice: $out"
+rm -rf "$T/lspd"; echo 'lsposed_verbose=off' > "$T/mod/config/governor.conf"
+out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=absent' || fail "no LSPosed: $out"
+echo "PASS lsposed verbose: LSPosed's own switch written as Java's Boolean, remembered and put back; old logs freed; foreign layouts untouched"
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;

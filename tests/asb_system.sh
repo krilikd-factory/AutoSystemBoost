@@ -708,14 +708,14 @@ awk -F'|' '
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
-[ "$(wc -l < "$TMP/conf")" = "198" ] || fail "expected 198 config keys, got $(wc -l < "$TMP/conf")"
-[ "$(wc -l < "$TMP/registry")" = "198" ] || fail "expected 198 registry keys, got $(wc -l < "$TMP/registry")"
+[ "$(wc -l < "$TMP/conf")" = "199" ] || fail "expected 199 config keys, got $(wc -l < "$TMP/conf")"
+[ "$(wc -l < "$TMP/registry")" = "199" ] || fail "expected 199 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
 
 sed -n '/const CFG_ITEMS = \[/,/^\];/p' "$ROOT/webroot/index.html" \
   | grep -oE "key:'[A-Za-z_][A-Za-z0-9_]*'" | sed "s/key:'//;s/'//" | sort -u > "$TMP/cards"
-[ "$(wc -l < "$TMP/cards")" = "74" ] || fail "expected 74 WebUI cards, got $(wc -l < "$TMP/cards")"
+[ "$(wc -l < "$TMP/cards")" = "75" ] || fail "expected 75 WebUI cards, got $(wc -l < "$TMP/cards")"
 _card_bad="$(while IFS= read -r key; do
   cls="$(awk -F'|' -v k="$key" '$1==k {print $2; exit}' "$REG")"
   case "$cls" in user|advanced) : ;; *) printf '%s ' "$key" ;; esac
@@ -748,7 +748,7 @@ for _c in $(grep -oE "\{ key:'[A-Za-z_][A-Za-z_0-9]*'" "$ROOT/webroot/index.html
 done
 [ -z "$_missing" ] || fail "cards missing from install.sh _user_keys:$_missing"
 
-echo 'PASS config ownership registry contract (198 keys; 30 user, 44 advanced, 124 internal)'
+echo 'PASS config ownership registry contract (199 keys; 30 user, 45 advanced, 124 internal)'
 )
 
 t_config_restore_outcome_runtime() (
@@ -3989,6 +3989,29 @@ done
 grep -q 'asb_msm' "$ROOT/tools/logkit/asb_log_full_day.sh" || fail "the capture blames the vendor for ASB's msm registration"
 grep -q 'asb_msm' "$ROOT/docs/log_schemas.md" || fail "asb_msm undocumented"
 echo "PASS: fix186 contract"
+) || exit 1
+# ---- fix187 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix187: $*"; exit 1; }
+H="$ROOT/webroot/index.html"; L="$ROOT/runtime/asb_lsposed.sh"
+asb_has_test test_lsposed_verbose_runtime.sh || fail "test_lsposed_verbose_runtime.sh missing"
+asb_has_test test_webui_home_offdrain_runtime.sh || fail "test_webui_home_offdrain_runtime.sh missing"
+asb_has_test test_webui_navbar_profiles.sh || fail "test_webui_navbar_profiles.sh missing"
+asb_has_test test_webui_lsposed_badge_runtime.sh || fail "test_webui_lsposed_badge_runtime.sh missing"
+[ -f "$ROOT/src/asb_lspd.h" ] && [ -f "$L" ] || fail "LSPosed switch missing"
+grep -q '#include "asb_lspd.h"' "$ROOT/src/asb_governor.c" || fail "the binary does not carry the LSPosed helper"
+grep -q 'dlopen(libs\[i\], RTLD_NOW)' "$ROOT/src/asb_lspd.h" || fail "libsqlite is not opened at run time"
+grep -q '^lsposed_verbose=keep$' "$ROOT/config/governor.conf" || fail "the switch must ship as keep"
+grep -q '^lsposed_verbose|advanced|' "$ROOT/config/key_ownership.tsv" || fail "lsposed_verbose not registered"
+grep -q 'asb_lsposed' "$ROOT/service.sh" "$ROOT/post-fs-data.sh" 2>/dev/null && fail "the LSPosed switch must never run at boot"
+grep -q 'asb_lsposed.sh" restore' "$ROOT/uninstall.sh" || fail "uninstall leaves LSPosed changed"
+grep -q 'asb_lsposed.sh' "$ROOT/docs/log_schemas.md" || fail "asb_lsposed.sh status undocumented"
+grep -q '0f. LSPOSED LOGGING' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not report LSPosed"
+grep -q 'const off = homeOffFigure(prof, e);' "$H" || fail "home card ignores the governor's screen-off figure"
+grep -q '"nav_home": "Профили"' "$ROOT/webroot/i18n/ru.json" || fail "the first tab is not Profiles"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag differs from tools/asb_diag.sh"
+echo "PASS: fix187 contract"
 ) || exit 1
 echo "PASS: field-fix contracts"
 )

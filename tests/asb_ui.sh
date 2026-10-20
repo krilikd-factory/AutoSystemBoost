@@ -3473,6 +3473,128 @@ out="$(node "$T/run.js" "$T/body.js" 2>&1)" || fail "$out"
 echo "PASS webui smart basis: the tile says what shapes Smart now (records, trials, smoothness, overrides), the sheet lists every situation's record"
 )
 
+t_webui_home_offdrain_runtime() (
+# Runtime (fix187): the home card of the running profile shows a screen-off figure whenever
+# the Monitor sheet does. An OP15 Smart card read "8.2 %/h" with no moon while the sheet
+# printed "~0.70 %/h": the meter had no screen-off hour in Smart yet, the governor had five.
+# The REAL chooser runs in node: meter figure, "<x" for an hour that did not move the level,
+# the governor's "~" only for the running profile, nothing otherwise (and never for Stock).
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui home offdrain: $*" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "SKIP webui home offdrain: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+grep -q 'const off = homeOffFigure(prof, e);' "$H" || fail "the home card does not use the sheet's rules"
+grep -q "if (_was !== _lvGovOff.x) homeMeterPaint();" "$H" || fail "the governor figure never reaches the home card"
+{
+  echo "function T(k, d) { return d; }"
+  echo "function lvPct(x, div, digits) { return (x / div).toFixed(digits) + '%/h'; }"
+  echo "var _selectedProfile = 'smart';"
+  sed -n '/^const _lvGovOff = /p' "$H" | sed 's/^const /var /'
+  sed -n '/^function homeOffFigure(/,/^}/p' "$H"
+  cat <<'EOF'
+let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
+_lvGovOff.x = 70; _lvGovOff.n = 5; _lvGovOff.prof = 'smart';
+let r = homeOffFigure('smart', { on: 82, off: 0, offN: 0, offS: 0 });
+chk(r && r.t === '~0.70%/h' && /5 screen-off/.test(r.tip), 'running profile borrows the governor figure: ' + JSON.stringify(r));
+r = homeOffFigure('battery', { on: 100, off: 37, offN: 1, offS: 9771 });
+chk(r && r.t === '0.37%/h' && !r.tip, 'meter figure: ' + JSON.stringify(r));
+r = homeOffFigure('balanced', { on: 0, off: 0, offN: 2, offS: 7200 });
+chk(r && r.t === '<0.50%/h', 'an hour that did not move the level: ' + JSON.stringify(r));
+r = homeOffFigure('battery', { on: 100, off: 0, offN: 0, offS: 0 });
+chk(r === null, 'another profile does not borrow the governor figure');
+_selectedProfile = 'stock'; _lvGovOff.prof = 'stock';
+chk(homeOffFigure('stock', { on: 170, off: 0, offN: 0, offS: 0 }) === null, 'Stock runs no governor');
+_selectedProfile = 'smart'; _lvGovOff.prof = 'smart'; _lvGovOff.x = 0;
+chk(homeOffFigure('smart', null) === null, 'nothing measured: nothing shown');
+if (bad) process.exit(1);
+console.log('ok');
+EOF
+} > "$T/t.js"
+out="$(node "$T/t.js" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo "PASS webui home offdrain: the running profile's card shows the screen-off figure the Monitor sheet shows"
+)
+
+t_webui_navbar_profiles() (
+# fix187: the first tab is the profile picker and says so. The user asked for "Profiles" in
+# place of "Home", an icon that fits it, and a bar in a current style: a sliding tonal pill
+# behind the active icon, line icons that fill when active, no aria-label overriding the
+# translated text. The pill is placed from the active tab's measured box (RTL included),
+# and again when the bar comes back from a settings category.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui navbar: $*" >&2; exit 1; }
+command -v python3 >/dev/null 2>&1 || { echo "SKIP webui navbar: no python3"; exit 0; }
+python3 - "$ROOT" <<'P' || exit 1
+import json, re, sys, glob, os
+root = sys.argv[1]; h = open(os.path.join(root, 'webroot/index.html'), encoding='utf-8').read()
+bad = []
+nav = h[h.index('<nav class="asb-tabbar"'):h.index('</nav>', h.index('<nav class="asb-tabbar"'))]
+tabs = re.findall(r'<button class="asb-tab"[^>]*>', nav)
+if len(tabs) != 3: bad.append('three tabs expected, found %d' % len(tabs))
+if any('aria-label' in t for t in tabs): bad.append('a tab still overrides its translated label with an English aria-label')
+if nav.count('class="asb-tab-ico"') != 3 or nav.count('class="f"') + nav.count('class="f" ') < 3: bad.append('every icon needs a line form and a filled form')
+if 'class="asb-tab-ind"' not in nav: bad.append('no sliding indicator')
+if '>Profiles</span>' not in nav: bad.append('the first tab is not called Profiles')
+if 'is-active::before' in h: bad.append('the old top-edge marker is back')
+fn = h[h.index('function asbNavSync()'):h.index('function asbNavGo(')]
+if 'asbNavIndicator();' not in fn or 'on.offsetLeft' not in fn: bad.append('the pill is not placed from the active tab')
+vis = h[h.index('function asbTabbarVisibility()'):h.index('function cfgRender()')]
+if 'asbNavIndicator()' not in vis: bad.append('returning from a category leaves the pill where it was')
+want = {'en': 'Profiles', 'ru': 'Профили', 'uk': 'Профілі', 'de': 'Profile'}
+for f in sorted(glob.glob(os.path.join(root, 'webroot/i18n/*.json'))):
+    lang = os.path.basename(f)[:-5]; d = json.load(open(f, encoding='utf-8'))
+    v = d.get('nav_home', '')
+    if lang in want and v != want[lang]: bad.append('%s nav_home=%r' % (lang, v))
+    if v in ('Home', 'Главная', 'Головна', 'Start', 'Accueil', 'Inicio', 'Início', 'Beranda', 'Ana sayfa', '主页', 'الرئيسية', 'Գլխավոր'):
+        bad.append('%s still says Home' % lang)
+for b in bad: print('FAIL webui navbar: ' + b, file=sys.stderr)
+sys.exit(1 if bad else 0)
+P
+echo "PASS webui navbar: Profiles / Monitor / Settings with fitting icons, a sliding pill and translated names"
+)
+
+t_webui_lsposed_badge_runtime() (
+# Runtime (fix187): the LSPosed card's badge says what LSPosed has, not what the card asked.
+# The REAL parser and badge run in node on asb_lsposed.sh status output.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui lsposed badge: $*" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "SKIP webui lsposed badge: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+grep -q 'await loadLspStatus();' "$H" || fail "the status is never loaded"
+grep -q "if (it.key === 'lsposed_verbose') {" "$H" || fail "the card has no badge of its own"
+{
+  echo "function T(k, d) { return d; }"
+  sed -n '/^function lspParse(/,/^}/p' "$H"
+  sed -n '/^function lspBadge(/,/^}/p' "$H"
+  cat <<'EOF'
+let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
+const P = (s) => lspParse(s.join('\n'));
+let b = lspBadge(P(['present=1', 'setting=keep', 'verbose=default_on', 'log_kib=31744', 'verbose_kib=30000', 'pending_reboot=0']), 'keep');
+chk(b.cls === 'warn' && b.text === 'LSPosed log on · 31 MB', 'a big verbose log: ' + JSON.stringify(b));
+b = lspBadge(P(['present=1', 'verbose=off', 'log_kib=2048', 'pending_reboot=1', 'asb_changed=1 prev=default_on']), 'off');
+chk(b.cls === 'warn' && b.text === 'off after a reboot', 'written this boot: ' + JSON.stringify(b));
+b = lspBadge(P(['present=1', 'verbose=off', 'log_kib=512', 'pending_reboot=0']), 'off');
+chk(b.cls === 'good' && b.text === 'LSPosed log off', 'off and in force: ' + JSON.stringify(b));
+b = lspBadge(P(['present=1', 'verbose=unknown', 'reason=no_sqlite']), 'off');
+chk(b.text === 'set in LSPosed', 'unreadable: ' + JSON.stringify(b));
+b = lspBadge(P(['present=0', 'setting=keep']), 'keep');
+chk(b.text === 'no LSPosed', 'absent: ' + JSON.stringify(b));
+chk(lspBadge(P(['']), 'keep') === null, 'no answer: the generic badge stays');
+if (bad) process.exit(1);
+console.log('ok');
+EOF
+} > "$T/t.js"
+out="$(node "$T/t.js" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo "PASS webui lsposed badge: LSPosed's real state, its log size and a pending reboot reach the card"
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;
