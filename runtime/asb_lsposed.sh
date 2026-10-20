@@ -58,12 +58,13 @@ present=0
 [ -d "$LSPD" ] && [ -f "$DB" ] && present=1
 
 _restore() {   # LSPosed's own earlier value back, if ASB ever changed it
+  # "off" before ASB's change means ASB changed nothing (a fix187 record): nothing to restore.
+  [ "$(cat "$PREV" 2>/dev/null)" = off ] && rm -f "$PREV"
   if [ -f "$PREV" ] && [ "$present" = 1 ]; then
     _p="$(cat "$PREV" 2>/dev/null)"
     case "$_p" in
       on)         _lspd verbose-set on >/dev/null && _mark ;;
       default_on) _lspd verbose-unset >/dev/null && _mark ;;
-      off)        : ;;
     esac
     rm -f "$PREV"
     echo "result=restored prev=$_p"
@@ -84,7 +85,7 @@ case "${1:-status}" in
       echo "verbose_kib=$(_kib "$LSPD"/log/verbose_*.log)"
       echo "pending_reboot=$(_pending)"
     fi
-    [ -f "$PREV" ] && echo "asb_changed=1 prev=$(cat "$PREV" 2>/dev/null)"
+    [ -f "$PREV" ] && [ "$(cat "$PREV" 2>/dev/null)" != off ] && echo "asb_changed=1 prev=$(cat "$PREV" 2>/dev/null)"
     ;;
   apply)
     _want="$(_cfg lsposed_verbose)"
@@ -93,13 +94,17 @@ case "${1:-status}" in
         [ "$present" = 1 ] || { echo "result=absent"; exit 0; }
         _cur="$(_get)"
         case "$_cur" in on|off|default_on) : ;; *) echo "result=unsupported reason=$(_reason)"; exit 0 ;; esac
-        # Remember what LSPosed had before ASB's first change, so "keep" can put it back.
-        [ -f "$PREV" ] || { mkdir -p "${PREV%/*}" 2>/dev/null; echo "$_cur" > "$PREV"; }
         if [ "$_cur" != off ]; then
+          # Remember what LSPosed had before ASB's first change, so "keep" can put it back.
+          [ -f "$PREV" ] || { mkdir -p "${PREV%/*}" 2>/dev/null; echo "$_cur" > "$PREV"; }
           [ "$(_lspd verbose-set off | sed -n 's/^verbose=//p' | head -1)" = off ] || { echo "result=write_failed"; exit 0; }
           _mark
           _res=off_after_reboot
         else
+          # Already off and ASB wrote nothing: there is nothing to put back. fix187 recorded
+          # "off" here anyway, and asbdiag then said ASB had switched the log off (an OP15
+          # whose user had turned it off in the manager beforehand) - that record goes.
+          [ "$(cat "$PREV" 2>/dev/null)" = off ] && rm -f "$PREV"
           _res=already_off
         fi
         # The old verbose logs: every one but the newest, which the daemon still writes to.
