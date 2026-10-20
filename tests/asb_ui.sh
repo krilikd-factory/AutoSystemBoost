@@ -3672,6 +3672,95 @@ done
 echo "PASS webui monitor binding tiles: the binding cluster's owner, counts on one line, the slot name whole"
 )
 
+t_webui_header_capsules() (
+# fix192: the header in the bottom bar's language - "make the header in the same style as the
+# nav bar, on every page". One material for bar and header capsules (shared tokens, so they
+# cannot drift apart), the bar's tonal pill for every "selected" thing (theme icon, current
+# profile, open Logs menu), and an island that stays on one line: Logs/Channel fold to icons
+# inside a Settings category and whenever the row would otherwise wrap (measured at runtime).
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui header capsules: $*" >&2; exit 1; }
+command -v python3 >/dev/null 2>&1 || { echo "SKIP webui header capsules: no python3"; exit 0; }
+python3 - "$H" <<'P' || exit 1
+import re, sys
+h = open(sys.argv[1], encoding='utf-8').read()
+bad = []
+def need(x, why):
+    if x not in h: bad.append(why)
+def absent(x, why):
+    if x in h: bad.append(why)
+for pre in ('', 'live', 'cfg'):
+    soc = (pre + 'SocBadge') if pre else 'socBadge'
+    ver = (pre + 'VerBadge') if pre else 'verBadge'
+    blk = '<div class="hdr-cap hdr-info">\n      <div class="badge badge-a" id="%s">DEVICE</div>\n      <div class="badge badge-a" id="%s">V65</div>\n      </div>' % (soc, ver)
+    need(blk, '%s/%s are not one capsule' % (soc, ver))
+need('.hdr-cap, .theme-toggle, .status-row {\n  background: var(--cap-wash), var(--tabbar-bg, #000000);\n  border: 1px solid var(--cap-edge);\n  box-shadow: var(--cap-shadow);', 'header capsules do not use the shared material')
+need('    var(--cap-wash),\n    var(--tabbar-bg, #000000);\n  border: 1px solid var(--cap-edge);', 'the bar no longer uses the shared material')
+bar = h[h.index('.asb-tab-ind::before {'):h.index('}', h.index('.asb-tab-ind::before {'))]
+if 'var(--pill-wash)' not in bar: bad.append('the bar indicator is not the shared pill')
+tt = h[h.index('.theme-toggle::before {'):h.index('}', h.index('.theme-toggle::before {'))]
+if 'var(--pill-wash)' not in tt or 'transition: transform' not in tt: bad.append('the theme switch has no sliding pill')
+need('html[data-asb-theme="light"] .theme-toggle::before { transform: translateX(38px); }', 'the pill does not follow the light theme')
+need('html[dir="rtl"][data-asb-theme="light"] .theme-toggle::before { transform: translateX(-38px); }', 'the pill slides the wrong way in RTL')
+sv = h[h.index('.status-val {\n  display: inline-flex;'):]
+sv = sv[:sv.index('}')]
+if 'var(--pill-wash)' not in sv: bad.append('the current profile is not on the tonal pill')
+need('.island-btn[aria-expanded="true"] { color: var(--accent); background: var(--pill-wash);', 'the open Logs menu is not marked')
+need('.status-row:is(.has-back,.is-tight) .island-btn > span { display: none; }', 'Logs/Channel never fold to icons')
+need("if (row) row.classList.toggle('has-back', !!_cfgGroup);", 'the category Back does not fold the island')
+lp = re.search(r'html\[data-asb-theme="light"\] :is\(([^)]*)\) \{\n  background:#ffffff !important;', h)
+if not lp: bad.append('light paper list not found')
+else:
+    m = [x.strip() for x in re.sub(r'/\*.*?\*/', '', lp.group(1), flags=re.S).split(',')]
+    for x in ('.hdr-cap', '.theme-toggle', '.status-row', '.asb-tabbar'):
+        if x not in m: bad.append('light paper list lacks ' + x)
+    if '.badge' in m: bad.append('light theme still paints each badge as its own white chip')
+absent('html[data-asb-theme="light"] .theme-toggle { background:transparent', 'light theme strips the switch capsule')
+rows = re.findall(r'\n\.status-row \{[^}]*\}', h)
+if len(rows) != 1: bad.append('the island has %d base rules, expected one' % len(rows))
+elif 'background' in rows[0] or 'border:' in rows[0]: bad.append('the island has a material of its own again')
+for b in bad: print('FAIL webui header capsules: ' + b, file=sys.stderr)
+sys.exit(1 if bad else 0)
+P
+command -v node >/dev/null 2>&1 || { echo "PASS webui header capsules (static; no node)"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+{
+  sed -n '/^function asbHeaderRowWrapped(/,/^}/p' "$H"
+  sed -n '/^function asbHeaderFit(/,/^}/p' "$H"
+  cat <<'EOF'
+let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
+function kid(top, h, shown) { return { getClientRects() { return shown === false ? [] : [1]; }, getBoundingClientRect() { return { top: top, bottom: top + h }; } }; }
+function row(kids) { const set = new Set(); return { children: kids, classList: { add(c) { set.add(c); }, remove(c) { set.delete(c); }, contains(c) { return set.has(c); } } }; }
+/* one line: an 8px dot and a 30px button share a centre */
+let r1 = row([kid(16, 8), kid(11, 18), kid(5, 30), kid(0, 0, false)]);
+/* wrapped: the island dropped to a second line */
+let r2 = row([kid(16, 8), kid(11, 18), kid(43, 30)]);
+/* was tight, now fits again (shorter profile) */
+let r3 = row([kid(16, 8), kid(5, 30)]); r3.classList.add('is-tight');
+global.document = { querySelectorAll() { return [r1, r2, r3]; } };
+asbHeaderFit();
+chk(!r1.classList.contains('is-tight'), 'a one-line island was folded');
+chk(r2.classList.contains('is-tight'), 'a wrapped island was not folded');
+chk(!r3.classList.contains('is-tight'), 'an island that fits again stays folded');
+chk(asbHeaderRowWrapped(row([kid(0, 30, false), kid(40, 30)])) === false, 'hidden children are counted');
+/* unchanged text and width: no re-measure (Monitor rewrites the same label every poll) ... */
+let measured = 0; const r4 = row([kid(16, 8), kid(43, 30)]); r4.textContent = 'smart';
+r4.children[0].getBoundingClientRect = function () { measured++; return { top: 16, bottom: 24 }; };
+global.document = { querySelectorAll() { return [r4]; } };
+asbHeaderFit(); asbHeaderFit();
+chk(measured === 1 && r4.classList.contains('is-tight'), 'the same label is measured again: ' + measured);
+/* ... but a forced pass (Back shown/hidden, fonts loaded) always measures */
+asbHeaderFit(true);
+chk(measured === 2, 'a forced pass was skipped');
+process.exit(bad ? 1 : 0);
+EOF
+} > "$T/t.js"
+node "$T/t.js" || fail "fit logic"
+echo "PASS webui header capsules: shared bar material, tonal pills, one-line island on every page"
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;

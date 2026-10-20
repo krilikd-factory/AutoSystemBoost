@@ -4069,6 +4069,16 @@ grep -q 'ASB applies NO cap in performance' "$ROOT/tools/asb_diag.sh" && fail "a
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag differs from tools/asb_diag.sh"
 echo "PASS: fix191 contract"
 ) || exit 1
+# ---- fix192 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix192: $*"; exit 1; }
+asb_has_test test_webui_header_capsules.sh || fail "test_webui_header_capsules.sh missing"
+grep -q -- '--cap-wash: linear-gradient(135deg, rgba(0,240,180,0.04), rgba(0,212,255,0.025));' "$ROOT/webroot/index.html" || fail "no shared capsule material"
+[ "$(grep -c 'class="hdr-cap hdr-info"' "$ROOT/webroot/index.html")" -eq 3 ] || fail "not every page has the chip/version capsule"
+grep -q '^function asbHeaderFit(force) {' "$ROOT/webroot/index.html" || fail "the island is never fitted"
+echo "PASS: fix192 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
 )
 
@@ -5850,20 +5860,26 @@ need "$WEB" 'theme_moon:'
 need "$WEB" "setAttribute('data-asb-theme', 'light')"
 need "$WEB" "removeAttribute('data-asb-theme')"
 absent "$WEB" "toggleAttribute('data-asb-theme'"
-# Both buttons are independent compact chips, with a pale semantic tint rather than a full green fill.
-need "$WEB" '.theme-choice { display:grid; place-items:center; width:34px; height:29px;'
+# fix192: the pair is one segmented capsule in the bottom bar's material; the selected icon
+# sits on the bar's tonal pill (which follows html[data-asb-theme]) - never a full green fill.
+need "$WEB" '.theme-choice { position:relative; z-index:1; display:grid; place-items:center; width:38px; height:24px;'
 need "$WEB" '<div class="badge badge-a" id="verBadge">V65</div>'
 need "$WEB" '<div class="badge badge-a" id="liveVerBadge">V65</div>'
 need "$WEB" '<div class="badge badge-a" id="cfgVerBadge">V65</div>'
-need "$WEB" '.theme-choice.active { color:var(--accent); background:rgba(0,240,180,.09);'
+need "$WEB" '.theme-choice.active { color:var(--accent); }'
+need "$WEB" 'html[data-asb-theme="light"] .theme-toggle::before { transform: translateX(38px); }'
 absent "$WEB" '.theme-choice.active { color:#04120f; background:linear-gradient'
+absent "$WEB" ':is(.cfg-reset-choice.armed,.theme-choice.active) { color:#04120f !important; }'
 # These cover readable dialog/title copy, Smart monitor telemetry and small configuration text.
 need "$WEB" '--text-secondary:#365048; --text-tertiary:#526b62;'
 need "$WEB" ':is(.cfg-profile-title,.cfg-reset-title,.debug-action-wait-title) { color:var(--text) !important; }'
 need "$WEB" '.smart-banner-value { color:#006c56; }'
 need "$WEB" '.cfg-desc { color:var(--text-secondary); opacity:1; }'
 # Android WebView light controls: every control that had retained translucent light text has an explicit override.
-need "$WEB" 'html[data-asb-theme="light"] .badge-a { background:linear-gradient(135deg,rgba(0,124,99,.14),rgba(0,111,155,.09)) !important;'
+# fix192: chip and version are text segments inside one paper capsule in light mode, not
+# two tinted chips of their own.
+need "$WEB" 'html[data-asb-theme="light"] .hdr-cap .badge { background:transparent !important;'
+absent "$WEB" 'html[data-asb-theme="light"] .badge-a {'
 need "$WEB" 'html[data-asb-theme="light"] .cfg-sel-btn { color:var(--text) !important; background:#fff !important;'
 need "$WEB" 'html[data-asb-theme="light"] .cfg-sel-pop button { color:var(--text-secondary) !important;'
 need "$WEB" 'html[data-asb-theme="light"] .cfg-range input[type="range"] { height:6px; background:linear-gradient(90deg,#adc2bb,#e4eeeb) !important;'
