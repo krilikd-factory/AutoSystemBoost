@@ -42,6 +42,15 @@
   --page-fade-delay: 0.06s;
   --page-fade-ease: cubic-bezier(0.2, 0.7, 0.25, 1);
 
+  /* Floating-capsule material (fix192): one definition for the bottom bar and the header
+   * capsules, so the two cannot drift apart again. --pill-* is the tonal "this one is
+   * selected" marker - the bar's sliding indicator, the theme switch and the profile value. */
+  --cap-wash: linear-gradient(135deg, rgba(0,240,180,0.04), rgba(0,212,255,0.025));
+  --cap-edge: rgba(0,240,180,0.15);
+  --cap-shadow: 0 10px 30px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05);
+  --pill-wash: linear-gradient(135deg, rgba(0,240,180,0.20), rgba(0,212,255,0.11));
+  --pill-edge: inset 0 0 0 1px rgba(0,240,180,0.20);
+
   --bg: #000000;
   --surface: rgba(255,255,255,0.04);
   --surface-hover: rgba(255,255,255,0.06);
@@ -286,86 +295,127 @@ body::before, body::after {
   margin-bottom: 16px;
 }
 
+/* ── Header capsules (fix192) ─────────────────────────────────────────────────────
+ * The header speaks the bottom bar's language now (fix187): the same floating capsule -
+ * near-black base, faint teal-to-cyan wash, thin teal edge, lit inner top line - and the
+ * same tonal pill wherever something is "the selected one". Three capsules in two rows:
+ * chip + version, the theme switch, and the profile island.
+ *
+ * Heights are held at what the old chips used (30px meta row, 40px island) - the Settings
+ * hub is sized to fit one screen and a taller header would push its last row off it. */
 .badges {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
+}
+.hdr-cap, .theme-toggle, .status-row {
+  background: var(--cap-wash), var(--tabbar-bg, #000000);
+  border: 1px solid var(--cap-edge);
+  box-shadow: var(--cap-shadow);
 }
 
+/* Chip and version: information, not controls, so plain text segments split by a hairline -
+ * nothing in this capsule looks pressable. The version carries the accent; the chip code
+ * stays secondary, the way an inactive tab label does. */
+.hdr-cap {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 15px;
+}
 .badge {
-  padding: 5px 14px;
-  border-radius: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 600;
+  line-height: 14px;
   letter-spacing: 1px;
   text-transform: uppercase;
-  border: 1px solid var(--border);
-  color: var(--text-tertiary);
-  background: var(--surface);
+  white-space: nowrap;
+  color: var(--text-secondary);
 }
-
-/* Theme choices deliberately use the same 8px rounded chip language as the adjacent device and
- * version badges. They are two separate 29px chips, not a filled segmented switch: the selected
- * state is a readable teal contour + soft tint, so neither moon nor sun becomes a solid green tile. */
-.theme-toggle { display:inline-flex; align-items:center; gap:5px; min-height:29px; padding:0; border:0; border-radius:0; background:transparent; }
-/* Same 8px-radius chip geometry and vertical rhythm as DEVICE / V64 badges. The icon cards
- * remain compact, while a thin active contour communicates selection more calmly than a full fill. */
-.theme-choice { display:grid; place-items:center; width:34px; height:29px; padding:0; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text-secondary); box-shadow:0 0 20px rgba(0,240,180,.06); transition:color .16s ease,border-color .16s ease,background .16s ease,box-shadow .16s ease,transform .12s ease; }
-.theme-choice svg { width:14px; height:14px; stroke:currentColor; }
-.theme-choice.active { color:var(--accent); background:rgba(0,240,180,.09); border-color:var(--accent); box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 24%,transparent),0 3px 10px var(--accent-glow); }
-.theme-choice:active { transform:scale(.92); }
-
-.badge-a {
-  background: linear-gradient(135deg, rgba(0,240,180,0.12), rgba(0,212,255,0.08));
-  border-color: rgba(0,240,180,0.25);
-  color: var(--accent);
-  box-shadow: 0 0 20px rgba(0,240,180,0.06);
+.badge + .badge {
+  margin-inline-start: 10px;
+  padding-inline-start: 10px;
+  border-inline-start: 1px solid var(--cap-edge);
 }
+.badge-a + .badge-a { color: var(--accent); }
 
+/* Theme switch: a two-segment capsule with the bar's sliding pill behind the chosen icon.
+ *
+ * The pill follows the attribute that actually themes the page (html[data-asb-theme]), not
+ * a copy of it - the switch cannot show one theme while the page wears the other. The
+ * attribute is written before first paint, so the pill starts where it belongs and only
+ * slides on a real switch. */
+.theme-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 2px;
+  border-radius: 15px;
+}
+.theme-toggle::before {
+  content: "";
+  position: absolute;
+  top: 2px; bottom: 2px;
+  inset-inline-start: 2px;
+  width: 38px;
+  border-radius: 13px;
+  background: var(--pill-wash);
+  box-shadow: var(--pill-edge);
+  transition: transform .34s cubic-bezier(.3,.8,.25,1);
+  pointer-events: none;
+}
+html[data-asb-theme="light"] .theme-toggle::before { transform: translateX(38px); }
+html[dir="rtl"][data-asb-theme="light"] .theme-toggle::before { transform: translateX(-38px); }
+.theme-choice { position:relative; z-index:1; display:grid; place-items:center; width:38px; height:24px; padding:0; border:0; border-radius:13px; background:transparent; color:var(--text-secondary); transition:color .2s ease,transform .12s ease; -webkit-tap-highlight-color:transparent; }
+.theme-choice svg { width:15px; height:15px; stroke:currentColor; color:inherit; filter:none; }
+.theme-choice.active { color:var(--accent); }
+.theme-choice:active { transform:scale(.9); }
+
+/* The profile island: the capsule, a live dot, the label, and the current profile in the
+ * tonal pill - it is the selected profile, so it wears the same marker as the selected tab.
+ * Logs and Channel sit after a hairline as plain icon-and-label buttons, like the tabs. */
 .status-row {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 20px;
-  border-radius: 100px;
+  gap: 8px;
+  height: auto;
+  min-height: 40px;
+  padding: 4px;
+  padding-inline: 14px 4px;
+  border-radius: 20px;
   /*
-   * Wrap instead of forcing the page to scroll sideways.
-   * "Profile: BALANCED" plus two chips is a fixed amount of text in a pill that cannot shrink.
+   * Wrap instead of forcing the page to scroll sideways - the last resort for a very long
+   * translated label; the phone-width rules below keep every built-in case on one line.
    */
   flex-wrap: wrap;
   justify-content: center;
-  row-gap: 8px;
+  row-gap: 4px;
   max-width: 100%;
-  background: linear-gradient(135deg, rgba(0,240,180,0.08), rgba(0,212,255,0.05));
-  border: 1px solid rgba(0,240,180,0.15);
 }
-
 /*
- * Wrapping was the fallback, but it fired on the two longest profile names - so the pill
- * showed as one lopsided line plus a stray NASTROIKI underneath on BALANCED and
- * PERFORMANCE, and as a clean single line on BATTERY. Same screen, two different shapes,
- * decided by how many letters the current profile happens to have.
- *
- * The content is ~460px at the default sizes inside a 380px column, so it could never fit;
- * shrinking the chips on phone widths brings the worst case (PERFORMANCE + two chips) to
- * ~340px. flex-wrap stays as the last resort for very long translated labels.
+ * One line on a phone for every built-in profile: the longest (PERFORMANCE) with Logs and
+ * Channel measured ~340px inside the 360px column. Inside a Settings category the Back
+ * button joins the row, and Logs/Channel fold to their icons (.has-back) so the row still
+ * fits instead of dropping Back onto a lopsided second line.
  */
 .status-label, .status-val { white-space: nowrap; }
 .status-row .live-chip { margin-left: 0; flex: 0 0 auto; }
 
 @media (max-width: 480px) {
-  .status-row { gap: 6px; padding: 7px 12px; }
-  .status-row .live-chip {
-    padding: 5px 8px 5px 7px;
-    gap: 4px;
-    font-size: 10px;
-    letter-spacing: 0.02em;
-  }
-  .status-val { font-size: 11px; letter-spacing: 0.5px; }
+  .status-row { gap: 6px; padding-inline: 12px 4px; }
+  .status-val { font-size: 11px; letter-spacing: 0.6px; padding: 0 9px; }
   .status-label { font-size: 11px; }
+  .island-btn { padding: 0 9px; }
 }
 
 .dot {
@@ -406,6 +456,13 @@ body::before, body::after {
 }
 
 .status-val {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 14px;
+  background: var(--pill-wash);
+  box-shadow: var(--pill-edge);
   font-family: var(--mono);
   font-size: 12px;
   font-weight: 700;
@@ -1606,8 +1663,8 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
   .logo-c { width: 88px; height: 88px; }
   .app-name { font-size: 32px; }
   .device-line { font-size: 14px; }
-  .badge { font-size: 11px; padding: 5px 12px; }
-  .status-row { font-size: 14px; padding: 14px 24px; }
+  .badge { font-size: 11px; }
+  .status-row { font-size: 14px; }
   .pbtn { padding: 16px 18px; }
   .pname { font-size: 17px; }
   .live-cell { padding: 14px 16px; }
@@ -2872,7 +2929,7 @@ html[data-asb-theme="light"] .config-page { background:var(--bg) !important; col
    .live-cell-value and .cfg-tile-ico as separate opaque white slabs, which created the
    rectangular seams visible inside otherwise rounded cards. Only outer material surfaces
    receive a paper background; child labels retain transparent backgrounds. */
-html[data-asb-theme="light"] :is(.badge,.status-row,.live-chip,.tg-link,.debug-support-btn,
+html[data-asb-theme="light"] :is(.hdr-cap,.theme-toggle,.status-row,.live-chip,.tg-link,.debug-support-btn,
   .cfg-backup,.cfg-lang-btn,.cfg-lang-pop,.cfg-sel-btn,.cfg-sel-pop,.cfg-tile,.cfg-row,
   .live-cell,.stock-telemetry,.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet,
   /* The tab bar now carries the same teal wash as .status-row, so it needs the same
@@ -2883,10 +2940,10 @@ html[data-asb-theme="light"] :is(.badge,.status-row,.live-chip,.tg-link,.debug-s
 }
 html[data-asb-theme="light"] :is(input,select,textarea,.seg,.seg-opt,.cfg-profile-name,.cfg-reset-choice,.cfg-profile-row,.cfg-profile-actions button) { background:#ffffff !important; color:var(--text) !important; border-color:var(--border) !important; }
 html[data-asb-theme="light"] :is(.cfg-modal,.cfg-profile-modal,.cfg-reset-modal,.diag-wait-modal,.debug-action-wait,[class*="overlay"]) { background:rgba(15,31,27,.58) !important; }
-html[data-asb-theme="light"] :is(.cfg-profile-row.selected,.cfg-tile.active,.cfg-reset-choice.armed,.theme-choice.active,.seg-opt.active,.seg button.active,.p-card.active,.profile-card.active) { border-color:var(--accent) !important; }
+html[data-asb-theme="light"] :is(.cfg-profile-row.selected,.cfg-tile.active,.cfg-reset-choice.armed,.seg-opt.active,.seg button.active,.p-card.active,.profile-card.active) { border-color:var(--accent) !important; }
 html[data-asb-theme="light"] .cfg-reset-choice.armed { color:#201300 !important; background:linear-gradient(135deg,#ffd166,#f6a623) !important; }
 html[data-asb-theme="light"] :is(.app-name,.status-val,.cfg-tile-count.has-on,.tg-link-main,.theme-choice.active) { color:var(--accent) !important; }
-html[data-asb-theme="light"] :is(.cfg-reset-choice.armed,.theme-choice.active) { color:#04120f !important; }
+html[data-asb-theme="light"] .cfg-reset-choice.armed { color:#04120f !important; }
 /* Light counterpart of the tonal primary (fix175): deep teal ink on a pale teal wash. */
 html[data-asb-theme="light"] :is(.cfg-profile-primary,.cfg-profile-apply) { color:#00634f !important; background:linear-gradient(135deg,rgba(0,124,99,.14),rgba(0,124,99,.07)) !important; border-color:rgba(0,124,99,.32) !important; }
 html[data-asb-theme="light"] :is(.cfg-profile-copy,.cfg-profile-row-meta,.cfg-profile-hint,.cfg-reset-copy,.cfg-reset-choice-copy,.live-cell-label,.device-line,.tg-link-sub) { color:var(--text-secondary) !important; }
@@ -2914,11 +2971,16 @@ html[data-asb-theme="light"] .cfg-profile-check-box { border-color:var(--border)
 html[data-asb-theme="light"] .cfg-profile-check.on .cfg-profile-check-box { background:var(--accent) !important; border-color:var(--accent) !important; color:#ffffff !important; }
 /* Contrast pass for elements whose dark design used hard-coded translucent white rather than a
  * theme variable. Keep surfaces calm, but make every operational label readable on near-white. */
-html[data-asb-theme="light"] .theme-toggle { background:transparent !important; border:0 !important; box-shadow:none !important; }
-html[data-asb-theme="light"] .theme-choice { color:var(--text-secondary) !important; background:#fff !important; border-color:var(--border) !important; box-shadow:0 2px 7px rgba(20,50,42,.08) !important; }
-html[data-asb-theme="light"] .theme-choice.active { color:var(--accent) !important; background:rgba(0,124,99,.10) !important; border-color:var(--accent) !important; box-shadow:0 0 0 1px rgba(0,124,99,.18),0 3px 9px rgba(0,124,99,.14) !important; }
-/* Device and version share one soft accent chip, deliberately more subdued than the active theme icon. */
-html[data-asb-theme="light"] .badge-a { background:linear-gradient(135deg,rgba(0,124,99,.14),rgba(0,111,155,.09)) !important; border-color:rgba(0,124,99,.36) !important; color:#006c56 !important; box-shadow:0 0 20px rgba(0,124,99,.09) !important; }
+/* Header capsules (fix192): the paper surface comes from the list above; inside them the
+ * theme icons and the chip/version text stay transparent, so the white capsule reads as one
+ * piece with the tonal pill as its only tint. */
+html[data-asb-theme="light"] .theme-choice { color:var(--text-secondary) !important; background:transparent !important; border:0 !important; box-shadow:none !important; }
+html[data-asb-theme="light"] .hdr-cap .badge { background:transparent !important; box-shadow:none !important; color:var(--text-secondary) !important; }
+html[data-asb-theme="light"] .hdr-cap .badge-a + .badge-a { color:#006c56 !important; }
+html[data-asb-theme="light"] .island-btn { color:var(--text-secondary); }
+html[data-asb-theme="light"] .island-btn:hover { color:var(--text); background:rgba(0,124,99,.06); }
+html[data-asb-theme="light"] .island-btn:active { background:rgba(0,124,99,.10); }
+html[data-asb-theme="light"] .status-row #cfgBackChip { background:transparent !important; border-color:rgba(0,124,99,.36) !important; color:var(--accent) !important; box-shadow:none !important; }
 /* Native-looking white controls left their dark-mode #e7eaee text on white in Android WebView.
  * Style both the trigger and its custom list explicitly, including all option states. */
 html[data-asb-theme="light"] .cfg-sel-btn { color:var(--text) !important; background:#fff !important; border-color:var(--border) !important; box-shadow:0 2px 8px rgba(20,50,42,.06); }
@@ -3071,7 +3133,6 @@ html[data-asb-theme="light"] .cfg-section-title { color:var(--section-accent,#a5
 html[data-asb-theme="light"] .cfg-row:not(.is-on) { box-shadow:0 1px 2px rgba(16,24,32,.05); }
 html[data-asb-theme="light"] .cfg-row.is-on { background:linear-gradient(160deg,rgba(0,124,99,.07),#fff 70%) !important; border-color:rgba(0,124,99,.30) !important; }
 html[data-asb-theme="light"] .cfg-icon { background:#f3f5f7; }
-html[data-asb-theme="light"] .badge-a { background:#ffffff !important; border-color:rgba(0,124,99,.30) !important; color:#00634f !important; box-shadow:0 1px 3px rgba(16,24,32,.06) !important; }
 html[data-asb-theme="light"] .tg-link-sub { color:var(--text-secondary) !important; }
 
 
@@ -3143,14 +3204,14 @@ html[data-asb-theme="light"] .tg-link-sub { color:var(--text-secondary) !importa
      * reads as grey - the eye judges it against the black around it, not against the
      * value it was copied from. Halving keeps the green edge and the gradient direction
      * while letting the bar stay black. */
-    linear-gradient(135deg, rgba(0,240,180,0.04), rgba(0,212,255,0.025)),
+    var(--cap-wash),
     var(--tabbar-bg, #000000);
-  border: 1px solid rgba(0,240,180,0.15);
+  border: 1px solid var(--cap-edge);
   border-radius: 31px;
   overflow: hidden;
   /* The inner top line is the lit edge a raised surface has; with the outer shadow it is
    * what separates the bar from cards scrolling underneath without any blur. */
-  box-shadow: 0 10px 30px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.05);
+  box-shadow: var(--cap-shadow);
   /* No backdrop blur.
    *
    * Blur samples whatever is behind the element and mixes it in. Against a bar pinned to
@@ -3226,16 +3287,19 @@ html[data-asb-theme="light"] .tg-link-sub { color:var(--text-secondary) !importa
   left: 50%; top: 6px;
   width: 60px; height: 32px; margin-left: -30px;
   border-radius: 16px;
-  background: linear-gradient(135deg, rgba(0,240,180,0.20), rgba(0,212,255,0.11));
-  box-shadow: inset 0 0 0 1px rgba(0,240,180,0.20);
+  background: var(--pill-wash);
+  box-shadow: var(--pill-edge);
 }
 .asb-tabbar.ind-anim .asb-tab-ind { transition: transform .34s cubic-bezier(.3,.8,.25,1), width .34s ease; }
-html[data-asb-theme="light"] .asb-tab-ind::before {
-  background: linear-gradient(135deg, rgba(0,124,99,0.15), rgba(0,111,155,0.09));
-  box-shadow: inset 0 0 0 1px rgba(0,124,99,0.20);
+/* Light counterpart of the tonal pill - deep teal on white - for the bar's indicator and the
+ * header's theme switch and profile value alike (fix192). */
+html[data-asb-theme="light"] {
+  --pill-wash: linear-gradient(135deg, rgba(0,124,99,0.15), rgba(0,111,155,0.09));
+  --pill-edge: inset 0 0 0 1px rgba(0,124,99,0.20);
+  --cap-edge: rgba(11,56,47,.16);
 }
 @media (prefers-reduced-motion: reduce) {
-  .asb-tabbar.ind-anim .asb-tab-ind, .asb-tab-ico, .asb-tab-ico .f { transition: none; }
+  .asb-tabbar.ind-anim .asb-tab-ind, .asb-tab-ico, .asb-tab-ico .f, .theme-toggle::before { transition: none; }
 }
 
 /* Give every page room so its last row is never trapped under the bar. */
@@ -3270,21 +3334,44 @@ body { padding-bottom: calc(var(--tabbar-space, 82px) + env(safe-area-inset-bott
 
 
 /* ── Island actions: logs + channel ──────────────────────────────────────────────── */
-.island-actions { display: inline-flex; gap: 6px; margin-left: 8px; flex: 0 0 auto; }
+/* Plain icon-and-label buttons after a hairline, like the bar's tabs: no chip outline of
+ * their own inside a capsule that already has one (fix192). A soft wash marks the press. */
+.island-actions {
+  display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto;
+  margin-inline-start: 2px; padding-inline-start: 6px;
+  border-inline-start: 1px solid var(--cap-edge);
+}
 .island-btn {
   display: inline-flex; align-items: center; gap: 5px;
-  padding: 5px 10px; border-radius: 100px;
-  border: 1px solid var(--border);
-  background: var(--surface);
+  height: 30px; padding: 0 10px; border-radius: 15px;
+  border: 0;
+  background: transparent;
   color: var(--text-secondary);
   font: inherit; font-size: 11.5px; line-height: 1;
   text-decoration: none; cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: border-color .15s ease, color .15s ease;
+  transition: background .15s ease, color .15s ease, transform .12s ease;
 }
-.island-btn:active { transform: scale(0.96); }
-.island-btn:hover  { border-color: var(--border-active); color: var(--text); }
-.island-btn svg    { opacity: .9; }
+.island-btn:active { transform: scale(0.94); background: rgba(0,240,180,0.10); }
+.island-btn:hover  { color: var(--text); background: rgba(0,240,180,0.06); }
+.island-btn[aria-expanded="true"] { color: var(--accent); background: var(--pill-wash); box-shadow: var(--pill-edge); }
+.island-btn svg    { opacity: .9; flex: 0 0 auto; }
+
+/* Back, inside a Settings category: the one way out of a category, so it keeps the accent -
+ * an outlined accent button, not the filled pill, which already means "selected". */
+.status-row #cfgBackChip {
+  height: 30px; margin: 0; padding: 0 12px 0 8px; gap: 4px;
+  border-radius: 15px;
+  background: transparent;
+  border: 1px solid rgba(0,240,180,0.32);
+  font-size: 10.5px; letter-spacing: 0.06em;
+  box-shadow: none;
+}
+.status-row #cfgBackChip:active { background: rgba(0,240,180,0.12); }
+.status-row:is(.has-back,.is-tight) .island-btn > span { display: none; }
+.status-row:is(.has-back,.is-tight) .island-btn { padding: 0 8px; }
+html[dir="rtl"] .status-row #cfgBackChip { padding: 0 8px 0 12px; }
+html[dir="rtl"] .status-row #cfgBackChip .live-chip-ico { transform: scaleX(-1); }
 
 /* Anchored under the island rather than inside it: the island clips, and a menu that is
    half-visible is worse than no menu. */
@@ -3497,8 +3584,10 @@ html[data-asb-font="device"] .sec-label { letter-spacing: 2.4px; }
     <div class="app-name">AutoSystemBoost</div>
     <div class="device-line" id="deviceLine">OnePlus Device · Qualcomm Snapdragon</div>
     <div class="badges">
+      <div class="hdr-cap hdr-info">
       <div class="badge badge-a" id="socBadge">DEVICE</div>
       <div class="badge badge-a" id="verBadge">V65</div>
+      </div>
       <div class="theme-toggle" role="group" data-theme-toggle="verBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button></div>
     </div>
     <div class="status-row">
@@ -3655,8 +3744,10 @@ html[data-asb-font="device"] .sec-label { letter-spacing: 2.4px; }
     <div class="app-name">AutoSystemBoost</div>
     <div class="device-line" id="liveDeviceLine">OnePlus Device · Qualcomm Snapdragon</div>
     <div class="badges">
+      <div class="hdr-cap hdr-info">
       <div class="badge badge-a" id="liveSocBadge">DEVICE</div>
       <div class="badge badge-a" id="liveVerBadge">V65</div>
+      </div>
       <div class="theme-toggle" role="group" data-theme-toggle="liveVerBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button></div>
     </div>
     <div class="status-row">
@@ -3862,8 +3953,10 @@ html[data-asb-font="device"] .sec-label { letter-spacing: 2.4px; }
     <div class="app-name">AutoSystemBoost</div>
     <div class="device-line" id="cfgDeviceLine">OnePlus Device &middot; Qualcomm Snapdragon</div>
     <div class="badges">
+      <div class="hdr-cap hdr-info">
       <div class="badge badge-a" id="cfgSocBadge">DEVICE</div>
       <div class="badge badge-a" id="cfgVerBadge">V65</div>
+      </div>
       <div class="theme-toggle" role="group" data-theme-toggle="cfgVerBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button></div>
     </div>
     <div class="status-row">
@@ -9612,6 +9705,54 @@ function asbNavIndicator() {
 }
 window.addEventListener('resize', function () { requestAnimationFrame(asbNavIndicator); });
 
+/* Header island fit (fix192). The profile value is free text - "smart \u2192 performance" on
+ * Monitor, a long translation of "not selected", the Armenian word for Logs - and when the
+ * island would break onto a second line, Logs and Channel fold to their icons first
+ * (.is-tight; their aria-labels still name them). Measured rather than guessed from string
+ * length: font, UI scale and locale all move the point where the row stops fitting. */
+function asbHeaderRowWrapped(row) {
+  const kids = Array.prototype.filter.call(row.children, function (k) { return k.getClientRects().length > 0; });
+  if (kids.length < 2) return false;
+  const a = kids[0].getBoundingClientRect(), b = kids[kids.length - 1].getBoundingClientRect();
+  return Math.abs((a.top + a.bottom) - (b.top + b.bottom)) / 2 > 4;
+}
+function asbHeaderFit(force) {
+  const w = (document.documentElement && document.documentElement.clientWidth) || 0;
+  document.querySelectorAll('.status-row').forEach(function (row) {
+    /* Monitor rewrites its profile label on every poll, usually with the same words; skip
+     * the measurement (a forced layout) unless the text or the width actually moved. */
+    const key = row.textContent + '|' + w;
+    if (!force && row._fitKey === key) return;
+    row._fitKey = key;
+    row.classList.remove('is-tight');
+    if (asbHeaderRowWrapped(row)) row.classList.add('is-tight');
+  });
+}
+function asbHeaderFitSoon(force) {
+  if (force === true) asbHeaderFitSoon._f = true;
+  if (asbHeaderFitSoon._q) return;
+  asbHeaderFitSoon._q = true;
+  requestAnimationFrame(function () {
+    const f = !!asbHeaderFitSoon._f;
+    asbHeaderFitSoon._q = false; asbHeaderFitSoon._f = false;
+    asbHeaderFit(f);
+  });
+}
+window.addEventListener('resize', function () { asbHeaderFitSoon(); });
+(function () {
+  /* Text in the island changes from many places (profile switch, Monitor poll, language);
+   * watching the rows catches all of them without each writer having to remember. Only
+   * childList/characterData are observed - the class this toggles cannot re-trigger it. */
+  try {
+    const mo = new MutationObserver(function () { asbHeaderFitSoon(); });
+    document.querySelectorAll('.status-row').forEach(function (row) {
+      mo.observe(row, { childList: true, characterData: true, subtree: true });
+    });
+  } catch (e) {}
+  try { if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { asbHeaderFitSoon(true); }); } catch (e) {}
+  asbHeaderFitSoon(true);
+})();
+
 function asbNavGo(target) {
   const at = asbNavCurrent();
   if (at === target) return;          /* tapping the current tab does nothing */
@@ -9779,7 +9920,15 @@ function cfgSyncChrome() {
    * another control already does - and two ways to do one thing is how a screen starts
    * feeling arbitrary. Shown when drilled in, hidden on the hub. */
   const bc = _el('cfgBackChip');
-  if (bc) bc.style.display = _cfgGroup ? 'inline-flex' : 'none';
+  if (bc) {
+    bc.style.display = _cfgGroup ? 'inline-flex' : 'none';
+    /* Back joins the island here, so Logs and Channel fold to their icons to keep the row on
+     * one line (fix192); their aria-labels still name them. */
+    const row = bc.closest ? bc.closest('.status-row') : null;
+    if (row) row.classList.toggle('has-back', !!_cfgGroup);
+    /* Back's own show/hide is a style change the island watcher does not see. */
+    if (typeof asbHeaderFitSoon === 'function') asbHeaderFitSoon(true);
+  }
   const ar = _el('cfgActionsRow'); if (ar) ar.style.display = _cfgGroup ? 'none' : 'grid';
   if (typeof navSyncSoon === 'function') navSyncSoon();
 }
