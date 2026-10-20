@@ -1166,5 +1166,10 @@
   "learn_tip_profile": "Bu profilin, governor’ın öğrendiği tamamlanmış oturumları: %s.",
   "learn_tip_tier": "Pil profilinin son oturumu: %s.",
   "lvi_learner_prof": "Governor’ın bu profilin kaç oturumundan («{ses}» kutucukta) öğrendiği. Her biri telefonun ne kadar hızlı ısındığını, ne kadar ısındığını ve frekans tavanlarının nasıl tuttuğunu kaydeder; profilin eşikleri bunlara göre ayarlanır. Pil profilinde kutucuk son oturumu da değerlendirir: temiz, kısmi, gürültülü veya bozuk.",
-  "stock_load_share": "%2 çekirdeğin %%1’i"
+  "stock_load_share": "%2 çekirdeğin %%1’i",
+  "cap_tip_clusters": "ana çekirdekler: %1 · üst çekirdekler: %2",
+  "lvb_charge": "⚡ şarjda",
+  "lvb_charge_tip": "Şarjda: rekorlar ve tüketim öğrenimi duraklar – şarj girerken tüketim ölçülemez.",
+  "lvb_charge_cool_tip": "Pil şarjda ısınıyor: Smart onu korumak için CPU’yu frenliyor.",
+  "lvb_charge_assist_tip": "Şarjda ve serin: Smart biraz daha pay bırakıyor."
 }

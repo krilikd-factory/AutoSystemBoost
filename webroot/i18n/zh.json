@@ -1166,5 +1166,10 @@
   "learn_tip_profile": "调速器已学习的此配置完成会话数：%s。",
   "learn_tip_tier": "“省电”上次会话：%s。",
   "lvi_learner_prof": "调速器已从此配置的多少个会话（磁贴上的“{ses}”）中学习。每个会话记录手机升温多快、温度多高以及频率上限保持得如何；配置的阈值据此调整。在“省电”配置中，磁贴还会评价上一次会话：干净、部分、嘈杂或受干扰。",
-  "stock_load_share": "%2 个核心的 %1 %"
+  "stock_load_share": "%2 个核心的 %1 %",
+  "cap_tip_clusters": "主核心：%1 · 高性能核心：%2",
+  "lvb_charge": "⚡ 充电中",
+  "lvb_charge_tip": "充电时：纪录与耗电学习暂停——电量在流入时无法测量耗电。",
+  "lvb_charge_cool_tip": "电池充电时变热：Smart 限制 CPU 以保护电池。",
+  "lvb_charge_assist_tip": "充电时温度较低：Smart 允许多一点余量。"
 }

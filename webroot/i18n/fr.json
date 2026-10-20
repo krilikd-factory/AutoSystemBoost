@@ -1166,5 +1166,10 @@
   "learn_tip_profile": "Sessions terminées de ce profil dont le governor a appris : %s.",
   "learn_tip_tier": "Dernière session du profil Batterie : %s.",
   "lvi_learner_prof": "Le nombre de sessions de ce profil (« {ses} » sur la tuile) dont le governor a appris. Chacune note en combien de temps le téléphone a chauffé, jusqu’à quelle température et comment les plafonds ont tenu ; les seuils du profil s’y adaptent. En Batterie, la tuile note aussi la dernière session : propre, partielle, bruitée ou perturbée.",
-  "stock_load_share": "%1 % de %2 cœurs"
+  "stock_load_share": "%1 % de %2 cœurs",
+  "cap_tip_clusters": "cœurs principaux : %1 · cœurs hauts : %2",
+  "lvb_charge": "⚡ en charge",
+  "lvb_charge_tip": "En charge : les records et l’apprentissage de la consommation sont en pause – tant que la charge arrive, la consommation ne se mesure pas.",
+  "lvb_charge_cool_tip": "La batterie chauffe en charge : Smart retient le CPU pour la ménager.",
+  "lvb_charge_assist_tip": "Frais en charge : Smart laisse un peu plus de marge."
 }

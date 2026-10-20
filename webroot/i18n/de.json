@@ -1166,5 +1166,10 @@
   "learn_tip_profile": "Abgeschlossene Sitzungen dieses Profils, aus denen der Governor gelernt hat: %s.",
   "learn_tip_tier": "Letzte Sitzung im Akku-Profil: %s.",
   "lvi_learner_prof": "Aus wie vielen Sitzungen dieses Profils („{ses}“ auf der Kachel) der Governor gelernt hat. Jede hält fest, wie schnell das Telefon warm wurde, wie heiß es wurde und wie gut die Frequenzgrenzen hielten; danach passen sich die Schwellen des Profils an. Im Akku-Profil bewertet die Kachel außerdem die letzte Sitzung: sauber, teilweise, unruhig oder gestört.",
-  "stock_load_share": "%1 % von %2 Kernen"
+  "stock_load_share": "%1 % von %2 Kernen",
+  "cap_tip_clusters": "Hauptkerne: %1 · Topkerne: %2",
+  "lvb_charge": "⚡ lädt",
+  "lvb_charge_tip": "Am Ladegerät: Rekorde und Verbrauchslernen pausieren – solange Ladung hereinkommt, lässt sich kein Verbrauch messen.",
+  "lvb_charge_cool_tip": "Der Akku wird beim Laden warm: Smart bremst die CPU, um ihn zu schonen.",
+  "lvb_charge_assist_tip": "Kühl am Ladegerät: Smart gibt etwas mehr Spielraum."
 }

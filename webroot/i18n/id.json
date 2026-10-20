@@ -1166,5 +1166,10 @@
   "learn_tip_profile": "Sesi selesai profil ini yang dipelajari governor: %s.",
   "learn_tip_tier": "Sesi terakhir profil Hemat: %s.",
   "lvi_learner_prof": "Berapa banyak sesi profil ini («{ses}» di ubin) yang dipelajari governor. Tiap sesi mencatat seberapa cepat ponsel menghangat, sepanas apa, dan seberapa baik batas frekuensi bertahan; ambang profil menyesuaikan dari situ. Di profil Hemat ubin juga menilai sesi terakhir: bersih, sebagian, bising, atau terganggu.",
-  "stock_load_share": "%1 % dari %2 inti"
+  "stock_load_share": "%1 % dari %2 inti",
+  "cap_tip_clusters": "inti utama: %1 · inti teratas: %2",
+  "lvb_charge": "⚡ mengisi",
+  "lvb_charge_tip": "Saat mengisi daya: rekor dan pembelajaran konsumsi dijeda – selama daya masuk, konsumsi tak bisa diukur.",
+  "lvb_charge_cool_tip": "Baterai menghangat saat mengisi: Smart menahan CPU untuk melindunginya.",
+  "lvb_charge_assist_tip": "Sejuk saat mengisi: Smart memberi sedikit lebih banyak ruang."
 }

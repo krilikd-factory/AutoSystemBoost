@@ -943,5 +943,10 @@
   "learn_tip_profile": "Completed sessions of this profile the governor has learned from: %s.",
   "learn_tip_tier": "Last Battery session: %s.",
   "lvi_learner_prof": "How many sessions of this profile (“{ses}” on the tile) the governor has learned from. Each records how long the phone took to warm up, how hot it got and how well the ceilings held; the profile’s thresholds adapt from them. On Battery the tile also rates the last session: clean, partial, noisy or disturbed.",
-  "stock_load_share": "%1 % of %2 cores"
+  "stock_load_share": "%1 % of %2 cores",
+  "cap_tip_clusters": "main cores: %1 · top cores: %2",
+  "lvb_charge": "⚡ charging",
+  "lvb_charge_tip": "On the charger: the records and the drain learning pause - charge coming in cannot be measured as drain.",
+  "lvb_charge_cool_tip": "The battery warms on the charger: Smart holds the CPU back to protect it.",
+  "lvb_charge_assist_tip": "Cool on the charger: Smart allows a little more headroom."
 }
