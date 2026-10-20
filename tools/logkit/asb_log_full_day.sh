@@ -1274,26 +1274,41 @@ lk_emit_phase_summary() {
   rm -f "$_all" "$LK_OUT_DIR/.phase_open.tsv" 2>/dev/null
 }
 
-# Smart records (fix184): what the governor measured per situation and the best setting it
-# kept - copied from /dev/.asb/smart_records.txt at the end of the capture.
+# Smart records (fix184, Smart V5 in fix185): what the governor measured per situation and the
+# best setting it kept - copied from /dev/.asb/smart_records.txt at the end of the capture.
 lk_emit_smart_records() {
   _srf="${ASB_LK_RECORDS_FILE:-/dev/.asb/smart_records.txt}"
-  echo "----- SMART RECORDS (best setting per situation, charge-counter current) -----"
+  echo "----- SMART RECORDS (best setting per situation, power compared side by side) -----"
   if [ ! -r "$_srf" ]; then
     echo "no records summary (Smart not running, or a governor older than fix184)"
     return 0
   fi
   cp "$_srf" "$LK_OUT_DIR/smart_records.txt" 2>/dev/null
   sed -n 's/^counter=/meter: /p' "$_srf" | head -1
-  echo "situation         status     best     record_mA  blocks  vs_original  testing"
-  awk -F'|' '$1 ~ /^(off|on)_/ {
-      vs = ($6 + 0 > 0 && $2 != "measuring") ? sprintf("%+d%%", $7) : "-"
-      printf "%-17s %-10s %-8s %9s  %6s  %11s  %s\n", $1, $2, $3, ($5 + 0 > 0 ? $4 : "-"), $13, vs, $8 }' "$_srf"
+  grep -m1 '^rejected|' "$_srf" | sed 's/^rejected|/set aside: /; s/|/  /g'
+  if grep -q '^# ctx|status|best|record_mW' "$_srf"; then
+    echo "situation         status     best     record_mW  record_mA  blocks  pairs  vs_original  testing"
+    awk -F'|' '$1 ~ /^(off|on)_/ {
+        vs = ($7 + 0 != 0) ? sprintf("-%.1f%%", $7) : "-"
+        if ($7 + 0 < 0) vs = sprintf("+%.1f%%", -$7)
+        printf "%-17s %-10s %-8s %9s  %9s  %6s  %5s  %11s  %s\n", $1, $2, $3, ($6 + 0 > 0 ? $4 : "-"), ($6 + 0 > 0 ? $5 : "-"), $13, $9, vs, $8 }' "$_srf"
+  else
+    # A fix184 governor: milliamps, one block at a time.
+    echo "situation         status     best     record_mA  blocks  vs_original  testing"
+    awk -F'|' '$1 ~ /^(off|on)_/ {
+        vs = ($6 + 0 > 0 && $2 != "measuring") ? sprintf("%+d%%", $7) : "-"
+        printf "%-17s %-10s %-8s %9s  %6s  %11s  %s\n", $1, $2, $3, ($5 + 0 > 0 ? $4 : "-"), $13, vs, $8 }' "$_srf"
+  fi
   grep '^microwake|' "$_srf" | sed 's/^microwake|/night wakes: /; s/|/  /g'
+  grep '^smooth|' "$_srf" | sed 's/^smooth|/smoothness: /; s/|/  /g'
   sed -n 's/^last=/last decision: /p' "$_srf" | head -1
-  echo "record_mA is the average current of the best setting's blocks (suspend included); vs_original"
-  echo "compares it with the original setting's first measurement. Blocks with charging, a busy radio,"
-  echo "heavy work, games, the thermal veto or low battery are set aside, not counted."
+  sed -n 's/^last_smooth=/last smoothness decision: /p' "$_srf" | head -1
+  echo "record_mW is the power of the best setting's blocks (charge counter x battery voltage, suspend"
+  echo "included). vs_original is the product of the side-by-side wins since the original setting: each"
+  echo "challenger block is compared with the champion block next to it (within 4 h, 2.5 C and 25 % of"
+  echo "charge), so weather, a warm home or a cold street and the charge level count on both sides."
+  echo "Blocks with charging or the 20 minutes after it, under 10 %, the battery warming or cooling by 3 C,"
+  echo "a busy radio, heavy work, games, the thermal veto or low battery are set aside, not counted."
 }
 
 lk_emit_audiomix_summary() {
