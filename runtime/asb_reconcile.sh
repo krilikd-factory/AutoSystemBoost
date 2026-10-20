@@ -301,6 +301,18 @@
       if [ "$ASB_GOV_ENABLED" = "1" ] && asb_governor_running; then
         if [ "$_reason" = "profile-change" ]; then
           asb_governor_set_profile
+          # fix183: a manual profile's CPU ceilings are the shell's, and this branch never
+          # wrote them - the governor stays off them in battery/balanced, so a switch kept the
+          # previous profile's ceilings until the next boot. CPH2747: 5.5 h of "Battery" on
+          # Smart's last 1555200/1862400. This loop only runs when the governor was missing at
+          # boot (service.sh, 90 s check); the common case is the governor's own hand-back from
+          # the precomputed records (writer_manual_handback), and this keeps the fallback path
+          # in step. Performance and Smart write their own ceilings.
+          case "$_now" in
+            battery|balanced) asb_feature_enabled CPU && apply_screen_aware_caps ;;
+            *) asb_feature_enabled CPU && command -v asb_shell_caps_precompute >/dev/null 2>&1 && \
+                 command -v asb_cap_dev >/dev/null 2>&1 && asb_shell_caps_precompute "$(asb_cap_dev)" ;;
+          esac
           asb_feature_enabled VM   && apply_vm
           asb_feature_enabled NET  && apply_net
           asb_feature_enabled WIFI && apply_wlan0_txqlen
