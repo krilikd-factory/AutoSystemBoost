@@ -1570,6 +1570,11 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
 .smart-banner-value.basis-warn { color: #f5c26b; }
 .smart-banner-value.basis-veto { color: #fca5a5; }
 .live-page .smart-banner-value.heat-warm { color: #f5c26b; }
+/* System load share (fix189): coloured like the temperatures. */
+.smart-banner-value .load-pct { font-weight: 700; }
+.smart-banner-value .load-low { color: var(--bat); }
+.smart-banner-value .load-mid { color: #f5c26b; }
+.smart-banner-value .load-high { color: var(--perf); }
 .live-page .live-metrics { gap: 10px; }
 .live-page .live-row { gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .live-page .live-cell { min-width: 0; }
@@ -3044,6 +3049,7 @@ html[data-asb-theme="light"] .smart-drain-more { color:rgba(0,99,79,.55) !import
 html[data-asb-theme="light"] .smart-banner-value.basis-warn { color:#8a5700 !important; }
 html[data-asb-theme="light"] .smart-banner-value.basis-veto { color:#b42318 !important; }
 html[data-asb-theme="light"] .live-page .smart-banner-value.heat-warm { color:#8a5700 !important; }
+html[data-asb-theme="light"] .smart-banner-value .load-mid { color:#8a5700 !important; }
 html[data-asb-theme="light"] .live-drain-block { background:#f7f9fa !important; border-color:var(--border) !important; }
 html[data-asb-theme="light"] .live-drain-cmp { background:#f7f9fa !important; }
 html[data-asb-theme="light"] .live-drain-ico { color:#007c63 !important; background:rgba(0,124,99,.10) !important; }
@@ -5069,6 +5075,10 @@ function lvDrainHome(banner) {
 /* The profile-independent drain meter (runtime/asb_drain_meter.sh, fix161): the same method
  * for every profile, Stock included, kept per profile so they can be compared. */
 const _lvMeter = { at: 0, cur: '', p: {} };
+/* The governor's screen-off drain (fix189): x/n phone-wide - every window, any profile, used
+ * only for time-to-empty estimates marked "~" - and by[profile] from windows one profile held
+ * throughout, which the profile cards show. */
+const _lvGovOff = { x: 0, n: 0, by: {} };
 function lvMeterParse(text) {
   const out = { cur: '', p: {} };
   String(text || '').split('\n').forEach(function (ln) {
@@ -5090,10 +5100,45 @@ async function lvMeterPoll(force) {
   if (!force && Date.now() - _lvMeter.at < 30000) return;
   _lvMeter.at = Date.now();
   try {
-    const r = await run('cat /dev/.asb_drain_meter 2>/dev/null || cat /data/adb/asb/drain_meter 2>/dev/null');
-    const m = lvMeterParse((r && r.stdout) || '');
+    /* fix189: with the governor's per-profile screen-off figures, read from its file so the
+     * home cards have them on every profile, Stock included (no state is read there). */
+    const r = await run('{ cat /dev/.asb_drain_meter 2>/dev/null || cat /data/adb/asb/drain_meter 2>/dev/null; }; echo ---; cat /data/adb/asb/offdrain_profiles 2>/dev/null');
+    const parts = ((r && r.stdout) || '').split('---');
+    const m = lvMeterParse(parts[0] || '');
     _lvMeter.cur = m.cur; _lvMeter.p = m.p;
+    _lvGovOff.by = lvGovOffParse(parts[1] || '');
   } catch (e) {}
+}
+/* "name rate windows" lines, /data/adb/asb/offdrain_profiles (fix189). */
+function lvGovOffParse(text) {
+  const by = {};
+  String(text || '').split('\n').forEach(function (ln) {
+    const f = ln.trim().split(/\s+/);
+    if (f.length < 3) return;
+    const x = parseInt(f[1], 10), n = parseInt(f[2], 10);
+    if (x > 0 && x < 5000) by[f[0]] = { x: x, n: n > 0 ? n : 1 };
+  });
+  return by;
+}
+/* A profile's screen-off drain, by one rule for the home cards, the Monitor's drain strip,
+ * its sheet and the time to empty (fix189): what the drain meter measured in that profile;
+ * a screen-off hour whose level did not move as "below one step" (<x); else what the governor
+ * measured in that profile (a window one profile held throughout). Never the phone-wide
+ * figure - an OP15 switched from Smart to Balanced showed Smart's 0.70 %/h on Balanced's
+ * card a minute later. null: nothing measured in this profile yet. */
+function lvOffFigure(profile) {
+  const e = (_lvMeter.p && _lvMeter.p[profile]) || null;
+  const tip = function (n) {
+    return T('lv_drain_off_measured', 'measured over %s screen-off stretch(es) of an hour or more, without charging or music').replace('%s', String(n));
+  };
+  if (e && e.off > 0) return { x: e.off, t: lvPct(e.off, 100, e.off >= 100 ? 1 : 2), n: e.offN, src: 'meter', tip: tip(e.offN) };
+  if (e && e.offN > 0 && e.offS > 0) {
+    const ub = Math.max(1, Math.ceil(100 * 3600 / e.offS));
+    return { x: ub, t: '<' + lvPct(ub, 100, ub >= 100 ? 1 : 2), n: e.offN, src: 'bound', tip: tip(e.offN) };
+  }
+  const g = (_lvGovOff.by || {})[profile];
+  if (g && g.x > 0) return { x: g.x, t: lvPct(g.x, 100, g.x >= 100 ? 1 : 2), n: g.n, src: 'gov', tip: tip(g.n) };
+  return null;
 }
 function lvPct(x, div, digits) {
   return (x / div).toFixed(digits) + T('unit_pcth', '%/h');
@@ -5113,11 +5158,12 @@ function lvMeterTip(min) {
 function lvMeterPaint(profile) {
   const e = (_lvMeter.p && _lvMeter.p[profile]) || null;
   const onEl = _el('bnDrain'), offEl = _el('bnDrainOff');
+  const off = lvOffFigure(profile);
   if (onEl) onEl.textContent = (e && e.on > 0) ? lvPct(e.on, 10, 1) : T('lv_measuring', 'measuring\u2026');
-  if (offEl) offEl.textContent = (e && e.off > 0) ? lvPct(e.off, 100, e.off >= 100 ? 1 : 2) : T('lv_measuring', 'measuring\u2026');
+  if (offEl) offEl.textContent = off ? off.t : T('lv_measuring', 'measuring\u2026');
   _lvDrain.on = (e && e.on > 0) ? 'meter' : 'meter_wait';
-  _lvDrain.off = (e && e.off > 0) ? 'measured' : 'wait';
-  _lvDrain.offN = e ? e.offN : 0;
+  _lvDrain.off = off ? 'measured' : 'wait';
+  _lvDrain.offN = off ? off.n : 0;
   _lvDrain.winS = e ? e.onMin * 60 : 0;
   lvEtaPaint();
   if (liveDrainIsOpen()) liveDrainPaint();
@@ -5141,25 +5187,35 @@ function lvEtaPaint() {
   if (!onEl || !offEl) return;
   const g = _lvEta.gov;
   const meterTip = T('lv_eta_meter_tip', 'Battery level divided by the drain ASB measured in this profile.');
-  let on = 0, off = 0, onTip = '', offTip = '';
+  let on = 0, off = 0, onTip = '', offTip = '', offEst = false;
+  const cap = _lvEta.cap;
   if (_selectedProfile === 'smart') {
-    if (g) { on = g.on; onTip = g.onTip; off = g.off; offTip = g.offTip; }
+    if (g) { on = g.on; onTip = g.onTip; }
   } else {
     const e = (_lvMeter.p && _lvMeter.p[_selectedProfile]) || null;
-    const cap = _lvEta.cap;
     const gov = g && _selectedProfile !== 'stock';
     if (e && e.on > 0 && cap > 0) { on = Math.floor(cap * 600 / e.on); onTip = meterTip; }
     else if (gov) { on = g.on; onTip = g.onTip; }
-    if (e && e.off > 0 && cap > 0) { off = Math.floor(cap * 6000 / e.off); offTip = meterTip; }
-    else if (gov) { off = g.off; offTip = g.offTip; }
   }
+  /* Screen off, every profile alike (fix189): this profile's own figure (the one printed
+   * above it); without one, the governor's phone-wide figure, marked "~" - on Balanced it
+   * read "measuring..." above "61 h 25 m" taken from Smart's nights, with nothing to say so;
+   * without that, the governor's estimate (Smart only). */
+  const _of = lvOffFigure(_selectedProfile);
+  if (_of && cap > 0) { off = Math.floor(cap * 6000 / _of.x); offTip = meterTip; }
+  else if (_selectedProfile !== 'stock' && _lvGovOff.x > 0 && cap > 0) {
+    off = Math.floor(cap * 6000 / _lvGovOff.x); offEst = true;
+    offTip = T('lv_eta_all_tip', 'Estimate: this profile has no screen-off hour of its own yet - from the screen-off drain of all profiles together, %s.')
+      .replace('%s', lvPct(_lvGovOff.x, 100, _lvGovOff.x >= 100 ? 1 : 2));
+  } else if (_selectedProfile !== 'stock' && g) { off = g.off; offTip = g.offTip; offEst = true; }
   if (_lvEta.chg) {
     on = 0; off = 0;
     onTip = offTip = T('lv_drain_charging_tip', 'No drain while charging - the figure comes back after unplugging.');
   }
   onEl.textContent = lvEtaFmt(on);
   onEl.title = onTip;
-  offEl.textContent = lvEtaFmt(off);
+  const _offTxt = lvEtaFmt(off);
+  offEl.textContent = (offEst && off > 0 && _offTxt.charAt(0) !== '>' ? '~' : '') + _offTxt;
   offEl.title = offTip;
 }
 /* Monitor: battery drain with the screen on and off (fix159). The two figures sit in the Smart
@@ -5223,9 +5279,14 @@ function liveDrainPaint() {
     meter: T('lv_drain_on_meter', 'measured by ASB over %s min with the screen on in this profile').replace('%s', String(mins)),
     meter_wait: T('lv_drain_on_wait', 'needs 10 minutes with the screen on and the battery level moving')
   }[_lvDrain.on] || '';
-  const offBasis = _lvDrain.off === 'measured'
+  let offBasis = _lvDrain.off === 'measured'
     ? T('lv_drain_off_measured', 'measured over %s screen-off stretch(es) of an hour or more, without charging or music').replace('%s', String(_lvDrain.offN))
     : T('lv_drain_off_wait', 'needs an hour with the screen off, without charging or music');
+  /* An estimated time to empty says what it is estimated from (fix189). */
+  if (_lvDrain.off !== 'measured' && etaOff.charAt(0) === '~') {
+    const _et = ((_el('liveEtaOff') || {}).title || '');
+    if (_et) offBasis += ' \u00b7 ' + _et;
+  }
   const left = T('lv_drain_left', 'to 0%: %s');
   body.textContent = '';
   body.appendChild(liveDrainBlock('sun', T('lv_scr_on', 'Screen on'), onV, onBasis,
@@ -5242,7 +5303,9 @@ function liveDrainPaint() {
 function liveDrainCompare() {
   const p = _lvMeter.p || {};
   const order = ['smart', 'balanced', 'battery', 'performance', 'stock'];
-  const any = order.some(function (k) { return p[k] && (p[k].on > 0 || p[k].off > 0 || p[k].offN > 0); });
+  const by = _lvGovOff.by || {};
+  const has = function (k) { return (p[k] && (p[k].on > 0 || p[k].off > 0 || p[k].offN > 0)) || (by[k] && by[k].x > 0); };
+  const any = order.some(has);
   if (!any) return null;
   const box = document.createElement('div');
   box.className = 'live-drain-cmp';
@@ -5251,8 +5314,8 @@ function liveDrainCompare() {
   h.textContent = T('lv_drain_cmp', 'By profile - the same measurement for each');
   box.appendChild(h);
   order.forEach(function (k) {
-    const e = p[k];
-    if (!e || (!(e.on > 0) && !(e.off > 0) && !(e.offN > 0))) return;
+    const e = p[k] || { on: 0, off: 0, offN: 0, offS: 0 };
+    if (!has(k)) return;
     const row = document.createElement('div');
     row.className = 'live-drain-cmp-row' + (k === _selectedProfile ? ' cur' : '');
     const name = document.createElement('span');
@@ -5266,21 +5329,14 @@ function liveDrainCompare() {
     const off = document.createElement('span');
     off.className = 'live-drain-cmp-val';
     off.innerHTML = techIcon('theme_moon');
-    /* No dash under the moon (fix177). The meter counts a screen-off hour whose level did not
-     * move at all, so a frugal profile summed to 0 and printed "—" beside a card measuring
-     * 0.56 %/h: that is "below one step of the level over the time measured", said as such.
-     * With no screen-off hour in this profile yet, the current profile borrows the governor's
-     * own screen-off figure (the card above, "~": not per profile); the others say they are
-     * still measuring. */
+    /* No dash under the moon (fix177): a screen-off hour whose level did not move is "below
+     * one step" (<x). Each row is lvOffFigure (fix189) - what was measured in that profile.
+     * fix177 lent the governor's phone-wide figure to the current profile here ("~"), which
+     * read as that profile's own; it now stays with the time to empty, where it is marked. */
     let offTxt, offTip = '';
-    if (e.off > 0) offTxt = lvPct(e.off, 100, e.off >= 100 ? 1 : 2);
-    else if (e.offN > 0 && e.offS > 0) {
-      const ub = Math.max(1, Math.ceil(100 * 3600 / e.offS));
-      offTxt = '<' + lvPct(ub, 100, ub >= 100 ? 1 : 2);
-      offTip = T('lv_drain_off_measured', 'measured over %s screen-off stretch(es) of an hour or more, without charging or music').replace('%s', String(e.offN));
-    } else if (k === _selectedProfile && _lvDrain.off === 'measured' && _lvDrain.offX > 0) {
-      offTxt = '~' + lvPct(_lvDrain.offX, 100, _lvDrain.offX >= 100 ? 1 : 2);
-    } else {
+    const of = lvOffFigure(k);
+    if (of) { offTxt = of.t; offTip = of.tip; }
+    else {
       offTxt = '\u2026';
       offTip = T('lv_drain_off_wait', 'needs an hour with the screen off, without charging or music');
     }
@@ -5487,6 +5543,9 @@ const LVI_TEXT = {
   capsrc: ['lvi_capsrc', 'Who set the CPU frequency ceiling right now: “ASB” - the profile and Smart; “Vendor” - the OnePlus thermal or performance service; “Thermal” - a thermal overlay; “Shell” - the profile script, for a few seconds after a switch until the governor takes over again. When the vendor holds a lower ceiling ASB leaves it alone rather than fighting it.'],
   clamps: ['lvi_clamps', 'How often the vendor service pushed the ceiling below what ASB asked for: in the last hour, and since ASB started. A few an hour is normal; dozens mean a hot phone or an aggressive vendor mode.'],
   learner: ['lvi_learner', 'How many stretches of use (“{ses}” on the tile) Smart has learned from, across all twelve slots. Every 20 minutes of use and every night adds one. The more there are, the more Smart decides from measurements of your phone instead of defaults.'],
+  /* fix189: the same tile on Battery, Balanced and Performance counts that profile's own
+   * sessions - the Smart text above described something else there. */
+  learnerp: ['lvi_learner_prof', 'How many sessions of this profile (“{ses}” on the tile) the governor has learned from. Each records how long the phone took to warm up, how hot it got and how well the ceilings held; the profile’s thresholds adapt from them. On Battery the tile also rates the last session: clean, partial, noisy or disturbed.'],
   slot: ['lvi_slot', 'Smart splits the day into six parts - {dp0} 0–6, {dp1} 6–9, {dp2} 9–12, {dp3} 12–17, {dp4} 17–21, {dp5} 21–24 - kept apart for weekdays (“{wd}”) and weekends (“{we}”): twelve slots, each with its own measurements. This is the slot the phone is in now. What a workday morning costs is not spent on a Sunday morning.'],
   conf: ['lvi_conf', 'How much Smart trusts what it has measured for this slot. The figure grows with every stretch of use; while it is low, Smart leans on neighbouring slots and safe defaults instead of guessing from a handful of samples.'],
   alpha: ['lvi_alpha', 'How far the current policy leans from {bal} toward {bat}, in percent, learned from what this slot usually costs. 0% is {bal} behaviour; higher values hold the phone back more to save charge. Heat, a game or a camera session pushes it back down on its own.'],
@@ -5586,6 +5645,9 @@ function liveInfoValText(val) {
   const nodes = val.childNodes || [];
   for (let i = 0; i < nodes.length; i++) {
     if (nodes[i].nodeType === 3) t += nodes[i].textContent;
+    /* Inline parts of the reading itself (the load's share of the cores, fix189), unlike a
+     * badge, belong in the sheet. */
+    else if (nodes[i].nodeType === 1 && nodes[i].classList && nodes[i].classList.contains('sb-inline')) t += nodes[i].textContent;
   }
   t = t.trim();
   return t || ((val.textContent || '').trim()) || '—';
@@ -5593,7 +5655,8 @@ function liveInfoValText(val) {
 function liveInfoOpen(cell) {
   if (!cell) return;
   const pos = cell.getAttribute('data-lvi');
-  const key = (_selectedProfile === 'stock' && LVI_STOCK[pos]) ? LVI_STOCK[pos] : pos;
+  let key = (_selectedProfile === 'stock' && LVI_STOCK[pos]) ? LVI_STOCK[pos] : pos;
+  if (key === 'learner' && _selectedProfile !== 'smart') key = 'learnerp';
   const txt = LVI_TEXT[key];
   if (!txt) return;
   uiSound('option');
@@ -6446,14 +6509,19 @@ async function loadLspStatus() {
 function lspBadge(lsp, cur) {
   if (!lsp) return null;
   if (lsp.present !== '1') return { cls:'neutral', text:T('st_lsp_absent', 'no LSPosed') };
-  const kib = parseInt(lsp.log_kib, 10) || 0;
-  const size = kib >= 1024 ? ' \u00b7 ' + (kib / 1024).toFixed(kib >= 10240 ? 0 : 1) + ' ' + T('unit_mb', 'MB') : '';
+  const mb = function (k) { return (k / 1024).toFixed(k >= 10240 ? 0 : 1) + ' ' + T('unit_mb', 'MB'); };
+  /* Each log by its own size (fix189). The badge added up every LSPosed log, so an OP15 with
+   * the verbose log off read "log off · 20 MB" and growing - the modules log, which the
+   * modules write themselves and LSPosed has no switch for. It is named apart now. */
+  const vk = parseInt(lsp.verbose_kib, 10) || 0;
+  const mk = parseInt(lsp.modules_kib, 10) || 0;
+  const mods = mk >= 1024 ? ' \u00b7 ' + T('st_lsp_mods', 'modules log %s').replace('%s', mb(mk)) : '';
   if (lsp.verbose === 'off')
     return lsp.pending_reboot === '1'
       ? { cls:'warn', text:T('st_lsp_reboot', 'off after a reboot') }
-      : { cls: cur === 'off' ? 'good' : 'neutral', text:T('st_lsp_off', 'LSPosed log off') + size };
+      : { cls: cur === 'off' ? 'good' : 'neutral', text:T('st_lsp_off', 'verbose log off') + mods };
   if (lsp.verbose === 'on' || lsp.verbose === 'default_on')
-    return { cls: kib >= 10240 ? 'warn' : 'neutral', text:T('st_lsp_on', 'LSPosed log on') + size };
+    return { cls: vk >= 10240 ? 'warn' : 'neutral', text:T('st_lsp_on', 'verbose log on') + (vk >= 1024 ? ' \u00b7 ' + mb(vk) : '') };
   return { cls:'neutral', text:T('st_lsp_unknown', 'set in LSPosed') };
 }
 
@@ -9416,33 +9484,21 @@ function asbFitPages() {
     }
   } catch (e) {}
 }
-/* Each profile card carries what the drain meter measured for it (fix168), the same figures
- * the Monitor sheet compares; a profile not measured yet shows nothing rather than a guess.
+/* Each profile card carries what was measured for it (fix168), the same figures the Monitor
+ * sheet compares; a profile not measured yet shows nothing rather than a guess.
  *
- * The screen-off chip follows the sheet's own rules (fix187). The home card showed only the
- * meter's figure, so a Smart card read "8.2 %/h" with no moon while the Monitor sheet beside
- * it printed "~0.70 %/h" for the same profile - the meter had no hour of screen-off in Smart
- * without music yet, and the governor had measured five. Now: the meter's figure; with a
- * screen-off hour whose level did not move, "below one step" (<x); for the running profile
- * without either, the governor's own measurement marked "~"; otherwise nothing. */
-const _lvGovOff = { x: 0, n: 0, prof: '' };
-function homeOffFigure(profile, e) {
-  if (e && e.off > 0) return { t: lvPct(e.off, 100, e.off >= 100 ? 1 : 2), tip: '' };
-  if (e && e.offN > 0 && e.offS > 0) {
-    const ub = Math.max(1, Math.ceil(100 * 3600 / e.offS));
-    return { t: '<' + lvPct(ub, 100, ub >= 100 ? 1 : 2), tip: '' };
-  }
-  const running = (_lvGovOff.prof || _selectedProfile) === profile && profile === _selectedProfile;
-  if (running && profile !== 'stock' && _lvGovOff.x > 0)
-    return { t: '~' + lvPct(_lvGovOff.x, 100, _lvGovOff.x >= 100 ? 1 : 2),
-             tip: T('lv_drain_off_measured', 'measured over %s screen-off stretch(es) of an hour or more, without charging or music').replace('%s', String(_lvGovOff.n)) };
-  return null;
+ * The screen-off chip is lvOffFigure (fix189). fix187 put the governor's phone-wide figure,
+ * marked "~", on the running profile's card: the 0.70 %/h measured mostly in Smart moved to
+ * Balanced's card a minute after the switch, and left Smart's. A card now shows only what was
+ * measured in that profile. */
+function homeOffFigure(profile) {
+  return lvOffFigure(profile);
 }
 function homeMeterPaint() {
   document.querySelectorAll('.pmeta[data-meter]').forEach(function (box) {
     const prof = box.getAttribute('data-meter');
     const e = (_lvMeter.p || {})[prof];
-    const off = homeOffFigure(prof, e);
+    const off = homeOffFigure(prof);
     box.textContent = '';
     if (!(e && e.on > 0) && !off) { box.hidden = true; return; }
     [['sun', (e && e.on > 0) ? lvPct(e.on, 10, 1) : '', ''], ['theme_moon', off ? off.t : '', off ? off.tip : '']].forEach(function (c) {
@@ -10047,6 +10103,17 @@ function fmtStockLoad(raw) {
    * 1/5/15-minute triplet stays in the tooltip. */
   return Number.isFinite(value) && value >= 0 ? value.toFixed(2) : '—';
 }
+/* The 1-minute load as a share of the online cores (fix189), coloured like the temperatures:
+ * green while the cores keep up, amber past half, red from 80 %. Android's load counts tasks
+ * waiting on storage too, so it can pass 100 %. null without a core count. */
+function lvLoadShare(raw, cpus) {
+  const first = String(raw || '').trim().split(/\s+/)[0];
+  const v = Number(first);
+  const n = parseInt(cpus, 10);
+  if (!/^\d/.test(first) || !Number.isFinite(v) || v < 0 || !(n > 0)) return null;
+  const pct = Math.round(v * 100 / n);
+  return { pct: pct, n: n, cls: pct >= 80 ? 'load-high' : (pct >= 50 ? 'load-mid' : 'load-low') };
+}
 function paintStockLive(stockKv = null) {
   /* Governor-owned cells stay untouched outside Stock.
    *
@@ -10247,6 +10314,21 @@ function paintStockLive(stockKv = null) {
   bset('bnStockCpuClock', cpuClock, Object.entries(kv).filter(([k]) => /^cpu\.policy\d+\.scaling_cur_freq$/.test(k))
     .sort().map(([k, v]) => k.split('.')[1] + ': ' + (n(v) / 1e6).toFixed(2) + ' GHz').join('\n'));
   bset('bnStockLoad', fmtStockLoad(kv.loadavg), T('stock_load_now', '1 min') + ' \u00b7 5 \u00b7 15: ' + (kv.loadavg || '\u2014'));
+  {
+    const _ls = lvLoadShare(kv.loadavg, kv.cpus_online), _le = _el('bnStockLoad');
+    if (_ls && _le && fmtStockLoad(kv.loadavg) !== '\u2014') {
+      /* One decimal beside the share, so "9.1 · 113%" fits a quarter-width cell; a narrower
+       * one drops the decimal rather than cutting the share off. */
+      const _lv = Number(String(kv.loadavg).trim().split(/\s+/)[0]);
+      _le.textContent = _lv.toFixed(1);
+      const sp = document.createElement('span');
+      sp.className = 'sb-inline load-pct ' + _ls.cls;
+      sp.textContent = ' \u00b7 ' + _ls.pct + '%';
+      _le.appendChild(sp);
+      if (_le.clientWidth > 0 && _le.scrollWidth > _le.clientWidth + 1) _le.firstChild.textContent = String(Math.round(_lv));
+      _le.title += '\n' + T('stock_load_share', '%1 % of %2 cores').replace('%1', String(_ls.pct)).replace('%2', String(_ls.n));
+    }
+  }
   bset('bnStockBattery', capPct ? (capPct + '%' + (volt > 0 ? ' · ' + volt.toFixed(2) + 'V' : '')) : '—',
     batT > 0 ? T('stock_bat_temp', 'Battery temp') + ': ' + batT + ' \u00b0C' : '');
   bset('bnStockUptime', uptime, uptimeSec > 0
@@ -10405,14 +10487,21 @@ async function pollLive(visible) {
     } catch(e) {}
 
     _lvLast.st = st || {}; _lvLast.kv = kv;
-    /* The governor's own screen-off measurement, for the home card of the running profile
-     * (fix187) - read on every poll, whichever page is open. */
+    /* The governor's screen-off measurement, phone-wide and per profile (fix189) - read on
+     * every poll, whichever page is open. */
     {
       const _ox = parseInt(kv.offdrain_pctph_x100 || '0', 10), _on = parseInt(kv.offdrain_windows || '0', 10);
-      const _was = _lvGovOff.x;
+      const _was = JSON.stringify(_lvGovOff.by) + _lvGovOff.x;
       _lvGovOff.x = (_ox > 0 && _on > 0) ? _ox : 0; _lvGovOff.n = _on;
-      _lvGovOff.prof = String(kv.profile || '');
-      if (_was !== _lvGovOff.x) homeMeterPaint();
+      if (kv.offdrain_by_profile) {
+        const by = {};
+        String(kv.offdrain_by_profile).split(',').forEach(function (it) {
+          const f = it.split(':'); const x = parseInt(f[1], 10), n = parseInt(f[2], 10);
+          if (f[0] && x > 0 && x < 5000) by[f[0]] = { x: x, n: n > 0 ? n : 1 };
+        });
+        _lvGovOff.by = by;
+      }
+      if (_was !== JSON.stringify(_lvGovOff.by) + _lvGovOff.x) homeMeterPaint();
     }
     const capSrc = (st && st.cap_source_p0) || '';
     const advActive = (st && st.adv_active) || 0;
@@ -10609,7 +10698,7 @@ async function pollLive(visible) {
       onTip: eta_title + eta_note,
       off: toff_min,
       offTip: (_idleMeasured
-        ? T('eta_idle_measured_tip', 'Measured screen-off drain: ') + (_offx / 100).toFixed(2) + ' %/h'
+        ? T('eta_idle_measured_tip', 'Measured screen-off drain: ') + (_offx / 100).toFixed(2) + ' ' + T('unit_pcth', '%/h')
         : eta_title) + off_note
     };
     lvEtaPaint();
@@ -10765,14 +10854,19 @@ async function pollLive(visible) {
          * blender - and the screen presented them as one thing. Translate the tier and
          * say plainly that no session has been recorded yet.
          */
-        const tierRaw = learner.trust_tier || '';
-        const tier = tierRaw ? T('learn_' + tierRaw, tierRaw) : '—';
-        const sessions = (learner.sessions && learner.sessions.battery) || 0;
-        _el('liveLearner').textContent = tier + ' · ' + sessions;
+        /* fix189: this profile's sessions, not Battery's. Balanced read "unknown · 2" with ten
+         * sessions of its own recorded: the count was always learner.sessions.battery, and
+         * the tier - a rating of the last Battery session only - came through untranslated
+         * as "unknown". The tier now shows on Battery alone, translated, once it is known. */
+        const sesMap = learner.sessions || {};
+        const sessions = parseInt(sesMap[profile], 10) || 0;
+        const tierRaw = (profile === 'battery' && learner.trust_tier && learner.trust_tier !== 'unknown') ? learner.trust_tier : '';
+        _el('liveLearner').textContent = sessions + ' ' + _ses + (tierRaw ? ' \u00b7 ' + T('learn_' + tierRaw, tierRaw) : '');
         _el('liveLearner').title = (sessions === 0)
           ? T('learn_tip_none',
               'No completed session yet for this profile. The Smart card line above comes from the Smart blender, which is a separate subsystem and can already show a daypart.')
-          : '';
+          : T('learn_tip_profile', 'Completed sessions of this profile the governor has learned from: %s.').replace('%s', String(sessions))
+            + (tierRaw ? '\n' + T('learn_tip_tier', 'Last Battery session: %s.').replace('%s', T('learn_' + tierRaw, tierRaw)) : '');
       }
     } else {
       const learnerLabel = _el('liveLearner').parentElement.querySelector('.live-cell-label');
@@ -10938,19 +11032,15 @@ async function pollLive(visible) {
             }
             _lvDrain.on = _act > 0 ? 'now' : (_chg ? 'charging' : ((_frt > 0 && (_fbs === 'recent' || _fbs === 'slot' || _fbs === 'meter')) ? _fbs : 'wait'));
             _lvDrain.winS = _lvDrain.on === 'meter' ? _fpk.min * 60 : parseInt(kv.smart_drain_window_s || '0', 10);
-            const _offx = parseInt(kv.offdrain_pctph_x100 || '0', 10);
-            const _offn = parseInt(kv.offdrain_windows || '0', 10);
-            _lvDrain.offN = _offn;
-            _lvDrain.offX = (_offx > 0 && _offn > 0) ? _offx : 0;
+            /* Smart's own screen-off figure (fix189), by the rule every card uses - not the
+             * phone-wide one, which only feeds the time to empty (marked "~" there). */
+            const _sOff = lvOffFigure('smart');
+            _lvDrain.offN = _sOff ? _sOff.n : 0;
+            _lvDrain.offX = _sOff ? _sOff.x : 0;
             const _doEl = _el('bnDrainOff');
             if (_doEl) {
-              if (_offx > 0 && _offn > 0) {
-                _doEl.textContent = (_offx / 100).toFixed(_offx >= 100 ? 1 : 2) + T('unit_pcth', '%/h');
-                _lvDrain.off = 'measured';
-              } else {
-                _doEl.textContent = T('lv_measuring', 'measuring\u2026');
-                _lvDrain.off = 'wait';
-              }
+              _doEl.textContent = _sOff ? _sOff.t : T('lv_measuring', 'measuring\u2026');
+              _lvDrain.off = _sOff ? 'measured' : 'wait';
             }
             const _stEl = _el('bnSlotTemp');
             if (_stEl) {
