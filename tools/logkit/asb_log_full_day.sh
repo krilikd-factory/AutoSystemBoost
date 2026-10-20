@@ -399,6 +399,19 @@ lk_throttle_row() {
   # compared with the LAST policy's ceiling here. Older governors only have the slot-1 key.
   _dp="$(lk_state_kv desired_cpu_max_prime | head -1 | tr -dc '0-9')"
   [ -n "$_dp" ] || _dp="$(lk_state_kv desired_cpu_maxp | head -1 | tr -dc '0-9')"
+  # fix182: in battery/balanced the shell writes the ceilings and desired_* is a rail the
+  # writer never sends. An OP15 Battery day logged all 224 samples here - the shell's own
+  # 1747200 prime under the unsent 1862400 - and the verdict called it foreign ownership.
+  # There the reference is what the shell wrote, and it is also the "requested" value: a
+  # live ceiling under it is somebody else's clamp.
+  _cw="$(lk_state_kv cap_writer | head -1 | tr -dc 'a-z')"
+  _sh0=""; _shp=""
+  if [ "$_cw" = "shell" ]; then
+    _sh0="$(lk_state_kv shell_cpu_max0 | head -1 | tr -dc '0-9')"
+    _shp="$(lk_state_kv shell_cpu_max_prime | head -1 | tr -dc '0-9')"
+    case "$_sh0" in ''|0) _d0="" ;; *) _d0="$_sh0" ;; esac
+    case "$_shp" in ''|0) _dp="" ;; *) _dp="$_shp" ;; esac
+  fi
   [ -n "$_p0" ] && [ -n "$_d0" ] && [ "$_p0" -lt "$_d0" ] 2>/dev/null && _capped=1
   [ -n "$_p6" ] && [ -n "$_dp" ] && [ "$_p6" -lt "$_dp" ] 2>/dev/null && _capped=1
   [ "$_capped" = "0" ] && return 0
@@ -412,9 +425,10 @@ lk_throttle_row() {
   # thermal-budget trim - two different causes behind one label.
   _r0="$(lk_state_kv requested_cpu_max0 | head -1 | tr -dc '0-9')"
   _rp="$(lk_state_kv requested_cpu_max_prime | head -1 | tr -dc '0-9')"
+  [ "$_cw" = "shell" ] && { _r0="$_d0"; _rp="$_dp"; }
   _mb="$(lk_cap_cause "$_p0" "$_d0" "$_r0")"
   _pb="$(lk_cap_cause "$_p6" "$_dp" "$_rp")"
-  echo "${_e}|${_ph}|p0_max=${_p0}/${LK_P0_HWMAX}|p6_max=${_p6}/${LK_P6_HWMAX}|cpu_temp=${_temp}|surface=${_surf}|cap_owner=${_own}|main_by=${_mb}|prime_by=${_pb}" >> "$LK_OUT_DIR/throttle_trace.txt"
+  echo "${_e}|${_ph}|p0_max=${_p0}/${LK_P0_HWMAX}|p6_max=${_p6}/${LK_P6_HWMAX}|cpu_temp=${_temp}|surface=${_surf}|cap_owner=${_own}|main_by=${_mb}|prime_by=${_pb}|writer=${_cw:-asb}" >> "$LK_OUT_DIR/throttle_trace.txt"
   # Count it for the summary as well as the trace.
   #
   # LK_PH_THROTTLE was declared, reset per phase and printed - and incremented nowhere.
@@ -1260,6 +1274,24 @@ lk_emit_phase_summary() {
   rm -f "$_all" "$LK_OUT_DIR/.phase_open.tsv" 2>/dev/null
 }
 
+lk_emit_audiomix_summary() {
+  echo "----- AUDIOMIX LIVE ATTRIBUTION -----"
+  _amix="$LK_OUT_DIR/audio_wakelock_attribution.tsv"
+  if [ -r "$_amix" ] && [ "$(awk '!/^#/ && NF {n++} END{print n+0}' "$_amix")" -gt 0 ] 2>/dev/null; then
+    # Data rows only, and a shared system uid named once (fix181): the second header line was
+    # counted as a holder ("uid|package=worksource_uid|package"), and uid 1000 printed every
+    # package that shares it - android, com.android.DeviceAsWebcam, ... - as one long "app".
+    awk -F'|' '!/^#/ && $1 ~ /^[0-9]+$/ {
+        p = $4; if ($3 ~ /^[0-9]+$/ && $3 + 0 < 10000) p = "system"; else if (p ~ /,/) { sub(/,.*/, "", p); p = p " (shared uid)" }
+        k = $3 "|" p; n[k]++ }
+      END {for(k in n) print n[k]"  "k}' "$_amix" | sort -rn | head -12 | \
+      awk -F'  ' '{print "samples=" $1 "  uid|package=" $2}'
+    echo "detail: audio_wakelock_attribution.tsv; unresolved means Android did not expose a UID mapping."
+  else
+    echo "no AudioMix partial wakelock observed in live power-manager samples."
+  fi
+}
+
 lk_emit_screenoff_sleep() {
   _bs=$(lk_dumpsys batterystats 2>/dev/null | grep -m1 -iE "screen off:.*realtime.*uptime")
   [ -z "$_bs" ] && { echo "  screen-off CPU sleep: n/a (batterystats line not found)"; return 0; }
@@ -1495,15 +1527,7 @@ lk_emit_full_day_report() {
   echo ""
   lk_emit_live_wakelock_holders
   echo ""
-  echo "----- AUDIOMIX LIVE ATTRIBUTION -----"
-  _amix="$LK_OUT_DIR/audio_wakelock_attribution.tsv"
-  if [ -r "$_amix" ] && [ "$(awk 'NR>1{n++} END{print n+0}' "$_amix")" -gt 0 ] 2>/dev/null; then
-    awk -F'|' 'NR>1 {k=$3"|"$4; n[k]++} END {for(k in n) print n[k]"  "k}' "$_amix" | sort -rn | head -12 | \
-      awk -F'  ' '{print "samples=" $1 "  uid|package=" $2}'
-    echo "detail: audio_wakelock_attribution.tsv; unresolved means Android did not expose a UID mapping."
-  else
-    echo "no AudioMix partial wakelock observed in live power-manager samples."
-  fi
+  lk_emit_audiomix_summary
   echo ""
     echo "----- SYSTEMUI RESTARTS -----"
     _sw_f="$LK_OUT_DIR/sysui_restarts.txt"
@@ -1801,10 +1825,19 @@ lk_emit_cap_ownership_verdict() {
   _lc_vendor=$(awk -F'cap_owner=' 'NF>1 && $2 ~ /^vendor/{n++} END{print n+0}' "$_lc_trace")
   _lc_shell=$(awk -F'cap_owner=' 'NF>1 && $2 ~ /^shell/{n++} END{print n+0}' "$_lc_trace")
   _lc_asb=$(awk -F'cap_owner=' 'NF>1 && $2 ~ /^asb/{n++} END{print n+0}' "$_lc_trace")
-  _lc_foreign=$(( _lc_vendor + _lc_shell ))
+  # "shell" is this module's own manual-profile cap layer (service.sh), not a foreign owner
+  # (fix182): counting it as foreign made a Battery day read "foreign cap ownership
+  # dominated" for ceilings ASB itself had set.
+  _lc_foreign="$_lc_vendor"
+  _lc_own=$(( _lc_asb + _lc_shell ))
   echo "----- CAP OWNERSHIP VERDICT -----"
-  echo "observed throttle owners: vendor=$_lc_vendor shell=$_lc_shell asb=$_lc_asb"
-  if [ "$_lc_foreign" -gt "$_lc_asb" ] && [ "$_lc_foreign" -ge 3 ]; then
+  echo "observed throttle owners: vendor=$_lc_vendor shell=$_lc_shell asb=$_lc_asb (shell = ASB's manual-profile caps)"
+  _lc_sw=$(grep -c '|writer=shell' "$_lc_trace" 2>/dev/null)
+  case "$_lc_sw" in ''|*[!0-9]*) _lc_sw=0 ;; esac
+  if [ "$_lc_sw" -gt 0 ]; then
+    echo "  $_lc_sw sample(s) were taken in a manual profile: there the reference is the ceiling the shell wrote, so each one is a live ceiling under the profile's own cap."
+  fi
+  if [ "$_lc_foreign" -gt "$_lc_own" ] && [ "$_lc_foreign" -ge 3 ]; then
     echo "verdict: foreign cap ownership dominated this capture; ASB does not raise universal frequencies. Native vendor holddown/detente remains responsible for suppressing losing idle writes."
   else
     echo "verdict: no foreign-owner dominance established in this capture."
