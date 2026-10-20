@@ -125,6 +125,7 @@ This is **not** JSON despite logkit's `lk_status_json()` parsing it. Each line i
 
 **Identity / state**
 - `state` — FSM state (`DEEP_IDLE`/`LIGHT_IDLE`/`MODERATE`/`HEAVY`/`SUSTAINED`/`GAMING`)
+- `sustained_repeat` — 0-3: quick SUSTAINED re-entries (within 5 min of the last exit) the current SUSTAINED dwell is doubled for (24/48/96/180 s); `sustained_reentry_left_s` — seconds re-entry is still blocked after the last exit (fix181)
 - `profile` — current profile name
 - `mA` — current battery draw (positive=discharging)
 - `gpu_pct` — GPU load %
@@ -150,6 +151,23 @@ This is **not** JSON despite logkit's `lk_status_json()` parsing it. Each line i
 - `requested_cpu_max0`, `requested_cpu_max_prime` — what the writer last sent and kept, after
   the thermal budget and the race-to-idle floor; 0 until ASB has written (fix126). Live below
   this = a ceiling ASB did not write; live equal to it but below `desired_*` = ASB's own trim.
+- `cap_writer` — `shell` in battery/balanced with no thermal cap and no screen-off cooldown
+  (service.sh writes the CPU ceilings), `asb` otherwise - Smart, Performance, or the governor
+  overriding a manual profile (fix183: then never above the shell's own ceilings); `shell_cpu_max0`,
+  `shell_cpu_max_prime` — the ceilings the shell recorded for slot 0 and the prime, 0 when not
+  the owner or no record yet. In `shell` mode `desired_*` is a rail the writer does not send:
+  compare live ceilings with `shell_cpu_max*` (fix182).
+- `/dev/.asb/shell_cpu_caps` (fix182) — written by service.sh `apply_cpufreq_caps` with mv:
+  `profile=`, `screen_on=` (the rung used), `ts=`, then `policyN=kHz` per policy written (the
+  request, or the read-back when the kernel rounded it up). The governor trusts it only for
+  the running profile while it is the cap owner; `cap_source_*` there is `shell_applied`
+  (live == record), `vendor_clamp` (below) or `shell_overridden_up` (above).
+- `/dev/.asb/shell_cpu_caps.battery`, `.balanced` (fix183) — the screen-on rung of each manual
+  profile, computed by `apply_screen_aware_caps` on every pass whatever profile runs (Smart
+  included) without writing a ceiling: `profile=`, `screen_on=1`, `ts=`, `precomputed=1`,
+  `policyN=kHz`. The governor uses it when `shell_cpu_caps` names another profile: on a switch
+  into Battery/Balanced it writes these values itself, and it hands back what it wrote under a
+  thermal cap, the cooldown or the anti-clamp. The full-day logkit copies all three files.
 - `prime_escape_skip_warm`, `prime_escape_skip_foreign` — prime bursts not opened: the die
   within 3 C of the sustained-exit mark that would end the burst, or the cores pinned at a
   lower ceiling ASB does not hold (fix126).
@@ -379,8 +397,12 @@ by phase, by ASB state and by whether a cluster sat at the ASB ceiling.
 rail (`desired_*`):
 
 ```
-epoch|phase|p0_max=LIVE/HWMAX|p6_max=LIVE/HWMAX|cpu_temp=C|surface=C|cap_owner=WORD|main_by=CAUSE|prime_by=CAUSE
+epoch|phase|p0_max=LIVE/HWMAX|p6_max=LIVE/HWMAX|cpu_temp=C|surface=C|cap_owner=WORD|main_by=CAUSE|prime_by=CAUSE|writer=asb|shell
 ```
+
+`writer=shell` (fix182): a manual profile - the reference was `shell_cpu_max*`, the ceiling
+the shell wrote, so the row is a live ceiling under the profile's own cap. In the ownership
+verdict `shell` counts as ASB's own, not as a foreign owner.
 
 `p6_max` is the last (prime) policy, compared with `desired_cpu_max_prime` since fix126 (it
 was slot 1, a middle cluster on 1+3+2+1 parts). `main_by` / `prime_by` (fix126): `-` at or
