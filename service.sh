@@ -2600,6 +2600,38 @@ apply_gpu_caps() {
     fi
   fi
 }
+# One policy's ceiling for the current _P_CPUCAP_L/_P_CPUCAP_B (percent of the cluster's own
+# cpuinfo_max_freq, empty = no cap). Sets _rel (first CPU) and _want (kHz); needs _pol_count
+# and _top_rel from the caller. Shared by apply_cpufreq_caps and the fix183 precompute, so
+# the record the governor reads is computed exactly as the write is.
+asb_cap_want_for_policy() {
+  _cwp_dir="$1"
+  _rel="$(cat "$_cwp_dir/related_cpus" 2>/dev/null | awk '{print $1}')"
+  case "$_rel" in ''|*[!0-9]*) _rel=0 ;; esac
+  _is_mid=0
+  if [ "${_pol_count:-0}" -ge 3 ] && [ "$_rel" -gt "$little_end" ] && [ "$_rel" -lt "${_top_rel:-0}" ]; then
+    _is_mid=1
+  fi
+  # _P_CPUCAP_* are PERCENTS of this cluster's cpuinfo_max_freq (empty = no cap).
+  if [ "$_rel" -le "$little_end" ]; then
+    _pct="$_P_CPUCAP_L"
+  else
+    _pct="$_P_CPUCAP_B"
+  fi
+  if [ "$_is_mid" = "1" ] && [ -n "$_P_CPUCAP_L" ] && [ -n "$_P_CPUCAP_B" ]; then
+    # MID cluster (the OP12 policy2 workhorse): cap halfway between the LITTLE
+    _hi="$_P_CPUCAP_L"; [ "$_P_CPUCAP_B" -gt "$_hi" ] 2>/dev/null && _hi="$_P_CPUCAP_B"
+    _pct="$(( _hi + (100 - _hi) / 2 ))"
+  fi
+  if [ -z "$_pct" ]; then
+    # no cap for this tier — restore the cluster's full hardware ceiling.
+    _want="$(cat "$_cwp_dir/cpuinfo_max_freq" 2>/dev/null)"
+  elif [ "$_pct" -ge 100 ] 2>/dev/null; then
+    _want="$(cat "$_cwp_dir/cpuinfo_max_freq" 2>/dev/null)"
+  else
+    _want="$(asb_freq_pick_pct "$_cwp_dir" "$_pct")"
+  fi
+}
 apply_cpufreq_caps() {
   [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
   # Camera deadline and safety owners outrank a manual profile cap. Keep the
@@ -2612,6 +2644,7 @@ apply_cpufreq_caps() {
   _pol_count="$(echo "$_pol_list" | grep -c .)"
   _top_pol="$(echo "$_pol_list" | tail -1)"
   _top_rel=0
+  _shcaps=""   # fix182: what this pass wrote, per policy (published below)
   if [ -n "$_top_pol" ]; then
     _top_rel="$(cat "$_top_pol/related_cpus" 2>/dev/null | awk '{print $1}')"
     case "$_top_rel" in ''|*[!0-9]*) _top_rel=0 ;; esac
@@ -2620,31 +2653,7 @@ apply_cpufreq_caps() {
     [ -d "$_pol_dir" ] || continue
     _smax="$_pol_dir/scaling_max_freq"
     [ -w "$_smax" ] || continue
-    _rel="$(cat "$_pol_dir/related_cpus" 2>/dev/null | awk '{print $1}')"
-    case "$_rel" in ''|*[!0-9]*) _rel=0 ;; esac
-    _is_mid=0
-    if [ "$_pol_count" -ge 3 ] && [ "$_rel" -gt "$little_end" ] && [ "$_rel" -lt "$_top_rel" ]; then
-      _is_mid=1
-    fi
-    # _P_CPUCAP_* are PERCENTS of this cluster's cpuinfo_max_freq (empty = no cap).
-    if [ "$_rel" -le "$little_end" ]; then
-      _pct="$_P_CPUCAP_L"
-    else
-      _pct="$_P_CPUCAP_B"
-    fi
-    if [ "$_is_mid" = "1" ] && [ -n "$_P_CPUCAP_L" ] && [ -n "$_P_CPUCAP_B" ]; then
-      # MID cluster (the OP12 policy2 workhorse): cap halfway between the LITTLE
-      _hi="$_P_CPUCAP_L"; [ "$_P_CPUCAP_B" -gt "$_hi" ] 2>/dev/null && _hi="$_P_CPUCAP_B"
-      _pct="$(( _hi + (100 - _hi) / 2 ))"
-    fi
-    if [ -z "$_pct" ]; then
-      # no cap for this tier — restore the cluster's full hardware ceiling.
-      _want="$(cat "$_pol_dir/cpuinfo_max_freq" 2>/dev/null)"
-    elif [ "$_pct" -ge 100 ] 2>/dev/null; then
-      _want="$(cat "$_pol_dir/cpuinfo_max_freq" 2>/dev/null)"
-    else
-      _want="$(asb_freq_pick_pct "$_pol_dir" "$_pct")"
-    fi
+    asb_cap_want_for_policy "$_pol_dir"
     # In Smart mode the governor owns the ceiling - do not overwrite it here.
     #
     # This wrote the profile percentage unconditionally, so every reconcile pass stamped a
@@ -2670,9 +2679,17 @@ apply_cpufreq_caps() {
     # Restoring the unconditional write. The ownership problem is real and still unsolved,
     # but it needs to be understood before it is acted on - this was a guess, and it cost
     # the user a day of a stuttering phone.
+    _actual=""
     if [ -n "$_want" ] && writef_retry "$_smax" "$_want" 2 0.06; then
       _actual="$(cat "$_smax" 2>/dev/null)"
       command -v asb_arbiter_note >/dev/null 2>&1 && asb_arbiter_note cpu_cap profile profile_apply "$_want" "${_actual:--}" applied || true
+      # Record the ceiling the kernel now holds for us. A read-back above the request is the
+      # kernel rounding up to its next step, so that is ours too; one below it is somebody
+      # else's clamp at this instant, and recording it would call that clamp ours later.
+      _rec="$_want"
+      case "$_actual" in ''|*[!0-9]*) : ;; *) [ "$_actual" -gt "$_want" ] 2>/dev/null && _rec="$_actual" ;; esac
+      case "$_rec" in ''|*[!0-9]*) : ;; *) _shcaps="${_shcaps}policy${_pol_dir##*policy}=${_rec}
+" ;; esac
     fi
     # Per-cluster min-freq floor (single owner, 4-cluster aware). little cluster
     _smin="$_pol_dir/scaling_min_freq"
@@ -2700,6 +2717,25 @@ apply_cpufreq_caps() {
       fi
     fi
   done
+  asb_shell_caps_publish "$_shcaps"
+}
+# fix182: publish the manual-profile ceilings this shell wrote.
+#
+# In battery and balanced the governor leaves the CPU ceilings to this file and only adds a
+# thermal clamp on top, so it never knew what they were: it judged the live ceiling against
+# msm_performance and its own unsent rail, and a whole Battery day was reported as vendor
+# clamping (vendor_clamp_1h up to 441) - a count Smart's thermal veto reads, and the governor
+# keeps it across a profile switch. The governor, asbdiag and the full-day logkit read this record.
+asb_shell_caps_publish() {
+  _scp_f="${ASB_SHELL_CAPS_FILE:-/dev/.asb/shell_cpu_caps}"
+  _scp_d="${_scp_f%/*}"
+  [ -d "$_scp_d" ] || return 0
+  _scp_t="$_scp_f.tmp.$$"
+  {
+    printf 'profile=%s\nscreen_on=%s\nts=%s\n' "${ASB_PROFILE:-${PROFILE:-unknown}}" "${_son:-1}" "$(date +%s 2>/dev/null || echo 0)"
+    printf '%s' "$1"
+  } > "$_scp_t" 2>/dev/null && mv -f "$_scp_t" "$_scp_f" 2>/dev/null || rm -f "$_scp_t" 2>/dev/null
+  return 0
 }
 # apply_cpufreq_caps must run ONLY via apply_screen_aware_caps, which first sets
 
@@ -2723,33 +2759,31 @@ asb_screen_on() {
   done
   dumpsys power 2>/dev/null | grep -q "mHoldingDisplaySuspendBlocker=true"
 }
-apply_screen_aware_caps() {
-  [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
-  asb_feature_enabled CPU || return 0
-  asb_load_profile
-  _son=0
-  asb_screen_on && _son=1
-  # Caps are PERCENT of each cluster's own cpuinfo_max_freq (apply_cpufreq_caps
-  _soc="$(getprop ro.board.platform 2>/dev/null)"
-  [ -z "$_soc" ] && _soc="$(getprop ro.hardware.chipname 2>/dev/null)"
-  case "$_soc" in
-    canoe|sm8850*) _dev="op15" ;;
-    sun|sm8750*)   _dev="op13" ;;
-    pineapple|sm8650*) _dev="op12" ;;
-    *)             _dev="generic" ;;
+# Which per-device percentage table applies (apply_screen_aware_caps).
+asb_cap_dev() {
+  _cdv_soc="$(getprop ro.board.platform 2>/dev/null)"
+  [ -z "$_cdv_soc" ] && _cdv_soc="$(getprop ro.hardware.chipname 2>/dev/null)"
+  case "$_cdv_soc" in
+    canoe|sm8850*) echo op15 ;;
+    sun|sm8750*)   echo op13 ;;
+    pineapple|sm8650*) echo op12 ;;
+    *)             echo generic ;;
   esac
-
+}
+# The manual-profile percentages: $1 profile, $2 screen on (1/0), $3 device table.
+# Sets _P_CPUCAP_L / _P_CPUCAP_B (empty = that tier is not capped); returns 1 for a profile
+# the shell does not cap (smart, stock).
+asb_manual_cap_pct() {
   _P_CPUCAP_L=""; _P_CPUCAP_B=""
-  CPU_CAP_LITTLE=""; CPU_CAP_BIG=""
-  case "$ASB_PROFILE" in
+  case "$1" in
     performance)
       # never cap performance: full hardware range on every cluster, every SoC.
       _P_CPUCAP_L=""; _P_CPUCAP_B=""
       ;;
     balanced)
-      if [ "$_son" -eq 1 ]; then
+      if [ "$2" -eq 1 ]; then
         # screen-on balanced: light touch; balance comes from WALT/uclamp. OP15
-        case "$_dev" in
+        case "$3" in
           op15) _P_CPUCAP_L=""; _P_CPUCAP_B="" ;;
           op13) _P_CPUCAP_L=72; _P_CPUCAP_B=58 ;;
           op12) _P_CPUCAP_L=78; _P_CPUCAP_B=58 ;;   # MID lifts to ~79%
@@ -2760,9 +2794,9 @@ apply_screen_aware_caps() {
       fi
       ;;
     battery)
-      if [ "$_son" -eq 1 ]; then
+      if [ "$2" -eq 1 ]; then
         # screen-on battery: MUST stay usable. Prime is capped for savings but
-        case "$_dev" in
+        case "$3" in
           op15) _P_CPUCAP_L=50; _P_CPUCAP_B=38 ;;
           op13) _P_CPUCAP_L=58; _P_CPUCAP_B=48 ;;   # raised: UI stayed janky at 50/44
           op12) _P_CPUCAP_L=60; _P_CPUCAP_B=45 ;;   # MID lifts to ~72%
@@ -2773,11 +2807,82 @@ apply_screen_aware_caps() {
       fi
       ;;
     *)
-      return 0
+      return 1
       ;;
   esac
+  return 0
+}
+# fix183: the screen-on rung of battery and balanced, computed without writing a ceiling.
+#
+# The governor stays off the CPU ceilings in a manual profile, and the shell re-applied them
+# only at boot: with the governor running, a profile switch never reached
+# apply_screen_aware_caps. A CPH2747 day switched from Smart to Battery at 11:25 and kept
+# Smart's last 1555200/1862400 for 5.5 h - the Battery caps were never written. The records
+# below (/dev/.asb/shell_cpu_caps.<profile>) let the governor put a manual profile's own
+# ceilings in place the moment it switches, and give back what it wrote under a thermal cap
+# or a cooldown, before the shell's next pass arrives.
+asb_shell_caps_precompute() {
+  _scq_f="${ASB_SHELL_CAPS_FILE:-/dev/.asb/shell_cpu_caps}"
+  [ -d "${_scq_f%/*}" ] || return 0
+  _scq_sl="${_P_CPUCAP_L:-}"; _scq_sb="${_P_CPUCAP_B:-}"
+  _pol_list="$(ls -d /sys/devices/system/cpu/cpufreq/policy* 2>/dev/null | sort -t'y' -k2 -n)"
+  _pol_count="$(echo "$_pol_list" | grep -c .)"
+  _top_pol="$(echo "$_pol_list" | tail -1)"
+  _top_rel=0
+  [ -n "$_top_pol" ] && _top_rel="$(cat "$_top_pol/related_cpus" 2>/dev/null | awk '{print $1}')"
+  case "$_top_rel" in ''|*[!0-9]*) _top_rel=0 ;; esac
+  for _scq_p in battery balanced; do
+    asb_manual_cap_pct "$_scq_p" 1 "$1" || continue
+    _scq_body=""
+    for _pol_dir in $_pol_list; do
+      [ -d "$_pol_dir" ] || continue
+      asb_cap_want_for_policy "$_pol_dir"
+      case "$_want" in ''|*[!0-9]*) continue ;; esac
+      _scq_body="${_scq_body}policy${_pol_dir##*policy}=${_want}
+"
+    done
+    [ -n "$_scq_body" ] || continue
+    _scq_t="$_scq_f.$_scq_p.tmp.$$"
+    {
+      printf 'profile=%s\nscreen_on=1\nts=%s\nprecomputed=1\n' "$_scq_p" "$(date +%s 2>/dev/null || echo 0)"
+      printf '%s' "$_scq_body"
+    } > "$_scq_t" 2>/dev/null && mv -f "$_scq_t" "$_scq_f.$_scq_p" 2>/dev/null || rm -f "$_scq_t" 2>/dev/null
+  done
+  _P_CPUCAP_L="$_scq_sl"; _P_CPUCAP_B="$_scq_sb"
+  return 0
+}
+apply_screen_aware_caps() {
+  [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
+  asb_feature_enabled CPU || return 0
+  asb_load_profile
+  _son=0
+  asb_screen_on && _son=1
+  # fix182: the screen-off rung only where something will lift it again.
+  #
+  # runtime/asb_reconcile.sh re-applies these caps on a screen change only while the
+  # governor is NOT running - with it running the screen-off side belongs to the governor's
+  # own cooldown clamp, which a shell write must not overwrite - and in battery/balanced the
+  # governor never writes the CPU ceiling itself. So a screen-off rung written here with the
+  # governor up (a boot that finishes after the screen timed out, the fallback reconcile
+  # loop at night) stayed after the screen came back on: OP15 battery 35/25 %, the prime at
+  # 1152000 kHz, on a phone in use, until the next profile change. A full-day OP15 Battery
+  # capture shows the other half of the same fact: every screen-off sample held the
+  # screen-on 1785600/1747200, the screen-off rung never reached the hardware at all.
+  # With the governor running the screen-on rung is the only one that is safe to leave.
+  _rung_note=""
+  if [ "$_son" -eq 0 ] && command -v asb_governor_running >/dev/null 2>&1 && asb_governor_running; then
+    _son=1
+    _rung_note=" (screen off, but the governor is running and nothing would restore the screen-on rung - kept it)"
+  fi
+  # Caps are PERCENT of each cluster's own cpuinfo_max_freq (apply_cpufreq_caps
+  _dev="$(asb_cap_dev)"
+  CPU_CAP_LITTLE=""; CPU_CAP_BIG=""
+  # fix183: every manual profile's screen-on rung is recorded first, whatever profile runs -
+  # Smart included, because a switch from Smart to Battery is the switch users make.
+  asb_shell_caps_precompute "$_dev"
+  asb_manual_cap_pct "$ASB_PROFILE" "$_son" "$_dev" || return 0
   apply_cpufreq_caps
-  asb_log "screen_aware_caps: dev=$_dev profile=$ASB_PROFILE screen_on=$_son cap_l=${_P_CPUCAP_L:-(none)} cap_b=${_P_CPUCAP_B:-(none)}"
+  asb_log "screen_aware_caps: dev=$_dev profile=$ASB_PROFILE screen_on=$_son cap_l=${_P_CPUCAP_L:-(none)} cap_b=${_P_CPUCAP_B:-(none)}${_rung_note}"
 }
 asb_feature_enabled CPU && asb_log "boot: GPU cap policy deferred until boot_completed"
 apply_walt_live() {
