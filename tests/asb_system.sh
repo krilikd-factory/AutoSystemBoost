@@ -708,8 +708,8 @@ awk -F'|' '
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
-[ "$(wc -l < "$TMP/conf")" = "193" ] || fail "expected 193 config keys, got $(wc -l < "$TMP/conf")"
-[ "$(wc -l < "$TMP/registry")" = "193" ] || fail "expected 193 registry keys, got $(wc -l < "$TMP/registry")"
+[ "$(wc -l < "$TMP/conf")" = "198" ] || fail "expected 198 config keys, got $(wc -l < "$TMP/conf")"
+[ "$(wc -l < "$TMP/registry")" = "198" ] || fail "expected 198 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
 
@@ -748,7 +748,7 @@ for _c in $(grep -oE "\{ key:'[A-Za-z_][A-Za-z_0-9]*'" "$ROOT/webroot/index.html
 done
 [ -z "$_missing" ] || fail "cards missing from install.sh _user_keys:$_missing"
 
-echo 'PASS config ownership registry contract (193 keys; 30 user, 44 advanced, 119 internal)'
+echo 'PASS config ownership registry contract (198 keys; 30 user, 44 advanced, 124 internal)'
 )
 
 t_config_restore_outcome_runtime() (
@@ -2559,6 +2559,7 @@ static long g_cpu_freq_tables[16][32]; static int g_cpu_freq_table_len[16];
 static void cpu_read_freq_tables(void) {}
 static long cpu_snap_freq(int p, long w) { long b=0; for (int i=0;i<g_cpu_freq_table_len[p];i++){long v=g_cpu_freq_tables[p][i]; if(v<=w&&v>b)b=v;} return b?b:w; }
 #define ASB_MIN_CEILING_PCT_OF_HW 40
+static int g_writer_floor_pct = 0;   /* fix184: the records' one-write floor */
 C
 awk '/^static int cpu_floor_ceiling/,/^}/' "$W" >> "$T/t.c"
 cat >> "$T/t.c" <<'C'
@@ -2567,6 +2568,10 @@ int main(void){
   for(int i=0;i<5;i++) g_cpu_freq_tables[1][i]=t[i]; g_cpu_freq_table_len[1]=5;
   int a=cpu_floor_ceiling(1,1497600,0), b=cpu_floor_ceiling(1,1497600,1), c=cpu_floor_ceiling(1,2380800,0);
   if(a!=1900800||b!=1497600||c!=2380800){printf("got %d %d %d\n",a,b,c);return 1;}
+  g_writer_floor_pct = 25;   /* the records trying x0.75: 25 % for that write only */
+  if(cpu_floor_ceiling(1,1497600,0)!=1497600){puts("lowered floor ignored");return 1;}
+  g_writer_floor_pct = 60;   /* never above the 40 % guard */
+  if(cpu_floor_ceiling(1,1497600,0)!=1900800){puts("floor override raised the guard");return 1;}
   return 0; }
 C
 gcc -O0 -o "$T/t" "$T/t.c" 2>"$T/err" || { cat "$T/err"; rm -rf "$T"; fail "guard harness does not build"; }
@@ -3904,6 +3909,61 @@ grep -q 'manual-profile cap records' "$ROOT/tools/asb_diag.sh" || fail "asbdiag 
 grep -q 'shell_cpu_caps.battery' "$ROOT/docs/log_schemas.md" || fail "the records are undocumented"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag differs from tools/asb_diag.sh"
 echo "PASS: fix183 contract"
+) || exit 1
+# ---- fix184 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix184: $*"; exit 1; }
+asb_has_test test_smart_records_runtime.sh || fail "test_smart_records_runtime.sh missing"
+[ -f "$ROOT/src/asb_record.h" ] || fail "asb_record.h missing"
+grep -q '#define ASB_REC_CC_PATH     "/sys/class/power_supply/battery/charge_counter"' "$ROOT/src/asb_record.h" || fail "the records do not measure with the charge counter"
+grep -q 'asb_rec_save() == 0) asb_log("smart records flushed on shutdown");' "$ROOT/src/asb_governor.c" || fail "records not flushed on shutdown"
+grep -q '_ri.idle_state = (fsm.state == ASB_STATE_DEEP_IDLE && _rq_quiet &&' "$ROOT/src/asb_governor.c" || fail "screen-off quiet flag has no hysteresis / ignores the detente"
+grep -q 'smart_records.bin' "$ROOT/runtime/asb_smart_reset.sh" || fail "the Smart reset keeps the records"
+grep -q '^lk_emit_smart_records() {' "$ROOT/tools/logkit/asb_log_full_day.sh" || fail "no SMART RECORDS section in the full-day report"
+grep -q 'Smart records        :' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not show the records"
+grep -q 'smart_records.txt' "$ROOT/docs/log_schemas.md" || fail "records undocumented"
+for k in smart_records smart_records_explore smart_microwake; do
+  grep -q "^$k=1$" "$ROOT/config/governor.conf" || fail "$k not shipped on"
+  grep -q "^$k|internal|" "$ROOT/config/key_ownership.tsv" || fail "$k not registered"
+  grep -q "\"$k\"" "$ROOT/src/asb_config.h" || fail "$k not parsed"
+done
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag differs from tools/asb_diag.sh"
+echo "PASS: fix184 contract"
+) || exit 1
+# ---- fix185 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix185: $*"; exit 1; }
+asb_has_test test_smart_records_runtime.sh || fail "test_smart_records_runtime.sh missing"
+asb_has_test test_smart_smoothness_runtime.sh || fail "test_smart_smoothness_runtime.sh missing"
+grep -q '#define ASB_SMART_VER         5' "$ROOT/src/asb_smart_defs.h" || fail "Smart engine is not V5"
+grep -q 'if (st->version >= ASB_SMART_VER_KEEP) {' "$ROOT/src/asb_smart.h" || fail "a V4 store would lose what it learned"
+grep -q '#define ASB_REC_VERSION     2' "$ROOT/src/asb_record.h" || fail "records store version"
+grep -q 'static void asb_rec_pair(asb_rec_ctx_t \*c, int slot, const asb_rec_last_t \*me) {' "$ROOT/src/asb_record.h" || fail "no side-by-side pairing"
+grep -q 'double mw = ma \* v;' "$ROOT/src/asb_record.h" || fail "records not measured as power"
+grep -q 'if (climate) { asb_rec_reject(REJ_CLIMATE); return; }' "$ROOT/src/asb_record.h" || fail "no climate rejection"
+grep -q 'in->unplug_age_s < ASB_REC_SETTLE_S' "$ROOT/src/asb_record.h" || fail "no settle time after the charger"
+grep -q 's->drain_pctph_x10 >= 0 && !s->climate);' "$ROOT/src/asb_smart.h" || fail "the bucket learner still takes drain the climate explains"
+grep -q 'sin.climate = _cl ? 1 : 0;' "$ROOT/src/asb_governor.c" || fail "the session climate flag is never set"
+grep -q 'if (g_asb_cfg.smart_cold_guard && !charging && battery_pct >= 0 && battery_pct < 40 &&' "$ROOT/src/asb_governor.c" || fail "no cold guard"
+[ -f "$ROOT/runtime/asb_gfx_probe.sh" ] || fail "no frame-statistics probe"
+grep -q 'dumpsys graphicsstats' "$ROOT/runtime/asb_gfx_probe.sh" || fail "the probe does not read graphicsstats"
+grep -v '^[[:space:]]*#' "$ROOT/runtime/asb_gfx_probe.sh" | grep -q 'gfxinfo' && fail "the probe must not call into the app (gfxinfo)"
+grep -q 'snprintf(disp, sizeof(disp), "app %016llx", (unsigned long long)h);' "$ROOT/src/asb_governor.c" || fail "the smoothness log names apps in plaintext in release builds"
+for k in smart_smooth smart_cold_guard; do
+  grep -q "^$k=1$" "$ROOT/config/governor.conf" || fail "$k not shipped on"
+  grep -q "^$k=1$" "$ROOT/config/governor.conf.shipped" || fail "$k not in the shipped config"
+  grep -q "^$k|internal|" "$ROOT/config/key_ownership.tsv" || fail "$k not registered"
+  grep -q "\"$k\"" "$ROOT/src/asb_config.h" || fail "$k not parsed"
+done
+grep -q "smart_cold'" "$ROOT/webroot/index.html" || fail "the WebUI does not show the cold guard"
+grep -q '"smart_cold":' "$ROOT/webroot/i18n/ru.json" || fail "cold guard untranslated"
+grep -q 'smoothness           :' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not show the smoothness check"
+grep -q "grep '^smooth|'" "$ROOT/tools/logkit/asb_log_full_day.sh" || fail "the full-day report does not show the smoothness check"
+grep -q 'asb_gfx_probe.sh' "$ROOT/docs/log_schemas.md" || fail "probe undocumented"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag differs from tools/asb_diag.sh"
+echo "PASS: fix185 contract"
 ) || exit 1
 echo "PASS: field-fix contracts"
 )

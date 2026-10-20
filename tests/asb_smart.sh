@@ -202,6 +202,21 @@ static void test_store_seed_validate(void) {
     asb_smart_store_seed_defaults(&s);
     s.buckets[5].interactive_bonus_x1000 = -50;  /* below min */
     EXPECT(asb_smart_store_validate(&s) != 0, "negative interactive_bonus → invalid");
+
+    /* Smart V5 (fix185): a V4 store keeps what it learned, an older one is reset as before. */
+    EXPECT(ASB_SMART_VER == 5, "Smart engine is V5");
+    asb_smart_store_seed_defaults(&s);
+    s.version = 4; s.buckets[3].alpha_battery_x1000 = 731; s.buckets[3].sleep_bias_x1000 = 222;
+    EXPECT(asb_smart_store_validate(&s) == 0, "a V4 store validates");
+    asb_smart_store_migrate(&s);
+    EXPECT(s.version == ASB_SMART_VER, "V4 -> V5");
+    EXPECT(s.buckets[3].alpha_battery_x1000 == 731 && s.buckets[3].sleep_bias_x1000 == 222,
+           "V4 -> V5 keeps the learned outputs");
+    asb_smart_store_seed_defaults(&s);
+    s.version = 3; s.buckets[3].alpha_battery_x1000 = 731;
+    asb_smart_store_migrate(&s);
+    EXPECT(s.version == ASB_SMART_VER && s.buckets[3].alpha_battery_x1000 == 500,
+           "V3 -> V5 still resets the outputs");
 }
 
 static void test_clamps(void) {
@@ -1187,6 +1202,39 @@ static void test_bucket_learn_cool(void) {
     EXPECT(b.interactive_bonus_x1000 > inter_before, "clean+cool → interactive increases");
 }
 
+/* fix185: a session whose drain the climate or the charger explains teaches nothing about
+ * drain - in either direction - while heat still teaches. */
+static void test_bucket_learn_climate(void) {
+    printf("test_bucket_learn_climate\n");
+    asb_smart_bucket_t b = {0}, c = {0};
+    b.alpha_battery_x1000 = 500; b.avg_drain_pctph_x10 = 100;
+    c = b;
+    asb_smart_session_input_t s = {0};
+    s.dur_s = 1800; s.max_temp_c = 60; s.drain_pctph_x10 = 400; s.drain_on_sec = 1800;
+    s.trust = ASB_TRUST_NOISY;
+    asb_smart_bucket_update_from_session(&b, &s, time(NULL));
+    EXPECT(b.alpha_battery_x1000 > 500, "a dear session in normal weather leans to battery");
+    s.climate = 1;
+    asb_smart_bucket_update_from_session(&c, &s, time(NULL));
+    EXPECT(c.alpha_battery_x1000 == 500, "a dear session in the cold teaches nothing");
+    EXPECT(c.avg_drain_pctph_x10 == 100, "and does not move the drain average");
+    /* Cheap because the pack came in warm / off the charger: no credit either. */
+    asb_smart_bucket_t d = {0};
+    d.alpha_battery_x1000 = 500; d.avg_drain_pctph_x10 = 300;
+    asb_smart_session_input_t w = {0};
+    w.dur_s = 1800; w.max_temp_c = 60; w.drain_pctph_x10 = 50; w.drain_on_sec = 1800;
+    w.trust = ASB_TRUST_CLEAN; w.climate = 1;
+    asb_smart_bucket_update_from_session(&d, &w, time(NULL));
+    EXPECT(d.alpha_battery_x1000 == 500, "a cheap session the room explains takes no credit");
+    /* Heat still counts. */
+    asb_smart_bucket_t h = {0};
+    h.alpha_battery_x1000 = 500;
+    asb_smart_session_input_t hs = {0};
+    hs.dur_s = 1800; hs.max_temp_c = 82; hs.trust = ASB_TRUST_NOISY; hs.climate = 1;
+    asb_smart_bucket_update_from_session(&h, &hs, time(NULL));
+    EXPECT(h.alpha_battery_x1000 > 500, "heat still teaches with the climate flag set");
+}
+
 static void test_bucket_learn_thermal_hit(void) {
     printf("test_bucket_learn_thermal_hit\n");
     asb_smart_bucket_t b = {0};
@@ -1353,6 +1401,7 @@ int main(void) {
     test_bucket_learn_hot();
     test_bucket_learn_cool();
     test_bucket_learn_thermal_hit();
+    test_bucket_learn_climate();
     test_bucket_learn_clamping();
     test_bucket_learn_sleep_quality();
 
@@ -3631,7 +3680,7 @@ MOD="$TMP/module"; STATE="$TMP/state"; RUNTIME="$TMP/runtime"; VOL="$TMP/volatil
 mkdir -p "$MOD/runtime" "$STATE" "$RUNTIME" "$(dirname "$VOL")"
 printf 'user-config-must-survive\n' > "$MOD/config.keep"
 printf 'baseline-must-survive\n' > "$STATE/baseline.txt"
-for f in buckets.bin buckets.bin.bak smart_appheat.bin smart_prev_profile night_window.conf session_history.jsonl; do
+for f in buckets.bin buckets.bin.bak smart_appheat.bin smart_records.bin smart_prev_profile night_window.conf session_history.jsonl; do
   printf 'learned:%s\n' "$f" > "$STATE/$f"
 done
 for f in session_stats.json pstats_battery.json pstats_balanced.json pstats_performance.json session_history.jsonl; do
@@ -3641,7 +3690,7 @@ printf 'volatile learning\n' > "$VOL"
 
 OUT="$(MODDIR="$MOD" ASB_SMART_STATE="$STATE" ASB_RUNTIME_STATE="$RUNTIME" ASB_SMART_VOLATILE_STATE="$VOL" sh "$RESET")"
 printf '%s\n' "$OUT" | grep -Fq 'session history and learned stats are cleared' || { echo 'FAIL smart reset: outcome message missing' >&2; exit 1; }
-for f in buckets.bin buckets.bin.bak smart_appheat.bin smart_prev_profile night_window.conf session_history.jsonl; do
+for f in buckets.bin buckets.bin.bak smart_appheat.bin smart_records.bin smart_prev_profile night_window.conf session_history.jsonl; do
   [ ! -e "$STATE/$f" ] || { echo "FAIL smart reset: retained state/$f" >&2; exit 1; }
 done
 for f in session_stats.json pstats_battery.json pstats_balanced.json pstats_performance.json session_history.jsonl; do
@@ -4480,6 +4529,9 @@ static void asb_log(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 static void asb_log(const char *fmt, ...) {
     va_list ap; va_start(ap, fmt); vsnprintf(g_last_log, sizeof(g_last_log), fmt, ap); va_end(ap);
 }
+#define ASB_REC_FILE "rec.bin"
+#define ASB_REC_SUMMARY "rec.txt"
+#include "asb_record.h"   /* fix184: the night checks are learned from the same chain */
 #include "n.c"
 #define DAY0 1792022400L
 static time_t at(int day, int h, int m) { return (time_t)(DAY0 + day * 86400L + h * 3600L + m * 60L); }
@@ -4508,6 +4560,9 @@ int main(void) {
     CHK(g_night_sleep_min == 3 * 60 + 10, "29835: bedtime is not the first screen-off (03:10)");
     CHK(g_night_wake_min == 8 * 60 + 25, "29835: the face unlock or a glance was learned as the wake");
     CHK(strstr(g_last_log, "night 03:10-08:25") != NULL, "29835: log line");
+    /* fix184: the 03:50 glance came 40 min after bedtime - not a night check; the 06:20 face
+     * unlock after three hours asleep is one. */
+    CHK(g_rec.mw.total == 1 && g_rec.mw.nights == 1 && g_rec.mw.dur_ewma_s <= 90.0f, "29835: night checks learned wrong");
     /* The rest of that morning on a desk: glances under ten minutes, a long pickup at 13:06. */
     run(0, at(0, 10, 0)); run(1, at(0, 10, 5)); run(0, at(0, 11, 30)); run(1, at(0, 11, 33));
     run(0, at(0, 13, 6)); run(1, at(0, 13, 30));
@@ -4518,6 +4573,7 @@ int main(void) {
     run(1, at(1, 23, 0)); run(0, at(2, 2, 30)); run(1, at(2, 2, 31)); run(0, at(2, 7, 0)); run(1, at(2, 7, 20));
     CHK(g_night_samples == 1 && g_night_samples_rejected == 0, "glance at 02:30 rejected or split the night");
     CHK(g_night_sleep_min == 23 * 60 && g_night_wake_min == 7 * 60, "glance at 02:30 moved bedtime or wake");
+    CHK(g_rec.mw.total == 2 && g_rec.mw.nights == 2, "the 02:30 night check was not learned (or the desk glances were)");
     /* Twenty minutes awake at 00:20 ends the first chain: bedtime is 00:40, learned once. */
     fresh(at(3, 22, 0));
     run(1, at(3, 23, 0)); run(0, at(4, 0, 20)); run(1, at(4, 0, 40)); run(0, at(4, 7, 0)); run(1, at(4, 7, 20));
@@ -4795,6 +4851,377 @@ X
 "$CC" -std=gnu11 -Wall -Werror -Wno-unused-function -o "$T/t" "$T/t.c" || fail "harness does not compile"
 "$T/t" || fail "behaviour"
 echo "PASS shell cap owner: the shell's ceiling is the reference, overrides stay under it, the governor's writes go back"
+)
+
+t_smart_records_runtime() (
+# Runtime (fix184, Smart V5 in fix185): Smart records. Per situation the governor measures the
+# POWER drawn (charge counter x battery voltage), alternates the best setting with one
+# neighbour and compares them side by side - each challenger block with the champion block
+# next to it, only when the two were close in time, battery temperature and charge. The
+# cheaper one is kept only when the gain clears the noise (screen on: without pinning the
+# cores more); a loss turns round; the plateau stops it. Charging, the 20 minutes after it,
+# a battery under 10 % and a battery warming or cooling by 3 C are set aside with the reason
+# counted. Night checks are learned by time and length and survive the fix184 -> fix185 store
+# change. The REAL asb_record.h runs against a simulated battery whose power depends on the
+# setting and whose voltage falls with the charge.
+set -eu
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+R="$ROOT/src/asb_record.h"; G="$ROOT/src/asb_governor.c"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL smart records: $*" >&2; exit 1; }
+CC="${CC:-cc}"; command -v "$CC" >/dev/null 2>&1 || CC=gcc
+command -v "$CC" >/dev/null 2>&1 || { echo "SKIP smart records: no C compiler"; exit 0; }
+grep -q '#include "asb_record.h"' "$G" || fail "governor does not include the records"
+grep -Fq 'asb_rec_tick(&_ri);' "$G" || fail "no records tick"
+grep -Fq '_ri.voltage_uv  = metrics.bat.voltage_uv;' "$G" || fail "no voltage: power cannot be measured"
+grep -Fq '_ri.bat_temp_dc = metrics.bat.temp_dC;' "$G" || fail "no battery temperature: climate cannot be seen"
+grep -Fq '_ri.soc         = metrics.bat.capacity_pct;' "$G" || fail "no charge level"
+grep -Fq 'if (_rc_prev_chg == 1 && !metrics.bat.charging) _rc_unplug_ms = _ri.now_ms;' "$G" || fail "the unplug moment is not tracked"
+grep -Fq 'asb_rec_apply_offcaps(&_effective_caps, &fsm, metrics.misc.screen_on);   /* fix184 */' "$G" || fail "screen-off setting not applied before the writer"
+[ "$(grep -c 'asb_rec_apply_offcaps(&_effective_caps, &fsm, metrics.misc.screen_on)' "$G")" -ge 2 ] || fail "the heartbeat write would undo the screen-off setting"
+grep -Fq 'if (screen_on && (g_rec_on_offset != 0 || g_smooth_lean != 0)) {' "$G" || fail "screen-on lean not applied in the Smart tick"
+awk '/g_rec_on_applied = _off;/{a=NR} /4\. Safety overrides/{if(a) {print "ok"; exit}}' "$G" | grep -qx ok || fail "the lean must come before the safety layers"
+grep -Fq '(!metrics.misc.screen_on || g_mw_active) &&' "$G" || fail "night checks do not keep the night radio mode"
+grep -Fq 'asb_mw_note((long)g_night_on_since, (long)(now - g_night_on_since));' "$G" || fail "night checks are not learned"
+grep -q '^smart_records=1$' "$ROOT/config/governor.conf" && grep -q '^smart_microwake=1$' "$ROOT/config/governor.conf" || fail "not shipped on"
+grep -q '^smart_records|internal|' "$ROOT/config/key_ownership.tsv" || fail "keys not registered"
+cat > "$T/t.c" <<X
+#define ASB_REC_FILE "$T/rec.bin"
+#define ASB_REC_SUMMARY "$T/rec.txt"
+#include "$R"
+#include <stdlib.h>
+#define CAP_UAH 7000000.0
+static double g_uah = 3500000.0;   /* the simulated counter, µAh (50 %) */
+static int g_cc_ok = 1, g_bright = 20;
+static long long g_net = 0;
+static long fake_cc(void) { return g_cc_ok ? ((long)(g_uah / 1000.0)) * 1000L : -1; }
+static long long fake_net(void) { return g_net; }
+static int fake_bright(void) { return g_bright; }
+static unsigned g_seed = 12345;
+static double noise(void) { g_seed = g_seed * 1103515245u + 12345u; return ((double)((g_seed >> 16) % 2001) / 1000.0) - 1.0; }
+static long long g_ms = 0; static long g_wall = 1792440000L, g_unplug_wall = 0;
+static int soc(void) { int p = (int)(g_uah * 100.0 / CAP_UAH); return p < 0 ? 0 : p > 100 ? 100 : p; }
+static double volts(void) { return 3.50 + 0.80 * soc() / 100.0; }
+/* Power is the setting's property; the current is what the voltage makes of it.
+ * Screen off: x0.875 is 8 % cheaper than today's, x0.75 back up again. */
+static double off_mw(int scale) { switch (scale) { case 750: return 183.0; case 875: return 177.0; case 1000: return 192.0; case 1250: return 200.0; default: return 212.0; } }
+/* Screen on: more economy is cheaper, but +0.2 pins the cores far more often. */
+static double on_mw(int off) { return 1540.0 - 0.6 * off; }
+static double (*g_mul)(asb_rec_in_t *in) = 0;   /* a climate effect on the drain, per test */
+static int g_flat = 0;                          /* every setting costs the same */
+static int (*g_temp)(void) = 0;                 /* battery temperature, per test */
+static void fill(asb_rec_in_t *in) {
+    in->now_ms = g_ms; in->wall = g_wall;
+    in->soc = soc(); in->voltage_uv = (int)(volts() * 1e6);
+    in->bat_temp_dc = g_temp ? g_temp() : 250;
+    in->unplug_age_s = g_unplug_wall ? g_wall - g_unplug_wall : 1000000L;
+}
+static void run(asb_rec_in_t *in, int ticks, int step_s, int screen) {
+    for (int i = 0; i < ticks; i++) {
+        double mw = screen ? on_mw(g_rec_on_offset) : (g_flat ? 190.0 : off_mw(g_rec_off_scale));
+        if (g_mul) mw *= g_mul(in);
+        mw *= 1.0 + noise() * (screen ? 0.015 : 0.012);
+        double ma = mw / volts();
+        if (in->charging) g_uah += 3000.0 * step_s / 3.6; else g_uah -= ma * step_s / 3.6;
+        if (g_uah > CAP_UAH) g_uah = CAP_UAH;
+        g_ms += (long long)step_s * 1000; g_wall += step_s;
+        fill(in);
+        in->at_ceiling = screen ? ((g_rec_on_offset >= 200) ? (i % 2 == 0) : (i % 5 == 0)) : 0;
+        asb_rec_tick(in);
+    }
+}
+/* Charge back to 95 % when low - the real day: the records must ride over it. */
+static void maybe_charge(asb_rec_in_t *in, int screen) {
+    if (soc() >= 30) return;
+    in->charging = 1;
+    while (soc() < 95) run(in, 1, 60, screen);
+    in->charging = 0; g_unplug_wall = g_wall;
+}
+static int arm_temp(void) { return (g_rec_blk.active && g_rec_blk.slot == 1) ? 248 : 220; }
+static double arm_cold(asb_rec_in_t *in) { return (in->bat_temp_dc < 235) ? 1.10 : 1.0; }
+static int g_ramp_t = 250;
+static int ramp_temp(void) { return g_ramp_t; }
+int main(void) {
+    int bad = 0;
+    g_rec_read_cc = fake_cc; g_rec_read_net = fake_net; g_rec_read_bright_pct = fake_bright;
+    if (asb_rec_load() != 0) { puts("fresh start expected"); bad = 1; }
+    for (int i = 0; i < ASB_REC_CTX_N; i++)
+        if (g_rec.ctx[i].champion != ASB_REC_ARM_DEFAULT) { puts("champion must start at today's setting"); bad = 1; }
+    asb_rec_in_t in; memset(&in, 0, sizeof(in));
+    in.enabled = 1; in.explore = 1;
+    in.screen_on = 0; in.idle_state = 1; in.night = 1;
+    fill(&in);
+    /* Charging: nothing is measured, nothing is changed. */
+    in.charging = 1; run(&in, 10, 60, 0);
+    if (g_rec.ctx[ASB_REC_OFF_NIGHT].blocks != 0 || g_rec_blk.active) { puts("a charging block was counted"); bad = 1; }
+    /* The first 20 minutes after the charger: the pack is warm, the voltage relaxing - not yet. */
+    in.charging = 0; g_unplug_wall = g_wall;
+    run(&in, 15, 60, 0);
+    if (g_rec_blk.active) { puts("a block started right after the charger"); bad = 1; }
+    run(&in, 7, 60, 0);
+    if (!g_rec_blk.active) { puts("no block once the pack settled"); bad = 1; }
+    /* A busy radio (20 KiB/s): set aside, counted as radio. */
+    for (int i = 0; i < 45; i++) { g_net += 20 * 1024 * 60; run(&in, 1, 60, 0); }
+    if (g_rec.ctx[ASB_REC_OFF_NIGHT].blocks != 0) { puts("a radio-dominated block was counted"); bad = 1; }
+    if (g_rec_rej[REJ_RADIO] == 0) { puts("the radio block was not counted as radio"); bad = 1; }
+    /* In from the cold: the pack warms by 4 C with the screen off - the room, not the setting. */
+    g_temp = ramp_temp; g_ramp_t = 60; g_rec_blk.active = 0;
+    for (int i = 0; i < 41; i++) { g_ramp_t = 60 + i; run(&in, 1, 60, 0); }
+    if (g_rec.ctx[ASB_REC_OFF_NIGHT].blocks != 0 || g_rec_rej[REJ_CLIMATE] == 0) { puts("a block that warmed by 4 C was counted"); bad = 1; }
+    g_temp = 0;
+    /* Many nights of quiet screen-off blocks, with recharges. */
+    int scale_seen_875 = 0;
+    for (int n = 0; n < 60 * 10 && !g_rec.ctx[ASB_REC_OFF_NIGHT].converged; n++) {
+        run(&in, 41, 60, 0);
+        maybe_charge(&in, 0);
+        if (g_rec_off_scale == 875) scale_seen_875 = 1;
+    }
+    asb_rec_ctx_t *c = &g_rec.ctx[ASB_REC_OFF_NIGHT];
+    if (!c->converged) { printf("screen off never reached its plateau: champion %d trials %u\n", c->champion, c->trials); bad = 1; }
+    if (g_rec_off_scale_x1000[c->champion] != 875) { printf("screen off kept %d, the cheapest is 875\n", g_rec_off_scale_x1000[c->champion]); bad = 1; }
+    if (c->wins < 1 || c->baseline_n == 0 || c->baseline_mw < 186.0f || c->baseline_mw > 198.0f) { printf("baseline %.1f mW (%u) wins %u\n", c->baseline_mw, c->baseline_n, c->wins); bad = 1; }
+    if (c->record_mw < 171.0f || c->record_mw > 183.0f) { printf("record %.1f mW is not the cheap setting's\n", c->record_mw); bad = 1; }
+    if (c->gain_total > 0.96f || c->gain_total < 0.88f) { printf("side-by-side gain %.3f, ~0.92 expected\n", c->gain_total); bad = 1; }
+    if (!scale_seen_875) { puts("the knob never showed the setting being measured"); bad = 1; }
+    if (g_rec_rej[REJ_CHARGE] + g_rec_blocks_ok == 0) { puts("nothing measured"); bad = 1; }
+    /* After the plateau the best setting stays in force. */
+    run(&in, 5, 60, 0);
+    if (g_rec_off_scale != 875) { printf("off scale %d after the plateau\n", g_rec_off_scale); bad = 1; }
+    /* The cooldown takes the ceilings: the knob steps aside. */
+    in.cooldown = 1; run(&in, 2, 60, 0);
+    if (g_rec_off_scale != 1000) { puts("the setting was applied under the cooldown"); bad = 1; }
+    in.cooldown = 0;
+    /* Music with the screen off keeps the CPU awake: x1, and a mostly-busy block is set aside. */
+    in.idle_state = 0; run(&in, 1, 60, 0);
+    if (g_rec_off_scale != 1000) { puts("a setting was tried under screen-off music"); bad = 1; }
+    unsigned long rj = g_rec_rej[REJ_BUSY]; unsigned bl = g_rec.ctx[ASB_REC_OFF_NIGHT].blocks;
+    g_rec_blk.active = 0; run(&in, 45, 60, 0);
+    if (g_rec.ctx[ASB_REC_OFF_NIGHT].blocks != bl || g_rec_rej[REJ_BUSY] <= rj) { puts("a block full of music was counted"); bad = 1; }
+    in.idle_state = 1;
+    /* The climate must not be credited to a setting. By day, the two settings cost the same,
+     * but every champion block happens to run 2.8 C colder and 10 % dearer: block by block
+     * the challenger looks about 9 % cheaper. No pair forms across that gap, so nothing is
+     * promoted - an unpaired comparison would have declared a winner. */
+    in.night = 0; g_temp = arm_temp; g_mul = arm_cold; g_flat = 1; g_rec_blk.active = 0;
+    for (int n = 0; n < 60; n++) { run(&in, 41, 60, 0); maybe_charge(&in, 0); }
+    asb_rec_ctx_t *dy = &g_rec.ctx[ASB_REC_OFF_DAY];
+    if (dy->challenger == dy->champion || dy->trial[1].n < 10 || dy->trial[0].n < 10) { printf("the day trial did not run (%u/%u)\n", dy->trial[0].n, dy->trial[1].n); bad = 1; }
+    if (!(dy->trial[1].mean < dy->trial[0].mean * 0.95)) { printf("the setup is wrong: %.1f vs %.1f\n", dy->trial[1].mean, dy->trial[0].mean); bad = 1; }
+    if (dy->wins != 0 || dy->champion != ASB_REC_ARM_DEFAULT || dy->pairs != 0) { printf("the climate was credited: wins %u champion %d pairs %u\n", dy->wins, dy->champion, dy->pairs); bad = 1; }
+    g_temp = 0; g_mul = 0; g_flat = 0;
+    /* Under 10 %: the voltage sags, the gauge's model is at its edge - not measured. */
+    { double keep = g_uah; g_uah = CAP_UAH * 0.08; g_rec_blk.active = 0; run(&in, 30, 60, 0);
+      if (g_rec_blk.active) { puts("a block under 10 %"); bad = 1; } g_uah = keep; }
+    /* Screen on, dim, light apps. */
+    in.screen_on = 1; in.idle_state = 0; in.night = 0; g_unplug_wall = 0;
+    for (int n = 0; n < 600 && !g_rec.ctx[ASB_REC_ON_LIGHT_DIM].converged; n++) { run(&in, 11, 60, 1); maybe_charge(&in, 1); }
+    asb_rec_ctx_t *o = &g_rec.ctx[ASB_REC_ON_LIGHT_DIM];
+    if (!o->converged) { printf("screen on never reached its plateau: champion %d trials %u\n", o->champion, o->trials); bad = 1; }
+    if (g_rec_on_offset_x1000[o->champion] != 100) { printf("screen on kept %+d - +200 is cheaper but pins the cores, +100 is the answer\n", g_rec_on_offset_x1000[o->champion]); bad = 1; }
+    /* Screen on, the pack cooling by 3 C (out into the cold): set aside. */
+    { unsigned long cl = g_rec_rej[REJ_CLIMATE]; g_temp = ramp_temp; g_rec_blk.active = 0;
+      for (int i = 0; i < 11; i++) { g_ramp_t = 250 - 4 * i; run(&in, 1, 60, 1); }
+      g_ramp_t = 200; run(&in, 1, 60, 1); g_rec_blk.active = 0; g_temp = 0;
+      run(&in, 1, 60, 1);
+      if (g_rec_rej[REJ_CLIMATE] <= cl) { puts("a screen-on block that cooled by 4 C was counted"); bad = 1; } }
+    /* Heavy work and a night check get no lean at all. */
+    in.heavy_state = 1; run(&in, 1, 60, 1);
+    if (g_rec_on_offset != 0) { puts("a lean under heavy work"); bad = 1; }
+    in.heavy_state = 0; in.microwake = 1; run(&in, 1, 60, 1);
+    if (g_rec_on_offset != 0) { puts("a lean during a night check"); bad = 1; }
+    in.microwake = 0;
+    /* A smoothness test for the app in front: the records leave that time out. */
+    g_rec_smooth_testing = 1; g_rec_blk.active = 0; run(&in, 3, 60, 1);
+    if (g_rec_blk.active) { puts("a block during a smoothness test"); bad = 1; }
+    g_rec_smooth_testing = 0;
+    /* Bright screen is its own situation. */
+    g_bright = 80; g_rec_bright_ts = 0; run(&in, 3, 60, 1);
+    if (!g_rec_blk.active || g_rec_blk.ctx != ASB_REC_ON_LIGHT_BRIGHT) { puts("a bright screen was not its own situation"); bad = 1; }
+    /* Persistence: what was learned survives a restart. */
+    if (asb_rec_save() != 0) { puts("save failed"); bad = 1; }
+    int ch = c->champion, oc = o->champion;
+    memset(&g_rec, 0, sizeof(g_rec)); g_rec_loaded = 0;
+    if (asb_rec_load() != 1 || g_rec.ctx[ASB_REC_OFF_NIGHT].champion != ch ||
+        g_rec.ctx[ASB_REC_ON_LIGHT_DIM].champion != oc || !g_rec.ctx[ASB_REC_OFF_NIGHT].converged) { puts("records lost across a restart"); bad = 1; }
+    /* Re-check after 21 days: exploring opens again. */
+    g_wall += ASB_REC_RECHECK_S + 60; in.screen_on = 0; in.idle_state = 1; in.night = 1;
+    run(&in, 2, 60, 0);
+    if (g_rec.ctx[ASB_REC_OFF_NIGHT].converged || g_rec.ctx[ASB_REC_OFF_NIGHT].challenger == g_rec.ctx[ASB_REC_OFF_NIGHT].champion) { puts("no re-check after 21 days"); bad = 1; }
+    /* No meter: nothing is measured. */
+    g_cc_ok = 0; g_rec_blk.active = 0; unsigned b0 = g_rec.ctx[ASB_REC_OFF_DAY].blocks; in.night = 0;
+    run(&in, 100, 60, 0);
+    if (g_rec.ctx[ASB_REC_OFF_DAY].blocks != b0 || g_rec_cc_state != -1) { puts("measured without a charge counter"); bad = 1; }
+    /* Night wakes: three nights with a check around 03:10. */
+    struct tm tmv; memset(&tmv, 0, sizeof(tmv));
+    tmv.tm_year = 126; tmv.tm_mon = 9; tmv.tm_mday = 20; tmv.tm_hour = 3; tmv.tm_min = 10; tmv.tm_isdst = -1;
+    long t310 = (long)mktime(&tmv);
+    for (int d = 0; d < 3; d++) { asb_mw_note(t310 + d * 86400L, 200 + d * 20); asb_mw_night_end(); }
+    if (g_rec.mw.total != 3 || g_rec.mw.nights != 3 || g_rec.mw.per_night_ewma < 0.9f) { printf("night wakes %u/%u %.2f\n", g_rec.mw.total, g_rec.mw.nights, g_rec.mw.per_night_ewma); bad = 1; }
+    if (!asb_mw_predict(t310 + 3 * 86400L + 600, 1, 4 * 3600)) { puts("a 03:20 check after 4 h asleep was not recognised"); bad = 1; }
+    if (asb_mw_predict(t310 + 3 * 86400L + 600, 1, 20 * 60)) { puts("20 minutes after going to bed is not a night check"); bad = 1; }
+    if (asb_mw_predict(t310 + 3 * 86400L + 600, 0, 4 * 3600)) { puts("outside the night window is not a night check"); bad = 1; }
+    long h = asb_mw_hold_s();
+    if (h < 180 || h > 600) { printf("hold %ld s\n", h); bad = 1; }
+    asb_rec_summary_write();
+    FILE *f = fopen("$T/rec.txt", "r"); char line[400]; int saw_plateau = 0, saw_mw = 0, saw_hdr = 0, saw_rej = 0, saw_sm = 0;
+    while (f && fgets(line, sizeof(line), f)) {
+        if (!strncmp(line, "off_night|", 10) && strstr(line, "|x0.875|")) saw_plateau = 1;
+        if (!strncmp(line, "microwake|learned=3|", 20)) saw_mw = 1;
+        if (!strncmp(line, "# ctx|status|best|record_mW|record_mA|", 38)) saw_hdr = 1;
+        if (!strncmp(line, "rejected|meter=", 15) && strstr(line, "|climate=")) saw_rej = 1;
+        if (!strncmp(line, "smooth|watching=", 16)) saw_sm = 1;
+    }
+    if (f) fclose(f);
+    if (!saw_plateau || !saw_mw || !saw_hdr || !saw_rej || !saw_sm) { printf("summary does not show the result (%d %d %d %d %d)\n", saw_plateau, saw_mw, saw_hdr, saw_rej, saw_sm); bad = 1; }
+    /* A fix184 store: the night-check habit comes across, the situations start over. */
+    {
+        asb_rec_store_v1_t v1; memset(&v1, 0, sizeof(v1));
+        v1.magic = ASB_REC_MAGIC; v1.version = 1; v1.size = sizeof(v1);
+        v1.ctx[0].b[0] = 3; v1.mw.total = 7; v1.mw.nights = 5; v1.mw.dur_ewma_s = 240.0f;
+        v1.mw.per_night_ewma = 1.2f; v1.mw.slot_w[6] = 4.0f;
+        FILE *w = fopen("$T/rec.bin", "wb"); fwrite(&v1, 1, sizeof(v1), w); fclose(w);
+        memset(&g_rec, 0, sizeof(g_rec)); g_rec_loaded = 0;
+        int rl = asb_rec_load();
+        if (rl != 2 || g_rec.mw.total != 7 || g_rec.mw.nights != 5 || g_rec.mw.slot_w[6] != 4.0f ||
+            g_rec.ctx[0].champion != ASB_REC_ARM_DEFAULT || g_rec.version != ASB_REC_VERSION) { printf("fix184 store not carried over (rl %d, total %u)\n", rl, g_rec.mw.total); bad = 1; }
+        if (asb_rec_save() != 0) { puts("re-save failed"); bad = 1; }
+        memset(&g_rec, 0, sizeof(g_rec)); g_rec_loaded = 0;
+        if (asb_rec_load() != 1 || g_rec.mw.total != 7) { puts("the carried-over store does not load as fix185"); bad = 1; }
+        /* Garbage of the right size is not taken for a night habit. */
+        v1.mw.dur_ewma_s = -5.0f;
+        w = fopen("$T/rec.bin", "wb"); fwrite(&v1, 1, sizeof(v1), w); fclose(w);
+        memset(&g_rec, 0, sizeof(g_rec)); g_rec_loaded = 0;
+        if (asb_rec_load() != 0 || g_rec.mw.total != 0) { puts("a corrupt fix184 store was used"); bad = 1; }
+    }
+    return bad;
+}
+X
+"$CC" -std=gnu11 -Wall -Werror -Wno-unused-function -o "$T/t" "$T/t.c" || fail "harness does not compile"
+"$T/t" || fail "behaviour"
+echo "PASS smart records: power compared side by side - the climate is not credited, charging and its aftermath are set aside, the plateau stops it, night checks carry over"
+)
+
+t_smart_smoothness_runtime() (
+# Runtime (fix185): Smart's smoothness check. Android's own frame statistics per app; an app
+# that misses 8 % of 3000+ frames under the normal lean is TESTED - windows alternate the
+# normal lean and 0.15 more headroom - and the headroom is kept for that app only when it
+# cuts the janky share by a quarter and 1.5 points; otherwise the app is marked as not
+# helped by clocks. Windows under the wrong arm are ignored, 24 apps are remembered, the
+# verdicts are re-checked after 21 days. The probe script parses graphicsstats text for one
+# package. The REAL asb_record.h and runtime/asb_gfx_probe.sh run here.
+set -eu
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+R="$ROOT/src/asb_record.h"; G="$ROOT/src/asb_governor.c"; P="$ROOT/runtime/asb_gfx_probe.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL smart smoothness: $*" >&2; exit 1; }
+CC="${CC:-cc}"; command -v "$CC" >/dev/null 2>&1 || CC=gcc
+command -v "$CC" >/dev/null 2>&1 || { echo "SKIP smart smoothness: no C compiler"; exit 0; }
+[ -f "$P" ] || fail "no probe script"
+grep -Fq 'asb_smooth_probe_tick(&fsm, &metrics);' "$G" || fail "the governor never probes"
+grep -Fq 'asb_run_modscript("runtime/asb_gfx_probe.sh", pk);' "$G" || fail "the probe is not run for the app in front"
+grep -Fq '#define ASB_SMOOTH_PROBE_S 180' "$G" || fail "probe cadence"
+grep -Fq 'else if (g_smooth_win_arm != arm) g_smooth_win_arm = -2;' "$G" || fail "a window whose arm changed would be counted"
+grep -Fq 'g_smart_rt.app_hint < ASB_APP_GAMING && !m->misc.camera_active &&' "$G" || fail "games / the camera are not left out"
+grep -Fq '!asb_smart_is_system_ui(g_smart_rt.app_pkg_cached)' "$G" || fail "the system UI is not left out"
+grep -Fq 'int _off = g_rec_on_offset + g_smooth_lean;' "$G" || fail "the smoothness lean is not applied"
+grep -q '^smart_smooth=1$' "$ROOT/config/governor.conf" || fail "not shipped on"
+grep -q '^smart_smooth|internal|' "$ROOT/config/key_ownership.tsv" || fail "key not registered"
+# The probe: a fake dumpsys with two entries for the app (live + a past day) and a neighbour.
+mkdir -p "$T/bin"
+cat > "$T/bin/dumpsys" <<'D'
+#!/bin/sh
+[ "$1" = graphicsstats ] || exit 1
+cat <<'E'
+Package: com.other.app
+Version: 3
+Total frames rendered: 999
+Janky frames: 500 (50.00%)
+Package: com.example.feed
+Version: 41
+Stats since: 1000ns
+Total frames rendered: 12000
+Janky frames: 960 (8.00%)
+Janky frames (legacy): 2000 (16.66%)
+Package: com.example.feed
+Version: 40
+Total frames rendered: 3000
+Janky frames: 90 (3.00%)
+E
+D
+chmod +x "$T/bin/dumpsys"
+PATH="$T/bin:$PATH" ASB_GFX_OUT="$T/gfx.txt" ASB_GFX_LOCK="$T/gfx.lock" sh "$P" com.example.feed
+[ "$(cat "$T/gfx.txt")" = "com.example.feed 15000 1050" ] || fail "probe parse: $(cat "$T/gfx.txt")"
+[ ! -d "$T/gfx.lock" ] || fail "probe left its lock"
+PATH="$T/bin:$PATH" ASB_GFX_OUT="$T/gfx2.txt" ASB_GFX_LOCK="$T/gfx.lock" sh "$P" 'com.x;rm -rf /'
+[ ! -e "$T/gfx2.txt" ] || fail "a bad package name reached dumpsys"
+mkdir "$T/gfx.lock"
+PATH="$T/bin:$PATH" ASB_GFX_OUT="$T/gfx3.txt" ASB_GFX_LOCK="$T/gfx.lock" sh "$P" com.example.feed
+[ ! -e "$T/gfx3.txt" ] || fail "a second probe ran while one held the lock"
+rmdir "$T/gfx.lock"
+PATH="$T/bin:$PATH" ASB_GFX_OUT="$T/gfx4.txt" ASB_GFX_LOCK="$T/gfx.lock" sh "$P" com.absent.app
+[ -e "$T/gfx4.txt" ] && [ ! -s "$T/gfx4.txt" ] || fail "an app with no frames should leave an empty answer"
+cat > "$T/t.c" <<X
+#define ASB_REC_FILE "$T/rec.bin"
+#define ASB_REC_SUMMARY "$T/rec.txt"
+#include "$R"
+static long g_now = 1792440000L;
+/* One three-minute window of an app drawing 2000 frames, janky share by arm. */
+static int win(uint64_t h, const char *pkg, double j0, double j1) {
+    int arm = asb_smooth_offset_for(h, g_now) != 0 ? 1 : 0;
+    long df = 2000, dj = (long)(df * (arm ? j1 : j0) + 0.5);
+    g_now += 180;
+    return asb_smooth_window(h, pkg, df, dj, arm, g_now);
+}
+int main(void) {
+    int bad = 0;
+    asb_rec_store_init(&g_rec); g_rec_loaded = 1;
+    const uint64_t A = 0x1111, B = 0x2222, C = 0x3333;
+    /* A smooth app is only watched. */
+    for (int i = 0; i < 10; i++) win(C, "com.smooth", 0.02, 0.02);
+    if (asb_smooth_find(C, g_now, 0)->state != 0 || asb_smooth_offset_for(C, g_now) != 0) { puts("a smooth app was touched"); bad = 1; }
+    /* A janky app whose jank is the clocks: tested, then kept. */
+    int ev = 0;
+    for (int i = 0; i < 2; i++) ev |= win(A, "com.feed", 0.10, 0.04);
+    if (asb_smooth_find(A, g_now, 0)->state != 1 || !ev || !strstr(g_smooth_event_msg, "testing more headroom")) { puts("a janky app was not tested"); bad = 1; }
+    if (asb_smooth_offset_for(A, g_now) != ASB_SMOOTH_LEAN_X1000 || !g_rec_smooth_testing) { puts("the test does not start with the headroom arm / records not told"); bad = 1; }
+    /* A window under the wrong arm is not counted. */
+    asb_smooth_app_t *a = asb_smooth_find(A, g_now, 0);
+    unsigned w0 = a->t_windows[0], w1 = a->t_windows[1];
+    asb_smooth_window(A, "com.feed", 2000, 200, a->arm ^ 1, g_now);
+    if (a->t_windows[0] != w0 || a->t_windows[1] != w1) { puts("a window under the other arm was counted"); bad = 1; }
+    int n = 0;
+    while (a->state == 1 && n++ < 40) win(A, "com.feed", 0.10, 0.04);
+    if (a->state != 2 || asb_smooth_offset_for(A, g_now) != ASB_SMOOTH_LEAN_X1000 || g_rec_smooth_testing) { printf("headroom that helps was not kept (state %d)\n", a->state); bad = 1; }
+    if (!strstr(g_smooth_event_msg, "more headroom helps")) { puts("no log of the verdict"); bad = 1; }
+    if (a->t_windows[0] < ASB_SMOOTH_MIN_WINDOWS || a->t_windows[1] < ASB_SMOOTH_MIN_WINDOWS) { puts("decided on too few windows"); bad = 1; }
+    /* A janky app whose jank is not the clocks: tested, then left alone. */
+    for (int i = 0; i < 2; i++) win(B, "com.chat", 0.12, 0.115);
+    asb_smooth_app_t *b = asb_smooth_find(B, g_now, 0);
+    n = 0;
+    while (b->state == 1 && n++ < 60) win(B, "com.chat", 0.12, 0.115);
+    if (b->state != 3 || asb_smooth_offset_for(B, g_now) != 0) { printf("headroom that does not help was kept (state %d)\n", b->state); bad = 1; }
+    if (!strstr(g_smooth_event_msg, "does not help")) { puts("no log of the negative verdict"); bad = 1; }
+    /* 21 days on, both verdicts are re-checked. */
+    g_now += ASB_REC_RECHECK_S + 10;
+    win(B, "com.chat", 0.01, 0.01);
+    if (b->state != 0) { puts("no re-check after 21 days"); bad = 1; }
+    /* 24 apps remembered: the least recently seen makes room, the rest stay. */
+    for (uint64_t k = 0; k < 30; k++) { g_now += 60; asb_smooth_window(0x9000 + k, "com.many", 100, 1, 0, g_now); }
+    if (asb_smooth_find(0x9000, g_now, 0) || !asb_smooth_find(0x9000 + 29, g_now, 0)) { puts("the app table did not evict the oldest"); bad = 1; }
+    /* Nonsense windows are ignored. */
+    if (asb_smooth_window(A, "x", 100, 200, 0, g_now) || asb_smooth_window(A, "x", 0, 0, 0, g_now) || asb_smooth_window(0, "x", 100, 1, 0, g_now)) { puts("a nonsense window counted"); bad = 1; }
+    /* Persisted with the records. */
+    asb_smooth_app_t *s29 = asb_smooth_find(0x9000 + 29, g_now, 0);
+    s29->state = 2; s29->decided_ts = (uint32_t)g_now;
+    if (asb_rec_save() != 0) { puts("save failed"); bad = 1; }
+    memset(&g_rec, 0, sizeof(g_rec)); g_rec_loaded = 0;
+    if (asb_rec_load() != 1 || asb_smooth_offset_for(0x9000 + 29, g_now) != ASB_SMOOTH_LEAN_X1000) { puts("the verdict was lost across a restart"); bad = 1; }
+    return bad;
+}
+X
+"$CC" -std=gnu11 -Wall -Werror -Wno-unused-function -o "$T/t" "$T/t.c" || fail "harness does not compile"
+"$T/t" || fail "behaviour"
+echo "PASS smart smoothness: real frame statistics, an A/B test per app, headroom kept only where it cuts the jank, the probe reads one app"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

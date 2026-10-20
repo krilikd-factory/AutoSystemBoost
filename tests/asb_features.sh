@@ -3976,6 +3976,7 @@ sleep 2.5
 [ "$(cat "$T/peak")" = 120.0 ] || f "a value set by someone else was overwritten"
 
 # Switched off: stopped and restored.
+_lp0="$(cat "$T/d/ltpo_video.pid" 2>/dev/null | tr -dc '0-9')"   # the watcher, before its pid file goes
 echo ltpo_video=0 > "$T/mod/config/governor.conf"
 sh "$V" reconcile
 [ -f "$T/d/ltpo_video.lowered" ] && f "record kept after off"
@@ -3984,8 +3985,14 @@ sh "$V" reconcile
 # "Without a watcher" is the premise (fix180): under a loaded regression host the stopped
 # watcher could still be exiting - and restoring its own peak - when the record below was
 # written, which failed this check once in a full run. Wait for it to be gone first.
+# The pid file can be gone while the process is still restoring (fix184: the wait read the
+# file and returned at once, and the check flaked again) - so wait on the pid taken before
+# the switch-off as well.
 _lw=0
 while [ "$_lw" -lt 100 ] && _lp="$(cat "$T/d/ltpo_video.pid" 2>/dev/null | tr -dc '0-9')" && [ -n "$_lp" ] && kill -0 "$_lp" 2>/dev/null; do
+  sleep 0.1; _lw=$((_lw + 1))
+done
+while [ "$_lw" -lt 100 ] && [ -n "$_lp0" ] && kill -0 "$_lp0" 2>/dev/null; do
   sleep 0.1; _lw=$((_lw + 1))
 done
 printf 'orig=144.0\nset=60.0\ncontent=30\nsince=1\n' > "$T/d/ltpo_video.lowered"
