@@ -286,7 +286,7 @@ fi
 # name the process, the signal and the abort message; the newest few are listed, and one
 # with ASB code in its backtrace is called out.
 _asb_tombstones() {
-  _tb_abs=""; _tb_injs=""
+  _tb_abs=""; _tb_injs=""; _tb_libs=""
   _tb_list="$(ls -t "${ASB_TOMBSTONE_DIR:-/data/tombstones}"/tombstone_[0-9][0-9] 2>/dev/null | head -8)"
   if [ -n "$_tb_list" ]; then
     P "  recent native crashes (newest first, /data/tombstones):"
@@ -322,8 +322,17 @@ _asb_tombstones() {
       # com.oplus.battery/ota aborts whose first frame was LuckyTool's libdexkit.so - a hook
       # module injected there - and nothing said so.
       _tb_inj="$(printf '%s\n' "$_tb_fr" | sed -n 's#^/data/app/\(~~[^/]*/\)\{0,1\}\([A-Za-z0-9_.]*\)-[^/]*/.*#\2#p' | head -1)"
-      case "$_tb_inj" in ''|"${_tb_cmd%%:*}") : ;; *) _tb_injs="${_tb_injs:-}$_tb_inj
-" ;; esac
+      # fix188: WebView (and the Chrome/Trichrome builds that provide it) is shared code every
+      # app with a web page loads from its own APK - a com.booking crash in it was reported as
+      # "a hook / Xposed module" to switch off. Those are named as what they are.
+      case "$_tb_inj" in
+        ''|"${_tb_cmd%%:*}") : ;;
+        com.google.android.webview|com.android.webview|com.google.android.trichromelibrary*|com.android.chrome|com.chrome.*)
+          _tb_libs="${_tb_libs:-}${_tb_cmd%%:*}
+" ;;
+        *) _tb_injs="${_tb_injs:-}$_tb_inj
+" ;;
+      esac
     done
     # One message across many processes is one cause, not many crashes.
     if [ -n "${_tb_abs:-}" ]; then
@@ -334,6 +343,9 @@ _asb_tombstones() {
       printf '%s' "$_tb_injs" | sort | uniq -c | sort -rn | while read -r _tb_in _tb_ip; do
         NOTE "$_tb_in of the listed crashes start in code of $_tb_ip, loaded into another app's process (a hook / Xposed module) - its hooks there are the first thing to switch off"
       done
+    fi
+    if [ -n "${_tb_libs:-}" ]; then
+      NOTE "$(printf '%s' "$_tb_libs" | grep -c .) of the listed crashes are in Android System WebView, inside $(printf '%s' "$_tb_libs" | sort -u | tr '\n' ' ' | sed 's/ $//') - shared browser code apps load for web pages, not a hook; if it repeats, update WebView"
     fi
     if [ "$_tb_asb_n" -gt 0 ]; then
       NOTE "$_tb_asb_n of these crashes have ASB code (the DSP library or its attach daemon) in them - send this asbdiag; dsp_loudness=off takes the effect out of the audio path until it is fixed"
@@ -1655,7 +1667,13 @@ else
     *)          NOTE "verbose logging: could not be read here (${_lsp_r:-?}) - LSPosed manager > Settings shows it" ;;
   esac
   NOTE "card lsposed_verbose=$(cfg lsposed_verbose) - keep: ASB leaves LSPosed alone; off: ASB writes LSPosed's setting once, when the card is changed"
-  [ -f /data/adb/asb/lsposed_verbose_prev ] && NOTE "ASB switched it off; LSPosed's earlier value, put back on keep: $(cat /data/adb/asb/lsposed_verbose_prev 2>/dev/null)"
+  # Only a value ASB actually replaced is reported: a fix187 build also recorded "off" when
+  # LSPosed's log was already off, and this line then claimed ASB had switched it off.
+  _lsp_p="$(cat /data/adb/asb/lsposed_verbose_prev 2>/dev/null)"
+  case "$_lsp_p" in
+    on|default_on) NOTE "ASB switched it off; LSPosed had '$_lsp_p' before - keep (or uninstalling ASB) puts that back" ;;
+    off) NOTE "LSPosed's log was already off when the card was set - ASB changed nothing in LSPosed" ;;
+  esac
   # Written after this boot began: the running daemon still has the old value.
   _lsp_at="$(cat /data/adb/asb/lsposed_verbose_prev_at 2>/dev/null)"
   _lsp_up="$(cut -d. -f1 /proc/uptime 2>/dev/null)"; _lsp_now="$(date +%s 2>/dev/null)"
@@ -2601,8 +2619,15 @@ _sb_d="$(grep -m1 '^smart_bucket_drain_x10=' /dev/.asb/state 2>/dev/null | cut -
 # session's "peak" was a launch / dexopt blip, which the learner now ignores.
 _spr="$(grep -m1 '^ses_max_temp_raw=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 _sps="$(grep -m1 '^ses_max_temp_smooth=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
-[ -n "$_spr" ] && [ -n "$_sps" ] && \
-  NOTE "current session peak: raw ${_spr}C, smoothed ${_sps}C (the learner uses the smoothed one)"
+# fix188: "smoothed 0C" a minute after a boot read as a broken sensor - it is a peak not
+# formed yet.
+if [ -n "$_spr" ] && [ -n "$_sps" ]; then
+  if [ "$_sps" = 0 ]; then
+    NOTE "current session peak: raw ${_spr}C, smoothed: not formed yet (the learner uses the smoothed one, so a boot or launch spike is not learned)"
+  else
+    NOTE "current session peak: raw ${_spr}C, smoothed ${_sps}C (the learner uses the smoothed one)"
+  fi
+fi
 _vr="$(grep -m1 '^smart_thermal_veto_reason=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 case "$_vr" in
   1) NOTE "thermal veto: ON - skin at or above thermal_skin_c" ;;
@@ -3527,7 +3552,14 @@ case "$_prof_now" in
       NOTE "battery: prime live scaling_max=${_prime_pct}% of hw (expected <=70%; if this persists under idle, ASB's cap may not be sticking — check the write-test above)"
     fi ;;
   *)
-    NOTE "profile=$_prof_now -> prime cluster at ${_prime_pct}% of hw (balanced/smart vary by load)" ;;
+    # fix188: say whose ceiling it is. An OP15 a minute after boot read "prime cluster at 35%"
+    # beside "cap written by ASB: prime 1862400" (40 %) - the 35 % was msm_performance's.
+    _prime_req="$(grep -m1 '^requested_cpu_max_prime=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+    if [ -n "$_prime_smax" ] && [ "${_prime_req:-0}" -gt 0 ] 2>/dev/null && [ "$_prime_smax" -lt "$_prime_req" ] 2>/dev/null; then
+      NOTE "profile=$_prof_now -> prime cluster at ${_prime_pct}% of hw - below the ${_prime_req} kHz ASB wrote: a ceiling ASB did not set holds it (vendor thermal or msm_performance, see section 10)"
+    else
+      NOTE "profile=$_prof_now -> prime cluster at ${_prime_pct}% of hw (balanced/smart vary by load)"
+    fi ;;
 esac
 # cool gaming
 _cool="$(cfg cool_gaming)"; NOTE "cool_gaming toggle = ${_cool:-0}"
@@ -3976,9 +4008,37 @@ for _wp in /sys/devices/system/cpu/walt/sched_boost \
            /proc/sys/walt/sched_boost; do
   [ -r "$_wp" ] && P "    $(echo $_wp|sed 's#.*/##') = $(cat $_wp 2>/dev/null)"
 done
-# msm_performance (governor writes cpu_max_freq here)
-[ -r /sys/kernel/msm_performance/parameters/cpu_max_freq ] && \
-  P "    msm_performance cpu_max_freq = $(cat /sys/kernel/msm_performance/parameters/cpu_max_freq 2>/dev/null)"
+# msm_performance: a second CPU ceiling the kernel obeys. ASB registers there only in
+# HEAVY/GAMING (msm_perf_boost_only=1); the vendor's perf and thermal services use it too.
+# fix188: whose values they are, from the governor's own record (msm_asb_hold / msm_asb).
+if [ -r /sys/kernel/msm_performance/parameters/cpu_max_freq ]; then
+  _msm_v="$(cat /sys/kernel/msm_performance/parameters/cpu_max_freq 2>/dev/null)"
+  P "    msm_performance cpu_max_freq = $_msm_v"
+  _msm_h="$(grep -m1 '^msm_asb_hold=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  _msm_a="$(grep -m1 '^msm_asb=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  # The values below each cluster's hardware maximum: a request somebody holds.
+  _msm_low=""; _msm_own=0
+  for _msm_p in /sys/devices/system/cpu/cpufreq/policy*; do
+    _msm_c="$(awk '{print $1; exit}' "$_msm_p/related_cpus" 2>/dev/null)"
+    _msm_hw="$(cat "$_msm_p/cpuinfo_max_freq" 2>/dev/null)"
+    _msm_cv="$(printf '%s\n' "$_msm_v" | tr ' ' '\n' | sed -n "s/^${_msm_c:-x}://p" | head -1)"
+    case "$_msm_cv$_msm_hw" in ''|*[!0-9]*) continue ;; esac
+    [ "$_msm_cv" -lt "$_msm_hw" ] || continue
+    _msm_low="${_msm_low}${_msm_low:+, }cpu${_msm_c} ${_msm_cv}"
+    case ",${_msm_a:-}," in *",$_msm_cv,"*) _msm_own=1 ;; esac
+  done
+  if [ -z "$_msm_low" ]; then
+    P "      (no ceiling held there - every cluster at its hardware maximum)"
+  elif [ "$_msm_h" = 1 ]; then
+    P "      (ASB's own HEAVY/GAMING registration, ${_msm_a:-?} kHz by cluster - the same ceilings it writes to scaling_max_freq)"
+  elif [ "$_msm_own" = 1 ]; then
+    P "      (ASB's last HEAVY/GAMING values (${_msm_a}), still in the node - releasing them on the way out did not land)"
+  elif [ -n "$_msm_h" ]; then
+    P "      (NOT ASB's: ASB holds nothing in this node now - the ceilings here (${_msm_low}) come from the vendor's perf/thermal service; the live ceiling is the lower of these and ASB's)"
+  else
+    P "      (whose values: unknown - this governor build does not publish msm_asb_hold)"
+  fi
+fi
 
 # --- 10d. GPU full profile ---
 P ""
