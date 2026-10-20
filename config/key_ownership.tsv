@@ -169,6 +169,8 @@ smart_night_awake|internal|engine_or_derived
 smart_records|internal|engine_or_derived
 smart_records_explore|internal|engine_or_derived
 smart_microwake|internal|engine_or_derived
+smart_smooth|internal|engine_or_derived
+smart_cold_guard|internal|engine_or_derived
 media_loudness|user|webui_standard
 dsp_loudness|advanced|webui_sensitive
 dsp_bass|advanced|webui_sensitive
