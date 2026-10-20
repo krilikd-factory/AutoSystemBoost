@@ -517,6 +517,7 @@ lk_copy_runtime_artifacts() {
     "/dev/.asb/shell_cpu_caps" \
     "/dev/.asb/shell_cpu_caps.battery" \
     "/dev/.asb/shell_cpu_caps.balanced" \
+    "/dev/.asb/smart_records.txt" \
     "/dev/.asb/gpu_path_discovery" \
     "/dev/.asb/config_stale_detected" \
     "/dev/.asb/vendor_overrides" \
