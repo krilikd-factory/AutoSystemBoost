@@ -3965,6 +3965,31 @@ grep -q 'asb_gfx_probe.sh' "$ROOT/docs/log_schemas.md" || fail "probe undocument
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag differs from tools/asb_diag.sh"
 echo "PASS: fix185 contract"
 ) || exit 1
+# ---- fix186 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix186: $*"; exit 1; }
+G="$ROOT/src/asb_governor.c"; W="$ROOT/src/asb_writer.h"; A="$ROOT/action.sh"
+asb_has_test test_msm_final_ceiling_runtime.sh || fail "test_msm_final_ceiling_runtime.sh missing"
+asb_has_test test_webui_smart_basis_runtime.sh || fail "test_webui_smart_basis_runtime.sh missing"
+grep -q 'msm_perf_write_caps(msm_c0, msm_c1, msm_c2);' "$W" || fail "msm_performance still gets the raw ceiling"
+grep -q 'g_drain_rs_drop_x100 = g_drain_rs_drop_x100 \* 3 / 4 + g_smart_drain_drop_x100;' "$G" || fail "recent drain is not a ratio of sums"
+grep -q 'if (sin.drain_pctph_x10 > 0) {' "$G" && ! grep -q 'g_smart_drain_rate_ewma_x10 = (int)r;' "$G" && fail "recent drain still averages only sessions with a step"
+grep -q 'if (screen_on && _app_prev_on == 0) g_smart_rt.app_cache_last_refresh = 0;' "$G" || fail "the app in front is not re-read on wake"
+awk '/^static void asb_smooth_probe_tick/,/^}/' "$G" | grep -q 'g_smooth_probe_ts = 0;' && fail "the smoothness probe still runs out of turn"
+grep -q '"headroom_real_pct=%d\\n"' "$G" || fail "headroom_real_pct not in the state"
+grep -q '_g_head="$(_st headroom_real_pct)"' "$A" || fail "action shows a different headroom than the Monitor"
+grep -q '\[ "$_l_dwin" -lt 600 \]' "$A" || fail "action prints an unproven drain-now figure"
+grep -q '#define ASB_REC_T2              6.25' "$ROOT/src/asb_record.h" || fail "records verdict threshold"
+grep -q 'rec_ctx=%s' "$G" || fail "records situation not published"
+grep -q 'const _b = lvBasisPaint(kv, fb, dp, we, conf, night, veto);' "$ROOT/webroot/index.html" || fail "Basis tile"
+for l in ar de es fr hy id it pt ru tr uk zh; do
+  grep -q '^T_HEADROOM=".*thermal\|^T_HEADROOM="тепловой' "$ROOT/runtime/i18n/action_$l.sh" && fail "$l: headroom still called thermal"
+done
+grep -q 'asb_msm' "$ROOT/tools/logkit/asb_log_full_day.sh" || fail "the capture blames the vendor for ASB's msm registration"
+grep -q 'asb_msm' "$ROOT/docs/log_schemas.md" || fail "asb_msm undocumented"
+echo "PASS: fix186 contract"
+) || exit 1
 echo "PASS: field-fix contracts"
 )
 

@@ -5224,6 +5224,71 @@ X
 echo "PASS smart smoothness: real frame statistics, an A/B test per app, headroom kept only where it cuts the jank, the probe reads one app"
 )
 
+t_msm_final_ceiling_runtime() (
+# Runtime (fix186): msm_performance gets the ceiling scaling_max_freq gets.
+#
+# In HEAVY the writer registers its ceilings with msm_performance - a second ceiling the
+# kernel also obeys - and it registered the value BEFORE the race-to-idle floor. On an OP15
+# in Smart the prime then ran at the profile's raw 1497600 in every HEAVY sample while
+# scaling_max_freq read 1862400, and the capture blamed the vendor. The REAL helpers run
+# against the OP15 prime table: the msm value equals the per-path value, floor and manual
+# clamp included, and a thermal cap still goes under the floor.
+set -eu
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+W="$ROOT/src/asb_writer.h"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL msm final ceiling: $*" >&2; exit 1; }
+CC="${CC:-cc}"; command -v "$CC" >/dev/null 2>&1 || CC=gcc
+command -v "$CC" >/dev/null 2>&1 || { echo "SKIP msm final ceiling: no C compiler"; exit 0; }
+grep -Fq '? writer_slot_final_max(0, c0_target, thermal_cap, manual_override, manual_prof_idx)' "$W" || fail "slot 0 msm value is not the final ceiling"
+grep -Fq '? writer_slot_final_max(1, c1_target, thermal_cap, manual_override, manual_prof_idx)' "$W" || fail "slot 1 msm value is not the final ceiling"
+grep -Fq 'msm_perf_write_caps(msm_c0, msm_c1, msm_c2);' "$W" || fail "msm write does not use the final values"
+grep -Fq 'msm_perf_write_caps(msm_c0, msm_c1, cmax[2] > 0 ? cmax[2] : 0);' "$W" && fail "the raw slot-2 value still goes to msm"
+cat > "$T/t.c" <<'C'
+#include <stdio.h>
+#include <string.h>
+static long g_cpu_freq_tables[16][32]; static int g_cpu_freq_table_len[16];
+static char g_cpu_max_paths[3][128]; static char g_cpu_all_max_paths[16][128]; static int g_cpu_all_paths_n;
+static void cpu_read_freq_tables(void) {}
+static void writer_init_paths(void) {}
+static long cpu_snap_freq(int p, long w) { long b=0; for (int i=0;i<g_cpu_freq_table_len[p];i++){long v=g_cpu_freq_tables[p][i]; if(v<=w&&v>b)b=v;} return b?b:w; }
+#define ASB_MIN_CEILING_PCT_OF_HW 40
+static int g_writer_floor_pct = 0;
+static int g_shell_cap = 0;
+static int writer_manual_clamp(int pi, const char *path, int want) { (void)pi; (void)path; return (g_shell_cap > 0 && want > g_shell_cap) ? g_shell_cap : want; }
+C
+awk '/^static int cpu_floor_ceiling/,/^}/' "$W" >> "$T/t.c"
+awk '/^static int writer_slot_path_idx/,/^}/' "$W" >> "$T/t.c"
+awk '/^static int writer_slot_ceiling/,/^}/' "$W" >> "$T/t.c"
+awk '/^static int writer_slot_final_max/,/^}/' "$W" >> "$T/t.c"
+cat >> "$T/t.c" <<'C'
+int main(void) {
+  /* OP15: policy0 main, policy6 prime (4608000 max, 40 % = 1843200 -> 1862400). */
+  long p0[] = {384000, 1555200, 1996800, 3628800}, p6[] = {768000, 1497600, 1632000, 1862400, 2380800, 4608000};
+  for (int i = 0; i < 4; i++) g_cpu_freq_tables[0][i] = p0[i];
+  for (int i = 0; i < 6; i++) g_cpu_freq_tables[1][i] = p6[i];
+  g_cpu_freq_table_len[0] = 4; g_cpu_freq_table_len[1] = 6;
+  strcpy(g_cpu_max_paths[0], "/p0"); strcpy(g_cpu_max_paths[1], "/p6");
+  strcpy(g_cpu_all_max_paths[0], "/p0"); strcpy(g_cpu_all_max_paths[1], "/p6"); g_cpu_all_paths_n = 2;
+  int bad = 0;
+  int v = writer_slot_final_max(1, 1497600, 0, 0, 0);
+  if (v != 1862400) { printf("HEAVY prime %d, want the floor 1862400\n", v); bad = 1; }
+  if (writer_slot_final_max(1, 1632000, 0, 0, 0) != 1862400) { puts("1632000 not lifted"); bad = 1; }
+  if (writer_slot_final_max(1, 1497600, 1, 0, 0) != 1497600) { puts("a thermal cap must go under the floor"); bad = 1; }
+  if (writer_slot_final_max(1, 2500000, 0, 0, 0) != 2380800) { puts("not snapped to the table"); bad = 1; }
+  if (writer_slot_final_max(0, 1996800, 0, 0, 0) != 1996800) { puts("main above the floor changed"); bad = 1; }
+  g_shell_cap = 1747200;
+  if (writer_slot_final_max(1, 1497600, 0, 1, 0) != 1747200) { puts("manual clamp not applied"); bad = 1; }
+  if (writer_slot_final_max(1, 1497600, 0, 0, 0) != 1862400) { puts("manual clamp applied without an override"); bad = 1; }
+  if (writer_slot_final_max(2, 1000000, 0, 0, 0) != 1000000) { puts("an unmanaged slot was altered"); bad = 1; }
+  return bad;
+}
+C
+"$CC" -std=gnu11 -Wall -Werror -Wno-unused-function -o "$T/t" "$T/t.c" || fail "harness does not compile"
+"$T/t" || fail "behaviour"
+echo "PASS msm final ceiling: HEAVY's msm_performance registration carries the floor-lifted ceiling, not the raw one"
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;

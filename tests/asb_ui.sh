@@ -1960,6 +1960,28 @@ printf '%s\n' "$out2" | grep -q 'status-bar settings read' && f "a settings head
 sed 's/com.android.systemui:48:200,com.twitter.android:12:3800/com.twitter.android:60:4000/' "$J" > "$T/a/j2" && mv "$T/a/j2" "$J"
 out3="$(sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit_jank_summary' "$C" "$T/a" 2>&1)"
 printf '%s\n' "$out3" | grep -q 'status-bar settings read' && f "status-bar settings printed for an app that is not SystemUI: $out3"
+# fix186: all three usual sources already off (an OP15 capture) - say so, do not advise them.
+mkdir -p "$T/c" "$T/bin2"
+cat > "$T/bin2/settings" <<'S'
+#!/bin/sh
+[ "$1" = list ] || exit 0
+case "$2" in
+  system) printf '%s\n' 'show_network_speed=0' 'status_bar_show_battery_percent=0' ;;
+  secure) printf '%s\n' 'clock_seconds=0' 'icon_blacklist=rotate,ime,show_network_speed' ;;
+esac
+S
+cat > "$T/bin2/dumpsys" <<'S'
+#!/bin/sh
+[ "$1" = wallpaper ] || exit 0
+printf '%s\n' '  mWallpaperComponent=ComponentInfo{com.android.systemui/com.android.systemui.wallpapers.ImageWallpaper}'
+S
+chmod +x "$T/bin2/"*
+PATH="$T/bin2:$PATH" sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_display_config_capture' "$C" "$T/c"
+sed 's/com.twitter.android:60:4000/com.android.systemui:48:200,com.twitter.android:12:3800/' "$J" > "$T/c/jank_trace.tsv"
+out4="$(sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit_jank_summary' "$C" "$T/c" 2>&1)"
+printf '%s\n' "$out4" | grep -q '^The usual per-second sources are already off on this phone' || f "all-off case not recognised: $out4"
+printf '%s\n' "$out4" | grep -q '^Turn off one thing at a time that it updates every second' && f "advised switching off what is already off: $out4"
+printf '%s\n' "$out" | grep -q '^Turn off one thing at a time that it updates every second' || f "the advice is gone where it applies: $out"
 [ "$fail" = 0 ] && echo "PASS sysui redraw: the status-bar settings that redraw every second are recorded and named under a steady SystemUI redraw"
 exit "$fail"
 )
@@ -3329,6 +3351,126 @@ grep -Fq '.cfg-row-top > .cfg-range input[type="range"] { flex: 1 1 auto; width:
 grep -Fq "if (it.key === 'wakelock_fitness') {" "$H" || fail "cfgStatus lost the wakelock_fitness honesty branch"
 grep -Fq 'async function loadWlFitStatus(force)' "$H" || fail "loadWlFitStatus is gone"
 echo "PASS webui option labels: option buttons and value badges are labelled in the UI language, the Wi-Fi scan rate in minutes, sliders use their row, and the fitness limit admits when the ROM ignores it"
+)
+
+t_webui_smart_basis_runtime() (
+# Runtime (fix186): the Monitor's Smart "Basis" tile said "own slot" around the clock once the
+# learner had history - true and uninformative. It now shows what shapes Smart's lean right
+# now (an override, the records' result or trial for this situation, the smoothness check),
+# keeps the slot basis while the learner borrows from another slot, and its sheet lists every
+# situation's record from smart_records.txt. The REAL functions run in node.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"; G="$ROOT/src/asb_governor.c"
+fail() { echo "FAIL webui smart basis: $*" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "SKIP webui smart basis: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+grep -q 'const _b = lvBasisPaint(kv, fb, dp, we, conf, night, veto);' "$H" || fail "the tile does not use lvBasisPaint"
+grep -q "if (key === 'basis' && typeof lviRecordsAppend === 'function') lviRecordsAppend(src, tok);" "$H" || fail "the sheet does not list the records"
+for k in rec_ctx rec_ctx_status rec_ctx_best rec_ctx_test rec_ctx_trial rec_ctx_pairs rec_ctx_need rec_ctx_max rec_ctx_n rec_ctx_gain_x10; do
+  grep -q "\"$k=%" "$G" || grep -q "\\\\n$k=%" "$G" || grep -q "$k=%" "$G" || fail "governor does not publish $k"
+done
+for l in en ru uk de es fr it pt tr id ar hy zh; do
+  J="$ROOT/webroot/i18n/$l.json"
+  for k in lvb_record lvb_record_ok lvb_trial lvb_measure lvb_smooth_test lvb_smooth_on lvb_cold lvb_lowbat lvb_brief \
+           lvr_ctx_off_night lvr_ctx_on_medium_bright lvr_arm_off lvr_arm_on lvr_plateau lvr_testing lvr_testing_more \
+           lvr_title lvr_rejected lvr_mw lvr_smooth lvb_clim unit_mw lvi_basis; do
+    grep -q "\"$k\"" "$J" || fail "$l.json lacks $k"
+  done
+  grep -q '"lvb_record": "[^"]*%s' "$J" || fail "$l.json lvb_record has no place for its figure"
+  grep -q '"lvi_basis": "[^"]*{rec}[^"]*{trial}[^"]*{cold}' "$J" || fail "$l.json lvi_basis does not explain the new values"
+done
+cat > "$T/rec.txt" <<'E'
+# Smart records (Smart V5): power per situation, charge counter x battery voltage
+counter=ok blocks_ok=57 blocks_rejected=6
+rejected|meter=0|charge=2|radio=1|busy=1|climate=2|other=0
+# ctx|status|best|record_mW|record_mA|record_n|gain_pct|testing|pairs|pair_diff_pct|trials|wins|blocks|first_mW
+off_night|plateau|x0.875|176|45.6|9|7.7|-|0|0.0|2|1|25|192
+off_day|testing|x1.000|0|0.0|0|0.0|x0.875|3|-4.1|0|0|8|0
+on_light_dim|holding|+100|1477|381.2|11|3.9|-|0|0.0|1|1|24|1540
+on_light_bright|testing|+0|0|0.0|0|0.0|+100|9|-1.0|0|0|20|0
+on_medium_dim|plateau|+0|1500|390.0|8|0.0|-|0|0.0|2|0|30|1500
+on_medium_bright|measuring|+0|0|0.0|0|0.0|-|0|0.0|0|0|2|0
+microwake|learned=3|nights=3|per_night=1.0|typical_s=220|usual=03:00-03:30
+smooth|watching=4|testing=1|helped=1|not_helped=2
+E
+{
+  sed -n '/^\/\* Smart records in words (fix186)/,/^const LVI_TEXT = {/p' "$H" | sed '$d'
+  cat <<'EOF'
+;
+let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
+const base = { rec_enabled: '1', rec_ctx: 'on_medium_dim', rec_ctx_status: 'plateau', rec_ctx_best: '0', rec_ctx_test: '0',
+  rec_ctx_pairs: '0', rec_ctx_need: '8', rec_ctx_max: '20', rec_ctx_n: '0', rec_ctx_gain_x10: '0' };
+function paint(over, fb, night, veto) { return lvBasisPaint(Object.assign({}, base, over || {}), fb || 0, 4, 0, 720, night || 0, veto || 0); }
+let r = paint({}, 0);
+chk(r.txt === 'record ✓', 'plateau at the original setting: ' + r.txt);
+chk(/plateau: the original setting is the best/.test(r.tip) && /Confidence: 72%/.test(r.tip) && r.tip.indexOf('=') < 0, 'tip: ' + r.tip);
+r = paint({ rec_ctx: 'off_night', rec_ctx_best: '875', rec_ctx_test: '875', rec_ctx_gain_x10: '77' });
+chk(r.txt === '🏆 −8%' && r.cls === ' cap-raised' && r.short === '', 'a win shows its saving: ' + r.txt + r.cls);
+chk(/night, screen off: plateau: ceilings ×0\.875 is the best found, 7\.7% cheaper/.test(r.tip), 'win tip: ' + r.tip);
+r = paint({ rec_ctx_status: 'testing', rec_ctx_test: '100', rec_ctx_pairs: '3' });
+chk(r.txt === 'trial 3/8' && r.short === '🧪 3/8' && /trial: lean \+10 against lean ±0, 3 of 8 pairs/.test(r.tip), 'trial: ' + r.txt + ' / ' + r.tip);
+r = paint({ rec_ctx_status: 'testing', rec_ctx_test: '-100', rec_ctx_pairs: '11' });
+chk(r.txt === 'trial 11' && r.short === '🧪 11' && /lean −10 against .* 11 pairs - not a clear result yet, up to 20/.test(r.tip), 'long trial: ' + r.txt + ' / ' + r.tip);
+r = paint({ rec_ctx_status: 'measuring', rec_ctx_n: '2' });
+chk(r.txt === 'measure 2/8' && r.short === '⏳ 2/8', 'measuring: ' + r.txt);
+r = paint({ smooth_lean: '-150' });
+chk(r.txt === '🎞 smooth' && r.short === '🎞 ↑' && /kept for it/.test(r.tip), 'smoothness kept: ' + r.txt);
+r = paint({ smooth_lean: '-150', smooth_testing: '1' });
+chk(r.txt === '🎞 test' && r.short === '🎞 A/B', 'smoothness test: ' + r.txt);
+r = paint({ smart_cold_guard: '1' });
+chk(r.txt === '❄ cold' && r.cls === ' basis-warn' && r.short === '' && /under 5 °C/.test(r.tip), 'cold guard: ' + r.txt);
+r = paint({ smart_lowbat_override: '1' });
+chk(r.txt === '🔋 low', 'low battery: ' + r.txt);
+r = paint({ microwake_active: '1' });
+chk(r.txt === '🌙 brief', 'night check: ' + r.txt);
+r = paint({ smart_cold_guard: '1' }, 0, 1, 1);
+chk(r.txt === '🛡 guard' && r.cls === ' basis-veto', 'the thermal guard comes first: ' + r.txt);
+r = paint({}, 1);
+chk(r.txt === 'neighbour', 'a borrowed slot is still shown: ' + r.txt);
+r = paint({}, 4);
+chk(r.txt === 'cold start' && r.cls === ' basis-warn', 'cold start: ' + r.txt);
+r = paint({ rec_enabled: '0' });
+chk(r.txt === 'own slot', 'records off: the slot basis: ' + r.txt);
+r = paint({ rec_ctx: '-', rec_ctx_status: '-' });
+chk(r.txt === 'own slot', 'no situation now: the slot basis: ' + r.txt);
+r = paint({ ses_climate: '2' });
+chk(/taught nothing about drain: a cold battery was warming up or cooling down/.test(r.tip), 'climate note: ' + r.tip);
+(async function () {
+  const src = { textContent: 'first line', hidden: true };
+  _lviTok = 1;
+  await lviRecordsAppend(src, 1);
+  const t = src.textContent;
+  chk(!src.hidden && t.indexOf('first line\n\nSmart records') === 0, 'appended after the tile lines: ' + t.slice(0, 60));
+  chk(/night, screen off: plateau: ceilings ×0\.875 is the best found, 7\.7% cheaper .* · 176 mW/.test(t), 'off_night line');
+  chk(/day, screen off: trial: ceilings ×0\.875 against ceilings ×1, 3 of 6 pairs/.test(t), 'off_day line');
+  chk(/screen on, light apps, dim: best so far: lean \+10, 3\.9% cheaper/.test(t), 'on_light_dim line');
+  chk(/screen on, light apps, bright: trial: lean \+10 against lean ±0, 9 pairs - not a clear result yet, up to 20/.test(t), 'on_light_bright line');
+  chk(/screen on, other apps, dim: plateau: the original setting is the best/.test(t), 'on_medium_dim line');
+  chk(/screen on, other apps, bright: measuring: 2 block\(s\) so far/.test(t), 'on_medium_bright line');
+  chk(/Set aside, credited to no setting: charging 2, busy radio 1, CPU kept awake 1, climate 2/.test(t), 'rejections: ' + t);
+  chk(/Night check-ins: 3 over 3 night\(s\), usually 03:00-03:30, about 220 s/.test(t), 'night check-ins');
+  chk(/Smoothness: watching 4, testing 1, helped 1, not helped 2/.test(t), 'smoothness');
+  const late = { textContent: 'x', hidden: true };
+  _lviTok = 5;
+  await lviRecordsAppend(late, 4);
+  chk(late.textContent === 'x', 'a sheet that was replaced is not written into');
+  if (bad) process.exit(1);
+  console.log('ok');
+})();
+EOF
+} > "$T/body.js"
+cat > "$T/run.js" <<EOF
+const fs = require('fs');
+global.T = function (k, d) { return d; };
+global.liveInfoIsOpen = function () { return true; };
+global.run = function () { return Promise.resolve({ errno: 0, stdout: fs.readFileSync('$T/rec.txt', 'utf8'), stderr: '' }); };
+const src = fs.readFileSync(process.argv[2], 'utf8');
+(0, eval)(src);
+EOF
+out="$(node "$T/run.js" "$T/body.js" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo "PASS webui smart basis: the tile says what shapes Smart now (records, trials, smoothness, overrides), the sheet lists every situation's record"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

@@ -6774,7 +6774,7 @@ run() {
   ( LK_OUT_DIR="$T"; LK_PRIME_POL="$T/policy6"; LK_P0_HWMAX=3628800; LK_P6_HWMAX=4608000; LK_PH_THROTTLE=0
     MODDIR="$T/mod"; ASB_LK_STATE_FILE="$T/state"; ASB_SHELL_CAPS_FILE="$T/shell_cpu_caps"
     . "$T/f.sh"
-    lk_status_json() { printf '{"temp":40,"surface_hotspot":38,"cap_owner":"%s","perf_cap_p0":2361600,"perf_cap_p6":1632000,"cap_source_p0":"shell_applied","cap_source_p6":"%s"}' "${OWN:-shell}" "${SRC:-shell_applied}"; }
+    lk_status_json() { printf '{"temp":40,"surface_hotspot":38,"headroom_invalid_reason":"%s","cap_owner":"%s","perf_cap_p0":2361600,"perf_cap_p6":1632000,"cap_source_p0":"shell_applied","cap_source_p6":"%s"}' "${HIR:-ok}" "${OWN:-shell}" "${SRC:-shell_applied}"; }
     "$@" )
 }
 echo 1785600 > "$T/policy0/scaling_max_freq"; echo 1747200 > "$T/policy6/scaling_max_freq"
@@ -6791,7 +6791,34 @@ printf '%s\n' "$(cut -d'|' -f1-6 "$T/throttle_trace.txt")|cap_owner=shell|main_b
 cat "$T/x" "$T/x" "$T/x" > "$T/throttle_trace.txt"
 out="$(run lk_emit_cap_ownership_verdict)"
 printf '%s\n' "$out" | grep -q 'foreign cap ownership dominated' && fail "the shell was counted as a foreign owner: $out"
+# fix186: in Smart, ASB's own msm_performance registration under its scaling_max_freq is
+# ASB's (headroom reason own_cap, node value == live), not the vendor's.
+cat > "$T/state" <<'D'
+desired_cpu_max0=1996800
+desired_cpu_max_prime=1862400
+requested_cpu_max0=1996800
+requested_cpu_max_prime=1862400
+cap_writer=asb
+D
+: > "$T/throttle_trace.txt"
+echo 1996800 > "$T/policy0/scaling_max_freq"; echo 1632000 > "$T/policy6/scaling_max_freq"
+HIR=own_cap OWN=asb SRC=asb_dynamic run lk_throttle_row active
+grep -q 'prime_by=asb_msm|writer=asb' "$T/throttle_trace.txt" || fail "ASB's msm registration blamed on the vendor: $(cat "$T/throttle_trace.txt")"
+: > "$T/throttle_trace.txt"
+HIR=ok OWN=asb SRC=asb_dynamic run lk_throttle_row active
+grep -q 'prime_by=vendor|writer=asb' "$T/throttle_trace.txt" || fail "a real foreign ceiling lost its owner: $(cat "$T/throttle_trace.txt")"
 # cap_verify: the shell's values are the expectation, the legacy 921600 is not
+cat > "$T/state" <<'D'
+desired_cpu_max0=1555200
+desired_cpu_maxp=1862400
+desired_cpu_max_prime=1862400
+requested_cpu_max0=0
+requested_cpu_max_prime=0
+cap_writer=shell
+shell_cpu_max0=1785600
+shell_cpu_max_prime=1747200
+D
+echo 1785600 > "$T/policy0/scaling_max_freq"
 echo 1747200 > "$T/policy6/scaling_max_freq"
 run lk_verify_caps
 grep -q 'cap_writer: shell' "$T/cap_verify.txt" || fail "cap_verify does not say who writes: $(cat "$T/cap_verify.txt")"
