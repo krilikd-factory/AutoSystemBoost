@@ -10141,7 +10141,12 @@ function logReportRender(d) {
       s.appendChild(logReportNote(T('lr_crash_none', 'No native crashes during the capture.')));
     } else {
       s.appendChild(logReportRow(logReportT('lr_crash_n', 'Native crashes: {n}', { n: String(cn) }), '', ca > 0));
-      if (crash.latest && crash.latest !== 'none') s.appendChild(logReportNote(logReportT('lr_crash_latest', 'latest: {proc}', { proc: String(crash.latest) })));
+      /* fix204: the crash time rides inside the proc label ("proc, HH:MM") so the user
+         can place it ("that was when I took the screenshot") - no new locale keys. */
+      if (crash.latest && crash.latest !== 'none') {
+        const lt = String(crash.ltime || '').trim();
+        s.appendChild(logReportNote(logReportT('lr_crash_latest', 'latest: {proc}', { proc: String(crash.latest) + (lt ? ', ' + lt : '') })));
+      }
       if (ca > 0) s.appendChild(logReportNote(logReportT('lr_crash_asb', 'ASB code is involved in {n} - please send an asbdiag log to the developer.', { n: String(ca) }), true));
     }
     if (sysui) s.appendChild(logReportRow(logReportT('lr_sysui', 'SystemUI restarts: {n}', { n: String(+sysui.count || 0) }), '', (+sysui.count || 0) > 2));
@@ -10276,23 +10281,37 @@ function asbApplyUiScale() {
  * profile cards (Home) and the two rows of category tiles (Settings) within sane limits.
  * On a tall screen the cards stop growing before they look stretched.
  *
- * fix202 adds the other direction, which is what the layout was always meant to do:
- * a page should FIT on one screen at any density, and only scroll when it truly cannot.
- * After the cards are sized, the page the user is looking at is measured (the document
- * for Home, the scrolling overlay itself for Monitor/Settings/the log report). If it
- * runs past its viewport, the compaction tiers asb-fit-c1/asb-fit-c2 go on <html> and
- * the loop sizes the cards again against the smaller chrome - the floors step down with
- * the tier (68/58/48 px cards, 104/92/80 px tiles). A tier comes off only when a trial
- * fit shows the page fits the lighter tier with a few pixels to spare, so the layout
- * cannot flip-flop at a boundary. If even tier 2 overflows, nothing is hidden: the
- * page simply scrolls (fix201). Re-run on resize, page open/close and when the hub or
- * the report is (re)built, since the header can wrap differently in each language. */
+ * The shrink direction (fix202, reworked in fix203 after the owner's OP15 showed the cost
+ * of getting it wrong). A page should fit one screen at any density - but the first take
+ * decided that from scrollHeight, which counts the bottom padding reserved for the floating
+ * bar AND ran after the cards had grown into the free space. Every page read as a few
+ * pixels too tall, so the compaction tiers went on where nothing was wrong, and the freed
+ * space had nowhere to go (a card cannot grow past its content): compact chrome over a
+ * void, "normal for a second, then awful". The overlays had it worse: a fixed box's
+ * scrollHeight never reads below its own clientHeight, so Monitor and Settings reported
+ * a bar's height of overflow even with short content.
+ *
+ * The tier is now decided from the page as it ASKS to be: the fitted heights are taken
+ * away for the measurement, a fixed overlay is unclamped for it (bottom/height auto), and
+ * the bottom edge of the actual content is compared with the fit line 20 px above the
+ * floating bar - never with a padding-inclusive scroll size. And compaction is the heavy
+ * tool, not the first one: a page that overflows by less than a fifth of the screen
+ * simply keeps its looks and scrolls those pixels (fix201 made that possible); the tiers
+ * asb-fit-c1/asb-fit-c2 go on <html> only past that, with the card/tile floors stepping
+ * down (68/58/48 px cards, 104/92/80 px tiles). A tier comes off when the lighter one is
+ * back within the same allowance, minus a small margin so the layout cannot flip-flop at
+ * a boundary. If even tier 2 overflows, nothing is hidden: the page scrolls. Re-run on
+ * resize, page open/close and when the hub or the report is (re)built, since the header
+ * can wrap differently in each language. */
 function asbFitPages() {
   try {
     const z = window._asbUiScale || 1;
     const bar = document.querySelector('.asb-tabbar');
-    const barTop = bar ? bar.getBoundingClientRect().top : window.innerHeight;
-    const stop = barTop - 20 * z;
+    const barTop = bar ? bar.getBoundingClientRect().top : 0;
+    /* The bar hides inside a settings category (its rect reads 0): the page then owns the
+     * whole height. The fit line sits a little above the bar so content never slides
+     * under it mid-scroll. */
+    const stop = (barTop > 0 ? barTop : window.innerHeight) - 20 * z;
     const root = document.documentElement;
     let tier = asbFitPages._tier || 0;
 
@@ -10328,36 +10347,79 @@ function asbFitPages() {
         root.classList.toggle('asb-fit-c2', t >= 2);
       }
     };
-    /* How far the visible page runs past its viewport, in px: positive means the user has
-     * to scroll, negative is spare room. Home scrolls the document; the overlays are
-     * fixed and scroll themselves. */
-    const overflow = function () {
-      let el = null;
+    /* How far the visible page's content runs past the fit line, in px: positive means the
+     * user has to scroll that much, negative is spare room. Home scrolls the document, so
+     * its bottom is the page box's own. The overlays are fixed and scroll themselves - and
+     * a fixed box's scrollHeight never reads below its own clientHeight, so a page shorter
+     * than the screen would report a full bar's height of overflow it does not have. Their
+     * content bottom is measured with the box unclamped (bottom/height auto for one
+     * synchronous layout, then restored). Both read WITHOUT the bottom padding - that
+     * padding is the reserved strip for the floating bar, counting it (fix202 did, through
+     * scrollHeight) reports a full bar's height of overflow on a page that fits exactly.
+     *
+     * Coordinates: rects come back zoomed (--asb-ui-scale), scroll sizes do not. */
+    const naturalOverflow = function () {
+      let el = null, overlay = true;
       if (document.body.classList.contains('report-active')) el = _el('reportPage');
       else if (document.body.classList.contains('config-active')) el = _el('configPage');
       else if (document.body.classList.contains('live-active')) el = _el('livePage');
-      return el ? el.scrollHeight - el.clientHeight : root.scrollHeight - root.clientHeight;
+      else { el = document.querySelector('.page:not(.live-page)'); overlay = false; }
+      if (!el || !el.getBoundingClientRect) return NaN;
+      const pb = parseFloat(getComputedStyle(el).paddingBottom) || 0;
+      if (!overlay) {
+        const r = el.getBoundingClientRect();
+        return r.bottom - pb * z - stop;
+      }
+      const st = el.style;
+      if (!st) return NaN;
+      const prevB = st.bottom, prevH = st.height;
+      st.bottom = 'auto'; st.height = 'auto';
+      let bottom = NaN;
+      try { bottom = el.getBoundingClientRect().bottom; } finally { st.bottom = prevB; st.height = prevH; }
+      return bottom - pb * z - stop;
     };
 
+    /* What "too tall" means. A page that runs a little past the fit line just scrolls that
+     * far - the chrome stays exactly as drawn, and the scroll is the fix201 fallback every
+     * screen already has. The tiers are the heavy tool: they squeeze the header, the cards
+     * and the cells, and the owner has seen what that does to a page that only barely
+     * overflowed (fix202: a compacted page over a void, where the old look plus a short
+     * scroll read fine). So the allowance is generous: a fifth of the screen, never less
+     * than 56 px - about a card and a half. Past that the scroll itself would get in the
+     * way, and the compaction earns its keep. */
+    const vh = root.clientHeight || window.innerHeight;
+    const need = Math.max(56, Math.round(vh * 0.2));
+
+    /* Measure the page as it asks to be, not as the last pass left it: with the fitted
+     * heights in place every tier reads "just fits" (the cards swallow whatever the tier
+     * freed), which is how fix202 latched onto a tier and never let go. */
+    const prevPbtn = root.style.getPropertyValue ? root.style.getPropertyValue('--pbtn-h') : '';
+    const prevTile = root.style.getPropertyValue ? root.style.getPropertyValue('--cfg-tile-h') : '';
+    root.style.setProperty('--pbtn-h', '0px');
+    root.style.setProperty('--cfg-tile-h', '0px');
     let guard = 0;
     for (;;) {
-      if (++guard > 5) break;
-      sizeCards();
-      const over = overflow();
+      if (++guard > 6) break;
+      const over = naturalOverflow();
       if (!(over > -1e9)) break;   /* this host gave no usable metrics - leave things be */
-      if (over > 2 && tier < 2) { tier++; applyTier(tier); continue; }
-      if (over <= 2 && tier > 0) {
-        /* Fits now. Try the lighter tier, but keep it only with a little room to spare -
-         * taking it back for a 1 px win is how the layout starts breathing. */
+      if (over > need && tier < 2) { tier++; applyTier(tier); continue; }
+      if (over <= need && tier > 0) {
+        /* Fits within the allowance now. Take the lighter tier back when it fits within it
+         * too, minus a few px of margin - flipping the chrome for a 1 px win is how the
+         * layout starts breathing. */
         applyTier(tier - 1);
-        sizeCards();
-        const over2 = overflow();
-        if (!(over2 > -1e9) || over2 > -6) { applyTier(tier); break; }
+        const over2 = naturalOverflow();
+        if (!(over2 > -1e9) || over2 > need - 8) { applyTier(tier); break; }
         tier--; continue;
       }
       break;
     }
     asbFitPages._tier = tier;
+    /* The decision is made; hand the free space back to the cards (or restore the previous
+     * fit on a page whose cards this pass does not size). */
+    root.style.setProperty('--pbtn-h', prevPbtn);
+    root.style.setProperty('--cfg-tile-h', prevTile);
+    sizeCards();
   } catch (e) {}
 }
 /* Each profile card carries what was measured for it (fix168), the same figures the Monitor
