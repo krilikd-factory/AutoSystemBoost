@@ -1701,7 +1701,7 @@ else
     off)        NOTE "verbose logging: off (LSPosed's own setting; it applies from the boot after it was written)" ;;
     *)          NOTE "verbose logging: could not be read here (${_lsp_r:-?}) - LSPosed manager > Settings shows it" ;;
   esac
-  NOTE "card lsposed_verbose=$(cfg lsposed_verbose) - keep: ASB leaves LSPosed alone; off: ASB writes LSPosed's setting once, when the card is changed"
+  NOTE "card lsposed_verbose=$(cfg lsposed_verbose) - keep: ASB leaves LSPosed alone; off: ASB writes LSPosed's setting once, when the card is changed, and empties the modules log every 10 min (fix197)"
   # Only a value ASB actually replaced is reported: a fix187 build also recorded "off" when
   # LSPosed's log was already off, and this line then claimed ASB had switched it off.
   _lsp_p="$(cat /data/adb/asb/lsposed_verbose_prev 2>/dev/null)"
@@ -3965,10 +3965,13 @@ for _pol in /sys/devices/system/cpu/cpufreq/policy*; do
       P "        smart minimum: [PASS] Smart requested hardware lowest OPP"
     else
       case "$_drv:$_gov" in
-        *scmi*|*walt*)
+        *scmi*|*walt*|*uag*|*qcom-cpufreq-hw*)
           # The write lands and the platform holds the minimum higher - a longer boost or a
           # vendor floor. Either way it is not ASB's write that limits it; writer health
-          # counts these as kernel_floor_higher.
+          # counts these as kernel_floor_higher. uag/qcom-cpufreq-hw (OP12/pineapple) boosts
+          # the little-cluster minimum on touches exactly like walt does on SM8850 - a field
+          # report showed 672000 held through the whole 3 s watch right after the screen was
+          # touched to run this diagnostic (fix196).
           P "        smart minimum: [NOTE] want=$_lowest live=${_smin:-unknown} for 3 s - the platform holds a higher minimum right now (a longer perf/PowerHAL boost or a vendor floor on $_drv/$_gov); ASB's write is not the limit" ;;
         *)
           P "        smart minimum: [WARN] want=$_lowest live=${_smin:-unknown} for 3 s (vendor/kernel override or write failure)" ;;
