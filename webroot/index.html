@@ -1530,6 +1530,28 @@ html[dir="rtl"] .live-page .smart-banner-item[data-lvi]::after { content: '\2039
 .live-page .smart-banner-item[data-lvi] .smart-banner-value { padding-inline-end: 9px; }
 html[data-asb-theme="light"] .live-info-now { background: #f7f9fa; }
 html[data-asb-theme="light"] .live-info-src { background: #fbfcfc; }
+/* 24h log report sheet (fix194): plain-words sections over the capsule material. */
+.lgr-status { font-size: 12px; color: var(--text-tertiary); margin: -6px 2px 8px; }
+.lgr-body { display: flex; flex-direction: column; gap: 10px; }
+.lgr-sec { border-radius: 14px; padding: 11px 13px; border: 1px solid var(--border);
+  background: rgba(255,255,255,0.03); }
+.lgr-sec-t { font-size: 11px; font-weight: 700; letter-spacing: 0.35px; text-transform: uppercase;
+  color: var(--accent); margin-bottom: 6px; }
+.lgr-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  font-size: 13px; padding: 2.5px 0; }
+.lgr-k { color: var(--text-secondary); flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.lgr-v { font-weight: 600; color: var(--text); text-align: end; flex: 0 1 auto; max-width: 58%;
+  overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.lgr-note { font-size: 12.5px; line-height: 1.45; color: var(--text-secondary); padding: 2px 0; }
+.lgr-warn { color: var(--perf); }
+.lgr-tip { display: flex; gap: 9px; align-items: flex-start; padding: 4px 0; font-size: 12.5px;
+  line-height: 1.45; color: var(--text); }
+.lgr-ic { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; display: flex;
+  align-items: center; justify-content: center; font-size: 11px; font-weight: 800; margin-top: 1px; }
+.lgr-ic.ok { background: rgba(99,218,163,0.13); color: #63daa3; border: 1px solid rgba(99,218,163,0.35); }
+.lgr-ic.warn { background: rgba(245,180,94,0.12); color: #f5b45e; border: 1px solid rgba(245,180,94,0.38); }
+.lgr-ic.info { background: rgba(76,211,232,0.11); color: #4cd3e8; border: 1px solid rgba(76,211,232,0.35); }
+html[data-asb-theme="light"] .lgr-sec { background: #f7f9fa; }
 .live-drain-cmp { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 14px;
   border: 1px solid var(--border); background: rgba(255,255,255,0.02); }
 .live-drain-cmp-row { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center;
@@ -9471,8 +9493,289 @@ function asbToggleLogMenu(ev) {
   if (typeof uiSound === 'function') uiSound('option');
 }
 
+/* ----- 24h log report (fix194) ------------------------------------------------
+ * The full-day capture writes a long plain-text report aimed at a developer. This sheet
+ * re-reads the same capture directory through tools/logkit/asb_fullday_digest.sh - awk
+ * over files the recorder already wrote, no dumpsys, so it returns instantly - and
+ * explains the capture in plain words: drain, what kept the phone awake, crashes,
+ * SystemUI restarts, throttling, and what to do about it. It works on the RUNNING
+ * capture too: the digest folds in the still-open phase, so the numbers move as the
+ * day goes on. */
+function parseLogReport(txt) {
+  const d = { ok: false, error: '', sections: {}, wl: [] };
+  if (!txt) { d.error = 'empty'; return d; }
+  const lines = String(txt).split('\n');
+  for (const raw of lines) {
+    const line = raw.replace(/\s+$/, '');
+    if (!line) continue;
+    const parts = line.split('\t');
+    const tag = parts[0];
+    if (tag === 'error') { d.error = parts[1] || 'unknown'; return d; }
+    const kv = {};
+    for (let i = 1; i < parts.length; i++) {
+      const eq = parts[i].indexOf('=');
+      if (eq > 0) kv[parts[i].slice(0, eq)] = parts[i].slice(eq + 1);
+    }
+    if (tag === 'wl') {
+      if (kv.pkg) d.wl.push({ pkg: kv.pkg, sec: +kv.sec || 0 });
+      else d.sections.wl_none = { none: '1' };
+    } else {
+      d.sections[tag] = kv;
+    }
+  }
+  d.ok = !!d.sections.meta;
+  return d;
+}
+function logReportT(key, fb, vars) {
+  let s = T(key, fb);
+  const v = vars || {};
+  for (const k in v) s = s.split('{' + k + '}').join(v[k]);
+  return s;
+}
+function logReportDur(min) {
+  const t = Math.max(0, Math.round(+min || 0));
+  const h = Math.floor(t / 60), m = t % 60;
+  if (h > 0 && m > 0) return logReportT('lr_h', '{n} h', { n: String(h) }) + ' ' + logReportT('lr_min', '{n} min', { n: String(m) });
+  if (h > 0) return logReportT('lr_h', '{n} h', { n: String(h) });
+  return logReportT('lr_min', '{n} min', { n: String(m) });
+}
+function logReportTips(d) {
+  const tips = [];
+  const night = d.sections.night || null;
+  const idle = d.sections.idlemax || null;
+  const crash = d.sections.crash || null;
+  if (crash && (+crash.asb || 0) > 0) tips.push({ ic: 'warn', key: 'lr_tip_crash', vars: {} });
+  if (night && (+night.pctph || 0) > 0.8) tips.push({ ic: 'warn', key: 'lr_tip_night', vars: { pct: (+night.pctph).toFixed(1) } });
+  if (idle && (+idle.awake || 0) > 15) tips.push({ ic: 'warn', key: 'lr_tip_awake', vars: { awake: String(idle.awake) } });
+  if (d.wl.length && d.wl[0].sec >= 3600) tips.push({ ic: 'info', key: 'lr_tip_app', vars: { app: d.wl[0].pkg, min: String(Math.round(d.wl[0].sec / 60)) } });
+  if (crash && (+crash.count || 0) > 2 && !((+crash.asb || 0) > 0)) tips.push({ ic: 'info', key: 'lr_tip_crashes', vars: { n: String(crash.count) } });
+  if (!tips.length) tips.push({ ic: 'ok', key: 'lr_tip_ok', vars: {} });
+  return tips;
+}
+/* Everything below builds DOM with textContent only: package names and tombstone
+ * cmdlines are device data and must never become markup. */
+function logReportRow(k, v, warn) {
+  const r = document.createElement('div');
+  r.className = 'lgr-row';
+  const a = document.createElement('span');
+  a.className = 'lgr-k';
+  a.textContent = k;
+  const b = document.createElement('span');
+  b.className = 'lgr-v' + (warn ? ' lgr-warn' : '');
+  b.textContent = v;
+  r.appendChild(a);
+  r.appendChild(b);
+  return r;
+}
+function logReportSec(title) {
+  const s = document.createElement('div');
+  s.className = 'lgr-sec';
+  const t = document.createElement('div');
+  t.className = 'lgr-sec-t';
+  t.textContent = title;
+  s.appendChild(t);
+  return s;
+}
+function logReportNote(txt, warn) {
+  const p = document.createElement('div');
+  p.className = 'lgr-note' + (warn ? ' lgr-warn' : '');
+  p.textContent = txt;
+  return p;
+}
+function logReportEnsure() {
+  let m = _el('logReportSheet');
+  if (m) return m;
+  m = document.createElement('div');
+  m.className = 'cfg-profile-modal live-drain-modal';
+  m.id = 'logReportSheet';
+  m.hidden = true;
+  m.setAttribute('aria-hidden', 'true');
+  const card = document.createElement('div');
+  card.className = 'cfg-profile-sheet live-drain-sheet';
+  card.setAttribute('role', 'dialog');
+  card.setAttribute('aria-modal', 'true');
+  card.setAttribute('aria-labelledby', 'logReportTitle');
+  const head = document.createElement('div');
+  head.className = 'cfg-profile-head';
+  const title = document.createElement('div');
+  title.className = 'cfg-profile-title';
+  title.id = 'logReportTitle';
+  const x = document.createElement('button');
+  x.className = 'cfg-profile-close';
+  x.id = 'logReportX';
+  x.type = 'button';
+  x.setAttribute('aria-label', 'Close');
+  x.textContent = '×';
+  head.appendChild(title);
+  head.appendChild(x);
+  const status = document.createElement('div');
+  status.className = 'lgr-status';
+  status.id = 'logReportStatus';
+  status.hidden = true;
+  const body = document.createElement('div');
+  body.className = 'lgr-body';
+  body.id = 'logReportBody';
+  const done = document.createElement('button');
+  done.className = 'cfg-profile-primary live-drain-done';
+  done.id = 'logReportDone';
+  done.type = 'button';
+  card.appendChild(head);
+  card.appendChild(status);
+  card.appendChild(body);
+  card.appendChild(done);
+  m.appendChild(card);
+  document.body.appendChild(m);
+  m.addEventListener('click', function (e) { if (e.target === m) logReportClose(); });
+  x.onclick = logReportClose;
+  done.onclick = logReportClose;
+  return m;
+}
+function logReportClose() {
+  const m = _el('logReportSheet');
+  if (!m || m.hidden) return;
+  m.hidden = true;
+  m.setAttribute('aria-hidden', 'true');
+  navSyncSoon();
+}
+function logReportRender(d) {
+  const body = _el('logReportBody');
+  const status = _el('logReportStatus');
+  const meta = d.sections.meta || {};
+  const h = String(meta.target_h || '24');
+  body.textContent = '';
+  status.hidden = false;
+  if (String(meta.running) === '1') {
+    status.textContent = logReportT('lr_running', 'recording · {min} min of {h} h', { min: String(meta.elapsed_min || '0'), h: h });
+  } else {
+    status.textContent = T('lr_done', 'capture finished');
+  }
+  const drain = d.sections.drain || null;
+  const cover = d.sections.cover || null;
+  const night = d.sections.night || null;
+  const idle = d.sections.idlemax || null;
+  const radio = d.sections.radio || null;
+  const crash = d.sections.crash || null;
+  const sysui = d.sections.sysui || null;
+  const thermal = d.sections.thermal || null;
+  const throttle = d.sections.throttle || null;
+  if (!(drain || cover || night || idle)) {
+    /* A capture that just started has no committed phases yet - say so instead of
+       showing only the "nothing bad happened" sections. */
+    body.appendChild(logReportNote(T('lr_early', 'The capture has just started - the numbers will appear here after the first phases.')));
+  }
+  if (drain || cover || night || idle) {
+    const s = logReportSec(T('lr_sec_drain', 'Battery drain'));
+    if (drain) {
+      s.appendChild(logReportRow(T('lr_overall', 'Average drain'), String(drain.pctph) + T('lr_per_hour', '%/h')));
+      if ((+drain.ma || 0) > 0) s.appendChild(logReportRow(T('lr_avg_current', 'Average current'), String(drain.ma) + ' mA'));
+    }
+    if (cover) {
+      s.appendChild(logReportRow(T('lr_screen_on', 'Screen on'), logReportDur(cover.on_min) + ' (' + String(cover.on_pct) + '%)'));
+      s.appendChild(logReportRow(T('lr_screen_off', 'Screen off'), logReportDur(cover.off_min)));
+    }
+    if (night) s.appendChild(logReportRow(T('lr_night', 'Longest idle stretch'), logReportDur(night.dur_min) + ' · ' + String(night.pctph) + T('lr_per_hour', '%/h'), (+night.pctph || 0) > 0.8));
+    if (idle) s.appendChild(logReportRow(T('lr_idle', 'Worst idle awake share'), String(idle.awake) + '%', (+idle.awake || 0) > 15));
+    if (radio) s.appendChild(logReportRow(T('lr_radio', 'Mobile data'), String(radio.mib) + ' MiB'));
+    body.appendChild(s);
+  }
+  {
+    const s = logReportSec(T('lr_sec_wake', 'What kept the phone awake'));
+    if (d.wl.length) {
+      d.wl.forEach(function (w) {
+        s.appendChild(logReportRow(w.pkg, logReportDur(Math.round(w.sec / 60))));
+      });
+    } else {
+      s.appendChild(logReportNote(T('lr_wake_none', 'No app wakelocks recorded - excellent.')));
+    }
+    body.appendChild(s);
+  }
+  if (crash || sysui) {
+    const s = logReportSec(T('lr_sec_crash', 'Errors & crashes'));
+    const cn = crash ? (+crash.count || 0) : 0;
+    const ca = crash ? (+crash.asb || 0) : 0;
+    if (cn === 0) {
+      s.appendChild(logReportNote(T('lr_crash_none', 'No native crashes during the capture.')));
+    } else {
+      s.appendChild(logReportRow(logReportT('lr_crash_n', 'Native crashes: {n}', { n: String(cn) }), '', ca > 0));
+      if (crash.latest && crash.latest !== 'none') s.appendChild(logReportNote(logReportT('lr_crash_latest', 'latest: {proc}', { proc: String(crash.latest) })));
+      if (ca > 0) s.appendChild(logReportNote(logReportT('lr_crash_asb', 'ASB code is involved in {n} - please send an asbdiag log to the developer.', { n: String(ca) }), true));
+    }
+    if (sysui) s.appendChild(logReportRow(logReportT('lr_sysui', 'SystemUI restarts: {n}', { n: String(+sysui.count || 0) }), '', (+sysui.count || 0) > 2));
+    body.appendChild(s);
+  }
+  if (thermal || throttle) {
+    const s = logReportSec(T('lr_sec_thermal', 'Thermals & throttling'));
+    if (thermal) s.appendChild(logReportRow(logReportT('lr_temp_max', 'Peak: CPU {cpu}° · skin {surf}°', { cpu: String(thermal.cpu), surf: String(thermal.surf) }), '', (+thermal.cpu || 0) >= 45));
+    if (throttle && (+throttle.clamps || 0) > 0) {
+      s.appendChild(logReportNote(logReportT('lr_clamp_some', 'Throttling periods: {n} ({owner})', { n: String(throttle.clamps), owner: String(throttle.owner || 'unknown') }), true));
+    } else {
+      s.appendChild(logReportNote(T('lr_clamp_none', 'No thermal throttling detected.')));
+    }
+    body.appendChild(s);
+  }
+  {
+    const s = logReportSec(T('lr_sec_tips', 'What it means'));
+    logReportTips(d).forEach(function (tip) {
+      const row = document.createElement('div');
+      row.className = 'lgr-tip';
+      const ic = document.createElement('span');
+      ic.className = 'lgr-ic ' + tip.ic;
+      ic.textContent = tip.ic === 'ok' ? '✓' : (tip.ic === 'warn' ? '!' : 'i');
+      const tx = document.createElement('span');
+      tx.textContent = logReportT(tip.key, {
+        lr_tip_ok: 'No serious issues found - drain looks healthy.',
+        lr_tip_night: 'Overnight the phone lost ~{pct}%/h - check background apps.',
+        lr_tip_awake: 'During idle the phone stayed awake {awake}% of the time - something prevents deep sleep.',
+        lr_tip_crash: 'There are crashes involving ASB code - please send an asbdiag log to the developer.',
+        lr_tip_crashes: '{n} native crashes during the capture - details are in the full report.',
+        lr_tip_app: '{app} held the phone awake for {min} min - consider restricting its background activity.'
+      }[tip.key] || '', tip.vars);
+      row.appendChild(ic);
+      row.appendChild(tx);
+      s.appendChild(row);
+    });
+    body.appendChild(s);
+  }
+}
+async function asbLogReportOpen() {
+  const m = logReportEnsure();
+  _el('logReportTitle').textContent = T('lr_title', '24h log in plain words');
+  _el('logReportDone').textContent = T('doze_keep_done', 'Done');
+  const body = _el('logReportBody');
+  const status = _el('logReportStatus');
+  status.hidden = true;
+  body.textContent = '';
+  body.appendChild(logReportNote(T('lr_loading', 'Reading log data…')));
+  m.hidden = false;
+  m.setAttribute('aria-hidden', 'false');
+  navSyncSoon();
+  let out = '';
+  try {
+    out = runText(await run('sh ' + MD + '/tools/logkit/asb_fullday_digest.sh 2>/dev/null'));
+  } catch (e) { out = ''; }
+  const d = parseLogReport(out);
+  if (d.error === 'no_capture') {
+    status.hidden = true;
+    body.textContent = '';
+    const s = logReportSec(T('lr_none_title', 'No capture found'));
+    s.appendChild(logReportNote(T('lr_none_body', 'Start a 24h capture from this menu first. The report appears here as data accumulates - even while it is still recording.')));
+    body.appendChild(s);
+    return;
+  }
+  if (!d.ok) {
+    status.hidden = true;
+    body.textContent = '';
+    body.appendChild(logReportNote(T('lr_failed', 'Could not read the log data.'), true));
+    return;
+  }
+  logReportRender(d);
+}
+
 function asbLogMenuPick(action) {
   asbCloseLogMenu();
+  /* The report is read-only - it re-reads files the capture already wrote - so it is NOT
+     behind the debug-build gate that protects STARTING a capture. */
+  if (action === 'report') { asbLogReportOpen(); return; }
   if (typeof asbDebugAction === 'function') asbDebugAction(action);
 }
 
@@ -11564,6 +11867,9 @@ setTimeout(() => pollLive(false), 1500);
   </button>
   <button class="log-menu-item" role="menuitem" type="button" onclick="asbLogMenuPick('full-day')">
     <span data-i18n="dbg_log_btn">24h log</span>
+  </button>
+  <button class="log-menu-item" role="menuitem" type="button" onclick="asbLogMenuPick('report')">
+    <span data-i18n="lr_menu">Log report</span>
   </button>
 </div>
 <nav class="asb-tabbar" id="asbTabbar" role="tablist" aria-label="Sections">
