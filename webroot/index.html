@@ -10300,7 +10300,10 @@ function asbApplyUiScale() {
  * asb-fit-c1/asb-fit-c2 go on <html> only past that, with the card/tile floors stepping
  * down (68/58/48 px cards, 104/92/80 px tiles). A tier comes off when the lighter one is
  * back within the same allowance, minus a small margin so the layout cannot flip-flop at
- * a boundary. If even tier 2 overflows, nothing is hidden: the page scrolls. Re-run on
+ * a boundary. If even tier 2 overflows, nothing is hidden: the page scrolls. And the two
+ * scroll surfaces whose content is a long list by design - the log report and an open
+ * tweak category - never take a tier at all (fix205): the tiers style the header, cards,
+ * tiles and cells only, so there they would squash the header and buy nothing. Re-run on
  * resize, page open/close and when the hub or the report is (re)built, since the header
  * can wrap differently in each language. */
 function asbFitPages() {
@@ -10390,6 +10393,17 @@ function asbFitPages() {
     const vh = root.clientHeight || window.innerHeight;
     const need = Math.max(56, Math.round(vh * 0.2));
 
+    /* fix205: the tiers compress the shared header, the profile cards, the config tiles
+     * and the monitor cells - nothing else. On the pages whose content is a long list BY
+     * DESIGN (the log report, an open tweak category) that content is not tier-styled at
+     * all: a tier there buys zero room and only squashes the header, while the list keeps
+     * scrolling regardless (the owner saw the report's header squeezed flat on exactly
+     * such a page). Those are the scroll surfaces - the chrome stays exactly as drawn,
+     * and a tier carried over from another page comes off. */
+    const fittable = !document.body.classList.contains('report-active') &&
+      !(document.body.classList.contains('config-active') && _cfgGroup);
+    if (!fittable) { tier = 0; applyTier(0); }
+
     /* Measure the page as it asks to be, not as the last pass left it: with the fitted
      * heights in place every tier reads "just fits" (the cards swallow whatever the tier
      * freed), which is how fix202 latched onto a tier and never let go. */
@@ -10402,7 +10416,7 @@ function asbFitPages() {
       if (++guard > 6) break;
       const over = naturalOverflow();
       if (!(over > -1e9)) break;   /* this host gave no usable metrics - leave things be */
-      if (over > need && tier < 2) { tier++; applyTier(tier); continue; }
+      if (fittable && over > need && tier < 2) { tier++; applyTier(tier); continue; }
       if (over <= need && tier > 0) {
         /* Fits within the allowance now. Take the lighter tier back when it fits within it
          * too, minus a few px of margin - flipping the chrome for a 1 px win is how the
