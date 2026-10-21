@@ -935,7 +935,6 @@ echo "📋 Release identity"
 # workflow builds the first release ZIP, so the manifest is deliberately not a CI gate.
 # module.prop is the authoritative artifact identity.
 _mp="$MODDIR/module.prop"
-_cl="$MODDIR/CHANGELOG.md"
 if [ -f "$_mp" ]; then
   _mp_ver="$(grep '^version=' "$_mp" | head -1 | cut -d= -f2)"
   _mp_code="$(grep '^versionCode=' "$_mp" | head -1 | cut -d= -f2)"
@@ -944,15 +943,10 @@ if [ -f "$_mp" ]; then
     # update.json is NOT compared with module.prop: it points at the release users are
     # offered, which is legitimately behind a module still in testing. The comparison made
     # every V65 test build fail on a V64 manifest (fix83 CI), so it was removed on request.
+    # The changelog is not consulted either (fix199): the owner keeps it by hand, and a
+    # stale or missing one must never fail - or even warn on - a build.
   else
     err "module.prop missing version or versionCode"
-  fi
-  if [ -f "$_cl" ] && [ -n "$_mp_ver" ]; then
-    if grep -qE "^# .*${_mp_ver}|^## .*${_mp_ver}" "$_cl" 2>/dev/null; then
-      ok "CHANGELOG.md mentions $_mp_ver"
-    else
-      warn "CHANGELOG.md has no section heading for $_mp_ver"
-    fi
   fi
   _ws="$MODDIR/webroot/index.html"
   if [ -f "$_ws" ] && [ -n "$_mp_ver" ]; then
