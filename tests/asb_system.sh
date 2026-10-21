@@ -4102,6 +4102,29 @@ grep -q '\*scmi\*|\*walt\*|\*uag\*|\*qcom-cpufreq-hw\*)' "$ROOT/tools/asb_diag.s
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag differs from tools/asb_diag.sh"
 echo "PASS: fix196 contract"
 ) || exit 1
+# ---- fix199 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix199: $*"; exit 1; }
+# The build must not depend on CHANGELOG.md. The owner keeps the changelog by hand in his
+# own repo; a stale or missing one must never fail a build. It did: the fix198 contract
+# pinned "the changelog names fix198" and the CI run of a tree whose changelog lagged the
+# code failed on exactly that, and lint warned "no section heading" on the same tree. Both
+# are gone; nothing in the gates may read the changelog again. (The tree-check fixture's
+# made-up temp file of the same name is a fixture, not a gate.)
+_clpat='CHANGE''LOG'
+grep -q "$_clpat" "$ROOT/tools/asb_lint.sh" && fail "lint still reads the changelog"
+for _s in asb_smart asb_features asb_ui; do
+  grep -q "$_clpat" "$ROOT/tests/$_s.sh" && fail "tests/$_s.sh still reads the changelog"
+done
+_clreal='$ROOT/CHANGE''LOG.md'
+grep -qF "$_clreal" "$ROOT/tests/asb_system.sh" && fail "this suite still reads the real changelog"
+grep -q "$_clpat" "$ROOT/tools/asb_full_regression.sh" && fail "the regression still reads the changelog"
+# The changelog stays in the delivered tree and in the tree manifest - it is the owner's
+# release notes, just never a build gate.
+grep -q '  CHANGELOG.md$' "$ROOT/tools/asb_tree.sha256" || fail "the changelog fell out of the tree manifest"
+echo "PASS: fix199 contract"
+) || exit 1
 # ---- fix198 ---------------------------------------------------------------
 (
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -4118,7 +4141,6 @@ grep -Fq 'if (enough && j1 <= j0 * (1.0 - ASB_SMOOTH_GAIN_REL)' "$R" || fail "th
 grep -Fq 'a full test without enough frames for a verdict: left as it was' "$R" || fail "no thin-frames verdict"
 grep -Fq 'a->t_frames[0] ? (double)a->t_janky[0] / a->t_frames[0] : 0.0' "$R" || fail "a thin arm would divide by zero"
 asb_has_test test_smart_smoothness_runtime.sh || fail "smoothness runtime test missing"
-grep -q 'fix198' "$ROOT/CHANGELOG.md" || fail "CHANGELOG is silent about fix198"
 echo "PASS: fix198 contract"
 ) || exit 1
 # ---- fix197 ---------------------------------------------------------------
@@ -5883,8 +5905,9 @@ t_tree_check_runtime() (
 #
 # The fix160 debug build failed with "FAIL dsp stereo width: legacy effect does not apply the
 # width". The test was right: src/DSP/asb_dsp.c in the repository was still the fix159 file - it
-# had not been uploaded with the rest of the delivery (CHANGELOG.md neither, hence the lint
-# warning "no section heading for V65"). The real tools/asb_tree_check.sh is run on a made-up
+# had not been uploaded with the rest of the delivery (CHANGELOG.md neither, which back then
+# drew the lint warning "no section heading for V65"; fix199 later dropped that warning - the
+# build must not depend on the changelog). The real tools/asb_tree_check.sh is run on a made-up
 # tree: unchanged, one file edited, one missing, the files it must ignore, CI annotations and
 # the --strict exit. fix164: a file left over from an older delivery (the tests that became
 # four suites) is named as extra, so the owner knows what to delete.
