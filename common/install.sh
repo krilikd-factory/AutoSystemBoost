@@ -256,7 +256,7 @@ asb_end_banner() {
   fi
   ui_print " "
   ui_print "  🔄  ${ASB_DONE_MSG:-Reboot to activate.}"
-  ui_print "  🌐  ${ASB_SUM_WEBUI:-Settings: open the module's WebUI after reboot}"
+  ui_print "  🌐  ${ASB_SUM_WEBUI:-Settings: open the module WebUI after reboot}"
   ui_print "${SEPARATOR}"
   # The brand mark closes the install, under the summary - the same logo the template draws
   # at the top, so the last thing on screen is the module's own signature.
