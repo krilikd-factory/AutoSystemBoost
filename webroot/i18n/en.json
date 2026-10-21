@@ -780,6 +780,7 @@
   "eta_average": "estimate",
   "eta_average_tip": "Estimate: no 10-minute measurement with the screen on yet - based on your recent screen-on sessions.",
   "eta_idle_measured_tip": "Measured screen-off drain: ",
+  "t_cfg_video": " · acts during video playback",
   "st_ltpo_vid_low": "now",
   "st_not_running": "not running",
   "t_cfg_conflict_off": "⇄ {other}: {val} — conflicts with {key}",
