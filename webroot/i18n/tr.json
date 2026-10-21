@@ -384,7 +384,7 @@
     },
     "lsposed_verbose": {
       "name": "LSPosed ayrıntılı günlüğü",
-      "desc": "LSPosed, onlarca megabayta varan kendi ayrıntılı günlüğünü tutar (bir telefonda 31 MB). Kapalı, LSPosed’in kendi ayarını yazar – yöneticisindeki Ayarlar > Ayrıntılı günlük ile aynı anahtar – ve eski ayrıntılı günlük dosyalarını siler; LSPosed ayarı başlarken okur, bu yüzden yeniden başlatmadan sonra geçerli olur. Dokunma, LSPosed’e dokunmaz ve ASB günlüğü kapattıysa LSPosed’in önceki değerini geri koyar. Değiştirdiğinizde bir kez uygulanır: daha sonra günlüğü LSPosed’de yeniden açarsanız ASB bunu geri almaz. Bir LSPosed modülünün yazarına sorun bildirmeden önce yeniden açın.",
+      "desc": "LSPosed, onlarca megabayta varan kendi ayrıntılı günlüğünü tutar (bir telefonda 31 MB). Kapalı, LSPosed’in kendi ayarını yazar – yöneticisindeki Ayarlar > Ayrıntılı günlük ile aynı anahtar – ve eski ayrıntılı günlük dosyalarını siler; LSPosed ayarı başlarken okur, bu yüzden yeniden başlatmadan sonra geçerli olur. Modül günlüğünün – LSPosed modüllerinin kendi yazdığı günlüğün – LSPosed’de bir anahtarı yoktur, bu yüzden kart Kapalı’dayken ASB onu da birkaç dakikada bir arka planda boşaltır. Dokunma, LSPosed’e hiç dokunmaz ve ASB ayrıntılı günlüğü kapattıysa LSPosed’in önceki değerini geri koyar. Günlüğü daha sonra LSPosed’de yeniden açarsanız ASB bunu geri almaz. Bir LSPosed modülünün yazarına sorun bildirmeden önce yeniden açın.",
       "descOpt": {
         "keep": "ASB, LSPosed ayarlarına dokunmaz.",
         "off": "LSPosed ayrıntılı günlüğü bir sonraki açılışta kapanır; eski dosyalar hemen silinir."

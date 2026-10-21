@@ -384,7 +384,7 @@
     },
     "lsposed_verbose": {
       "name": "Log detalhado do LSPosed",
-      "desc": "O LSPosed mantém um log detalhado próprio que chega a dezenas de megabytes (31 MB num telefone). Desligado grava a configuração do próprio LSPosed – o mesmo interruptor de Configurações > Log detalhado no seu gerenciador – e apaga os arquivos antigos de log detalhado; o LSPosed lê a configuração ao iniciar, então vale após reiniciar. Manter deixa o LSPosed como está e, se o ASB desligou o log, devolve o valor que o LSPosed tinha. Aplicado uma vez, ao mudar: se depois você religar o log no LSPosed, o ASB não desfaz isso. Religue-o antes de relatar um problema ao autor de um módulo LSPosed.",
+      "desc": "O LSPosed mantém um log detalhado próprio que chega a dezenas de megabytes (31 MB num telefone). Desligado grava a configuração do próprio LSPosed – o mesmo interruptor de Configurações > Log detalhado no seu gerenciador – e apaga os arquivos antigos de log detalhado; o LSPosed lê a configuração ao iniciar, então vale após reiniciar. O log de módulos – o que os próprios módulos do LSPosed escrevem – não tem interruptor no LSPosed, por isso, enquanto o cartão está em Desligado, o ASB também o esvazia em segundo plano a cada poucos minutos. Manter deixa o LSPosed completamente como está e, se o ASB desligou o log detalhado, devolve o valor que o LSPosed tinha. Se depois você religar o log no LSPosed, o ASB não desfaz isso. Religue-o antes de relatar um problema ao autor de um módulo LSPosed.",
       "descOpt": {
         "keep": "O ASB não mexe nas configurações do LSPosed.",
         "off": "Log detalhado do LSPosed desligado a partir do próximo boot; arquivos antigos apagados na hora."

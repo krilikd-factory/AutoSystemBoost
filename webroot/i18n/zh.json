@@ -411,7 +411,7 @@
     },
     "lsposed_verbose": {
       "name": "LSPosed 详细日志",
-      "desc": "LSPosed 会保存自己的详细日志，可增长到几十 MB（某台手机上为 31 MB）。“关闭”会写入 LSPosed 自身的设置——即其管理器中“设置 > 详细日志”的同一开关——并删除旧的详细日志文件；LSPosed 在启动时读取该设置，因此重启后生效。“保持”不改动 LSPosed；如果 ASB 曾关闭日志，则恢复 LSPosed 原来的值。仅在更改时应用一次：之后若您在 LSPosed 中重新打开日志，ASB 不会撤销。向 LSPosed 模块作者报告问题前请重新打开它。",
+      "desc": "LSPosed 会保存自己的详细日志，可增长到几十 MB（某台手机上为 31 MB）。“关闭”会写入 LSPosed 自身的设置——即其管理器中“设置 > 详细日志”的同一开关——并删除旧的详细日志文件；LSPosed 在启动时读取该设置，因此重启后生效。模块日志——LSPosed 模块自己写入的内容——在 LSPosed 中没有开关，因此当此卡片处于“关闭”时，ASB 还会每隔几分钟在后台清空它。“保持”完全不改动 LSPosed；如果 ASB 曾关闭详细日志，则恢复 LSPosed 原来的值。之后若您在 LSPosed 中重新打开日志，ASB 不会撤销。向 LSPosed 模块作者报告问题前请重新打开它。",
       "descOpt": {
         "keep": "ASB 不改动 LSPosed 的设置。",
         "off": "下次启动起关闭 LSPosed 详细日志；旧日志文件立即删除。"

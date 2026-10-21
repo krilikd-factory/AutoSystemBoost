@@ -384,7 +384,7 @@
     },
     "lsposed_verbose": {
       "name": "Log rinci LSPosed",
-      "desc": "LSPosed menyimpan log rinci sendiri yang bisa mencapai puluhan megabyte (31 MB di satu ponsel). Mati menulis pengaturan LSPosed sendiri – sakelar yang sama dengan Pengaturan > Log rinci di managernya – dan menghapus file log rinci lama; LSPosed membaca pengaturan saat mulai, jadi berlaku setelah reboot. Biarkan tidak menyentuh LSPosed dan, jika ASB pernah mematikan log, mengembalikan nilai yang dimiliki LSPosed. Diterapkan sekali saat diubah: jika nanti Anda menyalakan log lagi di LSPosed, ASB tidak membatalkannya. Nyalakan lagi sebelum melaporkan masalah ke pembuat modul LSPosed.",
+      "desc": "LSPosed menyimpan log rinci sendiri yang bisa mencapai puluhan megabyte (31 MB di satu ponsel). Mati menulis pengaturan LSPosed sendiri – sakelar yang sama dengan Pengaturan > Log rinci di managernya – dan menghapus file log rinci lama; LSPosed membaca pengaturan saat mulai, jadi berlaku setelah reboot. Log modul – yang ditulis oleh modul LSPosed sendiri – tidak punya sakelar di LSPosed, jadi selama kartu pada posisi Mati, ASB juga mengosongkannya di latar belakang setiap beberapa menit. Biarkan tidak menyentuh LSPosed sama sekali dan, jika ASB pernah mematikan log rinci, mengembalikan nilai yang dimiliki LSPosed. Jika nanti Anda menyalakan log lagi di LSPosed, ASB tidak membatalkannya. Nyalakan lagi sebelum melaporkan masalah ke pembuat modul LSPosed.",
       "descOpt": {
         "keep": "ASB tidak menyentuh pengaturan LSPosed.",
         "off": "Log rinci LSPosed mati mulai boot berikutnya; file lama dihapus sekarang."

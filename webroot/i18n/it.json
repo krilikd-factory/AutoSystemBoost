@@ -411,7 +411,7 @@
     },
     "lsposed_verbose": {
       "name": "Log dettagliato LSPosed",
-      "desc": "LSPosed tiene un proprio log dettagliato che arriva a decine di megabyte (31 MB su un telefono). Spento scrive l’impostazione di LSPosed stesso – lo stesso interruttore di Impostazioni > Log dettagliato nel suo manager – ed elimina i vecchi file di log dettagliato; LSPosed legge l’impostazione all’avvio, quindi ha effetto dopo un riavvio. Lascia lascia LSPosed com’è e, se ASB aveva spento il log, rimette il valore che aveva LSPosed. Applicato una volta, quando lo cambiate: se in seguito riaccendete il log in LSPosed, ASB non lo annulla. Riaccendetelo prima di segnalare un problema all’autore di un modulo LSPosed.",
+      "desc": "LSPosed tiene un proprio log dettagliato che arriva a decine di megabyte (31 MB su un telefono). Spento scrive l’impostazione di LSPosed stesso – lo stesso interruttore di Impostazioni > Log dettagliato nel suo manager – ed elimina i vecchi file di log dettagliato; LSPosed legge l’impostazione all’avvio, quindi ha effetto dopo un riavvio. Il log dei moduli – quello che i moduli LSPosed scrivono da sé – non ha un interruttore in LSPosed, quindi finché la scheda è su Spento ASB lo svuota in background ogni pochi minuti. Lascia lascia LSPosed completamente com’è e, se ASB aveva spento il log dettagliato, rimette il valore che aveva LSPosed. Se in seguito riaccendete il log in LSPosed, ASB non lo annulla. Riaccendetelo prima di segnalare un problema all’autore di un modulo LSPosed.",
       "descOpt": {
         "keep": "ASB non tocca le impostazioni di LSPosed.",
         "off": "Log dettagliato di LSPosed spento dal prossimo avvio; i vecchi file vengono eliminati subito."
