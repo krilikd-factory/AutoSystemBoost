@@ -5149,12 +5149,16 @@ echo "PASS smart records: power compared side by side - the climate is not credi
 
 t_smart_smoothness_runtime() (
 # Runtime (fix185): Smart's smoothness check. Android's own frame statistics per app; an app
-# that misses 8 % of 3000+ frames under the normal lean is TESTED - windows alternate the
-# normal lean and 0.15 more headroom - and the headroom is kept for that app only when it
-# cuts the janky share by a quarter and 1.5 points; otherwise the app is marked as not
-# helped by clocks. Windows under the wrong arm are ignored, 24 apps are remembered, the
-# verdicts are re-checked after 21 days. The probe script parses graphicsstats text for one
-# package. The REAL asb_record.h and runtime/asb_gfx_probe.sh run here.
+# that misses 5 % of 3000+ frames under the normal lean is TESTED (8 % until fix198, which
+# two full-day flagship captures showed is above anything a healthy flagship's apps reach) -
+# windows alternate the normal lean and 0.15 more headroom - and the headroom is kept for
+# that app only when it cuts the janky share by a quarter and 1.5 points; otherwise the app
+# is marked as not helped by clocks. fix198 also made the test truly bounded: six windows
+# per arm always end it, even when the app draws too few frames for a verdict (then it is
+# simply left as it was, never kept). Windows under the wrong arm are ignored, 24 apps are
+# remembered, the verdicts are re-checked after 21 days. The probe script parses
+# graphicsstats text for one package. The REAL asb_record.h and runtime/asb_gfx_probe.sh
+# run here.
 set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 R="$ROOT/src/asb_record.h"; G="$ROOT/src/asb_governor.c"; P="$ROOT/runtime/asb_gfx_probe.sh"
@@ -5166,6 +5170,8 @@ command -v "$CC" >/dev/null 2>&1 || { echo "SKIP smart smoothness: no C compiler
 grep -Fq 'asb_smooth_probe_tick(&fsm, &metrics);' "$G" || fail "the governor never probes"
 grep -Fq 'asb_run_modscript("runtime/asb_gfx_probe.sh", pk);' "$G" || fail "the probe is not run for the app in front"
 grep -Fq '#define ASB_SMOOTH_PROBE_S 180' "$G" || fail "probe cadence"
+grep -Fq '#define ASB_SMOOTH_TRIGGER_JANK    0.05' "$R" || fail "fix198: the test trigger is 5 % of 3000+ frames"
+grep -Fq 'if (!enough && !full) return 0;' "$R" || fail "fix198: a full test must end even on thin frames"
 grep -Fq 'else if (g_smooth_win_arm != arm) g_smooth_win_arm = -2;' "$G" || fail "a window whose arm changed would be counted"
 grep -Fq 'g_smart_rt.app_hint < ASB_APP_GAMING && !m->misc.camera_active &&' "$G" || fail "games / the camera are not left out"
 grep -Fq '!asb_smart_is_system_ui(g_smart_rt.app_pkg_cached)' "$G" || fail "the system UI is not left out"
@@ -5225,6 +5231,14 @@ int main(void) {
     /* A smooth app is only watched. */
     for (int i = 0; i < 10; i++) win(C, "com.smooth", 0.02, 0.02);
     if (asb_smooth_find(C, g_now, 0)->state != 0 || asb_smooth_offset_for(C, g_now) != 0) { puts("a smooth app was touched"); bad = 1; }
+    /* fix198: the trigger is 5 % now - 6.5 % of 3000+ frames starts a test, 4 % does not. */
+    const uint64_t D = 0x4444, E = 0x5555;
+    win(D, "com.chatty", 0.065, 0.065);
+    if (asb_smooth_find(D, g_now, 0)->state != 0) { puts("tested before 3000 frames"); bad = 1; }
+    win(D, "com.chatty", 0.065, 0.065);
+    if (asb_smooth_find(D, g_now, 0)->state != 1) { puts("a 6.5 percent app was not tested"); bad = 1; }
+    for (int i = 0; i < 10; i++) win(E, "com.okish", 0.04, 0.04);
+    if (asb_smooth_find(E, g_now, 0)->state != 0) { puts("a 4 percent app was tested"); bad = 1; }
     /* A janky app whose jank is the clocks: tested, then kept. */
     int ev = 0;
     for (int i = 0; i < 2; i++) ev |= win(A, "com.feed", 0.10, 0.04);
@@ -5251,6 +5265,22 @@ int main(void) {
     g_now += ASB_REC_RECHECK_S + 10;
     win(B, "com.chat", 0.01, 0.01);
     if (b->state != 0) { puts("no re-check after 21 days"); bad = 1; }
+    /* fix198: a test is bounded even on thin frames - an app that draws little while it is
+     * watched (a chat left on screen) reaches its verdict at six windows per arm and is
+     * left as it was, headroom never kept. */
+    const uint64_t F = 0x6666;
+    for (int i = 0; i < 8; i++) { g_now += 180; asb_smooth_window(F, "com.quiet", 400, 32, 0, g_now); }
+    asb_smooth_app_t *fa = asb_smooth_find(F, g_now, 0);
+    if (fa->state != 1) { puts("the quiet janky app was not tested"); bad = 1; }
+    int armf = 1, nf = 0;
+    while (fa->state == 1 && nf++ < 40) {
+        g_now += 180;
+        asb_smooth_window(F, "com.quiet", 300, 24, armf, g_now);
+        armf ^= 1;
+    }
+    if (fa->state != 3 || asb_smooth_offset_for(F, g_now) != 0) { puts("a full test on thin frames did not end, or kept the headroom"); bad = 1; }
+    if (!strstr(g_smooth_event_msg, "without enough frames")) { puts("no log of the thin-frames verdict"); bad = 1; }
+    if (nf > 13) { printf("a thin-frames test took %d windows\n", nf); bad = 1; }
     /* 24 apps remembered: the least recently seen makes room, the rest stay. */
     for (uint64_t k = 0; k < 30; k++) { g_now += 60; asb_smooth_window(0x9000 + k, "com.many", 100, 1, 0, g_now); }
     if (asb_smooth_find(0x9000, g_now, 0) || !asb_smooth_find(0x9000 + 29, g_now, 0)) { puts("the app table did not evict the oldest"); bad = 1; }

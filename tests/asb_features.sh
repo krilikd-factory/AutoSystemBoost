@@ -3856,6 +3856,15 @@ grep -qx 'peak=120.0' "$T/d/ltpo_range.orig" && grep -qx 'min=60.0' "$T/d/ltpo_r
 sh "$A" apply
 grep -qx 'peak=120.0' "$T/d/ltpo_range.orig" || f "baseline overwritten on re-apply"
 
+# The asbdiag diagnostic line: the deleted floor must read as the open range, and the
+# recorded originals must not glue onto an empty value - the fix192 field report printed
+# "min= recorded=peak=120.0 min=__unset" on two different devices (fix196).
+_rng="$(sh "$A" range)"
+case "$_rng" in
+  "max_mode=165 peak=165.0 min=none (floor open) original: peak=120.0 min=60.0") : ;;
+  *) f "range diagnostic garbled: $_rng" ;;
+esac
+
 echo ltpo_force=0 > "$T/mod/config/governor.conf"; sh "$A" apply
 [ "$(cat "$T/s/peak_refresh_rate")" = 120.0 ] && [ "$(cat "$T/s/min_refresh_rate")" = 60.0 ] || f "off did not restore peak/min"
 [ -f "$T/d/ltpo_range.orig" ] && f "baseline kept after restore"
@@ -3874,6 +3883,14 @@ echo ltpo_force=1 > "$T/mod/config/governor.conf"; sh "$A" apply
 grep -qx 'peak=144.0' "$T/d/ltpo_range.orig" || f "a lowered video peak was recorded as the user's"
 [ "$(cat "$T/s/peak_refresh_rate")" = 60.0 ] || f "range fought the video watcher while lowered"
 grep -qx 'orig=165.0' "$T/d/ltpo_video.lowered" || f "open peak not handed to the video record"
+
+# The diagnostic stays readable with an unset baseline too (nothing was ever recorded).
+rm -f "$T/d/ltpo_video.lowered"
+_rng="$(sh "$A" range)"
+case "$_rng" in
+  "max_mode=165 peak=60.0 min=none (floor open) original: peak=144.0 min=__unset") : ;;
+  *) f "range diagnostic with a video-held peak garbled: $_rng" ;;
+esac
 
 [ "$fail" = 0 ] && echo "PASS ltpo range runtime"
 exit "$fail"
@@ -6840,15 +6857,16 @@ echo "PASS logkit shell cap reference: manual-profile throttle and cap_verify us
 )
 
 t_lsposed_verbose_runtime() (
-# Runtime (fix187): LSPosed's verbose log, switched only on request.
+# Runtime (fix187, sweep added in fix197): LSPosed's verbose log, switched only on request.
 #
 # A user's LSPosed had 31 MB of verbose logs. The REAL C helper (asb --lspd, src/asb_lspd.h)
 # runs against a real SQLite database laid out like LSPosed's modules_config.db (host
 # libsqlite3 in place of Android's libsqlite.so), and the REAL runtime/asb_lsposed.sh drives
 # it: off writes LSPosed's own Boolean false, keeps the newest verbose log and deletes the
-# rest, remembers what LSPosed had; keep puts that back (no row = LSPosed's default); a
-# database of another layout is never touched; status says whether a write is still waiting
-# for the reboot LSPosed needs.
+# rest, empties the modules log (it has no switch - the sweep empties it again every ten
+# minutes from service.sh's loop while the card says off), remembers what LSPosed had; keep
+# puts that back (no row = LSPosed's default); a database of another layout is never
+# touched; status says whether a write is still waiting for the reboot LSPosed needs.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
@@ -6863,7 +6881,10 @@ G="$ROOT/src/asb_governor.c"
 grep -Fq 'if (argc >= 3 && strcmp(argv[1], "--lspd") == 0) return asb_lspd_cli(argc - 2, argv + 2);' "$G" || fail "the governor binary does not answer --lspd"
 grep -q '^lsposed_verbose=keep$' "$ROOT/config/governor.conf" || fail "not shipped as keep"
 grep -q "if (key === 'lsposed_verbose') {" "$ROOT/webroot/index.html" || fail "the card does not run the script"
-grep -q 'asb_lsposed.sh' "$ROOT/service.sh" && fail "the switch must never run at boot"
+grep -qE 'asb_lsposed\.sh"?\s+apply\b' "$ROOT/service.sh" && fail "the switch must never run at boot"
+# fix197: the setting is still never written at boot - what runs is the sweep loop, which
+# only empties the logs, and only while the card says off.
+grep -q 'asb_lsposed.sh" sweep' "$ROOT/service.sh" || fail "no modules-log sweep loop in service.sh"
 cat > "$T/m.c" <<C
 #define ASB_LSPD_SQLITE_LIB "$LIB"
 #include "$ROOT/src/asb_lspd.h"
@@ -6912,7 +6933,7 @@ mkdir -p "$T/lspd/log.old"; head -c 1024 /dev/zero > "$T/lspd/log.old/verbose_20
 head -c 1024 /dev/zero > "$T/lspd/log.old/modules_2026-10-10T10_00_00.log"
 run() { ( MODDIR="$T/mod" ASB_CONF="$T/mod/config/governor.conf" ASB_LSPD_DIR="$T/lspd" ASB_LSPD_PREV="$T/asb/prev" ASB_GOV_BIN="$T/bin/asb" sh "$ROOT/runtime/asb_lsposed.sh" "$@" ); }
 echo 'lsposed_verbose=off' > "$T/mod/config/governor.conf"
-out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=off_after_reboot freed_kib=5$' || fail "apply off: $out"
+out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=off_after_reboot freed_kib=7$' || fail "apply off: $out"
 [ -f "$T/lspd/log/verbose_2026-10-13T10_00_00.log" ] || fail "the newest verbose log (held open) was deleted"
 # Emptied, not deleted (fix189): LSPosed deletes the eldest of this boot's files itself, and a
 # file already gone stalls that for the rest of the boot.
@@ -6920,13 +6941,16 @@ out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=off_after_reboot fre
   && [ -f "$T/lspd/log/verbose_2026-10-12T10_00_00.log" ] && [ ! -s "$T/lspd/log/verbose_2026-10-12T10_00_00.log" ] || fail "old verbose logs not emptied in place"
 [ -s "$T/lspd/log/verbose_2026-10-13T10_00_00.log" ] || fail "the newest verbose log was emptied"
 [ ! -f "$T/lspd/log.old/verbose_2026-10-10T10_00_00.log" ] || fail "the previous boot's verbose log kept"
-[ -f "$T/lspd/log.old/modules_2026-10-10T10_00_00.log" ] || fail "the previous boot's modules log was touched"
-[ -f "$T/lspd/log/modules_2026-10-13T10_00_00.log" ] || fail "the modules log was touched"
+# fix197: the modules log has no switch in LSPosed, so off keeps it clean as well - every
+# file emptied in place, the newest included (the daemon appends; a truncated file simply
+# grows again), and the previous boot's deleted like the verbose ones.
+[ -f "$T/lspd/log/modules_2026-10-13T10_00_00.log" ] && [ ! -s "$T/lspd/log/modules_2026-10-13T10_00_00.log" ] || fail "the modules log not emptied in place"
+[ ! -f "$T/lspd/log.old/modules_2026-10-10T10_00_00.log" ] || fail "the previous boot's modules log kept"
 [ "$(cat "$T/asb/prev")" = default_on ] || fail "LSPosed's earlier value not remembered"
 out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=already_off' || fail "second apply: $out"
 [ "$(cat "$T/asb/prev")" = default_on ] || fail "the remembered value was overwritten by ASB's own"
 out="$(run status)"; printf '%s\n' "$out" | grep -qx 'verbose=off' && printf '%s\n' "$out" | grep -qx 'present=1' || fail "status: $out"
-printf '%s\n' "$out" | grep -qx 'modules_kib=1' && printf '%s\n' "$out" | grep -qx 'oldlog_kib=1' || fail "the modules log is not reported apart: $out"
+printf '%s\n' "$out" | grep -qx 'modules_kib=0' && printf '%s\n' "$out" | grep -qx 'oldlog_kib=0' || fail "the modules log is not reported apart: $out"
 # Written during this boot: the daemon still runs with the old value, the card must say so.
 printf '%s\n' "$out" | grep -qx 'pending_reboot=1' || fail "a write from this boot is not reported as waiting for a reboot: $out"
 echo 1000 > "$T/asb/prev_at"
@@ -6953,9 +6977,23 @@ echo off > "$T/asb/prev"; echo 'lsposed_verbose=keep' > "$T/mod/config/governor.
 out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=untouched' || fail "keep after an already-off claims a restore: $out"
 [ "$("$T/bin/asb" --lspd verbose-get "$D")" = "verbose=off" ] || fail "keep changed a value ASB never wrote"
 grep -q "LSPosed's log was already off when the card was set" "$ROOT/tools/asb_diag.sh" || fail "asbdiag still says ASB switched an already-off log"
+# fix197: sweep - the command service.sh's loop runs every ten minutes. It empties the logs
+# while the card says off and touches nothing else: no setting write, no record, and nothing
+# at all on keep.
+head -c 3072 /dev/zero > "$T/lspd/log/modules_2026-10-14T10_00_00.log"
+echo 'lsposed_verbose=keep' > "$T/mod/config/governor.conf"
+out="$(run sweep)"; printf '%s\n' "$out" | grep -qx 'result=skip' || fail "sweep on keep: $out"
+[ "$(wc -c < "$T/lspd/log/modules_2026-10-14T10_00_00.log")" = 3072 ] || fail "sweep touched the logs on keep"
+echo 'lsposed_verbose=off' > "$T/mod/config/governor.conf"
+out="$(run sweep)"; printf '%s\n' "$out" | grep -qx 'result=swept freed_kib=3' || fail "sweep on off: $out"
+[ ! -s "$T/lspd/log/modules_2026-10-14T10_00_00.log" ] || fail "sweep left the modules log full"
+[ -s "$T/lspd/log/verbose_2026-10-13T10_00_00.log" ] || fail "sweep emptied the live verbose log the daemon holds open"
+[ "$(row "$D")" = "ACED0005737200116A6176612E6C616E672E426F6F6C65616ECD207280D59CFAEE0200015A000576616C7565787000" ] || fail "sweep wrote LSPosed's setting"
+[ ! -f "$T/asb/prev" ] || fail "sweep recorded a previous value it never replaced"
 rm -rf "$T/lspd"; echo 'lsposed_verbose=off' > "$T/mod/config/governor.conf"
 out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=absent' || fail "no LSPosed: $out"
-echo "PASS lsposed verbose: LSPosed's own switch written as Java's Boolean, remembered and put back; old logs freed; foreign layouts untouched"
+out="$(run sweep)"; printf '%s\n' "$out" | grep -qx 'result=absent' || fail "sweep without LSPosed: $out"
+echo "PASS lsposed verbose: LSPosed's own switch written as Java's Boolean, remembered and put back; old logs and the modules log freed; sweep only while the card says off; foreign layouts untouched"
 )
 
 t_asbdiag_lsposed_modlog_runtime() (

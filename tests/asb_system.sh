@@ -4004,7 +4004,8 @@ grep -q '#include "asb_lspd.h"' "$ROOT/src/asb_governor.c" || fail "the binary d
 grep -q 'dlopen(libs\[i\], RTLD_NOW)' "$ROOT/src/asb_lspd.h" || fail "libsqlite is not opened at run time"
 grep -q '^lsposed_verbose=keep$' "$ROOT/config/governor.conf" || fail "the switch must ship as keep"
 grep -q '^lsposed_verbose|advanced|' "$ROOT/config/key_ownership.tsv" || fail "lsposed_verbose not registered"
-grep -q 'asb_lsposed' "$ROOT/service.sh" "$ROOT/post-fs-data.sh" 2>/dev/null && fail "the LSPosed switch must never run at boot"
+grep -qE 'asb_lsposed\.sh"?[[:space:]]+(apply|restore|open)\b' "$ROOT/service.sh" "$ROOT/post-fs-data.sh" 2>/dev/null && fail "the LSPosed switch must never run at boot"
+grep -q 'asb_lsposed' "$ROOT/post-fs-data.sh" 2>/dev/null && fail "the LSPosed sweep must not run in post-fs-data"
 grep -q 'asb_lsposed.sh" restore' "$ROOT/uninstall.sh" || fail "uninstall leaves LSPosed changed"
 grep -q 'asb_lsposed.sh' "$ROOT/docs/log_schemas.md" || fail "asb_lsposed.sh status undocumented"
 grep -q '0f. LSPOSED LOGGING' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not report LSPosed"
@@ -4078,6 +4079,88 @@ grep -q -- '--cap-wash: linear-gradient(135deg, rgba(0,240,180,0.04), rgba(0,212
 [ "$(grep -c 'class="hdr-cap hdr-info"' "$ROOT/webroot/index.html")" -eq 4 ] || fail "not every page has the chip/version capsule"
 grep -q '^function asbHeaderFit(force) {' "$ROOT/webroot/index.html" || fail "the island is never fitted"
 echo "PASS: fix192 contract"
+) || exit 1
+# ---- fix196 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix196: $*"; exit 1; }
+# The LTPO diagnostic read as corruption on two field devices.
+grep -q 'min=%s original: %s' "$ROOT/runtime/asb_ltpo_apply.sh" || fail "ltpo range diagnostic still glues the recorded originals onto an empty min"
+grep -q "printf 'max_mode=%s peak=%s min=%s recorded=%s" "$ROOT/runtime/asb_ltpo_apply.sh" && fail "the old glued recorded= format is back"
+# The action sheet shows the same idle figure as the profile's card.
+asb_has_test test_action_idle_per_profile_runtime.sh || fail "action idle per-profile test missing"
+grep -q 'awk -F: -v p="$PROFILE"' "$ROOT/action.sh" || fail "action.sh does not pick the active profile's idle figure"
+# The prime-ceiling label named the rail's ask "requested" - the writer's request is the
+# floor-lifted value; all 12 locales carry the corrected wording with its %s intact.
+for _l in "$ROOT"/runtime/i18n/action_*.sh; do
+  grep -q '^T_CPR_FLOOR=' "$_l" || fail "${_l##*/} lacks T_CPR_FLOOR"
+  [ "$(sed -n 's/^T_CPR_FLOOR=//p' "$_l" | grep -c '%s')" -eq 1 ] || fail "${_l##*/} T_CPR_FLOOR lost its %s"
+done
+grep -q 'T_CPR_FLOOR="эффективный минимум' "$ROOT/runtime/i18n/action_ru.sh" && fail "the misleading ru wording is back"
+# OP12's uag/qcom-cpufreq-hw boosts the minimum on touches exactly like walt - a NOTE, not a WARN.
+grep -q '\*scmi\*|\*walt\*|\*uag\*|\*qcom-cpufreq-hw\*)' "$ROOT/tools/asb_diag.sh" || fail "asbdiag still warns on a uag platform floor boost"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag differs from tools/asb_diag.sh"
+echo "PASS: fix196 contract"
+) || exit 1
+# ---- fix198 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+R="$ROOT/src/asb_record.h"
+fail() { echo "FAIL fix198: $*"; exit 1; }
+# The smoothness check's entry bar is 5 % of 3000+ frames (was 8 %): two full-day flagship
+# captures showed 8 % above anything a healthy phone's apps reach, so no test ever ran.
+grep -Fq '#define ASB_SMOOTH_TRIGGER_JANK    0.05' "$R" || fail "the test trigger is not 5 %"
+grep -Fq 'The trigger was 8 % until fix198' "$R" || fail "the design comment lost the field evidence"
+# A test is bounded: six windows per arm always end it, even on thin frames - the verdict
+# is kept-headroom only with the full evidence, otherwise the app is left as it was.
+grep -Fq 'if (!enough && !full) return 0;' "$R" || fail "the frames floor still gates the verdict"
+grep -Fq 'if (enough && j1 <= j0 * (1.0 - ASB_SMOOTH_GAIN_REL)' "$R" || fail "thin frames could keep the headroom"
+grep -Fq 'a full test without enough frames for a verdict: left as it was' "$R" || fail "no thin-frames verdict"
+grep -Fq 'a->t_frames[0] ? (double)a->t_janky[0] / a->t_frames[0] : 0.0' "$R" || fail "a thin arm would divide by zero"
+asb_has_test test_smart_smoothness_runtime.sh || fail "smoothness runtime test missing"
+grep -q 'fix198' "$ROOT/CHANGELOG.md" || fail "CHANGELOG is silent about fix198"
+echo "PASS: fix198 contract"
+) || exit 1
+# ---- fix197 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL fix197: $*"; exit 1; }
+# The segment control and the switch wear the navigation bar's capsule material.
+sed -n '/^\.cfg-seg {$/,/^}/p' "$H" | grep -q 'background: var(--cap-wash), var(--tabbar-bg, #000000);' || fail "the segment is not the bar's capsule"
+sed -n '/^\.cfg-seg {$/,/^}/p' "$H" | grep -q 'border: 1px solid var(--cap-edge);' || fail "the segment lost the teal edge"
+sed -n '/^\.cfg-seg {$/,/^}/p' "$H" | grep -q 'box-shadow: var(--cap-shadow);' || fail "the segment lost the lit edge"
+sed -n '/^\.cfg-seg {$/,/^}/p' "$H" | grep -Eq '^[[:space:]]*overflow: hidden;' && fail "the clip is back - it cuts the floating pill's ring"
+sed -n '/^\.cfg-seg button {$/,/^}/p' "$H" | grep -q 'border-radius: 11px;' || fail "the segment buttons are not pills"
+sed -n '/^\.cfg-seg button\.on {$/,/^}/p' "$H" | grep -q 'background: var(--pill-wash);' || fail "the selected option lost the tonal pill"
+sed -n '/^\.cfg-switch {$/,/^}/p' "$H" | grep -q 'background: var(--cap-wash), var(--tabbar-bg, #000000);' || fail "the switch track is not the bar's capsule"
+sed -n '/^\.cfg-switch {$/,/^}/p' "$H" | grep -q 'box-shadow: var(--cap-shadow);' || fail "the switch lost the lit edge"
+sed -n '/^\.cfg-switch\.on {$/,/^}/p' "$H" | grep -q 'rgba(0,240,180,0.5)' || fail "the on state lost the accent wash"
+grep -q 'html\[data-asb-theme="light"\] \.cfg-seg {' "$H" || fail "no light-theme segment capsule"
+grep -q 'html\[data-asb-theme="light"\] \.cfg-switch {' "$H" || fail "no light-theme switch capsule"
+# The log report is a page in the back-gesture history, like the others.
+[ "$(grep -c '^let _rpOpen = false;' "$H")" -eq 1 ] || fail "_rpOpen declared twice or never"
+[ "$(grep -n '^let _rpOpen = false;' "$H" | cut -d: -f1)" -lt "$(grep -n '^function navUiDepth()' "$H" | cut -d: -f1)" ] || fail "_rpOpen is declared after the nav code that reads it"
+grep -q 'if (_rpOpen) d++;' "$H" || fail "the report page owns no history entry"
+grep -q "if (_rpOpen) { uiSound('nav'); closeReportPage(); return; }" "$H" || fail "back does not close the report page"
+grep -q "if (e.key === 'Escape' && _rpOpen)" "$H" || fail "Escape does not close the report page"
+# The LSPosed card keeps the modules log clean: apply empties it once, the service loop
+# sweeps it every ten minutes while the card says off, and the setting is still never
+# written at boot.
+grep -q '^_sweep_logs() {' "$ROOT/runtime/asb_lsposed.sh" || fail "no sweep helper"
+grep -q '^  sweep)' "$ROOT/runtime/asb_lsposed.sh" || fail "no sweep command"
+grep -q 'log/modules_\*\.log' "$ROOT/runtime/asb_lsposed.sh" || fail "the sweep does not touch the modules log"
+grep -q 'status|apply|sweep|restore|open' "$ROOT/runtime/asb_lsposed.sh" || fail "usage line not updated"
+grep -q 'asb_lsposed.sh" sweep' "$ROOT/service.sh" || fail "no sweep loop in service.sh"
+grep -qE 'asb_lsposed\.sh"?\s+apply\b' "$ROOT/service.sh" && fail "the LSPosed setting is written at boot"
+asb_has_test test_lsposed_verbose_runtime.sh || fail "lsposed runtime test missing"
+# The card tells the user about the modules-log cleaning in every shipped language.
+grep -q 'The modules log - what the LSPosed modules themselves write - has no switch' "$H" || fail "the English card text is silent about the modules log"
+for _l in ru:лога\ модулей uk:логу\ модулів de:Modulprotokoll es:registro\ de\ módulos fr:journal\ des\ modules it:log\ dei\ moduli pt:log\ de\ módulos tr:Modül\ günlüğünün id:Log\ modul ar:سجل\ الوحدات hy:Մոդուլների\ լոգը zh:模块日志; do
+  _f="$_l"; _lang="${_f%%:*}"; _word="${_f#*:}"
+  grep -q "$_word" "$ROOT/webroot/i18n/$_lang.json" || fail "$_lang.json: the card text is silent about the modules log"
+done
+echo "PASS: fix197 contract"
 ) || exit 1
 echo "PASS: field-fix contracts"
 )
@@ -4156,6 +4239,44 @@ grep -qx 'smart 150 1' "$T/odp" || fail "per-profile figure not kept on disk: $(
 grep -q '"offdrain_by_profile="' "$G" || fail "not published in the state"
 echo "PASS offdrain by profile: a window counts for the profile that held it from screen-off to screen-on"
 )
+
+t_action_idle_per_profile_runtime() (
+# Runtime (fix196): the action page's idle figure is the CURRENT profile's own measurement -
+# the number the WebUI shows on the profile's card - not the phone-wide one. An OP15 on
+# Smart printed "idle measured 0.63 %/h (6 windows)" in the action sheet while the Smart card
+# and the Monitor tile said 0.42 %/h (1 window): same minute, two figures, one phone. The
+# REAL block from action.sh runs against a state file that carries both scopes.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL action idle per-profile: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+A="$ROOT/action.sh"
+awk '/^_offx="\$\(grep -m1/{f=1} f{print} f && /^_idle_measured=0/{g=1} g && /^fi$/{exit}' "$A" \
+  | sed "s#/dev/.asb/state#$T/state#g" > "$T/blk.sh"
+grep -q 'offdrain_by_profile' "$T/blk.sh" || fail "the block does not read the per-profile figure"
+grep -q '^fi$' "$T/blk.sh" || fail "extraction stopped before the ETA branch"
+run_blk() { # $1=profile -> "offx offn measured toff_min"
+  PROFILE="$1" _lvl=53 _remain_mah=0 _off_ma=0 sh -c ". '$T/blk.sh'; printf '%s %s %s %s\n' \"\$_offx\" \"\$_offn\" \"\$_idle_measured\" \"\$_toff_min\""
+}
+cat > "$T/state" <<'S'
+offdrain_pctph_x100=63
+offdrain_windows=6
+offdrain_by_profile=battery:37:1,balanced:-1:0,performance:-1:0,smart:42:1
+S
+out="$(run_blk smart)"
+[ "$out" = "42 1 1 7571" ] || fail "Smart must see its own 0.42 %/h (1 window): $out"
+out="$(run_blk balanced)"
+[ "$out" = "63 6 1 5047" ] || fail "a profile with no clean window falls back to phone-wide: $out"
+# No per-profile key at all: the phone-wide figure stands, as before fix189 existed.
+cat > "$T/state" <<'S'
+offdrain_pctph_x100=63
+offdrain_windows=6
+S
+out="$(run_blk smart)"
+[ "$out" = "63 6 1 5047" ] || fail "missing per-profile key must keep the phone-wide figure: $out"
+echo "PASS action idle per-profile: the action sheet shows the same idle figure as the profile's card"
+)
+
 
 t_profile_net_reassert_runtime() (
 # Runtime (fix168): a profile switch never leaves the network on the profile's rails.

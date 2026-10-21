@@ -2211,6 +2211,20 @@ async function back() { if (!hist.canGoBack()) { exited++; return; } hist.go(-1)
   await back();
   chk(exited === 1, 'and only now does back leave');
 
+  /* fix197: the log report is a page of its own - back closes it and returns to the page
+   * it was opened from, instead of leaving the WebUI. */
+  exited = 0;
+  _rpOpen = true; navSync();
+  chk(hist.idx === 1, 'report over Home: one entry, have ' + hist.idx);
+  await back();
+  chk(_rpOpen === false && hist.idx === 0 && exited === 0, 'back closed the report, stayed in the WebUI');
+  _cfgOpen = true; navSync(); _rpOpen = true; navSync();
+  chk(hist.idx === 2, 'report over Settings: two entries, have ' + hist.idx);
+  await back();
+  chk(_rpOpen === false && _cfgOpen === true && hist.idx === 1, 'back from the report returned to Settings');
+  await back();
+  chk(!_cfgOpen && hist.idx === 0 && exited === 0, 'and the next back went Home');
+
   _lvDrain.on = 'recent'; _lvDrain.off = 'measured'; _lvDrain.offN = 3; _lvDrain.winS = 0;
   _el('bnDrain').textContent = '~8.5%/h'; _el('bnDrainOff').textContent = '0.52%/h';
   _el('liveEtaOn').textContent = '8h 56m'; _el('liveEtaOff').textContent = '> 72h';
@@ -2257,9 +2271,10 @@ global._el = function (id) { return els[id] || null; };
 global.T = function (k, d) { return d; };
 global.techIcon = function (k) { return '<svg data-k="' + k + '"></svg>'; };
 global.uiSound = function () {};
-global._liveOpen = false; global._cfgOpen = false; global._cfgGroup = null;
+global._liveOpen = false; global._cfgOpen = false; global._cfgGroup = null; global._rpOpen = false;
 global.closeLivePage = function () { _liveOpen = false; };
 global.closeConfigPage = function () { _cfgOpen = false; _cfgGroup = null; };
+global.closeReportPage = function () { _rpOpen = false; };
 global.cfgBack = function () { _cfgGroup = null; };
 global.asbCloseLogMenu = function () { els.logMenu.hidden = true; };
 global.cfgFmClose = function () { els.cfgFm.hidden = true; };
