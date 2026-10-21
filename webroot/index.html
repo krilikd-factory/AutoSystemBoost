@@ -74,7 +74,10 @@
   --border-active: rgba(255,255,255,0.15);
   
   --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
-  --sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+  /* Emoji fonts close the stack so glyphs like the report-section marks always resolve to
+   * the colour emoji face instead of tofu - some WebView builds skip fontconfig-style
+   * fallback when the requested weight has no emoji coverage. */
+  --sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji';
 }
 
 *, *::before, *::after {
@@ -1530,13 +1533,30 @@ html[dir="rtl"] .live-page .smart-banner-item[data-lvi]::after { content: '\2039
 .live-page .smart-banner-item[data-lvi] .smart-banner-value { padding-inline-end: 9px; }
 html[data-asb-theme="light"] .live-info-now { background: #f7f9fa; }
 html[data-asb-theme="light"] .live-info-src { background: #fbfcfc; }
-/* 24h log report sheet (fix194): plain-words sections over the capsule material. */
-.lgr-status { font-size: 12px; color: var(--text-tertiary); margin: -6px 2px 8px; }
-.lgr-body { display: flex; flex-direction: column; gap: 10px; }
-.lgr-sec { border-radius: 14px; padding: 11px 13px; border: 1px solid var(--border);
-  background: rgba(255,255,255,0.03); }
-.lgr-sec-t { font-size: 11px; font-weight: 700; letter-spacing: 0.35px; text-transform: uppercase;
-  color: var(--accent); margin-bottom: 6px; }
+/* 24h log report page (fix195): a full page, not a sheet - Monitor-cell cards, emoji
+ * section labels, two hero tiles where a headline number exists. One layer above Config
+ * so it can open over any page from the Logs menu in any header. */
+#reportPage { z-index: 130; overflow-y: auto !important; }
+.rpt-meta-row { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  width: 100%; margin: -2px 2px 10px; }
+.lgr-status { font-size: 12px; color: var(--text-tertiary); }
+.rpt-refresh { flex: 0 0 auto; }
+.lgr-body { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+.lgr-sec { border-radius: 18px; padding: 13px 14px; border: 1px solid var(--border);
+  background: linear-gradient(160deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.035), 0 1px 4px rgba(0,0,0,0.22); }
+.lgr-sec-t { font-size: 12px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+  color: var(--accent); margin-bottom: 9px; }
+.lgr-heros { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.lgr-heros.single { grid-template-columns: 1fr; }
+.lgr-hero { display: flex; flex-direction: column; gap: 3px; border-radius: 14px; padding: 10px 12px;
+  border: 1px solid var(--border); background: rgba(255,255,255,0.025); }
+.lgr-hero-warn { border-color: rgba(245,180,94,0.35); background: rgba(245,180,94,0.06); }
+.lgr-hero-emo { font-size: 14px; line-height: 1; }
+.lgr-hero-lbl { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+  color: var(--text-tertiary); }
+.lgr-hero-val { font: 700 19px/1.15 var(--sans); color: var(--text); font-variant-numeric: tabular-nums; }
+.lgr-hero-sub { font-size: 11px; color: var(--text-secondary); }
 .lgr-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
   font-size: 13px; padding: 2.5px 0; }
 .lgr-k { color: var(--text-secondary); flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
@@ -1544,14 +1564,14 @@ html[data-asb-theme="light"] .live-info-src { background: #fbfcfc; }
   overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .lgr-note { font-size: 12.5px; line-height: 1.45; color: var(--text-secondary); padding: 2px 0; }
 .lgr-warn { color: var(--perf); }
-.lgr-tip { display: flex; gap: 9px; align-items: flex-start; padding: 4px 0; font-size: 12.5px;
+.lgr-tip { display: flex; gap: 9px; align-items: flex-start; padding: 5px 0; font-size: 12.5px;
   line-height: 1.45; color: var(--text); }
-.lgr-ic { flex: 0 0 auto; width: 20px; height: 20px; border-radius: 50%; display: flex;
-  align-items: center; justify-content: center; font-size: 11px; font-weight: 800; margin-top: 1px; }
-.lgr-ic.ok { background: rgba(99,218,163,0.13); color: #63daa3; border: 1px solid rgba(99,218,163,0.35); }
-.lgr-ic.warn { background: rgba(245,180,94,0.12); color: #f5b45e; border: 1px solid rgba(245,180,94,0.38); }
-.lgr-ic.info { background: rgba(76,211,232,0.11); color: #4cd3e8; border: 1px solid rgba(76,211,232,0.35); }
-html[data-asb-theme="light"] .lgr-sec { background: #f7f9fa; }
+.lgr-ic { flex: 0 0 auto; font-size: 13px; line-height: 1.45; }
+.lgr-empty { text-align: center; padding: 26px 16px; }
+.lgr-empty-emo { display: block; font-size: 34px; line-height: 1; margin-bottom: 10px; }
+.lgr-empty-t { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+html[data-asb-theme="light"] .lgr-sec { background: #fff; box-shadow: 0 1px 2px rgba(16,24,32,.05); }
+html[data-asb-theme="light"] .lgr-hero { background: #f7f9fa; }
 .live-drain-cmp { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 14px;
   border: 1px solid var(--border); background: rgba(255,255,255,0.02); }
 .live-drain-cmp-row { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center;
@@ -1805,14 +1825,15 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
 }
 .cfg-row {
   width: 100%;
-  /* The bar/header capsule material (fix193): near-black base, faint wash, thin edge,
-   * lit top line, soft lift - the settings cards join the same surface family. */
-  background: linear-gradient(160deg, rgba(255,255,255,0.032), rgba(255,255,255,0.010)), #07090b;
-  border: 1px solid rgba(255,255,255,0.075);
+  /* The Monitor cell material (fix195): the fix192 wash over the page background with
+   * the live-cell's lit top line and low lift. fix193's #07090b base turned the cards
+   * into grey slabs next to Monitor's deep cells - same family now, no base. */
+  background: linear-gradient(160deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018));
+  border: 1px solid var(--border);
   border-radius: 18px;
   padding: 14px 15px;
   box-sizing: border-box;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.04);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.035), 0 1px 4px rgba(0,0,0,0.22);
   transition: border-color 0.2s ease, background 0.2s ease;
 }
 /*
@@ -1839,15 +1860,15 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
   min-height: 122px;
   border-radius: 16px;
   text-align: center;
-  border: 1px solid color-mix(in srgb, var(--cat, var(--accent)) 24%, transparent);
-  /* Hub tiles are capsules in the bar's material now (fix193): the near-black base,
-   * faint wash, thin edge and lit top line of fix192, with the category hue as a
-   * whisper over it instead of a saturated fill. One --cat per category feeds the
-   * tile, the icon pill, the section heading and the toast - they cannot drift. */
+  border: 1px solid rgba(255,255,255,0.07);
+  /* Hub tiles carry their category hue the fix192 way (fix195): a deep three-stop
+   * gradient over the page background, a neutral edge, and the hue living in the glow
+   * underneath. fix193's near-black #07090b base read as flat grey slabs against the
+   * Monitor's cells - the base is gone, the saturation is back. One --cat per category
+   * still feeds the tile, the icon pill, the section heading and the toast. */
   background:
-    linear-gradient(160deg, color-mix(in srgb, var(--cat, var(--accent)) 8%, transparent) 0%, color-mix(in srgb, var(--cat, var(--accent)) 2.5%, transparent) 100%),
-    #07090b;
-  box-shadow: 0 10px 26px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05), 0 6px 20px -12px color-mix(in srgb, var(--cat, var(--accent)) 55%, transparent);
+    linear-gradient(160deg, color-mix(in srgb, var(--cat, var(--accent)) 17%, transparent) 0%, color-mix(in srgb, var(--cat, var(--accent)) 8%, transparent) 55%, color-mix(in srgb, var(--cat, var(--accent)) 4%, transparent) 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 16px -8px color-mix(in srgb, var(--cat, var(--accent)) 55%, transparent);
   color: inherit;
   font: inherit;
   cursor: pointer;
@@ -1908,8 +1929,8 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
  * drifted a notch further apart with every edit. */
 
 .cfg-row.is-on {
-  border-color: rgba(0,240,180,0.26);
-  background: linear-gradient(160deg, rgba(0,240,180,0.055), rgba(0,212,255,0.028)), #07090b;
+  border-color: rgba(0,225,200,0.28);
+  background: linear-gradient(160deg, rgba(0,225,200,0.06), rgba(255,255,255,0.015));
 }
 .cfg-sub {
   margin-top: 11px;
@@ -2220,7 +2241,7 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
 #cfgLangWrap { position: relative; flex: 0 0 auto; }
 .cfg-lang-btn {
   width: 38px; height: 38px; border-radius: 50%;
-  background: var(--cap-wash), #07090b;
+  background: var(--cap-wash);
   border: 1px solid var(--cap-edge);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
   color: #e7eaee; font-size: 16px; line-height: 1; padding: 0;
@@ -2285,7 +2306,7 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
   text-overflow: ellipsis;
   border-radius: 12px;
   border: 1px solid var(--cap-edge);
-  background: var(--cap-wash), #07090b;
+  background: var(--cap-wash);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
   color: #e7eaee;
   font-size: 12px;
@@ -2387,7 +2408,7 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
   transition: width .18s ease, max-width .18s ease;
   -webkit-appearance: none;
   appearance: none;
-  background: var(--cap-wash), #07090b;
+  background: var(--cap-wash);
   border: 1px solid var(--cap-edge);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
   border-radius: 12px;
@@ -2430,7 +2451,7 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
 /* Tweak dropdown: our own button + popup, same pattern as the language picker. */
 .cfg-sel-wrap { flex: 0 0 auto; margin-left: auto; position: relative; }
 .cfg-sel-btn {
-  background: var(--cap-wash), #07090b;
+  background: var(--cap-wash);
   border: 1px solid var(--cap-edge);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
   color: #e7eaee; font-size: 12.5px; font-weight: 600; letter-spacing: 0.2px;
@@ -2861,11 +2882,12 @@ html[data-asb-theme="light"] .cfg-profile-folder { color:var(--text) !important;
 .cfg-reboot-tile {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
   min-height: 74px; padding: 10px 6px; border-radius: 16px; text-align: center;
-  /* A neutral capsule with a whisper of the action's own colour (fix193): the three
-   * restarts are destructive-ish actions - they warn on press, not at rest. */
-  border: 1px solid color-mix(in srgb, var(--rb, #ffffff) 16%, transparent);
-  background: linear-gradient(160deg, color-mix(in srgb, var(--rb, #ffffff) 5%, transparent), color-mix(in srgb, var(--rb, #ffffff) 1.5%, transparent)), #07090b;
-  box-shadow: 0 8px 22px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.04);
+  /* A neutral card with a whisper of the action's own colour (fix195): the three
+   * restarts are destructive-ish actions - they warn on press, not at rest. Same
+   * no-base material as the tweak cards. */
+  border: 1px solid color-mix(in srgb, var(--rb, #ffffff) 18%, transparent);
+  background: linear-gradient(160deg, color-mix(in srgb, var(--rb, #ffffff) 8%, transparent), color-mix(in srgb, var(--rb, #ffffff) 2.5%, transparent));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.035), 0 1px 4px rgba(0,0,0,0.22);
   color: inherit; font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent;
   transition: transform 0.13s ease, border-color 0.18s ease;
 }
@@ -3050,7 +3072,7 @@ html[data-asb-theme="light"] :is(.cfg-tile,.cfg-row) { background:#fff !importan
  * category colour over white, so they no longer sit in the same flat white as the three
  * restart tiles below them. Must follow the flat-white rule above to win on order. */
 html[data-asb-theme="light"] .cfg-tile {
-  background: linear-gradient(160deg, color-mix(in srgb, var(--cat) 10%, #ffffff) 0%, color-mix(in srgb, var(--cat) 4%, #ffffff) 100%) !important;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--cat) 13%, #ffffff) 0%, color-mix(in srgb, var(--cat) 6%, #ffffff) 55%, color-mix(in srgb, var(--cat) 3%, #ffffff) 100%) !important;
   border-color: color-mix(in srgb, var(--cat) 34%, var(--border)) !important;
   box-shadow: 0 1px 3px rgba(16,24,32,.06);
 }
@@ -4077,6 +4099,85 @@ html[data-asb-font="device"] .sec-label { letter-spacing: 2.4px; }
 
   <div class="footer"></div>
 
+</div>
+
+<!-- 24h log report page (fix195): the Logs menu's third entry opens this full page -
+     same capsule header and tab bar as every other page, Monitor-cell cards explaining
+     the capture in plain words. Data comes from tools/logkit/asb_fullday_digest.sh: awk
+     over the recorder's own files, no dumpsys, so the page opens instantly and works on
+     the RUNNING capture too. -->
+<div class="page live-page report-page" id="reportPage" aria-hidden="true">
+  <div class="live-inner">
+
+  <div class="header">
+    <div class="logo-c">
+      <div class="logo-glow"></div>
+      <div class="logo-ring"></div>
+      <div class="logo-inner"><span class="logo-glyph">🛸</span></div>
+    </div>
+    <div class="app-name">AutoSystemBoost</div>
+    <div class="device-line" id="rpDeviceLine">OnePlus Device &middot; Qualcomm Snapdragon</div>
+    <div class="badges">
+      <div class="hdr-cap hdr-info">
+      <div class="badge badge-a" id="rpSocBadge">DEVICE</div>
+      <div class="badge badge-a" id="rpVerBadge">V65</div>
+      </div>
+      <div class="theme-toggle" role="group" data-theme-toggle="rpVerBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button></div>
+    </div>
+    <div class="status-row">
+      <div class="dot"></div>
+      <span class="status-label" data-i18n="hdr_profile">Profile:&nbsp;</span>
+      <span class="status-val" id="rpCurProfile">balanced</span>
+        <div class="island-actions">
+          <button class="island-btn" type="button" onclick="asbToggleLogMenu(event)"
+                  aria-haspopup="menu" aria-expanded="false" aria-label="Logs">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 3.5h8l4 4V20a.5.5 0 0 1-.5.5h-11A.5.5 0 0 1 6 20z"></path>
+              <path d="M14 3.5V8h4M9 12.5h6M9 16h4"></path>
+            </svg>
+            <span data-i18n="nav_logs">Logs</span>
+          </button>
+          <a class="island-btn" href="tg://resolve?domain=AutoSystemBoost"
+             onclick="openTelegram(event)" aria-label="Telegram">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 4.5 2.8 11.3l5.4 1.9 1.9 5.4z"></path>
+              <path d="M8.2 13.2 21 4.5l-8.9 13.9-1.8-4.2z"></path>
+            </svg>
+            <span data-i18n="nav_channel">Channel</span>
+          </a>
+        </div>
+      <button class="live-chip" id="rpBackChip" onclick="closeReportPage()" aria-label="Back to main">
+        <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 18l-6-6 6-6"></path>
+        </svg>
+        <span data-i18n="nav_back">Back</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-line"></div>
+    <div class="sec-label" data-i18n="lr_menu">Log report</div>
+    <div class="sec-line"></div>
+  </div>
+
+  <div class="rpt-meta-row">
+    <span class="lgr-status" id="reportStatus"></span>
+    <button class="live-chip rpt-refresh" id="rpRefresh" type="button" onclick="asbLogReportLoad()">
+      <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M20 11a8 8 0 1 0-2.3 6.3"></path>
+        <path d="M20 5v6h-6"></path>
+      </svg>
+      <span data-i18n="lr_refresh">Refresh</span>
+    </button>
+  </div>
+
+  <div class="lgr-body" id="reportBody"></div>
+
+  </div>
+  <div class="footer"></div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -9539,6 +9640,14 @@ function logReportDur(min) {
   if (h > 0) return logReportT('lr_h', '{n} h', { n: String(h) });
   return logReportT('lr_min', '{n} min', { n: String(m) });
 }
+/* Wakelock holds are often seconds, and rounding them into whole minutes printed "0 min"
+ * next to an app that did hold the phone - read as a broken counter. Sub-minute holds get
+ * their own unit. */
+function logReportDurSec(sec) {
+  const t = Math.max(0, Math.round(+sec || 0));
+  if (t < 60) return logReportT('lr_secs', '{n} sec', { n: String(t) });
+  return logReportDur(t / 60);
+}
 function logReportTips(d) {
   const tips = [];
   const night = d.sections.night || null;
@@ -9582,73 +9691,114 @@ function logReportNote(txt, warn) {
   p.textContent = txt;
   return p;
 }
-function logReportEnsure() {
-  let m = _el('logReportSheet');
-  if (m) return m;
-  m = document.createElement('div');
-  m.className = 'cfg-profile-modal live-drain-modal';
-  m.id = 'logReportSheet';
-  m.hidden = true;
-  m.setAttribute('aria-hidden', 'true');
-  const card = document.createElement('div');
-  card.className = 'cfg-profile-sheet live-drain-sheet';
-  card.setAttribute('role', 'dialog');
-  card.setAttribute('aria-modal', 'true');
-  card.setAttribute('aria-labelledby', 'logReportTitle');
-  const head = document.createElement('div');
-  head.className = 'cfg-profile-head';
-  const title = document.createElement('div');
-  title.className = 'cfg-profile-title';
-  title.id = 'logReportTitle';
-  const x = document.createElement('button');
-  x.className = 'cfg-profile-close';
-  x.id = 'logReportX';
-  x.type = 'button';
-  x.setAttribute('aria-label', 'Close');
-  x.textContent = '×';
-  head.appendChild(title);
-  head.appendChild(x);
-  const status = document.createElement('div');
-  status.className = 'lgr-status';
-  status.id = 'logReportStatus';
-  status.hidden = true;
-  const body = document.createElement('div');
-  body.className = 'lgr-body';
-  body.id = 'logReportBody';
-  const done = document.createElement('button');
-  done.className = 'cfg-profile-primary live-drain-done';
-  done.id = 'logReportDone';
-  done.type = 'button';
-  card.appendChild(head);
-  card.appendChild(status);
-  card.appendChild(body);
-  card.appendChild(done);
-  m.appendChild(card);
-  document.body.appendChild(m);
-  m.addEventListener('click', function (e) { if (e.target === m) logReportClose(); });
-  x.onclick = logReportClose;
-  done.onclick = logReportClose;
-  return m;
+let _rpOpen = false;
+function openReportPage() {
+  uiSound('nav');
+  const p = _el('reportPage');
+  if (!p) return;
+  try {
+    _el('rpDeviceLine').textContent = _el('deviceLine').textContent;
+    _el('rpSocBadge').textContent   = _el('socBadge').textContent;
+    _el('rpVerBadge').textContent   = _el('verBadge').textContent;
+    _el('rpCurProfile').textContent = _el('curProfile').textContent;
+  } catch (e) {}
+  p.setAttribute('aria-hidden', 'false');
+  p.scrollTop = 0;
+  _rpOpen = true;
+  /* Same two-frame entrance as Config: the body classes move now, the slide starts after
+     one laid-out frame, and a tap away inside those frames must not slide it back in. */
+  document.body.classList.add('live-active');
+  document.body.classList.add('report-active');
+  asbTabbarVisibility();
+  requestAnimationFrame(function () {
+    requestAnimationFrame(function () { if (_rpOpen) p.classList.add('open'); });
+  });
+  asbLogReportLoad();
+  setTimeout(asbNavSync, 60);
 }
-function logReportClose() {
-  const m = _el('logReportSheet');
-  if (!m || m.hidden) return;
-  m.hidden = true;
-  m.setAttribute('aria-hidden', 'true');
+function closeReportPage() {
+  const p = _el('reportPage');
+  if (!p) return;
+  _rpOpen = false;
+  p.classList.remove('open');
+  document.body.classList.remove('report-active');
+  /* The report may sit over Config or Monitor (their headers carry the Logs menu too) -
+     live-active belongs to whichever page is still mounted underneath, so only drop it
+     when the main page is what remains. */
+  if (!document.body.classList.contains('config-active') &&
+      !(typeof _liveOpen !== 'undefined' && _liveOpen)) {
+    document.body.classList.remove('live-active');
+  }
+  asbTabbarVisibility();
+  p.setAttribute('aria-hidden', 'true');
   navSyncSoon();
 }
+async function asbLogReportLoad() {
+  const body = _el('reportBody');
+  const status = _el('reportStatus');
+  if (!body || !status) return;
+  status.textContent = '';
+  body.textContent = '';
+  body.appendChild(logReportNote(T('lr_loading', 'Reading log data…')));
+  let out = '';
+  try {
+    out = runText(await run('sh ' + MD + '/tools/logkit/asb_fullday_digest.sh 2>/dev/null'));
+  } catch (e) { out = ''; }
+  if (!_rpOpen) return;   // the user left while the shell read the capture
+  const d = parseLogReport(out);
+  if (d.error === 'no_capture') {
+    status.textContent = '';
+    body.textContent = '';
+    const s0 = logReportSec(T('lr_none_title', 'No capture found'));
+    s0.classList.add('lgr-empty');
+    const em = document.createElement('span');
+    em.className = 'lgr-empty-emo';
+    em.textContent = '📭';
+    s0.insertBefore(em, s0.firstChild);
+    s0.appendChild(logReportNote(T('lr_none_body', 'Start a 24h capture from this menu first. The report appears here as data accumulates - even while it is still recording.')));
+    body.appendChild(s0);
+    return;
+  }
+  if (!d.ok) {
+    status.textContent = '';
+    body.textContent = '';
+    body.appendChild(logReportNote(T('lr_failed', 'Could not read the log data.'), true));
+    return;
+  }
+  logReportRender(d);
+}
+function logReportHero(emo, label, value, sub, warn) {
+  const t = document.createElement('div');
+  t.className = 'lgr-hero' + (warn ? ' lgr-hero-warn' : '');
+  const e = document.createElement('span');
+  e.className = 'lgr-hero-emo';
+  e.textContent = emo;
+  const l = document.createElement('span');
+  l.className = 'lgr-hero-lbl';
+  l.textContent = label;
+  const v = document.createElement('span');
+  v.className = 'lgr-hero-val';
+  v.textContent = value;
+  t.appendChild(e);
+  t.appendChild(l);
+  t.appendChild(v);
+  if (sub) {
+    const u = document.createElement('span');
+    u.className = 'lgr-hero-sub';
+    u.textContent = sub;
+    t.appendChild(u);
+  }
+  return t;
+}
 function logReportRender(d) {
-  const body = _el('logReportBody');
-  const status = _el('logReportStatus');
+  const body = _el('reportBody');
+  const status = _el('reportStatus');
   const meta = d.sections.meta || {};
   const h = String(meta.target_h || '24');
   body.textContent = '';
-  status.hidden = false;
-  if (String(meta.running) === '1') {
-    status.textContent = logReportT('lr_running', 'recording · {min} min of {h} h', { min: String(meta.elapsed_min || '0'), h: h });
-  } else {
-    status.textContent = T('lr_done', 'capture finished');
-  }
+  status.textContent = String(meta.running) === '1'
+    ? logReportT('lr_running', 'recording · {min} min of {h} h', { min: String(meta.elapsed_min || '0'), h: h })
+    : T('lr_done', 'capture finished');
   const drain = d.sections.drain || null;
   const cover = d.sections.cover || null;
   const night = d.sections.night || null;
@@ -9663,26 +9813,40 @@ function logReportRender(d) {
        showing only the "nothing bad happened" sections. */
     body.appendChild(logReportNote(T('lr_early', 'The capture has just started - the numbers will appear here after the first phases.')));
   }
-  if (drain || cover || night || idle) {
-    const s = logReportSec(T('lr_sec_drain', 'Battery drain'));
+  if (drain || cover || night || idle || radio) {
+    const s = logReportSec(T('lr_sec_drain', '🔋 Battery drain'));
+    const g = document.createElement('div');
+    g.className = 'lgr-heros';
+    let heroes = 0;
     if (drain) {
-      s.appendChild(logReportRow(T('lr_overall', 'Average drain'), String(drain.pctph) + T('lr_per_hour', '%/h')));
-      if ((+drain.ma || 0) > 0) s.appendChild(logReportRow(T('lr_avg_current', 'Average current'), String(drain.ma) + ' mA'));
+      g.appendChild(logReportHero('📉', T('lr_overall', 'Average drain'),
+        String(drain.pctph) + T('lr_per_hour', '%/h'),
+        ((+drain.ma || 0) > 0 ? String(drain.ma) + ' mA' : ''), false));
+      heroes++;
+    }
+    if (night) {
+      g.appendChild(logReportHero('🌙', T('lr_night', 'Longest idle stretch'),
+        String(night.pctph) + T('lr_per_hour', '%/h'),
+        logReportDur(night.dur_min), (+night.pctph || 0) > 0.8));
+      heroes++;
+    }
+    if (heroes) {
+      if (heroes === 1) g.classList.add('single');
+      s.appendChild(g);
     }
     if (cover) {
       s.appendChild(logReportRow(T('lr_screen_on', 'Screen on'), logReportDur(cover.on_min) + ' (' + String(cover.on_pct) + '%)'));
       s.appendChild(logReportRow(T('lr_screen_off', 'Screen off'), logReportDur(cover.off_min)));
     }
-    if (night) s.appendChild(logReportRow(T('lr_night', 'Longest idle stretch'), logReportDur(night.dur_min) + ' · ' + String(night.pctph) + T('lr_per_hour', '%/h'), (+night.pctph || 0) > 0.8));
     if (idle) s.appendChild(logReportRow(T('lr_idle', 'Worst idle awake share'), String(idle.awake) + '%', (+idle.awake || 0) > 15));
     if (radio) s.appendChild(logReportRow(T('lr_radio', 'Mobile data'), String(radio.mib) + ' MiB'));
     body.appendChild(s);
   }
   {
-    const s = logReportSec(T('lr_sec_wake', 'What kept the phone awake'));
+    const s = logReportSec(T('lr_sec_wake', '⏰ What kept the phone awake'));
     if (d.wl.length) {
       d.wl.forEach(function (w) {
-        s.appendChild(logReportRow(w.pkg, logReportDur(Math.round(w.sec / 60))));
+        s.appendChild(logReportRow(w.pkg, logReportDurSec(w.sec)));
       });
     } else {
       s.appendChild(logReportNote(T('lr_wake_none', 'No app wakelocks recorded - excellent.')));
@@ -9690,7 +9854,7 @@ function logReportRender(d) {
     body.appendChild(s);
   }
   if (crash || sysui) {
-    const s = logReportSec(T('lr_sec_crash', 'Errors & crashes'));
+    const s = logReportSec(T('lr_sec_crash', '💥 Errors & crashes'));
     const cn = crash ? (+crash.count || 0) : 0;
     const ca = crash ? (+crash.asb || 0) : 0;
     if (cn === 0) {
@@ -9704,8 +9868,14 @@ function logReportRender(d) {
     body.appendChild(s);
   }
   if (thermal || throttle) {
-    const s = logReportSec(T('lr_sec_thermal', 'Thermals & throttling'));
-    if (thermal) s.appendChild(logReportRow(logReportT('lr_temp_max', 'Peak: CPU {cpu}° · skin {surf}°', { cpu: String(thermal.cpu), surf: String(thermal.surf) }), '', (+thermal.cpu || 0) >= 45));
+    const s = logReportSec(T('lr_sec_thermal', '🌡️ Thermals & throttling'));
+    if (thermal) {
+      const g = document.createElement('div');
+      g.className = 'lgr-heros';
+      g.appendChild(logReportHero('🎯', 'CPU', String(thermal.cpu) + '°', '', (+thermal.cpu || 0) >= 45));
+      g.appendChild(logReportHero('🧊', T('lr_temp_surf', 'Skin'), String(thermal.surf) + '°', '', (+thermal.surf || 0) >= 40));
+      s.appendChild(g);
+    }
     if (throttle && (+throttle.clamps || 0) > 0) {
       s.appendChild(logReportNote(logReportT('lr_clamp_some', 'Throttling periods: {n} ({owner})', { n: String(throttle.clamps), owner: String(throttle.owner || 'unknown') }), true));
     } else {
@@ -9714,13 +9884,13 @@ function logReportRender(d) {
     body.appendChild(s);
   }
   {
-    const s = logReportSec(T('lr_sec_tips', 'What it means'));
+    const s = logReportSec(T('lr_sec_tips', '💡 What it means'));
     logReportTips(d).forEach(function (tip) {
       const row = document.createElement('div');
       row.className = 'lgr-tip';
       const ic = document.createElement('span');
       ic.className = 'lgr-ic ' + tip.ic;
-      ic.textContent = tip.ic === 'ok' ? '✓' : (tip.ic === 'warn' ? '!' : 'i');
+      ic.textContent = tip.ic === 'ok' ? '✅' : (tip.ic === 'warn' ? '⚠️' : '💡');
       const tx = document.createElement('span');
       tx.textContent = logReportT(tip.key, {
         lr_tip_ok: 'No serious issues found - drain looks healthy.',
@@ -9737,45 +9907,12 @@ function logReportRender(d) {
     body.appendChild(s);
   }
 }
-async function asbLogReportOpen() {
-  const m = logReportEnsure();
-  _el('logReportTitle').textContent = T('lr_title', '24h log in plain words');
-  _el('logReportDone').textContent = T('doze_keep_done', 'Done');
-  const body = _el('logReportBody');
-  const status = _el('logReportStatus');
-  status.hidden = true;
-  body.textContent = '';
-  body.appendChild(logReportNote(T('lr_loading', 'Reading log data…')));
-  m.hidden = false;
-  m.setAttribute('aria-hidden', 'false');
-  navSyncSoon();
-  let out = '';
-  try {
-    out = runText(await run('sh ' + MD + '/tools/logkit/asb_fullday_digest.sh 2>/dev/null'));
-  } catch (e) { out = ''; }
-  const d = parseLogReport(out);
-  if (d.error === 'no_capture') {
-    status.hidden = true;
-    body.textContent = '';
-    const s = logReportSec(T('lr_none_title', 'No capture found'));
-    s.appendChild(logReportNote(T('lr_none_body', 'Start a 24h capture from this menu first. The report appears here as data accumulates - even while it is still recording.')));
-    body.appendChild(s);
-    return;
-  }
-  if (!d.ok) {
-    status.hidden = true;
-    body.textContent = '';
-    body.appendChild(logReportNote(T('lr_failed', 'Could not read the log data.'), true));
-    return;
-  }
-  logReportRender(d);
-}
 
 function asbLogMenuPick(action) {
   asbCloseLogMenu();
   /* The report is read-only - it re-reads files the capture already wrote - so it is NOT
      behind the debug-build gate that protects STARTING a capture. */
-  if (action === 'report') { asbLogReportOpen(); return; }
+  if (action === 'report') { openReportPage(); return; }
   if (typeof asbDebugAction === 'function') asbDebugAction(action);
 }
 
@@ -9970,6 +10107,7 @@ window.addEventListener('resize', function () { requestAnimationFrame(asbFitPage
 window.addEventListener('load', function () { requestAnimationFrame(asbFitPages); setTimeout(function () { homeMeterRefresh(true); }, 1800); asbDeviceFont(); });
 
 function asbNavCurrent() {
+  if (document.body.classList.contains('report-active')) return 'report';
   if (document.body.classList.contains('config-active')) return 'config';
   if (document.body.classList.contains('live-active'))   return 'live';
   return 'home';
@@ -10053,7 +10191,13 @@ window.addEventListener('resize', function () { asbHeaderFitSoon(); });
 })();
 
 function asbNavGo(target) {
-  const at = asbNavCurrent();
+  let at = asbNavCurrent();
+  if (at === 'report') {
+    /* The report is a read-only drill-in from the Logs menu, not a tab: a tab tap closes
+       it first, then the usual transition runs from whatever page is underneath. */
+    closeReportPage();
+    at = asbNavCurrent();
+  }
   if (at === target) return;          /* tapping the current tab does nothing */
 
   /* Monitor <-> Config: bring the new page in FIRST, then drop the old one behind it.
