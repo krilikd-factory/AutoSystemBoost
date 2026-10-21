@@ -3652,6 +3652,69 @@ html[data-asb-theme="light"] .cfg-tile-bar { background: rgba(21,35,32,.08); }
 html[data-asb-font="device"] { --sans: 'ASB Device', sans-serif; --mono: 'ASB Device', sans-serif; }
 html[data-asb-font="device"] body { font-variant-numeric: tabular-nums; }
 html[data-asb-font="device"] .sec-label { letter-spacing: 2.4px; }
+
+/* ── fix202: fit without scrolling, the shrink direction ─────────────────────────────
+ * asbFitPages always GREW the cards into free space (fix168) but on a short or dense
+ * screen it hit its floors and the page had to scroll - the "cut off, doesn't scroll
+ * down" reports. The missing half is compaction: when the page the user is looking at
+ * measures taller than its viewport, asbFitPages raises asb-fit-c1, then asb-fit-c2 on
+ * <html>, and these rules take the height back out of the chrome (top gap, logo,
+ * wordmark, capsule row), the cards and the Monitor cells. Two tiers, applied only while
+ * the page actually overflows - with room to spare they come off again (a trial fit with
+ * a small margin, so the layout cannot flip-flop at a boundary). If even tier 2
+ * overflows, the fix201 scroll remains as the fallback: nothing is ever clipped away. */
+html.asb-fit-c1 { --page-top: clamp(30px, 5vh, 48px); }
+html.asb-fit-c1 .logo-c { width: 56px; height: 56px; margin-bottom: 12px; }
+html.asb-fit-c1 .logo-inner { font-size: 26px; border-radius: 16px; }
+html.asb-fit-c1 .logo-glow { border-radius: 20px; }
+html.asb-fit-c1 .logo-ring { border-radius: 18px; }
+html.asb-fit-c1 .app-name { font-size: 23px; margin-bottom: 4px; }
+html.asb-fit-c1 .device-line { margin-bottom: 10px; }
+html.asb-fit-c1 .badges { margin-bottom: 12px; }
+html.asb-fit-c1 .header { margin-bottom: 20px; }
+html.asb-fit-c1 .sec { margin-bottom: 10px; }
+html.asb-fit-c1 .live-page .sec { margin-top: 8px !important; margin-bottom: 4px !important; }
+html.asb-fit-c1 .profiles { gap: 7px; }
+html.asb-fit-c1 .pbtn { padding: 10px 14px; gap: 12px; }
+html.asb-fit-c1 .pbtn .pico { width: 46px; height: 46px; border-radius: 14px; }
+html.asb-fit-c1 .pbtn .pico .tech-icon { width: 23px; height: 23px; }
+html.asb-fit-c1 .cfg-tile { padding: 10px 6px 9px; }
+html.asb-fit-c1 .cfg-tile-ico { width: 36px; height: 36px; }
+html.asb-fit-c1 .live-cell { min-height: 48px; padding: 7px 11px; }
+html.asb-fit-c1 .smart-banner { margin-top: 10px; margin-bottom: 16px; padding: 10px 12px; gap: 8px; }
+html.asb-fit-c1 .smart-banner-row { gap: 9px 8px; }
+html.asb-fit-c1 .smart-drain-half { padding: 11px 10px; }
+html.asb-fit-c1 .tg-link-wrap { padding-top: 14px; gap: 10px; }
+
+html.asb-fit-c2 { --page-top: 22px; }
+html.asb-fit-c2 .logo-c { width: 44px; height: 44px; margin-bottom: 8px; }
+html.asb-fit-c2 .logo-inner { font-size: 21px; border-radius: 13px; }
+html.asb-fit-c2 .logo-glow { border-radius: 16px; }
+html.asb-fit-c2 .logo-ring { border-radius: 14px; }
+html.asb-fit-c2 .app-name { font-size: 20px; margin-bottom: 3px; }
+html.asb-fit-c2 .device-line { margin-bottom: 8px; }
+html.asb-fit-c2 .badges { margin-bottom: 8px; }
+html.asb-fit-c2 .hdr-cap { height: 26px; padding: 0 11px; border-radius: 13px; }
+html.asb-fit-c2 .theme-toggle { height: 26px; }
+html.asb-fit-c2 .status-row { min-height: 34px; }
+html.asb-fit-c2 .header { margin-bottom: 12px; }
+html.asb-fit-c2 .sec { margin-bottom: 8px; }
+html.asb-fit-c2 .live-page .sec { margin-top: 6px !important; margin-bottom: 3px !important; }
+html.asb-fit-c2 .profiles { gap: 6px; }
+html.asb-fit-c2 .pbtn { padding: 8px 12px; gap: 10px; }
+html.asb-fit-c2 .pbtn .pico { width: 40px; height: 40px; border-radius: 12px; }
+html.asb-fit-c2 .pbtn .pico .tech-icon { width: 21px; height: 21px; }
+html.asb-fit-c2 .pname { font-size: 15px; }
+html.asb-fit-c2 .pdesc { font-size: 11px; }
+html.asb-fit-c2 .cfg-tile { padding: 8px 5px 7px; }
+html.asb-fit-c2 .cfg-tile-ico { width: 32px; height: 32px; }
+html.asb-fit-c2 .cfg-tile-name { font-size: 12.5px; }
+html.asb-fit-c2 .live-cell { min-height: 42px; padding: 6px 10px; }
+html.asb-fit-c2 .live-metrics, html.asb-fit-c2 .live-row { gap: 5px; }
+html.asb-fit-c2 .smart-banner { margin-top: 8px; margin-bottom: 10px; padding: 8px 10px; gap: 7px; }
+html.asb-fit-c2 .smart-banner-row { gap: 7px 8px; }
+html.asb-fit-c2 .smart-drain-half { padding: 9px; }
+html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
 </style>
 </head>
 <body>
@@ -5229,6 +5292,10 @@ function openLivePage() {
     pollLive(true);
   }, LIVE_OPEN_SETTLE_MS);
   _liveTimer = setInterval(() => pollLive(true), 3000);
+  /* fix202: Monitor is the tall page - once it is up, measure it and compact the chrome
+     if it runs past the screen (the page is full-height from its first frame; the slide
+     is a transform and does not change the measurement). */
+  requestAnimationFrame(asbFitPages);
 }
 const LIVE_OPEN_SETTLE_MS = 320;
 
@@ -5242,6 +5309,9 @@ function closeLivePage() {
   p.setAttribute('aria-hidden', 'true');
   _liveOpen = false;
   if (_liveTimer) { clearInterval(_liveTimer); _liveTimer = null; }
+  /* Back on Home: the compaction Monitor may have asked for is re-measured, and comes
+     off again if the profile list fits without it (fix202). */
+  requestAnimationFrame(asbFitPages);
 }
 
 /* Back gesture inside the WebUI (fix159).
@@ -9846,6 +9916,7 @@ function openReportPage() {
   });
   asbLogReportLoad();
   setTimeout(asbNavSync, 60);
+  requestAnimationFrame(asbFitPages);
 }
 function closeReportPage() {
   const p = _el('reportPage');
@@ -9863,6 +9934,7 @@ function closeReportPage() {
   asbTabbarVisibility();
   p.setAttribute('aria-hidden', 'true');
   navSyncSoon();
+  requestAnimationFrame(asbFitPages);
 }
 async function asbLogReportLoad() {
   const body = _el('reportBody');
@@ -9888,15 +9960,20 @@ async function asbLogReportLoad() {
     s0.insertBefore(em, s0.firstChild);
     s0.appendChild(logReportNote(T('lr_none_body', 'Start a 24h capture from this menu first. The report appears here as data accumulates - even while it is still recording.')));
     body.appendChild(s0);
+    requestAnimationFrame(asbFitPages);
     return;
   }
   if (!d.ok) {
     status.textContent = '';
     body.textContent = '';
     body.appendChild(logReportNote(T('lr_failed', 'Could not read the log data.'), true));
+    requestAnimationFrame(asbFitPages);
     return;
   }
   logReportRender(d);
+  /* The report's height is only known now that the digest has been painted - the fit
+     check belongs here, not where the page opened (fix202). */
+  requestAnimationFrame(asbFitPages);
 }
 function logReportHero(emo, label, value, sub, warn) {
   const t = document.createElement('div');
@@ -10196,10 +10273,20 @@ function asbApplyUiScale() {
 
 /* Fill the screen the way Monitor does (fix168). The free height between the end of the
  * content and the floating tab bar is measured, not assumed, and shared out to the five
- * profile cards (Home) and the two rows of category tiles (Settings) within sane limits. On a
- * short screen the limits win and the page scrolls as before; on a tall one the cards stop
- * growing before they look stretched. Re-run on resize, when Settings opens and when the hub
- * is rebuilt, since the header can wrap differently in each language. */
+ * profile cards (Home) and the two rows of category tiles (Settings) within sane limits.
+ * On a tall screen the cards stop growing before they look stretched.
+ *
+ * fix202 adds the other direction, which is what the layout was always meant to do:
+ * a page should FIT on one screen at any density, and only scroll when it truly cannot.
+ * After the cards are sized, the page the user is looking at is measured (the document
+ * for Home, the scrolling overlay itself for Monitor/Settings/the log report). If it
+ * runs past its viewport, the compaction tiers asb-fit-c1/asb-fit-c2 go on <html> and
+ * the loop sizes the cards again against the smaller chrome - the floors step down with
+ * the tier (68/58/48 px cards, 104/92/80 px tiles). A tier comes off only when a trial
+ * fit shows the page fits the lighter tier with a few pixels to spare, so the layout
+ * cannot flip-flop at a boundary. If even tier 2 overflows, nothing is hidden: the
+ * page simply scrolls (fix201). Re-run on resize, page open/close and when the hub or
+ * the report is (re)built, since the header can wrap differently in each language. */
 function asbFitPages() {
   try {
     const z = window._asbUiScale || 1;
@@ -10207,30 +10294,70 @@ function asbFitPages() {
     const barTop = bar ? bar.getBoundingClientRect().top : window.innerHeight;
     const stop = barTop - 20 * z;
     const root = document.documentElement;
-    const prof = document.querySelector('.page:not(.live-page) .profiles');
-    if (prof && !document.body.classList.contains('live-active') && !document.body.classList.contains('config-active')) {
-      const cards = prof.querySelectorAll('.pbtn');
-      if (cards.length) {
-        const top = prof.getBoundingClientRect().top + (window.scrollY || 0);
-        const gap = parseFloat(getComputedStyle(prof).rowGap || getComputedStyle(prof).gap) || 8;
-        let h = ((stop - top) / z - gap * (cards.length - 1)) / cards.length;
-        h = Math.max(68, Math.min(104, Math.floor(h)));
-        root.style.setProperty('--pbtn-h', h + 'px');
+    let tier = asbFitPages._tier || 0;
+
+    const sizeCards = function () {
+      const prof = document.querySelector('.page:not(.live-page) .profiles');
+      if (prof && !document.body.classList.contains('live-active') && !document.body.classList.contains('config-active')) {
+        const cards = prof.querySelectorAll('.pbtn');
+        if (cards.length) {
+          const top = prof.getBoundingClientRect().top + (window.scrollY || 0);
+          const gap = parseFloat(getComputedStyle(prof).rowGap || getComputedStyle(prof).gap) || 8;
+          let h = ((stop - top) / z - gap * (cards.length - 1)) / cards.length;
+          h = Math.max([68, 58, 48][tier], Math.min(104, Math.floor(h)));
+          root.style.setProperty('--pbtn-h', h + 'px');
+        }
       }
+      const hub = document.querySelector('#configPage .cfg-hub');
+      const page = _el('configPage');
+      if (hub && page && page.getAttribute('aria-hidden') === 'false' && !_cfgGroup) {
+        const tiles = hub.querySelectorAll('.cfg-tile');
+        const rows = Math.ceil(tiles.length / 3) || 1;
+        const reb = _el('cfgRebootWrap');
+        const rebH = reb ? (reb.getBoundingClientRect().height / z + (parseFloat(getComputedStyle(reb).marginTop) || 0)) : 0;
+        const top = hub.getBoundingClientRect().top + page.scrollTop;
+        const gap = parseFloat(getComputedStyle(hub).rowGap || getComputedStyle(hub).gap) || 9;
+        let h = ((stop - top) / z - rebH - gap * (rows - 1)) / rows;
+        h = Math.max([104, 92, 80][tier], Math.min(176, Math.floor(h)));
+        root.style.setProperty('--cfg-tile-h', h + 'px');
+      }
+    };
+    const applyTier = function (t) {
+      if (root.classList) {
+        root.classList.toggle('asb-fit-c1', t >= 1);
+        root.classList.toggle('asb-fit-c2', t >= 2);
+      }
+    };
+    /* How far the visible page runs past its viewport, in px: positive means the user has
+     * to scroll, negative is spare room. Home scrolls the document; the overlays are
+     * fixed and scroll themselves. */
+    const overflow = function () {
+      let el = null;
+      if (document.body.classList.contains('report-active')) el = _el('reportPage');
+      else if (document.body.classList.contains('config-active')) el = _el('configPage');
+      else if (document.body.classList.contains('live-active')) el = _el('livePage');
+      return el ? el.scrollHeight - el.clientHeight : root.scrollHeight - root.clientHeight;
+    };
+
+    let guard = 0;
+    for (;;) {
+      if (++guard > 5) break;
+      sizeCards();
+      const over = overflow();
+      if (!(over > -1e9)) break;   /* this host gave no usable metrics - leave things be */
+      if (over > 2 && tier < 2) { tier++; applyTier(tier); continue; }
+      if (over <= 2 && tier > 0) {
+        /* Fits now. Try the lighter tier, but keep it only with a little room to spare -
+         * taking it back for a 1 px win is how the layout starts breathing. */
+        applyTier(tier - 1);
+        sizeCards();
+        const over2 = overflow();
+        if (!(over2 > -1e9) || over2 > -6) { applyTier(tier); break; }
+        tier--; continue;
+      }
+      break;
     }
-    const hub = document.querySelector('#configPage .cfg-hub');
-    const page = _el('configPage');
-    if (hub && page && page.getAttribute('aria-hidden') === 'false' && !_cfgGroup) {
-      const tiles = hub.querySelectorAll('.cfg-tile');
-      const rows = Math.ceil(tiles.length / 3) || 1;
-      const reb = _el('cfgRebootWrap');
-      const rebH = reb ? (reb.getBoundingClientRect().height / z + (parseFloat(getComputedStyle(reb).marginTop) || 0)) : 0;
-      const top = hub.getBoundingClientRect().top + page.scrollTop;
-      const gap = parseFloat(getComputedStyle(hub).rowGap || getComputedStyle(hub).gap) || 9;
-      let h = ((stop - top) / z - rebH - gap * (rows - 1)) / rows;
-      h = Math.max(104, Math.min(176, Math.floor(h)));
-      root.style.setProperty('--cfg-tile-h', h + 'px');
-    }
+    asbFitPages._tier = tier;
   } catch (e) {}
 }
 /* Each profile card carries what was measured for it (fix168), the same figures the Monitor
@@ -10316,6 +10443,7 @@ asbApplyUiScale();
 window.addEventListener('resize', asbApplyUiScale);
 window.addEventListener('orientationchange', asbApplyUiScale);
 window.addEventListener('resize', function () { requestAnimationFrame(asbFitPages); });
+window.addEventListener('orientationchange', function () { requestAnimationFrame(asbFitPages); });
 window.addEventListener('load', function () { requestAnimationFrame(asbFitPages); setTimeout(function () { homeMeterRefresh(true); }, 1800); asbDeviceFont(); });
 
 function asbNavCurrent() {
@@ -10590,7 +10718,7 @@ function cfgSyncChrome() {
 
 function cfgBack() {
   uiSound('nav');
-  if (_cfgGroup) { _cfgGroup = null; cfgRender(); return; }
+  if (_cfgGroup) { _cfgGroup = null; cfgRender(); requestAnimationFrame(asbFitPages); return; }
   closeConfigPage(true);
 }
 
@@ -10609,6 +10737,9 @@ function closeConfigPage(toMain) {
   }
   p.setAttribute('aria-hidden', 'true');
   _cfgOpen = false;
+  /* The page underneath (Home or Monitor) is measured again: compaction the hub needed
+     may be more than it needs (fix202). */
+  requestAnimationFrame(asbFitPages);
 }
 
 /*
