@@ -66,6 +66,17 @@ check_shell_syntax() {
   else
     err "$(basename "$_f") syntax error"
   fi
+  # Bash parse too: an apostrophe inside ${var:-...} inside double quotes is fine for
+  # mksh/dash but flips bash's quote state and fails pages later (real case: install.sh
+  # "module's" -> bogus error at line 551). The installer is the most sensitive script we
+  # ship, so it must be clean under both.
+  if command -v bash >/dev/null 2>&1; then
+    if bash -n "$_f" 2>/dev/null; then
+      ok "$(basename "$_f") bash parse ok"
+    else
+      err "$(basename "$_f") bash parse error"
+    fi
+  fi
 }
 
 validate_json() {
@@ -89,7 +100,13 @@ echo "  Module dir: $MODDIR"
 echo
 echo "🐚 Shell Syntax"
 for f in \
+  "$MODDIR/common/install.sh" \
+  "$MODDIR/customize.sh" \
   "$MODDIR/service.sh" \
+  "$MODDIR/post-fs-data.sh" \
+  "$MODDIR/uninstall.sh" \
+  "$MODDIR/action.sh" \
+  "$MODDIR/apply_profile.sh" \
   "$MODDIR/runtime/asb_watchdog.sh" \
   "$MODDIR/runtime/asb_reconcile.sh" \
   "$MODDIR/runtime/asb_tweaks.sh" \
