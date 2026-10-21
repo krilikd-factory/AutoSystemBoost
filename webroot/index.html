@@ -1954,9 +1954,11 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
   font-size: 10px;
   color: rgba(255,255,255,0.42);
 }
+.cfg-seg.small { border-radius: 12px; padding: 2px; }
 .cfg-seg.small button {
   padding: 5px 10px;
   font-size: 11px;
+  border-radius: 10px;
 }
 .cfg-seg.small.dense button {
   padding: 5px 7px;
@@ -2204,10 +2206,14 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
   width: 46px;
   height: 27px;
   border-radius: 14px;
-  background: rgba(255,255,255,0.10);
-  border: 1px solid var(--border);
+  /* The bar's material too (fix197): the track was a flat grey slab; it is the floating
+   * capsule now - wash over the opaque base, thin teal edge, lit top line - and ON pours
+   * the accent wash into it instead of swapping in a foreign solid green. */
+  background: var(--cap-wash), var(--tabbar-bg, #000000);
+  border: 1px solid var(--cap-edge);
+  box-shadow: var(--cap-shadow);
   cursor: pointer;
-  transition: background 0.25s ease, border-color 0.25s ease;
+  transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
 }
 .cfg-switch::after {
   content: '';
@@ -2218,12 +2224,15 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
   height: 21px;
   border-radius: 50%;
   background: rgba(255,255,255,0.78);
+  /* A raised knob: it casts on the track it slides over, the way the capsule casts on the
+   * page. The lit top edge keeps it in the same light as everything else. */
+  box-shadow: 0 1px 4px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.35);
   transition: transform 0.25s cubic-bezier(0.22, 0.61, 0.36, 1), background 0.25s ease;
 }
 .cfg-switch.on {
-  background: linear-gradient(135deg, rgba(0,225,200,0.55), rgba(0,200,235,0.4));
-  border-color: rgba(0,225,200,0.55);
-  box-shadow: 0 0 14px rgba(0,225,200,0.25);
+  background: linear-gradient(135deg, rgba(0,240,180,0.5), rgba(0,212,255,0.35)), var(--tabbar-bg, #000000);
+  border-color: rgba(0,240,180,0.55);
+  box-shadow: 0 0 16px rgba(0,240,180,0.28), inset 0 1px 0 rgba(255,255,255,0.18);
 }
 .cfg-switch.on::after {
   transform: translateX(19px);
@@ -2515,9 +2524,21 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
    */
   flex: 1 1 auto;
   max-width: 100%;
-  border: 1px solid var(--border);
-  border-radius: 11px;
-  overflow: hidden;
+  /* The bar's own material (fix197). The segment was a plain bordered box around flat
+   * buttons; it is a small floating capsule now - the same wash over an opaque base, the
+   * same thin teal edge and lit top line as the navigation bar and the header capsules -
+   * with the selected option's tonal pill floating inside it the way the bar's sliding
+   * tab indicator does. The padding is what floats the pill: without it the pill paints
+   * edge to edge and the control looks like a filled box again. */
+  background: var(--cap-wash), var(--tabbar-bg, #000000);
+  border: 1px solid var(--cap-edge);
+  border-radius: 14px;
+  box-shadow: var(--cap-shadow);
+  padding: 3px;
+  gap: 2px;
+  /* overflow: hidden went with the padding: it clipped the old edge-to-edge selection
+   * fill to the rounded corners; the floating pill never reaches the edge, and the clip
+   * would only cut the pill's lit ring. */
 }
 .cfg-seg button {
   appearance: none;
@@ -2529,6 +2550,10 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
   padding: 6px 13px;
   cursor: pointer;
   opacity: 0.6;
+  /* The pill the selected option wears is round; the radius lives on every button so the
+   * state change does not move the text by turning a square into a pill. */
+  border-radius: 11px;
+  transition: background 0.22s ease, box-shadow 0.22s ease, opacity 0.2s ease;
   /*
    * Buttons share the width instead of each demanding its own.
    *
@@ -3090,9 +3115,13 @@ html[data-asb-theme="light"] .cfg-desc { color:var(--text-secondary); opacity:1;
 html[data-asb-theme="light"] .cfg-search { background:#fff; color:var(--text); border-color:var(--border); box-shadow:0 2px 8px rgba(20,50,42,.05); }
 html[data-asb-theme="light"] .cfg-search::placeholder { color:#61776f; opacity:1; }
 html[data-asb-theme="light"] .cfg-search-empty, html[data-asb-theme="light"] .cfg-row-cat { color:var(--text-tertiary); }
-html[data-asb-theme="light"] .cfg-switch { background:#e0ebe6; border-color:rgba(11,56,47,.28); box-shadow:inset 0 1px 2px rgba(20,50,42,.10); }
-html[data-asb-theme="light"] .cfg-switch::after { background:#fff; box-shadow:0 1px 3px rgba(20,50,42,.22); }
-html[data-asb-theme="light"] .cfg-switch.on { background:linear-gradient(135deg,#57d9cc,#53cce8); border-color:#129f92; box-shadow:0 2px 9px rgba(0,124,99,.24); }
+/* Light capsules for the segment and the switch (fix197): the same white surface, border
+   and soft shadow the light tab bar gets from the list above; the selected segment option
+   keeps the light --pill-* tokens, so it needs no rule of its own. */
+html[data-asb-theme="light"] .cfg-seg { background:#fff; border-color:var(--border); box-shadow:0 10px 28px rgba(20,50,42,.10); }
+html[data-asb-theme="light"] .cfg-switch { background:#fff; border-color:rgba(11,56,47,.28); box-shadow:0 10px 28px rgba(20,50,42,.10); }
+html[data-asb-theme="light"] .cfg-switch::after { background:#fff; box-shadow:0 1px 3px rgba(20,50,42,.22), inset 0 1px 0 rgba(255,255,255,.82); }
+html[data-asb-theme="light"] .cfg-switch.on { background:linear-gradient(135deg,#57d9cc,#53cce8); border-color:#129f92; box-shadow:0 2px 9px rgba(0,124,99,.24), inset 0 1px 0 rgba(255,255,255,.35); }
 html[data-asb-theme="light"] :is(.live-cell-label,.stock-telemetry-title) { background:transparent !important; color:var(--text-tertiary) !important; opacity:1; }
 html[data-asb-theme="light"] :is(.cfg-tile-ico,.cfg-icon,.pbtn .pico) { box-shadow:inset 0 1px 0 rgba(255,255,255,.82); }
 html[data-asb-theme="light"] .cfg-pending { color:#765000; background:#fff5d6; border-color:#d89d24; }
@@ -5151,6 +5180,9 @@ function _el(id) { return document.getElementById(id); }
 let _liveTimer = null;
 let _liveBgTimer = null;
 let _liveOpen = false;
+/* Declared up here with the other page flags, not next to the report page: navUiDepth()
+ * reads it and lives earlier in the file, and a let read before its declaration throws. */
+let _rpOpen = false;
 
 function openLivePage() {
   uiSound('nav');
@@ -5194,7 +5226,8 @@ function closeLivePage() {
  * The root manager's WebView goes back through the page history and closes the WebUI only
  * when there is none - and this page never made any, so the back gesture left the WebUI from
  * a settings category, from Monitor and from any open window. Each level on screen now owns
- * one history entry: a page other than Home, a category inside Settings, every open window.
+ * one history entry: a page other than Home, a category inside Settings, every open window,
+ * the log report (fix197 - it opened over a page and still swallowed the gesture).
  * Back closes the top one - a window, then the category (to the Settings hub), then the page
  * (to Home) - and only on Home, with nothing left, does the gesture leave the WebUI. Levels
  * opened or closed by a tap, a swipe or a tab keep the history in step (navSync), so the next
@@ -5216,6 +5249,10 @@ function navUiDepth() {
   let d = 0;
   if (_liveOpen || _cfgOpen) d++;
   if (_cfgOpen && _cfgGroup) d++;
+  /* The log report is a page of its own above whichever page opened it (fix197) - it owns
+   * a history entry like the others, so the back gesture closes the report instead of
+   * leaving the WebUI. */
+  if (_rpOpen) d++;
   return d + navOverlaysOpen().length;
 }
 function navSync() {
@@ -5239,6 +5276,8 @@ function navSyncSoon() {
 function navBackAction() {
   const o = navOverlaysOpen();
   if (o.length) { o[0].close(); return; }
+  /* The report sits above the page it was opened from; back returns to that page. */
+  if (_rpOpen) { uiSound('nav'); closeReportPage(); return; }
   if (_cfgOpen && _cfgGroup) { cfgBack(); return; }
   if (_cfgOpen) { uiSound('nav'); closeConfigPage(true); return; }
   if (_liveOpen) closeLivePage();
@@ -5935,6 +5974,7 @@ window.addEventListener('popstate', function (e) {
   } catch (e) {}
 })();
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && _rpOpen) { closeReportPage(); return; }
   if (e.key === 'Escape' && _liveOpen) closeLivePage();
   if (e.key === 'Escape' && _cfgOpen) closeConfigPage(true);
 });
@@ -6189,7 +6229,7 @@ const CFG_ITEMS = [
   { key:'log_level', type:'seg', def:'1', stock:'stock', opts:['stock','0','1','2','3'], name:'Log Detail',
     desc:'What the module writes to its log, and how much the DEVICE logs. Stock is the only value that leaves the phone\u2019s own logging untouched. 0 is extreme: it cuts device logging and debug output as far as it goes, which saves the writes and wakeups logging costs - and makes almost any bug report from this phone useless, including ours. 1 is normal, what the module has always done. 2 adds learner updates and screen transitions - switch this on before sending a log about battery behaviour. 3 is verbose and fills the log fast; use it only while reproducing something. Leaving extreme puts your logging back the way it was.' },
   { key:'lsposed_verbose', type:'seg', def:'keep', stock:'keep', opts:['keep','off'], name:'LSPosed Verbose Log',
-    desc:'LSPosed keeps a detailed log of its own that grows to tens of megabytes (31 MB on one phone). Off writes LSPosed\'s own setting - the same switch as Settings > Verbose log in its manager - and deletes the old verbose log files; LSPosed reads the setting when it starts, so it takes effect after a reboot. Keep leaves LSPosed alone, and if ASB switched the log off, puts back what LSPosed had. Applied once, when you change it: if you turn the log back on in LSPosed later, ASB does not undo that. Turn it on again before reporting a problem to the author of an LSPosed module.' },
+    desc:'LSPosed keeps a detailed log of its own that grows to tens of megabytes (31 MB on one phone). Off writes LSPosed\'s own setting - the same switch as Settings > Verbose log in its manager - and deletes the old verbose log files; LSPosed reads the setting when it starts, so it takes effect after a reboot. The modules log - what the LSPosed modules themselves write - has no switch in LSPosed, so while the card is Off ASB also empties it in the background every few minutes. Keep leaves LSPosed completely alone, and if ASB switched the verbose log off, puts back what LSPosed had. If you turn the log back on in LSPosed later, ASB does not undo that. Turn it on again before reporting a problem to the author of an LSPosed module.' },
 ];
 let _cfgVals = {};
 let _cfgOpen = false;
@@ -9691,7 +9731,6 @@ function logReportNote(txt, warn) {
   p.textContent = txt;
   return p;
 }
-let _rpOpen = false;
 function openReportPage() {
   uiSound('nav');
   const p = _el('reportPage');
