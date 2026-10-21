@@ -3766,6 +3766,172 @@ node "$T/t.js" || fail "fit logic"
 echo "PASS webui header capsules: shared bar material, tonal pills, one-line island on every page"
 )
 
+t_webui_log_report_runtime() (
+# Runtime (fix194): the Logs menu grew a third entry, "Log report". It runs the REAL
+# tools/logkit/asb_fullday_digest.sh - awk over the files the 24h recorder already wrote,
+# no dumpsys - and explains the capture in plain words in a sheet: drain, what kept the
+# phone awake, crashes, SystemUI restarts, throttling, plus advice. Works on the RUNNING
+# capture (the digest folds in the open phase) and is not behind the debug-build gate.
+# Here: the digest over a fixture capture, the REAL parser/tips in node, the markup and
+# all 13 locales.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+D="$ROOT/tools/logkit/asb_fullday_digest.sh"
+fail() { echo "FAIL webui log report: $*" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "SKIP webui log report: no node"; exit 0; }
+[ -f "$D" ] || fail "tools/logkit/asb_fullday_digest.sh is missing"
+sh -n "$D" || fail "digest script has a syntax error"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+
+# --- fixture capture: 12h of phases, a 7.8h night chain at 1.0%/h, wakelocks, crashes ---
+NOW=$(date +%s)
+CAP="$T/asb_log_full_day_999"; mkdir -p "$CAP" "$T/tomb"
+cat > "$CAP/phase_ledger.tsv" <<EOF
+active	$((NOW-72000))	$((NOW-68400))	95	89	38	33	1800	42	0	0	-1	310	5000000	1200000	0
+idle	$((NOW-68400))	$((NOW-64800))	89	88	31	29	400	0	0	5	12	40	0	0	0
+sleep	$((NOW-64800))	$((NOW-43200))	88	82	30	28	0	0	0	0	8	35	1000000	200000	0
+idle	$((NOW-43260))	$((NOW-40260))	82	81	31	29	400	0	0	0	10	45	0	0	0
+charging	$((NOW-40000))	$((NOW-36400))	81	95	32	30	500	0	0	0	100	0	0	0	0
+active	$((NOW-36000))	$((NOW-32400))	95	88	41	35	2100	55	0	0	-1	420	8000000	3000000	0
+sleep	$((NOW-32400))	$((NOW-28800))	88	87	33	31	0	0	2	0	25	60	0	0	0
+EOF
+cat > "$CAP/battery_trace.txt" <<EOF
+epoch|datetime|fsm_state|profile|screen|bat_pct|bat_mA
+$((NOW-72000))|d|B|b|1|95|310
+$((NOW-68400))|d|B|b|0|89|40
+$((NOW-43200))|d|B|b|0|82|30
+$((NOW-28800))|d|B|b|0|87|50
+EOF
+printf '10123 3661\n10456 1830\n' > "$CAP/.wl_uid_delta"
+printf '10123|com.instagram.android\n10456|com.whatsapp\n' > "$CAP/.uid_package_map.tsv"
+printf '===== SYSTEMUI RESTART at a\nverdict: ok\n===== SYSTEMUI RESTART at b\nverdict: ok\n' > "$CAP/sysui_restarts.txt"
+printf '%s|active|cap_owner=thermal|x\n%s|active|cap_owner=asb_governor|x\n' "$((NOW-71000))" "$((NOW-70000))" > "$CAP/throttle_trace.txt"
+printf ' ASB FULL-DAY REPORT — x\n capture: 24h target, 720 min elapsed\n' > "$CAP/_full_day_report.txt"
+printf 'Cmdline: com.crashy.app\nsignal 11\n' > "$T/tomb/tombstone_01"; touch -d "@$((NOW-4000))" "$T/tomb/tombstone_01"
+printf 'Cmdline: /vendor/bin/hw/foo\nlibasbdsp x\n' > "$T/tomb/tombstone_02"; touch -d "@$((NOW-3000))" "$T/tomb/tombstone_02"
+printf 'Cmdline: old.crash\n' > "$T/tomb/tombstone_03"; touch -d "@$((NOW-200000))" "$T/tomb/tombstone_03"
+
+out="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" sh "$D" "$CAP")" || fail "digest exit"
+printf '%s\n' "$out" | grep -q '^meta	.*elapsed_min=720	target_h=24	running=0$' || fail "meta line: $(printf '%s' "$out" | head -1)"
+printf '%s\n' "$out" | grep -q '^drain	pctph=2.0	total_drop=22	hours=10.8	ma=99$' || fail "drain line"
+printf '%s\n' "$out" | grep -q '^night	dur_min=469	drop=8	pctph=1.0	awake=8$' || fail "night chain"
+printf '%s\n' "$out" | grep -q '^idlemax	awake=25	phase=sleep	dur_min=60$' || fail "idlemax"
+printf '%s\n' "$out" | grep -q '^wl	pkg=com.instagram.android	sec=3661$' || fail "top wakelock app"
+printf '%s\n' "$out" | grep -q '^crash	count=2	asb=1	latest=/vendor/bin/hw/foo$' || fail "crash window or ASB attribution"
+printf '%s\n' "$out" | grep -q '^sysui	count=2$' || fail "sysui restarts"
+printf '%s\n' "$out" | grep -q '^thermal	cpu=41	surf=35$' || fail "thermal peaks"
+printf '%s\n' "$out" | grep -q '^throttle	clamps=2	owner=asb_governor$' || fail "throttle clamp periods"
+printf '%s\n' "$out" | grep -q '^radio	mib=17.5$' || fail "radio MiB"
+[ "$(ASB_TOMBSTONE_DIR="$T/tomb" sh "$D" "$T/no-such-dir")" = "error	no_capture" ] || fail "missing capture must say error no_capture"
+EMPTY="$T/empty"; mkdir -p "$EMPTY"
+eout="$(ASB_TOMBSTONE_DIR="$T/empty-tomb" ASB_LK_LOCK="$T/nolock" sh "$D" "$EMPTY")"
+printf '%s\n' "$eout" | grep -q '^meta	' || fail "an empty capture still reports meta"
+printf '%s\n' "$eout" | grep -q '^wl	none=1$' || fail "an empty capture reports no wakelocks"
+printf '%s\n' "$eout" | grep -q '^drain	' && fail "an empty capture must not invent drain numbers"
+
+# --- the REAL parser/tips in node, fed the fixture digest and the shipped locales ---
+{
+  printf 'const I18N = { en: %s, ru: %s };\n' "$(cat "$ROOT/webroot/i18n/en.json")" "$(cat "$ROOT/webroot/i18n/ru.json")"
+  cat <<'EOF'
+let ASB_LANG = 'ru';
+function T(k, d) { const L = I18N[ASB_LANG]; return (L && typeof L[k] === 'string') ? L[k] : d; }
+EOF
+  for fn in parseLogReport logReportT logReportDur logReportTips; do
+    sed -n "/^function $fn(/,/^}/p" "$H"
+  done
+  cat <<'EOF'
+let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
+const txt = [
+  'meta\telapsed_min=720\ttarget_h=24\trunning=1',
+  'cover\ton_min=200\toff_min=520\ton_pct=27',
+  'drain\tpctph=2.0\ttotal_drop=22\thours=10.8\tma=99',
+  'night\tdur_min=469\tdrop=8\tpctph=1.0\tawake=8',
+  'idlemax\tawake=25\tphase=sleep\tdur_min=60',
+  'thermal\tcpu=41\tsurf=35',
+  'radio\tmib=17.5',
+  'wl\tpkg=com.instagram.android\tsec=3661',
+  'wl\tpkg=com.whatsapp\tsec=1830',
+  'crash\tcount=2\tasb=1\tlatest=/vendor/bin/hw/foo',
+  'sysui\tcount=2',
+  'throttle\tclamps=2\towner=asb_governor',
+  ''].join('\n');
+const d = parseLogReport(txt);
+chk(d.ok === true, 'fixture digest parses');
+chk(d.sections.meta.running === '1' && d.sections.meta.elapsed_min === '720', 'meta fields');
+chk(d.sections.drain.pctph === '2.0' && d.sections.night.dur_min === '469', 'drain/night fields');
+chk(d.wl.length === 2 && d.wl[0].pkg === 'com.instagram.android' && d.wl[0].sec === 3661, 'wakelock rows: ' + JSON.stringify(d.wl));
+const tips = logReportTips(d);
+const keys = tips.map(function (t) { return t.key; });
+chk(keys.indexOf('lr_tip_crash') === 0, 'an ASB crash is the first tip: ' + keys.join(','));
+chk(keys.indexOf('lr_tip_night') >= 0 && keys.indexOf('lr_tip_awake') >= 0 && keys.indexOf('lr_tip_app') >= 0, 'night/awake/app tips present: ' + keys.join(','));
+chk(logReportT('lr_running', 'recording \u00b7 {min} min of {h} h', { min: '720', h: '24' }) === 'идёт запись \u00b7 720 мин из 24 ч', 'ru running line');
+chk(logReportT('lr_tip_night', '', { pct: '1.0' }) === I18N.ru.lr_tip_night.replace('{pct}', '1.0'), 'ru night tip fills its placeholder');
+chk(logReportT('lr_tip_app', '', { app: 'com.instagram.android', min: '61' }).indexOf('com.instagram.android') >= 0, 'ru app tip names the app');
+chk(logReportDur(469) === '7 ч 49 мин', 'ru duration: ' + logReportDur(469));
+chk(logReportDur(45) === '45 мин', 'ru short duration');
+ASB_LANG = 'en';
+chk(logReportDur(469) === '7 h 49 min', 'en duration: ' + logReportDur(469));
+const clean = parseLogReport('meta\telapsed_min=10\ttarget_h=24\trunning=1\nwl\tnone=1\ncrash\tcount=0\tasb=0\tlatest=none\nsysui\tcount=0\n');
+const ct = logReportTips(clean);
+chk(ct.length === 1 && ct[0].key === 'lr_tip_ok' && ct[0].ic === 'ok', 'a clean capture gets the ok tip: ' + JSON.stringify(ct));
+chk(logReportT('lr_tip_ok', '', {}) === 'No serious issues found - drain looks healthy.', 'en ok tip');
+chk(parseLogReport('error\tno_capture\n').error === 'no_capture', 'no_capture error survives the parser');
+chk(parseLogReport('').error === 'empty', 'empty output is an error, not data');
+chk(parseLogReport('wl\tnone=1\n').ok === false, 'no meta line means not ok');
+if (bad) process.exit(1);
+console.log('ok');
+EOF
+} > "$T/t.js"
+rout="$(node "$T/t.js" 2>&1)" || fail "$rout"
+[ "$rout" = ok ] || fail "$rout"
+
+# --- locales + markup pins ---
+python3 - "$ROOT" <<'P' || fail "locales/markup"
+import json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+KEYS = ['lr_menu','lr_title','lr_loading','lr_none_title','lr_none_body','lr_failed',
+        'lr_running','lr_done','lr_early','lr_sec_drain','lr_overall','lr_avg_current',
+        'lr_screen_on','lr_screen_off','lr_night','lr_idle','lr_radio','lr_sec_wake',
+        'lr_wake_none','lr_sec_crash','lr_crash_none','lr_crash_n','lr_crash_latest',
+        'lr_crash_asb','lr_sysui','lr_sec_thermal','lr_temp_max','lr_clamp_none',
+        'lr_clamp_some','lr_sec_tips','lr_tip_ok','lr_tip_night','lr_tip_awake',
+        'lr_tip_crash','lr_tip_crashes','lr_tip_app','lr_min','lr_h','lr_per_hour']
+PH = {'lr_running': ['{min}', '{h}'], 'lr_crash_n': ['{n}'], 'lr_crash_latest': ['{proc}'],
+      'lr_crash_asb': ['{n}'], 'lr_sysui': ['{n}'], 'lr_temp_max': ['{cpu}', '{surf}'],
+      'lr_clamp_some': ['{n}', '{owner}'], 'lr_tip_night': ['{pct}'], 'lr_tip_awake': ['{awake}'],
+      'lr_tip_crashes': ['{n}'], 'lr_tip_app': ['{app}', '{min}'], 'lr_min': ['{n}'], 'lr_h': ['{n}']}
+files = sorted((root / 'webroot' / 'i18n').glob('*.json'))
+assert len(files) == 13, 'locale count'
+for p in files:
+    d = json.loads(p.read_text(encoding='utf-8'))
+    for k in KEYS:
+        assert d.get(k), '%s: %s missing' % (p.name, k)
+        for ph in PH.get(k, []):
+            assert ph in d[k], '%s: %s lost its %s placeholder' % (p.name, k, ph)
+    if p.name == 'en.json':
+        assert d['lr_title'] == '24h log in plain words'
+        assert d['lr_running'] == 'recording \u00b7 {min} min of {h} h'
+        assert d['lr_tip_night'] == 'Overnight the phone lost ~{pct}%/h - check background apps.'
+        assert d['lr_per_hour'] == '%/h'
+    if p.name == 'ru.json':
+        assert d['lr_title'] == 'Суточный лог простыми словами'
+        assert d['lr_menu'] == 'Отчёт по логу'
+h = (root / 'webroot' / 'index.html').read_text(encoding='utf-8')
+assert h.count('data-i18n="lr_menu"') == 1, 'menu item carries lr_menu'
+P
+grep -Fq 'onclick="asbLogMenuPick('"'"'report'"'"')"' "$H" || fail "the menu item does not pick report"
+grep -Fq "if (action === 'report') { asbLogReportOpen(); return; }" "$H" || fail "the report branch is gone from asbLogMenuPick"
+grep -Fq "run('sh ' + MD + '/tools/logkit/asb_fullday_digest.sh 2>/dev/null')" "$H" || fail "the digest invocation changed"
+grep -Fq 'iclassName' "$H" && fail "typo"
+grep -Fq '.lgr-ic.warn {' "$H" || fail "tip badge styles missing"
+grep -Fq 'textContent = tip.ic' "$H" || fail "tips must render via textContent, not markup"
+grep -Fq '"tools/logkit/asb_fullday_digest.sh"' "$ROOT/.github/workflows/build-debug.yml" || fail "debug workflow does not ship the digest"
+grep -Fq '"tools/logkit/asb_fullday_digest.sh"' "$ROOT/.github/workflows/build-release.yml" || fail "release workflow does not ship the digest"
+grep -Fq 'asb_fullday_digest.sh' "$ROOT/.github/workflows/build-release.yml" || fail "release staging loop lost the digest"
+echo "PASS webui log report: digest over a fixture capture, plain-words parser/tips in node (ru+en), 13 locales, menu wiring"
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;
