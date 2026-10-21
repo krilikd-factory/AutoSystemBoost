@@ -87,7 +87,14 @@
 }
 
 html, body {
-  height: 100%;
+  /* min-height, not height: with a fixed 100% the body is exactly one viewport tall and
+   * becomes the scroll container (overflow-x: hidden computes overflow-y to auto), while
+   * the document itself has nothing to scroll. WebViews that only gesture-scroll the
+   * document then show a page that simply does not move - "can't scroll down, there are
+   * more cards" (user report). With min-height the page grows, the document scrolls, and
+   * every WebView since forever scrolls it. Short content still fills exactly one
+   * viewport via .page's min-height, so the no-jelly property is unchanged. */
+  min-height: 100%;
   width: 100%;
   max-width: 100%;
   margin: 0;
@@ -1301,7 +1308,12 @@ html[data-asb-theme="light"] .tg-link-sub { color:#315a4f !important; }
   transition: opacity var(--page-fade-out) ease-out,
               transform var(--page-fade-out) ease-out,
               visibility 0s linear var(--page-fade-out);
-  overflow-y: hidden;
+  /* Vertical scroll must stay on: the Monitor page is taller than one viewport on many
+   * phones (battery cards, realtime grid, limits, learner), and overflow-y: hidden here
+   * clipped the rest with no way to reach it - the "doesn't scroll" report, confirmed on
+   * an Ace 5. Horizontal stays hidden: the slide-in transform would otherwise flash a
+   * scrollbar track mid-animation. */
+  overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   pointer-events: none;
