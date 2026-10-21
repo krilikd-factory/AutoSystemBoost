@@ -14,7 +14,12 @@
 #                          emptied - the newest stays, the daemon still holds it open; the
 #                          previous boot's are deleted. LSPosed reads the setting when it
 #                          starts: it takes effect at the next boot. The modules log (what the
-#                          modules write) has no switch in LSPosed and is only reported.
+#                          modules themselves write) has no switch in LSPosed, so while the
+#                          card says off ASB also empties it - once here, then every few
+#                          minutes from service.sh's sweep loop (fix197). Emptied by
+#                          truncation, the same thing LSPosed's own manager does on
+#                          "clear log": the daemon appends, so the next line lands at the
+#                          start of the file and the log simply grows again from empty.
 #
 # Nothing runs at boot. If the user later turns the log back on in the LSPosed manager, that
 # is their choice and ASB does not undo it. Uninstalling ASB puts LSPosed's value back.
@@ -22,6 +27,8 @@
 #   status  prints key=value lines for the WebUI and asbdiag (pending_reboot=1: ASB wrote
 #           the setting after this boot began, so the daemon still runs with the old one)
 #   apply   carries out the card's value, prints result=...
+#   sweep   empties the logs only - no setting is written, no record kept; runs from
+#           service.sh's loop while the card says off, exits quietly on any other value
 #   restore puts LSPosed's earlier value back (uninstall.sh)
 #   open    opens the LSPosed manager (the parasitic one in Shell, else the standalone app)
 
@@ -76,6 +83,47 @@ _restore() {   # LSPosed's own earlier value back, if ASB ever changed it
   fi
 }
 
+# Empties LSPosed's logs; the total freed is left in $_freed (KiB). Emptied, not deleted
+# (fix189): LSPosed keeps the files of this boot in a list and deletes the eldest itself
+# once there are ten - an entry ASB had already deleted fails that delete, stays at the
+# head of the list, and from then on LSPosed deletes none of its old logs until the next
+# boot. The previous boot's logs (log.old) are not in that list; LSPosed removes the
+# folder at its next start anyway, so those are deleted outright.
+#
+# Verbose: every file but the newest, which the daemon still holds open - with the verbose
+# setting off that file gathers nothing, so it is left alone.
+#
+# Modules (fix197): ALL of them, the newest included. The modules log has no switch in
+# LSPosed - the modules keep writing to the current file all boot (an OP15 showed 20 MB
+# an hour after boot with the verbose log off), so leaving the newest alone would leave
+# the whole problem in place. Truncating a live log is what LSPosed's own manager does on
+# "clear log": the daemon appends, so the next line lands at the start of the file.
+_sweep_logs() {
+  _freed=0; _n=0
+  # Newest first, by NAME, not by mtime: truncating a file sets its mtime to now, so after
+  # one sweep `ls -t` puts the emptied files ahead of the live one and the next sweep would
+  # empty the file the daemon holds open. LSPosed's own filenames carry the creation
+  # timestamp (verbose_2026-10-13T10_00_00.log), so reverse lexical order is the creation
+  # order and stays stable no matter what the sweep does to the contents.
+  for _f in $(ls -r "$LSPD"/log/verbose_*.log 2>/dev/null); do
+    _n=$((_n + 1))
+    [ "$_n" -eq 1 ] && continue
+    _k=$(_kib "$_f"); true > "$_f" 2>/dev/null && _freed=$((_freed + _k))
+  done
+  for _f in "$LSPD"/log.old/verbose_*.log; do
+    [ -f "$_f" ] || continue
+    _k=$(_kib "$_f"); rm -f "$_f" 2>/dev/null && _freed=$((_freed + _k))
+  done
+  for _f in "$LSPD"/log/modules_*.log; do
+    [ -f "$_f" ] || continue
+    _k=$(_kib "$_f"); true > "$_f" 2>/dev/null && _freed=$((_freed + _k))
+  done
+  for _f in "$LSPD"/log.old/modules_*.log; do
+    [ -f "$_f" ] || continue
+    _k=$(_kib "$_f"); rm -f "$_f" 2>/dev/null && _freed=$((_freed + _k))
+  done
+}
+
 case "${1:-status}" in
   status)
     echo "present=$present"
@@ -88,6 +136,8 @@ case "${1:-status}" in
       # fix189: the modules log is what LSPosed modules write themselves (XposedBridge.log,
       # tag LSPosed-Bridge). LSPosed has no switch for it; the verbose setting does not touch
       # it. An OP15 with the verbose log off showed 20 MB an hour after boot, all of it this.
+      # fix197: while the card says off, the sweep keeps it empty - it is still reported
+      # here, so the card and asbdiag can show what the last minutes produced.
       echo "modules_kib=$(_kib "$LSPD"/log/modules_*.log)"
       echo "oldlog_kib=$(_kib "$LSPD"/log.old/*.log)"
       echo "pending_reboot=$(_pending)"
@@ -114,26 +164,24 @@ case "${1:-status}" in
           [ "$(cat "$PREV" 2>/dev/null)" = off ] && rm -f "$PREV"
           _res=already_off
         fi
-        # The old verbose logs: every one but the newest, which the daemon still writes to.
-        # Emptied, not deleted (fix189): LSPosed keeps the files of this boot in a list and
-        # deletes the eldest itself once there are ten - an entry ASB had already deleted
-        # fails that delete, stays at the head of the list, and from then on LSPosed deletes
-        # none of its old logs until the next boot. The previous boot's logs (log.old) are
-        # not in that list; LSPosed removes the folder at its next start anyway.
-        _freed=0; _n=0
-        for _f in $(ls -t "$LSPD"/log/verbose_*.log 2>/dev/null); do
-          _n=$((_n + 1))
-          [ "$_n" -eq 1 ] && continue
-          _k=$(_kib "$_f"); true > "$_f" 2>/dev/null && _freed=$((_freed + _k))
-        done
-        for _f in "$LSPD"/log.old/verbose_*.log; do
-          [ -f "$_f" ] || continue
-          _k=$(_kib "$_f"); rm -f "$_f" 2>/dev/null && _freed=$((_freed + _k))
-        done
+        # The old verbose logs - and the modules log too (fix197): it has no switch in
+        # LSPosed, so the card's off keeps it empty as well. The mechanics live in
+        # _sweep_logs (why emptied in place, why the modules log's newest file too).
+        _sweep_logs
         echo "result=$_res freed_kib=$_freed"
         ;;
       *) _restore ;;
     esac
+    ;;
+  sweep)
+    # The periodic pass from service.sh's loop. The verbose setting persists in LSPosed
+    # itself once written; the modules log has no such switch, so keeping it clean is a
+    # repeating action. This writes no setting and keeps no record - it only empties the
+    # logs, and only while the card says off; any other value leaves LSPosed untouched.
+    [ "$present" = 1 ] || { echo "result=absent"; exit 0; }
+    [ "$(_cfg lsposed_verbose)" = off ] || { echo "result=skip"; exit 0; }
+    _sweep_logs
+    echo "result=swept freed_kib=$_freed"
     ;;
   restore)
     # Uninstall: put back what LSPosed had, whatever the card says - ASB is leaving, and a
@@ -152,6 +200,6 @@ case "${1:-status}" in
       echo "result=open_failed"
     fi
     ;;
-  *) echo "usage: asb_lsposed.sh status|apply|restore|open" >&2; exit 2 ;;
+  *) echo "usage: asb_lsposed.sh status|apply|sweep|restore|open" >&2; exit 2 ;;
 esac
 exit 0

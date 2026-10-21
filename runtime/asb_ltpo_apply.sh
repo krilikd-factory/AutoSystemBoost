@@ -235,10 +235,16 @@ case "${1:-apply}" in
     _ltpo_framework_up && _ltpo_range_restore
     ;;
   range)
-    # Diagnostics: what the range half did.
-    printf 'max_mode=%s peak=%s min=%s recorded=%s\n' "$(_ltpo_max_mode)" \
-      "$(_ltpo_get peak_refresh_rate)" "$(_ltpo_get min_refresh_rate)" \
-      "$( [ -f "$RANGE_ORIG" ] && tr '\n' ' ' < "$RANGE_ORIG" || echo no)"
+    # Diagnostics: what the range half did. The floor key is deleted on purpose once the
+    # range is open, so an empty min is the OPEN range, not missing data. It used to print
+    # as "min= recorded=peak=... min=__unset" - the empty value and the recorded originals
+    # glued into one line, which read as corruption in field reports (fix196).
+    _pk="$(_ltpo_get peak_refresh_rate)"
+    _mn="$(_ltpo_get min_refresh_rate)"
+    _rec="$( { [ -f "$RANGE_ORIG" ] && tr '\n' ' ' < "$RANGE_ORIG"; } | sed 's/ *$//' )"
+    [ -n "$_rec" ] || _rec="none"
+    printf 'max_mode=%s peak=%s min=%s original: %s\n' "$(_ltpo_max_mode)" \
+      "${_pk:-unset}" "${_mn:-none (floor open)}" "$_rec"
     ;;
   status)
     if [ ! -f "$MAN" ]; then
