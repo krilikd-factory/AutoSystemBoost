@@ -467,6 +467,50 @@ logs.
 
 ---
 
+## `asb_fullday_digest.sh` — the WebUI log-report feed (fix194, extended fix200)
+
+`tools/logkit/asb_fullday_digest.sh [capture_dir]` prints the capture as TAB-separated
+`tag\tkey=value\t…` lines on stdout; the WebUI "Log report" page is its only consumer.
+With no argument it resolves the running capture from the logkit lock, else the newest
+`asb_log_full_day_*` folder under the usual roots. Everything is awk/sed over files the
+recorder already wrote - no dumpsys, so it costs nothing and works the same in every
+profile, on running and saved captures alike. A missing input only means its line is
+absent; consumers must treat every line as optional. Tags in emission order:
+
+```
+meta     elapsed_min, target_h, running (1 = capture live), started (YYYY-MM-DD HH:MM
+         from the ledger's first phase, may be empty), profile (env.txt current_profile)
+cover    on_min, off_min, on_pct          (only with >= 10 min of battery_trace)
+drain    pctph, total_drop, hours, ma     (discharging phases only)
+night    dur_min, drop, pctph, awake      (longest idle/sleep chain >= 15 min)
+idlemax  awake, phase, dur_min            (worst screen-off awake share)
+thermal  cpu, surf                        (peak temperatures)
+radio    mib                              (ledger rx+tx, >= 0.1 MiB)
+wl       pkg, sec                         (top app wakelocks) or "wl  none=1"
+crash    count, asb, latest               (tombstones inside the capture window)
+sysui    count                            (SystemUI restarts)
+throttle clamps, owner
+jank     pct, jps, frames                 (screen-on jank headline, from the report)
+japp     pkg, frames, pct                 (top four apps; the split-screen "multi"
+                                           pseudo-row is dropped)
+hz       mode, share, ma                  (per-refresh-rate rows)
+asbcost  cpu_msh, writes_h, wakes_h       (ASB's own bill)
+audio    spk_min, pctph, ma               (speaker playback, from the phase table whose
+                                           header carries pct/h - never the sampled-
+                                           current table, which reuses the column for mA)
+charge   types                            (e.g. "Fast(17) N/A(197)")
+smart    watching, testing, helped, nothelped, ctxlearn   (smooth| line of
+                                           smart_records.txt plus learned contexts)
+cfg      key, value                       (seven advice-relevant switches, read from the
+                                           CURRENT config, one line per key)
+error    no_capture                       (nothing found - the only failure line)
+```
+
+The WebUI parser keys on the tag; unknown tags are kept in `sections` and unknown keys
+are preserved, so older WebUIs tolerate newer digests and vice versa.
+
+---
+
 ## `audio_trace.txt`, `network_trace.txt`, `kernel_params.txt` — provenance snapshots
 
 These are human-readable snapshot streams, not positional CSV schemas. Each block begins with a UTC timestamp and a scenario tag. A missing property, route, sysfs node or PSI endpoint means **unavailable**, not a failed ASB write.
