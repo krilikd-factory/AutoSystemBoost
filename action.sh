@@ -844,7 +844,7 @@ T_CEIL_ASB="CPU ceiling: set by ASB"
 T_CPR_PROFILE="profile rail"
 T_CPR_ENV="efficiency envelope"
 T_CPR_HEAT="heat budget (%s)"
-T_CPR_FLOOR="efficient minimum (asked %s MHz)"
+T_CPR_FLOOR="efficiency rail asked %s MHz - the responsiveness floor keeps it higher"
 T_PRIME_CEIL="prime ceiling: %s MHz · %s"
 T_BURST_ON="⚡ burst boost ACTIVE - prime lifted for heavy work (max 20 s)"
 T_BURST_N="burst boosts this session: %s"
@@ -1188,6 +1188,25 @@ fi
 # above stays only as the fallback - it sat at its 40 mA floor on a phone measured at ~37.
 _offx="$(grep -m1 '^offdrain_pctph_x100=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 case "$_offx" in ''|*[!0-9]*) _offx=0 ;; esac
+_offn="$(grep -m1 '^offdrain_windows=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+case "$_offn" in ''|*[!0-9]*) _offn=0 ;; esac
+# fix196: the WebUI cards show the CURRENT profile's own measured figure (fix189); this page
+# printed the phone-wide one, and on a phone that has both the two disagreed - 0.63 %/h here
+# against 0.42 %/h on the Smart card in the same minute. Prefer the active profile's figure
+# with its own window count; the phone-wide one stays the fallback for a profile with no
+# clean screen-off window yet.
+if [ -n "$PROFILE" ]; then
+  _poff="$(grep -m1 '^offdrain_by_profile=' /dev/.asb/state 2>/dev/null | cut -d= -f2 \
+    | tr ',' '\n' | awk -F: -v p="$PROFILE" '$1 == p && $2 > 0 && $3 > 0 { print $2; exit }')"
+  case "$_poff" in
+    ''|*[!0-9]*) : ;;
+    *)
+      _offx="$_poff"
+      _offn="$(grep -m1 '^offdrain_by_profile=' /dev/.asb/state 2>/dev/null | cut -d= -f2 \
+        | tr ',' '\n' | awk -F: -v p="$PROFILE" '$1 == p && $2 > 0 && $3 > 0 { print $3; exit }')"
+      ;;
+  esac
+fi
 _idle_measured=0
 if [ "$_offx" -gt 0 ] 2>/dev/null && [ -n "$_lvl" ] && [ "$_lvl" -gt 0 ] 2>/dev/null; then
   _toff_min=$(( _lvl * 6000 / _offx ))
@@ -1378,7 +1397,8 @@ case "$_bstat" in
     fi
     if [ "$_idle_measured" = 1 ]; then
       # How many windows stand behind the figure: one night is a point, not a rate.
-      _offn="$(grep -m1 '^offdrain_windows=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+      # _offn was read with _offx above and follows its scope (the profile's own count when
+      # the per-profile figure won).
       case "$_offn" in ''|*[!0-9]*) _offn="" ;; esac
       printf '       %s%s\n' "$(_s "$T_ETA_IDLE_MEAS" "$((_offx / 100)).$(printf '%02d' $((_offx % 100)))")" \
         "${_offn:+$(_s "$T_ETA_IDLE_N" "$_offn")}"

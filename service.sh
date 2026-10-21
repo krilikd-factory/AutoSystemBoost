@@ -4093,6 +4093,25 @@ esac
   [ -f "$MODDIR/runtime/asb_log_apply.sh" ] && \
     sh "$MODDIR/runtime/asb_log_apply.sh" >/dev/null 2>&1
 
+  # LSPosed modules-log sweep (fix197). The verbose setting is written once and persists in
+  # LSPosed itself; the modules log - what the LSPosed modules write - has no switch, so
+  # while the card says off this loop empties it every ten minutes (an OP15 grew 20 MB an
+  # hour). The setting itself is never written here: the sweep command only empties logs,
+  # and only while the card says off - "keep" leaves LSPosed completely alone. The loop
+  # re-reads the config each pass, so toggling the card needs no reboot to start or stop it.
+  if [ -f "$MODDIR/runtime/asb_lsposed.sh" ]; then
+    (
+      while true; do
+        sleep 600
+        [ -d /data/adb/lspd ] || continue
+        case "$(grep -E '^[[:space:]]*lsposed_verbose=' "$MODDIR/config/governor.conf" 2>/dev/null \
+                | tail -1 | sed 's/^[^=]*=//; s/#.*//' | tr -d ' \r')" in
+          off) sh "$MODDIR/runtime/asb_lsposed.sh" sweep >/dev/null 2>&1 ;;
+        esac
+      done
+    ) &
+  fi
+
   if [ -f "$MODDIR/runtime/asb_net_apply.sh" ]; then
     _asb_net_any=0
     # Per-link keys too: a config with the global switch on auto and only Wi-Fi or mobile
