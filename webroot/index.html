@@ -1564,6 +1564,17 @@ html[data-asb-theme="light"] .live-info-src { background: #fbfcfc; }
   overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .lgr-note { font-size: 12.5px; line-height: 1.45; color: var(--text-secondary); padding: 2px 0; }
 .lgr-warn { color: var(--perf); }
+/* fix200: real per-app / per-rate tables. Fixed layout so a long package name ellipsizes
+   instead of pushing the numbers off the card. */
+.lgr-table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 6px; }
+.lgr-table th { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
+  color: var(--text-tertiary); text-align: start; padding: 4px 6px 2px; }
+.lgr-table td { font-size: 12.5px; color: var(--text); padding: 5px 6px;
+  border-top: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+.lgr-table th:first-child { width: 50%; }
+.lgr-table td.lgr-td-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lgr-table td.lgr-td-num, .lgr-table th.lgr-td-num { text-align: end; }
+.lgr-table td.lgr-warn, .lgr-table td .lgr-warn { color: var(--perf); }
 .lgr-tip { display: flex; gap: 9px; align-items: flex-start; padding: 5px 0; font-size: 12.5px;
   line-height: 1.45; color: var(--text); }
 .lgr-ic { flex: 0 0 auto; font-size: 13px; line-height: 1.45; }
@@ -9643,7 +9654,7 @@ function asbToggleLogMenu(ev) {
  * capture too: the digest folds in the still-open phase, so the numbers move as the
  * day goes on. */
 function parseLogReport(txt) {
-  const d = { ok: false, error: '', sections: {}, wl: [] };
+  const d = { ok: false, error: '', sections: {}, wl: [], japps: [], hzs: [], cfg: {} };
   if (!txt) { d.error = 'empty'; return d; }
   const lines = String(txt).split('\n');
   for (const raw of lines) {
@@ -9660,6 +9671,13 @@ function parseLogReport(txt) {
     if (tag === 'wl') {
       if (kv.pkg) d.wl.push({ pkg: kv.pkg, sec: +kv.sec || 0 });
       else d.sections.wl_none = { none: '1' };
+    } else if (tag === 'japp') {
+      /* fix200: per-app frame counts - the real per-app table the sheet shows. */
+      if (kv.pkg) d.japps.push({ pkg: kv.pkg, frames: +kv.frames || 0, pct: +kv.pct || 0 });
+    } else if (tag === 'hz') {
+      if (kv.mode) d.hzs.push({ mode: kv.mode, share: +kv.share || 0, ma: +kv.ma || 0 });
+    } else if (tag === 'cfg') {
+      if (kv.key) d.cfg[kv.key] = kv.value || '';
     } else {
       d.sections[tag] = kv;
     }
@@ -9688,18 +9706,54 @@ function logReportDurSec(sec) {
   if (t < 60) return logReportT('lr_secs', '{n} sec', { n: String(t) });
   return logReportDur(t / 60);
 }
+/* fix200: the advice engine. Every rule is a finding from the capture plus, where the fix
+ * is one switch, the ASB setting that does it - named the way the Settings screen names it
+ * (Tcfg), in the UI language. Worst things first; at most six cards so the list stays
+ * readable. The settings are the CURRENT ones: a saved log from last week still advises
+ * against the switches as they are set today. */
 function logReportTips(d) {
   const tips = [];
-  const night = d.sections.night || null;
-  const idle = d.sections.idlemax || null;
-  const crash = d.sections.crash || null;
+  const s = d.sections || {};
+  const night = s.night || null;
+  const idle = s.idlemax || null;
+  const crash = s.crash || null;
+  const jank = s.jank || null;
+  const smart = s.smart || null;
+  const audio = s.audio || null;
+  const cost = s.asbcost || null;
+  const cfg = d.cfg || {};
   if (crash && (+crash.asb || 0) > 0) tips.push({ ic: 'warn', key: 'lr_tip_crash', vars: {} });
-  if (night && (+night.pctph || 0) > 0.8) tips.push({ ic: 'warn', key: 'lr_tip_night', vars: { pct: (+night.pctph).toFixed(1) } });
+  if (night && (+night.pctph || 0) > 0.8) {
+    if (cfg.night_modem_idle === '0')
+      tips.push({ ic: 'warn', key: 'lr_tip_night_modem', vars: { pct: (+night.pctph).toFixed(1), set: Tcfg('night_modem_idle', 'name', 'Quiet Radio at Night') } });
+    else
+      tips.push({ ic: 'warn', key: 'lr_tip_night', vars: { pct: (+night.pctph).toFixed(1) } });
+  }
   if (idle && (+idle.awake || 0) > 15) tips.push({ ic: 'warn', key: 'lr_tip_awake', vars: { awake: String(idle.awake) } });
-  if (d.wl.length && d.wl[0].sec >= 3600) tips.push({ ic: 'info', key: 'lr_tip_app', vars: { app: d.wl[0].pkg, min: String(Math.round(d.wl[0].sec / 60)) } });
+  if (d.wl.length && d.wl[0].sec >= 3600) {
+    const v = { app: d.wl[0].pkg, min: String(Math.round(d.wl[0].sec / 60)) };
+    if (cfg.wakelock_action === '1') tips.push({ ic: 'info', key: 'lr_tip_app', vars: v });
+    else { v.set = Tcfg('wakelock_action', 'name', 'Act on Wakelocks'); tips.push({ ic: 'info', key: 'lr_tip_wl_enable', vars: v }); }
+  }
+  if (jank && (+jank.frames || 0) > 20000) {
+    if ((+jank.pct || 0) >= 6) tips.push({ ic: 'warn', key: 'lr_tip_jank_bad', vars: { pct: String(jank.pct) } });
+    else if ((+jank.pct || 0) <= 2) tips.push({ ic: 'ok', key: 'lr_tip_jank_ok', vars: { pct: String(jank.pct) } });
+  }
+  if (audio && (+audio.spk_min || 0) >= 30 && (+audio.pctph || 0) >= 5)
+    tips.push({ ic: 'info', key: 'lr_tip_audio', vars: { pct: String(audio.pctph) } });
+  if (smart && (+smart.helped || 0) > 0)
+    tips.push({ ic: 'ok', key: 'lr_tip_smart_help', vars: { n: String(smart.helped) } });
+  if (cost && (+cost.cpu_msh || 0) > 0) {
+    /* The unit travels with the number: "{ms} of CPU per hour" reads "1851 ms of ...". */
+    const ms = String(cost.cpu_msh) + ' ms';
+    if ((+cost.cpu_msh || 0) <= 2500) tips.push({ ic: 'ok', key: 'lr_tip_cost_ok', vars: { ms: ms } });
+    else tips.push({ ic: 'info', key: 'lr_tip_cost_hi', vars: { ms: ms } });
+  }
+  if (cfg.ltpo_video === '0')
+    tips.push({ ic: 'info', key: 'lr_tip_ltpo', vars: { set: Tcfg('ltpo_video', 'name', 'Lowest Refresh for Video') } });
   if (crash && (+crash.count || 0) > 2 && !((+crash.asb || 0) > 0)) tips.push({ ic: 'info', key: 'lr_tip_crashes', vars: { n: String(crash.count) } });
   if (!tips.length) tips.push({ ic: 'ok', key: 'lr_tip_ok', vars: {} });
-  return tips;
+  return tips.slice(0, 6);
 }
 /* Everything below builds DOM with textContent only: package names and tombstone
  * cmdlines are device data and must never become markup. */
@@ -9730,6 +9784,32 @@ function logReportNote(txt, warn) {
   p.className = 'lgr-note' + (warn ? ' lgr-warn' : '');
   p.textContent = txt;
   return p;
+}
+/* fix200: one small table (headers + rows, all textContent - device data never becomes
+ * markup). numCols says which columns are right-aligned numbers. */
+function logReportTable(heads, rows, numCols) {
+  const t = document.createElement('table');
+  t.className = 'lgr-table';
+  const hr = document.createElement('tr');
+  heads.forEach(function (h, i) {
+    const th = document.createElement('th');
+    th.textContent = h;
+    if (numCols && numCols.indexOf(i) >= 0) th.className = 'lgr-td-num';
+    hr.appendChild(th);
+  });
+  t.appendChild(hr);
+  rows.forEach(function (row) {
+    const tr = document.createElement('tr');
+    row.forEach(function (cell, i) {
+      const td = document.createElement('td');
+      td.textContent = (cell && cell.txt !== undefined) ? cell.txt : String(cell);
+      td.className = (i === 0 ? 'lgr-td-name' : '') + (numCols && numCols.indexOf(i) >= 0 ? ' lgr-td-num' : '') +
+        (cell && cell.warn ? ' lgr-warn' : '');
+      tr.appendChild(td);
+    });
+    t.appendChild(tr);
+  });
+  return t;
 }
 function openReportPage() {
   uiSound('nav');
@@ -9835,9 +9915,18 @@ function logReportRender(d) {
   const meta = d.sections.meta || {};
   const h = String(meta.target_h || '24');
   body.textContent = '';
-  status.textContent = String(meta.running) === '1'
-    ? logReportT('lr_running', 'recording · {min} min of {h} h', { min: String(meta.elapsed_min || '0'), h: h })
-    : T('lr_done', 'capture finished');
+  if (String(meta.running) === '1') {
+    status.textContent = logReportT('lr_running', 'recording · {min} min of {h} h', { min: String(meta.elapsed_min || '0'), h: h });
+  } else if (meta.started) {
+    /* fix200: a SAVED capture is named as such - with its start time and the profile it
+       ran under - so nobody mistakes last Tuesday's day for right now. */
+    status.textContent = logReportT('lr_saved', 'saved capture · {when} · {profile}', {
+      when: String(meta.started),
+      profile: T('prof_' + String(meta.profile || ''), String(meta.profile || ''))
+    });
+  } else {
+    status.textContent = T('lr_done', 'capture finished');
+  }
   const drain = d.sections.drain || null;
   const cover = d.sections.cover || null;
   const night = d.sections.night || null;
@@ -9847,6 +9936,11 @@ function logReportRender(d) {
   const sysui = d.sections.sysui || null;
   const thermal = d.sections.thermal || null;
   const throttle = d.sections.throttle || null;
+  const jank = d.sections.jank || null;
+  const smart = d.sections.smart || null;
+  const audio = d.sections.audio || null;
+  const cost = d.sections.asbcost || null;
+  const charge = d.sections.charge || null;
   if (!(drain || cover || night || idle)) {
     /* A capture that just started has no committed phases yet - say so instead of
        showing only the "nothing bad happened" sections. */
@@ -9879,6 +9973,64 @@ function logReportRender(d) {
     }
     if (idle) s.appendChild(logReportRow(T('lr_idle', 'Worst idle awake share'), String(idle.awake) + '%', (+idle.awake || 0) > 15));
     if (radio) s.appendChild(logReportRow(T('lr_radio', 'Mobile data'), String(radio.mib) + ' MiB'));
+    if (audio) {
+      /* Speaker playback is the one background sound that shows up in drain. */
+      s.appendChild(logReportRow(T('lr_audio_spk', 'Speaker playback'),
+        logReportDur(audio.spk_min) + ' · ' + String(audio.pctph) + T('lr_per_hour', '%/h') +
+        ((+audio.ma || 0) > 0 ? ' · ' + String(audio.ma) + ' mA' : ''), (+audio.pctph || 0) >= 8));
+    }
+    if (charge && charge.types) s.appendChild(logReportRow(T('lr_charge_types', 'Charging seen'), String(charge.types)));
+    body.appendChild(s);
+  }
+  /* fix200: smoothness, with the per-app frame table - the real numbers, not vibes. */
+  if (jank || d.japps.length) {
+    const s = logReportSec(T('lr_sec_smooth', '📱 Smoothness'));
+    if (jank) {
+      const g = document.createElement('div');
+      g.className = 'lgr-heros';
+      g.appendChild(logReportHero('🎞', T('lr_jank_hero', 'Janky frames'),
+        String(jank.pct) + '%', logReportT('lr_jank_all', 'of {frames} frames', { frames: String(jank.frames) }), (+jank.pct || 0) >= 6));
+      g.appendChild(logReportHero('⏱', T('lr_jps_hero', 'Stutter rate'),
+        String(jank.jps), T('lr_jps_sub', 'janky frames per second'), (+jank.jps || 0) >= 3));
+      s.appendChild(g);
+    }
+    if (d.japps.length) {
+      s.appendChild(logReportTable(
+        [T('lr_th_app', 'App'), T('lr_th_frames', 'Frames'), T('lr_th_jank', 'Jank')],
+        d.japps.map(function (a) {
+          return [a.pkg, String(a.frames), { txt: String(a.pct) + '%', warn: a.pct >= 6 }];
+        }), [1, 2]));
+    }
+    body.appendChild(s);
+  }
+  /* fix200: what the panel ran at, and what each rate cost. */
+  if (d.hzs.length) {
+    const s = logReportSec(T('lr_sec_display', '🖥 Display refresh'));
+    const rows = d.hzs.slice().sort(function (a, b) { return (+a.mode) - (+b.mode); }).map(function (z) {
+      return [String(z.mode) + ' ' + T('lr_hz_unit', 'Hz'), String(z.share) + '%',
+              { txt: String(z.ma) + ' mA', warn: false }];
+    });
+    s.appendChild(logReportTable([T('lr_th_hz', 'Rate'), T('lr_th_share', 'Share'), T('lr_th_ma', 'Avg draw')], rows, [2]));
+    body.appendChild(s);
+  }
+  /* fix200: what Smart has already figured out - records and the smoothness learner. */
+  if (smart) {
+    const s = logReportSec(T('lr_sec_smart', '🧠 Smart learner'));
+    s.appendChild(logReportRow(T('lr_sm_ctx', 'Situations with a verdict'), String(smart.ctxlearn || 0)));
+    s.appendChild(logReportRow(T('lr_sm_watching', 'Apps watched for stutter'), String(smart.watching || 0)));
+    if ((+smart.testing || 0) > 0) s.appendChild(logReportRow(T('lr_sm_testing', 'In a headroom test'), String(smart.testing)));
+    if ((+smart.helped || 0) > 0) s.appendChild(logReportRow(T('lr_sm_helped', 'Kept extra headroom'), String(smart.helped)));
+    if ((+smart.nothelped || 0) > 0) s.appendChild(logReportRow(T('lr_sm_nothelped', 'Headroom ruled out'), String(smart.nothelped)));
+    if ((+smart.ctxlearn || 0) === 0 && (+smart.watching || 0) === 0)
+      s.appendChild(logReportNote(T('lr_sm_fresh', 'Smart is still collecting its first days - verdicts appear as the evidence accumulates.')));
+    body.appendChild(s);
+  }
+  /* fix200: ASB's own bill - the answer to "and what does the module itself eat?". */
+  if (cost) {
+    const s = logReportSec(T('lr_sec_asb', '⚙️ ASB own cost'));
+    s.appendChild(logReportRow(T('lr_cost_cpu', 'Governor CPU per hour'), logReportT('lr_ms_h', '{n} ms/h', { n: String(cost.cpu_msh) }), (+cost.cpu_msh || 0) > 5000));
+    if ((+cost.writes_h || 0) > 0) s.appendChild(logReportRow(T('lr_cost_writes', 'Frequency writes per hour'), String(cost.writes_h)));
+    if ((+cost.wakes_h || 0) > 0) s.appendChild(logReportRow(T('lr_cost_wakes', 'Timer wakeups per hour'), String(cost.wakes_h)));
     body.appendChild(s);
   }
   {
@@ -9937,7 +10089,16 @@ function logReportRender(d) {
         lr_tip_awake: 'During idle the phone stayed awake {awake}% of the time - something prevents deep sleep.',
         lr_tip_crash: 'There are crashes involving ASB code - please send an asbdiag log to the developer.',
         lr_tip_crashes: '{n} native crashes during the capture - details are in the full report.',
-        lr_tip_app: '{app} held the phone awake for {min} min - consider restricting its background activity.'
+        lr_tip_app: '{app} held the phone awake for {min} min - consider restricting its background activity.',
+        lr_tip_wl_enable: '{app} held the phone awake for {min} min - turn on "{set}" in Settings and ASB will rein such apps in for you.',
+        lr_tip_night_modem: 'Overnight the phone lost ~{pct}%/h - try "{set}" in Settings, it quiets the modem in your own sleeping hours.',
+        lr_tip_jank_bad: 'About {pct}% of frames missed their deadline - stutter is visible. On Smart the learner is already testing the worst apps; heavy games do better on Performance.',
+        lr_tip_jank_ok: 'Smoothness is excellent: only {pct}% of frames janky.',
+        lr_tip_audio: 'Speaker playback cost ~{pct}%/h. For long sessions, headphones or a gentler DSP preset are kinder to the battery.',
+        lr_tip_cost_ok: 'ASB itself is cheap: {ms} of CPU per hour.',
+        lr_tip_cost_hi: 'ASB used {ms} of CPU per hour - more than usual; worth sending this log to the developer.',
+        lr_tip_smart_help: 'Smart proved extra headroom helps {n} of your apps and keeps it just for them.',
+        lr_tip_ltpo: 'Tip: "{set}" in Settings lowers the refresh rate on video and saves battery.'
       }[tip.key] || '', tip.vars);
       row.appendChild(ic);
       row.appendChild(tx);
