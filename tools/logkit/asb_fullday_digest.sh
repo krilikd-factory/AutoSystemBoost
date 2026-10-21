@@ -23,7 +23,7 @@
 #   cfg      key=<setting>  value=<v>                  (the settings the advice can point at)
 #   wl       pkg=<package>  sec=<n>            (up to 5 rows, worst first)
 #   wl       none=1                            (nothing recorded)
-#   crash    count=<n>  asb=<n>  latest=<cmdline|none>
+#   crash    count=<n>  asb=<n>  latest=<cmdline|none>  ltime=<HH:MM>
 #   sysui    count=<n>
 #   thermal  cpu=<n>  surf=<n>
 #   throttle clamps=<n>  owner=<name|unknown>
@@ -234,16 +234,26 @@ else
 fi
 
 # ----- native crashes inside the capture window ------------------------------
-# Window start: the first ledger row, else derived from the elapsed time, else the last
-# 24h - an old tombstone from before the capture must not count against it.
+# Window start: the first ledger row (the ledger leads with a "# ..." comment - skip it),
+# else derived from the elapsed time, else - for a capture that is RUNNING but has
+# written neither the ledger nor the interim report yet (the first snapshot lands after
+# fifteen minutes) - the capture's own launch time, stamped on the lock's pid file
+# (fix204). Only when nothing is known at all does the window reach back 24h. Without
+# the launch-time step a fresh capture counted tombstones from BEFORE it started at
+# minute 0 (a com.oplus.screenshot crash from an earlier screenshot), and that count then
+# "disappeared" the moment the first ledger row landed - the crash list must not change
+# under the user's eyes.
 _start=""
 if [ -s "$_LEDGER" ]; then
-  _start="$(head -n 1 "$_LEDGER" 2>/dev/null | cut -f2)"
+  _start="$(awk -F'\t' '!/^#/ { print $2; exit }' "$_LEDGER" 2>/dev/null)"
 fi
 case "$_start" in
   ''|*[!0-9]*)
     if [ -n "$_el" ]; then
       _start=$(( $(date +%s) - _el * 60 ))
+    elif [ "$_running" = "1" ]; then
+      _start="$(stat -c %Y "$_LOCK/pid" 2>/dev/null || date -r "$_LOCK/pid" +%s 2>/dev/null)"
+      case "$_start" in ''|*[!0-9]*) _start="$(date +%s)" ;; esac
     else
       _start=$(( $(date +%s) - 86400 ))
     fi ;;
@@ -266,7 +276,13 @@ if [ -d "$_tdir" ]; then
     fi
   done
 fi
-printf 'crash\tcount=%d\tasb=%d\tlatest=%s\n' "$_cn" "$_ca" "${_cl:-none}"
+# The crash time lets the user place it ("that was when I took the screenshot") instead
+# of wondering who crashed and why - the sheet shows "latest: proc, HH:MM".
+_clh=""
+if [ "$_clt" -gt 0 ] 2>/dev/null; then
+  _clh="$(date -d "@$_clt" '+%H:%M' 2>/dev/null || date -r "$_clt" '+%H:%M' 2>/dev/null)"
+fi
+printf 'crash\tcount=%d\tasb=%d\tlatest=%s\tltime=%s\n' "$_cn" "$_ca" "${_cl:-none}" "${_clh:-}"
 
 # ----- SystemUI restarts ------------------------------------------------------
 _sn=0
