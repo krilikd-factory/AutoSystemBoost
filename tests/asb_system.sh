@@ -4125,6 +4125,61 @@ grep -q "$_clpat" "$ROOT/tools/asb_full_regression.sh" && fail "the regression s
 grep -q '  CHANGELOG.md$' "$ROOT/tools/asb_tree.sha256" || fail "the changelog fell out of the tree manifest"
 echo "PASS: fix199 contract"
 ) || exit 1
+# ---- fix204 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+D="$ROOT/tools/logkit/asb_fullday_digest.sh"
+fail() { echo "FAIL fix204: $*"; exit 1; }
+# Owner's live capture: at "0 min of 24 h" the report sheet counted four native crashes
+# (latest com.oplus.screenshot - from screenshots taken BEFORE the recording); a few
+# minutes later the same section read "no crashes". Cause: a capture that just started
+# has neither the phase ledger nor the interim report (the first snapshot lands after
+# fifteen minutes), so the crash window fell back to "the last 24h" and counted
+# pre-capture tombstones - which then fell out of the window the moment the first ledger
+# row landed. The window of a RUNNING capture with no ledger yet now opens at the
+# capture's own launch, stamped on the WebUI lock's pid file; the ledger's leading "#"
+# comment is skipped when the first data row is read. And the sheet names the time of
+# the latest crash ("latest: proc, HH:MM"), so the user can place it instead of
+# wondering who crashed and why. The behaviour (fixture captures, incl. the fresh one
+# with a live lock) is exercised in tests/asb_ui.sh:t_webui_log_report_runtime.
+sh -n "$D" || fail "digest script has a syntax error"
+grep -qF '_start="$(stat -c %Y "$_LOCK/pid"' "$D" || fail "a fresh running capture still opens its crash window 24h back"
+grep -qF "awk -F'\\t' '!/^#/ { print \$2; exit }' \"\$_LEDGER\"" "$D" || fail "the crash window still reads the ledger's comment header as its first row"
+grep -qF 'crash\tcount=%d\tasb=%d\tlatest=%s\tltime=%s\n' "$D" || fail "the digest does not report when the latest crash happened"
+grep -qF 'crash.ltime' "$H" || fail "the sheet does not show the latest crash's time"
+echo "PASS: fix204 contract"
+) || exit 1
+# ---- fix203 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL fix203: $*"; exit 1; }
+# Owner's OP15 screenshots a day after fix202: Config, Monitor and Profiles sat compacted
+# into the top of the screen with a void above the bar - "first paint is fine, a second
+# later it looks like this". Four causes: the overflow reading counted the floating bar's
+# reserved bottom padding (a perfectly fit page read a full bar's height too tall), the
+# overlays were measured through scrollHeight, which never reads below the box's own
+# clientHeight (every fixed page reported the bar's height of overflow even when its
+# content was short), the measurement ran AFTER the cards grew into the freed space
+# (every tier read "just fits", so the hysteresis trial latched it), and the cards can
+# only shrink to their natural height (min-height only), so the compaction freed space
+# nothing re-absorbed. The tier decision now measures the page as it asks to be: the
+# fitted heights are zeroed for the measurement and restored after, the reading excludes
+# the bar's reserved padding, a fixed overlay is unclamped (bottom/height auto for one
+# layout), and an overflow within a fifth of the screen - at least 56 px - keeps the look
+# and just scrolls (the fix201 fallback). A tier comes off only with real room (need - 8
+# px of hysteresis). The runtime behaviour (escalation, the allowance, the hysteresis) is
+# exercised in node by t_webui_fill_pages_runtime; here the structural pins.
+grep -qF 'const need = Math.max(56, Math.round(' "$H" || fail "a small overflow must keep the look and scroll, not compact"
+grep -qF "root.style.setProperty('--pbtn-h', '0px');" "$H" || fail "the tier is not decided from the page's natural height"
+grep -qF "root.style.setProperty('--cfg-tile-h', '0px');" "$H" || fail "the Settings tiles' fitted height is not neutralized for the measurement"
+grep -qF "st.bottom = 'auto'; st.height = 'auto';" "$H" || fail "a fixed overlay is still measured through its clamped scrollHeight"
+grep -qF 'over2 > need - 8' "$H" || fail "a tier comes off without hysteresis"
+grep -qF 'getComputedStyle(el).paddingBottom' "$H" || fail "the bar's reserved padding is still counted as overflow"
+grep -qF "let homeBase = 1022, cfgBase = 1100, clientH = 1900, barTop = 1700;" "$ROOT/tests/asb_ui.sh" || fail "the fit test lost its natural-measurement mock"
+echo "PASS: fix203 contract"
+) || exit 1
 # ---- fix202 ---------------------------------------------------------------
 (
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -4136,13 +4191,15 @@ fail() { echo "FAIL fix202: $*"; exit 1; }
 # cards into free space - on a short screen it hit its floors and the page scrolled. It now
 # measures the visible page's overflow and compacts in two tiers (asb-fit-c1/c2 on <html>:
 # top gap, logo, wordmark, capsules, cards, Monitor cells, support rail), with the card
-# and tile floors stepping down (68/58/48, 104/92/80). A tier comes off only when a trial
-# fit leaves real slack (6 px), so the layout cannot flip-flop. If even tier 2 overflows,
-# the fix201 scroll remains as the fallback - nothing is clipped. The runtime behaviour
-# (escalation, hysteresis, per-page measurement) is exercised in node by
-# t_webui_fill_pages_runtime; here the structural pins.
+# and tile floors stepping down (68/58/48, 104/92/80). fix203 reworked the measurement -
+# it is taken from the page's natural height against the bar's fit line, with the bar's
+# reserved padding excluded and a small overflow left to scroll; a tier comes off only
+# when the lighter tier fits within the allowance minus a margin, so the layout cannot
+# flip-flop. If even tier 2 overflows, the fix201 scroll remains as the fallback - nothing
+# is clipped. The runtime behaviour (escalation, hysteresis, per-page measurement) is
+# exercised in node by t_webui_fill_pages_runtime; here the structural pins.
 grep -q 't_webui_fill_pages_runtime' "$ROOT/tests/asb_ui.sh" || fail "the fit runtime test is missing"
-grep -qF "let homeBase = 1800, cfgBase = 1800, clientH = 1900;" "$ROOT/tests/asb_ui.sh" || fail "the fit test lost its measured-overflow mock"
+grep -qF "let homeBase = 1022, cfgBase = 1100, clientH = 1900, barTop = 1700;" "$ROOT/tests/asb_ui.sh" || fail "the fit test lost its measured-overflow mock"
 for t in asb-fit-c1 asb-fit-c2; do
   grep -qF "html.$t { --page-top:" "$H" || fail "$t does not tighten the top gap"
   grep -qF "html.$t .logo-c {" "$H" || fail "$t does not shrink the logo"

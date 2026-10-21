@@ -3118,7 +3118,11 @@ t_webui_fill_pages_runtime() (
 # Owner's request: Home and Settings looked empty next to Monitor; bigger, richer profile cards
 # and category tiles that look right on screens of different DPI. The free height is measured
 # and shared out within limits, so a short screen scrolls and a tall one stops before the
-# cards look stretched. The REAL asbFitPages runs in node against measured boxes.
+# cards look stretched. fix203: the compaction tiers decide from the page's NATURAL height -
+# the fitted card heights are zeroed for the measurement, the floating bar's reserved padding
+# is not counted as overflow, a fixed overlay is unclamped for the measurement, and an
+# overflow within a fifth of the screen just scrolls (fix201) instead of squeezing the
+# chrome over a void. The REAL asbFitPages runs in node against measured boxes.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 H="$ROOT/webroot/index.html"
@@ -3171,6 +3175,16 @@ for t in ('html.asb-fit-c1', 'html.asb-fit-c2'):
 assert "classList.toggle('asb-fit-c1'" in s and "classList.toggle('asb-fit-c2'" in s, "the fit never raises a compaction tier"
 assert '[68, 58, 48][tier]' in s and '[104, 92, 80][tier]' in s, "the card/tile floors do not step down with the tier"
 assert 'asbFitPages._tier' in s, "the tier is not remembered between passes"
+# fix203: the tier decision reads the page as it asks to be - the fitted heights are zeroed
+# for the measurement, the floating bar's reserved padding is out of the reading, a fixed
+# overlay is unclamped for the measurement (its scrollHeight never reads below its own
+# clientHeight), and a small overflow just scrolls (fix201) instead of compacting the
+# chrome over a void.
+assert 'const need = Math.max(56, Math.round(' in s, "a small overflow must keep the look and scroll, not compact"
+assert "root.style.setProperty('--pbtn-h', '0px');" in s and "root.style.setProperty('--cfg-tile-h', '0px');" in s, "the tier is not decided from the page's natural height"
+assert "st.bottom = 'auto'; st.height = 'auto';" in s, "a fixed overlay is still measured through its clamped scrollHeight"
+assert 'over2 > need - 8' in s, "a tier comes off without hysteresis"
+assert 'getComputedStyle(el).paddingBottom' in s, "the bar's reserved padding is still counted as overflow"
 for fn in ('openLivePage', 'closeLivePage', 'closeConfigPage', 'cfgBack', 'openReportPage', 'closeReportPage', 'asbLogReportLoad'):
     m = re.search(r'(?:async )?function %s\s*\([^)]*\)\s*\{(.*?)\n\}' % fn, s, re.S)
     assert m, fn + ' is missing'
@@ -3186,32 +3200,49 @@ P
 let _cfgGroup = null;
 const props = {};
 const fitCls = new Set();
-/* fix202: the mock measures like a browser - each compaction tier buys back 100 px of
-   document height, and the overflow reading drives the escalation checks below. */
-let homeBase = 1800, cfgBase = 1800, clientH = 1900;
+/* fix203: the mock measures like a browser - the fit reads the content's own bottom edge
+ * against the floating bar's top (the fit line sits 20 px above it), each compaction tier
+ * buys back 80 px of content height, and a fixed overlay reports its unclamped content
+ * bottom while the measurement holds its box at bottom/height:auto (a real overlay's
+ * scrollHeight never reads below its own clientHeight). The allowance is generous: a
+ * fifth of the screen, so a page that only runs a little past the line keeps its look
+ * and scrolls. */
+let homeBase = 1022, cfgBase = 1100, clientH = 1900, barTop = 1700;
+let profTop = 600, hubTop = 760, live = false, cfgOpen = false;
 function tierOf() { return fitCls.has('asb-fit-c2') ? 2 : (fitCls.has('asb-fit-c1') ? 1 : 0); }
 function resetFit() { fitCls.clear(); delete asbFitPages._tier; }
 const root = {
-  style: { setProperty(k, v) { props[k] = v; } },
+  style: { setProperty(k, v) { if (v === '') delete props[k]; else props[k] = v; },
+           getPropertyValue(k) { return props[k] || ''; } },
   classList: { toggle(c, on) { if (on) fitCls.add(c); else fitCls.delete(c); } },
-  get clientHeight() { return clientH; },
-  get scrollHeight() { return homeBase - tierOf() * 100; }
+  get clientHeight() { return clientH; }
 };
-const box = (top, h) => ({ getBoundingClientRect() { return { top: top, height: h }; } });
-let barTop = 1700, profTop = 600, hubTop = 760, live = false, cfgOpen = false;
+const box = (top, h) => ({ getBoundingClientRect() { return { top: top, height: h, bottom: top + h }; } });
 const pb = new Array(5).fill(0), tiles = new Array(6).fill(0);
 const prof = { getBoundingClientRect() { return { top: profTop }; }, querySelectorAll() { return pb; } };
 const hub = { getBoundingClientRect() { return { top: hubTop }; }, querySelectorAll() { return tiles; } };
-const page = { scrollTop: 0, getAttribute() { return cfgOpen ? 'false' : 'true'; },
-  get clientHeight() { return clientH; }, get scrollHeight() { return cfgBase - tierOf() * 100; } };
+const homePage = { getBoundingClientRect() { return { top: 0, bottom: homeBase - tierOf() * 80 }; } };
+const page = { scrollTop: 0, style: {}, getAttribute() { return cfgOpen ? 'false' : 'true'; },
+  get clientHeight() { return clientH; },
+  getBoundingClientRect() {
+    return this.style.height === 'auto'
+      ? { top: 0, bottom: (cfgBase - tierOf() * 80) * (window._asbUiScale || 1) }
+      : { top: 0, bottom: clientH };
+  } };
 const reb = box(0, 84);
 global.window = { _asbUiScale: 1, innerHeight: 1900, scrollY: 0 };
 global.document = {
   documentElement: root,
   body: { classList: { contains(c) { return (c === 'live-active' && live) || (c === 'config-active' && cfgOpen); } } },
-  querySelector(q) { if (q === '.asb-tabbar') return box(barTop, 60); if (q.indexOf('.profiles') >= 0) return prof; if (q.indexOf('.cfg-hub') >= 0) return hub; return null; }
+  querySelector(q) {
+    if (q === '.asb-tabbar') return box(barTop, 60);
+    if (q.indexOf('.profiles') >= 0) return prof;
+    if (q.indexOf('.cfg-hub') >= 0) return hub;
+    if (q.indexOf('.page:not(.live-page)') >= 0) return homePage;
+    return null;
+  }
 };
-global.getComputedStyle = () => ({ rowGap: '10px', gap: '10px', marginTop: '10px' });
+global.getComputedStyle = () => ({ rowGap: '10px', gap: '10px', marginTop: '10px', paddingBottom: '0px' });
 function _el(id) { return id === 'configPage' ? page : id === 'cfgRebootWrap' ? reb : null; }
 EOF
   sed -n "/^function asbFitPages(/,/^}/p" "$H"
@@ -3221,8 +3252,8 @@ asbFitPages();
 chk(props['--pbtn-h'] === '104px', 'a tall screen stops at the upper limit: ' + props['--pbtn-h']);
 barTop = 1100; asbFitPages();
 chk(props['--pbtn-h'] === '88px', 'shared out to the five cards: ' + props['--pbtn-h']);
-barTop = 800; asbFitPages();
-chk(props['--pbtn-h'] === '68px', 'a fitting screen keeps the tier-0 floor: ' + props['--pbtn-h']);
+barTop = 960; asbFitPages();
+chk(tierOf() === 0 && props['--pbtn-h'] === '68px', '82 px past the fit line just scrolls - the tier-0 floor stays: ' + props['--pbtn-h'] + ' tier ' + tierOf());
 chk(props['--cfg-tile-h'] === undefined, 'Settings closed: tiles untouched');
 cfgOpen = true; barTop = 1200; delete props['--pbtn-h']; asbFitPages();
 chk(props['--pbtn-h'] === undefined, 'Home cards are not refitted while Settings covers them');
@@ -3231,25 +3262,33 @@ _cfgGroup = 'audio'; props['--cfg-tile-h'] = 'x'; asbFitPages();
 chk(props['--cfg-tile-h'] === 'x', 'an open category leaves the hub alone');
 _cfgGroup = null; barTop = 2600; asbFitPages();
 chk(props['--cfg-tile-h'] === '176px', 'upper limit on Settings: ' + props['--cfg-tile-h']);
-barTop = 900; asbFitPages();
-chk(props['--cfg-tile-h'] === '104px', 'tier-0 floor on Settings while it fits: ' + props['--cfg-tile-h']);
+barTop = 900; cfgBase = 975; asbFitPages();
+chk(tierOf() === 0 && props['--cfg-tile-h'] === '104px', 'a Settings page at the allowance keeps the tier-0 floor: ' + props['--cfg-tile-h'] + ' tier ' + tierOf());
 window._asbUiScale = 0.82; barTop = 1120; asbFitPages();
 chk(props['--cfg-tile-h'] === '148px', 'a scaled UI shares out unscaled pixels: ' + props['--cfg-tile-h']);
-/* fix202: a page measured past its viewport compacts the chrome instead of clipping. */
+/* fix203: a page genuinely past its viewport compacts in tiers; a page only a little past
+   the fit line keeps its look and scrolls (the allowance is a fifth of the screen). */
 resetFit(); cfgOpen = false; live = false; window._asbUiScale = 1;
-clientH = 700; homeBase = 950;   /* 250 px past the screen; a tier buys back 100 */
+clientH = 700; window.innerHeight = 700; barTop = 640; homeBase = 920;   /* 300 px past the fit line; a tier buys back 80 */
 asbFitPages();
 chk(tierOf() === 2 && fitCls.has('asb-fit-c1') && fitCls.has('asb-fit-c2'), 'escalates tier by tier while it still overflows: tier ' + tierOf());
-barTop = 800; asbFitPages();
-chk(props['--pbtn-h'] === '48px', 'the card floor steps down with the tier: ' + props['--pbtn-h']);
-homeBase = 698;                  /* fits tier 1 with room; tier 0 would leave only 2 px */
+barTop = 660; asbFitPages();
+chk(tierOf() === 2 && props['--pbtn-h'] === '48px', 'the card floor steps down with the tier: ' + props['--pbtn-h']);
+resetFit(); fitCls.add('asb-fit-c1'); asbFitPages._tier = 1; homeBase = 776;   /* tier 0 would sit 136 px past - over the 132 px margin */
 asbFitPages();
-chk(tierOf() === 1 && !fitCls.has('asb-fit-c2'), 'a 2 px fit is not enough to take the lighter tier: tier ' + tierOf());
-homeBase = 560;                  /* now tier 0 fits with real room */
+chk(tierOf() === 1 && fitCls.has('asb-fit-c1') && !fitCls.has('asb-fit-c2'), 'a tier comes off only with real room: tier ' + tierOf());
+homeBase = 768;                  /* now tier 0 sits within the margin */
 asbFitPages();
-chk(tierOf() === 0 && fitCls.size === 0 && props['--pbtn-h'] === '68px', 'compaction comes back off with room to spare: tier ' + tierOf());
-resetFit(); cfgOpen = true; clientH = 1900; cfgBase = 2400;   /* Settings 500 px past */
-barTop = 900; asbFitPages();
+chk(tierOf() === 0 && fitCls.size === 0 && props['--pbtn-h'] === '68px', 'within the margin the lighter look wins: tier ' + tierOf());
+/* the owner's OP15: the page is a touch past the fit line and keeps its look, scrolling the rest */
+resetFit(); clientH = 1900; window.innerHeight = 1900; barTop = 1700; homeBase = 1755;
+asbFitPages();
+chk(tierOf() === 0 && props['--pbtn-h'] === '104px', 'a tall phone keeps its look and scrolls a touch: tier ' + tierOf());
+homeBase = 2070;                 /* past the allowance: the compaction earns its keep */
+asbFitPages();
+chk(tierOf() === 1 && fitCls.has('asb-fit-c1') && !fitCls.has('asb-fit-c2'), 'past the allowance the page compacts, and stays compact: tier ' + tierOf());
+resetFit(); cfgOpen = true; clientH = 700; window.innerHeight = 700; barTop = 640; cfgBase = 1400;   /* Settings 780 px past */
+asbFitPages();
 chk(tierOf() === 2 && props['--cfg-tile-h'] === '80px', 'the Settings tiles compact too: ' + props['--cfg-tile-h']);
 if (bad) process.exit(1);
 console.log('ok');
@@ -3259,7 +3298,7 @@ out="$(node "$T/t.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 grep -Fq "window.addEventListener('resize', function () { requestAnimationFrame(asbFitPages); });" "$H" || fail "the fit is not redone on resize"
 grep -Fq "window.addEventListener('orientationchange', function () { requestAnimationFrame(asbFitPages); });" "$H" || fail "the fit is not redone when the panel rotates"
-echo "PASS webui fill pages: profile cards and category tiles take the free height within limits on any screen, a page that still overflows compacts in tiers instead of clipping, and the tiers come off when the room returns"
+echo "PASS webui fill pages: profile cards and category tiles take the free height within limits on any screen, a page well past its fit line compacts in tiers (decided from its natural height, the bar's padding not counted), a small overflow just scrolls, and the tiers come off with room to spare"
 )
 
 t_webui_device_font_runtime() (
@@ -3959,7 +3998,7 @@ printf '%s\n' "$out" | grep -q '^drain	pctph=2.0	total_drop=22	hours=10.8	ma=99$
 printf '%s\n' "$out" | grep -q '^night	dur_min=469	drop=8	pctph=1.0	awake=8$' || fail "night chain"
 printf '%s\n' "$out" | grep -q '^idlemax	awake=25	phase=sleep	dur_min=60$' || fail "idlemax"
 printf '%s\n' "$out" | grep -q '^wl	pkg=com.instagram.android	sec=3661$' || fail "top wakelock app"
-printf '%s\n' "$out" | grep -q '^crash	count=2	asb=1	latest=/vendor/bin/hw/foo$' || fail "crash window or ASB attribution"
+printf '%s\n' "$out" | grep -Eq '^crash	count=2	asb=1	latest=/vendor/bin/hw/foo	ltime=[0-9]{2}:[0-9]{2}$' || fail "crash window, ASB attribution or the crash time"
 printf '%s\n' "$out" | grep -q '^sysui	count=2$' || fail "sysui restarts"
 printf '%s\n' "$out" | grep -q '^thermal	cpu=41	surf=35$' || fail "thermal peaks"
 printf '%s\n' "$out" | grep -q '^throttle	clamps=2	owner=asb_governor$' || fail "throttle clamp periods"
@@ -3983,6 +4022,29 @@ printf '%s\n' "$eout" | grep -q '^meta	' || fail "an empty capture still reports
 printf '%s\n' "$eout" | grep -q '^wl	none=1$' || fail "an empty capture reports no wakelocks"
 printf '%s\n' "$eout" | grep -q '^drain	' && fail "an empty capture must not invent drain numbers"
 
+# fix204: a capture that JUST started has neither the ledger nor the interim report (the
+# first snapshot lands after fifteen minutes). Its crash window must open at the
+# capture's launch (the lock's pid-file mtime), not "24h ago" - otherwise tombstones from
+# BEFORE the capture show at minute 0 and then vanish once the first ledger row lands
+# (the user's com.oplus.screenshot crashes from before the recording did exactly that).
+FRESH="$T/asb_log_full_day_fresh"; mkdir -p "$FRESH" "$T/lock2"
+printf '%s\n' "$FRESH" > "$T/lock2/output_dir"
+sleep 30 & _lp=$!
+printf '%s\n' "$_lp" > "$T/lock2/pid"
+touch -d "@$((NOW-600))" "$T/lock2/pid"   # launched ten minutes ago
+printf 'Cmdline: com.oplus.screenshot\n' > "$T/tomb/tombstone_07"; touch -d "@$((NOW-4000))" "$T/tomb/tombstone_07"
+printf 'Cmdline: fresh.crash\n' > "$T/tomb/tombstone_08"; touch -d "@$((NOW-300))" "$T/tomb/tombstone_08"
+fout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" sh "$D" "$FRESH")"
+kill "$_lp" 2>/dev/null || true; wait "$_lp" 2>/dev/null || true
+printf '%s\n' "$fout" | grep -q '^meta	elapsed_min=0	target_h=24	running=1' || fail "the fresh capture must read as running: $(printf '%s' "$fout" | head -1)"
+printf '%s\n' "$fout" | grep -Eq '^crash	count=1	asb=0	latest=fresh.crash	ltime=[0-9]{2}:[0-9]{2}$' || fail "a fresh capture's crash window must start at its launch, not 24h ago: $(printf '%s' "$fout" | grep '^crash')"
+# The ledger may lead with a "# phase ..." comment: the window must read the first DATA
+# row, not the comment. The main fixture's ledger has no comment, so pin it here.
+CMNT="$T/asb_log_full_day_cmnt"; mkdir -p "$CMNT"
+printf '# phase start end ...\nactive	%s	%s	95	89\n' "$((NOW-72000))" "$((NOW-68400))" > "$CMNT/phase_ledger.tsv"
+cout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" sh "$D" "$CMNT")"
+printf '%s\n' "$cout" | grep -Eq '^crash	count=4	asb=1	latest=fresh.crash' || fail "the window must skip the ledger's comment header: $(printf '%s' "$cout" | grep '^crash')"
+
 # --- the REAL parser/tips in node, fed the fixture digest and the shipped locales ---
 {
   printf 'const I18N = { en: %s, ru: %s };\n' "$(cat "$ROOT/webroot/i18n/en.json")" "$(cat "$ROOT/webroot/i18n/ru.json")"
@@ -4005,7 +4067,7 @@ const txt = [
   'radio\tmib=17.5',
   'wl\tpkg=com.instagram.android\tsec=3661',
   'wl\tpkg=com.whatsapp\tsec=1830',
-  'crash\tcount=2\tasb=1\tlatest=/vendor/bin/hw/foo',
+  'crash\tcount=2\tasb=1\tlatest=/vendor/bin/hw/foo\tltime=14:32',
   'sysui\tcount=2',
   'throttle\tclamps=2\towner=asb_governor',
   'jank\tpct=1.4\tjps=0.6\tframes=366481',
@@ -4032,6 +4094,7 @@ chk(d.japps.length === 2 && d.japps[0].pkg === 'com.ttt.nagram' && d.japps[0].fr
 chk(d.hzs.length === 3 && d.hzs[0].mode === '60' && d.hzs[0].ma === 264 && d.hzs[2].share === 13, 'refresh rows: ' + JSON.stringify(d.hzs));
 chk(d.cfg.wakelock_action === '0' && d.cfg.night_modem_idle === '0' && d.cfg.ltpo_video === '1', 'cfg snapshot: ' + JSON.stringify(d.cfg));
 chk(d.sections.jank.pct === '1.4' && d.sections.audio.spk_min === '72' && d.sections.smart.ctxlearn === '2' && d.sections.asbcost.cpu_msh === '1851' && d.sections.charge.types === 'Fast(17) N/A(197)', 'the fix200 sections parse');
+chk(d.sections.crash.ltime === '14:32', 'fix204: the crash time survives the parser');
 const tips = logReportTips(d);
 const keys = tips.map(function (t) { return t.key; });
 chk(keys.join(',') === 'lr_tip_crash,lr_tip_night_modem,lr_tip_awake,lr_tip_wl_enable,lr_tip_jank_ok,lr_tip_audio', 'fix200 advice, worst first, six cards max: ' + keys.join(','));
@@ -4162,7 +4225,8 @@ grep -Fq "Tcfg('night_modem_idle', 'name', 'Quiet Radio at Night')" "$H" || fail
 grep -Fq '"tools/logkit/asb_fullday_digest.sh"' "$ROOT/.github/workflows/build-debug.yml" || fail "debug workflow does not ship the digest"
 grep -Fq '"tools/logkit/asb_fullday_digest.sh"' "$ROOT/.github/workflows/build-release.yml" || fail "release workflow does not ship the digest"
 grep -Fq 'asb_fullday_digest.sh' "$ROOT/.github/workflows/build-release.yml" || fail "release staging loop lost the digest"
-echo "PASS webui log report: digest over a fixture capture (drain..cfg), plain-words parser/tips in node (ru+en), 13 locales, menu wiring"
+grep -Fq 'crash.ltime' "$H" || fail "fix204: the sheet must show WHEN the latest crash happened"
+echo "PASS webui log report: digest over a fixture capture (drain..cfg), fresh-capture crash window (fix204), plain-words parser/tips in node (ru+en), 13 locales, menu wiring"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
