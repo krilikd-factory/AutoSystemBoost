@@ -8,11 +8,19 @@
 # over files the recorder already wrote. This script is that projection.
 #
 # Output: TAB-separated lines, one fact per line:
-#   meta     elapsed_min=<n>  target_h=<n>  running=0|1
+#   meta     elapsed_min=<n>  target_h=<n>  running=0|1  started=<YYYY-MM-DD HH:MM>  profile=<name>
 #   cover    on_min=<n>  off_min=<n>  on_pct=<n>
 #   drain    pctph=<x.x>  total_drop=<n>  hours=<x.x>  ma=<n>
 #   night    dur_min=<n>  drop=<n>  pctph=<x.x>  awake=<n>
 #   idlemax  awake=<n>  phase=<name>  dur_min=<n>
+#   jank     pct=<x.x>  jps=<x.x>  frames=<n>
+#   japp     pkg=<package>  frames=<n>  pct=<x.x>      (up to 4 rows, most frames first)
+#   hz       mode=<60|90|120|..>  share=<n>  ma=<n>    (one row per refresh rate)
+#   asbcost  cpu_msh=<n>  writes_h=<n>  wakes_h=<n>
+#   audio    spk_min=<n>  pctph=<x.x>  ma=<n>
+#   charge   types=<Fast(17) N/A(197)>
+#   smart    watching=<n>  testing=<n>  helped=<n>  nothelped=<n>  ctxlearn=<n>
+#   cfg      key=<setting>  value=<v>                  (the settings the advice can point at)
 #   wl       pkg=<package>  sec=<n>            (up to 5 rows, worst first)
 #   wl       none=1                            (nothing recorded)
 #   crash    count=<n>  asb=<n>  latest=<cmdline|none>
@@ -79,8 +87,9 @@ if [ -f "$_DIR/_full_day_report.txt" ]; then
 fi
 # No interim report yet (the first one lands after 15 minutes): derive the elapsed time
 # from the first ledger row so the sheet can still say "recording, N min so far".
+# (The ledger leads with a "# phase start end ..." comment - skip it.)
 if [ -z "$_el" ] && [ "$_HAVE_LEDGER" = "1" ]; then
-  _fs="$(_cat_ledger | head -n 1 | cut -f2)"
+  _fs="$(_cat_ledger | awk -F'\t' '!/^#/ { print $2; exit }')"
   case "$_fs" in
     ''|*[!0-9]*) : ;;
     *) _el=$(( ($(date +%s) - _fs) / 60 )) ;;
@@ -94,7 +103,19 @@ if [ -f "$_LOCK/output_dir" ] && [ -f "$_LOCK/pid" ]; then
     _running=1
   fi
 fi
-printf 'meta\telapsed_min=%s\ttarget_h=%s\trunning=%d\n' "${_el:-0}" "${_th:-24}" "$_running"
+# fix200: when the capture started and under which profile, so the sheet can name a SAVED
+# capture ("started 2026-10-20 23:10, smart") instead of pretending it is live.
+_started=""
+if [ "$_HAVE_LEDGER" = "1" ]; then
+  _fs0="$(_cat_ledger | awk -F'\t' '!/^#/ { print $2; exit }')"
+  case "$_fs0" in
+    ''|*[!0-9]*) : ;;
+    *) _started="$(date -d "@$_fs0" '+%Y-%m-%d %H:%M' 2>/dev/null || date -r "$_fs0" '+%Y-%m-%d %H:%M' 2>/dev/null)" ;;
+  esac
+fi
+_prof="$(sed -n 's/^current_profile:[[:space:]]*//p' "$_DIR/env.txt" 2>/dev/null | head -n 1 | tr -cd 'a-z')"
+printf 'meta\telapsed_min=%s\ttarget_h=%s\trunning=%d\tstarted=%s\tprofile=%s\n' \
+  "${_el:-0}" "${_th:-24}" "$_running" "${_started:-}" "${_prof:-}"
 
 # ----- cover (screen on/off split, time-weighted) ---------------------------
 # Same rule as the report writer: an interval counts as screen-on only when it started
@@ -267,6 +288,92 @@ if [ -s "$_DIR/throttle_trace.txt" ]; then
     } END {
       if (n > 0) printf "throttle\tclamps=%d\towner=%s\n", n, (lo == "" ? "unknown" : lo)
     }' "$_DIR/throttle_trace.txt" 2>/dev/null
+fi
+
+# ----- report-derived facts (fix200) -------------------------------------------
+# The interim/final human report already computed these; the sheet reuses its numbers
+# instead of recomputing them. Every pattern tolerates a missing file or a missing table
+# (a capture that just started writes its first interim report after fifteen minutes).
+_RPT="$_DIR/_full_day_report.txt"
+if [ -f "$_RPT" ]; then
+  # UI smoothness headline: "all screen-on intervals: 167  frames 366481  janky 5.1%  ..."
+  _jl="$(grep -m1 '^all screen-on intervals:' "$_RPT" 2>/dev/null)"
+  if [ -n "$_jl" ]; then
+    _jf="$(printf '%s\n' "$_jl" | sed -n 's/.*frames \([0-9][0-9]*\).*/\1/p')"
+    _jp="$(printf '%s\n' "$_jl" | sed -n 's/.*janky \([0-9.][0-9.]*\)%.*/\1/p')"
+    _js="$(sed -n 's/^janky frames per second on screen: \([0-9.]*\).*/\1/p' "$_RPT" 2>/dev/null | head -n 1)"
+    if [ -n "$_jf" ] && [ -n "$_jp" ]; then
+      printf 'jank\tpct=%s\tjps=%s\tframes=%s\n' "$_jp" "${_js:-0}" "$_jf"
+    fi
+  fi
+  # Per-app jank, the "app in front" table: unindented rows of "pkg frames pct% jps",
+  # most frames first, up to four. The indented per-interval table above it must not
+  # match - its rows lead with two spaces.
+  awk '/^app in front / { t = 1; next }
+       t && $1 ~ /^[a-z0-9._]+$/ && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9.]+%$/ {
+         if ($1 == "multi") next   # split-screen frames belong to no app
+         p = $3; sub(/%$/, "", p)
+         printf "japp\tpkg=%s\tframes=%s\tpct=%s\n", $1, $2, p
+         n++; if (n >= 4) exit; next
+       }
+       t { exit }' "$_RPT" 2>/dev/null
+  # Display refresh split: rows "60  112  64%  30  264" under the refresh_hz header.
+  # The brightness table right below starts "0-24 ..." - the dash keeps it out.
+  awk '/^refresh_hz[ \t]/ { t = 1; next }
+       t && $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+%$/ && $5 ~ /^[0-9]+$/ {
+         s = $3; sub(/%$/, "", s)
+         printf "hz\tmode=%s\tshare=%s\tma=%s\n", $1, s, $5; next
+       }
+       t { t = 0 }' "$_RPT" 2>/dev/null
+  # ASB's own cost.
+  _cc="$(sed -n 's/^  governor cpu[ ]*: \([0-9][0-9]*\) ms\/h.*/\1/p' "$_RPT" 2>/dev/null | head -n 1)"
+  if [ -n "$_cc" ]; then
+    _cw="$(sed -n 's/^  physical writes[ ]*: \([0-9][0-9]*\)\/h.*/\1/p' "$_RPT" 2>/dev/null | head -n 1)"
+    _ck="$(sed -n 's/^  timer wakeups[ ]*: \([0-9][0-9]*\)\/h.*/\1/p' "$_RPT" 2>/dev/null | head -n 1)"
+    printf 'asbcost\tcpu_msh=%s\twrites_h=%s\twakes_h=%s\n' "$_cc" "${_cw:-0}" "${_ck:-0}"
+  fi
+  # Speaker playback cost, from the phase table (the one whose header carries pct/h -
+  # the "sampled current" table further down lists audio rows too, with mA in this
+  # column, so the header match must be exact).
+  awk '/^phase[ \t]+dur_min[ \t]+d_pct[ \t]+pct\/h/ { t = 1; next }
+       t && $1 ~ /^[a-z_]+$/ && $2 ~ /^[0-9.]+$/ {
+         if ($1 == "audio_spk_scr") {
+           p = $4; sub(/[^0-9.].*$/, "", p); m = $5; sub(/[^0-9].*$/, "", m)
+           printf "audio\tspk_min=%d\tpctph=%s\tma=%d\n", $2, p, m
+         }
+         next
+       }
+       t { exit }' "$_RPT" 2>/dev/null
+  # Charging flavours seen.
+  _ct="$(sed -n 's/^  charge types seen[ ]*: *//p' "$_RPT" 2>/dev/null | head -n 1 | tr '\t' ' ' | tr -s ' ' | sed 's/ $//')"
+  [ -n "$_ct" ] && printf 'charge\ttypes=%s\n' "$_ct"
+fi
+
+# ----- Smart learner progress (fix200) ------------------------------------------
+if [ -s "$_DIR/smart_records.txt" ]; then
+  _sm="$(grep -m1 '^smooth|' "$_DIR/smart_records.txt" 2>/dev/null)"
+  if [ -n "$_sm" ]; then
+    _cl="$(awk -F'|' '$1 ~ /^(off_night|off_day|on_light_dim|on_light_bright|on_medium_dim|on_medium_bright)$/ && $2 != "measuring" { n++ } END { print n + 0 }' "$_DIR/smart_records.txt" 2>/dev/null)"
+    printf 'smart\twatching=%s\ttesting=%s\thelped=%s\tnothelped=%s\tctxlearn=%s\n' \
+      "$(printf '%s' "$_sm" | sed -n 's/.*watching=\([0-9]*\).*/\1/p')" \
+      "$(printf '%s' "$_sm" | sed -n 's/.*|testing=\([0-9]*\).*/\1/p')" \
+      "$(printf '%s' "$_sm" | sed -n 's/.*helped=\([0-9]*\).*/\1/p')" \
+      "$(printf '%s' "$_sm" | sed -n 's/.*not_helped=\([0-9]*\).*/\1/p')" \
+      "${_cl:-0}"
+  fi
+fi
+
+# ----- the settings the advice can point at (fix200) -----------------------------
+# Read from the CURRENT config, not the capture: a saved week's-old log should still give
+# advice that matches the settings as they are now. The list is fixed; values are
+# sanitized to one word.
+_MD="$(CDPATH= cd -- "$(dirname "$0")/../.." 2>/dev/null && pwd)"
+_CFG="${ASB_CFG_FILE:-$_MD/config/governor.conf}"
+if [ -f "$_CFG" ]; then
+  for _k in wakelock_action ltpo_video night_modem_idle net_screen_off_lte wifi_powersave gms_freeze doze_level; do
+    _v="$(grep -E "^[[:space:]]*$_k=" "$_CFG" 2>/dev/null | tail -n 1 | sed 's/^[^=]*=//; s/#.*//' | tr -d ' \t\r')"
+    [ -n "$_v" ] && printf 'cfg\tkey=%s\tvalue=%s\n' "$_k" "$_v"
+  done
 fi
 
 exit 0
