@@ -3121,11 +3121,16 @@ for k in ('prof_performance_desc', 'prof_balanced_desc', 'prof_battery_desc'):
 assert re.search(r'\.pbtn \{[^}]*min-height: var\(--pbtn-h', s) and re.search(r'\.cfg-tile \{[^}]*min-height: var\(--cfg-tile-h', s), "cards do not take the fitted height"
 # fix174-175: the six hub categories carry a tint of their own hue so they lift off the
 # neutral restart row, and the nine Monitor tiles are filled a notch stronger.
-# fix193: the tint became the bar's capsule material fed by one --cat token per category
-# (tile, icon pill, heading and toast cannot drift), and the selected segment option
-# wears the bar's tonal pill.
-assert re.search(r'\.cfg-tile \{[^}]*color-mix\(in srgb, var\(--cat, var\(--accent\)\) 8%', s), "hub tiles lost their capsule category wash"
-assert 'color-mix(in srgb, var(--cat) 10%, #ffffff)' in s, "light hub tiles lost their category tint"
+# fix193: the tint became one --cat token per category (tile, icon pill, heading and
+# toast cannot drift). fix195: the cards dropped the #07090b base that read as grey
+# slabs next to Monitor's cells - the fix192 three-stop hue gradient is back, the tweak
+# rows wear the Monitor cell material, and the selected segment option wears the pill.
+assert re.search(r'\.cfg-tile \{[^}]*color-mix\(in srgb, var\(--cat, var\(--accent\)\) 17%', s), "hub tiles lost their deep category gradient"
+_strip = lambda b: re.sub(r'/\*.*?\*/', '', b, flags=re.S)
+assert '#07090b' not in _strip(re.search(r'\.cfg-tile \{([^}]*)\}', s).group(1)), "the grey slab base is back on hub tiles"
+assert '#07090b' not in _strip(re.search(r'\.cfg-row \{([^}]*)\}', s).group(1)), "the grey slab base is back on tweak cards"
+assert 'linear-gradient(160deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018))' in s, "tweak cards lost the Monitor cell material"
+assert 'color-mix(in srgb, var(--cat) 13%, #ffffff)' in s, "light hub tiles lost their category tint"
 for _cat in ('audio', 'camera', 'battery', 'ux', 'net', 'iface'):
     assert re.search(r'\.cfg-tile\.cat-%s\s*\{ --cat: #[0-9a-f]{6}; \}' % _cat, s), 'category %s lost its hue token' % _cat
 assert '.cfg-row.is-on .cfg-icon[class*="cat-"]' in s, "active tweak icons lost the category pill"
@@ -3837,7 +3842,7 @@ printf '%s\n' "$eout" | grep -q '^drain	' && fail "an empty capture must not inv
 let ASB_LANG = 'ru';
 function T(k, d) { const L = I18N[ASB_LANG]; return (L && typeof L[k] === 'string') ? L[k] : d; }
 EOF
-  for fn in parseLogReport logReportT logReportDur logReportTips; do
+  for fn in parseLogReport logReportT logReportDur logReportDurSec logReportTips; do
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
   cat <<'EOF'
@@ -3870,8 +3875,11 @@ chk(logReportT('lr_tip_night', '', { pct: '1.0' }) === I18N.ru.lr_tip_night.repl
 chk(logReportT('lr_tip_app', '', { app: 'com.instagram.android', min: '61' }).indexOf('com.instagram.android') >= 0, 'ru app tip names the app');
 chk(logReportDur(469) === '7 ч 49 мин', 'ru duration: ' + logReportDur(469));
 chk(logReportDur(45) === '45 мин', 'ru short duration');
+chk(logReportDurSec(9) === '9 сек', 'ru sub-minute hold reads in seconds: ' + logReportDurSec(9));
+chk(logReportDurSec(3661) === logReportDur(61), 'long holds still read in hours/minutes');
 ASB_LANG = 'en';
 chk(logReportDur(469) === '7 h 49 min', 'en duration: ' + logReportDur(469));
+chk(logReportDurSec(8) === '8 sec', 'en sub-minute hold: ' + logReportDurSec(8));
 const clean = parseLogReport('meta\telapsed_min=10\ttarget_h=24\trunning=1\nwl\tnone=1\ncrash\tcount=0\tasb=0\tlatest=none\nsysui\tcount=0\n');
 const ct = logReportTips(clean);
 chk(ct.length === 1 && ct[0].key === 'lr_tip_ok' && ct[0].ic === 'ok', 'a clean capture gets the ok tip: ' + JSON.stringify(ct));
@@ -3890,17 +3898,19 @@ rout="$(node "$T/t.js" 2>&1)" || fail "$rout"
 python3 - "$ROOT" <<'P' || fail "locales/markup"
 import json, pathlib, sys
 root = pathlib.Path(sys.argv[1])
-KEYS = ['lr_menu','lr_title','lr_loading','lr_none_title','lr_none_body','lr_failed',
-        'lr_running','lr_done','lr_early','lr_sec_drain','lr_overall','lr_avg_current',
+KEYS = ['lr_menu','lr_refresh','lr_loading','lr_none_title','lr_none_body','lr_failed',
+        'lr_running','lr_done','lr_early','lr_sec_drain','lr_overall','lr_temp_surf',
         'lr_screen_on','lr_screen_off','lr_night','lr_idle','lr_radio','lr_sec_wake',
         'lr_wake_none','lr_sec_crash','lr_crash_none','lr_crash_n','lr_crash_latest',
-        'lr_crash_asb','lr_sysui','lr_sec_thermal','lr_temp_max','lr_clamp_none',
+        'lr_crash_asb','lr_sysui','lr_sec_thermal','lr_clamp_none',
         'lr_clamp_some','lr_sec_tips','lr_tip_ok','lr_tip_night','lr_tip_awake',
-        'lr_tip_crash','lr_tip_crashes','lr_tip_app','lr_min','lr_h','lr_per_hour']
+        'lr_tip_crash','lr_tip_crashes','lr_tip_app','lr_min','lr_secs','lr_h','lr_per_hour']
+EMO = {'lr_sec_drain': '\U0001f50b', 'lr_sec_wake': '\u23f0', 'lr_sec_crash': '\U0001f4a5',
+       'lr_sec_thermal': '\U0001f321\ufe0f', 'lr_sec_tips': '\U0001f4a1'}
 PH = {'lr_running': ['{min}', '{h}'], 'lr_crash_n': ['{n}'], 'lr_crash_latest': ['{proc}'],
       'lr_crash_asb': ['{n}'], 'lr_sysui': ['{n}'], 'lr_temp_max': ['{cpu}', '{surf}'],
       'lr_clamp_some': ['{n}', '{owner}'], 'lr_tip_night': ['{pct}'], 'lr_tip_awake': ['{awake}'],
-      'lr_tip_crashes': ['{n}'], 'lr_tip_app': ['{app}', '{min}'], 'lr_min': ['{n}'], 'lr_h': ['{n}']}
+      'lr_tip_crashes': ['{n}'], 'lr_tip_app': ['{app}', '{min}'], 'lr_min': ['{n}'], 'lr_secs': ['{n}'], 'lr_h': ['{n}']}
 files = sorted((root / 'webroot' / 'i18n').glob('*.json'))
 assert len(files) == 13, 'locale count'
 for p in files:
@@ -3909,22 +3919,34 @@ for p in files:
         assert d.get(k), '%s: %s missing' % (p.name, k)
         for ph in PH.get(k, []):
             assert ph in d[k], '%s: %s lost its %s placeholder' % (p.name, k, ph)
+    for k, e in EMO.items():
+        assert d[k].startswith(e + ' '), '%s: %s lost its emoji prefix' % (p.name, k)
     if p.name == 'en.json':
-        assert d['lr_title'] == '24h log in plain words'
+        assert d['lr_sec_drain'] == '\U0001f50b Battery drain'
         assert d['lr_running'] == 'recording \u00b7 {min} min of {h} h'
         assert d['lr_tip_night'] == 'Overnight the phone lost ~{pct}%/h - check background apps.'
-        assert d['lr_per_hour'] == '%/h'
+        assert d['lr_per_hour'] == '%/h' and d['lr_refresh'] == 'Refresh'
+        assert d['lr_secs'] == '{n} sec'
     if p.name == 'ru.json':
-        assert d['lr_title'] == 'Суточный лог простыми словами'
-        assert d['lr_menu'] == 'Отчёт по логу'
+        assert d['lr_sec_drain'] == '\U0001f50b Разряд батареи'
+        assert d['lr_menu'] == 'Отчёт по логу' and d['lr_refresh'] == 'Обновить'
+        assert d['lr_secs'] == '{n} сек'
 h = (root / 'webroot' / 'index.html').read_text(encoding='utf-8')
-assert h.count('data-i18n="lr_menu"') == 1, 'menu item carries lr_menu'
+assert h.count('data-i18n="lr_menu"') == 2, 'menu item and page section label carry lr_menu'
 P
 grep -Fq 'onclick="asbLogMenuPick('"'"'report'"'"')"' "$H" || fail "the menu item does not pick report"
-grep -Fq "if (action === 'report') { asbLogReportOpen(); return; }" "$H" || fail "the report branch is gone from asbLogMenuPick"
+grep -Fq "if (action === 'report') { openReportPage(); return; }" "$H" || fail "the report branch is gone from asbLogMenuPick"
 grep -Fq "run('sh ' + MD + '/tools/logkit/asb_fullday_digest.sh 2>/dev/null')" "$H" || fail "the digest invocation changed"
 grep -Fq 'iclassName' "$H" && fail "typo"
-grep -Fq '.lgr-ic.warn {' "$H" || fail "tip badge styles missing"
+grep -Fq '#reportPage { z-index: 130;' "$H" || fail "the report page is not a page layer above Config"
+grep -Fq 'id="reportPage"' "$H" || fail "report page markup missing"
+grep -Fq 'function openReportPage()' "$H" || fail "openReportPage missing"
+grep -Fq 'function closeReportPage()' "$H" || fail "closeReportPage missing"
+grep -Fq "if (document.body.classList.contains('report-active')) return 'report';" "$H" || fail "asbNavCurrent does not know the report page"
+grep -Fq '.lgr-heros { display: grid;' "$H" || fail "hero tiles styles missing"
+grep -Fq "'Noto Color Emoji'" "$H" || fail "the sans stack lost its emoji fallback"
+grep -Fq 'function logReportDurSec(sec)' "$H" || fail "seconds-level duration formatter missing"
+grep -Fq 'logReportDurSec(w.sec)' "$H" || fail "wakelock rows must format sub-minute holds in seconds"
 grep -Fq 'textContent = tip.ic' "$H" || fail "tips must render via textContent, not markup"
 grep -Fq '"tools/logkit/asb_fullday_digest.sh"' "$ROOT/.github/workflows/build-debug.yml" || fail "debug workflow does not ship the digest"
 grep -Fq '"tools/logkit/asb_fullday_digest.sh"' "$ROOT/.github/workflows/build-release.yml" || fail "release workflow does not ship the digest"

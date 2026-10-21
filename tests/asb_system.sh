@@ -4075,7 +4075,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 fail() { echo "FAIL fix192: $*"; exit 1; }
 asb_has_test test_webui_header_capsules.sh || fail "test_webui_header_capsules.sh missing"
 grep -q -- '--cap-wash: linear-gradient(135deg, rgba(0,240,180,0.04), rgba(0,212,255,0.025));' "$ROOT/webroot/index.html" || fail "no shared capsule material"
-[ "$(grep -c 'class="hdr-cap hdr-info"' "$ROOT/webroot/index.html")" -eq 3 ] || fail "not every page has the chip/version capsule"
+[ "$(grep -c 'class="hdr-cap hdr-info"' "$ROOT/webroot/index.html")" -eq 4 ] || fail "not every page has the chip/version capsule"
 grep -q '^function asbHeaderFit(force) {' "$ROOT/webroot/index.html" || fail "the island is never fitted"
 echo "PASS: fix192 contract"
 ) || exit 1
