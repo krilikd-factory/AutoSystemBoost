@@ -658,15 +658,23 @@ static long asb_mw_hold_s(void) {
  * reading it does not call into the app (dumpsys gfxinfo would, on the app's own thread).
  * The governor reads it every three minutes of screen-on time at most, for the app in front.
  *
- * An app that misses its deadline on 8 % or more of 3000+ frames under the normal lean is
+ * An app that misses its deadline on 5 % or more of 3000+ frames under the normal lean is
  * TESTED, not trusted: three-minute windows alternate the normal lean and 0.15 more
  * headroom. Only if the headroom cuts its janky share by a quarter and at least 1.5 points
  * does it keep the headroom whenever it is in front; otherwise it is marked as not helped
  * by clocks and left alone. Both verdicts are re-checked after 21 days. 24 apps are
  * remembered; the least recently seen makes room.
+ *
+ * The trigger was 8 % until fix198. Two full-day flagship captures (an OP12 and an Ace 6)
+ * then showed the check watching six and three apps for the whole day and never testing
+ * one - while the jankiest app of the OP12's day, a chat client at 7.0 % of 122k frames
+ * (11 % in its no-touch stretches), sat just under it. 5 % is where missed frames become
+ * visible (six a second at 120 fps), and the A/B test itself decides whether the clocks
+ * are the cause - on a phone that is simply smooth (the Ace 6's day: 1.0 % overall, the
+ * jankiest app 2.1 %) nothing changes, no test ever runs.
  */
 #define ASB_SMOOTH_TRIGGER_FRAMES  3000
-#define ASB_SMOOTH_TRIGGER_JANK    0.08
+#define ASB_SMOOTH_TRIGGER_JANK    0.05
 #define ASB_SMOOTH_MIN_WINDOWS     3
 #define ASB_SMOOTH_MAX_WINDOWS     6
 #define ASB_SMOOTH_MIN_FRAMES      4000
@@ -734,20 +742,33 @@ static int asb_smooth_window(uint64_t hash, const char *pkg, long df, long dj, i
         if (arm != (int)a->arm) return 0;   /* the window ran under the other arm: not ours */
         a->t_frames[arm] += (uint32_t)df; a->t_janky[arm] += (uint32_t)dj; a->t_windows[arm]++;
         a->arm ^= 1;
-        if (a->t_windows[0] < ASB_SMOOTH_MIN_WINDOWS || a->t_windows[1] < ASB_SMOOTH_MIN_WINDOWS ||
-            a->t_frames[0] < ASB_SMOOTH_MIN_FRAMES || a->t_frames[1] < ASB_SMOOTH_MIN_FRAMES) return 0;
-        double j0 = (double)a->t_janky[0] / a->t_frames[0];
-        double j1 = (double)a->t_janky[1] / a->t_frames[1];
-        if (j1 <= j0 * (1.0 - ASB_SMOOTH_GAIN_REL) && j0 - j1 >= ASB_SMOOTH_GAIN_ABS) {
+        int enough = (a->t_windows[0] >= ASB_SMOOTH_MIN_WINDOWS && a->t_windows[1] >= ASB_SMOOTH_MIN_WINDOWS &&
+                      a->t_frames[0] >= ASB_SMOOTH_MIN_FRAMES && a->t_frames[1] >= ASB_SMOOTH_MIN_FRAMES);
+        int full   = (a->t_windows[0] >= ASB_SMOOTH_MAX_WINDOWS && a->t_windows[1] >= ASB_SMOOTH_MAX_WINDOWS);
+        if (!enough && !full) return 0;
+        /* fix198: the frames floor used to sit in the early return, so an app that draws
+         * little while it is watched (a chat left on screen, short bursts over days) never
+         * reached any verdict - the "at most six windows per arm" bound never applied and
+         * the test, half of it at more headroom and all of it invisible to the records,
+         * ran for as long as the app was used. A full test on thin frames is not evidence
+         * enough to KEEP headroom, but it is reason enough to stop asking. */
+        double j0 = a->t_frames[0] ? (double)a->t_janky[0] / a->t_frames[0] : 0.0;
+        double j1 = a->t_frames[1] ? (double)a->t_janky[1] / a->t_frames[1] : 0.0;
+        if (enough && j1 <= j0 * (1.0 - ASB_SMOOTH_GAIN_REL) && j0 - j1 >= ASB_SMOOTH_GAIN_ABS) {
             a->state = 2; a->decided_ts = (uint32_t)now; a->gain = (float)(1.0 - j1 / j0);
             snprintf(g_smooth_event_msg, sizeof(g_smooth_event_msg),
                      "smooth: %s - more headroom helps (janky %.1f %% -> %.1f %%), kept for it",
                      pkg ? pkg : "?", 100.0 * j0, 100.0 * j1);
-        } else if (a->t_windows[0] >= ASB_SMOOTH_MAX_WINDOWS && a->t_windows[1] >= ASB_SMOOTH_MAX_WINDOWS) {
+        } else if (full) {
             a->state = 3; a->decided_ts = (uint32_t)now; a->gain = (float)((j0 > 0) ? 1.0 - j1 / j0 : 0.0);
-            snprintf(g_smooth_event_msg, sizeof(g_smooth_event_msg),
-                     "smooth: %s - headroom does not help (janky %.1f %% vs %.1f %%): its jank is not the clocks, left as it was",
-                     pkg ? pkg : "?", 100.0 * j0, 100.0 * j1);
+            if (enough)
+                snprintf(g_smooth_event_msg, sizeof(g_smooth_event_msg),
+                         "smooth: %s - headroom does not help (janky %.1f %% vs %.1f %%): its jank is not the clocks, left as it was",
+                         pkg ? pkg : "?", 100.0 * j0, 100.0 * j1);
+            else
+                snprintf(g_smooth_event_msg, sizeof(g_smooth_event_msg),
+                         "smooth: %s - a full test without enough frames for a verdict: left as it was",
+                         pkg ? pkg : "?");
         } else {
             return 0;
         }
