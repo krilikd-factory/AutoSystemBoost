@@ -3119,12 +3119,17 @@ assert re.findall(r'<div class="pmeta" data-meter="(\w+)" hidden></div>', s) == 
 for k in ('prof_performance_desc', 'prof_balanced_desc', 'prof_battery_desc'):
     assert ('class="pdesc" data-i18n="%s"' % k) in s, "%s card has no description" % k
 assert re.search(r'\.pbtn \{[^}]*min-height: var\(--pbtn-h', s) and re.search(r'\.cfg-tile \{[^}]*min-height: var\(--cfg-tile-h', s), "cards do not take the fitted height"
-# fix174: the six hub categories carry a tint of their own hue so they lift off the
+# fix174-175: the six hub categories carry a tint of their own hue so they lift off the
 # neutral restart row, and the nine Monitor tiles are filled a notch stronger.
-# fix175: the tint went a step stronger on the owner's request, and the sheets' primary
-# button turned tonal - no more full-bleed bright green slab.
-assert re.search(r'\.cfg-tile \{[^}]*color-mix\(in srgb, var\(--tech-icon, var\(--accent\)\) 17%', s), "hub tiles lost their category tint"
-assert 'color-mix(in srgb, var(--tech-icon) 15%, #ffffff)' in s, "light hub tiles lost their category tint"
+# fix193: the tint became the bar's capsule material fed by one --cat token per category
+# (tile, icon pill, heading and toast cannot drift), and the selected segment option
+# wears the bar's tonal pill.
+assert re.search(r'\.cfg-tile \{[^}]*color-mix\(in srgb, var\(--cat, var\(--accent\)\) 8%', s), "hub tiles lost their capsule category wash"
+assert 'color-mix(in srgb, var(--cat) 10%, #ffffff)' in s, "light hub tiles lost their category tint"
+for _cat in ('audio', 'camera', 'battery', 'ux', 'net', 'iface'):
+    assert re.search(r'\.cfg-tile\.cat-%s\s*\{ --cat: #[0-9a-f]{6}; \}' % _cat, s), 'category %s lost its hue token' % _cat
+assert '.cfg-row.is-on .cfg-icon[class*="cat-"]' in s, "active tweak icons lost the category pill"
+assert re.search(r'\.cfg-seg button\.on \{[^}]*var\(--pill-wash\)', s), "the selected segment option is not the bar's pill"
 assert 'background: linear-gradient(135deg, rgba(255,255,255,0.065), rgba(255,255,255,0.024));' in s, "Monitor tiles lost their stronger fill"
 prim = re.search(r'\.cfg-profile-primary \{([^}]*)\}', s).group(1)
 assert 'background:linear-gradient(135deg,#2cd6ad,#67e4c8)' not in prim, "the poisonous green slab is back on the sheet button"
