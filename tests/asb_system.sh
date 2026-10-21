@@ -4125,6 +4125,70 @@ grep -q "$_clpat" "$ROOT/tools/asb_full_regression.sh" && fail "the regression s
 grep -q '  CHANGELOG.md$' "$ROOT/tools/asb_tree.sha256" || fail "the changelog fell out of the tree manifest"
 echo "PASS: fix199 contract"
 ) || exit 1
+# ---- fix201 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+fail() { echo "FAIL fix201: $*"; exit 1; }
+# The fix192-era audit's P0 was real: common/install.sh failed bash -n. The cause sits at
+# line 259's default string ("...module's WebUI..."): an apostrophe inside ${var:-...}
+# inside double quotes is literal text for POSIX sh/mksh but OPENS a single quote for bash,
+# so bash's parse error surfaced pages later, at line 551. mksh on device always parsed it
+# right - this is a CI/maintainability landmine, not a device bug - but the installer is
+# the most sensitive script we ship, and lint now gates the whole installer family under
+# BOTH shells so the class cannot come back.
+bash -n "$ROOT/common/install.sh" 2>/dev/null || fail "install.sh fails bash -n again"
+sh -n "$ROOT/common/install.sh" 2>/dev/null || fail "install.sh fails sh -n"
+for _s in customize.sh service.sh post-fs-data.sh uninstall.sh action.sh apply_profile.sh; do
+  bash -n "$ROOT/$_s" 2>/dev/null || fail "$_s fails bash -n"
+  sh -n "$ROOT/$_s" 2>/dev/null || fail "$_s fails sh -n"
+done
+grep -q 'bash -n "$_f"' "$ROOT/tools/asb_lint.sh" || fail "lint does not gate the bash parse"
+grep -q 'common/install.sh' "$ROOT/tools/asb_lint.sh" || fail "lint does not check the installer"
+# The scroll regression pins live in tests/asb_ui.sh:t_webui_page_scroll.
+grep -q 't_webui_page_scroll' "$ROOT/tests/asb_ui.sh" || fail "the scroll regression test is missing"
+# Locale key parity (a fix192-era drift: t_cfg_video existed in 12 locales but not en) is
+# asserted inside t_webui_log_report_runtime's locale pass.
+grep -q 'key set differs from en' "$ROOT/tests/asb_ui.sh" || fail "the locale key-parity check is missing"
+echo "PASS: fix201 contract"
+) || exit 1
+# ---- fix200 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+D="$ROOT/tools/logkit/asb_fullday_digest.sh"
+fail() { echo "FAIL fix200: $*"; exit 1; }
+# The log report grew from a drain summary into the full "what kind of day was it" sheet:
+# saved captures are named (start time + profile), smoothness comes with the real per-app
+# frame table, the display-refresh split, Smart learner progress, ASB's own cost, speaker
+# playback and charge types - and advice can name the exact Settings switch. The digest
+# mines the recorder's own interim report (no dumpsys), so it works on running AND saved
+# captures alike, under every profile.
+sh -n "$D" || fail "digest script has a syntax error"
+grep -qF 'started=%s\tprofile=%s' "$D" || fail "the digest must name when a saved capture started and under which profile"
+grep -q 'current_profile:' "$D" || fail "the digest must read the capture profile from env.txt"
+grep -qF 'japp\tpkg=' "$D" || fail "the digest must emit per-app jank rows"
+grep -qF 'hz\tmode=' "$D" || fail "the digest must emit the display refresh split"
+grep -qF 'asbcost\tcpu_msh=' "$D" || fail "the digest must emit ASB's own cost"
+grep -qF 'audio\tspk_min=' "$D" || fail "the digest must emit speaker playback cost"
+grep -qF 'charge\ttypes=' "$D" || fail "the digest must emit charge types"
+grep -qF 'smart\twatching=' "$D" || fail "the digest must emit Smart learner progress"
+grep -q 'wakelock_action ltpo_video night_modem_idle' "$D" || fail "the digest must snapshot the settings the advice points at"
+# No quotes may break the shell: the awk programs are single-quoted, an apostrophe inside
+# them once broke the whole script (dash sh -n caught it - keep it caught).
+grep -q "nobody's" "$D" && fail "apostrophe inside a single-quoted awk program"
+# WebUI side.
+grep -q 'd.japps' "$H" || fail "the parser must collect per-app jank rows"
+grep -q 'd.hzs' "$H" || fail "the parser must collect the refresh split"
+grep -q 'd.cfg' "$H" || fail "the parser must collect the settings snapshot"
+grep -q 'function logReportTable(' "$H" || fail "the table builder is missing"
+grep -q "lr_saved" "$H" || fail "a saved capture must be named as such"
+grep -q 'tips.slice(0, 6)' "$H" || fail "advice stays readable: at most six cards"
+grep -q 'td.textContent' "$H" || fail "table cells must be textContent - device data never becomes markup"
+# The full behaviour (digest over a fixture capture, parser+tips in node, all 13 locales)
+# lives in tests/asb_ui.sh:t_webui_log_report_runtime.
+grep -q 'lr_tip_jank_bad' "$ROOT/tests/asb_ui.sh" || fail "the runtime test must cover the fix200 advice"
+echo "PASS: fix200 contract"
+) || exit 1
 # ---- fix198 ---------------------------------------------------------------
 (
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

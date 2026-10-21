@@ -3786,14 +3786,56 @@ node "$T/t.js" || fail "fit logic"
 echo "PASS webui header capsules: shared bar material, tonal pills, one-line island on every page"
 )
 
+t_webui_page_scroll() (
+# fix201: "can't scroll down, there are more cards" - two user reports (an OP15 screenshot
+# with the Monitor page cut mid-card, "same on an Ace 5"). Two causes, both pinned here.
+# html/body were height:100%: overflow-x:hidden computes overflow-y to auto, so BODY became
+# the scroll container and the document had nothing to scroll - WebViews that gesture-scroll
+# only the document showed a page that does not move. Now min-height: the page grows, the
+# document scrolls, every WebView scrolls it. Short content still fills exactly one viewport
+# via .page's min-height, so the no-jelly property is unchanged. And .live-page carried
+# overflow-y:hidden in portrait, clipping the Monitor page below the fold with no way to
+# reach the rest; only landscape media queries re-enabled it.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui page scroll: $*" >&2; exit 1; }
+command -v python3 >/dev/null 2>&1 || { echo "SKIP webui page scroll: no python3"; exit 0; }
+python3 - "$H" <<'P' || exit 1
+import re, sys
+h = open(sys.argv[1], encoding='utf-8').read()
+bad = []
+m = re.search(r'\nhtml, body \{(.*?)\n\}', h, re.S)
+if not m: bad.append('the html, body rule is gone')
+else:
+    body = re.sub(r'/\*.*?\*/', '', m.group(1), flags=re.S)
+    if re.search(r'(^|\s)height\s*:\s*100%', body):
+        bad.append('html/body are a fixed 100% again - body becomes the only scroller and the document does not scroll')
+    if 'min-height: 100%' not in body: bad.append('html/body lost min-height: 100%')
+lp = re.search(r'\n\.live-page \{\n  position: fixed;(.*?)\n\}', h, re.S)
+if not lp: bad.append('the main .live-page rule is gone')
+else:
+    body = re.sub(r'/\*.*?\*/', '', lp.group(1), flags=re.S)
+    if 'overflow-y: auto' not in body: bad.append('the Monitor page cannot scroll in portrait again')
+    if 'overflow-x: hidden' not in body: bad.append('the slide-in would flash a horizontal scrollbar track')
+if 'body.live-active {\n  overflow: hidden;' not in h: bad.append('an open overlay no longer freezes the page under it')
+for b in bad: print('FAIL webui page scroll: ' + b, file=sys.stderr)
+sys.exit(1 if bad else 0)
+P
+echo "PASS webui page scroll: the document scrolls the main page, live pages scroll themselves"
+)
+
 t_webui_log_report_runtime() (
 # Runtime (fix194): the Logs menu grew a third entry, "Log report". It runs the REAL
 # tools/logkit/asb_fullday_digest.sh - awk over the files the 24h recorder already wrote,
 # no dumpsys - and explains the capture in plain words in a sheet: drain, what kept the
 # phone awake, crashes, SystemUI restarts, throttling, plus advice. Works on the RUNNING
 # capture (the digest folds in the open phase) and is not behind the debug-build gate.
-# Here: the digest over a fixture capture, the REAL parser/tips in node, the markup and
-# all 13 locales.
+# fix200 made the sheet much richer: it names a SAVED capture (start time + profile),
+# adds smoothness with the real per-app frame table, the display-refresh split, the Smart
+# learner's progress, ASB's own cost, speaker playback, charge types - and the advice can
+# point at the exact Settings switch by name. Here: the digest over a fixture capture,
+# the REAL parser/tips in node, the markup and all 13 locales.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 H="$ROOT/webroot/index.html"
@@ -3827,13 +3869,48 @@ printf '10123 3661\n10456 1830\n' > "$CAP/.wl_uid_delta"
 printf '10123|com.instagram.android\n10456|com.whatsapp\n' > "$CAP/.uid_package_map.tsv"
 printf '===== SYSTEMUI RESTART at a\nverdict: ok\n===== SYSTEMUI RESTART at b\nverdict: ok\n' > "$CAP/sysui_restarts.txt"
 printf '%s|active|cap_owner=thermal|x\n%s|active|cap_owner=asb_governor|x\n' "$((NOW-71000))" "$((NOW-70000))" > "$CAP/throttle_trace.txt"
-printf ' ASB FULL-DAY REPORT — x\n capture: 24h target, 720 min elapsed\n' > "$CAP/_full_day_report.txt"
+# fix200: the interim report the digest mines for smoothness, per-app frames, refresh
+# split, ASB's own cost, speaker playback and charge types. Field order and indentation
+# match the real writer: asbcost lines are indented, table rows are not.
+cat > "$CAP/_full_day_report.txt" <<EOF
+ ASB FULL-DAY REPORT — x
+ capture: 24h target, 720 min elapsed
+all screen-on intervals: 167  frames 366481  janky 5.1%  over 12.2 h
+janky frames per second on screen: 2.50
+app in front      frames   jank   jps
+com.ttt.nagram    122186   7.0%   4.20
+com.whatsapp       40211   1.2%   0.40
+multi               9000  12.0%   9.00
+com.android.systemui   30000   0.5%   0.10
+
+refresh_hz  samples  share   avg_brightness%  avg_mA
+ 60  112  64%  30  264
+ 90   40  23%  34  301
+120   23  13%  40  380
+0-24  9  5%  200
+
+  governor cpu             : 1851 ms/h
+  physical writes          : 176/h
+  timer wakeups            : 491/h
+phase  dur_min  d_pct  pct/h  mA  note
+ audio_spk_scr  72  6.0  8.31  362  x
+ active  400  10.0  1.50  200  x
+
+  charge types seen        : Fast(17) N/A(197)
+EOF
+printf 'current_profile: smart\n' > "$CAP/env.txt"
+cat > "$CAP/smart_records.txt" <<EOF
+smooth|watching=3|testing=0|helped=0|not_helped=0
+off_night|ok|1760000000
+on_light_dim|ok|1760000001
+off_day|measuring|1760000002
+EOF
 printf 'Cmdline: com.crashy.app\nsignal 11\n' > "$T/tomb/tombstone_01"; touch -d "@$((NOW-4000))" "$T/tomb/tombstone_01"
 printf 'Cmdline: /vendor/bin/hw/foo\nlibasbdsp x\n' > "$T/tomb/tombstone_02"; touch -d "@$((NOW-3000))" "$T/tomb/tombstone_02"
 printf 'Cmdline: old.crash\n' > "$T/tomb/tombstone_03"; touch -d "@$((NOW-200000))" "$T/tomb/tombstone_03"
 
 out="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" sh "$D" "$CAP")" || fail "digest exit"
-printf '%s\n' "$out" | grep -q '^meta	.*elapsed_min=720	target_h=24	running=0$' || fail "meta line: $(printf '%s' "$out" | head -1)"
+printf '%s\n' "$out" | grep -Eq '^meta	elapsed_min=720	target_h=24	running=0	started=[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}	profile=smart$' || fail "meta line: $(printf '%s' "$out" | head -1)"
 printf '%s\n' "$out" | grep -q '^drain	pctph=2.0	total_drop=22	hours=10.8	ma=99$' || fail "drain line"
 printf '%s\n' "$out" | grep -q '^night	dur_min=469	drop=8	pctph=1.0	awake=8$' || fail "night chain"
 printf '%s\n' "$out" | grep -q '^idlemax	awake=25	phase=sleep	dur_min=60$' || fail "idlemax"
@@ -3843,6 +3920,18 @@ printf '%s\n' "$out" | grep -q '^sysui	count=2$' || fail "sysui restarts"
 printf '%s\n' "$out" | grep -q '^thermal	cpu=41	surf=35$' || fail "thermal peaks"
 printf '%s\n' "$out" | grep -q '^throttle	clamps=2	owner=asb_governor$' || fail "throttle clamp periods"
 printf '%s\n' "$out" | grep -q '^radio	mib=17.5$' || fail "radio MiB"
+# fix200: the richer sections, mined from the interim report + smart_records + config.
+printf '%s\n' "$out" | grep -q '^jank	pct=5.1	jps=2.50	frames=366481$' || fail "jank headline"
+printf '%s\n' "$out" | grep -q '^japp	pkg=com.ttt.nagram	frames=122186	pct=7.0$' || fail "top jank app"
+printf '%s\n' "$out" | grep -q '^japp	pkg=multi' && fail "the split-screen pseudo-app must not become a row"
+printf '%s\n' "$out" | grep -q '^hz	mode=60	share=64	ma=264$' || fail "60 Hz row"
+printf '%s\n' "$out" | grep -q '^hz	mode=120	share=13	ma=380$' || fail "120 Hz row"
+printf '%s\n' "$out" | grep -q '^asbcost	cpu_msh=1851	writes_h=176	wakes_h=491$' || fail "ASB own cost"
+printf '%s\n' "$out" | grep -q '^audio	spk_min=72	pctph=8.31	ma=362$' || fail "speaker audio cost"
+printf '%s\n' "$out" | grep -q '^charge	types=Fast(17) N/A(197)$' || fail "charge types"
+printf '%s\n' "$out" | grep -q '^smart	watching=3	testing=0	helped=0	nothelped=0	ctxlearn=2$' || fail "smart learner line"
+printf '%s\n' "$out" | grep -q '^cfg	key=wakelock_action	value=0$' || fail "cfg snapshot for wakelock_action"
+printf '%s\n' "$out" | grep -q '^cfg	key=night_modem_idle	value=0$' || fail "cfg snapshot for night_modem_idle"
 [ "$(ASB_TOMBSTONE_DIR="$T/tomb" sh "$D" "$T/no-such-dir")" = "error	no_capture" ] || fail "missing capture must say error no_capture"
 EMPTY="$T/empty"; mkdir -p "$EMPTY"
 eout="$(ASB_TOMBSTONE_DIR="$T/empty-tomb" ASB_LK_LOCK="$T/nolock" sh "$D" "$EMPTY")"
@@ -3857,13 +3946,13 @@ printf '%s\n' "$eout" | grep -q '^drain	' && fail "an empty capture must not inv
 let ASB_LANG = 'ru';
 function T(k, d) { const L = I18N[ASB_LANG]; return (L && typeof L[k] === 'string') ? L[k] : d; }
 EOF
-  for fn in parseLogReport logReportT logReportDur logReportDurSec logReportTips; do
+  for fn in Tcfg parseLogReport logReportT logReportDur logReportDurSec logReportTips; do
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
   cat <<'EOF'
 let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
 const txt = [
-  'meta\telapsed_min=720\ttarget_h=24\trunning=1',
+  'meta\telapsed_min=720\ttarget_h=24\trunning=1\tstarted=2026-10-21 09:40\tprofile=smart',
   'cover\ton_min=200\toff_min=520\ton_pct=27',
   'drain\tpctph=2.0\ttotal_drop=22\thours=10.8\tma=99',
   'night\tdur_min=469\tdrop=8\tpctph=1.0\tawake=8',
@@ -3875,16 +3964,47 @@ const txt = [
   'crash\tcount=2\tasb=1\tlatest=/vendor/bin/hw/foo',
   'sysui\tcount=2',
   'throttle\tclamps=2\towner=asb_governor',
+  'jank\tpct=1.4\tjps=0.6\tframes=366481',
+  'japp\tpkg=com.ttt.nagram\tframes=122186\tpct=7.0',
+  'japp\tpkg=com.whatsapp\tframes=40211\tpct=1.2',
+  'hz\tmode=60\tshare=64\tma=264',
+  'hz\tmode=90\tshare=23\tma=301',
+  'hz\tmode=120\tshare=13\tma=380',
+  'asbcost\tcpu_msh=1851\twrites_h=176\twakes_h=491',
+  'audio\tspk_min=72\tpctph=8.31\tma=362',
+  'charge\ttypes=Fast(17) N/A(197)',
+  'smart\twatching=3\ttesting=0\thelped=0\tnothelped=0\tctxlearn=2',
+  'cfg\tkey=wakelock_action\tvalue=0',
+  'cfg\tkey=night_modem_idle\tvalue=0',
+  'cfg\tkey=ltpo_video\tvalue=1',
   ''].join('\n');
 const d = parseLogReport(txt);
 chk(d.ok === true, 'fixture digest parses');
 chk(d.sections.meta.running === '1' && d.sections.meta.elapsed_min === '720', 'meta fields');
+chk(d.sections.meta.started === '2026-10-21 09:40' && d.sections.meta.profile === 'smart', 'meta names when the capture ran and under which profile');
 chk(d.sections.drain.pctph === '2.0' && d.sections.night.dur_min === '469', 'drain/night fields');
 chk(d.wl.length === 2 && d.wl[0].pkg === 'com.instagram.android' && d.wl[0].sec === 3661, 'wakelock rows: ' + JSON.stringify(d.wl));
+chk(d.japps.length === 2 && d.japps[0].pkg === 'com.ttt.nagram' && d.japps[0].frames === 122186 && d.japps[0].pct === 7, 'per-app jank rows: ' + JSON.stringify(d.japps));
+chk(d.hzs.length === 3 && d.hzs[0].mode === '60' && d.hzs[0].ma === 264 && d.hzs[2].share === 13, 'refresh rows: ' + JSON.stringify(d.hzs));
+chk(d.cfg.wakelock_action === '0' && d.cfg.night_modem_idle === '0' && d.cfg.ltpo_video === '1', 'cfg snapshot: ' + JSON.stringify(d.cfg));
+chk(d.sections.jank.pct === '1.4' && d.sections.audio.spk_min === '72' && d.sections.smart.ctxlearn === '2' && d.sections.asbcost.cpu_msh === '1851' && d.sections.charge.types === 'Fast(17) N/A(197)', 'the fix200 sections parse');
 const tips = logReportTips(d);
 const keys = tips.map(function (t) { return t.key; });
-chk(keys.indexOf('lr_tip_crash') === 0, 'an ASB crash is the first tip: ' + keys.join(','));
-chk(keys.indexOf('lr_tip_night') >= 0 && keys.indexOf('lr_tip_awake') >= 0 && keys.indexOf('lr_tip_app') >= 0, 'night/awake/app tips present: ' + keys.join(','));
+chk(keys.join(',') === 'lr_tip_crash,lr_tip_night_modem,lr_tip_awake,lr_tip_wl_enable,lr_tip_jank_ok,lr_tip_audio', 'fix200 advice, worst first, six cards max: ' + keys.join(','));
+chk(tips[1].vars.set === I18N.ru.cfg.night_modem_idle.name, 'the night-modem tip names the setting as Settings names it: ' + tips[1].vars.set);
+chk(tips[3].vars.set === I18N.ru.cfg.wakelock_action.name, 'the wakelock tip names its setting too: ' + tips[3].vars.set);
+d.cfg.wakelock_action = '1';
+const keys2 = logReportTips(d).map(function (t) { return t.key; });
+chk(keys2.indexOf('lr_tip_app') >= 0 && keys2.indexOf('lr_tip_wl_enable') < 0, 'with the setting already on, the tip just reports the app: ' + keys2.join(','));
+d.cfg.wakelock_action = '0';
+d.sections.jank.pct = '7.2';
+const keys3 = logReportTips(d).map(function (t) { return t.key; });
+chk(keys3.indexOf('lr_tip_jank_bad') >= 0 && keys3.indexOf('lr_tip_jank_ok') < 0, 'a stuttery day advises higher refresh: ' + keys3.join(','));
+d.sections.jank.pct = '1.4';
+chk(Tcfg('ltpo_video', 'name', 'x') === I18N.ru.cfg.ltpo_video.name, 'Tcfg reads the locale setting name');
+chk(logReportT('lr_saved', '', { when: '2026-10-21 09:40', profile: 'Умный' }) === I18N.ru.lr_saved.split('{when}').join('2026-10-21 09:40').split('{profile}').join('Умный'), 'ru saved-capture line fills both placeholders');
+chk(logReportT('lr_tip_audio', '', { pct: '8.31' }).indexOf('{') < 0, 'the audio tip fills its placeholder');
+chk(logReportT('lr_ms_h', '', { n: '1851' }).indexOf('1851') === 0, 'the ms/h unit formats: ' + logReportT('lr_ms_h', '', { n: '1851' }));
 chk(logReportT('lr_running', 'recording \u00b7 {min} min of {h} h', { min: '720', h: '24' }) === 'идёт запись \u00b7 720 мин из 24 ч', 'ru running line');
 chk(logReportT('lr_tip_night', '', { pct: '1.0' }) === I18N.ru.lr_tip_night.replace('{pct}', '1.0'), 'ru night tip fills its placeholder');
 chk(logReportT('lr_tip_app', '', { app: 'com.instagram.android', min: '61' }).indexOf('com.instagram.android') >= 0, 'ru app tip names the app');
@@ -3919,13 +4039,27 @@ KEYS = ['lr_menu','lr_refresh','lr_loading','lr_none_title','lr_none_body','lr_f
         'lr_wake_none','lr_sec_crash','lr_crash_none','lr_crash_n','lr_crash_latest',
         'lr_crash_asb','lr_sysui','lr_sec_thermal','lr_clamp_none',
         'lr_clamp_some','lr_sec_tips','lr_tip_ok','lr_tip_night','lr_tip_awake',
-        'lr_tip_crash','lr_tip_crashes','lr_tip_app','lr_min','lr_secs','lr_h','lr_per_hour']
+        'lr_tip_crash','lr_tip_crashes','lr_tip_app','lr_min','lr_secs','lr_h','lr_per_hour',
+        'lr_saved','lr_sec_smooth','lr_jank_hero','lr_jank_all','lr_jps_hero','lr_jps_sub',
+        'lr_th_app','lr_th_frames','lr_th_jank','lr_sec_display','lr_th_hz','lr_th_share',
+        'lr_th_ma','lr_hz_unit','lr_sec_smart','lr_sm_ctx','lr_sm_watching','lr_sm_testing',
+        'lr_sm_helped','lr_sm_nothelped','lr_sm_fresh','lr_sec_asb','lr_cost_cpu',
+        'lr_cost_writes','lr_cost_wakes','lr_ms_h','lr_charge_types','lr_audio_spk',
+        'lr_tip_wl_enable','lr_tip_night_modem','lr_tip_jank_bad','lr_tip_jank_ok',
+        'lr_tip_audio','lr_tip_cost_ok','lr_tip_cost_hi','lr_tip_smart_help','lr_tip_ltpo']
 EMO = {'lr_sec_drain': '\U0001f50b', 'lr_sec_wake': '\u23f0', 'lr_sec_crash': '\U0001f4a5',
-       'lr_sec_thermal': '\U0001f321\ufe0f', 'lr_sec_tips': '\U0001f4a1'}
+       'lr_sec_thermal': '\U0001f321\ufe0f', 'lr_sec_tips': '\U0001f4a1',
+       'lr_sec_smooth': '\U0001f4f1', 'lr_sec_display': '\U0001f5a5',
+       'lr_sec_smart': '\U0001f9e0', 'lr_sec_asb': '\u2699\ufe0f'}
 PH = {'lr_running': ['{min}', '{h}'], 'lr_crash_n': ['{n}'], 'lr_crash_latest': ['{proc}'],
       'lr_crash_asb': ['{n}'], 'lr_sysui': ['{n}'], 'lr_temp_max': ['{cpu}', '{surf}'],
       'lr_clamp_some': ['{n}', '{owner}'], 'lr_tip_night': ['{pct}'], 'lr_tip_awake': ['{awake}'],
-      'lr_tip_crashes': ['{n}'], 'lr_tip_app': ['{app}', '{min}'], 'lr_min': ['{n}'], 'lr_secs': ['{n}'], 'lr_h': ['{n}']}
+      'lr_tip_crashes': ['{n}'], 'lr_tip_app': ['{app}', '{min}'], 'lr_min': ['{n}'], 'lr_secs': ['{n}'], 'lr_h': ['{n}'],
+      'lr_saved': ['{when}', '{profile}'], 'lr_jank_all': ['{frames}'], 'lr_ms_h': ['{n}'],
+      'lr_tip_wl_enable': ['{app}', '{min}', '{set}'], 'lr_tip_night_modem': ['{pct}', '{set}'],
+      'lr_tip_jank_bad': ['{pct}'], 'lr_tip_jank_ok': ['{pct}'], 'lr_tip_audio': ['{pct}'],
+      'lr_tip_cost_ok': ['{ms}'], 'lr_tip_cost_hi': ['{ms}'], 'lr_tip_smart_help': ['{n}'],
+      'lr_tip_ltpo': ['{set}']}
 files = sorted((root / 'webroot' / 'i18n').glob('*.json'))
 assert len(files) == 13, 'locale count'
 for p in files:
@@ -3942,10 +4076,23 @@ for p in files:
         assert d['lr_tip_night'] == 'Overnight the phone lost ~{pct}%/h - check background apps.'
         assert d['lr_per_hour'] == '%/h' and d['lr_refresh'] == 'Refresh'
         assert d['lr_secs'] == '{n} sec'
+        assert d['lr_sec_smooth'] == '\U0001f4f1 Smoothness'
+        assert d['lr_saved'] == 'saved capture \u00b7 {when} \u00b7 {profile}'
+        assert d['lr_jank_all'] == 'of {frames} frames' and d['lr_ms_h'] == '{n} ms/h'
+        assert d['lr_tip_jank_ok'] == 'Smoothness is excellent: only {pct}% of frames janky.'
     if p.name == 'ru.json':
         assert d['lr_sec_drain'] == '\U0001f50b Разряд батареи'
         assert d['lr_menu'] == 'Отчёт по логу' and d['lr_refresh'] == 'Обновить'
         assert d['lr_secs'] == '{n} сек'
+        assert d['lr_sec_smooth'] == '\U0001f4f1 Плавность'
+        assert d['lr_saved'] == 'сохранённый лог \u00b7 {when} \u00b7 {profile}'
+# Key-set parity: every locale must carry exactly the English key set. A missing key
+# silently falls back to English mid-screen; an extra one is dead weight. (Real drift
+# caught: t_cfg_video existed in 12 locales but not en.)
+ref = set(json.loads((root / 'webroot' / 'i18n' / 'en.json').read_text(encoding='utf-8')))
+for p in files:
+    d = json.loads(p.read_text(encoding='utf-8'))
+    assert set(d) == ref, '%s: key set differs from en (%s)' % (p.name, sorted(set(d) ^ ref)[:3])
 h = (root / 'webroot' / 'index.html').read_text(encoding='utf-8')
 assert h.count('data-i18n="lr_menu"') == 2, 'menu item and page section label carry lr_menu'
 P
@@ -3963,10 +4110,15 @@ grep -Fq "'Noto Color Emoji'" "$H" || fail "the sans stack lost its emoji fallba
 grep -Fq 'function logReportDurSec(sec)' "$H" || fail "seconds-level duration formatter missing"
 grep -Fq 'logReportDurSec(w.sec)' "$H" || fail "wakelock rows must format sub-minute holds in seconds"
 grep -Fq 'textContent = tip.ic' "$H" || fail "tips must render via textContent, not markup"
+grep -Fq 'function logReportTable(heads, rows, numCols)' "$H" || fail "the fix200 table builder is missing"
+grep -Fq '.lgr-table { width: 100%; border-collapse: collapse; table-layout: fixed;' "$H" || fail "the fix200 table styles are missing"
+grep -Fq "logReportT('lr_saved', 'saved capture · {when} · {profile}'" "$H" || fail "a saved capture must be named with its start time and profile"
+grep -Fq "lr_tip_wl_enable: '{app} held the phone awake for {min} min" "$H" || fail "the wakelock tip lost its English fallback"
+grep -Fq "Tcfg('night_modem_idle', 'name', 'Quiet Radio at Night')" "$H" || fail "advice must name settings as the Settings screen names them"
 grep -Fq '"tools/logkit/asb_fullday_digest.sh"' "$ROOT/.github/workflows/build-debug.yml" || fail "debug workflow does not ship the digest"
 grep -Fq '"tools/logkit/asb_fullday_digest.sh"' "$ROOT/.github/workflows/build-release.yml" || fail "release workflow does not ship the digest"
 grep -Fq 'asb_fullday_digest.sh' "$ROOT/.github/workflows/build-release.yml" || fail "release staging loop lost the digest"
-echo "PASS webui log report: digest over a fixture capture, plain-words parser/tips in node (ru+en), 13 locales, menu wiring"
+echo "PASS webui log report: digest over a fixture capture (drain..cfg), plain-words parser/tips in node (ru+en), 13 locales, menu wiring"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
