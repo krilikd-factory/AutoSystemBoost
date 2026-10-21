@@ -530,6 +530,7 @@ jobs:
             "tools/asb_field_report.sh" \
             "tools/logkit/_asb_logkit_common.sh" \
             "tools/logkit/asb_audio_ab.sh" \
+            "tools/logkit/asb_fullday_digest.sh" \
             "tools/logkit/asb_log_battery_mixed.sh" \
             "tools/logkit/asb_log_battery_sleep.sh" \
             "tools/logkit/asb_log_perf.sh" \

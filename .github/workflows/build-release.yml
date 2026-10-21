@@ -458,7 +458,7 @@ jobs:
           # against; excluding them from release made normal diagnosis debug-only.
           # (Not in release_tools.list: they live in tools/logkit/, and the installer's
           # prune is maxdepth 1 - subdirectories are never touched.)
-          for _t in _asb_logkit_common.sh asb_audio_ab.sh asb_log_battery_mixed.sh asb_log_battery_sleep.sh asb_log_bgtrim_snapshot.sh asb_log_full_day.sh asb_log_perf.sh asb_log_smart_daily.sh asb_log_smart_gaming.sh asb_log_smart_sleep.sh; do
+          for _t in _asb_logkit_common.sh asb_audio_ab.sh asb_fullday_digest.sh asb_log_battery_mixed.sh asb_log_battery_sleep.sh asb_log_bgtrim_snapshot.sh asb_log_full_day.sh asb_log_perf.sh asb_log_smart_daily.sh asb_log_smart_gaming.sh asb_log_smart_sleep.sh; do
             if [ -f "tools/logkit/$_t" ]; then
               mkdir -p "$PKG_REL/tools/logkit"
               install -m 0755 "tools/logkit/$_t" "$PKG_REL/tools/logkit/$_t"
@@ -600,6 +600,7 @@ jobs:
             "tools/asb_verify_device.sh" \
             "tools/logkit/_asb_logkit_common.sh" \
             "tools/logkit/asb_audio_ab.sh" \
+            "tools/logkit/asb_fullday_digest.sh" \
             "tools/logkit/asb_log_battery_mixed.sh" \
             "tools/logkit/asb_log_battery_sleep.sh" \
             "tools/logkit/asb_log_bgtrim_snapshot.sh" \
