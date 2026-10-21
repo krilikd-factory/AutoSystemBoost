@@ -4125,6 +4125,37 @@ grep -q "$_clpat" "$ROOT/tools/asb_full_regression.sh" && fail "the regression s
 grep -q '  CHANGELOG.md$' "$ROOT/tools/asb_tree.sha256" || fail "the changelog fell out of the tree manifest"
 echo "PASS: fix199 contract"
 ) || exit 1
+# ---- fix202 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL fix202: $*"; exit 1; }
+# Owner's design intent, restated after the fix201 scroll repair: the pages were meant to
+# FIT one screen at any DPI/height, with no need to scroll; the users' screens clipped and
+# they asked for scrolling. The logic is reconsidered: asbFitPages (fix168) only GREW the
+# cards into free space - on a short screen it hit its floors and the page scrolled. It now
+# measures the visible page's overflow and compacts in two tiers (asb-fit-c1/c2 on <html>:
+# top gap, logo, wordmark, capsules, cards, Monitor cells, support rail), with the card
+# and tile floors stepping down (68/58/48, 104/92/80). A tier comes off only when a trial
+# fit leaves real slack (6 px), so the layout cannot flip-flop. If even tier 2 overflows,
+# the fix201 scroll remains as the fallback - nothing is clipped. The runtime behaviour
+# (escalation, hysteresis, per-page measurement) is exercised in node by
+# t_webui_fill_pages_runtime; here the structural pins.
+grep -q 't_webui_fill_pages_runtime' "$ROOT/tests/asb_ui.sh" || fail "the fit runtime test is missing"
+grep -qF "let homeBase = 1800, cfgBase = 1800, clientH = 1900;" "$ROOT/tests/asb_ui.sh" || fail "the fit test lost its measured-overflow mock"
+for t in asb-fit-c1 asb-fit-c2; do
+  grep -qF "html.$t { --page-top:" "$H" || fail "$t does not tighten the top gap"
+  grep -qF "html.$t .logo-c {" "$H" || fail "$t does not shrink the logo"
+  grep -qF "html.$t .live-cell {" "$H" || fail "$t does not compact the Monitor cells"
+done
+grep -qF "classList.toggle('asb-fit-c1', t >= 1)" "$H" || fail "tier classes are not raised from the measurement"
+grep -qF 'Math.max([68, 58, 48][tier]' "$H" || fail "the profile-card floor does not step down"
+grep -qF 'Math.max([104, 92, 80][tier]' "$H" || fail "the tile floor does not step down"
+grep -qF 'else if (document.body.classList.contains('"'"'live-active'"'"')) el = _el('"'"'livePage'"'"');' "$H" || fail "the Monitor page is not the thing measured while it is open"
+# The fix201 fallback must survive intact: overlays still scroll themselves.
+grep -q 't_webui_page_scroll' "$ROOT/tests/asb_ui.sh" || fail "the scroll regression test is missing"
+echo "PASS: fix202 contract"
+) || exit 1
 # ---- fix201 ---------------------------------------------------------------
 (
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

@@ -3160,6 +3160,21 @@ assert "'cfg-tile-desc'" in s and "'cfg-tile-bar'" in s, "category tiles lack th
 assert "sub.className = 'smart-banner-pill' + (we ? ' we' : '');" in s, "weekday/weekend is still glued to the slot name"
 assert "html[data-asb-font=\"device\"] { --sans: 'ASB Device', sans-serif; --mono: 'ASB Device', sans-serif; }" in s, "no device-font switch"
 assert "'px @ '" not in s and "document.documentElement.dataset.asbUi = w + 'px@' + scale;" in s, "the scale reading is still glued to the device line"
+# fix202: the shrink direction. Two compaction tiers on <html>, raised only while the
+# visible page measures past its viewport, with the card/tile floors stepping down; the
+# page opens report their size so the check runs on every screen change.
+for t in ('html.asb-fit-c1', 'html.asb-fit-c2'):
+    assert t + ' { --page-top:' in s, t + ' does not tighten the top gap'
+    assert t + ' .logo-c {' in s and t + ' .pbtn {' in s and t + ' .pbtn .pico {' in s, t + ' does not compact the header and the profile cards'
+    assert t + ' .live-cell {' in s and t + ' .tg-link-wrap {' in s, t + ' does not compact the Monitor cells and the support rail'
+    assert t + ' .cfg-tile {' in s, t + ' does not compact the Settings tiles'
+assert "classList.toggle('asb-fit-c1'" in s and "classList.toggle('asb-fit-c2'" in s, "the fit never raises a compaction tier"
+assert '[68, 58, 48][tier]' in s and '[104, 92, 80][tier]' in s, "the card/tile floors do not step down with the tier"
+assert 'asbFitPages._tier' in s, "the tier is not remembered between passes"
+for fn in ('openLivePage', 'closeLivePage', 'closeConfigPage', 'cfgBack', 'openReportPage', 'closeReportPage', 'asbLogReportLoad'):
+    m = re.search(r'(?:async )?function %s\s*\([^)]*\)\s*\{(.*?)\n\}' % fn, s, re.S)
+    assert m, fn + ' is missing'
+    assert 'requestAnimationFrame(asbFitPages)' in m.group(1), fn + ' never re-measures the fit'
 files = sorted((root / 'webroot' / 'i18n').glob('*.json'))
 for p in files:
     d = json.loads(p.read_text(encoding='utf-8'))
@@ -3170,13 +3185,25 @@ P
   cat <<'EOF'
 let _cfgGroup = null;
 const props = {};
-const root = { style: { setProperty(k, v) { props[k] = v; } } };
+const fitCls = new Set();
+/* fix202: the mock measures like a browser - each compaction tier buys back 100 px of
+   document height, and the overflow reading drives the escalation checks below. */
+let homeBase = 1800, cfgBase = 1800, clientH = 1900;
+function tierOf() { return fitCls.has('asb-fit-c2') ? 2 : (fitCls.has('asb-fit-c1') ? 1 : 0); }
+function resetFit() { fitCls.clear(); delete asbFitPages._tier; }
+const root = {
+  style: { setProperty(k, v) { props[k] = v; } },
+  classList: { toggle(c, on) { if (on) fitCls.add(c); else fitCls.delete(c); } },
+  get clientHeight() { return clientH; },
+  get scrollHeight() { return homeBase - tierOf() * 100; }
+};
 const box = (top, h) => ({ getBoundingClientRect() { return { top: top, height: h }; } });
 let barTop = 1700, profTop = 600, hubTop = 760, live = false, cfgOpen = false;
 const pb = new Array(5).fill(0), tiles = new Array(6).fill(0);
 const prof = { getBoundingClientRect() { return { top: profTop }; }, querySelectorAll() { return pb; } };
 const hub = { getBoundingClientRect() { return { top: hubTop }; }, querySelectorAll() { return tiles; } };
-const page = { scrollTop: 0, getAttribute() { return cfgOpen ? 'false' : 'true'; } };
+const page = { scrollTop: 0, getAttribute() { return cfgOpen ? 'false' : 'true'; },
+  get clientHeight() { return clientH; }, get scrollHeight() { return cfgBase - tierOf() * 100; } };
 const reb = box(0, 84);
 global.window = { _asbUiScale: 1, innerHeight: 1900, scrollY: 0 };
 global.document = {
@@ -3195,7 +3222,7 @@ chk(props['--pbtn-h'] === '104px', 'a tall screen stops at the upper limit: ' + 
 barTop = 1100; asbFitPages();
 chk(props['--pbtn-h'] === '88px', 'shared out to the five cards: ' + props['--pbtn-h']);
 barTop = 800; asbFitPages();
-chk(props['--pbtn-h'] === '68px', 'a short screen keeps the floor and scrolls: ' + props['--pbtn-h']);
+chk(props['--pbtn-h'] === '68px', 'a fitting screen keeps the tier-0 floor: ' + props['--pbtn-h']);
 chk(props['--cfg-tile-h'] === undefined, 'Settings closed: tiles untouched');
 cfgOpen = true; barTop = 1200; delete props['--pbtn-h']; asbFitPages();
 chk(props['--pbtn-h'] === undefined, 'Home cards are not refitted while Settings covers them');
@@ -3205,9 +3232,25 @@ chk(props['--cfg-tile-h'] === 'x', 'an open category leaves the hub alone');
 _cfgGroup = null; barTop = 2600; asbFitPages();
 chk(props['--cfg-tile-h'] === '176px', 'upper limit on Settings: ' + props['--cfg-tile-h']);
 barTop = 900; asbFitPages();
-chk(props['--cfg-tile-h'] === '104px', 'floor on a short screen: ' + props['--cfg-tile-h']);
+chk(props['--cfg-tile-h'] === '104px', 'tier-0 floor on Settings while it fits: ' + props['--cfg-tile-h']);
 window._asbUiScale = 0.82; barTop = 1120; asbFitPages();
 chk(props['--cfg-tile-h'] === '148px', 'a scaled UI shares out unscaled pixels: ' + props['--cfg-tile-h']);
+/* fix202: a page measured past its viewport compacts the chrome instead of clipping. */
+resetFit(); cfgOpen = false; live = false; window._asbUiScale = 1;
+clientH = 700; homeBase = 950;   /* 250 px past the screen; a tier buys back 100 */
+asbFitPages();
+chk(tierOf() === 2 && fitCls.has('asb-fit-c1') && fitCls.has('asb-fit-c2'), 'escalates tier by tier while it still overflows: tier ' + tierOf());
+barTop = 800; asbFitPages();
+chk(props['--pbtn-h'] === '48px', 'the card floor steps down with the tier: ' + props['--pbtn-h']);
+homeBase = 698;                  /* fits tier 1 with room; tier 0 would leave only 2 px */
+asbFitPages();
+chk(tierOf() === 1 && !fitCls.has('asb-fit-c2'), 'a 2 px fit is not enough to take the lighter tier: tier ' + tierOf());
+homeBase = 560;                  /* now tier 0 fits with real room */
+asbFitPages();
+chk(tierOf() === 0 && fitCls.size === 0 && props['--pbtn-h'] === '68px', 'compaction comes back off with room to spare: tier ' + tierOf());
+resetFit(); cfgOpen = true; clientH = 1900; cfgBase = 2400;   /* Settings 500 px past */
+barTop = 900; asbFitPages();
+chk(tierOf() === 2 && props['--cfg-tile-h'] === '80px', 'the Settings tiles compact too: ' + props['--cfg-tile-h']);
 if (bad) process.exit(1);
 console.log('ok');
 EOF
@@ -3215,7 +3258,8 @@ EOF
 out="$(node "$T/t.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 grep -Fq "window.addEventListener('resize', function () { requestAnimationFrame(asbFitPages); });" "$H" || fail "the fit is not redone on resize"
-echo "PASS webui fill pages: profile cards and category tiles take the free height within limits on any screen, with descriptions, measured drain and fill bars"
+grep -Fq "window.addEventListener('orientationchange', function () { requestAnimationFrame(asbFitPages); });" "$H" || fail "the fit is not redone when the panel rotates"
+echo "PASS webui fill pages: profile cards and category tiles take the free height within limits on any screen, a page that still overflows compacts in tiers instead of clipping, and the tiers come off when the room returns"
 )
 
 t_webui_device_font_runtime() (
