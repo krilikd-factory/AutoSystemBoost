@@ -1719,7 +1719,13 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
     const int manual_profile  = (!fsm_profile_is_smart && !fsm_profile_is_performance);
     const int manual_prof_idx = fsm_profile_is_battery ? PROFILE_BATTERY : PROFILE_BALANCED;
     const int manual_override = manual_profile && (thermal_cap || g_fsm_cooldown_active);
-    int manual_cap_skip = manual_profile && !manual_override;
+    /* fix212: while the unlock/launch lift runs on a manual profile the governor borrows the
+     * ceilings ABOVE the shell's caps - that is the lift's whole point, so it must not pass
+     * writer_manual_clamp. The writes mark the paths held (fix183), and the first pass after
+     * the window hands the shell's values back (writer_manual_handback). */
+    const int manual_lift     = manual_profile && g_unlock_lift_now && !thermal_cap &&
+                                !g_fsm_cooldown_active;
+    int manual_cap_skip = manual_profile && !manual_override && !manual_lift;
     /* Smart and Performance own every ceiling they write; nothing is waiting to be handed
      * back while one of them runs. */
     if (!manual_profile) memset(g_writer_path_held, 0, sizeof(g_writer_path_held));

@@ -27,6 +27,12 @@
 #include "asb_metrics.h"
 #include "asb_fsm.h"
 #include "asb_learner.h"
+
+/* fix212: the writer borrows the CPU ceilings on the manual profiles while the
+ * unlock/launch lift runs, so it reads this flag - the lift machinery itself sits far
+ * below the includes and defines it there. */
+static int g_unlock_lift_now;
+
 #include "asb_writer.h"
 #include "asb_socket.h"
 #include "asb_config.h"
@@ -1114,10 +1120,13 @@ static inline const char *cap_source_classify(int profile_cap,
  * the governor itself stays off the ceiling - a manual profile with no thermal cap and no
  * screen-off cooldown - and only for the profile that is running.
  */
-/* The writer's own rule for "the shell owns the CPU ceilings" (manual_cap_skip). */
+/* The writer's own rule for "the shell owns the CPU ceilings" (manual_cap_skip).
+ * fix212: while the unlock/launch lift runs on a manual profile the ceilings above are
+ * the governor's own, not the shell's - reading them as the shell's would classify the
+ * lift itself as a vendor clamp once the lift ends. */
 static int asb_manual_shell_owns_caps(const asb_fsm_t *fsm) {
     return fsm && !fsm_profile_is_smart && !fsm_profile_is_performance && !fsm->thermal_cap &&
-           !g_fsm_cooldown_active;
+           !g_fsm_cooldown_active && !g_unlock_lift_now;
 }
 
 /* The shell's ceiling for a governor slot, or 0 when it is not the owner or not known. */
@@ -3016,9 +3025,17 @@ static void asb_main_capacity_parity(asb_profile_caps_t *caps, const asb_metrics
  * - every managed CPU ceiling is lifted to unlock_lift_pct of its cluster's hardware maximum,
  * and the top-app uclamp ceiling to the same share. Ceilings only: no floor is raised, so the
  * clocks climb only if the unlock asks for it, and the vendor's own boost is honoured again.
- * Smart only (in Battery and Balanced the shell owns the ceilings and the governor does not
- * write them), not while thermally capped, not on a die already at the comfort mark. */
+ * Not while thermally capped, not on a die already at the comfort mark.
+ *
+ * fix212: Smart, Battery and Balanced all lift now - the field captures behind it show the
+ * Battery profile janking exactly here (32 % of SystemUI frames on an OP15 day against
+ * 3.5-4.4 % on Smart), because the shell's static 50/38 % ceilings are all a wake ever
+ * got. On a manual profile the writer borrows the ceilings above the shell's caps for the
+ * window (manual_lift) and hands them back when it ends. Performance never needs it - its
+ * ceilings are uncapped already. An app switch arms the same window once per 5 s while no
+ * lift is running: opening or closing an app is the same burst as a wake. */
 #define ASB_UNLOCK_TOUCH_WINDOW_MS 20000L
+#define ASB_LAUNCH_LIFT_GAP_MS 5000L
 static int    g_unlock_prev_screen = -1;  /* screen state of the last pass, -1 before the first */
 static long   g_unlock_on_ms       = 0;   /* boottime ms the screen last came on, 0 = off */
 static long   g_unlock_until_ms    = 0;   /* boottime ms the running lift ends, 0 = none */
@@ -3029,6 +3046,15 @@ static int    g_unlock_edge        = 0;   /* the lift started or ended: this pas
 static unsigned long g_unlock_lifts = 0;  /* lifts started: screen-on edges and touch re-arms */
 static unsigned long g_unlock_skips = 0;  /* edges that did not lift */
 static char   g_unlock_skip_why[16] = "-";/* why the last one did not: off/profile/thermal/warm */
+static long   g_launch_arm_ms      = 0;   /* boottime ms of the last app-switch arm */
+static const char *g_unlock_arm_why = "-";/* what armed the running lift, for the log line */
+
+/* Who the lift is for. Battery and Balanced are exactly the profiles that jank on a wake -
+ * their ceilings are the shell's static caps - and Smart has always had it. Performance is
+ * never capped, so a lift there would only mark paths held for no gain. */
+static int asb_unlock_lift_profile_ok(int profile_idx) {
+    return profile_idx != PROFILE_PERFORMANCE;
+}
 
 /* "Warm" is judged on the die before the wake as well as at it (fix166).
  *
@@ -3054,8 +3080,8 @@ static int asb_unlock_gate_die(int die_now, int dark_c, time_t dark_ts, time_t n
     return dark_c < die_now ? dark_c : die_now;
 }
 
-static int asb_unlock_lift_update(int screen_on, int touch_kick, long now_ms, int profile_idx,
-                                  int thermal_cap, int die_c) {
+static int asb_unlock_lift_update(int screen_on, int touch_kick, int launch_kick, long now_ms,
+                                  int profile_idx, int thermal_cap, int die_c) {
     int prev = g_unlock_prev_screen;
     int arm = 0;
     g_unlock_prev_screen = screen_on ? 1 : 0;
@@ -3070,15 +3096,24 @@ static int asb_unlock_lift_update(int screen_on, int touch_kick, long now_ms, in
         g_unlock_on_ms = now_ms;
         g_unlock_touch_used = 0;
         arm = 1;
+        g_unlock_arm_why = "screen on";
     } else if (touch_kick && !g_unlock_touch_used && g_unlock_on_ms > 0 &&
                now_ms - g_unlock_on_ms <= ASB_UNLOCK_TOUCH_WINDOW_MS) {
         g_unlock_touch_used = 1;
         arm = 1;
+        g_unlock_arm_why = "first touch";
+    } else if (launch_kick && g_unlock_until_ms <= now_ms &&
+               now_ms - g_launch_arm_ms >= ASB_LAUNCH_LIFT_GAP_MS) {
+        /* fix212: a foreground-app change. Rate-limited and refused while a lift runs, so
+         * scrolling through the recents list buys one window, not an unbroken boost. */
+        g_launch_arm_ms = now_ms;
+        arm = 1;
+        g_unlock_arm_why = "app switch";
     }
     if (arm) {
         const char *why = NULL;
         if (g_asb_cfg.unlock_lift_s <= 0) why = "off";
-        else if (profile_idx != PROFILE_SMART) why = "profile";
+        else if (!asb_unlock_lift_profile_ok(profile_idx)) why = "profile";
         else if (thermal_cap) why = "thermal";
         else if (die_c > 0 && g_asb_cfg.bat_comfort_temp > 0 &&
                  die_c >= g_asb_cfg.bat_comfort_temp) why = "warm";
@@ -3092,7 +3127,7 @@ static int asb_unlock_lift_update(int screen_on, int touch_kick, long now_ms, in
         }
     }
     if (g_unlock_until_ms > 0 &&
-        (thermal_cap || profile_idx != PROFILE_SMART || now_ms >= g_unlock_until_ms))
+        (thermal_cap || !asb_unlock_lift_profile_ok(profile_idx) || now_ms >= g_unlock_until_ms))
         g_unlock_until_ms = 0;
     g_unlock_lift_now = (g_unlock_until_ms > 0);
     return g_unlock_lift_now;
@@ -9692,8 +9727,22 @@ int main(int argc, char **argv) {
              * touch re-arm's case. Ending it only asks for a pass (g_unlock_edge): a live
              * ceiling above the request is always rewritten, and so is a changed uclamp. */
             {
+                /* fix212: an app switch is a launch burst. The foreground hash was refreshed
+                 * a few lines up (the manual-profile classification) or one tick ago (Smart's
+                 * own tick) - either way fresh enough for a 3 s window. Screen-off and "no
+                 * package" reset the baseline, so a wake is never mistaken for a switch. */
+                static long g_launch_prev_hash = 0;
+                int _launch_kick = 0;
+                {
+                    uint64_t _fh = g_smart_rt.app_hash;
+                    if (metrics.misc.screen_on && _fh != 0 && g_launch_prev_hash != 0 &&
+                        (uint64_t)g_launch_prev_hash != _fh)
+                        _launch_kick = 1;
+                    g_launch_prev_hash = (metrics.misc.screen_on && _fh != 0) ? (long)_fh : 0;
+                }
                 int _ul_was = g_unlock_applied;
                 int _ul = asb_unlock_lift_update(metrics.misc.screen_on, g_touch_kick,
+                                                 _launch_kick,
                                                  asb_clock_ms(CLOCK_BOOTTIME), fsm.profile_idx,
                                                  fsm.thermal_cap,
                                                  asb_unlock_gate_die(metrics.therm.cpu_max_c,
@@ -9709,7 +9758,7 @@ int main(int argc, char **argv) {
                     if (g_asb_cfg.log_level >= 2) {
                         if (_ul)
                             asb_log("unlock_lift: on (%s, ceilings to %d%% of hw for %d s, die=%dC)",
-                                    g_unlock_touch_used ? "first touch" : "screen on",
+                                    g_unlock_arm_why,
                                     g_asb_cfg.unlock_lift_pct, g_asb_cfg.unlock_lift_s,
                                     metrics.therm.cpu_max_c);
                         else
