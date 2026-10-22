@@ -2832,11 +2832,13 @@ grep -Fq "const ownGrid = _selectedProfile === 'stock';" "$H" || fail "the ROM s
 {
   cat <<'EOF'
 const _nodes = {};
-function _el(id) { if (!_nodes[id]) _nodes[id] = { id: id, textContent: '', title: '', className: '', style: { display: '' }, classList: { remove() {} } }; return _nodes[id]; }
+function _el(id) { if (!_nodes[id]) _nodes[id] = { id: id, textContent: '', title: '', className: '', style: { display: '' }, classList: { remove() {} }, clientWidth: 0, scrollWidth: 0, appendChild(ch) { this.textContent += ch.textContent; if (!this.firstChild) this.firstChild = ch; } }; return _nodes[id]; }
+const document = { createElement: function () { return { className: '', textContent: '' }; } };
 function T(k, d) { return d; }
 let _selectedProfile = 'stock';
 let _stockRomHistory = { ts: 0, cpuT: 0 };
 let _stockTrendSamples = [], _stockTrendLast = null;
+let _stockCpuStatPrev = null;
 /* fix210: the trend persists in localStorage - the harness fakes it and checks the save. */
 const _ls = {};
 const localStorage = {
@@ -2883,6 +2885,23 @@ chk(v('liveCapSrc') === '33°C' && v('liveCapSrcLabel') === 'Battery temp', 'bat
 chk(v('liveClamp') === '2.8 GB' && v('liveClampLabel') === 'zRAM used', 'zRAM in use: ' + v('liveClamp'));
 chk(v('liveLearner') === 'paused' && v('liveLearnerLabel') === 'Smart learning', 'learner: ' + v('liveLearner'));
 chk(v('bnStockLoad') === '6.12', 'system load is a number, not "1 min 6.12": ' + v('bnStockLoad'));
+/* fix214: the inline percentage is the REAL busy share between two /proc/stat reads, not
+ * the load-average share (which counts storage waits and reads past 100% on an idle
+ * phone). First read: no percentage yet. Second read: the delta. A repaint of the same
+ * read keeps the figure instead of blanking it. */
+_stockCpuStatPrev = null;
+paintStockLive(Object.assign({}, kv, { tsms: '1760000100000', cpustat: '1000 0 500 7800 200 100 50 350', cpus_online: '8', loadavg: '9.40 8.00 7.00' }));
+chk(v('bnStockLoad') === '9.40', 'no busy share before the second reading: ' + v('bnStockLoad'));
+paintStockLive(Object.assign({}, kv, { tsms: '1760000110000', cpustat: '1100 0 550 8580 210 110 55 385', cpus_online: '8', loadavg: '9.40 8.00 7.00' }));
+/* total +990, idle +790 -> busy 20% */
+chk(v('bnStockLoad') === '9.4 · 20%', 'the busy share beside the load: ' + v('bnStockLoad'));
+chk(/CPU actually busy: 20 % over the last 10 s/.test(_nodes.bnStockLoad.title), 'the busy share is captioned: ' + _nodes.bnStockLoad.title);
+chk(/of 8 cores/.test(_nodes.bnStockLoad.title), 'the loadavg share moved to the tooltip: ' + _nodes.bnStockLoad.title);
+paintStockLive(Object.assign({}, kv, { tsms: '1760000110000', cpustat: '1100 0 550 8580 210 110 55 385', cpus_online: '8', loadavg: '9.40 8.00 7.00' }));
+chk(v('bnStockLoad') === '9.4 · 20%', 'a repaint of the same reading keeps the busy share: ' + v('bnStockLoad'));
+_stockCpuStatPrev = null;
+_stockTrendSamples = []; _stockTrendLast = null;   /* keep the trend checks below isolated */
+paintStockLive(kv);   /* one fresh sample again - the tile is back to "measuring" */
 /* fix177: the thermal trend over a window, kept between reads. One sample: measuring, not a
  * dash. A repaint of the same sample keeps the verdict; 40 s of a warming CPU says warming. */
 chk(v('bnStockTrend') === '\u2026', 'first sample says it is measuring: ' + v('bnStockTrend'));
@@ -3767,7 +3786,9 @@ chk(b.cls === 'warn' && b.text === 'off after a reboot', 'written this boot: ' +
 b = lspBadge(P(['present=1', 'verbose=off', 'log_kib=512', 'pending_reboot=0']), 'off');
 chk(b.cls === 'good' && b.text === 'verbose log off', 'off and in force: ' + JSON.stringify(b));
 b = lspBadge(P(['present=1', 'verbose=unknown', 'reason=no_sqlite']), 'off');
-chk(b.text === 'set in LSPosed', 'unreadable: ' + JSON.stringify(b));
+chk(b.text === 'set in LSPosed (no_sqlite)', 'unreadable names why (fix213): ' + JSON.stringify(b));
+b = lspBadge(P(['present=1', 'verbose=unknown', 'reason=unexpected_schema']), 'keep');
+chk(b.text === 'set in LSPosed (unexpected_schema)', 'a newer LSPosed schema names itself (fix213): ' + JSON.stringify(b));
 b = lspBadge(P(['present=0', 'setting=keep']), 'keep');
 chk(b.text === 'no LSPosed', 'absent: ' + JSON.stringify(b));
 chk(lspBadge(P(['']), 'keep') === null, 'no answer: the generic badge stays');
@@ -3796,7 +3817,7 @@ grep -q 'const sessions = parseInt(sesMap\[profile\], 10) || 0;' "$H" || fail "t
 grep -q "if (key === 'learner' && _selectedProfile !== 'smart') key = 'learnerp';" "$H" || fail "the sheet explains Smart's learning on a manual profile"
 grep -q 'echo "cpus_online=$_nc"' "$ROOT/runtime/asb_rom_telemetry.sh" || fail "no core count for the load share"
 for l in en ru uk de fr it pt es id tr zh ar hy; do
-  python3 -c "import json,sys; d=json.load(open(sys.argv[1])); [d[k] for k in ('learn_clean','learn_partial','learn_noisy','learn_dirty','lvi_learner_prof','stock_load_share','learn_tip_profile')]" "$ROOT/webroot/i18n/$l.json" \
+  python3 -c "import json,sys; d=json.load(open(sys.argv[1])); [d[k] for k in ('learn_clean','learn_partial','learn_noisy','learn_dirty','lvi_learner_prof','stock_load_share','stock_load_busy','learn_tip_profile')]" "$ROOT/webroot/i18n/$l.json" \
     || fail "$l: tile strings missing"
 done
 {
@@ -4088,17 +4109,27 @@ WAKELOCK REPORT x
 ----- end -----
 EOF
 printf 'current_profile: smart\n' > "$CAP/env.txt"
+# fix213 (audit 8.1): the device context the page shows - the recorder writes these into
+# env.txt when the capture starts, the digest projects them as meta2.
+cat >> "$CAP/env.txt" <<EOF
+model:           CPH2745
+device:          OP611FL1
+soc_model:       SM8850
+oem_build:       CPH2745_16.0.10.601(EX01)
+module_version:  V65-test
+EOF
 cat > "$CAP/smart_records.txt" <<EOF
 smooth|watching=3|testing=0|helped=0|not_helped=0
 off_night|ok|1760000000
 on_light_dim|ok|1760000001
 off_day|measuring|1760000002
+microwake|learned=14|nights=9|per_night=2.6|typical_s=38|usual=03:00-03:30
 EOF
 printf 'Cmdline: com.crashy.app\nsignal 11\n' > "$T/tomb/tombstone_01"; touch -d "@$((NOW-4000))" "$T/tomb/tombstone_01"
 printf 'Cmdline: /vendor/bin/hw/foo\nlibasbdsp x\n' > "$T/tomb/tombstone_02"; touch -d "@$((NOW-3000))" "$T/tomb/tombstone_02"
 printf 'Cmdline: old.crash\n' > "$T/tomb/tombstone_03"; touch -d "@$((NOW-200000))" "$T/tomb/tombstone_03"
 
-out="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" sh "$D" "$CAP")" || fail "digest exit"
+out="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state0" sh "$D" "$CAP")" || fail "digest exit"
 printf '%s\n' "$out" | grep -Eq '^meta	elapsed_min=720	target_h=24	running=0	started=[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}	profile=smart$' || fail "meta line: $(printf '%s' "$out" | head -1)"
 printf '%s\n' "$out" | grep -q '^drain	pctph=2.0	total_drop=22	hours=10.8	ma=99$' || fail "drain line"
 printf '%s\n' "$out" | grep -q '^night	dur_min=469	drop=8	pctph=1.0	awake=8$' || fail "night chain"
@@ -4110,6 +4141,11 @@ printf '%s\n' "$out" | grep -q '^wl	pkg=com.instagram.android	sec=3661$' || fail
 printf '%s\n' "$out" | grep -Eq '^crash	count=2	asb=1	latest=/vendor/bin/hw/foo	ltime=[0-9]{2}:[0-9]{2}$' || fail "crash window, ASB attribution or the crash time"
 printf '%s\n' "$out" | grep -q '^sysui	count=2$' || fail "sysui restarts"
 printf '%s\n' "$out" | grep -q '^thermal	cpu=41	surf=35$' || fail "thermal peaks"
+# fix213: device context, heat durations and night habits ride the same digest.
+printf '%s\n' "$out" | grep -q '^meta2	model=CPH2745	device=OP611FL1	soc=SM8850	rom=CPH2745_16.0.10.601(EX01)	mod=V65-test$' || fail "meta2 device context: $(printf '%s\n' "$out" | grep '^meta2')"
+printf '%s\n' "$out" | grep -q '^heat	peak_phase=active	warm_min=0	skin_min=0$' || fail "heat detail: $(printf '%s\n' "$out" | grep '^heat')"
+printf '%s\n' "$out" | grep -q '^mwake	n=14	per_night=2.6	typical_s=38$' || fail "night habits: $(printf '%s\n' "$out" | grep '^mwake')"
+printf '%s\n' "$out" | grep -q '^cfg	key=sustained_temp_mode	value=' || fail "the thermal setting is not in the advice snapshot"
 printf '%s\n' "$out" | grep -q '^throttle	clamps=2	owner=asb_governor$' || fail "throttle clamp periods"
 printf '%s\n' "$out" | grep -q '^radio	mib=17.5$' || fail "radio MiB"
 # fix200: the richer sections, mined from the interim report + smart_records + config.
@@ -4152,9 +4188,9 @@ printf '%s\n' "$out" | grep -q '^wla	tag=com.android.systemui.aod.HIDE_TIME	n=18
 printf '%s\n' "$out" | grep -q '^wla	tag=android.app.backup.FullBackupJob	n=6$' || fail "alarm row 2"
 printf '%s\n' "$out" | grep -q 'once.is.not.enough' && fail "an alarm under the count floor leaked"
 printf '%s\n' "$out" | grep -q '^sradio	mib=1.1$' || fail "idle radio split: $(printf '%s\n' "$out" | grep '^sradio')"
-[ "$(ASB_TOMBSTONE_DIR="$T/tomb" sh "$D" "$T/no-such-dir")" = "error	no_capture" ] || fail "missing capture must say error no_capture"
+[ "$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_STATE_DIR="$T/state1" sh "$D" "$T/no-such-dir")" = "error	no_capture" ] || fail "missing capture must say error no_capture"
 EMPTY="$T/empty"; mkdir -p "$EMPTY"
-eout="$(ASB_TOMBSTONE_DIR="$T/empty-tomb" ASB_LK_LOCK="$T/nolock" sh "$D" "$EMPTY")"
+eout="$(ASB_TOMBSTONE_DIR="$T/empty-tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state2" sh "$D" "$EMPTY")"
 printf '%s\n' "$eout" | grep -q '^meta	' || fail "an empty capture still reports meta"
 printf '%s\n' "$eout" | grep -q '^wl	none=1$' || fail "an empty capture reports no wakelocks"
 printf '%s\n' "$eout" | grep -q '^drain	' && fail "an empty capture must not invent drain numbers"
@@ -4171,7 +4207,7 @@ printf '%s\n' "$_lp" > "$T/lock2/pid"
 touch -d "@$((NOW-600))" "$T/lock2/pid"   # launched ten minutes ago
 printf 'Cmdline: com.oplus.screenshot\n' > "$T/tomb/tombstone_07"; touch -d "@$((NOW-4000))" "$T/tomb/tombstone_07"
 printf 'Cmdline: fresh.crash\n' > "$T/tomb/tombstone_08"; touch -d "@$((NOW-300))" "$T/tomb/tombstone_08"
-fout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" sh "$D" "$FRESH")"
+fout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" ASB_LK_STATE_DIR="$T/state3" sh "$D" "$FRESH")"
 kill "$_lp" 2>/dev/null || true; wait "$_lp" 2>/dev/null || true
 printf '%s\n' "$fout" | grep -q '^meta	elapsed_min=0	target_h=24	running=1' || fail "the fresh capture must read as running: $(printf '%s' "$fout" | head -1)"
 printf '%s\n' "$fout" | grep -Eq '^crash	count=1	asb=0	latest=fresh.crash	ltime=[0-9]{2}:[0-9]{2}$' || fail "a fresh capture's crash window must start at its launch, not 24h ago: $(printf '%s' "$fout" | grep '^crash')"
@@ -4179,8 +4215,27 @@ printf '%s\n' "$fout" | grep -Eq '^crash	count=1	asb=0	latest=fresh.crash	ltime=
 # row, not the comment. The main fixture's ledger has no comment, so pin it here.
 CMNT="$T/asb_log_full_day_cmnt"; mkdir -p "$CMNT"
 printf '# phase start end ...\nactive	%s	%s	95	89\n' "$((NOW-72000))" "$((NOW-68400))" > "$CMNT/phase_ledger.tsv"
-cout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" sh "$D" "$CMNT")"
+cout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state4" sh "$D" "$CMNT")"
 printf '%s\n' "$cout" | grep -Eq '^crash	count=4	asb=1	latest=fresh.crash' || fail "the window must skip the ledger's comment header: $(printf '%s' "$cout" | grep '^crash')"
+
+# fix213 (audit 8.2): a finished capture leaves one compact line in report_history.tsv,
+# and the NEXT capture's digest carries the earlier one as a hist row - that is the trend
+# the page renders. Keyed by the capture's start minute: re-opening the same capture
+# rewrites its line instead of duplicating it.
+HST="$T/hist_state"
+CB="$T/asb_log_full_day_b"; mkdir -p "$CB"
+awk -F'\t' 'BEGIN{OFS="\t"} {$2=$2-100000; $3=$3-100000; print}' "$CAP/phase_ledger.tsv" > "$CB/phase_ledger.tsv"
+ra="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST" sh "$D" "$CAP")"
+printf '%s\n' "$ra" | grep -q '^hist	' && fail "the first finished capture must not invent a trend"
+[ -s "$HST/report_history.tsv" ] || fail "a finished capture left no history line"
+rb="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST" sh "$D" "$CB")"
+printf '%s\n' "$rb" | grep -Eq '^hist	started=[0-9-]+ [0-9:]+	night=1.0	drain=2.0	jank=5.1	cpu=41	clamps=2$' || fail "the second capture must name the first: $(printf '%s\n' "$rb" | grep '^hist')"
+ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST" sh "$D" "$CAP" >/dev/null
+[ "$(wc -l < "$HST/report_history.tsv")" -eq 2 ] || fail "re-opening the same capture must rewrite its line, not duplicate it"
+rc="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST" sh "$D" "$CAP")"
+# capture B has no report and no throttle trace: its trend line carries dashes, and a
+# dash must not break the row or count as a number.
+printf '%s\n' "$rc" | grep -Eq '^hist	started=[0-9-]+ [0-9:]+	night=1.0	drain=2.0	jank=-	cpu=41	clamps=-$' || fail "a capture without jank data still trends, with dashes: $(printf '%s\n' "$rc" | grep '^hist')"
 
 # --- the REAL parser/tips in node, fed the fixture digest and the shipped locales ---
 {
@@ -4196,6 +4251,10 @@ EOF
 let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
 const txt = [
   'meta\telapsed_min=720\ttarget_h=24\trunning=1\tstarted=2026-10-21 09:40\tprofile=smart',
+  'meta2\tmodel=CPH2745\tdevice=OP611FL1\tsoc=SM8850\trom=TESTBUILD\tmod=V65-test',
+  'heat\tpeak_phase=active\twarm_min=0\tskin_min=0',
+  'mwake\tn=14\tper_night=2.6\ttypical_s=38',
+  'hist\tstarted=2026-10-20 09:10\tnight=0.6\tdrain=2.4\tjank=5.1\tcpu=41\tclamps=2',
   'cover\ton_min=200\toff_min=520\ton_pct=27',
   'drain\tpctph=2.0\ttotal_drop=22\thours=10.8\tma=99',
   'night\tdur_min=469\tdrop=8\tpctph=1.0\tawake=8',
@@ -4242,6 +4301,12 @@ const d = parseLogReport(txt);
 chk(d.ok === true, 'fixture digest parses');
 chk(d.sections.meta.running === '1' && d.sections.meta.elapsed_min === '720', 'meta fields');
 chk(d.sections.meta.started === '2026-10-21 09:40' && d.sections.meta.profile === 'smart', 'meta names when the capture ran and under which profile');
+/* fix213: the new sections parse - device context, heat durations, night habits, and
+   the earlier captures the trend compares against. */
+chk(d.sections.meta2.model === 'CPH2745' && d.sections.meta2.soc === 'SM8850' && d.sections.meta2.mod === 'V65-test', 'meta2 device context parses: ' + JSON.stringify(d.sections.meta2));
+chk(d.sections.heat.peak_phase === 'active' && d.sections.heat.warm_min === '0' && d.sections.heat.skin_min === '0', 'heat detail parses: ' + JSON.stringify(d.sections.heat));
+chk(d.sections.mwake.n === '14' && d.sections.mwake.per_night === '2.6' && d.sections.mwake.typical_s === '38', 'night habits parse: ' + JSON.stringify(d.sections.mwake));
+chk(d.hist.length === 1 && d.hist[0].started === '2026-10-20 09:10' && d.hist[0].night === '0.6' && d.hist[0].drain === '2.4' && d.hist[0].clamps === '2', 'history rows parse: ' + JSON.stringify(d.hist));
 chk(d.sections.drain.pctph === '2.0' && d.sections.night.dur_min === '469', 'drain/night fields');
 chk(d.wl.length === 2 && d.wl[0].pkg === 'com.instagram.android' && d.wl[0].sec === 3661, 'wakelock rows: ' + JSON.stringify(d.wl));
 chk(d.japps.length === 2 && d.japps[0].pkg === 'com.ttt.nagram' && d.japps[0].frames === 122186 && d.japps[0].pct === 7, 'per-app jank rows: ' + JSON.stringify(d.japps));
@@ -4320,6 +4385,26 @@ const dc2 = dcost({ cpu_msh: '9000', writes_h: '52', wakes_h: '300' });
 chk(dc2.indexOf('lr_tip_cost_hi') >= 0, 'a 30 ms tick is the runaway: ' + dc2.join(','));
 const dc3 = dcost({ cpu_msh: '12000', writes_h: '52' });
 chk(dc3.indexOf('lr_tip_cost_hi') >= 0, 'a spin without wake data still trips on the absolute figure: ' + dc3.join(','));
+/* fix213 (audit 8.3/К9): the heat advice. A long hot stretch advises (and names the
+   thermal switch when the protection is on Stock); a cool day without a single throttle
+   says so; a day WITH throttles never claims calm; a short warm spell stays quiet. */
+const dheat = function (heat, thermal, throttle, cfg) {
+  const dc = JSON.parse(JSON.stringify(d));
+  dc.sections = { heat: heat, thermal: thermal, throttle: throttle };
+  dc.cfg = cfg || {}; dc.wl = []; dc.wlive = []; dc.wla = []; dc.wlt = []; dc.kwk = []; dc.profs = [];
+  dc.hist = [];
+  return logReportTips(dc).map(function (t) { return t.key; });
+};
+const hh = { peak_phase: 'gaming', warm_min: '47', skin_min: '12' };
+chk(dheat(hh, { cpu: '52' }, { clamps: '3' }, {}).indexOf('lr_tip_heat_warm') >= 0, 'a hot stretch advises: ' + dheat(hh, { cpu: '52' }, { clamps: '3' }, {}).join(','));
+chk(dheat(hh, { cpu: '52' }, { clamps: '3' }, { sustained_temp_mode: 'stock' }).indexOf('lr_tip_heat_warm_set') >= 0, 'protection on Stock names the switch');
+const hk1 = dheat({ peak_phase: 'active', warm_min: '0', skin_min: '0' }, { cpu: '41' }, { clamps: '0' }, {});
+chk(hk1.indexOf('lr_tip_heat_calm') >= 0, 'a cool day without throttling says so: ' + hk1.join(','));
+const hk2 = dheat({ peak_phase: 'active', warm_min: '0', skin_min: '0' }, { cpu: '41' }, { clamps: '2' }, {});
+chk(hk2.indexOf('lr_tip_heat_calm') < 0, 'a cool day WITH throttles does not claim calm');
+const hk3 = dheat({ peak_phase: 'active', warm_min: '12', skin_min: '0' }, { cpu: '46' }, { clamps: '0' }, {});
+chk(hk3.indexOf('lr_tip_heat_warm') < 0 && hk3.indexOf('lr_tip_heat_calm') < 0, 'a short warm spell stays quiet');
+chk(logReportT('lr_tip_heat_warm', '', { min: '47 мин', phase: 'Игры' }).indexOf('{') < 0, 'the heat tip fills its placeholders');
 chk(Tcfg('ltpo_video', 'name', 'x') === I18N.ru.cfg.ltpo_video.name, 'Tcfg reads the locale setting name');
 chk(logReportT('lr_saved', '', { when: '2026-10-21 09:40', profile: 'Умный' }) === I18N.ru.lr_saved.split('{when}').join('2026-10-21 09:40').split('{profile}').join('Умный'), 'ru saved-capture line fills both placeholders');
 chk(logReportT('lr_tip_audio', '', { pct: '8.31' }).indexOf('{') < 0, 'the audio tip fills its placeholder');
@@ -4378,13 +4463,17 @@ KEYS = ['lr_menu','lr_refresh','lr_loading','lr_none_title','lr_none_body','lr_f
         'lr_nd_radio','lr_nd_temp','lr_nd_temp_fmt','lr_nd_holder',
         'lr_nd_verdict_ok','lr_nd_verdict_mid','lr_nd_verdict_bad','lr_tip_prof_save',
         'lr_wlt_head','lr_wla_head','lr_times','lr_sradio','lr_scr_note',
-        'lr_tip_awake_alarm','lr_tip_awake_hold']
+        'lr_tip_awake_alarm','lr_tip_awake_hold',
+        'lr_heat_peak','lr_heat_warm_fmt','lr_heat_skin_fmt',
+        'lr_tip_heat_warm','lr_tip_heat_warm_set','lr_tip_heat_calm',
+        'lr_mwake','lr_mwake_fmt',
+        'lr_sec_trend','lr_trend_night','lr_trend_day','lr_trend_jank','lr_trend_vs']
 EMO = {'lr_sec_drain': '\U0001f50b', 'lr_sec_wake': '\u23f0', 'lr_sec_crash': '\U0001f4a5',
        'lr_sec_thermal': '\U0001f321\ufe0f', 'lr_sec_tips': '\U0001f4a1',
        'lr_sec_smooth': '\U0001f4f1', 'lr_sec_display': '\U0001f5a5',
        'lr_sec_smart': '\U0001f9e0', 'lr_sec_asb': '\u2699\ufe0f',
        'lr_sec_profiles': '\u2696\ufe0f', 'lr_sec_phases': '\U0001f4ca',
-       'lr_sec_nightd': '\U0001f319'}
+       'lr_sec_nightd': '\U0001f319', 'lr_sec_trend': '\U0001f4c8'}
 PH = {'lr_running': ['{min}', '{h}'], 'lr_crash_n': ['{n}'], 'lr_crash_latest': ['{proc}'],
       'lr_crash_asb': ['{n}'], 'lr_sysui': ['{n}'], 'lr_temp_max': ['{cpu}', '{surf}'],
       'lr_clamp_some': ['{n}', '{owner}'], 'lr_tip_night': ['{pct}'], 'lr_tip_awake': ['{awake}'],
@@ -4401,7 +4490,11 @@ PH = {'lr_running': ['{min}', '{h}'], 'lr_crash_n': ['{n}'], 'lr_crash_latest': 
       'lr_nd_verdict_mid': ['{awake}'], 'lr_nd_verdict_bad': ['{pct}'],
       'lr_tip_prof_save': ['{cheap}', '{x}', '{busy}', '{y}'],
       'lr_times': ['{n}'],
-      'lr_tip_awake_alarm': ['{awake}', '{who}'], 'lr_tip_awake_hold': ['{awake}', '{who}']}
+      'lr_tip_awake_alarm': ['{awake}', '{who}'], 'lr_tip_awake_hold': ['{awake}', '{who}'],
+      'lr_tip_heat_warm': ['{min}', '{phase}'], 'lr_tip_heat_warm_set': ['{min}', '{phase}', '{set}'],
+      'lr_tip_heat_calm': ['{cpu}'], 'lr_mwake_fmt': ['{n}', '{per}', '{sec}'],
+      'lr_trend_night': ['{was}', '{now}'], 'lr_trend_day': ['{was}', '{now}'],
+      'lr_trend_jank': ['{was}', '{now}'], 'lr_trend_vs': ['{when}']}
 files = sorted((root / 'webroot' / 'i18n').glob('*.json'))
 assert len(files) == 13, 'locale count'
 for p in files:
@@ -4461,6 +4554,15 @@ grep -Fq '"tools/logkit/asb_fullday_digest.sh"' "$ROOT/.github/workflows/build-d
 grep -Fq '"tools/logkit/asb_fullday_digest.sh"' "$ROOT/.github/workflows/build-release.yml" || fail "release workflow does not ship the digest"
 grep -Fq 'asb_fullday_digest.sh' "$ROOT/.github/workflows/build-release.yml" || fail "release staging loop lost the digest"
 grep -Fq 'crash.ltime' "$H" || fail "fix204: the sheet must show WHEN the latest crash happened"
+# fix213: device context, heat durations, night habits and the trend must all be wired
+grep -Fq 'd.sections.meta2' "$H" || fail "the page never reads the device context"
+grep -Fq "T('lr_sec_trend'," "$H" || fail "the trend section is not rendered"
+grep -Fq "'lr_tip_heat_warm'" "$H" || fail "the heat advice is gone"
+grep -Fq "Tcfg('sustained_temp_mode', 'name', 'Throttling Point')" "$H" || fail "the heat advice does not name the thermal switch"
+grep -Fq "T('lr_mwake'," "$H" || fail "the night-habits row is gone"
+grep -Fq "tag === 'hist'" "$H" || fail "the parser drops the history rows"
+grep -Fq 'hist\tstarted=' "$ROOT/tools/logkit/asb_fullday_digest.sh" 2>/dev/null || grep -Fq 'hist\tstarted=%s' "$ROOT/tools/logkit/asb_fullday_digest.sh" || fail "the digest emits no history rows"
+grep -Fq 'report_history.tsv' "$ROOT/tools/logkit/asb_fullday_digest.sh" || fail "the digest keeps no capture history"
 echo "PASS webui log report: digest over a fixture capture (drain..cfg, live holders, per-profile drain, charging, LTPO, AOD, wake causes by occurrence fix210), fresh-capture crash window (fix204), plain-words parser/tips in node (ru+en), 13 locales, menu wiring"
 )
 

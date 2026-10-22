@@ -4155,8 +4155,13 @@ grep -q 't_fg_classify_manual_gaming_runtime' "$T" || fail "the manual-profile c
 #    last verdict now persist in localStorage and survive a page reload (fresh to 115 s,
 #    so the oldest restored sample still counts at the next 10 s read).
 grep -qF "asb_stock_trend" "$H" || fail "the thermal trend lost its persistence"
-grep -qF "localStorage.removeItem('asb_stock_trend')" "$H" || fail "the monitor reset must drop the persisted trend"
+# fix214: the reset-on-Stock must KEEP the trend, not drop it - the samples come from the
+# ROM's own thermal zones and are profile-agnostic. Dropping them on every switch to Stock
+# (and a profile switch is exactly when the Monitor gets opened) is what made the tile sit
+# at "..." for half a minute after nearly every visit.
+! grep -qF "localStorage.removeItem('asb_stock_trend')" "$H" || fail "the monitor reset drops the persisted trend again (fix214 keeps it)"
 grep -qF 'x.t <= 115000' "$H" || fail "restored samples outlive the verdict span"
+grep -qF 'd.l.t <= 600000' "$H" || fail "the last verdict is not restored beyond the sample window (fix214)"
 # 3) Wake section: flat held-time counters hid the causes the capture already knew. The
 #    digest now surfaces them - the top partial-wakelock holders by occurrence (wlt), the
 #    top alarm/wakeup sources (wla), and the idle radio traffic (sradio) - and the sheet
@@ -4252,6 +4257,123 @@ grep -qF 'an app switch did not lift' "$T" || fail "the launch lift is not exerc
 grep -qF 'a switch during a running lift re-armed' "$T" || fail "the no-extend rule is not exercised"
 grep -qF 'lift: the governor owns the ceilings' "$T" || fail "the ownership exclusion is not exercised"
 echo "PASS: fix212 contract"
+) || exit 1
+# ---- fix213 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+MP="$ROOT/module.prop"
+UJ="$ROOT/update.json"
+D="$ROOT/tools/logkit/asb_fullday_digest.sh"
+DG="$ROOT/tools/asb_diag.sh"
+fail() { echo "FAIL fix213: $*" >&2; exit 1; }
+# Audit K1/K2: the OTA manifest must describe THIS build exactly. Three builds shipped a
+# V64/640 manifest next to a V65/650 module - managers offered a downgrade whose asset
+# does not exist. versionCode is monotonic now (major*1000+fix), so any two builds order
+# correctly and a rollback target is nameable. Whoever bumps module.prop bumps
+# update.json in the same commit - this block is the gate fix83 removed and the audit
+# asked back.
+_v="$(sed -n 's/^version=//p' "$MP" | head -1)"
+_c="$(sed -n 's/^versionCode=//p' "$MP" | head -1)"
+[ -n "$_v" ] && [ -n "$_c" ] || fail "module.prop identity missing"
+case "$_c" in ''|*[!0-9]*) fail "versionCode is not numeric: $_c" ;; esac
+[ "$_c" -gt 650 ] || fail "versionCode must stay above the frozen 650 (monotonic since fix213)"
+# fix214: a stamped tree (V65-debugN from the debug workflow, V65-rcN from a pre-release)
+# must not trip this gate - update.json is an OTA manifest for PUBLIC releases and is
+# excluded from both CI zip packages, so it never travels with a stamped build. Compare
+# the base version; a suffix belongs to the build stream, not to the manifest.
+_vb="${_v%%-*}"
+grep -qF "\"version\": \"$_vb\"" "$UJ" || fail "update.json version != module.prop version ($_vb)"
+grep -qF "\"versionCode\": $_c" "$UJ" || fail "update.json versionCode != module.prop versionCode ($_c)"
+_maj="$(printf '%s' "$_vb" | sed -n 's/^V\([0-9][0-9]*\).*/\1/p')"
+[ -n "$_maj" ] || fail "module version is not V<major>"
+grep -qF "/releases/download/$_maj/" "$UJ" || fail "update.json zipUrl does not name the $_maj release"
+# ...and the exclusion itself is pinned, so no future workflow edit can ship the manifest
+# inside a flashable zip again.
+grep -qF -- "--exclude 'update.json'" "$ROOT/.github/workflows/build-debug.yml" || fail "the debug build stopped excluding update.json"
+grep -qF -- "--exclude 'update.json'" "$ROOT/.github/workflows/build-release.yml" || fail "the release build stopped excluding update.json"
+# Audit K3: a profile's GPU intent is GPU_MAX_PCT alone. thermal_pwrlevel belongs to the
+# vendor thermal engine - the governor reads it back as a vendor cap, so the profile's
+# static level (battery 7, balanced/performance 2) looked like one and double-capped the
+# GPU. Profiles carry the key no more; the shell releases a stale static level once per
+# boot (the engine re-asserts it when it actually needs to cool the GPU).
+for _p in "$ROOT"/profiles/*.sh; do
+  grep -q 'GPU_THERMAL_PWRLEVEL' "$_p" && fail "profile still pins thermal_pwrlevel: $_p"
+done
+grep -c 'gpu_tpl_released' "$ROOT/runtime/profile_core.sh" | grep -q '^[0-9]' || fail "profile_core lost the stale-level release"
+grep -qF 'gpu_tpl_released' "$ROOT/runtime/profile_core.sh" || fail "profile_core does not release a stale thermal_pwrlevel"
+grep -qF 'gpu_tpl_released' "$ROOT/service.sh" || fail "service.sh does not release a stale thermal_pwrlevel"
+grep -qF 'writef_retry "$_tpl" 0 2 0.06' "$ROOT/runtime/profile_core.sh" || fail "the release must write 0 (no cap), not another level"
+grep -qF 'vendor thermal cap, read-only for us' "$ROOT/src/asb_writer.h" || fail "the writer lost the vendor-cap reading of the node"
+# Audit K4: asbdiag probes the meter itself, not only the recorder's summary - a phone
+# without a usable charge_counter used to stay silently blind (Smart V5 learns nothing).
+grep -qF '/sys/class/power_supply/battery/charge_counter' "$DG" || fail "asbdiag does not probe the charge counter directly"
+grep -qF 'smart meter' "$DG" || fail "asbdiag lost the smart meter line"
+cmp -s "$DG" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+# Audit K8: the LSPosed answer names the serialization layout it parsed, so a future
+# schema change shows up instead of failing silently.
+grep -qF 'ASB_LSPD_FORMAT' "$ROOT/src/asb_lspd.h" || fail "the LSPosed answer does not name the schema"
+grep -qF 'format=' "$ROOT/runtime/asb_lsposed.sh" || fail "the LSPosed status does not pass the schema through"
+# Audit 8.1/8.2/8.3/8.8: the log report grew the device context, the capture history the
+# trend reads from, the heat durations and the night habits. The runtime coverage (a
+# fixture capture through the real digest, the parser and the tips in node, all 13
+# locales) lives in t_webui_log_report_runtime - pin that it is registered and pins the
+# new sections.
+grep -qF "printf 'meta2" "$D" || fail "the digest emits no device context"
+grep -qF 'printf "heat' "$D" || fail "the digest emits no heat detail"
+grep -qF "printf 'mwake" "$D" || fail "the digest emits no night habits"
+grep -qF 'report_history.tsv' "$D" || fail "the digest keeps no capture history"
+grep -qF 'sustained_temp_mode' "$D" || fail "the advice snapshot lost the thermal switch"
+grep -qF 'meta2' "$ROOT/tests/asb_ui.sh" || fail "the runtime test does not pin the device context"
+grep -qF 'lr_tip_heat_warm' "$ROOT/tests/asb_ui.sh" || fail "the runtime test does not pin the heat advice"
+grep -qF 'report_history.tsv' "$ROOT/tests/asb_ui.sh" || fail "the runtime test does not exercise the history"
+grep -qF 'lr_sec_trend' "$ROOT/tests/asb_ui.sh" || fail "the runtime test does not pin the trend locale keys"
+grep -qF 't_webui_log_report_runtime' "$ROOT/tests/asb_ui.sh" || fail "the report runtime test is not registered"
+echo "PASS: fix213 contract"
+) || exit 1
+# ---- fix214 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+F="$ROOT/src/asb_fsm.h"
+H="$ROOT/webroot/index.html"
+TEL="$ROOT/runtime/asb_rom_telemetry.sh"
+D="$ROOT/tools/logkit/asb_fullday_digest.sh"
+fail() { echo "FAIL fix214: $*" >&2; exit 1; }
+# Field report (fix212 build, OP15-class device): the FSM sat at HEAVY with two light apps
+# open. Three causes, all pinned here.
+# 1) bat_suppress_gaming landed on HEAVY INSTANTLY - one tick with the GPU past the gaming
+#    gate (an app launch, a scroll fling) held HEAVY's looser rails for a whole ~48 s tick.
+#    The suppression must keep Battery out of GAMING but reach HEAVY through the same
+#    two-tick, CPU-backed gate as every other GPU-led escalation.
+! grep -qE '^[[:space:]]+if \(g_asb_cfg\.bat_suppress_gaming && fsm_profile_is_battery\)$' "$F" || fail "bat_suppress_gaming is an instant HEAVY again"
+grep -qF 'int suppress_gaming = (g_asb_cfg.bat_suppress_gaming && fsm_profile_is_battery);' "$F" || fail "the suppression flag is gone"
+grep -qF 'if (!suppress_gaming &&' "$F" || fail "a suppressed game can still reach GAMING"
+# 2) The "CPU participates" bars were fixed per-core constants (0.15/0.25 -> load1 1.2/2.0
+#    on eight cores) calibrated on a phone idling near zero. OP15-class devices idle at
+#    load1 6-9, so the bars were always true and every GPU flicker qualified. The gate is
+#    the device's own learned quiet floor with the burst margin; the constants are the
+#    pre-learning fallback.
+grep -qF 'static int asb_cpu_participates(const asb_metrics_t *m, float per_core_fallback)' "$F" || fail "the floor-relative participation gate is gone"
+[ "$(grep -c 'asb_cpu_participates(m,' "$F")" -ge 3 ] || fail "not every GPU-led gate uses the participation check"
+grep -qF 'qf * (1.0f + (float)ASB_UI_BURST_MARGIN_PCT / 100.0f)' "$F" || fail "the participation gate does not use the quiet floor"
+# 3) The Monitor answered the confusion with a share that made it worse: the load average
+#    counts tasks waiting on storage, so "9.4 . 118%" showed an overload that was not
+#    there. The tile now shows the real CPU-busy share between two /proc/stat readings;
+#    the loadavg share moved to the tooltip.
+grep -qF 'cpustat=' "$TEL" || fail "the ROM telemetry does not publish /proc/stat"
+grep -qF '_stockCpuStatPrev' "$H" || fail "the WebUI does not derive the busy share"
+grep -qF 'stock_load_busy' "$H" || fail "the busy share has no caption"
+grep -qF "String(kv.cpustat || '')" "$H" || fail "the busy share does not read the telemetry line"
+# The thermal trend survives a profile switch to Stock (ROM data, profile-agnostic) and
+# the last verdict is restored for ten minutes, so the tile stops sitting at "..." after
+# every Monitor visit.
+! grep -qF "localStorage.removeItem('asb_stock_trend')" "$H" || fail "the Stock switch wipes the trend again"
+grep -qF '_stockCpuStatPrev = null;' "$H" || fail "the busy-share state is declared nowhere"
+# A running capture's elapsed time comes from the ledger and the clock, not from the
+# interim report rewritten every fifteen minutes - the status line disagreed with the
+# live sections below it by up to a quarter of an hour.
+grep -qF '_el_live=' "$D" || fail "the digest lost the live elapsed time"
+grep -qF 'recording · {min} min of {h} h' "$H" || fail "the report status line is gone"
+echo "PASS: fix214 contract"
 ) || exit 1
 # ---- fix209 ---------------------------------------------------------------
 (
@@ -6802,11 +6924,12 @@ if ( BASE_CODE=64x DEBUG_SEQ_INPUT=10 . "$TMP_DEBUG_GATE/gate.sh" ) >"$TMP_DEBUG
   exit 1
 fi
 
-# Public module identity is build-critical. OTA metadata and GitHub-facing changelog are
-# deliberately outside build-time contracts: both are publication documents that may be updated
-# only after the first V64 asset is available, so neither can block debug or release compilation.
+# Public module identity is build-critical: version + versionCode are pinned here, and
+# since fix213 the OTA manifest is pinned WITH them (see the fix213 block) - update.json
+# can never again drift three builds behind module.prop and offer a downgrade to a 404.
+# The GitHub-facing changelog stays outside build-time contracts (fix199).
 need "$MODULE_PROP" 'version=V65'
-need "$MODULE_PROP" 'versionCode=650'
+need "$MODULE_PROP" 'versionCode=65214'
 
 # Release publication must validate the immutable public identity rather than patching it from
 # an arbitrary GitHub tag. Exercise the literal workflow fragment under safe subshell fixtures.

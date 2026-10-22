@@ -6914,11 +6914,13 @@ r=db.execute(\"SELECT hex(data) FROM configs WHERE module_pkg_name='lspd' AND us
 print(r[0] if r else 'none')"; }
 D="$T/lspd/config/modules_config.db"; mkdir -p "$T/lspd/config" "$T/lspd/log" "$T/state" "$T/mod/config"
 mk_db "$D" lspd
-[ "$("$T/bin/asb" --lspd verbose-get "$D")" = "verbose=default_on" ] || fail "no row is LSPosed's default (on)"
+[ "$("$T/bin/asb" --lspd verbose-get "$D")" = "verbose=default_on
+format=v1" ] || fail "no row is LSPosed's default (on, schema named)"
 out="$("$T/bin/asb" --lspd verbose-set off "$D")"; printf '%s\n' "$out" | grep -qx 'verbose=off' || fail "set off: $out"
 printf '%s\n' "$out" | grep -qx 'before=default_on' || fail "before: $out"
 [ "$(row "$D")" = "ACED0005737200116A6176612E6C616E672E426F6F6C65616ECD207280D59CFAEE0200015A000576616C7565787000" ] || fail "not Java's Boolean false: $(row "$D")"
-"$T/bin/asb" --lspd verbose-set on "$D" >/dev/null; [ "$("$T/bin/asb" --lspd verbose-get "$D")" = "verbose=on" ] || fail "set on"
+"$T/bin/asb" --lspd verbose-set on "$D" >/dev/null; [ "$("$T/bin/asb" --lspd verbose-get "$D")" = "verbose=on
+format=v1" ] || fail "set on (schema named)"
 "$T/bin/asb" --lspd verbose-unset "$D" >/dev/null; [ "$(row "$D")" = none ] || fail "unset left a row"
 python3 -c "import sqlite3; db=sqlite3.connect('$D'); assert db.execute(\"SELECT count(*) FROM configs WHERE \`key\`='misc_path'\").fetchone()[0]==1" || fail "another row was touched"
 mk_db "$T/other.db" other
@@ -6950,6 +6952,8 @@ out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=off_after_reboot fre
 out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=already_off' || fail "second apply: $out"
 [ "$(cat "$T/asb/prev")" = default_on ] || fail "the remembered value was overwritten by ASB's own"
 out="$(run status)"; printf '%s\n' "$out" | grep -qx 'verbose=off' && printf '%s\n' "$out" | grep -qx 'present=1' || fail "status: $out"
+# fix213 (audit K8): the status passes the parsed schema version through to the WebUI.
+printf '%s\n' "$out" | grep -qx 'format=v1' || fail "status does not name the schema: $out"
 printf '%s\n' "$out" | grep -qx 'modules_kib=0' && printf '%s\n' "$out" | grep -qx 'oldlog_kib=0' || fail "the modules log is not reported apart: $out"
 # Written during this boot: the daemon still runs with the old value, the card must say so.
 printf '%s\n' "$out" | grep -qx 'pending_reboot=1' || fail "a write from this boot is not reported as waiting for a reboot: $out"
@@ -6975,7 +6979,8 @@ echo off > "$T/asb/prev"   # what fix187 left on such a phone
 out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=already_off' && [ ! -f "$T/asb/prev" ] || fail "fix187's 'off' record not cleared: $out"
 echo off > "$T/asb/prev"; echo 'lsposed_verbose=keep' > "$T/mod/config/governor.conf"
 out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=untouched' || fail "keep after an already-off claims a restore: $out"
-[ "$("$T/bin/asb" --lspd verbose-get "$D")" = "verbose=off" ] || fail "keep changed a value ASB never wrote"
+[ "$("$T/bin/asb" --lspd verbose-get "$D")" = "verbose=off
+format=v1" ] || fail "keep changed a value ASB never wrote"
 grep -q "LSPosed's log was already off when the card was set" "$ROOT/tools/asb_diag.sh" || fail "asbdiag still says ASB switched an already-off log"
 # fix197: sweep - the command service.sh's loop runs every ten minutes. It empties the logs
 # while the card says off and touches nothing else: no setting write, no record, and nothing
