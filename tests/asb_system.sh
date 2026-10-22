@@ -4182,6 +4182,41 @@ for _l in "$ROOT"/webroot/i18n/*.json; do
 done
 echo "PASS: fix210 contract"
 ) || exit 1
+# ---- fix211 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+G="$ROOT/src/asb_governor.c"
+H="$ROOT/webroot/index.html"
+U="$ROOT/tests/asb_ui.sh"
+fail() { echo "FAIL fix211: $*"; exit 1; }
+# Owner's suspicion, confirmed on three captures: "the Battery profile influences Smart".
+# It did. Two leaks, both closed.
+# 1) Session banking ran under a stale Smart flag. apply_profile.sh clears
+#    smart_mode_enabled on a manual switch, but a live socket switch never re-read the
+#    flag, and the banking gate checked the flag only - so a Battery/Balanced session
+#    after a Smart session was banked into the Smart buckets the per-app records already
+#    refused (they gate on fsm.profile_idx == PROFILE_SMART). The banking gate now checks
+#    the profile too, and the profile-change handler re-syncs the in-memory flag.
+grep -qF 'fsm->profile_idx == PROFILE_SMART' "$G" || fail "Smart session banking is not gated on the Smart profile"
+grep -qF '_sf != g_smart_rt.enabled' "$G" || fail "a live profile switch never re-syncs the smart_mode_enabled flag"
+# 2) The drain carry/reset lived INSIDE the banked block; gating the block on the profile
+#    would have leaked the accumulators into the next Smart session. The unconditional
+#    fallback after the block keeps every non-Smart session's drain accounting local.
+grep -qF 'fix211: the drain carry and reset inside the block above' "$G" || fail "the non-Smart drain carry/reset fallback is gone"
+# 3) The asbcost tip read ms/h against an absolute 2500 - on a busy day (3627 ms/h at
+#    3.0 ms per wake, the normal per-wake price on every capture we have) it told the
+#    owner to mail the developer. The tip now judges the per-wake price: cheap at or
+#    under 8 ms a wake, high only above that, with the absolute figure kept for a
+#    capture that has no wake count.
+grep -qF '_msPerWake' "$H" || fail "the asbcost tip does not judge the per-wake price"
+grep -qF 'a busy day at 3 ms a tick reads cheap' "$U" || fail "the per-wake cost tip is not exercised"
+# 4) Noise gates from the same captures: a 5.2 %/h screen-off figure off 11 minutes and
+#    an AOD verdict off 1 of 4 checks read red. The screen-off warn now needs 30+
+#    minutes of off data, the AOD verdict needs 20+ checks before it can go red.
+grep -qF '(+scr.off_min || 0) >= 30' "$H" || fail "the screen-off drain warns on sub-30-minute data"
+grep -qF '(+aod.of || 0) >= 20' "$H" || fail "the AOD verdict can go red on a handful of checks"
+echo "PASS: fix211 contract"
+) || exit 1
 # ---- fix209 ---------------------------------------------------------------
 (
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

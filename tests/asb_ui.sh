@@ -3393,7 +3393,15 @@ out="$(sh "$T/cmd.sh")"
 cmp -s "$T/mod/webroot/devfont/f1.ttf" "$T/data/fonts/Custom-Regular.ttf" || fail "font not copied next to the page"
 grep -v '/data/fonts/' "$T/maps" > "$T/maps2"; mv "$T/maps2" "$T/maps"
 out="$(sh "$T/cmd.sh")"
-[ "$(printf '%s\n' "$out" | cut -d'|' -f1,2)" = "f0.ttf|$T/system/fonts/SysSans-En-Regular.ttf" ] || fail "no OnePlus family fallback, or a CJK face taken: $out"
+if [ "$(printf '%s\n' "$out" | cut -d'|' -f1,2)" != "f0.ttf|$T/system/fonts/SysSans-En-Regular.ttf" ]; then
+  # The failure is environment-flaky inside the parallel suite; leave evidence behind.
+  echo "FAIL webui device font: no OnePlus family fallback, or a CJK face taken: $out" >&2
+  echo "--- maps ---" >&2; cat "$T/maps" >&2 2>&1
+  echo "--- cmd.sh ---" >&2; cat "$T/cmd.sh" >&2 2>&1
+  echo "--- sh -x rerun ---" >&2; sh -x "$T/cmd.sh" >&2 2>&1
+  echo "--- devfont dir ---" >&2; ls -la "$T/mod/webroot/devfont" >&2 2>&1
+  exit 1
+fi
 {
   cat <<'EOF'
 const faces = [];
@@ -4294,6 +4302,24 @@ d.sections.jank.pct = '7.2';
 const keys3 = logReportTips(d).map(function (t) { return t.key; });
 chk(keys3.indexOf('lr_tip_jank_bad') >= 0 && keys3.indexOf('lr_tip_jank_ok') < 0, 'a stuttery day advises higher refresh: ' + keys3.join(','));
 d.sections.jank.pct = '1.4';
+/* fix211: ASB's own cost is judged per wakeup, not per hour. The owner's BATTERY capture
+   (3627 ms/h over 1203 wakeups/h = 3.0 ms a tick) must read cheap; a tick that costs 30 ms
+   is the runaway the "send the log" tip exists for. */
+/* The sheet shows at most six tips, so isolate the cost section from the fixture's
+   other tip sources (crash, night, awake, jank, audio) - the verdict must come from
+   asbcost alone. */
+const dcost = function (cost) {
+  const dc = JSON.parse(JSON.stringify(d));
+  dc.sections = { asbcost: cost };
+  dc.cfg = {}; dc.wl = []; dc.wlive = []; dc.wla = []; dc.wlt = []; dc.kwk = []; dc.profs = [];
+  return logReportTips(dc).map(function (t) { return t.key; });
+};
+const dc1 = dcost({ cpu_msh: '3627', writes_h: '52', wakes_h: '1203' });
+chk(dc1.indexOf('lr_tip_cost_ok') >= 0 && dc1.indexOf('lr_tip_cost_hi') < 0, 'a busy day at 3 ms a tick reads cheap: ' + dc1.join(','));
+const dc2 = dcost({ cpu_msh: '9000', writes_h: '52', wakes_h: '300' });
+chk(dc2.indexOf('lr_tip_cost_hi') >= 0, 'a 30 ms tick is the runaway: ' + dc2.join(','));
+const dc3 = dcost({ cpu_msh: '12000', writes_h: '52' });
+chk(dc3.indexOf('lr_tip_cost_hi') >= 0, 'a spin without wake data still trips on the absolute figure: ' + dc3.join(','));
 chk(Tcfg('ltpo_video', 'name', 'x') === I18N.ru.cfg.ltpo_video.name, 'Tcfg reads the locale setting name');
 chk(logReportT('lr_saved', '', { when: '2026-10-21 09:40', profile: 'Умный' }) === I18N.ru.lr_saved.split('{when}').join('2026-10-21 09:40').split('{profile}').join('Умный'), 'ru saved-capture line fills both placeholders');
 chk(logReportT('lr_tip_audio', '', { pct: '8.31' }).indexOf('{') < 0, 'the audio tip fills its placeholder');
