@@ -709,6 +709,55 @@ static void test_appheat_table(void) {
     memset(&g_smart_appheat, 0, sizeof(g_smart_appheat));
 }
 
+static void test_bucket_learn_relative_thresholds(void) {
+    printf("test_bucket_learn_relative_thresholds\n");
+    /* fix209: the hot/cool verdicts are offsets from THIS device's learned median.
+     * A cool-running device (median 38 C) must treat 64 C as hot (64 >= 38+25), while the
+     * same absolute session on a warm-silicon device (median 52 C) is ordinary and must
+     * not teach a battery lean. The reference phone (median ~45 C) reproduces the old
+     * absolutes exactly: hot at 70, very hot at 80, clean-cool below 55. */
+    asb_smart_session_input_t s = {0};
+    s.dur_s = 1800;
+    s.trust = ASB_TRUST_CLEAN;
+    s.max_temp_c = 64;
+    s.drain_on_sec = 0;    /* no drain feedback: the temperature verdict alone moves alpha */
+
+    asb_smart_bucket_t cool_dev = {0}; cool_dev.alpha_battery_x1000 = 500;
+    asb_smart_bucket_update_from_session_ex(&cool_dev, &s, time(NULL), 38);
+    EXPECT(cool_dev.alpha_battery_x1000 > 500,
+           "64C on a median-38C device teaches a battery lean");
+
+    asb_smart_bucket_t warm_dev = {0}; warm_dev.alpha_battery_x1000 = 500;
+    asb_smart_bucket_update_from_session_ex(&warm_dev, &s, time(NULL), 52);
+    EXPECT(warm_dev.alpha_battery_x1000 == 500,
+           "64C on a median-52C device is its ordinary day: no lean");
+
+    asb_smart_bucket_t ref_dev = {0}; ref_dev.alpha_battery_x1000 = 500;
+    s.max_temp_c = 69;
+    asb_smart_bucket_update_from_session_ex(&ref_dev, &s, time(NULL), 45);
+    EXPECT(ref_dev.alpha_battery_x1000 == 500,
+           "69C at the reference median 45C stays below the old absolute 70");
+    s.max_temp_c = 70;
+    asb_smart_bucket_update_from_session_ex(&ref_dev, &s, time(NULL), 45);
+    EXPECT(ref_dev.alpha_battery_x1000 > 500,
+           "70C at the reference median 45C reproduces the old absolute hot");
+
+    /* No median: the absolutes apply, exactly as before fix209. */
+    asb_smart_bucket_t no_med = {0}; no_med.alpha_battery_x1000 = 500;
+    s.max_temp_c = 64;
+    asb_smart_bucket_update_from_session_ex(&no_med, &s, time(NULL), 0);
+    EXPECT(no_med.alpha_battery_x1000 == 500, "without a median 64C is not hot");
+    s.max_temp_c = 72;
+    asb_smart_bucket_update_from_session_ex(&no_med, &s, time(NULL), 0);
+    EXPECT(no_med.alpha_battery_x1000 > 500, "without a median 72C is hot");
+
+    /* The old wrapper passes no median: identical to the pre-fix209 behaviour. */
+    asb_smart_bucket_t wrap = {0}; wrap.alpha_battery_x1000 = 500;
+    s.max_temp_c = 64;
+    asb_smart_bucket_update_from_session(&wrap, &s, time(NULL));
+    EXPECT(wrap.alpha_battery_x1000 == 500, "the wrapper keeps the absolute thresholds");
+}
+
 static void test_bucket_learn_drain_loop(void) {
     printf("test_bucket_learn_drain_loop\n");
     asb_smart_bucket_t b = {0};
@@ -1384,6 +1433,7 @@ int main(void) {
     test_thermal_trend_state();
     test_boot_settle_trend();
     test_appheat_table();
+    test_bucket_learn_relative_thresholds();
     test_bucket_learn_drain_loop();
     test_energy_budget();
     test_drain_spike_window();
@@ -5119,6 +5169,28 @@ int main(void) {
     }
     if (f) fclose(f);
     if (!saw_plateau || !saw_mw || !saw_hdr || !saw_rej || !saw_sm) { printf("summary does not show the result (%d %d %d %d %d)\n", saw_plateau, saw_mw, saw_hdr, saw_rej, saw_sm); bad = 1; }
+    /* fix209: a night whose morning never confirmed is closed by the next note ten or more
+     * hours later - tonight folds into the per-night average, the habits fade, and a
+     * tonight built over an unknown number of nights counts as no more than four checks. */
+    memset(&g_rec.mw, 0, sizeof(g_rec.mw));
+    asb_mw_note(t310, 200);
+    asb_mw_note(t310 + 11 * 3600L, 200);
+    if (g_rec.mw.nights != 1 || g_rec.mw.tonight != 1 || g_rec.mw.total != 2 ||
+        g_rec.mw.per_night_ewma != 1.0f) { printf("the unconfirmed night did not close (%u/%u %.2f)\n", g_rec.mw.nights, g_rec.mw.tonight, g_rec.mw.per_night_ewma); bad = 1; }
+    /* A confirmed night_end already folded the night: the next note must not fold it again. */
+    memset(&g_rec.mw, 0, sizeof(g_rec.mw));
+    asb_mw_note(t310, 200); asb_mw_night_end();
+    asb_mw_note(t310 + 86400L, 200);
+    if (g_rec.mw.nights != 1 || g_rec.mw.tonight != 1) { printf("a confirmed night folded twice (%u/%u)\n", g_rec.mw.nights, g_rec.mw.tonight); bad = 1; }
+    /* Twenty checks banked with nights=0 (the capture's own case): the fold counts four. */
+    memset(&g_rec.mw, 0, sizeof(g_rec.mw));
+    g_rec.mw.tonight = 20; g_rec.mw.last_ts = (uint32_t)t310;
+    asb_mw_note(t310 + 11 * 3600L, 200);
+    if (g_rec.mw.nights != 1 || g_rec.mw.tonight != 1 || g_rec.mw.per_night_ewma != 4.0f) { printf("a poisoned tonight was not capped (%.2f)\n", g_rec.mw.per_night_ewma); bad = 1; }
+    /* A check within the same night is still one night. */
+    memset(&g_rec.mw, 0, sizeof(g_rec.mw));
+    asb_mw_note(t310, 200); asb_mw_note(t310 + 1800, 240);
+    if (g_rec.mw.nights != 0 || g_rec.mw.tonight != 2) { puts("two checks in one night folded early"); bad = 1; }
     /* A fix184 store: the night-check habit comes across, the situations start over. */
     {
         asb_rec_store_v1_t v1; memset(&v1, 0, sizeof(v1));
@@ -5144,7 +5216,7 @@ int main(void) {
 X
 "$CC" -std=gnu11 -Wall -Werror -Wno-unused-function -o "$T/t" "$T/t.c" || fail "harness does not compile"
 "$T/t" || fail "behaviour"
-echo "PASS smart records: power compared side by side - the climate is not credited, charging and its aftermath are set aside, the plateau stops it, night checks carry over"
+echo "PASS smart records: power compared side by side - the climate is not credited, charging and its aftermath are set aside, the plateau stops it, night checks carry over and unconfirmed nights close on their own"
 )
 
 t_smart_smoothness_runtime() (

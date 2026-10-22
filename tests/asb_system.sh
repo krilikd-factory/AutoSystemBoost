@@ -4125,6 +4125,146 @@ grep -q "$_clpat" "$ROOT/tools/asb_full_regression.sh" && fail "the regression s
 grep -q '  CHANGELOG.md$' "$ROOT/tools/asb_tree.sha256" || fail "the changelog fell out of the tree manifest"
 echo "PASS: fix199 contract"
 ) || exit 1
+# ---- fix209 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+S="$ROOT/src/asb_smart.h"
+G="$ROOT/src/asb_governor.c"
+R="$ROOT/src/asb_record.h"
+T="$ROOT/tests/asb_smart.sh"
+fail() { echo "FAIL fix209: $*"; exit 1; }
+# Smart teaches heat against THIS device, not an OP15's numbers. The session-feedback
+# thresholds (hot / very hot / clean-cool) were absolute 70/80/55 C - right for the
+# reference phone, wrong everywhere the sensors run warmer or cooler. They now sit at a
+# fixed offset over the device's own learned temperature median (the same median the
+# warm/cool boundaries already use), clamped to a sane band, with the absolute values kept
+# for any caller that has no store yet. The governor hands the median in at the one call
+# site. The night-check learner got its own repair: a capture showed twenty checks banked
+# with nights=0 - a night whose morning never confirmed (an irregular wake, a rejected
+# sample) never received night_end, so tonight kept counting across days and the slot
+# weights never faded; the first confirming morning would have folded it all into one
+# "night" of twenty checks. A note that lands ten or more hours after the previous one now
+# closes the pending night first (capped at four checks - an unbounded accumulation is not
+# one night's habit), exactly as the confirmed path does.
+grep -qF 'static int asb_smart_therm_median_x10(const asb_smart_store_t *st)' "$S" || fail "the device-median helper is gone"
+grep -qF 'asb_smart_bucket_update_from_session_ex(' "$S" || fail "the median-aware session update is gone"
+grep -qF 'asb_clamp_int(device_median_c + 25, 60, 80)' "$S" || fail "the hot threshold is not median-relative any more"
+grep -qF 'asb_smart_bucket_update_from_session_ex(b, s, now, 0);' "$S" || fail "the no-median fallback lost the absolute thresholds"
+grep -qF 'asb_smart_therm_median_x10(&g_smart_store) / 10' "$G" || fail "the governor does not hand the device median to the learner"
+grep -qF '#define ASB_MW_FOLD_GAP_S   (10L * 3600)' "$R" || fail "the unconfirmed-night gap is gone"
+grep -qF '#define ASB_MW_FOLD_MAX     4' "$R" || fail "an unbounded tonight is folded as one night again"
+grep -qF 'start_wall - (long)w->last_ts >= ASB_MW_FOLD_GAP_S' "$R" || fail "the lazy night fold is gone"
+grep -qF 'test_bucket_learn_relative_thresholds();' "$T" || fail "the median-relative threshold test is not registered"
+grep -qF 'the unconfirmed night did not close' "$T" || fail "the lazy-fold assertions are gone"
+echo "PASS: fix209 contract"
+) || exit 1
+# ---- fix208 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+D="$ROOT/tools/logkit/asb_fullday_digest.sh"
+fail() { echo "FAIL fix208: $*"; exit 1; }
+# The night deserves its own sheet: a day capture holds the one stretch where the phone
+# should cost almost nothing, and the report only had a two-line hero for it. The digest
+# now walks the same longest deep-sleep chain the hero reports and tallies it in detail -
+# weighted average current, rmnet radio traffic, peak CPU/skin temperatures - as a nightd
+# line emitted only when that chain ran at least 15 minutes. The sheet renders a "Night in
+# detail" section right after the drain hero: what the night cost and at what pace, the
+# deep-sleep share, the awake share, the average current, the radio traffic (a modem that
+# talks all night is THE classic night drain), the peak temperatures (charging on a
+# wireless pad warms the phone and keeps it shallow), the loudest live holder, and AOD
+# time - closed by a three-tier verdict so a good night says so plainly.
+# The same capture answers "which profile is cheaper on THIS phone": when two or more
+# profiles each held the screen for half an hour, a tip quotes the measured cheapest vs
+# the measured priciest screen-on figure (a tester day: battery 1.6 %/h against
+# performance 6.1 %/h) instead of generic advice.
+sh -n "$D" || fail "digest script has a syntax error"
+grep -qF 'printf "nightd\tma=%d\tradio_mib=%.1f\tcpu_t=%d\tskin_t=%d\twake_pk=%d\n"' "$D" || fail "the digest lost the night-detail line"
+grep -qF 'bd >= 900' "$D" || fail "the night detail must not fire on a sub-15-minute chain"
+grep -qF 'd.sections.nightd' "$H" || fail "the report parser dropped the night-detail line"
+grep -qF "lr_sec_nightd" "$H" || fail "the night-detail section is not rendered"
+grep -qF "lr_nd_verdict_bad" "$H" || fail "the night verdict lost its bad tier"
+grep -qF "lr_tip_prof_save" "$H" || fail "the measured cheapest-profile tip is gone"
+grep -qF "busy.onP >= cheap.onP * 2" "$H" || fail "the profile tip fires without a real (2x) gap"
+echo "PASS: fix208 contract"
+) || exit 1
+# ---- fix207 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+D="$ROOT/tools/logkit/asb_fullday_digest.sh"
+fail() { echo "FAIL fix207: $*"; exit 1; }
+# Owner's report sheet: "В простое телефон бодрствовал 30% времени - что-то мешает
+# глубокому сну" right above "Блокировок сна от приложений не записано - отлично", and
+# "Самый долгий простой 0.7 %/ч" against Monitor's "Экран выкл 1.3 %/ч". Two fixes.
+# 1) The contradiction: batterystats had recorded nothing (flat per-uid delta), so the
+#    sheet claimed excellence under a restless idle. The wake section now never prints
+#    "excellent" when the awake share is high and nothing was recorded - it says the
+#    counters stayed flat and points at the full report. Kernel wakelock holders on the
+#    charger (the only named holders on a charging day) are listed too.
+# 2) The figure mismatch: three windows, three right answers. The night hero is ONE
+#    deep-sleep-heavy chain; Monitor's meter averages clean hour-plus stretches without
+#    music; the digest now also emits the whole-ledger screen on/off split (the report
+#    writer's own classification) and the sheet shows all three side by side, plus a
+#    deep-sleep share in the night hero. More detail: a per-phase breakdown table (time,
+#    signed drop, %/h) aggregated from the ledger.
+sh -n "$D" || fail "digest script has a syntax error"
+grep -qF 'printf "scr\ton_pctph=%.1f\toff_pctph=%.1f\ton_min=%d\toff_min=%d\n"' "$D" || fail "the digest lost the screen on/off split"
+grep -qF 'printf "phase\tname=%s\tmin=%d\tdrop=%d\tpctph=%.1f\n"' "$D" || fail "the digest lost the phase rows"
+grep -qF 'printf "kwk\ttag=%s\tmin=%d\n"' "$D" || fail "the digest lost the kernel charger holders"
+grep -qF 'ph ~ /_scr$/ || ph == "active" || ph == "gaming" || ph == "post_wake"' "$D" || fail "the split no longer uses the report writer's classification"
+grep -qF 'd.phases.push' "$H" || fail "the report parser dropped the phase table"
+grep -qF 'd.kwk.push' "$H" || fail "the report parser dropped the kernel holders"
+grep -qF "lr_sec_phases" "$H" || fail "the phase breakdown section is not rendered"
+grep -qF "lr_drain_off" "$H" || fail "the screen-off drain row is gone"
+grep -qF "lr_wake_gap" "$H" || fail "a restless idle with flat counters still prints 'excellent'"
+grep -qF "lr_deep_sleep" "$H" || fail "the night hero lost its deep-sleep share"
+echo "PASS: fix207 contract"
+) || exit 1
+# ---- fix206 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+D="$ROOT/tools/logkit/asb_fullday_digest.sh"
+fail() { echo "FAIL fix206: $*"; exit 1; }
+# Two user reports drove this fix.
+# 1) "Монитор листается, Профили не листаются" - a KernelSU-family WebView host that
+#    gesture-scrolls overflowing ELEMENTS but not the document (Monitor, a live-page with
+#    element scroll, worked; Home, the last document-scrolled page, did not). Home is now
+#    a self-scrolling fixed overlay exactly like .live-page, centered with left/right:0 +
+#    margin:auto - NOT translateX(-50%), because the prefers-reduced-motion block forces
+#    transform:none on .page:not(.live-page). asbFitPages measures it through the overlay
+#    path (unclamped bottom/height) and sizeCards reads the overlay's own scrollTop.
+# 2) Log analysis (three full-day captures): the report hid the real wake story whenever
+#    batterystats counted nothing (the owner's MountServiceIdler at 23% of samples over a
+#    flat per-uid delta printed "no wakelocks - excellent"), said nothing about a day on
+#    the charger (5W wireless, +62% over ~400 min), and could not compare profiles on the
+#    day a tester ran them all. The digest now emits wlive (power-manager-sampled live
+#    holders), prof (per-profile drain from the battery trace's profile field, only when
+#    two or more profiles ran), chg (charging sessions from the ledger), ltpo and aod;
+#    the sheet renders a profiles table, a charging row, an AOD row, live holders in the
+#    wake section, an LTPO row, a Smart-only learning note when the capture ran under
+#    another profile, and the awake tip names its top holder. The runtime behaviour is
+#    exercised in tests/asb_ui.sh (t_webui_page_scroll, t_webui_fill_pages_runtime,
+#    t_webui_log_report_runtime); here the structural pins.
+sh -n "$D" || fail "digest script has a syntax error"
+grep -qF 'printf "wlive\ttag=%s\tpct=%d\tmin=%d\tpkg=%s\n"' "$D" || fail "the digest lost the live-holder rows"
+grep -qF 'printf "prof\tname=%s\ton_min=%d\toff_min=%d\ton_pctph=%.1f\toff_pctph=%.1f\n"' "$D" || fail "the digest lost the per-profile rows"
+grep -qF 'printf "chg\tmin=%d\tgain=%d\tsess=%d\n"' "$D" || fail "the digest lost the charging line"
+grep -qF "printf 'ltpo\tn=%s\tmin=%s\n'" "$D" || fail "the digest lost the ltpo line"
+grep -qF "printf 'aod\tlit=%s\tof=%s\n'" "$D" || fail "the digest lost the aod line"
+grep -qF 'if (np >= 2)' "$D" || fail "a one-profile day must not emit a comparison"
+grep -qF ".page:not(.live-page) {" "$H" || fail "home page rule missing"
+grep -qF 'else el = document.querySelector('"'"'.page:not(.live-page)'"'"');' "$H" || fail "asbFitPages no longer measures home through the overlay path"
+grep -qF 'const home = document.querySelector('"'"'.page:not(.live-page)'"'"');' "$H" || fail "sizeCards no longer reads the home overlay's scrollTop"
+grep -qF 'd.wlive.push' "$H" || fail "the report parser dropped live holders"
+grep -qF 'd.profs.push' "$H" || fail "the report parser dropped per-profile rows"
+grep -qF "lr_sec_profiles" "$H" || fail "the profiles comparison section is not rendered"
+grep -qF "lr_tip_awake_who" "$H" || fail "the awake tip does not name its holder"
+grep -qF "lr_sm_smart_only" "$H" || fail "the Smart-only learning note is gone"
+grep -qF "lr_wlive_fmt" "$H" || fail "the live-holder row format is gone"
+echo "PASS: fix206 contract"
+) || exit 1
 # ---- fix205 ---------------------------------------------------------------
 (
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

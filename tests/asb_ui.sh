@@ -3228,7 +3228,15 @@ const box = (top, h) => ({ getBoundingClientRect() { return { top: top, height: 
 const pb = new Array(5).fill(0), tiles = new Array(6).fill(0);
 const prof = { getBoundingClientRect() { return { top: profTop }; }, querySelectorAll() { return pb; } };
 const hub = { getBoundingClientRect() { return { top: hubTop }; }, querySelectorAll() { return tiles; } };
-const homePage = { getBoundingClientRect() { return { top: 0, bottom: homeBase - tierOf() * 80 }; } };
+/* fix206: home is a self-scrolling fixed overlay now - it mocks like the report page:
+ * unclamped (height:auto) it reports its natural content bottom, clamped it reports the
+ * viewport. scrollTop feeds sizeCards' profiles-top measurement. */
+const homePage = { scrollTop: 0, style: {},
+  getBoundingClientRect() {
+    return this.style.height === 'auto'
+      ? { top: 0, bottom: homeBase - tierOf() * 80 }
+      : { top: 0, bottom: clientH };
+  } };
 const page = { scrollTop: 0, style: {}, getAttribute() { return cfgOpen ? 'false' : 'true'; },
   get clientHeight() { return clientH; },
   getBoundingClientRect() {
@@ -3906,6 +3914,14 @@ t_webui_page_scroll() (
 # via .page's min-height, so the no-jelly property is unchanged. And .live-page carried
 # overflow-y:hidden in portrait, clipping the Monitor page below the fold with no way to
 # reach the rest; only landscape media queries re-enabled it.
+#
+# fix206: "Монитор листается, Профили не листаются" - a KernelSU-family WebView host that
+# gesture-scrolls overflowing ELEMENTS but not the document. Home was the last
+# document-scrolled page; it is now a self-scrolling fixed overlay like .live-page
+# (element scroll works in every host, confirmed by the same user's Monitor). Centered
+# with left/right:0 + margin:auto, NOT translateX(-50%): the prefers-reduced-motion block
+# forces transform:none on .page:not(.live-page), so a translate centering would park the
+# page half a width to the right there.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 H="$ROOT/webroot/index.html"
@@ -3928,11 +3944,20 @@ else:
     body = re.sub(r'/\*.*?\*/', '', lp.group(1), flags=re.S)
     if 'overflow-y: auto' not in body: bad.append('the Monitor page cannot scroll in portrait again')
     if 'overflow-x: hidden' not in body: bad.append('the slide-in would flash a horizontal scrollbar track')
+hp = re.search(r'\n\.page:not\(\.live-page\) \{\n  position: fixed;(.*?)\n\}', h, re.S)
+if not hp: bad.append('home is not a fixed overlay - it is back to document scroll')
+else:
+    body = re.sub(r'/\*.*?\*/', '', hp.group(1), flags=re.S)
+    if 'overflow-y: auto' not in body: bad.append('the home overlay cannot scroll itself')
+    if 'overflow-x: hidden' not in body: bad.append('the home overlay can flash a horizontal scrollbar track')
+    if 'margin: 0 auto' not in body: bad.append('the home overlay lost its margin:auto centering')
+    if 'translateX(-50%)' in body: bad.append('translateX centering breaks under prefers-reduced-motion (transform:none)')
 if 'body.live-active {\n  overflow: hidden;' not in h: bad.append('an open overlay no longer freezes the page under it')
+if '.page:not(.live-page) > *:last-child' not in h: bad.append('the home overlay reserves no room for the floating bar at its end')
 for b in bad: print('FAIL webui page scroll: ' + b, file=sys.stderr)
 sys.exit(1 if bad else 0)
 P
-echo "PASS webui page scroll: the document scrolls the main page, live pages scroll themselves"
+echo "PASS webui page scroll: every page is a self-scrolling overlay - element scroll works in every WebView host"
 )
 
 t_webui_log_report_runtime() (
@@ -3974,6 +3999,13 @@ $((NOW-72000))|d|B|b|1|95|310
 $((NOW-68400))|d|B|b|0|89|40
 $((NOW-43200))|d|B|b|0|82|30
 $((NOW-28800))|d|B|b|0|87|50
+$((NOW-10000))|d|B|p|1|50|400
+$((NOW-9900))|d|B|p|1|49|400
+$((NOW-9800))|d|B|p|0|48|40
+$((NOW-9700))|d|B|p|0|48|40
+$((NOW-9600))|d|B|b|1|47|300
+$((NOW-9500))|d|B|b|1|46|300
+$((NOW-9400))|d|B|b|1|45|300
 EOF
 printf '10123 3661\n10456 1830\n' > "$CAP/.wl_uid_delta"
 printf '10123|com.instagram.android\n10456|com.whatsapp\n' > "$CAP/.uid_package_map.tsv"
@@ -4007,6 +4039,16 @@ phase  dur_min  d_pct  pct/h  mA  note
  active  400  10.0  1.50  200  x
 
   charge types seen        : Fast(17) N/A(197)
+
+----- LIVE WAKELOCK HOLDERS (power-manager samples, screen off) -----
+screen-off samples: 200
+  held in  40% of samples, longest hold   12 min  *job*r/com.instagram.android/.job.Sync  (com.instagram.android)
+  held in   9% of samples, longest hold    3 min  AudioMix  (com.google.android.youtube)
+
+always-on display: 11 of 520 screen-off samples had the panel lit (10 with Android display state doze)
+ltpo_video (lifetime): lowered 79 times, 11 min at the lower rate, 79 restored by touch
+kernel holder on the charger: rx_wake_lock 343 min
+kernel holder on the charger: qcom_rx_wakelock 13 min
 EOF
 printf 'current_profile: smart\n' > "$CAP/env.txt"
 cat > "$CAP/smart_records.txt" <<EOF
@@ -4023,6 +4065,9 @@ out="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" sh "$D" "$CAP")" || f
 printf '%s\n' "$out" | grep -Eq '^meta	elapsed_min=720	target_h=24	running=0	started=[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}	profile=smart$' || fail "meta line: $(printf '%s' "$out" | head -1)"
 printf '%s\n' "$out" | grep -q '^drain	pctph=2.0	total_drop=22	hours=10.8	ma=99$' || fail "drain line"
 printf '%s\n' "$out" | grep -q '^night	dur_min=469	drop=8	pctph=1.0	awake=8$' || fail "night chain"
+# fix207: the night chain's detail rides along - weighted average current, mobile
+# traffic, peak temperatures and the wakeup-source peak of the SAME best chain.
+printf '%s\n' "$out" | grep -q '^nightd	ma=36	radio_mib=1.1	cpu_t=31	skin_t=29	wake_pk=5$' || fail "night detail: $(printf '%s\n' "$out" | grep '^nightd')"
 printf '%s\n' "$out" | grep -q '^idlemax	awake=25	phase=sleep	dur_min=60$' || fail "idlemax"
 printf '%s\n' "$out" | grep -q '^wl	pkg=com.instagram.android	sec=3661$' || fail "top wakelock app"
 printf '%s\n' "$out" | grep -Eq '^crash	count=2	asb=1	latest=/vendor/bin/hw/foo	ltime=[0-9]{2}:[0-9]{2}$' || fail "crash window, ASB attribution or the crash time"
@@ -4042,6 +4087,25 @@ printf '%s\n' "$out" | grep -q '^charge	types=Fast(17) N/A(197)$' || fail "charg
 printf '%s\n' "$out" | grep -q '^smart	watching=3	testing=0	helped=0	nothelped=0	ctxlearn=2$' || fail "smart learner line"
 printf '%s\n' "$out" | grep -q '^cfg	key=wakelock_action	value=0$' || fail "cfg snapshot for wakelock_action"
 printf '%s\n' "$out" | grep -q '^cfg	key=night_modem_idle	value=0$' || fail "cfg snapshot for night_modem_idle"
+# fix206: live wakelock holders from the power-manager samples, per-profile drain from
+# the trace's profile field, charging sessions from the ledger, LTPO and AOD from the
+# report - the facts the old sheet hid (a holder behind a flat batterystats delta, a day
+# on 5W wireless, a profile comparison).
+printf '%s\n' "$out" | grep -q '^wlive	tag=job.Sync	pct=40	min=12	pkg=com.instagram.android$' || fail "live holder row: $(printf '%s\n' "$out" | grep '^wlive' | head -1)"
+printf '%s\n' "$out" | grep -q '^wlive	tag=AudioMix	pct=9	min=3	pkg=com.google.android.youtube$' || fail "live holder row 2"
+printf '%s\n' "$out" | grep -q '^prof	name=p	on_min=3	off_min=3	on_pctph=36.0	off_pctph=18.0$' || fail "per-profile row p: $(printf '%s\n' "$out" | grep '^prof' | head -1)"
+printf '%s\n' "$out" | grep -q '^prof	name=b	on_min=3	off_min=0	on_pctph=36.0	off_pctph=0.0$' || fail "per-profile row b"
+printf '%s\n' "$out" | grep -q '^chg	min=60	gain=14	sess=1$' || fail "charging sessions: $(printf '%s\n' "$out" | grep '^chg')"
+printf '%s\n' "$out" | grep -q '^ltpo	n=79	min=11$' || fail "ltpo line"
+printf '%s\n' "$out" | grep -q '^aod	lit=11	of=520$' || fail "aod line"
+# fix207: the screen on/off split over the whole ledger (the figure that reconciles with
+# Monitor's tile), the per-phase breakdown and the kernel holders on the charger.
+printf '%s\n' "$out" | grep -q '^scr	on_pctph=6.5	off_pctph=1.0	on_min=120	off_min=530$' || fail "screen split: $(printf '%s\n' "$out" | grep '^scr')"
+printf '%s\n' "$out" | grep -q '^phase	name=sleep	min=420	drop=7	pctph=1.0$' || fail "phase sleep: $(printf '%s\n' "$out" | grep '^phase' | head -1)"
+printf '%s\n' "$out" | grep -q '^phase	name=active	min=120	drop=13	pctph=6.5$' || fail "phase active"
+printf '%s\n' "$out" | grep -q '^phase	name=charging	min=60	drop=-14	pctph=0.0$' || fail "phase charging keeps its signed drop"
+printf '%s\n' "$out" | grep -q '^kwk	tag=rx_wake_lock	min=343$' || fail "kernel holder on the charger"
+printf '%s\n' "$out" | grep -q '^kwk	tag=qcom_rx_wakelock	min=13$' || fail "kernel holder 2"
 [ "$(ASB_TOMBSTONE_DIR="$T/tomb" sh "$D" "$T/no-such-dir")" = "error	no_capture" ] || fail "missing capture must say error no_capture"
 EMPTY="$T/empty"; mkdir -p "$EMPTY"
 eout="$(ASB_TOMBSTONE_DIR="$T/empty-tomb" ASB_LK_LOCK="$T/nolock" sh "$D" "$EMPTY")"
@@ -4089,11 +4153,23 @@ const txt = [
   'cover\ton_min=200\toff_min=520\ton_pct=27',
   'drain\tpctph=2.0\ttotal_drop=22\thours=10.8\tma=99',
   'night\tdur_min=469\tdrop=8\tpctph=1.0\tawake=8',
+  'nightd\tma=36\tradio_mib=1.1\tcpu_t=31\tskin_t=29\twake_pk=5',
   'idlemax\tawake=25\tphase=sleep\tdur_min=60',
   'thermal\tcpu=41\tsurf=35',
   'radio\tmib=17.5',
   'wl\tpkg=com.instagram.android\tsec=3661',
   'wl\tpkg=com.whatsapp\tsec=1830',
+  'wlive\ttag=TgWsProxy::ServiceWakeLock\tpct=78\tmin=24\tpkg=com.amurcanov.tgwsproxy',
+  'wlive\ttag=com.android.server.MountServiceIdler\tpct=23\tmin=9\tpkg=',
+  'prof\tname=performance\ton_min=236\toff_min=296\ton_pctph=6.1\toff_pctph=0.6',
+  'prof\tname=balanced\ton_min=116\toff_min=118\ton_pctph=5.2\toff_pctph=3.0',
+  'chg\tmin=402\tgain=63\tsess=10',
+  'ltpo\tn=79\tmin=11',
+  'aod\tlit=11\tof=520',
+  'scr\ton_pctph=5.7\toff_pctph=1.8\ton_min=401\toff_min=478',
+  'phase\tname=sleep\tmin=304\tdrop=8\tpctph=1.6',
+  'phase\tname=charging_idle\tmin=397\tdrop=-62\tpctph=0.0',
+  'kwk\ttag=rx_wake_lock\tmin=343',
   'crash\tcount=2\tasb=1\tlatest=/vendor/bin/hw/foo\tltime=14:32',
   'sysui\tcount=2',
   'throttle\tclamps=2\towner=asb_governor',
@@ -4122,9 +4198,36 @@ chk(d.hzs.length === 3 && d.hzs[0].mode === '60' && d.hzs[0].ma === 264 && d.hzs
 chk(d.cfg.wakelock_action === '0' && d.cfg.night_modem_idle === '0' && d.cfg.ltpo_video === '1', 'cfg snapshot: ' + JSON.stringify(d.cfg));
 chk(d.sections.jank.pct === '1.4' && d.sections.audio.spk_min === '72' && d.sections.smart.ctxlearn === '2' && d.sections.asbcost.cpu_msh === '1851' && d.sections.charge.types === 'Fast(17) N/A(197)', 'the fix200 sections parse');
 chk(d.sections.crash.ltime === '14:32', 'fix204: the crash time survives the parser');
+/* fix206: the new digest facts parse. */
+chk(d.wlive.length === 2 && d.wlive[0].pkg === 'com.amurcanov.tgwsproxy' && d.wlive[0].pct === 78 && d.wlive[0].min === 24, 'live wakelock rows: ' + JSON.stringify(d.wlive));
+chk(d.wlive[1].pkg === '' && d.wlive[1].tag === 'com.android.server.MountServiceIdler', 'a system holder keeps the tag and no package');
+chk(d.profs.length === 2 && d.profs[0].name === 'performance' && d.profs[0].onP === 6.1 && d.profs[1].offP === 3, 'per-profile rows: ' + JSON.stringify(d.profs));
+chk(d.sections.chg.min === '402' && d.sections.chg.gain === '63' && d.sections.chg.sess === '10', 'charging line parses');
+chk(d.sections.ltpo.n === '79' && d.sections.ltpo.min === '11', 'ltpo line parses');
+chk(d.sections.aod.lit === '11' && d.sections.aod.of === '520', 'aod line parses');
+/* fix207: the screen split, the phase table and the kernel charger holders parse. */
+chk(d.sections.scr.on_pctph === '5.7' && d.sections.scr.off_pctph === '1.8' && d.sections.scr.off_min === '478', 'screen split parses');
+chk(d.phases.length === 2 && d.phases[0].name === 'sleep' && d.phases[0].drop === 8 && d.phases[1].drop === -62, 'phase rows keep the signed drop: ' + JSON.stringify(d.phases));
+chk(d.kwk.length === 1 && d.kwk[0].tag === 'rx_wake_lock' && d.kwk[0].min === 343, 'kernel charger holder parses');
+chk(d.sections.nightd.ma === '36' && d.sections.nightd.radio_mib === '1.1' && d.sections.nightd.cpu_t === '31' && d.sections.nightd.skin_t === '29' && d.sections.nightd.wake_pk === '5', 'night detail parses: ' + JSON.stringify(d.sections.nightd));
+/* fix207: the profile-saving tip fires on the tester's own numbers (Battery at 1.6 %/h
+   against Performance at 6.1 %/h, both with enough screen-on minutes). */
+const dps = { sections: { meta: {} }, wl: [], wlive: [], japps: [], hzs: [], cfg: {},
+  profs: [{ name: 'performance', onMin: 236, offMin: 296, onP: 6.1, offP: 0.6 },
+          { name: 'balanced', onMin: 116, offMin: 118, onP: 5.2, offP: 3.0 },
+          { name: 'battery', onMin: 37, offMin: 130, onP: 1.6, offP: 0.9 }] };
+const pst = logReportTips(dps).filter(function (t) { return t.key === 'lr_tip_prof_save'; });
+chk(pst.length === 1 && pst[0].vars.x === '1.6' && pst[0].vars.y === '6.1' && pst[0].vars.cheap === I18N.ru.prof_battery, 'the profile-saving tip: ' + JSON.stringify(pst));
+dps.profs[2].onMin = 10;
+chk(!logReportTips(dps).some(function (t) { return t.key === 'lr_tip_prof_save'; }), 'the tip stays quiet without enough minutes on the cheap profile');
 const tips = logReportTips(d);
 const keys = tips.map(function (t) { return t.key; });
-chk(keys.join(',') === 'lr_tip_crash,lr_tip_night_modem,lr_tip_awake,lr_tip_wl_enable,lr_tip_jank_ok,lr_tip_audio', 'fix200 advice, worst first, six cards max: ' + keys.join(','));
+chk(keys.join(',') === 'lr_tip_crash,lr_tip_night_modem,lr_tip_awake_who,lr_tip_wl_enable,lr_tip_jank_ok,lr_tip_audio', 'fix200 advice, worst first, six cards max, the awake tip names its holder (fix206): ' + keys.join(','));
+chk(tips[2].vars.who === 'com.amurcanov.tgwsproxy' && tips[2].vars.awake === '25', 'the awake tip names the top live holder: ' + JSON.stringify(tips[2].vars));
+/* without live holders the awake tip falls back to the generic wording */
+d.wlive = [];
+chk(logReportTips(d).map(function (t) { return t.key; }).indexOf('lr_tip_awake') >= 0, 'no live holders - the generic awake tip');
+d.wlive = [{ tag: 'TgWsProxy::ServiceWakeLock', pct: 78, min: 24, pkg: 'com.amurcanov.tgwsproxy' }];
 chk(tips[1].vars.set === I18N.ru.cfg.night_modem_idle.name, 'the night-modem tip names the setting as Settings names it: ' + tips[1].vars.set);
 chk(tips[3].vars.set === I18N.ru.cfg.wakelock_action.name, 'the wakelock tip names its setting too: ' + tips[3].vars.set);
 d.cfg.wakelock_action = '1';
@@ -4180,11 +4283,24 @@ KEYS = ['lr_menu','lr_refresh','lr_loading','lr_none_title','lr_none_body','lr_f
         'lr_sm_helped','lr_sm_nothelped','lr_sm_fresh','lr_sec_asb','lr_cost_cpu',
         'lr_cost_writes','lr_cost_wakes','lr_ms_h','lr_charge_types','lr_audio_spk',
         'lr_tip_wl_enable','lr_tip_night_modem','lr_tip_jank_bad','lr_tip_jank_ok',
-        'lr_tip_audio','lr_tip_cost_ok','lr_tip_cost_hi','lr_tip_smart_help','lr_tip_ltpo']
+        'lr_tip_audio','lr_tip_cost_ok','lr_tip_cost_hi','lr_tip_smart_help','lr_tip_ltpo',
+        'lr_sec_profiles','lr_th_profile','lr_th_time','lr_th_onscreen','lr_th_idle',
+        'lr_prof_note','lr_charging','lr_chg_fmt','lr_aod','lr_aod_fmt','lr_ltpo',
+        'lr_ltpo_fmt','lr_wlive_fmt','lr_tip_awake_who','lr_sm_smart_only',
+        'lr_drain_on','lr_drain_off','lr_deep_sleep','lr_sec_phases','lr_th_phase',
+        'lr_th_drop','lr_ph_note','lr_kwk_fmt','lr_wake_gap',
+        'lr_ph_active','lr_ph_idle','lr_ph_sleep','lr_ph_post_wake','lr_ph_gap',
+        'lr_ph_gaming','lr_ph_audio_spk','lr_ph_audio_spk_scr','lr_ph_audio_bt',
+        'lr_ph_audio_bt_scr','lr_ph_charging_idle','lr_ph_charging_active',
+        'lr_sec_nightd','lr_nd_spent','lr_nd_deep','lr_nd_awake','lr_nd_ma',
+        'lr_nd_radio','lr_nd_temp','lr_nd_temp_fmt','lr_nd_holder',
+        'lr_nd_verdict_ok','lr_nd_verdict_mid','lr_nd_verdict_bad','lr_tip_prof_save']
 EMO = {'lr_sec_drain': '\U0001f50b', 'lr_sec_wake': '\u23f0', 'lr_sec_crash': '\U0001f4a5',
        'lr_sec_thermal': '\U0001f321\ufe0f', 'lr_sec_tips': '\U0001f4a1',
        'lr_sec_smooth': '\U0001f4f1', 'lr_sec_display': '\U0001f5a5',
-       'lr_sec_smart': '\U0001f9e0', 'lr_sec_asb': '\u2699\ufe0f'}
+       'lr_sec_smart': '\U0001f9e0', 'lr_sec_asb': '\u2699\ufe0f',
+       'lr_sec_profiles': '\u2696\ufe0f', 'lr_sec_phases': '\U0001f4ca',
+       'lr_sec_nightd': '\U0001f319'}
 PH = {'lr_running': ['{min}', '{h}'], 'lr_crash_n': ['{n}'], 'lr_crash_latest': ['{proc}'],
       'lr_crash_asb': ['{n}'], 'lr_sysui': ['{n}'], 'lr_temp_max': ['{cpu}', '{surf}'],
       'lr_clamp_some': ['{n}', '{owner}'], 'lr_tip_night': ['{pct}'], 'lr_tip_awake': ['{awake}'],
@@ -4193,7 +4309,13 @@ PH = {'lr_running': ['{min}', '{h}'], 'lr_crash_n': ['{n}'], 'lr_crash_latest': 
       'lr_tip_wl_enable': ['{app}', '{min}', '{set}'], 'lr_tip_night_modem': ['{pct}', '{set}'],
       'lr_tip_jank_bad': ['{pct}'], 'lr_tip_jank_ok': ['{pct}'], 'lr_tip_audio': ['{pct}'],
       'lr_tip_cost_ok': ['{ms}'], 'lr_tip_cost_hi': ['{ms}'], 'lr_tip_smart_help': ['{n}'],
-      'lr_tip_ltpo': ['{set}']}
+      'lr_tip_ltpo': ['{set}'], 'lr_chg_fmt': ['{min}', '{gain}', '{sess}'],
+      'lr_aod_fmt': ['{lit}', '{of}'], 'lr_ltpo_fmt': ['{n}', '{min}'],
+      'lr_wlive_fmt': ['{pct}', '{dur}'], 'lr_tip_awake_who': ['{awake}', '{who}'],
+      'lr_deep_sleep': ['{pct}'], 'lr_kwk_fmt': ['{tag}'],
+      'lr_nd_temp_fmt': ['{cpu}', '{skin}'], 'lr_nd_verdict_ok': ['{pct}', '{deep}'],
+      'lr_nd_verdict_mid': ['{awake}'], 'lr_nd_verdict_bad': ['{pct}'],
+      'lr_tip_prof_save': ['{cheap}', '{x}', '{busy}', '{y}']}
 files = sorted((root / 'webroot' / 'i18n').glob('*.json'))
 assert len(files) == 13, 'locale count'
 for p in files:
@@ -4253,7 +4375,7 @@ grep -Fq '"tools/logkit/asb_fullday_digest.sh"' "$ROOT/.github/workflows/build-d
 grep -Fq '"tools/logkit/asb_fullday_digest.sh"' "$ROOT/.github/workflows/build-release.yml" || fail "release workflow does not ship the digest"
 grep -Fq 'asb_fullday_digest.sh' "$ROOT/.github/workflows/build-release.yml" || fail "release staging loop lost the digest"
 grep -Fq 'crash.ltime' "$H" || fail "fix204: the sheet must show WHEN the latest crash happened"
-echo "PASS webui log report: digest over a fixture capture (drain..cfg), fresh-capture crash window (fix204), plain-words parser/tips in node (ru+en), 13 locales, menu wiring"
+echo "PASS webui log report: digest over a fixture capture (drain..cfg, live holders, per-profile drain, charging, LTPO, AOD), fresh-capture crash window (fix204), plain-words parser/tips in node (ru+en), 13 locales, menu wiring"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
