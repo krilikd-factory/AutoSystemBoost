@@ -54,7 +54,13 @@ typedef struct {
 #define ASB_SQLITE_OPEN_READWRITE  0x00000002
 
 /* java.lang.Boolean, as ObjectOutputStream writes it: stream header, class descriptor
- * (serialVersionUID 0xCD207280D59CFAEE, one boolean field "value"), then the value byte. */
+ * (serialVersionUID 0xCD207280D59CFAEE, one boolean field "value"), then the value byte.
+ * The layout this parser/writer was built against is named so a future LSPosed that
+ * changes its serialization is diagnosable from the answer itself (audit K8): a
+ * successful read answers format=v1, an unrecognized layout answers
+ * reason=unexpected_schema - and the WebUI shows the reason instead of silently doing
+ * nothing. */
+#define ASB_LSPD_FORMAT "v1"
 static const unsigned char g_lspd_bool_prefix[] = {
     0xAC, 0xED, 0x00, 0x05, 0x73, 0x72, 0x00, 0x11,
     'j', 'a', 'v', 'a', '.', 'l', 'a', 'n', 'g', '.', 'B', 'o', 'o', 'l', 'e', 'a', 'n',
@@ -178,9 +184,9 @@ static int asb_lspd_cli(int argc, char **argv) {
         int after = asb_lspd_read(&s, db);
         int want = unset ? 2 : set;
         if (after != want) rc = 8;
-        printf("verbose=%s\nbefore=%s\n", asb_lspd_name(after), asb_lspd_name(before));
+        printf("verbose=%s\nbefore=%s\nformat=%s\n", asb_lspd_name(after), asb_lspd_name(before), ASB_LSPD_FORMAT);
     } else {
-        printf("verbose=%s\n", asb_lspd_name(before));
+        printf("verbose=%s\nformat=%s\n", asb_lspd_name(before), ASB_LSPD_FORMAT);
     }
     s.close(db);
     return rc;

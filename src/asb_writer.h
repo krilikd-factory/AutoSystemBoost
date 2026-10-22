@@ -1095,7 +1095,11 @@ static void writer_discover_gpu_paths(void) {
 
     /*
      * thermal_pwrlevel discovery — vendor thermal cap, read-only for us but kernel writes to
-     * it dynamically.
+     * it dynamically. fix213 made that literally true: the profiles used to write a static
+     * level here (battery 7, balanced/performance 2), and this reader then mistook the
+     * shell's own write for a vendor cap - while the write also fought the governor's own
+     * max_pwrlevel ceiling. The shell now only releases a stale level once per boot, so a
+     * value above zero here is always the vendor engine's.
      */
     static const char *thermal_pl_candidates[] = {
         "/sys/class/kgsl/kgsl-3d0/thermal_pwrlevel",
