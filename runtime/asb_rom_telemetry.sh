@@ -40,6 +40,13 @@ while [ -n "$_rest" ]; do
 done
 echo "cpus_online=$_nc"
 
+# Aggregate /proc/stat line (fix214): the WebUI derives the real CPU-busy share between two
+# reads, because the load average counts tasks waiting on storage and reads past 100% on an
+# idle-looking phone. Emitted as the eight first counters (user nice system idle iowait irq
+# softirq steal); one builtin read, no fork.
+_cs=""; { read -r _c _cs < "$PROC/stat" || _cs=""; } 2>/dev/null
+[ -n "$_cs" ] && echo "cpustat=$_cs"
+
 _b="$SYS/class/power_supply/battery"
 for _f in capacity current_now voltage_now temp status charge_full; do
   _r "$_b/$_f" "battery.$_f"
