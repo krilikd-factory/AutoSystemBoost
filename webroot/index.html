@@ -9896,9 +9896,18 @@ function logReportTips(d) {
   if (smart && (+smart.helped || 0) > 0)
     tips.push({ ic: 'ok', key: 'lr_tip_smart_help', vars: { n: String(smart.helped) } });
   if (cost && (+cost.cpu_msh || 0) > 0) {
-    /* The unit travels with the number: "{ms} of CPU per hour" reads "1851 ms of ...". */
+    /* The unit travels with the number: "{ms} of CPU per hour" reads "1851 ms of ...".
+       fix211: per hour is the wrong ruler - a day that is 87 % screen-on ticks far more
+       often, and the same healthy tick costs more per hour (a BATTERY-profile capture:
+       3627 ms/h over 1203 wakeups/h = 3.0 ms a tick, perfectly normal, yet the sheet
+       said "send the log"). What separates a runaway is the price of ONE wakeup: 3-4 ms
+       across every field capture, on every device. Past 8 ms a tick is doing work it
+       should not - that is the "send the log" case - and an outright spin (10 s of CPU
+       an hour) still trips on the absolute figure alone. */
     const ms = String(cost.cpu_msh) + ' ms';
-    if ((+cost.cpu_msh || 0) <= 2500) tips.push({ ic: 'ok', key: 'lr_tip_cost_ok', vars: { ms: ms } });
+    const _wk = +cost.wakes_h || 0;
+    const _msPerWake = _wk > 0 ? (+cost.cpu_msh || 0) / _wk : 99;
+    if ((+cost.cpu_msh || 0) <= 2500 || _msPerWake <= 8) tips.push({ ic: 'ok', key: 'lr_tip_cost_ok', vars: { ms: ms } });
     else tips.push({ ic: 'info', key: 'lr_tip_cost_hi', vars: { ms: ms } });
   }
   if (cfg.ltpo_video === '0')
@@ -10147,7 +10156,10 @@ function logReportRender(d) {
       if ((+scr.on_min || 0) > 0)
         s.appendChild(logReportRow(T('lr_drain_on', 'Screen-on drain'), String(scr.on_pctph) + T('lr_per_hour', '%/h'), (+scr.on_pctph || 0) >= 8));
       if ((+scr.off_min || 0) > 0)
-        s.appendChild(logReportRow(T('lr_drain_off', 'Screen-off drain (all idle)'), String(scr.off_pctph) + T('lr_per_hour', '%/h'), (+scr.off_pctph || 0) > 1.5));
+        /* fix211: a red figure needs a window that can hold it. One battery-percent step
+           over 12 idle minutes reads as 5 %/h - noise, not a finding. Under half an hour
+           the row stays neutral. */
+        s.appendChild(logReportRow(T('lr_drain_off', 'Screen-off drain (all idle)'), String(scr.off_pctph) + T('lr_per_hour', '%/h'), (+scr.off_pctph || 0) > 1.5 && (+scr.off_min || 0) >= 30));
       /* fix210: say it in the sheet itself, right under the two rows - the Monitor tiles
          count only calm stretches of an hour or more, these rows cover the whole
          capture. Different windows, both figures right. */
@@ -10170,11 +10182,13 @@ function logReportRender(d) {
           min: logReportDur(chg.min), gain: String(chg.gain), sess: String(chg.sess) })));
     }
     /* fix206: an always-on display is a steady idle drain - name its share of screen-off
-       checks once it is more than a rounding error. */
+       checks once it is more than a rounding error.
+       fix211: red asks for a sample that can carry it - one lit check out of four is
+       25 % and still means nothing; from twenty checks the share is real. */
     if (aod && (+aod.of || 0) > 0 && (+aod.lit || 0) * 100 >= 5 * (+aod.of || 0)) {
       s.appendChild(logReportRow(T('lr_aod', 'Always-on display'),
         logReportT('lr_aod_fmt', 'panel lit in {lit} of {of} screen-off checks', {
-          lit: String(aod.lit), of: String(aod.of) }), (+aod.lit || 0) * 100 >= 20 * (+aod.of || 0)));
+          lit: String(aod.lit), of: String(aod.of) }), (+aod.of || 0) >= 20 && (+aod.lit || 0) * 100 >= 20 * (+aod.of || 0)));
     }
     body.appendChild(s);
   }
