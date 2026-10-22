@@ -3189,6 +3189,16 @@ assert 'color-mix(in srgb, var(--cat) 13%, #ffffff)' in s, "light hub tiles lost
 for _cat in ('audio', 'camera', 'battery', 'ux', 'net', 'iface'):
     assert re.search(r'\.cfg-tile\.cat-%s\s*\{ --cat: #[0-9a-f]{6}; \}' % _cat, s), 'category %s lost its hue token' % _cat
 assert '.cfg-row.is-on .cfg-icon[class*="cat-"]' in s, "active tweak icons lost the category pill"
+# fix217: an enabled tweak card lights up like its hub tile - the row carries its
+# cat-* class, shares the hue map with the icon and wears the same gradient and glow.
+assert "row.className = 'cfg-row ' + cfgCatClass(it.key) + (isOn ? ' is-on' : '');" in s, "tweak rows no longer carry their category class"
+assert ':is(.cfg-icon,.cfg-row).cat-audio' in s and ':is(.cfg-icon,.cfg-row).cat-system' in s, "the category hue map does not feed tweak rows"
+oncard = re.search(r'\.cfg-row\.is-on\[class\*="cat-"\] \{([^}]*)\}', s)
+assert oncard and 'color-mix(in srgb, var(--cat, var(--accent)) 17%, transparent) 0%' in oncard.group(1), "enabled tweak cards lost the hub-tile gradient"
+assert oncard and 'box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 16px -8px color-mix(in srgb, var(--cat, var(--accent)) 55%, transparent);' in oncard.group(1), "enabled tweak cards lost the category glow"
+lon = re.search(r'html\[data-asb-theme="light"\] \.cfg-row\.is-on\[class\*="cat-"\] \{([^}]*)\}', s, re.S)
+assert lon and 'color-mix(in srgb, var(--cat) 13%, #ffffff) 0%' in lon.group(1), "light enabled cards lost the hub-tile tint"
+assert re.search(r'html\[data-asb-theme="light"\] \.cfg-row\.cat-audio\s*\{ --cat:#c0362c; \}', s), "light tweak rows lost the deepened hues"
 assert re.search(r'\.cfg-seg button\.on \{[^}]*var\(--pill-wash\)', s), "the selected segment option is not the bar's pill"
 assert 'background: linear-gradient(135deg, rgba(255,255,255,0.065), rgba(255,255,255,0.024));' in s, "Monitor tiles lost their stronger fill"
 prim = re.search(r'\.cfg-profile-primary \{([^}]*)\}', s).group(1)

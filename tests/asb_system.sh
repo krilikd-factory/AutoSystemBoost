@@ -4396,6 +4396,26 @@ grep -qF 'read -r _md 2>/dev/null < "$CACHE"' "$TEL" || fail "the settings-cache
 grep -qF 'END { exit(1-f) }' "$ROOT/tests/asb_system.sh" || fail "the settings-wrapper scan is a SIGPIPE pipe again"
 echo "PASS: fix216 contract"
 ) || exit 1
+# ---- fix217 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL fix217: $*" >&2; exit 1; }
+# Cosmetic: enabled tweak cards wear the hub-tile look. The row carries its cat-*
+# class (single render site, cfgRenderRow), the category hue map feeds the icon AND
+# the row, and the enabled card takes the tile's category gradient, border tint and
+# glow - in both themes. The classless teal .cfg-row.is-on rules stay as the fallback
+# for rows without a category.
+grep -qF "row.className = 'cfg-row ' + cfgCatClass(it.key) + (isOn ? ' is-on' : '');" "$H" || fail "tweak rows lost their category class"
+grep -qF ':is(.cfg-icon,.cfg-row).cat-audio' "$H" || fail "the hue map no longer feeds tweak rows"
+grep -qF '.cfg-row.is-on[class*="cat-"] {' "$H" || fail "enabled cards lost the category rule"
+grep -qF 'color-mix(in srgb, var(--cat, var(--accent)) 17%, transparent) 0%' "$H" || fail "enabled cards lost the hub-tile gradient"
+grep -qF '0 4px 16px -8px color-mix(in srgb, var(--cat, var(--accent)) 55%, transparent)' "$H" || fail "enabled cards lost the category glow"
+grep -qF 'html[data-asb-theme="light"] .cfg-row.is-on[class*="cat-"] {' "$H" || fail "the light enabled-card rule is gone"
+grep -qF 'html[data-asb-theme="light"] .cfg-row.cat-audio   { --cat:#c0362c; }' "$H" || fail "light rows lost the deepened hues"
+grep -qF 'color-mix(in srgb, var(--cat) 13%, #ffffff) 0%' "$H" || fail "light enabled cards lost the hub-tile tint"
+echo "PASS: fix217 contract"
+) || exit 1
 # ---- fix209 ---------------------------------------------------------------
 (
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
