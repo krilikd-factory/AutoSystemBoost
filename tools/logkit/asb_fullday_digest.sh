@@ -25,6 +25,9 @@
 #   wl       pkg=<package>  sec=<n>            (up to 5 rows, worst first)
 #   wl       none=1                            (nothing recorded)
 #   wlive    tag=<cleaned tag>  pct=<n>  min=<n>  pkg=<package|''>   (up to 3 rows)
+#   wlt      tag=<wakelock tag>  n=<count>      (top 5 partial holders by occurrence, n>=3)
+#   wla      tag=<alarm source>  n=<count>      (top 4 alarm/wakeup sources, n>=2)
+#   sradio   mib=<x.x>                          (idle/sleep mobile traffic, screen off)
 #   kwk      tag=<kernel wakelock>  min=<n>      (up to 3 rows, holders on the charger)
 #   prof     name=<profile>  on_min=<n>  off_min=<n>  on_pctph=<x.x>  off_pctph=<x.x>
 #   scr      on_pctph=<x.x>  off_pctph=<x.x>  on_min=<n>  off_min=<n>
@@ -225,10 +228,17 @@ if [ "$_HAVE_LEDGER" = "1" ]; then
 
   # ----- radio traffic -------------------------------------------------------
   # Byte counters outgrow mksh 32-bit arithmetic, hence awk for the sum.
+  # fix210: the idle/sleep share is split out (sradio) - mobile traffic while the screen
+  # was OFF is background sync, one of the real causes of a restless idle, and the sheet
+  # names it in the wake section instead of only in the day-wide total.
   _cat_ledger | awk -F'\t' '
     /^#/ { next }
-    { rx += $14 + 0; tx += $15 + 0 }
-    END { m = (rx + tx) / 1048576; if (m >= 0.1) printf "radio\tmib=%.1f\n", m }' 2>/dev/null
+    { rx += $14 + 0; tx += $15 + 0
+      if ($1 == "idle" || $1 == "sleep") { irx += $14 + 0; itx += $15 + 0 } }
+    END {
+      m = (rx + tx) / 1048576; if (m >= 0.1) printf "radio\tmib=%.1f\n", m
+      im = (irx + itx) / 1048576; if (im >= 0.1) printf "sradio\tmib=%.1f\n", im
+    }' 2>/dev/null
 fi
 
 # ----- wakelocks (top apps by held time) -------------------------------------
@@ -291,6 +301,43 @@ if [ -f "$_DIR/_full_day_report.txt" ]; then
          next
        }
        t && NF == 0 { t = 0 }' "$_DIR/_full_day_report.txt" 2>/dev/null
+fi
+
+# ----- wake causes by occurrence (fix210) ---------------------------------------
+# The per-uid held-time delta above is a DURATION counter: it stays flat while charging
+# and on several ROM builds simply never moves. "Nothing recorded" then sat next to a
+# restless idle and the sheet could not name a single cause - while the capture's own
+# wakelock report had them, counted by occurrence:
+#   TOP PARTIAL WAKELOCK HOLDERS:  "  x54   taken  *alarm*"   (each = one partial hold)
+#   TOP ALARM / WAKEUP SOURCES:    "  x18    *walarm*:tag"    (each = one scheduled wakeup)
+# Counts, not seconds - but "the alarm manager fired 54 times over a restless night" IS
+# the answer to "what kept waking it", and it exists even when every duration is zero.
+if [ -f "$_DIR/_wakelock_report.txt" ]; then
+  awk '/TOP PARTIAL WAKELOCK HOLDERS/ { t = 1; next }
+       t && /^-----/ { t = 0; next }
+       t && $1 ~ /^x[0-9]+$/ && $2 == "taken" {
+         n = $1; sub(/^x/, "", n)
+         tag = ""
+         for (i = 3; i <= NF; i++) tag = (tag == "" ? $i : tag " " $i)
+         gsub(/[\t=]/, " ", tag); gsub(/^[ ]+|[ ]+$/, "", tag)
+         if (tag != "" && n + 0 >= 3) {
+           printf "wlt\ttag=%s\tn=%d\n", tag, n
+           c++; if (c >= 5) exit
+         }
+       }' "$_DIR/_wakelock_report.txt" 2>/dev/null
+  awk '/TOP ALARM \/ WAKEUP SOURCES/ { t = 1; next }
+       t && /^-----/ { t = 0; next }
+       t && $1 ~ /^x[0-9]+$/ && $2 ~ /^\*walarm\*:/ {
+         n = $1; sub(/^x/, "", n)
+         tag = ""
+         for (i = 2; i <= NF; i++) tag = (tag == "" ? $i : tag " " $i)
+         sub(/^\*walarm\*:/, "", tag)
+         gsub(/[\t=]/, " ", tag); gsub(/^[ ]+|[ ]+$/, "", tag)
+         if (tag != "" && n + 0 >= 2) {
+           printf "wla\ttag=%s\tn=%d\n", tag, n
+           c++; if (c >= 4) exit
+         }
+       }' "$_DIR/_wakelock_report.txt" 2>/dev/null
 fi
 
 # ----- per-profile drain attribution (fix206) -----------------------------------
