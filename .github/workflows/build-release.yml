@@ -232,6 +232,23 @@ jobs:
             echo "Release identity: version=$BASE_VER versionCode=$BASE_CODE manual-ref=${TAG:-unknown}"
           fi
 
+      - name: Validate OTA manifest (update.json)
+        run: |
+          # fix215: this check gates PUBLISHING, never building. It lived in the always-run
+          # host test suite since fix213, so any checkout whose metadata had not been bumped
+          # yet (a fork, a debug run, main between releases) failed CI on a metadata file.
+          # Here in the release pipeline it still guarantees the manifest the managers fetch
+          # via updateJson describes exactly the build this run publishes.
+          BASE_VER="$(sed -n 's/^version=//p' module.prop | head -n 1)"
+          BASE_CODE="$(sed -n 's/^versionCode=//p' module.prop | head -n 1)"
+          [ -f update.json ] || { echo "::error::update.json missing at repo root"; exit 1; }
+          grep -qF "\"version\": \"${BASE_VER%%-*}\"" update.json || { echo "::error::update.json version != module.prop (${BASE_VER%%-*})"; exit 1; }
+          grep -qF "\"versionCode\": ${BASE_CODE}" update.json || { echo "::error::update.json versionCode != module.prop ($BASE_CODE)"; exit 1; }
+          MAJ="$(printf '%s' "${BASE_VER%%-*}" | sed -n 's/^V\([0-9][0-9]*\).*/\1/p')"
+          [ -n "$MAJ" ] || { echo "::error::module version is not V<major>: $BASE_VER"; exit 1; }
+          grep -qF "/releases/download/${MAJ}/" update.json || { echo "::error::update.json zipUrl does not name the $MAJ release"; exit 1; }
+          echo "OTA manifest matches: ${BASE_VER%%-*} / $BASE_CODE / release $MAJ"
+
       - name: Normalize DSP source path for Linux CI
         run: |
           if [ -d src/DSP ] && [ ! -e src/dsp ]; then
