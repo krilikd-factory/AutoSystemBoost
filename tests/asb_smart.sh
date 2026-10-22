@@ -5521,6 +5521,144 @@ C
 echo "PASS reassert manual ceiling: HEAVY never under a manual profile's own ceiling, SUSTAINED never over it"
 )
 
+t_fg_classify_manual_gaming_runtime() (
+# Runtime (fix210): foreground-app classification on the MANUAL profiles.
+#
+# The FSM's GAMING gate asks the package table (pkg_agrees), but the classification ran
+# only inside asb_smart_tick - on Battery/Balanced/Performance the hint stayed 0, the
+# gate's "no package information" fallback fired permanently, and a busy GPU plus a busy
+# CPU read as GAMING (BALANCED field capture: FSM=GAMING at GPU 57 %, load 7.1, while the
+# owner was not playing). The REAL asb_fg_classify_tick is cut out of asb_governor.c and
+# driven with a scripted detector: a feed app under exactly that load is NOT a game, a
+# known game is, a hot GPU-busy unlisted app is (the heat inference, as on Smart), the
+# camera and media are not, the no-signal fallback never invents GAMING, and with Smart
+# active the function keeps its hands off.
+set -eu
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+G="$ROOT/src/asb_governor.c"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL fg classify manual gaming: $*" >&2; exit 1; }
+CC="${CC:-cc}"; command -v "$CC" >/dev/null 2>&1 || CC=gcc
+command -v "$CC" >/dev/null 2>&1 || { echo "SKIP fg classify manual gaming: no C compiler"; exit 0; }
+grep -q '^static void asb_fg_classify_tick' "$G" || fail "no manual-profile classification"
+[ "$(grep -c 'asb_fg_classify_tick(&metrics, &fsm);' "$G")" -eq 2 ] || fail "must run before both app_hint publishes (startup and the main loop)"
+grep -q 'if (g_smart_rt.enabled && g_smart_store_loaded) return;' "$G" || fail "Smart must keep owning the classification"
+awk '/^static void asb_fg_classify_tick/,/^}/' "$G" > "$T/f.c"
+grep -q 'asb_fg_classify_tick' "$T/f.c" || fail "extraction failed"
+cat > "$T/t.c" <<'C'
+#include <stdio.h>
+#include <string.h>
+#include <stdint.h>
+#include <time.h>
+enum { ASB_APP_IDLE = 0, ASB_APP_LIGHT, ASB_APP_MEDIUM, ASB_APP_HEAVY, ASB_APP_GAMING };
+enum { ASB_STATE_DEEP_IDLE = 0, ASB_STATE_LIGHT_IDLE, ASB_STATE_MODERATE, ASB_STATE_HEAVY,
+       ASB_STATE_SUSTAINED, ASB_STATE_GAMING };
+typedef enum { ASB_PKG_OK = 0, ASB_PKG_MISSING = 1, ASB_PKG_STALE = 2, ASB_PKG_SYS_UI = 3 } asb_pkg_status_t;
+#define ASB_SMART_APP_CACHE_S 0   /* every call classifies - the cache cadence is not under test */
+typedef struct { float load1; } cpu_t;
+typedef struct { int load_pct; } gpu_t;
+typedef struct { int cpu_max_c; } therm_t;
+typedef struct { int screen_on, camera_active; } misc_t;
+typedef struct { cpu_t cpu; gpu_t gpu; therm_t therm; misc_t misc; } asb_metrics_t;
+typedef struct { int state; } asb_fsm_t;
+static struct { int enabled; int app_hint; uint64_t app_hash; char app_pkg_cached[128]; } g_smart_rt;
+static int g_smart_store_loaded = 0;
+static int g_pkg_detect_ok = 0, g_pkg_detect_status = 0, g_pkg_detect_source = 0;
+static float g_ui_quiet_floor = 0.0f;
+static long g_gov_start_ts = 0;
+static struct { int bat_suppress_gaming; } g_asb_cfg = { 1 };
+/* The scripted detector: the package the device "sees" in front. */
+static const char *g_det_pkg = "";
+static int g_det_hint = ASB_APP_MEDIUM;
+static asb_pkg_status_t g_det_status = ASB_PKG_OK;
+static int g_det_media = 0;
+static asb_pkg_status_t asb_smart_detect_foreground_pkg(
+        char *out_pkg, size_t outsz, uint64_t *out_hash, int *out_hint, int *out_source,
+        int screen_on_now, int interacting_now) {
+    (void)screen_on_now; (void)interacting_now;
+    if (g_det_status == ASB_PKG_OK || g_det_status == ASB_PKG_STALE) {
+        snprintf(out_pkg, outsz, "%s", g_det_pkg);
+        *out_hash = 0x1234; *out_hint = g_det_hint; *out_source = 1;
+    }
+    return g_det_status;
+}
+static int asb_smart_pkg_is_media_candidate(const char *pkg) { (void)pkg; return g_det_media; }
+#include "f.c"
+static asb_metrics_t M; static asb_fsm_t F;
+static void det(const char *pkg, int hint, asb_pkg_status_t st, int media) {
+    g_det_pkg = pkg; g_det_hint = hint; g_det_status = st; g_det_media = media;
+}
+int main(void) {
+    int bad = 0;
+    M.misc.screen_on = 1; F.state = ASB_STATE_MODERATE;
+    /* The field case: Balanced, a feed app, GPU 57 %, load 7.1 - NOT a game. */
+    det("com.reddit.frontpage", ASB_APP_MEDIUM, ASB_PKG_OK, 0);
+    M.gpu.load_pct = 57; M.cpu.load1 = 7.1f; M.therm.cpu_max_c = 45;
+    asb_fg_classify_tick(&M, &F);
+    if (g_smart_rt.app_hint != ASB_APP_MEDIUM) { printf("a feed under load read as %d, want medium\n", g_smart_rt.app_hint); bad = 1; }
+    if (!g_pkg_detect_ok) { puts("a detected package not marked as such"); bad = 1; }
+    /* A known game under the same load IS a game. */
+    det("com.miHoYo.GenshinImpact", ASB_APP_GAMING, ASB_PKG_OK, 0);
+    asb_fg_classify_tick(&M, &F);
+    if (g_smart_rt.app_hint != ASB_APP_GAMING) { puts("a known game lost its hint"); bad = 1; }
+    /* A paused game (idle FSM, quiet GPU) is one step down, not GAMING. */
+    det("com.miHoYo.GenshinImpact", ASB_APP_GAMING, ASB_PKG_OK, 0);
+    F.state = ASB_STATE_LIGHT_IDLE; M.gpu.load_pct = 4; M.cpu.load1 = 5.0f;
+    asb_fg_classify_tick(&M, &F);
+    if (g_smart_rt.app_hint != ASB_APP_HEAVY) { printf("a paused game read as %d\n", g_smart_rt.app_hint); bad = 1; }
+    /* A backgrounded game (quiet run queue) is LIGHT. */
+    M.cpu.load1 = 1.2f;
+    asb_fg_classify_tick(&M, &F);
+    if (g_smart_rt.app_hint != ASB_APP_LIGHT) { puts("a backgrounded game was not demoted"); bad = 1; }
+    /* The heat inference: an unlisted real game (hot die, busy GPU, SUSTAINED) reaches
+     * GAMING even though the table calls it medium - this is how Smart treats it too. */
+    det("com.newgame.unlisted", ASB_APP_MEDIUM, ASB_PKG_OK, 0);
+    F.state = ASB_STATE_SUSTAINED; M.therm.cpu_max_c = 60; M.gpu.load_pct = 45; M.cpu.load1 = 6.0f;
+    asb_fg_classify_tick(&M, &F);
+    if (g_smart_rt.app_hint != ASB_APP_GAMING) { puts("a hot GPU-busy unknown was not inferred as a game"); bad = 1; }
+    /* ... but the camera is not a game, whatever the heat. */
+    det("com.newgame.unlisted", ASB_APP_MEDIUM, ASB_PKG_OK, 0);
+    M.misc.camera_active = 1;
+    asb_fg_classify_tick(&M, &F);
+    if (g_smart_rt.app_hint == ASB_APP_GAMING) { puts("the camera was inferred as a game"); bad = 1; }
+    M.misc.camera_active = 0;
+    /* ... and neither is a video app. */
+    det("com.google.android.youtube", ASB_APP_MEDIUM, ASB_PKG_OK, 1);
+    asb_fg_classify_tick(&M, &F);
+    if (g_smart_rt.app_hint == ASB_APP_GAMING) { puts("a media app was inferred as a game"); bad = 1; }
+    /* Below 60 C there is no inference at all - the old bug's exact territory. */
+    det("com.newgame.unlisted", ASB_APP_MEDIUM, ASB_PKG_OK, 0);
+    M.therm.cpu_max_c = 52;
+    asb_fg_classify_tick(&M, &F);
+    if (g_smart_rt.app_hint == ASB_APP_GAMING) { puts("GPU-busy at 52 C read as a game"); bad = 1; }
+    /* No detection answer at all: the load heuristic, and never GAMING from it. */
+    det("", 0, ASB_PKG_MISSING, 0);
+    M.cpu.load1 = 13.0f; M.therm.cpu_max_c = 70; F.state = ASB_STATE_HEAVY;
+    asb_fg_classify_tick(&M, &F);
+    if (g_smart_rt.app_hint != ASB_APP_HEAVY || g_pkg_detect_ok) { printf("no-signal load heuristic: hint %d ok %d\n", g_smart_rt.app_hint, g_pkg_detect_ok); bad = 1; }
+    M.cpu.load1 = 7.0f;
+    asb_fg_classify_tick(&M, &F);
+    if (g_smart_rt.app_hint != ASB_APP_MEDIUM) { puts("load 7 without detection is medium"); bad = 1; }
+    /* Screen off: idle, nothing cached. */
+    M.misc.screen_on = 0;
+    asb_fg_classify_tick(&M, &F);
+    if (g_smart_rt.app_hint != ASB_APP_IDLE || g_smart_rt.app_hash != 0) { puts("screen off is not idle"); bad = 1; }
+    M.misc.screen_on = 1;
+    /* Smart active: the function keeps its hands off Smart's classification. */
+    g_smart_rt.enabled = 1; g_smart_store_loaded = 1; g_smart_rt.app_hint = ASB_APP_LIGHT;
+    det("com.miHoYo.GenshinImpact", ASB_APP_GAMING, ASB_PKG_OK, 0);
+    F.state = ASB_STATE_SUSTAINED; M.therm.cpu_max_c = 60; M.gpu.load_pct = 45;
+    asb_fg_classify_tick(&M, &F);
+    if (g_smart_rt.app_hint != ASB_APP_LIGHT) { puts("Smart's classification was overwritten"); bad = 1; }
+    if (!bad) printf("ok\n");
+    return bad;
+}
+C
+"$CC" -std=gnu11 -Wall -Werror -Wno-unused-function -o "$T/t" "$T/t.c" -I"$T" || fail "harness does not compile"
+"$T/t" || fail "behaviour"
+echo "PASS fg classify manual gaming: a feed under load is not a game, a known game is, the heat inference keeps the camera and media out, Smart keeps owning its own"
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;

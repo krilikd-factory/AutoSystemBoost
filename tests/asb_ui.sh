@@ -2837,6 +2837,19 @@ function T(k, d) { return d; }
 let _selectedProfile = 'stock';
 let _stockRomHistory = { ts: 0, cpuT: 0 };
 let _stockTrendSamples = [], _stockTrendLast = null;
+/* fix210: the trend persists in localStorage - the harness fakes it and checks the save. */
+const _ls = {};
+const localStorage = {
+  getItem: function (k) { return (k in _ls) ? _ls[k] : null; },
+  setItem: function (k, v) { _ls[k] = String(v); },
+  removeItem: function (k) { delete _ls[k]; }
+};
+function _stockTrendSave() {
+  try {
+    localStorage.setItem('asb_stock_trend', JSON.stringify({
+      s: _stockTrendSamples.slice(-16), l: _stockTrendLast }));
+  } catch (e) {}
+}
 const ASB_LANG = 'en';
 const _stockLiveInfo = { ceil: [] };
 const _lvEta = { cap: 0, chg: false, gov: null };
@@ -2878,6 +2891,7 @@ _stockTrendSamples = []; _stockTrendLast = null;
 paintStockLive(at(1000000, 40)); paintStockLive(at(1010000, 40.5)); paintStockLive(at(1020000, 41)); paintStockLive(at(1040000, 42));
 chk(v('bnStockTrend') === '\u2191 warming' && /cap-clamp/.test(_nodes.bnStockTrend.className), 'warming over 40 s: ' + v('bnStockTrend'));
 chk(/per minute over the last 40 s/.test(_nodes.bnStockTrend.title), 'rate in the sheet source: ' + _nodes.bnStockTrend.title);
+chk(_ls.asb_stock_trend && JSON.parse(_ls.asb_stock_trend).s.length === 4, 'the trend persists across a page reload (fix210): ' + _ls.asb_stock_trend);
 paintStockLive(at(1040000, 42));
 chk(v('bnStockTrend') === '\u2191 warming', 'a repaint of the same sample shows a dash again: ' + v('bnStockTrend'));
 /* A one-core spike between steady samples does not flip it. */
@@ -4050,6 +4064,21 @@ ltpo_video (lifetime): lowered 79 times, 11 min at the lower rate, 79 restored b
 kernel holder on the charger: rx_wake_lock 343 min
 kernel holder on the charger: qcom_rx_wakelock 13 min
 EOF
+# fix210: the capture's own wakelock report - counts by occurrence, the facts the sheet
+# names when the held-time counters are flat.
+cat > "$CAP/_wakelock_report.txt" <<EOF
+WAKELOCK REPORT x
+
+----- TOP PARTIAL WAKELOCK HOLDERS -----
+  x54   taken  *alarm*
+  x28   taken  *launch*
+  x2    taken  tinyrare
+----- TOP ALARM / WAKEUP SOURCES -----
+  x18    *walarm*:com.android.systemui.aod.HIDE_TIME
+  x6    *walarm*:android.app.backup.FullBackupJob
+  x1    *walarm*:once.is.not.enough
+----- end -----
+EOF
 printf 'current_profile: smart\n' > "$CAP/env.txt"
 cat > "$CAP/smart_records.txt" <<EOF
 smooth|watching=3|testing=0|helped=0|not_helped=0
@@ -4106,6 +4135,15 @@ printf '%s\n' "$out" | grep -q '^phase	name=active	min=120	drop=13	pctph=6.5$' |
 printf '%s\n' "$out" | grep -q '^phase	name=charging	min=60	drop=-14	pctph=0.0$' || fail "phase charging keeps its signed drop"
 printf '%s\n' "$out" | grep -q '^kwk	tag=rx_wake_lock	min=343$' || fail "kernel holder on the charger"
 printf '%s\n' "$out" | grep -q '^kwk	tag=qcom_rx_wakelock	min=13$' || fail "kernel holder 2"
+# fix210: causes by occurrence - the holders and alarms the capture counted, and the
+# idle/sleep radio split off the day-wide total. Rows under the count floor stay out.
+printf '%s\n' "$out" | grep -q '^wlt	tag=\*alarm\*	n=54$' || fail "holder row: $(printf '%s\n' "$out" | grep '^wlt' | head -1)"
+printf '%s\n' "$out" | grep -q '^wlt	tag=\*launch\*	n=28$' || fail "holder row 2"
+printf '%s\n' "$out" | grep -q 'tinyrare' && fail "a holder under the count floor leaked"
+printf '%s\n' "$out" | grep -q '^wla	tag=com.android.systemui.aod.HIDE_TIME	n=18$' || fail "alarm row: $(printf '%s\n' "$out" | grep '^wla' | head -1)"
+printf '%s\n' "$out" | grep -q '^wla	tag=android.app.backup.FullBackupJob	n=6$' || fail "alarm row 2"
+printf '%s\n' "$out" | grep -q 'once.is.not.enough' && fail "an alarm under the count floor leaked"
+printf '%s\n' "$out" | grep -q '^sradio	mib=1.1$' || fail "idle radio split: $(printf '%s\n' "$out" | grep '^sradio')"
 [ "$(ASB_TOMBSTONE_DIR="$T/tomb" sh "$D" "$T/no-such-dir")" = "error	no_capture" ] || fail "missing capture must say error no_capture"
 EMPTY="$T/empty"; mkdir -p "$EMPTY"
 eout="$(ASB_TOMBSTONE_DIR="$T/empty-tomb" ASB_LK_LOCK="$T/nolock" sh "$D" "$EMPTY")"
@@ -4170,6 +4208,11 @@ const txt = [
   'phase\tname=sleep\tmin=304\tdrop=8\tpctph=1.6',
   'phase\tname=charging_idle\tmin=397\tdrop=-62\tpctph=0.0',
   'kwk\ttag=rx_wake_lock\tmin=343',
+  'wlt\ttag=*alarm*\tn=54',
+  'wlt\ttag=*launch*\tn=28',
+  'wla\ttag=com.android.systemui.aod.HIDE_TIME\tn=18',
+  'wla\ttag=android.app.backup.FullBackupJob\tn=6',
+  'sradio\tmib=1.1',
   'crash\tcount=2\tasb=1\tlatest=/vendor/bin/hw/foo\tltime=14:32',
   'sysui\tcount=2',
   'throttle\tclamps=2\towner=asb_governor',
@@ -4209,6 +4252,10 @@ chk(d.sections.aod.lit === '11' && d.sections.aod.of === '520', 'aod line parses
 chk(d.sections.scr.on_pctph === '5.7' && d.sections.scr.off_pctph === '1.8' && d.sections.scr.off_min === '478', 'screen split parses');
 chk(d.phases.length === 2 && d.phases[0].name === 'sleep' && d.phases[0].drop === 8 && d.phases[1].drop === -62, 'phase rows keep the signed drop: ' + JSON.stringify(d.phases));
 chk(d.kwk.length === 1 && d.kwk[0].tag === 'rx_wake_lock' && d.kwk[0].min === 343, 'kernel charger holder parses');
+/* fix210: the occurrence-counted causes parse too. */
+chk(d.wlt.length === 2 && d.wlt[0].tag === '*alarm*' && d.wlt[0].n === 54 && d.wlt[1].n === 28, 'holder rows: ' + JSON.stringify(d.wlt));
+chk(d.wla.length === 2 && d.wla[0].tag === 'com.android.systemui.aod.HIDE_TIME' && d.wla[0].n === 18, 'alarm rows: ' + JSON.stringify(d.wla));
+chk(d.sections.sradio.mib === '1.1', 'the idle radio split parses');
 chk(d.sections.nightd.ma === '36' && d.sections.nightd.radio_mib === '1.1' && d.sections.nightd.cpu_t === '31' && d.sections.nightd.skin_t === '29' && d.sections.nightd.wake_pk === '5', 'night detail parses: ' + JSON.stringify(d.sections.nightd));
 /* fix207: the profile-saving tip fires on the tester's own numbers (Battery at 1.6 %/h
    against Performance at 6.1 %/h, both with enough screen-on minutes). */
@@ -4224,9 +4271,18 @@ const tips = logReportTips(d);
 const keys = tips.map(function (t) { return t.key; });
 chk(keys.join(',') === 'lr_tip_crash,lr_tip_night_modem,lr_tip_awake_who,lr_tip_wl_enable,lr_tip_jank_ok,lr_tip_audio', 'fix200 advice, worst first, six cards max, the awake tip names its holder (fix206): ' + keys.join(','));
 chk(tips[2].vars.who === 'com.amurcanov.tgwsproxy' && tips[2].vars.awake === '25', 'the awake tip names the top live holder: ' + JSON.stringify(tips[2].vars));
-/* without live holders the awake tip falls back to the generic wording */
+/* without live holders the awake tip names the counted causes (fix210): the loudest
+   alarm first, then the loudest holder, then the generic wording */
 d.wlive = [];
-chk(logReportTips(d).map(function (t) { return t.key; }).indexOf('lr_tip_awake') >= 0, 'no live holders - the generic awake tip');
+const tipA = logReportTips(d).filter(function (t) { return t.key === 'lr_tip_awake_alarm'; });
+chk(tipA.length === 1 && tipA[0].vars.who === 'com.android.systemui.aod.HIDE_TIME' && tipA[0].vars.awake === '25', 'no live holders - the tip names the loudest alarm: ' + JSON.stringify(tipA));
+d.wla = [];
+const tipH = logReportTips(d).filter(function (t) { return t.key === 'lr_tip_awake_hold'; });
+chk(tipH.length === 1 && tipH[0].vars.who === '*alarm*', 'no alarms either - the tip names the loudest holder: ' + JSON.stringify(tipH));
+d.wlt = [];
+chk(logReportTips(d).map(function (t) { return t.key; }).indexOf('lr_tip_awake') >= 0, 'no causes at all - the generic awake tip');
+d.wlt = [{ tag: '*alarm*', n: 54 }, { tag: '*launch*', n: 28 }];
+d.wla = [{ tag: 'com.android.systemui.aod.HIDE_TIME', n: 18 }, { tag: 'android.app.backup.FullBackupJob', n: 6 }];
 d.wlive = [{ tag: 'TgWsProxy::ServiceWakeLock', pct: 78, min: 24, pkg: 'com.amurcanov.tgwsproxy' }];
 chk(tips[1].vars.set === I18N.ru.cfg.night_modem_idle.name, 'the night-modem tip names the setting as Settings names it: ' + tips[1].vars.set);
 chk(tips[3].vars.set === I18N.ru.cfg.wakelock_action.name, 'the wakelock tip names its setting too: ' + tips[3].vars.set);
@@ -4294,7 +4350,9 @@ KEYS = ['lr_menu','lr_refresh','lr_loading','lr_none_title','lr_none_body','lr_f
         'lr_ph_audio_bt_scr','lr_ph_charging_idle','lr_ph_charging_active',
         'lr_sec_nightd','lr_nd_spent','lr_nd_deep','lr_nd_awake','lr_nd_ma',
         'lr_nd_radio','lr_nd_temp','lr_nd_temp_fmt','lr_nd_holder',
-        'lr_nd_verdict_ok','lr_nd_verdict_mid','lr_nd_verdict_bad','lr_tip_prof_save']
+        'lr_nd_verdict_ok','lr_nd_verdict_mid','lr_nd_verdict_bad','lr_tip_prof_save',
+        'lr_wlt_head','lr_wla_head','lr_times','lr_sradio','lr_scr_note',
+        'lr_tip_awake_alarm','lr_tip_awake_hold']
 EMO = {'lr_sec_drain': '\U0001f50b', 'lr_sec_wake': '\u23f0', 'lr_sec_crash': '\U0001f4a5',
        'lr_sec_thermal': '\U0001f321\ufe0f', 'lr_sec_tips': '\U0001f4a1',
        'lr_sec_smooth': '\U0001f4f1', 'lr_sec_display': '\U0001f5a5',
@@ -4315,7 +4373,9 @@ PH = {'lr_running': ['{min}', '{h}'], 'lr_crash_n': ['{n}'], 'lr_crash_latest': 
       'lr_deep_sleep': ['{pct}'], 'lr_kwk_fmt': ['{tag}'],
       'lr_nd_temp_fmt': ['{cpu}', '{skin}'], 'lr_nd_verdict_ok': ['{pct}', '{deep}'],
       'lr_nd_verdict_mid': ['{awake}'], 'lr_nd_verdict_bad': ['{pct}'],
-      'lr_tip_prof_save': ['{cheap}', '{x}', '{busy}', '{y}']}
+      'lr_tip_prof_save': ['{cheap}', '{x}', '{busy}', '{y}'],
+      'lr_times': ['{n}'],
+      'lr_tip_awake_alarm': ['{awake}', '{who}'], 'lr_tip_awake_hold': ['{awake}', '{who}']}
 files = sorted((root / 'webroot' / 'i18n').glob('*.json'))
 assert len(files) == 13, 'locale count'
 for p in files:
@@ -4375,7 +4435,7 @@ grep -Fq '"tools/logkit/asb_fullday_digest.sh"' "$ROOT/.github/workflows/build-d
 grep -Fq '"tools/logkit/asb_fullday_digest.sh"' "$ROOT/.github/workflows/build-release.yml" || fail "release workflow does not ship the digest"
 grep -Fq 'asb_fullday_digest.sh' "$ROOT/.github/workflows/build-release.yml" || fail "release staging loop lost the digest"
 grep -Fq 'crash.ltime' "$H" || fail "fix204: the sheet must show WHEN the latest crash happened"
-echo "PASS webui log report: digest over a fixture capture (drain..cfg, live holders, per-profile drain, charging, LTPO, AOD), fresh-capture crash window (fix204), plain-words parser/tips in node (ru+en), 13 locales, menu wiring"
+echo "PASS webui log report: digest over a fixture capture (drain..cfg, live holders, per-profile drain, charging, LTPO, AOD, wake causes by occurrence fix210), fresh-capture crash window (fix204), plain-words parser/tips in node (ru+en), 13 locales, menu wiring"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

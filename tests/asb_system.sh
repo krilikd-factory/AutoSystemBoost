@@ -2976,7 +2976,9 @@ fail() { echo "FAIL fix120: $*"; exit 1; }
 G="$ROOT/src/asb_governor.c"
 F="$ROOT/src/asb_fsm.h"
 grep -q 'int cam_open = m->misc.camera_active;' "$G" || fail "camera flag not read by the app-hint inference"
-[ "$(grep -c '} else if (!boot_grace && !cam_open &&' "$G")" = 2 ] || fail "a heat branch still infers a game with the camera open"
+# Four branches, all guarded: the two Smart inferences and, since fix210, their mirror in
+# asb_fg_classify_tick on the manual profiles - each heat branch must keep !cam_open.
+[ "$(grep -c '} else if (!boot_grace && !cam_open &&' "$G")" = 4 ] || fail "a heat branch still infers a game with the camera open"
 grep -q 'static const char \*_snames\[\]' "$G" && fail "heartbeat still carries its own state-name table"
 grep -q 'asb_state_names\[fsm.state\] : "?",' "$G" || fail "heartbeat does not use the FSM state names"
 # The name table must follow the enum, entry for entry.
@@ -4124,6 +4126,61 @@ grep -q "$_clpat" "$ROOT/tools/asb_full_regression.sh" && fail "the regression s
 # release notes, just never a build gate.
 grep -q '  CHANGELOG.md$' "$ROOT/tools/asb_tree.sha256" || fail "the changelog fell out of the tree manifest"
 echo "PASS: fix199 contract"
+) || exit 1
+# ---- fix210 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+G="$ROOT/src/asb_governor.c"
+H="$ROOT/webroot/index.html"
+D="$ROOT/tools/logkit/asb_fullday_digest.sh"
+T="$ROOT/tests/asb_smart.sh"
+fail() { echo "FAIL fix210: $*"; exit 1; }
+# Owner's report: FSM said GAMING on Balanced while he was scrolling a feed (GPU 57 %,
+# load 7.1), the Monitor's thermal trend kept showing "...", the Monitor's drain tiles
+# looked at odds with the log report's, and the wake section said "holders not recorded"
+# while the capture plainly knew what woke the phone.
+# 1) GAMING on the manual profiles: the foreground-package classification ran only inside
+#    asb_smart_tick, so on Battery/Balanced/Performance the hint stayed 0 and the FSM
+#    gate's "no package information" fallback (app_hint == 0 counts as agreement) fired
+#    permanently - any busy GPU plus a busy CPU read as a game. asb_fg_classify_tick now
+#    mirrors Smart's classification on the manual profiles (same detector, same media and
+#    camera guards, same heat inference, same wake-edge re-read, plus a no-signal load
+#    heuristic that never invents GAMING) and runs before BOTH app_hint publishes.
+grep -q '^static void asb_fg_classify_tick' "$G" || fail "no manual-profile classification"
+[ "$(grep -c 'asb_fg_classify_tick(&metrics, &fsm);' "$G")" -eq 2 ] || fail "must run before both app_hint publishes (startup and the main loop)"
+grep -q 'if (g_smart_rt.enabled && g_smart_store_loaded) return;' "$G" || fail "Smart must keep owning the classification"
+grep -q 't_fg_classify_manual_gaming_runtime' "$T" || fail "the manual-profile classification runtime test is gone"
+# 2) Thermal trend: the verdict needs three samples over a 30 s span, and a recreated
+#    WebView threw them away - on a real phone that is every visit. The samples and the
+#    last verdict now persist in localStorage and survive a page reload (fresh to 115 s,
+#    so the oldest restored sample still counts at the next 10 s read).
+grep -qF "asb_stock_trend" "$H" || fail "the thermal trend lost its persistence"
+grep -qF "localStorage.removeItem('asb_stock_trend')" "$H" || fail "the monitor reset must drop the persisted trend"
+grep -qF 'x.t <= 115000' "$H" || fail "restored samples outlive the verdict span"
+# 3) Wake section: flat held-time counters hid the causes the capture already knew. The
+#    digest now surfaces them - the top partial-wakelock holders by occurrence (wlt), the
+#    top alarm/wakeup sources (wla), and the idle radio traffic (sradio) - and the sheet
+#    renders them and names the loudest one in the awake tip instead of shrugging.
+grep -qF 'printf "wlt\ttag=%s\tn=%d\n"' "$D" || fail "the digest lost the holder line"
+grep -qF 'printf "wla\ttag=%s\tn=%d\n"' "$D" || fail "the digest lost the alarm line"
+grep -qF 'printf "sradio\tmib=%.1f\n"' "$D" || fail "the digest lost the idle-radio line"
+grep -qF "tag === 'wlt'" "$H" || fail "the report parser dropped the holder line"
+grep -qF "tag === 'wla'" "$H" || fail "the report parser dropped the alarm line"
+grep -qF 'lr_wlt_head' "$H" || fail "the holder rows are not rendered"
+grep -qF 'lr_wla_head' "$H" || fail "the alarm rows are not rendered"
+grep -qF 'lr_sradio' "$H" || fail "the idle-radio row is not rendered"
+grep -qF 'lr_tip_awake_alarm' "$H" || fail "the awake tip never names the alarm"
+grep -qF 'lr_tip_awake_hold' "$H" || fail "the awake tip never names the holder"
+# 4) The drain tiles vs the report: not a bug - four different windows (the tiles count
+#    only calm stretches of an hour or more, the report covers the whole capture), and the
+#    sheet now says so right under the screen rows so the two pages stop looking at odds.
+grep -qF 'lr_scr_note' "$H" || fail "the screen-rows reconciliation note is gone"
+for _l in "$ROOT"/webroot/i18n/*.json; do
+  for _k in lr_wlt_head lr_wla_head lr_times lr_sradio lr_tip_awake_alarm lr_tip_awake_hold lr_scr_note; do
+    grep -q "\"$_k\"" "$_l" || fail "${_l##*/} lacks $_k"
+  done
+done
+echo "PASS: fix210 contract"
 ) || exit 1
 # ---- fix209 ---------------------------------------------------------------
 (
