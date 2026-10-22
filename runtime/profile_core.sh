@@ -401,7 +401,16 @@ asb_apply_gpu() {
   [ -w /sys/class/kgsl/kgsl-3d0/force_no_nap ] && writef_retry /sys/class/kgsl/kgsl-3d0/force_no_nap "$GPU_FORCE_NO_NAP" 2 0.06 || true
   [ -w /sys/class/kgsl/kgsl-3d0/bus_split ] && [ -n "$GPU_BUS_SPLIT" ] && writef_retry /sys/class/kgsl/kgsl-3d0/bus_split "$GPU_BUS_SPLIT" 2 0.06 || true
   [ -w /sys/class/kgsl/kgsl-3d0/throttling ] && [ -n "$GPU_THROTTLING" ] && writef_retry /sys/class/kgsl/kgsl-3d0/throttling "$GPU_THROTTLING" 2 0.06 || true
-  [ -w /sys/class/kgsl/kgsl-3d0/thermal_pwrlevel ] && [ -n "$GPU_THERMAL_PWRLEVEL" ] && writef_retry /sys/class/kgsl/kgsl-3d0/thermal_pwrlevel "$GPU_THERMAL_PWRLEVEL" 2 0.06 || true
+  # fix213: thermal_pwrlevel belongs to the vendor thermal engine. Profiles up to fix212
+  # wrote a static level here; the governor reads this node as a vendor cap, so the shell's
+  # own write looked like one (and sat under the governor's pwrlevel ceiling, double-capping
+  # the GPU). The intent lives in GPU_MAX_PCT now, which the governor translates into the
+  # pwrlevel index itself. Release a stale static level once per boot - the engine
+  # re-asserts its own level the moment it actually needs to cool the GPU.
+  _tpl=/sys/class/kgsl/kgsl-3d0/thermal_pwrlevel
+  if [ -w "$_tpl" ] && [ ! -f /dev/.asb/gpu_tpl_released ]; then
+    writef_retry "$_tpl" 0 2 0.06 && true > /dev/.asb/gpu_tpl_released 2>/dev/null || true
+  fi
   # GPU FREQ OWNERSHIP (single-owner, mirrors the CPU refactor): devfreq
   : # GPU freq caps intentionally not written here
 }

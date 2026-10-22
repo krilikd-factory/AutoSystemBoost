@@ -62,6 +62,7 @@ _pending() {   # 1 when ASB's last write came after this boot started
 }
 _get() { _lspd verbose-get | sed -n 's/^verbose=//p' | head -1; }
 _reason() { _lspd verbose-get | sed -n 's/^reason=//p' | head -1; }
+_format() { _lspd verbose-get | sed -n 's/^format=//p' | head -1; }
 
 present=0
 [ -d "$LSPD" ] && [ -f "$DB" ] && present=1
@@ -131,6 +132,9 @@ case "${1:-status}" in
     if [ "$present" = 1 ]; then
       _v="$(_get)"; echo "verbose=${_v:-unknown}"
       [ "${_v:-unknown}" = unknown ] && echo "reason=$(_reason)"
+      # fix213 (audit K8): the serialization layout the CLI parsed, so a future LSPosed
+      # schema change is visible here and in the WebUI instead of failing silently.
+      _f="$(_format)"; [ -n "$_f" ] && echo "format=$_f"
       echo "log_kib=$(_kib "$LSPD"/log/*.log "$LSPD"/log/*/*.log)"
       echo "verbose_kib=$(_kib "$LSPD"/log/verbose_*.log)"
       # fix189: the modules log is what LSPosed modules write themselves (XposedBridge.log,
