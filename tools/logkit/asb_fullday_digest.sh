@@ -9,6 +9,7 @@
 #
 # Output: TAB-separated lines, one fact per line:
 #   meta     elapsed_min=<n>  target_h=<n>  running=0|1  started=<YYYY-MM-DD HH:MM>  profile=<name>
+#   meta2    model=<m>  device=<codename>  soc=<soc>  rom=<build>  mod=<build>   (fix213)
 #   cover    on_min=<n>  off_min=<n>  on_pct=<n>
 #   drain    pctph=<x.x>  total_drop=<n>  hours=<x.x>  ma=<n>
 #   night    dur_min=<n>  drop=<n>  pctph=<x.x>  awake=<n>
@@ -21,6 +22,7 @@
 #   audio    spk_min=<n>  pctph=<x.x>  ma=<n>
 #   charge   types=<Fast(17) N/A(197)>
 #   smart    watching=<n>  testing=<n>  helped=<n>  nothelped=<n>  ctxlearn=<n>
+#   mwake    n=<n>  per_night=<x.x>  typical_s=<n>     (night habits, fix213)
 #   cfg      key=<setting>  value=<v>                  (the settings the advice can point at)
 #   wl       pkg=<package>  sec=<n>            (up to 5 rows, worst first)
 #   wl       none=1                            (nothing recorded)
@@ -38,8 +40,11 @@
 #   crash    count=<n>  asb=<n>  latest=<cmdline|none>  ltime=<HH:MM>
 #   sysui    count=<n>
 #   thermal  cpu=<n>  surf=<n>
+#   heat     peak_phase=<name>  warm_min=<n>  skin_min=<n>   (durations hot, fix213)
 #   throttle clamps=<n>  owner=<name|unknown>
 #   radio    mib=<x.x>
+#   hist     started=<...>  night=<x.x>  drain=<x.x>  jank=<x.x>  cpu=<n>  clamps=<n>
+#            (up to 3 earlier finished captures, newest first, fix213)
 #   error    no_capture                        (no capture directory found)
 #
 # Sections are emitted only when their source file exists, so a capture that just started
@@ -97,14 +102,24 @@ if [ -f "$_DIR/_full_day_report.txt" ]; then
   _th="$(printf '%s\n' "$_hl" | sed -n 's/^ capture: \([0-9][0-9]*\)h target.*/\1/p')"
   _el="$(printf '%s\n' "$_hl" | sed -n 's/.*, \([0-9][0-9]*\) min elapsed.*/\1/p')"
 fi
-# No interim report yet (the first one lands after 15 minutes): derive the elapsed time
-# from the first ledger row so the sheet can still say "recording, N min so far".
+# fix214: while the capture runs, the elapsed time comes from the ledger and the clock,
+# not from the interim report. The interim line is rewritten every fifteen minutes, so
+# between writes it read "15 min" while the live sections right below (computed fresh
+# from the traces) already showed 24 - one sheet disagreeing with itself.
 # (The ledger leads with a "# phase start end ..." comment - skip it.)
-if [ -z "$_el" ] && [ "$_HAVE_LEDGER" = "1" ]; then
+if [ "$_HAVE_LEDGER" = "1" ]; then
   _fs="$(_cat_ledger | awk -F'\t' '!/^#/ { print $2; exit }')"
   case "$_fs" in
     ''|*[!0-9]*) : ;;
-    *) _el=$(( ($(date +%s) - _fs) / 60 )) ;;
+    *) _el_live=$(( ($(date +%s) - _fs) / 60 ))
+       # A finished capture keeps the report-writer number; a running one goes live.
+       if [ -f "$_LOCK/output_dir" ] && [ -f "$_LOCK/pid" ]; then
+         _lod0="$(cat "$_LOCK/output_dir" 2>/dev/null)"; _lpid0="$(cat "$_LOCK/pid" 2>/dev/null)"
+         if [ "$_lod0" = "$_DIR" ] && [ -n "$_lpid0" ] && kill -0 "$_lpid0" 2>/dev/null; then
+           _el="$_el_live"
+         fi
+       fi
+       [ -z "$_el" ] && _el="$_el_live" ;;
   esac
 fi
 _running=0
@@ -129,6 +144,17 @@ _prof="$(sed -n 's/^current_profile:[[:space:]]*//p' "$_DIR/env.txt" 2>/dev/null
 printf 'meta\telapsed_min=%s\ttarget_h=%s\trunning=%d\tstarted=%s\tprofile=%s\n' \
   "${_el:-0}" "${_th:-24}" "$_running" "${_started:-}" "${_prof:-}"
 
+# ----- meta2: device context (fix213, audit 8.1) ----------------------------------
+# The page used to be device-blind, so no advice could know the device it talked about.
+# All of it is in env.txt, written by the recorder when the capture started - reading it
+# costs nothing extra. The module build is the one that RAN the capture, which is the
+# honest answer to "which build was this day measured on".
+if [ -f "$_DIR/env.txt" ]; then
+  _m2() { sed -n "s/^$1:[[:space:]]*//p" "$_DIR/env.txt" 2>/dev/null | head -n 1 | tr -d '\t'; }
+  printf 'meta2\tmodel=%s\tdevice=%s\tsoc=%s\trom=%s\tmod=%s\n' \
+    "$(_m2 model)" "$(_m2 device)" "$(_m2 soc_model)" "$(_m2 oem_build)" "$(_m2 module_version)"
+fi
+
 # ----- cover (screen on/off split, time-weighted) ---------------------------
 # Same rule as the report writer: an interval counts as screen-on only when it started
 # with the screen on and is no longer than five minutes - while suspended the recorder
@@ -148,7 +174,9 @@ fi
 # mA is the duration-weighted mean of the per-phase averages, reported only where the
 # recorder itself trusted its sensor readings (it already blanks the unusable ones).
 if [ "$_HAVE_LEDGER" = "1" ]; then
-  _cat_ledger | awk -F'\t' '
+  # fix213: the line is captured, not printed straight, so the history block at the end
+  # can lift the headline figure for the trend without recomputing it.
+  _h_drain_line="$(_cat_ledger | awk -F'\t' '
     /^#/ { next }
     NF >= 5 {
       d = $4 - $5; dur = $3 - $2
@@ -161,7 +189,8 @@ if [ "$_HAVE_LEDGER" = "1" ]; then
       if (sec > 0)
         printf "drain\tpctph=%.1f\ttotal_drop=%d\thours=%.1f\tma=%d\n", \
           drop * 3600 / sec, drop, sec / 3600, (maw > 0 ? ma / maw : 0)
-    }' 2>/dev/null
+    }' 2>/dev/null)"
+  [ -n "$_h_drain_line" ] && printf '%s\n' "$_h_drain_line"
 
   # ----- night (longest uninterrupted idle/sleep chain) ---------------------
   # Consecutive idle/sleep rows with at most two minutes between them are one stretch:
@@ -170,7 +199,7 @@ if [ "$_HAVE_LEDGER" = "1" ]; then
   # fix207: the same pass keeps the chain's detail - average current, mobile traffic,
   # peak CPU/skin temperatures, the wakeup-source peak - so the sheet can give the
   # night its own section ("потрачено за ночь, почему") instead of one bare rate.
-  _cat_ledger | awk -F'\t' '
+  _h_night_line="$(_cat_ledger | awk -F'\t' '
     function flush() {
       if (in_c && cd > bd) {
         bd = cd; bdrop = cdrop; baw = (cawt > 0 ? caw / cawt : 0)
@@ -206,7 +235,8 @@ if [ "$_HAVE_LEDGER" = "1" ]; then
         printf "nightd\tma=%d\tradio_mib=%.1f\tcpu_t=%d\tskin_t=%d\twake_pk=%d\n", \
           bma, br / 1048576, bct, bst, bwp
       }
-    }' 2>/dev/null
+    }' 2>/dev/null)"
+  [ -n "$_h_night_line" ] && printf '%s\n' "$_h_night_line"
 
   # ----- idlemax (worst screen-off awake share) -----------------------------
   # awake% is the share of a screen-off phase the phone spent NOT in suspend. A high
@@ -221,10 +251,27 @@ if [ "$_HAVE_LEDGER" = "1" ]; then
     }' 2>/dev/null
 
   # ----- thermal peaks -------------------------------------------------------
-  _cat_ledger | awk -F'\t' '
+  _h_thermal_line="$(_cat_ledger | awk -F'\t' '
     /^#/ { next }
     { if (($6 + 0) > c) c = $6 + 0; if (($7 + 0) > s) s = $7 + 0 }
-    END { if (c > 0 || s > 0) printf "thermal\tcpu=%d\tsurf=%d\n", c, s }' 2>/dev/null
+    END { if (c > 0 || s > 0) printf "thermal\tcpu=%d\tsurf=%d\n", c, s }' 2>/dev/null)"
+  [ -n "$_h_thermal_line" ] && printf '%s\n' "$_h_thermal_line"
+
+  # ----- heat detail (fix213, audit 8.3/К9) -----------------------------------
+  # A peak alone does not say how LONG the phone ran hot, and the duration is what
+  # costs battery and comfort: minutes at cpu>=45 / skin>=40, plus the phase that
+  # saw the cpu peak, so the advice can name WHEN the day ran hot.
+  _cat_ledger | awk -F'\t' '
+    /^#/ { next }
+    {
+      c = $6 + 0; s = $7 + 0; dur = ($3 - $2) / 60
+      if (c > mc) { mc = c; mp = $1 }
+      if (c >= 45) cm += dur
+      if (s >= 40) sm += dur
+    }
+    END {
+      if (mc > 0) printf "heat\tpeak_phase=%s\twarm_min=%d\tskin_min=%d\n", mp, cm, sm
+    }' 2>/dev/null
 
   # ----- radio traffic -------------------------------------------------------
   # Byte counters outgrow mksh 32-bit arithmetic, hence awk for the sum.
@@ -520,14 +567,15 @@ printf 'sysui\tcount=%d\n' "$_sn"
 # A new period starts when the cap owner changes or the trace goes quiet for over three
 # minutes (the throttle ended and later came back - two episodes, not one).
 if [ -s "$_DIR/throttle_trace.txt" ]; then
-  awk -F'|' '$1 ~ /^[0-9]+$/ {
+  _h_throttle_line="$(awk -F'|' '$1 ~ /^[0-9]+$/ {
       t = $1 + 0; o = ""
       for (i = 1; i <= NF; i++) if ($i ~ /^cap_owner=/) { o = $i; sub(/^cap_owner=/, "", o) }
       if (NR == 1 || (t - pt) > 180 || o != po) n++
       pt = t; po = o; lo = o
     } END {
       if (n > 0) printf "throttle\tclamps=%d\towner=%s\n", n, (lo == "" ? "unknown" : lo)
-    }' "$_DIR/throttle_trace.txt" 2>/dev/null
+    }' "$_DIR/throttle_trace.txt" 2>/dev/null)"
+  [ -n "$_h_throttle_line" ] && printf '%s\n' "$_h_throttle_line"
 fi
 
 # ----- report-derived facts (fix200) -------------------------------------------
@@ -613,6 +661,18 @@ if [ -s "$_DIR/smart_records.txt" ]; then
       "$(printf '%s' "$_sm" | sed -n 's/.*not_helped=\([0-9]*\).*/\1/p')" \
       "${_cl:-0}"
   fi
+  # ----- night habits (fix213, audit 8.8) ---------------------------------------
+  # The microwake learner's summary rides in the same file. A reassuring fact the page
+  # never showed: how rarely the phone stirs at night and for how long - deliberately a
+  # calm row, not an alarm.
+  _mw="$(grep -m1 '^microwake|' "$_DIR/smart_records.txt" 2>/dev/null)"
+  if [ -n "$_mw" ]; then
+    _mwn="$(printf '%s' "$_mw" | sed -n 's/.*learned=\([0-9]*\).*/\1/p')"
+    [ -n "$_mwn" ] && printf 'mwake\tn=%s\tper_night=%s\ttypical_s=%s\n' \
+      "$_mwn" \
+      "$(printf '%s' "$_mw" | sed -n 's/.*per_night=\([0-9.]*\).*/\1/p')" \
+      "$(printf '%s' "$_mw" | sed -n 's/.*typical_s=\([0-9]*\).*/\1/p')"
+  fi
 fi
 
 # ----- the settings the advice can point at (fix200) -----------------------------
@@ -622,10 +682,43 @@ fi
 _MD="$(CDPATH= cd -- "$(dirname "$0")/../.." 2>/dev/null && pwd)"
 _CFG="${ASB_CFG_FILE:-$_MD/config/governor.conf}"
 if [ -f "$_CFG" ]; then
-  for _k in wakelock_action ltpo_video night_modem_idle net_screen_off_lte wifi_powersave gms_freeze doze_level; do
+  for _k in wakelock_action ltpo_video night_modem_idle net_screen_off_lte wifi_powersave gms_freeze doze_level sustained_temp_mode; do
     _v="$(grep -E "^[[:space:]]*$_k=" "$_CFG" 2>/dev/null | tail -n 1 | sed 's/^[^=]*=//; s/#.*//' | tr -d ' \t\r')"
     [ -n "$_v" ] && printf 'cfg\tkey=%s\tvalue=%s\n' "$_k" "$_v"
   done
+fi
+
+# ----- capture history + trend (fix213, audit 8.2) --------------------------------
+# A finished capture leaves one compact line in report_history.tsv; the NEXT report then
+# answers the question no single-day report could: "did what I changed actually help?"
+# Keyed by the capture's start minute (a re-opened report rewrites its own line instead
+# of duplicating it), the last 12 kept. Strictly best-effort - on a device where the
+# state dir is unwritable the report works exactly as before, just without a trend.
+_hkv() { printf '%s\n' "$1" | grep -E "^$2[[:space:]]" | head -n 1 | tr '\t' '\n' | sed -n "s/^$3=//p"; }
+_h_dp="$(_hkv "${_h_drain_line:-}" drain pctph)"
+_h_np="$(_hkv "${_h_night_line:-}" night pctph)"
+_h_cp="$(_hkv "${_h_thermal_line:-}" thermal cpu)"
+_h_tc="$(_hkv "${_h_throttle_line:-}" throttle clamps)"
+_HF="$_STATE/report_history.tsv"
+if [ -s "$_HF" ]; then
+  # Up to three earlier captures, newest first - enough for "was -> became" without a
+  # wall of history on the page.
+  awk -F'\t' -v k="${_started:-}" '
+    $1 != k { r[++n] = $0 }
+    END {
+      for (i = n; i >= 1 && s < 3; i--) {
+        split(r[i], f, "\t"); s++
+        printf "hist\tstarted=%s\tnight=%s\tdrain=%s\tjank=%s\tcpu=%s\tclamps=%s\n", \
+          f[1], f[2], f[3], f[4], f[5], f[6]
+      }
+    }' "$_HF" 2>/dev/null
+fi
+if [ "$_running" = 0 ] && [ -n "${_started:-}" ] && { [ -n "$_h_dp" ] || [ -n "$_h_np" ]; }; then
+  if mkdir -p "$_STATE" 2>/dev/null && touch "$_HF" 2>/dev/null; then
+    { awk -F'\t' -v k="$_started" '$1 != k' "$_HF" 2>/dev/null
+      printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$_started" "${_h_np:--}" "${_h_dp:--}" "${_jp:--}" "${_h_cp:--}" "${_h_tc:--}"
+    } | tail -n 12 > "$_HF.tmp" 2>/dev/null && mv "$_HF.tmp" "$_HF" 2>/dev/null || rm -f "$_HF.tmp"
+  fi
 fi
 
 exit 0
