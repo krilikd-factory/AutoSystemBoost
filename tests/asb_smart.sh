@@ -4233,11 +4233,15 @@ t_unlock_lift_runtime() (
 # block is cut out of asb_governor.c and run: a wake lifts every managed ceiling to
 # unlock_lift_pct of the hardware maximum (and top-app uclamp to the same share) for
 # unlock_lift_s; the first touch within 20 s re-arms it once; the lift ends on time, on screen
-# off and on a thermal cap; Battery/Balanced, a thermal cap, a warm die and unlock_lift_s=0 do
+# off and on a thermal cap; Performance, a thermal cap, a warm die and unlock_lift_s=0 do
 # not lift and say why; an empty slot stays unmanaged and nothing is ever lowered.
+# fix212: Battery and Balanced lift too - their static shell ceilings are exactly what janked
+# (32% of SystemUI frames on an OP15 Battery day against 3.5-4.4% on Smart) - and a
+# foreground-app switch arms the same window once per 5 s while no lift runs.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 G="$ROOT/src/asb_governor.c"
+W="$ROOT/src/asb_writer.h"
 fail() { echo "FAIL unlock lift: $*" >&2; exit 1; }
 
 # Wiring: decided before the touch kick is answered, applied after every trim, forces the
@@ -4260,6 +4264,16 @@ grep -q '^unlock_lift_pct|internal|' "$ROOT/config/key_ownership.tsv" || fail "u
 grep -q 'c->unlock_lift_s                = 3;' "$ROOT/src/asb_config.h" || fail "compiled default"
 grep -q 'unlock lift: ' "$ROOT/tools/asb_diag.sh" || fail "asbdiag says nothing"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag is stale"
+# fix212: the lift reaches the manual profiles, an app switch arms it, and the writer lets the
+# borrowed ceilings through while it runs.
+grep -q 'static int asb_unlock_lift_profile_ok(int profile_idx)' "$G" || fail "profile gate helper missing"
+grep -q '#define ASB_LAUNCH_LIFT_GAP_MS 5000L' "$G" || fail "launch rate limit missing"
+grep -q 'static long g_launch_prev_hash = 0;' "$G" || fail "app-switch detection not wired in the tick"
+grep -q '_launch_kick,' "$G" || fail "the launch kick does not reach the update"
+grep -q 'g_unlock_arm_why,' "$G" || fail "the log line does not say what armed the lift"
+grep -Fq 'const int manual_lift     = manual_profile && g_unlock_lift_now && !thermal_cap &&' "$W" || fail "the writer clamps the borrowed ceilings"
+grep -Fq 'int manual_cap_skip = manual_profile && !manual_override && !manual_lift;' "$W" || fail "manual_cap_skip does not yield to the lift"
+grep -Fq '!g_fsm_cooldown_active && !g_unlock_lift_now;' "$G" || fail "the lift would classify its own ceilings as the shell's"
 
 CC=""; for c in gcc clang cc; do command -v "$c" >/dev/null 2>&1 && { CC="$c"; break; }; done
 [ -n "$CC" ] || { echo "PASS unlock lift (source pins only)"; exit 0; }
@@ -4277,7 +4291,8 @@ static struct { int unlock_lift_s, unlock_lift_pct, bat_comfort_temp; } g_asb_cf
 static int g_cpu_slot_hwmax[3] = { 3628800, 4608000, 0 };
 #include "u.c"
 static int P = PROFILE_SMART, TC = 0, DIE = 36;
-static int up(int scr, int kick, long ms) { return asb_unlock_lift_update(scr, kick, ms, P, TC, DIE); }
+static int up(int scr, int kick, long ms) { return asb_unlock_lift_update(scr, kick, 0, ms, P, TC, DIE); }
+static int upl(int scr, int kick, int launch, long ms) { return asb_unlock_lift_update(scr, kick, launch, ms, P, TC, DIE); }
 int main(void) {
     int bad = 0;
 #define CHK(c, what) do { if (!(c)) { printf("%s\n", what); bad = 1; } } while (0)
@@ -4308,17 +4323,20 @@ int main(void) {
     /* A thermal cap ends it too. */
     CHK(up(1, 0, 90000) == 1, "fourth wake");
     TC = 1; CHK(up(1, 0, 91000) == 0, "thermal cap kept the lift"); TC = 0;
-    /* Gates: each wake that does not lift says why. */
+    /* fix212: Battery and Balanced lift on a wake too - their static shell ceilings are what
+     * made one jank. Performance is never capped and skips with "profile". */
     unsigned long l0 = g_unlock_lifts;
-    up(0, 0, 100000); P = PROFILE_BALANCED; CHK(up(1, 0, 101000) == 0 && !strcmp(g_unlock_skip_why, "profile"), "Balanced lifted"); P = PROFILE_SMART;
-    up(0, 0, 102000); P = PROFILE_BATTERY; CHK(up(1, 0, 103000) == 0, "Battery lifted"); P = PROFILE_SMART;
-    up(0, 0, 104000); TC = 1; CHK(up(1, 0, 105000) == 0 && !strcmp(g_unlock_skip_why, "thermal"), "thermal-capped wake lifted"); TC = 0;
-    up(0, 0, 106000); DIE = 48; CHK(up(1, 0, 107000) == 0 && !strcmp(g_unlock_skip_why, "warm"), "warm die lifted"); DIE = 36;
-    up(0, 0, 108000); g_asb_cfg.unlock_lift_s = 0; CHK(up(1, 0, 109000) == 0 && !strcmp(g_unlock_skip_why, "off"), "switched off and lifted"); g_asb_cfg.unlock_lift_s = 3;
-    CHK(g_unlock_lifts == l0 && g_unlock_skips == 5, "skips not counted");
+    up(0, 0, 100000); P = PROFILE_BALANCED; CHK(up(1, 0, 101000) == 1, "Balanced did not lift"); P = PROFILE_SMART;
+    up(0, 0, 102000); P = PROFILE_BATTERY; CHK(up(1, 0, 103000) == 1, "Battery did not lift"); P = PROFILE_SMART;
+    CHK(g_unlock_lifts == l0 + 2, "manual-profile wakes not counted");
+    up(0, 0, 104000); P = PROFILE_PERFORMANCE; CHK(up(1, 0, 105000) == 0 && !strcmp(g_unlock_skip_why, "profile"), "Performance lifted"); P = PROFILE_SMART;
+    up(0, 0, 106000); TC = 1; CHK(up(1, 0, 107000) == 0 && !strcmp(g_unlock_skip_why, "thermal"), "thermal-capped wake lifted"); TC = 0;
+    up(0, 0, 108000); DIE = 48; CHK(up(1, 0, 109000) == 0 && !strcmp(g_unlock_skip_why, "warm"), "warm die lifted"); DIE = 36;
+    up(0, 0, 110000); g_asb_cfg.unlock_lift_s = 0; CHK(up(1, 0, 111000) == 0 && !strcmp(g_unlock_skip_why, "off"), "switched off and lifted"); g_asb_cfg.unlock_lift_s = 3;
+    CHK(g_unlock_lifts == l0 + 2 && g_unlock_skips == 4, "skips not counted");
     /* A skipped wake still lets the first touch try (the phone may have cooled). */
-    up(0, 0, 110000); DIE = 48; up(1, 0, 111000); DIE = 36;
-    CHK(up(1, 1, 113000) == 1, "first touch after a warm wake did not lift on a cool die");
+    up(0, 0, 112000); DIE = 48; up(1, 0, 113000); DIE = 36;
+    CHK(up(1, 1, 115000) == 1, "first touch after a warm wake did not lift on a cool die");
     /* fix166: "warm" is the lower of the die at the wake and the last reading in the dark. */
     {
         time_t n = 1792305000;
@@ -4329,6 +4347,25 @@ int main(void) {
         up(0, 0, 120000); DIE = asb_unlock_gate_die(49, 36, n - 120, n);
         CHK(up(1, 0, 121000) == 1, "29835: the 08:4x wake was skipped warm on a cool phone"); DIE = 36;
     }
+    /* fix212: an app switch arms the same window - never while a lift runs, once per 5 s,
+     * gated like a wake. */
+    up(0, 0, 130000); up(1, 0, 131000);
+    unsigned long l1 = g_unlock_lifts;
+    CHK(upl(1, 0, 1, 132000) == 1 && g_unlock_lifts == l1, "a switch during a running lift re-armed");
+    CHK(upl(1, 0, 1, 140000) == 1 && g_unlock_lifts == l1 + 1, "an app switch did not lift");
+    CHK(!strcmp(g_unlock_arm_why, "app switch"), "the log does not say what armed the lift");
+    CHK(upl(1, 0, 1, 144000) == 0 && g_unlock_lifts == l1 + 1, "a switch inside 5 s re-armed");
+    CHK(upl(1, 0, 1, 146000) == 1 && g_unlock_lifts == l1 + 2, "a switch after 5 s did not lift");
+    /* A switch to Performance ends a running lift (its ceilings are uncapped anyway). */
+    up(0, 0, 160000); up(1, 0, 161000);
+    P = PROFILE_PERFORMANCE;
+    CHK(up(1, 0, 162000) == 0, "a lift survived a switch to Performance");
+    unsigned long l2 = g_unlock_lifts;
+    CHK(upl(1, 0, 1, 170000) == 0 && g_unlock_lifts == l2 && !strcmp(g_unlock_skip_why, "profile"),
+        "an app switch lifted on Performance");
+    P = PROFILE_SMART;
+    TC = 1; CHK(upl(1, 0, 1, 180000) == 0 && !strcmp(g_unlock_skip_why, "thermal"),
+        "a launch lift slipped past a thermal cap"); TC = 0;
     /* 4-cluster part: the prime slot Smart caps at 62% is lifted; the share is clamped to 100. */
     g_cpu_slot_hwmax[0] = 2265600; g_cpu_slot_hwmax[1] = 3148800; g_cpu_slot_hwmax[2] = 3302400;
     g_asb_cfg.unlock_lift_pct = 130;
@@ -4859,6 +4896,7 @@ typedef enum { ASB_STATE_DEEP_IDLE, ASB_STATE_LIGHT_IDLE, ASB_STATE_MODERATE, AS
                ASB_STATE_SUSTAINED, ASB_STATE_GAMING } asb_state_t;
 typedef struct { int profile_idx; int thermal_cap; } asb_fsm_t;
 static int fsm_profile_is_smart = 0, fsm_profile_is_performance = 0, g_fsm_cooldown_active = 0;
+static int g_unlock_lift_now = 0;   /* fix212: while 1, the governor owns the ceilings */
 static int g_cpu_policy_ids[3] = {0, 6, -1};
 static char g_cpu_max_paths[3][128];
 static char g_cpu_all_max_paths[16][128];
@@ -4910,6 +4948,9 @@ int main(void) {
     f.thermal_cap = 0; g_fsm_cooldown_active = 1;
     if (asb_manual_shell_owns_caps(&f)) { puts("cooldown: the governor writes, the shell is not the owner"); bad = 1; }
     g_fsm_cooldown_active = 0;
+    g_unlock_lift_now = 1;
+    if (asb_manual_shell_owns_caps(&f)) { puts("lift: the governor owns the ceilings"); bad = 1; }
+    g_unlock_lift_now = 0;
     f.profile_idx = PROFILE_SMART; fsm_profile_is_smart = 1;
     if (asb_manual_shell_owns_caps(&f) || asb_shell_cap_khz(&f, 0) != 0) { puts("Smart owns its ceilings"); bad = 1; }
     fsm_profile_is_smart = 0; f.profile_idx = PROFILE_BATTERY;

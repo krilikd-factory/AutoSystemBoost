@@ -3508,7 +3508,7 @@ echo "PASS: fix149 contract"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 fail() { echo "FAIL fix150: $*"; exit 1; }
 G="$ROOT/src/asb_governor.c"; C="$ROOT/tools/logkit/_asb_logkit_common.sh"; D="$ROOT/tools/asb_diag.sh"
-grep -q '^static int asb_unlock_lift_update(int screen_on, int touch_kick, long now_ms, int profile_idx,$' "$G" || fail "no unlock lift"
+grep -q '^static int asb_unlock_lift_update(int screen_on, int touch_kick, int launch_kick, long now_ms,$' "$G" || fail "no unlock lift"
 grep -q '^static void asb_smart_night_awake(int screen_on, int daypart, int is_weekend, time_t now) {$' "$G" || fail "no night-awake lean"
 grep -q '^unlock_lift_s=3$' "$ROOT/config/governor.conf" && grep -q '^smart_night_awake=1$' "$ROOT/config/governor.conf" || fail "not shipped on"
 cmp -s "$ROOT/config/governor.conf" "$ROOT/config/governor.conf.shipped" || fail "shipped governor.conf differs"
@@ -4216,6 +4216,42 @@ grep -qF 'a busy day at 3 ms a tick reads cheap' "$U" || fail "the per-wake cost
 grep -qF '(+scr.off_min || 0) >= 30' "$H" || fail "the screen-off drain warns on sub-30-minute data"
 grep -qF '(+aod.of || 0) >= 20' "$H" || fail "the AOD verdict can go red on a handful of checks"
 echo "PASS: fix211 contract"
+) || exit 1
+# ---- fix212 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+G="$ROOT/src/asb_governor.c"
+W="$ROOT/src/asb_writer.h"
+T="$ROOT/tests/asb_smart.sh"
+fail() { echo "FAIL fix212: $*"; exit 1; }
+# Owner's report: "подлагивания при открытии и сворачивании приложений и при разблокировке" on
+# the Battery profile. The field evidence was already in the captures: an OP15 Battery day
+# (17155) janked 32 % of SystemUI frames against 3.5-4.4 % on the Smart captures (18069,
+# 30827). Root cause: the fix150 unlock lift was Smart-only, so on Battery/Balanced a wake or
+# an app switch ran on the shell's static screen-on caps (OP15: 50/38 %) with WALT boost off.
+# The lift now runs on every capped profile (Performance is never capped and skips), a
+# foreground-app switch arms the same short window (once per 5 s, never extending a running
+# lift), and the writer lets the borrowed ceilings through while it runs - marking the paths
+# held (fix183) and handing the shell's values back when the window ends. The profiles' static
+# values are UNTOUCHED: Battery stays Battery, the lift is a short ceiling-only burst.
+grep -qF 'static int asb_unlock_lift_profile_ok(int profile_idx)' "$G" || fail "no profile gate"
+grep -qF 'return profile_idx != PROFILE_PERFORMANCE;' "$G" || fail "the gate is not 'everyone but Performance'"
+grep -qF '#define ASB_LAUNCH_LIFT_GAP_MS 5000L' "$G" || fail "no launch rate limit"
+grep -qF 'g_unlock_arm_why = "app switch";' "$G" || fail "no app-switch arm"
+grep -qF 'g_unlock_arm_why = "screen on";' "$G" || fail "the wake arm lost its reason"
+grep -qF 'static long g_launch_prev_hash = 0;' "$G" || fail "no foreground-hash baseline in the tick"
+grep -qF 'uint64_t _fh = g_smart_rt.app_hash;' "$G" || fail "the launch kick does not read the foreground hash"
+grep -qF '!g_fsm_cooldown_active && !g_unlock_lift_now;' "$G" || fail "the shell-ownership rule does not yield during the lift"
+grep -qF 'const int manual_lift     = manual_profile && g_unlock_lift_now && !thermal_cap &&' "$W" || fail "the writer still clamps the borrowed ceilings"
+grep -qF 'int manual_cap_skip = manual_profile && !manual_override && !manual_lift;' "$W" || fail "manual_cap_skip does not yield to the lift"
+# The pinned fix183 line must survive verbatim next to the new flag.
+grep -qF 'const int manual_override = manual_profile && (thermal_cap || g_fsm_cooldown_active);' "$W" || fail "the thermal/cooldown override line changed"
+grep -qF 't_unlock_lift_runtime' "$T" || fail "the runtime test is not registered"
+grep -qF 'Battery did not lift' "$T" || fail "Battery/Balanced lifts are not exercised"
+grep -qF 'an app switch did not lift' "$T" || fail "the launch lift is not exercised"
+grep -qF 'a switch during a running lift re-armed' "$T" || fail "the no-extend rule is not exercised"
+grep -qF 'lift: the governor owns the ceilings' "$T" || fail "the ownership exclusion is not exercised"
+echo "PASS: fix212 contract"
 ) || exit 1
 # ---- fix209 ---------------------------------------------------------------
 (
