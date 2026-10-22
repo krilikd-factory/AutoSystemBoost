@@ -2751,6 +2751,30 @@ if [ -r "$_srf" ]; then
 else
   P "  Smart records        : no summary yet (written once the governor has loaded them)"
 fi
+# fix213 (audit K4): the meter itself, probed directly. The summary above only exists
+# once the governor has loaded, and its "unavailable / not_moving" note says WHAT the
+# recorder decided but not whether the phone even exposes the node - on a coarse-gauge
+# device Smart V5 would stay silently blind and the user would never learn why a week of
+# Smart taught nothing. Three distinct answers: no node, a node with no usable figure,
+# a readable node (then the summary's state says whether it moves over time).
+_ccp=/sys/class/power_supply/battery/charge_counter
+if [ -r "$_ccp" ]; then
+  _ccv="$(cat "$_ccp" 2>/dev/null)"
+  case "$_ccv" in
+    ''|*[!0-9]*)
+      P "  smart meter          : charge_counter reads '${_ccv:-empty}' - the gauge gives no usable figure, so Smart V5 cannot measure power on this device" ;;
+    0)
+      P "  smart meter          : charge_counter reads 0 - present but not reporting yet; Smart V5 learns once it moves" ;;
+    *)
+      if [ "${_src:-}" = "ok" ]; then
+        P "  smart meter          : charge_counter reads ${_ccv} uAh - the gauge reports, the recorder is measuring"
+      else
+        NOTE "charge_counter reads ${_ccv} uAh - the node works; if the records above keep saying the meter is unavailable or not moving, send this log to the developer"
+      fi ;;
+  esac
+else
+  P "  smart meter          : no charge_counter node on this device - Smart V5 cannot measure power here; the learned settings stay at their shipped values and everything else in Smart still works"
+fi
 _scg="$(_rget smart_cold_guard /dev/.asb/state 2>/dev/null)"
 [ "$_scg" = 1 ] && NOTE "cold battery under 40 %: Smart holds the CPU peaks down until it warms up or charges (smart_cold_guard=$(cfg smart_cold_guard))"
 _scl="$(_rget ses_climate /dev/.asb/state 2>/dev/null)"
