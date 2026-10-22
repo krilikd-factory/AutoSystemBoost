@@ -957,9 +957,14 @@ if [ -f "$_mp" ]; then
   _mp_code="$(grep '^versionCode=' "$_mp" | head -1 | cut -d= -f2)"
   if [ -n "$_mp_ver" ] && [ -n "$_mp_code" ]; then
     ok "module identity present: version=$_mp_ver versionCode=$_mp_code"
-    # update.json is NOT compared with module.prop: it points at the release users are
-    # offered, which is legitimately behind a module still in testing. The comparison made
-    # every V65 test build fail on a V64 manifest (fix83 CI), so it was removed on request.
+    # update.json identity is a HARD contract since fix213 - see the fix213 block in
+    # tests/asb_system.sh (version and versionCode must match module.prop exactly, the
+    # zip URL must name the same major). It lives in the test suite, not here, so a
+    # lint-only run on a developer machine never blocks local experiments; CI runs the
+    # suite and fails. History: fix83 removed an earlier comparison because every V65
+    # test build failed on the V64 manifest; the V64 manifest then survived three builds
+    # and offered users a downgrade to a 404 (audit K1) - so the check is back, as a
+    # gate with an explicit owner: whoever bumps module.prop bumps update.json with it.
     # The changelog is not consulted either (fix199): the owner keeps it by hand, and a
     # stale or missing one must never fail - or even warn on - a build.
   else
