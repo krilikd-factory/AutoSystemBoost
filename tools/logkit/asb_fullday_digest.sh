@@ -12,6 +12,7 @@
 #   cover    on_min=<n>  off_min=<n>  on_pct=<n>
 #   drain    pctph=<x.x>  total_drop=<n>  hours=<x.x>  ma=<n>
 #   night    dur_min=<n>  drop=<n>  pctph=<x.x>  awake=<n>
+#   nightd   ma=<n>  radio_mib=<x.x>  cpu_t=<n>  skin_t=<n>  wake_pk=<n>
 #   idlemax  awake=<n>  phase=<name>  dur_min=<n>
 #   jank     pct=<x.x>  jps=<x.x>  frames=<n>
 #   japp     pkg=<package>  frames=<n>  pct=<x.x>      (up to 4 rows, most frames first)
@@ -23,6 +24,14 @@
 #   cfg      key=<setting>  value=<v>                  (the settings the advice can point at)
 #   wl       pkg=<package>  sec=<n>            (up to 5 rows, worst first)
 #   wl       none=1                            (nothing recorded)
+#   wlive    tag=<cleaned tag>  pct=<n>  min=<n>  pkg=<package|''>   (up to 3 rows)
+#   kwk      tag=<kernel wakelock>  min=<n>      (up to 3 rows, holders on the charger)
+#   prof     name=<profile>  on_min=<n>  off_min=<n>  on_pctph=<x.x>  off_pctph=<x.x>
+#   scr      on_pctph=<x.x>  off_pctph=<x.x>  on_min=<n>  off_min=<n>
+#   phase    name=<p>  min=<n>  drop=<signed n>  pctph=<x.x>   (up to 10 rows, longest first)
+#   chg      min=<n>  gain=<n>  sess=<n>
+#   ltpo     n=<n>  min=<n>
+#   aod      lit=<n>  of=<n>
 #   crash    count=<n>  asb=<n>  latest=<cmdline|none>  ltime=<HH:MM>
 #   sysui    count=<n>
 #   thermal  cpu=<n>  surf=<n>
@@ -155,30 +164,45 @@ if [ "$_HAVE_LEDGER" = "1" ]; then
   # Consecutive idle/sleep rows with at most two minutes between them are one stretch:
   # that is the number a user recognises as "how my phone did overnight". Reported only
   # from fifteen minutes up - shorter stretches say nothing about idle drain.
+  # fix207: the same pass keeps the chain's detail - average current, mobile traffic,
+  # peak CPU/skin temperatures, the wakeup-source peak - so the sheet can give the
+  # night its own section ("потрачено за ночь, почему") instead of one bare rate.
   _cat_ledger | awk -F'\t' '
     function flush() {
-      if (in_c && cd > bd) { bd = cd; bdrop = cdrop; baw = (cawt > 0 ? caw / cawt : 0) }
+      if (in_c && cd > bd) {
+        bd = cd; bdrop = cdrop; baw = (cawt > 0 ? caw / cawt : 0)
+        bma = (cmaw > 0 ? cma / cmaw : 0); br = cr; bct = cct; bst = cst; bwp = cwp
+      }
     }
     /^#/ { next }
     $1 == "idle" || $1 == "sleep" {
       dur = $3 - $2
-      if (in_c && ($2 - pe) <= 120) {
-        cdrop += ($4 - $5); cd = $3 - cs
-        if (dur > 0) { caw += $12 * dur; cawt += dur }
-      } else {
+      if (!(in_c && ($2 - pe) <= 120)) {
         flush()
-        in_c = 1; cs = $2; cd = $3 - $2; cdrop = ($4 - $5)
-        caw = (dur > 0 ? $12 * dur : 0); cawt = (dur > 0 ? dur : 0)
+        in_c = 1; cs = $2; cd = 0; cdrop = 0; caw = 0; cawt = 0
+        cma = 0; cmaw = 0; cr = 0; cct = 0; cst = 0; cwp = 0
       }
+      cdrop += ($4 - $5); cd = $3 - cs
+      if (dur > 0) {
+        caw += $12 * dur; cawt += dur
+        if (($13 + 0) > 0) { cma += $13 * dur; cmaw += dur }
+      }
+      cr += $14 + $15
+      if (($6 + 0) > cct) cct = $6 + 0
+      if (($7 + 0) > cst) cst = $7 + 0
+      if (($11 + 0) > cwp) cwp = $11 + 0
       pe = $3
       next
     }
     { flush(); in_c = 0 }
     END {
       flush()
-      if (bd >= 900)
+      if (bd >= 900) {
         printf "night\tdur_min=%d\tdrop=%d\tpctph=%.1f\tawake=%d\n", \
           bd / 60, bdrop, (bdrop > 0 ? bdrop * 3600 / bd : 0), baw
+        printf "nightd\tma=%d\tradio_mib=%.1f\tcpu_t=%d\tskin_t=%d\twake_pk=%d\n", \
+          bma, br / 1048576, bct, bst, bwp
+      }
     }' 2>/dev/null
 
   # ----- idlemax (worst screen-off awake share) -----------------------------
@@ -231,6 +255,159 @@ if [ -n "$_wl_out" ]; then
   printf '%s\n' "$_wl_out"
 else
   printf 'wl\tnone=1\n'
+fi
+
+# ----- live wakelock holders (fix206) -----------------------------------------
+# The per-uid delta only moves when batterystats counts - and it counts nothing while
+# charging, and sometimes nothing at all over a whole capture (owner's log: awake 30%
+# at night, delta flat, the sheet then claimed "no wakelocks - great" while the phone
+# plainly had holders). The report's LIVE WAKELOCK HOLDERS section samples the power
+# manager directly, so it sees holders regardless. Up to three rows, as listed.
+if [ -f "$_DIR/_full_day_report.txt" ]; then
+  awk '/LIVE WAKELOCK HOLDERS/ { t = 1; next }
+       t && /held in/ {
+         # "  held in  23% of samples, longest hold    9 min  TAG  (pkg)"
+         line = $0
+         pct = line; sub(/.*held in[ ]*/, "", pct); sub(/%.*/, "", pct)
+         mn  = line; sub(/.*longest hold[ ]*/, "", mn); sub(/[^0-9].*/, "", mn)
+         tag = line; sub(/.*min[ ]+/, "", tag)
+         pkg = ""
+         if (tag ~ /\(/) {
+           pkg = tag; sub(/^[^(]*\(/, "", pkg); sub(/\).*/, "", pkg)
+           sub(/[ ]*\(.*/, "", tag)
+         }
+         # JobScheduler/sync wrappers: keep the meaningful tail of the tag.
+         sub(/^\*job\*r\//, "", tag); sub(/^\*sync\*\//, "", tag)
+         sub(/^\*alarm\//, "", tag)
+         n = split(tag, seg, "/"); if (n > 1) tag = seg[n]
+         sub(/^\.+/, "", tag)
+         if (pkg ~ /^system uid/) pkg = ""
+         gsub(/[\t=]/, " ", tag); gsub(/[\t=]/, " ", pkg)
+         gsub(/^[ ]+|[ ]+$/, "", tag)
+         if (tag != "" && pct + 0 >= 3) {
+           printf "wlive\ttag=%s\tpct=%d\tmin=%d\tpkg=%s\n", tag, pct, mn, pkg
+           c++; if (c >= 3) exit
+         }
+         next
+       }
+       t && NF == 0 { t = 0 }' "$_DIR/_full_day_report.txt" 2>/dev/null
+fi
+
+# ----- per-profile drain attribution (fix206) -----------------------------------
+# battery_trace field 4 is the active profile at every sample, so a day spent switching
+# profiles (the tester who ran all of them, night on performance) can be split per
+# profile without config_changes. Same interval rule as cover: an interval belongs to
+# the profile at its start, counts only when not longer than five minutes, and only
+# positive drops count (charging would fake a negative "drain"). Emitted only when two
+# or more profiles actually ran - a one-profile day has nothing to compare.
+if [ -s "$_DIR/battery_trace.txt" ]; then
+  awk -F'|' '$1 ~ /^[0-9]+$/ {
+      p = $4; if (p == "") p = "unknown"
+      seen[p] = 1
+      if (pe != "") {
+        dt = $1 - pe
+        if (dt > 0 && dt <= 300) {
+          d = pb - $6
+          if (ps == "1") { on[pp] += dt; if (d > 0) od[pp] += d }
+          else           { off[pp] += dt; if (d > 0) fd[pp] += d }
+        }
+      }
+      pe = $1; pp = p; ps = $5; pb = $6
+    } END {
+      np = 0
+      for (p in seen) if ((on[p] + off[p]) >= 120) { np++; ord[np] = p }
+      if (np >= 2) {
+        # most time first, insertion-order bubble (np <= 8 in practice)
+        for (i = 1; i <= np; i++) for (j = i + 1; j <= np; j++)
+          if (on[ord[j]] + off[ord[j]] > on[ord[i]] + off[ord[i]]) {
+            t = ord[i]; ord[i] = ord[j]; ord[j] = t
+          }
+        if (np > 8) np = 8
+        for (i = 1; i <= np; i++) {
+          p = ord[i]
+          op = (on[p]  > 0 && od[p] > 0) ? od[p] * 3600 / on[p]  : 0
+          fp = (off[p] > 0 && fd[p] > 0) ? fd[p] * 3600 / off[p] : 0
+          printf "prof\tname=%s\ton_min=%d\toff_min=%d\ton_pctph=%.1f\toff_pctph=%.1f\n", \
+            p, on[p] / 60, off[p] / 60, op, fp
+        }
+      }
+    }' "$_DIR/battery_trace.txt" 2>/dev/null
+fi
+
+# ----- screen on/off drain split (fix207) ---------------------------------------
+# "Самый долгий простой 0.7 %/ч, а Монитор пишет Экран выкл 1.3 %/ч": three different
+# windows, three right answers. The night figure is ONE deep-sleep-heavy chain; the
+# Monitor meter averages clean stretches of an hour or more, WITHOUT music; this split
+# is the whole ledger - the same classification the report writer uses (screen-on:
+# *_scr, active, gaming, post_wake, charging_active), charging and gap excluded, only
+# positive drops count. The sheet shows all three, so the numbers stop contradicting.
+# Same awk pass emits the per-phase table (fix207): every phase's time, signed drop
+# (negative = charge gained) and drain rate - the detailed breakdown section.
+if [ "$_HAVE_LEDGER" = "1" ]; then
+  _cat_ledger | awk -F'\t' '
+    /^#/ { next }
+    NF >= 5 {
+      ph = $1; dd = $3 - $2; d = $4 - $5
+      if (dd <= 0) next
+      dur[ph] += dd; drop[ph] += d; seen[ph] = 1
+      if (ph ~ /^charging/ || ph == "gap") next
+      if (ph ~ /_scr$/ || ph == "active" || ph == "gaming" || ph == "post_wake") {
+        on += dd; if (d > 0) ond += d
+      } else {
+        off += dd; if (d > 0) offd += d
+      }
+    }
+    END {
+      if (on >= 300 || off >= 300)
+        printf "scr\ton_pctph=%.1f\toff_pctph=%.1f\ton_min=%d\toff_min=%d\n", \
+          (on > 0 && ond > 0 ? ond * 3600 / on : 0), \
+          (off > 0 && offd > 0 ? offd * 3600 / off : 0), on / 60, off / 60
+      np = 0
+      for (p in seen) if (dur[p] >= 120) { np++; ord[np] = p }
+      for (i = 1; i <= np; i++) for (j = i + 1; j <= np; j++)
+        if (dur[ord[j]] > dur[ord[i]]) { t = ord[i]; ord[i] = ord[j]; ord[j] = t }
+      if (np > 10) np = 10
+      for (i = 1; i <= np; i++) {
+        p = ord[i]
+        r = (drop[p] > 0) ? drop[p] * 3600 / dur[p] : 0
+        printf "phase\tname=%s\tmin=%d\tdrop=%d\tpctph=%.1f\n", p, dur[p] / 60, drop[p], r
+      }
+    }' 2>/dev/null
+fi
+
+# ----- kernel wakelock holders on the charger (fix207) ---------------------------
+# batterystats counts no app wakelock while charging; the report lists the KERNEL
+# holders it sampled instead ("kernel holder on the charger: rx_wake_lock 343 min").
+# They explain a warm phone on a wireless pad - surface them in the wake section.
+if [ -f "$_DIR/_full_day_report.txt" ]; then
+  awk '/kernel holder on the charger:/ {
+         line = $0; sub(/.*charger:[ ]*/, "", line)
+         mn = line; sub(/[ ]*min$/, "", mn); sub(/.*[ ]/, "", mn)
+         sub(/[ ]+[0-9]+ min$/, "", line)
+         tag = line; gsub(/[\t=]/, " ", tag); gsub(/^[ ]+|[ ]+$/, "", tag)
+         if (tag != "" && mn ~ /^[0-9]+$/ && mn + 0 >= 1) {
+           printf "kwk\ttag=%s\tmin=%d\n", tag, mn
+           c++; if (c >= 3) exit
+         }
+       }' "$_DIR/_full_day_report.txt" 2>/dev/null
+fi
+
+# ----- charging sessions (fix206) -------------------------------------------------
+# The user on 5W wireless all day gained 62% across nearly 400 minutes of charging and
+# the old sheet said nothing about it. Ledger rows are charging_idle/charging_active;
+# sessions are contiguous rows with at most two minutes between them.
+if [ "$_HAVE_LEDGER" = "1" ]; then
+  _cat_ledger | awk -F'\t' '
+    /^#/ { next }
+    $1 ~ /^charging/ {
+      dur = $3 - $2; g = $5 - $4
+      if (dur > 0) { tot += dur; if (g > 0) gain += g }
+      if (pe == "" || ($2 - pe) > 120) sess++
+      pe = $3
+    }
+    END {
+      if (tot >= 300) printf "chg\tmin=%d\tgain=%d\tsess=%d\n", tot / 60, gain, sess
+    }' 2>/dev/null
 fi
 
 # ----- native crashes inside the capture window ------------------------------
@@ -363,6 +540,18 @@ if [ -f "$_RPT" ]; then
   # Charging flavours seen.
   _ct="$(sed -n 's/^  charge types seen[ ]*: *//p' "$_RPT" 2>/dev/null | head -n 1 | tr '\t' ' ' | tr -s ' ' | sed 's/ $//')"
   [ -n "$_ct" ] && printf 'charge\ttypes=%s\n' "$_ct"
+  # LTPO video drop (fix206): "ltpo_video (lifetime): lowered N times, M min at the
+  # lower rate, ..." - proof the panel savings actually engage.
+  _lt="$(sed -n 's/^ltpo_video (lifetime): lowered \([0-9][0-9]*\) times, \([0-9][0-9]*\) min at the lower rate.*/\1 \2/p' "$_RPT" 2>/dev/null | head -n 1)"
+  if [ -n "$_lt" ]; then
+    printf 'ltpo\tn=%s\tmin=%s\n' "${_lt% *}" "${_lt#* }"
+  fi
+  # Always-on display share of screen-off time (fix206): "always-on display: X of Y
+  # screen-off samples had the panel lit ..." - AOD is a steady idle drain worth naming.
+  _ao="$(sed -n 's/^always-on display: \([0-9][0-9]*\) of \([0-9][0-9]*\) screen-off samples had the panel lit.*/\1 \2/p' "$_RPT" 2>/dev/null | head -n 1)"
+  if [ -n "$_ao" ]; then
+    printf 'aod\tlit=%s\tof=%s\n' "${_ao% *}" "${_ao#* }"
+  fi
 fi
 
 # ----- Smart learner progress (fix200) ------------------------------------------
