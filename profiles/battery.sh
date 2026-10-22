@@ -54,7 +54,10 @@ GPU_MIN_FREQ=
 GPU_MAX_FREQ=
 GPU_BUS_SPLIT=1
 GPU_THROTTLING=1
-GPU_THERMAL_PWRLEVEL=7
+# thermal_pwrlevel is NOT set here (fix213): that node belongs to the vendor thermal
+# engine, and the governor reads it back as a vendor cap - a static level from the
+# profile looked exactly like one. The GPU ceiling intent is GPU_MAX_PCT above; the
+# governor translates it into the pwrlevel index itself.
 VM_SWAPPINESS=80
 VM_DIRTY_EXPIRE=60000
 VM_DIRTY_WRITEBACK=30000
