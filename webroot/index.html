@@ -9754,7 +9754,7 @@ function asbToggleLogMenu(ev) {
  * capture too: the digest folds in the still-open phase, so the numbers move as the
  * day goes on. */
 function parseLogReport(txt) {
-  const d = { ok: false, error: '', sections: {}, wl: [], wlive: [], profs: [], phases: [], kwk: [], japps: [], hzs: [], cfg: {} };
+  const d = { ok: false, error: '', sections: {}, wl: [], wlive: [], wlt: [], wla: [], profs: [], phases: [], kwk: [], japps: [], hzs: [], cfg: {} };
   if (!txt) { d.error = 'empty'; return d; }
   const lines = String(txt).split('\n');
   for (const raw of lines) {
@@ -9775,6 +9775,13 @@ function parseLogReport(txt) {
       /* fix206: holders sampled from the power manager directly - visible even where
          batterystats counted nothing (charging time, flat deltas). */
       if (kv.tag) d.wlive.push({ tag: kv.tag, pct: +kv.pct || 0, min: +kv.min || 0, pkg: kv.pkg || '' });
+    } else if (tag === 'wlt') {
+      /* fix210: top partial-wakelock holders by occurrence - the names that stay
+         visible even when every held-time counter is flat. */
+      if (kv.tag) d.wlt.push({ tag: kv.tag, n: +kv.n || 0 });
+    } else if (tag === 'wla') {
+      /* fix210: top alarm/wakeup sources by occurrence - who scheduled the wakeups. */
+      if (kv.tag) d.wla.push({ tag: kv.tag, n: +kv.n || 0 });
     } else if (tag === 'prof') {
       /* fix206: per-profile drain attribution for the day spent switching profiles. */
       if (kv.name) d.profs.push({ name: kv.name, onMin: +kv.on_min || 0, offMin: +kv.off_min || 0,
@@ -9847,9 +9854,15 @@ function logReportTips(d) {
   }
   if (idle && (+idle.awake || 0) > 15) {
     /* fix206: name the culprit when the power-manager samples caught one - "something
-       prevents deep sleep" next to a named holder is a finding, without it a shrug. */
+       prevents deep sleep" next to a named holder is a finding, without it a shrug.
+       fix210: and when even the samples are empty, the occurrence counts still know who
+       woke the phone - the top alarm source, else the top partial holder. */
     if (d.wlive.length)
       tips.push({ ic: 'warn', key: 'lr_tip_awake_who', vars: { awake: String(idle.awake), who: d.wlive[0].pkg || d.wlive[0].tag } });
+    else if (d.wla.length)
+      tips.push({ ic: 'warn', key: 'lr_tip_awake_alarm', vars: { awake: String(idle.awake), who: d.wla[0].tag } });
+    else if (d.wlt.length)
+      tips.push({ ic: 'warn', key: 'lr_tip_awake_hold', vars: { awake: String(idle.awake), who: d.wlt[0].tag } });
     else
       tips.push({ ic: 'warn', key: 'lr_tip_awake', vars: { awake: String(idle.awake) } });
   }
@@ -10135,6 +10148,10 @@ function logReportRender(d) {
         s.appendChild(logReportRow(T('lr_drain_on', 'Screen-on drain'), String(scr.on_pctph) + T('lr_per_hour', '%/h'), (+scr.on_pctph || 0) >= 8));
       if ((+scr.off_min || 0) > 0)
         s.appendChild(logReportRow(T('lr_drain_off', 'Screen-off drain (all idle)'), String(scr.off_pctph) + T('lr_per_hour', '%/h'), (+scr.off_pctph || 0) > 1.5));
+      /* fix210: say it in the sheet itself, right under the two rows - the Monitor tiles
+         count only calm stretches of an hour or more, these rows cover the whole
+         capture. Different windows, both figures right. */
+      s.appendChild(logReportNote(T('lr_scr_note', 'The Monitor tiles measure only calm stretches of an hour or more; these rows cover the whole capture - different windows, both figures are right.')));
     }
     if (idle) s.appendChild(logReportRow(T('lr_idle', 'Worst idle awake share'), String(idle.awake) + '%', (+idle.awake || 0) > 15));
     if (radio) s.appendChild(logReportRow(T('lr_radio', 'Mobile data'), String(radio.mib) + ' MiB'));
@@ -10316,7 +10333,30 @@ function logReportRender(d) {
         pct: String(w.pct), dur: logReportDur(w.min) }), w.pct >= 30));
       liveShown++;
     });
-    if (!d.wl.length && !liveShown && !d.kwk.length) {
+    /* fix210: the causes by occurrence. Held-time counters stay flat while charging and
+       on some ROM builds never move at all - "holders not recorded" then sat next to a
+       restless idle while the capture's own wakelock report had the names, counted by
+       event. This is the answer to "what actually woke it": partial holds first (CPU kept
+       from deep sleep), then the scheduled wakeups (alarms) that started them. */
+    if (d.wlt.length) {
+      s.appendChild(logReportNote(T('lr_wlt_head', 'Most frequent partial holds (CPU kept awake):')));
+      d.wlt.slice(0, 4).forEach(function (w) {
+        s.appendChild(logReportRow(w.tag, logReportT('lr_times', '{n} times', { n: String(w.n) }), w.n >= 60));
+      });
+    }
+    if (d.wla.length) {
+      s.appendChild(logReportNote(T('lr_wla_head', 'Scheduled wakeups (alarms):')));
+      d.wla.slice(0, 3).forEach(function (w) {
+        s.appendChild(logReportRow(w.tag, logReportT('lr_times', '{n} times', { n: String(w.n) }), w.n >= 60));
+      });
+    }
+    /* Background sync is the other restless-idle cause: mobile traffic while the screen
+       was off, split out of the day-wide total by the digest. */
+    const sradio = d.sections.sradio || null;
+    if (sradio && (+sradio.mib || 0) >= 1)
+      s.appendChild(logReportRow(T('lr_sradio', 'Background mobile data (screen off)'),
+        String(sradio.mib) + ' MiB', (+sradio.mib || 0) >= 50));
+    if (!d.wl.length && !liveShown && !d.kwk.length && !d.wlt.length && !d.wla.length) {
       /* fix207: never print "excellent" under a restless idle - when the awake share is
          high but nothing was recorded, the honest line is that the counters stayed flat,
          not that the night was clean (the owner's MountServiceIdler night, pre-wlive). */
@@ -10382,6 +10422,8 @@ function logReportRender(d) {
         lr_tip_night: 'Overnight the phone lost ~{pct}%/h - check background apps.',
         lr_tip_awake: 'During idle the phone stayed awake {awake}% of the time - something prevents deep sleep.',
         lr_tip_awake_who: 'During idle the phone stayed awake {awake}% of the time - {who} is the main holder.',
+        lr_tip_awake_alarm: 'During idle the phone stayed awake {awake}% of the time - the most frequent wakeup: {who}.',
+        lr_tip_awake_hold: 'During idle the phone stayed awake {awake}% of the time - the most frequent holder: {who}.',
         lr_tip_crash: 'There are crashes involving ASB code - please send an asbdiag log to the developer.',
         lr_tip_crashes: '{n} native crashes during the capture - details are in the full report.',
         lr_tip_app: '{app} held the phone awake for {min} min - consider restricting its background activity.',
@@ -11295,6 +11337,7 @@ function stockMonitorReset() {
   _stockRomHistory = { ts: 0, cpuT: 0 };
   _stockTrendSamples = [];
   _stockTrendLast = null;
+  try { localStorage.removeItem('asb_stock_trend'); } catch (e) {}
   if (_liveOpen) paintStockLive({});
 }
 // Android emits /proc/meminfo as `MemAvailable: 123456 kB`, while most values in
@@ -11486,8 +11529,9 @@ function paintStockLive(stockKv = null) {
         let num = 0, den = 0;
         _stockTrendSamples.forEach(x => { num += (x.t - mt) * (x.c - mc); den += (x.t - mt) * (x.t - mt); });
         const perMin = den > 0 ? (num / den) * 60000 : 0;
-        _stockTrendLast = { slope: perMin, span: span };
+        _stockTrendLast = { slope: perMin, span: span, t: sampleMs };
       }
+      _stockTrendSave();
     }
   }
   let trend = '\u2026';
@@ -11574,6 +11618,31 @@ let _stockRomHistory = { ts: 0, cpuT: 0 };
  * 10 s) recomputed the trend from the same sample and showed "—" - most of the time. */
 let _stockTrendSamples = [];
 let _stockTrendLast = null;
+/* fix210: persist the trend across WebView recreations. A real phone throws the page
+ * away on every visit, and the verdict needs three samples over a 30 s span - without
+ * persistence the tile sat at "…" most of the time. Fresh to 115 s: the oldest restored
+ * sample must still count at the next 10 s read (the window itself is 120 s). */
+function _stockTrendSave() {
+  try {
+    localStorage.setItem('asb_stock_trend', JSON.stringify({
+      s: _stockTrendSamples.slice(-16), l: _stockTrendLast }));
+  } catch (e) {}
+}
+(function _stockTrendRestore() {
+  try {
+    const raw = localStorage.getItem('asb_stock_trend');
+    if (!raw) return;
+    const d = JSON.parse(raw);
+    const now = Date.now();
+    if (d && Array.isArray(d.s)) {
+      _stockTrendSamples = d.s.filter(x => x && x.t > 0 && x.c > 0 && x.c < 120 && now - x.t <= 115000);
+    }
+    if (d && d.l && typeof d.l.slope === 'number' && typeof d.l.span === 'number' &&
+        d.l.t > 0 && now - d.l.t <= 115000 && _stockTrendSamples.length >= 3) {
+      _stockTrendLast = d.l;
+    }
+  } catch (e) {}
+})();
 let _stockSettingsAtMs = 0;
 const STOCK_TELEMETRY_MIN_INTERVAL_MS = 10000;
 async function pollStockTelemetry(visible, force = false) {
