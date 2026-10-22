@@ -1859,7 +1859,10 @@ for f in "$ROOT"/runtime/*.sh "$ROOT/action.sh" "$ROOT/service.sh" "$ROOT"/tools
   case "${f##*/}" in
     asb_settings.sh|asb_apply_ledger.sh) continue ;;   # the wrapper itself / a sourced library
   esac
-  grep -vE '^[[:space:]]*#' "$f" | grep -qE '(^|[^_a-zA-Z.])settings (get|put|delete) ' || continue
+  # awk, not grep|grep -q: the second grep exits on its first match and the first one dies
+  # writing to the closed pipe - three "grep: write error: Broken pipe" lines of CI noise
+  # per run (fix216). awk reads the file once and answers with its exit code.
+  awk '!/^[[:space:]]*#/ && /(^|[^_a-zA-Z.])settings (get|put|delete) / { f=1 } END { exit(1-f) }' "$f" || continue
   grep -q 'asb_settings.sh' "$f" || { echo "FAIL settings wrapper: ${f#$ROOT/} calls settings without the wrapper" >&2; fail=1; }
 done
 grep -q "case \"\$_asb_loc\" in \*\[Ff\]ailure\*" "$ROOT/action.sh" || { echo "FAIL settings wrapper: action.sh may take an error string as the locale" >&2; fail=1; }
@@ -4363,6 +4366,35 @@ grep -qF '_stockCpuStatPrev = null;' "$H" || fail "the busy-share state is decla
 grep -qF '_el_live=' "$D" || fail "the digest lost the live elapsed time"
 grep -qF 'recording · {min} min of {h} h' "$H" || fail "the report status line is gone"
 echo "PASS: fix214 contract"
+) || exit 1
+# ---- fix216 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+TEL="$ROOT/runtime/asb_rom_telemetry.sh"
+fail() { echo "FAIL fix216: $*" >&2; exit 1; }
+# The CI debug build failed on a FLAKE, not on code: the device-font discovery filtered
+# FULL PATHS with the family/exclusion tokens, and mktemp named the test's fixture dir
+# "tmp.5wIeilzKrt" - the "kr" in the random suffix matched the Korean-face exclusion and
+# emptied the whole list. On device the same shape silently drops a user font living in a
+# directory named "kr"/"mono"/.... The patterns are anchored to the file name now; the
+# runtime reproduction (a dir carrying the tokens) lives in tests/asb_ui.sh.
+grep -qF 'grep -iE \"/[^/]*(syssans|oplussans|oneplussans|opsans)[^/]*$\"' "$H" || fail "the family match is not anchored to the file name"
+grep -qF 'grep -viE \"/[^/]*(mono|cond|hans|hant|jp|kr|arab|thai|hebr|deva|beng|mya)[^/]*$\"' "$H" || fail "the CJK/variant exclusion is not anchored to the file name"
+grep -qF 'grep -viE \"/[^/]*(emoji|mono|symbol)[^/]*$\"' "$H" || fail "the /data branch exclusion is not anchored to the file name"
+grep -qF 'grep -iE \"syssans|' "$H" && fail "the unanchored family match is back"
+grep -qF 'kr-mono-hans-cond-arab' "$ROOT/tests/asb_ui.sh" || fail "the token-dir reproduction is gone from the runtime test"
+# Same class of noise in the telemetry script: `read ... < file 2>/dev/null` lets the shell
+# report the missing input file on the ORIGINAL stderr (redirections apply left to right),
+# which is where the CI log's "cannot open .../cpu/online" lines came from. The stderr
+# redirect comes first now; the reads still answer empty on a missing file.
+grep -qF 'read -r _on 2>/dev/null < "$SYS/devices/system/cpu/online"' "$TEL" || fail "the cpu/online read reports a missing file again"
+grep -qF 'read -r _up _x 2>/dev/null < "$PROC/uptime"' "$TEL" || fail "the uptime read lost its redirect order"
+grep -qF 'read -r _md 2>/dev/null < "$CACHE"' "$TEL" || fail "the settings-cache read lost its redirect order"
+# ...and the settings-wrapper contract answers with awk's exit code, not a grep|grep pipe
+# whose upstream dies with "write error: Broken pipe" three times per CI run.
+grep -qF 'END { exit(1-f) }' "$ROOT/tests/asb_system.sh" || fail "the settings-wrapper scan is a SIGPIPE pipe again"
+echo "PASS: fix216 contract"
 ) || exit 1
 # ---- fix209 ---------------------------------------------------------------
 (

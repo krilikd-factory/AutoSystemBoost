@@ -3421,6 +3421,20 @@ if [ "$(printf '%s\n' "$out" | cut -d'|' -f1,2)" != "f0.ttf|$T/system/fonts/SysS
   echo "--- devfont dir ---" >&2; ls -la "$T/mod/webroot/devfont" >&2 2>&1
   exit 1
 fi
+# fix216: the patterns must match the font FILE NAME, never the full path. A CI run once
+# lost the whole list because mktemp named the fixture dir "tmp.5wIeilzKrt" - the "kr" in
+# the random suffix matched the Korean-face exclusion and every path under it died. That
+# layout is reproduced here on purpose: a directory carrying several exclusion tokens.
+T2="$T/kr-mono-hans-cond-arab"
+mkdir -p "$T2/mod/webroot" "$T2/system/fonts"
+printf 'S' > "$T2/system/fonts/SysSans-En-Regular.ttf"
+printf 'H' > "$T2/system/fonts/SysSans-Hans-Regular.ttf"
+printf '7000-8000 r--s 00000000 fd:00 1 %s\n' "$T2/system/fonts/SysSans-En-Regular.ttf" > "$T2/maps"
+printf '7000-8000 r--s 00000000 fd:00 1 %s\n' "$T2/system/fonts/SysSans-Hans-Regular.ttf" >> "$T2/maps"
+node "$T/cmd.js" "$H" "$T2" || fail "command (token dir)"
+out="$(sh "$T2/cmd.sh")"
+[ "$(printf '%s\n' "$out" | cut -d'|' -f1,2)" = "f0.ttf|$T2/system/fonts/SysSans-En-Regular.ttf" ] \
+  || fail "a directory named with exclusion tokens must not empty the family list: $out"
 {
   cat <<'EOF'
 const faces = [];
