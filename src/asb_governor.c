@@ -6319,6 +6319,123 @@ static void asb_smart_night_awake(int screen_on, int daypart, int is_weekend, ti
     }
 }
 
+/* Foreground app classification on the manual profiles (fix210).
+ *
+ * The FSM's GAMING gate asks the package table: pkg_agrees counts app_hint == 0 as "no
+ * information, do not block". The classification that fills app_hint lives inside
+ * asb_smart_tick, which returns early unless Smart is active - so on BATTERY, BALANCED
+ * and PERFORMANCE the hint stayed 0 all day, the fallback was permanently in force, and
+ * a busy GPU next to a busy CPU read as GAMING. A field capture shows it plainly:
+ * profile BALANCED, FSM=GAMING, GPU 57 %, load 7.1, while the owner scrolled a feed.
+ *
+ * This mirrors Smart's classification block for the manual profiles: the same detector,
+ * the same ten-second cache, the same stale-cache demotion, the same heat inference with
+ * the camera and media guards, the same wake-edge re-read (fix186). The no-signal
+ * fallback keeps Smart's load heuristic - and like Smart's, it never invents GAMING.
+ * With Smart active this function is a no-op: Smart owns the classification. */
+static void asb_fg_classify_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
+    if (!m) return;
+    if (g_smart_rt.enabled && g_smart_store_loaded) return;
+
+    time_t now = time(NULL);
+    static time_t _last = 0;
+    static int _prev_on = -1;
+    /* Same wake edge as Smart (fix186): the cached answer was read with the screen off
+     * and says "idle" - re-read at once instead of waiting out the cache. */
+    if (m->misc.screen_on && _prev_on == 0) _last = 0;
+    _prev_on = m->misc.screen_on ? 1 : 0;
+    if (_last && now - _last < ASB_SMART_APP_CACHE_S) return;
+
+    if (!m->misc.screen_on) {
+        g_smart_rt.app_hint = ASB_APP_IDLE;
+        g_smart_rt.app_hash = 0;
+        g_smart_rt.app_pkg_cached[0] = 0;
+        g_pkg_detect_ok = 0;
+        g_pkg_detect_source = 0;
+        g_pkg_detect_status = ASB_PKG_MISSING;
+    } else {
+        char fg_pkg[128] = {0};
+        uint64_t fg_hash = 0;
+        int fg_hint = ASB_APP_MEDIUM;
+        int fg_source = 0;
+        int media_known = 0;
+        asb_pkg_status_t pst = asb_smart_detect_foreground_pkg(
+            fg_pkg, sizeof(fg_pkg), &fg_hash, &fg_hint, &fg_source,
+            m->misc.screen_on,
+            /* "Interacting" = the run queue is above the learned quiet floor. Same
+               signal the calm tick cadence uses, so the two cannot disagree. */
+            (g_ui_quiet_floor > 0.0f &&
+             m->cpu.load1 >= g_ui_quiet_floor * 1.35f));
+
+        g_pkg_detect_status = pst;
+        g_pkg_detect_source = fg_source;
+
+        if (pst == ASB_PKG_OK || pst == ASB_PKG_STALE) {
+            /* Real package signal — use it */
+            g_smart_rt.app_hash = fg_hash;
+            g_smart_rt.app_hint = fg_hint;
+            g_pkg_detect_ok = 1;
+            {
+                size_t _pl = strnlen(fg_pkg, sizeof(g_smart_rt.app_pkg_cached) - 1);
+                memcpy(g_smart_rt.app_pkg_cached, fg_pkg, _pl);
+                g_smart_rt.app_pkg_cached[_pl] = 0;
+            }
+            /* Only a current, positively recognised media package may opt into the
+             * media guard. A stale cache deliberately does not qualify. */
+            media_known = (pst == ASB_PKG_OK &&
+                           asb_smart_pkg_is_media_candidate(fg_pkg));
+            /* For heavy/gaming hints, double-check with load to avoid
+             * stale cache mistakes (e.g. user backgrounded the game) */
+            if (fg_hint >= ASB_APP_HEAVY && m->cpu.load1 < 3.0f) {
+                g_smart_rt.app_hint = ASB_APP_LIGHT;
+            }
+            /* Game/heavy app is foreground but the FSM has settled into an idle state
+             * with low GPU — the game is paused, in a menu, or loading. */
+            else if (fg_hint >= ASB_APP_HEAVY && fsm &&
+                     (fsm->state == ASB_STATE_DEEP_IDLE ||
+                      fsm->state == ASB_STATE_LIGHT_IDLE) &&
+                     m->gpu.load_pct < 15) {
+                g_smart_rt.app_hint = fg_hint - 1;
+            }
+        } else {
+            /* No package signal — the load heuristic, and never GAMING from it. */
+            g_smart_rt.app_hash = 0;
+            g_smart_rt.app_pkg_cached[0] = 0;
+            g_pkg_detect_ok = 0;
+            if (m->cpu.load1 >= 12.0f) g_smart_rt.app_hint = ASB_APP_HEAVY;
+            else if (m->cpu.load1 >= 6.0f) g_smart_rt.app_hint = ASB_APP_MEDIUM;
+            else g_smart_rt.app_hint = ASB_APP_LIGHT;
+        }
+        /* The heat inference, one-to-one with Smart's: an unlisted game looks like a
+         * hot die plus a busy GPU. The camera is not a game (fix120), a media app is
+         * not either, and the boot grace keeps early boot storms out. */
+        if (g_smart_rt.app_hint < ASB_APP_GAMING && fsm && m->misc.screen_on) {
+            int fresh_pkg = (pst == ASB_PKG_OK);
+            int boot_grace = (g_gov_start_ts > 0 &&
+                              (long)(now - g_gov_start_ts) < 180);
+            int cam_open = m->misc.camera_active;
+            if (fsm->state == ASB_STATE_GAMING && fresh_pkg && !media_known) {
+                g_smart_rt.app_hint = ASB_APP_GAMING;
+            } else if (!boot_grace && !cam_open &&
+                       fsm->state == ASB_STATE_SUSTAINED &&
+                       m->therm.cpu_max_c >= 60 && m->gpu.load_pct >= 30 &&
+                       fresh_pkg && !media_known) {
+                g_smart_rt.app_hint = ASB_APP_GAMING;
+            } else if (!boot_grace && !cam_open &&
+                       g_asb_cfg.bat_suppress_gaming &&
+                       fsm->state == ASB_STATE_HEAVY &&
+                       m->therm.cpu_max_c >= 60 && m->gpu.load_pct >= 45 &&
+                       m->cpu.load1 >= 3.0f &&
+                       fresh_pkg && !media_known) {
+                /* A suppressed game is still a game - see the Smart twin of this
+                 * branch for the full reasoning. */
+                g_smart_rt.app_hint = ASB_APP_GAMING;
+            }
+        }
+    }
+    _last = now;
+}
+
 static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     if (!m) return 0;
     /* Defensive consistency: if FSM is in PROFILE_SMART, ensure runtime flag
@@ -7562,7 +7679,11 @@ int main(int argc, char **argv) {
     /* Hand the app classification to the FSM before it decides.
      * The Smart package table already knows which app is a game; without this the FSM
      * only ever saw GPU load, and a game that does not push the GPU past the entry
-     * threshold never reached GAMING at all. */
+     * threshold never reached GAMING at all.
+     * fix210: classify first on the manual profiles too - otherwise the hint stays 0,
+     * the gate's "no package information" fallback counts as agreement, and any busy
+     * GPU next to a busy CPU reads as GAMING. */
+    asb_fg_classify_tick(&metrics, &fsm);
     metrics.misc.app_hint = g_smart_rt.app_hint;
     fsm_update(&fsm, &metrics);
 
@@ -9516,7 +9637,11 @@ int main(int argc, char **argv) {
             /* Hand the app classification to the FSM before it decides.
              * The Smart package table already knows which app is a game; without this the FSM
              * only ever saw GPU load, and a game that does not push the GPU past the entry
-             * threshold never reached GAMING at all. */
+             * threshold never reached GAMING at all.
+             * fix210: classify first on the manual profiles too - otherwise the hint
+             * stays 0, the gate's "no package information" fallback counts as agreement,
+             * and any busy GPU next to a busy CPU reads as GAMING. */
+            asb_fg_classify_tick(&metrics, &fsm);
             metrics.misc.app_hint = g_smart_rt.app_hint;
             /* Tell the writer whether anyone is looking, before it writes anything. */
             fsm_screen_is_on = metrics.misc.screen_on;
