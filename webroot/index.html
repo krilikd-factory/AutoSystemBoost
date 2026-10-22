@@ -10819,11 +10819,15 @@ async function homeMeterRefresh(force) {
  * font" has to be taken from where it is actually in use: the font files the system UI process
  * has mapped. One applied from outside the system image lives under /data; without one the
  * OnePlus system family is taken. The files are copied next to the page (only when changed)
- * and registered under one family name with the weight their file names give. */
+ * and registered under one family name with the weight their file names give.
+ * fix216: the family and exclusion patterns are anchored to the FILE NAME (/[^/]*…[^/]*$).
+ * They used to match the whole path, so any directory component containing a token - a user
+ * font folder named "kr", and in CI a mktemp dir like "tmp.5wIeilzKrt" - excluded every font
+ * and the variant silently kept the default family. */
 const ASB_DEVICE_FONT_CMD = "sh -c 'd=" + MD + "/webroot/devfont; mkdir -p \"$d\" || exit 0; "
   + "m=$(for p in $(pidof com.android.systemui); do grep -oE \"/[^ ]+[.]([tT][tT][fFcC]|[oO][tT][fF])$\" /proc/$p/maps 2>/dev/null; done | sort -u); "
-  + "l=$(printf \"%s\\n\" $m | grep \"^/data/\" | grep -viE \"emoji|mono|symbol\" | head -4); "
-  + "[ -n \"$l\" ] || l=$(printf \"%s\\n\" $m | grep -iE \"syssans|oplussans|oneplussans|opsans\" | grep -viE \"mono|cond|hans|hant|jp|kr|arab|thai|hebr|deva|beng|mya\" | head -4); "
+  + "l=$(printf \"%s\\n\" $m | grep \"^/data/\" | grep -viE \"/[^/]*(emoji|mono|symbol)[^/]*$\" | head -4); "
+  + "[ -n \"$l\" ] || l=$(printf \"%s\\n\" $m | grep -iE \"/[^/]*(syssans|oplussans|oneplussans|opsans)[^/]*$\" | grep -viE \"/[^/]*(mono|cond|hans|hant|jp|kr|arab|thai|hebr|deva|beng|mya)[^/]*$\" | head -4); "
   + "i=0; for f in $l; do x=${f##*.}; o=\"$d/f$i.$x\"; cmp -s \"$f\" \"$o\" || { cp -f \"$f\" \"$o\" && chmod 0644 \"$o\"; }; [ -s \"$o\" ] && printf \"%s|%s|%s\\n\" \"f$i.$x\" \"$f\" \"$(stat -c %Y \"$o\")\"; i=$((i + 1)); done'";
 function asbDeviceFontWeight(path) {
   const n = String(path || '').split('/').pop().toLowerCase();
