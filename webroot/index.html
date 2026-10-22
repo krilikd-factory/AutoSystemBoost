@@ -87,13 +87,10 @@
 }
 
 html, body {
-  /* min-height, not height: with a fixed 100% the body is exactly one viewport tall and
-   * becomes the scroll container (overflow-x: hidden computes overflow-y to auto), while
-   * the document itself has nothing to scroll. WebViews that only gesture-scroll the
-   * document then show a page that simply does not move - "can't scroll down, there are
-   * more cards" (user report). With min-height the page grows, the document scrolls, and
-   * every WebView since forever scrolls it. Short content still fills exactly one
-   * viewport via .page's min-height, so the no-jelly property is unchanged. */
+  /* min-height, not height: body stays exactly one viewport tall. All pages are
+   * now self-scrolling fixed overlays (element scroll works in every WebView
+   * host, document scroll does not - fix206), so the document itself never
+   * needs to scroll; min-height just keeps body at the viewport size. */
   min-height: 100%;
   width: 100%;
   max-width: 100%;
@@ -1354,10 +1351,31 @@ body.live-active .page:not(.live-page) {
               transform var(--page-fade-out) ease-out;
   pointer-events: none;
 }
+/* Home scrolls INSIDE its own fixed overlay, exactly like .live-page: some
+ * KernelSU-family WebView hosts gesture-scroll overflowing elements but never
+ * the document (user report: «Монитор» листается, «Профили» нет — monitor is a
+ * live-page with element scroll, home was the only document-scrolled page).
+ * Centered with left/right:0 + margin:auto — NOT translateX(-50%), because the
+ * prefers-reduced-motion block forces transform:none on this selector. */
 .page:not(.live-page) {
+  position: fixed;
+  top: 0; bottom: 0; left: 0; right: 0;
+  margin: 0 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-top: calc(var(--window-inset-top) + var(--page-top));
+  padding-bottom: 0;
   transform-origin: center center;
   transition: opacity var(--page-fade-in) var(--page-fade-ease) var(--page-fade-delay),
               transform var(--page-fade-in) var(--page-fade-ease) var(--page-fade-delay);
+}
+.page:not(.live-page)::-webkit-scrollbar { width: 0; height: 0; display: none; }
+.page:not(.live-page) { scrollbar-width: none; }
+.page:not(.live-page) > *:last-child {
+  padding-bottom: calc(86px + env(safe-area-inset-bottom, 0px));
 }
 .live-metrics {
   width: 100%;
@@ -9736,7 +9754,7 @@ function asbToggleLogMenu(ev) {
  * capture too: the digest folds in the still-open phase, so the numbers move as the
  * day goes on. */
 function parseLogReport(txt) {
-  const d = { ok: false, error: '', sections: {}, wl: [], japps: [], hzs: [], cfg: {} };
+  const d = { ok: false, error: '', sections: {}, wl: [], wlive: [], profs: [], phases: [], kwk: [], japps: [], hzs: [], cfg: {} };
   if (!txt) { d.error = 'empty'; return d; }
   const lines = String(txt).split('\n');
   for (const raw of lines) {
@@ -9753,6 +9771,22 @@ function parseLogReport(txt) {
     if (tag === 'wl') {
       if (kv.pkg) d.wl.push({ pkg: kv.pkg, sec: +kv.sec || 0 });
       else d.sections.wl_none = { none: '1' };
+    } else if (tag === 'wlive') {
+      /* fix206: holders sampled from the power manager directly - visible even where
+         batterystats counted nothing (charging time, flat deltas). */
+      if (kv.tag) d.wlive.push({ tag: kv.tag, pct: +kv.pct || 0, min: +kv.min || 0, pkg: kv.pkg || '' });
+    } else if (tag === 'prof') {
+      /* fix206: per-profile drain attribution for the day spent switching profiles. */
+      if (kv.name) d.profs.push({ name: kv.name, onMin: +kv.on_min || 0, offMin: +kv.off_min || 0,
+        onP: +kv.on_pctph || 0, offP: +kv.off_pctph || 0 });
+    } else if (tag === 'phase') {
+      /* fix207: the per-phase breakdown - every phase's time, signed drop (negative is
+         charge gained) and drain rate, longest first. */
+      if (kv.name) d.phases.push({ name: kv.name, min: +kv.min || 0, drop: +kv.drop || 0, pctph: +kv.pctph || 0 });
+    } else if (tag === 'kwk') {
+      /* fix207: kernel holders on the charger - batterystats counts no app wakelock
+         while charging, so these are the only names a charging day has. */
+      if (kv.tag) d.kwk.push({ tag: kv.tag, min: +kv.min || 0 });
     } else if (tag === 'japp') {
       /* fix200: per-app frame counts - the real per-app table the sheet shows. */
       if (kv.pkg) d.japps.push({ pkg: kv.pkg, frames: +kv.frames || 0, pct: +kv.pct || 0 });
@@ -9811,7 +9845,14 @@ function logReportTips(d) {
     else
       tips.push({ ic: 'warn', key: 'lr_tip_night', vars: { pct: (+night.pctph).toFixed(1) } });
   }
-  if (idle && (+idle.awake || 0) > 15) tips.push({ ic: 'warn', key: 'lr_tip_awake', vars: { awake: String(idle.awake) } });
+  if (idle && (+idle.awake || 0) > 15) {
+    /* fix206: name the culprit when the power-manager samples caught one - "something
+       prevents deep sleep" next to a named holder is a finding, without it a shrug. */
+    if (d.wlive.length)
+      tips.push({ ic: 'warn', key: 'lr_tip_awake_who', vars: { awake: String(idle.awake), who: d.wlive[0].pkg || d.wlive[0].tag } });
+    else
+      tips.push({ ic: 'warn', key: 'lr_tip_awake', vars: { awake: String(idle.awake) } });
+  }
   if (d.wl.length && d.wl[0].sec >= 3600) {
     const v = { app: d.wl[0].pkg, min: String(Math.round(d.wl[0].sec / 60)) };
     if (cfg.wakelock_action === '1') tips.push({ ic: 'info', key: 'lr_tip_app', vars: v });
@@ -9823,6 +9864,22 @@ function logReportTips(d) {
   }
   if (audio && (+audio.spk_min || 0) >= 30 && (+audio.pctph || 0) >= 5)
     tips.push({ ic: 'info', key: 'lr_tip_audio', vars: { pct: String(audio.pctph) } });
+  /* fix207: the tester's day proved it with his own numbers - Battery at the screen cost
+     1.6 %/h where Balanced/Performance cost 5-6. When the capture shows a profile twice
+     as cheap as the busiest one (enough screen-on minutes on both), say so. */
+  if (d.profs && d.profs.length >= 2) {
+    let cheap = null, busy = null;
+    d.profs.forEach(function (p) {
+      if (p.onMin >= 30 && p.onP > 0) {
+        if (!cheap || p.onP < cheap.onP) cheap = p;
+        if (!busy || p.onP > busy.onP) busy = p;
+      }
+    });
+    if (cheap && busy && cheap !== busy && busy.onP >= cheap.onP * 2)
+      tips.push({ ic: 'ok', key: 'lr_tip_prof_save', vars: {
+        cheap: T('prof_' + cheap.name, cheap.name), x: cheap.onP.toFixed(1),
+        busy: T('prof_' + busy.name, busy.name), y: busy.onP.toFixed(1) } });
+  }
   if (smart && (+smart.helped || 0) > 0)
     tips.push({ ic: 'ok', key: 'lr_tip_smart_help', vars: { n: String(smart.helped) } });
   if (cost && (+cost.cpu_msh || 0) > 0) {
@@ -10030,12 +10087,17 @@ function logReportRender(d) {
   const audio = d.sections.audio || null;
   const cost = d.sections.asbcost || null;
   const charge = d.sections.charge || null;
+  const chg = d.sections.chg || null;
+  const ltpo = d.sections.ltpo || null;
+  const aod = d.sections.aod || null;
+  const scr = d.sections.scr || null;
+  const nightd = d.sections.nightd || null;
   if (!(drain || cover || night || idle)) {
     /* A capture that just started has no committed phases yet - say so instead of
        showing only the "nothing bad happened" sections. */
     body.appendChild(logReportNote(T('lr_early', 'The capture has just started - the numbers will appear here after the first phases.')));
   }
-  if (drain || cover || night || idle || radio) {
+  if (drain || cover || night || idle || radio || chg) {
     const s = logReportSec(T('lr_sec_drain', '🔋 Battery drain'));
     const g = document.createElement('div');
     g.className = 'lgr-heros';
@@ -10047,9 +10109,12 @@ function logReportRender(d) {
       heroes++;
     }
     if (night) {
+      /* fix207: the hero's subtitle carries the deep-sleep share too - "awake 8%" reads
+         as a warning unless the flip side ("deep sleep 92%") sits next to it. */
+      const deep = Math.max(0, 100 - (+night.awake || 0));
       g.appendChild(logReportHero('🌙', T('lr_night', 'Longest idle stretch'),
         String(night.pctph) + T('lr_per_hour', '%/h'),
-        logReportDur(night.dur_min), (+night.pctph || 0) > 0.8));
+        logReportDur(night.dur_min) + ' · ' + logReportT('lr_deep_sleep', 'deep sleep {pct}%', { pct: String(deep) }), (+night.pctph || 0) > 0.8));
       heroes++;
     }
     if (heroes) {
@@ -10060,6 +10125,17 @@ function logReportRender(d) {
       s.appendChild(logReportRow(T('lr_screen_on', 'Screen on'), logReportDur(cover.on_min) + ' (' + String(cover.on_pct) + '%)'));
       s.appendChild(logReportRow(T('lr_screen_off', 'Screen off'), logReportDur(cover.off_min)));
     }
+    /* fix207: the drain split over the WHOLE ledger, next to the durations - this is the
+       figure that reconciles with Monitor's "screen off" tile. Three windows, three right
+       answers: the night hero is one deep-sleep-heavy chain, the Monitor meter averages
+       clean stretches of an hour or more without music, and this is everything. Showing
+       them together ends the "0.7 here, 1.3 there" confusion. */
+    if (scr) {
+      if ((+scr.on_min || 0) > 0)
+        s.appendChild(logReportRow(T('lr_drain_on', 'Screen-on drain'), String(scr.on_pctph) + T('lr_per_hour', '%/h'), (+scr.on_pctph || 0) >= 8));
+      if ((+scr.off_min || 0) > 0)
+        s.appendChild(logReportRow(T('lr_drain_off', 'Screen-off drain (all idle)'), String(scr.off_pctph) + T('lr_per_hour', '%/h'), (+scr.off_pctph || 0) > 1.5));
+    }
     if (idle) s.appendChild(logReportRow(T('lr_idle', 'Worst idle awake share'), String(idle.awake) + '%', (+idle.awake || 0) > 15));
     if (radio) s.appendChild(logReportRow(T('lr_radio', 'Mobile data'), String(radio.mib) + ' MiB'));
     if (audio) {
@@ -10069,6 +10145,86 @@ function logReportRender(d) {
         ((+audio.ma || 0) > 0 ? ' · ' + String(audio.ma) + ' mA' : ''), (+audio.pctph || 0) >= 8));
     }
     if (charge && charge.types) s.appendChild(logReportRow(T('lr_charge_types', 'Charging seen'), String(charge.types)));
+    /* fix206: time on the charger is part of the day too - the 5W-wireless tester gained
+       62% over ~400 minutes and the old sheet never mentioned it. */
+    if (chg) {
+      s.appendChild(logReportRow(T('lr_charging', 'Charging'),
+        logReportT('lr_chg_fmt', '{min} · +{gain}% · {sess} sessions', {
+          min: logReportDur(chg.min), gain: String(chg.gain), sess: String(chg.sess) })));
+    }
+    /* fix206: an always-on display is a steady idle drain - name its share of screen-off
+       checks once it is more than a rounding error. */
+    if (aod && (+aod.of || 0) > 0 && (+aod.lit || 0) * 100 >= 5 * (+aod.of || 0)) {
+      s.appendChild(logReportRow(T('lr_aod', 'Always-on display'),
+        logReportT('lr_aod_fmt', 'panel lit in {lit} of {of} screen-off checks', {
+          lit: String(aod.lit), of: String(aod.of) }), (+aod.lit || 0) * 100 >= 20 * (+aod.of || 0)));
+    }
+    body.appendChild(s);
+  }
+  /* fix207: the night gets its own section when a real night was captured - total spend,
+     why it was what it was (awake vs deep sleep, current, radio, temperatures) and who
+     held the phone. The headline rate stays in the drain hero above; here is the detail. */
+  if (night && nightd) {
+    const s = logReportSec(T('lr_sec_nightd', '🌙 Night in detail'));
+    const pctph = +night.pctph || 0, awake = +night.awake || 0;
+    const deep = Math.max(0, 100 - awake);
+    s.appendChild(logReportRow(T('lr_nd_spent', 'Spent overnight'),
+      String(night.drop) + '% · ' + String(night.pctph) + T('lr_per_hour', '%/h') + ' · ' + logReportDur(night.dur_min), pctph > 0.8));
+    s.appendChild(logReportRow(T('lr_nd_deep', 'Deep sleep'), String(deep) + '%', deep < 70));
+    s.appendChild(logReportRow(T('lr_nd_awake', 'Awake share'), String(awake) + '%', awake > 15));
+    if ((+nightd.ma || 0) > 0)
+      s.appendChild(logReportRow(T('lr_nd_ma', 'Average current at night'), String(nightd.ma) + ' mA'));
+    if ((+nightd.radio_mib || 0) >= 0.5)
+      s.appendChild(logReportRow(T('lr_nd_radio', 'Mobile data at night'), String(nightd.radio_mib) + ' MiB'));
+    if ((+nightd.cpu_t || 0) > 0)
+      s.appendChild(logReportRow(T('lr_nd_temp', 'Peak temperatures'),
+        logReportT('lr_nd_temp_fmt', 'CPU {cpu}° · skin {skin}°', { cpu: String(nightd.cpu_t), skin: String(nightd.skin_t) }), (+nightd.skin_t || 0) >= 40));
+    const holder = d.wlive.length ? (d.wlive[0].pkg || d.wlive[0].tag) : (d.wl.length ? d.wl[0].pkg : '');
+    if (holder)
+      s.appendChild(logReportRow(T('lr_nd_holder', 'Main holder at night'), holder, true));
+    if (aod && (+aod.lit || 0) > 0)
+      s.appendChild(logReportRow(T('lr_aod', 'Always-on display'),
+        logReportT('lr_aod_fmt', 'panel lit in {lit} of {of} screen-off checks', { lit: String(aod.lit), of: String(aod.of) })));
+    if (pctph <= 0.8)
+      s.appendChild(logReportNote(logReportT('lr_nd_verdict_ok', 'An excellent night: {pct}%/h with {deep}% deep sleep.', { pct: String(night.pctph), deep: String(deep) })));
+    else if (pctph <= 1.5)
+      s.appendChild(logReportNote(logReportT('lr_nd_verdict_mid', 'A decent night, but the {awake}% awake share ate part of the gain.', { awake: String(awake) })));
+    else
+      s.appendChild(logReportNote(logReportT('lr_nd_verdict_bad', 'An expensive night: {pct}%/h - see the holders above and the advice below.', { pct: String(night.pctph) }), true));
+    body.appendChild(s);
+  }
+  /* fix206: per-profile comparison - the answer to "how does Smart really differ from
+     Performance on MY phone". Only for a day that actually ran two or more profiles;
+     the drain figures count only the minutes each profile was active (charging time
+     excluded), so the note says exactly that. */
+  if (d.profs.length >= 2) {
+    const s = logReportSec(T('lr_sec_profiles', '⚖️ Profiles compared'));
+    const rows = d.profs.map(function (p) {
+      return [T('prof_' + p.name, p.name), logReportDur(p.onMin + p.offMin),
+              { txt: String(p.onP.toFixed(1)) + T('lr_per_hour', '%/h'), warn: false },
+              { txt: String(p.offP.toFixed(1)) + T('lr_per_hour', '%/h'), warn: p.offP > 0.8 }];
+    });
+    s.appendChild(logReportTable(
+      [T('lr_th_profile', 'Profile'), T('lr_th_time', 'Time'),
+       T('lr_th_onscreen', 'Screen %/h'), T('lr_th_idle', 'Idle %/h')], rows, [1, 2, 3]));
+    s.appendChild(logReportNote(T('lr_prof_note', 'Only the minutes each profile was actually active count; charging time is excluded.')));
+    body.appendChild(s);
+  }
+  /* fix207: the whole day phase by phase - where the time went and what each stretch
+     cost (or gained, on the charger). This is the ledger itself, aggregated. */
+  if (d.phases.length) {
+    const s = logReportSec(T('lr_sec_phases', '📊 Phase breakdown'));
+    const rows = d.phases.map(function (p) {
+      let cell;
+      if (p.drop < 0) cell = '+' + String(-p.drop) + '%';
+      else if (p.drop === 0) cell = '0%';
+      else cell = '−' + String(p.drop) + '% · ' + p.pctph.toFixed(1) + T('lr_per_hour', '%/h');
+      return [T('lr_ph_' + p.name, p.name), logReportDur(p.min),
+              { txt: cell, warn: p.pctph >= 8 }];
+    });
+    s.appendChild(logReportTable(
+      [T('lr_th_phase', 'Phase'), T('lr_th_time', 'Time'), T('lr_th_drop', 'Drain')], rows, [1, 2]));
+    s.appendChild(logReportNote(T('lr_ph_note', 'Every stretch of the day, longest first; a plus is charge gained on the charger.')));
     body.appendChild(s);
   }
   /* fix200: smoothness, with the per-app frame table - the real numbers, not vibes. */
@@ -10093,13 +10249,22 @@ function logReportRender(d) {
     body.appendChild(s);
   }
   /* fix200: what the panel ran at, and what each rate cost. */
-  if (d.hzs.length) {
+  if (d.hzs.length || ltpo) {
     const s = logReportSec(T('lr_sec_display', '🖥 Display refresh'));
-    const rows = d.hzs.slice().sort(function (a, b) { return (+a.mode) - (+b.mode); }).map(function (z) {
-      return [String(z.mode) + ' ' + T('lr_hz_unit', 'Hz'), String(z.share) + '%',
-              { txt: String(z.ma) + ' mA', warn: false }];
-    });
-    s.appendChild(logReportTable([T('lr_th_hz', 'Rate'), T('lr_th_share', 'Share'), T('lr_th_ma', 'Avg draw')], rows, [2]));
+    if (d.hzs.length) {
+      const rows = d.hzs.slice().sort(function (a, b) { return (+a.mode) - (+b.mode); }).map(function (z) {
+        return [String(z.mode) + ' ' + T('lr_hz_unit', 'Hz'), String(z.share) + '%',
+                { txt: String(z.ma) + ' mA', warn: false }];
+      });
+      s.appendChild(logReportTable([T('lr_th_hz', 'Rate'), T('lr_th_share', 'Share'), T('lr_th_ma', 'Avg draw')], rows, [2]));
+    }
+    /* fix206: proof the LTPO video drop actually engages - "lowered N times, M min at
+       the lower rate". */
+    if (ltpo && (+ltpo.n || 0) > 0) {
+      s.appendChild(logReportRow(T('lr_ltpo', 'LTPO video drop'),
+        logReportT('lr_ltpo_fmt', '{n} times · {min} at the lower rate', {
+          n: String(ltpo.n), min: logReportDur(ltpo.min) })));
+    }
     body.appendChild(s);
   }
   /* fix200: what Smart has already figured out - records and the smoothness learner. */
@@ -10112,6 +10277,11 @@ function logReportRender(d) {
     if ((+smart.nothelped || 0) > 0) s.appendChild(logReportRow(T('lr_sm_nothelped', 'Headroom ruled out'), String(smart.nothelped)));
     if ((+smart.ctxlearn || 0) === 0 && (+smart.watching || 0) === 0)
       s.appendChild(logReportNote(T('lr_sm_fresh', 'Smart is still collecting its first days - verdicts appear as the evidence accumulates.')));
+    /* fix206: the usage records behind the verdicts only meter while Smart is the active
+       profile (asb_governor.c gates the meter on PROFILE_SMART). On a day spent in
+       Balanced the counters stand still - say so, or "0 verdicts" reads as broken. */
+    if (String(meta.profile || '') && String(meta.profile) !== 'smart')
+      s.appendChild(logReportNote(T('lr_sm_smart_only', 'Usage records learn only while the Smart profile is active - this capture ran under a different one.')));
     body.appendChild(s);
   }
   /* fix200: ASB's own bill - the answer to "and what does the module itself eat?". */
@@ -10128,9 +10298,39 @@ function logReportRender(d) {
       d.wl.forEach(function (w) {
         s.appendChild(logReportRow(w.pkg, logReportDurSec(w.sec)));
       });
-    } else {
-      s.appendChild(logReportNote(T('lr_wake_none', 'No app wakelocks recorded - excellent.')));
     }
+    /* fix206: live holders sampled from the power manager. They show up even where
+       batterystats counted nothing (all charging time, flat per-uid deltas) - the case
+       that used to print "no wakelocks, excellent" over a phone that plainly had
+       holders. Rows duplicating a package already in the top table are skipped; a
+       holder whose tag equals its package (sync adapters) prints once. */
+    const seen = {};
+    d.wl.forEach(function (w) { seen[w.pkg] = 1; });
+    let liveShown = 0;
+    d.wlive.forEach(function (w) {
+      if (liveShown >= 3) return;
+      if (w.pkg && seen[w.pkg]) return;
+      if (w.pkg) seen[w.pkg] = 1;
+      const label = w.pkg ? (w.pkg + ' · ' + w.tag) : w.tag;
+      s.appendChild(logReportRow(label, logReportT('lr_wlive_fmt', 'held in {pct}% of checks · longest {dur}', {
+        pct: String(w.pct), dur: logReportDur(w.min) }), w.pct >= 30));
+      liveShown++;
+    });
+    if (!d.wl.length && !liveShown && !d.kwk.length) {
+      /* fix207: never print "excellent" under a restless idle - when the awake share is
+         high but nothing was recorded, the honest line is that the counters stayed flat,
+         not that the night was clean (the owner's MountServiceIdler night, pre-wlive). */
+      if (idle && (+idle.awake || 0) > 15)
+        s.appendChild(logReportNote(T('lr_wake_gap', 'No holders were recorded even though idle was restless - the counters stayed flat; see the full report for the live samples.'), true));
+      else
+        s.appendChild(logReportNote(T('lr_wake_none', 'No app wakelocks recorded - excellent.')));
+    }
+    /* fix207: kernel holders on the charger - on a charging day they are the ONLY
+       holders with names (batterystats counts no app wakelock while charging). */
+    d.kwk.forEach(function (w) {
+      s.appendChild(logReportRow(logReportT('lr_kwk_fmt', '{tag} (kernel, on the charger)', { tag: w.tag }),
+        logReportDur(w.min), w.min >= 60));
+    });
     body.appendChild(s);
   }
   if (crash || sysui) {
@@ -10181,6 +10381,7 @@ function logReportRender(d) {
         lr_tip_ok: 'No serious issues found - drain looks healthy.',
         lr_tip_night: 'Overnight the phone lost ~{pct}%/h - check background apps.',
         lr_tip_awake: 'During idle the phone stayed awake {awake}% of the time - something prevents deep sleep.',
+        lr_tip_awake_who: 'During idle the phone stayed awake {awake}% of the time - {who} is the main holder.',
         lr_tip_crash: 'There are crashes involving ASB code - please send an asbdiag log to the developer.',
         lr_tip_crashes: '{n} native crashes during the capture - details are in the full report.',
         lr_tip_app: '{app} held the phone awake for {min} min - consider restricting its background activity.',
@@ -10189,6 +10390,7 @@ function logReportRender(d) {
         lr_tip_jank_bad: 'About {pct}% of frames missed their deadline - stutter is visible. On Smart the learner is already testing the worst apps; heavy games do better on Performance.',
         lr_tip_jank_ok: 'Smoothness is excellent: only {pct}% of frames janky.',
         lr_tip_audio: 'Speaker playback cost ~{pct}%/h. For long sessions, headphones or a gentler DSP preset are kinder to the battery.',
+        lr_tip_prof_save: 'Your own measurements: {cheap} cost {x}%/h at the screen against {y}%/h on {busy} - for reading and music it is noticeably cheaper.',
         lr_tip_cost_ok: 'ASB itself is cheap: {ms} of CPU per hour.',
         lr_tip_cost_hi: 'ASB used {ms} of CPU per hour - more than usual; worth sending this log to the developer.',
         lr_tip_smart_help: 'Smart proved extra headroom helps {n} of your apps and keeps it just for them.',
@@ -10323,7 +10525,10 @@ function asbFitPages() {
       if (prof && !document.body.classList.contains('live-active') && !document.body.classList.contains('config-active')) {
         const cards = prof.querySelectorAll('.pbtn');
         if (cards.length) {
-          const top = prof.getBoundingClientRect().top + (window.scrollY || 0);
+          /* fix206: home is a self-scrolling overlay now, so the profiles block's
+           * document-absolute top is its rect top plus the overlay's own scrollTop. */
+          const home = document.querySelector('.page:not(.live-page)');
+          const top = prof.getBoundingClientRect().top + (home ? home.scrollTop : 0);
           const gap = parseFloat(getComputedStyle(prof).rowGap || getComputedStyle(prof).gap) || 8;
           let h = ((stop - top) / z - gap * (cards.length - 1)) / cards.length;
           h = Math.max([68, 58, 48][tier], Math.min(104, Math.floor(h)));
@@ -10351,28 +10556,24 @@ function asbFitPages() {
       }
     };
     /* How far the visible page's content runs past the fit line, in px: positive means the
-     * user has to scroll that much, negative is spare room. Home scrolls the document, so
-     * its bottom is the page box's own. The overlays are fixed and scroll themselves - and
-     * a fixed box's scrollHeight never reads below its own clientHeight, so a page shorter
-     * than the screen would report a full bar's height of overflow it does not have. Their
-     * content bottom is measured with the box unclamped (bottom/height auto for one
-     * synchronous layout, then restored). Both read WITHOUT the bottom padding - that
-     * padding is the reserved strip for the floating bar, counting it (fix202 did, through
-     * scrollHeight) reports a full bar's height of overflow on a page that fits exactly.
+     * user has to scroll that much, negative is spare room. Every page is a fixed,
+     * self-scrolling overlay now (home included, fix206) - and a fixed box's scrollHeight
+     * never reads below its own clientHeight, so a page shorter than the screen would
+     * report a full bar's height of overflow it does not have. The content bottom is
+     * measured with the box unclamped (bottom/height auto for one synchronous layout, then
+     * restored). It reads WITHOUT the bottom padding - that padding is the reserved strip
+     * for the floating bar, counting it (fix202 did, through scrollHeight) reports a full
+     * bar's height of overflow on a page that fits exactly.
      *
      * Coordinates: rects come back zoomed (--asb-ui-scale), scroll sizes do not. */
     const naturalOverflow = function () {
-      let el = null, overlay = true;
+      let el = null;
       if (document.body.classList.contains('report-active')) el = _el('reportPage');
       else if (document.body.classList.contains('config-active')) el = _el('configPage');
       else if (document.body.classList.contains('live-active')) el = _el('livePage');
-      else { el = document.querySelector('.page:not(.live-page)'); overlay = false; }
+      else el = document.querySelector('.page:not(.live-page)');
       if (!el || !el.getBoundingClientRect) return NaN;
       const pb = parseFloat(getComputedStyle(el).paddingBottom) || 0;
-      if (!overlay) {
-        const r = el.getBoundingClientRect();
-        return r.bottom - pb * z - stop;
-      }
       const st = el.style;
       if (!st) return NaN;
       const prevB = st.bottom, prevH = st.height;
