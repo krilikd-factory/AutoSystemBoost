@@ -5628,8 +5628,9 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         /* Find current bucket and update */
         int bid = (int)asb_smart_bucket_id(g_smart_rt.daypart, g_smart_rt.is_weekend);
         if (bid >= 0 && bid < ASB_SMART_BUCKETS) {
-            asb_smart_bucket_update_from_session(
-                &g_smart_store.buckets[bid], &sin, time(NULL));
+            asb_smart_bucket_update_from_session_ex(
+                &g_smart_store.buckets[bid], &sin, time(NULL),
+                asb_smart_therm_median_x10(&g_smart_store) / 10);
             g_smart_sessions_since_save++;
             /* separate Smart-specific accounting */
             g_smart_sessions_total++;

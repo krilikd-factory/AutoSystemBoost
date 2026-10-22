@@ -1166,6 +1166,33 @@ static asb_smart_bucket_t* asb_smart_lookup_bucket(
  * Applies confidence gating per locked rules. */
 /* st is needed for the device-relative thermal median: the decision depends not only on
  * this bucket but on how it compares to the rest of this phone's history. */
+/* This device's ordinary operating temperature: the median of the per-bucket temperature
+ * averages that have enough observations, in tenths of a degree, or 0 while too few
+ * buckets have history. A 12 on SD8Gen3 idles and loads at different temperatures than a
+ * 15 on SM8850, and an older model with a smaller thermal envelope different again - the
+ * median is whatever THIS silicon does, so every "is this hot?" question can be asked
+ * relative to the device instead of relative to the phone the numbers came from.
+ *
+ * Factored out of asb_smart_compute_effective: the session teacher asks the same
+ * question (see asb_smart_bucket_update_from_session_ex). */
+static int asb_smart_therm_median_x10(const asb_smart_store_t *st) {
+    int temps[ASB_SMART_BUCKETS];
+    int n = 0;
+    for (int i = 0; st && i < ASB_SMART_BUCKETS; i++) {
+        int t = (int)st->buckets[i].avg_max_temp_x10;
+        if (t > 0 && st->buckets[i].eff_obs_x100 >= ASB_SMART_THERM_MIN_OBS_X100)
+            temps[n++] = t;
+    }
+    if (!st || n < ASB_SMART_THERM_MIN_BUCKETS) return 0;
+    /* Insertion sort: n <= 12, and a median needs the middle element only. */
+    for (int i = 1; i < n; i++) {
+        int v = temps[i], j = i - 1;
+        while (j >= 0 && temps[j] > v) { temps[j + 1] = temps[j]; j--; }
+        temps[j + 1] = v;
+    }
+    return temps[n / 2];
+}
+
 static void asb_smart_compute_effective(
         const asb_smart_bucket_t *b,
         int conf_x1000,
@@ -1246,21 +1273,8 @@ static void asb_smart_compute_effective(
     int warm_x10 = ASB_SMART_THERM_WARM_X10;
     int cool_x10 = ASB_SMART_THERM_COOL_X10;
     {
-        int temps[ASB_SMART_BUCKETS];
-        int n = 0;
-        for (int i = 0; st && i < ASB_SMART_BUCKETS; i++) {
-            int t = (int)st->buckets[i].avg_max_temp_x10;
-            if (t > 0 && st->buckets[i].eff_obs_x100 >= ASB_SMART_THERM_MIN_OBS_X100)
-                temps[n++] = t;
-        }
-        if (st && n >= ASB_SMART_THERM_MIN_BUCKETS) {
-            /* Insertion sort: n <= 12, and a median needs the middle element only. */
-            for (int i = 1; i < n; i++) {
-                int v = temps[i], j = i - 1;
-                while (j >= 0 && temps[j] > v) { temps[j + 1] = temps[j]; j--; }
-                temps[j + 1] = v;
-            }
-            int median = temps[n / 2];
+        int median = asb_smart_therm_median_x10(st);
+        if (median > 0) {
             warm_x10 = median + ASB_SMART_THERM_WARM_OFFSET_X10;
             cool_x10 = median - ASB_SMART_THERM_COOL_OFFSET_X10;
         }
@@ -2286,10 +2300,11 @@ typedef struct {
     int climate;
 } asb_smart_session_input_t;
 
-static void asb_smart_bucket_update_from_session(
+static void asb_smart_bucket_update_from_session_ex(
         asb_smart_bucket_t *b,
         const asb_smart_session_input_t *s,
-        time_t now)
+        time_t now,
+        int device_median_c)
 {
     if (!b || !s) return;
 
@@ -2320,14 +2335,30 @@ static void asb_smart_bucket_update_from_session(
     int dt_sleep = 0;
     int dt_net   = 0;
 
-    int hot = (s->max_temp_c >= 70);
-    int very_hot = (s->max_temp_c >= 80);
+    /* The hot/cool verdicts, relative to THIS device once its median is learned.
+     *
+     * The absolutes (70/80/55 C) were measured on a OnePlus 15. On a phone whose silicon
+     * simply runs warmer every session looked hot and taught a permanent battery lean it
+     * never deserved; on a cool-running phone a genuinely hot-for-it 60 C session taught
+     * nothing. With the learned median the thresholds become offsets from the device's own
+     * normal, clamped so no device leaves the sane 60-90 / 45-60 C bands. On the phone the
+     * absolutes came from the median sits at ~45 C and the offsets reproduce them exactly,
+     * so the reference behaviour is unchanged; every other device is judged by its own
+     * normal instead. Without a median the absolutes apply, as before. */
+    int hot_c = 70, very_hot_c = 80, cool_c = 55;
+    if (device_median_c > 0) {
+        hot_c      = asb_clamp_int(device_median_c + 25, 60, 80);
+        very_hot_c = asb_clamp_int(device_median_c + 35, 70, 90);
+        cool_c     = asb_clamp_int(device_median_c + 10, 45, 60);
+    }
+    int hot = (s->max_temp_c >= hot_c);
+    int very_hot = (s->max_temp_c >= very_hot_c);
     int drain_valid = (s->drain_on_sec >= ASB_SMART_DRAIN_MIN_ON_SEC &&
                        s->drain_pctph_x10 >= 0 && !s->climate);
     int drainy = (drain_valid &&
                   s->drain_pctph_x10 >= ASB_SMART_DRAIN_HEAVY_PCTPH_X10);
     int sustained_heavy = (s->sustained_pct >= 30);
-    int clean_cool = (s->max_temp_c < 55 && s->trust == ASB_TRUST_CLEAN);
+    int clean_cool = (s->max_temp_c < cool_c && s->trust == ASB_TRUST_CLEAN);
 
     if (very_hot)  dt_alpha += 80;
     else if (hot)  dt_alpha += 40;
@@ -2463,6 +2494,16 @@ static void asb_smart_bucket_update_from_session(
 
     /* Refresh cached confidence */
     b->conf_x1000 = asb_smart_confidence_x1000(b, now);
+}
+
+/* The governor passes the learned device median; tests and any caller without a store keep
+ * the absolute thresholds by passing none. */
+static void __attribute__((unused)) asb_smart_bucket_update_from_session(
+        asb_smart_bucket_t *b,
+        const asb_smart_session_input_t *s,
+        time_t now)
+{
+    asb_smart_bucket_update_from_session_ex(b, s, now, 0);
 }
 
 /*

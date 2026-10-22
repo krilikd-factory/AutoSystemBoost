@@ -605,10 +605,32 @@ static int asb_mw_slot(long wall) {
     return (tmv.tm_hour * 60 + tmv.tm_min) / 30;
 }
 /* A short check ended inside a night: started at start_wall, lasted dur_s. */
+/* A night that never confirmed (an irregular morning, a rejected sample) never got
+ * asb_mw_night_end - and a capture shows what that does: twenty checks banked over days
+ * with nights=0, tonight still counting, the slot weights never faded. The first morning
+ * that finally DID confirm would have folded all of it into one "night" of twenty checks,
+ * and per_night would have read every later night screen-on as a check for weeks.
+ *
+ * So a note that lands ten or more hours after the previous one belongs to a new night,
+ * and the pending one is closed here first: tonight folds into the per-night average and
+ * the habits fade by their 3 %, exactly as the confirmed path does - capped, because a
+ * tonight accumulated across an unknown number of nights is not one night's habit. */
+#define ASB_MW_FOLD_GAP_S   (10L * 3600)
+#define ASB_MW_FOLD_MAX     4
 static void asb_mw_note(long start_wall, long dur_s) {
     int s = asb_mw_slot(start_wall);
     if (s < 0 || dur_s <= 0) return;
     asb_microwake_t *w = &g_rec.mw;
+    if (w->last_ts && w->tonight > 0 &&
+        start_wall - (long)w->last_ts >= ASB_MW_FOLD_GAP_S) {
+        int tn = w->tonight;
+        if (tn > ASB_MW_FOLD_MAX) tn = ASB_MW_FOLD_MAX;
+        w->per_night_ewma = (w->nights == 0) ? (float)tn
+                                             : w->per_night_ewma * 0.8f + (float)tn * 0.2f;
+        if (w->nights < 65535) w->nights++;
+        w->tonight = 0;
+        for (int i = 0; i < ASB_MW_SLOTS; i++) w->slot_w[i] *= 0.97f;
+    }
     w->slot_w[s] += 1.0f;
     w->dur_ewma_s = (w->total == 0) ? (float)dur_s : w->dur_ewma_s * 0.75f + (float)dur_s * 0.25f;
     w->total++;
