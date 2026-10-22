@@ -2093,21 +2093,32 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
   background: color-mix(in srgb, var(--cat) 13%, transparent);
   border-color: color-mix(in srgb, var(--cat) 34%, transparent);
 }
-.cfg-icon.cat-audio   { --cat: #f98d9e; }
-.cfg-icon.cat-camera  { --cat: #7eb4f7; }
-.cfg-icon.cat-battery { --cat: #63daa3; }
-.cfg-icon.cat-perf    { --cat: #bfa1f7; }
-.cfg-icon.cat-ux      { --cat: #f0b76b; }
-.cfg-icon.cat-display { --cat: #c9d0dd; }
-.cfg-icon.cat-memory  { --cat: #4ed9c8; }
-.cfg-icon.cat-system  { --cat: #a7b7c6; }
-.cfg-icon.cat-thermal { --cat: #f5b45e; }
-.cfg-icon.cat-net     { --cat: #4cd3e8; }
-.cfg-icon.cat-iface   { --cat: #c6a3f5; }
-.cfg-icon.cat-blur    { --cat: #b9a5ff; }
-.cfg-icon.cat-motion  { --cat: #ff8fc0; }
-.cfg-icon.cat-haptic  { --cat: #f5b45e; }
+/* The hue map feeds both the tweak icon and (fix217) the tweak row itself: the row
+ * carries its cat-* class, so an enabled card lights up in its category colour. */
+:is(.cfg-icon,.cfg-row).cat-audio   { --cat: #f98d9e; }
+:is(.cfg-icon,.cfg-row).cat-camera  { --cat: #7eb4f7; }
+:is(.cfg-icon,.cfg-row).cat-battery { --cat: #63daa3; }
+:is(.cfg-icon,.cfg-row).cat-perf    { --cat: #bfa1f7; }
+:is(.cfg-icon,.cfg-row).cat-ux      { --cat: #f0b76b; }
+:is(.cfg-icon,.cfg-row).cat-display { --cat: #c9d0dd; }
+:is(.cfg-icon,.cfg-row).cat-memory  { --cat: #4ed9c8; }
+:is(.cfg-icon,.cfg-row).cat-system  { --cat: #a7b7c6; }
+:is(.cfg-icon,.cfg-row).cat-thermal { --cat: #f5b45e; }
+:is(.cfg-icon,.cfg-row).cat-net     { --cat: #4cd3e8; }
+:is(.cfg-icon,.cfg-row).cat-iface   { --cat: #c6a3f5; }
+:is(.cfg-icon,.cfg-row).cat-blur    { --cat: #b9a5ff; }
+:is(.cfg-icon,.cfg-row).cat-motion  { --cat: #ff8fc0; }
+:is(.cfg-icon,.cfg-row).cat-haptic  { --cat: #f5b45e; }
 .cfg-icon[class*="cat-"] { --tech-icon: var(--cat); }
+/* Enabled tweak cards wear the same category-hue gradient and glow as the six hub
+ * tiles (fix217): the row carries its cat-* class, so the whole card lights up in its
+ * category colour while it is on. The classless .cfg-row.is-on rule above stays as the
+ * fallback for rows without a category. */
+.cfg-row.is-on[class*="cat-"] {
+  background: linear-gradient(160deg, color-mix(in srgb, var(--cat, var(--accent)) 17%, transparent) 0%, color-mix(in srgb, var(--cat, var(--accent)) 8%, transparent) 55%, color-mix(in srgb, var(--cat, var(--accent)) 4%, transparent) 100%);
+  border-color: color-mix(in srgb, var(--cat, var(--accent)) 30%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 16px -8px color-mix(in srgb, var(--cat, var(--accent)) 55%, transparent);
+}
 .cfg-icon .tech-icon { width: 22px; height: 22px; }
 .cfg-main {
   flex: 1 1 auto;
@@ -3242,6 +3253,22 @@ html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-system  {
 html[data-asb-theme="light"] .cfg-section-title { color:var(--section-accent,#a52620) !important; }
 html[data-asb-theme="light"] .cfg-row:not(.is-on) { box-shadow:0 1px 2px rgba(16,24,32,.05); }
 html[data-asb-theme="light"] .cfg-row.is-on { background:linear-gradient(160deg,rgba(0,124,99,.07),#fff 70%) !important; border-color:rgba(0,124,99,.30) !important; }
+/* Light rows share the deepened light hues (fix217): the row carries cat-* now, so an
+ * enabled card lights up exactly like its hub tile - same gradient, same border tint,
+ * plus a soft category-coloured glow. Higher specificity + !important beats the teal
+ * is-on rules above; those stay as the fallback for rows without a category. */
+html[data-asb-theme="light"] .cfg-row.cat-audio   { --cat:#c0362c; }
+html[data-asb-theme="light"] .cfg-row.cat-camera  { --cat:#1f63b6; }
+html[data-asb-theme="light"] .cfg-row.cat-battery { --cat:#127a45; }
+html[data-asb-theme="light"] .cfg-row.cat-ux      { --cat:#9a5a00; }
+html[data-asb-theme="light"] .cfg-row.cat-net     { --cat:#0b6f86; }
+html[data-asb-theme="light"] .cfg-row.cat-iface   { --cat:#7442b8; }
+html[data-asb-theme="light"] .cfg-row.cat-system  { --cat:#4a5f75; }
+html[data-asb-theme="light"] .cfg-row.is-on[class*="cat-"] {
+  background: linear-gradient(160deg, color-mix(in srgb, var(--cat) 13%, #ffffff) 0%, color-mix(in srgb, var(--cat) 6%, #ffffff) 55%, color-mix(in srgb, var(--cat) 3%, #ffffff) 100%) !important;
+  border-color: color-mix(in srgb, var(--cat) 34%, var(--border)) !important;
+  box-shadow: 0 4px 16px -10px color-mix(in srgb, var(--cat) 45%, transparent) !important;
+}
 html[data-asb-theme="light"] .cfg-icon { background:#f3f5f7; }
 html[data-asb-theme="light"] .tg-link-sub { color:var(--text-secondary) !important; }
 
@@ -7486,7 +7513,7 @@ function cfgRenderRow(list, it, showCat) {
     const cur = (_cfgVals[it.key] !== undefined) ? _cfgVals[it.key] : it.def;
     const isOn = cfgIsActive(it, cur);
     const row = document.createElement('div');
-    row.className = 'cfg-row' + (isOn ? ' is-on' : '');
+    row.className = 'cfg-row ' + cfgCatClass(it.key) + (isOn ? ' is-on' : '');
     const top = document.createElement('div');
     top.className = 'cfg-row-top';
 
