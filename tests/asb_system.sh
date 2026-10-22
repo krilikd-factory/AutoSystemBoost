@@ -4125,6 +4125,25 @@ grep -q "$_clpat" "$ROOT/tools/asb_full_regression.sh" && fail "the regression s
 grep -q '  CHANGELOG.md$' "$ROOT/tools/asb_tree.sha256" || fail "the changelog fell out of the tree manifest"
 echo "PASS: fix199 contract"
 ) || exit 1
+# ---- fix205 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL fix205: $*"; exit 1; }
+# Owner's OP15 after fix204: every page back to normal except the log report - "look at
+# the header". The report is a long list BY DESIGN and scrolls; its content sections are
+# not tier-styled at all, so the compaction tiers there compressed only the shared header
+# (logo, title, capsules) and bought zero room. The tiers now apply only where their
+# styled content lives (Profiles, Monitor, the Settings hub): the report and an open
+# tweak category always keep the chrome as drawn and scroll. The runtime behaviour (the
+# report never compacts, a carried-over tier comes off, an open category is exempt, the
+# hub still compacts) is exercised in node by t_webui_fill_pages_runtime.
+grep -qF "const fittable = !document.body.classList.contains('report-active') &&" "$H" || fail "the report page can still take a compaction tier"
+grep -qF "!(document.body.classList.contains('config-active') && _cfgGroup)" "$H" || fail "an open tweak category can still take a compaction tier"
+grep -qF 'if (fittable && over > need && tier < 2)' "$H" || fail "escalation is not gated on the page having tier-styled content"
+grep -qF 'let reportOpen = false, reportBase = 3000;' "$ROOT/tests/asb_ui.sh" || fail "the fit test lost its report-page mock"
+echo "PASS: fix205 contract"
+) || exit 1
 # ---- fix204 ---------------------------------------------------------------
 (
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

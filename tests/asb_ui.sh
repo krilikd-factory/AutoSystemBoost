@@ -3122,7 +3122,10 @@ t_webui_fill_pages_runtime() (
 # the fitted card heights are zeroed for the measurement, the floating bar's reserved padding
 # is not counted as overflow, a fixed overlay is unclamped for the measurement, and an
 # overflow within a fifth of the screen just scrolls (fix201) instead of squeezing the
-# chrome over a void. The REAL asbFitPages runs in node against measured boxes.
+# chrome over a void. fix205: the log report and an open tweak category never take a tier -
+# the tiers style the header/cards/tiles/cells only, so on those long-list surfaces they
+# would squash the header and buy nothing. The REAL asbFitPages runs in node against
+# measured boxes.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 H="$ROOT/webroot/index.html"
@@ -3209,6 +3212,10 @@ const fitCls = new Set();
  * and scrolls. */
 let homeBase = 1022, cfgBase = 1100, clientH = 1900, barTop = 1700;
 let profTop = 600, hubTop = 760, live = false, cfgOpen = false;
+/* fix205: the log report is the scroll surface - a long list by design. The tiers style
+ * the header/cards/tiles/cells only, so they must never go on there (nor inside an open
+ * tweak category): they would squash the header and buy nothing. */
+let reportOpen = false, reportBase = 3000;
 function tierOf() { return fitCls.has('asb-fit-c2') ? 2 : (fitCls.has('asb-fit-c1') ? 1 : 0); }
 function resetFit() { fitCls.clear(); delete asbFitPages._tier; }
 const root = {
@@ -3230,10 +3237,16 @@ const page = { scrollTop: 0, style: {}, getAttribute() { return cfgOpen ? 'false
       : { top: 0, bottom: clientH };
   } };
 const reb = box(0, 84);
+const reportPage = { scrollTop: 0, style: {}, get clientHeight() { return clientH; },
+  getBoundingClientRect() {
+    return this.style.height === 'auto'
+      ? { top: 0, bottom: reportBase - tierOf() * 80 }
+      : { top: 0, bottom: clientH };
+  } };
 global.window = { _asbUiScale: 1, innerHeight: 1900, scrollY: 0 };
 global.document = {
   documentElement: root,
-  body: { classList: { contains(c) { return (c === 'live-active' && live) || (c === 'config-active' && cfgOpen); } } },
+  body: { classList: { contains(c) { return (c === 'live-active' && live) || (c === 'config-active' && cfgOpen) || (c === 'report-active' && reportOpen); } } },
   querySelector(q) {
     if (q === '.asb-tabbar') return box(barTop, 60);
     if (q.indexOf('.profiles') >= 0) return prof;
@@ -3243,7 +3256,7 @@ global.document = {
   }
 };
 global.getComputedStyle = () => ({ rowGap: '10px', gap: '10px', marginTop: '10px', paddingBottom: '0px' });
-function _el(id) { return id === 'configPage' ? page : id === 'cfgRebootWrap' ? reb : null; }
+function _el(id) { return id === 'configPage' ? page : id === 'reportPage' ? reportPage : id === 'cfgRebootWrap' ? reb : null; }
 EOF
   sed -n "/^function asbFitPages(/,/^}/p" "$H"
   cat <<'EOF'
@@ -3290,6 +3303,20 @@ chk(tierOf() === 1 && fitCls.has('asb-fit-c1') && !fitCls.has('asb-fit-c2'), 'pa
 resetFit(); cfgOpen = true; clientH = 700; window.innerHeight = 700; barTop = 640; cfgBase = 1400;   /* Settings 780 px past */
 asbFitPages();
 chk(tierOf() === 2 && props['--cfg-tile-h'] === '80px', 'the Settings tiles compact too: ' + props['--cfg-tile-h']);
+/* fix205: the scroll surfaces never take a tier. The report is 2380 px past the fit line
+   on this small screen - and the header still stays exactly as drawn. */
+resetFit(); reportOpen = true; cfgOpen = false; reportBase = 3000;
+asbFitPages();
+chk(tierOf() === 0 && fitCls.size === 0, 'the report scrolls by design - its header is never squashed: tier ' + tierOf());
+fitCls.add('asb-fit-c1'); fitCls.add('asb-fit-c2'); asbFitPages._tier = 2;   /* carried over from a small screen's Home */
+asbFitPages();
+chk(tierOf() === 0 && fitCls.size === 0, 'a tier carried into the report comes off: tier ' + tierOf());
+reportOpen = false; cfgOpen = true; _cfgGroup = 'audio'; cfgBase = 2600;    /* an open category, 1980 px past */
+asbFitPages();
+chk(tierOf() === 0 && fitCls.size === 0, 'an open tweak category scrolls too - no squashed header: tier ' + tierOf());
+_cfgGroup = null; cfgBase = 1400;
+asbFitPages();
+chk(tierOf() === 2, 'back on the Settings hub the tiers work as before: tier ' + tierOf());
 if (bad) process.exit(1);
 console.log('ok');
 EOF
