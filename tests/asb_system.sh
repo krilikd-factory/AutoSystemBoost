@@ -4266,31 +4266,20 @@ UJ="$ROOT/update.json"
 D="$ROOT/tools/logkit/asb_fullday_digest.sh"
 DG="$ROOT/tools/asb_diag.sh"
 fail() { echo "FAIL fix213: $*" >&2; exit 1; }
-# Audit K1/K2: the OTA manifest must describe THIS build exactly. Three builds shipped a
-# V64/640 manifest next to a V65/650 module - managers offered a downgrade whose asset
-# does not exist. versionCode is monotonic now (major*1000+fix), so any two builds order
-# correctly and a rollback target is nameable. Whoever bumps module.prop bumps
-# update.json in the same commit - this block is the gate fix83 removed and the audit
-# asked back.
-_v="$(sed -n 's/^version=//p' "$MP" | head -1)"
-_c="$(sed -n 's/^versionCode=//p' "$MP" | head -1)"
-[ -n "$_v" ] && [ -n "$_c" ] || fail "module.prop identity missing"
-case "$_c" in ''|*[!0-9]*) fail "versionCode is not numeric: $_c" ;; esac
-[ "$_c" -gt 650 ] || fail "versionCode must stay above the frozen 650 (monotonic since fix213)"
-# fix214: a stamped tree (V65-debugN from the debug workflow, V65-rcN from a pre-release)
-# must not trip this gate - update.json is an OTA manifest for PUBLIC releases and is
-# excluded from both CI zip packages, so it never travels with a stamped build. Compare
-# the base version; a suffix belongs to the build stream, not to the manifest.
-_vb="${_v%%-*}"
-grep -qF "\"version\": \"$_vb\"" "$UJ" || fail "update.json version != module.prop version ($_vb)"
-grep -qF "\"versionCode\": $_c" "$UJ" || fail "update.json versionCode != module.prop versionCode ($_c)"
-_maj="$(printf '%s' "$_vb" | sed -n 's/^V\([0-9][0-9]*\).*/\1/p')"
-[ -n "$_maj" ] || fail "module version is not V<major>"
-grep -qF "/releases/download/$_maj/" "$UJ" || fail "update.json zipUrl does not name the $_maj release"
-# ...and the exclusion itself is pinned, so no future workflow edit can ship the manifest
-# inside a flashable zip again.
+# Audit K1/K2 (fix215): the exact update.json<->module.prop identity check lives in the
+# RELEASE pipeline now (.github/workflows/build-release.yml, step "Validate OTA manifest"),
+# where it gates PUBLISHING. It must never gate BUILDING: this block ran in the always-run
+# host suite, so any checkout whose metadata had not been bumped yet - a fork, a debug run,
+# the owner's own repo between releases - failed CI on a metadata file, which is exactly
+# "module.prop/update.json must not influence the build". What stays pinned here is only
+# structural: (1) update.json exists and stays out of both flashable zips, (2) the release
+# workflow still carries the manifest gate, so it cannot silently disappear.
+[ -f "$UJ" ] || fail 'update.json missing at repo root'
 grep -qF -- "--exclude 'update.json'" "$ROOT/.github/workflows/build-debug.yml" || fail "the debug build stopped excluding update.json"
 grep -qF -- "--exclude 'update.json'" "$ROOT/.github/workflows/build-release.yml" || fail "the release build stopped excluding update.json"
+grep -qF 'Validate OTA manifest (update.json)' "$ROOT/.github/workflows/build-release.yml" || fail "the release workflow lost the update.json manifest gate"
+grep -qF '\"versionCode\": ${BASE_CODE}' "$ROOT/.github/workflows/build-release.yml" || fail "the release gate must compare versionCode against module.prop"
+grep -qF '/releases/download/${MAJ}/' "$ROOT/.github/workflows/build-release.yml" || fail "the release gate must validate the zipUrl release dir"
 # Audit K3: a profile's GPU intent is GPU_MAX_PCT alone. thermal_pwrlevel belongs to the
 # vendor thermal engine - the governor reads it back as a vendor cap, so the profile's
 # static level (battery 7, balanced/performance 2) looked like one and double-capped the
@@ -6924,12 +6913,13 @@ if ( BASE_CODE=64x DEBUG_SEQ_INPUT=10 . "$TMP_DEBUG_GATE/gate.sh" ) >"$TMP_DEBUG
   exit 1
 fi
 
-# Public module identity is build-critical: version + versionCode are pinned here, and
-# since fix213 the OTA manifest is pinned WITH them (see the fix213 block) - update.json
-# can never again drift three builds behind module.prop and offer a downgrade to a 404.
-# The GitHub-facing changelog stays outside build-time contracts (fix199).
-need "$MODULE_PROP" 'version=V65'
-need "$MODULE_PROP" 'versionCode=65214'
+# Public module identity: only the FORMAT is pinned here (fix215). The exact version and
+# versionCode are metadata the owner edits on his own schedule - a hard pin on the values
+# (V65/65214) failed CI builds whose checkout simply had not merged the bump yet, which is
+# precisely "module.prop must not influence the build". The update.json agreement moved to
+# the release workflow for the same reason (see the fix213 block and build-release.yml).
+grep -qE '^version=V[0-9]+(-[A-Za-z0-9.]+)?$' "$MODULE_PROP" || { echo 'FAIL: module.prop version is not V<number>' >&2; exit 1; }
+grep -qE '^versionCode=[0-9]+$' "$MODULE_PROP" || { echo 'FAIL: module.prop versionCode is not decimal' >&2; exit 1; }
 
 # Release publication must validate the immutable public identity rather than patching it from
 # an arbitrary GitHub tag. Exercise the literal workflow fragment under safe subshell fixtures.
