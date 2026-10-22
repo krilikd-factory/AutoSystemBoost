@@ -5934,7 +5934,7 @@ const LVI_TEXT = {
   slpm: ['lvi_slpm', 'Whether the ROM keeps mobile data up while Wi-Fi is connected (the “mobile data always active” developer setting): “{lfast}” - kept up, a faster handover for a little more drain; “{lnormal}” - the ROM’s default. In {stock} ASB applies no modem policy; this is the ROM’s own setting.'],
   sram: ['lvi_sram', 'Memory available to apps right now without closing anything, next to the phone’s total. Android keeps apps in memory on purpose, so a low figure is not a problem unless apps keep restarting.'],
   sclock: ['lvi_sclock', 'The highest current clock among the CPU clusters in this reading. It changes many times a second, so one reading says little on its own; below, the clock of every cluster.'],
-  sload: ['lvi_sload', 'System load over the last minute: how many tasks were running or waiting for the CPU, on average. Compare it with the number of cores (8 on most OnePlus phones): below that the CPU keeps up. The 5- and 15-minute figures are below.'],
+  sload: ['lvi_sload', 'System load over the last minute: how many tasks were running or waiting - for the CPU or for storage - on average. Android counts storage waits too, so this number alone can read past the core count on a phone that is doing almost nothing; that is normal, not an overload. The percentage beside it is the part of the last seconds the cores were genuinely busy, measured from /proc/stat between two readings. The 5- and 15-minute figures and the per-core share are in the tooltip.'],
   sbattery: ['lvi_sbattery', 'Charge level and voltage, read straight from the battery driver. The voltage falls as the charge goes down and sags briefly under load; below, the battery temperature.'],
   suptime: ['lvi_suptime', 'Time since the phone was last started. Below, when that was.']
 };
@@ -6893,7 +6893,9 @@ function lspBadge(lsp, cur) {
       : { cls: cur === 'off' ? 'good' : 'neutral', text:T('st_lsp_off', 'verbose log off') + mods };
   if (lsp.verbose === 'on' || lsp.verbose === 'default_on')
     return { cls: vk >= 10240 ? 'warn' : 'neutral', text:T('st_lsp_on', 'verbose log on') + (vk >= 1024 ? ' \u00b7 ' + mb(vk) : '') };
-  return { cls:'neutral', text:T('st_lsp_unknown', 'set in LSPosed') };
+  /* fix213 (audit K8): an unreadable database names WHY (no_sqlite, unexpected_schema...),
+   * so a future LSPosed schema change shows up here instead of failing silently. */
+  return { cls:'neutral', text:T('st_lsp_unknown', 'set in LSPosed') + (lsp.reason ? ' (' + lsp.reason + ')' : '') };
 }
 
 // Multimedia telemetry: the same honesty standard as the LTPO card - the badge reads
@@ -9754,7 +9756,7 @@ function asbToggleLogMenu(ev) {
  * capture too: the digest folds in the still-open phase, so the numbers move as the
  * day goes on. */
 function parseLogReport(txt) {
-  const d = { ok: false, error: '', sections: {}, wl: [], wlive: [], wlt: [], wla: [], profs: [], phases: [], kwk: [], japps: [], hzs: [], cfg: {} };
+  const d = { ok: false, error: '', sections: {}, wl: [], wlive: [], wlt: [], wla: [], profs: [], phases: [], kwk: [], japps: [], hzs: [], hist: [], cfg: {} };
   if (!txt) { d.error = 'empty'; return d; }
   const lines = String(txt).split('\n');
   for (const raw of lines) {
@@ -9799,6 +9801,12 @@ function parseLogReport(txt) {
       if (kv.pkg) d.japps.push({ pkg: kv.pkg, frames: +kv.frames || 0, pct: +kv.pct || 0 });
     } else if (tag === 'hz') {
       if (kv.mode) d.hzs.push({ mode: kv.mode, share: +kv.share || 0, ma: +kv.ma || 0 });
+    } else if (tag === 'hist') {
+      /* fix213 (audit 8.2): earlier finished captures, newest first - the trend the
+         page compares this day against. Values may be '-' when a capture had no night
+         or no drain window; the renderer skips those metrics. */
+      if (kv.started) d.hist.push({ started: kv.started, night: kv.night || '', drain: kv.drain || '',
+        jank: kv.jank || '', cpu: kv.cpu || '', clamps: kv.clamps || '' });
     } else if (tag === 'cfg') {
       if (kv.key) d.cfg[kv.key] = kv.value || '';
     } else {
@@ -9877,6 +9885,29 @@ function logReportTips(d) {
   }
   if (audio && (+audio.spk_min || 0) >= 30 && (+audio.pctph || 0) >= 5)
     tips.push({ ic: 'info', key: 'lr_tip_audio', vars: { pct: String(audio.pctph) } });
+  /* fix213 (audit 8.3/К9): heat finally speaks. A peak number alone says nothing about
+     cost - the DURATION above 45 °C does. Half an hour hot is advice-worthy (and when
+     the thermal protection is deliberately on Stock, the advice names the switch);
+     a day that never ran hot and never throttled is worth saying too - it closes the
+     "is my phone running warm?" question instead of leaving it open. */
+  const heat = s.heat || null;
+  if (heat) {
+    const wm = +heat.warm_min || 0;
+    const cpuPeak = +(s.thermal && s.thermal.cpu) || 0;
+    const clamps = +(s.throttle && s.throttle.clamps) || 0;
+    const ph = T('lr_ph_' + String(heat.peak_phase || ''), String(heat.peak_phase || ''));
+    if (wm >= 30) {
+      const hv = { min: logReportDur(wm), phase: ph };
+      if (cfg.sustained_temp_mode === 'stock') {
+        hv.set = Tcfg('sustained_temp_mode', 'name', 'Throttling Point');
+        tips.push({ ic: 'warn', key: 'lr_tip_heat_warm_set', vars: hv });
+      } else {
+        tips.push({ ic: 'warn', key: 'lr_tip_heat_warm', vars: hv });
+      }
+    } else if (cpuPeak > 0 && wm === 0 && clamps === 0) {
+      tips.push({ ic: 'ok', key: 'lr_tip_heat_calm', vars: { cpu: String(cpuPeak) } });
+    }
+  }
   /* fix207: the tester's day proved it with his own numbers - Battery at the screen cost
      1.6 %/h where Balanced/Performance cost 5-6. When the capture shows a profile twice
      as cheap as the busiest one (enough screen-on minutes on both), say so. */
@@ -10095,6 +10126,18 @@ function logReportRender(d) {
   } else {
     status.textContent = T('lr_done', 'capture finished');
   }
+  /* fix213 (audit 8.1): which device, ROM and module build this day was measured on.
+     The advice below reads differently on another SoC, and a saved capture must say what
+     it was captured with - "V65-debug12" in an asbdiag report now names the exact build. */
+  const m2 = d.sections.meta2 || null;
+  if (m2) {
+    const m2p = [];
+    if (m2.model) m2p.push(String(m2.model));
+    if (m2.soc) m2p.push(String(m2.soc));
+    if (m2.rom) m2p.push(String(m2.rom));
+    if (m2.mod) m2p.push('ASB ' + String(m2.mod));
+    if (m2p.length) body.appendChild(logReportNote(m2p.join(' · ')));
+  }
   const drain = d.sections.drain || null;
   const cover = d.sections.cover || null;
   const night = d.sections.night || null;
@@ -10114,6 +10157,8 @@ function logReportRender(d) {
   const aod = d.sections.aod || null;
   const scr = d.sections.scr || null;
   const nightd = d.sections.nightd || null;
+  const heat = d.sections.heat || null;
+  const mwake = d.sections.mwake || null;
   if (!(drain || cover || night || idle)) {
     /* A capture that just started has no committed phases yet - say so instead of
        showing only the "nothing bad happened" sections. */
@@ -10213,6 +10258,13 @@ function logReportRender(d) {
     const holder = d.wlive.length ? (d.wlive[0].pkg || d.wlive[0].tag) : (d.wl.length ? d.wl[0].pkg : '');
     if (holder)
       s.appendChild(logReportRow(T('lr_nd_holder', 'Main holder at night'), holder, true));
+    /* fix213 (audit 8.8): the microwake learner's long-term answer to "does my phone
+       sleep at night?" - how rarely it stirs and for how long. A calm fact, not an
+       alarm, so it sits among the rows, not in the advice. */
+    if (mwake && (+mwake.n || 0) > 0)
+      s.appendChild(logReportRow(T('lr_mwake', 'Night wakes (learned)'),
+        logReportT('lr_mwake_fmt', '{n} checks · {per} a night · ~{sec} s each', {
+          n: String(mwake.n), per: String(mwake.per_night), sec: String(mwake.typical_s) })));
     if (aod && (+aod.lit || 0) > 0)
       s.appendChild(logReportRow(T('lr_aod', 'Always-on display'),
         logReportT('lr_aod_fmt', 'panel lit in {lit} of {of} screen-off checks', { lit: String(aod.lit), of: String(aod.of) })));
@@ -10406,7 +10458,7 @@ function logReportRender(d) {
     if (sysui) s.appendChild(logReportRow(logReportT('lr_sysui', 'SystemUI restarts: {n}', { n: String(+sysui.count || 0) }), '', (+sysui.count || 0) > 2));
     body.appendChild(s);
   }
-  if (thermal || throttle) {
+  if (thermal || throttle || heat) {
     const s = logReportSec(T('lr_sec_thermal', '🌡️ Thermals & throttling'));
     if (thermal) {
       const g = document.createElement('div');
@@ -10415,12 +10467,46 @@ function logReportRender(d) {
       g.appendChild(logReportHero('🧊', T('lr_temp_surf', 'Skin'), String(thermal.surf) + '°', '', (+thermal.surf || 0) >= 40));
       s.appendChild(g);
     }
+    /* fix213 (audit 8.3): peaks are the headline; the DURATION hot is the cost. The rows
+       name the hottest phase and the minutes spent above the comfort marks, so "it felt
+       warm all evening" either shows here or is disproven here. */
+    if (heat) {
+      if (heat.peak_phase)
+        s.appendChild(logReportRow(T('lr_heat_peak', 'Hottest phase'),
+          T('lr_ph_' + String(heat.peak_phase), String(heat.peak_phase)), false));
+      s.appendChild(logReportRow(T('lr_heat_warm_fmt', 'CPU above 45 °C'),
+        logReportDur(+heat.warm_min || 0), (+heat.warm_min || 0) >= 30));
+      s.appendChild(logReportRow(T('lr_heat_skin_fmt', 'Skin above 40 °C'),
+        logReportDur(+heat.skin_min || 0), (+heat.skin_min || 0) >= 30));
+    }
     if (throttle && (+throttle.clamps || 0) > 0) {
       s.appendChild(logReportNote(logReportT('lr_clamp_some', 'Throttling periods: {n} ({owner})', { n: String(throttle.clamps), owner: String(throttle.owner || 'unknown') }), true));
     } else {
       s.appendChild(logReportNote(T('lr_clamp_none', 'No thermal throttling detected.')));
     }
     body.appendChild(s);
+  }
+  /* fix213 (audit 8.2): the trend - this day against the earlier finished captures.
+     The question every single-day report left open was "did what I changed actually
+     help?"; the same metric side by side answers it. Only metrics present in both
+     captures are compared (a capture without a night has no night to compare), and a
+     worsening is marked. */
+  if (d.hist.length && (drain || night || jank)) {
+    const h0 = d.hist[0];
+    const s = logReportSec(T('lr_sec_trend', '📈 Trend'));
+    let trows = 0;
+    const trow = function (key, fb, was, now) {
+      if (was === '' || was === '-' || now === null) return;
+      const w = +was, n = +now;
+      if (isNaN(w) || isNaN(n)) return;
+      trows++;
+      s.appendChild(logReportRow(logReportT(key, fb, { was: w.toFixed(1), now: n.toFixed(1) }),
+        logReportT('lr_trend_vs', 'vs {when}', { when: String(h0.started) }), n > w));
+    };
+    if (night) trow('lr_trend_night', 'Night: {was} %/h \u2192 {now} %/h', h0.night, +night.pctph);
+    if (drain) trow('lr_trend_day', 'Day drain: {was} %/h \u2192 {now} %/h', h0.drain, +drain.pctph);
+    if (jank) trow('lr_trend_jank', 'Jank: {was}% \u2192 {now}%', h0.jank, +jank.pct);
+    if (trows > 0) body.appendChild(s);
   }
   {
     const s = logReportSec(T('lr_sec_tips', '💡 What it means'));
@@ -11349,9 +11435,12 @@ function stockMonitorReset() {
   _stockTelemetryKv = {};
   _stockTelemetryLastMs = 0;
   _stockRomHistory = { ts: 0, cpuT: 0 };
-  _stockTrendSamples = [];
-  _stockTrendLast = null;
-  try { localStorage.removeItem('asb_stock_trend'); } catch (e) {}
+  _stockCpuStatPrev = null;
+  /* The thermal trend is deliberately NOT reset here (fix214): its samples come from the
+   * ROM's own thermal zones and are just as true on Stock as on any other profile. Wiping
+   * them on every switch to Stock - and switching profiles is exactly when the Monitor
+   * gets opened - threw away the two-minute window and the persisted verdict, so the tile
+   * sat at "…" for half a minute after nearly every visit. */
   if (_liveOpen) paintStockLive({});
 }
 // Android emits /proc/meminfo as `MemAvailable: 123456 kB`, while most values in
@@ -11593,18 +11682,44 @@ function paintStockLive(stockKv = null) {
     .sort().map(([k, v]) => k.split('.')[1] + ': ' + (n(v) / 1e6).toFixed(2) + ' GHz').join('\n'));
   bset('bnStockLoad', fmtStockLoad(kv.loadavg), T('stock_load_now', '1 min') + ' \u00b7 5 \u00b7 15: ' + (kv.loadavg || '\u2014'));
   {
-    const _ls = lvLoadShare(kv.loadavg, kv.cpus_online), _le = _el('bnStockLoad');
-    if (_ls && _le && fmtStockLoad(kv.loadavg) !== '\u2014') {
-      /* One decimal beside the share, so "9.1 · 113%" fits a quarter-width cell; a narrower
-       * one drops the decimal rather than cutting the share off. */
-      const _lv = Number(String(kv.loadavg).trim().split(/\s+/)[0]);
-      _le.textContent = _lv.toFixed(1);
-      const sp = document.createElement('span');
-      sp.className = 'sb-inline load-pct ' + _ls.cls;
-      sp.textContent = ' \u00b7 ' + _ls.pct + '%';
-      _le.appendChild(sp);
-      if (_le.clientWidth > 0 && _le.scrollWidth > _le.clientWidth + 1) _le.firstChild.textContent = String(Math.round(_lv));
+    const _le = _el('bnStockLoad');
+    const _ls = lvLoadShare(kv.loadavg, kv.cpus_online);
+    if (_ls && _le) {
       _le.title += '\n' + T('stock_load_share', '%1 % of %2 cores').replace('%1', String(_ls.pct)).replace('%2', String(_ls.n));
+    }
+    /* Real CPU-busy share between the last two ROM reads (fix214). The load average
+     * counts tasks waiting on storage too, so its per-core share passes 100% on a phone
+     * doing almost nothing and reads as an overload that is not there; the /proc/stat
+     * delta answers "how busy the cores actually were over the last N seconds". Shown
+     * beside the load only once two reads exist - before that the bare loadavg number
+     * stands alone rather than the misleading share. */
+    const _cs = String(kv.cpustat || '').trim().split(/\s+/).map(Number);
+    if (_cs.length >= 4 && _cs.every(Number.isFinite)) {
+      const _tot = _cs.reduce((p, q) => p + q, 0);
+      const _idl = _cs[3] + (_cs[4] || 0);
+      const _t = n(kv.tsms) || Date.now();
+      let _busy = -1, _win = 0;
+      if (_stockCpuStatPrev && _tot > _stockCpuStatPrev.tot) {
+        /* A fresh read: the delta against the previous counters is the measurement. */
+        _busy = Math.max(0, Math.min(100, Math.round(100 * (1 - (_idl - _stockCpuStatPrev.idl) / (_tot - _stockCpuStatPrev.tot)))));
+        _win = Math.max(1, Math.round((_t - _stockCpuStatPrev.t) / 1000));
+        _stockCpuStatPrev = { tot: _tot, idl: _idl, t: _t, busy: _busy, win: _win };
+      } else if (_stockCpuStatPrev && _tot === _stockCpuStatPrev.tot && _stockCpuStatPrev.busy >= 0) {
+        /* A repaint of the same read keeps the last measurement instead of blanking it. */
+        _busy = _stockCpuStatPrev.busy; _win = _stockCpuStatPrev.win;
+      } else {
+        _stockCpuStatPrev = { tot: _tot, idl: _idl, t: _t, busy: -1, win: 0 };
+      }
+      if (_busy >= 0 && _le && fmtStockLoad(kv.loadavg) !== '\u2014') {
+        const _lv = Number(String(kv.loadavg).trim().split(/\s+/)[0]);
+        _le.textContent = _lv.toFixed(1);
+        const sp = document.createElement('span');
+        sp.className = 'sb-inline load-pct ' + (_busy >= 80 ? 'load-high' : _busy >= 50 ? 'load-mid' : 'load-low');
+        sp.textContent = ' \u00b7 ' + _busy + '%';
+        _le.appendChild(sp);
+        if (_le.clientWidth > 0 && _le.scrollWidth > _le.clientWidth + 1) _le.firstChild.textContent = String(Math.round(_lv));
+        _le.title += '\n' + T('stock_load_busy', 'CPU actually busy: %1 % over the last %2 s').replace('%1', String(_busy)).replace('%2', String(_win));
+      }
     }
   }
   bset('bnStockBattery', capPct ? (capPct + '%' + (volt > 0 ? ' · ' + volt.toFixed(2) + 'V' : '')) : '—',
@@ -11632,10 +11747,21 @@ let _stockRomHistory = { ts: 0, cpuT: 0 };
  * 10 s) recomputed the trend from the same sample and showed "—" - most of the time. */
 let _stockTrendSamples = [];
 let _stockTrendLast = null;
+/* fix214: previous aggregate /proc/stat counters, for the real CPU-busy share between two
+ * ROM reads. The load average counts tasks waiting on storage and passes 100% on a phone
+ * with two light apps open - that figure next to the load read as an overload that was not
+ * there. Session-only on purpose: a delta across a page recreation could span a sleep,
+ * and an hours-old average says nothing about right now. */
+let _stockCpuStatPrev = null;
 /* fix210: persist the trend across WebView recreations. A real phone throws the page
  * away on every visit, and the verdict needs three samples over a 30 s span - without
  * persistence the tile sat at "…" most of the time. Fresh to 115 s: the oldest restored
- * sample must still count at the next 10 s read (the window itself is 120 s). */
+ * sample must still count at the next 10 s read (the window itself is 120 s).
+ * fix214: the last VERDICT is restored for much longer than the samples (10 min). The
+ * samples feed the two-minute slope and die with it; the verdict is the answer to "which
+ * way was the temperature heading the last time anyone measured", and a minutes-old
+ * answer beats "…" while the fresh window fills. A new verdict replaces it at the first
+ * recomputation. */
 function _stockTrendSave() {
   try {
     localStorage.setItem('asb_stock_trend', JSON.stringify({
@@ -11652,7 +11778,7 @@ function _stockTrendSave() {
       _stockTrendSamples = d.s.filter(x => x && x.t > 0 && x.c > 0 && x.c < 120 && now - x.t <= 115000);
     }
     if (d && d.l && typeof d.l.slope === 'number' && typeof d.l.span === 'number' &&
-        d.l.t > 0 && now - d.l.t <= 115000 && _stockTrendSamples.length >= 3) {
+        d.l.t > 0 && now - d.l.t <= 600000) {
       _stockTrendLast = d.l;
     }
   } catch (e) {}
