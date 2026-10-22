@@ -24,13 +24,13 @@ _r() {
   printf '%s=%s\n' "$2" "$_v"
 }
 
-_up=""; read -r _up _x < "$PROC/uptime" 2>/dev/null
+_up=""; read -r _up _x 2>/dev/null < "$PROC/uptime"
 echo "uptime=$_up"
-_l1=""; _l5=""; _l15=""; read -r _l1 _l5 _l15 _x < "$PROC/loadavg" 2>/dev/null
+_l1=""; _l5=""; _l15=""; read -r _l1 _l5 _l15 _x 2>/dev/null < "$PROC/loadavg"
 echo "loadavg=$_l1 $_l5 $_l15"
 # Online CPUs (fix189), so the Monitor can give the load as a share of the cores: the file
 # reads "0-7", or "0-3,6-7" with cores parked.
-_on=""; read -r _on < "$SYS/devices/system/cpu/online" 2>/dev/null
+_on=""; read -r _on 2>/dev/null < "$SYS/devices/system/cpu/online"
 _nc=0; _rest="${_on:+$_on,}"
 while [ -n "$_rest" ]; do
   _r="${_rest%%,*}"; _rest="${_rest#*,}"
@@ -60,7 +60,7 @@ if [ "${1:-}" = refresh ] && command -v settings >/dev/null 2>&1; then
     printf "%s\n" "$v" > "$0.tmp" && mv -f "$0.tmp" "$0"' \
     "$CACHE" "$(dirname "$0")" </dev/null >/dev/null 2>&1 &
 fi
-_md=""; [ -r "$CACHE" ] && read -r _md < "$CACHE" 2>/dev/null
+_md=""; [ -r "$CACHE" ] && read -r _md 2>/dev/null < "$CACHE"
 echo "settings.global.mobile_data_always_on=$_md"
 
 while read -r _k _v _u; do
