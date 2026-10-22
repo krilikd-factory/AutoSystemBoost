@@ -305,6 +305,10 @@ static inline const char *asb_profile_name(int profile_idx) {
  */
 #define ASB_GAMING_MIN_LOAD1_PER_CORE 0.25f
 #define ASB_HEAVY_GPU_MIN_LOAD1_PER_CORE 0.15f
+/* fix214: both constants are FALLBACKS now, used only until the device has learned its
+ * screen-on quiet floor - see asb_cpu_participates(). On an OP15-class phone whose run
+ * queue rests at 6-9, the per-core figures are true essentially always, so the learned
+ * floor with the burst margin is the gate that actually decides. */
 static float asb_load_per_core(const asb_metrics_t *m) {
     /* Core count read once. asb_metrics_t does not carry it and adding a field would touch
      * every producer of the struct for a number that cannot change while the process runs.
@@ -926,6 +930,27 @@ static float asb_ui_quiet_floor(const asb_metrics_t *m) {
     return g_ui_quiet_floor;
 }
 
+/* "Is the CPU actually participating" behind a busy GPU (fix214).
+ *
+ * The fixed per-core bars this replaces (0.15/0.25, i.e. load1 1.2/2.0 on eight cores)
+ * were calibrated on a phone that idles near zero. Field traces from the OP15 family show
+ * the screen-on run queue resting at 6.3-9.4 - so the bars were true essentially always,
+ * and every GPU flicker (an app launch, a scroll fling, a video compositing pass)
+ * qualified as "CPU-backed" and could promote the phone to HEAVY. A capture shows it:
+ * HEAVY entries at GPU 36-38% with load1 6.5 while music played with the screen on.
+ *
+ * Where the device has learned its own quiet level, the bar is that floor with the usual
+ * burst margin - the same ruler the GPU-shortcut and burst gates already use, so "the CPU
+ * is doing something" means the same thing in every branch. Before any floor is learned
+ * the per-core constant stands, which keeps devices that idle near zero exactly where
+ * they were. */
+static int asb_cpu_participates(const asb_metrics_t *m, float per_core_fallback) {
+    float qf = asb_ui_quiet_floor(m);
+    if (qf > 0.0f)
+        return m->cpu.load1 >= qf * (1.0f + (float)ASB_UI_BURST_MARGIN_PCT / 100.0f);
+    return asb_load_per_core(m) >= per_core_fallback;
+}
+
 /* The load at which battery current may stand in for a CPU that load1 under-reports (fix179).
  *
  * The corroboration below fires at 60% of the MODERATE threshold - 8.4 of 14 - a number
@@ -1230,8 +1255,14 @@ static asb_state_t fsm_desired_base(const asb_metrics_t *m) {
     }
 
 if (m->gpu.load_pct >= _gpu_gate) {
-        if (g_asb_cfg.bat_suppress_gaming && fsm_profile_is_battery)
-            return ASB_STATE_HEAVY;
+        /* bat_suppress_gaming still keeps Battery out of GAMING - but it no longer lands
+         * on HEAVY directly (fix214). One tick past the GPU gate is an app launch, a
+         * scroll fling or a video compositing spike, not a workload: on a ~48 s tick a
+         * single spike held HEAVY - and its looser rails - for a minute at a time, which
+         * is the "FSM sits at HEAVY with two light apps open" report. The escalation now
+         * passes the same two-tick, CPU-backed gate as every other GPU-led HEAVY below;
+         * a real game clears it one tick later and loses nothing. */
+        int suppress_gaming = (g_asb_cfg.bat_suppress_gaming && fsm_profile_is_battery);
         /* GPU load alone does not mean a game.
          *
          * Reported: FSM stuck in GAMING while scrolling Instagram, Facebook and Threads.
@@ -1247,7 +1278,7 @@ if (m->gpu.load_pct >= _gpu_gate) {
          * The threshold is deliberately low - this rejects "GPU busy, CPU idle", it does not
          * try to grade how hard the game works. Anything genuinely interactive clears it.
          */
-        int cpu_busy_enough = (asb_load_per_core(m) >= ASB_GAMING_MIN_LOAD1_PER_CORE);
+        int cpu_busy_enough = asb_cpu_participates(m, ASB_GAMING_MIN_LOAD1_PER_CORE);
         /* A game must be confirmed by the package, not by GPU load alone.
          *
          * GPU load and a busy CPU describe video playback, map rendering and a heavily
@@ -1262,7 +1293,8 @@ if (m->gpu.load_pct >= _gpu_gate) {
          * gates alone decide, so a device without package detection is no worse off.
          */
         int pkg_agrees = (m->misc.app_hint == 0 || m->misc.app_hint >= ASB_APP_GAMING);
-        if (g_gaming_confirm_streak >= g_asb_cfg.gaming_confirm_ticks && cpu_busy_enough &&
+        if (!suppress_gaming &&
+            g_gaming_confirm_streak >= g_asb_cfg.gaming_confirm_ticks && cpu_busy_enough &&
             pkg_agrees)
             return ASB_STATE_GAMING;
         /* Above the gaming GPU threshold but the CPU is not participating: this fell
@@ -1270,7 +1302,7 @@ if (m->gpu.load_pct >= _gpu_gate) {
          * video reaches 60% GPU with the CPU under 1.0, and HEAVY's clocks do nothing for
          * it - the decode is already in hardware. Graded by what the CPU is doing, like
          * every other branch here. */
-        if (asb_load_per_core(m) >= ASB_HEAVY_GPU_MIN_LOAD1_PER_CORE)
+        if (asb_cpu_participates(m, ASB_HEAVY_GPU_MIN_LOAD1_PER_CORE))
             /* Two consecutive ticks before entering HEAVY.
              *
              * A capture shows 11 HEAVY episodes of which 8 lasted a single tick - roughly 47
@@ -1324,7 +1356,7 @@ if (m->gpu.load_pct >= _gpu_gate) {
     int gpu_says_heavy = (m->gpu.load_pct >= g_asb_cfg.heavy_gpu_enter);
     int cpu_says_heavy = (m->cpu.load1 >= heavy_thr);
     if (cpu_says_heavy ||
-        (gpu_says_heavy && asb_load_per_core(m) >= ASB_HEAVY_GPU_MIN_LOAD1_PER_CORE)) {
+        (gpu_says_heavy && asb_cpu_participates(m, ASB_HEAVY_GPU_MIN_LOAD1_PER_CORE))) {
         if (!ma_valid || m->bat.current_ma >= 150)
             return ASB_STATE_HEAVY;
     }
