@@ -2932,8 +2932,11 @@ apply_idle() {
     writef_retry /sys/class/kgsl/kgsl-3d0/bus_split "$GPU_BUS_SPLIT" 2 0.06 || true
   [ -w /sys/class/kgsl/kgsl-3d0/throttling ] && [ -n "$GPU_THROTTLING" ] && \
     writef_retry /sys/class/kgsl/kgsl-3d0/throttling "$GPU_THROTTLING" 2 0.06 || true
-  [ -w /sys/class/kgsl/kgsl-3d0/thermal_pwrlevel ] && [ -n "$GPU_THERMAL_PWRLEVEL" ] && \
-    writef_retry /sys/class/kgsl/kgsl-3d0/thermal_pwrlevel "$GPU_THERMAL_PWRLEVEL" 2 0.06 || true
+  # fix213: thermal_pwrlevel is the vendor thermal engine's node, not a profile knob
+  # (the governor reads it back as a vendor cap). Release a stale static level left by
+  # an older build once per boot; the engine re-asserts it when it needs to.
+  [ -w /sys/class/kgsl/kgsl-3d0/thermal_pwrlevel ] && [ ! -f /dev/.asb/gpu_tpl_released ] && \
+    { writef_retry /sys/class/kgsl/kgsl-3d0/thermal_pwrlevel 0 2 0.06 && true > /dev/.asb/gpu_tpl_released 2>/dev/null || true; }
   [ -w /sys/class/kgsl/kgsl-3d0/pwrscale/policy/governor ] &&     echo msm-adreno-tz > /sys/class/kgsl/kgsl-3d0/pwrscale/policy/governor 2>/dev/null || true
 }
 asb_feature_enabled CPU && apply_idle
