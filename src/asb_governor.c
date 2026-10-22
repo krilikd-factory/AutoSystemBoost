@@ -5461,8 +5461,18 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         g_smart_rt.app_hint_session_top,
         (unsigned long long)g_smart_rt.app_hash_session_top);
 
-    /* Smart Mode: feed session outcome into bucket learning (smart_mode=1 only) */
-    if (g_smart_rt.enabled && g_smart_store_loaded && dur > 0) {
+    /* Smart Mode: feed session outcome into bucket learning (smart_mode=1 only)
+     *
+     * fix211: and only while the Smart PROFILE is actually running. The flag says the
+     * user chose Smart at some point; it stays 1 in memory across a live switch to
+     * Battery/Balanced/Performance (the socket command updates profile_idx, nobody
+     * re-reads the flag) - and every session after such a switch banked its drain,
+     * measured under the manual profile's own ceilings, into Smart's buckets. A battery
+     * profile day taught the learner this bucket is cheap; a performance day, that it is
+     * dear. Both are the manual profile's numbers, not Smart's - the learner must never
+     * see them. (The per-app records already gate on the profile, see the recorder arm.) */
+    if (g_smart_rt.enabled && g_smart_store_loaded && dur > 0 &&
+        fsm->profile_idx == PROFILE_SMART) {
         asb_smart_session_input_t sin = {0};
         sin.dur_s = (int)dur;
         /* The smoothed session peak (fix110), not the single hottest sample: a one-tick
@@ -5653,6 +5663,21 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
         /* Reset session-top tracking for next session */
         g_smart_rt.app_hint_session_top = 0;
         g_smart_rt.app_hash_session_top = 0;
+    }
+    /* fix211: the drain carry and reset inside the block above belong to EVERY session,
+     * not only Smart's. With the banking gated on the Smart profile, a manual-profile
+     * session must still close out the measurement window - otherwise its seconds and
+     * percent steps leak into the next Smart session's evidence. When the block above
+     * ran, both accumulators are already zero and this is a no-op; when the session was
+     * zero-length the old code kept them, and so does this. */
+    if (dur > 0 && !(g_smart_rt.enabled && g_smart_store_loaded &&
+                     fsm->profile_idx == PROFILE_SMART)) {
+        if (g_smart_drain_on_sec >= 300 && g_smart_drain_drop_x100 > 0) {
+            g_smart_drain_last_x10 = (g_smart_drain_drop_x100 * 360L) / g_smart_drain_on_sec;
+            g_smart_drain_last_ts  = time(NULL);
+        }
+        g_smart_drain_on_sec = 0;
+        g_smart_drain_drop_x100 = 0;
     }
     fflush(wf);
     fsync(fileno(wf));
@@ -8590,6 +8615,22 @@ int main(int argc, char **argv) {
                             asb_log("profile:battery -> highload burst/auto cleared");
                         }
                         profile_changed = 1;
+                        /* fix211: follow the flag apply_profile.sh just wrote. The
+                         * in-memory copy was only ever set at init or by a Smart tick,
+                         * so after a live Smart -> Battery switch it stayed 1: Smart's
+                         * tick kept classifying (harmless, but it is the manual
+                         * profiles' own classifier's job now, fix210) and kept its
+                         * bookkeeping alive under a manual policy. A user switch writes
+                         * the flag before this command arrives; an auto switch keeps it
+                         * at 1 by design, and Smart resumes classification. */
+                        {
+                            int _sf = asb_smart_flag_read();
+                            if (_sf >= 0 && _sf != g_smart_rt.enabled) {
+                                g_smart_rt.enabled = _sf;
+                                asb_log("smart: mode %s after profile switch",
+                                        _sf ? "enabled" : "disabled");
+                            }
+                        }
                         /* The foreground package cache is keyed on time, not on relevance: a profile switch
                            is a certainty that the next decision should be made on fresh data, not on what
                            was true up to 8 seconds ago. */
