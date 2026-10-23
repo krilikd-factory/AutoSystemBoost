@@ -40,8 +40,8 @@
 #   crash    count=<n>  asb=<n>  latest=<cmdline|none>  ltime=<HH:MM>
 #   sysui    count=<n>
 #   thermal  cpu=<n>  surf=<n>
-#   heat     peak_phase=<name>  warm_min=<n>  skin_min=<n>   (durations hot, fix213)
-#   throttle clamps=<n>  owner=<name|unknown>
+#   heat     peak_phase=<name>  peak_c=<n>  warm_min=<n>  skin_min=<n>   (durations hot, fix213; peak_c fix218)
+#   throttle clamps=<n>  owner=<dominant>  by=<owner:n,...>   (per-owner split, fix219)
 #   radio    mib=<x.x>
 #   hist     started=<...>  night=<x.x>  drain=<x.x>  jank=<x.x>  cpu=<n>  clamps=<n>
 #            (up to 3 earlier finished captures, newest first, fix213)
@@ -261,16 +261,24 @@ if [ "$_HAVE_LEDGER" = "1" ]; then
   # A peak alone does not say how LONG the phone ran hot, and the duration is what
   # costs battery and comfort: minutes at cpu>=45 / skin>=40, plus the phase that
   # saw the cpu peak, so the advice can name WHEN the day ran hot.
+  # fix218: a "gap" is a sub-two-minute screen-off pause - it carries the heat of
+  # whatever the phone was doing around it, so naming it "the hottest phase" tells
+  # the user nothing (a field capture read "Hottest phase: Recording gap" while the
+  # gap itself lasted three minutes). The peak is attributed to the hottest NAMED
+  # phase; gap minutes still count in the durations. peak_c reports that phase's own
+  # peak, so the sheet can show the number next to the name.
   _cat_ledger | awk -F'\t' '
     /^#/ { next }
     {
       c = $6 + 0; s = $7 + 0; dur = ($3 - $2) / 60
-      if (c > mc) { mc = c; mp = $1 }
+      if (c > mc) { mc = c; mpa = $1 }
+      if ($1 != "gap" && c > mcn) { mcn = c; mp = $1 }
       if (c >= 45) cm += dur
       if (s >= 40) sm += dur
     }
     END {
-      if (mc > 0) printf "heat\tpeak_phase=%s\twarm_min=%d\tskin_min=%d\n", mp, cm, sm
+      if (mp == "") { mp = mpa; mcn = mc }
+      if (mc > 0) printf "heat\tpeak_phase=%s\tpeak_c=%d\twarm_min=%d\tskin_min=%d\n", mp, mcn, cm, sm
     }' 2>/dev/null
 
   # ----- radio traffic -------------------------------------------------------
@@ -566,14 +574,30 @@ printf 'sysui\tcount=%d\n' "$_sn"
 # ----- throttling periods -----------------------------------------------------
 # A new period starts when the cap owner changes or the trace goes quiet for over three
 # minutes (the throttle ended and later came back - two episodes, not one).
+# fix219: the sheet blamed every period on the LAST period's owner - a field capture
+# showed "16 (asb)" for a day of 3 ASB + 6 vendor + 6 shell + 1 unknown periods. The
+# owner is now the one with the most periods (the more recent wins a tie) and the
+# per-owner breakdown rides along as by=owner:n,... so the sheet can name them all.
 if [ -s "$_DIR/throttle_trace.txt" ]; then
   _h_throttle_line="$(awk -F'|' '$1 ~ /^[0-9]+$/ {
       t = $1 + 0; o = ""
       for (i = 1; i <= NF; i++) if ($i ~ /^cap_owner=/) { o = $i; sub(/^cap_owner=/, "", o) }
-      if (NR == 1 || (t - pt) > 180 || o != po) n++
-      pt = t; po = o; lo = o
+      if (o == "") o = "unknown"
+      if (n == 0 || (t - pt) > 180 || o != po) { n++; cnt[o]++; last[o] = t }
+      pt = t; po = o
     } END {
-      if (n > 0) printf "throttle\tclamps=%d\towner=%s\n", n, (lo == "" ? "unknown" : lo)
+      if (n > 0) {
+        best = ""; bc = -1; bl = -1
+        for (o in cnt) if (cnt[o] > bc || (cnt[o] == bc && last[o] > bl)) { best = o; bc = cnt[o]; bl = last[o] }
+        by = ""
+        while (1) {
+          bo = ""; bc2 = -1; bl2 = -1
+          for (o in cnt) if (!(o in done) && (cnt[o] > bc2 || (cnt[o] == bc2 && last[o] > bl2))) { bo = o; bc2 = cnt[o]; bl2 = last[o] }
+          if (bo == "") break
+          done[bo] = 1; by = by (by == "" ? "" : ",") bo ":" bc2
+        }
+        printf "throttle\tclamps=%d\towner=%s\tby=%s\n", n, best, by
+      }
     }' "$_DIR/throttle_trace.txt" 2>/dev/null)"
   [ -n "$_h_throttle_line" ] && printf '%s\n' "$_h_throttle_line"
 fi
