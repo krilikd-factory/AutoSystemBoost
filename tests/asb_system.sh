@@ -4416,6 +4416,47 @@ grep -qF 'html[data-asb-theme="light"] .cfg-row.cat-audio   { --cat:#c0362c; }' 
 grep -qF 'color-mix(in srgb, var(--cat) 13%, #ffffff) 0%' "$H" || fail "light enabled cards lost the hub-tile tint"
 echo "PASS: fix217 contract"
 ) || exit 1
+# ---- fix218 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+D="$ROOT/tools/logkit/asb_fullday_digest.sh"
+fail() { echo "FAIL fix218: $*" >&2; exit 1; }
+# A field capture's report named "Recording gap" the hottest phase of the day: a
+# sub-two-minute screen-off pause happened to hold the peak reading and the heat block
+# attributed the peak to it. The peak now goes to the hottest NAMED phase (gap minutes
+# still count in the durations), the Hottest-phase row shows that phase's own peak
+# temperature, and the phase table can no longer wrap the %/h unit onto its own line.
+grep -qF 'if ($1 != "gap" && c > mcn) { mcn = c; mp = $1 }' "$D" || fail "a gap can be named the hottest phase again"
+grep -qF 'peak_c=%d' "$D" || fail "the heat line lost the named phase's peak"
+grep -qF "((+heat.peak_c || 0) > 0 ? ' · ' + String(+heat.peak_c) + '°' : '')" "$H" || fail "the hottest-phase row lost its peak temperature"
+grep -qF ".replace(/\//g, '/\u2060');" "$H" || fail "the phase drain cell can orphan its unit again"
+echo "PASS: fix218 contract"
+) || exit 1
+# ---- fix219 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+D="$ROOT/tools/logkit/asb_fullday_digest.sh"
+T="$ROOT/tests/asb_ui.sh"
+fail() { echo "FAIL fix219: $*" >&2; exit 1; }
+# A field capture's report said "Throttling periods: 16 (asb)" - for a day where the
+# trace shows 3 ASB periods, 6 vendor, 6 shell and 1 unknown. The digest had counted
+# the periods correctly but kept only the LAST period's owner, so whoever clamped last
+# took the blame for the whole day. The throttle line now reports the dominant owner
+# (the one with the most periods; the more recent wins a tie) and carries the full
+# per-owner split as by=owner:n,...; the sheet names every owner in the clamp note.
+# The runtime behaviour (the majority-owner fixture, the parser) is exercised in
+# tests/asb_ui.sh:t_webui_log_report_runtime; here the structural pins.
+sh -n "$D" || fail "digest script has a syntax error"
+grep -qF 'cnt[o]++; last[o] = t' "$D" || fail "the digest no longer counts periods per owner"
+grep -qF 'printf "throttle\tclamps=%d\towner=%s\tby=%s\n"' "$D" || fail "the throttle line lost the per-owner split"
+grep -qF "const names = { asb: 'ASB', asb_governor: 'ASB', vendor: 'ROM', shell: 'profile', thermal: 'ROM thermal', unknown: '?' };" "$H" || fail "the sheet no longer names every throttle owner"
+grep -qF "by.indexOf(',') > 0" "$H" || fail "the sheet ignores the per-owner split"
+grep -qF 'by=asb_governor:1,thermal:1' "$T" || fail "the runtime fixture lost the per-owner split"
+grep -qF 'clamps=3	owner=vendor	by=vendor:2,asb:1' "$T" || fail "the majority-owner fixture is gone"
+echo "PASS: fix219 contract"
+) || exit 1
 # ---- fix209 ---------------------------------------------------------------
 (
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
