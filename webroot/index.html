@@ -10328,7 +10328,11 @@ function logReportRender(d) {
       let cell;
       if (p.drop < 0) cell = '+' + String(-p.drop) + '%';
       else if (p.drop === 0) cell = '0%';
-      else cell = '−' + String(p.drop) + '% · ' + p.pctph.toFixed(1) + T('lr_per_hour', '%/h');
+      else cell = '−' + String(p.drop) + '% · ' + (p.pctph.toFixed(1) + T('lr_per_hour', '%/h'))
+        /* fix218: a break after the slash orphaned the unit on its own line
+           ("−28% · 11.4%/" / "ч"). The word joiner forbids it; the cell may still
+           wrap at the "·" before the number. */
+        .replace(/\//g, '/\u2060');
       return [T('lr_ph_' + p.name, p.name), logReportDur(p.min),
               { txt: cell, warn: p.pctph >= 8 }];
     });
@@ -10500,14 +10504,30 @@ function logReportRender(d) {
     if (heat) {
       if (heat.peak_phase)
         s.appendChild(logReportRow(T('lr_heat_peak', 'Hottest phase'),
-          T('lr_ph_' + String(heat.peak_phase), String(heat.peak_phase)), false));
+          /* fix218: the phase name with ITS peak - "Music, speaker · 51°" says both
+             when the day ran hot and how hot, so a mild winner over a hot day does
+             not read as the day's 52 °C. */
+          T('lr_ph_' + String(heat.peak_phase), String(heat.peak_phase)) +
+            ((+heat.peak_c || 0) > 0 ? ' · ' + String(+heat.peak_c) + '°' : ''), false));
       s.appendChild(logReportRow(T('lr_heat_warm_fmt', 'CPU above 45 °C'),
         logReportDur(+heat.warm_min || 0), (+heat.warm_min || 0) >= 30));
       s.appendChild(logReportRow(T('lr_heat_skin_fmt', 'Skin above 40 °C'),
         logReportDur(+heat.skin_min || 0), (+heat.skin_min || 0) >= 30));
     }
     if (throttle && (+throttle.clamps || 0) > 0) {
-      s.appendChild(logReportNote(logReportT('lr_clamp_some', 'Throttling periods: {n} ({owner})', { n: String(throttle.clamps), owner: String(throttle.owner || 'unknown') }), true));
+      /* fix219: the owner used to be the LAST period's owner - "16 (asb)" for a day
+         where ASB clamped 3 times and the ROM 12. With more than one owner, name them
+         all; the digest sends the per-owner period counts as by=owner:n,... */
+      let own = String(throttle.owner || 'unknown');
+      const by = String(throttle.by || '');
+      if (by.indexOf(',') > 0) {
+        const names = { asb: 'ASB', asb_governor: 'ASB', vendor: 'ROM', shell: 'profile', thermal: 'ROM thermal', unknown: '?' };
+        own = by.split(',').map(function (bp) {
+          const bk = bp.split(':');
+          return (names[bk[0]] || bk[0]) + ' ' + bk[1];
+        }).join(' · ');
+      }
+      s.appendChild(logReportNote(logReportT('lr_clamp_some', 'Throttling periods: {n} ({owner})', { n: String(throttle.clamps), owner: own }), true));
     } else {
       s.appendChild(logReportNote(T('lr_clamp_none', 'No thermal throttling detected.')));
     }
