@@ -17,8 +17,12 @@
 #   idlemax  awake=<n>  phase=<name>  dur_min=<n>
 #   jank     pct=<x.x>  jps=<x.x>  frames=<n>
 #   japp     pkg=<package>  frames=<n>  pct=<x.x>      (up to 4 rows, most frames first)
+#   jwake    wakes=<n>  pct=<x.x>  ord=<x.x>  frames=<n>  top=<pkg>  top_pct=<x.x>   (fix220)
+#   jphase   phase=<name>  intv=<n>  frames=<n>  pct=<x.x>  jps=<x.xx>               (fix220)
+#   jstate   state=<name>  intv=<n>  frames=<n>  pct=<x.x>  jps=<x.xx>               (fix220)
 #   hz       mode=<60|90|120|..>  share=<n>  ma=<n>    (one row per refresh rate)
 #   asbcost  cpu_msh=<n>  writes_h=<n>  wakes_h=<n>
+#   gauge    factor=<x.xx>  windows=<n>  mult=<x.x>    (current_now vs SOC, fix220)
 #   audio    spk_min=<n>  pctph=<x.x>  ma=<n>
 #   charge   types=<Fast(17) N/A(197)>
 #   smart    watching=<n>  testing=<n>  helped=<n>  nothelped=<n>  ctxlearn=<n>
@@ -629,6 +633,38 @@ if [ -f "$_RPT" ]; then
          n++; if (n >= 4) exit; next
        }
        t { exit }' "$_RPT" 2>/dev/null
+  # Wake smoothness (fix220): "the wake itself: 23 wake(s), ... frames 109484, janky 8.0%
+  # (ordinary screen-on intervals: 7.2%)" plus the top wake janker from the "at the wakes,
+  # by app:" line below it. The wake rows are exactly where ColorOS 17 janked (lock/unlock,
+  # open/close), so the sheet shows them next to the day average.
+  _wk="$(grep -m1 '^the wake itself:' "$_RPT" 2>/dev/null)"
+  if [ -n "$_wk" ]; then
+    _wn="$(printf '%s\n' "$_wk" | sed -n 's/^the wake itself: \([0-9][0-9]*\) wake.*/\1/p')"
+    _wf="$(printf '%s\n' "$_wk" | sed -n 's/.* frames \([0-9][0-9]*\),.*/\1/p')"
+    _wp="$(printf '%s\n' "$_wk" | sed -n 's/.*janky \([0-9.][0-9.]*\)%.*/\1/p')"
+    _wo="$(printf '%s\n' "$_wk" | sed -n 's/.*ordinary screen-on intervals: \([0-9.][0-9.]*\)%.*/\1/p')"
+    _wt="$(sed -n 's/^  at the wakes, by app: \([a-z0-9._]*\) [0-9][0-9]* of [0-9][0-9]* janky (\([0-9.][0-9.]*\)%.*/\1 \2/p' "$_RPT" 2>/dev/null | head -n 1)"
+    if [ -n "$_wn" ] && [ -n "$_wp" ]; then
+      printf 'jwake\twakes=%s\tpct=%s\tord=%s\tframes=%s\ttop=%s\ttop_pct=%s\n' \
+        "$_wn" "$_wp" "${_wo:-0}" "${_wf:-0}" "${_wt%% *}" "${_wt##* }"
+    fi
+  fi
+  # Smoothness by phase and by ASB state (fix220): the two small tables under the
+  # smoothness headline - "phase  intervals  frames  janky  janky/s" and the same with
+  # "ASB state". Headers are matched in full so the drain phase table (dur_min, pct/h)
+  # further down cannot leak in.
+  awk '/^phase[ \t]+intervals[ \t]+frames[ \t]+janky[ \t]+janky\/s[ \t]*$/ { t = 1; next }
+       t && $1 ~ /^[a-z_]+$/ && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ && $4 ~ /^[0-9.]+%$/ {
+         p = $4; sub(/%$/, "", p)
+         printf "jphase\tphase=%s\tintv=%s\tframes=%s\tpct=%s\tjps=%s\n", $1, $2, $3, p, $5; next
+       }
+       t { exit }' "$_RPT" 2>/dev/null
+  awk '/^ASB state[ \t]+intervals[ \t]+frames[ \t]+janky[ \t]+janky\/s[ \t]*$/ { t = 1; next }
+       t && $1 ~ /^[A-Za-z_]+$/ && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ && $4 ~ /^[0-9.]+%$/ {
+         p = $4; sub(/%$/, "", p)
+         printf "jstate\tstate=%s\tintv=%s\tframes=%s\tpct=%s\tjps=%s\n", $1, $2, $3, p, $5; next
+       }
+       t { exit }' "$_RPT" 2>/dev/null
   # Display refresh split: rows "60  112  64%  30  264" under the refresh_hz header.
   # The brightness table right below starts "0-24 ..." - the dash keeps it out.
   awk '/^refresh_hz[ \t]/ { t = 1; next }
@@ -643,6 +679,17 @@ if [ -f "$_RPT" ]; then
     _cw="$(sed -n 's/^  physical writes[ ]*: \([0-9][0-9]*\)\/h.*/\1/p' "$_RPT" 2>/dev/null | head -n 1)"
     _ck="$(sed -n 's/^  timer wakeups[ ]*: \([0-9][0-9]*\)\/h.*/\1/p' "$_RPT" 2>/dev/null | head -n 1)"
     printf 'asbcost\tcpu_msh=%s\twrites_h=%s\twakes_h=%s\n' "$_cc" "${_cw:-0}" "${_ck:-0}"
+  fi
+  # Gauge check (fix220): "governor's gauge check: on screen-on windows current_now
+  # integrates to x0.34 of the SOC-derived drain (40 windows) - multiply screen-on mA by
+  # about 2.9; ...". On the OP15 the sensor under-reads by ~3x, which makes every mA figure
+  # in the sheet look better than the battery's own count - the sheet says so.
+  _gl="$(grep -m1 "^governor's gauge check:" "$_RPT" 2>/dev/null)"
+  if [ -n "$_gl" ]; then
+    _gf="$(printf '%s\n' "$_gl" | sed -n 's/.* integrates to x\([0-9.][0-9.]*\) of .*/\1/p')"
+    _gw="$(printf '%s\n' "$_gl" | sed -n 's/.* (\([0-9][0-9]*\) windows).*/\1/p')"
+    _gm="$(printf '%s\n' "$_gl" | sed -n 's/.*multiply screen-on mA by about \([0-9.][0-9.]*\).*/\1/p')"
+    [ -n "$_gf" ] && printf 'gauge\tfactor=%s\twindows=%s\tmult=%s\n' "$_gf" "${_gw:-0}" "${_gm:-0}"
   fi
   # Speaker playback cost, from the phase table (the one whose header carries pct/h -
   # the "sampled current" table further down lists audio rows too, with mA in this
