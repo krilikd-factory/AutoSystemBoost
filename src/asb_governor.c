@@ -2148,7 +2148,12 @@ static int wake_key_drain(int fd) {
 static void wake_keys_park(int epfd, int park) {
     for (int i = 0; i < g_wake_key_n; i++) {
         if (park) {
-            epoll_ctl(epfd, EPOLL_CTL_DEL, g_wake_key_fd[i], NULL);
+            /* fix220: park only the touch PANEL's gesture node with the screen on - it is
+             * the one that would wake the loop on every frame of a scroll. A pure key
+             * device (the power key) fires a handful of times a day, and its press with
+             * the screen on is the lock animation the lift now covers - keep it live. */
+            if (g_wake_key_touch[i])
+                epoll_ctl(epfd, EPOLL_CTL_DEL, g_wake_key_fd[i], NULL);
         } else {
             (void)wake_key_drain(g_wake_key_fd[i]);   /* what queued while on is stale */
             struct epoll_event e;
@@ -2236,9 +2241,9 @@ static int touch_watch_set(int epfd, int on) {
 
 static void uev_park(int epfd, int uefd) {
     (void)touch_watch_set(epfd, 1);   /* screen on: watch touches (fix117) */
-    /* The display-state waiter already keeps the uevent socket parked (fix118); the wake
-     * keys still have to come out of epoll - the touch panel's node would otherwise wake
-     * the loop on every frame of a scroll. */
+    /* The display-state waiter already keeps the uevent socket parked (fix118); the touch
+     * panel's gesture node still has to come out of epoll - it would otherwise wake the
+     * loop on every frame of a scroll. The power key stays (fix220: the lock press). */
     if (g_disp_waiter_up == 2 && g_uev_parked) { wake_keys_park(epfd, 1); return; }
     if (uefd < 0 || g_uev_parked) return;
     if (epoll_ctl(epfd, EPOLL_CTL_DEL, uefd, NULL) == 0) {
@@ -3033,7 +3038,22 @@ static void asb_main_capacity_parity(asb_profile_caps_t *caps, const asb_metrics
  * got. On a manual profile the writer borrows the ceilings above the shell's caps for the
  * window (manual_lift) and hands them back when it ends. Performance never needs it - its
  * ceilings are uncapped already. An app switch arms the same window once per 5 s while no
- * lift is running: opening or closing an app is the same burst as a wake. */
+ * lift is running: opening or closing an app is the same burst as a wake.
+ *
+ * fix220: the app-switch arm alone reaches the animation late. It is seen on the next
+ * metrics tick - up to 2 s after the tap - while the open/close animation runs in the first
+ * half second, and the ColorOS 17 captures show it: 8-22 % janky in the wake rows that
+ * landed in LIGHT_IDLE on Battery, SystemUI the top janker at every unlock (13.6 % of its
+ * wake frames on Battery, 7.3 % on Smart). Two earlier signals now arm the same window:
+ * the first touch after a calm spell (the tap that starts the open/close/switch - the
+ * touchscreen is already in epoll, so the lift lands before the animation's first frames),
+ * and the power key with the screen on (the lock press: the fade-out animation renders
+ * before Android publishes the display state, at whatever ceilings the moment had). Both
+ * share the app switch's 5 s gap and its gates, so a reading session buys one short lift
+ * per burst of interaction, not an unbroken boost - ceilings only, the clocks still climb
+ * just for the work that asks. To hear the lock press the wake keys stay in epoll with the
+ * screen on, except the touch panel's own gesture node, which would wake the loop on every
+ * frame of a scroll. */
 #define ASB_UNLOCK_TOUCH_WINDOW_MS 20000L
 #define ASB_LAUNCH_LIFT_GAP_MS 5000L
 static int    g_unlock_prev_screen = -1;  /* screen state of the last pass, -1 before the first */
@@ -3080,8 +3100,8 @@ static int asb_unlock_gate_die(int die_now, int dark_c, time_t dark_ts, time_t n
     return dark_c < die_now ? dark_c : die_now;
 }
 
-static int asb_unlock_lift_update(int screen_on, int touch_kick, int launch_kick, long now_ms,
-                                  int profile_idx, int thermal_cap, int die_c) {
+static int asb_unlock_lift_update(int screen_on, int touch_kick, int lock_kick, int launch_kick,
+                                  long now_ms, int profile_idx, int thermal_cap, int die_c) {
     int prev = g_unlock_prev_screen;
     int arm = 0;
     g_unlock_prev_screen = screen_on ? 1 : 0;
@@ -3100,15 +3120,18 @@ static int asb_unlock_lift_update(int screen_on, int touch_kick, int launch_kick
     } else if (touch_kick && !g_unlock_touch_used && g_unlock_on_ms > 0 &&
                now_ms - g_unlock_on_ms <= ASB_UNLOCK_TOUCH_WINDOW_MS) {
         g_unlock_touch_used = 1;
-        arm = 1;
-        g_unlock_arm_why = "first touch";
-    } else if (launch_kick && g_unlock_until_ms <= now_ms &&
-               now_ms - g_launch_arm_ms >= ASB_LAUNCH_LIFT_GAP_MS) {
-        /* fix212: a foreground-app change. Rate-limited and refused while a lift runs, so
-         * scrolling through the recents list buys one window, not an unbroken boost. */
         g_launch_arm_ms = now_ms;
         arm = 1;
-        g_unlock_arm_why = "app switch";
+        g_unlock_arm_why = "first touch";
+    } else if ((touch_kick || lock_kick || launch_kick) && g_unlock_until_ms <= now_ms &&
+               now_ms - g_launch_arm_ms >= ASB_LAUNCH_LIFT_GAP_MS) {
+        /* fix212: a foreground-app change. fix220: the tap that starts an open/close and
+         * the lock press are the same burst, heard earlier than the app hash can change.
+         * Rate-limited and refused while a lift runs, so scrolling through the recents
+         * list buys one window, not an unbroken boost. */
+        g_launch_arm_ms = now_ms;
+        arm = 1;
+        g_unlock_arm_why = touch_kick ? "touch" : (lock_kick ? "lock key" : "app switch");
     }
     if (arm) {
         const char *why = NULL;
@@ -8417,11 +8440,20 @@ int main(int argc, char **argv) {
             else if (wake_key_is_fd(fd)) {
                 /* A wake key while the screen reads off: look now, then the usual short
                  * re-check chain. sysfs decides; the key only says "look". */
-                if (wake_key_drain(fd) && !metrics.misc.screen_on &&
+                int _wkp = wake_key_drain(fd);
+                if (_wkp && !metrics.misc.screen_on &&
                     timerfd_state(tfd_active) != 1) {
                     g_wake_key_hints++;
                     g_disp_evt_ts = time(NULL); g_disp_retry = 0;
                     arm_timerfd_once_ms(tfd_active, 250);
+                } else if (_wkp && metrics.misc.screen_on) {
+                    /* fix220: the power key with the screen on is the lock press - the
+                     * screen-off animation renders before Android publishes the display
+                     * state, at whatever ceilings the moment had. Ask the lift to cover
+                     * it; the fresh pass decides (a stale "on" after the panel went off
+                     * arms nothing - the update refuses with the screen off). */
+                    g_lock_key_kick = 1;
+                    need_metrics = 1;
                 }
             }
             else if (fd == uefd) {
@@ -9742,7 +9774,7 @@ int main(int argc, char **argv) {
                 }
                 int _ul_was = g_unlock_applied;
                 int _ul = asb_unlock_lift_update(metrics.misc.screen_on, g_touch_kick,
-                                                 _launch_kick,
+                                                 g_lock_key_kick, _launch_kick,
                                                  asb_clock_ms(CLOCK_BOOTTIME), fsm.profile_idx,
                                                  fsm.thermal_cap,
                                                  asb_unlock_gate_die(metrics.therm.cpu_max_c,
@@ -9769,6 +9801,7 @@ int main(int argc, char **argv) {
             }
             int changed = fsm_update(&fsm, &metrics);
             g_touch_kick = 0;   /* answered (fix117) */
+            g_lock_key_kick = 0;   /* answered (fix220) */
             /* fix184: Smart records - one tick of measuring, the knobs read back below. */
             {
                 asb_rec_in_t _ri;

@@ -1191,6 +1191,10 @@ static unsigned long g_li_pin_escalations = 0;
 static time_t        g_touch_last_ts = 0;
 static int           g_touch_kick = 0;
 static unsigned long g_touch_lifts = 0;
+/* fix220: the power key with the screen on (the lock press) - the governor keeps the pure
+ * key devices in epoll while the screen is on and raises this, so the screen-off animation
+ * gets the same lift a wake gets. */
+static int           g_lock_key_kick = 0;
 
 /* Prime escape gates (fix126).
  *
