@@ -3511,7 +3511,7 @@ echo "PASS: fix149 contract"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 fail() { echo "FAIL fix150: $*"; exit 1; }
 G="$ROOT/src/asb_governor.c"; C="$ROOT/tools/logkit/_asb_logkit_common.sh"; D="$ROOT/tools/asb_diag.sh"
-grep -q '^static int asb_unlock_lift_update(int screen_on, int touch_kick, int launch_kick, long now_ms,$' "$G" || fail "no unlock lift"
+grep -q '^static int asb_unlock_lift_update(int screen_on, int touch_kick, int lock_kick, int launch_kick,$' "$G" || fail "no unlock lift"
 grep -q '^static void asb_smart_night_awake(int screen_on, int daypart, int is_weekend, time_t now) {$' "$G" || fail "no night-awake lean"
 grep -q '^unlock_lift_s=3$' "$ROOT/config/governor.conf" && grep -q '^smart_night_awake=1$' "$ROOT/config/governor.conf" || fail "not shipped on"
 cmp -s "$ROOT/config/governor.conf" "$ROOT/config/governor.conf.shipped" || fail "shipped governor.conf differs"
@@ -4245,7 +4245,9 @@ fail() { echo "FAIL fix212: $*"; exit 1; }
 grep -qF 'static int asb_unlock_lift_profile_ok(int profile_idx)' "$G" || fail "no profile gate"
 grep -qF 'return profile_idx != PROFILE_PERFORMANCE;' "$G" || fail "the gate is not 'everyone but Performance'"
 grep -qF '#define ASB_LAUNCH_LIFT_GAP_MS 5000L' "$G" || fail "no launch rate limit"
-grep -qF 'g_unlock_arm_why = "app switch";' "$G" || fail "no app-switch arm"
+# fix220 merged the app switch into one arm with the tap and the lock press - the reason
+# string must still name it.
+grep -qF 'g_unlock_arm_why = touch_kick ? "touch" : (lock_kick ? "lock key" : "app switch");' "$G" || fail "no app-switch arm"
 grep -qF 'g_unlock_arm_why = "screen on";' "$G" || fail "the wake arm lost its reason"
 grep -qF 'static long g_launch_prev_hash = 0;' "$G" || fail "no foreground-hash baseline in the tick"
 grep -qF 'uint64_t _fh = g_smart_rt.app_hash;' "$G" || fail "the launch kick does not read the foreground hash"
@@ -4456,6 +4458,122 @@ grep -qF "by.indexOf(',') > 0" "$H" || fail "the sheet ignores the per-owner spl
 grep -qF 'by=asb_governor:1,thermal:1' "$T" || fail "the runtime fixture lost the per-owner split"
 grep -qF 'clamps=3	owner=vendor	by=vendor:2,asb:1' "$T" || fail "the majority-owner fixture is gone"
 echo "PASS: fix219 contract"
+) || exit 1
+# ---- fix220 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+G="$ROOT/src/asb_governor.c"
+H="$ROOT/webroot/index.html"
+D="$ROOT/tools/logkit/asb_fullday_digest.sh"
+T="$ROOT/tests/asb_ui.sh"
+S="$ROOT/tests/asb_smart.sh"
+fail() { echo "FAIL fix220: $*" >&2; exit 1; }
+# ColorOS 17 / Android 17 on the OP15: animations at app open/close and at lock/unlock
+# visibly janked on Smart and Battery. The app-switch arm (fix212) is seen on the next
+# metrics tick - up to 2 s after the tap, past the animation's first frames - and the
+# lock press had no arm at all. Two earlier signals now arm the same 3 s ceilings-only
+# lift: the first touch after a calm spell (the tap that starts the open/close) and the
+# power key with the screen on (the lock press; the wake keys stay in epoll with the
+# screen on, except the touch panel's gesture node). The day report grew the wake-jank
+# line, per-phase and per-state jank tables and the current-sensor gauge note, and its
+# red verdicts learned the duration guards (a 40-minute "night" and 6 loud minutes are
+# noise, not findings). The runtime behaviour (the lift arms, the digest lines, the
+# parser, the tips) is exercised in tests/asb_smart.sh:t_unlock_lift_runtime and
+# tests/asb_ui.sh:t_webui_log_report_runtime; here the structural pins.
+sh -n "$D" || fail "digest script has a syntax error"
+grep -qF 'int touch_kick, int lock_kick, int launch_kick,' "$G" || fail "the update does not take the lock kick"
+grep -qF 'g_unlock_arm_why = touch_kick ? "touch" : (lock_kick ? "lock key" : "app switch");' "$G" || fail "the arm no longer names its source"
+grep -qF 'g_lock_key_kick = 1;' "$G" || fail "the power key with the screen on raises no kick"
+grep -qF 'if (g_wake_key_touch[i])' "$G" || fail "wake_keys_park parks the power key with the screen on again"
+grep -qF 'jwake\twakes=%s\tpct=%s\tord=%s\tframes=%s\ttop=%s\ttop_pct=%s' "$D" || fail "the digest emits no wake-jank line"
+grep -qF 'jphase\tphase=%s\tintv=%s\tframes=%s\tpct=%s\tjps=%s' "$D" || fail "the digest emits no per-phase jank"
+grep -qF 'jstate\tstate=%s\tintv=%s\tframes=%s\tpct=%s\tjps=%s' "$D" || fail "the digest emits no per-state jank"
+grep -qF "gauge\tfactor=%s\twindows=%s\tmult=%s" "$D" || fail "the digest emits no gauge line"
+grep -qF "tag === 'jphase'" "$H" || fail "the parser drops the per-phase rows"
+grep -qF "tag === 'jstate'" "$H" || fail "the parser drops the per-state rows"
+grep -qF "lr_tip_jank_wake" "$H" || fail "the wake-jank advice is gone"
+grep -qF "lr_gauge_note" "$H" || fail "the gauge note is gone"
+grep -qF "(+night.dur_min || 0) >= 120" "$H" || fail "the night verdict lost its duration guard"
+grep -qF "(+audio.pctph || 0) >= 8 && (+audio.spk_min || 0) >= 30" "$H" || fail "the speaker row colours noise red again"
+grep -qF "lr_nd_verdict_short" "$H" || fail "a short night still gets a red verdict"
+grep -qF 'jwake\twakes=23\tpct=7.3\tord=5.1' "$T" || fail "the wake-jank fixture is gone"
+grep -qF 'a 40-minute night stretch draws no night tip' "$T" || fail "the night duration-guard assertion is gone"
+grep -qF 'the tap that opens an app did not lift' "$S" || fail "the touch-arm assertion is gone"
+grep -qF 'the lock press did not lift' "$S" || fail "the lock-arm assertion is gone"
+grep -qF 'wakes, first touches, app opens/closes, lock presses' "$ROOT/tools/asb_diag.sh" || fail "asbdiag still says wakes + first touches"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag is stale"
+echo "PASS: fix220 contract"
+) || exit 1
+# ---- fix221 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+L="$ROOT/runtime/asb_apply_ledger.sh"
+D="$ROOT/tools/asb_diag.sh"
+T="$ROOT/tests/asb_features.sh"
+U="$ROOT/tests/asb_ui.sh"
+fail() { echo "FAIL fix221: $*"; exit 1; }
+# Other users' diag reports (ColorOS 16: CPH2747, CPH2769, CPH2691) listed
+# network_recommendations_enabled and cloud_dns_happy_eyeballs_priority_enabled as
+# "refused, not in effect ... the ROM blocks this write" - but the read-back was empty
+# before and after the write: these keys simply do not exist on those ROMs. A refusal is
+# a permission problem; an absent key is not, and naming it one sent people chasing a
+# ghost. The ledger now files the empty-before-and-after signature as "unsupported" (its
+# own class for "the key or node does not exist on this device"), remembers it in the
+# same rejected list so it is still not retried, and asbdiag lists such keys apart under
+# a calm "not on this ROM" line instead of the refusal list.
+sh -n "$L" || fail "asb_apply_ledger.sh does not parse"
+grep -qF '_ls_absent=0' "$L" || fail "no absent-key detection in the ledger"
+grep -qF '[ -n "$_ls_v" ] && [ -z "$_ls_prev" ] && [ -z "$_ls_now" ]' "$L" || fail "absent-key signature changed"
+grep -qF 'unsupported "key absent on this ROM"' "$L" || fail "absent key not filed as unsupported"
+# The silently-ignored write (rc=0, still no key) is remembered too, or every boot and
+# every reinforce pass keeps paying three `settings` calls for it.
+grep -qF '# Silently ignored write to a key this ROM does not have: remember it too' "$L" || fail "rc=0 absent-key write not remembered"
+[ "$(grep -c '>> "$ASB_SETTINGS_REJECTED"' "$L")" -ge 2 ] || fail "the absent key is not remembered in the rejected list on both paths"
+sh -n "$D" || fail "asb_diag.sh does not parse"
+grep -qF 'else if (last[k] == "unsupported" && k ~ /^settings\//) { u++; printf "U|%s|%s\n", k, req[k] }' "$D" || fail "diag does not split absent settings keys out of the refusal list"
+grep -qF '· not on this ROM ' "$D" || fail "diag summary does not name the absent-key count"
+grep -qF 'not on this ROM: $_uk (wanted ${_ur:-?}) - this ROM has no such setting; nothing is wrong' "$D" || fail "diag absent-key line gone"
+cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag is stale"
+grep -qF 'unsupported|key absent on this ROM' "$T" || fail "the runtime absent-key assertion is gone"
+grep -qF 'existing-key refusal no longer filed as not_writable' "$T" || fail "the existing-key refusal assertion is gone"
+grep -qF 'not on this ROM: settings/cloud_dns_happy_eyeballs_priority_enabled (wanted off)' "$U" || fail "the diag fixture lost the absent-key line"
+grep -qF 'an unsupported sysfs node leaked into the settings list' "$U" || fail "the sysfs-leak assertion is gone"
+echo "PASS: fix221 contract"
+) || exit 1
+# ---- fix222 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+U="$ROOT/tests/asb_ui.sh"
+fail() { echo "FAIL fix222: $*"; exit 1; }
+# The owner's debug13 screenshots (CPH2745, ColorOS 17, a running Smart capture): the
+# report called a 40-minute daytime stretch "the night" - red 1.5 %/h rows, a verdict and
+# a night advice card, at 19:57, before any night had happened; the awake tip blamed
+# com.android.systemui while the red AOD line (14 of 67 screen-off checks) sat a card
+# away with no connection drawn; 214.7 MiB of background mobile data glowed red with no
+# advice; and the profile table printed "0.0 %/h" for a profile whose counted idle
+# minutes had nearly all sat on the charger. All four are report-honesty repairs; no
+# governor or profile numbers moved.
+grep -qF "const shortNight = (+night.dur_min || 0) < 120;" "$H" || fail "the short-stretch night detector is gone"
+grep -qF "T('lr_sec_nightd_short', '🌙 Longest idle stretch in detail')" "$H" || fail "the short stretch is still titled a night"
+grep -qF "T('lr_nd_spent_short', 'Spent over the stretch')" "$H" || fail "the spent row still says overnight on a short stretch"
+grep -qF 'pctph > 0.8 && !shortNight' "$H" || fail "a short stretch still paints the spent row red"
+grep -qF 'awake > 15 && !shortNight' "$H" || fail "a short stretch still paints the awake row red"
+grep -qF 'if (holder && !shortNight)' "$H" || fail "a capture-wide holder is still named the night's holder on a short stretch"
+grep -qF "(+idle.awake || 0) > 15 && (+idle.dur_min || 0) >= 20" "$H" || fail "the awake verdict lost its duration floor"
+grep -qF "key: 'lr_tip_awake_aod'" "$H" || fail "the AOD awake tip is gone"
+grep -qF "(+_aodt.lit || 0) * 100 >= 10 * (+_aodt.of || 0)" "$H" || fail "the AOD pattern threshold changed"
+grep -qF "key: 'lr_tip_sradio'" "$H" || fail "the background-traffic tip is gone"
+grep -qF "(cfg.net_screen_off_lte || '0') === '0'" "$H" || fail "the traffic tip must treat a missing cfg snapshot as the shipped default"
+grep -qF "p.offMin >= 20 ? { txt: String(p.offP.toFixed(1))" "$H" || fail "the profile table lost its too-few-minutes dash"
+for k in lr_sec_nightd_short lr_nd_spent_short lr_tip_awake_aod lr_tip_sradio; do
+  grep -qF "\"$k\"" "$ROOT/webroot/i18n/en.json" || fail "en.json lost $k"
+done
+grep -qF 'SystemUI + AOD names the display' "$U" || fail "the AOD tip assertion is gone"
+grep -qF 'a ten-minute stretch draws no awake tip' "$U" || fail "the awake duration-floor assertion is gone"
+grep -qF 'the traffic tip names its setting' "$U" || fail "the sradio tip assertion is gone"
+grep -qF "const _smRan = d.profs.some(function (p) { return p.name === 'smart' && (p.onMin + p.offMin) >= 30; });" "$H" || fail "the Smart-ran check is gone - the not-a-Smart-day note fires on a mid-day switch again"
+echo "PASS: fix222 contract"
 ) || exit 1
 # ---- fix209 ---------------------------------------------------------------
 (

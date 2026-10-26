@@ -4238,6 +4238,10 @@ t_unlock_lift_runtime() (
 # fix212: Battery and Balanced lift too - their static shell ceilings are exactly what janked
 # (32% of SystemUI frames on an OP15 Battery day against 3.5-4.4% on Smart) - and a
 # foreground-app switch arms the same window once per 5 s while no lift runs.
+# fix220: the app-switch arm is seen on the next metrics tick - up to 2 s after the tap, past
+# the animation's first frames. The tap itself (a fresh touch after a calm spell) and the
+# lock press (the power key with the screen on) now arm the same window, same 5 s gap, same
+# gates - so the open/close/unlock/lock animations of ColorOS 17 run on lifted ceilings.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 G="$ROOT/src/asb_governor.c"
@@ -4274,6 +4278,17 @@ grep -q 'g_unlock_arm_why,' "$G" || fail "the log line does not say what armed t
 grep -Fq 'const int manual_lift     = manual_profile && g_unlock_lift_now && !thermal_cap &&' "$W" || fail "the writer clamps the borrowed ceilings"
 grep -Fq 'int manual_cap_skip = manual_profile && !manual_override && !manual_lift;' "$W" || fail "manual_cap_skip does not yield to the lift"
 grep -Fq '!g_fsm_cooldown_active && !g_unlock_lift_now;' "$G" || fail "the lift would classify its own ceilings as the shell's"
+# fix220: the lock press reaches the update, is answered after the decision, and the wake keys
+# stay in epoll with the screen on - except the touch panel's own gesture node.
+grep -q 'static int           g_lock_key_kick = 0;' "$ROOT/src/asb_fsm.h" || fail "lock kick not declared"
+grep -q 'g_lock_key_kick, _launch_kick,' "$G" || fail "the lock kick does not reach the update"
+grep -q 'g_lock_key_kick = 1;' "$G" || fail "the power key with the screen on raises no kick"
+grep -q 'g_lock_key_kick = 0;   /\* answered (fix220) \*/' "$G" || fail "the lock kick is never answered"
+grep -q 'wakes, first touches, app opens/closes, lock presses' "$ROOT/tools/asb_diag.sh" || fail "asbdiag still says wakes + first touches"
+sed -n '/^static void wake_keys_park(int epfd, int park) {/,/^}/p' "$G" | grep -q 'if (g_wake_key_touch\[i\])' \
+  || fail "wake_keys_park parks the power key with the screen on"
+sed -n '/^static void wake_keys_park(int epfd, int park) {/,/^}/p' "$G" | grep -q 'e.data.fd = g_wake_key_fd\[i\];' \
+  || fail "unpark no longer re-adds the keys"
 
 CC=""; for c in gcc clang cc; do command -v "$c" >/dev/null 2>&1 && { CC="$c"; break; }; done
 [ -n "$CC" ] || { echo "PASS unlock lift (source pins only)"; exit 0; }
@@ -4291,8 +4306,9 @@ static struct { int unlock_lift_s, unlock_lift_pct, bat_comfort_temp; } g_asb_cf
 static int g_cpu_slot_hwmax[3] = { 3628800, 4608000, 0 };
 #include "u.c"
 static int P = PROFILE_SMART, TC = 0, DIE = 36;
-static int up(int scr, int kick, long ms) { return asb_unlock_lift_update(scr, kick, 0, ms, P, TC, DIE); }
-static int upl(int scr, int kick, int launch, long ms) { return asb_unlock_lift_update(scr, kick, launch, ms, P, TC, DIE); }
+static int up(int scr, int kick, long ms) { return asb_unlock_lift_update(scr, kick, 0, 0, ms, P, TC, DIE); }
+static int upl(int scr, int kick, int launch, long ms) { return asb_unlock_lift_update(scr, kick, 0, launch, ms, P, TC, DIE); }
+static int uplk(int scr, int lock, long ms) { return asb_unlock_lift_update(scr, 0, lock, 0, ms, P, TC, DIE); }
 int main(void) {
     int bad = 0;
 #define CHK(c, what) do { if (!(c)) { printf("%s\n", what); bad = 1; } } while (0)
@@ -4313,11 +4329,15 @@ int main(void) {
     CHK(up(1, 1, 16000) == 1 && g_unlock_lifts == 2, "first touch after the wake does not re-arm");
     CHK(up(1, 1, 17000) == 1 && g_unlock_lifts == 2, "a second touch re-armed");
     CHK(up(1, 0, 19000) == 0, "touch lift not over at 3 s");
-    CHK(up(1, 1, 22000) == 0 && g_unlock_lifts == 2, "a later touch lifted again");
-    /* A touch more than 20 s after the wake is ordinary use. */
+    /* fix220: a fresh touch after a calm spell is the tap that opens or closes an app - it
+     * arms the same window, once per 5 s. */
+    CHK(up(1, 1, 22000) == 1 && g_unlock_lifts == 3 && !strcmp(g_unlock_arm_why, "touch"),
+        "fix220: the tap that opens an app did not lift");
+    CHK(up(1, 1, 23000) == 1 && g_unlock_lifts == 3, "a touch inside 5 s re-armed");
     up(0, 0, 30000); up(1, 0, 40000); up(1, 0, 44000);
-    CHK(g_unlock_lifts == 3, "second wake");
-    CHK(up(1, 1, 61000) == 0 && g_unlock_lifts == 3, "a touch 21 s after the wake lifted");
+    CHK(g_unlock_lifts == 4, "second wake");
+    CHK(up(1, 1, 61000) == 1 && g_unlock_lifts == 5 && !strcmp(g_unlock_arm_why, "touch"),
+        "fix220: a tap past the wake window is still an app open");
     /* Screen off ends a running lift at once. */
     up(0, 0, 70000); CHK(up(1, 0, 80000) == 1, "third wake"); CHK(up(0, 0, 81000) == 0, "screen off kept the lift");
     /* A thermal cap ends it too. */
@@ -4366,6 +4386,28 @@ int main(void) {
     P = PROFILE_SMART;
     TC = 1; CHK(upl(1, 0, 1, 180000) == 0 && !strcmp(g_unlock_skip_why, "thermal"),
         "a launch lift slipped past a thermal cap"); TC = 0;
+    /* fix220: the lock press with the screen on arms the same window - the fade-out animation
+     * renders before Android publishes the display state. Same 5 s gap, same gates, and a
+     * press in the dark is a wake hint, not a lift (the screen-on edge does that). */
+    up(0, 0, 190000); up(1, 0, 191000);
+    unsigned long l3 = g_unlock_lifts;
+    CHK(uplk(1, 1, 192000) == 1 && g_unlock_lifts == l3, "a lock press during a running lift re-armed");
+    CHK(uplk(1, 1, 200000) == 1 && g_unlock_lifts == l3 + 1 && !strcmp(g_unlock_arm_why, "lock key"),
+        "the lock press did not lift");
+    CHK(uplk(1, 1, 204000) == 0 && g_unlock_lifts == l3 + 1, "a lock press inside 5 s re-armed");
+    CHK(uplk(1, 1, 206000) == 1 && g_unlock_lifts == l3 + 2, "a lock press after 5 s did not lift");
+    up(0, 0, 210000);
+    CHK(uplk(0, 1, 211000) == 0 && g_unlock_lifts == l3 + 2, "a lock press in the dark lifted");
+    P = PROFILE_PERFORMANCE;
+    up(1, 0, 212000);
+    unsigned long l4 = g_unlock_lifts;
+    CHK(uplk(1, 1, 220000) == 0 && g_unlock_lifts == l4 && !strcmp(g_unlock_skip_why, "profile"),
+        "a lock press lifted on Performance");
+    P = PROFILE_SMART;
+    TC = 1; CHK(uplk(1, 1, 230000) == 0 && g_unlock_lifts == l4 && !strcmp(g_unlock_skip_why, "thermal"),
+        "a lock lift slipped past a thermal cap"); TC = 0;
+    CHK(up(1, 1, 240000) == 1 && g_unlock_lifts == l4 + 1 && !strcmp(g_unlock_arm_why, "touch"),
+        "a tap after the lock run did not lift");
     /* 4-cluster part: the prime slot Smart caps at 62% is lifted; the share is clamped to 100. */
     g_cpu_slot_hwmax[0] = 2265600; g_cpu_slot_hwmax[1] = 3148800; g_cpu_slot_hwmax[2] = 3302400;
     g_asb_cfg.unlock_lift_pct = 130;
@@ -4381,7 +4423,7 @@ int main(void) {
 X
 "$CC" -O2 -Wall -Werror -Wno-unused-function -Wno-unused-variable -I"$T" -o "$T/t" "$T/t.c" 2>"$T/cc.log" || { cat "$T/cc.log" >&2; fail "fixture did not compile"; }
 "$T/t" || fail "lift wrong"
-echo "PASS unlock lift: a wake and its first touch get the ceilings for a few seconds, nothing else moves"
+echo "PASS unlock lift: wakes, app taps and lock presses get the ceilings for a few seconds, nothing else moves"
 )
 
 t_v64_regression_contract() (

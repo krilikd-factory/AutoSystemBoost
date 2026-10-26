@@ -4938,6 +4938,18 @@ grep -q '^put global network_recommendations_enabled 1' "$T/calls" || fail "anot
 echo "OnePlus/CPH2745/OP611FL1:16/B" > "$T/fp"
 : > "$T/calls"; run global network_recommendations_enabled 0 >/dev/null
 grep -q '^put global network_recommendations_enabled 0' "$T/calls" || fail "not retried after an OTA"
+# fix221: the key that does not exist on the ROM (empty read-back before AND after the
+# failed write - ColorOS 16 refuses to create unknown keys) is filed as unsupported,
+# not as a refusal: it is not a permission problem, and asbdiag lists it apart.
+tail -1 "$T/state/apply_ledger" | grep -q 'unsupported|key absent on this ROM' \
+  || fail "absent key not filed as unsupported: $(tail -1 "$T/state/apply_ledger")"
+# A key that EXISTS but refuses the write is still a refusal.
+echo 1 > "$T/s/global.network_recommendations_enabled"
+echo "OnePlus/CPH2745/OP611FL1:16/C" > "$T/fp"
+run global network_recommendations_enabled 0 >/dev/null
+tail -1 "$T/state/apply_ledger" | grep -q 'not_writable|write rejected' \
+  || fail "existing-key refusal no longer filed as not_writable: $(tail -1 "$T/state/apply_ledger")"
+rm -f "$T/s/global.network_recommendations_enabled"
 # A value the ROM stored in another form did take: not remembered as a refusal.
 cat > "$T/bin/settings" <<'X'
 #!/bin/sh

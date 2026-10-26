@@ -223,6 +223,8 @@ cat > "$T/state/apply_ledger" <<'L'
 2|settings|network_recommendations_enabled|0|1|1|not_writable|write rejected|
 3|settings|ram_expand_switch_state|0|1|0|applied||
 4|reconcile|uclamp.max|100|0|100|applied||
+5|settings|cloud_dns_happy_eyeballs_priority_enabled|off|||unsupported|key absent on this ROM|
+6|sysfs|some_node|1|||unsupported|node absent on this device|
 L
 run() {
   cat > "$T/run.sh" <<EOF
@@ -255,6 +257,11 @@ printf '%s\n' "$o" | grep -q '^     \[PASS\] DSP gain applied (persist.asb.dsp.g
 printf '%s\n' "$o" | grep -q '^     \[FAIL\] camera grade live  ->  3$' || f "FAIL check not echoed in part B"
 printf '%s\n' "$o" | grep -q 'applied 1 · already set 1 · refused by Android 1' || f "ledger totals wrong (reconcile rows must not count): $o"
 printf '%s\n' "$o" | grep -q 'refused, not in effect: settings/network_recommendations_enabled (wanted 0, device keeps 1)' || f "refused key not named"
+# fix221: an absent-on-this-ROM settings key is counted and listed apart from refusals;
+# an unsupported SYSFS node is neither counted nor listed here.
+printf '%s\n' "$o" | grep -q 'refused by Android 1 · not on this ROM 1' || f "absent-on-ROM count missing: $o"
+printf '%s\n' "$o" | grep -q '^       not on this ROM: settings/cloud_dns_happy_eyeballs_priority_enabled (wanted off) - this ROM has no such setting; nothing is wrong$' || f "absent-on-ROM key not listed: $o"
+printf '%s\n' "$o" | grep -q 'some_node' && f "an unsupported sysfs node leaked into the settings list: $o"
 printf '%s\n' "$o" | grep -q '^     FAIL=1 - these did not take effect' || f "verdict does not name the failure count"
 printf '%s\n' "$o" | grep -q '^       camera grade live: want 10, live 3$' || f "failing check not listed in the verdict"
 printf '%s\n' "$o" | grep -q 'Read FAIL, not PASS' || f "PASS-count explanation missing"
@@ -707,6 +714,20 @@ ORPHAN_OUT="$(cat "$TMP/state/full_day_webui.lock/output_dir")"
 [ -d "$ORPHAN_OUT" ] || { echo 'FAIL debug support: recorder did not publish output dir' >&2; exit 1; }
 rm -rf "$ORPHAN_OUT"
 RECOVERED="$(PATH="$TMP/ps-truncated:$PATH" env "${ENV[@]}" sh "$HELPER" full-day || true)"
+# fix220: the same storm fix219 proved in the sibling test fired here once in a full
+# regression: the helper had cancelled the orphan (cancel=output_removed in the log, the
+# recorder gone) but a loaded /proc misread kept the still-live check from clearing the
+# lock inside the wait, and the answer was already_running over a corpse. The recovery is
+# idempotent, so one retry tells a flake from a regression: the retry reclaims the now
+# dead lock and starts; a helper that genuinely lost orphan recovery answers
+# already_running to BOTH attempts and still fails below.
+case "$RECOVERED" in
+  *status=started*) : ;;
+  *status=already_running*)
+    sleep 0.5
+    RECOVERED="$RECOVERED
+$(PATH="$TMP/ps-truncated:$PATH" env "${ENV[@]}" sh "$HELPER" full-day || true)" ;;
+esac
 printf '%s\n' "$RECOVERED" | grep -Fq 'status=started' || {
   echo 'FAIL debug support: removed output dir did not recover capture slot' >&2
   # What the helper answered and why (fix146: a CI run failed here with nothing to read).
@@ -716,8 +737,13 @@ printf '%s\n' "$RECOVERED" | grep -Fq 'status=started' || {
   [ -n "$_rp" ] && { printf '  recorder %s: ' "$_rp"; cat "/proc/$_rp/stat" 2>/dev/null || echo gone; } >&2
   exit 1
 }
-grep -Fq 'recovered=output_removed' "$TMP/state/full_day_webui.recovery.log" || { echo 'FAIL debug support: orphan recovery evidence missing' >&2; exit 1; }
-REC_PID="$(printf '%s\n' "$RECOVERED" | sed -n 's/^pid=//p')"
+# The evidence of the recovery path is the cancel note itself - the recovered= note can be
+# lost when the retry takes the dead-lock reclaim instead (the cancel already proved the
+# missing-output path was taken).
+grep -Fq 'output_removed' "$TMP/state/full_day_webui.recovery.log" || { echo 'FAIL debug support: orphan recovery evidence missing' >&2; exit 1; }
+# With the retry the combined answer can name two PIDs - the cancelled orphan's and the new
+# recorder's. The new recorder is the last.
+REC_PID="$(printf '%s\n' "$RECOVERED" | sed -n 's/^pid=//p' | tail -n 1)"
 [ -n "$REC_PID" ] && kill -0 "$REC_PID" 2>/dev/null || { echo 'FAIL debug support: recovered recorder missing' >&2; exit 1; }
 
 # Repeat simultaneous starts from a clean state. One and only one recorder may be created in
@@ -4105,8 +4131,18 @@ printf '%s|active|cap_owner=thermal|x\n%s|active|cap_owner=asb_governor|x\n' "$(
 cat > "$CAP/_full_day_report.txt" <<EOF
  ASB FULL-DAY REPORT — x
  capture: 24h target, 720 min elapsed
+governor's gauge check: on screen-on windows current_now integrates to x0.34 of the SOC-derived drain (40 windows) - multiply screen-on mA by about 2.9; a gauge property, not the load
 all screen-on intervals: 167  frames 366481  janky 5.1%  over 12.2 h
 janky frames per second on screen: 2.50
+phase            intervals    frames    janky  janky/s
+post_wake               23     61234     7.3%     4.11
+active                 144    305247     4.6%     2.01
+ASB state        intervals    frames    janky  janky/s
+MODERATE                40    100000     4.0%     2.20
+LIGHT_IDLE             100    200000     5.6%     2.60
+mixed                   27     66481     5.2%     2.40
+the wake itself: 23 wake(s), last screen-on poll before each to the first after it - frames 61234, janky 7.3% (ordinary screen-on intervals: 5.1%)
+  at the wakes, by app: com.android.systemui 1740 of 12000 janky (14.5%), com.ttt.nagram 900 of 20000 janky (4.5%)
 app in front      frames   jank   jps
 com.ttt.nagram    122186   7.0%   4.20
 com.whatsapp       40211   1.2%   0.40
@@ -4195,6 +4231,13 @@ printf '%s\n' "$out" | grep -q '^throttle	clamps=2	owner=asb_governor	by=asb_gov
 printf '%s\n' "$out" | grep -q '^radio	mib=17.5$' || fail "radio MiB"
 # fix200: the richer sections, mined from the interim report + smart_records + config.
 printf '%s\n' "$out" | grep -q '^jank	pct=5.1	jps=2.50	frames=366481$' || fail "jank headline"
+# fix220: wake smoothness, the per-phase and per-state jank tables and the gauge check.
+printf '%s\n' "$out" | grep -q '^jwake	wakes=23	pct=7.3	ord=5.1	frames=61234	top=com.android.systemui	top_pct=14.5$' || fail "wake jank line: $(printf '%s\n' "$out" | grep '^jwake')"
+printf '%s\n' "$out" | grep -q '^jphase	phase=post_wake	intv=23	frames=61234	pct=7.3	jps=4.11$' || fail "phase jank row: $(printf '%s\n' "$out" | grep '^jphase' | head -1)"
+printf '%s\n' "$out" | grep -q '^jphase	phase=active	intv=144	frames=305247	pct=4.6	jps=2.01$' || fail "phase jank row 2"
+printf '%s\n' "$out" | grep -q '^jstate	state=LIGHT_IDLE	intv=100	frames=200000	pct=5.6	jps=2.60$' || fail "state jank row: $(printf '%s\n' "$out" | grep '^jstate' | head -2 | tail -1)"
+printf '%s\n' "$out" | grep -q '^jstate	state=mixed	intv=27	frames=66481	pct=5.2	jps=2.40$' || fail "the lowercase mixed state row"
+printf '%s\n' "$out" | grep -q '^gauge	factor=0.34	windows=40	mult=2.9$' || fail "gauge line: $(printf '%s\n' "$out" | grep '^gauge')"
 printf '%s\n' "$out" | grep -q '^japp	pkg=com.ttt.nagram	frames=122186	pct=7.0$' || fail "top jank app"
 printf '%s\n' "$out" | grep -q '^japp	pkg=multi' && fail "the split-screen pseudo-app must not become a row"
 printf '%s\n' "$out" | grep -q '^hz	mode=60	share=64	ma=264$' || fail "60 Hz row"
@@ -4356,6 +4399,12 @@ const txt = [
   'sysui\tcount=2',
   'throttle\tclamps=2\towner=asb_governor\tby=asb_governor:1,thermal:1',
   'jank\tpct=1.4\tjps=0.6\tframes=366481',
+  'jwake\twakes=23\tpct=7.3\tord=5.1\tframes=61234\ttop=com.android.systemui\ttop_pct=14.5',
+  'jphase\tphase=post_wake\tintv=23\tframes=61234\tpct=7.3\tjps=4.11',
+  'jphase\tphase=active\tintv=144\tframes=305247\tpct=4.6\tjps=2.01',
+  'jstate\tstate=MODERATE\tintv=40\tframes=100000\tpct=4.0\tjps=2.20',
+  'jstate\tstate=LIGHT_IDLE\tintv=100\tframes=200000\tpct=5.6\tjps=2.60',
+  'gauge\tfactor=0.34\twindows=40\tmult=2.9',
   'japp\tpkg=com.ttt.nagram\tframes=122186\tpct=7.0',
   'japp\tpkg=com.whatsapp\tframes=40211\tpct=1.2',
   'hz\tmode=60\tshare=64\tma=264',
@@ -4386,6 +4435,11 @@ chk(d.japps.length === 2 && d.japps[0].pkg === 'com.ttt.nagram' && d.japps[0].fr
 chk(d.hzs.length === 3 && d.hzs[0].mode === '60' && d.hzs[0].ma === 264 && d.hzs[2].share === 13, 'refresh rows: ' + JSON.stringify(d.hzs));
 chk(d.cfg.wakelock_action === '0' && d.cfg.night_modem_idle === '0' && d.cfg.ltpo_video === '1', 'cfg snapshot: ' + JSON.stringify(d.cfg));
 chk(d.sections.jank.pct === '1.4' && d.sections.audio.spk_min === '72' && d.sections.smart.ctxlearn === '2' && d.sections.asbcost.cpu_msh === '1851' && d.sections.charge.types === 'Fast(17) N/A(197)', 'the fix200 sections parse');
+/* fix220: wake jank, the per-phase/per-state tables and the gauge parse. */
+chk(d.sections.jwake.wakes === '23' && d.sections.jwake.pct === '7.3' && d.sections.jwake.ord === '5.1' && d.sections.jwake.top === 'com.android.systemui' && d.sections.jwake.top_pct === '14.5', 'wake jank parses: ' + JSON.stringify(d.sections.jwake));
+chk(d.jphases.length === 2 && d.jphases[0].phase === 'post_wake' && d.jphases[0].pct === 7.3 && d.jphases[1].jps === 2.01, 'per-phase jank rows: ' + JSON.stringify(d.jphases));
+chk(d.jstates.length === 2 && d.jstates[0].state === 'MODERATE' && d.jstates[1].pct === 5.6, 'per-state jank rows: ' + JSON.stringify(d.jstates));
+chk(d.sections.gauge.factor === '0.34' && d.sections.gauge.windows === '40' && d.sections.gauge.mult === '2.9', 'the gauge check parses: ' + JSON.stringify(d.sections.gauge));
 chk(d.sections.crash.ltime === '14:32', 'fix204: the crash time survives the parser');
 /* fix206: the new digest facts parse. */
 chk(d.wlive.length === 2 && d.wlive[0].pkg === 'com.amurcanov.tgwsproxy' && d.wlive[0].pct === 78 && d.wlive[0].min === 24, 'live wakelock rows: ' + JSON.stringify(d.wlive));
@@ -4478,6 +4532,58 @@ chk(hk2.indexOf('lr_tip_heat_calm') < 0, 'a cool day WITH throttles does not cla
 const hk3 = dheat({ peak_phase: 'active', warm_min: '12', skin_min: '0' }, { cpu: '46' }, { clamps: '0' }, {});
 chk(hk3.indexOf('lr_tip_heat_warm') < 0 && hk3.indexOf('lr_tip_heat_calm') < 0, 'a short warm spell stays quiet');
 chk(logReportT('lr_tip_heat_warm', '', { min: '47 мин', phase: 'Игры' }).indexOf('{') < 0, 'the heat tip fills its placeholders');
+/* fix220: a short night is noise, not a verdict - under two hours no red card (the owner's
+   Battery capture read "1.5 %/h over 40 min" off a single battery-percent step). */
+const dn1 = JSON.parse(JSON.stringify(d));
+dn1.sections = { night: { dur_min: '40', pctph: '1.5', awake: '20', drop: '1' } };
+dn1.cfg = {}; dn1.wl = []; dn1.wlive = []; dn1.wla = []; dn1.wlt = []; dn1.kwk = []; dn1.profs = []; dn1.hist = [];
+chk(!logReportTips(dn1).some(function (t) { return t.key.indexOf('lr_tip_night') === 0; }), 'a 40-minute night stretch draws no night tip');
+dn1.sections.night.dur_min = '469';
+chk(logReportTips(dn1).some(function (t) { return t.key === 'lr_tip_night'; }), 'a full night over 0.8 %/h still advises');
+/* fix222: the awake verdict needs a stretch that can carry it (under 20 min: no tip), and
+   when the top holder is SystemUI with the panel lit in a tenth or more of screen-off
+   checks, the tip names the always-on display, not a system app (the owner's Smart day:
+   awake 64 %, holder com.android.systemui, AOD 14 of 67). */
+const daod = JSON.parse(JSON.stringify(d));
+daod.sections = { idlemax: { awake: '64', phase: 'idle', dur_min: '45' }, aod: { lit: '14', of: '67' } };
+daod.cfg = {}; daod.wl = []; daod.wla = []; daod.wlt = []; daod.kwk = []; daod.profs = []; daod.hist = [];
+daod.wlive = [{ tag: 'AODDisplayUtil', pct: 20, min: 0, pkg: 'com.android.systemui' }];
+const kaod = logReportTips(daod).map(function (t) { return t.key; });
+chk(kaod.indexOf('lr_tip_awake_aod') >= 0 && kaod.indexOf('lr_tip_awake_who') < 0, 'SystemUI + AOD names the display: ' + kaod.join(','));
+daod.wlive = [{ tag: 'TgWsProxy::ServiceWakeLock', pct: 78, min: 24, pkg: 'com.amurcanov.tgwsproxy' }];
+const kna = logReportTips(daod).map(function (t) { return t.key; });
+chk(kna.indexOf('lr_tip_awake_who') >= 0 && kna.indexOf('lr_tip_awake_aod') < 0, 'a real app holder is still named: ' + kna.join(','));
+daod.sections.idlemax.dur_min = '10';
+chk(!logReportTips(daod).some(function (t) { return t.key.indexOf('lr_tip_awake') === 0; }), 'a ten-minute stretch draws no awake tip');
+daod.sections.aod.lit = '3';
+daod.sections.idlemax.dur_min = '45';
+daod.wlive = [{ tag: 'AODDisplayUtil', pct: 20, min: 0, pkg: 'com.android.systemui' }];
+chk(logReportTips(daod).some(function (t) { return t.key === 'lr_tip_awake_who'; }), 'SystemUI without the AOD pattern is still blamed by name');
+/* fix222: the background-traffic advice - over 50 MiB with the screen off, the switch
+   named while it is off; quiet when it is already on or the traffic is modest. */
+const dsr = JSON.parse(JSON.stringify(d));
+dsr.sections = { sradio: { mib: '214.7' } };
+dsr.cfg = { net_screen_off_lte: '0' }; dsr.wl = []; dsr.wlive = []; dsr.wla = []; dsr.wlt = []; dsr.kwk = []; dsr.profs = []; dsr.hist = [];
+const ksr = logReportTips(dsr);
+chk(ksr.some(function (t) { return t.key === 'lr_tip_sradio' && t.vars.mib === '214.7' && t.vars.set === I18N.ru.cfg.net_screen_off_lte.name; }), 'the traffic tip names its setting: ' + JSON.stringify(ksr));
+dsr.cfg.net_screen_off_lte = '1';
+chk(!logReportTips(dsr).some(function (t) { return t.key === 'lr_tip_sradio'; }), 'already on - no traffic tip');
+delete dsr.cfg.net_screen_off_lte;
+chk(logReportTips(dsr).some(function (t) { return t.key === 'lr_tip_sradio'; }), 'an old capture without the cfg snapshot is the shipped default (off)');
+dsr.sections.sradio.mib = '12.0';
+chk(!logReportTips(dsr).some(function (t) { return t.key === 'lr_tip_sradio'; }), 'modest background traffic draws no tip');
+/* fix220: the wake-jank tip - wakes clearly worse than the day, the top wake app named;
+   quiet when the wakes match the day, under the visible threshold, or on a thin sample. */
+const djw = function (jwake) {
+  const dc = JSON.parse(JSON.stringify(d));
+  dc.sections = { jwake: jwake };
+  dc.cfg = {}; dc.wl = []; dc.wlive = []; dc.wla = []; dc.wlt = []; dc.kwk = []; dc.profs = []; dc.hist = [];
+  return logReportTips(dc).map(function (t) { return t.key; });
+};
+chk(djw({ wakes: '23', pct: '8.0', ord: '7.2', top: 'com.android.systemui' }).indexOf('lr_tip_jank_wake') >= 0, 'wake jank clearly above the day advises');
+chk(djw({ wakes: '23', pct: '8.0', ord: '7.2', top: '' }).indexOf('lr_tip_jank_wake_wh') >= 0, 'no top app - the wording without a name');
+chk(djw({ wakes: '14', pct: '4.8', ord: '4.2', top: 'com.android.systemui' }).indexOf('lr_tip_jank_wake') < 0, 'smooth wakes stay quiet');
+chk(djw({ wakes: '3', pct: '12.0', ord: '5.0', top: '' }).indexOf('lr_tip_jank_wake_wh') < 0, 'three wakes are no pattern');
 chk(Tcfg('ltpo_video', 'name', 'x') === I18N.ru.cfg.ltpo_video.name, 'Tcfg reads the locale setting name');
 chk(logReportT('lr_saved', '', { when: '2026-10-21 09:40', profile: 'Умный' }) === I18N.ru.lr_saved.split('{when}').join('2026-10-21 09:40').split('{profile}').join('Умный'), 'ru saved-capture line fills both placeholders');
 chk(logReportT('lr_tip_audio', '', { pct: '8.31' }).indexOf('{') < 0, 'the audio tip fills its placeholder');
@@ -4540,13 +4646,18 @@ KEYS = ['lr_menu','lr_refresh','lr_loading','lr_none_title','lr_none_body','lr_f
         'lr_heat_peak','lr_heat_warm_fmt','lr_heat_skin_fmt',
         'lr_tip_heat_warm','lr_tip_heat_warm_set','lr_tip_heat_calm',
         'lr_mwake','lr_mwake_fmt',
-        'lr_sec_trend','lr_trend_night','lr_trend_day','lr_trend_jank','lr_trend_vs']
+        'lr_sec_trend','lr_trend_night','lr_trend_day','lr_trend_jank','lr_trend_vs',
+        'lr_th_jps','lr_th_state','lr_jwake','lr_jwake_fmt','lr_jwake_top',
+        'lr_jphase_head','lr_jstate_head','lr_gauge_note','lr_nd_verdict_short',
+        'lr_tip_jank_wake','lr_tip_jank_wake_wh',
+        'lr_sec_nightd_short','lr_nd_spent_short','lr_tip_awake_aod','lr_tip_sradio']
 EMO = {'lr_sec_drain': '\U0001f50b', 'lr_sec_wake': '\u23f0', 'lr_sec_crash': '\U0001f4a5',
        'lr_sec_thermal': '\U0001f321\ufe0f', 'lr_sec_tips': '\U0001f4a1',
        'lr_sec_smooth': '\U0001f4f1', 'lr_sec_display': '\U0001f5a5',
        'lr_sec_smart': '\U0001f9e0', 'lr_sec_asb': '\u2699\ufe0f',
        'lr_sec_profiles': '\u2696\ufe0f', 'lr_sec_phases': '\U0001f4ca',
-       'lr_sec_nightd': '\U0001f319', 'lr_sec_trend': '\U0001f4c8'}
+       'lr_sec_nightd': '\U0001f319', 'lr_sec_trend': '\U0001f4c8',
+       'lr_sec_nightd_short': '\U0001f319'}
 PH = {'lr_running': ['{min}', '{h}'], 'lr_crash_n': ['{n}'], 'lr_crash_latest': ['{proc}'],
       'lr_crash_asb': ['{n}'], 'lr_sysui': ['{n}'], 'lr_temp_max': ['{cpu}', '{surf}'],
       'lr_clamp_some': ['{n}', '{owner}'], 'lr_tip_night': ['{pct}'], 'lr_tip_awake': ['{awake}'],
@@ -4567,7 +4678,11 @@ PH = {'lr_running': ['{min}', '{h}'], 'lr_crash_n': ['{n}'], 'lr_crash_latest': 
       'lr_tip_heat_warm': ['{min}', '{phase}'], 'lr_tip_heat_warm_set': ['{min}', '{phase}', '{set}'],
       'lr_tip_heat_calm': ['{cpu}'], 'lr_mwake_fmt': ['{n}', '{per}', '{sec}'],
       'lr_trend_night': ['{was}', '{now}'], 'lr_trend_day': ['{was}', '{now}'],
-      'lr_trend_jank': ['{was}', '{now}'], 'lr_trend_vs': ['{when}']}
+      'lr_trend_jank': ['{was}', '{now}'], 'lr_trend_vs': ['{when}'],
+      'lr_jwake_fmt': ['{n}', '{pct}', '{ord}'], 'lr_jwake_top': ['{pkg}', '{pct}'],
+      'lr_gauge_note': ['{x}', '{w}'], 'lr_nd_verdict_short': ['{min}', '{pct}'],
+      'lr_tip_jank_wake': ['{pct}', '{ord}', '{who}'], 'lr_tip_jank_wake_wh': ['{pct}', '{ord}'],
+      'lr_tip_awake_aod': ['{awake}', '{lit}', '{of}'], 'lr_tip_sradio': ['{mib}', '{set}']}
 files = sorted((root / 'webroot' / 'i18n').glob('*.json'))
 assert len(files) == 13, 'locale count'
 for p in files:
