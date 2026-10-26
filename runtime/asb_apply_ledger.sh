@@ -113,19 +113,42 @@ asb_ledger_settings() {
   # Distinguish "refused" from "accepted then ignored": the first is a permission or
   # policy problem the user might fix, the second is the ROM overriding us and no amount
   # of retrying will help.
+  #
+  # fix221: a third case, seen in user diag reports from ColorOS 16 (CPH2747, CPH2769,
+  # CPH2691 - network_recommendations_enabled, cloud_dns_happy_eyeballs_priority_enabled):
+  # the key simply does not exist on this ROM. The write fails - or is silently ignored -
+  # and the read-back stays empty, exactly as it was before the write. That is the
+  # ledger's own "unsupported" class ("the key or node does not exist on this device"),
+  # not a refusal: naming it "the ROM blocks this write" in asbdiag sent users looking
+  # for a permission problem that is not there. It is remembered in the same rejected
+  # list, because no retry will ever create the key either.
+  _ls_absent=0
+  if [ -n "$_ls_v" ] && [ -z "$_ls_prev" ] && [ -z "$_ls_now" ]; then
+    _ls_absent=1
+  fi
   if [ "$_ls_rc" != "0" ]; then
-    case "$_ls_err" in
-      *ermission*|*SecurityException*|*denied*)
-        asb_ledger_note settings "$_ls_k" "$_ls_v" "$_ls_prev" "$_ls_now" not_writable "permission refused" "" ;;
-      *)
-        asb_ledger_note settings "$_ls_k" "$_ls_v" "$_ls_prev" "$_ls_now" not_writable "write rejected" "" ;;
-    esac
+    if [ "$_ls_absent" = "1" ]; then
+      asb_ledger_note settings "$_ls_k" "$_ls_v" "$_ls_prev" "$_ls_now" unsupported "key absent on this ROM" ""
+    else
+      case "$_ls_err" in
+        *ermission*|*SecurityException*|*denied*)
+          asb_ledger_note settings "$_ls_k" "$_ls_v" "$_ls_prev" "$_ls_now" not_writable "permission refused" "" ;;
+        *)
+          asb_ledger_note settings "$_ls_k" "$_ls_v" "$_ls_prev" "$_ls_now" not_writable "write rejected" "" ;;
+      esac
+    fi
     # Remembered only when nothing moved: a value the ROM stored in another form (1.0 read
     # back as 1) did take, and must not be skipped later.
     if [ "$_ls_now" = "$_ls_prev" ]; then
       mkdir -p "${ASB_SETTINGS_REJECTED%/*}" 2>/dev/null
       printf '%s|%s|%s|%s\n' "$_ls_ns" "$_ls_k" "$_ls_v" "$(_asb_ledger_rom)" >> "$ASB_SETTINGS_REJECTED" 2>/dev/null
     fi
+  elif [ "$_ls_absent" = "1" ]; then
+    # Silently ignored write to a key this ROM does not have: remember it too, or the
+    # boot path and every reinforce pass will keep paying three `settings` calls for it.
+    asb_ledger_note settings "$_ls_k" "$_ls_v" "$_ls_prev" "$_ls_now" unsupported "key absent on this ROM" ""
+    mkdir -p "${ASB_SETTINGS_REJECTED%/*}" 2>/dev/null
+    printf '%s|%s|%s|%s\n' "$_ls_ns" "$_ls_k" "$_ls_v" "$(_asb_ledger_rom)" >> "$ASB_SETTINGS_REJECTED" 2>/dev/null
   else
     asb_ledger_note settings "$_ls_k" "$_ls_v" "$_ls_prev" "$_ls_now" readback_mismatch \
       "accepted but device reports a different value" ""
