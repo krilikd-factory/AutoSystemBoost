@@ -9783,7 +9783,7 @@ function asbToggleLogMenu(ev) {
  * capture too: the digest folds in the still-open phase, so the numbers move as the
  * day goes on. */
 function parseLogReport(txt) {
-  const d = { ok: false, error: '', sections: {}, wl: [], wlive: [], wlt: [], wla: [], profs: [], phases: [], kwk: [], japps: [], hzs: [], hist: [], cfg: {} };
+  const d = { ok: false, error: '', sections: {}, wl: [], wlive: [], wlt: [], wla: [], profs: [], phases: [], kwk: [], japps: [], jphases: [], jstates: [], hzs: [], hist: [], cfg: {} };
   if (!txt) { d.error = 'empty'; return d; }
   const lines = String(txt).split('\n');
   for (const raw of lines) {
@@ -9826,6 +9826,16 @@ function parseLogReport(txt) {
     } else if (tag === 'japp') {
       /* fix200: per-app frame counts - the real per-app table the sheet shows. */
       if (kv.pkg) d.japps.push({ pkg: kv.pkg, frames: +kv.frames || 0, pct: +kv.pct || 0 });
+    } else if (tag === 'jphase') {
+      /* fix220: smoothness by moment of the day (post_wake, active, audio) - where the
+         day's stutter actually sits. */
+      if (kv.phase) d.jphases.push({ phase: kv.phase, intv: +kv.intv || 0, frames: +kv.frames || 0,
+        pct: +kv.pct || 0, jps: +kv.jps || 0 });
+    } else if (tag === 'jstate') {
+      /* fix220: smoothness by the governor's own state - a janky LIGHT_IDLE is the
+         signature of ceilings too tight for the moment. */
+      if (kv.state) d.jstates.push({ state: kv.state, intv: +kv.intv || 0, frames: +kv.frames || 0,
+        pct: +kv.pct || 0, jps: +kv.jps || 0 });
     } else if (tag === 'hz') {
       if (kv.mode) d.hzs.push({ mode: kv.mode, share: +kv.share || 0, ma: +kv.ma || 0 });
     } else if (tag === 'hist') {
@@ -9881,19 +9891,37 @@ function logReportTips(d) {
   const cost = s.asbcost || null;
   const cfg = d.cfg || {};
   if (crash && (+crash.asb || 0) > 0) tips.push({ ic: 'warn', key: 'lr_tip_crash', vars: {} });
-  if (night && (+night.pctph || 0) > 0.8) {
+  /* fix220: the night verdict needs a night. One battery-percent step over 40 idle minutes
+     reads as 1.5 %/h and painted a red card over pure noise (fix211 taught the screen-off
+     row the same lesson) - under two hours the stretch is evidence, not a verdict. */
+  if (night && (+night.pctph || 0) > 0.8 && (+night.dur_min || 0) >= 120) {
     if (cfg.night_modem_idle === '0')
       tips.push({ ic: 'warn', key: 'lr_tip_night_modem', vars: { pct: (+night.pctph).toFixed(1), set: Tcfg('night_modem_idle', 'name', 'Quiet Radio at Night') } });
     else
       tips.push({ ic: 'warn', key: 'lr_tip_night', vars: { pct: (+night.pctph).toFixed(1) } });
   }
-  if (idle && (+idle.awake || 0) > 15) {
+  /* fix222: the awake verdict needs a stretch that can carry it - a five-minute gap fully
+     awake is noise, and the worst-stretch row used to turn red over exactly that. Under
+     twenty minutes there is no awake tip. */
+  if (idle && (+idle.awake || 0) > 15 && (+idle.dur_min || 0) >= 20) {
     /* fix206: name the culprit when the power-manager samples caught one - "something
        prevents deep sleep" next to a named holder is a finding, without it a shrug.
        fix210: and when even the samples are empty, the occurrence counts still know who
-       woke the phone - the top alarm source, else the top partial holder. */
-    if (d.wlive.length)
-      tips.push({ ic: 'warn', key: 'lr_tip_awake_who', vars: { awake: String(idle.awake), who: d.wlive[0].pkg || d.wlive[0].tag } });
+       woke the phone - the top alarm source, else the top partial holder.
+       fix222: when the top holder is SystemUI and the panel was lit in a tenth or more of
+       the screen-off checks, the holder is almost certainly the always-on display (the
+       owner's Smart day: awake 64 %, holder com.android.systemui, AOD lit in 14 of 67
+       checks). Name the real cause and the remedy instead of blaming a system app the
+       user cannot - and should not - rein in. */
+    if (d.wlive.length) {
+      const _who = d.wlive[0].pkg || d.wlive[0].tag;
+      const _aodt = s.aod || null;
+      if (_who === 'com.android.systemui' && _aodt && (+_aodt.of || 0) >= 20 &&
+          (+_aodt.lit || 0) * 100 >= 10 * (+_aodt.of || 0))
+        tips.push({ ic: 'warn', key: 'lr_tip_awake_aod', vars: { awake: String(idle.awake), lit: String(_aodt.lit), of: String(_aodt.of) } });
+      else
+        tips.push({ ic: 'warn', key: 'lr_tip_awake_who', vars: { awake: String(idle.awake), who: _who } });
+    }
     else if (d.wla.length)
       tips.push({ ic: 'warn', key: 'lr_tip_awake_alarm', vars: { awake: String(idle.awake), who: d.wla[0].tag } });
     else if (d.wlt.length)
@@ -9912,6 +9940,24 @@ function logReportTips(d) {
   }
   if (audio && (+audio.spk_min || 0) >= 30 && (+audio.pctph || 0) >= 5)
     tips.push({ ic: 'info', key: 'lr_tip_audio', vars: { pct: String(audio.pctph) } });
+  /* fix220: stutter concentrated at the wakes is its own finding - the day can read fine
+     while every unlock, open and close visibly hitches (the ColorOS 17 captures: 8-13 %
+     wake jank on Battery against 7 % ordinary). The interaction lift covers these moments;
+     the card says it is seen. It ranks below the drain findings - it costs comfort, not
+     percent. */
+  const jwake = s.jwake || null;
+  if (jwake && (+jwake.wakes || 0) >= 5 && (+jwake.pct || 0) >= 6 &&
+      (+jwake.pct || 0) >= (+jwake.ord || 0) + 0.8) {
+    const jwv = { pct: String(jwake.pct), ord: String(jwake.ord), who: String(jwake.top || '') };
+    tips.push({ ic: 'info', key: jwv.who ? 'lr_tip_jank_wake' : 'lr_tip_jank_wake_wh', vars: jwv });
+  }
+  /* fix222: the red background-traffic line had no advice next to it (the owner's Smart
+     day: 214.7 MiB with the screen off, radio wakelocks holding the modem). When the
+     saving switch exists and is off, the card names it; an old capture without the cfg
+     snapshot is treated as the shipped default (off). Under 50 MiB it is just messengers. */
+  const sradio = s.sradio || null;
+  if (sradio && (+sradio.mib || 0) >= 50 && (cfg.net_screen_off_lte || '0') === '0')
+    tips.push({ ic: 'info', key: 'lr_tip_sradio', vars: { mib: String(sradio.mib), set: Tcfg('net_screen_off_lte', 'name', 'LTE While Screen Off') } });
   /* fix213 (audit 8.3/К9): heat finally speaks. A peak number alone says nothing about
      cost - the DURATION above 45 °C does. Half an hour hot is advice-worthy (and when
      the thermal protection is deliberately on Stock, the advice names the switch);
@@ -10175,6 +10221,7 @@ function logReportRender(d) {
   const thermal = d.sections.thermal || null;
   const throttle = d.sections.throttle || null;
   const jank = d.sections.jank || null;
+  const jwake = d.sections.jwake || null;
   const smart = d.sections.smart || null;
   const audio = d.sections.audio || null;
   const cost = d.sections.asbcost || null;
@@ -10206,9 +10253,11 @@ function logReportRender(d) {
       /* fix207: the hero's subtitle carries the deep-sleep share too - "awake 8%" reads
          as a warning unless the flip side ("deep sleep 92%") sits next to it. */
       const deep = Math.max(0, 100 - (+night.awake || 0));
+      /* fix220: red asks for a window that can hold it - under two hours one battery-percent
+         step already reads past the 0.8 %/h mark, and that is noise, not a finding. */
       g.appendChild(logReportHero('🌙', T('lr_night', 'Longest idle stretch'),
         String(night.pctph) + T('lr_per_hour', '%/h'),
-        logReportDur(night.dur_min) + ' · ' + logReportT('lr_deep_sleep', 'deep sleep {pct}%', { pct: String(deep) }), (+night.pctph || 0) > 0.8));
+        logReportDur(night.dur_min) + ' · ' + logReportT('lr_deep_sleep', 'deep sleep {pct}%', { pct: String(deep) }), (+night.pctph || 0) > 0.8 && (+night.dur_min || 0) >= 120));
       heroes++;
     }
     if (heroes) {
@@ -10237,13 +10286,23 @@ function logReportRender(d) {
          capture. Different windows, both figures right. */
       s.appendChild(logReportNote(T('lr_scr_note', 'The Monitor tiles measure only calm stretches of an hour or more; these rows cover the whole capture - different windows, both figures are right.')));
     }
-    if (idle) s.appendChild(logReportRow(T('lr_idle', 'Worst idle awake share'), String(idle.awake) + '%', (+idle.awake || 0) > 15));
+    /* fix220: on the OP15 the current sensor integrates to ~0.34 of the battery's own count
+       - every mA in this sheet is a lower bound. Say it once, next to the figures it tempers. */
+    const gauge = d.sections.gauge || null;
+    if (gauge && (+gauge.factor || 1) > 0 && (+gauge.factor || 1) <= 0.75 && (+gauge.windows || 0) >= 10)
+      s.appendChild(logReportNote(logReportT('lr_gauge_note',
+        'The current sensor on this phone reads about {x}× low ({w} checks) - every mA figure here is a lower bound; the %/h figures from the battery counter are exact.',
+        { x: String(gauge.mult || ''), w: String(gauge.windows || '') })));
+    if (idle) s.appendChild(logReportRow(T('lr_idle', 'Worst idle awake share'), String(idle.awake) + '%', (+idle.awake || 0) > 15 && (+idle.dur_min || 0) >= 20));
     if (radio) s.appendChild(logReportRow(T('lr_radio', 'Mobile data'), String(radio.mib) + ' MiB'));
     if (audio) {
-      /* Speaker playback is the one background sound that shows up in drain. */
+      /* Speaker playback is the one background sound that shows up in drain.
+         fix220: red follows the advice rule - 27 %/h over 6 minutes is one loud video,
+         not a habit; the colour appears from half an hour, like the tip below. */
       s.appendChild(logReportRow(T('lr_audio_spk', 'Speaker playback'),
         logReportDur(audio.spk_min) + ' · ' + String(audio.pctph) + T('lr_per_hour', '%/h') +
-        ((+audio.ma || 0) > 0 ? ' · ' + String(audio.ma) + ' mA' : ''), (+audio.pctph || 0) >= 8));
+        ((+audio.ma || 0) > 0 ? ' · ' + String(audio.ma) + ' mA' : ''),
+        (+audio.pctph || 0) >= 8 && (+audio.spk_min || 0) >= 30));
     }
     if (charge && charge.types) s.appendChild(logReportRow(T('lr_charge_types', 'Charging seen'), String(charge.types)));
     /* fix206: time on the charger is part of the day too - the 5W-wireless tester gained
@@ -10268,13 +10327,19 @@ function logReportRender(d) {
      why it was what it was (awake vs deep sleep, current, radio, temperatures) and who
      held the phone. The headline rate stays in the drain hero above; here is the detail. */
   if (night && nightd) {
-    const s = logReportSec(T('lr_sec_nightd', '🌙 Night in detail'));
+    /* fix222: a 40-minute daytime stretch is not a night - the owner's running capture
+       showed "1.5 %/h for the night" at 19:57, before any night had happened, and the
+       rows turned red over a single battery-percent step. Under two hours the card says
+       what the stretch actually is and stays neutral; the calm note below explains why. */
+    const shortNight = (+night.dur_min || 0) < 120;
+    const s = logReportSec(shortNight ? T('lr_sec_nightd_short', '🌙 Longest idle stretch in detail')
+                                      : T('lr_sec_nightd', '🌙 Night in detail'));
     const pctph = +night.pctph || 0, awake = +night.awake || 0;
     const deep = Math.max(0, 100 - awake);
-    s.appendChild(logReportRow(T('lr_nd_spent', 'Spent overnight'),
-      String(night.drop) + '% · ' + String(night.pctph) + T('lr_per_hour', '%/h') + ' · ' + logReportDur(night.dur_min), pctph > 0.8));
-    s.appendChild(logReportRow(T('lr_nd_deep', 'Deep sleep'), String(deep) + '%', deep < 70));
-    s.appendChild(logReportRow(T('lr_nd_awake', 'Awake share'), String(awake) + '%', awake > 15));
+    s.appendChild(logReportRow(shortNight ? T('lr_nd_spent_short', 'Spent over the stretch') : T('lr_nd_spent', 'Spent overnight'),
+      String(night.drop) + '% · ' + String(night.pctph) + T('lr_per_hour', '%/h') + ' · ' + logReportDur(night.dur_min), pctph > 0.8 && !shortNight));
+    s.appendChild(logReportRow(T('lr_nd_deep', 'Deep sleep'), String(deep) + '%', deep < 70 && !shortNight));
+    s.appendChild(logReportRow(T('lr_nd_awake', 'Awake share'), String(awake) + '%', awake > 15 && !shortNight));
     if ((+nightd.ma || 0) > 0)
       s.appendChild(logReportRow(T('lr_nd_ma', 'Average current at night'), String(nightd.ma) + ' mA'));
     if ((+nightd.radio_mib || 0) >= 0.5)
@@ -10283,7 +10348,9 @@ function logReportRender(d) {
       s.appendChild(logReportRow(T('lr_nd_temp', 'Peak temperatures'),
         logReportT('lr_nd_temp_fmt', 'CPU {cpu}° · skin {skin}°', { cpu: String(nightd.cpu_t), skin: String(nightd.skin_t) }), (+nightd.skin_t || 0) >= 40));
     const holder = d.wlive.length ? (d.wlive[0].pkg || d.wlive[0].tag) : (d.wl.length ? d.wl[0].pkg : '');
-    if (holder)
+    /* fix222: the holder list is capture-wide - naming it "at night" over a 40-minute
+       daytime stretch blamed SystemUI's AOD for a night that never happened. */
+    if (holder && !shortNight)
       s.appendChild(logReportRow(T('lr_nd_holder', 'Main holder at night'), holder, true));
     /* fix213 (audit 8.8): the microwake learner's long-term answer to "does my phone
        sleep at night?" - how rarely it stirs and for how long. A calm fact, not an
@@ -10295,7 +10362,14 @@ function logReportRender(d) {
     if (aod && (+aod.lit || 0) > 0)
       s.appendChild(logReportRow(T('lr_aod', 'Always-on display'),
         logReportT('lr_aod_fmt', 'panel lit in {lit} of {of} screen-off checks', { lit: String(aod.lit), of: String(aod.of) })));
-    if (pctph <= 0.8)
+    /* fix220: a stretch under two hours gets no verdict at all - one battery-percent step
+       over 40 minutes reads as 1.5 %/h and painted an "expensive night" over pure noise.
+       Say what it is and wait for a real night. */
+    if ((+night.dur_min || 0) < 120)
+      s.appendChild(logReportNote(logReportT('lr_nd_verdict_short',
+        'A short stretch: one battery-percent step over {min} already reads as {pct}%/h - the rate settles over a full night.',
+        { min: logReportDur(night.dur_min), pct: String(night.pctph) })));
+    else if (pctph <= 0.8)
       s.appendChild(logReportNote(logReportT('lr_nd_verdict_ok', 'An excellent night: {pct}%/h with {deep}% deep sleep.', { pct: String(night.pctph), deep: String(deep) })));
     else if (pctph <= 1.5)
       s.appendChild(logReportNote(logReportT('lr_nd_verdict_mid', 'A decent night, but the {awake}% awake share ate part of the gain.', { awake: String(awake) })));
@@ -10310,9 +10384,15 @@ function logReportRender(d) {
   if (d.profs.length >= 2) {
     const s = logReportSec(T('lr_sec_profiles', '⚖️ Profiles compared'));
     const rows = d.profs.map(function (p) {
+      /* fix222: "0.0 %/h" over a handful of minutes reads as a bug (the owner's Smart
+         stretch: 2 h 11 min on the profile, but nearly every screen-off minute sat on
+         the charger and was excluded). Under twenty counted minutes a rate cannot be
+         told apart from one battery-percent step - show a dash, not a number. */
       return [T('prof_' + p.name, p.name), logReportDur(p.onMin + p.offMin),
-              { txt: String(p.onP.toFixed(1)) + T('lr_per_hour', '%/h'), warn: false },
-              { txt: String(p.offP.toFixed(1)) + T('lr_per_hour', '%/h'), warn: p.offP > 0.8 }];
+              p.onMin >= 20 ? { txt: String(p.onP.toFixed(1)) + T('lr_per_hour', '%/h'), warn: false }
+                            : { txt: '—', warn: false },
+              p.offMin >= 20 ? { txt: String(p.offP.toFixed(1)) + T('lr_per_hour', '%/h'), warn: p.offP > 0.8 }
+                             : { txt: '—', warn: false }];
     });
     s.appendChild(logReportTable(
       [T('lr_th_profile', 'Profile'), T('lr_th_time', 'Time'),
@@ -10360,6 +10440,40 @@ function logReportRender(d) {
           return [a.pkg, String(a.frames), { txt: String(a.pct) + '%', warn: a.pct >= 6 }];
         }), [1, 2]));
     }
+    /* fix220: the wake intervals - unlock, lock, app open/close - called out on their own
+       row; they are the moments a hitch is actually felt, and a day can read fine while
+       they stutter (the ColorOS 17 Battery capture: 8.0% at the wakes, SystemUI 13.6%). */
+    if (jwake && (+jwake.wakes || 0) > 0) {
+      s.appendChild(logReportRow(T('lr_jwake', 'Unlocks & app opens'),
+        logReportT('lr_jwake_fmt', '{n} wakes · {pct}% janky (the day: {ord}%)', {
+          n: String(jwake.wakes), pct: String(jwake.pct), ord: String(jwake.ord) }),
+        (+jwake.pct || 0) >= 6 && (+jwake.pct || 0) >= (+jwake.ord || 0) + 0.8));
+      if (jwake.top)
+        s.appendChild(logReportNote(logReportT('lr_jwake_top',
+          'At the wakes the most janky: {pkg} ({pct}% of its wake frames).',
+          { pkg: String(jwake.top), pct: String(jwake.top_pct) })));
+    }
+    /* fix220: where the day's stutter sits - by moment (the wake phase, bluetooth audio,
+       ordinary use) and by the governor's own state. A janky LIGHT_IDLE next to a calm
+       MODERATE is the signature of ceilings too tight for the moment, not of a slow phone. */
+    if (d.jphases.length) {
+      s.appendChild(logReportNote(T('lr_jphase_head', 'By moment of the day:')));
+      s.appendChild(logReportTable(
+        [T('lr_th_phase', 'Phase'), T('lr_th_frames', 'Frames'), T('lr_th_jank', 'Jank'), T('lr_th_jps', 'Janky/s')],
+        d.jphases.map(function (p) {
+          return [T('lr_ph_' + p.phase, p.phase), String(p.frames),
+                  { txt: String(p.pct) + '%', warn: p.pct >= 6 }, String(p.jps)];
+        }), [2]));
+    }
+    if (d.jstates.length) {
+      s.appendChild(logReportNote(T('lr_jstate_head', 'By governor state:')));
+      s.appendChild(logReportTable(
+        [T('lr_th_state', 'ASB state'), T('lr_th_frames', 'Frames'), T('lr_th_jank', 'Jank'), T('lr_th_jps', 'Janky/s')],
+        d.jstates.map(function (p) {
+          return [String(p.state), String(p.frames),
+                  { txt: String(p.pct) + '%', warn: p.pct >= 6 }, String(p.jps)];
+        }), [2]));
+    }
     body.appendChild(s);
   }
   /* fix200: what the panel ran at, and what each rate cost. */
@@ -10393,8 +10507,12 @@ function logReportRender(d) {
       s.appendChild(logReportNote(T('lr_sm_fresh', 'Smart is still collecting its first days - verdicts appear as the evidence accumulates.')));
     /* fix206: the usage records behind the verdicts only meter while Smart is the active
        profile (asb_governor.c gates the meter on PROFILE_SMART). On a day spent in
-       Balanced the counters stand still - say so, or "0 verdicts" reads as broken. */
-    if (String(meta.profile || '') && String(meta.profile) !== 'smart')
+       Balanced the counters stand still - say so, or "0 verdicts" reads as broken.
+       fix222: but a capture that merely STARTED elsewhere and then ran Smart for two
+       hours (the owner's debug13: started on Battery, switched to Smart mid-day) is not
+       "a capture under a different profile" - say it only when Smart never really ran. */
+    const _smRan = d.profs.some(function (p) { return p.name === 'smart' && (p.onMin + p.offMin) >= 30; });
+    if (String(meta.profile || '') && String(meta.profile) !== 'smart' && !_smRan)
       s.appendChild(logReportNote(T('lr_sm_smart_only', 'Usage records learn only while the Smart profile is active - this capture ran under a different one.')));
     body.appendChild(s);
   }
@@ -10571,6 +10689,8 @@ function logReportRender(d) {
         lr_tip_awake_who: 'During idle the phone stayed awake {awake}% of the time - {who} is the main holder.',
         lr_tip_awake_alarm: 'During idle the phone stayed awake {awake}% of the time - the most frequent wakeup: {who}.',
         lr_tip_awake_hold: 'During idle the phone stayed awake {awake}% of the time - the most frequent holder: {who}.',
+        lr_tip_awake_aod: 'During idle the phone stayed awake {awake}% of the time - most likely the always-on display (the panel was lit in {lit} of {of} screen-off checks); turn AOD off in the display settings if you do not need it.',
+        lr_tip_sradio: 'Background mobile data used {mib} MiB with the screen off - try "{set}" in Settings: the modem idles lower while the screen is off.',
         lr_tip_crash: 'There are crashes involving ASB code - please send an asbdiag log to the developer.',
         lr_tip_crashes: '{n} native crashes during the capture - details are in the full report.',
         lr_tip_app: '{app} held the phone awake for {min} min - consider restricting its background activity.',
@@ -10578,6 +10698,8 @@ function logReportRender(d) {
         lr_tip_night_modem: 'Overnight the phone lost ~{pct}%/h - try "{set}" in Settings, it quiets the modem in your own sleeping hours.',
         lr_tip_jank_bad: 'About {pct}% of frames missed their deadline - stutter is visible. On Smart the learner is already testing the worst apps; heavy games do better on Performance.',
         lr_tip_jank_ok: 'Smoothness is excellent: only {pct}% of frames janky.',
+        lr_tip_jank_wake: 'Stutter concentrates at the wakes: {pct}% of frames at unlocks and app opens against {ord}% over the day; the most janky there is {who}.',
+        lr_tip_jank_wake_wh: 'Stutter concentrates at the wakes: {pct}% of frames at unlocks and app opens against {ord}% over the day.',
         lr_tip_audio: 'Speaker playback cost ~{pct}%/h. For long sessions, headphones or a gentler DSP preset are kinder to the battery.',
         lr_tip_prof_save: 'Your own measurements: {cheap} cost {x}%/h at the screen against {y}%/h on {busy} - for reading and music it is noticeably cheaper.',
         lr_tip_cost_ok: 'ASB itself is cheap: {ms} of CPU per hour.',
