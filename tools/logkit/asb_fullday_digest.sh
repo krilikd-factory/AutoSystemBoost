@@ -10,6 +10,7 @@
 # Output: TAB-separated lines, one fact per line:
 #   meta     elapsed_min=<n>  target_h=<n>  running=0|1  started=<YYYY-MM-DD HH:MM>  profile=<name>
 #   meta2    model=<m>  device=<codename>  soc=<soc>  rom=<build>  mod=<build>   (fix213)
+#   capture  dir=<absolute capture path>             (report.json export target, fix225)
 #   cover    on_min=<n>  off_min=<n>  on_pct=<n>
 #   drain    pctph=<x.x>  total_drop=<n>  hours=<x.x>  ma=<n>
 #   night    dur_min=<n>  drop=<n>  pctph=<x.x>  awake=<n>
@@ -48,7 +49,9 @@
 #   throttle clamps=<n>  owner=<dominant>  by=<owner:n,...>   (per-owner split, fix219)
 #   radio    mib=<x.x>
 #   hist     started=<...>  night=<x.x>  drain=<x.x>  jank=<x.x>  cpu=<n>  clamps=<n>
-#            (up to 3 earlier finished captures, newest first, fix213)
+#            device=<codename> rom=<build> mod=<build> elapsed=<n> on_pct=<n> off_min=<n>
+#            (up to 3 earlier finished captures, newest first; six-field legacy rows remain
+#             readable but are not comparable; context fields were added in fix225)
 #   error    no_capture                        (no capture directory found)
 #
 # Sections are emitted only when their source file exists, so a capture that just started
@@ -147,6 +150,9 @@ fi
 _prof="$(sed -n 's/^current_profile:[[:space:]]*//p' "$_DIR/env.txt" 2>/dev/null | head -n 1 | tr -cd 'a-z')"
 printf 'meta\telapsed_min=%s\ttarget_h=%s\trunning=%d\tstarted=%s\tprofile=%s\n' \
   "${_el:-0}" "${_th:-24}" "$_running" "${_started:-}" "${_prof:-}"
+# The structured report export belongs beside the capture, not in an unrelated global state
+# directory. This is a path, not device content; the WebUI shell-quotes it before writing.
+printf 'capture\tdir=%s\n' "$_DIR"
 
 # ----- meta2: device context (fix213, audit 8.1) ----------------------------------
 # The page used to be device-blind, so no advice could know the device it talked about.
@@ -163,14 +169,16 @@ fi
 # Same rule as the report writer: an interval counts as screen-on only when it started
 # with the screen on and is no longer than five minutes - while suspended the recorder
 # does not sample, so long gaps belong to screen-off time regardless.
+_h_cover_line=""
 if [ -s "$_DIR/battery_trace.txt" ]; then
-  awk -F'|' '$1 ~ /^[0-9]+$/ {
+  _h_cover_line="$(awk -F'|' '$1 ~ /^[0-9]+$/ {
       if (pe != "") { dt = $1 - pe; if (dt > 300 || ps != "1") off += dt; else on += dt }
       pe = $1; ps = $5
     } END {
       t = on + off
       if (t >= 600) printf "cover\ton_min=%d\toff_min=%d\ton_pct=%d\n", on / 60, off / 60, 100 * on / t
-    }' "$_DIR/battery_trace.txt" 2>/dev/null
+    }' "$_DIR/battery_trace.txt" 2>/dev/null)"
+  [ -n "$_h_cover_line" ] && printf '%s\n' "$_h_cover_line"
 fi
 
 # ----- drain (discharging phases only) --------------------------------------
@@ -770,6 +778,10 @@ _h_dp="$(_hkv "${_h_drain_line:-}" drain pctph)"
 _h_np="$(_hkv "${_h_night_line:-}" night pctph)"
 _h_cp="$(_hkv "${_h_thermal_line:-}" thermal cpu)"
 _h_tc="$(_hkv "${_h_throttle_line:-}" throttle clamps)"
+_h_on="$(_hkv "${_h_cover_line:-}" cover on_pct)"
+_h_off="$(_hkv "${_h_cover_line:-}" cover off_min)"
+_h_env() { sed -n "s/^$1:[[:space:]]*//p" "$_DIR/env.txt" 2>/dev/null | head -n 1 | tr -d '\t'; }
+_h_device="$(_h_env device)"; _h_rom="$(_h_env oem_build)"; _h_mod="$(_h_env module_version)"
 _HF="$_STATE/report_history.tsv"
 if [ -s "$_HF" ]; then
   # Up to three earlier captures, newest first - enough for "was -> became" without a
@@ -779,15 +791,16 @@ if [ -s "$_HF" ]; then
     END {
       for (i = n; i >= 1 && s < 3; i--) {
         split(r[i], f, "\t"); s++
-        printf "hist\tstarted=%s\tnight=%s\tdrain=%s\tjank=%s\tcpu=%s\tclamps=%s\n", \
-          f[1], f[2], f[3], f[4], f[5], f[6]
+        printf "hist\tstarted=%s\tnight=%s\tdrain=%s\tjank=%s\tcpu=%s\tclamps=%s\tdevice=%s\trom=%s\tmod=%s\telapsed=%s\ton_pct=%s\toff_min=%s\n", \
+          f[1], f[2], f[3], f[4], f[5], f[6], f[7], f[8], f[9], f[10], f[11], f[12]
       }
     }' "$_HF" 2>/dev/null
 fi
 if [ "$_running" = 0 ] && [ -n "${_started:-}" ] && { [ -n "$_h_dp" ] || [ -n "$_h_np" ]; }; then
   if mkdir -p "$_STATE" 2>/dev/null && touch "$_HF" 2>/dev/null; then
     { awk -F'\t' -v k="$_started" '$1 != k' "$_HF" 2>/dev/null
-      printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$_started" "${_h_np:--}" "${_h_dp:--}" "${_jp:--}" "${_h_cp:--}" "${_h_tc:--}"
+      printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$_started" "${_h_np:--}" "${_h_dp:--}" "${_jp:--}" "${_h_cp:--}" "${_h_tc:--}" \
+        "${_h_device:--}" "${_h_rom:--}" "${_h_mod:--}" "${_el:-0}" "${_h_on:--}" "${_h_off:--}"
     } | tail -n 12 > "$_HF.tmp" 2>/dev/null && mv "$_HF.tmp" "$_HF" 2>/dev/null || rm -f "$_HF.tmp"
   fi
 fi
