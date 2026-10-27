@@ -33,6 +33,7 @@ asb_resolve_moddir() {
 
 MODDIR="$(asb_resolve_moddir "$MODDIR")"
 [ -r "$MODDIR/runtime/asb_arbiter.sh" ] && . "$MODDIR/runtime/asb_arbiter.sh"
+[ -r "$MODDIR/runtime/asb_device_bounds.sh" ] && . "$MODDIR/runtime/asb_device_bounds.sh"
 
 has() { command -v "$1" >/dev/null 2>&1; }
 readf() { [ -r "$1" ] && cat "$1" 2>/dev/null; }
@@ -774,23 +775,16 @@ asb_load_profile() {
   # six cores rather than two, which is the heat those users reported and the reason OP15
   # and Ace 6 owners saw nothing wrong.
   if [ "$(grep -E '^[[:space:]]*device_bounds_override=' "$MODDIR/config/governor.conf" 2>/dev/null \
-          | head -1 | sed 's/.*=//' | tr -d ' \r')" = "1" ] \
-     && [ -r /data/adb/asb/device_bounds.env ] \
-     && { grep -q '^confidence=high[[:space:]]*$' /data/adb/asb/device_bounds.env 2>/dev/null \
-          || grep -q '^# confidence=high[[:space:]]' /data/adb/asb/device_bounds.env 2>/dev/null; }; then
-    # Unknown/low-confidence synthesis never reaches the shell writer. Accept the legacy
-    # generated comment for installed fix213+ devices and the schema-2 key for new ones.
-    # Only KEY=number lines: sourcing the file blindly would execute arbitrary content.
-    while IFS='=' read -r _bk _bv; do
-      case "$_bk" in
-        \#*|'') continue ;;
-        *_CPU_MAX_*|*_CPU_CAP_*|*_CPU_MIN_*|*_GPU_*) : ;;
-        *) continue ;;
-      esac
-      case "$_bv" in ''|*[!0-9]*) continue ;; esac
-      eval "$_bk=\$_bv"
-      export "$_bk"
-    done < /data/adb/asb/device_bounds.env
+          | head -1 | sed 's/.*=//' | tr -d ' \r')" = "1" ]; then
+    # Schema, current build fingerprint and the measured 2/3/4-policy signature must all
+    # match before any value reaches a profile. The helper assigns an explicit allow-list:
+    # device_bounds.env is data, never shell code, and stale files remain untouched for diag.
+    if command -v asb_device_bounds_import >/dev/null 2>&1; then
+      asb_device_bounds_import /data/adb/asb/device_bounds.env || \
+        asb_log "device_bounds: shell import ${ASB_BOUNDS_STATUS:-skipped}/${ASB_BOUNDS_REASON:-unknown}; compiled profile defaults in force"
+    else
+      asb_log "device_bounds: shell validator unavailable; compiled profile defaults in force"
+    fi
   fi
   if [ -f "$MODDIR/profiles/$_SHELL_BOOT_PROFILE.sh" ]; then
     . "$MODDIR/profiles/$_SHELL_BOOT_PROFILE.sh"
