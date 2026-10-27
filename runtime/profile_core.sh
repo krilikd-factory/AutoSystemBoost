@@ -142,32 +142,10 @@ asb_cpu_cluster_init() {
   [ "$LITTLE_END" -ge "$CPU_MAX" ] 2>/dev/null && LITTLE_END=$((CPU_MAX>1 ? CPU_MAX-1 : CPU_MAX))
   FG_CPUS="0-$CPU_MAX"
   BG_CPUS="0-$LITTLE_END"
-  # Battery keeps the foreground off the PRIME cluster only (fix103).
-  #
-  # It used to get BG_CPUS - "the first cpufreq policy". On OP13/OP15 that is cpus 0-5, six
-  # full cores, so excluding the prime pair was the whole effect. On OP12 / Ace 3 / Ace 5
-  # (SM8650: policies 0/2/5/7) the first policy is the two A520 efficiency cores, and the
-  # app on screen was pinned to cpus 0-1 - the "phone is unusable in Battery" report, on
-  # exactly the parts with four clusters. The prime cluster is found by its hardware
-  # ceiling, like everywhere else in ASB, and the foreground gets everything below it.
-  if [ "$PROFILE" = "battery" ]; then
-    FG_CPUS="$BG_CPUS"
-    _pr_hi=0; _pr_first=""
-    for _pp in $_cpu_sys/cpufreq/policy*; do
-      _ph="$(cat "$_pp/cpuinfo_max_freq" 2>/dev/null)"
-      case "$_ph" in ''|*[!0-9]*) continue ;; esac
-      if [ "$_ph" -gt "$_pr_hi" ]; then
-        _pr_hi="$_ph"
-        _pr_first="$(tr ' ' '\n' < "$_pp/related_cpus" 2>/dev/null | grep -m1 '^[0-9][0-9]*$')"
-      fi
-    done
-    case "$_pr_first" in
-      ''|*[!0-9]*) : ;;
-      *) if [ "$_pr_first" -gt "$((LITTLE_END + 1))" ] 2>/dev/null && [ "$_pr_first" -ge 4 ]; then
-           FG_CPUS="0-$((_pr_first - 1))"
-         fi ;;
-    esac
-  fi
+  # Foreground and top-app may use every present core on every profile (fix233).
+  # Battery still owns lower frequency/uclamp ceilings and BG_CPUS keeps background work
+  # off the faster clusters. Pinning its visible apps below the prime cluster made the
+  # unlock/launch lift raise a prime ceiling that launcher/SystemUI could never use.
 }
 
 asb_pick_nearest_freq() {
