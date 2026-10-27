@@ -7657,10 +7657,10 @@ echo "PASS session lifecycle: the boot session has a start and its sentinels, sc
 t_device_bounds_confidence_runtime() (
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-fail() { echo "FAIL device bounds confidence: $*" >&2; exit 1; }
+fail() { echo "FAIL device bounds validation: $*" >&2; exit 1; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 
-# Exercise the real native loader with its persistent state path redirected into the fixture.
+# Exercise the real native loader with persistent state and Android property access redirected.
 CC=""; for c in ${HOST_CC:-} gcc clang cc; do command -v "$c" >/dev/null 2>&1 && { CC="$c"; break; }; done
 [ -n "$CC" ] || fail "no host C compiler"
 sed "s#\"/data/adb/asb/device_bounds.env\"#\"$T/device_bounds.env\"#" \
@@ -7668,10 +7668,17 @@ sed "s#\"/data/adb/asb/device_bounds.env\"#\"$T/device_bounds.env\"#" \
 cat > "$T/t.c" <<'X'
 #include <stdio.h>
 #include <string.h>
+static int test_bounds_getprop(const char *key, char *value) {
+    if (strcmp(key, "ro.build.fingerprint") != 0) { value[0] = '\0'; return 0; }
+    strcpy(value, "OnePlus/test/user");
+    return (int)strlen(value);
+}
+#define ASB_DEVICE_BOUNDS_PROPERTY_GET test_bounds_getprop
 #include "asb_fsm_test.h"
 asb_runtime_config_t g_asb_cfg;
 static asb_profile_bounds_t defs[3];
-static int run_case(const char *text, int enabled, int expect_n, int expect_value) {
+static int run_case(const char *text, int enabled, int expect_n, int expect_value,
+                    const char *expect_status, const char *expect_reason) {
     FILE *f = fopen(ASB_DEVICE_BOUNDS_FILE, "w");
     if (!f) return 90;
     fputs(text, f); fclose(f);
@@ -7681,37 +7688,62 @@ static int run_case(const char *text, int enabled, int expect_n, int expect_valu
     int got = g_profile_bounds[PROFILE_BALANCED].ceil.cpu_max[0];
     if (n != expect_n) { printf("applied=%d want=%d\n", n, expect_n); return 1; }
     if (got != expect_value) { printf("value=%d want=%d (before=%d)\n", got, expect_value, before); return 2; }
+    if (strcmp(g_device_bounds_status, expect_status) || strcmp(g_device_bounds_reason, expect_reason)) {
+        printf("result=%s/%s want=%s/%s\n", g_device_bounds_status, g_device_bounds_reason,
+               expect_status, expect_reason); return 3;
+    }
     return 0;
 }
+#define VALID_META "schema=2\nconfidence=high\nsource=measured\npolicy_count=2\n" \
+    "cluster_signature=0:3000000>none:0>6:4000000\nfingerprint=OnePlus/test/user\n"
 int main(void) {
     memcpy(defs, g_profile_bounds, sizeof(defs));
+    g_cpu_policy_count = 2;
+    g_cpu_all_count = 2;
+    g_cpu_policy_ids[0] = 0; g_cpu_policy_ids[1] = 6; g_cpu_policy_ids[2] = -1;
+    g_cpu_slot_hwmax[0] = 3000000; g_cpu_slot_hwmax[1] = 4000000; g_cpu_slot_hwmax[2] = 0;
     int stock = defs[PROFILE_BALANCED].ceil.cpu_max[0];
     int rc = 0;
-    rc |= run_case("schema=2\nconfidence=high\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 1, 2340000);
-    rc |= run_case("schema=2\nconfidence=low\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 0, stock);
-    rc |= run_case("schema=2\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 0, stock);
-    rc |= run_case("# confidence=high  topology=2c\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 1, 2340000);
-    rc |= run_case("schema=2\nconfidence=high\nBALANCED_CPU_MAX_LITTLE=2340000\n", 0, 0, stock);
+    rc |= run_case(VALID_META "BALANCED_CPU_MAX_LITTLE=2340000\n", 1, 1, 2340000, "applied", "ok");
+    rc |= run_case("schema=2\nconfidence=low\nsource=measured\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 0, stock, "skipped", "confidence");
+    rc |= run_case("schema=2\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 0, stock, "skipped", "confidence");
+    rc |= run_case("# confidence=high  topology=2c\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 0, stock, "skipped", "schema");
+    rc |= run_case(VALID_META "BALANCED_CPU_MAX_LITTLE=2340000\n", 0, 0, stock, "disabled", "off");
+    rc |= run_case("schema=2\nconfidence=high\nsource=measured\nBALANCED_CPU_MAX_LITTLE=2340000\npolicy_count=2\ncluster_signature=0:3000000>none:0>6:4000000\nfingerprint=OnePlus/old/user\n", 1, 0, stock, "stale", "fingerprint");
+    rc |= run_case("schema=2\nconfidence=high\nsource=measured\npolicy_count=3\ncluster_signature=0:3000000>none:0>6:4000000\nfingerprint=OnePlus/test/user\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 0, stock, "stale", "policy_count");
+    rc |= run_case("schema=2\nconfidence=high\nsource=measured\npolicy_count=2\ncluster_signature=0:2995200>none:0>6:4000000\nfingerprint=OnePlus/test/user\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 0, stock, "stale", "cluster_signature");
+    rc |= run_case("schema=2\nconfidence=high\npolicy_count=2\ncluster_signature=0:3000000>none:0>6:4000000\nfingerprint=OnePlus/test/user\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 0, stock, "skipped", "source");
     return rc;
 }
 X
 "$CC" -O1 -I"$T" -I"$ROOT/src" -o "$T/t" "$T/t.c" -lm 2>"$T/cc.log" || { cat "$T/cc.log" >&2; fail "native harness did not compile"; }
-"$T/t" || fail "native high/low/unknown/legacy/disabled behavior diverged"
+"$T/t" || fail "native provenance/fingerprint/policy/signature behavior diverged"
 
-# Run the actual shell import block, not a reimplementation of its filter.
-awk '/^  if \[ "\$\(grep -E .*device_bounds_override=/{p=1} p{print} p && /^  fi$/{exit}' \
-  "$ROOT/runtime/profile_core.sh" | sed 's#/data/adb/asb/device_bounds.env#"$BOUNDS"#g' > "$T/import.sh"
-[ -s "$T/import.sh" ] || fail "shell import block was not extracted"
-mkdir -p "$T/mod/config"
-printf 'device_bounds_override=1\n' > "$T/mod/config/governor.conf"
+# Exercise the actual shell validator/importer against a live-looking sysfs fixture.
+mkdir -p "$T/bin" "$T/sys/cpufreq/policy0" "$T/sys/cpufreq/policy6"
+printf '3000000\n' > "$T/sys/cpufreq/policy0/cpuinfo_max_freq"
+printf '4000000\n' > "$T/sys/cpufreq/policy6/cpuinfo_max_freq"
+cat > "$T/bin/getprop" <<'X'
+#!/bin/sh
+[ "${1:-}" = ro.build.fingerprint ] && printf '%s\n' 'OnePlus/test/user'
+X
+chmod +x "$T/bin/getprop"
 shell_value() {
   printf '%s' "$2" > "$T/shell_bounds.env"
-  ( MODDIR="$T/mod" BOUNDS="$T/shell_bounds.env" . "$T/import.sh"; printf '%s' "${BALANCED_CPU_MAX_LITTLE:-stock}" )
+  ( PATH="$T/bin:$PATH" ASB_CPU_SYSFS="$T/sys"
+    . "$ROOT/runtime/asb_device_bounds.sh"
+    asb_device_bounds_import "$T/shell_bounds.env" >/dev/null 2>&1 || true
+    printf '%s' "${BALANCED_CPU_MAX_LITTLE:-stock}" )
 }
-[ "$(shell_value high 'schema=2
+shell_meta='schema=2
 confidence=high
-BALANCED_CPU_MAX_LITTLE=2340000
-')" = 2340000 ] || fail "shell rejected schema-2 high confidence"
+source=measured
+policy_count=2
+cluster_signature=0:3000000>none:0>6:4000000
+fingerprint=OnePlus/test/user
+'
+[ "$(shell_value high "$shell_meta"'BALANCED_CPU_MAX_LITTLE=2340000
+')" = 2340000 ] || fail "shell rejected current valid bounds"
 [ "$(shell_value low 'schema=2
 confidence=low
 BALANCED_CPU_MAX_LITTLE=2340000
@@ -7721,16 +7753,41 @@ BALANCED_CPU_MAX_LITTLE=2340000
 ')" = stock ] || fail "shell accepted unknown confidence"
 [ "$(shell_value legacy '# confidence=high  topology=2c
 BALANCED_CPU_MAX_LITTLE=2340000
-')" = 2340000 ] || fail "shell rejected legacy high confidence"
+')" = stock ] || fail "shell accepted legacy file without provenance"
+[ "$(shell_value stale_fp 'schema=2
+confidence=high
+source=measured
+policy_count=2
+cluster_signature=0:3000000>none:0>6:4000000
+fingerprint=OnePlus/old/user
+BALANCED_CPU_MAX_LITTLE=2340000
+')" = stock ] || fail "shell accepted stale fingerprint"
+[ "$(shell_value stale_count 'schema=2
+confidence=high
+source=measured
+policy_count=3
+cluster_signature=0:3000000>none:0>6:4000000
+fingerprint=OnePlus/test/user
+BALANCED_CPU_MAX_LITTLE=2340000
+')" = stock ] || fail "shell accepted changed policy count"
+[ "$(shell_value stale_hw 'schema=2
+confidence=high
+source=measured
+policy_count=2
+cluster_signature=0:2995200>none:0>6:4000000
+fingerprint=OnePlus/test/user
+BALANCED_CPU_MAX_LITTLE=2340000
+')" = stock ] || fail "shell accepted changed hw_max"
+! grep -qE '(^|[[:space:];])eval([[:space:]]|$)' "$ROOT/runtime/asb_device_bounds.sh" || fail "shell importer still uses eval"
 
-# Synthesis emits useful provenance, but emits frequencies only for resolved topologies.
+# Synthesis emits useful provenance, but frequencies only for resolved 2/3/4-policy topologies.
 sed -e "s#^CAPS=.*#CAPS=\"$T/device_caps.env\"#" \
     -e "s#^OUT=.*#OUT=\"$T/synthesized.env\"#" \
     -e "s#^ASB_DIR=.*#ASB_DIR=\"$T\"#" \
     "$ROOT/tools/asb_synthesize_bounds.sh" > "$T/synthesize.sh"
 cat > "$T/device_caps.env" <<'X'
 cpu_policy_count=2
-cpu_policy_list=0 6
+cpu_policy_list=6 0
 cpu_policy0_hwmax=3000000
 cpu_policy6_hwmax=4000000
 fingerprint=OnePlus/test/user
@@ -7740,7 +7797,22 @@ grep -q '^schema=2$' "$T/synthesized.env" || fail "schema metadata missing"
 grep -q '^confidence=high$' "$T/synthesized.env" || fail "resolved topology is not high confidence"
 grep -q '^source=measured$' "$T/synthesized.env" || fail "measured source missing"
 grep -q '^fingerprint=OnePlus/test/user$' "$T/synthesized.env" || fail "fingerprint missing"
+grep -q '^cluster_signature=0:3000000>none:0>6:4000000$' "$T/synthesized.env" || fail "signature did not use hardware ordering"
 grep -q '^BALANCED_CPU_MAX_LITTLE=[0-9]' "$T/synthesized.env" || fail "high synthesis emitted no bounds"
+cat > "$T/device_caps.env" <<'X'
+cpu_policy_count=4
+cpu_policy_list=0 2 5 7
+cpu_policy0_hwmax=2000000
+cpu_policy2_hwmax=2800000
+cpu_policy5_hwmax=3000000
+cpu_policy7_hwmax=3300000
+fingerprint=OnePlus/test/user
+X
+sh "$T/synthesize.sh" >/dev/null
+grep -q '^confidence=high$' "$T/synthesized.env" || fail "4-policy topology was rejected"
+grep -q '^cluster_signature=0:2000000>5:3000000>7:3300000$' "$T/synthesized.env" || fail "4-policy strongest-middle signature wrong"
+grep -q '^BALANCED_CPU_MAX_MID=[0-9]' "$T/synthesized.env" || fail "4-policy mid bounds missing"
+grep -q '^BATTERY_CPU_MAX_PRIME=[0-9]' "$T/synthesized.env" || fail "4-policy prime bound missing"
 cat > "$T/device_caps.env" <<'X'
 cpu_policy_count=1
 cpu_policy_list=0
@@ -7748,9 +7820,26 @@ cpu_policy0_hwmax=3000000
 fingerprint=OnePlus/test/user
 X
 sh "$T/synthesize.sh" >/dev/null
-grep -q '^confidence=low$' "$T/synthesized.env" || fail "unresolved topology is not low confidence"
-! grep -q '^BALANCED_CPU_MAX_LITTLE=' "$T/synthesized.env" || fail "low synthesis emitted an override"
-echo "PASS device bounds confidence: native/shell accept only explicit high; synthesis provenance and low fail-closed"
+grep -q '^confidence=low$' "$T/synthesized.env" || fail "1-policy topology is not low confidence"
+! grep -q '^BALANCED_CPU_MAX_LITTLE=' "$T/synthesized.env" || fail "1-policy synthesis emitted an override"
+cat > "$T/device_caps.env" <<'X'
+cpu_policy_count=5
+cpu_policy_list=0 2 4 5 7
+cpu_policy0_hwmax=1800000
+cpu_policy2_hwmax=2400000
+cpu_policy4_hwmax=2800000
+cpu_policy5_hwmax=3000000
+cpu_policy7_hwmax=3300000
+fingerprint=OnePlus/test/user
+X
+sh "$T/synthesize.sh" >/dev/null
+grep -q '^confidence=low$' "$T/synthesized.env" || fail "5-policy topology is not low confidence"
+grep -q '^policy_count=5$' "$T/synthesized.env" || fail "5-policy provenance missing"
+grep -q '^# confidence=low  topology=unsupported' "$T/synthesized.env" || fail "5-policy topology is not marked unsupported"
+! grep -qE '^(BATTERY|BALANCED|PERFORMANCE)_CPU_(MAX|CAP|MIN)_' "$T/synthesized.env" || fail "5-policy synthesis emitted an override"
+grep -q 'bounds status.*applied/stale/skipped' "$ROOT/tools/asb_diag.sh" || fail "diag lacks explicit bounds status"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "diag copies diverged"
+echo "PASS device bounds validation: current identity/topology required; stale and 5-policy files fail closed; no eval"
 )
 
 t_net_route_watch_dormant_runtime() (
