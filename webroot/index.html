@@ -1732,13 +1732,18 @@ html[data-asb-theme="light"] .lgr-hero { background: #f7f9fa; }
 .smart-banner-pill.we { color: #9ef2e4; background: rgba(0,225,200,.10); border-color: rgba(0,225,200,.28); }
 html[data-asb-theme="light"] .smart-banner-pill { background: rgba(21,35,32,.05); border-color: rgba(21,35,32,.12); }
 html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background: rgba(0,124,99,.08); border-color: rgba(0,124,99,.24); }
-.smart-banner-value.basis-warn { color: #f5c26b; }
-.smart-banner-value.basis-veto { color: #fca5a5; }
-.live-page .smart-banner-value.heat-warm { color: #f5c26b; }
-/* System load share (fix189): coloured like the temperatures. */
+.smart-banner-value.basis-warn { color: var(--bal); }
+.smart-banner-value.basis-veto { color: var(--perf); }
+.live-page .smart-banner-value.heat-warm { color: var(--bal); }
+/* One semantic scale for Stock system load and Smart app load. Direct classes belong to
+ * bnApp; descendant classes belong to lvLoadShare(). Warm-up/unknown stay neutral. */
 .smart-banner-value .load-pct { font-weight: 700; }
+.smart-banner-value:is(.load-low,.load-mid,.load-high) { font-weight: 700; }
+.smart-banner-value.load-low,
 .smart-banner-value .load-low { color: var(--bat); }
-.smart-banner-value .load-mid { color: #f5c26b; }
+.smart-banner-value.load-mid,
+.smart-banner-value .load-mid { color: var(--bal); }
+.smart-banner-value.load-high,
 .smart-banner-value .load-high { color: var(--perf); }
 .live-page .live-metrics { gap: 10px; }
 .live-page .live-row { gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -3310,7 +3315,12 @@ html[data-asb-theme="light"] .smart-drain-more { color:rgba(0,99,79,.55) !import
 html[data-asb-theme="light"] .smart-banner-value.basis-warn { color:#8a5700 !important; }
 html[data-asb-theme="light"] .smart-banner-value.basis-veto { color:#b42318 !important; }
 html[data-asb-theme="light"] .live-page .smart-banner-value.heat-warm { color:#8a5700 !important; }
+html[data-asb-theme="light"] .smart-banner-value.load-low,
+html[data-asb-theme="light"] .smart-banner-value .load-low { color:#08753c !important; }
+html[data-asb-theme="light"] .smart-banner-value.load-mid,
 html[data-asb-theme="light"] .smart-banner-value .load-mid { color:#8a5700 !important; }
+html[data-asb-theme="light"] .smart-banner-value.load-high,
+html[data-asb-theme="light"] .smart-banner-value .load-high { color:#b42318 !important; }
 html[data-asb-theme="light"] .live-drain-block { background:#f7f9fa !important; border-color:var(--border) !important; }
 html[data-asb-theme="light"] .live-drain-cmp { background:#f7f9fa !important; }
 html[data-asb-theme="light"] .live-drain-ico { color:#007c63 !important; background:rgba(0,124,99,.10) !important; }
@@ -3825,6 +3835,43 @@ html[data-asb-glass="1"][data-asb-theme="light"] .app-name {
     linear-gradient(180deg,#00866b 0%,#007c63 58%,#005f4c 100%) !important;
   background-size:300% 100%,100% 100% !important; -webkit-background-clip:text !important; background-clip:text !important;
 }
+
+/* Glass changes the material, never the meaning of a reading. These explicit semantic
+ * rules come after both neutral material layers so cooling, warning and high load cannot
+ * collapse to the default text colour in either palette. */
+html[data-asb-glass="1"] .smart-banner-value:is(.cap-raised,.load-low),
+html[data-asb-glass="1"] .smart-banner-value .load-low { color:var(--bat) !important; }
+html[data-asb-glass="1"] .smart-banner-value:is(.basis-warn,.heat-warm,.load-mid),
+html[data-asb-glass="1"] .smart-banner-value .load-mid { color:var(--bal) !important; }
+html[data-asb-glass="1"] .smart-banner-value:is(.cap-clamp,.basis-veto,.load-high),
+html[data-asb-glass="1"] .smart-banner-value .load-high { color:var(--perf) !important; }
+
+/* Category identity remains visible through the glass: a tinted translucent body and edge,
+ * a stronger tonal icon pill, and the existing category progress hue. Titles and descriptions
+ * stay neutral for readability; blur, geometry and the six-category layout are unchanged. */
+html[data-asb-glass="1"] .cfg-tile[class*="cat-"] {
+  background:linear-gradient(145deg,color-mix(in srgb,var(--cat) 28%,transparent),color-mix(in srgb,var(--cat) 10%,transparent) 58%,transparent),rgba(16,23,20,.86) !important;
+  border-color:color-mix(in srgb,var(--cat) 48%,var(--border)) !important;
+  box-shadow:0 14px 34px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.16),inset 0 0 0 1px color-mix(in srgb,var(--cat) 8%,transparent),0 10px 24px -16px color-mix(in srgb,var(--cat) 75%,transparent) !important;
+}
+html[data-asb-glass="1"] .cfg-tile[class*="cat-"] .cfg-tile-ico {
+  color:var(--cat); border-color:color-mix(in srgb,var(--cat) 52%,transparent);
+  background:color-mix(in srgb,var(--cat) 20%,rgba(16,23,20,.64));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 5px 16px -10px color-mix(in srgb,var(--cat) 75%,transparent);
+}
+html[data-asb-glass="1"] .cfg-tile[class*="cat-"] .cfg-tile-count { color:color-mix(in srgb,var(--cat) 72%,var(--text)); }
+html[data-asb-glass="1"] .cfg-tile[class*="cat-"] .cfg-tile-count.has-on { color:var(--cat); }
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-tile[class*="cat-"] {
+  background:linear-gradient(145deg,color-mix(in srgb,var(--cat) 17%,transparent),color-mix(in srgb,var(--cat) 7%,transparent) 60%,transparent),rgba(255,255,255,.58) !important;
+  border-color:color-mix(in srgb,var(--cat) 38%,var(--border)) !important;
+  box-shadow:0 14px 34px rgba(20,50,42,.14),inset 0 1px 0 rgba(255,255,255,.78),inset 0 0 0 1px color-mix(in srgb,var(--cat) 5%,transparent),0 10px 22px -16px color-mix(in srgb,var(--cat) 45%,transparent) !important;
+}
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-tile[class*="cat-"] .cfg-tile-ico {
+  color:var(--cat); border-color:color-mix(in srgb,var(--cat) 38%,transparent);
+  background:color-mix(in srgb,var(--cat) 12%,rgba(255,255,255,.68));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.72),0 5px 14px -10px color-mix(in srgb,var(--cat) 38%,transparent);
+}
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-tile[class*="cat-"] :is(.cfg-tile-count,.cfg-tile-count.has-on) { color:var(--cat) !important; }
 
 /* Device font (fix168, test variant): the variant build sets data-asb-font="device" on <html>,
  * and every text - the monospace labels included - follows the font the phone is set to.
@@ -10310,7 +10357,10 @@ function logReportAnalyze(d) {
     .map(function (x) { return x.tip; });
   const selected = {};
   actions.forEach(function (t) { selected[t.key] = true; });
-  const observations = logReportTips(d, true).filter(function (t) { return !selected[t.key]; }).slice(0, 6);
+  const observations = logReportTips(d, true).filter(function (t) { return !selected[t.key]; })
+    .map(function (t, i) { return { tip: t, weight: weights[t.key] || 0, order: i }; })
+    .sort(function (a, b) { return b.weight - a.weight || a.order - b.order; }).slice(0, 6)
+    .map(function (x) { return x.tip; });
   return { schema: 2, quality: quality, scenario: scenario, scenario_family: scenarioFamily,
     verdicts: verdicts, chains: chains.slice(0, 3), actions: actions, observations: observations,
     asb_overhead: { native_cpu_ms_h: cost ? +cost.cpu_msh || 0 : null,
@@ -13053,7 +13103,11 @@ async function pollLive(visible) {
           }
           _el('bnConf').textContent = Math.round(conf / 10) + '%';
           _el('bnAlpha').textContent = Math.round(alpha / 10) + '%';
-          _el('bnApp').textContent = warm ? '\u2026' : T('lv_app_' + appH, appNames[appH] || '?');
+          const appEl = _el('bnApp');
+          appEl.textContent = warm ? '\u2026' : T('lv_app_' + appH, appNames[appH] || '?');
+          const appLoadCls = (!warm && appH >= 0 && appH <= 4)
+            ? (appH <= 1 ? ' load-low' : (appH === 2 ? ' load-mid' : ' load-high')) : '';
+          appEl.className = 'smart-banner-value' + appLoadCls;
 
           // Second row: four more Smart-owned readings, so the card is two full rows instead
           // of one row plus an orphan hanging under Bucket. The session count sits in the
