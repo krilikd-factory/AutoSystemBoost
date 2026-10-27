@@ -4488,6 +4488,7 @@ asb_state_sampler.sh
 asb_drain_analyzer.sh
 asb_vendor_thermal_probe.sh
 asb_kernel_uv_coexist.sh
+asb_device_info.sh
 asb_discover.sh
 asb_synthesize_bounds.sh
 asb_install_probe.sh
@@ -4514,6 +4515,7 @@ EOF
 	  chmod 0755 "$MODPATH/tools/asb_sysui_watch.sh" 2>/dev/null || true
 	  chmod 0755 "$MODPATH/tools/asb_config_backup.sh" 2>/dev/null || true
 	  chmod 0755 "$MODPATH/tools/asb_kernel_uv_coexist.sh" 2>/dev/null || true
+	  chmod 0755 "$MODPATH/tools/asb_device_info.sh" 2>/dev/null || true
 	fi
 # asb_tools_prune_end
 
