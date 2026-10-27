@@ -1,21 +1,6 @@
 #!/system/bin/sh
 # smart_dynamic_tune.sh — Smart Mode runtime tuner.
 
-# Legitimate foreground value to restore when the live one is a transient "max":
-# the last ordinary screen-on value seen, else the active profile's own value
-# (Smart blends Battery 55 and Balanced 70, so it falls back to the lower 55).
-_ucfg_fallback() {
-  _ucfb="$(cat /data/adb/asb/ucfg_last_good 2>/dev/null | tr -dc '0-9')"
-  if [ -n "$_ucfb" ] && [ "$_ucfb" -gt 35 ] 2>/dev/null && [ "$_ucfb" -lt 100 ] 2>/dev/null; then
-    echo "$_ucfb"; return 0
-  fi
-  case "$(cat /data/adb/modules/AutoSystemBoost/current_profile 2>/dev/null | tr -d ' \r\n')" in
-    performance) echo 88 ;;
-    balanced)    echo 70 ;;
-    *)           echo 55 ;;
-  esac
-}
-
 set -u
 
 # Config reader. The Wi-Fi power-save block below called _cfg, which this script never
@@ -113,7 +98,7 @@ if [ "$_cam_guard" = "0" ]; then
     #
     # Only for profiles that left it at auto: battery already forces it on and
     # performance deliberately forces it off, and neither choice should be overridden
-    # from here. Restored on wake by the branch below, the same way the uclamp tier is.
+    # from here. Restored on wake by the branch below, using its own marker and baseline.
     # Driven by the wifi_powersave tweak now, not by profile alone.
     #
     #   off        - do nothing, the shipped default
@@ -160,48 +145,6 @@ if [ "$_cam_guard" = "0" ]; then
         writef "$_wm_node" 10
       fi
     fi
-    # Foreground uclamp tier follows the screen, like the background tier already does.
-    #
-    # With the screen off there is no foreground app by definition - whatever is running
-    # is background or system work. The tier nevertheless keeps its profile value (59 on
-    # this device), so anything the scheduler places there may ask for 59% of peak while
-    # nobody is looking.
-    #
-    # The FSM owns the background tier but has no field for foreground, so this is the
-    # cheapest correct place: the tuner already knows the screen state and already writes
-    # per-screen values. 35 keeps a real working floor - the empty-uclamp defect is not
-    # repeated - and the profile value is restored the moment the screen comes back.
-    _ucfg_node=/dev/cpuctl/foreground/cpu.uclamp.max
-    if [ -w "$_ucfg_node" ]; then
-      # The kernel prints "max" for 100, and "max" has no digits: the old cut/tr turned it
-      # into an empty string and then 0, so a tier sitting at max when the screen went off
-      # (the camera guard leaves it there during face unlock) was judged "nothing to lower"
-      # and kept uncapped all night. Read "max" as 100 so it is lowered like any other.
-      _ucfg_raw="$(cat "$_ucfg_node" 2>/dev/null | tr -d ' \r\n')"
-      case "$_ucfg_raw" in
-        max*) _ucfg_now=100 ;;
-        *)    _ucfg_now="$(echo "$_ucfg_raw" | cut -d. -f1 | tr -dc '0-9')" ;;
-      esac
-      case "$_ucfg_now" in ''|*[!0-9]*) _ucfg_now=0 ;; esac
-      if [ "$_ucfg_now" -gt 35 ] 2>/dev/null; then
-        # Never save "max" as the value to restore.
-        #
-        # 100 is never a profile value for this tier (55-88); it is always a transient boost,
-        # usually the camera guard during face unlock. Saving it made it self-perpetuating: a
-        # capture shows the screen going off at max, the tuner storing 100, every following
-        # wake restoring max for the whole session (8 minutes uncapped at a time), and every
-        # following sleep storing 100 again. A legitimate value is also kept as "last good" in
-        # a file that is not deleted, and that is what a boosted moment saves instead.
-        if [ "$_ucfg_now" -lt 100 ] 2>/dev/null; then
-          _ucfg_keep="$_ucfg_now"
-          printf '%s\n' "$_ucfg_now" > /data/adb/asb/ucfg_last_good 2>/dev/null
-        else
-          _ucfg_keep="$(_ucfg_fallback)"
-        fi
-        printf '%s\n' "$_ucfg_keep" > /data/adb/asb/ucfg_restore 2>/dev/null
-        writef "$_ucfg_node" 35
-      fi
-    fi
   else
     writef /proc/sys/vm/laptop_mode 0
     # Screen on: restore the profile watermark if sleep lowered it. A missing file means
@@ -239,20 +182,6 @@ if [ "$_cam_guard" = "0" ]; then
       iw dev wlan0 set power_save off >/dev/null 2>&1 || true
       rm -f /data/adb/asb/wifipm_restore 2>/dev/null
     fi
-    # Screen back on: restore the profile's foreground tier immediately.
-    #
-    # Without this the tier stays at 35 and the first app the user opens is throttled -
-    # a saving that costs responsiveness is not a saving. The saved value is written by
-    # the screen-off branch above; if the file is missing nothing is touched, so a
-    # half-applied state can never leave the tier pinned.
-    _ucfg_node=/dev/cpuctl/foreground/cpu.uclamp.max
-    _ucfg_save="$(cat /data/adb/asb/ucfg_restore 2>/dev/null | tr -dc '0-9')"
-    # A 100 stored by an older build is the same self-perpetuating boost: replace it.
-    [ -n "$_ucfg_save" ] && [ "$_ucfg_save" -ge 100 ] 2>/dev/null && _ucfg_save="$(_ucfg_fallback)"
-    case "$_ucfg_save" in ''|*[!0-9]*) : ;; *)
-      [ -w "$_ucfg_node" ] && writef "$_ucfg_node" "$_ucfg_save"
-      rm -f /data/adb/asb/ucfg_restore 2>/dev/null ;;
-    esac
     case "$HINT" in
       4|3) _dr=5;  _dbr=2  ; _dby=33554432;  _dbby=8388608  ;;
       *)   _dr=20; _dbr=5  ; _dby=134217728; _dbby=33554432 ;;
