@@ -2831,31 +2831,26 @@ mk op12 0-7 "0:0 1:2265600" "2:2 3 4:3148800" "5:5 6:2956800" "7:7:3302400"
 mk op15 0-7 "0:0 1 2 3 4 5:3628800" "6:6 7:4608000"
 mk sm8550 0-7 "0:0 1 2:2016000" "3:3 4 5 6:2803200" "7:7:3187200"
 got() { sh -c '. "$1"; PROFILE="$3"; ASB_CPU_SYSFS="$2" asb_cpu_cluster_init; echo "$FG_CPUS|$BG_CPUS"' _ "$T/f.sh" "$T/$1" "$2"; }
-[ "$(got op12 battery)" = "0-6|0-1" ] || fail "OP12 battery: $(got op12 battery)"
-[ "$(got op15 battery)" = "0-5|0-5" ] || fail "OP15 battery: $(got op15 battery)"
-[ "$(got sm8550 battery)" = "0-6|0-2" ] || fail "SM8550 battery: $(got sm8550 battery)"
+[ "$(got op12 battery)" = "0-7|0-1" ] || fail "OP12 battery foreground must include every core: $(got op12 battery)"
+[ "$(got op15 battery)" = "0-7|0-5" ] || fail "OP15 battery foreground must include the prime pair: $(got op15 battery)"
+[ "$(got sm8550 battery)" = "0-7|0-2" ] || fail "SM8550 battery foreground must include every core: $(got sm8550 battery)"
 [ "$(got op12 balanced)" = "0-7|0-1" ] || fail "OP12 balanced: $(got op12 balanced)"
-echo "PASS: fix103 contract"
+[ "$(got op15 smart)" = "0-7|0-5" ] || fail "OP15 Smart placement changed: $(got op15 smart)"
+[ "$(got sm8550 smart)" = "0-7|0-2" ] || fail "SM8550 Smart placement changed: $(got sm8550 smart)"
+echo "PASS: fix103/fix233 foreground cpuset contract"
 ) || exit 1
 # ---- fix104 ---------------------------------------------------------------
 (
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 fail() { echo "FAIL fix104: $*"; exit 1; }
 S="$ROOT/service.sh"
-grep -q 'writef_retry /dev/cpuset/top-app/cpus         "0-${bat_fg_end}"' "$S" || fail "service.sh battery top-app still on the first cluster"
-grep -q '_fg="0-${bat_fg_end}"' "$S" || fail "service.sh battery cgroup pass still on the first cluster"
-# Run the derivation block against fake per-cpu sysfs for OP12 and OP15.
-T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
-sed -n '/^_prime_hi=0; _prime_start=""$/,/^esac$/p' "$S" | sed 's#/sys/devices/system/cpu/#$CPUS/#g' > "$T/b.sh"
-[ -s "$T/b.sh" ] || fail "derivation block not found"
-mk() { d="$T/$1"; shift; i=0; for f in "$@"; do mkdir -p "$d/cpu$i/cpufreq"; echo "$f" > "$d/cpu$i/cpufreq/cpuinfo_max_freq"; i=$((i+1)); done; }
-mk op12 2265600 2265600 3148800 3148800 3148800 2956800 2956800 3302400
-mk op15 3628800 3628800 3628800 3628800 3628800 3628800 4608000 4608000
-r12="$(CPUS="$T/op12" cpu_max=7 little_end=1 sh -c '. "$1"; echo $bat_fg_end' _ "$T/b.sh")"
-r15="$(CPUS="$T/op15" cpu_max=7 little_end=5 sh -c '. "$1"; echo $bat_fg_end' _ "$T/b.sh")"
-[ "$r12" = 6 ] || fail "OP12 battery foreground end $r12, want 6"
-[ "$r15" = 5 ] || fail "OP15 battery foreground end $r15, want 5"
-echo "PASS: fix104 contract"
+grep -q 'writef_retry /dev/cpuset/top-app/cpus         "0-${cpu_max}"' "$S" || fail "service.sh top-app cannot reach every core"
+grep -q 'writef_retry /dev/cpuset/foreground/cpus      "0-${cpu_max}"' "$S" || fail "service.sh foreground cannot reach every core"
+grep -q '_fg="0-${cpu_max}"' "$S" || fail "service.sh cgroup pass does not use every foreground core"
+! grep -q 'bat_fg_end' "$S" || fail "a stale Battery-only foreground cpuset restriction remains"
+# The background policy is deliberately unchanged: visible apps get all cores, background does not.
+grep -q 'writef_retry /dev/cpuset/background/cpus        "0-${little_end}"' "$S" || fail "background economy cpuset changed"
+echo "PASS: fix104/fix233 service cpuset contract"
 ) || exit 1
 # ---- fix107 ---------------------------------------------------------------
 (
