@@ -10,9 +10,9 @@
 # On OP15 the snap returns the original value, so the output equals the shipped bounds (zero
 # change for the reference).
 #
-# Safety / confidence: - If topology is not the expected 2-cluster little+big shape, we DO NOT
-# guess a 3/4-cluster mapping here; we write a header noting low confidence and emit nothing
-# (governor then keeps its compiled defaults).
+# Safety / confidence: only the supported 2/3/4-policy mappings are synthesized. Any other
+# topology, missing hardware ceiling or unresolved middle policy writes provenance with low
+# confidence and no overrides (governor and shell then keep their compiled defaults).
 
 CAPS="/data/adb/asb/device_caps.env"
 OUT="/data/adb/asb/device_bounds.env"
@@ -38,48 +38,57 @@ R_BAT_MAX_M=4072   # (4603+3542)/2  battery mid
 R_BAL_MAX_M=7910   # (7196+8625)/2  balanced mid
 R_PRF_MAX_M=9250   # (9500+9000)/2  performance mid
 
-# ---- Topology mapping: 2, 3, or 4 clusters -> little / [mid] / big ---- Mirrors the C
-# writer's logic exactly (src/asb_metrics.h cpu_topology_discover): first policy -> little last
-# policy -> big (prime) strongest middle -> mid (only when >2 clusters; OP12 has policy0/2/5/7)
-# confidence stays "high" for 2/3/4 clusters as long as we can resolve first+last hw_max;
-# anything we can't read drops to "low" and we emit no overrides.
+# ---- Topology mapping: exactly 2, 3, or 4 policies -> little / [mid] / big ----
+# Match native discovery: order by measured hardware ceiling, not by policy directory number.
+# The weakest policy is little, the strongest is big/prime, and the strongest remaining policy
+# is mid. A 5+ policy file is intentionally rejected instead of being squeezed into three slots.
 _pcount="$(_cget cpu_policy_count)"
 _plist="$(_cget cpu_policy_list)"
 _conf="high"
 _little_id=""
 _mid_id=""
 _big_id=""
-_topo="2c"
+_hw_little=0
+_hw_big=0
+_hw_mid=0
+_topo="unsupported"
+_skip_reason="unsupported policy count"
 
-if [ "${_pcount:-0}" -ge 2 ] 2>/dev/null; then
-  _little_id="$(echo "$_plist" | awk '{print $1}')"
-  _big_id="$(echo "$_plist"   | awk '{print $NF}')"
-  if [ "${_pcount}" -ge 3 ] 2>/dev/null; then
-    # pick the middle policy with the highest hw_max (the strongest mid cluster)
+case "${_pcount:-0}" in
+  2|3|4)
     _topo="${_pcount}c"
-    _mid_best=-1
-    _i=0
+    _seen=0
     for _pid in $_plist; do
-      _i=$((_i + 1))
-      # skip first and last (those are little/big)
-      [ "$_pid" = "$_little_id" ] && continue
-      [ "$_pid" = "$_big_id" ] && continue
+      case "$_pid" in ''|*[!0-9]*) _conf="low"; continue ;; esac
       _h="$(_cget cpu_policy${_pid}_hwmax)"
-      [ -z "$_h" ] && continue
-      if [ "$_h" -gt "$_mid_best" ] 2>/dev/null; then _mid_best="$_h"; _mid_id="$_pid"; fi
+      case "$_h" in ''|*[!0-9]*) _conf="low"; continue ;; esac
+      [ "$_h" -gt 0 ] 2>/dev/null || { _conf="low"; continue; }
+      _seen=$((_seen + 1))
+      if [ -z "$_little_id" ] || [ "$_h" -lt "$_hw_little" ] || \
+         { [ "$_h" -eq "$_hw_little" ] && [ "$_pid" -lt "$_little_id" ]; }; then
+        _little_id="$_pid"; _hw_little="$_h"
+      fi
+      if [ -z "$_big_id" ] || [ "$_h" -gt "$_hw_big" ] || \
+         { [ "$_h" -eq "$_hw_big" ] && [ "$_pid" -gt "$_big_id" ]; }; then
+        _big_id="$_pid"; _hw_big="$_h"
+      fi
     done
-  fi
-else
-  _conf="low"
-fi
-
-_hw_little="$(_cget cpu_policy${_little_id}_hwmax)"
-_hw_big="$(_cget cpu_policy${_big_id}_hwmax)"
-_hw_mid=""
-[ -n "$_mid_id" ] && _hw_mid="$(_cget cpu_policy${_mid_id}_hwmax)"
-[ -z "$_hw_little" ] && _conf="low"
-[ -z "$_hw_big" ]    && _conf="low"
-# for 3/4-cluster, a missing mid hw_max is not fatal — we just skip mid overrides
+    [ "$_seen" -eq "$_pcount" ] 2>/dev/null || _conf="low"
+    if [ "$_pcount" -ge 3 ]; then
+      _mid_best=-1
+      for _pid in $_plist; do
+        [ "$_pid" = "$_little_id" ] && continue
+        [ "$_pid" = "$_big_id" ] && continue
+        _h="$(_cget cpu_policy${_pid}_hwmax)"
+        case "$_h" in ''|*[!0-9]*) continue ;; esac
+        if [ "$_h" -gt "$_mid_best" ] 2>/dev/null; then _mid_best="$_h"; _mid_id="$_pid"; _hw_mid="$_h"; fi
+      done
+      [ -n "$_mid_id" ] && [ "$_hw_mid" -gt 0 ] 2>/dev/null || _conf="low"
+    fi
+    [ "$_conf" = "high" ] || _skip_reason="unresolved policy ids or hardware ceilings"
+    ;;
+  *) _conf="low" ;;
+esac
 
 
 # snap RATIO_x10000 HW POLICY_ID -> the available freq closest to ratio*hw.
@@ -151,7 +160,7 @@ _snap() {
       echo "PERFORMANCE_CPU_MAX_BIG=$(_snap $R_PRF_MAX_B $_hw_big $_big_id)"
     fi
   else
-    echo "# synthesis skipped: could not resolve first+last cluster hw_max (count=$_pcount) — governor keeps compiled defaults"
+    echo "# synthesis skipped: $_skip_reason (count=${_pcount:-0}) — governor keeps compiled defaults"
   fi
 } > "$OUT.tmp" 2>/dev/null
 # Write-then-rename, so the governor can never read a half-written file. The old form

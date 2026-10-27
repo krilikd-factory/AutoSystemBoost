@@ -1397,6 +1397,15 @@ _dbounds="/data/adb/asb/device_bounds.env"
 _ovr_flag="$(cfg device_bounds_override)"
 P "  override active       : ${_ovr_flag:-0}  (governor consumes device_bounds.env only when =1)"
 _dba="$(_rget device_bounds_applied /dev/.asb/state)"
+_dbstatus="$(_rget device_bounds_status /dev/.asb/state)"
+_dbreason="$(_rget device_bounds_reason /dev/.asb/state)"
+if [ -z "$_dbstatus" ] && [ -r "$MODDIR/runtime/asb_device_bounds.sh" ]; then
+  . "$MODDIR/runtime/asb_device_bounds.sh"
+  asb_device_bounds_validate "$_dbounds" || true
+  _dbstatus="$ASB_BOUNDS_STATUS"
+  _dbreason="$ASB_BOUNDS_REASON"
+fi
+P "  bounds status         : ${_dbstatus:-unknown}/${_dbreason:-unknown} (applied/stale/skipped + reason)"
 case "${_ovr_flag:-0}:${_dba:-}" in
   1:0) P "  [WARN] override=1 but the governor loaded 0 values - it runs the compiled OP15 reference rails (snapped to this device's table)" ;;
   1:[1-9]*) P "  governor loaded       : ${_dba} value(s) at start" ;;
@@ -1412,8 +1421,10 @@ if [ -f "$_dbounds" ]; then
     grep -E '^[A-Z].*=' "$_dbounds" 2>/dev/null | while IFS= read -r _l; do P "    $_l"; done
     if [ "${_ovr_flag:-0}" != "1" ]; then
       NOTE "These are a PREVIEW — not applied (override flag is off). The governor is using its compiled defaults. On OP15 the synthesised values equal those defaults anyway."
+    elif [ "${_dbstatus:-}" = "applied" ] && [ "${_dba:-0}" -gt 0 ] 2>/dev/null; then
+      NOTE "ACTIVE: the governor loaded these over its compiled defaults at boot after identity/topology validation."
     else
-      NOTE "ACTIVE: the governor loaded these over its compiled defaults at boot."
+      NOTE "NOT ACTIVE: validation reported ${_dbstatus:-skipped}/${_dbreason:-unknown}; the file is preserved for diagnostics and compiled defaults stand."
     fi
   else
     P "  (no overrides emitted — see confidence note above; compiled defaults stand)"
