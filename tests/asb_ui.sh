@@ -4934,6 +4934,10 @@ assert 'backdrop-filter:blur(8px)' in h
 assert 'html[data-asb-glass="1"]' in h
 assert 'html[data-asb-glass="1"][data-asb-theme="light"]' in h
 assert '--accent:#00f0b4' in h and '--accent:#007c63' in h
+assert '--surface:rgba(16,23,20,.86)' in h and '--border:rgba(108,151,133,.46)' in h
+assert '.log-menu,.cfg-fm-box,.asb-tabbar' in h
+assert ':is(.log-menu,.cfg-fm-box,.cfg-profile-sheet,.cfg-reset-dialog)' in h
+assert '.cfg-fm-btn,.cfg-fm-place,.cfg-fm-cancel' in h
 assert '#00aaff' not in h and '0,170,255' not in h and '101,215,255' not in h
 assert "localStorage.getItem('asb_glass_base')" in h
 assert '@media (prefers-reduced-motion:reduce)' in h

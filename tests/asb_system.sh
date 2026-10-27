@@ -2252,6 +2252,13 @@ grep -q 'writer_node_is_cpu_max' "$ROOT/src/asb_writer.h"
 grep -q 'live_max > cmax\[i\]' "$ROOT/src/asb_writer.h"
 grep -q 'consecutive_failures' "$ROOT/src/asb_writer.h"
 grep -q 'retry_at = now + 86400' "$ROOT/src/asb_writer.h"
+# OP15/ColorOS evidence: the kernel's INT_MIN WALT sentinel is unsupported hardware surface,
+# not a rejected write. Preserve it as UNSUPPORTED evidence and never mix it into FAIL counts.
+[ "$(grep -c 'writer_write_unsupported_event(node, path, requested, observed, h->retry_at);' "$ROOT/src/asb_writer.h")" -eq 2 ]
+grep -q 'writer_write_event("UNSUPPORTED"' "$ROOT/src/asb_writer.h"
+grep -q "sed -n '/^FAIL /s/.*node=" "$ROOT/tools/asb_diag.sh"
+grep -q "grep '\^FAIL ' /dev/.asb/write_errors" "$ROOT/tools/asb_diag.sh"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag"
 # The vendor-disagreement holddown must exist and be short enough to act within one
 # thermal episode.
 #
@@ -5639,12 +5646,12 @@ need "$HELPER" '_path_ok()'
 need "$HELPER" '_migrate_legacy_external()'
 need "$HELPER" 'asb_settings_backup.conf'
 
-# Audio remains one top-level category. DSP is a labelled subsection of it, not a second
-# destination or a duplicate renderer path; every locale must provide its compact labels.
+# Audio remains one top-level category. DSP is its first labelled subsection and Loudness its
+# first card, not a second destination or duplicate renderer; locales keep their compact labels.
 need "$UI" "const CFG_GROUP_SECTIONS = {"
 need "$UI" "audio: ["
 need "$UI" "titleKey:'cfg_audio_section_dsp'"
-need "$UI" "keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_compressor']"
+need "$UI" "keys:['dsp_loudness','dsp_outputs','dsp_bass','dsp_voice','dsp_width','dsp_compressor']"
 need "$UI" 'function cfgRenderGroup(list, groupId)'
 need "$UI" 'cfgRenderGroup(list, _cfgGroup);'
 need "$UI" '.cfg-section-hint'
@@ -5687,6 +5694,14 @@ need "$UI" "const CFG_SILENT_KEYS = ['dsp_loudness','dsp_bass','dsp_voice','dsp_
 python3 - "$UI" <<'PY'
 import re, sys
 text = open(sys.argv[1], encoding='utf-8').read()
+audio = re.search(r'\n  audio: \[(.*?)\n  \],\n  battery:', text, re.S)
+assert audio, 'audio section model missing'
+section_order = re.findall(r"\{ id:'([^']+)'", audio.group(1))
+assert section_order == ['dsp', 'playback', 'safety'], f'audio priority/order drifted: {section_order}'
+dsp = re.search(r"\{ id:'dsp'.*?keys:\[([^]]+)\]", audio.group(1), re.S)
+assert dsp, 'DSP section keys missing'
+dsp_keys = re.findall(r"'([^']+)'", dsp.group(1))
+assert dsp_keys == ['dsp_loudness','dsp_outputs','dsp_bass','dsp_voice','dsp_width','dsp_compressor'], f'DSP order drifted: {dsp_keys}'
 items = set(re.findall(r"\{ key:'([^']+)'", text))
 block = re.search(r'const CFG_ICONS = \{(.*?)\n\};', text, re.S)
 assert block, 'CFG_ICONS block missing'
