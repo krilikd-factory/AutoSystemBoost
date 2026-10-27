@@ -2914,7 +2914,8 @@ eq(asbConfidenceMetric('low'), 'metric-bad', 'low confidence'); eq(asbConfidence
 eq(asbBasisMetric('stable'), 'metric-good', 'stable basis'); eq(asbBasisMetric('fallback'), 'metric-warm', 'fallback basis');
 eq(asbBasisMetric('basis-veto'), 'metric-bad', 'veto basis'); eq(asbModemMetric('save'), 'metric-good', 'save modem');
 eq(asbModemMetric('night'), 'metric-good', 'night modem'); eq(asbModemMetric('fast'), 'metric-bad', 'fast modem');
-eq(asbModemMetric('normal'), 'metric-neutral', 'normal modem');
+eq(asbModemMetric('normal'), 'metric-neutral', 'normal modem is the stock baseline'); eq(asbModemMetric(''), 'metric-neutral', 'unknown modem');
+eq(asbModemMetric('unavailable'), 'metric-neutral', 'unavailable modem');
 eq(asbSlotMetric('cool'), 'metric-good', 'cool slot'); eq(asbSlotMetric('typical'), 'metric-good', 'typical slot');
 eq(asbSlotMetric('warm'), 'metric-warm', 'warm slot'); eq(asbSlotMetric(undefined), 'metric-neutral', 'unknown slot');
 eq(lvSlotHeat(400, 410, 490).state, 'cool', 'cool slot evidence'); eq(lvSlotHeat(450, 410, 490).state, 'typical', 'typical slot evidence');
@@ -4187,6 +4188,9 @@ fail() { echo "FAIL webui log report: $*" >&2; exit 1; }
 command -v node >/dev/null 2>&1 || { echo "SKIP webui log report: no node"; exit 0; }
 [ -f "$D" ] || fail "tools/logkit/asb_fullday_digest.sh is missing"
 sh -n "$D" || fail "digest script has a syntax error"
+# fix231: Report and Device are fullscreen drill-ins, including when Liquid Glass opens
+# them over Monitor/Config. Their opaque page surfaces must override the Glass tab rule.
+grep -qF '#reportPage, #devicePage { background: var(--bg) !important; }' "$H" || fail "fullscreen report/device can inherit a transparent Glass page"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 
 # --- fixture capture: 12h of phases, a 7.8h night chain at 1.0%/h, wakelocks, crashes ---
@@ -4455,7 +4459,7 @@ let ASB_LANG = 'ru';
 function T(k, d) { const L = I18N[ASB_LANG]; return (L && typeof L[k] === 'string') ? L[k] : d; }
 EOF
   for fn in Tcfg parseLogReport logReportT logReportDur logReportDurSec logReportTips \
-    logReportAnalyze logReportHistoryComparable logReportMachineDigest logReportAnalysisT \
+    logReportScreenOnDrainState logReportAnalyze logReportHistoryComparable logReportMachineDigest logReportAnalysisT \
     logReportTipText logReportRow logReportSec logReportNote logReportHero \
     logReportAppendAnalysis logReportRender shQuote; do
     sed -n "/^function $fn(/,/^}/p" "$H"
@@ -4750,6 +4754,14 @@ chk(logReportAnalyze(wakeBad).verdicts.find(v => v.domain === 'smoothness').stat
 const screenLed = parseLogReport('meta\telapsed_min=180\ncover\ton_min=150\toff_min=30\ton_pct=83\nscr\ton_pctph=4.2\toff_pctph=9.9\ton_min=150\toff_min=30\nnight\tdur_min=180\tpctph=3.0\tawake=30\n');
 const screenA = logReportAnalyze(screenLed);
 chk(screenA.scenario_family === 'screen_on' && screenA.verdicts.find(v => v.domain === 'drain').metric === '4.2%/h' && screenA.verdicts.find(v => v.domain === 'drain').reason === 'screen_on_ledger', 'screen-led capture uses the matching screen-on ledger');
+/* fix231: 10.1%/h is ordinary screen-on use, not an automatic red verdict. Heavy and
+   speaker scenarios have their own budgets, and the summary uses the same classifier. */
+chk(logReportScreenOnDrainState(10.1, 'screen_on_light') === 'normal', '10.1%/h stays normal for ordinary screen use');
+chk(logReportScreenOnDrainState(15.1, 'screen_on_light') === 'problem', 'ordinary screen use crosses the red line only above 15%/h');
+chk(logReportScreenOnDrainState(25, 'screen_on_heavy') === 'normal' && logReportScreenOnDrainState(30.1, 'screen_on_heavy') === 'problem', 'gaming uses its own drain budget');
+chk(logReportScreenOnDrainState(18, 'audio_speaker') === 'normal' && logReportScreenOnDrainState(20.1, 'audio_speaker') === 'problem', 'speaker playback uses its own drain budget');
+const typicalScreen = parseLogReport('meta\telapsed_min=180\ncover\ton_min=150\toff_min=30\ton_pct=83\nscr\ton_pctph=10.1\toff_pctph=0.5\ton_min=150\toff_min=30\n');
+chk(logReportAnalyze(typicalScreen).verdicts.find(v => v.domain === 'drain').state === 'normal', 'the rendered summary keeps 10.1%/h normal');
 const oldHistory = d.hist[0];
 chk(!logReportHistoryComparable(d, analysis, oldHistory), 'legacy six-field history is not comparable');
 const sameHistory = { started:'2026-10-20 09:10', night:'1.0', drain:'2.0', jank:'1.4', device:'OP611FL1', rom:'TESTBUILD', mod:'old', elapsed:720, onPct:'40', offMin:300 };
@@ -4776,6 +4788,8 @@ logReportRender(early);
 chk(countClass(reportBody, 'lgr-verdict') === 5, 'summary renders all five verdict rows');
 chk(reportBody.children[0].children[0].textContent === I18N.ru.lr_sec_summary, 'smart summary is the first report section');
 chk(countClass(reportBody, 'lgr-action') === 0 && allText(reportBody).indexOf(I18N.ru.lr_no_actions_early) >= 0, 'early DOM has no unsupported action');
+logReportRender(typicalScreen);
+chk(countClass(reportBody, 'lgr-state-problem') === 0 && countClass(reportBody, 'lgr-warn') === 0, 'neither summary nor detail paints 10.1%/h red');
 const trendText = 'meta\telapsed_min=120\ttarget_h=24\trunning=0\tstarted=2026-10-21 09:40\tprofile=smart\nmeta2\tdevice=OP611FL1\trom=TESTBUILD\ndrain\tpctph=2.0\n';
 const incompatible = parseLogReport(trendText + 'hist\tstarted=2026-10-20 09:10\tnight=-\tdrain=3.0\tjank=-\tcpu=-\tclamps=-\n');
 logReportRender(incompatible);
@@ -5159,6 +5173,12 @@ assert 'seq !== _deviceLoadSeq' in loader and 'Nothing was changed' in loader
 segment = h[h.index('function parseDeviceInfo('):h.index('function openDevicePage()')]
 assert '.innerHTML' not in segment and 'textContent' in segment
 assert "['kernel_features', 'dev_sec_kernel_features'" in h
+assert "['metamodule', 'dev_sec_metamodule'" in h
+feature_order = re.search(r'const DEVICE_KERNEL_FEATURE_ORDER = \[(.*?)\];', h, re.S)
+assert feature_order, 'explicit custom-kernel feature order missing'
+ordered_features = re.findall(r"'([^']+)'", feature_order.group(1))
+assert ordered_features == ['susfs','susfs_version','bbg_baseband_guard','bbr_v2','bbr_v1','lto',
+                            'tmpfs_xattr_posix_acl','unicode_bypass_fix','droidspaces','ntsync','nomount','nomount_version'], ordered_features
 keys = set(json.loads((root/'webroot/i18n/en.json').read_text(encoding='utf-8')))
 for p in (root/'webroot/i18n').glob('*.json'):
     d = json.loads(p.read_text(encoding='utf-8'))
@@ -5166,11 +5186,15 @@ for p in (root/'webroot/i18n').glob('*.json'):
     for key in ('dev_sec_kernel_features','dev_kernel_features_nomount','dev_kernel_features_nomount_version',
                 'dev_kernel_features_ntsync','dev_kernel_features_droidspaces','dev_kernel_features_unicode_bypass_fix',
                 'dev_kernel_features_tmpfs_xattr_posix_acl','dev_kernel_features_lto','dev_kernel_features_bbr_v1',
-                'dev_kernel_features_bbr_v2','dev_kernel_features_bbg_baseband_guard','dev_kernel_features_susfs'):
+                'dev_kernel_features_bbr_v2','dev_kernel_features_bbg_baseband_guard','dev_kernel_features_susfs',
+                'dev_sec_metamodule','dev_metamodule_status','dev_metamodule_id','dev_metamodule_name',
+                'dev_metamodule_version','dev_metamodule_version_code','dev_metamodule_nomount_driver',
+                'dev_metamodule_nomount_driver_version','dev_metamodule_nomount_evidence'):
         assert d.get(key), '%s: %s missing' % (p.name, key)
 ru = json.loads((root/'webroot/i18n/ru.json').read_text(encoding='utf-8'))
 assert 'NoMount' in ru['dev_kernel_features_nomount'] and 'NTSync' in ru['dev_kernel_features_ntsync']
 assert 'BBRv2' in ru['dev_kernel_features_bbr_v2'] and 'SuSFS' in ru['dev_kernel_features_susfs']
+assert 'Метамодуль' in ru['dev_sec_metamodule'] and 'NoMount' in ru['dev_metamodule_nomount_driver_version']
 for f in ('tools/release_tools.list','common/install.sh','.github/workflows/build-release.yml','.github/workflows/build-debug.yml'):
     assert 'asb_device_info.sh' in (root/f).read_text(encoding='utf-8'), f
 PY
@@ -5198,6 +5222,7 @@ function logReportSec(title) { const n = mk('section'); const h = mk('h3'); h.te
 function logReportRow(key, value) { const r = mk('div'), k = mk('span'), v = mk('span'); k.textContent = key; v.className = 'lgr-v'; v.textContent = value; r.appendChild(k); r.appendChild(v); return r; }
 EOF
   sed -n '/^const DEVICE_SECTION_ORDER = \[/,/^\];/p' "$H"
+  sed -n '/^const DEVICE_KERNEL_FEATURE_ORDER = \[/,/^\];/p' "$H"
   for fn in parseDeviceInfo deviceVal deviceFallbackLabel deviceLabel deviceHero deviceValueClass deviceDisplayValue deviceInfoRender; do
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
@@ -5223,21 +5248,34 @@ const text = [
   'D\tkernel_features\tbbg_baseband_guard\tactive in LSM; built-in',
   'D\tkernel_features\tsusfs\tinterface available',
   'D\tkernel_features\tsusfs_version\tv2.3.0',
+  'D\tmetamodule\tstatus\tdetected at standard path',
+  'D\tmetamodule\tid\tMetaCore',
+  'D\tmetamodule\tname\tMetaCore Metamodule',
+  'D\tmetamodule\tversion\t1.4.0',
+  'D\tmetamodule\tversion_code\t140',
+  'D\tmetamodule\tnomount_driver\tbuilt-in',
+  'D\tmetamodule\tnomount_driver_version\t22 (105)',
+  'D\tmetamodule\tnomount_evidence\tkernel config/sysfs; driver ownership not inferred',
   'D\tmeta\tschema\t2',
   'garbage', 'D\tbroken'
 ].join('\n');
 const d = parseDeviceInfo(text);
-chk(d.count === 19 && d.malformed === 2, 'TSV count/malformed: ' + d.count + '/' + d.malformed);
+chk(d.count === 27 && d.malformed === 2, 'TSV count/malformed: ' + d.count + '/' + d.malformed);
 chk(deviceVal(d, 'soc', 'soc_model') === 'SM8850', 'SoC parsed');
 chk(deviceVal(d, 'soc', 'missing') === '—', 'missing value fallback');
 const shown = deviceInfoRender(d);
-chk(shown === 19, 'renderer row count: ' + shown);
+chk(shown === 27, 'renderer row count: ' + shown);
 const dump = (function walk(n) { return [n.textContent || ''].concat((n.children || []).flatMap(walk)); })(body).join('\n');
 chk(dump.includes(attack), 'markup-like device data was not preserved as literal text');
 chk(globalThis.pwned !== 1 && !body.querySelector('.img'), 'device value became markup');
 chk(dump.includes('22 (105)') && dump.includes('ThinLTO (Clang)') && dump.includes('active in LSM; built-in'), 'custom kernel facts missing from render');
+chk(dump.includes('Metamodule') && dump.includes('MetaCore Metamodule') && dump.includes('1.4.0') && dump.includes('driver ownership not inferred'), 'metamodule metadata or independent NoMount evidence missing from render');
 chk(dump.includes('mismatch evidence only'), 'uname mismatch was turned into a spoofing verdict or hidden');
 const values = []; (function walk(n) { if (n.className && n.className.split(/\s+/).includes('lgr-v')) values.push(n); (n.children || []).forEach(walk); })(body);
+const expectedFeatureValues = ['interface available','v2.3.0','active in LSM; built-in','available','available','ThinLTO (Clang)','supported','not runtime-discoverable','core config present; runtime not verified','built-in','built-in','22 (105)'];
+const featureCard = body.children.find(n => n.children && n.children[0] && n.children[0].textContent === 'Custom kernel features');
+const actualFeatureValues = []; (function walk(n) { if (n && n.className && n.className.split(/\s+/).includes('lgr-v')) actualFeatureValues.push(n.textContent); ((n && n.children) || []).forEach(walk); })(featureCard);
+chk(JSON.stringify(actualFeatureValues) === JSON.stringify(expectedFeatureValues), 'custom-kernel groups are not reversed with SuSFS first: ' + JSON.stringify(actualFeatureValues));
 chk(values.some(v => v.textContent === attack && v.className.includes('dev-long')), 'long untrusted value lacks safe wrapping class');
 chk(values.some(v => v.textContent === 'mismatch' && v.className.includes('dev-warn')), 'uname mismatch is not amber');
 if (bad) process.exit(1); console.log('ok');
@@ -5245,7 +5283,7 @@ EOF
 } > "$T/t.js"
 out="$(node "$T/t.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo "PASS webui device page: five SoC buttons/theme groups, safe TSV parser/renderer, custom-kernel rows, mismatch evidence and read-only loader"
+echo "PASS webui device page: five SoC buttons/theme groups, safe TSV parser/renderer, metamodule metadata, independent NoMount evidence and read-only loader"
 )
 
 t_device_info_runtime() (
@@ -5259,9 +5297,10 @@ sh -n "$D" || fail "shell syntax"
 mkdir -p "$T/mod/tools" "$T/proc/sys/net/ipv4" "$T/proc/sys/net/core" \
   "$T/sys/module/nomount" "$T/sys/module/ntsync" "$T/sys/module/baseband_guard" \
   "$T/sys/devices/system/cpu/cpufreq/policy0" "$T/sys/class/power_supply/battery" \
-  "$T/data/asb" "$T/data/modules"
+  "$T/data/asb" "$T/data/modules" "$T/data/metamodule"
 cp "$ROOT/tools/asb_kernel_uv_coexist.sh" "$T/mod/tools/"
 printf 'id=AutoSystemBoost\nversion=V65-129-fix230\nversionCode=65230\n' > "$T/mod/module.prop"
+printf 'id=MetaCore\nname=MetaCore Metamodule\nversion=1.4.0\nversionCode=140\n' > "$T/data/metamodule/module.prop"
 cat > "$T/props" <<'EOF'
 [ro.product.brand]: [OnePlus]
 [ro.product.manufacturer]: [OnePlus]
@@ -5352,6 +5391,10 @@ out="$(run)"
 printf '%s\n' "$out" | awk -F '\t' 'NF < 4 || $1 != "D" || $2 == "" || $3 == "" { bad = 1 } END { exit bad }' || fail "malformed TSV"
 want meta schema 2; want firmware baseband TEST_BASEBAND; want firmware android 17; want soc soc_model SM8850
 want kernel_features nomount built-in; want kernel_features nomount_version '22 (105)'; want kernel_features ntsync built-in
+want metamodule status 'detected at standard path'; want metamodule id MetaCore; want metamodule name 'MetaCore Metamodule'
+want metamodule version 1.4.0; want metamodule version_code 140
+want metamodule nomount_driver built-in; want metamodule nomount_driver_version '22 (105)'
+want metamodule nomount_evidence 'kernel config/sysfs; driver ownership not inferred'
 want kernel_features droidspaces 'core config present; runtime not verified'
 # Generic CONFIG_UNICODE is not evidence of the patch.
 want kernel_features unicode_bypass_fix 'not runtime-discoverable'
@@ -5363,6 +5406,19 @@ want asb_caps policy_count 2; want asb device_bounds_status applied
 printf '%s\n' "$out" | grep -q 'DO_NOT_COLLECT' && fail "a sensitive identifier was collected"
 [ "$(wc -l < "$T/susfs.log")" = 3 ] || fail "SuSFS called more than the three show reads"
 grep -Ev '^show (version|variant|enabled_features)$' "$T/susfs.log" && fail "a state-changing SuSFS command ran"
+# Missing metmodule version fields stay explicitly unknown; NoMount evidence remains independent.
+printf 'id=MetaCore\nname=MetaCore Metamodule\n' > "$T/data/metamodule/module.prop"
+out="$(run)"
+want metamodule status 'detected at standard path'; want metamodule version 'not exposed'; want metamodule version_code 'not exposed'
+want metamodule nomount_driver built-in; want metamodule nomount_driver_version '22 (105)'
+# A directory without readable metadata is not reported as a complete installation.
+rm -f "$T/data/metamodule/module.prop"; out="$(run)"
+want metamodule status 'standard path present; module.prop not readable'; want metamodule version 'not exposed'
+want metamodule nomount_driver built-in; want metamodule nomount_driver_version '22 (105)'
+# No standard path is not universal proof of absence, and does not hide a running NoMount driver.
+rmdir "$T/data/metamodule"; out="$(run)"
+want metamodule status 'not detected at standard path'
+want metamodule nomount_driver built-in; want metamodule nomount_driver_version '22 (105)'
 # Runtime bbr2 spelling is accepted as BBRv2 too.
 printf 'reno bbr bbr2\n' > "$T/proc/sys/net/ipv4/tcp_available_congestion_control"
 out="$(run)"; want kernel_features bbr_v2 available
@@ -5378,6 +5434,7 @@ sed -i -e 's/^CONFIG_NOMOUNT=y$/CONFIG_NOMOUNT=m/' -e 's/^CONFIG_NTSYNC=y$/CONFI
 gzip -c "$T/config" > "$T/proc/config.gz"; rm -f "$T/sys/module/nomount/version"
 out="$(run)"
 want kernel_features nomount 'module loaded'; want kernel_features nomount_version 'not exposed'; want kernel_features ntsync 'module loaded'
+want metamodule nomount_driver 'module loaded'; want metamodule nomount_driver_version 'not exposed'
 # An executable with no read response is not advertised as a working SuSFS interface.
 cat > "$T/susfs" <<'EOF'
 #!/bin/sh
@@ -5389,7 +5446,7 @@ out="$(run)"; want susfs interface present_no_read_response; want kernel_feature
 printf '\nCONFIG_UNICODE_BYPASS_FIX=y\n' >> "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
 out="$(run)"; want kernel_features unicode_bypass_fix built-in
 ! grep -Eq 'set_uname|add_sus_path|add_sus_map|add_sus_kstat|add_sus_' "$D" || fail "a SuSFS writer entered the collector"
-echo "PASS device info: read-only TSV, built-in/LKM NoMount and version, NTSync, Droidspaces, Unicode evidence, TMPFS, LTO, BBR, BBG, SuSFS and missing-config semantics"
+echo "PASS device info: read-only TSV, metamodule presence/version variants, built-in/LKM NoMount and version, kernel feature evidence and missing-config semantics"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
