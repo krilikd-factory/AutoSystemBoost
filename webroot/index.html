@@ -10,7 +10,7 @@
 <title>AutoSystemBoost</title>
 <meta name="theme-color" content="#000000">
 <meta name="color-scheme" content="dark light">
-<script>(function(){try{if(localStorage.getItem('asb_theme')==='light')document.documentElement.setAttribute('data-asb-theme','light');}catch(e){}})();</script>
+<script>(function(){try{var t=localStorage.getItem('asb_theme');if(t==='light'||t==='glass')document.documentElement.setAttribute('data-asb-theme',t);}catch(e){}})();</script>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <style>
@@ -355,7 +355,7 @@ body::before, body::after {
 }
 .badge-a + .badge-a { color: var(--accent); }
 
-/* Theme switch: a two-segment capsule with the bar's sliding pill behind the chosen icon.
+/* Theme switch: a three-segment capsule with the bar's sliding pill behind the chosen icon.
  *
  * The pill follows the attribute that actually themes the page (html[data-asb-theme]), not
  * a copy of it - the switch cannot show one theme while the page wears the other. The
@@ -383,6 +383,8 @@ body::before, body::after {
 }
 html[data-asb-theme="light"] .theme-toggle::before { transform: translateX(38px); }
 html[dir="rtl"][data-asb-theme="light"] .theme-toggle::before { transform: translateX(-38px); }
+html[data-asb-theme="glass"] .theme-toggle::before { transform: translateX(76px); }
+html[dir="rtl"][data-asb-theme="glass"] .theme-toggle::before { transform: translateX(-76px); }
 .theme-choice { position:relative; z-index:1; display:grid; place-items:center; width:38px; height:24px; padding:0; border:0; border-radius:13px; background:transparent; color:var(--text-secondary); transition:color .2s ease,transform .12s ease; -webkit-tap-highlight-color:transparent; }
 .theme-choice svg { width:15px; height:15px; stroke:currentColor; color:inherit; filter:none; }
 .theme-choice.active { color:var(--accent); }
@@ -3021,6 +3023,55 @@ html[data-asb-theme="light"] .cfg-profile-folder { color:var(--text) !important;
    running an older package. */
 #cfgVerBadge::after { content: ''; }   /* ASB_UI_BUILD=light-surface-contract-1 */
 
+/* Liquid Glass: an opt-in dark glass material, not a replacement for either basic theme.
+ * Opaque black stays behind the fixed pages; the cool grey panels use real translucency,
+ * a restrained 8 px blur and a fine reflective edge. No canvas/WebGL or extra motion. */
+html[data-asb-theme="glass"] {
+  --bg:#000000; --surface:rgba(30,30,36,.78); --surface-hover:rgba(74,74,90,.42);
+  --tabbar-bg:rgba(30,30,36,.76); --text:#e0e0e0; --text-secondary:#b8b8c2; --text-tertiary:#9a9aab;
+  --accent:#00aaff; --accent-glow:rgba(0,170,255,.24); --accent2:#65d7ff;
+  --border:rgba(74,74,90,.55); --border-active:rgba(101,215,255,.48);
+  --cap-wash:linear-gradient(135deg,rgba(255,255,255,.10),rgba(0,170,255,.045));
+  --cap-edge:rgba(224,224,224,.20);
+  --cap-shadow:0 12px 32px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.16);
+  --pill-wash:linear-gradient(135deg,rgba(0,170,255,.28),rgba(101,215,255,.13));
+  --pill-edge:inset 0 0 0 1px rgba(101,215,255,.32),inset 0 1px 0 rgba(255,255,255,.18);
+  color-scheme:dark;
+}
+html[data-asb-theme="glass"] body {
+  background:
+    radial-gradient(ellipse 90% 48% at 12% 0%,rgba(0,170,255,.16),transparent 68%),
+    radial-gradient(ellipse 70% 42% at 100% 82%,rgba(74,74,90,.36),transparent 72%),#000;
+}
+html[data-asb-theme="glass"] :is(.page,.live-page,.config-page) { background:transparent !important; color:var(--text); }
+html[data-asb-theme="glass"] :is(.hdr-cap,.theme-toggle,.status-row,.live-chip,.tg-link,.debug-support-btn,
+  .cfg-backup,.cfg-lang-btn,.cfg-lang-pop,.cfg-sel-btn,.cfg-sel-pop,.cfg-tile,.cfg-row,
+  .live-cell,.stock-telemetry,.smart-banner,.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet,
+  .asb-tabbar) {
+  background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.018)),rgba(30,30,36,.78) !important;
+  color:var(--text) !important; border-color:var(--border) !important;
+  box-shadow:0 12px 30px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.10);
+  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+}
+html[data-asb-theme="glass"] :is(.pbtn,.lgr-hero,.lgr-sec,.live-info-now,.live-info-src) {
+  background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.018)),rgba(30,30,36,.72) !important;
+  border-color:var(--border); box-shadow:inset 0 1px 0 rgba(255,255,255,.10);
+  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+}
+html[data-asb-theme="glass"] :is(.pbtn.on,.cfg-tile.active,.cfg-profile-row.selected) {
+  border-color:var(--accent) !important; box-shadow:0 0 0 1px var(--accent-glow),inset 0 1px 0 rgba(255,255,255,.16);
+}
+html[data-asb-theme="glass"] :is(input,select,textarea,.seg,.seg-opt,.cfg-profile-name,.cfg-reset-choice,.cfg-profile-row,.cfg-profile-actions button) {
+  background:rgba(30,30,36,.82) !important; color:var(--text) !important; border-color:var(--border) !important;
+}
+html[data-asb-theme="glass"] :is(.cfg-modal,.cfg-profile-modal,.cfg-reset-modal,.diag-wait-modal,.debug-action-wait,[class*="overlay"]) { background:rgba(0,0,0,.68) !important; }
+html[data-asb-theme="glass"] :is(.cfg-desc,.cfg-profile-copy,.cfg-profile-row-meta,.cfg-profile-hint,.cfg-reset-copy,.cfg-reset-choice-copy,.live-cell-label,.device-line,.tg-link-sub) { color:var(--text-secondary) !important; }
+html[data-asb-theme="glass"] .smart-banner-value { color:var(--text); }
+html[data-asb-theme="glass"] .cfg-search::placeholder { color:var(--text-tertiary); opacity:1; }
+@media (prefers-reduced-motion:reduce) {
+  html[data-asb-theme="glass"] .theme-toggle::before { transition:none; }
+}
+
 /* Full light theme: near-white materials, retained ASB status accents, no colour inversion. */
 html[data-asb-theme="light"] {
   /* The floating bar keeps the light theme's own surface: the white wash that reads as
@@ -3788,7 +3839,7 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
       <div class="badge badge-a" id="socBadge">DEVICE</div>
       <div class="badge badge-a" id="verBadge">V65</div>
       </div>
-      <div class="theme-toggle" role="group" data-theme-toggle="verBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button></div>
+      <div class="theme-toggle" role="group" data-theme-toggle="verBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button><button class="theme-choice" type="button" data-theme-choice="glass" onclick="asbSetTheme('glass')" aria-label="Liquid Glass theme"><span data-tech-icon="theme_glass"></span></button></div>
     </div>
     <div class="status-row">
       <div class="dot"></div>
@@ -3948,7 +3999,7 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
       <div class="badge badge-a" id="liveSocBadge">DEVICE</div>
       <div class="badge badge-a" id="liveVerBadge">V65</div>
       </div>
-      <div class="theme-toggle" role="group" data-theme-toggle="liveVerBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button></div>
+      <div class="theme-toggle" role="group" data-theme-toggle="liveVerBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button><button class="theme-choice" type="button" data-theme-choice="glass" onclick="asbSetTheme('glass')" aria-label="Liquid Glass theme"><span data-tech-icon="theme_glass"></span></button></div>
     </div>
     <div class="status-row">
       <div class="dot"></div>
@@ -4157,7 +4208,7 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
       <div class="badge badge-a" id="cfgSocBadge">DEVICE</div>
       <div class="badge badge-a" id="cfgVerBadge">V65</div>
       </div>
-      <div class="theme-toggle" role="group" data-theme-toggle="cfgVerBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button></div>
+      <div class="theme-toggle" role="group" data-theme-toggle="cfgVerBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button><button class="theme-choice" type="button" data-theme-choice="glass" onclick="asbSetTheme('glass')" aria-label="Liquid Glass theme"><span data-tech-icon="theme_glass"></span></button></div>
     </div>
     <div class="status-row">
       <div class="dot"></div>
@@ -4282,7 +4333,7 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
       <div class="badge badge-a" id="rpSocBadge">DEVICE</div>
       <div class="badge badge-a" id="rpVerBadge">V65</div>
       </div>
-      <div class="theme-toggle" role="group" data-theme-toggle="rpVerBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button></div>
+      <div class="theme-toggle" role="group" data-theme-toggle="rpVerBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button><button class="theme-choice" type="button" data-theme-choice="glass" onclick="asbSetTheme('glass')" aria-label="Liquid Glass theme"><span data-tech-icon="theme_glass"></span></button></div>
     </div>
     <div class="status-row">
       <div class="dot"></div>
@@ -4508,6 +4559,7 @@ const TECH_ICON_PATHS = {
   lte_light: '<path d="M3.5 19v-3M7 19v-6M10.5 19v-9"/><path d="M13.5 17a4.5 4.5 0 0 1 9 0"/><path d="M18 17l-2.6-2.2"/><circle cx="18" cy="17" r=".9" fill="currentColor" stroke="none"/>',
   cellular_controls: '<rect x="6.5" y="3" width="11" height="18" rx="2.4"/><path d="M6.5 8.5 11.5 3.5"/><path d="M9.7 16.8v-2.4M12 16.8v-4M14.3 16.8v-5.6"/>',
   theme_moon: '<path d="M20 13.6A8.2 8.2 0 1 1 10.4 4a6.7 6.7 0 0 0 9.6 9.6z"/>',
+  theme_glass: '<path d="M12 3.2s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/><path d="M9 14.4a3.2 3.2 0 0 0 3 2.2"/>',
   quiet_moon: '<path d="M19.8 12.6A8 8 0 1 1 11 3.5a6.6 6.6 0 0 0 8.8 9.1z"/><path d="M16.5 16.5l4 4M20.5 16.5l-4 4"/>',
   sun: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.8v2.2M12 19v2.2M2.8 12h2.2M19 12h2.2M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6M6.8 17.2l-1.6 1.6"/>',
   /* Wi-Fi arcs with the outermost one broken, and an arrow handing off to a cell mast:
@@ -4881,26 +4933,26 @@ function applyStaticI18n() {
 
 
 function asbThemeValue() {
-  try { return localStorage.getItem('asb_theme') === 'light' ? 'light' : 'dark'; } catch (e) { return 'dark'; }
+  try { const t = localStorage.getItem('asb_theme'); return (t === 'light' || t === 'glass') ? t : 'dark'; } catch (e) { return 'dark'; }
 }
 function asbPaintThemeControls() {
   const theme = asbThemeValue();
-  // CSS uses the value selector [data-asb-theme="light"]. toggleAttribute() creates an empty
-  // attribute, which made dark → light wait until the next page load (prepaint writes "light").
-  // Set or remove the value explicitly so both directions redraw in the same running WebView.
-  if (theme === 'light') document.documentElement.setAttribute('data-asb-theme', 'light');
-  else document.documentElement.removeAttribute('data-asb-theme');
+  // CSS uses literal value selectors. Set/remove the attribute explicitly so every theme
+  // redraws immediately in the same running WebView; dark remains the attribute-less default.
+  if (theme === 'dark') document.documentElement.removeAttribute('data-asb-theme');
+  else document.documentElement.setAttribute('data-asb-theme', theme);
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute('content', theme === 'light' ? '#f3f7f6' : '#000000');
   document.querySelectorAll('[data-theme-choice]').forEach(function(btn) {
-    const active = btn.getAttribute('data-theme-choice') === theme;
+    const choice = btn.getAttribute('data-theme-choice');
+    const active = choice === theme;
     btn.classList.toggle('active', active);
     btn.setAttribute('aria-pressed', active ? 'true' : 'false');
-    btn.setAttribute('aria-label', btn.getAttribute('data-theme-choice') === 'light' ? T('theme_light','Light theme') : T('theme_dark','Dark theme'));
+    btn.setAttribute('aria-label', choice === 'light' ? T('theme_light','Light theme') : choice === 'glass' ? T('theme_glass','Liquid Glass theme') : T('theme_dark','Dark theme'));
   });
 }
 function asbSetTheme(theme) {
-  theme = theme === 'light' ? 'light' : 'dark';
+  theme = (theme === 'light' || theme === 'glass') ? theme : 'dark';
   uiSound('option');
   try { localStorage.setItem('asb_theme', theme); } catch (e) {}
   /* Apply it now, not on the next launch.
@@ -4910,8 +4962,8 @@ function asbSetTheme(theme) {
    * and repainted the toggle, while the page itself stayed as it was until a restart -
    * most visible on surfaces that use --surface directly, like the bottom bar. */
   try {
-    if (theme === 'light') document.documentElement.setAttribute('data-asb-theme', 'light');
-    else document.documentElement.removeAttribute('data-asb-theme');
+    if (theme === 'dark') document.documentElement.removeAttribute('data-asb-theme');
+    else document.documentElement.setAttribute('data-asb-theme', theme);
   } catch (e) {}
   asbPaintThemeControls();
   uiSound('option');
@@ -11999,13 +12051,18 @@ async function pollStockTelemetry(visible, force = false) {
     const r = await run(cmd);
     await lvMeterPoll(false);
     const text = ((r && r.stdout) || '').trim();
-    _stockTelemetryKv = parseStockTelemetry(text);
-    /* The sample time is the page's own clock in ms (the script runs no `date`). */
-    if (Object.keys(_stockTelemetryKv).length) _stockTelemetryKv.tsms = String(Date.now());
+    const freshKv = parseStockTelemetry(text);
+    /* A transient root/sysfs failure is not a new thermal sample. Keep the last complete
+     * snapshot (and its timestamp/verdict) visible instead of blanking the whole card until
+     * the next successful poll. A retry with real data replaces it atomically. */
+    if (Object.keys(freshKv).length) {
+      _stockTelemetryKv = freshKv;
+      /* The sample time is the page's own clock in ms (the script runs no `date`). */
+      _stockTelemetryKv.tsms = String(Date.now());
+    }
     paintStockLive(_stockTelemetryKv);
     if (pre) pre.textContent = text || T('stock_telemetry_unavailable', 'ROM telemetry unavailable');
   } catch(e) {
-    _stockTelemetryKv = {};
     paintStockLive(_stockTelemetryKv);
     if (pre) pre.textContent = T('stock_telemetry_unavailable', 'ROM telemetry unavailable');
   }
