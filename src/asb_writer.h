@@ -1232,6 +1232,8 @@ static int gpu_hz_to_pwrlevel_min(long target_hz) {
  * for the frequency the pipeline needed no matter how high the caps went.
  */
 #define UCLAMP_FG_MAX   "/dev/cpuctl/foreground/cpu.uclamp.max"
+#define UCFG_LAST_GOOD  "/data/adb/asb/ucfg_last_good"
+#define UCFG_RESTORE    "/data/adb/asb/ucfg_restore"
 #define CPUSET_FG_CPUS  "/dev/cpuset/foreground/cpus"
 #define CPUSET_TOP_CPUS "/dev/cpuset/top-app/cpus"
 #define PATH_CPU_PRESENT   "/sys/devices/system/cpu/present"
@@ -2590,7 +2592,7 @@ static void writer_camera_guard(int active) {
             /* Never hand back "max". The foreground tier is 55-88 in every profile; 100 here
              * means it was already boosted when the camera opened (face unlock right after
              * another boost). Restoring it left the whole screen session uncapped. Use the
-             * tuner's last ordinary value instead, the same file it falls back to. */
+             * native guard's last ordinary value instead, the same file it falls back to. */
             int _fg = g_cam_saved_uc_fg;
             if (_fg >= 100) {
                 int _lg = sysfs_read_int("/data/adb/asb/ucfg_last_good", -1);
@@ -2651,46 +2653,93 @@ static void writer_init_cache(void) {
     g_wcache.initialized = 1;
 }
 
-/* Foreground uclamp guard.
+/* Foreground uclamp has one runtime owner. Smart's screen-off 35 / wake restore used to
+ * live in smart_dynamic_tune.sh while this native guard and the camera guard wrote the
+ * same node independently. Keeping both screen-state transitions here closes that race;
+ * profile scripts still apply their one-shot baseline when the user changes profile.
  *
- * Nobody owned this node while the governor ran. The writer manages top-app, background
- * and system-background; asb_reconcile.sh checks foreground too, but skips every
- * per-cgroup check while the governor is running, on the reasoning that those ceilings
- * are the governor's. So when the ROM put foreground back to "max" it stayed there until
- * the next screen-off: 21 minutes in one capture, 15 in another, 43% of a day on an OP12.
- * Foreground holds what keeps running behind the visible app - music, navigation,
- * downloads - which is exactly what the profile's foreground limit is for.
- *
- * Only "max" is corrected, only with the screen on, never while the camera guard holds
- * it, and only after it has persisted for 60 s: a vendor launch boost lifts foreground
- * for a second or two and must not be cut short. The value put back is the last
- * legitimate one ASB saw (below 100), else the tuner's saved value, else 70 - the
- * Balanced rail. Five corrections inside ten minutes means something keeps reasserting
- * it, and the guard then stands down for ten minutes rather than fight. */
+ * The Smart-only screen policy is unchanged: 35 with the screen off, the saved ordinary
+ * value on wake, never save or restore a transient "max". Manual Balanced/Battery keep
+ * their previous behaviour - only the pre-existing 60-second max correction applies.
+ * Camera guard always wins while active. */
 static int    g_fg_last_good = -1;
 static time_t g_fg_max_since = 0;
 static int    g_fg_fix_n = 0;
 static time_t g_fg_fix_window = 0;
 static time_t g_fg_backoff_until = 0;
 static unsigned long g_fg_fix_total = 0;
-static void writer_fg_guard(int screen_on) {
+
+static int writer_fg_ordinary(int value) {
+    return value > 35 && value < 100;
+}
+
+static int writer_fg_fallback(void) {
+    if (writer_fg_ordinary(g_fg_last_good)) return g_fg_last_good;
+    int want = sysfs_read_int(UCFG_LAST_GOOD, -1);
+    if (writer_fg_ordinary(want)) return want;
+    char profile[24];
+    writer_read_current_profile(profile, sizeof(profile));
+    if (!strcmp(profile, "performance")) return 88;
+    if (!strcmp(profile, "balanced")) return 70;
+    return 55;
+}
+
+static void writer_fg_save_value(const char *path, int value) {
+    FILE *f = fopen(path, "w");
+    if (!f) return;
+    fprintf(f, "%d\n", value);
+    fclose(f);
+}
+
+static void writer_fg_guard(int screen_on, int smart_screen_policy) {
     time_t now = time(NULL);
-    if (!screen_on || g_cam_guard_on) { g_fg_max_since = 0; return; }
+    if (g_cam_guard_on) { g_fg_max_since = 0; return; }
+
     int cur = uclamp_read_pct(UCLAMP_FG_MAX, -1);
     if (cur < 0) return;
-    if (cur < 100) { g_fg_last_good = cur; g_fg_max_since = 0; return; }
+
+    if (!screen_on) {
+        g_fg_max_since = 0;
+        if (!smart_screen_policy || cur <= 35) return;
+        int keep = cur;
+        if (writer_fg_ordinary(cur)) {
+            g_fg_last_good = cur;
+            writer_fg_save_value(UCFG_LAST_GOOD, cur);
+        } else {
+            /* 100/max is a vendor or camera boost, never an ordinary restore value. */
+            keep = writer_fg_fallback();
+        }
+        writer_fg_save_value(UCFG_RESTORE, keep);
+        (void)sysfs_write_int(UCLAMP_FG_MAX, 35);
+        return;
+    }
+
+    /* Restore only what this owner lowered. A legacy 100 is replaced by last-good or
+     * the active profile's established foreground baseline. */
+    int saved = sysfs_read_int(UCFG_RESTORE, -1);
+    if (saved >= 0) {
+        int want = saved >= 100 ? writer_fg_fallback() : saved;
+        if (want > 0 && want < 100 && sysfs_write_int(UCLAMP_FG_MAX, want) == 0) {
+            unlink(UCFG_RESTORE);
+            if (writer_fg_ordinary(want)) g_fg_last_good = want;
+            cur = want;
+        }
+    }
+
+    /* A short vendor launch boost is allowed to finish. Correct only a max that has
+     * persisted for 60 s, and stand down for ten minutes after five failed ownership
+     * rounds rather than fighting another policy writer. */
+    if (cur < 100) {
+        if (writer_fg_ordinary(cur)) g_fg_last_good = cur;
+        g_fg_max_since = 0;
+        return;
+    }
     if (g_fg_max_since == 0) { g_fg_max_since = now; return; }
     if (now - g_fg_max_since < 60) return;
     if (now < g_fg_backoff_until) return;
     if (g_fg_fix_window == 0 || now - g_fg_fix_window > 600) { g_fg_fix_window = now; g_fg_fix_n = 0; }
     if (++g_fg_fix_n > 5) { g_fg_backoff_until = now + 600; return; }
-    int want = g_fg_last_good;
-    if (want <= 0 || want >= 100) {
-        want = -1;
-        FILE *f = fopen("/data/adb/asb/ucfg_last_good", "r");
-        if (f) { if (fscanf(f, "%d", &want) != 1) want = -1; fclose(f); }
-        if (want <= 0 || want >= 100) want = 70;
-    }
+    int want = writer_fg_fallback();
     if (sysfs_write_int(UCLAMP_FG_MAX, want) == 0) g_fg_fix_total++;
     g_fg_max_since = 0;
 }

@@ -7104,7 +7104,7 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
      * happened to change at the same moment. A field night shows the result: hourly
      * snapshots at 02:39 and 04:27, screen off, still read watermark_scale_factor=60 -
      * and with it none of the tuner's screen-off work ran either: laptop_mode, dirty
-     * thresholds, read-ahead, the foreground uclamp tier, Wi-Fi power save.
+     * thresholds, read-ahead and Wi-Fi power save. Foreground uclamp is native-owned.
      *
      * The call itself stays cheap: it only forks when the signature changes. A screen
      * change also bypasses the 30 s debounce - with the screen off the governor's timers
@@ -10611,9 +10611,10 @@ int main(int argc, char **argv) {
              * shell_overridden_up watchdog Anti-clamp above handles vendor DOWN-clamps (gap >
              * 0).
              */
-            /* Foreground has no other owner while the governor runs - see writer_fg_guard. */
+            /* One native foreground owner: Smart screen transitions plus the max guard.
+             * Manual profiles retain their baseline without gaining Smart's sleep cap. */
             if (fsm.profile_idx != PROFILE_PERFORMANCE)
-                writer_fg_guard(metrics.misc.screen_on);
+                writer_fg_guard(metrics.misc.screen_on, fsm.profile_idx == PROFILE_SMART);
             if (fsm.profile_idx != PROFILE_PERFORMANCE &&
                 (fsm.state == ASB_STATE_DEEP_IDLE || fsm.state == ASB_STATE_LIGHT_IDLE ||
                  fsm.state == ASB_STATE_MODERATE  || fsm.state == ASB_STATE_HEAVY)) {
