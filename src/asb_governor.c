@@ -3835,7 +3835,7 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
         fprintf(f, "cap_sleep_detente=%d\ncap_detente_skipped=%ld\n"
                    "build_flavor=%s\nbat_cur_unit=%d\n",
                 g_cap_detente_active, g_cap_detente_skipped,
-                ASB_DEBUG_BUILD ? "debug" : "release",
+                "unified",
                 g_batt_cur_unit);
     }
     /* Debug build only: include plaintext pkg if cached */
@@ -7481,7 +7481,7 @@ int main(int argc, char **argv) {
     g_gov_start_ts = time(NULL);
     g_logf = fopen(LOG_FILE, "a");
     asb_log("=== asb_governor starting (pid %d, flavor=%s) ===", getpid(),
-            ASB_DEBUG_BUILD ? "debug" : "release");
+            "unified");
 
     signal(SIGTERM, sig_handler);
     signal(SIGINT,  sig_handler);

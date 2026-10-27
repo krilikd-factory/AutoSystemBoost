@@ -26,20 +26,19 @@ fi
 
 ASB_BUILD_MODE="${ASB_BUILD_MODE:-release}"
 case "$ASB_BUILD_MODE" in
-  release) ASB_BIN_NAME="asb" ;;
-  debug)   ASB_BIN_NAME="asb-debug" ;;
-  *) echo "[ASB] ASB_BUILD_MODE must be 'release' or 'debug' (got: $ASB_BUILD_MODE)" >&2; exit 1 ;;
+  release|test) ASB_BIN_NAME="asb" ;;
+  *) echo "[ASB] ASB_BUILD_MODE must be 'release' or 'test' (got: $ASB_BUILD_MODE)" >&2; exit 1 ;;
 esac
 
 CFLAGS=(
   -O2 -fstack-protector-strong -fPIE -pie
   -D_FORTIFY_SOURCE=2
   -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare
+  -DASB_DEBUG_BUILD=1
   -I"$SCRIPT_DIR"
 )
-if [ "$ASB_BUILD_MODE" = "debug" ]; then
-  CFLAGS+=(-DASB_DEBUG_BUILD=1)
-fi
+# fix235: one unified feature set. Release and testN differ only in package identity;
+# diagnostics, observability and WebUI support actions are no longer a separate debug flavor.
 LDFLAGS=(-lm -ldl)   # -ldl: dlsym for __system_property_wait (fix116)
 
 "$CC" "${CFLAGS[@]}" "$SCRIPT_DIR/asb_governor.c" "${LDFLAGS[@]}" -o "$OUT_DIR/$ASB_BIN_NAME"
