@@ -21,24 +21,9 @@ asb_resolve_moddir() {
 }
 MODDIR="$(asb_resolve_moddir)"
 
-# Debug-only passive lifecycle evidence for slow reboot investigation. Keep the same strict
-# numeric suffix grammar as the recorder/asbdiag: V64-debug4 is a debug build, V64-debug4x is not.
-# The local gate prevents any extra helper process in a release boot.
-ASB_TIMELINE_DEBUG=0
-_asb_timeline_version=""
-while IFS='=' read -r _asb_timeline_key _asb_timeline_value; do
-  [ "$_asb_timeline_key" = "version" ] || continue
-  _asb_timeline_version="$_asb_timeline_value"
-  break
-done < "$MODDIR/module.prop"
-_asb_timeline_seq="${_asb_timeline_version##*-debug}"
-case "$_asb_timeline_version:$_asb_timeline_seq" in
-  *-debug[1-9]*:[1-9]*)
-    case "$_asb_timeline_seq" in *[!0-9]*) ;; *) ASB_TIMELINE_DEBUG=1 ;; esac
-    ;;
-esac
+# Unified passive lifecycle evidence: release and testN record the same short boot markers.
+ASB_TIMELINE_ENABLED=1
 asb_timeline_mark() {
-  [ "$ASB_TIMELINE_DEBUG" = "1" ] || return 0
   [ -f "$MODDIR/runtime/asb_boot_timeline.sh" ] || return 0
   ASB_BOOT_TIMELINE_MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_boot_timeline.sh" mark "$1" >/dev/null 2>&1 || true
 }
