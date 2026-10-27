@@ -2,12 +2,6 @@ name: ASB · Build Release
 
 on:
   workflow_dispatch:
-    inputs:
-      prerelease:
-        description: 'Pre-release tag for a manual build (rc1, rc2, ...); empty = the public version from module.prop'
-        required: false
-        default: ''
-        type: string
   push:
     tags:
       - 'v*'
@@ -27,7 +21,7 @@ permissions:
 jobs:
   build-release:
     runs-on: ubuntu-latest
-    name: Release (no debug logs)
+    name: Release (unified diagnostics)
 
     steps:
       - name: Checkout
@@ -237,7 +231,7 @@ jobs:
         run: |
           # fix215: this check gates PUBLISHING, never building. It lived in the always-run
           # host test suite since fix213, so any checkout whose metadata had not been bumped
-          # yet (a fork, a debug run, main between releases) failed CI on a metadata file.
+          # yet (a fork or main between releases) failed CI on a metadata file.
           # Here in the release pipeline it still guarantees the manifest the managers fetch
           # via updateJson describes exactly the build this run publishes.
           BASE_VER="$(sed -n 's/^version=//p' module.prop | head -n 1)"
@@ -283,7 +277,7 @@ jobs:
             fi
           done
 
-      - name: Build RELEASE binary (no debug logs)
+      - name: Build RELEASE binary (unified diagnostics)
         # The AIDL effect prebuilt (src/DSP_AIDL/prebuilt/<abi>/libasbdsp_aidl.so) is used
         # automatically when present - build_ndk_release.sh detects the file and prefers it
         # over the legacy .so, verifying the createEffect symbol. We do NOT force
@@ -347,8 +341,6 @@ jobs:
           done
 
       - name: Package RELEASE zip
-        env:
-          PRERELEASE_INPUT: ${{ github.event.inputs.prerelease }}
         run: |
           PKG_REL="$PWD/pkg-release"
           rm -rf "$PKG_REL"
@@ -471,9 +463,9 @@ jobs:
             exit 1
           fi
 
-          # Full-day, battery, audio and Smart logkit are normal on-device support tools.
+          # Session, battery, audio and Smart logkit are normal on-device support tools.
           # They are POSIX shell scripts and are used to collect the user reports ASB is tuned
-          # against; excluding them from release made normal diagnosis debug-only.
+          # against; both release and testN packages keep normal diagnosis available.
           # (Not in release_tools.list: they live in tools/logkit/, and the installer's
           # prune is maxdepth 1 - subdirectories are never touched.)
           for _t in _asb_logkit_common.sh asb_audio_ab.sh asb_fullday_digest.sh asb_log_battery_mixed.sh asb_log_battery_sleep.sh asb_log_bgtrim_snapshot.sh asb_log_full_day.sh asb_log_perf.sh asb_log_smart_daily.sh asb_log_smart_gaming.sh asb_log_smart_sleep.sh; do
@@ -485,19 +477,6 @@ jobs:
 
           ASB_VER=$(grep '^version=' module.prop | cut -d= -f2)
           ASB_CODE=$(grep '^versionCode=' module.prop | cut -d= -f2)
-          # A pre-release is the release build (no debug logs) under its own name, V65-rc1:
-          # manual runs only, versionCode unchanged so the public release still updates over it.
-          if [ -n "${PRERELEASE_INPUT:-}" ]; then
-            [ "${GITHUB_EVENT_NAME:-}" = "workflow_dispatch" ] || { echo "::error::prerelease is for manual runs only"; exit 1; }
-            case "$PRERELEASE_INPUT" in
-              rc[1-9]|rc[1-9][0-9]) ;;
-              *) echo "::error::prerelease must be rc1 .. rc99"; exit 1 ;;
-            esac
-            ASB_VER="${ASB_VER}-${PRERELEASE_INPUT}"
-            sed -i "s/^version=.*/version=${ASB_VER}/" "$PKG_REL/module.prop"
-            grep -qx "version=${ASB_VER}" "$PKG_REL/module.prop"
-            grep -qx "versionCode=${ASB_CODE}" "$PKG_REL/module.prop"
-          fi
           ASB_COMMIT=$(git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
           ASB_BIN_SHA=$(sha256sum "$PKG_REL/bin/asb" | awk '{print $1}')
           cat > "$PKG_REL/release-manifest.json" <<EOF
@@ -676,7 +655,7 @@ jobs:
             "config/profile_bounds.conf" \
             "config/governor.conf$"; do
             if unzip -l "$ZIP_REL" | grep -qE "$forbidden"; then
-              echo "ERROR: $ZIP_REL leaked $forbidden (debug/dev artifact)"
+              echo "ERROR: $ZIP_REL leaked $forbidden (development artifact)"
               exit 1
             fi
           done
@@ -723,7 +702,7 @@ jobs:
             echo "  ZIP     : $ZIP_REL ($(du -sh $ZIP_REL | cut -f1))"
             BINSZ=$(unzip -p "$ZIP_REL" bin/asb 2>/dev/null | wc -c)
             SOSZ=$(unzip -p "$ZIP_REL" bin/libasbdsp.so 2>/dev/null | wc -c)
-            echo "  Binary  : ${BINSZ} bytes (no debug logs)"
+            echo "  Binary  : ${BINSZ} bytes (unified diagnostics)"
             echo "  DSP .so : ${SOSZ} bytes"
           fi
           echo "========================================"

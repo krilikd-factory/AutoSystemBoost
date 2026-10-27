@@ -1,0 +1,700 @@
+name: ASB · Build Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_sequence:
+        description: 'Positive test sequence after this public release (1, 2, …, 10, …)'
+        required: false
+        default: '1'
+        type: string
+
+# Test builds only upload an artifact and never publish a release.
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    name: Test (unified diagnostics)
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Normalize executable diagnostic script modes
+        run: |
+          # Source archives and browser uploads can lose git executable mode bits. These two
+          # runtime helpers are explicitly executed by their safety contracts below.
+          chmod 0755 runtime/asb_active_efficiency_envelope.sh runtime/asb_boot_timeline.sh runtime/asb_debug_support.sh runtime/asb_stock_policy.sh runtime/asb_overlay_guard.sh runtime/asb_wifi_fallback.sh tools/asb_kernel_uv_coexist.sh tools/asb_device_info.sh
+
+      - name: Validate required source files
+        run: |
+          for f in \
+            src/asb_governor.c \
+            common/englishtext.sh \
+            common/frenchtext.sh \
+            common/armeniantext.sh \
+            "webroot/i18n/en.json" \
+            "webroot/i18n/ru.json" \
+            "webroot/i18n/uk.json" \
+            "webroot/i18n/de.json" \
+            "webroot/i18n/es.json" \
+            "webroot/i18n/pt.json" \
+            "webroot/i18n/tr.json" \
+            "webroot/i18n/id.json" \
+            "webroot/i18n/it.json" \
+            "webroot/i18n/fr.json" \
+            "webroot/i18n/ar.json" \
+            "webroot/i18n/zh.json" \
+            "webroot/i18n/hy.json" \
+            common/russiantext.sh \
+            common/ukrainiantext.sh \
+            common/germantext.sh \
+            common/spanishtext.sh \
+            common/portuguesetext.sh \
+            common/turkishtext.sh \
+            common/indonesiantext.sh \
+            common/italiantext.sh \
+            common/arabictext.sh \
+            common/chinesetext.sh \
+            src/asb_metrics.h \
+            src/asb_fsm.h \
+            src/asb_learner.h \
+            src/asb_writer.h \
+            src/asb_socket.h \
+            src/asb_config.h \
+            src/asb_fsm_bounds.generated.h \
+            src/asb_smart.h \
+            src/asb_smart_defs.h \
+            src/asb_record.h \
+            src/asb_lspd.h \
+            src/build_ndk_release.sh \
+            src/DSP/asb_dsp.c \
+            src/DSP/asb_effect_abi.h \
+            src/DSP_AIDL/asb_dsp_core.h \
+            module.prop \
+            customize.sh \
+            service.sh \
+            runtime/asb_arbiter.sh \
+            runtime/asb_device_bounds.sh \
+            runtime/asb_capabilities.sh \
+            runtime/asb_active_efficiency_envelope.sh \
+            runtime/asb_boot_timeline.sh \
+            runtime/asb_debug_support.sh \
+            runtime/asb_wifi_fallback.sh \
+            runtime/asb_ltpo_apply.sh \
+            runtime/asb_lte_screenoff.sh \
+            runtime/asb_mmfeed_apply.sh \
+            runtime/asb_ltpo_video.sh \
+            runtime/asb_odm_rebind.sh \
+            runtime/asb_stock_policy.sh \
+            runtime/asb_overlay_guard.sh \
+            tools/asb_schema_sync.sh \
+            config/key_ownership.tsv \
+            tools/asb_intent.sh \
+            tools/asb_config_backup.sh \
+            tools/asb_native_warning_budget.sh \
+            tools/asb_native_warning_baseline.txt \
+            tools/asb_full_regression.sh \
+            tests/asb_smart.sh \
+            tests/asb_features.sh \
+            tests/asb_ui.sh \
+            tests/asb_system.sh; do
+            if [ ! -f "$f" ]; then
+              echo "ERROR: required file missing: $f"
+              exit 1
+            fi
+            echo "  v $f"
+          done
+
+      - name: Validate profile bounds source-of-truth
+        run: |
+          cp config/profile_bounds.generated.sh /tmp/_bounds_sh.before 2>/dev/null || true
+          cp src/asb_fsm_bounds.generated.h    /tmp/_bounds_h.before  2>/dev/null || true
+          bash tools/gen_bounds.sh
+          if ! diff -q /tmp/_bounds_sh.before config/profile_bounds.generated.sh >/dev/null 2>&1 \
+            || ! diff -q /tmp/_bounds_h.before src/asb_fsm_bounds.generated.h >/dev/null 2>&1; then
+            echo "ERROR: generated bounds files are STALE"
+            echo "       Run 'bash tools/gen_bounds.sh' locally and commit."
+            exit 1
+          fi
+          echo "Generated bounds artefacts up-to-date."
+
+      - name: Validate generated governor schema baseline
+        run: |
+          chmod +x tools/asb_schema_sync.sh
+          tools/asb_schema_sync.sh check
+
+      - name: DSP source checks (catches the errors that reached main)
+        run: |
+          # The AIDL library is built by a separate soong workflow, so nothing on this
+          # path compiles it. A revision with three compile errors reached main because of
+          # that gap. This does not build the library - it checks the source for the
+          # specific mistakes that got through.
+          bash tools/dsp_stubs/asb_dsp_syntax_check.sh
+
+      - name: Enforce native strict-warning budget
+        run: |
+          chmod +x tools/asb_native_warning_budget.sh
+          CC=clang tools/asb_native_warning_budget.sh
+
+      - name: Run asb_lint.sh
+        run: |
+          if [ ! -f tools/asb_lint.sh ]; then
+            echo "WARNING: tools/asb_lint.sh missing — skipping"
+            exit 0
+          fi
+          MODDIR="$(pwd)" bash tools/asb_lint.sh
+
+      - name: Run canonical host regression
+        run: bash tools/asb_full_regression.sh
+
+      - name: Verify runner tools
+        shell: bash
+        run: |
+          missing=()
+          for tool in zip unzip curl file rsync jq; do
+            command -v "$tool" >/dev/null 2>&1 || missing+=("$tool")
+          done
+          if [ "${#missing[@]}" -eq 0 ]; then
+            printf 'Runner tools already available: %s\n' 'zip unzip curl file rsync jq'
+            exit 0
+          fi
+          echo "::warning::Installing missing runner tools: ${missing[*]}"
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends "${missing[@]}"
+
+      - name: Cache Android NDK
+        id: cache-ndk
+        uses: actions/cache@v4
+        with:
+          path: android-ndk-r28c
+          # The exact key pins both runner platform and immutable NDK release.
+          # Legacy restore keeps the cache populated by prior V64 workflows usable.
+          key: ${{ runner.os }}-android-ndk-r28c-linux-v1
+          restore-keys: |
+            ${{ runner.os }}-android-ndk-r28c-linux-
+            android-ndk-r28c
+
+      - name: Download Android NDK
+        if: steps.cache-ndk.outputs.cache-hit != 'true'
+        run: |
+          # A restore-key hit returns cache-hit=false but can already restore a
+          # complete r28c directory. Reuse it when usable; otherwise remove any
+          # incomplete directory before extraction so unzip never prompts for input.
+          if [ -x android-ndk-r28c/toolchains/llvm/prebuilt/linux-x86_64/bin/clang ]; then
+            echo "Restored Android NDK is usable; skipping download."
+            exit 0
+          fi
+          rm -rf android-ndk-r28c android-ndk.zip
+          curl --fail --location --retry 3 --retry-delay 5 --retry-all-errors \
+            -o android-ndk.zip \
+            https://dl.google.com/android/repository/android-ndk-r28c-linux.zip
+          unzip -q android-ndk.zip
+          rm -f android-ndk.zip
+          test -x android-ndk-r28c/toolchains/llvm/prebuilt/linux-x86_64/bin/clang
+
+      - name: Set NDK environment
+        run: |
+          echo "ANDROID_NDK_ROOT=$PWD/android-ndk-r28c" >> $GITHUB_ENV
+          echo "NDK_ROOT=$PWD/android-ndk-r28c"         >> $GITHUB_ENV
+
+      - name: Validate release tag
+        run: |
+          TAG="${GITHUB_REF_NAME:-}"
+          BASE_VER="$(sed -n 's/^version=//p' module.prop | head -n 1)"
+          BASE_CODE="$(sed -n 's/^versionCode=//p' module.prop | head -n 1)"
+          case "$BASE_VER:$BASE_CODE" in
+            V[0-9]*:[0-9]*) ;;
+            *) echo "::error::module.prop must expose V<number> and a decimal versionCode"; exit 1 ;;
+          esac
+          # A manually dispatched build normally runs from a branch such as `main`; it must
+          # not be mistaken for a release tag. Check tag identity only for an actual GitHub
+          # Release or a tag-ref run that could publish an asset.
+          if [ "${GITHUB_EVENT_NAME:-}" = "release" ] || [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            case "$TAG" in
+              "$BASE_VER"|v"${BASE_VER#V}"|"${BASE_VER#V}") ;;
+              *) echo "::error::Release tag '$TAG' does not match module version '$BASE_VER'"; exit 1 ;;
+            esac
+            echo "Release identity: version=$BASE_VER versionCode=$BASE_CODE tag=$TAG"
+          else
+            echo "Release identity: version=$BASE_VER versionCode=$BASE_CODE manual-ref=${TAG:-unknown}"
+          fi
+
+      - name: Normalize DSP source path for Linux CI
+        run: |
+          if [ -d src/DSP ] && [ ! -e src/dsp ]; then
+            ln -s DSP src/dsp
+          fi
+          test -f src/dsp/asb_dsp.c || { echo "ERROR: src/dsp/asb_dsp.c not found after normalization"; exit 1; }
+          test -f src/dsp/asb_effect_abi.h || { echo "ERROR: src/dsp/asb_effect_abi.h not found after normalization"; exit 1; }
+          ls -la src/dsp
+
+      - name: Check AIDL prebuilt presence
+        run: |
+          # Make it obvious in the log whether the soong-built AIDL effect is present.
+          # If it is missing, build_ndk_release.sh silently falls back to the LEGACY
+          # effect, which Android 13+/16 never loads - that is easy to miss otherwise.
+          echo "=== src/DSP_AIDL/prebuilt ==="
+          ls -laR src/DSP_AIDL/prebuilt 2>/dev/null || echo "  (prebuilt dir missing)"
+          for a in arm64-v8a armeabi-v7a; do
+            # Either name counts. build_ndk_release.sh prefers the versioned prebuilts and
+            # falls back to the historical libasbdsp_aidl.so, so warning about the old name
+            # when libasbdsp_v3.so is sitting right beside it would be a false alarm.
+            p=""
+            for _c in src/DSP_AIDL/prebuilt/$a/libasbdsp_v*.so \
+                      src/DSP_AIDL/prebuilt/$a/libasbdsp_aidl.so; do
+              case "$_c" in *_legacy*) continue ;; esac
+              [ -f "$_c" ] && { p="$_c"; break; }
+            done
+            if [ -n "$p" ]; then
+              echo "  FOUND $p ($(wc -c < "$p") bytes)"
+            else
+              echo "  ::warning::no AIDL prebuilt for $a (looked for libasbdsp_v*.so and libasbdsp_aidl.so) - falls back to the LEGACY effect"
+            fi
+          done
+
+      - name: Build TEST binary (unified diagnostics)
+        # The AIDL effect prebuilt (src/DSP_AIDL/prebuilt/<abi>/libasbdsp_aidl.so) is used
+        # automatically when present - build_ndk_release.sh detects the file and prefers it
+        # over the legacy .so, verifying the createEffect symbol. We do NOT force
+        # ASB_DSP_AIDL=1 here so the release is not blocked before the prebuilt exists; the
+        # verify step below reports which effect variant actually shipped.
+        run: ASB_BUILD_MODE=test bash src/build_ndk_release.sh
+
+      - name: Verify test binary and DSP library
+        run: |
+          B="bin/arm64-v8a/asb"
+          SO="bin/arm64-v8a/libasbdsp.so"
+
+          test -f "$B" || { echo "ERROR: $B not found"; exit 1; }
+          test -x "$B" || { echo "ERROR: $B not executable"; exit 1; }
+          FILE_OUT="$(file "$B")"
+          echo "$B file: $FILE_OUT"
+          echo "$FILE_OUT" | grep -q "aarch64"          || { echo "ERROR: not aarch64!"; exit 1; }
+          echo "$FILE_OUT" | grep -q "ELF"              || { echo "ERROR: not ELF!"; exit 1; }
+          echo "$FILE_OUT" | grep -q "Android\|dynamic" || { echo "ERROR: not Android binary!"; exit 1; }
+          SIZE=$(wc -c < "$B")
+          echo "Binary size: $SIZE bytes"
+          [ "$SIZE" -gt 10000 ]   || { echo "ERROR: too small"; exit 1; }
+          [ "$SIZE" -lt 2000000 ] || { echo "ERROR: too large"; exit 1; }
+
+          test -f "$SO" || { echo "ERROR: $SO not found"; exit 1; }
+          ATT="bin/arm64-v8a/asb_dsp_attach"
+          test -x "$ATT" || { echo "ERROR: $ATT missing or not executable"; exit 1; }
+          SO32="bin/armeabi-v7a/libasbdsp.so"
+          if [ -f "$SO32" ]; then
+            F32="$(file "$SO32")"; echo "$SO32 file: $F32"
+            echo "$F32" | grep -q "ARM"  || { echo "ERROR: $SO32 is not 32-bit ARM!"; exit 1; }
+            echo "$F32" | grep -q "ELF"  || { echo "ERROR: $SO32 not ELF!"; exit 1; }
+          else
+            echo "::error::$SO32 missing - the armeabi-v7a build did not run"
+            exit 1
+          fi
+          FILE_SO="$(file "$SO")"
+          echo "$SO file: $FILE_SO"
+          echo "$FILE_SO" | grep -q "aarch64" || { echo "ERROR: DSP .so is not aarch64!"; exit 1; }
+          echo "$FILE_SO" | grep -q "ELF"     || { echo "ERROR: DSP .so is not ELF!"; exit 1; }
+          echo "$FILE_SO" | grep -q "shared object" || { echo "ERROR: DSP artifact is not a shared object!"; exit 1; }
+          SO_SIZE=$(wc -c < "$SO")
+          echo "DSP size: $SO_SIZE bytes"
+          [ "$SO_SIZE" -gt 1000 ] || { echo "ERROR: DSP .so too small"; exit 1; }
+
+          # Report which effect ABI actually shipped. On Android 13+/16 audioserver loads
+          # effects through the AIDL factory (createEffect); a legacy AELI-only .so is
+          # never bound to the stream, so surface a clear warning if that is what shipped.
+          if command -v llvm-nm >/dev/null 2>&1; then NM=llvm-nm; else NM="$(ls "$ANDROID_NDK_HOME"/toolchains/llvm/prebuilt/*/bin/llvm-nm 2>/dev/null | head -1)"; fi
+          [ -n "$NM" ] && [ -x "$NM" ] || NM=nm
+          for so in "$SO" "$SO32"; do
+            [ -f "$so" ] || continue
+            SYMS="$("$NM" -D --defined-only "$so" 2>/dev/null || true)"
+            if echo "$SYMS" | grep -q " createEffect$"; then
+              echo "::notice::$so is the AIDL effect (createEffect present) - loads on Android 13+/16"
+            elif echo "$SYMS" | grep -q "AUDIO_EFFECT_LIBRARY_INFO_SYM"; then
+              echo "::warning::$so is the LEGACY effect (AELI only). Android 13+/16 will NOT bind it to the music stream. Build src/DSP_AIDL via the 'Build DSP AIDL' workflow and commit the prebuilt so the AIDL variant ships."
+            else
+              echo "::warning::$so exports neither createEffect nor AELI - effect will not load"
+            fi
+          done
+
+      - name: Package TEST zip
+        env:
+          TEST_SEQ_INPUT: ${{ inputs.test_sequence }}
+        run: |
+          PKG_TEST="$PWD/pkg-test"
+          rm -rf "$PKG_TEST"
+          mkdir -p "$PKG_TEST"
+
+          rsync -a ./ "$PKG_TEST"/ \
+            --exclude '.git'                          \
+            --exclude '.github'                       \
+            --exclude 'android-ndk*'                  \
+            --exclude 'pkg-*'                        \
+            --exclude '*.zip'                         \
+            --exclude '__MACOSX'                      \
+            --exclude '*.DS_Store'                    \
+            --exclude '__pycache__'                   \
+            --exclude '*.pyc'                         \
+            --exclude 'src'                           \
+            --exclude 'bin/arm64-v8a'                 \
+            --exclude 'bin/armeabi-v7a'               \
+            --exclude 'banner.png'                    \
+            --exclude 'banner2.png'                   \
+            --exclude 'CHANGELOG.md'                  \
+            --exclude 'README.md'                     \
+            --exclude 'README.ru.md'                  \
+            --exclude 'update.json'                   \
+            --exclude 'RELEASE_CHECKLIST.md'          \
+            --exclude 'docs'                          \
+            --exclude 'tests'                         \
+            --exclude 'tools'                         \
+            --exclude 'config/profile_bounds.conf'    \
+            --exclude 'config/governor.conf' \
+            --exclude '/install.sh'
+
+          mkdir -p "$PKG_TEST/bin"
+          install -m 0755 bin/arm64-v8a/asb "$PKG_TEST/bin/asb"
+          # Both ABIs: /vendor/lib64/soundfx and /vendor/lib/soundfx both exist on the
+          # target and each needs a library of its own bitness.
+          # The generic slot, ONLY when there is no versioned build to stand in for it.
+          #
+          # build_ndk_release.sh now resolves bin/arm64-v8a/libasbdsp.so from the newest
+          # versioned prebuilt, so shipping both means shipping the same bytes twice under
+          # two names - 664 KB of duplicate in a 2 MB module. The installer's fallback
+          # already walks libasbdsp_v*.so and takes the newest, so the generic name is only
+          # needed by a build that ships no versioned libraries at all.
+          if ls src/DSP_AIDL/prebuilt/arm64-v8a/libasbdsp_v*.so >/dev/null 2>&1; then
+            echo "  = skipping generic bin/libasbdsp.so (versioned builds cover it)"
+          else
+            install -m 0644 bin/arm64-v8a/libasbdsp.so "$PKG_TEST/bin/libasbdsp.so"
+          fi
+          # Versioned AIDL builds, when the repo carries them. The installer reads the
+          # effect interface version out of VINTF and asks for the matching one; a device
+          # on v2 cannot load a v3 library, so shipping only one is a coin flip.
+          for _vs in src/DSP_AIDL/prebuilt/arm64-v8a/libasbdsp_v*.so; do
+            [ -f "$_vs" ] || continue
+            install -m 0644 "$_vs" "$PKG_TEST/bin/$(basename "$_vs")"
+            echo "  + bin/$(basename "$_vs")"
+          done
+          for _vs in src/DSP_AIDL/prebuilt/armeabi-v7a/libasbdsp_v*.so; do
+            [ -f "$_vs" ] || continue
+            _vn="$(basename "$_vs" .so)_32.so"
+            install -m 0644 "$_vs" "$PKG_TEST/bin/$_vn"
+            echo "  + bin/$_vn"
+          done
+          # Both effect ABIs travel in the zip; common/install.sh stages whichever one
+          # this device's effect factory can actually load. Shipping a single variant
+          # made that a build-time coin flip - see the OP13 NO_INIT report.
+          for _v in "arm64-v8a:libasbdsp_legacy.so" "armeabi-v7a:libasbdsp_legacy_32.so"; do
+            _va="${_v%%:*}"; _vn="${_v#*:}"
+            if [ -f "bin/$_va/libasbdsp_legacy.so" ]; then
+              install -m 0644 "bin/$_va/libasbdsp_legacy.so" "$PKG_TEST/bin/$_vn"
+              echo "  + bin/$_vn"
+            else
+              echo "::warning::bin/$_va/libasbdsp_legacy.so missing - that ABI has no legacy fallback"
+            fi
+          done
+          # Attacher daemon: creates the effect on session 0. OxygenOS ignores the
+          # config <postprocess>, so without this the effect never gets instantiated.
+          if [ ! -f bin/arm64-v8a/asb_dsp_attach ]; then
+            echo "::error::asb_dsp_attach missing - DSP would register but not attach"
+            exit 1
+          fi
+          install -m 0755 bin/arm64-v8a/asb_dsp_attach "${PKG_TEST}/bin/asb_dsp_attach"
+          if [ -f bin/armeabi-v7a/libasbdsp.so ]; then
+            if ls src/DSP_AIDL/prebuilt/armeabi-v7a/libasbdsp_v*.so >/dev/null 2>&1; then
+              echo "  = skipping generic bin/libasbdsp_32.so (versioned builds cover it)"
+            else
+              install -m 0644 bin/armeabi-v7a/libasbdsp.so "$PKG_TEST/bin/libasbdsp_32.so"
+            fi
+            echo "DSP: both ABIs packaged"
+          else
+            # Loud, because the only symptom on-device is /vendor/lib/soundfx quietly
+            # never appearing - which is exactly how this shipped broken once already.
+            echo "::error::armeabi-v7a libasbdsp.so was NOT built - check the DSP build step above"
+            exit 1
+          fi
+          find "$PKG_TEST" -name "*.log" -delete
+
+          # Top-level tools/ ship by ONE list: tools/release_tools.list. The installer's
+          # whitelist prune reads the same manifest, so "CI ships it" and "install keeps
+          # it" cannot drift apart - they did once, and seven shipped tools (among them
+          # asb_diag.sh's companions asb_effective_policy.sh and asb_verify_device.sh)
+          # were deleted at install time on every device. tests/asb_system.sh fails the
+          # build if this loop, the manifest and the installer stop agreeing.
+          # The manifest ships too, so the on-device installer reads the real list rather
+          # than its inline fallback.
+          if [ -f tools/release_tools.list ]; then
+            mkdir -p "$PKG_TEST/tools"
+            install -m 0644 tools/release_tools.list "$PKG_TEST/tools/release_tools.list"
+            while IFS= read -r _t; do
+              _t="$(echo "$_t" | sed 's/#.*//; s/[ \t\r]//g')"
+              [ -n "$_t" ] || continue
+              if [ -f "tools/$_t" ]; then
+                install -m 0755 "tools/$_t" "$PKG_TEST/tools/$_t"
+              else
+                echo "::error::release_tools.list names tools/$_t, which does not exist"
+                exit 1
+              fi
+            done < tools/release_tools.list
+          else
+            echo "::error::tools/release_tools.list missing - the release tool set has no source of truth"
+            exit 1
+          fi
+
+          # Session, battery, audio and Smart logkit are normal on-device support tools.
+          # They are POSIX shell scripts and are used to collect the user reports ASB is tuned
+          # against; both release and testN packages keep normal diagnosis available.
+          # (Not in release_tools.list: they live in tools/logkit/, and the installer's
+          # prune is maxdepth 1 - subdirectories are never touched.)
+          for _t in _asb_logkit_common.sh asb_audio_ab.sh asb_fullday_digest.sh asb_log_battery_mixed.sh asb_log_battery_sleep.sh asb_log_bgtrim_snapshot.sh asb_log_full_day.sh asb_log_perf.sh asb_log_smart_daily.sh asb_log_smart_gaming.sh asb_log_smart_sleep.sh; do
+            if [ -f "tools/logkit/$_t" ]; then
+              mkdir -p "$PKG_TEST/tools/logkit"
+              install -m 0755 "tools/logkit/$_t" "$PKG_TEST/tools/logkit/$_t"
+            fi
+          done
+
+          ASB_VER=$(grep '^version=' module.prop | cut -d= -f2)
+          ASB_CODE=$(grep '^versionCode=' module.prop | cut -d= -f2)
+          BASE_VER="$ASB_VER"
+          BASE_CODE="$ASB_CODE"
+          TEST_SEQ="${TEST_SEQ_INPUT:-}"
+          case "$BASE_CODE" in
+            ''|*[!0-9]*) echo '::error::module versionCode must be a decimal integer'; exit 1 ;;
+          esac
+          case "$TEST_SEQ" in
+            ''|0|0*|*[!0-9]*)
+              echo '::error::test_sequence must be one positive decimal integer (1, 2, …, 10, …)'
+              exit 1 ;;
+          esac
+          TEST_CODE="$BASE_CODE"
+          # Test identity changes only in the staged package. Native code, diagnostics,
+          # support tools and package contents remain identical to the release workflow.
+          ASB_VER="${BASE_VER}-test${TEST_SEQ}"
+          sed -i "s/^version=.*/version=${ASB_VER}/" "$PKG_TEST/module.prop"
+          grep -qx "version=${ASB_VER}" "$PKG_TEST/module.prop"
+          grep -qx "versionCode=${BASE_CODE}" "$PKG_TEST/module.prop"
+          ASB_COMMIT=$(git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
+          ASB_BIN_SHA=$(sha256sum "$PKG_TEST/bin/asb" | awk '{print $1}')
+          cat > "$PKG_TEST/release-manifest.json" <<EOF
+          {
+            "schema": 1,
+            "distribution": "flashable-module",
+            "version": "${ASB_VER}",
+            "versionCode": ${ASB_CODE},
+            "source_commit": "${ASB_COMMIT}",
+            "required_artifacts": ["bin/asb", "bin/asb_dsp_attach", "service.sh", "runtime/asb_arbiter.sh", "runtime/asb_capabilities.sh", "tools/asb_config_backup.sh", "tools/logkit/asb_log_full_day.sh"],
+            "artifacts": {"bin/asb": {"abi": "arm64-v8a", "sha256": "${ASB_BIN_SHA}"}}
+          }
+          EOF
+          ZIP_TEST="ASB-${ASB_VER}.zip"
+          rm -f "$ZIP_TEST"
+          # WebUI assets readable by the root manager's WebView. The zip preserves modes,
+          # so getting them right here is what customize.sh then re-asserts on device -
+          # a webroot/i18n that is not world-readable loads no translations at all.
+          chmod 0755 "$PKG_TEST/webroot" "$PKG_TEST/webroot/i18n" 2>/dev/null || true
+          find "$PKG_TEST/webroot" -type f -exec chmod 0644 {} + 2>/dev/null || true
+          find "$PKG_TEST/webroot" -type d -exec chmod 0755 {} + 2>/dev/null || true
+          ( cd "$PKG_TEST" && zip -rq "../$ZIP_TEST" . -x "*.DS_Store" )
+          echo "ZIP_TEST=$ZIP_TEST"   >> $GITHUB_ENV
+          echo "ASB_VER=$ASB_VER"   >> $GITHUB_ENV
+          echo "Created: $ZIP_TEST ($(du -sh $ZIP_TEST | cut -f1))"
+
+      - name: Validate TEST zip
+        run: |
+          echo "=== Zip contents ==="
+          unzip -l "$ZIP_TEST"
+
+          for required in \
+            "bin/asb" \
+            "bin/libasbdsp_legacy.so" \
+            "bin/libasbdsp_legacy_32.so" \
+            "bin/asb_dsp_attach" \
+            "system/bin/asbtrial" \
+            "system/bin/asbdiag" \
+            "service.sh" \
+            "module.prop" \
+            "post-fs-data.sh" \
+            "apply_profile.sh" \
+            "action.sh" \
+            "uninstall.sh" \
+            "customize.sh" \
+            "features.conf" \
+            "runtime/asb_watchdog.sh" \
+            "runtime/asb_apply_ledger.sh" \
+            "runtime/asb_trial.sh" \
+            "runtime/asb_policy_preview.sh" \
+            "runtime/asb_reconcile.sh" \
+            "runtime/profile_core.sh" \
+            "runtime/asb_baseline.sh" \
+            "runtime/asb_utils.sh" \
+            "runtime/asb_audio_apply.sh" \
+            "runtime/asb_dsp_thermal.sh" \
+            "runtime/asb_audio_activity.sh" \
+            "runtime/asb_drain_meter.sh" \
+            "runtime/asb_gfx_probe.sh" \
+            "runtime/asb_lsposed.sh" \
+            "runtime/asb_rom_telemetry.sh" \
+            "runtime/asb_dsp_live.sh" \
+            "runtime/asb_cgroup.sh" \
+            "runtime/asb_volume_curves.sh" \
+            "runtime/asb_media_apply.sh" \
+            "runtime/asb_blur_apply.sh" \
+            "runtime/asb_lpm.sh" \
+            "runtime/asb_dsp_abi_apply.sh" \
+            "runtime/asb_haptics_apply.sh" \
+            "runtime/asb_camera_grade.sh" \
+            "runtime/asb_system_tweaks.sh" \
+            "runtime/asb_anim_apply.sh" \
+            "runtime/asb_gms_trim.sh" \
+            "runtime/asb_gms_freeze.sh" \
+            "runtime/asb_wakelock_watch.sh" \
+            "runtime/asb_bt_link_watch.sh" \
+            "runtime/asb_screenoff_class.sh" \
+            "runtime/asb_smart_reset.sh" \
+            "runtime/asb_gnss_trim.sh" \
+            "runtime/asb_procstate.sh" \
+            "runtime/asb_bg_buckets.sh" \
+            "runtime/asb_net_apply.sh" \
+            "runtime/asb_net_routes.sh" \
+            "runtime/asb_log_apply.sh" \
+            "runtime/asb_settings.sh" \
+            "runtime/asb_doze_apply.sh" \
+            "runtime/asb_net_offload.sh" \
+            "runtime/asb_athena_apply.sh" \
+            "runtime/asb_config_safe.sh" \
+            "runtime/asb_arbiter.sh" \
+            "runtime/asb_capabilities.sh" \
+            "runtime/asb_active_efficiency_envelope.sh" \
+            "runtime/asb_apply_managed_props.sh" \
+            "runtime/asb_quick_restart.sh" \
+            "runtime/asb_boot_timeline.sh" \
+            "runtime/asb_debug_support.sh" \
+            "runtime/asb_wifi_fallback.sh" \
+            "runtime/asb_ltpo_apply.sh" \
+            "runtime/asb_lte_screenoff.sh" \
+            "runtime/asb_mmfeed_apply.sh" \
+            "runtime/asb_ltpo_video.sh" \
+            "runtime/asb_odm_rebind.sh" \
+            "runtime/asb_stock_policy.sh" \
+            "runtime/asb_overlay_guard.sh" \
+            "runtime/asb_device_pack_manifest.sh" \
+            "runtime/asb_device_tier.sh" \
+            "runtime/asb_device_bounds.sh" \
+            "tools/asb_diag.sh" \
+            "tools/asb_kernel_uv_coexist.sh" \
+            "tools/asb_device_info.sh" \
+            "tools/asb_effective_policy.sh" \
+            "tools/asb_intent.sh" \
+            "tools/asb_config_backup.sh" \
+            "tools/asb_doctor.sh" \
+            "tools/asb_recents_probe.sh" \
+            "tools/asb_state_sampler.sh" \
+            "tools/asb_drain_analyzer.sh" \
+            "tools/asb_vendor_thermal_probe.sh" \
+            "tools/asb_audit_state.sh" \
+            "tools/asb_verify_device.sh" \
+            "tools/logkit/_asb_logkit_common.sh" \
+            "tools/logkit/asb_audio_ab.sh" \
+            "tools/logkit/asb_fullday_digest.sh" \
+            "tools/logkit/asb_log_battery_mixed.sh" \
+            "tools/logkit/asb_log_battery_sleep.sh" \
+            "tools/logkit/asb_log_bgtrim_snapshot.sh" \
+            "tools/logkit/asb_log_full_day.sh" \
+            "tools/logkit/asb_log_perf.sh" \
+            "tools/logkit/asb_log_smart_daily.sh" \
+            "tools/logkit/asb_log_smart_gaming.sh" \
+            "tools/logkit/asb_log_smart_sleep.sh" \
+            "runtime/profile_core.sh" \
+            "runtime/smart_dynamic_tune.sh" \
+            "runtime/asb_tweaks.sh" \
+            "runtime/smart_dynamic_tune.sh" \
+            "profiles/battery.sh" \
+            "profiles/balanced.sh" \
+            "profiles/performance.sh" \
+            "config/profile_bounds.generated.sh" \
+            "config/governor.conf.shipped" \
+            "release-manifest.json" \
+            "tools/asb_smart_mode.sh" \
+            "tools/asb_kernel_uv_coexist.sh" \
+            "tools/asb_device_info.sh" \
+            "tools/asb_discover.sh" \
+            "tools/asb_synthesize_bounds.sh" \
+            "tools/release_tools.list" \
+            "webroot/index.html"; do
+            unzip -l "$ZIP_TEST" | grep -q "$required" \
+              || { echo "ERROR: $ZIP_TEST missing $required"; exit 1; }
+          done
+
+          # An AIDL library of each bitness has to be in there under SOME name. Listing
+          # bin/libasbdsp.so by name stopped working once the generic copy was dropped in
+          # favour of the versioned ones - and a required-file list that names a file the
+          # packaging step deliberately skips fails every build for no reason.
+          for _bits in "" "_32"; do
+            if ! unzip -l "$ZIP_TEST" 2>/dev/null | grep -qE "bin/libasbdsp(_v[0-9]+)?${_bits}\.so"; then
+              echo "::error::no AIDL effect library for ${_bits:-64-bit} in the package"
+              exit 1
+            fi
+          done
+
+          for forbidden in \
+            "tools/asb_lint.sh" \
+            "tools/gen_bounds.sh" \
+            "tools/asb_field_report.py" \
+            "tools/asb_field_report.sh" \
+            "tools/asb_compare_sessions.py" \
+            "tools/asb_analyze.py" \
+            "docs/" \
+            "tests/" \
+            "bin/arm64-v8a" \
+            "android-ndk" \
+            "src/asb_governor.c" \
+            "config/profile_bounds.conf" \
+            "config/governor.conf$"; do
+            if unzip -l "$ZIP_TEST" | grep -qE "$forbidden"; then
+              echo "ERROR: $ZIP_TEST leaked $forbidden (development artifact)"
+              exit 1
+            fi
+          done
+          unzip -p "$ZIP_TEST" release-manifest.json | grep -q '"distribution": "flashable-module"' || { echo "ERROR: release manifest missing/invalid"; exit 1; }
+          unzip -p "$ZIP_TEST" release-manifest.json | grep -q '"abi": "arm64-v8a"' || { echo "ERROR: release manifest ABI missing"; exit 1; }
+          echo "TEST zip validation passed"
+
+      # Upload the package CONTENTS, not the packaged zip. actions/upload-artifact always
+      # wraps what it is given in an artifact zip of its own, so passing ASB-V61.zip gave
+      # you ASB-V61.zip containing ASB-V61.zip - every download needed unpacking by hand
+      # before it could be flashed. Pointing at the directory makes the artifact root the
+      # module root, so the file GitHub hands back IS the flashable module. The staging
+      # directory is deliberately NOT dot-prefixed any more: upload-artifact@v4 drops
+      # hidden files unless include-hidden-files is set, and a hidden root is exactly the
+      # kind of thing that silently ships an empty artifact.
+      #
+      # Artifact zips do not carry the executable bit, which is fine here: customize.sh
+      # and common/install.sh set every mode they need (bin/asb, bin/asb_dsp_attach,
+      # system/bin/*, runtime/*.sh, tools/*.sh) during installation.
+      - name: Upload test artifact (flashable, not double-zipped)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ASB-${{ env.ASB_VER }}
+          path: pkg-test/
+          retention-days: 30
+
+      - name: Build summary
+        if: always()
+        run: |
+          echo ""
+          echo "========================================"
+          echo "  ASB Test Build Summary"
+          echo "========================================"
+          echo "  Trigger : ${{ github.event_name }}"
+          echo "  Ref     : ${GITHUB_REF_NAME:-unknown}"
+          echo "  Version : ${ASB_VER:-unknown}"
+          if [ -f "${ZIP_TEST:-}" ]; then
+            echo "  ZIP     : $ZIP_TEST ($(du -sh $ZIP_TEST | cut -f1))"
+            BINSZ=$(unzip -p "$ZIP_TEST" bin/asb 2>/dev/null | wc -c)
+            SOSZ=$(unzip -p "$ZIP_TEST" bin/libasbdsp.so 2>/dev/null | wc -c)
+            echo "  Binary  : ${BINSZ} bytes (unified diagnostics)"
+            echo "  DSP .so : ${SOSZ} bytes"
+          fi
+          echo "========================================"
