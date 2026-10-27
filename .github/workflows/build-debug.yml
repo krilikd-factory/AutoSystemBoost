@@ -510,6 +510,7 @@ jobs:
             "runtime/asb_overlay_guard.sh" \
             "runtime/asb_active_efficiency_envelope.sh" \
             "runtime/asb_device_tier.sh" \
+            "runtime/asb_device_bounds.sh" \
             "runtime/asb_device_pack_manifest.sh" \
             "tools/asb_kernel_uv_coexist.sh" \
             "tools/asb_config_backup.sh" \
