@@ -25,6 +25,7 @@ MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
 CONF="$MODDIR/config/governor.conf"
 STATE="/data/adb/asb/net_routes_orig"
 MODE="${1:-apply}"
+WATCH_DIR="${ASB_NET_STATE_DIR:-/data/adb/asb}"
 
 _cfg() {
   grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r'
@@ -35,10 +36,12 @@ _has() { command -v "$1" >/dev/null 2>&1; }
 # "ip_monitor_ended after 0s: BusyBox v1.36.1.1 ... Usage: ip [OPTIONS]", every window
 # change refused, and per-route congctl reported "not in use". Android's own binary is
 # /system/bin/ip; PATH is only the fallback.
-ASB_IP=""
-for _ipb in /system/bin/ip /system/xbin/ip /vendor/bin/ip; do
-  [ -x "$_ipb" ] && { ASB_IP="$_ipb"; break; }
-done
+ASB_IP="${ASB_IP:-}"
+if [ -z "$ASB_IP" ]; then
+  for _ipb in /system/bin/ip /system/xbin/ip /vendor/bin/ip; do
+    [ -x "$_ipb" ] && { ASB_IP="$_ipb"; break; }
+  done
+fi
 [ -n "$ASB_IP" ] || ASB_IP="$(command -v ip 2>/dev/null)"
 [ -n "$ASB_IP" ] || ASB_IP=ip
 [ -x "$ASB_IP" ] || _has "$ASB_IP" || { echo "net_routes: no ip(8), nothing to do"; exit 0; }
@@ -293,19 +296,19 @@ _watch() {
   # identical from outside once the process is gone, and the six possible causes need
   # different fixes. One line on the way out turns a guess into an answer.
   _nrw_note() {
-    mkdir -p /data/adb/asb 2>/dev/null
+    mkdir -p "$WATCH_DIR" 2>/dev/null
     printf '%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null)" "$1" \
-      > /data/adb/asb/net_routes_watch.exit 2>/dev/null || true
+      > $WATCH_DIR/net_routes_watch.exit 2>/dev/null || true
   }
   [ -x "$ASB_IP" ] || _has "$ASB_IP" || { _nrw_note "missing_ip"; exit 0; }
-  rm -f /data/adb/asb/net_routes_watch.exit 2>/dev/null
-  mkdir -p /data/adb/asb 2>/dev/null
-  echo monitor > /data/adb/asb/net_routes_watch.mode 2>/dev/null
+  rm -f $WATCH_DIR/net_routes_watch.exit 2>/dev/null
+  mkdir -p "$WATCH_DIR" 2>/dev/null
+  echo monitor > $WATCH_DIR/net_routes_watch.mode 2>/dev/null
   _w0="$(date +%s 2>/dev/null || echo 0)"
   _fp="$(_route_fp)"
   # stderr kept: "rc=0" alone said nothing about why the monitor stopped (the pipeline's
   # status is the while loop's, not ip's), and the cause decides the fix.
-  "$ASB_IP" monitor route 2>/data/adb/asb/net_routes_watch.err | while IFS= read -r _ev; do
+  "$ASB_IP" monitor route 2>$WATCH_DIR/net_routes_watch.err | while IFS= read -r _ev; do
     case "$_ev" in
       # A route change is the one event that can change a qdisc verdict.
       #
@@ -321,33 +324,45 @@ _watch() {
       *default*)
         _nfp="$(_route_fp)"
         [ "$_nfp" = "$_fp" ] && continue
-        rm -rf /data/adb/asb/qdisc_cool 2>/dev/null
+        rm -rf "$WATCH_DIR/qdisc_cool" 2>/dev/null
         sleep 2; _reapply
         _fp="$(_route_fp)" ;;
     esac
   done
   _w1="$(date +%s 2>/dev/null || echo 0)"
-  _werr="$(head -c 120 /data/adb/asb/net_routes_watch.err 2>/dev/null | tr '\n' ' ')"
+  _werr="$(head -c 120 $WATCH_DIR/net_routes_watch.err 2>/dev/null | tr '\n' ' ')"
   # Reached only if ip monitor terminated: a healthy watcher never gets here.
   _nrw_note "ip_monitor_ended after $((_w1 - _w0))s${_werr:+: $_werr}"
 
-  # A monitor that dies within a minute will die the same way when the half-hour pass
-  # restarts it (a field diag shows it ending 7 s after boot), leaving routes untuned
-  # after every reconnect in between. Fall back to a slow poll of the default routes:
-  # one ip call a minute, on a sleep that does not wake a suspended phone, and work only
-  # when the fingerprint changes. The window and congctl tokens are stripped so our own
-  # tuning does not register as a change.
+  # A monitor that dies within a minute gets a bounded bridge until the existing
+  # half-hour reconcile can retry netlink. Fifteen one-minute polls cover a reconnect
+  # without leaving another permanent shell worker on ROMs where ip monitor is broken.
   [ $((_w1 - _w0)) -lt 60 ] 2>/dev/null || exit 0
-  echo poll > /data/adb/asb/net_routes_watch.mode 2>/dev/null
+  if ! { _defaults 4; _defaults 6; } | grep -q '^default'; then
+    echo dormant > "$WATCH_DIR/net_routes_watch.mode" 2>/dev/null
+    _nrw_note "dormant: event monitor unavailable; no active default route"
+    exit 0
+  fi
+  echo poll > "$WATCH_DIR/net_routes_watch.mode" 2>/dev/null
   _fp="$(_route_fp)"
-  while :; do
+  _poll_left=15
+  while [ "$_poll_left" -gt 0 ]; do
+    _poll_left=$((_poll_left - 1))
     sleep 60
+    if ! { _defaults 4; _defaults 6; } | grep -q '^default'; then
+      echo dormant > "$WATCH_DIR/net_routes_watch.mode" 2>/dev/null
+      _nrw_note "dormant: event monitor unavailable; active route lost"
+      exit 0
+    fi
     _nfp="$(_route_fp)"
     [ "$_nfp" = "$_fp" ] && continue
-    rm -rf /data/adb/asb/qdisc_cool 2>/dev/null
+    rm -rf "$WATCH_DIR/qdisc_cool" 2>/dev/null
     sleep 2; _reapply
     _fp="$(_route_fp)"
   done
+  echo dormant > "$WATCH_DIR/net_routes_watch.mode" 2>/dev/null
+  _nrw_note "dormant: event monitor unavailable; fallback TTL exhausted after 15 polls"
+  exit 0
 }
 
 case "$MODE" in

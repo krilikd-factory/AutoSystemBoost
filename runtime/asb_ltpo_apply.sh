@@ -26,6 +26,19 @@ ACTIVE="$STATE_DIR/ltpo_bind.active"
 BLOCK="$STATE_DIR/vendor_overlay_blocked"
 MOUNTS_LOG="$STATE_DIR/vendor_mounts.log"
 CONF="$MODDIR/config/governor.conf"
+EXT_MODULES_ROOT="${ASB_LTPO_MODULES_ROOT:-/data/adb/modules}"
+
+# OnePlus15-165HZ-LTPO owns touch-driven mode switching through
+# oplus_customize_screen_refresh_rate and its own refresh_rate_config.xml bind. ASB's
+# force-LTPO bind/range is a different mechanism, but enabling both still produces two
+# display policies. Detect the installed, enabled module and yield only ASB's force owner;
+# never kill its daemon, edit its files, or disable the independent ltpo_video feature.
+_ltpo_external_owner() {
+  _e="$EXT_MODULES_ROOT/OnePlus15-165HZ-LTPO"
+  [ -d "$_e" ] && [ ! -f "$_e/disable" ] && [ ! -f "$_e/remove" ] || return 1
+  [ -f "$_e/vrrd.sh" ] || return 1
+  grep -q '^id=OnePlus15-165HZ-LTPO[[:space:]]*$' "$_e/module.prop" 2>/dev/null
+}
 
 _cfg() {
   [ -f "$CONF" ] || return 0
@@ -207,27 +220,32 @@ _ltpo_range_restore() {
 
 case "${1:-apply}" in
   apply)
-    if [ "$(_cfg ltpo_force)" = "1" ] && [ ! -f "$BLOCK" ] && _ltpo_guard; then
+    _external=0
+    _ltpo_external_owner && _external=1
+    if [ "$(_cfg ltpo_force)" = "1" ] && [ "$_external" = "0" ] && [ ! -f "$BLOCK" ] && _ltpo_guard; then
       if _ltpo_bind_all; then
         _log 'action=ltpo_bind result=applied'
       fi
     else
-      # Toggle off (or fuse set): a bind of ours must not survive the choice that
-      # removed it. Stock content is what the file shows again from this umount on.
+      # Toggle off, fuse set, or an enabled external touch-LTPO owner: a bind of ours
+      # must not survive. This also cleans up an ASB bind left by the previous boot.
       if [ -f "$ACTIVE" ]; then
         _ltpo_unbind_all && _log 'action=ltpo_bind result=removed'
       fi
     fi
     # The range does not need the patch: a device without a VRR table still benefits from
     # an open Android range, and the fuse guards mounts, not a setting. Only once the
-    # framework is up - post-fs-data runs this too, before Settings exists.
+    # framework is up - post-fs-data runs this too, before Settings exists. With the
+    # external owner, restore the range ASB recorded instead of fighting its mode daemon.
     if _ltpo_framework_up; then
-      if [ "$(_cfg ltpo_force)" = "1" ]; then
+      if [ "$(_cfg ltpo_force)" = "1" ] && [ "$_external" = "0" ]; then
         _ltpo_range_open
       else
         _ltpo_range_restore
       fi
     fi
+    [ "$_external" = "1" ] && [ "$(_cfg ltpo_force)" = "1" ] && \
+      _log 'action=ltpo_force result=held reason=external_OnePlus15-165HZ-LTPO'
     ;;
   remove)
     # Uninstall path: drop whatever we own regardless of the toggle state.
@@ -247,10 +265,12 @@ case "${1:-apply}" in
       "${_pk:-unset}" "${_mn:-none (floor open)}" "$_rec"
     ;;
   status)
-    if [ ! -f "$MAN" ]; then
-      echo 'ltpo_patch_absent'
-    elif [ "$(_cfg ltpo_force)" != "1" ]; then
+    if [ "$(_cfg ltpo_force)" != "1" ]; then
       echo 'ltpo_off'
+    elif _ltpo_external_owner; then
+      echo 'ltpo_external_owner'
+    elif [ ! -f "$MAN" ]; then
+      echo 'ltpo_patch_absent'
     elif [ -f "$ACTIVE" ]; then
       echo 'ltpo_active'
     else

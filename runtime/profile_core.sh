@@ -455,21 +455,10 @@ asb_apply_net() {
   if [ -n "$NET_HAPPY_EYEBALLS" ] && has settings; then
     asb_settings_put system cloud_dns_happy_eyeballs_priority_enabled "$NET_HAPPY_EYEBALLS"
   fi
-  # Resolve tc the way asb_net_apply.sh does: boot contexts can put a limited applet
-  # first in PATH, and it fails every qdisc write while /system/bin/tc (full iproute2)
-  # works. A silent || true hid that for two field captures.
-  _asb_tc="${ASB_TC:-}"
-  if [ -z "$_asb_tc" ]; then
-    for _tcc in /system/bin/tc "$(command -v tc 2>/dev/null)"; do
-      [ -n "$_tcc" ] && [ -x "$_tcc" ] || continue
-      "$_tcc" qdisc show dev lo 2>/dev/null | grep -q qdisc && { _asb_tc="$_tcc"; break; }
-    done
-  fi
-  if [ -n "$_asb_tc" ]; then
-    for _if in $(ls /sys/class/net 2>/dev/null | tr '\n' ' '); do
-      case "$_if" in wlan0|rmnet*|ccmni*) "$_asb_tc" qdisc replace dev "$_if" root "$NET_QDISC" >/dev/null 2>&1 || true ;; esac
-    done
-  fi
+  # qdisc is deliberately absent here. runtime/asb_net_apply.sh is its sole owner:
+  # it resolves a full tc, checks noqueue/support, applies cooldown and verifies read-back.
+  # apply_profile.sh invokes that owner after the profile pass; a second raw writer here
+  # could overwrite its decision and made diagnostics disagree with the live interface.
 }
 
 # OEM-owned settings need a baseline that is captured ONCE, before ASB has ever touched them,
@@ -786,9 +775,12 @@ asb_load_profile() {
   # and Ace 6 owners saw nothing wrong.
   if [ "$(grep -E '^[[:space:]]*device_bounds_override=' "$MODDIR/config/governor.conf" 2>/dev/null \
           | head -1 | sed 's/.*=//' | tr -d ' \r')" = "1" ] \
-     && [ -r /data/adb/asb/device_bounds.env ]; then
-    # Only KEY=number lines: the file also carries comments, and sourcing it blindly would
-    # execute whatever ended up in there.
+     && [ -r /data/adb/asb/device_bounds.env ] \
+     && { grep -q '^confidence=high[[:space:]]*$' /data/adb/asb/device_bounds.env 2>/dev/null \
+          || grep -q '^# confidence=high[[:space:]]' /data/adb/asb/device_bounds.env 2>/dev/null; }; then
+    # Unknown/low-confidence synthesis never reaches the shell writer. Accept the legacy
+    # generated comment for installed fix213+ devices and the schema-2 key for new ones.
+    # Only KEY=number lines: sourcing the file blindly would execute arbitrary content.
     while IFS='=' read -r _bk _bv; do
       case "$_bk" in
         \#*|'') continue ;;
