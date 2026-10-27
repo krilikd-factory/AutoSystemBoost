@@ -152,9 +152,34 @@ _feature_state() {
     *) if [ -d "$2" ]; then printf 'driver present\n'; else printf 'unknown\n'; fi ;;
   esac
 }
-_emit kernel_features nomount "$(_feature_state CONFIG_NOMOUNT "$SYS/module/nomount")"
+_nm_state="$(_feature_state CONFIG_NOMOUNT "$SYS/module/nomount")"
 _nm_ver="$(_read "$SYS/module/nomount/version")"
+_emit kernel_features nomount "$_nm_state"
 _emit kernel_features nomount_version "${_nm_ver:-not exposed}"
+
+# Metamodule metadata is read from the standard module.prop only. NoMount evidence is
+# intentionally independent: config/sysfs can prove driver state, not which module owns it.
+_mm_prop="$DATA/metamodule/module.prop"
+if [ -r "$_mm_prop" ]; then
+  _emit metamodule status 'detected at standard path'
+  _mm_id="$(_kv "$_mm_prop" id)"
+  _mm_name="$(_kv "$_mm_prop" name)"
+  _mm_version="$(_kv "$_mm_prop" version)"
+  _mm_version_code="$(_kv "$_mm_prop" versionCode)"
+  _emit metamodule id "${_mm_id:-not exposed}"
+  _emit metamodule name "${_mm_name:-not exposed}"
+  _emit metamodule version "${_mm_version:-not exposed}"
+  _emit metamodule version_code "${_mm_version_code:-not exposed}"
+elif [ -d "$DATA/metamodule" ]; then
+  _emit metamodule status 'standard path present; module.prop not readable'
+  _emit metamodule version 'not exposed'
+  _emit metamodule version_code 'not exposed'
+else
+  _emit metamodule status 'not detected at standard path'
+fi
+_emit metamodule nomount_driver "$_nm_state"
+_emit metamodule nomount_driver_version "${_nm_ver:-not exposed}"
+_emit metamodule nomount_evidence 'kernel config/sysfs; driver ownership not inferred'
 _emit kernel_features ntsync "$(_feature_state CONFIG_NTSYNC "$SYS/module/ntsync")"
 
 # Droidspaces has no single standard runtime switch. Report only its core kernel
