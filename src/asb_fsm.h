@@ -213,9 +213,17 @@ static int asb_load_device_bounds_override(int enabled,
     FILE *f = fopen(ASB_DEVICE_BOUNDS_FILE, "r");
     if (!f) return 0;
     int applied = 0;
+    int confidence_high = 0;
     char line[160];
     while (fgets(line, sizeof(line), f)) {
-        if (line[0] == '#' || line[0] == '\n') continue;
+        /* Generated overrides are trusted only with an explicit high-confidence topology.
+         * Accept the fix213 legacy comment as well as the schema-2 KEY=value metadata;
+         * unknown/low confidence keeps the compiled safe defaults. */
+        if (line[0] == '#') {
+            if (strncmp(line, "# confidence=high", 17) == 0) confidence_high = 1;
+            continue;
+        }
+        if (line[0] == '\n') continue;
         char *eq = strchr(line, '=');
         if (!eq) continue;
         *eq = '\0';
@@ -224,6 +232,13 @@ static int asb_load_device_bounds_override(int enabled,
         /* trim trailing whitespace/newline on key */
         char *ke = key + strlen(key);
         while (ke > key && (ke[-1] == ' ' || ke[-1] == '\t')) *--ke = '\0';
+        if (strcmp(key, "confidence") == 0) {
+            if (strncmp(valstr, "high", 4) == 0 &&
+                (valstr[4] == '\n' || valstr[4] == '\r' || valstr[4] == '\0'))
+                confidence_high = 1;
+            continue;
+        }
+        if (!confidence_high) continue;
         long val = atol(valstr);
         applied += asb_device_bounds_apply_kv(key, val);
     }
