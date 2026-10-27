@@ -27,7 +27,7 @@ jobs:
         run: |
           # Source archives and browser uploads can lose git executable mode bits. These two
           # runtime helpers are explicitly executed by their safety contracts below.
-          chmod 0755 runtime/asb_active_efficiency_envelope.sh runtime/asb_boot_timeline.sh runtime/asb_debug_support.sh runtime/asb_stock_policy.sh runtime/asb_overlay_guard.sh runtime/asb_wifi_fallback.sh tools/asb_kernel_uv_coexist.sh
+          chmod 0755 runtime/asb_active_efficiency_envelope.sh runtime/asb_boot_timeline.sh runtime/asb_debug_support.sh runtime/asb_stock_policy.sh runtime/asb_overlay_guard.sh runtime/asb_wifi_fallback.sh tools/asb_kernel_uv_coexist.sh tools/asb_device_info.sh
 
       - name: Validate required source files
         run: |
@@ -513,6 +513,7 @@ jobs:
             "runtime/asb_device_bounds.sh" \
             "runtime/asb_device_pack_manifest.sh" \
             "tools/asb_kernel_uv_coexist.sh" \
+            "tools/asb_device_info.sh" \
             "tools/asb_config_backup.sh" \
             "runtime/profile_core.sh" \
             "runtime/smart_dynamic_tune.sh" \
@@ -548,6 +549,7 @@ jobs:
             "tools/asb_synthesize_bounds.sh" \
             "tools/asb_vendor_thermal_probe.sh" \
             "tools/asb_kernel_uv_coexist.sh" \
+            "tools/asb_device_info.sh" \
             "tools/asb_config_backup.sh" \
             "tools/asb_diag.sh" \
             "tools/asb_effective_policy.sh" \
