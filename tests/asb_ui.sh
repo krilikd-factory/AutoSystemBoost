@@ -2272,6 +2272,21 @@ async function back() { if (!hist.canGoBack()) { exited++; return; } hist.go(-1)
   await back();
   chk(!_cfgOpen && hist.idx === 0 && exited === 0, 'and the next back went Home');
 
+  /* fix230: Device is the top page. Back returns to Report or to the exact Config category
+   * underneath it instead of unloading the WebUI or skipping a level. */
+  _rpOpen = true; navSync(); _deviceOpen = true; navSync();
+  chk(hist.idx === 2, 'Device over Report: two entries, have ' + hist.idx);
+  await back();
+  chk(!_deviceOpen && _rpOpen && hist.idx === 1, 'back from Device returned to Report');
+  await back();
+  chk(!_rpOpen && hist.idx === 0 && exited === 0, 'next back closed Report');
+  _cfgOpen = true; navSync(); _cfgGroup = 'audio'; navSync(); _deviceOpen = true; navSync();
+  chk(hist.idx === 3, 'Device over Config category: three entries, have ' + hist.idx);
+  await back();
+  chk(!_deviceOpen && _cfgOpen && _cfgGroup === 'audio' && hist.idx === 2, 'back from Device preserved the Config category');
+  await back(); await back();
+  chk(!_cfgOpen && hist.idx === 0 && exited === 0, 'Config category and hub closed after Device');
+
   _lvDrain.on = 'recent'; _lvDrain.off = 'measured'; _lvDrain.offN = 3; _lvDrain.winS = 0;
   _el('bnDrain').textContent = '~8.5%/h'; _el('bnDrainOff').textContent = '0.52%/h';
   _el('liveEtaOn').textContent = '8h 56m'; _el('liveEtaOff').textContent = '> 72h';
@@ -2318,10 +2333,11 @@ global._el = function (id) { return els[id] || null; };
 global.T = function (k, d) { return d; };
 global.techIcon = function (k) { return '<svg data-k="' + k + '"></svg>'; };
 global.uiSound = function () {};
-global._liveOpen = false; global._cfgOpen = false; global._cfgGroup = null; global._rpOpen = false;
+global._liveOpen = false; global._cfgOpen = false; global._cfgGroup = null; global._rpOpen = false; global._deviceOpen = false;
 global.closeLivePage = function () { _liveOpen = false; };
 global.closeConfigPage = function () { _cfgOpen = false; _cfgGroup = null; };
 global.closeReportPage = function () { _rpOpen = false; };
+global.closeDevicePage = function () { _deviceOpen = false; };
 global.cfgBack = function () { _cfgGroup = null; };
 global.asbCloseLogMenu = function () { els.logMenu.hidden = true; };
 global.cfgFmClose = function () { els.cfgFm.hidden = true; };
@@ -2848,6 +2864,73 @@ _n="$(grep -c "list.classList.add('cfg-stagger');" "$W")"
 echo "PASS webui quiet ui: cues switchable and quiet over other audio, entrance only on a change of screen"
 )
 
+t_webui_monitor_semantics_runtime() (
+# Runtime (fix230): Monitor value colours come from each reading's own unit and state.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui monitor semantics: $*" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "SKIP webui monitor semantics: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+python3 - "$H" <<'PY' || fail 'markup or semantic CSS'
+import sys
+h = open(sys.argv[1], encoding='utf-8').read()
+for i in ('bnBasis','bnSlotTemp','bnConf','bnLpm','bnStockRam','bnStockDrain','bnStockCpuClock',
+          'liveCpu','liveSkin','liveSurface','liveGpu','liveHeadroom'):
+    assert "asbMetricPaint('%s'" % i in h, '%s is not semantically painted' % i
+for cls in ('good','warm','bad','neutral'):
+    assert '.live-cell-value.metric-' + cls in h
+    assert 'html[data-asb-glass="1"] .live-cell-value.metric-' + cls in h
+assert "asbThermalMetric(cpuT ? fmtTempC(cpuT) : 0, 'cpu')" in h, 'governor deci-C temperature is classified without display-unit normalization'
+assert h.index('/* Every monitored value uses the same evidence vocabulary') > h.index('html[data-asb-glass="1"] .smart-banner-value { color:var(--text); }'), 'Glass neutral rules override the evidence colours'
+PY
+{
+  echo "function T(k, d) { return d; }"
+  echo "const _node = { className: 'live-cell-value cap-raised metric-good' }; function _el(id) { return id === 'x' ? _node : null; }"
+  sed -n '/^const METRIC_CLASSES = /p' "$H"
+  for fn in asbMetricPaint asbLoadMetric asbThermalMetric asbRamMetric asbDrainMetric asbClockMetric asbHeadroomMetric asbConfidenceMetric asbBasisMetric asbModemMetric asbSlotMetric lvSlotHeat; do
+    sed -n "/^function $fn(/,/^}/p" "$H"
+  done
+  cat <<'EOF'
+let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
+function eq(actual, want, name) { chk(actual === want, name + ': ' + actual + ', want ' + want); }
+eq(asbLoadMetric(34), 'metric-good', 'low load'); eq(asbLoadMetric(35), 'metric-warm', 'medium load');
+eq(asbLoadMetric(70), 'metric-bad', 'high load'); eq(asbLoadMetric(null), 'metric-neutral', 'unknown load');
+eq(asbThermalMetric(31, 'body'), 'metric-good', 'cool body'); eq(asbThermalMetric(32, 'body'), 'metric-warm', 'warm body');
+eq(asbThermalMetric(38, 'body'), 'metric-bad', 'hot body'); eq(asbThermalMetric(44, 'board'), 'metric-warm', 'warm board');
+eq(asbThermalMetric(45, 'board'), 'metric-bad', 'hot board'); eq(asbThermalMetric(64, 'cpu'), 'metric-warm', 'warm CPU');
+eq(asbThermalMetric(65, 'cpu'), 'metric-bad', 'hot CPU'); eq(asbThermalMetric(0, 'cpu'), 'metric-neutral', 'unknown CPU');
+eq(asbRamMetric(3500, 10000), 'metric-good', '35% RAM'); eq(asbRamMetric(1800, 10000), 'metric-warm', '18% RAM');
+eq(asbRamMetric(1799, 10000), 'metric-bad', 'low RAM'); eq(asbRamMetric(0, 0), 'metric-neutral', 'unknown RAM');
+eq(asbDrainMetric(-100, 5000), 'metric-good', 'charging'); eq(asbDrainMetric(0, 5000), 'metric-neutral', 'zero current');
+eq(asbDrainMetric(200, 5000), 'metric-good', '4%/h current'); eq(asbDrainMetric(201, 5000), 'metric-warm', 'medium current');
+eq(asbDrainMetric(601, 5000), 'metric-bad', 'high current'); eq(asbDrainMetric(100, 0), 'metric-neutral', 'current without capacity');
+eq(asbClockMetric(440, 1000), 'metric-good', 'low clock'); eq(asbClockMetric(450, 1000), 'metric-warm', 'medium clock');
+eq(asbClockMetric(800, 1000), 'metric-bad', 'high clock'); eq(asbClockMetric(100, 0), 'metric-neutral', 'clock without maximum');
+eq(asbHeadroomMetric(20), 'metric-good', 'ample headroom'); eq(asbHeadroomMetric(10), 'metric-warm', 'limited headroom');
+eq(asbHeadroomMetric(9), 'metric-bad', 'low headroom'); eq(asbHeadroomMetric(null), 'metric-neutral', 'unknown headroom');
+eq(asbConfidenceMetric('high'), 'metric-good', 'high confidence'); eq(asbConfidenceMetric('med'), 'metric-warm', 'medium confidence');
+eq(asbConfidenceMetric('low'), 'metric-bad', 'low confidence'); eq(asbConfidenceMetric(''), 'metric-neutral', 'unknown confidence');
+eq(asbBasisMetric('stable'), 'metric-good', 'stable basis'); eq(asbBasisMetric('fallback'), 'metric-warm', 'fallback basis');
+eq(asbBasisMetric('basis-veto'), 'metric-bad', 'veto basis'); eq(asbModemMetric('save'), 'metric-good', 'save modem');
+eq(asbModemMetric('night'), 'metric-good', 'night modem'); eq(asbModemMetric('fast'), 'metric-bad', 'fast modem');
+eq(asbModemMetric('normal'), 'metric-neutral', 'normal modem');
+eq(asbSlotMetric('cool'), 'metric-good', 'cool slot'); eq(asbSlotMetric('typical'), 'metric-good', 'typical slot');
+eq(asbSlotMetric('warm'), 'metric-warm', 'warm slot'); eq(asbSlotMetric(undefined), 'metric-neutral', 'unknown slot');
+eq(lvSlotHeat(400, 410, 490).state, 'cool', 'cool slot evidence'); eq(lvSlotHeat(450, 410, 490).state, 'typical', 'typical slot evidence');
+eq(lvSlotHeat(500, 410, 490).state, 'warm', 'warm slot evidence'); eq(lvSlotHeat(0, 410, 490).state, undefined, 'empty slot evidence');
+asbMetricPaint('x', 'metric-warm');
+chk(_node.className === 'live-cell-value cap-raised metric-warm', 'semantic repaint preserves non-semantic state and replaces the old colour: ' + _node.className);
+asbMetricPaint('x', 'nonsense'); chk(/metric-neutral/.test(_node.className), 'invalid state fails neutral');
+asbMetricPaint('missing', 'metric-good');
+if (bad) process.exit(1); console.log('ok');
+EOF
+} > "$T/t.js"
+out="$(node "$T/t.js" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo "PASS webui monitor semantics: unit-specific thermal/load/RAM/current/clock/headroom/confidence/modem/slot colours, neutral unknowns, all four themes"
+)
+
 t_webui_stock_monitor_runtime() (
 # Runtime (fix168): on Stock the Monitor shows nine real ROM readings, never a trip point.
 #
@@ -2904,14 +2987,15 @@ const _stockLiveInfo = { ceil: [] };
 const _lvEta = { cap: 0, chg: false, gov: null };
 function lvTopSecSync() {} function lvDrainHome() {} function lvTopSec() {} function lvMeterPaint() {}
 EOF
-  for fn in fmtTempC setLiveLabel fmtStockLoad lvLoadShare paintStockLive; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  sed -n '/^const METRIC_CLASSES = /p' "$H"
+  for fn in fmtTempC setLiveLabel fmtStockLoad lvLoadShare asbMetricPaint asbThermalMetric asbLoadMetric asbDrainMetric asbRamMetric asbClockMetric paintStockLive; do sed -n "/^function $fn(/,/^}/p" "$H"; done
   cat <<'EOF'
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
 const kv = {
   ts: '1760000000', uptime: '5400.2', loadavg: '6.12 5.80 5.10',
   'battery.capacity': '88', 'battery.current_now': '412000', 'battery.voltage_now': '4210000',
   'battery.temp': '331', 'battery.status': 'Discharging', 'battery.charge_full': '5300000',
-  MemAvailable: '5242880 kB', SwapTotal: '8388604 kB', SwapFree: '5420000 kB',
+  MemTotal: '8388608 kB', MemAvailable: '5242880 kB', SwapTotal: '8388604 kB', SwapFree: '5420000 kB',
   'cpu.policy0.scaling_cur_freq': '1785600', 'cpu.policy0.scaling_max_freq': '3628800', 'cpu.policy0.cpuinfo_max_freq': '3628800',
   'cpu.policy6.scaling_cur_freq': '1132800', 'cpu.policy6.scaling_max_freq': '1632000', 'cpu.policy6.cpuinfo_max_freq': '4608000',
   'gpu.gpuclk': '220000000', 'gpu.gpu_busy_percentage': '12 %',
@@ -2928,6 +3012,12 @@ chk(v('liveSurface') === '42°C' && v('liveSurfaceLabel') === 'Board', 'board se
 chk(v('liveState') === '35%' && /cap-raised/.test(_nodes.liveState.className) && v('liveStateLabel') === 'CPU ceiling', 'CPU ceiling on the most limited cluster: ' + v('liveState'));
 chk(_stockLiveInfo.ceil.length === 2 && _stockLiveInfo.ceil[1] === 'policy6: 1.63 / 4.61 GHz', 'ceiling lines for the sheet: ' + JSON.stringify(_stockLiveInfo.ceil));
 chk(v('liveGpu') === '12%' && v('liveHeadroom') === '220 MHz', 'GPU load and clock: ' + v('liveGpu') + ' / ' + v('liveHeadroom'));
+chk(/metric-warm/.test(_nodes.liveCpu.className) && /metric-good/.test(_nodes.liveSkin.className) && /metric-good/.test(_nodes.liveGpu.className), '45°C CPU is amber while cool body and low GPU load are green: ' + _nodes.liveCpu.className + ' / ' + _nodes.liveSkin.className + ' / ' + _nodes.liveGpu.className);
+chk(/metric-warm/.test(_nodes.liveSurface.className), 'warm board is amber: ' + _nodes.liveSurface.className);
+chk(/metric-warm/.test(_nodes.bnStockDrain.className), '7.8%/h battery current is amber: ' + _nodes.bnStockDrain.className);
+chk(/metric-good/.test(_nodes.bnStockRam.className), '62.5% available RAM is green: ' + _nodes.bnStockRam.className);
+chk(/metric-warm/.test(_nodes.bnStockCpuClock.className), '49% CPU clock is amber: ' + _nodes.bnStockCpuClock.className);
+chk(/metric-neutral/.test(_nodes.liveHeadroom.className) && /metric-neutral/.test(_nodes.bnStockLpm.className), 'GPU clock without a ceiling and unknown modem state stay neutral');
 chk(v('liveCapSrc') === '33°C' && v('liveCapSrcLabel') === 'Battery temp', 'battery temperature: ' + v('liveCapSrc'));
 chk(v('liveClamp') === '2.8 GB' && v('liveClampLabel') === 'zRAM used', 'zRAM in use: ' + v('liveClamp'));
 chk(v('liveLearner') === 'paused' && v('liveLearnerLabel') === 'Smart learning', 'learner: ' + v('liveLearner'));
@@ -2968,6 +3058,8 @@ chk(_nodes.bnStockLpm.title === 'mobile_data_always_on: \u2014' && _nodes.bnStoc
 const tripOnly = { 'thermal.cpu-hw-trip-0': '95000', 'thermal.cpu-hw-trip-1': '95000', 'thermal.socd': '8' };
 paintStockLive(tripOnly);
 chk(v('liveCpu') === '—' && v('liveSurface') === '—', 'trip zones and the socd level are not temperatures: ' + v('liveCpu') + ' / ' + v('liveSurface'));
+chk(/metric-neutral/.test(_nodes.liveCpu.className) && /metric-neutral/.test(_nodes.liveSurface.className) && /metric-neutral/.test(_nodes.liveGpu.className), 'unknown thermal/GPU readings are not painted green');
+chk(/metric-neutral/.test(_nodes.bnStockDrain.className) && /metric-neutral/.test(_nodes.bnStockRam.className) && /metric-neutral/.test(_nodes.bnStockCpuClock.className), 'unknown Stock banner values stay neutral');
 _selectedProfile = 'battery';
 _nodes.liveCpu.textContent = '39°C'; _nodes.liveStateLabel.textContent = 'FSM';
 paintStockLive(kv);
@@ -3948,11 +4040,11 @@ def need(x, why):
     if x not in h: bad.append(why)
 def absent(x, why):
     if x in h: bad.append(why)
-for pre in ('', 'live', 'cfg'):
+for pre in ('', 'live', 'cfg', 'rp', 'dev'):
     soc = (pre + 'SocBadge') if pre else 'socBadge'
     ver = (pre + 'VerBadge') if pre else 'verBadge'
-    blk = '<div class="hdr-cap hdr-info">\n      <div class="badge badge-a" id="%s">DEVICE</div>\n      <div class="badge badge-a" id="%s">V65</div>\n      </div>' % (soc, ver)
-    need(blk, '%s/%s are not one capsule' % (soc, ver))
+    blk = r'<div class="hdr-cap hdr-info">\s*<button class="badge badge-a" id="%s" type="button" onclick="openDevicePage\(\)" aria-label="Open device diagnostics" title="Device diagnostics">DEVICE</button>\s*<div class="badge badge-a" id="%s">V65</div>\s*</div>' % (soc, ver)
+    if not re.search(blk, h): bad.append('%s/%s are not one capsule' % (soc, ver))
 need('.hdr-cap, .theme-toggle, .status-row {\n  background: var(--cap-wash), var(--tabbar-bg, #000000);\n  border: 1px solid var(--cap-edge);\n  box-shadow: var(--cap-shadow);', 'header capsules do not use the shared material')
 need('    var(--cap-wash),\n    var(--tabbar-bg, #000000);\n  border: 1px solid var(--cap-edge);', 'the bar no longer uses the shared material')
 bar = h[h.index('.asb-tab-ind::before {'):h.index('}', h.index('.asb-tab-ind::before {'))]
@@ -4907,7 +4999,7 @@ const attrs = {};
 const root = { setAttribute:(k,v) => { attrs[k]=v; }, removeAttribute:k => { delete attrs[k]; } };
 const meta = { setAttribute:(k,v) => { meta.content=v; } };
 const buttons = [];
-for (let page=0; page<4; page++) for (const choice of ['dark','light','glass']) {
+for (let page=0; page<5; page++) for (const choice of ['dark','light','glass']) {
   const classes = new Set();
   buttons.push({ choice, classes, attrs:{}, getAttribute(k) { return k==='data-theme-choice' ? choice : this.attrs[k]; }, setAttribute(k,v) { this.attrs[k]=v; }, classList:{ toggle(c,on) { on ? classes.add(c) : classes.delete(c); } } });
 }
@@ -4921,7 +5013,7 @@ function chk(c,m) { if (!c) throw new Error(m); }
 asbPaintThemeControls();
 chk(!('data-asb-theme' in attrs)&&attrs['data-asb-glass']==='1','legacy Glass cold start defaults to the black palette');
 chk(meta.content==='#000000','black Glass theme-color');
-chk(buttons.filter(b=>b.classes.has('active')).length===4,'not all four switches select glass');
+chk(buttons.filter(b=>b.classes.has('active')).length===5,'not all five switches select glass');
 chk(buttons.filter(b=>b.choice==='glass').every(b=>b.attrs['aria-pressed']==='true'&&b.attrs['aria-label']==='Liquid Glass theme'),'glass aria state/label');
 asbSetTheme('light'); chk(attrs['data-asb-theme']==='light'&&!('data-asb-glass' in attrs)&&store.asb_theme==='light'&&store.asb_glass_base==='light','Glass -> light remembers the light base');
 asbSetTheme('glass'); chk(attrs['data-asb-theme']==='light'&&attrs['data-asb-glass']==='1'&&store.asb_theme==='glass'&&store.asb_glass_base==='light','Light -> Glass produces light glass');
@@ -4940,8 +5032,8 @@ out="$(node "$T/t.js" 2>&1)" || fail "$out"
 python3 - "$H" <<'PY' || fail 'markup or material'
 import sys
 h=open(sys.argv[1],encoding='utf-8').read()
-assert h.count('data-theme-choice="glass"') == 4
-assert h.count('data-theme-toggle=') == 4
+assert h.count('data-theme-choice="glass"') == 5
+assert h.count('data-theme-toggle=') == 5
 assert 'backdrop-filter:blur(8px)' in h
 assert 'html[data-asb-glass="1"]' in h
 assert 'html[data-asb-glass="1"][data-asb-theme="light"]' in h
@@ -4964,6 +5056,11 @@ for selector in (
     assert selector in h, selector
 assert "appH === 2 ? ' load-mid'" in h and "appH <= 1 ? ' load-low'" in h
 assert '.smart-banner-value.load-mid,' in h and 'color: var(--bal);' in h
+for cls in ('good', 'warm', 'bad', 'neutral'):
+    assert '.smart-banner-value.metric-' + cls in h
+    assert '.live-cell-value.metric-' + cls in h
+    assert 'html[data-asb-glass="1"] .smart-banner-value.metric-' + cls in h
+    assert 'html[data-asb-glass="1"] .live-cell-value.metric-' + cls in h
 # Category colour is a translucent material layer, not a flat replacement or a neutral wash.
 assert 'html[data-asb-glass="1"] .cfg-tile[class*="cat-"] {' in h
 assert 'html[data-asb-glass="1"][data-asb-theme="light"] .cfg-tile[class*="cat-"] {' in h
@@ -4971,7 +5068,7 @@ assert 'color-mix(in srgb,var(--cat) 28%,transparent)' in h
 assert 'color-mix(in srgb,var(--cat) 17%,transparent)' in h
 assert 'html[data-asb-glass="1"] .cfg-tile[class*="cat-"] .cfg-tile-ico {' in h
 PY
-echo "PASS webui liquid glass: cold start, four synchronized switches, dark/light compatibility and localized aria"
+echo "PASS webui liquid glass: cold start, five synchronized switches, dark/light compatibility and localized aria"
 )
 
 t_webui_stock_trend_retry_runtime() (
@@ -5014,6 +5111,285 @@ EOF
 out="$(node "$T/t.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 echo "PASS webui stock trend retry: a transient read keeps the last good trend and the next poll refreshes it"
+)
+
+t_webui_visual_hierarchy_contract() (
+# Contract (fix230): DSP outputs precede loudness and the global icons have clean silhouettes.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui visual hierarchy: $*" >&2; exit 1; }
+python3 - "$H" <<'PY' || fail 'DSP order or icons'
+import re, sys
+h = open(sys.argv[1], encoding='utf-8').read()
+assert "keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_compressor']" in h, 'DSP Outputs is not first'
+for name in ('smart','performance','theme_glass'):
+    m = re.search(r'^  %s: \'([^\']*)\'' % name, h, re.M)
+    assert m, '%s missing from TECH_ICON_PATHS' % name
+    if name in ('performance','theme_glass'):
+        assert m.group(1).count('<path') == 1 and '<circle' not in m.group(1) and '<rect' not in m.group(1), '%s has an unwanted inner glyph' % name
+    else:
+        assert '<rect' in m.group(1) and m.group(1).count('<path') >= 2, 'Smart lost its adaptive-core glyph'
+assert h.count('const TECH_ICON_PATHS = {') == 1, 'icon definitions diverged by page'
+PY
+echo "PASS webui visual hierarchy: DSP Outputs first; global Smart, Performance and Liquid Glass icons use the cleaned geometry"
+)
+
+t_webui_device_page_runtime() (
+# Runtime (fix230): SoC pills open a fifth page; its TSV renderer is safe and evidence-based.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui device page: $*" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "SKIP webui device page: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+python3 - "$ROOT" <<'PY' || fail 'markup, localization or read-only wiring'
+import json, re, sys
+from pathlib import Path
+root = Path(sys.argv[1]); h = (root/'webroot/index.html').read_text(encoding='utf-8')
+assert len(re.findall(r'<button class="badge badge-a" id="(?:socBadge|liveSocBadge|cfgSocBadge|rpSocBadge|devSocBadge)"', h)) == 5, 'not every SoC pill is a button'
+for i in ('socBadge','liveSocBadge','cfgSocBadge','rpSocBadge','devSocBadge'):
+    assert re.search(r'<button class="badge badge-a" id="%s" type="button"\s+onclick="openDevicePage\(\)"' % i, h), i
+assert h.count('data-theme-toggle=') == 5 and h.count('data-theme-choice="glass"') == 5
+assert '#devicePage { z-index: 140;' in h and 'id="devicePage"' in h
+assert "run('sh ' + MD + '/tools/asb_device_info.sh 2>/dev/null')" in h
+loader = h[h.index('async function asbDeviceInfoLoad()'):h.index('async function asbLogReportLoad()')]
+assert 'setInterval' not in loader and 'setTimeout' not in loader
+assert 'seq !== _deviceLoadSeq' in loader and 'Nothing was changed' in loader
+segment = h[h.index('function parseDeviceInfo('):h.index('function openDevicePage()')]
+assert '.innerHTML' not in segment and 'textContent' in segment
+assert "['kernel_features', 'dev_sec_kernel_features'" in h
+keys = set(json.loads((root/'webroot/i18n/en.json').read_text(encoding='utf-8')))
+for p in (root/'webroot/i18n').glob('*.json'):
+    d = json.loads(p.read_text(encoding='utf-8'))
+    assert set(d) == keys, p.name
+    for key in ('dev_sec_kernel_features','dev_kernel_features_nomount','dev_kernel_features_nomount_version',
+                'dev_kernel_features_ntsync','dev_kernel_features_droidspaces','dev_kernel_features_unicode_bypass_fix',
+                'dev_kernel_features_tmpfs_xattr_posix_acl','dev_kernel_features_lto','dev_kernel_features_bbr_v1',
+                'dev_kernel_features_bbr_v2','dev_kernel_features_bbg_baseband_guard','dev_kernel_features_susfs'):
+        assert d.get(key), '%s: %s missing' % (p.name, key)
+ru = json.loads((root/'webroot/i18n/ru.json').read_text(encoding='utf-8'))
+assert 'NoMount' in ru['dev_kernel_features_nomount'] and 'NTSync' in ru['dev_kernel_features_ntsync']
+assert 'BBRv2' in ru['dev_kernel_features_bbr_v2'] and 'SuSFS' in ru['dev_kernel_features_susfs']
+for f in ('tools/release_tools.list','common/install.sh','.github/workflows/build-release.yml','.github/workflows/build-debug.yml'):
+    assert 'asb_device_info.sh' in (root/f).read_text(encoding='utf-8'), f
+PY
+{
+  cat <<'EOF'
+const ASB_LANG = 'en';
+function T(k, d) { return d; }
+function requestAnimationFrame() {} function asbFitPages() {}
+function mk(tag) {
+  const e = { tagName: tag, className: '', children: [], _text: '',
+    classList: { add(c) { const a = new Set(e.className.split(/\s+/).filter(Boolean)); a.add(c); e.className = Array.from(a).join(' '); } },
+    appendChild(c) { e.children.push(c); return c; },
+    querySelector(sel) { const want = sel.slice(1); let found = null;
+      (function walk(n) { if (found) return; if (n.className && n.className.split(/\s+/).includes(want)) { found = n; return; } (n.children || []).forEach(walk); })(e);
+      return found; }
+  };
+  Object.defineProperty(e, 'textContent', { get() { return e._text; }, set(v) { e._text = String(v); e.children = []; } });
+  return e;
+}
+const body = mk('div');
+function _el(id) { return id === 'deviceBody' ? body : null; }
+const document = { createElement: mk };
+function logReportNote(text, warn) { const n = mk('div'); n.className = 'lgr-note'; n.textContent = text; return n; }
+function logReportSec(title) { const n = mk('section'); const h = mk('h3'); h.textContent = title; n.appendChild(h); return n; }
+function logReportRow(key, value) { const r = mk('div'), k = mk('span'), v = mk('span'); k.textContent = key; v.className = 'lgr-v'; v.textContent = value; r.appendChild(k); r.appendChild(v); return r; }
+EOF
+  sed -n '/^const DEVICE_SECTION_ORDER = \[/,/^\];/p' "$H"
+  for fn in parseDeviceInfo deviceVal deviceFallbackLabel deviceLabel deviceHero deviceValueClass deviceDisplayValue deviceInfoRender; do
+    sed -n "/^function $fn(/,/^}/p" "$H"
+  done
+  cat <<'EOF'
+let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
+const attack = '<img src=x onerror=globalThis.pwned=1> OnePlus 15';
+const text = [
+  'D\tfirmware\tmodel\t' + attack,
+  'D\tfirmware\tandroid\t17',
+  'D\tsoc\tsoc_model\tSM8850',
+  'D\tsoc\tcpu_online\t0-7',
+  'D\tkernel\trelease\t6.12.30-custom',
+  'D\tkernel\tuname_consistency\tmismatch',
+  'D\tkernel_features\tnomount\tbuilt-in',
+  'D\tkernel_features\tnomount_version\t22 (105)',
+  'D\tkernel_features\tntsync\tbuilt-in',
+  'D\tkernel_features\tdroidspaces\tcore config present; runtime not verified',
+  'D\tkernel_features\tunicode_bypass_fix\tnot runtime-discoverable',
+  'D\tkernel_features\ttmpfs_xattr_posix_acl\tsupported',
+  'D\tkernel_features\tlto\tThinLTO (Clang)',
+  'D\tkernel_features\tbbr_v1\tavailable',
+  'D\tkernel_features\tbbr_v2\tavailable',
+  'D\tkernel_features\tbbg_baseband_guard\tactive in LSM; built-in',
+  'D\tkernel_features\tsusfs\tinterface available',
+  'D\tkernel_features\tsusfs_version\tv2.3.0',
+  'D\tmeta\tschema\t2',
+  'garbage', 'D\tbroken'
+].join('\n');
+const d = parseDeviceInfo(text);
+chk(d.count === 19 && d.malformed === 2, 'TSV count/malformed: ' + d.count + '/' + d.malformed);
+chk(deviceVal(d, 'soc', 'soc_model') === 'SM8850', 'SoC parsed');
+chk(deviceVal(d, 'soc', 'missing') === '—', 'missing value fallback');
+const shown = deviceInfoRender(d);
+chk(shown === 19, 'renderer row count: ' + shown);
+const dump = (function walk(n) { return [n.textContent || ''].concat((n.children || []).flatMap(walk)); })(body).join('\n');
+chk(dump.includes(attack), 'markup-like device data was not preserved as literal text');
+chk(globalThis.pwned !== 1 && !body.querySelector('.img'), 'device value became markup');
+chk(dump.includes('22 (105)') && dump.includes('ThinLTO (Clang)') && dump.includes('active in LSM; built-in'), 'custom kernel facts missing from render');
+chk(dump.includes('mismatch evidence only'), 'uname mismatch was turned into a spoofing verdict or hidden');
+const values = []; (function walk(n) { if (n.className && n.className.split(/\s+/).includes('lgr-v')) values.push(n); (n.children || []).forEach(walk); })(body);
+chk(values.some(v => v.textContent === attack && v.className.includes('dev-long')), 'long untrusted value lacks safe wrapping class');
+chk(values.some(v => v.textContent === 'mismatch' && v.className.includes('dev-warn')), 'uname mismatch is not amber');
+if (bad) process.exit(1); console.log('ok');
+EOF
+} > "$T/t.js"
+out="$(node "$T/t.js" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo "PASS webui device page: five SoC buttons/theme groups, safe TSV parser/renderer, custom-kernel rows, mismatch evidence and read-only loader"
+)
+
+t_device_info_runtime() (
+# Runtime (fix230): real read-only collector against fake Android procfs/sysfs and SuSFS.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+D="$ROOT/tools/asb_device_info.sh"
+fail() { echo "FAIL device info: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+sh -n "$D" || fail "shell syntax"
+mkdir -p "$T/mod/tools" "$T/proc/sys/net/ipv4" "$T/proc/sys/net/core" \
+  "$T/sys/module/nomount" "$T/sys/module/ntsync" "$T/sys/module/baseband_guard" \
+  "$T/sys/devices/system/cpu/cpufreq/policy0" "$T/sys/class/power_supply/battery" \
+  "$T/data/asb" "$T/data/modules"
+cp "$ROOT/tools/asb_kernel_uv_coexist.sh" "$T/mod/tools/"
+printf 'id=AutoSystemBoost\nversion=V65-129-fix230\nversionCode=65230\n' > "$T/mod/module.prop"
+cat > "$T/props" <<'EOF'
+[ro.product.brand]: [OnePlus]
+[ro.product.manufacturer]: [OnePlus]
+[ro.product.model]: [CPH2691]
+[ro.product.device]: [OP15]
+[ro.product.name]: [CPH2691]
+[ro.product.market.name]: [OnePlus 15]
+[ro.build.version.release]: [17]
+[ro.build.version.sdk]: [37]
+[ro.build.display.id]: [CPH2691_17.0.0.100]
+[ro.build.fingerprint]: [OnePlus/CPH2691/OP15:17/TEST/user/release-keys]
+[ro.build.version.oplusrom]: [ColorOS 17.0]
+[gsm.version.baseband]: [TEST_BASEBAND]
+[ro.soc.model]: [SM8850]
+[ro.soc.manufacturer]: [QTI]
+[ro.board.platform]: [sun]
+[ro.hardware.chipname]: [SM8850]
+[ro.serialno]: [DO_NOT_COLLECT_SERIAL]
+[gsm.imei]: [DO_NOT_COLLECT_IMEI]
+EOF
+printf 'Linux version 6.12.30-custom (builder@host) #1 SMP PREEMPT\n' > "$T/proc/version"
+printf 'console=ttyMSM0 androidboot.hardware=qcom\n' > "$T/proc/cmdline"
+printf 'Hardware\t: Qualcomm Technologies, Inc SM8850\n' > "$T/proc/cpuinfo"
+printf 'MemTotal: 16000000 kB\nMemAvailable: 9000000 kB\nSwapTotal: 8000000 kB\nSwapFree: 7000000 kB\n' > "$T/proc/meminfo"
+printf '12345.6 99999.9\n' > "$T/proc/uptime"; printf '1.25 1.10 0.90 1/100 1\n' > "$T/proc/loadavg"
+printf 'reno bbr bbrv2\n' > "$T/proc/sys/net/ipv4/tcp_available_congestion_control"
+printf 'bbr\n' > "$T/proc/sys/net/ipv4/tcp_congestion_control"; printf 'fq_codel\n' > "$T/proc/sys/net/core/default_qdisc"
+printf '0-7\n' > "$T/sys/devices/system/cpu/online"; cp "$T/sys/devices/system/cpu/online" "$T/sys/devices/system/cpu/present"; cp "$T/sys/devices/system/cpu/online" "$T/sys/devices/system/cpu/possible"
+for spec in 'related_cpus:0-3' 'scaling_governor:schedutil' 'scaling_cur_freq:1800000' 'scaling_min_freq:300000' 'scaling_max_freq:3200000' 'cpuinfo_min_freq:300000' 'cpuinfo_max_freq:3600000'; do
+  printf '%s\n' "${spec#*:}" > "$T/sys/devices/system/cpu/cpufreq/policy0/${spec%%:*}"
+done
+printf '22 (105)\n' > "$T/sys/module/nomount/version"
+for spec in 'capacity:88' 'status:Discharging' 'temp:331' 'current_now:412000' 'voltage_now:4210000' 'charge_full:5300000'; do
+  printf '%s\n' "${spec#*:}" > "$T/sys/class/power_supply/battery/${spec%%:*}"
+done
+printf 'profile=smart\nstate=LIGHT_IDLE\ndevice_bounds_status=applied\n' > "$T/state"
+printf 'android_api=37\nkernel=6.12.30-custom\nsoc=SM8850\npolicy_count=2\n' > "$T/data/asb/device_caps.env"
+cat > "$T/config" <<'EOF'
+CONFIG_LOCALVERSION="-custom"
+CONFIG_PREEMPT=y
+CONFIG_HZ=300
+CONFIG_NOMOUNT=y
+CONFIG_NTSYNC=y
+CONFIG_NAMESPACES=y
+CONFIG_SYSVIPC=y
+CONFIG_POSIX_MQUEUE=y
+CONFIG_IPC_NS=y
+CONFIG_PID_NS=y
+CONFIG_NET_NS=y
+CONFIG_UTS_NS=y
+CONFIG_DEVTMPFS=y
+CONFIG_UNICODE=y
+# CONFIG_UNICODE_BYPASS_FIX is not set
+# CONFIG_UNICODE_BYPASS is not set
+CONFIG_TMPFS=y
+CONFIG_TMPFS_XATTR=y
+CONFIG_TMPFS_POSIX_ACL=y
+CONFIG_LTO_CLANG_THIN=y
+# CONFIG_LTO_NONE is not set
+CONFIG_TCP_CONG_BBR=y
+CONFIG_TCP_CONG_BBR2=y
+CONFIG_SECURITY_BASEBAND_GUARD=y
+CONFIG_LSM="landlock,lockdown,yama,integrity,apparmor,baseband_guard"
+CONFIG_KSU=y
+CONFIG_KSU_SUSFS=y
+EOF
+gzip -c "$T/config" > "$T/proc/config.gz"
+cat > "$T/susfs" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$SUSFS_LOG"
+case "$1 $2" in
+  'show version') printf 'v2.3.0\n' ;;
+  'show variant') printf 'KernelSU-Next\n' ;;
+  'show enabled_features') printf 'sus_path\nsus_mount\n' ;;
+esac
+EOF
+chmod +x "$T/susfs"
+run() {
+  ASB_DEVINFO_MODDIR="$T/mod" ASB_DEVINFO_SYS="$T/sys" ASB_DEVINFO_PROC="$T/proc" \
+  ASB_DEVINFO_DATA="$T/data" ASB_DEVINFO_PROP_FILE="$T/props" ASB_DEVINFO_SUSFS="$T/susfs" \
+  ASB_DEVINFO_STATE="$T/state" SUSFS_LOG="$T/susfs.log" sh "$D"
+}
+want() {
+  _line="$(printf 'D\t%s\t%s\t%s' "$1" "$2" "$3")"
+  printf '%s\n' "$out" | grep -Fqx "$_line" || fail "missing [$_line] in: $out"
+}
+out="$(run)"
+printf '%s\n' "$out" | awk -F '\t' 'NF < 4 || $1 != "D" || $2 == "" || $3 == "" { bad = 1 } END { exit bad }' || fail "malformed TSV"
+want meta schema 2; want firmware baseband TEST_BASEBAND; want firmware android 17; want soc soc_model SM8850
+want kernel_features nomount built-in; want kernel_features nomount_version '22 (105)'; want kernel_features ntsync built-in
+want kernel_features droidspaces 'core config present; runtime not verified'
+# Generic CONFIG_UNICODE is not evidence of the patch.
+want kernel_features unicode_bypass_fix 'not runtime-discoverable'
+want kernel_features tmpfs_xattr_posix_acl supported; want kernel_features lto 'ThinLTO (Clang)'
+want kernel_features bbr_v1 available; want kernel_features bbr_v2 available
+want kernel_features bbg_baseband_guard 'active in LSM; built-in'
+want kernel_features susfs 'interface available'; want kernel_features susfs_version v2.3.0
+want asb_caps policy_count 2; want asb device_bounds_status applied
+printf '%s\n' "$out" | grep -q 'DO_NOT_COLLECT' && fail "a sensitive identifier was collected"
+[ "$(wc -l < "$T/susfs.log")" = 3 ] || fail "SuSFS called more than the three show reads"
+grep -Ev '^show (version|variant|enabled_features)$' "$T/susfs.log" && fail "a state-changing SuSFS command ran"
+# Runtime bbr2 spelling is accepted as BBRv2 too.
+printf 'reno bbr bbr2\n' > "$T/proc/sys/net/ipv4/tcp_available_congestion_control"
+out="$(run)"; want kernel_features bbr_v2 available
+# A missing kernel config never becomes proof that a runtime driver is absent.
+mv "$T/proc/config.gz" "$T/config.gz.saved"
+out="$(run)"
+want kernel_config available unavailable; want kernel_features nomount 'driver present'; want kernel_features ntsync 'driver present'
+want kernel_features droidspaces unknown; want kernel_features unicode_bypass_fix 'not runtime-discoverable'
+want kernel_features tmpfs_xattr_posix_acl unknown; want kernel_features lto unknown
+want kernel_features bbr_v1 available; want kernel_features bbr_v2 available
+# LKM NoMount/NTSync: loaded state and a version that the driver does not expose.
+sed -i -e 's/^CONFIG_NOMOUNT=y$/CONFIG_NOMOUNT=m/' -e 's/^CONFIG_NTSYNC=y$/CONFIG_NTSYNC=m/' "$T/config"
+gzip -c "$T/config" > "$T/proc/config.gz"; rm -f "$T/sys/module/nomount/version"
+out="$(run)"
+want kernel_features nomount 'module loaded'; want kernel_features nomount_version 'not exposed'; want kernel_features ntsync 'module loaded'
+# An executable with no read response is not advertised as a working SuSFS interface.
+cat > "$T/susfs" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+chmod +x "$T/susfs"
+out="$(run)"; want susfs interface present_no_read_response; want kernel_features susfs built-in; want kernel_features susfs_version 'not exposed'
+# Explicit specialized config is the only positive Unicode Bypass evidence in this fixture.
+printf '\nCONFIG_UNICODE_BYPASS_FIX=y\n' >> "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
+out="$(run)"; want kernel_features unicode_bypass_fix built-in
+! grep -Eq 'set_uname|add_sus_path|add_sus_map|add_sus_kstat|add_sus_' "$D" || fail "a SuSFS writer entered the collector"
+echo "PASS device info: read-only TSV, built-in/LKM NoMount and version, NTSync, Droidspaces, Unicode evidence, TMPFS, LTO, BBR, BBG, SuSFS and missing-config semantics"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
