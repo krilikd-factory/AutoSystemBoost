@@ -1,9 +1,9 @@
 #!/system/bin/sh
-# asb_boot_timeline.sh — debug-only, passive boot lifecycle evidence.
+# asb_boot_timeline.sh — unified, passive boot lifecycle evidence.
 #
 # It records short marker rows only. No property, service, package or policy is modified.
-# The script is called from post-fs-data/service and embedded in asbdiag so a tester need only
-# press the existing debug asbdiag button after a reboot; no terminal command is required.
+# The script is called from post-fs-data/service and embedded in asbdiag so every build can
+# collect the same reboot evidence; no terminal command is required.
 set -u
 
 MODID="AutoSystemBoost"
@@ -25,11 +25,6 @@ resolve_moddir() {
 MODDIR="$(resolve_moddir 2>/dev/null || true)"
 [ -n "$MODDIR" ] || { echo 'status=module_not_found'; exit 2; }
 VERSION="$(sed -n 's/^version=//p' "$MODDIR/module.prop" 2>/dev/null | head -n 1)"
-_debug_seq="${VERSION##*-debug}"
-case "$VERSION:$_debug_seq" in
-  *-debug[1-9]*:[1-9]* ) case "$_debug_seq" in *[!0-9]*) echo 'status=debug_only'; exit 3 ;; esac ;;
-  *) echo 'status=debug_only'; exit 3 ;;
-esac
 
 STATE_DIR="${ASB_BOOT_TIMELINE_STATE_DIR:-/data/adb/asb}"
 OUT="$STATE_DIR/boot_timeline.tsv"
@@ -61,7 +56,7 @@ case "${1:-}" in
   begin)
     mkdir -p "$STATE_DIR" 2>/dev/null || { echo 'status=state_unavailable'; exit 1; }
     {
-      printf '# ASB debug boot timeline v1\n'
+      printf '# ASB boot timeline v1\n'
       printf '# version=%s\n' "$VERSION"
       printf '# bootreason=%s\n' "$(_prop ro.boot.bootreason)"
       printf '# columns=uptime_ms\tmarker\tboot_completed\taudioserver\tsurfaceflinger\tzygote\n'

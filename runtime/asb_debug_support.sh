@@ -1,6 +1,6 @@
 #!/system/bin/sh
-# Debug-only WebUI support actions. This helper accepts no user-supplied shell text:
-# it either writes one asbdiag report or starts one bounded 24-hour full-day capture.
+# Unified WebUI support actions. This helper accepts no user-supplied shell text:
+# it either writes one asbdiag report or starts one capture that runs until shutdown.
 set -u
 
 MODID="AutoSystemBoost"
@@ -19,14 +19,6 @@ resolve_moddir() {
 
 MODDIR="${ASB_DEBUG_SUPPORT_MODDIR:-$(resolve_moddir 2>/dev/null || true)}"
 [ -n "$MODDIR" ] || { echo 'error=module_not_found'; exit 2; }
-VERSION="$(sed -n 's/^version=//p' "$MODDIR/module.prop" 2>/dev/null | head -n 1)"
-_debug_seq="${VERSION##*-debug}"
-case "$VERSION:$_debug_seq" in
-  *-debug[1-9]*:[1-9]* )
-    case "$_debug_seq" in *[!0-9]*) echo 'error=debug_only'; exit 3 ;; esac ;;
-  *) echo 'error=debug_only'; exit 3 ;;
-esac
-
 STATE_DIR="${ASB_DEBUG_SUPPORT_STATE_DIR:-/data/adb/asb/logkit}"
 # A directory is an atomic lock on Android filesystems. Unlike a PID file, it cannot be
 # observed as a simultaneously absent/empty guard, and it carries the recorder's own PID.
@@ -73,7 +65,7 @@ OUTPUTFILE="$LOCKDIR/output_dir"
 # started by the pre-lock-directory helper is still alive. New starts never create this file.
 LEGACY_PIDFILE="$STATE_DIR/full_day_webui.pid"
 RUNLOG="${ASB_DEBUG_SUPPORT_RUNLOG:-/data/local/tmp/asb_full_day.out}"
-# Debug-only bounded evidence for a manually removed capture directory. This tells a future
+# Unified bounded evidence for a manually removed capture directory. This tells a future
 # diagnostic exactly why the slot was or was not recovered without writing policy state.
 RECOVERY_LOG="${ASB_DEBUG_SUPPORT_RECOVERY_LOG:-$STATE_DIR/full_day_webui.recovery.log}"
 # Kept injectable for the host contract only; production always reads Android's /proc.
@@ -81,7 +73,7 @@ PROC_ROOT="${ASB_DEBUG_SUPPORT_PROC_ROOT:-/proc}"
 DIAG_OUTDIR="${ASB_DEBUG_SUPPORT_DIAG_OUTDIR:-/sdcard/Download}"
 # A WebView bridge waits for stdout to close. Long actions therefore need a deliberately
 # detached launcher and a tiny status file: otherwise the browser cannot paint feedback
-# until asbdiag has already finished. This state is debug-only and never touches policy.
+# until asbdiag has already finished. This state never touches policy.
 DIAG_LOCKDIR="$STATE_DIR/asbdiag_webui.lock"
 DIAG_BOOTIDFILE="$DIAG_LOCKDIR/boot_id"
 DIAG_PIDFILE="$DIAG_LOCKDIR/pid"
@@ -117,7 +109,7 @@ pid_is_live() {
 
 full_day_recovery_note() {
   # Keep this log tiny: it exists for the explicit "I deleted the output directory" recovery
-  # path only, in debug builds. Never let diagnostics make a capture start fail.
+  # path only. Never let diagnostics make a capture start fail.
   _fdrn_msg="${1:-unknown}"
   mkdir -p "$STATE_DIR" 2>/dev/null || true
   _fdrn_tmp="${RECOVERY_LOG}.tmp.$$"
@@ -660,7 +652,7 @@ start_full_day() {
   # The recorder receives the lock token and publishes its own PID before it begins capture.
   # The launcher PID is written immediately after fork to cover the publish interval.
   ASB_DEBUG_SUPPORT_LOCKDIR="$LOCKDIR" ASB_DEBUG_SUPPORT_LOCK_TOKEN="$_token" \
-    nohup sh "$MODDIR/tools/logkit/asb_log_full_day.sh" 24 > "$RUNLOG" 2>&1 < /dev/null &
+    nohup sh "$MODDIR/tools/logkit/asb_log_full_day.sh" 0 > "$RUNLOG" 2>&1 < /dev/null &
   _pid=$!
   if ! { printf '%s\n' "$_pid" > "$LAUNCHERFILE"; } 2>/dev/null; then
     # Recorder may already be alive: leave the lock in place rather than clearing ownership.
@@ -673,7 +665,8 @@ start_full_day() {
   if [ "$_async" = 1 ]; then
     echo 'status=started'
     echo "pid=$_pid"
-    echo 'hours=24'
+    echo 'hours=0'
+    echo 'limit=until_shutdown'
     echo "log=$RUNLOG"
     return 0
   fi
@@ -684,7 +677,8 @@ start_full_day() {
     if [ "$_claim" = "$_pid" ] && pid_is_live "$_pid"; then
       echo 'status=started'
       echo "pid=$_pid"
-      echo 'hours=24'
+      echo 'hours=0'
+      echo 'limit=until_shutdown'
       echo "log=$RUNLOG"
       return 0
     fi
