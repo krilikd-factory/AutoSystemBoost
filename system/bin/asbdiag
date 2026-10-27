@@ -212,23 +212,11 @@ _gfx_run0_t="$(date +%s)"
 _gfx_host="$(asb_report_host)"
 
 # =====================================================================
-SEC "0. BOOT TIMELINE  (debug-only passive lifecycle evidence)"
+SEC "0. BOOT TIMELINE  (unified passive lifecycle evidence)"
 _boot_timeline="/data/adb/asb/boot_timeline.tsv"
-_boot_version="$(grep '^version=' "$MODDIR/module.prop" 2>/dev/null | cut -d= -f2)"
-# Keep this strict numeric debug-build rule in lockstep with runtime/asb_boot_timeline.sh
-# and runtime/asb_debug_support.sh. A shell glob such as [1-9][0-9]* accidentally
-# requires at least two digits, so it misclassified V64-debug4 as a release build.
-_boot_debug=0
-_boot_seq="${_boot_version##*-debug}"
-case "$_boot_version:$_boot_seq" in
-  *-debug[1-9]*:[1-9]*)
-    case "$_boot_seq" in *[!0-9]*) ;; *) _boot_debug=1 ;; esac
-    ;;
-esac
-if [ "$_boot_debug" = "1" ]; then
-  if [ -r "$_boot_timeline" ]; then
+if [ -r "$_boot_timeline" ]; then
     _boot_rows="$(grep -cv '^#' "$_boot_timeline" 2>/dev/null)"
-    P "  recorder             : debug active · ${_boot_rows:-0} marker(s)"
+    P "  recorder             : active · ${_boot_rows:-0} marker(s)"
     # ro.boot.bootreason is empty on current OnePlus builds (the reason lives in
     # sys.boot.reason, set later by bootstat); say where to look instead of a blank.
     _tl_br="$(grep '^# bootreason=' "$_boot_timeline" 2>/dev/null | head -1 | cut -d= -f2-)"
@@ -239,14 +227,11 @@ if [ "$_boot_debug" = "1" ]; then
       P "    $_boot_row"
     done
     NOTE "Rows use uptime_ms. A long gap before service_enter is pre-service; a long gap after service_dispatched is framework/vendor startup; a long post_boot_tweaks span identifies deferred helper work."
-  else
-    NOTE "No boot timeline yet. Reboot once, wait for the system to finish starting, then export asbdiag again."
-  fi
 else
-  P "  recorder             : release build — disabled by design"
+  NOTE "No boot timeline yet. Reboot once, wait for the system to finish starting, then export asbdiag again."
 fi
 
-# Why did the LAST boot end? Readable on every build, debug or not.
+# Why did the LAST boot end? Readable on every build.
 #
 # An OP12 report: in the morning the launcher was black with only the clock, the alarm did
 # not ring, the power button clicked but the screen stayed on; a reboot fixed it and nobody
