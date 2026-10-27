@@ -3053,7 +3053,18 @@ static void asb_main_capacity_parity(asb_profile_caps_t *caps, const asb_metrics
  * per burst of interaction, not an unbroken boost - ceilings only, the clocks still climb
  * just for the work that asks. To hear the lock press the wake keys stay in epoll with the
  * screen on, except the touch panel's own gesture node, which would wake the loop on every
- * frame of a scroll. */
+ * frame of a scroll.
+ *
+ * fix223: on manual Battery the shell still owns the static ceilings, so changing its FSM
+ * touch state would not make a continuous scroll any faster. The post-fix219 captures show
+ * why that matters: CPH2745 Battery touch intervals in LIGHT_IDLE had 9.7% janky frames
+ * versus 7.1% in MODERATE; on CPH2747, the same Telegram session class measured 8.1% under
+ * Battery versus 3.7% after switching to Smart, and TikTok 15.6% versus 6.8%. A touch on
+ * Battery now keeps the ALREADY ARMED lift alive while the finger remains active. It never
+ * starts a lift by itself, and therefore cannot bypass the off/profile/thermal/warm gates.
+ * Quiet reading gets the old static Battery ceilings back after the usual three seconds;
+ * Smart, Balanced and Performance are unchanged. The lift remains a percentage of each
+ * slot's own hardware maximum, with no Android/ColorOS-version dependency. */
 #define ASB_UNLOCK_TOUCH_WINDOW_MS 20000L
 #define ASB_LAUNCH_LIFT_GAP_MS 5000L
 static int    g_unlock_prev_screen = -1;  /* screen state of the last pass, -1 before the first */
@@ -3100,7 +3111,8 @@ static int asb_unlock_gate_die(int die_now, int dark_c, time_t dark_ts, time_t n
     return dark_c < die_now ? dark_c : die_now;
 }
 
-static int asb_unlock_lift_update(int screen_on, int touch_kick, int lock_kick, int launch_kick,
+static int asb_unlock_lift_update(int screen_on, int touch_kick, int touch_active,
+                                  int lock_kick, int launch_kick,
                                   long now_ms, int profile_idx, int thermal_cap, int die_c) {
     int prev = g_unlock_prev_screen;
     int arm = 0;
@@ -3148,6 +3160,16 @@ static int asb_unlock_lift_update(int screen_on, int touch_kick, int lock_kick, 
             if (until > g_unlock_until_ms) g_unlock_until_ms = until;
             g_unlock_lifts++;
         }
+    }
+    /* A continuous Battery scroll is one interaction, not a new lift on every tick. Extend
+     * only an existing, successfully armed window; a zero/unarmed window stays zero, so the
+     * setting-off, warm-die and profile vetoes above cannot be bypassed by holding a finger
+     * down. The two-second active cadence is shorter than the three-second window, and the
+     * normal expiry/handback runs as soon as the touch stream stops. */
+    if (touch_active && profile_idx == PROFILE_BATTERY && g_unlock_until_ms > 0 &&
+        g_asb_cfg.unlock_lift_s > 0 && !thermal_cap) {
+        long until = now_ms + (long)g_asb_cfg.unlock_lift_s * 1000L;
+        if (until > g_unlock_until_ms) g_unlock_until_ms = until;
     }
     if (g_unlock_until_ms > 0 &&
         (thermal_cap || !asb_unlock_lift_profile_ok(profile_idx) || now_ms >= g_unlock_until_ms))
@@ -9773,8 +9795,11 @@ int main(int argc, char **argv) {
                     g_launch_prev_hash = (metrics.misc.screen_on && _fh != 0) ? (long)_fh : 0;
                 }
                 int _ul_was = g_unlock_applied;
+                int _touch_active = metrics.misc.screen_on && !metrics.misc.camera_active &&
+                                    g_touch_last_ts > 0 &&
+                                    time(NULL) - g_touch_last_ts <= ASB_TOUCH_RECENT_S;
                 int _ul = asb_unlock_lift_update(metrics.misc.screen_on, g_touch_kick,
-                                                 g_lock_key_kick, _launch_kick,
+                                                 _touch_active, g_lock_key_kick, _launch_kick,
                                                  asb_clock_ms(CLOCK_BOOTTIME), fsm.profile_idx,
                                                  fsm.thermal_cap,
                                                  asb_unlock_gate_die(metrics.therm.cpu_max_c,
