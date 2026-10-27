@@ -10,7 +10,7 @@
 <title>AutoSystemBoost</title>
 <meta name="theme-color" content="#000000">
 <meta name="color-scheme" content="dark light">
-<script>(function(){try{var t=localStorage.getItem('asb_theme');if(t==='light'||t==='glass')document.documentElement.setAttribute('data-asb-theme',t);}catch(e){}})();</script>
+<script>(function(){try{var t=localStorage.getItem('asb_theme'),b=localStorage.getItem('asb_glass_base');if(t==='light'||(t==='glass'&&b==='light'))document.documentElement.setAttribute('data-asb-theme','light');if(t==='glass')document.documentElement.setAttribute('data-asb-glass','1');}catch(e){}})();</script>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <style>
@@ -383,8 +383,8 @@ body::before, body::after {
 }
 html[data-asb-theme="light"] .theme-toggle::before { transform: translateX(38px); }
 html[dir="rtl"][data-asb-theme="light"] .theme-toggle::before { transform: translateX(-38px); }
-html[data-asb-theme="glass"] .theme-toggle::before { transform: translateX(76px); }
-html[dir="rtl"][data-asb-theme="glass"] .theme-toggle::before { transform: translateX(-76px); }
+html[data-asb-glass="1"] .theme-toggle::before { transform: translateX(76px); }
+html[dir="rtl"][data-asb-glass="1"] .theme-toggle::before { transform: translateX(-76px); }
 .theme-choice { position:relative; z-index:1; display:grid; place-items:center; width:38px; height:24px; padding:0; border:0; border-radius:13px; background:transparent; color:var(--text-secondary); transition:color .2s ease,transform .12s ease; -webkit-tap-highlight-color:transparent; }
 .theme-choice svg { width:15px; height:15px; stroke:currentColor; color:inherit; filter:none; }
 .theme-choice.active { color:var(--accent); }
@@ -3046,53 +3046,54 @@ html[data-asb-theme="light"] .cfg-profile-folder { color:var(--text) !important;
    running an older package. */
 #cfgVerBadge::after { content: ''; }   /* ASB_UI_BUILD=light-surface-contract-1 */
 
-/* Liquid Glass: an opt-in dark glass material, not a replacement for either basic theme.
- * Opaque black stays behind the fixed pages; the cool grey panels use real translucency,
- * a restrained 8 px blur and a fine reflective edge. No canvas/WebGL or extra motion. */
-html[data-asb-theme="glass"] {
-  --bg:#000000; --surface:rgba(30,30,36,.78); --surface-hover:rgba(74,74,90,.42);
-  --tabbar-bg:rgba(30,30,36,.76); --text:#e0e0e0; --text-secondary:#b8b8c2; --text-tertiary:#9a9aab;
-  --accent:#00aaff; --accent-glow:rgba(0,170,255,.24); --accent2:#65d7ff;
-  --border:rgba(74,74,90,.55); --border-active:rgba(101,215,255,.48);
-  --cap-wash:linear-gradient(135deg,rgba(255,255,255,.10),rgba(0,170,255,.045));
-  --cap-edge:rgba(224,224,224,.20);
-  --cap-shadow:0 12px 32px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.16);
-  --pill-wash:linear-gradient(135deg,rgba(0,170,255,.28),rgba(101,215,255,.13));
-  --pill-edge:inset 0 0 0 1px rgba(101,215,255,.32),inset 0 1px 0 rgba(255,255,255,.18);
+/* Liquid Glass is a material over EITHER palette, not a third colour scheme. The dark
+ * variant keeps ASB's original mint-green accent; the light variant inherits the complete
+ * light palette below and only replaces opaque surfaces with translucent glass at the end
+ * of that cascade. No canvas/WebGL, extra motion or device-specific colors. */
+html[data-asb-glass="1"] {
+  --bg:#000000; --surface:rgba(24,32,29,.78); --surface-hover:rgba(42,66,57,.42);
+  --tabbar-bg:rgba(24,32,29,.76); --text:#f2fff9; --text-secondary:#b8cec4; --text-tertiary:#91aa9f;
+  --accent:#00f0b4; --accent-glow:rgba(0,240,180,.24); --accent2:#65efc9;
+  --border:rgba(108,151,133,.38); --border-active:rgba(0,240,180,.42);
+  --cap-wash:linear-gradient(135deg,rgba(255,255,255,.09),rgba(0,240,180,.045));
+  --cap-edge:rgba(0,240,180,.18);
+  --cap-shadow:0 12px 32px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.14);
+  --pill-wash:linear-gradient(135deg,rgba(0,240,180,.26),rgba(101,239,201,.12));
+  --pill-edge:inset 0 0 0 1px rgba(0,240,180,.30),inset 0 1px 0 rgba(255,255,255,.16);
   color-scheme:dark;
 }
-html[data-asb-theme="glass"] body {
+html[data-asb-glass="1"] body {
   background:
-    radial-gradient(ellipse 90% 48% at 12% 0%,rgba(0,170,255,.16),transparent 68%),
-    radial-gradient(ellipse 70% 42% at 100% 82%,rgba(74,74,90,.36),transparent 72%),#000;
+    radial-gradient(ellipse 90% 48% at 12% 0%,rgba(0,240,180,.13),transparent 68%),
+    radial-gradient(ellipse 70% 42% at 100% 82%,rgba(42,66,57,.32),transparent 72%),#000;
 }
-html[data-asb-theme="glass"] :is(.page,.live-page,.config-page) { background:transparent !important; color:var(--text); }
-html[data-asb-theme="glass"] :is(.hdr-cap,.theme-toggle,.status-row,.live-chip,.tg-link,.debug-support-btn,
+html[data-asb-glass="1"] :is(.page,.live-page,.config-page) { background:transparent !important; color:var(--text); }
+html[data-asb-glass="1"] :is(.hdr-cap,.theme-toggle,.status-row,.live-chip,.tg-link,.debug-support-btn,
   .cfg-backup,.cfg-lang-btn,.cfg-lang-pop,.cfg-sel-btn,.cfg-sel-pop,.cfg-tile,.cfg-row,
   .live-cell,.stock-telemetry,.smart-banner,.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet,
   .asb-tabbar) {
-  background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.018)),rgba(30,30,36,.78) !important;
+  background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.018)),rgba(24,32,29,.78) !important;
   color:var(--text) !important; border-color:var(--border) !important;
   box-shadow:0 12px 30px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.10);
   -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
 }
-html[data-asb-theme="glass"] :is(.pbtn,.lgr-hero,.lgr-sec,.live-info-now,.live-info-src) {
-  background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.018)),rgba(30,30,36,.72) !important;
+html[data-asb-glass="1"] :is(.pbtn,.lgr-hero,.lgr-sec,.live-info-now,.live-info-src) {
+  background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.018)),rgba(24,32,29,.72) !important;
   border-color:var(--border); box-shadow:inset 0 1px 0 rgba(255,255,255,.10);
   -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
 }
-html[data-asb-theme="glass"] :is(.pbtn.on,.cfg-tile.active,.cfg-profile-row.selected) {
+html[data-asb-glass="1"] :is(.pbtn.on,.cfg-tile.active,.cfg-profile-row.selected) {
   border-color:var(--accent) !important; box-shadow:0 0 0 1px var(--accent-glow),inset 0 1px 0 rgba(255,255,255,.16);
 }
-html[data-asb-theme="glass"] :is(input,select,textarea,.seg,.seg-opt,.cfg-profile-name,.cfg-reset-choice,.cfg-profile-row,.cfg-profile-actions button) {
-  background:rgba(30,30,36,.82) !important; color:var(--text) !important; border-color:var(--border) !important;
+html[data-asb-glass="1"] :is(input,select,textarea,.seg,.seg-opt,.cfg-profile-name,.cfg-reset-choice,.cfg-profile-row,.cfg-profile-actions button) {
+  background:rgba(24,32,29,.82) !important; color:var(--text) !important; border-color:var(--border) !important;
 }
-html[data-asb-theme="glass"] :is(.cfg-modal,.cfg-profile-modal,.cfg-reset-modal,.diag-wait-modal,.debug-action-wait,[class*="overlay"]) { background:rgba(0,0,0,.68) !important; }
-html[data-asb-theme="glass"] :is(.cfg-desc,.cfg-profile-copy,.cfg-profile-row-meta,.cfg-profile-hint,.cfg-reset-copy,.cfg-reset-choice-copy,.live-cell-label,.device-line,.tg-link-sub) { color:var(--text-secondary) !important; }
-html[data-asb-theme="glass"] .smart-banner-value { color:var(--text); }
-html[data-asb-theme="glass"] .cfg-search::placeholder { color:var(--text-tertiary); opacity:1; }
+html[data-asb-glass="1"] :is(.cfg-modal,.cfg-profile-modal,.cfg-reset-modal,.diag-wait-modal,.debug-action-wait,[class*="overlay"]) { background:rgba(0,0,0,.68) !important; }
+html[data-asb-glass="1"] :is(.cfg-desc,.cfg-profile-copy,.cfg-profile-row-meta,.cfg-profile-hint,.cfg-reset-copy,.cfg-reset-choice-copy,.live-cell-label,.device-line,.tg-link-sub) { color:var(--text-secondary) !important; }
+html[data-asb-glass="1"] .smart-banner-value { color:var(--text); }
+html[data-asb-glass="1"] .cfg-search::placeholder { color:var(--text-tertiary); opacity:1; }
 @media (prefers-reduced-motion:reduce) {
-  html[data-asb-theme="glass"] .theme-toggle::before { transition:none; }
+  html[data-asb-glass="1"] .theme-toggle::before { transition:none; }
 }
 
 /* Full light theme: near-white materials, retained ASB status accents, no colour inversion. */
@@ -3762,6 +3763,58 @@ html[data-asb-theme="light"] .pmeta-chip { background: rgba(21,35,32,.04); borde
 .cfg-tile-bar > i { display: block; height: 100%; border-radius: 2px; background: var(--tech-icon, var(--accent));
   box-shadow: 0 0 6px color-mix(in srgb, var(--tech-icon, var(--accent)) 60%, transparent); }
 html[data-asb-theme="light"] .cfg-tile-bar { background: rgba(21,35,32,.08); }
+
+/* Light Liquid Glass (fix226): every light-theme readability rule above remains in force.
+ * These later, more specific rules replace only its opaque materials. The accent stays the
+ * same deep ASB green as ordinary Light; dark Glass uses #00f0b4 above. */
+html[data-asb-glass="1"][data-asb-theme="light"] {
+  --bg:#edf4f1; --surface:rgba(255,255,255,.66); --surface-hover:rgba(232,245,239,.76);
+  --tabbar-bg:rgba(248,252,250,.76); --accent:#007c63; --accent2:#007c63;
+  --accent-glow:rgba(0,124,99,.20); --border:rgba(11,56,47,.20); --border-active:rgba(0,124,99,.42);
+  --cap-wash:linear-gradient(135deg,rgba(255,255,255,.64),rgba(0,124,99,.055));
+  --cap-edge:rgba(0,124,99,.18);
+  --cap-shadow:0 12px 30px rgba(20,50,42,.14),inset 0 1px 0 rgba(255,255,255,.74);
+  --pill-wash:linear-gradient(135deg,rgba(0,124,99,.20),rgba(0,240,180,.10));
+  --pill-edge:inset 0 0 0 1px rgba(0,124,99,.24),inset 0 1px 0 rgba(255,255,255,.66);
+  color-scheme:light;
+}
+html[data-asb-glass="1"][data-asb-theme="light"] body {
+  background:
+    radial-gradient(ellipse 90% 48% at 12% 0%,rgba(0,124,99,.10),transparent 68%),
+    radial-gradient(ellipse 70% 42% at 100% 82%,rgba(101,239,201,.15),transparent 72%),#f2f4f6 !important;
+}
+html[data-asb-glass="1"][data-asb-theme="light"] :is(.page,.live-page,.config-page) { background:transparent !important; }
+html[data-asb-glass="1"][data-asb-theme="light"] :is(.hdr-cap,.theme-toggle,.status-row,.live-chip,.tg-link,.debug-support-btn,
+  .cfg-backup,.cfg-lang-btn,.cfg-lang-pop,.cfg-sel-btn,.cfg-sel-pop,.cfg-tile,.cfg-row,
+  .live-cell,.stock-telemetry,.smart-banner,.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet,
+  .log-menu,.asb-tabbar) {
+  background:linear-gradient(145deg,rgba(255,255,255,.64),rgba(244,252,248,.36)),rgba(255,255,255,.54) !important;
+  color:var(--text) !important; border-color:var(--border) !important;
+  box-shadow:0 12px 30px rgba(20,50,42,.12),inset 0 1px 0 rgba(255,255,255,.72) !important;
+  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+}
+html[data-asb-glass="1"][data-asb-theme="light"] :is(.pbtn,.lgr-hero,.lgr-sec,.live-info-now,.live-info-src) {
+  background:linear-gradient(145deg,rgba(255,255,255,.62),rgba(244,252,248,.32)),rgba(255,255,255,.48) !important;
+  border-color:var(--border) !important; box-shadow:inset 0 1px 0 rgba(255,255,255,.68) !important;
+  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+}
+html[data-asb-glass="1"][data-asb-theme="light"] :is(input,select,textarea,.seg,.seg-opt,.cfg-profile-name,.cfg-reset-choice,.cfg-profile-row,.cfg-profile-actions button) {
+  background:rgba(255,255,255,.62) !important; color:var(--text) !important; border-color:var(--border) !important;
+}
+html[data-asb-glass="1"][data-asb-theme="light"] :is(.lgr-chip,.pmeta-chip,.cfg-icon) {
+  background:rgba(255,255,255,.46) !important; border-color:var(--border) !important;
+}
+html[data-asb-glass="1"][data-asb-theme="light"] :is(.pbtn.on,.cfg-tile.active,.cfg-profile-row.selected,.cfg-row.is-on) {
+  border-color:var(--accent) !important; box-shadow:0 0 0 1px var(--accent-glow),inset 0 1px 0 rgba(255,255,255,.72) !important;
+}
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-row.is-on {
+  background:linear-gradient(145deg,rgba(0,124,99,.12),rgba(255,255,255,.52)) !important;
+}
+html[data-asb-glass="1"][data-asb-theme="light"] .app-name {
+  background:linear-gradient(105deg,transparent 0%,rgba(255,255,255,0) 40%,rgba(255,255,255,.78) 50%,rgba(255,255,255,0) 60%,transparent 100%),
+    linear-gradient(180deg,#00866b 0%,#007c63 58%,#005f4c 100%) !important;
+  background-size:300% 100%,100% 100% !important; -webkit-background-clip:text !important; background-clip:text !important;
+}
 
 /* Device font (fix168, test variant): the variant build sets data-asb-font="device" on <html>,
  * and every text - the monospace labels included - follows the font the phone is set to.
@@ -4964,14 +5017,21 @@ function applyStaticI18n() {
 function asbThemeValue() {
   try { const t = localStorage.getItem('asb_theme'); return (t === 'light' || t === 'glass') ? t : 'dark'; } catch (e) { return 'dark'; }
 }
+function asbGlassBase() {
+  try { return localStorage.getItem('asb_glass_base') === 'light' ? 'light' : 'dark'; } catch (e) { return 'dark'; }
+}
 function asbPaintThemeControls() {
-  const theme = asbThemeValue();
-  // CSS uses literal value selectors. Set/remove the attribute explicitly so every theme
-  // redraws immediately in the same running WebView; dark remains the attribute-less default.
-  if (theme === 'dark') document.documentElement.removeAttribute('data-asb-theme');
-  else document.documentElement.setAttribute('data-asb-theme', theme);
+  const theme = asbThemeValue(), glassBase = asbGlassBase();
+  const light = theme === 'light' || (theme === 'glass' && glassBase === 'light');
+  /* Palette and material are independent: light/dark owns every foreground/background
+   * contract, while data-asb-glass only changes the surfaces. This lets Light -> Glass
+   * produce light glass and Dark -> Glass produce black glass without a blue third theme. */
+  if (light) document.documentElement.setAttribute('data-asb-theme', 'light');
+  else document.documentElement.removeAttribute('data-asb-theme');
+  if (theme === 'glass') document.documentElement.setAttribute('data-asb-glass', '1');
+  else document.documentElement.removeAttribute('data-asb-glass');
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', theme === 'light' ? '#f3f7f6' : '#000000');
+  if (meta) meta.setAttribute('content', light ? '#f3f7f6' : '#000000');
   document.querySelectorAll('[data-theme-choice]').forEach(function(btn) {
     const choice = btn.getAttribute('data-theme-choice');
     const active = choice === theme;
@@ -4982,17 +5042,14 @@ function asbPaintThemeControls() {
 }
 function asbSetTheme(theme) {
   theme = (theme === 'light' || theme === 'glass') ? theme : 'dark';
+  const previous = asbThemeValue();
+  let glassBase = asbGlassBase();
+  if (theme === 'light' || theme === 'dark') glassBase = theme;
+  else if (previous === 'light' || previous === 'dark') glassBase = previous;
   uiSound('option');
-  try { localStorage.setItem('asb_theme', theme); } catch (e) {}
-  /* Apply it now, not on the next launch.
-   *
-   * The attribute that drives every light-theme rule was only set by the inline script at
-   * the top of the document, which runs once. Switching themes therefore saved the choice
-   * and repainted the toggle, while the page itself stayed as it was until a restart -
-   * most visible on surfaces that use --surface directly, like the bottom bar. */
   try {
-    if (theme === 'dark') document.documentElement.removeAttribute('data-asb-theme');
-    else document.documentElement.setAttribute('data-asb-theme', theme);
+    localStorage.setItem('asb_theme', theme);
+    localStorage.setItem('asb_glass_base', glassBase);
   } catch (e) {}
   asbPaintThemeControls();
   uiSound('option');
