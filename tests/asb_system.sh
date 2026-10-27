@@ -6793,9 +6793,9 @@ need "$ROOT/runtime/asb_lpm.sh" 'if ! _feat_on LPM || ! _radio_policy_enabled; t
 need "$ROOT/runtime/asb_wifi_fallback.sh" '_enabled() { case "$(_cfg net_wifi_leave)" in weak|unusable|aggressive) return 0 ;; esac; return 1; }'
 absent "$ROOT/runtime/asb_wifi_fallback.sh" '_radio_policy_enabled && [ "$(_cfg net_wifi_leave)" = aggressive ]'
 
-# Preference is decided before first paint and the same compact pair appears beside the
-# version badge on all three surfaces.
-need "$WEB" "var t=localStorage.getItem('asb_theme');if(t==='light'||t==='glass')"
+# Palette and Glass material are restored before first paint; the same compact pair appears
+# beside the version badge on all three surfaces.
+need "$WEB" "var t=localStorage.getItem('asb_theme'),b=localStorage.getItem('asb_glass_base');if(t==='light'||(t==='glass'&&b==='light'))"
 need "$WEB" 'asbPaintThemeControls()'
 need "$WEB" 'data-theme-toggle="verBadge"'
 need "$WEB" 'data-theme-toggle="liveVerBadge"'
@@ -6808,10 +6808,13 @@ need "$WEB" 'data-tech-icon="theme_glass"'
 need "$WEB" 'theme_glass:'
 absent "$WEB" 'data-tech-icon="quiet_moon"></span></button><button class="theme-choice"'
 need "$WEB" 'theme_moon:'
-# CSS matches the literal value selector, so assigning/removing that literal must be immediate.
-need "$WEB" "setAttribute('data-asb-theme', theme)"
+# CSS matches literal value selectors, so palette and material updates must be immediate.
+need "$WEB" "setAttribute('data-asb-theme', 'light')"
 need "$WEB" "removeAttribute('data-asb-theme')"
+need "$WEB" "setAttribute('data-asb-glass', '1')"
+need "$WEB" "removeAttribute('data-asb-glass')"
 absent "$WEB" "toggleAttribute('data-asb-theme'"
+absent "$WEB" "toggleAttribute('data-asb-glass'"
 # fix192: the pair is one segmented capsule in the bottom bar's material; the selected icon
 # sits on the bar's tonal pill (which follows html[data-asb-theme]) - never a full green fill.
 need "$WEB" '.theme-choice { position:relative; z-index:1; display:grid; place-items:center; width:38px; height:24px;'
@@ -6820,9 +6823,9 @@ need "$WEB" '<div class="badge badge-a" id="liveVerBadge">V65</div>'
 need "$WEB" '<div class="badge badge-a" id="cfgVerBadge">V65</div>'
 need "$WEB" '.theme-choice.active { color:var(--accent); }'
 need "$WEB" 'html[data-asb-theme="light"] .theme-toggle::before { transform: translateX(38px); }'
-need "$WEB" 'html[data-asb-theme="glass"] .theme-toggle::before { transform: translateX(76px); }'
-need "$WEB" 'html[dir="rtl"][data-asb-theme="glass"] .theme-toggle::before { transform: translateX(-76px); }'
-need "$WEB" 'html[data-asb-theme="glass"] .theme-toggle::before'
+need "$WEB" 'html[data-asb-glass="1"] .theme-toggle::before { transform: translateX(76px); }'
+need "$WEB" 'html[dir="rtl"][data-asb-glass="1"] .theme-toggle::before { transform: translateX(-76px); }'
+need "$WEB" 'html[data-asb-glass="1"] .theme-toggle::before'
 absent "$WEB" '.theme-choice.active { color:#04120f; background:linear-gradient'
 absent "$WEB" ':is(.cfg-reset-choice.armed,.theme-choice.active) { color:#04120f !important; }'
 # These cover readable dialog/title copy, Smart monitor telemetry and small configuration text.

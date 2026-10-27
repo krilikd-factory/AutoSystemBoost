@@ -3961,8 +3961,8 @@ tt = h[h.index('.theme-toggle::before {'):h.index('}', h.index('.theme-toggle::b
 if 'var(--pill-wash)' not in tt or 'transition: transform' not in tt: bad.append('the theme switch has no sliding pill')
 need('html[data-asb-theme="light"] .theme-toggle::before { transform: translateX(38px); }', 'the pill does not follow the light theme')
 need('html[dir="rtl"][data-asb-theme="light"] .theme-toggle::before { transform: translateX(-38px); }', 'the pill slides the wrong way in RTL')
-need('html[data-asb-theme="glass"] .theme-toggle::before { transform: translateX(76px); }', 'the pill does not follow Liquid Glass')
-need('html[dir="rtl"][data-asb-theme="glass"] .theme-toggle::before { transform: translateX(-76px); }', 'the Glass pill slides the wrong way in RTL')
+need('html[data-asb-glass="1"] .theme-toggle::before { transform: translateX(76px); }', 'the pill does not follow Liquid Glass')
+need('html[dir="rtl"][data-asb-glass="1"] .theme-toggle::before { transform: translateX(-76px); }', 'the Glass pill slides the wrong way in RTL')
 sv = h[h.index('.status-val {\n  display: inline-flex;'):]
 sv = sv[:sv.index('}')]
 if 'var(--pill-wash)' not in sv: bad.append('the current profile is not on the tonal pill')
@@ -4903,17 +4903,22 @@ const document = { documentElement:root, querySelector:s => s==='meta[name="them
 function T(k,d) { return d; }
 let sounds=0; function uiSound() { sounds++; }
 EOF
-  for fn in asbThemeValue asbPaintThemeControls asbSetTheme; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  for fn in asbThemeValue asbGlassBase asbPaintThemeControls asbSetTheme; do sed -n "/^function $fn(/,/^}/p" "$H"; done
   cat <<'EOF'
 function chk(c,m) { if (!c) throw new Error(m); }
 asbPaintThemeControls();
-chk(attrs['data-asb-theme']==='glass','cold start does not restore glass');
+chk(!('data-asb-theme' in attrs)&&attrs['data-asb-glass']==='1','legacy Glass cold start defaults to the black palette');
+chk(meta.content==='#000000','black Glass theme-color');
 chk(buttons.filter(b=>b.classes.has('active')).length===4,'not all four switches select glass');
 chk(buttons.filter(b=>b.choice==='glass').every(b=>b.attrs['aria-pressed']==='true'&&b.attrs['aria-label']==='Liquid Glass theme'),'glass aria state/label');
-asbSetTheme('light'); chk(attrs['data-asb-theme']==='light'&&store.asb_theme==='light','glass -> light');
-asbSetTheme('dark'); chk(!('data-asb-theme' in attrs)&&store.asb_theme==='dark','light -> dark');
-asbSetTheme('glass'); chk(attrs['data-asb-theme']==='glass'&&store.asb_theme==='glass','dark -> glass');
-asbSetTheme('invalid'); chk(!('data-asb-theme' in attrs)&&store.asb_theme==='dark','unknown theme is not accepted');
+asbSetTheme('light'); chk(attrs['data-asb-theme']==='light'&&!('data-asb-glass' in attrs)&&store.asb_theme==='light'&&store.asb_glass_base==='light','Glass -> light remembers the light base');
+asbSetTheme('glass'); chk(attrs['data-asb-theme']==='light'&&attrs['data-asb-glass']==='1'&&store.asb_theme==='glass'&&store.asb_glass_base==='light','Light -> Glass produces light glass');
+chk(meta.content==='#f3f7f6','light Glass theme-color');
+asbSetTheme('dark'); chk(!('data-asb-theme' in attrs)&&!('data-asb-glass' in attrs)&&store.asb_theme==='dark'&&store.asb_glass_base==='dark','light Glass -> dark remembers the dark base');
+asbSetTheme('glass'); chk(!('data-asb-theme' in attrs)&&attrs['data-asb-glass']==='1'&&store.asb_theme==='glass'&&store.asb_glass_base==='dark','Dark -> Glass produces black glass');
+store.asb_glass_base='light'; asbPaintThemeControls();
+chk(attrs['data-asb-theme']==='light'&&attrs['data-asb-glass']==='1','a saved light-Glass choice cold-starts on the light palette');
+asbSetTheme('invalid'); chk(!('data-asb-theme' in attrs)&&!('data-asb-glass' in attrs)&&store.asb_theme==='dark','unknown theme is not accepted');
 chk(buttons.every(b=>(b.classes.has('active'))===(b.choice==='dark')),'switches diverged after cycling');
 console.log('ok');
 EOF
@@ -4926,7 +4931,11 @@ h=open(sys.argv[1],encoding='utf-8').read()
 assert h.count('data-theme-choice="glass"') == 4
 assert h.count('data-theme-toggle=') == 4
 assert 'backdrop-filter:blur(8px)' in h
-assert 'html[data-asb-theme="glass"]' in h
+assert 'html[data-asb-glass="1"]' in h
+assert 'html[data-asb-glass="1"][data-asb-theme="light"]' in h
+assert '--accent:#00f0b4' in h and '--accent:#007c63' in h
+assert '#00aaff' not in h and '0,170,255' not in h and '101,215,255' not in h
+assert "localStorage.getItem('asb_glass_base')" in h
 assert '@media (prefers-reduced-motion:reduce)' in h
 PY
 echo "PASS webui liquid glass: cold start, four synchronized switches, dark/light compatibility and localized aria"
