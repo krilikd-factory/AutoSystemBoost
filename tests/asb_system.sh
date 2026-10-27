@@ -1403,20 +1403,22 @@ echo "PASS DSP released off the selected outputs"
 
 # ==== fg_uclamp_guard_contract ====================================================================
 (
-# One native owner handles Smart's screen transitions, the pre-existing max correction and
-# camera exclusion. The executable fixture drives the REAL production functions against a
-# synthetic cgroup/state directory; manual profiles must not inherit Smart's sleep cap.
+# One native owner handles Smart's screen transitions, Battery's short foreground lift,
+# the pre-existing max correction and camera exclusion. The executable fixture drives the REAL
+# production functions against a synthetic cgroup/state directory; manual profiles must not
+# inherit Smart's sleep cap, and Smart/Balanced must not inherit Battery's foreground lift.
 set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 W="$ROOT/src/asb_writer.h"; G="$ROOT/src/asb_governor.c"; D="$ROOT/runtime/smart_dynamic_tune.sh"
 fail() { echo "FAIL fg uclamp guard contract: $*"; exit 1; }
 need() { grep -Fq -- "$2" "$1" || fail "$3"; }
-need "$W" 'static void writer_fg_guard(int screen_on, int smart_screen_policy)' 'native owner missing'
+need "$W" 'static void writer_fg_guard(int screen_on, int smart_screen_policy,' 'native owner missing'
 need "$W" 'if (g_cam_guard_on) { g_fg_max_since = 0; return; }' 'camera guard is not exclusive'
 need "$W" 'if (!smart_screen_policy || cur <= 35) return;' 'manual profile inherited Smart sleep cap'
 need "$W" 'if (now - g_fg_max_since < 60) return;' 'no 60 s persistence before acting'
 need "$W" 'g_fg_backoff_until = now + 600' 'no stand-down when something keeps reasserting'
-need "$G" 'writer_fg_guard(metrics.misc.screen_on, fsm.profile_idx == PROFILE_SMART);' 'Smart policy not scoped in governor loop'
+need "$G" 'writer_fg_guard(metrics.misc.screen_on, fsm.profile_idx == PROFILE_SMART,' 'Smart policy not scoped in governor loop'
+need "$G" 'fsm.profile_idx == PROFILE_BATTERY && g_unlock_lift_now &&' 'Battery foreground lift not scoped in governor loop'
 need "$G" 'fg_guard_fixes=%lu' 'corrections not published'
 grep -Fq '/dev/cpuctl/foreground/cpu.uclamp.max' "$D" && fail 'shell tuner still writes foreground uclamp'
 grep -Fq '_ucfg_fallback' "$D" && fail 'shell fallback writer remains'
@@ -1424,9 +1426,9 @@ grep -Fq '_ucfg_fallback' "$D" && fail 'shell fallback writer remains'
 CC=""; for c in ${HOST_CC:-} gcc clang cc; do command -v "$c" >/dev/null 2>&1 && { CC="$c"; break; }; done
 if [ -z "$CC" ]; then echo 'PASS fg uclamp guard contract (source pins only)'; exit 0; fi
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
-sed -n '/^static int    g_fg_last_good = -1;$/,/^static void writer_fg_guard(int screen_on, int smart_screen_policy) {$/p' "$W" > "$T/fg.c"
+sed -n '/^static int    g_fg_last_good = -1;$/,/^static void writer_fg_guard(int screen_on, int smart_screen_policy,$/p' "$W" > "$T/fg.c"
 # The range above ends at the function opening; append its complete body through the next brace.
-awk '/^static void writer_fg_guard\(int screen_on, int smart_screen_policy\) \{$/{on=1; next} on{print; if ($0 == "}") exit}' "$W" >> "$T/fg.c"
+awk '/^static void writer_fg_guard\(int screen_on, int smart_screen_policy,$/{on=1; next} on{print; if ($0 == "}") exit}' "$W" >> "$T/fg.c"
 grep -q 'writer_fg_fallback' "$T/fg.c" || fail 'native fixture extraction failed'
 cat > "$T/t.c" <<X
 #include <stdio.h>
@@ -1465,46 +1467,92 @@ static void reset_fg(const char *raw, const char *profile) {
     unlink(UCFG_LAST_GOOD); unlink(UCFG_RESTORE); g_cam_guard_on = 0;
     g_fg_last_good = -1; g_fg_max_since = 0; g_fg_fix_n = 0; g_fg_fix_window = 0;
     g_fg_backoff_until = 0; g_fg_fix_total = 0;
+    g_fg_lift_on = 0; g_fg_lift_saved = -1;
 }
 static void check(int cond, const char *what) { if (!cond) { printf("  FAIL %s\n", what); fails++; } }
 int main(void) {
-    reset_fg("70.00\n", "smart"); writer_fg_guard(0, 1);
+    reset_fg("70.00\n", "smart"); writer_fg_guard(0, 1, 0, 80);
     check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 35, "Smart screen-off did not lower to 35");
     check(sysfs_read_int(UCFG_RESTORE, -1) == 70, "ordinary wake value not saved");
     check(sysfs_read_int(UCFG_LAST_GOOD, -1) == 70, "last-good not saved");
-    writer_fg_guard(0, 1);
+    writer_fg_guard(0, 1, 0, 80);
     check(sysfs_read_int(UCFG_RESTORE, -1) == 70, "second sleep tick overwrote restore");
-    writer_fg_guard(1, 1);
+    writer_fg_guard(1, 1, 0, 80);
     check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 70 && access(UCFG_RESTORE, F_OK) != 0, "wake did not restore exactly once");
 
-    reset_fg("max\n", "smart"); put_state(UCFG_LAST_GOOD, 70); writer_fg_guard(0, 1);
+    reset_fg("max\n", "smart"); put_state(UCFG_LAST_GOOD, 70); writer_fg_guard(0, 1, 0, 80);
     check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 35 && sysfs_read_int(UCFG_RESTORE, -1) == 70, "max was not replaced by last-good");
 
-    reset_fg("max\n", "balanced"); writer_fg_guard(0, 1);
+    reset_fg("max\n", "balanced"); writer_fg_guard(0, 1, 0, 80);
     check(sysfs_read_int(UCFG_RESTORE, -1) == 70, "balanced fallback changed");
-    reset_fg("max\n", "performance"); writer_fg_guard(0, 1);
+    reset_fg("max\n", "performance"); writer_fg_guard(0, 1, 0, 80);
     check(sysfs_read_int(UCFG_RESTORE, -1) == 88, "performance fallback changed");
-    reset_fg("max\n", "smart"); writer_fg_guard(0, 1);
+    reset_fg("max\n", "smart"); writer_fg_guard(0, 1, 0, 80);
     check(sysfs_read_int(UCFG_RESTORE, -1) == 55, "smart fallback changed");
-    reset_fg("max\n", "battery"); writer_fg_guard(0, 1);
+    reset_fg("max\n", "battery"); writer_fg_guard(0, 1, 0, 80);
     check(sysfs_read_int(UCFG_RESTORE, -1) == 55, "battery fallback changed");
 
-    reset_fg("35.00\n", "smart"); put_state(UCFG_LAST_GOOD, 70); put_state(UCFG_RESTORE, 100); writer_fg_guard(1, 1);
+    reset_fg("35.00\n", "smart"); put_state(UCFG_LAST_GOOD, 70); put_state(UCFG_RESTORE, 100); writer_fg_guard(1, 1, 0, 80);
     check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 70 && access(UCFG_RESTORE, F_OK) != 0, "legacy restore=100 survived wake");
 
-    reset_fg("70.00\n", "balanced"); writer_fg_guard(0, 0);
+    reset_fg("70.00\n", "balanced"); writer_fg_guard(0, 0, 0, 80);
     check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 70 && access(UCFG_RESTORE, F_OK) != 0, "manual Balanced gained Smart sleep policy");
 
-    reset_fg("max\n", "smart"); g_cam_guard_on = 1; writer_fg_guard(0, 1); writer_fg_guard(1, 1);
+    reset_fg("max\n", "smart"); g_cam_guard_on = 1; writer_fg_guard(0, 1, 0, 80); writer_fg_guard(1, 1, 0, 80);
     check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 100 && access(UCFG_RESTORE, F_OK) != 0, "camera guard was overwritten");
 
     reset_fg("max\n", "balanced"); put_state(UCFG_LAST_GOOD, 70);
-    writer_fg_guard(1, 0); check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 100, "short max boost cut short");
-    g_fg_max_since = time(NULL) - 61; writer_fg_guard(1, 0);
+    writer_fg_guard(1, 0, 0, 80); check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 100, "short max boost cut short");
+    g_fg_max_since = time(NULL) - 61; writer_fg_guard(1, 0, 0, 80);
     check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 70 && g_fg_fix_total == 1, "persistent max not corrected");
 
+    /* fix234: only an armed Battery interaction borrows foreground uclamp. The exact shell
+     * baseline returns at expiry/screen-off; higher vendor values are never lowered. */
+    reset_fg("50.00\n", "battery"); writer_fg_guard(1, 0, 1, 80);
+    check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 80 && g_fg_lift_on && g_fg_lift_saved == 50,
+          "Battery interaction did not lift foreground from its saved baseline");
+    writer_fg_guard(1, 0, 1, 80);
+    check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 80 && g_fg_last_good == 50,
+          "active Battery lift polluted the ordinary last-good value");
+    writer_fg_guard(1, 0, 0, 80);
+    check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 50 && !g_fg_lift_on && g_fg_lift_saved == -1,
+          "Battery foreground lift did not hand back exactly 50");
+
+    reset_fg("70.00\n", "battery"); writer_fg_guard(1, 0, 1, 80);
+    writer_fg_guard(0, 0, 1, 80);
+    check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 70 && !g_fg_lift_on,
+          "screen-off did not end the Battery foreground lift or gained Smart sleep policy");
+
+    reset_fg("90.00\n", "battery"); writer_fg_guard(1, 0, 1, 80);
+    check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 90 && !g_fg_lift_on,
+          "Battery foreground lift lowered a higher vendor ceiling");
+
+    reset_fg("50.00\n", "battery"); writer_fg_guard(1, 0, 1, 100);
+    g_fg_max_since = time(NULL) - 61; writer_fg_guard(1, 0, 1, 100);
+    check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 100 && g_fg_fix_total == 0,
+          "persistent-max correction fought an active Battery lift");
+    writer_fg_guard(1, 0, 0, 100);
+    check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 50, "100%% Battery lift did not restore");
+
+    reset_fg("50.00\n", "battery"); writer_fg_guard(1, 0, 1, 80);
+    g_cam_guard_on = 1; put_raw("max\n"); writer_fg_guard(1, 0, 1, 80);
+    check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 100, "Battery lift overwrote the camera guard");
+    g_cam_guard_on = 0; writer_fg_guard(1, 0, 0, 80);
+    check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 50 && !g_fg_lift_on,
+          "post-camera Battery handback did not restore the saved value");
+
+    reset_fg("50.00\n", "battery"); writer_fg_guard(1, 0, 1, 80);
+    snprintf(g_profile, sizeof(g_profile), "%s", "smart"); writer_fg_guard(1, 1, 0, 80);
+    check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 80 && !g_fg_lift_on,
+          "profile switch restored stale Battery foreground value over Smart");
+
+    reset_fg("50.00\n", "smart"); writer_fg_guard(1, 1, 0, 80);
+    check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 50, "Smart gained Battery foreground lift");
+    reset_fg("50.00\n", "balanced"); writer_fg_guard(1, 0, 0, 80);
+    check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 50, "Balanced gained Battery foreground lift");
+
     if (fails) return 1;
-    puts("PASS fg uclamp native runtime: sleep/wake, max fallback, profile scope, camera exclusion");
+    puts("PASS fg uclamp native runtime: sleep/wake, Battery lift handback, max fallback, profile scope, camera exclusion");
     return 0;
 }
 X
