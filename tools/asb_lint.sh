@@ -135,8 +135,7 @@ else
     v="$(get_kv "$CONF" "$need")"
     [ -n "$v" ] && ok "$need present" || err "$need missing"
   done
-  A_TIME="$(get_kv "$CONF" auto_degrade_time_gate)"
-  [ -n "$A_TIME" ] && ok "auto_degrade_time_gate present" || warn "auto_degrade_time_gate not set (using built-in timing logic)"
+  ok "auto-degrade timing is built in (thermal gate=120s; other gates are event-driven)"
 
   HEAVY_GPU="$(get_kv "$CONF" heavy_gpu_enter)"
   S_ENTER="$(get_kv "$CONF" sustained_temp_enter)"
@@ -147,7 +146,6 @@ else
   [ -n "$S_ENTER" ] && { num_ge "$S_ENTER" 50 && num_le "$S_ENTER" 95 && ok "sustained_temp_enter in range" || warn "sustained_temp_enter=$S_ENTER outside 50-95"; }
   [ -n "$S_EXIT" ]  && { num_ge "$S_EXIT" 35 && num_le "$S_EXIT" 90 && ok "sustained_temp_exit in range" || warn "sustained_temp_exit=$S_EXIT outside 35-90"; }
   [ -n "$A_THERM" ] && { num_ge "$A_THERM" 20 && num_le "$A_THERM" 95 && ok "auto_degrade_thermal_pct in range" || warn "auto_degrade_thermal_pct=$A_THERM outside 20-95"; }
-  [ -n "$A_TIME" ]  && { num_ge "$A_TIME" 30 && num_le "$A_TIME" 600 && ok "auto_degrade_time_gate in range" || warn "auto_degrade_time_gate=$A_TIME outside 30-600"; }
 
   if [ -n "$S_ENTER" ] && [ -n "$S_EXIT" ]; then
     if num_ge "$S_EXIT" "$S_ENTER"; then

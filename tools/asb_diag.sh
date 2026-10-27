@@ -1400,8 +1400,10 @@ case "${_ovr_flag:-0}:${_dba:-}" in
   1:[1-9]*) P "  governor loaded       : ${_dba} value(s) at start" ;;
 esac
 if [ -f "$_dbounds" ]; then
-  _dconf="$(grep -E '^# confidence=' "$_dbounds" 2>/dev/null | head -1 | sed 's/^# confidence=//')"
-  P "  synthesis confidence  : ${_dconf:-unknown}"
+  _dconf="$(grep -E '^confidence=' "$_dbounds" 2>/dev/null | head -1 | cut -d= -f2-)"
+  [ -n "$_dconf" ] || _dconf="$(grep -E '^# confidence=' "$_dbounds" 2>/dev/null | head -1 | sed 's/^# confidence=//' | awk '{print $1}')"
+  _dschema="$(grep -E '^schema=' "$_dbounds" 2>/dev/null | head -1 | cut -d= -f2-)"
+  P "  synthesis confidence  : ${_dconf:-unknown} (schema=${_dschema:-legacy}; overrides require high)"
   _nvals="$(grep -cE '^[A-Z].*=' "$_dbounds" 2>/dev/null)"
   if [ "${_nvals:-0}" -gt 0 ] 2>/dev/null; then
     P "  synthesised bounds (scaled from OP15 ratios, snapped to this device):"
@@ -1417,6 +1419,10 @@ if [ -f "$_dbounds" ]; then
 else
   P "  (device_bounds.env not present yet — writes at install or next boot)"
 fi
+
+SEC "0a3. AUTO-DEGRADE TIMING  (effective built-in gates)"
+P "  auto_degrade_time_gate=builtin: thermal share requires 120s of classified load; gap/ratio and hard-gap gates are event-driven"
+P "  There is no hidden single timer and no public config key to drift between releases."
 
 # =====================================================================
 SEC "0b. MODULE STATE  (running, mounts, governor)"
@@ -2611,6 +2617,9 @@ else
         NOTE "route link watcher: missing_ip - the ip binary is not on PATH for this shell"
       elif [ ! -f "$MODDIR/runtime/asb_net_routes.sh" ]; then
         NOTE "route link watcher: missing_script - runtime/asb_net_routes.sh is not installed"
+      elif [ "$(cat /data/adb/asb/net_routes_watch.mode 2>/dev/null)" = dormant ]; then
+        NOTE "route link watcher: dormant (event monitor unavailable; bounded fallback ended) - $(cat /data/adb/asb/net_routes_watch.exit 2>/dev/null)"
+        NOTE "  the existing profile/reconcile or half-hour maintenance event will retry it"
       elif [ -f /data/adb/asb/net_routes_watch.exit ]; then
         NOTE "route link watcher: exited - last reason: $(cat /data/adb/asb/net_routes_watch.exit 2>/dev/null)"
       else

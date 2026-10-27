@@ -109,6 +109,12 @@ _snap() {
   echo "# generated_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null)"
   echo "# method=OP15-ratio-scaled, snapped to this device's real frequencies"
   echo "# confidence=$_conf  topology=$_topo (little+[mid]+big; 2/3/4 clusters supported)"
+  echo "schema=2"
+  echo "confidence=$_conf"
+  echo "source=measured"
+  echo "policy_count=${_pcount:-0}"
+  echo "cluster_signature=${_little_id:-none}:${_hw_little:-0}>${_mid_id:-none}:${_hw_mid:-0}>${_big_id:-none}:${_hw_big:-0}"
+  echo "fingerprint=$(_cget fingerprint)"
   echo "# little_policy=$_little_id hw_max=$_hw_little | mid_policy=${_mid_id:-none} hw_max=${_hw_mid:-n/a} | big_policy=$_big_id hw_max=$_hw_big"
   if [ "$_conf" = "high" ]; then
     # --- multi-cluster (3/4-cluster, e.g.

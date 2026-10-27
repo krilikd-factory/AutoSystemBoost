@@ -26,6 +26,7 @@ _gp() { getprop "$1" 2>/dev/null; }
   echo "soc_model=$(_gp ro.soc.model)"
   echo "codename=$(_gp ro.product.device)"
   echo "model=$(_gp ro.product.model)"
+  echo "fingerprint=$(_gp ro.build.fingerprint)"
   echo "board=$(_gp ro.product.board)"
   echo "android_api=$(_gp ro.build.version.sdk)"
   echo "kernel=$(uname -r 2>/dev/null)"
