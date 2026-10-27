@@ -58,6 +58,7 @@
   --accent: #00f0b4;
   --accent-glow: rgba(0,240,180,0.35);
   --accent2: #00d4ff;
+  --metric-cool: #00d4ff;
   
   --perf: #ff1a1a;
   --perf-glow: rgba(255,26,26,0.4);
@@ -1567,7 +1568,7 @@ html[dir="rtl"] .live-page .smart-banner-item[data-lvi]::after { content: '\2039
 .live-page .smart-banner-item[data-lvi] .smart-banner-value { padding-inline-end: 9px; }
 html[data-asb-theme="light"] .live-info-now { background: #f7f9fa; }
 html[data-asb-theme="light"] .live-info-src { background: #fbfcfc; }
-/* 24h log report page (fix195): a full page, not a sheet - Monitor-cell cards, emoji
+/* Session log report page (fix195): a full page, not a sheet - Monitor-cell cards, emoji
  * section labels, two hero tiles where a headline number exists. One layer above Config
  * so it can open over any page from the Logs menu in any header. */
 #reportPage { z-index: 130; overflow-y: auto !important; }
@@ -3131,7 +3132,7 @@ html[data-asb-theme="light"] {
   /* A restrained warm-grey canvas keeps white operational cards distinct without the dark
      theme’s neon glow. Values are opaque enough for Android WebView composition. */
   --bg:#edf4f1; --surface:#ffffff; --surface-hover:#e3efea;
-  --accent:#007c63; --accent2:#006f9b; --accent-glow:rgba(0,124,99,.20);
+  --accent:#007c63; --accent2:#006f9b; --metric-cool:#006f9b; --accent-glow:rgba(0,124,99,.20);
   --perf:#b42318; --perf-glow:rgba(180,35,24,.18); --bal:#8a5700; --bal-glow:rgba(138,87,0,.17);
   --bat:#08753c; --bat-glow:rgba(8,117,60,.17); --text:#14231f;
   --text-secondary:#365048; --text-tertiary:#526b62;
@@ -3876,6 +3877,12 @@ html[data-asb-glass="1"] .live-cell-value.metric-bad { color:var(--perf) !import
 html .smart-banner-value.metric-neutral, html .live-cell-value.metric-neutral,
 html[data-asb-glass="1"] .smart-banner-value.metric-neutral,
 html[data-asb-glass="1"] .live-cell-value.metric-neutral { color:var(--text-tertiary) !important; }
+html .smart-banner-value.metric-normal, html .live-cell-value.metric-normal,
+html[data-asb-glass="1"] .smart-banner-value.metric-normal,
+html[data-asb-glass="1"] .live-cell-value.metric-normal { color:var(--text) !important; }
+html .smart-banner-value.metric-cool, html .live-cell-value.metric-cool,
+html[data-asb-glass="1"] .smart-banner-value.metric-cool,
+html[data-asb-glass="1"] .live-cell-value.metric-cool { color:var(--metric-cool) !important; }
 
 /* Category identity remains visible through the glass: a tinted translucent body and edge,
  * a stronger tonal icon pill, and the existing category progress hue. Titles and descriptions
@@ -4123,8 +4130,7 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
 
   </div>
 
-  <!-- One support rail per page: debug builds reveal exactly three equal controls;
-       release builds retain exactly one Telegram control. -->
+  <!-- One unified support rail per page: asbdiag, Telegram and session log on every build. -->
   <div class="tg-link-wrap">
     <div class="footer-support-row" data-debug-support-row hidden>
       <button class="debug-support-btn" data-debug-action="diag" type="button" onclick="asbDebugAction('diag')" data-i18n="dbg_diag_btn">asbdiag</button>
@@ -4132,7 +4138,7 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
         <span class="tg-link-ico" data-tech-icon="telegram"></span>
         <span class="tg-link-main">@AutoSystemBoost</span>
       </a>
-      <button class="debug-support-btn" data-debug-action="full-day" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">24h log</button>
+      <button class="debug-support-btn" data-debug-action="full-day" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">Session log</button>
     </div>
     <a class="tg-link" data-release-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
       <span class="tg-link-ico" data-tech-icon="telegram"></span>
@@ -4332,8 +4338,7 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
 
   </div>
 
-  <!-- One support rail per page: debug builds reveal exactly three equal controls;
-       release builds retain exactly one Telegram control. -->
+  <!-- One unified support rail per page: asbdiag, Telegram and session log on every build. -->
   <div class="tg-link-wrap">
     <div class="footer-support-row" data-debug-support-row hidden>
       <button class="debug-support-btn" data-debug-action="diag" type="button" onclick="asbDebugAction('diag')" data-i18n="dbg_diag_btn">asbdiag</button>
@@ -4341,7 +4346,7 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
         <span class="tg-link-ico" data-tech-icon="telegram"></span>
         <span class="tg-link-main">@AutoSystemBoost</span>
       </a>
-      <button class="debug-support-btn" data-debug-action="full-day" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">24h log</button>
+      <button class="debug-support-btn" data-debug-action="full-day" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">Session log</button>
     </div>
     <a class="tg-link" data-release-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
       <span class="tg-link-ico" data-tech-icon="telegram"></span>
@@ -4454,8 +4459,7 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
   </div>
   </div>
 
-  <!-- One support rail per page: debug builds reveal exactly three equal controls;
-       release builds retain exactly one Telegram control. -->
+  <!-- One unified support rail per page: asbdiag, Telegram and session log on every build. -->
   <div class="tg-link-wrap">
     <div class="footer-support-row" data-debug-support-row hidden>
       <button class="debug-support-btn" data-debug-action="diag" type="button" onclick="asbDebugAction('diag')" data-i18n="dbg_diag_btn">asbdiag</button>
@@ -4463,7 +4467,7 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
         <span class="tg-link-ico" data-tech-icon="telegram"></span>
         <span class="tg-link-main">@AutoSystemBoost</span>
       </a>
-      <button class="debug-support-btn" data-debug-action="full-day" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">24h log</button>
+      <button class="debug-support-btn" data-debug-action="full-day" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">Session log</button>
     </div>
     <a class="tg-link" data-release-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
       <span class="tg-link-ico" data-tech-icon="telegram"></span>
@@ -4476,7 +4480,7 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
 
 </div>
 
-<!-- 24h log report page (fix195): the Logs menu's third entry opens this full page -
+<!-- Session log report page (fix195): the Logs menu's third entry opens this full page -
      same capsule header and tab bar as every other page, Monitor-cell cards explaining
      the capture in plain words. Data comes from tools/logkit/asb_fullday_digest.sh: awk
      over the recorder's own files, no dumpsys, so the page opens instantly and works on
@@ -4599,6 +4603,10 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
     <div class="rpt-meta-row">
       <span class="lgr-status" id="deviceStatus" role="status" aria-live="polite"></span>
       <div class="rpt-actions">
+        <button class="live-chip" id="devJson" type="button" onclick="asbDeviceInfoExportJson()" aria-label="Export device diagnostics JSON" disabled>
+          <span aria-hidden="true">{ }</span>
+          <span>JSON</span>
+        </button>
         <button class="live-chip rpt-refresh" id="devRefresh" type="button" onclick="asbDeviceInfoLoad()">
           <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 6.3"></path><path d="M20 5v6h-6"></path></svg>
           <span data-i18n="dev_refresh">Refresh</span>
@@ -5295,20 +5303,15 @@ function run(cmd) {
   });
 }
 
-let _asbDebugBuild = false;
 let _asbDebugActionBusy = false;
 
 function debugSupportPaint() {
-  document.querySelectorAll('[data-debug-support-row]').forEach(row => { row.hidden = !_asbDebugBuild; });
-  document.querySelectorAll('[data-release-telegram]').forEach(link => { link.hidden = _asbDebugBuild; });
+  document.querySelectorAll('[data-debug-support-row]').forEach(row => { row.hidden = false; });
+  // The support rail already contains the same Telegram destination; never draw it twice.
+  document.querySelectorAll('[data-release-telegram]').forEach(link => { link.hidden = true; });
 }
 
 async function loadDebugSupport() {
-  try {
-    const r = await run('sed -n "s/^version=//p" ' + MD + '/module.prop 2>/dev/null | head -n 1');
-    const version = ((r && r.stdout) || '').trim();
-    _asbDebugBuild = /-debug[1-9][0-9]*$/i.test(version);
-  } catch (e) { _asbDebugBuild = false; }
   debugSupportPaint();
 }
 
@@ -5328,9 +5331,9 @@ function debugActionWaitOpen(action) {
   const copy = document.getElementById('debugActionWaitCopy');
   if (!modal || !title || !copy) return;
   const isDiag = action === 'diag';
-  title.textContent = isDiag ? 'asbdiag' : '24h log';
+  title.textContent = isDiag ? 'asbdiag' : 'Session log';
   copy.textContent = T(isDiag ? 'dbg_diag_wait' : 'dbg_log_wait',
-                       isDiag ? 'asbdiag started · please wait' : '24h log is starting · please wait');
+                       isDiag ? 'asbdiag started · please wait' : 'Session log is starting · please wait');
   modal.hidden = false;
   modal.setAttribute('aria-hidden', 'false');
 }
@@ -5390,7 +5393,7 @@ async function debugFullDayPoll() {
 }
 
 async function asbDebugAction(action) {
-  if (!_asbDebugBuild || _asbDebugActionBusy) { toast(T('dbg_only', 'Debug build only'), 'warn'); return; }
+  if (_asbDebugActionBusy) return;
   const allowed = action === 'diag' || action === 'full-day';
   if (!allowed) return;
   _asbDebugActionBusy = true;
@@ -5405,7 +5408,7 @@ async function asbDebugAction(action) {
   // acknowledgement. Yield twice before KSU work so the first pulse is on-screen.
   await debugFrame();
   toast(T(action === 'diag' ? 'dbg_diag_wait' : 'dbg_log_wait',
-          action === 'diag' ? 'asbdiag started · please wait' : '24h log is starting · please wait'), 'warn');
+          action === 'diag' ? 'asbdiag started · please wait' : 'Session log is starting · please wait'), 'warn');
   try {
     const cmd = action === 'diag' ? 'diag-start' : 'full-day-start';
     const r = await run('sh ' + MD + '/runtime/asb_debug_support.sh ' + cmd + ' 2>/dev/null');
@@ -5428,18 +5431,18 @@ async function asbDebugAction(action) {
       uiSound('success');
       toast(T('dbg_diag_saved', 'asbdiag saved') + (done.info.path ? ': ' + done.info.path : ''), 'good');
     } else if (info.status === 'already_running') {
-      toast(T('dbg_log_running', '24h log is already running') + (info.pid ? ' · PID ' + info.pid : '') +
+      toast(T('dbg_log_running', 'Session log is already running') + (info.pid ? ' · PID ' + info.pid : '') +
           (info.output ? ' · ' + info.output.replace(/^\/(sdcard|storage\/emulated\/0)\//, '') + ' — ' + T('dbg_log_running_hint', 'delete this folder to start a new one') : ''), 'warn');
     } else if (info.status === 'started') {
       const started = await debugFullDayPoll();
       if (!started.ok) {
-        toast(T('dbg_log_failed', 'Could not start 24h log'), 'bad');
+        toast(T('dbg_log_failed', 'Could not start session log'), 'bad');
         return;
       }
       uiSound('success');
-      toast(T('dbg_log_started', '24h log started') + ((started.info.pid || info.pid) ? ' · PID ' + (started.info.pid || info.pid) : ''), 'good');
+      toast(T('dbg_log_started', 'Session log started') + ((started.info.pid || info.pid) ? ' · PID ' + (started.info.pid || info.pid) : ''), 'good');
     } else {
-      toast(T('dbg_log_failed', 'Could not start 24h log'), 'bad');
+      toast(T('dbg_log_failed', 'Could not start session log'), 'bad');
     }
   } catch (e) { toast(T(action === 'diag' ? 'dbg_diag_failed' : 'dbg_log_failed', 'Debug action failed'), 'bad'); }
   finally {
@@ -10066,7 +10069,7 @@ function asbToggleLogMenu(ev) {
   if (typeof uiSound === 'function') uiSound('option');
 }
 
-/* ----- 24h log report (fix194) ------------------------------------------------
+/* ----- Session log report (fix194) ------------------------------------------------
  * The full-day capture writes a long plain-text report aimed at a developer. This sheet
  * re-reads the same capture directory through tools/logkit/asb_fullday_digest.sh - awk
  * over files the recorder already wrote, no dumpsys, so it returns instantly - and
@@ -10786,10 +10789,42 @@ function closeDevicePage() {
   navSyncSoon();
   requestAnimationFrame(asbFitPages);
 }
+async function asbDeviceInfoExportJson() {
+  const d = window._asbDeviceInfoData;
+  if (!d || !d.count) { toast(T('dev_json_empty', 'Refresh device diagnostics before exporting JSON.'), 'error'); return; }
+  const btn = _el('devJson'); if (btn) btn.disabled = true;
+  try {
+    /* Export only the snapshot already returned by the read-only, on-demand collector.
+     * No shell probe, background worker or additional device identifier is introduced. */
+    const snapshot = {
+      schema: 1,
+      source: 'asb_device_info',
+      read_only: true,
+      fact_count: d.count,
+      malformed_lines: d.malformed,
+      sections: d.sections
+    };
+    const json = JSON.stringify(snapshot, null, 2) + '\n';
+    const bytes = new TextEncoder().encode(json);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    const b64 = btoa(bin), path = '/sdcard/Download/device.json';
+    const r = await run("printf '%s' " + shQuote(b64) + ' | base64 -d > ' + shQuote(path));
+    if (!r || r.errno !== 0) throw new Error((r && r.stderr) || 'write failed');
+    toast(T('dev_json_saved', 'Saved {path}').replace('{path}', path), 'ok');
+  } catch (e) {
+    toast(T('dev_json_error', 'Could not save device.json.'), 'error');
+  } finally {
+    if (btn) btn.disabled = !window._asbDeviceInfoData;
+  }
+}
 async function asbDeviceInfoLoad() {
   const body = _el('deviceBody'), status = _el('deviceStatus'), btn = _el('devRefresh');
   if (!body || !status || !_deviceOpen) return;
   const seq = ++_deviceLoadSeq;
+  const jsonBtn = _el('devJson');
+  window._asbDeviceInfoData = null;
+  if (jsonBtn) jsonBtn.disabled = true;
   if (btn) btn.disabled = true;
   status.textContent = T('dev_loading_status', 'Collecting read-only data…');
   body.textContent = '';
@@ -10801,16 +10836,19 @@ async function asbDeviceInfoLoad() {
   const d = parseDeviceInfo(r ? runText(r) : '');
   body.textContent = '';
   if (!r || r.errno !== 0 || !d.count) {
+    window._asbDeviceInfoData = null;
     const empty = logReportSec(T('dev_error_title', 'Device data unavailable'));
     empty.classList.add('lgr-empty');
     empty.appendChild(logReportNote(T('dev_error_body', 'The read-only collector returned no usable data. Nothing was changed. Tap Refresh to try again.'), true));
     body.appendChild(empty);
     status.textContent = T('dev_error_status', 'Collection failed');
   } else {
+    window._asbDeviceInfoData = d;
     const shown = deviceInfoRender(d);
     status.textContent = T('dev_facts_status', '%s facts').replace('%s', String(shown));
   }
   if (btn) btn.disabled = false;
+  if (jsonBtn) jsonBtn.disabled = !window._asbDeviceInfoData;
   requestAnimationFrame(asbFitPages);
 }
 async function asbLogReportLoad() {
@@ -10835,7 +10873,7 @@ async function asbLogReportLoad() {
     em.className = 'lgr-empty-emo';
     em.textContent = '📭';
     s0.insertBefore(em, s0.firstChild);
-    s0.appendChild(logReportNote(T('lr_none_body', 'Start a 24h capture from this menu first. The report appears here as data accumulates - even while it is still recording.')));
+    s0.appendChild(logReportNote(T('lr_none_body', 'Start a session log from this menu first. The report appears here as data accumulates - even while it is still recording.')));
     body.appendChild(s0);
     requestAnimationFrame(asbFitPages);
     return;
@@ -10998,13 +11036,15 @@ function logReportRender(d) {
   const body = _el('reportBody');
   const status = _el('reportStatus');
   const meta = d.sections.meta || {};
-  const h = String(meta.target_h || '24');
+  const h = String(meta.target_h || '0');
   body.textContent = '';
   const analysis = logReportAnalyze(d);
   d.analysis = analysis;
   window._asbLogReportData = d;
   if (String(meta.running) === '1') {
-    status.textContent = logReportT('lr_running', 'recording · {min} min of {h} h', { min: String(meta.elapsed_min || '0'), h: h });
+    status.textContent = h === '0'
+      ? logReportT('lr_running_open', 'recording · {min} min · until shutdown', { min: String(meta.elapsed_min || '0') })
+      : logReportT('lr_running', 'recording · {min} min of {h} h', { min: String(meta.elapsed_min || '0'), h: h });
   } else if (meta.started) {
     /* fix200: a SAVED capture is named as such - with its start time and the profile it
        ran under - so nobody mistakes last Tuesday's day for right now. */
@@ -12466,7 +12506,7 @@ function lvLoadShare(raw, cpus) {
 }
 /* Monitor readings share one colour vocabulary, but not one threshold table. Each helper
  * judges only its own unit; missing, malformed and warm-up evidence stays neutral. */
-const METRIC_CLASSES = ['metric-good', 'metric-warm', 'metric-bad', 'metric-neutral'];
+const METRIC_CLASSES = ['metric-good', 'metric-warm', 'metric-bad', 'metric-neutral', 'metric-normal', 'metric-cool'];
 function asbMetricPaint(id, state) {
   const el = _el(id); if (!el) return;
   const kept = String(el.className || '').split(/\s+/).filter(c => c && !METRIC_CLASSES.includes(c));
@@ -12518,14 +12558,18 @@ function asbBasisMetric(v) {
 }
 function asbModemMetric(v) {
   const s = String(v || '').toLowerCase();
-  /* Green is reserved for an active power-saving mode. Normal is the stock baseline,
-     so it stays readable but neutral rather than looking like an economy state. */
+  /* Green is reserved for an active power-saving mode. Normal is the stock baseline:
+     full-strength foreground text, not a disabled/unknown-looking tertiary colour. */
   if (s === 'save' || s === 'night') return 'metric-good';
   if (s === 'fast') return 'metric-bad';
+  if (s === 'normal') return 'metric-normal';
   return 'metric-neutral';
 }
 function asbSlotMetric(v) {
-  return v === 'warm' ? 'metric-warm' : v === 'typical' || v === 'cool' ? 'metric-good' : 'metric-neutral';
+  if (v === 'warm') return 'metric-warm';
+  if (v === 'typical') return 'metric-normal';
+  if (v === 'cool') return 'metric-cool';
+  return 'metric-neutral';
 }
 function paintStockLive(stockKv = null) {
   /* Governor-owned cells stay untouched outside Stock.
@@ -13932,7 +13976,7 @@ setTimeout(() => pollLive(false), 1500);
     <span data-i18n="dbg_diag_btn">asbdiag</span>
   </button>
   <button class="log-menu-item" role="menuitem" type="button" onclick="asbLogMenuPick('full-day')">
-    <span data-i18n="dbg_log_btn">24h log</span>
+    <span data-i18n="dbg_log_btn">Session log</span>
   </button>
   <button class="log-menu-item" role="menuitem" type="button" onclick="asbLogMenuPick('report')">
     <span data-i18n="lr_menu">Log report</span>
