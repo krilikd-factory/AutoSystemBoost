@@ -409,7 +409,7 @@ esac
 
 # Restore the foreground uclamp tier if we left it lowered.
 #
-# smart_dynamic_tune drops it to 35 while the screen is off and puts it back on wake.
+# The native foreground guard drops it to 35 in Smart screen-off and restores on wake.
 # A user who removes the module with the screen off would otherwise keep a throttled
 # foreground tier until the next reboot - the saved value is right there, so use it.
 # Undo the screen-off Wi-Fi power save if it is still on.
