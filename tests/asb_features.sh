@@ -3672,6 +3672,7 @@ export ASB_LTPO_LOG="$TMP/mount.log"
 export ASB_LTPO_STATE_DIR="$TMP/state"
 export ASB_LTPO_PROC_MOUNTS="$TMP/mounts"
 export ASB_LTPO_LIVE_ROOT="$TMP/live"
+export ASB_LTPO_MODULES_ROOT="$TMP/modules"
 : > "$TMP/mounts"
 
 LIVE="$TMP/live/my_product/etc/oplus_vrr_config.json"
@@ -3740,6 +3741,28 @@ printf 'ltpo_force=1\n' > "$TMP/mod/config/governor.conf"
 run remove
 grep -q "umount $LIVE" "$ASB_LTPO_LOG" || fail 'remove did not unbind'
 [ ! -f "$TMP/state/ltpo_bind.active" ] || fail 'remove kept the active marker'
+
+# External touch-LTPO coexistence: an enabled OnePlus15-165HZ-LTPO owns display policy.
+# ASB removes its previous bind and yields; disabling that module restores normal ASB behavior.
+EXT="$TMP/modules/OnePlus15-165HZ-LTPO"
+mkdir -p "$EXT"
+printf 'id=OnePlus15-165HZ-LTPO\n' > "$EXT/module.prop"
+printf '#!/system/bin/sh\n' > "$EXT/vrrd.sh"
+printf "%s %s ext4 rw 0 0\n" "$PAYLOAD" "$LIVE" > "$TMP/mounts"
+: > "$TMP/state/ltpo_bind.active"
+printf 'ltpo_force=1\n' > "$TMP/mod/config/governor.conf"
+run apply
+[ ! -f "$TMP/state/ltpo_bind.active" ] || fail 'external owner kept the old ASB bind marker'
+[ "$(run status)" = 'ltpo_external_owner' ] || fail 'external owner not reported honestly'
+: > "$EXT/disable"
+run apply
+grep -q -- "--bind $PAYLOAD $LIVE" "$ASB_LTPO_LOG" || fail 'ASB did not resume after external disable'
+[ -f "$TMP/state/ltpo_bind.active" ] || fail 'ASB ownership did not resume after external disable'
+run remove
+rm -f "$EXT/disable"
+run apply
+[ ! -f "$TMP/state/ltpo_bind.active" ] || fail 're-enabled external owner did not regain exclusivity'
+run remove
 
 # status vocabulary stays stable for the WebUI/diag readers.
 printf 'ltpo_force=0\n' > "$TMP/mod/config/governor.conf"
@@ -3891,6 +3914,20 @@ case "$_rng" in
   "max_mode=165 peak=60.0 min=none (floor open) original: peak=144.0 min=__unset") : ;;
   *) f "range diagnostic with a video-held peak garbled: $_rng" ;;
 esac
+
+# External touch-LTPO owner: restore ASB's recorded range instead of forcing 165 over it.
+mkdir -p "$T/modules/OnePlus15-165HZ-LTPO"
+printf 'id=OnePlus15-165HZ-LTPO\n' > "$T/modules/OnePlus15-165HZ-LTPO/module.prop"
+printf '#!/system/bin/sh\n' > "$T/modules/OnePlus15-165HZ-LTPO/vrrd.sh"
+export ASB_LTPO_MODULES_ROOT="$T/modules"
+echo ltpo_force=1 > "$T/mod/config/governor.conf"
+sh "$A" apply
+[ "$(cat "$T/s/peak_refresh_rate")" = 144.0 ] || f "external owner did not receive the original peak"
+[ -f "$T/d/ltpo_range.orig" ] && f "range baseline survived the ownership handoff"
+[ "$(sh "$A" status)" = ltpo_external_owner ] || f "external status missing"
+: > "$T/modules/OnePlus15-165HZ-LTPO/disable"
+sh "$A" apply
+[ "$(cat "$T/s/peak_refresh_rate")" = 165.0 ] || f "ASB range did not resume after external disable"
 
 [ "$fail" = 0 ] && echo "PASS ltpo range runtime"
 exit "$fail"
@@ -4529,10 +4566,12 @@ grep -qF 'qdisc=*-unavailable)' "$SRC" || fail 'mapper: qdisc unavailable line m
 if grep -v '^[[:space:]]*#' "$SRC" | grep -qE '(^|[^"A-Za-z_])tc qdisc (replace|show)'; then
   fail 'a bare tc call survived - every qdisc call must use the resolved binary'
 fi
-# profile_core.sh has the same boot-context exposure and must resolve the same way.
+# profile_core must not be a second qdisc writer. The capability/read-back owner is
+# asb_net_apply.sh, invoked once by apply_profile.sh after the profile pass.
 PC="$ROOT/runtime/profile_core.sh"
-grep -qF '_asb_tc="${ASB_TC:-}"' "$PC" || fail 'profile_core tc not injectable'
-grep -qF '"$_asb_tc" qdisc replace' "$PC" || fail 'profile_core not using the resolved tc'
+! grep -qE 'qdisc[[:space:]]+replace' "$PC" || fail 'profile_core still writes qdisc directly'
+grep -qF 'asb_net_apply.sh is its sole owner' "$PC" || fail 'qdisc ownership is undocumented'
+grep -qF 'sh "$MODDIR/runtime/asb_net_apply.sh"' "$ROOT/apply_profile.sh" || fail 'the single qdisc owner is not invoked'
 
 # Executable: the REAL tc selection block honours the fixture injector.
 n="$(grep -nF '_ASB_TC="${ASB_TC:-}"' "$SRC" | head -1 | cut -d: -f1)"
@@ -4680,6 +4719,7 @@ for _locale in "$ROOT"/webroot/i18n/*.json; do
   need "$_locale" '"net_wifi_leave"'
   need "$_locale" '"theme_dark"'
   need "$_locale" '"theme_light"'
+  need "$_locale" '"theme_glass"'
   need "$_locale" '"name"'
   need "$_locale" '"desc"'
 done

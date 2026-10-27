@@ -3961,6 +3961,8 @@ tt = h[h.index('.theme-toggle::before {'):h.index('}', h.index('.theme-toggle::b
 if 'var(--pill-wash)' not in tt or 'transition: transform' not in tt: bad.append('the theme switch has no sliding pill')
 need('html[data-asb-theme="light"] .theme-toggle::before { transform: translateX(38px); }', 'the pill does not follow the light theme')
 need('html[dir="rtl"][data-asb-theme="light"] .theme-toggle::before { transform: translateX(-38px); }', 'the pill slides the wrong way in RTL')
+need('html[data-asb-theme="glass"] .theme-toggle::before { transform: translateX(76px); }', 'the pill does not follow Liquid Glass')
+need('html[dir="rtl"][data-asb-theme="glass"] .theme-toggle::before { transform: translateX(-76px); }', 'the Glass pill slides the wrong way in RTL')
 sv = h[h.index('.status-val {\n  display: inline-flex;'):]
 sv = sv[:sv.index('}')]
 if 'var(--pill-wash)' not in sv: bad.append('the current profile is not on the tonal pill')
@@ -4752,6 +4754,100 @@ grep -Fq "tag === 'hist'" "$H" || fail "the parser drops the history rows"
 grep -Fq 'hist\tstarted=' "$ROOT/tools/logkit/asb_fullday_digest.sh" 2>/dev/null || grep -Fq 'hist\tstarted=%s' "$ROOT/tools/logkit/asb_fullday_digest.sh" || fail "the digest emits no history rows"
 grep -Fq 'report_history.tsv' "$ROOT/tools/logkit/asb_fullday_digest.sh" || fail "the digest keeps no capture history"
 echo "PASS webui log report: digest over a fixture capture (drain..cfg, live holders, per-profile drain, charging, LTPO, AOD, wake causes by occurrence fix210), fresh-capture crash window (fix204), plain-words parser/tips in node (ru+en), 13 locales, menu wiring"
+)
+
+t_webui_liquid_glass_runtime() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui liquid glass: $*" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "SKIP webui liquid glass: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+{
+  cat <<'EOF'
+const store = { asb_theme:'glass' };
+const localStorage = { getItem:k => store[k] || null, setItem:(k,v) => { store[k]=v; } };
+const attrs = {};
+const root = { setAttribute:(k,v) => { attrs[k]=v; }, removeAttribute:k => { delete attrs[k]; } };
+const meta = { setAttribute:(k,v) => { meta.content=v; } };
+const buttons = [];
+for (let page=0; page<4; page++) for (const choice of ['dark','light','glass']) {
+  const classes = new Set();
+  buttons.push({ choice, classes, attrs:{}, getAttribute(k) { return k==='data-theme-choice' ? choice : this.attrs[k]; }, setAttribute(k,v) { this.attrs[k]=v; }, classList:{ toggle(c,on) { on ? classes.add(c) : classes.delete(c); } } });
+}
+const document = { documentElement:root, querySelector:s => s==='meta[name="theme-color"]' ? meta : null, querySelectorAll:s => s==='[data-theme-choice]' ? buttons : [] };
+function T(k,d) { return d; }
+let sounds=0; function uiSound() { sounds++; }
+EOF
+  for fn in asbThemeValue asbPaintThemeControls asbSetTheme; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  cat <<'EOF'
+function chk(c,m) { if (!c) throw new Error(m); }
+asbPaintThemeControls();
+chk(attrs['data-asb-theme']==='glass','cold start does not restore glass');
+chk(buttons.filter(b=>b.classes.has('active')).length===4,'not all four switches select glass');
+chk(buttons.filter(b=>b.choice==='glass').every(b=>b.attrs['aria-pressed']==='true'&&b.attrs['aria-label']==='Liquid Glass theme'),'glass aria state/label');
+asbSetTheme('light'); chk(attrs['data-asb-theme']==='light'&&store.asb_theme==='light','glass -> light');
+asbSetTheme('dark'); chk(!('data-asb-theme' in attrs)&&store.asb_theme==='dark','light -> dark');
+asbSetTheme('glass'); chk(attrs['data-asb-theme']==='glass'&&store.asb_theme==='glass','dark -> glass');
+asbSetTheme('invalid'); chk(!('data-asb-theme' in attrs)&&store.asb_theme==='dark','unknown theme is not accepted');
+chk(buttons.every(b=>(b.classes.has('active'))===(b.choice==='dark')),'switches diverged after cycling');
+console.log('ok');
+EOF
+} > "$T/t.js"
+out="$(node "$T/t.js" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+python3 - "$H" <<'PY' || fail 'markup or material'
+import sys
+h=open(sys.argv[1],encoding='utf-8').read()
+assert h.count('data-theme-choice="glass"') == 4
+assert h.count('data-theme-toggle=') == 4
+assert 'backdrop-filter:blur(8px)' in h
+assert 'html[data-asb-theme="glass"]' in h
+assert '@media (prefers-reduced-motion:reduce)' in h
+PY
+echo "PASS webui liquid glass: cold start, four synchronized switches, dark/light compatibility and localized aria"
+)
+
+t_webui_stock_trend_retry_runtime() (
+# A transient root/sysfs read failure must not erase the last good thermal trend.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui stock trend retry: $*" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "SKIP webui stock trend retry: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+{
+  cat <<'EOF'
+const nodes = {};
+function _el(id) { if (!nodes[id]) nodes[id] = { classList:{remove(){}}, style:{display:''}, textContent:'' }; return nodes[id]; }
+function T(k,d) { return d; }
+let _selectedProfile = 'stock', _stockRomHistory = {};
+let _stockTelemetryLastMs = 0, _stockSettingsAtMs = 0;
+let _stockTelemetryKv = { tsms:'1000', 'thermal.cpu-1-1-0':'41000' };
+const STOCK_TELEMETRY_MIN_INTERVAL_MS = 10000, MD = '/mod';
+let painted = [];
+function paintStockLive(kv) { painted.push(kv); _el('liveStockRomBanner').style.display = Object.keys(kv).length ? '' : 'none'; }
+function lvTopSecSync() {} async function lvMeterPoll() {}
+let calls = 0;
+async function run() { calls++; if (calls === 1) throw new Error('temporary root failure'); return { stdout:'thermal.cpu-1-1-0=42000\n' }; }
+let clock = 10000; Date.now = () => clock;
+EOF
+  for fn in parseStockTelemetry pollStockTelemetry; do sed -n "/^\\(async \\)\\{0,1\\}function $fn(/,/^}/p" "$H"; done
+  cat <<'EOF'
+(async function () {
+  await pollStockTelemetry(true, true);
+  if (calls !== 1 || !_stockTelemetryKv.tsms || painted.length !== 1 || painted[0].tsms !== '1000') throw new Error('cached snapshot lost after a transient failure');
+  if (_el('liveStockRomBanner').style.display === 'none') throw new Error('thermal card hidden despite a cached trend');
+  clock = 30000;
+  await pollStockTelemetry(true, true);
+  if (calls !== 2 || _stockTelemetryKv['thermal.cpu-1-1-0'] !== '42000' || !painted[1].tsms) throw new Error('retry did not replace the cache with fresh telemetry');
+  console.log('ok');
+})().catch(e => { console.error(e.message); process.exit(1); });
+EOF
+} > "$T/t.js"
+out="$(node "$T/t.js" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo "PASS webui stock trend retry: a transient read keeps the last good trend and the next poll refreshes it"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

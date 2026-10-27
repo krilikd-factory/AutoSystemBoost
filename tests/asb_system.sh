@@ -6462,7 +6462,8 @@ need "$UI" 'async function pollStockTelemetry(visible, force = false)'
 need "$UI" "'/runtime/asb_rom_telemetry.sh'"
 need "$ROOT/runtime/asb_rom_telemetry.sh" '/class/power_supply/battery'
 need "$ROOT/runtime/asb_rom_telemetry.sh" '/devices/system/cpu/cpufreq/policy'
-need "$UI" '_stockTelemetryKv = parseStockTelemetry(text);'
+need "$UI" 'const freshKv = parseStockTelemetry(text);'
+need "$UI" '_stockTelemetryKv = freshKv;'
 need "$UI" 'paintStockLive(_stockTelemetryKv);'
 need "$UI" "set('liveCpu'"
 need "$UI" "set('liveGpu'"
@@ -6794,18 +6795,21 @@ absent "$ROOT/runtime/asb_wifi_fallback.sh" '_radio_policy_enabled && [ "$(_cfg 
 
 # Preference is decided before first paint and the same compact pair appears beside the
 # version badge on all three surfaces.
-need "$WEB" "localStorage.getItem('asb_theme')==='light'"
+need "$WEB" "var t=localStorage.getItem('asb_theme');if(t==='light'||t==='glass')"
 need "$WEB" 'asbPaintThemeControls()'
 need "$WEB" 'data-theme-toggle="verBadge"'
 need "$WEB" 'data-theme-toggle="liveVerBadge"'
 need "$WEB" 'data-theme-toggle="cfgVerBadge"'
 need "$WEB" 'data-theme-choice="dark"'
 need "$WEB" 'data-theme-choice="light"'
+need "$WEB" 'data-theme-choice="glass"'
 need "$WEB" 'data-tech-icon="theme_moon"'
+need "$WEB" 'data-tech-icon="theme_glass"'
+need "$WEB" 'theme_glass:'
 absent "$WEB" 'data-tech-icon="quiet_moon"></span></button><button class="theme-choice"'
 need "$WEB" 'theme_moon:'
 # CSS matches the literal value selector, so assigning/removing that literal must be immediate.
-need "$WEB" "setAttribute('data-asb-theme', 'light')"
+need "$WEB" "setAttribute('data-asb-theme', theme)"
 need "$WEB" "removeAttribute('data-asb-theme')"
 absent "$WEB" "toggleAttribute('data-asb-theme'"
 # fix192: the pair is one segmented capsule in the bottom bar's material; the selected icon
@@ -6816,6 +6820,9 @@ need "$WEB" '<div class="badge badge-a" id="liveVerBadge">V65</div>'
 need "$WEB" '<div class="badge badge-a" id="cfgVerBadge">V65</div>'
 need "$WEB" '.theme-choice.active { color:var(--accent); }'
 need "$WEB" 'html[data-asb-theme="light"] .theme-toggle::before { transform: translateX(38px); }'
+need "$WEB" 'html[data-asb-theme="glass"] .theme-toggle::before { transform: translateX(76px); }'
+need "$WEB" 'html[dir="rtl"][data-asb-theme="glass"] .theme-toggle::before { transform: translateX(-76px); }'
+need "$WEB" 'html[data-asb-theme="glass"] .theme-toggle::before'
 absent "$WEB" '.theme-choice.active { color:#04120f; background:linear-gradient'
 absent "$WEB" ':is(.cfg-reset-choice.armed,.theme-choice.active) { color:#04120f !important; }'
 # These cover readable dialog/title copy, Smart monitor telemetry and small configuration text.
@@ -7535,6 +7542,181 @@ X
 "$CC" -O1 -I"$ROOT/src" -o "$T/t" "$T/t.c" -lm 2>"$T/cc.log" || { cat "$T/cc.log" >&2; fail "harness did not compile"; }
 out="$("$T/t")" || { printf '%s\n' "$out" >&2; fail "session reset wrong"; }
 echo "PASS session lifecycle: the boot session has a start and its sentinels, screen-offs keep context without re-learning, shutdown banks once"
+)
+
+t_device_bounds_confidence_runtime() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL device bounds confidence: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+
+# Exercise the real native loader with its persistent state path redirected into the fixture.
+CC=""; for c in ${HOST_CC:-} gcc clang cc; do command -v "$c" >/dev/null 2>&1 && { CC="$c"; break; }; done
+[ -n "$CC" ] || fail "no host C compiler"
+sed "s#\"/data/adb/asb/device_bounds.env\"#\"$T/device_bounds.env\"#" \
+  "$ROOT/src/asb_fsm.h" > "$T/asb_fsm_test.h"
+cat > "$T/t.c" <<'X'
+#include <stdio.h>
+#include <string.h>
+#include "asb_fsm_test.h"
+asb_runtime_config_t g_asb_cfg;
+static asb_profile_bounds_t defs[3];
+static int run_case(const char *text, int enabled, int expect_n, int expect_value) {
+    FILE *f = fopen(ASB_DEVICE_BOUNDS_FILE, "w");
+    if (!f) return 90;
+    fputs(text, f); fclose(f);
+    memcpy(g_profile_bounds, defs, sizeof(defs));
+    int before = g_profile_bounds[PROFILE_BALANCED].ceil.cpu_max[0];
+    int n = asb_load_device_bounds_override(enabled, defs);
+    int got = g_profile_bounds[PROFILE_BALANCED].ceil.cpu_max[0];
+    if (n != expect_n) { printf("applied=%d want=%d\n", n, expect_n); return 1; }
+    if (got != expect_value) { printf("value=%d want=%d (before=%d)\n", got, expect_value, before); return 2; }
+    return 0;
+}
+int main(void) {
+    memcpy(defs, g_profile_bounds, sizeof(defs));
+    int stock = defs[PROFILE_BALANCED].ceil.cpu_max[0];
+    int rc = 0;
+    rc |= run_case("schema=2\nconfidence=high\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 1, 2340000);
+    rc |= run_case("schema=2\nconfidence=low\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 0, stock);
+    rc |= run_case("schema=2\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 0, stock);
+    rc |= run_case("# confidence=high  topology=2c\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 1, 2340000);
+    rc |= run_case("schema=2\nconfidence=high\nBALANCED_CPU_MAX_LITTLE=2340000\n", 0, 0, stock);
+    return rc;
+}
+X
+"$CC" -O1 -I"$T" -I"$ROOT/src" -o "$T/t" "$T/t.c" -lm 2>"$T/cc.log" || { cat "$T/cc.log" >&2; fail "native harness did not compile"; }
+"$T/t" || fail "native high/low/unknown/legacy/disabled behavior diverged"
+
+# Run the actual shell import block, not a reimplementation of its filter.
+awk '/^  if \[ "\$\(grep -E .*device_bounds_override=/{p=1} p{print} p && /^  fi$/{exit}' \
+  "$ROOT/runtime/profile_core.sh" | sed 's#/data/adb/asb/device_bounds.env#"$BOUNDS"#g' > "$T/import.sh"
+[ -s "$T/import.sh" ] || fail "shell import block was not extracted"
+mkdir -p "$T/mod/config"
+printf 'device_bounds_override=1\n' > "$T/mod/config/governor.conf"
+shell_value() {
+  printf '%s' "$2" > "$T/shell_bounds.env"
+  ( MODDIR="$T/mod" BOUNDS="$T/shell_bounds.env" . "$T/import.sh"; printf '%s' "${BALANCED_CPU_MAX_LITTLE:-stock}" )
+}
+[ "$(shell_value high 'schema=2
+confidence=high
+BALANCED_CPU_MAX_LITTLE=2340000
+')" = 2340000 ] || fail "shell rejected schema-2 high confidence"
+[ "$(shell_value low 'schema=2
+confidence=low
+BALANCED_CPU_MAX_LITTLE=2340000
+')" = stock ] || fail "shell accepted low confidence"
+[ "$(shell_value unknown 'schema=2
+BALANCED_CPU_MAX_LITTLE=2340000
+')" = stock ] || fail "shell accepted unknown confidence"
+[ "$(shell_value legacy '# confidence=high  topology=2c
+BALANCED_CPU_MAX_LITTLE=2340000
+')" = 2340000 ] || fail "shell rejected legacy high confidence"
+
+# Synthesis emits useful provenance, but emits frequencies only for resolved topologies.
+sed -e "s#^CAPS=.*#CAPS=\"$T/device_caps.env\"#" \
+    -e "s#^OUT=.*#OUT=\"$T/synthesized.env\"#" \
+    -e "s#^ASB_DIR=.*#ASB_DIR=\"$T\"#" \
+    "$ROOT/tools/asb_synthesize_bounds.sh" > "$T/synthesize.sh"
+cat > "$T/device_caps.env" <<'X'
+cpu_policy_count=2
+cpu_policy_list=0 6
+cpu_policy0_hwmax=3000000
+cpu_policy6_hwmax=4000000
+fingerprint=OnePlus/test/user
+X
+sh "$T/synthesize.sh" >/dev/null
+grep -q '^schema=2$' "$T/synthesized.env" || fail "schema metadata missing"
+grep -q '^confidence=high$' "$T/synthesized.env" || fail "resolved topology is not high confidence"
+grep -q '^source=measured$' "$T/synthesized.env" || fail "measured source missing"
+grep -q '^fingerprint=OnePlus/test/user$' "$T/synthesized.env" || fail "fingerprint missing"
+grep -q '^BALANCED_CPU_MAX_LITTLE=[0-9]' "$T/synthesized.env" || fail "high synthesis emitted no bounds"
+cat > "$T/device_caps.env" <<'X'
+cpu_policy_count=1
+cpu_policy_list=0
+cpu_policy0_hwmax=3000000
+fingerprint=OnePlus/test/user
+X
+sh "$T/synthesize.sh" >/dev/null
+grep -q '^confidence=low$' "$T/synthesized.env" || fail "unresolved topology is not low confidence"
+! grep -q '^BALANCED_CPU_MAX_LITTLE=' "$T/synthesized.env" || fail "low synthesis emitted an override"
+echo "PASS device bounds confidence: native/shell accept only explicit high; synthesis provenance and low fail-closed"
+)
+
+t_net_route_watch_dormant_runtime() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+R="$ROOT/runtime/asb_net_routes.sh"
+fail() { echo "FAIL net route watcher dormant: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/bin" "$T/mod/config"
+printf 'net_route_tune=auto\nnet_congestion_wifi=auto\nnet_congestion_mobile=auto\n' > "$T/mod/config/governor.conf"
+cat > "$T/bin/ip" <<'X'
+#!/bin/sh
+case "$*" in
+  *"monitor route"*) echo 'netlink unavailable' >&2; exit 1 ;;
+  *"route show table all"*) [ ! -f "$ASB_TEST_ROUTE_FILE" ] || cat "$ASB_TEST_ROUTE_FILE" ;;
+esac
+exit 0
+X
+cat > "$T/bin/sleep" <<'X'
+#!/bin/sh
+if [ "$1" = 60 ]; then
+  echo poll >> "$ASB_TEST_POLLS"
+  [ "${ASB_TEST_LOSE_ROUTE:-0}" != 1 ] || rm -f "$ASB_TEST_ROUTE_FILE"
+fi
+exit 0
+X
+chmod +x "$T/bin/ip" "$T/bin/sleep"
+mkdir -p "$T/no-route"
+ASB_TEST_POLLS="$T/no-route/polls"; export ASB_TEST_POLLS
+ASB_TEST_ROUTE_FILE="$T/no-route/default"; export ASB_TEST_ROUTE_FILE
+ASB_IP="$T/bin/ip" ASB_NET_STATE_DIR="$T/no-route" PATH="$T/bin:$PATH" MODDIR="$T/mod" sh "$R" watch >/dev/null 2>&1
+[ ! -e "$T/no-route/polls" ] || fail "no-active-route branch entered fallback polling"
+[ "$(cat "$T/no-route/net_routes_watch.mode")" = dormant ] || fail "no-route mode is not dormant"
+grep -q 'no active default route' "$T/no-route/net_routes_watch.exit" || fail "no-route reason missing"
+mkdir -p "$T/lost"
+echo 'default via 10.0.0.1 dev wlan0 table wlan0 proto static' > "$T/lost/default"
+ASB_TEST_POLLS="$T/lost/polls"; export ASB_TEST_POLLS
+ASB_TEST_ROUTE_FILE="$T/lost/default"; export ASB_TEST_ROUTE_FILE
+ASB_TEST_LOSE_ROUTE=1; export ASB_TEST_LOSE_ROUTE
+ASB_IP="$T/bin/ip" ASB_NET_STATE_DIR="$T/lost" PATH="$T/bin:$PATH" MODDIR="$T/mod" sh "$R" watch >/dev/null 2>&1
+[ "$(wc -l < "$T/lost/polls")" = 1 ] || fail "route loss did not stop on the first poll"
+[ "$(cat "$T/lost/net_routes_watch.mode")" = dormant ] || fail "route-lost mode is not dormant"
+grep -q 'active route lost' "$T/lost/net_routes_watch.exit" || fail "route-lost reason missing"
+echo "PASS net route watcher dormant: no route skips fallback; route loss stops it immediately"
+)
+
+t_net_route_watch_ttl_runtime() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+R="$ROOT/runtime/asb_net_routes.sh"
+fail() { echo "FAIL net route watcher TTL: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/bin" "$T/mod/config" "$T/state"
+printf 'net_route_tune=auto\nnet_congestion_wifi=auto\nnet_congestion_mobile=auto\n' > "$T/mod/config/governor.conf"
+cat > "$T/bin/ip" <<'X'
+#!/bin/sh
+case "$*" in
+  *"monitor route"*) echo 'netlink unavailable' >&2; exit 1 ;;
+  *"route show table all"*) echo 'default via 10.0.0.1 dev wlan0 table wlan0 proto static' ;;
+esac
+exit 0
+X
+cat > "$T/bin/sleep" <<'X'
+#!/bin/sh
+[ "$1" = 60 ] && echo poll >> "$ASB_TEST_POLLS"
+exit 0
+X
+chmod +x "$T/bin/ip" "$T/bin/sleep"
+ASB_TEST_POLLS="$T/polls"; export ASB_TEST_POLLS
+ASB_IP="$T/bin/ip" ASB_NET_STATE_DIR="$T/state" PATH="$T/bin:$PATH" MODDIR="$T/mod" sh "$R" watch >/dev/null 2>&1
+[ "$(wc -l < "$T/polls")" = 15 ] || fail "fallback did not stop after 15 polls: $(wc -l < "$T/polls")"
+[ "$(cat "$T/state/net_routes_watch.mode")" = dormant ] || fail "dormant mode not recorded"
+grep -q 'fallback TTL exhausted after 15 polls' "$T/state/net_routes_watch.exit" || fail "dormant reason missing"
+grep -q 'route link watcher: dormant' "$ROOT/tools/asb_diag.sh" || fail "diag does not explain dormant state"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "diag copies diverged"
+echo "PASS net route watcher TTL: broken netlink gets 15 polls, then a diagnosable dormant state"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
