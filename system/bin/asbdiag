@@ -1344,15 +1344,17 @@ if [ -r "$_state" ]; then
     # do from a pasted report, and what turned a one-line diagnosis into three rounds of
     # guessing at which node was failing and why. The rows carry the node, the value asked
     # for and the value read back; that triple is usually the whole answer.
-    if [ -s /dev/.asb/write_errors ]; then
-      tail -8 /dev/.asb/write_errors 2>/dev/null | while IFS= read -r _wl; do
+    if grep -q '^FAIL ' /dev/.asb/write_errors 2>/dev/null; then
+      grep '^FAIL ' /dev/.asb/write_errors 2>/dev/null | tail -8 | while IFS= read -r _wl; do
         P "    $_wl"
       done
       NOTE "counts by node:"
-      sed -n 's/.*node=\([A-Za-z_0-9]*\).*/\1/p' /dev/.asb/write_errors 2>/dev/null |
+      sed -n '/^FAIL /s/.*node=\([A-Za-z_0-9]*\).*/\1/p' /dev/.asb/write_errors 2>/dev/null |
         sort | uniq -c | sort -rn | head -6 | while read -r _wn _wnode; do
           P "    ${_wnode}: ${_wn} rejected write(s)"
         done
+    elif [ -s /dev/.asb/write_errors ]; then
+      NOTE "(only unsupported device nodes are recorded; they are not rejected writes)"
     else
       NOTE "(no rows recorded yet - failures counted but nothing written to /dev/.asb/write_errors)"
     fi
