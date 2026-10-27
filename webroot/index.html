@@ -1573,7 +1573,30 @@ html[data-asb-theme="light"] .live-info-src { background: #fbfcfc; }
   width: 100%; margin: -2px 2px 10px; }
 .lgr-status { font-size: 12px; color: var(--text-tertiary); }
 .rpt-refresh { flex: 0 0 auto; }
+.rpt-actions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
 .lgr-body { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+.lgr-context { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 8px; }
+.lgr-chip { display: inline-flex; align-items: center; min-height: 25px; padding: 4px 9px;
+  border: 1px solid var(--border); border-radius: 999px; color: var(--text-secondary);
+  background: rgba(255,255,255,.025); font-size: 11px; font-weight: 650; line-height: 1.25; }
+.lgr-verdict { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 4px 10px;
+  align-items: baseline; padding: 7px 0; border-top: 1px solid var(--border); }
+.lgr-verdict:first-of-type { border-top: 0; }
+.lgr-verdict-name { color: var(--text-secondary); font-size: 12.5px; }
+.lgr-verdict-value { color: var(--text); font-size: 12.5px; font-weight: 700; text-align: end;
+  overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.lgr-verdict-detail { grid-column: 1 / -1; color: var(--text-tertiary); font-size: 11.5px; line-height: 1.4; }
+.lgr-state-problem { color: var(--perf); }
+.lgr-state-good { color: var(--ok); }
+.lgr-state-unknown { color: var(--text-tertiary); }
+.lgr-chain { padding: 8px 0; border-top: 1px solid var(--border); font-size: 12.5px;
+  line-height: 1.5; color: var(--text); overflow-wrap: anywhere; }
+.lgr-chain:first-of-type { border-top: 0; }
+.lgr-chain-kind { display: block; margin-bottom: 2px; color: var(--text-tertiary);
+  font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; }
+.lgr-action { border-inline-start: 2px solid var(--accent); padding-inline-start: 9px; }
+.lgr-action-n { color: var(--accent); font-weight: 800; min-width: 14px; }
+html[data-asb-theme="light"] .lgr-chip { background: #f7f9fa; }
 .lgr-sec { border-radius: 18px; padding: 13px 14px; border: 1px solid var(--border);
   background: linear-gradient(160deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018));
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.035), 0 1px 4px rgba(0,0,0,0.22); }
@@ -4376,13 +4399,19 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
 
   <div class="rpt-meta-row">
     <span class="lgr-status" id="reportStatus"></span>
-    <button class="live-chip rpt-refresh" id="rpRefresh" type="button" onclick="asbLogReportLoad()">
-      <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M20 11a8 8 0 1 0-2.3 6.3"></path>
-        <path d="M20 5v6h-6"></path>
-      </svg>
-      <span data-i18n="lr_refresh">Refresh</span>
-    </button>
+    <div class="rpt-actions">
+      <button class="live-chip" id="rpJson" type="button" onclick="logReportExportJson()" aria-label="Export report JSON">
+        <span aria-hidden="true">{ }</span>
+        <span>JSON</span>
+      </button>
+      <button class="live-chip rpt-refresh" id="rpRefresh" type="button" onclick="asbLogReportLoad()">
+        <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M20 11a8 8 0 1 0-2.3 6.3"></path>
+          <path d="M20 5v6h-6"></path>
+        </svg>
+        <span data-i18n="lr_refresh">Refresh</span>
+      </button>
+    </div>
   </div>
 
   <div class="lgr-body" id="reportBody"></div>
@@ -9895,7 +9924,9 @@ function parseLogReport(txt) {
          page compares this day against. Values may be '-' when a capture had no night
          or no drain window; the renderer skips those metrics. */
       if (kv.started) d.hist.push({ started: kv.started, night: kv.night || '', drain: kv.drain || '',
-        jank: kv.jank || '', cpu: kv.cpu || '', clamps: kv.clamps || '' });
+        jank: kv.jank || '', cpu: kv.cpu || '', clamps: kv.clamps || '', device: kv.device || '',
+        rom: kv.rom || '', mod: kv.mod || '', elapsed: +kv.elapsed || 0,
+        onPct: kv.on_pct || '', offMin: +kv.off_min || 0 });
     } else if (tag === 'cfg') {
       if (kv.key) d.cfg[kv.key] = kv.value || '';
     } else {
@@ -9931,7 +9962,7 @@ function logReportDurSec(sec) {
  * (Tcfg), in the UI language. Worst things first; at most six cards so the list stays
  * readable. The settings are the CURRENT ones: a saved log from last week still advises
  * against the switches as they are set today. */
-function logReportTips(d) {
+function logReportTips(d, all) {
   const tips = [];
   const s = d.sections || {};
   const night = s.night || null;
@@ -10069,9 +10100,197 @@ function logReportTips(d) {
   if (cfg.ltpo_video === '0')
     tips.push({ ic: 'info', key: 'lr_tip_ltpo', vars: { set: Tcfg('ltpo_video', 'name', 'Lowest Refresh for Video') } });
   if (crash && (+crash.count || 0) > 2 && !((+crash.asb || 0) > 0)) tips.push({ ic: 'info', key: 'lr_tip_crashes', vars: { n: String(crash.count) } });
-  if (!tips.length) tips.push({ ic: 'ok', key: 'lr_tip_ok', vars: {} });
-  return tips.slice(0, 6);
+  if (!tips.length) {
+    const hasEvidence = !!(s.drain || s.cover || s.night || s.thermal || s.jank || s.asbcost || s.crash || s.sysui);
+    tips.push({ ic: hasEvidence ? 'ok' : 'info', key: hasEvidence ? 'lr_tip_ok' : 'lr_tip_wait', vars: {} });
+  }
+  return all ? tips : tips.slice(0, 6);
 }
+/* fix225: one analytical model drives the executive summary, causal explanations, priority
+ * actions and report.json. It deliberately uses qualitative confidence: a numeric 87/100
+ * would look calibrated without a calibration corpus. Every verdict has its own evidence
+ * floor; a long capture cannot make an absent sensor or a five-wake jank sample trustworthy. */
+function logReportAnalyze(d) {
+  const s = d.sections || {}, meta = s.meta || {};
+  const elapsed = Math.max(0, +meta.elapsed_min || 0);
+  const cover = s.cover || null, night = s.night || null, scr = s.scr || null;
+  const jank = s.jank || null, jwake = s.jwake || null, heat = s.heat || null;
+  const thermal = s.thermal || null, throttle = s.throttle || null, cost = s.asbcost || null;
+  const crash = s.crash || null, idle = s.idlemax || null, aod = s.aod || null;
+  const audio = s.audio || null, chg = s.chg || null, sradio = s.sradio || null;
+  const total = Math.max(elapsed, cover ? (+cover.on_min || 0) + (+cover.off_min || 0) : 0, 1);
+  const gamingMin = (d.phases || []).reduce(function (n, p) {
+    return n + (p.name === 'gaming' ? Math.max(0, +p.min || 0) : 0);
+  }, 0);
+  let scenario = 'mixed';
+  if (chg && (+chg.min || 0) >= total * .5 && (+chg.gain || 0) > 0) scenario = 'charging';
+  else if (audio && (+audio.spk_min || 0) >= 30 && (+audio.spk_min || 0) >= total * .35) scenario = 'audio_speaker';
+  else if (gamingMin >= 30 && gamingMin >= total * .25) scenario = 'screen_on_heavy';
+  else if (cover && (+cover.on_pct || 0) <= 25)
+    scenario = sradio && (+sradio.mib || 0) >= 50 ? 'screen_off_network_active' : 'screen_off_idle';
+  else if (cover && (+cover.on_pct || 0) >= 50) scenario = 'screen_on_light';
+  const scenarioFamily = scenario === 'charging' ? 'charging' :
+    (scenario === 'screen_off_idle' || scenario === 'screen_off_network_active') ? 'screen_off' :
+    scenario === 'mixed' ? 'mixed' : 'screen_on';
+
+  let evidence = 0;
+  ['drain', 'cover', 'night', 'thermal', 'jank', 'asbcost'].forEach(function (k) { if (s[k]) evidence++; });
+  const quality = { level: 'medium', reasons: [] };
+  if (elapsed < 30) { quality.level = 'low'; quality.reasons.push('capture_under_30m'); }
+  else if (elapsed >= 240 && evidence >= 3 && (s.drain || night)) quality.level = 'high';
+  else quality.reasons.push('limited_capture_or_sensors');
+  if (s.gauge && (+s.gauge.factor || 1) <= .75 && (+s.gauge.windows || 0) >= 10)
+    quality.reasons.push('current_sensor_lower_bound');
+
+  const verdicts = [];
+  function verdict(domain, state, metric, detailKey, vars, reason) {
+    verdicts.push({ domain: domain, state: state, metric: metric || '', detail_key: detailKey || '',
+      vars: vars || {}, reason: reason || '' });
+  }
+  let drainDone = false;
+  const screenLed = scenarioFamily === 'screen_on';
+  if (screenLed && scr && (+scr.on_min || 0) >= 30 && (+scr.on_pctph || 0) > 0) {
+    const v = +scr.on_pctph;
+    verdict('drain', v > 8 ? 'problem' : v <= 5 ? 'good' : 'normal', v.toFixed(1) + '%/h',
+      'lr_sum_drain_on', { min: logReportDur(scr.on_min) }, 'screen_on_ledger');
+    drainDone = true;
+  }
+  if (!drainDone && night && (+night.dur_min || 0) >= 120) {
+    const v = +night.pctph || 0, deep = Math.max(0, 100 - (+night.awake || 0));
+    verdict('drain', v > 1.5 ? 'problem' : v <= .8 ? 'good' : 'normal', v.toFixed(1) + '%/h',
+      'lr_sum_drain_night', { min: logReportDur(night.dur_min), deep: String(deep) }, 'longest_idle_chain');
+    drainDone = true;
+  }
+  if (!drainDone && scr && (+scr.off_min || 0) >= 30 && (+scr.off_pctph || 0) > 0) {
+    const v = +scr.off_pctph;
+    verdict('drain', v > 1.5 ? 'problem' : v <= 1 ? 'good' : 'normal', v.toFixed(1) + '%/h',
+      'lr_sum_drain_off', { min: logReportDur(scr.off_min) }, 'screen_off_ledger');
+    drainDone = true;
+  }
+  if (!drainDone) verdict('drain', 'unknown', '—', 'lr_sum_need_time', {}, 'insufficient_duration');
+
+  if (thermal || heat) {
+    const wm = heat ? +heat.warm_min || 0 : 0, sm = heat ? +heat.skin_min || 0 : 0;
+    const peak = thermal ? +thermal.cpu || 0 : 0, clamps = throttle ? +throttle.clamps || 0 : 0;
+    const state = wm >= 30 || sm >= 30 ? 'problem' : (wm >= 10 || sm >= 10 || peak >= 45 || clamps > 0) ? 'normal' : 'good';
+    verdict('thermal', state, logReportDur(Math.max(wm, sm)), 'lr_sum_thermal_detail',
+      { warm: logReportDur(wm), clamps: String(clamps) }, 'hot_duration_and_throttle');
+  } else verdict('thermal', 'unknown', '—', 'lr_sum_no_sensor', {}, 'no_thermal_samples');
+
+  if (jank && (+jank.frames || 0) >= 20000) {
+    const jp = +jank.pct || 0;
+    const wakeBad = jwake && (+jwake.wakes || 0) >= 5 && (+jwake.pct || 0) >= 6 &&
+      (+jwake.pct || 0) >= (+jwake.ord || 0) + .8;
+    verdict('smoothness', wakeBad || jp >= 6 ? 'problem' : jp <= 2 ? 'good' : 'normal', jp.toFixed(1) + '%',
+      'lr_sum_smooth_detail', { frames: String(jank.frames), wake: jwake ? String(jwake.pct) + '%' : '—' },
+      wakeBad ? 'wake_jank_concentration' : 'frame_deadlines');
+  } else verdict('smoothness', 'unknown', '—', 'lr_sum_need_frames', {}, 'under_20000_frames');
+
+  if (night && (+night.dur_min || 0) >= 120) {
+    const awake = +night.awake || 0;
+    verdict('deep_sleep', awake > 20 ? 'problem' : awake <= 10 ? 'good' : 'normal',
+      Math.max(0, 100 - awake) + '%', 'lr_sum_sleep_detail',
+      { awake: String(awake), min: logReportDur(night.dur_min) }, 'longest_idle_chain');
+  } else verdict('deep_sleep', 'unknown', '—', 'lr_sum_need_night', {}, 'no_two_hour_idle_chain');
+
+  let msPerWake = null;
+  if (cost && (+cost.wakes_h || 0) > 0) msPerWake = (+cost.cpu_msh || 0) / (+cost.wakes_h || 0);
+  if (crash && (+crash.asb || 0) > 0)
+    verdict('asb', 'problem', String(crash.asb), 'lr_sum_asb_crash', {}, 'asb_native_crash');
+  else if (cost) {
+    const costly = (+cost.cpu_msh || 0) > 10000 || ((+cost.cpu_msh || 0) > 2500 && (msPerWake === null || msPerWake > 8));
+    verdict('asb', costly ? 'problem' : 'normal', msPerWake === null ? String(cost.cpu_msh || 0) + ' ms/h' : msPerWake.toFixed(1) + ' ms/wake',
+      'lr_sum_asb_cost', { ms: String(cost.cpu_msh || 0), per: msPerWake === null ? '—' : msPerWake.toFixed(1) }, 'overhead_not_net_benefit');
+  } else verdict('asb', 'unknown', '—', 'lr_sum_asb_unknown', {}, 'no_overhead_samples');
+
+  const chains = [];
+  function chain(weight, kind, key, vars) { chains.push({ weight: weight, kind: kind, key: key, vars: vars || {} }); }
+  if (crash && (+crash.asb || 0) > 0) chain(100, 'fact', 'lr_chain_asb_crash', { n: String(crash.asb) });
+  const idleBad = idle && (+idle.awake || 0) > 15 && (+idle.dur_min || 0) >= 20;
+  if (heat && ((+heat.warm_min || 0) >= 30 || (+heat.skin_min || 0) >= 30))
+    chain(90, 'fact', 'lr_chain_heat', { min: logReportDur(Math.max(+heat.warm_min || 0, +heat.skin_min || 0)),
+      clamps: String(throttle ? +throttle.clamps || 0 : 0), owner: String(throttle && throttle.owner || 'unknown'),
+      phase: T('lr_ph_' + String(heat.peak_phase || ''), String(heat.peak_phase || '')) });
+  if (idleBad) {
+    const who = d.wlive.length ? (d.wlive[0].pkg || d.wlive[0].tag) : '';
+    if (who === 'com.android.systemui' && aod && (+aod.of || 0) >= 20 && (+aod.lit || 0) * 100 >= 10 * (+aod.of || 0))
+      chain(86, 'hypothesis', 'lr_chain_aod', { awake: String(idle.awake), lit: String(aod.lit), of: String(aod.of) });
+    else if (sradio && (+sradio.mib || 0) >= 50)
+      chain(85, 'hypothesis', 'lr_chain_radio', { awake: String(idle.awake), mib: String(sradio.mib) });
+    else if (who) chain(82, 'hypothesis', 'lr_chain_holder', { awake: String(idle.awake), who: who });
+    else if (d.wla.length) chain(80, 'hypothesis', 'lr_chain_alarm', { awake: String(idle.awake), who: d.wla[0].tag, n: String(d.wla[0].n) });
+    else if (d.wlt.length) chain(80, 'hypothesis', 'lr_chain_hold', { awake: String(idle.awake), who: d.wlt[0].tag, n: String(d.wlt[0].n) });
+    else chain(78, 'fact', 'lr_chain_wakegap', { awake: String(idle.awake) });
+  }
+  if (jwake && (+jwake.wakes || 0) >= 5 && (+jwake.pct || 0) >= 6 && (+jwake.pct || 0) >= (+jwake.ord || 0) + .8)
+    chain(70, 'fact', 'lr_chain_wake', { pct: String(jwake.pct), ord: String(jwake.ord), who: String(jwake.top || '') });
+  if (audio && (+audio.spk_min || 0) >= 30 && (+audio.pctph || 0) >= 5)
+    chain(45, 'fact', 'lr_chain_audio', { min: logReportDur(audio.spk_min), pct: String(audio.pctph) });
+  if (cost && ((+cost.cpu_msh || 0) > 10000 || ((+cost.cpu_msh || 0) > 2500 && (msPerWake === null || msPerWake > 8))))
+    chain(95, 'fact', 'lr_chain_cost', { ms: String(cost.cpu_msh), wakes: String(cost.wakes_h || 0), per: msPerWake === null ? '—' : msPerWake.toFixed(1) });
+  chains.sort(function (a, b) { return b.weight - a.weight; });
+
+  const weights = {
+    lr_tip_crash: 100, lr_tip_cost_hi: 96, lr_tip_heat_warm_set: 92, lr_tip_heat_warm: 92,
+    lr_tip_crashes: 88, lr_tip_awake_aod: 86, lr_tip_awake_who: 84, lr_tip_awake_alarm: 84,
+    lr_tip_awake_hold: 84, lr_tip_awake: 80, lr_tip_sradio: 82, lr_tip_night_modem: 78,
+    lr_tip_night: 76, lr_tip_jank_bad: 72, lr_tip_jank_wake: 70, lr_tip_jank_wake_wh: 70,
+    lr_tip_wl_enable: 64, lr_tip_app: 62, lr_tip_audio: 45, lr_tip_ltpo: 15
+  };
+  const actions = logReportTips(d, true).filter(function (t) { return t.ic !== 'ok' && weights[t.key]; })
+    .map(function (t, i) { return { tip: t, weight: weights[t.key] || 0, order: i }; })
+    .sort(function (a, b) { return b.weight - a.weight || a.order - b.order; }).slice(0, 3)
+    .map(function (x) { return x.tip; });
+  const selected = {};
+  actions.forEach(function (t) { selected[t.key] = true; });
+  const observations = logReportTips(d, true).filter(function (t) { return !selected[t.key]; }).slice(0, 6);
+  return { schema: 2, quality: quality, scenario: scenario, scenario_family: scenarioFamily,
+    verdicts: verdicts, chains: chains.slice(0, 3), actions: actions, observations: observations,
+    asb_overhead: { native_cpu_ms_h: cost ? +cost.cpu_msh || 0 : null,
+      physical_writes_h: cost ? +cost.writes_h || 0 : null, timer_wakeups_h: cost ? +cost.wakes_h || 0 : null,
+      native_cpu_ms_per_wakeup: msPerWake } };
+}
+
+function logReportHistoryComparable(d, analysis, h) {
+  const m = d.sections.meta2 || {};
+  if (!h || !h.device || !h.rom || h.device === '-' || h.rom === '-' || !m.device || !m.rom) return false;
+  if (String(h.device) !== String(m.device) || String(h.rom) !== String(m.rom)) return false;
+  if ((+h.elapsed || 0) < 30 || (+d.sections.meta.elapsed_min || 0) < 30) return false;
+  const pct = +h.onPct;
+  if (!isFinite(pct) || h.onPct === '' || h.onPct === '-') return false;
+  const family = pct <= 25 ? 'screen_off' : pct >= 50 ? 'screen_on' : 'mixed';
+  return family === analysis.scenario_family;
+}
+
+function logReportMachineDigest(d) {
+  const a = d.analysis || logReportAnalyze(d), m = d.sections.meta || {}, m2 = d.sections.meta2 || {};
+  return { schema: 2,
+    capture: { started: m.started || '', elapsed_min: +m.elapsed_min || 0, running: String(m.running) === '1', profile: m.profile || '' },
+    device: { model: m2.model || '', device: m2.device || '', soc: m2.soc || '', rom: m2.rom || '', module: m2.mod || '' },
+    quality: a.quality, scenario: { name: a.scenario, family: a.scenario_family }, verdicts: a.verdicts,
+    facts: a.chains.filter(function (c) { return c.kind === 'fact'; }),
+    hypotheses: a.chains.filter(function (c) { return c.kind === 'hypothesis'; }),
+    actions: a.actions, asb_overhead: a.asb_overhead };
+}
+
+async function logReportExportJson() {
+  const d = window._asbLogReportData;
+  const dir = d && d.sections.capture && d.sections.capture.dir;
+  if (!d || !dir) { toast(T('lr_json_error', 'Open a readable capture first.'), 'error'); return; }
+  const btn = _el('rpJson'); if (btn) btn.disabled = true;
+  try {
+    const json = JSON.stringify(logReportMachineDigest(d), null, 2) + '\n';
+    let bin = '';
+    const bytes = new TextEncoder().encode(json);
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    const b64 = btoa(bin), path = String(dir).replace(/\/+$/, '') + '/report.json';
+    const r = await run("printf '%s' " + shQuote(b64) + ' | base64 -d > ' + shQuote(path));
+    if (!r || r.errno !== 0) throw new Error((r && r.stderr) || 'write failed');
+    toast(logReportT('lr_json_saved', 'Saved {path}', { path: path }), 'ok');
+  } catch (e) { toast(T('lr_json_error', 'Could not save report.json.'), 'error'); }
+  finally { if (btn) btn.disabled = false; }
+}
+
 /* Everything below builds DOM with textContent only: package names and tombstone
  * cmdlines are device data and must never become markup. */
 function logReportRow(k, v, warn) {
@@ -10233,12 +10452,134 @@ function logReportHero(emo, label, value, sub, warn) {
   }
   return t;
 }
+function logReportAnalysisT(key, vars) {
+  const fallback = {
+    lr_sum_drain_on: 'Screen-on phases over {min}; charging excluded.',
+    lr_sum_drain_night: 'Longest idle chain: {min}; deep sleep {deep}%.',
+    lr_sum_drain_off: 'All eligible screen-off phases over {min}.',
+    lr_sum_need_time: 'Needs a longer matching discharge window.',
+    lr_sum_thermal_detail: 'CPU above 45 °C: {warm}; throttling periods: {clamps}.',
+    lr_sum_no_sensor: 'No usable thermal samples in this capture.',
+    lr_sum_smooth_detail: '{frames} frames; wake windows: {wake}.',
+    lr_sum_need_frames: 'Fewer than 20,000 frames: no stable verdict.',
+    lr_sum_sleep_detail: 'Awake {awake}% during the {min} idle chain.',
+    lr_sum_need_night: 'Needs an idle chain of at least two hours.',
+    lr_sum_asb_crash: 'ASB-related native crashes require a diagnostic log.',
+    lr_sum_asb_cost: 'Governor {ms} ms/h; {per} ms per wake. Net benefit needs a paired A/B capture.',
+    lr_sum_asb_unknown: 'No overhead data; no benefit or harm verdict.',
+    lr_quality_short: 'Preliminary: only {min} of capture.',
+    lr_quality_full: 'Domain-specific evidence floors still apply.',
+    lr_chain_asb_crash: '{n} ASB-related native crash(es) → stability is not proven → send asbdiag.',
+    lr_chain_heat: '{min} hot → {clamps} throttle period(s), main owner {owner} → hottest named phase: {phase}.',
+    lr_chain_aod: 'Awake {awake}% → SystemUI holder + panel lit {lit}/{of} checks → AOD is a likely contributor, not a proven sole cause.',
+    lr_chain_radio: 'Awake {awake}% + {mib} MiB screen-off mobile traffic → background sync/modem activity may contribute → test one change at a time.',
+    lr_chain_holder: 'Awake {awake}% → top sampled holder: {who} → inspect its background activity; correlation is not sole-cause proof.',
+    lr_chain_alarm: 'Awake {awake}% → most frequent alarm source: {who} ({n}) → a lead to investigate, not sole-cause proof.',
+    lr_chain_hold: 'Awake {awake}% → most frequent partial holder: {who} ({n}) → a lead to investigate, not sole-cause proof.',
+    lr_chain_wakegap: 'Awake {awake}% → holder counters stayed flat → the cause remains unknown.',
+    lr_chain_wake: 'Wake jank {pct}% versus {ord}% over the day → interaction windows need attention; average FPS alone would hide this.',
+    lr_chain_audio: 'Speaker playback lasted {min} at {pct}%/h → this phase accounts for part of screen-on drain.',
+    lr_chain_cost: 'ASB used {ms} ms/h over {wakes} wakeups/h → {per} ms per wake → above the usual overhead budget.',
+    lr_no_actions: 'No priority change is supported by this capture. Keep settings unchanged and collect a comparable capture.',
+    lr_no_actions_early: 'No settings recommendation yet: let the capture accumulate evidence.',
+    lr_trend_matched: 'Same device, ROM and scenario family; durations pass the minimum. Still an observation, not a controlled A/B test.',
+    lr_trend_unmatched: 'The previous capture has a different or unknown device/ROM/scenario. Numeric improvement is intentionally not claimed.'
+  };
+  return logReportT(key, fallback[key] || key, vars || {});
+}
+
+function logReportTipText(tip) {
+  return logReportT(tip.key, {
+    lr_tip_ok: 'No serious issues found - drain looks healthy.',
+    lr_tip_wait: 'The capture has no stable evidence yet - keep recording before changing settings.',
+    lr_tip_night: 'Overnight the phone lost ~{pct}%/h - check background apps.',
+    lr_tip_awake: 'During idle the phone stayed awake {awake}% of the time - something prevents deep sleep.',
+    lr_tip_awake_who: 'During idle the phone stayed awake {awake}% of the time - {who} is the main holder.',
+    lr_tip_awake_alarm: 'During idle the phone stayed awake {awake}% of the time - the most frequent wakeup: {who}.',
+    lr_tip_awake_hold: 'During idle the phone stayed awake {awake}% of the time - the most frequent holder: {who}.',
+    lr_tip_awake_aod: 'During idle the phone stayed awake {awake}% of the time - most likely the always-on display (the panel was lit in {lit} of {of} screen-off checks); turn AOD off in the display settings if you do not need it.',
+    lr_tip_sradio: 'Background mobile data used {mib} MiB with the screen off - try "{set}" in Settings: the modem idles lower while the screen is off.',
+    lr_tip_crash: 'There are crashes involving ASB code - please send an asbdiag log to the developer.',
+    lr_tip_crashes: '{n} native crashes during the capture - details are in the full report.',
+    lr_tip_app: '{app} held the phone awake for {min} min - consider restricting its background activity.',
+    lr_tip_wl_enable: '{app} held the phone awake for {min} min - turn on "{set}" in Settings and ASB will rein such apps in for you.',
+    lr_tip_night_modem: 'Overnight the phone lost ~{pct}%/h - try "{set}" in Settings, it quiets the modem in your own sleeping hours.',
+    lr_tip_jank_bad: 'About {pct}% of frames missed their deadline - stutter is visible. On Smart the learner is already testing the worst apps; heavy games do better on Performance.',
+    lr_tip_jank_ok: 'Smoothness is excellent: only {pct}% of frames janky.',
+    lr_tip_jank_wake: 'Stutter concentrates at the wakes: {pct}% of frames at unlocks and app opens against {ord}% over the day; the most janky there is {who}.',
+    lr_tip_jank_wake_wh: 'Stutter concentrates at the wakes: {pct}% of frames at unlocks and app opens against {ord}% over the day.',
+    lr_tip_audio: 'Speaker playback cost ~{pct}%/h. For long sessions, headphones or a gentler DSP preset are kinder to the battery.',
+    lr_tip_prof_save: 'Your own measurements: {cheap} cost {x}%/h at the screen against {y}%/h on {busy} - for reading and music it is noticeably cheaper.',
+    lr_tip_heat_warm: 'The phone spent {min} hot, mostly in {phase} - reduce sustained load or use a gentler profile.',
+    lr_tip_heat_warm_set: 'The phone spent {min} hot, mostly in {phase} - check "{set}" in Settings if you want ASB thermal protection.',
+    lr_tip_heat_calm: 'No sustained heat or throttling detected; peak CPU temperature was {cpu}°C.',
+    lr_tip_cost_ok: 'ASB itself is cheap: {ms} of CPU per hour.',
+    lr_tip_cost_hi: 'ASB used {ms} of CPU per hour - more than usual; worth sending this log to the developer.',
+    lr_tip_smart_help: 'Smart proved extra headroom helps {n} of your apps and keeps it just for them.',
+    lr_tip_ltpo: 'Tip: "{set}" in Settings lowers the refresh rate on video and saves battery.'
+  }[tip.key] || '', tip.vars);
+}
+
+function logReportAppendAnalysis(body, d, analysis) {
+  const summary = logReportSec(T('lr_sec_summary', '🧭 Smart summary'));
+  const context = document.createElement('div'); context.className = 'lgr-context';
+  [T('lr_scenario_' + analysis.scenario, analysis.scenario),
+   T('lr_quality_' + analysis.quality.level, analysis.quality.level),
+   logReportDur(d.sections.meta.elapsed_min || 0)].forEach(function (txt) {
+    const c = document.createElement('span'); c.className = 'lgr-chip'; c.textContent = txt; context.appendChild(c);
+  });
+  summary.appendChild(context);
+  const names = { drain: 'lr_sum_drain', thermal: 'lr_sum_thermal', smoothness: 'lr_sum_smooth',
+    deep_sleep: 'lr_sum_sleep', asb: 'lr_sum_asb' };
+  analysis.verdicts.forEach(function (v) {
+    const row = document.createElement('div'); row.className = 'lgr-verdict';
+    const name = document.createElement('span'); name.className = 'lgr-verdict-name'; name.textContent = T(names[v.domain], v.domain);
+    const value = document.createElement('span'); value.className = 'lgr-verdict-value lgr-state-' + v.state;
+    value.textContent = T('lr_state_' + v.state, v.state) + (v.metric && v.metric !== '—' ? ' · ' + v.metric : '');
+    const detail = document.createElement('span'); detail.className = 'lgr-verdict-detail';
+    detail.textContent = logReportAnalysisT(v.detail_key, v.vars);
+    row.appendChild(name); row.appendChild(value); row.appendChild(detail); summary.appendChild(row);
+  });
+  summary.appendChild(logReportNote(logReportAnalysisT(analysis.quality.level === 'low' ? 'lr_quality_short' : 'lr_quality_full',
+    { min: logReportDur(d.sections.meta.elapsed_min || 0) })));
+  body.appendChild(summary);
+
+  if (analysis.chains.length) {
+    const sec = logReportSec(T('lr_sec_causes', '🔗 Evidence and likely causes'));
+    analysis.chains.forEach(function (c) {
+      const row = document.createElement('div'); row.className = 'lgr-chain';
+      const kind = document.createElement('span'); kind.className = 'lgr-chain-kind';
+      kind.textContent = T(c.kind === 'fact' ? 'lr_kind_fact' : 'lr_kind_hypothesis', c.kind);
+      const text = document.createElement('span'); text.textContent = logReportAnalysisT(c.key, c.vars);
+      row.appendChild(kind); row.appendChild(text); sec.appendChild(row);
+    });
+    body.appendChild(sec);
+  }
+  if (analysis.actions.length) {
+    const sec = logReportSec(T('lr_sec_actions', '🎯 Priority actions'));
+    analysis.actions.forEach(function (tip, i) {
+      const row = document.createElement('div'); row.className = 'lgr-tip lgr-action';
+      const n = document.createElement('span'); n.className = 'lgr-action-n'; n.textContent = String(i + 1) + '.';
+      const tx = document.createElement('span'); tx.textContent = logReportTipText(tip);
+      row.appendChild(n); row.appendChild(tx); sec.appendChild(row);
+    });
+    body.appendChild(sec);
+  } else {
+    const sec = logReportSec(T('lr_sec_actions', '🎯 Priority actions'));
+    sec.appendChild(logReportNote(logReportAnalysisT(analysis.quality.level === 'low' ? 'lr_no_actions_early' : 'lr_no_actions')));
+    body.appendChild(sec);
+  }
+}
+
 function logReportRender(d) {
   const body = _el('reportBody');
   const status = _el('reportStatus');
   const meta = d.sections.meta || {};
   const h = String(meta.target_h || '24');
   body.textContent = '';
+  const analysis = logReportAnalyze(d);
+  d.analysis = analysis;
+  window._asbLogReportData = d;
   if (String(meta.running) === '1') {
     status.textContent = logReportT('lr_running', 'recording · {min} min of {h} h', { min: String(meta.elapsed_min || '0'), h: h });
   } else if (meta.started) {
@@ -10263,6 +10604,7 @@ function logReportRender(d) {
     if (m2.mod) m2p.push('ASB ' + String(m2.mod));
     if (m2p.length) body.appendChild(logReportNote(m2p.join(' · ')));
   }
+  logReportAppendAnalysis(body, d, analysis);
   const drain = d.sections.drain || null;
   const cover = d.sections.cover || null;
   const night = d.sections.night || null;
@@ -10711,54 +11053,39 @@ function logReportRender(d) {
   if (d.hist.length && (drain || night || jank)) {
     const h0 = d.hist[0];
     const s = logReportSec(T('lr_sec_trend', '📈 Trend'));
-    let trows = 0;
-    const trow = function (key, fb, was, now) {
-      if (was === '' || was === '-' || now === null) return;
-      const w = +was, n = +now;
-      if (isNaN(w) || isNaN(n)) return;
-      trows++;
-      s.appendChild(logReportRow(logReportT(key, fb, { was: w.toFixed(1), now: n.toFixed(1) }),
-        logReportT('lr_trend_vs', 'vs {when}', { when: String(h0.started) }), n > w));
-    };
-    if (night) trow('lr_trend_night', 'Night: {was} %/h \u2192 {now} %/h', h0.night, +night.pctph);
-    if (drain) trow('lr_trend_day', 'Day drain: {was} %/h \u2192 {now} %/h', h0.drain, +drain.pctph);
-    if (jank) trow('lr_trend_jank', 'Jank: {was}% \u2192 {now}%', h0.jank, +jank.pct);
-    if (trows > 0) body.appendChild(s);
+    const comparable = logReportHistoryComparable(d, analysis, h0);
+    if (!comparable) {
+      s.appendChild(logReportNote(logReportAnalysisT('lr_trend_unmatched')));
+      body.appendChild(s);
+    } else {
+      let trows = 0;
+      const trow = function (key, fb, was, now) {
+        if (was === '' || was === '-' || now === null) return;
+        const w = +was, n = +now;
+        if (isNaN(w) || isNaN(n)) return;
+        trows++;
+        s.appendChild(logReportRow(logReportT(key, fb, { was: w.toFixed(1), now: n.toFixed(1) }),
+          logReportT('lr_trend_vs', 'vs {when}', { when: String(h0.started) }), n > w));
+      };
+      if (night) trow('lr_trend_night', 'Night: {was} %/h \u2192 {now} %/h', h0.night, +night.pctph);
+      if (drain) trow('lr_trend_day', 'Day drain: {was} %/h \u2192 {now} %/h', h0.drain, +drain.pctph);
+      if (jank) trow('lr_trend_jank', 'Jank: {was}% \u2192 {now}%', h0.jank, +jank.pct);
+      if (trows > 0) {
+        s.appendChild(logReportNote(logReportAnalysisT('lr_trend_matched')));
+        body.appendChild(s);
+      }
+    }
   }
-  {
-    const s = logReportSec(T('lr_sec_tips', '💡 What it means'));
-    logReportTips(d).forEach(function (tip) {
+  if (analysis.observations.length) {
+    const s = logReportSec(T('lr_sec_observations', '💡 Other observations'));
+    analysis.observations.forEach(function (tip) {
       const row = document.createElement('div');
       row.className = 'lgr-tip';
       const ic = document.createElement('span');
       ic.className = 'lgr-ic ' + tip.ic;
       ic.textContent = tip.ic === 'ok' ? '✅' : (tip.ic === 'warn' ? '⚠️' : '💡');
       const tx = document.createElement('span');
-      tx.textContent = logReportT(tip.key, {
-        lr_tip_ok: 'No serious issues found - drain looks healthy.',
-        lr_tip_night: 'Overnight the phone lost ~{pct}%/h - check background apps.',
-        lr_tip_awake: 'During idle the phone stayed awake {awake}% of the time - something prevents deep sleep.',
-        lr_tip_awake_who: 'During idle the phone stayed awake {awake}% of the time - {who} is the main holder.',
-        lr_tip_awake_alarm: 'During idle the phone stayed awake {awake}% of the time - the most frequent wakeup: {who}.',
-        lr_tip_awake_hold: 'During idle the phone stayed awake {awake}% of the time - the most frequent holder: {who}.',
-        lr_tip_awake_aod: 'During idle the phone stayed awake {awake}% of the time - most likely the always-on display (the panel was lit in {lit} of {of} screen-off checks); turn AOD off in the display settings if you do not need it.',
-        lr_tip_sradio: 'Background mobile data used {mib} MiB with the screen off - try "{set}" in Settings: the modem idles lower while the screen is off.',
-        lr_tip_crash: 'There are crashes involving ASB code - please send an asbdiag log to the developer.',
-        lr_tip_crashes: '{n} native crashes during the capture - details are in the full report.',
-        lr_tip_app: '{app} held the phone awake for {min} min - consider restricting its background activity.',
-        lr_tip_wl_enable: '{app} held the phone awake for {min} min - turn on "{set}" in Settings and ASB will rein such apps in for you.',
-        lr_tip_night_modem: 'Overnight the phone lost ~{pct}%/h - try "{set}" in Settings, it quiets the modem in your own sleeping hours.',
-        lr_tip_jank_bad: 'About {pct}% of frames missed their deadline - stutter is visible. On Smart the learner is already testing the worst apps; heavy games do better on Performance.',
-        lr_tip_jank_ok: 'Smoothness is excellent: only {pct}% of frames janky.',
-        lr_tip_jank_wake: 'Stutter concentrates at the wakes: {pct}% of frames at unlocks and app opens against {ord}% over the day; the most janky there is {who}.',
-        lr_tip_jank_wake_wh: 'Stutter concentrates at the wakes: {pct}% of frames at unlocks and app opens against {ord}% over the day.',
-        lr_tip_audio: 'Speaker playback cost ~{pct}%/h. For long sessions, headphones or a gentler DSP preset are kinder to the battery.',
-        lr_tip_prof_save: 'Your own measurements: {cheap} cost {x}%/h at the screen against {y}%/h on {busy} - for reading and music it is noticeably cheaper.',
-        lr_tip_cost_ok: 'ASB itself is cheap: {ms} of CPU per hour.',
-        lr_tip_cost_hi: 'ASB used {ms} of CPU per hour - more than usual; worth sending this log to the developer.',
-        lr_tip_smart_help: 'Smart proved extra headroom helps {n} of your apps and keeps it just for them.',
-        lr_tip_ltpo: 'Tip: "{set}" in Settings lowers the refresh rate on video and saves battery.'
-      }[tip.key] || '', tip.vars);
+      tx.textContent = logReportTipText(tip);
       row.appendChild(ic);
       row.appendChild(tx);
       s.appendChild(row);
