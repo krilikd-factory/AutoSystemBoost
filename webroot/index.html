@@ -1574,6 +1574,11 @@ html[data-asb-theme="light"] .live-info-src { background: #fbfcfc; }
 /* Device diagnostics is a fifth, read-only page above Report. It deliberately reuses the
  * report's cards and rows so long kernel/build values get the same wrapping and contrast. */
 #devicePage { z-index: 140; overflow-y: auto !important; }
+/* These are fullscreen drill-ins, not translucent sheets. Liquid Glass deliberately makes
+ * ordinary tab pages transparent, but Report/Device may open over Monitor or Config: an
+ * inherited transparent surface there exposes two screens at once. Keep the Glass cards,
+ * while the page itself owns an opaque palette background in every theme and on every path. */
+#reportPage, #devicePage { background: var(--bg) !important; }
 .device-page .lgr-hero-val { overflow-wrap: anywhere; }
 .device-page .lgr-v.dev-long { max-width: 64%; font-family: var(--mono); font-size: 11px; line-height: 1.4; }
 .device-page .lgr-v.dev-good { color: var(--bat); }
@@ -10312,6 +10317,19 @@ function logReportTips(d, all) {
   }
   return all ? tips : tips.slice(0, 6);
 }
+/* Screen-on drain has no honest one-device-fits-all red line. In particular, 10%/h is
+ * roughly ten hours of screen time, not a defect by itself. Keep the verdict tied to the
+ * observed scenario: ordinary screen use, sustained gaming and speaker playback have
+ * different budgets. The same classifier paints the summary and detail rows, so they cannot
+ * disagree about the same number. Screen-off thresholds remain separate and much stricter. */
+function logReportScreenOnDrainState(value, scenario) {
+  const v = +value || 0;
+  const heavy = scenario === 'screen_on_heavy';
+  const audio = scenario === 'audio_speaker' || scenario === 'audio_spk_scr';
+  const problemAbove = heavy ? 30 : audio ? 20 : 15;
+  const goodThrough = heavy ? 15 : audio ? 10 : 8;
+  return v > problemAbove ? 'problem' : v <= goodThrough ? 'good' : 'normal';
+}
 /* fix225: one analytical model drives the executive summary, causal explanations, priority
  * actions and report.json. It deliberately uses qualitative confidence: a numeric 87/100
  * would look calibrated without a calibration corpus. Every verdict has its own evidence
@@ -10357,7 +10375,7 @@ function logReportAnalyze(d) {
   const screenLed = scenarioFamily === 'screen_on';
   if (screenLed && scr && (+scr.on_min || 0) >= 30 && (+scr.on_pctph || 0) > 0) {
     const v = +scr.on_pctph;
-    verdict('drain', v > 8 ? 'problem' : v <= 5 ? 'good' : 'normal', v.toFixed(1) + '%/h',
+    verdict('drain', logReportScreenOnDrainState(v, scenario), v.toFixed(1) + '%/h',
       'lr_sum_drain_on', { min: logReportDur(scr.on_min) }, 'screen_on_ledger');
     drainDone = true;
   }
@@ -10609,6 +10627,7 @@ const DEVICE_SECTION_ORDER = [
   ['kernel_external', 'dev_sec_kernel_external', 'External kernel / UV evidence'],
   ['kernel_config', 'dev_sec_kernel_config', 'Kernel configuration'],
   ['kernel_features', 'dev_sec_kernel_features', 'Custom kernel features'],
+  ['metamodule', 'dev_sec_metamodule', 'Metamodule'],
   ['kernel_runtime', 'dev_sec_kernel_runtime', 'Live kernel facilities'],
   ['cpu_policy', 'dev_sec_cpu_policy', 'CPU frequency policies'],
   ['gpu', 'dev_sec_gpu', 'GPU and devfreq'],
@@ -10618,6 +10637,13 @@ const DEVICE_SECTION_ORDER = [
   ['asb', 'dev_sec_asb', 'ASB runtime'],
   ['asb_caps', 'dev_sec_asb_caps', 'ASB device capabilities'],
   ['meta', 'dev_sec_meta', 'Collection metadata']
+];
+/* Reverse the feature groups from the original collector presentation while keeping each
+ * driver's version directly below its main row. SuSFS leads, NoMount closes the section.
+ * Unknown future keys remain visible after this explicit, device-independent order. */
+const DEVICE_KERNEL_FEATURE_ORDER = [
+  'susfs', 'susfs_version', 'bbg_baseband_guard', 'bbr_v2', 'bbr_v1', 'lto',
+  'tmpfs_xattr_posix_acl', 'unicode_bypass_fix', 'droidspaces', 'ntsync', 'nomount', 'nomount_version'
 ];
 function parseDeviceInfo(txt) {
   const d = { sections: Object.create(null), count: 0, malformed: 0 };
@@ -10698,7 +10724,9 @@ function deviceInfoRender(d) {
   DEVICE_SECTION_ORDER.forEach(function (spec) {
     const sec = d.sections[spec[0]];
     if (!sec) return;
-    const keys = Object.keys(sec);
+    const keys = spec[0] === 'kernel_features' ?
+      DEVICE_KERNEL_FEATURE_ORDER.filter(function (key) { return Object.prototype.hasOwnProperty.call(sec, key); }).concat(
+        Object.keys(sec).filter(function (key) { return DEVICE_KERNEL_FEATURE_ORDER.indexOf(key) < 0; })) : Object.keys(sec);
     if (!keys.length) return;
     const card = logReportSec(T(spec[1], spec[2]));
     keys.forEach(function (key) {
@@ -11064,7 +11092,8 @@ function logReportRender(d) {
        them together ends the "0.7 here, 1.3 there" confusion. */
     if (scr) {
       if ((+scr.on_min || 0) > 0)
-        s.appendChild(logReportRow(T('lr_drain_on', 'Screen-on drain'), String(scr.on_pctph) + T('lr_per_hour', '%/h'), (+scr.on_pctph || 0) >= 8));
+        s.appendChild(logReportRow(T('lr_drain_on', 'Screen-on drain'), String(scr.on_pctph) + T('lr_per_hour', '%/h'),
+          logReportScreenOnDrainState(scr.on_pctph, analysis.scenario) === 'problem'));
       if ((+scr.off_min || 0) > 0)
         /* fix211: a red figure needs a window that can hold it. One battery-percent step
            over 12 idle minutes reads as 5 %/h - noise, not a finding. Under half an hour
@@ -11203,7 +11232,8 @@ function logReportRender(d) {
            wrap at the "·" before the number. */
         .replace(/\//g, '/\u2060');
       return [T('lr_ph_' + p.name, p.name), logReportDur(p.min),
-              { txt: cell, warn: p.pctph >= 8 }];
+              { txt: cell, warn: logReportScreenOnDrainState(p.pctph,
+                p.name === 'gaming' ? 'screen_on_heavy' : p.name === 'audio_spk_scr' ? 'audio_speaker' : 'screen_on_light') === 'problem' }];
     });
     s.appendChild(logReportTable(
       [T('lr_th_phase', 'Phase'), T('lr_th_time', 'Time'), T('lr_th_drop', 'Drain')], rows, [1, 2]));
@@ -12488,6 +12518,8 @@ function asbBasisMetric(v) {
 }
 function asbModemMetric(v) {
   const s = String(v || '').toLowerCase();
+  /* Green is reserved for an active power-saving mode. Normal is the stock baseline,
+     so it stays readable but neutral rather than looking like an economy state. */
   if (s === 'save' || s === 'night') return 'metric-good';
   if (s === 'fast') return 'metric-bad';
   return 'metric-neutral';
