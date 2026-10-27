@@ -4146,6 +4146,8 @@ out="$("$T/t")" || fail "$out"
 
 # The FSM side: the touch floor sits before the light-idle return, battery and camera
 # excluded; the first touch lifts LIGHT_IDLE at once; the kick is cleared after each update.
+# Battery's actual manual-profile ceilings are lifted by the writer path tested in
+# unlock_lift_runtime (fix223), not by changing this quiet-screen state exclusion.
 awk '/A finger on the glass is interaction/{t=NR} /The light-idle ceiling is binding/{p=NR} END{exit !(t && p && t < p)}' "$F" \
   || fail "touch floor is not ahead of the light-idle decision"
 grep -q 'g_touch_last_ts > 0 && time(NULL) - g_touch_last_ts <= ASB_TOUCH_RECENT_S)' "$F" || fail "touch floor has no time window"
@@ -4242,6 +4244,8 @@ t_unlock_lift_runtime() (
 # the animation's first frames. The tap itself (a fresh touch after a calm spell) and the
 # lock press (the power key with the screen on) now arm the same window, same 5 s gap, same
 # gates - so the open/close/unlock/lock animations of ColorOS 17 run on lifted ceilings.
+# fix223: on manual Battery, continuous touch extends an already-armed window; quiet reading,
+# Smart/Balanced/Performance and a vetoed (off/warm/thermal) start gain no new lift path.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 G="$ROOT/src/asb_governor.c"
@@ -4282,6 +4286,8 @@ grep -Fq '!g_fsm_cooldown_active && !g_unlock_lift_now;' "$G" || fail "the lift 
 # stay in epoll with the screen on - except the touch panel's own gesture node.
 grep -q 'static int           g_lock_key_kick = 0;' "$ROOT/src/asb_fsm.h" || fail "lock kick not declared"
 grep -q 'g_lock_key_kick, _launch_kick,' "$G" || fail "the lock kick does not reach the update"
+grep -qF '_touch_active, g_lock_key_kick, _launch_kick,' "$G" || fail "continuous touch does not reach the Battery lift"
+grep -qF 'time(NULL) - g_touch_last_ts <= ASB_TOUCH_RECENT_S;' "$G" || fail "the continuous-touch window is not tied to the sampled touch clock"
 grep -q 'g_lock_key_kick = 1;' "$G" || fail "the power key with the screen on raises no kick"
 grep -q 'g_lock_key_kick = 0;   /\* answered (fix220) \*/' "$G" || fail "the lock kick is never answered"
 grep -q 'wakes, first touches, app opens/closes, lock presses' "$ROOT/tools/asb_diag.sh" || fail "asbdiag still says wakes + first touches"
@@ -4306,9 +4312,10 @@ static struct { int unlock_lift_s, unlock_lift_pct, bat_comfort_temp; } g_asb_cf
 static int g_cpu_slot_hwmax[3] = { 3628800, 4608000, 0 };
 #include "u.c"
 static int P = PROFILE_SMART, TC = 0, DIE = 36;
-static int up(int scr, int kick, long ms) { return asb_unlock_lift_update(scr, kick, 0, 0, ms, P, TC, DIE); }
-static int upl(int scr, int kick, int launch, long ms) { return asb_unlock_lift_update(scr, kick, 0, launch, ms, P, TC, DIE); }
-static int uplk(int scr, int lock, long ms) { return asb_unlock_lift_update(scr, 0, lock, 0, ms, P, TC, DIE); }
+static int upa(int scr, int kick, int active, long ms) { return asb_unlock_lift_update(scr, kick, active, 0, 0, ms, P, TC, DIE); }
+static int up(int scr, int kick, long ms) { return upa(scr, kick, 0, ms); }
+static int upl(int scr, int kick, int launch, long ms) { return asb_unlock_lift_update(scr, kick, 0, 0, launch, ms, P, TC, DIE); }
+static int uplk(int scr, int lock, long ms) { return asb_unlock_lift_update(scr, 0, 0, lock, 0, ms, P, TC, DIE); }
 int main(void) {
     int bad = 0;
 #define CHK(c, what) do { if (!(c)) { printf("%s\n", what); bad = 1; } } while (0)
@@ -4408,6 +4415,38 @@ int main(void) {
         "a lock lift slipped past a thermal cap"); TC = 0;
     CHK(up(1, 1, 240000) == 1 && g_unlock_lifts == l4 + 1 && !strcmp(g_unlock_arm_why, "touch"),
         "a tap after the lock run did not lift");
+    /* fix223: manual Battery keeps an already-armed lift while the finger is active. The
+     * original three seconds would have elapsed at 263000; 264000 proves the extension.
+     * No extra lift is counted for continuation, quiet touch state cannot start one, and
+     * stopping the finger gives the ceilings back on the normal expiry. */
+    up(0, 0, 250000); P = PROFILE_BATTERY;
+    unsigned long lb = g_unlock_lifts;
+    CHK(up(1, 0, 251000) == 1 && g_unlock_lifts == lb + 1, "Battery test wake did not lift");
+    CHK(up(1, 0, 254000) == 0, "Battery test wake did not expire");
+    CHK(upa(1, 1, 1, 260000) == 1 && g_unlock_lifts == lb + 2, "Battery touch did not arm");
+    CHK(upa(1, 0, 1, 262000) == 1 && g_unlock_lifts == lb + 2, "Battery continuation counted as a new lift");
+    CHK(upa(1, 0, 1, 264000) == 1 && g_unlock_lifts == lb + 2, "continuous Battery scrolling expired after the original 3 s");
+    CHK(upa(1, 0, 0, 266000) == 1, "Battery handback started before the quiet window ended");
+    CHK(up(1, 0, 268000) == 0, "Battery ceilings did not return after the touch stopped");
+    CHK(upa(1, 0, 1, 270000) == 0 && g_unlock_lifts == lb + 2,
+        "touch-active alone started a Battery lift without an arm event");
+    CHK(upa(1, 1, 1, 280000) == 1 && g_unlock_lifts == lb + 3, "second Battery touch did not arm");
+    TC = 1; CHK(upa(1, 0, 1, 282000) == 0, "thermal cap did not cancel a held Battery lift"); TC = 0;
+    CHK(upa(1, 0, 1, 283000) == 0 && g_unlock_lifts == lb + 3,
+        "touch hold restarted a thermally cancelled Battery lift");
+    DIE = 48; up(0, 0, 290000); up(1, 0, 291000);
+    CHK(upa(1, 1, 1, 292000) == 0 && !strcmp(g_unlock_skip_why, "warm"), "a warm Battery touch armed");
+    CHK(upa(1, 0, 1, 293000) == 0, "touch hold bypassed the warm-start veto"); DIE = 36;
+    /* Smart and Balanced keep the old fixed-length touch window: no permanent boost. */
+    up(0, 0, 300000); P = PROFILE_SMART; up(1, 0, 301000); up(1, 0, 304000);
+    unsigned long ls = g_unlock_lifts;
+    CHK(upa(1, 1, 1, 310000) == 1 && g_unlock_lifts == ls + 1, "Smart control touch did not arm");
+    CHK(upa(1, 0, 1, 312000) == 1, "Smart control touch ended early");
+    CHK(upa(1, 0, 1, 313000) == 0, "Smart gained the Battery continuous-touch hold");
+    up(0, 0, 320000); P = PROFILE_BALANCED; up(1, 0, 321000); up(1, 0, 324000);
+    unsigned long ll = g_unlock_lifts;
+    CHK(upa(1, 1, 1, 330000) == 1 && g_unlock_lifts == ll + 1, "Balanced control touch did not arm");
+    CHK(upa(1, 0, 1, 333000) == 0, "Balanced gained the Battery continuous-touch hold");
     /* 4-cluster part: the prime slot Smart caps at 62% is lifted; the share is clamped to 100. */
     g_cpu_slot_hwmax[0] = 2265600; g_cpu_slot_hwmax[1] = 3148800; g_cpu_slot_hwmax[2] = 3302400;
     g_asb_cfg.unlock_lift_pct = 130;

@@ -3511,7 +3511,8 @@ echo "PASS: fix149 contract"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 fail() { echo "FAIL fix150: $*"; exit 1; }
 G="$ROOT/src/asb_governor.c"; C="$ROOT/tools/logkit/_asb_logkit_common.sh"; D="$ROOT/tools/asb_diag.sh"
-grep -q '^static int asb_unlock_lift_update(int screen_on, int touch_kick, int lock_kick, int launch_kick,$' "$G" || fail "no unlock lift"
+# fix223 deliberately adds touch_active for Battery's already-armed continuous-touch hold.
+grep -q '^static int asb_unlock_lift_update(int screen_on, int touch_kick, int touch_active,$' "$G" || fail "no unlock lift"
 grep -q '^static void asb_smart_night_awake(int screen_on, int daypart, int is_weekend, time_t now) {$' "$G" || fail "no night-awake lean"
 grep -q '^unlock_lift_s=3$' "$ROOT/config/governor.conf" && grep -q '^smart_night_awake=1$' "$ROOT/config/governor.conf" || fail "not shipped on"
 cmp -s "$ROOT/config/governor.conf" "$ROOT/config/governor.conf.shipped" || fail "shipped governor.conf differs"
@@ -4481,7 +4482,7 @@ fail() { echo "FAIL fix220: $*" >&2; exit 1; }
 # parser, the tips) is exercised in tests/asb_smart.sh:t_unlock_lift_runtime and
 # tests/asb_ui.sh:t_webui_log_report_runtime; here the structural pins.
 sh -n "$D" || fail "digest script has a syntax error"
-grep -qF 'int touch_kick, int lock_kick, int launch_kick,' "$G" || fail "the update does not take the lock kick"
+grep -qF 'int lock_kick, int launch_kick,' "$G" || fail "the update does not take the lock kick"
 grep -qF 'g_unlock_arm_why = touch_kick ? "touch" : (lock_kick ? "lock key" : "app switch");' "$G" || fail "the arm no longer names its source"
 grep -qF 'g_lock_key_kick = 1;' "$G" || fail "the power key with the screen on raises no kick"
 grep -qF 'if (g_wake_key_touch[i])' "$G" || fail "wake_keys_park parks the power key with the screen on again"
@@ -4574,6 +4575,48 @@ grep -qF 'a ten-minute stretch draws no awake tip' "$U" || fail "the awake durat
 grep -qF 'the traffic tip names its setting' "$U" || fail "the sradio tip assertion is gone"
 grep -qF "const _smRan = d.profs.some(function (p) { return p.name === 'smart' && (p.onMin + p.offMin) >= 30; });" "$H" || fail "the Smart-ran check is gone - the not-a-Smart-day note fires on a mid-day switch again"
 echo "PASS: fix222 contract"
+) || exit 1
+# ---- fix223 ---------------------------------------------------------------
+(
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+G="$ROOT/src/asb_governor.c"
+F="$ROOT/src/asb_fsm.h"
+W="$ROOT/src/asb_writer.h"
+S="$ROOT/tests/asb_smart.sh"
+fail() { echo "FAIL fix223: $*"; exit 1; }
+# Re-review of the post-fix219 screenshots and captures found a real responsiveness
+# asymmetry, not a reason to move static profile caps. CPH2745 Battery touch intervals had
+# 9.7% janky frames in LIGHT_IDLE versus 7.1% in MODERATE; same-device CPH2747 Battery ->
+# Smart showed Telegram 8.1% versus 3.7%, TikTok 15.6% versus 6.8%. Manual Battery ceilings
+# are shell-owned, so merely removing its FSM touch exclusion would not fix the scroll.
+# Instead, continuous touch extends an ALREADY ARMED unlock-lift window on Battery only.
+# The writer borrows ceilings above the shell caps and hands them back on expiry. Quiet
+# reading, the FSM's Battery exclusions, static profile frequencies and all other profiles
+# stay unchanged. No absolute frequency, new setting or Android/ColorOS API is introduced.
+grep -qF 'int touch_active,' "$G" || fail "continuous touch is absent from the lift update"
+grep -qF 'if (touch_active && profile_idx == PROFILE_BATTERY && g_unlock_until_ms > 0 &&' "$G" \
+  || fail "the hold is not Battery-only and already-armed-only"
+grep -qF '_touch_active, g_lock_key_kick, _launch_kick,' "$G" || fail "the main loop does not pass continuous touch"
+grep -qF 'metrics.misc.screen_on && !metrics.misc.camera_active &&' "$G" || fail "the touch-active signal lost its screen/camera gates"
+grep -qF 'time(NULL) - g_touch_last_ts <= ASB_TOUCH_RECENT_S;' "$G" || fail "the hold is not bounded by the sampled touch clock"
+[ "$(grep -cF '!fsm_profile_is_battery && !m->misc.camera_active' "$F")" -eq 3 ] \
+  || fail "Battery's quiet-screen FSM exclusions changed"
+grep -qF 'const int manual_lift     = manual_profile && g_unlock_lift_now && !thermal_cap &&' "$W" \
+  || fail "the writer does not borrow the manual-profile ceilings"
+grep -qF 'int manual_cap_skip = manual_profile && !manual_override && !manual_lift;' "$W" \
+  || fail "manual_cap_skip does not yield to the lift"
+grep -qF 'writer_manual_handback' "$W" || fail "manual-profile ceiling handback is missing"
+grep -q '^unlock_lift_s=3$' "$ROOT/config/governor.conf" || fail "the lift duration changed"
+grep -q '^unlock_lift_pct=80$' "$ROOT/config/governor.conf" || fail "the hardware-relative lift share changed"
+for pin in 'continuous Battery scrolling expired after the original 3 s' \
+           'touch-active alone started a Battery lift without an arm event' \
+           'touch hold restarted a thermally cancelled Battery lift' \
+           'touch hold bypassed the warm-start veto' \
+           'Smart gained the Battery continuous-touch hold' \
+           'Balanced gained the Battery continuous-touch hold'; do
+  grep -qF "$pin" "$S" || fail "missing runtime assertion: $pin"
+done
+echo "PASS: fix223 contract"
 ) || exit 1
 # ---- fix209 ---------------------------------------------------------------
 (
