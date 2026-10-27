@@ -900,6 +900,7 @@
   "wb_handover_active": "Apaga Wi‑Fi temporalmente solo cuando Android informa que la ruta Wi‑Fi predeterminada no está validada. Puede usar datos móviles y desconectar brevemente dispositivos Wi‑Fi locales; Wi‑Fi vuelve automáticamente.",
   "theme_dark": "Tema oscuro",
   "theme_light": "Tema claro",
+  "theme_glass": "Tema Liquid Glass",
   "wb_radio_policy": "Activa la política independiente de ASB para contexto móvil y keepalive. Déjala apagada en dispositivos solo Wi‑Fi o sin SIM.",
   "stock_load_now": "1 min",
   "cfg_unavailable": "no disponible en este dispositivo",

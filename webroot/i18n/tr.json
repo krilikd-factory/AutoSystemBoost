@@ -900,6 +900,7 @@
   "wb_handover_active": "Wi‑Fi’yi yalnızca Android varsayılan Wi‑Fi rotasını doğrulanmamış olarak bildirirse kısa süreli kapatır. Mobil veri kullanılabilir ve yerel Wi‑Fi cihazları kısa süre ayrılabilir; Wi‑Fi otomatik geri gelir.",
   "theme_dark": "Koyu tema",
   "theme_light": "Açık tema",
+  "theme_glass": "Liquid Glass teması",
   "wb_radio_policy": "ASB’nin ayrı mobil bağlam ve keepalive politikasını etkinleştirir. Yalnızca Wi‑Fi kullanan veya SIM’siz cihazlarda kapalı bırakın.",
   "stock_load_now": "1 dk",
   "cfg_unavailable": "bu cihazda kullanılamaz",
