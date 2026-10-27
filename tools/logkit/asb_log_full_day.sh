@@ -5,7 +5,7 @@ set -u
 LK_SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"
 . "$LK_SCRIPT_DIR/_asb_logkit_common.sh"
 
-# Auto-detach so the day-long capture survives Termux closure / phone sleep.
+# Auto-detach so the session capture survives Termux closure / phone sleep.
 if [ -t 0 ]; then
   if command -v setsid >/dev/null 2>&1; then
     if [ -z "${ASB_LOGKIT_DETACHED:-}" ]; then
@@ -18,7 +18,7 @@ fi
 
 LK_SCENARIO="full_day"
 LK_OUT_DIR="$(lk_resolve_outbase)/asb_log_${LK_SCENARIO}_$$"
-LK_HOURS="${1:-24}"
+LK_HOURS="${1:-0}"
 LK_MAX_SEC=$(( LK_HOURS * 3600 ))
 # Report-only threshold: a phase needs at least this much observed mobile RX+TX before
 # it is listed as traffic context. This does not trigger a radio action or allocate drain.
@@ -1488,7 +1488,11 @@ lk_emit_full_day_report() {
   {
     echo "==================================================================="
     echo " ASB FULL-DAY REPORT — $(date '+%Y-%m-%d %H:%M:%S')"
-    echo " capture: ${LK_HOURS}h target, $(( ($(date +%s) - LK_START_EPOCH) / 60 )) min elapsed"
+    if [ "$LK_MAX_SEC" -gt 0 ]; then
+      echo " capture: ${LK_HOURS}h target, $(( ($(date +%s) - LK_START_EPOCH) / 60 )) min elapsed"
+    else
+      echo " capture: 0h target (until shutdown), $(( ($(date +%s) - LK_START_EPOCH) / 60 )) min elapsed"
+    fi
     echo "==================================================================="
     echo ""
     echo "----- NIGHT / SCREEN-OFF CPU SLEEP -----"
@@ -1995,7 +1999,11 @@ lk_finalize() {
 }
 trap 'lk_finalize; lk_webui_guard_release; exit 0' TERM INT HUP
 
-echo "[$(date '+%H:%M:%S')] FULL-DAY capture running up to ${LK_HOURS}h. Use the phone normally."
+if [ "$LK_MAX_SEC" -gt 0 ]; then
+  echo "[$(date '+%H:%M:%S')] SESSION capture running up to ${LK_HOURS}h. Use the phone normally."
+else
+  echo "[$(date '+%H:%M:%S')] SESSION capture running until shutdown. Use the phone normally."
+fi
 LK_WIFI_SINCE="$(date '+%Y-%m-%d %H:%M:%S')"
 
 _last_snapshot=$(date +%s)
@@ -2019,7 +2027,7 @@ echo "$(date +%s)|$(date '+%Y-%m-%d %H:%M:%S')|$_phase|capture_start" >> "$LK_OU
 while : ; do
   _now=$(date +%s)
   _elapsed=$(( _now - LK_START_EPOCH ))
-  [ "$_elapsed" -ge "$LK_MAX_SEC" ] && break
+  [ "$LK_MAX_SEC" -gt 0 ] && [ "$_elapsed" -ge "$LK_MAX_SEC" ] && break
 
   lk_wl_acquire
   lk_sample_gpu_busy

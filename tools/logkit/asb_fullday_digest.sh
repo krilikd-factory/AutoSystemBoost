@@ -1,6 +1,6 @@
 #!/system/bin/sh
 #
-# asb_fullday_digest.sh - machine-readable digest of a 24h capture, for the WebUI report.
+# asb_fullday_digest.sh - machine-readable digest of a session capture, for the WebUI report.
 #
 # The full-day recorder writes a rich but long report aimed at a developer reading a text
 # file. The WebUI "Log report" sheet needs the same facts in a form it can render and
@@ -105,7 +105,7 @@ _el=""
 _th=""
 if [ -f "$_DIR/_full_day_report.txt" ]; then
   _hl="$(grep 'min elapsed' "$_DIR/_full_day_report.txt" 2>/dev/null | tail -n 1)"
-  # " capture: 24h target, N min elapsed"
+  # " capture: 24h target, N min elapsed" or "capture: 0h target (until shutdown), N min elapsed"
   _th="$(printf '%s\n' "$_hl" | sed -n 's/^ capture: \([0-9][0-9]*\)h target.*/\1/p')"
   _el="$(printf '%s\n' "$_hl" | sed -n 's/.*, \([0-9][0-9]*\) min elapsed.*/\1/p')"
 fi
@@ -149,7 +149,7 @@ if [ "$_HAVE_LEDGER" = "1" ]; then
 fi
 _prof="$(sed -n 's/^current_profile:[[:space:]]*//p' "$_DIR/env.txt" 2>/dev/null | head -n 1 | tr -cd 'a-z')"
 printf 'meta\telapsed_min=%s\ttarget_h=%s\trunning=%d\tstarted=%s\tprofile=%s\n' \
-  "${_el:-0}" "${_th:-24}" "$_running" "${_started:-}" "${_prof:-}"
+  "${_el:-0}" "${_th:-0}" "$_running" "${_started:-}" "${_prof:-}"
 # The structured report export belongs beside the capture, not in an unrelated global state
 # directory. This is a path, not device content; the WebUI shell-quotes it before writing.
 printf 'capture\tdir=%s\n' "$_DIR"
