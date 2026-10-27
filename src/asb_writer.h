@@ -136,14 +136,26 @@ static const char *writer_write_node_name(asb_write_node_t node) {
     return (node >= 0 && node < ASB_WRITE_NODE_COUNT) ? names[node] : "unknown";
 }
 
-static void writer_write_failure_event(asb_write_node_t node, const char *path,
-                                       int requested, int observed, time_t retry_at) {
+static void writer_write_event(const char *kind, asb_write_node_t node, const char *path,
+                               int requested, int observed, time_t retry_at) {
     FILE *ef = fopen("/dev/.asb/write_errors", "a");
     if (!ef) return;
-    fprintf(ef, "FAIL node=%s path=%s requested=%d observed=%d retry_at=%ld\n",
-            writer_write_node_name(node), path ? path : "(none)",
+    fprintf(ef, "%s node=%s path=%s requested=%d observed=%d retry_at=%ld\n",
+            kind, writer_write_node_name(node), path ? path : "(none)",
             requested, observed, (long)retry_at);
     fclose(ef);
+}
+
+static void writer_write_failure_event(asb_write_node_t node, const char *path,
+                                       int requested, int observed, time_t retry_at) {
+    writer_write_event("FAIL", node, path, requested, observed, retry_at);
+}
+
+static void writer_write_unsupported_event(asb_write_node_t node, const char *path,
+                                           int requested, int observed, time_t retry_at) {
+    /* Device capability, not a rejected write: keep the evidence without teaching the
+     * diagnostic report to count a supported-on-other-kernels node as a real failure. */
+    writer_write_event("UNSUPPORTED", node, path, requested, observed, retry_at);
 }
 
 static int writer_node_is_cpu(asb_write_node_t node) {
@@ -426,13 +438,13 @@ static int writer_write_int_confirmed(asb_write_node_t node, const char *path, i
     if (path && access(path, F_OK) != 0) {
         h->retry_at = now + 86400;
         snprintf(h->status, sizeof(h->status), "%s", "unsupported_absent");
-        writer_write_failure_event(node, path, requested, observed, h->retry_at);
+        writer_write_unsupported_event(node, path, requested, observed, h->retry_at);
         return -1;
     }
     if (node == ASB_WRITE_WALT_RAVG && observed == INT_MIN) {
         h->retry_at = now + 86400;
         snprintf(h->status, sizeof(h->status), "%s", "unsupported_readback");
-        writer_write_failure_event(node, path, requested, observed, h->retry_at);
+        writer_write_unsupported_event(node, path, requested, observed, h->retry_at);
         return -1;
     }
 
