@@ -37,6 +37,7 @@ asb_state_sampler.sh
 asb_drain_analyzer.sh
 asb_vendor_thermal_probe.sh
 asb_kernel_uv_coexist.sh
+asb_device_info.sh
 
 # Device-adaptive layer - install/boot run these by path.
 #   asb_discover.sh          writes device_caps.env (facts); service.sh runs it at boot
