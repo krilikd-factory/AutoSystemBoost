@@ -3051,42 +3051,47 @@ html[data-asb-theme="light"] .cfg-profile-folder { color:var(--text) !important;
  * light palette below and only replaces opaque surfaces with translucent glass at the end
  * of that cascade. No canvas/WebGL, extra motion or device-specific colors. */
 html[data-asb-glass="1"] {
-  --bg:#000000; --surface:rgba(24,32,29,.78); --surface-hover:rgba(42,66,57,.42);
-  --tabbar-bg:rgba(24,32,29,.76); --text:#f2fff9; --text-secondary:#b8cec4; --text-tertiary:#91aa9f;
+  --bg:#000000; --surface:rgba(16,23,20,.86); --surface-hover:rgba(36,58,49,.48);
+  --tabbar-bg:rgba(16,23,20,.84); --text:#f2fff9; --text-secondary:#b8cec4; --text-tertiary:#91aa9f;
   --accent:#00f0b4; --accent-glow:rgba(0,240,180,.24); --accent2:#65efc9;
-  --border:rgba(108,151,133,.38); --border-active:rgba(0,240,180,.42);
+  --border:rgba(108,151,133,.46); --border-active:rgba(0,240,180,.56);
   --cap-wash:linear-gradient(135deg,rgba(255,255,255,.09),rgba(0,240,180,.045));
-  --cap-edge:rgba(0,240,180,.18);
-  --cap-shadow:0 12px 32px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.14);
+  --cap-edge:rgba(0,240,180,.26);
+  --cap-shadow:0 12px 32px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.18);
   --pill-wash:linear-gradient(135deg,rgba(0,240,180,.26),rgba(101,239,201,.12));
   --pill-edge:inset 0 0 0 1px rgba(0,240,180,.30),inset 0 1px 0 rgba(255,255,255,.16);
   color-scheme:dark;
 }
 html[data-asb-glass="1"] body {
   background:
-    radial-gradient(ellipse 90% 48% at 12% 0%,rgba(0,240,180,.13),transparent 68%),
-    radial-gradient(ellipse 70% 42% at 100% 82%,rgba(42,66,57,.32),transparent 72%),#000;
+    radial-gradient(ellipse 90% 48% at 12% 0%,rgba(0,240,180,.10),transparent 68%),
+    radial-gradient(ellipse 70% 42% at 100% 82%,rgba(36,58,49,.26),transparent 72%),#000;
 }
 html[data-asb-glass="1"] :is(.page,.live-page,.config-page) { background:transparent !important; color:var(--text); }
 html[data-asb-glass="1"] :is(.hdr-cap,.theme-toggle,.status-row,.live-chip,.tg-link,.debug-support-btn,
   .cfg-backup,.cfg-lang-btn,.cfg-lang-pop,.cfg-sel-btn,.cfg-sel-pop,.cfg-tile,.cfg-row,
   .live-cell,.stock-telemetry,.smart-banner,.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet,
-  .asb-tabbar) {
-  background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.018)),rgba(24,32,29,.78) !important;
+  .log-menu,.cfg-fm-box,.asb-tabbar) {
+  background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.018)),rgba(16,23,20,.86) !important;
   color:var(--text) !important; border-color:var(--border) !important;
-  box-shadow:0 12px 30px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.10);
+  box-shadow:0 14px 34px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.14),inset 0 0 0 1px rgba(255,255,255,.025);
   -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
 }
+html[data-asb-glass="1"] :is(.log-menu,.cfg-fm-box,.cfg-profile-sheet,.cfg-reset-dialog) {
+  border-color:var(--border-active) !important;
+}
 html[data-asb-glass="1"] :is(.pbtn,.lgr-hero,.lgr-sec,.live-info-now,.live-info-src) {
-  background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.018)),rgba(24,32,29,.72) !important;
-  border-color:var(--border); box-shadow:inset 0 1px 0 rgba(255,255,255,.10);
+  background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.018)),rgba(16,23,20,.80) !important;
+  border-color:var(--border); box-shadow:inset 0 1px 0 rgba(255,255,255,.14),inset 0 0 0 1px rgba(255,255,255,.025);
   -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
 }
 html[data-asb-glass="1"] :is(.pbtn.on,.cfg-tile.active,.cfg-profile-row.selected) {
   border-color:var(--accent) !important; box-shadow:0 0 0 1px var(--accent-glow),inset 0 1px 0 rgba(255,255,255,.16);
 }
-html[data-asb-glass="1"] :is(input,select,textarea,.seg,.seg-opt,.cfg-profile-name,.cfg-reset-choice,.cfg-profile-row,.cfg-profile-actions button) {
-  background:rgba(24,32,29,.82) !important; color:var(--text) !important; border-color:var(--border) !important;
+html[data-asb-glass="1"] :is(input,select,textarea,.seg,.seg-opt,.cfg-profile-name,.cfg-reset-choice,.cfg-profile-row,.cfg-profile-actions button,
+  .cfg-fm-btn,.cfg-fm-place,.cfg-fm-cancel,.cfg-profile-close,.cfg-reset-close,.cfg-profile-dest button,.cfg-profile-check,.cfg-profile-result-reboot) {
+  background:rgba(16,23,20,.88) !important; color:var(--text) !important; border-color:var(--border) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
 }
 html[data-asb-glass="1"] :is(.cfg-modal,.cfg-profile-modal,.cfg-reset-modal,.diag-wait-modal,.debug-action-wait,[class*="overlay"]) { background:rgba(0,0,0,.68) !important; }
 html[data-asb-glass="1"] :is(.cfg-desc,.cfg-profile-copy,.cfg-profile-row-meta,.cfg-profile-hint,.cfg-reset-copy,.cfg-reset-choice-copy,.live-cell-label,.device-line,.tg-link-sub) { color:var(--text-secondary) !important; }
@@ -3787,19 +3792,24 @@ html[data-asb-glass="1"][data-asb-theme="light"] :is(.page,.live-page,.config-pa
 html[data-asb-glass="1"][data-asb-theme="light"] :is(.hdr-cap,.theme-toggle,.status-row,.live-chip,.tg-link,.debug-support-btn,
   .cfg-backup,.cfg-lang-btn,.cfg-lang-pop,.cfg-sel-btn,.cfg-sel-pop,.cfg-tile,.cfg-row,
   .live-cell,.stock-telemetry,.smart-banner,.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet,
-  .log-menu,.asb-tabbar) {
+  .log-menu,.cfg-fm-box,.asb-tabbar) {
   background:linear-gradient(145deg,rgba(255,255,255,.64),rgba(244,252,248,.36)),rgba(255,255,255,.54) !important;
   color:var(--text) !important; border-color:var(--border) !important;
-  box-shadow:0 12px 30px rgba(20,50,42,.12),inset 0 1px 0 rgba(255,255,255,.72) !important;
+  box-shadow:0 14px 34px rgba(20,50,42,.14),inset 0 1px 0 rgba(255,255,255,.76),inset 0 0 0 1px rgba(255,255,255,.20) !important;
   -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+}
+html[data-asb-glass="1"][data-asb-theme="light"] :is(.log-menu,.cfg-fm-box,.cfg-profile-sheet,.cfg-reset-dialog) {
+  border-color:var(--border-active) !important;
 }
 html[data-asb-glass="1"][data-asb-theme="light"] :is(.pbtn,.lgr-hero,.lgr-sec,.live-info-now,.live-info-src) {
   background:linear-gradient(145deg,rgba(255,255,255,.62),rgba(244,252,248,.32)),rgba(255,255,255,.48) !important;
   border-color:var(--border) !important; box-shadow:inset 0 1px 0 rgba(255,255,255,.68) !important;
   -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
 }
-html[data-asb-glass="1"][data-asb-theme="light"] :is(input,select,textarea,.seg,.seg-opt,.cfg-profile-name,.cfg-reset-choice,.cfg-profile-row,.cfg-profile-actions button) {
+html[data-asb-glass="1"][data-asb-theme="light"] :is(input,select,textarea,.seg,.seg-opt,.cfg-profile-name,.cfg-reset-choice,.cfg-profile-row,.cfg-profile-actions button,
+  .cfg-fm-btn,.cfg-fm-place,.cfg-fm-cancel,.cfg-profile-close,.cfg-reset-close,.cfg-profile-dest button,.cfg-profile-check,.cfg-profile-result-reboot) {
   background:rgba(255,255,255,.62) !important; color:var(--text) !important; border-color:var(--border) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.68);
 }
 html[data-asb-glass="1"][data-asb-theme="light"] :is(.lgr-chip,.pmeta-chip,.cfg-icon) {
   background:rgba(255,255,255,.46) !important; border-color:var(--border) !important;
@@ -6641,19 +6651,19 @@ const CFG_GROUP_OF = {
 };
 function cfgGroupOf(key){ return CFG_GROUP_OF[key] || 'ui'; }
 
-/* Audio stays one top-level group. These labels only organise cards inside that screen:
- * playback and Bluetooth define the route, DSP defines processing on that route, and the
- * volume-limit switch remains visibly separate because it is a hearing-safety decision. */
+/* Audio stays one top-level group. The frequently tuned ASB DSP chain comes first, with
+ * Loudness immediately reachable; playback/Bluetooth follows and the hearing-safety decision
+ * remains visibly separate. This changes presentation order only, never setting ownership. */
 const CFG_GROUP_SECTIONS = {
   audio: [
+    { id:'dsp', icon:'dsp', titleKey:'cfg_audio_section_dsp',
+      title:'ASB DSP Engine', hintKey:'cfg_audio_section_dsp_hint',
+      hint:'Optional gain, bass and dynamics processing on the outputs you select.',
+      keys:['dsp_loudness','dsp_outputs','dsp_bass','dsp_voice','dsp_width','dsp_compressor'] },
     { id:'playback', icon:'headphones', titleKey:'cfg_audio_section_playback',
       title:'Playback & Bluetooth', hintKey:'cfg_audio_section_playback_hint',
       hint:'Choose the audio path and Bluetooth behaviour.',
       keys:['audio_profile','audio_dac_hifi','media_loudness','media_vol_steps','audio_resampler','bt_absvol_mode','bt_a2dp_offload','bt_link_stability'] },
-    { id:'dsp', icon:'dsp', titleKey:'cfg_audio_section_dsp',
-      title:'ASB DSP Engine', hintKey:'cfg_audio_section_dsp_hint',
-      hint:'Optional gain, bass and dynamics processing on the outputs you select.',
-      keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_compressor'] },
     { id:'safety', icon:'ear_safe', titleKey:'cfg_audio_section_safety',
       title:'Listening Safety', hintKey:'cfg_audio_section_safety_hint',
       hint:'The system hearing limit is left untouched unless you explicitly change it.',
