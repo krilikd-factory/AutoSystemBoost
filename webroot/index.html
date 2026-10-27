@@ -324,9 +324,8 @@ body::before, body::after {
   box-shadow: var(--cap-shadow);
 }
 
-/* Chip and version: information, not controls, so plain text segments split by a hairline -
- * nothing in this capsule looks pressable. The version carries the accent; the chip code
- * stays secondary, the way an inactive tab label does. */
+/* Chip and version share one capsule. The SoC segment is a button into the read-only
+ * device diagnostics page; the version remains plain text. Geometry stays identical. */
 .hdr-cap {
   display: inline-flex;
   align-items: center;
@@ -354,6 +353,9 @@ body::before, body::after {
   border-inline-start: 1px solid var(--cap-edge);
 }
 .badge-a + .badge-a { color: var(--accent); }
+button.badge { appearance: none; -webkit-appearance: none; cursor: pointer; text-align: start; }
+button.badge:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 3px; }
+button.badge:active { color: var(--accent); }
 
 /* Theme switch: a three-segment capsule with the bar's sliding pill behind the chosen icon.
  *
@@ -1569,6 +1571,15 @@ html[data-asb-theme="light"] .live-info-src { background: #fbfcfc; }
  * section labels, two hero tiles where a headline number exists. One layer above Config
  * so it can open over any page from the Logs menu in any header. */
 #reportPage { z-index: 130; overflow-y: auto !important; }
+/* Device diagnostics is a fifth, read-only page above Report. It deliberately reuses the
+ * report's cards and rows so long kernel/build values get the same wrapping and contrast. */
+#devicePage { z-index: 140; overflow-y: auto !important; }
+.device-page .lgr-hero-val { overflow-wrap: anywhere; }
+.device-page .lgr-v.dev-long { max-width: 64%; font-family: var(--mono); font-size: 11px; line-height: 1.4; }
+.device-page .lgr-v.dev-good { color: var(--bat); }
+.device-page .lgr-v.dev-warn { color: var(--bal); }
+.device-page .lgr-v.dev-bad { color: var(--perf); }
+.device-page .dev-evidence { border-inline-start: 2px solid var(--accent); padding-inline-start: 10px; }
 .rpt-meta-row { display: flex; align-items: center; justify-content: space-between; gap: 10px;
   width: 100%; margin: -2px 2px 10px; }
 .lgr-status { font-size: 12px; color: var(--text-tertiary); }
@@ -3846,6 +3857,21 @@ html[data-asb-glass="1"] .smart-banner-value .load-mid { color:var(--bal) !impor
 html[data-asb-glass="1"] .smart-banner-value:is(.cap-clamp,.basis-veto,.load-high),
 html[data-asb-glass="1"] .smart-banner-value .load-high { color:var(--perf) !important; }
 
+/* Every monitored value uses the same evidence vocabulary in all four themes.
+ * Unknown and warm-up readings intentionally remain neutral. */
+html .smart-banner-value.metric-good, html .live-cell-value.metric-good,
+html[data-asb-glass="1"] .smart-banner-value.metric-good,
+html[data-asb-glass="1"] .live-cell-value.metric-good { color:var(--bat) !important; }
+html .smart-banner-value.metric-warm, html .live-cell-value.metric-warm,
+html[data-asb-glass="1"] .smart-banner-value.metric-warm,
+html[data-asb-glass="1"] .live-cell-value.metric-warm { color:var(--bal) !important; }
+html .smart-banner-value.metric-bad, html .live-cell-value.metric-bad,
+html[data-asb-glass="1"] .smart-banner-value.metric-bad,
+html[data-asb-glass="1"] .live-cell-value.metric-bad { color:var(--perf) !important; }
+html .smart-banner-value.metric-neutral, html .live-cell-value.metric-neutral,
+html[data-asb-glass="1"] .smart-banner-value.metric-neutral,
+html[data-asb-glass="1"] .live-cell-value.metric-neutral { color:var(--text-tertiary) !important; }
+
 /* Category identity remains visible through the glass: a tinted translucent body and edge,
  * a stronger tonal icon pill, and the existing category progress hue. Titles and descriptions
  * stay neutral for readability; blur, geometry and the six-category layout are unchanged. */
@@ -3969,7 +3995,7 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
     <div class="device-line" id="deviceLine">OnePlus Device · Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="hdr-cap hdr-info">
-      <div class="badge badge-a" id="socBadge">DEVICE</div>
+      <button class="badge badge-a" id="socBadge" type="button" onclick="openDevicePage()" aria-label="Open device diagnostics" title="Device diagnostics">DEVICE</button>
       <div class="badge badge-a" id="verBadge">V65</div>
       </div>
       <div class="theme-toggle" role="group" data-theme-toggle="verBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button><button class="theme-choice" type="button" data-theme-choice="glass" onclick="asbSetTheme('glass')" aria-label="Liquid Glass theme"><span data-tech-icon="theme_glass"></span></button></div>
@@ -4129,7 +4155,7 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
     <div class="device-line" id="liveDeviceLine">OnePlus Device · Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="hdr-cap hdr-info">
-      <div class="badge badge-a" id="liveSocBadge">DEVICE</div>
+      <button class="badge badge-a" id="liveSocBadge" type="button" onclick="openDevicePage()" aria-label="Open device diagnostics" title="Device diagnostics">DEVICE</button>
       <div class="badge badge-a" id="liveVerBadge">V65</div>
       </div>
       <div class="theme-toggle" role="group" data-theme-toggle="liveVerBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button><button class="theme-choice" type="button" data-theme-choice="glass" onclick="asbSetTheme('glass')" aria-label="Liquid Glass theme"><span data-tech-icon="theme_glass"></span></button></div>
@@ -4338,7 +4364,7 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
     <div class="device-line" id="cfgDeviceLine">OnePlus Device &middot; Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="hdr-cap hdr-info">
-      <div class="badge badge-a" id="cfgSocBadge">DEVICE</div>
+      <button class="badge badge-a" id="cfgSocBadge" type="button" onclick="openDevicePage()" aria-label="Open device diagnostics" title="Device diagnostics">DEVICE</button>
       <div class="badge badge-a" id="cfgVerBadge">V65</div>
       </div>
       <div class="theme-toggle" role="group" data-theme-toggle="cfgVerBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button><button class="theme-choice" type="button" data-theme-choice="glass" onclick="asbSetTheme('glass')" aria-label="Liquid Glass theme"><span data-tech-icon="theme_glass"></span></button></div>
@@ -4463,7 +4489,7 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
     <div class="device-line" id="rpDeviceLine">OnePlus Device &middot; Qualcomm Snapdragon</div>
     <div class="badges">
       <div class="hdr-cap hdr-info">
-      <div class="badge badge-a" id="rpSocBadge">DEVICE</div>
+      <button class="badge badge-a" id="rpSocBadge" type="button" onclick="openDevicePage()" aria-label="Open device diagnostics" title="Device diagnostics">DEVICE</button>
       <div class="badge badge-a" id="rpVerBadge">V65</div>
       </div>
       <div class="theme-toggle" role="group" data-theme-toggle="rpVerBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button><button class="theme-choice" type="button" data-theme-choice="glass" onclick="asbSetTheme('glass')" aria-label="Liquid Glass theme"><span data-tech-icon="theme_glass"></span></button></div>
@@ -4526,6 +4552,55 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
 
   <div class="lgr-body" id="reportBody"></div>
 
+  </div>
+  <div class="footer"></div>
+</div>
+
+<!-- Read-only device / firmware / kernel diagnostics (fix230). Opened from every SoC
+     capsule. The shell collector runs only on entrance or an explicit Refresh tap. -->
+<div class="page live-page report-page device-page" id="devicePage" aria-hidden="true">
+  <div class="live-inner">
+    <div class="header">
+      <div class="logo-c">
+        <div class="logo-glow"></div>
+        <div class="logo-ring"></div>
+        <div class="logo-inner"><span class="logo-glyph">🛸</span></div>
+      </div>
+      <div class="app-name">AutoSystemBoost</div>
+      <div class="device-line" id="devDeviceLine">OnePlus Device &middot; Qualcomm Snapdragon</div>
+      <div class="badges">
+        <div class="hdr-cap hdr-info">
+          <button class="badge badge-a" id="devSocBadge" type="button" onclick="openDevicePage()" aria-label="Open device diagnostics" title="Device diagnostics">DEVICE</button>
+          <div class="badge badge-a" id="devVerBadge">V65</div>
+        </div>
+        <div class="theme-toggle" role="group" data-theme-toggle="devVerBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button><button class="theme-choice" type="button" data-theme-choice="glass" onclick="asbSetTheme('glass')" aria-label="Liquid Glass theme"><span data-tech-icon="theme_glass"></span></button></div>
+      </div>
+      <div class="status-row">
+        <div class="dot"></div>
+        <span class="status-label" data-i18n="hdr_profile">Profile:&nbsp;</span>
+        <span class="status-val" id="devCurProfile">balanced</span>
+        <button class="live-chip" id="devBackChip" type="button" onclick="closeDevicePage()" aria-label="Back">
+          <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+          <span data-i18n="nav_back">Back</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-line"></div>
+      <div class="sec-label" data-i18n="dev_title">Device diagnostics</div>
+      <div class="sec-line"></div>
+    </div>
+    <div class="rpt-meta-row">
+      <span class="lgr-status" id="deviceStatus" role="status" aria-live="polite"></span>
+      <div class="rpt-actions">
+        <button class="live-chip rpt-refresh" id="devRefresh" type="button" onclick="asbDeviceInfoLoad()">
+          <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 6.3"></path><path d="M20 5v6h-6"></path></svg>
+          <span data-i18n="dev_refresh">Refresh</span>
+        </button>
+      </div>
+    </div>
+    <div class="lgr-body" id="deviceBody"></div>
   </div>
   <div class="footer"></div>
 </div>
@@ -4614,8 +4689,11 @@ const TECH_ICON_PATHS = {
          + '<path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"></path>'
          + '<path d="M9.5 12.5l1.8 1.8 3.4-3.6"></path>',
   /* Completed ASB vector system: centred silhouettes, 4–20px optical frame and one coherent rounded-line language. */
-  smart: '<path d="M12 4.2l1.8 4.5 4.5 1.8-4.5 1.8L12 16.8l-1.8-4.5-4.5-1.8 4.5-1.8z"/><path d="M18.6 15.2a7.4 7.4 0 0 1-13 .8M5.4 8.8a7.4 7.4 0 0 1 13-.8"/>',
-  performance: '<path d="M12 3.2c.9 3 2.4 4.7 3.9 6.5a6.4 6.4 0 1 1-11.8.2c.1-1.8.8-3.2 1.8-4.6.4 1.1 1 1.9 1.9 2.4.8-1.6 2.6-3 4.2-4.5z"/><path d="M10.2 17.5a2.6 2.6 0 0 0 3.9-2.2c0-.9-.5-1.6-1.1-2.2-.3.7-.8 1.2-1.5 1.5-.2-.9-.6-1.7-1.3-2.4-.8.9-.9 2-.5 3.2"/>',
+  /* Smart: an adaptive core with four independent sensor inputs. The small neural spark
+     sits on a clean chip plane instead of the old ambiguous star-and-orbits drawing. */
+  smart: '<rect x="5" y="5" width="14" height="14" rx="4"/><path d="M9 2.8v2.2M15 2.8v2.2M9 19v2.2M15 19v2.2M2.8 9H5M2.8 15H5M19 9h2.2M19 15h2.2"/><path d="M12 8.2l1.05 2.75L15.8 12l-2.75 1.05L12 15.8l-1.05-2.75L8.2 12l2.75-1.05z"/>',
+  /* Performance: one confident flame silhouette. No second flame or stray line inside it. */
+  performance: '<path d="M12 2.8c1.1 3.5 2.8 5.2 4.4 7.1 1.3 1.5 2.1 3.1 2.1 5a6.5 6.5 0 0 1-13 0c0-2.3 1-4.2 2.7-6.1.2 1.5.8 2.5 1.8 3.1.5-3.1 1-6 2-9.1z"/>',
   balanced: '<path d="M12 4.5V17M8.5 20h7"/><path d="M12 6.5H4.5M12 6.5h7.5"/><path d="M4.5 6.5 2 12h5z"/><path d="M2 12a2.5 2.5 0 0 0 5 0"/><path d="M19.5 6.5 17 12h5z"/><path d="M17 12a2.5 2.5 0 0 0 5 0"/>',
   battery: '<rect x="2.8" y="8" width="15.5" height="9" rx="2.5"/><path d="M20.8 11.2v2.6"/><path d="M7.2 14.3c.5-2.4 2.1-3.8 4.9-4.2-.3 2.6-1.7 4-4.2 4.2z"/><path d="M7.2 14.3c1-1 2.3-1.7 3.6-1.9"/>',
   battery_cell: '<rect x="2.6" y="8" width="15.8" height="9" rx="2.6"/><path d="M20.9 11.2v2.6"/><path d="M11.6 9.7 9.9 12.7h3l-1.7 3.1"/>',
@@ -4698,7 +4776,8 @@ const TECH_ICON_PATHS = {
   lte_light: '<path d="M3.5 19v-3M7 19v-6M10.5 19v-9"/><path d="M13.5 17a4.5 4.5 0 0 1 9 0"/><path d="M18 17l-2.6-2.2"/><circle cx="18" cy="17" r=".9" fill="currentColor" stroke="none"/>',
   cellular_controls: '<rect x="6.5" y="3" width="11" height="18" rx="2.4"/><path d="M6.5 8.5 11.5 3.5"/><path d="M9.7 16.8v-2.4M12 16.8v-4M14.3 16.8v-5.6"/>',
   theme_moon: '<path d="M20 13.6A8.2 8.2 0 1 1 10.4 4a6.7 6.7 0 0 0 9.6 9.6z"/>',
-  theme_glass: '<path d="M12 3.2s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/><path d="M9 14.4a3.2 3.2 0 0 0 3 2.2"/>',
+  /* Liquid Glass: an uncluttered droplet outline, with nothing floating inside it. */
+  theme_glass: '<path d="M12 2.8c1.7 2.3 6.5 7.7 6.5 11.7a6.5 6.5 0 0 1-13 0C5.5 10.5 10.3 5.1 12 2.8z"/>',
   quiet_moon: '<path d="M19.8 12.6A8 8 0 1 1 11 3.5a6.6 6.6 0 0 0 8.8 9.1z"/><path d="M16.5 16.5l4 4M20.5 16.5l-4 4"/>',
   sun: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.8v2.2M12 19v2.2M2.8 12h2.2M19 12h2.2M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6M6.8 17.2l-1.6 1.6"/>',
   /* Wi-Fi arcs with the outermost one broken, and an arrow handing off to a cell mast:
@@ -5178,13 +5257,17 @@ async function loadDeviceInfo() {
     /* Every page header at once (fix168). Monitor and Settings copied Home's line only from
      * the governor's poll, so on Stock - no governor - they kept the "OnePlus Device" and
      * "DEVICE" placeholders. */
-    ['deviceLine', 'liveDeviceLine', 'cfgDeviceLine'].forEach(function (id) {
+    ['deviceLine', 'liveDeviceLine', 'cfgDeviceLine', 'rpDeviceLine', 'devDeviceLine'].forEach(function (id) {
       const el = document.getElementById(id);
       if (el) el.textContent = model + ' / ' + soc;
     });
-    ['socBadge', 'liveSocBadge', 'cfgSocBadge'].forEach(function (id) {
+    ['socBadge', 'liveSocBadge', 'cfgSocBadge', 'rpSocBadge', 'devSocBadge'].forEach(function (id) {
       const el = document.getElementById(id);
-      if (el) el.textContent = chip;
+      if (el) {
+        el.textContent = chip;
+        el.setAttribute('aria-label', T('dev_open', 'Open device diagnostics') + ': ' + chip);
+        el.title = T('dev_title', 'Device diagnostics');
+      }
     });
   } catch(e) {}
 }
@@ -5509,6 +5592,8 @@ let _liveOpen = false;
 /* Declared up here with the other page flags, not next to the report page: navUiDepth()
  * reads it and lives earlier in the file, and a let read before its declaration throws. */
 let _rpOpen = false;
+let _deviceOpen = false;
+let _deviceLoadSeq = 0;
 
 function openLivePage() {
   uiSound('nav');
@@ -5586,6 +5671,8 @@ function navUiDepth() {
    * a history entry like the others, so the back gesture closes the report instead of
    * leaving the WebUI. */
   if (_rpOpen) d++;
+  /* Device diagnostics is the top page and owns its own Back/history level. */
+  if (_deviceOpen) d++;
   return d + navOverlaysOpen().length;
 }
 function navSync() {
@@ -5609,6 +5696,8 @@ function navSyncSoon() {
 function navBackAction() {
   const o = navOverlaysOpen();
   if (o.length) { o[0].close(); return; }
+  /* Device diagnostics may sit above Report, Config or Monitor; close it first. */
+  if (_deviceOpen) { uiSound('nav'); closeDevicePage(); return; }
   /* The report sits above the page it was opened from; back returns to that page. */
   if (_rpOpen) { uiSound('nav'); closeReportPage(); return; }
   if (_cfgOpen && _cfgGroup) { cfgBack(); return; }
@@ -5632,7 +5721,7 @@ function lvSlotHeat(tx10, coolx10, warmx10) {
     ? Math.round(coolx10 / 10) + '\u2013' + Math.round(warmx10 / 10) + '\u00b0C' : '\u2014';
   const tip = T('lv_heat_tip', 'Typical CPU peak in this slot: %s; this phone\u2019s norm: %s')
     .replace('%s', t + '\u00b0C').replace('%s', band);
-  return { text: T(key, def), tip: tip, warm: warm };
+  return { text: T(key, def), tip: tip, warm: warm, state: def };
 }
 /* The section title above the card names it (fix162): Smart's card or the battery-and-system
  * card every other profile shows. */
@@ -6307,6 +6396,7 @@ window.addEventListener('popstate', function (e) {
   } catch (e) {}
 })();
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && _deviceOpen) { closeDevicePage(); return; }
   if (e.key === 'Escape' && _rpOpen) { closeReportPage(); return; }
   if (e.key === 'Escape' && _liveOpen) closeLivePage();
   if (e.key === 'Escape' && _cfgOpen) closeConfigPage(true);
@@ -6698,15 +6788,15 @@ const CFG_GROUP_OF = {
 };
 function cfgGroupOf(key){ return CFG_GROUP_OF[key] || 'ui'; }
 
-/* Audio stays one top-level group. The frequently tuned ASB DSP chain comes first, with
- * Loudness immediately reachable; playback/Bluetooth follows and the hearing-safety decision
- * remains visibly separate. This changes presentation order only, never setting ownership. */
+/* Audio stays one top-level group. Output routing is the first DSP decision: it defines
+ * where the whole chain runs before the user adjusts gain or tone. Playback/Bluetooth follows
+ * and hearing safety remains separate. Presentation order only; setting ownership is unchanged. */
 const CFG_GROUP_SECTIONS = {
   audio: [
     { id:'dsp', icon:'dsp', titleKey:'cfg_audio_section_dsp',
       title:'ASB DSP Engine', hintKey:'cfg_audio_section_dsp_hint',
       hint:'Optional gain, bass and dynamics processing on the outputs you select.',
-      keys:['dsp_loudness','dsp_outputs','dsp_bass','dsp_voice','dsp_width','dsp_compressor'] },
+      keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_compressor'] },
     { id:'playback', icon:'headphones', titleKey:'cfg_audio_section_playback',
       title:'Playback & Bluetooth', hintKey:'cfg_audio_section_playback_hint',
       hint:'Choose the audio path and Bluetooth behaviour.',
@@ -8185,7 +8275,9 @@ function cfgRenderMatches(list) {
  * Monitor until settings was reopened. */
 function asbTabbarVisibility() {
   const inCategory = (typeof _cfgGroup !== 'undefined' && _cfgGroup) &&
-                     document.body.classList.contains('config-active');
+                     document.body.classList.contains('config-active') &&
+                     !(typeof _deviceOpen !== 'undefined' && _deviceOpen) &&
+                     !(typeof _rpOpen !== 'undefined' && _rpOpen);
   const bar = document.querySelector('.asb-tabbar');
   if (bar) bar.style.display = inCategory ? 'none' : '';
   document.documentElement.style.setProperty('--tabbar-space', inCategory ? '16px' : '82px');
@@ -10507,6 +10599,192 @@ function closeReportPage() {
   navSyncSoon();
   requestAnimationFrame(asbFitPages);
 }
+/* Device diagnostics (fix230). The TSV collector is read-only and runs on demand only.
+ * Every section, key and value is inserted with textContent: kernel/build data is never HTML. */
+const DEVICE_SECTION_ORDER = [
+  ['firmware', 'dev_sec_firmware', 'Firmware and ROM'],
+  ['soc', 'dev_sec_soc', 'Device and SoC'],
+  ['kernel', 'dev_sec_kernel', 'Kernel build'],
+  ['susfs', 'dev_sec_susfs', 'SuSFS interface'],
+  ['kernel_external', 'dev_sec_kernel_external', 'External kernel / UV evidence'],
+  ['kernel_config', 'dev_sec_kernel_config', 'Kernel configuration'],
+  ['kernel_features', 'dev_sec_kernel_features', 'Custom kernel features'],
+  ['kernel_runtime', 'dev_sec_kernel_runtime', 'Live kernel facilities'],
+  ['cpu_policy', 'dev_sec_cpu_policy', 'CPU frequency policies'],
+  ['gpu', 'dev_sec_gpu', 'GPU and devfreq'],
+  ['memory', 'dev_sec_memory', 'Memory'],
+  ['battery', 'dev_sec_battery', 'Battery'],
+  ['system', 'dev_sec_system', 'System'],
+  ['asb', 'dev_sec_asb', 'ASB runtime'],
+  ['asb_caps', 'dev_sec_asb_caps', 'ASB device capabilities'],
+  ['meta', 'dev_sec_meta', 'Collection metadata']
+];
+function parseDeviceInfo(txt) {
+  const d = { sections: Object.create(null), count: 0, malformed: 0 };
+  String(txt || '').split(/\r?\n/).forEach(function (line) {
+    if (!line) return;
+    const p = line.split('\t');
+    if (p.length < 4 || p[0] !== 'D' || !p[1] || !p[2]) { d.malformed++; return; }
+    const sec = p[1], key = p[2], val = p.slice(3).join('\t');
+    if (!d.sections[sec]) d.sections[sec] = Object.create(null);
+    d.sections[sec][key] = val;
+    d.count++;
+  });
+  return d;
+}
+function deviceVal(d, sec, key) {
+  const s = d && d.sections && d.sections[sec];
+  const v = s && s[key];
+  return (v == null || v === '') ? '—' : String(v);
+}
+function deviceFallbackLabel(key) {
+  return String(key || '').replace(/^CONFIG_/, 'CONFIG ').replace(/_/g, ' ')
+    .replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+}
+function deviceLabel(sec, key) {
+  return T('dev_' + sec + '_' + key, deviceFallbackLabel(key));
+}
+function deviceHero(label, value, sub) {
+  const el = document.createElement('div');
+  el.className = 'lgr-hero';
+  const a = document.createElement('div'); a.className = 'lgr-hero-lbl'; a.textContent = label;
+  const b = document.createElement('div'); b.className = 'lgr-hero-val'; b.textContent = value;
+  el.appendChild(a); el.appendChild(b);
+  if (sub) { const c = document.createElement('div'); c.className = 'lgr-hero-sub'; c.textContent = sub; el.appendChild(c); }
+  return el;
+}
+function deviceValueClass(sec, key, value) {
+  const v = String(value || '').toLowerCase();
+  if (key === 'uname_consistency') return v === 'mismatch' ? ' dev-warn' : (v === 'match' ? ' dev-good' : '');
+  if ((sec === 'susfs' && key === 'interface') || (sec === 'kernel_config' && key === 'available'))
+    return (v === 'available' || v === 'yes') ? ' dev-good' : '';
+  if (sec === 'kernel_external' && key === 'status' && /conflict|error|unsafe/.test(v)) return ' dev-bad';
+  return '';
+}
+function deviceDisplayValue(sec, key, value) {
+  if ((sec === 'meta' && key === 'generated_epoch' || sec === 'firmware' && key === 'build_date') && /^\d{9,}$/.test(value)) {
+    const dt = new Date(parseInt(value, 10) * 1000);
+    if (!isNaN(dt.getTime())) return dt.toLocaleString(ASB_LANG || undefined) + ' (' + value + ')';
+  }
+  return value;
+}
+function deviceInfoRender(d) {
+  const body = _el('deviceBody');
+  if (!body) return 0;
+  body.textContent = '';
+  const note = logReportNote(T('dev_readonly_note', 'Read-only snapshot. ASB reads firmware, procfs, sysfs and its own runtime state; it does not change kernel, SuSFS, CPU, GPU or network settings.'));
+  note.classList.add('dev-evidence');
+  body.appendChild(note);
+
+  const model = deviceVal(d, 'firmware', 'market_name') !== '—' ? deviceVal(d, 'firmware', 'market_name') : deviceVal(d, 'firmware', 'model');
+  const soc = ['soc_model', 'chipname', 'platform', 'hardware'].map(function (k) { return deviceVal(d, 'soc', k); }).filter(function (v) { return v !== '—'; })[0] || '—';
+  let fw = deviceVal(d, 'firmware', 'android');
+  const rom = deviceVal(d, 'firmware', 'oplus_rom');
+  if (rom !== '—') fw += (fw !== '—' ? ' · ' : '') + rom;
+  const heroWrap = document.createElement('div'); heroWrap.className = 'lgr-heros';
+  heroWrap.appendChild(deviceHero(T('dev_hero_device', 'Device'), model, deviceVal(d, 'firmware', 'device')));
+  heroWrap.appendChild(deviceHero(T('dev_hero_soc', 'SoC'), soc, deviceVal(d, 'soc', 'cpu_online') !== '—' ? T('dev_cpu_online_short', 'CPUs online') + ': ' + deviceVal(d, 'soc', 'cpu_online') : ''));
+  heroWrap.appendChild(deviceHero(T('dev_hero_firmware', 'Firmware'), fw, deviceVal(d, 'firmware', 'build_display')));
+  heroWrap.appendChild(deviceHero(T('dev_hero_kernel', 'Kernel'), deviceVal(d, 'kernel', 'release'), deviceVal(d, 'kernel', 'uname_consistency') !== '—' ? deviceLabel('kernel', 'uname_consistency') + ': ' + deviceVal(d, 'kernel', 'uname_consistency') : ''));
+  body.appendChild(heroWrap);
+
+  const consistency = deviceVal(d, 'kernel', 'uname_consistency');
+  if (consistency === 'mismatch') {
+    const n = logReportNote(T('dev_uname_mismatch_note', 'The release in /proc/version differs from uname -r. This is mismatch evidence only; it does not prove a particular kernel or spoofing method.'), true);
+    n.classList.add('dev-evidence'); body.appendChild(n);
+  }
+
+  let shown = 0;
+  DEVICE_SECTION_ORDER.forEach(function (spec) {
+    const sec = d.sections[spec[0]];
+    if (!sec) return;
+    const keys = Object.keys(sec);
+    if (!keys.length) return;
+    const card = logReportSec(T(spec[1], spec[2]));
+    keys.forEach(function (key) {
+      const raw = String(sec[key]);
+      const value = deviceDisplayValue(spec[0], key, raw);
+      const row = logReportRow(deviceLabel(spec[0], key), value, false);
+      const v = row.querySelector('.lgr-v');
+      if (v) {
+        if (raw.length > 48) v.classList.add('dev-long');
+        const cls = deviceValueClass(spec[0], key, raw);
+        if (cls) v.classList.add(cls.trim());
+      }
+      card.appendChild(row); shown++;
+    });
+    body.appendChild(card);
+  });
+  requestAnimationFrame(asbFitPages);
+  return shown;
+}
+function openDevicePage() {
+  if (_deviceOpen) return;
+  uiSound('nav');
+  const p = _el('devicePage');
+  if (!p) return;
+  try {
+    _el('devDeviceLine').textContent = _el('deviceLine').textContent;
+    _el('devSocBadge').textContent = _el('socBadge').textContent;
+    _el('devVerBadge').textContent = _el('verBadge').textContent;
+    _el('devCurProfile').textContent = _el('curProfile').textContent;
+  } catch (e) {}
+  _deviceOpen = true;
+  p.setAttribute('aria-hidden', 'false');
+  p.scrollTop = 0;
+  document.body.classList.add('live-active', 'device-active');
+  asbTabbarVisibility();
+  requestAnimationFrame(function () {
+    requestAnimationFrame(function () { if (_deviceOpen) p.classList.add('open'); });
+  });
+  asbDeviceInfoLoad();
+  setTimeout(asbNavSync, 60);
+  requestAnimationFrame(asbFitPages);
+}
+function closeDevicePage() {
+  const p = _el('devicePage');
+  if (!p) return;
+  _deviceOpen = false;
+  _deviceLoadSeq++;
+  p.classList.remove('open');
+  p.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('device-active');
+  if (!document.body.classList.contains('report-active') &&
+      !document.body.classList.contains('config-active') &&
+      !(typeof _liveOpen !== 'undefined' && _liveOpen)) {
+    document.body.classList.remove('live-active');
+  }
+  asbTabbarVisibility();
+  navSyncSoon();
+  requestAnimationFrame(asbFitPages);
+}
+async function asbDeviceInfoLoad() {
+  const body = _el('deviceBody'), status = _el('deviceStatus'), btn = _el('devRefresh');
+  if (!body || !status || !_deviceOpen) return;
+  const seq = ++_deviceLoadSeq;
+  if (btn) btn.disabled = true;
+  status.textContent = T('dev_loading_status', 'Collecting read-only data…');
+  body.textContent = '';
+  body.appendChild(logReportNote(T('dev_loading', 'Reading device, firmware and kernel evidence…')));
+  let r = null;
+  try { r = await run('sh ' + MD + '/tools/asb_device_info.sh 2>/dev/null'); }
+  catch (e) { r = null; }
+  if (!_deviceOpen || seq !== _deviceLoadSeq) return;
+  const d = parseDeviceInfo(r ? runText(r) : '');
+  body.textContent = '';
+  if (!r || r.errno !== 0 || !d.count) {
+    const empty = logReportSec(T('dev_error_title', 'Device data unavailable'));
+    empty.classList.add('lgr-empty');
+    empty.appendChild(logReportNote(T('dev_error_body', 'The read-only collector returned no usable data. Nothing was changed. Tap Refresh to try again.'), true));
+    body.appendChild(empty);
+    status.textContent = T('dev_error_status', 'Collection failed');
+  } else {
+    const shown = deviceInfoRender(d);
+    status.textContent = T('dev_facts_status', '%s facts').replace('%s', String(shown));
+  }
+  if (btn) btn.disabled = false;
+  requestAnimationFrame(asbFitPages);
+}
 async function asbLogReportLoad() {
   const body = _el('reportBody');
   const status = _el('reportStatus');
@@ -11375,7 +11653,8 @@ function asbFitPages() {
      * Coordinates: rects come back zoomed (--asb-ui-scale), scroll sizes do not. */
     const naturalOverflow = function () {
       let el = null;
-      if (document.body.classList.contains('report-active')) el = _el('reportPage');
+      if (document.body.classList.contains('device-active')) el = _el('devicePage');
+      else if (document.body.classList.contains('report-active')) el = _el('reportPage');
       else if (document.body.classList.contains('config-active')) el = _el('configPage');
       else if (document.body.classList.contains('live-active')) el = _el('livePage');
       else el = document.querySelector('.page:not(.live-page)');
@@ -11408,7 +11687,8 @@ function asbFitPages() {
      * scrolling regardless (the owner saw the report's header squeezed flat on exactly
      * such a page). Those are the scroll surfaces - the chrome stays exactly as drawn,
      * and a tier carried over from another page comes off. */
-    const fittable = !document.body.classList.contains('report-active') &&
+    const fittable = !document.body.classList.contains('device-active') &&
+      !document.body.classList.contains('report-active') &&
       !(document.body.classList.contains('config-active') && _cfgGroup);
     if (!fittable) { tier = 0; applyTier(0); }
 
@@ -11535,6 +11815,7 @@ window.addEventListener('orientationchange', function () { requestAnimationFrame
 window.addEventListener('load', function () { requestAnimationFrame(asbFitPages); setTimeout(function () { homeMeterRefresh(true); }, 1800); asbDeviceFont(); });
 
 function asbNavCurrent() {
+  if (document.body.classList.contains('device-active')) return 'device';
   if (document.body.classList.contains('report-active')) return 'report';
   if (document.body.classList.contains('config-active')) return 'config';
   if (document.body.classList.contains('live-active'))   return 'live';
@@ -11620,6 +11901,10 @@ window.addEventListener('resize', function () { asbHeaderFitSoon(); });
 
 function asbNavGo(target) {
   let at = asbNavCurrent();
+  if (at === 'device') {
+    closeDevicePage();
+    at = asbNavCurrent();
+  }
   if (at === 'report') {
     /* The report is a read-only drill-in from the Logs menu, not a tab: a tab tap closes
        it first, then the usual transition runs from whatever page is underneath. */
@@ -12149,6 +12434,67 @@ function lvLoadShare(raw, cpus) {
   const pct = Math.round(v * 100 / n);
   return { pct: pct, n: n, cls: pct >= 80 ? 'load-high' : (pct >= 50 ? 'load-mid' : 'load-low') };
 }
+/* Monitor readings share one colour vocabulary, but not one threshold table. Each helper
+ * judges only its own unit; missing, malformed and warm-up evidence stays neutral. */
+const METRIC_CLASSES = ['metric-good', 'metric-warm', 'metric-bad', 'metric-neutral'];
+function asbMetricPaint(id, state) {
+  const el = _el(id); if (!el) return;
+  const kept = String(el.className || '').split(/\s+/).filter(c => c && !METRIC_CLASSES.includes(c));
+  kept.push(METRIC_CLASSES.includes(state) ? state : 'metric-neutral');
+  el.className = kept.join(' ');
+}
+function asbLoadMetric(v) {
+  if (v === null || v === undefined || v === '') return 'metric-neutral';
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? (n < 35 ? 'metric-good' : n < 70 ? 'metric-warm' : 'metric-bad') : 'metric-neutral';
+}
+function asbThermalMetric(v, kind) {
+  const n = Number(v); if (!Number.isFinite(n) || n <= 0) return 'metric-neutral';
+  const mid = kind === 'body' ? 32 : kind === 'board' ? 38 : 45;
+  const high = kind === 'body' ? 38 : kind === 'board' ? 45 : 65;
+  return n < mid ? 'metric-good' : n < high ? 'metric-warm' : 'metric-bad';
+}
+function asbRamMetric(av, total) {
+  const a = Number(av), t = Number(total);
+  if (!Number.isFinite(a) || !Number.isFinite(t) || a < 0 || t <= 0) return 'metric-neutral';
+  const pct = a / t * 100; return pct >= 35 ? 'metric-good' : pct >= 18 ? 'metric-warm' : 'metric-bad';
+}
+function asbDrainMetric(ma, cap) {
+  const n = Number(ma), c = Number(cap); if (!Number.isFinite(n)) return 'metric-neutral';
+  if (n < 0) return 'metric-good'; if (n === 0) return 'metric-neutral';
+  if (!Number.isFinite(c) || c <= 0) return 'metric-neutral';
+  const pctph = n / c * 100; return pctph <= 4 ? 'metric-good' : pctph <= 12 ? 'metric-warm' : 'metric-bad';
+}
+function asbClockMetric(cur, max) {
+  const n = Number(cur), m = Number(max);
+  if (!Number.isFinite(n) || !Number.isFinite(m) || n < 0 || m <= 0) return 'metric-neutral';
+  const pct = n / m * 100; return pct < 45 ? 'metric-good' : pct < 80 ? 'metric-warm' : 'metric-bad';
+}
+function asbHeadroomMetric(v) {
+  if (v === null || v === undefined || v === '') return 'metric-neutral';
+  const n = Number(v); if (!Number.isFinite(n) || n < 0) return 'metric-neutral';
+  return n >= 20 ? 'metric-good' : n >= 10 ? 'metric-warm' : 'metric-bad';
+}
+function asbConfidenceMetric(v) {
+  const s = String(v || '').toLowerCase();
+  return s === 'high' ? 'metric-good' : s === 'med' ? 'metric-warm' : s === 'low' ? 'metric-bad' : 'metric-neutral';
+}
+function asbBasisMetric(v) {
+  const s = String(v || '').toLowerCase();
+  if (s.includes('veto')) return 'metric-bad';
+  if (s.includes('fallback')) return 'metric-warm';
+  if (s.includes('stable') || s === 'good') return 'metric-good';
+  return 'metric-neutral';
+}
+function asbModemMetric(v) {
+  const s = String(v || '').toLowerCase();
+  if (s === 'save' || s === 'night') return 'metric-good';
+  if (s === 'fast') return 'metric-bad';
+  return 'metric-neutral';
+}
+function asbSlotMetric(v) {
+  return v === 'warm' ? 'metric-warm' : v === 'typical' || v === 'cool' ? 'metric-good' : 'metric-neutral';
+}
 function paintStockLive(stockKv = null) {
   /* Governor-owned cells stay untouched outside Stock.
    *
@@ -12216,9 +12562,12 @@ function paintStockLive(stockKv = null) {
   if (volt > 10000) volt /= 1000000;
   const batTRaw = n(kv['battery.temp']);
   const batT = batTRaw > 100 ? Math.round(batTRaw / 10) : batTRaw;
-  const gpu = n(kv['gpu.gpu_busy_percentage'] || kv['gpu.gpubusy']);
+  const gpuRaw = kv['gpu.gpu_busy_percentage'] || kv['gpu.gpubusy'] || '';
+  const gpuKnown = /\d/.test(String(gpuRaw));
+  const gpu = n(gpuRaw);
   const ramKb = n(kv.MemAvailable);
-  const ramGb = ramKb > 0 ? (ramKb / 1048576).toFixed(1) + ' GB' : '—';
+  const ramKnown = ramKb > 0;
+  const ramGb = ramKnown ? (ramKb / 1048576).toFixed(1) + ' GB' : '—';
   const cpuKHz = Object.entries(kv).filter(([k]) => /^cpu\.policy\d+\.scaling_cur_freq$/.test(k))
     .map(([, v]) => n(v)).filter(v => v > 0);
   const cpuClock = cpuKHz.length ? Math.round(Math.max(...cpuKHz) / 1000) + ' MHz' : '—';
@@ -12255,7 +12604,7 @@ function paintStockLive(stockKv = null) {
     });
     set('liveState', ceilPct ? ceilPct + '%' : '—');
     cls('liveState', ceilPct && ceilPct < 100 ? 'cap-raised' : '');
-    set('liveGpu', /\d/.test(String(kv['gpu.gpu_busy_percentage'] || kv['gpu.gpubusy'] || '')) ? gpu + '%' : '—');
+    set('liveGpu', gpuKnown ? gpu + '%' : '—');
     const gclk = n(kv['gpu.gpuclk']);
     set('liveHeadroom', gclk > 0 ? Math.round(gclk > 100000 ? gclk / 1e6 : gclk) + ' MHz' : '—');
     set('liveCapSrc', batT > 0 ? batT + '°C' : '—');
@@ -12265,6 +12614,13 @@ function paintStockLive(stockKv = null) {
     cls('liveClamp', '');
     set('liveLearner', T('stock_learn_paused', 'paused'), off);
     cls('liveLearner', '');
+    asbMetricPaint('liveCpu', asbThermalMetric(cpuT, 'cpu'));
+    asbMetricPaint('liveSkin', asbThermalMetric(skinT, 'body'));
+    asbMetricPaint('liveSurface', asbThermalMetric(boardT || hotT, boardT ? 'board' : 'cpu'));
+    asbMetricPaint('liveGpu', gpuKnown ? asbLoadMetric(gpu) : 'metric-neutral');
+    /* This cell is GPU clock in Stock, not governor headroom. Without a maximum frequency
+     * there is no defensible ratio, so it deliberately stays neutral. */
+    asbMetricPaint('liveHeadroom', 'metric-neutral');
   }
 
   // Read-only Stock telemetry is deliberately separate from Smart: no bucket, confidence,
@@ -12349,6 +12705,22 @@ function paintStockLive(stockKv = null) {
   bset('bnStockRam', ramGb, memTotKb > 0 && ramKb > 0 ? ramGb + ' / ' + (memTotKb / 1048576).toFixed(1) + ' GB' : '');
   bset('bnStockCpuClock', cpuClock, Object.entries(kv).filter(([k]) => /^cpu\.policy\d+\.scaling_cur_freq$/.test(k))
     .sort().map(([k, v]) => k.split('.')[1] + ': ' + (n(v) / 1e6).toFixed(2) + ' GHz').join('\n'));
+  asbMetricPaint('bnStockDrain', asbDrainMetric(ma, chargeFullMah));
+  asbMetricPaint('bnStockRam', ramKnown ? asbRamMetric(ramKb, memTotKb) : 'metric-neutral');
+  const clockPolicy = {};
+  Object.entries(kv).forEach(([k, v]) => {
+    const m = k.match(/^cpu\.(policy\d+)\.(scaling_cur_freq|scaling_max_freq|cpuinfo_max_freq)$/);
+    if (m) (clockPolicy[m[1]] = clockPolicy[m[1]] || {})[m[2]] = n(v);
+  });
+  const clockRows = Object.values(clockPolicy);
+  const clockKnown = clockRows.some(p => (p.cpuinfo_max_freq > 0 || p.scaling_max_freq > 0) && p.scaling_cur_freq > 0);
+  const clockPct = Math.max(0, ...clockRows.map(p => {
+    const ceiling = p.cpuinfo_max_freq > 0 ? p.cpuinfo_max_freq : p.scaling_max_freq;
+    return ceiling > 0 && p.scaling_cur_freq >= 0 ? p.scaling_cur_freq / ceiling * 100 : 0;
+  }));
+  asbMetricPaint('bnStockCpuClock', clockKnown ? asbClockMetric(clockPct, 100) : 'metric-neutral');
+  const lpmKnown = Object.prototype.hasOwnProperty.call(kv, 'settings.global.mobile_data_always_on') && String(kv['settings.global.mobile_data_always_on'] || '') !== '';
+  asbMetricPaint('bnStockLpm', lpmKnown ? (lpmHeld ? 'metric-warm' : 'metric-good') : 'metric-neutral');
   bset('bnStockLoad', fmtStockLoad(kv.loadavg), T('stock_load_now', '1 min') + ' \u00b7 5 \u00b7 15: ' + (kv.loadavg || '\u2014'));
   {
     const _le = _el('bnStockLoad');
@@ -12703,9 +13075,11 @@ async function pollLive(visible) {
 
     const cpuT = (st && st.temp) || parseInt(kv.thermal || '0', 10);
     _el('liveCpu').textContent = cpuT ? fmtTempC(cpuT) + '°C' : '—';
+    asbMetricPaint('liveCpu', asbThermalMetric(cpuT ? fmtTempC(cpuT) : 0, 'cpu'));
 
     const skinT = (st && st.skin_temp) || 0;
     _el('liveSkin').textContent = skinT ? skinT + '°C' : '—';
+    asbMetricPaint('liveSkin', asbThermalMetric(skinT, 'body'));
 
     const bcap = (st && st.capacity) || parseInt(kv.capacity || '0', 10);
     const bma_raw = (st && st.mA) || parseInt(kv.mA || '0', 10);
@@ -12864,6 +13238,7 @@ async function pollLive(visible) {
         ? String(st.gpu_valid) === '1' : gpu !== null;
       gpuEl.textContent = (gpu === null || !gpuValid) ? '—' : (gpu + '%');
       gpuEl.title = gpuValid ? '' : 'GPU utilisation node is unavailable on this driver; ASB keeps CPU/thermal policy fail-closed.';
+      asbMetricPaint('liveGpu', gpuValid && gpu !== null ? asbLoadMetric(gpu) : 'metric-neutral');
     }
     // Modem LPM. Read straight from /dev/.asb/lpm_mode - the governor owns that file and
     // the action screen already reports it; this puts the same reading on the monitor so
@@ -12878,6 +13253,7 @@ async function pollLive(visible) {
         if (!m) {
           lpmEl.textContent = 'n/a';
           lpmEl.className = 'smart-banner-value';
+          asbMetricPaint('bnLpm', 'metric-neutral');
           lpmEl.title = 'LPM feature off, or the governor has not written a mode yet';
           return;
         }
@@ -12903,8 +13279,9 @@ async function pollLive(visible) {
         }
         lpmEl.textContent = txt;
         lpmEl.className = cls;
+        asbMetricPaint('bnLpm', asbModemMetric(m));
         lpmEl.title = tip;
-      }).catch(function() { lpmEl.textContent = 'n/a'; });
+      }).catch(function() { lpmEl.textContent = 'n/a'; asbMetricPaint('bnLpm', 'metric-neutral'); });
     }
     const hrEl = _el('liveHeadroom');
     if (hrEl) {
@@ -12932,6 +13309,8 @@ async function pollLive(visible) {
         hrEl.textContent = 'n/a';
         hrEl.title = 'headroom source unavailable';
       }
+      const shownHr = hrReal !== null && hrReal >= 0 ? hrReal : (hr !== null && hrValid === 1 ? hr : null);
+      asbMetricPaint('liveHeadroom', asbHeadroomMetric(shownHr));
     }
 
     if (recCount > 0 || recDisabled === 1) {
@@ -12993,6 +13372,7 @@ async function pollLive(visible) {
       if (surfaceEl) {
         const surf = (st && st.surface_hotspot) || 0;
         surfaceEl.textContent = surf > 0 ? surf + '°C' : '—';
+        asbMetricPaint('liveSurface', asbThermalMetric(surf, 'board'));
         /* fix94: surface_hotspot is max(sys-therm surface, board) - the BODY of the phone,
          * not the silicon. Under the "Die · max" label an OP15 showed 39 C next to a CPU
          * at 42 C: a "hottest zone" below the CPU reads as a broken sensor. The Stock path
@@ -13102,6 +13482,7 @@ async function pollLive(visible) {
               + ' \u00b7 ' + dtTxt;
           }
           _el('bnConf').textContent = Math.round(conf / 10) + '%';
+          asbMetricPaint('bnConf', warm ? 'metric-neutral' : conf >= 650 ? 'metric-good' : conf >= 350 ? 'metric-warm' : 'metric-bad');
           _el('bnAlpha').textContent = Math.round(alpha / 10) + '%';
           const appEl = _el('bnApp');
           appEl.textContent = warm ? '\u2026' : T('lv_app_' + appH, appNames[appH] || '?');
@@ -13175,6 +13556,7 @@ async function pollLive(visible) {
               _stEl.textContent = _h.text;
               _stEl.title = _h.tip;
               _stEl.className = 'smart-banner-value' + (_h.warm ? ' heat-warm' : '');
+              asbMetricPaint('bnSlotTemp', warm ? 'metric-neutral' : asbSlotMetric(_h.state));
             }
             lvDrainHome(_el('liveSmartBanner'));
             lvTopSec(true);
@@ -13222,6 +13604,7 @@ async function pollLive(visible) {
             basisEl.textContent = _b.txt;
             basisEl.title = _b.tip;
             basisEl.className = 'smart-banner-value' + _b.cls;
+            asbMetricPaint('bnBasis', warm ? 'metric-neutral' : asbBasisMetric(_b.cls || 'stable'));
             if (_b.short && basisEl.scrollWidth > basisEl.clientWidth + 1) basisEl.textContent = _b.short;
           }
         } else {
