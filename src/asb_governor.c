@@ -3960,7 +3960,8 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     /* The suspend-aware companion to load1: how much of the last tick the CPU was up. */
     fprintf(f, "awake_tick_pct=%d\n", m->cpu.awake_tick_pct);
     fprintf(f, "current_scale_x100=%d\ncurrent_scale_windows=%d\n", g_curscale_x100, g_curscale_n);
-    fprintf(f, "device_bounds_applied=%d\n", g_device_bounds_applied);
+    fprintf(f, "device_bounds_applied=%d\ndevice_bounds_status=%s\ndevice_bounds_reason=%s\n",
+            g_device_bounds_applied, g_device_bounds_status, g_device_bounds_reason);
     fprintf(f, "surface_source=%s\n", g_surface_from_skin ? "skin" :
                (g_thermal_surface_zone >= 0 ? "zone" : (g_thermal_board_zone >= 0 ? "board" : "none")));
     fprintf(f, "vendor_ceiling_ticks=%lu\nvendor_ceiling_used_ticks=%lu\nown_ceiling_ticks=%lu\n",
@@ -7511,7 +7512,8 @@ int main(int argc, char **argv) {
          * (external audit P1). The writer still snaps every value to this device's own
          * frequency table, so nothing invalid reaches sysfs either way. */
         else if (g_asb_cfg.device_bounds_override)
-            asb_log_critical("device_bounds: override=1 but %s gave no usable values - compiled reference rails in force",
+            asb_log_critical("device_bounds: %s/%s for %s - compiled reference rails in force",
+                             g_device_bounds_status, g_device_bounds_reason,
                              ASB_DEVICE_BOUNDS_FILE);
         g_device_bounds_applied = _ovr;
     }

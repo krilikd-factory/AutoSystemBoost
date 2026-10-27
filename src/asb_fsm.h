@@ -204,41 +204,160 @@ static int asb_device_bounds_apply_kv(const char *key, long val) {
     return 0;
 }
 
+static char g_device_bounds_status[16] = "disabled";
+static char g_device_bounds_reason[32] = "off";
+
+static void asb_device_bounds_set_result(const char *status, const char *reason) {
+    snprintf(g_device_bounds_status, sizeof(g_device_bounds_status), "%s", status);
+    snprintf(g_device_bounds_reason, sizeof(g_device_bounds_reason), "%s", reason);
+}
+
+#ifndef ASB_DEVICE_BOUNDS_PROPERTY_GET
+#if defined(__ANDROID__)
+#define ASB_DEVICE_BOUNDS_PROPERTY_GET __system_property_get
+#else
+static int asb_device_bounds_property_unavailable(const char *key, char *value) {
+    (void)key;
+    if (value) value[0] = '\0';
+    return 0;
+}
+#define ASB_DEVICE_BOUNDS_PROPERTY_GET asb_device_bounds_property_unavailable
+#endif
+#endif
+
+static int asb_device_bounds_current_fingerprint(char *out, size_t out_size) {
+    if (!out || out_size < 2) return 0;
+    out[0] = '\0';
+    int n = ASB_DEVICE_BOUNDS_PROPERTY_GET("ro.build.fingerprint", out);
+    out[out_size - 1] = '\0';
+    return n > 0 && out[0] != '\0';
+}
+
+/* Rebuild exactly the signature emitted by asb_synthesize_bounds.sh from live topology. */
+static int asb_device_bounds_current_topology(int *count, char *signature, size_t signature_size) {
+    cpu_topology_discover();
+    int physical = g_cpu_all_count;
+    if (physical < 2 || physical > 4) return 0;
+    int big_slot = physical > 2 ? 2 : 1;
+    int little_id = g_cpu_policy_ids[0];
+    int big_id = g_cpu_policy_ids[big_slot];
+    int mid_id = physical > 2 ? g_cpu_policy_ids[1] : -1;
+    if (little_id < 0 || big_id < 0 || g_cpu_slot_hwmax[0] <= 0 ||
+        g_cpu_slot_hwmax[big_slot] <= 0) return 0;
+    if (physical > 2 && (mid_id < 0 || g_cpu_slot_hwmax[1] <= 0)) return 0;
+    char mid_label[16];
+    if (physical > 2) snprintf(mid_label, sizeof(mid_label), "%d", mid_id);
+    else snprintf(mid_label, sizeof(mid_label), "none");
+    int n = snprintf(signature, signature_size, "%d:%d>%s:%d>%d:%d",
+                     little_id, g_cpu_slot_hwmax[0],
+                     mid_label, physical > 2 ? g_cpu_slot_hwmax[1] : 0,
+                     big_id, g_cpu_slot_hwmax[big_slot]);
+    if (n <= 0 || (size_t)n >= signature_size) return 0;
+    *count = physical;
+    return 1;
+}
+
+static void asb_device_bounds_trim(char *s) {
+    size_t n = strlen(s);
+    while (n > 0 && (s[n - 1] == '\n' || s[n - 1] == '\r' ||
+                     s[n - 1] == ' ' || s[n - 1] == '\t')) s[--n] = '\0';
+}
+
 /*
- * Load + apply the override file.
+ * Validate the complete provenance first, then apply values in a second pass. A stale OTA
+ * file must not leave a partially modified g_profile_bounds behind.
  */
 static int asb_load_device_bounds_override(int enabled,
                                            const asb_profile_bounds_t *defaults) {
-    if (!enabled) return 0;
+    if (!enabled) {
+        asb_device_bounds_set_result("disabled", "off");
+        return 0;
+    }
     FILE *f = fopen(ASB_DEVICE_BOUNDS_FILE, "r");
-    if (!f) return 0;
-    int applied = 0;
+    if (!f) {
+        asb_device_bounds_set_result("skipped", "missing");
+        return 0;
+    }
+    int schema = 0;
     int confidence_high = 0;
-    char line[160];
+    int source_measured = 0;
+    long file_policy_count = 0;
+    char file_fingerprint[128] = {0};
+    char file_signature[96] = {0};
+    char line[256];
     while (fgets(line, sizeof(line), f)) {
-        /* Generated overrides are trusted only with an explicit high-confidence topology.
-         * Accept the fix213 legacy comment as well as the schema-2 KEY=value metadata;
-         * unknown/low confidence keeps the compiled safe defaults. */
-        if (line[0] == '#') {
-            if (strncmp(line, "# confidence=high", 17) == 0) confidence_high = 1;
-            continue;
-        }
-        if (line[0] == '\n') continue;
+        if (line[0] == '#' || line[0] == '\n') continue;
         char *eq = strchr(line, '=');
         if (!eq) continue;
         *eq = '\0';
         char *key = line;
         char *valstr = eq + 1;
-        /* trim trailing whitespace/newline on key */
-        char *ke = key + strlen(key);
-        while (ke > key && (ke[-1] == ' ' || ke[-1] == '\t')) *--ke = '\0';
-        if (strcmp(key, "confidence") == 0) {
-            if (strncmp(valstr, "high", 4) == 0 &&
-                (valstr[4] == '\n' || valstr[4] == '\r' || valstr[4] == '\0'))
-                confidence_high = 1;
-            continue;
-        }
-        if (!confidence_high) continue;
+        asb_device_bounds_trim(key);
+        asb_device_bounds_trim(valstr);
+        if (!strcmp(key, "schema")) schema = atoi(valstr);
+        else if (!strcmp(key, "confidence")) confidence_high = !strcmp(valstr, "high");
+        else if (!strcmp(key, "source")) source_measured = !strcmp(valstr, "measured");
+        else if (!strcmp(key, "policy_count")) file_policy_count = atol(valstr);
+        else if (!strcmp(key, "fingerprint"))
+            snprintf(file_fingerprint, sizeof(file_fingerprint), "%s", valstr);
+        else if (!strcmp(key, "cluster_signature"))
+            snprintf(file_signature, sizeof(file_signature), "%s", valstr);
+    }
+    fclose(f);
+
+    if (schema != 2) {
+        asb_device_bounds_set_result("skipped", "schema");
+        return 0;
+    }
+    if (!confidence_high) {
+        asb_device_bounds_set_result("skipped", "confidence");
+        return 0;
+    }
+    if (!source_measured) {
+        asb_device_bounds_set_result("skipped", "source");
+        return 0;
+    }
+    char current_fingerprint[128];
+    if (!file_fingerprint[0] ||
+        !asb_device_bounds_current_fingerprint(current_fingerprint, sizeof(current_fingerprint)) ||
+        strcmp(file_fingerprint, current_fingerprint) != 0) {
+        asb_device_bounds_set_result("stale", "fingerprint");
+        return 0;
+    }
+    if (file_policy_count < 2 || file_policy_count > 4) {
+        asb_device_bounds_set_result("skipped", "policy_count");
+        return 0;
+    }
+    int current_policy_count = 0;
+    char current_signature[96];
+    if (!asb_device_bounds_current_topology(&current_policy_count, current_signature,
+                                             sizeof(current_signature))) {
+        asb_device_bounds_set_result("skipped", "topology");
+        return 0;
+    }
+    if (file_policy_count != (long)current_policy_count) {
+        asb_device_bounds_set_result("stale", "policy_count");
+        return 0;
+    }
+    if (!file_signature[0] || strcmp(file_signature, current_signature) != 0) {
+        asb_device_bounds_set_result("stale", "cluster_signature");
+        return 0;
+    }
+
+    int applied = 0;
+    f = fopen(ASB_DEVICE_BOUNDS_FILE, "r");
+    if (!f) {
+        asb_device_bounds_set_result("skipped", "missing");
+        return 0;
+    }
+    while (fgets(line, sizeof(line), f)) {
+        if (line[0] == '#' || line[0] == '\n') continue;
+        char *eq = strchr(line, '=');
+        if (!eq) continue;
+        *eq = '\0';
+        char *key = line;
+        char *valstr = eq + 1;
+        asb_device_bounds_trim(key);
         long val = atol(valstr);
         applied += asb_device_bounds_apply_kv(key, val);
     }
@@ -259,6 +378,8 @@ static int asb_load_device_bounds_override(int enabled,
         }
         if (corrupt) g_profile_bounds[p] = defaults[p];
     }
+    if (applied > 0) asb_device_bounds_set_result("applied", "ok");
+    else asb_device_bounds_set_result("skipped", "no_values");
     return applied;
 }
 
