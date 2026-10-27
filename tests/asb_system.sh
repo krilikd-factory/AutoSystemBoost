@@ -4181,7 +4181,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 fail() { echo "FAIL fix192: $*"; exit 1; }
 asb_has_test test_webui_header_capsules.sh || fail "test_webui_header_capsules.sh missing"
 grep -q -- '--cap-wash: linear-gradient(135deg, rgba(0,240,180,0.04), rgba(0,212,255,0.025));' "$ROOT/webroot/index.html" || fail "no shared capsule material"
-[ "$(grep -c 'class="hdr-cap hdr-info"' "$ROOT/webroot/index.html")" -eq 4 ] || fail "not every page has the chip/version capsule"
+[ "$(grep -c 'class="hdr-cap hdr-info"' "$ROOT/webroot/index.html")" -eq 5 ] || fail "not every page has the chip/version capsule"
 grep -q '^function asbHeaderFit(force) {' "$ROOT/webroot/index.html" || fail "the island is never fitted"
 echo "PASS: fix192 contract"
 ) || exit 1
@@ -4866,11 +4866,12 @@ fail() { echo "FAIL fix205: $*"; exit 1; }
 # the header". The report is a long list BY DESIGN and scrolls; its content sections are
 # not tier-styled at all, so the compaction tiers there compressed only the shared header
 # (logo, title, capsules) and bought zero room. The tiers now apply only where their
-# styled content lives (Profiles, Monitor, the Settings hub): the report and an open
+# styled content lives (Profiles, Monitor, the Settings hub): Device, the report and an open
 # tweak category always keep the chrome as drawn and scroll. The runtime behaviour (the
 # report never compacts, a carried-over tier comes off, an open category is exempt, the
 # hub still compacts) is exercised in node by t_webui_fill_pages_runtime.
-grep -qF "const fittable = !document.body.classList.contains('report-active') &&" "$H" || fail "the report page can still take a compaction tier"
+grep -qF "const fittable = !document.body.classList.contains('device-active') &&" "$H" || fail "the Device page can still take a compaction tier"
+grep -qF "!document.body.classList.contains('report-active') &&" "$H" || fail "the report page can still take a compaction tier"
 grep -qF "!(document.body.classList.contains('config-active') && _cfgGroup)" "$H" || fail "an open tweak category can still take a compaction tier"
 grep -qF 'if (fittable && over > need && tier < 2)' "$H" || fail "escalation is not gated on the page having tier-styled content"
 grep -qF 'let reportOpen = false, reportBase = 3000;' "$ROOT/tests/asb_ui.sh" || fail "the fit test lost its report-page mock"
@@ -5738,12 +5739,12 @@ need "$HELPER" '_path_ok()'
 need "$HELPER" '_migrate_legacy_external()'
 need "$HELPER" 'asb_settings_backup.conf'
 
-# Audio remains one top-level category. DSP is its first labelled subsection and Loudness its
+# Audio remains one top-level category. DSP is its first labelled subsection and Outputs its
 # first card, not a second destination or duplicate renderer; locales keep their compact labels.
 need "$UI" "const CFG_GROUP_SECTIONS = {"
 need "$UI" "audio: ["
 need "$UI" "titleKey:'cfg_audio_section_dsp'"
-need "$UI" "keys:['dsp_loudness','dsp_outputs','dsp_bass','dsp_voice','dsp_width','dsp_compressor']"
+need "$UI" "keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_compressor']"
 need "$UI" 'function cfgRenderGroup(list, groupId)'
 need "$UI" 'cfgRenderGroup(list, _cfgGroup);'
 need "$UI" '.cfg-section-hint'
@@ -5793,7 +5794,7 @@ assert section_order == ['dsp', 'playback', 'safety'], f'audio priority/order dr
 dsp = re.search(r"\{ id:'dsp'.*?keys:\[([^]]+)\]", audio.group(1), re.S)
 assert dsp, 'DSP section keys missing'
 dsp_keys = re.findall(r"'([^']+)'", dsp.group(1))
-assert dsp_keys == ['dsp_loudness','dsp_outputs','dsp_bass','dsp_voice','dsp_width','dsp_compressor'], f'DSP order drifted: {dsp_keys}'
+assert dsp_keys == ['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_compressor'], f'DSP order drifted: {dsp_keys}'
 items = set(re.findall(r"\{ key:'([^']+)'", text))
 block = re.search(r'const CFG_ICONS = \{(.*?)\n\};', text, re.S)
 assert block, 'CFG_ICONS block missing'
