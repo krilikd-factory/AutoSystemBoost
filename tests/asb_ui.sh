@@ -4622,6 +4622,18 @@ chk(analysis.schema === 2 && analysis.quality.level === 'high', 'rich capture qu
 chk(analysis.verdicts.length === 5 && analysis.actions.length <= 3, 'five verdict domains and at most three priority actions');
 const selectedActions = analysis.actions.map(t => t.key);
 chk(analysis.observations.every(t => selectedActions.indexOf(t.key) < 0), 'priority actions are not duplicated in observations');
+const sortFixture = parseLogReport([
+  'meta\telapsed_min=180',
+  'night\tdur_min=180\tpctph=1.5\tawake=30\tdrop=3',
+  'idlemax\tawake=40\tphase=sleep\tdur_min=45',
+  'wlive\ttag=Holder\tpct=80\tmin=30\tpkg=com.example.holder',
+  'cfg\tnight_modem_idle=1', 'cfg\twakelock_action=0', 'cfg\tnet_screen_off_lte=0',
+  'audio\tspk_min=40\tpctph=6.0', 'sradio\tmib=60',
+  'heat\tpeak_phase=active\twarm_min=47\tskin_min=12', 'thermal\tcpu=52', 'throttle\tclamps=3',
+  'asbcost\tcpu_msh=9000\twrites_h=52\twakes_h=300', 'crash\tcount=3\tasb=0', ''].join('\n'));
+const sortKeys = logReportAnalyze(sortFixture).observations.map(t => t.key).join(',');
+chk(sortKeys === 'lr_tip_awake_who,lr_tip_sradio,lr_tip_night,lr_tip_audio',
+  'observations use the same stable priority order as actions: ' + sortKeys);
 chk(analysis.chains.some(c => c.kind === 'hypothesis' && c.key === 'lr_chain_holder'), 'holder causality remains a hypothesis');
 chk(analysis.chains.some(c => c.kind === 'fact' && c.key === 'lr_chain_asb_crash'), 'an ASB crash remains a fact');
 const overheadOnly = parseLogReport('meta\telapsed_min=120\nasbcost\tcpu_msh=1851\twrites_h=176\twakes_h=491\n');
@@ -4941,6 +4953,23 @@ assert '.cfg-fm-btn,.cfg-fm-place,.cfg-fm-cancel' in h
 assert '#00aaff' not in h and '0,170,255' not in h and '101,215,255' not in h
 assert "localStorage.getItem('asb_glass_base')" in h
 assert '@media (prefers-reduced-motion:reduce)' in h
+# Semantic readings survive both neutral Glass material layers, for direct Smart classes
+# and Stock load's descendant spans alike.
+for selector in (
+    'html[data-asb-glass="1"] .smart-banner-value:is(.cap-raised,.load-low)',
+    'html[data-asb-glass="1"] .smart-banner-value:is(.basis-warn,.heat-warm,.load-mid)',
+    'html[data-asb-glass="1"] .smart-banner-value:is(.cap-clamp,.basis-veto,.load-high)',
+    'html[data-asb-glass="1"] .smart-banner-value .load-mid',
+):
+    assert selector in h, selector
+assert "appH === 2 ? ' load-mid'" in h and "appH <= 1 ? ' load-low'" in h
+assert '.smart-banner-value.load-mid,' in h and 'color: var(--bal);' in h
+# Category colour is a translucent material layer, not a flat replacement or a neutral wash.
+assert 'html[data-asb-glass="1"] .cfg-tile[class*="cat-"] {' in h
+assert 'html[data-asb-glass="1"][data-asb-theme="light"] .cfg-tile[class*="cat-"] {' in h
+assert 'color-mix(in srgb,var(--cat) 28%,transparent)' in h
+assert 'color-mix(in srgb,var(--cat) 17%,transparent)' in h
+assert 'html[data-asb-glass="1"] .cfg-tile[class*="cat-"] .cfg-tile-ico {' in h
 PY
 echo "PASS webui liquid glass: cold start, four synchronized switches, dark/light compatibility and localized aria"
 )

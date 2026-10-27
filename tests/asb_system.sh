@@ -1403,21 +1403,113 @@ echo "PASS DSP released off the selected outputs"
 
 # ==== fg_uclamp_guard_contract ====================================================================
 (
-# Foreground uclamp had no owner while the governor ran (reconcile skips per-cgroup checks
-# then, the writer manages only top/bg/sybg), so a ROM "max" stayed for whole screen-on
-# sessions. The guard's limits are what keep it from fighting vendor launch boosts.
-set -u
+# One native owner handles Smart's screen transitions, the pre-existing max correction and
+# camera exclusion. The executable fixture drives the REAL production functions against a
+# synthetic cgroup/state directory; manual profiles must not inherit Smart's sleep cap.
+set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-W="$ROOT/src/asb_writer.h"; G="$ROOT/src/asb_governor.c"
+W="$ROOT/src/asb_writer.h"; G="$ROOT/src/asb_governor.c"; D="$ROOT/runtime/smart_dynamic_tune.sh"
 fail() { echo "FAIL fg uclamp guard contract: $*"; exit 1; }
 need() { grep -Fq -- "$2" "$1" || fail "$3"; }
-need "$W" 'static void writer_fg_guard(int screen_on)' 'guard missing'
-need "$W" 'if (!screen_on || g_cam_guard_on) { g_fg_max_since = 0; return; }' 'acts with screen off or during camera guard'
-need "$W" 'if (cur < 100) { g_fg_last_good = cur; g_fg_max_since = 0; return; }' 'corrects values other than max'
+need "$W" 'static void writer_fg_guard(int screen_on, int smart_screen_policy)' 'native owner missing'
+need "$W" 'if (g_cam_guard_on) { g_fg_max_since = 0; return; }' 'camera guard is not exclusive'
+need "$W" 'if (!smart_screen_policy || cur <= 35) return;' 'manual profile inherited Smart sleep cap'
 need "$W" 'if (now - g_fg_max_since < 60) return;' 'no 60 s persistence before acting'
 need "$W" 'g_fg_backoff_until = now + 600' 'no stand-down when something keeps reasserting'
-need "$G" 'writer_fg_guard(metrics.misc.screen_on);' 'guard not called from the governor loop'
+need "$G" 'writer_fg_guard(metrics.misc.screen_on, fsm.profile_idx == PROFILE_SMART);' 'Smart policy not scoped in governor loop'
 need "$G" 'fg_guard_fixes=%lu' 'corrections not published'
+grep -Fq '/dev/cpuctl/foreground/cpu.uclamp.max' "$D" && fail 'shell tuner still writes foreground uclamp'
+grep -Fq '_ucfg_fallback' "$D" && fail 'shell fallback writer remains'
+
+CC=""; for c in ${HOST_CC:-} gcc clang cc; do command -v "$c" >/dev/null 2>&1 && { CC="$c"; break; }; done
+if [ -z "$CC" ]; then echo 'PASS fg uclamp guard contract (source pins only)'; exit 0; fi
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+sed -n '/^static int    g_fg_last_good = -1;$/,/^static void writer_fg_guard(int screen_on, int smart_screen_policy) {$/p' "$W" > "$T/fg.c"
+# The range above ends at the function opening; append its complete body through the next brace.
+awk '/^static void writer_fg_guard\(int screen_on, int smart_screen_policy\) \{$/{on=1; next} on{print; if ($0 == "}") exit}' "$W" >> "$T/fg.c"
+grep -q 'writer_fg_fallback' "$T/fg.c" || fail 'native fixture extraction failed'
+cat > "$T/t.c" <<X
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+#define UCLAMP_FG_MAX "$T/fg"
+#define UCFG_LAST_GOOD "$T/last"
+#define UCFG_RESTORE "$T/restore"
+static int g_cam_guard_on = 0;
+static char g_profile[24] = "smart";
+static void writer_read_current_profile(char *out, size_t n) { snprintf(out, n, "%s", g_profile); }
+static int sysfs_read_int(const char *path, int def) {
+    FILE *f = fopen(path, "r"); int v = def;
+    if (f) { if (fscanf(f, "%d", &v) != 1) v = def; fclose(f); }
+    return v;
+}
+static int uclamp_read_pct(const char *path, int def) {
+    char b[32] = {0}; FILE *f = fopen(path, "r");
+    if (!f) return def;
+    if (!fgets(b, sizeof(b), f)) { fclose(f); return def; }
+    fclose(f);
+    return !strncmp(b, "max", 3) ? 100 : (int)strtol(b, NULL, 10);
+}
+static int sysfs_write_int(const char *path, int value) {
+    FILE *f = fopen(path, "w"); if (!f) return -1;
+    int rc = fprintf(f, "%d.00\n", value) > 0 ? 0 : -1; fclose(f); return rc;
+}
+#include "fg.c"
+static int fails = 0;
+static void put_raw(const char *s) { FILE *f = fopen(UCLAMP_FG_MAX, "w"); fputs(s, f); fclose(f); }
+static void put_state(const char *path, int v) { FILE *f = fopen(path, "w"); if (f) { fprintf(f, "%d\n", v); fclose(f); } }
+static void reset_fg(const char *raw, const char *profile) {
+    put_raw(raw); snprintf(g_profile, sizeof(g_profile), "%s", profile);
+    unlink(UCFG_LAST_GOOD); unlink(UCFG_RESTORE); g_cam_guard_on = 0;
+    g_fg_last_good = -1; g_fg_max_since = 0; g_fg_fix_n = 0; g_fg_fix_window = 0;
+    g_fg_backoff_until = 0; g_fg_fix_total = 0;
+}
+static void check(int cond, const char *what) { if (!cond) { printf("  FAIL %s\n", what); fails++; } }
+int main(void) {
+    reset_fg("70.00\n", "smart"); writer_fg_guard(0, 1);
+    check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 35, "Smart screen-off did not lower to 35");
+    check(sysfs_read_int(UCFG_RESTORE, -1) == 70, "ordinary wake value not saved");
+    check(sysfs_read_int(UCFG_LAST_GOOD, -1) == 70, "last-good not saved");
+    writer_fg_guard(0, 1);
+    check(sysfs_read_int(UCFG_RESTORE, -1) == 70, "second sleep tick overwrote restore");
+    writer_fg_guard(1, 1);
+    check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 70 && access(UCFG_RESTORE, F_OK) != 0, "wake did not restore exactly once");
+
+    reset_fg("max\n", "smart"); put_state(UCFG_LAST_GOOD, 70); writer_fg_guard(0, 1);
+    check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 35 && sysfs_read_int(UCFG_RESTORE, -1) == 70, "max was not replaced by last-good");
+
+    reset_fg("max\n", "balanced"); writer_fg_guard(0, 1);
+    check(sysfs_read_int(UCFG_RESTORE, -1) == 70, "balanced fallback changed");
+    reset_fg("max\n", "performance"); writer_fg_guard(0, 1);
+    check(sysfs_read_int(UCFG_RESTORE, -1) == 88, "performance fallback changed");
+    reset_fg("max\n", "smart"); writer_fg_guard(0, 1);
+    check(sysfs_read_int(UCFG_RESTORE, -1) == 55, "smart fallback changed");
+    reset_fg("max\n", "battery"); writer_fg_guard(0, 1);
+    check(sysfs_read_int(UCFG_RESTORE, -1) == 55, "battery fallback changed");
+
+    reset_fg("35.00\n", "smart"); put_state(UCFG_LAST_GOOD, 70); put_state(UCFG_RESTORE, 100); writer_fg_guard(1, 1);
+    check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 70 && access(UCFG_RESTORE, F_OK) != 0, "legacy restore=100 survived wake");
+
+    reset_fg("70.00\n", "balanced"); writer_fg_guard(0, 0);
+    check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 70 && access(UCFG_RESTORE, F_OK) != 0, "manual Balanced gained Smart sleep policy");
+
+    reset_fg("max\n", "smart"); g_cam_guard_on = 1; writer_fg_guard(0, 1); writer_fg_guard(1, 1);
+    check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 100 && access(UCFG_RESTORE, F_OK) != 0, "camera guard was overwritten");
+
+    reset_fg("max\n", "balanced"); put_state(UCFG_LAST_GOOD, 70);
+    writer_fg_guard(1, 0); check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 100, "short max boost cut short");
+    g_fg_max_since = time(NULL) - 61; writer_fg_guard(1, 0);
+    check(uclamp_read_pct(UCLAMP_FG_MAX, -1) == 70 && g_fg_fix_total == 1, "persistent max not corrected");
+
+    if (fails) return 1;
+    puts("PASS fg uclamp native runtime: sleep/wake, max fallback, profile scope, camera exclusion");
+    return 0;
+}
+X
+"$CC" -std=gnu99 -Wall -Wextra -Werror -I"$T" -o "$T/t" "$T/t.c" 2>"$T/cc.log" || { cat "$T/cc.log" >&2; fail 'native fixture does not compile'; }
+"$T/t" || fail 'native runtime behaviour mismatch'
 echo "PASS fg uclamp guard contract"
 
 ) || { echo "FAIL in bundled contract: fg_uclamp_guard_contract" >&2; exit 1; }
