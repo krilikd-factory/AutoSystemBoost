@@ -570,55 +570,24 @@ cmp -s "$DIAG" "$INSTALLED_DIAG" || { echo "FAIL debug support: asbdiag copies d
 need "$DIAG" 'BOOT TIMELINE'
 need "$DIAG" 'boot_timeline.tsv'
 
-# Execute the actual asbdiag version gate fragment. A prior shell glob used
-# [1-9][0-9]*, which requires two digits and therefore hid timeline evidence on
-# V64-debug4 even though the recorder had correctly created it.
-awk '
-  /^_boot_debug=0$/ { capture=1 }
-  capture && /^if \[ "\$_boot_debug" = "1" \]; then$/ { exit }
-  capture { print }
-' "$DIAG" > "$TMP/asbdiag_boot_gate.sh"
-[ -s "$TMP/asbdiag_boot_gate.sh" ] || { echo 'FAIL debug support: cannot extract asbdiag boot gate' >&2; exit 1; }
-diag_boot_gate() (
-  _boot_version="$1"
-  . "$TMP/asbdiag_boot_gate.sh"
-  printf '%s' "$_boot_debug"
-)
-for _gate_case in \
-  'V64-debug1:1' \
-  'V64-debug4:1' \
-  'V64-debug10:1' \
-  'V64-debug42:1' \
-  'V64-debug999999999:1' \
-  'V64:0' \
-  'V64-debug:0' \
-  'V64-debug0:0' \
-  'V64-debug4x:0'; do
-  _gate_version="${_gate_case%:*}"; _gate_want="${_gate_case##*:}"
-  _gate_live="$(diag_boot_gate "$_gate_version")"
-  [ "$_gate_live" = "$_gate_want" ] || {
-    echo "FAIL debug support: asbdiag boot gate version=$_gate_version want=$_gate_want live=$_gate_live" >&2; exit 1
-  }
+# Release and testN expose the same passive boot timeline; no version gate remains.
+for _version in V65 V65-test1 V65-test10; do
+  _mod="$TMP/timeline-${_version}"; mkdir -p "$_mod"
+  printf 'id=AutoSystemBoost\nversion=%s\n' "$_version" > "$_mod/module.prop"
+  _state="$TMP/timeline-state-${_version}"
+  ASB_BOOT_TIMELINE_MODDIR="$_mod" ASB_BOOT_TIMELINE_STATE_DIR="$_state" sh "$TIMELINE" begin postfs_begin >/dev/null
+  ASB_BOOT_TIMELINE_MODDIR="$_mod" ASB_BOOT_TIMELINE_STATE_DIR="$_state" sh "$TIMELINE" mark service_enter >/dev/null
+  grep -Fq $'\tpostfs_begin\t' "$_state/boot_timeline.tsv" || { echo 'FAIL debug support: unified postfs marker missing' >&2; exit 1; }
+  grep -Fq $'\tservice_enter\t' "$_state/boot_timeline.tsv" || { echo 'FAIL debug support: unified service marker missing' >&2; exit 1; }
 done
+! grep -Fq 'debug_only' "$HELPER" || { echo 'FAIL debug support: version-only support gate remains' >&2; exit 1; }
+! grep -Fq 'debug_only' "$TIMELINE" || { echo 'FAIL debug support: version-only timeline gate remains' >&2; exit 1; }
 
-# A release module must refuse both mutations even if someone manufactures a DOM click.
-REL="$TMP/release"; mkdir -p "$REL"
-printf 'id=AutoSystemBoost\nversion=V65\n' > "$REL/module.prop"
-REL_OUT="$(ASB_DEBUG_SUPPORT_MODDIR="$REL" ASB_DEBUG_SUPPORT_STATE_DIR="$TMP/state" sh "$HELPER" full-day || true)"
-printf '%s\n' "$REL_OUT" | grep -Fq 'error=debug_only' || {
-  echo 'FAIL debug support: release gate did not refuse recorder' >&2; exit 1
-}
-REL_TL="$(ASB_BOOT_TIMELINE_MODDIR="$REL" ASB_BOOT_TIMELINE_STATE_DIR="$TMP/timeline-release" sh "$TIMELINE" begin postfs_begin || true)"
-printf '%s\n' "$REL_TL" | grep -Fq 'status=debug_only' || {
-  echo 'FAIL debug support: release gate did not refuse boot timeline' >&2; exit 1
-}
-[ ! -e "$TMP/timeline-release/boot_timeline.tsv" ] || { echo 'FAIL debug support: release timeline wrote state' >&2; exit 1; }
-
-# A debug module gets a mocked diagnostic and recorder. The recorder reproduces the real
+# A public release gets the same mocked diagnostic and unlimited recorder. The recorder reproduces the real
 # ownership protocol: it claims the tokenized directory with ITS OWN PID and only removes
 # a guard that still names that PID. This catches launcher-PID and cleanup races on host.
 DBG="$TMP/debug"; mkdir -p "$DBG/system/bin" "$DBG/tools/logkit" "$TMP/out"
-printf 'id=AutoSystemBoost\nversion=V65-debug10\n' > "$DBG/module.prop"
+printf 'id=AutoSystemBoost\nversion=V65\n' > "$DBG/module.prop"
 TL_STATE="$TMP/timeline-debug"
 ASB_BOOT_TIMELINE_MODDIR="$DBG" ASB_BOOT_TIMELINE_STATE_DIR="$TL_STATE" sh "$TIMELINE" begin postfs_begin >/dev/null
 ASB_BOOT_TIMELINE_MODDIR="$DBG" ASB_BOOT_TIMELINE_STATE_DIR="$TL_STATE" sh "$TIMELINE" mark service_enter >/dev/null
@@ -693,6 +662,8 @@ printf '%s\n' "$FAIL_DIAG_STATUS" | grep -Fqx 'status=failed' || { echo 'FAIL de
 printf '%s\n' "$FAIL_DIAG_STATUS" | grep -Fqx 'error=asbdiag_exit_9' || { echo 'FAIL debug support: nonzero diag exit was not surfaced' >&2; exit 1; }
 START1="$(env "${ENV[@]}" sh "$HELPER" full-day || true)"
 echo "$START1" | grep -Fq 'status=started'
+echo "$START1" | grep -Fq 'hours=0'
+echo "$START1" | grep -Fq 'limit=until_shutdown'
 REC_PID="$(printf '%s\n' "$START1" | sed -n 's/^pid=//p')"
 [ -n "$REC_PID" ] && kill -0 "$REC_PID" 2>/dev/null || { echo 'FAIL debug support: recorder did not stay alive' >&2; exit 1; }
 START2="$(env "${ENV[@]}" sh "$HELPER" full-day || true)"
@@ -707,7 +678,7 @@ echo "$START2" | grep -Fq "pid=$REC_PID"
 mkdir -p "$TMP/ps-truncated"
 cat > "$TMP/ps-truncated/ps" <<'EOF_PS'
 #!/bin/sh
-printf '%s\n' 'sh asb_log_full_day.sh 24'
+printf '%s\n' 'sh asb_log_full_day.sh 0'
 EOF_PS
 chmod 0755 "$TMP/ps-truncated/ps"
 ORPHAN_OUT="$(cat "$TMP/state/full_day_webui.lock/output_dir")"
@@ -812,6 +783,11 @@ need "$ROOT/tools/logkit/asb_log_full_day.sh" 'lk_webui_guard_release'
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'lk_webui_guard_publish_output()'
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'LK_WEBUI_OUTPUTFILE'
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'FULL-DAY capture complete. Output: $LK_OUT_DIR'
+need "$ROOT/tools/logkit/asb_log_full_day.sh" 'LK_HOURS="${1:-0}"'
+need "$ROOT/tools/logkit/asb_log_full_day.sh" '[ "$LK_MAX_SEC" -gt 0 ] && [ "$_elapsed" -ge "$LK_MAX_SEC" ] && break'
+need "$ROOT/tools/logkit/asb_log_full_day.sh" 'SESSION capture running until shutdown.'
+need "$HELPER" 'asb_log_full_day.sh" 0 >'
+need "$HELPER" "echo 'limit=until_shutdown'"
 # Debug capture must expose a resolvable AudioMix owner and the evidence that made
 # a media-like workload game-like, without putting any package-manager polling in
 # the native governor. The logkit helpers are passive and use one capture-start map.
@@ -864,7 +840,8 @@ need "$UI" 'flex-wrap: nowrap;'
 need "$UI" '[data-release-telegram][hidden] { display: none !important; }'
 need "$UI" 'runtime/asb_debug_support.sh'
 need "$UI" 'loadDebugSupport()'
-need "$UI" '/-debug[1-9][0-9]*$/i'
+need "$UI" 'row.hidden = false;'
+! grep -Fq '/-debug[1-9][0-9]*$/i' "$UI" || { echo 'FAIL debug support: WebUI version gate remains' >&2; exit 1; }
 # asbdiag can spend seconds writing its export. A persistent modal must open before
 # the root bridge await, stay while the pulse is active, and close only in finally.
 need "$UI" 'id="debugActionWait"'
@@ -912,9 +889,13 @@ for locale in "$ROOT"/webroot/i18n/*.json; do
   # what the contract is about.
   grep -Eq '"dbg_diag_btn"[[:space:]]*:[[:space:]]*"asbdiag"' "$locale" \
     || fail "missing dbg_diag_btn=asbdiag in $locale"
-  grep -Eq '"dbg_log_btn"[[:space:]]*:[[:space:]]*"24h log"' "$locale" \
-    || fail "missing dbg_log_btn=24h log in $locale"
+  grep -Eq '"dbg_log_btn"[[:space:]]*:[[:space:]]*"' "$locale" \
+    || fail "missing dbg_log_btn in $locale"
+  grep -Fq '"dbg_log_btn": "24h log"' "$locale" && fail "obsolete 24h label in $locale"
   need "$locale" '"dbg_log_failed"'
+  need "$locale" '"lr_running_open"'
+  need "$locale" '"dev_json_saved"'
+  need "$locale" '"dev_json_error"'
 done
 
 echo 'PASS debug support WebUI/helper contract'
@@ -935,7 +916,7 @@ fail() { echo "FAIL debug stale-lock: $*" >&2; exit 1; }
 # Alive and not a zombie: a killed process stays visible to kill -0 until it is reaped.
 alive() { [ -r "/proc/$1/stat" ] || return 1; case "$(sed 's/^.*) //' "/proc/$1/stat" | cut -c1)" in Z|X) return 1 ;; esac; return 0; }
 DBG="$TMP/mod"; mkdir -p "$DBG/tools/logkit" "$DBG/runtime"
-printf 'id=AutoSystemBoost\nversion=V65-debug10\nversionCode=650\n' > "$DBG/module.prop"
+printf 'id=AutoSystemBoost\nversion=V65-test10\nversionCode=650\n' > "$DBG/module.prop"
 cat > "$DBG/tools/logkit/asb_log_full_day.sh" << 'EOF_REC'
 set -u
 _lock="${ASB_DEBUG_SUPPORT_LOCKDIR:-}"; _token="${ASB_DEBUG_SUPPORT_LOCK_TOKEN:-}"
@@ -2878,10 +2859,13 @@ h = open(sys.argv[1], encoding='utf-8').read()
 for i in ('bnBasis','bnSlotTemp','bnConf','bnLpm','bnStockRam','bnStockDrain','bnStockCpuClock',
           'liveCpu','liveSkin','liveSurface','liveGpu','liveHeadroom'):
     assert "asbMetricPaint('%s'" % i in h, '%s is not semantically painted' % i
-for cls in ('good','warm','bad','neutral'):
+for cls in ('good','warm','bad','neutral','normal','cool'):
     assert '.live-cell-value.metric-' + cls in h
     assert 'html[data-asb-glass="1"] .live-cell-value.metric-' + cls in h
 assert "asbThermalMetric(cpuT ? fmtTempC(cpuT) : 0, 'cpu')" in h, 'governor deci-C temperature is classified without display-unit normalization'
+assert '--metric-cool: #00d4ff;' in h, 'dark cool state must stay blue rather than inherit the Glass mint accent'
+assert '--metric-cool:#006f9b;' in h, 'light cool state needs a readable blue'
+assert '.live-cell-value.metric-cool { color:var(--metric-cool) !important; }' in h, 'cool state must use its own semantic color, not a theme accent'
 assert h.index('/* Every monitored value uses the same evidence vocabulary') > h.index('html[data-asb-glass="1"] .smart-banner-value { color:var(--text); }'), 'Glass neutral rules override the evidence colours'
 PY
 {
@@ -2914,9 +2898,9 @@ eq(asbConfidenceMetric('low'), 'metric-bad', 'low confidence'); eq(asbConfidence
 eq(asbBasisMetric('stable'), 'metric-good', 'stable basis'); eq(asbBasisMetric('fallback'), 'metric-warm', 'fallback basis');
 eq(asbBasisMetric('basis-veto'), 'metric-bad', 'veto basis'); eq(asbModemMetric('save'), 'metric-good', 'save modem');
 eq(asbModemMetric('night'), 'metric-good', 'night modem'); eq(asbModemMetric('fast'), 'metric-bad', 'fast modem');
-eq(asbModemMetric('normal'), 'metric-neutral', 'normal modem is the stock baseline'); eq(asbModemMetric(''), 'metric-neutral', 'unknown modem');
+eq(asbModemMetric('normal'), 'metric-normal', 'normal modem is the stock baseline'); eq(asbModemMetric(''), 'metric-neutral', 'unknown modem');
 eq(asbModemMetric('unavailable'), 'metric-neutral', 'unavailable modem');
-eq(asbSlotMetric('cool'), 'metric-good', 'cool slot'); eq(asbSlotMetric('typical'), 'metric-good', 'typical slot');
+eq(asbSlotMetric('cool'), 'metric-cool', 'cool slot'); eq(asbSlotMetric('typical'), 'metric-normal', 'typical slot');
 eq(asbSlotMetric('warm'), 'metric-warm', 'warm slot'); eq(asbSlotMetric(undefined), 'metric-neutral', 'unknown slot');
 eq(lvSlotHeat(400, 410, 490).state, 'cool', 'cool slot evidence'); eq(lvSlotHeat(450, 410, 490).state, 'typical', 'typical slot evidence');
 eq(lvSlotHeat(500, 410, 490).state, 'warm', 'warm slot evidence'); eq(lvSlotHeat(0, 410, 490).state, undefined, 'empty slot evidence');
@@ -4423,7 +4407,7 @@ printf 'Cmdline: com.oplus.screenshot\n' > "$T/tomb/tombstone_07"; touch -d "@$(
 printf 'Cmdline: fresh.crash\n' > "$T/tomb/tombstone_08"; touch -d "@$((NOW-300))" "$T/tomb/tombstone_08"
 fout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" ASB_LK_STATE_DIR="$T/state3" sh "$D" "$FRESH")"
 kill "$_lp" 2>/dev/null || true; wait "$_lp" 2>/dev/null || true
-printf '%s\n' "$fout" | grep -q '^meta	elapsed_min=0	target_h=24	running=1' || fail "the fresh capture must read as running: $(printf '%s' "$fout" | head -1)"
+printf '%s\n' "$fout" | grep -q '^meta	elapsed_min=0	target_h=0	running=1' || fail "the fresh capture must read as running: $(printf '%s' "$fout" | head -1)"
 printf '%s\n' "$fout" | grep -Eq '^crash	count=1	asb=0	latest=fresh.crash	ltime=[0-9]{2}:[0-9]{2}$' || fail "a fresh capture's crash window must start at its launch, not 24h ago: $(printf '%s' "$fout" | grep '^crash')"
 # The ledger may lead with a "# phase ..." comment: the window must read the first DATA
 # row, not the comment. The main fixture's ledger has no comment, so pin it here.
@@ -4834,7 +4818,7 @@ python3 - "$ROOT" <<'P' || fail "locales/markup"
 import json, pathlib, sys
 root = pathlib.Path(sys.argv[1])
 KEYS = ['lr_menu','lr_refresh','lr_loading','lr_none_title','lr_none_body','lr_failed',
-        'lr_running','lr_done','lr_early','lr_sec_drain','lr_overall','lr_temp_surf',
+        'lr_running','lr_running_open','lr_done','lr_early','lr_sec_drain','lr_overall','lr_temp_surf',
         'lr_screen_on','lr_screen_off','lr_night','lr_idle','lr_radio','lr_sec_wake',
         'lr_wake_none','lr_sec_crash','lr_crash_none','lr_crash_n','lr_crash_latest',
         'lr_crash_asb','lr_sysui','lr_sec_thermal','lr_clamp_none',
@@ -4892,7 +4876,7 @@ EMO = {'lr_sec_drain': '\U0001f50b', 'lr_sec_wake': '\u23f0', 'lr_sec_crash': '\
        'lr_sec_nightd_short': '\U0001f319', 'lr_sec_summary': '\U0001f9ed',
        'lr_sec_causes': '\U0001f517', 'lr_sec_actions': '\U0001f3af',
        'lr_sec_observations': '\U0001f4a1'}
-PH = {'lr_running': ['{min}', '{h}'], 'lr_crash_n': ['{n}'], 'lr_crash_latest': ['{proc}'],
+PH = {'lr_running': ['{min}', '{h}'], 'lr_running_open': ['{min}'], 'lr_crash_n': ['{n}'], 'lr_crash_latest': ['{proc}'],
       'lr_crash_asb': ['{n}'], 'lr_sysui': ['{n}'], 'lr_temp_max': ['{cpu}', '{surf}'],
       'lr_clamp_some': ['{n}', '{owner}'], 'lr_tip_night': ['{pct}'], 'lr_tip_awake': ['{awake}'],
       'lr_tip_crashes': ['{n}'], 'lr_tip_app': ['{app}', '{min}'], 'lr_min': ['{n}'], 'lr_secs': ['{n}'], 'lr_h': ['{n}'],
@@ -4940,6 +4924,7 @@ for p in files:
     if p.name == 'en.json':
         assert d['lr_sec_drain'] == '\U0001f50b Battery drain'
         assert d['lr_running'] == 'recording \u00b7 {min} min of {h} h'
+        assert d['lr_running_open'] == 'recording \u00b7 {min} min \u00b7 until shutdown'
         assert d['lr_tip_night'] == 'Overnight the phone lost ~{pct}%/h - check background apps.'
         assert d['lr_per_hour'] == '%/h' and d['lr_refresh'] == 'Refresh'
         assert d['lr_secs'] == '{n} sec'
@@ -4982,7 +4967,7 @@ grep -Fq '.lgr-table { width: 100%; border-collapse: collapse; table-layout: fix
 grep -Fq "logReportT('lr_saved', 'saved capture · {when} · {profile}'" "$H" || fail "a saved capture must be named with its start time and profile"
 grep -Fq "lr_tip_wl_enable: '{app} held the phone awake for {min} min" "$H" || fail "the wakelock tip lost its English fallback"
 grep -Fq "Tcfg('night_modem_idle', 'name', 'Quiet Radio at Night')" "$H" || fail "advice must name settings as the Settings screen names them"
-grep -Fq '"tools/logkit/asb_fullday_digest.sh"' "$ROOT/.github/workflows/build-debug.yml" || fail "debug workflow does not ship the digest"
+grep -Fq '"tools/logkit/asb_fullday_digest.sh"' "$ROOT/.github/workflows/build-test.yml" || fail "debug workflow does not ship the digest"
 grep -Fq '"tools/logkit/asb_fullday_digest.sh"' "$ROOT/.github/workflows/build-release.yml" || fail "release workflow does not ship the digest"
 grep -Fq 'asb_fullday_digest.sh' "$ROOT/.github/workflows/build-release.yml" || fail "release staging loop lost the digest"
 grep -Fq 'crash.ltime' "$H" || fail "fix204: the sheet must show WHEN the latest crash happened"
@@ -5070,7 +5055,7 @@ for selector in (
     assert selector in h, selector
 assert "appH === 2 ? ' load-mid'" in h and "appH <= 1 ? ' load-low'" in h
 assert '.smart-banner-value.load-mid,' in h and 'color: var(--bal);' in h
-for cls in ('good', 'warm', 'bad', 'neutral'):
+for cls in ('good', 'warm', 'bad', 'neutral', 'normal', 'cool'):
     assert '.smart-banner-value.metric-' + cls in h
     assert '.live-cell-value.metric-' + cls in h
     assert 'html[data-asb-glass="1"] .smart-banner-value.metric-' + cls in h
@@ -5167,9 +5152,15 @@ for i in ('socBadge','liveSocBadge','cfgSocBadge','rpSocBadge','devSocBadge'):
 assert h.count('data-theme-toggle=') == 5 and h.count('data-theme-choice="glass"') == 5
 assert '#devicePage { z-index: 140;' in h and 'id="devicePage"' in h
 assert "run('sh ' + MD + '/tools/asb_device_info.sh 2>/dev/null')" in h
+assert 'id="devJson"' in h and 'asbDeviceInfoExportJson()' in h
 loader = h[h.index('async function asbDeviceInfoLoad()'):h.index('async function asbLogReportLoad()')]
 assert 'setInterval' not in loader and 'setTimeout' not in loader
 assert 'seq !== _deviceLoadSeq' in loader and 'Nothing was changed' in loader
+assert loader.index('window._asbDeviceInfoData = null') < loader.index('await run(')
+assert 'window._asbDeviceInfoData = d;' in loader
+export_loader = h[h.index('async function asbDeviceInfoExportJson()'):h.index('async function asbDeviceInfoLoad()')]
+assert '/sdcard/Download/device.json' in export_loader
+assert 'asb_device_info.sh' not in export_loader and 'setInterval' not in export_loader
 segment = h[h.index('function parseDeviceInfo('):h.index('function openDevicePage()')]
 assert '.innerHTML' not in segment and 'textContent' in segment
 assert "['kernel_features', 'dev_sec_kernel_features'" in h
@@ -5188,19 +5179,20 @@ for p in (root/'webroot/i18n').glob('*.json'):
                 'dev_kernel_features_tmpfs_xattr_posix_acl','dev_kernel_features_lto','dev_kernel_features_bbr_v1',
                 'dev_kernel_features_bbr_v2','dev_kernel_features_bbg_baseband_guard','dev_kernel_features_susfs',
                 'dev_sec_metamodule','dev_metamodule_status','dev_metamodule_id','dev_metamodule_name',
-                'dev_metamodule_version','dev_metamodule_version_code','dev_metamodule_nomount_driver',
+                'dev_metamodule_version','dev_metamodule_version_code','dev_json_empty','dev_json_saved','dev_json_error','dev_metamodule_nomount_driver',
                 'dev_metamodule_nomount_driver_version','dev_metamodule_nomount_evidence'):
         assert d.get(key), '%s: %s missing' % (p.name, key)
 ru = json.loads((root/'webroot/i18n/ru.json').read_text(encoding='utf-8'))
 assert 'NoMount' in ru['dev_kernel_features_nomount'] and 'NTSync' in ru['dev_kernel_features_ntsync']
 assert 'BBRv2' in ru['dev_kernel_features_bbr_v2'] and 'SuSFS' in ru['dev_kernel_features_susfs']
 assert 'Метамодуль' in ru['dev_sec_metamodule'] and 'NoMount' in ru['dev_metamodule_nomount_driver_version']
-for f in ('tools/release_tools.list','common/install.sh','.github/workflows/build-release.yml','.github/workflows/build-debug.yml'):
+for f in ('tools/release_tools.list','common/install.sh','.github/workflows/build-release.yml','.github/workflows/build-test.yml'):
     assert 'asb_device_info.sh' in (root/f).read_text(encoding='utf-8'), f
 PY
 {
   cat <<'EOF'
 const ASB_LANG = 'en';
+const window = globalThis;
 function T(k, d) { return d; }
 function requestAnimationFrame() {} function asbFitPages() {}
 function mk(tag) {
@@ -5214,8 +5206,8 @@ function mk(tag) {
   Object.defineProperty(e, 'textContent', { get() { return e._text; }, set(v) { e._text = String(v); e.children = []; } });
   return e;
 }
-const body = mk('div');
-function _el(id) { return id === 'deviceBody' ? body : null; }
+const body = mk('div'), jsonButton = { disabled: false };
+function _el(id) { return id === 'deviceBody' ? body : id === 'devJson' ? jsonButton : null; }
 const document = { createElement: mk };
 function logReportNote(text, warn) { const n = mk('div'); n.className = 'lgr-note'; n.textContent = text; return n; }
 function logReportSec(title) { const n = mk('section'); const h = mk('h3'); h.textContent = title; n.appendChild(h); return n; }
@@ -5223,9 +5215,10 @@ function logReportRow(key, value) { const r = mk('div'), k = mk('span'), v = mk(
 EOF
   sed -n '/^const DEVICE_SECTION_ORDER = \[/,/^\];/p' "$H"
   sed -n '/^const DEVICE_KERNEL_FEATURE_ORDER = \[/,/^\];/p' "$H"
-  for fn in parseDeviceInfo deviceVal deviceFallbackLabel deviceLabel deviceHero deviceValueClass deviceDisplayValue deviceInfoRender; do
+  for fn in parseDeviceInfo deviceVal deviceFallbackLabel deviceLabel deviceHero deviceValueClass deviceDisplayValue deviceInfoRender shQuote; do
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
+  sed -n '/^async function asbDeviceInfoExportJson()/,/^}/p' "$H"
   cat <<'EOF'
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
 const attack = '<img src=x onerror=globalThis.pwned=1> OnePlus 15';
@@ -5278,7 +5271,24 @@ const actualFeatureValues = []; (function walk(n) { if (n && n.className && n.cl
 chk(JSON.stringify(actualFeatureValues) === JSON.stringify(expectedFeatureValues), 'custom-kernel groups are not reversed with SuSFS first: ' + JSON.stringify(actualFeatureValues));
 chk(values.some(v => v.textContent === attack && v.className.includes('dev-long')), 'long untrusted value lacks safe wrapping class');
 chk(values.some(v => v.textContent === 'mismatch' && v.className.includes('dev-warn')), 'uname mismatch is not amber');
-if (bad) process.exit(1); console.log('ok');
+(async function () {
+  window._asbDeviceInfoData = d;
+  let exportCalls = 0, encoded = '', commands = [];
+  const notices = [];
+  globalThis.run = async function (cmd) { exportCalls++; commands.push(cmd); const m = cmd.match(/printf '%s' '([^']*)'/); if (m) encoded = m[1]; return { errno: 0, stdout: '', stderr: '' }; };
+  globalThis.toast = function (text, kind) { notices.push({ text, kind }); };
+  await asbDeviceInfoExportJson();
+  const exported = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'));
+  chk(exportCalls === 1 && exported.schema === 1 && exported.read_only === true, 'Device JSON did not write one prepared snapshot');
+  chk(exported.fact_count === 27 && exported.malformed_lines === 2, 'Device JSON snapshot counts differ');
+  chk(exported.sections.firmware.model === attack && exported.sections.metamodule.id === 'MetaCore', 'Device JSON lost parsed sections');
+  chk(commands[0].includes("/sdcard/Download/device.json") && !commands[0].includes('asb_device_info.sh'), 'Device JSON ran a new collector or used the wrong path');
+  chk(!jsonButton.disabled, 'Device JSON button stayed disabled after success');
+  window._asbDeviceInfoData = null;
+  await asbDeviceInfoExportJson();
+  chk(exportCalls === 1 && notices.some(n => n.text.includes('Refresh device diagnostics')), 'cleared/stale snapshot was exported');
+  if (bad) process.exit(1); console.log('ok');
+})().catch(e => { console.error(e); process.exit(1); });
 EOF
 } > "$T/t.js"
 out="$(node "$T/t.js" 2>&1)" || fail "$out"

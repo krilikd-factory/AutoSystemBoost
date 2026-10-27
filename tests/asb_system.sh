@@ -3262,9 +3262,11 @@ grep -q 'high-input-latency events %d' "$ROOT/tools/asb_diag.sh" || fail "asbdia
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 grep -q 'per cluster: the prime sat under a ceiling ASB did not write' "$ROOT/tools/logkit/asb_log_full_day.sh" || fail "verdict ignores the per-cluster cause"
 Y="$ROOT/.github/workflows/build-release.yml"
-grep -q 'prerelease:' "$Y" || fail "release workflow has no prerelease input"
-grep -q 'rc\[1-9\]|rc\[1-9\]\[0-9\]) ;;' "$Y" || fail "prerelease tag not validated"
-grep -q 'ASB_VER="${ASB_VER}-${PRERELEASE_INPUT}"' "$Y" || fail "prerelease does not name the build"
+TW="$ROOT/.github/workflows/build-test.yml"
+! grep -q 'prerelease:\|PRERELEASE_INPUT\|rc\[1-9\]' "$Y" || fail "obsolete rc/prerelease channel remains"
+grep -q 'test_sequence:' "$TW" || fail "test workflow has no positive testN input"
+grep -q 'ASB_VER="${BASE_VER}-test${TEST_SEQ}"' "$TW" || fail "testN does not name the build"
+[ ! -e "$ROOT/.github/workflows/build-debug.yml" ] || fail "separate debug channel remains"
 grep -q '\*conf_tuning_params.json.asbbase) asb_tw_cam_stock "$_bf" && asb_tw_base_rom_ok "$_bf" && continue ;;' "$ROOT/runtime/asb_tweaks.sh" \
   || fail "orphan prune deletes the stock camera baseline before the installer clones"
 grep -q '\*conf_tuning_params.json.asbbase) asb_tw_base_rom_stamp "$_bp" ;;' "$ROOT/runtime/asb_tweaks.sh" || fail "camera baseline saved without a ROM stamp"
@@ -3959,7 +3961,7 @@ grep -q '^asb_stock_enter_fast() {' "$ROOT/runtime/asb_stock_policy.sh" || fail 
 grep -q '^run_stock_finish() {' "$ROOT/apply_profile.sh" || fail "no background settings pass for Stock"
 grep -q 'fitness-status' "$ROOT/runtime/asb_wakelock_watch.sh" || fail "the watcher does not answer the fitness badge"
 grep -q 'function lviFill(t) {' "$ROOT/webroot/index.html" || fail "sheet texts still carry their own value lists"
-grep -q 'asb_tree_check' "$ROOT/.github/workflows/build-debug.yml" && fail "CI still annotates the tree differences"
+grep -q 'asb_tree_check' "$ROOT/.github/workflows/build-test.yml" && fail "CI still annotates the tree differences"
 echo "PASS: fix177 contract"
 ) || exit 1
 # ---- fix178 ---------------------------------------------------------------
@@ -4423,7 +4425,7 @@ fail() { echo "FAIL fix213: $*" >&2; exit 1; }
 # structural: (1) update.json exists and stays out of both flashable zips, (2) the release
 # workflow still carries the manifest gate, so it cannot silently disappear.
 [ -f "$UJ" ] || fail 'update.json missing at repo root'
-grep -qF -- "--exclude 'update.json'" "$ROOT/.github/workflows/build-debug.yml" || fail "the debug build stopped excluding update.json"
+grep -qF -- "--exclude 'update.json'" "$ROOT/.github/workflows/build-test.yml" || fail "the test build stopped excluding update.json"
 grep -qF -- "--exclude 'update.json'" "$ROOT/.github/workflows/build-release.yml" || fail "the release build stopped excluding update.json"
 grep -qF 'Validate OTA manifest (update.json)' "$ROOT/.github/workflows/build-release.yml" || fail "the release workflow lost the update.json manifest gate"
 grep -qF '\"versionCode\": ${BASE_CODE}' "$ROOT/.github/workflows/build-release.yml" || fail "the release gate must compare versionCode against module.prop"
@@ -5581,16 +5583,16 @@ echo "PASS P0 provenance contract"
 )
 
 t_package_functional_parity_contract() (
-# Contract: release is smaller than debug, not functionally crippled.
+# Contract: release and testN share one complete diagnostic feature set and package definition.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 REL="$ROOT/.github/workflows/build-release.yml"
-DBG="$ROOT/.github/workflows/build-debug.yml"
+TEST="$ROOT/.github/workflows/build-test.yml"
 
 need() { grep -Fq -- "$2" "$1" || { echo "FAIL package parity: missing [$2] in ${1##*/}" >&2; exit 1; }; }
 not_need() { ! grep -Fq -- "$2" "$1" || { echo "FAIL package parity: forbidden [$2] in ${1##*/}" >&2; exit 1; }; }
 
-for wf in "$REL" "$DBG"; do
+for wf in "$REL" "$TEST"; do
   [ -f "$wf" ] || { echo "FAIL package parity: missing workflow $wf" >&2; exit 1; }
   need "$wf" 'bin/asb_dsp_attach'
   need "$wf" 'system/bin/asbdiag'
@@ -5599,14 +5601,16 @@ for wf in "$REL" "$DBG"; do
   need "$wf" 'runtime/asb_stock_policy.sh'
 done
 
-# The helper is physically present in both packages because runtime/ is a module runtime
-# dependency; its own installed module.prop check denies every release action.
-need "$ROOT/runtime/asb_debug_support.sh" 'debug_only'
+# Support actions are unified: no version suffix may disable them on a public release.
+not_need "$ROOT/runtime/asb_debug_support.sh" 'debug_only'
+need "$ROOT/src/build_ndk_release.sh" '-DASB_DEBUG_BUILD=1'
+need "$REL" 'ASB_BUILD_MODE=release'
+need "$TEST" 'ASB_BUILD_MODE=test'
 need "$ROOT/runtime/asb_wifi_fallback.sh" 'asb_wifi_fallback'
 need "$ROOT/runtime/asb_stock_policy.sh" 'asb_stock_enter'
 
 # Release must retain every normal on-device capture and support script. They are POSIX shell,
-# are used by users to collect support evidence, and must not become debug-only.
+# are used by users to collect support evidence, and must remain available in both release and testN.
 for tool in \
   asb_diag.sh asb_kernel_uv_coexist.sh asb_doctor.sh asb_recents_probe.sh \
   asb_effective_policy.sh asb_intent.sh asb_config_backup.sh asb_state_sampler.sh \
@@ -5631,7 +5635,22 @@ need "$REL" '"bin/asb_dsp_attach"'
 need "$REL" '"tools/asb_config_backup.sh"'
 need "$REL" '"tools/logkit/asb_log_full_day.sh"'
 
-echo 'PASS debug/release functional package parity contract'
+# Compare the actual staging definitions, not merely a list of names. Only package identity
+# may differ: testN must not silently lose a diagnostic helper or gain a dev-only payload.
+python3 - "$REL" "$TEST" <<'PY_PARITY'
+import sys
+from pathlib import Path
+r, t = (Path(p).read_text(encoding='utf-8') for p in sys.argv[1:])
+def block(s, start, end):
+    i = s.index(start)
+    return s[i:s.index(end, i)]
+rb = block(r, '          rsync -a ./ "$PKG_REL"/', '          ASB_COMMIT=')
+tb = block(t, '          rsync -a ./ "$PKG_TEST"/', '          BASE_VER=')
+tb = tb.replace('PKG_TEST', 'PKG_REL').replace('pkg-test', 'pkg-release')
+assert rb == tb, 'release/test staging definitions diverged'
+PY_PARITY
+
+echo 'PASS release/test functional package parity contract'
 )
 
 t_profile_uv_webui_package_contract() (
@@ -5642,7 +5661,7 @@ set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 UI="$ROOT/webroot/index.html"
 REL="$ROOT/.github/workflows/build-release.yml"
-DBG="$ROOT/.github/workflows/build-debug.yml"
+TEST="$ROOT/.github/workflows/build-test.yml"
 HELPER="$ROOT/tools/asb_config_backup.sh"
 UV="$ROOT/tools/asb_kernel_uv_coexist.sh"
 INSTALL="$ROOT/common/install.sh"
@@ -5693,7 +5712,7 @@ done
 [ ! -e "$TMP/tools/zz_dev_only.py" ] || fail 'installer prune keeps a dev-only tool'
 
 # Both workflows must preserve and verify the exact helpers in their flashable packages.
-for WF in "$REL" "$DBG"; do
+for WF in "$REL" "$TEST"; do
   need "$WF" 'tools/asb_config_backup.sh'
   need "$WF" 'tools/asb_kernel_uv_coexist.sh'
 done
@@ -5912,10 +5931,10 @@ GUARD="$ROOT/runtime/asb_overlay_guard.sh"
 ATTACH="$ROOT/src/DSP_AIDL/asb_dsp_attach.cpp"
 NATIVE_BUILD="$ROOT/src/build_ndk_release.sh"
 REL="$ROOT/.github/workflows/build-release.yml"
-DBG="$ROOT/.github/workflows/build-debug.yml"
+TEST="$ROOT/.github/workflows/build-test.yml"
 ATTWF="$ROOT/.github/workflows/build-dsp-attach.yml"
 WEB="$ROOT/webroot/index.html"
-for f in "$UTILS" "$CORE" "$POSTFS" "$TWEAKS" "$SERVICE" "$AUDIO" "$GUARD" "$ATTACH" "$NATIVE_BUILD" "$REL" "$DBG" "$ATTWF" "$WEB"; do
+for f in "$UTILS" "$CORE" "$POSTFS" "$TWEAKS" "$SERVICE" "$AUDIO" "$GUARD" "$ATTACH" "$NATIVE_BUILD" "$REL" "$TEST" "$ATTWF" "$WEB"; do
   [ -f "$f" ] || fail "missing $f"
 done
 for f in "$UTILS" "$CORE" "$POSTFS" "$TWEAKS" "$SERVICE" "$AUDIO" "$GUARD"; do
@@ -5953,7 +5972,7 @@ need "$GUARD" 'invalid_xml_payload'
 need "$GUARD" 'invalid_json_payload'
 
 # The dedicated attacher workflow compiles current source and publishes auditable SHA-256
-# provenance. Release/debug keep the compatible prebuilt guard on functional source literals;
+# provenance. Release/test keep the compatible prebuilt guard on functional source literals;
 # an observability-only source marker must not make normal module builds unbuildable.
 need "$ATTWF" 'SOURCE_SHA256='
 need "$ATTWF" 'source_sha256=$SOURCE_SHA256'
@@ -5964,8 +5983,8 @@ need "$NATIVE_BUILD" 'settings change'
 need "$NATIVE_BUILD" 'attached to session'
 absent "$ATTACH" 'kAsbAttachBuildId'
 absent "$REL" 'ATT is stale for source marker'
-absent "$DBG" 'ATT is stale for source marker'
-for w in "$REL" "$DBG"; do
+absent "$TEST" 'ATT is stale for source marker'
+for w in "$REL" "$TEST"; do
   need "$w" 'tests/asb_smart.sh'
   need "$w" 'tests/asb_features.sh'
   need "$w" 'tests/asb_ui.sh'
@@ -6070,8 +6089,9 @@ _core_call_line="$(grep -nF '  asb_apply_deferred_core_boot' "$SERVICE" | tail -
 [ -n "$_core_line" ] && [ -n "$_core_call_line" ] && [ "$_core_call_line" -gt "$_core_line" ] && [ "$_core_line" -gt "$_pb_line" ] || fail 'deferred core policy is not boot-complete gated'
 need "$SERVICE" 'asb_timeline_mark post_boot_bgtrim_begin'
 need "$SERVICE" 'asb_timeline_mark post_boot_bgtrim_complete'
-need "$SERVICE" 'ASB_TIMELINE_DEBUG=0'
-need "$SERVICE" 'case "$_asb_timeline_seq" in *[!0-9]*) ;; *) ASB_TIMELINE_DEBUG=1 ;; esac'
+need "$SERVICE" 'ASB_TIMELINE_ENABLED=1'
+absent "$SERVICE" 'ASB_TIMELINE_DEBUG'
+absent "$SERVICE" '_asb_timeline_seq'
 
 # Wi-Fi readiness can wait for wlan0/operstate (10 + 15 seconds), with a separate link
 # reassertion that can wait longer. The OP15 timeline measured 19 seconds in that stage before
@@ -6847,7 +6867,7 @@ grep -q 'for suite in tests/asb_\*.sh; do' "$R" || fail "the regression does not
 grep -q 'queue "$area: $name" bash "$suite" "$name"' "$R" || fail "suite tests are not queued one by one"
 grep -q 'tests/test_' "$R" && fail "the regression still names a test file"
 grep -q 'bash "$MODDIR/tests/asb_smart.sh" --source "$_t"' "$ROOT/tools/asb_lint.sh" || fail "lint does not build the Smart fixtures from the suite"
-for w in build-debug build-release; do
+for w in build-test build-release; do
   grep -q 'tests/test_' "$ROOT/.github/workflows/$w.yml" && fail "$w.yml still requires a test file"
   for s in asb_smart asb_features asb_ui asb_system; do
     grep -q "tests/$s.sh" "$ROOT/.github/workflows/$w.yml" || fail "$w.yml does not require tests/$s.sh"
@@ -6874,7 +6894,7 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 fail=0; f() { echo "FAIL tree check: $*" >&2; fail=1; }
 # fix177: a local tool. The CI step annotated every build with the owner's own repository
 # differences ("Tree differs from the delivered archive"), which told him nothing to act on.
-for w in build-debug build-release; do
+for w in build-test build-release; do
   grep -q 'asb_tree_check' "$ROOT/.github/workflows/$w.yml" && f "$w.yml still runs the tree check"
 done
 mkdir -p "$T/r/src/DSP" "$T/r/tools" "$T/r/.github/workflows" "$T/r/src/DSP_AIDL/prebuilt"
@@ -7182,7 +7202,7 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 WRITER="$ROOT_DIR/runtime/asb_config_safe.sh"
 BACKUP="$ROOT_DIR/tools/asb_config_backup.sh"
 WEBUI="$ROOT_DIR/webroot/index.html"
-DEBUG_WF="$ROOT_DIR/.github/workflows/build-debug.yml"
+TEST_WF="$ROOT_DIR/.github/workflows/build-test.yml"
 RELEASE_WF="$ROOT_DIR/.github/workflows/build-release.yml"
 MODULE_PROP="$ROOT_DIR/module.prop"
 INSTALL="$ROOT_DIR/common/install.sh"
@@ -7284,47 +7304,43 @@ if grep -RIlE '^[[:space:]]*import[[:space:]]+pytest([[:space:]]|$)' "$ROOT_DIR/
   echo "FAIL: pytest-dependent reference material remains under tests" >&2; exit 1
 fi
 
-# Debug identity changes only after rsync in package staging. It keeps the public
-# versionCode so V64-debug1 can be manually flashed over V64; public source/OTA stay V64/640.
-need "$DEBUG_WF" 'debug_sequence:'
-need "$DEBUG_WF" 'Positive debug sequence after this public release'
-need "$DEBUG_WF" 'DEBUG_SEQ_INPUT: ${{ inputs.debug_sequence }}'
-need "$DEBUG_WF" 'DEBUG_SEQ="${DEBUG_SEQ_INPUT:-}"'
-need "$DEBUG_WF" 'DEBUG_CODE="$BASE_CODE"'
-need "$DEBUG_WF" 'ASB_VER="${BASE_VER}-debug${DEBUG_SEQ}"'
-need "$DEBUG_WF" 'sed -i "s/^version=.*/version=${ASB_VER}/" "$PKG_DBG/module.prop"'
-need "$DEBUG_WF" 'grep -qx "versionCode=${BASE_CODE}" "$PKG_DBG/module.prop"'
-absent "$DEBUG_WF" 'DEBUG_CODE=$((BASE_CODE + DEBUG_SEQ))'
-absent "$DEBUG_WF" 'one integer from 1 to 9'
-need "$DEBUG_WF" 'name: ASB-${{ env.ASB_VER }}'
+# Test identity changes only after rsync in package staging. It keeps the public
+# versionCode so V65-test1 can be manually flashed over V65; public source/OTA stay unchanged.
+need "$TEST_WF" 'test_sequence:'
+need "$TEST_WF" 'Positive test sequence after this public release'
+need "$TEST_WF" 'TEST_SEQ_INPUT: ${{ inputs.test_sequence }}'
+need "$TEST_WF" 'TEST_SEQ="${TEST_SEQ_INPUT:-}"'
+need "$TEST_WF" 'TEST_CODE="$BASE_CODE"'
+need "$TEST_WF" 'ASB_VER="${BASE_VER}-test${TEST_SEQ}"'
+need "$TEST_WF" 'sed -i "s/^version=.*/version=${ASB_VER}/" "$PKG_TEST/module.prop"'
+need "$TEST_WF" 'grep -qx "versionCode=${BASE_CODE}" "$PKG_TEST/module.prop"'
+absent "$TEST_WF" 'TEST_CODE=$((BASE_CODE + TEST_SEQ))'
+absent "$TEST_WF" 'one integer from 1 to 9'
+need "$TEST_WF" 'name: ASB-${{ env.ASB_VER }}'
+[ ! -e "$ROOT_DIR/.github/workflows/build-debug.yml" ] || { echo 'FAIL: separate debug workflow remains' >&2; exit 1; }
 
-# Execute the workflow's real validation fragment: debug suffixes are local identifiers,
-# therefore every positive decimal integer is valid (including debug10 and numbers larger
-# than a single digit), but ambiguous/unsafe spellings must never become filenames or shell
-# input. `exit 1` runs inside the subshell only.
-TMP_DEBUG_GATE="$(mktemp -d)"
-trap 'rm -rf "$TMP_DEBUG_GATE"' EXIT HUP INT TERM
-sed -n '/^          DEBUG_SEQ="${DEBUG_SEQ_INPUT:-}"$/,/^          DEBUG_CODE="$BASE_CODE"$/p' "$DEBUG_WF" > "$TMP_DEBUG_GATE/gate.sh"
-[ -s "$TMP_DEBUG_GATE/gate.sh" ] || { echo 'FAIL: debug workflow validation fragment missing' >&2; exit 1; }
-debug_sequence_valid() (
-  BASE_CODE=640 DEBUG_SEQ_INPUT="$1"
-  . "$TMP_DEBUG_GATE/gate.sh"
-  [ "$DEBUG_SEQ" = "$1" ]
+# Execute the workflow's real validation fragment: every positive decimal testN identifier
+# is valid, but ambiguous/unsafe spellings must never become filenames or shell input.
+TMP_TEST_GATE="$(mktemp -d)"
+trap 'rm -rf "$TMP_TEST_GATE"' EXIT HUP INT TERM
+sed -n '/^          TEST_SEQ="${TEST_SEQ_INPUT:-}"$/,/^          TEST_CODE="$BASE_CODE"$/p' "$TEST_WF" > "$TMP_TEST_GATE/gate.sh"
+[ -s "$TMP_TEST_GATE/gate.sh" ] || { echo 'FAIL: test workflow validation fragment missing' >&2; exit 1; }
+test_sequence_valid() (
+  BASE_CODE=640 TEST_SEQ_INPUT="$1"
+  . "$TMP_TEST_GATE/gate.sh"
+  [ "$TEST_SEQ" = "$1" ]
 )
 for _valid_seq in 1 9 10 42 999999999; do
-  debug_sequence_valid "$_valid_seq" || { echo "FAIL: valid debug sequence rejected: $_valid_seq" >&2; exit 1; }
+  test_sequence_valid "$_valid_seq" || { echo "FAIL: valid test sequence rejected: $_valid_seq" >&2; exit 1; }
 done
-for _invalid_seq in '' 0 00 01 -1 +1 1.0 debug10 '10 '; do
-  # The real gate deliberately writes a GitHub `::error::` for invalid manual input.
-  # This is a negative host fixture, not a failed CI build; capture that expected text so
-  # a passing test cannot manufacture red workflow annotations in the parent job.
-  if debug_sequence_valid "$_invalid_seq" >"$TMP_DEBUG_GATE/invalid.out" 2>&1; then
-    echo "FAIL: invalid debug sequence accepted: $_invalid_seq" >&2
+for _invalid_seq in '' 0 00 01 -1 +1 1.0 test10 '10 '; do
+  if test_sequence_valid "$_invalid_seq" >"$TMP_TEST_GATE/invalid.out" 2>&1; then
+    echo "FAIL: invalid test sequence accepted: $_invalid_seq" >&2
     exit 1
   fi
 done
-if ( BASE_CODE=64x DEBUG_SEQ_INPUT=10 . "$TMP_DEBUG_GATE/gate.sh" ) >"$TMP_DEBUG_GATE/invalid-base-code.out" 2>&1; then
-  echo 'FAIL: non-decimal module versionCode accepted by debug gate' >&2
+if ( BASE_CODE=64x TEST_SEQ_INPUT=10 . "$TMP_TEST_GATE/gate.sh" ) >"$TMP_TEST_GATE/invalid-base-code.out" 2>&1; then
+  echo 'FAIL: non-decimal module versionCode accepted by test gate' >&2
   exit 1
 fi
 
@@ -7344,7 +7360,7 @@ need "$RELEASE_WF" 'GITHUB_REF_TYPE'
 need "$RELEASE_WF" 'does not match module version'
 absent "$RELEASE_WF" 'sed -i "s/^version=.*/version=${TAG}/" module.prop'
 TMP_RELEASE_GATE="$(mktemp -d)"
-trap 'rm -rf "$TMP_DEBUG_GATE" "$TMP_RELEASE_GATE"' EXIT HUP INT TERM
+trap 'rm -rf "$TMP_TEST_GATE" "$TMP_RELEASE_GATE"' EXIT HUP INT TERM
 sed -n '/^          TAG="${GITHUB_REF_NAME:-}"$/,/^          fi$/p' "$RELEASE_WF" | sed 's/^          //' > "$TMP_RELEASE_GATE/gate.sh"
 [ -s "$TMP_RELEASE_GATE/gate.sh" ] || { echo 'FAIL: release workflow identity gate missing' >&2; exit 1; }
 release_identity_valid() (
@@ -7567,7 +7583,7 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 need() { grep -Fqx "$2" "$1" >/dev/null || { echo "FAIL workflow executable modes: missing [$2] in $1" >&2; exit 1; }; }
-for WF in "$ROOT/.github/workflows/build-debug.yml" "$ROOT/.github/workflows/build-release.yml"; do
+for WF in "$ROOT/.github/workflows/build-test.yml" "$ROOT/.github/workflows/build-release.yml"; do
   [ -f "$WF" ] || { echo "FAIL workflow executable modes: missing $WF" >&2; exit 1; }
   _norm=$(grep -n 'name: Normalize executable diagnostic script modes' "$WF" | head -1 | cut -d: -f1)
   _tests=$(grep -n 'name: Run canonical host regression' "$WF" | head -1 | cut -d: -f1)
@@ -7623,7 +7639,7 @@ extract_step() {
   [ -s "$_out" ] || fail "could not extract required-files step from $(basename "$_wf")"
 }
 
-for name in build-debug.yml build-release.yml; do
+for name in build-test.yml build-release.yml; do
   wf="$ROOT/.github/workflows/$name"
   out="$TMP/${name%.yml}.sh"
   [ -f "$wf" ] || fail "missing $wf"

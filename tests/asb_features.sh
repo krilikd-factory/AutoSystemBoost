@@ -1414,7 +1414,7 @@ grep -q 'sh "$MODDIR/runtime/asb_drain_meter.sh" run' "$ROOT/service.sh" || f "s
 _svc_line="$(grep -n 'runtime/asb_drain_meter.sh" run' "$ROOT/service.sh" | cut -d: -f1)"
 awk -v L="$_svc_line" 'NR < L && /^if \[ "\$\{ASB_STOCK_PROFILE:-0\}" != "1" \]; then$/ { open = 1 } NR < L && open && /^fi$/ { open = 0 } END { exit open }' "$ROOT/service.sh" \
   || f "the meter is started inside a non-Stock branch"
-grep -q '"runtime/asb_drain_meter.sh"' "$ROOT/.github/workflows/build-debug.yml" || f "CI does not require the meter"
+grep -q '"runtime/asb_drain_meter.sh"' "$ROOT/.github/workflows/build-test.yml" || f "CI does not require the meter"
 
 ASB_DM_DIR="$T/asb"; ASB_DM_LIVE="$T/live"; ASB_DM_BL="$T/bl"; ASB_DM_PS="$T/ps"
 export ASB_DM_DIR ASB_DM_LIVE ASB_DM_BL ASB_DM_PS
@@ -1786,7 +1786,7 @@ grep -q '#include "asb_dsp_core.h"' "$SRC" || fail "legacy effect does not inclu
 grep -q 'asb_core_configure_ex' "$SRC" || fail "legacy effect does not configure the shared core"
 grep -q 'persist.vendor.asb.dsp.%s' "$SRC" || fail "legacy effect ignores the vendor-namespace props"
 grep -q 'I"$SCRIPT_DIR/DSP_AIDL"' "$ROOT/src/build_ndk_release.sh" || fail "NDK build lacks the core include path"
-for w in build-debug build-release; do
+for w in build-test build-release; do
   grep -q 'src/DSP_AIDL/asb_dsp_core.h' "$ROOT/.github/workflows/$w.yml" || fail "$w.yml does not require the core header"
 done
 

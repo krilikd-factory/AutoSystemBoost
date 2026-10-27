@@ -2626,7 +2626,7 @@ ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 TOOL="$ROOT/tools/asb_kernel_uv_coexist.sh"
 DIAG="$ROOT/tools/asb_diag.sh"
 BIN_DIAG="$ROOT/system/bin/asbdiag"
-DEBUG_WF="$ROOT/.github/workflows/build-debug.yml"
+TEST_WF="$ROOT/.github/workflows/build-test.yml"
 REL_WF="$ROOT/.github/workflows/build-release.yml"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -2688,15 +2688,16 @@ grep -Fq 'EXTERNAL KERNEL / UV COEXISTENCE' "$DIAG" || fail "asbdiag integration
 grep -Fq 'asb_kernel_uv_coexist.sh' "$DIAG" || fail "asbdiag helper invocation missing"
 cmp -s "$DIAG" "$BIN_DIAG" || fail "asbdiag copies differ"
 
-# Debug package identity changes only in staged package. It intentionally preserves base code.
-grep -Fq 'ASB_VER="${BASE_VER}-debug${DEBUG_SEQ}"' "$DEBUG_WF" || fail "V64-debug1 naming contract missing"
-grep -Fq 'DEBUG_CODE="$BASE_CODE"' "$DEBUG_WF" || fail "debug versionCode preservation missing"
-grep -Fq 'sed -i "s/^version=.*/version=${ASB_VER}/" "$PKG_DBG/module.prop"' "$DEBUG_WF" || fail "staged version-only patch missing"
-grep -Fq 'grep -qx "versionCode=${BASE_CODE}" "$PKG_DBG/module.prop"' "$DEBUG_WF" || fail "staged versionCode check missing"
-! grep -Fq 'DEBUG_CODE=$((BASE_CODE + DEBUG_SEQ))' "$DEBUG_WF" || fail "legacy debug code ladder remains"
+# Test package identity changes only in staged package. It intentionally preserves base code.
+grep -Fq 'ASB_VER="${BASE_VER}-test${TEST_SEQ}"' "$TEST_WF" || fail "V65-test1 naming contract missing"
+grep -Fq 'TEST_CODE="$BASE_CODE"' "$TEST_WF" || fail "test versionCode preservation missing"
+grep -Fq 'sed -i "s/^version=.*/version=${ASB_VER}/" "$PKG_TEST/module.prop"' "$TEST_WF" || fail "staged version-only patch missing"
+grep -Fq 'grep -qx "versionCode=${BASE_CODE}" "$PKG_TEST/module.prop"' "$TEST_WF" || fail "staged versionCode check missing"
+! grep -Fq 'TEST_CODE=$((BASE_CODE + TEST_SEQ))' "$TEST_WF" || fail "legacy test code ladder remains"
+[ ! -e "$ROOT/.github/workflows/build-debug.yml" ] || fail "separate debug workflow still exists"
 
 grep -Fq 'tools/asb_kernel_uv_coexist.sh' "$REL_WF" || fail "release package does not carry probe"
-grep -Fq 'tools/asb_kernel_uv_coexist.sh' "$DEBUG_WF" || fail "debug package does not carry probe"
+grep -Fq 'tools/asb_kernel_uv_coexist.sh' "$TEST_WF" || fail "test package does not carry probe"
 
 echo "PASS kernel/UV coexistence and V64-debug identity contract"
 )
