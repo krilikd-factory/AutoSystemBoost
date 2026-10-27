@@ -4214,6 +4214,7 @@ printf 'Cmdline: old.crash\n' > "$T/tomb/tombstone_03"; touch -d "@$((NOW-200000
 
 out="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state0" sh "$D" "$CAP")" || fail "digest exit"
 printf '%s\n' "$out" | grep -Eq '^meta	elapsed_min=720	target_h=24	running=0	started=[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}	profile=smart$' || fail "meta line: $(printf '%s' "$out" | head -1)"
+printf '%s\n' "$out" | grep -qF "capture	dir=$CAP" || fail "capture path for report.json export"
 printf '%s\n' "$out" | grep -q '^drain	pctph=2.0	total_drop=22	hours=10.8	ma=99$' || fail "drain line"
 printf '%s\n' "$out" | grep -q '^night	dur_min=469	drop=8	pctph=1.0	awake=8$' || fail "night chain"
 # fix207: the night chain's detail rides along - weighted average current, mobile
@@ -4346,13 +4347,13 @@ ra="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST
 printf '%s\n' "$ra" | grep -q '^hist	' && fail "the first finished capture must not invent a trend"
 [ -s "$HST/report_history.tsv" ] || fail "a finished capture left no history line"
 rb="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST" sh "$D" "$CB")"
-printf '%s\n' "$rb" | grep -Eq '^hist	started=[0-9-]+ [0-9:]+	night=1.0	drain=2.0	jank=5.1	cpu=41	clamps=2$' || fail "the second capture must name the first: $(printf '%s\n' "$rb" | grep '^hist')"
+printf '%s\n' "$rb" | grep -Eq '^hist	started=[0-9-]+ [0-9:]+	night=1.0	drain=2.0	jank=5.1	cpu=41	clamps=2	device=OP611FL1	rom=CPH2745_16.0.10.601\(EX01\)	mod=V65-test	elapsed=720	on_pct=0	off_min=1036$' || fail "the second capture must name the first with comparison context: $(printf '%s\n' "$rb" | grep '^hist')"
 ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST" sh "$D" "$CAP" >/dev/null
 [ "$(wc -l < "$HST/report_history.tsv")" -eq 2 ] || fail "re-opening the same capture must rewrite its line, not duplicate it"
 rc="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST" sh "$D" "$CAP")"
 # capture B has no report and no throttle trace: its trend line carries dashes, and a
 # dash must not break the row or count as a number.
-printf '%s\n' "$rc" | grep -Eq '^hist	started=[0-9-]+ [0-9:]+	night=1.0	drain=2.0	jank=-	cpu=41	clamps=-$' || fail "a capture without jank data still trends, with dashes: $(printf '%s\n' "$rc" | grep '^hist')"
+printf '%s\n' "$rc" | grep -Eq '^hist	started=[0-9-]+ [0-9:]+	night=1.0	drain=2.0	jank=-	cpu=41	clamps=-	device=-	rom=-	mod=-	elapsed=2866	on_pct=-	off_min=-$' || fail "a capture without jank data still trends, with dashes and explicit unknown context: $(printf '%s\n' "$rc" | grep '^hist')"
 
 # --- the REAL parser/tips in node, fed the fixture digest and the shipped locales ---
 {
@@ -4361,14 +4362,19 @@ printf '%s\n' "$rc" | grep -Eq '^hist	started=[0-9-]+ [0-9:]+	night=1.0	drain=2.
 let ASB_LANG = 'ru';
 function T(k, d) { const L = I18N[ASB_LANG]; return (L && typeof L[k] === 'string') ? L[k] : d; }
 EOF
-  for fn in Tcfg parseLogReport logReportT logReportDur logReportDurSec logReportTips; do
+  for fn in Tcfg parseLogReport logReportT logReportDur logReportDurSec logReportTips \
+    logReportAnalyze logReportHistoryComparable logReportMachineDigest logReportAnalysisT \
+    logReportTipText logReportRow logReportSec logReportNote logReportHero \
+    logReportAppendAnalysis logReportRender shQuote; do
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
+  sed -n '/^async function logReportExportJson(/,/^}/p' "$H"
   cat <<'EOF'
 let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
 const txt = [
   'meta\telapsed_min=720\ttarget_h=24\trunning=1\tstarted=2026-10-21 09:40\tprofile=smart',
   'meta2\tmodel=CPH2745\tdevice=OP611FL1\tsoc=SM8850\trom=TESTBUILD\tmod=V65-test',
+  'capture\tdir=/storage/emulated/0/asb_log_full_day_test',
   'heat\tpeak_phase=active\tpeak_c=41\twarm_min=0\tskin_min=0',
   'mwake\tn=14\tper_night=2.6\ttypical_s=38',
   'hist\tstarted=2026-10-20 09:10\tnight=0.6\tdrain=2.4\tjank=5.1\tcpu=41\tclamps=2',
@@ -4607,8 +4613,99 @@ chk(logReportT('lr_tip_ok', '', {}) === 'No serious issues found - drain looks h
 chk(parseLogReport('error\tno_capture\n').error === 'no_capture', 'no_capture error survives the parser');
 chk(parseLogReport('').error === 'empty', 'empty output is an error, not data');
 chk(parseLogReport('wl\tnone=1\n').ok === false, 'no meta line means not ok');
-if (bad) process.exit(1);
-console.log('ok');
+
+/* fix225: the analytical layer has explicit evidence floors and never turns overhead or
+   correlation into a claimed net benefit / sole cause. */
+chk(d.sections.capture.dir === '/storage/emulated/0/asb_log_full_day_test', 'capture export path parses');
+const analysis = logReportAnalyze(d);
+chk(analysis.schema === 2 && analysis.quality.level === 'high', 'rich capture quality: ' + JSON.stringify(analysis.quality));
+chk(analysis.verdicts.length === 5 && analysis.actions.length <= 3, 'five verdict domains and at most three priority actions');
+const selectedActions = analysis.actions.map(t => t.key);
+chk(analysis.observations.every(t => selectedActions.indexOf(t.key) < 0), 'priority actions are not duplicated in observations');
+chk(analysis.chains.some(c => c.kind === 'hypothesis' && c.key === 'lr_chain_holder'), 'holder causality remains a hypothesis');
+chk(analysis.chains.some(c => c.kind === 'fact' && c.key === 'lr_chain_asb_crash'), 'an ASB crash remains a fact');
+const overheadOnly = parseLogReport('meta\telapsed_min=120\nasbcost\tcpu_msh=1851\twrites_h=176\twakes_h=491\n');
+chk(logReportAnalyze(overheadOnly).verdicts.find(v => v.domain === 'asb').state === 'normal', 'ordinary overhead is neutral, not a claimed saving');
+const machine = logReportMachineDigest(d);
+chk(machine.schema === 2 && machine.capture.elapsed_min === 720 && machine.device.device === 'OP611FL1', 'machine digest capture/device');
+chk(machine.quality.level === analysis.quality.level && machine.scenario.family === analysis.scenario_family, 'machine digest quality/scenario');
+chk(machine.verdicts.length === 5 && machine.facts.every(c => c.kind === 'fact') && machine.hypotheses.every(c => c.kind === 'hypothesis'), 'machine digest separates facts and hypotheses');
+chk(machine.actions.length <= 3 && machine.asb_overhead.native_cpu_ms_per_wakeup > 3.7 && machine.asb_overhead.native_cpu_ms_per_wakeup < 3.8, 'machine digest actions and overhead');
+chk(JSON.parse(JSON.stringify(machine)).schema === 2, 'machine digest is JSON serializable');
+const early = parseLogReport('meta\telapsed_min=10\ttarget_h=24\trunning=1\nwl\tnone=1\n');
+const earlyA = logReportAnalyze(early);
+chk(earlyA.quality.level === 'low' && earlyA.verdicts.every(v => v.state === 'unknown'), 'meta-only capture yields no healthy verdict');
+chk(earlyA.actions.length === 0 && earlyA.observations.length === 1 && earlyA.observations[0].key === 'lr_tip_wait', 'early capture waits instead of recommending or claiming health');
+const shortNight = parseLogReport('meta\telapsed_min=180\nnight\tdur_min=40\tpctph=1.5\tawake=20\tdrop=1\n');
+const shortA = logReportAnalyze(shortNight);
+chk(shortA.verdicts.find(v => v.domain === 'drain').state === 'unknown' && shortA.verdicts.find(v => v.domain === 'deep_sleep').state === 'unknown', 'forty idle minutes produce neither drain nor sleep verdict');
+const lowFrames = parseLogReport('meta\telapsed_min=120\njank\tpct=19\tjps=9\tframes=19999\n');
+chk(logReportAnalyze(lowFrames).verdicts.find(v => v.domain === 'smoothness').state === 'unknown', 'thin jank sample stays unknown');
+const wakeBad = parseLogReport('meta\telapsed_min=120\njank\tpct=1.0\tjps=0.4\tframes=30000\njwake\twakes=8\tpct=8.0\tord=1.0\tframes=900\ttop=com.android.systemui\n');
+chk(logReportAnalyze(wakeBad).verdicts.find(v => v.domain === 'smoothness').state === 'problem', 'wake-window jank can overturn a good average');
+const screenLed = parseLogReport('meta\telapsed_min=180\ncover\ton_min=150\toff_min=30\ton_pct=83\nscr\ton_pctph=4.2\toff_pctph=9.9\ton_min=150\toff_min=30\nnight\tdur_min=180\tpctph=3.0\tawake=30\n');
+const screenA = logReportAnalyze(screenLed);
+chk(screenA.scenario_family === 'screen_on' && screenA.verdicts.find(v => v.domain === 'drain').metric === '4.2%/h' && screenA.verdicts.find(v => v.domain === 'drain').reason === 'screen_on_ledger', 'screen-led capture uses the matching screen-on ledger');
+const oldHistory = d.hist[0];
+chk(!logReportHistoryComparable(d, analysis, oldHistory), 'legacy six-field history is not comparable');
+const sameHistory = { started:'2026-10-20 09:10', night:'1.0', drain:'2.0', jank:'1.4', device:'OP611FL1', rom:'TESTBUILD', mod:'old', elapsed:720, onPct:'40', offMin:300 };
+const histBase = parseLogReport('meta\telapsed_min=120\nmeta2\tdevice=OP611FL1\trom=TESTBUILD\ncover\ton_min=40\toff_min=60\ton_pct=40\n');
+const histBaseA = logReportAnalyze(histBase);
+chk(logReportHistoryComparable(histBase, histBaseA, sameHistory), 'same device/ROM/scenario and sufficient durations are comparable');
+chk(!logReportHistoryComparable(histBase, histBaseA, Object.assign({}, sameHistory, {rom:'OTHER'})), 'ROM mismatch blocks a numeric trend');
+chk(!logReportHistoryComparable(histBase, histBaseA, Object.assign({}, sameHistory, {elapsed:20})), 'short previous capture blocks a numeric trend');
+chk(!logReportHistoryComparable(histBase, histBaseA, Object.assign({}, sameHistory, {onPct:'-'})), 'unknown scenario blocks a numeric trend');
+
+/* Real DOM-building functions over a small DOM stub: summary precedes details, five
+   verdicts are visible, incompatible history never prints a numeric improvement. */
+ASB_LANG = 'ru';
+function domEl(tag) { return { tag:tag, children:[], _text:'', className:'', disabled:false,
+  get textContent() { return this._text; }, set textContent(v) { this._text = String(v); this.children = []; },
+  appendChild(c) { this.children.push(c); return c; }, classList:{ add() {} } }; }
+const reportBody = domEl('div'), reportStatus = domEl('div'), jsonButton = domEl('button');
+function _el(id) { return id === 'reportBody' ? reportBody : id === 'reportStatus' ? reportStatus : id === 'rpJson' ? jsonButton : null; }
+const document = { createElement:domEl };
+global.window = {};
+function allText(e) { return (e.textContent || '') + e.children.map(allText).join('|'); }
+function countClass(e, name) { return (String(e.className).split(/\s+/).indexOf(name) >= 0 ? 1 : 0) + e.children.reduce((n,c) => n + countClass(c,name), 0); }
+logReportRender(early);
+chk(countClass(reportBody, 'lgr-verdict') === 5, 'summary renders all five verdict rows');
+chk(reportBody.children[0].children[0].textContent === I18N.ru.lr_sec_summary, 'smart summary is the first report section');
+chk(countClass(reportBody, 'lgr-action') === 0 && allText(reportBody).indexOf(I18N.ru.lr_no_actions_early) >= 0, 'early DOM has no unsupported action');
+const trendText = 'meta\telapsed_min=120\ttarget_h=24\trunning=0\tstarted=2026-10-21 09:40\tprofile=smart\nmeta2\tdevice=OP611FL1\trom=TESTBUILD\ndrain\tpctph=2.0\n';
+const incompatible = parseLogReport(trendText + 'hist\tstarted=2026-10-20 09:10\tnight=-\tdrain=3.0\tjank=-\tcpu=-\tclamps=-\n');
+logReportRender(incompatible);
+let trendSec = reportBody.children.find(e => e.children[0] && e.children[0].textContent === I18N.ru.lr_sec_trend);
+chk(trendSec && allText(trendSec).indexOf(I18N.ru.lr_trend_unmatched) >= 0 && allText(trendSec).indexOf('3.0') < 0, 'incompatible history has no was/became numbers');
+const compatible = parseLogReport(trendText + 'hist\tstarted=2026-10-20 09:10\tnight=-\tdrain=3.0\tjank=-\tcpu=-\tclamps=-\tdevice=OP611FL1\trom=TESTBUILD\tmod=old\telapsed=120\ton_pct=40\toff_min=60\n');
+chk(logReportHistoryComparable(compatible, logReportAnalyze(compatible), compatible.hist[0]), 'render fixture history is comparable: ' + JSON.stringify(compatible.hist[0]) + ' / ' + JSON.stringify(compatible.sections.meta2));
+logReportRender(compatible);
+trendSec = reportBody.children.find(e => e.children[0] && e.children[0].textContent === I18N.ru.lr_sec_trend);
+chk(trendSec && allText(trendSec).indexOf('3.0') >= 0 && allText(trendSec).indexOf(I18N.ru.lr_trend_matched) >= 0, 'compatible history shows numbers plus the non-A/B caveat: ' + (trendSec ? allText(trendSec) : 'no section') + ' comparable-after=' + logReportHistoryComparable(compatible, compatible.analysis, compatible.hist[0]) + ' scenario=' + compatible.analysis.scenario_family);
+
+let exportCommand = '', exportErrno = 0; const exportToasts = [];
+function toast(msg, kind) { exportToasts.push({msg:msg, kind:kind}); }
+async function run(cmd) { exportCommand = cmd; return { errno:exportErrno, stderr:'write failed' }; }
+async function verifyJsonExport() {
+  compatible.sections.capture = { dir:"/storage/emulated/0/asb log 'quoted'" };
+  compatible.sections.meta.profile = 'Смарт';
+  window._asbLogReportData = compatible;
+  await logReportExportJson();
+  chk(jsonButton.disabled === false && exportCommand.indexOf("printf '%s' ") === 0, 'JSON export button and command');
+  chk(exportCommand.endsWith(shQuote("/storage/emulated/0/asb log 'quoted'/report.json")), 'JSON export quotes the exact capture path');
+  const match = exportCommand.match(/^printf '%s' '([^']*)' \| base64 -d > /);
+  chk(!!match, 'JSON export has a base64 payload');
+  if (match) {
+    const exported = JSON.parse(Buffer.from(match[1], 'base64').toString('utf8'));
+    chk(exported.schema === 2 && exported.capture.profile === 'Смарт', 'JSON export preserves UTF-8 and schema 2');
+  }
+  exportErrno = 1; await logReportExportJson();
+  chk(exportToasts.some(t => t.kind === 'error') && jsonButton.disabled === false, 'JSON write failure reports an error and re-enables the button');
+}
+verifyJsonExport().then(function () {
+  if (bad) process.exit(1);
+  console.log('ok');
+}, function (e) { console.log('FAIL async JSON export: ' + e.stack); process.exit(1); });
 EOF
 } > "$T/t.js"
 rout="$(node "$T/t.js" 2>&1)" || fail "$rout"
@@ -4653,13 +4750,30 @@ KEYS = ['lr_menu','lr_refresh','lr_loading','lr_none_title','lr_none_body','lr_f
         'lr_jphase_head','lr_jstate_head','lr_gauge_note','lr_nd_verdict_short',
         'lr_tip_jank_wake','lr_tip_jank_wake_wh',
         'lr_sec_nightd_short','lr_nd_spent_short','lr_tip_awake_aod','lr_tip_sradio']
+KEYS += ['lr_sec_summary','lr_sec_causes','lr_sec_actions','lr_sec_observations',
+         'lr_sum_drain','lr_sum_thermal','lr_sum_smooth','lr_sum_sleep','lr_sum_asb',
+         'lr_state_good','lr_state_normal','lr_state_problem','lr_state_unknown',
+         'lr_quality_low','lr_quality_medium','lr_quality_high',
+         'lr_scenario_charging','lr_scenario_audio_speaker','lr_scenario_screen_on_heavy',
+         'lr_scenario_screen_off_idle','lr_scenario_screen_off_network_active',
+         'lr_scenario_screen_on_light','lr_scenario_mixed','lr_kind_fact','lr_kind_hypothesis',
+         'lr_sum_drain_on','lr_sum_drain_night','lr_sum_drain_off','lr_sum_need_time',
+         'lr_sum_thermal_detail','lr_sum_no_sensor','lr_sum_smooth_detail','lr_sum_need_frames',
+         'lr_sum_sleep_detail','lr_sum_need_night','lr_sum_asb_crash','lr_sum_asb_cost',
+         'lr_sum_asb_unknown','lr_quality_short','lr_quality_full',
+         'lr_chain_asb_crash','lr_chain_heat','lr_chain_aod','lr_chain_radio','lr_chain_holder',
+         'lr_chain_alarm','lr_chain_hold','lr_chain_wakegap','lr_chain_wake','lr_chain_audio',
+         'lr_chain_cost','lr_no_actions','lr_no_actions_early','lr_trend_matched',
+         'lr_trend_unmatched','lr_tip_wait','lr_json_saved','lr_json_error']
 EMO = {'lr_sec_drain': '\U0001f50b', 'lr_sec_wake': '\u23f0', 'lr_sec_crash': '\U0001f4a5',
        'lr_sec_thermal': '\U0001f321\ufe0f', 'lr_sec_tips': '\U0001f4a1',
        'lr_sec_smooth': '\U0001f4f1', 'lr_sec_display': '\U0001f5a5',
        'lr_sec_smart': '\U0001f9e0', 'lr_sec_asb': '\u2699\ufe0f',
        'lr_sec_profiles': '\u2696\ufe0f', 'lr_sec_phases': '\U0001f4ca',
        'lr_sec_nightd': '\U0001f319', 'lr_sec_trend': '\U0001f4c8',
-       'lr_sec_nightd_short': '\U0001f319'}
+       'lr_sec_nightd_short': '\U0001f319', 'lr_sec_summary': '\U0001f9ed',
+       'lr_sec_causes': '\U0001f517', 'lr_sec_actions': '\U0001f3af',
+       'lr_sec_observations': '\U0001f4a1'}
 PH = {'lr_running': ['{min}', '{h}'], 'lr_crash_n': ['{n}'], 'lr_crash_latest': ['{proc}'],
       'lr_crash_asb': ['{n}'], 'lr_sysui': ['{n}'], 'lr_temp_max': ['{cpu}', '{surf}'],
       'lr_clamp_some': ['{n}', '{owner}'], 'lr_tip_night': ['{pct}'], 'lr_tip_awake': ['{awake}'],
@@ -4685,6 +4799,16 @@ PH = {'lr_running': ['{min}', '{h}'], 'lr_crash_n': ['{n}'], 'lr_crash_latest': 
       'lr_gauge_note': ['{x}', '{w}'], 'lr_nd_verdict_short': ['{min}', '{pct}'],
       'lr_tip_jank_wake': ['{pct}', '{ord}', '{who}'], 'lr_tip_jank_wake_wh': ['{pct}', '{ord}'],
       'lr_tip_awake_aod': ['{awake}', '{lit}', '{of}'], 'lr_tip_sradio': ['{mib}', '{set}']}
+PH.update({'lr_sum_drain_on':['{min}'], 'lr_sum_drain_night':['{min}','{deep}'],
+      'lr_sum_drain_off':['{min}'], 'lr_sum_thermal_detail':['{warm}','{clamps}'],
+      'lr_sum_smooth_detail':['{frames}','{wake}'], 'lr_sum_sleep_detail':['{awake}','{min}'],
+      'lr_sum_asb_cost':['{ms}','{per}'], 'lr_quality_short':['{min}'],
+      'lr_chain_asb_crash':['{n}'], 'lr_chain_heat':['{min}','{clamps}','{owner}','{phase}'],
+      'lr_chain_aod':['{awake}','{lit}','{of}'], 'lr_chain_radio':['{awake}','{mib}'],
+      'lr_chain_holder':['{awake}','{who}'], 'lr_chain_alarm':['{awake}','{who}','{n}'],
+      'lr_chain_hold':['{awake}','{who}','{n}'], 'lr_chain_wakegap':['{awake}'],
+      'lr_chain_wake':['{pct}','{ord}'], 'lr_chain_audio':['{min}','{pct}'],
+      'lr_chain_cost':['{ms}','{wakes}','{per}'], 'lr_json_saved':['{path}']})
 files = sorted((root / 'webroot' / 'i18n').glob('*.json'))
 assert len(files) == 13, 'locale count'
 for p in files:
