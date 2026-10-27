@@ -2668,6 +2668,10 @@ static int    g_fg_fix_n = 0;
 static time_t g_fg_fix_window = 0;
 static time_t g_fg_backoff_until = 0;
 static unsigned long g_fg_fix_total = 0;
+/* fix234: Battery's interaction lift also belongs to this single foreground owner.
+ * Save/restore the shell baseline here instead of adding a second foreground writer. */
+static int    g_fg_lift_on = 0;
+static int    g_fg_lift_saved = -1;
 
 static int writer_fg_ordinary(int value) {
     return value > 35 && value < 100;
@@ -2691,12 +2695,48 @@ static void writer_fg_save_value(const char *path, int value) {
     fclose(f);
 }
 
-static void writer_fg_guard(int screen_on, int smart_screen_policy) {
+static void writer_fg_guard(int screen_on, int smart_screen_policy,
+                            int battery_lift, int lift_pct) {
     time_t now = time(NULL);
     if (g_cam_guard_on) { g_fg_max_since = 0; return; }
 
     int cur = uclamp_read_pct(UCLAMP_FG_MAX, -1);
     if (cur < 0) return;
+
+    /* fix234: SystemUI/launcher work can live in foreground rather than top-app. Battery's
+     * existing CPU/top-app lift therefore still left those animation threads at the ordinary
+     * 50% ceiling. Borrow this tier for the very same gated window, then hand back the exact
+     * saved shell value. No timer, background worker or new profile policy is involved. */
+    if (g_fg_lift_on && (!battery_lift || !screen_on)) {
+        char profile[24];
+        writer_read_current_profile(profile, sizeof(profile));
+        int restore = !profile[0] || !strcmp(profile, "battery");
+        if (restore && g_fg_lift_saved > 0) {
+            if (sysfs_write_int(UCLAMP_FG_MAX, g_fg_lift_saved) == 0)
+                cur = g_fg_lift_saved;
+        }
+        g_fg_lift_on = 0;
+        g_fg_lift_saved = -1;
+        g_fg_max_since = 0;
+        /* A profile apply owns the new baseline; never restore Battery's old value over it. */
+        if (!restore) return;
+    }
+    if (battery_lift && screen_on) {
+        if (g_fg_lift_on) { g_fg_max_since = 0; return; }
+        int want = lift_pct;
+        if (want < 50) want = 50;
+        if (want > 100) want = 100;
+        if (cur < want) {
+            int saved = writer_fg_ordinary(cur) ? cur : writer_fg_fallback();
+            if (sysfs_write_int(UCLAMP_FG_MAX, want) == 0) {
+                g_fg_lift_saved = saved;
+                g_fg_lift_on = 1;
+                g_fg_last_good = saved;
+                g_fg_max_since = 0;
+                return;
+            }
+        }
+    }
 
     if (!screen_on) {
         g_fg_max_since = 0;

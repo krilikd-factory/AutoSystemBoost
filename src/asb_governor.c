@@ -10613,10 +10613,14 @@ int main(int argc, char **argv) {
              * shell_overridden_up watchdog Anti-clamp above handles vendor DOWN-clamps (gap >
              * 0).
              */
-            /* One native foreground owner: Smart screen transitions plus the max guard.
-             * Manual profiles retain their baseline without gaining Smart's sleep cap. */
+            /* One native foreground owner: Smart screen transitions, the max guard and
+             * Battery's short interaction lift (fix234). Other manual profiles retain their
+             * baseline without gaining either Smart's sleep cap or Battery's foreground lift. */
             if (fsm.profile_idx != PROFILE_PERFORMANCE)
-                writer_fg_guard(metrics.misc.screen_on, fsm.profile_idx == PROFILE_SMART);
+                writer_fg_guard(metrics.misc.screen_on, fsm.profile_idx == PROFILE_SMART,
+                                fsm.profile_idx == PROFILE_BATTERY && g_unlock_lift_now &&
+                                    !fsm.thermal_cap && !g_fsm_cooldown_active,
+                                g_asb_cfg.unlock_lift_pct);
             if (fsm.profile_idx != PROFILE_PERFORMANCE &&
                 (fsm.state == ASB_STATE_DEEP_IDLE || fsm.state == ASB_STATE_LIGHT_IDLE ||
                  fsm.state == ASB_STATE_MODERATE  || fsm.state == ASB_STATE_HEAVY)) {
