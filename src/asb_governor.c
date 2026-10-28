@@ -3193,6 +3193,136 @@ static void asb_unlock_lift_apply(asb_profile_caps_t *caps) {
 }
 
 /* Smart night slot with the screen on (fix150) - see asb_smart_night_awake. */
+
+/* Battery jank insurance (fix236).
+ *
+ * This is deliberately NOT Smart's per-app learner. It runs only in Battery and only while
+ * the user-owned session recorder is live in this boot. The existing on-demand graphicsstats
+ * probe supplies a foreground window; a sufficiently large, genuinely janky window arms the
+ * same short, ceiling-only unlock lift. There is no frequency floor, persistent offset, app
+ * table or background polling worker. The ordinary lift expiry performs exact handback, and
+ * camera/thermal/profile gates remain ahead of it. */
+#define ASB_BJANK_PROBE_S       60
+#define ASB_BJANK_TTL_MS        10000L
+#define ASB_BJANK_MIN_FRAMES    300L
+#define ASB_BJANK_MIN_JANKY     12L
+#define ASB_BJANK_MIN_PCT       8L
+#define ASB_BJANK_LOCK          "/data/adb/asb/logkit/full_day_webui.lock"
+static uint64_t g_bjank_hash = 0;
+static char     g_bjank_pkg[64];
+static long     g_bjank_frames = -1, g_bjank_janky = -1;
+static long     g_bjank_probe_ts = 0, g_bjank_gfx_seen = 0;
+static long     g_bjank_log_ts = 0;
+static int      g_bjank_log_ok = 0, g_bjank_armed = 0;
+static unsigned long g_bjank_probes = 0, g_bjank_windows = 0, g_bjank_triggers = 0;
+
+static int asb_bjank_read(const char *path, char *buf, size_t cap) {
+    if (!buf || cap < 2) return -1;
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return -1;
+    ssize_t n = read(fd, buf, cap - 1);
+    close(fd);
+    if (n <= 0) return -1;
+    buf[n] = 0;
+    while (n > 0 && (buf[n - 1] == '\n' || buf[n - 1] == '\r' || buf[n - 1] == ' '))
+        buf[--n] = 0;
+    return n > 0 ? 0 : -1;
+}
+
+static int asb_bjank_capture_live(long now) {
+    if (g_bjank_log_ts > 0 && now >= g_bjank_log_ts && now - g_bjank_log_ts < 5)
+        return g_bjank_log_ok;
+    g_bjank_log_ts = now;
+    g_bjank_log_ok = 0;
+    char boot[80], lock_boot[80], pid_s[24];
+    if (asb_bjank_read("/proc/sys/kernel/random/boot_id", boot, sizeof(boot)) < 0 ||
+        asb_bjank_read(ASB_BJANK_LOCK "/boot_id", lock_boot, sizeof(lock_boot)) < 0 ||
+        strcmp(boot, lock_boot) != 0 ||
+        asb_bjank_read(ASB_BJANK_LOCK "/pid", pid_s, sizeof(pid_s)) < 0) return 0;
+    char *end = NULL;
+    long pid = strtol(pid_s, &end, 10);
+    if (!end || *end || pid <= 1 || kill((pid_t)pid, 0) != 0) return 0;
+    g_bjank_log_ok = 1;
+    return 1;
+}
+
+static void asb_bjank_reset_window(void) {
+    g_bjank_hash = 0;
+    g_bjank_pkg[0] = 0;
+    g_bjank_frames = -1;
+    g_bjank_janky = -1;
+}
+
+static void asb_bjank_disarm(void) {
+    if (g_bjank_armed) {
+        g_bjank_armed = 0;
+        g_unlock_until_ms = 0;
+        g_unlock_lift_now = 0;
+        g_unlock_edge = 1;
+    }
+    asb_bjank_reset_window();
+}
+
+static void asb_battery_jank_guard_tick(const asb_fsm_t *fsm, const asb_metrics_t *m) {
+    long now = (long)time(NULL);
+    long now_ms = asb_clock_ms(CLOCK_BOOTTIME);
+    if (g_bjank_armed && now_ms >= g_unlock_until_ms) g_bjank_armed = 0;
+    int on = g_asb_cfg.battery_jank_guard && fsm->profile_idx == PROFILE_BATTERY &&
+             m->misc.screen_on && !m->misc.camera_active && !fsm->thermal_cap &&
+             g_pkg_detect_ok && g_smart_rt.app_hash != 0 &&
+             g_smart_rt.app_hint < ASB_APP_GAMING && g_smart_rt.app_pkg_cached[0] &&
+             asb_bjank_capture_live(now);
+    if (!on) { asb_bjank_disarm(); return; }
+
+    uint64_t h = g_smart_rt.app_hash;
+    if (h != g_bjank_hash) {
+        asb_bjank_disarm();
+        g_bjank_hash = h;
+        snprintf(g_bjank_pkg, sizeof(g_bjank_pkg), "%s", g_smart_rt.app_pkg_cached);
+    }
+
+    struct stat st;
+    if (stat(ASB_GFX_FILE, &st) == 0 && (long)st.st_mtime != g_bjank_gfx_seen &&
+        g_bjank_probe_ts > 0 && (long)st.st_mtime >= g_bjank_probe_ts) {
+        g_bjank_gfx_seen = (long)st.st_mtime;
+        long fr = -1, jk = -1;
+        if (asb_gfx_read_pkg(g_bjank_pkg, &fr, &jk) == 0) {
+            if (g_bjank_frames >= 0 && fr >= g_bjank_frames && jk >= g_bjank_janky) {
+                long df = fr - g_bjank_frames, dj = jk - g_bjank_janky;
+                g_bjank_windows++;
+                if (df >= ASB_BJANK_MIN_FRAMES && dj >= ASB_BJANK_MIN_JANKY &&
+                    dj * 100L >= df * ASB_BJANK_MIN_PCT) {
+                    g_unlock_until_ms = now_ms + ASB_BJANK_TTL_MS;
+                    g_unlock_lift_now = 1;
+                    g_unlock_edge = 1;
+                    g_bjank_armed = 1;
+                    g_unlock_arm_why = "battery jank guard";
+                    g_bjank_triggers++;
+                    asb_log("battery_jank_guard: %ld/%ld janky frames (%ld%%), ceilings to %d%% for %lds",
+                            dj, df, df > 0 ? dj * 100L / df : 0L,
+                            g_asb_cfg.unlock_lift_pct, ASB_BJANK_TTL_MS / 1000L);
+                }
+            }
+            g_bjank_frames = fr;
+            g_bjank_janky = jk;
+        }
+    }
+
+    if (g_bjank_probe_ts == 0 || now - g_bjank_probe_ts >= ASB_BJANK_PROBE_S ||
+        now < g_bjank_probe_ts) {
+        const char *pk = g_bjank_pkg;
+        int ok = pk[0] != 0;
+        for (const char *c = pk; *c && ok; c++)
+            ok = ((*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') ||
+                  (*c >= '0' && *c <= '9') || *c == '.' || *c == '_');
+        g_bjank_probe_ts = now;
+        if (!ok) return;
+        g_bjank_probes++;
+        asb_run_modscript("runtime/asb_gfx_probe.sh", pk);
+    }
+}
+
+
 static int g_rec_on_applied = 0;            /* fix184: the records' screen-on lean in force, x1000 */
 static int g_smart_cold_guard = 0;          /* fix185: cold pack at low charge - battery rails */
 static int g_smart_night_awake_on = 0;      /* the evening values replaced the night ones */
@@ -9891,6 +10021,7 @@ int main(int argc, char **argv) {
                 }
                 asb_rec_tick(&_ri);
                 asb_smooth_probe_tick(&fsm, &metrics);
+                asb_battery_jank_guard_tick(&fsm, &metrics);
                 if (g_rec_event) { asb_log("%s", g_rec_event_msg); g_rec_event = 0; }
                 if (g_rec_knob_changed) { g_rec_knob_changed = 0; force_write = 1; }
             }

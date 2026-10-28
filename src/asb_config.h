@@ -203,6 +203,7 @@ typedef struct {
     int   main_capacity_parity;      /* 1=Smart keeps the main ceiling level with the prime (fix130) */
     int   unlock_lift_s;             /* Smart: seconds the ceilings stay lifted after a wake (fix150), 0=off */
     int   unlock_lift_pct;           /* ... lifted to this share of each cluster's hardware max, 50-100 */
+    int   battery_jank_guard;        /* Battery-only, log-capture-gated temporary ceiling insurance */
     int   smart_night_awake;         /* 1=Smart night slots with the screen on lean no harder than the evening (fix150) */
     int   smart_records;             /* 1=Smart measures drain per situation and keeps the best setting found (fix184) */
     int   smart_records_explore;     /* 1=... and keeps trying a neighbouring setting until none beats it */
@@ -372,6 +373,7 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->main_capacity_parity         = 1;
     c->unlock_lift_s                = 3;
     c->unlock_lift_pct              = 80;
+    c->battery_jank_guard           = 1;
     c->smart_night_awake            = 1;
     c->smart_records                = 1;
     c->smart_records_explore        = 1;
@@ -612,6 +614,7 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "smart_records"))           c->smart_records           = atoi(v) ? 1 : 0;
     else if (!strcmp(k, "smart_records_explore"))   c->smart_records_explore   = atoi(v) ? 1 : 0;
     else if (!strcmp(k, "smart_microwake"))         c->smart_microwake         = atoi(v) ? 1 : 0;
+    else if (!strcmp(k, "battery_jank_guard"))       c->battery_jank_guard       = atoi(v) ? 1 : 0;
     else if (!strcmp(k, "smart_smooth"))            c->smart_smooth            = atoi(v) ? 1 : 0;
     else if (!strcmp(k, "smart_cold_guard"))        c->smart_cold_guard        = atoi(v) ? 1 : 0;
     else if (!strcmp(k, "prime_escape_burst_s"))    c->prime_escape_burst_s    = atoi(v);
