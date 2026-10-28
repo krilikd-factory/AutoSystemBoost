@@ -4705,6 +4705,7 @@ const TECH_ICON_PATHS = {
   memhold: '<rect x="5" y="7" width="14" height="11" rx="2"/><path d="M9 7V4.5M15 7V4.5M9 20.5V18M15 20.5V18"/><path d="M12 10l2.2.9v1.5c0 1.4-.9 2.3-2.2 2.9-1.3-.6-2.2-1.5-2.2-2.9v-1.5z"/>'
          + '<path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"></path>'
          + '<path d="M9.5 12.5l1.8 1.8 3.4-3.6"></path>',
+  kernel: '<rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 9h6v6H9zM9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>',
   /* Completed ASB vector system: centred silhouettes, 4–20px optical frame and one coherent rounded-line language. */
   /* Smart: an adaptive core with four independent sensor inputs. The small neural spark
      sits on a clean chip plane instead of the old ambiguous star-and-orbits drawing. */
@@ -6454,6 +6455,7 @@ const SNAP_KEYS = [
   'bt_link_stability',
   'BG_TRIM_LEVEL',
   'mglru_hold',
+  'kernel_sched_stats',
   'cool_gaming',
   'auto_battery_enable',
   'charge_aware_enable',
@@ -6558,7 +6560,7 @@ const CFG_ITEMS = [
   { key:'CAMERA_CONTRAST', type:'range', def:'3', min:0, max:10, step:1, name:'Contrast & Colour Depth',
     desc:'The tone curve’s contrast and saturation scales. This is a different axis from Camera Grade: that one changes the colour matrix, this one gives darker shadows and richer colour. 3 is stock; 10 reaches 170% for a clearly visible result. Reboot to apply.' },
   { key:'CAMERA_GRAIN', type:'range', def:'3', min:0, max:10, step:1, name:'Film Grain',
-    desc:'The camera adds grain back after denoising, because a perfectly smooth image reads as plastic. 3 is stock, 0 removes it, and 10 reaches 10× the shipped grain for a deliberately extreme film look. Every addNoiseWeight* key present in the firmware tuning is patched, including mode-specific variants. High levels are intentionally visible and can look coarse in shadows. Reboot to apply.' },
+    desc:'The camera adds grain back after denoising, because a perfectly smooth image reads as plastic. 3 is stock, 0 removes it, and 10 reaches 16× the shipped grain for a deliberately extreme film look. Every addNoiseWeight* key present in the firmware tuning is patched, including mode-specific variants. High levels are intentionally visible and can look coarse in shadows. Reboot to apply.' },
   { key:'CAMERA_PORTRAIT', type:'range', def:'0', min:0, max:6, step:1, name:'Portrait AI',
     desc:'Neural processing on faces and skin, which ships switched off — the weights are all zero. Raising it restores detail that the denoiser flattens; level 6 reaches the safe blend-weight ceiling. Start at 1–2, because high levels are intentionally stylised. Portrait modes only; reboot to apply.' },
   { key:'CAMERA_LOWLIGHT', type:'range', def:'0', min:0, max:10, step:1, name:'Macro & Low-light Sharpening',
@@ -6608,7 +6610,7 @@ const CFG_ITEMS = [
     desc:'Recovery for mobile or VPN routes that silently discard packets when path MTU discovery is blocked. On enables the kernel\'s black-hole-only probe (tcp_mtu_probing=1): healthy routes keep their normal MSS, while a suspected black hole can recover instead of stalling. It is not a general speed boost. Stock restores the exact 0, 1 or 2 value the device had before ASB; uninstall does the same.' },
   { key:'wifi_country', type:'seg', def:'auto', opts:['auto','CR','US','DE','JP'], name:'WiFi Region',
     desc:'The region decides which WiFi channels your phone may use, and that sets the ceiling on link speed. CR opens the widest set of channels - usually the fastest WiFi. Stock keeps the region the phone gets from the SIM. IMPORTANT: using channels not permitted where you are is your call and your responsibility.' },
-  { key:'wifi_scan_throttle', type:'range', def:'2', min:0, max:4, step:1,
+  { key:'wifi_scan_throttle', type:'range', def:'2', min:0, max:5, step:1,
     name:'WiFi Scan Rate', cat:'net' },
   { key:'net_wifi_leave', type:'seg', def:'off', stock:'off',
     opts:['off','weak','unusable','aggressive'], name:'Leave Bad Wi-Fi',
@@ -6658,6 +6660,9 @@ const CFG_ITEMS = [
   { key:'mglru_hold', type:'seg', def:'stock', stock:'stock',
     opts:['stock','hold','aggressive'], name:'Keep Apps In Memory',
     cat:'battery' },
+  { key:'kernel_sched_stats', type:'seg', def:'stock', stock:'stock',
+    opts:['stock','off'], name:'Scheduler Debug Accounting', cat:'system',
+    desc:'Opt-in generic kernel tweak. Off disables scheduler debug statistics through /proc/sys/kernel/sched_stats when the kernel exposes a writable node; it does not change scheduling policy, CPU frequencies or SoC-specific drivers. Stock and uninstall restore the exact original 0/1. Leave stock if you use scheduler diagnostics. Any battery effect is device-dependent and is not assigned an unmeasured percentage.' },
   { key:'gms_trim', type:'seg', def:'stock', stock:'stock', opts:['stock','lite','strict'], name:'Google Services Trim',
     desc:'Reduces what Google Play services does in the background. This does NOT freeze or disable GMS - push notifications, sign-in, payments and the Play Store keep working, because a module that broke those would be lying about what it is for.\n\nlite stops location reporting and the search widget\u2019s background work; neither is involved in delivering a notification. strict additionally removes GMS from the Doze whitelist, which is where the real saving is on a phone where Google services are the main drain - and which can delay notifications by minutes while the phone is asleep. If messages arriving late would bother you, stay on lite.\n\nFully reversible: the permissions changed are recorded and restored when ASB is removed.' },
   { key:'gms_freeze', type:'seg', def:'off', stock:'off', opts:['off','safe','more','max'], name:'Freeze Google Components',
@@ -6794,7 +6799,7 @@ const CFG_GROUP_OF = {
   /* battery, not memory: CFG_GROUPS renders six groups and memory is not one of them,
      so the card existed in CFG_ITEMS and was never drawn. BG_TRIM_LEVEL and gms_trim -
      the other RAM tweaks - sit under battery for exactly this reason. */
-  mglru_hold:'battery',
+  mglru_hold:'battery', kernel_sched_stats:'ui',
   night_modem_idle:'net', net_screen_off_lte:'net', net_lte_light:'net', smart_media_guard:'battery',
   net_rps:'net', net_txqueue:'net',
   athena_service:'ui', ltpo_force:'ui', ltpo_video:'ui', mmfeed_off:'ui',
@@ -6850,7 +6855,7 @@ const CFG_GROUP_SECTIONS = {
     { id:'memory', icon:'cleaner', titleKey:'cfg_battery_section_memory',
       title:'Memory & Apps', hintKey:'cfg_battery_section_memory_hint',
       hint:'How long apps stay in memory and how hard background services are limited.',
-      keys:['BG_TRIM_LEVEL','mglru_hold','gms_trim','gms_freeze'] }
+      keys:['BG_TRIM_LEVEL','mglru_hold','kernel_sched_stats','gms_trim','gms_freeze'] }
   ],
   net: [
     { id:'cellular', icon:'cellular_controls', titleKey:'cfg_net_section_cellular',
@@ -7024,8 +7029,20 @@ async function cfgLoadGrade() {
     const f = line.slice(eq + 1).split(':');
     ASB_GRADE = {
       CAMERA_LEVEL: f[1], CAMERA_GRAIN: f[2], CAMERA_CONTRAST: f[3],
-      CAMERA_PORTRAIT: f[4], CAMERA_LOWLIGHT: f[5]
+      CAMERA_PORTRAIT: f[4], CAMERA_LOWLIGHT: f[5], grain_keys: null
     };
+    /* Coverage is evidence from the applied stock source, not a capability guess. Sum all
+       graded destinations: one usable tuning file is enough to disprove "not exposed". */
+    try {
+      const sr = await run("cat /data/adb/asb/grade_marks/*.mark.stats 2>/dev/null");
+      const stats = String((sr && (sr.stdout || sr)) || '');
+      let total = 0, seen = false;
+      stats.split('\n').forEach(function (row) {
+        const m = /^grain_keys=(\d+)$/.exec(row.trim());
+        if (m) { total += parseInt(m[1], 10); seen = true; }
+      });
+      if (seen) ASB_GRADE.grain_keys = total;
+    } catch (e) { /* no coverage evidence: remain unknown */ }
   } catch (e) { ASB_GRADE = {}; }
 }
 
@@ -7036,6 +7053,11 @@ function cfgCameraPending(key, cur) {
   const baked = ASB_GRADE[key];
   if (baked === undefined || baked === '') return false;
   return String(cur) !== String(baked);
+}
+
+function cfgCameraNotExposed(key, cur) {
+  return key === 'CAMERA_GRAIN' && ASB_GRADE && ASB_GRADE.grain_keys === 0 &&
+         String(cur) !== '3' && !cfgCameraPending(key, cur);
 }
 
 const ASB_NEEDS_REBOOT = {
@@ -7078,7 +7100,7 @@ async function cfgLoadCaps() {
 const CFG_ICONS = {
   wifi_powersave:'wifipm',
   net_wifi_leave:'wifileave',
-  mglru_hold:'memhold',
+  mglru_hold:'memhold', kernel_sched_stats:'kernel',
   audio_profile:'audio_profile', audio_dac_hifi:'dac', media_loudness:'media_volume', bt_absvol_mode:'volume_sync', bt_a2dp_offload:'bluetooth_offload',
   dsp_loudness:'loudness', dsp_bass:'bass', dsp_voice:'voice', dsp_width:'stereo_width', dsp_clarity:'clarity', dsp_rumble:'rumble_filter', dsp_compressor:'compressor', dsp_headroom:'headroom', dsp_outputs:'audio_route', audio_remove_volume_limit:'ear_safe', audio_resampler:'resampler', media_vol_steps:'vol_steps',
   CAMERA_LEVEL:'camera_level', CAMERA_CONTRAST:'contrast', CAMERA_GRAIN:'grain', CAMERA_PORTRAIT:'portrait', CAMERA_LOWLIGHT:'lowlight', camera_hold_enable:'camera_hold', CAMERA_AGGRESSIVE:'camera_aggressive', CAMERA_AGGRESSIVE_INJECT:'camera_inject',
@@ -7370,7 +7392,7 @@ function cfgScanLabel(v) {
   v = parseInt(v, 10);
   if (v === 0) return Topt('off');
   if (v === 4) return T('wst_free', 'no limit');
-  const m = { 1: 10, 2: 5, 3: 2 }[v];
+  const m = { 1: 10, 2: 5, 3: 2, 5: 30 }[v];
   return m ? T('wst_every', 'every %s min').replace('%s', m) : String(v);
 }
 function cfgStatus(it, cur) {
@@ -7661,7 +7683,7 @@ const APPLY_MODE = {
   net_wifi_leave: APPLY_LIVE,
   /* Live: asb_system_tweaks writes the sysfs node on save, and the value can be read
      straight back from /sys/kernel/mm/lru_gen/min_ttl_ms - no reboot, verifiable. */
-  mglru_hold: APPLY_LIVE,
+  mglru_hold: APPLY_LIVE, kernel_sched_stats: APPLY_LIVE,
   // Live: these have a runtime script that runs on save and is verified afterwards.
   audio_profile:APPLY_LIVE, dsp_loudness:APPLY_LIVE, dsp_bass:APPLY_LIVE, dsp_voice:APPLY_LIVE, dsp_width:APPLY_LIVE, dsp_clarity:APPLY_LIVE, dsp_rumble:APPLY_LIVE,
   dsp_compressor:APPLY_LIVE, dsp_headroom:APPLY_LIVE, bt_absvol_mode:APPLY_LIVE, bt_link_stability:APPLY_LIVE, bt_a2dp_offload:APPLY_LIVE,
@@ -7871,6 +7893,12 @@ function cfgRenderRow(list, it, showCat) {
   badge.textContent = T('cfg_after_reboot', 'applies after reboot');
   badge.title = T('cfg_after_reboot_why',
     'Saved. Camera tone tables are rebuilt when the module starts.');
+}
+if (cfgCameraNotExposed(it.key, cur)) {
+  badge.className = 'cfg-status na';
+  badge.textContent = T('cfg_not_exposed', 'not exposed');
+  badge.title = T('cfg_grain_not_exposed_why',
+    'The applied stock tuning exposed no scalar or list addNoiseWeight value that could be changed. Support is not exposed by this firmware; no successful grain edit is claimed.');
 }
 const _unav = ASB_CAP_REQUIRES[it.key];
     if (_unav && ASB_CAPS && ASB_CAPS[_unav] === '0') {
@@ -8900,7 +8928,7 @@ async function cfgSet(key, val, ctl) {
       // immediate and the popup confirmed nothing. Not a contradiction, but the one
       // place a user cannot tell a working setting from a silently ignored one.
       toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
-    } else if (key === 'mglru_hold') {
+    } else if (key === 'mglru_hold' || key === 'kernel_sched_stats') {
       /* Run the script that owns the node, then say it applied.
        *
        * Without its own branch this key fell through to the default, which prints "reboot
