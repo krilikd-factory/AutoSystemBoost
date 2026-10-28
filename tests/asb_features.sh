@@ -4341,6 +4341,87 @@ X
 echo "PASS mobile data counted on every rmnet_data*/ccmni* link (not ipa0, not wlan)"
 )
 
+t_net_mtu_probing_runtime() (
+# Runtime: opt-in PMTUD black-hole recovery applies tcp_mtu_probing=1, captures the
+# device's own 0/1/2 exactly once, restores it on stock/uninstall, and never writes
+# when no trustworthy baseline can be recorded.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+HELPER="$ROOT/runtime/asb_net_mtu.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL net MTU probing: $*" >&2; exit 1; }
+mkdir -p "$T/mod/config" "$T/state"
+NODE="$T/tcp_mtu_probing"; STATE="$T/state/net_mtu_probing.prev"
+export ASB_NET_MTU_SYSCTL="$NODE" ASB_NET_MTU_STATE="$STATE"
+run() {
+  printf 'net_mtu_probing=%s\n' "$1" > "$T/mod/config/governor.conf"
+  MODDIR="$T/mod" sh "$HELPER" apply
+}
+restore() { MODDIR="$T/mod" sh "$HELPER" restore; }
+
+sh -n "$HELPER" || fail 'helper shell syntax'
+echo 0 > "$NODE"
+[ "$(run on)" = 'mtu_probing=on' ] || fail 'on result missing'
+[ "$(cat "$NODE")" = 1 ] || fail 'tcp_mtu_probing=1 not applied'
+[ "$(cat "$STATE")" = 0 ] || fail 'initial 0 not captured'
+
+# An outside change before another apply must not become ASB's baseline.
+echo 2 > "$NODE"
+run on >/dev/null
+[ "$(cat "$NODE")" = 1 ] || fail 'reassert did not restore on=1'
+[ "$(cat "$STATE")" = 0 ] || fail 'repeat apply overwrote the original baseline'
+[ "$(run stock)" = 'mtu_probing=restored' ] || fail 'stock restore result missing'
+[ "$(cat "$NODE")" = 0 ] || fail 'stock did not restore initial 0'
+[ ! -e "$STATE" ] || fail 'successful restore kept stale baseline'
+
+# 2 is a valid pre-existing kernel policy too: hand it back, never flatten it to 0.
+echo 2 > "$NODE"
+run on >/dev/null
+[ "$(cat "$STATE")" = 2 ] || fail 'initial 2 not captured'
+run stock >/dev/null
+[ "$(cat "$NODE")" = 2 ] || fail 'stock did not restore initial 2'
+
+# Uninstall calls the same restore path; exercise it directly with an initial 1.
+echo 1 > "$NODE"
+run on >/dev/null
+[ "$(restore)" = 'mtu_probing=restored' ] || fail 'uninstall restore result missing'
+[ "$(cat "$NODE")" = 1 ] || fail 'restore changed a pre-existing 1'
+
+# Missing kernel node is unavailable, not a false success.
+rm -f "$NODE" "$STATE"
+if out="$(run on 2>/dev/null)"; then fail 'missing sysctl reported success'; fi
+[ "$out" = 'mtu_probing=unavailable' ] || fail "missing sysctl verdict: $out"
+
+# If the baseline cannot be persisted, the sysctl must remain untouched.
+echo 0 > "$NODE"; echo file > "$T/not-a-dir"
+export ASB_NET_MTU_STATE="$T/not-a-dir/net_mtu_probing.prev"
+if out="$(run on 2>/dev/null)"; then fail 'uncaptured write reported success'; fi
+[ "$out" = 'mtu_probing=FAILED' ] || fail "baseline failure verdict: $out"
+[ "$(cat "$NODE")" = 0 ] || fail 'sysctl changed without a restorable baseline'
+export ASB_NET_MTU_STATE="$STATE"
+
+# Corrupt state is never replayed into procfs and remains available for diagnosis.
+echo 2 > "$NODE"; mkdir -p "$T/state"; echo invalid > "$STATE"
+if out="$(restore 2>/dev/null)"; then fail 'corrupt baseline reported restored'; fi
+[ "$out" = 'mtu_probing=restore-FAILED' ] || fail "corrupt restore verdict: $out"
+[ "$(cat "$NODE")" = 2 ] || fail 'corrupt baseline was written'
+[ -f "$STATE" ] || fail 'failed restore discarded the only recovery record'
+rm -f "$STATE"
+
+# Integration pins: full apply owns the verdict; routes-only reconnects do not;
+# stock/off cannot inherit a stale ok badge; removal invokes the same restore helper.
+grep -qF 'sh "$MODDIR/runtime/asb_net_mtu.sh" apply' "$ROOT/runtime/asb_net_apply.sh" \
+  || fail 'full network apply does not invoke MTU helper'
+grep -qF "mtu_probing=stock|mtu_probing=restored)" "$ROOT/runtime/asb_net_apply.sh" \
+  || fail 'stock result mapper missing'
+grep -qF 'sh "$MODDIR/runtime/asb_net_mtu.sh" restore' "$ROOT/uninstall.sh" \
+  || fail 'uninstall does not restore MTU probing'
+grep -qF "key:'net_mtu_probing'" "$ROOT/webroot/index.html" || fail 'WebUI card missing'
+grep -qF 'net_mtu_probing=stock' "$ROOT/config/governor.conf" || fail 'opt-in default missing'
+
+echo 'PASS net MTU probing: opt-in apply, exact 0/1/2 handback, safe failure and uninstall restore'
+)
+
 t_net_congctl_probe_runtime() (
 # Runtime (fix136): per-route congctl is decided on evidence, not on one probe.
 #
@@ -7155,6 +7236,56 @@ run_case video
 grep -q '^orig=60.0$' "$T/state/ltpo_video.lowered" || fail 'video restore target did not follow idle state'
 grep -q '^owner=fixture$' "$T/state/ltpo_video.lowered" || fail 'video ownership metadata was damaged'
 echo "PASS LTPO touch runtime: event waits, active/idle handback, camera guard and video ownership"
+)
+
+
+t_ltpo_external_fallback_runtime() (
+# If ASB's touch controller cannot initialise, the verified external writer must survive.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL LTPO external fallback: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'kill "${EPID:-0}" 2>/dev/null || true; rm -rf "$T"' EXIT
+mkdir -p "$T/mod/config" "$T/mod/runtime" "$T/state" "$T/bin" \
+  "$T/modules/OnePlus15-165HZ-LTPO"
+cp "$ROOT/runtime/asb_ltpo_apply.sh" "$T/mod/runtime/"
+: > "$T/mod/module.prop"
+printf 'ltpo_force=1\n' > "$T/mod/config/governor.conf"
+printf 'DisplayMode{id=1, peakRefreshRate=165.0}\n' > "$T/display"
+EXT="$T/modules/OnePlus15-165HZ-LTPO"
+printf 'id=OnePlus15-165HZ-LTPO\n' > "$EXT/module.prop"
+cat > "$EXT/vrrd.sh" <<'X'
+#!/bin/sh
+sleep 30
+X
+cat > "$EXT/service.sh" <<'X'
+#!/bin/sh
+printf 'resumed\n' > "$ASB_TEST_RESUME_MARK"
+X
+chmod +x "$EXT/vrrd.sh" "$EXT/service.sh"
+sh "$EXT/vrrd.sh" & EPID=$!
+printf '%s\n' "$EPID" > "$EXT/.vrrd.pid"
+cat > "$T/bin/settings" <<'X'
+#!/bin/sh
+case "$1" in get) echo null ;; put|delete) exit 0 ;; esac
+X
+chmod +x "$T/bin/settings"
+export MODDIR="$T/mod" ASB_LTPO_STATE_DIR="$T/state" \
+  ASB_LTPO_MODULES_ROOT="$T/modules" ASB_LTPO_DISPLAY_DUMP="$T/display" \
+  ASB_TEST_RESUME_MARK="$T/resumed" PATH="$T/bin:$PATH"
+# There is deliberately no asb_ltpo_touch.sh in this module. The old order paused the
+# external PID first and only then discovered that ASB had no live controller.
+sh "$T/mod/runtime/asb_ltpo_apply.sh" apply
+kill -0 "$EPID" 2>/dev/null || fail 'external writer was paused without a live ASB replacement'
+[ ! -e "$T/state/ltpo_external.paused" ] || fail 'pause marker left without a pause'
+# A marker from an earlier successful ASB handover is resumed on a later startup failure.
+: > "$T/state/ltpo_external.paused"
+sh "$T/mod/runtime/asb_ltpo_apply.sh" apply
+i=0; while [ ! -f "$T/resumed" ] && [ "$i" -lt 20 ]; do sleep 0.05; i=$((i + 1)); done
+[ -f "$T/resumed" ] || fail 'previous external pause was not resumed after watcher failure'
+[ ! -e "$T/state/ltpo_external.paused" ] || fail 'resume marker was not cleared'
+awk '/if _ltpo_touch_start; then/{s=NR} /_ltpo_external_pause$/{if(s && !p)p=NR} END{exit !(s && p && p>s)}' \
+  "$ROOT/runtime/asb_ltpo_apply.sh" || fail 'external pause still precedes watcher readiness'
+echo "PASS LTPO external fallback: no handover before watcher readiness; previous pause is resumed"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

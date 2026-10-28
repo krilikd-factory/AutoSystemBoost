@@ -356,6 +356,12 @@ need "$OUT" '"BnScale": [3.2]'
 need "$OUT" '"addNoiseWeightMain1X": 10'
 need "$OUT" '"addNoiseWeightUltraWidePortrait": 5'
 need "$OUT" '"low20XcontrastScale": 1.7'
+GRADE_STATS="$(find "$TMP/grade_marks" -type f -name '*.stats' | head -1)"
+[ -n "$GRADE_STATS" ] || fail 'camera apply coverage report missing'
+need "$GRADE_STATS" 'grain_keys=2'
+need "$GRADE_STATS" 'grain_pct=1000'
+need "$GRADE_STATS" 'contrast_rules=2'
+need "$GRADE_STATS" 'contrast_pct=170'
 
 # Independent settings must grade even with Camera Grade at stock. This is the exact former
 # silent-no-op regression: contrast 10 had been accepted and displayed but copied unchanged.
@@ -368,6 +374,9 @@ sed -i \
 MODDIR="$MOD" ASB_GRADE_DIR="$TMP/grade_marks" sh "$GRADE" "$SRC" "$OUT" >/dev/null || fail "independent contrast grade failed"
 need "$OUT" '"low20XcontrastScale": 1.7'
 need "$OUT" '"Main1x_Rgb2YuvParams": [1, 1, 1, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]'
+need "$GRADE_STATS" 'grain_keys=0'
+need "$GRADE_STATS" 'contrast_rules=2'
+need "$ROOT/tools/asb_diag.sh" 'camera grade coverage:'
 
 # Retouch injection must survive the final staging pass and remain idempotent. A stock-like
 # fixture starts with four package entries; the helper must append the known app set once, not
@@ -710,14 +719,14 @@ awk -F'|' '
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
-[ "$(wc -l < "$TMP/conf")" = "203" ] || fail "expected 203 config keys, got $(wc -l < "$TMP/conf")"
-[ "$(wc -l < "$TMP/registry")" = "203" ] || fail "expected 199 registry keys, got $(wc -l < "$TMP/registry")"
+[ "$(wc -l < "$TMP/conf")" = "204" ] || fail "expected 203 config keys, got $(wc -l < "$TMP/conf")"
+[ "$(wc -l < "$TMP/registry")" = "204" ] || fail "expected 199 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
 
 sed -n '/const CFG_ITEMS = \[/,/^\];/p' "$ROOT/webroot/index.html" \
   | grep -oE "key:'[A-Za-z_][A-Za-z0-9_]*'" | sed "s/key:'//;s/'//" | sort -u > "$TMP/cards"
-[ "$(wc -l < "$TMP/cards")" = "76" ] || fail "expected 75 WebUI cards, got $(wc -l < "$TMP/cards")"
+[ "$(wc -l < "$TMP/cards")" = "77" ] || fail "expected 75 WebUI cards, got $(wc -l < "$TMP/cards")"
 _card_bad="$(while IFS= read -r key; do
   cls="$(awk -F'|' -v k="$key" '$1==k {print $2; exit}' "$REG")"
   case "$cls" in user|advanced) : ;; *) printf '%s ' "$key" ;; esac
@@ -750,7 +759,7 @@ for _c in $(grep -oE "\{ key:'[A-Za-z_][A-Za-z_0-9]*'" "$ROOT/webroot/index.html
 done
 [ -z "$_missing" ] || fail "cards missing from install.sh _user_keys:$_missing"
 
-echo 'PASS config ownership registry contract (203 keys; 30 user, 46 advanced, 127 internal)'
+echo 'PASS config ownership registry contract (204 keys; 30 user, 47 advanced, 127 internal)'
 )
 
 t_config_restore_outcome_runtime() (
@@ -902,6 +911,12 @@ need_line "$MOD/config/governor.conf" "gaming_confirm_ticks=6"
 need_line "$MOD/config/governor.conf" "smart_media_guard=0"
 run_writer set smart_media_guard 1 >/dev/null
 need_line "$MOD/config/governor.conf" "smart_media_guard=1"
+run_writer set net_mtu_probing on >/dev/null
+need_line "$MOD/config/governor.conf" "net_mtu_probing=on"
+if run_writer set net_mtu_probing always >/dev/null 2>&1; then
+  fail "net_mtu_probing=always was accepted"
+fi
+need_line "$MOD/config/governor.conf" "net_mtu_probing=on"
 
 # A linked slider update must commit both keys and its snapshot under one lock.
 run_writer set-many --snapshot "$SNAP" \
@@ -8031,10 +8046,12 @@ static long g_unlock_until_ms = 0, test_now_ms = 10000;
 static int g_unlock_lift_now = 0, g_unlock_edge = 0, probe_calls = 0;
 static const char *g_unlock_arm_why = "";
 static long gfx_frames = 1000, gfx_janky = 10;
+static long sys_frames = 500, sys_janky = 5;
 static long asb_clock_ms(clockid_t which) { (void)which; return test_now_ms; }
 static int asb_gfx_read_pkg(const char *pkg, long *fr, long *jk) {
-    if (strcmp(pkg, "com.example.launcher")) return -1;
-    *fr = gfx_frames; *jk = gfx_janky; return 0;
+    if (!strcmp(pkg, "com.example.launcher")) { *fr = gfx_frames; *jk = gfx_janky; return 0; }
+    if (!strcmp(pkg, "com.android.systemui")) { *fr = sys_frames; *jk = sys_janky; return 0; }
+    return -1;
 }
 static void asb_run_modscript(const char *script, const char *pkg) {
     (void)script; (void)pkg; probe_calls++;
@@ -8059,7 +8076,7 @@ int main(void) {
     CHK(probe_calls == 1 && !g_unlock_lift_now, "baseline triggered a lift");
     advance_file(); gfx_frames = 1400; gfx_janky = 50; test_now_ms += 1000;
     asb_battery_jank_guard_tick(&f, &m);
-    CHK(g_bjank_windows == 1 && g_bjank_triggers == 1, "10% jank window not measured");
+    CHK(g_bjank_windows == 2 && g_bjank_triggers == 1, "foreground/SystemUI windows not measured independently");
     CHK(g_unlock_lift_now && g_bjank_armed && g_unlock_until_ms == test_now_ms + 10000,
         "bounded lift not armed");
     CHK(!strcmp(g_unlock_arm_why, "battery jank guard"), "ownership reason missing");
@@ -8085,6 +8102,16 @@ int main(void) {
     g_smart_rt.app_hint = 0; g_bjank_log_ts = 0;
     unlink("$T/lock/pid"); asb_battery_jank_guard_tick(&f, &m);
     CHK(probe_calls == 1 && g_bjank_frames == -1, "missing live recorder was ignored");
+    /* A smooth foreground must not hide a janky launcher/shade/recents SystemUI window. */
+    FILE *pf = fopen("$T/lock/pid", "w"); fprintf(pf, "%d\n", getpid()); fclose(pf);
+    g_bjank_log_ts = 0; g_smart_rt.app_hash = 9;
+    gfx_frames = 2000; gfx_janky = 20; sys_frames = 500; sys_janky = 5;
+    advance_file(); asb_battery_jank_guard_tick(&f, &m);
+    advance_file(); gfx_frames = 2400; gfx_janky = 30; sys_frames = 900; sys_janky = 45;
+    unsigned long before = g_bjank_triggers;
+    asb_battery_jank_guard_tick(&f, &m);
+    CHK(g_bjank_triggers == before + 1 && g_bjank_armed,
+        "SystemUI jank was hidden by a smooth foreground package");
     return bad;
 }
 X
