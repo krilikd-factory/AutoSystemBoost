@@ -15,7 +15,11 @@
     "flat": "Flat",
     "off": "Off",
     "safe": "Safe",
-    "aggressive": "Aggressive"
+    "aggressive": "Aggressive",
+    "auto": "Auto",
+    "on": "On",
+    "smart": "Smart",
+    "manual": "Manual"
   },
   "optFor": {
     "net_mtu_probing": {
@@ -172,6 +176,12 @@
       "35": "35 Hz",
       "50": "50 Hz",
       "70": "70 Hz"
+    },
+    "dsp_headroom": {
+      "15": "−0.15 dB",
+      "30": "−0.30 dB",
+      "50": "−0.50 dB",
+      "100": "−1.00 dB"
     }
   },
   "prof_none": "not selected",
@@ -353,9 +363,6 @@
         "off": "LSPosed's verbose log off from the next boot; old verbose logs deleted now."
       }
     },
-    "dsp_headroom": "DSP Output Headroom",
-    "dsp_clarity": "DSP Clarity",
-    "dsp_rumble": "DSP Sub-bass Filter",
     "kernel_sched_stats": {
       "name": "Scheduler Debug Accounting",
       "desc": "Opt-in generic kernel tweak. Off disables scheduler debug statistics only when /proc/sys/kernel/sched_stats is exposed and writable. Scheduling policy, CPU frequencies and SoC drivers are untouched. Stock and uninstall restore the exact original 0/1. No unmeasured battery percentage is claimed.",
@@ -375,7 +382,7 @@
   "cfg_import_none": "No backup found",
   "cfg_import_ok": "Restored ",
   "cfg_import_reboot": " - reboot to apply",
-  "cfg_import_err": "Could not read the backup",
+  "cfg_import_err": "The configuration action failed",
   "cfg_language": "Language",
   "doze_edit": "Choose apps to keep exempt",
   "doze_loading": "Reading the exemption list...",
@@ -1412,10 +1419,5 @@
   "dev_json_saved": "Saved {path}",
   "dev_json_error": "Could not save device.json.",
   "dev_uname_mismatch_susfs_note": "The releases differ, and SuSFS reports CONFIG_KSU_SUSFS_SPOOF_UNAME. On a SuSFS/Wild GKI setup this is an expected possible explanation, not evidence of a compromised kernel. The collector does not claim which component produced either string.",
-  "dsp_eq_idle": "EQ mode · DSP off",
-  "desc": {
-    "dsp_clarity": "Gentle high-shelf detail lift above 6.5 kHz (0.5 dB per level, up to +4 dB). Before width, dynamics and the safety limiter.",
-    "dsp_rumble": "24 dB/octave high-pass filter for sub-bass rumble and speaker excursion. Start at 35 Hz; 70 Hz is intentionally aggressive.",
-    "dsp_headroom": "Sample-peak ceiling below 0 dBFS. Leaves DAC/codec reconstruction margin; not an oversampled true-peak detector."
-  }
+  "dsp_eq_idle": "EQ mode · DSP off"
 }
