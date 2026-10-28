@@ -719,14 +719,14 @@ awk -F'|' '
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
-[ "$(wc -l < "$TMP/conf")" = "204" ] || fail "expected 203 config keys, got $(wc -l < "$TMP/conf")"
-[ "$(wc -l < "$TMP/registry")" = "204" ] || fail "expected 199 registry keys, got $(wc -l < "$TMP/registry")"
+[ "$(wc -l < "$TMP/conf")" = "206" ] || fail "expected 206 config keys, got $(wc -l < "$TMP/conf")"
+[ "$(wc -l < "$TMP/registry")" = "206" ] || fail "expected 206 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
 
 sed -n '/const CFG_ITEMS = \[/,/^\];/p' "$ROOT/webroot/index.html" \
   | grep -oE "key:'[A-Za-z_][A-Za-z0-9_]*'" | sed "s/key:'//;s/'//" | sort -u > "$TMP/cards"
-[ "$(wc -l < "$TMP/cards")" = "77" ] || fail "expected 75 WebUI cards, got $(wc -l < "$TMP/cards")"
+[ "$(wc -l < "$TMP/cards")" = "79" ] || fail "expected 79 WebUI cards, got $(wc -l < "$TMP/cards")"
 _card_bad="$(while IFS= read -r key; do
   cls="$(awk -F'|' -v k="$key" '$1==k {print $2; exit}' "$REG")"
   case "$cls" in user|advanced) : ;; *) printf '%s ' "$key" ;; esac
@@ -759,7 +759,7 @@ for _c in $(grep -oE "\{ key:'[A-Za-z_][A-Za-z_0-9]*'" "$ROOT/webroot/index.html
 done
 [ -z "$_missing" ] || fail "cards missing from install.sh _user_keys:$_missing"
 
-echo 'PASS config ownership registry contract (204 keys; 30 user, 47 advanced, 127 internal)'
+echo 'PASS config ownership registry contract (206 keys; 30 user, 49 advanced, 127 internal)'
 )
 
 t_config_restore_outcome_runtime() (
@@ -5823,7 +5823,7 @@ need "$HELPER" 'asb_settings_backup.conf'
 need "$UI" "const CFG_GROUP_SECTIONS = {"
 need "$UI" "audio: ["
 need "$UI" "titleKey:'cfg_audio_section_dsp'"
-need "$UI" "keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_compressor','dsp_headroom']"
+need "$UI" "keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom']"
 need "$UI" 'function cfgRenderGroup(list, groupId)'
 need "$UI" 'cfgRenderGroup(list, _cfgGroup);'
 need "$UI" '.cfg-section-hint'
@@ -5861,7 +5861,7 @@ need "$UI" "uiSound('profile');"
 need "$UI" "uiSound('capture');"
 need "$UI" "tile.onclick = () => { uiSound('nav');"
 need "$UI" "if (CFG_SILENT_KEYS.indexOf(key) < 0) uiSound(cfgSoundKind(key, val));"
-need "$UI" "const CFG_SILENT_KEYS = ['dsp_loudness','dsp_bass','dsp_voice','dsp_width'];"
+need "$UI" "const CFG_SILENT_KEYS = ['dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble'];"
 
 python3 - "$UI" <<'PY'
 import re, sys
@@ -5873,7 +5873,7 @@ assert section_order == ['dsp', 'playback', 'safety'], f'audio priority/order dr
 dsp = re.search(r"\{ id:'dsp'.*?keys:\[([^]]+)\]", audio.group(1), re.S)
 assert dsp, 'DSP section keys missing'
 dsp_keys = re.findall(r"'([^']+)'", dsp.group(1))
-assert dsp_keys == ['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_compressor','dsp_headroom'], f'DSP order drifted: {dsp_keys}'
+assert dsp_keys == ['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom'], f'DSP order drifted: {dsp_keys}'
 items = set(re.findall(r"\{ key:'([^']+)'", text))
 block = re.search(r'const CFG_ICONS = \{(.*?)\n\};', text, re.S)
 assert block, 'CFG_ICONS block missing'

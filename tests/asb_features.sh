@@ -2091,7 +2091,9 @@ MODDIR="$MOD" sh "$MOD/runtime/asb_audio_apply.sh" mirror >/dev/null 2>&1 || tru
 [ "$(prop persist.asb.dsp.enable)" = 0 ] || fail "the mirror pass switched the DSP back on"
 UI="$ROOT/webroot/index.html"
 grep -q "key:'dsp_outputs', type:'seg', def:'all', stock:'all', opts:\['off','all'," "$UI" || fail "no off in the WebUI"
-grep -q "_cfgVals\['dsp_outputs'\] === 'off' &&" "$UI" || fail "the DSP cards do not show off"
+grep -q "const DSP_CFG_KEYS = .*dsp_clarity.*dsp_rumble.*dsp_headroom" "$UI" || fail "DSP card registry is incomplete"
+grep -q "function dspEngineActive()" "$UI" || fail "common DSP engine state is missing"
+grep -q "if (DSP_CFG_KEYS.indexOf(it.key) >= 0 && !dspEngineActive())" "$UI" || fail "the DSP cards do not show off"
 for l in ar de en es fr hy id it pt ru tr uk zh; do
   python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert d['optFor']['dsp_outputs']['off']" "$ROOT/webroot/i18n/$l.json" \
     || fail "$l.json has no label for off"
@@ -7286,6 +7288,103 @@ i=0; while [ ! -f "$T/resumed" ] && [ "$i" -lt 20 ]; do sleep 0.05; i=$((i + 1))
 awk '/if _ltpo_touch_start; then/{s=NR} /_ltpo_external_pause$/{if(s && !p)p=NR} END{exit !(s && p && p>s)}' \
   "$ROOT/runtime/asb_ltpo_apply.sh" || fail 'external pause still precedes watcher readiness'
 echo "PASS LTPO external fallback: no handover before watcher readiness; previous pause is resumed"
+)
+
+
+t_dsp_tone_filters_runtime() (
+# fix238: Clarity and the fourth-order sub-bass filter run in the same core for AIDL,
+# legacy, float and PCM16. The host test measures their responses, bit-exact bypass and
+# final sample ceiling; the runtime fixture checks live mirroring and attacher wake-up.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL dsp tone filters: $*" >&2; exit 1; }
+CC="${CC:-cc}"; command -v "$CC" >/dev/null 2>&1 || CC=gcc
+command -v "$CC" >/dev/null 2>&1 || { echo "SKIP dsp tone filters: no C compiler"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+grep -q 'asb_core_set_clarity(&mCore, clarity, (uint32_t)rate);' "$ROOT/src/DSP_AIDL/asb_effect_aidl.cpp" || fail 'AIDL clarity not applied'
+grep -q 'asb_core_set_rumble(&mCore, rumble, (uint32_t)rate);' "$ROOT/src/DSP_AIDL/asb_effect_aidl.cpp" || fail 'AIDL rumble not applied'
+grep -q 'asb_core_set_clarity(&c->core, asb_dsp_prop("clarity", 0), rate);' "$ROOT/src/DSP/asb_dsp.c" || fail 'legacy clarity not applied'
+grep -q 'asb_core_set_rumble(&c->core, asb_dsp_prop("rumble_hz", 0), rate);' "$ROOT/src/DSP/asb_dsp.c" || fail 'legacy rumble not applied'
+grep -q '__system_property_get("persist.asb.dsp.clarity", j);' "$ROOT/src/DSP_AIDL/asb_dsp_attach.cpp" || fail 'clarity does not wake the attacher'
+grep -q '__system_property_get("persist.asb.dsp.rumble_hz", r);' "$ROOT/src/DSP_AIDL/asb_dsp_attach.cpp" || fail 'rumble does not wake the attacher'
+grep -q '" clarity=" " rumble_hz="' "$ROOT/src/build_ndk_release.sh" || fail 'AIDL freshness gate lacks tone filters'
+cat > "$T/t.c" <<'X'
+#include "asb_dsp_core.h"
+#include <stdio.h>
+#include <string.h>
+#define N 48000
+#define R 48000u
+static float in[N], out[N], ref[N];
+static int16_t sin16[N], sout16[N], sref16[N];
+static void cfg(asb_core_t *c, int enabled, int gain, int clarity, int rumble) {
+    memset(c, 0, sizeof(*c));
+    asb_core_configure_ex(c, enabled, gain, -100, 0, 60, -2400, 1, R, 1, 0, 300);
+    asb_core_set_bass(c, 0, R); asb_core_set_voice(c, 0, R);
+    asb_core_set_width(c, 0, R); asb_core_set_clarity(c, clarity, R);
+    asb_core_set_rumble(c, rumble, R); asb_core_reset(c);
+}
+static void sine(float hz, float amp) {
+    for (int i=0;i<N;i++) in[i]=amp*sinf(2.0f*3.14159265358979323846f*hz*(float)i/(float)R);
+}
+static double rms(const float *x) { double s=0; for(int i=N/2;i<N;i++) s+=(double)x[i]*x[i]; return sqrt(s/(N/2)); }
+static float response(int pcm, float hz, int clarity, int rumble) {
+    asb_core_t a,b; sine(hz,0.005f);
+    cfg(&a,1,1,0,0); cfg(&b,1,1,clarity,rumble);
+    if (!pcm) {
+        asb_core_process_f32(&a,in,ref,N,0); asb_core_process_f32(&b,in,out,N,0);
+        return (float)(20.0*log10(rms(out)/rms(ref)));
+    }
+    for(int i=0;i<N;i++) sin16[i]=(int16_t)(in[i]*32768.0f);
+    asb_core_process_s16(&a,sin16,sref16,N,0); asb_core_process_s16(&b,sin16,sout16,N,0);
+    for(int i=0;i<N;i++){ref[i]=(float)sref16[i]/32768.0f;out[i]=(float)sout16[i]/32768.0f;}
+    return (float)(20.0*log10(rms(out)/rms(ref)));
+}
+int main(void) {
+    int bad=0; asb_core_t a;
+    for(int pcm=0;pcm<2;pcm++) {
+        float c=response(pcm,10000.0f,8,0), lo=response(pcm,20.0f,0,50), hi=response(pcm,1000.0f,0,50);
+        printf("pcm=%d clarity10k=%.2fdB rumble20Hz=%.2fdB rumble1k=%.2fdB\n",pcm,c,lo,hi);
+        if(c<3.0f||c>3.7f){puts("FAIL clarity response");bad++;}
+        if(lo>-15.0f){puts("FAIL sub-bass attenuation");bad++;}
+        if(hi<-0.3f||hi>0.3f){puts("FAIL high-pass passband");bad++;}
+    }
+    sine(1000.0f,0.2f); for(int i=0;i<N;i++) sin16[i]=(int16_t)(in[i]*30000.0f);
+    cfg(&a,0,0,8,70); asb_core_process_f32(&a,in,out,2048,0); asb_core_process_s16(&a,sin16,sout16,2048,0);
+    if(memcmp(in,out,2048*sizeof(float))||memcmp(sin16,sout16,2048*sizeof(int16_t))){puts("FAIL bypass not bit-exact");bad++;}
+    cfg(&a,1,2500,8,70); asb_core_process_f32(&a,in,out,N,0);
+    float peak=0;for(int i=0;i<N;i++)if(fabsf(out[i])>peak)peak=fabsf(out[i]);
+    if(peak>asb_core_mb_to_lin(-100)+0.0002f){printf("FAIL sample ceiling %.6f\n",peak);bad++;}
+    cfg(&a,1,1,99,99); if(!a.clarity_on||a.rumble_on){puts("FAIL effect clamp/validation");bad++;}
+    if(bad)return 1; puts("NEW_DSP_HOST_TEST_PASS"); return 0;
+}
+X
+"$CC" -std=c99 -O2 -Wall -Wextra -I"$ROOT/src/DSP_AIDL" "$T/t.c" -lm -o "$T/t"
+"$T/t" || fail 'host DSP response/bypass/ceiling test'
+# Runtime mirror: both property namespaces receive both controls and one USR1 wake.
+mkdir -p "$T/mod/config" "$T/mod/runtime" "$T/bin"
+cp "$ROOT/runtime/asb_audio_apply.sh" "$ROOT/runtime/asb_dsp_thermal.sh" "$ROOT/runtime/asb_dsp_live.sh" "$T/mod/runtime/"
+printf 'dsp_loudness=5\ndsp_bass=0\ndsp_voice=0\ndsp_width=0\ndsp_headroom=15\ndsp_clarity=6\ndsp_rumble=50\n' > "$T/mod/config/governor.conf"
+PROPS="$T/props"; export PROPS; : > "$PROPS"
+cat > "$T/bin/getprop" <<'X'
+#!/bin/sh
+grep -m1 "^$1=" "$PROPS" 2>/dev/null | cut -d= -f2-
+X
+cat > "$T/bin/resetprop" <<'X'
+#!/bin/sh
+[ "$1" = "-n" ] && shift
+grep -v "^$1=" "$PROPS" > "$PROPS.t" 2>/dev/null || true
+printf '%s=%s\n' "$1" "$2" >> "$PROPS.t"; mv "$PROPS.t" "$PROPS"
+X
+cp "$T/bin/resetprop" "$T/bin/setprop"
+printf '#!/bin/sh\nprintf "%%s\\n" "$*" >> "$ASB_TEST_PKILL"\n' > "$T/bin/pkill"
+chmod 755 "$T/bin"/*
+ASB_TEST_PKILL="$T/pkill"; export ASB_TEST_PKILL; : > "$ASB_TEST_PKILL"
+MODDIR="$T/mod" PATH="$T/bin:$PATH" sh "$T/mod/runtime/asb_audio_apply.sh" mirror >/dev/null 2>&1
+for kv in persist.asb.dsp.clarity=6 persist.vendor.asb.dsp.clarity=6 persist.asb.dsp.rumble_hz=50 persist.vendor.asb.dsp.rumble_hz=50; do
+  grep -qx "$kv" "$PROPS" || fail "mirror missing $kv"
+done
+grep -q -- '-USR1' "$ASB_TEST_PKILL" || fail 'tone edit did not wake the attacher'
+echo 'PASS dsp tone filters: float/PCM16 responses, bypass, sample ceiling, runtime mirror and live wake'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

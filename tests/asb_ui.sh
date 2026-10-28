@@ -3648,6 +3648,7 @@ function ledgerBadge() { return null; } function trialHoursLeft() { return 0; } 
 const _netResult = {}; const _cfgVals = {};
 let _wlFitIgnored = 0, _wlFitLimited = 0, _wlFitInstalled = 0, _wlFitProbed = false;
 EOF
+  sed -n '/^const DSP_CFG_KEYS = /p; /^function dspEngineActive()/,/^}/p' "$H"
   for fn in Topt cfgScanLabel cfgStatus; do sed -n "/^function $fn(/,/^}/p" "$H"; done
   cat <<'EOF'
 let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
@@ -3659,7 +3660,7 @@ chk(cfgStatus(seg('wakelock_action', '0'), '1').text === 'ДЕЙСТВОВАТЬ
 chk(cfgStatus(seg('net_congestion_wifi', 'auto'), 'cubic').text === 'CUBIC', 'technical names unchanged');
 chk(cfgStatus({ key: 'wifi_scan_throttle', type: 'range' }, '1').text === 'раз в 10 мин', 'scan badge: ' + cfgStatus({ key: 'wifi_scan_throttle', type: 'range' }, '1').text);
 chk(cfgScanLabel(0) === 'выкл' && cfgScanLabel(3) === 'раз в 2 мин' && cfgScanLabel(4) === 'без ограничений', 'scan labels');
-chk(cfgStatus({ key: 'dsp_bass', type: 'range' }, '0').text === 'выкл', 'a range at zero says off in the UI language');
+chk(cfgStatus({ key: 'dsp_bass', type: 'range' }, '0').text === T('dsp_idle', 'DSP off'), 'a tone card says DSP off while the engine is disabled');
 chk(cfgStatus(seg('wakelock_fitness', 'protect'), 'protect').text === String(Topt('protect', 'wakelock_fitness')).toUpperCase(), 'protect badge: ' + cfgStatus(seg('wakelock_fitness', 'protect'), 'protect').text);
 _wlFitIgnored = 1;
 chk(cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').cls === 'warn' && cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text === 'прошивка игнорирует', 'ROM-ignored limit badge: ' + cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text);
@@ -3678,6 +3679,18 @@ chk(cfgScanLabel(2) === 'every 5 min', 'English scan label');
 _wlFitIgnored = 1;
 chk(cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text === 'ROM ignores it', 'English ROM-ignored badge: ' + cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text);
 _wlFitIgnored = 0;
+/* fix238: every tone/dynamics/headroom card is neutral when the engine is off. */
+for (const k of ['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom']) {
+  _cfgVals.dsp_outputs = 'all'; _cfgVals.audio_profile = 'stock'; _cfgVals.dsp_loudness = '0';
+  chk(cfgStatus(seg(k, 'off'), k === 'dsp_loudness' ? '25' : '1').cls === 'neutral', k + ' active with zero gain');
+  _cfgVals.dsp_loudness = '25';
+  chk(cfgStatus(seg(k, 'off'), k === 'dsp_loudness' ? '25' : '1').cls !== 'neutral', k + ' not active with gain');
+  _cfgVals.audio_profile = 'eq_compat';
+  const eq = cfgStatus(seg(k, 'off'), '1');
+  chk(eq.text === 'EQ mode · DSP off', k + ' has no EQ-off badge: ' + eq.text);
+  _cfgVals.audio_profile = 'stock'; _cfgVals.dsp_outputs = 'off';
+  chk(cfgStatus(seg(k, 'off'), '1').cls === 'neutral', k + ' active with outputs off');
+}
 if (bad) process.exit(1);
 console.log('ok');
 EOF
@@ -5121,7 +5134,7 @@ fail() { echo "FAIL webui visual hierarchy: $*" >&2; exit 1; }
 python3 - "$H" <<'PY' || fail 'DSP order or icons'
 import re, sys
 h = open(sys.argv[1], encoding='utf-8').read()
-assert "keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_compressor','dsp_headroom']" in h, 'DSP Outputs is not first'
+assert "keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom']" in h, 'DSP Outputs is not first'
 for name in ('smart','performance','theme_glass'):
     m = re.search(r'^  %s: \'([^\']*)\'' % name, h, re.M)
     assert m, '%s missing from TECH_ICON_PATHS' % name
