@@ -3691,6 +3691,15 @@ for (const k of ['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width'
   _cfgVals.audio_profile = 'stock'; _cfgVals.dsp_outputs = 'off';
   chk(cfgStatus(seg(k, 'off'), '1').cls === 'neutral', k + ' active with outputs off');
 }
+/* fix240: a number with a unit keeps its case on the badge ("ДБ", "HZ" were wrong). */
+_cfgVals.dsp_outputs = 'all'; _cfgVals.audio_profile = 'stock'; _cfgVals.dsp_loudness = '6';
+ASB_LANG = 'ru';
+chk(cfgStatus(seg('dsp_headroom', '15'), '50').text === '\u22120,50 дБ', 'headroom badge: ' + cfgStatus(seg('dsp_headroom', '15'), '50').text);
+chk(cfgStatus(seg('dsp_rumble', 'off'), '35').text === '35 Гц', 'rumble badge: ' + cfgStatus(seg('dsp_rumble', 'off'), '35').text);
+chk(cfgStatus(seg('dsp_rumble', 'off'), 'off').text === 'ВЫКЛ', 'rumble off badge: ' + cfgStatus(seg('dsp_rumble', 'off'), 'off').text);
+chk(cfgStatus(seg('phantom_procs', 'stock'), 'strict').text === String(Topt('strict', 'phantom_procs')).toUpperCase(), 'a word label is still uppercased');
+ASB_LANG = 'en';
+chk(cfgStatus(seg('dsp_headroom', '15'), '100').text === '\u22121.00 dB', 'English headroom badge: ' + cfgStatus(seg('dsp_headroom', '15'), '100').text);
 if (bad) process.exit(1);
 console.log('ok');
 EOF
@@ -5561,6 +5570,82 @@ eval(fs.readFileSync(process.argv[2], 'utf8'));
 EOF
 [ "$(node "$T/t.js" "$T/extract.js")" = ok ] || fail 'camera coverage state mismatch'
 echo 'PASS WebUI camera coverage: zero keys = not exposed, multi-file stats summed, missing = unknown'
+)
+
+t_webui_card_i18n_coverage_runtime() (
+# Runtime (fix240): every Config card has a name and a description in every language.
+#
+# fix239 shipped DSP Clarity, Sub-bass Filter and Output Headroom with cfg.<key> written as a
+# plain string in all 13 locale files and the descriptions parked in a top-level "desc" table
+# that nothing reads. Tcfg looks up cfg[key].name / .desc, so every language fell back to the
+# English source text (and uk.json carried Russian). Six newer cards kept their English names
+# in 11 languages and several option labels were never translated. This test parses CFG_ITEMS
+# from index.html and checks each locale: cfg entries are objects with a name and a desc, no
+# stray "desc" table, card names are not left in English, descOpt tables are translated, every
+# option that English labels has a label of its own, and uk.json holds no Russian-only words.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL webui card i18n: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'P' || fail "locale coverage"
+import json, re, sys, pathlib
+root = pathlib.Path(sys.argv[1])
+h = (root / 'webroot' / 'index.html').read_text(encoding='utf-8')
+body = h[h.index('const CFG_ITEMS = ['):h.index('const CFG_GROUPS = [')]
+items = {}
+for m in re.finditer(r"\{\s*key:'(\w+)',\s*type:'(\w+)'(.*?)(?=\n\s*\{\s*key:'|\n\];)", body, re.S):
+    k, t, rest = m.group(1), m.group(2), m.group(3)
+    om = re.search(r"opts:\[([^\]]*)\]", rest)
+    nm = re.search(r"name:'((?:[^'\\]|\\.)*)'", rest)
+    items[k] = {'type': t, 'opts': re.findall(r"'([^']*)'", om.group(1)) if om else [], 'name': nm.group(1) if nm else ''}
+assert len(items) >= 70, 'CFG_ITEMS parse: %d' % len(items)
+for k in ('dsp_clarity', 'dsp_rumble', 'dsp_headroom', 'kernel_sched_stats', 'athena_service', 'net_rps'):
+    assert k in items, 'CFG_ITEMS lost ' + k
+files = sorted((root / 'webroot' / 'i18n').glob('*.json'))
+assert len(files) == 13, len(files)
+en = json.loads((root / 'webroot' / 'i18n' / 'en.json').read_text(encoding='utf-8'))
+same = {('de', 'haptic_strength'), ('fr', 'haptic_strength')}
+def lab(d, k, o):
+    v = d.get('optFor', {}).get(k, {}).get(o)
+    return v if v is not None else d.get('opt', {}).get(o)
+probs = []
+for p in files:
+    lg = p.stem
+    d = json.loads(p.read_text(encoding='utf-8'))
+    if 'desc' in d:
+        probs.append('%s: stray top-level "desc" table' % lg)
+    for k, v in d.get('cfg', {}).items():
+        if not isinstance(v, dict):
+            probs.append('%s: cfg.%s is a %s, Tcfg needs {name, desc}' % (lg, k, type(v).__name__))
+    for k, it in items.items():
+        c = d.get('cfg', {}).get(k)
+        if lg != 'en':
+            if not isinstance(c, dict) or not str(c.get('name', '')).strip() or not str(c.get('desc', '')).strip():
+                probs.append('%s: %s lacks a name or description' % (lg, k))
+                continue
+            if c['name'].replace('\n', ' ') == it['name'] and (lg, k) not in same and not re.fullmatch(r'[A-Z0-9 /.+-]+', it['name']):
+                probs.append('%s: %s name is still English (%s)' % (lg, k, it['name']))
+            if c['desc'] == en.get('cfg', {}).get(k, {}).get('desc'):
+                probs.append('%s: %s description is still English' % (lg, k))
+        ec = en.get('cfg', {}).get(k)
+        eo = ec.get('descOpt') if isinstance(ec, dict) else None
+        if eo and lg != 'en':
+            lo = (c or {}).get('descOpt') or {}
+            for o, txt in eo.items():
+                if not lo.get(o) or lo.get(o) == txt:
+                    probs.append('%s: %s descOpt.%s untranslated' % (lg, k, o))
+        if it['type'] == 'seg' and lg != 'en':
+            for o in it['opts']:
+                if lab(en, k, o) is not None and lab(d, k, o) is None:
+                    probs.append('%s: %s option %s has no label' % (lg, k, o))
+    if lg == 'uk':
+        for w in sorted(set(re.findall(r'\w*[ыэъё]\w*', json.dumps(d, ensure_ascii=False)))):
+            probs.append('uk: Russian word ' + w)
+for o in items['dsp_headroom']['opts']:
+    if lab(en, 'dsp_headroom', o) is None:
+        probs.append('en: dsp_headroom %s has no dB label' % o)
+assert not probs, '\n'.join(probs)
+P
+echo "PASS webui card i18n: all 13 languages carry a name, description, translated detail table and option labels for every Config card"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

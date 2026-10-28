@@ -2016,6 +2016,117 @@ int main(void) {
 ASB_C_EOF
 }
 
+t_battery_touch_light_idle_runtime() (
+# Runtime (fix240): on Battery a finger on the glass leaves LIGHT_IDLE at once.
+#
+# OP15, ColorOS 17, Battery: the first seconds of a launcher page swipe, the shade, the app
+# drawer and every app open/close stuttered, then the phone was smooth. Battery's LIGHT_IDLE
+# carries the governor's own GPU ceiling bat_light_idle_gpu=10 - the lowest pwrlevel, 160 MHz
+# on SM8850 - and Battery was excluded from the fix117 touch floor and first-touch lift, so a
+# swipe that started from a calm screen was drawn at that step until a later tick (2-8 s on
+# Battery's doubled up window) left light idle. The unlock lift never touched the GPU, and in
+# the field asbdiag 7 of 8 taps were not lifted at all (warm die).
+# The REAL governor translation unit is compiled and its FSM driven: a quiet Battery screen
+# stays in light idle; a fresh touch moves it to MODERATE in the same update; it holds while
+# the touches continue and returns to light idle once they stop; a sampled touch without a
+# kick does not wait on the doubled window; Battery's MODERATE GPU ceiling stays inside its
+# own 40-44 % envelope while light idle keeps bat_light_idle_gpu; Smart keeps its lift.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL battery touch light idle: $*" >&2; exit 1; }
+CC=""; for c in gcc clang cc; do command -v "$c" >/dev/null 2>&1 && { CC="$c"; break; }; done
+[ -n "$CC" ] || { echo "SKIP battery touch light idle: no C compiler"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cat > "$T/t.c" <<'X'
+#define main asb_governor_main_unused
+#include "asb_governor.c"
+#undef main
+static int bad = 0;
+#define CHECK(c, ...) do { if (!(c)) { printf("FAIL "); printf(__VA_ARGS__); printf("\n"); bad++; } } while (0)
+static asb_metrics_t quiet_screen(void) {
+    asb_metrics_t m;
+    memset(&m, 0, sizeof(m));
+    m.misc.screen_on = 1;
+    m.cpu.load1 = 1.0f;
+    m.cpu.awake_tick_pct = 100;
+    m.gpu.load_pct = 0;
+    m.therm.cpu_max_c = 40;
+    m.therm.source_confidence = 2;
+    m.bat.current_ma = 100;
+    return m;
+}
+static void set_profile(asb_fsm_t *f, int p) {
+    fsm_init(f, p);
+    fsm_profile_is_battery = (p == PROFILE_BATTERY);
+    fsm_profile_is_smart = (p == PROFILE_SMART);
+    fsm_profile_is_performance = (p == PROFILE_PERFORMANCE);
+    f->state = f->pending = ASB_STATE_LIGHT_IDLE;
+    f->pending_ticks = 0;
+    clock_gettime(CLOCK_MONOTONIC, &f->last_transition);
+    f->last_transition.tv_sec -= 600;
+    g_screen_on_since = time(NULL) - 600;
+    g_touch_last_ts = 0;
+    g_touch_kick = 0;
+}
+int main(void) {
+    asb_config_defaults(&g_asb_cfg);
+    asb_fsm_t f;
+    asb_metrics_t m = quiet_screen();
+
+    set_profile(&f, PROFILE_BATTERY);
+    for (int i = 0; i < 8; i++) fsm_update(&f, &m);
+    CHECK(f.state == ASB_STATE_LIGHT_IDLE, "a quiet Battery screen left light idle: %s", asb_state_names[f.state]);
+
+    unsigned long lifts = g_touch_lifts;
+    g_touch_last_ts = time(NULL);
+    g_touch_kick = 1;
+    fsm_update(&f, &m);
+    g_touch_kick = 0;
+    CHECK(f.state == ASB_STATE_MODERATE, "a fresh touch on Battery stayed in %s", asb_state_names[f.state]);
+    CHECK(g_touch_lifts == lifts + 1, "the Battery touch lift was not counted");
+
+    for (int i = 0; i < 4; i++) fsm_update(&f, &m);
+    CHECK(f.state == ASB_STATE_MODERATE, "Battery fell to %s while the finger was still on the glass", asb_state_names[f.state]);
+
+    g_touch_last_ts = time(NULL) - 30;
+    f.last_transition.tv_sec -= 600;
+    for (int i = 0; i < 12; i++) fsm_update(&f, &m);
+    CHECK(f.state == ASB_STATE_LIGHT_IDLE, "quiet reading after the touches never returned to light idle: %s", asb_state_names[f.state]);
+
+    g_touch_last_ts = time(NULL);
+    g_touch_kick = 0;
+    fsm_update(&f, &m);
+    CHECK(f.state == ASB_STATE_MODERATE, "a sampled touch without a kick waited on Battery's doubled window: %s", asb_state_names[f.state]);
+
+    asb_profile_caps_t li, mo;
+    memset(&li, 0, sizeof(li));
+    memset(&mo, 0, sizeof(mo));
+    fsm_profile_is_battery = 1;
+    fsm_interpolate_caps(&g_profile_bounds[PROFILE_BATTERY], PROFILE_BATTERY, ASB_STATE_LIGHT_IDLE, 0, 0.0f, &li);
+    fsm_interpolate_caps(&g_profile_bounds[PROFILE_BATTERY], PROFILE_BATTERY, ASB_STATE_MODERATE, 0, 0.0f, &mo);
+    CHECK(li.gpu_max_pct == g_asb_cfg.bat_light_idle_gpu, "Battery light-idle GPU ceiling is %d, not bat_light_idle_gpu", li.gpu_max_pct);
+    CHECK(mo.gpu_max_pct >= 40 && mo.gpu_max_pct <= 44, "Battery MODERATE GPU ceiling %d is outside its own 40-44 envelope", mo.gpu_max_pct);
+    CHECK(mo.uclamp_top_max <= 50, "Battery MODERATE top-app uclamp %d is above its profile ceiling", mo.uclamp_top_max);
+
+    set_profile(&f, PROFILE_SMART);
+    g_touch_last_ts = time(NULL);
+    g_touch_kick = 1;
+    fsm_update(&f, &m);
+    g_touch_kick = 0;
+    CHECK(f.state == ASB_STATE_MODERATE, "Smart lost its touch lift: %s", asb_state_names[f.state]);
+
+    if (bad) return 1;
+    printf("ok\n");
+    return 0;
+}
+X
+"$CC" -std=gnu11 -O0 -w -I"$ROOT/src" -DASB_DEBUG_BUILD=0 -o "$T/t" "$T/t.c" -lm -ldl -lpthread 2>"$T/cc.err" \
+  || { cat "$T/cc.err" >&2; fail "fixture does not compile"; }
+out="$("$T/t")" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo "PASS battery touch light idle: a touch leaves Battery's lowest-step GPU light idle at once, holds while touching, quiet reading still idles, Smart unchanged"
+)
+
 t_budget_current_scale_runtime() (
 # fix85: the thermal-budget mA gates were tuned on OP15 readings (gauge x0.38 of real drain).
 # A CPH2769 gauge reads x0.88, so the same workload crossed every gate 2.3x earlier. The
@@ -4145,15 +4256,21 @@ X
 "$CC" -std=gnu99 -Wall -Wno-unused-function -o "$T/t" "$T/t.c" -I"$T" 2>"$T/cc.err" || { cat "$T/cc.err" >&2; fail "fixture does not compile"; }
 out="$("$T/t")" || fail "$out"
 
-# The FSM side: the touch floor sits before the light-idle return, battery and camera
-# excluded; the first touch lifts LIGHT_IDLE at once; the kick is cleared after each update.
-# Battery's actual manual-profile ceilings are lifted by the writer path tested in
-# unlock_lift_runtime (fix223), not by changing this quiet-screen state exclusion.
+# The FSM side: the touch floor sits before the light-idle return, the camera excluded; the
+# first touch lifts LIGHT_IDLE at once; the kick is cleared after each update.
+# fix240: Battery is no longer excluded from the floor or the lift - its LIGHT_IDLE carries
+# the governor's own lowest-step GPU ceiling, which is what the first seconds of a swipe
+# were drawn at (battery_touch_light_idle_runtime runs the real FSM). The pin escalation
+# stays CPU-only and keeps Battery out.
 awk '/A finger on the glass is interaction/{t=NR} /The light-idle ceiling is binding/{p=NR} END{exit !(t && p && t < p)}' "$F" \
   || fail "touch floor is not ahead of the light-idle decision"
 grep -q 'g_touch_last_ts > 0 && time(NULL) - g_touch_last_ts <= ASB_TOUCH_RECENT_S)' "$F" || fail "touch floor has no time window"
 grep -q 'm->misc.screen_on && g_touch_kick && fsm->state == ASB_STATE_LIGHT_IDLE &&' "$F" || fail "first touch does not lift light idle"
-grep -q '!fsm_profile_is_battery && !m->misc.camera_active) {' "$F" || fail "battery/camera not excluded from the touch lift"
+_lift="$(grep -A1 'm->misc.screen_on && g_touch_kick && fsm->state == ASB_STATE_LIGHT_IDLE &&' "$F")"
+case "$_lift" in *'!m->misc.camera_active) {'*) ;; *) fail "the camera is not excluded from the touch lift" ;; esac
+case "$_lift" in *fsm_profile_is_battery*) fail "Battery is excluded from the touch lift again" ;; esac
+_floor="$(grep -B1 -A1 'g_touch_last_ts > 0 && time(NULL) - g_touch_last_ts <= ASB_TOUCH_RECENT_S)$' "$F" | head -3)"
+case "$_floor" in *fsm_profile_is_battery*) fail "Battery is excluded from the touch floor again" ;; esac
 grep -q 'g_touch_kick = 0;   /\* answered (fix117) \*/' "$G" || fail "touch kick never cleared"
 grep -q 'touch_watch=%d' "$G" || fail "state file does not report the touch watch"
 grep -q '(void)touch_watch_set(epfd, 0);   /\* screen off' "$G" || fail "screen-off does not stop the touch watch"

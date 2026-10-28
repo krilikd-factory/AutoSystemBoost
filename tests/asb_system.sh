@@ -764,6 +764,17 @@ for _c in $(grep -oE "\{ key:'[A-Za-z_][A-Za-z_0-9]*'" "$ROOT/webroot/index.html
   case " $_uk " in *" $_c "*) : ;; *) _missing="$_missing $_c" ;; esac
 done
 [ -z "$_missing" ] || fail "cards missing from install.sh _user_keys:$_missing"
+# fix240: the snapshot that outlives the module had its own, shorter copy of the list - five
+# cards added later (Keep Apps In Memory, Bluetooth link stability, Leave Bad Wi-Fi, Wi-Fi power
+# save, LSPosed log) were not in it, so a reinstall after removal reset them.
+_sk="$(awk '/^  _keys="audio_profile/{f=1} f{printf "%s ", $0} f&&/"[[:space:]]*$/{exit}' "$ROOT/common/install.sh" | sed 's/.*_keys="//;s/".*//;s/\\\\//g')"
+[ -n "$_sk" ] || fail "snapshot key list not found"
+_missing=""
+for _c in $(grep -oE "\{ key:'[A-Za-z_][A-Za-z_0-9]*'" "$ROOT/webroot/index.html" \
+            | sed "s/.*key:'//;s/'//" | sort -u); do
+  case " $_sk " in *" $_c "*) : ;; *) _missing="$_missing $_c" ;; esac
+done
+[ -z "$_missing" ] || fail "cards missing from the install.sh settings snapshot:$_missing"
 
 echo 'PASS config ownership registry contract (207 keys; 30 user, 50 advanced, 127 internal)'
 )
@@ -4766,7 +4777,9 @@ grep -qF 'if (touch_active && profile_idx == PROFILE_BATTERY && g_unlock_until_m
 grep -qF '_touch_active, g_lock_key_kick, _launch_kick,' "$G" || fail "the main loop does not pass continuous touch"
 grep -qF 'metrics.misc.screen_on && !metrics.misc.camera_active &&' "$G" || fail "the touch-active signal lost its screen/camera gates"
 grep -qF 'time(NULL) - g_touch_last_ts <= ASB_TOUCH_RECENT_S;' "$G" || fail "the hold is not bounded by the sampled touch clock"
-[ "$(grep -cF '!fsm_profile_is_battery && !m->misc.camera_active' "$F")" -eq 3 ] \
+# fix240: the touch floor and the first-touch lift now include Battery (its LIGHT_IDLE GPU
+# ceiling is the governor's own lowest step); only the CPU pin escalation keeps it out.
+[ "$(grep -cF '!fsm_profile_is_battery && !m->misc.camera_active' "$F")" -eq 1 ] \
   || fail "Battery's quiet-screen FSM exclusions changed"
 grep -qF 'const int manual_lift     = manual_profile && g_unlock_lift_now && !thermal_cap &&' "$W" \
   || fail "the writer does not borrow the manual-profile ceilings"
@@ -7735,6 +7748,85 @@ X
 "$CC" -O1 -I"$ROOT/src" -o "$T/t" "$T/t.c" -lm 2>"$T/cc.log" || { cat "$T/cc.log" >&2; fail "harness did not compile"; }
 out="$("$T/t")" || { printf '%s\n' "$out" >&2; fail "session reset wrong"; }
 echo "PASS session lifecycle: the boot session has a start and its sentinels, screen-offs keep context without re-learning, shutdown banks once"
+)
+
+t_device_bounds_long_fingerprint_runtime() (
+# Runtime (fix240): the governor reads a fingerprint longer than 91 characters whole.
+#
+# Owner's OP15 asbdiag: "bounds status: stale/fingerprint" and the governor log
+# "device_bounds: stale/fingerprint ... compiled reference rails in force" on every start,
+# minutes after the synthesis wrote the current fingerprint. The OP15 fingerprint is 92
+# characters; __system_property_get() answers a read-only property that long with bionic's
+# fixed "Must use __system_property_read_callback() to read", so the comparison could never
+# match, while the shell's getprop accepted the same file. The REAL loader is compiled as for
+# Android against a fake property area with bionic's semantics: the callback reader is found
+# at run time and the file applies; with no callback reader the short reader still sees only
+# the legacy text, which is the old behaviour.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL device bounds long fingerprint: $*" >&2; exit 1; }
+CC=""; for c in ${HOST_CC:-} gcc clang cc; do command -v "$c" >/dev/null 2>&1 && { CC="$c"; break; }; done
+[ -n "$CC" ] || { echo "SKIP device bounds long fingerprint: no host C compiler"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/inc/sys"
+cat > "$T/inc/sys/system_properties.h" <<'X'
+#pragma once
+#define PROP_VALUE_MAX 92
+typedef struct prop_info prop_info;
+const prop_info *__system_property_find(const char *name);
+int __system_property_get(const char *name, char *value);
+X
+sed "s#\"/data/adb/asb/device_bounds.env\"#\"$T/device_bounds.env\"#" "$ROOT/src/asb_fsm.h" > "$T/asb_fsm_test.h"
+cat > "$T/t.c" <<'X'
+#include <stdio.h>
+#include <string.h>
+#include <stdint.h>
+#include <sys/system_properties.h>
+#define FP "OnePlus/CPH2745IN/OP611FL1:16/BP2A.250605.015/B.R4T3.1abf132_aeee51_aea830:user/release-keys"
+struct prop_info { int dummy; };
+static struct prop_info g_fp_info;
+const prop_info *__system_property_find(const char *name) {
+    return strcmp(name, "ro.build.fingerprint") == 0 ? &g_fp_info : NULL;
+}
+int __system_property_get(const char *name, char *value) {
+    if (strcmp(name, "ro.build.fingerprint") != 0) { value[0] = '\0'; return 0; }
+    if (strlen(FP) >= PROP_VALUE_MAX) { strcpy(value, "Must use __system_property_read_callback() to read"); return (int)strlen(value); }
+    strcpy(value, FP); return (int)strlen(value);
+}
+#ifdef WITH_CALLBACK
+void __system_property_read_callback(const prop_info *pi,
+        void (*cb)(void *, const char *, const char *, uint32_t), void *cookie) {
+    if (pi == &g_fp_info) cb(cookie, "ro.build.fingerprint", FP, 1);
+}
+#endif
+#include "asb_fsm_test.h"
+asb_runtime_config_t g_asb_cfg;
+static asb_profile_bounds_t defs[3];
+int main(void) {
+    memcpy(defs, g_profile_bounds, sizeof(defs));
+    g_cpu_policy_count = 2; g_cpu_all_count = 2;
+    g_cpu_policy_ids[0] = 0; g_cpu_policy_ids[1] = 6; g_cpu_policy_ids[2] = -1;
+    g_cpu_slot_hwmax[0] = 3628800; g_cpu_slot_hwmax[1] = 4608000; g_cpu_slot_hwmax[2] = 0;
+    FILE *f = fopen(ASB_DEVICE_BOUNDS_FILE, "w");
+    if (!f) return 90;
+    fputs("schema=2\nconfidence=high\nsource=measured\npolicy_count=2\n"
+          "cluster_signature=0:3628800>none:0>6:4608000\nfingerprint=" FP "\n"
+          "BALANCED_CPU_MAX_LITTLE=2611200\n", f);
+    fclose(f);
+    int n = asb_load_device_bounds_override(1, defs);
+    printf("%s/%s %d\n", g_device_bounds_status, g_device_bounds_reason, n);
+    return 0;
+}
+X
+[ "$(printf %s 'OnePlus/CPH2745IN/OP611FL1:16/BP2A.250605.015/B.R4T3.1abf132_aeee51_aea830:user/release-keys' | wc -c)" -gt 91 ] || fail "fixture fingerprint is not long"
+"$CC" -O1 -D__ANDROID__ -DWITH_CALLBACK -I"$T/inc" -I"$ROOT/src" -rdynamic -o "$T/cb" "$T/t.c" -lm -ldl 2>"$T/cc1.log" || { cat "$T/cc1.log" >&2; fail "callback build"; }
+"$CC" -O1 -D__ANDROID__ -I"$T/inc" -I"$ROOT/src" -o "$T/nocb" "$T/t.c" -lm -ldl 2>"$T/cc2.log" || { cat "$T/cc2.log" >&2; fail "fallback build"; }
+out="$("$T/cb")"
+[ "$out" = "applied/ok 1" ] || fail "a 92-character fingerprint is still not read whole: $out"
+out="$("$T/nocb")"
+[ "$out" = "stale/fingerprint 0" ] || fail "without the callback reader the short reader must behave as bionic does: $out"
+grep -q 'dlsym(RTLD_DEFAULT, "__system_property_read_callback")' "$ROOT/src/asb_fsm.h" || fail "the long-property reader is not looked up"
+echo "PASS device bounds long fingerprint: a 92-character fingerprint is read whole and the measured bounds apply in the governor, as they already did in the shell"
 )
 
 t_device_bounds_confidence_runtime() (
