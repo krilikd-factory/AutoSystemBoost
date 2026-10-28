@@ -465,6 +465,10 @@ if command -v cmd >/dev/null 2>&1; then
   dumpsys deviceidle whitelist +com.google.android.gms >/dev/null 2>&1
 fi
 
+# Restore TCP PMTUD probing exactly as it was before ASB's opt-in write.
+[ -f "$MODDIR/runtime/asb_net_mtu.sh" ] &&   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_net_mtu.sh" restore >/dev/null 2>&1 || true
+rm -f /data/adb/asb/net_mtu_probing.prev 2>/dev/null
+
 # Put the network sysctls back before the file that remembers them is deleted.
 #
 # These are not settings or properties, so they never entered baseline.txt - the generic
