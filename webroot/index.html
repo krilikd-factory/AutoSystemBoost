@@ -7534,8 +7534,10 @@ function cfgStatus(it, cur) {
   const _isNeutral = (cur === _stockVal) || (!it.stock && (cur === 'auto' || cur === 'stock'));
   /* The option's label, not its stored value (fix169): Russian cards read "OFF" above a
    * button saying "выкл", and Act on Wakelocks read "0"/"1". Values without a label - bbr,
-   * fq_codel, a country code - come back unchanged. */
-  return { cls: (_isNeutral ? 'neutral' : 'warn'), text: String(Topt(cur, it.key)).toUpperCase() };
+   * fq_codel, a country code - come back unchanged. A number with a unit keeps its case
+   * (fix240): "−0,15 дБ" and "35 Hz" uppercased read as "ДБ" and "HZ". */
+  const _lab = String(Topt(cur, it.key));
+  return { cls: (_isNeutral ? 'neutral' : 'warn'), text: /^\u2066?[\u2212+-]?\d[\d.,]*\s?[^\s\d]+\u2069?$/.test(_lab) ? _lab : _lab.toUpperCase() };
 }
 // A card counts as "active" whenever it is not sitting on the shipped default -- not
 // just when a switch is on. A segment parked on "hifi" or a slider at 4 is every bit as
