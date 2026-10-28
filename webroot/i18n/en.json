@@ -318,7 +318,7 @@
     },
     "ltpo_force": {
       "name": "Force LTPO Refresh",
-      "desc": "LTPO panels can fall to their lowest refresh rate when nothing on the screen moves; OxygenOS ships parts of that path switched off. This patch takes your device's OWN refresh-rate table (oplus_vrr_config.json), enables every panel power-saving switch the OEM left disabled (ADFR, PDFR, refresh-rate director, histogram backlight control and more), and additionally turns OFF the display stack's own telemetry (VRR info records, histogram sampling, big-data and shader cache-miss upload) - free battery with zero impact on the picture. Nothing is copied from another model, and the stock file itself is never modified.\n\nThe patch is prepared while the module installs, and this switch decides whether it is applied: off by default, and turning it on takes effect after a reboot. If the installer found no refresh-rate table on your device, or nothing left to improve in it, the switch does nothing - the install log and the status badge say which.\n\nOn a table the OEM already ships fully enabled (OnePlus 15 is one) the patch still earns its keep: an identical copy is bound with only the telemetry switches cut.\n\nThe switch also opens the Android side of the range, and that part applies at once, without a reboot: no refresh floor, and the peak set to the highest mode this panel reports (165 Hz on the OnePlus 15). The low end - the panel's own idle rates below 60 Hz - is the table's job, because Android does not list those rates at all. What was set before is recorded and restored when you switch off. The OEM's own cap on the render rate (90 Hz on some builds) is left alone."
+      "desc": "LTPO panels can fall to their lowest refresh rate when nothing on the screen moves; OxygenOS ships parts of that path switched off. This patch takes your device's OWN refresh-rate table (oplus_vrr_config.json), enables every panel power-saving switch the OEM left disabled (ADFR, PDFR, refresh-rate director, histogram backlight control and more), and additionally turns OFF the display stack's own telemetry (VRR info records, histogram sampling, big-data and shader cache-miss upload) - free battery with zero impact on the picture. Nothing is copied from another model, and the stock file itself is never modified.\n\nThe patch is prepared while the module installs, and this switch decides whether it is applied: off by default, and turning it on takes effect after a reboot. If the installer found no refresh-rate table on your device, or nothing left to improve in it, the switch does nothing - the install log and the status badge say which.\n\nOn a table the OEM already ships fully enabled (OnePlus 15 is one) the patch still earns its keep: an identical copy is bound with only the telemetry switches cut.\n\nThe switch also opens the Android side of the range, and that part applies at once, without a reboot: no refresh floor, and the peak set to the highest mode this panel reports (165 Hz on the OnePlus 15). The low end - the panel's own idle rates below 60 Hz - is the table's job, because Android does not list those rates at all. What was set before is recorded and restored when you switch off. The OEM's own cap on the render rate (90 Hz on some builds) is left alone.\n\nIntegrated interaction control uses blocking touchscreen events, not polling: the panel maximum is restored on touch, and after two quiet seconds ASB selects 60 Hz so the patched ADFR path can idle down. Camera and game states are kept active, video keeps its own owner, and previous range values are restored exactly on handback. If OnePlus15-165HZ-LTPO is installed, ASB stays off and yields by default; explicitly enabling this switch pauses only its verified writer and gives ASB priority. Switching ASB off requests a clean external-service resume."
     },
     "mmfeed_off": {
       "name": "Multimedia Telemetry Off",
@@ -337,6 +337,10 @@
         "keep": "ASB does not touch LSPosed's settings.",
         "off": "LSPosed's verbose log off from the next boot; old verbose logs deleted now."
       }
+    },
+    "dsp_headroom": {
+      "name": "DSP True-Peak Headroom",
+      "desc": "Final true-peak ceiling: 15 = -0.15 dB, 30 = -0.30 dB, 50 = -0.50 dB, 100 = -1.00 dB. More headroom leaves extra margin for inter-sample peaks after Bluetooth or DAC reconstruction. It lowers only the final ceiling, not the selected gain, bass, voice or width. Applies live through the existing DSP engine."
     }
   },
   "cfg_search": "Search",
@@ -1382,5 +1386,6 @@
   "lr_running_open": "recording · {min} min · until shutdown",
   "dev_json_empty": "Refresh device diagnostics before exporting JSON.",
   "dev_json_saved": "Saved {path}",
-  "dev_json_error": "Could not save device.json."
+  "dev_json_error": "Could not save device.json.",
+  "dev_uname_mismatch_susfs_note": "The releases differ, and SuSFS reports CONFIG_KSU_SUSFS_SPOOF_UNAME. On a SuSFS/Wild GKI setup this is an expected possible explanation, not evidence of a compromised kernel. The collector does not claim which component produced either string."
 }

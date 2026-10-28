@@ -416,6 +416,10 @@
         "keep": "ASB 不改动 LSPosed 的设置。",
         "off": "下次启动起关闭 LSPosed 详细日志；旧日志文件立即删除。"
       }
+    },
+    "dsp_headroom": {
+      "name": "DSP True-Peak Headroom",
+      "desc": "Final true-peak ceiling: 15 = -0.15 dB, 30 = -0.30 dB, 50 = -0.50 dB, 100 = -1.00 dB. More headroom leaves extra margin for inter-sample peaks after Bluetooth or DAC reconstruction. It lowers only the final ceiling, not the selected gain, bass, voice or width. Applies live through the existing DSP engine."
     }
   },
   "optFor": {
@@ -1604,5 +1608,6 @@
   "lr_running_open": "正在录制 · {min} 分钟 · 直到关机",
   "dev_json_empty": "请先刷新设备诊断。",
   "dev_json_saved": "已保存：{path}",
-  "dev_json_error": "无法保存 device.json。"
+  "dev_json_error": "无法保存 device.json。",
+  "dev_uname_mismatch_susfs_note": "The releases differ, and SuSFS reports CONFIG_KSU_SUSFS_SPOOF_UNAME. On a SuSFS/Wild GKI setup this is an expected possible explanation, not evidence of a compromised kernel. The collector does not claim which component produced either string."
 }

@@ -389,6 +389,10 @@
         "keep": "ASB не чіпає налаштування LSPosed.",
         "off": "Детальний лог LSPosed вимкнеться з наступного завантаження; старі файли логу видаляються одразу."
       }
+    },
+    "dsp_headroom": {
+      "name": "DSP True-Peak Headroom",
+      "desc": "Final true-peak ceiling: 15 = -0.15 dB, 30 = -0.30 dB, 50 = -0.50 dB, 100 = -1.00 dB. More headroom leaves extra margin for inter-sample peaks after Bluetooth or DAC reconstruction. It lowers only the final ceiling, not the selected gain, bass, voice or width. Applies live through the existing DSP engine."
     }
   },
   "nav_live": "Монітор",
@@ -1604,5 +1608,6 @@
   "lr_running_open": "триває запис · {min} хв · до вимкнення",
   "dev_json_empty": "Спочатку оновіть діагностику пристрою.",
   "dev_json_saved": "Збережено: {path}",
-  "dev_json_error": "Не вдалося зберегти device.json."
+  "dev_json_error": "Не вдалося зберегти device.json.",
+  "dev_uname_mismatch_susfs_note": "The releases differ, and SuSFS reports CONFIG_KSU_SUSFS_SPOOF_UNAME. On a SuSFS/Wild GKI setup this is an expected possible explanation, not evidence of a compromised kernel. The collector does not claim which component produced either string."
 }
