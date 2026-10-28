@@ -1451,6 +1451,9 @@ else
   V "ASB governor process alive" "running" "$([ -n "$_gov_pid" ] && echo running || echo stopped)" eq
 fi
 P "  current profile : $(cat "$MODDIR/current_profile" 2>/dev/null || gp persist.asb.profile)"
+_prof_switching=0
+pgrep -f 'apply_profile.sh --worker' >/dev/null 2>&1 && _prof_switching=1
+[ "$_prof_switching" = 1 ] && NOTE "a profile switch is being applied right now - caps, leases and the network re-apply below can still change; run asbdiag again in a minute for a settled reading"
 # is module's system actually mounted?
 _mounted="$(grep -c "AutoSystemBoost" /proc/mounts 2>/dev/null)"
 NOTE "mount entries mentioning the module: ${_mounted:-0}"
@@ -2409,7 +2412,11 @@ if [ -n "$_txq_want" ] && [ "$_txq_want" != "stock" ]; then
   done
   NOTE "net_txqueue=$_txq_want (${_txq_len:-?} on Wi-Fi) - live:${_txq_seen:- unreadable}"
   [ -n "$_txq_mob" ] && NOTE "  mobile links left to the platform:$_txq_mob"
-  [ -n "$_txq_bad" ] && NOTE "  WARN:$_txq_bad not at ${_txq_len} - the queue did not take (send this diag)"
+  if [ -n "$_txq_bad" ] && [ "${_prof_switching:-0}" = 1 ]; then
+    NOTE "  $_txq_bad not at ${_txq_len} yet - the profile switch in progress re-applies the queue when it finishes"
+  elif [ -n "$_txq_bad" ]; then
+    NOTE "  WARN:$_txq_bad not at ${_txq_len} - the queue did not take (send this diag)"
+  fi
 fi
 
 
@@ -3956,8 +3963,11 @@ NOTE "doze_trim_whitelist = $(cfg doze_trim_whitelist) · trimmed by ASB: $(_dzn
 
 # =====================================================================
 SEC "8b. INTERFACE / SYSTEM TWEAKS"
-V "  window blur disabled" "$(cfg disable_blur)" \
-  "$(settings get global disable_window_blurs 2>/dev/null)" present
+if [ "$(cfg disable_blur)" = "1" ]; then
+  V "  window blur disabled" "1" "$(settings get global disable_window_blurs 2>/dev/null)" eq
+else
+  OFF "window blur - disable_blur=$(cfg disable_blur), the ROM's blur is left alone" "disable_blur"
+fi
 NOTE "ui_effects_level = $(cfg ui_effects_level)  ·  anim_level prop = $(gp persist.sys.oplus.anim_level)"
 NOTE "phantom_procs = $(cfg phantom_procs)  ·  live: $(settings get global settings_enable_monitor_phantom_procs 2>/dev/null)"
 if [ -r /proc/sys/kernel/sched_stats ]; then
