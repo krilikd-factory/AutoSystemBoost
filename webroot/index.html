@@ -4770,6 +4770,7 @@ const TECH_ICON_PATHS = {
   rps: '<path d="M3 12h4.5"/><path d="M7.5 12c5 0 5-6.5 13.5-6.5M7.5 12h13.5M7.5 12c5 0 5 6.5 13.5 6.5"/><circle cx="20.5" cy="5.5" r="1.4" fill="currentColor" stroke="none"/><circle cx="20.5" cy="12" r="1.4" fill="currentColor" stroke="none"/><circle cx="20.5" cy="18.5" r="1.4" fill="currentColor" stroke="none"/>',
   txqueue: '<path d="M4 7.5h11M4 12h11M4 16.5h11"/><path d="M18 7.5h3M18 12h3M18 16.5h3M18 7.5l2 0" /><path d="M17.5 5.8 20 7.5l-2.5 1.7"/>',
   route: '<circle cx="5.5" cy="18.5" r="2"/><circle cx="18.5" cy="5.5" r="2"/><path d="M7.5 18.5h6a3.5 3.5 0 0 0 3.5-3.5v-4a3.5 3.5 0 0 1 3.5-3.5"/>',
+  mtu_probe: '<path d="M3.5 12h4M16.5 12h4"/><rect x="7.5" y="6.5" width="9" height="11" rx="2"/><path d="M10 10h4M10 14h4"/>',
   globe_pin: '<circle cx="12" cy="11" r="7.5"/><path d="M4.5 11h15M12 3.5c-4.7 4.3-4.7 10.7 0 15 4.7-4.3 4.7-10.7 0-15z"/>',
   radar: '<path d="M5 18.5A10 10 0 0 1 19 8.9"/><path d="M8.2 18.5a6 6 0 0 1 9.5-5.5"/><path d="M11.4 18.5a2.4 2.4 0 0 1 2.8-2"/><circle cx="13.6" cy="18.6" r=".9" fill="currentColor" stroke="none"/><path d="M13.6 18.6 19 12.8"/>',
   handover: '<path d="M3.5 10a8.5 8.5 0 0 1 7 0M5.5 13a5 5 0 0 1 3 0"/><circle cx="8" cy="16" r="1" fill="currentColor"/><path d="M16 17v3M19 14v6M22 11v9"/><path d="M10.5 12h4m-2-2 2 2-2 2"/>',
@@ -6462,6 +6463,7 @@ const SNAP_KEYS = [
   'net_congestion',
   'net_qdisc',
   'net_route_tune',
+  'net_mtu_probing',
   'net_congestion_wifi',
   'net_congestion_mobile',
   'net_qdisc_wifi',
@@ -6590,6 +6592,8 @@ const CFG_ITEMS = [
     desc:'How many packets may wait to be sent. The stock 1000 is a wired-Ethernet default from the 1990s that survived into wireless drivers; on a link as variable as WiFi a deep queue mostly adds latency under load rather than throughput. Short is 256, shorter is 128. If uploads feel slower, go back to stock.' },
   { key:'net_route_tune', type:'seg', def:'auto', stock:'off', opts:['auto','off','conservative','aggressive'], name:'Network Buffers',
     desc:'How much the phone sends in one burst before waiting for a reply. Smart lets ASB look at your actual WiFi or mobile speed and size it: bigger on a fast link, left at the factory value on a weak one, because a big burst there only causes losses. Moderate uses the factory value everywhere. Aggressive goes one class higher if you trust your link. Stock puts it back. Start with Smart.' },
+  { key:'net_mtu_probing', type:'seg', def:'stock', stock:'stock', opts:['stock','on'], name:'TCP MTU Recovery',
+    desc:'Recovery for mobile or VPN routes that silently discard packets when path MTU discovery is blocked. On enables the kernel\'s black-hole-only probe (tcp_mtu_probing=1): healthy routes keep their normal MSS, while a suspected black hole can recover instead of stalling. It is not a general speed boost. Stock restores the exact 0, 1 or 2 value the device had before ASB; uninstall does the same.' },
   { key:'wifi_country', type:'seg', def:'auto', opts:['auto','CR','US','DE','JP'], name:'WiFi Region',
     desc:'The region decides which WiFi channels your phone may use, and that sets the ceiling on link speed. CR opens the widest set of channels - usually the fastest WiFi. Stock keeps the region the phone gets from the SIM. IMPORTANT: using channels not permitted where you are is your call and your responsibility.' },
   { key:'wifi_scan_throttle', type:'range', def:'2', min:0, max:4, step:1,
@@ -6730,7 +6734,7 @@ const CFG_CAT = {
   camera_hold_enable:'camera',
   night_quiet_enable:'battery', log_level:'system', lsposed_verbose:'system', phantom_procs:'system',
   sustained_temp_mode:'battery', doze_level:'battery', doze_trim_whitelist:'battery',
-  net_congestion:'net', net_qdisc:'net', net_route_tune:'net',
+  net_congestion:'net', net_qdisc:'net', net_route_tune:'net', net_mtu_probing:'net',
   net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net', radio_policy_enable:'net',
   disable_blur:'iface', ui_effects_level:'iface', haptic_strength:'system', haptic_touch_strength:'system'
 };
@@ -6794,7 +6798,7 @@ const CFG_GROUP_OF = {
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery', perf_ceiling_pct:'battery', 
   BG_TRIM_LEVEL:'battery', gms_trim:'battery', gms_freeze:'battery', cool_gaming:'battery',
   UX_MANAGE_OEM_TOGGLES:'ui', UX_MANAGE_TIMEOUTS:'iface', anim_speed:'iface', UX_ANIM_FORCE_RESTART:'iface',
-  net_congestion:'net', net_qdisc:'net', net_route_tune:'net',
+  net_congestion:'net', net_qdisc:'net', net_route_tune:'net', net_mtu_probing:'net',
   net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net', radio_policy_enable:'net',
   disable_blur:'iface', ui_effects_level:'iface', haptic_strength:'ui', haptic_touch_strength:'ui'
 };
@@ -6852,7 +6856,7 @@ const CFG_GROUP_SECTIONS = {
     { id:'stack', icon:'route', titleKey:'cfg_net_section_stack',
       title:'Network Stack', hintKey:'cfg_net_section_stack_hint',
       hint:'Advanced: how network work is spread across cores and buffered.',
-      keys:['net_rps','net_txqueue','net_route_tune'] }
+      keys:['net_rps','net_txqueue','net_route_tune','net_mtu_probing'] }
   ],
   ui: [
     { id:'services', icon:'oem_switches', titleKey:'cfg_ui_section_services',
@@ -7068,7 +7072,7 @@ const CFG_ICONS = {
   CAMERA_LEVEL:'camera_level', CAMERA_CONTRAST:'contrast', CAMERA_GRAIN:'grain', CAMERA_PORTRAIT:'portrait', CAMERA_LOWLIGHT:'lowlight', camera_hold_enable:'camera_hold', CAMERA_AGGRESSIVE:'camera_aggressive', CAMERA_AGGRESSIVE_INJECT:'camera_inject',
   UX_MANAGE_TIMEOUTS:'timeout', anim_speed:'anim_speed', UX_ANIM_FORCE_RESTART:'anim_restart', disable_blur:'blur', ui_effects_level:'effects',
   net_congestion:'congestion', net_congestion_wifi:'wifi_congestion', net_congestion_mobile:'mobile_congestion', net_qdisc:'qdisc', net_qdisc_wifi:'wifi_queue', net_qdisc_mobile:'mobile_queue',
-  net_rps:'rps', net_txqueue:'txqueue', net_route_tune:'route', wifi_country:'globe_pin', wifi_scan_throttle:'radar', radio_policy_enable:'cellular_controls',
+  net_rps:'rps', net_txqueue:'txqueue', net_route_tune:'route', net_mtu_probing:'mtu_probe', wifi_country:'globe_pin', wifi_scan_throttle:'radar', radio_policy_enable:'cellular_controls',
   auto_battery_enable:'battery_auto', smart_battery_bias:'battery_bias', smart_media_guard:'media_guard', charge_aware_enable:'charge_aware', doze_level:'doze', doze_trim_whitelist:'whitelist',
   wakelock_action:'wakelock', gnss_trim:'satellite', night_modem_idle:'radio_moon', net_screen_off_lte:'lte_screenoff', net_lte_light:'lte_light', night_quiet_enable:'quiet_moon', sustained_temp_mode:'thermal_mode', sustained_temp_enter:'thermal_point',
   perf_ceiling_pct:'perf_cap', cool_gaming:'cool_game', bat_suppress_gaming:'game_battery', BG_TRIM_LEVEL:'cleaner', gms_trim:'service_trim', gms_freeze:'service_freeze',
@@ -7664,7 +7668,7 @@ const APPLY_MODE = {
   haptic_strength:APPLY_LIVE, haptic_touch_strength:APPLY_LIVE,
   net_congestion:APPLY_LIVE, net_congestion_wifi:APPLY_LIVE, net_congestion_mobile:APPLY_LIVE,
   net_qdisc:APPLY_LIVE, net_qdisc_wifi:APPLY_LIVE, net_qdisc_mobile:APPLY_LIVE,
-  net_route_tune:APPLY_LIVE, wifi_country:APPLY_LIVE, net_wifi_leave:APPLY_LIVE, wifi_scan_throttle:APPLY_LIVE, radio_policy_enable:APPLY_LIVE, log_level:APPLY_LIVE,
+  net_route_tune:APPLY_LIVE, net_mtu_probing:APPLY_LIVE, wifi_country:APPLY_LIVE, net_wifi_leave:APPLY_LIVE, wifi_scan_throttle:APPLY_LIVE, radio_policy_enable:APPLY_LIVE, log_level:APPLY_LIVE,
   smart_battery_bias:APPLY_LIVE, smart_media_guard:APPLY_LIVE, auto_battery_enable:APPLY_LIVE,
   heavy_prime_escape:APPLY_LIVE, prime_escape_burst_s:APPLY_LIVE, prime_escape_rest_s:APPLY_LIVE,
   wakelock_fitness:APPLY_LIVE, ltpo_video:APPLY_LIVE,
@@ -8849,7 +8853,7 @@ async function cfgSet(key, val, ctl) {
         if (ctl) ctl.classList.remove('busy');
         return;
       }
-    var NET_KEYS = ['net_congestion','net_qdisc','net_route_tune',
+    var NET_KEYS = ['net_congestion','net_qdisc','net_route_tune','net_mtu_probing',
       'net_congestion_wifi','net_congestion_mobile','net_qdisc_wifi','net_qdisc_mobile',
       'wifi_country','wifi_scan_throttle',
       /* These reach the device through the same net-apply pass as the rest of this list.
