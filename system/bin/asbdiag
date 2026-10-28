@@ -1811,9 +1811,11 @@ SEC "1b. DSP ENGINE  (what the effect is actually doing)"
 # is the only way to tell "configured" from "in force": the library reads the properties,
 # not governor.conf.
 _dsp_g="$(cfg dsp_loudness)"
+[ "$(cfg audio_profile)" = "eq_compat" ] && _dsp_g=eq_compat
 [ "$(cfg dsp_outputs)" = "off" ] && _dsp_g=outputs_off
 case "$_dsp_g" in ''|0|off) NOTE "dsp_loudness = off - the effect is released from the audio path entirely" ;;
-  outputs_off) NOTE "dsp_outputs = off - the DSP is switched off (enable=$(gp persist.asb.dsp.enable)); loudness $(cfg dsp_loudness), bass $(cfg dsp_bass), voice $(cfg dsp_voice), width $(cfg dsp_width) are kept for when an output is picked again" ;;
+  eq_compat) NOTE "audio_profile = eq_compat - the ASB DSP is intentionally off; tone, dynamics and headroom settings are kept for stock/hifi" ;;
+  outputs_off) NOTE "dsp_outputs = off - the DSP is switched off (enable=$(gp persist.asb.dsp.enable)); loudness $(cfg dsp_loudness), bass $(cfg dsp_bass), voice $(cfg dsp_voice), width $(cfg dsp_width), clarity $(cfg dsp_clarity), rumble $(cfg dsp_rumble) and headroom are kept for when an output is picked again" ;;
   *)
     _dsp_requested_mb=$((_dsp_g * 100))
     _dsp_expected_mb="$_dsp_requested_mb"
@@ -1892,6 +1894,31 @@ case "$(cfg dsp_width)" in
     fi
     ;;
 esac
+NOTE "dsp_clarity = $(cfg dsp_clarity)  ·  live: $(gp persist.asb.dsp.clarity)"
+NOTE "dsp_rumble = $(cfg dsp_rumble)  ·  live cutoff Hz: $(gp persist.asb.dsp.rumble_hz)"
+# Binary markers are read-only evidence. Absence of a marker is not proof that a device
+# lacks DSP support: it only means this shipped binary was not runtime-discoverable as current.
+_tf_lib=""
+for _tf_c in /vendor/lib64/soundfx/libasbdsp.so /vendor/lib/soundfx/libasbdsp.so; do
+  [ -f "$_tf_c" ] && { _tf_lib="$_tf_c"; break; }
+done
+if [ -n "$_tf_lib" ]; then
+  if grep -aq 'clarity' "$_tf_lib" 2>/dev/null && grep -aq 'rumble_hz' "$_tf_lib" 2>/dev/null; then
+    NOTE "  clarity/sub-bass filter: markers present in $_tf_lib"
+  else
+    NOTE "  clarity/sub-bass filter: support unknown; current markers not exposed by $_tf_lib - rebuild the DSP library"
+  fi
+else
+  NOTE "  clarity/sub-bass filter: support unknown; loaded library is not runtime-discoverable"
+fi
+if [ -f /data/adb/asb/asb_dsp_attach ]; then
+  if grep -aq 'persist.asb.dsp.clarity' /data/adb/asb/asb_dsp_attach 2>/dev/null \
+     && grep -aq 'persist.asb.dsp.rumble_hz' /data/adb/asb/asb_dsp_attach 2>/dev/null; then
+    NOTE "  tone-filter live push: attacher markers present"
+  else
+    NOTE "  tone-filter live push: support unknown; attacher markers not exposed - rebuild asb_dsp_attach"
+  fi
+fi
 NOTE "dsp_compressor = $(cfg dsp_compressor)  ·  live comp: $(gp persist.asb.dsp.comp)"
 # Output routing needs the rebuilt library to take effect; a config that says bt with a
 # library that predates the feature will process everything and look correct here.
