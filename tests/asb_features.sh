@@ -3742,8 +3742,8 @@ run remove
 grep -q "umount $LIVE" "$ASB_LTPO_LOG" || fail 'remove did not unbind'
 [ ! -f "$TMP/state/ltpo_bind.active" ] || fail 'remove kept the active marker'
 
-# External touch-LTPO coexistence: an enabled OnePlus15-165HZ-LTPO owns display policy.
-# ASB removes its previous bind and yields; disabling that module restores normal ASB behavior.
+# External touch-LTPO coexistence: explicit ASB enable takes priority (fix236).
+# The default-off path is asserted separately below; disabling ASB hands ownership back.
 EXT="$TMP/modules/OnePlus15-165HZ-LTPO"
 mkdir -p "$EXT"
 printf 'id=OnePlus15-165HZ-LTPO\n' > "$EXT/module.prop"
@@ -3752,8 +3752,8 @@ printf "%s %s ext4 rw 0 0\n" "$PAYLOAD" "$LIVE" > "$TMP/mounts"
 : > "$TMP/state/ltpo_bind.active"
 printf 'ltpo_force=1\n' > "$TMP/mod/config/governor.conf"
 run apply
-[ ! -f "$TMP/state/ltpo_bind.active" ] || fail 'external owner kept the old ASB bind marker'
-[ "$(run status)" = 'ltpo_external_owner' ] || fail 'external owner not reported honestly'
+[ -f "$TMP/state/ltpo_bind.active" ] || fail 'explicit ASB priority did not retain its bind'
+[ "$(run status)" != 'ltpo_external_owner' ] || fail 'explicit ASB priority still yields to the external writer'
 : > "$EXT/disable"
 run apply
 grep -q -- "--bind $PAYLOAD $LIVE" "$ASB_LTPO_LOG" || fail 'ASB did not resume after external disable'
@@ -3761,11 +3761,13 @@ grep -q -- "--bind $PAYLOAD $LIVE" "$ASB_LTPO_LOG" || fail 'ASB did not resume a
 run remove
 rm -f "$EXT/disable"
 run apply
-[ ! -f "$TMP/state/ltpo_bind.active" ] || fail 're-enabled external owner did not regain exclusivity'
+[ -f "$TMP/state/ltpo_bind.active" ] || fail 'ASB priority did not resume after external re-enable'
 run remove
 
-# status vocabulary stays stable for the WebUI/diag readers.
+# status vocabulary: default-off yields to an enabled external owner; without one it is off.
 printf 'ltpo_force=0\n' > "$TMP/mod/config/governor.conf"
+[ "$(run status)" = 'ltpo_external_owner' ] || fail 'default-off external ownership not reported'
+: > "$EXT/disable"
 [ "$(run status)" = 'ltpo_off' ] || fail 'status off vocabulary changed'
 
 # --- executable install-patcher fixture: the REAL staging function against fixture
@@ -3915,16 +3917,17 @@ case "$_rng" in
   *) f "range diagnostic with a video-held peak garbled: $_rng" ;;
 esac
 
-# External touch-LTPO owner: restore ASB's recorded range instead of forcing 165 over it.
+# External touch-LTPO with explicit ASB priority: ASB opens its own range and keeps
+# the exact baseline for handback; the external writer no longer forces a yield.
 mkdir -p "$T/modules/OnePlus15-165HZ-LTPO"
 printf 'id=OnePlus15-165HZ-LTPO\n' > "$T/modules/OnePlus15-165HZ-LTPO/module.prop"
 printf '#!/system/bin/sh\n' > "$T/modules/OnePlus15-165HZ-LTPO/vrrd.sh"
 export ASB_LTPO_MODULES_ROOT="$T/modules"
 echo ltpo_force=1 > "$T/mod/config/governor.conf"
 sh "$A" apply
-[ "$(cat "$T/s/peak_refresh_rate")" = 144.0 ] || f "external owner did not receive the original peak"
-[ -f "$T/d/ltpo_range.orig" ] && f "range baseline survived the ownership handoff"
-[ "$(sh "$A" status)" = ltpo_external_owner ] || f "external status missing"
+[ "$(cat "$T/s/peak_refresh_rate")" = 165.0 ] || f "ASB priority did not open the panel maximum"
+[ -f "$T/d/ltpo_range.orig" ] || f "ASB priority discarded the exact range baseline"
+[ "$(sh "$A" status)" != ltpo_external_owner ] || f "explicit ASB priority still reports an external owner"
 : > "$T/modules/OnePlus15-165HZ-LTPO/disable"
 sh "$A" apply
 [ "$(cat "$T/s/peak_refresh_rate")" = 165.0 ] || f "ASB range did not resume after external disable"
@@ -7080,6 +7083,78 @@ out="$( NOTE() { echo "NOTE $*"; }; . "$T/fn.sh"; ASB_LSPD_LOG="$T/none" _asb_ls
 [ -z "$out" ] || fail "printed something without a modules log: $out"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS asbdiag lsposed modlog: the modules log is reported apart, with the app and message that fill it"
+)
+
+
+t_ltpo_touch_runtime() (
+# Integrated LTPO: event-driven active/idle transitions, guards and video ownership.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+W="$ROOT/runtime/asb_ltpo_touch.sh"
+fail() { echo "FAIL LTPO touch runtime: $*" >&2; exit 1; }
+sh -n "$W" || fail 'shell syntax'
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/bin" "$T/mod/config" "$T/state"
+: > "$T/event0"
+printf 'ltpo_force=1\nltpo_idle_s=2\nltpo_idle_rate=60\n' > "$T/mod/config/governor.conf"
+printf 'mDisplayState=ON DisplayMode{id=1, width=1440, peakRefreshRate=165.0}\n' > "$T/display"
+cat > "$T/bin/getevent" <<'X'
+#!/bin/sh
+if [ "$1" = "-pl" ]; then echo 'ABS_MT_POSITION_X'; exit 0; fi
+n=0; [ ! -f "$ASB_TEST_COUNT" ] || n="$(cat "$ASB_TEST_COUNT")"
+n=$((n + 1)); printf '%s\n' "$n" > "$ASB_TEST_COUNT"
+case "${ASB_TEST_MODE:-normal}:$n" in
+  normal:1|video:1) exit 1 ;;
+  normal:2|video:2) exit 0 ;;
+  normal:3|video:3) : > "$ASB_LTPO_STATE_DIR/ltpo_touch.stop"; exit 1 ;;
+  guard:2) : > "$ASB_LTPO_STATE_DIR/ltpo_touch.stop" ;;
+esac
+exit 1
+X
+cat > "$T/bin/timeout" <<'X'
+#!/bin/sh
+shift
+"$@"
+X
+cat > "$T/bin/settings" <<'X'
+#!/bin/sh
+if [ "$1" = get ]; then cat "$ASB_TEST_CURRENT" 2>/dev/null || echo null; exit 0; fi
+if [ "$1" = put ]; then
+  printf '%s\n' "$4" > "$ASB_TEST_CURRENT"
+  printf '%s=%s\n' "$3" "$4" >> "$ASB_TEST_WRITES"
+fi
+X
+cat > "$T/bin/sleep" <<'X'
+#!/bin/sh
+exit 0
+X
+chmod +x "$T/bin/"*
+run_case() {
+  mode="$1"
+  rm -rf "$T/state"; mkdir -p "$T/state"
+  : > "$T/current"; : > "$T/writes"; : > "$T/count"; : > "$T/rstate"
+  [ "$mode" != guard ] || printf 'camera_hold=1\nstate=LIGHT_IDLE\n' > "$T/rstate"
+  if [ "$mode" = video ]; then printf 'orig=165.0\nowner=fixture\n' > "$T/state/ltpo_video.lowered"; fi
+  ASB_TEST_MODE="$mode" ASB_TEST_COUNT="$T/count" ASB_TEST_CURRENT="$T/current" \
+    ASB_TEST_WRITES="$T/writes" ASB_LTPO_TOUCH_DEVICE="$T/event0" \
+    ASB_LTPO_STATE_DIR="$T/state" ASB_LTPO_RSTATE="$T/rstate" \
+    ASB_LTPO_DISPLAY_DUMP="$T/display" MODDIR="$T/mod" PATH="$T/bin:$PATH" \
+    sh "$W" || fail "$mode watcher exited unsuccessfully"
+}
+run_case normal
+[ "$(cat "$T/count")" = 3 ] || fail 'normal case did not block on exactly three input events'
+printf 'peak_refresh_rate=165.0\npeak_refresh_rate=60.0\npeak_refresh_rate=165.0\npeak_refresh_rate=60.0\n' > "$T/expect"
+cmp -s "$T/writes" "$T/expect" || { cat "$T/writes"; fail 'active/idle write sequence is wrong'; }
+[ ! -e "$T/state/ltpo_touch.pid" ] && [ ! -e "$T/state/ltpo_touch.stop" ] || fail 'cleanup left lifecycle files'
+run_case guard
+printf 'peak_refresh_rate=165.0\n' > "$T/expect"
+cmp -s "$T/writes" "$T/expect" || fail 'camera guard lowered the panel'
+[ "$(cat "$T/count")" = 2 ] || fail 'camera guard did not return to blocking input wait'
+run_case video
+[ ! -s "$T/writes" ] || fail 'touch watcher fought the video owner through Settings'
+grep -q '^orig=60.0$' "$T/state/ltpo_video.lowered" || fail 'video restore target did not follow idle state'
+grep -q '^owner=fixture$' "$T/state/ltpo_video.lowered" || fail 'video ownership metadata was damaged'
+echo "PASS LTPO touch runtime: event waits, active/idle handback, camera guard and video ownership"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

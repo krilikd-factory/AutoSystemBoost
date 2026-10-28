@@ -333,6 +333,7 @@ cat > "$SRC" <<'EOF'
     "QbcScale": [1]
   },
   "addNoiseWeightMain1X": 1,
+  "addNoiseWeightUltraWidePortrait": 0.5,
   "low20XcontrastScale": 1,
   "SatuColorScale": 1
 }
@@ -352,7 +353,8 @@ need "$OUT" '"NormalParams": {'
 need "$OUT" '"BnScale": [3.5]'
 need "$OUT" '"MacroParams": {'
 need "$OUT" '"BnScale": [3.2]'
-need "$OUT" '"addNoiseWeightMain1X": 3.33'
+need "$OUT" '"addNoiseWeightMain1X": 10'
+need "$OUT" '"addNoiseWeightUltraWidePortrait": 5'
 need "$OUT" '"low20XcontrastScale": 1.7'
 
 # Independent settings must grade even with Camera Grade at stock. This is the exact former
@@ -708,14 +710,14 @@ awk -F'|' '
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
-[ "$(wc -l < "$TMP/conf")" = "199" ] || fail "expected 199 config keys, got $(wc -l < "$TMP/conf")"
-[ "$(wc -l < "$TMP/registry")" = "199" ] || fail "expected 199 registry keys, got $(wc -l < "$TMP/registry")"
+[ "$(wc -l < "$TMP/conf")" = "203" ] || fail "expected 203 config keys, got $(wc -l < "$TMP/conf")"
+[ "$(wc -l < "$TMP/registry")" = "203" ] || fail "expected 199 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
 
 sed -n '/const CFG_ITEMS = \[/,/^\];/p' "$ROOT/webroot/index.html" \
   | grep -oE "key:'[A-Za-z_][A-Za-z0-9_]*'" | sed "s/key:'//;s/'//" | sort -u > "$TMP/cards"
-[ "$(wc -l < "$TMP/cards")" = "75" ] || fail "expected 75 WebUI cards, got $(wc -l < "$TMP/cards")"
+[ "$(wc -l < "$TMP/cards")" = "76" ] || fail "expected 75 WebUI cards, got $(wc -l < "$TMP/cards")"
 _card_bad="$(while IFS= read -r key; do
   cls="$(awk -F'|' -v k="$key" '$1==k {print $2; exit}' "$REG")"
   case "$cls" in user|advanced) : ;; *) printf '%s ' "$key" ;; esac
@@ -748,7 +750,7 @@ for _c in $(grep -oE "\{ key:'[A-Za-z_][A-Za-z_0-9]*'" "$ROOT/webroot/index.html
 done
 [ -z "$_missing" ] || fail "cards missing from install.sh _user_keys:$_missing"
 
-echo 'PASS config ownership registry contract (199 keys; 30 user, 45 advanced, 124 internal)'
+echo 'PASS config ownership registry contract (203 keys; 30 user, 46 advanced, 127 internal)'
 )
 
 t_config_restore_outcome_runtime() (
@@ -5806,7 +5808,7 @@ need "$HELPER" 'asb_settings_backup.conf'
 need "$UI" "const CFG_GROUP_SECTIONS = {"
 need "$UI" "audio: ["
 need "$UI" "titleKey:'cfg_audio_section_dsp'"
-need "$UI" "keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_compressor']"
+need "$UI" "keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_compressor','dsp_headroom']"
 need "$UI" 'function cfgRenderGroup(list, groupId)'
 need "$UI" 'cfgRenderGroup(list, _cfgGroup);'
 need "$UI" '.cfg-section-hint'
@@ -5856,7 +5858,7 @@ assert section_order == ['dsp', 'playback', 'safety'], f'audio priority/order dr
 dsp = re.search(r"\{ id:'dsp'.*?keys:\[([^]]+)\]", audio.group(1), re.S)
 assert dsp, 'DSP section keys missing'
 dsp_keys = re.findall(r"'([^']+)'", dsp.group(1))
-assert dsp_keys == ['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_compressor'], f'DSP order drifted: {dsp_keys}'
+assert dsp_keys == ['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_compressor','dsp_headroom'], f'DSP order drifted: {dsp_keys}'
 items = set(re.findall(r"\{ key:'([^']+)'", text))
 block = re.search(r'const CFG_ICONS = \{(.*?)\n\};', text, re.S)
 assert block, 'CFG_ICONS block missing'
@@ -7976,6 +7978,119 @@ grep -q 'fallback TTL exhausted after 15 polls' "$T/state/net_routes_watch.exit"
 grep -q 'route link watcher: dormant' "$ROOT/tools/asb_diag.sh" || fail "diag does not explain dormant state"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "diag copies diverged"
 echo "PASS net route watcher TTL: broken netlink gets 15 polls, then a diagnosable dormant state"
+)
+
+
+t_battery_jank_guard_runtime() (
+# Battery insurance must react to measured frame windows, never learn like Smart.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+G="$ROOT/src/asb_governor.c"
+fail() { echo "FAIL Battery jank guard: $*" >&2; exit 1; }
+for pin in \
+  'g_asb_cfg.battery_jank_guard && fsm->profile_idx == PROFILE_BATTERY' \
+  'm->misc.screen_on && !m->misc.camera_active && !fsm->thermal_cap' \
+  'asb_bjank_capture_live(now)' \
+  'df >= ASB_BJANK_MIN_FRAMES && dj >= ASB_BJANK_MIN_JANKY' \
+  'dj * 100L >= df * ASB_BJANK_MIN_PCT' \
+  'g_unlock_until_ms = now_ms + ASB_BJANK_TTL_MS' \
+  'g_unlock_lift_now = 1' \
+  'g_unlock_edge = 1'; do
+  grep -Fq "$pin" "$G" || fail "missing safety/runtime pin: $pin"
+done
+CC=""; for c in gcc clang cc; do command -v "$c" >/dev/null 2>&1 && { CC="$c"; break; }; done
+[ -n "$CC" ] || { echo "PASS Battery jank guard (source pins only)"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+sed -n '/^\/\* Battery jank insurance (fix236)/,/^static int g_rec_on_applied/p' "$G" | sed '$d' \
+  | sed "s#\"/data/adb/asb/logkit/full_day_webui.lock\"#\"$T/lock\"#" > "$T/b.c"
+grep -q 'asb_battery_jank_guard_tick' "$T/b.c" || fail 'runtime block extraction failed'
+mkdir -p "$T/lock"
+cp /proc/sys/kernel/random/boot_id "$T/lock/boot_id"
+printf '%s\n' "$$" > "$T/lock/pid"
+: > "$T/gfx"
+cat > "$T/t.c" <<X
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <sys/stat.h>
+#include <stdarg.h>
+#define ASB_GFX_FILE "$T/gfx"
+#define ASB_APP_GAMING 3
+enum { PROFILE_BATTERY, PROFILE_BALANCED, PROFILE_PERFORMANCE, PROFILE_SMART };
+typedef struct { int profile_idx, thermal_cap; } asb_fsm_t;
+typedef struct { struct { int screen_on, camera_active; } misc; } asb_metrics_t;
+static struct { int battery_jank_guard, unlock_lift_pct; } g_asb_cfg = { 1, 80 };
+static struct { uint64_t app_hash; int app_hint; char app_pkg_cached[64]; } g_smart_rt = { 7, 0, "com.example.launcher" };
+static int g_pkg_detect_ok = 1;
+static long g_unlock_until_ms = 0, test_now_ms = 10000;
+static int g_unlock_lift_now = 0, g_unlock_edge = 0, probe_calls = 0;
+static const char *g_unlock_arm_why = "";
+static long gfx_frames = 1000, gfx_janky = 10;
+static long asb_clock_ms(clockid_t which) { (void)which; return test_now_ms; }
+static int asb_gfx_read_pkg(const char *pkg, long *fr, long *jk) {
+    if (strcmp(pkg, "com.example.launcher")) return -1;
+    *fr = gfx_frames; *jk = gfx_janky; return 0;
+}
+static void asb_run_modscript(const char *script, const char *pkg) {
+    (void)script; (void)pkg; probe_calls++;
+}
+static void asb_log(const char *fmt, ...) { (void)fmt; }
+#include "b.c"
+static int bad = 0;
+#define CHK(c, what) do { if (!(c)) { printf("%s\\n", what); bad = 1; } } while (0)
+static void advance_file(void) {
+    static int seq = 0;
+    struct timespec ts[2];
+    ts[0].tv_sec = time(NULL) + 2 + ++seq; ts[0].tv_nsec = 0; ts[1] = ts[0];
+    utimensat(AT_FDCWD, ASB_GFX_FILE, ts, 0);
+}
+int main(void) {
+    asb_fsm_t f = { PROFILE_BATTERY, 0 };
+    asb_metrics_t m = { { 1, 0 } };
+    asb_battery_jank_guard_tick(&f, &m);
+    CHK(probe_calls == 1 && !g_unlock_lift_now, "initial probe triggered a lift");
+    advance_file(); asb_battery_jank_guard_tick(&f, &m);
+    CHK(g_bjank_frames == 1000 && g_bjank_janky == 10, "baseline not captured");
+    CHK(probe_calls == 1 && !g_unlock_lift_now, "baseline triggered a lift");
+    advance_file(); gfx_frames = 1400; gfx_janky = 50; test_now_ms += 1000;
+    asb_battery_jank_guard_tick(&f, &m);
+    CHK(g_bjank_windows == 1 && g_bjank_triggers == 1, "10% jank window not measured");
+    CHK(g_unlock_lift_now && g_bjank_armed && g_unlock_until_ms == test_now_ms + 10000,
+        "bounded lift not armed");
+    CHK(!strcmp(g_unlock_arm_why, "battery jank guard"), "ownership reason missing");
+    f.profile_idx = PROFILE_BALANCED; asb_battery_jank_guard_tick(&f, &m);
+    CHK(!g_unlock_lift_now && g_unlock_until_ms == 0, "non-Battery profile kept the lift");
+    f.profile_idx = PROFILE_BATTERY; g_smart_rt.app_hash = 8;
+    advance_file(); asb_battery_jank_guard_tick(&f, &m);
+    advance_file(); gfx_frames = 1800; gfx_janky = 90;
+    asb_battery_jank_guard_tick(&f, &m);
+    CHK(g_bjank_armed && g_unlock_lift_now, "second measured window not armed");
+    test_now_ms += 11000; asb_battery_jank_guard_tick(&f, &m);
+    CHK(!g_bjank_armed, "TTL did not expire");
+    g_unlock_lift_now = 0; g_unlock_until_ms = 0; /* ordinary unlock owner sees the same expiry */
+    m.misc.camera_active = 1;
+    asb_battery_jank_guard_tick(&f, &m);
+    CHK(g_bjank_frames == -1 && probe_calls == 1, "camera gate failed or polled");
+    m.misc.camera_active = 0; f.thermal_cap = 1;
+    asb_battery_jank_guard_tick(&f, &m);
+    CHK(probe_calls == 1, "thermal gate failed");
+    f.thermal_cap = 0; g_smart_rt.app_hint = ASB_APP_GAMING;
+    asb_battery_jank_guard_tick(&f, &m);
+    CHK(probe_calls == 1, "game entered Battery insurance");
+    g_smart_rt.app_hint = 0; g_bjank_log_ts = 0;
+    unlink("$T/lock/pid"); asb_battery_jank_guard_tick(&f, &m);
+    CHK(probe_calls == 1 && g_bjank_frames == -1, "missing live recorder was ignored");
+    return bad;
+}
+X
+"$CC" -std=c11 -Wall -Wextra -Werror -D_GNU_SOURCE -I"$T" "$T/t.c" -o "$T/t" || fail 'runtime fixture did not compile'
+"$T/t" || fail 'runtime behavior mismatch'
+echo "PASS Battery jank guard: live capture gate, measured 10% window, bounded lift and handback"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

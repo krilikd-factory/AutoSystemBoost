@@ -5121,7 +5121,7 @@ fail() { echo "FAIL webui visual hierarchy: $*" >&2; exit 1; }
 python3 - "$H" <<'PY' || fail 'DSP order or icons'
 import re, sys
 h = open(sys.argv[1], encoding='utf-8').read()
-assert "keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_compressor']" in h, 'DSP Outputs is not first'
+assert "keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_compressor','dsp_headroom']" in h, 'DSP Outputs is not first'
 for name in ('smart','performance','theme_glass'):
     m = re.search(r'^  %s: \'([^\']*)\'' % name, h, re.M)
     assert m, '%s missing from TECH_ICON_PATHS' % name
@@ -5209,7 +5209,7 @@ function mk(tag) {
 const body = mk('div'), jsonButton = { disabled: false };
 function _el(id) { return id === 'deviceBody' ? body : id === 'devJson' ? jsonButton : null; }
 const document = { createElement: mk };
-function logReportNote(text, warn) { const n = mk('div'); n.className = 'lgr-note'; n.textContent = text; return n; }
+function logReportNote(text, warn) { const n = mk('div'); n.className = 'lgr-note'; n.textContent = text; n.warn = !!warn; return n; }
 function logReportSec(title) { const n = mk('section'); const h = mk('h3'); h.textContent = title; n.appendChild(h); return n; }
 function logReportRow(key, value) { const r = mk('div'), k = mk('span'), v = mk('span'); k.textContent = key; v.className = 'lgr-v'; v.textContent = value; r.appendChild(k); r.appendChild(v); return r; }
 EOF
@@ -5264,6 +5264,12 @@ chk(globalThis.pwned !== 1 && !body.querySelector('.img'), 'device value became 
 chk(dump.includes('22 (105)') && dump.includes('ThinLTO (Clang)') && dump.includes('active in LSM; built-in'), 'custom kernel facts missing from render');
 chk(dump.includes('Metamodule') && dump.includes('MetaCore Metamodule') && dump.includes('1.4.0') && dump.includes('driver ownership not inferred'), 'metamodule metadata or independent NoMount evidence missing from render');
 chk(dump.includes('mismatch evidence only'), 'uname mismatch was turned into a spoofing verdict or hidden');
+d.sections.susfs = { enabled_features: 'CONFIG_KSU_SUSFS_SPOOF_UNAME CONFIG_KSU_SUSFS_SUS_PATH' };
+deviceInfoRender(d);
+const susfsDump = (function walk(n) { return [n.textContent || ''].concat((n.children || []).flatMap(walk)); })(body).join('\n');
+chk(susfsDump.includes('expected possible explanation') && susfsDump.includes('CONFIG_KSU_SUSFS_SPOOF_UNAME'), 'SuSFS/Wild GKI mismatch lacks its expected-cause explanation');
+const mismatchNotes = []; (function walk(n) { if (n.className && n.className.split(/\s+/).includes('lgr-note') && n.textContent.includes('CONFIG_KSU_SUSFS_SPOOF_UNAME')) mismatchNotes.push(n); (n.children || []).forEach(walk); })(body);
+chk(mismatchNotes.length === 1 && !mismatchNotes[0].warn, 'expected SuSFS mismatch is still presented as a warning');
 const values = []; (function walk(n) { if (n.className && n.className.split(/\s+/).includes('lgr-v')) values.push(n); (n.children || []).forEach(walk); })(body);
 const expectedFeatureValues = ['interface available','v2.3.0','active in LSM; built-in','available','available','ThinLTO (Clang)','supported','not runtime-discoverable','core config present; runtime not verified','built-in','built-in','22 (105)'];
 const featureCard = body.children.find(n => n.children && n.children[0] && n.children[0].textContent === 'Custom kernel features');
