@@ -95,6 +95,10 @@
   "t_reboot_confirm": "Appuyez à nouveau",
   "t_rebooting": "Redémarrage…",
   "cfg": {
+    "net_mtu_probing": {
+          "name": "Récupération MTU TCP",
+          "desc": "Pour les routes mobiles ou VPN où la découverte de MTU bloquée fige les connexions. Activé déclenche la sonde du noyau uniquement en cas de suspicion de trou noir ; les routes saines conservent leur MSS normal. Ce n’est pas une accélération générale. Origine et la désinstallation restaurent exactement l’ancienne valeur 0, 1 ou 2."
+    },
     "doze_trim_whitelist": {
       "desc": "Retire vos applications de la liste des exemptions de veille profonde ; les applications système (téléphone, SMS, horloge, gestionnaire root) ne sont pas touchées. Le bouton ci-dessous montre quelles applications sont exemptées et permet de conserver celles dont vous avez besoin.",
       "name": "Réduire les exemptions Doze"
@@ -512,6 +516,10 @@
     "smart": "intelligent"
   },
   "optFor": {
+    "net_mtu_probing": {
+          "stock": "Origine",
+          "on": "Activé"
+    },
     "doze_level": {
       "stock": "stock",
       "night": "la nuit",

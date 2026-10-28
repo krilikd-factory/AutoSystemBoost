@@ -28,6 +28,10 @@
   "grp_ui": "Sistema",
   "wb_handover": "I dati mobili restano pronti a schermo acceso e consumano un po’ più batteria",
   "cfg": {
+    "net_mtu_probing": {
+          "name": "Recupero MTU TCP",
+          "desc": "Per route mobili o VPN in cui la path MTU discovery bloccata blocca le connessioni. Attivo abilita il controllo del kernel solo dopo un sospetto black hole; le route sane mantengono il normale MSS. Non è un aumento generale di velocità. Originale e disinstallazione ripristinano esattamente il precedente valore 0, 1 o 2."
+    },
     "audio_profile": {
       "name": "Profilo audio",
       "desc": "Chi elabora il suono. «Per equalizzatore» consegna il segnale a un EQ/ViPER esterno senza toccarlo. «Hi-Fi» attiva UHQA per quando non usi alcun EQ. «Originale» lascia solo le regolazioni di base. Si applica senza riavvio."
@@ -423,6 +427,10 @@
     }
   },
   "optFor": {
+    "net_mtu_probing": {
+          "stock": "Originale",
+          "on": "Attivo"
+    },
     "gms_freeze": {
       "off": "off",
       "safe": "sicuro",

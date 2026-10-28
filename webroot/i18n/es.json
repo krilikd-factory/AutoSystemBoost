@@ -1,6 +1,10 @@
 {
   "wb_handover": "Los datos móviles se mantienen listos con la pantalla encendida y consumen algo más de batería",
   "cfg": {
+    "net_mtu_probing": {
+          "name": "Recuperación de MTU TCP",
+          "desc": "Para rutas móviles o VPN donde el descubrimiento de MTU bloqueado detiene las conexiones. Activado habilita la prueba del kernel solo tras sospechar un agujero negro; las rutas sanas conservan su MSS normal. No es una mejora general de velocidad. Original y la desinstalación restauran exactamente el valor anterior 0, 1 o 2."
+    },
     "audio_profile": {
       "name": "Perfil de audio",
       "desc": "Quién procesa el sonido. «Compatible con EQ» entrega la señal intacta a un EQ/ViPER externo. «Hi-Fi» activa UHQA para cuando no usas ningún EQ. «De fábrica» deja solo los ajustes básicos. Se aplica sin reiniciar."
@@ -423,6 +427,10 @@
   "grp_battery": "Batería",
   "grp_ui": "Sistema",
   "optFor": {
+    "net_mtu_probing": {
+          "stock": "Original",
+          "on": "Activado"
+    },
     "gms_freeze": {
       "off": "apagado",
       "safe": "seguro",

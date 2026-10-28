@@ -1,6 +1,10 @@
 {
   "wb_handover": "Mobil veri ekran açıkken hazır tutulur ve biraz daha fazla pil tüketir",
   "cfg": {
+    "net_mtu_probing": {
+          "name": "TCP MTU kurtarma",
+          "desc": "Engellenen yol MTU keşfinin bağlantıları durdurduğu mobil veya VPN rotaları için. Açık, çekirdek yoklamasını yalnızca kara delik şüphesinde etkinleştirir; sağlıklı rotalar normal MSS değerini korur. Genel bir hız artışı değildir. Stok ve kaldırma, önceki 0, 1 veya 2 değerini aynen geri yükler."
+    },
     "audio_profile": {
       "name": "Ses profili",
       "desc": "Sesi kimin işlediği. «EQ dostu» sinyali harici bir EQ/ViPER'a dokunmadan verir. «Hi-Fi» hiç EQ kullanmadığınızda UHQA'yı açar. «Varsayılan» yalnızca temel ayarları bırakır. Yeniden başlatmadan uygulanır."
@@ -423,6 +427,10 @@
   "grp_battery": "Pil",
   "grp_ui": "Sistem",
   "optFor": {
+    "net_mtu_probing": {
+          "stock": "Stok",
+          "on": "Açık"
+    },
     "gms_freeze": {
       "off": "kapalı",
       "safe": "güvenli",

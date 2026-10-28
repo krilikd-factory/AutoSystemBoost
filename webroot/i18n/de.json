@@ -1,6 +1,10 @@
 {
   "wb_handover": "Mobilfunkdaten bleiben bei eingeschaltetem Display bereit und verbrauchen etwas mehr Akku",
   "cfg": {
+    "net_mtu_probing": {
+          "name": "TCP-MTU-Wiederherstellung",
+          "desc": "Für Mobilfunk- oder VPN-Routen, bei denen eine blockierte Path-MTU-Discovery Verbindungen zum Stillstand bringt. Ein aktiviert die Kernel-Prüfung nur bei Verdacht auf ein Blackhole; gesunde Routen behalten ihre normale MSS. Das ist keine allgemeine Beschleunigung. Standard und Deinstallation stellen den vorherigen Wert 0, 1 oder 2 exakt wieder her."
+    },
     "audio_profile": {
       "name": "Audio-Profil",
       "desc": "Wer den Klang verarbeitet. «EQ-freundlich» reicht das Signal unangetastet an einen externen EQ/ViPER weiter. «Hi-Fi» schaltet UHQA ein, wenn kein EQ läuft. «Standard» behält nur die Basisanpassungen. Wirkt ohne Neustart."
@@ -423,6 +427,10 @@
   "grp_battery": "Akku",
   "grp_ui": "System",
   "optFor": {
+    "net_mtu_probing": {
+          "stock": "Standard",
+          "on": "Ein"
+    },
     "gms_freeze": {
       "off": "aus",
       "safe": "sicher",
