@@ -1,7 +1,7 @@
 /*
  * asb_dsp_core.h — AutoSystemBoost loudness DSP, interface-agnostic core.
  *
- * The processing math (soft-knee compressor + auto make-up + true-peak limiter +
+ * The processing math (soft-knee compressor + auto make-up + sample-peak limiter +
  * make-up gain) is lifted verbatim from src/DSP/asb_dsp.c. It is deliberately free
  * of any HAL / AIDL type so the same object serves both the legacy effect and the
  * new AIDL wrapper. Everything the realtime path needs is precomputed in
@@ -52,6 +52,13 @@
 #define ASB_WIDTH_MAX       10
 #define ASB_WIDTH_STEP      0.1f
 #define ASB_WIDTH_HP_HZ     180.0f
+/* Clarity: gentle high shelf, +0.5 dB per level, at most +4 dB. */
+#define ASB_CLARITY_MAX      8
+#define ASB_CLARITY_FREQ_HZ  6500.0f
+#define ASB_CLARITY_DB       0.5f
+#define ASB_CLARITY_SLOPE    0.8f
+/* Sub-bass filter: fourth-order Butterworth high-pass (24 dB/octave). */
+#define ASB_RUMBLE_MAX_HZ    70
 #define ASB_CEIL_MB_MIN   (-600)
 #define ASB_CEIL_MB_MAX   (-30)
 #define ASB_RATIO_MIN      10
@@ -102,12 +109,22 @@ typedef struct {
     float    bb0, bb1, bb2, ba1, ba2;              /* coefficients, a0-normalised */
     float    bx1[ASB_MAX_CH], bx2[ASB_MAX_CH];     /* per-channel input history */
     float    by1[ASB_MAX_CH], by2[ASB_MAX_CH];     /* per-channel output history */
+    /* Sub-bass high-pass: two cascaded biquads before the other tone stages. */
+    int      rumble_on;
+    float    rc[2][5];
+    float    rx1[2][ASB_MAX_CH], rx2[2][ASB_MAX_CH];
+    float    ry1[2][ASB_MAX_CH], ry2[2][ASB_MAX_CH];
     /* Voice tone: two peaking biquads after the bass shelf, same placement rule - before
      * the detector, so the limiter sees what they add. */
     int      voice_on;
     float    vc[2][5];                              /* b0 b1 b2 a1 a2 per band, a0-normalised */
     float    vx1[2][ASB_MAX_CH], vx2[2][ASB_MAX_CH];
     float    vy1[2][ASB_MAX_CH], vy2[2][ASB_MAX_CH];
+    /* Clarity high shelf after bass/voice and before width/detector. */
+    int      clarity_on;
+    float    cb0, cb1, cb2, ca1, ca2;
+    float    cx1[ASB_MAX_CH], cx2[ASB_MAX_CH];
+    float    cy1[ASB_MAX_CH], cy2[ASB_MAX_CH];
     /* Stereo width: after the tone stages and before the detector, for the same reason -
      * the limiter has to see the wider signal. */
     int      width_on;
@@ -233,6 +250,38 @@ static inline float asb_core_bass_step(asb_core_t *c, int k, float x) {
     return y;
 }
 
+/* Fourth-order Butterworth high-pass. Only the three documented cutoffs are accepted. */
+static inline void asb_core_set_rumble(asb_core_t *c, int cutoff_hz, uint32_t rate) {
+    for (int b = 0; b < 2; b++) for (int k = 0; k < ASB_MAX_CH; k++)
+        c->rx1[b][k] = c->rx2[b][k] = c->ry1[b][k] = c->ry2[b][k] = 0.0f;
+    c->rumble_on = 0;
+    if ((cutoff_hz != 35 && cutoff_hz != 50 && cutoff_hz != 70) || rate == 0 ||
+        c->channels > ASB_MAX_CH || (float)cutoff_hz >= 0.45f * (float)rate) return;
+    const float qs[2] = {0.54119610f, 1.30656296f};
+    float w0 = 2.0f * 3.14159265358979f * (float)cutoff_hz / (float)rate;
+    float cs = cosf(w0), sn = sinf(w0);
+    for (int b = 0; b < 2; b++) {
+        float alpha = sn / (2.0f * qs[b]), a0 = 1.0f + alpha;
+        c->rc[b][0] = ((1.0f + cs) * 0.5f) / a0;
+        c->rc[b][1] = (-(1.0f + cs)) / a0;
+        c->rc[b][2] = c->rc[b][0];
+        c->rc[b][3] = (-2.0f * cs) / a0;
+        c->rc[b][4] = (1.0f - alpha) / a0;
+    }
+    c->rumble_on = 1;
+}
+static inline float asb_core_rumble_step(asb_core_t *c, int k, float x) {
+    for (int b = 0; b < 2; b++) {
+        const float *q = c->rc[b];
+        float y = q[0] * x + q[1] * c->rx1[b][k] + q[2] * c->rx2[b][k]
+                  - q[3] * c->ry1[b][k] - q[4] * c->ry2[b][k];
+        c->rx2[b][k] = c->rx1[b][k]; c->rx1[b][k] = x;
+        c->ry2[b][k] = c->ry1[b][k]; c->ry1[b][k] = y;
+        x = y;
+    }
+    return x;
+}
+
 /* RBJ peaking band. Returns 0 when the coefficients are unusable. */
 static inline int asb_core_peak_coefs(float *o, float f0, float q, float db, uint32_t rate) {
     if (rate == 0 || f0 <= 0.0f || f0 >= 0.45f * (float)rate || q <= 0.0f) return 0;
@@ -277,6 +326,38 @@ static inline float asb_core_voice_step(asb_core_t *c, int k, float x) {
         x = y;
     }
     return x;
+}
+
+/* RBJ high shelf. Coefficients are prepared outside the realtime processing path. */
+static inline void asb_core_set_clarity(asb_core_t *c, int level, uint32_t rate) {
+    for (int k = 0; k < ASB_MAX_CH; k++)
+        c->cx1[k] = c->cx2[k] = c->cy1[k] = c->cy2[k] = 0.0f;
+    if (level < 0) level = 0;
+    if (level > ASB_CLARITY_MAX) level = ASB_CLARITY_MAX;
+    c->clarity_on = 0;
+    if (level == 0 || rate == 0 || c->channels > ASB_MAX_CH ||
+        ASB_CLARITY_FREQ_HZ >= 0.45f * (float)rate) return;
+    float db = ASB_CLARITY_DB * (float)level;
+    float A = powf(10.0f, db / 40.0f);
+    float w0 = 2.0f * 3.14159265358979f * ASB_CLARITY_FREQ_HZ / (float)rate;
+    float cs = cosf(w0), sn = sinf(w0);
+    float alpha = sn / 2.0f * sqrtf((A + 1.0f / A) * (1.0f / ASB_CLARITY_SLOPE - 1.0f) + 2.0f);
+    float t = 2.0f * sqrtf(A) * alpha;
+    float b0 = A * ((A + 1.0f) + (A - 1.0f) * cs + t);
+    float b1 = -2.0f * A * ((A - 1.0f) + (A + 1.0f) * cs);
+    float b2 = A * ((A + 1.0f) + (A - 1.0f) * cs - t);
+    float a0 = (A + 1.0f) - (A - 1.0f) * cs + t;
+    float a1 = 2.0f * ((A - 1.0f) - (A + 1.0f) * cs);
+    float a2 = (A + 1.0f) - (A - 1.0f) * cs - t;
+    if (a0 == 0.0f) return;
+    c->cb0=b0/a0; c->cb1=b1/a0; c->cb2=b2/a0; c->ca1=a1/a0; c->ca2=a2/a0;
+    c->clarity_on = 1;
+}
+static inline float asb_core_clarity_step(asb_core_t *c, int k, float x) {
+    float y = c->cb0*x + c->cb1*c->cx1[k] + c->cb2*c->cx2[k]
+              - c->ca1*c->cy1[k] - c->ca2*c->cy2[k];
+    c->cx2[k]=c->cx1[k]; c->cx1[k]=x; c->cy2[k]=c->cy1[k]; c->cy1[k]=y;
+    return y;
 }
 
 /* Stereo width level 0..10; 0 disables the stage and the samples pass untouched.
@@ -366,13 +447,14 @@ static inline void asb_core_process_f32(asb_core_t *c, const float *in, float *o
     for (size_t f = 0; f < frames; f++) {
         const float *src = in + f * ch;
         float *dst = out + f * ch;
-        /* Bass first: the detector below must measure the boosted signal, otherwise the
-         * extra low end bypasses the compressor and the limiter and clips on output. */
+        /* Tone stages all precede the detector and sample-peak limiter. */
         float bs[ASB_MAX_CH];
-        if (c->bass_on || c->voice_on || c->width_on) {
+        if (c->rumble_on || c->bass_on || c->voice_on || c->clarity_on || c->width_on) {
             for (int k = 0; k < ch; k++) {
-                float x = c->bass_on ? asb_core_bass_step(c, k, src[k]) : src[k];
-                bs[k] = c->voice_on ? asb_core_voice_step(c, k, x) : x;
+                float x = c->rumble_on ? asb_core_rumble_step(c, k, src[k]) : src[k];
+                if (c->bass_on) x = asb_core_bass_step(c, k, x);
+                if (c->voice_on) x = asb_core_voice_step(c, k, x);
+                bs[k] = c->clarity_on ? asb_core_clarity_step(c, k, x) : x;
             }
             if (c->width_on) asb_core_width_step(c, &bs[0], &bs[1]);
             src = bs;
@@ -404,6 +486,14 @@ static inline void asb_core_process_f32(asb_core_t *c, const float *in, float *o
 static inline void asb_core_process_s16(asb_core_t *c, const int16_t *in, int16_t *out,
                                         size_t frames, int accumulate) {
     const int ch = c->channels;
+    if (c->bypass) {
+        const size_t n = frames * (size_t)ch;
+        for (size_t i = 0; i < n; i++) {
+            int32_t s = (int32_t)in[i] + (accumulate ? (int32_t)out[i] : 0);
+            out[i] = (int16_t)(s > 32767 ? 32767 : (s < -32768 ? -32768 : s));
+        }
+        return;
+    }
     const float g = c->gain;
     for (size_t f = 0; f < frames; f++) {
         const int16_t *src = in + f * ch;
@@ -413,8 +503,10 @@ static inline void asb_core_process_s16(asb_core_t *c, const int16_t *in, int16_
         float bs[ASB_MAX_CH];
         for (int k = 0; k < ch; k++) {
             float x = (float)src[k] / 32768.0f;
+            if (c->rumble_on) x = asb_core_rumble_step(c, k, x);
             if (c->bass_on)  x = asb_core_bass_step(c, k, x);
             if (c->voice_on) x = asb_core_voice_step(c, k, x);
+            if (c->clarity_on) x = asb_core_clarity_step(c, k, x);
             bs[k] = x;
         }
         if (c->width_on) asb_core_width_step(c, &bs[0], &bs[1]);

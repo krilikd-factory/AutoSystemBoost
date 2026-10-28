@@ -138,6 +138,7 @@ static void asb_tunables_sig(char *out, size_t n) {
     char a[PROP_VALUE_MAX] = {0}, b[PROP_VALUE_MAX] = {0}, c[PROP_VALUE_MAX] = {0};
     char d[PROP_VALUE_MAX] = {0}, e[PROP_VALUE_MAX] = {0}, f[PROP_VALUE_MAX] = {0};
     char g[PROP_VALUE_MAX] = {0}, h[PROP_VALUE_MAX] = {0}, w[PROP_VALUE_MAX] = {0};
+    char j[PROP_VALUE_MAX] = {0}, r[PROP_VALUE_MAX] = {0};
     __system_property_get("persist.asb.dsp.ceiling_mb", a);
     __system_property_get("persist.asb.dsp.comp", b);
     __system_property_get("persist.asb.dsp.comp_ratio_x10", c);
@@ -147,7 +148,9 @@ static void asb_tunables_sig(char *out, size_t n) {
     __system_property_get("persist.asb.dsp.bass_db", g);
     __system_property_get("persist.asb.dsp.voice", h);   // fix75 voice tone
     __system_property_get("persist.asb.dsp.width", w);   // fix160 stereo width
-    snprintf(out, n, "%s|%s|%s|%s|%s|%s|%s|%s|%s", a, b, c, d, e, f, g, h, w);
+    __system_property_get("persist.asb.dsp.clarity", j); // fix238 high shelf
+    __system_property_get("persist.asb.dsp.rumble_hz", r); // fix238 sub-bass filter
+    snprintf(out, n, "%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s", a, b, c, d, e, f, g, h, w, j, r);
 }
 
 int main(int /*argc*/, char** /*argv*/) {
