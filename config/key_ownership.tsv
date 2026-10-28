@@ -178,6 +178,7 @@ dsp_bass|advanced|webui_sensitive
 dsp_voice|advanced|webui_sensitive
 dsp_width|advanced|webui_sensitive
 dsp_compressor|advanced|webui_sensitive
+dsp_headroom|advanced|webui_sensitive
 dsp_outputs|advanced|webui_sensitive
 audio_remove_volume_limit|advanced|webui_sensitive
 audio_resampler|advanced|webui_sensitive
@@ -200,3 +201,6 @@ device_bounds_override|internal|engine_or_derived
 ltpo_force|user|webui_standard
 ltpo_video|user|webui_standard
 mmfeed_off|user|webui_standard
+battery_jank_guard|internal|engine_or_derived
+ltpo_idle_s|internal|engine_or_derived
+ltpo_idle_rate|internal|engine_or_derived
