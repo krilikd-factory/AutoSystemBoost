@@ -5478,6 +5478,91 @@ out="$(run)"; want kernel_features unicode_bypass_fix built-in
 echo "PASS device info: read-only TSV, metamodule presence/version variants, built-in/LKM NoMount and version, kernel feature evidence and missing-config semantics"
 )
 
+t_webui_tcp_algorithms_runtime() (
+# Runtime: every algorithm exposed by this kernel reaches the WebUI, unfiltered and deduplicated.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL WebUI TCP algorithms: $*" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI TCP algorithms: node unavailable'; exit 0; }
+python3 - "$ROOT/webroot/index.html" "$T/extract.js" <<'PY'
+import sys
+s=open(sys.argv[1]).read()
+a=s.index('async function cfgLoadTcpAlgorithms()')
+b=s.index('// Pending-reboot bar.',a)
+open(sys.argv[2],'w').write(s[a:b])
+PY
+cat > "$T/t.js" <<'EOF'
+const fs = require('fs');
+let ASB_TCP_ALGS = null, _tcpAlgLoadStarted = false, _isReference = false, renders = 0;
+function cfgRender(){ renders++; }
+globalThis.run = async function(cmd){
+  if (!cmd.includes('tcp_available_congestion_control')) throw new Error('unexpected command');
+  return { errno:0, stdout:'reno bbr bic cubic westwood htcp bbr invalid-name! \n', stderr:'' };
+};
+eval(fs.readFileSync(process.argv[2], 'utf8'));
+(async function(){
+  const it = { key:'net_congestion_wifi', opts:['auto'] };
+  const first = cfgOptsFor(it);
+  if (JSON.stringify(first) !== JSON.stringify(['auto'])) throw new Error('premature static options');
+  await cfgLoadTcpAlgorithms();
+  const got = cfgOptsFor(it);
+  const want = ['auto','reno','bbr','bic','cubic','westwood','htcp'];
+  if (JSON.stringify(got) !== JSON.stringify(want)) throw new Error(JSON.stringify(got));
+  if (renders !== 1) throw new Error('dynamic result did not rerender exactly once');
+  await cfgLoadTcpAlgorithms();
+  if (renders !== 1) throw new Error('algorithm probe repeated');
+  console.log('ok');
+})().catch(e => { console.error(e); process.exit(1); });
+EOF
+[ "$(node "$T/t.js" "$T/extract.js")" = ok ] || fail 'runtime algorithm list mismatch'
+grep -Fq 'case " $_avail " in' "$ROOT/runtime/asb_net_apply.sh" || fail 'runtime availability revalidation missing'
+echo 'PASS WebUI TCP algorithms: reno/bbr/bic/cubic/westwood/htcp come from the live kernel list'
+)
+
+t_webui_camera_grade_coverage_runtime() (
+# Runtime: marker values and apply-coverage stats produce honest Grain states.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL WebUI camera coverage: $*" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI camera coverage: node unavailable'; exit 0; }
+python3 - "$ROOT/webroot/index.html" "$T/extract.js" <<'PY'
+import sys
+s=open(sys.argv[1]).read()
+a=s.index('async function cfgLoadGrade()')
+b=s.index('const ASB_NEEDS_REBOOT =',a)
+open(sys.argv[2],'w').write(s[a:b])
+PY
+cat > "$T/t.js" <<'EOF'
+const fs = require('fs');
+let ASB_GRADE = null;
+let statsText = 'grain_keys=0\ngrain_pct=1600\n';
+globalThis.run = async function(cmd){
+  if (cmd.includes('*.mark.stats')) return {errno:0,stdout:statsText,stderr:''};
+  if (cmd.includes('*.mark')) return {errno:0,stdout:'ASBGRADE=abc:10:10:3:0:0\n',stderr:''};
+  throw new Error('unexpected command: '+cmd);
+};
+eval(fs.readFileSync(process.argv[2], 'utf8'));
+(async function(){
+  await cfgLoadGrade();
+  if (ASB_GRADE.CAMERA_GRAIN !== '10' || ASB_GRADE.grain_keys !== 0) throw new Error('marker/stats not loaded');
+  if (!cfgCameraNotExposed('CAMERA_GRAIN','10')) throw new Error('zero changed keys claimed applied');
+  if (cfgCameraNotExposed('CAMERA_GRAIN','3')) throw new Error('stock Grain marked not exposed');
+  if (cfgCameraNotExposed('CAMERA_GRAIN','9')) throw new Error('pending change confused with coverage');
+  statsText = 'grain_keys=0\ngrain_keys=2\n';
+  await cfgLoadGrade();
+  if (ASB_GRADE.grain_keys !== 2 || cfgCameraNotExposed('CAMERA_GRAIN','10')) throw new Error('multi-file coverage not summed');
+  statsText = '';
+  await cfgLoadGrade();
+  if (ASB_GRADE.grain_keys !== null || cfgCameraNotExposed('CAMERA_GRAIN','10')) throw new Error('missing evidence became a negative claim');
+  console.log('ok');
+})().catch(e => { console.error(e); process.exit(1); });
+EOF
+[ "$(node "$T/t.js" "$T/extract.js")" = ok ] || fail 'camera coverage state mismatch'
+echo 'PASS WebUI camera coverage: zero keys = not exposed, multi-file stats summed, missing = unknown'
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;

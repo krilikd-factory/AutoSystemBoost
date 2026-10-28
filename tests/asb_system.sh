@@ -334,6 +334,7 @@ cat > "$SRC" <<'EOF'
   },
   "addNoiseWeightMain1X": 1,
   "addNoiseWeightUltraWidePortrait": 0.5,
+  "addNoiseWeightFront": [0.25, 0.5],
   "low20XcontrastScale": 1,
   "SatuColorScale": 1
 }
@@ -353,13 +354,14 @@ need "$OUT" '"NormalParams": {'
 need "$OUT" '"BnScale": [3.5]'
 need "$OUT" '"MacroParams": {'
 need "$OUT" '"BnScale": [3.2]'
-need "$OUT" '"addNoiseWeightMain1X": 10'
-need "$OUT" '"addNoiseWeightUltraWidePortrait": 5'
+need "$OUT" '"addNoiseWeightMain1X": 16'
+need "$OUT" '"addNoiseWeightUltraWidePortrait": 8'
+need "$OUT" '"addNoiseWeightFront": [4, 8]'
 need "$OUT" '"low20XcontrastScale": 1.7'
 GRADE_STATS="$(find "$TMP/grade_marks" -type f -name '*.stats' | head -1)"
 [ -n "$GRADE_STATS" ] || fail 'camera apply coverage report missing'
-need "$GRADE_STATS" 'grain_keys=2'
-need "$GRADE_STATS" 'grain_pct=1000'
+need "$GRADE_STATS" 'grain_keys=3'
+need "$GRADE_STATS" 'grain_pct=1600'
 need "$GRADE_STATS" 'contrast_rules=2'
 need "$GRADE_STATS" 'contrast_pct=170'
 
@@ -377,6 +379,10 @@ need "$OUT" '"Main1x_Rgb2YuvParams": [1, 1, 1, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6]'
 need "$GRADE_STATS" 'grain_keys=0'
 need "$GRADE_STATS" 'contrast_rules=2'
 need "$ROOT/tools/asb_diag.sh" 'camera grade coverage:'
+need "$UI" 'cfgCameraNotExposed(it.key, cur)'
+need "$UI" 'ASB_GRADE.grain_keys === 0'
+need "$UI" '/^grain_keys=(\d+)$/'
+need "$UI" "cfg_not_exposed"
 
 # Retouch injection must survive the final staging pass and remain idempotent. A stock-like
 # fixture starts with four package entries; the helper must append the known app set once, not
@@ -719,14 +725,14 @@ awk -F'|' '
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
-[ "$(wc -l < "$TMP/conf")" = "206" ] || fail "expected 206 config keys, got $(wc -l < "$TMP/conf")"
-[ "$(wc -l < "$TMP/registry")" = "206" ] || fail "expected 206 registry keys, got $(wc -l < "$TMP/registry")"
+[ "$(wc -l < "$TMP/conf")" = "207" ] || fail "expected 207 config keys, got $(wc -l < "$TMP/conf")"
+[ "$(wc -l < "$TMP/registry")" = "207" ] || fail "expected 207 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
 
 sed -n '/const CFG_ITEMS = \[/,/^\];/p' "$ROOT/webroot/index.html" \
   | grep -oE "key:'[A-Za-z_][A-Za-z0-9_]*'" | sed "s/key:'//;s/'//" | sort -u > "$TMP/cards"
-[ "$(wc -l < "$TMP/cards")" = "79" ] || fail "expected 79 WebUI cards, got $(wc -l < "$TMP/cards")"
+[ "$(wc -l < "$TMP/cards")" = "80" ] || fail "expected 80 WebUI cards, got $(wc -l < "$TMP/cards")"
 _card_bad="$(while IFS= read -r key; do
   cls="$(awk -F'|' -v k="$key" '$1==k {print $2; exit}' "$REG")"
   case "$cls" in user|advanced) : ;; *) printf '%s ' "$key" ;; esac
@@ -759,7 +765,7 @@ for _c in $(grep -oE "\{ key:'[A-Za-z_][A-Za-z_0-9]*'" "$ROOT/webroot/index.html
 done
 [ -z "$_missing" ] || fail "cards missing from install.sh _user_keys:$_missing"
 
-echo 'PASS config ownership registry contract (206 keys; 30 user, 49 advanced, 127 internal)'
+echo 'PASS config ownership registry contract (207 keys; 30 user, 50 advanced, 127 internal)'
 )
 
 t_config_restore_outcome_runtime() (
@@ -8008,6 +8014,8 @@ for pin in \
   'asb_bjank_capture_live(now)' \
   'df >= ASB_BJANK_MIN_FRAMES && dj >= ASB_BJANK_MIN_JANKY' \
   'dj * 100L >= df * ASB_BJANK_MIN_PCT' \
+  'df >= ASB_BJANK_SHORT_FRAMES' \
+  'dj * 100L >= df * ASB_BJANK_SHORT_PCT' \
   'g_unlock_until_ms = now_ms + ASB_BJANK_TTL_MS' \
   'g_unlock_lift_now = 1' \
   'g_unlock_edge = 1'; do
@@ -8112,12 +8120,22 @@ int main(void) {
     asb_battery_jank_guard_tick(&f, &m);
     CHK(g_bjank_triggers == before + 1 && g_bjank_armed,
         "SystemUI jank was hidden by a smooth foreground package");
+    /* A short but visibly rough 150-frame window must not wait for 300 frames. */
+    f.profile_idx = PROFILE_BALANCED; asb_battery_jank_guard_tick(&f, &m);
+    f.profile_idx = PROFILE_BATTERY; g_smart_rt.app_hash = 10;
+    gfx_frames = 3000; gfx_janky = 30; sys_frames = 1000; sys_janky = 10;
+    advance_file(); asb_battery_jank_guard_tick(&f, &m);
+    advance_file(); gfx_frames = 3150; gfx_janky = 50;
+    before = g_bjank_triggers;
+    asb_battery_jank_guard_tick(&f, &m);
+    CHK(g_bjank_triggers == before + 1 && g_bjank_armed,
+        "short 150-frame high-jank window did not arm the bounded guard");
     return bad;
 }
 X
 "$CC" -std=c11 -Wall -Wextra -Werror -D_GNU_SOURCE -I"$T" "$T/t.c" -o "$T/t" || fail 'runtime fixture did not compile'
 "$T/t" || fail 'runtime behavior mismatch'
-echo "PASS Battery jank guard: live capture gate, measured 10% window, bounded lift and handback"
+echo "PASS Battery jank guard: live capture gate, long/short windows, SystemUI and bounded handback"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

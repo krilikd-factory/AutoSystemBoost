@@ -4863,6 +4863,45 @@ MODDIR="$TMP/mod" sh "$TMP/mod/runtime/asb_lpm.sh" normal
 echo 'PASS: network handover and independent radio policy contract'
 )
 
+t_kernel_sched_stats_runtime() (
+# Runtime: opt-in sched_stats writes are guarded, idempotent and exactly reversible.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL kernel sched_stats: $*" >&2; exit 1; }
+mkdir -p "$T/mod/config" "$T/mod/runtime"
+cp "$ROOT/runtime/asb_baseline.sh" "$T/mod/runtime/"
+run() {
+  printf 'kernel_sched_stats=%s\nphantom_procs=stock\nmglru_hold=stock\n' "$1" > "$T/mod/config/governor.conf"
+  MODDIR="$T/mod" ASB_BASELINE="$T/baseline" ASB_PROFILE_BASELINE="$T/profile" \
+    ASB_SCHED_STATS_NODE="$T/sched_stats" ASB_SCHED_STATS_PREV="$T/state/sched.prev" \
+    sh "$ROOT/runtime/asb_system_tweaks.sh" >/dev/null 2>&1
+}
+printf '1\n' > "$T/sched_stats"
+run off
+[ "$(cat "$T/sched_stats")" = 0 ] || fail 'off did not write zero'
+[ "$(cat "$T/state/sched.prev")" = 1 ] || fail 'original one was not captured'
+run off
+[ "$(cat "$T/state/sched.prev")" = 1 ] || fail 'repeat apply replaced the original baseline'
+run stock
+[ "$(cat "$T/sched_stats")" = 1 ] || fail 'stock did not restore original one'
+[ ! -e "$T/state/sched.prev" ] || fail 'consumed baseline was not removed'
+printf '0\n' > "$T/sched_stats"
+run off; run stock
+[ "$(cat "$T/sched_stats")" = 0 ] || fail 'original zero was not restored exactly'
+run off
+printf '9\n' > "$T/sched_stats"
+run stock
+[ "$(cat "$T/sched_stats")" = 0 ] || fail 'stock did not restore the captured pre-ASB value after an external change'
+rm -f "$T/sched_stats"; printf '1\n' > "$T/state/sched.prev"
+run off
+[ "$(cat "$T/state/sched.prev")" = 1 ] || fail 'missing node destroyed evidence instead of leaving it for restore'
+grep -Fq '/data/adb/asb/kernel_sched_stats.prev' "$ROOT/uninstall.sh" || fail 'uninstall restore missing'
+grep -Fq 'kernel_sched_stats = $(cfg kernel_sched_stats)' "$ROOT/tools/asb_diag.sh" || fail 'diagnostic live state missing'
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail 'diagnostic copies diverged'
+echo 'PASS kernel sched_stats: guarded opt-in, idempotent baseline, exact stock/uninstall restore'
+)
+
 t_phantom_stock_restore_runtime() (
 # Runtime: phantom_procs strict/relaxed -> stock puts the original value back.
 # The stock branch read profile_runtime_baseline.v1, but asb_settings_put records in
@@ -6452,7 +6491,7 @@ echo "PASS wifi leave rungs: weak/unusable work without the cellular master, win
 )
 
 t_wifi_scan_rungs_contract() (
-# Contract: the five wifi_scan_throttle rungs write a valid boolean plus an interval,
+# Contract: the six wifi_scan_throttle rungs write a valid boolean plus an interval,
 # and auto/unknown values write nothing.
 #
 # Field bug: the shipped default wifi_scan_throttle=2 fell into the "2|*)" branch, which
@@ -6480,6 +6519,7 @@ need "$NET" '_wt_write 1 600000'     # 1: every 10 minutes
 need "$NET" '_wt_write 1 300000'     # 2: every 5 minutes (framework default)
 need "$NET" '_wt_write 1 120000'     # 3: every 2 minutes
 need "$NET" '_wt_write 0 300000'     # 4: unthrottled, interval reset for re-enable
+need "$NET" '_wt_write 1 1800000'    # 5: every 30 minutes
 
 # The rung number must never be written into the boolean key.
 absent "$NET" 'wifi_scan_throttle_enabled "$_wt"'
@@ -6497,10 +6537,13 @@ need "$CONF" 'wifi_scan_throttle=2'
 need "$CONF" '2 = every 5 minutes (framework default)'
 
 # action.sh labels describe the rungs as they actually behave: 0 stops background
-# scanning, 4 is the unthrottled one, the shipped default is named.
+# scanning, 4 is the unthrottled one, 5 is the 30-minute battery rung, and the shipped default is named.
 need "$ACTION" 'background scanning off'
 need "$ACTION" 'every 5 min (framework default)'
 need "$ACTION" 'unthrottled (roams sooner, costs battery)'
+need "$ACTION" 'every 30 min (battery rung; slower network discovery)'
+need "$ROOT/webroot/index.html" "key:'wifi_scan_throttle', type:'range', def:'2', min:0, max:5"
+need "$ROOT/webroot/index.html" 'const m = { 1: 10, 2: 5, 3: 2, 5: 30 }[v];'
 
 echo "PASS wifi scan rungs contract"
 )
