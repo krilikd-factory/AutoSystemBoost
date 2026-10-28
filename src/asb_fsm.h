@@ -212,23 +212,58 @@ static void asb_device_bounds_set_result(const char *status, const char *reason)
     snprintf(g_device_bounds_reason, sizeof(g_device_bounds_reason), "%s", reason);
 }
 
-#ifndef ASB_DEVICE_BOUNDS_PROPERTY_GET
-#if defined(__ANDROID__)
-#define ASB_DEVICE_BOUNDS_PROPERTY_GET __system_property_get
-#else
-static int asb_device_bounds_property_unavailable(const char *key, char *value) {
-    (void)key;
-    if (value) value[0] = '\0';
-    return 0;
+/* ro.build.fingerprint is a LONG property on current OnePlus builds (fix240).
+ *
+ * __system_property_get() returns at most PROP_VALUE_MAX - 1 = 91 characters, and for a
+ * read-only property longer than that bionic does not truncate: it hands back the fixed text
+ * "Must use __system_property_read_callback() to read". The OP15 fingerprint is 92
+ * characters (OnePlus/CPH2745IN/OP611FL1:16/BP2A.250605.015/B.R4T3.1abf132_aeee51_aea830:
+ * user/release-keys), so the governor compared that text with the file and logged
+ * "device_bounds: stale/fingerprint" on every start, while the shell, reading the same
+ * property through getprop, accepted the file - the shell rails and the governor's rails
+ * came from two different tables on every device the bounds exist for. The callback reader
+ * returns the whole value; it is looked up at run time because the build targets API 24 and
+ * the call arrived in API 26. Without it the short reader is used, as before. */
+#if !defined(ASB_DEVICE_BOUNDS_PROPERTY_GET) && defined(__ANDROID__)
+#include <dlfcn.h>
+#include <stdint.h>
+typedef void (*asb_prop_value_cb_t)(void *cookie, const char *name, const char *value, uint32_t serial);
+typedef void (*asb_prop_read_cb_fn_t)(const prop_info *pi, asb_prop_value_cb_t cb, void *cookie);
+struct asb_prop_sink { char *out; size_t size; };
+static void asb_prop_sink_copy(void *cookie, const char *name, const char *value, uint32_t serial) {
+    struct asb_prop_sink *s = (struct asb_prop_sink *)cookie;
+    (void)name; (void)serial;
+    if (s && s->out && s->size) snprintf(s->out, s->size, "%s", value ? value : "");
 }
-#define ASB_DEVICE_BOUNDS_PROPERTY_GET asb_device_bounds_property_unavailable
-#endif
+static int asb_device_bounds_property_read(const char *key, char *out, size_t out_size) {
+    if (!out || out_size < 2) return 0;
+    out[0] = '\0';
+    const prop_info *pi = __system_property_find(key);
+    if (!pi) return 0;
+    asb_prop_read_cb_fn_t fn = (asb_prop_read_cb_fn_t)dlsym(RTLD_DEFAULT, "__system_property_read_callback");
+    if (fn) {
+        struct asb_prop_sink sink = { out, out_size };
+        fn(pi, asb_prop_sink_copy, &sink);
+        return (int)strlen(out);
+    }
+    char v[PROP_VALUE_MAX];
+    v[0] = '\0';
+    int n = __system_property_get(key, v);
+    if (n > 0) snprintf(out, out_size, "%s", v);
+    return n > 0 ? (int)strlen(out) : 0;
+}
 #endif
 
 static int asb_device_bounds_current_fingerprint(char *out, size_t out_size) {
     if (!out || out_size < 2) return 0;
     out[0] = '\0';
+#if defined(ASB_DEVICE_BOUNDS_PROPERTY_GET)
     int n = ASB_DEVICE_BOUNDS_PROPERTY_GET("ro.build.fingerprint", out);
+#elif defined(__ANDROID__)
+    int n = asb_device_bounds_property_read("ro.build.fingerprint", out, out_size);
+#else
+    int n = 0;
+#endif
     out[out_size - 1] = '\0';
     return n > 0 && out[0] != '\0';
 }
@@ -282,9 +317,9 @@ static int asb_load_device_bounds_override(int enabled,
     int confidence_high = 0;
     int source_measured = 0;
     long file_policy_count = 0;
-    char file_fingerprint[128] = {0};
+    char file_fingerprint[256] = {0};
     char file_signature[96] = {0};
-    char line[256];
+    char line[384];
     while (fgets(line, sizeof(line), f)) {
         if (line[0] == '#' || line[0] == '\n') continue;
         char *eq = strchr(line, '=');
@@ -317,7 +352,7 @@ static int asb_load_device_bounds_override(int enabled,
         asb_device_bounds_set_result("skipped", "source");
         return 0;
     }
-    char current_fingerprint[128];
+    char current_fingerprint[256];
     if (!file_fingerprint[0] ||
         !asb_device_bounds_current_fingerprint(current_fingerprint, sizeof(current_fingerprint)) ||
         strcmp(file_fingerprint, current_fingerprint) != 0) {
