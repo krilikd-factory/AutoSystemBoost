@@ -3209,6 +3209,12 @@ static void asb_unlock_lift_apply(asb_profile_caps_t *caps) {
 #define ASB_BJANK_MIN_FRAMES    300L
 #define ASB_BJANK_MIN_JANKY     12L
 #define ASB_BJANK_MIN_PCT       8L
+/* A short launcher/app-transition window can be visibly rough and still end before the
+ * primary 300-frame sample exists. Keep a second, stricter high-jank ratio for that case;
+ * it uses the same 60-second on-demand dump and the same bounded ceiling-only lift. */
+#define ASB_BJANK_SHORT_FRAMES  120L
+#define ASB_BJANK_SHORT_JANKY   8L
+#define ASB_BJANK_SHORT_PCT     12L
 #define ASB_BJANK_LOCK          "/data/adb/asb/logkit/full_day_webui.lock"
 static uint64_t g_bjank_hash = 0;
 static char     g_bjank_pkg[64];
@@ -3270,16 +3276,20 @@ static void asb_bjank_disarm(void) {
 
 static void asb_bjank_eval_window(const char *pkg, long df, long dj, long now_ms) {
     g_bjank_windows++;
-    if (df >= ASB_BJANK_MIN_FRAMES && dj >= ASB_BJANK_MIN_JANKY &&
-        dj * 100L >= df * ASB_BJANK_MIN_PCT) {
+    int long_window = df >= ASB_BJANK_MIN_FRAMES && dj >= ASB_BJANK_MIN_JANKY &&
+                      dj * 100L >= df * ASB_BJANK_MIN_PCT;
+    int short_window = df >= ASB_BJANK_SHORT_FRAMES && df < ASB_BJANK_MIN_FRAMES &&
+                       dj >= ASB_BJANK_SHORT_JANKY &&
+                       dj * 100L >= df * ASB_BJANK_SHORT_PCT;
+    if (long_window || short_window) {
         g_unlock_until_ms = now_ms + ASB_BJANK_TTL_MS;
         g_unlock_lift_now = 1;
         g_unlock_edge = 1;
         g_bjank_armed = 1;
         g_unlock_arm_why = "battery jank guard";
         g_bjank_triggers++;
-        asb_log("battery_jank_guard: %s %ld/%ld janky frames (%ld%%), ceilings to %d%% for %lds",
-                pkg, dj, df, df > 0 ? dj * 100L / df : 0L,
+        asb_log("battery_jank_guard[%s]: %s %ld/%ld janky frames (%ld%%), ceilings to %d%% for %lds",
+                short_window ? "short" : "long", pkg, dj, df, df > 0 ? dj * 100L / df : 0L,
                 g_asb_cfg.unlock_lift_pct, ASB_BJANK_TTL_MS / 1000L);
     }
 }
