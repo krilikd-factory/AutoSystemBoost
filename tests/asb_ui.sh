@@ -981,6 +981,73 @@ kill "$OTHER" 2>/dev/null
 echo "PASS debug support stale-lock and deleted-folder recovery"
 )
 
+t_debug_support_stop_runtime() (
+# Runtime (fix242): an open-ended session log can be stopped from the WebUI menu.
+#
+# Since fix235 the capture runs until shutdown, and the only way to end it was to delete its
+# folder (which discards it) or to reboot. full-day-stop sends the recorder the TERM it already
+# traps - finalise the report, release the lock - wakes its foreground sleep so the trap runs
+# now, returns at once with status=stopping, and a detached waiter forces the end only if the
+# recorder ignores TERM. The REAL helper runs against a stub recorder with the same trap shape.
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+HELPER="$ROOT/runtime/asb_debug_support.sh"
+TMP="$(mktemp -d)"; trap 'kill $(jobs -p) 2>/dev/null; pkill -f "$TMP" 2>/dev/null; rm -rf "$TMP"' EXIT
+fail() { echo "FAIL debug stop: $*" >&2; exit 1; }
+alive() { [ -r "/proc/$1/stat" ] || return 1; case "$(sed 's/^.*) //' "/proc/$1/stat" | cut -c1)" in Z|X) return 1 ;; esac; return 0; }
+DBG="$TMP/mod"; mkdir -p "$DBG/tools/logkit" "$DBG/runtime"
+printf 'id=AutoSystemBoost\nversion=V65-test15\nversionCode=650\n' > "$DBG/module.prop"
+cat > "$DBG/tools/logkit/asb_log_full_day.sh" << 'EOF_REC'
+set -u
+_lock="${ASB_DEBUG_SUPPORT_LOCKDIR:-}"; _token="${ASB_DEBUG_SUPPORT_LOCK_TOKEN:-}"
+[ -d "$_lock" ] && [ "$(cat "$_lock/token")" = "$_token" ] || exit 91
+printf '%s\n' "$$" > "$_lock/pid"
+_out="$(dirname "$_lock")/capture_$$"; mkdir -p "$_out"; printf '%s\n' "$_out" > "$_lock/output_dir"
+if [ "${STUB_IGNORE_TERM:-0}" = 1 ]; then
+  trap '' TERM
+else
+  trap 'echo finalized > "$_out/_full_day_report.txt"; rm -rf "$_lock"; exit 0' TERM
+fi
+while :; do sleep 60; done
+EOF_REC
+ENV=(ASB_DEBUG_SUPPORT_MODDIR="$DBG" ASB_DEBUG_SUPPORT_STATE_DIR="$TMP/state" ASB_DEBUG_SUPPORT_RUNLOG="$TMP/run.out" ASB_DEBUG_SUPPORT_STOP_WAIT_S=3)
+H() { env "${ENV[@]}" sh "$HELPER" "$@" 2>/dev/null || true; }
+LOCK="$TMP/state/full_day_webui.lock"
+OUT="$(H full-day-stop)"
+printf '%s\n' "$OUT" | grep -qx 'status=idle' || fail "stop with nothing running did not say idle: $OUT"
+OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep -q 'status=started' || fail "start: $OUT"
+n=0; while [ ! -s "$LOCK/output_dir" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
+P1="$(tr -dc 0-9 < "$LOCK/pid" 2>/dev/null)"; [ -n "$P1" ] && alive "$P1" || fail "recorder not running"
+CAP="$(cat "$LOCK/output_dir")"
+t0="$(date +%s)"
+OUT="$(H full-day-stop)"
+t1="$(date +%s)"
+printf '%s\n' "$OUT" | grep -qx 'status=stopping' || fail "stop did not answer stopping: $OUT"
+printf '%s\n' "$OUT" | grep -qx "pid=$P1" || fail "stop named another pid: $OUT"
+printf '%s\n' "$OUT" | grep -qx "output=$CAP" || fail "stop did not name the capture folder: $OUT"
+[ $(( t1 - t0 )) -le 2 ] || fail "the helper held the WebView bridge for $(( t1 - t0 )) s"
+n=0; while alive "$P1" && [ "$n" -lt 40 ]; do sleep 0.1; n=$((n + 1)); done
+alive "$P1" && fail "the recorder did not end on TERM within 4 s (its sleep was not woken)"
+grep -qx finalized "$CAP/_full_day_report.txt" 2>/dev/null || fail "the recorder was killed instead of finalising its report"
+[ -d "$CAP" ] || fail "stopping removed the capture folder"
+OUT="$(H status)"; printf '%s\n' "$OUT" | grep -qx 'status=idle' || fail "status after stop: $OUT"
+ENV+=(STUB_IGNORE_TERM=1)
+OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep -q 'status=started' || fail "second start: $OUT"
+n=0; while [ ! -s "$LOCK/output_dir" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
+P2="$(tr -dc 0-9 < "$LOCK/pid" 2>/dev/null)"
+OUT="$(H full-day-stop)"; printf '%s\n' "$OUT" | grep -qx 'status=stopping' || fail "stop of a stubborn recorder: $OUT"
+n=0; while alive "$P2" && [ "$n" -lt 80 ]; do sleep 0.1; n=$((n + 1)); done
+alive "$P2" && fail "a recorder that ignores TERM was never ended"
+n=0; while [ -d "$LOCK" ] && [ "$n" -lt 30 ]; do sleep 0.1; n=$((n + 1)); done
+[ -d "$LOCK" ] && fail "the lock of a force-ended recorder stayed"
+OUT="$(H status)"; printf '%s\n' "$OUT" | grep -qx 'status=idle' || fail "status after a forced stop: $OUT"
+H="$ROOT/webroot/index.html"
+grep -Fq "asb_debug_support.sh full-day-stop 2>/dev/null" "$H" || fail "the WebUI does not call full-day-stop"
+grep -Fq "if (action === 'full-day' && _asbLogRunning) {" "$H" || fail "the menu item does not turn into Stop while recording"
+grep -Fq "Date.now() - _asbLogStopArmed >= 4000" "$H" || fail "stopping has no second-tap confirmation"
+echo "PASS debug support stop: TERM ends the capture at once with its report finalised, the bridge returns immediately, a recorder that ignores TERM is ended, the menu asks twice"
+)
+
 t_jank_app_state_runtime() (
 # Runtime (fix140): the smoothness report compares ASB states inside the app with the most
 # frames, touched and untouched apart.
@@ -3026,7 +3093,16 @@ _stockTrendSamples = []; _stockTrendLast = null;   /* keep the trend checks belo
 paintStockLive(kv);   /* one fresh sample again - the tile is back to "measuring" */
 /* fix177: the thermal trend over a window, kept between reads. One sample: measuring, not a
  * dash. A repaint of the same sample keeps the verdict; 40 s of a warming CPU says warming. */
-chk(v('bnStockTrend') === '\u2026', 'first sample says it is measuring: ' + v('bnStockTrend'));
+chk(/^\d+\u00b0 \u2026$/.test(v('bnStockTrend')), 'first sample says it is measuring, with the temperature in hand (fix242): ' + v('bnStockTrend'));
+/* fix242: a snapshot without CPU zones still measures - from the hottest die zone - and a
+   source change starts a fresh window instead of mixing two series into one slope. */
+_stockTrendSamples = []; _stockTrendLast = null;
+paintStockLive({ tsms: '1500000', 'thermal.gpuss-0': '38000' });
+chk(v('bnStockTrend') === '38\u00b0 \u2026' && _stockTrendSamples.length === 1 && _stockTrendSamples[0].s === 'die', 'no CPU zone - the die zone carries the trend: ' + v('bnStockTrend'));
+paintStockLive({ tsms: '1510000', 'thermal.cpu-1-1-0': '41000' });
+chk(_stockTrendSamples.length === 1 && _stockTrendSamples[0].s === 'cpu' && !_stockTrendLast, 'a source change does not mix two series');
+paintStockLive({ tsms: '1520000' });
+chk(v('bnStockTrend') === '\u2014', 'no temperature at all is the only dash: ' + v('bnStockTrend'));
 const at = (ms, c) => Object.assign({}, kv, { tsms: String(ms), 'thermal.cpu-1-1-0': String(c * 1000), 'thermal.cpu-1-1-1': String(c * 1000) });
 _stockTrendSamples = []; _stockTrendLast = null;
 paintStockLive(at(1000000, 40)); paintStockLive(at(1010000, 40.5)); paintStockLive(at(1020000, 41)); paintStockLive(at(1040000, 42));
@@ -4366,7 +4442,7 @@ printf '%s\n' "$out" | grep -q '^ltpo	n=79	min=11$' || fail "ltpo line"
 printf '%s\n' "$out" | grep -q '^aod	lit=11	of=520$' || fail "aod line"
 # fix207: the screen on/off split over the whole ledger (the figure that reconciles with
 # Monitor's tile), the per-phase breakdown and the kernel holders on the charger.
-printf '%s\n' "$out" | grep -q '^scr	on_pctph=6.5	off_pctph=1.0	on_min=120	off_min=530$' || fail "screen split: $(printf '%s\n' "$out" | grep '^scr')"
+printf '%s\n' "$out" | grep -q '^scr	on_pctph=6.5	off_pctph=1.0	on_min=120	off_min=530	idle_pctph=1.0	idle_min=530	music_min=0$' || fail "screen split: $(printf '%s\n' "$out" | grep '^scr')"
 printf '%s\n' "$out" | grep -q '^phase	name=sleep	min=420	drop=7	pctph=1.0$' || fail "phase sleep: $(printf '%s\n' "$out" | grep '^phase' | head -1)"
 printf '%s\n' "$out" | grep -q '^phase	name=active	min=120	drop=13	pctph=6.5$' || fail "phase active"
 printf '%s\n' "$out" | grep -q '^phase	name=charging	min=60	drop=-14	pctph=0.0$' || fail "phase charging keeps its signed drop"
@@ -4399,6 +4475,40 @@ grep -qF ".replace(/\//g, '/\u2060');" "$H" || fail "the phase drain cell can or
 # fix219: the throttle owner was the LAST period's owner - a capture with 3 ASB, 6
 # vendor, 6 shell and 1 unknown period showed "16 (asb)". The owner is the one with
 # the most periods now (the more recent wins a tie), and the split rides along.
+# fix242: the day drain counts every discharging phase - also the many short ones whose
+# whole-percent level did not move - and leaves charging out by name (smart charging can
+# hold the level still with the cable in). A zero-length row (the instant a phase opened)
+# never sets a temperature peak. The SystemUI steady-redraw verdict and the status-bar
+# settings the capture read come through as sysuidraw.
+MIX="$T/asb_log_full_day_mix"; mkdir -p "$MIX"
+cat > "$MIX/phase_ledger.tsv" <<EOF
+audio_spk_scr	$((NOW-11000))	$((NOW-11000))	95	95	55	49	900000	13	0	0	-1	490	0	0	0
+active	$((NOW-11000))	$((NOW-9200))	95	92	43	39	1000000	17	0	0	100	300	0	0	0
+idle	$((NOW-9200))	$((NOW-8900))	92	92	38	34	0	0	0	0	40	100	0	0	0
+post_wake	$((NOW-8900))	$((NOW-8600))	92	91	39	35	0	0	0	0	99	200	0	0	0
+audio_bt	$((NOW-8600))	$((NOW-6800))	91	90	30	30	0	0	0	0	99	90	0	0	0
+idle	$((NOW-6800))	$((NOW-6500))	90	90	31	31	0	0	0	0	30	80	0	0	0
+charging_idle	$((NOW-6500))	$((NOW-2900))	90	90	30	30	0	0	0	0	20	0	0	0	0
+active	$((NOW-2900))	$((NOW-200))	90	86	41	37	0	0	0	0	100	320	0	0	0
+EOF
+cat > "$MIX/_full_day_report.txt" <<EOF
+ capture: 0h target (until shutdown), 180 min elapsed
+  app                                         janky    frames  janky/s   intervals with janky frames
+  com.android.systemui                         6239     45345     1.48   81 of 81
+com.android.systemui missed deadlines in 81 of 81 screen-on intervals, whatever app was in front: a steady redraw.
+EOF
+cat > "$MIX/display_config.txt" <<EOF
+## status bar redraw settings
+wallpaper: static image (ComponentInfo{com.android.systemui/com.android.systemui.wallpapers.ImageWallpaper})
+system: show_network_speed=1
+secure: clock_seconds=0
+EOF
+mout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state6" sh "$D" "$MIX")" || fail "mixed fixture digest exit"
+printf '%s\n' "$mout" | grep -q '^drain	pctph=4.5	total_drop=9	hours=2.0	ma=' || fail "zero-step phases must count and charging stay out: $(printf '%s\n' "$mout" | grep '^drain')"
+printf '%s\n' "$mout" | grep -q '^thermal	cpu=43	surf=39$' || fail "a zero-length row set the temperature peak: $(printf '%s\n' "$mout" | grep '^thermal')"
+printf '%s\n' "$mout" | grep -q '^heat	peak_phase=active	peak_c=43	' || fail "a zero-length row named the hottest phase: $(printf '%s\n' "$mout" | grep '^heat')"
+printf '%s\n' "$mout" | grep -q '^scr	on_pctph=6.0	off_pctph=1.5	on_min=80	off_min=40	idle_pctph=0.0	idle_min=10	music_min=30$' || fail "idle and screen-off music split: $(printf '%s\n' "$mout" | grep '^scr')"
+printf '%s\n' "$mout" | grep -q '^sysuidraw	intv=81	of=81	pct=13.8	netspeed=1	clocksec=0	livewp=0$' || fail "SystemUI steady redraw line: $(printf '%s\n' "$mout" | grep '^sysuidraw')"
 THR="$T/asb_log_full_day_thr"; mkdir -p "$THR"
 cat > "$THR/throttle_trace.txt" <<EOF
 $((NOW-10000))|active|cap_owner=vendor|x
@@ -4449,13 +4559,13 @@ ra="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST
 printf '%s\n' "$ra" | grep -q '^hist	' && fail "the first finished capture must not invent a trend"
 [ -s "$HST/report_history.tsv" ] || fail "a finished capture left no history line"
 rb="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST" sh "$D" "$CB")"
-printf '%s\n' "$rb" | grep -Eq '^hist	started=[0-9-]+ [0-9:]+	night=1.0	drain=2.0	jank=5.1	cpu=41	clamps=2	device=OP611FL1	rom=CPH2745_16.0.10.601\(EX01\)	mod=V65-test	elapsed=720	on_pct=0	off_min=1036$' || fail "the second capture must name the first with comparison context: $(printf '%s\n' "$rb" | grep '^hist')"
+printf '%s\n' "$rb" | grep -Eq '^hist	started=[0-9-]+ [0-9:]+	night=1.0	drain=2.0	jank=5.1	cpu=41	clamps=2	device=OP611FL1	rom=CPH2745_16.0.10.601\(EX01\)	mod=V65-test	elapsed=720	on_pct=0	off_min=1036	dm=2$' || fail "the second capture must name the first with comparison context: $(printf '%s\n' "$rb" | grep '^hist')"
 ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST" sh "$D" "$CAP" >/dev/null
 [ "$(wc -l < "$HST/report_history.tsv")" -eq 2 ] || fail "re-opening the same capture must rewrite its line, not duplicate it"
 rc="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST" sh "$D" "$CAP")"
 # capture B has no report and no throttle trace: its trend line carries dashes, and a
 # dash must not break the row or count as a number.
-printf '%s\n' "$rc" | grep -Eq '^hist	started=[0-9-]+ [0-9:]+	night=1.0	drain=2.0	jank=-	cpu=41	clamps=-	device=-	rom=-	mod=-	elapsed=2866	on_pct=-	off_min=-$' || fail "a capture without jank data still trends, with dashes and explicit unknown context: $(printf '%s\n' "$rc" | grep '^hist')"
+printf '%s\n' "$rc" | grep -Eq '^hist	started=[0-9-]+ [0-9:]+	night=1.0	drain=2.0	jank=-	cpu=41	clamps=-	device=-	rom=-	mod=-	elapsed=2866	on_pct=-	off_min=-	dm=2$' || fail "a capture without jank data still trends, with dashes and explicit unknown context: $(printf '%s\n' "$rc" | grep '^hist')"
 
 # --- the REAL parser/tips in node, fed the fixture digest and the shipped locales ---
 {
@@ -4465,8 +4575,8 @@ let ASB_LANG = 'ru';
 function T(k, d) { const L = I18N[ASB_LANG]; return (L && typeof L[k] === 'string') ? L[k] : d; }
 EOF
   for fn in Tcfg parseLogReport logReportT logReportDur logReportDurSec logReportTips \
-    logReportScreenOnDrainState logReportAnalyze logReportHistoryComparable logReportMachineDigest logReportAnalysisT \
-    logReportTipText logReportRow logReportSec logReportNote logReportHero \
+    logReportSysuiSteady logReportFullCharge logReportScreenOnDrainState logReportAnalyze logReportHistoryComparable logReportMachineDigest logReportAnalysisT \
+    logReportTipText logReportRow logReportSec logReportNote logReportHero logReportTable \
     logReportAppendAnalysis logReportRender shQuote; do
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
@@ -4768,6 +4878,37 @@ chk(logReportScreenOnDrainState(25, 'screen_on_heavy') === 'normal' && logReport
 chk(logReportScreenOnDrainState(18, 'audio_speaker') === 'normal' && logReportScreenOnDrainState(20.1, 'audio_speaker') === 'problem', 'speaker playback uses its own drain budget');
 const typicalScreen = parseLogReport('meta\telapsed_min=180\ncover\ton_min=150\toff_min=30\ton_pct=83\nscr\ton_pctph=10.1\toff_pctph=0.5\ton_min=150\toff_min=30\n');
 chk(logReportAnalyze(typicalScreen).verdicts.find(v => v.domain === 'drain').state === 'normal', 'the rendered summary keeps 10.1%/h normal');
+/* fix242: the owner's Battery day - mixed use, short pauses between uses, music over
+   Bluetooth with the screen off, SystemUI redrawing all day with the network-speed meter
+   on. The verdict is the whole discharge against a budget blended by the screen share;
+   the short-pause "idle" is never red; the redraw is named with the switch that is on. */
+const mixDay = parseLogReport([
+  'meta\telapsed_min=187\ttarget_h=0\trunning=0\tstarted=2026-10-28 12:51\tprofile=battery',
+  'cover\ton_min=91\toff_min=95\ton_pct=48',
+  'drain\tpctph=6.3\ttotal_drop=19\thours=3.0\tma=198',
+  'idlemax\tawake=66\tphase=idle\tdur_min=5',
+  'thermal\tcpu=46\tsurf=39', 'heat\tpeak_phase=audio_bt_scr\tpeak_c=46\twarm_min=0\tskin_min=0',
+  'throttle\tclamps=6\towner=asb\tby=asb:3,vendor:3',
+  'scr\ton_pctph=8.9\toff_pctph=3.4\ton_min=87\toff_min=87\tidle_pctph=3.3\tidle_min=54\tmusic_min=32',
+  'phase\tname=idle\tmin=54\tdrop=3\tpctph=3.3', 'phase\tname=gap\tmin=5\tdrop=1\tpctph=11.0',
+  'audio\tspk_min=1\tpctph=0.00\tma=246',
+  'wlt\ttag=*launch*\tn=76', 'wlt\ttag=*alarm*\tn=39',
+  'jank\tpct=5.9\tjps=2.90\tframes=207872',
+  'jwake\twakes=13\tpct=8.5\tord=5.9\tframes=54377\ttop=com.android.systemui\ttop_pct=11.4',
+  'sysuidraw\tintv=81\tof=81\tpct=13.8\tnetspeed=1\tclocksec=0\tlivewp=0',
+  'smart\twatching=11\ttesting=3\thelped=0\tnothelped=0\tctxlearn=6',
+  'asbcost\tcpu_msh=3859\twrites_h=540\twakes_h=1171', ''].join('\n'));
+const mixA = logReportAnalyze(mixDay);
+const mixDrain = mixA.verdicts.find(v => v.domain === 'drain');
+chk(mixA.scenario === 'mixed' && mixDrain.reason === 'whole_discharge_mixed' && mixDrain.state === 'normal' && mixDrain.metric === '6.3%/h', 'a mixed day is judged on the whole discharge: ' + JSON.stringify(mixDrain));
+chk(mixDrain.vars.est === logReportDur(16 * 60), 'the verdict names how long a full charge lasts: ' + mixDrain.vars.est);
+chk(mixA.actions.some(t => t.key === 'lr_tip_sysui_netspeed' && t.vars.n === '81'), 'the redraw action names the network-speed meter: ' + JSON.stringify(mixA.actions.map(t => t.key)));
+chk(mixA.chains.some(c => c.key === 'lr_chain_sysui') && mixA.chains.some(c => c.key === 'lr_chain_music_off'), 'redraw and screen-off music are explained: ' + JSON.stringify(mixA.chains.map(c => c.key)));
+chk(logReportAnalyze(parseLogReport('meta\telapsed_min=120\nscr\ton_pctph=0\toff_pctph=2.4\ton_min=0\toff_min=120\tidle_pctph=0.6\tidle_min=60\tmusic_min=60\n')).verdicts.find(v => v.domain === 'drain').state === 'good', 'screen-off music does not paint the idle verdict');
+const mixSd = JSON.parse(JSON.stringify(mixDay)); mixSd.sections.sysuidraw.netspeed = '0'; mixSd.sections.sysuidraw.livewp = '1';
+chk(logReportTips(mixSd, true).some(t => t.key === 'lr_tip_sysui_livewp'), 'a live wallpaper is named when the meter is off');
+mixSd.sections.sysuidraw.intv = '40';
+chk(!logReportTips(mixSd, true).some(t => t.key.indexOf('lr_tip_sysui_') === 0), 'SystemUI janky in half the intervals is no steady redraw');
 const oldHistory = d.hist[0];
 chk(!logReportHistoryComparable(d, analysis, oldHistory), 'legacy six-field history is not comparable');
 const sameHistory = { started:'2026-10-20 09:10', night:'1.0', drain:'2.0', jank:'1.4', device:'OP611FL1', rom:'TESTBUILD', mod:'old', elapsed:720, onPct:'40', offMin:300 };
@@ -4794,6 +4935,15 @@ logReportRender(early);
 chk(countClass(reportBody, 'lgr-verdict') === 5, 'summary renders all five verdict rows');
 chk(reportBody.children[0].children[0].textContent === I18N.ru.lr_sec_summary, 'smart summary is the first report section');
 chk(countClass(reportBody, 'lgr-action') === 0 && allText(reportBody).indexOf(I18N.ru.lr_no_actions_early) >= 0, 'early DOM has no unsupported action');
+logReportRender(mixDay);
+const mixText = allText(reportBody);
+chk(mixText.indexOf(I18N.ru.lr_sec_smart) < 0, 'the Smart learner card stays off a Battery day');
+chk(mixText.indexOf(I18N.ru.lr_idle) < 0, 'a five-minute pause gets no worst-idle row');
+chk(mixText.indexOf(I18N.ru.lr_audio_spk) < 0, 'one minute of speaker sound is no playback row');
+chk(mixText.indexOf(I18N.ru.lr_drain_idle) >= 0 && mixText.indexOf(I18N.ru.lr_drain_short_note0.slice(0, 30)) >= 0, 'the short-pause idle figure carries its explanation');
+chk(mixText.indexOf('\u224816') >= 0, 'the drain hero says how long a charge lasts');
+chk(mixText.indexOf('\u22121%|') >= 0 && mixText.indexOf('11.0') < 0, 'a one-step five-minute phase shows no rate');
+chk(mixText.indexOf(I18N.ru.lr_sysui_draw) >= 0 && mixText.indexOf(I18N.ru.lr_clamp_brief_note) >= 0, 'redraw row and the calm clamp note render');
 logReportRender(typicalScreen);
 chk(countClass(reportBody, 'lgr-state-problem') === 0 && countClass(reportBody, 'lgr-warn') === 0, 'neither summary nor detail paints 10.1%/h red');
 const trendText = 'meta\telapsed_min=120\ttarget_h=24\trunning=0\tstarted=2026-10-21 09:40\tprofile=smart\nmeta2\tdevice=OP611FL1\trom=TESTBUILD\ndrain\tpctph=2.0\n';
@@ -4801,7 +4951,13 @@ const incompatible = parseLogReport(trendText + 'hist\tstarted=2026-10-20 09:10\
 logReportRender(incompatible);
 let trendSec = reportBody.children.find(e => e.children[0] && e.children[0].textContent === I18N.ru.lr_sec_trend);
 chk(trendSec && allText(trendSec).indexOf(I18N.ru.lr_trend_unmatched) >= 0 && allText(trendSec).indexOf('3.0') < 0, 'incompatible history has no was/became numbers');
-const compatible = parseLogReport(trendText + 'hist\tstarted=2026-10-20 09:10\tnight=-\tdrain=3.0\tjank=-\tcpu=-\tclamps=-\tdevice=OP611FL1\trom=TESTBUILD\tmod=old\telapsed=120\ton_pct=40\toff_min=60\n');
+/* fix242: the day-drain figure changed method; a history line written by the old digest
+   (no dm field) carried the inflated figure and must not be compared as a day drain. */
+const oldMethod = parseLogReport(trendText + 'hist\tstarted=2026-10-20 09:10\tnight=-\tdrain=3.0\tjank=-\tcpu=-\tclamps=-\tdevice=OP611FL1\trom=TESTBUILD\tmod=old\telapsed=120\ton_pct=40\toff_min=60\n');
+logReportRender(oldMethod);
+trendSec = reportBody.children.find(e => e.children[0] && e.children[0].textContent === I18N.ru.lr_sec_trend);
+chk(!trendSec || allText(trendSec).indexOf('3.0') < 0, 'an old-method day drain is not compared against the new one');
+const compatible = parseLogReport(trendText + 'hist\tstarted=2026-10-20 09:10\tnight=-\tdrain=3.0\tjank=-\tcpu=-\tclamps=-\tdevice=OP611FL1\trom=TESTBUILD\tmod=old\telapsed=120\ton_pct=40\toff_min=60\tdm=2\n');
 chk(logReportHistoryComparable(compatible, logReportAnalyze(compatible), compatible.hist[0]), 'render fixture history is comparable: ' + JSON.stringify(compatible.hist[0]) + ' / ' + JSON.stringify(compatible.sections.meta2));
 logReportRender(compatible);
 trendSec = reportBody.children.find(e => e.children[0] && e.children[0].textContent === I18N.ru.lr_sec_trend);
@@ -4855,7 +5011,7 @@ KEYS = ['lr_menu','lr_refresh','lr_loading','lr_none_title','lr_none_body','lr_f
         'lr_tip_audio','lr_tip_cost_ok','lr_tip_cost_hi','lr_tip_smart_help','lr_tip_ltpo',
         'lr_sec_profiles','lr_th_profile','lr_th_time','lr_th_onscreen','lr_th_idle',
         'lr_prof_note','lr_charging','lr_chg_fmt','lr_aod','lr_aod_fmt','lr_ltpo',
-        'lr_ltpo_fmt','lr_wlive_fmt','lr_tip_awake_who','lr_sm_smart_only',
+        'lr_ltpo_fmt','lr_wlive_fmt','lr_tip_awake_who',
         'lr_drain_on','lr_drain_off','lr_deep_sleep','lr_sec_phases','lr_th_phase',
         'lr_th_drop','lr_ph_note','lr_kwk_fmt','lr_wake_gap',
         'lr_ph_active','lr_ph_idle','lr_ph_sleep','lr_ph_post_wake','lr_ph_gap',
@@ -4932,7 +5088,17 @@ PH.update({'lr_sum_drain_on':['{min}'], 'lr_sum_drain_night':['{min}','{deep}'],
       'lr_chain_holder':['{awake}','{who}'], 'lr_chain_alarm':['{awake}','{who}','{n}'],
       'lr_chain_hold':['{awake}','{who}','{n}'], 'lr_chain_wakegap':['{awake}'],
       'lr_chain_wake':['{pct}','{ord}'], 'lr_chain_audio':['{min}','{pct}'],
-      'lr_chain_cost':['{ms}','{wakes}','{per}'], 'lr_json_saved':['{path}']})
+      'lr_chain_cost':['{ms}','{wakes}','{per}'], 'lr_json_saved':['{path}'],
+      'lr_ms':['{n}'], 'lr_ms_wake':['{n}'], 'lr_drain_est':['{h}'], 'lr_drain_short_note':['{min}'],
+      'lr_idle_fmt':['{pct}','{min}'], 'lr_sum_drain_idle':['{min}'], 'lr_sum_drain_mixed':['{h}','{on}','{est}'],
+      'lr_chain_sysui':['{n}','{of}','{pct}'], 'lr_chain_music_off':['{off}','{music}'],
+      'lr_tip_sysui_netspeed':['{n}','{of}'], 'lr_tip_sysui_clocksec':['{n}','{of}'],
+      'lr_tip_sysui_livewp':['{n}','{of}'], 'lr_tip_sysui_other':['{n}','{of}'],
+      'lr_sysui_draw_fmt':['{n}','{of}','{pct}']})
+KEYS += ['lr_ms','lr_ms_wake','lr_drain_est','lr_drain_idle','lr_drain_short_note','lr_drain_short_note0',
+         'lr_idle_fmt','lr_peak','lr_clamp_brief_note','lr_sum_drain_idle','lr_sum_drain_mixed',
+         'lr_chain_sysui','lr_chain_music_off','lr_tip_sysui_netspeed','lr_tip_sysui_clocksec',
+         'lr_tip_sysui_livewp','lr_tip_sysui_other','lr_sysui_draw','lr_sysui_draw_fmt']
 files = sorted((root / 'webroot' / 'i18n').glob('*.json'))
 assert len(files) == 13, 'locale count'
 for p in files:
@@ -5237,7 +5403,7 @@ function logReportRow(key, value) { const r = mk('div'), k = mk('span'), v = mk(
 EOF
   sed -n '/^const DEVICE_SECTION_ORDER = \[/,/^\];/p' "$H"
   sed -n '/^const DEVICE_KERNEL_FEATURE_ORDER = \[/,/^\];/p' "$H"
-  for fn in parseDeviceInfo deviceVal deviceFallbackLabel deviceLabel deviceHero deviceValueClass deviceDisplayValue deviceInfoRender shQuote; do
+  for fn in parseDeviceInfo deviceVal deviceFallbackLabel deviceLabel deviceHero deviceValueClass deviceNum deviceKv deviceFreqKhz deviceFreqHz deviceSizeKb deviceDuration deviceCpuCount deviceCpuList deviceYesNo deviceFill deviceBatteryMa deviceBatteryMah deviceBatteryWear deviceDisplayValue deviceInfoOverview deviceInfoRender shQuote; do
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
   sed -n '/^async function asbDeviceInfoExportJson()/,/^}/p' "$H"
@@ -5279,7 +5445,7 @@ chk(d.count === 27 && d.malformed === 2, 'TSV count/malformed: ' + d.count + '/'
 chk(deviceVal(d, 'soc', 'soc_model') === 'SM8850', 'SoC parsed');
 chk(deviceVal(d, 'soc', 'missing') === '—', 'missing value fallback');
 const shown = deviceInfoRender(d);
-chk(shown === 27, 'renderer row count: ' + shown);
+chk(shown === 28, 'renderer row count: ' + shown);
 const dump = (function walk(n) { return [n.textContent || ''].concat((n.children || []).flatMap(walk)); })(body).join('\n');
 chk(dump.includes(attack), 'markup-like device data was not preserved as literal text');
 chk(globalThis.pwned !== 1 && !body.querySelector('.img'), 'device value became markup');
@@ -5299,6 +5465,48 @@ const actualFeatureValues = []; (function walk(n) { if (n && n.className && n.cl
 chk(JSON.stringify(actualFeatureValues) === JSON.stringify(expectedFeatureValues), 'custom-kernel groups are not reversed with SuSFS first: ' + JSON.stringify(actualFeatureValues));
 chk(values.some(v => v.textContent === attack && v.className.includes('dev-long')), 'long untrusted value lacks safe wrapping class');
 chk(values.some(v => v.textContent === 'mismatch' && v.className.includes('dev-warn')), 'uname mismatch is not amber');
+const d2 = parseDeviceInfo([
+  'D\tsoc\tcpu_online\t0-7',
+  'D\tsystem\tuptime\t508.51 2724.42',
+  'D\tsystem\tloadavg\t7.18 7.95 4.97 3/11967 8744',
+  'D\tmemory\tMemTotal\t15728640 kB',
+  'D\tmemory\tMemAvailable\t4899840 kB',
+  'D\tmemory\tSwapTotal\t8388608 kB',
+  'D\tmemory\tSwapFree\t2097152 kB',
+  'D\tbattery\tcapacity\t87',
+  'D\tbattery\ttechnology\tLi-ion',
+  'D\tbattery\ttemp_tenths_c\t280',
+  'D\tbattery\tcurrent_ua\t-412000',
+  'D\tbattery\tvoltage_uv\t4123000',
+  'D\tbattery\tcharge_full_uah\t5600000',
+  'D\tbattery\tcharge_full_design_uah\t7300000',
+  'D\tbattery\tcycle_count\t214',
+  'D\tcpu_policy\tpolicy0\tcpus=0 1 2 3 4 5; governor=walt; current_khz=1132800; scaling_min_khz=384000; scaling_max_khz=3628800; hardware_min_khz=384000; hardware_max_khz=3628800',
+  'D\tcpu_policy\tpolicy6\tcpus=6 7; governor=walt; current_khz=1382400; scaling_min_khz=1017600; scaling_max_khz=4608000; hardware_min_khz=1017600; hardware_max_khz=4608000',
+  'D\tgpu\tkgsl-3d0\tgovernor=msm-adreno-tz; current_hz=160000000; min_hz=160000000; max_hz=1200000000; busy=25 100',
+  'D\tasb_caps\tpolicy6\thwmin=1017600; hwmax=4608000; lowest=1017600; steps=22; min_writable=1',
+  'D\tasb_caps\tgpu\tbackend=pwrlevel; levels=11',
+  'D\tasb_caps\tthermal_zones\t92',
+  'D\tasb_caps\tuclamp\t1',
+  'D\tasb_caps\troot_manager\tksu',
+  'D\tasb_caps\toverlay\tcamera=1; audio=0',
+  'D\tasb_caps\ttunable\tcamera audio wifi'
+].join('\n'));
+deviceInfoRender(d2);
+const d2dump = (function walk(n) { return [n.textContent || ''].concat((n.children || []).flatMap(walk)); })(body).join('\n').replace(/\u00a0/g, ' ');
+chk(d2dump.includes('At a glance') && d2dump.includes('8 cores · 2 clusters · up to 4.61 GHz'), 'overview processor line: ' + d2dump);
+chk(d2dump.includes('8 min · CPU idle 67%') && !d2dump.includes('508.51 2724.42'), 'raw /proc/uptime pair shown instead of a duration');
+chk(d2dump.includes('7.18 · 7.95 · 4.97 (1 / 5 / 15 min) · 3 of 11967 threads running') && !d2dump.includes('3/11967 8744'), 'raw /proc/loadavg line shown');
+chk(d2dump.includes('Load average counts tasks'), 'load average explanation missing');
+chk(d2dump.includes('15.0 GB') && d2dump.includes('4.7 GB free of 15.0 GB · zRAM 6.0 GB used'), 'memory not humanised');
+chk(d2dump.includes('28.0 °C') && d2dump.includes('-412 mA') && d2dump.includes('4.12 V') && d2dump.includes('7300 mAh'), 'battery units not humanised');
+chk(d2dump.includes('Silicon-carbon (Si/C)') && d2dump.includes('77% of design capacity') && d2dump.includes('214 cycles'), 'battery chemistry note, wear or cycles missing');
+chk(d2dump.includes('CPU 0–5 · walt · now 1.13 GHz · limit 384 MHz–3.63 GHz · hardware 384 MHz–3.63 GHz'), 'cpu policy not formatted');
+chk(d2dump.includes('msm-adreno-tz · now 160 MHz · range 160 MHz–1.20 GHz · busy 25%'), 'gpu not formatted');
+chk(d2dump.includes('1.02 GHz–4.61 GHz · 22 steps · floor control: yes') && d2dump.includes('power levels · 11 steps') && d2dump.includes('92 zones'), 'ASB capability rows not formatted');
+chk(d2dump.includes('KernelSU') && d2dump.includes('camera: yes · audio: no') && d2dump.includes('camera · audio · wifi'), 'ASB capability names not formatted');
+const wearRow = []; (function walk(n) { if (n.className && n.className.split(/\s+/).includes('lgr-v') && n.textContent === '77%') wearRow.push(n); (n.children || []).forEach(walk); })(body);
+chk(wearRow.length === 1 && wearRow[0].className.includes('dev-warn'), 'worn battery is not amber');
 (async function () {
   window._asbDeviceInfoData = d;
   let exportCalls = 0, encoded = '', commands = [];
@@ -5375,7 +5583,10 @@ for spec in 'capacity:88' 'status:Discharging' 'temp:331' 'current_now:412000' '
   printf '%s\n' "${spec#*:}" > "$T/sys/class/power_supply/battery/${spec%%:*}"
 done
 printf 'profile=smart\nstate=LIGHT_IDLE\ndevice_bounds_status=applied\n' > "$T/state"
-printf 'android_api=37\nkernel=6.12.30-custom\nsoc=SM8850\npolicy_count=2\n' > "$T/data/asb/device_caps.env"
+printf 'android_api=37\nkernel=6.12.30-custom\nsoc_model=SM8850\nroot_manager=ksu\ncpu_policy0_hwmax=3628800\ncpu_policy0_hwmin=384000\ncpu_policy0_lowest_opp=384000\ncpu_policy0_min_writable=1\ncpu_policy0_nfreq=23\ncpu_policy6_hwmax=4608000\ncpu_policy6_hwmin=1017600\ncpu_policy6_lowest_opp=1017600\ncpu_policy6_min_writable=0\ncpu_policy6_nfreq=19\ncpu_policy_count=2\ncpu_policy_list=0 6\ngpu_max_pwrlevel=0\ngpu_num_pwrlevels=18\ngpu_backend=pwrlevel\nthermal_zone_count=99\nhas_odm_camera_dir=1\nhas_vendor_audio_dir=0\nhas_wlan_txqlen=1\n' > "$T/data/asb/device_caps.env"
+printf 'schema=1\ncpu_policy_count=2\ncpu_opp_complete=1\ncgroup_v2=1\nuclamp=1\nthermal_sensors=1\nthermal_headroom_source=skin\nbattery_current=1\nmemcg=1\nmsm_performance=0\ncamera_cpuset=1\ndsp_soundfx=1\n' > "$T/data/asb/capabilities.env"
+printf 'SUMMARY\n  camera_tunable=1\n  audio_tunable=1\n  wifi_tunable=0\n  media_codecs_tunable=0\n  perf_tunable=1\n  gps_tunable=1\n' > "$T/data/asb/install_probe.txt"
+printf '370\n' > "$T/sys/class/power_supply/battery/cycle_count"
 cat > "$T/config" <<'EOF'
 CONFIG_LOCALVERSION="-custom"
 CONFIG_PREEMPT=y
@@ -5440,7 +5651,14 @@ want kernel_features tmpfs_xattr_posix_acl supported; want kernel_features lto '
 want kernel_features bbr_v1 available; want kernel_features bbr_v2 available
 want kernel_features bbg_baseband_guard 'active in LSM; built-in'
 want kernel_features susfs 'interface available'; want kernel_features susfs_version v2.3.0
-want asb_caps policy_count 2; want asb device_bounds_status applied
+want asb_caps cpu_policy_count 2; want asb device_bounds_status applied
+want asb_caps policy0 'hwmin=384000; hwmax=3628800; lowest=384000; steps=23; min_writable=1'
+want asb_caps policy6 'hwmin=1017600; hwmax=4608000; lowest=1017600; steps=19; min_writable=0'
+want asb_caps gpu 'backend=pwrlevel; levels=18'; want asb_caps thermal_zones 99; want asb_caps root_manager ksu
+want asb_caps uclamp 1; want asb_caps battery_current 1; want asb_caps msm_performance 0
+want asb_caps overlay 'camera=1; audio=0'; want asb_caps wlan_txqlen 1; want asb_caps tunable 'camera audio perf gps'
+want battery cycle_count 370
+printf '%s\n' "$out" | grep -Eq '^D	asb_caps	(android_api|kernel|model)	' && fail "ASB capabilities repeat firmware/kernel identity instead of capabilities"
 printf '%s\n' "$out" | grep -q 'DO_NOT_COLLECT' && fail "a sensitive identifier was collected"
 [ "$(wc -l < "$T/susfs.log")" = 3 ] || fail "SuSFS called more than the three show reads"
 grep -Ev '^show (version|variant|enabled_features)$' "$T/susfs.log" && fail "a state-changing SuSFS command ran"

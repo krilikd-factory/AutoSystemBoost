@@ -6376,6 +6376,93 @@ grep -qx 3 "$T/sleeps" && fail "unusable lost its captive-portal grace: $(tr '\n
 echo "PASS wifi leave fast confirm: 3 s between failing readings (out of range, aggressive), 8 s grace on unusable"
 )
 
+t_wifi_leave_marginal_runtime() (
+# Runtime (fix242): Wi-Fi that hangs on at a marginal signal is left.
+#
+# Field report (fix233, CPH2769, aggressive rung, a proxy VPN on): between two access points
+# neither link works, the phone stays on Wi-Fi and mobile data never takes over - the user has
+# to switch Wi-Fi off by hand. Three gaps: the out-of-range streak needed three readings IN A
+# ROW, so a signal bobbing around -80 dBm reset it every other pass; a link at -74 dBm that no
+# longer passes traffic still reads "validated" (Android re-validates only after a data stall);
+# and behind a VPN the system default network was taken only from netd's rule text. The REAL
+# watcher functions run here on mocked ip/ping/dumpsys/svc:
+#   - three weak readings out of the last four leave, a lone weak reading does not;
+#   - on unusable/aggressive, an access point that answered before and now stays silent twice
+#     at a marginal signal is left; one that never answered (ICMP blocked) is never judged;
+#     weak never probes;
+#   - behind a tunnel, dumpsys connectivity naming Wi-Fi as the default network counts.
+set -u
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail=0; f() { echo "FAIL wifi leave marginal: $*" >&2; fail=1; }
+mkdir -p "$T/bin" "$T/state" "$T/mod/config"
+sed '/^case "\${1:-reconcile}" in/,$d' "$ROOT/runtime/asb_wifi_fallback.sh" > "$T/lib.sh"
+cat > "$T/bin/ip" <<'X'
+#!/bin/sh
+case "$1 $2" in
+  "route get") cat "$T/route" ;;
+  "rule show") cat "$T/rules" 2>/dev/null ;;
+  "route show") [ "$4" = wlan0 ] && echo 'default via 192.168.1.1 dev wlan0 proto static' ;;
+esac
+X
+cat > "$T/bin/ping" <<'X'
+#!/bin/sh
+echo "$*" >> "$T/pings"
+exit "$(cat "$T/ping_rc")"
+X
+cat > "$T/bin/dumpsys" <<'X'
+#!/bin/sh
+case "$1" in
+  power) echo 'mWakefulness=Awake' ;;
+  wifi) printf 'mWifiInfo SSID: "home", RSSI: %s, Link speed: 6Mbps\nNetworkInfo: VALIDATED=true\n' "$(cat "$T/rssi")" ;;
+  connectivity) cat "$T/conn" 2>/dev/null ;;
+esac
+X
+cat > "$T/bin/settings" <<'X'
+#!/bin/sh
+case "$1:$2:$3" in get:global:airplane_mode_on) echo 0 ;; get:global:mobile_data) echo 1 ;; *) echo null ;; esac
+X
+cat > "$T/bin/svc" <<'X'
+#!/bin/sh
+echo "$*" >> "$T/svc"
+X
+chmod 0755 "$T/bin/"*
+printf 'state=MODERATE\nscreen=1\n' > "$T/gov"
+echo '1.1.1.1 via 192.168.1.1 dev wlan0 table wlan0 src 192.168.1.9' > "$T/route"
+run() {   # rung, then a sequence of rssi:ping_rc passes -> prints released|kept
+  printf 'net_wifi_leave=%s\nnet_wifi_leave_dbm=-80\n' "$1" > "$T/mod/config/governor.conf"; shift
+  rm -f "$T/svc" "$T/pings" "$T/state/"wifi_fallback.*
+  T="$T" PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_WIFI_FALLBACK_STATE_DIR="$T/state" ASB_GOV_STATE="$T/gov" \
+    sh -c '. "$1"; shift; for p in "$@"; do echo "${p%%:*}" > "$T/rssi"; echo "${p#*:}" > "$T/ping_rc"; _try_release; done' x "$T/lib.sh" "$@"
+  grep -qx 'wifi disable' "$T/svc" 2>/dev/null && echo released || echo kept
+}
+[ "$(run weak -85:0 -78:0 -85:0 -85:0)" = released ] || f "three weak readings out of four did not leave (signal bobbing around the threshold)"
+[ "$(run weak -85:0 -78:0 -78:0 -85:0 -78:0)" = kept ] || f "a lone weak reading among strong ones left Wi-Fi"
+grep -q 'out of range (rssi=-85) - releasing' "$T/state/wifi_fallback.log" 2>/dev/null && f "release logged on a kept link"
+[ "$(run aggressive -60:0 -75:1 -75:1)" = released ] || f "a silent access point at -75 dBm was kept on aggressive"
+grep -q 'link dead (gateway 192.168.1.1 silent, rssi=-75) - releasing' "$T/state/wifi_fallback.log" || f "dead-link release not logged"
+[ "$(run aggressive -75:1 -75:1 -75:1)" = kept ] || f "an access point that never answered (ICMP blocked) was judged dead"
+[ "$(run aggressive -60:0 -75:1 -60:0 -75:1)" = kept ] || f "two silences separated by an answer counted as a dead link"
+[ "$(run unusable -74:0 -75:1 -76:1)" = released ] || f "unusable did not leave a dead link"
+[ "$(run aggressive -50:1 -50:1 -50:1)" = kept ] || f "a strong link was probed into a release"
+run weak -75:1 -75:1 -75:1 >/dev/null
+[ ! -s "$T/pings" ] || f "the weak rung probed the access point"
+awk '/^_wifi_default\(\) \{/ { p = 1 } p { print } p && /^}/ { exit }' "$ROOT/runtime/asb_wifi_fallback.sh" > "$T/wd.sh"
+vpn() { echo '1.1.1.1 dev tun0 table tun0 src 26.26.26.1 uid 0' > "$T/route"; printf '%s\n' "$1" > "$T/rules"; printf '%s\n' "$2" > "$T/conn"
+  T="$T" PATH="$T/bin:$PATH" sh -c '. "$1"; _wifi_default' x "$T/wd.sh" && echo yes || echo no; }
+CONN_WIFI='Active default network: 105
+Current Networks:
+  NetworkAgentInfo{network{104}  handle{1}  ni{MOBILE CONNECTED extra: internet}  lp{{InterfaceName: rmnet_data2 LinkAddresses: [ 10.1.1.2/30 ]}}
+  NetworkAgentInfo{network{105}  handle{2}  ni{WIFI CONNECTED extra: }  lp{{InterfaceName: wlan0 LinkAddresses: [ 192.168.1.9/24 ]}}
+  NetworkAgentInfo{network{106}  handle{3}  ni{VPN CONNECTED extra: }  lp{{InterfaceName: tun0 LinkAddresses: [ 26.26.26.1/30 ]}}'
+CONN_MOBILE="$(printf '%s\n' "$CONN_WIFI" | sed 's/^Active default network: 105/Active default network: 104/')"
+[ "$(vpn '0:	from all lookup local' "$CONN_WIFI")" = yes ] || f "VPN over Wi-Fi not recognised from dumpsys connectivity when the rule text differs"
+[ "$(vpn '0:	from all lookup local' "$CONN_MOBILE")" = no ] || f "VPN over mobile data taken for Wi-Fi via dumpsys"
+[ "$(vpn '0:	from all lookup local' '')" = no ] || f "no connectivity dump read as Wi-Fi"
+[ "$fail" = 0 ] && echo "PASS wifi leave marginal: 3-of-4 weak readings leave, a silent access point at a marginal signal is left on unusable/aggressive, ICMP-blind routers are never judged, Wi-Fi under a VPN found through the default network"
+exit "$fail"
+)
+
 t_wifi_leave_rungs_runtime() (
 # Runtime (fix134): "Leave bad Wi-Fi" works on every rung, with or without the cellular master.
 #

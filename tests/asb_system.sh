@@ -4882,7 +4882,7 @@ fail() { echo "FAIL fix207: $*"; exit 1; }
 #    deep-sleep share in the night hero. More detail: a per-phase breakdown table (time,
 #    signed drop, %/h) aggregated from the ledger.
 sh -n "$D" || fail "digest script has a syntax error"
-grep -qF 'printf "scr\ton_pctph=%.1f\toff_pctph=%.1f\ton_min=%d\toff_min=%d\n"' "$D" || fail "the digest lost the screen on/off split"
+grep -qF 'printf "scr\ton_pctph=%.1f\toff_pctph=%.1f\ton_min=%d\toff_min=%d\tidle_pctph=%.1f\tidle_min=%d\tmusic_min=%d\n"' "$D" || fail "the digest lost the screen on/off split"
 grep -qF 'printf "phase\tname=%s\tmin=%d\tdrop=%d\tpctph=%.1f\n"' "$D" || fail "the digest lost the phase rows"
 grep -qF 'printf "kwk\ttag=%s\tmin=%d\n"' "$D" || fail "the digest lost the kernel charger holders"
 grep -qF 'ph ~ /_scr$/ || ph == "active" || ph == "gaming" || ph == "post_wake"' "$D" || fail "the split no longer uses the report writer's classification"
@@ -4934,7 +4934,7 @@ grep -qF 'd.wlive.push' "$H" || fail "the report parser dropped live holders"
 grep -qF 'd.profs.push' "$H" || fail "the report parser dropped per-profile rows"
 grep -qF "lr_sec_profiles" "$H" || fail "the profiles comparison section is not rendered"
 grep -qF "lr_tip_awake_who" "$H" || fail "the awake tip does not name its holder"
-grep -qF "lr_sm_smart_only" "$H" || fail "the Smart-only learning note is gone"
+grep -qF "if (smart && _smDay) {" "$H" || fail "the Smart learner card is shown on a day Smart never ran"
 grep -qF "lr_wlive_fmt" "$H" || fail "the live-holder row format is gone"
 echo "PASS: fix206 contract"
 ) || exit 1
