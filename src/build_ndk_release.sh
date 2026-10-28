@@ -124,7 +124,7 @@ if [ -n "$DSP_SRC" ]; then
       # if one is missing, the prebuilt is from an older build than the sources next to it.
       _src_fx="$SCRIPT_DIR/DSP_AIDL/asb_effect_aidl.cpp"
       _missing=""
-      for _lit in "ASB queryEffect" "ASB createEffect" "ASB configure" "ASB process"; do
+      for _lit in "ASB queryEffect" "ASB createEffect" "ASB configure" "ASB process" " clarity=" " rumble_hz="; do
         grep -q "$_lit" "$_src_fx" 2>/dev/null || continue
         grep -aq "$_lit" "$_dout/libasbdsp.so" 2>/dev/null || _missing="$_missing \"$_lit\""
       done
@@ -178,7 +178,10 @@ if [ -n "$DSP_SRC" ]; then
         "$TOOLCHAIN/llvm-nm" -D --defined-only "$_dout/libasbdsp_legacy.so" | grep -q " AELI$" \
           || { echo "[ASB] ERROR: AELI symbol not exported from $_abi/libasbdsp_legacy.so" >&2; exit 1; }
       fi
-      echo "[ASB] DSP: legacy effect for $_abi also built (AELI verified) - installer picks one"
+      for _lit in clarity rumble_hz; do
+        grep -aq "$_lit" "$_dout/libasbdsp_legacy.so"           || { echo "[ASB] ERROR: $_abi legacy DSP lacks $_lit marker" >&2; exit 1; }
+      done
+      echo "[ASB] DSP: legacy effect for $_abi also built (AELI and tone filters verified) - installer picks one"
       ls -lh "$_dout/libasbdsp_legacy.so"
       continue
     fi
@@ -210,7 +213,7 @@ if [ -n "$DSP_SRC" ]; then
     # behaves like the code was never changed.
     _src_att="$SCRIPT_DIR/DSP_AIDL/asb_dsp_attach.cpp"
     _att_missing=""
-    for _lit in "pushed gain_mb" "settings change" "attached to session"; do
+    for _lit in "pushed gain_mb" "settings change" "attached to session" "persist.asb.dsp.clarity" "persist.asb.dsp.rumble_hz"; do
       grep -q "$_lit" "$_src_att" 2>/dev/null || continue
       grep -aq "$_lit" "$_att_pre" 2>/dev/null || _att_missing="$_att_missing \"$_lit\""
     done

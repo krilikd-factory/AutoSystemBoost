@@ -1942,17 +1942,19 @@ static volatile int  g_disp_waiter_up = 0;
  * nothing while the phone sleeps - and pokes an eventfd only when the display enters or
  * leaves ON. Doze <-> doze-suspend flips of an always-on display (one a minute) wake the
  * thread but never the main loop. Resolved with dlsym: the binary targets API 24 and the
- * call is API 26; where it is missing nothing starts and the old paths work as before. */
+ * calls are API 26; where either is missing nothing starts and the old paths work as before. */
 #ifndef ASB_DISP_FIND_RETRY_S
 #define ASB_DISP_FIND_RETRY_S 30
 #endif
 #if defined(__ANDROID__)
 typedef _Bool (*asb_prop_wait_fn)(const prop_info *, uint32_t, uint32_t *, const struct timespec *);
+typedef uint32_t (*asb_prop_serial_fn)(const prop_info *);
 
 static void *asb_disp_waiter(void *arg) {
     (void)arg;
     asb_prop_wait_fn w = (asb_prop_wait_fn)dlsym(RTLD_DEFAULT, "__system_property_wait");
-    if (!w) { g_disp_waiter_up = -1; return NULL; }
+    asb_prop_serial_fn s = (asb_prop_serial_fn)dlsym(RTLD_DEFAULT, "__system_property_serial");
+    if (!w || !s) { g_disp_waiter_up = -1; return NULL; }
     const prop_info *pi = NULL;
     /* The framework creates the property at the first display transition after boot, not
      * at boot (fix118): an OP15 kept the screen on for 12 minutes after a reboot and the
@@ -1963,7 +1965,7 @@ static void *asb_disp_waiter(void *arg) {
         if (!pi) sleep(ASB_DISP_FIND_RETRY_S);
     }
     g_disp_waiter_up = 2;
-    uint32_t serial = __system_property_serial(pi);
+    uint32_t serial = s(pi);
     int prev = asb_display_state_read();
     int idle_fail = 0;
     for (;;) {
