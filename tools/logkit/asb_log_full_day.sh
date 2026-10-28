@@ -1466,11 +1466,13 @@ lk_emit_wifi_leave_summary() {
     / pass 1\// { if (st) back++; st = t; next }
     /out of range .* - releasing/ { rr++; released(t); next }
     /released unvalidated Wi-Fi/ { ru++; released(t); next }
+    /link dead .* - releasing/ { rd++; released(t); next }
     /re-enabled after ASB fallback window/ { ren++; next }
     /could not disable Wi-Fi/ { nd++; next }
     END {
       if (st) back++
       printf "releases: %d (out of range %d, no internet %d) - Wi-Fi given back after the window: %d, could not disable: %d\n", rel + 0, rr + 0, ru + 0, ren + 0, nd + 0
+      if (rd > 0) printf "released because the access point stopped answering at a marginal signal: %d\n", rd
       if (nl > 0) {
         for (i = 2; i <= nl; i++) { v = lat[i]; j = i - 1; while (j > 0 && lat[j] > v) { lat[j + 1] = lat[j]; j-- } lat[j + 1] = v }
         med = (nl % 2) ? lat[(nl + 1) / 2] : (lat[nl / 2] + lat[nl / 2 + 1]) / 2

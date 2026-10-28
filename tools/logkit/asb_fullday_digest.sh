@@ -192,13 +192,13 @@ if [ "$_HAVE_LEDGER" = "1" ]; then
     /^#/ { next }
     NF >= 5 {
       d = $4 - $5; dur = $3 - $2
-      if (d > 0 && dur > 0) {
-        drop += d; sec += dur
-        if (($13 + 0) > 0) { ma += $13 * dur; maw += dur }
-      }
+      if ($1 ~ /^charging/ || dur <= 0) next
+      drop += d; sec += dur
+      if (($13 + 0) > 0) { ma += $13 * dur; maw += dur }
     }
     END {
-      if (sec > 0)
+      if (drop < 0) drop = 0
+      if (sec > 0 && drop > 0)
         printf "drain\tpctph=%.1f\ttotal_drop=%d\thours=%.1f\tma=%d\n", \
           drop * 3600 / sec, drop, sec / 3600, (maw > 0 ? ma / maw : 0)
     }' 2>/dev/null)"
@@ -265,6 +265,7 @@ if [ "$_HAVE_LEDGER" = "1" ]; then
   # ----- thermal peaks -------------------------------------------------------
   _h_thermal_line="$(_cat_ledger | awk -F'\t' '
     /^#/ { next }
+    ($3 - $2) <= 0 { next }
     { if (($6 + 0) > c) c = $6 + 0; if (($7 + 0) > s) s = $7 + 0 }
     END { if (c > 0 || s > 0) printf "thermal\tcpu=%d\tsurf=%d\n", c, s }' 2>/dev/null)"
   [ -n "$_h_thermal_line" ] && printf '%s\n' "$_h_thermal_line"
@@ -281,6 +282,7 @@ if [ "$_HAVE_LEDGER" = "1" ]; then
   # peak, so the sheet can show the number next to the name.
   _cat_ledger | awk -F'\t' '
     /^#/ { next }
+    ($3 - $2) <= 0 { next }
     {
       c = $6 + 0; s = $7 + 0; dur = ($3 - $2) / 60
       if (c > mc) { mc = c; mpa = $1 }
@@ -469,13 +471,16 @@ if [ "$_HAVE_LEDGER" = "1" ]; then
         on += dd; if (d > 0) ond += d
       } else {
         off += dd; if (d > 0) offd += d
+        if (ph == "idle" || ph == "sleep") { idl += dd; if (d > 0) idd += d }
+        else if (ph ~ /^audio_/) mus += dd
       }
     }
     END {
       if (on >= 300 || off >= 300)
-        printf "scr\ton_pctph=%.1f\toff_pctph=%.1f\ton_min=%d\toff_min=%d\n", \
+        printf "scr\ton_pctph=%.1f\toff_pctph=%.1f\ton_min=%d\toff_min=%d\tidle_pctph=%.1f\tidle_min=%d\tmusic_min=%d\n", \
           (on > 0 && ond > 0 ? ond * 3600 / on : 0), \
-          (off > 0 && offd > 0 ? offd * 3600 / off : 0), on / 60, off / 60
+          (off > 0 && offd > 0 ? offd * 3600 / off : 0), on / 60, off / 60, \
+          (idl > 0 && idd > 0 ? idd * 3600 / idl : 0), idl / 60, mus / 60
       np = 0
       for (p in seen) if (dur[p] >= 120) { np++; ord[np] = p }
       for (i = 1; i <= np; i++) for (j = i + 1; j <= np; j++)
@@ -582,6 +587,24 @@ if [ -f "$_DIR/sysui_restarts.txt" ]; then
 fi
 case "$_sn" in ''|*[!0-9]*) _sn=0 ;; esac
 printf 'sysui\tcount=%d\n' "$_sn"
+
+_sdr="$_DIR/_full_day_report.txt"
+if [ -f "$_sdr" ]; then
+  _sd="$(sed -n 's/^com\.android\.systemui missed deadlines in \([0-9][0-9]*\) of \([0-9][0-9]*\) screen-on intervals.*/\1 \2/p' "$_sdr" 2>/dev/null | head -n 1)"
+  if [ -n "$_sd" ]; then
+    _sj="$(awk '$1 == "com.android.systemui" && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ && $3 > 0 { printf "%.1f", $2 * 100 / $3; exit }' "$_sdr" 2>/dev/null)"
+    _sdc="$_DIR/display_config.txt"
+    _sns="$(sed -n 's/^system: show_network_speed=\([0-9]\).*/\1/p' "$_sdc" 2>/dev/null | head -n 1)"
+    _scs='?'
+    if grep -Eq '^(secure|system): clock_seconds=1|^global: oost_systemui_permanent_clock_seconds=1' "$_sdc" 2>/dev/null; then _scs=1
+    elif grep -Eq '^(secure|system): clock_seconds=0' "$_sdc" 2>/dev/null; then _scs=0; fi
+    _slw='?'
+    if grep -q '^wallpaper: static image' "$_sdc" 2>/dev/null; then _slw=0
+    elif grep -q '^wallpaper: .*wallpaper service' "$_sdc" 2>/dev/null; then _slw=1; fi
+    printf 'sysuidraw\tintv=%s\tof=%s\tpct=%s\tnetspeed=%s\tclocksec=%s\tlivewp=%s\n' \
+      "${_sd% *}" "${_sd#* }" "${_sj:-0}" "${_sns:-?}" "$_scs" "$_slw"
+  fi
+fi
 
 # ----- throttling periods -----------------------------------------------------
 # A new period starts when the cap owner changes or the trace goes quiet for over three
@@ -791,16 +814,16 @@ if [ -s "$_HF" ]; then
     END {
       for (i = n; i >= 1 && s < 3; i--) {
         split(r[i], f, "\t"); s++
-        printf "hist\tstarted=%s\tnight=%s\tdrain=%s\tjank=%s\tcpu=%s\tclamps=%s\tdevice=%s\trom=%s\tmod=%s\telapsed=%s\ton_pct=%s\toff_min=%s\n", \
-          f[1], f[2], f[3], f[4], f[5], f[6], f[7], f[8], f[9], f[10], f[11], f[12]
+        printf "hist\tstarted=%s\tnight=%s\tdrain=%s\tjank=%s\tcpu=%s\tclamps=%s\tdevice=%s\trom=%s\tmod=%s\telapsed=%s\ton_pct=%s\toff_min=%s\tdm=%s\n", \
+          f[1], f[2], f[3], f[4], f[5], f[6], f[7], f[8], f[9], f[10], f[11], f[12], f[13]
       }
     }' "$_HF" 2>/dev/null
 fi
 if [ "$_running" = 0 ] && [ -n "${_started:-}" ] && { [ -n "$_h_dp" ] || [ -n "$_h_np" ]; }; then
   if mkdir -p "$_STATE" 2>/dev/null && touch "$_HF" 2>/dev/null; then
     { awk -F'\t' -v k="$_started" '$1 != k' "$_HF" 2>/dev/null
-      printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$_started" "${_h_np:--}" "${_h_dp:--}" "${_jp:--}" "${_h_cp:--}" "${_h_tc:--}" \
-        "${_h_device:--}" "${_h_rom:--}" "${_h_mod:--}" "${_el:-0}" "${_h_on:--}" "${_h_off:--}"
+      printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$_started" "${_h_np:--}" "${_h_dp:--}" "${_jp:--}" "${_h_cp:--}" "${_h_tc:--}" \
+        "${_h_device:--}" "${_h_rom:--}" "${_h_mod:--}" "${_el:-0}" "${_h_on:--}" "${_h_off:--}" 2
     } | tail -n 12 > "$_HF.tmp" 2>/dev/null && mv "$_HF.tmp" "$_HF" 2>/dev/null || rm -f "$_HF.tmp"
   fi
 fi
