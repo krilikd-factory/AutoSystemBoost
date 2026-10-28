@@ -60,6 +60,51 @@ if [ -w "$_mg_node" ]; then
   esac
 fi
 
+# --- scheduler statistics -----------------------------------------------------------
+# sched_stats is generic kernel debug accounting, not a scheduler policy or an SoC-specific
+# writer. Disabling it can remove debug bookkeeping, but no fixed battery percentage is
+# claimed. Stock is the default. Capture the exact boolean before the first opt-in write;
+# if that capture is impossible, do not write at all. A missing node remains "not exposed".
+_ss_node="${ASB_SCHED_STATS_NODE:-/proc/sys/kernel/sched_stats}"
+_ss_prev="${ASB_SCHED_STATS_PREV:-/data/adb/asb/kernel_sched_stats.prev}"
+case "$(_cfg kernel_sched_stats)" in
+  off)
+    if [ -r "$_ss_node" ] && [ -w "$_ss_node" ]; then
+      if [ ! -f "$_ss_prev" ]; then
+        _ss_orig="$(cat "$_ss_node" 2>/dev/null | tr -d ' 
+')"
+        case "$_ss_orig" in 0|1) ;; *) _ss_orig="" ;; esac
+        if [ -n "$_ss_orig" ]; then
+          mkdir -p "$(dirname "$_ss_prev")" 2>/dev/null
+          printf '%s
+' "$_ss_orig" > "$_ss_prev" 2>/dev/null
+        fi
+      fi
+      if [ -f "$_ss_prev" ] && printf '%s
+' 0 > "$_ss_node" 2>/dev/null          && [ "$(cat "$_ss_node" 2>/dev/null | tr -d ' 
+')" = 0 ]; then
+        _changed="${_changed}kernel_sched_stats=off "
+      fi
+    fi
+    ;;
+  *)
+    if [ -f "$_ss_prev" ] && [ -w "$_ss_node" ]; then
+      _ss_orig="$(cat "$_ss_prev" 2>/dev/null | tr -d ' 
+')"
+      case "$_ss_orig" in
+        0|1)
+          if printf '%s
+' "$_ss_orig" > "$_ss_node" 2>/dev/null              && [ "$(cat "$_ss_node" 2>/dev/null | tr -d ' 
+')" = "$_ss_orig" ]; then
+            rm -f "$_ss_prev" 2>/dev/null
+            _changed="${_changed}kernel_sched_stats=stock(restored) "
+          fi
+          ;;
+      esac
+    fi
+    ;;
+esac
+
 # --- phantom process monitor ---------------------------------------------------------
 case "$(_cfg phantom_procs)" in
   relaxed)

@@ -576,7 +576,7 @@ case "$_btls" in
 esac
 
 _wt="$(_cfg wifi_scan_throttle)"
-# Five rungs now, including one that stops background scanning entirely.
+# Six rungs now, including a 30-minute battery rung and one that stops background scanning entirely.
 #
 # The old control was auto/0/1 - throttling on or off. Wi-Fi scanning is a real
 # drain on a phone that sits in one place all day, and the framework exposes an
@@ -586,6 +586,7 @@ _wt="$(_cfg wifi_scan_throttle)"
 #   0 - no background scanning at all (networks are found only when you look)
 #   1 - every 10 minutes    2 - every 5 minutes (framework default)
 #   3 - every 2 minutes     4 - unthrottled, the stock pre-throttle behaviour
+#   5 - every 30 minutes    (explicit battery rung; slower discovery of new networks)
 #
 # Rung 0 sets the interval to a day rather than writing a disable flag Android does
 # not have: scanning stops in practice and nothing needs a reboot to come back.
@@ -614,6 +615,7 @@ case "$_wt" in
   2) _wt_write 1 300000 ;;     # every 5 minutes - framework default
   3) _wt_write 1 120000 ;;     # every 2 minutes
   4) _wt_write 0 300000 ;;     # unthrottled; interval reset so re-enabling is sane
+  5) _wt_write 1 1800000 ;;    # every 30 minutes - explicit battery rung
   # auto (and anything unrecognised) leaves both keys alone, as the config contract says:
   # writing an unrecognised token into a boolean key is exactly the bug fixed above.
   *) : ;;

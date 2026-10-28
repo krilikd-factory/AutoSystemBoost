@@ -71,8 +71,10 @@ _cfg_num() {
 _grain="$(_cfg_num CAMERA_GRAIN "$ASB_CAM_GRAIN_IN")"
 case "$_grain" in ''|*[!0-9]*) _grain=3 ;; esac
 [ "$_grain" -gt 10 ] 2>/dev/null && _grain=10
-# 3 is stock. The upper range is intentionally stylised: level 10 is 10x the shipped
-# additive grain, not the old 3.3x ceiling that was almost invisible on strong denoisers.
+# 3 is stock. The upper range is intentionally stylised: level 10 is 16x the shipped
+# additive grain. This remains a bounded stock-source ratio (numeric ceiling 64), not a
+# compounding edit; the apply-coverage sidecar tells the UI when a firmware exposes no
+# usable addNoiseWeight value instead of pretending that a larger percentage must work.
 case "$_grain" in
   0) _grain_pct=0 ;;
   1) _grain_pct=35 ;;
@@ -84,7 +86,7 @@ case "$_grain" in
   7) _grain_pct=450 ;;
   8) _grain_pct=600 ;;
   9) _grain_pct=800 ;;
-  *) _grain_pct=1000 ;;
+  *) _grain_pct=1600 ;;
 esac
 
 # Contrast and colour depth, from the tone-mapping block: the *contrastScale and
@@ -228,6 +230,9 @@ asb_camera_grade_file() {
       if (i == 0) return line
       head = head substr(body, 1, i)
       body = substr(body, i + 1)
+      # A list is not a scalar zero followed by trailing text. Leave it for scale_list;
+      # treating "[...]" as trailing data both corrupted JSON and reported false coverage.
+      if (body ~ /^[[:space:]]*\[/) return line
       tail = ""
       for (i = 1; i <= length(body); i++) {
         c = substr(body, i, 1)
@@ -308,6 +313,8 @@ asb_camera_grade_file() {
           _noise_key = substr(_noise_rest, RSTART + 1, RLENGTH - 2)
           _noise_before = line
           line = scale_num(line, _noise_key, GRAIN)
+          if (line == _noise_before)
+            line = scale_list(line, _noise_key, GRAIN, 0, 0)
           if (line != _noise_before) GRAIN_KEYS++
           _noise_rest = substr(_noise_rest, RSTART + RLENGTH)
         }
