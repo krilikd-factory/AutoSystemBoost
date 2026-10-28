@@ -3211,6 +3211,7 @@ static void asb_unlock_lift_apply(asb_profile_caps_t *caps) {
 static uint64_t g_bjank_hash = 0;
 static char     g_bjank_pkg[64];
 static long     g_bjank_frames = -1, g_bjank_janky = -1;
+static long     g_bjank_sys_frames = -1, g_bjank_sys_janky = -1;
 static long     g_bjank_probe_ts = 0, g_bjank_gfx_seen = 0;
 static long     g_bjank_log_ts = 0;
 static int      g_bjank_log_ok = 0, g_bjank_armed = 0;
@@ -3251,6 +3252,8 @@ static void asb_bjank_reset_window(void) {
     g_bjank_pkg[0] = 0;
     g_bjank_frames = -1;
     g_bjank_janky = -1;
+    g_bjank_sys_frames = -1;
+    g_bjank_sys_janky = -1;
 }
 
 static void asb_bjank_disarm(void) {
@@ -3261,6 +3264,22 @@ static void asb_bjank_disarm(void) {
         g_unlock_edge = 1;
     }
     asb_bjank_reset_window();
+}
+
+static void asb_bjank_eval_window(const char *pkg, long df, long dj, long now_ms) {
+    g_bjank_windows++;
+    if (df >= ASB_BJANK_MIN_FRAMES && dj >= ASB_BJANK_MIN_JANKY &&
+        dj * 100L >= df * ASB_BJANK_MIN_PCT) {
+        g_unlock_until_ms = now_ms + ASB_BJANK_TTL_MS;
+        g_unlock_lift_now = 1;
+        g_unlock_edge = 1;
+        g_bjank_armed = 1;
+        g_unlock_arm_why = "battery jank guard";
+        g_bjank_triggers++;
+        asb_log("battery_jank_guard: %s %ld/%ld janky frames (%ld%%), ceilings to %d%% for %lds",
+                pkg, dj, df, df > 0 ? dj * 100L / df : 0L,
+                g_asb_cfg.unlock_lift_pct, ASB_BJANK_TTL_MS / 1000L);
+    }
 }
 
 static void asb_battery_jank_guard_tick(const asb_fsm_t *fsm, const asb_metrics_t *m) {
@@ -3287,24 +3306,28 @@ static void asb_battery_jank_guard_tick(const asb_fsm_t *fsm, const asb_metrics_
         g_bjank_gfx_seen = (long)st.st_mtime;
         long fr = -1, jk = -1;
         if (asb_gfx_read_pkg(g_bjank_pkg, &fr, &jk) == 0) {
-            if (g_bjank_frames >= 0 && fr >= g_bjank_frames && jk >= g_bjank_janky) {
-                long df = fr - g_bjank_frames, dj = jk - g_bjank_janky;
-                g_bjank_windows++;
-                if (df >= ASB_BJANK_MIN_FRAMES && dj >= ASB_BJANK_MIN_JANKY &&
-                    dj * 100L >= df * ASB_BJANK_MIN_PCT) {
-                    g_unlock_until_ms = now_ms + ASB_BJANK_TTL_MS;
-                    g_unlock_lift_now = 1;
-                    g_unlock_edge = 1;
-                    g_bjank_armed = 1;
-                    g_unlock_arm_why = "battery jank guard";
-                    g_bjank_triggers++;
-                    asb_log("battery_jank_guard: %ld/%ld janky frames (%ld%%), ceilings to %d%% for %lds",
-                            dj, df, df > 0 ? dj * 100L / df : 0L,
-                            g_asb_cfg.unlock_lift_pct, ASB_BJANK_TTL_MS / 1000L);
-                }
-            }
+            if (g_bjank_frames >= 0 && fr >= g_bjank_frames && jk >= g_bjank_janky)
+                asb_bjank_eval_window(g_bjank_pkg, fr - g_bjank_frames,
+                                      jk - g_bjank_janky, now_ms);
             g_bjank_frames = fr;
             g_bjank_janky = jk;
+        }
+        /* Launcher swipes, notification shade and recents are rendered by SystemUI, not
+         * necessarily by the foreground package. The field Battery capture that motivated
+         * this guard had 29.5% SystemUI jank while several foreground apps were below 3%.
+         * Evaluate SystemUI as an independent window from the SAME on-demand dump: never
+         * add two apps' frames together, and never run another probe or worker. */
+        if (strcmp(g_bjank_pkg, "com.android.systemui") != 0) {
+            fr = -1; jk = -1;
+            if (asb_gfx_read_pkg("com.android.systemui", &fr, &jk) == 0) {
+                if (g_bjank_sys_frames >= 0 && fr >= g_bjank_sys_frames &&
+                    jk >= g_bjank_sys_janky)
+                    asb_bjank_eval_window("com.android.systemui",
+                                          fr - g_bjank_sys_frames,
+                                          jk - g_bjank_sys_janky, now_ms);
+                g_bjank_sys_frames = fr;
+                g_bjank_sys_janky = jk;
+            }
         }
     }
 
