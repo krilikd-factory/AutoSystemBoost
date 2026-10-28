@@ -140,9 +140,11 @@ if [ "$_mode" = "mirror" ]; then
   case "$_mbass" in
     ''|off|*[!0-9]*) : ;;
     *)
-      if [ "$_mbass" -ge 0 ] 2>/dev/null && [ "$_mbass" -le 12 ] 2>/dev/null; then
+      if [ "$_mbass" -ge 0 ] 2>/dev/null && [ "$_mbass" -le 10 ] 2>/dev/null; then
         _mbhave="$(getprop persist.asb.dsp.bass_db 2>/dev/null)"
-        [ "$_mbhave" != "$_mbass" ] && _persist persist.asb.dsp.bass_db "$_mbass"
+        if [ "$_mbhave" != "$_mbass" ]; then
+          _persist persist.asb.dsp.bass_db "$_mbass"; _mwake=1
+        fi
       fi
       ;;
   esac
@@ -152,7 +154,9 @@ if [ "$_mode" = "mirror" ]; then
     *)
       if [ "$_mvoice" -ge 0 ] 2>/dev/null && [ "$_mvoice" -le 10 ] 2>/dev/null; then
         _mvhave="$(getprop persist.asb.dsp.voice 2>/dev/null)"
-        [ "$_mvhave" != "$_mvoice" ] && _persist persist.asb.dsp.voice "$_mvoice"
+        if [ "$_mvhave" != "$_mvoice" ]; then
+          _persist persist.asb.dsp.voice "$_mvoice"; _mwake=1
+        fi
       fi
       ;;
   esac
@@ -162,13 +166,37 @@ if [ "$_mode" = "mirror" ]; then
     *)
       if [ "$_mwidth" -ge 0 ] 2>/dev/null && [ "$_mwidth" -le 10 ] 2>/dev/null; then
         _mwhave="$(getprop persist.asb.dsp.width 2>/dev/null)"
-        [ "$_mwhave" != "$_mwidth" ] && _persist persist.asb.dsp.width "$_mwidth"
+        if [ "$_mwhave" != "$_mwidth" ]; then
+          _persist persist.asb.dsp.width "$_mwidth"; _mwake=1
+        fi
       fi
       ;;
   esac
+  _mclarity="$(_cfg dsp_clarity)"
+  case "$_mclarity" in
+    ''|off|*[!0-9]*) : ;;
+    *) if [ "$_mclarity" -ge 0 ] 2>/dev/null && [ "$_mclarity" -le 8 ] 2>/dev/null; then
+         _mchave="$(getprop persist.asb.dsp.clarity 2>/dev/null)"
+         if [ "$_mchave" != "$_mclarity" ]; then
+           _persist persist.asb.dsp.clarity "$_mclarity"; _mwake=1
+         fi
+       fi ;;
+  esac
+  _mrumble="$(_cfg dsp_rumble)"
+  case "$_mrumble" in 35|50|70) ;; *) _mrumble=0 ;; esac
+  _mrhave="$(getprop persist.asb.dsp.rumble_hz 2>/dev/null)"
+  if [ "$_mrhave" != "$_mrumble" ]; then
+    _persist persist.asb.dsp.rumble_hz "$_mrumble"; _mwake=1
+  fi
   _mhead="$(_cfg dsp_headroom)"
-  case "$_mhead" in 15|30|50|100) _persist persist.asb.dsp.ceiling_mb "-$_mhead" ;; esac
-  for _k in enable gain_mb ceiling_mb comp comp_ratio_x10 comp_thresh_mb softclip postgain_x100 bass_db voice width; do
+  case "$_mhead" in
+    15|30|50|100)
+      _mhhave="$(getprop persist.asb.dsp.ceiling_mb 2>/dev/null)"
+      if [ "$_mhhave" != "-$_mhead" ]; then
+        _persist persist.asb.dsp.ceiling_mb "-$_mhead"; _mwake=1
+      fi ;;
+  esac
+  for _k in enable gain_mb ceiling_mb comp comp_ratio_x10 comp_thresh_mb softclip postgain_x100 bass_db voice width clarity rumble_hz; do
     _v="$(getprop "persist.asb.dsp.$_k" 2>/dev/null)"
     [ -n "$_v" ] && _persist_ctx "persist.vendor.asb.dsp.$_k" "$_v"
   done
@@ -382,7 +410,7 @@ if [ "$_dsp_ok" = "1" ]; then
       # compressor does is squash dynamics that never needed squashing, which is exactly what
       # someone listening to a mastered recording hears as "processed".
       #
-      # Turning it off does NOT remove the limiter: true peaks are still caught at the
+      # Turning it off does NOT remove the limiter: sample peaks are still caught at the
       # ceiling, so this cannot clip. What it can do at high gain is make the limiter work
       # continuously instead of occasionally, which sounds worse than the compressor did.
       _dsp_comp="$(_cfg dsp_compressor)"
