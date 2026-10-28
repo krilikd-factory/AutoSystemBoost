@@ -3442,7 +3442,7 @@ asb_load_profile
 (
   _ux_w=0
   while [ "$(getprop sys.boot_completed 2>/dev/null)" != "1" ] && [ "$_ux_w" -lt 120 ]; do
-    sleep 2; _ux_w=$((_ux_w + 2))
+    sleep 1; _ux_w=$((_ux_w + 1))
   done
   command -v asb_apply_ux >/dev/null 2>&1 && asb_apply_ux >/dev/null 2>&1
 ) &
@@ -3874,7 +3874,7 @@ esac
     asb_log "post_boot_tweaks: skipped (boot completion timeout)"
     exit 0
   }
-  # Two seconds, not eight - and the poll above is now 1s, not 3s.
+  # One second, not eight - and the poll above is now 1s, not 3s.
   #
   # A timeline with an independent 1-second watcher shows boot_completed arriving at
   # 36s while post_boot_tweaks_begin was stamped at 44s. Those eight seconds were this
@@ -3885,7 +3885,7 @@ esac
   # The pause exists to let the framework settle before the module starts writing, and
   # two seconds does that: boot_completed is itself the signal that the system is up,
   # so this is a courtesy margin rather than a real dependency.
-  sleep 2
+  sleep 1
   asb_timeline_mark post_boot_tweaks_begin
   asb_log "post_boot_tweaks: begin"
   # Start the native Smart/profile governor only after Android's framework reports ready.
