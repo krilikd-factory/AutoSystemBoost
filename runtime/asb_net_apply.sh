@@ -269,6 +269,16 @@ case "$_cc" in
     ;;
 esac
 
+# --- TCP PMTUD black-hole recovery ------------------------------------------------------
+# Independent of congestion and route windows. routes-only reconnect passes must not
+# rewrite it; the full apply owns the one-shot baseline capture and exact stock restore.
+if [ -f "$MODDIR/runtime/asb_net_mtu.sh" ]; then
+  _mtu_out="$(sh "$MODDIR/runtime/asb_net_mtu.sh" apply 2>/dev/null)" || true
+  [ -n "$_mtu_out" ] && _out="$_out $_mtu_out"
+elif [ "$(_cfg net_mtu_probing)" = "on" ]; then
+  _out="$_out mtu_probing=unavailable"
+fi
+
 # --- queue discipline ----------------------------------------------------------------- This
 # one IS per-interface in the kernel, so WiFi and mobile get their own without any tricks.
 #
@@ -739,6 +749,12 @@ mkdir -p /data/adb/asb 2>/dev/null
       scan_throttle=*)              printf 'wifi_scan_throttle=ok\n' ;;
       route_tune=FAILED)          printf 'net_route_tune=failed\n' ;;
       route_tune=*)               printf 'net_route_tune=ok\n' ;;
+      mtu_probing=FAILED|mtu_probing=restore-FAILED)
+                                    printf 'net_mtu_probing=failed\n' ;;
+      mtu_probing=unavailable)      printf 'net_mtu_probing=unavailable\n' ;;
+      mtu_probing=on)               printf 'net_mtu_probing=ok\n' ;;
+      mtu_probing=stock|mtu_probing=restored)
+                                    printf 'net_mtu_probing=off\n' ;;
       radio_policy=on)            printf 'radio_policy_enable=ok\n' ;;
       radio_policy=*)             printf 'radio_policy_enable=off\n' ;;
       wifi_fallback=1)            printf 'net_handover_active=ok\n' ;;

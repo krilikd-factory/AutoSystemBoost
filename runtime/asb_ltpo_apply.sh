@@ -257,12 +257,24 @@ _ltpo_touch_live() {
   case "$_tc" in *asb_ltpo_touch.sh*) kill -0 "$_tp" 2>/dev/null ;; *) return 1 ;; esac
 }
 _ltpo_touch_start() {
-  [ -f "$MODDIR/runtime/asb_ltpo_touch.sh" ] || return 0
+  [ -f "$MODDIR/runtime/asb_ltpo_touch.sh" ] || return 1
   _ltpo_touch_live && return 0
   rm -f "$TOUCH_PID" "$TOUCH_STOP" 2>/dev/null
   nohup env MODDIR="$MODDIR" ASB_LTPO_STATE_DIR="$STATE_DIR" \
     ${ASB_LTPO_DISPLAY_DUMP:+ASB_LTPO_DISPLAY_DUMP="$ASB_LTPO_DISPLAY_DUMP"} \
     sh "$MODDIR/runtime/asb_ltpo_touch.sh" >/dev/null 2>&1 </dev/null &
+  _ts=$!
+  # Bounded startup barrier, not a worker: the watcher publishes its PID only after it
+  # has found both a touchscreen and a valid panel mode. Never hand over from the
+  # external module to a process that has already exited.
+  _tn=0
+  while [ "$_tn" -lt 10 ]; do
+    _ltpo_touch_live && return 0
+    kill -0 "$_ts" 2>/dev/null || break
+    sleep 0.1
+    _tn=$((_tn + 1))
+  done
+  _ltpo_touch_live
 }
 _ltpo_touch_stop() {
   true > "$TOUCH_STOP" 2>/dev/null
@@ -276,9 +288,9 @@ _ltpo_touch_stop() {
 case "${1:-apply}" in
   apply)
     if [ "$(_cfg ltpo_force)" = "1" ]; then
-      # Explicit ASB enable has priority. With the toggle off this branch never runs and
-      # the external module remains the sole owner by default.
-      _ltpo_external_pause
+      # Explicit ASB enable has priority only after its independent touch controller is
+      # actually live. A missing input node/getevent/panel mode must not strand the user
+      # with both touch writers stopped.
       if [ ! -f "$BLOCK" ] && _ltpo_guard; then
         _ltpo_bind_all && _log 'action=ltpo_bind result=applied owner=asb'
       elif [ -f "$ACTIVE" ]; then
@@ -286,7 +298,12 @@ case "${1:-apply}" in
       fi
       if _ltpo_framework_up; then
         _ltpo_range_open
-        _ltpo_touch_start
+        if _ltpo_touch_start; then
+          _ltpo_external_pause
+        else
+          _ltpo_external_resume
+          _log 'action=ltpo_touch result=unavailable external=fallback'
+        fi
       fi
     else
       _ltpo_touch_stop

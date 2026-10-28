@@ -71,11 +71,14 @@ trap _cleanup TERM INT HUP
 
 [ "$(_cfg ltpo_force)" = "1" ] || exit 0
 mkdir -p "$STATE_DIR" 2>/dev/null
-printf '%s\n' "$$" > "$PIDFILE" 2>/dev/null || exit 1
 rm -f "$STOPFILE" 2>/dev/null
-DEV="$(_find_touch)" || { rm -f "$PIDFILE"; exit 1; }
+# Publish ownership only after input and panel discovery both succeed. The apply owner
+# uses this PID as the handover barrier: an early failure must leave the external LTPO
+# writer running instead of pausing it and then silently losing touch switching.
+DEV="$(_find_touch)" || exit 1
 MAX="$(_max_mode)"
-case "$MAX" in ''|*[!0-9]*) rm -f "$PIDFILE"; exit 1 ;; esac
+case "$MAX" in ''|*[!0-9]*) exit 1 ;; esac
+printf '%s\n' "$$" > "$PIDFILE" 2>/dev/null || exit 1
 IDLE="$(_cfg ltpo_idle_rate)"; [ -n "$IDLE" ] || IDLE=60
 case "$IDLE" in ''|*[!0-9]*) IDLE=60 ;; esac
 [ "$IDLE" -ge 30 ] 2>/dev/null || IDLE=30

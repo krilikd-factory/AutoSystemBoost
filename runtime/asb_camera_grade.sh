@@ -186,9 +186,13 @@ asb_camera_grade_file() {
     return 0
   fi
 
+  _grade_stats="$(asb_grade_mark_path "${_dst%.graded}").stats"
+  mkdir -p "$ASB_GRADE_DIR" 2>/dev/null
+  rm -f "$_grade_stats.tmp" 2>/dev/null
   awk -v SAT="$_sat" -v AI="$_ai" -v SHARP="$_sharp" \
       -v GRAIN="$_grain_pct" -v CONTR="$_contrast_pct" -v LOW="$_low_pct" \
-      -v P1="$_p1" -v P2="$_p2" -v P3="$_p3" -v INBLK="" '
+      -v P1="$_p1" -v P2="$_p2" -v P3="$_p3" -v INBLK="" \
+      -v STATS="$_grade_stats.tmp" '
     # Multiply every number inside the bracketed list that follows key, in place.
     # from/to are 1-based element positions; 0 means "all of them".
     function scale_list(line, key, pct, from, to,    head, body, tail, n, a, i, out, v) {
@@ -302,17 +306,21 @@ asb_camera_grade_file() {
         _noise_rest = line
         while (match(_noise_rest, /"addNoiseWeight[A-Za-z0-9_]*"/)) {
           _noise_key = substr(_noise_rest, RSTART + 1, RLENGTH - 2)
+          _noise_before = line
           line = scale_num(line, _noise_key, GRAIN)
+          if (line != _noise_before) GRAIN_KEYS++
           _noise_rest = substr(_noise_rest, RSTART + RLENGTH)
         }
       }
       # Tone curve: contrast and colour depth.
       if (line ~ /[Cc]ontrastScale|SatuColorScale|sunsetSatScale/) {
+        _tone_before = line
         line = scale_num(line, "low20XcontrastScale",  CONTR)
         line = scale_num(line, "high20XcontrastScale", CONTR)
         line = scale_num(line, "faceBackContrastScale", CONTR)
         line = scale_num(line, "SatuColorScale",       CONTR)
         line = scale_num(line, "sunsetSatScale",       CONTR)
+        if (line != _tone_before) CONTRAST_RULES++
       }
       # Portrait AI - absolute, and only inside the portrait sub-blocks.
       if (P1 != "" && INBLK == "portrait") {
@@ -321,6 +329,12 @@ asb_camera_grade_file() {
         line = set_list3(line, "FaceBlendWeight",   P1, P2, P3)
       }
       print line
+    }
+    END {
+      if (STATS != "") {
+        printf "grain_keys=%d\ngrain_pct=%d\ncontrast_rules=%d\ncontrast_pct=%d\n", \
+          GRAIN_KEYS, GRAIN, CONTRAST_RULES, CONTR > STATS
+      }
     }
   ' "$_src" > "$_dst.tmp" 2>/dev/null
 
@@ -334,6 +348,7 @@ asb_camera_grade_file() {
       # Stamp the result. The hash is of the SOURCE, so a later run can tell "this came
       # from the file I am about to use" from "this came from something else".
       mv -f "$_dst.tmp" "$_dst" 2>/dev/null
+      [ ! -f "$_grade_stats.tmp" ] || mv -f "$_grade_stats.tmp" "$_grade_stats" 2>/dev/null
       _src_h="$(sha256sum "$_src" 2>/dev/null | cut -c1-16)"
       [ -n "$_src_h" ] || _src_h="nohash"
       mkdir -p "$ASB_GRADE_DIR" 2>/dev/null
@@ -343,7 +358,7 @@ asb_camera_grade_file() {
       return 0
     fi
   fi
-  rm -f "$_dst.tmp" 2>/dev/null
+  rm -f "$_dst.tmp" "$_grade_stats.tmp" 2>/dev/null
   cp -f "$_src" "$_dst" 2>/dev/null
   return 1
 }
