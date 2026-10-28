@@ -1629,6 +1629,8 @@ if (m->gpu.load_pct >= _gpu_gate) {
      * Deploy logs showed vendor PowerHAL clamps GPU max_pwrlevel to 17 (160MHz) ONLY when
      * state=LIGHT_IDLE on battery — this caused unlock→shelf scroll stutter for the 1-2
      * seconds before UI-burst escalation kicked in.
+     * fix240: the 160 MHz step was never the vendor's - it is ASB's own LIGHT_IDLE GPU
+     * ceiling on Battery (bat_light_idle_gpu=10). See the touch floor below.
      */
     /* Time-bounded, not permanent.
      *
@@ -1656,8 +1658,19 @@ if (m->gpu.load_pct >= _gpu_gate) {
      * a calm screen ran on light-idle ceilings: up to 6 s to notice on the calm cadence,
      * and the pin escalation below wants a second pinned tick on top. An OP15 day counted
      * 51 such escalations. While the panel reports touches (and 3 s after the last one) the
-     * floor is MODERATE; the governor also answers the first touch with an immediate tick. */
-    if (m->misc.screen_on && !fsm_profile_is_battery && !m->misc.camera_active &&
+     * floor is MODERATE; the governor also answers the first touch with an immediate tick.
+     *
+     * fix240: Battery too. It was left out on the reasoning that its CPU ceilings are the
+     * shell's static caps, so the state would not change a scroll. The GPU ceiling is not
+     * static: in Battery LIGHT_IDLE the governor itself writes bat_light_idle_gpu (10 % of
+     * the GPU maximum - the lowest pwrlevel, 160 MHz on SM8850), the "vendor clamp to 17"
+     * the grace above was written against. A launcher page swipe, the shade, the app drawer
+     * and every open/close animation that started from a calm screen were drawn at that
+     * step until a later tick left light idle - the first seconds of stutter on an OP15 on
+     * ColorOS 17. While a finger is on the glass Battery now draws at its own MODERATE
+     * envelope (GPU ceiling ~42 %, still under every other profile); quiet reading returns
+     * to light idle through Battery's usual down window once the touches stop. */
+    if (m->misc.screen_on && !m->misc.camera_active &&
         g_touch_last_ts > 0 && time(NULL) - g_touch_last_ts <= ASB_TOUCH_RECENT_S)
         return ASB_STATE_MODERATE;
 
@@ -1892,9 +1905,10 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
         fsm->state_changed = 1;
     }
     /* The first touch after a calm spell lifts light idle now, not after the usual two
-     * confirming ticks (fix117). Leaving MODERATE again goes through the normal down window. */
+     * confirming ticks (fix117). Leaving MODERATE again goes through the normal down window.
+     * fix240: on Battery as well - see the touch floor in fsm_desired_base. */
     else if (m->misc.screen_on && g_touch_kick && fsm->state == ASB_STATE_LIGHT_IDLE &&
-             !fsm_profile_is_battery && !m->misc.camera_active) {
+             !m->misc.camera_active) {
         fsm->state   = ASB_STATE_MODERATE;
         fsm->pending = ASB_STATE_MODERATE;
         fsm->pending_ticks = 0;
@@ -2365,7 +2379,18 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
         int ui_burst_path = (m->misc.screen_on && m->gpu.load_pct >= 12 &&
                              desired == ASB_STATE_MODERATE &&
                              fsm->state == ASB_STATE_LIGHT_IDLE);
-        if (ui_burst_path) {
+        /* fix240: a finger still on the glass while Battery sits in light idle (touches the
+         * sampled watch saw without a fresh kick) leaves it on this tick: the doubled Battery
+         * up window is for load drifting upwards, not for someone scrolling. */
+        int touch_path = (fsm_profile_is_battery && m->misc.screen_on &&
+                          !m->misc.camera_active &&
+                          desired == ASB_STATE_MODERATE &&
+                          fsm->state == ASB_STATE_LIGHT_IDLE &&
+                          g_touch_last_ts > 0 &&
+                          time(NULL) - g_touch_last_ts <= ASB_TOUCH_RECENT_S);
+        if (touch_path) {
+            window = 0;
+        } else if (ui_burst_path) {
             window = 1;
         } else if (fsm_profile_is_battery && desired > fsm->state &&
             desired >= ASB_STATE_MODERATE &&

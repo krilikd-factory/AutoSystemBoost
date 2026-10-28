@@ -3066,7 +3066,14 @@ static void asb_main_capacity_parity(asb_profile_caps_t *caps, const asb_metrics
  * starts a lift by itself, and therefore cannot bypass the off/profile/thermal/warm gates.
  * Quiet reading gets the old static Battery ceilings back after the usual three seconds;
  * Smart, Balanced and Performance are unchanged. The lift remains a percentage of each
- * slot's own hardware maximum, with no Android/ColorOS-version dependency. */
+ * slot's own hardware maximum, with no Android/ColorOS-version dependency.
+ *
+ * fix240: the premise above held for the CPU only. Battery's LIGHT_IDLE also carries the
+ * governor's own GPU ceiling of bat_light_idle_gpu (the lowest pwrlevel), and this lift never
+ * touched the GPU - so even a lifted Battery wake or tap was drawn at 160 MHz until the FSM
+ * left light idle a tick or more later. The FSM now treats a touch as interaction on Battery
+ * too (asb_fsm.h, touch floor), which also covers the taps the warm-die veto keeps from
+ * lifting. The lift itself is unchanged. */
 #define ASB_UNLOCK_TOUCH_WINDOW_MS 20000L
 #define ASB_LAUNCH_LIFT_GAP_MS 5000L
 static int    g_unlock_prev_screen = -1;  /* screen state of the last pass, -1 before the first */
