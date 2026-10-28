@@ -924,6 +924,7 @@ T_N_SCAN1="Wi-Fi scan: every 10 min"
 T_N_SCAN2="Wi-Fi scan: every 5 min (framework default)"
 T_N_SCAN3="Wi-Fi scan: every 2 min"
 T_N_SCAN4="Wi-Fi scan: unthrottled (roams sooner, costs battery)"
+T_N_SCAN5="Wi-Fi scan: every 30 min (battery rung; slower network discovery)"
 T_N_RADIO_ON="cellular/radio controls: enabled by explicit choice"
 T_N_RADIO_OFF="cellular/radio controls: off · profiles leave Android radio policy untouched"
 T_N_LEAVE_WEAK="leave Wi-Fi: on a weak signal (below %s dBm)"
@@ -2084,7 +2085,7 @@ case "$_wcc" in
      esac ;;
 esac
 _wst="$(_cfg wifi_scan_throttle)"
-# Labels match the five rungs asb_net_apply.sh actually applies. The old table predated
+# Labels match the six rungs asb_net_apply.sh actually applies. The old table predated
 # the interval-based rewrite: it called rung 0 "unthrottled" when that rung stops
 # background scanning entirely, and said nothing at all for the shipped default (2).
 case "$_wst" in
@@ -2093,6 +2094,7 @@ case "$_wst" in
   2) _f "       $T_N_SCAN2" ;;
   3) _f "       $T_N_SCAN3" ;;
   4) _f "       $T_N_SCAN4" ;;
+  5) _f "       $T_N_SCAN5" ;;
 esac
 _radio_policy="$(_cfg radio_policy_enable)"
 # Derived from the net_wifi_leave ladder (asb_lpm.sh): the old net_handover_* keys are no
