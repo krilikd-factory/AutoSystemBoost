@@ -77,7 +77,6 @@ _emit soc cpu_present "$(_read "$SYS/devices/system/cpu/present")"
 _emit soc cpu_possible "$(_read "$SYS/devices/system/cpu/possible")"
 _emit soc hardware_cpuinfo "$(sed -n 's/^Hardware[[:space:]]*:[[:space:]]*//p' "$PROC/cpuinfo" 2>/dev/null | head -n 1)"
 
-# Kernel build evidence, including the Brene-inspired uname consistency check.
 _uname_r="$(uname -r 2>/dev/null)"
 _uname_a="$(uname -srmo 2>/dev/null)"
 _proc_version="$(_read "$PROC/version")"
@@ -92,8 +91,6 @@ if [ -n "$_uname_r" ] && [ -n "$_proc_release" ]; then
 fi
 _emit kernel cmdline "$(_read "$PROC/cmdline")"
 
-# Optional SuSFS interface: exactly the three read-only show commands used by Brene.
-# Absence is normal and no conclusion about the kernel is drawn from it.
 if [ -x "$SUSFS_BIN" ]; then
   _sv="$("$SUSFS_BIN" show version 2>/dev/null)"
   _st="$("$SUSFS_BIN" show variant 2>/dev/null)"
@@ -305,7 +302,8 @@ done
 for _spec in \
   'capacity:capacity' 'status:status' 'technology:technology' 'health:health' \
   'temp_tenths_c:temp' 'current_ua:current_now' 'voltage_uv:voltage_now' \
-  'charge_full_uah:charge_full' 'charge_full_design_uah:charge_full_design'; do
+  'charge_full_uah:charge_full' 'charge_full_design_uah:charge_full_design' \
+  'cycle_count:cycle_count'; do
   _k="${_spec%%:*}"; _v="$(_read "$SYS/class/power_supply/battery/${_spec#*:}")"
   [ -n "$_v" ] && _emit battery "$_k" "$_v"
 done
@@ -317,7 +315,37 @@ for _k in profile state state_warmup smart_mode thermal cap_owner device_bounds_
   _v="$(_kv "$STATE_FILE" "$_k")"; [ -n "$_v" ] && _emit asb "$_k" "$_v"
 done
 _caps="$DATA/asb/device_caps.env"
-for _k in android_api kernel soc model device topology policy_count; do
-  _v="$(_kv "$_caps" "$_k")"; [ -n "$_v" ] && _emit asb_caps "$_k" "$_v"
+_rcaps="$DATA/asb/capabilities.env"
+_probe="$DATA/asb/install_probe.txt"
+_pc="$(_kv "$_caps" cpu_policy_count)"
+[ -n "$_pc" ] || _pc="$(_kv "$_rcaps" cpu_policy_count)"
+[ -n "$_pc" ] && _emit asb_caps cpu_policy_count "$_pc"
+for _pid in $(_kv "$_caps" cpu_policy_list); do
+  case "$_pid" in ''|*[!0-9]*) continue ;; esac
+  _emit asb_caps "policy$_pid" "hwmin=$(_kv "$_caps" "cpu_policy${_pid}_hwmin"); hwmax=$(_kv "$_caps" "cpu_policy${_pid}_hwmax"); lowest=$(_kv "$_caps" "cpu_policy${_pid}_lowest_opp"); steps=$(_kv "$_caps" "cpu_policy${_pid}_nfreq"); min_writable=$(_kv "$_caps" "cpu_policy${_pid}_min_writable")"
 done
+_gb="$(_kv "$_caps" gpu_backend)"
+case "$_gb" in
+  pwrlevel) _emit asb_caps gpu "backend=pwrlevel; levels=$(_kv "$_caps" gpu_num_pwrlevels)" ;;
+  devfreq) _emit asb_caps gpu "backend=devfreq; min=$(_kv "$_caps" gpu_devfreq_min); max=$(_kv "$_caps" gpu_devfreq_max)" ;;
+  none) _emit asb_caps gpu "backend=none" ;;
+esac
+_tz="$(_kv "$_caps" thermal_zone_count)"
+[ -n "$_tz" ] && _emit asb_caps thermal_zones "$_tz"
+for _k in uclamp battery_current cgroup_v2 memcg msm_performance camera_cpuset dsp_soundfx cpu_opp_complete; do
+  _v="$(_kv "$_rcaps" "$_k")"; [ -n "$_v" ] && _emit asb_caps "$_k" "$_v"
+done
+_v="$(_kv "$_rcaps" thermal_headroom_source)"; [ -n "$_v" ] && _emit asb_caps thermal_headroom_source "$_v"
+_v="$(_kv "$_caps" root_manager)"; [ -n "$_v" ] && _emit asb_caps root_manager "$_v"
+_cam="$(_kv "$_caps" has_odm_camera_dir)"; _aud="$(_kv "$_caps" has_vendor_audio_dir)"
+[ -n "$_cam$_aud" ] && _emit asb_caps overlay "camera=${_cam:-?}; audio=${_aud:-?}"
+_v="$(_kv "$_caps" has_wlan_txqlen)"; [ -n "$_v" ] && _emit asb_caps wlan_txqlen "$_v"
+if [ -r "$_probe" ]; then
+  _tl=''
+  for _spec in camera:camera_tunable audio:audio_tunable wifi:wifi_tunable media:media_codecs_tunable perf:perf_tunable gps:gps_tunable; do
+    _tv="$(sed -n "s/^[[:space:]]*${_spec#*:}=//p" "$_probe" 2>/dev/null | head -n 1 | tr -dc '0-9')"
+    [ -n "$_tv" ] && [ "$_tv" != 0 ] && _tl="$_tl ${_spec%%:*}"
+  done
+  _emit asb_caps tunable "${_tl# }"
+fi
 exit 0
