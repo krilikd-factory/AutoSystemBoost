@@ -166,6 +166,8 @@ if [ "$_mode" = "mirror" ]; then
       fi
       ;;
   esac
+  _mhead="$(_cfg dsp_headroom)"
+  case "$_mhead" in 15|30|50|100) _persist persist.asb.dsp.ceiling_mb "-$_mhead" ;; esac
   for _k in enable gain_mb ceiling_mb comp comp_ratio_x10 comp_thresh_mb softclip postgain_x100 bass_db voice width; do
     _v="$(getprop "persist.asb.dsp.$_k" 2>/dev/null)"
     [ -n "$_v" ] && _persist_ctx "persist.vendor.asb.dsp.$_k" "$_v"
@@ -369,7 +371,9 @@ if [ "$_dsp_ok" = "1" ]; then
       else
         _dspp inactive_reason "route_${_asb_route}_not_in_${_dsp_out}"
       fi
-      _dspp ceiling_mb -15
+      _dsp_head="$(_cfg dsp_headroom)"
+      case "$_dsp_head" in 15|30|50|100) ;; *) _dsp_head=15 ;; esac
+      _dspp ceiling_mb "-$_dsp_head"
       # Compressor, on unless the user asked for it off.
       #
       # It exists so that large gain does not simply slam into the limiter: 6:1 above -24 dBFS

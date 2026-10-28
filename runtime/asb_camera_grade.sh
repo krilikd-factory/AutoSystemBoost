@@ -71,8 +71,21 @@ _cfg_num() {
 _grain="$(_cfg_num CAMERA_GRAIN "$ASB_CAM_GRAIN_IN")"
 case "$_grain" in ''|*[!0-9]*) _grain=3 ;; esac
 [ "$_grain" -gt 10 ] 2>/dev/null && _grain=10
-# 3 is stock; 10 is roughly 3.3x the shipped grain, a clearly visible film look.
-_grain_pct=$(( _grain * 100 / 3 ))
+# 3 is stock. The upper range is intentionally stylised: level 10 is 10x the shipped
+# additive grain, not the old 3.3x ceiling that was almost invisible on strong denoisers.
+case "$_grain" in
+  0) _grain_pct=0 ;;
+  1) _grain_pct=35 ;;
+  2) _grain_pct=70 ;;
+  3) _grain_pct=100 ;;
+  4) _grain_pct=150 ;;
+  5) _grain_pct=225 ;;
+  6) _grain_pct=325 ;;
+  7) _grain_pct=450 ;;
+  8) _grain_pct=600 ;;
+  9) _grain_pct=800 ;;
+  *) _grain_pct=1000 ;;
+esac
 
 # Contrast and colour depth, from the tone-mapping block: the *contrastScale and
 # SatuColorScale knobs. Separate from the saturation above, which works on the colour
@@ -282,26 +295,16 @@ asb_camera_grade_file() {
         line = scale_list(line, "BnScale",  _sf, 0, 0)
         line = scale_list(line, "QbcScale", _sf, 0, 0)
       }
-      # Added grain.
+      # Added grain. Discover every addNoiseWeight* key instead of maintaining a model-
+      # specific name list: firmware variants add UltraWide/Front and mode-specific keys,
+      # and the old fixed list silently left those at stock even at level 10.
       if (line ~ /addNoiseWeight/) {
-        line = scale_num(line, "addNoiseWeightSuperNightWide",       GRAIN)
-        line = scale_num(line, "addNoiseWeightPeopleSuperNightWide", GRAIN)
-        line = scale_num(line, "addNoiseWeightNightSuperNightWide",  GRAIN)
-        line = scale_num(line, "addNoiseWeightWide",                 GRAIN)
-        line = scale_num(line, "addNoiseWeightPeopleWide",           GRAIN)
-        line = scale_num(line, "addNoiseWeightNightWide",            GRAIN)
-        line = scale_num(line, "addNoiseWeightMain1X",               GRAIN)
-        line = scale_num(line, "addNoiseWeightPeopleMain1X",         GRAIN)
-        line = scale_num(line, "addNoiseWeightNightMain1X",          GRAIN)
-        line = scale_num(line, "addNoiseWeightMain2X",               GRAIN)
-        line = scale_num(line, "addNoiseWeightPeopleMain2X",         GRAIN)
-        line = scale_num(line, "addNoiseWeightNightMain2X",          GRAIN)
-        line = scale_num(line, "addNoiseWeightTele1",                GRAIN)
-        line = scale_num(line, "addNoiseWeightPeopleTele1",          GRAIN)
-        line = scale_num(line, "addNoiseWeightNightTele1",           GRAIN)
-        line = scale_num(line, "addNoiseWeightTele2",                GRAIN)
-        line = scale_num(line, "addNoiseWeightPeopleTele2",          GRAIN)
-        line = scale_num(line, "addNoiseWeightNightTele2",           GRAIN)
+        _noise_rest = line
+        while (match(_noise_rest, /"addNoiseWeight[A-Za-z0-9_]*"/)) {
+          _noise_key = substr(_noise_rest, RSTART + 1, RLENGTH - 2)
+          line = scale_num(line, _noise_key, GRAIN)
+          _noise_rest = substr(_noise_rest, RSTART + RLENGTH)
+        }
       }
       # Tone curve: contrast and colour depth.
       if (line ~ /[Cc]ontrastScale|SatuColorScale|sunsetSatScale/) {

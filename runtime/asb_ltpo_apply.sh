@@ -218,45 +218,94 @@ _ltpo_range_restore() {
   _log "action=ltpo_range result=restored peak=$_op min=$_om"
 }
 
+# Explicit ASB ownership: pause only the verified external writer process, never edit or
+# disable the other module. Its bind/config stay untouched. If ASB is later switched off,
+# resume the external service only when we actually paused it.
+EXT_PAUSED="$STATE_DIR/ltpo_external.paused"
+TOUCH_PID="$STATE_DIR/ltpo_touch.pid"
+TOUCH_STOP="$STATE_DIR/ltpo_touch.stop"
+
+_ltpo_external_pause() {
+  _ltpo_external_owner || return 0
+  _ep="$(cat "$EXT_MODULES_ROOT/OnePlus15-165HZ-LTPO/.vrrd.pid" 2>/dev/null | tr -dc '0-9')"
+  [ -n "$_ep" ] || return 0
+  [ -r "/proc/$_ep/cmdline" ] || return 0
+  _ec="$(tr '\000' ' ' < "/proc/$_ep/cmdline" 2>/dev/null)"
+  case "$_ec" in
+    *OnePlus15-165HZ-LTPO/vrrd.sh*|*OnePlus15-165HZ-LTPO*/vrrd.sh*)
+      if kill -TERM "$_ep" 2>/dev/null; then
+        true > "$EXT_PAUSED" 2>/dev/null
+        _log "action=ltpo_external result=paused pid=$_ep"
+      fi
+      ;;
+  esac
+}
+_ltpo_external_resume() {
+  [ -f "$EXT_PAUSED" ] || return 0
+  _e="$EXT_MODULES_ROOT/OnePlus15-165HZ-LTPO"
+  if _ltpo_external_owner && [ -f "$_e/service.sh" ]; then
+    nohup sh "$_e/service.sh" >/dev/null 2>&1 </dev/null &
+    _log 'action=ltpo_external result=resume_requested'
+  fi
+  rm -f "$EXT_PAUSED" 2>/dev/null
+}
+_ltpo_touch_live() {
+  [ -f "$TOUCH_PID" ] || return 1
+  _tp="$(cat "$TOUCH_PID" 2>/dev/null | tr -dc '0-9')"
+  [ -n "$_tp" ] && [ -r "/proc/$_tp/cmdline" ] || return 1
+  _tc="$(tr '\000' ' ' < "/proc/$_tp/cmdline" 2>/dev/null)"
+  case "$_tc" in *asb_ltpo_touch.sh*) kill -0 "$_tp" 2>/dev/null ;; *) return 1 ;; esac
+}
+_ltpo_touch_start() {
+  [ -f "$MODDIR/runtime/asb_ltpo_touch.sh" ] || return 0
+  _ltpo_touch_live && return 0
+  rm -f "$TOUCH_PID" "$TOUCH_STOP" 2>/dev/null
+  nohup env MODDIR="$MODDIR" ASB_LTPO_STATE_DIR="$STATE_DIR" \
+    ${ASB_LTPO_DISPLAY_DUMP:+ASB_LTPO_DISPLAY_DUMP="$ASB_LTPO_DISPLAY_DUMP"} \
+    sh "$MODDIR/runtime/asb_ltpo_touch.sh" >/dev/null 2>&1 </dev/null &
+}
+_ltpo_touch_stop() {
+  true > "$TOUCH_STOP" 2>/dev/null
+  if _ltpo_touch_live; then
+    _tp="$(cat "$TOUCH_PID" 2>/dev/null | tr -dc '0-9')"
+    kill -TERM "$_tp" 2>/dev/null || true
+  fi
+  rm -f "$TOUCH_PID" 2>/dev/null
+}
+
 case "${1:-apply}" in
   apply)
-    _external=0
-    _ltpo_external_owner && _external=1
-    if [ "$(_cfg ltpo_force)" = "1" ] && [ "$_external" = "0" ] && [ ! -f "$BLOCK" ] && _ltpo_guard; then
-      if _ltpo_bind_all; then
-        _log 'action=ltpo_bind result=applied'
+    if [ "$(_cfg ltpo_force)" = "1" ]; then
+      # Explicit ASB enable has priority. With the toggle off this branch never runs and
+      # the external module remains the sole owner by default.
+      _ltpo_external_pause
+      if [ ! -f "$BLOCK" ] && _ltpo_guard; then
+        _ltpo_bind_all && _log 'action=ltpo_bind result=applied owner=asb'
+      elif [ -f "$ACTIVE" ]; then
+        _ltpo_unbind_all && _log 'action=ltpo_bind result=removed reason=guard'
+      fi
+      if _ltpo_framework_up; then
+        _ltpo_range_open
+        _ltpo_touch_start
       fi
     else
-      # Toggle off, fuse set, or an enabled external touch-LTPO owner: a bind of ours
-      # must not survive. This also cleans up an ASB bind left by the previous boot.
+      _ltpo_touch_stop
       if [ -f "$ACTIVE" ]; then
         _ltpo_unbind_all && _log 'action=ltpo_bind result=removed'
       fi
+      _ltpo_framework_up && _ltpo_range_restore
+      _ltpo_external_resume
     fi
-    # The range does not need the patch: a device without a VRR table still benefits from
-    # an open Android range, and the fuse guards mounts, not a setting. Only once the
-    # framework is up - post-fs-data runs this too, before Settings exists. With the
-    # external owner, restore the range ASB recorded instead of fighting its mode daemon.
-    if _ltpo_framework_up; then
-      if [ "$(_cfg ltpo_force)" = "1" ] && [ "$_external" = "0" ]; then
-        _ltpo_range_open
-      else
-        _ltpo_range_restore
-      fi
-    fi
-    [ "$_external" = "1" ] && [ "$(_cfg ltpo_force)" = "1" ] && \
-      _log 'action=ltpo_force result=held reason=external_OnePlus15-165HZ-LTPO'
     ;;
   remove)
-    # Uninstall path: drop whatever we own regardless of the toggle state.
+    _ltpo_touch_stop
     _ltpo_unbind_all && _log 'action=ltpo_bind result=removed reason=uninstall'
     _ltpo_framework_up && _ltpo_range_restore
+    _ltpo_external_resume
     ;;
   range)
     # Diagnostics: what the range half did. The floor key is deleted on purpose once the
-    # range is open, so an empty min is the OPEN range, not missing data. It used to print
-    # as "min= recorded=peak=... min=__unset" - the empty value and the recorded originals
-    # glued into one line, which read as corruption in field reports (fix196).
+    # range is open, so an empty min is the OPEN range, not missing data.
     _pk="$(_ltpo_get peak_refresh_rate)"
     _mn="$(_ltpo_get min_refresh_rate)"
     _rec="$( { [ -f "$RANGE_ORIG" ] && tr '\n' ' ' < "$RANGE_ORIG"; } | sed 's/ *$//' )"
@@ -266,9 +315,9 @@ case "${1:-apply}" in
     ;;
   status)
     if [ "$(_cfg ltpo_force)" != "1" ]; then
-      echo 'ltpo_off'
-    elif _ltpo_external_owner; then
-      echo 'ltpo_external_owner'
+      if _ltpo_external_owner; then echo 'ltpo_external_owner'; else echo 'ltpo_off'; fi
+    elif [ -f "$ACTIVE" ] && _ltpo_touch_live; then
+      echo 'ltpo_active_touch'
     elif [ ! -f "$MAN" ]; then
       echo 'ltpo_patch_absent'
     elif [ -f "$ACTIVE" ]; then
