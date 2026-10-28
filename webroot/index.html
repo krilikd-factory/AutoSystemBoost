@@ -1631,7 +1631,7 @@ html[data-asb-theme="light"] .lgr-chip { background: #f7f9fa; }
 .lgr-hero-sub { font-size: 11px; color: var(--text-secondary); }
 .lgr-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
   font-size: 13px; padding: 2.5px 0; }
-.lgr-k { color: var(--text-secondary); flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.lgr-k { color: var(--text-secondary); flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
 .lgr-v { font-weight: 600; color: var(--text); text-align: end; flex: 0 1 auto; max-width: 58%;
   overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .lgr-note { font-size: 12.5px; line-height: 1.45; color: var(--text-secondary); padding: 2px 0; }
@@ -3656,6 +3656,18 @@ html[data-asb-theme="light"] .log-menu {
 .log-menu-item + .log-menu-item { margin-top: 2px; }
 .log-menu-item:hover  { background: var(--surface-hover); }
 .log-menu-item:active { transform: scale(0.98); }
+/* fix242: a running session log turns its menu item into Stop - a red recording dot, and an
+ * amber second-tap confirmation so a stray tap cannot end a long capture. */
+.log-menu-item.is-recording::before {
+  content: ''; flex: 0 0 auto; width: 8px; height: 8px; margin-right: 10px; border-radius: 50%;
+  background: #ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,.18);
+  animation: logRecPulse 1.6s ease-in-out infinite;
+}
+.log-menu-item.is-recording { color: #ef4444; font-weight: 600; }
+.log-menu-item.is-armed { background: rgba(245,158,11,.14); color: #f59e0b; }
+.log-menu-item.is-armed::before { background: #f59e0b; box-shadow: 0 0 0 3px rgba(245,158,11,.2); }
+@keyframes logRecPulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .log-menu-item.is-recording::before { animation: none; } }
 
 /* The three footer copies of these buttons are replaced by the island pair. Hidden, not
    deleted: asbDebugAction and its status wiring still address them by attribute. */
@@ -5401,6 +5413,50 @@ async function debugFullDayPoll() {
   return { ok:false, info:{ error:'full_day_status_timeout' } };
 }
 
+/* fix242: an open-ended capture can be stopped from the same menu that started it. Stopping
+ * sends the recorder the signal it already handles (finalise the report, release the lock);
+ * the helper returns at once and the end is confirmed by polling, like a start. */
+async function debugFullDayStopPoll() {
+  for (let attempt = 0; attempt < 90; attempt++) {
+    await debugDelay(2000);
+    const r = await run('sh ' + MD + '/runtime/asb_debug_support.sh status 2>/dev/null');
+    const info = debugActionText(r);
+    if (r && r.errno === 0 && info.status === 'idle') return true;
+  }
+  return false;
+}
+async function asbDebugStopFullDay() {
+  if (_asbDebugActionBusy) return;
+  _asbDebugActionBusy = true;
+  try {
+    uiSound('capture');
+    const r = await run('sh ' + MD + '/runtime/asb_debug_support.sh full-day-stop 2>/dev/null');
+    const info = debugActionText(r);
+    if (!r || r.errno !== 0 || info.error) {
+      uiSound('error');
+      toast(T('dbg_log_stop_failed', 'Could not stop the session log'), 'bad');
+      return;
+    }
+    _asbLogRunning = false;
+    asbLogMenuPaint();
+    if (info.status === 'idle') { toast(T('dbg_log_not_running', 'No session log is running'), 'warn'); return; }
+    toast(T('dbg_log_stopping', 'Stopping the session log · the report is being finalised'), 'warn');
+    _asbDebugActionBusy = false;
+    const done = await debugFullDayStopPoll();
+    if (done) {
+      uiSound('success');
+      const out = info.output ? ' · ' + info.output.replace(/^\/(sdcard|storage\/emulated\/0)\//, '') : '';
+      toast(T('dbg_log_stopped', 'Session log stopped') + out, 'good');
+    } else {
+      toast(T('dbg_log_stop_slow', 'The session log is still finishing its report'), 'warn');
+    }
+  } catch (e) {
+    toast(T('dbg_log_stop_failed', 'Could not stop the session log'), 'bad');
+  } finally {
+    _asbDebugActionBusy = false;
+  }
+}
+
 async function asbDebugAction(action) {
   if (_asbDebugActionBusy) return;
   const allowed = action === 'diag' || action === 'full-day';
@@ -5440,8 +5496,10 @@ async function asbDebugAction(action) {
       uiSound('success');
       toast(T('dbg_diag_saved', 'asbdiag saved') + (done.info.path ? ': ' + done.info.path : ''), 'good');
     } else if (info.status === 'already_running') {
+      _asbLogRunning = true;
+      asbLogMenuPaint();
       toast(T('dbg_log_running', 'Session log is already running') + (info.pid ? ' · PID ' + info.pid : '') +
-          (info.output ? ' · ' + info.output.replace(/^\/(sdcard|storage\/emulated\/0)\//, '') + ' — ' + T('dbg_log_running_hint', 'delete this folder to start a new one') : ''), 'warn');
+          (info.output ? ' · ' + info.output.replace(/^\/(sdcard|storage\/emulated\/0)\//, '') : '') + ' — ' + T('dbg_log_running_hint', 'open this menu again to stop it'), 'warn');
     } else if (info.status === 'started') {
       const started = await debugFullDayPoll();
       if (!started.ok) {
@@ -10128,6 +10186,7 @@ function asbToggleLogMenu(ev) {
   m.style.top  = (r.bottom / z + 6) + 'px';
   b.setAttribute('aria-expanded', 'true');
   if (typeof uiSound === 'function') uiSound('option');
+  asbLogMenuSync();
 }
 
 /* ----- Session log report (fix194) ------------------------------------------------
@@ -10201,7 +10260,7 @@ function parseLogReport(txt) {
       if (kv.started) d.hist.push({ started: kv.started, night: kv.night || '', drain: kv.drain || '',
         jank: kv.jank || '', cpu: kv.cpu || '', clamps: kv.clamps || '', device: kv.device || '',
         rom: kv.rom || '', mod: kv.mod || '', elapsed: +kv.elapsed || 0,
-        onPct: kv.on_pct || '', offMin: +kv.off_min || 0 });
+        onPct: kv.on_pct || '', offMin: +kv.off_min || 0, dm: kv.dm || '' });
     } else if (tag === 'cfg') {
       if (kv.key) d.cfg[kv.key] = kv.value || '';
     } else {
@@ -10309,6 +10368,16 @@ function logReportTips(d, all) {
     const jwv = { pct: String(jwake.pct), ord: String(jwake.ord), who: String(jwake.top || '') };
     tips.push({ ic: 'info', key: jwv.who ? 'lr_tip_jank_wake' : 'lr_tip_jank_wake_wh', vars: jwv });
   }
+  /* fix242: SystemUI missing frames in nearly every screen-on interval, whatever app is in
+     front, is a status bar that never stops redrawing (the owner's Battery day: 81 of 81
+     intervals, 13.8 % of its frames, with the network-speed meter on). The capture read the
+     per-second sources at its start, so the card names the one that is actually on. */
+  const sdraw = s.sysuidraw || null;
+  if (logReportSysuiSteady(sdraw)) {
+    const sv = { n: String(sdraw.intv), of: String(sdraw.of), pct: String(sdraw.pct) };
+    tips.push({ ic: 'info', key: sdraw.netspeed === '1' ? 'lr_tip_sysui_netspeed' :
+      sdraw.clocksec === '1' ? 'lr_tip_sysui_clocksec' : sdraw.livewp === '1' ? 'lr_tip_sysui_livewp' : 'lr_tip_sysui_other', vars: sv });
+  }
   /* fix222: the red background-traffic line had no advice next to it (the owner's Smart
      day: 214.7 MiB with the screen off, radio wakelocks holding the modem). When the
      saving switch exists and is off, the card names it; an old capture without the cfg
@@ -10366,7 +10435,7 @@ function logReportTips(d, all) {
        across every field capture, on every device. Past 8 ms a tick is doing work it
        should not - that is the "send the log" case - and an outright spin (10 s of CPU
        an hour) still trips on the absolute figure alone. */
-    const ms = String(cost.cpu_msh) + ' ms';
+    const ms = logReportT('lr_ms', '{n} ms', { n: String(cost.cpu_msh) });
     const _wk = +cost.wakes_h || 0;
     const _msPerWake = _wk > 0 ? (+cost.cpu_msh || 0) / _wk : 99;
     if ((+cost.cpu_msh || 0) <= 2500 || _msPerWake <= 8) tips.push({ ic: 'ok', key: 'lr_tip_cost_ok', vars: { ms: ms } });
@@ -10380,6 +10449,18 @@ function logReportTips(d, all) {
     tips.push({ ic: hasEvidence ? 'ok' : 'info', key: hasEvidence ? 'lr_tip_ok' : 'lr_tip_wait', vars: {} });
   }
   return all ? tips : tips.slice(0, 6);
+}
+function logReportSysuiSteady(sd) {
+  return !!(sd && (+sd.of || 0) >= 10 && (+sd.intv || 0) * 10 >= (+sd.of || 0) * 8);
+}
+/* fix242: how long a full battery lasts at the measured pace - the figure a user actually
+ * plans with. Whole hours past three hours; the pace already includes the mix of the day. */
+function logReportFullCharge(pctph) {
+  const p = +pctph || 0;
+  if (!(p > 0)) return '—';
+  let min = 6000 / p;
+  if (min >= 180) min = Math.round(min / 60) * 60;
+  return logReportDur(Math.min(min, 99 * 60));
 }
 /* Screen-on drain has no honest one-device-fits-all red line. In particular, 10%/h is
  * roughly ten hours of screen time, not a defect by itself. Keep the verdict tied to the
@@ -10406,6 +10487,8 @@ function logReportAnalyze(d) {
   const thermal = s.thermal || null, throttle = s.throttle || null, cost = s.asbcost || null;
   const crash = s.crash || null, idle = s.idlemax || null, aod = s.aod || null;
   const audio = s.audio || null, chg = s.chg || null, sradio = s.sradio || null;
+  const drain = s.drain || null, sdraw = s.sysuidraw || null;
+  const perHour = T('lr_per_hour', '%/h');
   const total = Math.max(elapsed, cover ? (+cover.on_min || 0) + (+cover.off_min || 0) : 0, 1);
   const gamingMin = (d.phases || []).reduce(function (n, p) {
     return n + (p.name === 'gaming' ? Math.max(0, +p.min || 0) : 0);
@@ -10439,19 +10522,40 @@ function logReportAnalyze(d) {
   const screenLed = scenarioFamily === 'screen_on';
   if (screenLed && scr && (+scr.on_min || 0) >= 30 && (+scr.on_pctph || 0) > 0) {
     const v = +scr.on_pctph;
-    verdict('drain', logReportScreenOnDrainState(v, scenario), v.toFixed(1) + '%/h',
+    verdict('drain', logReportScreenOnDrainState(v, scenario), v.toFixed(1) + perHour,
       'lr_sum_drain_on', { min: logReportDur(scr.on_min) }, 'screen_on_ledger');
+    drainDone = true;
+  }
+  /* fix242: a day of mixed use is judged as a whole. Its screen-off minutes are mostly
+     short pauses between uses, and their few whole-percent steps read as 3 %/h "idle" (the
+     owner's Battery day) - a verdict about idle the capture cannot carry. The budget is the
+     screen-on and screen-off budgets blended by the day's own screen-on share. */
+  if (!drainDone && scenario === 'mixed' && drain && cover && (+drain.hours || 0) >= 1 && (+drain.total_drop || 0) >= 3) {
+    const share = Math.max(0, Math.min(100, +cover.on_pct || 0)) / 100;
+    const v = +drain.pctph || 0;
+    const good = share * 8 + (1 - share), bad = share * 15 + (1 - share) * 1.5;
+    verdict('drain', v > bad ? 'problem' : v <= good ? 'good' : 'normal', v.toFixed(1) + perHour,
+      'lr_sum_drain_mixed', { h: logReportDur(Math.round((+drain.hours || 0) * 60)), on: String(+cover.on_pct || 0),
+        est: logReportFullCharge(v) }, 'whole_discharge_mixed');
     drainDone = true;
   }
   if (!drainDone && night && (+night.dur_min || 0) >= 120) {
     const v = +night.pctph || 0, deep = Math.max(0, 100 - (+night.awake || 0));
-    verdict('drain', v > 1.5 ? 'problem' : v <= .8 ? 'good' : 'normal', v.toFixed(1) + '%/h',
+    verdict('drain', v > 1.5 ? 'problem' : v <= .8 ? 'good' : 'normal', v.toFixed(1) + perHour,
       'lr_sum_drain_night', { min: logReportDur(night.dur_min), deep: String(deep) }, 'longest_idle_chain');
     drainDone = true;
   }
-  if (!drainDone && scr && (+scr.off_min || 0) >= 30 && (+scr.off_pctph || 0) > 0) {
+  /* fix242: idle without the music - screen-off playback is work, not idle. */
+  const idleOnly = !!(scr && (+scr.idle_min || 0) >= 30 && scr.idle_pctph !== undefined);
+  if (!drainDone && idleOnly && (+scr.idle_pctph || 0) > 0) {
+    const v = +scr.idle_pctph;
+    verdict('drain', v > 1.5 ? 'problem' : v <= 1 ? 'good' : 'normal', v.toFixed(1) + perHour,
+      'lr_sum_drain_idle', { min: logReportDur(scr.idle_min) }, 'screen_off_idle_ledger');
+    drainDone = true;
+  }
+  if (!drainDone && !idleOnly && scr && (+scr.off_min || 0) >= 30 && (+scr.off_pctph || 0) > 0) {
     const v = +scr.off_pctph;
-    verdict('drain', v > 1.5 ? 'problem' : v <= 1 ? 'good' : 'normal', v.toFixed(1) + '%/h',
+    verdict('drain', v > 1.5 ? 'problem' : v <= 1 ? 'good' : 'normal', v.toFixed(1) + perHour,
       'lr_sum_drain_off', { min: logReportDur(scr.off_min) }, 'screen_off_ledger');
     drainDone = true;
   }
@@ -10487,7 +10591,8 @@ function logReportAnalyze(d) {
     verdict('asb', 'problem', String(crash.asb), 'lr_sum_asb_crash', {}, 'asb_native_crash');
   else if (cost) {
     const costly = (+cost.cpu_msh || 0) > 10000 || ((+cost.cpu_msh || 0) > 2500 && (msPerWake === null || msPerWake > 8));
-    verdict('asb', costly ? 'problem' : 'normal', msPerWake === null ? String(cost.cpu_msh || 0) + ' ms/h' : msPerWake.toFixed(1) + ' ms/wake',
+    verdict('asb', costly ? 'problem' : 'normal', msPerWake === null ? logReportT('lr_ms_h', '{n} ms/h', { n: String(cost.cpu_msh || 0) }) :
+      logReportT('lr_ms_wake', '{n} ms/wake', { n: msPerWake.toFixed(1) }),
       'lr_sum_asb_cost', { ms: String(cost.cpu_msh || 0), per: msPerWake === null ? '—' : msPerWake.toFixed(1) }, 'overhead_not_net_benefit');
   } else verdict('asb', 'unknown', '—', 'lr_sum_asb_unknown', {}, 'no_overhead_samples');
 
@@ -10514,6 +10619,10 @@ function logReportAnalyze(d) {
     chain(70, 'fact', 'lr_chain_wake', { pct: String(jwake.pct), ord: String(jwake.ord), who: String(jwake.top || '') });
   if (audio && (+audio.spk_min || 0) >= 30 && (+audio.pctph || 0) >= 5)
     chain(45, 'fact', 'lr_chain_audio', { min: logReportDur(audio.spk_min), pct: String(audio.pctph) });
+  if (logReportSysuiSteady(sdraw))
+    chain(68, 'fact', 'lr_chain_sysui', { n: String(sdraw.intv), of: String(sdraw.of), pct: String(sdraw.pct) });
+  if (scr && (+scr.music_min || 0) >= 20 && (+scr.off_min || 0) > 0)
+    chain(40, 'fact', 'lr_chain_music_off', { off: logReportDur(scr.off_min), music: logReportDur(scr.music_min) });
   if (cost && ((+cost.cpu_msh || 0) > 10000 || ((+cost.cpu_msh || 0) > 2500 && (msPerWake === null || msPerWake > 8))))
     chain(95, 'fact', 'lr_chain_cost', { ms: String(cost.cpu_msh), wakes: String(cost.wakes_h || 0), per: msPerWake === null ? '—' : msPerWake.toFixed(1) });
   chains.sort(function (a, b) { return b.weight - a.weight; });
@@ -10523,6 +10632,7 @@ function logReportAnalyze(d) {
     lr_tip_crashes: 88, lr_tip_awake_aod: 86, lr_tip_awake_who: 84, lr_tip_awake_alarm: 84,
     lr_tip_awake_hold: 84, lr_tip_awake: 80, lr_tip_sradio: 82, lr_tip_night_modem: 78,
     lr_tip_night: 76, lr_tip_jank_bad: 72, lr_tip_jank_wake: 70, lr_tip_jank_wake_wh: 70,
+    lr_tip_sysui_netspeed: 68, lr_tip_sysui_clocksec: 68, lr_tip_sysui_livewp: 66, lr_tip_sysui_other: 30,
     lr_tip_wl_enable: 64, lr_tip_app: 62, lr_tip_audio: 45, lr_tip_ltpo: 15
   };
   const actions = logReportTips(d, true).filter(function (t) { return t.ic !== 'ok' && weights[t.key]; })
@@ -10592,7 +10702,9 @@ function logReportRow(k, v, warn) {
   a.textContent = k;
   const b = document.createElement('span');
   b.className = 'lgr-v' + (warn ? ' lgr-warn' : '');
-  b.textContent = v;
+  /* fix242: "3.3%/ч" wrapped after the slash and left the unit alone on the next line;
+     a word joiner keeps a rate unit whole. */
+  b.textContent = String(v).replace(/%\//g, '%/\u2060');
   r.appendChild(a);
   r.appendChild(b);
   return r;
@@ -10686,13 +10798,6 @@ function closeReportPage() {
 const DEVICE_SECTION_ORDER = [
   ['firmware', 'dev_sec_firmware', 'Firmware and ROM'],
   ['soc', 'dev_sec_soc', 'Device and SoC'],
-  ['kernel', 'dev_sec_kernel', 'Kernel build'],
-  ['susfs', 'dev_sec_susfs', 'SuSFS interface'],
-  ['kernel_external', 'dev_sec_kernel_external', 'External kernel / UV evidence'],
-  ['kernel_config', 'dev_sec_kernel_config', 'Kernel configuration'],
-  ['kernel_features', 'dev_sec_kernel_features', 'Custom kernel features'],
-  ['metamodule', 'dev_sec_metamodule', 'Metamodule'],
-  ['kernel_runtime', 'dev_sec_kernel_runtime', 'Live kernel facilities'],
   ['cpu_policy', 'dev_sec_cpu_policy', 'CPU frequency policies'],
   ['gpu', 'dev_sec_gpu', 'GPU and devfreq'],
   ['memory', 'dev_sec_memory', 'Memory'],
@@ -10700,6 +10805,13 @@ const DEVICE_SECTION_ORDER = [
   ['system', 'dev_sec_system', 'System'],
   ['asb', 'dev_sec_asb', 'ASB runtime'],
   ['asb_caps', 'dev_sec_asb_caps', 'ASB device capabilities'],
+  ['kernel', 'dev_sec_kernel', 'Kernel build'],
+  ['kernel_features', 'dev_sec_kernel_features', 'Custom kernel features'],
+  ['susfs', 'dev_sec_susfs', 'SuSFS interface'],
+  ['metamodule', 'dev_sec_metamodule', 'Metamodule'],
+  ['kernel_external', 'dev_sec_kernel_external', 'External kernel / UV evidence'],
+  ['kernel_runtime', 'dev_sec_kernel_runtime', 'Live kernel facilities'],
+  ['kernel_config', 'dev_sec_kernel_config', 'Kernel configuration'],
   ['meta', 'dev_sec_meta', 'Collection metadata']
 ];
 /* Reverse the feature groups from the original collector presentation while keeping each
@@ -10732,6 +10844,8 @@ function deviceFallbackLabel(key) {
     .replace(/\b\w/g, function (c) { return c.toUpperCase(); });
 }
 function deviceLabel(sec, key) {
+  if (sec === 'asb_caps' && /^policy\d+$/.test(key)) return T('dev_asb_caps_policy', 'Frequency table') + ' · ' + key;
+  if (sec === 'cpu_policy' && /^policy\d+$/.test(key)) return T('dev_cpu_cluster', 'Cluster') + ' · ' + key;
   return T('dev_' + sec + '_' + key, deviceFallbackLabel(key));
 }
 function deviceHero(label, value, sub) {
@@ -10751,12 +10865,203 @@ function deviceValueClass(sec, key, value) {
   if (sec === 'kernel_external' && key === 'status' && /conflict|error|unsafe/.test(v)) return ' dev-bad';
   return '';
 }
-function deviceDisplayValue(sec, key, value) {
+/* fix242: human-readable values. The collector keeps raw kernel units (kHz, kB, tenths of a
+ * degree, the /proc/uptime and /proc/loadavg lines) so the JSON export stays exact; the page
+ * turns them into words and units. Every value is still inserted with textContent. */
+function deviceNum(v) {
+  const m = String(v == null ? '' : v).match(/-?\d+(?:\.\d+)?/);
+  return m ? parseFloat(m[0]) : NaN;
+}
+function deviceKv(v) {
+  const o = {};
+  String(v || '').split(/;\s*/).forEach(function (p) {
+    const i = p.indexOf('=');
+    if (i > 0) o[p.slice(0, i).trim()] = p.slice(i + 1).trim();
+  });
+  return o;
+}
+function deviceFreqKhz(v) {
+  const k = deviceNum(v);
+  if (!(k > 0)) return '—';
+  return k >= 1000000 ? (k / 1000000).toFixed(2) + '\u00a0GHz' : Math.round(k / 1000) + '\u00a0MHz';
+}
+function deviceFreqHz(v) {
+  const h = deviceNum(v);
+  if (!(h > 0)) return '—';
+  return h >= 1e9 ? (h / 1e9).toFixed(2) + '\u00a0GHz' : Math.round(h / 1e6) + '\u00a0MHz';
+}
+function deviceSizeKb(v) {
+  const k = deviceNum(v);
+  if (!(k >= 0)) return String(v);
+  return k >= 1048576 ? (k / 1048576).toFixed(1) + '\u00a0GB' : Math.round(k / 1024) + '\u00a0MB';
+}
+function deviceDuration(sec) {
+  const s = Math.max(0, Math.floor(+sec || 0));
+  const dd = Math.floor(s / 86400), hh = Math.floor((s % 86400) / 3600), mm = Math.floor((s % 3600) / 60);
+  const fill = function (k, fb, n) { return T(k, fb).split('{n}').join(String(n)); };
+  return (dd ? dd + ' ' + T('unit_d', 'd') + ' ' : '') + (dd || hh ? fill('lr_h', '{n} h', hh) + ' ' : '') +
+    fill('lr_min', '{n} min', mm);
+}
+function deviceCpuCount(d) {
+  let n = 0;
+  String(deviceVal(d, 'soc', 'cpu_online')).split(',').forEach(function (r) {
+    const m = r.trim().match(/^(\d+)(?:-(\d+))?$/);
+    if (m) n += (m[2] !== undefined ? +m[2] : +m[1]) - +m[1] + 1;
+  });
+  return n;
+}
+function deviceCpuList(v) {
+  const n = String(v || '').split(/[\s,]+/).filter(function (x) { return /^\d+$/.test(x); }).map(Number).sort(function (a, b) { return a - b; });
+  if (!n.length) return String(v || '—');
+  const out = []; let lo = n[0], hi = n[0];
+  for (let i = 1; i <= n.length; i++) {
+    if (i < n.length && n[i] === hi + 1) { hi = n[i]; continue; }
+    out.push(lo === hi ? String(lo) : lo + '–' + hi);
+    if (i < n.length) { lo = hi = n[i]; }
+  }
+  return out.join(', ');
+}
+function deviceYesNo(v) {
+  const x = String(v).trim().toLowerCase();
+  if (x === '1' || x === 'yes' || x === 'y') return T('dev_yes', 'yes');
+  if (x === '0' || x === 'no' || x === 'n') return T('dev_no', 'no');
+  return String(v);
+}
+function deviceFill(key, fallback, vars) {
+  let t = T(key, fallback);
+  Object.keys(vars || {}).forEach(function (k) { t = t.split('{' + k + '}').join(String(vars[k])); });
+  return t;
+}
+function deviceBatteryMa(v) {
+  const x = deviceNum(v);
+  if (!isFinite(x)) return String(v);
+  return Math.round(Math.abs(x) > 10000 ? x / 1000 : x) + '\u00a0mA';
+}
+function deviceBatteryMah(v) {
+  const x = deviceNum(v);
+  if (!(x > 0)) return String(v);
+  return Math.round(x > 100000 ? x / 1000 : x) + '\u00a0mAh';
+}
+function deviceBatteryWear(d) {
+  const full = deviceNum(deviceVal(d, 'battery', 'charge_full_uah'));
+  const design = deviceNum(deviceVal(d, 'battery', 'charge_full_design_uah'));
+  if (!(full > 0 && design > 0)) return null;
+  return Math.round(full * 100 / design);
+}
+function deviceDisplayValue(sec, key, value, d) {
   if ((sec === 'meta' && key === 'generated_epoch' || sec === 'firmware' && key === 'build_date') && /^\d{9,}$/.test(value)) {
     const dt = new Date(parseInt(value, 10) * 1000);
     if (!isNaN(dt.getTime())) return dt.toLocaleString(ASB_LANG || undefined) + ' (' + value + ')';
   }
+  if (value === '—') return value;
+  if (sec === 'system' && key === 'uptime') {
+    const p = String(value).trim().split(/\s+/), up = parseFloat(p[0]), idle = parseFloat(p[1]);
+    const n = d ? deviceCpuCount(d) : 0;
+    if (!(up > 0)) return value;
+    if (n > 0 && idle >= 0)
+      return deviceFill('dev_uptime_fmt', '{dur} · CPU idle {idle}%', { dur: deviceDuration(up),
+        idle: String(Math.max(0, Math.min(100, Math.round(idle * 100 / (up * n))))) });
+    return deviceDuration(up);
+  }
+  if (sec === 'system' && key === 'loadavg') {
+    const p = String(value).trim().split(/\s+/);
+    if (p.length < 3) return value;
+    let out = deviceFill('dev_load_fmt', '{l1} · {l5} · {l15} (1 / 5 / 15 min)', { l1: p[0], l5: p[1], l15: p[2] });
+    const t = (p[3] || '').match(/^(\d+)\/(\d+)$/);
+    if (t) out += ' · ' + deviceFill('dev_load_tasks', '{run} of {all} threads running', { run: t[1], all: t[2] });
+    return out;
+  }
+  if (sec === 'memory') return deviceSizeKb(value);
+  if (sec === 'battery') {
+    if (key === 'temp_tenths_c') { const x = deviceNum(value); return isFinite(x) ? (x / 10).toFixed(1) + '\u00a0°C' : value; }
+    if (key === 'current_ua') return deviceBatteryMa(value);
+    if (key === 'voltage_uv') { const x = deviceNum(value); return x > 0 ? (x > 100000 ? x / 1e6 : x > 100 ? x / 1000 : x).toFixed(2) + '\u00a0V' : value; }
+    if (key === 'charge_full_uah' || key === 'charge_full_design_uah') return deviceBatteryMah(value);
+    if (key === 'capacity') { const x = deviceNum(value); return isFinite(x) ? x + '%' : value; }
+  }
+  if (sec === 'cpu_policy') {
+    const k = deviceKv(value);
+    if (!k.cpus) return value;
+    return deviceFill('dev_cpu_fmt', 'CPU {cpus} · {gov} · now {cur} · limit {min}–{max} · hardware {hmin}–{hmax}', {
+      cpus: deviceCpuList(k.cpus), gov: k.governor || '—', cur: deviceFreqKhz(k.current_khz),
+      min: deviceFreqKhz(k.scaling_min_khz), max: deviceFreqKhz(k.scaling_max_khz),
+      hmin: deviceFreqKhz(k.hardware_min_khz), hmax: deviceFreqKhz(k.hardware_max_khz) });
+  }
+  if (sec === 'gpu') {
+    const k = deviceKv(value);
+    if (!('governor' in k)) return value;
+    let busy = '—';
+    const b = String(k.busy || '').trim().split(/\s+/).map(Number);
+    if (b.length >= 2 && b[1] > 0) busy = Math.round(b[0] * 100 / b[1]) + '%';
+    else if (b.length >= 1 && isFinite(b[0]) && String(k.busy).trim() !== '') busy = Math.round(b[0]) + '%';
+    return deviceFill('dev_gpu_fmt', '{gov} · now {cur} · range {min}–{max} · busy {busy}', {
+      gov: k.governor || '—', cur: deviceFreqHz(k.current_hz), min: deviceFreqHz(k.min_hz), max: deviceFreqHz(k.max_hz), busy: busy });
+  }
+  if (sec === 'asb_caps') {
+    if (/^policy\d+$/.test(key)) {
+      const k = deviceKv(value);
+      return deviceFill('dev_cap_policy_fmt', '{min}–{max} · {steps} steps · floor control: {floor}', {
+        min: deviceFreqKhz(k.lowest || k.hwmin), max: deviceFreqKhz(k.hwmax), steps: k.steps || '—', floor: deviceYesNo(k.min_writable || '?') });
+    }
+    if (key === 'gpu') {
+      const k = deviceKv(value);
+      if (k.backend === 'pwrlevel') return deviceFill('dev_cap_gpu_pwr', 'power levels · {n} steps', { n: k.levels || '—' });
+      if (k.backend === 'devfreq') return deviceFill('dev_cap_gpu_devfreq', 'devfreq · {min}–{max}', { min: deviceFreqHz(k.min), max: deviceFreqHz(k.max) });
+      return T('dev_cap_gpu_none', 'not controllable');
+    }
+    if (key === 'thermal_zones') return deviceFill('dev_cap_zones', '{n} zones', { n: value });
+    if (key === 'root_manager') return ({ ksu: 'KernelSU', magisk: 'Magisk', apatch: 'APatch' })[value] || value;
+    if (key === 'overlay') {
+      const k = deviceKv(value);
+      return deviceFill('dev_cap_overlay_fmt', 'camera: {cam} · audio: {aud}', { cam: deviceYesNo(k.camera), aud: deviceYesNo(k.audio) });
+    }
+    if (key === 'tunable') {
+      const names = String(value).trim().split(/\s+/).filter(Boolean).map(function (x) { return T('dev_sub_' + x, x); });
+      return names.length ? names.join(' · ') : T('dev_no', 'no');
+    }
+    if (/^(uclamp|battery_current|cgroup_v2|memcg|msm_performance|camera_cpuset|dsp_soundfx|cpu_opp_complete|wlan_txqlen|thermal_headroom_source)$/.test(key))
+      return deviceYesNo(value);
+  }
   return value;
+}
+function deviceInfoOverview(d) {
+  const rows = [];
+  const pol = (d.sections && d.sections.cpu_policy) || {};
+  const keys = Object.keys(pol);
+  let hmax = 0;
+  keys.forEach(function (k) { const x = deviceNum(deviceKv(pol[k]).hardware_max_khz); if (x > hmax) hmax = x; });
+  const cores = deviceCpuCount(d);
+  if (cores > 0 || keys.length)
+    rows.push([T('dev_ov_cpu', 'Processor'), deviceFill('dev_ov_cpu_fmt', '{cores} cores · {clusters} clusters · up to {max}',
+      { cores: cores || '—', clusters: keys.length || '—', max: deviceFreqKhz(hmax) })]);
+  const mt = deviceVal(d, 'memory', 'MemTotal'), ma = deviceVal(d, 'memory', 'MemAvailable');
+  if (mt !== '—') {
+    let mv = deviceFill('dev_ov_mem_fmt', '{avail} free of {total}', { avail: ma !== '—' ? deviceSizeKb(ma) : '—', total: deviceSizeKb(mt) });
+    const st = deviceNum(deviceVal(d, 'memory', 'SwapTotal')), sf = deviceNum(deviceVal(d, 'memory', 'SwapFree'));
+    if (st > 0 && sf >= 0) mv += ' · ' + deviceFill('dev_ov_swap_fmt', 'zRAM {used} used', { used: deviceSizeKb(st - sf) });
+    rows.push([T('dev_ov_memory', 'Memory'), mv]);
+  }
+  const cap = deviceVal(d, 'battery', 'capacity');
+  if (cap !== '—') {
+    const parts = [deviceDisplayValue('battery', 'capacity', cap, d)];
+    const tmp = deviceVal(d, 'battery', 'temp_tenths_c');
+    if (tmp !== '—') parts.push(deviceDisplayValue('battery', 'temp_tenths_c', tmp, d));
+    const wear = deviceBatteryWear(d);
+    if (wear !== null) parts.push(deviceFill('dev_bat_wear_fmt', '{pct}% of design capacity', { pct: wear }));
+    const cyc = deviceVal(d, 'battery', 'cycle_count');
+    if (cyc !== '—') parts.push(deviceFill('dev_bat_cycles_fmt', '{n} cycles', { n: cyc }));
+    rows.push([T('dev_ov_battery', 'Battery'), parts.join(' · ')]);
+  }
+  const up = deviceVal(d, 'system', 'uptime');
+  if (up !== '—') rows.push([T('dev_ov_uptime', 'Running for'), deviceDuration(parseFloat(up))]);
+  const root = deviceVal(d, 'asb_caps', 'root_manager');
+  if (root !== '—') {
+    let rv = deviceDisplayValue('asb_caps', 'root_manager', root, d);
+    const sv = deviceVal(d, 'kernel_features', 'susfs_version');
+    if (sv !== '—' && sv !== 'not exposed') rv += ' · SuSFS ' + sv;
+    rows.push([T('dev_ov_root', 'Root'), rv]);
+  }
+  return rows;
 }
 function deviceInfoRender(d) {
   const body = _el('deviceBody');
@@ -10792,6 +11097,12 @@ function deviceInfoRender(d) {
   }
 
   let shown = 0;
+  const ov = deviceInfoOverview(d);
+  if (ov.length) {
+    const card = logReportSec(T('dev_sec_overview', 'At a glance'));
+    ov.forEach(function (r) { card.appendChild(logReportRow(r[0], r[1], false)); shown++; });
+    body.appendChild(card);
+  }
   DEVICE_SECTION_ORDER.forEach(function (spec) {
     const sec = d.sections[spec[0]];
     if (!sec) return;
@@ -10802,15 +11113,32 @@ function deviceInfoRender(d) {
     const card = logReportSec(T(spec[1], spec[2]));
     keys.forEach(function (key) {
       const raw = String(sec[key]);
-      const value = deviceDisplayValue(spec[0], key, raw);
+      const value = deviceDisplayValue(spec[0], key, raw, d);
       const row = logReportRow(deviceLabel(spec[0], key), value, false);
       const v = row.querySelector('.lgr-v');
       if (v) {
-        if (raw.length > 48) v.classList.add('dev-long');
+        if (raw.length > 48 && value === raw) v.classList.add('dev-long');
         const cls = deviceValueClass(spec[0], key, raw);
         if (cls) v.classList.add(cls.trim());
       }
       card.appendChild(row); shown++;
+      if (spec[0] === 'battery' && key === 'technology') {
+        const tn = logReportNote(T('dev_battery_tech_note', 'The kernel reports only the chemistry class. Silicon-carbon (Si/C) batteries are lithium-ion cells too: the anode material is not published through sysfs, so Li-ion is also correct for them.'));
+        tn.classList.add('dev-evidence'); card.appendChild(tn);
+      }
+      if (spec[0] === 'battery' && key === 'charge_full_design_uah') {
+        const wear = deviceBatteryWear(d);
+        if (wear !== null) {
+          const wr = logReportRow(T('dev_battery_wear', 'Capacity vs design'), wear + '%', false);
+          const wv = wr.querySelector('.lgr-v');
+          if (wv && wear < 80) wv.classList.add('dev-warn');
+          card.appendChild(wr); shown++;
+        }
+      }
+      if (spec[0] === 'system' && key === 'loadavg') {
+        const ln = logReportNote(T('dev_load_note', 'Load average counts tasks that run or wait, including those waiting on storage; on Android it often exceeds the number of cores without anything being wrong.'));
+        ln.classList.add('dev-evidence'); card.appendChild(ln);
+      }
     });
     body.appendChild(card);
   });
@@ -10986,6 +11314,8 @@ function logReportAnalysisT(key, vars) {
     lr_sum_drain_on: 'Screen-on phases over {min}; charging excluded.',
     lr_sum_drain_night: 'Longest idle chain: {min}; deep sleep {deep}%.',
     lr_sum_drain_off: 'All eligible screen-off phases over {min}.',
+    lr_sum_drain_idle: 'Screen-off idle without music over {min}.',
+    lr_sum_drain_mixed: 'Whole discharge over {h}, screen on {on}% of the time: about {est} from a full charge at this pace.',
     lr_sum_need_time: 'Needs a longer matching discharge window.',
     lr_sum_thermal_detail: 'CPU above 45 °C: {warm}; throttling periods: {clamps}.',
     lr_sum_no_sensor: 'No usable thermal samples in this capture.',
@@ -11009,6 +11339,8 @@ function logReportAnalysisT(key, vars) {
     lr_chain_wake: 'Wake jank {pct}% versus {ord}% over the day → interaction windows need attention; average FPS alone would hide this.',
     lr_chain_audio: 'Speaker playback lasted {min} at {pct}%/h → this phase accounts for part of screen-on drain.',
     lr_chain_cost: 'ASB used {ms} ms/h over {wakes} wakeups/h → {per} ms per wake → above the usual overhead budget.',
+    lr_chain_sysui: 'SystemUI missed frames in {n} of {of} screen-on intervals ({pct}% of its frames) whatever app was open → something in the status bar redraws all the time.',
+    lr_chain_music_off: 'Screen off for {off}, of which {music} was music → the screen-off verdict counts only the idle part; playback is work, not idle drain.',
     lr_no_actions: 'No priority change is supported by this capture. Keep settings unchanged and collect a comparable capture.',
     lr_no_actions_early: 'No settings recommendation yet: let the capture accumulate evidence.',
     lr_trend_matched: 'Same device, ROM and scenario family; durations pass the minimum. Still an observation, not a controlled A/B test.',
@@ -11045,7 +11377,11 @@ function logReportTipText(tip) {
     lr_tip_cost_ok: 'ASB itself is cheap: {ms} of CPU per hour.',
     lr_tip_cost_hi: 'ASB used {ms} of CPU per hour - more than usual; worth sending this log to the developer.',
     lr_tip_smart_help: 'Smart proved extra headroom helps {n} of your apps and keeps it just for them.',
-    lr_tip_ltpo: 'Tip: "{set}" in Settings lowers the refresh rate on video and saves battery.'
+    lr_tip_ltpo: 'Tip: "{set}" in Settings lowers the refresh rate on video and saves battery.',
+    lr_tip_sysui_netspeed: 'SystemUI stutters in {n} of {of} screen-on intervals and the network-speed meter in the status bar is on - it redraws every second. Turn it off in the status-bar settings and compare the stutter in the next capture.',
+    lr_tip_sysui_clocksec: 'SystemUI stutters in {n} of {of} screen-on intervals and the status-bar clock shows seconds - it redraws every second. Turn the seconds off and compare the stutter in the next capture.',
+    lr_tip_sysui_livewp: 'SystemUI stutters in {n} of {of} screen-on intervals and a live wallpaper is set - it redraws whenever it is visible. Try a static wallpaper and compare the stutter in the next capture.',
+    lr_tip_sysui_other: 'SystemUI stutters in {n} of {of} screen-on intervals although the usual per-second sources are off - look for an animated icon, a floating overlay or a module hooking SystemUI.'
   }[tip.key] || '', tip.vars);
 }
 
@@ -11169,9 +11505,14 @@ function logReportRender(d) {
     g.className = 'lgr-heros';
     let heroes = 0;
     if (drain) {
+      /* fix242: the pace turned into the number people plan with - how long a full charge
+         lasts at this day's mix. Only from an hour of discharge and three percent. */
+      const dsub = [];
+      if ((+drain.ma || 0) > 0) dsub.push(String(drain.ma) + ' mA');
+      if ((+drain.hours || 0) >= 1 && (+drain.total_drop || 0) >= 3)
+        dsub.push(logReportT('lr_drain_est', '≈{h} from 100%', { h: logReportFullCharge(drain.pctph) }));
       g.appendChild(logReportHero('📉', T('lr_overall', 'Average drain'),
-        String(drain.pctph) + T('lr_per_hour', '%/h'),
-        ((+drain.ma || 0) > 0 ? String(drain.ma) + ' mA' : ''), false));
+        String(drain.pctph) + T('lr_per_hour', '%/h'), dsub.join(' · '), false));
       heroes++;
     }
     if (night) {
@@ -11202,11 +11543,24 @@ function logReportRender(d) {
       if ((+scr.on_min || 0) > 0)
         s.appendChild(logReportRow(T('lr_drain_on', 'Screen-on drain'), String(scr.on_pctph) + T('lr_per_hour', '%/h'),
           logReportScreenOnDrainState(scr.on_pctph, analysis.scenario) === 'problem'));
-      if ((+scr.off_min || 0) > 0)
-        /* fix211: a red figure needs a window that can hold it. One battery-percent step
-           over 12 idle minutes reads as 5 %/h - noise, not a finding. Under half an hour
-           the row stays neutral. */
-        s.appendChild(logReportRow(T('lr_drain_off', 'Screen-off drain (all idle)'), String(scr.off_pctph) + T('lr_per_hour', '%/h'), (+scr.off_pctph || 0) > 1.5 && (+scr.off_min || 0) >= 30));
+      /* fix211: a red figure needs a window that can hold it. One battery-percent step
+         over 12 idle minutes reads as 5 %/h - noise, not a finding. Under half an hour
+         the row stays neutral.
+         fix242: the row is idle alone when the digest splits it (music with the screen off
+         is playback, not idle), and red needs a quiet stretch of an hour: a day of short
+         pauses between uses carries the tail of every use into its "idle". */
+      const quietMin = night ? (+night.dur_min || 0) : 0;
+      const idleSplit = (+scr.idle_min || 0) > 0 && scr.idle_pctph !== undefined;
+      if (idleSplit)
+        s.appendChild(logReportRow(T('lr_drain_idle', 'Screen-off drain (idle, no music)'), String(scr.idle_pctph) + T('lr_per_hour', '%/h'),
+          (+scr.idle_pctph || 0) > 1.5 && (+scr.idle_min || 0) >= 30 && quietMin >= 60));
+      else if ((+scr.off_min || 0) > 0)
+        s.appendChild(logReportRow(T('lr_drain_off', 'Screen-off drain (all idle)'), String(scr.off_pctph) + T('lr_per_hour', '%/h'),
+          (+scr.off_pctph || 0) > 1.5 && (+scr.off_min || 0) >= 30 && quietMin >= 60));
+      if ((+scr.off_min || 0) >= 30 && quietMin < 60)
+        s.appendChild(logReportNote(quietMin > 0 ?
+          logReportT('lr_drain_short_note', 'The screen-off time here is short pauses between uses (the longest quiet stretch: {min}); their drain carries the tail of each use. A reliable idle figure needs an hour or more of quiet.', { min: logReportDur(quietMin) }) :
+          T('lr_drain_short_note0', 'The screen-off time here is short pauses between uses (none reached 15 minutes); their drain carries the tail of each use. A reliable idle figure needs an hour or more of quiet.')));
       /* fix210: say it in the sheet itself, right under the two rows - the Monitor tiles
          count only calm stretches of an hour or more, these rows cover the whole
          capture. Different windows, both figures right. */
@@ -11219,10 +11573,15 @@ function logReportRender(d) {
       s.appendChild(logReportNote(logReportT('lr_gauge_note',
         'The current sensor on this phone reads about {x}× low ({w} checks) - every mA figure here is a lower bound; the %/h figures from the battery counter are exact.',
         { x: String(gauge.mult || ''), w: String(gauge.windows || '') })));
-    if (idle) s.appendChild(logReportRow(T('lr_idle', 'Worst idle awake share'), String(idle.awake) + '%', (+idle.awake || 0) > 15 && (+idle.dur_min || 0) >= 20));
+    /* fix242: a five-minute pause fully awake says nothing - the row needs the same twenty
+       minutes as the advice before it is shown at all. */
+    if (idle && (+idle.dur_min || 0) >= 20)
+      s.appendChild(logReportRow(T('lr_idle', 'Worst idle awake share'),
+        logReportT('lr_idle_fmt', '{pct}% over {min}', { pct: String(idle.awake), min: logReportDur(idle.dur_min) }), (+idle.awake || 0) > 15));
     if (radio) s.appendChild(logReportRow(T('lr_radio', 'Mobile data'), String(radio.mib) + ' MiB'));
-    if (audio) {
+    if (audio && (+audio.spk_min || 0) >= 10) {
       /* Speaker playback is the one background sound that shows up in drain.
+         fix242: a minute of a video's sound is no playback habit - from ten minutes on.
          fix220: red follows the advice rule - 27 %/h over 6 minutes is one loud video,
          not a habit; the colour appears from half an hour, like the tip below. */
       s.appendChild(logReportRow(T('lr_audio_spk', 'Speaker playback'),
@@ -11332,15 +11691,19 @@ function logReportRender(d) {
     const s = logReportSec(T('lr_sec_phases', '📊 Phase breakdown'));
     const rows = d.phases.map(function (p) {
       let cell;
+      /* fix242: the gauge steps in whole percent - a rate from one step over a few minutes
+         ("−1% · 11.0%/h" for a five-minute gap) is resolution, not drain. */
+      const lowRes = p.drop > 0 && (p.drop < 2 || p.min < 20);
       if (p.drop < 0) cell = '+' + String(-p.drop) + '%';
       else if (p.drop === 0) cell = '0%';
+      else if (lowRes) cell = '−' + String(p.drop) + '%';
       else cell = '−' + String(p.drop) + '% · ' + (p.pctph.toFixed(1) + T('lr_per_hour', '%/h'))
         /* fix218: a break after the slash orphaned the unit on its own line
            ("−28% · 11.4%/" / "ч"). The word joiner forbids it; the cell may still
            wrap at the "·" before the number. */
         .replace(/\//g, '/\u2060');
       return [T('lr_ph_' + p.name, p.name), logReportDur(p.min),
-              { txt: cell, warn: logReportScreenOnDrainState(p.pctph,
+              { txt: cell, warn: !lowRes && logReportScreenOnDrainState(p.pctph,
                 p.name === 'gaming' ? 'screen_on_heavy' : p.name === 'audio_spk_scr' ? 'audio_speaker' : 'screen_on_light') === 'problem' }];
     });
     s.appendChild(logReportTable(
@@ -11380,6 +11743,11 @@ function logReportRender(d) {
           'At the wakes the most janky: {pkg} ({pct}% of its wake frames).',
           { pkg: String(jwake.top), pct: String(jwake.top_pct) })));
     }
+    const sdraw = d.sections.sysuidraw || null;
+    if (logReportSysuiSteady(sdraw))
+      s.appendChild(logReportRow(T('lr_sysui_draw', 'SystemUI redraw'),
+        logReportT('lr_sysui_draw_fmt', 'janky in {n} of {of} intervals · {pct}% of its frames', {
+          n: String(sdraw.intv), of: String(sdraw.of), pct: String(sdraw.pct) }), true));
     /* fix220: where the day's stutter sits - by moment (the wake phase, bluetooth audio,
        ordinary use) and by the governor's own state. A janky LIGHT_IDLE next to a calm
        MODERATE is the signature of ceilings too tight for the moment, not of a slow phone. */
@@ -11423,7 +11791,12 @@ function logReportRender(d) {
     body.appendChild(s);
   }
   /* fix200: what Smart has already figured out - records and the smoothness learner. */
-  if (smart) {
+  /* fix242: the learner card belongs to Smart days. Its records meter only while Smart is
+     the active profile, so on a Battery capture the counters are yesterday's - shown, they
+     read as part of this day. A capture that switched to Smart for half an hour keeps it. */
+  const _smRan = d.profs.some(function (p) { return p.name === 'smart' && (p.onMin + p.offMin) >= 30; });
+  const _smDay = String(meta.profile || '') === 'smart' || !String(meta.profile || '') || _smRan;
+  if (smart && _smDay) {
     const s = logReportSec(T('lr_sec_smart', '🧠 Smart learner'));
     s.appendChild(logReportRow(T('lr_sm_ctx', 'Situations with a verdict'), String(smart.ctxlearn || 0)));
     s.appendChild(logReportRow(T('lr_sm_watching', 'Apps watched for stutter'), String(smart.watching || 0)));
@@ -11438,9 +11811,6 @@ function logReportRender(d) {
        fix222: but a capture that merely STARTED elsewhere and then ran Smart for two
        hours (the owner's debug13: started on Battery, switched to Smart mid-day) is not
        "a capture under a different profile" - say it only when Smart never really ran. */
-    const _smRan = d.profs.some(function (p) { return p.name === 'smart' && (p.onMin + p.offMin) >= 30; });
-    if (String(meta.profile || '') && String(meta.profile) !== 'smart' && !_smRan)
-      s.appendChild(logReportNote(T('lr_sm_smart_only', 'Usage records learn only while the Smart profile is active - this capture ran under a different one.')));
     body.appendChild(s);
   }
   /* fix200: ASB's own bill - the answer to "and what does the module itself eat?". */
@@ -11482,8 +11852,11 @@ function logReportRender(d) {
        from deep sleep), then the scheduled wakeups (alarms) that started them. */
     if (d.wlt.length) {
       s.appendChild(logReportNote(T('lr_wlt_head', 'Most frequent partial holds (CPU kept awake):')));
+      /* fix242: *launch* is the system's own hold while an app starts and *vibrator* the
+         haptics - counts of the day's use, not a culprit; they are never painted red. */
       d.wlt.slice(0, 4).forEach(function (w) {
-        s.appendChild(logReportRow(w.tag, logReportT('lr_times', '{n} times', { n: String(w.n) }), w.n >= 60));
+        s.appendChild(logReportRow(w.tag, logReportT('lr_times', '{n} times', { n: String(w.n) }),
+          w.n >= 60 && !/^\*(launch|vibrator)\*$/.test(String(w.tag))));
       });
     }
     if (d.wla.length) {
@@ -11539,8 +11912,8 @@ function logReportRender(d) {
     if (thermal) {
       const g = document.createElement('div');
       g.className = 'lgr-heros';
-      g.appendChild(logReportHero('🎯', 'CPU', String(thermal.cpu) + '°', '', (+thermal.cpu || 0) >= 45));
-      g.appendChild(logReportHero('🧊', T('lr_temp_surf', 'Skin'), String(thermal.surf) + '°', '', (+thermal.surf || 0) >= 40));
+      g.appendChild(logReportHero('🎯', 'CPU', String(thermal.cpu) + '°', T('lr_peak', 'peak'), (+thermal.cpu || 0) >= 45));
+      g.appendChild(logReportHero('🧊', T('lr_temp_surf', 'Skin'), String(thermal.surf) + '°', T('lr_peak', 'peak'), (+thermal.surf || 0) >= 40));
       s.appendChild(g);
     }
     /* fix213 (audit 8.3): peaks are the headline; the DURATION hot is the cost. The rows
@@ -11572,7 +11945,13 @@ function logReportRender(d) {
           return (names[bk[0]] || bk[0]) + ' ' + bk[1];
         }).join(' · ');
       }
-      s.appendChild(logReportNote(logReportT('lr_clamp_some', 'Throttling periods: {n} ({owner})', { n: String(throttle.clamps), owner: own }), true));
+      /* fix242: clamps without minutes of heat are the protection doing its job (a Battery
+         day: 6 short periods, 0 minutes above 45 °C) - red is kept for clamps that came
+         with sustained heat. */
+      const hotMin = heat ? Math.max(+heat.warm_min || 0, +heat.skin_min || 0) : 0;
+      s.appendChild(logReportNote(logReportT('lr_clamp_some', 'Throttling periods: {n} ({owner})', { n: String(throttle.clamps), owner: own }), hotMin >= 10));
+      if (heat && hotMin < 10)
+        s.appendChild(logReportNote(T('lr_clamp_brief_note', 'No sustained heat came with them: brief clamps are the protection doing its job.')));
     } else {
       s.appendChild(logReportNote(T('lr_clamp_none', 'No thermal throttling detected.')));
     }
@@ -11601,7 +11980,9 @@ function logReportRender(d) {
           logReportT('lr_trend_vs', 'vs {when}', { when: String(h0.started) }), n > w));
       };
       if (night) trow('lr_trend_night', 'Night: {was} %/h \u2192 {now} %/h', h0.night, +night.pctph);
-      if (drain) trow('lr_trend_day', 'Day drain: {was} %/h \u2192 {now} %/h', h0.drain, +drain.pctph);
+      /* fix242: the day-drain figure changed its method (zero-step phases now count); an
+         older history line used the inflated one and would fake an improvement. */
+      if (drain && String(h0.dm || '') === '2') trow('lr_trend_day', 'Day drain: {was} %/h \u2192 {now} %/h', h0.drain, +drain.pctph);
       if (jank) trow('lr_trend_jank', 'Jank: {was}% \u2192 {now}%', h0.jank, +jank.pct);
       if (trows > 0) {
         s.appendChild(logReportNote(logReportAnalysisT('lr_trend_matched')));
@@ -11627,7 +12008,43 @@ function logReportRender(d) {
   }
 }
 
+let _asbLogRunning = false;
+let _asbLogStopArmed = 0;
+function asbLogMenuPaint() {
+  const item = document.getElementById('logMenuSession');
+  const label = document.getElementById('logMenuSessionLabel');
+  if (!item || !label) return;
+  const armed = _asbLogRunning && _asbLogStopArmed && Date.now() - _asbLogStopArmed < 4000;
+  item.classList.toggle('is-recording', _asbLogRunning);
+  item.classList.toggle('is-armed', !!armed);
+  label.removeAttribute('data-i18n');
+  label.textContent = !_asbLogRunning ? T('dbg_log_btn', 'Session log') :
+    (armed ? T('dbg_log_stop_confirm', 'Tap again to stop') : T('dbg_log_stop_btn', 'Stop session log'));
+}
+async function asbLogMenuSync() {
+  _asbLogStopArmed = 0;
+  asbLogMenuPaint();
+  try {
+    const r = await run('sh ' + MD + '/runtime/asb_debug_support.sh status 2>/dev/null');
+    const info = debugActionText(r);
+    _asbLogRunning = !!(r && r.errno === 0 && (info.status === 'running' || info.status === 'starting'));
+  } catch (e) { _asbLogRunning = false; }
+  asbLogMenuPaint();
+}
 function asbLogMenuPick(action) {
+  if (action === 'full-day' && _asbLogRunning) {
+    if (!_asbLogStopArmed || Date.now() - _asbLogStopArmed >= 4000) {
+      _asbLogStopArmed = Date.now();
+      asbLogMenuPaint();
+      if (typeof uiSound === 'function') uiSound('option');
+      setTimeout(asbLogMenuPaint, 4100);
+      return;
+    }
+    _asbLogStopArmed = 0;
+    asbCloseLogMenu();
+    asbDebugStopFullDay();
+    return;
+  }
   asbCloseLogMenu();
   /* The report is read-only - it re-reads files the capture already wrote - so it is NOT
      behind the debug-build gate that protects STARTING a capture. */
@@ -12787,11 +13204,19 @@ function paintStockLive(stockKv = null) {
       .map(([, v]) => { const x = parseFloat(v); return x > 1000 ? x / 1000 : x; }).filter(v => v > 0 && v < 120);
     return a.length ? a.reduce((p, q) => p + q, 0) / a.length : 0;
   })();
+  /* fix242: the trend follows the CPU zones, and falls back to the hottest die zone and then
+     to the battery when a snapshot carries no CPU zone. One series never mixes sources: a
+     source change starts a fresh window. The tile showed a bare dash whenever it had no
+     verdict yet and no CPU reading in hand - on Battery, where every Monitor visit starts a
+     fresh page and the verdict needs two reads ten seconds apart, that was most glances. */
+  const trendSrc = cpuMean > 0 ? 'cpu' : hotT > 0 ? 'die' : batT > 0 ? 'bat' : '';
+  const trendVal = cpuMean > 0 ? cpuMean : hotT > 0 ? hotT : (batTRaw > 100 ? batTRaw / 10 : batTRaw);
   const sampleMs = n(kv.tsms) || sampleTs;
-  if (sampleMs && cpuMean > 0) {
+  if (sampleMs && trendVal > 0) {
+    if (_stockTrendSamples.length && (_stockTrendSamples[0].s || 'cpu') !== trendSrc) _stockTrendSamples = [];
     const last = _stockTrendSamples[_stockTrendSamples.length - 1];
     if (!last || last.t !== sampleMs) {
-      _stockTrendSamples.push({ t: sampleMs, c: cpuMean });
+      _stockTrendSamples.push({ t: sampleMs, c: trendVal, s: trendSrc });
       _stockTrendSamples = _stockTrendSamples.filter(x => sampleMs - x.t <= 120000);
       const span = sampleMs - _stockTrendSamples[0].t;
       if (_stockTrendSamples.length >= 2 && span >= 8000) {
@@ -12806,9 +13231,9 @@ function paintStockLive(stockKv = null) {
       _stockTrendSave();
     }
   }
-  let trend = '\u2026';
+  let trend = trendVal > 0 ? Math.round(trendVal) + '\u00b0 \u2026' : '\u2026';
   let trendCls = 'smart-banner-value';
-  let trendTip = '';
+  let trendTip = trendVal > 0 ? T('stock_trend_wait', 'Measuring: the direction appears after two readings ten seconds apart') : '';
   if (_stockTrendLast) {
     const sl = _stockTrendLast.slope;
     if (sl > 0.5) { trend = '\u2191 ' + T('lv_trend_up', 'warming'); trendCls += ' cap-clamp'; }
@@ -12817,7 +13242,7 @@ function paintStockLive(stockKv = null) {
     trendTip = T('lvi_trend_rate', '%1 \u00b0C per minute over the last %2 s')
       .replace('%1', (sl >= 0 ? '+' : '\u2212') + Math.abs(sl).toFixed(1))
       .replace('%2', String(Math.round(_stockTrendLast.span / 1000)));
-  } else if (!cpuT) {
+  } else if (!trendVal) {
     trend = '\u2014';
   }
   const uptimeSec = Math.floor(parseFloat(kv.uptime || '0'));
@@ -14043,8 +14468,8 @@ setTimeout(() => pollLive(false), 1500);
   <button class="log-menu-item" role="menuitem" type="button" onclick="asbLogMenuPick('diag')">
     <span data-i18n="dbg_diag_btn">asbdiag</span>
   </button>
-  <button class="log-menu-item" role="menuitem" type="button" onclick="asbLogMenuPick('full-day')">
-    <span data-i18n="dbg_log_btn">Session log</span>
+  <button class="log-menu-item" id="logMenuSession" role="menuitem" type="button" onclick="asbLogMenuPick('full-day')">
+    <span id="logMenuSessionLabel" data-i18n="dbg_log_btn">Session log</span>
   </button>
   <button class="log-menu-item" role="menuitem" type="button" onclick="asbLogMenuPick('report')">
     <span data-i18n="lr_menu">Log report</span>
