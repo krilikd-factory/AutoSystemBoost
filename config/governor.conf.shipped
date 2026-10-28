@@ -1,4 +1,4 @@
-# CONFIG_SHAPE=66f9ee5529a8
+# CONFIG_SHAPE=b551d19170eb
 # Fingerprint of every option list and slider range in the WebUI. asb_lint.sh compares
 # against it: if the shape moves and this does not, a stored value may now mean something
 # different from what the user chose, and the schema number in install.sh needs bumping
@@ -377,6 +377,11 @@ wifi_country=auto
 # Initial TCP windows per route: auto|off|conservative|aggressive How many segments may go out,
 # and be advertised, before the first ACK.
 net_route_tune=auto
+
+# TCP PMTUD black-hole recovery: stock|on. Opt-in. on writes tcp_mtu_probing=1,
+# which probes only after a suspected black hole; it does not force a smaller MSS
+# on healthy routes. The original 0/1/2 is restored on stock and uninstall.
+net_mtu_probing=stock
 
 # Spread received network packets across cores: stock|little|all
 #   RPS/RFS. Stock keeps every packet on the core the interrupt landed on, which caps

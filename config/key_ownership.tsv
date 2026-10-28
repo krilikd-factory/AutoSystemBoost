@@ -128,6 +128,7 @@ net_screen_off_lte|advanced|webui_sensitive
 net_lte_light|advanced|webui_sensitive
 wifi_country|advanced|webui_sensitive
 net_route_tune|advanced|webui_sensitive
+net_mtu_probing|advanced|webui_sensitive
 net_rps|advanced|webui_sensitive
 net_txqueue|advanced|webui_sensitive
 wifi_scan_throttle|advanced|webui_sensitive
