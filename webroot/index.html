@@ -4730,6 +4730,7 @@ const TECH_ICON_PATHS = {
      off. Not an eye: this kills event reporting and dumps, not visibility. */
   mmfeed: '<path d="M3.5 3.5l17 17"/><path d="M6 20v-6"/><path d="M12 20v-9"/><path d="M18 20v-4"/>',
   dsp: '<path d="M4 19V5M9.3 19V9M14.7 19V4M20 19V11"/><circle cx="4" cy="11" r="1.8"/><circle cx="9.3" cy="14" r="1.8"/><circle cx="14.7" cy="8" r="1.8"/><circle cx="20" cy="15" r="1.8"/>',
+  headroom: '<path d="M4 17h16M6 13h12M8 9h8M10 5h4"/><path d="M12 3v14M8 11l4 4 4-4"/>',
   ear_safe: '<path d="M8 10a4 4 0 1 1 7.7 1.5c-.8 1.6-2.2 2.4-2.9 3.7-.5 1-.6 2.3-1.9 2.8-1.6.6-3-.5-3.4-2"/><path d="M10.4 10.2a1.9 1.9 0 0 1 3.3 1.3"/><path d="M17.6 4.2l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z"/>',
   audio_profile: '<path d="M7 4v3.2M7 11.6v8.4M12 4v8.2M12 17.4v2.6M17 4v5.2M17 14.6v5.4"/><circle cx="7" cy="9.4" r="1.9"/><circle cx="12" cy="15.2" r="1.9"/><circle cx="17" cy="12.4" r="1.9"/>',
   dac: '<rect x="6" y="6" width="12" height="12" rx="2.4"/><path d="M9 3.2v1.6M12 3.2v1.6M15 3.2v1.6M9 19.2v1.6M12 19.2v1.6M15 19.2v1.6"/><path d="M8.4 12h1.3l1-2.2 1.5 4.4 1-2.2h2.4"/>',
@@ -6475,6 +6476,7 @@ const SNAP_KEYS = [
   'dsp_voice',
   'dsp_width',
   'dsp_compressor',
+  'dsp_headroom',
   'dsp_effect_abi',
   'sustained_temp_enter',
   'sustained_temp_mode',
@@ -6526,6 +6528,8 @@ const CFG_ITEMS = [
     desc:'Needs DSP Loudness above. For voices that sound thin or shrill on the phone speaker - the usual complaint when comparing a video with the same clip on an iPhone. Two broad bands move together: body at 350 Hz goes up (+0.5 dB per step) and the 3 kHz edge goes down (-0.6 dB per step), so level 10 is +5 / -6 dB. Bass Boost works at 90 Hz, mostly below what a phone speaker can play; this band is where a speaker still has output, so it is what makes a voice sound fuller. Runs before the limiter and cannot clip. Start at 4-6; on headphones less is usually enough - use DSP Outputs to keep it on the speaker only.' },
   { key:'dsp_width', type:'range', def:'0', min:0, max:10, step:1, name:'DSP Stereo Width',
     desc:'Needs DSP Loudness above. Makes the sound wider and more spacious: the difference between the left and right channels is raised above 180 Hz, 10% per step, so level 10 is twice as wide. What sits in the centre - vocals, dialogue, a mono recording - is not touched at all, and the bass stays centred so it keeps its punch. Strongest on headphones and Bluetooth; the two speakers of a phone sit close together, so there the effect is smaller. Start at 3-5. Runs before the limiter and cannot clip. Stereo tracks only.' },
+  { key:'dsp_headroom', type:'seg', def:'15', opts:['15','30','50','100'], name:'DSP True-Peak Headroom',
+    desc:'Final true-peak ceiling: 15 = -0.15 dB, 30 = -0.30 dB, 50 = -0.50 dB, 100 = -1.00 dB. More headroom leaves extra margin for inter-sample peaks after Bluetooth or DAC reconstruction. It lowers only the final ceiling, not the selected gain, bass, voice or width. Applies live through the existing DSP engine.' },
   { key:'dsp_compressor', type:'seg', def:'on', opts:['on','off'], name:'DSP Compressor',
     desc:'On suits large gain: it holds the body of a track down so peaks stay clean. Off suits modest gain (+2..+4 dB), where the compressor only squashes dynamics that never needed it. The true-peak limiter stays either way, so off cannot clip - but at high gain it makes the limiter work constantly, which sounds worse. Does nothing while DSP Loudness is off.' },
   // --- Audio ---,
@@ -6540,7 +6544,7 @@ const CFG_ITEMS = [
   { key:'CAMERA_CONTRAST', type:'range', def:'3', min:0, max:10, step:1, name:'Contrast & Colour Depth',
     desc:'The tone curve’s contrast and saturation scales. This is a different axis from Camera Grade: that one changes the colour matrix, this one gives darker shadows and richer colour. 3 is stock; 10 reaches 170% for a clearly visible result. Reboot to apply.' },
   { key:'CAMERA_GRAIN', type:'range', def:'3', min:0, max:10, step:1, name:'Film Grain',
-    desc:'The camera adds grain back after denoising, because a perfectly smooth image reads as plastic. 3 is stock, 0 removes it, and 10 reaches roughly 3.3× the shipped grain for a deliberate film look. Reboot to apply.' },
+    desc:'The camera adds grain back after denoising, because a perfectly smooth image reads as plastic. 3 is stock, 0 removes it, and 10 reaches 10× the shipped grain for a deliberately extreme film look. Every addNoiseWeight* key present in the firmware tuning is patched, including mode-specific variants. High levels are intentionally visible and can look coarse in shadows. Reboot to apply.' },
   { key:'CAMERA_PORTRAIT', type:'range', def:'0', min:0, max:6, step:1, name:'Portrait AI',
     desc:'Neural processing on faces and skin, which ships switched off — the weights are all zero. Raising it restores detail that the denoiser flattens; level 6 reaches the safe blend-weight ceiling. Start at 1–2, because high levels are intentionally stylised. Portrait modes only; reboot to apply.' },
   { key:'CAMERA_LOWLIGHT', type:'range', def:'0', min:0, max:10, step:1, name:'Macro & Low-light Sharpening',
@@ -6646,7 +6650,7 @@ const CFG_ITEMS = [
     desc:'Lets ASB manage OxygenOS toggles (RAM expansion, Adaptive Battery, Low-Heat). OFF = untouched (OOS may re-enable RAM expansion on reboot). ON = forces RAM expansion OFF every boot.' },
   { key:'athena_service', type:'seg', def:'stock', stock:'stock', opts:['stock','off'], name:'Athena Background Killer' },
   { key:'ltpo_force', type:'bool', def:'0', stock:'0', name:'Force LTPO Refresh',
-    desc:'LTPO panels can fall to their lowest refresh rate when nothing on the screen moves; OxygenOS ships parts of that path switched off. This patch takes your device\u2019s OWN refresh-rate table (oplus_vrr_config.json), flips only the idle frame-drop switches the OEM left disabled, and binds the result over the stock file - nothing is copied from another model, and the stock file itself is never modified.\n\nThe patch is prepared while the module installs, and this switch decides whether it is applied: off by default, and turning it on takes effect after a reboot. If the installer found no refresh-rate table on your device, this switch does nothing - the install log says which.\n\nOn a table the OEM already ships fully enabled the switch also does nothing: binding an identical file would be a mount with no effect.\n\nThe switch also opens the Android side of the range, and that part applies at once, without a reboot: no refresh floor, and the peak set to the highest mode this panel reports (165 Hz on the OnePlus 15). The low end - the panel\u2019s own idle rates below 60 Hz - is the table\u2019s job, because Android does not list those rates at all. What was set before is recorded and restored when you switch off. The OEM\u2019s own cap on the render rate (90 Hz on some builds) is left alone.' },
+    desc:'LTPO panels can fall to their lowest refresh rate when nothing on the screen moves; OxygenOS ships parts of that path switched off. This patch takes your device\u2019s OWN refresh-rate table (oplus_vrr_config.json), flips only the idle frame-drop switches the OEM left disabled, and binds the result over the stock file - nothing is copied from another model, and the stock file itself is never modified.\n\nThe patch is prepared while the module installs, and this switch decides whether it is applied: off by default, and turning it on takes effect after a reboot. If the installer found no refresh-rate table on your device, this switch does nothing - the install log says which.\n\nOn a table the OEM already ships fully enabled the switch also does nothing: binding an identical file would be a mount with no effect.\n\nThe switch also opens the Android side of the range, and that part applies at once, without a reboot: no refresh floor, and the peak set to the highest mode this panel reports (165 Hz on the OnePlus 15). The low end - the panel\u2019s own idle rates below 60 Hz - is the table\u2019s job, because Android does not list those rates at all. What was set before is recorded and restored when you switch off. The OEM\u2019s own cap on the render rate (90 Hz on some builds) is left alone.\n\nIntegrated interaction control uses blocking touchscreen events, not polling: the panel maximum is restored on touch, and after two quiet seconds ASB selects 60 Hz so the patched ADFR path can idle down. Camera and game states are kept active, video keeps its own owner, and previous range values are restored exactly on handback. If OnePlus15-165HZ-LTPO is installed, ASB stays off and yields by default; explicitly enabling this switch pauses only its verified writer and gives ASB priority. Switching ASB off requests a clean external-service resume.' },
   { key:'ltpo_video', type:'bool', def:'0', stock:'0', name:'Lowest Refresh for Video',
     desc:'While a video plays, the panel stays at the rate the system picked for everything else - on this phone family 90 Hz for a 30 fps stream, which is three refreshes per frame where two would do.\n\nWith this on, ASB lowers the peak refresh rate to the smallest panel mode that is an exact multiple of the video (60 Hz for 30 and 60 fps), so motion stays judder-free. It acts only when: the screen is on, audio is playing, a video layer asks for 30 or 60 fps, no layer asks for high smoothness, and the screen has not been touched for 3 seconds.\n\nThe first touch restores the previous value at once, as do the end of playback, the video closing and the screen turning off - so scrolling and animations run at full rate. The honest catch: the very first frames after that touch (about 0.1-0.2 s) can still be at the lower rate. 24, 25 and 50 fps video has no lower judder-free mode and is left alone. Applies immediately.' },
   { key:'phantom_procs', type:'seg', def:'relaxed', stock:'stock', opts:['stock','relaxed','strict'], name:'Background Process Limit',
@@ -6717,7 +6721,7 @@ const CFG_CAT = {
   heavy_prime_escape:'battery', prime_escape_burst_s:'battery', prime_escape_rest_s:'battery', wakelock_fitness:'battery',
   bt_a2dp_offload:'audio', bat_suppress_gaming:'battery',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
-  dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_width:'audio', dsp_compressor:'audio', dsp_outputs:'audio', audio_remove_volume_limit:'audio', audio_resampler:'audio', media_vol_steps:'audio', bt_absvol_mode:'audio', bt_link_stability:'audio',
+  dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_width:'audio', dsp_compressor:'audio', dsp_headroom:'audio', dsp_outputs:'audio', audio_remove_volume_limit:'audio', audio_resampler:'audio', media_vol_steps:'audio', bt_absvol_mode:'audio', bt_link_stability:'audio',
   CAMERA_LEVEL:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_PORTRAIT:'camera', CAMERA_CONTRAST:'camera', CAMERA_GRAIN:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   cool_gaming:'battery',
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery',
@@ -6783,7 +6787,7 @@ const CFG_GROUP_OF = {
   camera_hold_enable:'camera', bt_a2dp_offload:'audio',
   night_quiet_enable:'battery', bat_suppress_gaming:'battery', log_level:'ui', lsposed_verbose:'ui', phantom_procs:'ui',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
-  dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_width:'audio', dsp_compressor:'audio', dsp_outputs:'audio', audio_remove_volume_limit:'audio', audio_resampler:'audio', media_vol_steps:'audio',
+  dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_width:'audio', dsp_compressor:'audio', dsp_headroom:'audio', dsp_outputs:'audio', audio_remove_volume_limit:'audio', audio_resampler:'audio', media_vol_steps:'audio',
   bt_absvol_mode:'audio', bt_link_stability:'audio',
   CAMERA_LEVEL:'camera', CAMERA_GRAIN:'camera', CAMERA_CONTRAST:'camera',
   CAMERA_PORTRAIT:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
@@ -6804,7 +6808,7 @@ const CFG_GROUP_SECTIONS = {
     { id:'dsp', icon:'dsp', titleKey:'cfg_audio_section_dsp',
       title:'ASB DSP Engine', hintKey:'cfg_audio_section_dsp_hint',
       hint:'Optional gain, bass and dynamics processing on the outputs you select.',
-      keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_compressor'] },
+      keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_compressor','dsp_headroom'] },
     { id:'playback', icon:'headphones', titleKey:'cfg_audio_section_playback',
       title:'Playback & Bluetooth', hintKey:'cfg_audio_section_playback_hint',
       hint:'Choose the audio path and Bluetooth behaviour.',
@@ -7060,7 +7064,7 @@ const CFG_ICONS = {
   net_wifi_leave:'wifileave',
   mglru_hold:'memhold',
   audio_profile:'audio_profile', audio_dac_hifi:'dac', media_loudness:'media_volume', bt_absvol_mode:'volume_sync', bt_a2dp_offload:'bluetooth_offload',
-  dsp_loudness:'loudness', dsp_bass:'bass', dsp_voice:'voice', dsp_width:'stereo_width', dsp_compressor:'compressor', dsp_outputs:'audio_route', audio_remove_volume_limit:'ear_safe', audio_resampler:'resampler', media_vol_steps:'vol_steps',
+  dsp_loudness:'loudness', dsp_bass:'bass', dsp_voice:'voice', dsp_width:'stereo_width', dsp_compressor:'compressor', dsp_headroom:'headroom', dsp_outputs:'audio_route', audio_remove_volume_limit:'ear_safe', audio_resampler:'resampler', media_vol_steps:'vol_steps',
   CAMERA_LEVEL:'camera_level', CAMERA_CONTRAST:'contrast', CAMERA_GRAIN:'grain', CAMERA_PORTRAIT:'portrait', CAMERA_LOWLIGHT:'lowlight', camera_hold_enable:'camera_hold', CAMERA_AGGRESSIVE:'camera_aggressive', CAMERA_AGGRESSIVE_INJECT:'camera_inject',
   UX_MANAGE_TIMEOUTS:'timeout', anim_speed:'anim_speed', UX_ANIM_FORCE_RESTART:'anim_restart', disable_blur:'blur', ui_effects_level:'effects',
   net_congestion:'congestion', net_congestion_wifi:'wifi_congestion', net_congestion_mobile:'mobile_congestion', net_qdisc:'qdisc', net_qdisc_wifi:'wifi_queue', net_qdisc_mobile:'mobile_queue',
@@ -7393,7 +7397,7 @@ function cfgStatus(it, cur) {
   }
   if (it.key === 'ltpo_force') {
     if (cur === '1') {
-      if (_ltpoStatus === 'ltpo_active') return { cls:'good', text:T('st_on', 'Enabled') };
+      if (_ltpoStatus === 'ltpo_active' || _ltpoStatus === 'ltpo_active_touch') return { cls:'good', text:T('st_on', 'Enabled') };
       if (_ltpoStatus === 'ltpo_pending_boot') return { cls:'warn', text:T('st_pending', 'pending') };
       if (_ltpoStatus === 'ltpo_patch_absent') {
         if (_ltpoState === 'already') return { cls:'neutral', text:T('st_ltpo_oem', 'already on by OEM') };
@@ -7656,7 +7660,7 @@ const APPLY_MODE = {
   mglru_hold: APPLY_LIVE,
   // Live: these have a runtime script that runs on save and is verified afterwards.
   audio_profile:APPLY_LIVE, dsp_loudness:APPLY_LIVE, dsp_bass:APPLY_LIVE, dsp_voice:APPLY_LIVE, dsp_width:APPLY_LIVE,
-  dsp_compressor:APPLY_LIVE, bt_absvol_mode:APPLY_LIVE, bt_link_stability:APPLY_LIVE, bt_a2dp_offload:APPLY_LIVE,
+  dsp_compressor:APPLY_LIVE, dsp_headroom:APPLY_LIVE, bt_absvol_mode:APPLY_LIVE, bt_link_stability:APPLY_LIVE, bt_a2dp_offload:APPLY_LIVE,
   haptic_strength:APPLY_LIVE, haptic_touch_strength:APPLY_LIVE,
   net_congestion:APPLY_LIVE, net_congestion_wifi:APPLY_LIVE, net_congestion_mobile:APPLY_LIVE,
   net_qdisc:APPLY_LIVE, net_qdisc_wifi:APPLY_LIVE, net_qdisc_mobile:APPLY_LIVE,
@@ -7759,7 +7763,26 @@ var _profSwitchAt = 0;
 
 // Drop options this device should not be offered. Done at render rather than in the item
 // list so the same build serves every model.
+let ASB_TCP_ALGS = null;
+let _tcpAlgLoadStarted = false;
+async function cfgLoadTcpAlgorithms() {
+  if (_tcpAlgLoadStarted) return;
+  _tcpAlgLoadStarted = true;
+  try {
+    const r = await run('cat /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null');
+    const found = String((r && r.stdout) || '').trim().split(/\s+/)
+      .filter(x => /^[a-z0-9_]+$/.test(x));
+    ASB_TCP_ALGS = found.filter((x, i) => found.indexOf(x) === i);
+    cfgRender();
+  } catch (e) { ASB_TCP_ALGS = []; }
+}
 function cfgOptsFor(it) {
+  if (/^net_congestion(?:_(?:wifi|mobile))?$/.test(it.key)) {
+    if (!_tcpAlgLoadStarted) cfgLoadTcpAlgorithms();
+    if (ASB_TCP_ALGS !== null)
+      return ['auto'].concat(ASB_TCP_ALGS.filter(x => x !== 'auto'));
+    return ['auto'];
+  }
   if (it.key === 'ui_effects_level' && !_isReference) {
     return it.opts.filter(function(o) { return o !== 'flat'; });
   }
@@ -8517,10 +8540,10 @@ async function cfgSet(key, val, ctl) {
     // reboot for these.
     // audioserver restarts briefly (a short audio gap), which is why it runs in the background
     // and the toast says "applying" rather than "reboot".
-    var AUDIO_LIVE_KEYS = ['dsp_outputs','audio_profile','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_compressor','bt_absvol_mode'];
+    var AUDIO_LIVE_KEYS = ['dsp_outputs','audio_profile','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_compressor','dsp_headroom','bt_absvol_mode'];
     // DSP-only changes go through the daemon, which hands the value to the live effect -
     // no audioserver restart, so the audio never drops out while the slider moves.
-    var AUDIO_DSP_KEYS = ['dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_compressor'];
+    var AUDIO_DSP_KEYS = ['dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_compressor','dsp_headroom'];
     // Overlay keys: media_loudness (volume curves) and audio_dac_hifi (mixer) are baked
     // into the mounted overlay and only read at boot - a restart cannot pick them up, so
     // be honest and say reboot.
@@ -10719,7 +10742,14 @@ function deviceInfoRender(d) {
 
   const consistency = deviceVal(d, 'kernel', 'uname_consistency');
   if (consistency === 'mismatch') {
-    const n = logReportNote(T('dev_uname_mismatch_note', 'The release in /proc/version differs from uname -r. This is mismatch evidence only; it does not prove a particular kernel or spoofing method.'), true);
+    const spoofEvidence = deviceVal(d, 'susfs', 'enabled_features').indexOf('CONFIG_KSU_SPOOF_UNAME') >= 0 ||
+      deviceVal(d, 'susfs', 'enabled_features').indexOf('CONFIG_KSU_SUSFS_SPOOF_UNAME') >= 0;
+    const n = logReportNote(T(
+      spoofEvidence ? 'dev_uname_mismatch_susfs_note' : 'dev_uname_mismatch_note',
+      spoofEvidence ?
+        'The releases differ and SuSFS reports CONFIG_KSU_SUSFS_SPOOF_UNAME. This is an expected possible explanation for a SuSFS/Wild GKI setup, not evidence of a compromised kernel; the collector does not claim which component produced either string.' :
+        'The release in /proc/version differs from uname -r. This is mismatch evidence only; it does not prove a particular kernel or spoofing method.'
+    ), !spoofEvidence);
     n.classList.add('dev-evidence'); body.appendChild(n);
   }
 
@@ -12726,7 +12756,7 @@ function paintStockLive(stockKv = null) {
       _stockTrendSamples.push({ t: sampleMs, c: cpuMean });
       _stockTrendSamples = _stockTrendSamples.filter(x => sampleMs - x.t <= 120000);
       const span = sampleMs - _stockTrendSamples[0].t;
-      if (_stockTrendSamples.length >= 3 && span >= 30000) {
+      if (_stockTrendSamples.length >= 2 && span >= 8000) {
         const m = _stockTrendSamples.length;
         const mt = _stockTrendSamples.reduce((p, x) => p + x.t, 0) / m;
         const mc = _stockTrendSamples.reduce((p, x) => p + x.c, 0) / m;
@@ -12796,7 +12826,7 @@ function paintStockLive(stockKv = null) {
   }));
   asbMetricPaint('bnStockCpuClock', clockKnown ? asbClockMetric(clockPct, 100) : 'metric-neutral');
   const lpmKnown = Object.prototype.hasOwnProperty.call(kv, 'settings.global.mobile_data_always_on') && String(kv['settings.global.mobile_data_always_on'] || '') !== '';
-  asbMetricPaint('bnStockLpm', lpmKnown ? (lpmHeld ? 'metric-warm' : 'metric-good') : 'metric-neutral');
+  asbMetricPaint('bnStockLpm', lpmKnown ? asbModemMetric(lpmHeld ? 'fast' : 'normal') : 'metric-neutral');
   bset('bnStockLoad', fmtStockLoad(kv.loadavg), T('stock_load_now', '1 min') + ' \u00b7 5 \u00b7 15: ' + (kv.loadavg || '\u2014'));
   {
     const _le = _el('bnStockLoad');
