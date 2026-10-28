@@ -176,7 +176,8 @@
         "1": "每 10 分钟一次。手机静置不动时射频工作时间明显减少。",
         "2": "每 5 分钟一次 —— Android 自带默认值。",
         "3": "每 2 分钟一次。更快发现你走入覆盖范围的网络。",
-        "4": "不限制。发现最快，耗电也最高。"
+        "4": "不限制。发现最快，耗电也最高。",
+        "5": "每 30 分钟。明确的省电级别；发现新网络会更慢。"
       }
     },
     "auto_battery_enable": {
@@ -423,7 +424,15 @@
     },
     "dsp_headroom": "DSP 输出余量",
     "dsp_clarity": "DSP 清晰度",
-    "dsp_rumble": "DSP 超低音滤波"
+    "dsp_rumble": "DSP 超低音滤波",
+    "kernel_sched_stats": {
+      "name": "调度器调试统计",
+      "desc": "可选的通用内核调整。仅在 /proc/sys/kernel/sched_stats 可用且可写时，关闭才会禁用调度器调试统计。调度策略、CPU 频率和 SoC 驱动程序均不改变。Stock 和卸载会恢复原始 0/1。不声称未经测量的省电百分比。",
+      "descOpt": {
+        "stock": "Stock: leave scheduler debug accounting untouched.",
+        "off": "Disable only the exposed generic sched_stats node; restore the exact original on stock or uninstall."
+      }
+    }
   },
   "optFor": {
     "net_mtu_probing": {
@@ -924,6 +933,8 @@
   "cfg_unavailable_why": "此手机未提供：",
   "cfg_after_reboot": "applies after reboot",
   "cfg_after_reboot_why": "已保存。相机色调表会在模块启动时重建。",
+  "cfg_not_exposed": "未提供",
+  "cfg_grain_not_exposed_why": "已应用的原厂调优没有可修改的标量或列表 addNoiseWeight 值。固件未提供此参数；不声称颗粒修改成功。",
   "lv_vendor_clamps": "厂商钳制",
   "cap_clamps_val": "{h}/小时 · 共 {t}",
   "cap_clamps_tip": "厂商温控引擎从 ASB 手中收回上限的频率。",

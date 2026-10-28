@@ -347,7 +347,8 @@
         "1": "Toutes les 10 minutes. Nettement moins d’activité radio pour un téléphone qui reste en place.",
         "2": "Toutes les 5 minutes — la valeur d’Android.",
         "3": "Toutes les 2 minutes. Détecte plus vite un réseau dans lequel vous entrez.",
-        "4": "Sans limitation. Détection la plus rapide, coût le plus élevé."
+        "4": "Sans limitation. Détection la plus rapide, coût le plus élevé.",
+        "5": "Toutes les 30 minutes. Le mode économie explicite ; les nouveaux réseaux sont détectés plus lentement."
       }
     },
     "haptic_strength": {
@@ -490,7 +491,15 @@
     },
     "dsp_headroom": "DSP Output Headroom",
     "dsp_clarity": "DSP Clarity",
-    "dsp_rumble": "DSP Sub-bass Filter"
+    "dsp_rumble": "DSP Sub-bass Filter",
+    "kernel_sched_stats": {
+      "name": "Statistiques de débogage du planificateur",
+      "desc": "Réglage noyau générique et facultatif. Désactivé coupe les statistiques de débogage uniquement si /proc/sys/kernel/sched_stats est accessible en écriture. La politique d’ordonnancement, les fréquences CPU et les pilotes SoC ne changent pas. Stock et la désinstallation restaurent la valeur 0/1 d’origine. Aucun gain de batterie non mesuré n’est annoncé.",
+      "descOpt": {
+        "stock": "Stock: leave scheduler debug accounting untouched.",
+        "off": "Disable only the exposed generic sched_stats node; restore the exact original on stock or uninstall."
+      }
+    }
   },
   "opt": {
     "3": "+3 dB",
@@ -943,6 +952,8 @@
   "cfg_unavailable_why": "Ce téléphone n'expose pas :",
   "cfg_after_reboot": "applies after reboot",
   "cfg_after_reboot_why": "Enregistré. Les tables de tons de l’appareil photo sont reconstruites au démarrage du module.",
+  "cfg_not_exposed": "non exposé",
+  "cfg_grain_not_exposed_why": "Le réglage d’origine appliqué ne contient aucune valeur scalaire ou de liste addNoiseWeight modifiable. Le firmware n’expose pas ce paramètre ; aucune modification réussie du grain n’est revendiquée.",
   "lv_vendor_clamps": "Limitations du fabricant",
   "cap_clamps_val": "{h}/h · {t} total",
   "cap_clamps_tip": "À quelle fréquence le moteur thermique du fabricant a repris le plafond à ASB.",

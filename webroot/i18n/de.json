@@ -149,7 +149,8 @@
         "1": "Alle 10 Minuten. Deutlich weniger Funkzeit bei einem Telefon, das am Ort bleibt.",
         "2": "Alle 5 Minuten — Androids eigener Standard.",
         "3": "Alle 2 Minuten. Findet ein Netz schneller, in dessen Bereich Sie kommen.",
-        "4": "Ungedrosselt. Schnellste Erkennung, höchste Kosten."
+        "4": "Ungedrosselt. Schnellste Erkennung, höchste Kosten.",
+        "5": "Alle 30 Minuten. Der explizite Akkusparmodus; neue Netzwerke werden langsamer erkannt."
       }
     },
     "auto_battery_enable": {
@@ -396,7 +397,15 @@
     },
     "dsp_headroom": "DSP Output Headroom",
     "dsp_clarity": "DSP Clarity",
-    "dsp_rumble": "DSP Sub-bass Filter"
+    "dsp_rumble": "DSP Sub-bass Filter",
+    "kernel_sched_stats": {
+      "name": "Scheduler-Debugstatistik",
+      "desc": "Optionaler generischer Kernel-Tweak. Aus deaktiviert die Scheduler-Debugstatistik nur bei einem beschreibbaren /proc/sys/kernel/sched_stats. Scheduler-Richtlinie, CPU-Frequenzen und SoC-Treiber bleiben unverändert. Stock und Deinstallation stellen den ursprünglichen Wert 0/1 wieder her. Kein ungemessener Akkuvorteil wird behauptet.",
+      "descOpt": {
+        "stock": "Stock: leave scheduler debug accounting untouched.",
+        "off": "Disable only the exposed generic sched_stats node; restore the exact original on stock or uninstall."
+      }
+    }
   },
   "nav_live": "Monitor",
   "lv_ses": "Sitzungen",
@@ -924,6 +933,8 @@
   "cfg_unavailable_why": "Dieses Telefon bietet nicht:",
   "cfg_after_reboot": "applies after reboot",
   "cfg_after_reboot_why": "Gespeichert. Die Kamera-Tontabellen werden beim Modulstart neu erstellt.",
+  "cfg_not_exposed": "nicht bereitgestellt",
+  "cfg_grain_not_exposed_why": "Die angewandte Stock-Abstimmung enthält keinen änderbaren skalaren oder Listenwert addNoiseWeight. Die Firmware stellt diesen Parameter nicht bereit; eine erfolgreiche Körnungsänderung wird nicht behauptet.",
   "lv_vendor_clamps": "Vendor-Clamps",
   "cap_clamps_val": "{h}/h · {t} ges.",
   "cap_clamps_tip": "Wie oft die Thermik des Herstellers ASB das Limit entzogen hat: in der letzten Stunde und seit dem Start.",

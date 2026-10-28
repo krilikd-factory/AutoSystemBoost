@@ -149,7 +149,8 @@
         "1": "Cada 10 minutos. Bastante menos tiempo de radio en un teléfono que no se mueve.",
         "2": "Cada 5 minutos: el valor predeterminado de Android.",
         "3": "Cada 2 minutos. Detecta antes la red a la que te acercas.",
-        "4": "Sin limitación. Detección más rápida y mayor coste."
+        "4": "Sin limitación. Detección más rápida y mayor coste.",
+        "5": "Cada 30 minutos. El modo explícito de ahorro; las redes nuevas se descubren más despacio."
       }
     },
     "auto_battery_enable": {
@@ -396,7 +397,15 @@
     },
     "dsp_headroom": "DSP Output Headroom",
     "dsp_clarity": "DSP Clarity",
-    "dsp_rumble": "DSP Sub-bass Filter"
+    "dsp_rumble": "DSP Sub-bass Filter",
+    "kernel_sched_stats": {
+      "name": "Estadísticas de depuración del planificador",
+      "desc": "Ajuste genérico opcional del kernel. Desactivado desactiva las estadísticas de depuración solo si /proc/sys/kernel/sched_stats está disponible y se puede escribir. No cambia la política del planificador, las frecuencias de CPU ni los controladores del SoC. Stock y la desinstalación restauran el 0/1 original. No se afirma un porcentaje de ahorro sin medir.",
+      "descOpt": {
+        "stock": "Stock: leave scheduler debug accounting untouched.",
+        "off": "Disable only the exposed generic sched_stats node; restore the exact original on stock or uninstall."
+      }
+    }
   },
   "nav_live": "Monitor",
   "lv_ses": "Sesiones",
@@ -924,6 +933,8 @@
   "cfg_unavailable_why": "Este teléfono no expone:",
   "cfg_after_reboot": "applies after reboot",
   "cfg_after_reboot_why": "Guardado. Las tablas de tonos de cámara se reconstruyen al iniciar el módulo.",
+  "cfg_not_exposed": "no expuesto",
+  "cfg_grain_not_exposed_why": "El ajuste de fábrica aplicado no contiene ningún valor escalar o de lista addNoiseWeight modificable. El firmware no expone este parámetro; no se afirma que el grano se haya cambiado.",
   "lv_vendor_clamps": "Limitaciones del fabricante",
   "cap_clamps_val": "{h}/h · {t} total",
   "cap_clamps_tip": "Con qué frecuencia el motor térmico del fabricante le quitó el límite a ASB.",

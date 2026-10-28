@@ -176,7 +176,8 @@
         "1": "Ogni 10 minuti. Molta meno attività radio su un telefono che resta fermo.",
         "2": "Ogni 5 minuti: il valore predefinito di Android.",
         "3": "Ogni 2 minuti. Trova più in fretta la rete in cui entri.",
-        "4": "Senza limiti. Rilevamento più rapido, costo più alto."
+        "4": "Senza limiti. Rilevamento più rapido, costo più alto.",
+        "5": "Ogni 30 minuti. Il livello esplicito di risparmio; le nuove reti vengono rilevate più lentamente."
       }
     },
     "auto_battery_enable": {
@@ -423,7 +424,15 @@
     },
     "dsp_headroom": "DSP Output Headroom",
     "dsp_clarity": "DSP Clarity",
-    "dsp_rumble": "DSP Sub-bass Filter"
+    "dsp_rumble": "DSP Sub-bass Filter",
+    "kernel_sched_stats": {
+      "name": "Statistiche di debug dello scheduler",
+      "desc": "Ottimizzazione generica opzionale del kernel. Off disattiva le statistiche di debug solo se /proc/sys/kernel/sched_stats è esposto e scrivibile. Politica dello scheduler, frequenze CPU e driver SoC restano invariati. Stock e disinstallazione ripristinano il valore 0/1 originale. Nessuna percentuale di risparmio non misurata viene dichiarata.",
+      "descOpt": {
+        "stock": "Stock: leave scheduler debug accounting untouched.",
+        "off": "Disable only the exposed generic sched_stats node; restore the exact original on stock or uninstall."
+      }
+    }
   },
   "optFor": {
     "net_mtu_probing": {
@@ -924,6 +933,8 @@
   "cfg_unavailable_why": "Questo telefono non espone:",
   "cfg_after_reboot": "applies after reboot",
   "cfg_after_reboot_why": "Salvato. Le tabelle tonali della fotocamera vengono ricostruite all’avvio del modulo.",
+  "cfg_not_exposed": "non esposto",
+  "cfg_grain_not_exposed_why": "La calibrazione stock applicata non contiene valori scalari o elenchi addNoiseWeight modificabili. Il firmware non espone questo parametro; non si dichiara una modifica riuscita della grana.",
   "lv_vendor_clamps": "Clamp del produttore",
   "cap_clamps_val": "{h}/h · {t} totali",
   "cap_clamps_tip": "Quanto spesso il motore termico del produttore ha tolto il limite ad ASB.",

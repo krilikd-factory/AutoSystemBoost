@@ -318,7 +318,8 @@
         "1": "Every 10 minutes. Noticeably less radio time on a phone that stays in one place.",
         "2": "Every 5 minutes - Android's own default.",
         "3": "Every 2 minutes. Faster to spot a network you walk into.",
-        "4": "Unthrottled. Fastest discovery, highest cost."
+        "4": "Unthrottled. Fastest discovery, highest cost.",
+        "5": "Every 30 minutes. The explicit battery-saving rung; new networks are discovered more slowly."
       }
     },
     "wifi_powersave": {
@@ -354,7 +355,15 @@
     },
     "dsp_headroom": "DSP Output Headroom",
     "dsp_clarity": "DSP Clarity",
-    "dsp_rumble": "DSP Sub-bass Filter"
+    "dsp_rumble": "DSP Sub-bass Filter",
+    "kernel_sched_stats": {
+      "name": "Scheduler Debug Accounting",
+      "desc": "Opt-in generic kernel tweak. Off disables scheduler debug statistics only when /proc/sys/kernel/sched_stats is exposed and writable. Scheduling policy, CPU frequencies and SoC drivers are untouched. Stock and uninstall restore the exact original 0/1. No unmeasured battery percentage is claimed.",
+      "descOpt": {
+        "stock": "Stock: leave scheduler debug accounting untouched.",
+        "off": "Disable only the exposed generic sched_stats node; restore the exact original on stock or uninstall."
+      }
+    }
   },
   "cfg_search": "Search",
   "cfg_search_none": "Nothing matches that",
@@ -669,6 +678,8 @@
   "cfg_unavailable_why": "This phone does not expose: ",
   "cfg_after_reboot": "applies after reboot",
   "cfg_after_reboot_why": "Saved. Camera tone tables are rebuilt when the module starts.",
+  "cfg_not_exposed": "not exposed",
+  "cfg_grain_not_exposed_why": "The applied stock tuning exposed no scalar or list addNoiseWeight value that could be changed. Support is not exposed by this firmware; no successful grain edit is claimed.",
   "lv_vendor_clamps": "Vendor clamps",
   "cap_clamps_val": "{h}/h · {t} total",
   "cap_clamps_tip": "How often the vendor thermal engine took the cap away from ASB: in the last hour, and since boot.",

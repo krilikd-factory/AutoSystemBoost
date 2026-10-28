@@ -149,7 +149,8 @@
         "1": "Her 10 dakikada bir. Yerinde duran bir telefonda radyo süresi belirgin azalır.",
         "2": "Her 5 dakikada bir — Android’in kendi varsayılanı.",
         "3": "Her 2 dakikada bir. Kapsama alanına girdiğiniz ağı daha hızlı bulur.",
-        "4": "Kısıtlamasız. En hızlı bulma, en yüksek maliyet."
+        "4": "Kısıtlamasız. En hızlı bulma, en yüksek maliyet.",
+        "5": "Her 30 dakikada bir. Açık pil tasarrufu seviyesi; yeni ağlar daha yavaş bulunur."
       }
     },
     "auto_battery_enable": {
@@ -396,7 +397,15 @@
     },
     "dsp_headroom": "DSP Output Headroom",
     "dsp_clarity": "DSP Clarity",
-    "dsp_rumble": "DSP Sub-bass Filter"
+    "dsp_rumble": "DSP Sub-bass Filter",
+    "kernel_sched_stats": {
+      "name": "Zamanlayıcı Hata Ayıklama İstatistikleri",
+      "desc": "İsteğe bağlı genel çekirdek ayarı. Kapalı, yalnızca /proc/sys/kernel/sched_stats kullanılabilir ve yazılabilir olduğunda zamanlayıcı hata ayıklama istatistiklerini kapatır. Zamanlama politikası, CPU frekansları ve SoC sürücüleri değişmez. Stock ve kaldırma, özgün 0/1 değerini geri yükler. Ölçülmemiş pil tasarrufu yüzdesi iddia edilmez.",
+      "descOpt": {
+        "stock": "Stock: leave scheduler debug accounting untouched.",
+        "off": "Disable only the exposed generic sched_stats node; restore the exact original on stock or uninstall."
+      }
+    }
   },
   "nav_live": "İzleme",
   "lv_ses": "Oturum",
@@ -924,6 +933,8 @@
   "cfg_unavailable_why": "Bu telefon şunu sunmuyor:",
   "cfg_after_reboot": "applies after reboot",
   "cfg_after_reboot_why": "Kaydedildi. Kamera ton tabloları modül başladığında yeniden oluşturulur.",
+  "cfg_not_exposed": "sunulmuyor",
+  "cfg_grain_not_exposed_why": "Uygulanan stok ayarında değiştirilebilir skaler veya liste addNoiseWeight değeri yok. Üretici yazılımı bu parametreyi sunmuyor; başarılı gren değişikliği iddia edilmiyor.",
   "lv_vendor_clamps": "Üretici kısıtlamaları",
   "cap_clamps_val": "{h}/sa · {t} toplam",
   "cap_clamps_tip": "Üreticinin termal motoru ASB'den sınırı ne sıklıkla aldı.",

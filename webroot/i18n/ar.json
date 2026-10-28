@@ -176,7 +176,8 @@
         "1": "كل 10 دقائق. زمن تشغيل اللاسلكي أقل بوضوح لهاتف يبقى في مكانه.",
         "2": "كل 5 دقائق — الإعداد الافتراضي في Android.",
         "3": "كل دقيقتين. يكتشف أسرع الشبكة التي تدخل نطاقها.",
-        "4": "بلا تقييد. أسرع اكتشاف وأعلى تكلفة."
+        "4": "بلا تقييد. أسرع اكتشاف وأعلى تكلفة.",
+        "5": "كل 30 دقيقة. مستوى التوفير الصريح؛ تُكتشف الشبكات الجديدة ببطء أكبر."
       }
     },
     "auto_battery_enable": {
@@ -423,7 +424,15 @@
     },
     "dsp_headroom": "DSP Output Headroom",
     "dsp_clarity": "DSP Clarity",
-    "dsp_rumble": "DSP Sub-bass Filter"
+    "dsp_rumble": "DSP Sub-bass Filter",
+    "kernel_sched_stats": {
+      "name": "إحصاءات تصحيح المجدول",
+      "desc": "تعديل اختياري عام للنواة. يؤدي الإيقاف إلى تعطيل إحصاءات تصحيح المجدول فقط عندما يكون /proc/sys/kernel/sched_stats متاحاً وقابلاً للكتابة. لا تتغير سياسة الجدولة أو ترددات المعالج أو برامج تشغيل SoC. يعيد Stock وإزالة التثبيت القيمة الأصلية 0/1. لا تُدّعى نسبة توفير غير مقاسة.",
+      "descOpt": {
+        "stock": "Stock: leave scheduler debug accounting untouched.",
+        "off": "Disable only the exposed generic sched_stats node; restore the exact original on stock or uninstall."
+      }
+    }
   },
   "optFor": {
     "net_mtu_probing": {
@@ -924,6 +933,8 @@
   "cfg_unavailable_why": "هذا الهاتف لا يوفر:",
   "cfg_after_reboot": "applies after reboot",
   "cfg_after_reboot_why": "تم الحفظ. تُعاد إعادة بناء جداول درجات الكاميرا عند بدء الوحدة.",
+  "cfg_not_exposed": "غير متاح",
+  "cfg_grain_not_exposed_why": "لا يحتوي الضبط الأصلي المطبق على قيمة addNoiseWeight رقمية أو قائمة قابلة للتغيير. لا توفر البرامج الثابتة هذا المعامل؛ لا يُدّعى نجاح تعديل الحبيبات.",
   "lv_vendor_clamps": "قيود المُصنّع",
   "cap_clamps_val": "{h}/س · {t} إجمالاً",
   "cap_clamps_tip": "كم مرة انتزع محرك الحرارة الخاص بالمصنّع الحد من ASB.",

@@ -149,7 +149,8 @@
         "1": "Setiap 10 menit. Waktu radio jauh lebih sedikit pada ponsel yang diam di tempat.",
         "2": "Setiap 5 menit — bawaan Android.",
         "3": "Setiap 2 menit. Lebih cepat menemukan jaringan yang baru Anda masuki.",
-        "4": "Tanpa pembatasan. Penemuan tercepat, biaya tertinggi."
+        "4": "Tanpa pembatasan. Penemuan tercepat, biaya tertinggi.",
+        "5": "Setiap 30 menit. Tingkat hemat baterai eksplisit; jaringan baru ditemukan lebih lambat."
       }
     },
     "auto_battery_enable": {
@@ -396,7 +397,15 @@
     },
     "dsp_headroom": "DSP Output Headroom",
     "dsp_clarity": "DSP Clarity",
-    "dsp_rumble": "DSP Sub-bass Filter"
+    "dsp_rumble": "DSP Sub-bass Filter",
+    "kernel_sched_stats": {
+      "name": "Statistik Debug Penjadwal",
+      "desc": "Tweak kernel generik opsional. Nonaktif mematikan statistik debug penjadwal hanya jika /proc/sys/kernel/sched_stats tersedia dan dapat ditulis. Kebijakan penjadwalan, frekuensi CPU, dan driver SoC tidak berubah. Stock dan penghapusan memulihkan nilai 0/1 asli. Tidak ada persentase penghematan baterai yang belum diukur yang diklaim.",
+      "descOpt": {
+        "stock": "Stock: leave scheduler debug accounting untouched.",
+        "off": "Disable only the exposed generic sched_stats node; restore the exact original on stock or uninstall."
+      }
+    }
   },
   "nav_live": "Monitor",
   "lv_ses": "Sesi",
@@ -924,6 +933,8 @@
   "cfg_unavailable_why": "Ponsel ini tidak menyediakan:",
   "cfg_after_reboot": "applies after reboot",
   "cfg_after_reboot_why": "Tersimpan. Tabel nada kamera dibangun ulang saat modul dimulai.",
+  "cfg_not_exposed": "tidak tersedia",
+  "cfg_grain_not_exposed_why": "Penyetelan bawaan yang diterapkan tidak memiliki nilai skalar atau daftar addNoiseWeight yang dapat diubah. Firmware tidak menyediakan parameter ini; keberhasilan perubahan grain tidak diklaim.",
   "lv_vendor_clamps": "Clamp vendor",
   "cap_clamps_val": "{h}/jam · {t} total",
   "cap_clamps_tip": "Seberapa sering mesin termal vendor mengambil alih batas dari ASB.",
