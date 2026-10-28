@@ -680,11 +680,11 @@ bt_absvol_mode=stock
 #   overriding it silently would change how their music sounds without asking.
 bt_link_stability=stock
 
-# Bluetooth A2DP hardware offload: on|off|auto on = keep A2DP offloaded to the DSP (stock, best
+# Bluetooth A2DP hardware offload: auto|on|off. auto = ASB writes nothing (the ROM decides); on = keep A2DP offloaded to the DSP (best
 # battery/codec efficiency).
 # BUT audio effect engines (ViPER4Android, JamesDSP, etc.) CANNOT process Bluetooth audio while
 # it is offloaded — the stream bypasses the effect chain in the DSP.
-bt_a2dp_offload=on
+bt_a2dp_offload=auto
 
 # Region: allow system locale as a last-resort source for Wi-Fi country code
 # when no SIM/operator country is available. 0=off (safest), 1=allow locale.
