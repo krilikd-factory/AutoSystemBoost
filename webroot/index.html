@@ -4680,7 +4680,11 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
 // Cards whose value goes straight into the live audio path. The click would be played
 // through the very output being reconfigured - amplified by whatever gain was just set,
 // or cut mid-sample by the parameter push - so these change silently. Haptic stays.
-const CFG_SILENT_KEYS = ['dsp_loudness','dsp_bass','dsp_voice','dsp_width'];
+const CFG_SILENT_KEYS = ['dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble'];
+const DSP_CFG_KEYS = ['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom'];
+function dspEngineActive() {
+  return _cfgVals['dsp_outputs'] !== 'off' && _cfgVals['audio_profile'] !== 'eq_compat' && Number(_cfgVals['dsp_loudness'] || 0) > 0;
+}
 
 /* ── Hi-tech vector language ─────────────────────────────────────────────
  * All feature symbols are deterministic inline SVG rather than system emoji. That keeps
@@ -4737,6 +4741,8 @@ const TECH_ICON_PATHS = {
   media_volume: '<path d="M4.5 9.6v4.8h3L12 18.4V5.6L7.5 9.6z"/><path d="M15.3 9.4a4 4 0 0 1 0 5.2M17.9 7a7.6 7.6 0 0 1 0 10"/>',
   resampler: '<path d="M3 13.4l2.1-4.2 2.1 7.2 2.1-5"/><path d="M11.2 12h2.6M12.6 10.6l1.4 1.4-1.4 1.4"/><path d="M15.6 12c.9-2.4 1.8-2.4 2.7 0s1.8 2.4 2.7 0"/>',
   vol_steps: '<path d="M4.5 19.5v-2M7.5 19.5v-4M10.5 19.5v-6M13.5 19.5v-8M16.5 19.5v-10M19.5 19.5v-12"/>',
+  clarity: '<path d="M3 15c2.2-7 4.4-7 6.6 0s4.4 7 6.6 0 3.3-5.2 4.8-3"/><path d="M18 3v4M16 5h4"/>',
+  rumble_filter: '<path d="M3 18h18M5 15c4-1 5-8 8-9 2.5-.8 4 2 6 3"/><path d="M5 5l14 14"/>',
   stereo_width: '<path d="M12 7.5v9"/><path d="M9.4 12H3.6M5.8 9.8 3.6 12l2.2 2.2"/><path d="M14.6 12h5.8M18.2 9.8l2.2 2.2-2.2 2.2"/>',
   power_cycle: '<path d="M19.2 12a7.2 7.2 0 1 1-2.1-5.1"/><path d="M19.4 4.4v3.8h-3.8"/><path d="M12 8.4v4"/>',
   soft_restart: '<path d="M19.2 12a7.2 7.2 0 1 1-2.1-5.1"/><path d="M19.4 4.4v3.8h-3.8"/><path d="M12.7 8.6 10.6 12.3h3l-2.1 3.6"/>',
@@ -6477,6 +6483,8 @@ const SNAP_KEYS = [
   'dsp_bass',
   'dsp_voice',
   'dsp_width',
+  'dsp_clarity',
+  'dsp_rumble',
   'dsp_compressor',
   'dsp_headroom',
   'dsp_effect_abi',
@@ -6530,10 +6538,14 @@ const CFG_ITEMS = [
     desc:'Needs DSP Loudness above. For voices that sound thin or shrill on the phone speaker - the usual complaint when comparing a video with the same clip on an iPhone. Two broad bands move together: body at 350 Hz goes up (+0.5 dB per step) and the 3 kHz edge goes down (-0.6 dB per step), so level 10 is +5 / -6 dB. Bass Boost works at 90 Hz, mostly below what a phone speaker can play; this band is where a speaker still has output, so it is what makes a voice sound fuller. Runs before the limiter and cannot clip. Start at 4-6; on headphones less is usually enough - use DSP Outputs to keep it on the speaker only.' },
   { key:'dsp_width', type:'range', def:'0', min:0, max:10, step:1, name:'DSP Stereo Width',
     desc:'Needs DSP Loudness above. Makes the sound wider and more spacious: the difference between the left and right channels is raised above 180 Hz, 10% per step, so level 10 is twice as wide. What sits in the centre - vocals, dialogue, a mono recording - is not touched at all, and the bass stays centred so it keeps its punch. Strongest on headphones and Bluetooth; the two speakers of a phone sit close together, so there the effect is smaller. Start at 3-5. Runs before the limiter and cannot clip. Stereo tracks only.' },
-  { key:'dsp_headroom', type:'seg', def:'15', opts:['15','30','50','100'], name:'DSP True-Peak Headroom',
-    desc:'Final true-peak ceiling: 15 = -0.15 dB, 30 = -0.30 dB, 50 = -0.50 dB, 100 = -1.00 dB. More headroom leaves extra margin for inter-sample peaks after Bluetooth or DAC reconstruction. It lowers only the final ceiling, not the selected gain, bass, voice or width. Applies live through the existing DSP engine.' },
+  { key:'dsp_clarity', type:'range', def:'0', min:0, max:8, step:1, stock:'0', name:'DSP Clarity',
+    desc:'Needs DSP Loudness above. A gentle high shelf at 6.5 kHz adds 0.5 dB per level, up to +4 dB. Runs after voice tone and before stereo width, dynamics and the safety limiter. Applies live.' },
+  { key:'dsp_rumble', type:'seg', def:'off', stock:'off', opts:['off','35','50','70'], name:'DSP Sub-bass Filter',
+    desc:'Needs DSP Loudness above. A 24 dB/octave high-pass filter reduces sub-bass rumble and speaker excursion. Start at 35 Hz; 70 Hz is intentionally aggressive. Runs first in the chain and applies live.' },
+  { key:'dsp_headroom', type:'seg', def:'15', opts:['15','30','50','100'], name:'DSP Output Headroom',
+    desc:'Final sample-peak ceiling: 15 = -0.15 dB, 30 = -0.30 dB, 50 = -0.50 dB, 100 = -1.00 dB. More headroom leaves margin for DAC/codec reconstruction; this is not an oversampled true-peak detector. Applies live through the existing DSP engine.' },
   { key:'dsp_compressor', type:'seg', def:'on', opts:['on','off'], name:'DSP Compressor',
-    desc:'On suits large gain: it holds the body of a track down so peaks stay clean. Off suits modest gain (+2..+4 dB), where the compressor only squashes dynamics that never needed it. The true-peak limiter stays either way, so off cannot clip - but at high gain it makes the limiter work constantly, which sounds worse. Does nothing while DSP Loudness is off.' },
+    desc:'On suits large gain: it holds the body of a track down so peaks stay clean. Off suits modest gain (+2..+4 dB), where the compressor only squashes dynamics that never needed it. The sample-peak limiter stays either way, so off cannot clip - but at high gain it makes the limiter work constantly, which sounds worse. Does nothing while DSP Loudness is off.' },
   // --- Audio ---,
   { key:'audio_remove_volume_limit', type:'seg', def:'0', stock:'0', opts:['0','1'], name:'Headphone Volume Limit',
     desc:'Android caps headphone output above the level the EU considers unsafe for sustained listening, and warns you when you cross it. Removing that cap lets the existing volume slider go further - it does not make anything louder by itself.\n\nASB used to remove it silently as part of another category. It is now a choice, off by default, because how loud is too loud in your ears is not a decision a performance module should make for you.\n\nHearing damage from sustained loud listening is cumulative and permanent. If you remove the cap, watch the duration as much as the level.' },
@@ -6725,7 +6737,7 @@ const CFG_CAT = {
   heavy_prime_escape:'battery', prime_escape_burst_s:'battery', prime_escape_rest_s:'battery', wakelock_fitness:'battery',
   bt_a2dp_offload:'audio', bat_suppress_gaming:'battery',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
-  dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_width:'audio', dsp_compressor:'audio', dsp_headroom:'audio', dsp_outputs:'audio', audio_remove_volume_limit:'audio', audio_resampler:'audio', media_vol_steps:'audio', bt_absvol_mode:'audio', bt_link_stability:'audio',
+  dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_width:'audio', dsp_clarity:'audio', dsp_rumble:'audio', dsp_compressor:'audio', dsp_headroom:'audio', dsp_outputs:'audio', audio_remove_volume_limit:'audio', audio_resampler:'audio', media_vol_steps:'audio', bt_absvol_mode:'audio', bt_link_stability:'audio',
   CAMERA_LEVEL:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_PORTRAIT:'camera', CAMERA_CONTRAST:'camera', CAMERA_GRAIN:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   cool_gaming:'battery',
   smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery',
@@ -6791,7 +6803,7 @@ const CFG_GROUP_OF = {
   camera_hold_enable:'camera', bt_a2dp_offload:'audio',
   night_quiet_enable:'battery', bat_suppress_gaming:'battery', log_level:'ui', lsposed_verbose:'ui', phantom_procs:'ui',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
-  dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_width:'audio', dsp_compressor:'audio', dsp_headroom:'audio', dsp_outputs:'audio', audio_remove_volume_limit:'audio', audio_resampler:'audio', media_vol_steps:'audio',
+  dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_width:'audio', dsp_clarity:'audio', dsp_rumble:'audio', dsp_compressor:'audio', dsp_headroom:'audio', dsp_outputs:'audio', audio_remove_volume_limit:'audio', audio_resampler:'audio', media_vol_steps:'audio',
   bt_absvol_mode:'audio', bt_link_stability:'audio',
   CAMERA_LEVEL:'camera', CAMERA_GRAIN:'camera', CAMERA_CONTRAST:'camera',
   CAMERA_PORTRAIT:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
@@ -6812,7 +6824,7 @@ const CFG_GROUP_SECTIONS = {
     { id:'dsp', icon:'dsp', titleKey:'cfg_audio_section_dsp',
       title:'ASB DSP Engine', hintKey:'cfg_audio_section_dsp_hint',
       hint:'Optional gain, bass and dynamics processing on the outputs you select.',
-      keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_compressor','dsp_headroom'] },
+      keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom'] },
     { id:'playback', icon:'headphones', titleKey:'cfg_audio_section_playback',
       title:'Playback & Bluetooth', hintKey:'cfg_audio_section_playback_hint',
       hint:'Choose the audio path and Bluetooth behaviour.',
@@ -7068,7 +7080,7 @@ const CFG_ICONS = {
   net_wifi_leave:'wifileave',
   mglru_hold:'memhold',
   audio_profile:'audio_profile', audio_dac_hifi:'dac', media_loudness:'media_volume', bt_absvol_mode:'volume_sync', bt_a2dp_offload:'bluetooth_offload',
-  dsp_loudness:'loudness', dsp_bass:'bass', dsp_voice:'voice', dsp_width:'stereo_width', dsp_compressor:'compressor', dsp_headroom:'headroom', dsp_outputs:'audio_route', audio_remove_volume_limit:'ear_safe', audio_resampler:'resampler', media_vol_steps:'vol_steps',
+  dsp_loudness:'loudness', dsp_bass:'bass', dsp_voice:'voice', dsp_width:'stereo_width', dsp_clarity:'clarity', dsp_rumble:'rumble_filter', dsp_compressor:'compressor', dsp_headroom:'headroom', dsp_outputs:'audio_route', audio_remove_volume_limit:'ear_safe', audio_resampler:'resampler', media_vol_steps:'vol_steps',
   CAMERA_LEVEL:'camera_level', CAMERA_CONTRAST:'contrast', CAMERA_GRAIN:'grain', CAMERA_PORTRAIT:'portrait', CAMERA_LOWLIGHT:'lowlight', camera_hold_enable:'camera_hold', CAMERA_AGGRESSIVE:'camera_aggressive', CAMERA_AGGRESSIVE_INJECT:'camera_inject',
   UX_MANAGE_TIMEOUTS:'timeout', anim_speed:'anim_speed', UX_ANIM_FORCE_RESTART:'anim_restart', disable_blur:'blur', ui_effects_level:'effects',
   net_congestion:'congestion', net_congestion_wifi:'wifi_congestion', net_congestion_mobile:'mobile_congestion', net_qdisc:'qdisc', net_qdisc_wifi:'wifi_queue', net_qdisc_mobile:'mobile_queue',
@@ -7456,18 +7468,11 @@ function cfgStatus(it, cur) {
   // dsp_outputs only means anything while the DSP is actually processing. Showing it in
   // the same active state as a working setting invites the reading that routing is on
   // when nothing is being routed.
-  if (_cfgVals['dsp_outputs'] === 'off' &&
-      ['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_compressor'].indexOf(it.key) >= 0) {
-    return { cls:'neutral', text:T('dsp_idle', 'DSP off') };
+  if (DSP_CFG_KEYS.indexOf(it.key) >= 0 && !dspEngineActive()) {
+    return { cls: _cfgVals['audio_profile'] === 'eq_compat' ? 'warn' : 'neutral', text: _cfgVals['audio_profile'] === 'eq_compat' ? T('dsp_eq_idle', 'EQ mode · DSP off') : T('dsp_idle', 'DSP off') };
   }
   if (it.key === 'dsp_outputs') {
-    const g = parseInt(_cfgVals['dsp_loudness'] || '0', 10);
-    const b = parseInt(_cfgVals['dsp_bass'] || '0', 10);
-    const vt = parseInt(_cfgVals['dsp_voice'] || '0', 10);
-    const wd = parseInt(_cfgVals['dsp_width'] || '0', 10);
-    if (!(g > 0) && !(b > 0) && !(vt > 0) && !(wd > 0)) {
-      return { cls:'neutral', text:T('dsp_idle', 'DSP off') };
-    }
+    if (!dspEngineActive()) return { cls:'neutral', text:T('dsp_idle', 'DSP off') };
     // Active whenever the DSP is processing, including on "all".
     //
     // The first version dimmed "all" too, on the general rule that a default value is not
@@ -7530,14 +7535,9 @@ function cfgIsActive(it, cur) {
     const n = parseInt(cur, 10);
     return !(n === -1 || n === 6);
   }
-  if (_cfgVals['dsp_outputs'] === 'off' &&
-      ['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_compressor'].indexOf(it.key) >= 0) return false;
+  if (DSP_CFG_KEYS.indexOf(it.key) >= 0 && !dspEngineActive()) return false;
   if (it.key === 'dsp_outputs') {
-    const g = parseInt(_cfgVals['dsp_loudness'] || '0', 10);
-    const b = parseInt(_cfgVals['dsp_bass'] || '0', 10);
-    const vt = parseInt(_cfgVals['dsp_voice'] || '0', 10);
-    const wd = parseInt(_cfgVals['dsp_width'] || '0', 10);
-    return (g > 0) || (b > 0) || (vt > 0) || (wd > 0);
+    return dspEngineActive();
   }
   // "Active" means "differs from the untouched device", which is not always the same as
   // "differs from the default".
@@ -7663,7 +7663,7 @@ const APPLY_MODE = {
      straight back from /sys/kernel/mm/lru_gen/min_ttl_ms - no reboot, verifiable. */
   mglru_hold: APPLY_LIVE,
   // Live: these have a runtime script that runs on save and is verified afterwards.
-  audio_profile:APPLY_LIVE, dsp_loudness:APPLY_LIVE, dsp_bass:APPLY_LIVE, dsp_voice:APPLY_LIVE, dsp_width:APPLY_LIVE,
+  audio_profile:APPLY_LIVE, dsp_loudness:APPLY_LIVE, dsp_bass:APPLY_LIVE, dsp_voice:APPLY_LIVE, dsp_width:APPLY_LIVE, dsp_clarity:APPLY_LIVE, dsp_rumble:APPLY_LIVE,
   dsp_compressor:APPLY_LIVE, dsp_headroom:APPLY_LIVE, bt_absvol_mode:APPLY_LIVE, bt_link_stability:APPLY_LIVE, bt_a2dp_offload:APPLY_LIVE,
   haptic_strength:APPLY_LIVE, haptic_touch_strength:APPLY_LIVE,
   net_congestion:APPLY_LIVE, net_congestion_wifi:APPLY_LIVE, net_congestion_mobile:APPLY_LIVE,
@@ -8413,6 +8413,10 @@ const CFG_REQUIRES = [
     needs:'dsp_loudness', ok:function(v){ return Number(v) > 0; } },
   { key:'dsp_width', on:function(v){ return Number(v) > 0; },
     needs:'dsp_loudness', ok:function(v){ return Number(v) > 0; } },
+  { key:'dsp_clarity', on:function(v){ return Number(v) > 0; },
+    needs:'dsp_loudness', ok:function(v){ return Number(v) > 0; } },
+  { key:'dsp_rumble', on:function(v){ return String(v) !== 'off'; },
+    needs:'dsp_loudness', ok:function(v){ return Number(v) > 0; } },
   /* asb_fsm.h: burst/rest are read only while the lift itself is enabled. */
   { key:'prime_escape_burst_s', on:function(){ return true; },
     needs:'heavy_prime_escape', ok:function(v){ return String(v) === '1'; } },
@@ -8544,10 +8548,10 @@ async function cfgSet(key, val, ctl) {
     // reboot for these.
     // audioserver restarts briefly (a short audio gap), which is why it runs in the background
     // and the toast says "applying" rather than "reboot".
-    var AUDIO_LIVE_KEYS = ['dsp_outputs','audio_profile','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_compressor','dsp_headroom','bt_absvol_mode'];
+    var AUDIO_LIVE_KEYS = ['dsp_outputs','audio_profile','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom','bt_absvol_mode'];
     // DSP-only changes go through the daemon, which hands the value to the live effect -
     // no audioserver restart, so the audio never drops out while the slider moves.
-    var AUDIO_DSP_KEYS = ['dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_compressor','dsp_headroom'];
+    var AUDIO_DSP_KEYS = ['dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom'];
     // Overlay keys: media_loudness (volume curves) and audio_dac_hifi (mixer) are baked
     // into the mounted overlay and only read at boot - a restart cannot pick them up, so
     // be honest and say reboot.
