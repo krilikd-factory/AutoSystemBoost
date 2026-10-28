@@ -702,6 +702,50 @@ start_full_day() {
   return 0
 }
 
+stop_full_day() {
+  _sp="$(lock_live_pid 2>/dev/null || true)"
+  [ -n "$_sp" ] || _sp="$(legacy_live_pid 2>/dev/null || true)"
+  if [ -z "$_sp" ]; then
+    echo 'status=idle'
+    return 0
+  fi
+  if ! full_day_pid_matches_recorder "$_sp"; then
+    echo 'status=starting'
+    echo "pid=$_sp"
+    return 0
+  fi
+  _so="$(cat "$OUTPUTFILE" 2>/dev/null || true)"
+  _sk="$(pid_descendants "$_sp")"
+  kill -TERM "$_sp" 2>/dev/null || { echo 'error=stop_failed'; return 9; }
+  for _sc in $_sk; do
+    _scc="$(tr '\000' ' ' < "$PROC_ROOT/$_sc/cmdline" 2>/dev/null || true)"
+    case "$_scc" in sleep\ *|*/sleep\ *) kill -TERM "$_sc" 2>/dev/null || true ;; esac
+  done
+  [ -f "$MODDIR/runtime/asb_cgroup.sh" ] && . "$MODDIR/runtime/asb_cgroup.sh" && asb_cgroup_detach $$ >/dev/null 2>&1
+  (
+    exec </dev/null >/dev/null 2>&1
+    _sw=0
+    while [ "$_sw" -lt "${ASB_DEBUG_SUPPORT_STOP_WAIT_S:-120}" ] && pid_is_live "$_sp"; do
+      sleep 1
+      _sw=$(( _sw + 1 ))
+    done
+    if pid_is_live "$_sp" && full_day_pid_matches_recorder "$_sp"; then
+      kill -KILL "$_sp" 2>/dev/null || true
+      full_day_recovery_note "stop=forced pid=$_sp"
+    fi
+    for _sc in $_sk; do
+      pid_is_live "$_sc" && full_day_pid_matches_recorder "$_sc" && kill -KILL "$_sc" 2>/dev/null
+    done
+    if [ -d "$LOCKDIR" ] && [ "$(pid_from_file "$PIDFILE" 2>/dev/null || true)" = "$_sp" ] && ! pid_is_live "$_sp"; then
+      rm -rf "$LOCKDIR" 2>/dev/null || true
+    fi
+  ) &
+  echo 'status=stopping'
+  echo "pid=$_sp"
+  [ -n "$_so" ] && echo "output=$_so"
+  return 0
+}
+
 case "${1:-status}" in
   status) full_day_status ;;
   diag) write_diag ;;
@@ -709,5 +753,6 @@ case "${1:-status}" in
   diag-status) diag_status ;;
   full-day) start_full_day ;;
   full-day-start) start_full_day 1 ;;
+  full-day-stop) stop_full_day ;;
   *) echo 'error=bad_action'; exit 64 ;;
 esac

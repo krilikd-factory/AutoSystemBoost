@@ -68,6 +68,8 @@ _valid_seconds "$_raw_confirm" 1 30 && CONFIRM_INTERVAL_S="$_raw_confirm"
 [ "$CONFIRM_INTERVAL_S" -gt "$INTERVAL_S" ] && CONFIRM_INTERVAL_S="$INTERVAL_S"
 [ "$RELEASE_MAX_S" -lt "$RELEASE_S" ] && RELEASE_MAX_S="$RELEASE_S"
 STREAK="$STATE_DIR/wifi_fallback.streak"
+GW_OK="$STATE_DIR/wifi_fallback.gw"
+DEAD="$STATE_DIR/wifi_fallback.dead"
 
 _cfg() {
   grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r'
@@ -116,7 +118,33 @@ _wifi_default() {
   # lookup <table>"). When that table is Wi-Fi's, so is the default.
   printf '%s\n' "$_wd_rt" | grep -Eq '(^| )dev (tun|ppp|ipsec|wg|tap|vgate)[0-9A-Za-z_.-]*([[:space:]]|$)' || return 1
   ip rule show 2>/dev/null | grep -E 'fwmark 0x0/0xffff iif lo .*lookup ' | grep -v 'uidrange' \
-    | grep -Eq 'lookup wlan[0-9A-Za-z_.-]*([[:space:]]|$)'
+    | grep -Eq 'lookup wlan[0-9A-Za-z_.-]*([[:space:]]|$)' && return 0
+  _wd_now="$(date +%s 2>/dev/null || echo 0)"
+  case "${_wd_dc_at:-}" in ''|*[!0-9]*) _wd_dc_at=0 ;; esac
+  if [ $(( _wd_now - _wd_dc_at )) -ge 30 ] 2>/dev/null || [ "$_wd_dc_at" = 0 ]; then
+    _wd_dc_at="$_wd_now"
+    _wd_dc_ok=0
+    _wd_dc="$(dumpsys connectivity 2>/dev/null)"
+    _wd_nid="$(printf '%s\n' "$_wd_dc" | sed -n 's/^[[:space:]]*Active default network: \([0-9][0-9]*\).*/\1/p' | head -n 1)"
+    if [ -n "$_wd_nid" ] && printf '%s\n' "$_wd_dc" | grep -E "NetworkAgentInfo\{network\{$_wd_nid\}" \
+      | grep -Eq 'InterfaceName: wlan[0-9A-Za-z_.-]*'; then
+      _wd_dc_ok=1
+    fi
+    _wd_dc=""
+  fi
+  [ "${_wd_dc_ok:-0}" = 1 ]
+}
+_wifi_iface() {
+  _wi="$(ip route get 1.1.1.1 2>/dev/null | sed -n 's/.* dev \(wlan[0-9A-Za-z_.-]*\).*/\1/p' | head -n 1)"
+  [ -n "$_wi" ] || _wi=wlan0
+  printf '%s' "$_wi"
+}
+_wifi_gateway() {
+  ip route show table "$1" 2>/dev/null | sed -n 's/^default via \([0-9][0-9.]*\) .*/\1/p' | head -n 1
+}
+_gw_answers() {
+  command -v ping >/dev/null 2>&1 || return 2
+  ping -c 1 -W 1 -I "$1" "$2" >/dev/null 2>&1
 }
 _wifi_unvalidated() {
   _w="$(dumpsys wifi 2>/dev/null)"
@@ -304,16 +332,18 @@ _try_release() {
   fi
   if [ -n "$_leave_rssi" ]; then
     _rs_now="$(_wifi_rssi)"
-    # Signal recovered: clear the streak. Confirmation has to measure a continuous run
-    # of weak samples, not a tally of unrelated dips.
+    _hist_r="$(cat "$CONFIRM_RSSI" 2>/dev/null | tr -dc '01')"
     if [ -n "$_rs_now" ] && [ "$_rs_now" -ge "$_leave_rssi" ] 2>/dev/null; then
-      rm -f "$CONFIRM_RSSI" 2>/dev/null
+      _hist_r="${_hist_r}0"
+      _hist_r="$(printf '%s' "$_hist_r" | sed 's/.*\(....\)$/\1/')"
+      case "$_hist_r" in *1*) { printf '%s\n' "$_hist_r" > "$CONFIRM_RSSI"; } 2>/dev/null || true ;;
+        *) rm -f "$CONFIRM_RSSI" 2>/dev/null ;; esac
     fi
     if [ -n "$_rs_now" ] && [ "$_rs_now" -lt "$_leave_rssi" ] 2>/dev/null; then
-      _seen_r="$(cat "$CONFIRM_RSSI" 2>/dev/null | tr -dc '0-9')"
+      _hist_r="$(printf '%s' "${_hist_r}1" | sed 's/.*\(....\)$/\1/')"
+      { printf '%s\n' "$_hist_r" > "$CONFIRM_RSSI"; } 2>/dev/null || true
+      _seen_r="$(printf '%s' "$_hist_r" | tr -dc '1' | wc -c | tr -dc '0-9')"
       case "$_seen_r" in '') _seen_r=0 ;; esac
-      _seen_r=$(( _seen_r + 1 ))
-      { printf '%s\n' "$_seen_r" > "$CONFIRM_RSSI"; } 2>/dev/null || true
       if [ "$_seen_r" -ge "${ASB_WIFI_CONFIRM_PASSES:-3}" ] 2>/dev/null; then
         rm -f "$CONFIRM_RSSI" 2>/dev/null
         _rw="$(_release_window)"
@@ -327,6 +357,50 @@ _try_release() {
       _log "out of range (rssi=${_rs_now}) pass ${_seen_r}/${ASB_WIFI_CONFIRM_PASSES:-3}"
       _fast=1
       return 0
+    fi
+  fi
+
+  if _uses_validation && [ -n "${_leave_rssi:-}" ] && [ -n "${_rs_now:-}" ]; then
+    _wif="$(_wifi_iface)"
+    _gw="$(_wifi_gateway "$_wif")"
+    if [ -n "$_gw" ]; then
+      _gw_seen="$(cat "$GW_OK" 2>/dev/null)"
+      if [ "$_rs_now" -lt $(( _leave_rssi + 8 )) ] 2>/dev/null; then
+        _gw_answers "$_wif" "$_gw"
+        _gw_rc=$?
+        if [ "$_gw_rc" = 0 ]; then
+          printf '%s\n' "$_gw" > "$GW_OK" 2>/dev/null
+          rm -f "$DEAD" 2>/dev/null
+        elif [ "$_gw_rc" = 1 ] && [ "$_gw_seen" = "$_gw" ]; then
+          _dead_n="$(cat "$DEAD" 2>/dev/null | tr -dc '0-9')"
+          case "$_dead_n" in '') _dead_n=0 ;; esac
+          _dead_n=$(( _dead_n + 1 ))
+          printf '%s\n' "$_dead_n" > "$DEAD" 2>/dev/null
+          if [ "$_dead_n" -ge 2 ]; then
+            rm -f "$DEAD" "$CONFIRM_RSSI" 2>/dev/null
+            _rw="$(_release_window)"
+            _log "link dead (gateway ${_gw} silent, rssi=${_rs_now}) - releasing Wi-Fi default route for ${_rw}s"
+            _nowv="$(_now)"
+            if _wifi_disable; then
+              printf '%s|%s\n' "$_nowv" "$(( _nowv + _rw ))" > "$ACTION" 2>/dev/null
+            fi
+            return 0
+          fi
+          _log "link dead (gateway ${_gw} silent, rssi=${_rs_now}) pass ${_dead_n}/2"
+          _fast=1
+          return 0
+        fi
+      else
+        rm -f "$DEAD" 2>/dev/null
+        if [ "$_gw_seen" != "$_gw" ]; then
+          _gw_last="${_gw_probe_at:-0}"
+          _gw_tick="$(_now)"
+          if [ $(( _gw_tick - _gw_last )) -ge 60 ] 2>/dev/null; then
+            _gw_probe_at="$_gw_tick"
+            _gw_answers "$_wif" "$_gw" && printf '%s\n' "$_gw" > "$GW_OK" 2>/dev/null
+          fi
+        fi
+      fi
     fi
   fi
 
@@ -476,7 +550,7 @@ _stop() {
   _restore_if_owned
   # CONFIRM too: a streak counted before the feature was turned off must not survive to
   # shorten the first decision after it is turned back on.
-  rm -f "$PID" "$COOLDOWN" "$CONFIRM" "$CONFIRM_RSSI" "$STREAK" 2>/dev/null
+  rm -f "$PID" "$COOLDOWN" "$CONFIRM" "$CONFIRM_RSSI" "$STREAK" "$GW_OK" "$DEAD" 2>/dev/null
   _lock_owner_alive || rm -rf "$LOCK" 2>/dev/null
 }
 _watch() {
@@ -513,6 +587,7 @@ _watch() {
       if ! _wifi_default; then
         [ "$_armed" = "1" ] && _log 'fallback disarmed (Wi-Fi link gone)'
         _armed=0; _arm_good=0
+        rm -f "$GW_OK" "$DEAD" 2>/dev/null
       elif [ "$_armed" = "0" ]; then
         if ! _uses_validation; then
           # weak acts on signal alone: nothing to prove first (fix134).
