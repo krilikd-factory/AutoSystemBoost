@@ -96,8 +96,8 @@
   "t_rebooting": "Redémarrage…",
   "cfg": {
     "net_mtu_probing": {
-          "name": "Récupération MTU TCP",
-          "desc": "Pour les routes mobiles ou VPN où la découverte de MTU bloquée fige les connexions. Activé déclenche la sonde du noyau uniquement en cas de suspicion de trou noir ; les routes saines conservent leur MSS normal. Ce n’est pas une accélération générale. Origine et la désinstallation restaurent exactement l’ancienne valeur 0, 1 ou 2."
+      "name": "Récupération MTU TCP",
+      "desc": "Pour les routes mobiles ou VPN où la découverte de MTU bloquée fige les connexions. Activé déclenche la sonde du noyau uniquement en cas de suspicion de trou noir ; les routes saines conservent leur MSS normal. Ce n’est pas une accélération générale. Origine et la désinstallation restaurent exactement l’ancienne valeur 0, 1 ou 2."
     },
     "doze_trim_whitelist": {
       "desc": "Retire vos applications de la liste des exemptions de veille profonde ; les applications système (téléphone, SMS, horloge, gestionnaire root) ne sont pas touchées. Le bouton ci-dessous montre quelles applications sont exemptées et permet de conserver celles dont vous avez besoin.",
@@ -488,10 +488,9 @@
         "off": "Journal détaillé de LSPosed coupé au prochain démarrage ; les anciens fichiers sont supprimés tout de suite."
       }
     },
-    "dsp_headroom": {
-      "name": "DSP True-Peak Headroom",
-      "desc": "Final true-peak ceiling: 15 = -0.15 dB, 30 = -0.30 dB, 50 = -0.50 dB, 100 = -1.00 dB. More headroom leaves extra margin for inter-sample peaks after Bluetooth or DAC reconstruction. It lowers only the final ceiling, not the selected gain, bass, voice or width. Applies live through the existing DSP engine."
-    }
+    "dsp_headroom": "DSP Output Headroom",
+    "dsp_clarity": "DSP Clarity",
+    "dsp_rumble": "DSP Sub-bass Filter"
   },
   "opt": {
     "3": "+3 dB",
@@ -517,8 +516,8 @@
   },
   "optFor": {
     "net_mtu_probing": {
-          "stock": "Origine",
-          "on": "Activé"
+      "stock": "Origine",
+      "on": "Activé"
     },
     "doze_level": {
       "stock": "stock",
@@ -664,6 +663,12 @@
     "lsposed_verbose": {
       "keep": "conserver",
       "off": "désactivé"
+    },
+    "dsp_rumble": {
+      "off": "Off",
+      "35": "35 Hz",
+      "50": "50 Hz",
+      "70": "70 Hz"
     }
   },
   "prof_none": "non sélectionné",
@@ -1617,5 +1622,11 @@
   "dev_json_empty": "Actualisez d’abord le diagnostic de l’appareil.",
   "dev_json_saved": "Enregistré : {path}",
   "dev_json_error": "Impossible d’enregistrer device.json.",
-  "dev_uname_mismatch_susfs_note": "The releases differ, and SuSFS reports CONFIG_KSU_SUSFS_SPOOF_UNAME. On a SuSFS/Wild GKI setup this is an expected possible explanation, not evidence of a compromised kernel. The collector does not claim which component produced either string."
+  "dev_uname_mismatch_susfs_note": "The releases differ, and SuSFS reports CONFIG_KSU_SUSFS_SPOOF_UNAME. On a SuSFS/Wild GKI setup this is an expected possible explanation, not evidence of a compromised kernel. The collector does not claim which component produced either string.",
+  "dsp_eq_idle": "EQ mode · DSP off",
+  "desc": {
+    "dsp_clarity": "Gentle high-shelf detail lift above 6.5 kHz (0.5 dB per level, up to +4 dB). Before width, dynamics and the safety limiter.",
+    "dsp_rumble": "24 dB/octave high-pass filter for sub-bass rumble and speaker excursion. Start at 35 Hz; 70 Hz is intentionally aggressive.",
+    "dsp_headroom": "Sample-peak ceiling below 0 dBFS. Leaves DAC/codec reconstruction margin; not an oversampled true-peak detector."
+  }
 }

@@ -2,8 +2,8 @@
   "wb_handover": "Mobil veri ekran açıkken hazır tutulur ve biraz daha fazla pil tüketir",
   "cfg": {
     "net_mtu_probing": {
-          "name": "TCP MTU kurtarma",
-          "desc": "Engellenen yol MTU keşfinin bağlantıları durdurduğu mobil veya VPN rotaları için. Açık, çekirdek yoklamasını yalnızca kara delik şüphesinde etkinleştirir; sağlıklı rotalar normal MSS değerini korur. Genel bir hız artışı değildir. Stok ve kaldırma, önceki 0, 1 veya 2 değerini aynen geri yükler."
+      "name": "TCP MTU kurtarma",
+      "desc": "Engellenen yol MTU keşfinin bağlantıları durdurduğu mobil veya VPN rotaları için. Açık, çekirdek yoklamasını yalnızca kara delik şüphesinde etkinleştirir; sağlıklı rotalar normal MSS değerini korur. Genel bir hız artışı değildir. Stok ve kaldırma, önceki 0, 1 veya 2 değerini aynen geri yükler."
     },
     "audio_profile": {
       "name": "Ses profili",
@@ -394,10 +394,9 @@
         "off": "LSPosed ayrıntılı günlüğü bir sonraki açılışta kapanır; eski dosyalar hemen silinir."
       }
     },
-    "dsp_headroom": {
-      "name": "DSP True-Peak Headroom",
-      "desc": "Final true-peak ceiling: 15 = -0.15 dB, 30 = -0.30 dB, 50 = -0.50 dB, 100 = -1.00 dB. More headroom leaves extra margin for inter-sample peaks after Bluetooth or DAC reconstruction. It lowers only the final ceiling, not the selected gain, bass, voice or width. Applies live through the existing DSP engine."
-    }
+    "dsp_headroom": "DSP Output Headroom",
+    "dsp_clarity": "DSP Clarity",
+    "dsp_rumble": "DSP Sub-bass Filter"
   },
   "nav_live": "İzleme",
   "lv_ses": "Oturum",
@@ -428,8 +427,8 @@
   "grp_ui": "Sistem",
   "optFor": {
     "net_mtu_probing": {
-          "stock": "Stok",
-          "on": "Açık"
+      "stock": "Stok",
+      "on": "Açık"
     },
     "gms_freeze": {
       "off": "kapalı",
@@ -575,6 +574,12 @@
     "lsposed_verbose": {
       "keep": "dokunma",
       "off": "kapalı"
+    },
+    "dsp_rumble": {
+      "off": "Off",
+      "35": "35 Hz",
+      "50": "50 Hz",
+      "70": "70 Hz"
     }
   },
   "prof_none": "seçilmedi",
@@ -1617,5 +1622,11 @@
   "dev_json_empty": "Önce cihaz tanılamasını yenileyin.",
   "dev_json_saved": "Kaydedildi: {path}",
   "dev_json_error": "device.json kaydedilemedi.",
-  "dev_uname_mismatch_susfs_note": "The releases differ, and SuSFS reports CONFIG_KSU_SUSFS_SPOOF_UNAME. On a SuSFS/Wild GKI setup this is an expected possible explanation, not evidence of a compromised kernel. The collector does not claim which component produced either string."
+  "dev_uname_mismatch_susfs_note": "The releases differ, and SuSFS reports CONFIG_KSU_SUSFS_SPOOF_UNAME. On a SuSFS/Wild GKI setup this is an expected possible explanation, not evidence of a compromised kernel. The collector does not claim which component produced either string.",
+  "dsp_eq_idle": "EQ mode · DSP off",
+  "desc": {
+    "dsp_clarity": "Gentle high-shelf detail lift above 6.5 kHz (0.5 dB per level, up to +4 dB). Before width, dynamics and the safety limiter.",
+    "dsp_rumble": "24 dB/octave high-pass filter for sub-bass rumble and speaker excursion. Start at 35 Hz; 70 Hz is intentionally aggressive.",
+    "dsp_headroom": "Sample-peak ceiling below 0 dBFS. Leaves DAC/codec reconstruction margin; not an oversampled true-peak detector."
+  }
 }

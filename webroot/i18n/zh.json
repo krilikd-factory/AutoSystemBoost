@@ -29,8 +29,8 @@
   "wb_handover": "屏幕开启时移动数据会保持就绪，耗电会略有增加",
   "cfg": {
     "net_mtu_probing": {
-          "name": "TCP MTU 恢复",
-          "desc": "用于路径 MTU 发现被阻断而导致连接停滞的移动或 VPN 路由。开启后，内核只在怀疑出现黑洞时进行探测，正常路由保持原有 MSS，并非通用提速。选择原厂或卸载模块都会精确恢复此前的 0、1 或 2。"
+      "name": "TCP MTU 恢复",
+      "desc": "用于路径 MTU 发现被阻断而导致连接停滞的移动或 VPN 路由。开启后，内核只在怀疑出现黑洞时进行探测，正常路由保持原有 MSS，并非通用提速。选择原厂或卸载模块都会精确恢复此前的 0、1 或 2。"
     },
     "audio_profile": {
       "name": "音频配置",
@@ -421,15 +421,14 @@
         "off": "下次启动起关闭 LSPosed 详细日志；旧日志文件立即删除。"
       }
     },
-    "dsp_headroom": {
-      "name": "DSP True-Peak Headroom",
-      "desc": "Final true-peak ceiling: 15 = -0.15 dB, 30 = -0.30 dB, 50 = -0.50 dB, 100 = -1.00 dB. More headroom leaves extra margin for inter-sample peaks after Bluetooth or DAC reconstruction. It lowers only the final ceiling, not the selected gain, bass, voice or width. Applies live through the existing DSP engine."
-    }
+    "dsp_headroom": "DSP 输出余量",
+    "dsp_clarity": "DSP 清晰度",
+    "dsp_rumble": "DSP 超低音滤波"
   },
   "optFor": {
     "net_mtu_probing": {
-          "stock": "原厂",
-          "on": "开启"
+      "stock": "原厂",
+      "on": "开启"
     },
     "gms_freeze": {
       "off": "关闭",
@@ -575,6 +574,12 @@
     "lsposed_verbose": {
       "keep": "保持",
       "off": "关闭"
+    },
+    "dsp_rumble": {
+      "off": "Off",
+      "35": "35 Hz",
+      "50": "50 Hz",
+      "70": "70 Hz"
     }
   },
   "prof_none": "未选择",
@@ -1617,5 +1622,11 @@
   "dev_json_empty": "请先刷新设备诊断。",
   "dev_json_saved": "已保存：{path}",
   "dev_json_error": "无法保存 device.json。",
-  "dev_uname_mismatch_susfs_note": "The releases differ, and SuSFS reports CONFIG_KSU_SUSFS_SPOOF_UNAME. On a SuSFS/Wild GKI setup this is an expected possible explanation, not evidence of a compromised kernel. The collector does not claim which component produced either string."
+  "dev_uname_mismatch_susfs_note": "The releases differ, and SuSFS reports CONFIG_KSU_SUSFS_SPOOF_UNAME. On a SuSFS/Wild GKI setup this is an expected possible explanation, not evidence of a compromised kernel. The collector does not claim which component produced either string.",
+  "dsp_eq_idle": "EQ mode · DSP off",
+  "desc": {
+    "dsp_clarity": "Gentle high-shelf detail lift above 6.5 kHz (0.5 dB per level, up to +4 dB). Before width, dynamics and the safety limiter.",
+    "dsp_rumble": "24 dB/octave high-pass filter for sub-bass rumble and speaker excursion. Start at 35 Hz; 70 Hz is intentionally aggressive.",
+    "dsp_headroom": "Sample-peak ceiling below 0 dBFS. Leaves DAC/codec reconstruction margin; not an oversampled true-peak detector."
+  }
 }

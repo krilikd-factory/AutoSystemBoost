@@ -2,8 +2,8 @@
   "wb_handover": "Мобільні дані залишаються готовими за ввімкненого екрана й витрачають трохи більше заряду",
   "cfg": {
     "net_mtu_probing": {
-          "name": "Відновлення TCP MTU",
-          "desc": "Для мобільних і VPN-маршрутів, де блокування Path MTU Discovery призводить до зависання з’єднань. Увімкнення запускає перевірку ядра лише за підозри на «чорну діру»; на справних маршрутах MSS не змінюється. Це не універсальне прискорення мережі. «Сток» і видалення повертають початкове значення 0, 1 або 2."
+      "name": "Відновлення TCP MTU",
+      "desc": "Для мобільних і VPN-маршрутів, де блокування Path MTU Discovery призводить до зависання з’єднань. Увімкнення запускає перевірку ядра лише за підозри на «чорну діру»; на справних маршрутах MSS не змінюється. Це не універсальне прискорення мережі. «Сток» і видалення повертають початкове значення 0, 1 або 2."
     },
     "audio_profile": {
       "name": "Аудіопрофіль",
@@ -394,10 +394,9 @@
         "off": "Детальний лог LSPosed вимкнеться з наступного завантаження; старі файли логу видаляються одразу."
       }
     },
-    "dsp_headroom": {
-      "name": "DSP True-Peak Headroom",
-      "desc": "Final true-peak ceiling: 15 = -0.15 dB, 30 = -0.30 dB, 50 = -0.50 dB, 100 = -1.00 dB. More headroom leaves extra margin for inter-sample peaks after Bluetooth or DAC reconstruction. It lowers only the final ceiling, not the selected gain, bass, voice or width. Applies live through the existing DSP engine."
-    }
+    "dsp_headroom": "Выходной запас DSP",
+    "dsp_clarity": "Ясность DSP",
+    "dsp_rumble": "Фильтр инфранизких частот"
   },
   "nav_live": "Монітор",
   "lv_ses": "Сесії",
@@ -428,8 +427,8 @@
   "grp_ui": "Система",
   "optFor": {
     "net_mtu_probing": {
-          "stock": "Сток",
-          "on": "Увімк."
+      "stock": "Сток",
+      "on": "Увімк."
     },
     "gms_freeze": {
       "off": "вимк",
@@ -575,6 +574,12 @@
     "lsposed_verbose": {
       "keep": "не чіпати",
       "off": "вимк"
+    },
+    "dsp_rumble": {
+      "off": "Выкл.",
+      "35": "35 Гц",
+      "50": "50 Гц",
+      "70": "70 Гц"
     }
   },
   "prof_none": "не вибрано",
@@ -1617,5 +1622,11 @@
   "dev_json_empty": "Спочатку оновіть діагностику пристрою.",
   "dev_json_saved": "Збережено: {path}",
   "dev_json_error": "Не вдалося зберегти device.json.",
-  "dev_uname_mismatch_susfs_note": "The releases differ, and SuSFS reports CONFIG_KSU_SUSFS_SPOOF_UNAME. On a SuSFS/Wild GKI setup this is an expected possible explanation, not evidence of a compromised kernel. The collector does not claim which component produced either string."
+  "dev_uname_mismatch_susfs_note": "The releases differ, and SuSFS reports CONFIG_KSU_SUSFS_SPOOF_UNAME. On a SuSFS/Wild GKI setup this is an expected possible explanation, not evidence of a compromised kernel. The collector does not claim which component produced either string.",
+  "dsp_eq_idle": "Режим EQ · DSP вимкнено",
+  "desc": {
+    "dsp_clarity": "Мягкий подъём деталей выше 6,5 кГц: 0,5 дБ на уровень, максимум +4 дБ. До ширины, динамики и лимитера.",
+    "dsp_rumble": "ФНЧ 24 дБ/октаву против инфранизкого гула и лишнего хода динамика. Начните с 35 Гц; 70 Гц — агрессивный режим.",
+    "dsp_headroom": "Потолок sample peaks ниже 0 dBFS. Запас для ЦАП/кодека; это не oversampled true-peak detector."
+  }
 }

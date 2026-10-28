@@ -2,8 +2,8 @@
   "wb_handover": "Data seluler tetap siap saat layar menyala dan memakai sedikit lebih banyak baterai",
   "cfg": {
     "net_mtu_probing": {
-          "name": "Pemulihan MTU TCP",
-          "desc": "Untuk rute seluler atau VPN saat path MTU discovery yang diblokir membuat koneksi macet. Aktif menjalankan pemeriksaan kernel hanya setelah dugaan black hole; rute sehat mempertahankan MSS normal. Ini bukan peningkatan kecepatan umum. Bawaan dan penghapusan memulihkan nilai 0, 1, atau 2 sebelumnya dengan tepat."
+      "name": "Pemulihan MTU TCP",
+      "desc": "Untuk rute seluler atau VPN saat path MTU discovery yang diblokir membuat koneksi macet. Aktif menjalankan pemeriksaan kernel hanya setelah dugaan black hole; rute sehat mempertahankan MSS normal. Ini bukan peningkatan kecepatan umum. Bawaan dan penghapusan memulihkan nilai 0, 1, atau 2 sebelumnya dengan tepat."
     },
     "audio_profile": {
       "name": "Profil audio",
@@ -394,10 +394,9 @@
         "off": "Log rinci LSPosed mati mulai boot berikutnya; file lama dihapus sekarang."
       }
     },
-    "dsp_headroom": {
-      "name": "DSP True-Peak Headroom",
-      "desc": "Final true-peak ceiling: 15 = -0.15 dB, 30 = -0.30 dB, 50 = -0.50 dB, 100 = -1.00 dB. More headroom leaves extra margin for inter-sample peaks after Bluetooth or DAC reconstruction. It lowers only the final ceiling, not the selected gain, bass, voice or width. Applies live through the existing DSP engine."
-    }
+    "dsp_headroom": "DSP Output Headroom",
+    "dsp_clarity": "DSP Clarity",
+    "dsp_rumble": "DSP Sub-bass Filter"
   },
   "nav_live": "Monitor",
   "lv_ses": "Sesi",
@@ -428,8 +427,8 @@
   "grp_ui": "Sistem",
   "optFor": {
     "net_mtu_probing": {
-          "stock": "Bawaan",
-          "on": "Aktif"
+      "stock": "Bawaan",
+      "on": "Aktif"
     },
     "gms_freeze": {
       "off": "mati",
@@ -575,6 +574,12 @@
     "lsposed_verbose": {
       "keep": "biarkan",
       "off": "mati"
+    },
+    "dsp_rumble": {
+      "off": "Off",
+      "35": "35 Hz",
+      "50": "50 Hz",
+      "70": "70 Hz"
     }
   },
   "prof_none": "belum dipilih",
@@ -1617,5 +1622,11 @@
   "dev_json_empty": "Segarkan diagnosis perangkat terlebih dahulu.",
   "dev_json_saved": "Tersimpan: {path}",
   "dev_json_error": "Tidak dapat menyimpan device.json.",
-  "dev_uname_mismatch_susfs_note": "The releases differ, and SuSFS reports CONFIG_KSU_SUSFS_SPOOF_UNAME. On a SuSFS/Wild GKI setup this is an expected possible explanation, not evidence of a compromised kernel. The collector does not claim which component produced either string."
+  "dev_uname_mismatch_susfs_note": "The releases differ, and SuSFS reports CONFIG_KSU_SUSFS_SPOOF_UNAME. On a SuSFS/Wild GKI setup this is an expected possible explanation, not evidence of a compromised kernel. The collector does not claim which component produced either string.",
+  "dsp_eq_idle": "EQ mode · DSP off",
+  "desc": {
+    "dsp_clarity": "Gentle high-shelf detail lift above 6.5 kHz (0.5 dB per level, up to +4 dB). Before width, dynamics and the safety limiter.",
+    "dsp_rumble": "24 dB/octave high-pass filter for sub-bass rumble and speaker excursion. Start at 35 Hz; 70 Hz is intentionally aggressive.",
+    "dsp_headroom": "Sample-peak ceiling below 0 dBFS. Leaves DAC/codec reconstruction margin; not an oversampled true-peak detector."
+  }
 }

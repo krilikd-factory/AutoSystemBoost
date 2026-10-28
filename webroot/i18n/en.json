@@ -19,8 +19,8 @@
   },
   "optFor": {
     "net_mtu_probing": {
-          "stock": "Stock",
-          "on": "On"
+      "stock": "Stock",
+      "on": "On"
     },
     "ui_effects_level": {
       "auto": "Auto",
@@ -166,14 +166,20 @@
     "lsposed_verbose": {
       "keep": "keep",
       "off": "off"
+    },
+    "dsp_rumble": {
+      "off": "Off",
+      "35": "35 Hz",
+      "50": "50 Hz",
+      "70": "70 Hz"
     }
   },
   "prof_none": "not selected",
   "wb_handover": "Mobile data stays ready while the screen is on, which uses a little more battery",
   "cfg": {
     "net_mtu_probing": {
-          "name": "TCP MTU Recovery",
-          "desc": "For mobile or VPN routes where blocked path MTU discovery makes connections stall. On enables the kernel probe only after a suspected black hole; healthy routes keep their normal MSS. This is not a general speed boost. Stock and uninstall restore the exact previous 0, 1 or 2 value."
+      "name": "TCP MTU Recovery",
+      "desc": "For mobile or VPN routes where blocked path MTU discovery makes connections stall. On enables the kernel probe only after a suspected black hole; healthy routes keep their normal MSS. This is not a general speed boost. Stock and uninstall restore the exact previous 0, 1 or 2 value."
     },
     "athena_service": {
       "name": "Athena Background Killer",
@@ -346,10 +352,9 @@
         "off": "LSPosed's verbose log off from the next boot; old verbose logs deleted now."
       }
     },
-    "dsp_headroom": {
-      "name": "DSP True-Peak Headroom",
-      "desc": "Final true-peak ceiling: 15 = -0.15 dB, 30 = -0.30 dB, 50 = -0.50 dB, 100 = -1.00 dB. More headroom leaves extra margin for inter-sample peaks after Bluetooth or DAC reconstruction. It lowers only the final ceiling, not the selected gain, bass, voice or width. Applies live through the existing DSP engine."
-    }
+    "dsp_headroom": "DSP Output Headroom",
+    "dsp_clarity": "DSP Clarity",
+    "dsp_rumble": "DSP Sub-bass Filter"
   },
   "cfg_search": "Search",
   "cfg_search_none": "Nothing matches that",
@@ -1395,5 +1400,11 @@
   "dev_json_empty": "Refresh device diagnostics before exporting JSON.",
   "dev_json_saved": "Saved {path}",
   "dev_json_error": "Could not save device.json.",
-  "dev_uname_mismatch_susfs_note": "The releases differ, and SuSFS reports CONFIG_KSU_SUSFS_SPOOF_UNAME. On a SuSFS/Wild GKI setup this is an expected possible explanation, not evidence of a compromised kernel. The collector does not claim which component produced either string."
+  "dev_uname_mismatch_susfs_note": "The releases differ, and SuSFS reports CONFIG_KSU_SUSFS_SPOOF_UNAME. On a SuSFS/Wild GKI setup this is an expected possible explanation, not evidence of a compromised kernel. The collector does not claim which component produced either string.",
+  "dsp_eq_idle": "EQ mode · DSP off",
+  "desc": {
+    "dsp_clarity": "Gentle high-shelf detail lift above 6.5 kHz (0.5 dB per level, up to +4 dB). Before width, dynamics and the safety limiter.",
+    "dsp_rumble": "24 dB/octave high-pass filter for sub-bass rumble and speaker excursion. Start at 35 Hz; 70 Hz is intentionally aggressive.",
+    "dsp_headroom": "Sample-peak ceiling below 0 dBFS. Leaves DAC/codec reconstruction margin; not an oversampled true-peak detector."
+  }
 }

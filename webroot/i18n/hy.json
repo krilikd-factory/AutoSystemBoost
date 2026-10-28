@@ -96,8 +96,8 @@
   "t_rebooting": "Վերագործարկում…",
   "cfg": {
     "net_mtu_probing": {
-          "name": "TCP MTU վերականգնում",
-          "desc": "Բջջային կամ VPN երթուղիների համար, որտեղ արգելափակված Path MTU Discovery-ն կանգնեցնում է կապերը: Միացվածը միջուկի ստուգումը գործարկում է միայն «սև անցքի» կասկածի դեպքում. կողմնակի երթուղիների MSS-ը չի փոխվում: Սա ընդհանուր արագացում չէ: Բնօրինակը և հեռացումը վերադարձնում են նախորդ 0, 1 կամ 2 արժեքը:"
+      "name": "TCP MTU վերականգնում",
+      "desc": "Բջջային կամ VPN երթուղիների համար, որտեղ արգելափակված Path MTU Discovery-ն կանգնեցնում է կապերը: Միացվածը միջուկի ստուգումը գործարկում է միայն «սև անցքի» կասկածի դեպքում. կողմնակի երթուղիների MSS-ը չի փոխվում: Սա ընդհանուր արագացում չէ: Բնօրինակը և հեռացումը վերադարձնում են նախորդ 0, 1 կամ 2 արժեքը:"
     },
     "doze_trim_whitelist": {
       "desc": "Հեռացնում է ձեր հավելվածները խորը քնի բացառությունների ցանկից. համակարգայինները (զանգեր, SMS, ժամացույց, root-կառավարիչ) չեն շոշափվում։ Ներքևի կոճակը ցույց է տալիս, թե որ հավելվածներն են այժմ բացառություններում, և թույլ է տալիս պահել անհրաժեշտները։",
@@ -488,10 +488,9 @@
         "off": "LSPosed-ի մանրամասն լոգն անջատվում է հաջորդ բեռնումից. հին ֆայլերը ջնջվում են անմիջապես։"
       }
     },
-    "dsp_headroom": {
-      "name": "DSP True-Peak Headroom",
-      "desc": "Final true-peak ceiling: 15 = -0.15 dB, 30 = -0.30 dB, 50 = -0.50 dB, 100 = -1.00 dB. More headroom leaves extra margin for inter-sample peaks after Bluetooth or DAC reconstruction. It lowers only the final ceiling, not the selected gain, bass, voice or width. Applies live through the existing DSP engine."
-    }
+    "dsp_headroom": "DSP Output Headroom",
+    "dsp_clarity": "DSP Clarity",
+    "dsp_rumble": "DSP Sub-bass Filter"
   },
   "opt": {
     "3": "+3 dB",
@@ -517,8 +516,8 @@
   },
   "optFor": {
     "net_mtu_probing": {
-          "stock": "Բնօրինակ",
-          "on": "Միացված"
+      "stock": "Բնօրինակ",
+      "on": "Միացված"
     },
     "doze_level": {
       "stock": "ստանդարտ",
@@ -664,6 +663,12 @@
     "lsposed_verbose": {
       "keep": "չդիպչել",
       "off": "անջատ"
+    },
+    "dsp_rumble": {
+      "off": "Off",
+      "35": "35 Hz",
+      "50": "50 Hz",
+      "70": "70 Hz"
     }
   },
   "prof_none": "ընտրված չէ",
@@ -1617,5 +1622,11 @@
   "dev_json_empty": "Նախ թարմացրեք սարքի ախտորոշումը:",
   "dev_json_saved": "Պահպանված է՝ {path}",
   "dev_json_error": "Չհաջողվեց պահպանել device.json:",
-  "dev_uname_mismatch_susfs_note": "The releases differ, and SuSFS reports CONFIG_KSU_SUSFS_SPOOF_UNAME. On a SuSFS/Wild GKI setup this is an expected possible explanation, not evidence of a compromised kernel. The collector does not claim which component produced either string."
+  "dev_uname_mismatch_susfs_note": "The releases differ, and SuSFS reports CONFIG_KSU_SUSFS_SPOOF_UNAME. On a SuSFS/Wild GKI setup this is an expected possible explanation, not evidence of a compromised kernel. The collector does not claim which component produced either string.",
+  "dsp_eq_idle": "EQ mode · DSP off",
+  "desc": {
+    "dsp_clarity": "Gentle high-shelf detail lift above 6.5 kHz (0.5 dB per level, up to +4 dB). Before width, dynamics and the safety limiter.",
+    "dsp_rumble": "24 dB/octave high-pass filter for sub-bass rumble and speaker excursion. Start at 35 Hz; 70 Hz is intentionally aggressive.",
+    "dsp_headroom": "Sample-peak ceiling below 0 dBFS. Leaves DAC/codec reconstruction margin; not an oversampled true-peak detector."
+  }
 }

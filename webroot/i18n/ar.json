@@ -29,8 +29,8 @@
   "wb_handover": "تبقى بيانات الهاتف جاهزة أثناء تشغيل الشاشة، ما يستهلك قدراً بسيطاً من البطارية",
   "cfg": {
     "net_mtu_probing": {
-          "name": "استرداد TCP MTU",
-          "desc": "لمسارات الجوال أو VPN التي يؤدي فيها حظر اكتشاف MTU إلى توقف الاتصالات. يفعّل الخيار فحص النواة فقط عند الاشتباه في ثقب أسود، وتبقي المسارات السليمة على MSS المعتاد. ليس هذا تسريعاً عاماً. يعيد الافتراضي وإزالة الوحدة القيمة السابقة 0 أو 1 أو 2 بدقة."
+      "name": "استرداد TCP MTU",
+      "desc": "لمسارات الجوال أو VPN التي يؤدي فيها حظر اكتشاف MTU إلى توقف الاتصالات. يفعّل الخيار فحص النواة فقط عند الاشتباه في ثقب أسود، وتبقي المسارات السليمة على MSS المعتاد. ليس هذا تسريعاً عاماً. يعيد الافتراضي وإزالة الوحدة القيمة السابقة 0 أو 1 أو 2 بدقة."
     },
     "audio_profile": {
       "name": "ملف الصوت",
@@ -421,15 +421,14 @@
         "off": "يتوقف السجل المفصّل لـ LSPosed من الإقلاع التالي؛ تُحذف الملفات القديمة فورًا."
       }
     },
-    "dsp_headroom": {
-      "name": "DSP True-Peak Headroom",
-      "desc": "Final true-peak ceiling: 15 = -0.15 dB, 30 = -0.30 dB, 50 = -0.50 dB, 100 = -1.00 dB. More headroom leaves extra margin for inter-sample peaks after Bluetooth or DAC reconstruction. It lowers only the final ceiling, not the selected gain, bass, voice or width. Applies live through the existing DSP engine."
-    }
+    "dsp_headroom": "DSP Output Headroom",
+    "dsp_clarity": "DSP Clarity",
+    "dsp_rumble": "DSP Sub-bass Filter"
   },
   "optFor": {
     "net_mtu_probing": {
-          "stock": "الافتراضي",
-          "on": "مفعّل"
+      "stock": "الافتراضي",
+      "on": "مفعّل"
     },
     "gms_freeze": {
       "off": "إيقاف",
@@ -575,6 +574,12 @@
     "lsposed_verbose": {
       "keep": "إبقاء",
       "off": "إيقاف"
+    },
+    "dsp_rumble": {
+      "off": "Off",
+      "35": "35 Hz",
+      "50": "50 Hz",
+      "70": "70 Hz"
     }
   },
   "prof_none": "لم يتم الاختيار",
@@ -1617,5 +1622,11 @@
   "dev_json_empty": "حدّث تشخيص الجهاز أولاً.",
   "dev_json_saved": "تم الحفظ: {path}",
   "dev_json_error": "تعذر حفظ device.json.",
-  "dev_uname_mismatch_susfs_note": "The releases differ, and SuSFS reports CONFIG_KSU_SUSFS_SPOOF_UNAME. On a SuSFS/Wild GKI setup this is an expected possible explanation, not evidence of a compromised kernel. The collector does not claim which component produced either string."
+  "dev_uname_mismatch_susfs_note": "The releases differ, and SuSFS reports CONFIG_KSU_SUSFS_SPOOF_UNAME. On a SuSFS/Wild GKI setup this is an expected possible explanation, not evidence of a compromised kernel. The collector does not claim which component produced either string.",
+  "dsp_eq_idle": "EQ mode · DSP off",
+  "desc": {
+    "dsp_clarity": "Gentle high-shelf detail lift above 6.5 kHz (0.5 dB per level, up to +4 dB). Before width, dynamics and the safety limiter.",
+    "dsp_rumble": "24 dB/octave high-pass filter for sub-bass rumble and speaker excursion. Start at 35 Hz; 70 Hz is intentionally aggressive.",
+    "dsp_headroom": "Sample-peak ceiling below 0 dBFS. Leaves DAC/codec reconstruction margin; not an oversampled true-peak detector."
+  }
 }
