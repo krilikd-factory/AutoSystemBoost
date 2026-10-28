@@ -600,11 +600,16 @@ SEC "0b. CAMERA GRADE  (is the live tone table actually the graded one?)"
 # So read the live path, pull one value the grader always rewrites, and print it next to
 # the recorded one. Two numbers that agree is evidence; a status word is not.
 _cg_mark=""
+_cg_stats=""
 for _m in /data/adb/asb/grade_marks/*.mark; do
-  [ -f "$_m" ] && { _cg_mark="$(cat "$_m" 2>/dev/null)"; break; }
+  [ -f "$_m" ] || continue
+  _cg_mark="$(cat "$_m" 2>/dev/null)"
+  [ ! -f "$_m.stats" ] || _cg_stats="$(tr '\n' ' ' < "$_m.stats" 2>/dev/null | sed 's/ *$//')"
+  break
 done
 if [ -n "$_cg_mark" ]; then
   NOTE "recorded grade: ${_cg_mark#*=}   (hash:level:grain:contrast:portrait:lowlight)"
+  [ -z "$_cg_stats" ] || NOTE "camera grade coverage: $_cg_stats"
 else
   NOTE "recorded grade: none - the grader has not run on this install"
 fi
@@ -2292,6 +2297,7 @@ P "    rmem_default = $(cat /proc/sys/net/core/rmem_default 2>/dev/null)"
 P "    congestion = $(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null)"
 P "    available_congestion = $(cat /proc/sys/net/ipv4/tcp_available_congestion_control 2>/dev/null)"
 P "    tcp_fastopen = $(cat /proc/sys/net/ipv4/tcp_fastopen 2>/dev/null)"
+P "    tcp_mtu_probing = $(cat /proc/sys/net/ipv4/tcp_mtu_probing 2>/dev/null)"
 P "    default_qdisc = $(cat /proc/sys/net/core/default_qdisc 2>/dev/null)"
 # DNS / connectivity props ASB may touch
 P "  connectivity props:"
@@ -2390,12 +2396,13 @@ fi
 _nvf="/data/adb/asb/net_apply_result"
 if [ -f "$_nvf" ]; then
   for _nk in net_congestion net_qdisc net_congestion_wifi net_congestion_mobile \
-             net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle; do
+             net_qdisc_wifi net_qdisc_mobile net_mtu_probing wifi_country wifi_scan_throttle; do
     _nw="$(cfg "$_nk")"
     case "$_nw" in ''|auto) _net_auto="${_net_auto:+$_net_auto }$_nk"; continue ;; esac
     _nv="$(grep -E "^$_nk=" "$_nvf" 2>/dev/null | head -1 | sed 's/.*=//')"
     case "$_nv" in
       ok)          V "  $_nk" "$_nw" "$_nw" eq ;;
+      off)         OFF "  $_nk=stock (live tcp_mtu_probing=$(cat /proc/sys/net/ipv4/tcp_mtu_probing 2>/dev/null || echo unknown); original restored)" "net:mtu-stock" ;;
       unavailable)
         # "unavailable" for a qdisc key now also means "no working tc binary anywhere"
         # (the apply emits qdisc=...-unavailable then); for congestion it still means
