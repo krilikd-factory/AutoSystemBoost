@@ -9,6 +9,18 @@
 
 MODDIR=${0%/*}
 
+# Return generic scheduler debug accounting to its exact pre-ASB boolean. The state file is
+# created only before a successful opt-in write; no file means ASB never owned the node.
+if [ -f /data/adb/asb/kernel_sched_stats.prev ] && [ -w /proc/sys/kernel/sched_stats ]; then
+  _ss_orig="$(cat /data/adb/asb/kernel_sched_stats.prev 2>/dev/null | tr -d ' 
+')"
+  case "$_ss_orig" in
+    0|1) printf '%s
+' "$_ss_orig" > /proc/sys/kernel/sched_stats 2>/dev/null || true ;;
+  esac
+  rm -f /data/adb/asb/kernel_sched_stats.prev 2>/dev/null
+fi
+
 _BL=/data/adb/asb/baseline.txt
 _BL_TMP=/data/adb/.asb_uninstall_baseline
 _CC_FORCED=0
