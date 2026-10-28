@@ -1,4 +1,4 @@
-# CONFIG_SHAPE=52ce311c1b6e
+# CONFIG_SHAPE=1d56946721c1
 # Fingerprint of every option list and slider range in the WebUI. asb_lint.sh compares
 # against it: if the shape moves and this does not, a stored value may now mean something
 # different from what the user chose, and the schema number in install.sh needs bumping
@@ -288,6 +288,10 @@ night_quiet_enable=1
 night_quiet_hour_start=23
 night_quiet_hour_end=6
 mglru_hold=stock
+
+# Scheduler debug accounting: stock|off. Opt-in; generic /proc/sys/kernel/sched_stats only.
+# The exact original 0/1 is restored on stock and uninstall. Missing node = not exposed.
+kernel_sched_stats=stock
 BG_TRIM_LEVEL=safe
 
 # Google Play services background trim: stock | lite | strict
@@ -394,10 +398,11 @@ net_rps=stock
 #   latency under load more than it adds throughput.
 net_txqueue=stock
 
-# WiFi scan throttle: auto|0|1|2|3|4
+# WiFi scan throttle: auto|0|1|2|3|4|5
 #   0 = no background scanning at all (networks are found only when you look)
 #   1 = every 10 minutes    2 = every 5 minutes (framework default)
 #   3 = every 2 minutes     4 = unthrottled (roams sooner, costs battery)
+#   5 = every 30 minutes (slower discovery; explicit battery-saving rung)
 #   auto leaves both framework keys untouched.
 wifi_scan_throttle=2
 
