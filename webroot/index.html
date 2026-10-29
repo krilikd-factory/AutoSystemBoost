@@ -1638,6 +1638,19 @@ html[data-asb-theme="light"] .lgr-chip { background: #f7f9fa; }
 .lgr-brief { position: relative; font-size: 13px; line-height: 1.5; color: var(--text); padding: 3px 0; padding-inline-start: 14px; }
 .lgr-brief::before { content: '•'; position: absolute; inset-inline-start: 2px; color: var(--accent); font-weight: 800; }
 .lgr-brief-warn::before { color: var(--perf); }
+.lgr-dx { padding: 9px 0 10px; border-top: 1px solid var(--border); font-size: 12.5px; line-height: 1.45; }
+.lgr-dx:first-of-type { border-top: 0; padding-top: 2px; }
+.lgr-dx-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 3px; }
+.lgr-dx-area { color: var(--text); font-weight: 700; font-size: 13px; }
+.lgr-dx-state { font-weight: 700; font-size: 12px; white-space: nowrap; }
+.lgr-dx-cause { color: var(--text); }
+.lgr-dx-also { color: var(--text-secondary); margin-top: 3px; }
+.lgr-dx-fix { margin-top: 5px; padding-inline-start: 9px; border-inline-start: 2px solid var(--accent); color: var(--text); }
+.lgr-dx-fix-l { color: var(--accent); font-weight: 700; margin-inline-end: 5px; }
+.lgr-dx-owner { margin-top: 5px; color: var(--text-tertiary); font-size: 11.5px; }
+.lgr-dx-owner-asb, .lgr-dx-owner-unknown { color: var(--perf); }
+.lgr-dx-send { margin-top: 7px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; color: var(--text-secondary); }
+.lgr-dx-btn { font-size: 12px; }
 .lgr-warn { color: var(--perf); }
 /* fix200: real per-app / per-rate tables. Fixed layout so a long package name ellipsizes
    instead of pushing the numbers off the card. */
@@ -10342,6 +10355,13 @@ function logReportHolderWhat(w) {
   if (w.kind === 'alarm') return logReportT('lr_hold_alarm', 'alarm {name}', { name: tag });
   return tag;
 }
+/* fix247: the screen-off awake share the plain-words parts quote - the longest idle chain
+ * when there is one (the figure the deep-sleep verdict uses), else the worst phase. */
+function logReportIdleAwake(s) {
+  const n = s.night || null, i = s.idlemax || null;
+  if (n && (+n.dur_min || 0) >= 60) return +n.awake || 0;
+  return i ? +i.awake || 0 : 0;
+}
 function logReportHolderName(w) {
   if (!w) return '';
   const what = logReportHolderWhat(w);
@@ -10397,10 +10417,10 @@ function logReportTips(d, all) {
           (+_aodt.lit || 0) * 100 >= 10 * (+_aodt.of || 0))
         tips.push({ ic: 'warn', key: 'lr_tip_awake_aod', vars: { awake: String(idle.awake), lit: String(_aodt.lit), of: String(_aodt.of) } });
       else if (_top.kind === 'sync' && _top.pkg && _top.pct >= 30) {
-        tips.push({ ic: 'warn', key: 'lr_tip_awake_sync', vars: { awake: String(idle.awake), app: _top.pkg, what: logReportAuthority(_top.tag), pct: String(_top.pct) } });
+        tips.push({ ic: 'warn', key: 'lr_tip_awake_sync', vars: { awake: String(logReportIdleAwake(s)), app: _top.pkg, what: logReportAuthority(_top.tag), pct: String(_top.pct) } });
         _holderTipped[_top.pkg] = 1;
       } else if (_top.kind === 'worker' && _top.pkg && _top.pct >= 15) {
-        tips.push({ ic: 'warn', key: 'lr_tip_awake_worker', vars: { awake: String(idle.awake), app: _top.pkg, name: _top.tag, pct: String(_top.pct) } });
+        tips.push({ ic: 'warn', key: 'lr_tip_awake_worker', vars: { awake: String(logReportIdleAwake(s)), app: _top.pkg, name: _top.tag, pct: String(_top.pct) } });
         _holderTipped[_top.pkg] = 1;
       } else
         tips.push({ ic: 'warn', key: 'lr_tip_awake_who', vars: { awake: String(idle.awake), who: logReportHolderName(_top) } });
@@ -10703,7 +10723,7 @@ function logReportAnalyze(d) {
     else if (sradio && (+sradio.mib || 0) >= 50)
       chain(85, 'hypothesis', 'lr_chain_radio', { awake: String(idle.awake), mib: String(sradio.mib) });
     else if (who && d.wlive[0].kind === 'sync' && d.wlive[0].pct >= 30)
-      chain(84, 'fact', 'lr_chain_sync', { awake: String(idle.awake), who: logReportHolderName(d.wlive[0]), pct: String(d.wlive[0].pct) });
+      chain(84, 'fact', 'lr_chain_sync', { awake: String(logReportIdleAwake(s)), who: logReportHolderName(d.wlive[0]), pct: String(d.wlive[0].pct) });
     else if (who) chain(82, 'hypothesis', 'lr_chain_holder', { awake: String(idle.awake), who: logReportHolderName(d.wlive[0]) });
     else if (d.wla.length) chain(80, 'hypothesis', 'lr_chain_alarm', { awake: String(idle.awake), who: d.wla[0].tag, n: String(d.wla[0].n) });
     else if (d.wlt.length) chain(80, 'hypothesis', 'lr_chain_hold', { awake: String(idle.awake), who: d.wlt[0].tag, n: String(d.wlt[0].n) });
@@ -10780,7 +10800,7 @@ function asbPageClasses(e) { return String((e && e.className) || '').split(/\s+/
 function asbPageHas(e, c) { return asbPageClasses(e).indexOf(c) >= 0; }
 function asbPageKids(e) { return e && e.children ? Array.prototype.slice.call(e.children) : []; }
 function asbPageTxt(e) {
-  if (!e) return '';
+  if (!e || String(e.tagName || e.tag || '').toLowerCase() === 'button') return '';
   const k = asbPageKids(e);
   const t = k.length ? k.map(asbPageTxt).filter(function (x) { return x; }).join(' ') : String(e.textContent || '');
   return t.replace(/\u2060/g, '').replace(/[\u00a0\u2011]/g, function (m) { return m === '\u00a0' ? ' ' : '-'; })
@@ -10830,6 +10850,17 @@ function asbPageText(root) {
       return;
     }
     if (asbPageHas(e, 'lgr-brief')) { out.push('  • ' + asbPageTxt(e) + mark(e)); return; }
+    if (asbPageHas(e, 'lgr-dx')) { out.push(''); asbPageKids(e).forEach(walk); return; }
+    if (asbPageHas(e, 'lgr-dx-head')) {
+      out.push('  ' + asbPageTxt(pick(e, 'lgr-dx-area')) + ': ' + asbPageTxt(pick(e, 'lgr-dx-state')) + mark(e));
+      return;
+    }
+    if (asbPageClasses(e).some(function (c) { return /^lgr-dx-(cause|also|fix|owner|send)$/.test(c); })) {
+      const t = asbPageTxt(e);
+      if (t) out.push('    ' + t);
+      return;
+    }
+    if (String(e.tagName || e.tag || '').toLowerCase() === 'button') return;
     if (asbPageHas(e, 'lgr-note') || asbPageHas(e, 'lgr-tip')) {
       out.push('  ' + (asbPageHas(e, 'lgr-warn') ? '(!) ' : '') + asbPageTxt(e));
       return;
@@ -11613,12 +11644,13 @@ function logReportBrief(d, analysis) {
     if (offRate > 1.5) add('lr_brief_idle_bad', { pct: String(offRate) }, true);
     else if (offRate <= 1) add('lr_brief_idle_ok', {});
   }
-  if (idle && (+idle.awake || 0) > 15 && (+idle.dur_min || 0) >= 20) {
+  const awk = logReportIdleAwake(s);
+  if (idle && (+idle.awake || 0) > 15 && (+idle.dur_min || 0) >= 20 && awk > 15) {
     if (d.wlive.length && d.wlive[0].pct >= 10)
-      add('lr_brief_cause', { awake: String(idle.awake), who: logReportHolderName(d.wlive[0]), pct: String(d.wlive[0].pct) }, true);
+      add('lr_brief_cause', { awake: String(awk), who: logReportHolderName(d.wlive[0]), pct: String(d.wlive[0].pct) }, true);
     else if (sradio && (+sradio.mib || 0) >= 20)
-      add('lr_brief_cause_radio', { awake: String(idle.awake), mib: String(sradio.mib) }, true);
-    else add('lr_brief_cause_none', { awake: String(idle.awake) }, true);
+      add('lr_brief_cause_radio', { awake: String(awk), mib: String(sradio.mib) }, true);
+    else add('lr_brief_cause_none', { awake: String(awk) }, true);
   }
   if (nightd && quiet >= 60 && (+nightd.cpu_t || 0) >= 50)
     add('lr_brief_night_hot', { cpu: String(nightd.cpu_t) }, true);
@@ -11662,9 +11694,311 @@ function logReportBrief(d, analysis) {
   return sec;
 }
 
+/* fix247: the causes in plain words, one card per area - what happened, why, what to do
+ * and whose side it is on (an app, a phone setting, the ROM, the load, ASB's tuning for this
+ * device). Where the capture points at ASB itself, or shows a problem nothing in it explains,
+ * the card asks for the saved report. Thresholds are the advice engine's own. */
+function logReportDxT(key, vars) {
+  const fallback = {
+    lr_dx_fix_label: "What to do:",
+    lr_dx_cl_main: "main cores",
+    lr_dx_cl_prime: "prime cores",
+    lr_dx_send: "This needs the developer: save the report and send the file from Download to the ASB chat or channel.",
+    lr_dx_idle_short: "The screen went off only for short pauses (the longest quiet stretch: {min}) - too short to judge idle drain. An hour or more without touching the phone gives a reliable figure.",
+    lr_dx_idle_good: "Idle is healthy: {pct}%/h with {deep}% deep sleep.",
+    lr_dx_idle_sync: "{pct}%/h with the screen off - too much (healthy is about 1%/h). The phone stayed awake {awake}% of the time because {app} kept its {what} sync running in {hpct}% of the checks: a sync that never finishes.",
+    lr_dx_idle_aod: "{pct}%/h with the screen off; the phone stayed awake {awake}% of the time. The always-on display was lit in {lit} of {of} checks - it keeps SystemUI and the panel working.",
+    lr_dx_idle_worker: "{pct}%/h with the screen off; the phone stayed awake {awake}% of the time. {app} ran its background task {name} in {hpct}% of the checks.",
+    lr_dx_idle_holder: "{pct}%/h with the screen off; the phone stayed awake {awake}% of the time. The main holder: {who}, in {hpct}% of the checks.",
+    lr_dx_idle_radio: "{pct}%/h with the screen off; the phone stayed awake {awake}% of the time while apps moved {mib} MiB of mobile data in the background.",
+    lr_dx_idle_asleep: "{pct}%/h with the screen off although the phone slept ({deep}% deep sleep): the drain goes past the CPU - usually the modem on a weak signal, Bluetooth devices or sensors.",
+    lr_dx_idle_alarm: "{pct}%/h with the screen off; the phone stayed awake {awake}% of the time. It was woken most often by {who} ({n} times).",
+    lr_dx_idle_unknown: "{pct}%/h with the screen off; the phone stayed awake {awake}% of the time, and neither an app nor the network explains it.",
+    lr_dx_fix_sync: "Settings → Users & accounts → {app} → turn off {what} sync, or remove the account and add it again. ASB never stops a sync itself - that could lose data.",
+    lr_dx_fix_aod: "Turn the always-on display off in the display settings, or limit it to a schedule.",
+    lr_dx_fix_bg: "If you do not need {app} working in the background: Settings → Apps → {app} → Battery usage → turn off background activity.",
+    lr_dx_fix_wl: "Turn on \"{set}\" in ASB settings - ASB will then rein in such apps itself (messengers, alarms and fitness apps stay protected).",
+    lr_dx_fix_lte: "Try \"{set}\" in ASB settings: the modem idles lower while the screen is off. Also check which apps sync media in the background.",
+    lr_dx_fix_radio: "Check which apps download in the background (messengers with auto-download, photo backup) and limit them to Wi-Fi.",
+    lr_dx_fix_asleep: "Compare a night with mobile data or Bluetooth off. If the drain stays this high night after night, send the log to the developer.",
+    lr_dx_fix_alarm: "Restrict the background activity of the app behind that wakeup, or turn off its scheduled notifications.",
+    lr_dx_fix_send: "Save the report with the button below and send it to the developer.",
+    lr_dx_also_holder: "Also: {who}, in {hpct}% of the checks.",
+    lr_dx_bgheat: "With the screen off the CPU reached {cpu}° at times - something did heavy work in the background (media downloads, a backup, app updates).",
+    lr_dx_fix_bgheat: "In Settings → Battery see which app used power at that time. Move backups and auto-downloads to Wi-Fi and charging.",
+    lr_dx_screen_ok: "With the screen on: {pct}%/h - normal for this kind of use (about {est} of screen time from a full charge).",
+    lr_dx_screen_heavy: "With the screen on: {pct}%/h - heavy load ran for {min} (games or a hot phone), and it costs this much.",
+    lr_dx_fix_screen_heavy: "Expected for games. For long sessions, Balanced or lower graphics settings keep it cooler and cheaper.",
+    lr_dx_screen_perf: "With the screen on: {pct}%/h on the {prof} profile, which keeps the frequencies high on purpose.",
+    lr_dx_fix_screen_perf: "For everyday use switch to Smart or Balanced.",
+    lr_dx_screen_hz: "With the screen on: {pct}%/h; the panel ran at 120 Hz or more {share}% of the time.",
+    lr_dx_fix_screen_hz: "If you do not need the high rate everywhere, set the refresh rate to automatic in the display settings.",
+    lr_dx_screen_unknown: "With the screen on: {pct}%/h, and the capture shows no heavy load or heat that would explain it - the profile may be poorly matched to this device.",
+    lr_dx_smooth_sysui: "{pct}% of frames were late. The status bar stutters in {n} of {of} screen-on intervals ({spct}% of its frames) whatever app is open, because {src}.",
+    lr_dx_src_netspeed: "the network-speed meter is on - it redraws every second",
+    lr_dx_src_clocksec: "the clock shows seconds - it redraws every second",
+    lr_dx_src_livewp: "a live wallpaper is set - it redraws whenever it is visible",
+    lr_dx_src_hooks: "other apps load their code into SystemUI ({hooks})",
+    lr_dx_src_other: "something in it updates all the time (an animated icon, an overlay or a module)",
+    lr_dx_fix_netspeed: "Turn off the network-speed meter in the status-bar settings - stutter drops in every app.",
+    lr_dx_fix_clocksec: "Turn off seconds on the status-bar clock - stutter drops in every app.",
+    lr_dx_fix_livewp: "Set a static wallpaper and compare the next capture.",
+    lr_dx_fix_hooks: "Turn off the modules that change the status bar one at a time and compare the next capture.",
+    lr_dx_fix_sysui: "Turn off animated status-bar icons, floating overlays and SystemUI modules one at a time and compare the next capture.",
+    lr_dx_smooth_app: "{pct}% of frames were late; the most is lost in {app} ({apct}%) - a heavy app.",
+    lr_dx_fix_smooth_app: "On Smart the learner gives such apps more headroom; on Battery the ceilings stay low on purpose.",
+    lr_dx_smooth_ok: "{pct}% of frames were late - smoothness is fine.",
+    lr_dx_smooth_unknown: "{pct}% of frames were late, and neither the status bar, one app nor the frequency ceilings explain it.",
+    lr_dx_smooth_cap: "With the {cl} at the ASB ceiling {yes}% of frames were late, against {no}% below it - the profile ceilings are too tight for this device.",
+    lr_dx_smooth_cap_bat: "With the {cl} at the ceiling {yes}% of frames were late, against {no}% below it: {prof} keeps the ceilings low on purpose.",
+    lr_dx_fix_cap_bat: "If the stutter bothers you, switch to Smart or Balanced for heavy apps.",
+    lr_dx_smooth_wake: "Stutter concentrates at unlocks and app opens: {pct}% of frames late there against {ord}% over the day - the touch boost does not lift the clocks enough on this device.",
+    lr_dx_also_cap_ok: "The ASB frequency ceilings add no stutter: {yes}% at the ceiling, {no}% below it.",
+    lr_dx_also_vendor: "The firmware held the prime cores below ASB's ceiling in {n} of {of} checks (PowerHAL or kernel thermal) - ASB does not override it.",
+    lr_dx_heat_long: "The CPU spent {min} above 45 °C, most of it in {phase}; peak {cpu}°.",
+    lr_dx_fix_heat: "Reduce sustained load (games, long video calls while charging) or use a gentler profile; a case or charging while playing adds heat.",
+    lr_dx_fix_heat_set: "Check \"{set}\" in ASB settings - with Stock, ASB thermal protection is off.",
+    lr_dx_heat_some: "The CPU spent {min} above 45 °C (peak {cpu}°) - short spells of load, nothing sustained.",
+    lr_dx_heat_ok: "No overheating: the CPU peaked at {cpu}°.",
+    lr_dx_also_clamps: "Frequencies were limited {n} times briefly - the protection doing its job, without sustained heat.",
+    lr_dx_asb_crash: "ASB code is involved in {n} native crash(es) during the capture.",
+    lr_dx_fix_asbdiag: "Run asbdiag in the Logs menu and send it to the developer together with this report.",
+    lr_dx_asb_cost: "ASB used {ms} ms of CPU per hour ({per} ms per wakeup) - more than its usual budget.",
+    lr_dx_asb_ok: "ASB itself costs little: {ms} ms of CPU per hour, {per} ms per wakeup.",
+    lr_dx_sysui_inj: "SystemUI restarted {n} times; {m} of the recorded restarts crashed inside code that {pkg} injects into SystemUI.",
+    lr_dx_fix_inj: "Update or disable {pkg} - every restart rebuilds the status bar, drops frames and costs battery.",
+    lr_dx_crashes: "{n} native crashes during the capture, none in ASB code.",
+    lr_dx_fix_crashes: "If an app misbehaves, update it; the crash list is in the full report.",
+    lr_dx_gauge: "The current sensor on this phone reads about {x}× low - mA figures are a lower bound; the %/h figures from the battery counter are exact.",
+    lr_dx_short: "Only {min} recorded - the causes above are early. Let the log run through a night and a day."
+  };
+  return logReportT(key, fallback[key] || key, vars || {});
+}
+function logReportDiagnose(d) {
+  const s = d.sections || {}, cfg = d.cfg || {}, meta = s.meta || {};
+  const prof = String(meta.profile || '');
+  const scr = s.scr || null, night = s.night || null, nightd = s.nightd || null, aod = s.aod || null;
+  const sradio = s.sradio || null, jank = s.jank || null, jwake = s.jwake || null, sdraw = s.sysuidraw || null;
+  const sinj = s.sysuiinj || null, sysui = s.sysui || null, heat = s.heat || null, thermal = s.thermal || null;
+  const throttle = s.throttle || null, vcap = s.vcap || null, crash = s.crash || null, cost = s.asbcost || null;
+  const gauge = s.gauge || null;
+  const out = [];
+  const item = function (area, state, cause, cv, owner, fix, fv, send) {
+    const it = { area: area, state: state, cause: cause, cv: cv || {}, owner: owner || 'none',
+      fix: fix || '', fv: fv || cv || {}, send: !!send, also: [] };
+    out.push(it);
+    return it;
+  };
+  const sysPkg = function (p) { return !p || p === 'android' || p === 'com.android.systemui' || /^system uid/.test(p); };
+  const vendorHeld = !!(vcap && (+vcap.n || 0) >= 10 && (+vcap.prime_vendor || 0) * 2 > (+vcap.n || 0));
+  const vendorLine = vendorHeld ? { key: 'lr_dx_also_vendor', v: { n: String(vcap.prime_vendor), of: String(vcap.n) } } : null;
+
+  if (scr && (+scr.off_min || 0) >= 30) {
+    const idleSplit = (+scr.idle_min || 0) > 0 && scr.idle_pctph !== undefined;
+    const rate = idleSplit ? +scr.idle_pctph || 0 : +scr.off_pctph || 0;
+    const quiet = night ? +night.dur_min || 0 : 0;
+    const awake = logReportIdleAwake(s);
+    const deep = Math.max(0, 100 - awake);
+    if (quiet < 60) item('idle', 'normal', 'lr_dx_idle_short', { min: logReportDur(quiet) });
+    else if (rate <= 1) item('idle', 'good', 'lr_dx_idle_good', { pct: String(rate), deep: String(deep) });
+    else {
+      const st = rate > 1.5 ? 'problem' : 'normal';
+      const base = { pct: String(rate), awake: String(awake), deep: String(deep) };
+      const v = function (x) { return Object.assign({}, base, x || {}); };
+      const top = d.wlive[0] || null;
+      const used = {};
+      let it;
+      if (top && top.kind === 'sync' && top.pkg && top.pct >= 30) {
+        const sv = v({ app: top.pkg, what: logReportAuthority(top.tag), hpct: String(top.pct) });
+        it = item('idle', st, 'lr_dx_idle_sync', sv, 'app', 'lr_dx_fix_sync', sv);
+        used[top.pkg] = 1;
+      } else if (top && top.pkg === 'com.android.systemui' && aod && (+aod.of || 0) >= 20 && (+aod.lit || 0) * 10 >= (+aod.of || 0)) {
+        it = item('idle', st, 'lr_dx_idle_aod', v({ lit: String(aod.lit), of: String(aod.of) }), 'user', 'lr_dx_fix_aod');
+        used[top.pkg] = 1;
+      } else if (top && top.kind === 'worker' && top.pkg && top.pct >= 15) {
+        const wv = v({ app: top.pkg, name: top.tag, hpct: String(top.pct) });
+        it = item('idle', st, 'lr_dx_idle_worker', wv, 'app', 'lr_dx_fix_bg', wv);
+        used[top.pkg] = 1;
+      } else if (top && !sysPkg(top.pkg) && top.pct >= 20) {
+        const hv = v({ who: logReportHolderName(top), hpct: String(top.pct), app: top.pkg });
+        if (cfg.wakelock_action === '0' && top.kind !== 'sync')
+          it = item('idle', st, 'lr_dx_idle_holder', hv, 'app', 'lr_dx_fix_wl', { set: Tcfg('wakelock_action', 'name', 'Act on Wakelocks') });
+        else it = item('idle', st, 'lr_dx_idle_holder', hv, 'app', 'lr_dx_fix_bg', hv);
+        used[top.pkg] = 1;
+      } else if (sradio && (+sradio.mib || 0) >= 50) {
+        it = (cfg.net_screen_off_lte || '0') === '0'
+          ? item('idle', st, 'lr_dx_idle_radio', v({ mib: String(sradio.mib) }), 'app', 'lr_dx_fix_lte', { set: Tcfg('net_screen_off_lte', 'name', 'LTE While Screen Off') })
+          : item('idle', st, 'lr_dx_idle_radio', v({ mib: String(sradio.mib) }), 'app', 'lr_dx_fix_radio');
+      } else if (awake <= 15) {
+        it = item('idle', st, 'lr_dx_idle_asleep', v(), 'unknown', 'lr_dx_fix_asleep', {}, st === 'problem');
+      } else if (d.wla.length && (+d.wla[0].n || 0) >= 30 && !/^DeviceIdleController/.test(String(d.wla[0].tag))) {
+        it = item('idle', st, 'lr_dx_idle_alarm', v({ who: String(d.wla[0].tag), n: String(d.wla[0].n) }), 'app', 'lr_dx_fix_alarm');
+      } else {
+        it = item('idle', st, 'lr_dx_idle_unknown', v(), 'unknown', 'lr_dx_fix_send', {}, true);
+      }
+      d.wlive.forEach(function (w) {
+        if (!w.pkg || used[w.pkg] || sysPkg(w.pkg)) return;
+        if ((w.kind === 'sync' && w.pct >= 30) || (w.kind === 'worker' && w.pct >= 15) || w.pct >= 20) {
+          it.also.push({ key: 'lr_dx_also_holder', v: { who: logReportHolderName(w), hpct: String(w.pct) } });
+          used[w.pkg] = 1;
+        }
+      });
+    }
+    if (nightd && quiet >= 60 && (+nightd.cpu_t || 0) >= 50)
+      item('bgheat', 'normal', 'lr_dx_bgheat', { cpu: String(nightd.cpu_t) }, 'app', 'lr_dx_fix_bgheat');
+  }
+
+  if (scr && (+scr.on_min || 0) >= 20 && (+scr.on_pctph || 0) > 0) {
+    const r = +scr.on_pctph;
+    const gamingMin = (d.phases || []).reduce(function (n, p) { return n + (p.name === 'gaming' ? Math.max(0, +p.min || 0) : 0); }, 0);
+    const st = logReportScreenOnDrainState(r, gamingMin >= 30 ? 'screen_on_heavy' : 'screen_on_light');
+    const wm = heat ? +heat.warm_min || 0 : 0;
+    const hz = (d.hzs || []).reduce(function (n, z) { return n + ((+z.mode || 0) >= 120 ? (+z.share || 0) : 0); }, 0);
+    if (st !== 'problem') item('screen', st, 'lr_dx_screen_ok', { pct: String(r), est: logReportFullCharge(r) });
+    else if (gamingMin >= 30 || wm >= 20)
+      item('screen', st, 'lr_dx_screen_heavy', { pct: String(r), min: logReportDur(Math.max(gamingMin, wm)) }, 'load', 'lr_dx_fix_screen_heavy');
+    else if (prof === 'performance')
+      item('screen', st, 'lr_dx_screen_perf', { pct: String(r), prof: T('prof_performance', 'Performance') }, 'user', 'lr_dx_fix_screen_perf');
+    else if (hz >= 60)
+      item('screen', st, 'lr_dx_screen_hz', { pct: String(r), share: String(hz) }, 'user', 'lr_dx_fix_screen_hz');
+    else item('screen', st, 'lr_dx_screen_unknown', { pct: String(r) }, 'asb', 'lr_dx_fix_send', {}, true);
+  }
+
+  if (jank && (+jank.frames || 0) >= 20000) {
+    const jp = +jank.pct || 0;
+    const pv = { pct: String(jank.pct) };
+    const wakeBad = !!(jwake && (+jwake.wakes || 0) >= 5 && (+jwake.pct || 0) >= 6 && (+jwake.pct || 0) >= (+jwake.ord || 0) + 0.8);
+    const measured = function (c) { return !!(c && (+c.yes_f || 0) >= 10000 && (+c.no_f || 0) >= 10000); };
+    const worse = function (c) { return measured(c) && (+c.yes || 0) >= (+c.no || 0) + 1.5 && (+c.yes_jps || 0) >= (+c.no_jps || 0) * 1.2; };
+    const cm = s.jcap_main || null, cp = s.jcap_prime || null;
+    const capBad = worse(cm) ? ['main', cm] : worse(cp) ? ['prime', cp] : null;
+    const capFair = !capBad && (measured(cm) ? cm : measured(cp) ? cp : null);
+    const st = jp >= 6 ? 'problem' : jp <= 2 ? 'good' : 'normal';
+    let it;
+    if (logReportSysuiSteady(sdraw)) {
+      const src = sdraw.netspeed === '1' ? 'netspeed' : sdraw.clocksec === '1' ? 'clocksec' : sdraw.livewp === '1' ? 'livewp' :
+        (sinj && sinj.hooks) ? 'hooks' : 'other';
+      const sv = Object.assign({}, pv, { n: String(sdraw.intv), of: String(sdraw.of), spct: String(sdraw.pct),
+        src: logReportDxT('lr_dx_src_' + src, { hooks: String((sinj && sinj.hooks) || '') }) });
+      it = item('smooth', st === 'good' ? 'normal' : st, 'lr_dx_smooth_sysui', sv,
+        src === 'hooks' ? 'app' : src === 'other' ? 'unknown' : 'user', 'lr_dx_fix_' + (src === 'other' ? 'sysui' : src));
+    } else {
+      const ja = (d.japps || []).filter(function (a) { return a.frames >= 10000; }).sort(function (a, b) { return b.pct - a.pct; })[0];
+      if (ja && ja.pct >= 8 && ja.pct >= jp + 2)
+        it = item('smooth', st, 'lr_dx_smooth_app', Object.assign({}, pv, { app: ja.pkg, apct: String(ja.pct) }), 'app', 'lr_dx_fix_smooth_app');
+      else if (jp >= 6 && !capBad && !wakeBad)
+        it = item('smooth', st, 'lr_dx_smooth_unknown', pv, 'unknown', 'lr_dx_fix_send', {}, true);
+      else if (jp < 6) it = item('smooth', st, 'lr_dx_smooth_ok', pv);
+    }
+    if (it && capFair) it.also.push({ key: 'lr_dx_also_cap_ok', v: { yes: String(capFair.yes), no: String(capFair.no) } });
+    if (it && vendorLine && jp >= 6) it.also.push(vendorLine);
+    if (capBad) {
+      const cv = { cl: logReportDxT('lr_dx_cl_' + capBad[0], {}), yes: String(capBad[1].yes), no: String(capBad[1].no),
+        prof: T('prof_' + prof, prof) };
+      if (prof === 'battery') item('smooth', 'normal', 'lr_dx_smooth_cap_bat', cv, 'user', 'lr_dx_fix_cap_bat');
+      else item('smooth', 'problem', 'lr_dx_smooth_cap', cv, 'asb', 'lr_dx_fix_send', {}, true);
+    }
+    if (wakeBad)
+      item('smooth', 'problem', 'lr_dx_smooth_wake', { pct: String(jwake.pct), ord: String(jwake.ord) }, 'asb', 'lr_dx_fix_send', {}, true);
+  }
+
+  if (heat || thermal) {
+    const wm = heat ? +heat.warm_min || 0 : 0, pk = thermal ? +thermal.cpu || 0 : 0;
+    const clamps = throttle ? +throttle.clamps || 0 : 0;
+    const ph = heat ? T('lr_ph_' + String(heat.peak_phase || ''), String(heat.peak_phase || '')) : '';
+    let it;
+    if (wm >= 30) {
+      const hv = { min: logReportDur(wm), phase: ph, cpu: String(pk) };
+      it = cfg.sustained_temp_mode === 'stock'
+        ? item('heat', 'problem', 'lr_dx_heat_long', hv, 'user', 'lr_dx_fix_heat_set', { set: Tcfg('sustained_temp_mode', 'name', 'Throttling Point') })
+        : item('heat', 'problem', 'lr_dx_heat_long', hv, 'load', 'lr_dx_fix_heat');
+    } else if (wm >= 10) it = item('heat', 'normal', 'lr_dx_heat_some', { min: logReportDur(wm), cpu: String(pk) }, 'load');
+    else if (pk > 0) it = item('heat', 'good', 'lr_dx_heat_ok', { cpu: String(pk) });
+    if (it) {
+      if (vendorLine) it.also.push(vendorLine);
+      else if (clamps > 0 && wm < 10) it.also.push({ key: 'lr_dx_also_clamps', v: { n: String(clamps) } });
+    }
+  }
+
+  if (sinj && sinj.pkg && (+sinj.n || 0) > 0 && sysui && (+sysui.count || 0) > 0)
+    item('stab', 'problem', 'lr_dx_sysui_inj', { n: String(sysui.count), m: String(sinj.n), pkg: String(sinj.pkg) }, 'app', 'lr_dx_fix_inj', { pkg: String(sinj.pkg) });
+  else if (crash && (+crash.count || 0) > 2 && !((+crash.asb || 0) > 0))
+    item('stab', 'normal', 'lr_dx_crashes', { n: String(crash.count) }, 'rom', 'lr_dx_fix_crashes');
+
+  if (crash && (+crash.asb || 0) > 0)
+    item('asb', 'problem', 'lr_dx_asb_crash', { n: String(crash.asb) }, 'asb', 'lr_dx_fix_asbdiag', {}, true);
+  else if (cost) {
+    const ms = +cost.cpu_msh || 0, wk = +cost.wakes_h || 0;
+    const per = wk > 0 ? ms / wk : null;
+    const cv = { ms: String(ms), per: per === null ? '—' : per.toFixed(1) };
+    if (ms > 10000 || (ms > 2500 && (per === null || per > 8))) item('asb', 'problem', 'lr_dx_asb_cost', cv, 'asb', 'lr_dx_fix_send', {}, true);
+    else item('asb', 'good', 'lr_dx_asb_ok', cv);
+  }
+
+  if (gauge && (+gauge.factor || 1) > 0 && (+gauge.factor || 1) <= 0.75 && (+gauge.windows || 0) >= 10)
+    item('data', 'normal', 'lr_dx_gauge', { x: String(gauge.mult || '') });
+  if ((+meta.elapsed_min || 0) > 0 && (+meta.elapsed_min || 0) < 120)
+    item('data', 'normal', 'lr_dx_short', { min: logReportDur(meta.elapsed_min) });
+
+  const rank = { problem: 0, normal: 1, good: 2 };
+  return out.map(function (x, i) { return { x: x, i: i }; })
+    .sort(function (a, b) { return rank[a.x.state] - rank[b.x.state] || a.i - b.i; })
+    .map(function (o) { return o.x; });
+}
+function logReportDiagSection(items) {
+  if (!items || !items.length) return null;
+  const sec = logReportSec(T('lr_sec_dx', '🩺 Causes and what to do'));
+  const ownerFb = { app: 'Source: an app', user: 'Source: a phone setting', rom: 'Source: the firmware (ROM)',
+    asb: 'Source: ASB tuning for this device', load: 'Source: the load itself', unknown: 'Source: not identified' };
+  const areaFb = { idle: 'Battery with the screen off', screen: 'Battery with the screen on', smooth: 'Smoothness',
+    heat: 'Heat and throttling', bgheat: 'Background work', stab: 'Stability', asb: 'ASB itself', data: 'Measurement' };
+  items.forEach(function (it) {
+    const box = document.createElement('div');
+    box.className = 'lgr-dx lgr-dx-' + it.state;
+    const head = document.createElement('div'); head.className = 'lgr-dx-head';
+    const area = document.createElement('span'); area.className = 'lgr-dx-area';
+    area.textContent = T('lr_dx_area_' + it.area, areaFb[it.area] || it.area);
+    const st = document.createElement('span'); st.className = 'lgr-dx-state lgr-state-' + it.state;
+    st.textContent = T('lr_state_' + it.state, it.state);
+    head.appendChild(area); head.appendChild(st); box.appendChild(head);
+    const c = document.createElement('div'); c.className = 'lgr-dx-cause';
+    c.textContent = logReportDxT(it.cause, it.cv).replace(/%\//g, '%/⁠');
+    box.appendChild(c);
+    it.also.forEach(function (a) {
+      const e = document.createElement('div'); e.className = 'lgr-dx-also';
+      e.textContent = logReportDxT(a.key, a.v);
+      box.appendChild(e);
+    });
+    if (it.fix && !(it.send && it.fix === 'lr_dx_fix_send')) {
+      const f = document.createElement('div'); f.className = 'lgr-dx-fix';
+      const l = document.createElement('span'); l.className = 'lgr-dx-fix-l'; l.textContent = logReportDxT('lr_dx_fix_label', {});
+      const t = document.createElement('span'); t.textContent = logReportDxT(it.fix, it.fv);
+      f.appendChild(l); f.appendChild(t); box.appendChild(f);
+    }
+    if (it.owner !== 'none') {
+      const o = document.createElement('div'); o.className = 'lgr-dx-owner lgr-dx-owner-' + it.owner;
+      o.textContent = T('lr_dx_owner_' + it.owner, ownerFb[it.owner] || it.owner);
+      box.appendChild(o);
+    }
+    if (it.send) {
+      const sd = document.createElement('div'); sd.className = 'lgr-dx-send';
+      const tx = document.createElement('span'); tx.textContent = logReportDxT('lr_dx_send', {});
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'live-chip lgr-dx-btn';
+      b.textContent = T('lr_dx_send_btn', '📤 Save for the developer');
+      b.onclick = function () { asbSavePage('report'); };
+      sd.appendChild(tx); sd.appendChild(b); box.appendChild(sd);
+    }
+    sec.appendChild(box);
+  });
+  return sec;
+}
+
 function logReportAppendAnalysis(body, d, analysis) {
   const brief = logReportBrief(d, analysis);
   if (brief) body.appendChild(brief);
+  d.diagnosis = logReportDiagnose(d);
+  const dx = logReportDiagSection(d.diagnosis);
+  if (dx) body.appendChild(dx);
   const summary = logReportSec(T('lr_sec_summary', '🧭 Smart summary'));
   const context = document.createElement('div'); context.className = 'lgr-context';
   [T('lr_scenario_' + analysis.scenario, analysis.scenario),
@@ -11688,17 +12022,6 @@ function logReportAppendAnalysis(body, d, analysis) {
     { min: logReportDur(d.sections.meta.elapsed_min || 0) })));
   body.appendChild(summary);
 
-  if (analysis.chains.length) {
-    const sec = logReportSec(T('lr_sec_causes', '🔗 Evidence and likely causes'));
-    analysis.chains.forEach(function (c) {
-      const row = document.createElement('div'); row.className = 'lgr-chain';
-      const kind = document.createElement('span'); kind.className = 'lgr-chain-kind';
-      kind.textContent = T(c.kind === 'fact' ? 'lr_kind_fact' : 'lr_kind_hypothesis', c.kind);
-      const text = document.createElement('span'); text.textContent = logReportAnalysisT(c.key, c.vars);
-      row.appendChild(kind); row.appendChild(text); sec.appendChild(row);
-    });
-    body.appendChild(sec);
-  }
   if (analysis.actions.length) {
     const sec = logReportSec(T('lr_sec_actions', '🎯 Priority actions'));
     analysis.actions.forEach(function (tip, i) {
