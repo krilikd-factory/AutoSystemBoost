@@ -179,7 +179,7 @@ def parse_capture(d):
         m["build_date"] = "?"
     mm = re.search(r"^(\d+)\|", _read(os.path.join(d, "phase_timeline.txt")), re.M)
     m["start_epoch"] = int(mm.group(1)) if mm else 0
-    mm = re.search(r"capture: \S+ target, (\d+) min elapsed", rep)
+    mm = re.search(r"capture: \S+ target(?: \([^)]*\))?, (\d+) min elapsed", rep)
     m["elapsed_min"] = int(mm.group(1)) if mm else 0
 
     phases = {}
