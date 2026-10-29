@@ -155,6 +155,7 @@ T_N_LTE_TIMER="LTE con pantalla apagada: activado · temporizador en marcha (90 
 T_N_LTE_ALLOWED="LTE con pantalla apagada: activado · 5G permitido (pantalla encendida)"
 T_N_LTE_LIGHT_LTE="5G solo cuando hace falta: sí · ahora LTE (tráfico ligero), el 5G vuelve con una descarga pesada"
 T_N_LTE_LIGHT_5G="5G solo cuando hace falta: sí · 5G en uso, vigilando el tráfico"
+T_N_LTE_LIGHT_IDLE="5G solo cuando hace falta: sí · el vigilante de tráfico no está en marcha - arranca al encender la pantalla"
 T_N_LTE_LIGHT_HINT="5G solo cuando hace falta: no · con datos móviles, el tráfico ligero (música, feeds) gasta menos en LTE - WebUI → Red móvil"
 T_N_LTE_NO5G="LTE con la pantalla apagada: sí · 5G NO está permitido ahora - si no lo apagó usted, actívelo en los ajustes de la SIM"
 T_N_ROUTE="ruta por %s"

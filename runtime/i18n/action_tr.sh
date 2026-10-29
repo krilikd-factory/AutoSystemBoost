@@ -155,6 +155,7 @@ T_N_LTE_TIMER="ekran kapalıyken LTE: açık · zamanlayıcı çalışıyor (ekr
 T_N_LTE_ALLOWED="ekran kapalıyken LTE: açık · 5G'ye izin var (ekran açık)"
 T_N_LTE_LIGHT_LTE="Yalnızca gerektiğinde 5G: açık · şu an LTE (hafif trafik), ağır indirmede 5G geri gelir"
 T_N_LTE_LIGHT_5G="Yalnızca gerektiğinde 5G: açık · 5G kullanımda, trafik izleniyor"
+T_N_LTE_LIGHT_IDLE="Yalnızca gerektiğinde 5G: açık · trafik izleyici çalışmıyor - ekran bir sonraki açılışta başlar"
 T_N_LTE_LIGHT_HINT="Yalnızca gerektiğinde 5G: kapalı · mobil veride hafif trafik (müzik, akışlar) LTE üzerinden daha az harcar - WebUI → Mobil ağ"
 T_N_LTE_NO5G="Ekran kapalıyken LTE: açık · 5G şu an İZİNLİ DEĞİL - kendiniz kapatmadıysanız SIM ayarlarından açın"
 T_N_ROUTE="rota: %s"

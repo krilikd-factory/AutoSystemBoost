@@ -155,6 +155,7 @@ T_N_LTE_TIMER="LTE bei Bildschirm aus: an · Timer läuft (90 s nach Bildschirm 
 T_N_LTE_ALLOWED="LTE bei Bildschirm aus: an · 5G erlaubt (Bildschirm an)"
 T_N_LTE_LIGHT_LTE="5G nur bei Bedarf: an · jetzt LTE (wenig Verkehr), 5G kommt bei großem Download zurück"
 T_N_LTE_LIGHT_5G="5G nur bei Bedarf: an · 5G aktiv, Verkehr wird beobachtet"
+T_N_LTE_LIGHT_IDLE="5G nur bei Bedarf: an · die Verkehrsüberwachung läuft nicht - sie startet beim nächsten Einschalten des Bildschirms"
 T_N_LTE_LIGHT_HINT="5G nur bei Bedarf: aus · bei mobilen Daten kostet leichter Verkehr (Musik, Feeds) über LTE weniger - WebUI → Mobilfunk"
 T_N_LTE_NO5G="LTE bei ausgeschaltetem Bildschirm: an · 5G ist gerade NICHT erlaubt - falls Sie es nicht selbst ausgeschaltet haben, in den SIM-Einstellungen einschalten"
 T_N_ROUTE="Route über %s"
