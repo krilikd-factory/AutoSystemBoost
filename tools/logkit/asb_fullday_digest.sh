@@ -802,6 +802,33 @@ if [ -f "$_RPT" ]; then
          printf "jstate\tstate=%s\tintv=%s\tframes=%s\tpct=%s\tjps=%s\n", $1, $2, $3, p, $5; next
        }
        t { exit }' "$_RPT" 2>/dev/null
+  awk '/^(main|little|prime) cores at the ASB ceiling \(end of interval\): yes / {
+         cl = $1; y = ""; yf = ""; yj = ""; n = ""; nf = ""; nj = ""
+         for (i = 1; i <= NF; i++) {
+           if ($i == "yes") { y = $(i + 1); yf = $(i + 3); yj = $(i + 5) }
+           if ($i == "no") { n = $(i + 1); nf = $(i + 3); nj = $(i + 5) }
+         }
+         gsub(/[%(),]/, "", y); gsub(/[%(),]/, "", n); gsub(/[()\/s,]/, "", yj); gsub(/[()\/s,]/, "", nj)
+         if (cl == "little") cl = "main"
+         printf "jcap_%s\tyes=%s\tyes_f=%s\tyes_jps=%s\tno=%s\tno_f=%s\tno_jps=%s\n", cl, y, yf + 0, yj, n, nf + 0, nj
+       }' "$_RPT" 2>/dev/null
+  awk '/^steady floor: [0-9.]+ janky frames a second/ { q = $3; getline; b = $1 }
+       /^the floor: [a-z0-9._]+ drew [0-9.]+% of the janky frames/ { a = $3; sh = $5; sub(/%$/, "", sh) }
+       END { if (q != "") printf "jfloor\tquiet=%s\tbusy=%s\tapp=%s\tshare=%s\n", q, b, a, sh }' "$_RPT" 2>/dev/null
+  awk '/^who held the lower ceiling, per cluster \(/ { t = 1; n = $0; sub(/^[^(]*\(/, "", n); sub(/[^0-9].*$/, "", n); next }
+       t && /^  (main|little|prime):/ {
+         k = ($1 == "prime:") ? "prime" : "main"
+         line = $0; sub(/^  [a-z]+:[ ]*/, "", line)
+         c = split(line, it, ", ")
+         for (i = 1; i <= c; i++) {
+           split(it[i], kv, " ")
+           if (kv[1] == "vendor") v[k] += kv[2]
+           else if (kv[1] ~ /^asb/) a[k] += kv[2]
+         }
+         next
+       }
+       t { t = 0 }
+       END { if (n != "") printf "vcap\tn=%s\tmain_vendor=%d\tmain_asb=%d\tprime_vendor=%d\tprime_asb=%d\n", n, v["main"], a["main"], v["prime"], a["prime"] }' "$_RPT" 2>/dev/null
   # Display refresh split: rows "60  112  64%  30  264" under the refresh_hz header.
   # The brightness table right below starts "0-24 ..." - the dash keeps it out.
   awk '/^refresh_hz[ \t]/ { t = 1; next }
