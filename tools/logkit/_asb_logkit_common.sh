@@ -1618,6 +1618,7 @@ lk_emit_jank_summary() {
 # is too old to stand for the moment (deep-idle economy).
 lk_direct_temps() {
   _dc=""; _ds=""
+  _dsz="$(echo "${1:-}" | tr -dc '0-9')"
   for _dz in "${TZ_CPU_PRIME:-}" "${TZ_CPU_PERF:-}"; do
     [ -n "$_dz" ] || continue
     _dr="$(cat "${LK_THERMAL_BASE:-/sys/class/thermal}/thermal_zone$_dz/temp" 2>/dev/null)"
@@ -1625,6 +1626,11 @@ lk_direct_temps() {
     [ "$_dr" -ge 1000 ] && _dr=$((_dr / 1000))
     [ -z "$_dc" ] || [ "$_dr" -gt "$_dc" ] && _dc="$_dr"
   done
+  if [ -n "$_dsz" ]; then
+    _dr="$(cat "${LK_THERMAL_BASE:-/sys/class/thermal}/thermal_zone$_dsz/temp" 2>/dev/null)"
+    case "$_dr" in ''|*[!0-9]*) _dr="" ;; *) [ "$_dr" -ge 1000 ] && _dr=$((_dr / 1000)) ;; esac
+    [ -n "$_dr" ] && [ "$_dr" -gt 0 ] 2>/dev/null && { echo "${_dc}|${_dr}"; return 0; }
+  fi
   for _dz in "${TZ_SYSTHERM6:-}" "${TZ_BOARD:-}"; do
     [ -n "$_dz" ] || continue
     _dr="$(cat "${LK_THERMAL_BASE:-/sys/class/thermal}/thermal_zone$_dz/temp" 2>/dev/null)"
@@ -1805,7 +1811,7 @@ EOF_LKMB
   fi
   if [ -z "$_temp" ] || [ -z "$_surf" ]; then
     IFS='|' read -r _dtc _dts <<EOF_LKDT
-$(lk_direct_temps)
+$(lk_direct_temps "$(echo "$_j" | awk -F'"thermal_surface_zone":' '{print $2}' | awk -F, '{print $1}')")
 EOF_LKDT
     [ -n "$_temp" ] || _temp="$_dtc"
     [ -n "$_surf" ] || _surf="$_dts"

@@ -224,6 +224,7 @@ if [ "$_HAVE_LEDGER" = "1" ]; then
       if (in_c && cd > bd) {
         bd = cd; bdrop = cdrop; baw = (cawt > 0 ? caw / cawt : 0)
         bma = (cmaw > 0 ? cma / cmaw : 0); br = cr; bct = cct; bst = cst; bwp = cwp
+        bs = cs; be = pe
       }
     }
     /^#/ { next }
@@ -254,8 +255,22 @@ if [ "$_HAVE_LEDGER" = "1" ]; then
           bd / 60, bdrop, (bdrop > 0 ? bdrop * 3600 / bd : 0), baw
         printf "nightd\tma=%d\tradio_mib=%.1f\tcpu_t=%d\tskin_t=%d\twake_pk=%d\n", \
           bma, br / 1048576, bct, bst, bwp
+        printf "nightw\t%d\t%d\n", bs, be
       }
     }' 2>/dev/null)"
+  _h_night_win="$(printf '%s\n' "$_h_night_line" | sed -n 's/^nightw\t//p')"
+  _h_night_line="$(printf '%s\n' "$_h_night_line" | grep -v '^nightw')"
+  if [ -n "$_h_night_win" ] && [ -s "$_DIR/battery_trace.txt" ]; then
+    _h_night_skin="$(awk -F'|' -v w="$_h_night_win" '
+      BEGIN { split(w, b, "\t") }
+      $1 ~ /^[0-9]+$/ && $1 >= b[1] && $1 <= b[2] && ($12 + 0) > 0 && ($10 + 0) > 0 {
+        n++; if (($12 + 0) > m) m = $12 + 0; if (($10 + 0) > c) c = $10 + 0 }
+      END { if (n >= 3) print c " " m }' "$_DIR/battery_trace.txt" 2>/dev/null)"
+    if [ -n "$_h_night_skin" ]; then
+      _h_night_cpu="${_h_night_skin%% *}"; _h_night_skin="${_h_night_skin##* }"
+      _h_night_line="$(printf '%s\n' "$_h_night_line" | sed "s/\tcpu_t=[0-9]*\tskin_t=[0-9]*\t/\tcpu_t=$_h_night_cpu\tskin_t=$_h_night_skin\t/")"
+    fi
+  fi
   [ -n "$_h_night_line" ] && printf '%s\n' "$_h_night_line"
 
   # ----- idlemax (worst screen-off awake share) -----------------------------
@@ -271,11 +286,18 @@ if [ "$_HAVE_LEDGER" = "1" ]; then
     }' 2>/dev/null
 
   # ----- thermal peaks -------------------------------------------------------
-  _h_thermal_line="$(_cat_ledger | awk -F'\t' '
+  _h_trace_peak=""
+  [ -s "$_DIR/battery_trace.txt" ] && _h_trace_peak="$(awk -F'|' '
+    $1 ~ /^[0-9]+$/ && ($10 + 0) > 0 { n++; if (($10 + 0) > c) c = $10 + 0; if (($12 + 0) > s) s = $12 + 0 }
+    END { if (n >= 10) printf "%d %d\n", c, s }' "$_DIR/battery_trace.txt" 2>/dev/null)"
+  _h_thermal_line="$(_cat_ledger | awk -F'\t' -v tp="$_h_trace_peak" '
     /^#/ { next }
     ($3 - $2) <= 0 { next }
     { if (($6 + 0) > c) c = $6 + 0; if (($7 + 0) > s) s = $7 + 0 }
-    END { if (c > 0 || s > 0) printf "thermal\tcpu=%d\tsurf=%d\n", c, s }' 2>/dev/null)"
+    END {
+      if (tp != "") { split(tp, tv, " "); if ((tv[1] + 0) > 0) c = tv[1] + 0; if ((tv[2] + 0) > 0) s = tv[2] + 0 }
+      if (c > 0 || s > 0) printf "thermal\tcpu=%d\tsurf=%d\n", c, s
+    }' 2>/dev/null)"
   [ -n "$_h_thermal_line" ] && printf '%s\n' "$_h_thermal_line"
 
   # ----- heat detail (fix213, audit 8.3/К9) -----------------------------------
@@ -288,7 +310,14 @@ if [ "$_HAVE_LEDGER" = "1" ]; then
   # gap itself lasted three minutes). The peak is attributed to the hottest NAMED
   # phase; gap minutes still count in the durations. peak_c reports that phase's own
   # peak, so the sheet can show the number next to the name.
-  _cat_ledger | awk -F'\t' '
+  _h_trace_heat=""
+  [ -s "$_DIR/battery_trace.txt" ] && _h_trace_heat="$(awk -F'|' '
+    $1 ~ /^[0-9]+$/ {
+      if (pe != "") { dt = $1 - pe; if (dt > 0 && dt <= 300) { n++; if (pc >= 45) w += dt; if (ps >= 40) k += dt } }
+      pe = $1; pc = $10 + 0; ps = $12 + 0
+    }
+    END { if (n >= 10) printf "%d %d\n", w / 60, k / 60 }' "$_DIR/battery_trace.txt" 2>/dev/null)"
+  _cat_ledger | awk -F'\t' -v th="$_h_trace_heat" '
     /^#/ { next }
     ($3 - $2) <= 0 { next }
     {
@@ -299,6 +328,7 @@ if [ "$_HAVE_LEDGER" = "1" ]; then
       if (s >= 40) sm += dur
     }
     END {
+      if (th != "") { split(th, tv, " "); cm = tv[1] + 0; sm = tv[2] + 0 }
       if (mp == "") { mp = mpa; mcn = mc }
       if (mc > 0) printf "heat\tpeak_phase=%s\tpeak_c=%d\twarm_min=%d\tskin_min=%d\n", mp, mcn, cm, sm
     }' 2>/dev/null
@@ -363,16 +393,31 @@ if [ -f "$_DIR/_full_day_report.txt" ]; then
            pkg = tag; sub(/^[^(]*\(/, "", pkg); sub(/\).*/, "", pkg)
            sub(/[ ]*\(.*/, "", tag)
          }
-         # JobScheduler/sync wrappers: keep the meaningful tail of the tag.
-         sub(/^\*job\*r\//, "", tag); sub(/^\*sync\*\//, "", tag)
-         sub(/^\*alarm\//, "", tag)
-         n = split(tag, seg, "/"); if (n > 1) tag = seg[n]
+         kind = "lock"
+         if (tag ~ /^\*sync\*\// || tag ~ /^\*job\*r?\/@SyncManager@/) {
+           kind = "sync"; au = tag
+           sub(/^\*sync\*\//, "", au); sub(/^\*job\*r?\/@SyncManager@/, "", au); sub(/\/.*/, "", au)
+           if (au ~ /^com\.android\.(contacts|calendar)$/ || au ~ /^com\.google\.android\.gms\./) { n = split(au, seg, "."); au = seg[n] }
+           tag = au
+         } else if (tag ~ /^\*job\*r?\/#[^#]+#/) {
+           kind = "worker"; sub(/^\*job\*r?\/#/, "", tag); sub(/#.*/, "", tag)
+           n = split(tag, seg, "."); tag = seg[n]
+         } else if (tag ~ /^\*job\*/) {
+           kind = "job"; sub(/^\*job\*r?\//, "", tag)
+           n = split(tag, seg, "/"); if (n > 1) tag = seg[n]
+         } else if (tag ~ /^\*alarm\*?\//) {
+           kind = "alarm"; sub(/^\*alarm\*?\//, "", tag)
+           n = split(tag, seg, "/"); if (n > 1) tag = seg[n]
+         } else {
+           n = split(tag, seg, "/"); if (n > 1) tag = seg[n]
+         }
          sub(/^\.+/, "", tag)
          if (pkg ~ /^system uid/) pkg = ""
          gsub(/[\t=]/, " ", tag); gsub(/[\t=]/, " ", pkg)
          gsub(/^[ ]+|[ ]+$/, "", tag)
-         if (tag != "" && pct + 0 >= 3) {
-           printf "wlive\ttag=%s\tpct=%d\tmin=%d\tpkg=%s\n", tag, pct, mn, pkg
+         if (tag != "" && pct + 0 >= 3 && !((kind SUBSEP tag SUBSEP pkg) in seen)) {
+           seen[kind, tag, pkg] = 1
+           printf "wlive\ttag=%s\tpct=%d\tmin=%d\tpkg=%s\tkind=%s\n", tag, pct, mn, pkg, kind
            c++; if (c >= 3) exit
          }
          next

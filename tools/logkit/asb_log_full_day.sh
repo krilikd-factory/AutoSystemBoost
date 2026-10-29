@@ -715,7 +715,7 @@ lk_phase_ledger_accumulate() {
   if { [ -n "$_tre" ] && [ "$_tre" -gt 0 ] 2>/dev/null && [ $(( $(date +%s) - _tre )) -gt 120 ] 2>/dev/null; } \
      || [ -z "$_temp" ]; then
     IFS='|' read -r _temp _surf <<EOF
-$(lk_direct_temps)
+$(lk_direct_temps "$(echo "$_j" | awk -F'"thermal_surface_zone":' '{print $2}' | awk -F, '{print $1}')")
 EOF
   fi
   # The top cluster wherever it is: a hard-coded policy6 read nothing on a 4-cluster SoC
@@ -2012,6 +2012,7 @@ lk_resume_merge() {
 }
 
 lk_init
+renice -n 10 -p $$ >/dev/null 2>&1 || true
 # Publish after lk_init created the per-capture directory. If the user later deletes this
 # exact directory, the launcher can safely identify this capture as cancelled/orphaned.
 lk_webui_guard_publish_output || { echo '[debug-webui] output marker publish failed'; lk_webui_guard_release; exit 2; }
@@ -2066,6 +2067,8 @@ lk_finalize() {
   cp /data/adb/asb/qdisc_failures.log "$LK_OUT_DIR/qdisc_failures.log" 2>/dev/null || true
 }
 lk_on_signal() {
+  [ -n "${LK_SLEEP_PID:-}" ] && kill "$LK_SLEEP_PID" 2>/dev/null
+  LK_SLEEP_PID=""
   if lk_resume_owned && [ -n "${ASB_LK_SHUTDOWN:-$(getprop sys.shutdown.requested 2>/dev/null)}" ]; then
     echo "$(date +%s)|$(date '+%Y-%m-%d %H:%M:%S')|${_phase:-unknown}|shutdown" >> "$LK_OUT_DIR/phase_timeline.txt" 2>/dev/null
     lk_wl_release
@@ -2219,7 +2222,10 @@ while : ; do
   fi
 
   lk_wl_release
-  sleep "$LK_POLL_S"
+  sleep "$LK_POLL_S" &
+  LK_SLEEP_PID=$!
+  wait "$LK_SLEEP_PID" 2>/dev/null
+  LK_SLEEP_PID=""
 done
 
 # finalize
