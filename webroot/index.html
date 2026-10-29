@@ -4150,7 +4150,7 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
         <span class="tg-link-ico" data-tech-icon="telegram"></span>
         <span class="tg-link-main">@AutoSystemBoost</span>
       </a>
-      <button class="debug-support-btn" data-debug-action="full-day" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">Session log</button>
+      <button class="debug-support-btn" data-debug-action="full-day" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">Infinite log</button>
     </div>
     <a class="tg-link" data-release-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
       <span class="tg-link-ico" data-tech-icon="telegram"></span>
@@ -4358,7 +4358,7 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
         <span class="tg-link-ico" data-tech-icon="telegram"></span>
         <span class="tg-link-main">@AutoSystemBoost</span>
       </a>
-      <button class="debug-support-btn" data-debug-action="full-day" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">Session log</button>
+      <button class="debug-support-btn" data-debug-action="full-day" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">Infinite log</button>
     </div>
     <a class="tg-link" data-release-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
       <span class="tg-link-ico" data-tech-icon="telegram"></span>
@@ -4479,7 +4479,7 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
         <span class="tg-link-ico" data-tech-icon="telegram"></span>
         <span class="tg-link-main">@AutoSystemBoost</span>
       </a>
-      <button class="debug-support-btn" data-debug-action="full-day" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">Session log</button>
+      <button class="debug-support-btn" data-debug-action="full-day" type="button" onclick="asbDebugAction('full-day')" data-i18n="dbg_log_btn">Infinite log</button>
     </div>
     <a class="tg-link" data-release-telegram href="tg://resolve?domain=AutoSystemBoost" onclick="openTelegram(event)">
       <span class="tg-link-ico" data-tech-icon="telegram"></span>
@@ -4550,7 +4550,7 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
 
   <div class="sec">
     <div class="sec-line"></div>
-    <div class="sec-label" data-i18n="lr_menu">Log report</div>
+    <div class="sec-label" data-i18n="lr_menu">Infinite log report</div>
     <div class="sec-line"></div>
   </div>
 
@@ -5352,9 +5352,9 @@ function debugActionWaitOpen(action) {
   const copy = document.getElementById('debugActionWaitCopy');
   if (!modal || !title || !copy) return;
   const isDiag = action === 'diag';
-  title.textContent = isDiag ? 'asbdiag' : 'Session log';
+  title.textContent = isDiag ? 'asbdiag' : T('dbg_log_btn', 'Infinite log');
   copy.textContent = T(isDiag ? 'dbg_diag_wait' : 'dbg_log_wait',
-                       isDiag ? 'asbdiag started · please wait' : 'Session log is starting · please wait');
+                       isDiag ? 'asbdiag started · please wait' : 'Infinite log is starting · please wait');
   modal.hidden = false;
   modal.setAttribute('aria-hidden', 'false');
 }
@@ -5434,24 +5434,31 @@ async function asbDebugStopFullDay() {
     const info = debugActionText(r);
     if (!r || r.errno !== 0 || info.error) {
       uiSound('error');
-      toast(T('dbg_log_stop_failed', 'Could not stop the session log'), 'bad');
+      toast(T('dbg_log_stop_failed', 'Could not stop the infinite log'), 'bad');
       return;
     }
     _asbLogRunning = false;
     asbLogMenuPaint();
-    if (info.status === 'idle') { toast(T('dbg_log_not_running', 'No session log is running'), 'warn'); return; }
-    toast(T('dbg_log_stopping', 'Stopping the session log · the report is being finalised'), 'warn');
+    if (info.status === 'idle') { toast(T('dbg_log_not_running', 'No infinite log is running'), 'warn'); return; }
+    /* fix244: a capture waiting to resume after a reboot has no process yet - stopping it
+       cancels the resume at once, there is no report to wait for. */
+    if (info.status === 'stopped') {
+      uiSound('success');
+      toast(T('dbg_log_stopped', 'Infinite log stopped') + (info.output ? ' · ' + info.output.replace(/^\/(sdcard|storage\/emulated\/0)\//, '') : ''), 'good');
+      return;
+    }
+    toast(T('dbg_log_stopping', 'Stopping the infinite log · the report is being finalised'), 'warn');
     _asbDebugActionBusy = false;
     const done = await debugFullDayStopPoll();
     if (done) {
       uiSound('success');
       const out = info.output ? ' · ' + info.output.replace(/^\/(sdcard|storage\/emulated\/0)\//, '') : '';
-      toast(T('dbg_log_stopped', 'Session log stopped') + out, 'good');
+      toast(T('dbg_log_stopped', 'Infinite log stopped') + out, 'good');
     } else {
-      toast(T('dbg_log_stop_slow', 'The session log is still finishing its report'), 'warn');
+      toast(T('dbg_log_stop_slow', 'The infinite log is still finishing its report'), 'warn');
     }
   } catch (e) {
-    toast(T('dbg_log_stop_failed', 'Could not stop the session log'), 'bad');
+    toast(T('dbg_log_stop_failed', 'Could not stop the infinite log'), 'bad');
   } finally {
     _asbDebugActionBusy = false;
   }
@@ -5473,7 +5480,7 @@ async function asbDebugAction(action) {
   // acknowledgement. Yield twice before KSU work so the first pulse is on-screen.
   await debugFrame();
   toast(T(action === 'diag' ? 'dbg_diag_wait' : 'dbg_log_wait',
-          action === 'diag' ? 'asbdiag started · please wait' : 'Session log is starting · please wait'), 'warn');
+          action === 'diag' ? 'asbdiag started · please wait' : 'Infinite log is starting · please wait'), 'warn');
   try {
     const cmd = action === 'diag' ? 'diag-start' : 'full-day-start';
     const r = await run('sh ' + MD + '/runtime/asb_debug_support.sh ' + cmd + ' 2>/dev/null');
@@ -5498,18 +5505,19 @@ async function asbDebugAction(action) {
     } else if (info.status === 'already_running') {
       _asbLogRunning = true;
       asbLogMenuPaint();
-      toast(T('dbg_log_running', 'Session log is already running') + (info.pid ? ' · PID ' + info.pid : '') +
+      toast(T('dbg_log_running', 'The infinite log is already running') + (info.pid ? ' · PID ' + info.pid : '') +
           (info.output ? ' · ' + info.output.replace(/^\/(sdcard|storage\/emulated\/0)\//, '') : '') + ' — ' + T('dbg_log_running_hint', 'open this menu again to stop it'), 'warn');
     } else if (info.status === 'started') {
       const started = await debugFullDayPoll();
       if (!started.ok) {
-        toast(T('dbg_log_failed', 'Could not start session log'), 'bad');
+        toast(T('dbg_log_failed', 'Could not start the infinite log'), 'bad');
         return;
       }
       uiSound('success');
-      toast(T('dbg_log_started', 'Session log started') + ((started.info.pid || info.pid) ? ' · PID ' + (started.info.pid || info.pid) : ''), 'good');
+      toast(T('dbg_log_started', 'Infinite log started') + ((started.info.pid || info.pid) ? ' · PID ' + (started.info.pid || info.pid) : '') +
+          ' — ' + T('dbg_log_started_hint', 'it keeps recording across reboots until you stop it in this menu'), 'good');
     } else {
-      toast(T('dbg_log_failed', 'Could not start session log'), 'bad');
+      toast(T('dbg_log_failed', 'Could not start the infinite log'), 'bad');
     }
   } catch (e) { toast(T(action === 'diag' ? 'dbg_diag_failed' : 'dbg_log_failed', 'Debug action failed'), 'bad'); }
   finally {
@@ -5804,6 +5812,22 @@ function lvTopSec(smart) {
   const el = _el('liveTopSecLabel');
   if (el) el.textContent = smart ? T('lv_card_smart', 'Battery & Smart') : T('lv_card_rom', 'Battery & system');
   lvTopSecSync();
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(lvFitValues);
+}
+/* fix244: a value longer than its quarter of the card ("↓ остывает", "measuring…" in some
+ * languages) was cut to "↓ остыв…". The text shrinks a little before it is ever cut, down to
+ * 10 px; the ellipsis stays only for what still does not fit. */
+function lvFitValues() {
+  ['liveSmartBanner', 'liveStockRomBanner'].forEach(function (id) {
+    const card = _el(id);
+    if (!card || card.style.display === 'none' || !card.querySelectorAll) return;
+    card.querySelectorAll('.smart-banner-value').forEach(function (v) {
+      v.style.fontSize = '';
+      if (!(v.clientWidth > 0) || v.scrollWidth <= v.clientWidth + 1) return;
+      let fs = parseFloat(getComputedStyle(v).fontSize) || 13;
+      while (fs > 10 && v.scrollWidth > v.clientWidth + 1) { fs -= 0.5; v.style.fontSize = fs + 'px'; }
+    });
+  });
 }
 function lvTopSecSync() {
   const el = _el('liveTopSecLabel');
@@ -5963,7 +5987,11 @@ function lvEtaPaint() {
   onEl.textContent = lvEtaFmt(on);
   onEl.title = onTip;
   const _offTxt = lvEtaFmt(off);
-  offEl.textContent = (offEst && off > 0 && _offTxt.charAt(0) !== '>' ? '~' : '') + _offTxt;
+  /* fix244: an estimate past three days kept its "> 72h" without the "~" every other estimate
+     carries - under a "measuring..." that made it read like a measurement. */
+  offEl.textContent = (offEst && off > 0)
+    ? (_offTxt.charAt(0) === '>' ? '~72' + T('unit_h', 'h') + '+' : '~' + _offTxt)
+    : _offTxt;
   offEl.title = offTip;
 }
 /* Monitor: battery drain with the screen on and off (fix159). The two figures sit in the Smart
@@ -10352,7 +10380,12 @@ function logReportTips(d, all) {
     else { v.set = Tcfg('wakelock_action', 'name', 'Act on Wakelocks'); tips.push({ ic: 'info', key: 'lr_tip_wl_enable', vars: v }); }
   }
   if (jank && (+jank.frames || 0) > 20000) {
-    if ((+jank.pct || 0) >= 6) tips.push({ ic: 'warn', key: 'lr_tip_jank_bad', vars: { pct: String(jank.pct) } });
+    /* fix244: the advice names the profile the capture ran on - a Battery day was told what
+       the Smart learner is doing about it. */
+    if ((+jank.pct || 0) >= 6) {
+      const jp = String((s.meta || {}).profile || '');
+      tips.push({ ic: 'warn', key: jp === 'battery' ? 'lr_tip_jank_bad_bat' : (jp === 'balanced' || jp === 'performance' || jp === 'stock') ? 'lr_tip_jank_bad_man' : 'lr_tip_jank_bad', vars: { pct: String(jank.pct) } });
+    }
     else if ((+jank.pct || 0) <= 2) tips.push({ ic: 'ok', key: 'lr_tip_jank_ok', vars: { pct: String(jank.pct) } });
   }
   if (audio && (+audio.spk_min || 0) >= 30 && (+audio.pctph || 0) >= 5)
@@ -10372,6 +10405,14 @@ function logReportTips(d, all) {
      front, is a status bar that never stops redrawing (the owner's Battery day: 81 of 81
      intervals, 13.8 % of its frames, with the network-speed meter on). The capture read the
      per-second sources at its start, so the card names the one that is actually on. */
+  /* fix243: SystemUI restarts with the cause in hand. The recorder now keeps the system's
+     own native-crash record with each restart, and a crash whose frames sit in a library
+     loaded from an installed app is code that app injects into SystemUI - not ASB, not the
+     ROM. The owner's Battery evening: 7 restarts in 2 h, the recorded one SIGABRT inside such
+     a library. Every restart rebuilds the whole status bar and costs frames and battery. */
+  const sinj = s.sysuiinj || null, sysuiT = s.sysui || null;
+  if (sinj && sinj.pkg && (+sinj.n || 0) > 0 && sysuiT && (+sysuiT.count || 0) > 0)
+    tips.push({ ic: 'warn', key: 'lr_tip_sysui_inj', vars: { n: String(+sysuiT.count || 0), m: String(+sinj.n || 0), pkg: String(sinj.pkg) } });
   const sdraw = s.sysuidraw || null;
   if (logReportSysuiSteady(sdraw)) {
     const sv = { n: String(sdraw.intv), of: String(sdraw.of), pct: String(sdraw.pct) };
@@ -10621,6 +10662,9 @@ function logReportAnalyze(d) {
     chain(45, 'fact', 'lr_chain_audio', { min: logReportDur(audio.spk_min), pct: String(audio.pctph) });
   if (logReportSysuiSteady(sdraw))
     chain(68, 'fact', 'lr_chain_sysui', { n: String(sdraw.intv), of: String(sdraw.of), pct: String(sdraw.pct) });
+  const sinj = s.sysuiinj || null;
+  if (sinj && sinj.pkg && (+sinj.n || 0) > 0 && s.sysui && (+s.sysui.count || 0) > 0)
+    chain(88, 'fact', 'lr_chain_sysui_inj', { n: String(+s.sysui.count || 0), m: String(+sinj.n || 0), pkg: String(sinj.pkg) });
   if (scr && (+scr.music_min || 0) >= 20 && (+scr.off_min || 0) > 0)
     chain(40, 'fact', 'lr_chain_music_off', { off: logReportDur(scr.off_min), music: logReportDur(scr.music_min) });
   if (cost && ((+cost.cpu_msh || 0) > 10000 || ((+cost.cpu_msh || 0) > 2500 && (msPerWake === null || msPerWake > 8))))
@@ -10631,8 +10675,9 @@ function logReportAnalyze(d) {
     lr_tip_crash: 100, lr_tip_cost_hi: 96, lr_tip_heat_warm_set: 92, lr_tip_heat_warm: 92,
     lr_tip_crashes: 88, lr_tip_awake_aod: 86, lr_tip_awake_who: 84, lr_tip_awake_alarm: 84,
     lr_tip_awake_hold: 84, lr_tip_awake: 80, lr_tip_sradio: 82, lr_tip_night_modem: 78,
-    lr_tip_night: 76, lr_tip_jank_bad: 72, lr_tip_jank_wake: 70, lr_tip_jank_wake_wh: 70,
+    lr_tip_night: 76, lr_tip_jank_bad: 72, lr_tip_jank_bad_bat: 72, lr_tip_jank_bad_man: 72, lr_tip_jank_wake: 70, lr_tip_jank_wake_wh: 70,
     lr_tip_sysui_netspeed: 68, lr_tip_sysui_clocksec: 68, lr_tip_sysui_livewp: 66, lr_tip_sysui_other: 30,
+    lr_tip_sysui_inj: 90,
     lr_tip_wl_enable: 64, lr_tip_app: 62, lr_tip_audio: 45, lr_tip_ltpo: 15
   };
   const actions = logReportTips(d, true).filter(function (t) { return t.ic !== 'ok' && weights[t.key]; })
@@ -11269,7 +11314,7 @@ async function asbLogReportLoad() {
     em.className = 'lgr-empty-emo';
     em.textContent = '📭';
     s0.insertBefore(em, s0.firstChild);
-    s0.appendChild(logReportNote(T('lr_none_body', 'Start a session log from this menu first. The report appears here as data accumulates - even while it is still recording.')));
+    s0.appendChild(logReportNote(T('lr_none_body', 'Start an infinite log from this menu first. The report appears here as data accumulates - even while it is still recording.')));
     body.appendChild(s0);
     requestAnimationFrame(asbFitPages);
     return;
@@ -11341,6 +11386,7 @@ function logReportAnalysisT(key, vars) {
     lr_chain_cost: 'ASB used {ms} ms/h over {wakes} wakeups/h → {per} ms per wake → above the usual overhead budget.',
     lr_chain_sysui: 'SystemUI missed frames in {n} of {of} screen-on intervals ({pct}% of its frames) whatever app was open → something in the status bar redraws all the time.',
     lr_chain_music_off: 'Screen off for {off}, of which {music} was music → the screen-off verdict counts only the idle part; playback is work, not idle drain.',
+    lr_chain_sysui_inj: '{m} of {n} SystemUI restarts → a native crash inside code {pkg} injects into SystemUI → that module, not ASB or the ROM, brought SystemUI down.',
     lr_no_actions: 'No priority change is supported by this capture. Keep settings unchanged and collect a comparable capture.',
     lr_no_actions_early: 'No settings recommendation yet: let the capture accumulate evidence.',
     lr_trend_matched: 'Same device, ROM and scenario family; durations pass the minimum. Still an observation, not a controlled A/B test.',
@@ -11366,6 +11412,8 @@ function logReportTipText(tip) {
     lr_tip_wl_enable: '{app} held the phone awake for {min} min - turn on "{set}" in Settings and ASB will rein such apps in for you.',
     lr_tip_night_modem: 'Overnight the phone lost ~{pct}%/h - try "{set}" in Settings, it quiets the modem in your own sleeping hours.',
     lr_tip_jank_bad: 'About {pct}% of frames missed their deadline - stutter is visible. On Smart the learner is already testing the worst apps; heavy games do better on Performance.',
+    lr_tip_jank_bad_bat: 'About {pct}% of frames missed their deadline - stutter is visible. Battery keeps the ceilings low on purpose; for heavy apps Smart or Balanced give more room. The apps that drop the most are under Smoothness below.',
+    lr_tip_jank_bad_man: 'About {pct}% of frames missed their deadline - stutter is visible. The apps that drop the most are under Smoothness below; Smart adapts the ceilings to them.',
     lr_tip_jank_ok: 'Smoothness is excellent: only {pct}% of frames janky.',
     lr_tip_jank_wake: 'Stutter concentrates at the wakes: {pct}% of frames at unlocks and app opens against {ord}% over the day; the most janky there is {who}.',
     lr_tip_jank_wake_wh: 'Stutter concentrates at the wakes: {pct}% of frames at unlocks and app opens against {ord}% over the day.',
@@ -11381,7 +11429,8 @@ function logReportTipText(tip) {
     lr_tip_sysui_netspeed: 'SystemUI stutters in {n} of {of} screen-on intervals and the network-speed meter in the status bar is on - it redraws every second. Turn it off in the status-bar settings and compare the stutter in the next capture.',
     lr_tip_sysui_clocksec: 'SystemUI stutters in {n} of {of} screen-on intervals and the status-bar clock shows seconds - it redraws every second. Turn the seconds off and compare the stutter in the next capture.',
     lr_tip_sysui_livewp: 'SystemUI stutters in {n} of {of} screen-on intervals and a live wallpaper is set - it redraws whenever it is visible. Try a static wallpaper and compare the stutter in the next capture.',
-    lr_tip_sysui_other: 'SystemUI stutters in {n} of {of} screen-on intervals although the usual per-second sources are off - look for an animated icon, a floating overlay or a module hooking SystemUI.'
+    lr_tip_sysui_other: 'SystemUI stutters in {n} of {of} screen-on intervals although the usual per-second sources are off - look for an animated icon, a floating overlay or a module hooking SystemUI.',
+    lr_tip_sysui_inj: 'SystemUI restarted {n} times; {m} of the recorded restarts crashed inside code that {pkg} injects into SystemUI. Update or disable that module - every restart rebuilds the status bar, drops frames and costs battery.'
   }[tip.key] || '', tip.vars);
 }
 
@@ -11447,7 +11496,7 @@ function logReportRender(d) {
   window._asbLogReportData = d;
   if (String(meta.running) === '1') {
     status.textContent = h === '0'
-      ? logReportT('lr_running_open', 'recording · {min} min · until shutdown', { min: String(meta.elapsed_min || '0') })
+      ? logReportT('lr_running_open', 'recording · {min} min · until you stop it', { min: String(meta.elapsed_min || '0') })
       : logReportT('lr_running', 'recording · {min} min of {h} h', { min: String(meta.elapsed_min || '0'), h: h });
   } else if (meta.started) {
     /* fix200: a SAVED capture is named as such - with its start time and the profile it
@@ -11468,8 +11517,20 @@ function logReportRender(d) {
     if (m2.model) m2p.push(String(m2.model));
     if (m2.soc) m2p.push(String(m2.soc));
     if (m2.rom) m2p.push(String(m2.rom));
-    if (m2.mod) m2p.push('ASB ' + String(m2.mod));
+    /* fix244: "ASB V65-" / "test14" broke at the hyphen - the build name keeps together. */
+    if (m2.mod) m2p.push('ASB\u00a0' + String(m2.mod).replace(/-/g, '\u2011'));
     if (m2p.length) body.appendChild(logReportNote(m2p.join(' · ')));
+  }
+  /* fix244: a session log now resumes after a reboot. Say so, and name the module build
+     that ran after the last one when it differs from the build the capture started with. */
+  const rb = d.sections.reboot || null;
+  if (rb && (+rb.n || 0) > 0) {
+    const rbMod = String(rb.mod || '').trim();
+    const rbNew = rbMod && m2 && m2.mod && rbMod !== String(m2.mod);
+    const rbModShown = rbMod.replace(/-/g, '\u2011');
+    body.appendChild(logReportNote(rbNew
+      ? logReportT('lr_reboots_mod', 'Recorded across {n} reboot(s); ASB {mod} after the last one. The time the phone was off counts in no phase.', { n: String(+rb.n), mod: rbModShown })
+      : logReportT('lr_reboots', 'Recorded across {n} reboot(s). The time the phone was off counts in no phase.', { n: String(+rb.n) })));
   }
   logReportAppendAnalysis(body, d, analysis);
   const drain = d.sections.drain || null;
@@ -11905,6 +11966,13 @@ function logReportRender(d) {
       if (ca > 0) s.appendChild(logReportNote(logReportT('lr_crash_asb', 'ASB code is involved in {n} - please send an asbdiag log to the developer.', { n: String(ca) }), true));
     }
     if (sysui) s.appendChild(logReportRow(logReportT('lr_sysui', 'SystemUI restarts: {n}', { n: String(+sysui.count || 0) }), '', (+sysui.count || 0) > 2));
+    const sinj = d.sections.sysuiinj || null;
+    if (sinj && sinj.pkg && (+sinj.n || 0) > 0 && sysui && (+sysui.count || 0) > 0)
+      s.appendChild(logReportNote(logReportT('lr_sysui_inj_note', '{m} of them crashed inside code that {pkg} injects into SystemUI.',
+        { m: String(+sinj.n || 0), pkg: String(sinj.pkg) }), true));
+    if (sinj && sinj.hooks)
+      s.appendChild(logReportNote(logReportT('lr_sysui_hooks_note', 'Code other apps load into SystemUI: {hooks}. Every hook adds work to each status-bar redraw.',
+        { hooks: String(sinj.hooks) })));
     body.appendChild(s);
   }
   if (thermal || throttle || heat) {
@@ -12018,8 +12086,8 @@ function asbLogMenuPaint() {
   item.classList.toggle('is-recording', _asbLogRunning);
   item.classList.toggle('is-armed', !!armed);
   label.removeAttribute('data-i18n');
-  label.textContent = !_asbLogRunning ? T('dbg_log_btn', 'Session log') :
-    (armed ? T('dbg_log_stop_confirm', 'Tap again to stop') : T('dbg_log_stop_btn', 'Stop session log'));
+  label.textContent = !_asbLogRunning ? T('dbg_log_btn', 'Infinite log') :
+    (armed ? T('dbg_log_stop_confirm', 'Tap again to stop') : T('dbg_log_stop_btn', 'Stop infinite log'));
 }
 async function asbLogMenuSync() {
   _asbLogStopArmed = 0;
@@ -12027,7 +12095,7 @@ async function asbLogMenuSync() {
   try {
     const r = await run('sh ' + MD + '/runtime/asb_debug_support.sh status 2>/dev/null');
     const info = debugActionText(r);
-    _asbLogRunning = !!(r && r.errno === 0 && (info.status === 'running' || info.status === 'starting'));
+    _asbLogRunning = !!(r && r.errno === 0 && (info.status === 'running' || info.status === 'starting' || info.status === 'resuming'));
   } catch (e) { _asbLogRunning = false; }
   asbLogMenuPaint();
 }
@@ -14469,10 +14537,10 @@ setTimeout(() => pollLive(false), 1500);
     <span data-i18n="dbg_diag_btn">asbdiag</span>
   </button>
   <button class="log-menu-item" id="logMenuSession" role="menuitem" type="button" onclick="asbLogMenuPick('full-day')">
-    <span id="logMenuSessionLabel" data-i18n="dbg_log_btn">Session log</span>
+    <span id="logMenuSessionLabel" data-i18n="dbg_log_btn">Infinite log</span>
   </button>
   <button class="log-menu-item" role="menuitem" type="button" onclick="asbLogMenuPick('report')">
-    <span data-i18n="lr_menu">Log report</span>
+    <span data-i18n="lr_menu">Infinite log report</span>
   </button>
 </div>
 <nav class="asb-tabbar" id="asbTabbar" role="tablist" aria-label="Sections">
