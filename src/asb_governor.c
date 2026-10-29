@@ -3089,6 +3089,9 @@ static char   g_unlock_skip_why[16] = "-";/* why the last one did not: off/profi
 static long   g_launch_arm_ms      = 0;   /* boottime ms of the last app-switch arm */
 static int    g_unlock_profile     = -1;  /* profile the last update ran for (fix243) */
 static const char *g_unlock_arm_why = "-";/* what armed the running lift, for the log line */
+static long   g_unlock_armed_ms    = 0;   /* boottime ms of the arm behind the running lift (fix248) */
+static int    g_unlock_level_khz   = 0;   /* prime ceiling a held Battery lift was levelled to, 0 = none */
+static unsigned long g_unlock_levels = 0; /* held lifts that were levelled */
 
 /* Who the lift is for. Battery and Balanced are exactly the profiles that jank on a wake -
  * their ceilings are the shell's static caps - and Smart has always had it. Performance is
@@ -3169,6 +3172,7 @@ static int asb_unlock_lift_update(int screen_on, int touch_kick, int touch_activ
         } else {
             long until = now_ms + (long)g_asb_cfg.unlock_lift_s * 1000L;
             if (until > g_unlock_until_ms) g_unlock_until_ms = until;
+            g_unlock_armed_ms = now_ms;
             g_unlock_lifts++;
         }
     }
@@ -3186,6 +3190,7 @@ static int asb_unlock_lift_update(int screen_on, int touch_kick, int touch_activ
         (thermal_cap || !asb_unlock_lift_profile_ok(profile_idx) || now_ms >= g_unlock_until_ms))
         g_unlock_until_ms = 0;
     g_unlock_lift_now = (g_unlock_until_ms > 0);
+    if (!g_unlock_lift_now) g_unlock_level_khz = 0;
     return g_unlock_lift_now;
 }
 
@@ -3209,8 +3214,28 @@ static int asb_unlock_lift_share(int profile_idx) {
     return pct;
 }
 
+/* A Battery lift held by a finger keeps the clusters level (fix248).
+ *
+ * The lift raises every cluster to the same share of its OWN maximum, and the clusters are
+ * not the same size: on a 6+2 part the prime's capacity is a third above the main cores'
+ * (OP15: 1024 against 762), so at 64 % of each the prime becomes the bigger cluster and the
+ * scheduler moves ordinary foreground work onto the two dearest cores - the very imbalance
+ * fix130 removed from Smart. On Battery the touch hold (fix223) keeps the lift up through a
+ * whole scroll: in an OP15 Battery day the screen-on samples with the main ceiling more than
+ * 10 % under the prime's had the prime working in 20 % of them against 7-8 % with the two
+ * level, and a mean sampled current of 300 against 246 mA.
+ *
+ * So once a Battery lift outlives its own window and is only held up by the finger, the
+ * prime is lifted no further than the step whose capacity is within 10 % of the lifted main
+ * ceiling (OP15: 2227200 instead of 2880000 kHz, 495 against 468). The main lift, the
+ * top-app uclamp raise and the first unlock_lift_s seconds of every wake, first touch, app
+ * switch and lock press are untouched - those are the animations - and so is the jank
+ * guard's lift. Two clusters only, from each device's own cpu_capacity and frequency table;
+ * never below the prime's ceiling before the lift; main_capacity_parity=0 turns it off. */
+static int g_bjank_armed;
 static void asb_unlock_lift_apply(asb_profile_caps_t *caps) {
     int pct = asb_unlock_lift_share(g_unlock_profile);
+    int prime_before = caps->cpu_max[1];
     for (int i = 0; i < 3; i++) {
         long hw = g_cpu_slot_hwmax[i];
         /* 0 is "not managed" (an empty slot, or a prime left to the vendor): nothing to lift. */
@@ -3219,6 +3244,31 @@ static void asb_unlock_lift_apply(asb_profile_caps_t *caps) {
         if (caps->cpu_max[i] < want) caps->cpu_max[i] = want;
     }
     if (caps->uclamp_top_max > 0 && caps->uclamp_top_max < pct) caps->uclamp_top_max = pct;
+    int lvl = 0;
+    if (g_unlock_profile == PROFILE_BATTERY && g_asb_cfg.main_capacity_parity && !g_bjank_armed &&
+        g_asb_cfg.unlock_lift_s > 0 && g_unlock_armed_ms > 0 &&
+        asb_clock_ms(CLOCK_BOOTTIME) - g_unlock_armed_ms >= (long)g_asb_cfg.unlock_lift_s * 1000L &&
+        g_cpu_all_count == 2 && g_cpu_policy_ids[0] >= 0 && g_cpu_policy_ids[1] >= 0 &&
+        g_cpu_policy_ids[2] < 0 && caps->cpu_max[0] > 0 && prime_before > 0 &&
+        caps->cpu_max[1] > prime_before) {
+        if (g_parity_cap0 == -2) {
+            g_parity_cap0 = asb_cpu_capacity_of(g_cpu_policy_ids[0]);
+            g_parity_cap1 = asb_cpu_capacity_of(g_cpu_policy_ids[1]);
+        }
+        long long hw0 = g_cpu_slot_hwmax[0], hw1 = g_cpu_slot_hwmax[1];
+        if (g_parity_cap0 > 0 && g_parity_cap1 > g_parity_cap0 && hw0 > 0 && hw1 > 0) {
+            long long m = writer_slot_ceiling(0, caps->cpu_max[0], 0);
+            long long lim = m * g_parity_cap0 * hw1 * 110 / (hw0 * g_parity_cap1 * 100);
+            long long p = lim > 0 ? writer_slot_ceiling(1, (int)lim, 0) : 0;
+            if (p > 0 && p < caps->cpu_max[1]) {
+                if (p < prime_before) p = prime_before;
+                caps->cpu_max[1] = (int)p;
+                lvl = (int)p;
+            }
+        }
+    }
+    if (lvl > 0 && g_unlock_level_khz <= 0) g_unlock_levels++;
+    g_unlock_level_khz = lvl;
 }
 
 /* Smart night slot with the screen on (fix150) - see asb_smart_night_awake. */
@@ -4142,6 +4192,7 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
      * touches), wakes that did not lift and why the last one did not. */
     fprintf(f, "unlock_lift=%d\nunlock_lifts=%lu\nunlock_lift_skips=%lu\nunlock_lift_skip_why=%s\n",
             g_unlock_applied, g_unlock_lifts, g_unlock_skips, g_unlock_skip_why);
+    fprintf(f, "unlock_level_khz=%d\nunlock_levels=%lu\n", g_unlock_level_khz, g_unlock_levels);
     {
         long _pe_t = g_prime_escape_total_ms;
         if (g_prime_escape_since_ms > 0) _pe_t += asb_clock_ms(CLOCK_BOOTTIME) - g_prime_escape_since_ms;
@@ -6736,6 +6787,34 @@ static void asb_fg_classify_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     _last = now;
 }
 
+/* The user's screen-transition switches on the manual profiles (fix248).
+ *
+ * smart_dynamic_tune.sh carries three switches the user turns on for themselves - LTE with
+ * the screen off (net_screen_off_lte), 5G only when needed (net_lte_light) and Wi-Fi power
+ * save with the screen off (wifi_powersave) - next to Smart's own I/O and memory nudges.
+ * It was only ever started from the Smart tick, which returns at once on BATTERY, BALANCED
+ * and PERFORMANCE, so on those profiles the three switches did nothing. An OP15 on Battery
+ * shows it: the LTE log stopped the evening Smart was switched off, and two days, two
+ * captures and 1.9 GiB of mobile data later every snapshot still read applies=19,
+ * light_watch=0 with both switches on.
+ *
+ * On a manual profile the tuner now runs at every screen change in its "manual" mode, which
+ * does those switches and nothing else - read-ahead, swappiness and the dirty limits stay
+ * the profile's. -1 means "run at the next manual tick": Smart owned the screen until now. */
+static int g_manual_tune_screen = -1;
+
+static void asb_manual_screen_tune(const asb_metrics_t *m) {
+    int on = m->misc.screen_on ? 1 : 0;
+    if (on == g_manual_tune_screen) return;
+    g_manual_tune_screen = on;
+    /* Smart's tuner re-runs at its first tick when Smart comes back: the screen state it
+     * last saw is no longer the one the switches were left in. */
+    g_smart_last_tune_sig = -1;
+    char args[48];
+    snprintf(args, sizeof(args), "%d 0 %d manual", g_smart_rt.app_hint, on);
+    asb_run_modscript("runtime/smart_dynamic_tune.sh", args);
+}
+
 static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     if (!m) return 0;
     /* Defensive consistency: if FSM is in PROFILE_SMART, ensure runtime flag
@@ -6743,7 +6822,11 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     if (fsm && fsm->profile_idx == PROFILE_SMART) {
         g_smart_rt.enabled = 1;
     }
-    if (!g_smart_rt.enabled || !g_smart_store_loaded) return 0;
+    if (!g_smart_rt.enabled || !g_smart_store_loaded) {
+        asb_manual_screen_tune(m);
+        return 0;
+    }
+    g_manual_tune_screen = -1;
 
     time_t now = time(NULL);
 
