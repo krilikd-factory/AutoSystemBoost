@@ -243,21 +243,12 @@ full_day_pid_owns_lock() {
 # samplers as background subshells, and stopping only the parent left them writing.
 pid_descendants() {
   _pd_root="${1:-}"; [ -n "$_pd_root" ] || return 0
-  _pd_list="$_pd_root"; _pd_out=""
-  while [ -n "$_pd_list" ]; do
-    _pd_next=""
-    for _pd_stat in "$PROC_ROOT"/[0-9]*/stat; do
-      [ -r "$_pd_stat" ] || continue
-      _pd_line="$(cat "$_pd_stat" 2>/dev/null)" || continue
-      _pd_pid="${_pd_line%% *}"
-      _pd_rest="${_pd_line##*) }"; _pd_ppid="$(printf '%s' "$_pd_rest" | cut -d' ' -f2)"
-      for _pd_p in $_pd_list; do
-        [ "$_pd_ppid" = "$_pd_p" ] && { _pd_next="$_pd_next $_pd_pid"; _pd_out="$_pd_out $_pd_pid"; }
-      done
-    done
-    _pd_list="$_pd_next"
-  done
-  printf '%s' "$_pd_out"
+  cat "$PROC_ROOT"/[0-9]*/stat 2>/dev/null | awk -v r="$_pd_root" '
+    { l = $0; p = $1; sub(/^.*\) /, "", l); split(l, f, " "); if (p ~ /^[0-9]+$/ && f[2] ~ /^[0-9]+$/) pp[p] = f[2] }
+    END {
+      q[1] = r; n = 1; h = 1
+      while (h <= n) { c = q[h++]; for (p in pp) if (pp[p] == c && !(p in got)) { got[p] = 1; q[++n] = p; printf " %s", p } }
+    }'
 }
 
 full_day_cancel_orphan() {
@@ -758,6 +749,7 @@ stop_full_day() {
     echo "pid=$_sp"
     return 0
   fi
+  [ -f "$MODDIR/runtime/asb_cgroup.sh" ] && . "$MODDIR/runtime/asb_cgroup.sh" && asb_cgroup_detach $$ >/dev/null 2>&1
   rm -f "$RESUMEFILE" 2>/dev/null || true
   _so="$(cat "$OUTPUTFILE" 2>/dev/null || true)"
   _sk="$(pid_descendants "$_sp")"
@@ -766,11 +758,11 @@ stop_full_day() {
     _scc="$(tr '\000' ' ' < "$PROC_ROOT/$_sc/cmdline" 2>/dev/null || true)"
     case "$_scc" in sleep\ *|*/sleep\ *) kill -TERM "$_sc" 2>/dev/null || true ;; esac
   done
-  [ -f "$MODDIR/runtime/asb_cgroup.sh" ] && . "$MODDIR/runtime/asb_cgroup.sh" && asb_cgroup_detach $$ >/dev/null 2>&1
+  full_day_recovery_note "stop=term pid=$_sp"
   (
     exec </dev/null >/dev/null 2>&1
     _sw=0
-    while [ "$_sw" -lt "${ASB_DEBUG_SUPPORT_STOP_WAIT_S:-120}" ] && pid_is_live "$_sp"; do
+    while [ "$_sw" -lt "${ASB_DEBUG_SUPPORT_STOP_WAIT_S:-240}" ] && pid_is_live "$_sp"; do
       sleep 1
       _sw=$(( _sw + 1 ))
     done
