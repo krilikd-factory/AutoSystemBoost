@@ -4926,10 +4926,10 @@ printf '%s\n' "$rc" | grep -Eq '^hist	started=[0-9-]+ [0-9:]+	night=1.0	drain=2.
 let ASB_LANG = 'ru';
 function T(k, d) { const L = I18N[ASB_LANG]; return (L && typeof L[k] === 'string') ? L[k] : d; }
 EOF
-  for fn in Tcfg parseLogReport logReportT logReportDur logReportDurSec logReportAuthority logReportHolderWhat logReportHolderName logReportTips \
+  for fn in Tcfg parseLogReport logReportT logReportDur logReportDurSec logReportAuthority logReportHolderWhat logReportIdleAwake logReportHolderName logReportTips \
     logReportSysuiSteady logReportFullCharge logReportScreenOnDrainState logReportAnalyze logReportHistoryComparable logReportMachineDigest logReportAnalysisT \
     logReportTipText logReportRow logReportSec logReportNote logReportHero logReportTable \
-    logReportBrief logReportAppendAnalysis logReportRender shQuote \
+    logReportBrief logReportDxT logReportDiagnose logReportDiagSection logReportAppendAnalysis logReportRender shQuote \
     asbPageClasses asbPageHas asbPageKids asbPageTxt asbPageWarn asbPageText asbPageStamp; do
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
@@ -5302,7 +5302,7 @@ function allText(e) { return (e.textContent || '') + e.children.map(allText).joi
 function countClass(e, name) { return (String(e.className).split(/\s+/).indexOf(name) >= 0 ? 1 : 0) + e.children.reduce((n,c) => n + countClass(c,name), 0); }
 logReportRender(early);
 chk(countClass(reportBody, 'lgr-verdict') === 5, 'summary renders all five verdict rows');
-chk(reportBody.children.filter(c => c.children[0] && c.children[0].textContent !== I18N.ru.lr_sec_brief)[0].children[0].textContent === I18N.ru.lr_sec_summary, 'smart summary is the first report section after the plain-words brief');
+chk(reportBody.children.filter(c => c.children[0] && c.children[0].textContent !== I18N.ru.lr_sec_brief && c.children[0].textContent !== I18N.ru.lr_sec_dx)[0].children[0].textContent === I18N.ru.lr_sec_summary, 'smart summary is the first report section after the plain-words brief and the causes');
 chk(countClass(reportBody, 'lgr-action') === 0 && allText(reportBody).indexOf(I18N.ru.lr_no_actions_early) >= 0, 'early DOM has no unsupported action');
 logReportRender(mixDay);
 const mixText = allText(reportBody);
@@ -5393,6 +5393,63 @@ chk(syncText.indexOf(I18N.ru.lr_wl_live_note.split('{what}').join(logReportHolde
 const pageTxt = asbPageText(reportBody);
 chk(pageTxt.indexOf('== ' + I18N.ru.lr_sec_brief + ' ==') >= 0 && /\n  • .*com\.whatsapp/.test(pageTxt) && pageTxt.indexOf('(!)') > 0, 'the saved text keeps the brief bullets and warnings');
 chk(/\n  com\.whatsapp: /.test(pageTxt), 'the saved text keeps label: value rows');
+/* fix247: the causes, area by area, with whose side each one is on and when the developer
+   needs the log. The owner's morning: an app (the sync loop), a phone setting (the
+   network-speed meter), the firmware holding the prime cores - and ASB's ceilings cleared. */
+syncDay.sections.jcap_main = { yes: '5.8', yes_f: '26813', yes_jps: '2.25', no: '5.7', no_f: '50927', no_jps: '2.06' };
+syncDay.sections.vcap = { n: '26', main_vendor: '0', main_asb: '0', prime_vendor: '20', prime_asb: '6' };
+syncDay.sections.asbcost = { cpu_msh: '693', writes_h: '93', wakes_h: '205' };
+const dx = logReportDiagnose(syncDay);
+const dxArea = a => dx.filter(x => x.area === a);
+chk(dx[0].area === 'idle' && dx[0].state === 'problem' && dx[0].cause === 'lr_dx_idle_sync' && dx[0].owner === 'app' && !dx[0].send, 'the sync loop leads, on the app side, no log needed: ' + JSON.stringify(dx[0]));
+chk(dx[0].cv.awake === '33' && dx[0].fix === 'lr_dx_fix_sync', 'the idle card quotes the night awake share and the sync remedy');
+chk(dx[0].also.some(a => a.key === 'lr_dx_also_holder' && a.v.who.indexOf('com.facebook.katana') === 0), 'the second holder is listed under the first');
+const dxs = dxArea('smooth')[0];
+chk(dxs && dxs.cause === 'lr_dx_smooth_sysui' && dxs.owner === 'user' && dxs.fix === 'lr_dx_fix_netspeed', 'smoothness names the network-speed meter as a phone setting: ' + JSON.stringify(dxs));
+chk(dxs.also.some(a => a.key === 'lr_dx_also_cap_ok'), 'smoothness clears the ASB ceilings with the measured split');
+chk(dxArea('heat')[0].also.some(a => a.key === 'lr_dx_also_vendor' && a.v.n === '20'), 'the heat card says the firmware held the prime cores');
+chk(dxArea('bgheat').length === 1 && dxArea('asb')[0].state === 'good', 'background heat named, ASB itself fine');
+chk(!dx.some(x => x.send), 'nothing in this capture asks for the log');
+logReportRender(syncDay);
+const dxSec = reportBody.children.find(e => e.children[0] && e.children[0].textContent === I18N.ru.lr_sec_dx);
+chk(!!dxSec && reportBody.children.indexOf(dxSec) === reportBody.children.findIndex(e => e.children[0] && e.children[0].textContent === I18N.ru.lr_sec_brief) + 1, 'the causes follow the brief');
+const dxText = dxSec ? allText(dxSec) : '';
+chk(dxText.indexOf(I18N.ru.lr_dx_fix_netspeed) >= 0 && dxText.indexOf(I18N.ru.lr_dx_owner_user) >= 0 && dxText.indexOf(I18N.ru.lr_dx_owner_app) >= 0, 'the causes render remedies and sources');
+chk(reportBody.children.every(e => !(e.children[0] && e.children[0].textContent === I18N.ru.lr_sec_causes)), 'the terse evidence chains are no longer a separate section');
+/* A Smart day where the ceilings are what stutters: ASB's side, log requested, button shown. */
+const capDay = parseLogReport([
+  'meta\telapsed_min=600\ttarget_h=0\trunning=1\tprofile=smart',
+  'jank\tpct=7.5\tjps=3.10\tframes=50000',
+  'jcap_main\tyes=9.5\tyes_f=20000\tyes_jps=3.50\tno=5.0\tno_f=30000\tno_jps=2.00\tx=1',
+  'scr\ton_pctph=20.0\toff_pctph=0.8\ton_min=60\toff_min=300\tidle_pctph=0.8\tidle_min=300\tmusic_min=0',
+  'night\tdur_min=300\tdrop=4\tpctph=0.8\tawake=6',
+  'thermal\tcpu=41\tsurf=36', 'heat\tpeak_phase=active\tpeak_c=41\twarm_min=0\tskin_min=0'].join('\n'));
+const cdx = logReportDiagnose(capDay);
+const cap = cdx.find(x => x.cause === 'lr_dx_smooth_cap');
+chk(cap && cap.owner === 'asb' && cap.send && cap.state === 'problem' && cap.cv.yes === '9.5' && cap.cv.no === '5.0', 'tight ceilings on Smart are ASB tuning and ask for the log: ' + JSON.stringify(cdx));
+chk(cdx.some(x => x.cause === 'lr_dx_screen_unknown' && x.owner === 'asb' && x.send), 'unexplained screen-on drain asks for the log');
+chk(!cdx.some(x => x.cause === 'lr_dx_smooth_ok'), 'a 7.5% day is never called smooth because the ceilings explain it');
+chk(cdx.some(x => x.cause === 'lr_dx_idle_good' && x.state === 'good'), 'a good idle says so');
+chk(cdx[0].state === 'problem' && cdx[cdx.length - 1].state === 'good', 'problems first, healthy last');
+logReportRender(capDay);
+function findBtn(e) { return (String(e.className).split(/\s+/).indexOf('lgr-dx-btn') >= 0 ? [e] : []).concat(e.children.flatMap(findBtn)); }
+const btns = findBtn(reportBody);
+chk(btns.length === 2 && btns[0].textContent === I18N.ru.lr_dx_send_btn && typeof btns[0].onclick === 'function', 'each ASB-side card carries a Save-for-the-developer button');
+chk(allText(reportBody).indexOf(I18N.ru.lr_dx_send) >= 0 && allText(reportBody).indexOf(I18N.ru.lr_dx_owner_asb) >= 0, 'the card says the developer is needed and why');
+const capTxt = asbPageText(reportBody);
+chk(capTxt.indexOf(I18N.ru.lr_dx_owner_asb) >= 0 && capTxt.indexOf(I18N.ru.lr_dx_send_btn) < 0, 'the saved text keeps the cause and drops the button label');
+capDay.sections.meta.profile = 'battery';
+const bdx = logReportDiagnose(capDay).find(x => x.cause === 'lr_dx_smooth_cap_bat');
+chk(bdx && bdx.owner === 'user' && !bdx.send && bdx.state === 'normal', 'on Battery the low ceilings are the profile, not a fault');
+/* Nothing explains it: the log is requested instead of a guess. */
+const unkDay = parseLogReport(['meta\telapsed_min=600\tprofile=smart',
+  'scr\ton_pctph=6.0\toff_pctph=2.5\ton_min=40\toff_min=400\tidle_pctph=2.5\tidle_min=400\tmusic_min=0',
+  'night\tdur_min=360\tdrop=9\tpctph=2.5\tawake=30', 'idlemax\tawake=30\tphase=sleep\tdur_min=300'].join('\n'));
+const udx = logReportDiagnose(unkDay).find(x => x.area === 'idle');
+chk(udx && udx.cause === 'lr_dx_idle_unknown' && udx.owner === 'unknown' && udx.send, 'an unexplained restless idle asks for the log: ' + JSON.stringify(udx));
+unkDay.sections.night.awake = '5'; unkDay.sections.idlemax.awake = '5';
+const adx = logReportDiagnose(unkDay).find(x => x.area === 'idle');
+chk(adx && adx.cause === 'lr_dx_idle_asleep' && adx.send, 'drain while asleep points past the CPU: ' + JSON.stringify(adx));
 let exportCommands = [], exportErrno = 0; const exportToasts = [];
 function toast(msg, kind) { exportToasts.push({msg:msg, kind:kind}); }
 async function run(cmd) { exportCommands.push(cmd); return { errno:exportErrno, stderr:'write failed' }; }
@@ -5539,6 +5596,33 @@ PH.update({'lr_sum_drain_on':['{min}'], 'lr_sum_drain_night':['{min}','{deep}'],
       'lr_tip_sysui_inj':['{n}','{m}','{pkg}'], 'lr_chain_sysui_inj':['{n}','{m}','{pkg}'],
       'lr_sysui_inj_note':['{m}','{pkg}'], 'lr_sysui_hooks_note':['{hooks}'],
       'lr_reboots':['{n}'], 'lr_reboots_mod':['{n}','{mod}']})
+KEYS += ['lr_sec_dx','lr_dx_fix_label','lr_dx_send','lr_dx_send_btn','lr_dx_area_idle','lr_dx_area_screen','lr_dx_area_smooth',
+         'lr_dx_area_heat','lr_dx_area_bgheat','lr_dx_area_stab','lr_dx_area_asb','lr_dx_area_data','lr_dx_owner_app','lr_dx_owner_user',
+         'lr_dx_owner_rom','lr_dx_owner_asb','lr_dx_owner_load','lr_dx_owner_unknown','lr_dx_cl_main','lr_dx_cl_prime',
+         'lr_dx_idle_short','lr_dx_idle_good','lr_dx_idle_sync','lr_dx_idle_aod','lr_dx_idle_worker','lr_dx_idle_holder','lr_dx_idle_radio',
+         'lr_dx_idle_asleep','lr_dx_idle_alarm','lr_dx_idle_unknown','lr_dx_fix_sync','lr_dx_fix_aod','lr_dx_fix_bg','lr_dx_fix_wl',
+         'lr_dx_fix_lte','lr_dx_fix_radio','lr_dx_fix_asleep','lr_dx_fix_alarm','lr_dx_fix_send','lr_dx_also_holder','lr_dx_bgheat',
+         'lr_dx_fix_bgheat','lr_dx_screen_ok','lr_dx_screen_heavy','lr_dx_fix_screen_heavy','lr_dx_screen_perf','lr_dx_fix_screen_perf',
+         'lr_dx_screen_hz','lr_dx_fix_screen_hz','lr_dx_screen_unknown','lr_dx_smooth_sysui','lr_dx_src_netspeed','lr_dx_src_clocksec',
+         'lr_dx_src_livewp','lr_dx_src_hooks','lr_dx_src_other','lr_dx_fix_netspeed','lr_dx_fix_clocksec','lr_dx_fix_livewp',
+         'lr_dx_fix_hooks','lr_dx_fix_sysui','lr_dx_smooth_app','lr_dx_fix_smooth_app','lr_dx_smooth_ok','lr_dx_smooth_unknown',
+         'lr_dx_smooth_cap','lr_dx_smooth_cap_bat','lr_dx_fix_cap_bat','lr_dx_smooth_wake','lr_dx_also_cap_ok','lr_dx_also_vendor',
+         'lr_dx_heat_long','lr_dx_fix_heat','lr_dx_fix_heat_set','lr_dx_heat_some','lr_dx_heat_ok','lr_dx_also_clamps','lr_dx_asb_crash',
+         'lr_dx_fix_asbdiag','lr_dx_asb_cost','lr_dx_asb_ok','lr_dx_sysui_inj','lr_dx_fix_inj','lr_dx_crashes','lr_dx_fix_crashes',
+         'lr_dx_gauge','lr_dx_short']
+PH.update({'lr_dx_idle_short':['{min}'], 'lr_dx_idle_good':['{pct}','{deep}'], 'lr_dx_idle_sync':['{pct}','{awake}','{app}','{what}','{hpct}'],
+      'lr_dx_idle_aod':['{pct}','{awake}','{lit}','{of}'], 'lr_dx_idle_worker':['{pct}','{awake}','{app}','{name}','{hpct}'],
+      'lr_dx_idle_holder':['{pct}','{awake}','{who}','{hpct}'], 'lr_dx_idle_radio':['{pct}','{awake}','{mib}'], 'lr_dx_idle_asleep':['{pct}','{deep}'],
+      'lr_dx_idle_alarm':['{pct}','{awake}','{who}','{n}'], 'lr_dx_idle_unknown':['{pct}','{awake}'], 'lr_dx_fix_sync':['{app}','{what}'],
+      'lr_dx_fix_bg':['{app}'], 'lr_dx_fix_wl':['{set}'], 'lr_dx_fix_lte':['{set}'], 'lr_dx_also_holder':['{who}','{hpct}'], 'lr_dx_bgheat':['{cpu}'],
+      'lr_dx_screen_ok':['{pct}','{est}'], 'lr_dx_screen_heavy':['{pct}','{min}'], 'lr_dx_screen_perf':['{pct}','{prof}'],
+      'lr_dx_screen_hz':['{pct}','{share}'], 'lr_dx_screen_unknown':['{pct}'], 'lr_dx_smooth_sysui':['{pct}','{n}','{of}','{spct}','{src}'],
+      'lr_dx_src_hooks':['{hooks}'], 'lr_dx_smooth_app':['{pct}','{app}','{apct}'], 'lr_dx_smooth_ok':['{pct}'], 'lr_dx_smooth_unknown':['{pct}'],
+      'lr_dx_smooth_cap':['{cl}','{yes}','{no}'], 'lr_dx_smooth_cap_bat':['{cl}','{yes}','{no}','{prof}'], 'lr_dx_smooth_wake':['{pct}','{ord}'],
+      'lr_dx_also_cap_ok':['{yes}','{no}'], 'lr_dx_also_vendor':['{n}','{of}'], 'lr_dx_heat_long':['{min}','{phase}','{cpu}'],
+      'lr_dx_fix_heat_set':['{set}'], 'lr_dx_heat_some':['{min}','{cpu}'], 'lr_dx_heat_ok':['{cpu}'], 'lr_dx_also_clamps':['{n}'],
+      'lr_dx_asb_crash':['{n}'], 'lr_dx_asb_cost':['{ms}','{per}'], 'lr_dx_asb_ok':['{ms}','{per}'], 'lr_dx_sysui_inj':['{n}','{m}','{pkg}'],
+      'lr_dx_fix_inj':['{pkg}'], 'lr_dx_crashes':['{n}'], 'lr_dx_gauge':['{x}'], 'lr_dx_short':['{min}']})
 KEYS += ['lr_sec_brief','lr_brief_drain','lr_brief_drain_short','lr_brief_split','lr_brief_idle_bad','lr_brief_idle_ok',
          'lr_brief_cause','lr_brief_cause_radio','lr_brief_cause_none','lr_brief_night_hot','lr_brief_smooth_ok',
          'lr_brief_smooth_mid','lr_brief_smooth_bad','lr_brief_sysui_net','lr_brief_heat','lr_brief_heat_ok','lr_brief_next',
@@ -5673,6 +5757,15 @@ screen-off samples: 44
   held in  22% of samples, longest hold    0 min  *job*r/#MediaCountUploadWorker#@androidx.work.systemjobscheduler@com.facebook.katana/androidx.work.impl.background.systemjob.SystemJobService  (com.facebook.katana)
   held in  10% of samples, longest hold    2 min  *alarm*/com.example/.Tick  (com.example)
 
+steady floor: 1.33 janky frames a second while almost nothing was drawn (under 5 frames/s),
+2.52 a second in the busy intervals (20 frames/s and more). Something misses a deadline about
+main cores at the ASB ceiling (end of interval): yes 5.8% of 26813 frames (2.25/s), no 5.7% of 50927 frames (2.06/s)
+prime cores at the ASB ceiling (end of interval): yes - of 0 frames (-/s), no 5.7% of 77740 frames (2.12/s)
+the floor: com.android.systemui drew 94.0% of the janky frames in the quiet intervals.
+who held the lower ceiling, per cluster (26 samples):
+  main:  at or above the rail
+  prime: asb_trim 6, vendor 20
+  asb_trim = ASB's own thermal-budget/comfort trim (live == what ASB wrote)
 EOF
 out="$(sh "$D" "$CAP" 2>/dev/null)"
 printf '%s\n' "$out" | grep -q '^wlive	tag=contacts	pct=68	min=0	pkg=com.whatsapp	kind=sync$' || fail "sync holder: $(printf '%s\n' "$out" | grep '^wlive' | head -1)"
@@ -5683,6 +5776,12 @@ printf '%s\n' "$out" | grep -q '^thermal	cpu=57	surf=42$' || fail "trace peak: $
 printf '%s\n' "$out" | grep -q '^heat	peak_phase=active	peak_c=44	warm_min=20	skin_min=20$' || fail "trace durations: $(printf '%s\n' "$out" | grep '^heat')"
 printf '%s\n' "$out" | grep -q '^nightd	.*	cpu_t=57	skin_t=42	' || fail "night peaks from the trace: $(printf '%s\n' "$out" | grep '^nightd')"
 printf '%s\n' "$out" | grep -q '^nightw' && fail "the night window leaked into the digest"
+# fix247: the facts the causes card reads - whether the ASB ceiling costs frames, the jank
+# floor and who held the prime cores.
+printf '%s\n' "$out" | grep -q '^jcap_main	yes=5.8	yes_f=26813	yes_jps=2.25	no=5.7	no_f=50927	no_jps=2.06$' || fail "main ceiling split: $(printf '%s\n' "$out" | grep '^jcap_main')"
+printf '%s\n' "$out" | grep -q '^jcap_prime	yes=-	yes_f=0	yes_jps=-	no=5.7	no_f=77740	no_jps=2.12$' || fail "prime ceiling split: $(printf '%s\n' "$out" | grep '^jcap_prime')"
+printf '%s\n' "$out" | grep -q '^jfloor	quiet=1.33	busy=2.52	app=com.android.systemui	share=94.0$' || fail "jank floor: $(printf '%s\n' "$out" | grep '^jfloor')"
+printf '%s\n' "$out" | grep -q '^vcap	n=26	main_vendor=0	main_asb=0	prime_vendor=20	prime_asb=6$' || fail "ceiling holders: $(printf '%s\n' "$out" | grep '^vcap')"
 head -n 32 "$CAP/battery_trace.txt" > "$T/bt" && mv "$T/bt" "$CAP/battery_trace.txt"
 printf 'active\t%s\t%s\t80\t78\t44\t41\t1800\t20\t0\t0\t100\t300\t0\t0\t0\n' $((S0)) $((S0+1800)) > "$CAP/phase_ledger.tsv"
 out2="$(sh "$D" "$CAP" 2>/dev/null)"
