@@ -2309,6 +2309,7 @@ lk_audio_wakelock_attribution_init() {
   { cmd package list packages -U 2>/dev/null || pm list packages -U 2>/dev/null; } \
     | sed -n 's/^package:\([^ ]*\).* uid:\([0-9][0-9]*\).*$/\2|\1/p' \
     | sort -u > "$_map" 2>/dev/null || true
+  [ "${LK_RESUME:-0}" = 1 ] && [ -s "$LK_OUT_DIR/audio_wakelock_attribution.tsv" ] && return 0
   {
     echo "# AudioMix attribution — voluntary debug capture only"
     echo "# epoch|iso_time|worksource_uid|package|power_manager_hold"
@@ -2390,8 +2391,41 @@ lk_wakelock_live_row() {
 # Reads the text on stdin; prints one verdict line.
 lk_sysui_verdict() {
   awk '
-    / >>> com\.android\.systemui <<</ { sui = 1; sig = ""; fr = ""; next }
+    function injpkg(line,   l, p) {
+      l = line; sub(/.*\/data\/app\//, "", l)
+      if (l ~ /^~~/) sub(/^[^\/]*\//, "", l)
+      p = l; sub(/[-\/].*/, "", p)
+      return p
+    }
+    function injlib(line,   l) {
+      l = line
+      if (l ~ /!/) { sub(/^[^!]*!/, "", l) } else { sub(/^.*\/data\/app\/[^ ]*\//, "", l) }
+      sub(/ .*/, "", l)
+      return l
+    }
+    function addhook(n) {
+      gsub(/^[ \t]+|[ \t]+$/, "", n); gsub(/[\t=]/, " ", n)
+      if (n == "" || length(n) > 40 || (n in seenhook) || nhook >= 3) return
+      seenhook[n] = 1; nhook++; hooks = hooks (hooks == "" ? "" : ", ") n
+    }
+    function lfresh(l) { return (lsince == "" || substr(l, 1, 14) >= lsince) }
+    /^@@SINCE@@ / { sv = substr($0, 11); n = index(sv, "|"); if (n > 0) { dsince = substr(sv, 1, n - 1); lsince = substr(sv, n + 1) }; next }
+    /^@@DROPBOX_NATIVE@@$/ { dbx = 1; next }
+    dbx && /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9:]+ system_app_native_crash/ { dsui = 0; dsig = ""; dinj = ""; dlib = ""; dold = (dsince != "" && substr($0, 1, 19) < dsince); next }
+    dbx && dold { next }
+    dbx && /^Process: / { dsui = ($0 ~ /^Process: com\.android\.systemui([^.]|$)/) ? 1 : 0; next }
+    dbx && dsig == "" && /signal [0-9]+ \(SIG[A-Z]+\)/ { if (match($0, /SIG[A-Z]+/)) dsig = substr($0, RSTART, RLENGTH); next }
+    dbx && dinj == "" && /#[0-9]+ pc / && /\/data\/app\// { dinj = injpkg($0); dlib = injlib($0); next }
+    dbx { next }
+    /BootMonitorClient/ && /pkg=com\.android\.systemui / && /type=crash/ && lfresh($0) { bmcrash = 1 }
+    /\]\[E\]\[com\.android\.systemui\]/ { if (match($0, /\[[^]]+\]\[E\]\[com\.android\.systemui\]/)) { h = substr($0, RSTART + 1, RLENGTH - 1); sub(/\].*/, "", h); addhook(h) } }
+    / Version: .* package: com\.android\.systemui loaded/ { h = $0; sub(/ Version: .*/, "", h); sub(/.*: /, "", h); addhook(h) }
+    / >>> com\.android\.systemui <<</ { if (!lfresh($0)) { sui = 0; next }; sui = 1; blk++; sig = ""; fr = ""; sinj = ""; slib = ""; next }
     / >>> .* <<</ { sui = 0 }
+    sui && sinj == "" && /#[0-9]+ pc / && /\/data\/app\// {
+      sinj = injpkg($0); slib = injlib($0)
+      if (nat != "" && natblk == blk && natinj == "") { natinj = sinj; natlib = slib }
+    }
     sui && sig == "" && /signal [0-9]+ \(SIG[A-Z]+\)/ {
       if (match($0, /SIG[A-Z]+/)) sig = substr($0, RSTART, RLENGTH)
     }
@@ -2403,18 +2437,24 @@ lk_sysui_verdict() {
       if (length(fn) > 60) fn = substr(fn, 1, 60) "..."
       fr = lib (fn != "" ? " (" fn ")" : "")
     }
-    sui && sig != "" && fr != "" && !nat { nat = "native crash " sig " in " fr }
-    /AndroidRuntime/ && /Process: com\.android\.systemui/ { jv = 1; next }
+    sui && sig != "" && fr != "" && !nat { nat = "native crash " sig " in " fr; natblk = blk; natinj = sinj; natlib = slib }
+    /AndroidRuntime/ && /Process: com\.android\.systemui/ && lfresh($0) { jv = 1; next }
     jv == 1 && /AndroidRuntime/ && /[A-Za-z]+(Exception|Error)/ {
       l = $0; sub(/.*AndroidRuntime: */, "", l); if (length(l) > 90) l = substr(l, 1, 90) "..."
       jx = l; jv = 2
     }
-    /lowmemorykiller/ && /[Kk]ill.*com\.android\.systemui/ { lmk = 1 }
+    /lowmemorykiller/ && /[Kk]ill.*com\.android\.systemui/ && lfresh($0) { lmk = 1 }
     END {
-      if (nat != "")      print nat " - inside Android or the ROM, not a kill"
-      else if (jx != "")  print "Java crash: " jx
-      else if (lmk)       print "killed by lowmemorykiller"
-      else                print "no SystemUI crash in the crash buffer - restarted by the system (kill, ANR, theme or settings change)"
+      tail = (hooks != "" ? " · loaded into SystemUI: " hooks : "")
+      if (nat != "" && natinj != "") print nat " - " natlib " injected by " natinj ", code an installed app loads into SystemUI" tail
+      else if (nat != "") print nat " - inside Android or the ROM, not a kill" tail
+      else if (dsui && dinj != "") print "native crash " (dsig != "" ? dsig : "?") " in " dlib " injected by " dinj ", code an installed app loads into SystemUI" tail
+      else if (dsui) print "native crash " (dsig != "" ? dsig : "?") " (system crash record)" tail
+      else if (jx != "")  print "Java crash: " jx tail
+      else if (bmcrash && dinj != "") print "crash reported by the system; the latest native crash is in " dlib " injected by " dinj ", code an installed app loads into SystemUI" tail
+      else if (lmk)       print "killed by lowmemorykiller" tail
+      else if (bmcrash)   print "crash reported by the system, no crash record kept" tail
+      else                print "no SystemUI crash in the crash buffer - restarted by the system (kill, ANR, theme or settings change)" tail
     }'
 }
 
@@ -2424,7 +2464,7 @@ lk_sysui_watch_row() {
   [ -n "$_sw_pid" ] || return 0
   if [ -z "${LK_SYSUI_PID:-}" ]; then
     LK_SYSUI_PID="$_sw_pid"
-    echo "# SystemUI pid at capture start: $_sw_pid" > "$_sw_f" 2>/dev/null
+    echo "# SystemUI pid at capture start: $_sw_pid" >> "$_sw_f" 2>/dev/null
     return 0
   fi
   [ "$_sw_pid" = "$LK_SYSUI_PID" ] && return 0
@@ -2435,13 +2475,18 @@ lk_sysui_watch_row() {
     echo "--- dropbox system_app_anr (latest) ---"
     lk_dumpsys dropbox --print system_app_anr 2>/dev/null | tail -n 40
     echo "--- dropbox system_app_native_crash (latest) ---"
-    lk_dumpsys dropbox --print system_app_native_crash 2>/dev/null | tail -n 30
+    _sw_dn="$(lk_dumpsys dropbox --print system_app_native_crash 2>/dev/null)"
+    printf '%s\n' "$_sw_dn" | awk '/ system_app_native_crash \(/ { h = $0; p = "" } /^Process: / { p = $0 } END { if (h != "") print h; if (p != "") print p }'
+    printf '%s\n' "$_sw_dn" | tail -n 30
     _sw_cb="$(logcat -d -b crash -t 200 2>/dev/null)"
     _sw_ms="$(logcat -d -b main,system -t 3000 2>/dev/null \
       | grep -iE 'systemui|Process com\.android\.systemui|has died|ANR in|FATAL|lowmemorykiller|watchdog' | tail -n 60)"
     # The verdict reads the whole crash buffer: the tombstone header that names the process
     # sits above the 80 lines kept below.
-    echo "verdict: $(printf '%s\n%s\n' "$_sw_cb" "$_sw_ms" | lk_sysui_verdict)"
+    _sw_t0=$(( $(date +%s) - 300 ))
+    _sw_sd="$(date -d "@$_sw_t0" '+%F %T' 2>/dev/null || date -r "$_sw_t0" '+%F %T' 2>/dev/null)"
+    _sw_sl="$(date -d "@$_sw_t0" '+%m-%d %T' 2>/dev/null || date -r "$_sw_t0" '+%m-%d %T' 2>/dev/null)"
+    echo "verdict: $(printf '@@SINCE@@ %s|%s\n%s\n%s\n@@DROPBOX_NATIVE@@\n%s\n' "$_sw_sd" "$_sw_sl" "$_sw_cb" "$_sw_ms" "$_sw_dn" | lk_sysui_verdict)"
     echo "--- logcat crash buffer ---"
     printf '%s\n' "$_sw_cb" | tail -n 80
     echo "--- logcat main/system: systemui / ActivityManager around the restart ---"
@@ -3113,6 +3158,16 @@ LK_AUDIO_ROUTE="none"
 lk_config_watch_init() {
   LK_CFG_SNAP="$LK_OUT_DIR/.cfg_snapshot"
   mkdir -p "$LK_CFG_SNAP" 2>/dev/null || true
+  LK_CFG_MOD="${LK_MODDIR:-$(lk_resolve_moddir)}"
+  if [ "${LK_RESUME:-0}" = 1 ] && [ -s "$LK_OUT_DIR/config_changes.txt" ]; then
+    for _cw in "$LK_CFG_MOD/config/governor.conf:governor" \
+               "$LK_CFG_MOD/features.conf:features"; do
+      _cwf="${_cw%%:*}"; _cwn="${_cw##*:}"
+      [ -f "$_cwf" ] && [ ! -f "$LK_CFG_SNAP/$_cwn" ] && cp -f "$_cwf" "$LK_CFG_SNAP/$_cwn" 2>/dev/null
+    done
+    LK_CFG_PROFILE_PREV="$(cat "$LK_CFG_MOD/current_profile" 2>/dev/null)"
+    return 0
+  fi
   true > "$LK_OUT_DIR/config_changes.txt" 2>/dev/null
   # "file", not "source".
   #
@@ -3767,22 +3822,26 @@ lk_bt_reconnect_start() {
   LK_BT_RECONNECT_SNAPSHOTS="$LK_OUT_DIR/bt_lifecycle_snapshots.txt"
   LK_BT_RECONNECT_CONTEXT="$LK_OUT_DIR/bt_lifecycle_context.tsv"
   LK_BT_RECONNECT_RAW="$LK_OUT_DIR/bt_lifecycle_stack_evidence.tsv"
-  {
-    echo "# ASB Bluetooth lifecycle events (read-only)"
-    echo "# epoch<TAB>iso_utc<TAB>event<TAB>source"
-    echo "# event types distinguish HFP audio-link attach/detach from A2DP media-profile state; reconnect_literal needs literal stack wording"
-    echo "# MAC addresses and device names are not recorded; source is a coarse service family"
-    echo "# started_epoch=$(date +%s)"
-  } > "$LK_BT_RECONNECT_EVENTS"
-  {
-    echo "# epoch<TAB>iso_utc<TAB>tag<TAB>audio_playing<TAB>audio_route"
-    echo "# correlate lifecycle events with the nearest context row; context alone is not a connection event"
-  } > "$LK_BT_RECONNECT_CONTEXT"
-  {
-    echo "# ASB Bluetooth stack evidence (read-only, Bluetooth addresses redacted)"
-    echo "# epoch<TAB>iso_utc<TAB>redacted_stack_line"
-    echo "# This file preserves only lines that matched HFP/A2DP/generic lifecycle filters."
-  } > "$LK_BT_RECONNECT_RAW"
+  if [ "${LK_RESUME:-0}" = 1 ] && [ -s "$LK_BT_RECONNECT_EVENTS" ]; then
+    echo "# resumed_epoch=$(date +%s)" >> "$LK_BT_RECONNECT_EVENTS" 2>/dev/null
+  else
+    {
+      echo "# ASB Bluetooth lifecycle events (read-only)"
+      echo "# epoch<TAB>iso_utc<TAB>event<TAB>source"
+      echo "# event types distinguish HFP audio-link attach/detach from A2DP media-profile state; reconnect_literal needs literal stack wording"
+      echo "# MAC addresses and device names are not recorded; source is a coarse service family"
+      echo "# started_epoch=$(date +%s)"
+    } > "$LK_BT_RECONNECT_EVENTS"
+    {
+      echo "# epoch<TAB>iso_utc<TAB>tag<TAB>audio_playing<TAB>audio_route"
+      echo "# correlate lifecycle events with the nearest context row; context alone is not a connection event"
+    } > "$LK_BT_RECONNECT_CONTEXT"
+    {
+      echo "# ASB Bluetooth stack evidence (read-only, Bluetooth addresses redacted)"
+      echo "# epoch<TAB>iso_utc<TAB>redacted_stack_line"
+      echo "# This file preserves only lines that matched HFP/A2DP/generic lifecycle filters."
+    } > "$LK_BT_RECONNECT_RAW"
+  fi
   if ! command -v logcat >/dev/null 2>&1; then
     echo "# status=unavailable_logcat" >> "$LK_BT_RECONNECT_EVENTS"
     echo "# status=unavailable_logcat" >> "$LK_BT_RECONNECT_RAW"
@@ -3887,8 +3946,23 @@ lk_init() {
   LK_START_EPOCH=$(date +%s)
   LK_START_ISO=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
   LK_TICK_COUNT=0
+  if [ "${LK_RESUME:-0}" = 1 ]; then
+    _lk_rs="$(cat "$LK_OUT_DIR/.capture_start_epoch" 2>/dev/null | tr -dc '0-9')"
+    [ -n "$_lk_rs" ] || _lk_rs="$(awk -F'|' '$4 == "capture_start" { print $1; exit }' "$LK_OUT_DIR/phase_timeline.txt" 2>/dev/null)"
+    case "$_lk_rs" in
+      ''|*[!0-9]*) : ;;
+      *) if [ "$_lk_rs" -le "$LK_START_EPOCH" ]; then
+           LK_START_EPOCH="$_lk_rs"
+           LK_START_ISO="$(date -u -d "@$_lk_rs" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || echo "$LK_START_ISO")"
+         fi ;;
+    esac
+  else
+    echo "$LK_START_EPOCH" > "$LK_OUT_DIR/.capture_start_epoch" 2>/dev/null
+  fi
 
-  if [ -f "$LK_GOV_LOG" ]; then
+  if [ "${LK_RESUME:-0}" = 1 ] && case "$LK_GOV_LOG" in /dev/*) true ;; *) false ;; esac; then
+    LK_GOV_LOG_OFFSET=0
+  elif [ -f "$LK_GOV_LOG" ]; then
     LK_GOV_LOG_OFFSET=$(wc -c < "$LK_GOV_LOG" 2>/dev/null | tr -d ' ')
     LK_GOV_LOG_OFFSET="${LK_GOV_LOG_OFFSET:-0}"
   else
@@ -3898,8 +3972,13 @@ lk_init() {
 
   echo "[$(date '+%H:%M:%S')] logkit init: moddir=$MODDIR scenario=$LK_SCENARIO out=$LK_OUT_DIR gov_offset=$LK_GOV_LOG_OFFSET cgroup=${LK_CGROUP_ESCAPE:-skipped}"
   { echo "cgroup_escape=${LK_CGROUP_ESCAPE:-skipped}"; cat "/proc/$$/cgroup" 2>/dev/null; } > "$LK_OUT_DIR/_recorder_cgroup.txt" 2>/dev/null || true
-  lk_probe_env
-  lk_dump_build_manifest
-  lk_discover_zones
-  lk_snapshot_state "before"
+  if [ "${LK_RESUME:-0}" = 1 ]; then
+    lk_discover_zones
+    lk_snapshot_state "reboot_$(date +%s)"
+  else
+    lk_probe_env
+    lk_dump_build_manifest
+    lk_discover_zones
+    lk_snapshot_state "before"
+  fi
 }

@@ -20,6 +20,15 @@ LK_SCENARIO="full_day"
 LK_OUT_DIR="$(lk_resolve_outbase)/asb_log_${LK_SCENARIO}_$$"
 LK_HOURS="${1:-0}"
 LK_MAX_SEC=$(( LK_HOURS * 3600 ))
+LK_RESUME=0
+case "${ASB_LK_RESUME_DIR:-}" in
+  */asb_log_full_day_*)
+    if [ "$LK_MAX_SEC" -eq 0 ] && [ -d "$ASB_LK_RESUME_DIR" ] && [ -f "$ASB_LK_RESUME_DIR/phase_ledger.tsv" ]; then
+      LK_OUT_DIR="$ASB_LK_RESUME_DIR"
+      LK_RESUME=1
+    fi ;;
+esac
+LK_RESUME_FILE="${ASB_DEBUG_SUPPORT_RESUMEFILE:-}"
 # Report-only threshold: a phase needs at least this much observed mobile RX+TX before
 # it is listed as traffic context. This does not trigger a radio action or allocate drain.
 LK_MOBILE_TRAFFIC_CONTEXT_MIN_MIB=32
@@ -606,11 +615,12 @@ lk_phase_ledger_row() {
     # The remaining sparse spikes averaged to 619 mA for a sleep phase that actually used
     # 0.82 %/h, roughly 40 mA. A wrong number that looks precise is worse than no number: it
     # gets quoted and reasoned from. Below half usable, report nothing and let pct/h speak.
+    _macnt="${LK_PH_MACNT:-0}"
     if [ "${LK_PH_MASEEN:-0}" -gt 0 ] 2>/dev/null && \
-       [ $(( ${LK_PH_MACNT:-0} * 2 )) -lt "${LK_PH_MASEEN:-0}" ] 2>/dev/null; then
-      LK_PH_MACNT=0
+       [ $(( _macnt * 2 )) -lt "${LK_PH_MASEEN:-0}" ] 2>/dev/null; then
+      _macnt=0
     fi
-  [ "$LK_PH_MACNT" -gt 0 ] 2>/dev/null && _maavg=$(( LK_PH_MASUM / LK_PH_MACNT ))
+  [ "$_macnt" -gt 0 ] 2>/dev/null && _maavg=$(( LK_PH_MASUM / _macnt ))
   read -r _rmrx _rmtx <<EOF
 $(lk_phase_rmnet_bytes)
 EOF
@@ -651,6 +661,18 @@ EOF
 
 lk_phase_ledger_flush() {
   lk_phase_ledger_row >> "$LK_OUT_DIR/phase_ledger.tsv" 2>/dev/null || return 0
+  rm -f "$LK_OUT_DIR/.phase_live.tsv" 2>/dev/null
+}
+
+lk_phase_ledger_live() {
+  [ -n "${LK_CUR_PHASE:-}" ] || return 0
+  LK_PH_SNAPSHOT=1
+  if lk_phase_ledger_row > "$LK_OUT_DIR/.phase_live.tsv.tmp" 2>/dev/null; then
+    mv -f "$LK_OUT_DIR/.phase_live.tsv.tmp" "$LK_OUT_DIR/.phase_live.tsv" 2>/dev/null
+  else
+    rm -f "$LK_OUT_DIR/.phase_live.tsv.tmp" 2>/dev/null
+  fi
+  LK_PH_SNAPSHOT=0
 }
 
 lk_phase_ledger_snapshot_open() {
@@ -1489,11 +1511,16 @@ lk_emit_full_day_report() {
   _out="$LK_OUT_DIR/_full_day_report.txt"
   {
     echo "==================================================================="
-    echo " ASB FULL-DAY REPORT — $(date '+%Y-%m-%d %H:%M:%S')"
+    echo " ASB INFINITE LOG REPORT — $(date '+%Y-%m-%d %H:%M:%S')"
     if [ "$LK_MAX_SEC" -gt 0 ]; then
       echo " capture: ${LK_HOURS}h target, $(( ($(date +%s) - LK_START_EPOCH) / 60 )) min elapsed"
     else
-      echo " capture: 0h target (until shutdown), $(( ($(date +%s) - LK_START_EPOCH) / 60 )) min elapsed"
+      echo " capture: 0h target (until stopped), $(( ($(date +%s) - LK_START_EPOCH) / 60 )) min elapsed"
+    fi
+    if [ -s "$LK_OUT_DIR/reboots.txt" ]; then
+      awk -F'|' '!/^#/ && $1 ~ /^[0-9]+$/ { n++; if ($3 ~ /^[0-9]+$/) d += $3; m = $4 }
+        END { if (n > 0) printf " reboots during the capture: %d (about %d min between the last sample and the resume, in no phase)%s\n", n, d / 60, (m != "" ? "; module after the last one: " m : "") }' \
+        "$LK_OUT_DIR/reboots.txt" 2>/dev/null
     fi
     echo "==================================================================="
     echo ""
@@ -1949,33 +1976,72 @@ lk_emit_charging_idle_anomaly() {
 # A tester who explicitly does not want the trace may still start with ASB_BT_RECONNECT_TRACE=0.
 : "${ASB_BT_RECONNECT_TRACE:=1}"
 export ASB_BT_RECONNECT_TRACE
+lk_fresh() {
+  [ "$LK_RESUME" = 1 ] && [ -s "$LK_OUT_DIR/$1" ] && return 1
+  return 0
+}
+
+lk_resume_mark() {
+  [ -n "$LK_RESUME_FILE" ] && [ "$LK_MAX_SEC" -eq 0 ] || return 0
+  _rmk_tmp="$LK_RESUME_FILE.tmp.$$"
+  if { echo "dir=$LK_OUT_DIR"; echo "start=$LK_START_EPOCH"; echo "boot=${ASB_DEBUG_SUPPORT_BOOT_ID:-}"; } > "$_rmk_tmp" 2>/dev/null; then
+    mv -f "$_rmk_tmp" "$LK_RESUME_FILE" 2>/dev/null || rm -f "$_rmk_tmp" 2>/dev/null
+  fi
+  return 0
+}
+
+lk_resume_owned() {
+  [ -n "$LK_RESUME_FILE" ] && [ -r "$LK_RESUME_FILE" ] || return 1
+  [ "$(sed -n 's/^dir=//p' "$LK_RESUME_FILE" 2>/dev/null | head -n 1)" = "$LK_OUT_DIR" ]
+}
+
+lk_resume_merge() {
+  _rmg_now=$(date +%s)
+  if [ -s "$LK_OUT_DIR/.phase_live.tsv" ]; then
+    cat "$LK_OUT_DIR/.phase_live.tsv" >> "$LK_OUT_DIR/phase_ledger.tsv" 2>/dev/null
+    rm -f "$LK_OUT_DIR/.phase_live.tsv" 2>/dev/null
+  fi
+  rm -f "$LK_OUT_DIR/.phase_live.tsv.tmp" "$LK_OUT_DIR/.phase_open.tsv" 2>/dev/null
+  _rmg_last="$(awk -F'|' '$1 ~ /^[0-9]+$/ { e = $1 } END { print e }' "$LK_OUT_DIR/battery_trace.txt" 2>/dev/null)"
+  case "$_rmg_last" in ''|*[!0-9]*) _rmg_down=-1 ;; *) _rmg_down=$(( _rmg_now - _rmg_last )) ;; esac
+  _rmg_ver="$(sed -n 's/^version=//p' "$MODDIR/module.prop" 2>/dev/null | head -n 1 | tr -d '|\r')"
+  _rmg_rom="$(getprop ro.build.display.id 2>/dev/null | tr -d '|\r')"
+  _rmg_why="$(getprop sys.boot.reason 2>/dev/null | tr -d '|\r')"
+  [ -s "$LK_OUT_DIR/reboots.txt" ] || echo "# epoch|iso|down_s|module|rom|boot_reason" > "$LK_OUT_DIR/reboots.txt"
+  echo "${_rmg_now}|$(date '+%Y-%m-%d %H:%M:%S')|${_rmg_down}|${_rmg_ver}|${_rmg_rom}|${_rmg_why}" >> "$LK_OUT_DIR/reboots.txt"
+}
+
 lk_init
 # Publish after lk_init created the per-capture directory. If the user later deletes this
 # exact directory, the launcher can safely identify this capture as cancelled/orphaned.
 lk_webui_guard_publish_output || { echo '[debug-webui] output marker publish failed'; lk_webui_guard_release; exit 2; }
+lk_resume_mark
 lk_audio_wakelock_attribution_init
-lk_fsm_media_trace_header
+lk_fresh fsm_media_trace.tsv && lk_fsm_media_trace_header
 lk_bt_reconnect_start
 
 # trace headers
-lk_perf_trace_header
-lk_battery_trace_header
-lk_display_trace_header
-lk_jank_trace_header
+lk_fresh perf_trace.txt && lk_perf_trace_header
+lk_fresh battery_trace.txt && lk_battery_trace_header
+lk_fresh display_trace.txt && lk_display_trace_header
+lk_fresh jank_trace.tsv && lk_jank_trace_header
 lk_display_config_capture
-lk_charge_trace_header
-lk_asb_feature_header
+lk_fresh charge_trace.txt && lk_charge_trace_header
+lk_fresh asb_features.txt && lk_asb_feature_header
 lk_config_watch_init
-lk_screenoff_class_trace_header
-{ echo "# phase timeline — epoch | iso | phase | trigger"; } > "$LK_OUT_DIR/phase_timeline.txt"
-{ echo "# throttle trace — epoch | phase | p0 | p6 | temps | cap_owner"; } > "$LK_OUT_DIR/throttle_trace.txt"
-printf '# phase\tstart\tend\tstart_pct\tend_pct\tmaxCpuT\tmaxSurfT\tmaxP6\tgpuAvg\tthrottle\twakePeak\tawakePct\tavgMA\trmnetRxBytes\trmnetTxBytes\n' > "$LK_OUT_DIR/phase_ledger.tsv"
+lk_fresh screenoff_class_trace.tsv && lk_screenoff_class_trace_header
+lk_fresh phase_timeline.txt && { echo "# phase timeline — epoch | iso | phase | trigger"; } > "$LK_OUT_DIR/phase_timeline.txt"
+lk_fresh throttle_trace.txt && { echo "# throttle trace — epoch | phase | p0 | p6 | temps | cap_owner"; } > "$LK_OUT_DIR/throttle_trace.txt"
+lk_fresh phase_ledger.tsv && printf '# phase\tstart\tend\tstart_pct\tend_pct\tmaxCpuT\tmaxSurfT\tmaxP6\tgpuAvg\tthrottle\twakePeak\tawakePct\tavgMA\trmnetRxBytes\trmnetTxBytes\n' > "$LK_OUT_DIR/phase_ledger.tsv"
+[ "$LK_RESUME" = 1 ] && lk_resume_merge
+LK_TAG_BEFORE=before; LK_TAG_START=start
+[ "$LK_RESUME" = 1 ] && { LK_TAG_BEFORE=resume; LK_TAG_START=resume; }
 
 # wakelock baseline + reset
 lk_wakelock_kernel_baseline
-lk_wakelock_kernel_snapshot "start"
+lk_wakelock_kernel_snapshot "$LK_TAG_START"
 lk_wakelock_batterystats_reset
-lk_oem_ram_expand_probe "start"
+lk_oem_ram_expand_probe "$LK_TAG_START"
 lk_oem_toggle_row
 
 lk_finalize() {
@@ -1999,32 +2065,50 @@ lk_finalize() {
   # report can only say "tc refused" - the one line that names the cause stayed on the phone.
   cp /data/adb/asb/qdisc_failures.log "$LK_OUT_DIR/qdisc_failures.log" 2>/dev/null || true
 }
-trap 'lk_finalize; lk_webui_guard_release; exit 0' TERM INT HUP
+lk_on_signal() {
+  if lk_resume_owned && [ -n "${ASB_LK_SHUTDOWN:-$(getprop sys.shutdown.requested 2>/dev/null)}" ]; then
+    echo "$(date +%s)|$(date '+%Y-%m-%d %H:%M:%S')|${_phase:-unknown}|shutdown" >> "$LK_OUT_DIR/phase_timeline.txt" 2>/dev/null
+    lk_wl_release
+    lk_bt_reconnect_stop
+    lk_webui_guard_release
+    exit 0
+  fi
+  lk_finalize
+  lk_resume_owned && rm -f "$LK_RESUME_FILE" 2>/dev/null
+  lk_webui_guard_release
+  exit 0
+}
+trap 'lk_on_signal' TERM INT HUP
 
 if [ "$LK_MAX_SEC" -gt 0 ]; then
   echo "[$(date '+%H:%M:%S')] SESSION capture running up to ${LK_HOURS}h. Use the phone normally."
 else
-  echo "[$(date '+%H:%M:%S')] SESSION capture running until shutdown. Use the phone normally."
+  echo "[$(date '+%H:%M:%S')] INFINITE LOG running until it is stopped from the WebUI, across reboots. Use the phone normally."
 fi
 LK_WIFI_SINCE="$(date '+%Y-%m-%d %H:%M:%S')"
 
 _last_snapshot=$(date +%s)
 _last_report=$(date +%s)
 _last_wakesnap=$(date +%s)
-lk_snapshot_kernel "before"
-lk_snapshot_network "before"
+lk_snapshot_kernel "$LK_TAG_BEFORE"
+lk_snapshot_network "$LK_TAG_BEFORE"
 lk_sample_gpu_busy
 lk_sample_audio
 # Resolve the live route counters before opening the first phase, so its mobile
 # traffic delta has the same interface identity as later battery-trace rows.
-lk_netstats_uid_capture "start"
+lk_netstats_uid_capture "$LK_TAG_START"
 lk_capture_battery_trace_row
-lk_snapshot_audio "before"
-lk_bt_reconnect_snapshot "before"
+lk_snapshot_audio "$LK_TAG_BEFORE"
+lk_bt_reconnect_snapshot "$LK_TAG_BEFORE"
 lk_detect_phase "$(date +%s)"; _phase="$LK_PHASE_OUT"
 lk_capture_screenoff_class_row "$_phase"
 lk_phase_ledger_open "$_phase"
-echo "$(date +%s)|$(date '+%Y-%m-%d %H:%M:%S')|$_phase|capture_start" >> "$LK_OUT_DIR/phase_timeline.txt"
+if [ "$LK_RESUME" = 1 ]; then
+  echo "$(date +%s)|$(date '+%Y-%m-%d %H:%M:%S')|$_phase|reboot" >> "$LK_OUT_DIR/phase_timeline.txt"
+else
+  echo "$(date +%s)|$(date '+%Y-%m-%d %H:%M:%S')|$_phase|capture_start" >> "$LK_OUT_DIR/phase_timeline.txt"
+fi
+lk_phase_ledger_live
 
 while : ; do
   _now=$(date +%s)
@@ -2094,6 +2178,7 @@ while : ; do
   lk_charge_idle_observe "$_phase"
   lk_wifi_leave_collect
   lk_phase_ledger_accumulate
+  lk_phase_ledger_live
   LK_TICK_COUNT=$((LK_TICK_COUNT + 1))
 
   # periodic heavier wake snapshot

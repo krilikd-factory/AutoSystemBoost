@@ -92,20 +92,33 @@ fi
 # consumer, never written out: a scratch file inside the capture dir would get swept into
 # the recorder's own hidden-artifact snapshot.
 _LEDGER="$_DIR/phase_ledger.tsv"
+_lock_runs() {
+  [ -f "$_LOCK/output_dir" ] && [ -f "$_LOCK/pid" ] || return 1
+  [ "$(cat "$_LOCK/output_dir" 2>/dev/null)" = "$_DIR" ] || return 1
+  _lrb="$(cat "$_LOCK/boot_id" 2>/dev/null | tr -d ' \r\n')"
+  _lcb="$(cat "${ASB_LK_BOOT_ID_FILE:-/proc/sys/kernel/random/boot_id}" 2>/dev/null | tr -d ' \r\n')"
+  if [ -n "$_lrb" ] && [ -n "$_lcb" ] && [ "$_lrb" != "$_lcb" ]; then return 1; fi
+  _lrp="$(cat "$_LOCK/pid" 2>/dev/null | tr -dc '0-9')"
+  [ -n "$_lrp" ] && kill -0 "$_lrp" 2>/dev/null || return 1
+  [ -r "/proc/$_lrp/cmdline" ] || return 0
+  case "$(tr '\000' ' ' < "/proc/$_lrp/cmdline" 2>/dev/null)" in *asb_log_full_day*) return 0 ;; esac
+  return 1
+}
+_OPEN_ROW="$_DIR/.phase_open.tsv"
+[ -s "$_OPEN_ROW" ] || _OPEN_ROW="$_DIR/.phase_live.tsv"
 _cat_ledger() {
   cat "$_LEDGER" 2>/dev/null
-  [ -s "$_DIR/.phase_open.tsv" ] && cat "$_DIR/.phase_open.tsv" 2>/dev/null
+  [ -s "$_OPEN_ROW" ] && cat "$_OPEN_ROW" 2>/dev/null
   return 0
 }
 _HAVE_LEDGER=0
-if [ -s "$_LEDGER" ] || [ -s "$_DIR/.phase_open.tsv" ]; then _HAVE_LEDGER=1; fi
+if [ -s "$_LEDGER" ] || [ -s "$_OPEN_ROW" ]; then _HAVE_LEDGER=1; fi
 
 # ----- meta -----------------------------------------------------------------
 _el=""
 _th=""
 if [ -f "$_DIR/_full_day_report.txt" ]; then
   _hl="$(grep 'min elapsed' "$_DIR/_full_day_report.txt" 2>/dev/null | tail -n 1)"
-  # " capture: 24h target, N min elapsed" or "capture: 0h target (until shutdown), N min elapsed"
   _th="$(printf '%s\n' "$_hl" | sed -n 's/^ capture: \([0-9][0-9]*\)h target.*/\1/p')"
   _el="$(printf '%s\n' "$_hl" | sed -n 's/.*, \([0-9][0-9]*\) min elapsed.*/\1/p')"
 fi
@@ -120,23 +133,12 @@ if [ "$_HAVE_LEDGER" = "1" ]; then
     ''|*[!0-9]*) : ;;
     *) _el_live=$(( ($(date +%s) - _fs) / 60 ))
        # A finished capture keeps the report-writer number; a running one goes live.
-       if [ -f "$_LOCK/output_dir" ] && [ -f "$_LOCK/pid" ]; then
-         _lod0="$(cat "$_LOCK/output_dir" 2>/dev/null)"; _lpid0="$(cat "$_LOCK/pid" 2>/dev/null)"
-         if [ "$_lod0" = "$_DIR" ] && [ -n "$_lpid0" ] && kill -0 "$_lpid0" 2>/dev/null; then
-           _el="$_el_live"
-         fi
-       fi
+       _lock_runs && _el="$_el_live"
        [ -z "$_el" ] && _el="$_el_live" ;;
   esac
 fi
 _running=0
-if [ -f "$_LOCK/output_dir" ] && [ -f "$_LOCK/pid" ]; then
-  _lod="$(cat "$_LOCK/output_dir" 2>/dev/null)"
-  _lpid="$(cat "$_LOCK/pid" 2>/dev/null)"
-  if [ "$_lod" = "$_DIR" ] && [ -n "$_lpid" ] && kill -0 "$_lpid" 2>/dev/null; then
-    _running=1
-  fi
-fi
+_lock_runs && _running=1
 # fix200: when the capture started and under which profile, so the sheet can name a SAVED
 # capture ("started 2026-10-20 23:10, smart") instead of pretending it is live.
 _started=""
@@ -153,6 +155,12 @@ printf 'meta\telapsed_min=%s\ttarget_h=%s\trunning=%d\tstarted=%s\tprofile=%s\n'
 # The structured report export belongs beside the capture, not in an unrelated global state
 # directory. This is a path, not device content; the WebUI shell-quotes it before writing.
 printf 'capture\tdir=%s\n' "$_DIR"
+if [ -s "$_DIR/reboots.txt" ]; then
+  awk -F'|' '!/^#/ && $1 ~ /^[0-9]+$/ {
+      n++; if ($3 ~ /^[0-9]+$/) d += $3
+      m = $4; r = $5; gsub(/[\t=]/, " ", m); gsub(/[\t=]/, " ", r)
+    } END { if (n > 0) printf "reboot\tn=%d\tdown_min=%d\tmod=%s\trom=%s\n", n, d / 60, m, r }' "$_DIR/reboots.txt" 2>/dev/null
+fi
 
 # ----- meta2: device context (fix213, audit 8.1) ----------------------------------
 # The page used to be device-blind, so no advice could know the device it talked about.
@@ -587,6 +595,59 @@ if [ -f "$_DIR/sysui_restarts.txt" ]; then
 fi
 case "$_sn" in ''|*[!0-9]*) _sn=0 ;; esac
 printf 'sysui\tcount=%d\n' "$_sn"
+if [ "$_sn" -gt 0 ] 2>/dev/null; then
+  awk '
+    function pkgof(line,   l, p) {
+      l = line; sub(/.*\/data\/app\//, "", l)
+      if (l ~ /^~~/) sub(/^[^\/]*\//, "", l)
+      p = l; sub(/[-\/].*/, "", p)
+      return p
+    }
+    function addhook(n) {
+      gsub(/^[ \t]+|[ \t]+$/, "", n); gsub(/[\t=]/, " ", n)
+      if (n == "" || length(n) > 40 || (n in seen) || nh >= 3) return
+      seen[n] = 1; nh++; hooks = hooks (hooks == "" ? "" : ", ") n
+    }
+    function civ(y, mo, d, hh, mi, ss,   yy, era, yoe, doy, doe) {
+      yy = y - (mo <= 2 ? 1 : 0); era = int(yy / 400); yoe = yy - era * 400
+      doy = int((153 * (mo + (mo > 2 ? -3 : 9)) + 2) / 5) + d - 1
+      doe = yoe * 365 + int(yoe / 4) - int(yoe / 100) + doy
+      return (era * 146097 + doe) * 86400 + hh * 3600 + mi * 60 + ss
+    }
+    function tsfull(x) { return civ(substr(x, 1, 4) + 0, substr(x, 6, 2) + 0, substr(x, 9, 2) + 0, substr(x, 12, 2) + 0, substr(x, 15, 2) + 0, substr(x, 18, 2) + 0) }
+    function tslog(x) { return civ(ry, substr(x, 1, 2) + 0, substr(x, 4, 2) + 0, substr(x, 7, 2) + 0, substr(x, 10, 2) + 0, substr(x, 13, 2) + 0) }
+    function near(t) { return (rt > 0 && rt - t <= 300 && rt - t >= -60) }
+    function flush() {
+      if (!inb) return
+      p = (vip != "") ? vip : ((ip != "" && dfresh && (dproc == 1 || (dproc < 0 && bm))) ? ip : "")
+      if (p != "") cnt[p]++
+    }
+    /^===== SYSTEMUI RESTART/ {
+      flush(); inb = 1; dn = 0; bm = 0; ip = ""; vip = ""; dproc = -1; dfresh = 0; rt = 0
+      if ($4 ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/ && $5 ~ /^[0-9][0-9]:[0-9][0-9]:[0-9][0-9]$/) { rt = tsfull($4 " " $5); ry = substr($4, 1, 4) + 0 }
+      next
+    }
+    /^--- dropbox system_app_native_crash/ { dn = 1; next }
+    dn && /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9] system_app_native_crash/ { ip = ""; dproc = -1; dfresh = near(tsfull($1 " " $2)); next }
+    /^--- / { dn = 0; next }
+    /^verdict: / {
+      dn = 0
+      if ($0 ~ / injected by [A-Za-z0-9_.]+,/) { v = $0; sub(/.* injected by /, "", v); sub(/,.*/, "", v); vip = v }
+      if ($0 ~ /loaded into SystemUI: /) { v = $0; sub(/.*loaded into SystemUI: /, "", v); n = split(v, a, /, /); for (i = 1; i <= n; i++) addhook(a[i]) }
+      next
+    }
+    dn && /^Process: / { dproc = ($0 ~ /^Process: com\.android\.systemui([^.]|$)/) ? 1 : 0; next }
+    dn && ip == "" && /#[0-9]+ pc / && /\/data\/app\// { ip = pkgof($0) }
+    /BootMonitorClient/ && /pkg=com\.android\.systemui / && /type=crash/ && /^[0-9][0-9]-[0-9][0-9] / { if (near(tslog($0))) bm = 1 }
+    /\]\[E\]\[com\.android\.systemui\]/ { if (match($0, /\[[^]]+\]\[E\]\[com\.android\.systemui\]/)) { h = substr($0, RSTART + 1, RLENGTH - 1); sub(/\].*/, "", h); addhook(h) } }
+    / Version: .* package: com\.android\.systemui loaded/ { h = $0; sub(/ Version: .*/, "", h); sub(/.*: /, "", h); addhook(h) }
+    END {
+      flush()
+      best = ""; bn = 0
+      for (p in cnt) if (cnt[p] > bn) { best = p; bn = cnt[p] }
+      if (best != "" || hooks != "") printf "sysuiinj\tpkg=%s\tn=%d\thooks=%s\n", best, bn, hooks
+    }' "$_DIR/sysui_restarts.txt" 2>/dev/null
+fi
 
 _sdr="$_DIR/_full_day_report.txt"
 if [ -f "$_sdr" ]; then
