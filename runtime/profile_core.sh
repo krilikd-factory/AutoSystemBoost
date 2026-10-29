@@ -341,7 +341,7 @@ asb_apply_uclamp() {
 asb_apply_walt() {
   asb_feature_enabled CPU || return 0
   [ -d /proc/sys/walt ] || return 0
-  [ -e /proc/sys/walt/sched_ravg_window_nr_ticks ] && writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks "$RAVG_TICKS" 2 0.06 || true
+  [ -e /proc/sys/walt/sched_ravg_window_nr_ticks ] && [ ! -e /dev/.asb/walt_ravg_rom ] && writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks "$RAVG_TICKS" 2 0.06 || true
   [ -e /proc/sys/walt/sched_idle_enough ] && writef_retry /proc/sys/walt/sched_idle_enough "$WALT_IDLE" 2 0.06 || true
   [ -e /proc/sys/walt/sched_idle_enough_clust ] && writef_retry /proc/sys/walt/sched_idle_enough_clust "$WALT_IDLE_CLUST" 2 0.06 || true
   [ -e /proc/sys/walt/sched_cluster_util_thres_pct ] && writef_retry /proc/sys/walt/sched_cluster_util_thres_pct "$WALT_CLUSTER" 2 0.06 || true

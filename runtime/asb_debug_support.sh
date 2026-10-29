@@ -1,6 +1,4 @@
 #!/system/bin/sh
-# Unified WebUI support actions. This helper accepts no user-supplied shell text:
-# it either writes one asbdiag report or starts one capture that runs until shutdown.
 set -u
 
 MODID="AutoSystemBoost"
@@ -70,6 +68,7 @@ RUNLOG="${ASB_DEBUG_SUPPORT_RUNLOG:-/data/local/tmp/asb_full_day.out}"
 RECOVERY_LOG="${ASB_DEBUG_SUPPORT_RECOVERY_LOG:-$STATE_DIR/full_day_webui.recovery.log}"
 # Kept injectable for the host contract only; production always reads Android's /proc.
 PROC_ROOT="${ASB_DEBUG_SUPPORT_PROC_ROOT:-/proc}"
+RESUMEFILE="$STATE_DIR/full_day_resume"
 DIAG_OUTDIR="${ASB_DEBUG_SUPPORT_DIAG_OUTDIR:-/sdcard/Download}"
 # A WebView bridge waits for stdout to close. Long actions therefore need a deliberately
 # detached launcher and a tiny status file: otherwise the browser cannot paint feedback
@@ -105,6 +104,38 @@ pid_is_live() {
     esac
   fi
   return 0
+}
+
+prop_get() {
+  if [ -n "${ASB_DEBUG_SUPPORT_PROPS:-}" ]; then
+    sed -n "s/^$1=//p" "$ASB_DEBUG_SUPPORT_PROPS" 2>/dev/null | head -n 1
+  else
+    getprop "$1" 2>/dev/null
+  fi
+}
+
+resume_dir() {
+  [ -r "$RESUMEFILE" ] || return 1
+  _rsd="$(sed -n 's/^dir=//p' "$RESUMEFILE" 2>/dev/null | head -n 1 | tr -d '\r')"
+  case "$_rsd" in */asb_log_full_day_*) printf '%s' "$_rsd"; return 0 ;; esac
+  return 1
+}
+
+resume_pending() {
+  _rpd="$(resume_dir 2>/dev/null)" || return 1
+  _rpb="$(sed -n 's/^boot=//p' "$RESUMEFILE" 2>/dev/null | head -n 1 | tr -d ' \r')"
+  [ -n "$_rpb" ] && [ "$_rpb" != "$(current_boot_id)" ] || return 1
+  printf '%s' "$_rpd"
+}
+
+full_day_idle_status() {
+  _fis="$(resume_pending 2>/dev/null || true)"
+  if [ -n "$_fis" ]; then
+    echo 'status=resuming'
+    echo "output=$_fis"
+  else
+    echo 'status=idle'
+  fi
 }
 
 full_day_recovery_note() {
@@ -234,6 +265,7 @@ full_day_cancel_orphan() {
   # Never kill an arbitrary reused PID: only a live command line that is our own recorder may
   # be terminated, and the atomic lock is removed only after that process is confirmed dead.
   _fdco_pid="${1:-}"
+  _fdco_out="$(full_day_output_path 2>/dev/null || true)"
   if ! full_day_output_missing; then full_day_recovery_note "skip=output_present pid=${_fdco_pid:-none}"; return 1; fi
   if ! pid_is_live "$_fdco_pid"; then full_day_recovery_note "skip=pid_dead pid=${_fdco_pid:-none}"; return 1; fi
   if ! full_day_pid_matches_recorder "$_fdco_pid"; then full_day_recovery_note "skip=recorder_unverified pid=$_fdco_pid"; return 1; fi
@@ -282,6 +314,7 @@ full_day_cancel_orphan() {
     full_day_recovery_note "skip=still_live pid=$_fdco_pid state=${_fdco_state:-unknown}"; return 1
   fi
   rm -rf "$LOCKDIR" 2>/dev/null || true
+  [ -n "$_fdco_out" ] && [ "$(resume_dir 2>/dev/null || true)" = "$_fdco_out" ] && rm -f "$RESUMEFILE" 2>/dev/null
   full_day_recovery_note "recovered=output_removed pid=$_fdco_pid"
   return 0
 }
@@ -342,7 +375,7 @@ full_day_status() {
   if [ -d "$LOCKDIR" ]; then
     if lock_known_dead; then
       rm -rf "$LOCKDIR" 2>/dev/null || true
-      echo 'status=idle'
+      full_day_idle_status
     else
       # Winner has the atomic directory but has not published a PID yet. Do not remove it
       # and do not start a competing capture; the next status call will show the PID.
@@ -359,7 +392,7 @@ full_day_status() {
       rm -f "$LEGACY_PIDFILE" 2>/dev/null || true
     fi
   fi
-  echo 'status=idle'
+  full_day_idle_status
 }
 
 diag_lock_live_pid() {
@@ -552,6 +585,7 @@ diag_start() {
 
 start_full_day() {
   _async="${1:-0}"
+  _resume="${2:-}"
   [ -f "$MODDIR/tools/logkit/asb_log_full_day.sh" ] || { echo 'error=logkit_missing'; return 6; }
   mkdir -p "$STATE_DIR" 2>/dev/null || { echo 'error=state_dir_failed'; return 7; }
 
@@ -652,6 +686,8 @@ start_full_day() {
   # The recorder receives the lock token and publishes its own PID before it begins capture.
   # The launcher PID is written immediately after fork to cover the publish interval.
   ASB_DEBUG_SUPPORT_LOCKDIR="$LOCKDIR" ASB_DEBUG_SUPPORT_LOCK_TOKEN="$_token" \
+    ASB_DEBUG_SUPPORT_RESUMEFILE="$RESUMEFILE" ASB_DEBUG_SUPPORT_BOOT_ID="$(current_boot_id)" \
+    ASB_LK_RESUME_DIR="$_resume" \
     nohup sh "$MODDIR/tools/logkit/asb_log_full_day.sh" 0 > "$RUNLOG" 2>&1 < /dev/null &
   _pid=$!
   if ! { printf '%s\n' "$_pid" > "$LAUNCHERFILE"; } 2>/dev/null; then
@@ -666,7 +702,7 @@ start_full_day() {
     echo 'status=started'
     echo "pid=$_pid"
     echo 'hours=0'
-    echo 'limit=until_shutdown'
+    echo 'limit=until_stopped'
     echo "log=$RUNLOG"
     return 0
   fi
@@ -678,7 +714,7 @@ start_full_day() {
       echo 'status=started'
       echo "pid=$_pid"
       echo 'hours=0'
-      echo 'limit=until_shutdown'
+      echo 'limit=until_stopped'
       echo "log=$RUNLOG"
       return 0
     fi
@@ -706,7 +742,15 @@ stop_full_day() {
   _sp="$(lock_live_pid 2>/dev/null || true)"
   [ -n "$_sp" ] || _sp="$(legacy_live_pid 2>/dev/null || true)"
   if [ -z "$_sp" ]; then
-    echo 'status=idle'
+    _sr="$(resume_dir 2>/dev/null || true)"
+    rm -f "$RESUMEFILE" 2>/dev/null || true
+    if [ -n "$_sr" ]; then
+      full_day_recovery_note "stop=resume_cancelled"
+      echo 'status=stopped'
+      echo "output=$_sr"
+    else
+      echo 'status=idle'
+    fi
     return 0
   fi
   if ! full_day_pid_matches_recorder "$_sp"; then
@@ -714,6 +758,7 @@ stop_full_day() {
     echo "pid=$_sp"
     return 0
   fi
+  rm -f "$RESUMEFILE" 2>/dev/null || true
   _so="$(cat "$OUTPUTFILE" 2>/dev/null || true)"
   _sk="$(pid_descendants "$_sp")"
   kill -TERM "$_sp" 2>/dev/null || { echo 'error=stop_failed'; return 9; }
@@ -746,6 +791,45 @@ stop_full_day() {
   return 0
 }
 
+resume_full_day() {
+  _rd="$(resume_dir 2>/dev/null || true)"
+  if [ -z "$_rd" ]; then
+    rm -f "$RESUMEFILE" 2>/dev/null || true
+    echo 'status=idle'
+    return 0
+  fi
+  if [ -z "$(resume_pending 2>/dev/null || true)" ]; then
+    echo 'status=idle'
+    return 0
+  fi
+  _rpoll="${ASB_DEBUG_SUPPORT_RESUME_POLL_S:-15}"
+  _rmax="${ASB_DEBUG_SUPPORT_RESUME_WAIT_S:-43200}"
+  (
+    exec </dev/null >/dev/null 2>&1
+    _rw=0; _rce=0
+    while :; do
+      [ "$(resume_dir 2>/dev/null || true)" = "$_rd" ] || exit 0
+      if [ "$(prop_get sys.boot_completed)" = 1 ]; then
+        if [ -d "$_rd" ]; then
+          _rce=0
+          _rup="$(cut -d. -f1 /proc/uptime 2>/dev/null | tr -dc '0-9')"
+          [ "${_rup:-0}" -ge "${ASB_DEBUG_SUPPORT_RESUME_SETTLE_S:-90}" ] && break
+        elif [ "$(prop_get sys.user.0.ce_available)" = true ]; then
+          [ "$_rce" -ge "${ASB_DEBUG_SUPPORT_RESUME_GRACE_S:-60}" ] && { rm -f "$RESUMEFILE" 2>/dev/null; full_day_recovery_note "resume=dir_missing"; exit 0; }
+          _rce=$(( _rce + _rpoll ))
+        fi
+      fi
+      [ "$_rw" -ge "$_rmax" ] && { full_day_recovery_note "resume=timeout"; exit 0; }
+      sleep "$_rpoll"
+      _rw=$(( _rw + _rpoll ))
+    done
+    full_day_recovery_note "resume=start"
+    start_full_day 1 "$_rd" >/dev/null 2>&1
+  ) &
+  echo 'status=resuming'
+  echo "output=$_rd"
+}
+
 case "${1:-status}" in
   status) full_day_status ;;
   diag) write_diag ;;
@@ -754,5 +838,6 @@ case "${1:-status}" in
   full-day) start_full_day ;;
   full-day-start) start_full_day 1 ;;
   full-day-stop) stop_full_day ;;
+  full-day-resume) resume_full_day ;;
   *) echo 'error=bad_action'; exit 64 ;;
 esac
