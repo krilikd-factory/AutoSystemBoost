@@ -6,6 +6,9 @@ DM_PS="${ASB_DM_PS:-$DM_PSY/battery}"
 DM_BL="${ASB_DM_BL:-/sys/class/backlight}"
 DM_PROF_FILE="${ASB_DM_PROFILE:-/data/adb/modules/AutoSystemBoost/current_profile}"
 DM_PROFILES="smart balanced battery performance stock"
+DM_BOOT="${ASB_DM_BOOT:-$DM_LIVE.boot}"
+DM_BOOTID="${ASB_DM_BOOTID:-/proc/sys/kernel/random/boot_id}"
+dm_b_id=""; dm_b_on=0; dm_b_off=0; dm_b_ts=""; dm_b_scr=""
 
 dm_prof=""
 dm_prev_ts=""
@@ -189,8 +192,42 @@ dm_charging() {
   return 1
 }
 
+dm_boot_load() {
+  dm_b_id=""; [ -r "$DM_BOOTID" ] && read -r dm_b_id < "$DM_BOOTID" 2>/dev/null
+  dm_b_id="$(printf '%s' "$dm_b_id" | tr -dc '0-9a-f' | cut -c1-12)"
+  [ -n "$dm_b_id" ] || dm_b_id=0
+  dm_b_on=0; dm_b_off=0; dm_b_ts=""; dm_b_scr=""
+  [ -r "$DM_BOOT" ] || return 0
+  read -r _bi _bon _boff < "$DM_BOOT" 2>/dev/null
+  [ "$_bi" = "$dm_b_id" ] || return 0
+  case "$_bon$_boff" in ''|*[!0-9]*) return 0 ;; esac
+  dm_b_on="$_bon"; dm_b_off="$_boff"
+}
+
+dm_boot_step() {
+  if [ -n "$dm_b_ts" ]; then
+    _bd=$(( $1 - dm_b_ts ))
+    if [ "$_bd" -gt 0 ]; then
+      if [ "$dm_b_scr" = 1 ]; then
+        if [ "$_bd" -le 120 ]; then
+          dm_b_on=$((dm_b_on + _bd))
+        else
+          dm_b_on=$((dm_b_on + 30)); dm_b_off=$((dm_b_off + _bd - 30))
+        fi
+      else
+        dm_b_off=$((dm_b_off + _bd))
+      fi
+    fi
+  fi
+  dm_b_ts="$1"; dm_b_scr="$2"
+  printf '%s %s %s\n' "$dm_b_id" "$dm_b_on" "$dm_b_off" > "$DM_BOOT.tmp" 2>/dev/null \
+    && mv -f "$DM_BOOT.tmp" "$DM_BOOT" 2>/dev/null
+  return 0
+}
+
 dm_loop() {
   dm_load
+  dm_boot_load
   _dl_dir="$(dirname "$0")"
   [ -r "$_dl_dir/asb_audio_activity.sh" ] && . "$_dl_dir/asb_audio_activity.sh"
   while :; do
@@ -211,6 +248,7 @@ dm_loop() {
       [ -n "${_aa_sig:-}" ] && _lm=1
     fi
     _was="$dm_prof"; _was_scr="$dm_prev_scr"
+    dm_boot_step "$_ln" "$_ls"
     dm_step "$_ln" "$_lp" "$_lc" "$_ls" "$_lf" "$_lm"
     if [ "$dm_dirty" = 1 ] || [ "$_was" != "$dm_prof" ]; then dm_publish; fi
     if [ "$dm_dirty" = 1 ]; then

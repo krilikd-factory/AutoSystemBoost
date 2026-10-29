@@ -15,8 +15,10 @@ _cfg() {
 HINT="${1:-2}"
 THERM="${2:-0}"
 SCREEN="${3:-1}"
+MODE="${4:-smart}"
 
 writef() {
+  [ "$MODE" = manual ] && return 0
   [ -w "$1" ] || return 0
   echo "$2" > "$1" 2>/dev/null || true
 }
@@ -46,7 +48,7 @@ done
 # OP15 the node reads 0x0001 whatever was asked - yet the tuner rewrote it on every
 # run, dozens of times a day, for no change. The read-back of each request is remembered for
 # this boot; a write happens again only when the node no longer shows it.
-if [ -w /sys/kernel/mm/lru_gen/enabled ]; then
+if [ "$MODE" != manual ] && [ -w /sys/kernel/mm/lru_gen/enabled ]; then
   case "$HINT" in
     3|4) _lg=7 ;;
     *)   _lg=5 ;;
@@ -140,7 +142,7 @@ if [ "$_cam_guard" = "0" ]; then
     if [ -w "$_wm_node" ]; then
       _wm_now="$(cat "$_wm_node" 2>/dev/null | tr -dc '0-9')"
       case "$_wm_now" in ''|*[!0-9]*) _wm_now=0 ;; esac
-      if [ "$_wm_now" -gt 10 ] 2>/dev/null; then
+      if [ "$MODE" != manual ] && [ "$_wm_now" -gt 10 ] 2>/dev/null; then
         printf '%s\n' "$_wm_now" > /data/adb/asb/wmark_restore 2>/dev/null
         writef "$_wm_node" 10
       fi
@@ -171,7 +173,7 @@ if [ "$_cam_guard" = "0" ]; then
   # The baseline recorded at first run says what the ROM shipped. If the ROM had it off
   # and it is on now with the tweak off, it is ours, marker or not.
   _wpm="$(_cfg wifi_powersave)"
-  if [ "$_wpm" = "off" ] && [ ! -f /data/adb/asb/wifipm_restore ] \
+  if [ "$MODE" != manual ] && [ "$_wpm" = "off" ] && [ ! -f /data/adb/asb/wifipm_restore ] \
      && [ "$(cat /data/adb/asb/wifipm_baseline 2>/dev/null)" = "off" ] \
      && command -v iw >/dev/null 2>&1; then
     if [ "$(iw dev wlan0 get power_save 2>/dev/null | grep -oE 'on|off' | head -1)" = "on" ]; then
@@ -299,7 +301,7 @@ fi
 # the worst moment, and then kept. From fix135 mirror asks asb_dsp_thermal.sh: battery
 # temperature with hysteresis, loudspeaker only, the same answer the once-a-minute watcher in
 # service.sh gives. mirror stays idempotent: it rewrites a property only when the value moved.
-if [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_audio_apply.sh ]; then
+if [ "$MODE" != manual ] && [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_audio_apply.sh ]; then
   sh /data/adb/modules/AutoSystemBoost/runtime/asb_audio_apply.sh mirror >/dev/null 2>&1 || true
 fi
 

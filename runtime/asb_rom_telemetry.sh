@@ -79,7 +79,7 @@ done
 
 _g="$SYS/class/kgsl/kgsl-3d0"
 if [ -d "$_g" ]; then
-  for _f in gpuclk gpu_busy_percentage gpubusy max_pwrlevel min_pwrlevel thermal_pwrlevel; do
+  for _f in gpuclk max_gpuclk gpu_busy_percentage gpubusy max_pwrlevel min_pwrlevel thermal_pwrlevel; do
     _r "$_g/$_f" "gpu.$_f"
   done
 fi
