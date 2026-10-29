@@ -1635,6 +1635,9 @@ html[data-asb-theme="light"] .lgr-chip { background: #f7f9fa; }
 .lgr-v { font-weight: 600; color: var(--text); text-align: end; flex: 0 1 auto; max-width: 58%;
   overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .lgr-note { font-size: 12.5px; line-height: 1.45; color: var(--text-secondary); padding: 2px 0; }
+.lgr-brief { position: relative; font-size: 13px; line-height: 1.5; color: var(--text); padding: 3px 0; padding-inline-start: 14px; }
+.lgr-brief::before { content: '•'; position: absolute; inset-inline-start: 2px; color: var(--accent); font-weight: 800; }
+.lgr-brief-warn::before { color: var(--perf); }
 .lgr-warn { color: var(--perf); }
 /* fix200: real per-app / per-rate tables. Fixed layout so a long package name ellipsizes
    instead of pushing the numbers off the card. */
@@ -4557,9 +4560,9 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
   <div class="rpt-meta-row">
     <span class="lgr-status" id="reportStatus"></span>
     <div class="rpt-actions">
-      <button class="live-chip" id="rpJson" type="button" onclick="logReportExportJson()" aria-label="Export report JSON">
-        <span aria-hidden="true">{ }</span>
-        <span>JSON</span>
+      <button class="live-chip" id="rpSave" type="button" onclick="asbSavePage('report')" aria-label="Save the whole page as a text file">
+        <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"></path><path d="M7 10l5 5 5-5"></path><path d="M5 20h14"></path></svg>
+        <span data-i18n="page_save">Save</span>
       </button>
       <button class="live-chip rpt-refresh" id="rpRefresh" type="button" onclick="asbLogReportLoad()">
         <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -4615,9 +4618,9 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
     <div class="rpt-meta-row">
       <span class="lgr-status" id="deviceStatus" role="status" aria-live="polite"></span>
       <div class="rpt-actions">
-        <button class="live-chip" id="devJson" type="button" onclick="asbDeviceInfoExportJson()" aria-label="Export device diagnostics JSON" disabled>
-          <span aria-hidden="true">{ }</span>
-          <span>JSON</span>
+        <button class="live-chip" id="devSave" type="button" onclick="asbSavePage('device')" aria-label="Save the whole page as a text file" disabled>
+          <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"></path><path d="M7 10l5 5 5-5"></path><path d="M5 20h14"></path></svg>
+          <span data-i18n="page_save">Save</span>
         </button>
         <button class="live-chip rpt-refresh" id="devRefresh" type="button" onclick="asbDeviceInfoLoad()">
           <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 6.3"></path><path d="M20 5v6h-6"></path></svg>
@@ -5417,7 +5420,7 @@ async function debugFullDayPoll() {
  * sends the recorder the signal it already handles (finalise the report, release the lock);
  * the helper returns at once and the end is confirmed by polling, like a start. */
 async function debugFullDayStopPoll() {
-  for (let attempt = 0; attempt < 90; attempt++) {
+  for (let attempt = 0; attempt < 140; attempt++) {
     await debugDelay(2000);
     const r = await run('sh ' + MD + '/runtime/asb_debug_support.sh status 2>/dev/null');
     const info = debugActionText(r);
@@ -5426,10 +5429,14 @@ async function debugFullDayStopPoll() {
   return false;
 }
 async function asbDebugStopFullDay() {
-  if (_asbDebugActionBusy) return;
+  /* fix246: the second tap always answers at once. Behind a busy flag it returned in
+     silence, and the stop helper itself could take long enough on a loaded phone that the
+     user saw nothing, left the page - and the stop never reached the recorder. */
+  if (_asbDebugActionBusy) { toast(T('dbg_log_stop_busy', 'Still working on the last request - try again in a moment'), 'warn'); return; }
   _asbDebugActionBusy = true;
   try {
     uiSound('capture');
+    toast(T('dbg_log_stop_sent', 'Stopping the infinite log…'), 'warn');
     const r = await run('sh ' + MD + '/runtime/asb_debug_support.sh full-day-stop 2>/dev/null');
     const info = debugActionText(r);
     if (!r || r.errno !== 0 || info.error) {
@@ -10246,7 +10253,7 @@ function parseLogReport(txt) {
     } else if (tag === 'wlive') {
       /* fix206: holders sampled from the power manager directly - visible even where
          batterystats counted nothing (charging time, flat deltas). */
-      if (kv.tag) d.wlive.push({ tag: kv.tag, pct: +kv.pct || 0, min: +kv.min || 0, pkg: kv.pkg || '' });
+      if (kv.tag) d.wlive.push({ tag: kv.tag, pct: +kv.pct || 0, min: +kv.min || 0, pkg: kv.pkg || '', kind: kv.kind || '' });
     } else if (tag === 'wlt') {
       /* fix210: top partial-wakelock holders by occurrence - the names that stay
          visible even when every held-time counter is flat. */
@@ -10319,6 +10326,29 @@ function logReportDurSec(sec) {
   if (t < 60) return logReportT('lr_secs', '{n} sec', { n: String(t) });
   return logReportDur(t / 60);
 }
+/* fix246: what a live holder is, in words. The owner's Battery capture showed only
+ * "com.whatsapp · com.whatsapp:android" - a contacts sync that never finished, held in 68% of
+ * the screen-off checks - and the wake section then hid even that behind the package row. */
+function logReportAuthority(tag) {
+  const t = String(tag || '');
+  return /^[a-z]+$/.test(t) ? T('lr_auth_' + t, t) : t;
+}
+function logReportHolderWhat(w) {
+  if (!w) return '';
+  const tag = String(w.tag || '');
+  if (w.kind === 'sync') return logReportT('lr_hold_sync', '{what} sync', { what: logReportAuthority(tag) });
+  if (w.kind === 'worker') return logReportT('lr_hold_worker', 'background task {name}', { name: tag });
+  if (w.kind === 'job') return logReportT('lr_hold_job', 'scheduled job {name}', { name: tag });
+  if (w.kind === 'alarm') return logReportT('lr_hold_alarm', 'alarm {name}', { name: tag });
+  return tag;
+}
+function logReportHolderName(w) {
+  if (!w) return '';
+  const what = logReportHolderWhat(w);
+  if (!w.pkg) return what;
+  if (['sync', 'worker', 'job', 'alarm'].indexOf(w.kind) < 0) return w.pkg;
+  return what && what !== w.pkg ? w.pkg + ' (' + what + ')' : w.pkg;
+}
 /* fix200: the advice engine. Every rule is a finding from the capture plus, where the fix
  * is one switch, the ASB setting that does it - named the way the Settings screen names it
  * (Tcfg), in the UI language. Worst things first; at most six cards so the list stays
@@ -10335,6 +10365,7 @@ function logReportTips(d, all) {
   const audio = s.audio || null;
   const cost = s.asbcost || null;
   const cfg = d.cfg || {};
+  const _holderTipped = {};
   if (crash && (+crash.asb || 0) > 0) tips.push({ ic: 'warn', key: 'lr_tip_crash', vars: {} });
   /* fix220: the night verdict needs a night. One battery-percent step over 40 idle minutes
      reads as 1.5 %/h and painted a red card over pure noise (fix211 taught the screen-off
@@ -10359,13 +10390,20 @@ function logReportTips(d, all) {
        checks). Name the real cause and the remedy instead of blaming a system app the
        user cannot - and should not - rein in. */
     if (d.wlive.length) {
-      const _who = d.wlive[0].pkg || d.wlive[0].tag;
+      const _top = d.wlive[0];
+      const _who = _top.pkg || _top.tag;
       const _aodt = s.aod || null;
       if (_who === 'com.android.systemui' && _aodt && (+_aodt.of || 0) >= 20 &&
           (+_aodt.lit || 0) * 100 >= 10 * (+_aodt.of || 0))
         tips.push({ ic: 'warn', key: 'lr_tip_awake_aod', vars: { awake: String(idle.awake), lit: String(_aodt.lit), of: String(_aodt.of) } });
-      else
-        tips.push({ ic: 'warn', key: 'lr_tip_awake_who', vars: { awake: String(idle.awake), who: _who } });
+      else if (_top.kind === 'sync' && _top.pkg && _top.pct >= 30) {
+        tips.push({ ic: 'warn', key: 'lr_tip_awake_sync', vars: { awake: String(idle.awake), app: _top.pkg, what: logReportAuthority(_top.tag), pct: String(_top.pct) } });
+        _holderTipped[_top.pkg] = 1;
+      } else if (_top.kind === 'worker' && _top.pkg && _top.pct >= 15) {
+        tips.push({ ic: 'warn', key: 'lr_tip_awake_worker', vars: { awake: String(idle.awake), app: _top.pkg, name: _top.tag, pct: String(_top.pct) } });
+        _holderTipped[_top.pkg] = 1;
+      } else
+        tips.push({ ic: 'warn', key: 'lr_tip_awake_who', vars: { awake: String(idle.awake), who: logReportHolderName(_top) } });
     }
     else if (d.wla.length)
       tips.push({ ic: 'warn', key: 'lr_tip_awake_alarm', vars: { awake: String(idle.awake), who: d.wla[0].tag } });
@@ -10374,7 +10412,20 @@ function logReportTips(d, all) {
     else
       tips.push({ ic: 'warn', key: 'lr_tip_awake', vars: { awake: String(idle.awake) } });
   }
-  if (d.wl.length && d.wl[0].sec >= 3600) {
+  /* fix246: a sync that never finishes and a background task that keeps coming back are
+     findings with a remedy the user can apply in the system settings - ASB itself never
+     cuts a sync (that can lose data) and leaves an app's own scheduled work alone. */
+  d.wlive.forEach(function (w) {
+    if (!w.pkg || _holderTipped[w.pkg]) return;
+    if (w.kind === 'sync' && w.pct >= 30) {
+      tips.push({ ic: 'info', key: 'lr_tip_sync_loop', vars: { app: w.pkg, what: logReportAuthority(w.tag), pct: String(w.pct) } });
+      _holderTipped[w.pkg] = 1;
+    } else if (w.kind === 'worker' && w.pct >= 15) {
+      tips.push({ ic: 'info', key: 'lr_tip_worker', vars: { app: w.pkg, name: w.tag, pct: String(w.pct) } });
+      _holderTipped[w.pkg] = 1;
+    }
+  });
+  if (d.wl.length && d.wl[0].sec >= 3600 && !_holderTipped[d.wl[0].pkg]) {
     const v = { app: d.wl[0].pkg, min: String(Math.round(d.wl[0].sec / 60)) };
     if (cfg.wakelock_action === '1') tips.push({ ic: 'info', key: 'lr_tip_app', vars: v });
     else { v.set = Tcfg('wakelock_action', 'name', 'Act on Wakelocks'); tips.push({ ic: 'info', key: 'lr_tip_wl_enable', vars: v }); }
@@ -10651,7 +10702,9 @@ function logReportAnalyze(d) {
       chain(86, 'hypothesis', 'lr_chain_aod', { awake: String(idle.awake), lit: String(aod.lit), of: String(aod.of) });
     else if (sradio && (+sradio.mib || 0) >= 50)
       chain(85, 'hypothesis', 'lr_chain_radio', { awake: String(idle.awake), mib: String(sradio.mib) });
-    else if (who) chain(82, 'hypothesis', 'lr_chain_holder', { awake: String(idle.awake), who: who });
+    else if (who && d.wlive[0].kind === 'sync' && d.wlive[0].pct >= 30)
+      chain(84, 'fact', 'lr_chain_sync', { awake: String(idle.awake), who: logReportHolderName(d.wlive[0]), pct: String(d.wlive[0].pct) });
+    else if (who) chain(82, 'hypothesis', 'lr_chain_holder', { awake: String(idle.awake), who: logReportHolderName(d.wlive[0]) });
     else if (d.wla.length) chain(80, 'hypothesis', 'lr_chain_alarm', { awake: String(idle.awake), who: d.wla[0].tag, n: String(d.wla[0].n) });
     else if (d.wlt.length) chain(80, 'hypothesis', 'lr_chain_hold', { awake: String(idle.awake), who: d.wlt[0].tag, n: String(d.wlt[0].n) });
     else chain(78, 'fact', 'lr_chain_wakegap', { awake: String(idle.awake) });
@@ -10674,6 +10727,7 @@ function logReportAnalyze(d) {
   const weights = {
     lr_tip_crash: 100, lr_tip_cost_hi: 96, lr_tip_heat_warm_set: 92, lr_tip_heat_warm: 92,
     lr_tip_crashes: 88, lr_tip_awake_aod: 86, lr_tip_awake_who: 84, lr_tip_awake_alarm: 84,
+    lr_tip_awake_sync: 87, lr_tip_awake_worker: 84, lr_tip_sync_loop: 80, lr_tip_worker: 60,
     lr_tip_awake_hold: 84, lr_tip_awake: 80, lr_tip_sradio: 82, lr_tip_night_modem: 78,
     lr_tip_night: 76, lr_tip_jank_bad: 72, lr_tip_jank_bad_bat: 72, lr_tip_jank_bad_man: 72, lr_tip_jank_wake: 70, lr_tip_jank_wake_wh: 70,
     lr_tip_sysui_netspeed: 68, lr_tip_sysui_clocksec: 68, lr_tip_sysui_livewp: 66, lr_tip_sysui_other: 30,
@@ -10719,22 +10773,134 @@ function logReportMachineDigest(d) {
     actions: a.actions, asb_overhead: a.asb_overhead };
 }
 
-async function logReportExportJson() {
-  const d = window._asbLogReportData;
-  const dir = d && d.sections.capture && d.sections.capture.dir;
-  if (!d || !dir) { toast(T('lr_json_error', 'Open a readable capture first.'), 'error'); return; }
-  const btn = _el('rpJson'); if (btn) btn.disabled = true;
-  try {
-    const json = JSON.stringify(logReportMachineDigest(d), null, 2) + '\n';
-    let bin = '';
-    const bytes = new TextEncoder().encode(json);
-    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-    const b64 = btoa(bin), path = String(dir).replace(/\/+$/, '') + '/report.json';
-    const r = await run("printf '%s' " + shQuote(b64) + ' | base64 -d > ' + shQuote(path));
+/* fix246: the Save button keeps the WHOLE page as text - every section, row, note and table
+ * as the user sees it, then the raw digest the page was built from - in Download, so a
+ * report or a device page travels as one file instead of a stack of screenshots. */
+function asbPageClasses(e) { return String((e && e.className) || '').split(/\s+/); }
+function asbPageHas(e, c) { return asbPageClasses(e).indexOf(c) >= 0; }
+function asbPageKids(e) { return e && e.children ? Array.prototype.slice.call(e.children) : []; }
+function asbPageTxt(e) {
+  if (!e) return '';
+  const k = asbPageKids(e);
+  const t = k.length ? k.map(asbPageTxt).filter(function (x) { return x; }).join(' ') : String(e.textContent || '');
+  return t.replace(/\u2060/g, '').replace(/[\u00a0\u2011]/g, function (m) { return m === '\u00a0' ? ' ' : '-'; })
+    .replace(/\s+/g, ' ').trim();
+}
+function asbPageWarn(e) {
+  if (!e) return false;
+  if (asbPageHas(e, 'lgr-warn') || asbPageHas(e, 'dev-warn') || asbPageHas(e, 'dev-bad') ||
+      asbPageHas(e, 'lgr-hero-warn') || asbPageHas(e, 'lgr-brief-warn') || asbPageHas(e, 'lgr-state-problem')) return true;
+  return asbPageKids(e).some(asbPageWarn);
+}
+function asbPageText(root) {
+  const out = [];
+  const mark = function (e) { return asbPageWarn(e) ? '  (!)' : ''; };
+  const pick = function (e, c) { return asbPageKids(e).filter(function (x) { return asbPageHas(x, c); })[0] || null; };
+  function walk(e) {
+    if (asbPageHas(e, 'lgr-sec')) {
+      const t = pick(e, 'lgr-sec-t');
+      out.push('');
+      out.push('== ' + asbPageTxt(t) + ' ==');
+      asbPageKids(e).forEach(function (c) { if (c !== t) walk(c); });
+      return;
+    }
+    if (asbPageHas(e, 'lgr-row')) {
+      const k = asbPageTxt(pick(e, 'lgr-k')), v = asbPageTxt(pick(e, 'lgr-v'));
+      out.push('  ' + k + (v ? ': ' + v : '') + mark(e));
+      return;
+    }
+    if (asbPageHas(e, 'lgr-hero')) {
+      const l = asbPageTxt(pick(e, 'lgr-hero-lbl')), v = asbPageTxt(pick(e, 'lgr-hero-val')), u = asbPageTxt(pick(e, 'lgr-hero-sub'));
+      out.push('  ' + l + ': ' + v + (u ? ' (' + u + ')' : '') + mark(e));
+      return;
+    }
+    if (asbPageHas(e, 'lgr-verdict')) {
+      const n = asbPageTxt(pick(e, 'lgr-verdict-name')), v = asbPageTxt(pick(e, 'lgr-verdict-value')), dt = asbPageTxt(pick(e, 'lgr-verdict-detail'));
+      out.push('  ' + n + ': ' + v + mark(e) + (dt ? ' - ' + dt : ''));
+      return;
+    }
+    if (asbPageHas(e, 'lgr-chain')) {
+      const k = pick(e, 'lgr-chain-kind');
+      const rest = asbPageKids(e).filter(function (c) { return c !== k; }).map(asbPageTxt).join(' ');
+      out.push('  [' + asbPageTxt(k) + '] ' + rest);
+      return;
+    }
+    if (asbPageHas(e, 'lgr-context')) {
+      out.push('  ' + asbPageKids(e).map(asbPageTxt).filter(function (x) { return x; }).join(' · '));
+      return;
+    }
+    if (asbPageHas(e, 'lgr-brief')) { out.push('  • ' + asbPageTxt(e) + mark(e)); return; }
+    if (asbPageHas(e, 'lgr-note') || asbPageHas(e, 'lgr-tip')) {
+      out.push('  ' + (asbPageHas(e, 'lgr-warn') ? '(!) ' : '') + asbPageTxt(e));
+      return;
+    }
+    if (String(e.tagName || e.tag || '').toLowerCase() === 'table') {
+      const rows = [];
+      const collect = function (n) {
+        asbPageKids(n).forEach(function (c) {
+          const tg = String(c.tagName || c.tag || '').toLowerCase();
+          if (tg === 'tr') rows.push(asbPageKids(c).map(function (td) { return asbPageTxt(td) + (asbPageHas(td, 'lgr-warn') ? ' (!)' : ''); }));
+          else collect(c);
+        });
+      };
+      collect(e);
+      const w = [];
+      rows.forEach(function (r) { r.forEach(function (c, i) { w[i] = Math.max(w[i] || 0, c.length); }); });
+      rows.forEach(function (r) {
+        out.push('  ' + r.map(function (c, i) { return i === r.length - 1 ? c : c + ' '.repeat(Math.max(0, w[i] - c.length)); }).join(' | ').replace(/\s+$/, ''));
+      });
+      return;
+    }
+    const kids = asbPageKids(e);
+    if (kids.length) { kids.forEach(walk); return; }
+    const t = asbPageTxt(e);
+    if (t) out.push('  ' + t);
+  }
+  asbPageKids(root).forEach(walk);
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+function asbPageStamp(dt) {
+  const p = function (n) { return (n < 10 ? '0' : '') + n; };
+  return String(dt.getFullYear()) + p(dt.getMonth() + 1) + p(dt.getDate()) + '_' + p(dt.getHours()) + p(dt.getMinutes()) + p(dt.getSeconds());
+}
+async function asbSaveTextFile(path, text) {
+  const bytes = new TextEncoder().encode(text);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  const b64 = btoa(bin), tmp = path + '.b64', step = 48000;
+  const dir = path.replace(/\/[^\/]*$/, '');
+  for (let i = 0, n = 0; i < b64.length || n === 0; i += step, n++) {
+    const part = b64.slice(i, i + step);
+    const cmd = (n === 0 ? 'mkdir -p ' + shQuote(dir) + ' && ' : '') + "printf '%s' " + shQuote(part) + (n === 0 ? ' > ' : ' >> ') + shQuote(tmp);
+    const r = await run(cmd);
     if (!r || r.errno !== 0) throw new Error((r && r.stderr) || 'write failed');
-    toast(logReportT('lr_json_saved', 'Saved {path}', { path: path }), 'ok');
-  } catch (e) { toast(T('lr_json_error', 'Could not save report.json.'), 'error'); }
-  finally { if (btn) btn.disabled = false; }
+  }
+  const r = await run('base64 -d < ' + shQuote(tmp) + ' > ' + shQuote(path) + ' && rm -f ' + shQuote(tmp));
+  if (!r || r.errno !== 0) { await run('rm -f ' + shQuote(tmp)); throw new Error((r && r.stderr) || 'decode failed'); }
+}
+async function asbSavePage(kind) {
+  const isDev = kind === 'device';
+  const body = _el(isDev ? 'deviceBody' : 'reportBody');
+  const raw = isDev ? window._asbDeviceInfoRaw : window._asbLogReportRaw;
+  const ready = isDev ? !!window._asbDeviceInfoData : !!window._asbLogReportData;
+  if (!body || !ready) { toast(T('page_save_empty', 'Nothing to save yet - wait until the page has loaded.'), 'error'); return; }
+  const btn = _el(isDev ? 'devSave' : 'rpSave'); if (btn) btn.disabled = true;
+  try {
+    const now = new Date();
+    const status = _el(isDev ? 'deviceStatus' : 'reportStatus');
+    const line = _el('deviceLine');
+    const head = ['AutoSystemBoost - ' + (isDev ? T('dev_title', 'Device diagnostics') : T('lr_menu', 'Infinite log report')),
+      asbPageTxt(status), line ? asbPageTxt(line) : '', now.toString()].filter(function (x) { return x; });
+    let text = head.join('\n') + '\n\n' + asbPageText(body) + '\n';
+    if (raw) text += '\n\n== ' + T('page_save_raw', 'Raw data (for the developer)') + ' ==\n' + String(raw).replace(/\s+$/, '') + '\n';
+    const path = '/sdcard/Download/' + (isDev ? 'asb_device_' : 'asb_report_') + asbPageStamp(now) + '.txt';
+    await asbSaveTextFile(path, text);
+    toast(logReportT('page_saved', 'Saved: {path}', { path: path }), 'ok');
+  } catch (e) {
+    toast(T('page_save_error', 'Could not save the page.'), 'error');
+  } finally {
+    if (btn) btn.disabled = isDev ? !window._asbDeviceInfoData : false;
+  }
 }
 
 /* Everything below builds DOM with textContent only: package names and tombstone
@@ -10999,6 +11165,9 @@ function deviceDisplayValue(sec, key, value, d) {
     if (!isNaN(dt.getTime())) return dt.toLocaleString(ASB_LANG || undefined) + ' (' + value + ')';
   }
   if (value === '—') return value;
+  /* fix246: the external-kernel verdicts are machine tokens ("not_observable",
+     "diagnostics_only") - shown with spaces they read as words. */
+  if (sec === 'kernel_external' && /^[a-z0-9]+(?:_[a-z0-9]+)+$/.test(String(value))) return String(value).replace(/_/g, ' ');
   if (sec === 'system' && key === 'uptime') {
     const p = String(value).trim().split(/\s+/), up = parseFloat(p[0]), idle = parseFloat(p[1]);
     const n = d ? deviceCpuCount(d) : 0;
@@ -11039,8 +11208,14 @@ function deviceDisplayValue(sec, key, value, d) {
     const b = String(k.busy || '').trim().split(/\s+/).map(Number);
     if (b.length >= 2 && b[1] > 0) busy = Math.round(b[0] * 100 / b[1]) + '%';
     else if (b.length >= 1 && isFinite(b[0]) && String(k.busy).trim() !== '') busy = Math.round(b[0]) + '%';
-    return deviceFill('dev_gpu_fmt', '{gov} · now {cur} · range {min}–{max} · busy {busy}', {
-      gov: k.governor || '—', cur: deviceFreqHz(k.current_hz), min: deviceFreqHz(k.min_hz), max: deviceFreqHz(k.max_hz), busy: busy });
+    /* fix246: an Adreno driven by power levels has no devfreq node - the row read
+       "— · now — · range —–—" on the owner's OnePlus 15. The collector now falls back to
+       the kgsl clock files; the power-level backend is named in words. */
+    const gov = k.governor === 'pwrlevel' ? T('dev_gpu_gov_pwrlevel', 'power levels') : (k.governor || '—');
+    const line = deviceFill('dev_gpu_fmt', '{gov} · now {cur} · range {min}–{max} · busy {busy}', {
+      gov: gov, cur: deviceFreqHz(k.current_hz), min: deviceFreqHz(k.min_hz), max: deviceFreqHz(k.max_hz), busy: busy });
+    const model = String(k.model || '').trim();
+    return model ? model.replace(/^Adreno(?=\d)/, 'Adreno ') + ' · ' + line : line;
   }
   if (sec === 'asb_caps') {
     if (/^policy\d+$/.test(key)) {
@@ -11230,42 +11405,14 @@ function closeDevicePage() {
   navSyncSoon();
   requestAnimationFrame(asbFitPages);
 }
-async function asbDeviceInfoExportJson() {
-  const d = window._asbDeviceInfoData;
-  if (!d || !d.count) { toast(T('dev_json_empty', 'Refresh device diagnostics before exporting JSON.'), 'error'); return; }
-  const btn = _el('devJson'); if (btn) btn.disabled = true;
-  try {
-    /* Export only the snapshot already returned by the read-only, on-demand collector.
-     * No shell probe, background worker or additional device identifier is introduced. */
-    const snapshot = {
-      schema: 1,
-      source: 'asb_device_info',
-      read_only: true,
-      fact_count: d.count,
-      malformed_lines: d.malformed,
-      sections: d.sections
-    };
-    const json = JSON.stringify(snapshot, null, 2) + '\n';
-    const bytes = new TextEncoder().encode(json);
-    let bin = '';
-    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-    const b64 = btoa(bin), path = '/sdcard/Download/device.json';
-    const r = await run("printf '%s' " + shQuote(b64) + ' | base64 -d > ' + shQuote(path));
-    if (!r || r.errno !== 0) throw new Error((r && r.stderr) || 'write failed');
-    toast(T('dev_json_saved', 'Saved {path}').replace('{path}', path), 'ok');
-  } catch (e) {
-    toast(T('dev_json_error', 'Could not save device.json.'), 'error');
-  } finally {
-    if (btn) btn.disabled = !window._asbDeviceInfoData;
-  }
-}
 async function asbDeviceInfoLoad() {
   const body = _el('deviceBody'), status = _el('deviceStatus'), btn = _el('devRefresh');
   if (!body || !status || !_deviceOpen) return;
   const seq = ++_deviceLoadSeq;
-  const jsonBtn = _el('devJson');
+  const saveBtn = _el('devSave');
   window._asbDeviceInfoData = null;
-  if (jsonBtn) jsonBtn.disabled = true;
+  window._asbDeviceInfoRaw = '';
+  if (saveBtn) saveBtn.disabled = true;
   if (btn) btn.disabled = true;
   status.textContent = T('dev_loading_status', 'Collecting read-only data…');
   body.textContent = '';
@@ -11285,11 +11432,12 @@ async function asbDeviceInfoLoad() {
     status.textContent = T('dev_error_status', 'Collection failed');
   } else {
     window._asbDeviceInfoData = d;
+    window._asbDeviceInfoRaw = runText(r);
     const shown = deviceInfoRender(d);
     status.textContent = T('dev_facts_status', '%s facts').replace('%s', String(shown));
   }
   if (btn) btn.disabled = false;
-  if (jsonBtn) jsonBtn.disabled = !window._asbDeviceInfoData;
+  if (saveBtn) saveBtn.disabled = !window._asbDeviceInfoData;
   requestAnimationFrame(asbFitPages);
 }
 async function asbLogReportLoad() {
@@ -11304,6 +11452,7 @@ async function asbLogReportLoad() {
     out = runText(await run('sh ' + MD + '/tools/logkit/asb_fullday_digest.sh 2>/dev/null'));
   } catch (e) { out = ''; }
   if (!_rpOpen) return;   // the user left while the shell read the capture
+  window._asbLogReportRaw = out;
   const d = parseLogReport(out);
   if (d.error === 'no_capture') {
     status.textContent = '';
@@ -11378,6 +11527,7 @@ function logReportAnalysisT(key, vars) {
     lr_chain_aod: 'Awake {awake}% → SystemUI holder + panel lit {lit}/{of} checks → AOD is a likely contributor, not a proven sole cause.',
     lr_chain_radio: 'Awake {awake}% + {mib} MiB screen-off mobile traffic → background sync/modem activity may contribute → test one change at a time.',
     lr_chain_holder: 'Awake {awake}% → top sampled holder: {who} → inspect its background activity; correlation is not sole-cause proof.',
+    lr_chain_sync: 'Awake {awake}% → {who} was running in {pct}% of the screen-off checks → a sync that never finishes keeps the phone from sleeping.',
     lr_chain_alarm: 'Awake {awake}% → most frequent alarm source: {who} ({n}) → a lead to investigate, not sole-cause proof.',
     lr_chain_hold: 'Awake {awake}% → most frequent partial holder: {who} ({n}) → a lead to investigate, not sole-cause proof.',
     lr_chain_wakegap: 'Awake {awake}% → holder counters stayed flat → the cause remains unknown.',
@@ -11405,6 +11555,10 @@ function logReportTipText(tip) {
     lr_tip_awake_alarm: 'During idle the phone stayed awake {awake}% of the time - the most frequent wakeup: {who}.',
     lr_tip_awake_hold: 'During idle the phone stayed awake {awake}% of the time - the most frequent holder: {who}.',
     lr_tip_awake_aod: 'During idle the phone stayed awake {awake}% of the time - most likely the always-on display (the panel was lit in {lit} of {of} screen-off checks); turn AOD off in the display settings if you do not need it.',
+    lr_tip_awake_sync: 'With the screen off the phone stayed awake {awake}% of the time: {app} kept its {what} sync running in {pct}% of the checks - a sync that never finishes. Open Settings → Users & accounts → {app} and turn off {what} sync, or remove the account and add it again. ASB never stops a sync by itself - that could lose data.',
+    lr_tip_awake_worker: 'With the screen off the phone stayed awake {awake}% of the time: {app} ran its background task {name} in {pct}% of the checks. If you do not need the app working in the background, turn it off: Settings → Apps → {app} → Battery usage → background activity.',
+    lr_tip_sync_loop: '{app} kept its {what} sync running in {pct}% of the screen-off checks - a sync that never finishes. Turn off {what} sync for that account in Settings → Users & accounts, or remove the account and add it again.',
+    lr_tip_worker: '{app} ran its background task {name} in {pct}% of the screen-off checks. If you do not need it working in the background, turn it off: Settings → Apps → {app} → Battery usage → background activity.',
     lr_tip_sradio: 'Background mobile data used {mib} MiB with the screen off - try "{set}" in Settings: the modem idles lower while the screen is off.',
     lr_tip_crash: 'There are crashes involving ASB code - please send an asbdiag log to the developer.',
     lr_tip_crashes: '{n} native crashes during the capture - details are in the full report.',
@@ -11434,7 +11588,83 @@ function logReportTipText(tip) {
   }[tip.key] || '', tip.vars);
 }
 
+/* fix246: the report in plain words first - what the day cost, where the battery went,
+ * what was behind it and how smooth and warm it ran, in sentences a user reads once. The
+ * numbers under it stay for whoever wants them. */
+function logReportBrief(d, analysis) {
+  const s = d.sections || {};
+  const drain = s.drain || null, scr = s.scr || null, night = s.night || null, idle = s.idlemax || null;
+  const jank = s.jank || null, heat = s.heat || null, thermal = s.thermal || null;
+  const sradio = s.sradio || null, sdraw = s.sysuidraw || null, nightd = s.nightd || null;
+  const lines = [];
+  const add = function (key, vars, warn) { lines.push({ key: key, vars: vars || {}, warn: !!warn }); };
+  if (drain && (+drain.hours || 0) > 0 && (+drain.total_drop || 0) > 0) {
+    const v = { drop: String(drain.total_drop), h: logReportDur(Math.round((+drain.hours || 0) * 60)), pct: String(drain.pctph) };
+    if ((+drain.hours || 0) >= 1 && (+drain.total_drop || 0) >= 3) { v.est = logReportFullCharge(drain.pctph); add('lr_brief_drain', v); }
+    else add('lr_brief_drain_short', v);
+  }
+  let offRate = 0;
+  if (scr && (+scr.on_min || 0) >= 10 && (+scr.off_min || 0) >= 10) {
+    offRate = ((+scr.idle_min || 0) > 0 && scr.idle_pctph !== undefined) ? +scr.idle_pctph || 0 : +scr.off_pctph || 0;
+    add('lr_brief_split', { on: logReportDur(scr.on_min), onr: String(scr.on_pctph), off: logReportDur(scr.off_min), offr: String(offRate) });
+  }
+  const quiet = night ? +night.dur_min || 0 : 0;
+  if (quiet >= 60 && offRate > 0) {
+    if (offRate > 1.5) add('lr_brief_idle_bad', { pct: String(offRate) }, true);
+    else if (offRate <= 1) add('lr_brief_idle_ok', {});
+  }
+  if (idle && (+idle.awake || 0) > 15 && (+idle.dur_min || 0) >= 20) {
+    if (d.wlive.length && d.wlive[0].pct >= 10)
+      add('lr_brief_cause', { awake: String(idle.awake), who: logReportHolderName(d.wlive[0]), pct: String(d.wlive[0].pct) }, true);
+    else if (sradio && (+sradio.mib || 0) >= 20)
+      add('lr_brief_cause_radio', { awake: String(idle.awake), mib: String(sradio.mib) }, true);
+    else add('lr_brief_cause_none', { awake: String(idle.awake) }, true);
+  }
+  if (nightd && quiet >= 60 && (+nightd.cpu_t || 0) >= 50)
+    add('lr_brief_night_hot', { cpu: String(nightd.cpu_t) }, true);
+  if (jank && (+jank.frames || 0) >= 20000) {
+    const jp = +jank.pct || 0;
+    add(jp <= 2 ? 'lr_brief_smooth_ok' : jp < 6 ? 'lr_brief_smooth_mid' : 'lr_brief_smooth_bad', { pct: String(jank.pct) }, jp >= 6);
+    if (logReportSysuiSteady(sdraw) && sdraw.netspeed === '1') add('lr_brief_sysui_net', {});
+  }
+  if (heat || thermal) {
+    const wm = heat ? +heat.warm_min || 0 : 0, pk = thermal ? +thermal.cpu || 0 : 0;
+    if (wm >= 10) add('lr_brief_heat', { min: logReportDur(wm), cpu: String(pk) }, wm >= 30);
+    else if (pk > 0) add('lr_brief_heat_ok', { cpu: String(pk) });
+  }
+  if (!lines.length) return null;
+  if (analysis && analysis.actions && analysis.actions.length) add('lr_brief_next', {});
+  const fb = {
+    lr_brief_drain: 'Off the charger the battery fell {drop}% over {h} - {pct}%/h on average, about {est} from a full charge at this pace.',
+    lr_brief_drain_short: 'Off the charger the battery fell {drop}% over {h} ({pct}%/h).',
+    lr_brief_split: 'Screen on for {on}: {onr}%/h. Screen off for {off}: {offr}%/h.',
+    lr_brief_idle_bad: 'With the screen off {pct}%/h is a lot: a phone at rest should stay around 1%/h or less.',
+    lr_brief_idle_ok: 'With the screen off the phone rested well.',
+    lr_brief_cause: 'The phone did not fall asleep {awake}% of the screen-off time; the main reason: {who}, in {pct}% of the checks.',
+    lr_brief_cause_radio: 'The phone did not fall asleep {awake}% of the screen-off time; background mobile data used {mib} MiB meanwhile.',
+    lr_brief_cause_none: 'The phone did not fall asleep {awake}% of the screen-off time; no single app stood out.',
+    lr_brief_night_hot: 'With the screen off the CPU reached {cpu}° at times - something did heavy work in the background.',
+    lr_brief_smooth_ok: 'Smoothness is excellent: {pct}% of frames were late.',
+    lr_brief_smooth_mid: 'Smoothness is normal: {pct}% of frames were late - occasional stutter.',
+    lr_brief_smooth_bad: 'Stutter is noticeable: {pct}% of frames were late.',
+    lr_brief_sysui_net: 'The status bar redraws all the time because the network-speed meter is on - it costs frames in every app.',
+    lr_brief_heat: 'The CPU spent {min} above 45 °C (peak {cpu}°).',
+    lr_brief_heat_ok: 'No overheating: the CPU peaked at {cpu}°.',
+    lr_brief_next: 'What to change first is under Priority actions below.'
+  };
+  const sec = logReportSec(T('lr_sec_brief', '📝 In short'));
+  lines.forEach(function (l) {
+    const p = document.createElement('div');
+    p.className = 'lgr-brief' + (l.warn ? ' lgr-brief-warn' : '');
+    p.textContent = logReportT(l.key, fb[l.key] || l.key, l.vars).replace(/%\//g, '%/\u2060');
+    sec.appendChild(p);
+  });
+  return sec;
+}
+
 function logReportAppendAnalysis(body, d, analysis) {
+  const brief = logReportBrief(d, analysis);
+  if (brief) body.appendChild(brief);
   const summary = logReportSec(T('lr_sec_summary', '🧭 Smart summary'));
   const context = document.createElement('div'); context.className = 'lgr-context';
   [T('lr_scenario_' + analysis.scenario, analysis.scenario),
@@ -11693,7 +11923,7 @@ function logReportRender(d) {
     if ((+nightd.cpu_t || 0) > 0)
       s.appendChild(logReportRow(T('lr_nd_temp', 'Peak temperatures'),
         logReportT('lr_nd_temp_fmt', 'CPU {cpu}° · skin {skin}°', { cpu: String(nightd.cpu_t), skin: String(nightd.skin_t) }), (+nightd.skin_t || 0) >= 40));
-    const holder = d.wlive.length ? (d.wlive[0].pkg || d.wlive[0].tag) : (d.wl.length ? d.wl[0].pkg : '');
+    const holder = d.wlive.length ? logReportHolderName(d.wlive[0]) : (d.wl.length ? d.wl[0].pkg : '');
     /* fix222: the holder list is capture-wide - naming it "at night" over a 40-minute
        daytime stretch blamed SystemUI's AOD for a night that never happened. */
     if (holder && !shortNight)
@@ -11887,6 +12117,11 @@ function logReportRender(d) {
     if (d.wl.length) {
       d.wl.forEach(function (w) {
         s.appendChild(logReportRow(w.pkg, logReportDurSec(w.sec)));
+        /* fix246: the same app caught by the power-manager samples says WHAT it held. */
+        const lv = d.wlive.filter(function (x) { return x.pkg === w.pkg && x.kind && x.kind !== 'lock'; })[0];
+        if (lv)
+          s.appendChild(logReportNote(logReportT('lr_wl_live_note', '↳ {what} - in {pct}% of screen-off checks', {
+            what: logReportHolderWhat(lv), pct: String(lv.pct) }), lv.pct >= 30));
       });
     }
     /* fix206: live holders sampled from the power manager. They show up even where
@@ -11901,7 +12136,8 @@ function logReportRender(d) {
       if (liveShown >= 3) return;
       if (w.pkg && seen[w.pkg]) return;
       if (w.pkg) seen[w.pkg] = 1;
-      const label = w.pkg ? (w.pkg + ' · ' + w.tag) : w.tag;
+      const what = logReportHolderWhat(w);
+      const label = w.pkg ? (w.pkg + ' · ' + what) : what;
       s.appendChild(logReportRow(label, logReportT('lr_wlive_fmt', 'held in {pct}% of checks · longest {dur}', {
         pct: String(w.pct), dur: logReportDur(w.min) }), w.pct >= 30));
       liveShown++;
