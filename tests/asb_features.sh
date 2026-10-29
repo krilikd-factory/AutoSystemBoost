@@ -6740,6 +6740,60 @@ done
 echo "PASS action stock header: Stock names the stopped governor and drops its tilt, throttling temperature and night quiet, in every language"
 )
 
+t_action_also_lines_runtime() (
+# Runtime (fix243): the action screen names the settings added since it was last reworked.
+#
+# Owner: "the action window misses many new tweaks, the DSP ones too". The governor line
+# now carries the unlock-lift share (Battery lifts 4/5 of it), a performance ceiling, the
+# ROM throttling point and the prime-lift timing; the DSP line the clarity, sub-bass cut and
+# output headroom. The REAL blocks run against fixture configs, in English and Russian.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+A="$ROOT/action.sh"
+fail() { echo "FAIL action also lines: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/mod/config"
+run() {
+  {
+    echo "MODDIR='$T/mod'; PROFILE='$2'; _a_dsp='$3'"
+    sed -n '/^T_[A-Z0-9_]*="[^"]*"$/p' "$A"
+    [ "$1" = en ] || cat "$ROOT/runtime/i18n/action_$1.sh"
+    sed -n '/^_s() {/p; /^_f() {/p' "$A"
+    sed -n '/^_cfg() {$/,/^}$/p; /^_join() {$/,/^}$/p' "$A"
+    echo '_st() { [ "$1" = walt_window_owner ] && echo "${ST_WALT:-}"; return 0; }'
+    sed -n '/^  _uls="\$(_cfg unlock_lift_s)"$/p' "$A"
+    sed -n '/^  _gx=""$/,/^  \[ -n "\$_gx" \] && _f "       \$T_ALSO" "\$_gx"$/p' "$A"
+    sed -n '/^if \[ "\$_a_dsp" != "off" \]; then$/{N;/\n  _ax=""$/!d;:l;N;/\n  _f "       \$T_A_DSPF" "\$_ax"\nfi$/!bl;p}' "$A"
+  } > "$T/run.sh"
+  sh "$T/run.sh" 2>&1
+}
+grep -q '^  _gx=""$' "$A" || fail "governor also block not found"
+printf 'unlock_lift_pct=80\nunlock_lift_s=3\nperf_ceiling_pct=90\nsustained_temp_mode=stock\nheavy_prime_escape=1\nprime_escape_burst_s=10\nprime_escape_rest_s=60\ndsp_clarity=12\ndsp_rumble=50\ndsp_headroom=30\n' > "$T/mod/config/governor.conf"
+out="$(run en battery on)"
+printf '%s\n' "$out" | grep -qF 'also: lift 64% of each cluster  ·  performance ceiling 90%  ·  throttling point: ROM  ·  prime lift 10 s, pause 60 s' || fail "Battery governor line: $out"
+printf '%s\n' "$out" | grep -qF 'DSP filters: clarity +4.0 dB above 6.5 kHz  ·  sub-bass cut below 50 Hz  ·  output headroom -0.30 dB' || fail "DSP filter line: $out"
+out="$(run en smart on)"
+printf '%s\n' "$out" | grep -qF 'also: lift 80% of each cluster' || fail "Smart keeps the full lift share: $out"
+out="$(run en performance off)"
+printf '%s\n' "$out" | grep -q 'lift .* of each cluster' && fail "Performance shows a lift share: $out"
+printf '%s\n' "$out" | grep -q 'DSP filters' && fail "DSP filters shown with the DSP off: $out"
+printf 'unlock_lift_pct=55\nunlock_lift_s=3\n' > "$T/mod/config/governor.conf"
+out="$(run en battery on)"
+printf '%s\n' "$out" | grep -qF 'also: lift 50% of each cluster' || fail "the Battery share keeps its 50% floor: $out"
+printf '%s\n' "$out" | grep -qF 'DSP filters: output headroom -0.15 dB' || fail "default headroom: $out"
+printf 'unlock_lift_s=0\n' > "$T/mod/config/governor.conf"
+out="$(run en battery off)"
+[ -z "$out" ] || fail "nothing to add must print nothing: $out"
+out="$(ST_WALT=rom run en smart off)"
+printf '%s\n' "$out" | grep -qF 'scheduler window: ROM, per refresh rate' || fail "the ROM-owned scheduler window is not named: $out"
+printf 'unlock_lift_pct=80\nunlock_lift_s=3\ndsp_rumble=70\n' > "$T/mod/config/governor.conf"
+out="$(run ru battery on)"
+printf '%s\n' "$out" | grep -q '64%' || fail "Russian Battery share: $out"
+printf '%s\n' "$out" | grep -q '70' || fail "Russian sub-bass cut: $out"
+printf '%s\n' "$out" | grep -q 'lift\|DSP filters\|also:' && fail "English left in the Russian screen: $out"
+echo "PASS action also lines: governor lift share (Battery 4/5, floor 50), ceiling, ROM throttling and prime-lift timing; DSP clarity, sub-bass cut and headroom; English and Russian"
+)
+
 t_eta_slot_meter_runtime() (
 # Runtime (fix169): a slot estimate gives way to the screen-on drain measured in the profile.
 #

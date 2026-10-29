@@ -4343,6 +4343,96 @@ cmp -s "$DIAG" "$DIAG2" || fail "tools/asb_diag.sh and system/bin/asbdiag differ
 echo "PASS uclamp-gmin drift contract"
 )
 
+t_walt_window_runtime() (
+# Runtime (fix244): the WALT window is left to a ROM that sizes it itself; Smart blends its
+# packing threshold instead of writing 0.
+#
+# Every OnePlus capture on file (OP12, OP13, OP15, Ace 6) shows sched_ravg_window_nr_ticks
+# moving between 2, 3 and 4 on its own - the ROM's frame-time window - while ASB wrote its
+# profile value back on every forced apply (116 physical writes in one Battery evening). The
+# REAL observer is cut out of asb_writer.h: three NEW values ASB did not write within ten
+# minutes hand the node to the ROM and leave the marker the shell honours; one stray value (the
+# shell's own profile write landing late) or values spread over more than ten minutes do not.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+W="$ROOT/src/asb_writer.h"
+G="$ROOT/src/asb_governor.c"
+F="$ROOT/src/asb_fsm.h"
+fail() { echo "FAIL walt window: $*" >&2; exit 1; }
+grep -q '    writer_ravg_observe(force);' "$W" || fail "the observer is not called before the window write"
+grep -q '    if (!g_ravg_rom_owned && caps->ravg_ticks > 0 &&' "$W" || fail "the window is still written once the ROM owns it"
+grep -q 'walt_window_owner=%s' "$G" || fail "the state file does not say who owns the window"
+grep -q 'WALT window: left to the ROM' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not say the window is the ROM's"
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "system/bin/asbdiag is stale"
+for f in "$ROOT/runtime/profile_core.sh" "$ROOT/service.sh"; do
+  n="$(grep -c 'sched_ravg_window_nr_ticks \] && \[ ! -e /dev/.asb/walt_ravg_rom \] && writef_retry' "$f")"
+  [ "$n" -ge 1 ] || fail "${f##*/} still writes the window over the ROM"
+  grep 'writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks' "$f" | grep -vq 'walt_ravg_rom' && fail "${f##*/} has an unguarded window write"
+done
+grep -q '_reason="walt-ravg"' "$ROOT/runtime/asb_reconcile.sh" && fail "reconcile re-applies the whole profile when the ROM moves its window"
+# Smart: both fields blended, packing capped on screen at the kernel default.
+grep -q 'out.floor.idle_enough = wo\[0\];' "$G" && grep -q 'out.ceil.ravg_ticks  = wo\[1\];' "$G" || fail "Smart does not blend the window and packing threshold"
+grep -q '#define ASB_SMART_SCREEN_IDLE_ENOUGH 30' "$F" || fail "no on-screen packing for Smart"
+grep -q 'if (profile_idx == PROFILE_SMART && fsm_screen_is_on && out->idle_enough > ASB_SMART_SCREEN_IDLE_ENOUGH)' "$F" || fail "Smart on screen is not held at the kernel default"
+grep -q '^BATTERY_FLOOR_IDLE_ENOUGH=85$' "$ROOT/config/profile_bounds.conf" && grep -q '^BATTERY_CEIL_IDLE_ENOUGH=45$' "$ROOT/config/profile_bounds.conf" \
+  || fail "Battery packing rails"
+grep -q '#define ASB_BATTERY_FLOOR_IDLE_ENOUGH    85' "$ROOT/src/asb_fsm_bounds.generated.h" || fail "generated bounds are stale"
+
+CC=""; for c in gcc clang cc; do command -v "$c" >/dev/null 2>&1 && { CC="$c"; break; }; done
+[ -n "$CC" ] || { echo "PASS walt window (source pins only)"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+sed -n '/^#define WALT_RAVG_ROM_MARK/,/^static void writer_ravg_observe(int force) {$/p' "$W" | sed '$d' > "$T/o.c"
+sed -n '/^static void writer_ravg_observe(int force) {$/,/^}$/p' "$W" >> "$T/o.c"
+grep -q 'g_ravg_rom_owned = 1;' "$T/o.c" || fail "observer not found"
+sed -i "s#\"/dev/.asb/walt_ravg_rom\"#\"$T/mark\"#" "$T/o.c"
+cat > "$T/t.c" <<'X'
+#include <stdio.h>
+#include <limits.h>
+#include <time.h>
+#define WALT_RAVG_PATH "x"
+static int NODE = 4;
+static time_t NOW = 100000;
+#define time(p) (NOW)
+static int sysfs_read_int(const char *p, int d) { (void)p; (void)d; return NODE; }
+static struct { int ravg_ticks; } g_wcache = { 4 };
+#include "o.c"
+static void reset(void) { g_ravg_rom_owned = 0; g_ravg_foreign = 0; g_ravg_check_at = 0; g_ravg_first_at = 0; g_ravg_last_seen = 4; g_wcache.ravg_ticks = 4; NODE = 4; }
+static void tick(int node, int secs) { NODE = node; NOW += secs; writer_ravg_observe(0); }
+int main(void) {
+    int bad = 0;
+#define CHK(c, what) do { if (!(c)) { printf("%s\n", what); bad = 1; } } while (0)
+    reset();
+    for (int i = 0; i < 20; i++) tick(4, 30);
+    CHK(!g_ravg_rom_owned && g_ravg_foreign == 0, "a node holding ASB's value is not foreign");
+    reset();
+    for (int i = 0; i < 20; i++) tick(3, 30);
+    CHK(!g_ravg_rom_owned && g_ravg_foreign == 1, "one stray value counts once");
+    reset();
+    tick(2, 30); tick(2, 30); tick(3, 30); tick(3, 30);
+    CHK(!g_ravg_rom_owned, "two values are not yet the ROM");
+    tick(2, 30);
+    CHK(g_ravg_rom_owned && g_ravg_rom_seen == 2, "three new values within ten minutes hand the window to the ROM");
+    reset();
+    tick(2, 30); tick(3, 300); tick(2, 400);
+    CHK(!g_ravg_rom_owned, "values spread over more than ten minutes are not the ROM");
+    reset();
+    tick(2, 10); tick(3, 10); tick(2, 10);
+    CHK(!g_ravg_rom_owned && g_ravg_foreign == 1, "checks run every 30 s, not every tick");
+    NOW += 30; writer_ravg_observe(1);
+    CHK(g_ravg_foreign == 1, "a forced check of the same value adds nothing");
+    reset();
+    g_wcache.ravg_ticks = 0;
+    tick(2, 30); tick(3, 30); tick(2, 30);
+    CHK(!g_ravg_rom_owned, "nothing is judged before ASB has written the node");
+    return bad;
+}
+X
+"$CC" -O1 -I"$T" -o "$T/t" "$T/t.c" 2>"$T/cc.err" || { cat "$T/cc.err" >&2; fail "fixture does not compile"; }
+out="$("$T/t")" || fail "$out"
+[ -e "$T/mark" ] && grep -q '^rom=2 asb=4$' "$T/mark" || fail "the shell marker was not left: $(cat "$T/mark" 2>/dev/null)"
+echo "PASS walt window: three new ROM values in ten minutes hand the window to the ROM and leave the shell marker; a stray value, spread values and ASB's own value do not; Smart blends its packing and holds it at the kernel default on screen"
+)
+
 t_unlock_lift_runtime() (
 # Runtime (fix150): Smart lifts the CPU ceilings for a few seconds after a wake.
 #
@@ -4575,6 +4665,24 @@ int main(void) {
     asb_profile_caps_t r = { { 900000, 1000000, 1100000 }, { 0, 0, 0 }, 40, 32 };
     asb_unlock_lift_apply(&r);
     CHK(r.cpu_max[0] == 1132800 && r.uclamp_top_max == 50, "share below 50 not clamped to 50");
+    /* fix243: Battery lifts to four fifths of the shared share - 80 -> 64 % of each cluster's
+     * own maximum, never under the 50 % floor; Smart and Balanced keep the full share. */
+    g_cpu_slot_hwmax[0] = 3628800; g_cpu_slot_hwmax[1] = 4608000; g_cpu_slot_hwmax[2] = 0;
+    g_asb_cfg.unlock_lift_pct = 80;
+    up(0, 0, 400000); P = PROFILE_BATTERY; up(1, 0, 401000);
+    asb_profile_caps_t b = { { 1785600, 1747200, 0 }, { 0, 0, 0 }, 50, 30 };
+    asb_unlock_lift_apply(&b);
+    CHK(b.cpu_max[0] == 2322432 && b.cpu_max[1] == 2949120 && b.uclamp_top_max == 64,
+        "fix243: Battery lift is not 64 % of each cluster");
+    g_asb_cfg.unlock_lift_pct = 55;
+    asb_profile_caps_t b2 = { { 1785600, 1747200, 0 }, { 0, 0, 0 }, 40, 30 };
+    asb_unlock_lift_apply(&b2);
+    CHK(b2.cpu_max[0] == 1814400 && b2.uclamp_top_max == 50, "fix243: Battery share fell under the 50 % floor");
+    g_asb_cfg.unlock_lift_pct = 80;
+    up(0, 0, 410000); P = PROFILE_SMART; up(1, 0, 411000);
+    asb_profile_caps_t s2 = { { 1996800, 1862400, 0 }, { 0, 0, 0 }, 50, 32 };
+    asb_unlock_lift_apply(&s2);
+    CHK(s2.cpu_max[0] == 2903040 && s2.uclamp_top_max == 80, "fix243: Smart lost its full lift share");
     return bad;
 }
 X

@@ -663,7 +663,7 @@ printf '%s\n' "$FAIL_DIAG_STATUS" | grep -Fqx 'error=asbdiag_exit_9' || { echo '
 START1="$(env "${ENV[@]}" sh "$HELPER" full-day || true)"
 echo "$START1" | grep -Fq 'status=started'
 echo "$START1" | grep -Fq 'hours=0'
-echo "$START1" | grep -Fq 'limit=until_shutdown'
+echo "$START1" | grep -Fq 'limit=until_stopped'
 REC_PID="$(printf '%s\n' "$START1" | sed -n 's/^pid=//p')"
 [ -n "$REC_PID" ] && kill -0 "$REC_PID" 2>/dev/null || { echo 'FAIL debug support: recorder did not stay alive' >&2; exit 1; }
 START2="$(env "${ENV[@]}" sh "$HELPER" full-day || true)"
@@ -778,16 +778,16 @@ need "$HELPER" 'DIAG_LOCKDIR="$STATE_DIR/asbdiag_webui.lock"'
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'LK_WEBUI_LOCKDIR="${ASB_DEBUG_SUPPORT_LOCKDIR:-}"'
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'lk_webui_guard_claim()'
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'lk_webui_guard_claim || { echo '\''[debug-webui] guard claim failed'\''; exit 2; }'
-need "$ROOT/tools/logkit/asb_log_full_day.sh" "trap 'lk_finalize; lk_webui_guard_release; exit 0' TERM INT HUP"
+need "$ROOT/tools/logkit/asb_log_full_day.sh" "trap 'lk_on_signal' TERM INT HUP"
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'lk_webui_guard_release'
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'lk_webui_guard_publish_output()'
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'LK_WEBUI_OUTPUTFILE'
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'FULL-DAY capture complete. Output: $LK_OUT_DIR'
 need "$ROOT/tools/logkit/asb_log_full_day.sh" 'LK_HOURS="${1:-0}"'
 need "$ROOT/tools/logkit/asb_log_full_day.sh" '[ "$LK_MAX_SEC" -gt 0 ] && [ "$_elapsed" -ge "$LK_MAX_SEC" ] && break'
-need "$ROOT/tools/logkit/asb_log_full_day.sh" 'SESSION capture running until shutdown.'
+need "$ROOT/tools/logkit/asb_log_full_day.sh" 'INFINITE LOG running until it is stopped from the WebUI, across reboots.'
 need "$HELPER" 'asb_log_full_day.sh" 0 >'
-need "$HELPER" "echo 'limit=until_shutdown'"
+need "$HELPER" "echo 'limit=until_stopped'"
 # Debug capture must expose a resolvable AudioMix owner and the evidence that made
 # a media-like workload game-like, without putting any package-manager polling in
 # the native governor. The logkit helpers are passive and use one capture-start map.
@@ -894,6 +894,7 @@ for locale in "$ROOT"/webroot/i18n/*.json; do
   grep -Fq '"dbg_log_btn": "24h log"' "$locale" && fail "obsolete 24h label in $locale"
   need "$locale" '"dbg_log_failed"'
   need "$locale" '"lr_running_open"'
+  need "$locale" '"dbg_log_started_hint"'
   need "$locale" '"dev_json_saved"'
   need "$locale" '"dev_json_error"'
 done
@@ -1046,6 +1047,106 @@ grep -Fq "asb_debug_support.sh full-day-stop 2>/dev/null" "$H" || fail "the WebU
 grep -Fq "if (action === 'full-day' && _asbLogRunning) {" "$H" || fail "the menu item does not turn into Stop while recording"
 grep -Fq "Date.now() - _asbLogStopArmed >= 4000" "$H" || fail "stopping has no second-tap confirmation"
 echo "PASS debug support stop: TERM ends the capture at once with its report finalised, the bridge returns immediately, a recorder that ignores TERM is ended, the menu asks twice"
+)
+
+t_debug_support_resume_runtime() (
+# Runtime (fix244): a session log started from the WebUI survives a reboot.
+#
+# Owner: "the log collector should survive a reboot and keep recording until I stop it in the
+# WebUI". The recorder leaves a resume marker (its folder and boot); only the WebUI stop or a
+# deleted folder clears it. At boot the helper waits for boot completion and the unlocked
+# storage, then starts the recorder on the SAME folder. The REAL helper runs against a stub
+# recorder that publishes the marker as the real one does; a reboot is a SIGKILL plus a boot
+# id that no longer matches.
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+HELPER="$ROOT/runtime/asb_debug_support.sh"
+TMP="$(mktemp -d)"; trap 'kill $(jobs -p) 2>/dev/null; pkill -f "$TMP" 2>/dev/null; rm -rf "$TMP"' EXIT
+fail() { echo "FAIL debug resume: $*" >&2; exit 1; }
+alive() { [ -r "/proc/$1/stat" ] || return 1; case "$(sed 's/^.*) //' "/proc/$1/stat" | cut -c1)" in Z|X) return 1 ;; esac; return 0; }
+DBG="$TMP/mod"; mkdir -p "$DBG/tools/logkit" "$DBG/runtime"
+printf 'id=AutoSystemBoost\nversion=V65-test16\nversionCode=650\n' > "$DBG/module.prop"
+cat > "$DBG/tools/logkit/asb_log_full_day.sh" << 'EOF_REC'
+set -u
+_lock="${ASB_DEBUG_SUPPORT_LOCKDIR:-}"; _token="${ASB_DEBUG_SUPPORT_LOCK_TOKEN:-}"
+[ -d "$_lock" ] && [ "$(cat "$_lock/token")" = "$_token" ] || exit 91
+printf '%s\n' "$$" > "$_lock/pid"
+if [ -n "${ASB_LK_RESUME_DIR:-}" ] && [ -d "$ASB_LK_RESUME_DIR" ]; then
+  _out="$ASB_LK_RESUME_DIR"; echo "$$" >> "$_out/resumed_by"
+else
+  _out="$(dirname "$_lock")/asb_log_full_day_$$"; mkdir -p "$_out"
+fi
+printf '%s\n' "$_out" > "$_lock/output_dir"
+{ echo "dir=$_out"; echo "boot=${ASB_DEBUG_SUPPORT_BOOT_ID:-}"; } > "$ASB_DEBUG_SUPPORT_RESUMEFILE"
+trap 'echo finalized > "$_out/_full_day_report.txt"; rm -rf "$_lock"; exit 0' TERM
+while :; do sleep 60; done
+EOF_REC
+printf 'sys.boot_completed=1\nsys.user.0.ce_available=true\n' > "$TMP/props"
+ENV=(ASB_DEBUG_SUPPORT_MODDIR="$DBG" ASB_DEBUG_SUPPORT_STATE_DIR="$TMP/state" ASB_DEBUG_SUPPORT_RUNLOG="$TMP/run.out"
+     ASB_DEBUG_SUPPORT_STOP_WAIT_S=3 ASB_DEBUG_SUPPORT_PROPS="$TMP/props" ASB_DEBUG_SUPPORT_RESUME_POLL_S=1
+     ASB_DEBUG_SUPPORT_RESUME_SETTLE_S=0 ASB_DEBUG_SUPPORT_RESUME_GRACE_S=2)
+H() { env "${ENV[@]}" sh "$HELPER" "$@" 2>/dev/null || true; }
+LOCK="$TMP/state/full_day_webui.lock"; MARK="$TMP/state/full_day_resume"
+reboot_now() {
+  _p="$(tr -dc 0-9 < "$LOCK/pid" 2>/dev/null)"
+  [ -n "$_p" ] && kill -KILL "$_p" 2>/dev/null
+  n=0; while [ -n "$_p" ] && alive "$_p" && [ "$n" -lt 30 ]; do sleep 0.1; n=$((n + 1)); done
+  printf 'old-boot\n' > "$LOCK/boot_id" 2>/dev/null
+  sed -i 's/^boot=.*/boot=old-boot/' "$MARK"
+}
+OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep -q 'status=started' || fail "start: $OUT"
+printf '%s\n' "$OUT" | grep -qx 'limit=until_stopped' || fail "the start does not say it runs until stopped: $OUT"
+n=0; while [ ! -s "$MARK" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
+CAP="$(sed -n 's/^dir=//p' "$MARK")"
+[ -d "$CAP" ] || fail "no resume marker naming the capture folder"
+OUT="$(H full-day-resume)"; printf '%s\n' "$OUT" | grep -qx 'status=idle' || fail "a resume in the same boot must do nothing: $OUT"
+reboot_now
+OUT="$(H status)"
+printf '%s\n' "$OUT" | grep -qx 'status=resuming' || fail "after a reboot the status must say resuming: $OUT"
+printf '%s\n' "$OUT" | grep -qx "output=$CAP" || fail "the resuming status must name the folder: $OUT"
+OUT="$(H full-day-resume)"; printf '%s\n' "$OUT" | grep -qx 'status=resuming' || fail "boot resume: $OUT"
+n=0; while [ ! -s "$CAP/resumed_by" ] && [ "$n" -lt 80 ]; do sleep 0.1; n=$((n + 1)); done
+[ -s "$CAP/resumed_by" ] || fail "the recorder was not restarted on the same folder"
+P2="$(tr -dc 0-9 < "$LOCK/pid" 2>/dev/null)"; [ -n "$P2" ] && alive "$P2" || fail "the resumed recorder is not running"
+OUT="$(H status)"; printf '%s\n' "$OUT" | grep -qx 'status=running' || fail "status after the resume: $OUT"
+[ "$(sed -n 's/^dir=//p' "$MARK")" = "$CAP" ] || fail "the resumed recorder lost the marker"
+reboot_now
+printf 'sys.boot_completed=1\nsys.user.0.ce_available=false\n' > "$TMP/props"
+mv "$CAP" "$CAP.locked"
+OUT="$(H full-day-resume)"; printf '%s\n' "$OUT" | grep -qx 'status=resuming' || fail "second boot resume: $OUT"
+sleep 3
+[ -s "$MARK" ] || fail "a locked storage must not drop the resume"
+mv "$CAP.locked" "$CAP"
+printf 'sys.boot_completed=1\nsys.user.0.ce_available=true\n' > "$TMP/props"
+n=0; while [ "$(wc -l < "$CAP/resumed_by")" -lt 2 ] && [ "$n" -lt 80 ]; do sleep 0.1; n=$((n + 1)); done
+[ "$(wc -l < "$CAP/resumed_by")" -ge 2 ] || fail "the capture did not resume once the storage unlocked"
+P3="$(tr -dc 0-9 < "$LOCK/pid" 2>/dev/null)"
+OUT="$(H full-day-stop)"; printf '%s\n' "$OUT" | grep -qx 'status=stopping' || fail "stop of the resumed capture: $OUT"
+[ -e "$MARK" ] && fail "stopping must clear the resume marker"
+n=0; while alive "$P3" && [ "$n" -lt 40 ]; do sleep 0.1; n=$((n + 1)); done
+grep -qx finalized "$CAP/_full_day_report.txt" 2>/dev/null || fail "the stopped capture did not finalise"
+OUT="$(H status)"; printf '%s\n' "$OUT" | grep -qx 'status=idle' || fail "status after the stop: $OUT"
+OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep -q 'status=started' || fail "third start: $OUT"
+n=0; while [ ! -s "$MARK" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
+reboot_now
+OUT="$(H full-day-stop)"
+printf '%s\n' "$OUT" | grep -qx 'status=stopped' || fail "stopping a pending resume: $OUT"
+[ -e "$MARK" ] && fail "a pending resume survived the stop"
+OUT="$(H status)"; printf '%s\n' "$OUT" | grep -qx 'status=idle' || fail "status after cancelling the resume: $OUT"
+OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep -q 'status=started' || fail "fourth start: $OUT"
+n=0; while [ ! -s "$MARK" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
+CAP4="$(sed -n 's/^dir=//p' "$MARK")"
+reboot_now
+rm -rf "$CAP4"
+OUT="$(H full-day-resume)"
+n=0; while [ -e "$MARK" ] && [ "$n" -lt 80 ]; do sleep 0.1; n=$((n + 1)); done
+[ -e "$MARK" ] && fail "a deleted folder must cancel the resume"
+grep -q 'resume=dir_missing' "$TMP/state/full_day_webui.recovery.log" || fail "the cancelled resume left no note"
+[ -d "$CAP4" ] && fail "a resume recreated a deleted folder"
+grep -Fq 'asb_debug_support.sh" full-day-resume' "$ROOT/service.sh" || fail "service.sh does not resume the capture at boot"
+grep -Fq "info.status === 'resuming'" "$ROOT/webroot/index.html" || fail "the WebUI does not treat a pending resume as recording"
+grep -Fq "if (info.status === 'stopped') {" "$ROOT/webroot/index.html" || fail "the WebUI has no answer for a cancelled resume"
+echo "PASS debug support resume: the capture resumes on its own folder after a reboot (also after a late unlock), the status says resuming meanwhile, the WebUI stop cancels it, a deleted folder ends it"
 )
 
 t_jank_app_state_runtime() (
@@ -1379,7 +1480,7 @@ printf '%s\n' "$gd" | grep -q '^most janky frames: com.instagram.android 120 (6.
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || f "asbdiag copies differ"
 
 # The full-day recorder calls it and prints the section.
-grep -q '^lk_jank_trace_header$' "$ROOT/tools/logkit/asb_log_full_day.sh" || f "trace header not created by the full-day capture"
+grep -Eq '^(lk_fresh jank_trace\.tsv && )?lk_jank_trace_header$' "$ROOT/tools/logkit/asb_log_full_day.sh" || f "trace header not created by the full-day capture"
 grep -q 'lk_capture_jank_row "$_phase" "${_dscr:-0}"' "$ROOT/tools/logkit/asb_log_full_day.sh" || f "rows not captured per poll"
 grep -q '^    lk_emit_jank_summary$' "$ROOT/tools/logkit/asb_log_full_day.sh" || f "report does not print the section"
 
@@ -1736,7 +1837,8 @@ fi
 printf '%s\n' "$_traffic_context" | grep -Fq 'does not prove cause or assign battery percentage' || { echo 'FAIL logkit capture-quality: mobile-traffic disclaimer missing' >&2; exit 1; }
 
 # New verdict code must remain read-only: no global runtime-policy writes are allowed here.
-if grep -nE 'setprop|settings[[:space:]]+put|sysctl[[:space:]]+-w|swapoff|svc[[:space:]]+power|reboot' "$LOGKIT" >/dev/null 2>&1; then
+# fix244: "reboot" as a command - the recorder now names reboots in its files (reboots.txt).
+if grep -nE 'setprop|settings[[:space:]]+put|sysctl[[:space:]]+-w|swapoff|svc[[:space:]]+power|(^|[;&|[:space:]])reboot([[:space:]]|;|$)' "$LOGKIT" >/dev/null 2>&1; then
   echo "FAIL logkit capture-quality: full-day telemetry gained a policy write" >&2
   exit 1
 fi
@@ -1927,6 +2029,112 @@ grep -q 'SYSTEMUI RESTARTS' "$ROOT/tools/logkit/asb_log_full_day.sh" || f "repor
 
 [ "$fail" = 0 ] && echo "PASS logkit detach/sysui/sco runtime"
 exit "$fail"
+)
+
+t_logkit_resume_runtime() (
+# Runtime (fix244): the recorder half of a session log that survives a reboot.
+#
+# A reboot gives no warning the recorder can count on: Android may SIGKILL it. So the open
+# phase is kept on disk at every poll (.phase_live.tsv) and folded into the ledger when the
+# recorder resumes on the same folder; the time the phone was off belongs to no phase. A
+# shutdown TERM only marks the timeline and keeps the marker; any other TERM finalises and
+# clears it. The REAL functions run against fixtures; the digest reports the reboots.
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+FD="$ROOT/tools/logkit/asb_log_full_day.sh"
+C="$ROOT/tools/logkit/_asb_logkit_common.sh"
+D="$ROOT/tools/logkit/asb_fullday_digest.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL logkit resume: $*" >&2; exit 1; }
+{ for fn in lk_fresh lk_resume_mark lk_resume_owned lk_resume_merge lk_on_signal lk_phase_ledger_flush lk_phase_ledger_live; do
+    sed -n "/^$fn() {\$/,/^}\$/p" "$FD"
+  done; } > "$T/f.sh"
+for fn in lk_fresh lk_resume_mark lk_resume_owned lk_resume_merge lk_on_signal lk_phase_ledger_live; do
+  grep -q "^$fn() {\$" "$T/f.sh" || fail "$fn not found"
+done
+O="$T/asb_log_full_day_42"; mkdir -p "$O" "$T/mod"
+printf 'id=AutoSystemBoost\nversion=V65-test16\n' > "$T/mod/module.prop"
+NOW="$(date +%s)"
+printf '# phase\tstart\tend\n' > "$O/phase_ledger.tsv"
+printf 'active\t%s\t%s\t90\t88\t40\t35\t0\t0\t0\t0\t100\t300\t0\t0\t0\n' $((NOW-4000)) $((NOW-3000)) >> "$O/phase_ledger.tsv"
+printf '# header\n%s|x|x|battery|0|88\n%s|x|x|battery|0|87\n' $((NOW-700)) $((NOW-600)) > "$O/battery_trace.txt"
+printf '# t\n%s|x|active|capture_start\n' $((NOW-4000)) > "$O/phase_timeline.txt"
+cat > "$T/run.sh" <<EOF_RUN
+LK_OUT_DIR='$O'; MODDIR='$T/mod'; LK_MAX_SEC=0; LK_RESUME=0; LK_START_EPOCH=$((NOW-4000))
+LK_RESUME_FILE='$T/full_day_resume'; ASB_DEBUG_SUPPORT_BOOT_ID=boot-b
+LK_CUR_PHASE=idle; _phase=idle
+lk_phase_ledger_row() { printf 'idle\t%s\t%s\t88\t87\t30\t28\t0\t0\t0\t0\t10\t50\t0\t0\t0\n' $((NOW-3000)) "\$(date +%s)"; }
+lk_finalize() { echo finalized > "\$LK_OUT_DIR/finalized"; }
+lk_wl_release() { :; }
+lk_bt_reconnect_stop() { :; }
+lk_webui_guard_release() { :; }
+. '$T/f.sh'
+EOF_RUN
+r() { sh -c ". '$T/run.sh'; $1"; }
+r 'lk_phase_ledger_live'
+[ "$(grep -c . "$O/.phase_live.tsv")" = 1 ] || fail "no live row for the open phase"
+r 'lk_phase_ledger_flush'
+[ "$(grep -vc '^#' "$O/phase_ledger.tsv")" = 2 ] || fail "flush did not append the closed phase"
+[ -e "$O/.phase_live.tsv" ] && fail "a closed phase left its live row behind (it would be counted twice)"
+r 'lk_phase_ledger_live'
+r 'lk_resume_mark'
+grep -qx "dir=$O" "$T/full_day_resume" && grep -qx "boot=boot-b" "$T/full_day_resume" && grep -qx "start=$((NOW-4000))" "$T/full_day_resume" \
+  || fail "marker: $(cat "$T/full_day_resume")"
+r 'lk_resume_owned' || fail "the recorder does not recognise its own marker"
+r 'LK_MAX_SEC=3600; LK_RESUME_FILE='"'$T/other'"'; lk_resume_mark'
+[ -e "$T/other" ] && fail "a bounded capture must not ask to be resumed"
+r 'ASB_LK_SHUTDOWN=1 lk_on_signal'
+tail -n 1 "$O/phase_timeline.txt" | grep -q '|idle|shutdown$' || fail "the shutdown was not marked in the timeline"
+[ -e "$O/finalized" ] && fail "a shutdown ran the full finalisation"
+[ -s "$T/full_day_resume" ] || fail "a shutdown dropped the resume marker"
+[ -s "$O/.phase_live.tsv" ] || fail "a shutdown lost the open phase"
+r 'lk_resume_merge'
+[ "$(grep -vc '^#' "$O/phase_ledger.tsv")" = 3 ] || fail "the open phase was not folded into the ledger on resume"
+[ -e "$O/.phase_live.tsv" ] && fail "the folded live row stayed"
+L="$(grep -v '^#' "$O/reboots.txt")"
+_down="$(printf '%s\n' "$L" | cut -d'|' -f3)"
+[ "$(printf '%s\n' "$L" | cut -d'|' -f4)" = V65-test16 ] || fail "reboot row has no module build: $L"
+[ "$_down" -ge 599 ] 2>/dev/null && [ "$_down" -le 700 ] 2>/dev/null || fail "time off is measured from the last sample: $L"
+r 'ASB_LK_SHUTDOWN= lk_on_signal'
+[ -e "$O/finalized" ] || fail "a TERM outside a shutdown did not finalise"
+[ -e "$T/full_day_resume" ] && fail "a TERM outside a shutdown kept the resume marker"
+r 'LK_RESUME=1; lk_fresh phase_ledger.tsv' && fail "a resumed capture would rewrite its ledger header"
+r 'LK_RESUME=0; lk_fresh phase_ledger.tsv' || fail "a fresh capture skipped its header"
+r 'LK_RESUME=1; lk_fresh no_such_file.txt' || fail "a resumed capture missing a trace file did not create it"
+sed -n '/^lk_init() {$/,/^}$/p' "$C" > "$T/init.sh"
+grep -q 'LK_RESUME' "$T/init.sh" || fail "lk_init knows nothing of a resume"
+cat > "$T/init_run.sh" <<EOF_INIT
+ASB_LK_NO_CGROUP_ESCAPE=1
+lk_resolve_moddir() { echo '$T/mod'; }
+lk_resolve_gov_log() { echo /dev/.asb/governor.log; }
+lk_probe_env() { echo probe >> "\$LK_OUT_DIR/calls"; }
+lk_dump_build_manifest() { echo manifest >> "\$LK_OUT_DIR/calls"; }
+lk_discover_zones() { echo zones >> "\$LK_OUT_DIR/calls"; }
+lk_snapshot_state() { echo "state \$1" >> "\$LK_OUT_DIR/calls"; }
+. '$T/init.sh'
+EOF_INIT
+N="$T/asb_log_full_day_43"
+sh -c ". '$T/init_run.sh'; LK_OUT_DIR='$N'; LK_SCENARIO=full_day; LK_RESUME=0; lk_init >/dev/null; echo \$LK_START_EPOCH" > "$T/e0"
+[ "$(cat "$N/.capture_start_epoch")" = "$(cat "$T/e0")" ] || fail "a fresh capture did not record its start"
+grep -qx probe "$N/calls" && grep -qx 'state before' "$N/calls" || fail "fresh init calls: $(cat "$N/calls")"
+printf '%s\n' $((NOW-9000)) > "$N/.capture_start_epoch"; : > "$N/calls"
+out="$(sh -c ". '$T/init_run.sh'; LK_OUT_DIR='$N'; LK_SCENARIO=full_day; LK_RESUME=1; lk_init >/dev/null; echo \$LK_START_EPOCH \$LK_GOV_LOG_OFFSET")"
+[ "$out" = "$((NOW-9000)) 0" ] || fail "a resumed capture must keep its start and read the new boot's governor log from 0: $out"
+grep -q probe "$N/calls" && fail "a resume rewrote the environment of the capture start"
+grep -q '^state reboot_[0-9]' "$N/calls" || fail "a resume took no state snapshot of its own: $(cat "$N/calls")"
+rm -f "$N/.capture_start_epoch"; printf '# t\n%s|x|idle|capture_start\n' $((NOW-8000)) > "$N/phase_timeline.txt"
+out="$(sh -c ". '$T/init_run.sh'; LK_OUT_DIR='$N'; LK_SCENARIO=full_day; LK_RESUME=1; lk_init >/dev/null; echo \$LK_START_EPOCH")"
+[ "$out" = "$((NOW-8000))" ] || fail "a capture from an older build resumes from its timeline start: $out"
+printf 'audio_bt\t%s\t%s\t87\t86\t30\t28\t0\t0\t0\t0\t90\t120\t0\t0\t0\n' $((NOW-500)) $((NOW-100)) > "$O/.phase_live.tsv"
+printf '%s|x|10|V65-test17|ROM2|reboot\n' "$NOW" >> "$O/reboots.txt"
+dout="$(ASB_LK_STATE_DIR="$T/st" ASB_LK_LOCK="$T/nolock" ASB_TOMBSTONE_DIR="$T/tomb" sh "$D" "$O")"
+printf '%s\n' "$dout" | grep -q '^reboot	n=2	down_min=10	mod=V65-test17	rom=ROM2$' || fail "digest reboot line: $(printf '%s\n' "$dout" | grep '^reboot')"
+printf '%s\n' "$dout" | grep -q '^phase	name=audio_bt	' || fail "the digest left out the open phase of a running capture"
+grep -Fq 'reboots during the capture: %d' "$FD" || fail "the text report does not count reboots"
+grep -Fq 'lk_fresh phase_ledger.tsv && printf' "$FD" || fail "the ledger header is rewritten on resume"
+grep -Fq '[ "$LK_RESUME" = 1 ] && lk_resume_merge' "$FD" || fail "the recorder does not fold the open phase on resume"
+grep -Fq '  lk_phase_ledger_live' "$FD" || fail "the open phase is not kept on disk each poll"
+echo "PASS logkit resume: the open phase is kept each poll and folded in on resume, a shutdown keeps the marker without finalising, any other TERM finalises and clears it, the start and environment of the capture survive, the digest counts the reboots"
 )
 
 t_logkit_stale_temp_runtime() (
@@ -2129,9 +2337,53 @@ out="$(v <<'T'
 T
 )"
 [ "$out" = "killed by lowmemorykiller" ] || fail "lmk: $out"
+# fix243 (capture 549): seven SystemUI restarts read "no SystemUI crash in the crash buffer"
+# while the dropbox native crash record held SIGABRT in libdexkit.so loaded from another
+# app's APK, BootMonitorClient reported type=crash and an Xposed bridge logged its hooks.
+DBX='@@DROPBOX_NATIVE@@
+========================================
+2026-10-28 20:15:07 system_app_native_crash (text, 48211 bytes)
+Process: com.android.systemui
+signal 6 (SIGABRT), code -1 (SI_QUEUE), fault addr --------
+backtrace:
+      #00 pc 00000000000a6540  /apex/com.android.runtime/lib64/bionic/libc.so (abort+160) (BuildId: 4e)
+      #01 pc 000000000001ff80  /data/app/~~BP_PG==/com.example.hooker-PKE8==/base.apk!libdexkit.so (offset 0x69c000) (BuildId: 8f)'
+LOGS='10-28 20:15:08.344  8608 15441 I BootMonitorClient: report target=2 pkg=com.android.systemui pid=16619 type=crash
+10-28 20:15:08.645 29900 29900 I VectorLegacyBridge: [HookOne][E][com.android.systemui] An exception occurred in PackageParam(b@4f)
+10-28 20:15:08.761 29900 29900 I VectorLegacyBridge: Hook Two Version: nightly-210 (#2070) package: com.android.systemui loaded'
+out="$(printf '%s\n%s\n' "$LOGS" "$DBX" | v)"
+[ "$out" = "native crash SIGABRT in libdexkit.so injected by com.example.hooker, code an installed app loads into SystemUI · loaded into SystemUI: HookOne, Hook Two" ] || fail "dropbox injected crash: $out"
+# The record of another process names nobody; with the system's crash report it is the latest lead.
+out="$(printf '%s\n%s\n' "$LOGS" "$DBX" | sed 's/^Process: com.android.systemui$/Process: com.android.phone/' | v)"
+case "$out" in "crash reported by the system; the latest native crash is in libdexkit.so injected by com.example.hooker"*) : ;; *) fail "foreign record: $out" ;; esac
+out="$(printf '%s\n%s\n' "$DBX" | sed 's/^Process: com.android.systemui$/Process: com.android.phone/' | v)"
+case "$out" in "no SystemUI crash in the crash buffer"*) : ;; *) fail "foreign record without a crash report: $out" ;; esac
+# A SystemUI tombstone in the crash buffer with an injected frame names the package too.
+out="$(v <<'T'
+10-28 20:15:07.110   759   759 F DEBUG   : pid: 8142, tid: 8230, name: main  >>> com.android.systemui <<<
+10-28 20:15:07.110   759   759 F DEBUG   : signal 6 (SIGABRT), code -1 (SI_QUEUE), fault addr --------
+10-28 20:15:07.111   759   759 F DEBUG   :       #00 pc 00000000000a6540  /apex/com.android.runtime/lib64/bionic/libc.so (abort+160) (BuildId: 4e)
+10-28 20:15:07.111   759   759 F DEBUG   :       #01 pc 000000000001ff80  /data/app/~~BP_PG==/com.example.hooker-PKE8==/base.apk!libdexkit.so (offset 0x69c000) (BuildId: 8f)
+T
+)"
+[ "$out" = "native crash SIGABRT in libc.so (abort) - libdexkit.so injected by com.example.hooker, code an installed app loads into SystemUI" ] || fail "crash-buffer injected frame: $out"
+out="$(printf '%s\n' '10-28 20:15:08.344  8608 15441 I BootMonitorClient: report target=2 pkg=com.android.systemui pid=16619 type=crash' | v)"
+[ "$out" = "crash reported by the system, no crash record kept" ] || fail "crash report alone: $out"
+# fix244: the dropbox keeps only the LATEST record and logcat keeps hours. Capture 549's first
+# restart (20:15) carried the record of a 19:47 crash, before the capture began; evidence older
+# than five minutes before the restart was seen is not this restart's.
+SINCE='@@SINCE@@ 2026-10-28 20:10:08|10-28 20:10:08'
+out="$(printf '%s\n%s\n%s\n' "$SINCE" "$LOGS" "$DBX" | sed 's/^2026-10-28 20:15:07 system_app_native_crash/2026-10-28 19:47:09 system_app_native_crash/' | v)"
+case "$out" in "crash reported by the system, no crash record kept · loaded into SystemUI: HookOne, Hook Two") : ;; *) fail "a stale dropbox record was taken for this restart: $out" ;; esac
+out="$(printf '%s\n%s\n' "$SINCE" '10-28 20:00:00.000  8608 15441 I BootMonitorClient: report target=2 pkg=com.android.systemui pid=1 type=crash' | v)"
+case "$out" in "no SystemUI crash in the crash buffer"*) : ;; *) fail "an earlier restart's crash report counted again: $out" ;; esac
+out="$(printf '%s\n%s\n%s\n' "$SINCE" '10-28 19:47:09.110   759   759 F DEBUG   : pid: 8142, tid: 8230, name: main  >>> com.android.systemui <<<' '10-28 19:47:09.110   759   759 F DEBUG   : signal 6 (SIGABRT), code -1 (SI_QUEUE), fault addr --------' | v)"
+case "$out" in "no SystemUI crash in the crash buffer"*) : ;; *) fail "an old tombstone in the crash buffer was taken for this restart: $out" ;; esac
+grep -q "printf '@@SINCE@@ %s|%s" "$C" || fail "the restart block does not bound the evidence in time"
+grep -qF '@@DROPBOX_NATIVE@@' "$C" || fail "restart block does not hand the dropbox record to the verdict"
 grep -q 'echo "verdict: $(printf' "$C" || fail "restart block does not record the verdict"
 grep -q '/^verdict: / { print "      " $0 }' "$FD" || fail "report does not print the verdict"
-echo "PASS logkit sysui verdict: native, Java, other-process and low-memory cases"
+echo "PASS logkit sysui verdict: native, Java, other-process, low-memory and injected-code cases"
 )
 
 t_logkit_traffic_edge_runtime() (
@@ -2663,7 +2915,7 @@ const on = el('liveEtaOn'), off = el('liveEtaOff'); el('bnDrain'); el('bnDrainOf
 _lvEta.gov = { on: 536, onTip: 'gov on', off: 5000, offTip: 'gov off' };
 _lvEta.cap = 88;
 lvEtaPaint();
-chk(on.textContent === '8h 56m' && off.textContent === '> 72h', 'Smart shows the governor forecast: ' + on.textContent + ' / ' + off.textContent);
+chk(on.textContent === '8h 56m' && off.textContent === '~72h+', 'Smart shows the governor forecast, marked as an estimate past three days (fix244): ' + on.textContent + ' / ' + off.textContent);
 _lvEta.chg = true; lvEtaPaint();
 chk(on.textContent === '—' && off.textContent === '—', 'no time to empty while charging');
 _lvEta.chg = false;
@@ -2674,10 +2926,10 @@ lvMeterPaint('stock');
 chk(on.textContent === '11h 44m' && on.title.indexOf('measured') >= 0, 'Stock: level over its own measured drain: ' + on.textContent);
 chk(off.textContent === '> 72h', 'Stock idle past three days shows the ceiling: ' + off.textContent);
 _selectedProfile = 'battery'; lvMeterPaint('battery');
-chk(on.textContent === '8h 56m' && off.textContent === '> 72h', 'Battery without a measurement falls back to the governor: ' + on.textContent);
+chk(on.textContent === '8h 56m' && off.textContent === '~72h+', 'Battery without a measurement falls back to the governor: ' + on.textContent);
 _lvMeter.p.battery = { on: 120, off: 0, offN: 0, onMin: 30 };
 lvMeterPaint('battery');
-chk(on.textContent === '7h 20m' && off.textContent === '> 72h', 'Battery: measured screen-on, governor idle: ' + on.textContent + ' / ' + off.textContent);
+chk(on.textContent === '7h 20m' && off.textContent === '~72h+', 'Battery: measured screen-on, governor idle: ' + on.textContent + ' / ' + off.textContent);
 const sec = { style: { display: 'none' } };
 _nodes.liveTopSecLabel = { textContent: '', parentElement: sec };
 const smart = el('liveSmartBanner'), rom = el('liveStockRomBanner');
@@ -4402,6 +4654,7 @@ printf '%s\n' "$out" | grep -q '^idlemax	awake=25	phase=sleep	dur_min=60$' || fa
 printf '%s\n' "$out" | grep -q '^wl	pkg=com.instagram.android	sec=3661$' || fail "top wakelock app"
 printf '%s\n' "$out" | grep -Eq '^crash	count=2	asb=1	latest=/vendor/bin/hw/foo	ltime=[0-9]{2}:[0-9]{2}$' || fail "crash window, ASB attribution or the crash time"
 printf '%s\n' "$out" | grep -q '^sysui	count=2$' || fail "sysui restarts"
+printf '%s\n' "$out" | grep -q '^sysuiinj' && fail "restarts without injected code named a module"
 printf '%s\n' "$out" | grep -q '^thermal	cpu=41	surf=35$' || fail "thermal peaks"
 # fix213: device context, heat durations and night habits ride the same digest.
 printf '%s\n' "$out" | grep -q '^meta2	model=CPH2745	device=OP611FL1	soc=SM8850	rom=CPH2745_16.0.10.601(EX01)	mod=V65-test$' || fail "meta2 device context: $(printf '%s\n' "$out" | grep '^meta2')"
@@ -4492,7 +4745,7 @@ charging_idle	$((NOW-6500))	$((NOW-2900))	90	90	30	30	0	0	0	0	20	0	0	0	0
 active	$((NOW-2900))	$((NOW-200))	90	86	41	37	0	0	0	0	100	320	0	0	0
 EOF
 cat > "$MIX/_full_day_report.txt" <<EOF
- capture: 0h target (until shutdown), 180 min elapsed
+ capture: 0h target (until stopped), 180 min elapsed
   app                                         janky    frames  janky/s   intervals with janky frames
   com.android.systemui                         6239     45345     1.48   81 of 81
 com.android.systemui missed deadlines in 81 of 81 screen-on intervals, whatever app was in front: a steady redraw.
@@ -4509,6 +4762,42 @@ printf '%s\n' "$mout" | grep -q '^thermal	cpu=43	surf=39$' || fail "a zero-lengt
 printf '%s\n' "$mout" | grep -q '^heat	peak_phase=active	peak_c=43	' || fail "a zero-length row named the hottest phase: $(printf '%s\n' "$mout" | grep '^heat')"
 printf '%s\n' "$mout" | grep -q '^scr	on_pctph=6.0	off_pctph=1.5	on_min=80	off_min=40	idle_pctph=0.0	idle_min=10	music_min=30$' || fail "idle and screen-off music split: $(printf '%s\n' "$mout" | grep '^scr')"
 printf '%s\n' "$mout" | grep -q '^sysuidraw	intv=81	of=81	pct=13.8	netspeed=1	clocksec=0	livewp=0$' || fail "SystemUI steady redraw line: $(printf '%s\n' "$mout" | grep '^sysuidraw')"
+# fix243: a restart whose crash sits in a library loaded from an installed app's APK names
+# that app - from the verdict, or from the dropbox record when it is SystemUI's own or the
+# system reported a SystemUI crash. A record of another process names nobody.
+# fix244: only a record written within five minutes before the restart was seen - the dropbox
+# keeps the LATEST one, which in capture 549 predated the capture itself.
+SUI="$T/asb_log_full_day_sui"; mkdir -p "$SUI"
+cat > "$SUI/sysui_restarts.txt" <<'EOF'
+# SystemUI pid at capture start: 1000
+===== SYSTEMUI RESTART 2026-10-28 20:15:09 pid 1000 -> 2000 phase=active fsm=ACTIVE =====
+--- dropbox system_app_native_crash (latest) ---
+2026-10-28 20:15:01 system_app_native_crash (text, 48211 bytes)
+signal 6 (SIGABRT), code -1 (SI_QUEUE), fault addr --------
+      #01 pc 000000000001ff80  /data/app/~~BP==/com.example.hooker-PK==/base.apk!libdexkit.so (offset 0x69c000)
+verdict: no SystemUI crash in the crash buffer - restarted by the system (kill, ANR, theme or settings change)
+--- logcat main/system: systemui / ActivityManager around the restart ---
+10-28 20:15:08.344  8608 15441 I BootMonitorClient: report target=2 pkg=com.android.systemui pid=16619 type=crash
+10-28 20:15:08.645 29900 29900 I VectorLegacyBridge: [HookOne][E][com.android.systemui] An exception occurred
+===== SYSTEMUI RESTART 2026-10-28 20:40:00 pid 2000 -> 3000 phase=active fsm=ACTIVE =====
+verdict: native crash SIGABRT in libdexkit.so injected by com.example.hooker, code an installed app loads into SystemUI · loaded into SystemUI: HookOne, Hook Two
+===== SYSTEMUI RESTART 2026-10-28 21:00:00 pid 3000 -> 4000 phase=active fsm=ACTIVE =====
+--- dropbox system_app_native_crash (latest) ---
+Process: com.android.phone
+      #01 pc 0000000000001000  /data/app/~~x==/com.other.app-y==/base.apk!libfoo.so
+verdict: no SystemUI crash in the crash buffer - restarted by the system (kill, ANR, theme or settings change)
+===== SYSTEMUI RESTART 2026-10-28 21:30:00 pid 4000 -> 5000 phase=active fsm=ACTIVE =====
+--- dropbox system_app_native_crash (latest) ---
+2026-10-28 19:47:09 system_app_native_crash (text, 48211 bytes)
+      #01 pc 000000000001ff80  /data/app/~~BP==/com.example.hooker-PK==/base.apk!libdexkit.so (offset 0x69c000)
+verdict: crash reported by the system, no crash record kept
+--- logcat main/system: systemui / ActivityManager around the restart ---
+10-28 21:29:58.000  8608 15441 I BootMonitorClient: report target=2 pkg=com.android.systemui pid=1 type=crash
+10-28 20:15:08.344  8608 15441 I BootMonitorClient: report target=2 pkg=com.android.systemui pid=16619 type=crash
+EOF
+sout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state7" sh "$D" "$SUI")" || fail "sysui fixture digest exit"
+printf '%s\n' "$sout" | grep -q '^sysui	count=4$' || fail "sysui fixture count: $(printf '%s\n' "$sout" | grep '^sysui')"
+printf '%s\n' "$sout" | grep -q '^sysuiinj	pkg=com.example.hooker	n=2	hooks=HookOne, Hook Two$' || fail "injected-code line: $(printf '%s\n' "$sout" | grep '^sysuiinj')"
 THR="$T/asb_log_full_day_thr"; mkdir -p "$THR"
 cat > "$THR/throttle_trace.txt" <<EOF
 $((NOW-10000))|active|cap_owner=vendor|x
@@ -4532,12 +4821,24 @@ printf '%s\n' "$eout" | grep -q '^drain	' && fail "an empty capture must not inv
 # (the user's com.oplus.screenshot crashes from before the recording did exactly that).
 FRESH="$T/asb_log_full_day_fresh"; mkdir -p "$FRESH" "$T/lock2"
 printf '%s\n' "$FRESH" > "$T/lock2/output_dir"
-sleep 30 & _lp=$!
+printf 'sleep 30\n' > "$T/asb_log_full_day.sh"
+sh "$T/asb_log_full_day.sh" & _lp=$!
 printf '%s\n' "$_lp" > "$T/lock2/pid"
 touch -d "@$((NOW-600))" "$T/lock2/pid"   # launched ten minutes ago
 printf 'Cmdline: com.oplus.screenshot\n' > "$T/tomb/tombstone_07"; touch -d "@$((NOW-4000))" "$T/tomb/tombstone_07"
 printf 'Cmdline: fresh.crash\n' > "$T/tomb/tombstone_08"; touch -d "@$((NOW-300))" "$T/tomb/tombstone_08"
 fout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" ASB_LK_STATE_DIR="$T/state3" sh "$D" "$FRESH")"
+# fix244: a lock from an earlier boot, or a pid that is not the recorder (reused after a
+# reboot), is not a running capture - capture 549 read "recording" long after it ended.
+printf 'boot-old\n' > "$T/lock2/boot_id"; printf 'boot-new\n' > "$T/bootid"
+rout="$(ASB_LK_BOOT_ID_FILE="$T/bootid" ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" ASB_LK_STATE_DIR="$T/state3b" sh "$D" "$FRESH" | head -n 1)"
+printf '%s\n' "$rout" | grep -q '	running=0	' || fail "a lock from an earlier boot reads as running: $rout"
+rm -f "$T/lock2/boot_id"
+sleep 30 & _lq=$!
+printf '%s\n' "$_lq" > "$T/lock2/pid.other"
+rout="$(cp "$T/lock2/pid" "$T/lock2/pid.rec"; cp "$T/lock2/pid.other" "$T/lock2/pid"; ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" ASB_LK_STATE_DIR="$T/state3c" sh "$D" "$FRESH" | head -n 1; cp "$T/lock2/pid.rec" "$T/lock2/pid")"
+printf '%s\n' "$rout" | grep -q '	running=0	' || fail "a pid that is not the recorder reads as running: $rout"
+kill "$_lq" 2>/dev/null || true; wait "$_lq" 2>/dev/null || true
 kill "$_lp" 2>/dev/null || true; wait "$_lp" 2>/dev/null || true
 printf '%s\n' "$fout" | grep -q '^meta	elapsed_min=0	target_h=0	running=1' || fail "the fresh capture must read as running: $(printf '%s' "$fout" | head -1)"
 printf '%s\n' "$fout" | grep -Eq '^crash	count=1	asb=0	latest=fresh.crash	ltime=[0-9]{2}:[0-9]{2}$' || fail "a fresh capture's crash window must start at its launch, not 24h ago: $(printf '%s' "$fout" | grep '^crash')"
@@ -4905,6 +5206,21 @@ chk(mixDrain.vars.est === logReportDur(16 * 60), 'the verdict names how long a f
 chk(mixA.actions.some(t => t.key === 'lr_tip_sysui_netspeed' && t.vars.n === '81'), 'the redraw action names the network-speed meter: ' + JSON.stringify(mixA.actions.map(t => t.key)));
 chk(mixA.chains.some(c => c.key === 'lr_chain_sysui') && mixA.chains.some(c => c.key === 'lr_chain_music_off'), 'redraw and screen-off music are explained: ' + JSON.stringify(mixA.chains.map(c => c.key)));
 chk(logReportAnalyze(parseLogReport('meta\telapsed_min=120\nscr\ton_pctph=0\toff_pctph=2.4\ton_min=0\toff_min=120\tidle_pctph=0.6\tidle_min=60\tmusic_min=60\n')).verdicts.find(v => v.domain === 'drain').state === 'good', 'screen-off music does not paint the idle verdict');
+/* fix243: SystemUI restarts inside code an installed app injects - the action and the chain
+   name that app; hooks alone or no restart draw no action. */
+const injDay = parseLogReport('meta\telapsed_min=131\ttarget_h=0\trunning=0\tprofile=battery\nsysui\tcount=7\nsysuiinj\tpkg=com.example.hooker\tn=1\thooks=HookOne, Hook Two\n');
+const injA = logReportAnalyze(injDay);
+chk(injA.actions.some(t => t.key === 'lr_tip_sysui_inj' && t.vars.n === '7' && t.vars.m === '1' && t.vars.pkg === 'com.example.hooker'), 'the restart action names the injecting app: ' + JSON.stringify(injA.actions.map(t => t.key)));
+chk(injA.chains.some(c => c.key === 'lr_chain_sysui_inj'), 'the restart chain is explained: ' + JSON.stringify(injA.chains.map(c => c.key)));
+/* fix244: the stutter advice names the profile the day ran on. */
+const jkTip = function (prof) { return logReportTips(parseLogReport('meta\telapsed_min=200\tprofile=' + prof + '\njank\tpct=8.0\tjps=3.00\tframes=30000\n'), true).map(function (t) { return t.key; }); };
+chk(jkTip('battery').indexOf('lr_tip_jank_bad_bat') >= 0 && jkTip('battery').indexOf('lr_tip_jank_bad') < 0, 'a Battery day is not told about the Smart learner: ' + jkTip('battery'));
+chk(jkTip('balanced').indexOf('lr_tip_jank_bad_man') >= 0, 'a Balanced day gets the manual-profile wording');
+chk(jkTip('smart').indexOf('lr_tip_jank_bad') >= 0, 'a Smart day keeps the learner wording');
+const mixInj = JSON.parse(JSON.stringify(injDay)); mixInj.sections.sysuiinj.pkg = ''; mixInj.sections.sysuiinj.n = '0';
+chk(!logReportTips(mixInj, true).some(t => t.key === 'lr_tip_sysui_inj'), 'hooks alone draw no restart action');
+mixInj.sections.sysuiinj.pkg = 'com.example.hooker'; mixInj.sections.sysuiinj.n = '1'; mixInj.sections.sysui.count = '0';
+chk(!logReportTips(mixInj, true).some(t => t.key === 'lr_tip_sysui_inj'), 'no restart, no restart action');
 const mixSd = JSON.parse(JSON.stringify(mixDay)); mixSd.sections.sysuidraw.netspeed = '0'; mixSd.sections.sysuidraw.livewp = '1';
 chk(logReportTips(mixSd, true).some(t => t.key === 'lr_tip_sysui_livewp'), 'a live wallpaper is named when the meter is off');
 mixSd.sections.sysuidraw.intv = '40';
@@ -4944,6 +5260,19 @@ chk(mixText.indexOf(I18N.ru.lr_drain_idle) >= 0 && mixText.indexOf(I18N.ru.lr_dr
 chk(mixText.indexOf('\u224816') >= 0, 'the drain hero says how long a charge lasts');
 chk(mixText.indexOf('\u22121%|') >= 0 && mixText.indexOf('11.0') < 0, 'a one-step five-minute phase shows no rate');
 chk(mixText.indexOf(I18N.ru.lr_sysui_draw) >= 0 && mixText.indexOf(I18N.ru.lr_clamp_brief_note) >= 0, 'redraw row and the calm clamp note render');
+logReportRender(injDay);
+const injText = allText(reportBody);
+chk(injText.indexOf(I18N.ru.lr_sysui_inj_note.split('{m}').join('1').split('{pkg}').join('com.example.hooker')) >= 0, 'the crash section names the injecting app');
+chk(injText.indexOf(I18N.ru.lr_sysui_hooks_note.split('{hooks}').join('HookOne, Hook Two')) >= 0, 'the crash section lists the code loaded into SystemUI');
+/* fix244: a capture that resumed after reboots says so, and names the build after the last one
+   when it is not the build the capture started with. */
+const rbDay = parseLogReport('meta\telapsed_min=900\ttarget_h=0\trunning=1\tprofile=battery\nmeta2\tmodel=CPH2745\tmod=V65-test16\nreboot\tn=2\tdown_min=3\tmod=V65-test17\trom=X\n');
+logReportRender(rbDay);
+chk(allText(reportBody).indexOf(I18N.ru.lr_reboots_mod.split('{n}').join('2').split('{mod}').join('V65\u2011test17')) >= 0, 'a new build after the last reboot is named');
+chk(reportStatus.textContent === I18N.ru.lr_running_open.split('{min}').join('900'), 'an open capture runs until it is stopped: ' + reportStatus.textContent);
+rbDay.sections.reboot.mod = 'V65-test16';
+logReportRender(rbDay);
+chk(allText(reportBody).indexOf(I18N.ru.lr_reboots.split('{n}').join('2')) >= 0, 'the same build reads as plain reboots');
 logReportRender(typicalScreen);
 chk(countClass(reportBody, 'lgr-state-problem') === 0 && countClass(reportBody, 'lgr-warn') === 0, 'neither summary nor detail paints 10.1%/h red');
 const trendText = 'meta\telapsed_min=120\ttarget_h=24\trunning=0\tstarted=2026-10-21 09:40\tprofile=smart\nmeta2\tdevice=OP611FL1\trom=TESTBUILD\ndrain\tpctph=2.0\n';
@@ -5094,7 +5423,13 @@ PH.update({'lr_sum_drain_on':['{min}'], 'lr_sum_drain_night':['{min}','{deep}'],
       'lr_chain_sysui':['{n}','{of}','{pct}'], 'lr_chain_music_off':['{off}','{music}'],
       'lr_tip_sysui_netspeed':['{n}','{of}'], 'lr_tip_sysui_clocksec':['{n}','{of}'],
       'lr_tip_sysui_livewp':['{n}','{of}'], 'lr_tip_sysui_other':['{n}','{of}'],
-      'lr_sysui_draw_fmt':['{n}','{of}','{pct}']})
+      'lr_sysui_draw_fmt':['{n}','{of}','{pct}'],
+      'lr_tip_sysui_inj':['{n}','{m}','{pkg}'], 'lr_chain_sysui_inj':['{n}','{m}','{pkg}'],
+      'lr_sysui_inj_note':['{m}','{pkg}'], 'lr_sysui_hooks_note':['{hooks}'],
+      'lr_reboots':['{n}'], 'lr_reboots_mod':['{n}','{mod}']})
+KEYS += ['lr_tip_sysui_inj','lr_chain_sysui_inj','lr_sysui_inj_note','lr_sysui_hooks_note',
+         'lr_reboots','lr_reboots_mod','dbg_log_started_hint','lr_tip_jank_bad_bat','lr_tip_jank_bad_man']
+PH.update({'lr_tip_jank_bad_bat':['{pct}'], 'lr_tip_jank_bad_man':['{pct}']})
 KEYS += ['lr_ms','lr_ms_wake','lr_drain_est','lr_drain_idle','lr_drain_short_note','lr_drain_short_note0',
          'lr_idle_fmt','lr_peak','lr_clamp_brief_note','lr_sum_drain_idle','lr_sum_drain_mixed',
          'lr_chain_sysui','lr_chain_music_off','lr_tip_sysui_netspeed','lr_tip_sysui_clocksec',
@@ -5111,8 +5446,9 @@ for p in files:
         assert d[k].startswith(e + ' '), '%s: %s lost its emoji prefix' % (p.name, k)
     if p.name == 'en.json':
         assert d['lr_sec_drain'] == '\U0001f50b Battery drain'
+        assert d['dbg_log_btn'] == 'Infinite log' and d['lr_menu'] == 'Infinite log report'
         assert d['lr_running'] == 'recording \u00b7 {min} min of {h} h'
-        assert d['lr_running_open'] == 'recording \u00b7 {min} min \u00b7 until shutdown'
+        assert d['lr_running_open'] == 'recording \u00b7 {min} min \u00b7 until you stop it'
         assert d['lr_tip_night'] == 'Overnight the phone lost ~{pct}%/h - check background apps.'
         assert d['lr_per_hour'] == '%/h' and d['lr_refresh'] == 'Refresh'
         assert d['lr_secs'] == '{n} sec'
@@ -5122,7 +5458,9 @@ for p in files:
         assert d['lr_tip_jank_ok'] == 'Smoothness is excellent: only {pct}% of frames janky.'
     if p.name == 'ru.json':
         assert d['lr_sec_drain'] == '\U0001f50b Разряд батареи'
-        assert d['lr_menu'] == 'Отчёт по логу' and d['lr_refresh'] == 'Обновить'
+        assert d['lr_menu'] == 'Отчёт бесконечного лога' and d['lr_refresh'] == 'Обновить'
+        assert d['dbg_log_btn'] == 'Бесконечный лог' and d['dbg_log_stop_btn'] == 'Остановить бесконечный лог'
+        assert 'выключ' not in d['dbg_log_started']
         assert d['lr_secs'] == '{n} сек'
         assert d['lr_sec_smooth'] == '\U0001f4f1 Плавность'
         assert d['lr_saved'] == 'сохранённый лог \u00b7 {when} \u00b7 {profile}'

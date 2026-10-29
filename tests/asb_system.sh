@@ -8157,6 +8157,7 @@ static void asb_run_modscript(const char *script, const char *pkg) {
     (void)script; (void)pkg; probe_calls++;
 }
 static void asb_log(const char *fmt, ...) { (void)fmt; }
+static int asb_unlock_lift_share(int profile_idx) { return profile_idx == PROFILE_BATTERY ? g_asb_cfg.unlock_lift_pct * 4 / 5 : g_asb_cfg.unlock_lift_pct; }
 #include "b.c"
 static int bad = 0;
 #define CHK(c, what) do { if (!(c)) { printf("%s\\n", what); bad = 1; } } while (0)
