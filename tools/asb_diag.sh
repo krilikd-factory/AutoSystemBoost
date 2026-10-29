@@ -1104,6 +1104,11 @@ if [ -r "$_state" ]; then
     else
       NOTE "unlock lift: $([ "$(_rget unlock_lift /dev/.asb/state 2>/dev/null)" = 1 ] && echo 'ACTIVE now' || echo idle) · ${_ull} lift(s) this session (wakes, first touches, app opens/closes, lock presses) · ceilings to $(cfg unlock_lift_pct)% of hardware max for ${_ulsec:-3} s"
       [ "${_uls:-0}" -gt 0 ] 2>/dev/null && NOTE "  wakes not lifted: ${_uls} (last: ${_ulwt})"
+      _ullv="$(_rget unlock_levels /dev/.asb/state 2>/dev/null)"
+      _ullk="$(_rget unlock_level_khz /dev/.asb/state 2>/dev/null)"
+      if [ "${_ullv:-0}" -gt 0 ] 2>/dev/null; then
+        NOTE "  Battery lifts held by a finger kept level with the main cores: ${_ullv} time(s)$([ "${_ullk:-0}" -gt 0 ] 2>/dev/null && echo " · now prime ${_ullk} kHz")"
+      fi
     fi
   fi
   # Which cluster looks bigger to the scheduler right now (fix130). Work goes where the
