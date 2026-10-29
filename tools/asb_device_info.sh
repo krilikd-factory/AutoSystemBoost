@@ -292,7 +292,20 @@ for _d in "$SYS/class/kgsl/kgsl-3d0" "$SYS"/class/devfreq/*gpu*; do
   _min="$(_read_first "$_d/devfreq/min_freq" "$_d/min_freq")"
   _max="$(_read_first "$_d/devfreq/max_freq" "$_d/max_freq")"
   _busy="$(_read_first "$_d/gpubusy" "$_d/gpu_busy_percentage")"
-  _v="governor=$_governor; current_hz=$_current; min_hz=$_min; max_hz=$_max; busy=$_busy"
+  [ -n "$_current" ] || _current="$(_read "$_d/gpuclk")"
+  [ -n "$_max" ] || _max="$(_read "$_d/max_gpuclk")"
+  [ -n "$_min" ] || _min="$(_read "$_d/min_gpuclk")"
+  _avail="$(_read_first "$_d/gpu_available_frequencies" "$_d/devfreq/available_frequencies" "$_d/available_frequencies")"
+  if [ -n "$_avail" ]; then
+    _lo="$(printf '%s\n' $_avail | grep -E '^[0-9]+$' | sort -n | head -n 1)"
+    _hi="$(printf '%s\n' $_avail | grep -E '^[0-9]+$' | sort -n | tail -n 1)"
+    [ -n "$_min" ] || _min="$_lo"
+    [ -n "$_max" ] || _max="$_hi"
+  fi
+  [ -n "$_governor" ] || { [ -e "$_d/max_pwrlevel" ] && _governor="pwrlevel"; }
+  _levels="$(_read "$_d/num_pwrlevels")"
+  _model="$(_read "$_d/gpu_model")"
+  _v="governor=$_governor; current_hz=$_current; min_hz=$_min; max_hz=$_max; busy=$_busy; levels=$_levels; model=$_model"
   _emit gpu "$_name" "$_v"
 done
 
