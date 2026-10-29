@@ -149,7 +149,26 @@ jobs:
           MODDIR="$(pwd)" bash tools/asb_lint.sh
 
       - name: Run canonical host regression
-        run: bash tools/asb_full_regression.sh
+        run: |
+          # A source-only checkout deliberately has no AIDL reference binaries: the separate
+          # AOSP workflow produces them. Skip only their byte-for-byte staging check in that
+          # case; every static DSP gate and every other regression still runs. As soon as all
+          # reference files are present the strict staging check is mandatory again.
+          _pb_missing=0
+          for _pb in \
+            arm64-v8a/libasbdsp_v3.so \
+            armeabi-v7a/libasbdsp_v3.so \
+            arm64-v8a/asb_dsp_attach \
+            arm64-v8a/libasbdsp_v2.so \
+            armeabi-v7a/libasbdsp_v2.so; do
+            [ -s "src/DSP_AIDL/prebuilt/$_pb" ] || _pb_missing=1
+          done
+          if [ "$_pb_missing" = 1 ]; then
+            echo "Source-only DSP checkout: reference staging optional; static DSP gates remain mandatory."
+            ASB_DSP_REFERENCE_OPTIONAL=1 bash tools/asb_full_regression.sh
+          else
+            bash tools/asb_full_regression.sh
+          fi
 
       - name: Verify runner tools
         shell: bash
