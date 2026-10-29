@@ -3251,7 +3251,7 @@ if [ -s /data/adb/asb/wakelock_apps ]; then
     _al="$(( _as / 60 )) min"; [ "$_ah" = 1 ] && _al="$_al, holding now"
     case "$_av" in
       restricted) _avt="restricted by ASB (undone on uninstall)" ;;
-      protected)  _avt="protected class (messenger/alarm/fitness) - never auto-restricted" ;;
+      protected)  _avt="protected: messenger/alarm/fitness class or on the battery-optimisation whitelist - never auto-restricted" ;;
       in_use)     _avt="visible or audible to you - left alone" ;;
       limited)    _avt="wakelocks ignored by your wakelock_fitness=limit (undone on protect/uninstall)" ;;
       limit_ignored) _avt="wakelock_fitness=limit is set, but this Android does not enforce the WAKE_LOCK app-op - the app still held the CPU (not DISABLED) after it was set" ;;
