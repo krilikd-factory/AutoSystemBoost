@@ -59,6 +59,15 @@
   --accent-glow: rgba(0,240,180,0.35);
   --accent2: #00d4ff;
   --metric-cool: #00d4ff;
+  --m-cool: #00d4ff;
+  --m-good: #2ed573;
+  --m-mild: #c2e64b;
+  --m-warm: #ffbf1f;
+  --m-hot: #ff7a1a;
+  --m-bad: #ff2d2d;
+  --m-charge-a: #2ed573;
+  --m-charge-b: #00d4ff;
+  --m-charge-hi: #e9fff7;
   
   --perf: #ff1a1a;
   --perf-glow: rgba(255,26,26,0.4);
@@ -1568,6 +1577,30 @@ html[dir="rtl"] .live-page .smart-banner-item[data-lvi]::after { content: '\2039
 .live-page .smart-banner-item[data-lvi] .smart-banner-value { padding-inline-end: 9px; }
 html[data-asb-theme="light"] .live-info-now { background: #f7f9fa; }
 html[data-asb-theme="light"] .live-info-src { background: #fbfcfc; }
+/* fix248: where the reading sits on its colour scale, and how it moved while Monitor was open. */
+.live-info-scale { margin: -4px 0 12px; padding: 0 2px; }
+.lvs-bar { position: relative; display: flex; gap: 2px; height: 8px; border-radius: 5px; overflow: visible; }
+.lvs-seg { flex: 1 1 0; border-radius: 3px; opacity: .38; }
+.lvs-seg.on { opacity: 1; box-shadow: 0 0 0 1px rgba(255,255,255,.35), 0 0 10px currentColor; }
+.lvs-seg.metric-cool { background: var(--m-cool); color: var(--m-cool); }
+.lvs-seg.metric-good { background: var(--m-good); color: var(--m-good); }
+.lvs-seg.metric-mild { background: var(--m-mild); color: var(--m-mild); }
+.lvs-seg.metric-warm { background: var(--m-warm); color: var(--m-warm); }
+.lvs-seg.metric-hot { background: var(--m-hot); color: var(--m-hot); }
+.lvs-seg.metric-bad { background: var(--m-bad); color: var(--m-bad); }
+.lvs-ticks { display: flex; margin-top: 4px; font: 600 10px/1.2 var(--mono); color: var(--text-tertiary); }
+.lvs-ticks span { flex: 1 1 0; text-align: end; white-space: nowrap; }
+.lvs-ticks span:last-child { visibility: hidden; }
+.lvs-now { margin-top: 6px; font-size: 12px; line-height: 1.4; color: var(--text-secondary); }
+.live-info-hist { margin-top: 12px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border);
+  background: rgba(255,255,255,0.025); }
+.lvh-line { font-size: 12px; line-height: 1.45; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.lvh-spark { display: block; width: 100%; height: 38px; margin-top: 8px; overflow: visible; }
+.lvh-spark polyline { fill: none; stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.lvh-spark .lvh-fill { stroke: none; opacity: .14; }
+.lvh-extra { margin-top: 6px; font-size: 12px; line-height: 1.45; color: var(--text); white-space: pre-line; }
+html[data-asb-theme="light"] .live-info-hist { background: #fbfcfc; }
+html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25), 0 0 8px currentColor; }
 /* Session log report page (fix195): a full page, not a sheet - Monitor-cell cards, emoji
  * section labels, two hero tiles where a headline number exists. One layer above Config
  * so it can open over any page from the Logs menu in any header. */
@@ -1648,7 +1681,7 @@ html[data-asb-theme="light"] .lgr-chip { background: #f7f9fa; }
 .lgr-dx-fix { margin-top: 5px; padding-inline-start: 9px; border-inline-start: 2px solid var(--accent); color: var(--text); }
 .lgr-dx-fix-l { color: var(--accent); font-weight: 700; margin-inline-end: 5px; }
 .lgr-dx-owner { margin-top: 5px; color: var(--text-tertiary); font-size: 11.5px; }
-.lgr-dx-owner-asb, .lgr-dx-owner-unknown { color: var(--perf); }
+.lgr-dx-owner-asb, .lgr-dx-owner-unknown, .lgr-dx-owner-asbfix { color: var(--perf); }
 .lgr-dx-send { margin-top: 7px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; color: var(--text-secondary); }
 .lgr-dx-btn { font-size: 12px; }
 .lgr-warn { color: var(--perf); }
@@ -3149,6 +3182,8 @@ html[data-asb-theme="light"] {
      theme’s neon glow. Values are opaque enough for Android WebView composition. */
   --bg:#edf4f1; --surface:#ffffff; --surface-hover:#e3efea;
   --accent:#007c63; --accent2:#006f9b; --metric-cool:#006f9b; --accent-glow:rgba(0,124,99,.20);
+  --m-cool:#006f9b; --m-good:#08753c; --m-mild:#4f7a0a; --m-warm:#8a5700; --m-hot:#b04a00; --m-bad:#b42318;
+  --m-charge-a:#08753c; --m-charge-b:#006f9b; --m-charge-hi:#35b07a;
   --perf:#b42318; --perf-glow:rgba(180,35,24,.18); --bal:#8a5700; --bal-glow:rgba(138,87,0,.17);
   --bat:#08753c; --bat-glow:rgba(8,117,60,.17); --text:#14231f;
   --text-secondary:#365048; --text-tertiary:#526b62;
@@ -3881,6 +3916,56 @@ html[data-asb-glass="1"][data-asb-theme="light"] .app-name {
   background-size:300% 100%,100% 100% !important; -webkit-background-clip:text !important; background-clip:text !important;
 }
 
+/* fix248: the surfaces Liquid Glass had not reached. The report and device pages are opaque
+ * drill-ins (they must hide the page under them) but now sit on the same lit backdrop as
+ * the tabs instead of flat black or grey; the drain halves, the drain and reading sheets'
+ * inner cards, the sheets' primary button, the toast and the dialog backdrops take the
+ * material too. Colours that carry meaning (drain values, metric steps, toast categories)
+ * are untouched - only the fill, the edge light and the blur change. */
+html[data-asb-glass="1"] :is(#reportPage,#devicePage) {
+  background:
+    radial-gradient(ellipse 90% 48% at 12% 0%,rgba(0,240,180,.10),transparent 68%),
+    radial-gradient(ellipse 70% 42% at 100% 82%,rgba(36,58,49,.26),transparent 72%),#000 !important;
+}
+html[data-asb-glass="1"][data-asb-theme="light"] :is(#reportPage,#devicePage) {
+  background:
+    radial-gradient(ellipse 90% 48% at 12% 0%,rgba(0,124,99,.10),transparent 68%),
+    radial-gradient(ellipse 70% 42% at 100% 82%,rgba(101,239,201,.15),transparent 72%),#f2f4f6 !important;
+}
+html[data-asb-glass="1"] :is(.smart-drain-half,.live-drain-block,.live-drain-cmp,.live-info-hist) {
+  background:linear-gradient(150deg,rgba(255,255,255,.085),rgba(0,240,180,.035) 55%,rgba(255,255,255,.015)),rgba(16,23,20,.62) !important;
+  border-color:var(--border) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.15),inset 0 0 0 1px rgba(255,255,255,.025);
+  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+}
+html[data-asb-glass="1"] .smart-drain-half:active { background:linear-gradient(150deg,rgba(0,240,180,.18),rgba(0,240,180,.06)),rgba(16,23,20,.62) !important; }
+html[data-asb-glass="1"][data-asb-theme="light"] :is(.smart-drain-half,.live-drain-block,.live-drain-cmp,.live-info-hist) {
+  background:linear-gradient(150deg,rgba(255,255,255,.70),rgba(0,124,99,.045) 55%,rgba(255,255,255,.40)),rgba(255,255,255,.50) !important;
+  border-color:var(--border) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.80),0 6px 18px rgba(20,50,42,.08) !important;
+}
+html[data-asb-glass="1"] .cfg-profile-primary {
+  background:linear-gradient(135deg,rgba(0,240,180,.24),rgba(101,239,201,.08)),rgba(16,23,20,.55) !important;
+  border-color:var(--border-active) !important; color:#a8ffe6 !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.20),0 6px 20px rgba(0,240,180,.10);
+  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+}
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-profile-primary {
+  background:linear-gradient(135deg,rgba(0,124,99,.18),rgba(255,255,255,.55)),rgba(255,255,255,.45) !important;
+  color:#005f4c !important; box-shadow:inset 0 1px 0 rgba(255,255,255,.80),0 6px 18px rgba(0,124,99,.10) !important;
+}
+html[data-asb-glass="1"] .toast:not(.stock-restoring) {
+  background:linear-gradient(145deg,rgba(255,255,255,.10),rgba(255,255,255,.02)),color-mix(in srgb,currentColor 13%,rgba(14,20,18,.74)) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 10px 30px rgba(0,0,0,.42);
+  -webkit-backdrop-filter:blur(12px) saturate(1.2); backdrop-filter:blur(12px) saturate(1.2);
+}
+html[data-asb-glass="1"] :is(.cfg-modal,.cfg-profile-modal,.cfg-reset-modal,.diag-wait-modal,.debug-action-wait) {
+  -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+}
+html[data-asb-glass="1"][data-asb-theme="light"] :is(.cfg-modal,.cfg-profile-modal,.cfg-reset-modal,.diag-wait-modal,.debug-action-wait) {
+  background:rgba(14,32,27,.32) !important;
+}
+
 /* Glass changes the material, never the meaning of a reading. These explicit semantic
  * rules come after both neutral material layers so cooling, warning and high load cannot
  * collapse to the default text colour in either palette. */
@@ -3892,25 +3977,68 @@ html[data-asb-glass="1"] .smart-banner-value:is(.cap-clamp,.basis-veto,.load-hig
 html[data-asb-glass="1"] .smart-banner-value .load-high { color:var(--perf) !important; }
 
 /* Every monitored value uses the same evidence vocabulary in all four themes.
- * Unknown and warm-up readings intentionally remain neutral. */
-html .smart-banner-value.metric-good, html .live-cell-value.metric-good,
-html[data-asb-glass="1"] .smart-banner-value.metric-good,
-html[data-asb-glass="1"] .live-cell-value.metric-good { color:var(--bat) !important; }
-html .smart-banner-value.metric-warm, html .live-cell-value.metric-warm,
-html[data-asb-glass="1"] .smart-banner-value.metric-warm,
-html[data-asb-glass="1"] .live-cell-value.metric-warm { color:var(--bal) !important; }
-html .smart-banner-value.metric-bad, html .live-cell-value.metric-bad,
-html[data-asb-glass="1"] .smart-banner-value.metric-bad,
-html[data-asb-glass="1"] .live-cell-value.metric-bad { color:var(--perf) !important; }
-html .smart-banner-value.metric-neutral, html .live-cell-value.metric-neutral,
-html[data-asb-glass="1"] .smart-banner-value.metric-neutral,
-html[data-asb-glass="1"] .live-cell-value.metric-neutral { color:var(--text-tertiary) !important; }
-html .smart-banner-value.metric-normal, html .live-cell-value.metric-normal,
-html[data-asb-glass="1"] .smart-banner-value.metric-normal,
-html[data-asb-glass="1"] .live-cell-value.metric-normal { color:var(--text) !important; }
-html .smart-banner-value.metric-cool, html .live-cell-value.metric-cool,
-html[data-asb-glass="1"] .smart-banner-value.metric-cool,
-html[data-asb-glass="1"] .live-cell-value.metric-cool { color:var(--metric-cool) !important; }
+ * Unknown and warm-up readings intentionally remain neutral.
+ * fix248: one six-step scale for every graded reading - cold, healthy, slightly raised,
+ * raised, high, critical - so a temperature, a load or a drain rate says how far along it
+ * is, not only which side of one line. Plain descriptive values (uptime, the slot, a
+ * modem at its default) carry no grade and keep the card's own value colour. */
+html .smart-banner-value.metric-cool, html .live-cell-value.metric-cool, html .smart-drain-val.metric-cool, html .live-info-val.metric-cool,
+html[data-asb-glass="1"] .smart-banner-value.metric-cool, html[data-asb-glass="1"] .live-cell-value.metric-cool,
+html[data-asb-glass="1"] .smart-drain-val.metric-cool, html[data-asb-glass="1"] .live-info-val.metric-cool,
+html[data-asb-theme="light"] .smart-banner-value.metric-cool, html[data-asb-theme="light"] .live-cell-value.metric-cool,
+html[data-asb-theme="light"] .smart-drain-val.metric-cool, html[data-asb-theme="light"] .live-info-val.metric-cool { color:var(--m-cool) !important; }
+html .smart-banner-value.metric-good, html .live-cell-value.metric-good, html .smart-drain-val.metric-good, html .live-info-val.metric-good,
+html[data-asb-glass="1"] .smart-banner-value.metric-good, html[data-asb-glass="1"] .live-cell-value.metric-good,
+html[data-asb-glass="1"] .smart-drain-val.metric-good, html[data-asb-glass="1"] .live-info-val.metric-good,
+html[data-asb-theme="light"] .smart-banner-value.metric-good, html[data-asb-theme="light"] .live-cell-value.metric-good,
+html[data-asb-theme="light"] .smart-drain-val.metric-good, html[data-asb-theme="light"] .live-info-val.metric-good { color:var(--m-good) !important; }
+html .smart-banner-value.metric-mild, html .live-cell-value.metric-mild, html .smart-drain-val.metric-mild, html .live-info-val.metric-mild,
+html[data-asb-glass="1"] .smart-banner-value.metric-mild, html[data-asb-glass="1"] .live-cell-value.metric-mild,
+html[data-asb-glass="1"] .smart-drain-val.metric-mild, html[data-asb-glass="1"] .live-info-val.metric-mild,
+html[data-asb-theme="light"] .smart-banner-value.metric-mild, html[data-asb-theme="light"] .live-cell-value.metric-mild,
+html[data-asb-theme="light"] .smart-drain-val.metric-mild, html[data-asb-theme="light"] .live-info-val.metric-mild { color:var(--m-mild) !important; }
+html .smart-banner-value.metric-warm, html .live-cell-value.metric-warm, html .smart-drain-val.metric-warm, html .live-info-val.metric-warm,
+html[data-asb-glass="1"] .smart-banner-value.metric-warm, html[data-asb-glass="1"] .live-cell-value.metric-warm,
+html[data-asb-glass="1"] .smart-drain-val.metric-warm, html[data-asb-glass="1"] .live-info-val.metric-warm,
+html[data-asb-theme="light"] .smart-banner-value.metric-warm, html[data-asb-theme="light"] .live-cell-value.metric-warm,
+html[data-asb-theme="light"] .smart-drain-val.metric-warm, html[data-asb-theme="light"] .live-info-val.metric-warm { color:var(--m-warm) !important; }
+html .smart-banner-value.metric-hot, html .live-cell-value.metric-hot, html .smart-drain-val.metric-hot, html .live-info-val.metric-hot,
+html[data-asb-glass="1"] .smart-banner-value.metric-hot, html[data-asb-glass="1"] .live-cell-value.metric-hot,
+html[data-asb-glass="1"] .smart-drain-val.metric-hot, html[data-asb-glass="1"] .live-info-val.metric-hot,
+html[data-asb-theme="light"] .smart-banner-value.metric-hot, html[data-asb-theme="light"] .live-cell-value.metric-hot,
+html[data-asb-theme="light"] .smart-drain-val.metric-hot, html[data-asb-theme="light"] .live-info-val.metric-hot { color:var(--m-hot) !important; }
+html .smart-banner-value.metric-bad, html .live-cell-value.metric-bad, html .smart-drain-val.metric-bad, html .live-info-val.metric-bad,
+html[data-asb-glass="1"] .smart-banner-value.metric-bad, html[data-asb-glass="1"] .live-cell-value.metric-bad,
+html[data-asb-glass="1"] .smart-drain-val.metric-bad, html[data-asb-glass="1"] .live-info-val.metric-bad,
+html[data-asb-theme="light"] .smart-banner-value.metric-bad, html[data-asb-theme="light"] .live-cell-value.metric-bad,
+html[data-asb-theme="light"] .smart-drain-val.metric-bad, html[data-asb-theme="light"] .live-info-val.metric-bad { color:var(--m-bad) !important; }
+html .smart-banner-value.metric-neutral, html .live-cell-value.metric-neutral, html .smart-drain-val.metric-neutral, html .live-info-val.metric-neutral,
+html[data-asb-glass="1"] .smart-banner-value.metric-neutral, html[data-asb-glass="1"] .live-cell-value.metric-neutral,
+html[data-asb-glass="1"] .smart-drain-val.metric-neutral, html[data-asb-glass="1"] .live-info-val.metric-neutral,
+html[data-asb-theme="light"] .smart-banner-value.metric-neutral, html[data-asb-theme="light"] .live-cell-value.metric-neutral,
+html[data-asb-theme="light"] .smart-drain-val.metric-neutral, html[data-asb-theme="light"] .live-info-val.metric-neutral { color:var(--text-tertiary) !important; }
+html .live-cell-value.metric-normal, html[data-asb-glass="1"] .live-cell-value.metric-normal,
+html[data-asb-theme="light"] .live-cell-value.metric-normal { color:var(--text) !important; }
+html .smart-banner-value.metric-normal { color:#9ef2e4; }
+html[data-asb-theme="light"] .smart-banner-value.metric-normal { color:#00634f !important; }
+html[data-asb-glass="1"] .smart-banner-value.metric-normal { color:var(--text) !important; }
+html[data-asb-glass="1"][data-asb-theme="light"] .smart-banner-value.metric-normal { color:#00634f !important; }
+/* A battery that is charging: the word shimmers gently from green to blue, so it reads as
+ * something happening rather than a reading. Still colour for reduced motion. */
+html .smart-banner-value.metric-charge, html .live-cell-value.metric-charge, html .smart-drain-val.metric-charge, html .live-info-val.metric-charge,
+html[data-asb-glass="1"] .smart-banner-value.metric-charge, html[data-asb-glass="1"] .live-cell-value.metric-charge,
+html[data-asb-glass="1"] .smart-drain-val.metric-charge, html[data-asb-glass="1"] .live-info-val.metric-charge,
+html[data-asb-theme="light"] .smart-banner-value.metric-charge, html[data-asb-theme="light"] .live-cell-value.metric-charge,
+html[data-asb-theme="light"] .smart-drain-val.metric-charge, html[data-asb-theme="light"] .live-info-val.metric-charge {
+  color:var(--m-charge-a) !important;
+  background:linear-gradient(100deg,var(--m-charge-a) 0%,var(--m-charge-b) 38%,var(--m-charge-hi) 50%,var(--m-charge-b) 62%,var(--m-charge-a) 100%);
+  background-size:260% 100%; -webkit-background-clip:text; background-clip:text;
+  -webkit-text-fill-color:transparent; animation:asbChargeFlow 2.6s linear infinite;
+}
+@keyframes asbChargeFlow { from { background-position:100% 0; } to { background-position:-160% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .metric-charge { animation:none !important; -webkit-text-fill-color:currentColor !important; background:none !important; }
+}
 
 /* Category identity remains visible through the glass: a tinted translucent body and edge,
  * a stronger tonal icon pill, and the existing category progress hue. Titles and descriptions
@@ -5719,7 +5847,7 @@ function openLivePage() {
     if (_selectedProfile === 'stock') pollStockTelemetry(true, true);
     pollLive(true);
   }, LIVE_OPEN_SETTLE_MS);
-  _liveTimer = setInterval(() => pollLive(true), 3000);
+  _liveTimer = setInterval(() => { pollLive(true).then(lviSample, lviSample); }, 3000);
   /* fix202: Monitor is the tall page - once it is up, measure it and compact the chrome
      if it runs past the screen (the page is full-height from its first frame; the slide
      is a transform and does not change the measurement). */
@@ -5819,6 +5947,7 @@ function lvSlotHeat(tx10, coolx10, warmx10) {
    * warm about the slot; the sheet puts the CPU temperature now beside it. */
   let key = 'lv_heat_norm', def = 'typical', warm = false;
   if (warmx10 > 0 && tx10 > warmx10) { key = 'lv_heat_warm'; def = 'warm'; warm = true; }
+  if (warm && tx10 >= warmx10 + Math.max(30, coolx10 > 0 ? Math.round((warmx10 - coolx10) / 2) : 30)) def = 'hot';
   else if (coolx10 > 0 && tx10 < coolx10) { key = 'lv_heat_cool'; def = 'cool'; }
   const band = (coolx10 > 0 && warmx10 > 0)
     ? Math.round(coolx10 / 10) + '\u2013' + Math.round(warmx10 / 10) + '\u00b0C' : '\u2014';
@@ -5843,9 +5972,9 @@ function lvFitValues() {
     if (!card || card.style.display === 'none' || !card.querySelectorAll) return;
     card.querySelectorAll('.smart-banner-value').forEach(function (v) {
       v.style.fontSize = '';
-      if (!(v.clientWidth > 0) || v.scrollWidth <= v.clientWidth + 1) return;
+      if (!(v.clientWidth > 0) || v.scrollWidth <= v.clientWidth) return;
       let fs = parseFloat(getComputedStyle(v).fontSize) || 13;
-      while (fs > 10 && v.scrollWidth > v.clientWidth + 1) { fs -= 0.5; v.style.fontSize = fs + 'px'; }
+      while (fs > 10 && v.scrollWidth > v.clientWidth) { fs -= 0.5; v.style.fontSize = fs + 'px'; }
     });
   });
 }
@@ -5866,7 +5995,21 @@ function lvDrainHome(banner) {
 }
 /* The profile-independent drain meter (runtime/asb_drain_meter.sh, fix161): the same method
  * for every profile, Stock included, kept per profile so they can be compared. */
-const _lvMeter = { at: 0, cur: '', p: {} };
+const _lvMeter = { at: 0, cur: '', p: {}, boot: null };
+/* fix248: screen-on and screen-off seconds since the phone started, counted by the drain
+ * meter ("<boot id> <on> <off>"); null until the meter has written one this boot. */
+function lvBootParse(text) {
+  const f = String(text || '').trim().split(/\s+/);
+  if (f.length < 3) return null;
+  const on = parseInt(f[1], 10), off = parseInt(f[2], 10);
+  return (Number.isFinite(on) && on >= 0 && Number.isFinite(off) && off >= 0) ? { on: on, off: off } : null;
+}
+/* "2d 3h 14m" in the UI's own units. */
+function lvDurDHM(sec) {
+  const s = Math.max(0, Math.floor(+sec || 0));
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+  return (d ? d + T('unit_d', 'd') + ' ' : '') + (d || h ? h + T('unit_h', 'h') + ' ' : '') + m + T('unit_m', 'm');
+}
 /* The governor's screen-off drain (fix189): x/n phone-wide - every window, any profile, used
  * only for time-to-empty estimates marked "~" - and by[profile] from windows one profile held
  * throughout, which the profile cards show. */
@@ -5894,11 +6037,12 @@ async function lvMeterPoll(force) {
   try {
     /* fix189: with the governor's per-profile screen-off figures, read from its file so the
      * home cards have them on every profile, Stock included (no state is read there). */
-    const r = await run('{ cat /dev/.asb_drain_meter 2>/dev/null || cat /data/adb/asb/drain_meter 2>/dev/null; }; echo ---; cat /data/adb/asb/offdrain_profiles 2>/dev/null');
+    const r = await run('{ cat /dev/.asb_drain_meter 2>/dev/null || cat /data/adb/asb/drain_meter 2>/dev/null; }; echo ---; cat /data/adb/asb/offdrain_profiles 2>/dev/null; echo ---; cat /dev/.asb_drain_meter.boot 2>/dev/null');
     const parts = ((r && r.stdout) || '').split('---');
     const m = lvMeterParse(parts[0] || '');
     _lvMeter.cur = m.cur; _lvMeter.p = m.p;
     _lvGovOff.by = lvGovOffParse(parts[1] || '');
+    _lvMeter.boot = lvBootParse(parts[2] || '');
   } catch (e) {}
 }
 /* "name rate windows" lines, /data/adb/asb/offdrain_profiles (fix189). */
@@ -5953,6 +6097,8 @@ function lvMeterPaint(profile) {
   const off = lvOffFigure(profile);
   if (onEl) onEl.textContent = (e && e.on > 0) ? lvPct(e.on, 10, 1) : T('lv_measuring', 'measuring\u2026');
   if (offEl) offEl.textContent = off ? off.t : T('lv_measuring', 'measuring\u2026');
+  asbMetricPaint('bnDrain', (e && e.on > 0) ? asbScreenDrainMetric(e.on / 10, true) : 'metric-info');
+  asbMetricPaint('bnDrainOff', off ? asbScreenDrainMetric(off.x / 100, false) : 'metric-info');
   _lvDrain.on = (e && e.on > 0) ? 'meter' : 'meter_wait';
   _lvDrain.off = off ? 'measured' : 'wait';
   _lvDrain.offN = off ? off.n : 0;
@@ -6370,7 +6516,7 @@ const LVI_TEXT = {
   sclock: ['lvi_sclock', 'The highest current clock among the CPU clusters in this reading. It changes many times a second, so one reading says little on its own; below, the clock of every cluster.'],
   sload: ['lvi_sload', 'System load over the last minute: how many tasks were running or waiting - for the CPU or for storage - on average. Android counts storage waits too, so this number alone can read past the core count on a phone that is doing almost nothing; that is normal, not an overload. The percentage beside it is the part of the last seconds the cores were genuinely busy, measured from /proc/stat between two readings. The 5- and 15-minute figures and the per-core share are in the tooltip.'],
   sbattery: ['lvi_sbattery', 'Charge level and voltage, read straight from the battery driver. The voltage falls as the charge goes down and sags briefly under load; below, the battery temperature.'],
-  suptime: ['lvi_suptime', 'Time since the phone was last started. Below, when that was.']
+  suptime: ['lvi_suptime', 'Time since the phone was last started. Below: when that was, and how long the screen was on and off since then.']
 };
 /* The words the tiles show, by placeholder. */
 function lviFill(t) {
@@ -6407,7 +6553,9 @@ function liveInfoEnsure() {
     + '<div class="cfg-profile-head"><div class="cfg-profile-title" id="liveInfoTitle"></div>'
     + '<button class="cfg-profile-close" id="liveInfoX" type="button" aria-label="Close">\u00d7</button></div>'
     + '<div class="live-info-now"><span class="live-drain-lbl" id="liveInfoNowLbl"></span><span class="live-info-val" id="liveInfoVal"></span></div>'
+    + '<div class="live-info-scale" id="liveInfoScale" hidden></div>'
     + '<div class="live-info-text" id="liveInfoText"></div>'
+    + '<div class="live-info-hist" id="liveInfoHist" hidden></div>'
     + '<div class="live-info-src" id="liveInfoSrc" hidden></div>'
     + '<button class="cfg-profile-primary live-drain-done" id="liveInfoDone" type="button"></button></div>';
   document.body.appendChild(m);
@@ -6428,6 +6576,22 @@ function liveInfoSource(key, cell) {
     if (f.length) lines.push(f.map(function (x) { return (x / 1e6).toFixed(2); }).join(' \u00b7 ') + ' GHz');
   }
   if (key === 'cpuceil') _stockLiveInfo.ceil.forEach(function (l) { lines.push(l); });
+  /* fix248: how the time since the start splits between the screen on and off. */
+  if (key === 'suptime') {
+    const vv = cell && cell.querySelector('.smart-banner-value');
+    if (vv && vv.title) lines.push(T('lvi_started', 'Started: %s').replace('%s', vv.title));
+    const up = _stockLiveInfo.uptimeSec > 0
+      ? _stockLiveInfo.uptimeSec + Math.max(0, Math.round((Date.now() - (_stockLiveInfo.uptimeAt || Date.now())) / 1000)) : 0;
+    const b = _lvMeter.boot;
+    if (up > 0 && b) {
+      const on = Math.min(b.on, up), off = up - on;
+      lines.push(T('lvi_scr_on_time', 'Screen on: %1 (%2 %)').replace('%1', lvDurDHM(on)).replace('%2', String(Math.round(on * 100 / up))));
+      lines.push(T('lvi_scr_off_time', 'Screen off: %1 (%2 %)').replace('%1', lvDurDHM(off)).replace('%2', String(Math.round(off * 100 / up))));
+    } else if (up > 0) {
+      lines.push(T('lvi_scr_wait', 'Screen-on and screen-off time appear after the next restart: they are counted from the moment the phone starts.'));
+    }
+    return lines;
+  }
   const v = cell && (cell.querySelector('.live-cell-value') || cell.querySelector('.smart-banner-value'));
   const tip = ((v && v.title) || '').split('\n').filter(function (l) { return l && l.indexOf('=') < 0; }).join('\n');
   if (tip && lines.indexOf(tip) < 0) lines.push(tip);
@@ -6438,6 +6602,191 @@ function liveInfoSource(key, cell) {
     if (/\d/.test(cv)) lines.push(T('lvi_cpu_now', 'CPU now: %s').replace('%s', cv));
   }
   return lines;
+}
+/* fix248: what the sheet adds to every tile - where the reading sits on its colour scale,
+ * how it moved while Monitor was open, and the raw facts behind it where the phone exposes
+ * them. History is kept per profile and tile, in memory only, for fifteen minutes. */
+const LVI_HIST_MS = 15 * 60 * 1000;
+const _lviHist = {};
+const LVI_SCALES = {
+  cpu: { cuts: [35, 45, 52, 60, 68], unit: '°', kind: 't', steps: ['metric-cool', 'metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'] },
+  skin: { cuts: [30, 35, 38, 41, 44], unit: '°', kind: 't', steps: ['metric-cool', 'metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'] },
+  board: { cuts: [32, 38, 42, 46, 50], unit: '°', kind: 't', steps: ['metric-cool', 'metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'] },
+  battemp: { cuts: [25, 35, 38, 41, 45], unit: '°', kind: 't', steps: ['metric-cool', 'metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'] },
+  gpu: { cuts: [25, 45, 65, 85], unit: '%', kind: 'l', steps: ['metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'] },
+  headroom: { cuts: [10, 15, 25, 35], unit: '%', kind: 'h', steps: ['metric-bad', 'metric-hot', 'metric-warm', 'metric-mild', 'metric-good'] },
+  clamps: { cuts: [4, 11, 21, 41], unit: '', kind: 'c', steps: ['metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'] },
+  sbattery: { cuts: [10, 20, 30, 50], unit: '%', kind: 'b', steps: ['metric-bad', 'metric-hot', 'metric-warm', 'metric-mild', 'metric-good'] }
+};
+const LVS_FB = {
+  t: { 'metric-cool': 'cool', 'metric-good': 'normal', 'metric-mild': 'warm', 'metric-warm': 'quite warm', 'metric-hot': 'hot', 'metric-bad': 'overheating' },
+  l: { 'metric-good': 'light', 'metric-mild': 'moderate', 'metric-warm': 'noticeable', 'metric-hot': 'high', 'metric-bad': 'at the limit' },
+  h: { 'metric-bad': 'almost none', 'metric-hot': 'little', 'metric-warm': 'limited', 'metric-mild': 'enough', 'metric-good': 'free' },
+  c: { 'metric-good': 'rare', 'metric-mild': 'now and then', 'metric-warm': 'often', 'metric-hot': 'very often', 'metric-bad': 'constant' },
+  b: { 'metric-bad': 'critical', 'metric-hot': 'low', 'metric-warm': 'under a third', 'metric-mild': 'under half', 'metric-good': 'enough' }
+};
+function lviKeyOf(cell) {
+  const pos = cell.getAttribute('data-lvi');
+  let key = (_selectedProfile === 'stock' && LVI_STOCK[pos]) ? LVI_STOCK[pos] : pos;
+  if (key === 'learner' && _selectedProfile !== 'smart') key = 'learnerp';
+  return key;
+}
+function lviNum(text) {
+  const m = /[-−]?\d+(?:[.,]\d+)?/.exec(String(text || ''));
+  return m ? parseFloat(m[0].replace('−', '-').replace(',', '.')) : null;
+}
+function lviSample() {
+  if (typeof document === 'undefined' || document.hidden || !document.querySelectorAll) return;
+  const now = Date.now();
+  document.querySelectorAll('.live-cell[data-lvi], .smart-banner-item[data-lvi]').forEach(function (c) {
+    if (c.offsetParent === null) return;
+    const key = lviKeyOf(c);
+    if (key === 'suptime') return;
+    const val = c.querySelector('.live-cell-value') || c.querySelector('.smart-banner-value');
+    const txt = liveInfoValText(val);
+    if (!txt || txt === '—' || txt === '-') return;
+    const hk = _selectedProfile + ':' + key;
+    const h = _lviHist[hk] || (_lviHist[hk] = []);
+    const last = h[h.length - 1];
+    if (last && now - last.t < 1500) return;
+    h.push({ t: now, n: lviNum(txt), s: txt });
+    while (h.length && now - h[0].t > LVI_HIST_MS) h.shift();
+  });
+}
+function lviStepName(kind, step) {
+  return T('lvs_' + kind + '_' + step.replace('metric-', ''), (LVS_FB[kind] || {})[step] || step);
+}
+function lviScaleRender(box, key, num) {
+  const sc = LVI_SCALES[key];
+  box.textContent = '';
+  if (!sc || num === null || !Number.isFinite(num)) { box.hidden = true; return; }
+  let idx = sc.cuts.length;
+  for (let i = 0; i < sc.cuts.length; i++) if (num < sc.cuts[i]) { idx = i; break; }
+  const bar = document.createElement('div'); bar.className = 'lvs-bar';
+  const ticks = document.createElement('div'); ticks.className = 'lvs-ticks';
+  sc.steps.forEach(function (st, i) {
+    const seg = document.createElement('span'); seg.className = 'lvs-seg ' + st + (i === idx ? ' on' : '');
+    seg.title = lviStepName(sc.kind, st);
+    bar.appendChild(seg);
+    const tk = document.createElement('span'); tk.textContent = i < sc.cuts.length ? String(sc.cuts[i]) + sc.unit : '';
+    ticks.appendChild(tk);
+  });
+  const lo = idx > 0 ? sc.cuts[idx - 1] : null, hi = idx < sc.cuts.length ? sc.cuts[idx] : null;
+  const range = lo === null ? '< ' + hi + sc.unit : hi === null ? '≥ ' + lo + sc.unit : lo + '–' + hi + sc.unit;
+  const now = document.createElement('div'); now.className = 'lvs-now';
+  now.textContent = T('lvi_scale_now', 'Now: «%1» · %2').replace('%1', lviStepName(sc.kind, sc.steps[idx])).replace('%2', range);
+  box.appendChild(bar); box.appendChild(ticks); box.appendChild(now);
+  box.hidden = false;
+}
+function lviFmt(n) {
+  const a = Math.abs(n);
+  return (a >= 100 || Number.isInteger(n)) ? String(Math.round(n)) : a >= 10 ? n.toFixed(1) : n.toFixed(2);
+}
+function lviHistRender(box, key, color, extra) {
+  box.textContent = '';
+  const h = (_lviHist[_selectedProfile + ':' + key] || []).slice();
+  const lines = [];
+  const span = h.length ? Math.max(1, Math.round((Date.now() - h[0].t) / 60000)) : 0;
+  const nums = h.filter(function (x) { return x.n !== null && Number.isFinite(x.n); });
+  if (nums.length >= 3 && nums.length * 2 >= h.length) {
+    const vs = nums.map(function (x) { return x.n; });
+    const mn = Math.min.apply(null, vs), mx = Math.max.apply(null, vs);
+    const avg = vs.reduce(function (a, b) { return a + b; }, 0) / vs.length;
+    const sfx = String(h[h.length - 1].s || '').replace(/^[\s\S]*?[-−]?\d+(?:[.,]\d+)?/, '').trim();
+    const u = /^[^\d]{0,6}$/.test(sfx) ? (/^[%°]/.test(sfx) ? sfx : (sfx ? ' ' + sfx : '')) : '';
+    const ln = document.createElement('div'); ln.className = 'lvh-line';
+    ln.textContent = T('lvi_hist_num', 'Last %1: min %2 · avg %3 · max %4')
+      .replace('%1', logReportDur(span)).replace('%2', lviFmt(mn) + u)
+      .replace('%3', (vs.every(Number.isInteger) ? String(Math.round(avg)) : lviFmt(avg)) + u).replace('%4', lviFmt(mx) + u);
+    box.appendChild(ln);
+    const t0 = nums[0].t, t1 = nums[nums.length - 1].t, rng = (mx - mn) || 1;
+    const pts = nums.map(function (x) {
+      const px = t1 > t0 ? (x.t - t0) * 100 / (t1 - t0) : 0;
+      const py = 30 - (x.n - mn) * 28 / rng - 1;
+      return px.toFixed(1) + ',' + py.toFixed(1);
+    });
+    const NS = 'http://www.w3.org/2000/svg';
+    if (document.createElementNS) {
+      const svg = document.createElementNS(NS, 'svg');
+      svg.setAttribute('class', 'lvh-spark'); svg.setAttribute('viewBox', '0 0 100 30'); svg.setAttribute('preserveAspectRatio', 'none');
+      const fill = document.createElementNS(NS, 'polygon');
+      fill.setAttribute('class', 'lvh-fill'); fill.setAttribute('points', '0,30 ' + pts.join(' ') + ' 100,30');
+      fill.setAttribute('fill', color || 'currentColor');
+      const pl = document.createElementNS(NS, 'polyline');
+      pl.setAttribute('points', pts.join(' ')); pl.setAttribute('stroke', color || 'currentColor');
+      svg.appendChild(fill); svg.appendChild(pl); box.appendChild(svg);
+    }
+  } else if (h.length >= 3) {
+    const share = {};
+    for (let i = 0; i < h.length; i++) {
+      const dt = i + 1 < h.length ? Math.min(h[i + 1].t - h[i].t, 30000) : 3000;
+      share[h[i].s] = (share[h[i].s] || 0) + dt;
+    }
+    const tot = Object.keys(share).reduce(function (a, k) { return a + share[k]; }, 0) || 1;
+    const parts = Object.keys(share).sort(function (a, b) { return share[b] - share[a]; }).slice(0, 4)
+      .map(function (k) { return k + ' ' + Math.round(share[k] * 100 / tot) + '%'; });
+    const ln = document.createElement('div'); ln.className = 'lvh-line';
+    ln.textContent = T('lvi_hist_cat', 'Last %1: %2').replace('%1', logReportDur(span)).replace('%2', parts.join(' · '));
+    box.appendChild(ln);
+  } else if (key !== 'suptime' && key !== 'basis') {
+    const ln = document.createElement('div'); ln.className = 'lvh-line';
+    ln.textContent = T('lvi_hist_wait', 'The history of this reading builds up while Monitor stays open.');
+    box.appendChild(ln);
+  }
+  if (extra && extra.length) {
+    const ex = document.createElement('div'); ex.className = 'lvh-extra'; ex.textContent = extra.join('\n');
+    box.appendChild(ex);
+  }
+  box.hidden = !box.childNodes.length;
+}
+/* Raw facts behind a tile from the ROM snapshot and the governor's state, where they exist. */
+function lviExtra(key) {
+  const out = [];
+  const t = _stockTelemetryKv || {};
+  const kv = (_lvLast && _lvLast.kv) || {};
+  const zones = function (re) {
+    return Object.keys(t).filter(function (k) { return k.indexOf('thermal.') === 0 && re.test(k.slice(8)); })
+      .map(function (k) { const v = parseInt(t[k], 10); return { n: k.slice(8), c: v > 1000 ? v / 1000 : v }; })
+      .filter(function (z) { return z.c > 0 && z.c < 150; });
+  };
+  if (key === 'cpu') {
+    const z = zones(/^cpu/);
+    if (z.length >= 2) {
+      const cs = z.map(function (x) { return x.c; });
+      out.push(T('lvi_zones_cpu', 'CPU zones now: %1, from %2 to %3°')
+        .replace('%1', String(z.length)).replace('%2', lviFmt(Math.min.apply(null, cs))).replace('%3', lviFmt(Math.max.apply(null, cs))));
+    }
+  } else if (key === 'skin' || key === 'board') {
+    const z = zones(key === 'skin' ? /shell|skin|quiet|case|front|back/ : /board|sys|pa-|xo|pmic/).slice(0, 4);
+    if (z.length) out.push(T('lvi_zones', 'Zones: %s').replace('%s', z.map(function (x) { return x.n + ' ' + lviFmt(x.c) + '°'; }).join(' · ')));
+  } else if (key === 'gpu') {
+    const c = parseInt(t['gpu.gpuclk'], 10), m = parseInt(t['gpu.max_gpuclk'], 10);
+    const mhz = function (v) { return v > 100000 ? Math.round(v / 1e6) : v; };
+    if (c > 0 && m > 0) out.push(T('lvi_gpu_clock', 'GPU clock: %1 of %2 MHz').replace('%1', String(mhz(c))).replace('%2', String(mhz(m))));
+  } else if (key === 'sdrain') {
+    const ua = parseInt(t['battery.current_now'], 10), uv = parseInt(t['battery.voltage_now'], 10), full = parseInt(t['battery.charge_full'], 10);
+    const st = String(t['battery.status'] || '').toLowerCase();
+    if (Number.isFinite(ua) && ua !== 0 && st !== 'charging' && st !== 'full') {
+      const ma = Math.abs(ua) > 20000 ? Math.abs(ua) / 1000 : Math.abs(ua);
+      if (uv > 0) out.push(T('lvi_power', 'Power now: %s W').replace('%s', (ma * (uv > 100000 ? uv / 1e6 : uv / 1000) / 1000).toFixed(2)));
+      const cap = full > 100000 ? full / 1000 : full;
+      if (cap > 500) out.push(T('lvi_rate_now', 'At this current: about %s %/h').replace('%s', (ma * 100 / cap).toFixed(1)));
+      const sc = parseInt(kv.current_scale_x100, 10), sw = parseInt(kv.current_scale_windows, 10);
+      if (sc >= 10 && sc <= 75 && sw >= 10) {
+        const real = ma * 100 / sc;
+        out.push((cap > 500
+          ? T('lvi_gauge_real', "This phone's current sensor reads about %1\u00d7 low (%2 checks): the real draw is nearer %3 mA, about %4 %/h")
+          : T('lvi_gauge_real0', "This phone's current sensor reads about %1\u00d7 low (%2 checks): the real draw is nearer %3 mA"))
+          .replace('%1', (100 / sc).toFixed(1)).replace('%2', String(sw)).replace('%3', String(Math.round(real)))
+          .replace('%4', cap > 500 ? (real * 100 / cap).toFixed(1) : ''));
+      }
+    }
+  } else if (key === 'sram') {
+    const st = parseInt(String(t.SwapTotal || '').replace(/\D/g, ''), 10), sf = parseInt(String(t.SwapFree || '').replace(/\D/g, ''), 10);
+    if (st > 0 && sf >= 0) out.push(T('lvi_zram_use', 'Compressed memory (zRAM): %1 of %2 GB in use')
+      .replace('%1', ((st - sf) / 1048576).toFixed(1)).replace('%2', (st / 1048576).toFixed(1)));
+  }
+  return out;
 }
 /* A Smart-banner value can carry a pill badge as a child element (the slot name plus
  * "вых"). Raw textContent glues the badge onto the value ("вечервых") - only the
@@ -6471,6 +6820,7 @@ function liveInfoOpen(cell) {
   const val = cell.querySelector('.live-cell-value') || cell.querySelector('.smart-banner-value');
   _el('liveInfoTitle').textContent = (lbl && lbl.textContent) || '';
   _el('liveInfoNowLbl').textContent = key === 'slotheat' ? T('lvi_usual', 'Usually in this slot') : T('lvi_now', 'Now');
+  lviSample();
   const iv = _el('liveInfoVal');
   iv.textContent = liveInfoValText(val);
   iv.className = 'live-info-val' + (val ? ' ' + val.className.replace('live-cell-value', '').replace('smart-banner-value', '').trim() : '');
@@ -6482,6 +6832,8 @@ function liveInfoOpen(cell) {
   iv.style.color = '';
   try { if (val && typeof getComputedStyle === 'function') iv.style.color = getComputedStyle(val).color || ''; } catch (e) {}
   _el('liveInfoText').textContent = lviFill(T(txt[0], txt[1]));
+  lviScaleRender(_el('liveInfoScale'), key, lviNum(iv.textContent));
+  lviHistRender(_el('liveInfoHist'), key, iv.style.color, lviExtra(key));
   const src = _el('liveInfoSrc');
   const lines = liveInfoSource(key, cell);
   src.textContent = lines.join('\n');
@@ -10246,7 +10598,7 @@ function asbToggleLogMenu(ev) {
  * capture too: the digest folds in the still-open phase, so the numbers move as the
  * day goes on. */
 function parseLogReport(txt) {
-  const d = { ok: false, error: '', sections: {}, wl: [], wlive: [], wlt: [], wla: [], profs: [], phases: [], kwk: [], japps: [], jphases: [], jstates: [], hzs: [], hist: [], cfg: {} };
+  const d = { ok: false, error: '', sections: {}, wl: [], wlive: [], wlt: [], wla: [], profs: [], phases: [], kwk: [], japps: [], jphases: [], jstates: [], hzs: [], hist: [], rapps: [], btdrops: [], cfg: {} };
   if (!txt) { d.error = 'empty'; return d; }
   const lines = String(txt).split('\n');
   for (const raw of lines) {
@@ -10301,6 +10653,11 @@ function parseLogReport(txt) {
         pct: +kv.pct || 0, jps: +kv.jps || 0 });
     } else if (tag === 'hz') {
       if (kv.mode) d.hzs.push({ mode: kv.mode, share: +kv.share || 0, ma: +kv.ma || 0 });
+    } else if (tag === 'btdrop') {
+      if (kv.at) d.btdrops.push({ at: kv.at, who: kv.who || 'stack', whole: kv.whole === '1', back: kv.back !== '0' });
+    } else if (tag === 'rapp') {
+      /* fix248: the apps that moved the mobile data, from Android's per-app count. */
+      if (kv.pkg) d.rapps.push({ pkg: kv.pkg, mib: +kv.mib || 0 });
     } else if (tag === 'hist') {
       /* fix213 (audit 8.2): earlier finished captures, newest first - the trend the
          page compares this day against. Values may be '-' when a capture had no night
@@ -10553,6 +10910,16 @@ function logReportTips(d, all) {
     if ((+cost.cpu_msh || 0) <= 2500 || _msPerWake <= 8) tips.push({ ic: 'ok', key: 'lr_tip_cost_ok', vars: { ms: ms } });
     else tips.push({ ic: 'info', key: 'lr_tip_cost_hi', vars: { ms: ms } });
   }
+  /* fix248: a switch that was on and never ran is the first thing to fix - it is ASB's own
+     fault; heavy mobile data comes next, with the app that moved the most. */
+  const lteIdle = logReportLteIdle(s);
+  if (lteIdle) tips.push({ ic: 'warn', key: 'lr_tip_lte_idle', vars: lteIdle });
+  const radioT = s.radio || null;
+  if (radioT && (+radioT.mib || 0) >= 256 && d.rapps && d.rapps.length) {
+    const rh = Math.max(0.5, (+(s.meta || {}).elapsed_min || 0) / 60);
+    tips.push({ ic: (+radioT.mib || 0) / rh >= 250 ? 'warn' : 'info', key: 'lr_tip_net_heavy',
+      vars: { mib: logReportMiB(radioT.mib), app: d.rapps[0].pkg, amib: logReportMiB(d.rapps[0].mib) } });
+  }
   if (cfg.ltpo_video === '0')
     tips.push({ ic: 'info', key: 'lr_tip_ltpo', vars: { set: Tcfg('ltpo_video', 'name', 'Lowest Refresh for Video') } });
   if (crash && (+crash.count || 0) > 2 && !((+crash.asb || 0) > 0)) tips.push({ ic: 'info', key: 'lr_tip_crashes', vars: { n: String(crash.count) } });
@@ -10561,6 +10928,36 @@ function logReportTips(d, all) {
     tips.push({ ic: hasEvidence ? 'ok' : 'info', key: hasEvidence ? 'lr_tip_ok' : 'lr_tip_wait', vars: {} });
   }
   return all ? tips : tips.slice(0, 6);
+}
+/* fix248: data volumes the way people read them, and the setting that tames each kind of
+ * app that moved the most mobile data - an app store updating apps, a messenger
+ * auto-downloading media, a video feed, anything else. */
+function logReportMiB(x) {
+  const v = +x || 0;
+  return v >= 1024 ? (v / 1024).toFixed(1) + '\u00a0GiB' : Math.round(v) + '\u00a0MiB';
+}
+function logReportNetFix(pkg) {
+  const p = String(pkg || '');
+  if (p === 'com.android.vending') return 'lr_dx_fix_net_play';
+  if (/telegram|challegram|nekogram|nagram|ayugram|cherrygram|exteragram/i.test(p)) return 'lr_dx_fix_net_tg';
+  if (/^com\.whatsapp(\.w4b)?$/.test(p)) return 'lr_dx_fix_net_wa';
+  if (/youtube|instagram|tiktok|musically|facebook\.katana|netflix|twitch|reddit|snapchat|vkontakte|rutube/i.test(p)) return 'lr_dx_fix_net_video';
+  return 'lr_dx_fix_net_app';
+}
+/* The LTE switches were on and never moved: no apply, no LTE minute, no quiet window
+ * counted, no watcher seen in any snapshot - with enough screen time to have needed them.
+ * Builds before fix248 never started them on the manual profiles. */
+function logReportLteIdle(s) {
+  const lte = s.lte || null, cover = s.cover || null, radio = s.radio || null, scr = s.scr || null;
+  if (!lte || lte.unsup === '1' || (+lte.snaps || 0) < 3 || !radio || (+radio.mib || 0) < 100) return null;
+  if ((+lte.applies || 0) > 0 || (+lte.lte_min || 0) > 0 || (+lte.quiet || 0) > 0 || (+lte.watch || 0) > 0) return null;
+  const lightIdle = lte.light === '1' && cover && (+cover.on_min || 0) >= 60;
+  const offIdle = lte.en === '1' && scr && (+scr.off_min || 0) >= 30;
+  if (!lightIdle && !offIdle) return null;
+  const names = [];
+  if (lightIdle) names.push(Tcfg('net_lte_light', 'name', '5G Only When Needed'));
+  if (offIdle) names.push(Tcfg('net_screen_off_lte', 'name', 'LTE While Screen Off'));
+  return { set: names.join(' / '), n: String(+lte.snaps || 0) };
 }
 function logReportSysuiSteady(sd) {
   return !!(sd && (+sd.of || 0) >= 10 && (+sd.intv || 0) * 10 >= (+sd.of || 0) * 8);
@@ -10752,7 +11149,8 @@ function logReportAnalyze(d) {
     lr_tip_night: 76, lr_tip_jank_bad: 72, lr_tip_jank_bad_bat: 72, lr_tip_jank_bad_man: 72, lr_tip_jank_wake: 70, lr_tip_jank_wake_wh: 70,
     lr_tip_sysui_netspeed: 68, lr_tip_sysui_clocksec: 68, lr_tip_sysui_livewp: 66, lr_tip_sysui_other: 30,
     lr_tip_sysui_inj: 90,
-    lr_tip_wl_enable: 64, lr_tip_app: 62, lr_tip_audio: 45, lr_tip_ltpo: 15
+    lr_tip_wl_enable: 64, lr_tip_app: 62, lr_tip_audio: 45, lr_tip_ltpo: 15,
+    lr_tip_lte_idle: 94, lr_tip_net_heavy: 74
   };
   const actions = logReportTips(d, true).filter(function (t) { return t.ic !== 'ok' && weights[t.key]; })
     .map(function (t, i) { return { tip: t, weight: weights[t.key] || 0, order: i }; })
@@ -11615,7 +12013,9 @@ function logReportTipText(tip) {
     lr_tip_sysui_clocksec: 'SystemUI stutters in {n} of {of} screen-on intervals and the status-bar clock shows seconds - it redraws every second. Turn the seconds off and compare the stutter in the next capture.',
     lr_tip_sysui_livewp: 'SystemUI stutters in {n} of {of} screen-on intervals and a live wallpaper is set - it redraws whenever it is visible. Try a static wallpaper and compare the stutter in the next capture.',
     lr_tip_sysui_other: 'SystemUI stutters in {n} of {of} screen-on intervals although the usual per-second sources are off - look for an animated icon, a floating overlay or a module hooking SystemUI.',
-    lr_tip_sysui_inj: 'SystemUI restarted {n} times; {m} of the recorded restarts crashed inside code that {pkg} injects into SystemUI. Update or disable that module - every restart rebuilds the status bar, drops frames and costs battery.'
+    lr_tip_sysui_inj: 'SystemUI restarted {n} times; {m} of the recorded restarts crashed inside code that {pkg} injects into SystemUI. Update or disable that module - every restart rebuilds the status bar, drops frames and costs battery.',
+    lr_tip_lte_idle: '"{set}" was on but did not run once in this capture - an ASB fault on the manual profiles. Install the current build: the switches now run on every profile.',
+    lr_tip_net_heavy: '{mib} of mobile data went through the modem, the most by {app} ({amib}). What to change is on the Mobile data card above.'
   }[tip.key] || '', tip.vars);
 }
 
@@ -11635,11 +12035,29 @@ function logReportBrief(d, analysis) {
     else add('lr_brief_drain_short', v);
   }
   let offRate = 0;
-  if (scr && (+scr.on_min || 0) >= 10 && (+scr.off_min || 0) >= 10) {
-    offRate = ((+scr.idle_min || 0) > 0 && scr.idle_pctph !== undefined) ? +scr.idle_pctph || 0 : +scr.off_pctph || 0;
-    add('lr_brief_split', { on: logReportDur(scr.on_min), onr: String(scr.on_pctph), off: logReportDur(scr.off_min), offr: String(offRate) });
-  }
   const quiet = night ? +night.dur_min || 0 : 0;
+  /* fix248: "screen off for 21 min: 0 %/h" is a whole-percent step that never came, not a
+     rate. Under an hour off, or with no quiet stretch of an hour, the brief says the off
+     time was too short instead of quoting it. */
+  if (scr && (+scr.on_min || 0) >= 10 && (+scr.off_min || 0) >= 10) {
+    if ((+scr.off_min || 0) >= 60 && quiet >= 60) {
+      offRate = ((+scr.idle_min || 0) > 0 && scr.idle_pctph !== undefined) ? +scr.idle_pctph || 0 : +scr.off_pctph || 0;
+      add('lr_brief_split', { on: logReportDur(scr.on_min), onr: String(scr.on_pctph), off: logReportDur(scr.off_min), offr: String(offRate) });
+    } else add('lr_brief_split_short', { on: logReportDur(scr.on_min), onr: String(scr.on_pctph), off: logReportDur(scr.off_min) });
+  }
+  /* fix248: where screen time went when the modem carried most of it, and a switch that was
+     on yet never ran - the two facts a heavy mobile-data day turned on. */
+  const radio = s.radio || null, meta = s.meta || {};
+  if (radio && (+radio.mib || 0) >= 256) {
+    const rh = Math.max(0.5, (+meta.elapsed_min || 0) / 60);
+    const rv = { mib: logReportMiB(radio.mib), on: logReportMiB(+radio.on || 0) };
+    const heavy = (+radio.mib || 0) / rh >= 250;
+    if (d.rapps && d.rapps.length)
+      add('lr_brief_data', Object.assign(rv, { app: d.rapps[0].pkg, amib: logReportMiB(d.rapps[0].mib) }), heavy);
+    else add('lr_brief_data0', rv, heavy);
+  }
+  const lteIdle = logReportLteIdle(s);
+  if (lteIdle) add('lr_brief_lte_idle', lteIdle, true);
   if (quiet >= 60 && offRate > 0) {
     if (offRate > 1.5) add('lr_brief_idle_bad', { pct: String(offRate) }, true);
     else if (offRate <= 1) add('lr_brief_idle_ok', {});
@@ -11670,6 +12088,10 @@ function logReportBrief(d, analysis) {
     lr_brief_drain: 'Off the charger the battery fell {drop}% over {h} - {pct}%/h on average, about {est} from a full charge at this pace.',
     lr_brief_drain_short: 'Off the charger the battery fell {drop}% over {h} ({pct}%/h).',
     lr_brief_split: 'Screen on for {on}: {onr}%/h. Screen off for {off}: {offr}%/h.',
+    lr_brief_split_short: 'Screen on for {on}: {onr}%/h. The screen was off only {off} in short pauses - too little to judge drain at rest.',
+    lr_brief_data: 'Mobile data: {mib}, {on} of it with the screen on; the most by {app} ({amib}).',
+    lr_brief_data0: 'Mobile data: {mib}, {on} of it with the screen on.',
+    lr_brief_lte_idle: '"{set}" was on but never ran in this capture - an ASB fault on the manual profiles, fixed in this build.',
     lr_brief_idle_bad: 'With the screen off {pct}%/h is a lot: a phone at rest should stay around 1%/h or less.',
     lr_brief_idle_ok: 'With the screen off the phone rested well.',
     lr_brief_cause: 'The phone did not fall asleep {awake}% of the screen-off time; the main reason: {who}, in {pct}% of the checks.',
@@ -11770,6 +12192,28 @@ function logReportDxT(key, vars) {
     lr_dx_crashes: "{n} native crashes during the capture, none in ASB code.",
     lr_dx_fix_crashes: "If an app misbehaves, update it; the crash list is in the full report.",
     lr_dx_gauge: "The current sensor on this phone reads about {x}× low - mA figures are a lower bound; the %/h figures from the battery counter are exact.",
+    lr_dx_screen_net: "With the screen on: {pct}%/h; the modem moved {mib} meanwhile ({ph} an hour) - mobile data is the likely main cost here.",
+    lr_dx_screen_data: "With the screen on the modem moved {mib} ({ph} an hour) - see Mobile data.",
+    lr_dx_screen_bright_low: "Average brightness {b}% - the panel is not what costs here.",
+    lr_dx_screen_bright_high: "Average brightness {b}% - a bright panel is one of the main costs; auto-brightness helps.",
+    lr_dx_screen_top: "{app} was in front for {pct}% of the frames drawn.",
+    lr_dx_net_heavy: "{mib} of mobile data over {h}, {on} of it with the screen on - with this much traffic the modem is one of the main costs.",
+    lr_dx_net_nsa: "The modem was on LTE + 5G at once (5G NSA) in {n} of {of} checks - two radios powered for one connection.",
+    lr_dx_net_apps: "Most of it, by Android's per-app count since {since} ({tot}): {list}.",
+    lr_dx_net_ma: "In screen-on stretches with data moving the battery current was about {pct}% higher than in quiet ones ({hi} against {lo} mA, a lower bound). An app that streams also computes, so this is a correlation, not a split.",
+    lr_dx_lte_ran: "LTE was chosen {n} times in this capture, {min} on LTE in all.",
+    lr_dx_net_try_light: "Try \"{set}\" in ASB settings: with light traffic the modem keeps to LTE, and 5G comes back for a big download.",
+    lr_dx_also_fix: "Also: {txt}",
+    lr_dx_fix_net_play: "Google Play updated apps over mobile data: Play Store → Settings → Network preferences → Auto-update apps → Over Wi-Fi only.",
+    lr_dx_fix_net_tg: "In {app}: Settings → Data and storage → Automatic media download → turn off downloads over mobile data, or lower the size limit.",
+    lr_dx_fix_net_wa: "In WhatsApp: Settings → Storage and data → Media auto-download → When using mobile data → no media.",
+    lr_dx_fix_net_video: "{app} streams video: turn on its data saver or lower the video quality on mobile data.",
+    lr_dx_fix_net_app: "Check whether {app} downloads media, video or updates over mobile data, and limit that to Wi-Fi where it allows.",
+    lr_dx_fix_net_none: "Settings → Network → Data usage shows which apps used the most; limit their downloads to Wi-Fi.",
+    lr_dx_lte_idle: "\"{set}\" was on, yet in {n} checks it never switched and its traffic watcher never ran - the switch did nothing. On Battery, Balanced and Performance this was an ASB fault: the switches were only started by Smart.",
+    lr_dx_fix_lte_idle: "Install the current ASB build - the switches now run on every profile. If a capture made with it still shows this, send the report.",
+    lr_dx_asb_core: "That is {pct}% of one CPU core's time; it woke {on} times an hour with the screen on and {off} with it off, and none of those wakeups wakes a sleeping phone.",
+    lr_dx_asb_core2: "That is {pct}% of one CPU core's time.",
     lr_dx_short: "Only {min} recorded - the causes above are early. Let the log run through a night and a day."
   };
   return logReportT(key, fallback[key] || key, vars || {});
@@ -11854,15 +12298,75 @@ function logReportDiagnose(d) {
     const st = logReportScreenOnDrainState(r, gamingMin >= 30 ? 'screen_on_heavy' : 'screen_on_light');
     const wm = heat ? +heat.warm_min || 0 : 0;
     const hz = (d.hzs || []).reduce(function (n, z) { return n + ((+z.mode || 0) >= 120 ? (+z.share || 0) : 0); }, 0);
-    if (st !== 'problem') item('screen', st, 'lr_dx_screen_ok', { pct: String(r), est: logReportFullCharge(r) });
+    const radioOn = s.radio ? +s.radio.on || 0 : 0;
+    const onHours = Math.max(0.5, (+scr.on_min || 0) / 60);
+    const dataHeavy = radioOn >= 200 && radioOn / onHours >= 150;
+    let sit;
+    if (st !== 'problem') sit = item('screen', st, 'lr_dx_screen_ok', { pct: String(r), est: logReportFullCharge(r) });
     else if (gamingMin >= 30 || wm >= 20)
-      item('screen', st, 'lr_dx_screen_heavy', { pct: String(r), min: logReportDur(Math.max(gamingMin, wm)) }, 'load', 'lr_dx_fix_screen_heavy');
+      sit = item('screen', st, 'lr_dx_screen_heavy', { pct: String(r), min: logReportDur(Math.max(gamingMin, wm)) }, 'load', 'lr_dx_fix_screen_heavy');
     else if (prof === 'performance')
-      item('screen', st, 'lr_dx_screen_perf', { pct: String(r), prof: T('prof_performance', 'Performance') }, 'user', 'lr_dx_fix_screen_perf');
+      sit = item('screen', st, 'lr_dx_screen_perf', { pct: String(r), prof: T('prof_performance', 'Performance') }, 'user', 'lr_dx_fix_screen_perf');
     else if (hz >= 60)
-      item('screen', st, 'lr_dx_screen_hz', { pct: String(r), share: String(hz) }, 'user', 'lr_dx_fix_screen_hz');
-    else item('screen', st, 'lr_dx_screen_unknown', { pct: String(r) }, 'asb', 'lr_dx_fix_send', {}, true);
+      sit = item('screen', st, 'lr_dx_screen_hz', { pct: String(r), share: String(hz) }, 'user', 'lr_dx_fix_screen_hz');
+    else if (dataHeavy)
+      sit = item('screen', st, 'lr_dx_screen_net', { pct: String(r), mib: logReportMiB(radioOn), ph: logReportMiB(radioOn / onHours) }, 'app');
+    else sit = item('screen', st, 'lr_dx_screen_unknown', { pct: String(r) }, 'asb', 'lr_dx_fix_send', {}, true);
+    /* fix248: what the screen time went on, from the facts the capture holds - the modem's
+       share, the brightness, the app in front. Each is stated as measured, none as a
+       percentage of the battery. */
+    if (radioOn >= 200 && sit.cause !== 'lr_dx_screen_net')
+      sit.also.push({ key: 'lr_dx_screen_data', v: { mib: logReportMiB(radioOn), ph: logReportMiB(radioOn / onHours) } });
+    const br = s.bright ? +s.bright.avg || 0 : 0;
+    if (br > 0 && br <= 30) sit.also.push({ key: 'lr_dx_screen_bright_low', v: { b: String(br) } });
+    else if (br >= 70) sit.also.push({ key: 'lr_dx_screen_bright_high', v: { b: String(br) } });
+    const topApp = (d.japps || [])[0];
+    if (topApp && jank && (+jank.frames || 0) > 0) {
+      const share = Math.round(topApp.frames * 100 / (+jank.frames || 1));
+      if (share >= 20) sit.also.push({ key: 'lr_dx_screen_top', v: { app: topApp.pkg, pct: String(share) } });
+    }
   }
+
+  /* fix248: mobile data as its own area. A day of 1.9 GiB over LTE + 5G NSA read only as
+     "Mobile traffic: 1963.6 MiB" - not who moved it, not on which network, not what to
+     change. The fix names the setting for the kind of app that moved the most. */
+  const radio = s.radio || null;
+  if (radio && (+radio.mib || 0) >= 256) {
+    const mib = +radio.mib || 0;
+    const hrs = Math.max(0.5, (+meta.elapsed_min || 0) / 60);
+    const st = mib / hrs >= 250 ? 'problem' : 'normal';
+    const rapps = d.rapps || [];
+    const fix = rapps.length ? logReportNetFix(rapps[0].pkg) : 'lr_dx_fix_net_none';
+    const it = item('net', st, 'lr_dx_net_heavy', { mib: logReportMiB(mib), h: logReportDur(meta.elapsed_min || 0),
+      on: logReportMiB(+radio.on || 0) }, 'app', fix, { app: rapps.length ? rapps[0].pkg : '' });
+    const rat = s.rat || null;
+    if (rat && (+rat.of || 0) >= 3 && (+rat.nsa || 0) * 2 > (+rat.of || 0))
+      it.also.push({ key: 'lr_dx_net_nsa', v: { n: String(rat.nsa), of: String(rat.of) } });
+    if (rapps.length) {
+      const rn = s.rnet || {};
+      it.also.push({ key: 'lr_dx_net_apps', v: { since: String(rn.since || '?'), tot: logReportMiB(rn.tot || 0),
+        list: rapps.slice(0, 3).map(function (a) { return a.pkg + ' ' + logReportMiB(a.mib); }).join(', ') } });
+    }
+    const nm = s.netma || null;
+    if (nm && (+nm.lo || 0) > 0) {
+      const up = Math.round(((+nm.hi || 0) / (+nm.lo || 1) - 1) * 100);
+      if (up >= 10) it.also.push({ key: 'lr_dx_net_ma', v: { pct: String(up), hi: String(nm.hi), lo: String(nm.lo) } });
+    }
+    const lte = s.lte || null;
+    if (lte && ((+lte.applies || 0) > 0 || (+lte.lte_min || 0) > 0))
+      it.also.push({ key: 'lr_dx_lte_ran', v: { n: String(+lte.applies || 0), min: logReportDur(+lte.lte_min || 0) } });
+    if (!lte && rat && (+rat.nsa || 0) * 2 > (+rat.of || 0) && cfg.net_lte_light !== '1')
+      it.also.push({ key: 'lr_dx_net_try_light', v: { set: Tcfg('net_lte_light', 'name', '5G Only When Needed') } });
+    const seenFix = {}; seenFix[fix] = 1;
+    rapps.slice(1, 3).forEach(function (a) {
+      const fk = logReportNetFix(a.pkg);
+      if (seenFix[fk] || fk === 'lr_dx_fix_net_app' || a.mib < 50) return;
+      seenFix[fk] = 1;
+      it.also.push({ key: 'lr_dx_also_fix', v: { txt: logReportDxT(fk, { app: a.pkg }) } });
+    });
+  }
+  const lteIdle = logReportLteIdle(s);
+  if (lteIdle) item('lte', 'problem', 'lr_dx_lte_idle', lteIdle, 'asbfix', 'lr_dx_fix_lte_idle', lteIdle);
 
   if (jank && (+jank.frames || 0) >= 20000) {
     const jp = +jank.pct || 0;
@@ -11931,8 +12435,17 @@ function logReportDiagnose(d) {
     const ms = +cost.cpu_msh || 0, wk = +cost.wakes_h || 0;
     const per = wk > 0 ? ms / wk : null;
     const cv = { ms: String(ms), per: per === null ? '—' : per.toFixed(1) };
-    if (ms > 10000 || (ms > 2500 && (per === null || per > 8))) item('asb', 'problem', 'lr_dx_asb_cost', cv, 'asb', 'lr_dx_fix_send', {}, true);
-    else item('asb', 'good', 'lr_dx_asb_ok', cv);
+    const ait = (ms > 10000 || (ms > 2500 && (per === null || per > 8)))
+      ? item('asb', 'problem', 'lr_dx_asb_cost', cv, 'asb', 'lr_dx_fix_send', {}, true)
+      : item('asb', 'good', 'lr_dx_asb_ok', cv);
+    /* fix248: the absolute figure next to the per-wakeup one - a day 92 % on screen ticks
+       often, and "4977 ms an hour" alone reads like a lot. It is a share of one core's time. */
+    if (ms > 0) {
+      const core = (ms / 36000).toFixed(2);
+      if (cost.noalarm === '1' && cost.wakes_on !== undefined && cost.wakes_on !== '')
+        ait.also.push({ key: 'lr_dx_asb_core', v: { pct: core, on: String(cost.wakes_on), off: String(cost.wakes_off || 0) } });
+      else ait.also.push({ key: 'lr_dx_asb_core2', v: { pct: core } });
+    }
   }
 
   if (gauge && (+gauge.factor || 1) > 0 && (+gauge.factor || 1) <= 0.75 && (+gauge.windows || 0) >= 10)
@@ -11942,16 +12455,20 @@ function logReportDiagnose(d) {
 
   const rank = { problem: 0, normal: 1, good: 2 };
   return out.map(function (x, i) { return { x: x, i: i }; })
-    .sort(function (a, b) { return rank[a.x.state] - rank[b.x.state] || a.i - b.i; })
+    .sort(function (a, b) {
+      return rank[a.x.state] - rank[b.x.state] || (b.x.owner === 'asbfix') - (a.x.owner === 'asbfix') || a.i - b.i;
+    })
     .map(function (o) { return o.x; });
 }
 function logReportDiagSection(items) {
   if (!items || !items.length) return null;
   const sec = logReportSec(T('lr_sec_dx', '🩺 Causes and what to do'));
   const ownerFb = { app: 'Source: an app', user: 'Source: a phone setting', rom: 'Source: the firmware (ROM)',
-    asb: 'Source: ASB tuning for this device', load: 'Source: the load itself', unknown: 'Source: not identified' };
+    asb: 'Source: ASB tuning for this device', load: 'Source: the load itself', unknown: 'Source: not identified',
+    asbfix: 'Source: an ASB fault, fixed in this build' };
   const areaFb = { idle: 'Battery with the screen off', screen: 'Battery with the screen on', smooth: 'Smoothness',
-    heat: 'Heat and throttling', bgheat: 'Background work', stab: 'Stability', asb: 'ASB itself', data: 'Measurement' };
+    heat: 'Heat and throttling', bgheat: 'Background work', stab: 'Stability', asb: 'ASB itself', data: 'Measurement',
+    net: 'Mobile data', lte: 'ASB network switches' };
   items.forEach(function (it) {
     const box = document.createElement('div');
     box.className = 'lgr-dx lgr-dx-' + it.state;
@@ -12165,11 +12682,14 @@ function logReportRender(d) {
          pauses between uses carries the tail of every use into its "idle". */
       const quietMin = night ? (+night.dur_min || 0) : 0;
       const idleSplit = (+scr.idle_min || 0) > 0 && scr.idle_pctph !== undefined;
+      /* fix248: under half an hour off, a whole-percent counter has nothing to say - "0.0 %/h"
+         over 21 minutes is a step that never came, not a rate. */
+      const offShort = (+scr.off_min || 0) < 30;
       if (idleSplit)
-        s.appendChild(logReportRow(T('lr_drain_idle', 'Screen-off drain (idle, no music)'), String(scr.idle_pctph) + T('lr_per_hour', '%/h'),
+        s.appendChild(logReportRow(T('lr_drain_idle', 'Screen-off drain (idle, no music)'), offShort ? '—' : String(scr.idle_pctph) + T('lr_per_hour', '%/h'),
           (+scr.idle_pctph || 0) > 1.5 && (+scr.idle_min || 0) >= 30 && quietMin >= 60));
       else if ((+scr.off_min || 0) > 0)
-        s.appendChild(logReportRow(T('lr_drain_off', 'Screen-off drain (all idle)'), String(scr.off_pctph) + T('lr_per_hour', '%/h'),
+        s.appendChild(logReportRow(T('lr_drain_off', 'Screen-off drain (all idle)'), offShort ? '—' : String(scr.off_pctph) + T('lr_per_hour', '%/h'),
           (+scr.off_pctph || 0) > 1.5 && (+scr.off_min || 0) >= 30 && quietMin >= 60));
       if ((+scr.off_min || 0) >= 30 && quietMin < 60)
         s.appendChild(logReportNote(quietMin > 0 ?
@@ -12192,7 +12712,24 @@ function logReportRender(d) {
     if (idle && (+idle.dur_min || 0) >= 20)
       s.appendChild(logReportRow(T('lr_idle', 'Worst idle awake share'),
         logReportT('lr_idle_fmt', '{pct}% over {min}', { pct: String(idle.awake), min: logReportDur(idle.dur_min) }), (+idle.awake || 0) > 15));
-    if (radio) s.appendChild(logReportRow(T('lr_radio', 'Mobile data'), String(radio.mib) + ' MiB'));
+    if (radio) {
+      /* fix248: who moved it and on which network, under the total. */
+      s.appendChild(logReportRow(T('lr_radio', 'Mobile data'), logReportMiB(radio.mib) +
+        ((+radio.on || 0) > 0 ? ' · ' + logReportT('lr_radio_on', '{on} with the screen on', { on: logReportMiB(radio.on) }) : '')));
+      const rn = d.sections.rnet || null;
+      if (d.rapps.length && rn) {
+        s.appendChild(logReportNote(logReportT('lr_rapp_head', "By app, from Android's count since {since} ({tot} of it):",
+          { since: String(rn.since || '?'), tot: logReportMiB(rn.tot || 0) })));
+        d.rapps.forEach(function (a) { s.appendChild(logReportRow(a.pkg, logReportMiB(a.mib), a.mib >= 512)); });
+      }
+      const rat = d.sections.rat || null;
+      if (rat && (+rat.of || 0) > 0) {
+        const nsa = +rat.nsa || 0, sa = +rat.sa || 0, lt = +rat.lte || 0, of = String(rat.of);
+        const rk = nsa >= sa && nsa >= lt ? ['lr_rat_nsa', 'LTE + 5G NSA in {n} of {of} checks', nsa] :
+          sa >= lt ? ['lr_rat_sa', '5G SA in {n} of {of} checks', sa] : ['lr_rat_lte', 'LTE only in {n} of {of} checks', lt];
+        s.appendChild(logReportRow(T('lr_rat', 'Modem network'), logReportT(rk[0], rk[1], { n: String(rk[2]), of: of })));
+      }
+    }
     if (audio && (+audio.spk_min || 0) >= 10) {
       /* Speaker playback is the one background sound that shows up in drain.
          fix242: a minute of a video's sound is no playback habit - from ten minutes on.
@@ -12430,7 +12967,9 @@ function logReportRender(d) {
   /* fix200: ASB's own bill - the answer to "and what does the module itself eat?". */
   if (cost) {
     const s = logReportSec(T('lr_sec_asb', '⚙️ ASB own cost'));
-    s.appendChild(logReportRow(T('lr_cost_cpu', 'Governor CPU per hour'), logReportT('lr_ms_h', '{n} ms/h', { n: String(cost.cpu_msh) }), (+cost.cpu_msh || 0) > 5000));
+    s.appendChild(logReportRow(T('lr_cost_cpu', 'Governor CPU per hour'), logReportT('lr_ms_h', '{n} ms/h', { n: String(cost.cpu_msh) }),
+      (+cost.cpu_msh || 0) > 10000 || ((+cost.cpu_msh || 0) > 2500 && (+cost.wakes_h || 0) > 0 && (+cost.cpu_msh || 0) / (+cost.wakes_h || 1) > 8)));
+    if ((+cost.cpu_msh || 0) > 0) s.appendChild(logReportRow(T('lr_cost_core', 'Share of one CPU core'), ((+cost.cpu_msh || 0) / 36000).toFixed(2) + '%'));
     if ((+cost.writes_h || 0) > 0) s.appendChild(logReportRow(T('lr_cost_writes', 'Frequency writes per hour'), String(cost.writes_h)));
     if ((+cost.wakes_h || 0) > 0) s.appendChild(logReportRow(T('lr_cost_wakes', 'Timer wakeups per hour'), String(cost.wakes_h)));
     body.appendChild(s);
@@ -12506,6 +13045,30 @@ function logReportRender(d) {
       s.appendChild(logReportRow(logReportT('lr_kwk_fmt', '{tag} (kernel, on the charger)', { tag: w.tag }),
         logReportDur(w.min), w.min >= 60));
     });
+    body.appendChild(s);
+  }
+  /* fix248: Bluetooth in the report. A link that drops and a stream that pauses feel the same
+     in the ear; the capture tells them apart - the media profile going away is a disconnect,
+     "stopped playing" with the link still up is the stream pausing. */
+  const bt = d.sections.bt || null;
+  if (bt && ((+bt.acl || 0) > 0 || (+bt.media || 0) > 0 || (+bt.streams || 0) > 0)) {
+    const s = logReportSec(T('lr_sec_bt', '🎧 Bluetooth'));
+    if ((+bt.acl || 0) > 0)
+      s.appendChild(logReportRow(T('lr_bt_acl', 'Link drops'), logReportT('lr_bt_acl_fmt', '{n} · lost link {l} · by the device {d} · by the phone {p}', {
+        n: String(+bt.acl || 0), l: String(+bt.lost || 0), d: String(+bt.by_dev || 0), p: String(+bt.by_phone || 0) }), (+bt.lost || 0) >= 3));
+    if ((+bt.media || 0) > 0) {
+      s.appendChild(logReportRow(T('lr_bt_media', 'Audio profile disconnects'), String(+bt.media || 0)));
+      d.btdrops.forEach(function (x) {
+        const v = [T(x.who === 'phone' ? 'lr_bt_who_phone' : 'lr_bt_who_stack', x.who === 'phone' ? 'turned off on the phone' : 'ended by the headset or the radio link')];
+        if (x.whole) v.push(T('lr_bt_whole', 'calls dropped with it'));
+        if (!x.back) v.push(T('lr_bt_gone', 'not back'));
+        s.appendChild(logReportRow('\u21b3 ' + x.at, v.join(' \u00b7 ')));
+      });
+    }
+    if ((+bt.streams || 0) > 0)
+      s.appendChild(logReportNote(logReportT('lr_bt_streams', 'The music stopped {n} times while the headphones stayed connected - pauses of the stream (an app, a tap on the headphones, in-ear detection), not disconnects.', { n: String(+bt.streams || 0) })));
+    if ((+bt.lost || 0) > 0)
+      s.appendChild(logReportNote(T('lr_bt_lost_note', 'A lost link is range, a body or wall in the way, or a busy 2.4 GHz band - nothing ASB does.')));
     body.appendChild(s);
   }
   if (crash || sysui) {
@@ -12590,7 +13153,9 @@ function logReportRender(d) {
      captures are compared (a capture without a night has no night to compare), and a
      worsening is marked. */
   if (d.hist.length && (drain || night || jank)) {
-    const h0 = d.hist[0];
+    /* fix248: the latest comparable capture, not just the latest one - a 32 % screen-on
+       evening in between hid the 98 % day the 92 % day should be compared with. */
+    const h0 = d.hist.filter(function (h) { return logReportHistoryComparable(d, analysis, h); })[0] || d.hist[0];
     const s = logReportSec(T('lr_sec_trend', '📈 Trend'));
     const comparable = logReportHistoryComparable(d, analysis, h0);
     if (!comparable) {
@@ -13618,48 +14183,79 @@ function lvLoadShare(raw, cpus) {
 }
 /* Monitor readings share one colour vocabulary, but not one threshold table. Each helper
  * judges only its own unit; missing, malformed and warm-up evidence stays neutral. */
-const METRIC_CLASSES = ['metric-good', 'metric-warm', 'metric-bad', 'metric-neutral', 'metric-normal', 'metric-cool'];
+const METRIC_CLASSES = ['metric-good', 'metric-warm', 'metric-bad', 'metric-neutral', 'metric-normal', 'metric-cool',
+  'metric-mild', 'metric-hot', 'metric-info', 'metric-charge'];
 function asbMetricPaint(id, state) {
   const el = _el(id); if (!el) return;
   const kept = String(el.className || '').split(/\s+/).filter(c => c && !METRIC_CLASSES.includes(c));
   kept.push(METRIC_CLASSES.includes(state) ? state : 'metric-neutral');
   el.className = kept.join(' ');
 }
+/* fix248: one six-step scale - cool, good, mild, warm, hot, bad. `cuts` are the five upper
+ * bounds, ascending; a reading under the first is the first step. Readings where higher is
+ * better pass their steps reversed. */
+const METRIC_STEPS = ['metric-cool', 'metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'];
+function asbMetricStep(n, cuts, steps) {
+  const st = steps || METRIC_STEPS;
+  for (let i = 0; i < cuts.length; i++) if (n < cuts[i]) return st[i];
+  return st[cuts.length];
+}
 function asbLoadMetric(v) {
   if (v === null || v === undefined || v === '') return 'metric-neutral';
   const n = Number(v);
-  return Number.isFinite(n) && n >= 0 ? (n < 35 ? 'metric-good' : n < 70 ? 'metric-warm' : 'metric-bad') : 'metric-neutral';
+  if (!Number.isFinite(n) || n < 0) return 'metric-neutral';
+  return asbMetricStep(n, [25, 45, 65, 85], METRIC_STEPS.slice(1));
 }
 function asbThermalMetric(v, kind) {
   const n = Number(v); if (!Number.isFinite(n) || n <= 0) return 'metric-neutral';
-  const mid = kind === 'body' ? 32 : kind === 'board' ? 38 : 45;
-  const high = kind === 'body' ? 38 : kind === 'board' ? 45 : 65;
-  return n < mid ? 'metric-good' : n < high ? 'metric-warm' : 'metric-bad';
+  const cuts = kind === 'body' ? [30, 35, 38, 41, 44]
+    : kind === 'board' ? [32, 38, 42, 46, 50]
+    : kind === 'battery' ? [25, 35, 38, 41, 45]
+    : [35, 45, 52, 60, 68];
+  return asbMetricStep(n, cuts);
 }
 function asbRamMetric(av, total) {
   const a = Number(av), t = Number(total);
   if (!Number.isFinite(a) || !Number.isFinite(t) || a < 0 || t <= 0) return 'metric-neutral';
-  const pct = a / t * 100; return pct >= 35 ? 'metric-good' : pct >= 18 ? 'metric-warm' : 'metric-bad';
+  const pct = a / t * 100, gb = a / 1048576;
+  /* Android keeps apps in memory on purpose: a share alone painted 4.7 GB free on a 16 GB
+   * phone amber. Either a fair share or a few gigabytes in hand is enough. */
+  if (pct >= 30 || gb >= 4) return 'metric-good';
+  if (pct >= 20 || gb >= 2.5) return 'metric-mild';
+  if (pct >= 12 || gb >= 1.5) return 'metric-warm';
+  if (pct >= 7 || gb >= 0.8) return 'metric-hot';
+  return 'metric-bad';
 }
 function asbDrainMetric(ma, cap) {
   const n = Number(ma), c = Number(cap); if (!Number.isFinite(n)) return 'metric-neutral';
-  if (n < 0) return 'metric-good'; if (n === 0) return 'metric-neutral';
+  if (n < 0) return 'metric-charge'; if (n === 0) return 'metric-neutral';
   if (!Number.isFinite(c) || c <= 0) return 'metric-neutral';
-  const pctph = n / c * 100; return pctph <= 4 ? 'metric-good' : pctph <= 12 ? 'metric-warm' : 'metric-bad';
+  return asbMetricStep(n / c * 100, [1, 4, 7, 12, 18]);
+}
+/* The hourly drain rates of the card's two big tiles: with the screen on ten hours of
+ * screen time is ordinary; with it off, healthy idle stays well under one percent. */
+function asbScreenDrainMetric(pctph, screenOn) {
+  const n = Number(pctph); if (!Number.isFinite(n) || n <= 0) return 'metric-info';
+  return screenOn ? asbMetricStep(n, [3, 6, 9, 13, 18]) : asbMetricStep(n, [0.4, 0.8, 1.2, 1.8, 3]);
 }
 function asbClockMetric(cur, max) {
   const n = Number(cur), m = Number(max);
   if (!Number.isFinite(n) || !Number.isFinite(m) || n < 0 || m <= 0) return 'metric-neutral';
-  const pct = n / m * 100; return pct < 45 ? 'metric-good' : pct < 80 ? 'metric-warm' : 'metric-bad';
+  return asbMetricStep(n / m * 100, [25, 45, 65, 85], METRIC_STEPS.slice(1));
 }
 function asbHeadroomMetric(v) {
   if (v === null || v === undefined || v === '') return 'metric-neutral';
   const n = Number(v); if (!Number.isFinite(n) || n < 0) return 'metric-neutral';
-  return n >= 20 ? 'metric-good' : n >= 10 ? 'metric-warm' : 'metric-bad';
+  return asbMetricStep(n, [10, 15, 25, 35], ['metric-bad', 'metric-hot', 'metric-warm', 'metric-mild', 'metric-good']);
 }
 function asbConfidenceMetric(v) {
   const s = String(v || '').toLowerCase();
   return s === 'high' ? 'metric-good' : s === 'med' ? 'metric-warm' : s === 'low' ? 'metric-bad' : 'metric-neutral';
+}
+/* Smart's confidence in the slot, 0-1000. */
+function asbConfPctMetric(v) {
+  const n = Number(v); if (!Number.isFinite(n) || n < 0) return 'metric-neutral';
+  return asbMetricStep(n, [250, 450, 650, 850], ['metric-bad', 'metric-hot', 'metric-warm', 'metric-mild', 'metric-good']);
 }
 function asbBasisMetric(v) {
   const s = String(v || '').toLowerCase();
@@ -13670,18 +14266,56 @@ function asbBasisMetric(v) {
 }
 function asbModemMetric(v) {
   const s = String(v || '').toLowerCase();
-  /* Green is reserved for an active power-saving mode. Normal is the stock baseline:
-     full-strength foreground text, not a disabled/unknown-looking tertiary colour. */
+  /* Green is reserved for an active power-saving mode. Normal is the profile's own default:
+     the card's plain value colour, like the uptime beside it (fix248). Fast costs a little
+     battery for latency - a raised cost, not an alarm. */
   if (s === 'save' || s === 'night') return 'metric-good';
-  if (s === 'fast') return 'metric-bad';
-  if (s === 'normal') return 'metric-normal';
+  if (s === 'fast') return 'metric-warm';
+  if (s === 'normal') return 'metric-info';
   return 'metric-neutral';
 }
 function asbSlotMetric(v) {
+  if (v === 'hot') return 'metric-hot';
   if (v === 'warm') return 'metric-warm';
-  if (v === 'typical') return 'metric-normal';
+  if (v === 'typical') return 'metric-info';
   if (v === 'cool') return 'metric-cool';
   return 'metric-neutral';
+}
+/* Temperature direction in degrees per minute: fast cooling is blue, cooling green, steady
+ * plain, then warming by speed. */
+function asbTrendMetric(perMin) {
+  const n = Number(perMin); if (!Number.isFinite(n)) return 'metric-neutral';
+  if (n <= -1) return 'metric-cool';
+  if (n < -0.3) return 'metric-good';
+  if (n <= 0.3) return 'metric-info';
+  return asbMetricStep(n, [0.8, 1.5, 2.5], ['metric-mild', 'metric-warm', 'metric-hot', 'metric-bad']);
+}
+/* What the governor's state machine says the phone is doing, from asleep to flat out. */
+function asbFsmMetric(state) {
+  const s = String(state || '').toUpperCase().split(/[\s·]/)[0];
+  return { DEEP_IDLE: 'metric-cool', LIGHT_IDLE: 'metric-good', MODERATE: 'metric-mild', HEAVY: 'metric-warm',
+    SUSTAINED: 'metric-hot', GAMING: 'metric-hot' }[s] || 'metric-normal';
+}
+/* The foreground load Smart reads: idle, light, medium, heavy, gaming. */
+function asbAppMetric(h) {
+  const n = Number(h);
+  return ['metric-cool', 'metric-good', 'metric-mild', 'metric-warm', 'metric-hot'][n] || 'metric-neutral';
+}
+/* Vendor clamps in the last hour: a few are ordinary, dozens mean a hot phone. */
+function asbClampMetric(perHour) {
+  const n = Number(perHour); if (!Number.isFinite(n) || n < 0) return 'metric-neutral';
+  return asbMetricStep(n, [4, 11, 21, 41], METRIC_STEPS.slice(1));
+}
+/* How far the ROM lets the CPU reach (Stock): 100% is free, a low share is the ROM holding it. */
+function asbCeilMetric(pct) {
+  const n = Number(pct); if (!Number.isFinite(n) || n <= 0) return 'metric-neutral';
+  if (n >= 100) return 'metric-good';
+  return n >= 60 ? 'metric-mild' : n >= 30 ? 'metric-warm' : 'metric-hot';
+}
+/* Battery charge left. */
+function asbBatLevelMetric(pct) {
+  const n = Number(pct); if (!Number.isFinite(n) || n <= 0) return 'metric-neutral';
+  return asbMetricStep(n, [10, 20, 30, 50], ['metric-bad', 'metric-hot', 'metric-warm', 'metric-mild', 'metric-good']);
 }
 function paintStockLive(stockKv = null) {
   /* Governor-owned cells stay untouched outside Stock.
@@ -13791,12 +14425,12 @@ function paintStockLive(stockKv = null) {
       _stockLiveInfo.ceil.push(k + ': ' + (p.scaling_max_freq / 1e6).toFixed(2) + ' / ' + (p.cpuinfo_max_freq / 1e6).toFixed(2) + ' GHz');
     });
     set('liveState', ceilPct ? ceilPct + '%' : '—');
-    cls('liveState', ceilPct && ceilPct < 100 ? 'cap-raised' : '');
+    cls('liveState', '');
     set('liveGpu', gpuKnown ? gpu + '%' : '—');
     const gclk = n(kv['gpu.gpuclk']);
     set('liveHeadroom', gclk > 0 ? Math.round(gclk > 100000 ? gclk / 1e6 : gclk) + ' MHz' : '—');
     set('liveCapSrc', batT > 0 ? batT + '°C' : '—');
-    cls('liveCapSrc', batT >= 40 ? 'cap-raised' : '');
+    cls('liveCapSrc', '');
     const swT = n(kv.SwapTotal), swF = n(kv.SwapFree);
     set('liveClamp', swT > 0 ? ((swT - swF) / 1048576).toFixed(1) + ' GB' : '—');
     cls('liveClamp', '');
@@ -13806,9 +14440,14 @@ function paintStockLive(stockKv = null) {
     asbMetricPaint('liveSkin', asbThermalMetric(skinT, 'body'));
     asbMetricPaint('liveSurface', asbThermalMetric(boardT || hotT, boardT ? 'board' : 'cpu'));
     asbMetricPaint('liveGpu', gpuKnown ? asbLoadMetric(gpu) : 'metric-neutral');
-    /* This cell is GPU clock in Stock, not governor headroom. Without a maximum frequency
-     * there is no defensible ratio, so it deliberately stays neutral. */
-    asbMetricPaint('liveHeadroom', 'metric-neutral');
+    /* This cell is GPU clock in Stock, not governor headroom. Graded against the GPU's own
+     * maximum when the ROM publishes it (fix248); without one there is no defensible ratio. */
+    const gmax = n(kv['gpu.max_gpuclk']);
+    asbMetricPaint('liveHeadroom', gclk > 0 && gmax > 0 ? asbClockMetric(gclk, gmax) : 'metric-neutral');
+    asbMetricPaint('liveState', ceilPct ? asbCeilMetric(ceilPct) : 'metric-neutral');
+    asbMetricPaint('liveCapSrc', asbThermalMetric(batT, 'battery'));
+    asbMetricPaint('liveClamp', swT > 0 ? 'metric-normal' : 'metric-neutral');
+    asbMetricPaint('liveLearner', 'metric-neutral');
   }
 
   // Read-only Stock telemetry is deliberately separate from Smart: no bucket, confidence,
@@ -13861,11 +14500,13 @@ function paintStockLive(stockKv = null) {
   let trend = trendVal > 0 ? Math.round(trendVal) + '\u00b0 \u2026' : '\u2026';
   let trendCls = 'smart-banner-value';
   let trendTip = trendVal > 0 ? T('stock_trend_wait', 'Measuring: the direction appears after two readings ten seconds apart') : '';
+  let trendMetric = 'metric-info';
   if (_stockTrendLast) {
     const sl = _stockTrendLast.slope;
-    if (sl > 0.5) { trend = '\u2191 ' + T('lv_trend_up', 'warming'); trendCls += ' cap-clamp'; }
-    else if (sl < -0.5) { trend = '\u2193 ' + T('lv_trend_dn', 'cooling'); trendCls += ' cap-raised'; }
+    if (sl > 0.5) trend = '\u2191 ' + T('lv_trend_up', 'warming');
+    else if (sl < -0.5) trend = '\u2193 ' + T('lv_trend_dn', 'cooling');
     else trend = '\u2192 ' + T('lv_trend_fl', 'steady');
+    trendMetric = (sl > 0.5 || sl < -0.5) ? asbTrendMetric(sl) : 'metric-info';
     trendTip = T('lvi_trend_rate', '%1 \u00b0C per minute over the last %2 s')
       .replace('%1', (sl >= 0 ? '+' : '\u2212') + Math.abs(sl).toFixed(1))
       .replace('%2', String(Math.round(_stockTrendLast.span / 1000)));
@@ -13873,11 +14514,7 @@ function paintStockLive(stockKv = null) {
     trend = '\u2014';
   }
   const uptimeSec = Math.floor(parseFloat(kv.uptime || '0'));
-  const uptime = uptimeSec > 0
-    ? (Math.floor(uptimeSec / 86400) ? Math.floor(uptimeSec / 86400) + T('unit_d', 'd') + ' ' : '')
-      + Math.floor((uptimeSec % 86400) / 3600) + T('unit_h', 'h') + ' '
-      + Math.floor((uptimeSec % 3600) / 60) + T('unit_m', 'm')
-    : '—';
+  const uptime = uptimeSec > 0 ? lvDurDHM(uptimeSec) : '—';
   const lpmHeld = n(kv['settings.global.mobile_data_always_on']) === 1;
   if (stockBanner) stockBanner.style.display = Object.keys(kv).length ? '' : 'none';
   lvTopSecSync();
@@ -13894,14 +14531,16 @@ function paintStockLive(stockKv = null) {
     ? Math.abs(ma) + ' mA' : (isCharging ? T('lv_drain_charging', 'charging') : '—'),
     pctph > 0 ? '\u2248 ' + pctph.toFixed(1) + T('unit_pcth', '%/h') + (chargeFullMah > 0 ? ' \u00b7 ' + Math.round(chargeFullMah) + ' mAh' : '') : '');
   bset('bnStockTrend', trend, trendTip, trendCls);
+  asbMetricPaint('bnStockTrend', trendMetric);
   bset('bnStockLpm', lpmHeld ? T('lv_lpm_fast', 'fast') : T('lv_lpm_normal', 'normal'),
-    'mobile_data_always_on: ' + (String(kv['settings.global.mobile_data_always_on'] || '').trim() || '\u2014'),
-    'smart-banner-value' + (lpmHeld ? ' cap-clamp' : ''));
+    'mobile_data_always_on: ' + (String(kv['settings.global.mobile_data_always_on'] || '').trim() || '\u2014'));
   const memTotKb = n(kv.MemTotal);
   bset('bnStockRam', ramGb, memTotKb > 0 && ramKb > 0 ? ramGb + ' / ' + (memTotKb / 1048576).toFixed(1) + ' GB' : '');
   bset('bnStockCpuClock', cpuClock, Object.entries(kv).filter(([k]) => /^cpu\.policy\d+\.scaling_cur_freq$/.test(k))
     .sort().map(([k, v]) => k.split('.')[1] + ': ' + (n(v) / 1e6).toFixed(2) + ' GHz').join('\n'));
-  asbMetricPaint('bnStockDrain', asbDrainMetric(ma, chargeFullMah));
+  /* The sign of current_now differs between ROMs (negative while discharging on some), so the
+   * status decides charging and the magnitude grades the drain (fix248). */
+  asbMetricPaint('bnStockDrain', isCharging ? 'metric-charge' : asbDrainMetric(Math.abs(ma), chargeFullMah));
   asbMetricPaint('bnStockRam', ramKnown ? asbRamMetric(ramKb, memTotKb) : 'metric-neutral');
   const clockPolicy = {};
   Object.entries(kv).forEach(([k, v]) => {
@@ -13951,7 +14590,7 @@ function paintStockLive(stockKv = null) {
         const _lv = Number(String(kv.loadavg).trim().split(/\s+/)[0]);
         _le.textContent = _lv.toFixed(1);
         const sp = document.createElement('span');
-        sp.className = 'sb-inline load-pct ' + (_busy >= 80 ? 'load-high' : _busy >= 50 ? 'load-mid' : 'load-low');
+        sp.className = 'sb-inline load-pct';
         sp.textContent = ' \u00b7 ' + _busy + '%';
         _le.appendChild(sp);
         if (_le.clientWidth > 0 && _le.scrollWidth > _le.clientWidth + 1) _le.firstChild.textContent = String(Math.round(_lv));
@@ -13959,11 +14598,22 @@ function paintStockLive(stockKv = null) {
       }
     }
   }
+  {
+    /* fix248: the load is graded as a whole by how busy the cores really were between two
+     * reads. The load average alone counts storage waits and passes the core count on an
+     * idle phone - graded, it would paint calm orange - so until the second read it stays plain. */
+    const _lb = (_stockCpuStatPrev && _stockCpuStatPrev.busy >= 0) ? _stockCpuStatPrev.busy : -1;
+    asbMetricPaint('bnStockLoad', _lb >= 0 ? asbLoadMetric(_lb) : 'metric-info');
+  }
   bset('bnStockBattery', capPct ? (capPct + '%' + (volt > 0 ? ' · ' + volt.toFixed(2) + 'V' : '')) : '—',
     batT > 0 ? T('stock_bat_temp', 'Battery temp') + ': ' + batT + ' \u00b0C' : '');
+  asbMetricPaint('bnStockBattery', asbBatLevelMetric(capPct));
   bset('bnStockUptime', uptime, uptimeSec > 0
     ? new Date(Date.now() - uptimeSec * 1000).toLocaleString(ASB_LANG || undefined, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
     : '');
+  _stockLiveInfo.uptimeSec = uptimeSec;
+  _stockLiveInfo.uptimeAt = Date.now();
+  asbMetricPaint('bnStockUptime', 'metric-info');
 
   // These indicators belong to an active ASB governor. Clear stale values carried over from
   // the previous profile: Stock has no Smart state, learner, LPM policy or ASB recovery state.
@@ -14267,6 +14917,7 @@ async function pollLive(visible) {
         (_scrOn && /^LIGHT_IDLE$/.test(state))
           ? state + ' · ' + T('fsm_screen_on', 'screen on')
           : state;
+      asbMetricPaint('liveState', asbFsmMetric(state));
     }
 
     const cpuT = (st && st.temp) || parseInt(kv.thermal || '0', 10);
@@ -14420,10 +15071,15 @@ async function pollLive(visible) {
       + ((_cs0 && _cs1) ? '\n' + T('cap_tip_clusters', 'main cores: %1 · top cores: %2')
           .replace('%1', CAP_SRC_LABELS[_cs0] || _cs0).replace('%2', CAP_SRC_LABELS[_cs1] || _cs1) : '');
     capEl.className = 'live-cell-value';
+    /* fix248: ASB and the profile script keep their own hues; a ceiling someone else holds
+     * is graded - the vendor's clamp raised, a thermal overlay high - and an unreadable
+     * policy neutral. */
     if (capSrc === 'asb' || capSrc === 'asb_dynamic') capEl.classList.add('cap-asb');
-    else if (capSrc === 'vendor_clamp') capEl.classList.add('cap-clamp');
-    else if (capSrc === 'vendor_raised') capEl.classList.add('cap-raised');
     else if (capSrc && capSrc.startsWith('shell')) capEl.classList.add('cap-shell');
+    else if (capSrc === 'vendor_clamp') asbMetricPaint('liveCapSrc', 'metric-warm');
+    else if (capSrc === 'vendor_raised') asbMetricPaint('liveCapSrc', 'metric-mild');
+    else if (capSrc === 'thermal_overlay') asbMetricPaint('liveCapSrc', 'metric-hot');
+    else asbMetricPaint('liveCapSrc', 'metric-neutral');
 
     const gpuEl = _el('liveGpu');
     if (gpuEl) {
@@ -14453,23 +15109,20 @@ async function pollLive(visible) {
           lpmEl.title = 'LPM feature off, or the governor has not written a mode yet';
           return;
         }
-        // Colour carries the meaning: saving uses the battery accent, fast the
-        // performance one, normal stays neutral so it does not read as an alarm.
+        // Colour carries the meaning (asbModemMetric): saving green, fast raised, normal the
+        // card's plain value colour.
         let cls = 'smart-banner-value';
         let txt = T('lv_lpm_normal', 'normal');
         let tip = T('lv_lpm_normal_t', 'profile defaults');
         if (m === 'save') {
-          cls += ' cap-raised';
           txt = T('lv_lpm_save', 'save');
           tip = T('lv_lpm_save_t', 'radio idling, keepalives stretched');
         } else if (m === 'fast') {
-          cls += ' cap-clamp';
           txt = T('lv_lpm_fast', 'fast');
           tip = T('lv_lpm_fast_t', 'data call held up (low latency)');
         } else if (m === 'night') {
           /* The fourth mode (fix177): night fell through to "normal" here while the modem was
            * idling hardest of all. */
-          cls += ' cap-raised';
           txt = T('lv_lpm_night', 'night');
           tip = T('lv_lpm_night_t', 'night window: idling stretched further');
         }
@@ -14477,6 +15130,7 @@ async function pollLive(visible) {
         lpmEl.className = cls;
         asbMetricPaint('bnLpm', asbModemMetric(m));
         lpmEl.title = tip;
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(lvFitValues);
       }).catch(function() { lpmEl.textContent = 'n/a'; asbMetricPaint('bnLpm', 'metric-neutral'); });
     }
     const hrEl = _el('liveHeadroom');
@@ -14513,7 +15167,7 @@ async function pollLive(visible) {
       const learnerLabel = _el('liveLearner').parentElement.querySelector('.live-cell-label');
       if (learnerLabel) learnerLabel.textContent = recDisabled === 1 ? 'SAFE MODE' : 'Recovery';
       const learnerEl = _el('liveLearner');
-      learnerEl.className = recDisabled === 1 ? 'live-cell-value cap-clamp' : 'live-cell-value cap-raised';
+      learnerEl.className = recDisabled === 1 ? 'live-cell-value metric-bad' : 'live-cell-value metric-warm';
       learnerEl.textContent = recDisabled === 1
         ? 'Gov disabled · ' + (recReason || 'recovery')
         : recCount + ' restart(s) · ' + (recReason || 'unknown');
@@ -14531,7 +15185,7 @@ async function pollLive(visible) {
                     : (conf >= 350 ? T('learn_active', 'active') : T('learn_learning', 'learning'));
         _el('liveLearner').textContent = sm.total + ' ' + _ses;
         _el('liveLearner').title = stier + ' ' + Math.round(conf / 10) + '% · ' + sm.total + ' ' + _ses;
-        if (conf >= 650) _el('liveLearner').className = 'live-cell-value cap-asb';
+        asbMetricPaint('liveLearner', conf >= 650 ? 'metric-good' : conf >= 350 ? 'metric-mild' : 'metric-normal');
       } else {
         /*
          * trust_tier is emitted as a bare English token ("unknown"), which then sat in a
@@ -14548,6 +15202,7 @@ async function pollLive(visible) {
         const sessions = parseInt(sesMap[profile], 10) || 0;
         const tierRaw = (profile === 'battery' && learner.trust_tier && learner.trust_tier !== 'unknown') ? learner.trust_tier : '';
         _el('liveLearner').textContent = sessions + ' ' + _ses + (tierRaw ? ' \u00b7 ' + T('learn_' + tierRaw, tierRaw) : '');
+        asbMetricPaint('liveLearner', sessions === 0 ? 'metric-neutral' : sessions >= 10 ? 'metric-good' : 'metric-normal');
         _el('liveLearner').title = (sessions === 0)
           ? T('learn_tip_none',
               'No completed session yet for this profile. The Smart card line above comes from the Smart blender, which is a separate subsystem and can already show a daypart.')
@@ -14559,6 +15214,7 @@ async function pollLive(visible) {
       if (learnerLabel) learnerLabel.textContent = T('lv_learner', 'Learner');
       _el('liveLearner').className = 'live-cell-value';
       _el('liveLearner').textContent = T('learn_nodata', 'no data');
+      asbMetricPaint('liveLearner', 'metric-neutral');
     }
 
     /* extended Live metrics */
@@ -14611,6 +15267,7 @@ async function pollLive(visible) {
           const cTot = parseInt(kv.vendor_clamp_total || '0', 10);
           if (clampLabel) clampLabel.textContent = T('lv_vendor_clamps', 'Vendor clamps');
           clampEl.textContent = fmt('cap_clamps_val', '{h}/h · {t} total', {h: c1h, t: cTot});
+          asbMetricPaint('liveClamp', asbClampMetric(c1h));
           clampEl.title = T('cap_clamps_tip',
             'How often the vendor thermal engine took the cap away from ASB: in the last hour, and since boot.');
           /* fix190: "38/ч · 38 всего" broke onto two lines once the counts had two digits,
@@ -14678,13 +15335,14 @@ async function pollLive(visible) {
               + ' \u00b7 ' + dtTxt;
           }
           _el('bnConf').textContent = Math.round(conf / 10) + '%';
-          asbMetricPaint('bnConf', warm ? 'metric-neutral' : conf >= 650 ? 'metric-good' : conf >= 350 ? 'metric-warm' : 'metric-bad');
+          asbMetricPaint('bnConf', warm ? 'metric-neutral' : asbConfPctMetric(conf));
           _el('bnAlpha').textContent = Math.round(alpha / 10) + '%';
+          asbMetricPaint('bnAlpha', 'metric-info');
+          asbMetricPaint('bnBucket', 'metric-info');
           const appEl = _el('bnApp');
           appEl.textContent = warm ? '\u2026' : T('lv_app_' + appH, appNames[appH] || '?');
-          const appLoadCls = (!warm && appH >= 0 && appH <= 4)
-            ? (appH <= 1 ? ' load-low' : (appH === 2 ? ' load-mid' : ' load-high')) : '';
-          appEl.className = 'smart-banner-value' + appLoadCls;
+          appEl.className = 'smart-banner-value';
+          asbMetricPaint('bnApp', warm ? 'metric-neutral' : asbAppMetric(appH));
 
           // Second row: four more Smart-owned readings, so the card is two full rows instead
           // of one row plus an orphan hanging under Bucket. The session count sits in the
@@ -14733,6 +15391,8 @@ async function pollLive(visible) {
                 'Actual screen-on drain: how fast the battery level is falling now, over the last minutes - not a model.');
             }
             _lvDrain.on = _act > 0 ? 'now' : (_chg ? 'charging' : ((_frt > 0 && (_fbs === 'recent' || _fbs === 'slot' || _fbs === 'meter')) ? _fbs : 'wait'));
+            asbMetricPaint('bnDrain', _chg ? 'metric-charge' : _act > 0 ? asbScreenDrainMetric(_act / 10, true)
+              : (_frt > 0 && (_fbs === 'recent' || _fbs === 'slot' || _fbs === 'meter')) ? asbScreenDrainMetric(_frt / 10, true) : 'metric-info');
             _lvDrain.winS = _lvDrain.on === 'meter' ? _fpk.min * 60 : parseInt(kv.smart_drain_window_s || '0', 10);
             /* Smart's own screen-off figure (fix189), by the rule every card uses - not the
              * phone-wide one, which only feeds the time to empty (marked "~" there). */
@@ -14743,6 +15403,7 @@ async function pollLive(visible) {
             if (_doEl) {
               _doEl.textContent = _sOff ? _sOff.t : T('lv_measuring', 'measuring\u2026');
               _lvDrain.off = _sOff ? 'measured' : 'wait';
+              asbMetricPaint('bnDrainOff', _sOff ? asbScreenDrainMetric(_sOff.x / 100, false) : 'metric-info');
             }
             const _stEl = _el('bnSlotTemp');
             if (_stEl) {
@@ -14751,7 +15412,7 @@ async function pollLive(visible) {
                                     parseInt(kv.smart_therm_warm_x10 || '0', 10));
               _stEl.textContent = _h.text;
               _stEl.title = _h.tip;
-              _stEl.className = 'smart-banner-value' + (_h.warm ? ' heat-warm' : '');
+              _stEl.className = 'smart-banner-value';
               asbMetricPaint('bnSlotTemp', warm ? 'metric-neutral' : asbSlotMetric(_h.state));
             }
             lvDrainHome(_el('liveSmartBanner'));
@@ -14773,15 +15434,10 @@ async function pollLive(visible) {
           const trEl = _el('bnTrend');
           if (trEl) {
             trEl.className = 'smart-banner-value';
-            if (slope > 300) {
-              trEl.textContent = '\u2191 ' + T('lv_trend_up', 'warming');
-              trEl.classList.add('cap-clamp');
-            } else if (slope < -300) {
-              trEl.textContent = '\u2193 ' + T('lv_trend_dn', 'cooling');
-              trEl.classList.add('cap-raised');
-            } else {
-              trEl.textContent = '\u2192 ' + T('lv_trend_fl', 'steady');
-            }
+            if (slope > 300) trEl.textContent = '\u2191 ' + T('lv_trend_up', 'warming');
+            else if (slope < -300) trEl.textContent = '\u2193 ' + T('lv_trend_dn', 'cooling');
+            else trEl.textContent = '\u2192 ' + T('lv_trend_fl', 'steady');
+            asbMetricPaint('bnTrend', (slope > 300 || slope < -300) ? asbTrendMetric(slope / 1000) : 'metric-info');
           }
 
           const basisEl = _el('bnBasis');
