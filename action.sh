@@ -850,6 +850,17 @@ T_BURST_ON="⚡ burst boost ACTIVE - prime lifted for heavy work (max 20 s)"
 T_BURST_N="burst boosts this session: %s"
 T_BURST_MID="  + middle cluster lifted too (this SoC has more than two clusters)"
 T_UNLOCK_N="unlock lift this session: %s (ceilings raised for %s s after a wake)"
+T_ALSO="also: %s"
+T_G_LIFT="lift %s%% of each cluster"
+T_G_PERF_CEIL="performance ceiling %s%%"
+T_G_THERM_ROM="throttling point: ROM"
+T_G_NO_ESCAPE="no prime lift"
+T_G_ESCAPE_T="prime lift %s s, pause %s s"
+T_G_MEDIA_GUARD="media guard"
+T_G_NO_CHARGE="charge-aware mode off"
+T_G_NO_AUTOBAT="auto battery profile off"
+T_G_GAME_BAT="game mode allowed on Battery"
+T_G_WALT_ROM="scheduler window: ROM, per refresh rate"
 T_NIGHT_AWAKE="night slot, screen on: leaning no harder than in your evening"
 T_HEADROOM="CPU headroom %s%%"
 T_SENS_OK="temp sensor: verified"
@@ -879,6 +890,14 @@ T_A_COMP_ON="compressor: on  ·  6:1 above -24 dBFS"
 T_A_BASS="bass shelf: +%s dB @ 90 Hz"
 T_A_VOICE="voice tone: level %s (+%s dB @ 350 Hz, -%s dB @ 3 kHz)"
 T_A_WIDTH="stereo width: level %s (sides +%s%% above 180 Hz, centre untouched)"
+T_A_DSPF="DSP filters: %s"
+T_A_CLARITY="clarity +%s dB above 6.5 kHz"
+T_A_RUMBLE="sub-bass cut below %s Hz"
+T_A_HEADROOM="output headroom -%s dB"
+T_A_BT="Bluetooth: %s"
+T_A_BT_OFF_ON="audio offload forced on"
+T_A_BT_OFF_OFF="audio offload off"
+T_A_BT_STABLE="link stability mode"
 T_A_LIB="libasbdsp: 64-bit %s  ·  32-bit %s  ·  ABI %s"
 T_A_REG="effect registered in: %s"
 T_A_STATUS="DSP status: requested +%sdB · live +%sdB · enabled=%s · attacher %s · registered %s"
@@ -898,6 +917,7 @@ T_C_CONTR="contrast & colour depth: %s/10 (3 = stock)"
 T_C_PORT="portrait AI: %s/6 (ships off)"
 T_C_HOLD="hold ACTIVE · interactive caps held, cpuset + uclamp lifted"
 T_C_LOW="macro / low-light sharpening: %s/10"
+T_C_NOHOLD="performance hold while the camera runs: off"
 T_C_NOTLIVE="⚠️  grade NOT on the live file (still stock values)"
 T_C_LIVE="✅ live file graded: BlendWeight [%s]"
 T_M_BG="bg trim: level %s"
@@ -905,6 +925,8 @@ T_M_BG_ASSAFE="(smart: idle apps only, no hard steps)"
 T_M_SWAP="swappiness %s"
 T_M_FREE="%s MB free"
 T_M_ZRAM="zram %s MB used"
+T_M_MGLRU="apps kept in memory"
+T_M_MGLRU_AGGR="apps kept in memory (aggressive)"
 T_N_RX="rx budget %s"
 T_N_RAMP="ramp (other links)"
 T_N_QUEUE="queue (other links)"
@@ -950,6 +972,11 @@ T_N_LTE_LIGHT_HINT="5G only when needed: off · on mobile data, light traffic (m
 T_N_LTE_NO5G="LTE while screen off: on · 5G is NOT allowed right now - if you did not turn it off, turn it on in the SIM settings"
 T_N_ROUTE="route via %s"
 T_N_ROUTE_RX="%s MB rx"
+T_N_MTU="TCP MTU recovery"
+T_N_RPS_LITTLE="network load on the efficiency cores"
+T_N_RPS_ALL="network load on all cores"
+T_N_TXQ_SHORT="short transmit queue"
+T_N_TXQ_SHORTER="shortest transmit queue"
 T_L_FAST="modem LPM: fast · data call held up (low latency)"
 T_L_SAVE="modem LPM: save · radio idling, keepalives stretched"
 T_L_NIGHT="modem LPM: night · screen off, radio relaxed"
@@ -980,6 +1007,7 @@ T_I_ANIM_NORMAL_AUTO="animations: normal (auto, follows blur)"
 T_I_UISPEED="UI speed: managed (animations and touch windows scaled per profile)"
 T_I_LOCK="lock screen: camera and wallet shortcuts hidden"
 T_I_VIDHZ="Video refresh: lowered %s times, %s min at the lower rate"
+T_I_ANIM_SCALE="animation scale: %sx (your setting)"
 T_S_LEARNING="deep sleep: night mode, still learning your schedule"
 T_S_NIGHT="deep sleep: night mode · %s (learned from %s nights)"
 T_S_AOD="always-on display: paused for the night window"
@@ -987,6 +1015,16 @@ T_S_MOD="deep sleep: moderate (idle after 5 min instead of 30)"
 T_S_AGGR="deep sleep: aggressive (idle after 2 min; messages may lag)"
 T_S_STOCK="deep sleep: stock"
 T_S_NQ="night quiet: sensor polling slowed inside the sleep window"
+T_S_WL_ACT="ASB acts on wakelocks"
+T_S_FIT_LIMIT="fitness apps limited"
+T_S_GMS_LITE="Google services trimmed (lite)"
+T_S_GMS_STRICT="Google services trimmed (strict)"
+T_S_GMSF_SAFE="Google telemetry frozen"
+T_S_GMSF_MORE="Google telemetry and ad profiling frozen"
+T_S_GMSF_MAX="Google components frozen (max)"
+T_S_GNSS="background GPS trimmed"
+T_S_DOZE_WL="Doze exemptions trimmed"
+T_S_NIGHT_MODEM="quiet radio at night"
 T_S_WL_APP="keeps the CPU awake: %s · %s min since unplug (%s)"
 T_WLV_RESTRICTED="restricted by ASB"
 T_WLV_PROTECTED="protected - your call in Settings"
@@ -1015,6 +1053,14 @@ T_Y_OVL_PART="overlay: partial -%s not visible to the system"
 T_Y_OVL_NONE="overlay: not detected"
 T_Y_KERNEL="kernel %s"
 T_Y_UP="up %sh %sm"
+T_Y_ATHENA="Athena killer off"
+T_Y_LOG_STOCK="device logging untouched"
+T_Y_LOG_MIN="logging minimal"
+T_Y_LOG_V="log detail %s"
+T_Y_LSP="LSPosed verbose log off"
+T_Y_MMFEED="multimedia telemetry off"
+T_Y_SCHEDSTATS="scheduler accounting off"
+T_Y_LTPO="LTPO: ASB has priority"
 T_AB="switched here automatically · returns to %s when charged"
 T_BAD_HEAD="NOT APPLIED"
 T_ALL_OK="All configured tweaks verified applied"
@@ -1541,6 +1587,38 @@ if [ -n "$_g_state" ]; then
   _ull="$(_st unlock_lifts)"
   _uls="$(_cfg unlock_lift_s)"
   [ "${_ull:-0}" -gt 0 ] 2>/dev/null && _f "       $T_UNLOCK_N" "$_ull" "${_uls:-3}"
+  _gx=""
+  case "$PROFILE" in
+    performance|stock) : ;;
+    *)
+      _ulp="$(_cfg unlock_lift_pct)"
+      case "$_ulp" in ''|*[!0-9]*) _ulp=80 ;; esac
+      [ "$_ulp" -lt 50 ] && _ulp=50
+      [ "$_ulp" -gt 100 ] && _ulp=100
+      if [ "$PROFILE" = battery ]; then
+        _ulp=$((_ulp * 4 / 5))
+        [ "$_ulp" -lt 50 ] && _ulp=50
+      fi
+      [ "${_uls:-3}" != 0 ] && _gx="$(_join "$_gx" "$(_s "$T_G_LIFT" "$_ulp")")" ;;
+  esac
+  _pcp="$(_cfg perf_ceiling_pct)"
+  case "$_pcp" in ''|100|*[!0-9]*) : ;; *) _gx="$(_join "$_gx" "$(_s "$T_G_PERF_CEIL" "$_pcp")")" ;; esac
+  [ "$(_cfg sustained_temp_mode)" = stock ] && _gx="$(_join "$_gx" "$T_G_THERM_ROM")"
+  if [ "$(_cfg heavy_prime_escape)" = 0 ]; then
+    _gx="$(_join "$_gx" "$T_G_NO_ESCAPE")"
+  else
+    _peb="$(_cfg prime_escape_burst_s)"; _per="$(_cfg prime_escape_rest_s)"
+    case "${_peb:-20}:${_per:-40}" in
+      20:40|*[!0-9:]*) : ;;
+      *) _gx="$(_join "$_gx" "$(_s "$T_G_ESCAPE_T" "${_peb:-20}" "${_per:-40}")")" ;;
+    esac
+  fi
+  [ "$PROFILE" = smart ] && [ "$(_cfg smart_media_guard)" = 1 ] && _gx="$(_join "$_gx" "$T_G_MEDIA_GUARD")"
+  [ "$(_cfg charge_aware_enable)" = 0 ] && _gx="$(_join "$_gx" "$T_G_NO_CHARGE")"
+  [ "$(_cfg auto_battery_enable)" = 0 ] && _gx="$(_join "$_gx" "$T_G_NO_AUTOBAT")"
+  [ "$PROFILE" = battery ] && [ "$(_cfg bat_suppress_gaming)" = 0 ] && _gx="$(_join "$_gx" "$T_G_GAME_BAT")"
+  [ "$(_st walt_window_owner)" = rom ] && _gx="$(_join "$_gx" "$T_G_WALT_ROM")"
+  [ -n "$_gx" ] && _f "       $T_ALSO" "$_gx"
 
   _gl=""
   [ -n "$_g_head" ] && _gl="$(_join "$_gl" "$(_s "$T_HEADROOM" "$_g_head")")"
@@ -1769,6 +1847,13 @@ _loud_l="$(_s "$T_A_LOUD" "$_a_loud")"
 [ "$_a_dsp" != "off" ] && _loud_l="$(_join "$_loud_l" "$(_s "$T_A_DSPGAIN" "$_a_dsp")")"
 printf '       %s\n' "$_loud_l"
 [ "$_a_bt" = "disabled" ] && _f "       $T_A_BTVOL"
+_abx=""
+case "$(_cfg bt_a2dp_offload)" in
+  on)  _abx="$(_join "$_abx" "$T_A_BT_OFF_ON")" ;;
+  off) _abx="$(_join "$_abx" "$T_A_BT_OFF_OFF")" ;;
+esac
+[ "$(_cfg bt_link_stability)" = stable ] && _abx="$(_join "$_abx" "$T_A_BT_STABLE")"
+[ -n "$_abx" ] && _f "       $T_A_BT" "$_abx"
 [ "$_a_dsp_outoff" = "1" ] && _f "       $T_A_DSP_OUTOFF"
 if [ "$(_cfg audio_remove_volume_limit)" = "1" ]; then
   case "$(dumpsys audio 2>/dev/null | sed -n 's/^[[:space:]]*mSafeMediaVolumeState=//p' | head -1)" in
@@ -1829,6 +1914,22 @@ case "$_a_width" in
   ''|off|0|*[!0-9]*) : ;;
   *) _f "       $T_A_WIDTH" "$_a_width" "$((_a_width * 10))" ;;
 esac
+if [ "$_a_dsp" != "off" ]; then
+  _ax=""
+  _a_cl="$(_cfg dsp_clarity)"
+  case "$_a_cl" in
+    ''|0|*[!0-9]*) : ;;
+    *) _clh=$((_a_cl * 5)); [ "$_clh" -gt 40 ] && _clh=40
+       _ax="$(_join "$_ax" "$(_s "$T_A_CLARITY" "$((_clh / 10)).$((_clh % 10))")")" ;;
+  esac
+  case "$(_cfg dsp_rumble)" in
+    35|50|70) _ax="$(_join "$_ax" "$(_s "$T_A_RUMBLE" "$(_cfg dsp_rumble)")")" ;;
+  esac
+  _a_hr="$(_cfg dsp_headroom)"
+  case "$_a_hr" in 15|30|50|100) : ;; *) _a_hr=15 ;; esac
+  _ax="$(_join "$_ax" "$(_s "$T_A_HEADROOM" "$((_a_hr / 100)).$(printf '%02d' $((_a_hr % 100)))")")"
+  _f "       $T_A_DSPF" "$_ax"
+fi
 if [ "$_a_dsp" != "off" ]; then
   _l64="✗"; _l32="✗"
   [ -f /vendor/lib64/soundfx/libasbdsp.so ] && _l64="✓"
@@ -1966,6 +2067,7 @@ _c_low="$(_cfg CAMERA_LOWLIGHT)";   case "$_c_low"   in ''|0) _c_low=""   ;; esa
 if [ "$(_st camera_hold)" = "1" ]; then
   _f "       $T_C_HOLD"
 fi
+[ "$(_cfg camera_hold_enable)" = 0 ] && _f "       $T_C_NOHOLD"
 [ -n "$_c_low" ]   && _f "       $T_C_LOW" "$_c_low"
 # Whether the grade actually landed on the live partition, which is the only claim
 # worth making - the config saying 4 proved nothing until this was checked.
@@ -1997,6 +2099,10 @@ _ml=""
 [ -n "$_mfree" ] && _ml="$(_join "$_ml" "$(_s "$T_M_FREE" "$_mfree")")"
 [ -n "$_zram" ] && _ml="$(_join "$_ml" "$(_s "$T_M_ZRAM" "$_zram")")"
 [ -n "$_ml" ] && echo "       ${_ml}"
+case "$(_cfg mglru_hold)" in
+  hold)       _f "       $T_M_MGLRU" ;;
+  aggressive) _f "       $T_M_MGLRU_AGGR" ;;
+esac
 
 if [ "$(_feat NET)" = "1" ]; then
   echo ""
@@ -2179,6 +2285,17 @@ fi
     [ -n "$_rx" ] && _nl="$(_join "$_nl" "$(_s "$T_N_ROUTE_RX" "$(awk -v b="$_rx" 'BEGIN { printf "%d", b / 1048576 }')")")"
     echo "       ${_nl}"
   fi
+  _nx=""
+  [ "$(_cfg net_mtu_probing)" = on ] && _nx="$(_join "$_nx" "$T_N_MTU")"
+  case "$(_cfg net_rps)" in
+    little) _nx="$(_join "$_nx" "$T_N_RPS_LITTLE")" ;;
+    all)    _nx="$(_join "$_nx" "$T_N_RPS_ALL")" ;;
+  esac
+  case "$(_cfg net_txqueue)" in
+    short)   _nx="$(_join "$_nx" "$T_N_TXQ_SHORT")" ;;
+    shorter) _nx="$(_join "$_nx" "$T_N_TXQ_SHORTER")" ;;
+  esac
+  [ -n "$_nx" ] && _f "       $T_ALSO" "$_nx"
 fi
 
   # Modem LPM: a NETWORK line, gated on LPM, with its own wording.
@@ -2311,6 +2428,11 @@ case "$_ui_fx" in
              && _f "       $T_I_ANIM_SIMPLE_AUTO" \
              || _f "       $T_I_ANIM_NORMAL_AUTO" ;;
 esac
+case "$(_cfg anim_speed)" in
+  ''|-1|profile) : ;;
+  *) _asc="$(settings get global window_animation_scale 2>/dev/null)"
+     case "$_asc" in ''|null|*[!0-9.]*) : ;; *) _f "       $T_I_ANIM_SCALE" "$_asc" ;; esac ;;
+esac
 case "$(_cfg UX_MANAGE_TIMEOUTS)" in
   1) _f "       $T_I_UISPEED" ;;
 esac
@@ -2412,6 +2534,22 @@ esac
 [ "$PROFILE" = "stock" ] || case "$(_cfg night_quiet_enable)" in
   1) _f "       $T_S_NQ" ;;
 esac
+_sx=""
+[ "$(_cfg wakelock_action)" = 1 ] && _sx="$(_join "$_sx" "$T_S_WL_ACT")"
+[ "$(_cfg wakelock_fitness)" = limit ] && _sx="$(_join "$_sx" "$T_S_FIT_LIMIT")"
+case "$(_cfg gms_trim)" in
+  lite)   _sx="$(_join "$_sx" "$T_S_GMS_LITE")" ;;
+  strict) _sx="$(_join "$_sx" "$T_S_GMS_STRICT")" ;;
+esac
+case "$(_cfg gms_freeze)" in
+  safe) _sx="$(_join "$_sx" "$T_S_GMSF_SAFE")" ;;
+  more) _sx="$(_join "$_sx" "$T_S_GMSF_MORE")" ;;
+  max)  _sx="$(_join "$_sx" "$T_S_GMSF_MAX")" ;;
+esac
+[ "$(_cfg gnss_trim)" = 1 ] && _sx="$(_join "$_sx" "$T_S_GNSS")"
+[ "$(_cfg doze_trim_whitelist)" = 1 ] && _sx="$(_join "$_sx" "$T_S_DOZE_WL")"
+[ "$(_cfg night_modem_idle)" = 1 ] && _sx="$(_join "$_sx" "$T_S_NIGHT_MODEM")"
+[ -n "$_sx" ] && _f "       $T_ALSO" "$_sx"
 
 echo ""
 echo "  ⚙️  ${H_SYSTEM}"
@@ -2422,6 +2560,18 @@ esac
 case "$(_cfg UX_MANAGE_OEM_TOGGLES)" in
   1) _f "       $T_Y_OEM" ;;
 esac
+_yx=""
+[ "$(_cfg athena_service)" = off ] && _yx="$(_join "$_yx" "$T_Y_ATHENA")"
+case "$(_cfg log_level)" in
+  stock) _yx="$(_join "$_yx" "$T_Y_LOG_STOCK")" ;;
+  0)     _yx="$(_join "$_yx" "$T_Y_LOG_MIN")" ;;
+  2|3)   _yx="$(_join "$_yx" "$(_s "$T_Y_LOG_V" "$(_cfg log_level)")")" ;;
+esac
+[ "$(_cfg lsposed_verbose)" = off ] && _yx="$(_join "$_yx" "$T_Y_LSP")"
+[ "$(_cfg mmfeed_off)" = 1 ] && _yx="$(_join "$_yx" "$T_Y_MMFEED")"
+[ "$(_cfg kernel_sched_stats)" = off ] && _yx="$(_join "$_yx" "$T_Y_SCHEDSTATS")"
+[ "$(_cfg ltpo_force)" = 1 ] && _yx="$(_join "$_yx" "$T_Y_LTPO")"
+[ -n "$_yx" ] && _f "       $T_ALSO" "$_yx"
 
 # Haptics. The numbers that matter are the OEM stepless values actually in force, not
 # the level we asked for - a rejected write would leave the two disagreeing.
@@ -2445,19 +2595,24 @@ esac
 # Every category, not the six that happened to be hard-coded here. Wrapped by hand
 # because a single 20-item line is unreadable on a phone.
 # With a label: a bare "CPU · VM · AUDIO" block under SYSTEM did not say what it listed.
-_f "       $T_Y_MODULES"
-_cats=""; _catn=0; _catline=""
+_cats=""; _catn=0; _catline=""; _catout=""
 for _c in CPU VM AUDIO BT NFC CAMERA MEDIA NET WIFI GPS KERNEL LOG LPM \
           RADIO_IMS DISPLAY FPS SECURITY BG_TRIM VENDOR_OVERLAY SOTER_REPAIR; do
   [ "$(_feat "$_c")" = "1" ] || continue
   _catline="$(_join "$_catline" "$_c")"
   _catn=$((_catn + 1))
   if [ "$_catn" -ge 5 ]; then
-    echo "         ${_catline}"
+    _catout="${_catout}         ${_catline}
+"
     _catline=""; _catn=0
   fi
 done
-[ -n "$_catline" ] && echo "         ${_catline}"
+[ -n "$_catline" ] && _catout="${_catout}         ${_catline}
+"
+if [ -n "$_catout" ]; then
+  _f "       $T_Y_MODULES"
+  printf '%s' "$_catout"
+fi
 # Magisk does its magic mounts in a private namespace, so /proc/mounts read from here shows
 # zero entries for the module even when the overlay is perfectly live - on KernelSU the same
 # grep finds them.

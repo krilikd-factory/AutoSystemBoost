@@ -2396,7 +2396,7 @@ apply_kernel() {
   [ -e /proc/sys/walt/sched_min_task_util_for_colocation ] && writef_retry /proc/sys/walt/sched_min_task_util_for_colocation $_P_COLOC 1 0 || true
   [ -e /proc/sys/walt/sched_busy_hyst_ns ] && writef_retry /proc/sys/walt/sched_busy_hyst_ns $_P_BHYST 1 0 || true
   [ -e /proc/sys/walt/sched_boost ] && writef_retry /proc/sys/walt/sched_boost $_P_SBOOST 1 0 || true
-  [ -e /proc/sys/walt/sched_ravg_window_nr_ticks ] && writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks $_P_RAVG 2 0.06 || true
+  [ -e /proc/sys/walt/sched_ravg_window_nr_ticks ] && [ ! -e /dev/.asb/walt_ravg_rom ] && writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks $_P_RAVG 2 0.06 || true
   [ -e /proc/sys/walt/sched_pipeline_util_thres ] && writef_retry /proc/sys/walt/sched_pipeline_util_thres $_P_PIPE 1 0 || true
   [ -e /proc/sys/walt/sched_pipeline_non_special_task_util_thres ] && writef_retry /proc/sys/walt/sched_pipeline_non_special_task_util_thres $_P_PIPEN 1 0 || true
   [ -e /proc/sys/walt/sched_pipeline_special_task_util_thres ] && writef_retry /proc/sys/walt/sched_pipeline_special_task_util_thres $_P_PIPES 1 0 || true
@@ -2869,7 +2869,7 @@ apply_walt_live() {
   [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
   asb_feature_enabled CPU || return 0
   [ -d /proc/sys/walt ] || return 0
-  [ -e /proc/sys/walt/sched_ravg_window_nr_ticks ] && writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks "$RAVG_TICKS" 2 0.06 || true
+  [ -e /proc/sys/walt/sched_ravg_window_nr_ticks ] && [ ! -e /dev/.asb/walt_ravg_rom ] && writef_retry /proc/sys/walt/sched_ravg_window_nr_ticks "$RAVG_TICKS" 2 0.06 || true
   [ -e /proc/sys/walt/sched_idle_enough ] && writef_retry /proc/sys/walt/sched_idle_enough "$WALT_IDLE" 2 0.06 || true
   [ -e /proc/sys/walt/sched_idle_enough_clust ] && writef_retry /proc/sys/walt/sched_idle_enough_clust "$WALT_IDLE_CLUST" 2 0.06 || true
   [ -e /proc/sys/walt/sched_cluster_util_thres_pct ] && writef_retry /proc/sys/walt/sched_cluster_util_thres_pct "$WALT_CLUSTER" 2 0.06 || true
@@ -4283,6 +4283,9 @@ fi
   fi
 ) >/dev/null 2>&1 &
 
+if [ -f /data/adb/asb/logkit/full_day_resume ] && [ -f "$MODDIR/runtime/asb_debug_support.sh" ]; then
+  ASB_DEBUG_SUPPORT_MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_debug_support.sh" full-day-resume >/dev/null 2>&1
+fi
 asb_timeline_mark service_dispatched
 # Mark the wait for boot_completed separately from our own work.
 #
