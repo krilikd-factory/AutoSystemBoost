@@ -968,6 +968,7 @@ T_N_LTE_TIMER="LTE while screen off: on · timer running (90 s after screen off)
 T_N_LTE_ALLOWED="LTE while screen off: on · 5G allowed (screen is on)"
 T_N_LTE_LIGHT_LTE="5G only when needed: on · LTE now (light traffic), 5G returns on a heavy download"
 T_N_LTE_LIGHT_5G="5G only when needed: on · 5G in use, watching the traffic"
+T_N_LTE_LIGHT_IDLE="5G only when needed: on · the traffic watcher is not running - it starts at the next screen-on"
 T_N_LTE_LIGHT_HINT="5G only when needed: off · on mobile data, light traffic (music, feeds) costs less over LTE - WebUI → Mobile Network"
 T_N_LTE_NO5G="LTE while screen off: on · 5G is NOT allowed right now - if you did not turn it off, turn it on in the SIM settings"
 T_N_ROUTE="route via %s"
@@ -2249,9 +2250,12 @@ case "$_wleave" in
 esac
 # 5G only when needed (net_lte_light, fix114): what the screen-on watcher decided.
 if [ "$(_cfg net_lte_light)" = "1" ]; then
-  case "$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_lte_screenoff.sh" status 2>/dev/null | grep -m1 '^reason=')" in
-    reason=light) _f "       $T_N_LTE_LIGHT_LTE" ;;
-    *)            _f "       $T_N_LTE_LIGHT_5G" ;;
+  _llst="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_lte_screenoff.sh" status 2>/dev/null)"
+  case "$_llst" in
+    *reason=light*) _f "       $T_N_LTE_LIGHT_LTE" ;;
+    *unsupported=1*) [ "$(_cfg net_screen_off_lte)" = "1" ] || _f "       $T_N_LTE_STOP" "$(printf '%s\n' "$_llst" | sed -n 's/^last=//p' | cut -c1-90)" ;;
+    *light_watch=1*) _f "       $T_N_LTE_LIGHT_5G" ;;
+    *)              _f "       $T_N_LTE_LIGHT_IDLE" ;;
   esac
 else
   # Off, and the phone is on mobile data with 5G allowed right now: the one place the
