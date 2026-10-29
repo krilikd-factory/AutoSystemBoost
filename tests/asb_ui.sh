@@ -895,8 +895,10 @@ for locale in "$ROOT"/webroot/i18n/*.json; do
   need "$locale" '"dbg_log_failed"'
   need "$locale" '"lr_running_open"'
   need "$locale" '"dbg_log_started_hint"'
-  need "$locale" '"dev_json_saved"'
-  need "$locale" '"dev_json_error"'
+  need "$locale" '"page_saved"'
+  need "$locale" '"page_save_error"'
+  need "$locale" '"dbg_log_stop_sent"'
+  need "$locale" '"dbg_log_stop_busy"'
 done
 
 echo 'PASS debug support WebUI/helper contract'
@@ -1047,6 +1049,55 @@ grep -Fq "asb_debug_support.sh full-day-stop 2>/dev/null" "$H" || fail "the WebU
 grep -Fq "if (action === 'full-day' && _asbLogRunning) {" "$H" || fail "the menu item does not turn into Stop while recording"
 grep -Fq "Date.now() - _asbLogStopArmed >= 4000" "$H" || fail "stopping has no second-tap confirmation"
 echo "PASS debug support stop: TERM ends the capture at once with its report finalised, the bridge returns immediately, a recorder that ignores TERM is ended, the menu asks twice"
+)
+
+t_debug_support_stop_fast_runtime() (
+# Runtime (fix246): stopping the infinite log answers at once on a loaded phone.
+#
+# Owner, after a reboot mid-capture: "I tap Stop, tap again - nothing happens, the phone starts
+# to stutter, and the log keeps recording." The stop helper walked /proc once per generation
+# with a cat and a cut for every process - thousands of forks on a phone with ~1000 processes,
+# from the manager app's cgroup, before it sent the recorder anything. The page sat silent, the
+# user left it, the app's group was frozen and the TERM was never sent. The descendants are now
+# one cat and one awk, the helper leaves the app's cgroup first, and the recorder sleeps in the
+# background and waits, so a TERM interrupts it at once whatever the helper does.
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+HELPER="$ROOT/runtime/asb_debug_support.sh"
+FD="$ROOT/tools/logkit/asb_log_full_day.sh"
+T="$(mktemp -d)"; trap 'kill $(jobs -p) 2>/dev/null; rm -rf "$T"' EXIT
+fail() { echo "FAIL debug stop fast: $*" >&2; exit 1; }
+sed -n '/^pid_descendants() {$/,/^}$/p' "$HELPER" > "$T/pd.sh"
+grep -q 'awk' "$T/pd.sh" || fail "pid_descendants is not a single pass"
+grep -q 'for _pd_stat in' "$T/pd.sh" && fail "pid_descendants still forks per process"
+sh -c 'sleep 40 & (sleep 41 & (sleep 42 & wait) & wait) & wait' & ROOTP=$!
+sleep 0.5
+kids="$(PROC_ROOT=/proc sh -c '. "$1"; pid_descendants "$2"' x "$T/pd.sh" "$ROOTP")"
+want="$(ps -eo pid=,ppid= | awk -v r="$ROOTP" '{ pp[$1] = $2 } END { q[1] = r; n = 1; h = 1; while (h <= n) { c = q[h++]; for (p in pp) if (pp[p] == c) { q[++n] = p; print p } } }' | sort -n | tr '\n' ' ')"
+got="$(printf '%s\n' $kids | sort -n | tr '\n' ' ')"
+[ -n "$got" ] && [ "$got" = "$want" ] || fail "descendants: got [$got] want [$want]"
+[ "$(printf '%s\n' $kids | wc -l)" -ge 5 ] || fail "three generations not all found: $kids"
+pkill -P "$ROOTP" 2>/dev/null; kill "$ROOTP" 2>/dev/null
+awk '/^stop_full_day\(\) \{/ { f = 1 } f && /asb_cgroup_detach \$\$/ && !d { d = NR } f && /_sk="\$\(pid_descendants "\$_sp"\)"/ { k = NR } f && /^}/ { exit } END { exit !(d && k && d < k) }' "$HELPER" \
+  || fail "the stop helper scans /proc before leaving the app's cgroup"
+grep -q 'ASB_DEBUG_SUPPORT_STOP_WAIT_S:-240' "$HELPER" || fail "a reniced finalise gets the old 120 s before it is killed"
+grep -q '^  sleep "\$LK_POLL_S" &$' "$FD" && grep -q '^  wait "\$LK_SLEEP_PID" 2>/dev/null$' "$FD" || fail "the recorder still sleeps in the foreground"
+grep -q '^  \[ -n "\${LK_SLEEP_PID:-}" \] && kill "\$LK_SLEEP_PID" 2>/dev/null$' "$FD" || fail "the signal handler leaves the sleep behind"
+grep -q '^renice -n 10 -p \$\$' "$FD" || fail "the recorder competes with the UI at normal priority"
+{ echo 'LK_POLL_S=60; trap "echo term > \"$1\"; exit 0" TERM'
+  echo 'while :; do'
+  sed -n '/^  sleep "\$LK_POLL_S" &$/,/^  LK_SLEEP_PID=""$/p' "$FD"
+  echo 'done'; } > "$T/loop.sh"
+sh "$T/loop.sh" "$T/termed" & LP=$!
+sleep 0.5
+t0="$(date +%s%N)"; kill -TERM "$LP"
+n=0; while [ ! -s "$T/termed" ] && [ "$n" -lt 30 ]; do sleep 0.1; n=$((n + 1)); done
+[ -s "$T/termed" ] || fail "a TERM does not interrupt the recorder's sleep"
+[ $(( ($(date +%s%N) - t0) / 1000000 )) -lt 2000 ] || fail "the recorder took over 2 s to see a TERM"
+H="$ROOT/webroot/index.html"
+grep -Fq "toast(T('dbg_log_stop_sent', 'Stopping the infinite log…'), 'warn');" "$H" || fail "the second tap gives no immediate answer"
+grep -Fq "if (_asbDebugActionBusy) { toast(T('dbg_log_stop_busy'" "$H" || fail "a busy stop returns in silence"
+echo "PASS debug stop fast: one-pass descendants (three generations), the helper leaves the app's cgroup first, the recorder wakes on TERM at once, the page answers the second tap immediately"
 )
 
 t_debug_support_resume_runtime() (
@@ -4686,8 +4737,8 @@ printf '%s\n' "$out" | grep -q '^cfg	key=night_modem_idle	value=0$' || fail "cfg
 # the trace's profile field, charging sessions from the ledger, LTPO and AOD from the
 # report - the facts the old sheet hid (a holder behind a flat batterystats delta, a day
 # on 5W wireless, a profile comparison).
-printf '%s\n' "$out" | grep -q '^wlive	tag=job.Sync	pct=40	min=12	pkg=com.instagram.android$' || fail "live holder row: $(printf '%s\n' "$out" | grep '^wlive' | head -1)"
-printf '%s\n' "$out" | grep -q '^wlive	tag=AudioMix	pct=9	min=3	pkg=com.google.android.youtube$' || fail "live holder row 2"
+printf '%s\n' "$out" | grep -q '^wlive	tag=job.Sync	pct=40	min=12	pkg=com.instagram.android	kind=job$' || fail "live holder row: $(printf '%s\n' "$out" | grep '^wlive' | head -1)"
+printf '%s\n' "$out" | grep -q '^wlive	tag=AudioMix	pct=9	min=3	pkg=com.google.android.youtube	kind=lock$' || fail "live holder row 2"
 printf '%s\n' "$out" | grep -q '^prof	name=p	on_min=3	off_min=3	on_pctph=36.0	off_pctph=18.0$' || fail "per-profile row p: $(printf '%s\n' "$out" | grep '^prof' | head -1)"
 printf '%s\n' "$out" | grep -q '^prof	name=b	on_min=3	off_min=0	on_pctph=36.0	off_pctph=0.0$' || fail "per-profile row b"
 printf '%s\n' "$out" | grep -q '^chg	min=60	gain=14	sess=1$' || fail "charging sessions: $(printf '%s\n' "$out" | grep '^chg')"
@@ -4875,13 +4926,15 @@ printf '%s\n' "$rc" | grep -Eq '^hist	started=[0-9-]+ [0-9:]+	night=1.0	drain=2.
 let ASB_LANG = 'ru';
 function T(k, d) { const L = I18N[ASB_LANG]; return (L && typeof L[k] === 'string') ? L[k] : d; }
 EOF
-  for fn in Tcfg parseLogReport logReportT logReportDur logReportDurSec logReportTips \
+  for fn in Tcfg parseLogReport logReportT logReportDur logReportDurSec logReportAuthority logReportHolderWhat logReportHolderName logReportTips \
     logReportSysuiSteady logReportFullCharge logReportScreenOnDrainState logReportAnalyze logReportHistoryComparable logReportMachineDigest logReportAnalysisT \
     logReportTipText logReportRow logReportSec logReportNote logReportHero logReportTable \
-    logReportAppendAnalysis logReportRender shQuote; do
+    logReportBrief logReportAppendAnalysis logReportRender shQuote \
+    asbPageClasses asbPageHas asbPageKids asbPageTxt asbPageWarn asbPageText asbPageStamp; do
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
-  sed -n '/^async function logReportExportJson(/,/^}/p' "$H"
+  sed -n '/^async function asbSaveTextFile(/,/^}/p' "$H"
+  sed -n '/^async function asbSavePage(/,/^}/p' "$H"
   cat <<'EOF'
 let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
 const txt = [
@@ -5242,14 +5295,14 @@ function domEl(tag) { return { tag:tag, children:[], _text:'', className:'', dis
   get textContent() { return this._text; }, set textContent(v) { this._text = String(v); this.children = []; },
   appendChild(c) { this.children.push(c); return c; }, classList:{ add() {} } }; }
 const reportBody = domEl('div'), reportStatus = domEl('div'), jsonButton = domEl('button');
-function _el(id) { return id === 'reportBody' ? reportBody : id === 'reportStatus' ? reportStatus : id === 'rpJson' ? jsonButton : null; }
+function _el(id) { return id === 'reportBody' ? reportBody : id === 'reportStatus' ? reportStatus : id === 'rpSave' ? jsonButton : null; }
 const document = { createElement:domEl };
 global.window = {};
 function allText(e) { return (e.textContent || '') + e.children.map(allText).join('|'); }
 function countClass(e, name) { return (String(e.className).split(/\s+/).indexOf(name) >= 0 ? 1 : 0) + e.children.reduce((n,c) => n + countClass(c,name), 0); }
 logReportRender(early);
 chk(countClass(reportBody, 'lgr-verdict') === 5, 'summary renders all five verdict rows');
-chk(reportBody.children[0].children[0].textContent === I18N.ru.lr_sec_summary, 'smart summary is the first report section');
+chk(reportBody.children.filter(c => c.children[0] && c.children[0].textContent !== I18N.ru.lr_sec_brief)[0].children[0].textContent === I18N.ru.lr_sec_summary, 'smart summary is the first report section after the plain-words brief');
 chk(countClass(reportBody, 'lgr-action') === 0 && allText(reportBody).indexOf(I18N.ru.lr_no_actions_early) >= 0, 'early DOM has no unsupported action');
 logReportRender(mixDay);
 const mixText = allText(reportBody);
@@ -5292,24 +5345,83 @@ logReportRender(compatible);
 trendSec = reportBody.children.find(e => e.children[0] && e.children[0].textContent === I18N.ru.lr_sec_trend);
 chk(trendSec && allText(trendSec).indexOf('3.0') >= 0 && allText(trendSec).indexOf(I18N.ru.lr_trend_matched) >= 0, 'compatible history shows numbers plus the non-A/B caveat: ' + (trendSec ? allText(trendSec) : 'no section') + ' comparable-after=' + logReportHistoryComparable(compatible, compatible.analysis, compatible.hist[0]) + ' scenario=' + compatible.analysis.scenario_family);
 
-let exportCommand = '', exportErrno = 0; const exportToasts = [];
+/* fix246: the owner's Battery morning - a contacts sync held in 68% of the screen-off checks,
+   a Facebook worker in 22%, the network-speed meter on, 57 C with the screen off - reads in
+   plain words, names what each holder actually is and how to stop it. */
+const syncDay = parseLogReport([
+  'meta\telapsed_min=261\ttarget_h=0\trunning=0\tstarted=2026-10-29 06:26\tprofile=battery',
+  'cover\ton_min=42\toff_min=218\ton_pct=16',
+  'drain\tpctph=3.3\ttotal_drop=14\thours=4.3\tma=196',
+  'night\tdur_min=218\tdrop=8\tpctph=2.2\tawake=33',
+  'nightd\tma=195\tradio_mib=34.9\tcpu_t=57\tskin_t=42\twake_pk=0',
+  'idlemax\tawake=39\tphase=sleep\tdur_min=179',
+  'thermal\tcpu=57\tsurf=45',
+  'heat\tpeak_phase=active\tpeak_c=44\twarm_min=11\tskin_min=19',
+  'scr\ton_pctph=9.1\toff_pctph=2.2\ton_min=39\toff_min=218\tidle_pctph=2.2\tidle_min=218\tmusic_min=0',
+  'sysuidraw\tintv=41\tof=41\tpct=19.7\tnetspeed=1\tclocksec=0\tlivewp=0',
+  'jank\tpct=5.7\tjps=2.12\tframes=77740',
+  'wl\tpkg=com.whatsapp\tsec=2204', 'wl\tpkg=com.facebook.katana\tsec=864',
+  'wlive\ttag=contacts\tpct=68\tmin=0\tpkg=com.whatsapp\tkind=sync',
+  'wlive\ttag=MediaCountUploadWorker\tpct=22\tmin=0\tpkg=com.facebook.katana\tkind=worker',
+  'cfg\tkey=night_modem_idle\tvalue=0'].join('\n'));
+chk(syncDay.wlive[0].kind === 'sync' && syncDay.wlive[1].kind === 'worker', 'holder kinds parsed');
+chk(logReportHolderName(syncDay.wlive[0]) === 'com.whatsapp (' + I18N.ru.lr_hold_sync.split('{what}').join(I18N.ru.lr_auth_contacts) + ')', 'sync holder named in words: ' + logReportHolderName(syncDay.wlive[0]));
+chk(logReportHolderName({ pkg: 'com.x', tag: 'Lock', kind: 'lock' }) === 'com.x', 'a plain wakelock keeps the package name');
+const syncTips = logReportTips(syncDay, true).map(t => t.key);
+chk(syncTips.indexOf('lr_tip_awake_sync') >= 0 && syncTips.indexOf('lr_tip_awake_who') < 0, 'the awake tip names the sync loop: ' + syncTips.join(','));
+chk(syncTips.indexOf('lr_tip_worker') >= 0 && syncTips.indexOf('lr_tip_sync_loop') < 0, 'the second holder gets the worker tip, the first is not repeated: ' + syncTips.join(','));
+const syncTip = logReportTips(syncDay, true).filter(t => t.key === 'lr_tip_awake_sync')[0];
+const syncTipText = logReportTipText(syncTip);
+chk(syncTipText.indexOf('com.whatsapp') >= 0 && syncTipText.indexOf(I18N.ru.lr_auth_contacts) >= 0 && syncTipText.indexOf('68') >= 0 && syncTipText.indexOf('{') < 0, 'sync tip text: ' + syncTipText);
+const syncA = logReportAnalyze(syncDay);
+chk(syncA.actions[0].key === 'lr_tip_awake_sync', 'the sync loop is the first priority action: ' + syncA.actions.map(t => t.key).join(','));
+chk(syncA.chains.some(c => c.key === 'lr_chain_sync' && c.kind === 'fact'), 'the sync loop is a stated fact in the causes');
+logReportRender(syncDay);
+const syncText = allText(reportBody);
+const briefSec = reportBody.children.find(e => e.children[0] && e.children[0].textContent === I18N.ru.lr_sec_brief);
+chk(!!briefSec && reportBody.children.indexOf(briefSec) < reportBody.children.findIndex(e => e.children[0] && e.children[0].textContent === I18N.ru.lr_sec_summary), 'the plain-words brief comes before the summary');
+const briefText = briefSec ? allText(briefSec) : '';
+chk(briefText.indexOf('14%') >= 0 && briefText.indexOf('3.3') >= 0, 'brief: drop and pace');
+chk(briefText.indexOf('9.1') >= 0 && briefText.indexOf('2.2') >= 0, 'brief: screen on/off split');
+chk(briefText.indexOf(I18N.ru.lr_brief_idle_bad.split('{pct}').join('2.2').replace(/%\//g, '%/⁠')) >= 0, 'brief: idle verdict');
+chk(briefText.indexOf('com.whatsapp (') >= 0 && briefText.indexOf('68') >= 0, 'brief: the main screen-off cause with the holder named');
+chk(briefText.indexOf(I18N.ru.lr_brief_night_hot.split('{cpu}').join('57')) >= 0, 'brief: heavy work with the screen off');
+chk(briefText.indexOf(I18N.ru.lr_brief_sysui_net) >= 0 && briefText.indexOf(I18N.ru.lr_brief_next) >= 0, 'brief: status-bar redraw and the pointer to actions');
+chk(countClass(briefSec || domEl('x'), 'lgr-brief-warn') >= 2, 'brief: the bad findings are marked');
+chk(syncText.indexOf(I18N.ru.lr_wl_live_note.split('{what}').join(logReportHolderWhat(syncDay.wlive[0])).split('{pct}').join('68')) >= 0, 'the wake section says what WhatsApp held');
+chk(syncText.indexOf(I18N.ru.lr_wl_live_note.split('{what}').join(logReportHolderWhat(syncDay.wlive[1])).split('{pct}').join('22')) >= 0, 'the wake section says what Facebook ran');
+const pageTxt = asbPageText(reportBody);
+chk(pageTxt.indexOf('== ' + I18N.ru.lr_sec_brief + ' ==') >= 0 && /\n  • .*com\.whatsapp/.test(pageTxt) && pageTxt.indexOf('(!)') > 0, 'the saved text keeps the brief bullets and warnings');
+chk(/\n  com\.whatsapp: /.test(pageTxt), 'the saved text keeps label: value rows');
+let exportCommands = [], exportErrno = 0; const exportToasts = [];
 function toast(msg, kind) { exportToasts.push({msg:msg, kind:kind}); }
-async function run(cmd) { exportCommand = cmd; return { errno:exportErrno, stderr:'write failed' }; }
+async function run(cmd) { exportCommands.push(cmd); return { errno:exportErrno, stderr:'write failed' }; }
 async function verifyJsonExport() {
-  compatible.sections.capture = { dir:"/storage/emulated/0/asb log 'quoted'" };
-  compatible.sections.meta.profile = 'Смарт';
+  /* fix246: Save keeps the whole rendered page as text plus the raw digest, in Download,
+     in base64 chunks small enough for one shell argument each. */
   window._asbLogReportData = compatible;
-  await logReportExportJson();
-  chk(jsonButton.disabled === false && exportCommand.indexOf("printf '%s' ") === 0, 'JSON export button and command');
-  chk(exportCommand.endsWith(shQuote("/storage/emulated/0/asb log 'quoted'/report.json")), 'JSON export quotes the exact capture path');
-  const match = exportCommand.match(/^printf '%s' '([^']*)' \| base64 -d > /);
-  chk(!!match, 'JSON export has a base64 payload');
-  if (match) {
-    const exported = JSON.parse(Buffer.from(match[1], 'base64').toString('utf8'));
-    chk(exported.schema === 2 && exported.capture.profile === 'Смарт', 'JSON export preserves UTF-8 and schema 2');
-  }
-  exportErrno = 1; await logReportExportJson();
-  chk(exportToasts.some(t => t.kind === 'error') && jsonButton.disabled === false, 'JSON write failure reports an error and re-enables the button');
+  window._asbLogReportRaw = trendText + 'RAWMARK\tx=1\n' + 'Z'.repeat(70000);
+  logReportRender(compatible);
+  await asbSavePage('report');
+  const writes = exportCommands.filter(c => c.indexOf("printf '%s' ") >= 0);
+  chk(writes.length >= 2, 'a large page is written in several chunks: ' + writes.length);
+  chk(writes.every(c => c.length < 60000), 'every chunk fits one shell argument');
+  chk(/^mkdir -p '\/sdcard\/Download' && printf/.test(writes[0]) && / > '\/sdcard\/Download\/asb_report_\d{8}_\d{6}\.txt\.b64'$/.test(writes[0]), 'first chunk creates the temp file in Download: ' + writes[0].slice(-80));
+  chk(writes.slice(1).every(c => / >> '\/sdcard\/Download\/asb_report_\d{8}_\d{6}\.txt\.b64'$/.test(c)), 'later chunks append');
+  const fin = exportCommands[exportCommands.length - 1];
+  chk(/^base64 -d < '\/sdcard\/Download\/asb_report_\d{8}_\d{6}\.txt\.b64' > '\/sdcard\/Download\/asb_report_\d{8}_\d{6}\.txt' && rm -f /.test(fin), 'the chunks are decoded into the .txt: ' + fin);
+  const b64 = writes.map(c => c.match(/^(?:mkdir -p '[^']*' && )?printf '%s' '([^']*)'/)[1]).join('');
+  const saved = Buffer.from(b64, 'base64').toString('utf8');
+  chk(saved.indexOf('AutoSystemBoost - ') === 0, 'the file starts with the page title');
+  chk(saved.indexOf('== ' + I18N.ru.lr_sec_summary + ' ==') >= 0, 'section titles are kept');
+  chk(saved.indexOf('== ' + I18N.ru.lr_sec_trend + ' ==') >= 0 && saved.indexOf('3.0') >= 0, 'the trend section and its numbers are kept');
+  chk(saved.indexOf('RAWMARK\tx=1') >= 0 && saved.indexOf('== ' + I18N.ru.page_save_raw + ' ==') >= 0, 'the raw digest is appended under its heading');
+  chk(exportToasts.some(t => t.kind === 'ok' && t.msg.indexOf('/sdcard/Download/asb_report_') >= 0), 'the toast names the saved path');
+  chk(jsonButton.disabled === false, 'the Save button is enabled again');
+  exportCommands = []; exportErrno = 1; await asbSavePage('report');
+  chk(exportToasts.some(t => t.kind === 'error') && jsonButton.disabled === false, 'a write failure reports an error and re-enables the button');
+  exportCommands = []; exportErrno = 0; window._asbLogReportData = null; await asbSavePage('report');
+  chk(exportCommands.length === 0, 'nothing is written before the page has loaded');
 }
 verifyJsonExport().then(function () {
   if (bad) process.exit(1);
@@ -5373,7 +5485,7 @@ KEYS += ['lr_sec_summary','lr_sec_causes','lr_sec_actions','lr_sec_observations'
          'lr_chain_asb_crash','lr_chain_heat','lr_chain_aod','lr_chain_radio','lr_chain_holder',
          'lr_chain_alarm','lr_chain_hold','lr_chain_wakegap','lr_chain_wake','lr_chain_audio',
          'lr_chain_cost','lr_no_actions','lr_no_actions_early','lr_trend_matched',
-         'lr_trend_unmatched','lr_tip_wait','lr_json_saved','lr_json_error']
+         'lr_trend_unmatched','lr_tip_wait','page_save','page_saved','page_save_error','page_save_empty','page_save_raw']
 EMO = {'lr_sec_drain': '\U0001f50b', 'lr_sec_wake': '\u23f0', 'lr_sec_crash': '\U0001f4a5',
        'lr_sec_thermal': '\U0001f321\ufe0f', 'lr_sec_tips': '\U0001f4a1',
        'lr_sec_smooth': '\U0001f4f1', 'lr_sec_display': '\U0001f5a5',
@@ -5417,7 +5529,7 @@ PH.update({'lr_sum_drain_on':['{min}'], 'lr_sum_drain_night':['{min}','{deep}'],
       'lr_chain_holder':['{awake}','{who}'], 'lr_chain_alarm':['{awake}','{who}','{n}'],
       'lr_chain_hold':['{awake}','{who}','{n}'], 'lr_chain_wakegap':['{awake}'],
       'lr_chain_wake':['{pct}','{ord}'], 'lr_chain_audio':['{min}','{pct}'],
-      'lr_chain_cost':['{ms}','{wakes}','{per}'], 'lr_json_saved':['{path}'],
+      'lr_chain_cost':['{ms}','{wakes}','{per}'], 'page_saved':['{path}'],
       'lr_ms':['{n}'], 'lr_ms_wake':['{n}'], 'lr_drain_est':['{h}'], 'lr_drain_short_note':['{min}'],
       'lr_idle_fmt':['{pct}','{min}'], 'lr_sum_drain_idle':['{min}'], 'lr_sum_drain_mixed':['{h}','{on}','{est}'],
       'lr_chain_sysui':['{n}','{of}','{pct}'], 'lr_chain_music_off':['{off}','{music}'],
@@ -5427,6 +5539,20 @@ PH.update({'lr_sum_drain_on':['{min}'], 'lr_sum_drain_night':['{min}','{deep}'],
       'lr_tip_sysui_inj':['{n}','{m}','{pkg}'], 'lr_chain_sysui_inj':['{n}','{m}','{pkg}'],
       'lr_sysui_inj_note':['{m}','{pkg}'], 'lr_sysui_hooks_note':['{hooks}'],
       'lr_reboots':['{n}'], 'lr_reboots_mod':['{n}','{mod}']})
+KEYS += ['lr_sec_brief','lr_brief_drain','lr_brief_drain_short','lr_brief_split','lr_brief_idle_bad','lr_brief_idle_ok',
+         'lr_brief_cause','lr_brief_cause_radio','lr_brief_cause_none','lr_brief_night_hot','lr_brief_smooth_ok',
+         'lr_brief_smooth_mid','lr_brief_smooth_bad','lr_brief_sysui_net','lr_brief_heat','lr_brief_heat_ok','lr_brief_next',
+         'lr_auth_contacts','lr_auth_calendar','lr_hold_sync','lr_hold_worker','lr_hold_job','lr_hold_alarm','lr_wl_live_note',
+         'lr_tip_awake_sync','lr_tip_awake_worker','lr_tip_sync_loop','lr_tip_worker','lr_chain_sync']
+PH.update({'lr_brief_drain':['{drop}','{h}','{pct}','{est}'], 'lr_brief_drain_short':['{drop}','{h}','{pct}'],
+      'lr_brief_split':['{on}','{onr}','{off}','{offr}'], 'lr_brief_idle_bad':['{pct}'],
+      'lr_brief_cause':['{awake}','{who}','{pct}'], 'lr_brief_cause_radio':['{awake}','{mib}'], 'lr_brief_cause_none':['{awake}'],
+      'lr_brief_night_hot':['{cpu}'], 'lr_brief_smooth_ok':['{pct}'], 'lr_brief_smooth_mid':['{pct}'], 'lr_brief_smooth_bad':['{pct}'],
+      'lr_brief_heat':['{min}','{cpu}'], 'lr_brief_heat_ok':['{cpu}'], 'lr_hold_sync':['{what}'], 'lr_hold_worker':['{name}'],
+      'lr_hold_job':['{name}'], 'lr_hold_alarm':['{name}'], 'lr_wl_live_note':['{what}','{pct}'],
+      'lr_tip_awake_sync':['{awake}','{app}','{what}','{pct}'], 'lr_tip_awake_worker':['{awake}','{app}','{name}','{pct}'],
+      'lr_tip_sync_loop':['{app}','{what}','{pct}'], 'lr_tip_worker':['{app}','{name}','{pct}'],
+      'lr_chain_sync':['{awake}','{who}','{pct}']})
 KEYS += ['lr_tip_sysui_inj','lr_chain_sysui_inj','lr_sysui_inj_note','lr_sysui_hooks_note',
          'lr_reboots','lr_reboots_mod','dbg_log_started_hint','lr_tip_jank_bad_bat','lr_tip_jank_bad_man']
 PH.update({'lr_tip_jank_bad_bat':['{pct}'], 'lr_tip_jank_bad_man':['{pct}']})
@@ -5507,6 +5633,79 @@ grep -Fq "tag === 'hist'" "$H" || fail "the parser drops the history rows"
 grep -Fq 'hist\tstarted=' "$ROOT/tools/logkit/asb_fullday_digest.sh" 2>/dev/null || grep -Fq 'hist\tstarted=%s' "$ROOT/tools/logkit/asb_fullday_digest.sh" || fail "the digest emits no history rows"
 grep -Fq 'report_history.tsv' "$ROOT/tools/logkit/asb_fullday_digest.sh" || fail "the digest keeps no capture history"
 echo "PASS webui log report: digest over a fixture capture (drain..cfg, live holders, per-profile drain, charging, LTPO, AOD, wake causes by occurrence fix210), fresh-capture crash window (fix204), plain-words parser/tips in node (ru+en), 13 locales, menu wiring"
+)
+
+t_fullday_digest_trace_truth_runtime() (
+# fix246: an owner's Battery capture said "skin above 40 C for 41 min" and "night peak CPU
+# 37" while the phone sat at 33 C overnight and once ran at 57 C with the screen off. The
+# recorder averaged a zone that never moves (sys-therm-6 pinned at 40-41 C) into its idle
+# phases, and the digest read phase averages as peaks. The sync loop that kept it awake
+# printed as "com.whatsapp:android" and the report then hid it behind the package row.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+D="$ROOT/tools/logkit/asb_fullday_digest.sh"
+C="$ROOT/tools/logkit/_asb_logkit_common.sh"
+fail() { echo "FAIL digest trace truth: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+NOW=$(date +%s)
+CAP="$T/asb_log_full_day_1"; mkdir -p "$CAP"
+S0=$((NOW-20000))
+printf '# phase\tstart\n' > "$CAP/phase_ledger.tsv"
+printf 'active\t%s\t%s\t80\t78\t44\t41\t1800\t20\t0\t0\t100\t300\t0\t0\t0\n' $((S0)) $((S0+1800)) >> "$CAP/phase_ledger.tsv"
+printf 'idle\t%s\t%s\t78\t78\t34\t40\t0\t0\t0\t0\t9\t50\t0\t0\t0\n' $((S0+1800)) $((S0+3600)) >> "$CAP/phase_ledger.tsv"
+printf 'sleep\t%s\t%s\t78\t74\t36\t40\t0\t0\t0\t0\t30\t60\t0\t0\t0\n' $((S0+3600)) $((S0+14400)) >> "$CAP/phase_ledger.tsv"
+{
+  echo 'epoch|datetime|fsm_state|profile|screen|bat_pct|bat_mA|bat_uV|bat_dC|cpu_max_c|skin_c|surface_c|board_c'
+  i=0; while [ $i -lt 30 ]; do
+    e=$((S0 + i * 60)); c=46; s=41; [ $i -ge 20 ] && { c=40; s=38; }
+    echo "$e|d|MODERATE|battery|1|80|300|0|0|$c|35|$s|$s"; i=$((i + 1))
+  done
+  i=0; while [ $i -lt 20 ]; do
+    e=$((S0 + 3700 + i * 500)); c=33; s=33; [ $i -eq 7 ] && { c=57; s=42; }
+    echo "$e|d|DEEP_IDLE|battery|0|77|40|0|0|$c|33|$s|$s"; i=$((i + 1))
+  done
+} > "$CAP/battery_trace.txt"
+cat > "$CAP/_full_day_report.txt" <<'EOF'
+----- LIVE WAKELOCK HOLDERS (power-manager samples, screen off) -----
+screen-off samples: 44
+  held in  68% of samples, longest hold    0 min  *job*r/@SyncManager@com.android.contacts/com.whatsapp:android  (com.whatsapp)
+  held in  68% of samples, longest hold    0 min  *sync*/com.android.contacts/com.whatsapp  (com.whatsapp)
+  held in  22% of samples, longest hold    0 min  *job*r/#MediaCountUploadWorker#@androidx.work.systemjobscheduler@com.facebook.katana/androidx.work.impl.background.systemjob.SystemJobService  (com.facebook.katana)
+  held in  10% of samples, longest hold    2 min  *alarm*/com.example/.Tick  (com.example)
+
+EOF
+out="$(sh "$D" "$CAP" 2>/dev/null)"
+printf '%s\n' "$out" | grep -q '^wlive	tag=contacts	pct=68	min=0	pkg=com.whatsapp	kind=sync$' || fail "sync holder: $(printf '%s\n' "$out" | grep '^wlive' | head -1)"
+[ "$(printf '%s\n' "$out" | grep -c '^wlive	tag=contacts	')" = 1 ] || fail "the same sync counted twice"
+printf '%s\n' "$out" | grep -q '^wlive	tag=MediaCountUploadWorker	pct=22	min=0	pkg=com.facebook.katana	kind=worker$' || fail "worker holder: $(printf '%s\n' "$out" | grep '^wlive' | sed -n 2p)"
+printf '%s\n' "$out" | grep -q '^wlive	tag=Tick	pct=10	min=2	pkg=com.example	kind=alarm$' || fail "alarm holder: $(printf '%s\n' "$out" | grep '^wlive' | sed -n 3p)"
+printf '%s\n' "$out" | grep -q '^thermal	cpu=57	surf=42$' || fail "trace peak: $(printf '%s\n' "$out" | grep '^thermal')"
+printf '%s\n' "$out" | grep -q '^heat	peak_phase=active	peak_c=44	warm_min=20	skin_min=20$' || fail "trace durations: $(printf '%s\n' "$out" | grep '^heat')"
+printf '%s\n' "$out" | grep -q '^nightd	.*	cpu_t=57	skin_t=42	' || fail "night peaks from the trace: $(printf '%s\n' "$out" | grep '^nightd')"
+printf '%s\n' "$out" | grep -q '^nightw' && fail "the night window leaked into the digest"
+head -n 32 "$CAP/battery_trace.txt" > "$T/bt" && mv "$T/bt" "$CAP/battery_trace.txt"
+printf 'active\t%s\t%s\t80\t78\t44\t41\t1800\t20\t0\t0\t100\t300\t0\t0\t0\n' $((S0)) $((S0+1800)) > "$CAP/phase_ledger.tsv"
+out2="$(sh "$D" "$CAP" 2>/dev/null)"
+printf '%s\n' "$out2" | grep -q '^heat	peak_phase=active	peak_c=44	warm_min=20	skin_min=20$' || fail "screen-on trace: $(printf '%s\n' "$out2" | grep '^heat')"
+printf 'epoch|x\n1|a\n' > "$CAP/battery_trace.txt"
+out3="$(sh "$D" "$CAP" 2>/dev/null)"
+printf '%s\n' "$out3" | grep -q '^heat	peak_phase=active	peak_c=44	warm_min=0	skin_min=30$' || fail "ledger fallback: $(printf '%s\n' "$out3" | grep '^heat')"
+printf '%s\n' "$out3" | grep -q '^thermal	cpu=44	surf=41$' || fail "ledger peak fallback: $(printf '%s\n' "$out3" | grep '^thermal')"
+
+Z="$T/tz"; for z in 26 15 74 83 76; do mkdir -p "$Z/thermal_zone$z"; done
+echo 34000 > "$Z/thermal_zone26/temp"; echo 33000 > "$Z/thermal_zone15/temp"
+echo 40000 > "$Z/thermal_zone74/temp"; echo 33000 > "$Z/thermal_zone83/temp"; echo 32500 > "$Z/thermal_zone76/temp"
+f="$(sed -n '/^lk_direct_temps() {/,/^}/p' "$C")"
+[ -n "$f" ] || fail "lk_direct_temps is gone"
+r="$(sh -c "$f
+LK_THERMAL_BASE='$Z' TZ_CPU_PRIME=26 TZ_CPU_PERF=15 TZ_SYSTHERM6=74 TZ_BOARD=83
+lk_direct_temps 76; lk_direct_temps ''; lk_direct_temps 99")"
+[ "$r" = "34|32
+34|40
+34|40" ] || fail "direct temps must read the governor's surface zone first: $r"
+grep -q 'lk_direct_temps "$(echo "$_j" | awk -F'"'"'"thermal_surface_zone":'"'"'' "$ROOT/tools/logkit/asb_log_full_day.sh" || fail "the phase ledger does not pass the governor's surface zone"
+grep -q 'lk_direct_temps "$(echo "$_j" | awk -F'"'"'"thermal_surface_zone":'"'"'' "$C" || fail "the battery trace does not pass the governor's surface zone"
+echo "PASS digest trace truth: sync/worker/alarm holders named and deduped, peaks and hot minutes from the trace, night peaks inside the chain, ledger fallback, surface zone first"
 )
 
 t_webui_liquid_glass_runtime() (
@@ -5678,15 +5877,17 @@ for i in ('socBadge','liveSocBadge','cfgSocBadge','rpSocBadge','devSocBadge'):
 assert h.count('data-theme-toggle=') == 5 and h.count('data-theme-choice="glass"') == 5
 assert '#devicePage { z-index: 140;' in h and 'id="devicePage"' in h
 assert "run('sh ' + MD + '/tools/asb_device_info.sh 2>/dev/null')" in h
-assert 'id="devJson"' in h and 'asbDeviceInfoExportJson()' in h
+assert 'id="devSave"' in h and "asbSavePage('device')" in h and 'id="rpSave"' in h and "asbSavePage('report')" in h
+assert 'id="devJson"' not in h and 'id="rpJson"' not in h and 'ExportJson' not in h
 loader = h[h.index('async function asbDeviceInfoLoad()'):h.index('async function asbLogReportLoad()')]
 assert 'setInterval' not in loader and 'setTimeout' not in loader
 assert 'seq !== _deviceLoadSeq' in loader and 'Nothing was changed' in loader
 assert loader.index('window._asbDeviceInfoData = null') < loader.index('await run(')
 assert 'window._asbDeviceInfoData = d;' in loader
-export_loader = h[h.index('async function asbDeviceInfoExportJson()'):h.index('async function asbDeviceInfoLoad()')]
-assert '/sdcard/Download/device.json' in export_loader
-assert 'asb_device_info.sh' not in export_loader and 'setInterval' not in export_loader
+save_fn = h[h.index('async function asbSavePage('):h.index('async function asbDeviceInfoLoad()')]
+assert "'/sdcard/Download/'" in save_fn and 'asb_device_' in save_fn and 'asb_report_' in save_fn
+assert 'asb_device_info.sh' not in save_fn and 'setInterval' not in save_fn
+assert 'window._asbDeviceInfoRaw = runText(r);' in loader
 segment = h[h.index('function parseDeviceInfo('):h.index('function openDevicePage()')]
 assert '.innerHTML' not in segment and 'textContent' in segment
 assert "['kernel_features', 'dev_sec_kernel_features'" in h
@@ -5705,7 +5906,7 @@ for p in (root/'webroot/i18n').glob('*.json'):
                 'dev_kernel_features_tmpfs_xattr_posix_acl','dev_kernel_features_lto','dev_kernel_features_bbr_v1',
                 'dev_kernel_features_bbr_v2','dev_kernel_features_bbg_baseband_guard','dev_kernel_features_susfs',
                 'dev_sec_metamodule','dev_metamodule_status','dev_metamodule_id','dev_metamodule_name',
-                'dev_metamodule_version','dev_metamodule_version_code','dev_json_empty','dev_json_saved','dev_json_error','dev_metamodule_nomount_driver',
+                'dev_metamodule_version','dev_metamodule_version_code','page_save','page_saved','page_save_error','page_save_empty','page_save_raw','dev_gpu_gov_pwrlevel','dev_metamodule_nomount_driver',
                 'dev_metamodule_nomount_driver_version','dev_metamodule_nomount_evidence'):
         assert d.get(key), '%s: %s missing' % (p.name, key)
 ru = json.loads((root/'webroot/i18n/ru.json').read_text(encoding='utf-8'))
@@ -5732,19 +5933,23 @@ function mk(tag) {
   Object.defineProperty(e, 'textContent', { get() { return e._text; }, set(v) { e._text = String(v); e.children = []; } });
   return e;
 }
-const body = mk('div'), jsonButton = { disabled: false };
-function _el(id) { return id === 'deviceBody' ? body : id === 'devJson' ? jsonButton : null; }
+const body = mk('div'), jsonButton = { disabled: false }, devStatus = mk('span');
+devStatus.textContent = '27 facts';
+function _el(id) { return id === 'deviceBody' ? body : id === 'devSave' ? jsonButton : id === 'deviceStatus' ? devStatus : null; }
 const document = { createElement: mk };
-function logReportNote(text, warn) { const n = mk('div'); n.className = 'lgr-note'; n.textContent = text; n.warn = !!warn; return n; }
-function logReportSec(title) { const n = mk('section'); const h = mk('h3'); h.textContent = title; n.appendChild(h); return n; }
-function logReportRow(key, value) { const r = mk('div'), k = mk('span'), v = mk('span'); k.textContent = key; v.className = 'lgr-v'; v.textContent = value; r.appendChild(k); r.appendChild(v); return r; }
+function logReportNote(text, warn) { const n = mk('div'); n.className = 'lgr-note' + (warn ? ' lgr-warn' : ''); n.textContent = text; n.warn = !!warn; return n; }
+function logReportSec(title) { const n = mk('section'); n.className = 'lgr-sec'; const h = mk('h3'); h.className = 'lgr-sec-t'; h.textContent = title; n.appendChild(h); return n; }
+function logReportRow(key, value) { const r = mk('div'), k = mk('span'), v = mk('span'); r.className = 'lgr-row'; k.className = 'lgr-k'; k.textContent = key; v.className = 'lgr-v'; v.textContent = value; r.appendChild(k); r.appendChild(v); return r; }
+function logReportT(key, fb, vars) { let s = T(key, fb); const v = vars || {}; for (const k in v) s = s.split('{' + k + '}').join(v[k]); return s; }
 EOF
   sed -n '/^const DEVICE_SECTION_ORDER = \[/,/^\];/p' "$H"
   sed -n '/^const DEVICE_KERNEL_FEATURE_ORDER = \[/,/^\];/p' "$H"
-  for fn in parseDeviceInfo deviceVal deviceFallbackLabel deviceLabel deviceHero deviceValueClass deviceNum deviceKv deviceFreqKhz deviceFreqHz deviceSizeKb deviceDuration deviceCpuCount deviceCpuList deviceYesNo deviceFill deviceBatteryMa deviceBatteryMah deviceBatteryWear deviceDisplayValue deviceInfoOverview deviceInfoRender shQuote; do
+  for fn in parseDeviceInfo deviceVal deviceFallbackLabel deviceLabel deviceHero deviceValueClass deviceNum deviceKv deviceFreqKhz deviceFreqHz deviceSizeKb deviceDuration deviceCpuCount deviceCpuList deviceYesNo deviceFill deviceBatteryMa deviceBatteryMah deviceBatteryWear deviceDisplayValue deviceInfoOverview deviceInfoRender shQuote \
+    asbPageClasses asbPageHas asbPageKids asbPageTxt asbPageWarn asbPageText asbPageStamp; do
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
-  sed -n '/^async function asbDeviceInfoExportJson()/,/^}/p' "$H"
+  sed -n '/^async function asbSaveTextFile(/,/^}/p' "$H"
+  sed -n '/^async function asbSavePage(/,/^}/p' "$H"
   cat <<'EOF'
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
 const attack = '<img src=x onerror=globalThis.pwned=1> OnePlus 15';
@@ -5841,26 +6046,33 @@ chk(d2dump.includes('28.0 °C') && d2dump.includes('-412 mA') && d2dump.includes
 chk(d2dump.includes('Silicon-carbon (Si/C)') && d2dump.includes('77% of design capacity') && d2dump.includes('214 cycles'), 'battery chemistry note, wear or cycles missing');
 chk(d2dump.includes('CPU 0–5 · walt · now 1.13 GHz · limit 384 MHz–3.63 GHz · hardware 384 MHz–3.63 GHz'), 'cpu policy not formatted');
 chk(d2dump.includes('msm-adreno-tz · now 160 MHz · range 160 MHz–1.20 GHz · busy 25%'), 'gpu not formatted');
+chk(deviceDisplayValue('gpu', 'kgsl-3d0', 'governor=pwrlevel; current_hz=160000000; min_hz=160000000; max_hz=1200000000; busy=17; levels=18; model=Adreno840', d2).replace(/\u00a0/g, ' ') ===
+    'Adreno 840 · power levels · now 160 MHz · range 160 MHz–1.20 GHz · busy 17%', 'a power-level GPU with its model: ' + deviceDisplayValue('gpu', 'kgsl-3d0', 'governor=pwrlevel; current_hz=160000000; min_hz=160000000; max_hz=1200000000; busy=17; levels=18; model=Adreno840', d2));
 chk(d2dump.includes('1.02 GHz–4.61 GHz · 22 steps · floor control: yes') && d2dump.includes('power levels · 11 steps') && d2dump.includes('92 zones'), 'ASB capability rows not formatted');
 chk(d2dump.includes('KernelSU') && d2dump.includes('camera: yes · audio: no') && d2dump.includes('camera · audio · wifi'), 'ASB capability names not formatted');
 const wearRow = []; (function walk(n) { if (n.className && n.className.split(/\s+/).includes('lgr-v') && n.textContent === '77%') wearRow.push(n); (n.children || []).forEach(walk); })(body);
 chk(wearRow.length === 1 && wearRow[0].className.includes('dev-warn'), 'worn battery is not amber');
 (async function () {
-  window._asbDeviceInfoData = d;
-  let exportCalls = 0, encoded = '', commands = [];
+  window._asbDeviceInfoData = d2;
+  window._asbDeviceInfoRaw = 'D\tgpu\tkgsl-3d0\tRAWMARK';
+  let exportCalls = 0, commands = [];
   const notices = [];
-  globalThis.run = async function (cmd) { exportCalls++; commands.push(cmd); const m = cmd.match(/printf '%s' '([^']*)'/); if (m) encoded = m[1]; return { errno: 0, stdout: '', stderr: '' }; };
+  globalThis.run = async function (cmd) { exportCalls++; commands.push(cmd); return { errno: 0, stdout: '', stderr: '' }; };
   globalThis.toast = function (text, kind) { notices.push({ text, kind }); };
-  await asbDeviceInfoExportJson();
-  const exported = JSON.parse(Buffer.from(encoded, 'base64').toString('utf8'));
-  chk(exportCalls === 1 && exported.schema === 1 && exported.read_only === true, 'Device JSON did not write one prepared snapshot');
-  chk(exported.fact_count === 27 && exported.malformed_lines === 2, 'Device JSON snapshot counts differ');
-  chk(exported.sections.firmware.model === attack && exported.sections.metamodule.id === 'MetaCore', 'Device JSON lost parsed sections');
-  chk(commands[0].includes("/sdcard/Download/device.json") && !commands[0].includes('asb_device_info.sh'), 'Device JSON ran a new collector or used the wrong path');
-  chk(!jsonButton.disabled, 'Device JSON button stayed disabled after success');
+  await asbSavePage('device');
+  const b64 = commands.filter(c => c.indexOf("printf '%s' ") >= 0).map(c => c.match(/printf '%s' '([^']*)'/)[1]).join('');
+  const saved = Buffer.from(b64, 'base64').toString('utf8');
+  chk(/^AutoSystemBoost - Device diagnostics\n27 facts\n/.test(saved), 'Device save header: ' + saved.slice(0, 80));
+  chk(saved.includes('== At a glance ==') && saved.includes('8 cores · 2 clusters · up to 4.61 GHz'), 'Device save lost the overview');
+  chk(/\n  [^\n]*: 77%  \(!\)/.test(saved), 'Device save lost a warning mark on the worn battery');
+  chk(saved.includes('Load average counts tasks'), 'Device save lost the explanatory notes');
+  chk(saved.includes('== Raw data (for the developer) ==\nD\tgpu\tkgsl-3d0\tRAWMARK'), 'Device save lost the raw collector output');
+  chk(commands.some(c => /'\/sdcard\/Download\/asb_device_\d{8}_\d{6}\.txt'/.test(c)) && !commands.some(c => c.includes('asb_device_info.sh')), 'Device save ran a new collector or used the wrong path');
+  chk(!jsonButton.disabled && notices.some(n => n.kind === 'ok' && n.text.includes('/sdcard/Download/asb_device_')), 'Device save did not confirm the path or left the button disabled');
   window._asbDeviceInfoData = null;
-  await asbDeviceInfoExportJson();
-  chk(exportCalls === 1 && notices.some(n => n.text.includes('Refresh device diagnostics')), 'cleared/stale snapshot was exported');
+  const before = exportCalls;
+  await asbSavePage('device');
+  chk(exportCalls === before && notices.some(n => n.kind === 'error'), 'a page without data was saved');
   if (bad) process.exit(1); console.log('ok');
 })().catch(e => { console.error(e); process.exit(1); });
 EOF
@@ -6000,6 +6212,19 @@ printf '%s\n' "$out" | grep -Eq '^D	asb_caps	(android_api|kernel|model)	' && fai
 printf '%s\n' "$out" | grep -q 'DO_NOT_COLLECT' && fail "a sensitive identifier was collected"
 [ "$(wc -l < "$T/susfs.log")" = 3 ] || fail "SuSFS called more than the three show reads"
 grep -Ev '^show (version|variant|enabled_features)$' "$T/susfs.log" && fail "a state-changing SuSFS command ran"
+# fix246: an Adreno driven by power levels has no devfreq node; the row read "—" for every
+# frequency on a OnePlus 15. The kgsl clock files fill it.
+K="$T/sys/class/kgsl/kgsl-3d0"; mkdir -p "$K"
+printf '160000000\n' > "$K/gpuclk"; printf '1200000000\n' > "$K/max_gpuclk"; printf '17\n' > "$K/gpu_busy_percentage"
+printf '1200000000 1000000000 650000000 160000000\n' > "$K/gpu_available_frequencies"
+printf '17\n' > "$K/max_pwrlevel"; printf '18\n' > "$K/num_pwrlevels"; printf 'Adreno840v2\n' > "$K/gpu_model"
+out="$(run)"
+want gpu kgsl-3d0 'governor=pwrlevel; current_hz=160000000; min_hz=160000000; max_hz=1200000000; busy=17; levels=18; model=Adreno840v2'
+mkdir -p "$K/devfreq"; printf 'msm-adreno-tz\n' > "$K/devfreq/governor"; printf '300000000\n' > "$K/devfreq/cur_freq"
+printf '250000000\n' > "$K/devfreq/min_freq"; printf '1100000000\n' > "$K/devfreq/max_freq"
+out="$(run)"
+want gpu kgsl-3d0 'governor=msm-adreno-tz; current_hz=300000000; min_hz=250000000; max_hz=1100000000; busy=17; levels=18; model=Adreno840v2'
+rm -rf "$T/sys/class/kgsl"
 # Missing metmodule version fields stay explicitly unknown; NoMount evidence remains independent.
 printf 'id=MetaCore\nname=MetaCore Metamodule\n' > "$T/data/metamodule/module.prop"
 out="$(run)"

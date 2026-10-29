@@ -4921,7 +4921,7 @@ fail() { echo "FAIL fix206: $*"; exit 1; }
 #    exercised in tests/asb_ui.sh (t_webui_page_scroll, t_webui_fill_pages_runtime,
 #    t_webui_log_report_runtime); here the structural pins.
 sh -n "$D" || fail "digest script has a syntax error"
-grep -qF 'printf "wlive\ttag=%s\tpct=%d\tmin=%d\tpkg=%s\n"' "$D" || fail "the digest lost the live-holder rows"
+grep -qF 'printf "wlive\ttag=%s\tpct=%d\tmin=%d\tpkg=%s\tkind=%s\n"' "$D" || fail "the digest lost the live-holder rows"
 grep -qF 'printf "prof\tname=%s\ton_min=%d\toff_min=%d\ton_pctph=%.1f\toff_pctph=%.1f\n"' "$D" || fail "the digest lost the per-profile rows"
 grep -qF 'printf "chg\tmin=%d\tgain=%d\tsess=%d\n"' "$D" || fail "the digest lost the charging line"
 grep -qF "printf 'ltpo\tn=%s\tmin=%s\n'" "$D" || fail "the digest lost the ltpo line"
