@@ -341,11 +341,128 @@ if [ "$_HAVE_LEDGER" = "1" ]; then
   _cat_ledger | awk -F'\t' '
     /^#/ { next }
     { rx += $14 + 0; tx += $15 + 0
-      if ($1 == "idle" || $1 == "sleep") { irx += $14 + 0; itx += $15 + 0 } }
+      if ($1 == "idle" || $1 == "sleep") { irx += $14 + 0; itx += $15 + 0 }
+      if ($1 ~ /_scr$/ || $1 == "active" || $1 == "post_wake" || $1 == "gaming") { orx += $14 + 0; otx += $15 + 0 } }
     END {
-      m = (rx + tx) / 1048576; if (m >= 0.1) printf "radio\tmib=%.1f\n", m
+      m = (rx + tx) / 1048576; if (m >= 0.1) printf "radio\tmib=%.1f\ton=%.1f\n", m, (orx + otx) / 1048576
       im = (irx + itx) / 1048576; if (im >= 0.1) printf "sradio\tmib=%.1f\n", im
     }' 2>/dev/null
+fi
+
+if [ -s "$_DIR/netstats_uid_latest.txt" ] && [ -n "${_fs0:-}" ]; then
+  _rn_out="$(awk -v A="$_fs0" -v MAP="$_DIR/uid_map.txt" '
+      BEGIN { while ((getline ln < MAP) > 0) { split(ln, f, " "); if (f[1] != "") NAME[f[1] + 0] = f[2] } close(MAP) }
+      NR == 1 && /epoch=[0-9]+/ { z = $0; sub(/.*epoch=/, "", z); sub(/[^0-9].*/, "", z); Z = z + 0 }
+      /\{uid=[0-9]+,package=/ {
+        s = $0
+        while (match(s, /\{uid=[0-9]+,package=[^}]+\}/)) {
+          t = substr(s, RSTART, RLENGTH); u = t; sub(/.*uid=/, "", u); sub(/,.*/, "", u)
+          n = t; sub(/^.*package=/, "", n); sub(/\}.*/, "", n)
+          if (!((u + 0) in NAME)) NAME[u + 0] = n
+          s = substr(s, RSTART + RLENGTH)
+        }
+      }
+      /^UID stats:/ { sec = 1; next }
+      /^[A-Za-z][A-Za-z ]*:/ { sec = 0; CUR = ""; next }
+      sec && /uid=[0-9]+[ \t]+set=/ {
+        CUR = ""
+        if ($0 ~ /type=0[,}]/ && $0 ~ /tag=0x0([^0-9a-f]|$)/) { u = $0; sub(/.*uid=/, "", u); sub(/[ \t].*/, "", u); CUR = u + 0 }
+        next
+      }
+      sec && CUR != "" && /st=[0-9]+[ \t]+rb=[0-9]+/ {
+        st = $0; sub(/.*st=/, "", st); sub(/[ \t].*/, "", st)
+        rb = $0; sub(/.*rb=/, "", rb); sub(/[ \t].*/, "", rb)
+        tb = $0; sub(/.*tb=/, "", tb); sub(/[ \t].*/, "", tb)
+        if (st + 7200 > A && (Z == 0 || st < Z)) {
+          BY[CUR] += rb + tb; TOT += rb + tb
+          if (FIRST == "" || st < FIRST) FIRST = st + 0
+        }
+      }
+      END {
+        if (TOT < 1048576) exit
+        since = (FIRST > A) ? FIRST : A
+        printf "rnet\ttot=%.1f\tsince=%d\n", TOT / 1048576, since
+        for (i = 0; i < 4; i++) {
+          best = ""; bv = 0
+          for (u in BY) if (BY[u] + 0 > bv) { bv = BY[u] + 0; best = u }
+          if (best == "" || bv < 8388608) break
+          p = ((best + 0) in NAME) ? NAME[best + 0] : ((best + 0) < 10000 ? "system" : "uid " best)
+          gsub(/[\t=]/, " ", p)
+          printf "rapp\tpkg=%s\tmib=%.1f\n", p, bv / 1048576
+          delete BY[best]
+        }
+      }' "$_DIR/netstats_uid_latest.txt" 2>/dev/null)"
+  if [ -n "$_rn_out" ]; then
+    _rn_s="$(printf '%s\n' "$_rn_out" | sed -n 's/^rnet\t.*since=\([0-9]*\).*/\1/p')"
+    _rn_h="$(date -d "@$_rn_s" '+%H:%M' 2>/dev/null || date -r "$_rn_s" '+%H:%M' 2>/dev/null)"
+    printf '%s\n' "$_rn_out" | sed "s/^\(rnet\t.*\tsince=\)[0-9]*/\1${_rn_h:-?}/"
+  fi
+fi
+if [ -s "$_DIR/network_trace.txt" ]; then
+  awk '/^  data_rat: / {
+         n++
+         if ($0 ~ /network=NR([^_]|$)/) sa++
+         else if ($0 ~ /overrideNetwork=NR_(NSA|ADVANCED)/) nsa++
+         else if ($0 ~ /network=LTE/) lte++
+       }
+       END { if (n > 0) printf "rat\tnsa=%d\tsa=%d\tlte=%d\tof=%d\n", nsa, sa, lte, n }' "$_DIR/network_trace.txt" 2>/dev/null
+fi
+if [ -s "$_DIR/battery_trace.txt" ]; then
+  awk -F'|' '$1 == "epoch" { for (i = 1; i <= NF; i++) C[$i] = i; next }
+    $1 ~ /^[0-9]+$/ && ("screen" in C) && ("bat_mA" in C) && ("rmnet_rx" in C) && ("rmnet_tx" in C) {
+      b = $(C["rmnet_rx"]) + $(C["rmnet_tx"]); s = $(C["screen"]); ma = $(C["bat_mA"]) + 0
+      if (ma >= 100000) ma = ma / 1000
+      if (pe != "" && $1 - pe > 0 && $1 - pe <= 200 && ps == "1" && s == "1" && b >= pb && ma > 0) {
+        r = (b - pb) / ($1 - pe)
+        if (r < 5120) { lo += ma; ln++ } else if (r >= 51200) { hi += ma; hn++ }
+      }
+      pe = $1; ps = s; pb = b
+    }
+    END { if (ln >= 20 && hn >= 20) printf "netma\tlo=%d\tlo_n=%d\thi=%d\thi_n=%d\n", lo / ln, ln, hi / hn, hn }' "$_DIR/battery_trace.txt" 2>/dev/null
+fi
+if [ -f "$_DIR/_full_day_report.txt" ]; then
+  _bt_line="$(awk '
+    /^link drops \(ACL disconnects\): [0-9]+ - / {
+      n = $5; l = $0; sub(/.*lost link \(timeout\): /, "", l); sub(/,.*/, "", l)
+      r = $0; sub(/.*ended by the headset: /, "", r); sub(/,.*/, "", r)
+      o = $0; sub(/.*ended by this phone: /, "", o); sub(/,.*/, "", o)
+      acl = "acl=" n "\tlost=" l + 0 "\tby_dev=" r + 0 "\tby_phone=" o + 0
+    }
+    /^media drops: [0-9]+ / {
+      m = $3; w = $0; sub(/.*whole device \(call profile too\): /, "", w); sub(/;.*/, "", w)
+      med = "media=" m + 0 "\twhole=" w + 0
+    }
+    END { if (acl != "" || med != "") printf "%s%s%s\n", acl, (acl != "" && med != "" ? "\t" : ""), med }' "$_DIR/_full_day_report.txt" 2>/dev/null)"
+  _bt_st=0
+  [ -s "$_DIR/bt_lifecycle_stack_evidence.tsv" ] && _bt_st="$(grep -c 'A2dpStateMachine: Connected: stopped playing' "$_DIR/bt_lifecycle_stack_evidence.tsv" 2>/dev/null)"
+  case "$_bt_st" in ''|*[!0-9]*) _bt_st=0 ;; esac
+  if [ -n "$_bt_line" ] || [ "$_bt_st" -gt 0 ]; then
+    printf 'bt\t%s%sstreams=%s\n' "$_bt_line" "$([ -n "$_bt_line" ] && printf '\t')" "$_bt_st"
+    awk '/^media-profile drops in the Bluetooth service history/ { t = 1; next }
+         t && /^  [0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]/ {
+           who = ($0 ~ /asked for on the phone|turned off on the phone|by this phone/) ? "phone" : "stack"
+           whole = ($0 ~ /call profile dropped with it/) ? 1 : 0
+           back = ($0 ~ /not back within/) ? 0 : 1
+           printf "btdrop\tat=%s %s\twho=%s\twhole=%d\tback=%d\n", $1, substr($2, 1, 5), who, whole, back
+           c++; if (c >= 4) exit; next
+         }
+         t { exit }' "$_DIR/_full_day_report.txt" 2>/dev/null
+  fi
+fi
+_lte_snaps="$(for _sf in "$_DIR"/before.txt "$_DIR"/snapshot_*.txt "$_DIR"/reboot_*.txt; do
+  [ -s "$_sf" ] || continue
+  _se=0; case "$_sf" in */before.txt) _se=0 ;; *) _se="$(basename "$_sf" .txt | tr -dc '0-9')" ;; esac
+  printf '%s %s\n' "${_se:-0}" "$_sf"
+done | sort -n | awk '{ print $2 }')"
+if [ -n "$_lte_snaps" ]; then
+  printf '%s\n' "$_lte_snaps" | while IFS= read -r _sf; do
+    awk '/^  lte_screenoff status:/ { t = 1; next }
+         t && /^    [a-z_]+=/ { l = $0; sub(/^ +/, "", l); k = l; sub(/=.*/, "", k); v = l; sub(/^[^=]*=/, "", v); V[k] = v; next }
+         t { exit }
+         END { if ("enabled" in V) printf "%s %s %s %s %s %s %s\n", V["enabled"], V["light"], V["applies"] + 0, V["lte_minutes"] + 0, V["light_watch"] + 0, V["unsupported"] + 0, V["quiet_windows"] + 0 }' "$_sf" 2>/dev/null
+  done | awk '
+    NF >= 7 { n++; if (n == 1) { a0 = $3; m0 = $4; q0 = $7 } en = $1; li = $2; a1 = $3; m1 = $4; q1 = $7; if ($5 == 1) w++; if ($6 == 1) us = 1 }
+    END { if (n >= 2 && (en == 1 || li == 1)) printf "lte\ten=%d\tlight=%d\tapplies=%d\tlte_min=%d\twatch=%d\tsnaps=%d\tunsup=%d\tquiet=%d\n", en, li, a1 - a0, m1 - m0, w, n, us, q1 - q0 }'
 fi
 
 # ----- wakelocks (top apps by held time) -------------------------------------
@@ -836,13 +953,19 @@ if [ -f "$_RPT" ]; then
          s = $3; sub(/%$/, "", s)
          printf "hz\tmode=%s\tshare=%s\tma=%s\n", $1, s, $5; next
        }
-       t { t = 0 }' "$_RPT" 2>/dev/null
+       t && $1 == "?" && $2 ~ /^[0-9]+$/ { next }
+       t { t = 0 }
+       /^average brightness while on: [0-9]+%/ { b = $5; sub(/%.*/, "", b); printf "bright\tavg=%d\n", b }' "$_RPT" 2>/dev/null
   # ASB's own cost.
   _cc="$(sed -n 's/^  governor cpu[ ]*: \([0-9][0-9]*\) ms\/h.*/\1/p' "$_RPT" 2>/dev/null | head -n 1)"
   if [ -n "$_cc" ]; then
     _cw="$(sed -n 's/^  physical writes[ ]*: \([0-9][0-9]*\)\/h.*/\1/p' "$_RPT" 2>/dev/null | head -n 1)"
     _ck="$(sed -n 's/^  timer wakeups[ ]*: \([0-9][0-9]*\)\/h.*/\1/p' "$_RPT" 2>/dev/null | head -n 1)"
-    printf 'asbcost\tcpu_msh=%s\twrites_h=%s\twakes_h=%s\n' "$_cc" "${_cw:-0}" "${_ck:-0}"
+    _cbs="$(grep -m1 '^    by screen state[ ]*: screen on [0-9]*/h, screen off [0-9]*/h' "$_RPT" 2>/dev/null)"
+    _cbo="$(printf '%s\n' "$_cbs" | sed -n 's/.*screen on \([0-9][0-9]*\)\/h.*/\1/p')"
+    _cbf="$(printf '%s\n' "$_cbs" | sed -n 's/.*screen off \([0-9][0-9]*\)\/h.*/\1/p')"
+    _cbn=0; case "$_cbs" in *"none of them wakes a sleeping phone"*) _cbn=1 ;; esac
+    printf 'asbcost\tcpu_msh=%s\twrites_h=%s\twakes_h=%s\twakes_on=%s\twakes_off=%s\tnoalarm=%s\n' "$_cc" "${_cw:-0}" "${_ck:-0}" "${_cbo:-}" "${_cbf:-}" "$_cbn"
   fi
   # Gauge check (fix220): "governor's gauge check: on screen-on windows current_now
   # integrates to x0.34 of the SOC-derived drain (40 windows) - multiply screen-on mA by
