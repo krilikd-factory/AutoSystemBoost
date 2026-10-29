@@ -1017,6 +1017,9 @@ if [ -r "$_state" ]; then
   # No subsystem split before the first uevent: "0 (?)" read like an unreadable counter (fix143).
   [ -n "$_uet" ] && NOTE "uevents handled: ${_uet}${_ueb:+ ($_ueb)}  ·  skipped while the screen was on: ${_ued:-n/a} over ${_uep:-0} screen-on period(s)"
   [ -n "$_wbn" ] && NOTE "writes by node: $_wbn"
+  _wwo="$(grep -m1 '^walt_window_owner=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  _wwr="$(grep -m1 '^walt_window_rom=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  [ "$_wwo" = rom ] && NOTE "WALT window: left to the ROM, which sizes it to the refresh rate (last seen ${_wwr:-?} ticks) - the profile value is no longer written"
   # Vendor contention beside it: passive=1 means ASB stopped reasserting on purpose.
   _vp="$(grep -m1 '^cap_vendor_passive=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
   _vc="$(grep -m1 '^cap_vendor_slow_clamps=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
