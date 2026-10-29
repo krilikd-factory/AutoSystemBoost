@@ -3383,6 +3383,8 @@ grep -q 'by screen state        : screen on' "$L/asb_log_full_day.sh" || fail "t
 grep -q "_ph() { awk" "$L/asb_log_full_day.sh" || fail "cost rates still divide by whole hours"
 grep -q '^lk_sysui_verdict() {' "$L/_asb_logkit_common.sh" || fail "SystemUI restart has no verdict"
 grep -q 'ASB_DSP_REFERENCE_OPTIONAL' "$ROOT/tests/asb_features.sh" || fail "DSP reference has no explicit source-only switch"
+grep -q 'ASB_DSP_REFERENCE_OPTIONAL=1 bash tools/asb_full_regression.sh' "$ROOT/.github/workflows/build-test.yml" || fail "source-only test workflow cannot reach the native build"
+grep -q 'if \[ "\$_pb_missing" = 1 \]; then' "$ROOT/.github/workflows/build-test.yml" || fail "test workflow skips DSP staging even when every reference binary exists"
 grep -q 'ASB_DSP_REFERENCE_OPTIONAL' "$ROOT/.github/workflows/build-release.yml" && fail "release build must never skip the DSP reference"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS: fix133 contract"
