@@ -4516,8 +4516,21 @@ cat > "$T/t.c" <<'X'
 #include <time.h>
 enum { PROFILE_BATTERY, PROFILE_BALANCED, PROFILE_PERFORMANCE, PROFILE_SMART };
 typedef struct { int cpu_max[3]; int cpu_min[3]; int uclamp_top_max; int uclamp_bg_max; } asb_profile_caps_t;
-static struct { int unlock_lift_s, unlock_lift_pct, bat_comfort_temp; } g_asb_cfg = { 3, 80, 48 };
+static struct { int unlock_lift_s, unlock_lift_pct, bat_comfort_temp, main_capacity_parity; } g_asb_cfg = { 3, 80, 48, 1 };
 static int g_cpu_slot_hwmax[3] = { 3628800, 4608000, 0 };
+static int g_cpu_all_count = 2;
+static int g_cpu_policy_ids[3] = { 0, 6, -1 };
+static int g_parity_cap0 = -2, g_parity_cap1 = -2;
+static int asb_cpu_capacity_of(int cpu) { return cpu == 0 ? 762 : 1024; }
+static long g_now_ms = 0;
+static long asb_clock_ms(int clk) { (void)clk; return g_now_ms; }
+static int writer_slot_ceiling(int slot, int want, int tc) {
+    static const int t0[] = { 1785600, 1900800, 1996800, 2112000, 2227200, 2361600, 2745600, 3628800 };
+    static const int t1[] = { 1747200, 1862400, 2227200, 2438400, 2668800, 2880000, 3648000, 4608000 };
+    const int *t = slot == 0 ? t0 : t1; int best = t[0]; (void)tc;
+    for (int i = 0; i < 8; i++) if (t[i] <= want) best = t[i];
+    return best;
+}
 #include "u.c"
 static int P = PROFILE_SMART, TC = 0, DIE = 36;
 static int upa(int scr, int kick, int active, long ms) { return asb_unlock_lift_update(scr, kick, active, 0, 0, ms, P, TC, DIE); }
@@ -4669,7 +4682,7 @@ int main(void) {
      * own maximum, never under the 50 % floor; Smart and Balanced keep the full share. */
     g_cpu_slot_hwmax[0] = 3628800; g_cpu_slot_hwmax[1] = 4608000; g_cpu_slot_hwmax[2] = 0;
     g_asb_cfg.unlock_lift_pct = 80;
-    up(0, 0, 400000); P = PROFILE_BATTERY; up(1, 0, 401000);
+    up(0, 0, 400000); P = PROFILE_BATTERY; up(1, 0, 401000); g_now_ms = 401000;
     asb_profile_caps_t b = { { 1785600, 1747200, 0 }, { 0, 0, 0 }, 50, 30 };
     asb_unlock_lift_apply(&b);
     CHK(b.cpu_max[0] == 2322432 && b.cpu_max[1] == 2949120 && b.uclamp_top_max == 64,
@@ -4683,6 +4696,51 @@ int main(void) {
     asb_profile_caps_t s2 = { { 1996800, 1862400, 0 }, { 0, 0, 0 }, 50, 32 };
     asb_unlock_lift_apply(&s2);
     CHK(s2.cpu_max[0] == 2903040 && s2.uclamp_top_max == 80, "fix243: Smart lost its full lift share");
+    /* fix248: a Battery lift held up only by the finger keeps the prime level with the main
+     * cores (capacity 762 vs 1024 on the OP15): the main lift and the animation window of every
+     * arm stay as they were, and so do the jank guard, Smart and a 4-cluster part. */
+    up(0, 0, 500000); P = PROFILE_BATTERY; up(1, 0, 501000); up(1, 0, 505000);
+    CHK(upa(1, 1, 1, 510000) == 1, "fix248: Battery touch did not arm");
+    g_now_ms = 511000;
+    asb_profile_caps_t h0 = { { 1785600, 1747200, 0 }, { 0, 0, 0 }, 50, 30 };
+    asb_unlock_lift_apply(&h0);
+    CHK(h0.cpu_max[0] == 2322432 && h0.cpu_max[1] == 2949120 && g_unlock_level_khz == 0,
+        "fix248: the first seconds of a touch arm were levelled - that is the animation");
+    CHK(upa(1, 0, 1, 514000) == 1, "fix248: the hold did not keep the lift");
+    g_now_ms = 514000;
+    unsigned long lv0 = g_unlock_levels;
+    asb_profile_caps_t h1 = { { 1785600, 1747200, 0 }, { 0, 0, 0 }, 50, 30 };
+    asb_unlock_lift_apply(&h1);
+    CHK(h1.cpu_max[0] == 2322432 && h1.cpu_max[1] == 2227200 && h1.uclamp_top_max == 64,
+        "fix248: a held Battery lift did not level the prime with the main cores (2227200)");
+    CHK(g_unlock_level_khz == 2227200 && g_unlock_levels == lv0 + 1, "fix248: the levelled hold is not published");
+    asb_profile_caps_t h2 = { { 1785600, 1747200, 0 }, { 0, 0, 0 }, 50, 30 };
+    asb_unlock_lift_apply(&h2);
+    CHK(g_unlock_levels == lv0 + 1, "fix248: one hold counted twice");
+    asb_profile_caps_t h3 = { { 1785600, 2880000, 0 }, { 0, 0, 0 }, 50, 30 };
+    asb_unlock_lift_apply(&h3);
+    CHK(h3.cpu_max[1] == 2880000, "fix248: the levelled lift went under the prime's own ceiling from before the lift");
+    g_asb_cfg.main_capacity_parity = 0;
+    asb_profile_caps_t h4 = { { 1785600, 1747200, 0 }, { 0, 0, 0 }, 50, 30 };
+    asb_unlock_lift_apply(&h4);
+    CHK(h4.cpu_max[1] == 2949120, "fix248: main_capacity_parity=0 still levelled");
+    g_asb_cfg.main_capacity_parity = 1;
+    g_bjank_armed = 1;
+    asb_profile_caps_t h5 = { { 1785600, 1747200, 0 }, { 0, 0, 0 }, 50, 30 };
+    asb_unlock_lift_apply(&h5);
+    CHK(h5.cpu_max[1] == 2949120, "fix248: the jank guard's lift was levelled");
+    g_bjank_armed = 0;
+    g_cpu_policy_ids[2] = 7;
+    asb_profile_caps_t h6 = { { 1785600, 1747200, 0 }, { 0, 0, 0 }, 50, 30 };
+    asb_unlock_lift_apply(&h6);
+    CHK(h6.cpu_max[1] == 2949120, "fix248: a part with more than two clusters was levelled");
+    g_cpu_policy_ids[2] = -1;
+    CHK(upa(1, 0, 0, 516000) == 1 && up(1, 0, 518000) == 0 && g_unlock_level_khz == 0,
+        "fix248: the level outlived the lift");
+    up(0, 0, 520000); P = PROFILE_SMART; up(1, 0, 521000); g_now_ms = 530000;
+    asb_profile_caps_t h7 = { { 1996800, 1862400, 0 }, { 0, 0, 0 }, 50, 32 };
+    asb_unlock_lift_apply(&h7);
+    CHK(h7.cpu_max[1] == 3686400, "fix248: Smart's lift was levelled");
     return bad;
 }
 X

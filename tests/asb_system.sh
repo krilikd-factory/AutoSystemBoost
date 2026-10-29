@@ -8231,6 +8231,118 @@ X
 echo "PASS Battery jank guard: live capture gate, long/short windows, SystemUI and bounded handback"
 )
 
+t_manual_screen_switches_runtime() (
+# fix248: LTE with the screen off, 5G only when needed and Wi-Fi power save with the screen off
+# are the user's switches, but the tuner that drives them was only started from the Smart
+# tick - on Battery, Balanced and Performance they never ran (an OP15 on Battery: two days,
+# 1.9 GiB of mobile data, applies=19 and light_watch=0 in every snapshot). The governor now
+# runs the tuner at every screen change on a manual profile, in a "manual" mode that does the
+# switches and writes none of Smart's memory and I/O nodes.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+G="$ROOT/src/asb_governor.c"; D="$ROOT/runtime/smart_dynamic_tune.sh"
+fail() { echo "FAIL manual screen switches: $*" >&2; exit 1; }
+awk '/^static int asb_smart_tick\(const asb_metrics_t \*m, const asb_fsm_t \*fsm\) \{$/ { t = 1 }
+     t && /if \(!g_smart_rt.enabled \|\| !g_smart_store_loaded\) \{/ { e = 1 }
+     t && e && /asb_manual_screen_tune\(m\);/ { c = 1 }
+     t && /^    g_manual_tune_screen = -1;$/ { r = 1 }
+     t && /^    time_t now = time\(NULL\);$/ { exit }
+     END { exit !(e && c && r) }' "$G" || fail "the Smart tick does not hand manual profiles to the screen hook"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+CC=""; for c in gcc clang cc; do command -v "$c" >/dev/null 2>&1 && { CC="$c"; break; }; done
+if [ -n "$CC" ]; then
+  sed -n '/^static int g_manual_tune_screen = -1;$/,/^}$/p' "$G" > "$T/h.c"
+  grep -q 'asb_run_modscript("runtime/smart_dynamic_tune.sh", args);' "$T/h.c" || fail 'hook extraction failed'
+  cat > "$T/t.c" <<X
+#include <stdio.h>
+#include <string.h>
+typedef struct { struct { int screen_on; } misc; } asb_metrics_t;
+static struct { int app_hint; } g_smart_rt;
+static int g_smart_last_tune_sig = 7;
+static int runs = 0; static char last[64];
+static void asb_run_modscript(const char *p, const char *a) { (void)p; runs++; snprintf(last, sizeof(last), "%s", a); }
+#include "$T/h.c"
+int main(void) {
+    asb_metrics_t m; int bad = 0;
+    g_smart_rt.app_hint = 2; m.misc.screen_on = 1;
+    asb_manual_screen_tune(&m);
+    if (runs != 1 || strcmp(last, "2 0 1 manual")) { printf("first manual tick: runs=%d args=%s\n", runs, last); bad = 1; }
+    if (g_smart_last_tune_sig != -1) { printf("Smart would not re-run its tuner\n"); bad = 1; }
+    asb_manual_screen_tune(&m); asb_manual_screen_tune(&m);
+    if (runs != 1) { printf("the tuner forked on ticks without a screen change\n"); bad = 1; }
+    m.misc.screen_on = 0; g_smart_rt.app_hint = 0;
+    asb_manual_screen_tune(&m);
+    if (runs != 2 || strcmp(last, "0 0 0 manual")) { printf("screen off: runs=%d args=%s\n", runs, last); bad = 1; }
+    g_manual_tune_screen = -1;
+    asb_manual_screen_tune(&m);
+    if (runs != 3) { printf("a return from Smart did not re-run the switches\n"); bad = 1; }
+    return bad;
+}
+X
+  "$CC" -std=c11 -Wall -Wextra -Werror -o "$T/t" "$T/t.c" || fail 'hook fixture did not compile'
+  "$T/t" || fail 'hook behaviour'
+fi
+mkdir -p "$T/mod/runtime" "$T/mod/config" "$T/asb" "$T/vm" "$T/lru" "$T/blk/sda/queue" "$T/dev" "$T/bin"
+for n in dirty_bytes dirty_background_bytes dirty_ratio dirty_background_ratio laptop_mode watermark_scale_factor swappiness; do echo 77 > "$T/vm/$n"; done
+echo 0 > "$T/vm/dirty_bytes"; echo 1 > "$T/lru/enabled"; echo 0 > "$T/blk/sda/queue/rotational"
+echo 128 > "$T/blk/sda/queue/read_ahead_kb"; echo 128 > "$T/blk/sda/queue/nr_requests"
+printf 'wifi_powersave=screen_off\nnet_screen_off_lte=1\nnet_lte_light=1\n' > "$T/mod/config/governor.conf"
+printf '#!/bin/sh\necho "lte $*" >> "%s/calls"\n' "$T" > "$T/mod/runtime/asb_lte_screenoff.sh"
+printf '#!/bin/sh\necho "audio $*" >> "%s/calls"\n' "$T" > "$T/mod/runtime/asb_audio_apply.sh"
+cat > "$T/bin/iw" <<X
+#!/bin/sh
+case "\$*" in
+  *"get power_save"*) echo "Power save: \$(cat "$T/pm")" ;;
+  *"set power_save on"*) echo on > "$T/pm"; echo "iw on" >> "$T/calls" ;;
+  *"set power_save off"*) echo off > "$T/pm"; echo "iw off" >> "$T/calls" ;;
+esac
+X
+chmod 755 "$T/bin/iw"
+sed -e "s#/data/adb/modules/AutoSystemBoost#$T/mod#g" -e "s#/data/adb/asb#$T/asb#g" -e "s#/proc/sys/vm#$T/vm#g" \
+    -e "s#/sys/kernel/mm/lru_gen#$T/lru#g" -e "s#/sys/block/sd\*#$T/blk/sd*#g" -e "s#/dev/\.asb#$T/dev#g" "$D" > "$T/tune.sh"
+grep -q "$T/vm/watermark_scale_factor" "$T/tune.sh" || fail 'tuner path rewrite failed'
+snap() { cat "$T/vm/"* "$T/lru/enabled" "$T/blk/sda/queue/"* | tr '\n' ' '; }
+before="$(snap)"
+echo off > "$T/pm"; : > "$T/calls"
+PATH="$T/bin:$PATH" sh "$T/tune.sh" 0 0 0 manual
+grep -qx 'lte arm' "$T/calls" || fail "manual screen-off did not arm LTE with the screen off: $(cat "$T/calls")"
+grep -qx 'iw on' "$T/calls" || fail 'manual screen-off did not turn Wi-Fi power save on'
+grep -q '^audio' "$T/calls" && fail 'manual mode ran the DSP mirror'
+[ "$(snap)" = "$before" ] || fail "manual mode wrote memory or I/O nodes: $before -> $(snap)"
+[ -e "$T/asb/wmark_restore" ] && fail 'manual mode saved a watermark it never lowered'
+: > "$T/calls"
+PATH="$T/bin:$PATH" sh "$T/tune.sh" 2 0 1 manual
+grep -qx 'lte screen_on' "$T/calls" || fail "manual screen-on did not start the 5G watcher: $(cat "$T/calls")"
+grep -qx 'iw off' "$T/calls" || fail 'manual screen-on did not give Wi-Fi power save back'
+[ "$(snap)" = "$before" ] || fail 'manual screen-on wrote memory or I/O nodes'
+printf 'wifi_powersave=off\nnet_screen_off_lte=1\nnet_lte_light=1\n' > "$T/mod/config/governor.conf"
+echo off > "$T/asb/wifipm_baseline"; echo on > "$T/pm"; : > "$T/calls"
+PATH="$T/bin:$PATH" sh "$T/tune.sh" 2 0 1 manual
+grep -qx 'iw off' "$T/calls" && fail "manual screen-on turned off the power save a Battery profile forces on"
+: > "$T/calls"
+PATH="$T/bin:$PATH" sh "$T/tune.sh" 0 0 0
+[ "$(cat "$T/vm/laptop_mode")" = 1 ] || fail 'Smart screen-off no longer writes its memory nodes'
+[ "$(cat "$T/vm/watermark_scale_factor")" = 10 ] || fail 'Smart screen-off no longer relaxes the watermark'
+grep -qx 'lte arm' "$T/calls" || fail 'Smart screen-off no longer arms LTE'
+A="$ROOT/action.sh"
+sed -n '/^if \[ "$(_cfg net_lte_light)" = "1" \]; then$/,/^else$/p' "$A" | sed '$d' > "$T/a.sh"; echo fi >> "$T/a.sh"
+grep -q 'T_N_LTE_LIGHT_IDLE' "$T/a.sh" || fail 'action block extraction failed'
+mkdir -p "$T/am/runtime"
+act() {
+  printf '#!/bin/sh\nprintf "%%b" "%s"\n' "$1" > "$T/am/runtime/asb_lte_screenoff.sh"
+  MODDIR="$T/am" sh -c '_cfg() { [ "$1" = net_lte_light ] && echo 1 || echo 0; }; _f() { _x="$1"; shift; printf "$_x\n" "$@"; }
+    T_N_LTE_LIGHT_LTE=LTE; T_N_LTE_LIGHT_5G=WATCH; T_N_LTE_LIGHT_IDLE=IDLE; T_N_LTE_STOP="STOP %s"; . "$1"' _ "$T/a.sh" | tr -d ' '
+}
+[ "$(act 'reason=none\nlight_watch=0\nunsupported=0\n')" = IDLE ] || fail "action says the traffic is watched with no watcher running"
+[ "$(act 'reason=none\nlight_watch=1\nunsupported=0\n')" = WATCH ] || fail 'action lost the watching line'
+[ "$(act 'reason=light\nlight_watch=1\nunsupported=0\n')" = LTE ] || fail 'action lost the LTE line'
+[ "$(act 'reason=none\nlight_watch=0\nunsupported=1\nlast=apply: no\n')" = "STOPapply:no" ] || fail 'action hides that the switch stopped itself'
+for l in ar de es fr hy id it pt ru tr uk zh; do
+  grep -q '^T_N_LTE_LIGHT_IDLE="' "$ROOT/runtime/i18n/action_$l.sh" || fail "T_N_LTE_LIGHT_IDLE missing: $l"
+done
+echo "PASS manual screen switches: LTE, 5G-on-demand and Wi-Fi power save follow the screen on every profile; manual mode leaves memory and I/O to the profile"
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;

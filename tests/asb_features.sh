@@ -1553,6 +1553,37 @@ grep -q '_aa_prev=""' "$A/probe.sh" || f "the loop does not restart the audio pr
   . "$A/probe.sh"
   [ "$_lm" = 1 ] || { echo "playback with the screen off not seen" >&2; exit 1; }
 ) || f "audio probe across a screen-on period"
+# fix248: screen-on and screen-off time since boot for the Uptime popup. A sample interval
+# that started with the screen on counts as on when it is short; a long one (the phone slept
+# after the screen went off between two samples) gives the first 30 s to the screen and the
+# rest to the dark. The counters survive a meter restart on the same boot and start over on a
+# new one.
+( B="$T/boot"; mkdir -p "$B"
+  ASB_DM_BOOT="$B/meter.boot"; ASB_DM_BOOTID="$B/boot_id"; export ASB_DM_BOOT ASB_DM_BOOTID
+  echo "ab12cd34-0000-1111-2222-333344445555" > "$ASB_DM_BOOTID"
+  . "$M"
+  dm_boot_load
+  [ "$dm_b_id" = "ab12cd340000" ] || { echo "boot id read as '$dm_b_id'" >&2; exit 1; }
+  dm_boot_step 1000 1; dm_boot_step 1030 1; dm_boot_step 1060 1
+  dm_boot_step 1090 0; dm_boot_step 4690 0
+  dm_boot_step 4720 1; dm_boot_step 8320 1
+  read -r _i _on _off < "$ASB_DM_BOOT"
+  [ "$_on" = 120 ] || { echo "screen-on seconds $_on, want 120 (90 + 30 of a long gap)" >&2; exit 1; }
+  [ "$_off" = 7200 ] || { echo "screen-off seconds $_off, want 7200 (3600 + 30 + 3570)" >&2; exit 1; }
+  dm_boot_load
+  [ "$dm_b_on" = 120 ] && [ "$dm_b_off" = 7200 ] || { echo "a meter restart lost the counters ($dm_b_on/$dm_b_off)" >&2; exit 1; }
+  [ -z "$dm_b_ts" ] || { echo "a restart kept the previous sample time" >&2; exit 1; }
+  dm_boot_step 9000 1; dm_boot_step 9030 1
+  read -r _i _on _off < "$ASB_DM_BOOT"
+  [ "$_on" = 150 ] || { echo "after a restart the gap to the first sample was counted ($_on)" >&2; exit 1; }
+  echo "ffee0011-0000-1111-2222-333344445555" > "$ASB_DM_BOOTID"
+  dm_boot_load
+  [ "$dm_b_on" = 0 ] && [ "$dm_b_off" = 0 ] || { echo "a new boot kept the old counters ($dm_b_on/$dm_b_off)" >&2; exit 1; }
+  dm_boot_step 100 0; dm_boot_step 160 0
+  read -r _i _on _off < "$ASB_DM_BOOT"
+  [ "$_i" = "ffee00110000" ] && [ "$_on" = 0 ] && [ "$_off" = 60 ] || { echo "new boot file: $_i $_on $_off" >&2; exit 1; }
+) || f "screen time since boot"
+grep -q '"lvi_scr_on_time"' "$ROOT/webroot/i18n/en.json" || f "the Uptime popup does not name the screen-on time"
 H="$ROOT/webroot/index.html"
 grep -q "function lvMeterParse(text)" "$H" || f "the Monitor does not read the meter"
 grep -q "const isCharging = batteryStatus !== 'discharging' && (batteryStatus === 'charging' || batteryStatus === 'full' || ma < 0);" "$H" || f "Stock still reads Discharging as charging"

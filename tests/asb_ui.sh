@@ -2957,8 +2957,9 @@ const _lvMeter = { at: 0, cur: '', p: {} };
 function liveDrainIsOpen() { return false; }
 function liveDrainPaint() {}
 EOF
-  for fn in lvEtaFmt lvEtaPaint lvTopSec lvTopSecSync lvDrainHome lvMeterPaint lvPct lvOffFigure; do sed -n "/^function $fn(/,/^}/p" "$H"; done
-  sed -n "/^const _lvEta = /p; /^const _lvDrain = /p; /^const _lvGovOff = /p" "$H"
+  for fn in lvEtaFmt lvEtaPaint lvTopSec lvTopSecSync lvDrainHome lvMeterPaint lvPct lvOffFigure asbMetricPaint asbMetricStep asbScreenDrainMetric; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  sed -n "/^const _lvEta = /p; /^const _lvDrain = /p; /^const _lvGovOff = /p; /^const METRIC_STEPS = /p" "$H"
+  sed -n '/^const METRIC_CLASSES = /,/];$/p' "$H"
   cat <<'EOF'
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
 function el(id) { const e = { id: id, textContent: '', title: '', style: { display: '' }, parentElement: null }; _nodes[id] = e; return e; }
@@ -3215,6 +3216,97 @@ _n="$(grep -c "list.classList.add('cfg-stagger');" "$W")"
 echo "PASS webui quiet ui: cues switchable and quiet over other audio, entrance only on a change of screen"
 )
 
+t_webui_live_info_insight_runtime() (
+# fix248: every Monitor reading's sheet shows where the value sits on its colour scale, how it
+# moved while Monitor was open (min/avg/max with a sparkline, or the share of each state), and
+# the raw facts behind it the phone exposes (zones, GPU clock, power, the corrected current
+# where the gauge under-reads, zRAM). The scale must be the tile's own: a sheet that says
+# "normal" over an amber tile would be worse than no scale at all.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui live info insight: $*" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "SKIP webui live info insight: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+grep -q "id=\"liveInfoScale\"" "$H" && grep -q "id=\"liveInfoHist\"" "$H" || fail 'the sheet has no scale or history block'
+grep -qF "_liveTimer = setInterval(() => { pollLive(true).then(lviSample, lviSample); }, 3000);" "$H" || fail 'the readings are not sampled after each poll'
+grep -qF "lviScaleRender(_el('liveInfoScale'), key, lviNum(iv.textContent));" "$H" || fail 'the sheet does not draw the scale'
+grep -qF "lviHistRender(_el('liveInfoHist'), key, iv.style.color, lviExtra(key));" "$H" || fail 'the sheet does not draw the history'
+{
+  echo "function T(k, d) { return d; }"
+  echo "function logReportDur(m) { return m + ' min'; }"
+  echo "let _selectedProfile = 'battery'; const LVI_STOCK = {}; let _stockTelemetryKv = {}; const _lvLast = { st: {}, kv: {} };"
+  sed -n '/^const METRIC_STEPS = /p' "$H"
+  sed -n '/^const LVI_HIST_MS = /,/^function lviKeyOf(/p' "$H" | sed '$d'
+  for fn in asbMetricStep asbLoadMetric asbThermalMetric asbHeadroomMetric asbClampMetric asbBatLevelMetric lviNum lviFmt lviStepName lviExtra; do
+    sed -n "/^function $fn(/,/^}/p" "$H"
+  done
+  cat <<'JS'
+let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
+function stepOf(key, v) { const sc = LVI_SCALES[key]; let i = sc.cuts.length; for (let k = 0; k < sc.cuts.length; k++) if (v < sc.cuts[k]) { i = k; break; } return sc.steps[i]; }
+const paint = {
+  cpu: v => asbThermalMetric(v, 'cpu'), skin: v => asbThermalMetric(v, 'body'), board: v => asbThermalMetric(v, 'board'),
+  battemp: v => asbThermalMetric(v, 'battery'), gpu: v => asbLoadMetric(v), headroom: v => asbHeadroomMetric(v),
+  clamps: v => asbClampMetric(v), sbattery: v => asbBatLevelMetric(v)
+};
+Object.keys(paint).forEach(function (k) {
+  chk(!!LVI_SCALES[k], 'no scale for ' + k);
+  for (let v = 1; v <= 100; v += 0.5) chk(stepOf(k, v) === paint[k](v), k + ' at ' + v + ': sheet ' + stepOf(k, v) + ', tile ' + paint[k](v));
+});
+Object.keys(LVI_SCALES).forEach(function (k) { chk(LVI_SCALES[k].steps.length === LVI_SCALES[k].cuts.length + 1, k + ' steps vs cuts'); });
+chk(lviNum('38°C') === 38 && lviNum('−245 mA') === -245 && lviNum('1,25 GHz') === 1.25 && lviNum('MODERATE') === null, 'readings parsed');
+chk(lviStepName('t', 'metric-warm') === 'quite warm' && lviStepName('h', 'metric-bad') === 'almost none', 'step names');
+_stockTelemetryKv = { 'battery.current_now': '-412000', 'battery.voltage_now': '4123000', 'battery.charge_full': '7210000',
+  'battery.status': 'Discharging', 'thermal.cpu-0-0-0': '39500', 'thermal.cpu-1-0-0': '41000', 'thermal.shell_front': '33000',
+  'gpu.gpuclk': '222000000', 'gpu.max_gpuclk': '1200000000', SwapTotal: '8388608 kB', SwapFree: '1734000 kB' };
+_lvLast.kv = { current_scale_x100: '36', current_scale_windows: '117' };
+const d = lviExtra('sdrain');
+chk(d.length === 3 && d[0] === 'Power now: 1.70 W' && d[1] === 'At this current: about 5.7 %/h', 'power and rate: ' + JSON.stringify(d));
+chk(/2\.8× low \(117 checks\): the real draw is nearer 1144 mA, about 15\.9 %\/h/.test(d[2]), 'the corrected current where the gauge under-reads: ' + d[2]);
+_lvLast.kv = { current_scale_x100: '95', current_scale_windows: '117' };
+chk(lviExtra('sdrain').length === 2, 'a gauge that reads true gets no correction');
+_stockTelemetryKv['battery.status'] = 'Charging';
+chk(lviExtra('sdrain').length === 0, 'no drain figures while charging');
+chk(lviExtra('cpu')[0] === 'CPU zones now: 2, from 39.5 to 41°', 'CPU zones: ' + lviExtra('cpu')[0]);
+chk(lviExtra('skin')[0] === 'Zones: shell_front 33°', 'skin zones: ' + lviExtra('skin')[0]);
+chk(lviExtra('gpu')[0] === 'GPU clock: 222 of 1200 MHz', 'GPU clock: ' + lviExtra('gpu')[0]);
+chk(lviExtra('sram')[0] === 'Compressed memory (zRAM): 6.3 of 8.0 GB in use', 'zRAM: ' + lviExtra('sram')[0]);
+process.exit(bad ? 1 : 0);
+JS
+} > "$T/t.js"
+node "$T/t.js" || fail 'scale, parser or raw facts'
+python3 - "$ROOT" <<'PY' || fail 'locales'
+import json, pathlib, sys
+root = pathlib.Path(sys.argv[1])
+keys = ['lvi_scale_now','lvi_hist_num','lvi_hist_cat','lvi_hist_wait','lvi_zones_cpu','lvi_zones','lvi_gpu_clock','lvi_power',
+        'lvi_rate_now','lvi_gauge_real','lvi_gauge_real0','lvi_zram_use']
+for k in ('t', 'l', 'h', 'c', 'b'):
+    steps = ['cool','good','mild','warm','hot','bad'] if k == 't' else ['good','mild','warm','hot','bad']
+    keys += ['lvs_%s_%s' % (k, s) for s in steps]
+files = sorted((root / 'webroot' / 'i18n').glob('*.json'))
+assert len(files) == 13
+for f in files:
+    d = json.loads(f.read_text(encoding='utf-8'))
+    for k in keys:
+        assert d.get(k), '%s: %s' % (f.name, k)
+PY
+# Liquid Glass reaches the surfaces it had missed: the report and device pages' backdrop, the
+# drain halves, the sheets' inner cards and primary button, the toast and the dialog backdrops.
+python3 - "$H" <<'PY' || fail 'Liquid Glass coverage'
+import sys
+h = open(sys.argv[1], encoding='utf-8').read()
+for sel in ('html[data-asb-glass="1"] :is(#reportPage,#devicePage)',
+            'html[data-asb-glass="1"][data-asb-theme="light"] :is(#reportPage,#devicePage)',
+            'html[data-asb-glass="1"] :is(.smart-drain-half,.live-drain-block,.live-drain-cmp,.live-info-hist)',
+            'html[data-asb-glass="1"][data-asb-theme="light"] :is(.smart-drain-half,.live-drain-block,.live-drain-cmp,.live-info-hist)',
+            'html[data-asb-glass="1"] .cfg-profile-primary', 'html[data-asb-glass="1"] .toast:not(.stock-restoring)',
+            'html[data-asb-glass="1"] :is(.cfg-modal,.cfg-profile-modal,.cfg-reset-modal,.diag-wait-modal,.debug-action-wait) {\n  -webkit-backdrop-filter:blur(6px)'):
+    assert sel in h, sel
+assert h.index('html[data-asb-glass="1"] :is(#reportPage,#devicePage)') > h.index('#reportPage, #devicePage { background: var(--bg) !important; }'), 'the glass backdrop must come after the opaque page rule'
+PY
+echo "PASS webui live info insight: scale = the tile's own colour, history, raw facts, 13 locales, Liquid Glass coverage"
+)
+
 t_webui_monitor_semantics_runtime() (
 # Runtime (fix230): Monitor value colours come from each reading's own unit and state.
 set -eu
@@ -3227,55 +3319,108 @@ python3 - "$H" <<'PY' || fail 'markup or semantic CSS'
 import sys
 h = open(sys.argv[1], encoding='utf-8').read()
 for i in ('bnBasis','bnSlotTemp','bnConf','bnLpm','bnStockRam','bnStockDrain','bnStockCpuClock',
-          'liveCpu','liveSkin','liveSurface','liveGpu','liveHeadroom'):
+          'liveCpu','liveSkin','liveSurface','liveGpu','liveHeadroom',
+          'bnDrain','bnDrainOff','bnTrend','bnApp','bnAlpha','bnBucket','bnStockTrend','bnStockLoad','bnStockBattery',
+          'bnStockUptime','liveState','liveClamp','liveLearner','liveCapSrc'):
     assert "asbMetricPaint('%s'" % i in h, '%s is not semantically painted' % i
-for cls in ('good','warm','bad','neutral','normal','cool'):
-    assert '.live-cell-value.metric-' + cls in h
-    assert 'html[data-asb-glass="1"] .live-cell-value.metric-' + cls in h
+for cls in ('good','warm','bad','neutral','normal','cool','mild','hot','charge'):
+    assert '.live-cell-value.metric-' + cls in h, cls
+    assert 'html[data-asb-glass="1"] .live-cell-value.metric-' + cls in h, cls
+for cls in ('good','warm','bad','cool','mild','hot','charge'):
+    assert 'html[data-asb-theme="light"] .smart-banner-value.metric-' + cls in h, cls
+    assert 'html .smart-drain-val.metric-' + cls in h, cls
 assert "asbThermalMetric(cpuT ? fmtTempC(cpuT) : 0, 'cpu')" in h, 'governor deci-C temperature is classified without display-unit normalization'
 assert '--metric-cool: #00d4ff;' in h, 'dark cool state must stay blue rather than inherit the Glass mint accent'
 assert '--metric-cool:#006f9b;' in h, 'light cool state needs a readable blue'
-assert '.live-cell-value.metric-cool { color:var(--metric-cool) !important; }' in h, 'cool state must use its own semantic color, not a theme accent'
+# fix248: a six-step scale with its own variables in both palettes, readable on white.
+for v in ('--m-cool: #00d4ff;', '--m-good: #2ed573;', '--m-mild: #c2e64b;', '--m-warm: #ffbf1f;', '--m-hot: #ff7a1a;', '--m-bad: #ff2d2d;'):
+    assert v in h, v
+assert '--m-cool:#006f9b; --m-good:#08753c; --m-mild:#4f7a0a; --m-warm:#8a5700; --m-hot:#b04a00; --m-bad:#b42318;' in h, 'light palette'
+def lum(c):
+    c = c.lstrip('#'); r, g, b = (int(c[i:i + 2], 16) / 255 for i in (0, 2, 4))
+    f = lambda x: x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055) ** 2.4
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
+for c in ('#006f9b', '#08753c', '#4f7a0a', '#8a5700', '#b04a00', '#b42318'):
+    ratio = (1.05) / (lum(c) + 0.05)
+    assert ratio >= 4.5, '%s on white: %.2f' % (c, ratio)
+for c in ('#00d4ff', '#2ed573', '#c2e64b', '#ffbf1f', '#ff7a1a', '#ff2d2d'):
+    ratio = (lum(c) + 0.05) / 0.05
+    assert ratio >= 4.5, '%s on black: %.2f' % (c, ratio)
+assert '@keyframes asbChargeFlow' in h and 'prefers-reduced-motion: reduce' in h, 'charging shimmer and its reduced-motion fallback'
 assert h.index('/* Every monitored value uses the same evidence vocabulary') > h.index('html[data-asb-glass="1"] .smart-banner-value { color:var(--text); }'), 'Glass neutral rules override the evidence colours'
 PY
 {
   echo "function T(k, d) { return d; }"
   echo "const _node = { className: 'live-cell-value cap-raised metric-good' }; function _el(id) { return id === 'x' ? _node : null; }"
-  sed -n '/^const METRIC_CLASSES = /p' "$H"
-  for fn in asbMetricPaint asbLoadMetric asbThermalMetric asbRamMetric asbDrainMetric asbClockMetric asbHeadroomMetric asbConfidenceMetric asbBasisMetric asbModemMetric asbSlotMetric lvSlotHeat; do
+  sed -n '/^const METRIC_CLASSES = /,/];$/p' "$H"
+  sed -n '/^const METRIC_STEPS = /p' "$H"
+  for fn in asbMetricPaint asbMetricStep asbLoadMetric asbThermalMetric asbRamMetric asbDrainMetric asbScreenDrainMetric asbClockMetric asbHeadroomMetric asbConfidenceMetric asbConfPctMetric asbBasisMetric asbModemMetric asbSlotMetric asbTrendMetric asbFsmMetric asbAppMetric asbClampMetric asbCeilMetric asbBatLevelMetric lvSlotHeat; do
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
   cat <<'EOF'
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
 function eq(actual, want, name) { chk(actual === want, name + ': ' + actual + ', want ' + want); }
-eq(asbLoadMetric(34), 'metric-good', 'low load'); eq(asbLoadMetric(35), 'metric-warm', 'medium load');
-eq(asbLoadMetric(70), 'metric-bad', 'high load'); eq(asbLoadMetric(null), 'metric-neutral', 'unknown load');
-eq(asbThermalMetric(31, 'body'), 'metric-good', 'cool body'); eq(asbThermalMetric(32, 'body'), 'metric-warm', 'warm body');
-eq(asbThermalMetric(38, 'body'), 'metric-bad', 'hot body'); eq(asbThermalMetric(44, 'board'), 'metric-warm', 'warm board');
-eq(asbThermalMetric(45, 'board'), 'metric-bad', 'hot board'); eq(asbThermalMetric(64, 'cpu'), 'metric-warm', 'warm CPU');
-eq(asbThermalMetric(65, 'cpu'), 'metric-bad', 'hot CPU'); eq(asbThermalMetric(0, 'cpu'), 'metric-neutral', 'unknown CPU');
-eq(asbRamMetric(3500, 10000), 'metric-good', '35% RAM'); eq(asbRamMetric(1800, 10000), 'metric-warm', '18% RAM');
-eq(asbRamMetric(1799, 10000), 'metric-bad', 'low RAM'); eq(asbRamMetric(0, 0), 'metric-neutral', 'unknown RAM');
-eq(asbDrainMetric(-100, 5000), 'metric-good', 'charging'); eq(asbDrainMetric(0, 5000), 'metric-neutral', 'zero current');
-eq(asbDrainMetric(200, 5000), 'metric-good', '4%/h current'); eq(asbDrainMetric(201, 5000), 'metric-warm', 'medium current');
-eq(asbDrainMetric(601, 5000), 'metric-bad', 'high current'); eq(asbDrainMetric(100, 0), 'metric-neutral', 'current without capacity');
-eq(asbClockMetric(440, 1000), 'metric-good', 'low clock'); eq(asbClockMetric(450, 1000), 'metric-warm', 'medium clock');
-eq(asbClockMetric(800, 1000), 'metric-bad', 'high clock'); eq(asbClockMetric(100, 0), 'metric-neutral', 'clock without maximum');
-eq(asbHeadroomMetric(20), 'metric-good', 'ample headroom'); eq(asbHeadroomMetric(10), 'metric-warm', 'limited headroom');
+eq(asbLoadMetric(24), 'metric-good', 'low load'); eq(asbLoadMetric(25), 'metric-mild', 'light load');
+eq(asbLoadMetric(50), 'metric-warm', 'medium load'); eq(asbLoadMetric(70), 'metric-hot', 'high load');
+eq(asbLoadMetric(90), 'metric-bad', 'saturated load'); eq(asbLoadMetric(null), 'metric-neutral', 'unknown load');
+eq(asbThermalMetric(29, 'body'), 'metric-cool', 'cold body'); eq(asbThermalMetric(32, 'body'), 'metric-good', 'neutral body');
+eq(asbThermalMetric(36, 'body'), 'metric-mild', 'warmish body'); eq(asbThermalMetric(39, 'body'), 'metric-warm', 'warm body');
+eq(asbThermalMetric(42, 'body'), 'metric-hot', 'hot body'); eq(asbThermalMetric(45, 'body'), 'metric-bad', 'very hot body');
+eq(asbThermalMetric(44, 'board'), 'metric-warm', 'warm board'); eq(asbThermalMetric(50, 'board'), 'metric-bad', 'hot board');
+eq(asbThermalMetric(31, 'cpu'), 'metric-cool', 'idle CPU'); eq(asbThermalMetric(41, 'cpu'), 'metric-good', 'cool CPU');
+eq(asbThermalMetric(48, 'cpu'), 'metric-mild', 'busy CPU'); eq(asbThermalMetric(55, 'cpu'), 'metric-warm', 'warm CPU');
+eq(asbThermalMetric(64, 'cpu'), 'metric-hot', 'hot CPU'); eq(asbThermalMetric(70, 'cpu'), 'metric-bad', 'throttling CPU');
+eq(asbThermalMetric(28, 'battery'), 'metric-good', 'battery at room temperature'); eq(asbThermalMetric(42, 'battery'), 'metric-hot', 'warm battery');
+eq(asbThermalMetric(0, 'cpu'), 'metric-neutral', 'unknown CPU');
+eq(asbRamMetric(3500, 10000), 'metric-good', '35% RAM'); eq(asbRamMetric(4928307, 15800000), 'metric-good', '4.7 GB of 15 GB is plenty');
+eq(asbRamMetric(2000, 10000), 'metric-mild', '20% RAM'); eq(asbRamMetric(1300, 10000), 'metric-warm', '13% RAM');
+eq(asbRamMetric(800, 10000), 'metric-hot', '8% RAM'); eq(asbRamMetric(500, 10000), 'metric-bad', 'low RAM'); eq(asbRamMetric(0, 0), 'metric-neutral', 'unknown RAM');
+eq(asbDrainMetric(-100, 5000), 'metric-charge', 'charging'); eq(asbDrainMetric(0, 5000), 'metric-neutral', 'zero current');
+eq(asbDrainMetric(40, 5000), 'metric-cool', 'deep idle current'); eq(asbDrainMetric(150, 5000), 'metric-good', '3%/h current');
+eq(asbDrainMetric(300, 5000), 'metric-mild', '6%/h current'); eq(asbDrainMetric(500, 5000), 'metric-warm', '10%/h current');
+eq(asbDrainMetric(800, 5000), 'metric-hot', '16%/h current'); eq(asbDrainMetric(1000, 5000), 'metric-bad', '20%/h current');
+eq(asbDrainMetric(100, 0), 'metric-neutral', 'current without capacity');
+eq(asbScreenDrainMetric(4, true), 'metric-good', 'screen-on 4%/h'); eq(asbScreenDrainMetric(8.5, true), 'metric-mild', 'screen-on 8.5%/h');
+eq(asbScreenDrainMetric(20, true), 'metric-bad', 'screen-on 20%/h'); eq(asbScreenDrainMetric(0.38, false), 'metric-cool', 'screen-off 0.38%/h');
+eq(asbScreenDrainMetric(0.5, false), 'metric-good', 'screen-off 0.5%/h'); eq(asbScreenDrainMetric(2.2, false), 'metric-hot', 'screen-off 2.2%/h');
+eq(asbScreenDrainMetric(0, false), 'metric-info', 'nothing measured yet');
+eq(asbClockMetric(200, 1000), 'metric-good', 'low clock'); eq(asbClockMetric(450, 1000), 'metric-warm', 'medium clock');
+eq(asbClockMetric(900, 1000), 'metric-bad', 'clock at the top'); eq(asbClockMetric(100, 0), 'metric-neutral', 'clock without maximum');
+eq(asbHeadroomMetric(40), 'metric-good', 'ample headroom'); eq(asbHeadroomMetric(30), 'metric-mild', 'fair headroom');
+eq(asbHeadroomMetric(20), 'metric-warm', 'limited headroom'); eq(asbHeadroomMetric(12), 'metric-hot', 'tight headroom');
 eq(asbHeadroomMetric(9), 'metric-bad', 'low headroom'); eq(asbHeadroomMetric(null), 'metric-neutral', 'unknown headroom');
 eq(asbConfidenceMetric('high'), 'metric-good', 'high confidence'); eq(asbConfidenceMetric('med'), 'metric-warm', 'medium confidence');
 eq(asbConfidenceMetric('low'), 'metric-bad', 'low confidence'); eq(asbConfidenceMetric(''), 'metric-neutral', 'unknown confidence');
+eq(asbConfPctMetric(1000), 'metric-good', 'full slot confidence'); eq(asbConfPctMetric(700), 'metric-mild', '70% confidence');
+eq(asbConfPctMetric(500), 'metric-warm', '50% confidence'); eq(asbConfPctMetric(100), 'metric-bad', '10% confidence');
 eq(asbBasisMetric('stable'), 'metric-good', 'stable basis'); eq(asbBasisMetric('fallback'), 'metric-warm', 'fallback basis');
 eq(asbBasisMetric('basis-veto'), 'metric-bad', 'veto basis'); eq(asbModemMetric('save'), 'metric-good', 'save modem');
-eq(asbModemMetric('night'), 'metric-good', 'night modem'); eq(asbModemMetric('fast'), 'metric-bad', 'fast modem');
-eq(asbModemMetric('normal'), 'metric-normal', 'normal modem is the stock baseline'); eq(asbModemMetric(''), 'metric-neutral', 'unknown modem');
+eq(asbModemMetric('night'), 'metric-good', 'night modem'); eq(asbModemMetric('fast'), 'metric-warm', 'fast modem costs a little, no alarm');
+eq(asbModemMetric('normal'), 'metric-info', 'normal modem reads like the uptime beside it'); eq(asbModemMetric(''), 'metric-neutral', 'unknown modem');
 eq(asbModemMetric('unavailable'), 'metric-neutral', 'unavailable modem');
-eq(asbSlotMetric('cool'), 'metric-cool', 'cool slot'); eq(asbSlotMetric('typical'), 'metric-normal', 'typical slot');
-eq(asbSlotMetric('warm'), 'metric-warm', 'warm slot'); eq(asbSlotMetric(undefined), 'metric-neutral', 'unknown slot');
+eq(asbSlotMetric('cool'), 'metric-cool', 'cool slot'); eq(asbSlotMetric('typical'), 'metric-info', 'typical slot');
+eq(asbSlotMetric('warm'), 'metric-warm', 'warm slot'); eq(asbSlotMetric('hot'), 'metric-hot', 'hot slot'); eq(asbSlotMetric(undefined), 'metric-neutral', 'unknown slot');
 eq(lvSlotHeat(400, 410, 490).state, 'cool', 'cool slot evidence'); eq(lvSlotHeat(450, 410, 490).state, 'typical', 'typical slot evidence');
-eq(lvSlotHeat(500, 410, 490).state, 'warm', 'warm slot evidence'); eq(lvSlotHeat(0, 410, 490).state, undefined, 'empty slot evidence');
+eq(lvSlotHeat(500, 410, 490).state, 'warm', 'warm slot evidence'); eq(lvSlotHeat(540, 410, 490).state, 'hot', 'hot slot evidence');
+eq(lvSlotHeat(0, 410, 490).state, undefined, 'empty slot evidence');
+eq(asbTrendMetric(-1.2), 'metric-cool', 'cooling fast'); eq(asbTrendMetric(-0.5), 'metric-good', 'cooling');
+eq(asbTrendMetric(0.1), 'metric-info', 'steady'); eq(asbTrendMetric(0.6), 'metric-mild', 'warming slowly');
+eq(asbTrendMetric(1.2), 'metric-warm', 'warming'); eq(asbTrendMetric(2), 'metric-hot', 'warming fast'); eq(asbTrendMetric(3), 'metric-bad', 'heating up');
+eq(asbFsmMetric('DEEP_IDLE'), 'metric-cool', 'asleep'); eq(asbFsmMetric('LIGHT_IDLE'), 'metric-good', 'light idle');
+eq(asbFsmMetric('LIGHT_IDLE · screen on'), 'metric-good', 'light idle with the screen note'); eq(asbFsmMetric('MODERATE'), 'metric-mild', 'moderate');
+eq(asbFsmMetric('HEAVY'), 'metric-warm', 'heavy'); eq(asbFsmMetric('SUSTAINED'), 'metric-hot', 'sustained'); eq(asbFsmMetric('GAMING'), 'metric-hot', 'gaming');
+eq(asbFsmMetric('—'), 'metric-normal', 'unknown state');
+eq(asbAppMetric(0), 'metric-cool', 'idle app load'); eq(asbAppMetric(2), 'metric-mild', 'medium app load'); eq(asbAppMetric(4), 'metric-hot', 'gaming load');
+eq(asbAppMetric(9), 'metric-neutral', 'unknown app load');
+eq(asbClampMetric(1), 'metric-good', 'a clamp an hour is ordinary'); eq(asbClampMetric(6), 'metric-mild', 'several clamps');
+eq(asbClampMetric(15), 'metric-warm', 'frequent clamps'); eq(asbClampMetric(30), 'metric-hot', 'dozens of clamps'); eq(asbClampMetric(50), 'metric-bad', 'constant clamping');
+eq(asbCeilMetric(100), 'metric-good', 'free CPU'); eq(asbCeilMetric(70), 'metric-mild', 'mild ROM ceiling');
+eq(asbCeilMetric(35), 'metric-warm', 'ROM ceiling'); eq(asbCeilMetric(20), 'metric-hot', 'hard ROM ceiling'); eq(asbCeilMetric(0), 'metric-neutral', 'unknown ceiling');
+eq(asbBatLevelMetric(74), 'metric-good', 'full enough'); eq(asbBatLevelMetric(40), 'metric-mild', 'half'); eq(asbBatLevelMetric(25), 'metric-warm', 'low');
+eq(asbBatLevelMetric(15), 'metric-hot', 'very low'); eq(asbBatLevelMetric(5), 'metric-bad', 'almost empty');
 asbMetricPaint('x', 'metric-warm');
 chk(_node.className === 'live-cell-value cap-raised metric-warm', 'semantic repaint preserves non-semantic state and replaces the old colour: ' + _node.className);
+asbMetricPaint('x', 'metric-charge'); chk(/metric-charge/.test(_node.className) && !/metric-warm/.test(_node.className), 'charging replaces the grade');
 asbMetricPaint('x', 'nonsense'); chk(/metric-neutral/.test(_node.className), 'invalid state fails neutral');
 asbMetricPaint('missing', 'metric-good');
 if (bad) process.exit(1); console.log('ok');
@@ -3283,7 +3428,7 @@ EOF
 } > "$T/t.js"
 out="$(node "$T/t.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo "PASS webui monitor semantics: unit-specific thermal/load/RAM/current/clock/headroom/confidence/modem/slot colours, neutral unknowns, all four themes"
+echo "PASS webui monitor semantics: six-step scale (cool..bad) for thermal/load/RAM/current/drain/clock/headroom/confidence/trend/FSM/clamps/ceiling/battery, modem and slot plain at their default, charging shimmer, neutral unknowns, all four themes, contrast on white and black"
 )
 
 t_webui_stock_monitor_runtime() (
@@ -3342,8 +3487,9 @@ const _stockLiveInfo = { ceil: [] };
 const _lvEta = { cap: 0, chg: false, gov: null };
 function lvTopSecSync() {} function lvDrainHome() {} function lvTopSec() {} function lvMeterPaint() {}
 EOF
-  sed -n '/^const METRIC_CLASSES = /p' "$H"
-  for fn in fmtTempC setLiveLabel fmtStockLoad lvLoadShare asbMetricPaint asbThermalMetric asbLoadMetric asbDrainMetric asbRamMetric asbClockMetric paintStockLive; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  sed -n '/^const METRIC_CLASSES = /,/];$/p' "$H"
+  sed -n '/^const METRIC_STEPS = /p' "$H"
+  for fn in fmtTempC setLiveLabel fmtStockLoad lvLoadShare lvDurDHM asbMetricPaint asbMetricStep asbThermalMetric asbLoadMetric asbDrainMetric asbRamMetric asbClockMetric asbTrendMetric asbModemMetric asbCeilMetric asbBatLevelMetric paintStockLive; do sed -n "/^function $fn(/,/^}/p" "$H"; done
   cat <<'EOF'
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
 const kv = {
@@ -3364,14 +3510,17 @@ const v = (id) => _nodes[id] ? _nodes[id].textContent : '';
 chk(v('liveCpu') === '45°C', 'CPU from the core zones, not the 95 C trip point: ' + v('liveCpu'));
 chk(v('liveSkin') === '30°C', 'shell: ' + v('liveSkin'));
 chk(v('liveSurface') === '42°C' && v('liveSurfaceLabel') === 'Board', 'board sensor: ' + v('liveSurface') + ' / ' + v('liveSurfaceLabel'));
-chk(v('liveState') === '35%' && /cap-raised/.test(_nodes.liveState.className) && v('liveStateLabel') === 'CPU ceiling', 'CPU ceiling on the most limited cluster: ' + v('liveState'));
+chk(v('liveState') === '35%' && /metric-warm/.test(_nodes.liveState.className) && v('liveStateLabel') === 'CPU ceiling', 'CPU ceiling on the most limited cluster: ' + v('liveState') + ' ' + _nodes.liveState.className);
 chk(_stockLiveInfo.ceil.length === 2 && _stockLiveInfo.ceil[1] === 'policy6: 1.63 / 4.61 GHz', 'ceiling lines for the sheet: ' + JSON.stringify(_stockLiveInfo.ceil));
 chk(v('liveGpu') === '12%' && v('liveHeadroom') === '220 MHz', 'GPU load and clock: ' + v('liveGpu') + ' / ' + v('liveHeadroom'));
-chk(/metric-warm/.test(_nodes.liveCpu.className) && /metric-good/.test(_nodes.liveSkin.className) && /metric-good/.test(_nodes.liveGpu.className), '45°C CPU is amber while cool body and low GPU load are green: ' + _nodes.liveCpu.className + ' / ' + _nodes.liveSkin.className + ' / ' + _nodes.liveGpu.className);
+chk(/metric-mild/.test(_nodes.liveCpu.className) && /metric-good/.test(_nodes.liveSkin.className) && /metric-good/.test(_nodes.liveGpu.className), '45°C CPU is a step up while cool body and low GPU load are green: ' + _nodes.liveCpu.className + ' / ' + _nodes.liveSkin.className + ' / ' + _nodes.liveGpu.className);
+chk(/metric-good/.test(_nodes.liveCapSrc.className) && /metric-normal/.test(_nodes.liveClamp.className) && /metric-neutral/.test(_nodes.liveLearner.className), 'battery 33°C green, zRAM plain, paused learner neutral: ' + _nodes.liveCapSrc.className + ' / ' + _nodes.liveClamp.className + ' / ' + _nodes.liveLearner.className);
+chk(/metric-good/.test(_nodes.bnStockBattery.className) && /metric-info/.test(_nodes.bnStockUptime.className), '88% battery green, uptime plain: ' + _nodes.bnStockBattery.className + ' / ' + _nodes.bnStockUptime.className);
 chk(/metric-warm/.test(_nodes.liveSurface.className), 'warm board is amber: ' + _nodes.liveSurface.className);
 chk(/metric-warm/.test(_nodes.bnStockDrain.className), '7.8%/h battery current is amber: ' + _nodes.bnStockDrain.className);
 chk(/metric-good/.test(_nodes.bnStockRam.className), '62.5% available RAM is green: ' + _nodes.bnStockRam.className);
 chk(/metric-warm/.test(_nodes.bnStockCpuClock.className), '49% CPU clock is amber: ' + _nodes.bnStockCpuClock.className);
+chk(/metric-info/.test(_nodes.bnStockLoad.className), 'the load average alone is not graded: ' + _nodes.bnStockLoad.className);
 chk(/metric-neutral/.test(_nodes.liveHeadroom.className) && /metric-neutral/.test(_nodes.bnStockLpm.className), 'GPU clock without a ceiling and unknown modem state stay neutral');
 chk(v('liveCapSrc') === '33°C' && v('liveCapSrcLabel') === 'Battery temp', 'battery temperature: ' + v('liveCapSrc'));
 chk(v('liveClamp') === '2.8 GB' && v('liveClampLabel') === 'zRAM used', 'zRAM in use: ' + v('liveClamp'));
@@ -3387,6 +3536,7 @@ chk(v('bnStockLoad') === '9.40', 'no busy share before the second reading: ' + v
 paintStockLive(Object.assign({}, kv, { tsms: '1760000110000', cpustat: '1100 0 550 8580 210 110 55 385', cpus_online: '8', loadavg: '9.40 8.00 7.00' }));
 /* total +990, idle +790 -> busy 20% */
 chk(v('bnStockLoad') === '9.4 · 20%', 'the busy share beside the load: ' + v('bnStockLoad'));
+chk(/metric-good/.test(_nodes.bnStockLoad.className), '20% busy is green: ' + _nodes.bnStockLoad.className);
 chk(/CPU actually busy: 20 % over the last 10 s/.test(_nodes.bnStockLoad.title), 'the busy share is captioned: ' + _nodes.bnStockLoad.title);
 chk(/of 8 cores/.test(_nodes.bnStockLoad.title), 'the loadavg share moved to the tooltip: ' + _nodes.bnStockLoad.title);
 paintStockLive(Object.assign({}, kv, { tsms: '1760000110000', cpustat: '1100 0 550 8580 210 110 55 385', cpus_online: '8', loadavg: '9.40 8.00 7.00' }));
@@ -3409,7 +3559,7 @@ chk(v('bnStockTrend') === '\u2014', 'no temperature at all is the only dash: ' +
 const at = (ms, c) => Object.assign({}, kv, { tsms: String(ms), 'thermal.cpu-1-1-0': String(c * 1000), 'thermal.cpu-1-1-1': String(c * 1000) });
 _stockTrendSamples = []; _stockTrendLast = null;
 paintStockLive(at(1000000, 40)); paintStockLive(at(1010000, 40.5)); paintStockLive(at(1020000, 41)); paintStockLive(at(1040000, 42));
-chk(v('bnStockTrend') === '\u2191 warming' && /cap-clamp/.test(_nodes.bnStockTrend.className), 'warming over 40 s: ' + v('bnStockTrend'));
+chk(v('bnStockTrend') === '\u2191 warming' && /metric-bad/.test(_nodes.bnStockTrend.className), 'warming 3 °C a minute over 40 s: ' + v('bnStockTrend') + ' ' + _nodes.bnStockTrend.className);
 chk(/per minute over the last 40 s/.test(_nodes.bnStockTrend.title), 'rate in the sheet source: ' + _nodes.bnStockTrend.title);
 chk(_ls.asb_stock_trend && JSON.parse(_ls.asb_stock_trend).s.length === 4, 'the trend persists across a page reload (fix210): ' + _ls.asb_stock_trend);
 paintStockLive(at(1040000, 42));
@@ -3553,7 +3703,13 @@ function uiSound() {} function navSyncSoon() {}
 let _selectedProfile = 'smart';
 const _stockLiveInfo = { ceil: ['policy6: 1.63 / 4.61 GHz'] };
 const _lvLast = { st: { thermal_cpu_type: 'cpu-1-1-1' }, kv: { dwell_sec: '210', cpu_max_live: '3628800,1862400' } };
-function liveInfoEnsure() { if (_nodes.liveInfoSheet) return _nodes.liveInfoSheet; ['liveInfoTitle', 'liveInfoNowLbl', 'liveInfoVal', 'liveInfoText', 'liveInfoSrc', 'liveInfoDone'].forEach(mk); return mk('liveInfoSheet'); }
+const _lvMeter = { boot: null };
+function liveInfoEnsure() { if (_nodes.liveInfoSheet) return _nodes.liveInfoSheet; ['liveInfoTitle', 'liveInfoNowLbl', 'liveInfoVal', 'liveInfoScale', 'liveInfoText', 'liveInfoHist', 'liveInfoSrc', 'liveInfoDone'].forEach(mk); return mk('liveInfoSheet'); }
+/* fix248: the scale, history and raw facts have their own test (webui_live_info_insight). */
+const _lviCalls = [];
+function lviSample() { _lviCalls.push('sample'); } function lviNum() { return null; }
+function lviScaleRender(box, key) { _lviCalls.push('scale:' + key); } function lviHistRender(box, key) { _lviCalls.push('hist:' + key); }
+function lviExtra(key) { return []; }
 function cell(pos, label, value, cls, title) {
   const l = { textContent: label }, v = { textContent: value, className: 'live-cell-value' + (cls ? ' ' + cls : ''), title: title || '' };
   return { getAttribute() { return pos; }, querySelector(q) { return q === '.live-cell-label' ? l : v; } };
@@ -3571,7 +3727,7 @@ function bcell(pos, label, value, cls, title, pill) {
 }
 EOF
   sed -n "/^const LVI_TEXT = {/,/^};/p; /^const LVI_STOCK = /p" "$H"
-  for fn in lviFill liveInfoSource liveInfoValText liveInfoOpen liveInfoClose; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  for fn in lviFill liveInfoSource liveInfoValText liveInfoOpen liveInfoClose lvDurDHM lvBootParse; do sed -n "/^function $fn(/,/^}/p" "$H"; done
   cat <<'EOF'
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
 liveInfoOpen(cell('cpu', 'CPU', '41°C'));
@@ -3579,6 +3735,20 @@ chk(_nodes.liveInfoTitle.textContent === 'CPU' && _nodes.liveInfoVal.textContent
 chk(_nodes.liveInfoText.textContent.indexOf('CPU cores') >= 0, 'CPU explanation');
 chk(_nodes.liveInfoSrc.textContent === 'Source: cpu-1-1-1' && !_nodes.liveInfoSrc.hidden, 'CPU source zone: ' + _nodes.liveInfoSrc.textContent);
 chk(!_nodes.liveInfoSheet.hidden, 'sheet opens');
+/* fix248: the uptime sheet splits the time since the start between the screen on and off. */
+_selectedProfile = 'battery';
+_stockLiveInfo.uptimeSec = 5400; _stockLiveInfo.uptimeAt = Date.now();
+liveInfoOpen(bcell('suptime', 'Uptime', '1h 30m', 'metric-info', '29.10, 11:02'));
+chk(_nodes.liveInfoSrc.textContent === 'Started: 29.10, 11:02\nScreen-on and screen-off time appear after the next restart: they are counted from the moment the phone starts.', 'uptime sheet before the meter has a count: ' + JSON.stringify(_nodes.liveInfoSrc.textContent));
+_lvMeter.boot = lvBootParse('ab12cd34 1260 4140\n');
+liveInfoOpen(bcell('suptime', 'Uptime', '1h 30m', 'metric-info', '29.10, 11:02'));
+chk(_nodes.liveInfoSrc.textContent === 'Started: 29.10, 11:02\nScreen on: 21m (23 %)\nScreen off: 1h 9m (77 %)', 'uptime sheet with the screen split: ' + JSON.stringify(_nodes.liveInfoSrc.textContent));
+_lvMeter.boot = { on: 99999, off: 0 };
+liveInfoOpen(bcell('suptime', 'Uptime', '1h 30m', 'metric-info', '29.10, 11:02'));
+chk(/Screen on: 1h 30m \(100 %\)\nScreen off: 0m \(0 %\)$/.test(_nodes.liveInfoSrc.textContent), 'screen time never exceeds the uptime: ' + JSON.stringify(_nodes.liveInfoSrc.textContent));
+chk(lvBootParse('x 1') === null && lvBootParse('') === null && lvBootParse('id a 3') === null, 'a broken boot line is ignored');
+chk(lvDurDHM(90061) === '1d 1h 1m' && lvDurDHM(600) === '10m' && lvDurDHM(5400) === '1h 30m', 'durations: ' + lvDurDHM(90061) + ' / ' + lvDurDHM(600));
+_lvMeter.boot = null; _selectedProfile = 'smart';
 liveInfoClose();
 chk(_nodes.liveInfoSheet.hidden, 'sheet closes');
 liveInfoOpen(cell('fsm', 'FSM', 'MODERATE'));
@@ -3635,6 +3805,7 @@ chk(_nodes.liveInfoSrc.textContent === '+0.4 °C per minute over the last 40 s',
 liveInfoOpen(bcell('slpm', 'Modem state', 'normal', '', 'mobile_data_always_on: 0'));
 chk(_nodes.liveInfoText.textContent.indexOf('“fast” - kept up') >= 0 && _nodes.liveInfoSrc.textContent === 'mobile_data_always_on: 0', 'Stock modem: ' + _nodes.liveInfoSrc.textContent);
 _selectedProfile = 'smart';
+chk(_lviCalls[0] === 'sample' && _lviCalls.indexOf('scale:cpu') >= 0 && _lviCalls.indexOf('hist:cpu') >= 0, 'fix248: the sheet samples, then draws the scale and the history: ' + _lviCalls.slice(0, 4).join(','));
 if (bad) process.exit(1);
 console.log('ok');
 EOF
@@ -4713,7 +4884,7 @@ printf '%s\n' "$out" | grep -q '^heat	peak_phase=active	peak_c=41	warm_min=0	ski
 printf '%s\n' "$out" | grep -q '^mwake	n=14	per_night=2.6	typical_s=38$' || fail "night habits: $(printf '%s\n' "$out" | grep '^mwake')"
 printf '%s\n' "$out" | grep -q '^cfg	key=sustained_temp_mode	value=' || fail "the thermal setting is not in the advice snapshot"
 printf '%s\n' "$out" | grep -q '^throttle	clamps=2	owner=asb_governor	by=asb_governor:1,thermal:1$' || fail "throttle clamp periods: $(printf '%s\n' "$out" | grep '^throttle')"
-printf '%s\n' "$out" | grep -q '^radio	mib=17.5$' || fail "radio MiB"
+printf '%s\n' "$out" | grep -q '^radio	mib=17.5	on=16.4$' || fail "radio MiB with the screen-on share: $(printf '%s\n' "$out" | grep '^radio')"
 # fix200: the richer sections, mined from the interim report + smart_records + config.
 printf '%s\n' "$out" | grep -q '^jank	pct=5.1	jps=2.50	frames=366481$' || fail "jank headline"
 # fix220: wake smoothness, the per-phase and per-state jank tables and the gauge check.
@@ -4727,7 +4898,7 @@ printf '%s\n' "$out" | grep -q '^japp	pkg=com.ttt.nagram	frames=122186	pct=7.0$'
 printf '%s\n' "$out" | grep -q '^japp	pkg=multi' && fail "the split-screen pseudo-app must not become a row"
 printf '%s\n' "$out" | grep -q '^hz	mode=60	share=64	ma=264$' || fail "60 Hz row"
 printf '%s\n' "$out" | grep -q '^hz	mode=120	share=13	ma=380$' || fail "120 Hz row"
-printf '%s\n' "$out" | grep -q '^asbcost	cpu_msh=1851	writes_h=176	wakes_h=491$' || fail "ASB own cost"
+printf '%s\n' "$out" | grep -q '^asbcost	cpu_msh=1851	writes_h=176	wakes_h=491	wakes_on=	wakes_off=	noalarm=0$' || fail "ASB own cost: $(printf '%s\n' "$out" | grep '^asbcost')"
 printf '%s\n' "$out" | grep -q '^audio	spk_min=72	pctph=8.31	ma=362$' || fail "speaker audio cost"
 printf '%s\n' "$out" | grep -q '^charge	types=Fast(17) N/A(197)$' || fail "charge types"
 printf '%s\n' "$out" | grep -q '^smart	watching=3	testing=0	helped=0	nothelped=0	ctxlearn=2$' || fail "smart learner line"
@@ -4927,7 +5098,7 @@ let ASB_LANG = 'ru';
 function T(k, d) { const L = I18N[ASB_LANG]; return (L && typeof L[k] === 'string') ? L[k] : d; }
 EOF
   for fn in Tcfg parseLogReport logReportT logReportDur logReportDurSec logReportAuthority logReportHolderWhat logReportIdleAwake logReportHolderName logReportTips \
-    logReportSysuiSteady logReportFullCharge logReportScreenOnDrainState logReportAnalyze logReportHistoryComparable logReportMachineDigest logReportAnalysisT \
+    logReportSysuiSteady logReportMiB logReportNetFix logReportLteIdle logReportFullCharge logReportScreenOnDrainState logReportAnalyze logReportHistoryComparable logReportMachineDigest logReportAnalysisT \
     logReportTipText logReportRow logReportSec logReportNote logReportHero logReportTable \
     logReportBrief logReportDxT logReportDiagnose logReportDiagSection logReportAppendAnalysis logReportRender shQuote \
     asbPageClasses asbPageHas asbPageKids asbPageTxt asbPageWarn asbPageText asbPageStamp; do
@@ -5450,6 +5621,76 @@ chk(udx && udx.cause === 'lr_dx_idle_unknown' && udx.owner === 'unknown' && udx.
 unkDay.sections.night.awake = '5'; unkDay.sections.idlemax.awake = '5';
 const adx = logReportDiagnose(unkDay).find(x => x.area === 'idle');
 chk(adx && adx.cause === 'lr_dx_idle_asleep' && adx.send, 'drain while asleep points past the CPU: ' + JSON.stringify(adx));
+/* fix248: the owner's Battery day - 92 % on screen, 1.9 GiB over LTE + 5G NSA, and the two
+   LTE switches on yet never running (the manual-profile fault). The report now names the
+   switch as ASB's fault, gives mobile data its own card with the apps and the setting for
+   each kind, decomposes the screen-on drain and puts ASB's cost in absolute terms. */
+const dataDay = parseLogReport([
+  'meta\telapsed_min=373\ttarget_h=0\trunning=0\tstarted=2026-10-29 13:51\tprofile=battery',
+  'meta2\tmodel=CPH2745\tdevice=OP611FL1\tsoc=SM8850\trom=CPH2745_17.0.0.102(EX01)\tmod=V65-test14',
+  'cover\ton_min=347\toff_min=28\ton_pct=92', 'drain\tpctph=9.0\ttotal_drop=55\thours=6.1\tma=296',
+  'radio\tmib=1963.6\ton=1832.9', 'sradio\tmib=8.4', 'rnet\ttot=1189.6\tsince=15:00',
+  'rapp\tpkg=com.moonshot.kimichat\tmib=653.1', 'rapp\tpkg=org.telegram.messenger\tmib=198.5',
+  'rapp\tpkg=com.android.vending\tmib=158.1', 'rapp\tpkg=com.google.android.gms\tmib=33.4',
+  'rat\tnsa=7\tsa=0\tlte=1\tof=8', 'lte\ten=1\tlight=1\tapplies=0\tlte_min=0\twatch=0\tsnaps=8\tunsup=0\tquiet=0',
+  'netma\tlo=255\tlo_n=199\thi=340\thi_n=103', 'bright\tavg=14',
+  'scr\ton_pctph=9.5\toff_pctph=0.0\ton_min=339\toff_min=21\tidle_pctph=0.0\tidle_min=19\tmusic_min=2',
+  'jank\tpct=7.4\tjps=3.97\tframes=1040957', 'japp\tpkg=com.moonshot.kimichat\tframes=259121\tpct=4.2',
+  'japp\tpkg=com.google.android.googlequicksearchbox\tframes=112126\tpct=14.7',
+  'asbcost\tcpu_msh=4977\twrites_h=480\twakes_h=1628\twakes_on=1271\twakes_off=356\tnoalarm=1',
+  'cfg\tkey=net_screen_off_lte\tvalue=1',
+  'hist\tstarted=2026-10-28 19:51\tnight=1.3\tdrain=3.3\tjank=19.4\tcpu=52\tclamps=10\tdevice=OP611FL1\trom=CPH2745_17.0.0.102(EX01)\tmod=V65-test14\telapsed=676\ton_pct=32\toff_min=463\tdm=2',
+  'hist\tstarted=2026-10-27 21:00\tnight=-\tdrain=12.0\tjank=5.5\tcpu=64\tclamps=1\tdevice=OP611FL1\trom=CPH2745_17.0.0.102(EX01)\tmod=V65-test14\telapsed=198\ton_pct=98\toff_min=2\tdm=2'].join('\n'));
+chk(dataDay.rapps.length === 4 && dataDay.rapps[0].pkg === 'com.moonshot.kimichat' && dataDay.rapps[0].mib === 653.1, 'per-app mobile data parsed');
+chk(logReportNetFix('com.android.vending') === 'lr_dx_fix_net_play' && logReportNetFix('org.telegram.messenger') === 'lr_dx_fix_net_tg' &&
+    logReportNetFix('tw.nekomimi.nekogram') === 'lr_dx_fix_net_tg' && logReportNetFix('com.whatsapp') === 'lr_dx_fix_net_wa' &&
+    logReportNetFix('com.google.android.youtube') === 'lr_dx_fix_net_video' && logReportNetFix('com.moonshot.kimichat') === 'lr_dx_fix_net_app', 'each kind of app gets its own setting');
+chk(logReportMiB(1963.6) === '1.9 GiB' && logReportMiB(653.1) === '653 MiB', 'data volumes read as GiB/MiB');
+const ddx = logReportDiagnose(dataDay);
+chk(ddx[0].area === 'lte' && ddx[0].cause === 'lr_dx_lte_idle' && ddx[0].owner === 'asbfix' && ddx[0].fix === 'lr_dx_fix_lte_idle' && !ddx[0].send,
+    'the switch that never ran leads, as an ASB fault fixed in the build: ' + JSON.stringify(ddx[0]));
+chk(ddx[0].cv.set === I18N.ru.cfg.net_lte_light.name && ddx[0].cv.n === '8', 'it names 5G-only-when-needed only: the screen was off 21 min, too short to blame the screen-off switch: ' + ddx[0].cv.set);
+const net = ddx.find(x => x.area === 'net');
+chk(net && net.cause === 'lr_dx_net_heavy' && net.state === 'problem' && net.owner === 'app' && net.fix === 'lr_dx_fix_net_app' && net.fv.app === 'com.moonshot.kimichat',
+    'mobile data has its own card, the heaviest app and its remedy: ' + JSON.stringify(net));
+chk(net.cv.mib === '1.9 GiB' && net.cv.on === '1.8 GiB', 'the card quotes the total and the screen-on share');
+const nk = net.also.map(a => a.key);
+chk(nk.indexOf('lr_dx_net_nsa') >= 0 && nk.indexOf('lr_dx_net_apps') >= 0 && nk.indexOf('lr_dx_net_ma') >= 0, 'NSA, the apps and the current split are stated: ' + nk.join(','));
+chk(net.also.find(a => a.key === 'lr_dx_net_apps').v.list.indexOf('com.moonshot.kimichat 653') === 0 && net.also.find(a => a.key === 'lr_dx_net_ma').v.pct === '33', 'apps listed with volumes, the current 33 % higher with data moving');
+const fixes = net.also.filter(a => a.key === 'lr_dx_also_fix').map(a => a.v.txt);
+chk(fixes.length === 2 && fixes[0].indexOf('org.telegram.messenger') >= 0 && fixes[1] === logReportDxT('lr_dx_fix_net_play', {}), 'Telegram and Play get their own settings after the facts: ' + fixes.join(' | '));
+chk(nk.indexOf('lr_dx_also_fix') > nk.indexOf('lr_dx_net_ma'), 'facts before the extra remedies');
+const scrc = ddx.find(x => x.area === 'screen');
+const sk = scrc.also.map(a => a.key);
+chk(sk.indexOf('lr_dx_screen_data') >= 0 && sk.indexOf('lr_dx_screen_bright_low') >= 0 && sk.indexOf('lr_dx_screen_top') >= 0, 'screen-on drain is decomposed: ' + sk.join(','));
+chk(scrc.also.find(a => a.key === 'lr_dx_screen_top').v.pct === '25', 'the app in front by its share of frames');
+const asbc = ddx.find(x => x.area === 'asb');
+chk(asbc.state === 'good' && asbc.also[0].key === 'lr_dx_asb_core' && asbc.also[0].v.pct === '0.14' && asbc.also[0].v.on === '1271', 'ASB cost as a share of one core with the wake split: ' + JSON.stringify(asbc.also));
+const dacts = logReportAnalyze(dataDay).actions.map(t => t.key);
+chk(dacts[0] === 'lr_tip_lte_idle' && dacts.indexOf('lr_tip_net_heavy') >= 0, 'the fault and the data come first in the priority actions: ' + dacts.join(','));
+const lteTip = logReportTipText(logReportTips(dataDay, true).find(t => t.key === 'lr_tip_lte_idle'));
+chk(lteTip.indexOf(I18N.ru.cfg.net_lte_light.name) >= 0 && lteTip.indexOf('{') < 0, 'the action names the switch: ' + lteTip);
+logReportRender(dataDay);
+const dBrief = allText(reportBody.children.find(e => e.children[0] && e.children[0].textContent === I18N.ru.lr_sec_brief));
+chk(dBrief.indexOf(logReportT('lr_brief_split_short', '', { on: logReportDur(339), onr: '9.5', off: logReportDur(21) }).replace(/%\//g, '%/⁠')) >= 0, 'the brief does not quote a rate over 21 minutes off');
+chk(!/[ :]0(\.0)?%\//.test(dBrief) && dBrief.indexOf('com.moonshot.kimichat (653') >= 0, 'no "0 %/h" noise; the data line names the app: ' + dBrief);
+const dAll = allText(reportBody);
+chk(dAll.indexOf(I18N.ru.lr_dx_area_lte) >= 0 && dAll.indexOf(I18N.ru.lr_dx_owner_asbfix) >= 0 && dAll.indexOf(I18N.ru.lr_dx_area_net) >= 0, 'the new cards render with their areas and sources');
+chk(dAll.indexOf(logReportT('lr_rat_nsa', '', { n: '7', of: '8' })) >= 0 && dAll.indexOf(logReportT('lr_rapp_head', '', { since: '15:00', tot: '1.2 GiB' })) >= 0, 'the drain section names the network and the apps');
+chk(dAll.indexOf(I18N.ru.lr_drain_idle + '|—') >= 0, 'the screen-off row shows no rate over 21 minutes');
+chk(dAll.indexOf(logReportT('lr_trend_vs', '', { when: '2026-10-27 21:00' })) >= 0 && dAll.indexOf('2026-10-28 19:51') < 0, 'the trend compares with the latest comparable capture, not the 32 % evening');
+chk(dAll.indexOf(I18N.ru.lr_cost_core) >= 0, 'the cost section shows the share of a core');
+const btDay = parseLogReport(['meta\telapsed_min=373\tprofile=battery', 'bt\tacl=5\tlost=3\tby_dev=1\tby_phone=1\tmedia=1\twhole=1\tstreams=43',
+  'btdrop\tat=10-29 19:29\twho=stack\twhole=1\tback=0'].join('\n'));
+chk(btDay.btdrops.length === 1 && btDay.btdrops[0].whole && !btDay.btdrops[0].back, 'media drops parsed');
+logReportRender(btDay);
+const btText = allText(reportBody);
+chk(btText.indexOf(I18N.ru.lr_sec_bt) >= 0 && btText.indexOf(logReportT('lr_bt_streams', '', { n: '43' })) >= 0 &&
+    btText.indexOf(I18N.ru.lr_bt_who_stack) >= 0 && btText.indexOf(I18N.ru.lr_bt_lost_note) >= 0, 'the Bluetooth section tells drops from stream pauses');
+dataDay.sections.lte = { en: '1', light: '1', applies: '6', lte_min: '41', watch: '3', snaps: '8', unsup: '0', quiet: '4' };
+const ranDx = logReportDiagnose(dataDay);
+chk(!ranDx.some(x => x.area === 'lte') && ranDx.find(x => x.area === 'net').also.some(a => a.key === 'lr_dx_lte_ran' && a.v.n === '6'), 'a switch that ran is reported as working, not as a fault');
+chk(!logReportTips(dataDay, true).some(t => t.key === 'lr_tip_lte_idle'), 'no fault action once the switch ran');
 let exportCommands = [], exportErrno = 0; const exportToasts = [];
 function toast(msg, kind) { exportToasts.push({msg:msg, kind:kind}); }
 async function run(cmd) { exportCommands.push(cmd); return { errno:exportErrno, stderr:'write failed' }; }
@@ -5644,6 +5885,24 @@ KEYS += ['lr_ms','lr_ms_wake','lr_drain_est','lr_drain_idle','lr_drain_short_not
          'lr_idle_fmt','lr_peak','lr_clamp_brief_note','lr_sum_drain_idle','lr_sum_drain_mixed',
          'lr_chain_sysui','lr_chain_music_off','lr_tip_sysui_netspeed','lr_tip_sysui_clocksec',
          'lr_tip_sysui_livewp','lr_tip_sysui_other','lr_sysui_draw','lr_sysui_draw_fmt']
+KEYS += ['lr_brief_split_short','lr_brief_data','lr_brief_data0','lr_brief_lte_idle','lr_dx_area_net','lr_dx_area_lte',
+         'lr_dx_owner_asbfix','lr_dx_screen_net','lr_dx_screen_data','lr_dx_screen_bright_low','lr_dx_screen_bright_high',
+         'lr_dx_screen_top','lr_dx_net_heavy','lr_dx_net_nsa','lr_dx_net_apps','lr_dx_net_ma','lr_dx_lte_ran','lr_dx_net_try_light',
+         'lr_dx_also_fix','lr_dx_fix_net_play','lr_dx_fix_net_tg','lr_dx_fix_net_wa','lr_dx_fix_net_video','lr_dx_fix_net_app',
+         'lr_dx_fix_net_none','lr_dx_lte_idle','lr_dx_fix_lte_idle','lr_dx_asb_core','lr_dx_asb_core2','lr_tip_lte_idle',
+         'lr_tip_net_heavy','lr_radio_on','lr_rapp_head','lr_rat','lr_rat_nsa','lr_rat_sa','lr_rat_lte','lr_cost_core',
+         'lr_sec_bt','lr_bt_acl','lr_bt_acl_fmt','lr_bt_media','lr_bt_who_stack','lr_bt_who_phone','lr_bt_whole','lr_bt_gone',
+         'lr_bt_streams','lr_bt_lost_note']
+PH.update({'lr_brief_split_short':['{on}','{onr}','{off}'], 'lr_brief_data':['{mib}','{on}','{app}','{amib}'],
+      'lr_brief_data0':['{mib}','{on}'], 'lr_brief_lte_idle':['{set}'], 'lr_dx_screen_net':['{pct}','{mib}','{ph}'],
+      'lr_dx_screen_data':['{mib}','{ph}'], 'lr_dx_screen_bright_low':['{b}'], 'lr_dx_screen_bright_high':['{b}'],
+      'lr_dx_screen_top':['{app}','{pct}'], 'lr_dx_net_heavy':['{mib}','{h}','{on}'], 'lr_dx_net_nsa':['{n}','{of}'],
+      'lr_dx_net_apps':['{since}','{tot}','{list}'], 'lr_dx_net_ma':['{pct}','{hi}','{lo}'], 'lr_dx_lte_ran':['{n}','{min}'],
+      'lr_dx_net_try_light':['{set}'], 'lr_dx_also_fix':['{txt}'], 'lr_dx_fix_net_tg':['{app}'], 'lr_dx_fix_net_video':['{app}'],
+      'lr_dx_fix_net_app':['{app}'], 'lr_dx_lte_idle':['{set}','{n}'], 'lr_dx_asb_core':['{pct}','{on}','{off}'],
+      'lr_dx_asb_core2':['{pct}'], 'lr_tip_lte_idle':['{set}'], 'lr_tip_net_heavy':['{mib}','{app}','{amib}'],
+      'lr_radio_on':['{on}'], 'lr_rapp_head':['{since}','{tot}'], 'lr_rat_nsa':['{n}','{of}'], 'lr_rat_sa':['{n}','{of}'],
+      'lr_rat_lte':['{n}','{of}'], 'lr_bt_acl_fmt':['{n}','{l}','{d}','{p}'], 'lr_bt_streams':['{n}']})
 files = sorted((root / 'webroot' / 'i18n').glob('*.json'))
 assert len(files) == 13, 'locale count'
 for p in files:
@@ -5807,6 +6066,109 @@ grep -q 'lk_direct_temps "$(echo "$_j" | awk -F'"'"'"thermal_surface_zone":'"'"'
 echo "PASS digest trace truth: sync/worker/alarm holders named and deduped, peaks and hot minutes from the trace, night peaks inside the chain, ledger fallback, surface zone first"
 )
 
+t_fullday_digest_network_runtime() (
+# fix248: a day of 1.9 GiB over LTE + 5G NSA read as "Mobile traffic: 1963.6 MiB" and nothing
+# more. The digest now carries the screen-on share of it, the apps from Android's per-UID
+# history (mobile idents only, the capture window only, the UID section only), the radio's
+# network at each check, the screen-on current with and without data moving, and whether the
+# LTE switches actually ran between the first and last snapshot. The display table no longer
+# stops at a "?" refresh row, and ASB's wakeups carry the screen split.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+D="$ROOT/tools/logkit/asb_fullday_digest.sh"
+fail() { echo "FAIL digest network: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+NOW=$(date +%s); S0=$(( (NOW - 20000) / 7200 * 7200 + 600 ))
+CAP="$T/asb_log_full_day_2"; mkdir -p "$CAP"
+printf '# phase\tstart\n' > "$CAP/phase_ledger.tsv"
+printf 'active\t%s\t%s\t80\t70\t40\t35\t1800\t20\t0\t0\t100\t300\t%s\t%s\t0\n' $S0 $((S0 + 7200)) 943718400 104857600 >> "$CAP/phase_ledger.tsv"
+printf 'sleep\t%s\t%s\t70\t69\t33\t30\t0\t0\t0\t0\t10\t40\t%s\t%s\t0\n' $((S0 + 7200)) $((S0 + 10800)) 10485760 0 >> "$CAP/phase_ledger.tsv"
+{
+  echo 'epoch|datetime|fsm_state|profile|screen|bat_pct|bat_mA|bat_uV|bat_dC|cpu_max_c|skin_c|surface_c|board_c|env_iq|bat_deep_idle_s|bat_light_idle_s|reserved|bat_wake|headroom_pct|headroom_valid|headroom_reason|cpu_zone|fb_zone|wifi_rx|wifi_tx|rmnet_rx|rmnet_tx'
+  b=0; i=0
+  while [ $i -lt 60 ]; do
+    e=$((S0 + i * 60))
+    if [ $((i % 2)) = 0 ]; then b=$((b + 6291456)); ma=340; else b=$((b + 1024)); ma=250; fi
+    echo "$e|d|MODERATE|battery|1|80|$ma|0|0|40|30|33|33|0|0|0||0|100|1|ok|z|z|0|0|$b|0"
+    i=$((i + 1))
+  done
+} > "$CAP/battery_trace.txt"
+cat > "$CAP/netstats_uid_latest.txt" <<EOF
+# netstats uid capture: tag=latest epoch=$((S0 + 10800))
+Active interfaces:
+  iface=rmnet_data2 ident=[{type=0, ratType=13}]
+Xt stats:
+  ident=[{type=0, ratType=-2}] uid=-1 set=ALL tag=0x0
+    NetworkStatsHistory: bucketDuration=7200
+      st=$((S0 - 600)) rb=999999999 rp=1 tb=0 tp=0 op=0
+UID stats:
+  Pending bytes: 0
+  ident=[{type=0, ratType=-2, metered=true}] uid=10617 set=DEFAULT tag=0x0
+    NetworkStatsHistory: bucketDuration=7200
+      st=$((S0 - 7800)) rb=500000000 rp=1 tb=0 tp=0 op=0
+      st=$((S0 - 600)) rb=314572800 rp=1 tb=10485760 tp=1 op=0
+      st=$((S0 + 6600)) rb=209715200 rp=1 tb=0 tp=0 op=0
+  ident=[{type=1, ratType=-1, metered=false}] uid=10617 set=DEFAULT tag=0x0
+    NetworkStatsHistory: bucketDuration=7200
+      st=$((S0 - 600)) rb=888888888 rp=1 tb=0 tp=0 op=0
+  ident=[{type=0, ratType=-2, metered=true}] uid=10443 set=FOREGROUND tag=0x0
+    NetworkStatsHistory: bucketDuration=7200
+      st=$((S0 - 600)) rb=104857600 rp=1 tb=0 tp=0 op=0
+  ident=[{type=0, ratType=-2, metered=true}] uid=10999 set=DEFAULT tag=0x0
+    NetworkStatsHistory: bucketDuration=7200
+      st=$((S0 - 600)) rb=4194304 rp=1 tb=0 tp=0 op=0
+InterfaceMapHelper:
+  ident=[{type=0}] uid=10443 set=DEFAULT tag=0x0
+      st=$((S0 - 600)) rb=777777777 rp=1 tb=0 tp=0 op=0
+EOF
+printf '10617 com.moonshot.kimichat\n10443 org.telegram.messenger\n' > "$CAP/uid_map.txt"
+printf '  data_rat: network=LTE, overrideNetwork=NR_NSA \n  data_rat: network=LTE, overrideNetwork=NONE \n  data_rat: network=LTE, overrideNetwork=NR_NSA \n' > "$CAP/network_trace.txt"
+snap() {
+  printf '===== NET STATE =====\n  lte_screenoff status:\n    enabled=1\n    applied=0\n    reason=none\n    light=1\n    light_watch=%s\n    pending=0\n    unsupported=0\n    last=x\n    applies=%s\n    restores=%s\n    lte_minutes=%s\n    quiet_windows=%s\n  lte_screenoff log (last 8):\n    10-28 x\n' "$1" "$2" "$2" "$3" "$4" > "$5"
+}
+snap 0 19 685 35 "$CAP/before.txt"
+snap 1 20 690 35 "$CAP/snapshot_$((S0 + 3600)).txt"
+snap 0 21 700 36 "$CAP/snapshot_$((S0 + 9000)).txt"
+cat > "$CAP/_full_day_report.txt" <<'EOF'
+ capture: 0h target (until stopped), 180 min elapsed
+refresh_hz  samples  share   avg_brightness%  avg_mA
+?                 4     1%               12     538
+90              125    30%               16     271
+60              228    55%               14     279
+brightness%  samples  avg_mA
+0-24             384     299
+average brightness while on: 14%
+  governor cpu             : 4977 ms/h (15157 ms total)
+  physical writes          : 480/h
+  timer wakeups            : 1628/h
+    by screen state        : screen on 1271/h, screen off 356/h - no alarm clock: none of them wakes a sleeping phone
+link drops (ACL disconnects): 5 - lost link (timeout): 3, ended by the headset: 1, ended by this phone: 1, other/unknown: 0
+media-profile drops in the Bluetooth service history (phone clock; last 20 changes per profile, kept across snapshots):
+  10-29 19:29:01  device A  reported by the Bluetooth stack (the headset ended it or the radio link went); call profile dropped with it; not back within the kept history
+  10-29 20:01:10  device A  asked for on the phone; back within 2 min
+media drops: 2 (stack-reported 1, asked for on the phone 1); whole device (call profile too): 1; media only (call profile kept): 1
+EOF
+printf '# x\n1\tz\t I A2dpStateMachine: Connected: stopped playing: XX\ndup\t I A2dpStateMachine: Connected: stopped playing: XX\n2\tz\t I A2dpStateMachine: Connected: started playing: XX\n' > "$CAP/bt_lifecycle_stack_evidence.tsv"
+out="$(ASB_LK_STATE_DIR="$T/state" ASB_TOMBSTONE_DIR="$T/none" sh "$D" "$CAP")"
+line() { printf '%s\n' "$out" | grep "^$1	" || true; }
+[ "$(line radio)" = "$(printf 'radio\tmib=1010.0\ton=1000.0')" ] || fail "radio with the screen-on share: $(line radio)"
+_since="$(date -d "@$S0" '+%H:%M' 2>/dev/null || date -r "$S0" '+%H:%M')"
+[ "$(line rnet)" = "$(printf 'rnet\ttot=614.0\tsince=%s' "$_since")" ] || fail "per-app total over the capture window, mobile only: $(line rnet) (since $_since)"
+[ "$(line rapp)" = "$(printf 'rapp\tpkg=com.moonshot.kimichat\tmib=510.0\nrapp\tpkg=org.telegram.messenger\tmib=100.0')" ] || fail "apps by mobile data, named, under 8 MiB left out: $(line rapp)"
+[ "$(line rat)" = "$(printf 'rat\tnsa=2\tsa=0\tlte=1\tof=3')" ] || fail "radio network per check: $(line rat)"
+[ "$(line lte)" = "$(printf 'lte\ten=1\tlight=1\tapplies=2\tlte_min=15\twatch=1\tsnaps=3\tunsup=0\tquiet=1')" ] || fail "LTE switch activity between the snapshots: $(line lte)"
+[ "$(line netma)" = "$(printf 'netma\tlo=250\tlo_n=30\thi=340\thi_n=29')" ] || fail "screen-on current by traffic: $(line netma)"
+[ "$(line hz | wc -l)" = 2 ] && line hz | grep -q 'mode=60' || fail "the refresh table stopped at the '?' row: $(line hz)"
+[ "$(line bright)" = "$(printf 'bright\tavg=14')" ] || fail "average brightness: $(line bright)"
+[ "$(line asbcost)" = "$(printf 'asbcost\tcpu_msh=4977\twrites_h=480\twakes_h=1628\twakes_on=1271\twakes_off=356\tnoalarm=1')" ] || fail "ASB wakes by screen: $(line asbcost)"
+[ "$(line bt)" = "$(printf 'bt\tacl=5\tlost=3\tby_dev=1\tby_phone=1\tmedia=2\twhole=1\tstreams=2')" ] || fail "Bluetooth drops and stream pauses: $(line bt)"
+[ "$(line btdrop)" = "$(printf 'btdrop\tat=10-29 19:29\twho=stack\twhole=1\tback=0\nbtdrop\tat=10-29 20:01\twho=phone\twhole=0\tback=1')" ] || fail "media drops by time: $(line btdrop)"
+rm -f "$CAP/snapshot_"*.txt
+out="$(ASB_LK_STATE_DIR="$T/state" ASB_TOMBSTONE_DIR="$T/none" sh "$D" "$CAP")"
+[ -z "$(line lte)" ] || fail "one snapshot is no activity window: $(line lte)"
+echo "PASS digest network: screen-on data share, apps over the window from the UID section, NSA per check, LTE switch activity, current by traffic, refresh '?' row, ASB wakes by screen, Bluetooth drops vs stream pauses"
+)
+
 t_webui_liquid_glass_runtime() (
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
@@ -5877,7 +6239,7 @@ for selector in (
     'html[data-asb-glass="1"] .smart-banner-value .load-mid',
 ):
     assert selector in h, selector
-assert "appH === 2 ? ' load-mid'" in h and "appH <= 1 ? ' load-low'" in h
+assert "asbMetricPaint('bnApp', warm ? 'metric-neutral' : asbAppMetric(appH))" in h
 assert '.smart-banner-value.load-mid,' in h and 'color: var(--bal);' in h
 for cls in ('good', 'warm', 'bad', 'neutral', 'normal', 'cool'):
     assert '.smart-banner-value.metric-' + cls in h
