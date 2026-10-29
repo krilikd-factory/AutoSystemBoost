@@ -3087,6 +3087,7 @@ static unsigned long g_unlock_lifts = 0;  /* lifts started: screen-on edges and 
 static unsigned long g_unlock_skips = 0;  /* edges that did not lift */
 static char   g_unlock_skip_why[16] = "-";/* why the last one did not: off/profile/thermal/warm */
 static long   g_launch_arm_ms      = 0;   /* boottime ms of the last app-switch arm */
+static int    g_unlock_profile     = -1;  /* profile the last update ran for (fix243) */
 static const char *g_unlock_arm_why = "-";/* what armed the running lift, for the log line */
 
 /* Who the lift is for. Battery and Balanced are exactly the profiles that jank on a wake -
@@ -3126,6 +3127,7 @@ static int asb_unlock_lift_update(int screen_on, int touch_kick, int touch_activ
     int prev = g_unlock_prev_screen;
     int arm = 0;
     g_unlock_prev_screen = screen_on ? 1 : 0;
+    g_unlock_profile = profile_idx;
     if (!screen_on) {
         g_unlock_on_ms = 0;
         g_unlock_until_ms = 0;
@@ -3187,10 +3189,28 @@ static int asb_unlock_lift_update(int screen_on, int touch_kick, int touch_activ
     return g_unlock_lift_now;
 }
 
-static void asb_unlock_lift_apply(asb_profile_caps_t *caps) {
+/* fix243: Battery lifts to four fifths of the shared share (80 -> 64 % of each cluster's
+ * maximum). Two OP15 Battery captures (fix241/fix242 builds) had the lift in force for 54 %
+ * and 52 % of the screen-on intervals - the continuous-touch hold keeps it up through a
+ * scroll - while the main cluster sat at its lifted ceiling in only 1-2 % of them: the extra
+ * clock bought 6.5 vs 8.0 % and 9.7 vs 11.7 % janky frames against the static ceilings, and
+ * the slow-UI share hardly moved (3.6 vs 4.3 %). What was slow was the scheduler's response
+ * (Battery ran a 32 ms WALT window and discounted top-app demand to 80 %), which the Battery
+ * rails now fix; the peaks above ~64 % are the least efficient part of every OnePlus DVFS
+ * table. A share, so it follows each cluster's own maximum; never below the 50 % floor. */
+static int asb_unlock_lift_share(int profile_idx) {
     int pct = g_asb_cfg.unlock_lift_pct;
     if (pct < 50) pct = 50;
     if (pct > 100) pct = 100;
+    if (profile_idx == PROFILE_BATTERY) {
+        pct = pct * 4 / 5;
+        if (pct < 50) pct = 50;
+    }
+    return pct;
+}
+
+static void asb_unlock_lift_apply(asb_profile_caps_t *caps) {
+    int pct = asb_unlock_lift_share(g_unlock_profile);
     for (int i = 0; i < 3; i++) {
         long hw = g_cpu_slot_hwmax[i];
         /* 0 is "not managed" (an empty slot, or a prime left to the vendor): nothing to lift. */
@@ -3297,7 +3317,7 @@ static void asb_bjank_eval_window(const char *pkg, long df, long dj, long now_ms
         g_bjank_triggers++;
         asb_log("battery_jank_guard[%s]: %s %ld/%ld janky frames (%ld%%), ceilings to %d%% for %lds",
                 short_window ? "short" : "long", pkg, dj, df, df > 0 ? dj * 100L / df : 0L,
-                g_asb_cfg.unlock_lift_pct, ASB_BJANK_TTL_MS / 1000L);
+                asb_unlock_lift_share(PROFILE_BATTERY), ASB_BJANK_TTL_MS / 1000L);
     }
 }
 
@@ -4004,6 +4024,8 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             _first = 0;
         }
         fprintf(f, "\"\n");
+        fprintf(f, "walt_window_owner=%s\nwalt_window_rom=%d\n",
+                g_ravg_rom_owned ? "rom" : "asb", g_ravg_rom_seen);
         fprintf(f, "cap_sleep_detente=%d\ncap_detente_skipped=%ld\n"
                    "build_flavor=%s\nbat_cur_unit=%d\n",
                 g_cap_detente_active, g_cap_detente_skipped,
@@ -7450,6 +7472,30 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
         if (out.ceil.uclamp_top_max > bal->ceil.uclamp_top_max)
             out.ceil.uclamp_top_max = bal->ceil.uclamp_top_max;
     }
+    /* fix244: the WALT window and packing threshold were never blended either.
+     *
+     * Same defect as the uclamp tiers above, in the two fields after them: ravg_ticks and
+     * idle_enough stayed at the zero memset left, so Smart asked the writer for
+     * sched_idle_enough 0 on every tick. Every Smart capture on file reads 0 once the
+     * governor runs (OP12, OP13, OP15, Ace 6): no CPU short of a fully idle one counted
+     * as idle enough to take work, so screen-off background work woke idle cores the
+     * Battery and Balanced rails would have packed onto a busy one - more C-state exits for
+     * the profile most people run. The window request was 0 too, which the writer had to
+     * reject. Both are blended from the two rails like everything else; on screen the FSM
+     * keeps packing at the kernel's own default (fsm_interpolate_caps). */
+    {
+        int wb[2], wl[2], wo[2];
+        wb[0] = bat->floor.idle_enough; wb[1] = bat->floor.ravg_ticks;
+        wl[0] = bal->floor.idle_enough; wl[1] = bal->floor.ravg_ticks;
+        asb_smart_blend_values_int(wb, wl, 2, alpha, wo);
+        out.floor.idle_enough = wo[0];
+        out.floor.ravg_ticks  = wo[1];
+        wb[0] = bat->ceil.idle_enough; wb[1] = bat->ceil.ravg_ticks;
+        wl[0] = bal->ceil.idle_enough; wl[1] = bal->ceil.ravg_ticks;
+        asb_smart_blend_values_int(wb, wl, 2, alpha, wo);
+        out.ceil.idle_enough = wo[0];
+        out.ceil.ravg_ticks  = wo[1];
+    }
     g_smart_bounds = out;
     g_smart_bounds_initialized = 1;
 
@@ -9990,7 +10036,7 @@ int main(int argc, char **argv) {
                         if (_ul)
                             asb_log("unlock_lift: on (%s, ceilings to %d%% of hw for %d s, die=%dC)",
                                     g_unlock_arm_why,
-                                    g_asb_cfg.unlock_lift_pct, g_asb_cfg.unlock_lift_s,
+                                    asb_unlock_lift_share(fsm.profile_idx), g_asb_cfg.unlock_lift_s,
                                     metrics.therm.cpu_max_c);
                         else
                             asb_log("unlock_lift: off (%s)",
@@ -10793,7 +10839,7 @@ int main(int argc, char **argv) {
                 writer_fg_guard(metrics.misc.screen_on, fsm.profile_idx == PROFILE_SMART,
                                 fsm.profile_idx == PROFILE_BATTERY && g_unlock_lift_now &&
                                     !fsm.thermal_cap && !g_fsm_cooldown_active,
-                                g_asb_cfg.unlock_lift_pct);
+                                asb_unlock_lift_share(fsm.profile_idx));
             if (fsm.profile_idx != PROFILE_PERFORMANCE &&
                 (fsm.state == ASB_STATE_DEEP_IDLE || fsm.state == ASB_STATE_LIGHT_IDLE ||
                  fsm.state == ASB_STATE_MODERATE  || fsm.state == ASB_STATE_HEAVY)) {

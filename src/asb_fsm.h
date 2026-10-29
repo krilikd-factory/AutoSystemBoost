@@ -531,6 +531,8 @@ static const float g_state_level[ASB_STATE_COUNT] = {
     [ASB_STATE_GAMING]     = 1.0f
 };
 
+#define ASB_SMART_SCREEN_IDLE_ENOUGH 30
+
 static inline int lerp_int(int a, int b, float t) {
     return (int)(a + (b - a) * t + 0.5f);
 }
@@ -822,6 +824,14 @@ static void fsm_interpolate_caps(
 
     out->ravg_ticks     = lerp_int(f->ravg_ticks,     c->ravg_ticks,     t > 0.5f ? 1.0f : 0.0f);
     out->idle_enough    = lerp_int(f->idle_enough,    c->idle_enough,    t);
+    /* fix244: Smart packs like the stock kernel while the screen is on.
+     *
+     * Smart ran with no packing at all until fix244 (the blend above never set it) and its
+     * smoothness is the reference the other profiles are measured against. Screen-off states
+     * now get the blended rail - battery-like packing where nobody is looking - while on
+     * screen the threshold stays at WALT's own default rather than jumping to the rail. */
+    if (profile_idx == PROFILE_SMART && fsm_screen_is_on && out->idle_enough > ASB_SMART_SCREEN_IDLE_ENOUGH)
+        out->idle_enough = ASB_SMART_SCREEN_IDLE_ENOUGH;
     out->uclamp_top_max = lerp_int(f->uclamp_top_max, c->uclamp_top_max, t);
     out->uclamp_bg_max  = lerp_int(f->uclamp_bg_max,  c->uclamp_bg_max,  t);
 

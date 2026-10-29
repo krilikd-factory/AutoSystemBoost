@@ -1295,6 +1295,52 @@ typedef struct {
  * very first comparison. */
 static asb_writer_cache_t g_wcache = { .gpu_min_written = -1 };
 
+/* fix244: the WALT window belongs to the ROM where the ROM keeps setting it.
+ *
+ * Every OnePlus capture on file (OP12, OP13, OP15, Ace 6 - eight devices, every profile) shows
+ * sched_ravg_window_nr_ticks moving between 2, 3 and 4 on its own: the ROM sizes the window
+ * to the frame time of the refresh rate it is running (8 ms at 120 Hz, 12 ms at 90, 16 ms at
+ * 60). ASB put its profile value back on every forced apply - 116 physical writes in one
+ * Battery evening - and the value it wrote held only until the next refresh change, so the
+ * scheduler alternated between ASB's window and the ROM's. On a kernel where nothing else
+ * touches the node the profile value stays in force; once the node is seen holding a value
+ * ASB did not write on three checks, ASB stops writing it for the rest of the session and
+ * leaves a marker the shell profile apply honours. */
+#define WALT_RAVG_ROM_MARK "/dev/.asb/walt_ravg_rom"
+static int    g_ravg_rom_owned   = 0;
+static int    g_ravg_foreign     = 0;
+static time_t g_ravg_check_at    = 0;
+static time_t g_ravg_first_at    = 0;
+static int    g_ravg_last_seen   = 0;
+static int    g_ravg_rom_seen    = 0;
+
+/* Counted are NEW values ASB did not write, three within ten minutes: a ROM that resizes the
+ * window per refresh rate gets there within minutes of ordinary use, while the shell's own
+ * profile write landing after a native apply shows one value once and is rewritten. */
+static void writer_ravg_observe(int force) {
+    if (g_ravg_rom_owned || g_wcache.ravg_ticks <= 0) return;
+    time_t now = time(NULL);
+    if (!force && now < g_ravg_check_at) return;
+    g_ravg_check_at = now + 30;
+    int seen = sysfs_read_int(WALT_RAVG_PATH, INT_MIN);
+    if (seen <= 0) return;
+    if (seen == g_wcache.ravg_ticks) { g_ravg_last_seen = seen; return; }
+    if (seen == g_ravg_last_seen) return;
+    g_ravg_last_seen = seen;
+    g_ravg_rom_seen = seen;
+    if (g_ravg_foreign == 0 || now - g_ravg_first_at > 600) {
+        g_ravg_foreign = 0;
+        g_ravg_first_at = now;
+    }
+    if (++g_ravg_foreign < 3) return;
+    g_ravg_rom_owned = 1;
+    FILE *mf = fopen(WALT_RAVG_ROM_MARK, "w");
+    if (mf) {
+        fprintf(mf, "rom=%d asb=%d\n", seen, g_wcache.ravg_ticks);
+        fclose(mf);
+    }
+}
+
 
 
 /* Last uclamp values the writer was asked to apply, for diagnostics. Read from the
@@ -2247,10 +2293,13 @@ skip_cpu_caps: ;
         }
     }
 
-    if (force || caps->ravg_ticks != g_wcache.ravg_ticks) {
+    writer_ravg_observe(force);
+    if (!g_ravg_rom_owned && caps->ravg_ticks > 0 &&
+        (force || caps->ravg_ticks != g_wcache.ravg_ticks)) {
         if (writer_write_int_confirmed(ASB_WRITE_WALT_RAVG, WALT_RAVG_PATH,
                                        caps->ravg_ticks) == 0) {
             g_wcache.ravg_ticks = caps->ravg_ticks;
+            g_ravg_last_seen = caps->ravg_ticks;
             writes++;
         }
     }
