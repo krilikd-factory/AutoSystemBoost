@@ -10,7 +10,9 @@ WALT_PIPE_NONSP=90
 WALT_PIPE_SP=80
 WALT_BUSY_HYST=0
 WALT_ED_BOOST=5
-WALT_TOPAPP_WEIGHT=100
+# A small foreground preference helps the scheduler respond to UI work without raising any
+# frequency floor or ceiling. Stay below Balanced (110): Battery keeps its own power policy.
+WALT_TOPAPP_WEIGHT=105
 WALT_BOOST_MIN_UTIL=90
 WALT_SCHED_BOOST=0
 
