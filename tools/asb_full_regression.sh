@@ -72,7 +72,7 @@ run 'lint' env MODDIR="$ROOT" bash tools/asb_lint.sh
 run 'native warning budget' env CC="$HOST_CC" bash tools/asb_native_warning_budget.sh
 run 'DSP syntax' bash tools/dsp_stubs/asb_dsp_syntax_check.sh
 
-# The host tests live in four suites (tests/asb_*.sh, fix164); each test in them is a function
+# The host tests live in five suites (tests/asb_*.sh, fix164/fix266); each test is a function
 # that runs in its own subshell, so every test is still queued on its own and runs in parallel.
 export HOST_CC
 for suite in tests/asb_*.sh; do

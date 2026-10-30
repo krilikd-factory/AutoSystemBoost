@@ -3813,6 +3813,18 @@ else
   NOTE "com.oplus.athena enabled (ASB does not disable it)"
 fi
 
+# Optional package tweaks: report their exposed package state, ASB baseline ownership and
+# one-shot ART state without applying anything. Missing dump fields remain `unknown`; they are
+# not treated as proof that a package or capability is absent.
+if [ -f "$MODDIR/runtime/asb_heytap_mcs.sh" ]; then
+  _pt_hey="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_heytap_mcs.sh" status 2>/dev/null | tr '\n' ' ')"
+  NOTE "HeyTap MCS / ART (read-only): ${_pt_hey:-status not exposed}"
+fi
+if [ -f "$MODDIR/runtime/asb_documentsui_fix.sh" ]; then
+  _pt_doc="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_documentsui_fix.sh" status 2>/dev/null | tr '\n' ' ')"
+  NOTE "DocumentsUI / DSU picker (read-only): ${_pt_doc:-status not exposed}"
+fi
+
 # =====================================================================
 SEC "8. DISPLAY / UX"
 for _p in vendor.display.enable_dpps_dynamic_fps debug.hwui.use_partial_updates persist.sys.hwui.enable_texture_optimize; do
