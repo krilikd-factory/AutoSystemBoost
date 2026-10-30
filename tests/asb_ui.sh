@@ -5166,7 +5166,7 @@ EOF
   for fn in Tcfg parseLogReport logReportT logReportDur logReportDurSec logReportAuthority logReportHolderWhat logReportIdleAwake logReportHolderName logReportTips \
     logReportSysuiSteady logReportMiB logReportNetFix logReportLteIdle logReportFullCharge logReportScreenOnDrainState logReportAnalyze logReportHistoryComparable logReportMachineDigest logReportAnalysisT \
     logReportTipText logReportRow logReportSec logReportNote logReportHero logReportTable \
-    logReportBrief logReportDxT logReportDiagnose logReportDiagSection logReportAppendAnalysis logReportRender shQuote \
+    logReportBrief logReportDxT logReportDiagnose logReportDiagSection logReportQualityPanel logReportAppendAnalysis logReportRender asbPageJump shQuote \
     asbPageClasses asbPageHas asbPageKids asbPageTxt asbPageWarn asbPageText asbPageStamp; do
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
@@ -5539,6 +5539,9 @@ function allText(e) { return (e.textContent || '') + e.children.map(allText).joi
 function countClass(e, name) { return (String(e.className).split(/\s+/).indexOf(name) >= 0 ? 1 : 0) + e.children.reduce((n,c) => n + countClass(c,name), 0); }
 logReportRender(early);
 chk(countClass(reportBody, 'lgr-verdict') === 5, 'summary renders all five verdict rows');
+chk(countClass(reportBody, 'lgr-quality') === 1 && countClass(reportBody, 'lgr-quality-seg') === 5, 'fix255: evidence panel has five domain segments, not an invented score');
+chk(countClass(reportBody, 'lgr-verdict-unknown') === 5 && allText(reportBody).indexOf('0 из 5') >= 0, 'fix255: an early capture explicitly has no supported verdicts');
+chk(allText(reportBody).indexOf(I18N.ru.lr_summary_legend) >= 0 && countClass(reportBody, 'report-nav') === 1 && countClass(reportBody, 'lgr-details-anchor') === 1, 'fix255: report legend, working navigation model and technical-evidence anchor render');
 chk(reportBody.children.filter(c => c.children[0] && c.children[0].textContent !== I18N.ru.lr_sec_brief && c.children[0].textContent !== I18N.ru.lr_sec_dx)[0].children[0].textContent === I18N.ru.lr_sec_summary, 'smart summary is the first report section after the plain-words brief and the causes');
 chk(countClass(reportBody, 'lgr-action') === 0 && allText(reportBody).indexOf(I18N.ru.lr_no_actions_early) >= 0, 'early DOM has no unsupported action');
 logReportRender(mixDay);
@@ -6445,7 +6448,9 @@ for p in (root/'webroot/i18n').glob('*.json'):
                 'dev_sec_metamodule','dev_metamodule_status','dev_metamodule_id','dev_metamodule_name',
                 'dev_metamodule_version','dev_metamodule_version_code','page_save','page_saved','page_save_error','page_save_empty','page_save_raw','dev_gpu_gov_pwrlevel','dev_metamodule_nomount_driver',
                 'dev_metamodule_nomount_driver_version','dev_metamodule_nomount_evidence','dev_sec_device','dev_grp_hw','dev_grp_sw',
-                'dev_grp_kernel','dev_grp_root','dev_grp_asb'):
+                'dev_grp_kernel','dev_grp_root','dev_grp_asb','lr_quality_title','lr_quality_coverage','lr_summary_legend',
+                'lr_dx_read_note','lr_sec_details','dev_nav_title','dev_snap_memory','dev_snap_evidence','dev_evidence_note',
+                'dev_guide_cpu_policy','dev_guide_kernel_external','dev_guide_asb_caps'):
         assert d.get(key), '%s: %s missing' % (p.name, key)
 ru = json.loads((root/'webroot/i18n/ru.json').read_text(encoding='utf-8'))
 assert 'NoMount' in ru['dev_kernel_features_nomount'] and 'NTSync' in ru['dev_kernel_features_ntsync']
@@ -6482,8 +6487,10 @@ function logReportT(key, fb, vars) { let s = T(key, fb); const v = vars || {}; f
 EOF
   sed -n '/^const DEVICE_SECTION_ORDER = \[/,/^\];/p' "$H"
   sed -n '/^const DEVICE_GROUPS = {/,/^};/p' "$H"
+  sed -n '/^const DEVICE_GROUP_GUIDES = {/,/^};/p' "$H"
+  sed -n '/^const DEVICE_SECTION_GUIDES = {/,/^};/p' "$H"
   sed -n '/^const DEVICE_KERNEL_FEATURE_ORDER = \[/,/^\];/p' "$H"
-  for fn in parseDeviceInfo deviceVal deviceFallbackLabel deviceLabel deviceHero deviceValueClass deviceNum deviceKv deviceFreqKhz deviceFreqHz deviceSizeKb deviceDuration deviceCpuCount deviceCpuList deviceYesNo deviceFill deviceBatteryMa deviceBatteryMah deviceBatteryWear deviceDisplayValue deviceInfoOverview deviceInfoRender shQuote \
+  for fn in parseDeviceInfo deviceVal deviceFallbackLabel deviceLabel deviceHero deviceIsLimitedValue deviceValueClass deviceNum deviceKv deviceFreqKhz deviceFreqHz deviceSizeKb deviceDuration deviceCpuCount deviceCpuList deviceYesNo deviceFill deviceBatteryMa deviceBatteryMah deviceBatteryWear deviceDisplayValue deviceInfoEvidence deviceSnapshotCard deviceInfoSnapshot deviceInfoNav deviceInfoOverview deviceInfoRender asbPageJump shQuote \
     asbPageClasses asbPageHas asbPageKids asbPageTxt asbPageWarn asbPageText asbPageStamp; do
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
@@ -6491,6 +6498,8 @@ EOF
   sed -n '/^async function asbSavePage(/,/^}/p' "$H"
   cat <<'EOF'
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
+function countDeviceClass(e, name) { return (String(e.className || '').split(/\s+/).includes(name) ? 1 : 0) + (e.children || []).reduce((n,c) => n + countDeviceClass(c,name), 0); }
+const I18N_EN_DEV_GUIDE = 'Current limits and the hardware range are different.';
 const attack = '<img src=x onerror=globalThis.pwned=1> OnePlus 15';
 const text = [
   'D\tfirmware\tmodel\t' + attack,
@@ -6577,6 +6586,8 @@ const d2 = parseDeviceInfo([
 deviceInfoRender(d2);
 const d2dump = (function walk(n) { return [n.textContent || ''].concat((n.children || []).flatMap(walk)); })(body).join('\n').replace(/\u00a0/g, ' ');
 chk(d2dump.includes('At a glance') && d2dump.includes('8 cores · 2 clusters · up to 4.61 GHz'), 'overview processor line: ' + d2dump);
+chk(countDeviceClass(body, 'dev-snapshot') === 1 && countDeviceClass(body, 'lgr-hero') >= 3 && d2dump.includes('31% available'), 'fix255: device snapshot presents available memory and supporting evidence');
+chk(d2dump.includes(I18N_EN_DEV_GUIDE) && countDeviceClass(body, 'dev-nav') === 1, 'fix255: device limits explanation and group navigation render');
 chk(d2dump.includes('8 min · CPU idle 67%') && !d2dump.includes('508.51 2724.42'), 'raw /proc/uptime pair shown instead of a duration');
 chk(d2dump.includes('7.18 · 7.95 · 4.97 (1 / 5 / 15 min) · 3 of 11967 threads running') && !d2dump.includes('3/11967 8744'), 'raw /proc/loadavg line shown');
 chk(d2dump.includes('Load average counts tasks'), 'load average explanation missing');
@@ -6600,7 +6611,11 @@ const d3 = parseDeviceInfo([
   'D\tasb\tprofile\tbattery', 'D\tsystem\tuptime\t508.51 2724.42', 'D\tbattery\tcapacity\t74', 'D\tkernel_runtime\tswappiness\t100'
 ].join('\n'));
 deviceInfoRender(d3);
-const seq = body.children.filter(n => /dev-group|lgr-sec/.test(n.className)).map(n => /dev-group/.test(n.className) ? '# ' + n.textContent : n.children[0].textContent);
+const d3dump = (function walk(n) { return [n.textContent || ''].concat((n.children || []).flatMap(walk)); })(body).join('\n');
+chk(d3dump.includes('ASB runtime') && d3dump.includes('battery') && d3dump.includes('collection limits, not proof'), 'fix255: ASB snapshot and unknown-evidence caveat render');
+chk(countDeviceClass(body, 'dev-unknown') === 1 && countDeviceClass(body, 'dev-group-guide') === 5, 'fix255: unknown values stay neutral and all five group guides render');
+chk(deviceValueClass('kernel_external', 'status', 'not_observable').includes('dev-unknown') && deviceInfoEvidence(parseDeviceInfo('D\tkernel_external\tstatus\tnot_observable')).limited === 1, 'fix255: not observable never becomes proof of stock voltage or a healthy value');
+const seq = body.children.filter(n => /(?:^| )dev-group(?: |$)|lgr-sec/.test(n.className)).map(n => /(?:^| )dev-group(?: |$)/.test(n.className) ? '# ' + n.textContent : n.children[0].textContent);
 chk(JSON.stringify(seq) === JSON.stringify(['At a glance', '# Hardware', 'Device', 'Chip (SoC)', 'Battery', '# Firmware and system', 'Firmware and ROM', 'System',
   '# Kernel', 'Kernel build', 'Custom kernel features', 'Live kernel facilities', '# Root and modules', 'SuSFS interface', '# ASB module', 'ASB runtime',
   'Collection metadata']), 'device page groups and order: ' + JSON.stringify(seq));
@@ -6624,7 +6639,7 @@ deviceInfoRender(d2);
   const saved = Buffer.from(b64, 'base64').toString('utf8');
   chk(/^AutoSystemBoost - Device diagnostics\n27 facts\n/.test(saved), 'Device save header: ' + saved.slice(0, 80));
   chk(saved.includes('== At a glance ==') && saved.includes('8 cores · 2 clusters · up to 4.61 GHz'), 'Device save lost the overview');
-  chk(/\n# Hardware\n\n== Chip \(SoC\) ==/.test(saved) && saved.indexOf('# Hardware') < saved.indexOf('# ASB module'), 'Device save lost the group headings');
+  chk(/\n# Hardware\n[\s\S]{0,500}== Chip \(SoC\) ==/.test(saved) && saved.includes('Physical components and their live readings') && saved.indexOf('# Hardware') < saved.indexOf('# ASB module'), 'Device save lost the group headings or their guides');
   chk(/\n  [^\n]*: 77%  \(!\)/.test(saved), 'Device save lost a warning mark on the worn battery');
   chk(saved.includes('Load average counts tasks'), 'Device save lost the explanatory notes');
   chk(saved.includes('== Raw data (for the developer) ==\nD\tgpu\tkgsl-3d0\tRAWMARK'), 'Device save lost the raw collector output');
@@ -6988,6 +7003,106 @@ for o in items['dsp_headroom']['opts']:
 assert not probs, '\n'.join(probs)
 P
 echo "PASS webui card i18n: all 13 languages carry a name, description, translated detail table and option labels for every Config card"
+)
+
+t_webui_fix254_visual_states_runtime() (
+# Runtime/static (fix254): cap-owner colours survive the neutral metric cascade in all four
+# themes, priority actions have no vertical rail, and Liquid Glass distinguishes OFF from ON.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL WebUI fix254 visual states: $*" >&2; exit 1; }
+python3 - "$H" "$T/metric.js" "$T/owner.js" <<'PY' || fail "CSS or source contract"
+import re, sys
+s = open(sys.argv[1], encoding='utf-8').read()
+def rule(selector):
+    m = re.search(re.escape(selector) + r'\s*\{([^}]*)\}', s, re.S)
+    assert m, 'missing rule: ' + selector
+    return m.group(1)
+# The owner colours come after the broad metric-normal rules and use source, not quality,
+# identities. Shell has an explicit token so Glass's mint secondary accent cannot recolour it.
+normal = s.index(':is(.metric-normal,.metric-info) { color:var(--text) !important; }')
+for cls, colour in (('cap-asb', 'var(--accent)'), ('cap-shell', 'var(--owner-shell)')):
+    pos = s.index('html .live-cell-value.' + cls, normal)
+    assert pos > normal
+    assert colour in s[pos:s.index('}', pos)]
+assert '--owner-shell: #7dd3fc;' in s and '--owner-shell:#0b5f86;' in s
+assert 'html[data-asb-theme="light"] .live-cell-value.cap-asb { color:var(--accent) !important; }' in s
+assert "vendor_clamp') asbMetricPaint('liveCapSrc', 'metric-bad')" in s
+assert "vendor_raised') asbMetricPaint('liveCapSrc', 'metric-hot')" in s
+# Stock reuses this element for battery temperature: it must still clear owner classes first.
+assert "cls('liveCapSrc', '');" in s and "asbMetricPaint('liveCapSrc', asbThermalMetric(batT, 'battery'));" in s
+# No timeline border or indentation rail through the action numbers.
+a = rule('.lgr-tip.lgr-action')
+assert 'display: grid' in a and 'grid-template-columns: 22px minmax(0, 1fr)' in a
+assert 'border' not in a and 'padding-inline-start' not in a
+n = rule('.lgr-action-n')
+assert 'text-align: end' in n and 'font-variant-numeric: tabular-nums' in n
+# Both Glass palettes have neutral OFF cards and tracks. ON alone keeps the accent/category
+# treatment. Every new state selector is Glass-scoped, so ordinary dark/light stay untouched.
+for sel in (
+    'html[data-asb-glass="1"] .cfg-row:not(.is-on)',
+    'html[data-asb-glass="1"][data-asb-theme="light"] .cfg-row:not(.is-on)',
+    'html[data-asb-glass="1"] .cfg-switch:not(.on)',
+    'html[data-asb-glass="1"][data-asb-theme="light"] .cfg-switch:not(.on)'):
+    body = rule(sel)
+    assert 'background:' in body and 'border-color:' in body, sel
+    assert 'var(--accent)' not in body and 'var(--cat' not in body, sel
+on = rule('html[data-asb-glass="1"] .cfg-row.is-on')
+assert 'var(--cat,var(--accent))' in on
+# Text contrast for the actual owner colours on their card-family surfaces.
+def rgb(h):
+    h = h.lstrip('#'); return tuple(int(h[i:i+2], 16) / 255 for i in (0, 2, 4))
+def lum(h):
+    c = [v / 12.92 if v <= .04045 else ((v + .055) / 1.055) ** 2.4 for v in rgb(h)]
+    return .2126*c[0] + .7152*c[1] + .0722*c[2]
+def contrast(a, b):
+    x, y = sorted((lum(a), lum(b)), reverse=True); return (x + .05) / (y + .05)
+for bg, colours in {
+    '#101714': ('#00f0b4', '#7dd3fc', '#ff2d2d', '#ff7a1a'),
+    '#f7f9fa': ('#007c63', '#0b5f86', '#b42318', '#b04a00')}.items():
+    for fg in colours:
+        assert contrast(fg, bg) >= 4.5, (fg, bg, contrast(fg, bg))
+# Execute the real painter and real cap-owner branch in Node below.
+metric = s[s.index('const METRIC_CLASSES ='):s.index('/* fix253:', s.index('const METRIC_CLASSES ='))]
+owner = s[s.index('const CAP_SRC_LABELS ='):s.index('const gpuEl =', s.index('const CAP_SRC_LABELS ='))]
+open(sys.argv[2], 'w', encoding='utf-8').write(metric)
+open(sys.argv[3], 'w', encoding='utf-8').write(owner)
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI fix254 owner painter: node unavailable'; }
+if command -v node >/dev/null 2>&1; then
+cat > "$T/test.js" <<'JS'
+const fs = require('fs');
+let capSrc, _cs0, _cs1, el;
+function _el() { return el; }
+function T(_k, fallback) { return fallback; }
+eval(fs.readFileSync(process.argv[2], 'utf8'));
+// Evaluate the real owner branch in a fresh function scope so its const declarations repeat.
+const branch = fs.readFileSync(process.argv[3], 'utf8');
+function run(src) {
+  el = { className: 'live-cell-value', textContent: '', title: '',
+    classList: { add(c) { el.className += ' ' + c; } } };
+  capSrc = src; _cs0 = src; _cs1 = '';
+  eval(branch);
+  return el.className;
+}
+const cases = {
+  asb: ['cap-asb', 'metric-normal'], asb_dynamic: ['cap-asb', 'metric-normal'],
+  shell_applied: ['cap-shell', 'metric-normal'], shell_overridden_down: ['cap-shell', 'metric-normal'],
+  vendor_clamp: ['metric-bad'], vendor_raised: ['metric-hot'],
+  thermal_overlay: ['metric-hot'], policy_unknown: ['metric-neutral']
+};
+for (const [src, wanted] of Object.entries(cases)) {
+  const got = run(src);
+  for (const cls of wanted) if (!got.split(/\s+/).includes(cls)) throw new Error(src + ': ' + got);
+  if ((src === 'vendor_clamp' || src === 'vendor_raised') && /cap-asb|cap-shell/.test(got)) throw new Error(src + ': stale owner class');
+}
+console.log('ok');
+JS
+[ "$(node "$T/test.js" "$T/metric.js" "$T/owner.js")" = ok ] || fail "owner painter classes"
+fi
+echo "PASS WebUI fix254 visual states: ASB green, Shell blue, Vendor orange/red, rail-free actions and neutral OFF glass in both palettes"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
