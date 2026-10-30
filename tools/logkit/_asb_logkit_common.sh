@@ -340,7 +340,7 @@ lk_snapshot_state() {
     for _sf in wakelock_apps wakelock_fitness_limited wakelock_fitness_uidmode wakelock_fitness_refused \
                wakelock_restricted multicast_restricted \
                wakelock_multicast wakelock_rules_v137 avoid_bad_wifi.prev \
-               ltpo_video.stats ltpo_range.orig ltpo_video.lowered drain_meter offdrain_pctph_x100; do
+               ltpo_video.stats ltpo_range.orig ltpo_video.lowered drain_meter drain_meter.rej offdrain_pctph_x100 offdrain_profiles; do
       [ -f "/data/adb/asb/$_sf" ] || continue
       echo "--- $_sf ---"
       head -20 "/data/adb/asb/$_sf" 2>/dev/null
