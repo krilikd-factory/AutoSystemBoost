@@ -48,6 +48,7 @@ STAT="$STATE_DIR/ltpo_video.stats"
 LOG="$STATE_DIR/ltpo_video.log"
 TOUCHDEV="$STATE_DIR/ltpo_video.touchdev"
 TOUCH_AT="$STATE_DIR/ltpo_video.touch_at"
+. "$MODDIR/runtime/asb_ltpo_lock.sh"
 QUIET_S="${ASB_LTPO_QUIET_S:-3}"
 # Right after a touch gave the rate back, the next lower waits for a longer quiet (fix136).
 # Reading comments under a playing video touched, went quiet for 3 s, touched again: every
@@ -189,16 +190,23 @@ _guard_stop() {
 # --- lower / restore -----------------------------------------------------------------
 
 _lower() {   # $1 = mode Hz, $2 = content rate(s)
+  asb_ltpo_lock || return 1
+  # A touch/range writer may have changed the peak immediately before this lock.
   _orig="$(_get)"
   [ -n "$_orig" ] || _orig=__unset
   mkdir -p "$STATE_DIR" 2>/dev/null
-  printf 'orig=%s\nset=%s.0\ncontent=%s\nsince=%s\n' "$_orig" "$1" "$(printf '%s' "$2" | tr '\n' ',' | sed 's/,$//')" "$(_now)" \
-    > "$LOWERED" 2>/dev/null || return 1
+  if ! printf 'orig=%s\nset=%s.0\ncontent=%s\nsince=%s\n' "$_orig" "$1" "$(printf '%s' "$2" | tr '\n' ',' | sed 's/,$//')" "$(_now)" \
+    > "$LOWERED" 2>/dev/null; then
+    asb_ltpo_unlock
+    return 1
+  fi
   if ! _put "$1.0"; then
     rm -f "$LOWERED" 2>/dev/null
+    asb_ltpo_unlock
     _log "could not lower to $1 Hz (Settings refused) - nothing changed"
     return 1
   fi
+  asb_ltpo_unlock
   _stat_bump lowers 1
   # Several layers give several rates, one per line: joined, or the log line broke in two
   # ("for 30" / "60 fps video" in a CPH2769 capture, fix148).
@@ -211,7 +219,8 @@ _lower() {   # $1 = mode Hz, $2 = content rate(s)
     _g=$!
     printf '%s\n' "$_g" > "$GUARD" 2>/dev/null
     wait "$_g"
-    [ -f "$LOWERED" ] || exit 0
+    asb_ltpo_lock || exit 0
+    if [ ! -f "$LOWERED" ]; then asb_ltpo_unlock; exit 0; fi
     _o="$(sed -n 's/^orig=//p' "$LOWERED" 2>/dev/null | head -1)"
     case "$_o" in
       __unset) command settings delete system peak_refresh_rate >/dev/null 2>&1 ;;
@@ -221,6 +230,7 @@ _lower() {   # $1 = mode Hz, $2 = content rate(s)
     [ "$_o" = __unset ] || [ "$(_get)" = "$_o" ] || _put "$_o"
     _since="$(sed -n 's/^since=//p' "$LOWERED" 2>/dev/null | head -1)"
     rm -f "$LOWERED" "$GUARD" 2>/dev/null
+    asb_ltpo_unlock
     _now > "$TOUCH_AT" 2>/dev/null
     _stat_bump touch 1
     [ -n "$_since" ] && _stat_bump secs $(( $(_now) - _since ))
@@ -228,8 +238,23 @@ _lower() {   # $1 = mode Hz, $2 = content rate(s)
   return 0
 }
 
+_abandon_external() {
+  # The live peak already belongs to someone else. Drop only our record, under the
+  # same lock used by touch/range writers; never restore the stale recorded value.
+  asb_ltpo_lock || return 1
+  [ -f "$LOWERED" ] || { asb_ltpo_unlock; return 0; }
+  _since="$(sed -n 's/^since=//p' "$LOWERED" 2>/dev/null | head -1)"
+  _guard_stop
+  rm -f "$LOWERED" 2>/dev/null
+  asb_ltpo_unlock
+  [ -n "$_since" ] && _stat_bump secs $(( $(_now) - _since ))
+  return 0
+}
+
 _restore() {   # $1 = reason
   [ -f "$LOWERED" ] || { _guard_stop; return 0; }
+  asb_ltpo_lock || return 1
+  [ -f "$LOWERED" ] || { asb_ltpo_unlock; _guard_stop; return 0; }
   _o="$(sed -n 's/^orig=//p' "$LOWERED" 2>/dev/null | head -1)"
   _s="$(sed -n 's/^set=//p' "$LOWERED" 2>/dev/null | head -1)"
   _since="$(sed -n 's/^since=//p' "$LOWERED" 2>/dev/null | head -1)"
@@ -241,11 +266,16 @@ _restore() {   # $1 = reason
   else
     case "$_o" in
       __unset|'') _del ;;
-      *) _put "$_o" || { _log "restore to $_o failed ($1) - record kept for a retry"; return 1; } ;;
+      *) _put "$_o" || {
+           asb_ltpo_unlock
+           _log "restore to $_o failed ($1) - record kept for a retry"
+           return 1
+         } ;;
     esac
     _log "restored peak $_o ($1)"
   fi
   rm -f "$LOWERED" 2>/dev/null
+  asb_ltpo_unlock
   [ -n "$_since" ] && _stat_bump secs $(( $(_now) - _since ))
   return 0
 }
@@ -280,9 +310,7 @@ _watch() {
           _cur="$(_get)"
           if [ -n "$_cur" ] && [ "$(_int "$_cur")" != "$(_int "$_s")" ]; then
             _log "peak changed to $_cur by someone else while lowered - left as it is"
-            _since="$(sed -n 's/^since=//p' "$LOWERED" 2>/dev/null | head -1)"
-            _guard_stop; rm -f "$LOWERED" 2>/dev/null
-            [ -n "$_since" ] && _stat_bump secs $(( _tnow - _since ))
+            _abandon_external
             # Do not take it straight back: wait for this playback to end first.
             while _enabled && _audio_live && _screen_on; do sleep 10; done
           fi

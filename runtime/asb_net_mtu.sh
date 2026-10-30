@@ -69,6 +69,13 @@ fi
 _saved="$(head -1 "$STATE" 2>/dev/null | tr -d ' \r')"
 case "$_saved" in 0|1|2) ;; *) echo 'mtu_probing=FAILED'; exit 1 ;; esac
 
+# Keep the restorable baseline, but do not rewrite an already-correct sysctl on every
+# reconcile. Readback belongs after an actual write, not on this no-op path.
+if [ "$_live" = "1" ]; then
+  echo 'mtu_probing=on'
+  exit 0
+fi
+
 if _write 1; then
   echo 'mtu_probing=on'
   exit 0

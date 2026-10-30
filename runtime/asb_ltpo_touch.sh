@@ -16,8 +16,10 @@ DISPLAY_DUMP="${ASB_LTPO_DISPLAY_DUMP:-}"
 VIDEO_LOWERED="$STATE_DIR/ltpo_video.lowered"
 PIDFILE="$STATE_DIR/ltpo_touch.pid"
 STOPFILE="$STATE_DIR/ltpo_touch.stop"
+HEARTBEAT="$STATE_DIR/ltpo_touch.heartbeat"
 CHILD=""
 [ -f "$MODDIR/runtime/asb_settings.sh" ] && . "$MODDIR/runtime/asb_settings.sh"
+. "$MODDIR/runtime/asb_ltpo_lock.sh"
 
 _cfg() {
   grep -E "^$1=" "$CONF" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d ' \r'
@@ -32,14 +34,21 @@ _get() { command -v asb_set_get >/dev/null 2>&1 && asb_set_get system "$1" || se
 _put() { command -v asb_set_put >/dev/null 2>&1 && asb_set_put system "$1" "$2" || settings put system "$1" "$2" >/dev/null 2>&1; }
 _peak_write() {
   _pw="$1"
+  # The existence check, ownership-record edit and Settings write are one contract.
+  # Otherwise video can publish its record between our check and write, and the touch
+  # value can overwrite the content-matched rate (or lose the video restore target).
+  asb_ltpo_lock || return 1
   if [ -f "$VIDEO_LOWERED" ]; then
     # The video owner currently holds the live value. Change only the value it will
     # restore; never fight its 24/30/60 fps request.
-    _pt="$(sed "s/^orig=.*/orig=$_pw/" "$VIDEO_LOWERED" 2>/dev/null)" && \
-      printf '%s\n' "$_pt" > "$VIDEO_LOWERED"
+    asb_ltpo_set_orig "$VIDEO_LOWERED" "$_pw"
+    _pw_rc=$?
   else
     [ "$(_get peak_refresh_rate)" = "$_pw" ] || _put peak_refresh_rate "$_pw"
+    _pw_rc=$?
   fi
+  asb_ltpo_unlock
+  return "$_pw_rc"
 }
 _find_touch() {
   if [ -n "${ASB_LTPO_TOUCH_DEVICE:-}" ] && [ -e "$ASB_LTPO_TOUCH_DEVICE" ]; then
@@ -64,7 +73,7 @@ _wait_event() {
 }
 _cleanup() {
   [ -n "$CHILD" ] && kill "$CHILD" 2>/dev/null || true
-  rm -f "$PIDFILE" "$STOPFILE" 2>/dev/null
+  rm -f "$PIDFILE" "$STOPFILE" "$HEARTBEAT" 2>/dev/null
   exit 0
 }
 trap _cleanup TERM INT HUP
@@ -79,6 +88,12 @@ DEV="$(_find_touch)" || exit 1
 MAX="$(_max_mode)"
 case "$MAX" in ''|*[!0-9]*) exit 1 ;; esac
 printf '%s\n' "$$" > "$PIDFILE" 2>/dev/null || exit 1
+# A transition marker is evidence for status/diagnostics. It is deliberately not a
+# stale-PID restart timer: a healthy idle watcher may block in getevent indefinitely.
+touch "$HEARTBEAT" 2>/dev/null || true
+# Probe once: toybox supports fractional delays, some older sleep applets do not.
+SLEEP_STEP=0.2
+sleep 0.01 2>/dev/null || SLEEP_STEP=1
 IDLE="$(_cfg ltpo_idle_rate)"; [ -n "$IDLE" ] || IDLE=60
 case "$IDLE" in ''|*[!0-9]*) IDLE=60 ;; esac
 [ "$IDLE" -ge 30 ] 2>/dev/null || IDLE=30
@@ -89,17 +104,17 @@ case "$TIMEOUT" in ''|*[!0-9]*) TIMEOUT=2 ;; esac
 [ "$TIMEOUT" -le 15 ] 2>/dev/null || TIMEOUT=15
 
 state=active
-_peak_write "$MAX.0"
+_peak_write "$MAX.0" && touch "$HEARTBEAT" 2>/dev/null || true
 while [ ! -f "$STOPFILE" ] && [ -e "$DEV" ]; do
   if [ "$state" = idle ]; then
     if _wait_event ""; then
       state=active
-      _peak_write "$MAX.0"
+      _peak_write "$MAX.0" && touch "$HEARTBEAT" 2>/dev/null || true
     fi
   else
     if _wait_event "$TIMEOUT"; then
       # Consume a complete gesture at a bounded rate; this is an event wait, not a timer.
-      sleep 0.2
+      sleep "$SLEEP_STEP"
     else
       # Camera and games can animate without touch. The governor state is read only at
       # this transition, never in a polling loop.
@@ -107,7 +122,7 @@ while [ ! -f "$STOPFILE" ] && [ -e "$DEV" ]; do
         continue
       fi
       state=idle
-      _peak_write "$IDLE.0"
+      _peak_write "$IDLE.0" && touch "$HEARTBEAT" 2>/dev/null || true
     fi
   fi
 done

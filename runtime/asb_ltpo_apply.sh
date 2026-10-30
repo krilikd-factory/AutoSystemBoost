@@ -152,6 +152,7 @@ _ltpo_unbind_all() {
 # removed. Applied at boot and when toggled, never in a loop: a later choice in Settings
 # is the user's and is not fought over.
 [ -f "$MODDIR/runtime/asb_settings.sh" ] && . "$MODDIR/runtime/asb_settings.sh"
+. "$MODDIR/runtime/asb_ltpo_lock.sh"
 RANGE_ORIG="$STATE_DIR/ltpo_range.orig"
 VIDEO_LOWERED="$STATE_DIR/ltpo_video.lowered"
 
@@ -173,6 +174,7 @@ _ltpo_framework_up() {
 _ltpo_range_open() {
   _max="$(_ltpo_max_mode)"
   [ -n "$_max" ] || { _log 'action=ltpo_range result=skipped reason=no_modes'; return 0; }
+  asb_ltpo_lock || { _log 'action=ltpo_range result=deferred reason=video_lock'; return 1; }
   _peak="$(_ltpo_get peak_refresh_rate)"
   _min="$(_ltpo_get min_refresh_rate)"
   # A video lowering in progress (or left by a reboot mid-video) is not the user's peak.
@@ -188,7 +190,7 @@ _ltpo_range_open() {
     if [ -f "$VIDEO_LOWERED" ]; then
       # Not while a video holds it low: hand the open value to the video record, which
       # writes it back the moment the video lets go.
-      _tmp="$(sed "s/^orig=.*/orig=$_max.0/" "$VIDEO_LOWERED" 2>/dev/null)" && printf '%s\n' "$_tmp" > "$VIDEO_LOWERED"
+      asb_ltpo_set_orig "$VIDEO_LOWERED" "$_max.0"
     else
       _ltpo_put peak_refresh_rate "$_max.0" && _log "action=ltpo_range peak=${_peak:-unset}->$_max"
     fi
@@ -197,25 +199,31 @@ _ltpo_range_open() {
   if [ "${_mn:-0}" -gt 0 ] 2>/dev/null; then
     _ltpo_del min_refresh_rate && _log "action=ltpo_range min=$_min->none"
   fi
+  asb_ltpo_unlock
   return 0
 }
 
 _ltpo_range_restore() {
   [ -f "$RANGE_ORIG" ] || return 0
+  asb_ltpo_lock || return 1
   _op="$(sed -n 's/^peak=//p' "$RANGE_ORIG" | head -1)"
   _om="$(sed -n 's/^min=//p' "$RANGE_ORIG" | head -1)"
   if [ -f "$VIDEO_LOWERED" ]; then
     # The video watcher will put back what it recorded; make that the user's original.
-    _tmp="$(sed "s/^orig=.*/orig=${_op}/" "$VIDEO_LOWERED" 2>/dev/null)" && printf '%s\n' "$_tmp" > "$VIDEO_LOWERED"
+    asb_ltpo_set_orig "$VIDEO_LOWERED" "$_op" || { asb_ltpo_unlock; return 1; }
   else
     case "$_op" in
       __unset|'') _ltpo_del peak_refresh_rate ;;
-      *) _ltpo_put peak_refresh_rate "$_op" || return 0 ;;   # keep the record for a retry
+      *) _ltpo_put peak_refresh_rate "$_op" || { asb_ltpo_unlock; return 0; } ;;   # keep the record for a retry
     esac
   fi
-  case "$_om" in __unset|'') : ;; *) _ltpo_put min_refresh_rate "$_om" || return 0 ;; esac
+  case "$_om" in
+    __unset|'') : ;;
+    *) _ltpo_put min_refresh_rate "$_om" || { asb_ltpo_unlock; return 0; } ;;
+  esac
   rm -f "$RANGE_ORIG" 2>/dev/null
   _log "action=ltpo_range result=restored peak=$_op min=$_om"
+  asb_ltpo_unlock
 }
 
 # Explicit ASB ownership: pause only the verified external writer process, never edit or
