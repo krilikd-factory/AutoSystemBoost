@@ -58,6 +58,9 @@
   --accent: #00f0b4;
   --accent-glow: rgba(0,240,180,0.35);
   --accent2: #00d4ff;
+  /* Cap ownership is a source category, not a quality grade. Shell keeps its soft blue
+   * identity even where Glass remaps the general secondary accent to mint. */
+  --owner-shell: #7dd3fc;
   --m-good: #2ed573;
   --m-fair: #83df63;
   --m-mild: #c2e64b;
@@ -1635,6 +1638,62 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .device-page .dev-group { display: flex; align-items: center; gap: 10px; margin: 12px 4px -2px;
   font: 700 11px/1.2 var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--text-tertiary); }
 .device-page .dev-group::after { content: ''; flex: 1 1 auto; height: 1px; background: var(--border); }
+/* fix255: report and device evidence get a readable hierarchy without inventing a health
+ * score. Five report segments mean five independent evidence domains, never a percentage. */
+.lgr-quality { margin: 1px 0 4px; padding: 11px 12px; border: 1px solid var(--border);
+  border-radius: 13px; background: rgba(255,255,255,.025); }
+.lgr-quality-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.lgr-quality-title { color: var(--text-secondary); font-size: 11px; font-weight: 700;
+  letter-spacing: .05em; text-transform: uppercase; }
+.lgr-quality-level { color: var(--text); font-size: 12px; font-weight: 750; text-align: end; }
+.lgr-quality-map { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 5px; margin: 9px 0 7px; }
+.lgr-quality-seg { height: 5px; border-radius: 4px; background: var(--text-tertiary); opacity: .7; }
+.lgr-quality-seg.lgr-state-good { background: var(--ok); opacity: 1; }
+.lgr-quality-seg.lgr-state-normal { background: var(--bal); opacity: .85; }
+.lgr-quality-seg.lgr-state-problem { background: var(--perf); opacity: 1; }
+.lgr-quality-seg.lgr-state-unknown { height: 3px; margin-top: 1px; background: transparent;
+  border: 1px dashed var(--text-tertiary); opacity: .75; }
+.lgr-quality-count { color: var(--text); font-size: 12px; line-height: 1.4; }
+.lgr-quality-split { margin-top: 2px; color: var(--text-tertiary); font-size: 11px; line-height: 1.4; }
+.lgr-verdict { position: relative; padding-inline-start: 12px; }
+.lgr-verdict::before { content: ''; position: absolute; inset-inline-start: 0; top: 13px;
+  width: 4px; height: 4px; border-radius: 50%; background: var(--text-tertiary); }
+.lgr-verdict-good::before { background: var(--ok); }
+.lgr-verdict-normal::before { background: var(--bal); }
+.lgr-verdict-problem::before { background: var(--perf); }
+.lgr-verdict-unknown::before { background: transparent; border: 1px solid var(--text-tertiary); width: 3px; height: 3px; }
+.lgr-summary-legend { margin-top: 5px; padding-top: 8px; border-top: 1px solid var(--border); }
+.lgr-details-anchor { scroll-margin-top: 12px; padding: 3px 3px 0; }
+.lgr-details-title { color: var(--text); font-size: 14px; font-weight: 750; }
+.lgr-details-anchor .lgr-note { margin-top: 2px; }
+.lgr-jump { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: -3px 0 1px; }
+.lgr-jump-label { margin-inline-end: 2px; color: var(--text-tertiary); font-size: 10px;
+  font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.lgr-jump-btn { min-height: 32px; cursor: pointer; scroll-margin-top: 12px; }
+.lgr-jump-btn:active { border-color: var(--accent); color: var(--text); }
+.device-page .lgr-body { counter-reset: dev-group; }
+.device-page .dev-group { scroll-margin-top: 12px; }
+.device-page .dev-group::before { counter-increment: dev-group; content: counter(dev-group,decimal-leading-zero);
+  color: var(--accent); font: 700 10px/1 var(--mono); letter-spacing: 0; }
+.device-page .dev-group-guide { margin: -5px 4px 1px; color: var(--text-tertiary);
+  font-size: 11.5px; line-height: 1.45; }
+.device-page .dev-snapshot { grid-template-columns: repeat(2,minmax(0,1fr)); margin: 0 0 10px; }
+.device-page .dev-snapshot .lgr-hero { min-width: 0; gap: 5px; padding: 11px 12px; }
+.device-page .dev-snapshot .lgr-hero-val { font-size: 17px; line-height: 1.2; }
+.device-page .dev-snapshot .lgr-hero-sub { line-height: 1.4; overflow-wrap: anywhere; }
+.device-page .dev-snapshot .dev-snapshot-good { border-color: color-mix(in srgb,var(--ok) 34%,var(--border)); }
+.device-page .dev-snapshot .dev-snapshot-warn { border-color: color-mix(in srgb,var(--bal) 42%,var(--border)); }
+.device-page .dev-section-guide { margin: -3px 0 8px; padding: 0 0 7px; border-bottom: 1px solid var(--border); }
+.device-page .lgr-v.dev-unknown { color: var(--text-tertiary); font-weight: 550; }
+html[data-asb-theme="light"] .lgr-quality { background: #f7f9fa; }
+@media (max-width: 400px) {
+  .lgr-quality { padding: 10px; }
+  .lgr-quality-head { align-items: flex-start; }
+  .lgr-quality-title { font-size: 10px; }
+  .lgr-quality-level { max-width: 52%; font-size: 11px; }
+  .device-page .dev-snapshot .lgr-hero { padding: 10px; }
+  .device-page .dev-snapshot .lgr-hero-val { font-size: 15px; }
+}
 .rpt-meta-row { display: flex; align-items: center; justify-content: space-between; gap: 10px;
   width: 100%; margin: -2px 2px 10px; }
 .lgr-status { font-size: 12px; color: var(--text-tertiary); }
@@ -1660,8 +1719,10 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .lgr-chain:first-of-type { border-top: 0; }
 .lgr-chain-kind { display: block; margin-bottom: 2px; color: var(--text-tertiary);
   font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; }
-.lgr-action { border-inline-start: 2px solid var(--accent); padding-inline-start: 9px; }
-.lgr-action-n { color: var(--accent); font-weight: 800; min-width: 14px; }
+/* Priority actions are a numbered list, not a timeline: no vertical rail through the
+ * numbers. A fixed first column keeps every recommendation aligned when the text wraps. */
+.lgr-tip.lgr-action { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 7px; padding: 7px 0; }
+.lgr-action-n { color: var(--accent); font-weight: 800; min-width: 0; text-align: end; font-variant-numeric: tabular-nums; }
 html[data-asb-theme="light"] .lgr-chip { background: #f7f9fa; }
 .lgr-sec { border-radius: 18px; padding: 13px 14px; border: 1px solid var(--border);
   background: linear-gradient(160deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018));
@@ -3198,6 +3259,7 @@ html[data-asb-theme="light"] {
      theme’s neon glow. Values are opaque enough for Android WebView composition. */
   --bg:#edf4f1; --surface:#ffffff; --surface-hover:#e3efea;
   --accent:#007c63; --accent2:#006f9b; --accent-glow:rgba(0,124,99,.20);
+  --owner-shell:#0b5f86;
   --m-good:#08753c; --m-fair:#2f6b1d; --m-mild:#4f7a0a; --m-warm:#8a5700; --m-hot:#b04a00; --m-severe:#d14020; --m-bad:#b42318;
   --fsm-deep:#2059bf; --fsm-light:#00759e; --fsm-moderate:#047a76;
   --fsm-heavy:#7240bd; --fsm-sustained:#9c3aa0; --fsm-gaming:#b0245f;
@@ -3383,7 +3445,7 @@ html[data-asb-theme="light"] .sec-line { background:linear-gradient(90deg,transp
 html[data-asb-theme="light"] .live-cell { background:#ffffff !important; border-color:var(--border) !important; box-shadow:0 1px 3px rgba(16,24,32,.08) !important; }
 html[data-asb-theme="light"] .live-cell-label { color:var(--text-tertiary) !important; }
 html[data-asb-theme="light"] .live-cell-value { color:var(--text) !important; }
-html[data-asb-theme="light"] .live-cell-value.cap-asb { color:var(--text) !important; }
+html[data-asb-theme="light"] .live-cell-value.cap-asb { color:var(--accent) !important; }
 html[data-asb-theme="light"] .live-cell-value.cap-clamp { color:#b42318 !important; }
 html[data-asb-theme="light"] .live-cell-value.cap-raised { color:#8a5700 !important; }
 html[data-asb-theme="light"] .live-cell-value.cap-shell { color:#0b5f86 !important; }
@@ -3928,6 +3990,35 @@ html[data-asb-glass="1"][data-asb-theme="light"] :is(.pbtn.on,.cfg-tile.active,.
 html[data-asb-glass="1"][data-asb-theme="light"] .cfg-row.is-on {
   background:linear-gradient(145deg,rgba(0,124,99,.12),rgba(255,255,255,.52)) !important;
 }
+/* Glass must preserve the switch's meaning as well as its material. The shared glass rule
+ * otherwise gives ON and OFF rows the same tinted edge and body. OFF is neutral glass with
+ * no accent rim or category wash; only the enabled row carries the category colour. */
+html[data-asb-glass="1"] .cfg-row:not(.is-on) {
+  background:linear-gradient(145deg,rgba(255,255,255,.055),rgba(255,255,255,.012)),rgba(12,17,15,.88) !important;
+  border-color:rgba(255,255,255,.12) !important;
+  box-shadow:0 10px 26px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.10) !important;
+}
+html[data-asb-glass="1"] .cfg-row.is-on {
+  background:linear-gradient(145deg,color-mix(in srgb,var(--cat,var(--accent)) 18%,transparent),rgba(255,255,255,.025)),rgba(16,23,20,.82) !important;
+  border-color:color-mix(in srgb,var(--cat,var(--accent)) 42%,var(--border)) !important;
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--cat,var(--accent)) 12%,transparent),0 12px 30px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.14) !important;
+}
+html[data-asb-glass="1"] .cfg-row:not(.is-on) .cfg-icon {
+  background:rgba(255,255,255,.045); border-color:rgba(255,255,255,.10);
+}
+html[data-asb-glass="1"] .cfg-switch:not(.on) {
+  background:rgba(255,255,255,.055); border-color:rgba(255,255,255,.16);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
+}
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-row:not(.is-on) {
+  background:linear-gradient(145deg,rgba(255,255,255,.58),rgba(244,244,246,.34)),rgba(255,255,255,.46) !important;
+  border-color:rgba(16,24,32,.12) !important;
+  box-shadow:0 10px 26px rgba(20,50,42,.08),inset 0 1px 0 rgba(255,255,255,.72) !important;
+}
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-switch:not(.on) {
+  background:rgba(255,255,255,.48); border-color:rgba(16,24,32,.16);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.68);
+}
 html[data-asb-glass="1"][data-asb-theme="light"] .app-name {
   background:linear-gradient(105deg,transparent 0%,rgba(255,255,255,0) 40%,rgba(255,255,255,.78) 50%,rgba(255,255,255,0) 60%,transparent 100%),
     linear-gradient(180deg,#00866b 0%,#007c63 58%,#005f4c 100%) !important;
@@ -4045,6 +4136,15 @@ html[data-asb-theme="light"] .smart-drain-val.metric-neutral, html[data-asb-them
 html :is(.live-cell-value,.smart-banner-value,.smart-drain-val,.live-info-val):is(.metric-normal,.metric-info),
 html[data-asb-glass="1"] :is(.live-cell-value,.smart-banner-value,.smart-drain-val,.live-info-val):is(.metric-normal,.metric-info),
 html[data-asb-theme="light"] :is(.live-cell-value,.smart-banner-value,.smart-drain-val,.live-info-val):is(.metric-normal,.metric-info) { color:var(--text) !important; }
+/* Owner colours intentionally follow the neutral/quality rules: ASB is the module's green,
+ * Shell is soft blue in every palette, and Vendor is orange or red-orange. These classes are
+ * applied only by the non-Stock owner tile; Stock clears them before painting temperature. */
+html .live-cell-value.cap-asb,
+html[data-asb-glass="1"] .live-cell-value.cap-asb,
+html[data-asb-theme="light"] .live-cell-value.cap-asb { color:var(--accent) !important; }
+html .live-cell-value.cap-shell,
+html[data-asb-glass="1"] .live-cell-value.cap-shell,
+html[data-asb-theme="light"] .live-cell-value.cap-shell { color:var(--owner-shell) !important; }
 html :is(.live-cell-value,.smart-banner-value,.live-info-val).metric-fsm-deep,
 html[data-asb-glass="1"] :is(.live-cell-value,.smart-banner-value,.live-info-val).metric-fsm-deep,
 html[data-asb-theme="light"] :is(.live-cell-value,.smart-banner-value,.live-info-val).metric-fsm-deep { color:var(--fsm-deep) !important; }
@@ -11423,6 +11523,20 @@ function logReportNote(txt, warn) {
   p.textContent = txt;
   return p;
 }
+/* In-page navigation is real DOM, not links to routes that a static WebView cannot resolve. */
+function asbPageJump(items, label, extraClass) {
+  const nav = document.createElement('div');
+  nav.className = 'lgr-jump' + (extraClass ? ' ' + extraClass : '');
+  const l = document.createElement('span'); l.className = 'lgr-jump-label'; l.textContent = label;
+  nav.appendChild(l);
+  items.forEach(function (it) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'lgr-chip lgr-jump-btn';
+    b.textContent = it[1];
+    b.onclick = function () { const target = _el(it[0]); if (target && target.scrollIntoView) target.scrollIntoView({ block: 'start' }); };
+    nav.appendChild(b);
+  });
+  return nav;
+}
 /* fix200: one small table (headers + rows, all textContent - device data never becomes
  * markup). numCols says which columns are right-aligned numbers. */
 function logReportTable(heads, rows, numCols) {
@@ -11526,6 +11640,20 @@ const DEVICE_GROUPS = {
   hw: ['dev_grp_hw', 'Hardware'], sw: ['dev_grp_sw', 'Firmware and system'], kernel: ['dev_grp_kernel', 'Kernel'],
   root: ['dev_grp_root', 'Root and modules'], asb: ['dev_grp_asb', 'ASB module']
 };
+const DEVICE_GROUP_GUIDES = {
+  hw: ['dev_grp_hw_guide', 'Physical components and their live readings. Current limits are evidence, not proof of who set them.'],
+  sw: ['dev_grp_sw_guide', 'Build identity, uptime and memory reported by Android and procfs.'],
+  kernel: ['dev_grp_kernel_guide', 'Build configuration and runtime facilities are separate kinds of evidence.'],
+  root: ['dev_grp_root_guide', 'Root and metamodule interfaces detected at their exposed paths.'],
+  asb: ['dev_grp_asb_guide', 'ASB runtime state and only the device capabilities ASB actually discovered.']
+};
+const DEVICE_SECTION_GUIDES = {
+  cpu_policy: ['dev_guide_cpu_policy', 'Current limits and the hardware range are different. A current limit alone does not identify ASB, the vendor or another writer.'],
+  memory: ['dev_guide_memory', 'MemAvailable estimates memory available for new work. Cache is reusable and is not simply wasted memory.'],
+  kernel_features: ['dev_guide_kernel_features', 'A config flag, an exposed interface and a verified runtime behaviour are not interchangeable.'],
+  kernel_external: ['dev_guide_kernel_external', 'Not observable means this read-only snapshot cannot determine external kernel or undervoltage state; it does not prove stock voltage.'],
+  asb_caps: ['dev_guide_asb_caps', 'Only exposed, discovered control paths are listed. Missing evidence is not proof that the hardware lacks a feature.']
+};
 /* Reverse the feature groups from the original collector presentation while keeping each
  * driver's version directly below its main row. SuSFS leads, NoMount closes the section.
  * Unknown future keys remain visible after this explicit, device-independent order. */
@@ -11569,8 +11697,15 @@ function deviceHero(label, value, sub) {
   if (sub) { const c = document.createElement('div'); c.className = 'lgr-hero-sub'; c.textContent = sub; el.appendChild(c); }
   return el;
 }
+function deviceIsLimitedValue(value) {
+  const v = String(value == null ? '' : value).trim().toLowerCase().replace(/_/g, ' ');
+  return v === '—' || v === 'unknown' || v === 'not exposed' || v === 'not runtime-discoverable' ||
+    v === 'not observable' || v === 'unavailable' || v === 'not available' ||
+    v.indexOf('not exposed ') === 0 || v.indexOf('unknown ') === 0;
+}
 function deviceValueClass(sec, key, value) {
   const v = String(value || '').toLowerCase();
+  if (deviceIsLimitedValue(value)) return ' dev-unknown';
   if (key === 'uname_consistency') return v === 'mismatch' ? ' dev-warn' : (v === 'match' ? ' dev-good' : '');
   if ((sec === 'susfs' && key === 'interface') || (sec === 'kernel_config' && key === 'available'))
     return (v === 'available' || v === 'yes') ? ' dev-good' : '';
@@ -11745,6 +11880,74 @@ function deviceDisplayValue(sec, key, value, d) {
   }
   return value;
 }
+function deviceInfoEvidence(d) {
+  const out = { total: 0, limited: 0 };
+  Object.keys((d && d.sections) || {}).forEach(function (sec) {
+    const values = d.sections[sec] || {};
+    Object.keys(values).forEach(function (key) {
+      out.total++;
+      if (deviceIsLimitedValue(values[key])) out.limited++;
+    });
+  });
+  return out;
+}
+function deviceSnapshotCard(label, value, sub, tone) {
+  const el = deviceHero(label, value, sub);
+  el.classList.add('dev-snapshot-' + (tone || 'neutral'));
+  return el;
+}
+/* A compact answer before the full evidence table. These cards describe returned readings,
+ * not device health: absent ASB state and unavailable values remain explicitly inconclusive. */
+function deviceInfoSnapshot(d) {
+  const cards = [];
+  const mt = deviceNum(deviceVal(d, 'memory', 'MemTotal')), ma = deviceVal(d, 'memory', 'MemAvailable');
+  if (mt > 0 && ma !== '—') {
+    const av = deviceNum(ma), pct = av >= 0 ? Math.max(0, Math.min(100, Math.round(av * 100 / mt))) : null;
+    let sub = deviceFill('dev_ov_mem_fmt', '{avail} free of {total}', { avail: deviceSizeKb(ma), total: deviceSizeKb(mt) });
+    const st = deviceNum(deviceVal(d, 'memory', 'SwapTotal')), sf = deviceNum(deviceVal(d, 'memory', 'SwapFree'));
+    if (st > 0 && sf >= 0) sub += ' · ' + deviceFill('dev_ov_swap_fmt', 'zRAM {used} used', { used: deviceSizeKb(st - sf) });
+    cards.push(deviceSnapshotCard(T('dev_snap_memory', 'Memory available'),
+      pct === null ? deviceSizeKb(ma) : deviceFill('dev_snap_mem_pct', '{pct}% available', { pct: pct }), sub, 'neutral'));
+  }
+  const cap = deviceVal(d, 'battery', 'capacity');
+  if (cap !== '—') {
+    const parts = [], tmp = deviceVal(d, 'battery', 'temp_tenths_c');
+    if (tmp !== '—') parts.push(deviceDisplayValue('battery', 'temp_tenths_c', tmp, d));
+    const wear = deviceBatteryWear(d);
+    if (wear !== null) parts.push(deviceFill('dev_bat_wear_fmt', '{pct}% of design capacity', { pct: wear }));
+    const cyc = deviceVal(d, 'battery', 'cycle_count');
+    if (cyc !== '—') parts.push(deviceFill('dev_bat_cycles_fmt', '{n} cycles', { n: cyc }));
+    cards.push(deviceSnapshotCard(T('dev_snap_battery', 'Battery now'), deviceDisplayValue('battery', 'capacity', cap, d),
+      parts.join(' · '), wear !== null && wear < 80 ? 'warn' : 'neutral'));
+  }
+  const profile = deviceVal(d, 'asb', 'profile'), state = deviceVal(d, 'asb', 'state');
+  if (profile !== '—' || state !== '—') {
+    const asbParts = [];
+    if (state !== '—') asbParts.push(deviceLabel('asb', 'state') + ': ' + state);
+    const owner = deviceVal(d, 'asb', 'cap_owner');
+    if (owner !== '—') asbParts.push(deviceLabel('asb', 'cap_owner') + ': ' + owner);
+    cards.push(deviceSnapshotCard(T('dev_snap_asb', 'ASB runtime'),
+      profile !== '—' ? T('prof_' + profile, profile) : T('dev_snap_asb_unknown', 'No runtime state returned'),
+      asbParts.join(' · '), 'neutral'));
+  }
+  const ev = deviceInfoEvidence(d);
+  if (ev.total) cards.push(deviceSnapshotCard(T('dev_snap_evidence', 'Evidence coverage'),
+    deviceFill('dev_snap_facts', 'Facts collected: {n}', { n: ev.total }),
+    ev.limited ? deviceFill('dev_snap_limited', 'Unknown or not exposed fields: {n}', { n: ev.limited }) :
+      T('dev_snap_limited_none', 'No explicit unknown fields returned'), ev.limited ? 'neutral' : 'good'));
+  return cards;
+}
+function deviceInfoNav(d) {
+  const seen = {}, items = [];
+  DEVICE_SECTION_ORDER.forEach(function (spec) {
+    const group = spec[3];
+    if (!seen[group] && d.sections[spec[0]] && DEVICE_GROUPS[group]) {
+      seen[group] = true;
+      items.push(['dev-group-' + group, T(DEVICE_GROUPS[group][0], DEVICE_GROUPS[group][1])]);
+    }
+  });
+  return items.length > 1 ? asbPageJump(items, T('dev_nav_title', 'Jump to'), 'dev-nav') : null;
+}
 function deviceInfoOverview(d) {
   const rows = [];
   const pol = (d.sections && d.sections.cpu_policy) || {};
@@ -11755,24 +11958,6 @@ function deviceInfoOverview(d) {
   if (cores > 0 || keys.length)
     rows.push([T('dev_ov_cpu', 'Processor'), deviceFill('dev_ov_cpu_fmt', '{cores} cores · {clusters} clusters · up to {max}',
       { cores: cores || '—', clusters: keys.length || '—', max: deviceFreqKhz(hmax) })]);
-  const mt = deviceVal(d, 'memory', 'MemTotal'), ma = deviceVal(d, 'memory', 'MemAvailable');
-  if (mt !== '—') {
-    let mv = deviceFill('dev_ov_mem_fmt', '{avail} free of {total}', { avail: ma !== '—' ? deviceSizeKb(ma) : '—', total: deviceSizeKb(mt) });
-    const st = deviceNum(deviceVal(d, 'memory', 'SwapTotal')), sf = deviceNum(deviceVal(d, 'memory', 'SwapFree'));
-    if (st > 0 && sf >= 0) mv += ' · ' + deviceFill('dev_ov_swap_fmt', 'zRAM {used} used', { used: deviceSizeKb(st - sf) });
-    rows.push([T('dev_ov_memory', 'Memory'), mv]);
-  }
-  const cap = deviceVal(d, 'battery', 'capacity');
-  if (cap !== '—') {
-    const parts = [deviceDisplayValue('battery', 'capacity', cap, d)];
-    const tmp = deviceVal(d, 'battery', 'temp_tenths_c');
-    if (tmp !== '—') parts.push(deviceDisplayValue('battery', 'temp_tenths_c', tmp, d));
-    const wear = deviceBatteryWear(d);
-    if (wear !== null) parts.push(deviceFill('dev_bat_wear_fmt', '{pct}% of design capacity', { pct: wear }));
-    const cyc = deviceVal(d, 'battery', 'cycle_count');
-    if (cyc !== '—') parts.push(deviceFill('dev_bat_cycles_fmt', '{n} cycles', { n: cyc }));
-    rows.push([T('dev_ov_battery', 'Battery'), parts.join(' · ')]);
-  }
   const up = deviceVal(d, 'system', 'uptime');
   if (up !== '—') rows.push([T('dev_ov_uptime', 'Running for'), deviceDuration(parseFloat(up))]);
   const root = deviceVal(d, 'asb_caps', 'root_manager');
@@ -11803,6 +11988,8 @@ function deviceInfoRender(d) {
   heroWrap.appendChild(deviceHero(T('dev_hero_firmware', 'Firmware'), fw, deviceVal(d, 'firmware', 'build_display')));
   heroWrap.appendChild(deviceHero(T('dev_hero_kernel', 'Kernel'), deviceVal(d, 'kernel', 'release'), deviceVal(d, 'kernel', 'uname_consistency') !== '—' ? deviceLabel('kernel', 'uname_consistency') + ': ' + deviceVal(d, 'kernel', 'uname_consistency') : ''));
   body.appendChild(heroWrap);
+  const devNav = deviceInfoNav(d);
+  if (devNav) body.appendChild(devNav);
 
   const consistency = deviceVal(d, 'kernel', 'uname_consistency');
   if (consistency === 'mismatch') {
@@ -11818,9 +12005,16 @@ function deviceInfoRender(d) {
   }
 
   let shown = 0;
-  const ov = deviceInfoOverview(d);
-  if (ov.length) {
+  const ov = deviceInfoOverview(d), snapshot = deviceInfoSnapshot(d);
+  if (ov.length || snapshot.length) {
     const card = logReportSec(T('dev_sec_overview', 'At a glance'));
+    if (snapshot.length) {
+      const grid = document.createElement('div'); grid.className = 'lgr-heros dev-snapshot';
+      snapshot.forEach(function (item) { grid.appendChild(item); });
+      card.appendChild(grid);
+      const en = logReportNote(T('dev_evidence_note', 'Unknown, not exposed and not runtime-discoverable are collection limits, not proof that the device lacks support.'));
+      en.classList.add('dev-evidence'); card.appendChild(en);
+    }
     ov.forEach(function (r) { card.appendChild(logReportRow(r[0], r[1], false)); shown++; });
     body.appendChild(card);
   }
@@ -11841,13 +12035,21 @@ function deviceInfoRender(d) {
       const g = DEVICE_GROUPS[group];
       if (g) {
         const gh = document.createElement('div');
-        gh.className = 'dev-group';
+        gh.className = 'dev-group'; gh.id = 'dev-group-' + group;
         if (gh.setAttribute) { gh.setAttribute('role', 'heading'); gh.setAttribute('aria-level', '2'); }
         gh.textContent = T(g[0], g[1]);
         body.appendChild(gh);
+        const guide = DEVICE_GROUP_GUIDES[group];
+        if (guide) {
+          const gn = logReportNote(T(guide[0], guide[1])); gn.classList.add('dev-group-guide'); body.appendChild(gn);
+        }
       }
     }
     const card = logReportSec(T(spec[1], spec[2]));
+    const sectionGuide = DEVICE_SECTION_GUIDES[spec[0]];
+    if (sectionGuide) {
+      const sg = logReportNote(T(sectionGuide[0], sectionGuide[1])); sg.classList.add('dev-section-guide'); card.appendChild(sg);
+    }
     keys.forEach(function (key) {
       const raw = String(sec[key]);
       const value = deviceDisplayValue(spec[0], key, raw, d);
@@ -12550,7 +12752,9 @@ function logReportDiagnose(d) {
 }
 function logReportDiagSection(items) {
   if (!items || !items.length) return null;
-  const sec = logReportSec(T('lr_sec_dx', '🩺 Causes and what to do'));
+  const sec = logReportSec(T('lr_sec_dx', '🩺 Causes and what to do')); sec.id = 'lgr-diagnosis';
+  const guide = logReportNote(T('lr_dx_read_note', 'Facts are measurements. Likely causes are leads, not sole-cause proof; the owner line shows where to act.'));
+  guide.classList.add('dev-section-guide'); sec.appendChild(guide);
   const ownerFb = { app: 'Source: an app', user: 'Source: a phone setting', rom: 'Source: the firmware (ROM)',
     asb: 'Source: ASB tuning for this device', load: 'Source: the load itself', unknown: 'Source: not identified',
     asbfix: 'Source: an ASB fault, fixed in this build' };
@@ -12598,16 +12802,42 @@ function logReportDiagSection(items) {
   return sec;
 }
 
+function logReportQualityPanel(analysis) {
+  const panel = document.createElement('div'); panel.className = 'lgr-quality';
+  const head = document.createElement('div'); head.className = 'lgr-quality-head';
+  const title = document.createElement('span'); title.className = 'lgr-quality-title'; title.textContent = T('lr_quality_title', 'Evidence quality');
+  const level = document.createElement('span'); level.className = 'lgr-quality-level';
+  level.textContent = T('lr_quality_' + analysis.quality.level, analysis.quality.level);
+  head.appendChild(title); head.appendChild(level); panel.appendChild(head);
+  const map = document.createElement('div'); map.className = 'lgr-quality-map';
+  let known = 0, problems = 0, unknown = 0;
+  analysis.verdicts.forEach(function (v) {
+    if (v.state === 'unknown') unknown++; else known++;
+    if (v.state === 'problem') problems++;
+    const seg = document.createElement('span'); seg.className = 'lgr-quality-seg lgr-state-' + v.state;
+    map.appendChild(seg);
+  });
+  panel.appendChild(map);
+  const count = document.createElement('div'); count.className = 'lgr-quality-count';
+  count.textContent = logReportT('lr_quality_coverage', '{known} of {total} areas have enough data', { known: known, total: analysis.verdicts.length });
+  panel.appendChild(count);
+  const split = document.createElement('div'); split.className = 'lgr-quality-split';
+  split.textContent = logReportT('lr_quality_attention', 'Areas needing attention: {n}', { n: problems }) + ' · ' +
+    logReportT('lr_quality_unknown', 'Areas without a verdict: {n}', { n: unknown });
+  panel.appendChild(split);
+  return panel;
+}
+
 function logReportAppendAnalysis(body, d, analysis) {
   const brief = logReportBrief(d, analysis);
   if (brief) body.appendChild(brief);
   d.diagnosis = logReportDiagnose(d);
   const dx = logReportDiagSection(d.diagnosis);
   if (dx) body.appendChild(dx);
-  const summary = logReportSec(T('lr_sec_summary', '🧭 Smart summary'));
+  const summary = logReportSec(T('lr_sec_summary', '🧭 Smart summary')); summary.id = 'lgr-summary';
+  summary.appendChild(logReportQualityPanel(analysis));
   const context = document.createElement('div'); context.className = 'lgr-context';
   [T('lr_scenario_' + analysis.scenario, analysis.scenario),
-   T('lr_quality_' + analysis.quality.level, analysis.quality.level),
    logReportDur(d.sections.meta.elapsed_min || 0)].forEach(function (txt) {
     const c = document.createElement('span'); c.className = 'lgr-chip'; c.textContent = txt; context.appendChild(c);
   });
@@ -12615,7 +12845,7 @@ function logReportAppendAnalysis(body, d, analysis) {
   const names = { drain: 'lr_sum_drain', thermal: 'lr_sum_thermal', smoothness: 'lr_sum_smooth',
     deep_sleep: 'lr_sum_sleep', asb: 'lr_sum_asb' };
   analysis.verdicts.forEach(function (v) {
-    const row = document.createElement('div'); row.className = 'lgr-verdict';
+    const row = document.createElement('div'); row.className = 'lgr-verdict lgr-verdict-' + v.state;
     const name = document.createElement('span'); name.className = 'lgr-verdict-name'; name.textContent = T(names[v.domain], v.domain);
     const value = document.createElement('span'); value.className = 'lgr-verdict-value lgr-state-' + v.state;
     value.textContent = T('lr_state_' + v.state, v.state) + (v.metric && v.metric !== '—' ? ' · ' + v.metric : '');
@@ -12623,12 +12853,18 @@ function logReportAppendAnalysis(body, d, analysis) {
     detail.textContent = logReportAnalysisT(v.detail_key, v.vars);
     row.appendChild(name); row.appendChild(value); row.appendChild(detail); summary.appendChild(row);
   });
+  const legend = logReportNote(T('lr_summary_legend', 'Good and Normal describe only this capture. Not enough data is not a clean bill of health.'));
+  legend.classList.add('lgr-summary-legend'); summary.appendChild(legend);
   summary.appendChild(logReportNote(logReportAnalysisT(analysis.quality.level === 'low' ? 'lr_quality_short' : 'lr_quality_full',
     { min: logReportDur(d.sections.meta.elapsed_min || 0) })));
   body.appendChild(summary);
+  body.appendChild(asbPageJump([
+    ['lgr-summary', T('lr_nav_summary', 'Summary')], ['lgr-actions', T('lr_nav_actions', 'Actions')],
+    ['lgr-details', T('lr_nav_details', 'Details')]
+  ], T('dev_nav_title', 'Jump to'), 'report-nav'));
 
   if (analysis.actions.length) {
-    const sec = logReportSec(T('lr_sec_actions', '🎯 Priority actions'));
+    const sec = logReportSec(T('lr_sec_actions', '🎯 Priority actions')); sec.id = 'lgr-actions';
     analysis.actions.forEach(function (tip, i) {
       const row = document.createElement('div'); row.className = 'lgr-tip lgr-action';
       const n = document.createElement('span'); n.className = 'lgr-action-n'; n.textContent = String(i + 1) + '.';
@@ -12637,7 +12873,7 @@ function logReportAppendAnalysis(body, d, analysis) {
     });
     body.appendChild(sec);
   } else {
-    const sec = logReportSec(T('lr_sec_actions', '🎯 Priority actions'));
+    const sec = logReportSec(T('lr_sec_actions', '🎯 Priority actions')); sec.id = 'lgr-actions';
     sec.appendChild(logReportNote(logReportAnalysisT(analysis.quality.level === 'low' ? 'lr_no_actions_early' : 'lr_no_actions')));
     body.appendChild(sec);
   }
@@ -12691,6 +12927,11 @@ function logReportRender(d) {
       : logReportT('lr_reboots', 'Recorded across {n} reboot(s). The time the phone was off counts in no phase.', { n: String(+rb.n) })));
   }
   logReportAppendAnalysis(body, d, analysis);
+  const details = document.createElement('div'); details.className = 'lgr-details-anchor'; details.id = 'lgr-details';
+  const detailsTitle = document.createElement('div'); detailsTitle.className = 'lgr-details-title';
+  detailsTitle.textContent = T('lr_sec_details', '🔎 Technical evidence'); details.appendChild(detailsTitle);
+  details.appendChild(logReportNote(T('lr_details_note', 'Measured values behind the summary. Rates apply only to their stated windows.')));
+  body.appendChild(details);
   const drain = d.sections.drain || null;
   const cover = d.sections.cover || null;
   const night = d.sections.night || null;
@@ -15156,14 +15397,13 @@ async function pollLive(visible) {
       + ((_cs0 && _cs1) ? '\n' + T('cap_tip_clusters', 'main cores: %1 · top cores: %2')
           .replace('%1', CAP_SRC_LABELS[_cs0] || _cs0).replace('%2', CAP_SRC_LABELS[_cs1] || _cs1) : '');
     capEl.className = 'live-cell-value';
-    /* fix252: ASB or the profile script holding the ceiling is the ordinary case - a plain
-     * fact, not a green "good" or the cyan of an idle state. A ceiling someone else holds is
-     * graded - the vendor's clamp raised, a thermal overlay high - and an unreadable policy
-     * neutral. */
+    /* Ownership has its own source colours: ASB green, Shell soft blue, Vendor orange/red.
+     * It is not a seven-step quality reading. Thermal overlay remains a hot thermal warning;
+     * an unreadable policy remains neutral. */
     if (capSrc === 'asb' || capSrc === 'asb_dynamic') { capEl.classList.add('cap-asb'); asbMetricPaint('liveCapSrc', 'metric-normal'); }
     else if (capSrc && capSrc.startsWith('shell')) { capEl.classList.add('cap-shell'); asbMetricPaint('liveCapSrc', 'metric-normal'); }
-    else if (capSrc === 'vendor_clamp') asbMetricPaint('liveCapSrc', 'metric-warm');
-    else if (capSrc === 'vendor_raised') asbMetricPaint('liveCapSrc', 'metric-mild');
+    else if (capSrc === 'vendor_clamp') asbMetricPaint('liveCapSrc', 'metric-bad');
+    else if (capSrc === 'vendor_raised') asbMetricPaint('liveCapSrc', 'metric-hot');
     else if (capSrc === 'thermal_overlay') asbMetricPaint('liveCapSrc', 'metric-hot');
     else asbMetricPaint('liveCapSrc', 'metric-neutral');
 
