@@ -23,9 +23,10 @@
 
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
 CONF="$MODDIR/config/governor.conf"
-STATE="/data/adb/asb/net_routes_orig"
 MODE="${1:-apply}"
 WATCH_DIR="${ASB_NET_STATE_DIR:-/data/adb/asb}"
+STATE="$WATCH_DIR/net_routes_orig"
+APPLIED="$WATCH_DIR/net_routes_applied"
 
 _cfg() {
   grep -E "^[[:space:]]*$1=" "$CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r'
@@ -150,7 +151,7 @@ _window_for() {
   echo "$_wf_cwnd $_wf_rwnd"
 }
 
-# --- record originals once, so "off" and uninstall can put them back --------------------
+# --- record originals once per route, so "off" and uninstall can put them back ---------
 # Default routes from EVERY table.
 #
 # Android keeps no default route in the main table: each network gets its own table
@@ -164,24 +165,114 @@ _defaults() {
   else "$ASB_IP" route show table all 2>/dev/null; fi | grep '^default'
 }
 
+# These interfaces have routes ASB has never owned. In particular, a VPN's tun route is
+# not a physical Internet path: changing the underlying Wi-Fi/mobile routes while tun0 is
+# selected can break the VPN transport even though the tunnel's own route was skipped.
+_owned_if() {
+  case "$1" in ''|lo|dummy*|ifb*|sit*|ip6tnl*|tun*|vgate*) return 1 ;; esac
+  return 0
+}
+_vpn_owns_default() {
+  _vd="$($ASB_IP route get 1.1.1.1 2>/dev/null | sed -n 's/.* dev \([^ ]*\).*/\1/p' | head -1)"
+  case "$_vd" in tun*) return 0 ;; esac
+  return 1
+}
+_route_key() {
+  _rk_line="$1"; _rk_fam="$2"
+  _rk_if="$(printf '%s' "$_rk_line" | sed -n 's/.* dev \([^ ]*\).*/\1/p')"
+  _rk_tbl="$(printf '%s' "$_rk_line" | sed -n 's/.* table \([^ ]*\).*/\1/p')"
+  [ -n "$_rk_fam" ] || case "$_rk_line" in *:*) _rk_fam=6 ;; *) _rk_fam=4 ;; esac
+  printf '%s|%s|%s\n' "$_rk_fam" "$_rk_if" "${_rk_tbl:-main}"
+}
+# Windows and per-route congestion are mutable tuning attributes, not route identity.
+_route_identity() {
+  printf '%s' "$1" | sed -e 's/ initcwnd [0-9]*//' -e 's/ initrwnd [0-9]*//' \
+    -e 's/ congctl [a-z_]*//'
+}
+_find_saved_route() {
+  _fs_file="$1"; _fs_key="$2"
+  [ -f "$_fs_file" ] || return 1
+  while IFS= read -r _fs_line; do
+    [ -n "$_fs_line" ] || continue
+    [ "$(_route_key "$_fs_line" "")" = "$_fs_key" ] || continue
+    printf '%s\n' "$_fs_line"
+    return 0
+  done < "$_fs_file"
+  return 1
+}
+_find_live_route() {
+  _fl_key="$1"; _fl_fam="$2"
+  _defaults "$_fl_fam" | while IFS= read -r _fl_line; do
+    [ "$(_route_key "$_fl_line" "$_fl_fam")" = "$_fl_key" ] || continue
+    printf '%s\n' "$_fl_line"
+    break
+  done
+}
+
 _save_orig() {
-  [ -f "$STATE" ] && grep -q ' table ' "$STATE" 2>/dev/null && return 0
-  mkdir -p /data/adb/asb 2>/dev/null
-  { _defaults 4; _defaults 6; } > "$STATE" 2>/dev/null
+  mkdir -p "$WATCH_DIR" 2>/dev/null || return 1
+  _so_tmp="$STATE.new.$$"
+  touch "$_so_tmp" 2>/dev/null || return 1
+  for _so_fam in 4 6; do
+    _defaults "$_so_fam" | while IFS= read -r _so_rt; do
+      [ -n "$_so_rt" ] || continue
+      _so_if="$(printf '%s' "$_so_rt" | sed -n 's/.* dev \([^ ]*\).*/\1/p')"
+      _owned_if "$_so_if" || continue
+      _so_key="$(_route_key "$_so_rt" "$_so_fam")"
+      _so_old="$(_find_saved_route "$STATE" "$_so_key")"
+      _so_keep="$_so_rt"
+      if [ -n "$_so_old" ]; then
+        _so_applied="$(_find_saved_route "$APPLIED" "$_so_key")"
+        if [ -n "$_so_applied" ]; then
+          # Same route ASB tuned last time: retain its pre-ASB baseline. A different
+          # identity is Android's reconnect/replacement, so its current windows are stock.
+          [ "$(_route_identity "$_so_rt")" = "$(_route_identity "$_so_applied")" ] \
+            && _so_keep="$_so_old"
+        elif [ "$(_route_identity "$_so_rt")" = "$(_route_identity "$_so_old")" ]; then
+          # Upgrade path from the old originals-only state file.
+          _so_keep="$_so_old"
+        fi
+      fi
+      printf '%s\n' "$_so_keep" >> "$_so_tmp"
+    done
+  done
+  mv "$_so_tmp" "$STATE" 2>/dev/null
 }
 
 _restore() {
   [ -f "$STATE" ] || { echo "net_routes: nothing recorded, nothing to restore"; return 0; }
-  _rn=0
+  _rn=0; _rf=0
   while IFS= read -r _rl; do
     [ -n "$_rl" ] || continue
-    case "$_rl" in *initcwnd*|*initrwnd*) : ;; *) : ;; esac
-    case "$_rl" in
-      *:*) "$ASB_IP" -6 route change $_rl >/dev/null 2>&1 && _rn=$((_rn+1)) ;;
-      *)   "$ASB_IP" route change $_rl    >/dev/null 2>&1 && _rn=$((_rn+1)) ;;
-    esac
+    _rif="$(printf '%s' "$_rl" | sed -n 's/.* dev \([^ ]*\).*/\1/p')"
+    # Legacy state included tun0 even though the apply path never owned it. Never replay it.
+    _owned_if "$_rif" || continue
+    case "$_rl" in *:*) _rfam=6; _ipc="$ASB_IP -6" ;; *) _rfam=4; _ipc="$ASB_IP" ;; esac
+    _rkey="$(_route_key "$_rl" "$_rfam")"
+    _cur="$(_find_live_route "$_rkey" "$_rfam")"
+    [ -n "$_cur" ] || continue   # a vanished route needs no handback
+    # Restore ONLY our window attributes on the route that exists now. Replaying the whole
+    # old line could resurrect a stale gateway and could erase another owner's congctl.
+    _clean="$(printf '%s' "$_cur" | sed -e 's/ initcwnd [0-9]*//' -e 's/ initrwnd [0-9]*//')"
+    _ocwnd="$(printf '%s' "$_rl" | sed -n 's/.* initcwnd \([0-9]*\).*/\1/p')"
+    _orwnd="$(printf '%s' "$_rl" | sed -n 's/.* initrwnd \([0-9]*\).*/\1/p')"
+    _rok=1
+    if [ -n "$_ocwnd" ] && [ -n "$_orwnd" ]; then
+      $_ipc route change $_clean initcwnd "$_ocwnd" initrwnd "$_orwnd" >/dev/null 2>&1 || _rok=0
+    elif [ -n "$_ocwnd" ]; then
+      $_ipc route change $_clean initcwnd "$_ocwnd" >/dev/null 2>&1 || _rok=0
+    elif [ -n "$_orwnd" ]; then
+      $_ipc route change $_clean initrwnd "$_orwnd" >/dev/null 2>&1 || _rok=0
+    else
+      $_ipc route change $_clean >/dev/null 2>&1 || _rok=0
+    fi
+    if [ "$_rok" = 1 ]; then _rn=$((_rn+1)); else _rf=$((_rf+1)); fi
   done < "$STATE"
-  rm -f "$STATE" 2>/dev/null
+  if [ "$_rf" -eq 0 ]; then
+    rm -f "$STATE" "$APPLIED" 2>/dev/null
+  else
+    echo "net_routes: $_rf route(s) could not be restored; baseline retained" >&2
+  fi
   echo "net_routes: restored $_rn route(s)"
 }
 
@@ -199,8 +290,19 @@ _apply() {
     *) _mode=auto ;;
   esac
 
-  _save_orig
+  # A VPN owns the selected default route through tun*, but its encrypted transport still
+  # uses the underlying Wi-Fi/mobile defaults. Leave those routes alone while the VPN is up;
+  # if an earlier non-VPN apply tuned them, hand our window attributes back now.
+  if _vpn_owns_default; then
+    _restore
+    echo 'net_routes: VPN active, physical route windows left stock'
+    return 0
+  fi
+
+  _save_orig || { echo 'route_tune=FAILED'; return 1; }
   _done=0; _report=""
+  _applied_tmp="$APPLIED.new.$$"
+  touch "$_applied_tmp" 2>/dev/null || { echo 'route_tune=FAILED'; return 1; }
 
   # Only default routes: those are the ones carrying traffic off-device. Rewriting every
   # on-link subnet route achieves nothing and multiplies the chances of mangling one.
@@ -210,7 +312,7 @@ _apply() {
       _if="$(printf '%s' "$_rt" | sed -n 's/.* dev \([^ ]*\).*/\1/p')"
       [ -n "$_if" ] || continue
       # Placeholder and loopback tables carry a default too; none of them moves traffic.
-      case "$_if" in lo|dummy*|ifb*|sit*|ip6tnl*|tun*|vgate*) continue ;; esac
+      _owned_if "$_if" || continue
       _tbl="$(printf '%s' "$_rt" | sed -n 's/.* table \([^ ]*\).*/\1/p')"
       # The interface came FROM a default route, so it is carrying traffic by definition.
       # rmnet reports operstate "unknown" even then (virtual link over the modem IPA
@@ -252,15 +354,20 @@ _apply() {
         # Read it back. A route change can be accepted and silently not stick when the
         # route is replaced by the connectivity stack a moment later, and a tuning that
         # reports success without checking is how "it does nothing" reports start.
-        if $_ipc route show table "${_tbl:-main}" 2>/dev/null | grep '^default' \
-             | grep -E " dev $_if( |\$)" | grep -q "initcwnd $_cwnd"; then
-          echo "net_routes: $_if ipv$_fam $_class mtu=$_mtu cwnd=$_cwnd rwnd=$_rwnd"
-        else
-          echo "net_routes: $_if ipv$_fam applied but did not stick (route replaced?)"
-        fi
+        _now="$($_ipc route show table "${_tbl:-main}" 2>/dev/null | grep '^default' \
+                 | grep -E " dev $_if( |\$)" | head -1)"
+        case "$_now" in
+          *"initcwnd $_cwnd"*)
+            # Identity for the next apply: a reconnect with the same dev/table but a new
+            # gateway must capture a new baseline instead of restoring the old route.
+            printf '%s\n' "$_now" >> "$_applied_tmp"
+            echo "net_routes: $_if ipv$_fam $_class mtu=$_mtu cwnd=$_cwnd rwnd=$_rwnd" ;;
+          *) echo "net_routes: $_if ipv$_fam applied but did not stick (route replaced?)" ;;
+        esac
       fi
     done
   done
+  mv "$_applied_tmp" "$APPLIED" 2>/dev/null || { echo 'route_tune=FAILED'; return 1; }
 
   # Deliberately absent: dropping established connections to "apply" the change. These
   # values are read when a connection is created, so existing ones were never going to
