@@ -2412,6 +2412,9 @@ absent "$WRITER" 'LOWEST_OPP_KHZ'
 
 # Discovery and diagnostics must expose whether the actual policy is usable and accepted.
 need "$DISCOVER" 'cpu_policy${_pid}_lowest_opp='
+need "$DISCOVER" 'cpu_policy${_pid}_opp_count='
+need "$DISCOVER" 'cpu_policy${_pid}_opp_min='
+need "$DISCOVER" 'cpu_policy${_pid}_opp_max='
 need "$DISCOVER" 'cpu_policy${_pid}_min_writable='
 need "$DIAG" 'smart minimum: [PASS] Smart requested hardware lowest OPP'
 need "$DIAG" 'smart minimum: [WARN]'
@@ -5808,6 +5811,8 @@ cat > "$T/t.c" <<C
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #define ASB_LOG_FEEDBACK_FILE "$T/feedback.env"
 #include "$H"
 #define ASB_APP_GAMING 4
@@ -5821,10 +5826,13 @@ sed -n '/^#define ASB_SMOOTH_LOG_READ_S/,/^static void asb_smooth_probe_tick/p' 
 cat >> "$T/t.c" <<'C'
 static void put_feedback(unsigned long seq, long epoch, const char *hash, int hint, int bucket,
                          unsigned long rows, unsigned long frames, unsigned long janky, long jx) {
-    FILE *f = fopen(ASB_LOG_FEEDBACK_FILE, "w");
+    char tmp[sizeof(ASB_LOG_FEEDBACK_FILE) + 16];
+    snprintf(tmp, sizeof(tmp), "%s.tmp", ASB_LOG_FEEDBACK_FILE);
+    FILE *f = fopen(tmp, "w");
     fprintf(f, "schema=1\ncapture=100_20\nseq=%lu\nepoch=%ld\npkg_hash=%s\napp_hint=%d\nbucket_id=%d\nrows=%lu\nframes=%lu\njanky=%lu\njank_x1000=%ld\n",
             seq, epoch, hash, hint, bucket, rows, frames, janky, jx);
     fclose(f);
+    if (rename(tmp, ASB_LOG_FEEDBACK_FILE) != 0) { perror("rename"); exit(90); }
 }
 static int parse_one(const char *s, long now) {
     asb_log_feedback_t f; return asb_log_feedback_parse(s, strlen(s), now, &f);
@@ -5842,15 +5850,22 @@ int main(void) {
     if (parse_one("schema=1\ncapture=1_2\nseq=1\nepoch=1000\npkg_hash=0123456789abcdef\napp_hint=1\nbucket_id=2\nrows=2\nframes=1000\njanky=100\njank_x1000=90\n", 1000) == 1) { puts("inconsistent jank accepted"); bad = 1; }
     if (parse_one("schema=1\ncapture=1_2\nseq=1\nepoch=1000\npkg_hash=bad\napp_hint=1\nbucket_id=2\nrows=2\nframes=1000\njanky=100\njank_x1000=100\n", 1000) == 1) { puts("bad scenario hash accepted"); bad = 1; }
     if (parse_one("schema=1\ncapture=1_2\nseq=1\nepoch=1000\npkg_hash=0123456789abcdef\napp_hint=1\nbucket_id=2\nrows=2\nframes=1000\njanky=100\njank_x1000=100\ncommand=ignored\n", 1000) == 1) { puts("unknown key accepted"); bad = 1; }
+    if (parse_one("schema=1\ncapture=1_2\nseq=1\nepoch=1000\npkg_hash=0123456789abcdef\napp_hint=1\nbucket_id=2\nrows=2\nframes=18446744073709551615\njanky=100\njank_x1000=100\n", 1000) == 1) { puts("overflowing frame counter accepted"); bad = 1; }
+    if (parse_one("schema=1\ncapture=1_2\nseq=1\nepoch=1000\npkg_hash=0123456789abcdef\napp_hint=1\nbucket_id=2\nrows=2\nframes=1000\njanky=18446744073709551615\njank_x1000=100\n", 1000) == 1) { puts("overflowing jank counter accepted"); bad = 1; }
+    if (parse_one("schema=1\ncapture=1_2\nseq=18446744073709551615\nepoch=1000\npkg_hash=0123456789abcdef\napp_hint=1\nbucket_id=2\nrows=2\nframes=1000\njanky=100\njank_x1000=100\n", 1000) == 1) { puts("overflowing sequence accepted"); bad = 1; }
+    if (parse_one("schema=1\ncapture=1_2\nseq=1\nepoch=1000\npkg_hash=0123456789abcdef\napp_hint=1\nbucket_id=2\nrows=1001\nframes=1000000\njanky=100000\njank_x1000=100\n", 1000) == 1) { puts("unbounded row count accepted"); bad = 1; }
     if (asb_log_feedback_parse(valid, strlen(valid) - 1, 1000, &f) == 1) { puts("truncated record accepted"); bad = 1; }
 
     put_feedback(1, 1000, "0123456789abcdef", 1, 2, 2, 1000, 100, 100);
     asb_smooth_log_hint_tick(0x0123456789abcdefULL, 1000);
     if (g_smooth_log_accepted != 1 || g_smooth_log_due != 1045) { printf("first valid hint not scheduled: %lu/%ld\n", g_smooth_log_accepted, g_smooth_log_due); bad = 1; }
+    if (g_smooth_log_checks != 1 || g_smooth_log_reads != 1 || g_smooth_log_changes != 1) { puts("first feedback body was not read exactly once"); bad = 1; }
     asb_smooth_log_hint_tick(0x0123456789abcdefULL, 1011);
     if (g_smooth_log_accepted != 1) { puts("same capture/sequence counted twice"); bad = 1; }
+    if (g_smooth_log_checks != 2 || g_smooth_log_reads != 1 || g_smooth_log_unchanged != 1) { puts("unchanged feedback body was read again"); bad = 1; }
     put_feedback(2, 1021, "0123456789abcdef", 1, 2, 2, 1000, 100, 100);
     asb_smooth_log_hint_tick(0x0123456789abcdefULL, 1022);
+    if (g_smooth_log_reads != 2 || g_smooth_log_changes != 2) { puts("changed feedback body was not re-read"); bad = 1; }
     if (g_smooth_log_accepted != 1 || g_smooth_log_suppressed != 1) { printf("per-app cooldown missing: accepted=%lu suppressed=%lu rejected=%lu status=%s\n", g_smooth_log_accepted, g_smooth_log_suppressed, g_smooth_log_rejected, g_smooth_log_status); bad = 1; }
     put_feedback(3, 1602, "0123456789abcdef", 1, 2, 2, 1000, 100, 100);
     asb_smooth_log_hint_tick(0x0123456789abcdefULL, 1602);

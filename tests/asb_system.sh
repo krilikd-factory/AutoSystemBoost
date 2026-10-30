@@ -3383,7 +3383,10 @@ grep -q 'by screen state        : screen on' "$L/asb_log_full_day.sh" || fail "t
 grep -q "_ph() { awk" "$L/asb_log_full_day.sh" || fail "cost rates still divide by whole hours"
 grep -q '^lk_sysui_verdict() {' "$L/_asb_logkit_common.sh" || fail "SystemUI restart has no verdict"
 grep -q 'ASB_DSP_REFERENCE_OPTIONAL' "$ROOT/tests/asb_features.sh" || fail "DSP reference has no explicit source-only switch"
-grep -q 'ASB_DSP_REFERENCE_OPTIONAL=1 bash tools/asb_full_regression.sh' "$ROOT/.github/workflows/build-test.yml" || fail "source-only test workflow cannot reach the native build"
+grep -q 'bash tools/asb_source_regression.sh' "$ROOT/.github/workflows/build-test.yml" || fail "source-only test workflow cannot reach the native build"
+grep -q 'export ASB_DSP_REFERENCE_OPTIONAL=1' "$ROOT/tools/asb_source_regression.sh" || fail "source-only entry point does not set its explicit mode"
+grep -q 'MODE=SOURCE_ONLY' "$ROOT/tools/asb_full_regression.sh" || fail "runner does not announce source-only mode"
+grep -q 'MODE=RELEASE_STRICT' "$ROOT/tools/asb_full_regression.sh" || fail "runner does not announce strict mode"
 grep -q 'if \[ "\$_pb_missing" = 1 \]; then' "$ROOT/.github/workflows/build-test.yml" || fail "test workflow skips DSP staging even when every reference binary exists"
 grep -q 'ASB_DSP_REFERENCE_OPTIONAL' "$ROOT/.github/workflows/build-release.yml" && fail "release build must never skip the DSP reference"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
@@ -7802,6 +7805,7 @@ cat > "$T/t.c" <<'X'
 #include <string.h>
 #include <stdint.h>
 #include <sys/system_properties.h>
+#define ASB_DEVICE_BOUNDS_CPUFREQ_ROOT "/nonexistent/asb-long-fingerprint"
 #define FP "OnePlus/CPH2745IN/OP611FL1:16/BP2A.250605.015/B.R4T3.1abf132_aeee51_aea830:user/release-keys"
 struct prop_info { int dummy; };
 static struct prop_info g_fp_info;
@@ -7827,10 +7831,15 @@ int main(void) {
     g_cpu_policy_count = 2; g_cpu_all_count = 2;
     g_cpu_policy_ids[0] = 0; g_cpu_policy_ids[1] = 6; g_cpu_policy_ids[2] = -1;
     g_cpu_slot_hwmax[0] = 3628800; g_cpu_slot_hwmax[1] = 4608000; g_cpu_slot_hwmax[2] = 0;
+    g_cpu_all_ids[0] = 0; g_cpu_all_ids[1] = 6; g_cpu_all_slot[0] = 0; g_cpu_all_slot[1] = 1;
+    g_cpu_all_hwmax[0] = 3628800; g_cpu_all_hwmax[1] = 4608000;
     FILE *f = fopen(ASB_DEVICE_BOUNDS_FILE, "w");
     if (!f) return 90;
-    fputs("schema=2\nconfidence=high\nsource=measured\npolicy_count=2\n"
-          "cluster_signature=0:3628800>none:0>6:4608000\nfingerprint=" FP "\n"
+    fputs("schema=3\nconfidence=high\nsource=measured\npolicy_count=2\n"
+          "cluster_signature=0:3628800>none:0>6:4608000\n"
+          "cluster_signature_full=0:3628800,6:4608000\n"
+          "logical_roles=little:0,mid:none,big:6,extra:none\n"
+          "policy_map=0:0:3628800:0:0:0,6:1:4608000:0:0:0\nfingerprint=" FP "\n"
           "BALANCED_CPU_MAX_LITTLE=2611200\n", f);
     fclose(f);
     int n = asb_load_device_bounds_override(1, defs);
@@ -7869,6 +7878,7 @@ static int test_bounds_getprop(const char *key, char *value) {
     return (int)strlen(value);
 }
 #define ASB_DEVICE_BOUNDS_PROPERTY_GET test_bounds_getprop
+#define ASB_DEVICE_BOUNDS_CPUFREQ_ROOT "/nonexistent/asb-confidence"
 #include "asb_fsm_test.h"
 asb_runtime_config_t g_asb_cfg;
 static asb_profile_bounds_t defs[3];
@@ -7881,7 +7891,7 @@ static int run_case(const char *text, int enabled, int expect_n, int expect_valu
     int before = g_profile_bounds[PROFILE_BALANCED].ceil.cpu_max[0];
     int n = asb_load_device_bounds_override(enabled, defs);
     int got = g_profile_bounds[PROFILE_BALANCED].ceil.cpu_max[0];
-    if (n != expect_n) { printf("applied=%d want=%d\n", n, expect_n); return 1; }
+    if (n != expect_n) { printf("applied=%d want=%d result=%s/%s\n", n, expect_n, g_device_bounds_status, g_device_bounds_reason); return 1; }
     if (got != expect_value) { printf("value=%d want=%d (before=%d)\n", got, expect_value, before); return 2; }
     if (g_profile_bounds[PROFILE_BALANCED].floor.cpu_max[0] > got ||
         g_profile_bounds[PROFILE_BALANCED].ceil.cpu_min[0] > got ||
@@ -7895,25 +7905,36 @@ static int run_case(const char *text, int enabled, int expect_n, int expect_valu
     }
     return 0;
 }
-#define VALID_META "schema=2\nconfidence=high\nsource=measured\npolicy_count=2\n" \
-    "cluster_signature=0:3000000>none:0>6:4000000\nfingerprint=OnePlus/test/user\n"
+#define VALID_META "schema=3\nconfidence=high\nsource=measured\npolicy_count=2\n" \
+    "cluster_signature=0:3000000>none:0>6:4000000\n" \
+    "cluster_signature_full=0:3000000,6:4000000\n" \
+    "logical_roles=little:0,mid:none,big:6,extra:none\n" \
+    "policy_map=0:0:3000000:0:0:0,6:1:4000000:0:0:0\nfingerprint=OnePlus/test/user\n"
+#define VALID4_META "schema=3\nconfidence=high\nsource=measured\npolicy_count=4\n" \
+    "cluster_signature=0:2000000>5:3000000>7:3300000\n" \
+    "cluster_signature_full=0:2000000,2:2800000,5:3000000,7:3300000\n" \
+    "logical_roles=little:0,mid:5,big:7,extra:2\n" \
+    "policy_map=0:0:2000000:0:0:0,2:1:2800000:0:0:0,5:1:3000000:0:0:0,7:2:3300000:0:0:0\n" \
+    "fingerprint=OnePlus/test/user\n"
 int main(void) {
     memcpy(defs, g_profile_bounds, sizeof(defs));
     g_cpu_policy_count = 2;
     g_cpu_all_count = 2;
     g_cpu_policy_ids[0] = 0; g_cpu_policy_ids[1] = 6; g_cpu_policy_ids[2] = -1;
     g_cpu_slot_hwmax[0] = 3000000; g_cpu_slot_hwmax[1] = 4000000; g_cpu_slot_hwmax[2] = 0;
+    g_cpu_all_ids[0] = 0; g_cpu_all_ids[1] = 6; g_cpu_all_slot[0] = 0; g_cpu_all_slot[1] = 1;
+    g_cpu_all_hwmax[0] = 3000000; g_cpu_all_hwmax[1] = 4000000;
     int stock = defs[PROFILE_BALANCED].ceil.cpu_max[0];
     int rc = 0;
     rc |= run_case(VALID_META "BALANCED_CPU_MAX_LITTLE=2340000\n", 1, 1, 2340000, "applied", "ok");
-    rc |= run_case("schema=2\nconfidence=low\nsource=measured\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 0, stock, "skipped", "confidence");
-    rc |= run_case("schema=2\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 0, stock, "skipped", "confidence");
+    rc |= run_case("schema=3\nconfidence=low\nsource=measured\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 0, stock, "skipped", "confidence");
+    rc |= run_case("schema=3\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 0, stock, "skipped", "confidence");
     rc |= run_case("# confidence=high  topology=2c\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 0, stock, "skipped", "schema");
     rc |= run_case(VALID_META "BALANCED_CPU_MAX_LITTLE=2340000\n", 0, 0, stock, "disabled", "off");
-    rc |= run_case("schema=2\nconfidence=high\nsource=measured\nBALANCED_CPU_MAX_LITTLE=2340000\npolicy_count=2\ncluster_signature=0:3000000>none:0>6:4000000\nfingerprint=OnePlus/old/user\n", 1, 0, stock, "stale", "fingerprint");
-    rc |= run_case("schema=2\nconfidence=high\nsource=measured\npolicy_count=3\ncluster_signature=0:3000000>none:0>6:4000000\nfingerprint=OnePlus/test/user\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 0, stock, "stale", "policy_count");
-    rc |= run_case("schema=2\nconfidence=high\nsource=measured\npolicy_count=2\ncluster_signature=0:2995200>none:0>6:4000000\nfingerprint=OnePlus/test/user\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 0, stock, "stale", "cluster_signature");
-    rc |= run_case("schema=2\nconfidence=high\npolicy_count=2\ncluster_signature=0:3000000>none:0>6:4000000\nfingerprint=OnePlus/test/user\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 0, stock, "skipped", "source");
+    rc |= run_case("schema=3\nconfidence=high\nsource=measured\nBALANCED_CPU_MAX_LITTLE=2340000\npolicy_count=2\ncluster_signature=0:3000000>none:0>6:4000000\nfingerprint=OnePlus/old/user\n", 1, 0, stock, "stale", "fingerprint");
+    rc |= run_case("schema=3\nconfidence=high\nsource=measured\npolicy_count=3\ncluster_signature=0:3000000>none:0>6:4000000\nfingerprint=OnePlus/test/user\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 0, stock, "stale", "policy_count");
+    rc |= run_case("schema=3\nconfidence=high\nsource=measured\npolicy_count=2\ncluster_signature=0:2995200>none:0>6:4000000\nfingerprint=OnePlus/test/user\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 0, stock, "stale", "cluster_signature");
+    rc |= run_case("schema=3\nconfidence=high\npolicy_count=2\ncluster_signature=0:3000000>none:0>6:4000000\nfingerprint=OnePlus/test/user\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 0, stock, "skipped", "source");
     memcpy(g_profile_bounds, defs, sizeof(defs));
     FILE *f = fopen(ASB_DEVICE_BOUNDS_FILE, "w");
     if (!f) return 90;
@@ -7933,6 +7954,22 @@ int main(void) {
         g_profile_bounds[PROFILE_PERFORMANCE].ceil.cpu_max[1] != 2400000) {
         printf("full native MIN/CAP/MAX import diverged (n=%d)\n", n); rc |= 1;
     }
+    /* A 4-policy file proves every physical policy, including the extra policy mapped to MID. */
+    g_cpu_policy_count = 3; g_cpu_all_count = 4;
+    g_cpu_policy_ids[0] = 0; g_cpu_policy_ids[1] = 5; g_cpu_policy_ids[2] = 7;
+    g_cpu_slot_hwmax[0] = 2000000; g_cpu_slot_hwmax[1] = 3000000; g_cpu_slot_hwmax[2] = 3300000;
+    g_cpu_all_ids[0] = 0; g_cpu_all_ids[1] = 2; g_cpu_all_ids[2] = 5; g_cpu_all_ids[3] = 7;
+    g_cpu_all_slot[0] = 0; g_cpu_all_slot[1] = 1; g_cpu_all_slot[2] = 1; g_cpu_all_slot[3] = 2;
+    g_cpu_all_hwmax[0] = 2000000; g_cpu_all_hwmax[1] = 2800000;
+    g_cpu_all_hwmax[2] = 3000000; g_cpu_all_hwmax[3] = 3300000;
+    rc |= run_case(VALID4_META "BALANCED_CPU_MAX_LITTLE=1800000\n", 1, 1, 1800000, "applied", "ok");
+    rc |= run_case("schema=3\nconfidence=high\nsource=measured\npolicy_count=4\n"
+        "cluster_signature=0:2000000>5:3000000>7:3300000\n"
+        "cluster_signature_full=0:2000000,2:2800000,5:3000000,7:3300000\n"
+        "logical_roles=little:0,mid:5,big:7,extra:2\n"
+        "policy_map=0:0:2000000:0:0:0,2:0:2800000:0:0:0,5:1:3000000:0:0:0,7:2:3300000:0:0:0\n"
+        "fingerprint=OnePlus/test/user\nBALANCED_CPU_MAX_LITTLE=1800000\n",
+        1, 0, stock, "stale", "policy_map");
     return rc;
 }
 X
@@ -7955,26 +7992,29 @@ shell_value() {
     asb_device_bounds_import "$T/shell_bounds.env" >/dev/null 2>&1 || true
     printf '%s' "${BALANCED_CPU_MAX_LITTLE:-stock}" )
 }
-shell_meta='schema=2
+shell_meta='schema=3
 confidence=high
 source=measured
 policy_count=2
 cluster_signature=0:3000000>none:0>6:4000000
+cluster_signature_full=0:3000000,6:4000000
+logical_roles=little:0,mid:none,big:6,extra:none
+policy_map=0:0:3000000:0:0:0,6:1:4000000:0:0:0
 fingerprint=OnePlus/test/user
 '
 [ "$(shell_value high "$shell_meta"'BALANCED_CPU_MAX_LITTLE=2340000
 ')" = 2340000 ] || fail "shell rejected current valid bounds"
-[ "$(shell_value low 'schema=2
+[ "$(shell_value low 'schema=3
 confidence=low
 BALANCED_CPU_MAX_LITTLE=2340000
 ')" = stock ] || fail "shell accepted low confidence"
-[ "$(shell_value unknown 'schema=2
+[ "$(shell_value unknown 'schema=3
 BALANCED_CPU_MAX_LITTLE=2340000
 ')" = stock ] || fail "shell accepted unknown confidence"
 [ "$(shell_value legacy '# confidence=high  topology=2c
 BALANCED_CPU_MAX_LITTLE=2340000
 ')" = stock ] || fail "shell accepted legacy file without provenance"
-[ "$(shell_value stale_fp 'schema=2
+[ "$(shell_value stale_fp 'schema=3
 confidence=high
 source=measured
 policy_count=2
@@ -7982,7 +8022,7 @@ cluster_signature=0:3000000>none:0>6:4000000
 fingerprint=OnePlus/old/user
 BALANCED_CPU_MAX_LITTLE=2340000
 ')" = stock ] || fail "shell accepted stale fingerprint"
-[ "$(shell_value stale_count 'schema=2
+[ "$(shell_value stale_count 'schema=3
 confidence=high
 source=measured
 policy_count=3
@@ -7990,7 +8030,7 @@ cluster_signature=0:3000000>none:0>6:4000000
 fingerprint=OnePlus/test/user
 BALANCED_CPU_MAX_LITTLE=2340000
 ')" = stock ] || fail "shell accepted changed policy count"
-[ "$(shell_value stale_hw 'schema=2
+[ "$(shell_value stale_hw 'schema=3
 confidence=high
 source=measured
 policy_count=2
@@ -8013,11 +8053,14 @@ cpu_policy6_hwmax=4000000
 fingerprint=OnePlus/test/user
 X
 sh "$T/synthesize.sh" >/dev/null
-grep -q '^schema=2$' "$T/synthesized.env" || fail "schema metadata missing"
+grep -q '^schema=3$' "$T/synthesized.env" || fail "schema metadata missing"
 grep -q '^confidence=high$' "$T/synthesized.env" || fail "resolved topology is not high confidence"
 grep -q '^source=measured$' "$T/synthesized.env" || fail "measured source missing"
 grep -q '^fingerprint=OnePlus/test/user$' "$T/synthesized.env" || fail "fingerprint missing"
 grep -q '^cluster_signature=0:3000000>none:0>6:4000000$' "$T/synthesized.env" || fail "signature did not use hardware ordering"
+grep -q '^cluster_signature_full=0:3000000,6:4000000$' "$T/synthesized.env" || fail "full signature is not canonical"
+grep -q '^logical_roles=little:0,mid:none,big:6,extra:none$' "$T/synthesized.env" || fail "2-policy roles missing"
+grep -q '^policy_map=0:0:3000000:0:0:0,6:1:4000000:0:0:0$' "$T/synthesized.env" || fail "2-policy map missing"
 grep -q '^BALANCED_CPU_MAX_LITTLE=[0-9]' "$T/synthesized.env" || fail "high synthesis emitted no bounds"
 range_ok() {
   awk -F= -v p="$1" -v s="$2" '
@@ -8039,11 +8082,34 @@ X
 sh "$T/synthesize.sh" >/dev/null
 grep -q '^confidence=high$' "$T/synthesized.env" || fail "4-policy topology was rejected"
 grep -q '^cluster_signature=0:2000000>5:3000000>7:3300000$' "$T/synthesized.env" || fail "4-policy strongest-middle signature wrong"
+grep -q '^cluster_signature_full=0:2000000,2:2800000,5:3000000,7:3300000$' "$T/synthesized.env" || fail "4-policy full signature omits the extra policy"
+grep -q '^logical_roles=little:0,mid:5,big:7,extra:2$' "$T/synthesized.env" || fail "4-policy extra mapping missing"
+grep -q '^policy_map=0:0:2000000:0:0:0,2:1:2800000:0:0:0,5:1:3000000:0:0:0,7:2:3300000:0:0:0$' "$T/synthesized.env" || fail "4-policy full map wrong"
 grep -q '^BALANCED_CPU_MAX_MID=[0-9]' "$T/synthesized.env" || fail "4-policy mid bounds missing"
 grep -q '^BATTERY_CPU_MAX_PRIME=[0-9]' "$T/synthesized.env" || fail "4-policy prime bound missing"
 for _p in BATTERY BALANCED PERFORMANCE; do
   for _s in LITTLE MID; do range_ok "$_p" "$_s" || fail "invalid 4-policy $_p/$_s MIN/CAP/MAX range"; done
 done
+# Shell and native accept the same complete 4-policy identity. Mutating only the extra
+# policy, its logical slot or its OPP shape must reject the whole file before any import.
+rm -rf "$T/sys/cpufreq/policy6"
+mkdir -p "$T/sys/cpufreq/policy2" "$T/sys/cpufreq/policy5" "$T/sys/cpufreq/policy7"
+printf '2000000\n' > "$T/sys/cpufreq/policy0/cpuinfo_max_freq"
+printf '2800000\n' > "$T/sys/cpufreq/policy2/cpuinfo_max_freq"
+printf '3000000\n' > "$T/sys/cpufreq/policy5/cpuinfo_max_freq"
+printf '3300000\n' > "$T/sys/cpufreq/policy7/cpuinfo_max_freq"
+_four_meta="$(cat "$T/synthesized.env")"
+_four_val="$(grep -E '^BALANCED_CPU_MAX_LITTLE=' "$T/synthesized.env" | cut -d= -f2)"
+[ "$(shell_value valid4 "$_four_meta
+")" = "$_four_val" ] || fail "shell rejected valid full 4-policy provenance"
+[ "$(shell_value stale4hw "$(printf '%s\n' "$_four_meta" | sed 's/2:2800000/2:2700000/g')
+")" = stock ] || fail "shell accepted a changed fourth-policy hardware ceiling"
+[ "$(shell_value stale4roles "$(printf '%s\n' "$_four_meta" | sed 's/extra:2/extra:none/')
+")" = stock ] || fail "shell accepted a changed extra-policy role record"
+[ "$(shell_value stale4map "$(printf '%s\n' "$_four_meta" | sed 's/2:1:2800000:/2:0:2800000:/')
+")" = stock ] || fail "shell accepted a changed extra-policy writer slot"
+[ "$(shell_value stale4opp "$(printf '%s\n' "$_four_meta" | sed 's/2:1:2800000:0:0:0/2:1:2800000:9:600000:2800000/')
+")" = stock ] || fail "shell accepted a changed fourth-policy OPP shape"
 # Real OPP tables: ceilings snap DOWN, never to a nearer but higher frequency. The
 # Balanced little target is 2158800, where the old nearest rule chose 2200000.
 mkdir -p "$T/cpufreq/policy0" "$T/cpufreq/policy6"
@@ -8054,9 +8120,16 @@ cpu_policy_count=2
 cpu_policy_list=6 0
 cpu_policy0_hwmax=3000000
 cpu_policy6_hwmax=4000000
+cpu_policy0_opp_count=11
+cpu_policy0_opp_min=600000
+cpu_policy0_opp_max=3000000
+cpu_policy6_opp_count=10
+cpu_policy6_opp_min=400000
+cpu_policy6_opp_max=4000000
 fingerprint=OnePlus/test/user
 X
 ASB_CPUFREQ_ROOT="$T/cpufreq" sh "$T/synthesize.sh" >/dev/null
+grep -q '^policy_map=0:0:3000000:11:600000:3000000,6:1:4000000:10:400000:4000000$' "$T/synthesized.env" || fail "OPP shape missing from canonical policy map"
 grep -q '^BALANCED_CPU_MAX_LITTLE=2100000$' "$T/synthesized.env" || fail "ceiling snapped above the requested profile ratio"
 grep -q '^BALANCED_CPU_CAP_LITTLE=900000$' "$T/synthesized.env" || fail "CAP did not preserve the scaled range on the real OPP table"
 grep -q '^BALANCED_CPU_MIN_LITTLE=600000$' "$T/synthesized.env" || fail "MIN did not preserve the scaled range on the real OPP table"

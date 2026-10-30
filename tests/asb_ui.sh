@@ -6360,7 +6360,7 @@ assert 'backdrop-filter:blur(8px)' in h
 assert 'html[data-asb-glass="1"]' in h
 assert 'html[data-asb-glass="1"][data-asb-theme="light"]' in h
 assert '--accent:#00f0b4' in h and '--accent:#007c63' in h
-assert '--surface:rgba(16,23,20,.86)' in h and '--border:rgba(108,151,133,.46)' in h
+assert '--surface:rgba(8,13,10,.90)' in h and '--border:rgba(108,151,133,.46)' in h
 assert '.log-menu,.cfg-fm-box,.asb-tabbar' in h
 assert ':is(.log-menu,.cfg-fm-box,.cfg-profile-sheet,.cfg-reset-dialog)' in h
 assert '.cfg-fm-btn,.cfg-fm-place,.cfg-fm-cancel' in h
@@ -7351,6 +7351,16 @@ for token in ('rgba(4,8,6,.96)', 'rgba(255,255,255,.022)', 'rgba(255,255,255,.00
     assert token in tweak and token in off, token
 light_tweak = rule('html[data-asb-glass="1"][data-asb-theme="light"] .cfg-row:not(.is-on)')
 assert 'rgba(4,8,6,.96)' not in light_tweak
+# fix260: only the shared dark-Glass material gets darker. The approved OFF surfaces and
+# their neutral icon wells/tracks keep the exact fix259 paint, including highlights.
+assert '--surface:rgba(8,13,10,.90)' in s and '--tabbar-bg:rgba(8,13,10,.88)' in s
+assert 'rgba(16,23,20,.86)' not in s
+well = rule('html[data-asb-glass="1"] .cfg-row:not(.is-on) .cfg-icon')
+track = rule('html[data-asb-glass="1"] .cfg-switch:not(.on)')
+for body in (well, track):
+    assert 'background:rgba(255,255,255,.022)' in body
+    assert 'border-color:rgba(255,255,255,.10)' in body
+assert 'box-shadow:inset 0 1px 0 rgba(255,255,255,.065)' in track
 print('ok')
 PY
 echo "PASS WebUI fix256 inactive profiles: matching dark-Glass inactive profile/OFF-tweak surfaces, hidden idle sheen, full foreground opacity and unchanged active/light materials"
