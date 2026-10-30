@@ -4013,9 +4013,10 @@ html[data-asb-glass="1"][data-asb-theme="light"] .cfg-row.is-on {
  * otherwise gives ON and OFF rows the same tinted edge and body. OFF is neutral glass with
  * no accent rim or category wash; only the enabled row carries the category colour. */
 html[data-asb-glass="1"] .cfg-row:not(.is-on) {
-  background:linear-gradient(145deg,rgba(255,255,255,.055),rgba(255,255,255,.012)),rgba(12,17,15,.88) !important;
-  border-color:rgba(255,255,255,.12) !important;
-  box-shadow:0 10px 26px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.10) !important;
+  /* The same quiet, nearly black material as an inactive profile card (fix259). */
+  background:linear-gradient(145deg,rgba(255,255,255,.022),rgba(255,255,255,.004)),rgba(4,8,6,.96) !important;
+  border-color:rgba(255,255,255,.10) !important;
+  box-shadow:0 8px 22px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.065) !important;
 }
 html[data-asb-glass="1"] .cfg-row.is-on {
   background:linear-gradient(145deg,color-mix(in srgb,var(--cat,var(--accent)) 18%,transparent),rgba(255,255,255,.025)),rgba(16,23,20,.82) !important;
@@ -4023,11 +4024,11 @@ html[data-asb-glass="1"] .cfg-row.is-on {
   box-shadow:0 0 0 1px color-mix(in srgb,var(--cat,var(--accent)) 12%,transparent),0 12px 30px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.14) !important;
 }
 html[data-asb-glass="1"] .cfg-row:not(.is-on) .cfg-icon {
-  background:rgba(255,255,255,.045); border-color:rgba(255,255,255,.10);
+  background:rgba(255,255,255,.022); border-color:rgba(255,255,255,.10);
 }
 html[data-asb-glass="1"] .cfg-switch:not(.on) {
-  background:rgba(255,255,255,.055); border-color:rgba(255,255,255,.16);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
+  background:rgba(255,255,255,.022); border-color:rgba(255,255,255,.10);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.065);
 }
 html[data-asb-glass="1"][data-asb-theme="light"] .cfg-row:not(.is-on) {
   background:linear-gradient(145deg,rgba(255,255,255,.58),rgba(244,244,246,.34)),rgba(255,255,255,.46) !important;
@@ -4158,12 +4159,12 @@ html[data-asb-theme="light"] :is(.live-cell-value,.smart-banner-value,.smart-dra
 /* Owner colours intentionally follow the neutral/quality rules: ASB is the module's green,
  * Shell is soft blue in every palette, and Vendor is orange or red-orange. These classes are
  * applied only by the non-Stock owner tile; Stock clears them before painting temperature. */
-html .live-cell-value.cap-asb,
-html[data-asb-glass="1"] .live-cell-value.cap-asb,
-html[data-asb-theme="light"] .live-cell-value.cap-asb { color:var(--accent) !important; }
-html .live-cell-value.cap-shell,
-html[data-asb-glass="1"] .live-cell-value.cap-shell,
-html[data-asb-theme="light"] .live-cell-value.cap-shell { color:var(--owner-shell) !important; }
+html :is(.live-cell-value,.live-info-val).cap-asb,
+html[data-asb-glass="1"] :is(.live-cell-value,.live-info-val).cap-asb,
+html[data-asb-theme="light"] :is(.live-cell-value,.live-info-val).cap-asb { color:var(--accent) !important; }
+html :is(.live-cell-value,.live-info-val).cap-shell,
+html[data-asb-glass="1"] :is(.live-cell-value,.live-info-val).cap-shell,
+html[data-asb-theme="light"] :is(.live-cell-value,.live-info-val).cap-shell { color:var(--owner-shell) !important; }
 html :is(.live-cell-value,.smart-banner-value,.live-info-val).metric-fsm-deep,
 html[data-asb-glass="1"] :is(.live-cell-value,.smart-banner-value,.live-info-val).metric-fsm-deep,
 html[data-asb-theme="light"] :is(.live-cell-value,.smart-banner-value,.live-info-val).metric-fsm-deep { color:var(--fsm-deep) !important; }
@@ -6789,24 +6790,67 @@ const LVI_SCALES = {
   gpu: { cuts: [15, 25, 45, 65, 80, 85], unit: '%', kind: 'l', steps: ['metric-good', 'metric-fair', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-severe', 'metric-bad'] },
   headroom: { cuts: [5, 10, 15, 25, 30, 35], unit: '%', kind: 'h', steps: ['metric-bad', 'metric-severe', 'metric-hot', 'metric-warm', 'metric-mild', 'metric-fair', 'metric-good'] },
   clamps: { cuts: [2, 4, 11, 21, 41, 60], unit: '', kind: 'c', steps: ['metric-good', 'metric-fair', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-severe', 'metric-bad'] },
-  sbattery: { cuts: [5, 10, 20, 30, 40, 50], unit: '%', kind: 'b', steps: ['metric-bad', 'metric-severe', 'metric-hot', 'metric-warm', 'metric-mild', 'metric-fair', 'metric-good'] }
+  sbattery: { cuts: [5, 10, 20, 30, 40, 50], unit: '%', kind: 'b', steps: ['metric-bad', 'metric-severe', 'metric-hot', 'metric-warm', 'metric-mild', 'metric-fair', 'metric-good'] },
+  /* fix259: the scale and the tile use the same seven thresholds. The three Stock readings
+   * below are normalized by lviScaleValue() before rendering, never graded from bare MHz/mA. */
+  conf: { cuts: [15, 25, 45, 65, 75, 85], unit: '%', kind: 'q', steps: ['metric-bad', 'metric-severe', 'metric-hot', 'metric-warm', 'metric-mild', 'metric-fair', 'metric-good'] },
+  cpuceil: { cuts: [5, 15, 30, 60, 85, 100], unit: '%', kind: 'h', steps: ['metric-bad', 'metric-severe', 'metric-hot', 'metric-warm', 'metric-mild', 'metric-fair', 'metric-good'] },
+  sdrain: { cuts: [3, 4, 7, 12, 18, 25], unit: '%/h', kind: 'l', steps: ['metric-good', 'metric-fair', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-severe', 'metric-bad'] },
+  sclock: { cuts: [15, 25, 45, 65, 80, 85], unit: '%', kind: 'l', steps: ['metric-good', 'metric-fair', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-severe', 'metric-bad'] },
+  gpuclk: { cuts: [15, 25, 45, 65, 80, 85], unit: '%', kind: 'l', steps: ['metric-good', 'metric-fair', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-severe', 'metric-bad'] }
 };
 const LVS_FB = {
   t: { 'metric-good': 'normal', 'metric-fair': 'slightly warm', 'metric-mild': 'warm', 'metric-warm': 'quite warm', 'metric-hot': 'hot', 'metric-severe': 'very hot', 'metric-bad': 'overheating' },
   l: { 'metric-good': 'light', 'metric-fair': 'easy', 'metric-mild': 'moderate', 'metric-warm': 'noticeable', 'metric-hot': 'high', 'metric-severe': 'very high', 'metric-bad': 'at the limit' },
   h: { 'metric-bad': 'almost none', 'metric-severe': 'very little', 'metric-hot': 'little', 'metric-warm': 'limited', 'metric-mild': 'enough', 'metric-fair': 'comfortable', 'metric-good': 'free' },
   c: { 'metric-good': 'rare', 'metric-fair': 'occasional', 'metric-mild': 'now and then', 'metric-warm': 'often', 'metric-hot': 'very often', 'metric-severe': 'almost constant', 'metric-bad': 'constant' },
-  b: { 'metric-bad': 'critical', 'metric-severe': 'very low', 'metric-hot': 'low', 'metric-warm': 'under a third', 'metric-mild': 'under half', 'metric-fair': 'nearly half', 'metric-good': 'enough' }
+  b: { 'metric-bad': 'critical', 'metric-severe': 'very low', 'metric-hot': 'low', 'metric-warm': 'under a third', 'metric-mild': 'under half', 'metric-fair': 'nearly half', 'metric-good': 'enough' },
+  q: { 'metric-bad': 'very low', 'metric-severe': 'low', 'metric-hot': 'limited', 'metric-warm': 'growing', 'metric-mild': 'fair', 'metric-fair': 'high', 'metric-good': 'very high' }
 };
 function lviKeyOf(cell) {
   const pos = cell.getAttribute('data-lvi');
   let key = (_selectedProfile === 'stock' && LVI_STOCK[pos]) ? LVI_STOCK[pos] : pos;
   if (key === 'learner' && _selectedProfile !== 'smart') key = 'learnerp';
+  /* Stock's third thermal cell can be the die maximum instead of a board sensor. Its tile is
+   * painted with CPU thresholds, so the sheet must not show the narrower board scale. */
+  if (_selectedProfile === 'stock' && key === 'board' && _stockLiveInfo.surfaceKind === 'cpu') key = 'cpu';
   return key;
 }
 function lviNum(text) {
   const m = /[-−]?\d+(?:[.,]\d+)?/.exec(String(text || ''));
   return m ? parseFloat(m[0].replace('−', '-').replace(',', '.')) : null;
+}
+/* Some Stock tiles display an absolute reading but are coloured by a ratio. Feeding bare MHz
+ * or mA to a percentage scale would put every reading in the red. Reproduce the tile's own
+ * normalization here; a missing denominator means no scale, never a guessed severity. */
+function lviScaleValue(key, text) {
+  const kv = _stockTelemetryKv || {};
+  const n = function (v) { const m = /-?\d+/.exec(String(v === undefined || v === null ? '' : v)); return m ? parseInt(m[0], 10) : 0; };
+  if (key === 'sdrain') {
+    let ma = n(kv['battery.current_now']), cap = n(kv['battery.charge_full']);
+    if (Math.abs(ma) > 10000) ma = Math.round(ma / 1000);
+    if (cap > 10000) cap = Math.round(cap / 1000);
+    const status = String(kv['battery.status'] || '').toLowerCase();
+    return ma && cap > 0 && status !== 'charging' && status !== 'full' ? Math.abs(ma) * 100 / cap : null;
+  }
+  if (key === 'gpuclk') {
+    const cur = n(kv['gpu.gpuclk']), max = n(kv['gpu.max_gpuclk']);
+    return cur > 0 && max > 0 ? cur / max * 100 : null;
+  }
+  if (key === 'sclock') {
+    const policies = {};
+    Object.entries(kv).forEach(function ([k, v]) {
+      const m = /^cpu\.(policy\d+)\.(scaling_cur_freq|scaling_max_freq|cpuinfo_max_freq)$/.exec(k);
+      if (m) (policies[m[1]] = policies[m[1]] || {})[m[2]] = n(v);
+    });
+    const rows = Object.values(policies);
+    if (!rows.some(function (p) { return (p.cpuinfo_max_freq > 0 || p.scaling_max_freq > 0) && p.scaling_cur_freq > 0; })) return null;
+    return Math.max(0, ...rows.map(function (p) {
+      const ceiling = p.cpuinfo_max_freq > 0 ? p.cpuinfo_max_freq : p.scaling_max_freq;
+      return ceiling > 0 && p.scaling_cur_freq >= 0 ? p.scaling_cur_freq / ceiling * 100 : 0;
+    }));
+  }
+  return lviNum(text);
 }
 function lviSample() {
   if (typeof document === 'undefined' || document.hidden || !document.querySelectorAll) return;
@@ -6980,9 +7024,7 @@ function liveInfoValText(val) {
 }
 function liveInfoOpen(cell) {
   if (!cell) return;
-  const pos = cell.getAttribute('data-lvi');
-  let key = (_selectedProfile === 'stock' && LVI_STOCK[pos]) ? LVI_STOCK[pos] : pos;
-  if (key === 'learner' && _selectedProfile !== 'smart') key = 'learnerp';
+  const key = lviKeyOf(cell);
   const txt = LVI_TEXT[key];
   if (!txt) return;
   uiSound('option');
@@ -7005,7 +7047,7 @@ function liveInfoOpen(cell) {
   iv.style.color = '';
   try { if (val && typeof getComputedStyle === 'function') iv.style.color = getComputedStyle(val).color || ''; } catch (e) {}
   _el('liveInfoText').textContent = lviFill(T(txt[0], txt[1]));
-  lviScaleRender(_el('liveInfoScale'), key, lviNum(iv.textContent));
+  lviScaleRender(_el('liveInfoScale'), key, lviScaleValue(key, iv.textContent));
   lviHistRender(_el('liveInfoHist'), key, iv.style.color, lviExtra(key));
   const src = _el('liveInfoSrc');
   const lines = liveInfoSource(key, cell);
@@ -14758,8 +14800,10 @@ function asbConfPctMetric(v) {
 function asbBasisMetric(v) {
   const s = String(v || '').toLowerCase();
   if (s.includes('veto')) return 'metric-bad';
-  if (s.includes('fallback')) return 'metric-warm';
-  if (s.includes('stable') || s === 'good') return 'metric-good';
+  if (s.includes('warn') || s.includes('fallback')) return 'metric-warm';
+  /* A verified cheaper record and a stable original setting are positive evidence. Cold /
+   * low-battery overrides stay warnings instead of collapsing to unknown grey. */
+  if (s.includes('raised') || s.includes('stable') || s === 'good') return 'metric-good';
   return 'metric-neutral';
 }
 function asbModemMetric(v) {
@@ -14807,8 +14851,8 @@ function asbClampMetric(perHour) {
 /* How far the ROM lets the CPU reach (Stock): 100% is free, a low share is the ROM holding it. */
 function asbCeilMetric(pct) {
   const n = Number(pct); if (!Number.isFinite(n) || n <= 0) return 'metric-neutral';
-  if (n >= 100) return 'metric-good';
-  return n >= 85 ? 'metric-fair' : n >= 60 ? 'metric-mild' : n >= 30 ? 'metric-warm' : n >= 15 ? 'metric-hot' : 'metric-severe';
+  return asbMetricStep(n, [5, 15, 30, 60, 85, 100],
+    ['metric-bad', 'metric-severe', 'metric-hot', 'metric-warm', 'metric-mild', 'metric-fair', 'metric-good']);
 }
 /* Battery charge left. */
 function asbBatLevelMetric(pct) {
@@ -14908,6 +14952,7 @@ function paintStockLive(stockKv = null) {
      * board sensor. */
     set('liveSurface', (boardT || hotT) ? (boardT || hotT) + '°C' : '—');
     setLiveLabel('liveSurfaceLabel', boardT ? 'lv_board' : 'lv_hotspot', boardT ? 'Board' : 'Die · max');
+    _stockLiveInfo.surfaceKind = boardT ? 'board' : 'cpu';
     const pol = {};
     Object.entries(kv).forEach(([k, v]) => {
       const m = k.match(/^cpu\.(policy\d+)\.(scaling_max_freq|cpuinfo_max_freq)$/);
@@ -15124,7 +15169,7 @@ function paintStockLive(stockKv = null) {
 
 let _stockTelemetryLastMs = 0;
 let _stockTelemetryKv = {};
-const _stockLiveInfo = { ceil: [] };
+const _stockLiveInfo = { ceil: [], surfaceKind: 'board' };
 const _lvLast = { st: {}, kv: {} };
 let _stockRomHistory = { ts: 0, cpuT: 0 };
 /* Stock thermal trend (fix177): samples of the mean CPU-zone temperature over the last two
