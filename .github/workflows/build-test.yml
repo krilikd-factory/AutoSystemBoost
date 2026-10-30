@@ -166,7 +166,7 @@ jobs:
           done
           if [ "$_pb_missing" = 1 ]; then
             echo "Source-only DSP checkout: reference staging optional; static DSP gates remain mandatory."
-            ASB_DSP_REFERENCE_OPTIONAL=1 bash tools/asb_full_regression.sh
+            bash tools/asb_source_regression.sh
           else
             bash tools/asb_full_regression.sh
           fi
