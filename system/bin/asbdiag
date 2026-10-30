@@ -3082,7 +3082,8 @@ if [ -s "$_dmf" ]; then
   awk '$1 != "current" && NF >= 6 {
          on = ($2 >= 600 && $3 > 0) ? sprintf("%.1f%%/h over %d min", $3 * 36 / $2, $2 / 60) : "not measured";
          off = ($6 >= 1 && $4 > 0) ? sprintf("%.2f%%/h over %d window(s)", $5 * 36 / $4, $6) : "not measured";
-         printf "    %-12s screen on %s · screen off %s\n", $1, on, off }' "$_dmf" 2>/dev/null | while IFS= read -r _dml; do P "$_dml"; done
+         latest = (NF >= 9 && $8 >= 3600) ? sprintf(" · latest %.2f%%/h over %d min", $7 / 100, $8 / 60) : "";
+         printf "    %-12s screen on %s · screen off %s%s\n", $1, on, off, latest }' "$_dmf" 2>/dev/null | while IFS= read -r _dml; do P "$_dml"; done
   # fix189: the screen-off windows of 10+ min the meter did not count, and why.
   if [ -r /data/adb/asb/drain_meter.rej ]; then
     read -r _dmrm _dmrs _dmrc _dmrl < /data/adb/asb/drain_meter.rej 2>/dev/null
