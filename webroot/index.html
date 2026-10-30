@@ -58,13 +58,20 @@
   --accent: #00f0b4;
   --accent-glow: rgba(0,240,180,0.35);
   --accent2: #00d4ff;
-  --metric-cool: #00d4ff;
-  --m-cool: #00d4ff;
   --m-good: #2ed573;
   --m-mild: #c2e64b;
   --m-warm: #ffbf1f;
   --m-hot: #ff7a1a;
   --m-bad: #ff2d2d;
+  /* Activity (FSM state, app load) is a category, not a grade: blue/cyan at rest, turquoise
+   * for ordinary work, violet to pink as the work gets heavier. No green, no amber or red, so
+   * an activity can never be read as a quality judgement. */
+  --fsm-deep: #5c9eff;
+  --fsm-light: #65d7ff;
+  --fsm-moderate: #38d0c8;
+  --fsm-heavy: #b79aff;
+  --fsm-sustained: #e58cf2;
+  --fsm-gaming: #ff8fc8;
   --m-charge-a: #2ed573;
   --m-charge-b: #00d4ff;
   --m-charge-hi: #e9fff7;
@@ -1533,6 +1540,9 @@ body.config-active #livePage.open {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .smart-drain-eta { display: flex; align-items: center; gap: 5px; max-width: 100%; min-width: 0;
   font: 500 11px/1.2 var(--sans); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+/* Duration/ETA is context for the rate, not another severity reading. Keep it neutral in
+ * every theme even when a broad card rule paints all descendants with the drain grade. */
+html .smart-drain-half .smart-drain-eta { color:var(--text) !important; }
 .smart-drain-eta > span:last-child { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .smart-drain-eta-ico { flex: 0 0 auto; display: inline-flex; color: var(--text-tertiary); }
 .smart-drain-eta-ico .tech-icon { width: 11px; height: 11px; }
@@ -1582,7 +1592,6 @@ html[data-asb-theme="light"] .live-info-src { background: #fbfcfc; }
 .lvs-bar { position: relative; display: flex; gap: 2px; height: 8px; border-radius: 5px; overflow: visible; }
 .lvs-seg { flex: 1 1 0; border-radius: 3px; opacity: .38; }
 .lvs-seg.on { opacity: 1; box-shadow: 0 0 0 1px rgba(255,255,255,.35), 0 0 10px currentColor; }
-.lvs-seg.metric-cool { background: var(--m-cool); color: var(--m-cool); }
 .lvs-seg.metric-good { background: var(--m-good); color: var(--m-good); }
 .lvs-seg.metric-mild { background: var(--m-mild); color: var(--m-mild); }
 .lvs-seg.metric-warm { background: var(--m-warm); color: var(--m-warm); }
@@ -1619,6 +1628,9 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .device-page .lgr-v.dev-warn { color: var(--bal); }
 .device-page .lgr-v.dev-bad { color: var(--perf); }
 .device-page .dev-evidence { border-inline-start: 2px solid var(--accent); padding-inline-start: 10px; }
+.device-page .dev-group { display: flex; align-items: center; gap: 10px; margin: 12px 4px -2px;
+  font: 700 11px/1.2 var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--text-tertiary); }
+.device-page .dev-group::after { content: ''; flex: 1 1 auto; height: 1px; background: var(--border); }
 .rpt-meta-row { display: flex; align-items: center; justify-content: space-between; gap: 10px;
   width: 100%; margin: -2px 2px 10px; }
 .lgr-status { font-size: 12px; color: var(--text-tertiary); }
@@ -3181,8 +3193,10 @@ html[data-asb-theme="light"] {
   /* A restrained warm-grey canvas keeps white operational cards distinct without the dark
      theme’s neon glow. Values are opaque enough for Android WebView composition. */
   --bg:#edf4f1; --surface:#ffffff; --surface-hover:#e3efea;
-  --accent:#007c63; --accent2:#006f9b; --metric-cool:#006f9b; --accent-glow:rgba(0,124,99,.20);
-  --m-cool:#006f9b; --m-good:#08753c; --m-mild:#4f7a0a; --m-warm:#8a5700; --m-hot:#b04a00; --m-bad:#b42318;
+  --accent:#007c63; --accent2:#006f9b; --accent-glow:rgba(0,124,99,.20);
+  --m-good:#08753c; --m-mild:#4f7a0a; --m-warm:#8a5700; --m-hot:#b04a00; --m-bad:#b42318;
+  --fsm-deep:#2059bf; --fsm-light:#00759e; --fsm-moderate:#047a76;
+  --fsm-heavy:#7240bd; --fsm-sustained:#9c3aa0; --fsm-gaming:#b0245f;
   --m-charge-a:#08753c; --m-charge-b:#006f9b; --m-charge-hi:#35b07a;
   --perf:#b42318; --perf-glow:rgba(180,35,24,.18); --bal:#8a5700; --bal-glow:rgba(138,87,0,.17);
   --bat:#08753c; --bat-glow:rgba(8,117,60,.17); --text:#14231f;
@@ -3976,17 +3990,14 @@ html[data-asb-glass="1"] .smart-banner-value .load-mid { color:var(--bal) !impor
 html[data-asb-glass="1"] .smart-banner-value:is(.cap-clamp,.basis-veto,.load-high),
 html[data-asb-glass="1"] .smart-banner-value .load-high { color:var(--perf) !important; }
 
-/* Every monitored value uses the same evidence vocabulary in all four themes.
- * Unknown and warm-up readings intentionally remain neutral.
- * fix248: one six-step scale for every graded reading - cold, healthy, slightly raised,
- * raised, high, critical - so a temperature, a load or a drain rate says how far along it
- * is, not only which side of one line. Plain descriptive values (uptime, the slot, a
- * modem at its default) carry no grade and keep the card's own value colour. */
-html .smart-banner-value.metric-cool, html .live-cell-value.metric-cool, html .smart-drain-val.metric-cool, html .live-info-val.metric-cool,
-html[data-asb-glass="1"] .smart-banner-value.metric-cool, html[data-asb-glass="1"] .live-cell-value.metric-cool,
-html[data-asb-glass="1"] .smart-drain-val.metric-cool, html[data-asb-glass="1"] .live-info-val.metric-cool,
-html[data-asb-theme="light"] .smart-banner-value.metric-cool, html[data-asb-theme="light"] .live-cell-value.metric-cool,
-html[data-asb-theme="light"] .smart-drain-val.metric-cool, html[data-asb-theme="light"] .live-info-val.metric-cool { color:var(--m-cool) !important; }
+/* Every monitored value uses the same colour vocabulary in all four themes (fix252):
+ * - the text colour: a plain fact with no judgement (uptime, the slot, a rate, a modem at its
+ *   default); grey: not known yet or still warming up;
+ * - green, lime, yellow, orange, red: one quality scale from best to worst. Green is always the
+ *   best end - for a temperature, a load, the headroom and the battery alike - and no step sits
+ *   beyond it, so a green reading never looks second best;
+ * - blue/cyan, turquoise, violet, pink: what the phone is doing (FSM state, app load);
+ * - the green-to-blue shimmer: charging. */
 html .smart-banner-value.metric-good, html .live-cell-value.metric-good, html .smart-drain-val.metric-good, html .live-info-val.metric-good,
 html[data-asb-glass="1"] .smart-banner-value.metric-good, html[data-asb-glass="1"] .live-cell-value.metric-good,
 html[data-asb-glass="1"] .smart-drain-val.metric-good, html[data-asb-glass="1"] .live-info-val.metric-good,
@@ -4017,12 +4028,27 @@ html[data-asb-glass="1"] .smart-banner-value.metric-neutral, html[data-asb-glass
 html[data-asb-glass="1"] .smart-drain-val.metric-neutral, html[data-asb-glass="1"] .live-info-val.metric-neutral,
 html[data-asb-theme="light"] .smart-banner-value.metric-neutral, html[data-asb-theme="light"] .live-cell-value.metric-neutral,
 html[data-asb-theme="light"] .smart-drain-val.metric-neutral, html[data-asb-theme="light"] .live-info-val.metric-neutral { color:var(--text-tertiary) !important; }
-html .live-cell-value.metric-normal, html[data-asb-glass="1"] .live-cell-value.metric-normal,
-html[data-asb-theme="light"] .live-cell-value.metric-normal { color:var(--text) !important; }
-html .smart-banner-value.metric-normal { color:#9ef2e4; }
-html[data-asb-theme="light"] .smart-banner-value.metric-normal { color:#00634f !important; }
-html[data-asb-glass="1"] .smart-banner-value.metric-normal { color:var(--text) !important; }
-html[data-asb-glass="1"][data-asb-theme="light"] .smart-banner-value.metric-normal { color:#00634f !important; }
+html :is(.live-cell-value,.smart-banner-value,.smart-drain-val,.live-info-val):is(.metric-normal,.metric-info),
+html[data-asb-glass="1"] :is(.live-cell-value,.smart-banner-value,.smart-drain-val,.live-info-val):is(.metric-normal,.metric-info),
+html[data-asb-theme="light"] :is(.live-cell-value,.smart-banner-value,.smart-drain-val,.live-info-val):is(.metric-normal,.metric-info) { color:var(--text) !important; }
+html :is(.live-cell-value,.smart-banner-value,.live-info-val).metric-fsm-deep,
+html[data-asb-glass="1"] :is(.live-cell-value,.smart-banner-value,.live-info-val).metric-fsm-deep,
+html[data-asb-theme="light"] :is(.live-cell-value,.smart-banner-value,.live-info-val).metric-fsm-deep { color:var(--fsm-deep) !important; }
+html :is(.live-cell-value,.smart-banner-value,.live-info-val).metric-fsm-light,
+html[data-asb-glass="1"] :is(.live-cell-value,.smart-banner-value,.live-info-val).metric-fsm-light,
+html[data-asb-theme="light"] :is(.live-cell-value,.smart-banner-value,.live-info-val).metric-fsm-light { color:var(--fsm-light) !important; }
+html :is(.live-cell-value,.smart-banner-value,.live-info-val).metric-fsm-moderate,
+html[data-asb-glass="1"] :is(.live-cell-value,.smart-banner-value,.live-info-val).metric-fsm-moderate,
+html[data-asb-theme="light"] :is(.live-cell-value,.smart-banner-value,.live-info-val).metric-fsm-moderate { color:var(--fsm-moderate) !important; }
+html :is(.live-cell-value,.smart-banner-value,.live-info-val).metric-fsm-heavy,
+html[data-asb-glass="1"] :is(.live-cell-value,.smart-banner-value,.live-info-val).metric-fsm-heavy,
+html[data-asb-theme="light"] :is(.live-cell-value,.smart-banner-value,.live-info-val).metric-fsm-heavy { color:var(--fsm-heavy) !important; }
+html :is(.live-cell-value,.smart-banner-value,.live-info-val).metric-fsm-sustained,
+html[data-asb-glass="1"] :is(.live-cell-value,.smart-banner-value,.live-info-val).metric-fsm-sustained,
+html[data-asb-theme="light"] :is(.live-cell-value,.smart-banner-value,.live-info-val).metric-fsm-sustained { color:var(--fsm-sustained) !important; }
+html :is(.live-cell-value,.smart-banner-value,.live-info-val).metric-fsm-gaming,
+html[data-asb-glass="1"] :is(.live-cell-value,.smart-banner-value,.live-info-val).metric-fsm-gaming,
+html[data-asb-theme="light"] :is(.live-cell-value,.smart-banner-value,.live-info-val).metric-fsm-gaming { color:var(--fsm-gaming) !important; }
 /* A battery that is charging: the word shimmers gently from green to blue, so it reads as
  * something happening rather than a reading. Still colour for reduced motion. */
 html .smart-banner-value.metric-charge, html .live-cell-value.metric-charge, html .smart-drain-val.metric-charge, html .live-info-val.metric-charge,
@@ -6097,8 +6123,9 @@ function lvMeterPaint(profile) {
   const off = lvOffFigure(profile);
   if (onEl) onEl.textContent = (e && e.on > 0) ? lvPct(e.on, 10, 1) : T('lv_measuring', 'measuring\u2026');
   if (offEl) offEl.textContent = off ? off.t : T('lv_measuring', 'measuring\u2026');
-  asbMetricPaint('bnDrain', (e && e.on > 0) ? asbScreenDrainMetric(e.on / 10, true) : 'metric-info');
-  asbMetricPaint('bnDrainOff', off ? asbScreenDrainMetric(off.x / 100, false) : 'metric-info');
+  /* Rates are descriptive context, not alarms: both numeric %/h values stay neutral. */
+  asbMetricPaint('bnDrain', 'metric-info');
+  asbMetricPaint('bnDrainOff', 'metric-info');
   _lvDrain.on = (e && e.on > 0) ? 'meter' : 'meter_wait';
   _lvDrain.off = off ? 'measured' : 'wait';
   _lvDrain.offN = off ? off.n : 0;
@@ -6609,17 +6636,17 @@ function liveInfoSource(key, cell) {
 const LVI_HIST_MS = 15 * 60 * 1000;
 const _lviHist = {};
 const LVI_SCALES = {
-  cpu: { cuts: [35, 45, 52, 60, 68], unit: '°', kind: 't', steps: ['metric-cool', 'metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'] },
-  skin: { cuts: [30, 35, 38, 41, 44], unit: '°', kind: 't', steps: ['metric-cool', 'metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'] },
-  board: { cuts: [32, 38, 42, 46, 50], unit: '°', kind: 't', steps: ['metric-cool', 'metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'] },
-  battemp: { cuts: [25, 35, 38, 41, 45], unit: '°', kind: 't', steps: ['metric-cool', 'metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'] },
+  cpu: { cuts: [45, 52, 60, 68], unit: '°', kind: 't', steps: ['metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'] },
+  skin: { cuts: [35, 38, 41, 44], unit: '°', kind: 't', steps: ['metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'] },
+  board: { cuts: [38, 42, 46, 50], unit: '°', kind: 't', steps: ['metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'] },
+  battemp: { cuts: [35, 38, 41, 45], unit: '°', kind: 't', steps: ['metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'] },
   gpu: { cuts: [25, 45, 65, 85], unit: '%', kind: 'l', steps: ['metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'] },
   headroom: { cuts: [10, 15, 25, 35], unit: '%', kind: 'h', steps: ['metric-bad', 'metric-hot', 'metric-warm', 'metric-mild', 'metric-good'] },
   clamps: { cuts: [4, 11, 21, 41], unit: '', kind: 'c', steps: ['metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'] },
   sbattery: { cuts: [10, 20, 30, 50], unit: '%', kind: 'b', steps: ['metric-bad', 'metric-hot', 'metric-warm', 'metric-mild', 'metric-good'] }
 };
 const LVS_FB = {
-  t: { 'metric-cool': 'cool', 'metric-good': 'normal', 'metric-mild': 'warm', 'metric-warm': 'quite warm', 'metric-hot': 'hot', 'metric-bad': 'overheating' },
+  t: { 'metric-good': 'normal', 'metric-mild': 'warm', 'metric-warm': 'quite warm', 'metric-hot': 'hot', 'metric-bad': 'overheating' },
   l: { 'metric-good': 'light', 'metric-mild': 'moderate', 'metric-warm': 'noticeable', 'metric-hot': 'high', 'metric-bad': 'at the limit' },
   h: { 'metric-bad': 'almost none', 'metric-hot': 'little', 'metric-warm': 'limited', 'metric-mild': 'enough', 'metric-good': 'free' },
   c: { 'metric-good': 'rare', 'metric-mild': 'now and then', 'metric-warm': 'often', 'metric-hot': 'very often', 'metric-bad': 'constant' },
@@ -11215,6 +11242,11 @@ function asbPageText(root) {
   const mark = function (e) { return asbPageWarn(e) ? '  (!)' : ''; };
   const pick = function (e, c) { return asbPageKids(e).filter(function (x) { return asbPageHas(x, c); })[0] || null; };
   function walk(e) {
+    if (asbPageHas(e, 'dev-group')) {
+      out.push('');
+      out.push('# ' + asbPageTxt(e));
+      return;
+    }
     if (asbPageHas(e, 'lgr-sec')) {
       const t = pick(e, 'lgr-sec-t');
       out.push('');
@@ -11435,31 +11467,44 @@ function closeReportPage() {
 }
 /* Device diagnostics (fix230). The TSV collector is read-only and runs on demand only.
  * Every section, key and value is inserted with textContent: kernel/build data is never HTML. */
+/* fix252: the page reads top-down in five groups - the hardware, the firmware and system,
+ * the kernel, the root stack, then ASB itself - instead of ASB's own cards splitting the
+ * hardware from the kernel. The collector's firmware section is shown as two cards: the
+ * phone's identity opens the hardware group, the build details sit with the firmware. A
+ * spec's fifth field lists keys in display order; the last spec of a section also shows every
+ * key no earlier card took, so a future collector key is never hidden. */
 const DEVICE_SECTION_ORDER = [
-  ['firmware', 'dev_sec_firmware', 'Firmware and ROM'],
-  ['soc', 'dev_sec_soc', 'Device and SoC'],
-  ['cpu_policy', 'dev_sec_cpu_policy', 'CPU frequency policies'],
-  ['gpu', 'dev_sec_gpu', 'GPU and devfreq'],
-  ['memory', 'dev_sec_memory', 'Memory'],
-  ['battery', 'dev_sec_battery', 'Battery'],
-  ['system', 'dev_sec_system', 'System'],
-  ['asb', 'dev_sec_asb', 'ASB runtime'],
-  ['asb_caps', 'dev_sec_asb_caps', 'ASB device capabilities'],
-  ['kernel', 'dev_sec_kernel', 'Kernel build'],
-  ['kernel_features', 'dev_sec_kernel_features', 'Custom kernel features'],
-  ['susfs', 'dev_sec_susfs', 'SuSFS interface'],
-  ['metamodule', 'dev_sec_metamodule', 'Metamodule'],
-  ['kernel_external', 'dev_sec_kernel_external', 'External kernel / UV evidence'],
-  ['kernel_runtime', 'dev_sec_kernel_runtime', 'Live kernel facilities'],
-  ['kernel_config', 'dev_sec_kernel_config', 'Kernel configuration'],
-  ['meta', 'dev_sec_meta', 'Collection metadata']
+  ['firmware', 'dev_sec_device', 'Device', 'hw', ['market_name', 'brand', 'manufacturer', 'model', 'device', 'product', 'board']],
+  ['soc', 'dev_sec_soc', 'Chip (SoC)', 'hw'],
+  ['cpu_policy', 'dev_sec_cpu_policy', 'CPU frequency policies', 'hw'],
+  ['gpu', 'dev_sec_gpu', 'GPU and devfreq', 'hw'],
+  ['memory', 'dev_sec_memory', 'Memory', 'hw'],
+  ['battery', 'dev_sec_battery', 'Battery', 'hw'],
+  ['firmware', 'dev_sec_firmware', 'Firmware and ROM', 'sw', ['android', 'oplus_rom', 'build_display', 'security_patch', 'sdk',
+    'codename', 'oplus_ota', 'build_id', 'build_incremental', 'vendor_incremental', 'build_type', 'build_tags', 'build_date',
+    'base_os', 'baseband', 'bootloader', 'fingerprint']],
+  ['system', 'dev_sec_system', 'System', 'sw'],
+  ['kernel', 'dev_sec_kernel', 'Kernel build', 'kernel'],
+  ['kernel_features', 'dev_sec_kernel_features', 'Custom kernel features', 'kernel'],
+  ['kernel_runtime', 'dev_sec_kernel_runtime', 'Live kernel facilities', 'kernel'],
+  ['kernel_external', 'dev_sec_kernel_external', 'External kernel / UV evidence', 'kernel'],
+  ['kernel_config', 'dev_sec_kernel_config', 'Kernel configuration', 'kernel'],
+  ['susfs', 'dev_sec_susfs', 'SuSFS interface', 'root'],
+  ['metamodule', 'dev_sec_metamodule', 'Metamodule', 'root'],
+  ['asb', 'dev_sec_asb', 'ASB runtime', 'asb'],
+  ['asb_caps', 'dev_sec_asb_caps', 'ASB device capabilities', 'asb'],
+  ['meta', 'dev_sec_meta', 'Collection metadata', 'asb']
 ];
+const DEVICE_GROUPS = {
+  hw: ['dev_grp_hw', 'Hardware'], sw: ['dev_grp_sw', 'Firmware and system'], kernel: ['dev_grp_kernel', 'Kernel'],
+  root: ['dev_grp_root', 'Root and modules'], asb: ['dev_grp_asb', 'ASB module']
+};
 /* Reverse the feature groups from the original collector presentation while keeping each
  * driver's version directly below its main row. SuSFS leads, NoMount closes the section.
  * Unknown future keys remain visible after this explicit, device-independent order. */
 const DEVICE_KERNEL_FEATURE_ORDER = [
   'susfs', 'susfs_version', 'bbg_baseband_guard', 'bbr_v2', 'bbr_v1', 'lto',
-  'tmpfs_xattr_posix_acl', 'unicode_bypass_fix', 'droidspaces', 'ntsync', 'nomount', 'nomount_version'
+  'tmpfs_xattr_posix_acl', 'unicode_bypass_fix', 'unicode_bypass_evidence', 'droidspaces', 'ntsync', 'nomount', 'nomount_version'
 ];
 function parseDeviceInfo(txt) {
   const d = { sections: Object.create(null), count: 0, malformed: 0 };
@@ -11752,13 +11797,29 @@ function deviceInfoRender(d) {
     ov.forEach(function (r) { card.appendChild(logReportRow(r[0], r[1], false)); shown++; });
     body.appendChild(card);
   }
-  DEVICE_SECTION_ORDER.forEach(function (spec) {
+  const used = {};
+  let group = '';
+  DEVICE_SECTION_ORDER.forEach(function (spec, si) {
     const sec = d.sections[spec[0]];
     if (!sec) return;
-    const keys = spec[0] === 'kernel_features' ?
-      DEVICE_KERNEL_FEATURE_ORDER.filter(function (key) { return Object.prototype.hasOwnProperty.call(sec, key); }).concat(
-        Object.keys(sec).filter(function (key) { return DEVICE_KERNEL_FEATURE_ORDER.indexOf(key) < 0; })) : Object.keys(sec);
+    const taken = used[spec[0]] || (used[spec[0]] = {});
+    const order = spec[0] === 'kernel_features' ? DEVICE_KERNEL_FEATURE_ORDER : (spec[4] || []);
+    let keys = order.filter(function (key) { return Object.prototype.hasOwnProperty.call(sec, key) && !taken[key]; });
+    const last = !DEVICE_SECTION_ORDER.slice(si + 1).some(function (o) { return o[0] === spec[0]; });
+    if (last) keys = keys.concat(Object.keys(sec).filter(function (key) { return !taken[key] && keys.indexOf(key) < 0; }));
     if (!keys.length) return;
+    keys.forEach(function (key) { taken[key] = true; });
+    if (spec[3] && spec[3] !== group) {
+      group = spec[3];
+      const g = DEVICE_GROUPS[group];
+      if (g) {
+        const gh = document.createElement('div');
+        gh.className = 'dev-group';
+        if (gh.setAttribute) { gh.setAttribute('role', 'heading'); gh.setAttribute('aria-level', '2'); }
+        gh.textContent = T(g[0], g[1]);
+        body.appendChild(gh);
+      }
+    }
     const card = logReportSec(T(spec[1], spec[2]));
     keys.forEach(function (key) {
       const raw = String(sec[key]);
@@ -14183,18 +14244,19 @@ function lvLoadShare(raw, cpus) {
 }
 /* Monitor readings share one colour vocabulary, but not one threshold table. Each helper
  * judges only its own unit; missing, malformed and warm-up evidence stays neutral. */
-const METRIC_CLASSES = ['metric-good', 'metric-warm', 'metric-bad', 'metric-neutral', 'metric-normal', 'metric-cool',
-  'metric-mild', 'metric-hot', 'metric-info', 'metric-charge'];
+const METRIC_CLASSES = ['metric-good', 'metric-warm', 'metric-bad', 'metric-neutral', 'metric-normal',
+  'metric-mild', 'metric-hot', 'metric-info', 'metric-charge', 'metric-fsm-deep', 'metric-fsm-light',
+  'metric-fsm-moderate', 'metric-fsm-heavy', 'metric-fsm-sustained', 'metric-fsm-gaming'];
 function asbMetricPaint(id, state) {
   const el = _el(id); if (!el) return;
   const kept = String(el.className || '').split(/\s+/).filter(c => c && !METRIC_CLASSES.includes(c));
   kept.push(METRIC_CLASSES.includes(state) ? state : 'metric-neutral');
   el.className = kept.join(' ');
 }
-/* fix248: one six-step scale - cool, good, mild, warm, hot, bad. `cuts` are the five upper
- * bounds, ascending; a reading under the first is the first step. Readings where higher is
- * better pass their steps reversed. */
-const METRIC_STEPS = ['metric-cool', 'metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'];
+/* fix252: one five-step quality scale - good, mild, warm, hot, bad - with green always the
+ * best end. `cuts` are the four upper bounds, ascending; a reading under the first is the
+ * first step. Readings where higher is better pass their steps reversed. */
+const METRIC_STEPS = ['metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'];
 function asbMetricStep(n, cuts, steps) {
   const st = steps || METRIC_STEPS;
   for (let i = 0; i < cuts.length; i++) if (n < cuts[i]) return st[i];
@@ -14204,14 +14266,14 @@ function asbLoadMetric(v) {
   if (v === null || v === undefined || v === '') return 'metric-neutral';
   const n = Number(v);
   if (!Number.isFinite(n) || n < 0) return 'metric-neutral';
-  return asbMetricStep(n, [25, 45, 65, 85], METRIC_STEPS.slice(1));
+  return asbMetricStep(n, [25, 45, 65, 85]);
 }
 function asbThermalMetric(v, kind) {
   const n = Number(v); if (!Number.isFinite(n) || n <= 0) return 'metric-neutral';
-  const cuts = kind === 'body' ? [30, 35, 38, 41, 44]
-    : kind === 'board' ? [32, 38, 42, 46, 50]
-    : kind === 'battery' ? [25, 35, 38, 41, 45]
-    : [35, 45, 52, 60, 68];
+  const cuts = kind === 'body' ? [35, 38, 41, 44]
+    : kind === 'board' ? [38, 42, 46, 50]
+    : kind === 'battery' ? [35, 38, 41, 45]
+    : [45, 52, 60, 68];
   return asbMetricStep(n, cuts);
 }
 function asbRamMetric(av, total) {
@@ -14230,18 +14292,12 @@ function asbDrainMetric(ma, cap) {
   const n = Number(ma), c = Number(cap); if (!Number.isFinite(n)) return 'metric-neutral';
   if (n < 0) return 'metric-charge'; if (n === 0) return 'metric-neutral';
   if (!Number.isFinite(c) || c <= 0) return 'metric-neutral';
-  return asbMetricStep(n / c * 100, [1, 4, 7, 12, 18]);
-}
-/* The hourly drain rates of the card's two big tiles: with the screen on ten hours of
- * screen time is ordinary; with it off, healthy idle stays well under one percent. */
-function asbScreenDrainMetric(pctph, screenOn) {
-  const n = Number(pctph); if (!Number.isFinite(n) || n <= 0) return 'metric-info';
-  return screenOn ? asbMetricStep(n, [3, 6, 9, 13, 18]) : asbMetricStep(n, [0.4, 0.8, 1.2, 1.8, 3]);
+  return asbMetricStep(n / c * 100, [4, 7, 12, 18]);
 }
 function asbClockMetric(cur, max) {
   const n = Number(cur), m = Number(max);
   if (!Number.isFinite(n) || !Number.isFinite(m) || n < 0 || m <= 0) return 'metric-neutral';
-  return asbMetricStep(n / m * 100, [25, 45, 65, 85], METRIC_STEPS.slice(1));
+  return asbMetricStep(n / m * 100, [25, 45, 65, 85]);
 }
 function asbHeadroomMetric(v) {
   if (v === null || v === undefined || v === '') return 'metric-neutral';
@@ -14278,14 +14334,13 @@ function asbSlotMetric(v) {
   if (v === 'hot') return 'metric-hot';
   if (v === 'warm') return 'metric-warm';
   if (v === 'typical') return 'metric-info';
-  if (v === 'cool') return 'metric-cool';
+  if (v === 'cool') return 'metric-good';
   return 'metric-neutral';
 }
-/* Temperature direction in degrees per minute: fast cooling is blue, cooling green, steady
- * plain, then warming by speed. */
+/* Temperature direction in degrees per minute: cooling green, steady plain, then warming by
+ * speed. */
 function asbTrendMetric(perMin) {
   const n = Number(perMin); if (!Number.isFinite(n)) return 'metric-neutral';
-  if (n <= -1) return 'metric-cool';
   if (n < -0.3) return 'metric-good';
   if (n <= 0.3) return 'metric-info';
   return asbMetricStep(n, [0.8, 1.5, 2.5], ['metric-mild', 'metric-warm', 'metric-hot', 'metric-bad']);
@@ -14293,18 +14348,19 @@ function asbTrendMetric(perMin) {
 /* What the governor's state machine says the phone is doing, from asleep to flat out. */
 function asbFsmMetric(state) {
   const s = String(state || '').toUpperCase().split(/[\s·]/)[0];
-  return { DEEP_IDLE: 'metric-cool', LIGHT_IDLE: 'metric-good', MODERATE: 'metric-mild', HEAVY: 'metric-warm',
-    SUSTAINED: 'metric-hot', GAMING: 'metric-hot' }[s] || 'metric-normal';
+  return { DEEP_IDLE: 'metric-fsm-deep', LIGHT_IDLE: 'metric-fsm-light', MODERATE: 'metric-fsm-moderate',
+    HEAVY: 'metric-fsm-heavy', SUSTAINED: 'metric-fsm-sustained', GAMING: 'metric-fsm-gaming' }[s] || 'metric-normal';
 }
-/* The foreground load Smart reads: idle, light, medium, heavy, gaming. */
+/* The foreground load Smart reads: idle, light, medium, heavy, gaming - an activity, in the
+ * FSM's colours for the same words, not a grade. */
 function asbAppMetric(h) {
   const n = Number(h);
-  return ['metric-cool', 'metric-good', 'metric-mild', 'metric-warm', 'metric-hot'][n] || 'metric-neutral';
+  return ['metric-fsm-deep', 'metric-fsm-light', 'metric-fsm-moderate', 'metric-fsm-heavy', 'metric-fsm-gaming'][n] || 'metric-neutral';
 }
 /* Vendor clamps in the last hour: a few are ordinary, dozens mean a hot phone. */
 function asbClampMetric(perHour) {
   const n = Number(perHour); if (!Number.isFinite(n) || n < 0) return 'metric-neutral';
-  return asbMetricStep(n, [4, 11, 21, 41], METRIC_STEPS.slice(1));
+  return asbMetricStep(n, [4, 11, 21, 41]);
 }
 /* How far the ROM lets the CPU reach (Stock): 100% is free, a low share is the ROM holding it. */
 function asbCeilMetric(pct) {
@@ -15071,11 +15127,12 @@ async function pollLive(visible) {
       + ((_cs0 && _cs1) ? '\n' + T('cap_tip_clusters', 'main cores: %1 · top cores: %2')
           .replace('%1', CAP_SRC_LABELS[_cs0] || _cs0).replace('%2', CAP_SRC_LABELS[_cs1] || _cs1) : '');
     capEl.className = 'live-cell-value';
-    /* fix248: ASB and the profile script keep their own hues; a ceiling someone else holds
-     * is graded - the vendor's clamp raised, a thermal overlay high - and an unreadable
-     * policy neutral. */
-    if (capSrc === 'asb' || capSrc === 'asb_dynamic') capEl.classList.add('cap-asb');
-    else if (capSrc && capSrc.startsWith('shell')) capEl.classList.add('cap-shell');
+    /* fix252: ASB or the profile script holding the ceiling is the ordinary case - a plain
+     * fact, not a green "good" or the cyan of an idle state. A ceiling someone else holds is
+     * graded - the vendor's clamp raised, a thermal overlay high - and an unreadable policy
+     * neutral. */
+    if (capSrc === 'asb' || capSrc === 'asb_dynamic') { capEl.classList.add('cap-asb'); asbMetricPaint('liveCapSrc', 'metric-normal'); }
+    else if (capSrc && capSrc.startsWith('shell')) { capEl.classList.add('cap-shell'); asbMetricPaint('liveCapSrc', 'metric-normal'); }
     else if (capSrc === 'vendor_clamp') asbMetricPaint('liveCapSrc', 'metric-warm');
     else if (capSrc === 'vendor_raised') asbMetricPaint('liveCapSrc', 'metric-mild');
     else if (capSrc === 'thermal_overlay') asbMetricPaint('liveCapSrc', 'metric-hot');
@@ -15391,8 +15448,9 @@ async function pollLive(visible) {
                 'Actual screen-on drain: how fast the battery level is falling now, over the last minutes - not a model.');
             }
             _lvDrain.on = _act > 0 ? 'now' : (_chg ? 'charging' : ((_frt > 0 && (_fbs === 'recent' || _fbs === 'slot' || _fbs === 'meter')) ? _fbs : 'wait'));
-            asbMetricPaint('bnDrain', _chg ? 'metric-charge' : _act > 0 ? asbScreenDrainMetric(_act / 10, true)
-              : (_frt > 0 && (_fbs === 'recent' || _fbs === 'slot' || _fbs === 'meter')) ? asbScreenDrainMetric(_frt / 10, true) : 'metric-info');
+            /* Only the explicit charging state is animated; every numeric %/h rate and the
+             * warm-up text use the same neutral colour as the modem's ordinary state. */
+            asbMetricPaint('bnDrain', _chg ? 'metric-charge' : 'metric-info');
             _lvDrain.winS = _lvDrain.on === 'meter' ? _fpk.min * 60 : parseInt(kv.smart_drain_window_s || '0', 10);
             /* Smart's own screen-off figure (fix189), by the rule every card uses - not the
              * phone-wide one, which only feeds the time to empty (marked "~" there). */
@@ -15403,7 +15461,7 @@ async function pollLive(visible) {
             if (_doEl) {
               _doEl.textContent = _sOff ? _sOff.t : T('lv_measuring', 'measuring\u2026');
               _lvDrain.off = _sOff ? 'measured' : 'wait';
-              asbMetricPaint('bnDrainOff', _sOff ? asbScreenDrainMetric(_sOff.x / 100, false) : 'metric-info');
+              asbMetricPaint('bnDrainOff', 'metric-info');
             }
             const _stEl = _el('bnSlotTemp');
             if (_stEl) {
