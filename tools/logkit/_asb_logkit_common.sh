@@ -1147,6 +1147,7 @@ lk_policy_at_cap() {
 # the first after it came on. The summary reports those rows apart from the ordinary ones.
 lk_capture_jank_row() {
   _jph="$1"
+  LK_JANK_FEEDBACK_VALID=0
   if [ "${2:-0}" != 1 ]; then
     if [ -n "${LK_JANK_PREV:-}" ]; then
       LK_JANK_OFF="$LK_JANK_PREV"; LK_JANK_OFF_TS="${LK_JANK_PREV_TS:-0}"; LK_JANK_OFF_TOUCH="${LK_JANK_PREV_TOUCH:-}"
@@ -1214,11 +1215,17 @@ lk_capture_jank_row() {
       _jto="-"
       [ -n "$_jtc" ] && [ -n "${LK_JANK_PREV_TOUCH:-}" ] && [ "$_jtc" -ge "$LK_JANK_PREV_TOUCH" ] 2>/dev/null && \
         _jto=$(( _jtc - LK_JANK_PREV_TOUCH ))
+      _jfb_pkg="$(lk_topapp_pkg)"
       printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
         "$_jnow" "$(date '+%Y-%m-%dT%H:%M:%S')" "$_jph" "$_jsa" "$(( _jnow - LK_JANK_PREV_TS ))" \
         "$_jmc" "$_jpc" "$_jto" "$_df" "$_dj" "$_dd" "$_du" "$_di" \
-        "$_jmcs" "$_jpcs" "$(lk_topapp_pkg)" \
+        "$_jmcs" "$_jpcs" "$_jfb_pkg" \
         "$(lk_gfx_pkg_delta "$LK_OUT_DIR/.jank_pkg_prev" "$LK_OUT_DIR/.jank_pkg_now")" >> "$LK_OUT_DIR/jank_trace.tsv"
+      # A hint input only. The native governor takes a fresh probe for its own A/B
+      # window; these deltas are never injected into asb_smooth_window a second time.
+      LK_JANK_FEEDBACK_VALID=1
+      LK_JANK_FEEDBACK_TS="$_jnow"; LK_JANK_FEEDBACK_DF="$_df"; LK_JANK_FEEDBACK_DJ="$_dj"
+      LK_JANK_FEEDBACK_PKG="$_jfb_pkg"; LK_JANK_FEEDBACK_STATE="$_jsa"; LK_JANK_FEEDBACK_PHASE="$_jph"
     fi
   fi
   mv -f "$LK_OUT_DIR/.jank_pkg_now" "$LK_OUT_DIR/.jank_pkg_prev" 2>/dev/null

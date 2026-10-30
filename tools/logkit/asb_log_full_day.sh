@@ -1333,6 +1333,9 @@ lk_emit_smart_records() {
   fi
   grep '^microwake|' "$_srf" | sed 's/^microwake|/night wakes: /; s/|/  /g'
   grep '^smooth|' "$_srf" | sed 's/^smooth|/smoothness: /; s/|/  /g'
+  echo "infinite-log Smart feedback: status=$(lk_state_kv smooth_log_status); accepted=$(lk_state_kv smooth_log_accepted); suppressed=$(lk_state_kv smooth_log_suppressed); rejected=$(lk_state_kv smooth_log_rejected)"
+  echo "The log sends only sustained-jank probe hints. The native governor re-reads frames once, owns every A/B window and keeps plateau/recheck decisions."
+  [ -r "$LK_SF_FILE" ] && cp "$LK_SF_FILE" "$LK_OUT_DIR/smart_log_feedback.env" 2>/dev/null || true
   sed -n 's/^last=/last decision: /p' "$_srf" | head -1
   sed -n 's/^last_smooth=/last smoothness decision: /p' "$_srf" | head -1
   echo "record_mW is the power of the best setting's blocks (charge counter x battery voltage, suspend"
@@ -2011,7 +2014,63 @@ lk_resume_merge() {
   echo "${_rmg_now}|$(date '+%Y-%m-%d %H:%M:%S')|${_rmg_down}|${_rmg_ver}|${_rmg_rom}|${_rmg_why}" >> "$LK_OUT_DIR/reboots.txt"
 }
 
+# fix258: bounded log -> native Smart hint. This is not a controller and never writes
+# CPU/GPU/VM settings. Two consecutive, comparable jank rows can request an earlier
+# native probe; the governor validates freshness/scenario/sequence and performs its
+# own A/B measurement. No extra poll, dumpsys call or persistent worker is added.
+LK_SF_FILE="${ASB_LK_SMART_FEEDBACK_FILE:-/dev/.asb/log_smart_feedback.env}"
+LK_SF_CAPTURE=''
+LK_SF_SEQ=0; LK_SF_STREAK=0; LK_SF_SIG=''; LK_SF_PREV_DF=0; LK_SF_PREV_DJ=0
+lk_smart_feedback_reset_streak() { LK_SF_STREAK=0; LK_SF_SIG=''; LK_SF_PREV_DF=0; LK_SF_PREV_DJ=0; }
+lk_smart_feedback_clear() {
+  [ -f "$LK_SF_FILE" ] || return 0
+  _sfc="$(sed -n 's/^capture=//p' "$LK_SF_FILE" 2>/dev/null | head -n 1)"
+  [ "$_sfc" = "$LK_SF_CAPTURE" ] && rm -f "$LK_SF_FILE" 2>/dev/null || true
+}
+lk_smart_feedback_observe() {
+  [ "${LK_JANK_FEEDBACK_VALID:-0}" = 1 ] || { lk_smart_feedback_reset_streak; return 0; }
+  case "${LK_JANK_FEEDBACK_PKG:-}" in ''|-|multi|*systemui*) lk_smart_feedback_reset_streak; return 0 ;; esac
+  case "${LK_JANK_FEEDBACK_PHASE:-}" in gaming*|charging*|''|-) lk_smart_feedback_reset_streak; return 0 ;; esac
+  [ "${LK_JANK_FEEDBACK_STATE:-mixed}" != mixed ] || { lk_smart_feedback_reset_streak; return 0; }
+  [ "$(lk_state_kv profile)" = smart ] || { lk_smart_feedback_reset_streak; return 0; }
+  [ "$(lk_state_kv smart_mode)" = 1 ] || { lk_smart_feedback_reset_streak; return 0; }
+  [ "$(lk_state_kv smart_pkg_detect_ok)" = 1 ] || { lk_smart_feedback_reset_streak; return 0; }
+  [ "$(lk_state_kv smart_thermal_veto)" != 1 ] || { lk_smart_feedback_reset_streak; return 0; }
+  _sfh="$(lk_state_kv smart_pkg_hash)"; _sfa="$(lk_state_kv smart_app_hint)"; _sfb="$(lk_state_kv smart_bucket_id)"
+  case "$_sfh" in ''|*[!0-9a-fA-F]*) lk_smart_feedback_reset_streak; return 0 ;; esac
+  [ "${#_sfh}" = 16 ] && [ "$_sfh" != 0000000000000000 ] || { lk_smart_feedback_reset_streak; return 0; }
+  case "$_sfa:$_sfb" in *[!0-9:]*|:*|*:) lk_smart_feedback_reset_streak; return 0 ;; esac
+  _sfd="${LK_JANK_FEEDBACK_DF:-0}"; _sfj="${LK_JANK_FEEDBACK_DJ:-0}"
+  case "$_sfd:$_sfj" in *[!0-9:]*|:*|*:) lk_smart_feedback_reset_streak; return 0 ;; esac
+  _sfmin="${ASB_LK_SMART_HINT_MIN_FRAMES:-240}"
+  [ "$_sfd" -ge "$_sfmin" ] 2>/dev/null && [ "$_sfj" -gt 0 ] && \
+    [ $(( _sfj * 1000 )) -ge $(( _sfd * ${ASB_LK_SMART_HINT_MIN_JANK_X1000:-50} )) ] || {
+    lk_smart_feedback_reset_streak; return 0;
+  }
+  _sfsig="$_sfh:$_sfa:$_sfb:${LK_JANK_FEEDBACK_PKG}:${LK_JANK_FEEDBACK_STATE}"
+  if [ "$_sfsig" != "$LK_SF_SIG" ]; then
+    LK_SF_STREAK=1; LK_SF_SIG="$_sfsig"; LK_SF_PREV_DF="$_sfd"; LK_SF_PREV_DJ="$_sfj"; return 0
+  fi
+  LK_SF_STREAK=$((LK_SF_STREAK + 1))
+  if [ "$LK_SF_STREAK" -lt 2 ]; then LK_SF_PREV_DF="$_sfd"; LK_SF_PREV_DJ="$_sfj"; return 0; fi
+  _sfdf=$((LK_SF_PREV_DF + _sfd)); _sfdj=$((LK_SF_PREV_DJ + _sfj))
+  _sfnow="${LK_JANK_FEEDBACK_TS:-$(date +%s)}"; LK_SF_SEQ=$((LK_SF_SEQ + 1))
+  _sftmp="$LK_SF_FILE.tmp.$$"
+  if ( umask 077; printf '%s\n' \
+      'schema=1' "capture=$LK_SF_CAPTURE" "seq=$LK_SF_SEQ" "epoch=$_sfnow" \
+      "pkg_hash=$_sfh" "app_hint=$_sfa" "bucket_id=$_sfb" 'rows=2' \
+      "frames=$_sfdf" "janky=$_sfdj" "jank_x1000=$(( _sfdj * 1000 / _sfdf ))" > "$_sftmp" ) 2>/dev/null; then
+    mv -f "$_sftmp" "$LK_SF_FILE" 2>/dev/null || rm -f "$_sftmp" 2>/dev/null || true
+  else
+    rm -f "$_sftmp" 2>/dev/null || true
+  fi
+  # A published hint is deduplicated by capture/seq. Require two fresh qualifying
+  # rows before another hint instead of re-requesting probes on every logger poll.
+  lk_smart_feedback_reset_streak
+}
+
 lk_init
+LK_SF_CAPTURE="${LK_START_EPOCH}_$$"
 renice -n 10 -p $$ >/dev/null 2>&1 || true
 # Publish after lk_init created the per-capture directory. If the user later deletes this
 # exact directory, the launcher can safely identify this capture as cancelled/orphaned.
@@ -2048,6 +2107,7 @@ lk_oem_toggle_row
 lk_finalize() {
   [ "${LK_FINALIZED:-0}" = "1" ] && return 0
   LK_FINALIZED=1
+  lk_smart_feedback_clear
   lk_wl_release
   lk_bt_reconnect_snapshot "end"
   lk_bt_reconnect_stop
@@ -2166,6 +2226,7 @@ while : ; do
   lk_capture_display_trace_row "$_phase"
   # After the display row: it has just read the wakefulness this needs (fix121).
   lk_capture_jank_row "$_phase" "${_dscr:-0}"
+  lk_smart_feedback_observe
   lk_capture_screenoff_class_row "$_phase"
   lk_capture_fsm_media_trace_row "$_phase"
   lk_wakelock_live_row
