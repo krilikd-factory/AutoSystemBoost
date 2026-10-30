@@ -2504,7 +2504,7 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 for f in config/governor.conf config/governor.conf.shipped; do
   grep -qx 'dsp_voice=0' "$ROOT/$f" || fail "$f lacks dsp_voice=0"
 done
-grep -qx 'dsp_voice|advanced|webui_sensitive' "$ROOT/config/key_ownership.tsv" || fail "ownership registry"
+grep -qx 'dsp_voice|advanced|webui_sensitive|shell' "$ROOT/config/key_ownership.tsv" || fail "ownership registry"
 [ "$(grep -c ' dsp_voice ' "$ROOT/common/install.sh")" = 2 ] || fail "installer does not carry dsp_voice over on update"
 grep -q '_dspp voice "$_vox"' "$ROOT/runtime/asb_audio_apply.sh" || fail "apply script does not publish the voice prop"
 grep -Eq 'bass_db voice( [a-z_]+)*; do' "$ROOT/runtime/asb_audio_apply.sh" || fail "voice prop not mirrored into the vendor namespace"
@@ -3672,8 +3672,9 @@ grep -q 'ASB_LTPO_PROC_MOUNTS:-/proc/mounts' "$SRC" || fail 'mounts table not in
 # --- runtime fixture: mocked mount/umount/nsenter, no real radio or mount ---
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-mkdir -p "$TMP/mod/config" "$TMP/bin" "$TMP/state" "$TMP/live/my_product/etc"
+mkdir -p "$TMP/mod/config" "$TMP/mod/runtime" "$TMP/bin" "$TMP/state" "$TMP/live/my_product/etc"
 printf 'name=AutoSystemBoost\n' > "$TMP/mod/module.prop"
+cp "$ROOT/runtime/asb_ltpo_lock.sh" "$TMP/mod/runtime/"
 
 # A stock table with the OEM switches OFF, like the field device shipped.
 cat > "$TMP/live/my_product/etc/oplus_vrr_config.json" <<'EOF'
@@ -3885,7 +3886,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 fail=0; f() { echo "FAIL ltpo range: $*" >&2; fail=1; }
 mkdir -p "$T/bin" "$T/mod/config" "$T/mod/runtime" "$T/d" "$T/s"
-cp "$ROOT/runtime/asb_ltpo_apply.sh" "$T/mod/runtime/"
+cp "$ROOT/runtime/asb_ltpo_apply.sh" "$ROOT/runtime/asb_ltpo_lock.sh" "$T/mod/runtime/"
 touch "$T/mod/module.prop"
 cat > "$T/disp" <<'X'
       DisplayMode{id=1, width=1272, height=2772, peakRefreshRate=60.000004, vsyncRate=60.000004, group=0}
@@ -3979,7 +3980,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 T="$(mktemp -d)"
 fail=0; f() { echo "FAIL ltpo video: $*" >&2; fail=1; }
 mkdir -p "$T/bin" "$T/mod/config" "$T/mod/runtime" "$T/d" "$T/snd/card0/pcm0p/sub0" "$T/bl/panel0"
-cp "$ROOT/runtime/asb_ltpo_video.sh" "$T/mod/runtime/"
+cp "$ROOT/runtime/asb_ltpo_video.sh" "$ROOT/runtime/asb_ltpo_lock.sh" "$T/mod/runtime/"
 echo 900 > "$T/bl/panel0/brightness"
 echo "state: RUNNING" > "$T/snd/card0/pcm0p/sub0/status"
 printf 'screen=1\nstate=MODERATE\n' > "$T/rstate"
@@ -4414,9 +4415,17 @@ run on >/dev/null
 run stock >/dev/null
 [ "$(cat "$NODE")" = 2 ] || fail 'stock did not restore initial 2'
 
-# Uninstall calls the same restore path; exercise it directly with an initial 1.
-echo 1 > "$NODE"
+# An initial or already-applied 1 is a true no-op: preserve the baseline contract and
+# prove the fast path did not even rewrite the node (an old mtime must survive).
+rm -f "$STATE"; echo 1 > "$NODE"; touch -d '@1000000000' "$NODE"
+_mtu_mtime="$(stat -c %y "$NODE")"
 run on >/dev/null
+[ "$(stat -c %y "$NODE")" = "$_mtu_mtime" ] || fail 'already-enabled apply rewrote the sysctl'
+[ "$(cat "$STATE")" = 1 ] || fail 'no-op apply lost the initial 1 baseline'
+run on >/dev/null
+[ "$(stat -c %y "$NODE")" = "$_mtu_mtime" ] || fail 'repeat enabled apply rewrote the sysctl'
+
+# Uninstall calls the same restore path; exercise it directly with an initial 1.
 [ "$(restore)" = 'mtu_probing=restored' ] || fail 'uninstall restore result missing'
 [ "$(cat "$NODE")" = 1 ] || fail 'restore changed a pre-existing 1'
 
@@ -7392,7 +7401,8 @@ W="$ROOT/runtime/asb_ltpo_touch.sh"
 fail() { echo "FAIL LTPO touch runtime: $*" >&2; exit 1; }
 sh -n "$W" || fail 'shell syntax'
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
-mkdir -p "$T/bin" "$T/mod/config" "$T/state"
+mkdir -p "$T/bin" "$T/mod/config" "$T/mod/runtime" "$T/state"
+cp "$ROOT/runtime/asb_ltpo_lock.sh" "$T/mod/runtime/"
 : > "$T/event0"
 printf 'ltpo_force=1\nltpo_idle_s=2\nltpo_idle_rate=60\n' > "$T/mod/config/governor.conf"
 printf 'mDisplayState=ON DisplayMode{id=1, width=1440, peakRefreshRate=165.0}\n' > "$T/display"
@@ -7424,6 +7434,7 @@ fi
 X
 cat > "$T/bin/sleep" <<'X'
 #!/bin/sh
+case "$1" in *.*) [ "${ASB_TEST_FRACTIONAL:-1}" = 1 ] || exit 1 ;; esac
 exit 0
 X
 chmod +x "$T/bin/"*
@@ -7443,7 +7454,8 @@ run_case normal
 [ "$(cat "$T/count")" = 3 ] || fail 'normal case did not block on exactly three input events'
 printf 'peak_refresh_rate=165.0\npeak_refresh_rate=60.0\npeak_refresh_rate=165.0\npeak_refresh_rate=60.0\n' > "$T/expect"
 cmp -s "$T/writes" "$T/expect" || { cat "$T/writes"; fail 'active/idle write sequence is wrong'; }
-[ ! -e "$T/state/ltpo_touch.pid" ] && [ ! -e "$T/state/ltpo_touch.stop" ] || fail 'cleanup left lifecycle files'
+[ ! -e "$T/state/ltpo_touch.pid" ] && [ ! -e "$T/state/ltpo_touch.stop" ] && [ ! -e "$T/state/ltpo_touch.heartbeat" ] || fail 'cleanup left lifecycle files'
+[ ! -e "$T/state/ltpo_video.lock" ] || fail 'touch left the video ownership lock held'
 run_case guard
 printf 'peak_refresh_rate=165.0\n' > "$T/expect"
 cmp -s "$T/writes" "$T/expect" || fail 'camera guard lowered the panel'
@@ -7452,7 +7464,58 @@ run_case video
 [ ! -s "$T/writes" ] || fail 'touch watcher fought the video owner through Settings'
 grep -q '^orig=60.0$' "$T/state/ltpo_video.lowered" || fail 'video restore target did not follow idle state'
 grep -q '^owner=fixture$' "$T/state/ltpo_video.lowered" || fail 'video ownership metadata was damaged'
-echo "PASS LTPO touch runtime: event waits, active/idle handback, camera guard and video ownership"
+printf 'peak_refresh_rate=165.0\npeak_refresh_rate=60.0\npeak_refresh_rate=165.0\npeak_refresh_rate=60.0\n' > "$T/expect"
+ASB_TEST_FRACTIONAL=0 run_case normal
+cmp -s "$T/writes" "$T/expect" || fail 'fractional-sleep fallback changed active/idle transitions'
+[ ! -e "$T/state/ltpo_touch.heartbeat" ] || fail 'fallback case left heartbeat behind'
+echo "PASS LTPO touch runtime: event waits, ownership lock, liveness marker and portable sleep"
+)
+
+
+t_ltpo_lock_runtime() (
+# Shared ownership lock: concurrent record editors are serialized, stale locks are
+# reclaimed, and orig replacement is atomic and preserves unrelated metadata.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL LTPO ownership lock: $*" >&2; exit 1; }
+L="$ROOT/runtime/asb_ltpo_lock.sh"
+sh -n "$L" || fail 'helper shell syntax'
+export STATE_DIR="$T/state" ASB_LTPO_LOCK_DIR="$T/state/ltpo_video.lock"
+mkdir -p "$STATE_DIR"
+printf 'orig=165.0\nset=60.0\nowner=fixture\n' > "$STATE_DIR/ltpo_video.lowered"
+(
+  . "$L"
+  asb_ltpo_lock || exit 1
+  asb_ltpo_set_orig "$STATE_DIR/ltpo_video.lowered" 144.0 || exit 1
+  asb_ltpo_unlock
+) || fail 'basic lock/edit/unlock'
+grep -qx 'orig=144.0' "$STATE_DIR/ltpo_video.lowered" || fail 'restore target not replaced'
+grep -qx 'owner=fixture' "$STATE_DIR/ltpo_video.lowered" || fail 'metadata not preserved'
+[ ! -e "$ASB_LTPO_LOCK_DIR" ] || fail 'lock not released'
+printf '0\n' > "$T/count"
+worker() (
+  . "$L"
+  i=0
+  while [ "$i" -lt 25 ]; do
+    asb_ltpo_lock || exit 1
+    n="$(cat "$T/count")"
+    printf '%s\n' "$((n + 1))" > "$T/count"
+    asb_ltpo_unlock
+    i=$((i + 1))
+  done
+)
+worker & p1=$!
+worker & p2=$!
+worker & p3=$!
+wait "$p1"; wait "$p2"; wait "$p3"
+[ "$(cat "$T/count")" = 75 ] || fail "concurrent critical sections lost updates: $(cat "$T/count")"
+mkdir -p "$ASB_LTPO_LOCK_DIR"
+sh -c 'exit 0' & dead=$!
+wait "$dead" 2>/dev/null || true
+printf '%s\n' "$dead" > "$ASB_LTPO_LOCK_DIR/pid"
+( . "$L"; asb_ltpo_lock && asb_ltpo_unlock ) || fail 'dead owner lock was not reclaimed'
+echo 'PASS LTPO ownership lock: mutual exclusion, atomic orig update and stale recovery'
 )
 
 
@@ -7464,7 +7527,7 @@ fail() { echo "FAIL LTPO external fallback: $*" >&2; exit 1; }
 T="$(mktemp -d)"; trap 'kill "${EPID:-0}" 2>/dev/null || true; rm -rf "$T"' EXIT
 mkdir -p "$T/mod/config" "$T/mod/runtime" "$T/state" "$T/bin" \
   "$T/modules/OnePlus15-165HZ-LTPO"
-cp "$ROOT/runtime/asb_ltpo_apply.sh" "$T/mod/runtime/"
+cp "$ROOT/runtime/asb_ltpo_apply.sh" "$ROOT/runtime/asb_ltpo_lock.sh" "$T/mod/runtime/"
 : > "$T/mod/module.prop"
 printf 'ltpo_force=1\n' > "$T/mod/config/governor.conf"
 printf 'DisplayMode{id=1, peakRefreshRate=165.0}\n' > "$T/display"

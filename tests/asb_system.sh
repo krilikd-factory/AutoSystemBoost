@@ -700,7 +700,8 @@ echo 'PASS config lock lease contract'
 )
 
 t_config_ownership_registry() (
-# Contract: every governor.conf key has one explicit ownership class, and public keys match WebUI.
+# Contract: every governor.conf key has one explicit ownership class and consumer;
+# public keys match WebUI, and native/shell metadata cannot drift from the implementations.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 CONF="$ROOT/config/governor.conf"
@@ -718,10 +719,11 @@ sh -n "$LINT"
 awk -F= '/^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=/{k=$1; sub(/^[[:space:]]+/, "", k); sub(/[[:space:]]+$/, "", k); print k}' "$CONF" | sort > "$TMP/conf"
 awk -F'|' '
   /^[[:space:]]*#/ || /^[[:space:]]*$/ {next}
-  NF != 3 {print "malformed row " NR > "/dev/stderr"; bad=1; next}
+  NF != 4 {print "malformed row " NR > "/dev/stderr"; bad=1; next}
   $1 !~ /^[A-Za-z_][A-Za-z0-9_]*$/ {print "invalid key " $1 > "/dev/stderr"; bad=1}
   $2 !~ /^(user|advanced|internal)$/ {print "invalid class " $1 "=" $2 > "/dev/stderr"; bad=1}
   $3 !~ /^[a-z_][a-z0-9_]*$/ {print "invalid intent " $1 "=" $3 > "/dev/stderr"; bad=1}
+  $4 !~ /^(shell|native|both)$/ {print "invalid consumer " $1 "=" $4 > "/dev/stderr"; bad=1}
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
@@ -729,6 +731,20 @@ awk -F'|' '
 [ "$(wc -l < "$TMP/registry")" = "207" ] || fail "expected 207 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
+grep -qx 'kernel_sched_stats|advanced|webui_sensitive|shell' "$REG" || fail 'kernel_sched_stats consumer is not pinned to shell'
+grep -qx 'net_mtu_probing|advanced|webui_sensitive|shell' "$REG" || fail 'net_mtu_probing consumer is not pinned to shell'
+grep -oE '!strcmp\(k, "[A-Za-z_][A-Za-z0-9_]*"\)' "$ROOT/src/asb_config.h" \
+  | sed 's/.*"\([A-Za-z_][A-Za-z0-9_]*\)".*/\1/' | sort -u > "$TMP/native"
+cat "$ROOT"/runtime/*.sh "$ROOT"/common/*.sh "$ROOT"/profiles/*.sh "$ROOT"/*.sh > "$TMP/shell"
+awk -F'|' '/^[[:space:]]*#/ || /^[[:space:]]*$/ {next} {print $1 "|" $4}' "$REG" | while IFS='|' read -r key consumer; do
+  grep -Fqx "$key" "$TMP/native" && native=1 || native=0
+  grep -Eq "(^|[^A-Za-z0-9_])${key}([^A-Za-z0-9_]|$)" "$TMP/shell" && shell=1 || shell=0
+  case "$consumer:$native:$shell" in
+    native:1:*|both:1:1|shell:0:1) : ;;
+    *) echo "$key=$consumer(native=$native,shell=$shell)" ;;
+  esac
+done > "$TMP/consumer_bad"
+[ ! -s "$TMP/consumer_bad" ] || fail "consumer drift: $(tr '\n' ' ' < "$TMP/consumer_bad")"
 
 sed -n '/const CFG_ITEMS = \[/,/^\];/p' "$ROOT/webroot/index.html" \
   | grep -oE "key:'[A-Za-z_][A-Za-z0-9_]*'" | sed "s/key:'//;s/'//" | sort -u > "$TMP/cards"
@@ -3788,7 +3804,7 @@ grep -q '^  audio_resampler:APPLY_REBOOT,$' "$H" || fail "the resampler card doe
 grep -q '^  media_vol_steps:APPLY_REBOOT,$' "$H" || fail "the volume steps card does not ask for a reboot"
 for k in audio_resampler media_vol_steps; do
   grep -q "^$k=stock$" "$ROOT/config/governor.conf" || fail "$k not shipped as stock"
-  grep -q "^$k|advanced|webui_sensitive$" "$ROOT/config/key_ownership.tsv" || fail "$k has no owner"
+  grep -q "^$k|advanced|webui_sensitive|" "$ROOT/config/key_ownership.tsv" || fail "$k has no owner"
   [ "$(grep -c " $k " "$ROOT/common/install.sh")" -ge 2 ] || fail "$k is not carried over on update"
 done
 grep -q 'resetprop -n ro.config.media_vol_steps "$_mv_st"' "$ROOT/post-fs-data.sh" || fail "volume steps are not set before Android starts"
@@ -6037,6 +6053,11 @@ need "$ATTWF" 'SOURCE_SHA256='
 need "$ATTWF" 'source_sha256=$SOURCE_SHA256'
 need "$ATTWF" 'binary_sha256='
 need "$ATTWF" 'asb_dsp_attach.provenance'
+for _workflow in "$ATTWF" "$ROOT/.github/workflows/build-dsp-aidl.yml"; do
+  need "$_workflow" 'asb_aosp_mutable.before'
+  need "$_workflow" 'asb-aosp-changed-files.tsv'
+  need "$_workflow" 'asb-aosp-buildfiles.after.sha256'
+done
 need "$NATIVE_BUILD" 'pushed gain_mb'
 need "$NATIVE_BUILD" 'settings change'
 need "$NATIVE_BUILD" 'attached to session'

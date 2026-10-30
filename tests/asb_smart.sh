@@ -6219,6 +6219,187 @@ C
 echo "PASS fg classify manual gaming: a feed under load is not a game, a known game is, the heat inference keeps the camera and media out, Smart keeps owning its own"
 )
 
+t_writer_cap_composition_properties() (
+# Property test (fix264): compose randomized profile/thermal/budget/vendor/scene ceilings,
+# then pass the result through the REAL OPP snap, physical-policy mapping, floor and final
+# manual clamp. This deliberately tests the pure writer sink, not a second detached model of
+# gaming/camera/interaction orchestration; those transitions retain their integration tests.
+set -eu
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+W="$ROOT/src/asb_writer.h"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL writer cap properties: $*" >&2; exit 1; }
+CC="${CC:-cc}"; command -v "$CC" >/dev/null 2>&1 || CC=gcc
+command -v "$CC" >/dev/null 2>&1 || { echo "SKIP writer cap properties: no C compiler"; exit 0; }
+cat > "$T/t.c" <<'C'
+#include <stdio.h>
+#include <string.h>
+#include <stdint.h>
+static long g_cpu_freq_tables[16][32]; static int g_cpu_freq_table_len[16];
+static char g_cpu_max_paths[3][128]; static char g_cpu_all_max_paths[16][128]; static int g_cpu_all_paths_n;
+static void cpu_read_freq_tables(void) {}
+static void writer_init_paths(void) {}
+#define ASB_MIN_CEILING_PCT_OF_HW 40
+static int g_writer_floor_pct = 0;
+static int g_shell_cap = 0;
+static int writer_manual_clamp(int pi, const char *path, int want) {
+  (void)pi; (void)path;
+  return (g_shell_cap > 0 && want > g_shell_cap) ? g_shell_cap : want;
+}
+C
+awk '/^static long cpu_snap_freq/,/^}/' "$W" >> "$T/t.c"
+awk '/^static long cpu_lowest_opp/,/^}/' "$W" >> "$T/t.c"
+awk '/^static int cpu_floor_ceiling/,/^}/' "$W" >> "$T/t.c"
+awk '/^static int writer_slot_path_idx/,/^}/' "$W" >> "$T/t.c"
+awk '/^static int writer_slot_ceiling/,/^}/' "$W" >> "$T/t.c"
+awk '/^static int writer_slot_final_max/,/^}/' "$W" >> "$T/t.c"
+cat >> "$T/t.c" <<'C'
+static uint32_t rng_state = UINT32_C(0x9e3779b9);
+static uint32_t rnd(void) {
+  uint32_t x = rng_state;
+  x ^= x << 13; x ^= x >> 17; x ^= x << 5;
+  return rng_state = x;
+}
+static int random_khz(void) { return 300000 + (int)(rnd() % 5400000u); }
+static int positive_cap(void) { return (rnd() % 4u) == 0 ? 0 : random_khz(); }
+static int min_positive(int a, int b) {
+  if (a <= 0) return b;
+  if (b <= 0) return a;
+  return a < b ? a : b;
+}
+static int table_has(int k, int value) {
+  for (int i = 0; i < g_cpu_freq_table_len[k]; i++)
+    if (g_cpu_freq_tables[k][i] == value) return 1;
+  return 0;
+}
+static int path_index_for_id(int id) {
+  char needle[64];
+  snprintf(needle, sizeof(needle), "/policy%d/", id);
+  for (int k = 0; k < g_cpu_all_paths_n; k++)
+    if (strstr(g_cpu_all_max_paths[k], needle)) return k;
+  return -1;
+}
+static void make_topology(int which) {
+  static const int ids[3][4] = {{0, 6, -1, -1}, {0, 4, 6, -1}, {0, 4, 6, 7}};
+  static const int reps[3][3] = {{0, 6, -1}, {0, 4, 6}, {0, 6, 7}};
+  static const int counts[3] = {2, 3, 4};
+  memset(g_cpu_freq_tables, 0, sizeof(g_cpu_freq_tables));
+  memset(g_cpu_freq_table_len, 0, sizeof(g_cpu_freq_table_len));
+  memset(g_cpu_max_paths, 0, sizeof(g_cpu_max_paths));
+  memset(g_cpu_all_max_paths, 0, sizeof(g_cpu_all_max_paths));
+  g_cpu_all_paths_n = counts[which];
+  for (int k = 0; k < g_cpu_all_paths_n; k++) {
+    snprintf(g_cpu_all_max_paths[k], sizeof(g_cpu_all_max_paths[k]),
+             "/sys/devices/system/cpu/cpufreq/policy%d/scaling_max_freq", ids[which][k]);
+    int steps = 3 + (int)(rnd() % 10u);
+    long value = 300000 + (long)(rnd() % 200000u);
+    int used = 0;
+    while (used < steps && value <= 5700000) {
+      g_cpu_freq_tables[k][used++] = value;
+      value += 50000 + (long)(rnd() % 350000u);
+    }
+    g_cpu_freq_table_len[k] = used;
+  }
+  for (int s = 0; s < 3; s++) {
+    int k = reps[which][s] < 0 ? -1 : path_index_for_id(reps[which][s]);
+    if (k >= 0) snprintf(g_cpu_max_paths[s], sizeof(g_cpu_max_paths[s]), "%s", g_cpu_all_max_paths[k]);
+  }
+}
+int main(void) {
+  unsigned long checks = 0;
+  int thermal_witness = 0, floor_witness = 0;
+  for (int iteration = 0; iteration < 20000; iteration++) {
+    int which = iteration % 3;
+    make_topology(which);
+    for (int slot = 0; slot < 3; slot++) {
+      int k = writer_slot_path_idx(slot);
+      if (k < 0) {
+        int untouched = random_khz();
+        if (writer_slot_ceiling(slot, untouched, 0) != untouched) {
+          printf("unmanaged slot changed: iteration=%d slot=%d\n", iteration, slot); return 1;
+        }
+        checks++; continue;
+      }
+      int request = random_khz();
+      /* Independent upstream ceilings: profile, thermal overlay, budget, vendor and the
+         active scene. Zero means that a layer is absent, as in the governor contracts. */
+      request = min_positive(request, positive_cap());
+      request = min_positive(request, positive_cap());
+      request = min_positive(request, positive_cap());
+      request = min_positive(request, positive_cap());
+      request = min_positive(request, positive_cap());
+      int looser = request + (int)(rnd() % 1000000u);
+      int manual = (rnd() & 1u) != 0;
+      g_shell_cap = manual ? (int)g_cpu_freq_tables[k][rnd() % (uint32_t)g_cpu_freq_table_len[k]] : 0;
+      int normal = writer_slot_final_max(slot, request, 0, manual, 1);
+      int loose_result = writer_slot_final_max(slot, looser, 0, manual, 1);
+      int hot = writer_slot_final_max(slot, request, 1, manual, 1);
+      if (normal > loose_result) {
+        printf("stricter cap raised result: iteration=%d slot=%d request=%d looser=%d normal=%d loose=%d\n",
+               iteration, slot, request, looser, normal, loose_result); return 1;
+      }
+      if (hot > normal) {
+        printf("thermal emergency raised result: iteration=%d slot=%d hot=%d normal=%d\n",
+               iteration, slot, hot, normal); return 1;
+      }
+      if (!table_has(k, normal) || !table_has(k, hot)) {
+        printf("enumerated policy returned a non-OPP: iteration=%d slot=%d normal=%d hot=%d\n",
+               iteration, slot, normal, hot); return 1;
+      }
+      checks += 4;
+      int ordinary = writer_slot_ceiling(slot, request, 0);
+      int emergency = writer_slot_ceiling(slot, request, 1);
+      if (emergency < ordinary) thermal_witness = 1;
+      long lowest = cpu_lowest_opp(k);
+      long guard = 0;
+      for (int i = 0; i < g_cpu_freq_table_len[k]; i++)
+        if (g_cpu_freq_tables[k][i] > guard) guard = g_cpu_freq_tables[k][i];
+      guard = guard * ASB_MIN_CEILING_PCT_OF_HW / 100;
+      if (request < guard && ordinary > request) floor_witness = 1;
+      if (ordinary < lowest || emergency < lowest) {
+        printf("ceiling below lowest OPP: iteration=%d slot=%d\n", iteration, slot); return 1;
+      }
+      /* Exercise the documented min composition with the same real OPP helpers. The final
+         re-clamp is against the live effective maximum, including Smart's lowest-OPP floor. */
+      int wanted_min = random_khz();
+      int own_max = ordinary;
+      int live_max = emergency;
+      int limit = min_positive(own_max, live_max);
+      if (limit > 0 && wanted_min > limit) wanted_min = limit;
+      wanted_min = (rnd() & 1u) ? (int)cpu_lowest_opp(k) : (int)cpu_snap_freq(k, wanted_min);
+      if (live_max > 0 && wanted_min > live_max) wanted_min = live_max;
+      if (wanted_min <= 0 || wanted_min > live_max || !table_has(k, wanted_min)) {
+        printf("invalid effective min/max: iteration=%d slot=%d min=%d max=%d\n",
+               iteration, slot, wanted_min, live_max); return 1;
+      }
+      checks += 3;
+      /* Below the table, snap-down selects the lowest real OPP rather than zero/no-cap. */
+      if (lowest > 1 && cpu_snap_freq(k, lowest - 1) != lowest) {
+        printf("below-table snap is not lowest OPP: iteration=%d slot=%d\n", iteration, slot); return 1;
+      }
+      checks++;
+    }
+  }
+  if (!thermal_witness || !floor_witness) { puts("property corpus missed a required witness"); return 1; }
+  /* Non-enumerable means unknown, not unsupported: retain the kernel-rounding request path. */
+  make_topology(2);
+  int saved_len = g_cpu_freq_table_len[0];
+  g_cpu_freq_table_len[0] = 0;
+  if (writer_slot_ceiling(0, 1234567, 0) != 1234567 || cpu_snap_freq(0, 1234567) != 1234567) {
+    puts("missing OPP table did not preserve the request"); return 1;
+  }
+  g_cpu_freq_table_len[0] = saved_len;
+  if (cpu_snap_freq(-1, 1234567) != 1234567 || cpu_snap_freq(16, 1234567) != 1234567) {
+    puts("invalid OPP index did not preserve the request"); return 1;
+  }
+  printf("PASS writer cap properties: %lu checks, 2/3/4-policy mappings, OPP/floor/thermal/min-max invariants and kernel-rounding fallback\n", checks + 3);
+  return 0;
+}
+C
+"$CC" -std=gnu11 -Wall -Werror -Wno-unused-function -o "$T/t" "$T/t.c" || fail "harness does not compile"
+"$T/t" || fail "behaviour"
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;
