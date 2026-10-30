@@ -51,9 +51,9 @@ static int g_unlock_lift_now;
  * screen-on, socket and display uevents remain independently epoll-driven. */
 #define TIMER_IDLE_S   10   /* metrics interval, screen OFF */
 #define TIMER_DEEP_S   45   /* metrics interval, verified deep idle */
-/* Screen off with background work: halves the wakeup rate of the idle tier without
- * waiting for the verified-deep-idle conditions that busy background work prevents. */
-#define TIMER_IDLE_NOISY_S 20
+/* Screen off with background work: one third of the idle tier's wakeup rate. Display,
+ * input and socket events stay epoll-driven, so this slows only background re-evaluation. */
+#define TIMER_IDLE_NOISY_S 30
 #define TIMER_HOURLY_S  3600
 
 #define STATE_FILE      "/dev/.asb/state"
@@ -734,20 +734,11 @@ static void session_plan_build(asb_fsm_t *fsm, int screen_on) {
         /* Screen off with the state above LIGHT_IDLE: something is running, but nobody is
          * looking at it.
          *
-         * This branch keeps the 10 s cadence, and measurement says that is where the phone
-         * actually lives: overhead sampled across two diagnostics 14 minutes apart works
-         * out at 6.1 timer wakeups per minute, which is TIMER_IDLE_S exactly. The 45 s deep
-         * tier needs the state to be LIGHT_IDLE or lower, and background work keeps it just
-         * above that for long stretches.
-         *
-         * Six wakeups a minute is 360 an hour of pulling the CPU out of idle to look at
-         * sensors nobody can see the result of. The work behind them is real - a sync, a
-         * download - but ASB does not need to re-evaluate it twice a minute to stay
-         * correct: its own decisions here change on the scale of minutes.
-         *
-         * So this gets its own tier between IDLE and DEEP rather than sharing the
-         * screen-on-adjacent one. Reaction to something genuinely new is slower by at most
-         * a few seconds, and with the screen off nothing is waiting on it.
+         * Background work keeps the state above the deep-idle tier for long stretches. The
+         * work is real - a sync or a download - but ASB's policy decisions here change on
+         * the scale of minutes, not seconds. A 30 s cadence bounds the governor's own cost
+         * to 120 timer wakeups an hour; display, input and socket events still arrive via
+         * epoll immediately. With the screen off nobody is waiting on an intermediate cap.
          */
         fsm->plan.sensor_tier  = 1;  /* REDUCED */
         fsm->plan.thermal_div  = 1;
