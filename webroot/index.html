@@ -5149,6 +5149,10 @@ const TECH_ICON_PATHS = {
   log_detail: '<rect x="5" y="3.5" width="14" height="17" rx="2.4"/><path d="M8.5 8h7M8.5 11.5h7M8.5 15h4.2"/><circle cx="16.6" cy="16.6" r="2.6"/><path d="M16.6 15.2v1.4l1 1"/>',
   /* fix187: LSPosed's log - a log sheet beside a hook, the thing an Xposed framework does. */
   log_hook: '<rect x="3" y="3.5" width="10.5" height="17" rx="2.4"/><path d="M6.3 8h4M6.3 11.5h4M6.3 15h2.6"/><path d="M20.5 5v9.5a2.75 2.75 0 0 1-5.5 0V13"/><path d="M13.7 14.3 15 13l1.3 1.3"/>',
+  /* Push transport switched off: a routed signal crossed out, not a generic service stop. */
+  push_off: '<path d="M4 7h10M4 12h7M4 17h4"/><path d="m14 7 3 3-3 3M17 10h3"/><path d="m14 15 6 6M20 15l-6 6"/>',
+  /* DocumentsUI picker: a document with an explicit selection check. */
+  documents_picker: '<path d="M6 3.5h8l4 4V20H6z"/><path d="M14 3.5V8h4M9 12h5M9 15.5h2"/><path d="m13 16 1.5 1.5L18 14"/>',
   generic: '<path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 8v8M8.5 10l7 4M15.5 10l-7 4"/>',
 };
 function techIcon(kind) {
@@ -7172,6 +7176,8 @@ const SNAP_KEYS = [
   'log_level',
   'log_verbosity',
   'lsposed_verbose',
+  'heytap_mcs',
+  'documentsui_fix',
   'doze_level',
   'phantom_procs',
   'anim_speed',
@@ -7343,6 +7349,10 @@ const CFG_ITEMS = [
   { key:'UX_MANAGE_OEM_TOGGLES', type:'bool', def:'0', name:'Manage OEM Toggles (RAM/Battery/Heat)',
     desc:'Lets ASB manage OxygenOS toggles (RAM expansion, Adaptive Battery, Low-Heat). OFF = untouched (OOS may re-enable RAM expansion on reboot). ON = forces RAM expansion OFF every boot.' },
   { key:'athena_service', type:'seg', def:'stock', stock:'stock', opts:['stock','off'], name:'Athena Background Killer' },
+  { key:'heytap_mcs', type:'seg', def:'stock', stock:'stock', opts:['stock','off'], name:'HeyTap MCS / OPPO Push',
+    desc:'Off disables com.heytap.mcs without hiding or replacing any system files. This can stop or delay push notifications from apps that use HeyTap/OPPO Push; some apps may keep their own connection alive instead. Enabling the card also requests one `pm compile -m speed-profile -a` after the next reboot, once boot is complete. That compilation can temporarily use CPU, storage and battery; it never runs on every boot. Stock restores only the MCS state ASB changed and cancels a compile that has not started.' },
+  { key:'documentsui_fix', type:'bool', def:'0', stock:'0', name:'DocumentsUI / DSU Picker Fix',
+    desc:'A one-time repair for a missing or broken system file picker on affected ColorOS/DSU setups. It enables and unhides DocumentsUI, returns its picker and files activities to their default state, and disables com.coloros.filemanager for user 0. THE COST: the ColorOS File Manager disappears until you turn this fix off. Only states ASB actually changed are recorded and restored on Off or uninstall. Nothing is re-applied at boot, and this card does not request ART compilation.' },
   { key:'ltpo_force', type:'bool', def:'0', stock:'0', name:'Force LTPO Refresh',
     desc:'LTPO panels can fall to their lowest refresh rate when nothing on the screen moves; OxygenOS ships parts of that path switched off. This patch takes your device\u2019s OWN refresh-rate table (oplus_vrr_config.json), flips only the idle frame-drop switches the OEM left disabled, and binds the result over the stock file - nothing is copied from another model, and the stock file itself is never modified.\n\nThe patch is prepared while the module installs, and this switch decides whether it is applied: off by default, and turning it on takes effect after a reboot. If the installer found no refresh-rate table on your device, this switch does nothing - the install log says which.\n\nOn a table the OEM already ships fully enabled the switch also does nothing: binding an identical file would be a mount with no effect.\n\nThe switch also opens the Android side of the range, and that part applies at once, without a reboot: no refresh floor, and the peak set to the highest mode this panel reports (165 Hz on the OnePlus 15). The low end - the panel\u2019s own idle rates below 60 Hz - is the table\u2019s job, because Android does not list those rates at all. What was set before is recorded and restored when you switch off. The OEM\u2019s own cap on the render rate (90 Hz on some builds) is left alone.\n\nIntegrated interaction control uses blocking touchscreen events, not polling: the panel maximum is restored on touch, and after two quiet seconds ASB selects 60 Hz so the patched ADFR path can idle down. Camera and game states are kept active, video keeps its own owner, and previous range values are restored exactly on handback. If OnePlus15-165HZ-LTPO is installed, ASB stays off and yields by default; explicitly enabling this switch pauses only its verified writer and gives ASB priority. Switching ASB off requests a clean external-service resume.' },
   { key:'ltpo_video', type:'bool', def:'0', stock:'0', name:'Lowest Refresh for Video',
@@ -7391,6 +7401,7 @@ async function cfgLoad() {
   await loadMmfeedStatus();
   await loadWlFitStatus();
   await loadLspStatus();
+  await loadPackageTweakStatus();
   /* Never repaint the page while it is still sliding in. openConfigPage already drew
    * the hub before the slide started; if fresh values arrive mid-motion, wait out the
    * remainder and paint once the layer has settled. Other callers leave _cfgAnimUntil
@@ -7411,7 +7422,7 @@ const CFG_CAT = {
   perf_ceiling_pct:'battery', wakelock_action:'battery', gnss_trim:'battery',
   night_modem_idle:'net', net_screen_off_lte:'net', net_lte_light:'net', smart_media_guard:'battery',
   net_rps:'net', net_txqueue:'net',
-  athena_service:'system', ltpo_force:'system', ltpo_video:'system', mmfeed_off:'system',
+  athena_service:'system', heytap_mcs:'system', documentsui_fix:'system', ltpo_force:'system', ltpo_video:'system', mmfeed_off:'system',
   heavy_prime_escape:'battery', prime_escape_burst_s:'battery', prime_escape_rest_s:'battery', wakelock_fitness:'battery',
   bt_a2dp_offload:'audio', bat_suppress_gaming:'battery',
   audio_profile:'audio', audio_dac_hifi:'audio', media_loudness:'audio',
@@ -7475,7 +7486,7 @@ const CFG_GROUP_OF = {
   mglru_hold:'battery', kernel_sched_stats:'ui',
   night_modem_idle:'net', net_screen_off_lte:'net', net_lte_light:'net', smart_media_guard:'battery',
   net_rps:'net', net_txqueue:'net',
-  athena_service:'ui', ltpo_force:'ui', ltpo_video:'ui', mmfeed_off:'ui',
+  athena_service:'ui', heytap_mcs:'ui', documentsui_fix:'ui', ltpo_force:'ui', ltpo_video:'ui', mmfeed_off:'ui',
   heavy_prime_escape:'battery', prime_escape_burst_s:'battery', prime_escape_rest_s:'battery', wakelock_fitness:'battery',
   sustained_temp_mode:'battery', doze_level:'battery', doze_trim_whitelist:'battery', wakelock_action:'battery', gnss_trim:'battery',
   camera_hold_enable:'camera', bt_a2dp_offload:'audio',
@@ -7552,7 +7563,7 @@ const CFG_GROUP_SECTIONS = {
     { id:'services', icon:'oem_switches', titleKey:'cfg_ui_section_services',
       title:'System Services', hintKey:'cfg_ui_section_services_hint',
       hint:'Vendor background services and process limits.',
-      keys:['UX_MANAGE_OEM_TOGGLES','athena_service','phantom_procs','mmfeed_off'] },
+      keys:['UX_MANAGE_OEM_TOGGLES','athena_service','heytap_mcs','documentsui_fix','phantom_procs','mmfeed_off'] },
     { id:'feel', icon:'haptic_touch', titleKey:'cfg_ui_section_feel',
       title:'Display & Haptics', hintKey:'cfg_ui_section_feel_hint',
       hint:'Refresh-rate behaviour and how vibration and touch feedback feel.',
@@ -7784,6 +7795,7 @@ const CFG_ICONS = {
   wakelock_action:'wakelock', gnss_trim:'satellite', night_modem_idle:'radio_moon', net_screen_off_lte:'lte_screenoff', net_lte_light:'lte_light', night_quiet_enable:'quiet_moon', sustained_temp_mode:'thermal_mode', sustained_temp_enter:'thermal_point',
   perf_ceiling_pct:'perf_cap', cool_gaming:'cool_game', bat_suppress_gaming:'game_battery', BG_TRIM_LEVEL:'cleaner', gms_trim:'service_trim', gms_freeze:'service_freeze',
   UX_MANAGE_OEM_TOGGLES:'oem_switches', athena_service:'athena', phantom_procs:'phantom', haptic_strength:'haptic_power', haptic_touch_strength:'haptic_touch', log_level:'log_detail', lsposed_verbose:'log_hook', ltpo_force:'ltpo', ltpo_video:'ltpo_video', mmfeed_off:'mmfeed',
+  heytap_mcs:'push_off', documentsui_fix:'documents_picker',
   heavy_prime_escape:'prime_lift', prime_escape_burst_s:'prime_burst', prime_escape_rest_s:'prime_rest', wakelock_fitness:'fitness_pulse',
   /* Same family as net_handover_*: the same journey off a dead Wi-Fi, made by the
    * system instead of by us. Reusing the handover glyph says that at a glance. */
@@ -7931,6 +7943,44 @@ function lspBadge(lsp, cur) {
   /* fix213 (audit K8): an unreadable database names WHY (no_sqlite, unexpected_schema...),
    * so a future LSPosed schema change shows up here instead of failing silently. */
   return { cls:'neutral', text:T('st_lsp_unknown', 'set in LSPosed') + (lsp.reason ? ' (' + lsp.reason + ')' : '') };
+}
+
+let _heyTweak = null, _docTweak = null;
+function packageTweakParse(out) {
+  const o = {};
+  String(out || '').split(/\r?\n/).forEach(function (line) {
+    const m = /^([a-z_]+)=(.*)$/.exec(line.trim());
+    if (m) o[m[1]] = m[2];
+  });
+  return o;
+}
+async function loadPackageTweakStatus() {
+  try {
+    const r = await run("sh " + MD + "/runtime/asb_heytap_mcs.sh status 2>/dev/null; echo ---; sh " + MD + "/runtime/asb_documentsui_fix.sh status 2>/dev/null");
+    const parts = String((r && r.stdout) || '').split('---');
+    _heyTweak = packageTweakParse(parts[0]);
+    _docTweak = packageTweakParse(parts[1]);
+  } catch (e) { _heyTweak = null; _docTweak = null; }
+}
+function packageTweakBadge(key, cur) {
+  if (key === 'heytap_mcs') {
+    if (cur !== 'off') return { cls:'neutral', text:T('st_off', 'Disabled') };
+    const s = _heyTweak || {};
+    if (s.present === '0') return { cls:'neutral', text:T('st_hey_absent', 'MCS not installed') };
+    if (s.state === 'pending') return { cls:'warn', text:T('st_hey_pending', 'MCS off · ART next boot') };
+    if (s.state === 'running') return { cls:'warn', text:T('st_hey_running', 'ART compiling') };
+    if (s.state === 'done') return { cls:'good', text:T('st_hey_done', 'MCS off · ART done') };
+    if (s.state === 'failed') return { cls:'bad', text:T('st_hey_failed', 'MCS off · ART failed') };
+    return { cls:'good', text:T('st_hey_off', 'MCS disabled') };
+  }
+  if (key === 'documentsui_fix') {
+    if (cur !== '1') return { cls:'neutral', text:T('st_off', 'Disabled') };
+    const s = _docTweak || {};
+    if (s.present === '0') return { cls:'neutral', text:T('st_doc_absent', 'DocumentsUI absent') };
+    if (s.asb_changed === '1') return { cls:'good', text:T('st_doc_applied', 'picker repaired') };
+    return { cls:'neutral', text:T('st_doc_already', 'already repaired') };
+  }
+  return null;
 }
 
 // Multimedia telemetry: the same honesty standard as the LTPO card - the badge reads
@@ -8120,6 +8170,8 @@ function cfgStatus(it, cur) {
     if (_ltpoState === 'unsupported') return { cls:'neutral', text:T('st_unavail', 'not supported') };
     return { cls:'neutral', text:T('st_off', 'Disabled') };
   }
+  const _packageBadge = packageTweakBadge(it.key, cur);
+  if (_packageBadge) return _packageBadge;
   // mmfeed_off: same badge contract as ltpo_force - active / pending-boot / absent.
   if (it.key === 'lsposed_verbose') {
     const _lb2 = lspBadge(_lsp, cur);
@@ -8335,6 +8387,8 @@ const WILL_BREAK = {
   radio_policy_enable:'wb_radio_policy',
   gms_trim:           'wb_gms',
   gms_freeze:         'wb_gmsfreeze',
+  heytap_mcs:         'wb_heytap',
+  documentsui_fix:    'wb_documentsui',
   wakelock_action:    'wb_wl',
   gnss_trim:          'wb_gnss',
   perf_ceiling_pct:   'wb_ceiling',
@@ -8381,6 +8435,8 @@ const APPLY_MODE = {
   mmfeed_off:APPLY_REBOOT,
   /* fix187: written into LSPosed's database at once, read by LSPosed when it starts. */
   lsposed_verbose:APPLY_REBOOT,
+  heytap_mcs:APPLY_REBOOT,
+  documentsui_fix:APPLY_LIVE,
   // label is reboot even though the bind lands on save.
   disable_blur:APPLY_REBOOT, ui_effects_level:APPLY_REBOOT,
   CAMERA_LEVEL:APPLY_REBOOT, CAMERA_CONTRAST:APPLY_REBOOT, CAMERA_GRAIN:APPLY_REBOOT,
@@ -9301,6 +9357,40 @@ async function cfgSet(key, val, ctl) {
           try { await run('sh ' + shQuote(MD + '/runtime/asb_lsposed.sh') + ' open 2>/dev/null'); } catch (e) {}
         }
         await loadLspStatus();
+        cfgRender();
+        if (ctl) ctl.classList.remove('busy');
+        return;
+      }
+      if (key === 'heytap_mcs' || key === 'documentsui_fix') {
+        const script = key === 'heytap_mcs' ? 'asb_heytap_mcs.sh' : 'asb_documentsui_fix.sh';
+        let res = '', compile = '';
+        try {
+          const r = await run('sh ' + shQuote(MD + '/runtime/' + script) + ' apply 2>/dev/null');
+          const m = /result=([a-z_]+)/.exec((r && r.stdout) || '');
+          const c = /compile=([a-z_]+)/.exec((r && r.stdout) || '');
+          res = m ? m[1] : '';
+          compile = c ? c[1] : '';
+        } catch (e) {}
+        if (key === 'heytap_mcs') {
+          if ((res === 'disabled' || res === 'already_disabled') && compile === 'done')
+            toast(T('t_hey_done', 'HeyTap MCS remains disabled · ART compilation has already finished'), 'good');
+          else if ((res === 'disabled' || res === 'already_disabled') && compile === 'failed')
+            toast(T('t_hey_compile_failed', 'HeyTap MCS remains disabled · ART compilation failed and will not retry automatically'), 'warn');
+          else if (res === 'disabled' || res === 'already_disabled')
+            toast(T('t_hey_off', 'HeyTap MCS disabled · ART compilation will run once after the next reboot'), 'good');
+          else if (res === 'restored' || res === 'untouched')
+            toast(T('t_hey_stock', 'HeyTap MCS state restored · pending ART compilation cancelled'), 'good');
+          else if (res === 'absent') toast(T('t_hey_absent', 'HeyTap MCS is not installed on this device'), 'warn');
+          else toast(T('t_hey_failed', 'MCS was not changed safely; check its status in asbdiag'), 'bad');
+        } else {
+          if (res === 'applied') toast(T('t_doc_applied', 'DocumentsUI picker repaired · ColorOS File Manager disabled'), 'good');
+          else if (res === 'restored' || res === 'untouched') toast(T('t_doc_restored', 'DocumentsUI and File Manager states restored'), 'good');
+          else if (res === 'already_fixed' || res === 'already_applied') toast(T('t_doc_already', 'The picker already has the requested state'), 'good');
+          else if (res === 'absent') toast(T('t_doc_absent', 'DocumentsUI is not installed on this device'), 'warn');
+          else if (res === 'write_failed_rolled_back') toast(T('t_doc_rolled_back', 'The ROM rejected the repair; ASB rolled its changes back'), 'warn');
+          else toast(T('t_doc_failed', 'DocumentsUI state was not changed safely; original states were kept for restore'), 'bad');
+        }
+        await loadPackageTweakStatus();
         cfgRender();
         if (ctl) ctl.classList.remove('busy');
         return;
