@@ -365,6 +365,8 @@ jobs:
             --exclude 'CHANGELOG.md'                  \
             --exclude 'README.md'                     \
             --exclude 'README.ru.md'                  \
+            --exclude 'README.advanced.md'            \
+            --exclude 'README.advanced.ru.md'         \
             --exclude 'update.json'                   \
             --exclude 'RELEASE_CHECKLIST.md'          \
             --exclude 'docs'                          \
