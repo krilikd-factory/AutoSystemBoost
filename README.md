@@ -6,367 +6,264 @@
 <h1 align="center">AutoSystemBoost</h1>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/krilikd-factory/AutoSystemBoost/main/banner.png" alt="AutoSystemBoost banner" width="80%">
+  <img src="https://raw.githubusercontent.com/krilikd-factory/AutoSystemBoost/main/banner.png" alt="AutoSystemBoost" width="82%">
 </p>
 
-<p align="center"><strong>Adaptive runtime controller for rooted OnePlus devices</strong></p>
-<p align="center"><em>Profiles, a native C governor, thermal-aware policy, camera tuning, audio DSP and a built-in WebUI — with capability checks and readable diagnostics.</em></p>
+<p align="center"><strong>Fast when you need it. Cool and efficient the rest of the time.</strong></p>
+<p align="center">Adaptive performance, thermal awareness, battery tools, a built-in DSP, camera tuning and honest diagnostics for rooted OnePlus devices.</p>
 
 <p align="center">
-  <a href="#the-governor"><img src="https://img.shields.io/badge/GOVERNOR-NATIVE%20C-0ea5e9?style=for-the-badge" alt="Native C governor"></a>
-  <a href="#asb-dsp--our-own-audio-engine"><img src="https://img.shields.io/badge/DSP%20ENGINE-BUILT--IN-dc2626?style=for-the-badge" alt="Built-in DSP engine"></a>
-  <a href="#saved-configurations-and-reset"><img src="https://img.shields.io/badge/WEBUI-INTEGRATED-f59e0b?style=for-the-badge" alt="Integrated WebUI"></a>
-  <img src="https://img.shields.io/badge/ROOT-MAGISK%20%7C%20KSU%20%7C%20APATCH-16a34a?style=for-the-badge" alt="Supported root managers">
+  <img src="https://img.shields.io/badge/PROFILES-5-16a34a?style=for-the-badge" alt="Five profiles">
+  <img src="https://img.shields.io/badge/GOVERNOR-NATIVE-0f766e?style=for-the-badge" alt="Native governor">
+  <img src="https://img.shields.io/badge/SMART-ADAPTIVE-0ea5e9?style=for-the-badge" alt="Adaptive Smart">
+  <img src="https://img.shields.io/badge/DSP-BUILT--IN-dc2626?style=for-the-badge" alt="Built-in DSP">
+  <img src="https://img.shields.io/badge/WEBUI-INCLUDED-f59e0b?style=for-the-badge" alt="Integrated WebUI">
 </p>
 
 <p align="center">
-  <a href="https://github.com/krilikd-factory/AutoSystemBoost/releases"><img src="https://img.shields.io/github/downloads/krilikd-factory/AutoSystemBoost/total?style=for-the-badge&logo=github&label=Downloads" alt="Downloads"></a>
   <a href="https://github.com/krilikd-factory/AutoSystemBoost/releases/latest"><img src="https://img.shields.io/github/v/release/krilikd-factory/AutoSystemBoost?style=for-the-badge&logo=github&label=Latest%20release" alt="Latest release"></a>
+  <a href="https://github.com/krilikd-factory/AutoSystemBoost/releases"><img src="https://img.shields.io/github/downloads/krilikd-factory/AutoSystemBoost/total?style=for-the-badge&logo=github&label=Downloads" alt="Downloads"></a>
   <a href="https://github.com/krilikd-factory/AutoSystemBoost/stargazers"><img src="https://img.shields.io/github/stars/krilikd-factory/AutoSystemBoost?style=for-the-badge&logo=github&label=Stars" alt="GitHub stars"></a>
 </p>
 
----
+<p align="center">
+  <strong>📖 Documentation:</strong>
+  <a href="README.md">Quick start</a> ·
+  <a href="README.advanced.md">Advanced guide</a> ·
+  <a href="README.ru.md">Быстрый старт</a> ·
+  <a href="README.advanced.ru.md">Подробное руководство</a>
+</p>
 
-## ⚡ What it actually is
+## ⚡ What is ASB?
 
-ASB helps the phone use less energy when maximum power is not needed, while keeping it responsive when it is. It reduces unnecessary CPU/GPU spikes during idle and light use, accounts for heat, and never replaces Android's own thermal protection.
+**AutoSystemBoost is not a pack of random “speed” tweaks.** It is a root module that watches workload, temperature, battery level, charging and screen state, then applies behaviour appropriate to the moment.
 
-Unlike a static tweak pack, ASB does not write the same values to every phone at boot. While the phone is running, it considers workload, temperature, battery level and screen state, then selects a policy that fits that moment. If a feature is unsupported, the ROM returns a different value, or a path is unsafe to write, ASB leaves it alone and reports that fact in diagnostics.
+While the phone is idle, ASB tries to avoid unnecessary energy use. During games, camera work and demanding tasks, it keeps useful performance available. When the device becomes hot or the firmware does not expose a setting, ASB acts conservatively and reports the limitation instead of pretending that everything worked.
 
-ASB does not promise a magic battery percentage or identical benchmark results on every device. Its job is to remove unnecessary work that consumes power and creates heat without hiding trade-offs or sacrificing stability for an attractive number.
+> **The goal:** not maximum speed at any cost, but a controllable balance between responsiveness, heat and battery life — with evidence you can inspect.
 
-| | Layer | Component | What it does |
-|:---:|:---|:---|:---|
-| 🧠 | **Core** | `bin/asb` | Six-state governor · session plan · anti-clamp · camera hold · adaptive thermal budget |
-| 🌡 | **Safety** | thermal selector + leases | Validates control temperature, respects platform thermal limits and coordinates writers |
-| 🎚 | **Audio** | `libasbdsp` | Own DSP effect: loudness · compressor · limiter · bass shelf |
-| 🔧 | **Runtime** | `service.sh` + `runtime/` | Capability probe, migration, reconciliation, watchdog and reversible policy writers |
-| 🖥 | **UI** | WebUI + Action | Profiles, user controls, live status and explicit “not applied” evidence |
-| 🩺 | **Diagnostics** | `asbdiag` + effective policy | Source confidence, applied policy, device capabilities and support evidence |
+## ✨ Everything in one place
 
----
+| Area | What ASB gives you |
+|:---|:---|
+| 🧠 **Smart adaptation** | Learns from validated usage scenarios, smoothness, time, charge and temperature; rechecks conclusions instead of trusting one lucky result. |
+| 🎯 **Five profiles** | Smart, Performance, Balanced, Battery and Stock — from automatic adaptation to a clean firmware-controlled baseline. |
+| ⚙️ **Native governor** | Six workload states, smooth transitions and device-specific CPU bounds rather than one fixed frequency table for every phone. |
+| 🌡 **Thermal awareness** | Adaptive performance budgets, cooler sustained operation and explicit priority for the phone's own thermal protection. |
+| 🔋 **Battery & sleep** | Automatic low-battery switching, charging-aware behaviour, Doze, wakelock, background GPS, memory and night-time controls. |
+| 🎮 **Games & heavy work** | Responsive performance under real load, optional cool gaming, bounded prime-core boosts and camera performance hold. |
+| 🎧 **Built-in DSP** | Loudness, bass, voice tone, clarity, stereo width, sub-bass filtering, compression, limiting and selectable output routes. |
+| 🎵 **Playback & Bluetooth** | Audio profiles, Hi-Fi path, media loudness and volume steps, resampling, Bluetooth volume, link stability and audio offload. |
+| 📷 **Camera** | Image grade, contrast and colour depth, natural grain, portrait processing, macro/low-light sharpening and capture responsiveness. |
+| 🌐 **Network & Wi-Fi** | Per-route TCP and packet queues, buffers, transmit queues, packet distribution, Wi-Fi scans, power saving and bad-network fallback. |
+| ✨ **Interface & haptics** | Animation speed, visual effects, blur, LTPO behaviour, vibration strength and touch feedback. |
+| 🧩 **System controls** | Optional vendor-service, process-limit, scheduler-accounting, telemetry and diagnostic-log controls. |
+| 📊 **Monitoring & reports** | Live state, effective limits, smoothness, drain, heat, night activity and extended on-demand reports. |
+| 💾 **Configurations** | Named setups, backup, export, reset and separate management of Smart learning. |
+| 🎨 **Polished WebUI** | Dark and light themes, Liquid Glass, 13 languages and phone-friendly layouts. |
+| 🛡 **Safety & privacy** | Reversible changes, read-only on-demand device discovery and no serial number, IMEI, account or network identifiers in reports. |
 
-## 📱 Device support
+## 🎯 Five clear profiles
 
-ASB supports rooted OnePlus devices with a supported root manager. It is built around
-**device-native discovery**, not copied frequency tables or a global vendor-property pack.
-At installation, ASB inventories the current device and works from its own exposed CPU,
-thermal, GPU and audio paths. Mutable vendor domains remain behind capability and exact
-fingerprint gates.
-
-| Tier | Devices | SoC |
+| Profile | Choose it when… | What to expect |
 |:---|:---|:---|
-| **Reference families** | OnePlus 15 · OnePlus 13 · OnePlus 12 · Ace 5 | SM8850 · SM8750 · SM8650 |
-| **Capability-gated support** | Other rooted OnePlus devices when required CPU, thermal, GPU and audio interfaces are available | varies |
+| ✨ **Smart** | You want ASB to adapt automatically. | Behaviour follows the scenario and evidence. It can become more responsive or more economical, but heat and safety gates still win. |
+| 🔥 **Performance** | Maximum responsiveness matters most. | More headroom for demanding work and games, with potentially higher heat and battery use. It is not a promise to bypass hardware or firmware limits. |
+| ⚖️ **Balanced** | You want a predictable everyday mode. | A practical mix of responsiveness and efficiency without constantly chasing maximum clocks. |
+| 🔋 **Battery** | Battery life and lower heat are the priority. | Unnecessary performance peaks are restrained. Heavy tasks can take longer; Battery keeps its own policy rather than becoming another Smart mode. |
+| 📱 **Stock** | You want a firmware baseline or a fair comparison. | ASB profile policy is withdrawn and the ROM's own behaviour is used. Explicit unrelated tweaks should be reviewed separately. |
 
-Reference families have the most field coverage. Other OnePlus devices use the same discovery and safety gates; unavailable paths are skipped instead of filled with values copied from another model.
+**A good starting point:** choose **Balanced** for predictable behaviour or **Smart** for automatic adaptation. Use **Battery** when endurance matters more than speed.
 
-> Similar firmware names are not treated as identical hardware. For example, the Ace 6
-> shares `sun` firmware ancestry with OnePlus 13, so ASB resolves its exact fingerprint
-> before the broader family match.
+## 🧠 How Smart works
 
----
+Smart is more than a “fast / slow” switch. It combines workload evidence with app smoothness and previous comparable scenarios, then changes behaviour gradually.
 
-## 📦 Install
+| Smart considers… | Why it matters |
+|:---|:---|
+| 🕐 **Time and scenario** | Similar usage can repeat, but one time slot is never treated as proof on its own. |
+| 📱 **Screen and workload** | Idle, scrolling, sustained work, gaming and camera use need different behaviour. |
+| 🎞 **Smoothness** | Frame data can trigger a bounded comparison; a single jank hint does not directly rewrite system settings. |
+| 🔋 **Charge and charging** | Low charge can favour efficiency, while a cool phone on a charger may safely have more headroom. |
+| 🌡 **Temperature and thermal history** | A hot device needs restraint even if an older scenario favoured performance. |
+| ✅ **Fresh, repeatable evidence** | Stale, duplicated or contradictory observations are not promoted into permanent rules. |
 
-1. Download the **Release ZIP** for normal use. The **Debug ZIP** contains extra analysis
-   and logkit tools and is intended for troubleshooting; do **not** install both builds at
-   the same time.
-2. Flash the ZIP in **KSU / KSUN / APatch / ReSuKiSu / Magisk** and reboot.
-3. Open the module **WebUI** to select a profile and optional controls. Tap **Action** for
-   live status and the “not applied” report.
-4. Keep the existing configuration when updating: ASB migrates compatible settings
-   additively, creates a backup first, and retains the active profile and existing choices.
+Safety outranks learning. Camera work and active games are not ordinary idle time; music, charging, navigation and VPN activity are not called deep sleep merely because the screen is off; missing evidence produces an **unknown** state, not an invented answer.
 
-> Battery, sleep and network controls are conservative by default. The
-> performance ceiling starts at 100%; wakelock action, background GNSS trim and Quiet
-> Radio at Night start off; RPS and transmit queue start at stock.
+You can also set a manual **Performance Ceiling** to lower the selected profile's upper limit without abandoning that profile.
+
+## 🔋 Battery, sleep and background apps
+
+| Tool | What it does | What to watch |
+|:---|:---|:---|
+| 🔻 **Auto Battery Profile** | Switches to Battery at low charge and can restore the previous profile after charging. | A profile switch changes performance behaviour, not only a menu label. |
+| 🧭 **Smart Battery Bias** | Lets you ask Smart for a stronger efficiency preference. | More restraint can reduce peak responsiveness. |
+| 🔌 **Charge-Aware Mode** | Allows more headroom while charging when thermal conditions permit. | Heat still limits behaviour. |
+| 😴 **Deep Sleep / Doze** | Offers stock, night, moderate and aggressive idle timing. | Aggressive Doze can delay background work and notifications. |
+| ✅ **Doze exemptions** | Can trim exemptions for eligible user apps. | Messaging, health and automation apps may need their exemptions. |
+| ⏱ **Wakelocks & fitness** | Observes wake activity and offers optional action, with separate fitness-app handling. | Limiting the wrong app can break tracking, media or background tasks. |
+| 📍 **Background GPS** | Can reduce unnecessary background location access. | Navigation and fitness apps need location when genuinely in use. |
+| 🌙 **Quiet Night** | Reduces ASB's own optional work during the night window. | It does not mean disabling the phone's essential connectivity. |
+| 📻 **Quiet Radio at Night** | Optional cellular/radio restraint during the configured night behaviour. | Connectivity and message delivery may change. |
+| 🧹 **Memory & Google Services** | Controls cached-app retention, background trimming and selected Google components. | Stronger cleanup can cause reloads or delayed Google-app functions. |
+
+These are tools for specific behaviour, not a list of switches everyone should enable. Start with defaults and change one group at a time.
+
+## 🎧 Audio and the built-in DSP
+
+ASB includes its own audio engine as well as system playback controls.
+
+| Control group | Available options |
+|:---|:---|
+| 🔊 **Loudness & dynamics** | DSP loudness, compressor, peak limiting and adjustable output headroom. |
+| 🎚 **Tone** | Bass boost, voice tone, clarity and an optional sub-bass filter. |
+| 🎧 **Space** | Stereo-width processing for stereo content. |
+| 🔀 **DSP Outputs** | Off, all, speaker, wired, Bluetooth or selected combinations — other tone settings are preserved when outputs are off. |
+| 🎼 **Audio path** | Stock, external-EQ-compatible and Hi-Fi profiles, plus a separate Hi-Fi DAC mixer option where supported. |
+| 🔉 **System volume** | Media loudness curves and media-volume step count. |
+| 🎛 **Conversion quality** | Stock, high and maximum resampler settings for material that needs sample-rate conversion. |
+| 🔗 **Bluetooth** | Shared or independent volume behaviour, link stability and automatic, hardware-offloaded or CPU audio encoding. |
+| 🦻 **Listening safety** | The system headphone-volume limit remains untouched unless you explicitly change its separate setting. |
+
+Compression and peak limiting help control extra gain. More bass still consumes headroom, and a sample-peak ceiling is not the same thing as an oversampled true-peak meter. DSP availability depends on the firmware, audio interface and current route: ASB checks the result rather than declaring an effect active from a configuration value alone.
+
+> **A sensible start:** select only the output you use, then try moderate loudness and bass. Bluetooth processing can keep the CPU awake during screen-off playback. Sustained loud listening can permanently damage hearing.
+
+## 📷 Camera
+
+Camera grading starts from the phone's own stock files rather than values copied from another model.
+
+- **Camera Grade** controls the overall processing strength.
+- **Contrast & Colour Depth** changes the image's tonal character.
+- **Film Grain** can restore some natural texture after heavy denoising.
+- **Portrait AI** adjusts portrait-oriented processing.
+- **Macro & Low-light Sharpening** is controlled separately from the general look.
+- **Hold Performance While Camera Runs** helps preserve responsiveness during bursts and video.
+
+Strong processing can reveal halos, banding, harsh edges or unnatural colour. Change settings gradually and compare the same scenes. Camera-file changes can require a reboot because mounted files cannot always be replaced live.
+
+## 🌐 Network and Wi-Fi
+
+| Area | What you can adjust |
+|:---|:---|
+| 🚀 **Download ramp** | Automatic, BBR or CUBIC TCP congestion control for Wi-Fi, mobile and other links when the kernel supports it. |
+| 📦 **Packet queues** | Automatic, `fq`, `fq_codel` or `cake` queue selection per network type where available. |
+| 🧠 **Network work** | Receive-packet distribution across CPU cores and transmit-queue length. |
+| 🗄 **Buffers & recovery** | Conservative or aggressive network buffers and optional TCP MTU recovery. |
+| 📶 **Wi-Fi** | Scan-rate restraint, power saving, region selection and optional fallback away from weak or unusable Wi-Fi. |
+| 📱 **Mobile network** | Explicit radio controls, screen-off LTE behaviour, need-based 5G policy and quiet night operation. |
+
+Automatic modes leave the decision to the firmware. ASB checks for a real interface and a supported value before changing it; submitting a command is not treated as proof of success. Network results still depend on the kernel, carrier, signal, router and remote server.
+
+## ✨ Interface, haptics and system options
+
+The **Interface** and **System** sections cover details that are easy to overlook:
+
+- animation speed and touch timings, with an optional animation restart;
+- blur and system animation effects;
+- LTPO refresh behaviour and a low-refresh video option;
+- vibration and touch-feedback strength;
+- optional management of supported OEM RAM, battery and heat toggles;
+- Athena background-killer behaviour, background process limits and multimedia telemetry;
+- scheduler debug accounting, ASB log detail and LSPosed verbose logging.
+
+Availability depends on the device. A visible setting is a request, while diagnostics and effective values show what the system actually accepted.
+
+## 📊 WebUI: your control centre
+
+| Page | What you will find |
+|:---|:---|
+| 🏠 **Profiles** | Profile selection, current state and quick access to the main behaviour. |
+| 📈 **Monitor** | Workload, clocks, temperature, battery, Smart state, smoothness and the source of an effective limit. |
+| ⚙️ **Config** | Audio, camera, interface, network, battery and system settings, grouped into readable sections. |
+| 📱 **Device** | Processor, memory, root, kernel and capability information gathered read-only when requested. |
+| 🧾 **Reports** | Diagnostic output and extended capture tools with facts, hypotheses and recommendations kept separate. |
+
+The interface includes **13 languages**, dark and light themes, and **Liquid Glass**. Layouts are designed for narrow phones as well as larger screens. Metric colours indicate meaning, not decoration: unknown or warming-up data stays neutral instead of being painted as a success or failure.
+
+Named configurations, backups, export to **Downloads** or **Documents**, and separate resets for settings and Smart learning are built in.
+
+## 🧾 Reports that do not jump to conclusions
+
+On demand, you can record an extended session and inspect smoothness, drain, night activity, heat and ASB's own cost. The report distinguishes:
+
+1. **Facts** — values and events actually observed.
+2. **Hypotheses** — possible explanations that still need confirmation.
+3. **Recommendations** — next steps, not guaranteed fixes.
+
+ASB does not blame an app because of one coincidence or promise a battery-saving percentage without comparable field measurements. Detailed collection is user-triggered; there is no permanent extended-capture process running in the background.
+
+## 🛡 Safety and privacy
+
+- **The platform stays in charge.** Stock thermal protection and platform limits are not disabled.
+- **Changes are reversible.** ASB stores baselines and restores its owned settings when uninstalled.
+- **No system-partition writes.** Work uses root-module mechanisms and exposed system interfaces.
+- **No borrowed frequency tables.** Capabilities and bounds are derived from the current device and validated before use.
+- **No false success.** Requested, effective, unavailable and unknown states are different things.
+- **Updates preserve choices.** Compatible configurations migrate with a backup.
+- **Device discovery is read-only and on demand.** It does not create a persistent device-inventory collector.
+- **Unnecessary identifiers stay out.** Serial numbers, IMEI, account data and network identifiers are not read for reports.
+
+## 📱 Compatibility
+
+ASB is designed for **OnePlus, including Ace models**, with root access and a compatible module manager: **Magisk, KernelSU, APatch** and supported derivatives.
+
+Recent OnePlus devices have the most field validation. On other models, feature availability depends on firmware, kernel, exposed interfaces and the current route or service. If evidence is not exposed, ASB should say **unknown**, **not exposed** or **not runtime-discoverable** — that is not proof that the hardware itself is unsupported.
+
+## 📦 Installation and first steps
+
+1. Download the regular **Release ZIP** from the releases page.
+2. Install it in your module manager and reboot.
+3. Open the module's **WebUI**.
+4. Choose **Balanced** or **Smart**.
+5. Keep optional settings at their defaults and observe the phone first.
+6. Change one group at a time and check **Monitor**, **Action** or an extended report.
+7. Save a named configuration once you have a setup worth keeping.
 
 <p align="center">
   <a href="https://github.com/krilikd-factory/AutoSystemBoost/releases/latest">
-    <img src="https://img.shields.io/badge/⬇️_Download_Latest_Release-0969da?style=for-the-badge&logo=github&logoColor=white" alt="Download">
+    <img src="https://img.shields.io/badge/⬇️_Download_Release-0969da?style=for-the-badge&logo=github&logoColor=white" alt="Download AutoSystemBoost">
   </a>
 </p>
 
----
+> Do not install multiple ASB builds at the same time. Use the normal module-update path when testing another build.
 
-## 🎚 ASB DSP — our own audio engine
+## 🩺 If something goes wrong
 
-Volume curves only redistribute the gain the device already provides. ASB ships a real
-effect for controlled processing above unity:
-
-```
-input → bass shelf (90 Hz) → soft-knee compressor → auto make-up → true-peak limiter → out
-```
-
-| | |
-|:---|:---|
-| 🔊 **`dsp_loudness`** | **+1 … +20 dB** processing gain above unity |
-| 🥁 **`dsp_bass`** | **+1 … +10 dB** low shelf at 90 Hz |
-| 🛡 **Output safety** | Compression and true-peak limiting protect the output after the boost |
-| ⚡ **Live control** | Sliders communicate with the running effect; no `audioserver` restart is required |
-| 🎧 **Route-aware evidence** | Records route and AudioFlinger evidence instead of claiming Bluetooth offload without proof |
-
-Android 13+ effects use the AIDL effect contract, while older paths can require the legacy
-interface. ASB ships compatible DSP variants from one shared core and uses an attach
-helper because OxygenOS does not reliably instantiate a declared post-process effect by
-itself. The available DSP path remains device and route dependent; diagnostics report the
-observed evidence instead of promising an effect was attached when it was not.
-
-> The bass shelf intentionally sits at the start of the chain. Putting it after the
-> compressor and limiter would let extra low-frequency energy bypass those safeguards.
-
----
-
-## 🎵 Audio — clear controls, no competing writers
-
-| Setting | Options | What it does |
-|:---|:---|:---|
-| **`audio_profile`** | `stock` · `hifi` · `eq_compat` | `hifi` requests the high-fidelity path where the device exposes it. `eq_compat` lets ViPER/JamesDSP own the output instead of two effects competing for it. |
-| **`audio_dac_hifi`** | on / off | Separately controls the compatible mixer/DAC tuning path. |
-| **`media_loudness`** | `stock` · mild · strong · max | Adjusts volume curves; the added shaping targets the useful middle of slider travel rather than raising 100% volume. |
-
-Audio behaviour is capability- and route-dependent. ASB preserves the output-safety rule:
-100% volume is not raised past unity, and a conflicting external DSP is not silently
-fought by ASB.
-
-### Audio controls at a glance
-
-| WebUI control | Practical use and boundary |
-|:---|:---|
-| **Audio Profile** | Selects stock behaviour, a compatible Hi‑Fi path, or an external-EQ-friendly path. Use the external-EQ mode when ViPER/JamesDSP should own the stream. |
-| **Hi‑Fi DAC (mixer)** | Requests the compatible codec/mixer path for wired listening; it does not replace an external equalizer. |
-| **Media Loudness** | Reshapes media volume curves at useful slider positions. It leaves alarms/ringtones and the 100% unity ceiling alone. |
-| **Bluetooth Volume Control** | Keeps the shared phone/headset scale, or separates the two scales for an EQ-compatible gain path. Separated scales can make the lowest headset steps quieter. |
-| **Bluetooth Audio Offload** | `Auto` leaves the ROM decision untouched; `On` requests hardware encoding; `Off` can help codecs or Bluetooth EQs that need CPU encoding. |
-| **DSP Loudness / Bass / Compressor** | Controls the built-in effect. Start with modest gain; bass consumes headroom, and the compressor is most useful at higher loudness. |
-| **DSP Outputs** | Limits the DSP to speaker, wired, Bluetooth or selected combinations so a headphone boost does not unintentionally reach the speaker. |
-| **Headphone Volume Limit** | An explicit opt-in only. It removes a system safety cap; it does not create extra DSP gain, and sustained loud listening can damage hearing. |
-
-### Camera controls
-
-Camera tuning always starts from the phone's own stock files and uses ratios rather than
-another model's fixed values. The available controls are intentionally separated so one
-change does not silently alter an unrelated image axis.
-
-| WebUI control | What it adjusts |
-|:---|:---|
-| **Camera Grade** | Overall colour, contrast and detail character for photo/video. Levels 7–10 are intentionally strong and can reveal banding or halos in difficult scenes. |
-| **Contrast & Colour Depth** | Tone-curve contrast and saturation independently of the main grade; the extended range is effective even when Camera Grade is set to stock. |
-| **Film Grain** | The amount of texture restored after denoising; lower values look cleaner, higher values preserve more texture. |
-| **Portrait AI** | Face/skin processing in portrait modes. Begin with a low value to avoid an artificial look. |
-| **Macro & Low-light Sharpening** | Separate sharpening for close and high-ISO scenes, where aggressive sharpening creates halos most easily. |
-| **Hold Performance While Camera Runs** | Keeps camera-relevant CPU availability during an active stream to protect bursts and video, at a small temporary battery cost. |
-
----
-
-## 🧠 The governor
-
-**Six states.** `DEEP_IDLE` → `LIGHT_IDLE` → `MODERATE` → `HEAVY` → `SUSTAINED` →
-`GAMING`. Each state has its own caps, dwell time and entry/exit hysteresis. During genuine
-screen-off idle, ASB avoids unnecessary governor work; the screen-off classifier first identifies audio,
-charging, VPN/tunnel, GNSS and other screen-off activity so it does not call every dark
-screen “sleep”.
-
-**Adaptive thermal budget.** Before a hard thermal cap is needed, ASB can make a light,
-moderate or severe proportional trim based on available thermal headroom, temperature
-trend/rise and battery-current evidence. A 30-second dwell avoids rapid cap oscillation.
-Hard platform thermal protection always wins.
-
-**Thermal-source validation.** Some devices expose a misleading `socd` zone. ASB checks it
-against usable CPU peers, rejects implausible high or low readings, falls back to a real
-CPU thermal path when one exists, and periodically revalidates the primary source. The
-actual control source and confidence are visible in diagnostics.
-
-**Performance Ceiling.** The WebUI can apply a user-selected 60–100% ceiling to the current
-profile’s device-correct CPU/GPU envelope. It is an explicit trade-off: 100% preserves the
-profile baseline, while lower values can reduce unnecessary peaks for battery-first use.
-
-**Smart Mode** is a fourth adaptive profile, not a fixed fourth frequency table. It blends
-within the Battery ↔ Balanced envelope from time buckets, session history and confidence.
-Thermal safety, low battery and night policy take priority over learned behaviour.
-
-**Camera Hold and writer leases.** Camera capture, the selected profile, Smart Mode, user
-limits and safety/platform thermal actions are coordinated through priorities rather than
-blindly fighting over the same nodes. Camera activity receives a protected deadline; all
-changes remain bounded by platform thermal safety.
-
-### Power, sleep and background work
-
-These controls are optional policy tools, not universal switches. Start with the default,
-use `asbdiag` or a multi-hour log to identify the cause, then enable only the matching
-control.
-
-| WebUI control | What it does and when to use it |
-|:---|:---|
-| **Auto Battery Profile** | Switches to Battery at low charge and restores the previous profile after charging. |
-| **Smart Battery Bias** | Nudges Smart Mode toward lower energy use; it affects Smart only and can reduce responsiveness. |
-| **Charge-Aware Mode** | Allows more headroom while charging and cool, then backs off as battery heat rises. |
-| **Deep Sleep** | Chooses how quickly Android enters Doze after screen-off. Earlier Doze reduces standby work but can delay apps that poll instead of using priority push. |
-| **Trim Doze Exemptions** | Removes only eligible user apps from Android's Doze exemption list; protected calling, alarm, messaging and root-manager classes are excluded and changes are reversible. |
-| **Act on Wakelocks** | Always observes wakelocks; when enabled, long screen-off wakelocks from qualifying user apps can be moved to Android's restricted bucket. Nothing is force-stopped. |
-| **Trim Background GPS** | While screen-off, limits a qualifying cached user app to coarse location. Foreground navigation, fitness, emergency and protected classes are excluded. |
-| **Quiet Night** | Reduces ASB's own periodic work during a learned long screen-off window. |
-| **Quiet Radio at Night** | Relaxes keepalive/probe timing during the learned night window. Calls, SMS and priority push remain untouched; independently polling apps can be later. |
-| **Throttling Point / Temperature** | Keeps the stock device point, uses adaptive behaviour, or accepts a manual point. Lower values intervene sooner; values below normal idle temperature keep throttling active continuously. |
-| **Performance Ceiling** | Applies a 60–100% proportional ceiling to the current profile envelope. Floors are retained for basic smoothness; lower ceilings are an explicit speed/heat trade-off. |
-| **Cool Gaming / No Game Mode on Battery** | Biases gaming toward cooler sustained behaviour, or prevents the Battery profile from entering the higher gaming state. |
-
----
-
-## 🎯 Profiles — real policy envelopes
-
-| Parameter | 🔥 Performance | ⚖️ Balanced | 🔋 Battery |
-|:---|:---:|:---:|:---:|
-| Intent | peak responsiveness | daily default | lower background cost |
-| CPU/GPU envelope | highest validated profile envelope | balanced profile envelope | conservative profile envelope |
-| `uclamp` top / background | 90 / 50 | 85 / 35 | 50 / 40 |
-| RAVG window | 2 (8 ms) | 3 (12 ms) | 8 (32 ms) |
-| Swappiness | 12 | 35 | 80 |
-| VFS cache pressure | 30 | 80 | 120 |
-| Dirty writeback | 10 s | 60 s | 600 s |
-| Wi‑Fi power save | off | auto | on |
-| GAMING state | ✅ | ✅ | 🚫 blocked |
-
-> Exact available CPU/GPU frequencies come from the phone’s exposed policies and validated
-> bounds. ASB does not assume that an OP15 frequency table is valid on an OP13, OP12 or
-> Ace device. **Smart** is not shown as a fixed row because it blends only inside the
-> Battery and Balanced envelopes at runtime.
-
-### Interface, memory and system controls
-
-| WebUI control | Practical use and boundary |
-|:---|:---|
-| **Manage UI Speed / Animation Speed** | Lets profiles manage UI timing, or lets you choose a fixed animation scale. Stock leaves the system setting unchanged. |
-| **Force Animation Restart** | Restarts SystemUI only for firmware that ignores a live animation-scale change. Expect a visible blink and lock-screen return; leave it off unless needed. |
-| **Disable Blur / System Animations** | Reduces compositor effects. Simplified system animations can change the Recents presentation on supported devices; return to normal to restore it. |
-| **Background Trim Level** | Chooses safe or more aggressive cached-app trimming. Aggressive frees more RAM but causes more cold app restarts. |
-| **Google Services Trim / Freeze Google Components** | Offers reversible reductions in eligible Play-services background work. Stronger modes can delay background work or stop history/telemetry functions; push, sign-in, payments and Play Store paths are excluded. |
-| **Manage OEM Toggles** | Lets ASB manage selected OxygenOS RAM/battery/heat toggles. Leave off if those settings should remain entirely under manual control. |
-| **Athena Background Killer** | Keeps the system behaviour or disables the compatible Athena killer path where supported. |
-| **Background Process Limit** | Chooses stock, relaxed or strict treatment of Android phantom processes. Relaxed helps long terminal/compile-style work; stricter behaviour can reclaim resources sooner. |
-| **Vibration / Touch Feedback** | Selects an OEM-scale intensity or leaves the existing value unchanged. |
-| **Log Detail** | Controls ASB/device logging. Normal is suitable for daily use; detailed modes are for reproducing an issue, while minimal logging reduces evidence available for diagnosis. |
-
----
-
-## 📊 Stock vs ASB
-
-ASB is designed to change decision quality, not to promise one battery percentage to every
-phone. Display time, signal strength, apps, Bluetooth route, ambient temperature, charging
-and the length of true screen-off periods all materially affect results.
-
-### Network and Wi‑Fi controls
-
-| WebUI control | Practical use and boundary |
-|:---|:---|
-| **Download Ramp** | Chooses TCP congestion control globally, for Wi‑Fi, or for mobile data. `Auto`/stock preserves the existing decision; BBR is offered only when the kernel supports it. |
-| **Packet Queue** | Chooses queue discipline globally, for Wi‑Fi, or for mobile data. `fq_codel` commonly reduces loaded-link latency; `cake` is more thorough but can cost more CPU. |
-| **Spread Network Load** | Moves receive-packet work to efficiency cores or all cores. Useful on fast Wi‑Fi; waking more cores can be wasteful on a slow link. |
-| **Transmit Queue** | Reduces pending transmit packets from the deep driver default to shorter queues. It can improve latency under load; return to stock if uploads suffer. |
-| **Network Buffers** | Sizes network buffers automatically from observed link conditions, or lets you choose conservative/aggressive behaviour. |
-| **Wi‑Fi Region** | Selects an allowed regulatory domain. Leave automatic unless you understand and comply with the local channel rules. |
-| **Wi‑Fi Scan Rate** | Changes background scan frequency. More frequent scans can roam faster to a better access point at a small battery cost. |
-
-All network writers check for real, writable interfaces and record the applied outcome rather
-than assuming a driver accepted the request.
-
-| Area | Stock-style approach | ASB approach |
-|:---|:---|:---|
-| CPU/GPU policy | Static or vendor-driven limits | Six-state policy derived from current workload and profile |
-| Sustained heat | React mainly at a hard thermal point | Bounded adaptive budget before a hard cap, always under platform thermal protection |
-| Thermal input | A named sensor can be trusted blindly | `socd` is peer-checked; a real CPU zone is used as fallback when justified |
-| Screen-off drain | A dark display can be mistaken for sleep | Audio, charging, VPN, GNSS and activity context are classified first |
-| Device differences | Copying values can be tempting | Capability manifest, exact device domains and conservative fallback |
-| Support evidence | “Applied” can be an assumption | State provenance, effective policy, `asbdiag` and Action status show the evidence |
-
-The correct way to evaluate ASB is a comparable multi-hour use or overnight capture, then
-inspect `asbdiag` and the relevant log evidence. A control that is not appropriate for a
-phone is reported or skipped; it is not presented as a universal gain.
-
-
-### Saved configurations and in-page reset
-
-The Configuration page stores named configurations inside ASB and can create checksum-verified copies only in **Downloads** or **Documents**. The Reset dialog separates restoring all category defaults from clearing Smart learning, and both actions require a second tap.
-
----
-
-## 🛡 Safety
-
-- **Reversible:** ASB stores baselines and restores owned values on uninstall; it does not
-  write real system partitions.
-- **Boot guard:** A generated overlay is removed before mounting after a failed boot; the
-  threshold is tier-dependent.
-- **Thermal priority:** ASB never overrides hard platform thermal protection. Invalid or
-  untrusted thermal evidence is recorded, not rendered as a fake degree value.
-- **Atomic configuration:** `asb_config_safe.sh` validates a complete staged configuration,
-  writes atomically and records the transaction result, epoch and reload status.
-- **Safe upgrades:** compatible configuration migration is additive, backed up and idempotent;
-  retained user settings are not silently replaced by new defaults.
-- **No competing ownership:** Leases coordinate baseline, profile, Smart, camera, user cap,
-  safety and platform-thermal writers.
-
----
-
-## 🩺 Diagnostics & commands
-
-Tap **Action** in the module list for a live summary and a **NOT APPLIED** section. It is
-an evidence report: it lists settings that did not land instead of claiming success because
-a command was issued.
+Open **Action** on the module card to see live status and settings that were not applied. For a detailed diagnostic report, use **Reports** in the WebUI or `asbdiag`.
 
 ```bash
-su -c 'asb status'                # native status JSON
-su -c 'asb profile:performance'   # switch profile live
-su -c 'asb reload'                # re-read active config
-su -c 'asbdiag'                   # full report → /sdcard/asb_diag_report.txt
-su -c 'sh /data/adb/modules/AutoSystemBoost/tools/asb_doctor.sh'
-su -c 'sh /data/adb/modules/AutoSystemBoost/tools/asb_intent.sh list'
-su -c 'sh /data/adb/modules/AutoSystemBoost/tools/asb_smart_mode.sh status'
+su -c 'asb status'
+su -c 'asb reload'
+su -c 'asbdiag'
 ```
 
-| Release tool | Purpose |
-|:---|:---|
-| `asbdiag` | Full PASS/FAIL report: capability context, thermal source/confidence, audio/DSP evidence, policy and support data |
-| `tools/asb_doctor.sh` | HEALTHY / DEGRADED / UNHEALTHY health check |
-| `tools/asb_effective_policy.sh` | Machine-readable view of the policy, capabilities, energy state and transaction provenance |
-| `tools/asb_intent.sh` | Safe presets: daily, camera, game, travel, charging and observe |
-| `tools/asb_smart_mode.sh` | Smart Mode status, enable/disable and learner reset |
-| `tools/asb_config_backup.sh` | Create a config backup or preview an import before applying it |
+If a result looks wrong, check whether it is **requested**, **effective**, **temporarily vendor-limited**, **not exposed** or **unknown**. When asking for support, include the phone model, firmware, root manager, a reproducible description and the diagnostic report. Do not publish personal information.
 
-The **Debug ZIP** additionally carries logkit, field-report, state-sampling and source
-validation tools. Use it when collecting a reproducible support report; use the normal
-Release ZIP for ordinary daily use.
+## 🧑‍💻 Want the technical details?
 
-### Quality checks
+Read **[README.advanced.md](README.advanced.md)** for the governor states, Smart evidence gates, device-bounds schema, thermal and writer ownership, the complete setting index, DSP architecture, diagnostics, source layout and regression workflow.
 
-The source and workflows include host-side contracts for thermal-source fallback and
-recovery, atomic config writes, writer leases, device safety, DSP references, telemetry
-provenance, schema synchronisation, package contents and compatible configuration migration.
-Both distribution variants are checked for the runtime files they require before they are
-published.
+For source archives, the main validation entry point is:
 
----
+```sh
+bash tools/asb_source_regression.sh
+```
 
-## ⭐ Support
+## ⭐ Support the project
 
-- ⭐ Star the repository · 🐛 report reproducible issues on GitHub
 - 💬 [Telegram](https://t.me/DKomsomol)
+- 🐛 [Report an issue on GitHub](https://github.com/krilikd-factory/AutoSystemBoost/issues)
+- ⭐ Star the repository
 
 <p align="center">
   <a href="https://paypal.me/lugaru46">
-    <img src="https://img.shields.io/badge/PayPal-Donate-00457C?style=for-the-badge&logo=paypal&logoColor=white" alt="Donate via PayPal">
+    <img src="https://img.shields.io/badge/PayPal-Support%20the%20project-00457C?style=for-the-badge&logo=paypal&logoColor=white" alt="Support the project">
   </a>
 </p>
 
----
+## ⚠️ Important
 
-## ⚠️ Disclaimer
+This module changes system behaviour on a rooted device. Use it at your own risk. Results depend on the phone, firmware, apps, signal quality, temperature and usage pattern. ASB does not promise the same battery or performance improvement on every device.
 
-This module changes system behaviour on rooted devices. Use it at your own risk. ASB is
-designed to be reversible, but kernel, firmware and app behaviour still differ by device.
-Do not treat a diagnostic observation or a battery result from one phone as a guaranteed
-outcome on another.
-
----
-
-<p align="center"><i>Not magic — just measured policy, bounded writers and evidence for every important decision.</i></p>
+<p align="center"><i>No magic and no random tweaks — adaptation, control and verifiable results.</i></p>
