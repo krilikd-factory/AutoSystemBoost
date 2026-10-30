@@ -9,7 +9,9 @@ PROC="${ASB_DEVINFO_PROC:-/proc}"
 DATA="${ASB_DEVINFO_DATA:-/data/adb}"
 PROP_FILE="${ASB_DEVINFO_PROP_FILE:-}"
 SUSFS_BIN="${ASB_DEVINFO_SUSFS:-/data/adb/ksu/bin/susfs}"
+KSUD_BIN="${ASB_DEVINFO_KSUD:-}"
 STATE_FILE="${ASB_DEVINFO_STATE:-/dev/.asb/state}"
+DEV="${ASB_DEVINFO_DEV:-/dev}"
 
 _clean() {
   printf '%s' "$1" | tr '\t\r\n' '   ' | sed 's/  */ /g; s/^ //; s/ $//' | cut -c1-600
@@ -38,7 +40,7 @@ _prop() {
 _kv() { sed -n "s/^$2=//p" "$1" 2>/dev/null | head -n 1; }
 _mem() { sed -n "s/^$2:[[:space:]]*//p" "$1" 2>/dev/null | head -n 1; }
 
-_emit meta schema 2
+_emit meta schema 4
 _emit meta generated_epoch "$(date +%s 2>/dev/null)"
 _emit meta access read_only
 _emit meta module_version "$(_kv "$MODDIR/module.prop" version)"
@@ -127,7 +129,7 @@ _cfg_val() {
   if [ -z "$_cv" ] && printf '%s\n' "$_cfg" | grep -q "^# $1 is not set$"; then _cv='not set'; fi
   printf '%s\n' "$_cv"
 }
-_cfg_keys='CONFIG_LOCALVERSION CONFIG_PREEMPT CONFIG_PREEMPT_DYNAMIC CONFIG_HZ CONFIG_SCHED_WALT CONFIG_SCHEDUTIL CONFIG_CPU_FREQ_GOV_SCHEDUTIL CONFIG_CPU_FREQ_GOV_PERFORMANCE CONFIG_CPU_FREQ_GOV_POWERSAVE CONFIG_CPU_BOOST CONFIG_LRU_GEN CONFIG_LRU_GEN_ENABLED CONFIG_ZRAM CONFIG_ZSWAP CONFIG_ZSMALLOC CONFIG_DEVFREQ_GOV_SIMPLE_ONDEMAND CONFIG_DEVFREQ_GOV_MSM_ADRENO_TZ CONFIG_KGSL CONFIG_TCP_CONG_BBR CONFIG_TCP_CONG_BBR2 CONFIG_TCP_CONG_BBRV2 CONFIG_TCP_CONG_WESTWOOD CONFIG_KSU CONFIG_KSU_SUSFS CONFIG_NOMOUNT CONFIG_NTSYNC CONFIG_NAMESPACES CONFIG_SYSVIPC CONFIG_POSIX_MQUEUE CONFIG_IPC_NS CONFIG_PID_NS CONFIG_NET_NS CONFIG_UTS_NS CONFIG_USER_NS CONFIG_CGROUPS CONFIG_DEVTMPFS CONFIG_DROIDSPACES CONFIG_DROIDSPACE CONFIG_UNICODE CONFIG_UNICODE_BYPASS_FIX CONFIG_UNICODE_BYPASS CONFIG_TMPFS CONFIG_TMPFS_XATTR CONFIG_TMPFS_POSIX_ACL CONFIG_TMPFS_INODE64 CONFIG_LTO CONFIG_LTO_CLANG CONFIG_LTO_CLANG_THIN CONFIG_LTO_CLANG_FULL CONFIG_LTO_NONE CONFIG_BBG CONFIG_SECURITY_BASEBAND_GUARD CONFIG_BASEBAND_GUARD CONFIG_LSM'
+_cfg_keys='CONFIG_LOCALVERSION CONFIG_PREEMPT CONFIG_PREEMPT_DYNAMIC CONFIG_HZ CONFIG_SCHED_WALT CONFIG_SCHEDUTIL CONFIG_CPU_FREQ_GOV_SCHEDUTIL CONFIG_CPU_FREQ_GOV_PERFORMANCE CONFIG_CPU_FREQ_GOV_POWERSAVE CONFIG_CPU_BOOST CONFIG_LRU_GEN CONFIG_LRU_GEN_ENABLED CONFIG_ZRAM CONFIG_ZSWAP CONFIG_ZSMALLOC CONFIG_DEVFREQ_GOV_SIMPLE_ONDEMAND CONFIG_DEVFREQ_GOV_MSM_ADRENO_TZ CONFIG_KGSL CONFIG_TCP_CONG_BBR CONFIG_TCP_CONG_BBR2 CONFIG_TCP_CONG_BBRV2 CONFIG_TCP_CONG_WESTWOOD CONFIG_KSU CONFIG_KSU_SUSFS CONFIG_NOMOUNT CONFIG_NTSYNC CONFIG_NAMESPACES CONFIG_SYSVIPC CONFIG_POSIX_MQUEUE CONFIG_IPC_NS CONFIG_PID_NS CONFIG_NET_NS CONFIG_UTS_NS CONFIG_USER_NS CONFIG_CGROUPS CONFIG_DEVTMPFS CONFIG_DROIDSPACES CONFIG_DROIDSPACE CONFIG_UNICODE CONFIG_UNICODE_BYPASS_FIX CONFIG_UNICODE_BYPASS CONFIG_TMPFS CONFIG_TMPFS_XATTR CONFIG_TMPFS_POSIX_ACL CONFIG_TMPFS_INODE64 CONFIG_LTO CONFIG_LTO_CLANG CONFIG_LTO_CLANG_THIN CONFIG_LTO_CLANG_FULL CONFIG_LTO_NONE CONFIG_BBG CONFIG_SECURITY_BASEBAND_GUARD CONFIG_BASEBAND_GUARD CONFIG_LSM CONFIG_DEBUG_INFO_BTF CONFIG_DEBUG_INFO_BTF_MODULES CONFIG_BPF CONFIG_BPF_SYSCALL CONFIG_BPF_JIT CONFIG_BPF_JIT_ALWAYS_ON CONFIG_BPF_JIT_DEFAULT_ON CONFIG_BPF_LSM CONFIG_CGROUP_BPF CONFIG_NET_CLS_BPF CONFIG_NET_ACT_BPF CONFIG_FUSE_FS CONFIG_FUSE_BPF CONFIG_FUSE_PASSTHROUGH'
 if [ -n "$_cfg" ]; then
   _emit kernel_config available yes
   for _k in $_cfg_keys; do
@@ -137,6 +139,139 @@ if [ -n "$_cfg" ]; then
 else
   _emit kernel_config available unavailable
 fi
+
+# Kernel provenance is evidence, not a verdict from the word "custom" in a release
+# string. A locked green boot chain is only stock-like; a patch/config marker is only
+# custom-like. Neither identifies who built the boot image, and missing evidence is unknown.
+_origin_custom=''
+_origin_lower="$(printf '%s %s %s' "$_uname_r" "$_proc_version" "$(_cfg_val CONFIG_LOCALVERSION)" | tr 'A-Z' 'a-z')"
+case "$_origin_lower" in
+  *custom*|*kernelsu*|*sukisu*|*apatch*|*susfs*|*nomount*) _origin_custom='build/localversion marker' ;;
+esac
+for _k in KSU KSU_SUSFS NOMOUNT UNICODE_BYPASS_FIX UNICODE_BYPASS BBG SECURITY_BASEBAND_GUARD BASEBAND_GUARD; do
+  case "$(_cfg_val "CONFIG_$_k")" in y|m) _origin_custom="${_origin_custom:+$_origin_custom; }CONFIG_$_k" ;; esac
+done
+_origin_stock=''
+[ "$(_prop ro.boot.verifiedbootstate)" = 'green' ] && _origin_stock='verifiedbootstate=green'
+[ "$(_prop ro.boot.flash.locked)" = '1' ] && _origin_stock="${_origin_stock:+$_origin_stock; }flash.locked=1"
+[ "$(_prop ro.boot.vbmeta.device_state)" = 'locked' ] && _origin_stock="${_origin_stock:+$_origin_stock; }vbmeta=locked"
+[ "$(_prop ro.build.type)" = 'user' ] && _origin_stock="${_origin_stock:+$_origin_stock; }build.type=user"
+if [ -n "$_origin_custom" ]; then
+  _origin_class='custom-like'
+  _origin_basis='positive build/config patch indicators; provenance not proven'
+elif [ -n "$_origin_stock" ]; then
+  _origin_class='stock-like'
+  _origin_basis='boot/build indicators only; provenance not proven'
+else
+  _origin_class='unknown'
+  _origin_basis='not exposed'
+fi
+_emit kernel_origin assessment "$_origin_class"
+_emit kernel_origin confidence 'indicative; not a provenance proof'
+_emit kernel_origin custom_evidence "${_origin_custom:-none exposed}"
+_emit kernel_origin stock_evidence "${_origin_stock:-none exposed}"
+_emit kernel_origin basis "$_origin_basis"
+_emit kernel_origin capability_policy 'use only exposed per-node capabilities; no feature request from this collector'
+
+# BTF, eBPF and FUSE-BPF are separate facts. Config describes the build, a sysfs
+# node describes runtime exposure, and neither alone proves that a program is active.
+_btf_cfg="$(_cfg_val CONFIG_DEBUG_INFO_BTF)"
+_btf_mod_cfg="$(_cfg_val CONFIG_DEBUG_INFO_BTF_MODULES)"
+_btf_vmlinux="$SYS/kernel/btf/vmlinux"
+if [ -r "$_btf_vmlinux" ] && [ -s "$_btf_vmlinux" ]; then
+  _btf_runtime='vmlinux readable and non-empty'
+elif [ -e "$_btf_vmlinux" ]; then
+  _btf_runtime='vmlinux present; not readable/non-empty'
+else
+  _btf_runtime='not exposed at standard path'
+fi
+_btf_entries=0
+if [ -d "$SYS/kernel/btf" ]; then
+  for _p in "$SYS/kernel/btf"/*; do
+    [ -e "$_p" ] || continue
+    [ "$_p" = "$_btf_vmlinux" ] && continue
+    _btf_entries=$((_btf_entries + 1))
+  done
+  _btf_module_state="$_btf_entries entries exposed"
+else
+  _btf_module_state='not exposed at standard path'
+fi
+case "$_btf_cfg:$_btf_runtime" in
+  y:'vmlinux readable and non-empty') _btf_summary='built-in config; vmlinux exposed' ;;
+  y:*) _btf_summary='built-in config; vmlinux not readable/exposed' ;;
+  *:'vmlinux readable and non-empty') _btf_summary='vmlinux exposed; config not confirmed' ;;
+  *) [ -n "$_cfg" ] && _btf_summary='config/runtime evidence limited' || _btf_summary='unknown; not runtime-discoverable' ;;
+esac
+_emit kernel_btf summary "$_btf_summary"
+_emit kernel_btf config "${_btf_cfg:-unknown}"
+_emit kernel_btf modules_config "${_btf_mod_cfg:-unknown}"
+_emit kernel_btf vmlinux "$_btf_runtime"
+_emit kernel_btf module_entries "$_btf_module_state"
+_emit kernel_btf runtime_verification 'read-only exposure only; BTF contents not executed'
+
+_bpf_cfg="$(_cfg_val CONFIG_BPF)"
+_bpf_syscall_cfg="$(_cfg_val CONFIG_BPF_SYSCALL)"
+_bpf_bpfs='not exposed at standard path'
+_bpf_pinned='not runtime-discoverable'
+if [ -d "$SYS/fs/bpf" ]; then
+  _bpf_bpfs='directory exposed'
+  _bpf_n=0
+  for _p in "$SYS/fs/bpf"/*; do [ -e "$_p" ] || continue; _bpf_n=$((_bpf_n + 1)); done
+  _bpf_pinned="$_bpf_n top-level entries exposed"
+fi
+_bpf_runtime=0
+[ -d "$SYS/fs/bpf" ] && _bpf_runtime=1
+for _spec in jit_enable:bpf_jit_enable jit_harden:bpf_jit_harden jit_kallsyms:bpf_jit_kallsyms; do
+  _k="${_spec%%:*}"; _v="$(_read "$PROC/sys/net/core/${_spec#*:}")"
+  if [ -n "$_v" ]; then _emit kernel_ebpf "$_k" "$_v"; _bpf_runtime=1
+  else _emit kernel_ebpf "$_k" 'not exposed'; fi
+done
+case "$_bpf_cfg:$_bpf_syscall_cfg" in *y*|*m*) _bpf_positive=1 ;; *) _bpf_positive=0 ;; esac
+if [ "$_bpf_positive" = 1 ]; then
+  if [ "$_bpf_runtime" = 1 ]; then _bpf_summary='configured; runtime interfaces exposed'
+  else _bpf_summary='configured; runtime not verified'; fi
+elif [ "$_bpf_runtime" = 1 ]; then
+  _bpf_summary='runtime interfaces exposed; config not confirmed'
+elif [ -n "$_bpf_cfg$_bpf_syscall_cfg" ]; then
+  _bpf_summary='not enabled in exposed config; runtime not verified'
+else
+  _bpf_summary='unknown; not runtime-discoverable'
+fi
+_emit kernel_ebpf summary "$_bpf_summary"
+_emit kernel_ebpf config "${_bpf_cfg:-unknown}"
+_emit kernel_ebpf syscall_config "${_bpf_syscall_cfg:-unknown}"
+_emit kernel_ebpf bpfs "$_bpf_bpfs"
+_emit kernel_ebpf pinned_objects "$_bpf_pinned"
+_emit kernel_ebpf runtime_verification 'no BPF program loaded; config/exposure is not proof of active eBPF'
+
+_fuse_cfg="$(_cfg_val CONFIG_FUSE_FS)"
+_fuse_bpf_cfg="$(_cfg_val CONFIG_FUSE_BPF)"
+_fuse_runtime='not exposed at standard path'
+[ -c "$DEV/fuse" ] && _fuse_runtime='character device exposed'
+_fuse_type="$(_read "$SYS/fs/fuse/bpf_prog_type_fuse")"
+case "$_fuse_type" in ''|*[!0-9]*) _fuse_type_state='not exposed at standard path' ;; *) _fuse_type_state="exposed; type=$_fuse_type" ;; esac
+if [ -d "$SYS/fs/fuse/connections" ]; then
+  _fuse_n=0
+  for _p in "$SYS/fs/fuse/connections"/*; do [ -e "$_p" ] || continue; _fuse_n=$((_fuse_n + 1)); done
+  _fuse_conn="$_fuse_n connections exposed"
+else
+  _fuse_conn='not exposed at standard path'
+fi
+case "$_fuse_type" in
+  ''|*[!0-9]*)
+    if [ -n "$_fuse_bpf_cfg" ]; then _fuse_bpf_summary="config=${_fuse_bpf_cfg}; runtime interface not exposed"
+    else _fuse_bpf_summary='unknown; not runtime-discoverable'; fi ;;
+  *)
+    if [ -n "$_fuse_bpf_cfg" ]; then _fuse_bpf_summary="config=${_fuse_bpf_cfg}; runtime interface exposed"
+    else _fuse_bpf_summary='runtime interface exposed; config not confirmed'; fi ;;
+esac
+_emit kernel_fuse_bpf summary "$_fuse_bpf_summary"
+_emit kernel_fuse_bpf fuse_config "${_fuse_cfg:-unknown}"
+_emit kernel_fuse_bpf fuse_bpf_config "${_fuse_bpf_cfg:-unknown}"
+_emit kernel_fuse_bpf fuse_device "$_fuse_runtime"
+_emit kernel_fuse_bpf prog_type_interface "$_fuse_type_state"
+_emit kernel_fuse_bpf connections "$_fuse_conn"
+_emit kernel_fuse_bpf evidence_note 'ordinary FUSE or eBPF alone does not prove FUSE-BPF; active mounts/programs not inferred'
 
 # Normalised feature summary. "unknown" means that the running kernel exposes no
 # reliable read-only evidence; it never means that the feature is absent.
@@ -324,7 +459,8 @@ _emit system uptime "$(_read "$PROC/uptime")"
 _emit system loadavg "$(_read "$PROC/loadavg")"
 
 # ASB runtime facts: a whitelist, never an eval or arbitrary file import.
-for _k in profile state state_warmup smart_mode thermal cap_owner device_bounds_applied device_bounds_status device_bounds_reason; do
+for _k in profile state state_warmup smart_mode thermal cap_owner device_bounds_applied device_bounds_status device_bounds_reason \
+  smooth_log_status smooth_log_accepted smooth_log_rejected smooth_log_suppressed smooth_log_last_epoch smooth_log_last_jank_x1000 smooth_log_capture smooth_log_seq; do
   _v="$(_kv "$STATE_FILE" "$_k")"; [ -n "$_v" ] && _emit asb "$_k" "$_v"
 done
 _caps="$DATA/asb/device_caps.env"
@@ -349,7 +485,46 @@ for _k in uclamp battery_current cgroup_v2 memcg msm_performance camera_cpuset d
   _v="$(_kv "$_rcaps" "$_k")"; [ -n "$_v" ] && _emit asb_caps "$_k" "$_v"
 done
 _v="$(_kv "$_rcaps" thermal_headroom_source)"; [ -n "$_v" ] && _emit asb_caps thermal_headroom_source "$_v"
-_v="$(_kv "$_caps" root_manager)"; [ -n "$_v" ] && _emit asb_caps root_manager "$_v"
+_root_mgr="$(_kv "$_caps" root_manager)"
+if [ -n "$_root_mgr" ]; then
+  _emit asb_caps root_manager "$_root_mgr"
+  _emit root manager "$_root_mgr"
+fi
+# root_manager=ksu identifies the compatible interface family, not the implementation.
+# A bounded, sanitized version response may positively identify KernelSU Next or another
+# fork. No response means "not exposed", never "the original KernelSU" or "unsupported".
+if [ "$_root_mgr" = 'ksu' ]; then
+  _ksud=''
+  if [ -n "$KSUD_BIN" ] && [ -x "$KSUD_BIN" ]; then
+    _ksud="$KSUD_BIN"
+  else
+    for _candidate in "$DATA/ksud" "$DATA/ksu/bin/ksud"; do
+      if [ -x "$_candidate" ]; then _ksud="$_candidate"; break; fi
+    done
+  fi
+  _root_line=''
+  [ -n "$_ksud" ] && _root_line="$("$_ksud" --version 2>/dev/null | head -n 1)"
+  _root_line="$(_clean "$_root_line" | cut -c1-160)"
+  if [ -n "$_root_line" ]; then
+    _root_lower="$(printf '%s' "$_root_line" | tr 'A-Z' 'a-z')"
+    case "$_root_lower" in
+      *'kernelsu next'*) _root_variant='KernelSU Next' ;;
+      *'sukisu ultra'*) _root_variant='SukiSU Ultra' ;;
+      *'sukisu'*) _root_variant='SukiSU' ;;
+      *'kernelsu'*) _root_variant='KernelSU' ;;
+      *) _root_variant='not exposed' ;;
+    esac
+    _root_ver="$(printf '%s\n' "$_root_line" | sed -n 's/^[^0-9]*\([0-9][0-9A-Za-z.+_-]*\).*/\1/p' | head -n 1)"
+    _emit root variant "$_root_variant"
+    _emit root version "${_root_ver:-not exposed}"
+    _emit root variant_evidence 'ksud --version'
+    _emit root version_evidence "$_root_line"
+  else
+    _emit root variant 'not exposed'
+    _emit root version 'not exposed'
+    _emit root variant_evidence 'not exposed'
+  fi
+fi
 _cam="$(_kv "$_caps" has_odm_camera_dir)"; _aud="$(_kv "$_caps" has_vendor_audio_dir)"
 [ -n "$_cam$_aud" ] && _emit asb_caps overlay "camera=${_cam:-?}; audio=${_aud:-?}"
 _v="$(_kv "$_caps" has_wlan_txqlen)"; [ -n "$_v" ] && _emit asb_caps wlan_txqlen "$_v"
