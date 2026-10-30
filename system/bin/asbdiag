@@ -1413,6 +1413,12 @@ if [ -f "$_dbounds" ]; then
   [ -n "$_dconf" ] || _dconf="$(grep -E '^# confidence=' "$_dbounds" 2>/dev/null | head -1 | sed 's/^# confidence=//' | awk '{print $1}')"
   _dschema="$(grep -E '^schema=' "$_dbounds" 2>/dev/null | head -1 | cut -d= -f2-)"
   P "  synthesis confidence  : ${_dconf:-unknown} (schema=${_dschema:-legacy}; overrides require high)"
+  _dfull="$(grep -E '^cluster_signature_full=' "$_dbounds" 2>/dev/null | head -1 | cut -d= -f2-)"
+  _droles="$(grep -E '^logical_roles=' "$_dbounds" 2>/dev/null | head -1 | cut -d= -f2-)"
+  _dmap="$(grep -E '^policy_map=' "$_dbounds" 2>/dev/null | head -1 | cut -d= -f2-)"
+  P "  full CPU identity     : ${_dfull:-not exposed}"
+  P "  logical writer roles  : ${_droles:-not exposed}"
+  P "  physical policy map   : ${_dmap:-not exposed} (id:slot:hw_max:opp_count:opp_min:opp_max)"
   _nvals="$(grep -cE '^[A-Z].*=' "$_dbounds" 2>/dev/null)"
   if [ "${_nvals:-0}" -gt 0 ] 2>/dev/null; then
     P "  synthesised bounds (scaled from OP15 ratios, snapped to this device):"
