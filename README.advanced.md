@@ -20,14 +20,19 @@
 </p>
 
 <p align="center">
-  <strong>📖 Documentation:</strong>
-  <a href="README.md">Quick start</a> ·
-  <a href="README.advanced.md">Advanced guide</a> ·
-  <a href="README.ru.md">Быстрый старт</a> ·
-  <a href="README.advanced.ru.md">Подробное руководство</a>
+  <img src="https://img.shields.io/badge/SMART-12%20SCENARIO%20BUCKETS-7c3aed?style=for-the-badge" alt="Twelve Smart scenario buckets">
+  <img src="https://img.shields.io/badge/FALLBACK-5%20LEVELS-2563eb?style=for-the-badge" alt="Five fallback levels">
+  <img src="https://img.shields.io/badge/LEARNING-BOUNDED-475569?style=for-the-badge" alt="Bounded learning">
 </p>
 
-## 1. Purpose and reading contract
+<p align="center">
+  <a href="README.md"><img src="https://img.shields.io/badge/🚀_Quick_Start-16a34a?style=for-the-badge&logo=github&logoColor=white" alt="Quick start"></a>
+  <a href="README.advanced.md"><img src="https://img.shields.io/badge/🧠_Advanced_Guide-0f766e?style=for-the-badge&logo=github&logoColor=white" alt="Advanced guide"></a>
+  <a href="README.ru.md"><img src="https://img.shields.io/badge/🇷🇺_Быстрый_старт-1f2937?style=for-the-badge&logo=github&logoColor=white" alt="Быстрый старт"></a>
+  <a href="README.advanced.ru.md"><img src="https://img.shields.io/badge/🇷🇺_Подробное_руководство-334155?style=for-the-badge&logo=github&logoColor=white" alt="Подробное руководство"></a>
+</p>
+
+## 📖 1. Purpose and reading contract
 
 This guide describes the current architecture and operational model of ASB. It is intentionally not a release history: implementation details belong here when they help someone configure, test, diagnose or review the module safely.
 
@@ -46,7 +51,7 @@ The short [README.md](README.md) is the normal entry point. This document assume
 
 > **Central rule:** absence of read-only evidence is not evidence of absence. ASB must not turn an unreadable interface into a confident “unsupported”, “active” or “stock” claim.
 
-## 2. Design principles
+## 🧭 2. Design principles
 
 ASB combines a native performance governor, shell runtime appliers, a WebUI, optional audio components and on-demand diagnostics. These pieces share configuration and evidence, but they are not interchangeable owners of the same setting.
 
@@ -63,7 +68,7 @@ ASB combines a native performance governor, shell runtime appliers, a WebUI, opt
 | ↩️ **Reversibility** | Baselines, apply records and restore logic are part of the feature, not an afterthought. |
 | 📦 **Patch-based module delivery** | The module patches or overlays exposed behaviour through root-module mechanisms; it does not need to embed arbitrary APK files to implement these policies. |
 
-## 3. High-level architecture
+## 🏗️ 3. High-level architecture
 
 | Layer | Main responsibility | Representative sources |
 |:---|:---|:---|
@@ -79,9 +84,9 @@ ASB combines a native performance governor, shell runtime appliers, a WebUI, opt
 
 The native governor is a running policy component. That must not be confused with the diagnostic collection model: a persistent governor does not imply a persistent extended-log recorder or device-inventory worker.
 
-## 4. Installation, update and removal model
+## 📦 4. Installation, update and removal model
 
-### 4.1 Normal installation
+### 🚀 4.1. Normal installation
 
 1. Install the regular release ZIP with Magisk, KernelSU, APatch or a supported derivative.
 2. Reboot so boot-time mounts, native components, audio integration and generated device policy can be initialised in the intended order.
@@ -91,7 +96,7 @@ The native governor is a running policy component. That must not be confused wit
 
 Do not install several ASB packages in parallel. A test build replaces the existing module through the manager's normal update mechanism.
 
-### 4.2 Settings and learning are different state
+### 🗄️ 4.2. Settings and learning are different state
 
 ASB keeps user configuration, active-profile information, native learning, generated device bounds, baselines and diagnostic state as separate concepts. This separation matters:
 
@@ -103,13 +108,13 @@ ASB keeps user configuration, active-profile information, native learning, gener
 
 The WebUI provides named configurations, backup/export and separate reset actions. Use a backup before broad experiments, and record the firmware and root environment alongside a test capture.
 
-### 4.3 Stock and uninstall are not identical operations
+### ↩️ 4.3. Stock and uninstall are not identical operations
 
 **Stock** withdraws ASB's active profile policy and returns the relevant performance decisions to the ROM. It is useful for A/B comparisons, but a user-selected DSP, camera, network or interface option may still be an independent configuration choice.
 
 **Uninstall** runs the module's restoration path for settings ASB owns. Baselines and ownership records are used to avoid restoring a value over a newer unrelated change blindly. After removal, a reboot is the cleanest way to return mount- and boot-integrated behaviour to the stock environment.
 
-## 5. Profiles and policy composition
+## 🎯 5. Profiles and policy composition
 
 A profile is more than a single CPU maximum. Depending on the exposed device interfaces and user configuration, policy can involve per-policy CPU ranges, GPU behaviour, scheduler utilisation clamps, memory/VM behaviour, thermal response, background policy and other owned controls.
 
@@ -121,7 +126,7 @@ A profile is more than a single CPU maximum. Depending on the exposed device int
 | **Battery** | Reduce unnecessary peaks and prefer endurance and lower heat. | Its jank guard is bounded insurance, not a second Smart learner. Heavy work may be slower by design. |
 | **Stock** | Restore the ROM-controlled policy baseline for comparison or troubleshooting. | It does not mean that every independent optional tweak has been reset to its default. |
 
-### 5.1 Performance ceiling
+### 📉 5.1. Performance ceiling
 
 `perf_ceiling_pct` provides a user-level upper bound on the selected performance policy. It is an additional constraint, not a demand that every cluster always run at that percentage.
 
@@ -136,15 +141,15 @@ The final effective value can be lower because of:
 
 When a value must be snapped to a real OPP table, ASB uses a conservative ceiling rule rather than rounding upward beyond the requested cap.
 
-### 5.2 Profile switches and transient state
+### 🔀 5.2. Profile switches and transient state
 
 A profile switch can involve several ordered operations: stop or hand over native policy, apply the new ranges, reconcile runtime appliers, publish state and verify effective values. A diagnostic snapshot taken during this interval can be transient.
 
 If `asbdiag` indicates that switching is still in progress, wait for the operation to settle and capture again. Do not infer a permanent ownership conflict from one intermediate sample.
 
-## 6. Native governor
+## ⚙️ 6. Native governor
 
-### 6.1 Six states
+### 🎚️ 6.1. Six states
 
 The governor uses a finite-state model. A state describes the current operating situation; it is not another user-facing profile.
 
@@ -159,7 +164,7 @@ The governor uses a finite-state model. A state describes the current operating 
 
 A high GPU reading alone is not necessarily enough to declare gaming. Likewise, a game hint without sufficient load can be promoted to a heavy state rather than receiving an unconditional maximum-performance policy.
 
-### 6.2 Inputs and corroboration
+### 🛰️ 6.2. Inputs and corroboration
 
 The governor can combine several classes of metrics:
 
@@ -174,7 +179,7 @@ The governor can combine several classes of metrics:
 
 Inputs are validated before arithmetic or policy use. Missing counters, implausible deltas, stale samples and unsupported interfaces must not be converted into a fictitious load value.
 
-### 6.3 Hysteresis, dwell and escalation
+### ⏱️ 6.3. Hysteresis, dwell and escalation
 
 Immediate reaction to every sample would cause oscillation and unnecessary writes. The governor therefore uses different concepts for entering, leaving and holding states:
 
@@ -187,7 +192,7 @@ Immediate reaction to every sample would cause oscillation and unnecessary write
 
 This means that “the load fell for one sample” is not a valid expectation of an immediate state exit. Conversely, touch, launch or a properly corroborated heavy workload can justify faster escalation than ordinary load averaging.
 
-### 6.4 Sustained operation and cool gaming
+### 🏋️ 6.4. Sustained operation and cool gaming
 
 `SUSTAINED` is not a failure state. Its purpose is to find a performance level the device can maintain without repeatedly hitting severe thermal correction.
 
@@ -195,7 +200,7 @@ This means that “the load fell for one sample” is not a valid expectation of
 
 `bat_suppress_gaming` keeps the Battery profile out of the gaming policy even when a game is detected. This is intentional: Battery's own performance contract remains meaningful.
 
-### 6.5 Writer behaviour and vendor coexistence
+### ✍️ 6.5. Writer behaviour and vendor coexistence
 
 The writer compares requested and observed values and records disagreement rather than entering an endless write loop. Important cases include:
 
@@ -210,15 +215,15 @@ The writer compares requested and observed values and records disagreement rathe
 
 Writer leases and explicit handover are ownership tools, not a claim that ASB controls every system frequency at all times. Vendor thermal and PowerHAL decisions remain authoritative where the platform enforces them.
 
-## 7. Device-adaptive CPU bounds
+## 🧬 7. Device-adaptive CPU bounds
 
-### 7.1 Why synthesis exists
+### 🔍 7.1. Why synthesis exists
 
 Fixed frequency values copied from another device are unsafe and often meaningless. ASB discovers the current CPU policy topology and hardware ceilings, then synthesises profile ranges from that evidence.
 
 The discovery path is read-only. Synthesis writes generated configuration data, not new hardware capabilities. If discovery cannot establish identity reliably, import must fail closed rather than reuse an incompatible generated file.
 
-### 7.2 Bounds schema 3 identity
+### 🧾 7.2. Bounds schema 3 identity
 
 Schema 3 validates three complementary pieces of provenance:
 
@@ -230,7 +235,7 @@ Schema 3 validates three complementary pieces of provenance:
 
 This prevents a fourth policy, changed role, different OPP table or altered writer mapping from passing unnoticed merely because the main three clusters still look familiar.
 
-### 7.3 `policy_map` format
+### 🧩 7.3. `policy_map` format
 
 Each entry uses:
 
@@ -251,7 +256,7 @@ Entries are comma-separated in canonical order.
 
 The `0/0/0` OPP triplet is a valid evidence shape: **missing `scaling_available_frequencies` does not automatically make the policy unsupported**. Hardware ceilings and other validated interfaces can still permit bounded operation, while the absence of an OPP list remains explicit.
 
-### 7.4 Logical writer slots
+### 🗺️ 7.4. Logical writer slots
 
 | Topology | Slot 0 | Slot 1 | Slot 2 |
 |:---|:---|:---|:---|
@@ -261,7 +266,7 @@ The `0/0/0` OPP triplet is a valid evidence shape: **missing `scaling_available_
 
 On a 2-policy device, the second physical policy must not be mislabeled as an `extra` role simply because a 3/4-policy parser has such a field. Physical IDs and logical writer slots are deliberately separate.
 
-### 7.5 OPP-aware synthesis
+### 📐 7.5. OPP-aware synthesis
 
 For each generated MIN/CAP/MAX range, ASB uses the policy's measured hardware ceiling and defined profile ratios or policy logic. When an OPP table is exposed, ceiling values snap down to a real entry.
 
@@ -269,15 +274,125 @@ If every exposed OPP is above a requested target, the lowest real OPP is the onl
 
 Shell import and native import validate the same identity. A schema-2 or otherwise stale file must not be silently reinterpreted as schema 3.
 
-## 8. Smart learning and evidence gates
+## 🧠 8. Smart learning, decision layers and evidence gates
 
-### 8.1 What Smart is allowed to learn
+### 🎓 8.1. What Smart is allowed to learn
 
-Smart can build scenario-specific evidence from comparable operating windows. The goal is to answer questions such as whether additional headroom improves smoothness, whether a lower rail is sufficient, or whether previous thermal/battery behaviour makes a candidate unattractive.
+Smart is a native, multi-layer policy engine rather than a profile-name switch. It can build scenario-specific evidence from comparable operating windows, estimate the reliability of that evidence and use it to refine performance/efficiency decisions. The goal is to answer questions such as whether additional headroom improves smoothness, whether a lower rail is sufficient, or whether previous thermal/battery behaviour makes a candidate unattractive.
 
-Smart does not learn by blindly writing a new value after every frame spike. A candidate passes through scenario selection, freshness, validity, comparison and cooldown rules before it can influence future policy.
+Smart does not learn by blindly writing a new value after every frame spike. A candidate passes through scenario selection, freshness, validity, comparison and cooldown rules before it can influence future policy. Learning supplies a bounded starting point; live workload, thermal, charging and vendor evidence still decide what is acceptable now.
 
-### 8.2 Evidence pipeline
+### 🗂️ 8.2. Scenario identity: 12 buckets and hierarchical fallback
+
+Smart distinguishes six dayparts — `SLEEP`, `WAKE`, `MORN`, `DAY`, `EVE` and `LATE` — and separates weekdays from weekends. This produces **12 scenario buckets**: six dayparts × two day classes. The model can therefore reuse a genuinely similar evening or weekend scenario without assuming that every use of the phone at the same hour is equivalent.
+
+| Fallback level | Evidence used | Meaning |
+|:---|:---|:---|
+| `EXACT` | The matching daypart + weekday/weekend bucket | The most specific learned context available. |
+| `DAYPART_ONLY` | The same daypart across the broader day class | Used when the exact bucket is not reliable enough. |
+| `CLASS` | Weekday/weekend-class history | A broader behavioural reference, not an exact-scenario claim. |
+| `GLOBAL` | Cross-scenario learned history | A conservative general starting point when local evidence is sparse. |
+| `SAFE` | Neutral safe baseline | Prevents insufficient evidence from becoming a fabricated precise preference. |
+
+This hierarchy is part of the intelligence, not an error path. A broader fallback can be more truthful than an exact but weakly supported answer.
+
+### 📈 8.3. Confidence, freshness and bounded influence
+
+Each bucket tracks raw observations, effective observations, last-seen time and confidence. Learned outputs are scaled towards a neutral baseline when confidence is low, rather than being applied at full strength merely because a record exists.
+
+| Mechanism | Implementation meaning |
+|:---|:---|
+| **Effective observations** | Measure how much useful evidence supports the bucket, rather than counting every encounter equally. |
+| **Low/high confidence tiers** | The native model defines separate confidence tiers (`350` and `650` on a per-mille scale) and a bounded maximum. |
+| **Fresh period** | Evidence up to seven days old is treated as fresh by the decay model. |
+| **Stale boundary** | Time decay reaches the stale boundary at 37 days; old behaviour must not dominate indefinitely. |
+| **Neutral blending** | Weak confidence pulls learned biases back towards neutral instead of amplifying a guess. |
+| **Bounded outputs** | Final alpha and bias values remain inside native limits and cannot override hard safety gates. |
+
+Freshness is not the same as relevance. A fresh observation from an unsuitable charging, thermal or workload scenario can still be ineligible.
+
+### 🎛️ 8.4. What Smart actually controls
+
+Smart can blend Battery-like and Balanced-like CPU bounds and then apply separate, bounded adjustments. It does not randomly toggle the complete WebUI control set.
+
+| Learned bucket value | Policy role |
+|:---|:---|
+| `alpha_battery_x1000` | Position of the Battery ↔ Balanced performance/efficiency blend. |
+| `interactive_bonus_x1000` | Additional bounded allowance for suitable interactive scenarios, separate from idle policy. |
+| `idle_bias_x1000` | Preference for restraint versus readiness during idle-related decisions. |
+| `sleep_bias_x1000` | Efficiency preference for eligible sleep/night behaviour. |
+| `net_conservative_x1000` | Conservatism of related runtime network policy; it is not permission to rewrite every explicit network setting. |
+
+The bucket also retains history for idle quality, wake activity, drain and maximum temperature: `avg_idle_q_x10`, `avg_wph_x10`, `avg_drain_pctph_x10` and `avg_max_temp_x10`. Camera/profile transitions invalidate unsuitable cached decisions rather than carrying a conclusion into a different operating context.
+
+Explicit DSP, camera and other user settings remain user choices. Smart owns its performance/efficiency policy and related native runtime decisions, not an unrestricted licence to change all 80 controls.
+
+### 🌡️ 8.5. Device-relative thermal and drain history
+
+Smart does not apply one absolute “normal temperature” to every OnePlus model. It uses the median thermal history of sufficiently populated buckets to establish a device-relative reference and derive bounded warm/cool adjustments.
+
+| History signal | Possible bounded effect |
+|:---|:---|
+| Device is warmer than its own relevant norm | Start from a more conservative performance/efficiency position. |
+| Device is cooler than its relevant norm | Permit a less defensive starting point when live gates agree. |
+| Repeated high drain in comparable history | Add a bounded efficiency nudge instead of waiting for low battery alone. |
+| Sparse or stale thermal history | Reduce reliance on the learned norm and retain neutral/live evidence. |
+
+These nudges alter a starting point, not the final authority. The live thermal loop, vendor clamps and safety vetoes have the last word.
+
+### 🌙 8.6. Screen-off, night and low-battery decision layers
+
+Screen-off is not a single scenario. The native override distinguishes an approximate short pause window of **30–120 seconds**, an intermediate window of **120–1800 seconds**, and longer screen-off operation. This helps preserve a sensible return from a brief pause without preventing deeper restraint during a genuinely long idle period.
+
+The night-safe override combines several conditions rather than trusting a clock alone:
+
+- night daypart or learned night context;
+- screen-off state;
+- not charging;
+- no heavy application scenario;
+- battery-level eligibility.
+
+The low-battery override uses hysteresis. Entry and exit therefore do not flap around one percentage, and this native efficiency response remains distinct from the separate `auto_battery_enable` profile-switch feature.
+
+Active audio, navigation, VPN, charging, camera and heavy-work evidence can disqualify an otherwise tempting deep-idle conclusion.
+
+### 🔌 8.7. Charge-aware performance and hot-charge protection
+
+Charge-aware policy is a constrained decision matrix, not “plugged in equals maximum speed”. It can consider charging state, screen state, charge power class, battery temperature, SoC temperature and existing safety overrides.
+
+| Condition | Policy consequence |
+|:---|:---|
+| Cool device, eligible charging scenario | Bounded charge assist may provide additional headroom. |
+| Hot battery or hot SoC | Hot-charging protection can suppress the extra allowance. |
+| Plugged in with screen off and heat present | The cool guard can favour cooling over unnecessary performance. |
+| Existing safety floor or thermal veto | Charge assist does not cancel the floor or override the veto. |
+| Charging evidence missing or unsuitable | Do not infer a high-power, cool and safe scenario from the cable alone. |
+
+This is why `charge_aware_enable=1` is permission to evaluate an opportunity, not a guarantee of higher clocks in every charging session.
+
+### 🔥 8.8. App heat, thermal trends and session context
+
+Smart retains bounded per-app heat/drain history using an application hash, heat score, drain score and time decay. Entries are bounded and saved atomically through a temporary file plus `rename()`. This memory can inform later restraint without turning one bad session into a permanent verdict or collecting account/network identifiers.
+
+The thermal path also reacts before a fixed limit is reached:
+
+- a soft thermal pre-lean can reduce avoidable heat build-up;
+- a thermal-trend bump considers the rate of heating;
+- current temperature and trend remain separate from stale scenario preference;
+- session planning can classify the environment as `ENV_QUIET`, noisy or `ENV_HOSTILE`;
+- thermal debt and clamp debt from previous sessions can influence the next plan.
+
+| `thermal_veto_reason` | Veto source |
+|:---:|:---|
+| `1` | Skin/surface thermal constraint. |
+| `2` | Junction hard limit. |
+| `3` | Junction fallback when skin evidence is unavailable. |
+| `4` | Vendor clamps. |
+| `5` | Recovery. |
+
+A veto reason explains why extra performance was refused. It is not an error code and must not be “fixed” by fighting the platform owner.
+
+### 🧪 8.9. Evidence pipeline
 
 | Stage | Purpose |
 |:---|:---|
@@ -293,7 +408,7 @@ Smart does not learn by blindly writing a new value after every frame spike. A c
 
 A concluded plateau is not an instruction to test the same alternative continuously. Freshness and recheck rules exist so old decisions do not become unquestionable permanent truth either.
 
-### 8.3 Log-assisted smoothness feedback
+### 🎞️ 8.10. Log-assisted smoothness feedback
 
 The existing log path can provide bounded jank hints that schedule an earlier native smoothness comparison. The log is an input channel, not a policy owner:
 
@@ -305,7 +420,7 @@ The existing log path can provide bounded jank hints that schedule an earlier na
 
 This separation is essential. A shell log parser that directly wrote CPU settings would bypass native ownership and could fight the governor.
 
-### 8.4 Checked feedback parsing and bounded I/O
+### 🔍 8.11. Checked feedback parsing and bounded I/O
 
 Feedback numbers are parsed as checked 64-bit values. Parsing uses `strtoull`-style validation with `ERANGE` and overflow checks **before** arithmetic. An enormous counter must be rejected, not wrapped into a plausible small delta.
 
@@ -328,35 +443,35 @@ Atomic replacement is significant: a temp-file write followed by `rename()` must
 
 These counters support cost measurement. They do not themselves prove a battery saving.
 
-### 8.5 Battery, charging and media gates
+### 🔋 8.12. Battery, charging and media gates
 
 - `smart_battery_bias` adds an explicit user preference toward efficiency; it is not a learned temperature value.
 - `auto_battery_enable` handles low-charge profile switching and previous-profile restoration, independently of ordinary scenario learning.
-- `charge_aware_enable` permits more headroom while charging only when other gates allow it.
+- `charge_aware_enable` permits the charge-aware decision layer described above only when other gates allow it.
 - `smart_media_guard` prevents media-oriented behaviour from being mistaken for an ordinary interactive performance problem.
 - Screen-off audio, navigation, VPN and charging can disqualify deep-idle conclusions.
 
-### 8.6 Prime-core escape
+### 🚀 8.13. Prime-core escape
 
 `heavy_prime_escape`, `prime_escape_burst_s` and `prime_escape_rest_s` provide bounded prime-core relief for suitable heavy scenarios. The burst/rest pair is deliberate: a permanent prime lift would defeat the efficiency purpose and increase heat.
 
 The escape is a temporary relaxation within other safety constraints, not an unconditional hardware maximum or an SoC-specific writer.
 
-## 9. Thermal evidence and protection
+## 🌡️ 9. Thermal evidence and protection
 
-### 9.1 Multiple temperatures, multiple meanings
+### 🌡️ 9.1. Multiple temperatures, multiple meanings
 
 CPU, junction, board, skin and battery temperatures answer different questions. ASB can cross-check available thermal zones and attach confidence to a selected source. A derived or disputed source should be shown with lower confidence rather than presented as equally authoritative.
 
 A missing skin/board zone can limit surface-based policy even when CPU temperature remains readable. Conversely, a hot battery is not interchangeable with a CPU die reading.
 
-### 9.2 Adaptive thermal budget
+### 📉 9.2. Adaptive thermal budget
 
 The governor can reduce performance before the platform reaches a severe clamp. This proactive budget is intended to avoid inefficient peak-and-throttle oscillation and make sustained behaviour more predictable.
 
 The budget does not replace the vendor thermal engine. If the platform imposes a stricter limit, that limit wins. ASB must not repeatedly raise a ceiling against an active vendor clamp.
 
-### 9.3 User thermal controls
+### 🎚️ 9.3. User thermal controls
 
 | Control | Role | Caution |
 |:---|:---|:---|
@@ -366,17 +481,17 @@ The budget does not replace the vendor thermal engine. If the platform imposes a
 | `cool_gaming` | Biases gaming toward sustainable, cooler behaviour. | Frame-rate results depend on the game and device; no universal gain is promised. |
 | `bat_suppress_gaming` | Prevents Battery from entering its gaming state. | Lower game performance in Battery is expected. |
 
-### 9.4 Thermal diagnostics
+### 🔬 9.4. Thermal diagnostics
 
 A useful thermal report should identify the source, confidence, current limit owner and recent vendor evidence. “ASB requested a higher value” and “the phone is allowed to use it now” are separate statements.
 
 Do not infer that thermal protection is broken just because a current clock is below a profile ceiling. Check for `SUSTAINED`, a thermal cap, vendor ownership, sensor confidence and transient profile-switch state first.
 
-## 10. Complete WebUI control index
+## 🎛️ 10. Complete WebUI control index
 
 The following tables mirror the WebUI's six configuration groups. Defaults describe the normal initial policy, not a recommendation to reset a working setup. Availability and apply timing remain device-dependent.
 
-### 10.1 Battery
+### 🔋 10.1. Battery
 
 | Key | WebUI name | Default | Advanced behaviour / test focus |
 |:---|:---|:---:|:---|
@@ -404,7 +519,7 @@ The following tables mirror the WebUI's six configuration groups. Defaults descr
 | `gms_trim` | Google Services Trim | `stock` | Lite/strict background trimming for selected Google Services behaviour. |
 | `gms_freeze` | Freeze Google Components | `off` | Safe/more/max component restraint; test push, location, casting and account-dependent functions. |
 
-### 10.2 Network
+### 🌐 10.2. Network
 
 | Key | WebUI name | Default | Advanced behaviour / test focus |
 |:---|:---|:---:|:---|
@@ -427,13 +542,13 @@ The following tables mirror the WebUI's six configuration groups. Defaults descr
 | `net_wifi_leave` | Leave Bad Wi-Fi | `off` | Off/weak/unusable/aggressive fallback policy; can increase mobile-data use. |
 | `wifi_powersave` | WiFi Power Save | `off` | Off/screen-off/always power saving; latency and throughput can change. |
 
-#### Network verification rules
+#### 🔎 Network verification rules
 
 A valid network test identifies the exact route and interface. Wi-Fi results must not be collected while traffic actually uses a mobile interface, and a VPN can change the observable path. Compare the same server, signal conditions, time window and workload.
 
 `auto` is a deliberate non-write/hand-back choice where defined, not a hidden promise that ASB selected the fastest algorithm. Kernel support for BBR, `cake` or another option must be established from live evidence.
 
-### 10.3 Audio
+### 🎧 10.3. Audio
 
 | Key | WebUI name | Default | Advanced behaviour / test focus |
 |:---|:---|:---:|:---|
@@ -456,7 +571,7 @@ A valid network test identifies the exact route and interface. Wi-Fi results mus
 | `dsp_compressor` | DSP Compressor | `on` | Soft dynamics control for higher gain; the final peak limiter remains when the compressor is off. |
 | `audio_remove_volume_limit` | Headphone Volume Limit | `0` | Explicit hearing-safety choice; ASB does not silently remove this system safeguard. |
 
-#### DSP chain and route semantics
+#### 🎚️ DSP chain and route semantics
 
 The processing order is meaningful:
 
@@ -473,7 +588,7 @@ On the built-in loudspeaker, an additional thermal policy can reduce DSP gain wh
 
 Bluetooth DSP processing can remove playback from a low-power offload path and keep the CPU awake with the screen off. A battery comparison must therefore record the selected DSP outputs, codec/offload state and audio route.
 
-#### External processors and effect interfaces
+#### 🔌 External processors and effect interfaces
 
 `eq_compat` is the appropriate choice when ViPER, JamesDSP or another external processor should receive the stream without ASB's effect occupying the same processing path. Do not troubleshoot two processors as though they were one effect.
 
@@ -484,7 +599,7 @@ ASB's audio integration can involve legacy effect interfaces and AOSP/AIDL compo
 - reference/prebuilt DSP files must be described honestly as such;
 - ABI selection and attach evidence belong in diagnostics, not inferred from a filename.
 
-### 10.4 Camera
+### 📷 10.4. Camera
 
 | Key | WebUI name | Default | Advanced behaviour / test focus |
 |:---|:---|:---:|:---|
@@ -499,7 +614,7 @@ Camera tone tables are regenerated from stock files and integrated through the m
 
 A valid camera comparison uses the same phone, firmware, camera application, lens, scene, lighting and capture mode. Processing strength does not replace hardware optics and cannot be validated from one preferred photograph.
 
-### 10.5 Interface
+### ✨ 10.5. Interface
 
 | Key | WebUI name | Default | Advanced behaviour / test focus |
 |:---|:---|:---:|:---|
@@ -511,7 +626,7 @@ A valid camera comparison uses the same phone, firmware, camera application, len
 
 Animation speed changes perceived responsiveness; it does not make application computation faster. UI benchmarks should separate animation duration from actual launch and frame-production time.
 
-### 10.6 System
+### 🧩 10.6. System
 
 | Key | WebUI name | Default | Advanced behaviour / test focus |
 |:---|:---|:---:|:---|
@@ -528,9 +643,9 @@ Animation speed changes perceived responsiveness; it does not make application c
 
 Vendor-service and process controls require particular care. “More aggressive” is not synonymous with “more efficient”: repeated process restart can cost more energy and degrade notifications, widgets, media, sync and location.
 
-## 11. WebUI, monitor and effective-state semantics
+## 📊 11. WebUI, monitor and effective-state semantics
 
-### 11.1 Pages
+### 📑 11.1. Pages
 
 | Page | Operational role |
 |:---|:---|
@@ -542,7 +657,7 @@ Vendor-service and process controls require particular care. “More aggressive�
 
 The WebUI supports English, Russian, German, Spanish, French, Italian, Portuguese, Turkish, Ukrainian, Chinese, Indonesian, Arabic and Armenian. It provides dark, light and Liquid Glass presentation, with layouts intended for narrow phone viewports as well as larger screens.
 
-### 11.2 Requested versus effective
+### 🔍 11.2. Requested versus effective
 
 A configuration card answers “what did the user select?” It cannot by itself answer “what is live?” Monitor, Action and diagnostics therefore use additional evidence:
 
@@ -555,13 +670,13 @@ A configuration card answers “what did the user select?” It cannot by itself
 
 A missing denominator must hide a normalised scale rather than produce an arbitrary percentage. Unknown or warming-up values remain neutral. Reverse scales are used where a larger number is not automatically better — for example, available headroom versus consumed resource.
 
-### 11.3 Limit ownership
+### 👑 11.3. Limit ownership
 
 “Who set the limit?” is a diagnostic attribution, not a moral judgement. The source can be ASB policy, shell/runtime policy, vendor/platform policy, thermal protection or an unknown state.
 
 A vendor clamp can be protective and expected. An ASB cap can be deliberate because of Battery or a user ceiling. The correct response depends on the source and current scenario, not on always removing the lowest visible limit.
 
-### 11.4 Named configurations and backup
+### 💾 11.4. Named configurations and backup
 
 Named configurations are useful for repeatable testing, but they are not universal device images. Before importing a setup on different hardware or firmware:
 
@@ -572,15 +687,15 @@ Named configurations are useful for repeatable testing, but they are not univers
 5. regenerate or validate device-specific bounds where required;
 6. test each affected subsystem independently.
 
-## 12. Device information, privacy and evidence quality
+## 🔐 12. Device information, privacy and evidence quality
 
-### 12.1 Read-only, on-demand collection
+### 🕵️ 12.1. Read-only, on-demand collection
 
 Device discovery reads public runtime interfaces needed to describe capabilities and compatibility. It does not require a persistent inventory worker and must not modify the device while collecting facts.
 
 Read-only collection can still produce an incomplete answer. SELinux, kernel configuration, mount namespaces, missing nodes and firmware abstractions can hide information from the current process.
 
-### 12.2 Data excluded from reports
+### 🚫 12.2. Data excluded from reports
 
 ASB diagnostics do not need and must not read:
 
@@ -591,7 +706,7 @@ ASB diagnostics do not need and must not read:
 
 Before sharing a report, the user should still review it. Environment details, installed package names or personally meaningful filenames can be sensitive in a particular support context even when they are not universal hardware identifiers.
 
-### 12.3 Evidence labels
+### 🏷️ 12.3. Evidence labels
 
 Use precise wording when extending diagnostics:
 
@@ -606,9 +721,9 @@ Use precise wording when extending diagnostics:
 
 Kernel-origin classification is also indicative, not provenance proof. A stock-like configuration cannot establish who built the kernel.
 
-## 13. Diagnostics and command-line workflow
+## 🩺 13. Diagnostics and command-line workflow
 
-### 13.1 Everyday commands
+### ⌨️ 13.1. Everyday commands
 
 ```bash
 su -c 'asb status'
@@ -624,7 +739,7 @@ su -c 'asbdiag'
 
 The module card's **Action** screen is often the fastest first check. The WebUI support controls can generate diagnostics without manually typing shell commands.
 
-### 13.2 Useful source-side inspection tools
+### 🔧 13.2. Useful source-side inspection tools
 
 The source archive contains focused tools for discovery, effective policy, device verification, state audit, report generation and capture comparison. Their exact arguments can evolve, so inspect the tool header or `--help` where implemented rather than assuming a stable scripting API.
 
@@ -641,7 +756,7 @@ Important files in a typical review include:
 | `tools/asb_field_report.sh` / `tools/asb_field_report.py` | Field-report orchestration and analysis. |
 | `tools/asb_capture_compare.py` | Comparable-capture analysis rather than single-log intuition. |
 
-### 13.3 Reading a failure
+### 🧯 13.3. Reading a failure
 
 A practical order is:
 
@@ -656,9 +771,9 @@ A practical order is:
 
 Do not publish secrets, credentials, private configuration files or personal identifiers with a support report.
 
-## 14. Extended captures and defensible A/B testing
+## 🧪 14. Extended captures and defensible A/B testing
 
-### 14.1 Facts, hypotheses, recommendations
+### 🧾 14.1. Facts, hypotheses, recommendations
 
 Extended reports separate three layers:
 
@@ -668,7 +783,7 @@ Extended reports separate three layers:
 
 An application appearing near a drain event is not sufficient to prove causation. A wakelock can be legitimate work; a process restart can be the result of another constraint; a network radio can be responding to poor signal rather than an app defect.
 
-### 14.2 Comparable capture design
+### ⚖️ 14.2. Comparable capture design
 
 For a meaningful A/B comparison:
 
@@ -687,13 +802,13 @@ For a meaningful A/B comparison:
 
 Repeat runs. Report spread and anomalies rather than selecting the best-looking capture. For screen-off drain, ensure the compared windows really have similar audio, navigation, VPN, charging and network activity.
 
-### 14.3 What not to claim
+### 🚫 14.3. What not to claim
 
 Do not derive a universal battery-saving percentage from one before/after log. Do not call a lower average clock proof of better efficiency when work completed more slowly. Do not call higher benchmark throughput proof of better sustained user experience without heat and frame stability.
 
 A good result names its scope: device, firmware, scenario, configuration, sample count and uncertainty.
 
-## 15. Source-tree guide
+## 🗂️ 15. Source-tree guide
 
 ```text
 AutoSystemBoost/
@@ -726,9 +841,9 @@ AutoSystemBoost/
 
 When changing a feature, update every copy or counterpart owned by the delivery contract. For example, `tools/asb_diag.sh` and `system/bin/asbdiag` must remain identical. Generated bounds, WebUI manifests, localisation and runtime schemas may have explicit consistency tests.
 
-## 16. Building and regression validation
+## 🛠️ 16. Building and regression validation
 
-### 16.1 Source-only archive
+### 📦 16.1. Source-only archive
 
 Run the complete source-only entry point from the repository root:
 
@@ -740,7 +855,7 @@ This wrapper enables `ASB_DSP_REFERENCE_OPTIONAL=1` for the full runner. Only ab
 
 Source-only mode is not a “skip failures” mode and does not claim that DSP reference binaries were rebuilt.
 
-### 16.2 Strict tree with DSP references
+### 🧱 16.2. Strict tree with DSP references
 
 For a complete tree containing the DSP reference prebuilts:
 
@@ -751,7 +866,7 @@ sh tools/asb_tree_check.sh check --strict
 
 The full runner prints its validation mode and DSP-reference strictness. Native warnings are checked against a warning budget/baseline so new warnings cannot be hidden casually.
 
-### 16.3 Clean-archive verification
+### 🧼 16.3. Clean-archive verification
 
 A final archive should be tested after restoring it into a clean directory, not only in the working tree:
 
@@ -765,7 +880,7 @@ bash tools/asb_source_regression.sh
 
 Preserve executable permissions when constructing the source ZIP. Verify the file set, hashes and executable modes against the tested tree. A successful regression in another directory does not validate an archive that is missing files.
 
-### 16.4 Native and DSP workflows
+### ⚙️ 16.4. Native and DSP workflows
 
 The governor and DSP have different build requirements:
 
@@ -775,7 +890,7 @@ The governor and DSP have different build requirements:
 - do not label reference DSP binaries as locally rebuilt when they were not;
 - do not weaken native warning checks to make a delivery pass.
 
-### 16.5 WebUI checks
+### 🌐 16.5. WebUI checks
 
 WebUI validation should cover real controls and visible pages, not hidden offscreen containers. At minimum, exercise:
 
@@ -789,7 +904,7 @@ WebUI validation should cover real controls and visible pages, not hidden offscr
 
 A selector that does not exist or a page that was never made visible can produce a deceptively green harness. Tests must prove that they interacted with the intended element.
 
-## 17. Contribution and regression checklist
+## ✅ 17. Contribution and regression checklist
 
 Before submitting a behavioural change:
 
@@ -808,11 +923,11 @@ Before submitting a behavioural change:
 
 Documentation changes should also preserve language parity, working cross-links, simple quick-start language and a clear separation between stable architecture and release history.
 
-## 18. Field-test playbooks
+## 🔬 18. Field-test playbooks
 
 A focused playbook turns a vague impression into a falsifiable result. Each test below starts with a known-good backup and ends by restoring ordinary log verbosity and any temporary experimental setting.
 
-### 18.1 Smart and smoothness
+### 🧠 18.1. Smart and smoothness
 
 1. Select Smart and allow enough ordinary use to establish a stable baseline.
 2. Choose one repeatable interactive scenario, such as a fixed feed scroll or application launch sequence.
@@ -825,7 +940,7 @@ A focused playbook turns a vague impression into a falsifiable result. Each test
 
 Pass criteria are not “Smart always boosts”. A correct result can be no change when evidence is insufficient, duplicated, stale or unsafe.
 
-### 18.2 Topology and generated bounds
+### 🧬 18.2. Topology and generated bounds
 
 Test the discovery/synthesis/import path on 2-, 3- and 4-policy fixtures as well as a real device. Check every physical policy, not only the three familiar roles. A 2-policy big cluster must remain big, not become `extra`.
 
@@ -833,7 +948,7 @@ Change one provenance element at a time: full cluster signature, logical role, p
 
 For synthesis, verify that ceilings never snap above the requested target and that inverted or malformed ranges fail closed. Do not use a production device as the first place to test malformed fixtures.
 
-### 18.3 Thermal and writer ownership
+### 🌡️ 18.3. Thermal and writer ownership
 
 Start at a comparable cool temperature and apply a repeatable sustained workload. Record state transitions, requested ceilings, effective ceilings, thermal source/confidence and vendor-owner evidence.
 
@@ -841,7 +956,7 @@ A useful test includes three phases: initial ramp, sustained operation and coold
 
 If a lease or vendor backoff is active, do not interpret the lack of an ASB rewrite as a crashed governor. Capture the ownership state and wait for the defined handover/recheck path.
 
-### 18.4 Battery and night behaviour
+### 🔋 18.4. Battery and night behaviour
 
 Compare equivalent screen-off windows with the same audio, navigation, VPN, charging and network conditions. Record starting/ending charge, temperature and duration, then inspect deep-idle classification and wake activity before changing Doze or wakelock policy.
 
@@ -849,7 +964,7 @@ Enable one aggressive control at a time. Test notifications, fitness tracking, b
 
 For Auto Battery, cross the low-charge condition, charge again and verify previous-profile restoration without creating a profile-switch loop. For Charge-Aware, repeat while warm to ensure the thermal gate still wins.
 
-### 18.5 DSP and audio routes
+### 🎧 18.5. DSP and audio routes
 
 Test speaker, wired and Bluetooth independently. For each route, record `audio_profile`, `dsp_outputs`, loudness, tone settings, compressor/headroom, offload state and attach/ABI evidence.
 
@@ -857,19 +972,19 @@ Use the same audio material and comparable system/headset volume. Verify that `d
 
 A screen-off Bluetooth battery test must be compared against the same Bluetooth route without ASB DSP. Otherwise a change in offload/CPU wake behaviour can be misattributed to the headphone, codec or music application.
 
-### 18.6 Network and camera
+### 🌐 18.6. Network and camera
 
 For networking, select one route, disable unrelated background transfers and compare the same server and workload. Confirm the effective congestion control/qdisc on the actual interface. Include signal changes and VPN use as explicit variables, not footnotes.
 
 For camera grading, reboot when required and capture a fixed scene set: daylight detail, portrait edges, macro texture, low light and high-contrast highlights. Look for halos, banding and unnatural colour as well as preferred sharpness. Camera performance hold should be evaluated during bursts/video without confusing image quality with capture responsiveness.
 
-### 18.7 Update, Stock and uninstall
+### 🔄 18.7. Update, Stock and uninstall
 
 Before an update, export configuration and record learning/state expectations. Update through the normal manager path, reboot and verify compatible configuration migration, generated-bounds identity and pending-reboot indicators.
 
 Switch to Stock and verify withdrawal of profile policy without assuming unrelated explicit tweaks were reset. Finally, test uninstall restoration in a controlled environment: owned baselines should be restored, mount-integrated behaviour should return after reboot, and no background diagnostic collector should remain.
 
-## 19. Troubleshooting by subsystem
+## 🧯 19. Troubleshooting by subsystem
 
 | Symptom | First checks |
 |:---|:---|
@@ -884,7 +999,7 @@ Switch to Stock and verify withdrawal of profile policy without assuming unrelat
 | Device page lacks a capability fact | Treat as not exposed/not runtime-discoverable until stronger read-only evidence exists. |
 | Report identifies a correlation only | Keep it a hypothesis; design a controlled repeat capture instead of assigning blame. |
 
-## 20. Support and responsible disclosure
+## 🤝 20. Support and responsible disclosure
 
 - 💬 [Telegram](https://t.me/DKomsomol)
 - 🐛 [GitHub issues](https://github.com/krilikd-factory/AutoSystemBoost/issues)
@@ -900,7 +1015,7 @@ Never include passwords, authentication tokens, private keys, account data or pe
   </a>
 </p>
 
-## 21. Final boundary
+## 🛡️ 21. Final boundary
 
 ASB changes system behaviour on a rooted device. No adaptive policy can guarantee identical performance, temperature or battery results across devices and workloads. The module's serious features are not only its appliers: they are also its ownership rules, evidence gates, restore paths, diagnostics and willingness to report **unknown**.
 

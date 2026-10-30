@@ -27,16 +27,17 @@
 </p>
 
 <p align="center">
-  <strong>📖 Documentation:</strong>
-  <a href="README.md">Quick start</a> ·
-  <a href="README.advanced.md">Advanced guide</a> ·
-  <a href="README.ru.md">Быстрый старт</a> ·
-  <a href="README.advanced.ru.md">Подробное руководство</a>
+  <a href="README.md"><img src="https://img.shields.io/badge/🚀_Quick_Start-16a34a?style=for-the-badge&logo=github&logoColor=white" alt="Quick start"></a>
+  <a href="README.advanced.md"><img src="https://img.shields.io/badge/🧠_Advanced_Guide-0f766e?style=for-the-badge&logo=github&logoColor=white" alt="Advanced guide"></a>
+  <a href="README.ru.md"><img src="https://img.shields.io/badge/🇷🇺_Быстрый_старт-1f2937?style=for-the-badge&logo=github&logoColor=white" alt="Быстрый старт"></a>
+  <a href="README.advanced.ru.md"><img src="https://img.shields.io/badge/🇷🇺_Подробное_руководство-334155?style=for-the-badge&logo=github&logoColor=white" alt="Подробное руководство"></a>
 </p>
 
 ## ⚡ What is ASB?
 
 **AutoSystemBoost is not a pack of random “speed” tweaks.** It is a root module that watches workload, temperature, battery level, charging and screen state, then applies behaviour appropriate to the moment.
+
+Think of ASB as the **adaptive control layer at the heart of your OnePlus**: it connects profiles, the native governor, thermal policy, audio, camera, network, battery tools, the WebUI and diagnostics into one coordinated system instead of leaving you with a drawer of unrelated switches.
 
 While the phone is idle, ASB tries to avoid unnecessary energy use. During games, camera work and demanding tasks, it keeps useful performance available. When the device becomes hot or the firmware does not expose a setting, ASB acts conservatively and reports the limitation instead of pretending that everything worked.
 
@@ -75,22 +76,76 @@ While the phone is idle, ASB tries to avoid unnecessary energy use. During games
 
 **A good starting point:** choose **Balanced** for predictable behaviour or **Smart** for automatic adaptation. Use **Battery** when endurance matters more than speed.
 
-## 🧠 How Smart works
+## 🧠 Smart: the adaptive brain of ASB
 
-Smart is more than a “fast / slow” switch. It combines workload evidence with app smoothness and previous comparable scenarios, then changes behaviour gradually.
+Smart is not a timer that alternates between “fast” and “slow”. It is a layered decision system: it recognises the current situation, compares it with relevant history, estimates how much that history can be trusted, blends performance with efficiency and then lets live thermal and safety checks approve or overrule the result.
 
-| Smart considers… | Why it matters |
+> **Smart does not merely select a profile name.** It can continuously shape the policy between Battery-like restraint and Balanced-like headroom, add a separate interactive allowance when it is justified, and withdraw that allowance as conditions change.
+
+### 🛰 What Smart notices
+
+| Signal or context | How Smart uses it |
 |:---|:---|
-| 🕐 **Time and scenario** | Similar usage can repeat, but one time slot is never treated as proof on its own. |
-| 📱 **Screen and workload** | Idle, scrolling, sustained work, gaming and camera use need different behaviour. |
-| 🎞 **Smoothness** | Frame data can trigger a bounded comparison; a single jank hint does not directly rewrite system settings. |
-| 🔋 **Charge and charging** | Low charge can favour efficiency, while a cool phone on a charger may safely have more headroom. |
-| 🌡 **Temperature and thermal history** | A hot device needs restraint even if an older scenario favoured performance. |
-| ✅ **Fresh, repeatable evidence** | Stale, duplicated or contradictory observations are not promoted into permanent rules. |
+| 🕐 **Six parts of the day** | Sleep, wake-up, morning, daytime, evening and late-night use can have genuinely different needs. |
+| 📅 **Weekday or weekend** | The same hour on a workday and on a weekend is not automatically treated as the same scenario. |
+| 🧭 **Workload and app context** | Idle, interaction, sustained work, games, camera and media receive different treatment; hints are checked against real activity. |
+| 📱 **Screen state and off-time** | A brief screen-off pause, a longer inactive period and an extended idle stretch are different decisions, not one generic “screen off” action. |
+| 🎞 **Smoothness evidence** | Fresh, relevant frame evidence can open a controlled A/B investigation instead of causing an immediate settings rewrite. |
+| 🔋 **Battery level and drain history** | Low charge and repeatedly high drain can shift the balance towards efficiency, with hysteresis to avoid flapping. |
+| 🔌 **Charging state and power class** | Charging can change the performance decision, but the type of charging and the current temperatures still matter. |
+| 🌡 **Battery, SoC and surface temperatures** | Current heat can reduce or veto extra performance even when a learned scenario previously favoured it. |
+| 📈 **Heating trend** | Rapid warming matters before a final temperature limit is reached; Smart can lean cooler early rather than waiting for an emergency. |
+| 🧬 **The device's own thermal norm** | “Warm” and “cool” are judged relative to this device's sufficiently populated history, not one absolute temperature copied to every OnePlus. |
+| 🔥 **Per-app heat and drain memory** | Repeatedly demanding app behaviour can inform bounded future decisions; old influence decays instead of becoming a permanent accusation. |
+| 🧱 **Vendor clamps and previous sessions** | Platform limits, thermal debt and earlier sustained/clamped work can make the next decision more conservative. |
+| ✅ **Confidence and freshness** | Smart asks not only “what happened?” but also “how often, how recently and how comparable was it?”. |
 
-Safety outranks learning. Camera work and active games are not ordinary idle time; music, charging, navigation and VPN activity are not called deep sleep merely because the screen is off; missing evidence produces an **unknown** state, not an invented answer.
+### 🎛 What Smart actually decides
 
-You can also set a manual **Performance Ceiling** to lower the selected profile's upper limit without abandoning that profile.
+| Decision layer | What can change |
+|:---|:---|
+| ⚖️ **Performance–efficiency blend** | Smart blends Battery-like and Balanced-like bounds instead of making a crude two-position jump. |
+| 👆 **Interactive headroom** | Scrolling, launches and other interactive work can receive a separate bounded allowance without raising idle performance. |
+| 😴 **Idle and sleep policy** | Idle bias and sleep bias help distinguish useful background work from unnecessary activity. |
+| 🌐 **Network conservatism** | The learned efficiency preference can make related runtime policy more restrained when the scenario supports it. |
+| 🏋 **Sustained pace** | Long workloads can favour a level the phone can maintain rather than repeated short bursts followed by harsh thermal correction. |
+| 🚀 **Bounded prime-core escape** | A justified responsiveness escape can remain available within its gates; it is not an unlimited maximum-frequency mode. |
+| 🛡 **Safety overrides** | Night, low-battery, hot-charging, plugged screen-off cooling, thermal-veto and recovery layers can narrow or cancel the performance request. |
+
+### 🗂 How Smart learns without becoming superstitious
+
+Smart keeps **12 scenario buckets**: six dayparts multiplied by weekday/weekend. Each bucket can remember effective observations and bounded tendencies for efficiency, interaction, idle, sleep and network conservatism, together with idle quality, wake activity, drain and maximum-temperature history.
+
+An exact matching bucket is preferred. If it is not reliable enough, Smart deliberately falls back through broader context — daypart, weekday/weekend class, global history and finally a safe neutral baseline. It does not force a precise answer from insufficient data.
+
+| Learning safeguard | Why it matters |
+|:---|:---|
+| 🧮 **Effective observations** | Repeated useful evidence carries more weight than a single encounter. |
+| ⏳ **Freshness and decay** | Old behaviour gradually loses influence; a habit from weeks ago does not rule today's phone indefinitely. |
+| 🌡 **Device-relative comparison** | Thermal history is compared with the same device's normal behaviour, reducing false conclusions from another model's “normal”. |
+| 🧊 **Bounded influence** | Learned values move a decision within defined limits; they cannot erase hard thermal or vendor constraints. |
+| 🔁 **Continuous revalidation** | A learned preference is a starting hypothesis for a similar scenario, not an unquestionable permanent rule. |
+
+### 🎬 What this looks like in real life
+
+| Situation | Smart's reasoning |
+|:---|:---|
+| ⏸ **Screen turns off briefly** | Avoid treating a short pause as proof of deep sleep; preserve a sensible return to interaction. |
+| 🌙 **Long unplugged night idle** | When night context, screen-off state, battery level and absence of heavy work agree, favour a safer efficiency-oriented policy. |
+| 🔻 **Battery becomes low** | Shift towards endurance with hysteresis, rather than switching back and forth around one percentage. |
+| ❄️ **Cool device on a charger** | Charging-aware headroom may be allowed when the charging and thermal gates agree. |
+| 🔥 **Phone gets hot while charging** | Hot-charge and plugged screen-off guards can remove extra headroom; charge assist never overrides safety floors. |
+| 🎮 **Game starts heating rapidly** | Consider both current temperature and heating speed, then favour a sustainable rail before harsher correction is needed. |
+| 🌆 **Similar evening usage repeats** | Relevant history can provide a better starting point, but only at the confidence and freshness the evidence deserves. |
+| 🎞 **One isolated jank appears** | Deduplicate and qualify the hint; do not immediately rewrite policy or count the same observation repeatedly. |
+
+### 🧘 Why Smart does not overreact
+
+Smart combines **hysteresis, dwell time, cooldowns, confidence thresholds, freshness checks, evidence deduplication, scenario matching and plateau detection**. This is intentional intelligence: sometimes the smartest action is to hold a stable decision, wait for corroboration or admit that the answer is **unknown**.
+
+Safety always outranks learning. Camera work and active games are not ordinary idle time; music, charging, navigation and VPN activity are not called deep sleep merely because the screen is off. Missing evidence produces **unknown**, **not exposed** or **not runtime-discoverable**, never an invented success.
+
+Smart manages its performance/efficiency policy and related runtime decisions. It does **not** randomly rewrite your explicit DSP, camera or other user settings. You can also set a manual **Performance Ceiling** to lower the selected profile's upper limit without abandoning that profile.
 
 ## 🔋 Battery, sleep and background apps
 
@@ -242,7 +297,11 @@ If a result looks wrong, check whether it is **requested**, **effective**, **tem
 
 ## 🧑‍💻 Want the technical details?
 
-Read **[README.advanced.md](README.advanced.md)** for the governor states, Smart evidence gates, device-bounds schema, thermal and writer ownership, the complete setting index, DSP architecture, diagnostics, source layout and regression workflow.
+Open the advanced guide for the governor states, Smart decision layers and evidence gates, device-bounds schema, thermal and writer ownership, the complete setting index, DSP architecture, diagnostics, source layout and regression workflow.
+
+<p align="center">
+  <a href="README.advanced.md"><img src="https://img.shields.io/badge/🧠_Open_the_Advanced_Guide-0f766e?style=for-the-badge&logo=github&logoColor=white" alt="Open the advanced guide"></a>
+</p>
 
 For source archives, the main validation entry point is:
 
