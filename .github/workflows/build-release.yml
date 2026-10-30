@@ -109,7 +109,8 @@ jobs:
             tests/asb_smart.sh \
             tests/asb_features.sh \
             tests/asb_ui.sh \
-            tests/asb_system.sh; do
+            tests/asb_system.sh \
+            tests/asb_package_tweaks.sh; do
             if [ ! -f "$f" ]; then
               echo "ERROR: required file missing: $f"
               exit 1
@@ -544,6 +545,10 @@ jobs:
             "runtime/asb_drain_meter.sh" \
             "runtime/asb_gfx_probe.sh" \
             "runtime/asb_lsposed.sh" \
+            "runtime/asb_package_state.sh" \
+            "runtime/asb_heytap_mcs.sh" \
+            "runtime/asb_art_compile.sh" \
+            "runtime/asb_documentsui_fix.sh" \
             "runtime/asb_rom_telemetry.sh" \
             "runtime/asb_dsp_live.sh" \
             "runtime/asb_cgroup.sh" \
