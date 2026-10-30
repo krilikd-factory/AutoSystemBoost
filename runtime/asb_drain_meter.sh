@@ -16,14 +16,16 @@ dm_prev_pct=""
 dm_prev_scr=""
 dm_off_ts=""
 dm_off_pct=""
-dm_off_media=0
-dm_aud_run=0
+dm_off_media_s=0
 dm_glance_ts=""
 dm_glance_pct=""
 # A glance does not end a night (fix178): a screen-on shorter than this is folded into the
 # screen-off window, as the governor's own screen-off meter does. Checking the time once in
 # the night split every window under the hour, and no profile ever got a screen-off figure.
 DM_GLANCE_S="${ASB_DM_GLANCE_S:-120}"
+# A short notification or an audio-thread blip must not discard a whole night. Sustained
+# playback still does: count at most two minutes per sample, so suspend cannot invent audio.
+DM_MEDIA_REJECT_S="${ASB_DM_MEDIA_REJECT_S:-600}"
 dm_dirty=0
 dm_flush_ts=0
 # Screen-off windows that did not count, and why (fix189). An OP15's meter had no screen-off
@@ -52,27 +54,34 @@ dm_set() {
 
 dm_load() {
   for _dp in $DM_PROFILES; do
-    for _df in on_s on_x off_s off_x off_n; do dm_set "$_dp" "$_df" 0; done
+    for _df in on_s on_x off_s off_x off_n off_last off_last_s off_last_at; do dm_set "$_dp" "$_df" 0; done
   done
   if [ -r "$DM_REJ" ]; then
     read -r _rm _rs _rc _rl < "$DM_REJ" 2>/dev/null
     case "$_rm$_rs$_rc" in ''|*[!0-9]*) : ;; *) dm_rej_media="$_rm"; dm_rej_short="$_rs"; dm_rej_charge="$_rc"; dm_rej_last="${_rl:--}" ;; esac
   fi
   [ -r "$DM_FILE" ] || return 0
-  while read -r _dp _a _b _c _d _e _rest; do
+  while read -r _dp _a _b _c _d _e _f _g _h _rest; do
     case " $DM_PROFILES " in *" $_dp "*) : ;; *) continue ;; esac
     for _dv in "$_a" "$_b" "$_c" "$_d" "$_e"; do
       case "$_dv" in ''|*[!0-9]*) continue 2 ;; esac
     done
     dm_set "$_dp" on_s "$_a"; dm_set "$_dp" on_x "$_b"
     dm_set "$_dp" off_s "$_c"; dm_set "$_dp" off_x "$_d"; dm_set "$_dp" off_n "$_e"
+    # fix253 appends the latest qualifying window. Six-field files from older releases stay
+    # valid and simply have no latest-window figure until the next screen-off stretch ends.
+    for _dv in "${_f:-0}" "${_g:-0}" "${_h:-0}"; do
+      case "$_dv" in ''|*[!0-9]*) _f=0; _g=0; _h=0; break ;; esac
+    done
+    dm_set "$_dp" off_last "${_f:-0}"; dm_set "$_dp" off_last_s "${_g:-0}"; dm_set "$_dp" off_last_at "${_h:-0}"
   done < "$DM_FILE"
 }
 
 dm_table() {
   for _dp in $DM_PROFILES; do
-    printf '%s %s %s %s %s %s\n' "$_dp" "$(dm_get "$_dp" on_s)" "$(dm_get "$_dp" on_x)" \
-      "$(dm_get "$_dp" off_s)" "$(dm_get "$_dp" off_x)" "$(dm_get "$_dp" off_n)"
+    printf '%s %s %s %s %s %s %s %s %s\n' "$_dp" "$(dm_get "$_dp" on_s)" "$(dm_get "$_dp" on_x)" \
+      "$(dm_get "$_dp" off_s)" "$(dm_get "$_dp" off_x)" "$(dm_get "$_dp" off_n)" \
+      "$(dm_get "$_dp" off_last)" "$(dm_get "$_dp" off_last_s)" "$(dm_get "$_dp" off_last_at)"
   done
 }
 
@@ -99,6 +108,11 @@ dm_add_on() {
 }
 
 dm_add_off() {
+  # Keep the just-finished window alongside the long-term aggregate. After a night the Monitor
+  # must be able to show that night, not only an average dominated by older ones.
+  dm_set "$dm_prof" off_last "$(( $2 * 360000 / $1 ))"
+  dm_set "$dm_prof" off_last_s "$1"
+  dm_set "$dm_prof" off_last_at "${3:-0}"
   _ds=$(( $(dm_get "$dm_prof" off_s) + $1 ))
   _dx=$(( $(dm_get "$dm_prof" off_x) + $2 * 100 ))
   _dn=$(( $(dm_get "$dm_prof" off_n) + 1 ))
@@ -113,7 +127,7 @@ dm_step() {
   _n="$1"; _p="$2"; _c="$3"; _s="$4"; _pf="$5"; _m="$6"
   case " $DM_PROFILES " in *" $_pf "*) : ;; *) _pf="" ;; esac
   if [ "$_pf" != "$dm_prof" ]; then
-    dm_prof="$_pf"; dm_prev_ts=""; dm_prev_scr=""; dm_off_ts=""; dm_off_media=0; dm_aud_run=0; dm_glance_ts=""
+    dm_prof="$_pf"; dm_prev_ts=""; dm_prev_scr=""; dm_off_ts=""; dm_off_media_s=0; dm_glance_ts=""
   fi
   [ -n "$dm_prof" ] || return 0
   case "$_p" in ''|*[!0-9]*) dm_prev_ts=""; return 0 ;; esac
@@ -121,7 +135,7 @@ dm_step() {
   if [ "$_c" = 1 ]; then
     # A window of ten minutes or more ended by the charger is worth knowing about.
     [ -n "$dm_off_ts" ] && [ $((_n - dm_off_ts)) -ge 600 ] && dm_rej charge $((_n - dm_off_ts))
-    dm_prev_ts=""; dm_off_ts=""; dm_off_media=0; dm_aud_run=0; dm_glance_ts=""; dm_prev_scr="$_s"
+    dm_prev_ts=""; dm_off_ts=""; dm_off_media_s=0; dm_glance_ts=""; dm_prev_scr="$_s"
     return 0
   fi
   if [ "$_s" = 1 ]; then
@@ -130,14 +144,14 @@ dm_step() {
       [ -n "$dm_glance_ts" ] || { dm_glance_ts="$_n"; dm_glance_pct="$_p"; }
       if [ $((_n - dm_glance_ts)) -ge "$DM_GLANCE_S" ]; then
         _dd=$((dm_glance_ts - dm_off_ts)); _dq=$((dm_off_pct - dm_glance_pct))
-        if [ "$_dd" -ge 3600 ] && [ "$dm_off_media" = 0 ] && [ "$_dq" -ge 0 ] && [ "$_dq" -le 50 ]; then
-          dm_add_off "$_dd" "$_dq"
-        elif [ "$_dd" -ge 3600 ] && [ "$dm_off_media" = 1 ]; then
+        if [ "$_dd" -ge 3600 ] && [ "$dm_off_media_s" -lt "$DM_MEDIA_REJECT_S" ] && [ "$_dq" -ge 0 ] && [ "$_dq" -le 50 ]; then
+          dm_add_off "$_dd" "$_dq" "$dm_glance_ts"
+        elif [ "$_dd" -ge 3600 ] && [ "$dm_off_media_s" -ge "$DM_MEDIA_REJECT_S" ]; then
           dm_rej media "$_dd"
         elif [ "$_dd" -ge 600 ] && [ "$_dd" -lt 3600 ]; then
           dm_rej short "$_dd"
         fi
-        dm_off_ts=""; dm_off_media=0; dm_aud_run=0; dm_glance_ts=""
+        dm_off_ts=""; dm_off_media_s=0; dm_glance_ts=""
       fi
     fi
     if [ "$dm_prev_scr" = 1 ] && [ -n "$dm_prev_ts" ]; then
@@ -150,15 +164,16 @@ dm_step() {
   else
     # Off again within the glance: the same window goes on.
     dm_glance_ts=""
-    if [ -z "$dm_off_ts" ]; then dm_off_ts="$_n"; dm_off_pct="$_p"; dm_off_media=0; dm_aud_run=0; fi
-    # Playback, not a sound (fix178): two samples in a row with audio, about a minute of it.
-    # One notification - or the first sample after the screen went off, which saw the screen-on
-    # audio - no longer threw the whole night away.
-    if [ "$_m" = 1 ]; then
-      dm_aud_run=$((dm_aud_run + 1))
-      [ "$dm_aud_run" -ge 2 ] && dm_off_media=1
-    else
-      dm_aud_run=0
+    if [ -z "$dm_off_ts" ]; then dm_off_ts="$_n"; dm_off_pct="$_p"; dm_off_media_s=0; fi
+    # Only sustained playback invalidates an idle window. Two one-minute samples used to throw
+    # away a whole five-hour night after a notification or an audio-thread blip. The first
+    # screen-off sample is not timed: it can still contain activity from screen-on playback.
+    if [ "$_m" = 1 ] && [ "$dm_prev_scr" = 0 ] && [ -n "$dm_prev_ts" ]; then
+      _md=$((_n - dm_prev_ts))
+      if [ "$_md" -gt 0 ]; then
+        [ "$_md" -le 120 ] || _md=120
+        dm_off_media_s=$((dm_off_media_s + _md))
+      fi
     fi
   fi
   dm_prev_ts="$_n"; dm_prev_pct="$_p"; dm_prev_scr="$_s"
