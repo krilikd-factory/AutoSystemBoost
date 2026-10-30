@@ -4275,6 +4275,7 @@ P
 let ASB_LANG = 'ru';
 function T(k, d) { const L = I18N[ASB_LANG]; return (L && typeof L[k] === 'string') ? L[k] : d; }
 function ledgerBadge() { return null; } function trialHoursLeft() { return 0; } function trialExpired() { return false; }
+function packageTweakBadge() { return null; }
 const _netResult = {}; const _cfgVals = {};
 let _wlFitIgnored = 0, _wlFitLimited = 0, _wlFitInstalled = 0, _wlFitProbed = false;
 EOF

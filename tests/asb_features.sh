@@ -4375,6 +4375,126 @@ X
 echo "PASS mobile data counted on every rmnet_data*/ccmni* link (not ipa0, not wlan)"
 )
 
+t_net_route_vpn_runtime() (
+# Runtime: Android VPN owns the default route through tun0, while Wi-Fi/mobile defaults
+# remain in per-interface tables. Route-window tuning must not rewrite that VPN's underlying
+# paths. If ASB had already tuned them, entering the VPN hands their exact window attributes
+# back without touching tun0. Reconnects must restore the current route, not a stale gateway.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL net route VPN: $*" >&2; exit 1; }
+mkdir -p "$T/bin" "$T/mod/config" "$T/asb" "$T/net/wlan0" "$T/net/rmnet_data2" "$T/net/tun0"
+for i in wlan0 rmnet_data2 tun0; do echo 1500 > "$T/net/$i/mtu"; done
+echo up > "$T/net/wlan0/operstate"; echo 100 > "$T/net/wlan0/speed"
+echo unknown > "$T/net/rmnet_data2/operstate"; echo 0x1003 > "$T/net/rmnet_data2/flags"
+echo up > "$T/net/tun0/operstate"
+echo '4096 87380 6291456' > "$T/tcp_rmem"
+printf 'net_route_tune=auto\n' > "$T/mod/config/governor.conf"
+cat > "$T/bin/ip" <<'X'
+#!/bin/sh
+fam=4
+[ "${1:-}" = -6 ] && { fam=6; shift; }
+[ "$fam" = 4 ] && file="$ROUTES4" || file="$ROUTES6"
+case "${1:-} ${2:-}" in
+  "route get") cat "$ACTIVE" ;;
+  "route show")
+    if [ "${3:-}" = table ] && [ "${4:-}" = all ]; then
+      cat "$file" 2>/dev/null
+    elif [ "${3:-}" = table ]; then
+      grep -E " table ${4:-main}( |$)" "$file" 2>/dev/null
+    fi ;;
+  "route change")
+    shift 2; new="$*"
+    dev="$(printf '%s\n' "$new" | sed -n 's/.* dev \([^ ]*\).*/\1/p')"
+    tbl="$(printf '%s\n' "$new" | sed -n 's/.* table \([^ ]*\).*/\1/p')"
+    awk -v d="$dev" -v t="${tbl:-main}" '
+      $0 ~ "^default" && $0 ~ " dev " d "( |$)" && $0 ~ " table " t "( |$)" { next }
+      { print }' "$file" > "$file.new" 2>/dev/null || :
+    printf '%s\n' "$new" >> "$file.new"
+    mv "$file.new" "$file"
+    printf '%s|%s\n' "$fam" "$new" >> "$CALLS" ;;
+esac
+exit 0
+X
+chmod 755 "$T/bin/ip"
+ROUTES4="$T/routes4" ROUTES6="$T/routes6" ACTIVE="$T/active" CALLS="$T/calls"
+export ROUTES4 ROUTES6 ACTIVE CALLS
+: > "$ROUTES6"; : > "$CALLS"
+sed -e "s#/data/adb/asb#$T/asb#g" -e "s#/sys/class/net#$T/net#g" \
+    -e "s#/proc/sys/net/ipv4/tcp_rmem#$T/tcp_rmem#g" \
+    "$ROOT/runtime/asb_net_routes.sh" > "$T/asb_net_routes.sh"
+run() { MODDIR="$T/mod" ASB_IP="$T/bin/ip" sh "$T/asb_net_routes.sh" "${1:-apply}" >/dev/null; }
+physical_routes() {
+  printf '%s\n' \
+    'default via 192.168.1.1 dev wlan0 table wlan0 proto static' \
+    'default via 10.0.0.1 dev rmnet_data2 table rmnet_data2 proto static'
+}
+vpn_route() { printf '%s\n' 'default dev tun0 table tun0 proto static src 26.26.26.1 uid 0'; }
+vpn_up() {
+  { physical_routes; vpn_route; } > "$ROUTES4"
+  printf '%s\n' '1.1.1.1 dev tun0 table tun0 src 26.26.26.1 uid 0' > "$ACTIVE"
+}
+vpn_down() {
+  physical_routes > "$ROUTES4"
+  printf '%s\n' '1.1.1.1 via 192.168.1.1 dev wlan0 table wlan0 src 192.168.1.2 uid 0' > "$ACTIVE"
+}
+no_windows() { ! grep -E 'initcwnd|initrwnd' "$ROUTES4"; }
+
+# The field failure shape: VPN is already the selected default before the setting is enabled.
+vpn_up
+run apply
+[ ! -s "$CALLS" ] || fail "active VPN still rewrote underlying routes: $(cat "$CALLS")"
+no_windows || fail 'active VPN acquired route windows'
+[ ! -e "$T/asb/net_routes_orig" ] || fail 'a no-op VPN apply captured a restore baseline'
+
+# Ordinary non-VPN use still gets the feature; tun0 itself is never a route-window target.
+vpn_down
+run apply
+grep -q 'dev wlan0 .*initcwnd 16 initrwnd 64' "$ROUTES4" || fail 'Wi-Fi window was not applied'
+grep -q 'dev rmnet_data2 .*initcwnd 10 ' "$ROUTES4" || fail 'mobile window was not applied'
+
+# VPN appearing after an apply must hand back only ASB windows, never rewrite the tunnel.
+# Add the tunnel while retaining the tuned physical lines, as Android does during startup.
+{ grep -v 'dev tun0 ' "$ROUTES4"; vpn_route; } > "$T/routes.with-vpn"
+mv "$T/routes.with-vpn" "$ROUTES4"
+printf '%s\n' '1.1.1.1 dev tun0 table tun0 src 26.26.26.1 uid 0' > "$ACTIVE"
+: > "$CALLS"
+run apply
+no_windows || fail 'entering VPN did not restore physical route windows'
+! grep -q 'dev tun0 ' "$CALLS" || fail 'restore rewrote the VPN tunnel route'
+
+# A reconnect with the same interface/table but a new gateway gets its own baseline. Off must
+# remove ASB windows from the CURRENT route, never resurrect the pre-reconnect gateway.
+vpn_down
+run apply
+printf '%s\n' \
+  'default via 192.168.77.1 dev wlan0 table wlan0 proto static' \
+  'default via 10.0.0.1 dev rmnet_data2 table rmnet_data2 proto static' > "$ROUTES4"
+printf '%s\n' '1.1.1.1 via 192.168.77.1 dev wlan0 table wlan0 src 192.168.77.2 uid 0' > "$ACTIVE"
+run apply
+printf 'net_route_tune=off\n' > "$T/mod/config/governor.conf"
+run apply
+no_windows || fail 'off left ASB windows after reconnect'
+grep -q 'default via 192.168.77.1 dev wlan0 ' "$ROUTES4" || fail 'off restored a stale pre-reconnect gateway'
+[ ! -e "$T/asb/net_routes_orig" ] || fail 'successful off kept the restore baseline'
+
+# Uninstall uses the same restore entry point. Pre-existing window values are data too:
+# restore them exactly, and do not erase a concurrent per-route congestion owner.
+printf 'net_route_tune=auto\n' > "$T/mod/config/governor.conf"
+printf '%s\n' \
+  'default via 192.168.77.1 dev wlan0 table wlan0 proto static initcwnd 7 initrwnd 9' \
+  'default via 10.0.0.1 dev rmnet_data2 table rmnet_data2 proto static congctl cubic' > "$ROUTES4"
+run apply
+run restore
+grep -q 'dev wlan0 .*initcwnd 7 initrwnd 9' "$ROUTES4" || fail 'uninstall did not restore pre-existing window values'
+grep -q 'dev rmnet_data2 .*initcwnd 10 ' "$ROUTES4" && fail 'uninstall left an ASB mobile window'
+grep -q 'dev rmnet_data2 .*congctl cubic' "$ROUTES4" || fail 'window restore erased another owner congestion attribute'
+grep -q 'default via 192.168.77.1 dev wlan0 ' "$ROUTES4" || fail 'uninstall restored a stale route'
+
+echo 'PASS net route VPN: no underlying writes with VPN, exact handback, reconnect and uninstall restore'
+)
+
 t_net_mtu_probing_runtime() (
 # Runtime: opt-in PMTUD black-hole recovery applies tcp_mtu_probing=1, captures the
 # device's own 0/1/2 exactly once, restores it on stock/uninstall, and never writes

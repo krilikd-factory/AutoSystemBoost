@@ -727,8 +727,8 @@ awk -F'|' '
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
-[ "$(wc -l < "$TMP/conf")" = "207" ] || fail "expected 207 config keys, got $(wc -l < "$TMP/conf")"
-[ "$(wc -l < "$TMP/registry")" = "207" ] || fail "expected 207 registry keys, got $(wc -l < "$TMP/registry")"
+[ "$(wc -l < "$TMP/conf")" = "209" ] || fail "expected 209 config keys, got $(wc -l < "$TMP/conf")"
+[ "$(wc -l < "$TMP/registry")" = "209" ] || fail "expected 209 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
 grep -qx 'kernel_sched_stats|advanced|webui_sensitive|shell' "$REG" || fail 'kernel_sched_stats consumer is not pinned to shell'
@@ -748,7 +748,7 @@ done > "$TMP/consumer_bad"
 
 sed -n '/const CFG_ITEMS = \[/,/^\];/p' "$ROOT/webroot/index.html" \
   | grep -oE "key:'[A-Za-z_][A-Za-z0-9_]*'" | sed "s/key:'//;s/'//" | sort -u > "$TMP/cards"
-[ "$(wc -l < "$TMP/cards")" = "80" ] || fail "expected 80 WebUI cards, got $(wc -l < "$TMP/cards")"
+[ "$(wc -l < "$TMP/cards")" = "82" ] || fail "expected 82 WebUI cards, got $(wc -l < "$TMP/cards")"
 _card_bad="$(while IFS= read -r key; do
   cls="$(awk -F'|' -v k="$key" '$1==k {print $2; exit}' "$REG")"
   case "$cls" in user|advanced) : ;; *) printf '%s ' "$key" ;; esac
@@ -792,7 +792,7 @@ for _c in $(grep -oE "\{ key:'[A-Za-z_][A-Za-z_0-9]*'" "$ROOT/webroot/index.html
 done
 [ -z "$_missing" ] || fail "cards missing from the install.sh settings snapshot:$_missing"
 
-echo 'PASS config ownership registry contract (207 keys; 30 user, 50 advanced, 127 internal)'
+echo 'PASS config ownership registry contract (209 keys; 30 user, 52 advanced, 127 internal)'
 )
 
 t_config_restore_outcome_runtime() (
@@ -3930,7 +3930,7 @@ echo "PASS: fix163 contract"
 (
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 fail() { echo "FAIL fix164: $*"; exit 1; }
-[ "$(find "$ROOT/tests" -type f -name 'asb_*.sh' | wc -l)" -eq 4 ] || fail "the host tests are not the four suites"
+[ "$(find "$ROOT/tests" -type f -name 'asb_*.sh' | wc -l)" -eq 5 ] || fail "the host tests are not the five suites"
 asb_has_test test_suite_runner_runtime.sh || fail "suite runner test missing"
 grep -q 'extra: ' "$ROOT/tools/asb_tree_check.sh" || fail "the tree check does not name leftover files"
 echo "PASS: fix164 contract"
@@ -6897,7 +6897,7 @@ echo "PASS config shipped load: the governor reads its own governor.conf ($n key
 )
 
 t_suite_runner_runtime() (
-# Runtime (fix164): the host tests are four suites, not 161 files.
+# Runtime (fix164): the host tests are five suites, not 161 files.
 #
 # Asked for: as few files in tests/ as possible. Every former script is a function t_<name> whose
 # body runs in its own subshell - its exit, trap, set -e and variables stay its own - and every C
@@ -6909,7 +6909,7 @@ set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 fail() { echo "FAIL suite runner: $*" >&2; exit 1; }
-[ "$(find "$ROOT/tests" -type f -name 'asb_*.sh' | wc -l)" -eq 4 ] || fail "want four suites"
+[ "$(find "$ROOT/tests" -type f -name 'asb_*.sh' | wc -l)" -eq 5 ] || fail "want five suites"
 d0=""
 for s in "$ROOT"/tests/asb_*.sh; do
   bash -n "$s" || fail "$(basename "$s") does not parse"
@@ -6949,11 +6949,11 @@ grep -q 'tests/test_' "$R" && fail "the regression still names a test file"
 grep -q 'bash "$MODDIR/tests/asb_smart.sh" --source "$_t"' "$ROOT/tools/asb_lint.sh" || fail "lint does not build the Smart fixtures from the suite"
 for w in build-test build-release; do
   grep -q 'tests/test_' "$ROOT/.github/workflows/$w.yml" && fail "$w.yml still requires a test file"
-  for s in asb_smart asb_features asb_ui asb_system; do
+  for s in asb_smart asb_features asb_ui asb_system asb_package_tweaks; do
     grep -q "tests/$s.sh" "$ROOT/.github/workflows/$w.yml" || fail "$w.yml does not require tests/$s.sh"
   done
 done
-echo "PASS suite runner: four suites, each test isolated in its own subshell, run one by one in parallel by the regression"
+echo "PASS suite runner: five suites, each test isolated in its own subshell, run one by one in parallel by the regression"
 )
 
 t_tree_check_runtime() (
