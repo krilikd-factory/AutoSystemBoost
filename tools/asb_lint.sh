@@ -159,7 +159,8 @@ fi
 # Config ownership is deliberately a separate, machine-readable registry instead of inline
 # comments. Inline comments are too easy to lose during generated/default-config updates; this
 # guard makes every shipped key declare whether it is a normal user control, a sensitive advanced
-# control, or an internal engine/derived setting.
+# control, or an internal engine/derived setting. consumed_by additionally pins the native-parser
+# boundary: shell-only keys are intentional, but a refactor may not silently strand them.
 echo
  echo "🧭 Config Key Ownership"
 OWNERSHIP="$MODDIR/config/key_ownership.tsv"
@@ -170,12 +171,13 @@ elif [ ! -f "$OWNERSHIP" ]; then
 else
   _own_bad="$(awk -F'|' '
     /^[[:space:]]*#/ || /^[[:space:]]*$/ {next}
-    NF != 3 {print "malformed:" NR; next}
+    NF != 4 {print "malformed:" NR; next}
     $1 !~ /^[A-Za-z_][A-Za-z0-9_]*$/ {print "invalid-key:" $1; next}
     $2 !~ /^(user|advanced|internal)$/ {print "invalid-class:" $1 "=" $2; next}
-    $3 !~ /^[a-z_][a-z0-9_]*$/ {print "invalid-intent:" $1 "=" $3}
+    $3 !~ /^[a-z_][a-z0-9_]*$/ {print "invalid-intent:" $1 "=" $3; next}
+    $4 !~ /^(shell|native|both)$/ {print "invalid-consumer:" $1 "=" $4}
   ' "$OWNERSHIP")"
-  _own_dupes="$(awk -F'|' '/^[[:space:]]*#/ || /^[[:space:]]*$/ {next} NF==3 {print $1}' "$OWNERSHIP" | sort | uniq -d)"
+  _own_dupes="$(awk -F'|' '/^[[:space:]]*#/ || /^[[:space:]]*$/ {next} NF==4 {print $1}' "$OWNERSHIP" | sort | uniq -d)"
   if [ -n "$_own_bad" ]; then
     err "key ownership registry invalid: $_own_bad"
   elif [ -n "$_own_dupes" ]; then
@@ -184,15 +186,38 @@ else
     _own_conf="${TMPDIR:-/tmp}/asb_own_conf.$$"
     _own_reg="${TMPDIR:-/tmp}/asb_own_reg.$$"
     awk -F= '/^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=/{k=$1; sub(/^[[:space:]]+/, "", k); sub(/[[:space:]]+$/, "", k); print k}' "$CONF" > "$_own_conf"
-    awk -F'|' '/^[[:space:]]*#/ || /^[[:space:]]*$/ {next} NF==3 {print $1}' "$OWNERSHIP" > "$_own_reg"
+    awk -F'|' '/^[[:space:]]*#/ || /^[[:space:]]*$/ {next} NF==4 {print $1}' "$OWNERSHIP" > "$_own_reg"
     _own_missing="$(while IFS= read -r _ok; do grep -Fqx "$_ok" "$_own_reg" || printf '%s ' "$_ok"; done < "$_own_conf")"
     _own_extra="$(while IFS= read -r _ok; do grep -Fqx "$_ok" "$_own_conf" || printf '%s ' "$_ok"; done < "$_own_reg")"
     rm -f "$_own_conf" "$_own_reg"
     if [ -n "$_own_missing" ] || [ -n "$_own_extra" ]; then
       err "config ownership key-set drift: missing=[${_own_missing:-}] extra=[${_own_extra:-}]"
     else
-      _own_counts="$(awk -F'|' '/^[[:space:]]*#/ || /^[[:space:]]*$/ {next} NF==3 {n[$2]++} END{printf "user=%d advanced=%d internal=%d", n["user"]+0, n["advanced"]+0, n["internal"]+0}' "$OWNERSHIP")"
+      _own_counts="$(awk -F'|' '/^[[:space:]]*#/ || /^[[:space:]]*$/ {next} NF==4 {n[$2]++; c[$4]++} END{printf "user=%d advanced=%d internal=%d shell=%d native=%d both=%d", n["user"]+0, n["advanced"]+0, n["internal"]+0, c["shell"]+0, c["native"]+0, c["both"]+0}' "$OWNERSHIP")"
       ok "config ownership registry exactly matches governor.conf ($_own_counts)"
+    fi
+
+    if [ -f "$MODDIR/src/asb_config.h" ]; then
+      _own_native="${TMPDIR:-/tmp}/asb_own_native.$$"
+      _own_shell="${TMPDIR:-/tmp}/asb_own_shell.$$"
+      grep -oE '!strcmp\(k, "[A-Za-z_][A-Za-z0-9_]*"\)' "$MODDIR/src/asb_config.h" \
+        | sed 's/.*"\([A-Za-z_][A-Za-z0-9_]*\)".*/\1/' | sort -u > "$_own_native"
+      cat "$MODDIR"/runtime/*.sh "$MODDIR"/common/*.sh "$MODDIR"/profiles/*.sh \
+        "$MODDIR"/*.sh > "$_own_shell" 2>/dev/null || true
+      _own_consumer_bad="$(awk -F'|' '/^[[:space:]]*#/ || /^[[:space:]]*$/ {next} NF==4 {print $1 "|" $4}' "$OWNERSHIP" | while IFS='|' read -r _ok _oc; do
+        grep -Fqx "$_ok" "$_own_native" && _on=1 || _on=0
+        grep -Eq "(^|[^A-Za-z0-9_])${_ok}([^A-Za-z0-9_]|$)" "$_own_shell" && _os=1 || _os=0
+        case "$_oc:$_on:$_os" in
+          native:1:*|both:1:1|shell:0:1) : ;;
+          *) printf '%s=%s(native=%s,shell=%s) ' "$_ok" "$_oc" "$_on" "$_os" ;;
+        esac
+      done)"
+      rm -f "$_own_native" "$_own_shell"
+      if [ -n "$_own_consumer_bad" ]; then
+        err "config consumer drift: $_own_consumer_bad"
+      else
+        ok "consumed_by matches the native parser and shell runtime references"
+      fi
     fi
   fi
 
