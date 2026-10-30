@@ -5,6 +5,16 @@ set -euo pipefail
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 cd "$ROOT"
 
+# Make the validation contract visible before any test output. SOURCE_ONLY skips only the
+# byte-for-byte DSP reference staging check; release/strict runs never set the optional flag.
+if [ "${ASB_DSP_REFERENCE_OPTIONAL:-0}" = "1" ]; then
+  printf 'MODE=SOURCE_ONLY\nreference prebuilts: optional\n'
+elif [ -n "$(find src/DSP_AIDL/prebuilt -type f -print -quit 2>/dev/null)" ]; then
+  printf 'MODE=RELEASE_STRICT\nreference prebuilts: strict\n'
+else
+  printf 'MODE=RELEASE_STRICT\nreference prebuilts: absent\n'
+fi
+
 run() { printf '\n== %s ==\n' "$1"; shift; "$@"; }
 if [ -n "${CC:-}" ] && command -v "$CC" >/dev/null 2>&1; then
   HOST_CC="$CC"            # an explicit choice (CI passes clang) wins

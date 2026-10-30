@@ -90,6 +90,34 @@ case "${_pcount:-0}" in
   *) _conf="low" ;;
 esac
 
+# Canonical physical topology (fix260). The representative signature above is useful for
+# diagnostics, but it cannot prove the identity of the fourth policy on a 4-policy SoC.
+# policy_map is the single full record shared by synthesis, shell validation and native
+# validation: sorted policy id, logical writer slot, hardware ceiling and exposed OPP shape.
+_policy_map=""
+_full_sig=""
+_extra_id=""
+_sorted_ids="$(for _pid in $_plist; do case "$_pid" in ''|*[!0-9]*) ;; *) echo "$_pid" ;; esac; done | sort -n)"
+for _pid in $_sorted_ids; do
+  _h="$(_cget cpu_policy${_pid}_hwmax)"
+  case "$_h" in ''|*[!0-9]*) _h=0 ;; esac
+  if [ "$_pid" = "$_little_id" ]; then
+    _slot=0
+  elif [ "$_pid" = "$_big_id" ]; then
+    if [ "${_pcount:-0}" -gt 2 ] 2>/dev/null; then _slot=2; else _slot=1; fi
+  else
+    _slot=1
+    [ "$_pid" = "$_mid_id" ] || _extra_id="${_extra_id}${_extra_id:+,}${_pid}"
+  fi
+  _on="$(_cget cpu_policy${_pid}_opp_count)"
+  _omin="$(_cget cpu_policy${_pid}_opp_min)"
+  _omax="$(_cget cpu_policy${_pid}_opp_max)"
+  case "$_on" in ''|*[!0-9]*) _on=0 ;; esac
+  case "$_omin" in ''|*[!0-9]*) _omin=0 ;; esac
+  case "$_omax" in ''|*[!0-9]*) _omax=0 ;; esac
+  _policy_map="${_policy_map}${_policy_map:+,}${_pid}:${_slot}:${_h}:${_on}:${_omin}:${_omax}"
+  _full_sig="${_full_sig}${_full_sig:+,}${_pid}:${_h}"
+done
 
 # Snap a ceiling DOWN to this policy's own OPP table. Rounding to the nearest entry
 # could exceed the profile's intended ceiling and the native writer would then round it
@@ -148,11 +176,14 @@ _emit_cpu_range() {
   echo "# generated_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null)"
   echo "# method=reference-ratio full MIN/CAP/MAX ranges, snapped down to this device's real frequencies"
   echo "# confidence=$_conf  topology=$_topo (little+[mid]+big; 2/3/4 clusters supported)"
-  echo "schema=2"
+  echo "schema=3"
   echo "confidence=$_conf"
   echo "source=measured"
   echo "policy_count=${_pcount:-0}"
   echo "cluster_signature=${_little_id:-none}:${_hw_little:-0}>${_mid_id:-none}:${_hw_mid:-0}>${_big_id:-none}:${_hw_big:-0}"
+  echo "cluster_signature_full=$_full_sig"
+  echo "logical_roles=little:${_little_id:-none},mid:${_mid_id:-none},big:${_big_id:-none},extra:${_extra_id:-none}"
+  echo "policy_map=$_policy_map"
   echo "fingerprint=$(_cget fingerprint)"
   echo "# little_policy=$_little_id hw_max=$_hw_little | mid_policy=${_mid_id:-none} hw_max=${_hw_mid:-n/a} | big_policy=$_big_id hw_max=$_hw_big"
   if [ "$_conf" = "high" ]; then
