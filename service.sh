@@ -4140,6 +4140,15 @@ esac
   if [ -r "$MODDIR/runtime/asb_ltpo_apply.sh" ]; then
     MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_ltpo_apply.sh" apply >/dev/null 2>&1 || true
   fi
+  # HeyTap's ART request is consumed once, after every ordinary post-boot tweak is done.
+  # It runs beside this worker so an all-package compile cannot delay governor/network restore.
+  # Neither package tweak is re-applied here: PackageManager states persist across reboots.
+  if [ -f "$MODDIR/runtime/asb_art_compile.sh" ]; then
+    case "$(grep -E '^[[:space:]]*heytap_mcs=' "$MODDIR/config/governor.conf" 2>/dev/null \
+            | tail -1 | sed 's/.*=//' | tr -d ' \r')" in
+      off) ( MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_art_compile.sh" run-pending >/dev/null 2>&1 ) & ;;
+    esac
+  fi
   asb_log "post_boot_tweaks: complete"
   asb_timeline_mark post_boot_tweaks_complete
 ) >/dev/null 2>&1 &

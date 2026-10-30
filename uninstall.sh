@@ -594,6 +594,13 @@ fi
 # the earlier value is in /data/adb/asb, which goes on the next line.
 [ -f /data/adb/asb/lsposed_verbose_prev ] && [ -f "$MODDIR/runtime/asb_lsposed.sh" ] && \
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_lsposed.sh" restore >/dev/null 2>&1 || true
+# Package/component states changed by the two opt-in repair cards. Their baselines live under
+# /data/adb/asb, so hand them back before that directory is removed. ART artifacts stay under
+# Android's ownership; a pending one-shot request is cancelled, never mass-reset on uninstall.
+[ -f "$MODDIR/runtime/asb_heytap_mcs.sh" ] && \
+  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_heytap_mcs.sh" restore >/dev/null 2>&1 || true
+[ -f "$MODDIR/runtime/asb_documentsui_fix.sh" ] && \
+  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_documentsui_fix.sh" restore >/dev/null 2>&1 || true
 rm -rf /data/adb/asb 2>/dev/null
 
 # Remove the module's own persistent properties.

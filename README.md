@@ -220,6 +220,8 @@ The **Interface** and **System** sections cover details that are easy to overloo
 - vibration and touch-feedback strength;
 - optional management of supported OEM RAM, battery and heat toggles;
 - Athena background-killer behaviour, background process limits and multimedia telemetry;
+- optional HeyTap MCS / OPPO Push disable, with notification risk and one ART compilation after the next reboot;
+- a separate one-time DocumentsUI / DSU picker repair; ColorOS File Manager returns when the fix is turned off;
 - scheduler debug accounting, ASB log detail and LSPosed verbose logging.
 
 Availability depends on the device. A visible setting is a request, while diagnostics and effective values show what the system actually accepted.

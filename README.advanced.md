@@ -15,7 +15,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/GOVERNOR-6%20STATES-0f766e?style=for-the-badge" alt="Six governor states">
   <img src="https://img.shields.io/badge/BOUNDS-SCHEMA%203-0ea5e9?style=for-the-badge" alt="Bounds schema 3">
-  <img src="https://img.shields.io/badge/WEBUI-80%20CONTROLS-dc2626?style=for-the-badge" alt="Eighty WebUI controls">
+  <img src="https://img.shields.io/badge/WEBUI-82%20CONTROLS-dc2626?style=for-the-badge" alt="Eighty-two WebUI controls">
   <img src="https://img.shields.io/badge/EVIDENCE-FIRST-16a34a?style=for-the-badge" alt="Evidence first">
 </p>
 
@@ -325,7 +325,7 @@ Smart can blend Battery-like and Balanced-like CPU bounds and then apply separat
 
 The bucket also retains history for idle quality, wake activity, drain and maximum temperature: `avg_idle_q_x10`, `avg_wph_x10`, `avg_drain_pctph_x10` and `avg_max_temp_x10`. Camera/profile transitions invalidate unsuitable cached decisions rather than carrying a conclusion into a different operating context.
 
-Explicit DSP, camera and other user settings remain user choices. Smart owns its performance/efficiency policy and related native runtime decisions, not an unrestricted licence to change all 80 controls.
+Explicit DSP, camera and other user settings remain user choices. Smart owns its performance/efficiency policy and related native runtime decisions, not an unrestricted licence to change all 82 controls.
 
 ### 🌡️ 8.5. Device-relative thermal and drain history
 
@@ -632,6 +632,8 @@ Animation speed changes perceived responsiveness; it does not make application c
 |:---|:---|:---:|:---|
 | `UX_MANAGE_OEM_TOGGLES` | Manage OEM Toggles (RAM/Battery/Heat) | `0` | Explicit ownership gate for supported OEM controls; ASB does not assume every ROM exposes them. |
 | `athena_service` | Athena Background Killer | `stock` | Stock/off vendor background-killer policy; test app reloads and background delivery. |
+| `heytap_mcs` | HeyTap MCS / OPPO Push | `stock` | Off disables `com.heytap.mcs` without a `.replace` overlay and requests one `pm compile -m speed-profile -a` after the next completed boot. Push notifications can stop or be delayed. Stock/uninstall restores only ASB-owned state and cancels pending ART. |
+| `documentsui_fix` | DocumentsUI / DSU Picker Fix | `0` | One-time user-0 package/component repair with readback and rollback; disables ColorOS File Manager until Off. No ART request and no boot reapply. |
 | `phantom_procs` | Background Process Limit | `relaxed` | Stock/relaxed/strict process-limit policy; strict can affect legitimate background work. |
 | `mmfeed_off` | Multimedia Telemetry Off | `0` | Disables supported multimedia telemetry paths without claiming to remove all ROM telemetry. |
 | `ltpo_force` | Force LTPO Refresh | `0` | Forces supported LTPO behaviour; panel and ROM support are required. |
@@ -643,6 +645,8 @@ Animation speed changes perceived responsiveness; it does not make application c
 
 Vendor-service and process controls require particular care. “More aggressive” is not synonymous with “more efficient”: repeated process restart can cost more energy and degrade notifications, widgets, media, sync and location.
 
+The HeyTap ART helper is a bounded one-shot, not a boot service: `pending → running → done|failed|cancelled`, a lock against parallel execution, a post-boot delay and a 1800-second default timeout. A failed all-package compile is not retried automatically. Reapplying the same Off value does not re-arm a completed request; Stock → Off deliberately creates a new one. Uninstall cancels pending work but does not run a mass `pm compile --reset`.
+
 ## 📊 11. WebUI, monitor and effective-state semantics
 
 ### 📑 11.1. Pages
@@ -651,7 +655,7 @@ Vendor-service and process controls require particular care. “More aggressive�
 |:---|:---|
 | **Profiles** | Select Smart, Performance, Balanced, Battery or Stock and inspect current high-level state. |
 | **Monitor** | Inspect live workload, clocks, thermal/battery state, Smart evidence, smoothness and limit ownership. |
-| **Config** | Change the 80 controls indexed above, with capability and reboot/apply feedback. |
+| **Config** | Change the 82 controls indexed above, with capability and reboot/apply feedback. |
 | **Device** | Request read-only hardware, kernel, root and capability facts. |
 | **Reports** | Generate support diagnostics and user-triggered extended reports. |
 

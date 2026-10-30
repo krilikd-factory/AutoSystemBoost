@@ -15,7 +15,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/GOVERNOR-6%20СОСТОЯНИЙ-0f766e?style=for-the-badge" alt="Шесть состояний governor">
   <img src="https://img.shields.io/badge/BOUNDS-СХЕМА%203-0ea5e9?style=for-the-badge" alt="Схема bounds 3">
-  <img src="https://img.shields.io/badge/WEBUI-80%20НАСТРОЕК-dc2626?style=for-the-badge" alt="Восемьдесят настроек WebUI">
+  <img src="https://img.shields.io/badge/WEBUI-82%20НАСТРОЕК-dc2626?style=for-the-badge" alt="Восемьдесят две настройки WebUI">
   <img src="https://img.shields.io/badge/EVIDENCE-FIRST-16a34a?style=for-the-badge" alt="Сначала доказательства">
 </p>
 
@@ -325,7 +325,7 @@ Smart способен смешивать CPU bounds в стиле Battery и Ba
 
 Bucket также хранит историю качества простоя, пробуждений, расхода и максимальной температуры: `avg_idle_q_x10`, `avg_wph_x10`, `avg_drain_pctph_x10` и `avg_max_temp_x10`. Переходы камеры/профиля инвалидируют неподходящие cached decisions, а не переносят вывод в другой рабочий контекст.
 
-Явные DSP, камера и другие пользовательские настройки остаются выбором пользователя. Smart владеет своей performance/efficiency политикой и связанными native runtime-решениями, а не неограниченной лицензией менять все 80 настроек.
+Явные DSP, камера и другие пользовательские настройки остаются выбором пользователя. Smart владеет своей performance/efficiency политикой и связанными native runtime-решениями, а не неограниченной лицензией менять все 82 настройки.
 
 ### 🌡️ 8.5. Температурная и drain-история относительно устройства
 
@@ -632,6 +632,8 @@ Camera tone tables регенерируются из stock-файлов и ин�
 |:---|:---|:---:|:---|
 | `UX_MANAGE_OEM_TOGGLES` | Manage OEM Toggles (RAM/Battery/Heat) | `0` | Явный ownership gate поддерживаемых OEM controls; ASB не предполагает их наличие в каждой ROM. |
 | `athena_service` | Athena Background Killer | `stock` | Stock/off vendor background-killer политика; проверять перезапуски приложений и фоновую доставку. |
+| `heytap_mcs` | HeyTap MCS / OPPO Push | `stock` | Off отключает `com.heytap.mcs` без `.replace` overlay и запрашивает один `pm compile -m speed-profile -a` после следующей завершённой загрузки. Push-уведомления могут прекратиться или задерживаться. Stock/uninstall восстанавливает только состояние ASB и отменяет ожидающий ART. |
+| `documentsui_fix` | DocumentsUI / DSU Picker Fix | `0` | Одноразовое исправление package/component states для user 0 с readback и rollback; отключает ColorOS File Manager до Off. Не создаёт ART request и не применяется повторно при boot. |
 | `phantom_procs` | Background Process Limit | `relaxed` | Stock/relaxed/strict process-limit; strict может мешать легитимной фоновой работе. |
 | `mmfeed_off` | Multimedia Telemetry Off | `0` | Отключает поддерживаемые multimedia telemetry paths, не заявляя удаление всей ROM telemetry. |
 | `ltpo_force` | Force LTPO Refresh | `0` | Принудительное поддерживаемое LTPO-поведение; нужны поддержка панели и ROM. |
@@ -643,6 +645,8 @@ Camera tone tables регенерируются из stock-файлов и ин�
 
 Vendor-service и process controls требуют особой осторожности. «Агрессивнее» не означает «экономичнее»: повторный перезапуск процессов может стоить больше энергии и ухудшить уведомления, виджеты, медиа, sync и геолокацию.
 
+ART helper для HeyTap является ограниченным one-shot, а не boot service: `pending → running → done|failed|cancelled`, lock от параллельного запуска, задержка после boot и timeout 1800 секунд по умолчанию. Ошибка компиляции всех пакетов автоматически не повторяется. Повторное применение того же Off не активирует завершённый запрос заново; последовательность Stock → Off осознанно создаёт новый. Uninstall отменяет ожидающую работу, но не выполняет массовый `pm compile --reset`.
+
 ## 📊 11. WebUI, Monitor и смысл effective-state
 
 ### 📑 11.1. Страницы
@@ -651,7 +655,7 @@ Vendor-service и process controls требуют особой осторожн�
 |:---|:---|
 | **Profiles** | Выбор Smart, Performance, Balanced, Battery или Stock и просмотр общего текущего состояния. |
 | **Monitor** | Live workload, clocks, thermal/battery state, Smart evidence, плавность и владелец лимита. |
-| **Config** | 80 настроек из указателя выше, с capability и reboot/apply feedback. |
+| **Config** | 82 настройки из указателя выше, с capability и reboot/apply feedback. |
 | **Device** | Read-only hardware, kernel, root и capability facts по запросу. |
 | **Reports** | Support diagnostics и user-triggered extended reports. |
 
