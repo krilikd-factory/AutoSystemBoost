@@ -5,8 +5,12 @@
 asb_device_bounds_current_topology() {
   ASB_BOUNDS_CURRENT_COUNT=0
   ASB_BOUNDS_CURRENT_SIGNATURE=""
-  local _sys _dir _id _hw _policies _count _item
-  local _little_id _little_hw _big_id _big_hw _mid_id _mid_hw
+  ASB_BOUNDS_CURRENT_FULL_SIGNATURE=""
+  ASB_BOUNDS_CURRENT_POLICY_MAP=""
+  ASB_BOUNDS_CURRENT_LOGICAL_ROLES=""
+  local _sys _dir _id _hw _policies _count _item _candidate _slot _extra
+  local _little_id _little_hw _big_id _big_hw _mid_id _mid_hw _big_slot
+  local _avail _fr _on _omin _omax
   _sys="${ASB_CPU_SYSFS:-/sys/devices/system/cpu}"
   _policies=""
   _count=0
@@ -48,19 +52,46 @@ asb_device_bounds_current_topology() {
     done
     [ "$_mid_id" != "none" ] || return 1
   fi
+  _big_slot=1; [ "$_count" -gt 2 ] && _big_slot=2
+  _extra=""
+  for _item in $(printf '%s\n' $_policies | sort -t: -k1,1n); do
+    _id="${_item%%:*}"; _hw="${_item#*:}"
+    if [ "$_id" = "$_little_id" ]; then
+      _slot=0
+    elif [ "$_id" = "$_big_id" ]; then
+      _slot="$_big_slot"
+    else
+      _slot=1
+      [ "$_id" = "$_mid_id" ] || _extra="${_extra}${_extra:+,}${_id}"
+    fi
+    _on=0; _omin=0; _omax=0
+    _avail="$_sys/cpufreq/policy${_id}/scaling_available_frequencies"
+    if [ -r "$_avail" ]; then
+      for _fr in $(cat "$_avail" 2>/dev/null); do
+        case "$_fr" in ''|*[!0-9]*) continue ;; esac
+        [ "$_fr" -gt 0 ] 2>/dev/null || continue
+        _on=$((_on + 1))
+        if [ "$_omin" -eq 0 ] || [ "$_fr" -lt "$_omin" ]; then _omin="$_fr"; fi
+        if [ "$_fr" -gt "$_omax" ]; then _omax="$_fr"; fi
+      done
+    fi
+    ASB_BOUNDS_CURRENT_FULL_SIGNATURE="${ASB_BOUNDS_CURRENT_FULL_SIGNATURE}${ASB_BOUNDS_CURRENT_FULL_SIGNATURE:+,}${_id}:${_hw}"
+    ASB_BOUNDS_CURRENT_POLICY_MAP="${ASB_BOUNDS_CURRENT_POLICY_MAP}${ASB_BOUNDS_CURRENT_POLICY_MAP:+,}${_id}:${_slot}:${_hw}:${_on}:${_omin}:${_omax}"
+  done
   ASB_BOUNDS_CURRENT_SIGNATURE="${_little_id}:${_little_hw}>${_mid_id}:${_mid_hw}>${_big_id}:${_big_hw}"
+  ASB_BOUNDS_CURRENT_LOGICAL_ROLES="little:${_little_id},mid:${_mid_id},big:${_big_id},extra:${_extra:-none}"
   return 0
 }
 
 asb_device_bounds_validate() {
-  local _file _schema _conf _source _fp _current_fp _count _sig
+  local _file _schema _conf _source _fp _current_fp _count _sig _full _map _roles
   _file="$1"
   ASB_BOUNDS_VALID=0
   ASB_BOUNDS_STATUS=skipped
   ASB_BOUNDS_REASON=missing
   [ -r "$_file" ] || return 1
   _schema="$(grep -E '^schema=' "$_file" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r')"
-  [ "$_schema" = "2" ] || { ASB_BOUNDS_REASON=schema; return 1; }
+  [ "$_schema" = "3" ] || { ASB_BOUNDS_REASON=schema; return 1; }
   _conf="$(grep -E '^confidence=' "$_file" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r')"
   [ "$_conf" = "high" ] || { ASB_BOUNDS_REASON=confidence; return 1; }
   _source="$(grep -E '^source=' "$_file" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r')"
@@ -81,6 +112,20 @@ asb_device_bounds_validate() {
   ASB_BOUNDS_REASON=cluster_signature
   _sig="$(grep -E '^cluster_signature=' "$_file" 2>/dev/null | head -1 | cut -d= -f2- | tr -d ' \r')"
   [ -n "$_sig" ] && [ "$_sig" = "$ASB_BOUNDS_CURRENT_SIGNATURE" ] || return 1
+
+  ASB_BOUNDS_REASON=cluster_signature_full
+  _full="$(grep -E '^cluster_signature_full=' "$_file" 2>/dev/null | head -1 | cut -d= -f2- | tr -d ' \r')"
+  [ -n "$_full" ] && [ "$_full" = "$ASB_BOUNDS_CURRENT_FULL_SIGNATURE" ] || return 1
+
+  ASB_BOUNDS_REASON=logical_roles
+  _roles="$(grep -E '^logical_roles=' "$_file" 2>/dev/null | head -1 | cut -d= -f2- | tr -d ' \r')"
+  [ -n "$_roles" ] && [ "$_roles" = "$ASB_BOUNDS_CURRENT_LOGICAL_ROLES" ] || return 1
+
+  # Includes every physical policy's writer slot and OPP count/min/max. An OTA that
+  # changes only the fourth policy or its frequency table can no longer inherit old ranges.
+  ASB_BOUNDS_REASON=policy_map
+  _map="$(grep -E '^policy_map=' "$_file" 2>/dev/null | head -1 | cut -d= -f2- | tr -d ' \r')"
+  [ -n "$_map" ] && [ "$_map" = "$ASB_BOUNDS_CURRENT_POLICY_MAP" ] || return 1
 
   ASB_BOUNDS_VALID=1
   ASB_BOUNDS_STATUS=valid
