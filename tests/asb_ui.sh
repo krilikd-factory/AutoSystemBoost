@@ -3281,7 +3281,7 @@ root = pathlib.Path(sys.argv[1])
 keys = ['lvi_scale_now','lvi_hist_num','lvi_hist_cat','lvi_hist_wait','lvi_zones_cpu','lvi_zones','lvi_gpu_clock','lvi_power',
         'lvi_rate_now','lvi_gauge_real','lvi_gauge_real0','lvi_zram_use']
 for k in ('t', 'l', 'h', 'c', 'b'):
-    steps = ['cool','good','mild','warm','hot','bad'] if k == 't' else ['good','mild','warm','hot','bad']
+    steps = ['good','mild','warm','hot','bad']
     keys += ['lvs_%s_%s' % (k, s) for s in steps]
 files = sorted((root / 'webroot' / 'i18n').glob('*.json'))
 assert len(files) == 13
@@ -3323,38 +3323,79 @@ for i in ('bnBasis','bnSlotTemp','bnConf','bnLpm','bnStockRam','bnStockDrain','b
           'bnDrain','bnDrainOff','bnTrend','bnApp','bnAlpha','bnBucket','bnStockTrend','bnStockLoad','bnStockBattery',
           'bnStockUptime','liveState','liveClamp','liveLearner','liveCapSrc'):
     assert "asbMetricPaint('%s'" % i in h, '%s is not semantically painted' % i
-for cls in ('good','warm','bad','neutral','normal','cool','mild','hot','charge'):
+for cls in ('good','warm','bad','neutral','mild','hot','charge'):
     assert '.live-cell-value.metric-' + cls in h, cls
     assert 'html[data-asb-glass="1"] .live-cell-value.metric-' + cls in h, cls
-for cls in ('good','warm','bad','cool','mild','hot','charge'):
+for cls in ('good','warm','bad','mild','hot','charge'):
     assert 'html[data-asb-theme="light"] .smart-banner-value.metric-' + cls in h, cls
     assert 'html .smart-drain-val.metric-' + cls in h, cls
+# fix252: green is the best end of every quality scale; no blue step sits beyond it.
+assert 'metric-cool' not in h and '--m-cool' not in h and '--metric-cool' not in h, 'a blue step returned to a quality scale'
+for prefix in ('html ', 'html[data-asb-glass="1"] ', 'html[data-asb-theme="light"] '):
+    assert prefix + ':is(.live-cell-value,.smart-banner-value,.smart-drain-val,.live-info-val):is(.metric-normal,.metric-info)' in h, prefix + 'plain facts'
+    for cls in ('fsm-deep','fsm-light','fsm-moderate','fsm-heavy','fsm-sustained','fsm-gaming'):
+        assert prefix + ':is(.live-cell-value,.smart-banner-value,.live-info-val).metric-' + cls in h, prefix + cls
+i = h.index('html :is(.live-cell-value,.smart-banner-value,.smart-drain-val,.live-info-val):is(.metric-normal,.metric-info)')
+j = h.index('{ color:var(--text) !important; }', i)
+assert j - i < 400, 'plain facts take the text colour, not the old mint/teal card colour'
+assert "asbMetricPaint('liveCapSrc', 'metric-normal'); }" in h and h.count("asbMetricPaint('liveCapSrc', 'metric-normal'); }") == 2, 'ASB or the profile script holding the ceiling is a plain fact'
+assert 'html .smart-drain-half .smart-drain-eta { color:var(--text) !important; }' in h, 'screen time estimates must stay neutral'
+assert "asbMetricPaint('bnDrain', _chg ? 'metric-charge' : 'metric-info');" in h, 'numeric screen-on %/h must not use a severity grade'
+assert "asbMetricPaint('bnDrainOff', 'metric-info');" in h, 'numeric screen-off %/h must not use a severity grade'
+assert 'asbScreenDrainMetric' not in h, 'the removed screen-drain severity classifier must not return'
 assert "asbThermalMetric(cpuT ? fmtTempC(cpuT) : 0, 'cpu')" in h, 'governor deci-C temperature is classified without display-unit normalization'
-assert '--metric-cool: #00d4ff;' in h, 'dark cool state must stay blue rather than inherit the Glass mint accent'
-assert '--metric-cool:#006f9b;' in h, 'light cool state needs a readable blue'
-# fix248: a six-step scale with its own variables in both palettes, readable on white.
-for v in ('--m-cool: #00d4ff;', '--m-good: #2ed573;', '--m-mild: #c2e64b;', '--m-warm: #ffbf1f;', '--m-hot: #ff7a1a;', '--m-bad: #ff2d2d;'):
-    assert v in h, v
-assert '--m-cool:#006f9b; --m-good:#08753c; --m-mild:#4f7a0a; --m-warm:#8a5700; --m-hot:#b04a00; --m-bad:#b42318;' in h, 'light palette'
-def lum(c):
-    c = c.lstrip('#'); r, g, b = (int(c[i:i + 2], 16) / 255 for i in (0, 2, 4))
-    f = lambda x: x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055) ** 2.4
-    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
-for c in ('#006f9b', '#08753c', '#4f7a0a', '#8a5700', '#b04a00', '#b42318'):
-    ratio = (1.05) / (lum(c) + 0.05)
-    assert ratio >= 4.5, '%s on white: %.2f' % (c, ratio)
-for c in ('#00d4ff', '#2ed573', '#c2e64b', '#ffbf1f', '#ff7a1a', '#ff2d2d'):
-    ratio = (lum(c) + 0.05) / 0.05
-    assert ratio >= 4.5, '%s on black: %.2f' % (c, ratio)
+# fix252: a five-step quality scale and an activity palette, both readable on white and black.
+QD = ('#2ed573', '#c2e64b', '#ffbf1f', '#ff7a1a', '#ff2d2d')
+QL = ('#08753c', '#4f7a0a', '#8a5700', '#b04a00', '#b42318')
+AD = ('#5c9eff', '#65d7ff', '#38d0c8', '#b79aff', '#e58cf2', '#ff8fc8')
+AL = ('#2059bf', '#00759e', '#047a76', '#7240bd', '#9c3aa0', '#b0245f')
+assert ' '.join('--m-%s: %s;' % kv for kv in zip(('good','mild','warm','hot','bad'), QD)).replace('; --', ';\n  --') in h, 'dark quality palette'
+assert ' '.join('--m-%s:%s;' % kv for kv in zip(('good','mild','warm','hot','bad'), QL)) in h, 'light quality palette'
+names = ('deep','light','moderate','heavy','sustained','gaming')
+assert '\n'.join('  --fsm-%s: %s;' % kv for kv in zip(names, AD)) in h, 'dark activity palette'
+assert '--fsm-deep:%s; --fsm-light:%s; --fsm-moderate:%s;' % AL[:3] in h and '--fsm-heavy:%s; --fsm-sustained:%s; --fsm-gaming:%s;' % AL[3:] in h, 'light activity palette'
+import math
+def lin(c): c /= 255; return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+def rgb(c): c = c.lstrip('#'); return [lin(int(c[i:i + 2], 16)) for i in (0, 2, 4)]
+def lum(c): r, g, b = rgb(c); return 0.2126 * r + 0.7152 * g + 0.0722 * b
+def lab(c):
+    r, g, b = rgb(c)
+    x = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047; y = 0.2126 * r + 0.7152 * g + 0.0722 * b; z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883
+    f = lambda t: t ** (1 / 3) if t > 0.008856 else 7.787 * t + 16 / 116
+    return 116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))
+def de(c1, c2):
+    (L1, a1, b1), (L2, a2, b2) = lab(c1), lab(c2)
+    cb = (math.hypot(a1, b1) + math.hypot(a2, b2)) / 2; g = 0.5 * (1 - math.sqrt(cb ** 7 / (cb ** 7 + 25 ** 7)))
+    a1, a2 = a1 * (1 + g), a2 * (1 + g); C1, C2 = math.hypot(a1, b1), math.hypot(a2, b2)
+    h1, h2 = math.degrees(math.atan2(b1, a1)) % 360, math.degrees(math.atan2(b2, a2)) % 360
+    dh = 0 if C1 * C2 == 0 else (h2 - h1 if abs(h2 - h1) <= 180 else h2 - h1 - 360 if h2 > h1 else h2 - h1 + 360)
+    dH = 2 * math.sqrt(C1 * C2) * math.sin(math.radians(dh / 2))
+    Lb, Cb = (L1 + L2) / 2, (C1 + C2) / 2
+    hb = h1 + h2 if C1 * C2 == 0 else ((h1 + h2) / 2 if abs(h1 - h2) <= 180 else (h1 + h2 + 360) / 2)
+    t = 1 - 0.17 * math.cos(math.radians(hb - 30)) + 0.24 * math.cos(math.radians(2 * hb)) + 0.32 * math.cos(math.radians(3 * hb + 6)) - 0.2 * math.cos(math.radians(4 * hb - 63))
+    sl = 1 + 0.015 * (Lb - 50) ** 2 / math.sqrt(20 + (Lb - 50) ** 2); sc = 1 + 0.045 * Cb; sh = 1 + 0.015 * Cb * t
+    rt = -math.sin(math.radians(60 * math.exp(-((hb - 275) / 25) ** 2))) * 2 * math.sqrt(Cb ** 7 / (Cb ** 7 + 25 ** 7))
+    return math.sqrt(((L2 - L1) / sl) ** 2 + ((C2 - C1) / sc) ** 2 + (dH / sh) ** 2 + rt * ((C2 - C1) / sc) * (dH / sh))
+for q, a, text, bg in ((QD, AD, '#ffffff', '#000000'), (QL, AL, '#14231f', '#ffffff')):
+    for c in q + a:
+        assert (max(lum(c), lum(bg)) + 0.05) / (min(lum(c), lum(bg)) + 0.05) >= 4.5, '%s on %s' % (c, bg)
+    for c in a:
+        assert min(de(c, x) for x in q) >= 15, 'activity colour %s reads like a quality step' % c
+        assert de(c, text) >= 15, 'activity colour %s reads like a plain fact' % c
+    act = dict(zip(names, a))
+    for x, y in (('deep','heavy'), ('deep','moderate'), ('light','moderate'), ('moderate','heavy'), ('light','heavy')):
+        assert de(act[x], act[y]) >= 15, 'rest and work look alike: %s %s %.1f' % (x, y, de(act[x], act[y]))
+    for x, y in zip(names, names[1:]):
+        assert de(act[x], act[y]) >= 10, 'neighbouring activity states merge: %s %s' % (x, y)
 assert '@keyframes asbChargeFlow' in h and 'prefers-reduced-motion: reduce' in h, 'charging shimmer and its reduced-motion fallback'
-assert h.index('/* Every monitored value uses the same evidence vocabulary') > h.index('html[data-asb-glass="1"] .smart-banner-value { color:var(--text); }'), 'Glass neutral rules override the evidence colours'
+assert h.index('/* Every monitored value uses the same colour vocabulary') > h.index('html[data-asb-glass="1"] .smart-banner-value { color:var(--text); }'), 'Glass neutral rules override the evidence colours'
 PY
 {
   echo "function T(k, d) { return d; }"
   echo "const _node = { className: 'live-cell-value cap-raised metric-good' }; function _el(id) { return id === 'x' ? _node : null; }"
   sed -n '/^const METRIC_CLASSES = /,/];$/p' "$H"
   sed -n '/^const METRIC_STEPS = /p' "$H"
-  for fn in asbMetricPaint asbMetricStep asbLoadMetric asbThermalMetric asbRamMetric asbDrainMetric asbScreenDrainMetric asbClockMetric asbHeadroomMetric asbConfidenceMetric asbConfPctMetric asbBasisMetric asbModemMetric asbSlotMetric asbTrendMetric asbFsmMetric asbAppMetric asbClampMetric asbCeilMetric asbBatLevelMetric lvSlotHeat; do
+  for fn in asbMetricPaint asbMetricStep asbLoadMetric asbThermalMetric asbRamMetric asbDrainMetric asbClockMetric asbHeadroomMetric asbConfidenceMetric asbConfPctMetric asbBasisMetric asbModemMetric asbSlotMetric asbTrendMetric asbFsmMetric asbAppMetric asbClampMetric asbCeilMetric asbBatLevelMetric lvSlotHeat; do
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
   cat <<'EOF'
@@ -3363,11 +3404,12 @@ function eq(actual, want, name) { chk(actual === want, name + ': ' + actual + ',
 eq(asbLoadMetric(24), 'metric-good', 'low load'); eq(asbLoadMetric(25), 'metric-mild', 'light load');
 eq(asbLoadMetric(50), 'metric-warm', 'medium load'); eq(asbLoadMetric(70), 'metric-hot', 'high load');
 eq(asbLoadMetric(90), 'metric-bad', 'saturated load'); eq(asbLoadMetric(null), 'metric-neutral', 'unknown load');
-eq(asbThermalMetric(29, 'body'), 'metric-cool', 'cold body'); eq(asbThermalMetric(32, 'body'), 'metric-good', 'neutral body');
+eq(asbThermalMetric(29, 'body'), 'metric-good', 'cold body'); eq(asbThermalMetric(32, 'body'), 'metric-good', 'neutral body');
 eq(asbThermalMetric(36, 'body'), 'metric-mild', 'warmish body'); eq(asbThermalMetric(39, 'body'), 'metric-warm', 'warm body');
 eq(asbThermalMetric(42, 'body'), 'metric-hot', 'hot body'); eq(asbThermalMetric(45, 'body'), 'metric-bad', 'very hot body');
 eq(asbThermalMetric(44, 'board'), 'metric-warm', 'warm board'); eq(asbThermalMetric(50, 'board'), 'metric-bad', 'hot board');
-eq(asbThermalMetric(31, 'cpu'), 'metric-cool', 'idle CPU'); eq(asbThermalMetric(41, 'cpu'), 'metric-good', 'cool CPU');
+eq(asbThermalMetric(31, 'cpu'), 'metric-good', 'idle CPU'); eq(asbThermalMetric(41, 'cpu'), 'metric-good', 'cool CPU');
+eq(asbThermalMetric(20, 'battery'), 'metric-good', 'cool battery'); eq(asbThermalMetric(31, 'board'), 'metric-good', 'cool board');
 eq(asbThermalMetric(48, 'cpu'), 'metric-mild', 'busy CPU'); eq(asbThermalMetric(55, 'cpu'), 'metric-warm', 'warm CPU');
 eq(asbThermalMetric(64, 'cpu'), 'metric-hot', 'hot CPU'); eq(asbThermalMetric(70, 'cpu'), 'metric-bad', 'throttling CPU');
 eq(asbThermalMetric(28, 'battery'), 'metric-good', 'battery at room temperature'); eq(asbThermalMetric(42, 'battery'), 'metric-hot', 'warm battery');
@@ -3376,14 +3418,10 @@ eq(asbRamMetric(3500, 10000), 'metric-good', '35% RAM'); eq(asbRamMetric(4928307
 eq(asbRamMetric(2000, 10000), 'metric-mild', '20% RAM'); eq(asbRamMetric(1300, 10000), 'metric-warm', '13% RAM');
 eq(asbRamMetric(800, 10000), 'metric-hot', '8% RAM'); eq(asbRamMetric(500, 10000), 'metric-bad', 'low RAM'); eq(asbRamMetric(0, 0), 'metric-neutral', 'unknown RAM');
 eq(asbDrainMetric(-100, 5000), 'metric-charge', 'charging'); eq(asbDrainMetric(0, 5000), 'metric-neutral', 'zero current');
-eq(asbDrainMetric(40, 5000), 'metric-cool', 'deep idle current'); eq(asbDrainMetric(150, 5000), 'metric-good', '3%/h current');
+eq(asbDrainMetric(40, 5000), 'metric-good', 'deep idle current'); eq(asbDrainMetric(150, 5000), 'metric-good', '3%/h current');
 eq(asbDrainMetric(300, 5000), 'metric-mild', '6%/h current'); eq(asbDrainMetric(500, 5000), 'metric-warm', '10%/h current');
 eq(asbDrainMetric(800, 5000), 'metric-hot', '16%/h current'); eq(asbDrainMetric(1000, 5000), 'metric-bad', '20%/h current');
 eq(asbDrainMetric(100, 0), 'metric-neutral', 'current without capacity');
-eq(asbScreenDrainMetric(4, true), 'metric-good', 'screen-on 4%/h'); eq(asbScreenDrainMetric(8.5, true), 'metric-mild', 'screen-on 8.5%/h');
-eq(asbScreenDrainMetric(20, true), 'metric-bad', 'screen-on 20%/h'); eq(asbScreenDrainMetric(0.38, false), 'metric-cool', 'screen-off 0.38%/h');
-eq(asbScreenDrainMetric(0.5, false), 'metric-good', 'screen-off 0.5%/h'); eq(asbScreenDrainMetric(2.2, false), 'metric-hot', 'screen-off 2.2%/h');
-eq(asbScreenDrainMetric(0, false), 'metric-info', 'nothing measured yet');
 eq(asbClockMetric(200, 1000), 'metric-good', 'low clock'); eq(asbClockMetric(450, 1000), 'metric-warm', 'medium clock');
 eq(asbClockMetric(900, 1000), 'metric-bad', 'clock at the top'); eq(asbClockMetric(100, 0), 'metric-neutral', 'clock without maximum');
 eq(asbHeadroomMetric(40), 'metric-good', 'ample headroom'); eq(asbHeadroomMetric(30), 'metric-mild', 'fair headroom');
@@ -3398,19 +3436,20 @@ eq(asbBasisMetric('basis-veto'), 'metric-bad', 'veto basis'); eq(asbModemMetric(
 eq(asbModemMetric('night'), 'metric-good', 'night modem'); eq(asbModemMetric('fast'), 'metric-warm', 'fast modem costs a little, no alarm');
 eq(asbModemMetric('normal'), 'metric-info', 'normal modem reads like the uptime beside it'); eq(asbModemMetric(''), 'metric-neutral', 'unknown modem');
 eq(asbModemMetric('unavailable'), 'metric-neutral', 'unavailable modem');
-eq(asbSlotMetric('cool'), 'metric-cool', 'cool slot'); eq(asbSlotMetric('typical'), 'metric-info', 'typical slot');
+eq(asbSlotMetric('cool'), 'metric-good', 'cool slot'); eq(asbSlotMetric('typical'), 'metric-info', 'typical slot');
 eq(asbSlotMetric('warm'), 'metric-warm', 'warm slot'); eq(asbSlotMetric('hot'), 'metric-hot', 'hot slot'); eq(asbSlotMetric(undefined), 'metric-neutral', 'unknown slot');
 eq(lvSlotHeat(400, 410, 490).state, 'cool', 'cool slot evidence'); eq(lvSlotHeat(450, 410, 490).state, 'typical', 'typical slot evidence');
 eq(lvSlotHeat(500, 410, 490).state, 'warm', 'warm slot evidence'); eq(lvSlotHeat(540, 410, 490).state, 'hot', 'hot slot evidence');
 eq(lvSlotHeat(0, 410, 490).state, undefined, 'empty slot evidence');
-eq(asbTrendMetric(-1.2), 'metric-cool', 'cooling fast'); eq(asbTrendMetric(-0.5), 'metric-good', 'cooling');
+eq(asbTrendMetric(-1.2), 'metric-good', 'cooling fast'); eq(asbTrendMetric(-0.5), 'metric-good', 'cooling');
 eq(asbTrendMetric(0.1), 'metric-info', 'steady'); eq(asbTrendMetric(0.6), 'metric-mild', 'warming slowly');
 eq(asbTrendMetric(1.2), 'metric-warm', 'warming'); eq(asbTrendMetric(2), 'metric-hot', 'warming fast'); eq(asbTrendMetric(3), 'metric-bad', 'heating up');
-eq(asbFsmMetric('DEEP_IDLE'), 'metric-cool', 'asleep'); eq(asbFsmMetric('LIGHT_IDLE'), 'metric-good', 'light idle');
-eq(asbFsmMetric('LIGHT_IDLE · screen on'), 'metric-good', 'light idle with the screen note'); eq(asbFsmMetric('MODERATE'), 'metric-mild', 'moderate');
-eq(asbFsmMetric('HEAVY'), 'metric-warm', 'heavy'); eq(asbFsmMetric('SUSTAINED'), 'metric-hot', 'sustained'); eq(asbFsmMetric('GAMING'), 'metric-hot', 'gaming');
+eq(asbFsmMetric('DEEP_IDLE'), 'metric-fsm-deep', 'asleep'); eq(asbFsmMetric('LIGHT_IDLE'), 'metric-fsm-light', 'light idle');
+eq(asbFsmMetric('LIGHT_IDLE · screen on'), 'metric-fsm-light', 'light idle with the screen note'); eq(asbFsmMetric('MODERATE'), 'metric-fsm-moderate', 'moderate');
+eq(asbFsmMetric('HEAVY'), 'metric-fsm-heavy', 'heavy'); eq(asbFsmMetric('SUSTAINED'), 'metric-fsm-sustained', 'sustained'); eq(asbFsmMetric('GAMING'), 'metric-fsm-gaming', 'gaming');
 eq(asbFsmMetric('—'), 'metric-normal', 'unknown state');
-eq(asbAppMetric(0), 'metric-cool', 'idle app load'); eq(asbAppMetric(2), 'metric-mild', 'medium app load'); eq(asbAppMetric(4), 'metric-hot', 'gaming load');
+eq(asbAppMetric(0), 'metric-fsm-deep', 'idle app load'); eq(asbAppMetric(1), 'metric-fsm-light', 'light app load');
+eq(asbAppMetric(2), 'metric-fsm-moderate', 'medium app load'); eq(asbAppMetric(3), 'metric-fsm-heavy', 'heavy app load'); eq(asbAppMetric(4), 'metric-fsm-gaming', 'gaming load');
 eq(asbAppMetric(9), 'metric-neutral', 'unknown app load');
 eq(asbClampMetric(1), 'metric-good', 'a clamp an hour is ordinary'); eq(asbClampMetric(6), 'metric-mild', 'several clamps');
 eq(asbClampMetric(15), 'metric-warm', 'frequent clamps'); eq(asbClampMetric(30), 'metric-hot', 'dozens of clamps'); eq(asbClampMetric(50), 'metric-bad', 'constant clamping');
@@ -3421,14 +3460,31 @@ eq(asbBatLevelMetric(15), 'metric-hot', 'very low'); eq(asbBatLevelMetric(5), 'm
 asbMetricPaint('x', 'metric-warm');
 chk(_node.className === 'live-cell-value cap-raised metric-warm', 'semantic repaint preserves non-semantic state and replaces the old colour: ' + _node.className);
 asbMetricPaint('x', 'metric-charge'); chk(/metric-charge/.test(_node.className) && !/metric-warm/.test(_node.className), 'charging replaces the grade');
-asbMetricPaint('x', 'nonsense'); chk(/metric-neutral/.test(_node.className), 'invalid state fails neutral');
+asbMetricPaint('x', 'metric-fsm-deep'); chk(/metric-fsm-deep/.test(_node.className) && !/metric-charge/.test(_node.className), 'FSM activity replaces charging');
+asbMetricPaint('x', asbFsmMetric('MODERATE')); chk(/metric-fsm-moderate/.test(_node.className) && !/metric-fsm-deep/.test(_node.className), 'FSM repaint replaces the previous activity colour without accumulation');
+asbMetricPaint('x', 'nonsense'); chk(/metric-neutral/.test(_node.className) && !/metric-fsm-/.test(_node.className), 'invalid state fails neutral');
 asbMetricPaint('missing', 'metric-good');
+const Q = ['metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'];
+const OK = Q.concat(['metric-neutral', 'metric-info', 'metric-charge']);
+const sweep = {
+  load: v => asbLoadMetric(v), cpu: v => asbThermalMetric(v, 'cpu'), body: v => asbThermalMetric(v, 'body'),
+  board: v => asbThermalMetric(v, 'board'), battery: v => asbThermalMetric(v, 'battery'), drain: v => asbDrainMetric(v * 50, 5000),
+  clock: v => asbClockMetric(v, 100), clamps: v => asbClampMetric(v / 2), headroom: v => asbHeadroomMetric(100 - v),
+  conf: v => asbConfPctMetric(1000 - v * 10), level: v => asbBatLevelMetric(100 - v), ceil: v => asbCeilMetric(100 - v),
+  ram: v => asbRamMetric(10000 - v * 100, 10000), trend: v => asbTrendMetric(v / 20 - 1)
+};
+Object.keys(sweep).forEach(function (k) {
+  const seen = [];
+  for (let v = 0; v <= 100; v += 0.5) { const st = sweep[k](v); chk(OK.indexOf(st) >= 0, k + ' at ' + v + ': ' + st); if (Q.indexOf(st) >= 0 && seen[seen.length - 1] !== st) seen.push(st); }
+  chk(seen[0] === 'metric-good', k + ' does not start at green: ' + seen.join(','));
+  for (let i = 1; i < seen.length; i++) chk(Q.indexOf(seen[i]) > Q.indexOf(seen[i - 1]), k + ' steps back or skips order: ' + seen.join(','));
+});
 if (bad) process.exit(1); console.log('ok');
 EOF
 } > "$T/t.js"
 out="$(node "$T/t.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo "PASS webui monitor semantics: six-step scale (cool..bad) for thermal/load/RAM/current/drain/clock/headroom/confidence/trend/FSM/clamps/ceiling/battery, modem and slot plain at their default, charging shimmer, neutral unknowns, all four themes, contrast on white and black"
+echo "PASS webui monitor semantics: one five-step quality scale with green always the best end for thermal/load/RAM/current/clock/headroom/confidence/trend/clamps/ceiling/battery, plain facts in the text colour, activity palette for FSM and app load kept apart from quality and from each other, charging shimmer, neutral unknowns, all four themes, contrast on white and black"
 )
 
 t_webui_stock_monitor_runtime() (
@@ -6241,11 +6297,13 @@ for selector in (
     assert selector in h, selector
 assert "asbMetricPaint('bnApp', warm ? 'metric-neutral' : asbAppMetric(appH))" in h
 assert '.smart-banner-value.load-mid,' in h and 'color: var(--bal);' in h
-for cls in ('good', 'warm', 'bad', 'neutral', 'normal', 'cool'):
+for cls in ('good', 'warm', 'bad', 'neutral'):
     assert '.smart-banner-value.metric-' + cls in h
     assert '.live-cell-value.metric-' + cls in h
     assert 'html[data-asb-glass="1"] .smart-banner-value.metric-' + cls in h
     assert 'html[data-asb-glass="1"] .live-cell-value.metric-' + cls in h
+assert 'html[data-asb-glass="1"] :is(.live-cell-value,.smart-banner-value,.smart-drain-val,.live-info-val):is(.metric-normal,.metric-info)' in h
+assert 'html[data-asb-glass="1"] :is(.live-cell-value,.smart-banner-value,.live-info-val).metric-fsm-moderate' in h
 # Category colour is a translucent material layer, not a flat replacement or a neutral wash.
 assert 'html[data-asb-glass="1"] .cfg-tile[class*="cat-"] {' in h
 assert 'html[data-asb-glass="1"][data-asb-theme="light"] .cfg-tile[class*="cat-"] {' in h
@@ -6357,7 +6415,15 @@ feature_order = re.search(r'const DEVICE_KERNEL_FEATURE_ORDER = \[(.*?)\];', h, 
 assert feature_order, 'explicit custom-kernel feature order missing'
 ordered_features = re.findall(r"'([^']+)'", feature_order.group(1))
 assert ordered_features == ['susfs','susfs_version','bbg_baseband_guard','bbr_v2','bbr_v1','lto',
-                            'tmpfs_xattr_posix_acl','unicode_bypass_fix','droidspaces','ntsync','nomount','nomount_version'], ordered_features
+                            'tmpfs_xattr_posix_acl','unicode_bypass_fix','unicode_bypass_evidence','droidspaces','ntsync','nomount','nomount_version'], ordered_features
+# fix252: five groups in reading order - hardware, firmware and system, kernel, root, ASB.
+order = re.search(r'const DEVICE_SECTION_ORDER = \[(.*?)\n\];', h, re.S).group(1)
+specs = re.findall(r"\['([a-z_]+)', '(dev_sec_[a-z_]+)', '[^']*', '([a-z]+)'", order)
+assert [x[0] for x in specs] == ['firmware','soc','cpu_policy','gpu','memory','battery','firmware','system','kernel','kernel_features',
+                                 'kernel_runtime','kernel_external','kernel_config','susfs','metamodule','asb','asb_caps','meta'], specs
+groups = [x[2] for x in specs]
+assert groups == sorted(groups, key=['hw','sw','kernel','root','asb'].index), 'a group is split: ' + str(groups)
+assert specs[0][1] == 'dev_sec_device' and specs[6][1] == 'dev_sec_firmware', 'the phone identity opens the hardware group'
 keys = set(json.loads((root/'webroot/i18n/en.json').read_text(encoding='utf-8')))
 for p in (root/'webroot/i18n').glob('*.json'):
     d = json.loads(p.read_text(encoding='utf-8'))
@@ -6368,7 +6434,8 @@ for p in (root/'webroot/i18n').glob('*.json'):
                 'dev_kernel_features_bbr_v2','dev_kernel_features_bbg_baseband_guard','dev_kernel_features_susfs',
                 'dev_sec_metamodule','dev_metamodule_status','dev_metamodule_id','dev_metamodule_name',
                 'dev_metamodule_version','dev_metamodule_version_code','page_save','page_saved','page_save_error','page_save_empty','page_save_raw','dev_gpu_gov_pwrlevel','dev_metamodule_nomount_driver',
-                'dev_metamodule_nomount_driver_version','dev_metamodule_nomount_evidence'):
+                'dev_metamodule_nomount_driver_version','dev_metamodule_nomount_evidence','dev_sec_device','dev_grp_hw','dev_grp_sw',
+                'dev_grp_kernel','dev_grp_root','dev_grp_asb'):
         assert d.get(key), '%s: %s missing' % (p.name, key)
 ru = json.loads((root/'webroot/i18n/ru.json').read_text(encoding='utf-8'))
 assert 'NoMount' in ru['dev_kernel_features_nomount'] and 'NTSync' in ru['dev_kernel_features_ntsync']
@@ -6404,6 +6471,7 @@ function logReportRow(key, value) { const r = mk('div'), k = mk('span'), v = mk(
 function logReportT(key, fb, vars) { let s = T(key, fb); const v = vars || {}; for (const k in v) s = s.split('{' + k + '}').join(v[k]); return s; }
 EOF
   sed -n '/^const DEVICE_SECTION_ORDER = \[/,/^\];/p' "$H"
+  sed -n '/^const DEVICE_GROUPS = {/,/^};/p' "$H"
   sed -n '/^const DEVICE_KERNEL_FEATURE_ORDER = \[/,/^\];/p' "$H"
   for fn in parseDeviceInfo deviceVal deviceFallbackLabel deviceLabel deviceHero deviceValueClass deviceNum deviceKv deviceFreqKhz deviceFreqHz deviceSizeKb deviceDuration deviceCpuCount deviceCpuList deviceYesNo deviceFill deviceBatteryMa deviceBatteryMah deviceBatteryWear deviceDisplayValue deviceInfoOverview deviceInfoRender shQuote \
     asbPageClasses asbPageHas asbPageKids asbPageTxt asbPageWarn asbPageText asbPageStamp; do
@@ -6513,6 +6581,27 @@ chk(d2dump.includes('1.02 GHz–4.61 GHz · 22 steps · floor control: yes') && 
 chk(d2dump.includes('KernelSU') && d2dump.includes('camera: yes · audio: no') && d2dump.includes('camera · audio · wifi'), 'ASB capability names not formatted');
 const wearRow = []; (function walk(n) { if (n.className && n.className.split(/\s+/).includes('lgr-v') && n.textContent === '77%') wearRow.push(n); (n.children || []).forEach(walk); })(body);
 chk(wearRow.length === 1 && wearRow[0].className.includes('dev-warn'), 'worn battery is not amber');
+const d3 = parseDeviceInfo([
+  'D\tmeta\tschema\t2', 'D\tfirmware\tbrand\tOnePlus', 'D\tfirmware\tmodel\tCPH2745', 'D\tfirmware\tandroid\t16',
+  'D\tfirmware\tfingerprint\tOnePlus/x:16/y', 'D\tfirmware\tmarket_name\tOnePlus 15', 'D\tfirmware\tfuture_key\tZ1',
+  'D\tfirmware\toplus_rom\tV16.0.0', 'D\tsoc\tsoc_model\tSM8850', 'D\tkernel\trelease\t6.12', 'D\tsusfs\tinterface\tavailable',
+  'D\tkernel_features\tunicode_bypass_evidence\tno indicator', 'D\tkernel_features\tlto\tThinLTO (Clang)',
+  'D\tkernel_features\tunicode_bypass_fix\tnot runtime-discoverable', 'D\tkernel_features\tntsync\tbuilt-in',
+  'D\tasb\tprofile\tbattery', 'D\tsystem\tuptime\t508.51 2724.42', 'D\tbattery\tcapacity\t74', 'D\tkernel_runtime\tswappiness\t100'
+].join('\n'));
+deviceInfoRender(d3);
+const seq = body.children.filter(n => /dev-group|lgr-sec/.test(n.className)).map(n => /dev-group/.test(n.className) ? '# ' + n.textContent : n.children[0].textContent);
+chk(JSON.stringify(seq) === JSON.stringify(['At a glance', '# Hardware', 'Device', 'Chip (SoC)', 'Battery', '# Firmware and system', 'Firmware and ROM', 'System',
+  '# Kernel', 'Kernel build', 'Custom kernel features', 'Live kernel facilities', '# Root and modules', 'SuSFS interface', '# ASB module', 'ASB runtime',
+  'Collection metadata']), 'device page groups and order: ' + JSON.stringify(seq));
+function cardRows(title) { const c = body.children.find(n => n.children && n.children[0] && n.children[0].textContent === title); const out = [];
+  (function walk(n) { if (n.className && n.className.split(/\s+/).includes('lgr-v')) out.push(n.textContent); (n.children || []).forEach(walk); })(c); return out; }
+chk(JSON.stringify(cardRows('Device')) === JSON.stringify(['OnePlus 15', 'OnePlus', 'CPH2745']), 'identity card: ' + JSON.stringify(cardRows('Device')));
+chk(JSON.stringify(cardRows('Firmware and ROM')) === JSON.stringify(['16', 'V16.0.0', 'OnePlus/x:16/y', 'Z1']), 'firmware card keeps every other firmware key, the unknown one last: ' + JSON.stringify(cardRows('Firmware and ROM')));
+chk(JSON.stringify(cardRows('Custom kernel features')) === JSON.stringify(['ThinLTO (Clang)', 'not runtime-discoverable', 'no indicator', 'built-in']), 'the Unicode evidence sits under its feature: ' + JSON.stringify(cardRows('Custom kernel features')));
+const groupHead = body.children.find(n => /dev-group/.test(n.className));
+chk(groupHead && groupHead.tagName === 'div', 'group heading element');
+deviceInfoRender(d2);
 (async function () {
   window._asbDeviceInfoData = d2;
   window._asbDeviceInfoRaw = 'D\tgpu\tkgsl-3d0\tRAWMARK';
@@ -6525,6 +6614,7 @@ chk(wearRow.length === 1 && wearRow[0].className.includes('dev-warn'), 'worn bat
   const saved = Buffer.from(b64, 'base64').toString('utf8');
   chk(/^AutoSystemBoost - Device diagnostics\n27 facts\n/.test(saved), 'Device save header: ' + saved.slice(0, 80));
   chk(saved.includes('== At a glance ==') && saved.includes('8 cores · 2 clusters · up to 4.61 GHz'), 'Device save lost the overview');
+  chk(/\n# Hardware\n\n== Chip \(SoC\) ==/.test(saved) && saved.indexOf('# Hardware') < saved.indexOf('# ASB module'), 'Device save lost the group headings');
   chk(/\n  [^\n]*: 77%  \(!\)/.test(saved), 'Device save lost a warning mark on the worn battery');
   chk(saved.includes('Load average counts tasks'), 'Device save lost the explanatory notes');
   chk(saved.includes('== Raw data (for the developer) ==\nD\tgpu\tkgsl-3d0\tRAWMARK'), 'Device save lost the raw collector output');
@@ -6540,7 +6630,7 @@ EOF
 } > "$T/t.js"
 out="$(node "$T/t.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo "PASS webui device page: five SoC buttons/theme groups, safe TSV parser/renderer, metamodule metadata, independent NoMount evidence and read-only loader"
+echo "PASS webui device page: five SoC buttons/theme groups, safe TSV parser/renderer, five section groups in reading order with the identity card first, metamodule metadata, independent NoMount evidence and read-only loader"
 )
 
 t_device_info_runtime() (
