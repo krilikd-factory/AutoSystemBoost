@@ -5261,7 +5261,7 @@ fail() { echo "FAIL action idle per-profile: $*" >&2; exit 1; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 A="$ROOT/action.sh"
 awk '/^_offx="\$\(grep -m1/{f=1} f{print} f && /^_idle_measured=0/{g=1} g && /^fi$/{exit}' "$A" \
-  | sed "s#/dev/.asb/state#$T/state#g" > "$T/blk.sh"
+  | sed "s#/dev/.asb/state#$T/state#g; s#/dev/.asb_drain_meter#$T/dm#g; s#/data/adb/asb/drain_meter#$T/dm#g" > "$T/blk.sh"
 grep -q 'offdrain_by_profile' "$T/blk.sh" || fail "the block does not read the per-profile figure"
 grep -q '^fi$' "$T/blk.sh" || fail "extraction stopped before the ETA branch"
 run_blk() { # $1=profile -> "offx offn measured toff_min"
@@ -5283,6 +5283,24 @@ offdrain_windows=6
 S
 out="$(run_blk smart)"
 [ "$out" = "63 6 1 5047" ] || fail "missing per-profile key must keep the phone-wide figure: $out"
+# fix253: with the new nine-field meter, the action sheet and WebUI both prefer the fresh night.
+cat > "$T/state" <<'S'
+offdrain_pctph_x100=102
+offdrain_windows=5
+offdrain_by_profile=battery:150:2,balanced:-1:0,performance:-1:0,smart:43:3
+S
+cat > "$T/dm" <<'S'
+battery 10604 2614 43401 1100 2 40 18000 1793343720
+current battery
+S
+out="$(run_blk battery)"
+[ "$out" = "40 2 1 7950" ] || fail "the action sheet kept the stale average instead of the fresh 0.40 %/h night: $out"
+cat > "$T/dm" <<'S'
+battery 10604 2614 25301 900 1
+current battery
+S
+out="$(run_blk battery)"
+[ "$out" = "128 1 1 2484" ] || fail "a six-field meter lost its compatible aggregate fallback: $out"
 echo "PASS action idle per-profile: the action sheet shows the same idle figure as the profile's card"
 )
 
@@ -8343,6 +8361,28 @@ for l in ar de es fr hy id it pt ru tr uk zh; do
   grep -q '^T_N_LTE_LIGHT_IDLE="' "$ROOT/runtime/i18n/action_$l.sh" || fail "T_N_LTE_LIGHT_IDLE missing: $l"
 done
 echo "PASS manual screen switches: LTE, 5G-on-demand and Wi-Fi power save follow the screen on every profile; manual mode leaves memory and I/O to the profile"
+)
+
+t_fix253_power_smoothness_runtime() (
+# Field fix253: reduce ASB's own noisy screen-off cadence, and let Battery's scheduler
+# notice foreground work a little sooner without turning Battery into Balanced.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL fix253 power/smoothness: $*" >&2; exit 1; }
+bat="$(awk -F= '$1 == "WALT_TOPAPP_WEIGHT" { print $2 }' "$ROOT/profiles/battery.sh")"
+bal="$(awk -F= '$1 == "WALT_TOPAPP_WEIGHT" { print $2 }' "$ROOT/profiles/balanced.sh")"
+[ "$bat" = 105 ] || fail "Battery foreground weight is $bat, want the bounded 105 step"
+[ "$bal" -gt "$bat" ] || fail "Battery no longer sits below Balanced ($bat vs $bal)"
+for pin in \
+  'CPU_MAX_LITTLE="${BATTERY_CPU_MAX_LITTLE:-1670400}"' \
+  'CPU_MAX_BIG="${BATTERY_CPU_MAX_BIG:-1632000}"' \
+  'GPU_MAX_PCT="${BATTERY_GPU_MAX_PCT:-44}"'; do
+  grep -Fq "$pin" "$ROOT/profiles/battery.sh" || fail "Battery ceiling changed unexpectedly: $pin"
+done
+grep -Fq '#define TIMER_IDLE_NOISY_S 30' "$ROOT/src/asb_governor.c" || fail 'noisy screen-off cadence is not 30 s'
+grep -Fq 'fsm.plan.idle_noisy_slow ? TIMER_IDLE_NOISY_S' "$ROOT/src/asb_governor.c" || fail 'the slower tier is not wired into the timer'
+grep -Fq 'Display,' "$ROOT/src/asb_governor.c" || fail 'event-driven display response is not documented'
+echo "PASS fix253 power/smoothness: Battery foreground response stays below Balanced; noisy screen-off ASB checks are capped at 120/h with event-driven wake paths kept"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

@@ -2957,7 +2957,7 @@ const _lvMeter = { at: 0, cur: '', p: {} };
 function liveDrainIsOpen() { return false; }
 function liveDrainPaint() {}
 EOF
-  for fn in lvEtaFmt lvEtaPaint lvTopSec lvTopSecSync lvDrainHome lvMeterPaint lvPct lvOffFigure asbMetricPaint asbMetricStep asbScreenDrainMetric; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  for fn in lvEtaFmt lvEtaPaint lvTopSec lvTopSecSync lvDrainHome lvMeterPaint lvPct lvDurDHM lvOffFigure asbMetricPaint asbMetricStep asbScreenDrainMetric; do sed -n "/^function $fn(/,/^}/p" "$H"; done
   sed -n "/^const _lvEta = /p; /^const _lvDrain = /p; /^const _lvGovOff = /p; /^const METRIC_STEPS = /p" "$H"
   sed -n '/^const METRIC_CLASSES = /,/];$/p' "$H"
   cat <<'EOF'
@@ -3051,14 +3051,14 @@ assert "#cfgRebootWrap.cfg-reboot-row { display: grid; grid-template-columns: re
 assert re.search(r"if \(stockBanner\) \{ lvDrainHome\(stockBanner\);[^}]*lvMeterPaint\(_selectedProfile\); \}", s), "other profiles do not get the drain pair"
 P
 for l in en ru uk de es fr it pt tr id ar hy zh; do
-  for k in lv_slot_heat lv_heat_cool lv_heat_norm lv_heat_warm lv_heat_tip lv_drain_on_meter lv_drain_cmp cfg_reboot_tile cfg_soft_tile cfg_sysui_tile; do
+  for k in lv_slot_heat lv_heat_cool lv_heat_norm lv_heat_warm lv_heat_tip lv_drain_on_meter lv_drain_off_latest lv_drain_cmp cfg_reboot_tile cfg_soft_tile cfg_sysui_tile; do
     grep -q "\"$k\"" "$ROOT/webroot/i18n/$l.json" || fail "$l.json lacks $k"
   done
   grep -q '"lv_heat_tip": "[^"]*%s[^"]*%s' "$ROOT/webroot/i18n/$l.json" || fail "$l.json lv_heat_tip needs two places"
 done
 {
   echo "var T = function (k, d) { return d; };"
-  for fn in lvSlotHeat lvMeterParse liveDrainCompare lvOffFigure; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  for fn in lvSlotHeat lvMeterParse lvDurDHM liveDrainCompare lvOffFigure; do sed -n "/^function $fn(/,/^}/p" "$H"; done
   cat <<'EOF'
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
 let h = lvSlotHeat(518, 414, 494);
@@ -3068,9 +3068,10 @@ h = lvSlotHeat(487, 414, 494); chk(h.text === 'typical' && !h.warm, 'slot inside
 h = lvSlotHeat(400, 414, 494); chk(h.text === 'cool' && !h.warm, 'slot under the norm: ' + h.text);
 h = lvSlotHeat(0, 414, 494); chk(h.text === '—', 'nothing learned shows a dash');
 h = lvSlotHeat(530, 0, 0); chk(h.text === 'typical' && !h.warm, 'no norm known: never "warm"');
-const m = lvMeterParse('smart 1170 300 7230 100 1\nbattery 300 100 0 0 0\nstock 2400 500 7200 100 1\njunk\ncurrent stock\n');
+const m = lvMeterParse('smart 1170 300 7230 100 1 49 7230 1793343720\nbattery 300 100 0 0 0\nstock 2400 500 7200 100 1\njunk\ncurrent stock\n');
 chk(m.cur === 'stock', 'current profile');
 chk(m.p.smart.on === 92 && m.p.smart.off === 50, 'smart rates: ' + JSON.stringify(m.p.smart));
+chk(m.p.smart.offLast === 49 && m.p.smart.offLastS === 7230 && m.p.smart.offLastAt === 1793343720, 'latest screen-off window parses: ' + JSON.stringify(m.p.smart));
 chk(m.p.battery.on === 0, 'under 10 min of screen time is not a rate');
 chk(m.p.stock.on === 75 && m.p.stock.offN === 1, 'stock rates: ' + JSON.stringify(m.p.stock));
 /* fix177: no dash under the moon. A measured screen-off hour whose level did not move is
@@ -3323,10 +3324,10 @@ for i in ('bnBasis','bnSlotTemp','bnConf','bnLpm','bnStockRam','bnStockDrain','b
           'bnDrain','bnDrainOff','bnTrend','bnApp','bnAlpha','bnBucket','bnStockTrend','bnStockLoad','bnStockBattery',
           'bnStockUptime','liveState','liveClamp','liveLearner','liveCapSrc'):
     assert "asbMetricPaint('%s'" % i in h, '%s is not semantically painted' % i
-for cls in ('good','warm','bad','neutral','mild','hot','charge'):
+for cls in ('good','fair','warm','bad','neutral','mild','hot','severe','charge'):
     assert '.live-cell-value.metric-' + cls in h, cls
     assert 'html[data-asb-glass="1"] .live-cell-value.metric-' + cls in h, cls
-for cls in ('good','warm','bad','mild','hot','charge'):
+for cls in ('good','fair','warm','bad','mild','hot','severe','charge'):
     assert 'html[data-asb-theme="light"] .smart-banner-value.metric-' + cls in h, cls
     assert 'html .smart-drain-val.metric-' + cls in h, cls
 # fix252: green is the best end of every quality scale; no blue step sits beyond it.
@@ -3344,13 +3345,13 @@ assert "asbMetricPaint('bnDrain', _chg ? 'metric-charge' : 'metric-info');" in h
 assert "asbMetricPaint('bnDrainOff', 'metric-info');" in h, 'numeric screen-off %/h must not use a severity grade'
 assert 'asbScreenDrainMetric' not in h, 'the removed screen-drain severity classifier must not return'
 assert "asbThermalMetric(cpuT ? fmtTempC(cpuT) : 0, 'cpu')" in h, 'governor deci-C temperature is classified without display-unit normalization'
-# fix252: a five-step quality scale and an activity palette, both readable on white and black.
-QD = ('#2ed573', '#c2e64b', '#ffbf1f', '#ff7a1a', '#ff2d2d')
-QL = ('#08753c', '#4f7a0a', '#8a5700', '#b04a00', '#b42318')
+# fix253: a seven-step quality scale and an activity palette, both readable on white and black.
+QD = ('#2ed573', '#83df63', '#c2e64b', '#ffbf1f', '#ff7a1a', '#ff7047', '#ff2d2d')
+QL = ('#08753c', '#2f6b1d', '#4f7a0a', '#8a5700', '#b04a00', '#d14020', '#b42318')
 AD = ('#5c9eff', '#65d7ff', '#38d0c8', '#b79aff', '#e58cf2', '#ff8fc8')
 AL = ('#2059bf', '#00759e', '#047a76', '#7240bd', '#9c3aa0', '#b0245f')
-assert ' '.join('--m-%s: %s;' % kv for kv in zip(('good','mild','warm','hot','bad'), QD)).replace('; --', ';\n  --') in h, 'dark quality palette'
-assert ' '.join('--m-%s:%s;' % kv for kv in zip(('good','mild','warm','hot','bad'), QL)) in h, 'light quality palette'
+assert ' '.join('--m-%s: %s;' % kv for kv in zip(('good','fair','mild','warm','hot','severe','bad'), QD)).replace('; --', ';\n  --') in h, 'dark quality palette'
+assert ' '.join('--m-%s:%s;' % kv for kv in zip(('good','fair','mild','warm','hot','severe','bad'), QL)) in h, 'light quality palette'
 names = ('deep','light','moderate','heavy','sustained','gaming')
 assert '\n'.join('  --fsm-%s: %s;' % kv for kv in zip(names, AD)) in h, 'dark activity palette'
 assert '--fsm-deep:%s; --fsm-light:%s; --fsm-moderate:%s;' % AL[:3] in h and '--fsm-heavy:%s; --fsm-sustained:%s; --fsm-gaming:%s;' % AL[3:] in h, 'light activity palette'
@@ -3401,36 +3402,36 @@ PY
   cat <<'EOF'
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
 function eq(actual, want, name) { chk(actual === want, name + ': ' + actual + ', want ' + want); }
-eq(asbLoadMetric(24), 'metric-good', 'low load'); eq(asbLoadMetric(25), 'metric-mild', 'light load');
-eq(asbLoadMetric(50), 'metric-warm', 'medium load'); eq(asbLoadMetric(70), 'metric-hot', 'high load');
+eq(asbLoadMetric(10), 'metric-good', 'low load'); eq(asbLoadMetric(24), 'metric-fair', 'easy load'); eq(asbLoadMetric(25), 'metric-mild', 'light load');
+eq(asbLoadMetric(50), 'metric-warm', 'medium load'); eq(asbLoadMetric(70), 'metric-hot', 'high load'); eq(asbLoadMetric(82), 'metric-severe', 'very high load');
 eq(asbLoadMetric(90), 'metric-bad', 'saturated load'); eq(asbLoadMetric(null), 'metric-neutral', 'unknown load');
 eq(asbThermalMetric(29, 'body'), 'metric-good', 'cold body'); eq(asbThermalMetric(32, 'body'), 'metric-good', 'neutral body');
-eq(asbThermalMetric(36, 'body'), 'metric-mild', 'warmish body'); eq(asbThermalMetric(39, 'body'), 'metric-warm', 'warm body');
-eq(asbThermalMetric(42, 'body'), 'metric-hot', 'hot body'); eq(asbThermalMetric(45, 'body'), 'metric-bad', 'very hot body');
-eq(asbThermalMetric(44, 'board'), 'metric-warm', 'warm board'); eq(asbThermalMetric(50, 'board'), 'metric-bad', 'hot board');
-eq(asbThermalMetric(31, 'cpu'), 'metric-good', 'idle CPU'); eq(asbThermalMetric(41, 'cpu'), 'metric-good', 'cool CPU');
+eq(asbThermalMetric(34, 'body'), 'metric-fair', 'slightly warm body'); eq(asbThermalMetric(36, 'body'), 'metric-mild', 'warmish body'); eq(asbThermalMetric(39, 'body'), 'metric-warm', 'warm body');
+eq(asbThermalMetric(42, 'body'), 'metric-hot', 'hot body'); eq(asbThermalMetric(45, 'body'), 'metric-severe', 'very hot body'); eq(asbThermalMetric(48, 'body'), 'metric-bad', 'overheating body');
+eq(asbThermalMetric(44, 'board'), 'metric-warm', 'warm board'); eq(asbThermalMetric(50, 'board'), 'metric-severe', 'very hot board'); eq(asbThermalMetric(55, 'board'), 'metric-bad', 'overheating board');
+eq(asbThermalMetric(31, 'cpu'), 'metric-good', 'idle CPU'); eq(asbThermalMetric(41, 'cpu'), 'metric-fair', 'slightly warm CPU');
 eq(asbThermalMetric(20, 'battery'), 'metric-good', 'cool battery'); eq(asbThermalMetric(31, 'board'), 'metric-good', 'cool board');
 eq(asbThermalMetric(48, 'cpu'), 'metric-mild', 'busy CPU'); eq(asbThermalMetric(55, 'cpu'), 'metric-warm', 'warm CPU');
-eq(asbThermalMetric(64, 'cpu'), 'metric-hot', 'hot CPU'); eq(asbThermalMetric(70, 'cpu'), 'metric-bad', 'throttling CPU');
-eq(asbThermalMetric(28, 'battery'), 'metric-good', 'battery at room temperature'); eq(asbThermalMetric(42, 'battery'), 'metric-hot', 'warm battery');
+eq(asbThermalMetric(64, 'cpu'), 'metric-hot', 'hot CPU'); eq(asbThermalMetric(70, 'cpu'), 'metric-severe', 'very hot CPU'); eq(asbThermalMetric(76, 'cpu'), 'metric-bad', 'overheating CPU');
+eq(asbThermalMetric(28, 'battery'), 'metric-good', 'battery at room temperature'); eq(asbThermalMetric(34, 'battery'), 'metric-fair', 'slightly warm battery'); eq(asbThermalMetric(42, 'battery'), 'metric-hot', 'warm battery'); eq(asbThermalMetric(46, 'battery'), 'metric-severe', 'very hot battery');
 eq(asbThermalMetric(0, 'cpu'), 'metric-neutral', 'unknown CPU');
 eq(asbRamMetric(3500, 10000), 'metric-good', '35% RAM'); eq(asbRamMetric(4928307, 15800000), 'metric-good', '4.7 GB of 15 GB is plenty');
-eq(asbRamMetric(2000, 10000), 'metric-mild', '20% RAM'); eq(asbRamMetric(1300, 10000), 'metric-warm', '13% RAM');
-eq(asbRamMetric(800, 10000), 'metric-hot', '8% RAM'); eq(asbRamMetric(500, 10000), 'metric-bad', 'low RAM'); eq(asbRamMetric(0, 0), 'metric-neutral', 'unknown RAM');
+eq(asbRamMetric(2700, 10000), 'metric-fair', '27% RAM'); eq(asbRamMetric(2000, 10000), 'metric-mild', '20% RAM'); eq(asbRamMetric(1300, 10000), 'metric-warm', '13% RAM');
+eq(asbRamMetric(800, 10000), 'metric-hot', '8% RAM'); eq(asbRamMetric(500, 10000), 'metric-severe', 'very low RAM'); eq(asbRamMetric(300, 10000), 'metric-bad', 'critically low RAM'); eq(asbRamMetric(0, 0), 'metric-neutral', 'unknown RAM');
 eq(asbDrainMetric(-100, 5000), 'metric-charge', 'charging'); eq(asbDrainMetric(0, 5000), 'metric-neutral', 'zero current');
-eq(asbDrainMetric(40, 5000), 'metric-good', 'deep idle current'); eq(asbDrainMetric(150, 5000), 'metric-good', '3%/h current');
+eq(asbDrainMetric(40, 5000), 'metric-good', 'deep idle current'); eq(asbDrainMetric(140, 5000), 'metric-good', '2.8%/h current'); eq(asbDrainMetric(175, 5000), 'metric-fair', '3.5%/h current');
 eq(asbDrainMetric(300, 5000), 'metric-mild', '6%/h current'); eq(asbDrainMetric(500, 5000), 'metric-warm', '10%/h current');
-eq(asbDrainMetric(800, 5000), 'metric-hot', '16%/h current'); eq(asbDrainMetric(1000, 5000), 'metric-bad', '20%/h current');
+eq(asbDrainMetric(800, 5000), 'metric-hot', '16%/h current'); eq(asbDrainMetric(1000, 5000), 'metric-severe', '20%/h current'); eq(asbDrainMetric(1300, 5000), 'metric-bad', '26%/h current');
 eq(asbDrainMetric(100, 0), 'metric-neutral', 'current without capacity');
-eq(asbClockMetric(200, 1000), 'metric-good', 'low clock'); eq(asbClockMetric(450, 1000), 'metric-warm', 'medium clock');
-eq(asbClockMetric(900, 1000), 'metric-bad', 'clock at the top'); eq(asbClockMetric(100, 0), 'metric-neutral', 'clock without maximum');
-eq(asbHeadroomMetric(40), 'metric-good', 'ample headroom'); eq(asbHeadroomMetric(30), 'metric-mild', 'fair headroom');
+eq(asbClockMetric(100, 1000), 'metric-good', 'low clock'); eq(asbClockMetric(200, 1000), 'metric-fair', 'easy clock'); eq(asbClockMetric(450, 1000), 'metric-warm', 'medium clock');
+eq(asbClockMetric(820, 1000), 'metric-severe', 'very high clock'); eq(asbClockMetric(900, 1000), 'metric-bad', 'clock at the top'); eq(asbClockMetric(100, 0), 'metric-neutral', 'clock without maximum');
+eq(asbHeadroomMetric(40), 'metric-good', 'ample headroom'); eq(asbHeadroomMetric(30), 'metric-fair', 'comfortable headroom');
 eq(asbHeadroomMetric(20), 'metric-warm', 'limited headroom'); eq(asbHeadroomMetric(12), 'metric-hot', 'tight headroom');
-eq(asbHeadroomMetric(9), 'metric-bad', 'low headroom'); eq(asbHeadroomMetric(null), 'metric-neutral', 'unknown headroom');
+eq(asbHeadroomMetric(9), 'metric-severe', 'very low headroom'); eq(asbHeadroomMetric(4), 'metric-bad', 'almost no headroom'); eq(asbHeadroomMetric(null), 'metric-neutral', 'unknown headroom');
 eq(asbConfidenceMetric('high'), 'metric-good', 'high confidence'); eq(asbConfidenceMetric('med'), 'metric-warm', 'medium confidence');
 eq(asbConfidenceMetric('low'), 'metric-bad', 'low confidence'); eq(asbConfidenceMetric(''), 'metric-neutral', 'unknown confidence');
-eq(asbConfPctMetric(1000), 'metric-good', 'full slot confidence'); eq(asbConfPctMetric(700), 'metric-mild', '70% confidence');
-eq(asbConfPctMetric(500), 'metric-warm', '50% confidence'); eq(asbConfPctMetric(100), 'metric-bad', '10% confidence');
+eq(asbConfPctMetric(1000), 'metric-good', 'full slot confidence'); eq(asbConfPctMetric(800), 'metric-fair', '80% confidence'); eq(asbConfPctMetric(700), 'metric-mild', '70% confidence');
+eq(asbConfPctMetric(500), 'metric-warm', '50% confidence'); eq(asbConfPctMetric(200), 'metric-severe', '20% confidence'); eq(asbConfPctMetric(100), 'metric-bad', '10% confidence');
 eq(asbBasisMetric('stable'), 'metric-good', 'stable basis'); eq(asbBasisMetric('fallback'), 'metric-warm', 'fallback basis');
 eq(asbBasisMetric('basis-veto'), 'metric-bad', 'veto basis'); eq(asbModemMetric('save'), 'metric-good', 'save modem');
 eq(asbModemMetric('night'), 'metric-good', 'night modem'); eq(asbModemMetric('fast'), 'metric-warm', 'fast modem costs a little, no alarm');
@@ -3442,8 +3443,8 @@ eq(lvSlotHeat(400, 410, 490).state, 'cool', 'cool slot evidence'); eq(lvSlotHeat
 eq(lvSlotHeat(500, 410, 490).state, 'warm', 'warm slot evidence'); eq(lvSlotHeat(540, 410, 490).state, 'hot', 'hot slot evidence');
 eq(lvSlotHeat(0, 410, 490).state, undefined, 'empty slot evidence');
 eq(asbTrendMetric(-1.2), 'metric-good', 'cooling fast'); eq(asbTrendMetric(-0.5), 'metric-good', 'cooling');
-eq(asbTrendMetric(0.1), 'metric-info', 'steady'); eq(asbTrendMetric(0.6), 'metric-mild', 'warming slowly');
-eq(asbTrendMetric(1.2), 'metric-warm', 'warming'); eq(asbTrendMetric(2), 'metric-hot', 'warming fast'); eq(asbTrendMetric(3), 'metric-bad', 'heating up');
+eq(asbTrendMetric(0.1), 'metric-info', 'steady'); eq(asbTrendMetric(0.4), 'metric-fair', 'warming gently'); eq(asbTrendMetric(0.6), 'metric-mild', 'warming slowly');
+eq(asbTrendMetric(1.2), 'metric-warm', 'warming'); eq(asbTrendMetric(2), 'metric-hot', 'warming fast'); eq(asbTrendMetric(3), 'metric-severe', 'heating up'); eq(asbTrendMetric(4), 'metric-bad', 'heating up dangerously');
 eq(asbFsmMetric('DEEP_IDLE'), 'metric-fsm-deep', 'asleep'); eq(asbFsmMetric('LIGHT_IDLE'), 'metric-fsm-light', 'light idle');
 eq(asbFsmMetric('LIGHT_IDLE · screen on'), 'metric-fsm-light', 'light idle with the screen note'); eq(asbFsmMetric('MODERATE'), 'metric-fsm-moderate', 'moderate');
 eq(asbFsmMetric('HEAVY'), 'metric-fsm-heavy', 'heavy'); eq(asbFsmMetric('SUSTAINED'), 'metric-fsm-sustained', 'sustained'); eq(asbFsmMetric('GAMING'), 'metric-fsm-gaming', 'gaming');
@@ -3451,12 +3452,12 @@ eq(asbFsmMetric('—'), 'metric-normal', 'unknown state');
 eq(asbAppMetric(0), 'metric-fsm-deep', 'idle app load'); eq(asbAppMetric(1), 'metric-fsm-light', 'light app load');
 eq(asbAppMetric(2), 'metric-fsm-moderate', 'medium app load'); eq(asbAppMetric(3), 'metric-fsm-heavy', 'heavy app load'); eq(asbAppMetric(4), 'metric-fsm-gaming', 'gaming load');
 eq(asbAppMetric(9), 'metric-neutral', 'unknown app load');
-eq(asbClampMetric(1), 'metric-good', 'a clamp an hour is ordinary'); eq(asbClampMetric(6), 'metric-mild', 'several clamps');
-eq(asbClampMetric(15), 'metric-warm', 'frequent clamps'); eq(asbClampMetric(30), 'metric-hot', 'dozens of clamps'); eq(asbClampMetric(50), 'metric-bad', 'constant clamping');
-eq(asbCeilMetric(100), 'metric-good', 'free CPU'); eq(asbCeilMetric(70), 'metric-mild', 'mild ROM ceiling');
-eq(asbCeilMetric(35), 'metric-warm', 'ROM ceiling'); eq(asbCeilMetric(20), 'metric-hot', 'hard ROM ceiling'); eq(asbCeilMetric(0), 'metric-neutral', 'unknown ceiling');
-eq(asbBatLevelMetric(74), 'metric-good', 'full enough'); eq(asbBatLevelMetric(40), 'metric-mild', 'half'); eq(asbBatLevelMetric(25), 'metric-warm', 'low');
-eq(asbBatLevelMetric(15), 'metric-hot', 'very low'); eq(asbBatLevelMetric(5), 'metric-bad', 'almost empty');
+eq(asbClampMetric(1), 'metric-good', 'a clamp an hour is ordinary'); eq(asbClampMetric(2), 'metric-fair', 'occasional clamps'); eq(asbClampMetric(6), 'metric-mild', 'several clamps');
+eq(asbClampMetric(15), 'metric-warm', 'frequent clamps'); eq(asbClampMetric(30), 'metric-hot', 'dozens of clamps'); eq(asbClampMetric(50), 'metric-severe', 'almost constant clamping'); eq(asbClampMetric(65), 'metric-bad', 'constant clamping');
+eq(asbCeilMetric(100), 'metric-good', 'free CPU'); eq(asbCeilMetric(90), 'metric-fair', 'nearly free CPU'); eq(asbCeilMetric(70), 'metric-mild', 'mild ROM ceiling');
+eq(asbCeilMetric(35), 'metric-warm', 'ROM ceiling'); eq(asbCeilMetric(20), 'metric-hot', 'hard ROM ceiling'); eq(asbCeilMetric(10), 'metric-severe', 'severe ROM ceiling'); eq(asbCeilMetric(0), 'metric-neutral', 'unknown ceiling');
+eq(asbBatLevelMetric(74), 'metric-good', 'full enough'); eq(asbBatLevelMetric(40), 'metric-fair', 'nearly half'); eq(asbBatLevelMetric(25), 'metric-warm', 'low');
+eq(asbBatLevelMetric(15), 'metric-hot', 'very low'); eq(asbBatLevelMetric(5), 'metric-severe', 'almost empty'); eq(asbBatLevelMetric(4), 'metric-bad', 'critically empty');
 asbMetricPaint('x', 'metric-warm');
 chk(_node.className === 'live-cell-value cap-raised metric-warm', 'semantic repaint preserves non-semantic state and replaces the old colour: ' + _node.className);
 asbMetricPaint('x', 'metric-charge'); chk(/metric-charge/.test(_node.className) && !/metric-warm/.test(_node.className), 'charging replaces the grade');
@@ -3464,7 +3465,7 @@ asbMetricPaint('x', 'metric-fsm-deep'); chk(/metric-fsm-deep/.test(_node.classNa
 asbMetricPaint('x', asbFsmMetric('MODERATE')); chk(/metric-fsm-moderate/.test(_node.className) && !/metric-fsm-deep/.test(_node.className), 'FSM repaint replaces the previous activity colour without accumulation');
 asbMetricPaint('x', 'nonsense'); chk(/metric-neutral/.test(_node.className) && !/metric-fsm-/.test(_node.className), 'invalid state fails neutral');
 asbMetricPaint('missing', 'metric-good');
-const Q = ['metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'];
+const Q = ['metric-good', 'metric-fair', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-severe', 'metric-bad'];
 const OK = Q.concat(['metric-neutral', 'metric-info', 'metric-charge']);
 const sweep = {
   load: v => asbLoadMetric(v), cpu: v => asbThermalMetric(v, 'cpu'), body: v => asbThermalMetric(v, 'body'),
@@ -3484,7 +3485,7 @@ EOF
 } > "$T/t.js"
 out="$(node "$T/t.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo "PASS webui monitor semantics: one five-step quality scale with green always the best end for thermal/load/RAM/current/clock/headroom/confidence/trend/clamps/ceiling/battery, plain facts in the text colour, activity palette for FSM and app load kept apart from quality and from each other, charging shimmer, neutral unknowns, all four themes, contrast on white and black"
+echo "PASS webui monitor semantics: one seven-step quality scale with green always the best end for thermal/load/RAM/current/clock/headroom/confidence/trend/clamps/ceiling/battery, plain facts in the text colour, activity palette for FSM and app load kept apart from quality and from each other, charging shimmer, neutral unknowns, all four themes, contrast on white and black"
 )
 
 t_webui_stock_monitor_runtime() (
@@ -3569,13 +3570,13 @@ chk(v('liveSurface') === '42°C' && v('liveSurfaceLabel') === 'Board', 'board se
 chk(v('liveState') === '35%' && /metric-warm/.test(_nodes.liveState.className) && v('liveStateLabel') === 'CPU ceiling', 'CPU ceiling on the most limited cluster: ' + v('liveState') + ' ' + _nodes.liveState.className);
 chk(_stockLiveInfo.ceil.length === 2 && _stockLiveInfo.ceil[1] === 'policy6: 1.63 / 4.61 GHz', 'ceiling lines for the sheet: ' + JSON.stringify(_stockLiveInfo.ceil));
 chk(v('liveGpu') === '12%' && v('liveHeadroom') === '220 MHz', 'GPU load and clock: ' + v('liveGpu') + ' / ' + v('liveHeadroom'));
-chk(/metric-mild/.test(_nodes.liveCpu.className) && /metric-good/.test(_nodes.liveSkin.className) && /metric-good/.test(_nodes.liveGpu.className), '45°C CPU is a step up while cool body and low GPU load are green: ' + _nodes.liveCpu.className + ' / ' + _nodes.liveSkin.className + ' / ' + _nodes.liveGpu.className);
-chk(/metric-good/.test(_nodes.liveCapSrc.className) && /metric-normal/.test(_nodes.liveClamp.className) && /metric-neutral/.test(_nodes.liveLearner.className), 'battery 33°C green, zRAM plain, paused learner neutral: ' + _nodes.liveCapSrc.className + ' / ' + _nodes.liveClamp.className + ' / ' + _nodes.liveLearner.className);
+chk(/metric-mild/.test(_nodes.liveCpu.className) && /metric-good/.test(_nodes.liveSkin.className) && /metric-good/.test(_nodes.liveGpu.className), '45°C CPU is a step up while cool body and 12% GPU load are green: ' + _nodes.liveCpu.className + ' / ' + _nodes.liveSkin.className + ' / ' + _nodes.liveGpu.className);
+chk(/metric-fair/.test(_nodes.liveCapSrc.className) && /metric-normal/.test(_nodes.liveClamp.className) && /metric-neutral/.test(_nodes.liveLearner.className), 'battery 33°C uses the fair step, zRAM plain, paused learner neutral: ' + _nodes.liveCapSrc.className + ' / ' + _nodes.liveClamp.className + ' / ' + _nodes.liveLearner.className);
 chk(/metric-good/.test(_nodes.bnStockBattery.className) && /metric-info/.test(_nodes.bnStockUptime.className), '88% battery green, uptime plain: ' + _nodes.bnStockBattery.className + ' / ' + _nodes.bnStockUptime.className);
 chk(/metric-warm/.test(_nodes.liveSurface.className), 'warm board is amber: ' + _nodes.liveSurface.className);
 chk(/metric-warm/.test(_nodes.bnStockDrain.className), '7.8%/h battery current is amber: ' + _nodes.bnStockDrain.className);
 chk(/metric-good/.test(_nodes.bnStockRam.className), '62.5% available RAM is green: ' + _nodes.bnStockRam.className);
-chk(/metric-warm/.test(_nodes.bnStockCpuClock.className), '49% CPU clock is amber: ' + _nodes.bnStockCpuClock.className);
+chk(/metric-warm/.test(_nodes.bnStockCpuClock.className), '49% CPU clock uses the warm step: ' + _nodes.bnStockCpuClock.className);
 chk(/metric-info/.test(_nodes.bnStockLoad.className), 'the load average alone is not graded: ' + _nodes.bnStockLoad.className);
 chk(/metric-neutral/.test(_nodes.liveHeadroom.className) && /metric-neutral/.test(_nodes.bnStockLpm.className), 'GPU clock without a ceiling and unknown modem state stay neutral');
 chk(v('liveCapSrc') === '33°C' && v('liveCapSrcLabel') === 'Battery temp', 'battery temperature: ' + v('liveCapSrc'));
@@ -3592,7 +3593,7 @@ chk(v('bnStockLoad') === '9.40', 'no busy share before the second reading: ' + v
 paintStockLive(Object.assign({}, kv, { tsms: '1760000110000', cpustat: '1100 0 550 8580 210 110 55 385', cpus_online: '8', loadavg: '9.40 8.00 7.00' }));
 /* total +990, idle +790 -> busy 20% */
 chk(v('bnStockLoad') === '9.4 · 20%', 'the busy share beside the load: ' + v('bnStockLoad'));
-chk(/metric-good/.test(_nodes.bnStockLoad.className), '20% busy is green: ' + _nodes.bnStockLoad.className);
+chk(/metric-fair/.test(_nodes.bnStockLoad.className), '20% busy uses the fair step: ' + _nodes.bnStockLoad.className);
 chk(/CPU actually busy: 20 % over the last 10 s/.test(_nodes.bnStockLoad.title), 'the busy share is captioned: ' + _nodes.bnStockLoad.title);
 chk(/of 8 cores/.test(_nodes.bnStockLoad.title), 'the loadavg share moved to the tooltip: ' + _nodes.bnStockLoad.title);
 paintStockLive(Object.assign({}, kv, { tsms: '1760000110000', cpustat: '1100 0 550 8580 210 110 55 385', cpus_online: '8', loadavg: '9.40 8.00 7.00' }));
@@ -3615,7 +3616,7 @@ chk(v('bnStockTrend') === '\u2014', 'no temperature at all is the only dash: ' +
 const at = (ms, c) => Object.assign({}, kv, { tsms: String(ms), 'thermal.cpu-1-1-0': String(c * 1000), 'thermal.cpu-1-1-1': String(c * 1000) });
 _stockTrendSamples = []; _stockTrendLast = null;
 paintStockLive(at(1000000, 40)); paintStockLive(at(1010000, 40.5)); paintStockLive(at(1020000, 41)); paintStockLive(at(1040000, 42));
-chk(v('bnStockTrend') === '\u2191 warming' && /metric-bad/.test(_nodes.bnStockTrend.className), 'warming 3 °C a minute over 40 s: ' + v('bnStockTrend') + ' ' + _nodes.bnStockTrend.className);
+chk(v('bnStockTrend') === '\u2191 warming' && /metric-severe/.test(_nodes.bnStockTrend.className), 'warming 3 °C a minute over 40 s: ' + v('bnStockTrend') + ' ' + _nodes.bnStockTrend.className);
 chk(/per minute over the last 40 s/.test(_nodes.bnStockTrend.title), 'rate in the sheet source: ' + _nodes.bnStockTrend.title);
 chk(_ls.asb_stock_trend && JSON.parse(_ls.asb_stock_trend).s.length === 4, 'the trend persists across a page reload (fix210): ' + _ls.asb_stock_trend);
 paintStockLive(at(1040000, 42));
@@ -4467,6 +4468,7 @@ grep -q "cat /data/adb/asb/offdrain_profiles" "$H" || fail "the per-profile figu
   sed -n '/^const _lvMeter = /p' "$H" | sed 's/^const /var /'
   sed -n '/^const _lvGovOff = /p' "$H" | sed 's/^const /var /'
   sed -n '/^function lvGovOffParse(/,/^}/p' "$H"
+  sed -n '/^function lvDurDHM(/,/^}/p' "$H"
   sed -n '/^function lvOffFigure(/,/^}/p' "$H"
   sed -n '/^function homeOffFigure(/,/^}/p' "$H"
   cat <<'EOF'
@@ -4480,6 +4482,14 @@ let r = homeOffFigure('smart');
 chk(r && r.t === '0.62%/h' && r.src === 'gov' && /3 screen-off/.test(r.tip), 'Smart keeps its own governor figure: ' + JSON.stringify(r));
 r = homeOffFigure('battery');
 chk(r && r.t === '0.37%/h' && r.src === 'meter', 'meter figure first: ' + JSON.stringify(r));
+/* The supplied field case: Battery's old aggregate was 1.28 %/h, then a five-hour night
+ * measured 0.40 %/h. The tile must show the new night, not keep contradicting it with 1.28. */
+_lvMeter.p.battery.off = 128; _lvMeter.p.battery.offN = 2; _lvMeter.p.battery.offLast = 40; _lvMeter.p.battery.offLastS = 18000; _lvMeter.p.battery.offLastAt = 1793343720;
+r = homeOffFigure('battery');
+chk(r && r.t === '0.40%/h' && r.src === 'meter_latest' && /latest complete/.test(r.tip) && /5h/.test(r.tip), 'fresh night replaces the stale aggregate: ' + JSON.stringify(r));
+_lvMeter.p.battery.offLast = 0;
+r = homeOffFigure('battery');
+chk(r && r.t === '<0.20%/h' && r.src === 'bound_latest', 'fresh zero-step night is an upper bound, not the old average: ' + JSON.stringify(r));
 r = homeOffFigure('stock');
 chk(r && r.t === '<0.50%/h', 'an hour that did not move the level: ' + JSON.stringify(r));
 chk(homeOffFigure('performance') === null, 'nothing measured: nothing shown');

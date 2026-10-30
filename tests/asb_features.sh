@@ -1452,18 +1452,17 @@ t=$((t + 2400)); dm_step "$t" 75 0 0 smart 0
 wake 75
 [ "$(dm_get smart off_n)" = 2 ] || f "a glance split the night into two windows under the hour (off_n=$(dm_get smart off_n))"
 [ "$(dm_get smart off_s)" = 12150 ] || f "the glanced night: off_s=$(dm_get smart off_s), want 12150"
-# Music: audio on consecutive samples drops the window.
+# Sustained playback drops the window; a short sound must not (fix253).
 t=$((t + 30)); dm_step "$t" 75 0 0 smart 0
-t=$((t + 60)); dm_step "$t" 75 0 0 smart 1
-t=$((t + 60)); dm_step "$t" 75 0 0 smart 1
+i=0; while [ $i -lt 12 ]; do i=$((i + 1)); t=$((t + 60)); dm_step "$t" 75 0 0 smart 1; done
 t=$((t + 5000)); dm_step "$t" 74 0 0 smart 0
 wake 74
 [ "$(dm_get smart off_n)" = 2 ] || f "a screen-off stretch with music was counted"
-# One sound in the night (a notification, or the first probe after the screen went off) is not
-# playback (fix178): every window used to be dropped this way.
+# A notification, including two consecutive audio samples, is not sustained playback. Before
+# fix253 those two samples discarded this entire night and left the previous rate on Monitor.
 t=$((t + 30)); dm_step "$t" 74 0 0 smart 1
-t=$((t + 60)); dm_step "$t" 74 0 0 smart 0
 t=$((t + 60)); dm_step "$t" 74 0 0 smart 1
+t=$((t + 60)); dm_step "$t" 74 0 0 smart 0
 t=$((t + 5000)); dm_step "$t" 73 0 0 smart 0
 wake 73
 [ "$(dm_get smart off_n)" = 3 ] || f "a single sound threw the night away"
@@ -1493,7 +1492,8 @@ dm_step "$((t + 30))" 79 0 1 none 0
 # that ended on the charger.
 [ "$dm_rej_media $dm_rej_short $dm_rej_charge" = "1 1 1" ] || f "rejections: media=$dm_rej_media short=$dm_rej_short charge=$dm_rej_charge, want 1 1 1"
 dm_flush "$t"
-grep -q '^smart 1770 300 17300 300 3$' "$T/asb/drain_meter" || f "file line for smart: $(grep '^smart' "$T/asb/drain_meter")"
+awk '$1 == "smart" && NF == 9 && $2 == 1770 && $3 == 300 && $4 == 17300 && $5 == 300 && $6 == 3 && $7 == 69 && $8 == 5150 && $9 > 0 { ok=1 } END { exit !ok }' "$T/asb/drain_meter" \
+  || f "file line for smart, including latest window: $(grep '^smart' "$T/asb/drain_meter")"
 grep -qx '1 1 1 smart:charge:50' "$T/asb/drain_meter.rej" || f "rejections not kept: $(cat "$T/asb/drain_meter.rej" 2>/dev/null)"
 dm_rej_media=0; dm_load; [ "$dm_rej_media" = 1 ] || f "rejections not read back"
 printf '%s\n' 'smart 99 x 1 1 1' 'bogus 1 1 1 1 1' >> "$T/asb/drain_meter"
