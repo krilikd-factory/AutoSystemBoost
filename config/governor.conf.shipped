@@ -1,4 +1,4 @@
-# CONFIG_SHAPE=1d56946721c1
+# CONFIG_SHAPE=928eea600217
 # Fingerprint of every option list and slider range in the WebUI. asb_lint.sh compares
 # against it: if the shape moves and this does not, a stored value may now mean something
 # different from what the user chose, and the schema number in install.sh needs bumping
@@ -168,6 +168,18 @@ log_level=1
 #         deletes the old verbose_*.log files. Applied once when the card changes, never at
 #         boot; LSPosed reads it when it starts, so it takes effect after a reboot.
 lsposed_verbose=keep
+
+# HeyTap MCS / OPPO push transport: stock | off
+#   off disables com.heytap.mcs without a .replace overlay and requests one
+#   `pm compile -m speed-profile -a` after the next completed boot. Push notifications
+#   through HeyTap/OPPO can stop or arrive late. The previous package state is restored
+#   on stock/uninstall; disabling the card before reboot cancels the ART request.
+heytap_mcs=stock
+
+# DocumentsUI / DSU file-picker repair for user 0: 0 = stock, 1 = apply once.
+#   Enables/unhides DocumentsUI, returns its picker/files activities to default-state and
+#   disables com.coloros.filemanager. Only fields changed by ASB are restored on 0/uninstall.
+documentsui_fix=0
 
 # Background process limit: stock | relaxed | strict
 #   Android kills "phantom" processes - child processes an app spawns outside the normal
