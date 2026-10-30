@@ -287,8 +287,48 @@ static int asb_device_bounds_current_fingerprint(char *out, size_t out_size) {
     return n > 0 && out[0] != '\0';
 }
 
-/* Rebuild exactly the signature emitted by asb_synthesize_bounds.sh from live topology. */
-static int asb_device_bounds_current_topology(int *count, char *signature, size_t signature_size) {
+/* Complete physical topology shared with the shell validator and bounds synthesis.
+ * cluster_signature is retained for diagnostics; policy_map is the provenance contract.
+ * It covers every policy the writer can touch, its logical slot and its exposed OPP shape. */
+typedef struct {
+    int count;
+    char signature[96];
+    char full_signature[256];
+    char logical_roles[128];
+    char policy_map[512];
+} asb_device_topology_t;
+
+static int asb_device_bounds_append(char *out, size_t out_size, const char *piece) {
+    size_t have = strlen(out), add = strlen(piece);
+    if (have >= out_size || add >= out_size - have) return 0;
+    memcpy(out + have, piece, add + 1);
+    return 1;
+}
+
+#ifndef ASB_DEVICE_BOUNDS_CPUFREQ_ROOT
+#define ASB_DEVICE_BOUNDS_CPUFREQ_ROOT "/sys/devices/system/cpu/cpufreq"
+#endif
+
+static void asb_device_bounds_read_opp(int policy_id, int *count, long *min, long *max) {
+    char path[192];
+    *count = 0; *min = 0; *max = 0;
+    snprintf(path, sizeof(path),
+             "%s/policy%d/scaling_available_frequencies", ASB_DEVICE_BOUNDS_CPUFREQ_ROOT, policy_id);
+    FILE *f = fopen(path, "r");
+    if (!f) return;
+    long fr = 0;
+    while (fscanf(f, "%ld", &fr) == 1) {
+        if (fr <= 0) continue;
+        (*count)++;
+        if (*min == 0 || fr < *min) *min = fr;
+        if (fr > *max) *max = fr;
+    }
+    fclose(f);
+}
+
+static int asb_device_bounds_current_topology(asb_device_topology_t *topo) {
+    if (!topo) return 0;
+    memset(topo, 0, sizeof(*topo));
     cpu_topology_discover();
     int physical = g_cpu_all_count;
     if (physical < 2 || physical > 4) return 0;
@@ -299,15 +339,40 @@ static int asb_device_bounds_current_topology(int *count, char *signature, size_
     if (little_id < 0 || big_id < 0 || g_cpu_slot_hwmax[0] <= 0 ||
         g_cpu_slot_hwmax[big_slot] <= 0) return 0;
     if (physical > 2 && (mid_id < 0 || g_cpu_slot_hwmax[1] <= 0)) return 0;
-    char mid_label[16];
+    char mid_label[16], extra[48] = {0}, entry[192];
     if (physical > 2) snprintf(mid_label, sizeof(mid_label), "%d", mid_id);
     else snprintf(mid_label, sizeof(mid_label), "none");
-    int n = snprintf(signature, signature_size, "%d:%d>%s:%d>%d:%d",
-                     little_id, g_cpu_slot_hwmax[0],
-                     mid_label, physical > 2 ? g_cpu_slot_hwmax[1] : 0,
-                     big_id, g_cpu_slot_hwmax[big_slot]);
-    if (n <= 0 || (size_t)n >= signature_size) return 0;
-    *count = physical;
+    int n = snprintf(topo->signature, sizeof(topo->signature), "%d:%d>%s:%d>%d:%d",
+                     little_id, g_cpu_slot_hwmax[0], mid_label,
+                     physical > 2 ? g_cpu_slot_hwmax[1] : 0, big_id, g_cpu_slot_hwmax[big_slot]);
+    if (n <= 0 || (size_t)n >= sizeof(topo->signature)) return 0;
+
+    /* Directory order is hardware-ceiling order after discovery. Canonical provenance is
+     * instead sorted by numeric policy id, exactly as in the two shell implementations. */
+    for (int id = 0; id < 16; id++) {
+        int found = -1;
+        for (int i = 0; i < physical; i++) if (g_cpu_all_ids[i] == id) { found = i; break; }
+        if (found < 0) continue;
+        long hw = g_cpu_all_hwmax[found];
+        if (hw <= 0) return 0;
+        int slot = g_cpu_all_slot[found];
+        if (slot < 0 || slot > 2) return 0;
+        if (physical > 2 && slot == 1 && id != mid_id) {
+            snprintf(entry, sizeof(entry), "%s%d", extra[0] ? "," : "", id);
+            if (!asb_device_bounds_append(extra, sizeof(extra), entry)) return 0;
+        }
+        int opp_count = 0; long opp_min = 0, opp_max = 0;
+        asb_device_bounds_read_opp(id, &opp_count, &opp_min, &opp_max);
+        snprintf(entry, sizeof(entry), "%s%d:%ld", topo->full_signature[0] ? "," : "", id, hw);
+        if (!asb_device_bounds_append(topo->full_signature, sizeof(topo->full_signature), entry)) return 0;
+        snprintf(entry, sizeof(entry), "%s%d:%d:%ld:%d:%ld:%ld",
+                 topo->policy_map[0] ? "," : "", id, slot, hw, opp_count, opp_min, opp_max);
+        if (!asb_device_bounds_append(topo->policy_map, sizeof(topo->policy_map), entry)) return 0;
+    }
+    snprintf(topo->logical_roles, sizeof(topo->logical_roles),
+             "little:%d,mid:%s,big:%d,extra:%s", little_id, mid_label, big_id,
+             extra[0] ? extra : "none");
+    topo->count = physical;
     return 1;
 }
 
@@ -338,7 +403,10 @@ static int asb_load_device_bounds_override(int enabled,
     long file_policy_count = 0;
     char file_fingerprint[256] = {0};
     char file_signature[96] = {0};
-    char line[384];
+    char file_full_signature[256] = {0};
+    char file_logical_roles[128] = {0};
+    char file_policy_map[512] = {0};
+    char line[1024];
     while (fgets(line, sizeof(line), f)) {
         if (line[0] == '#' || line[0] == '\n') continue;
         char *eq = strchr(line, '=');
@@ -356,10 +424,16 @@ static int asb_load_device_bounds_override(int enabled,
             snprintf(file_fingerprint, sizeof(file_fingerprint), "%s", valstr);
         else if (!strcmp(key, "cluster_signature"))
             snprintf(file_signature, sizeof(file_signature), "%s", valstr);
+        else if (!strcmp(key, "cluster_signature_full"))
+            snprintf(file_full_signature, sizeof(file_full_signature), "%s", valstr);
+        else if (!strcmp(key, "logical_roles"))
+            snprintf(file_logical_roles, sizeof(file_logical_roles), "%s", valstr);
+        else if (!strcmp(key, "policy_map"))
+            snprintf(file_policy_map, sizeof(file_policy_map), "%s", valstr);
     }
     fclose(f);
 
-    if (schema != 2) {
+    if (schema != 3) {
         asb_device_bounds_set_result("skipped", "schema");
         return 0;
     }
@@ -382,19 +456,29 @@ static int asb_load_device_bounds_override(int enabled,
         asb_device_bounds_set_result("skipped", "policy_count");
         return 0;
     }
-    int current_policy_count = 0;
-    char current_signature[96];
-    if (!asb_device_bounds_current_topology(&current_policy_count, current_signature,
-                                             sizeof(current_signature))) {
+    asb_device_topology_t current;
+    if (!asb_device_bounds_current_topology(&current)) {
         asb_device_bounds_set_result("skipped", "topology");
         return 0;
     }
-    if (file_policy_count != (long)current_policy_count) {
+    if (file_policy_count != (long)current.count) {
         asb_device_bounds_set_result("stale", "policy_count");
         return 0;
     }
-    if (!file_signature[0] || strcmp(file_signature, current_signature) != 0) {
+    if (!file_signature[0] || strcmp(file_signature, current.signature) != 0) {
         asb_device_bounds_set_result("stale", "cluster_signature");
+        return 0;
+    }
+    if (!file_full_signature[0] || strcmp(file_full_signature, current.full_signature) != 0) {
+        asb_device_bounds_set_result("stale", "cluster_signature_full");
+        return 0;
+    }
+    if (!file_logical_roles[0] || strcmp(file_logical_roles, current.logical_roles) != 0) {
+        asb_device_bounds_set_result("stale", "logical_roles");
+        return 0;
+    }
+    if (!file_policy_map[0] || strcmp(file_policy_map, current.policy_map) != 0) {
+        asb_device_bounds_set_result("stale", "policy_map");
         return 0;
     }
 

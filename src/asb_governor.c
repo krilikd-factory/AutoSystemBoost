@@ -1790,6 +1790,9 @@ static uint64_t g_smooth_log_accept_hash = 0;
 static char g_smooth_log_capture[32] = {0};
 static unsigned long g_smooth_log_seq = 0;
 static unsigned long g_smooth_log_accepted = 0, g_smooth_log_rejected = 0, g_smooth_log_suppressed = 0;
+static unsigned long g_smooth_log_checks = 0, g_smooth_log_reads = 0, g_smooth_log_changes = 0, g_smooth_log_unchanged = 0;
+static struct stat g_smooth_log_seen;
+static int g_smooth_log_seen_valid = 0;
 static long g_smooth_log_last_epoch = 0, g_smooth_log_last_jank = 0;
 static char g_smooth_log_status[24] = "disabled";
 
@@ -1797,12 +1800,33 @@ static void asb_smooth_log_hint_tick(uint64_t hash, long now) {
     if (g_smooth_log_read_ts && now - g_smooth_log_read_ts < ASB_SMOOTH_LOG_READ_S &&
         now >= g_smooth_log_read_ts) return;
     g_smooth_log_read_ts = now;
+    g_smooth_log_checks++;
+    struct stat st;
+    if (stat(ASB_LOG_FEEDBACK_FILE, &st) != 0) {
+        g_smooth_log_seen_valid = 0;
+        g_smooth_log_due = 0;
+        snprintf(g_smooth_log_status, sizeof(g_smooth_log_status), "disabled");
+        return;
+    }
+    /* A full file identity, not just mtime/size: atomic replacement, same-size rewrites and
+     * timestamp-only updates are all detected. Unchanged bodies are neither read nor parsed. */
+    if (g_smooth_log_seen_valid && st.st_dev == g_smooth_log_seen.st_dev &&
+        st.st_ino == g_smooth_log_seen.st_ino && st.st_size == g_smooth_log_seen.st_size &&
+        st.st_mtime == g_smooth_log_seen.st_mtime && st.st_mtim.tv_nsec == g_smooth_log_seen.st_mtim.tv_nsec &&
+        st.st_ctime == g_smooth_log_seen.st_ctime && st.st_ctim.tv_nsec == g_smooth_log_seen.st_ctim.tv_nsec) {
+        g_smooth_log_unchanged++;
+        return;
+    }
+    g_smooth_log_seen = st;
+    g_smooth_log_seen_valid = 1;
+    g_smooth_log_changes++;
     FILE *f = fopen(ASB_LOG_FEEDBACK_FILE, "rb");
     if (!f) {
         g_smooth_log_due = 0;
         snprintf(g_smooth_log_status, sizeof(g_smooth_log_status), "disabled");
         return;
     }
+    g_smooth_log_reads++;
     char buf[ASB_LOG_FEEDBACK_MAX_BYTES];
     size_t n = fread(buf, 1, sizeof(buf), f);
     int truncated = !feof(f);
@@ -3822,9 +3846,12 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             g_smooth_lean, g_rec_smooth_testing, g_smooth_probes, g_smooth_windows,
             g_smart_cold_guard, g_ses_climate_last, g_unplug_age_s);
     fprintf(f, "smooth_log_status=%s\nsmooth_log_accepted=%lu\nsmooth_log_rejected=%lu\n"
-               "smooth_log_suppressed=%lu\nsmooth_log_last_epoch=%ld\nsmooth_log_last_jank_x1000=%ld\n"
+               "smooth_log_suppressed=%lu\nsmooth_log_checks=%lu\nsmooth_log_reads=%lu\n"
+               "smooth_log_changes=%lu\nsmooth_log_unchanged=%lu\n"
+               "smooth_log_last_epoch=%ld\nsmooth_log_last_jank_x1000=%ld\n"
                "smooth_log_capture=%s\nsmooth_log_seq=%lu\n",
             g_smooth_log_status, g_smooth_log_accepted, g_smooth_log_rejected, g_smooth_log_suppressed,
+            g_smooth_log_checks, g_smooth_log_reads, g_smooth_log_changes, g_smooth_log_unchanged,
             g_smooth_log_last_epoch, g_smooth_log_last_jank, g_smooth_log_capture, g_smooth_log_seq);
     /* fix186: the records' situation in force now and where it stands, for the WebUI's
      * Basis tile ("own slot" alone said nothing once the learner had history). */

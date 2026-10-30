@@ -9,6 +9,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
+#include <limits.h>
 
 #define ASB_LOG_FEEDBACK_SCHEMA       1
 #define ASB_LOG_FEEDBACK_MAX_BYTES    2048
@@ -17,6 +19,10 @@
 #define ASB_LOG_FEEDBACK_MIN_ROWS     2
 #define ASB_LOG_FEEDBACK_MIN_FRAMES_PER_ROW 240L
 #define ASB_LOG_FEEDBACK_MIN_JANK_X1000 50L
+/* Generous for a full-day capture, but small enough that every exported counter also fits
+ * a 32-bit unsigned long. All arithmetic is validated before it is performed. */
+#define ASB_LOG_FEEDBACK_MAX_FRAMES 1000000000ULL
+#define ASB_LOG_FEEDBACK_MAX_SEQ    1000000000ULL
 
 #define ASB_LOG_FEEDBACK_INVALID  0
 #define ASB_LOG_FEEDBACK_VALID    1
@@ -40,14 +46,15 @@ typedef struct {
     long jank_x1000;
 } asb_log_feedback_t;
 
-static int asb_log_feedback_uint(const char *s, unsigned long *v) {
+static int asb_log_feedback_uint(const char *s, uint64_t *v) {
     char *end = NULL;
-    unsigned long n;
+    unsigned long long n;
     if (!s || !*s) return 0;
     for (const char *p = s; *p; p++) if (*p < '0' || *p > '9') return 0;
-    n = strtoul(s, &end, 10);
-    if (!end || *end) return 0;
-    *v = n;
+    errno = 0;
+    n = strtoull(s, &end, 10);
+    if (errno == ERANGE || !end || *end) return 0;
+    *v = (uint64_t)n;
     return 1;
 }
 
@@ -71,8 +78,8 @@ static int asb_log_feedback_hash(const char *s, uint64_t *v) {
 static int asb_log_feedback_parse(const char *text, size_t len, long now,
                                   asb_log_feedback_t *out) {
     char buf[ASB_LOG_FEEDBACK_MAX_BYTES];
-    unsigned long schema = 0, seq = 0, epoch = 0, rows = 0, frames = 0, janky = 0, jx = 0;
-    unsigned long hint = 0, bucket = 0;
+    uint64_t schema = 0, seq = 0, epoch = 0, rows = 0, frames = 0, janky = 0, jx = 0;
+    uint64_t hint = 0, bucket = 0;
     char capture[32] = {0}, hash[17] = {0};
     size_t pos = 0;
     if (!text || !out || !len || len >= sizeof(buf) || text[len - 1] != '\n') return 0;
@@ -117,23 +124,29 @@ static int asb_log_feedback_parse(const char *text, size_t len, long now,
         } else return 0; /* fixed schema: no arbitrary keys or shell evaluation */
     }
     if (schema != ASB_LOG_FEEDBACK_SCHEMA || !capture[0] || !seq || !epoch ||
+        seq > ASB_LOG_FEEDBACK_MAX_SEQ || epoch > (uint64_t)LONG_MAX ||
         rows < ASB_LOG_FEEDBACK_MIN_ROWS || rows > 1000 ||
-        frames < rows * ASB_LOG_FEEDBACK_MIN_FRAMES_PER_ROW || janky > frames ||
+        frames > ASB_LOG_FEEDBACK_MAX_FRAMES || janky > frames ||
         hint > 100 || bucket > 255 || jx > 1000) return 0;
+    /* Division expresses frames >= rows * MIN without multiplying untrusted values. */
+    if (frames / rows < (uint64_t)ASB_LOG_FEEDBACK_MIN_FRAMES_PER_ROW) return 0;
     if (!asb_log_feedback_hash(hash, &out->app_hash)) return 0;
     if ((long)epoch > now + ASB_LOG_FEEDBACK_FUTURE_S) return ASB_LOG_FEEDBACK_FUTURE;
     if (now - (long)epoch > ASB_LOG_FEEDBACK_FRESH_S || now < (long)epoch - ASB_LOG_FEEDBACK_FUTURE_S)
         return ASB_LOG_FEEDBACK_STALE;
     {
-        unsigned long calc = frames ? (janky * 1000) / frames : 0;
-        unsigned long floor = (frames * ASB_LOG_FEEDBACK_MIN_JANK_X1000) / 1000;
-        if (janky < floor || jx < ASB_LOG_FEEDBACK_MIN_JANK_X1000 ||
+        if (janky > UINT64_MAX / 1000ULL ||
+            frames > UINT64_MAX / (uint64_t)ASB_LOG_FEEDBACK_MIN_JANK_X1000) return 0;
+        uint64_t calc = frames ? (janky * 1000ULL) / frames : 0;
+        uint64_t floor = (frames * (uint64_t)ASB_LOG_FEEDBACK_MIN_JANK_X1000) / 1000ULL;
+        if (janky < floor || jx < (uint64_t)ASB_LOG_FEEDBACK_MIN_JANK_X1000 ||
             (calc > jx ? calc - jx : jx - calc) > 1) return 0;
     }
     snprintf(out->capture, sizeof(out->capture), "%s", capture);
-    out->seq = seq; out->epoch = (long)epoch;
+    out->seq = (unsigned long)seq; out->epoch = (long)epoch;
     out->app_hint = (int)hint; out->bucket_id = (int)bucket;
-    out->rows = rows; out->frames = frames; out->janky = janky; out->jank_x1000 = (long)jx;
+    out->rows = (unsigned long)rows; out->frames = (unsigned long)frames;
+    out->janky = (unsigned long)janky; out->jank_x1000 = (long)jx;
     return ASB_LOG_FEEDBACK_VALID;
 }
 

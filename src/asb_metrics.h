@@ -524,6 +524,7 @@ static int g_cpu_policy_ids[3]   = {0, 6, -1};
  */
 static int g_cpu_all_ids[16];
 static int g_cpu_all_slot[16];
+static int g_cpu_all_hwmax[16];
 static int g_cpu_all_count = 0;
 static int g_cpu_policy_count    = 0;
 /*
@@ -622,8 +623,8 @@ static void cpu_topology_discover(void) {
         g_cpu_policy_ids[1] = found[1];
         g_cpu_policy_ids[2] = -1;
         g_cpu_policy_count  = 2;
-        g_cpu_all_ids[0] = found[0]; g_cpu_all_slot[0] = 0;
-        g_cpu_all_ids[1] = found[1]; g_cpu_all_slot[1] = 1;
+        g_cpu_all_ids[0] = found[0]; g_cpu_all_slot[0] = 0; g_cpu_all_hwmax[0] = found_hwmax[0];
+        g_cpu_all_ids[1] = found[1]; g_cpu_all_slot[1] = 1; g_cpu_all_hwmax[1] = found_hwmax[1];
         g_cpu_all_count = 2;
         cpu_capture_slot_hwmax();
         return;
@@ -665,6 +666,7 @@ static void cpu_topology_discover(void) {
         else                        slot = 1;
         g_cpu_all_ids[g_cpu_all_count]  = found[i];
         g_cpu_all_slot[g_cpu_all_count] = slot;
+        g_cpu_all_hwmax[g_cpu_all_count] = found_hwmax[i];
         g_cpu_all_count++;
     }
     cpu_capture_slot_hwmax();
