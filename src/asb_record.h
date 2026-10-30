@@ -731,6 +731,14 @@ static int asb_smooth_offset_for(uint64_t hash, long now) {
     return 0;
 }
 
+/* A log hint may accelerate an undecided app, but must not reopen a concluded
+ * helped/not-helped state. Only the existing 21-day recheck may do that. */
+static int asb_smooth_log_hint_useful(uint64_t hash, long now) {
+    asb_smooth_app_t *a = asb_smooth_find(hash, now, 0);
+    if (!a || a->state < 2) return 1;
+    return now - (long)a->decided_ts >= ASB_REC_RECHECK_S;
+}
+
 /* One measured window for the app in front: df frames, dj janky, drawn under arm `arm`
  * (0 normal, 1 headroom) - the arm that was in force for the whole window. Returns 1 when
  * the app's state changed (the governor logs g_smooth_event_msg). */
@@ -893,7 +901,7 @@ static void asb_rec_summary_write(void) {
     if (!f) return;
     const char *cc = g_rec_cc_state == 1 ? "ok" : g_rec_cc_state == -1 ? "unavailable"
                    : g_rec_cc_state == -2 ? "not_moving" : "waiting";
-    fprintf(f, "# Smart records (Smart V5): power per situation, charge counter x battery voltage\n");
+    fprintf(f, "# Smart records (Smart V6): power per situation, charge counter x battery voltage\n");
     fprintf(f, "counter=%s blocks_ok=%lu blocks_rejected=%lu\n", cc, g_rec_blocks_ok, g_rec_blocks_rejected);
     fprintf(f, "rejected");
     for (int r = 0; r < REJ_N; r++) fprintf(f, "|%s=%lu", g_rec_rej_names[r], g_rec_rej[r]);

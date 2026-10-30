@@ -177,6 +177,10 @@ static int asb_device_bounds_apply_kv(const char *key, long val) {
         { "BATTERY_CPU_MAX_PRIME",      PROFILE_BATTERY,     1, 0, 2 },
         { "BATTERY_CPU_CAP_LITTLE",     PROFILE_BATTERY,     0, 0, 0 },
         { "BATTERY_CPU_CAP_BIG",        PROFILE_BATTERY,     0, 0, 1 },
+        { "BATTERY_CPU_CAP_MID",        PROFILE_BATTERY,     0, 0, 1 },
+        { "BATTERY_CPU_MIN_LITTLE",     PROFILE_BATTERY,     0, 1, 0 },
+        { "BATTERY_CPU_MIN_BIG",        PROFILE_BATTERY,     0, 1, 1 },
+        { "BATTERY_CPU_MIN_MID",        PROFILE_BATTERY,     0, 1, 1 },
         { "BALANCED_CPU_MAX_LITTLE",    PROFILE_BALANCED,    1, 0, 0 },
         { "BALANCED_CPU_MAX_BIG",       PROFILE_BALANCED,    1, 0, 1 },
         { "BALANCED_CPU_MAX_MID",       PROFILE_BALANCED,    1, 0, 1 },
@@ -189,16 +193,31 @@ static int asb_device_bounds_apply_kv(const char *key, long val) {
          */
         { "BALANCED_CPU_CAP_LITTLE",    PROFILE_BALANCED,    0, 0, 0 },
         { "BALANCED_CPU_CAP_BIG",       PROFILE_BALANCED,    0, 0, 1 },
+        { "BALANCED_CPU_CAP_MID",       PROFILE_BALANCED,    0, 0, 1 },
+        { "BALANCED_CPU_MIN_LITTLE",    PROFILE_BALANCED,    0, 1, 0 },
+        { "BALANCED_CPU_MIN_BIG",       PROFILE_BALANCED,    0, 1, 1 },
+        { "BALANCED_CPU_MIN_MID",       PROFILE_BALANCED,    0, 1, 1 },
         { "PERFORMANCE_CPU_MAX_LITTLE", PROFILE_PERFORMANCE, 1, 0, 0 },
         { "PERFORMANCE_CPU_MAX_BIG",    PROFILE_PERFORMANCE, 1, 0, 1 },
         { "PERFORMANCE_CPU_MAX_MID",    PROFILE_PERFORMANCE, 1, 0, 1 },
+        { "PERFORMANCE_CPU_CAP_LITTLE", PROFILE_PERFORMANCE, 0, 0, 0 },
+        { "PERFORMANCE_CPU_CAP_BIG",    PROFILE_PERFORMANCE, 0, 0, 1 },
+        { "PERFORMANCE_CPU_CAP_MID",    PROFILE_PERFORMANCE, 0, 0, 1 },
+        { "PERFORMANCE_CPU_MIN_LITTLE", PROFILE_PERFORMANCE, 0, 1, 0 },
+        { "PERFORMANCE_CPU_MIN_BIG",    PROFILE_PERFORMANCE, 0, 1, 1 },
+        { "PERFORMANCE_CPU_MIN_MID",    PROFILE_PERFORMANCE, 0, 1, 1 },
     };
     for (unsigned i = 0; i < sizeof(map)/sizeof(map[0]); i++) {
         if (strcmp(key, map[i].name) != 0) continue;
         asb_profile_bounds_t *b = &g_profile_bounds[map[i].prof];
         asb_profile_caps_t *cs = map[i].is_ceil ? &b->ceil : &b->floor;
-        if (map[i].field == 0) cs->cpu_max[map[i].slot] = (int)val;
-        else                   cs->cpu_min[map[i].slot] = (int)val;
+        if (map[i].field == 0) {
+            cs->cpu_max[map[i].slot] = (int)val;
+            /* Shipped CAP and the peak-state minimum are the same rail. Keep that
+             * invariant when CAP is synthesized; otherwise the native governor would
+             * retain a literal reference-device peak minimum on new hardware. */
+            if (!map[i].is_ceil) b->ceil.cpu_min[map[i].slot] = (int)val;
+        } else cs->cpu_min[map[i].slot] = (int)val;
         return 1;
     }
     return 0;
@@ -397,19 +416,24 @@ static int asb_load_device_bounds_override(int enabled,
         applied += asb_device_bounds_apply_kv(key, val);
     }
     fclose(f);
-    /*
-     * Post-validate the invariant floor.cpu_max <= ceil.cpu_max for every slot.
-     * In that case we clamp the floor DOWN to the new ceiling rather than discarding the
-     * override — the override is the intent, the floor is just the DEEP_IDLE start and must
-     * not exceed it.
-     */
+    /* Post-validate the complete range on every slot. Old schema-2 files contained
+     * only MAX; new files also carry MIN/CAP. Clamp a stale absolute reference floor
+     * DOWN instead of letting it exceed a smaller device's synthesized ceiling. Zero
+     * retains its established "unmanaged slot" meaning; negative values invalidate
+     * the whole profile as before. */
     for (int p = 0; p < 3; p++) {
         int corrupt = 0;
         for (int s = 0; s < 3; s++) {
-            int ce = g_profile_bounds[p].ceil.cpu_max[s];
-            int fl = g_profile_bounds[p].floor.cpu_max[s];
-            if (ce < 0) { corrupt = 1; break; }
-            if (ce > 0 && fl > ce) g_profile_bounds[p].floor.cpu_max[s] = ce;  /* clamp floor down */
+            asb_profile_caps_t *fl = &g_profile_bounds[p].floor;
+            asb_profile_caps_t *ce = &g_profile_bounds[p].ceil;
+            if (fl->cpu_min[s] < 0 || fl->cpu_max[s] < 0 ||
+                ce->cpu_min[s] < 0 || ce->cpu_max[s] < 0) { corrupt = 1; break; }
+            if (ce->cpu_max[s] > 0 && fl->cpu_max[s] > ce->cpu_max[s])
+                fl->cpu_max[s] = ce->cpu_max[s];
+            if (ce->cpu_max[s] > 0 && ce->cpu_min[s] > ce->cpu_max[s])
+                ce->cpu_min[s] = ce->cpu_max[s];
+            if (fl->cpu_max[s] > 0 && fl->cpu_min[s] > fl->cpu_max[s])
+                fl->cpu_min[s] = fl->cpu_max[s];
         }
         if (corrupt) g_profile_bounds[p] = defaults[p];
     }

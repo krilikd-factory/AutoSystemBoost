@@ -38,6 +38,7 @@ static int g_unlock_lift_now;
 #include "asb_config.h"
 #include "asb_smart.h"
 #include "asb_record.h"
+#include "asb_log_feedback.h"
 #include "asb_lspd.h"   /* fix187 */
 
 #define TIMER_ACTIVE_S  2   /* metrics interval, screen ON, something happening */
@@ -1777,6 +1778,73 @@ static void asb_smooth_window_reset(uint64_t hash, const char *pkg) {
     g_smooth_win_arm = -1;
 }
 
+/* fix258: the opt-in infinite logger may ask for an earlier NATIVE probe after two
+ * comparable, sufficiently large jank intervals. It never supplies an A/B window:
+ * GraphicsStats is read again below and counted exactly once. All freshness,
+ * capture/sequence, scenario, plateau and rate gates live here in the single owner. */
+#define ASB_SMOOTH_LOG_READ_S       10
+#define ASB_SMOOTH_LOG_MIN_PROBE_S  45
+#define ASB_SMOOTH_LOG_APP_COOLDOWN_S 600
+static long g_smooth_log_read_ts = 0, g_smooth_log_due = 0, g_smooth_log_accept_ts = 0;
+static uint64_t g_smooth_log_accept_hash = 0;
+static char g_smooth_log_capture[32] = {0};
+static unsigned long g_smooth_log_seq = 0;
+static unsigned long g_smooth_log_accepted = 0, g_smooth_log_rejected = 0, g_smooth_log_suppressed = 0;
+static long g_smooth_log_last_epoch = 0, g_smooth_log_last_jank = 0;
+static char g_smooth_log_status[24] = "disabled";
+
+static void asb_smooth_log_hint_tick(uint64_t hash, long now) {
+    if (g_smooth_log_read_ts && now - g_smooth_log_read_ts < ASB_SMOOTH_LOG_READ_S &&
+        now >= g_smooth_log_read_ts) return;
+    g_smooth_log_read_ts = now;
+    FILE *f = fopen(ASB_LOG_FEEDBACK_FILE, "rb");
+    if (!f) {
+        g_smooth_log_due = 0;
+        snprintf(g_smooth_log_status, sizeof(g_smooth_log_status), "disabled");
+        return;
+    }
+    char buf[ASB_LOG_FEEDBACK_MAX_BYTES];
+    size_t n = fread(buf, 1, sizeof(buf), f);
+    int truncated = !feof(f);
+    fclose(f);
+    if (truncated) { g_smooth_log_rejected++; snprintf(g_smooth_log_status, sizeof(g_smooth_log_status), "invalid"); return; }
+    asb_log_feedback_t fb;
+    int rc = asb_log_feedback_parse(buf, n, now, &fb);
+    if (rc != ASB_LOG_FEEDBACK_VALID) {
+        g_smooth_log_rejected++;
+        snprintf(g_smooth_log_status, sizeof(g_smooth_log_status), "%s",
+                 rc == ASB_LOG_FEEDBACK_STALE ? "stale" : rc == ASB_LOG_FEEDBACK_FUTURE ? "future" : "invalid");
+        return;
+    }
+    int new_capture = strcmp(g_smooth_log_capture, fb.capture) != 0;
+    if (!new_capture && fb.seq <= g_smooth_log_seq) return; /* atomic file reread: deduplicated */
+    snprintf(g_smooth_log_capture, sizeof(g_smooth_log_capture), "%s", fb.capture);
+    g_smooth_log_seq = fb.seq;
+    g_smooth_log_last_epoch = fb.epoch; g_smooth_log_last_jank = fb.jank_x1000;
+    if (fb.app_hash != hash || fb.app_hint != g_smart_rt.app_hint ||
+        fb.app_hint >= ASB_APP_GAMING || fb.bucket_id != (int)g_smart_rt.bucket_id ||
+        fb.bucket_id < 0 || fb.bucket_id >= ASB_SMART_BUCKETS) {
+        g_smooth_log_rejected++; snprintf(g_smooth_log_status, sizeof(g_smooth_log_status), "scenario");
+        return;
+    }
+    if (!asb_smooth_log_hint_useful(hash, now)) {
+        g_smooth_log_suppressed++; snprintf(g_smooth_log_status, sizeof(g_smooth_log_status), "plateau");
+        return;
+    }
+    if (g_smooth_log_accept_hash == hash && g_smooth_log_accept_ts &&
+        now - g_smooth_log_accept_ts < ASB_SMOOTH_LOG_APP_COOLDOWN_S &&
+        now >= g_smooth_log_accept_ts) {
+        g_smooth_log_suppressed++; snprintf(g_smooth_log_status, sizeof(g_smooth_log_status), "cooldown");
+        return;
+    }
+    g_smooth_log_accept_hash = hash; g_smooth_log_accept_ts = now;
+    g_smooth_log_due = now;
+    if (g_smooth_probe_ts > 0 && g_smooth_probe_ts + ASB_SMOOTH_LOG_MIN_PROBE_S > now)
+        g_smooth_log_due = g_smooth_probe_ts + ASB_SMOOTH_LOG_MIN_PROBE_S;
+    g_smooth_log_accepted++;
+    snprintf(g_smooth_log_status, sizeof(g_smooth_log_status), "accepted");
+}
+
 static void asb_smooth_probe_tick(const asb_fsm_t *fsm, const asb_metrics_t *m) {
     long now = (long)time(NULL);
     int on = g_asb_cfg.smart_smooth && fsm->profile_idx == PROFILE_SMART && g_smart_rt.enabled &&
@@ -1784,15 +1852,18 @@ static void asb_smooth_probe_tick(const asb_fsm_t *fsm, const asb_metrics_t *m) 
              g_smart_rt.app_hint < ASB_APP_GAMING && !m->misc.camera_active &&
              g_smart_rt.app_pkg_cached[0] && !asb_smart_is_system_ui(g_smart_rt.app_pkg_cached);
     if (!on) {
-        g_smooth_lean = 0; g_rec_smooth_testing = 0;
+        g_smooth_lean = 0; g_rec_smooth_testing = 0; g_smooth_log_due = 0;
         if (g_smooth_win_hash) asb_smooth_window_reset(0, NULL);
         return;
     }
     uint64_t h = g_smart_rt.app_hash;
+    asb_smooth_log_hint_tick(h, now);
     g_smooth_lean = asb_smooth_offset_for(h, now);
     int arm = (g_smooth_lean != 0) ? 1 : 0;
-    if (h != g_smooth_win_hash)                /* another app: a fresh window */
+    if (h != g_smooth_win_hash) {              /* another app: a fresh window */
+        g_smooth_log_due = 0;                  /* a hint never crosses an app boundary */
         asb_smooth_window_reset(h, g_smart_rt.app_pkg_cached);
+    }
     /* No probe out of turn on an app switch (fix186). It used to probe at once to start the
      * new app's window, and an OP15 capture counted 91 probes in about 85 minutes of screen
      * time - one a minute, for 7 complete windows - against "at most every three minutes".
@@ -1829,8 +1900,10 @@ static void asb_smooth_probe_tick(const asb_fsm_t *fsm, const asb_metrics_t *m) 
             g_smooth_win_arm = (g_smooth_lean != 0) ? 1 : 0;
         }
     }
+    int log_due = g_smooth_log_due > 0 && now >= g_smooth_log_due;
     if (g_smooth_probe_ts == 0 || now - g_smooth_probe_ts >= ASB_SMOOTH_PROBE_S ||
-        now < g_smooth_probe_ts) {
+        now < g_smooth_probe_ts || log_due) {
+        g_smooth_log_due = 0;
         /* The package goes to a shell: only the characters a package name can have. */
         const char *pk = g_smooth_win_pkg;
         int ok = (pk[0] != 0);
@@ -3748,6 +3821,11 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             g_mw_active, g_mw_holds, g_rec.mw.total,
             g_smooth_lean, g_rec_smooth_testing, g_smooth_probes, g_smooth_windows,
             g_smart_cold_guard, g_ses_climate_last, g_unplug_age_s);
+    fprintf(f, "smooth_log_status=%s\nsmooth_log_accepted=%lu\nsmooth_log_rejected=%lu\n"
+               "smooth_log_suppressed=%lu\nsmooth_log_last_epoch=%ld\nsmooth_log_last_jank_x1000=%ld\n"
+               "smooth_log_capture=%s\nsmooth_log_seq=%lu\n",
+            g_smooth_log_status, g_smooth_log_accepted, g_smooth_log_rejected, g_smooth_log_suppressed,
+            g_smooth_log_last_epoch, g_smooth_log_last_jank, g_smooth_log_capture, g_smooth_log_seq);
     /* fix186: the records' situation in force now and where it stands, for the WebUI's
      * Basis tile ("own slot" alone said nothing once the learner had history). */
     {

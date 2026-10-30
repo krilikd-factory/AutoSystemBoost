@@ -875,7 +875,7 @@ typedef struct {
  */
 static void asb_smart_store_migrate(asb_smart_store_t *st) {
     if (!st || st->version == ASB_SMART_VER) return;
-    if (st->version >= ASB_SMART_VER_KEEP) {   /* V4 -> V5: nothing to undo (fix185) */
+    if (st->version >= ASB_SMART_VER_KEEP) {   /* V4/V5 -> V6: learned outputs remain valid */
         st->version = ASB_SMART_VER;
         return;
     }
