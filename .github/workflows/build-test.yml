@@ -86,6 +86,7 @@ jobs:
             runtime/asb_wifi_fallback.sh \
             runtime/asb_ltpo_apply.sh \
             runtime/asb_ltpo_touch.sh \
+            runtime/asb_ltpo_lock.sh \
             runtime/asb_lte_screenoff.sh \
             runtime/asb_mmfeed_apply.sh \
             runtime/asb_ltpo_video.sh \
@@ -98,6 +99,7 @@ jobs:
             tools/asb_config_backup.sh \
             tools/asb_native_warning_budget.sh \
             tools/asb_native_warning_baseline.txt \
+            tools/asb_native_warning_inventory.gcc.txt \
             tools/asb_full_regression.sh \
             tests/asb_smart.sh \
             tests/asb_features.sh \
@@ -136,10 +138,11 @@ jobs:
           # specific mistakes that got through.
           bash tools/dsp_stubs/asb_dsp_syntax_check.sh
 
-      - name: Enforce native strict-warning budget
+      - name: Enforce native strict-warning budget (clang + GCC inventory)
         run: |
           chmod +x tools/asb_native_warning_budget.sh
           CC=clang tools/asb_native_warning_budget.sh
+          CC=gcc tools/asb_native_warning_budget.sh
 
       - name: Run asb_lint.sh
         run: |
@@ -598,6 +601,7 @@ jobs:
             "runtime/asb_wifi_fallback.sh" \
             "runtime/asb_ltpo_apply.sh" \
             "runtime/asb_ltpo_touch.sh" \
+            "runtime/asb_ltpo_lock.sh" \
             "runtime/asb_lte_screenoff.sh" \
             "runtime/asb_mmfeed_apply.sh" \
             "runtime/asb_ltpo_video.sh" \
