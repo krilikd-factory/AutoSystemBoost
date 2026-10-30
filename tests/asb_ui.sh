@@ -3231,15 +3231,15 @@ command -v node >/dev/null 2>&1 || { echo "SKIP webui live info insight: no node
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 grep -q "id=\"liveInfoScale\"" "$H" && grep -q "id=\"liveInfoHist\"" "$H" || fail 'the sheet has no scale or history block'
 grep -qF "_liveTimer = setInterval(() => { pollLive(true).then(lviSample, lviSample); }, 3000);" "$H" || fail 'the readings are not sampled after each poll'
-grep -qF "lviScaleRender(_el('liveInfoScale'), key, lviNum(iv.textContent));" "$H" || fail 'the sheet does not draw the scale'
+grep -qF "lviScaleRender(_el('liveInfoScale'), key, lviScaleValue(key, iv.textContent));" "$H" || fail 'the sheet does not draw the scale from the tile-normalized value'
 grep -qF "lviHistRender(_el('liveInfoHist'), key, iv.style.color, lviExtra(key));" "$H" || fail 'the sheet does not draw the history'
 {
   echo "function T(k, d) { return d; }"
   echo "function logReportDur(m) { return m + ' min'; }"
-  echo "let _selectedProfile = 'battery'; const LVI_STOCK = {}; let _stockTelemetryKv = {}; const _lvLast = { st: {}, kv: {} };"
+  echo "let _selectedProfile = 'battery'; const LVI_STOCK = {}; let _stockTelemetryKv = {}; const _lvLast = { st: {}, kv: {} }; const _stockLiveInfo = { surfaceKind: 'board' };"
   sed -n '/^const METRIC_STEPS = /p' "$H"
   sed -n '/^const LVI_HIST_MS = /,/^function lviKeyOf(/p' "$H" | sed '$d'
-  for fn in asbMetricStep asbLoadMetric asbThermalMetric asbHeadroomMetric asbClampMetric asbBatLevelMetric lviNum lviFmt lviStepName lviExtra; do
+  for fn in asbMetricStep asbLoadMetric asbThermalMetric asbHeadroomMetric asbClampMetric asbBatLevelMetric asbConfPctMetric asbCeilMetric asbDrainMetric asbClockMetric lviNum lviScaleValue lviKeyOf lviFmt lviStepName lviExtra; do
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
   cat <<'JS'
@@ -3248,7 +3248,9 @@ function stepOf(key, v) { const sc = LVI_SCALES[key]; let i = sc.cuts.length; fo
 const paint = {
   cpu: v => asbThermalMetric(v, 'cpu'), skin: v => asbThermalMetric(v, 'body'), board: v => asbThermalMetric(v, 'board'),
   battemp: v => asbThermalMetric(v, 'battery'), gpu: v => asbLoadMetric(v), headroom: v => asbHeadroomMetric(v),
-  clamps: v => asbClampMetric(v), sbattery: v => asbBatLevelMetric(v)
+  clamps: v => asbClampMetric(v), sbattery: v => asbBatLevelMetric(v), conf: v => asbConfPctMetric(v * 10),
+  cpuceil: v => asbCeilMetric(v), sdrain: v => asbDrainMetric(v * 50, 5000),
+  sclock: v => asbClockMetric(v, 100), gpuclk: v => asbClockMetric(v, 100)
 };
 Object.keys(paint).forEach(function (k) {
   chk(!!LVI_SCALES[k], 'no scale for ' + k);
@@ -3257,10 +3259,28 @@ Object.keys(paint).forEach(function (k) {
 Object.keys(LVI_SCALES).forEach(function (k) { chk(LVI_SCALES[k].steps.length === LVI_SCALES[k].cuts.length + 1, k + ' steps vs cuts'); });
 chk(lviNum('38°C') === 38 && lviNum('−245 mA') === -245 && lviNum('1,25 GHz') === 1.25 && lviNum('MODERATE') === null, 'readings parsed');
 chk(lviStepName('t', 'metric-warm') === 'quite warm' && lviStepName('h', 'metric-bad') === 'almost none', 'step names');
+chk(lviStepName('q', 'metric-good') === 'very high' && lviStepName('q', 'metric-bad') === 'very low', 'confidence step names');
 _stockTelemetryKv = { 'battery.current_now': '-412000', 'battery.voltage_now': '4123000', 'battery.charge_full': '7210000',
   'battery.status': 'Discharging', 'thermal.cpu-0-0-0': '39500', 'thermal.cpu-1-0-0': '41000', 'thermal.shell_front': '33000',
   'gpu.gpuclk': '222000000', 'gpu.max_gpuclk': '1200000000', SwapTotal: '8388608 kB', SwapFree: '1734000 kB' };
 _lvLast.kv = { current_scale_x100: '36', current_scale_windows: '117' };
+const sd = lviScaleValue('sdrain', '412 mA');
+chk(Math.abs(sd - 412 * 100 / 7210) < 0.0001 && stepOf('sdrain', sd) === asbDrainMetric(412, 7210), 'mA normalize to the same %/h scale as the tile: ' + sd);
+const gp = lviScaleValue('gpuclk', '222 MHz');
+chk(Math.abs(gp - 18.5) < 0.0001 && stepOf('gpuclk', gp) === asbClockMetric(222000000, 1200000000), 'GPU MHz normalize against the hardware maximum: ' + gp);
+_stockTelemetryKv['cpu.policy0.scaling_cur_freq'] = '1000000'; _stockTelemetryKv['cpu.policy0.cpuinfo_max_freq'] = '2000000';
+_stockTelemetryKv['cpu.policy4.scaling_cur_freq'] = '1800000'; _stockTelemetryKv['cpu.policy4.scaling_max_freq'] = '3000000';
+const cp = lviScaleValue('sclock', '1800 MHz');
+chk(cp === 60 && stepOf('sclock', cp) === asbClockMetric(cp, 100), 'CPU clocks normalize per policy exactly like the tile: ' + cp);
+chk(lviScaleValue('conf', '72%') === 72 && lviScaleValue('gpuclk', '—') !== null, 'direct and normalized scale inputs');
+_stockTelemetryKv['gpu.max_gpuclk'] = '0';
+chk(lviScaleValue('gpuclk', '222 MHz') === null, 'a missing clock maximum fails neutral instead of guessing');
+_stockTelemetryKv['gpu.max_gpuclk'] = '1200000000';
+_selectedProfile = 'stock'; _stockLiveInfo.surfaceKind = 'cpu';
+const thermalCell = { getAttribute: function () { return 'board'; } };
+chk(lviKeyOf(thermalCell) === 'cpu', 'Stock die-max fallback uses CPU thresholds in the sheet');
+_stockLiveInfo.surfaceKind = 'board'; chk(lviKeyOf(thermalCell) === 'board', 'a real board sensor keeps board thresholds');
+_selectedProfile = 'battery';
 const d = lviExtra('sdrain');
 chk(d.length === 3 && d[0] === 'Power now: 1.70 W' && d[1] === 'At this current: about 5.7 %/h', 'power and rate: ' + JSON.stringify(d));
 chk(/2\.8× low \(117 checks\): the real draw is nearer 1144 mA, about 15\.9 %\/h/.test(d[2]), 'the corrected current where the gauge under-reads: ' + d[2]);
@@ -3281,8 +3301,8 @@ import json, pathlib, sys
 root = pathlib.Path(sys.argv[1])
 keys = ['lvi_scale_now','lvi_hist_num','lvi_hist_cat','lvi_hist_wait','lvi_zones_cpu','lvi_zones','lvi_gpu_clock','lvi_power',
         'lvi_rate_now','lvi_gauge_real','lvi_gauge_real0','lvi_zram_use']
-for k in ('t', 'l', 'h', 'c', 'b'):
-    steps = ['good','mild','warm','hot','bad']
+for k in ('t', 'l', 'h', 'c', 'b', 'q'):
+    steps = ['good','fair','mild','warm','hot','severe','bad']
     keys += ['lvs_%s_%s' % (k, s) for s in steps]
 files = sorted((root / 'webroot' / 'i18n').glob('*.json'))
 assert len(files) == 13
@@ -3433,6 +3453,8 @@ eq(asbConfidenceMetric('low'), 'metric-bad', 'low confidence'); eq(asbConfidence
 eq(asbConfPctMetric(1000), 'metric-good', 'full slot confidence'); eq(asbConfPctMetric(800), 'metric-fair', '80% confidence'); eq(asbConfPctMetric(700), 'metric-mild', '70% confidence');
 eq(asbConfPctMetric(500), 'metric-warm', '50% confidence'); eq(asbConfPctMetric(200), 'metric-severe', '20% confidence'); eq(asbConfPctMetric(100), 'metric-bad', '10% confidence');
 eq(asbBasisMetric('stable'), 'metric-good', 'stable basis'); eq(asbBasisMetric('fallback'), 'metric-warm', 'fallback basis');
+eq(asbBasisMetric('basis-warn'), 'metric-warm', 'cold or low-battery basis is a visible warning');
+eq(asbBasisMetric('cap-raised'), 'metric-good', 'a verified cheaper Smart record is positive evidence');
 eq(asbBasisMetric('basis-veto'), 'metric-bad', 'veto basis'); eq(asbModemMetric('save'), 'metric-good', 'save modem');
 eq(asbModemMetric('night'), 'metric-good', 'night modem'); eq(asbModemMetric('fast'), 'metric-warm', 'fast modem costs a little, no alarm');
 eq(asbModemMetric('normal'), 'metric-info', 'normal modem reads like the uptime beside it'); eq(asbModemMetric(''), 'metric-neutral', 'unknown modem');
@@ -3455,7 +3477,8 @@ eq(asbAppMetric(9), 'metric-neutral', 'unknown app load');
 eq(asbClampMetric(1), 'metric-good', 'a clamp an hour is ordinary'); eq(asbClampMetric(2), 'metric-fair', 'occasional clamps'); eq(asbClampMetric(6), 'metric-mild', 'several clamps');
 eq(asbClampMetric(15), 'metric-warm', 'frequent clamps'); eq(asbClampMetric(30), 'metric-hot', 'dozens of clamps'); eq(asbClampMetric(50), 'metric-severe', 'almost constant clamping'); eq(asbClampMetric(65), 'metric-bad', 'constant clamping');
 eq(asbCeilMetric(100), 'metric-good', 'free CPU'); eq(asbCeilMetric(90), 'metric-fair', 'nearly free CPU'); eq(asbCeilMetric(70), 'metric-mild', 'mild ROM ceiling');
-eq(asbCeilMetric(35), 'metric-warm', 'ROM ceiling'); eq(asbCeilMetric(20), 'metric-hot', 'hard ROM ceiling'); eq(asbCeilMetric(10), 'metric-severe', 'severe ROM ceiling'); eq(asbCeilMetric(0), 'metric-neutral', 'unknown ceiling');
+eq(asbCeilMetric(35), 'metric-warm', 'ROM ceiling'); eq(asbCeilMetric(20), 'metric-hot', 'hard ROM ceiling'); eq(asbCeilMetric(10), 'metric-severe', 'severe ROM ceiling');
+eq(asbCeilMetric(4), 'metric-bad', 'critical ROM ceiling'); eq(asbCeilMetric(0), 'metric-neutral', 'unknown ceiling');
 eq(asbBatLevelMetric(74), 'metric-good', 'full enough'); eq(asbBatLevelMetric(40), 'metric-fair', 'nearly half'); eq(asbBatLevelMetric(25), 'metric-warm', 'low');
 eq(asbBatLevelMetric(15), 'metric-hot', 'very low'); eq(asbBatLevelMetric(5), 'metric-severe', 'almost empty'); eq(asbBatLevelMetric(4), 'metric-bad', 'critically empty');
 asbMetricPaint('x', 'metric-warm');
@@ -3758,13 +3781,13 @@ function _el(id) { return _nodes[id] || null; }
 function T(k, d) { return d; }
 function uiSound() {} function navSyncSoon() {}
 let _selectedProfile = 'smart';
-const _stockLiveInfo = { ceil: ['policy6: 1.63 / 4.61 GHz'] };
+const _stockLiveInfo = { ceil: ['policy6: 1.63 / 4.61 GHz'], surfaceKind: 'board' };
 const _lvLast = { st: { thermal_cpu_type: 'cpu-1-1-1' }, kv: { dwell_sec: '210', cpu_max_live: '3628800,1862400' } };
 const _lvMeter = { boot: null };
 function liveInfoEnsure() { if (_nodes.liveInfoSheet) return _nodes.liveInfoSheet; ['liveInfoTitle', 'liveInfoNowLbl', 'liveInfoVal', 'liveInfoScale', 'liveInfoText', 'liveInfoHist', 'liveInfoSrc', 'liveInfoDone'].forEach(mk); return mk('liveInfoSheet'); }
 /* fix248: the scale, history and raw facts have their own test (webui_live_info_insight). */
 const _lviCalls = [];
-function lviSample() { _lviCalls.push('sample'); } function lviNum() { return null; }
+function lviSample() { _lviCalls.push('sample'); } function lviNum() { return null; } function lviScaleValue() { return null; }
 function lviScaleRender(box, key) { _lviCalls.push('scale:' + key); } function lviHistRender(box, key) { _lviCalls.push('hist:' + key); }
 function lviExtra(key) { return []; }
 function cell(pos, label, value, cls, title) {
@@ -3784,7 +3807,7 @@ function bcell(pos, label, value, cls, title, pill) {
 }
 EOF
   sed -n "/^const LVI_TEXT = {/,/^};/p; /^const LVI_STOCK = /p" "$H"
-  for fn in lviFill liveInfoSource liveInfoValText liveInfoOpen liveInfoClose lvDurDHM lvBootParse; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  for fn in lviFill lviKeyOf liveInfoSource liveInfoValText liveInfoOpen liveInfoClose lvDurDHM lvBootParse; do sed -n "/^function $fn(/,/^}/p" "$H"; done
   cat <<'EOF'
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
 liveInfoOpen(cell('cpu', 'CPU', '41°C'));
@@ -3812,8 +3835,8 @@ liveInfoOpen(cell('fsm', 'FSM', 'MODERATE'));
 chk(_nodes.liveInfoSrc.textContent === 'in this state for 210 s', 'FSM dwell: ' + _nodes.liveInfoSrc.textContent);
 liveInfoOpen(cell('headroom', 'Headroom', '40%'));
 chk(_nodes.liveInfoSrc.textContent === '3.63 · 1.86 GHz', 'live ceilings: ' + _nodes.liveInfoSrc.textContent);
-liveInfoOpen(cell('capsrc', 'Cap Src', 'ASB', 'cap-asb', 'owner=asb\nASB holds the ceiling'));
-chk(_nodes.liveInfoVal.className === 'live-info-val cap-asb', 'value keeps the tile colour: ' + _nodes.liveInfoVal.className);
+liveInfoOpen(cell('capsrc', 'Cap Src', 'ASB', 'cap-asb metric-normal', 'owner=asb\nASB holds the ceiling'));
+chk(_nodes.liveInfoVal.className === 'live-info-val cap-asb metric-normal', 'sheet keeps both owner and neutral-fact classes for the explicit green override: ' + _nodes.liveInfoVal.className);
 chk(_nodes.liveInfoSrc.textContent === 'ASB holds the ceiling', 'tile tooltip without raw key=value lines: ' + _nodes.liveInfoSrc.textContent);
 _selectedProfile = 'stock';
 liveInfoOpen(cell('fsm', 'CPU ceiling', '35%', 'cap-raised'));
@@ -7201,11 +7224,14 @@ def rule(selector):
 # identities. Shell has an explicit token so Glass's mint secondary accent cannot recolour it.
 normal = s.index(':is(.metric-normal,.metric-info) { color:var(--text) !important; }')
 for cls, colour in (('cap-asb', 'var(--accent)'), ('cap-shell', 'var(--owner-shell)')):
-    pos = s.index('html .live-cell-value.' + cls, normal)
+    selector = 'html :is(.live-cell-value,.live-info-val).' + cls
+    pos = s.index(selector, normal)
     assert pos > normal
     assert colour in s[pos:s.index('}', pos)]
+    for theme in ('html[data-asb-glass="1"] ', 'html[data-asb-theme="light"] '):
+        assert theme + ':is(.live-cell-value,.live-info-val).' + cls in s, theme + cls
 assert '--owner-shell: #7dd3fc;' in s and '--owner-shell:#0b5f86;' in s
-assert 'html[data-asb-theme="light"] .live-cell-value.cap-asb { color:var(--accent) !important; }' in s
+assert 'html[data-asb-theme="light"] :is(.live-cell-value,.live-info-val).cap-asb { color:var(--accent) !important; }' in s
 assert "vendor_clamp') asbMetricPaint('liveCapSrc', 'metric-bad')" in s
 assert "vendor_raised') asbMetricPaint('liveCapSrc', 'metric-hot')" in s
 # Stock reuses this element for battery temperature: it must still clear owner classes first.
@@ -7316,12 +7342,18 @@ assert pos > s.index('html[data-asb-glass="1"][data-asb-theme="light"] :is(.pbtn
 assert pos > s.index('html[data-asb-glass="1"][data-asb-theme="light"] :is(.pbtn.on,.cfg-tile.active,.cfg-profile-row.selected,.cfg-row.is-on)')
 active = rule('html[data-asb-glass="1"] :is(.pbtn.on,.cfg-tile.active,.cfg-profile-row.selected)')
 assert 'border-color:var(--accent) !important' in active
-# The approved tweak-card rules remain separate and retain their established materials.
+# fix259: disabled tweaks use exactly the approved inactive-profile surface, not a lighter
+# competing material. Their light-Glass and enabled treatments remain independent.
 tweak = rule('html[data-asb-glass="1"] .cfg-row:not(.is-on)')
-assert 'rgba(12,17,15,.88)' in tweak and 'rgba(255,255,255,.055)' in tweak
+for token in ('rgba(4,8,6,.96)', 'rgba(255,255,255,.022)', 'rgba(255,255,255,.004)',
+              'border-color:rgba(255,255,255,.10) !important',
+              'box-shadow:0 8px 22px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.065) !important'):
+    assert token in tweak and token in off, token
+light_tweak = rule('html[data-asb-glass="1"][data-asb-theme="light"] .cfg-row:not(.is-on)')
+assert 'rgba(4,8,6,.96)' not in light_tweak
 print('ok')
 PY
-echo "PASS WebUI fix256 inactive profiles: darker dark-Glass surfaces, hidden idle sheen, full foreground opacity and unchanged active/tweak/light materials"
+echo "PASS WebUI fix256 inactive profiles: matching dark-Glass inactive profile/OFF-tweak surfaces, hidden idle sheen, full foreground opacity and unchanged active/light materials"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
