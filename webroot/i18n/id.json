@@ -414,6 +414,18 @@
         "stock": "Standar: pencatatan debug penjadwal tidak disentuh.",
         "off": "Hanya mematikan node generik sched_stats jika tersedia; Standar atau uninstall memulihkan nilai asli yang persis."
       }
+    },
+    "heytap_mcs": {
+      "name": "Notifikasi Push HeyTap / OPPO",
+      "desc": "“Nonaktif” menonaktifkan com.heytap.mcs tanpa mengganti file sistem. Aplikasi yang memakai HeyTap/OPPO Push dapat kehilangan notifikasi atau menerimanya terlambat. Pengaktifan juga membuat satu permintaan kompilasi ART berbasis profil setelah boot ulang berikutnya; proses ini dapat sementara memakai CPU, penyimpanan, dan baterai. “Stock” hanya memulihkan status MCS yang diubah ASB dan membatalkan kompilasi yang belum dimulai.",
+      "descOpt": {
+        "stock": "MCS tetap di bawah kendali Android/OEM; permintaan ART tertunda dibatalkan.",
+        "off": "Nonaktifkan transport HeyTap Push dan kompilasi sekali setelah boot ulang berikutnya. Periksa notifikasi setelahnya."
+      }
+    },
+    "documentsui_fix": {
+      "name": "Perbaikan DocumentsUI / DSU Picker",
+      "desc": "Perbaikan satu kali untuk pemilih file sistem pada konfigurasi ColorOS/DSU yang terdampak. Mengaktifkan dan menampilkan DocumentsUI, mengembalikan aktivitas picker/files ke default, dan menonaktifkan ColorOS File Manager untuk pengguna 0. File Manager kembali saat “Nonaktif”. Hanya status yang diubah ASB yang dipulihkan; tidak ada penerapan ulang saat boot."
     }
   },
   "nav_live": "Monitor",
@@ -604,6 +616,10 @@
       "30": "−0,30 dB",
       "50": "−0,50 dB",
       "100": "−1,00 dB"
+    },
+    "heytap_mcs": {
+      "stock": "Standar",
+      "off": "Mati"
     }
   },
   "prof_none": "belum dipilih",
@@ -2046,5 +2062,28 @@
   "dev_guide_kernel_btf": "BTF config, vmlinux exposure and module entries are separate facts. No BTF program or probe is loaded by this read-only page.",
   "dev_guide_kernel_ebpf": "Config and bpfs/sysctl exposure do not prove that eBPF is active. No program is loaded to test the syscall.",
   "dev_guide_kernel_fuse_bpf": "FUSE-BPF needs its own positive evidence. Ordinary FUSE, generic eBPF or a connection count alone is insufficient.",
-  "dev_insight_kernel_origin": "Kernel origin is {origin}: this is an evidence classification, not guaranteed provenance. ASB still gates every control by the interfaces this kernel and ROM actually expose."
+  "dev_insight_kernel_origin": "Kernel origin is {origin}: this is an evidence classification, not guaranteed provenance. ASB still gates every control by the interfaces this kernel and ROM actually expose.",
+  "st_hey_absent": "MCS tidak terpasang",
+  "st_hey_pending": "MCS nonaktif · ART setelah boot ulang",
+  "st_hey_running": "Mengompilasi ART",
+  "st_hey_done": "MCS nonaktif · ART selesai",
+  "st_hey_failed": "MCS nonaktif · ART gagal",
+  "st_hey_off": "MCS dinonaktifkan",
+  "st_doc_absent": "DocumentsUI tidak ada",
+  "st_doc_applied": "pemilih diperbaiki",
+  "st_doc_already": "sudah diperbaiki",
+  "t_hey_off": "HeyTap MCS dinonaktifkan · ART akan dikompilasi sekali setelah boot ulang berikutnya",
+  "t_hey_done": "HeyTap MCS tetap nonaktif · ART sudah selesai",
+  "t_hey_compile_failed": "HeyTap MCS tetap nonaktif · ART gagal dan tidak akan diulang otomatis",
+  "t_hey_stock": "Status HeyTap MCS dipulihkan · kompilasi ART tertunda dibatalkan",
+  "t_hey_absent": "HeyTap MCS tidak terpasang di perangkat ini",
+  "t_hey_failed": "MCS tidak diubah dengan aman; periksa status di asbdiag",
+  "t_doc_applied": "Picker DocumentsUI diperbaiki · ColorOS File Manager dinonaktifkan",
+  "t_doc_restored": "Status DocumentsUI dan File Manager dipulihkan",
+  "t_doc_already": "Picker sudah dalam status yang diminta",
+  "t_doc_absent": "DocumentsUI tidak terpasang di perangkat ini",
+  "t_doc_rolled_back": "ROM menolak perbaikan; ASB membatalkan perubahannya",
+  "t_doc_failed": "DocumentsUI tidak diubah dengan aman; status asli disimpan untuk pemulihan",
+  "wb_heytap": "Aplikasi HeyTap/OPPO Push dapat kehilangan atau menunda notifikasi; ART berjalan sekali setelah boot ulang",
+  "wb_documentsui": "ColorOS File Manager tetap nonaktif selama perbaikan ini aktif"
 }

@@ -441,6 +441,18 @@
         "stock": "افتراضي: لا تُمسّ إحصاءات تصحيح المجدول.",
         "off": "يعطّل فقط عقدة sched_stats العامة المتاحة؛ «افتراضي» وإلغاء التثبيت يستعيدان القيمة الأصلية بدقة."
       }
+    },
+    "heytap_mcs": {
+      "name": "إشعارات HeyTap / OPPO Push",
+      "desc": "يعطّل «إيقاف» الحزمة com.heytap.mcs من دون استبدال ملفات النظام. قد تتوقف إشعارات التطبيقات التي تستخدم HeyTap/OPPO Push أو تتأخر. وينشئ التفعيل طلباً واحداً لتجميع ART الموجّه بالملف الشخصي بعد إعادة التشغيل التالية؛ وقد يستهلك ذلك المعالج والتخزين والبطارية مؤقتاً. يعيد «المخزون» حالة MCS التي غيّرها ASB فقط ويلغي التجميع إذا لم يبدأ.",
+      "descOpt": {
+        "stock": "يبقى MCS تحت إدارة Android/OEM ويُلغى طلب ART المعلق.",
+        "off": "تعطيل نقل HeyTap Push والتجميع مرة واحدة بعد إعادة التشغيل التالية. تحقق من الإشعارات بعد ذلك."
+      }
+    },
+    "documentsui_fix": {
+      "name": "إصلاح DocumentsUI / DSU Picker",
+      "desc": "إصلاح لمرة واحدة لمنتقي ملفات النظام في إعدادات ColorOS/DSU المتأثرة. يفعّل DocumentsUI ويظهره ويعيد نشاطي picker/files إلى الوضع الافتراضي، ويعطّل ColorOS File Manager للمستخدم 0. يعود مدير الملفات عند «إيقاف». تُستعاد فقط الحالات التي غيّرها ASB، ولا يُعاد تطبيق شيء عند الإقلاع."
     }
   },
   "optFor": {
@@ -604,6 +616,10 @@
       "30": "⁦−0.30 dB⁩",
       "50": "⁦−0.50 dB⁩",
       "100": "⁦−1.00 dB⁩"
+    },
+    "heytap_mcs": {
+      "stock": "افتراضي",
+      "off": "إيقاف"
     }
   },
   "prof_none": "لم يتم الاختيار",
@@ -2046,5 +2062,28 @@
   "dev_guide_kernel_btf": "BTF config, vmlinux exposure and module entries are separate facts. No BTF program or probe is loaded by this read-only page.",
   "dev_guide_kernel_ebpf": "Config and bpfs/sysctl exposure do not prove that eBPF is active. No program is loaded to test the syscall.",
   "dev_guide_kernel_fuse_bpf": "FUSE-BPF needs its own positive evidence. Ordinary FUSE, generic eBPF or a connection count alone is insufficient.",
-  "dev_insight_kernel_origin": "Kernel origin is {origin}: this is an evidence classification, not guaranteed provenance. ASB still gates every control by the interfaces this kernel and ROM actually expose."
+  "dev_insight_kernel_origin": "Kernel origin is {origin}: this is an evidence classification, not guaranteed provenance. ASB still gates every control by the interfaces this kernel and ROM actually expose.",
+  "st_hey_absent": "MCS غير مثبت",
+  "st_hey_pending": "MCS متوقف · ART بعد إعادة التشغيل",
+  "st_hey_running": "جارٍ تجميع ART",
+  "st_hey_done": "MCS متوقف · اكتمل ART",
+  "st_hey_failed": "MCS متوقف · فشل ART",
+  "st_hey_off": "MCS معطّل",
+  "st_doc_absent": "DocumentsUI غير موجود",
+  "st_doc_applied": "تم إصلاح المنتقي",
+  "st_doc_already": "تم الإصلاح مسبقاً",
+  "t_hey_off": "تم تعطيل HeyTap MCS · سيُنفذ تجميع ART مرة واحدة بعد إعادة التشغيل التالية",
+  "t_hey_done": "يبقى HeyTap MCS معطلاً · اكتمل تجميع ART",
+  "t_hey_compile_failed": "يبقى HeyTap MCS معطلاً · فشل ART ولن يتكرر تلقائياً",
+  "t_hey_stock": "استُعيدت حالة HeyTap MCS · أُلغي ART المعلق",
+  "t_hey_absent": "HeyTap MCS غير مثبت على هذا الجهاز",
+  "t_hey_failed": "لم تتغير حالة MCS بأمان؛ راجع asbdiag",
+  "t_doc_applied": "تم إصلاح DocumentsUI picker · تم تعطيل ColorOS File Manager",
+  "t_doc_restored": "استُعيدت حالات DocumentsUI وFile Manager",
+  "t_doc_already": "المنتقي في الحالة المطلوبة بالفعل",
+  "t_doc_absent": "DocumentsUI غير مثبت على هذا الجهاز",
+  "t_doc_rolled_back": "رفضت ROM الإصلاح؛ تراجع ASB عن تغييراته",
+  "t_doc_failed": "لم تتغير حالة DocumentsUI بأمان؛ حُفظت الحالات الأصلية للاستعادة",
+  "wb_heytap": "قد تفقد تطبيقات HeyTap/OPPO Push الإشعارات أو تتأخر؛ يعمل ART مرة واحدة بعد إعادة التشغيل",
+  "wb_documentsui": "يبقى ColorOS File Manager معطلاً أثناء تفعيل هذا الإصلاح"
 }

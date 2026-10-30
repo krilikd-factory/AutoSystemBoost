@@ -414,6 +414,18 @@
         "stock": "Standard: die Scheduler-Debugstatistik bleibt unverändert.",
         "off": "Deaktiviert nur den vorhandenen generischen sched_stats-Knoten; Standard oder Deinstallation stellen den genauen Ursprungswert wieder her."
       }
+    },
+    "heytap_mcs": {
+      "name": "HeyTap-/OPPO-Push-Benachrichtigungen",
+      "desc": "„Aus“ deaktiviert com.heytap.mcs ohne Ersetzen von Systemdateien. Apps mit HeyTap/OPPO Push können Benachrichtigungen verlieren oder verspätet erhalten. Beim Aktivieren wird außerdem eine einmalige profilgesteuerte ART-Kompilierung nach dem nächsten Neustart angefordert; dabei können CPU, Speicher und Akku vorübergehend stärker belastet werden. „Stock“ stellt nur den von ASB geänderten MCS-Zustand wieder her und bricht eine noch nicht gestartete Kompilierung ab.",
+      "descOpt": {
+        "stock": "MCS bleibt unter Android-/OEM-Kontrolle; eine ausstehende ART-Anfrage wird abgebrochen.",
+        "off": "HeyTap-Push-Transport deaktivieren und nach dem nächsten Neustart einmal kompilieren. Danach Benachrichtigungen prüfen."
+      }
+    },
+    "documentsui_fix": {
+      "name": "DocumentsUI-/DSU-Picker-Reparatur",
+      "desc": "Einmalige Reparatur der System-Dateiauswahl auf betroffenen ColorOS-/DSU-Systemen. Aktiviert und blendet DocumentsUI ein, setzt die Picker-/Datei-Aktivitäten zurück und deaktiviert den ColorOS-Dateimanager für Benutzer 0. Bei „Aus“ kehrt der Dateimanager zurück. Nur von ASB geänderte Zustände werden wiederhergestellt; beim Start erfolgt keine erneute Anwendung."
     }
   },
   "nav_live": "Monitor",
@@ -604,6 +616,10 @@
       "30": "−0,30 dB",
       "50": "−0,50 dB",
       "100": "−1,00 dB"
+    },
+    "heytap_mcs": {
+      "stock": "Standard",
+      "off": "Aus"
     }
   },
   "prof_none": "nicht gewählt",
@@ -2046,5 +2062,28 @@
   "dev_guide_kernel_btf": "BTF config, vmlinux exposure and module entries are separate facts. No BTF program or probe is loaded by this read-only page.",
   "dev_guide_kernel_ebpf": "Config and bpfs/sysctl exposure do not prove that eBPF is active. No program is loaded to test the syscall.",
   "dev_guide_kernel_fuse_bpf": "FUSE-BPF needs its own positive evidence. Ordinary FUSE, generic eBPF or a connection count alone is insufficient.",
-  "dev_insight_kernel_origin": "Kernel origin is {origin}: this is an evidence classification, not guaranteed provenance. ASB still gates every control by the interfaces this kernel and ROM actually expose."
+  "dev_insight_kernel_origin": "Kernel origin is {origin}: this is an evidence classification, not guaranteed provenance. ASB still gates every control by the interfaces this kernel and ROM actually expose.",
+  "st_hey_absent": "MCS nicht installiert",
+  "st_hey_pending": "MCS aus · ART nach Neustart",
+  "st_hey_running": "ART wird kompiliert",
+  "st_hey_done": "MCS aus · ART fertig",
+  "st_hey_failed": "MCS aus · ART fehlgeschlagen",
+  "st_hey_off": "MCS deaktiviert",
+  "st_doc_absent": "DocumentsUI fehlt",
+  "st_doc_applied": "Picker repariert",
+  "st_doc_already": "bereits repariert",
+  "t_hey_off": "HeyTap MCS deaktiviert · ART wird einmal nach dem nächsten Neustart kompiliert",
+  "t_hey_done": "HeyTap MCS bleibt deaktiviert · ART ist bereits abgeschlossen",
+  "t_hey_compile_failed": "HeyTap MCS bleibt deaktiviert · ART fehlgeschlagen, kein automatischer erneuter Versuch",
+  "t_hey_stock": "HeyTap-MCS-Zustand wiederhergestellt · ausstehende ART-Kompilierung abgebrochen",
+  "t_hey_absent": "HeyTap MCS ist auf diesem Gerät nicht installiert",
+  "t_hey_failed": "MCS wurde nicht sicher geändert; Status in asbdiag prüfen",
+  "t_doc_applied": "DocumentsUI-Picker repariert · ColorOS-Dateimanager deaktiviert",
+  "t_doc_restored": "DocumentsUI- und Dateimanager-Zustände wiederhergestellt",
+  "t_doc_already": "Der Picker hat bereits den gewünschten Zustand",
+  "t_doc_absent": "DocumentsUI ist auf diesem Gerät nicht installiert",
+  "t_doc_rolled_back": "ROM hat die Reparatur abgelehnt; ASB hat die Änderungen zurückgesetzt",
+  "t_doc_failed": "DocumentsUI wurde nicht sicher geändert; Originalzustände bleiben zur Wiederherstellung erhalten",
+  "wb_heytap": "Apps mit HeyTap/OPPO Push können Benachrichtigungen verlieren oder verspätet erhalten; ART läuft einmal nach dem Neustart",
+  "wb_documentsui": "Der ColorOS-Dateimanager bleibt deaktiviert, solange diese Reparatur aktiv ist"
 }

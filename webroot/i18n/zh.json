@@ -441,6 +441,18 @@
         "stock": "默认：不改动调度器调试统计。",
         "off": "仅关闭可用的通用 sched_stats 节点；选择默认或卸载时会精确恢复原始值。"
       }
+    },
+    "heytap_mcs": {
+      "name": "HeyTap / OPPO 推送通知",
+      "desc": "“关闭”会禁用 com.heytap.mcs，而不替换系统文件。使用 HeyTap/OPPO Push 的应用可能丢失或延迟收到通知。启用时还会请求在下次重启后执行一次按配置文件引导的 ART 编译；期间可能暂时占用 CPU、存储和电量。“原生”仅恢复 ASB 修改过的 MCS 状态，并取消尚未开始的编译。",
+      "descOpt": {
+        "stock": "MCS 保持由 Android/OEM 控制；取消等待中的 ART 请求。",
+        "off": "禁用 HeyTap Push 传输，并在下次重启后编译一次。之后请检查通知。"
+      }
+    },
+    "documentsui_fix": {
+      "name": "DocumentsUI / DSU Picker 修复",
+      "desc": "针对受影响的 ColorOS/DSU 配置，一次性修复系统文件选择器。启用并显示 DocumentsUI，将 picker/files 活动恢复为默认状态，并为用户 0 禁用 ColorOS 文件管理器。选择“关闭”后文件管理器会恢复。仅恢复 ASB 修改过的状态；开机时不会重复应用。"
     }
   },
   "optFor": {
@@ -604,6 +616,10 @@
       "30": "−0.30 dB",
       "50": "−0.50 dB",
       "100": "−1.00 dB"
+    },
+    "heytap_mcs": {
+      "stock": "默认",
+      "off": "关闭"
     }
   },
   "prof_none": "未选择",
@@ -2046,5 +2062,28 @@
   "dev_guide_kernel_btf": "BTF config, vmlinux exposure and module entries are separate facts. No BTF program or probe is loaded by this read-only page.",
   "dev_guide_kernel_ebpf": "Config and bpfs/sysctl exposure do not prove that eBPF is active. No program is loaded to test the syscall.",
   "dev_guide_kernel_fuse_bpf": "FUSE-BPF needs its own positive evidence. Ordinary FUSE, generic eBPF or a connection count alone is insufficient.",
-  "dev_insight_kernel_origin": "Kernel origin is {origin}: this is an evidence classification, not guaranteed provenance. ASB still gates every control by the interfaces this kernel and ROM actually expose."
+  "dev_insight_kernel_origin": "Kernel origin is {origin}: this is an evidence classification, not guaranteed provenance. ASB still gates every control by the interfaces this kernel and ROM actually expose.",
+  "st_hey_absent": "未安装 MCS",
+  "st_hey_pending": "MCS 已关闭 · 重启后 ART",
+  "st_hey_running": "正在编译 ART",
+  "st_hey_done": "MCS 已关闭 · ART 完成",
+  "st_hey_failed": "MCS 已关闭 · ART 失败",
+  "st_hey_off": "MCS 已禁用",
+  "st_doc_absent": "DocumentsUI 不存在",
+  "st_doc_applied": "选择器已修复",
+  "st_doc_already": "已修复",
+  "t_hey_off": "HeyTap MCS 已禁用 · 下次重启后将执行一次 ART 编译",
+  "t_hey_done": "HeyTap MCS 保持禁用 · ART 编译已完成",
+  "t_hey_compile_failed": "HeyTap MCS 保持禁用 · ART 编译失败，不会自动重试",
+  "t_hey_stock": "HeyTap MCS 状态已恢复 · 等待中的 ART 编译已取消",
+  "t_hey_absent": "此设备未安装 HeyTap MCS",
+  "t_hey_failed": "MCS 未能安全更改；请在 asbdiag 中检查状态",
+  "t_doc_applied": "DocumentsUI 选择器已修复 · ColorOS 文件管理器已禁用",
+  "t_doc_restored": "DocumentsUI 和文件管理器状态已恢复",
+  "t_doc_already": "选择器已处于所需状态",
+  "t_doc_absent": "此设备未安装 DocumentsUI",
+  "t_doc_rolled_back": "ROM 拒绝了修复；ASB 已撤销更改",
+  "t_doc_failed": "DocumentsUI 未能安全更改；原始状态已保留以供恢复",
+  "wb_heytap": "使用 HeyTap/OPPO Push 的应用可能丢失或延迟通知；重启后 ART 执行一次",
+  "wb_documentsui": "启用此修复期间，ColorOS 文件管理器会被禁用"
 }

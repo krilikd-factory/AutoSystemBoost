@@ -414,6 +414,18 @@
         "stock": "Стандарт: налагоджувальна статистика планувальника не змінюється.",
         "off": "Вимикає лише наявний загальний вузол sched_stats; «Стандарт» і видалення відновлюють точне початкове значення."
       }
+    },
+    "heytap_mcs": {
+      "name": "Push-сповіщення HeyTap / OPPO",
+      "desc": "«Вимкнено» вимикає com.heytap.mcs без заміни системних файлів. Застосунки, які використовують HeyTap/OPPO Push, можуть втрачати сповіщення або отримувати їх із затримкою. Під час вмикання також створюється один запит на профільну ART-компіляцію після наступного перезавантаження; вона може тимчасово навантажити процесор, сховище й батарею. «Сток» відновлює лише змінений ASB стан MCS і скасовує компіляцію, якщо вона ще не почалася.",
+      "descOpt": {
+        "stock": "MCS залишається під керуванням Android/OEM; запит ART, що очікує, скасовується.",
+        "off": "Вимкнути транспорт HeyTap Push і один раз виконати компіляцію після наступного перезавантаження. Потім перевірте сповіщення."
+      }
+    },
+    "documentsui_fix": {
+      "name": "Відновлення DocumentsUI / DSU Picker",
+      "desc": "Одноразове відновлення системного діалогу вибору файлів на уражених конфігураціях ColorOS/DSU. Вмикає й робить видимим DocumentsUI, повертає picker/files activity до типового стану та вимикає ColorOS File Manager для користувача 0. Після «Вимкнено» файловий менеджер повертається. Відновлюються лише стани, змінені ASB; під час завантаження нічого не застосовується повторно."
     }
   },
   "nav_live": "Монітор",
@@ -604,6 +616,10 @@
       "30": "−0,30 дБ",
       "50": "−0,50 дБ",
       "100": "−1,00 дБ"
+    },
+    "heytap_mcs": {
+      "stock": "Стандарт",
+      "off": "Вимкнено"
     }
   },
   "prof_none": "не вибрано",
@@ -2046,5 +2062,28 @@
   "dev_guide_kernel_btf": "BTF config, vmlinux exposure and module entries are separate facts. No BTF program or probe is loaded by this read-only page.",
   "dev_guide_kernel_ebpf": "Config and bpfs/sysctl exposure do not prove that eBPF is active. No program is loaded to test the syscall.",
   "dev_guide_kernel_fuse_bpf": "FUSE-BPF needs its own positive evidence. Ordinary FUSE, generic eBPF or a connection count alone is insufficient.",
-  "dev_insight_kernel_origin": "Kernel origin is {origin}: this is an evidence classification, not guaranteed provenance. ASB still gates every control by the interfaces this kernel and ROM actually expose."
+  "dev_insight_kernel_origin": "Kernel origin is {origin}: this is an evidence classification, not guaranteed provenance. ASB still gates every control by the interfaces this kernel and ROM actually expose.",
+  "st_hey_absent": "MCS не встановлено",
+  "st_hey_pending": "MCS вимкнено · ART після перезавантаження",
+  "st_hey_running": "ART-компіляція",
+  "st_hey_done": "MCS вимкнено · ART завершено",
+  "st_hey_failed": "MCS вимкнено · помилка ART",
+  "st_hey_off": "MCS вимкнено",
+  "st_doc_absent": "DocumentsUI відсутній",
+  "st_doc_applied": "picker відновлено",
+  "st_doc_already": "вже відновлено",
+  "t_hey_off": "HeyTap MCS вимкнено · ART-компіляція виконається один раз після наступного перезавантаження",
+  "t_hey_done": "HeyTap MCS залишається вимкненим · ART-компіляцію вже завершено",
+  "t_hey_compile_failed": "HeyTap MCS залишається вимкненим · ART не вдалася й автоматично не повторюватиметься",
+  "t_hey_stock": "Стан HeyTap MCS відновлено · очікувану ART-компіляцію скасовано",
+  "t_hey_absent": "HeyTap MCS не встановлено на цьому пристрої",
+  "t_hey_failed": "Стан MCS не було безпечно змінено; перевірте asbdiag",
+  "t_doc_applied": "DocumentsUI picker відновлено · ColorOS File Manager вимкнено",
+  "t_doc_restored": "Стани DocumentsUI та File Manager відновлено",
+  "t_doc_already": "Picker уже в потрібному стані",
+  "t_doc_absent": "DocumentsUI не встановлено на цьому пристрої",
+  "t_doc_rolled_back": "Прошивка відхилила виправлення; ASB скасував свої зміни",
+  "t_doc_failed": "Стан DocumentsUI не було безпечно змінено; початкові стани збережено",
+  "wb_heytap": "Застосунки з HeyTap/OPPO Push можуть втрачати або затримувати сповіщення; ART виконується один раз після перезавантаження",
+  "wb_documentsui": "ColorOS File Manager вимкнено, доки активне це виправлення"
 }

@@ -54,6 +54,10 @@
       "stock": "stock",
       "off": "off"
     },
+    "heytap_mcs": {
+      "stock": "stock",
+      "off": "disable"
+    },
     "anim_speed": {
       "profile": "by profile",
       "off": "off",
@@ -198,6 +202,18 @@
         "stock": "OxygenOS keeps killing background apps as it normally does.",
         "off": "AthenaService is disabled, so apps stay alive and keep notifying. Expect more RAM used and slightly more drain."
       }
+    },
+    "heytap_mcs": {
+      "name": "HeyTap MCS / OPPO Push",
+      "desc": "Off disables com.heytap.mcs without replacing system files. Apps using HeyTap/OPPO Push can stop receiving notifications or receive them late. Enabling also requests one profile-guided ART compilation after the next reboot; it can temporarily use CPU, storage and battery. Stock restores the MCS state ASB changed and cancels a compilation that has not started.",
+      "descOpt": {
+        "stock": "MCS stays under Android/OEM control; a pending ART request is cancelled.",
+        "off": "Disable HeyTap push transport and compile once after the next reboot. Check notifications afterwards."
+      }
+    },
+    "documentsui_fix": {
+      "name": "DocumentsUI / DSU Picker Fix",
+      "desc": "One-time repair for the system file picker on affected ColorOS/DSU setups. Enables and unhides DocumentsUI, resets its picker/files activities, and disables ColorOS File Manager for user 0. The File Manager returns on Off. Only states ASB changed are restored; nothing is re-applied at boot."
     },
     "doze_level": {
       "descOpt": {
@@ -749,6 +765,8 @@
   "wb_dozewl": "Notifications from trimmed apps may arrive late",
   "wb_dsp": "High gain can distort loud music",
   "wb_gms": "On strict, Google notifications may be delayed while the phone sleeps",
+  "wb_heytap": "Apps using HeyTap/OPPO Push can lose or delay notifications; ART compilation runs once after reboot",
+  "wb_documentsui": "ColorOS File Manager is disabled until this fix is turned off",
   "wb_loud": "Maximum volume is higher - a risk to hearing and to the speaker",
   "wb_phantom": "With no limit, background apps live longer and drain the battery",
   "wb_scan": "Wi-Fi scans for networks more often - the battery drains faster",
@@ -1057,6 +1075,27 @@
   "st_lsp_off": "verbose log off",
   "st_lsp_on": "verbose log on",
   "st_lsp_unknown": "set in LSPosed",
+  "t_hey_off": "HeyTap MCS disabled · ART compilation will run once after the next reboot",
+  "t_hey_done": "HeyTap MCS remains disabled · ART compilation has already finished",
+  "t_hey_compile_failed": "HeyTap MCS remains disabled · ART compilation failed and will not retry automatically",
+  "t_hey_stock": "HeyTap MCS state restored · pending ART compilation cancelled",
+  "t_hey_absent": "HeyTap MCS is not installed on this device",
+  "t_hey_failed": "MCS was not changed safely; check its status in asbdiag",
+  "st_hey_absent": "MCS not installed",
+  "st_hey_pending": "MCS off · ART next boot",
+  "st_hey_running": "ART compiling",
+  "st_hey_done": "MCS off · ART done",
+  "st_hey_failed": "MCS off · ART failed",
+  "st_hey_off": "MCS disabled",
+  "t_doc_applied": "DocumentsUI picker repaired · ColorOS File Manager disabled",
+  "t_doc_restored": "DocumentsUI and File Manager states restored",
+  "t_doc_already": "The picker already has the requested state",
+  "t_doc_absent": "DocumentsUI is not installed on this device",
+  "t_doc_rolled_back": "The ROM rejected the repair; ASB rolled its changes back",
+  "t_doc_failed": "DocumentsUI state was not changed safely; original states were kept for restore",
+  "st_doc_absent": "DocumentsUI absent",
+  "st_doc_applied": "picker repaired",
+  "st_doc_already": "already repaired",
   "unit_mb": "MB",
   "st_lsp_mods": "modules log %s",
   "lv_eta_all_tip": "Estimate: this profile has no screen-off hour of its own yet - from the screen-off drain of all profiles together, %s.",

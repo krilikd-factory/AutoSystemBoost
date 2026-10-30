@@ -414,6 +414,18 @@
         "stock": "Padrão: a contabilidade de depuração do agendador não é alterada.",
         "off": "Desativa apenas o nó genérico sched_stats, se exposto; Padrão ou a desinstalação restauram o valor original exato."
       }
+    },
+    "heytap_mcs": {
+      "name": "Notificações push da HeyTap / OPPO",
+      "desc": "«Desativado» desabilita o com.heytap.mcs sem substituir arquivos do sistema. Apps que usam HeyTap/OPPO Push podem perder notificações ou recebê-las com atraso. A ativação também solicita uma única compilação ART guiada por perfil após a próxima reinicialização; isso pode usar temporariamente mais CPU, armazenamento e bateria. «Stock» restaura apenas o estado do MCS alterado pelo ASB e cancela uma compilação ainda não iniciada.",
+      "descOpt": {
+        "stock": "O MCS permanece sob controle do Android/OEM; a solicitação ART pendente é cancelada.",
+        "off": "Desabilita o transporte HeyTap Push e compila uma vez após a próxima reinicialização. Verifique as notificações depois."
+      }
+    },
+    "documentsui_fix": {
+      "name": "Correção do DocumentsUI / DSU Picker",
+      "desc": "Correção única do seletor de arquivos do sistema em configurações ColorOS/DSU afetadas. Ativa e exibe o DocumentsUI, restaura as atividades de seleção/arquivos ao padrão e desabilita o ColorOS File Manager para o usuário 0. O gerenciador de arquivos retorna em «Desativado». Somente estados alterados pelo ASB são restaurados; nada é reaplicado na inicialização."
     }
   },
   "nav_live": "Monitor",
@@ -604,6 +616,10 @@
       "30": "−0,30 dB",
       "50": "−0,50 dB",
       "100": "−1,00 dB"
+    },
+    "heytap_mcs": {
+      "stock": "Padrão",
+      "off": "Desativado"
     }
   },
   "prof_none": "não selecionado",
@@ -2046,5 +2062,28 @@
   "dev_guide_kernel_btf": "BTF config, vmlinux exposure and module entries are separate facts. No BTF program or probe is loaded by this read-only page.",
   "dev_guide_kernel_ebpf": "Config and bpfs/sysctl exposure do not prove that eBPF is active. No program is loaded to test the syscall.",
   "dev_guide_kernel_fuse_bpf": "FUSE-BPF needs its own positive evidence. Ordinary FUSE, generic eBPF or a connection count alone is insufficient.",
-  "dev_insight_kernel_origin": "Kernel origin is {origin}: this is an evidence classification, not guaranteed provenance. ASB still gates every control by the interfaces this kernel and ROM actually expose."
+  "dev_insight_kernel_origin": "Kernel origin is {origin}: this is an evidence classification, not guaranteed provenance. ASB still gates every control by the interfaces this kernel and ROM actually expose.",
+  "st_hey_absent": "MCS não instalado",
+  "st_hey_pending": "MCS desativado · ART após reiniciar",
+  "st_hey_running": "Compilando ART",
+  "st_hey_done": "MCS desativado · ART concluída",
+  "st_hey_failed": "MCS desativado · ART falhou",
+  "st_hey_off": "MCS desabilitado",
+  "st_doc_absent": "DocumentsUI ausente",
+  "st_doc_applied": "seletor reparado",
+  "st_doc_already": "já reparado",
+  "t_hey_off": "HeyTap MCS desabilitado · ART será compilado uma vez após a próxima reinicialização",
+  "t_hey_done": "HeyTap MCS continua desabilitado · ART já foi concluído",
+  "t_hey_compile_failed": "HeyTap MCS continua desabilitado · ART falhou e não será repetido automaticamente",
+  "t_hey_stock": "Estado do HeyTap MCS restaurado · compilação ART pendente cancelada",
+  "t_hey_absent": "HeyTap MCS não está instalado neste dispositivo",
+  "t_hey_failed": "O MCS não foi alterado com segurança; verifique o asbdiag",
+  "t_doc_applied": "Seletor DocumentsUI reparado · ColorOS File Manager desabilitado",
+  "t_doc_restored": "Estados do DocumentsUI e do gerenciador de arquivos restaurados",
+  "t_doc_already": "O seletor já está no estado solicitado",
+  "t_doc_absent": "DocumentsUI não está instalado neste dispositivo",
+  "t_doc_rolled_back": "A ROM rejeitou a reparação; o ASB reverteu suas alterações",
+  "t_doc_failed": "O DocumentsUI não foi alterado com segurança; os estados originais foram preservados",
+  "wb_heytap": "Apps com HeyTap/OPPO Push podem perder ou atrasar notificações; ART executa uma vez após reiniciar",
+  "wb_documentsui": "O ColorOS File Manager fica desabilitado enquanto esta correção estiver ativa"
 }

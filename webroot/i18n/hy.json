@@ -508,6 +508,18 @@
         "stock": "Ստանդարտ՝ պլանավորիչի կարգաբերման վիճակագրությունը չի փոխվում։",
         "off": "Անջատում է միայն առկա ընդհանուր sched_stats հանգույցը; «ստանդարտ»-ը և ապատեղադրումը վերականգնում են ճշգրիտ սկզբնական արժեքը։"
       }
+    },
+    "heytap_mcs": {
+      "name": "HeyTap / OPPO Push ծանուցումներ",
+      "desc": "«Անջատվածը» անջատում է com.heytap.mcs-ը՝ առանց համակարգային ֆայլերը փոխարինելու։ HeyTap/OPPO Push օգտագործող ծրագրերի ծանուցումները կարող են կորչել կամ ուշանալ։ Միացնելիս նաև ստեղծվում է պրոֆիլային ART կոմպիլյացիայի մեկ հարցում՝ հաջորդ վերամեկնարկից հետո. դա կարող է ժամանակավորապես բարձրացնել պրոցեսորի, հիշողության և մարտկոցի ծանրաբեռնվածությունը։ «Stock»-ը վերականգնում է միայն ASB-ի փոխած MCS վիճակը և չեղարկում չսկսված կոմպիլյացիան։",
+      "descOpt": {
+        "stock": "MCS-ը մնում է Android/OEM կառավարման տակ. սպասող ART հարցումը չեղարկվում է։",
+        "off": "Անջատել HeyTap Push փոխանցումը և մեկ անգամ կոմպիլյացիա կատարել հաջորդ վերամեկնարկից հետո։ Ապա ստուգեք ծանուցումները։"
+      }
+    },
+    "documentsui_fix": {
+      "name": "DocumentsUI / DSU Picker վերականգնում",
+      "desc": "Համակարգային ֆայլ ընտրողի միանվագ վերականգնում տուժած ColorOS/DSU կազմաձևերում։ Միացնում և երևացող է դարձնում DocumentsUI-ը, վերականգնում picker/files գործունեությունների լռելյայն վիճակը և անջատում ColorOS File Manager-ը 0 օգտատիրոջ համար։ «Անջատված» ընտրելիս ֆայլերի կառավարիչը վերադառնում է։ Վերականգնվում են միայն ASB-ի փոխած վիճակները. բեռնման ժամանակ կրկին ոչինչ չի կիրառվում։"
     }
   },
   "opt": {
@@ -693,6 +705,10 @@
       "30": "−0,30 dB",
       "50": "−0,50 dB",
       "100": "−1,00 dB"
+    },
+    "heytap_mcs": {
+      "stock": "ստանդարտ",
+      "off": "անջ."
     }
   },
   "prof_none": "ընտրված չէ",
@@ -2046,5 +2062,28 @@
   "dev_guide_kernel_btf": "BTF config, vmlinux exposure and module entries are separate facts. No BTF program or probe is loaded by this read-only page.",
   "dev_guide_kernel_ebpf": "Config and bpfs/sysctl exposure do not prove that eBPF is active. No program is loaded to test the syscall.",
   "dev_guide_kernel_fuse_bpf": "FUSE-BPF needs its own positive evidence. Ordinary FUSE, generic eBPF or a connection count alone is insufficient.",
-  "dev_insight_kernel_origin": "Kernel origin is {origin}: this is an evidence classification, not guaranteed provenance. ASB still gates every control by the interfaces this kernel and ROM actually expose."
+  "dev_insight_kernel_origin": "Kernel origin is {origin}: this is an evidence classification, not guaranteed provenance. ASB still gates every control by the interfaces this kernel and ROM actually expose.",
+  "st_hey_absent": "MCS-ը տեղադրված չէ",
+  "st_hey_pending": "MCS անջատ · ART վերամեկնարկից հետո",
+  "st_hey_running": "ART կոմպիլյացիա",
+  "st_hey_done": "MCS անջատ · ART ավարտված",
+  "st_hey_failed": "MCS անջատ · ART սխալ",
+  "st_hey_off": "MCS-ը անջատված է",
+  "st_doc_absent": "DocumentsUI-ը բացակայում է",
+  "st_doc_applied": "ընտրողը վերականգնված է",
+  "st_doc_already": "արդեն վերականգնված է",
+  "t_hey_off": "HeyTap MCS-ը անջատված է · ART-ը մեկ անգամ կկատարվի հաջորդ վերամեկնարկից հետո",
+  "t_hey_done": "HeyTap MCS-ը մնում է անջատված · ART-ն արդեն ավարտված է",
+  "t_hey_compile_failed": "HeyTap MCS-ը մնում է անջատված · ART-ը ձախողվեց և ինքնաշխատ չի կրկնվի",
+  "t_hey_stock": "HeyTap MCS վիճակը վերականգնված է · սպասող ART-ը չեղարկված է",
+  "t_hey_absent": "HeyTap MCS-ը այս սարքում տեղադրված չէ",
+  "t_hey_failed": "MCS-ը անվտանգ չի փոխվել. ստուգեք asbdiag-ը",
+  "t_doc_applied": "DocumentsUI picker-ը վերականգնված է · ColorOS File Manager-ը անջատված է",
+  "t_doc_restored": "DocumentsUI և File Manager վիճակները վերականգնված են",
+  "t_doc_already": "Picker-ն արդեն պահանջված վիճակում է",
+  "t_doc_absent": "DocumentsUI-ը այս սարքում տեղադրված չէ",
+  "t_doc_rolled_back": "ROM-ը մերժեց վերականգնումը. ASB-ը հետ շրջեց իր փոփոխությունները",
+  "t_doc_failed": "DocumentsUI-ը անվտանգ չի փոխվել. սկզբնական վիճակները պահպանված են",
+  "wb_heytap": "HeyTap/OPPO Push ծրագրերը կարող են կորցնել կամ ուշացնել ծանուցումները. ART-ը մեկ անգամ է վերամեկնարկից հետո",
+  "wb_documentsui": "ColorOS File Manager-ը անջատված կմնա, քանի դեռ այս ուղղումը միացված է"
 }

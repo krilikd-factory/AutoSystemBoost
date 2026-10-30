@@ -414,6 +414,18 @@
         "stock": "Varsayılan: zamanlayıcı hata ayıklama sayımına dokunulmaz.",
         "off": "Yalnızca mevcut genel sched_stats düğümünü kapatır; Varsayılan ya da kaldırma tam özgün değeri geri yükler."
       }
+    },
+    "heytap_mcs": {
+      "name": "HeyTap / OPPO Push bildirimleri",
+      "desc": "“Kapalı”, sistem dosyalarını değiştirmeden com.heytap.mcs paketini devre dışı bırakır. HeyTap/OPPO Push kullanan uygulamalar bildirimleri kaybedebilir veya geç alabilir. Etkinleştirme ayrıca sonraki yeniden başlatmadan sonra bir kez profil güdümlü ART derlemesi ister; bu işlem CPU, depolama ve pili geçici olarak kullanabilir. “Stock”, yalnızca ASB’nin değiştirdiği MCS durumunu geri yükler ve başlamamış derlemeyi iptal eder.",
+      "descOpt": {
+        "stock": "MCS, Android/OEM denetiminde kalır; bekleyen ART isteği iptal edilir.",
+        "off": "HeyTap Push taşımasını devre dışı bırakır ve sonraki yeniden başlatmadan sonra bir kez derler. Ardından bildirimleri kontrol edin."
+      }
+    },
+    "documentsui_fix": {
+      "name": "DocumentsUI / DSU Picker onarımı",
+      "desc": "Etkilenen ColorOS/DSU kurulumlarında sistem dosya seçici için tek seferlik onarım. DocumentsUI’yi etkinleştirip görünür yapar, seçici/dosya etkinliklerini varsayılana döndürür ve kullanıcı 0 için ColorOS File Manager’ı devre dışı bırakır. “Kapalı” ile Dosya Yöneticisi geri gelir. Yalnızca ASB’nin değiştirdiği durumlar geri yüklenir; açılışta yeniden uygulanmaz."
     }
   },
   "nav_live": "İzleme",
@@ -604,6 +616,10 @@
       "30": "−0,30 dB",
       "50": "−0,50 dB",
       "100": "−1,00 dB"
+    },
+    "heytap_mcs": {
+      "stock": "Varsayılan",
+      "off": "Kapalı"
     }
   },
   "prof_none": "seçilmedi",
@@ -2046,5 +2062,28 @@
   "dev_guide_kernel_btf": "BTF config, vmlinux exposure and module entries are separate facts. No BTF program or probe is loaded by this read-only page.",
   "dev_guide_kernel_ebpf": "Config and bpfs/sysctl exposure do not prove that eBPF is active. No program is loaded to test the syscall.",
   "dev_guide_kernel_fuse_bpf": "FUSE-BPF needs its own positive evidence. Ordinary FUSE, generic eBPF or a connection count alone is insufficient.",
-  "dev_insight_kernel_origin": "Kernel origin is {origin}: this is an evidence classification, not guaranteed provenance. ASB still gates every control by the interfaces this kernel and ROM actually expose."
+  "dev_insight_kernel_origin": "Kernel origin is {origin}: this is an evidence classification, not guaranteed provenance. ASB still gates every control by the interfaces this kernel and ROM actually expose.",
+  "st_hey_absent": "MCS yüklü değil",
+  "st_hey_pending": "MCS kapalı · ART yeniden başlatınca",
+  "st_hey_running": "ART derleniyor",
+  "st_hey_done": "MCS kapalı · ART tamam",
+  "st_hey_failed": "MCS kapalı · ART başarısız",
+  "st_hey_off": "MCS devre dışı",
+  "st_doc_absent": "DocumentsUI yok",
+  "st_doc_applied": "seçici onarıldı",
+  "st_doc_already": "zaten onarılmış",
+  "t_hey_off": "HeyTap MCS devre dışı · ART, sonraki yeniden başlatmadan sonra bir kez derlenecek",
+  "t_hey_done": "HeyTap MCS devre dışı kalıyor · ART zaten tamamlandı",
+  "t_hey_compile_failed": "HeyTap MCS devre dışı kalıyor · ART başarısız oldu ve otomatik yeniden denenmeyecek",
+  "t_hey_stock": "HeyTap MCS durumu geri yüklendi · bekleyen ART derlemesi iptal edildi",
+  "t_hey_absent": "HeyTap MCS bu cihazda yüklü değil",
+  "t_hey_failed": "MCS güvenli biçimde değiştirilmedi; asbdiag durumunu kontrol edin",
+  "t_doc_applied": "DocumentsUI seçici onarıldı · ColorOS File Manager devre dışı",
+  "t_doc_restored": "DocumentsUI ve Dosya Yöneticisi durumları geri yüklendi",
+  "t_doc_already": "Seçici zaten istenen durumda",
+  "t_doc_absent": "DocumentsUI bu cihazda yüklü değil",
+  "t_doc_rolled_back": "ROM onarımı reddetti; ASB değişikliklerini geri aldı",
+  "t_doc_failed": "DocumentsUI güvenli biçimde değiştirilmedi; özgün durumlar geri yükleme için saklandı",
+  "wb_heytap": "HeyTap/OPPO Push uygulamaları bildirimleri kaybedebilir veya geciktirebilir; ART yeniden başlatma sonrası bir kez çalışır",
+  "wb_documentsui": "Bu onarım açıkken ColorOS File Manager devre dışı kalır"
 }
