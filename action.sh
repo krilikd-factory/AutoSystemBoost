@@ -1244,14 +1244,22 @@ case "$_offn" in ''|*[!0-9]*) _offn=0 ;; esac
 # with its own window count; the phone-wide one stays the fallback for a profile with no
 # clean screen-off window yet.
 if [ -n "$PROFILE" ]; then
-  _poff="$(grep -m1 '^offdrain_by_profile=' /dev/.asb/state 2>/dev/null | cut -d= -f2 \
-    | tr ',' '\n' | awk -F: -v p="$PROFILE" '$1 == p && $2 > 0 && $3 > 0 { print $2; exit }')"
+  # fix253: use exactly the WebUI's basis - latest complete meter window, then its aggregate,
+  # then the governor's per-profile average. A fresh night must not be 0.40 %/h on Monitor and
+  # an older 1.28 %/h here. Zero-step windows contribute their conservative upper bound.
+  _dmf=/dev/.asb_drain_meter; [ -s "$_dmf" ] || _dmf=/data/adb/asb/drain_meter
+  _poff="$(awk -v p="$PROFILE" '$1 == p && $6 > 0 {
+      if ($8 >= 3600) { r = $7 > 0 ? $7 : int((360000 + $8 - 1) / $8); print r, $6; exit }
+      if ($4 > 0) { r = $5 > 0 ? int($5 * 3600 / $4 + 0.5) : int((360000 + $4 - 1) / $4); print r, $6; exit }
+    }' "$_dmf" 2>/dev/null | head -1)"
   case "$_poff" in
-    ''|*[!0-9]*) : ;;
+    [1-9]*' '[1-9]*) _offx="${_poff%% *}"; _offn="${_poff##* }" ;;
     *)
-      _offx="$_poff"
-      _offn="$(grep -m1 '^offdrain_by_profile=' /dev/.asb/state 2>/dev/null | cut -d= -f2 \
-        | tr ',' '\n' | awk -F: -v p="$PROFILE" '$1 == p && $2 > 0 && $3 > 0 { print $3; exit }')"
+      _poff="$(grep -m1 '^offdrain_by_profile=' /dev/.asb/state 2>/dev/null | cut -d= -f2 \
+        | tr ',' '\n' | awk -F: -v p="$PROFILE" '$1 == p && $2 > 0 && $3 > 0 { print $2, $3; exit }')"
+      case "$_poff" in
+        [1-9]*' '[1-9]*) _offx="${_poff%% *}"; _offn="${_poff##* }" ;;
+      esac
       ;;
   esac
 fi
