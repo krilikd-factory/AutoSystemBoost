@@ -59,9 +59,11 @@
   --accent-glow: rgba(0,240,180,0.35);
   --accent2: #00d4ff;
   --m-good: #2ed573;
+  --m-fair: #83df63;
   --m-mild: #c2e64b;
   --m-warm: #ffbf1f;
   --m-hot: #ff7a1a;
+  --m-severe: #ff7047;
   --m-bad: #ff2d2d;
   /* Activity (FSM state, app load) is a category, not a grade: blue/cyan at rest, turquoise
    * for ordinary work, violet to pink as the work gets heavier. No green, no amber or red, so
@@ -1593,9 +1595,11 @@ html[data-asb-theme="light"] .live-info-src { background: #fbfcfc; }
 .lvs-seg { flex: 1 1 0; border-radius: 3px; opacity: .38; }
 .lvs-seg.on { opacity: 1; box-shadow: 0 0 0 1px rgba(255,255,255,.35), 0 0 10px currentColor; }
 .lvs-seg.metric-good { background: var(--m-good); color: var(--m-good); }
+.lvs-seg.metric-fair { background: var(--m-fair); color: var(--m-fair); }
 .lvs-seg.metric-mild { background: var(--m-mild); color: var(--m-mild); }
 .lvs-seg.metric-warm { background: var(--m-warm); color: var(--m-warm); }
 .lvs-seg.metric-hot { background: var(--m-hot); color: var(--m-hot); }
+.lvs-seg.metric-severe { background: var(--m-severe); color: var(--m-severe); }
 .lvs-seg.metric-bad { background: var(--m-bad); color: var(--m-bad); }
 .lvs-ticks { display: flex; margin-top: 4px; font: 600 10px/1.2 var(--mono); color: var(--text-tertiary); }
 .lvs-ticks span { flex: 1 1 0; text-align: end; white-space: nowrap; }
@@ -3194,7 +3198,7 @@ html[data-asb-theme="light"] {
      theme’s neon glow. Values are opaque enough for Android WebView composition. */
   --bg:#edf4f1; --surface:#ffffff; --surface-hover:#e3efea;
   --accent:#007c63; --accent2:#006f9b; --accent-glow:rgba(0,124,99,.20);
-  --m-good:#08753c; --m-mild:#4f7a0a; --m-warm:#8a5700; --m-hot:#b04a00; --m-bad:#b42318;
+  --m-good:#08753c; --m-fair:#2f6b1d; --m-mild:#4f7a0a; --m-warm:#8a5700; --m-hot:#b04a00; --m-severe:#d14020; --m-bad:#b42318;
   --fsm-deep:#2059bf; --fsm-light:#00759e; --fsm-moderate:#047a76;
   --fsm-heavy:#7240bd; --fsm-sustained:#9c3aa0; --fsm-gaming:#b0245f;
   --m-charge-a:#08753c; --m-charge-b:#006f9b; --m-charge-hi:#35b07a;
@@ -3993,9 +3997,9 @@ html[data-asb-glass="1"] .smart-banner-value .load-high { color:var(--perf) !imp
 /* Every monitored value uses the same colour vocabulary in all four themes (fix252):
  * - the text colour: a plain fact with no judgement (uptime, the slot, a rate, a modem at its
  *   default); grey: not known yet or still warming up;
- * - green, lime, yellow, orange, red: one quality scale from best to worst. Green is always the
- *   best end - for a temperature, a load, the headroom and the battery alike - and no step sits
- *   beyond it, so a green reading never looks second best;
+ * - green, green-lime, lime, yellow, orange, orange-red, red: one seven-step quality scale.
+ *   Green is always the best end - for a temperature, a load, the headroom and the battery
+ *   alike - and no step sits beyond it, so a green reading never looks second best;
  * - blue/cyan, turquoise, violet, pink: what the phone is doing (FSM state, app load);
  * - the green-to-blue shimmer: charging. */
 html .smart-banner-value.metric-good, html .live-cell-value.metric-good, html .smart-drain-val.metric-good, html .live-info-val.metric-good,
@@ -4003,6 +4007,11 @@ html[data-asb-glass="1"] .smart-banner-value.metric-good, html[data-asb-glass="1
 html[data-asb-glass="1"] .smart-drain-val.metric-good, html[data-asb-glass="1"] .live-info-val.metric-good,
 html[data-asb-theme="light"] .smart-banner-value.metric-good, html[data-asb-theme="light"] .live-cell-value.metric-good,
 html[data-asb-theme="light"] .smart-drain-val.metric-good, html[data-asb-theme="light"] .live-info-val.metric-good { color:var(--m-good) !important; }
+html .smart-banner-value.metric-fair, html .live-cell-value.metric-fair, html .smart-drain-val.metric-fair, html .live-info-val.metric-fair,
+html[data-asb-glass="1"] .smart-banner-value.metric-fair, html[data-asb-glass="1"] .live-cell-value.metric-fair,
+html[data-asb-glass="1"] .smart-drain-val.metric-fair, html[data-asb-glass="1"] .live-info-val.metric-fair,
+html[data-asb-theme="light"] .smart-banner-value.metric-fair, html[data-asb-theme="light"] .live-cell-value.metric-fair,
+html[data-asb-theme="light"] .smart-drain-val.metric-fair, html[data-asb-theme="light"] .live-info-val.metric-fair { color:var(--m-fair) !important; }
 html .smart-banner-value.metric-mild, html .live-cell-value.metric-mild, html .smart-drain-val.metric-mild, html .live-info-val.metric-mild,
 html[data-asb-glass="1"] .smart-banner-value.metric-mild, html[data-asb-glass="1"] .live-cell-value.metric-mild,
 html[data-asb-glass="1"] .smart-drain-val.metric-mild, html[data-asb-glass="1"] .live-info-val.metric-mild,
@@ -4018,6 +4027,11 @@ html[data-asb-glass="1"] .smart-banner-value.metric-hot, html[data-asb-glass="1"
 html[data-asb-glass="1"] .smart-drain-val.metric-hot, html[data-asb-glass="1"] .live-info-val.metric-hot,
 html[data-asb-theme="light"] .smart-banner-value.metric-hot, html[data-asb-theme="light"] .live-cell-value.metric-hot,
 html[data-asb-theme="light"] .smart-drain-val.metric-hot, html[data-asb-theme="light"] .live-info-val.metric-hot { color:var(--m-hot) !important; }
+html .smart-banner-value.metric-severe, html .live-cell-value.metric-severe, html .smart-drain-val.metric-severe, html .live-info-val.metric-severe,
+html[data-asb-glass="1"] .smart-banner-value.metric-severe, html[data-asb-glass="1"] .live-cell-value.metric-severe,
+html[data-asb-glass="1"] .smart-drain-val.metric-severe, html[data-asb-glass="1"] .live-info-val.metric-severe,
+html[data-asb-theme="light"] .smart-banner-value.metric-severe, html[data-asb-theme="light"] .live-cell-value.metric-severe,
+html[data-asb-theme="light"] .smart-drain-val.metric-severe, html[data-asb-theme="light"] .live-info-val.metric-severe { color:var(--m-severe) !important; }
 html .smart-banner-value.metric-bad, html .live-cell-value.metric-bad, html .smart-drain-val.metric-bad, html .live-info-val.metric-bad,
 html[data-asb-glass="1"] .smart-banner-value.metric-bad, html[data-asb-glass="1"] .live-cell-value.metric-bad,
 html[data-asb-glass="1"] .smart-drain-val.metric-bad, html[data-asb-glass="1"] .live-info-val.metric-bad,
@@ -6047,12 +6061,16 @@ function lvMeterParse(text) {
     if (f[0] === 'current') { out.cur = f[1] || ''; return; }
     if (f.length < 6) return;
     const n = f.slice(1, 6).map(function (x) { return parseInt(x, 10) || 0; });
+    const last = f.slice(6, 9).map(function (x) { return parseInt(x, 10) || 0; });
     out.p[f[0]] = {
       on: (n[0] >= 600 && n[1] > 0) ? Math.round(n[1] * 360 / n[0]) : 0,
       onMin: Math.round(n[0] / 60),
       off: (n[4] >= 1 && n[2] > 0) ? Math.round(n[3] * 3600 / n[2]) : 0,
       offN: n[4],
-      offS: n[2]
+      offS: n[2],
+      offLast: last[0],
+      offLastS: last[1],
+      offLastAt: last[2]
     };
   });
   return out;
@@ -6083,16 +6101,24 @@ function lvGovOffParse(text) {
   return by;
 }
 /* A profile's screen-off drain, by one rule for the home cards, the Monitor's drain strip,
- * its sheet and the time to empty (fix189): what the drain meter measured in that profile;
- * a screen-off hour whose level did not move as "below one step" (<x); else what the governor
- * measured in that profile (a window one profile held throughout). Never the phone-wide
- * figure - an OP15 switched from Smart to Balanced showed Smart's 0.70 %/h on Balanced's
- * card a minute later. null: nothing measured in this profile yet. */
+ * its sheet and the time to empty (fix189/fix253): the latest complete window measured in that
+ * profile, so waking to a good night cannot be contradicted by an average of older nights.
+ * Six-field meter files have no latest window and keep the long-term meter/governor fallback.
+ * A window whose level did not move is an upper bound (<x), never a fake zero. */
 function lvOffFigure(profile) {
   const e = (_lvMeter.p && _lvMeter.p[profile]) || null;
   const tip = function (n) {
-    return T('lv_drain_off_measured', 'measured over %s screen-off stretch(es) of an hour or more, without charging or music').replace('%s', String(n));
+    return T('lv_drain_off_measured', 'measured over %s screen-off stretch(es) of an hour or more, without charging or sustained audio').replace('%s', String(n));
   };
+  const latestTip = function (e) {
+    return T('lv_drain_off_latest', 'latest complete screen-off stretch: %s; %s qualifying stretch(es) total')
+      .replace('%s', lvDurDHM(e.offLastS)).replace('%s', String(e.offN));
+  };
+  if (e && e.offLastS >= 3600 && e.offN > 0) {
+    if (e.offLast > 0) return { x: e.offLast, t: lvPct(e.offLast, 100, e.offLast >= 100 ? 1 : 2), n: e.offN, src: 'meter_latest', lastS: e.offLastS, tip: latestTip(e) };
+    const lub = Math.max(1, Math.ceil(100 * 3600 / e.offLastS));
+    return { x: lub, t: '<' + lvPct(lub, 100, lub >= 100 ? 1 : 2), n: e.offN, src: 'bound_latest', lastS: e.offLastS, tip: latestTip(e) };
+  }
   if (e && e.off > 0) return { x: e.off, t: lvPct(e.off, 100, e.off >= 100 ? 1 : 2), n: e.offN, src: 'meter', tip: tip(e.offN) };
   if (e && e.offN > 0 && e.offS > 0) {
     const ub = Math.max(1, Math.ceil(100 * 3600 / e.offS));
@@ -6129,6 +6155,7 @@ function lvMeterPaint(profile) {
   _lvDrain.on = (e && e.on > 0) ? 'meter' : 'meter_wait';
   _lvDrain.off = off ? 'measured' : 'wait';
   _lvDrain.offN = off ? off.n : 0;
+  _lvDrain.offTip = off ? off.tip : '';
   _lvDrain.winS = e ? e.onMin * 60 : 0;
   lvEtaPaint();
   if (liveDrainIsOpen()) liveDrainPaint();
@@ -6189,7 +6216,7 @@ function lvEtaPaint() {
 }
 /* Monitor: battery drain with the screen on and off (fix159). The two figures sit in the Smart
  * card; a tap opens what each one is based on and how long the battery would last. */
-const _lvDrain = { on: 'wait', off: 'wait', winS: 0, offN: 0, offX: 0 };
+const _lvDrain = { on: 'wait', off: 'wait', winS: 0, offN: 0, offX: 0, offTip: '' };
 function liveDrainIsOpen() { const m = _el('liveDrainSheet'); return !!m && !m.hidden; }
 function liveDrainEnsure() {
   let m = _el('liveDrainSheet');
@@ -6249,8 +6276,8 @@ function liveDrainPaint() {
     meter_wait: T('lv_drain_on_wait', 'needs 10 minutes with the screen on and the battery level moving')
   }[_lvDrain.on] || '';
   let offBasis = _lvDrain.off === 'measured'
-    ? T('lv_drain_off_measured', 'measured over %s screen-off stretch(es) of an hour or more, without charging or music').replace('%s', String(_lvDrain.offN))
-    : T('lv_drain_off_wait', 'needs an hour with the screen off, without charging or music');
+    ? (_lvDrain.offTip || T('lv_drain_off_measured', 'measured over %s screen-off stretch(es) of an hour or more, without charging or sustained audio').replace('%s', String(_lvDrain.offN)))
+    : T('lv_drain_off_wait', 'needs an hour with the screen off, without charging or sustained audio');
   /* An estimated time to empty says what it is estimated from (fix189). */
   if (_lvDrain.off !== 'measured' && etaOff.charAt(0) === '~') {
     const _et = ((_el('liveEtaOff') || {}).title || '');
@@ -6307,7 +6334,7 @@ function liveDrainCompare() {
     if (of) { offTxt = of.t; offTip = of.tip; }
     else {
       offTxt = '\u2026';
-      offTip = T('lv_drain_off_wait', 'needs an hour with the screen off, without charging or music');
+      offTip = T('lv_drain_off_wait', 'needs an hour with the screen off, without charging or sustained audio');
     }
     off.appendChild(document.createTextNode(offTxt));
     if (offTip) off.title = offTip;
@@ -6636,21 +6663,21 @@ function liveInfoSource(key, cell) {
 const LVI_HIST_MS = 15 * 60 * 1000;
 const _lviHist = {};
 const LVI_SCALES = {
-  cpu: { cuts: [45, 52, 60, 68], unit: '°', kind: 't', steps: ['metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'] },
-  skin: { cuts: [35, 38, 41, 44], unit: '°', kind: 't', steps: ['metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'] },
-  board: { cuts: [38, 42, 46, 50], unit: '°', kind: 't', steps: ['metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'] },
-  battemp: { cuts: [35, 38, 41, 45], unit: '°', kind: 't', steps: ['metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'] },
-  gpu: { cuts: [25, 45, 65, 85], unit: '%', kind: 'l', steps: ['metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'] },
-  headroom: { cuts: [10, 15, 25, 35], unit: '%', kind: 'h', steps: ['metric-bad', 'metric-hot', 'metric-warm', 'metric-mild', 'metric-good'] },
-  clamps: { cuts: [4, 11, 21, 41], unit: '', kind: 'c', steps: ['metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'] },
-  sbattery: { cuts: [10, 20, 30, 50], unit: '%', kind: 'b', steps: ['metric-bad', 'metric-hot', 'metric-warm', 'metric-mild', 'metric-good'] }
+  cpu: { cuts: [40, 45, 52, 60, 68, 75], unit: '°', kind: 't', steps: ['metric-good', 'metric-fair', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-severe', 'metric-bad'] },
+  skin: { cuts: [33, 35, 38, 41, 44, 47], unit: '°', kind: 't', steps: ['metric-good', 'metric-fair', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-severe', 'metric-bad'] },
+  board: { cuts: [35, 38, 42, 46, 50, 55], unit: '°', kind: 't', steps: ['metric-good', 'metric-fair', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-severe', 'metric-bad'] },
+  battemp: { cuts: [32, 35, 38, 41, 45, 48], unit: '°', kind: 't', steps: ['metric-good', 'metric-fair', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-severe', 'metric-bad'] },
+  gpu: { cuts: [15, 25, 45, 65, 80, 85], unit: '%', kind: 'l', steps: ['metric-good', 'metric-fair', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-severe', 'metric-bad'] },
+  headroom: { cuts: [5, 10, 15, 25, 30, 35], unit: '%', kind: 'h', steps: ['metric-bad', 'metric-severe', 'metric-hot', 'metric-warm', 'metric-mild', 'metric-fair', 'metric-good'] },
+  clamps: { cuts: [2, 4, 11, 21, 41, 60], unit: '', kind: 'c', steps: ['metric-good', 'metric-fair', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-severe', 'metric-bad'] },
+  sbattery: { cuts: [5, 10, 20, 30, 40, 50], unit: '%', kind: 'b', steps: ['metric-bad', 'metric-severe', 'metric-hot', 'metric-warm', 'metric-mild', 'metric-fair', 'metric-good'] }
 };
 const LVS_FB = {
-  t: { 'metric-good': 'normal', 'metric-mild': 'warm', 'metric-warm': 'quite warm', 'metric-hot': 'hot', 'metric-bad': 'overheating' },
-  l: { 'metric-good': 'light', 'metric-mild': 'moderate', 'metric-warm': 'noticeable', 'metric-hot': 'high', 'metric-bad': 'at the limit' },
-  h: { 'metric-bad': 'almost none', 'metric-hot': 'little', 'metric-warm': 'limited', 'metric-mild': 'enough', 'metric-good': 'free' },
-  c: { 'metric-good': 'rare', 'metric-mild': 'now and then', 'metric-warm': 'often', 'metric-hot': 'very often', 'metric-bad': 'constant' },
-  b: { 'metric-bad': 'critical', 'metric-hot': 'low', 'metric-warm': 'under a third', 'metric-mild': 'under half', 'metric-good': 'enough' }
+  t: { 'metric-good': 'normal', 'metric-fair': 'slightly warm', 'metric-mild': 'warm', 'metric-warm': 'quite warm', 'metric-hot': 'hot', 'metric-severe': 'very hot', 'metric-bad': 'overheating' },
+  l: { 'metric-good': 'light', 'metric-fair': 'easy', 'metric-mild': 'moderate', 'metric-warm': 'noticeable', 'metric-hot': 'high', 'metric-severe': 'very high', 'metric-bad': 'at the limit' },
+  h: { 'metric-bad': 'almost none', 'metric-severe': 'very little', 'metric-hot': 'little', 'metric-warm': 'limited', 'metric-mild': 'enough', 'metric-fair': 'comfortable', 'metric-good': 'free' },
+  c: { 'metric-good': 'rare', 'metric-fair': 'occasional', 'metric-mild': 'now and then', 'metric-warm': 'often', 'metric-hot': 'very often', 'metric-severe': 'almost constant', 'metric-bad': 'constant' },
+  b: { 'metric-bad': 'critical', 'metric-severe': 'very low', 'metric-hot': 'low', 'metric-warm': 'under a third', 'metric-mild': 'under half', 'metric-fair': 'nearly half', 'metric-good': 'enough' }
 };
 function lviKeyOf(cell) {
   const pos = cell.getAttribute('data-lvi');
@@ -14244,8 +14271,8 @@ function lvLoadShare(raw, cpus) {
 }
 /* Monitor readings share one colour vocabulary, but not one threshold table. Each helper
  * judges only its own unit; missing, malformed and warm-up evidence stays neutral. */
-const METRIC_CLASSES = ['metric-good', 'metric-warm', 'metric-bad', 'metric-neutral', 'metric-normal',
-  'metric-mild', 'metric-hot', 'metric-info', 'metric-charge', 'metric-fsm-deep', 'metric-fsm-light',
+const METRIC_CLASSES = ['metric-good', 'metric-fair', 'metric-warm', 'metric-bad', 'metric-neutral', 'metric-normal',
+  'metric-mild', 'metric-hot', 'metric-severe', 'metric-info', 'metric-charge', 'metric-fsm-deep', 'metric-fsm-light',
   'metric-fsm-moderate', 'metric-fsm-heavy', 'metric-fsm-sustained', 'metric-fsm-gaming'];
 function asbMetricPaint(id, state) {
   const el = _el(id); if (!el) return;
@@ -14253,10 +14280,10 @@ function asbMetricPaint(id, state) {
   kept.push(METRIC_CLASSES.includes(state) ? state : 'metric-neutral');
   el.className = kept.join(' ');
 }
-/* fix252: one five-step quality scale - good, mild, warm, hot, bad - with green always the
- * best end. `cuts` are the four upper bounds, ascending; a reading under the first is the
- * first step. Readings where higher is better pass their steps reversed. */
-const METRIC_STEPS = ['metric-good', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-bad'];
+/* fix253: seven intuitive quality steps - good, fair, mild, warm, hot, severe, bad. The five
+ * fix252 meanings keep their names and order; fair and severe only subdivide broad ranges.
+ * `cuts` are ascending upper bounds. Readings where higher is better pass steps reversed. */
+const METRIC_STEPS = ['metric-good', 'metric-fair', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-severe', 'metric-bad'];
 function asbMetricStep(n, cuts, steps) {
   const st = steps || METRIC_STEPS;
   for (let i = 0; i < cuts.length; i++) if (n < cuts[i]) return st[i];
@@ -14266,14 +14293,14 @@ function asbLoadMetric(v) {
   if (v === null || v === undefined || v === '') return 'metric-neutral';
   const n = Number(v);
   if (!Number.isFinite(n) || n < 0) return 'metric-neutral';
-  return asbMetricStep(n, [25, 45, 65, 85]);
+  return asbMetricStep(n, [15, 25, 45, 65, 80, 85]);
 }
 function asbThermalMetric(v, kind) {
   const n = Number(v); if (!Number.isFinite(n) || n <= 0) return 'metric-neutral';
-  const cuts = kind === 'body' ? [35, 38, 41, 44]
-    : kind === 'board' ? [38, 42, 46, 50]
-    : kind === 'battery' ? [35, 38, 41, 45]
-    : [45, 52, 60, 68];
+  const cuts = kind === 'body' ? [33, 35, 38, 41, 44, 47]
+    : kind === 'board' ? [35, 38, 42, 46, 50, 55]
+    : kind === 'battery' ? [32, 35, 38, 41, 45, 48]
+    : [40, 45, 52, 60, 68, 75];
   return asbMetricStep(n, cuts);
 }
 function asbRamMetric(av, total) {
@@ -14283,26 +14310,28 @@ function asbRamMetric(av, total) {
   /* Android keeps apps in memory on purpose: a share alone painted 4.7 GB free on a 16 GB
    * phone amber. Either a fair share or a few gigabytes in hand is enough. */
   if (pct >= 30 || gb >= 4) return 'metric-good';
+  if (pct >= 25 || gb >= 3.2) return 'metric-fair';
   if (pct >= 20 || gb >= 2.5) return 'metric-mild';
   if (pct >= 12 || gb >= 1.5) return 'metric-warm';
   if (pct >= 7 || gb >= 0.8) return 'metric-hot';
+  if (pct >= 4 || gb >= 0.5) return 'metric-severe';
   return 'metric-bad';
 }
 function asbDrainMetric(ma, cap) {
   const n = Number(ma), c = Number(cap); if (!Number.isFinite(n)) return 'metric-neutral';
   if (n < 0) return 'metric-charge'; if (n === 0) return 'metric-neutral';
   if (!Number.isFinite(c) || c <= 0) return 'metric-neutral';
-  return asbMetricStep(n / c * 100, [4, 7, 12, 18]);
+  return asbMetricStep(n / c * 100, [3, 4, 7, 12, 18, 25]);
 }
 function asbClockMetric(cur, max) {
   const n = Number(cur), m = Number(max);
   if (!Number.isFinite(n) || !Number.isFinite(m) || n < 0 || m <= 0) return 'metric-neutral';
-  return asbMetricStep(n / m * 100, [25, 45, 65, 85]);
+  return asbMetricStep(n / m * 100, [15, 25, 45, 65, 80, 85]);
 }
 function asbHeadroomMetric(v) {
   if (v === null || v === undefined || v === '') return 'metric-neutral';
   const n = Number(v); if (!Number.isFinite(n) || n < 0) return 'metric-neutral';
-  return asbMetricStep(n, [10, 15, 25, 35], ['metric-bad', 'metric-hot', 'metric-warm', 'metric-mild', 'metric-good']);
+  return asbMetricStep(n, [5, 10, 15, 25, 30, 35], ['metric-bad', 'metric-severe', 'metric-hot', 'metric-warm', 'metric-mild', 'metric-fair', 'metric-good']);
 }
 function asbConfidenceMetric(v) {
   const s = String(v || '').toLowerCase();
@@ -14311,7 +14340,7 @@ function asbConfidenceMetric(v) {
 /* Smart's confidence in the slot, 0-1000. */
 function asbConfPctMetric(v) {
   const n = Number(v); if (!Number.isFinite(n) || n < 0) return 'metric-neutral';
-  return asbMetricStep(n, [250, 450, 650, 850], ['metric-bad', 'metric-hot', 'metric-warm', 'metric-mild', 'metric-good']);
+  return asbMetricStep(n, [150, 250, 450, 650, 750, 850], ['metric-bad', 'metric-severe', 'metric-hot', 'metric-warm', 'metric-mild', 'metric-fair', 'metric-good']);
 }
 function asbBasisMetric(v) {
   const s = String(v || '').toLowerCase();
@@ -14343,7 +14372,7 @@ function asbTrendMetric(perMin) {
   const n = Number(perMin); if (!Number.isFinite(n)) return 'metric-neutral';
   if (n < -0.3) return 'metric-good';
   if (n <= 0.3) return 'metric-info';
-  return asbMetricStep(n, [0.8, 1.5, 2.5], ['metric-mild', 'metric-warm', 'metric-hot', 'metric-bad']);
+  return asbMetricStep(n, [0.6, 0.8, 1.5, 2.5, 3.5], ['metric-fair', 'metric-mild', 'metric-warm', 'metric-hot', 'metric-severe', 'metric-bad']);
 }
 /* What the governor's state machine says the phone is doing, from asleep to flat out. */
 function asbFsmMetric(state) {
@@ -14360,18 +14389,18 @@ function asbAppMetric(h) {
 /* Vendor clamps in the last hour: a few are ordinary, dozens mean a hot phone. */
 function asbClampMetric(perHour) {
   const n = Number(perHour); if (!Number.isFinite(n) || n < 0) return 'metric-neutral';
-  return asbMetricStep(n, [4, 11, 21, 41]);
+  return asbMetricStep(n, [2, 4, 11, 21, 41, 60]);
 }
 /* How far the ROM lets the CPU reach (Stock): 100% is free, a low share is the ROM holding it. */
 function asbCeilMetric(pct) {
   const n = Number(pct); if (!Number.isFinite(n) || n <= 0) return 'metric-neutral';
   if (n >= 100) return 'metric-good';
-  return n >= 60 ? 'metric-mild' : n >= 30 ? 'metric-warm' : 'metric-hot';
+  return n >= 85 ? 'metric-fair' : n >= 60 ? 'metric-mild' : n >= 30 ? 'metric-warm' : n >= 15 ? 'metric-hot' : 'metric-severe';
 }
 /* Battery charge left. */
 function asbBatLevelMetric(pct) {
   const n = Number(pct); if (!Number.isFinite(n) || n <= 0) return 'metric-neutral';
-  return asbMetricStep(n, [10, 20, 30, 50], ['metric-bad', 'metric-hot', 'metric-warm', 'metric-mild', 'metric-good']);
+  return asbMetricStep(n, [5, 10, 20, 30, 40, 50], ['metric-bad', 'metric-severe', 'metric-hot', 'metric-warm', 'metric-mild', 'metric-fair', 'metric-good']);
 }
 function paintStockLive(stockKv = null) {
   /* Governor-owned cells stay untouched outside Stock.
