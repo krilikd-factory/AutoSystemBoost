@@ -1664,6 +1664,13 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .lgr-verdict-unknown::before { background: transparent; border: 1px solid var(--text-tertiary); width: 3px; height: 3px; }
 .lgr-summary-legend { margin-top: 5px; padding-top: 8px; border-top: 1px solid var(--border); }
 .lgr-details-anchor { scroll-margin-top: 12px; padding: 3px 3px 0; }
+.lgr-sec[id] { scroll-margin-top: 12px; }
+.lgr-ref { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.lgr-ref-btn { min-height: 28px; cursor: pointer; font-size: 11px; }
+.lgr-ref-btn:active { border-color: var(--accent); color: var(--text); }
+.lgr-verdict > .lgr-ref { grid-column: 1 / -1; margin-top: 1px; }
+.lgr-action > .lgr-ref { grid-column: 2; margin-top: 0; }
+.dev-insight-ref { margin: -2px 0 5px 12px; }
 .lgr-details-title { color: var(--text); font-size: 14px; font-weight: 750; }
 .lgr-details-anchor .lgr-note { margin-top: 2px; }
 .lgr-jump { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: -3px 0 1px; }
@@ -3986,6 +3993,18 @@ html[data-asb-glass="1"][data-asb-theme="light"] :is(.lgr-chip,.pmeta-chip,.cfg-
 }
 html[data-asb-glass="1"][data-asb-theme="light"] :is(.pbtn.on,.cfg-tile.active,.cfg-profile-row.selected,.cfg-row.is-on) {
   border-color:var(--accent) !important; box-shadow:0 0 0 1px var(--accent-glow),inset 0 1px 0 rgba(255,255,255,.72) !important;
+}
+/* Dark Glass: an unselected profile is a quiet, nearly black material, not another luminous
+ * card competing with the selected one. Dim only the surface and its decorative sheen;
+ * foreground labels, profile glyphs and neutral drain-rate chips retain their own paint.
+ * The explicit palette guard leaves ordinary Dark/Light and light Liquid Glass unchanged. */
+html[data-asb-glass="1"]:not([data-asb-theme="light"]) .pbtn:not(.on) {
+  background:linear-gradient(145deg,rgba(255,255,255,.022),rgba(255,255,255,.004)),rgba(4,8,6,.96) !important;
+  border-color:rgba(255,255,255,.10) !important;
+  box-shadow:0 8px 22px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.065) !important;
+}
+html[data-asb-glass="1"]:not([data-asb-theme="light"]) .pbtn:not(.on)::before {
+  opacity:0 !important;
 }
 html[data-asb-glass="1"][data-asb-theme="light"] .cfg-row.is-on {
   background:linear-gradient(145deg,rgba(0,124,99,.12),rgba(255,255,255,.52)) !important;
@@ -11369,6 +11388,8 @@ function asbPageText(root) {
   const mark = function (e) { return asbPageWarn(e) ? '  (!)' : ''; };
   const pick = function (e, c) { return asbPageKids(e).filter(function (x) { return asbPageHas(x, c); })[0] || null; };
   function walk(e) {
+    /* Navigation is useful on screen but is not report content. */
+    if (asbPageHas(e, 'lgr-ref') || asbPageHas(e, 'lgr-jump')) return;
     if (asbPageHas(e, 'dev-group')) {
       out.push('');
       out.push('# ' + asbPageTxt(e));
@@ -11537,6 +11558,23 @@ function asbPageJump(items, label, extraClass) {
   });
   return nav;
 }
+/* A compact evidence link does not depend on whether the target is above or below.
+ * Targets are tried in order because an early/partial capture may not have every card. */
+function asbPageReference(targets, label, extraClass) {
+  const box = document.createElement('div');
+  box.className = 'lgr-ref' + (extraClass ? ' ' + extraClass : '');
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'lgr-chip lgr-ref-btn';
+  b.textContent = '↳ ' + label;
+  b.onclick = function () {
+    for (let i = 0; i < targets.length; i++) {
+      const target = _el(targets[i]);
+      if (target && target.scrollIntoView) { target.scrollIntoView({ block: 'start' }); return true; }
+    }
+    return false;
+  };
+  box.appendChild(b);
+  return box;
+}
 /* fix200: one small table (headers + rows, all textContent - device data never becomes
  * markup). numCols says which columns are right-aligned numbers. */
 function logReportTable(heads, rows, numCols) {
@@ -11626,10 +11664,15 @@ const DEVICE_SECTION_ORDER = [
     'base_os', 'baseband', 'bootloader', 'fingerprint']],
   ['system', 'dev_sec_system', 'System', 'sw'],
   ['kernel', 'dev_sec_kernel', 'Kernel build', 'kernel'],
+  ['kernel_origin', 'dev_sec_kernel_origin', 'Kernel origin evidence', 'kernel'],
+  ['kernel_btf', 'dev_sec_kernel_btf', 'BTF evidence', 'kernel'],
+  ['kernel_ebpf', 'dev_sec_kernel_ebpf', 'eBPF evidence', 'kernel'],
+  ['kernel_fuse_bpf', 'dev_sec_kernel_fuse_bpf', 'FUSE-BPF evidence', 'kernel'],
   ['kernel_features', 'dev_sec_kernel_features', 'Custom kernel features', 'kernel'],
   ['kernel_runtime', 'dev_sec_kernel_runtime', 'Live kernel facilities', 'kernel'],
   ['kernel_external', 'dev_sec_kernel_external', 'External kernel / UV evidence', 'kernel'],
   ['kernel_config', 'dev_sec_kernel_config', 'Kernel configuration', 'kernel'],
+  ['root', 'dev_sec_root', 'Root implementation', 'root', ['manager', 'variant', 'version', 'variant_evidence', 'version_evidence']],
   ['susfs', 'dev_sec_susfs', 'SuSFS interface', 'root'],
   ['metamodule', 'dev_sec_metamodule', 'Metamodule', 'root'],
   ['asb', 'dev_sec_asb', 'ASB runtime', 'asb'],
@@ -11650,9 +11693,14 @@ const DEVICE_GROUP_GUIDES = {
 const DEVICE_SECTION_GUIDES = {
   cpu_policy: ['dev_guide_cpu_policy', 'Current limits and the hardware range are different. A current limit alone does not identify ASB, the vendor or another writer.'],
   memory: ['dev_guide_memory', 'MemAvailable estimates memory available for new work. Cache is reusable and is not simply wasted memory.'],
+  kernel_origin: ['dev_guide_kernel_origin', 'Stock-like and custom-like describe exposed indicators, not a guaranteed builder or provenance. Capability decisions still use each exposed control node.'],
+  kernel_btf: ['dev_guide_kernel_btf', 'BTF config, vmlinux exposure and module entries are separate facts. No BTF program or probe is loaded by this read-only page.'],
+  kernel_ebpf: ['dev_guide_kernel_ebpf', 'Config and bpfs/sysctl exposure do not prove that eBPF is active. No program is loaded to test the syscall.'],
+  kernel_fuse_bpf: ['dev_guide_kernel_fuse_bpf', 'FUSE-BPF needs its own positive evidence. Ordinary FUSE, generic eBPF or a connection count alone is insufficient.'],
   kernel_features: ['dev_guide_kernel_features', 'A config flag, an exposed interface and a verified runtime behaviour are not interchangeable.'],
   kernel_external: ['dev_guide_kernel_external', 'Not observable means this read-only snapshot cannot determine external kernel or undervoltage state; it does not prove stock voltage.'],
-  asb_caps: ['dev_guide_asb_caps', 'Only exposed, discovered control paths are listed. Missing evidence is not proof that the hardware lacks a feature.']
+  asb_caps: ['dev_guide_asb_caps', 'Only exposed, discovered control paths are listed. Missing evidence is not proof that the hardware lacks a feature.'],
+  root: ['dev_guide_root', 'The KSU interface family and the exact root implementation are separate facts. A variant is named only when version evidence names it.']
 };
 /* Reverse the feature groups from the original collector presentation while keeping each
  * driver's version directly below its main row. SuSFS leads, NoMount closes the section.
@@ -11795,6 +11843,17 @@ function deviceBatteryWear(d) {
   if (!(full > 0 && design > 0)) return null;
   return Math.round(full * 100 / design);
 }
+function deviceRootManagerDisplay(value, d) {
+  const v = String(value || '').trim().toLowerCase();
+  if (v !== 'ksu') return ({ magisk: 'Magisk', apatch: 'APatch' })[v] || value;
+  const variant = d ? deviceVal(d, 'root', 'variant') : '—';
+  const version = d ? deviceVal(d, 'root', 'version') : '—';
+  const hasVariant = variant !== '—' && !deviceIsLimitedValue(variant);
+  const hasVersion = version !== '—' && !deviceIsLimitedValue(version);
+  if (hasVariant) return variant + (hasVersion ? ' ' + version : '');
+  return T('dev_root_ksu_family', 'KernelSU-compatible family') + (hasVersion ? ' ' + version : '') +
+    ' · ' + T('dev_root_fork_possible', 'exact variant not exposed; a fork is possible');
+}
 function deviceDisplayValue(sec, key, value, d) {
   if ((sec === 'meta' && key === 'generated_epoch' || sec === 'firmware' && key === 'build_date') && /^\d{9,}$/.test(value)) {
     const dt = new Date(parseInt(value, 10) * 1000);
@@ -11853,6 +11912,7 @@ function deviceDisplayValue(sec, key, value, d) {
     const model = String(k.model || '').trim();
     return model ? model.replace(/^Adreno(?=\d)/, 'Adreno ') + ' · ' + line : line;
   }
+  if (sec === 'root' && key === 'manager') return deviceRootManagerDisplay(value, d);
   if (sec === 'asb_caps') {
     if (/^policy\d+$/.test(key)) {
       const k = deviceKv(value);
@@ -11866,7 +11926,7 @@ function deviceDisplayValue(sec, key, value, d) {
       return T('dev_cap_gpu_none', 'not controllable');
     }
     if (key === 'thermal_zones') return deviceFill('dev_cap_zones', '{n} zones', { n: value });
-    if (key === 'root_manager') return ({ ksu: 'KernelSU', magisk: 'Magisk', apatch: 'APatch' })[value] || value;
+    if (key === 'root_manager') return deviceRootManagerDisplay(value, d);
     if (key === 'overlay') {
       const k = deviceKv(value);
       return deviceFill('dev_cap_overlay_fmt', 'camera: {cam} · audio: {aud}', { cam: deviceYesNo(k.camera), aud: deviceYesNo(k.audio) });
@@ -11960,7 +12020,8 @@ function deviceInfoOverview(d) {
       { cores: cores || '—', clusters: keys.length || '—', max: deviceFreqKhz(hmax) })]);
   const up = deviceVal(d, 'system', 'uptime');
   if (up !== '—') rows.push([T('dev_ov_uptime', 'Running for'), deviceDuration(parseFloat(up))]);
-  const root = deviceVal(d, 'asb_caps', 'root_manager');
+  let root = deviceVal(d, 'asb_caps', 'root_manager');
+  if (root === '—') root = deviceVal(d, 'root', 'manager');
   if (root !== '—') {
     let rv = deviceDisplayValue('asb_caps', 'root_manager', root, d);
     const sv = deviceVal(d, 'kernel_features', 'susfs_version');
@@ -11968,6 +12029,54 @@ function deviceInfoOverview(d) {
     rows.push([T('dev_ov_root', 'Root'), rv]);
   }
   return rows;
+}
+/* Short interpretations are generated only from returned evidence. They deliberately
+ * avoid health scores, writer attribution and conclusions from a single instant. */
+function deviceInfoInsights(d) {
+  const out = [];
+  const origin = deviceVal(d, 'kernel_origin', 'assessment');
+  if (origin !== '—') out.push({
+    text: deviceFill('dev_insight_kernel_origin', 'Kernel origin is {origin}: this is an evidence classification, not guaranteed provenance. ASB still gates every control by the interfaces this kernel and ROM actually expose.', { origin: origin }),
+    targets: ['dev-sec-kernel-origin', 'dev-sec-asb-caps'], label: T('dev_sec_kernel_origin', 'Kernel origin evidence')
+  });
+  let root = deviceVal(d, 'asb_caps', 'root_manager');
+  if (root === '—') root = deviceVal(d, 'root', 'manager');
+  if (root === 'ksu') {
+    const variant = deviceVal(d, 'root', 'variant');
+    const identified = variant !== '—' && !deviceIsLimitedValue(variant);
+    out.push({
+      text: deviceFill(identified ? 'dev_insight_root_exact' : 'dev_insight_root_family',
+        identified ? 'The variant name comes from the version response, not from the shared KSU path. The displayed evidence is the basis for identifying {variant}.' :
+          'The KSU-compatible interface is present, but its exact implementation is not exposed. KernelSU Next and other forks remain possible; this is not evidence that support is absent.',
+        { variant: variant }),
+      targets: ['dev-sec-root', 'dev-sec-asb-caps'], label: T('dev_sec_root', 'Root implementation')
+    });
+  }
+  const policies = (d.sections && d.sections.cpu_policy) || {};
+  let capped = 0;
+  Object.keys(policies).forEach(function (key) {
+    const kv = deviceKv(policies[key]);
+    const cur = deviceNum(kv.scaling_max_khz), hw = deviceNum(kv.hardware_max_khz);
+    if (cur > 0 && hw > 0 && cur < hw) capped++;
+  });
+  if (capped) out.push({
+    text: deviceFill('dev_insight_cpu_cap', '{n} CPU policies currently have a ceiling below their hardware maximum. This snapshot does not identify who set it; compare after one controlled change.', { n: capped }),
+    targets: ['dev-sec-cpu-policy'], label: T('dev_sec_cpu_policy', 'CPU frequency policies')
+  });
+  const total = deviceNum(deviceVal(d, 'memory', 'MemTotal')), available = deviceNum(deviceVal(d, 'memory', 'MemAvailable'));
+  if (total > 0 && available >= 0) {
+    const pct = Math.max(0, Math.min(100, Math.round(available * 100 / total)));
+    if (pct <= 15) out.push({
+      text: deviceFill('dev_insight_memory', 'Only {pct}% of memory was available at collection time. One instant cannot identify a memory leak; recheck before changing settings.', { pct: pct }),
+      targets: ['dev-sec-memory'], label: T('dev_sec_memory', 'Memory')
+    });
+  }
+  const wear = deviceBatteryWear(d);
+  if (wear !== null && wear < 85) out.push({
+    text: deviceFill('dev_insight_battery', 'The battery reports {pct}% of design capacity. This is a fuel-gauge estimate from the exposed charge values, not a direct cell measurement.', { pct: wear }),
+    targets: ['dev-sec-battery'], label: T('dev_sec_battery', 'Battery')
+  });
+  return out;
 }
 function deviceInfoRender(d) {
   const body = _el('deviceBody');
@@ -12018,6 +12127,15 @@ function deviceInfoRender(d) {
     ov.forEach(function (r) { card.appendChild(logReportRow(r[0], r[1], false)); shown++; });
     body.appendChild(card);
   }
+  const insights = deviceInfoInsights(d);
+  if (insights.length) {
+    const card = logReportSec(T('dev_sec_insights', 'Evidence-based reading')); card.id = 'dev-insights';
+    insights.forEach(function (item) {
+      const n = logReportNote(item.text); n.classList.add('dev-evidence'); card.appendChild(n);
+      card.appendChild(asbPageReference(item.targets, item.label, 'dev-insight-ref'));
+    });
+    body.appendChild(card);
+  }
   const used = {};
   let group = '';
   DEVICE_SECTION_ORDER.forEach(function (spec, si) {
@@ -12046,6 +12164,7 @@ function deviceInfoRender(d) {
       }
     }
     const card = logReportSec(T(spec[1], spec[2]));
+    card.id = 'dev-sec-' + spec[1].slice(8).replace(/_/g, '-');
     const sectionGuide = DEVICE_SECTION_GUIDES[spec[0]];
     if (sectionGuide) {
       const sg = logReportNote(T(sectionGuide[0], sectionGuide[1])); sg.classList.add('dev-section-guide'); card.appendChild(sg);
@@ -12258,6 +12377,7 @@ function logReportAnalysisT(key, vars) {
     lr_chain_sysui_inj: '{m} of {n} SystemUI restarts → a native crash inside code {pkg} injects into SystemUI → that module, not ASB or the ROM, brought SystemUI down.',
     lr_no_actions: 'No priority change is supported by this capture. Keep settings unchanged and collect a comparable capture.',
     lr_no_actions_early: 'No settings recommendation yet: let the capture accumulate evidence.',
+    lr_actions_verify: 'Next capture: change one setting at a time and keep the scenario comparable. A second capture is an observation, not a controlled A/B test.',
     lr_trend_matched: 'Same device, ROM and scenario family; durations pass the minimum. Still an observation, not a controlled A/B test.',
     lr_trend_unmatched: 'The previous capture has a different or unknown device/ROM/scenario. Numeric improvement is intentionally not claimed.'
   };
@@ -12285,8 +12405,8 @@ function logReportTipText(tip) {
     lr_tip_wl_enable: '{app} held the phone awake for {min} min - turn on "{set}" in Settings and ASB will rein such apps in for you.',
     lr_tip_night_modem: 'Overnight the phone lost ~{pct}%/h - try "{set}" in Settings, it quiets the modem in your own sleeping hours.',
     lr_tip_jank_bad: 'About {pct}% of frames missed their deadline - stutter is visible. On Smart the learner is already testing the worst apps; heavy games do better on Performance.',
-    lr_tip_jank_bad_bat: 'About {pct}% of frames missed their deadline - stutter is visible. Battery keeps the ceilings low on purpose; for heavy apps Smart or Balanced give more room. The apps that drop the most are under Smoothness below.',
-    lr_tip_jank_bad_man: 'About {pct}% of frames missed their deadline - stutter is visible. The apps that drop the most are under Smoothness below; Smart adapts the ceilings to them.',
+    lr_tip_jank_bad_bat: 'About {pct}% of frames missed their deadline - stutter is visible. Battery keeps the ceilings low on purpose; for heavy apps Smart or Balanced give more room. The Smoothness section lists the apps that drop the most.',
+    lr_tip_jank_bad_man: 'About {pct}% of frames missed their deadline - stutter is visible. The Smoothness section lists the apps that drop the most; Smart adapts the ceilings to them.',
     lr_tip_jank_ok: 'Smoothness is excellent: only {pct}% of frames janky.',
     lr_tip_jank_wake: 'Stutter concentrates at the wakes: {pct}% of frames at unlocks and app opens against {ord}% over the day; the most janky there is {who}.',
     lr_tip_jank_wake_wh: 'Stutter concentrates at the wakes: {pct}% of frames at unlocks and app opens against {ord}% over the day.',
@@ -12305,7 +12425,7 @@ function logReportTipText(tip) {
     lr_tip_sysui_other: 'SystemUI stutters in {n} of {of} screen-on intervals although the usual per-second sources are off - look for an animated icon, a floating overlay or a module hooking SystemUI.',
     lr_tip_sysui_inj: 'SystemUI restarted {n} times; {m} of the recorded restarts crashed inside code that {pkg} injects into SystemUI. Update or disable that module - every restart rebuilds the status bar, drops frames and costs battery.',
     lr_tip_lte_idle: '"{set}" was on but did not run once in this capture - an ASB fault on the manual profiles. Install the current build: the switches now run on every profile.',
-    lr_tip_net_heavy: '{mib} of mobile data went through the modem, the most by {app} ({amib}). What to change is on the Mobile data card above.'
+    lr_tip_net_heavy: '{mib} of mobile data went through the modem, the most by {app} ({amib}). The Mobile data card shows the breakdown.'
   }[tip.key] || '', tip.vars);
 }
 
@@ -12394,7 +12514,7 @@ function logReportBrief(d, analysis) {
     lr_brief_sysui_net: 'The status bar redraws all the time because the network-speed meter is on - it costs frames in every app.',
     lr_brief_heat: 'The CPU spent {min} above 45 °C (peak {cpu}°).',
     lr_brief_heat_ok: 'No overheating: the CPU peaked at {cpu}°.',
-    lr_brief_next: 'What to change first is under Priority actions below.'
+    lr_brief_next: 'Priority actions lists the first changes to make; Causes and what to do explains the reasoning.'
   };
   const sec = logReportSec(T('lr_sec_brief', '📝 In short'));
   lines.forEach(function (l) {
@@ -12434,7 +12554,7 @@ function logReportDxT(key, vars) {
     lr_dx_fix_radio: "Check which apps download in the background (messengers with auto-download, photo backup) and limit them to Wi-Fi.",
     lr_dx_fix_asleep: "Compare a night with mobile data or Bluetooth off. If the drain stays this high night after night, send the log to the developer.",
     lr_dx_fix_alarm: "Restrict the background activity of the app behind that wakeup, or turn off its scheduled notifications.",
-    lr_dx_fix_send: "Save the report with the button below and send it to the developer.",
+    lr_dx_fix_send: "Use Save for the developer and send the saved report to the developer.",
     lr_dx_also_holder: "Also: {who}, in {hpct}% of the checks.",
     lr_dx_bgheat: "With the screen off the CPU reached {cpu}° at times - something did heavy work in the background (media downloads, a backup, app updates).",
     lr_dx_fix_bgheat: "In Settings → Battery see which app used power at that time. Move backups and auto-downloads to Wi-Fi and charging.",
@@ -12797,6 +12917,7 @@ function logReportDiagSection(items) {
       b.onclick = function () { asbSavePage('report'); };
       sd.appendChild(tx); sd.appendChild(b); box.appendChild(sd);
     }
+    const ref = logReportDiagRef(it); if (ref) box.appendChild(ref);
     sec.appendChild(box);
   });
   return sec;
@@ -12828,6 +12949,49 @@ function logReportQualityPanel(analysis) {
   return panel;
 }
 
+function logReportRef(targets, labelKey) {
+  const fallbacks = {
+    lr_sec_drain: '🔋 Battery drain', lr_sec_nightd_short: '🌙 Longest idle stretch in detail',
+    lr_sec_smooth: '📱 Smoothness', lr_sec_thermal: '🌡️ Thermals & throttling', lr_sec_asb: '⚙️ ASB own cost',
+    lr_sec_crash: '💥 Errors & crashes', lr_sec_display: '🖥 Display refresh', lr_sec_smart: '🧠 Smart learner',
+    lr_sec_wake: '⏰ What kept the phone awake', lr_sec_details: '🔎 Technical evidence'
+  };
+  return asbPageReference(targets, T(labelKey, fallbacks[labelKey] || labelKey));
+}
+function logReportDomainRef(domain, state) {
+  if (state === 'unknown') return null;
+  if (domain === 'drain') return logReportRef(['lgr-drain'], 'lr_sec_drain');
+  if (domain === 'thermal') return logReportRef(['lgr-thermal'], 'lr_sec_thermal');
+  if (domain === 'smoothness') return logReportRef(['lgr-smooth'], 'lr_sec_smooth');
+  if (domain === 'deep_sleep') return logReportRef(['lgr-night', 'lgr-wake', 'lgr-drain'], 'lr_sec_nightd_short');
+  if (domain === 'asb') return logReportRef(['lgr-asb', 'lgr-crash', 'lgr-details'], 'lr_sec_asb');
+  return null;
+}
+function logReportTipRef(tip) {
+  const k = String(tip && tip.key || '');
+  if (/^lr_tip_(?:jank|sysui)/.test(k)) return logReportRef(['lgr-smooth'], 'lr_sec_smooth');
+  if (/^lr_tip_heat_/.test(k)) return logReportRef(['lgr-thermal'], 'lr_sec_thermal');
+  if (/^lr_tip_cost_/.test(k)) return logReportRef(['lgr-asb'], 'lr_sec_asb');
+  if (/^lr_tip_crash/.test(k)) return logReportRef(['lgr-crash', 'lgr-details'], 'lr_sec_crash');
+  if (k === 'lr_tip_smart_help') return logReportRef(['lgr-smart'], 'lr_sec_smart');
+  if (k === 'lr_tip_ltpo') return logReportRef(['lgr-display', 'lgr-smooth'], 'lr_sec_display');
+  if (/^lr_tip_(?:night|awake|app|wl_enable|sync_loop|worker)/.test(k))
+    return logReportRef(['lgr-night', 'lgr-wake', 'lgr-drain'], 'lr_sec_nightd_short');
+  if (/^lr_tip_(?:sradio|net_heavy|night_modem|lte_idle|audio|prof_save)/.test(k))
+    return logReportRef(['lgr-drain'], 'lr_sec_drain');
+  return null;
+}
+function logReportDiagRef(it) {
+  if (!it || it.state === 'unknown') return null;
+  if (it.area === 'smooth') return logReportRef(['lgr-smooth'], 'lr_sec_smooth');
+  if (it.area === 'heat' || it.area === 'bgheat') return logReportRef(['lgr-thermal', 'lgr-drain'], 'lr_sec_thermal');
+  if (it.area === 'asb') return logReportRef(['lgr-asb', 'lgr-details'], 'lr_sec_asb');
+  if (it.area === 'stab') return logReportRef(['lgr-crash', 'lgr-details'], 'lr_sec_crash');
+  if (it.area === 'idle' || it.area === 'screen' || it.area === 'net' || it.area === 'lte')
+    return logReportRef(['lgr-drain', 'lgr-night', 'lgr-wake'], 'lr_sec_drain');
+  if (it.area === 'data') return logReportRef(['lgr-details'], 'lr_sec_details');
+  return null;
+}
 function logReportAppendAnalysis(body, d, analysis) {
   const brief = logReportBrief(d, analysis);
   if (brief) body.appendChild(brief);
@@ -12851,7 +13015,9 @@ function logReportAppendAnalysis(body, d, analysis) {
     value.textContent = T('lr_state_' + v.state, v.state) + (v.metric && v.metric !== '—' ? ' · ' + v.metric : '');
     const detail = document.createElement('span'); detail.className = 'lgr-verdict-detail';
     detail.textContent = logReportAnalysisT(v.detail_key, v.vars);
-    row.appendChild(name); row.appendChild(value); row.appendChild(detail); summary.appendChild(row);
+    row.appendChild(name); row.appendChild(value); row.appendChild(detail);
+    const ref = logReportDomainRef(v.domain, v.state); if (ref) row.appendChild(ref);
+    summary.appendChild(row);
   });
   const legend = logReportNote(T('lr_summary_legend', 'Good and Normal describe only this capture. Not enough data is not a clean bill of health.'));
   legend.classList.add('lgr-summary-legend'); summary.appendChild(legend);
@@ -12869,7 +13035,9 @@ function logReportAppendAnalysis(body, d, analysis) {
       const row = document.createElement('div'); row.className = 'lgr-tip lgr-action';
       const n = document.createElement('span'); n.className = 'lgr-action-n'; n.textContent = String(i + 1) + '.';
       const tx = document.createElement('span'); tx.textContent = logReportTipText(tip);
-      row.appendChild(n); row.appendChild(tx); sec.appendChild(row);
+      row.appendChild(n); row.appendChild(tx);
+      const ref = logReportTipRef(tip); if (ref) row.appendChild(ref);
+      sec.appendChild(row);
     });
     body.appendChild(sec);
   } else {
@@ -12877,6 +13045,8 @@ function logReportAppendAnalysis(body, d, analysis) {
     sec.appendChild(logReportNote(logReportAnalysisT(analysis.quality.level === 'low' ? 'lr_no_actions_early' : 'lr_no_actions')));
     body.appendChild(sec);
   }
+  const verify = logReportNote(logReportAnalysisT('lr_actions_verify', {}));
+  verify.classList.add('lgr-summary-legend'); body.appendChild(verify);
 }
 
 function logReportRender(d) {
@@ -12960,7 +13130,7 @@ function logReportRender(d) {
     body.appendChild(logReportNote(T('lr_early', 'The capture has just started - the numbers will appear here after the first phases.')));
   }
   if (drain || cover || night || idle || radio || chg) {
-    const s = logReportSec(T('lr_sec_drain', '🔋 Battery drain'));
+    const s = logReportSec(T('lr_sec_drain', '🔋 Battery drain')); s.id = 'lgr-drain';
     const g = document.createElement('div');
     g.className = 'lgr-heros';
     let heroes = 0;
@@ -13098,7 +13268,7 @@ function logReportRender(d) {
        what the stretch actually is and stays neutral; the calm note below explains why. */
     const shortNight = (+night.dur_min || 0) < 120;
     const s = logReportSec(shortNight ? T('lr_sec_nightd_short', '🌙 Longest idle stretch in detail')
-                                      : T('lr_sec_nightd', '🌙 Night in detail'));
+                                      : T('lr_sec_nightd', '🌙 Night in detail')); s.id = 'lgr-night';
     const pctph = +night.pctph || 0, awake = +night.awake || 0;
     const deep = Math.max(0, 100 - awake);
     s.appendChild(logReportRow(shortNight ? T('lr_nd_spent_short', 'Spent over the stretch') : T('lr_nd_spent', 'Spent overnight'),
@@ -13139,7 +13309,9 @@ function logReportRender(d) {
     else if (pctph <= 1.5)
       s.appendChild(logReportNote(logReportT('lr_nd_verdict_mid', 'A decent night, but the {awake}% awake share ate part of the gain.', { awake: String(awake) })));
     else
-      s.appendChild(logReportNote(logReportT('lr_nd_verdict_bad', 'An expensive night: {pct}%/h - see the holders above and the advice below.', { pct: String(night.pctph) }), true));
+      s.appendChild(logReportNote(logReportT('lr_nd_verdict_bad', 'An expensive night: {pct}%/h - compare the sampled holders with the Priority actions.', { pct: String(night.pctph) }), true));
+      s.appendChild(asbPageJump([['lgr-wake', T('lr_sec_wake', '⏰ What kept the phone awake')],
+        ['lgr-actions', T('lr_sec_actions', '🎯 Priority actions')]], T('dev_nav_title', 'Jump to'), 'lgr-night-links'));
     body.appendChild(s);
   }
   /* fix206: per-profile comparison - the answer to "how does Smart really differ from
@@ -13147,7 +13319,7 @@ function logReportRender(d) {
      the drain figures count only the minutes each profile was active (charging time
      excluded), so the note says exactly that. */
   if (d.profs.length >= 2) {
-    const s = logReportSec(T('lr_sec_profiles', '⚖️ Profiles compared'));
+    const s = logReportSec(T('lr_sec_profiles', '⚖️ Profiles compared')); s.id = 'lgr-profiles';
     const rows = d.profs.map(function (p) {
       /* fix222: "0.0 %/h" over a handful of minutes reads as a bug (the owner's Smart
          stretch: 2 h 11 min on the profile, but nearly every screen-off minute sat on
@@ -13168,7 +13340,7 @@ function logReportRender(d) {
   /* fix207: the whole day phase by phase - where the time went and what each stretch
      cost (or gained, on the charger). This is the ledger itself, aggregated. */
   if (d.phases.length) {
-    const s = logReportSec(T('lr_sec_phases', '📊 Phase breakdown'));
+    const s = logReportSec(T('lr_sec_phases', '📊 Phase breakdown')); s.id = 'lgr-phases';
     const rows = d.phases.map(function (p) {
       let cell;
       /* fix242: the gauge steps in whole percent - a rate from one step over a few minutes
@@ -13193,7 +13365,7 @@ function logReportRender(d) {
   }
   /* fix200: smoothness, with the per-app frame table - the real numbers, not vibes. */
   if (jank || d.japps.length) {
-    const s = logReportSec(T('lr_sec_smooth', '📱 Smoothness'));
+    const s = logReportSec(T('lr_sec_smooth', '📱 Smoothness')); s.id = 'lgr-smooth';
     if (jank) {
       const g = document.createElement('div');
       g.className = 'lgr-heros';
@@ -13253,7 +13425,7 @@ function logReportRender(d) {
   }
   /* fix200: what the panel ran at, and what each rate cost. */
   if (d.hzs.length || ltpo) {
-    const s = logReportSec(T('lr_sec_display', '🖥 Display refresh'));
+    const s = logReportSec(T('lr_sec_display', '🖥 Display refresh')); s.id = 'lgr-display';
     if (d.hzs.length) {
       const rows = d.hzs.slice().sort(function (a, b) { return (+a.mode) - (+b.mode); }).map(function (z) {
         return [String(z.mode) + ' ' + T('lr_hz_unit', 'Hz'), String(z.share) + '%',
@@ -13277,7 +13449,7 @@ function logReportRender(d) {
   const _smRan = d.profs.some(function (p) { return p.name === 'smart' && (p.onMin + p.offMin) >= 30; });
   const _smDay = String(meta.profile || '') === 'smart' || !String(meta.profile || '') || _smRan;
   if (smart && _smDay) {
-    const s = logReportSec(T('lr_sec_smart', '🧠 Smart learner'));
+    const s = logReportSec(T('lr_sec_smart', '🧠 Smart learner')); s.id = 'lgr-smart';
     s.appendChild(logReportRow(T('lr_sm_ctx', 'Situations with a verdict'), String(smart.ctxlearn || 0)));
     s.appendChild(logReportRow(T('lr_sm_watching', 'Apps watched for stutter'), String(smart.watching || 0)));
     if ((+smart.testing || 0) > 0) s.appendChild(logReportRow(T('lr_sm_testing', 'In a headroom test'), String(smart.testing)));
@@ -13295,7 +13467,7 @@ function logReportRender(d) {
   }
   /* fix200: ASB's own bill - the answer to "and what does the module itself eat?". */
   if (cost) {
-    const s = logReportSec(T('lr_sec_asb', '⚙️ ASB own cost'));
+    const s = logReportSec(T('lr_sec_asb', '⚙️ ASB own cost')); s.id = 'lgr-asb';
     s.appendChild(logReportRow(T('lr_cost_cpu', 'Governor CPU per hour'), logReportT('lr_ms_h', '{n} ms/h', { n: String(cost.cpu_msh) }),
       (+cost.cpu_msh || 0) > 10000 || ((+cost.cpu_msh || 0) > 2500 && (+cost.wakes_h || 0) > 0 && (+cost.cpu_msh || 0) / (+cost.wakes_h || 1) > 8)));
     if ((+cost.cpu_msh || 0) > 0) s.appendChild(logReportRow(T('lr_cost_core', 'Share of one CPU core'), ((+cost.cpu_msh || 0) / 36000).toFixed(2) + '%'));
@@ -13304,7 +13476,7 @@ function logReportRender(d) {
     body.appendChild(s);
   }
   {
-    const s = logReportSec(T('lr_sec_wake', '⏰ What kept the phone awake'));
+    const s = logReportSec(T('lr_sec_wake', '⏰ What kept the phone awake')); s.id = 'lgr-wake';
     if (d.wl.length) {
       d.wl.forEach(function (w) {
         s.appendChild(logReportRow(w.pkg, logReportDurSec(w.sec)));
@@ -13381,7 +13553,7 @@ function logReportRender(d) {
      "stopped playing" with the link still up is the stream pausing. */
   const bt = d.sections.bt || null;
   if (bt && ((+bt.acl || 0) > 0 || (+bt.media || 0) > 0 || (+bt.streams || 0) > 0)) {
-    const s = logReportSec(T('lr_sec_bt', '🎧 Bluetooth'));
+    const s = logReportSec(T('lr_sec_bt', '🎧 Bluetooth')); s.id = 'lgr-bt';
     if ((+bt.acl || 0) > 0)
       s.appendChild(logReportRow(T('lr_bt_acl', 'Link drops'), logReportT('lr_bt_acl_fmt', '{n} · lost link {l} · by the device {d} · by the phone {p}', {
         n: String(+bt.acl || 0), l: String(+bt.lost || 0), d: String(+bt.by_dev || 0), p: String(+bt.by_phone || 0) }), (+bt.lost || 0) >= 3));
@@ -13401,7 +13573,7 @@ function logReportRender(d) {
     body.appendChild(s);
   }
   if (crash || sysui) {
-    const s = logReportSec(T('lr_sec_crash', '💥 Errors & crashes'));
+    const s = logReportSec(T('lr_sec_crash', '💥 Errors & crashes')); s.id = 'lgr-crash';
     const cn = crash ? (+crash.count || 0) : 0;
     const ca = crash ? (+crash.asb || 0) : 0;
     if (cn === 0) {
@@ -13427,7 +13599,7 @@ function logReportRender(d) {
     body.appendChild(s);
   }
   if (thermal || throttle || heat) {
-    const s = logReportSec(T('lr_sec_thermal', '🌡️ Thermals & throttling'));
+    const s = logReportSec(T('lr_sec_thermal', '🌡️ Thermals & throttling')); s.id = 'lgr-thermal';
     if (thermal) {
       const g = document.createElement('div');
       g.className = 'lgr-heros';
@@ -13485,7 +13657,7 @@ function logReportRender(d) {
     /* fix248: the latest comparable capture, not just the latest one - a 32 % screen-on
        evening in between hid the 98 % day the 92 % day should be compared with. */
     const h0 = d.hist.filter(function (h) { return logReportHistoryComparable(d, analysis, h); })[0] || d.hist[0];
-    const s = logReportSec(T('lr_sec_trend', '📈 Trend'));
+    const s = logReportSec(T('lr_sec_trend', '📈 Trend')); s.id = 'lgr-trend';
     const comparable = logReportHistoryComparable(d, analysis, h0);
     if (!comparable) {
       s.appendChild(logReportNote(logReportAnalysisT('lr_trend_unmatched')));
@@ -13512,7 +13684,7 @@ function logReportRender(d) {
     }
   }
   if (analysis.observations.length) {
-    const s = logReportSec(T('lr_sec_observations', '💡 Other observations'));
+    const s = logReportSec(T('lr_sec_observations', '💡 Other observations')); s.id = 'lgr-observations';
     analysis.observations.forEach(function (tip) {
       const row = document.createElement('div');
       row.className = 'lgr-tip';
