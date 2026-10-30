@@ -4123,7 +4123,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 fail() { echo "FAIL fix185: $*"; exit 1; }
 asb_has_test test_smart_records_runtime.sh || fail "test_smart_records_runtime.sh missing"
 asb_has_test test_smart_smoothness_runtime.sh || fail "test_smart_smoothness_runtime.sh missing"
-grep -q '#define ASB_SMART_VER         5' "$ROOT/src/asb_smart_defs.h" || fail "Smart engine is not V5"
+grep -q '#define ASB_SMART_VER         6' "$ROOT/src/asb_smart_defs.h" || fail "Smart engine is not V6"
 grep -q 'if (st->version >= ASB_SMART_VER_KEEP) {' "$ROOT/src/asb_smart.h" || fail "a V4 store would lose what it learned"
 grep -q '#define ASB_REC_VERSION     2' "$ROOT/src/asb_record.h" || fail "records store version"
 grep -q 'static void asb_rec_pair(asb_rec_ctx_t \*c, int slot, const asb_rec_last_t \*me) {' "$ROOT/src/asb_record.h" || fail "no side-by-side pairing"
@@ -7883,6 +7883,12 @@ static int run_case(const char *text, int enabled, int expect_n, int expect_valu
     int got = g_profile_bounds[PROFILE_BALANCED].ceil.cpu_max[0];
     if (n != expect_n) { printf("applied=%d want=%d\n", n, expect_n); return 1; }
     if (got != expect_value) { printf("value=%d want=%d (before=%d)\n", got, expect_value, before); return 2; }
+    if (g_profile_bounds[PROFILE_BALANCED].floor.cpu_max[0] > got ||
+        g_profile_bounds[PROFILE_BALANCED].ceil.cpu_min[0] > got ||
+        g_profile_bounds[PROFILE_BALANCED].floor.cpu_min[0] >
+            g_profile_bounds[PROFILE_BALANCED].floor.cpu_max[0]) {
+        puts("post-validation left an inverted reference-device range"); return 4;
+    }
     if (strcmp(g_device_bounds_status, expect_status) || strcmp(g_device_bounds_reason, expect_reason)) {
         printf("result=%s/%s want=%s/%s\n", g_device_bounds_status, g_device_bounds_reason,
                expect_status, expect_reason); return 3;
@@ -7908,6 +7914,25 @@ int main(void) {
     rc |= run_case("schema=2\nconfidence=high\nsource=measured\npolicy_count=3\ncluster_signature=0:3000000>none:0>6:4000000\nfingerprint=OnePlus/test/user\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 0, stock, "stale", "policy_count");
     rc |= run_case("schema=2\nconfidence=high\nsource=measured\npolicy_count=2\ncluster_signature=0:2995200>none:0>6:4000000\nfingerprint=OnePlus/test/user\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 0, stock, "stale", "cluster_signature");
     rc |= run_case("schema=2\nconfidence=high\npolicy_count=2\ncluster_signature=0:3000000>none:0>6:4000000\nfingerprint=OnePlus/test/user\nBALANCED_CPU_MAX_LITTLE=2340000\n", 1, 0, stock, "skipped", "source");
+    memcpy(g_profile_bounds, defs, sizeof(defs));
+    FILE *f = fopen(ASB_DEVICE_BOUNDS_FILE, "w");
+    if (!f) return 90;
+    fputs(VALID_META
+          "BALANCED_CPU_MIN_LITTLE=700000\nBALANCED_CPU_CAP_LITTLE=1400000\nBALANCED_CPU_MAX_LITTLE=2340000\n"
+          "PERFORMANCE_CPU_MIN_MID=800000\nPERFORMANCE_CPU_CAP_MID=1600000\nPERFORMANCE_CPU_MAX_MID=2400000\n", f);
+    fclose(f);
+    int n = asb_load_device_bounds_override(1, defs);
+    if (n != 6 ||
+        g_profile_bounds[PROFILE_BALANCED].floor.cpu_min[0] != 700000 ||
+        g_profile_bounds[PROFILE_BALANCED].floor.cpu_max[0] != 1400000 ||
+        g_profile_bounds[PROFILE_BALANCED].ceil.cpu_min[0] != 1400000 ||
+        g_profile_bounds[PROFILE_BALANCED].ceil.cpu_max[0] != 2340000 ||
+        g_profile_bounds[PROFILE_PERFORMANCE].floor.cpu_min[1] != 800000 ||
+        g_profile_bounds[PROFILE_PERFORMANCE].floor.cpu_max[1] != 1600000 ||
+        g_profile_bounds[PROFILE_PERFORMANCE].ceil.cpu_min[1] != 1600000 ||
+        g_profile_bounds[PROFILE_PERFORMANCE].ceil.cpu_max[1] != 2400000) {
+        printf("full native MIN/CAP/MAX import diverged (n=%d)\n", n); rc |= 1;
+    }
     return rc;
 }
 X
@@ -7994,6 +8019,14 @@ grep -q '^source=measured$' "$T/synthesized.env" || fail "measured source missin
 grep -q '^fingerprint=OnePlus/test/user$' "$T/synthesized.env" || fail "fingerprint missing"
 grep -q '^cluster_signature=0:3000000>none:0>6:4000000$' "$T/synthesized.env" || fail "signature did not use hardware ordering"
 grep -q '^BALANCED_CPU_MAX_LITTLE=[0-9]' "$T/synthesized.env" || fail "high synthesis emitted no bounds"
+range_ok() {
+  awk -F= -v p="$1" -v s="$2" '
+    $1 == p "_CPU_MIN_" s { lo=$2 } $1 == p "_CPU_CAP_" s { cap=$2 } $1 == p "_CPU_MAX_" s { hi=$2 }
+    END { exit !(lo > 0 && lo <= cap && cap <= hi) }' "$T/synthesized.env"
+}
+for _p in BATTERY BALANCED PERFORMANCE; do
+  for _s in LITTLE BIG; do range_ok "$_p" "$_s" || fail "invalid synthesized $_p/$_s MIN/CAP/MAX range"; done
+done
 cat > "$T/device_caps.env" <<'X'
 cpu_policy_count=4
 cpu_policy_list=0 2 5 7
@@ -8008,6 +8041,28 @@ grep -q '^confidence=high$' "$T/synthesized.env" || fail "4-policy topology was 
 grep -q '^cluster_signature=0:2000000>5:3000000>7:3300000$' "$T/synthesized.env" || fail "4-policy strongest-middle signature wrong"
 grep -q '^BALANCED_CPU_MAX_MID=[0-9]' "$T/synthesized.env" || fail "4-policy mid bounds missing"
 grep -q '^BATTERY_CPU_MAX_PRIME=[0-9]' "$T/synthesized.env" || fail "4-policy prime bound missing"
+for _p in BATTERY BALANCED PERFORMANCE; do
+  for _s in LITTLE MID; do range_ok "$_p" "$_s" || fail "invalid 4-policy $_p/$_s MIN/CAP/MAX range"; done
+done
+# Real OPP tables: ceilings snap DOWN, never to a nearer but higher frequency. The
+# Balanced little target is 2158800, where the old nearest rule chose 2200000.
+mkdir -p "$T/cpufreq/policy0" "$T/cpufreq/policy6"
+printf '%s\n' 3000000 2200000 1000000 2100000 900000 2800000 2000000 600000 1300000 1400000 2900000 > "$T/cpufreq/policy0/scaling_available_frequencies"
+printf '%s\n' 4000000 3600000 3200000 2800000 2400000 2000000 1600000 1200000 800000 400000 > "$T/cpufreq/policy6/scaling_available_frequencies"
+cat > "$T/device_caps.env" <<'X'
+cpu_policy_count=2
+cpu_policy_list=6 0
+cpu_policy0_hwmax=3000000
+cpu_policy6_hwmax=4000000
+fingerprint=OnePlus/test/user
+X
+ASB_CPUFREQ_ROOT="$T/cpufreq" sh "$T/synthesize.sh" >/dev/null
+grep -q '^BALANCED_CPU_MAX_LITTLE=2100000$' "$T/synthesized.env" || fail "ceiling snapped above the requested profile ratio"
+grep -q '^BALANCED_CPU_CAP_LITTLE=900000$' "$T/synthesized.env" || fail "CAP did not preserve the scaled range on the real OPP table"
+grep -q '^BALANCED_CPU_MIN_LITTLE=600000$' "$T/synthesized.env" || fail "MIN did not preserve the scaled range on the real OPP table"
+for _p in BATTERY BALANCED PERFORMANCE; do
+  for _s in LITTLE BIG; do range_ok "$_p" "$_s" || fail "OPP-snapped $_p/$_s range is inverted"; done
+done
 cat > "$T/device_caps.env" <<'X'
 cpu_policy_count=1
 cpu_policy_list=0

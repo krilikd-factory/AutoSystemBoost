@@ -4320,6 +4320,38 @@ grep -Fq 'async function loadWlFitStatus(force)' "$H" || fail "loadWlFitStatus i
 echo "PASS webui option labels: option buttons and value badges are labelled in the UI language, the Wi-Fi scan rate in minutes, sliders use their row, and the fitness limit admits when the ROM ignores it"
 )
 
+t_webui_smart_engine_badge_runtime() (
+# The home Smart badge reports the native engine schema, never a WebUI hardcoded version.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"; D="$ROOT/src/asb_smart_defs.h"
+fail() { echo "FAIL webui Smart engine badge: $*" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "SKIP webui Smart engine badge: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+grep -q '^#define ASB_SMART_VER         6$' "$D" || fail "native Smart engine is not V6"
+grep -q 'id="smartEngineTag" style="display:none"></span>' "$H" || fail "badge is not empty and initially hidden"
+{
+  sed -n '/^function renderSmartSubLine(/,/^}/p' "$H"
+  cat <<'EOF'
+let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
+const sub = { textContent: '' };
+const tag = { textContent: '', style: { display: 'none' } };
+global._el = function (id) { return id === 'smartSubLine' ? sub : null; };
+global.document = { getElementById: function (id) { return id === 'smartEngineTag' ? tag : null; } };
+global.T = function (k, d) { return d; };
+renderSmartSubLine({ smart_mode: '1', smart_engine_ver: '6' });
+chk(tag.textContent === 'V6' && tag.style.display === '', 'native V6 is not shown: ' + JSON.stringify(tag));
+renderSmartSubLine({ smart_mode: '1', smart_engine_ver: '0' });
+chk(tag.style.display === 'none', 'an unknown engine version leaves a stale badge visible');
+if (bad) process.exit(1);
+console.log('ok');
+EOF
+} > "$T/badge.js"
+out="$(node "$T/badge.js" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo "PASS webui Smart engine badge: home card shows native V6 and hides an unknown version"
+)
+
 t_webui_smart_basis_runtime() (
 # Runtime (fix186): the Monitor's Smart "Basis" tile said "own slot" around the clock once the
 # learner had history - true and uninformative. It now shows what shapes Smart's lean right
@@ -4348,7 +4380,7 @@ for l in en ru uk de es fr it pt tr id ar hy zh; do
   grep -q '"lvi_basis": "[^"]*{rec}[^"]*{trial}[^"]*{cold}' "$J" || fail "$l.json lvi_basis does not explain the new values"
 done
 cat > "$T/rec.txt" <<'E'
-# Smart records (Smart V5): power per situation, charge counter x battery voltage
+# Smart records (Smart V6): power per situation, charge counter x battery voltage
 counter=ok blocks_ok=57 blocks_rejected=6
 rejected|meter=0|charge=2|radio=1|busy=1|climate=2|other=0
 # ctx|status|best|record_mW|record_mA|record_n|gain_pct|testing|pairs|pair_diff_pct|trials|wins|blocks|first_mW
@@ -5166,7 +5198,7 @@ EOF
   for fn in Tcfg parseLogReport logReportT logReportDur logReportDurSec logReportAuthority logReportHolderWhat logReportIdleAwake logReportHolderName logReportTips \
     logReportSysuiSteady logReportMiB logReportNetFix logReportLteIdle logReportFullCharge logReportScreenOnDrainState logReportAnalyze logReportHistoryComparable logReportMachineDigest logReportAnalysisT \
     logReportTipText logReportRow logReportSec logReportNote logReportHero logReportTable \
-    logReportBrief logReportDxT logReportDiagnose logReportDiagSection logReportQualityPanel logReportAppendAnalysis logReportRender asbPageJump shQuote \
+    logReportBrief logReportDxT logReportDiagnose logReportDiagSection logReportQualityPanel logReportRef logReportDomainRef logReportTipRef logReportDiagRef logReportAppendAnalysis logReportRender asbPageJump asbPageReference shQuote \
     asbPageClasses asbPageHas asbPageKids asbPageTxt asbPageWarn asbPageText asbPageStamp; do
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
@@ -5532,7 +5564,8 @@ function domEl(tag) { return { tag:tag, children:[], _text:'', className:'', dis
   get textContent() { return this._text; }, set textContent(v) { this._text = String(v); this.children = []; },
   appendChild(c) { this.children.push(c); return c; }, classList:{ add() {} } }; }
 const reportBody = domEl('div'), reportStatus = domEl('div'), jsonButton = domEl('button');
-function _el(id) { return id === 'reportBody' ? reportBody : id === 'reportStatus' ? reportStatus : id === 'rpSave' ? jsonButton : null; }
+function findReportId(e, id) { if (e.id === id) return e; for (const c of e.children) { const hit = findReportId(c, id); if (hit) return hit; } return null; }
+function _el(id) { return id === 'reportBody' ? reportBody : id === 'reportStatus' ? reportStatus : id === 'rpSave' ? jsonButton : findReportId(reportBody, id); }
 const document = { createElement:domEl };
 global.window = {};
 function allText(e) { return (e.textContent || '') + e.children.map(allText).join('|'); }
@@ -5630,7 +5663,19 @@ chk(briefText.indexOf(I18N.ru.lr_brief_sysui_net) >= 0 && briefText.indexOf(I18N
 chk(countClass(briefSec || domEl('x'), 'lgr-brief-warn') >= 2, 'brief: the bad findings are marked');
 chk(syncText.indexOf(I18N.ru.lr_wl_live_note.split('{what}').join(logReportHolderWhat(syncDay.wlive[0])).split('{pct}').join('68')) >= 0, 'the wake section says what WhatsApp held');
 chk(syncText.indexOf(I18N.ru.lr_wl_live_note.split('{what}').join(logReportHolderWhat(syncDay.wlive[1])).split('{pct}').join('22')) >= 0, 'the wake section says what Facebook ran');
+const reportRefs = [], reportTargets = [];
+(function walk(n) {
+  if (n.id) reportTargets.push(n);
+  if (String(n.className || '').split(/\s+/).includes('lgr-ref-btn')) reportRefs.push(n);
+  n.children.forEach(walk);
+})(reportBody);
+const scrolledTargets = []; reportTargets.forEach(n => { n.scrollIntoView = function () { scrolledTargets.push(n.id); }; });
+chk(reportRefs.length >= 5 && reportRefs.every(b => b.onclick() === true) && scrolledTargets.length === reportRefs.length, 'every summary/diagnosis/action reference resolves to a real evidence section: ' + reportRefs.length + '/' + scrolledTargets.length);
+chk(scrolledTargets.includes('lgr-smooth') && scrolledTargets.includes('lgr-drain') && scrolledTargets.includes('lgr-thermal'), 'report references cover smoothness, drain and thermals: ' + scrolledTargets.join(','));
+chk(allText(reportBody).includes(I18N.ru.lr_actions_verify), 'next-capture one-change-at-a-time guidance is visible');
 const pageTxt = asbPageText(reportBody);
+chk(!pageTxt.includes(I18N.ru.dev_nav_title) && !pageTxt.includes('↳ ' + I18N.ru.lr_sec_drain) &&
+  !pageTxt.includes('↳ ' + I18N.ru.lr_sec_smooth) && !pageTxt.includes('↳ ' + I18N.ru.lr_sec_thermal), 'navigation labels do not pollute the exported report');
 chk(pageTxt.indexOf('== ' + I18N.ru.lr_sec_brief + ' ==') >= 0 && /\n  • .*com\.whatsapp/.test(pageTxt) && pageTxt.indexOf('(!)') > 0, 'the saved text keeps the brief bullets and warnings');
 chk(/\n  com\.whatsapp: /.test(pageTxt), 'the saved text keeps label: value rows');
 /* fix247: the causes, area by area, with whose side each one is on and when the developer
@@ -6424,6 +6469,8 @@ segment = h[h.index('function parseDeviceInfo('):h.index('function openDevicePag
 assert '.innerHTML' not in segment and 'textContent' in segment
 assert "['kernel_features', 'dev_sec_kernel_features'" in h
 assert "['metamodule', 'dev_sec_metamodule'" in h
+assert "['root', 'dev_sec_root'" in h and "s.id = 'lgr-smooth';" in h and "s.id = 'lgr-drain';" in h
+assert "s.id = 'lgr-thermal';" in h and "s.id = 'lgr-asb';" in h
 feature_order = re.search(r'const DEVICE_KERNEL_FEATURE_ORDER = \[(.*?)\];', h, re.S)
 assert feature_order, 'explicit custom-kernel feature order missing'
 ordered_features = re.findall(r"'([^']+)'", feature_order.group(1))
@@ -6432,8 +6479,9 @@ assert ordered_features == ['susfs','susfs_version','bbg_baseband_guard','bbr_v2
 # fix252: five groups in reading order - hardware, firmware and system, kernel, root, ASB.
 order = re.search(r'const DEVICE_SECTION_ORDER = \[(.*?)\n\];', h, re.S).group(1)
 specs = re.findall(r"\['([a-z_]+)', '(dev_sec_[a-z_]+)', '[^']*', '([a-z]+)'", order)
-assert [x[0] for x in specs] == ['firmware','soc','cpu_policy','gpu','memory','battery','firmware','system','kernel','kernel_features',
-                                 'kernel_runtime','kernel_external','kernel_config','susfs','metamodule','asb','asb_caps','meta'], specs
+assert [x[0] for x in specs] == ['firmware','soc','cpu_policy','gpu','memory','battery','firmware','system','kernel','kernel_origin',
+                                 'kernel_btf','kernel_ebpf','kernel_fuse_bpf','kernel_features','kernel_runtime','kernel_external','kernel_config',
+                                 'root','susfs','metamodule','asb','asb_caps','meta'], specs
 groups = [x[2] for x in specs]
 assert groups == sorted(groups, key=['hw','sw','kernel','root','asb'].index), 'a group is split: ' + str(groups)
 assert specs[0][1] == 'dev_sec_device' and specs[6][1] == 'dev_sec_firmware', 'the phone identity opens the hardware group'
@@ -6450,12 +6498,20 @@ for p in (root/'webroot/i18n').glob('*.json'):
                 'dev_metamodule_nomount_driver_version','dev_metamodule_nomount_evidence','dev_sec_device','dev_grp_hw','dev_grp_sw',
                 'dev_grp_kernel','dev_grp_root','dev_grp_asb','lr_quality_title','lr_quality_coverage','lr_summary_legend',
                 'lr_dx_read_note','lr_sec_details','dev_nav_title','dev_snap_memory','dev_snap_evidence','dev_evidence_note',
-                'dev_guide_cpu_policy','dev_guide_kernel_external','dev_guide_asb_caps'):
+                'dev_guide_cpu_policy','dev_guide_kernel_external','dev_guide_asb_caps','dev_sec_root','dev_root_variant',
+                'dev_root_version','dev_root_version_evidence','dev_root_ksu_family','dev_root_fork_possible','dev_guide_root',
+                'dev_sec_insights','dev_insight_root_family','dev_insight_cpu_cap','lr_actions_verify',
+                'dev_sec_kernel_origin','dev_sec_kernel_btf','dev_sec_kernel_ebpf','dev_sec_kernel_fuse_bpf',
+                'dev_kernel_origin_assessment','dev_kernel_btf_summary','dev_kernel_ebpf_summary','dev_kernel_fuse_bpf_summary',
+                'dev_guide_kernel_origin','dev_guide_kernel_btf','dev_guide_kernel_ebpf','dev_guide_kernel_fuse_bpf','dev_insight_kernel_origin'):
         assert d.get(key), '%s: %s missing' % (p.name, key)
 ru = json.loads((root/'webroot/i18n/ru.json').read_text(encoding='utf-8'))
 assert 'NoMount' in ru['dev_kernel_features_nomount'] and 'NTSync' in ru['dev_kernel_features_ntsync']
 assert 'BBRv2' in ru['dev_kernel_features_bbr_v2'] and 'SuSFS' in ru['dev_kernel_features_susfs']
 assert 'Метамодуль' in ru['dev_sec_metamodule'] and 'NoMount' in ru['dev_metamodule_nomount_driver_version']
+assert 'возможен форк' in ru['dev_root_fork_possible'] and 'ниже' not in ru['lr_tip_jank_bad_bat']
+en = json.loads((root/'webroot/i18n/en.json').read_text(encoding='utf-8'))
+assert 'above' not in en['lr_tip_net_heavy'] and 'below' not in en['lr_tip_jank_bad_man']
 for f in ('tools/release_tools.list','common/install.sh','.github/workflows/build-release.yml','.github/workflows/build-test.yml'):
     assert 'asb_device_info.sh' in (root/f).read_text(encoding='utf-8'), f
 PY
@@ -6490,7 +6546,7 @@ EOF
   sed -n '/^const DEVICE_GROUP_GUIDES = {/,/^};/p' "$H"
   sed -n '/^const DEVICE_SECTION_GUIDES = {/,/^};/p' "$H"
   sed -n '/^const DEVICE_KERNEL_FEATURE_ORDER = \[/,/^\];/p' "$H"
-  for fn in parseDeviceInfo deviceVal deviceFallbackLabel deviceLabel deviceHero deviceIsLimitedValue deviceValueClass deviceNum deviceKv deviceFreqKhz deviceFreqHz deviceSizeKb deviceDuration deviceCpuCount deviceCpuList deviceYesNo deviceFill deviceBatteryMa deviceBatteryMah deviceBatteryWear deviceDisplayValue deviceInfoEvidence deviceSnapshotCard deviceInfoSnapshot deviceInfoNav deviceInfoOverview deviceInfoRender asbPageJump shQuote \
+  for fn in parseDeviceInfo deviceVal deviceFallbackLabel deviceLabel deviceHero deviceIsLimitedValue deviceValueClass deviceNum deviceKv deviceFreqKhz deviceFreqHz deviceSizeKb deviceDuration deviceCpuCount deviceCpuList deviceYesNo deviceFill deviceBatteryMa deviceBatteryMah deviceBatteryWear deviceRootManagerDisplay deviceDisplayValue deviceInfoEvidence deviceSnapshotCard deviceInfoSnapshot deviceInfoNav deviceInfoOverview deviceInfoInsights deviceInfoRender asbPageJump asbPageReference shQuote \
     asbPageClasses asbPageHas asbPageKids asbPageTxt asbPageWarn asbPageText asbPageStamp; do
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
@@ -6600,6 +6656,28 @@ chk(deviceDisplayValue('gpu', 'kgsl-3d0', 'governor=pwrlevel; current_hz=1600000
     'Adreno 840 · power levels · now 160 MHz · range 160 MHz–1.20 GHz · busy 17%', 'a power-level GPU with its model: ' + deviceDisplayValue('gpu', 'kgsl-3d0', 'governor=pwrlevel; current_hz=160000000; min_hz=160000000; max_hz=1200000000; busy=17; levels=18; model=Adreno840', d2));
 chk(d2dump.includes('1.02 GHz–4.61 GHz · 22 steps · floor control: yes') && d2dump.includes('power levels · 11 steps') && d2dump.includes('92 zones'), 'ASB capability rows not formatted');
 chk(d2dump.includes('KernelSU') && d2dump.includes('camera: yes · audio: no') && d2dump.includes('camera · audio · wifi'), 'ASB capability names not formatted');
+chk(deviceRootManagerDisplay('ksu', d2).includes('KernelSU-compatible family') && deviceRootManagerDisplay('ksu', d2).includes('a fork is possible'), 'old KSU-only snapshots keep the variant uncertain');
+chk(deviceRootManagerDisplay('ksu', d2) !== 'KernelSU' && deviceRootManagerDisplay('magisk', d2) === 'Magisk' && deviceRootManagerDisplay('apatch', d2) === 'APatch', 'generic KSU is not original KernelSU; other root managers are unchanged');
+const nextRoot = parseDeviceInfo(['D\tmeta\tschema\t3', 'D\tasb_caps\troot_manager\tksu', 'D\troot\tmanager\tksu',
+  'D\troot\tvariant\tKernelSU Next', 'D\troot\tversion\t1.0.8', 'D\troot\tvariant_evidence\tksud --version',
+  'D\troot\tversion_evidence\tKernelSU Next v1.0.8'].join('\n'));
+chk(deviceRootManagerDisplay('ksu', nextRoot) === 'KernelSU Next 1.0.8', 'positive KernelSU Next evidence is exact');
+const originalRoot = parseDeviceInfo('D\troot\tvariant\tKernelSU\nD\troot\tversion\t0.9.5');
+chk(deviceRootManagerDisplay('ksu', originalRoot) === 'KernelSU 0.9.5', 'original KernelSU requires positive variant evidence');
+const sukiRoot = parseDeviceInfo('D\troot\tvariant\tSukiSU Ultra\nD\troot\tversion\t1.2.3');
+chk(deviceRootManagerDisplay('ksu', sukiRoot) === 'SukiSU Ultra 1.2.3', 'another named KSU fork is preserved');
+const versionOnlyRoot = parseDeviceInfo('D\troot\tvariant\tnot exposed\nD\troot\tversion\t0.9.5');
+chk(deviceRootManagerDisplay('ksu', versionOnlyRoot).includes('0.9.5') && deviceRootManagerDisplay('ksu', versionOnlyRoot).includes('a fork is possible'), 'ksud version alone still cannot identify the variant');
+chk(deviceInfoInsights(d2).some(x => x.text.includes('KernelSU Next and other forks remain possible')) && deviceInfoInsights(nextRoot)[0].text.includes('KernelSU Next'), 'device insights explain uncertainty versus positive evidence');
+deviceInfoRender(nextRoot);
+chk(countDeviceClass(body, 'lgr-ref-btn') >= 1, 'root insight has a real evidence button');
+const oldDeviceEl = _el; let rootScrolled = '';
+const rootTarget = { scrollIntoView() { rootScrolled = 'dev-sec-root'; } };
+_el = function(id) { return id === 'dev-sec-root' ? rootTarget : oldDeviceEl(id); };
+const rootRefs = []; (function walk(n) { if (String(n.className || '').split(/\s+/).includes('lgr-ref-btn')) rootRefs.push(n); (n.children || []).forEach(walk); })(body);
+chk(rootRefs.length >= 1 && rootRefs[0].onclick() === true && rootScrolled === 'dev-sec-root', 'root evidence button scrolls to the actual root card');
+_el = oldDeviceEl;
+deviceInfoRender(d2);
 const wearRow = []; (function walk(n) { if (n.className && n.className.split(/\s+/).includes('lgr-v') && n.textContent === '77%') wearRow.push(n); (n.children || []).forEach(walk); })(body);
 chk(wearRow.length === 1 && wearRow[0].className.includes('dev-warn'), 'worn battery is not amber');
 const d3 = parseDeviceInfo([
@@ -6626,6 +6704,16 @@ chk(JSON.stringify(cardRows('Firmware and ROM')) === JSON.stringify(['16', 'V16.
 chk(JSON.stringify(cardRows('Custom kernel features')) === JSON.stringify(['ThinLTO (Clang)', 'not runtime-discoverable', 'no indicator', 'built-in']), 'the Unicode evidence sits under its feature: ' + JSON.stringify(cardRows('Custom kernel features')));
 const groupHead = body.children.find(n => /dev-group/.test(n.className));
 chk(groupHead && groupHead.tagName === 'div', 'group heading element');
+const d4 = parseDeviceInfo([
+  'D\tkernel_origin\tassessment\tstock-like', 'D\tkernel_origin\tconfidence\tindicative; not a provenance proof',
+  'D\tkernel_btf\tsummary\tbuilt-in config; vmlinux exposed', 'D\tkernel_btf\tvmlinux\tvmlinux readable and non-empty',
+  'D\tkernel_ebpf\tsummary\tconfigured; runtime interfaces exposed', 'D\tkernel_ebpf\tpinned_objects\t0 top-level entries exposed',
+  'D\tkernel_fuse_bpf\tsummary\tunknown; not runtime-discoverable', 'D\tkernel_fuse_bpf\tevidence_note\tordinary FUSE or eBPF alone does not prove FUSE-BPF'
+].join('\n'));
+deviceInfoRender(d4);
+const d4dump = (function walk(n) { return [n.textContent || ''].concat((n.children || []).flatMap(walk)); })(body).join('\n');
+chk(d4dump.includes('BTF evidence') && d4dump.includes('vmlinux readable and non-empty') && d4dump.includes('FUSE-BPF needs its own positive evidence'), 'BTF/eBPF/FUSE-BPF cards and evidence guide missing');
+chk(d4dump.includes('Kernel origin is stock-like') && d4dump.includes('not guaranteed provenance'), 'kernel origin became a guaranteed stock/custom verdict');
 deviceInfoRender(d2);
 (async function () {
   window._asbDeviceInfoData = d2;
@@ -6669,7 +6757,12 @@ sh -n "$D" || fail "shell syntax"
 mkdir -p "$T/mod/tools" "$T/proc/sys/net/ipv4" "$T/proc/sys/net/core" \
   "$T/sys/module/nomount" "$T/sys/module/ntsync" "$T/sys/module/baseband_guard" \
   "$T/sys/devices/system/cpu/cpufreq/policy0" "$T/sys/class/power_supply/battery" \
-  "$T/data/asb" "$T/data/modules" "$T/data/metamodule"
+  "$T/data/asb" "$T/data/modules" "$T/data/metamodule" "$T/dev" \
+  "$T/sys/kernel/btf" "$T/sys/fs/bpf" "$T/sys/fs/fuse/connections"
+printf 'BTF-FIXTURE\n' > "$T/sys/kernel/btf/vmlinux"; printf 'MODULE-BTF\n' > "$T/sys/kernel/btf/test_module"
+printf 'pinned\n' > "$T/sys/fs/bpf/prog_fixture"; printf '33\n' > "$T/sys/fs/fuse/bpf_prog_type_fuse"
+mkdir -p "$T/proc/sys/net/core"; printf '1\n' > "$T/proc/sys/net/core/bpf_jit_enable"
+printf '0\n' > "$T/proc/sys/net/core/bpf_jit_harden"; printf '1\n' > "$T/proc/sys/net/core/bpf_jit_kallsyms"
 cp "$ROOT/tools/asb_kernel_uv_coexist.sh" "$T/mod/tools/"
 printf 'id=AutoSystemBoost\nversion=V65-129-fix230\nversionCode=65230\n' > "$T/mod/module.prop"
 printf 'id=MetaCore\nname=MetaCore Metamodule\nversion=1.4.0\nversionCode=140\n' > "$T/data/metamodule/module.prop"
@@ -6685,6 +6778,10 @@ cat > "$T/props" <<'EOF'
 [ro.build.display.id]: [CPH2691_17.0.0.100]
 [ro.build.fingerprint]: [OnePlus/CPH2691/OP15:17/TEST/user/release-keys]
 [ro.build.version.oplusrom]: [ColorOS 17.0]
+[ro.build.type]: [user]
+[ro.boot.verifiedbootstate]: [green]
+[ro.boot.flash.locked]: [1]
+[ro.boot.vbmeta.device_state]: [locked]
 [gsm.version.baseband]: [TEST_BASEBAND]
 [ro.soc.model]: [SM8850]
 [ro.soc.manufacturer]: [QTI]
@@ -6741,6 +6838,14 @@ CONFIG_SECURITY_BASEBAND_GUARD=y
 CONFIG_LSM="landlock,lockdown,yama,integrity,apparmor,baseband_guard"
 CONFIG_KSU=y
 CONFIG_KSU_SUSFS=y
+CONFIG_DEBUG_INFO_BTF=y
+CONFIG_DEBUG_INFO_BTF_MODULES=y
+CONFIG_BPF=y
+CONFIG_BPF_SYSCALL=y
+CONFIG_BPF_JIT=y
+CONFIG_CGROUP_BPF=y
+CONFIG_FUSE_FS=y
+CONFIG_FUSE_BPF=y
 EOF
 gzip -c "$T/config" > "$T/proc/config.gz"
 cat > "$T/susfs" <<'EOF'
@@ -6753,10 +6858,36 @@ case "$1 $2" in
 esac
 EOF
 chmod +x "$T/susfs"
+cat > "$T/ksud" <<'EOF'
+#!/bin/sh
+printf '%s
+' "$*" >> "$KSUD_LOG"
+case "${KSUD_MODE:-empty}" in
+  next) printf 'KernelSU Next v1.0.8
+DO_NOT_READ_SECOND_LINE
+' ;;
+  original) printf 'KernelSU v0.9.5
+' ;;
+  suki) printf 'SukiSU Ultra 1.2.3
+' ;;
+  generic) printf 'ksud 0.9.5
+' ;;
+  malformed) printf 'not-a-version
+' ;;
+  sanitize) printf 'KernelSU Next	v1.0.8
+DO_NOT_READ_SECOND_LINE
+' ;;
+  long) printf 'KernelSU Next v1.0.8 %0220d
+' 0 ;;
+  empty) exit 0 ;;
+esac
+EOF
+chmod +x "$T/ksud"
 run() {
   ASB_DEVINFO_MODDIR="$T/mod" ASB_DEVINFO_SYS="$T/sys" ASB_DEVINFO_PROC="$T/proc" \
   ASB_DEVINFO_DATA="$T/data" ASB_DEVINFO_PROP_FILE="$T/props" ASB_DEVINFO_SUSFS="$T/susfs" \
-  ASB_DEVINFO_STATE="$T/state" SUSFS_LOG="$T/susfs.log" sh "$D"
+  ASB_DEVINFO_STATE="$T/state" ASB_DEVINFO_KSUD="$T/ksud" ASB_DEVINFO_DEV="$T/dev" KSUD_MODE="${KSUD_MODE:-empty}" \
+  KSUD_LOG="$T/ksud.log" SUSFS_LOG="$T/susfs.log" sh "$D"
 }
 want() {
   _line="$(printf 'D\t%s\t%s\t%s' "$1" "$2" "$3")"
@@ -6764,7 +6895,14 @@ want() {
 }
 out="$(run)"
 printf '%s\n' "$out" | awk -F '\t' 'NF < 4 || $1 != "D" || $2 == "" || $3 == "" { bad = 1 } END { exit bad }' || fail "malformed TSV"
-want meta schema 2; want firmware baseband TEST_BASEBAND; want firmware android 17; want soc soc_model SM8850
+want meta schema 4; want firmware baseband TEST_BASEBAND; want firmware android 17; want soc soc_model SM8850
+want kernel_origin assessment custom-like; want kernel_origin confidence 'indicative; not a provenance proof'
+want kernel_btf summary 'built-in config; vmlinux exposed'; want kernel_btf vmlinux 'vmlinux readable and non-empty'
+want kernel_btf module_entries '1 entries exposed'; want kernel_ebpf summary 'configured; runtime interfaces exposed'
+want kernel_ebpf bpfs 'directory exposed'; want kernel_ebpf pinned_objects '1 top-level entries exposed'
+want kernel_ebpf jit_enable 1; want kernel_ebpf jit_harden 0; want kernel_ebpf jit_kallsyms 1
+want kernel_fuse_bpf summary 'config=y; runtime interface exposed'; want kernel_fuse_bpf prog_type_interface 'exposed; type=33'
+want kernel_fuse_bpf fuse_device 'not exposed at standard path'; want kernel_fuse_bpf connections '0 connections exposed'
 want kernel_features nomount built-in; want kernel_features nomount_version '22 (105)'; want kernel_features ntsync built-in
 want metamodule status 'detected at standard path'; want metamodule id MetaCore; want metamodule name 'MetaCore Metamodule'
 want metamodule version 1.4.0; want metamodule version_code 140
@@ -6781,6 +6919,7 @@ want asb_caps cpu_policy_count 2; want asb device_bounds_status applied
 want asb_caps policy0 'hwmin=384000; hwmax=3628800; lowest=384000; steps=23; min_writable=1'
 want asb_caps policy6 'hwmin=1017600; hwmax=4608000; lowest=1017600; steps=19; min_writable=0'
 want asb_caps gpu 'backend=pwrlevel; levels=18'; want asb_caps thermal_zones 99; want asb_caps root_manager ksu
+want root manager ksu; want root variant 'not exposed'; want root version 'not exposed'; want root variant_evidence 'not exposed'
 want asb_caps uclamp 1; want asb_caps battery_current 1; want asb_caps msm_performance 0
 want asb_caps overlay 'camera=1; audio=0'; want asb_caps wlan_txqlen 1; want asb_caps tunable 'camera audio perf gps'
 want battery cycle_count 370
@@ -6824,6 +6963,21 @@ want kernel_config available unavailable; want kernel_features nomount 'driver p
 want kernel_features droidspaces unknown; want kernel_features unicode_bypass_fix 'not runtime-discoverable'
 want kernel_features tmpfs_xattr_posix_acl unknown; want kernel_features lto unknown
 want kernel_features bbr_v1 available; want kernel_features bbr_v2 available
+want kernel_btf summary 'vmlinux exposed; config not confirmed'; want kernel_ebpf summary 'runtime interfaces exposed; config not confirmed'
+want kernel_fuse_bpf summary 'runtime interface exposed; config not confirmed'
+# Explicitly disabled config is not positive configured evidence. With no runtime
+# interface exposed, report only the exposed config and keep activity unverified.
+cp "$T/config" "$T/config.notset"
+sed -i -e 's/^CONFIG_BPF=y$/# CONFIG_BPF is not set/' -e 's/^CONFIG_BPF_SYSCALL=y$/# CONFIG_BPF_SYSCALL is not set/' "$T/config.notset"
+gzip -c "$T/config.notset" > "$T/proc/config.gz"
+mv "$T/sys/fs/bpf" "$T/bpf.saved"
+for _jit in bpf_jit_enable bpf_jit_harden bpf_jit_kallsyms; do mv "$T/proc/sys/net/core/$_jit" "$T/$_jit.saved"; done
+out="$(run)"
+want kernel_ebpf summary 'not enabled in exposed config; runtime not verified'
+want kernel_ebpf config 'not set'; want kernel_ebpf syscall_config 'not set'; want kernel_ebpf bpfs 'not exposed at standard path'
+mv "$T/bpf.saved" "$T/sys/fs/bpf"
+for _jit in bpf_jit_enable bpf_jit_harden bpf_jit_kallsyms; do mv "$T/$_jit.saved" "$T/proc/sys/net/core/$_jit"; done
+rm -f "$T/config.notset"
 # LKM NoMount/NTSync: loaded state and a version that the driver does not expose.
 sed -i -e 's/^CONFIG_NOMOUNT=y$/CONFIG_NOMOUNT=m/' -e 's/^CONFIG_NTSYNC=y$/CONFIG_NTSYNC=m/' "$T/config"
 gzip -c "$T/config" > "$T/proc/config.gz"; rm -f "$T/sys/module/nomount/version"
@@ -6841,7 +6995,30 @@ out="$(run)"; want susfs interface present_no_read_response; want kernel_feature
 printf '\nCONFIG_UNICODE_BYPASS_FIX=y\n' >> "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
 out="$(run)"; want kernel_features unicode_bypass_fix built-in
 ! grep -Eq 'set_uname|add_sus_path|add_sus_map|add_sus_kstat|add_sus_' "$D" || fail "a SuSFS writer entered the collector"
-echo "PASS device info: read-only TSV, metamodule presence/version variants, built-in/LKM NoMount and version, kernel feature evidence and missing-config semantics"
+# Locked/green/user without positive patch markers is stock-like, never proven stock.
+printf 'Linux version 6.12.30-oplus (builder@host) #1 SMP PREEMPT\n' > "$T/proc/version"
+sed -i -e '/^CONFIG_LOCALVERSION=/d' -e '/^CONFIG_KSU/d' -e '/^CONFIG_NOMOUNT/d' -e '/^CONFIG_SECURITY_BASEBAND_GUARD/d' -e '/^CONFIG_UNICODE_BYPASS/d' "$T/config"
+gzip -c "$T/config" > "$T/proc/config.gz"; out="$(run)"
+want kernel_origin assessment stock-like; want kernel_origin basis 'boot/build indicators only; provenance not proven'
+grep -Ev '^\[ro\.boot\.|^\[ro\.build\.type\]' "$T/props" > "$T/props.new"; mv "$T/props.new" "$T/props"
+out="$(run)"; want kernel_origin assessment unknown; want kernel_origin basis 'not exposed'
+# fix257: generic KSU and exact implementation evidence are different facts.
+KSUD_MODE=next out="$(run)"; want root variant 'KernelSU Next'; want root version 1.0.8
+want root variant_evidence 'ksud --version'; want root version_evidence 'KernelSU Next v1.0.8'
+KSUD_MODE=original out="$(run)"; want root variant KernelSU; want root version 0.9.5
+KSUD_MODE=suki out="$(run)"; want root variant 'SukiSU Ultra'; want root version 1.2.3
+KSUD_MODE=generic out="$(run)"; want root variant 'not exposed'; want root version 0.9.5; want root version_evidence 'ksud 0.9.5'
+KSUD_MODE=malformed out="$(run)"; want root variant 'not exposed'; want root version 'not exposed'; want root version_evidence 'not-a-version'
+KSUD_MODE=empty out="$(run)"; want root variant 'not exposed'; want root version 'not exposed'; want root variant_evidence 'not exposed'
+KSUD_MODE=sanitize out="$(run)"; want root variant 'KernelSU Next'; want root version 1.0.8; want root version_evidence 'KernelSU Next v1.0.8'
+printf '%s
+' "$out" | grep -q 'DO_NOT_READ_SECOND_LINE' && fail "ksud emitted more than the bounded first line"
+KSUD_MODE=long out="$(run)"
+[ "$(printf '%s
+' "$out" | awk -F '	' '$2 == "root" && $3 == "version_evidence" { print length($4) }')" -le 160 ] || fail "ksud evidence was not bounded"
+[ "$(wc -l < "$T/ksud.log")" -gt 0 ] || fail "the ksud fixture was never queried"
+grep -Ev '^--version$' "$T/ksud.log" && fail "a state-changing ksud command ran"
+echo "PASS device info: read-only TSV, metamodule/root implementation variants, bounded ksud evidence, built-in/LKM NoMount and version, kernel feature evidence and missing-config semantics"
 )
 
 t_webui_tcp_algorithms_runtime() (
@@ -7103,6 +7280,48 @@ JS
 [ "$(node "$T/test.js" "$T/metric.js" "$T/owner.js")" = ok ] || fail "owner painter classes"
 fi
 echo "PASS WebUI fix254 visual states: ASB green, Shell blue, Vendor orange/red, rail-free actions and neutral OFF glass in both palettes"
+)
+
+t_webui_fix256_inactive_profile_glass() (
+# Runtime/static (fix256): dark-Glass profile surfaces recede without dimming their content.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI fix256 inactive profiles: $*" >&2; exit 1; }
+python3 - "$H" <<'PY' || fail "CSS or cascade contract"
+import re, sys
+s = open(sys.argv[1], encoding='utf-8').read()
+def rule(selector):
+    m = re.search(re.escape(selector) + r'\s*\{([^}]*)\}', s, re.S)
+    assert m, 'missing rule: ' + selector
+    return m.group(1)
+base = 'html[data-asb-glass="1"]:not([data-asb-theme="light"]) .pbtn:not(.on)'
+off = rule(base)
+# The actual surface is substantially darker than the shared Glass material. No opacity is
+# applied to the card itself, so names, icons and neutral %/h chips keep full foreground paint.
+assert 'rgba(4,8,6,.96)' in off
+assert 'rgba(255,255,255,.022)' in off and 'rgba(255,255,255,.004)' in off
+assert 'border-color:rgba(255,255,255,.10) !important' in off
+assert 'background:' in off and 'box-shadow:' in off
+assert not re.search(r'(?<![-\w])opacity\s*:', off), 'the whole inactive card must not be dimmed'
+assert not re.search(r'(?:^|;)\s*color\s*:', off), 'the surface rule must not recolour profile values or labels'
+# Smart's normally luminous decorative layer must not leave an inactive card looking selected.
+before = rule(base + '::before')
+assert 'opacity:0 !important' in before
+# These overrides follow both shared Glass materials and the light-Glass active rule. Their
+# explicit :not([data-asb-theme="light"]) guard prevents changes to the other three themes.
+pos = s.index(base)
+assert pos > s.index('html[data-asb-glass="1"] :is(.pbtn,.lgr-hero,.lgr-sec,.live-info-now,.live-info-src)')
+assert pos > s.index('html[data-asb-glass="1"][data-asb-theme="light"] :is(.pbtn,.lgr-hero,.lgr-sec,.live-info-now,.live-info-src)')
+assert pos > s.index('html[data-asb-glass="1"][data-asb-theme="light"] :is(.pbtn.on,.cfg-tile.active,.cfg-profile-row.selected,.cfg-row.is-on)')
+active = rule('html[data-asb-glass="1"] :is(.pbtn.on,.cfg-tile.active,.cfg-profile-row.selected)')
+assert 'border-color:var(--accent) !important' in active
+# The approved tweak-card rules remain separate and retain their established materials.
+tweak = rule('html[data-asb-glass="1"] .cfg-row:not(.is-on)')
+assert 'rgba(12,17,15,.88)' in tweak and 'rgba(255,255,255,.055)' in tweak
+print('ok')
+PY
+echo "PASS WebUI fix256 inactive profiles: darker dark-Glass surfaces, hidden idle sheen, full foreground opacity and unchanged active/tweak/light materials"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

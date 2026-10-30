@@ -203,20 +203,26 @@ static void test_store_seed_validate(void) {
     s.buckets[5].interactive_bonus_x1000 = -50;  /* below min */
     EXPECT(asb_smart_store_validate(&s) != 0, "negative interactive_bonus → invalid");
 
-    /* Smart V5 (fix185): a V4 store keeps what it learned, an older one is reset as before. */
-    EXPECT(ASB_SMART_VER == 5, "Smart engine is V5");
+    /* Smart V6: V4/V5 stores keep what they learned; older schemas reset as before. */
+    EXPECT(ASB_SMART_VER == 6, "Smart engine is V6");
     asb_smart_store_seed_defaults(&s);
     s.version = 4; s.buckets[3].alpha_battery_x1000 = 731; s.buckets[3].sleep_bias_x1000 = 222;
     EXPECT(asb_smart_store_validate(&s) == 0, "a V4 store validates");
     asb_smart_store_migrate(&s);
-    EXPECT(s.version == ASB_SMART_VER, "V4 -> V5");
+    EXPECT(s.version == ASB_SMART_VER, "V4 -> V6");
     EXPECT(s.buckets[3].alpha_battery_x1000 == 731 && s.buckets[3].sleep_bias_x1000 == 222,
-           "V4 -> V5 keeps the learned outputs");
+           "V4 -> V6 keeps the learned outputs");
+    asb_smart_store_seed_defaults(&s);
+    s.version = 5; s.buckets[3].alpha_battery_x1000 = 712; s.buckets[3].sleep_bias_x1000 = 223;
+    EXPECT(asb_smart_store_validate(&s) == 0, "a V5 store validates");
+    asb_smart_store_migrate(&s);
+    EXPECT(s.version == ASB_SMART_VER && s.buckets[3].alpha_battery_x1000 == 712 &&
+           s.buckets[3].sleep_bias_x1000 == 223, "V5 -> V6 keeps the learned outputs");
     asb_smart_store_seed_defaults(&s);
     s.version = 3; s.buckets[3].alpha_battery_x1000 = 731;
     asb_smart_store_migrate(&s);
     EXPECT(s.version == ASB_SMART_VER && s.buckets[3].alpha_battery_x1000 == 500,
-           "V3 -> V5 still resets the outputs");
+           "V3 -> V6 still resets the outputs");
 }
 
 static void test_clamps(void) {
@@ -5730,6 +5736,7 @@ int main(void) {
     int n = 0;
     while (a->state == 1 && n++ < 40) win(A, "com.feed", 0.10, 0.04);
     if (a->state != 2 || asb_smooth_offset_for(A, g_now) != ASB_SMOOTH_LEAN_X1000 || g_rec_smooth_testing) { printf("headroom that helps was not kept (state %d)\n", a->state); bad = 1; }
+    if (asb_smooth_log_hint_useful(A, g_now)) { puts("a log hint reopened a concluded helped state"); bad = 1; }
     if (!strstr(g_smooth_event_msg, "more headroom helps")) { puts("no log of the verdict"); bad = 1; }
     if (a->t_windows[0] < ASB_SMOOTH_MIN_WINDOWS || a->t_windows[1] < ASB_SMOOTH_MIN_WINDOWS) { puts("decided on too few windows"); bad = 1; }
     /* A janky app whose jank is not the clocks: tested, then left alone. */
@@ -5741,6 +5748,7 @@ int main(void) {
     if (!strstr(g_smooth_event_msg, "does not help")) { puts("no log of the negative verdict"); bad = 1; }
     /* 21 days on, both verdicts are re-checked. */
     g_now += ASB_REC_RECHECK_S + 10;
+    if (!asb_smooth_log_hint_useful(A, g_now) || !asb_smooth_log_hint_useful(B, g_now)) { puts("the normal recheck did not reopen a log hint"); bad = 1; }
     win(B, "com.chat", 0.01, 0.01);
     if (b->state != 0) { puts("no re-check after 21 days"); bad = 1; }
     /* fix198: a test is bounded even on thin frames - an app that draws little while it is
@@ -5776,6 +5784,137 @@ X
 "$CC" -std=gnu11 -Wall -Werror -Wno-unused-function -o "$T/t" "$T/t.c" || fail "harness does not compile"
 "$T/t" || fail "behaviour"
 echo "PASS smart smoothness: real frame statistics, an A/B test per app, headroom kept only where it cuts the jank, the probe reads one app"
+)
+
+t_smart_log_feedback_runtime() (
+# Runtime (fix258): the infinite log publishes only a bounded sustained-jank hint.
+# The REAL parser and native consumer run here. Freshness, capture/sequence,
+# scenario, cooldown and plateau are enforced before an earlier native probe;
+# no logger frame delta reaches asb_smooth_window.
+set -eu
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+H="$ROOT/src/asb_log_feedback.h"; G="$ROOT/src/asb_governor.c"; F="$ROOT/tools/logkit/asb_log_full_day.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL smart log feedback: $*" >&2; exit 1; }
+CC="${CC:-cc}"; command -v "$CC" >/dev/null 2>&1 || CC=gcc
+command -v "$CC" >/dev/null 2>&1 || { echo "SKIP smart log feedback: no C compiler"; exit 0; }
+[ "$(grep -c 'asb_smooth_window(h, disp' "$G")" = 1 ] || fail "native frame windows have more than one owner"
+grep -Fq 'fb.app_hash != hash || fb.app_hint != g_smart_rt.app_hint ||' "$G" || fail "scenario identity is not checked"
+grep -Fq 'if (!new_capture && fb.seq <= g_smooth_log_seq) return;' "$G" || fail "capture/sequence dedup missing"
+grep -Fq 'if (!asb_smooth_log_hint_useful(hash, now)) {' "$G" || fail "plateau gate missing"
+grep -Fq 'lk_smart_feedback_observe' "$F" || fail "logger does not publish feedback"
+cat > "$T/t.c" <<C
+#include <stdio.h>
+#include <stdint.h>
+#include <string.h>
+#include <stdlib.h>
+#define ASB_LOG_FEEDBACK_FILE "$T/feedback.env"
+#include "$H"
+#define ASB_APP_GAMING 4
+#define ASB_SMART_BUCKETS 32
+static struct { int app_hint; unsigned bucket_id; } g_smart_rt = { 1, 2 };
+static long g_smooth_probe_ts = 1000;
+static int useful = 1;
+static int asb_smooth_log_hint_useful(uint64_t h, long now) { (void)h; (void)now; return useful; }
+C
+sed -n '/^#define ASB_SMOOTH_LOG_READ_S/,/^static void asb_smooth_probe_tick/p' "$G" | sed '$d' >> "$T/t.c"
+cat >> "$T/t.c" <<'C'
+static void put_feedback(unsigned long seq, long epoch, const char *hash, int hint, int bucket,
+                         unsigned long rows, unsigned long frames, unsigned long janky, long jx) {
+    FILE *f = fopen(ASB_LOG_FEEDBACK_FILE, "w");
+    fprintf(f, "schema=1\ncapture=100_20\nseq=%lu\nepoch=%ld\npkg_hash=%s\napp_hint=%d\nbucket_id=%d\nrows=%lu\nframes=%lu\njanky=%lu\njank_x1000=%ld\n",
+            seq, epoch, hash, hint, bucket, rows, frames, janky, jx);
+    fclose(f);
+}
+static int parse_one(const char *s, long now) {
+    asb_log_feedback_t f; return asb_log_feedback_parse(s, strlen(s), now, &f);
+}
+int main(void) {
+    int bad = 0;
+    const char *valid = "schema=1\ncapture=100_20\nseq=1\nepoch=1000\npkg_hash=0123456789abcdef\napp_hint=1\nbucket_id=2\nrows=2\nframes=1000\njanky=100\njank_x1000=100\n";
+    asb_log_feedback_t f;
+    if (asb_log_feedback_parse(valid, strlen(valid), 1001, &f) != 1 || f.app_hash != 0x0123456789abcdefULL || f.frames != 1000) { puts("valid feedback rejected"); bad = 1; }
+    if (asb_log_feedback_parse(valid, strlen(valid), 1181, &f) != ASB_LOG_FEEDBACK_STALE) { puts("stale feedback accepted"); bad = 1; }
+    if (asb_log_feedback_parse(valid, strlen(valid), 969, &f) != ASB_LOG_FEEDBACK_FUTURE) { puts("future feedback accepted"); bad = 1; }
+    if (parse_one("schema=1\ncapture=1_2\nseq=1\nepoch=1000\npkg_hash=0123456789abcdef\napp_hint=1\nbucket_id=2\nrows=1\nframes=1000\njanky=100\njank_x1000=100\n", 1000) == 1) { puts("one noisy row accepted"); bad = 1; }
+    if (parse_one("schema=1\ncapture=1_2\nseq=1\nepoch=1000\npkg_hash=0123456789abcdef\napp_hint=1\nbucket_id=2\nrows=2\nframes=100\njanky=10\njank_x1000=100\n", 1000) == 1) { puts("thin evidence accepted"); bad = 1; }
+    if (parse_one("schema=1\ncapture=1_2\nseq=1\nepoch=1000\npkg_hash=0123456789abcdef\napp_hint=1\nbucket_id=2\nrows=2\nframes=1000\njanky=40\njank_x1000=40\n", 1000) == 1) { puts("low jank accepted"); bad = 1; }
+    if (parse_one("schema=1\ncapture=1_2\nseq=1\nepoch=1000\npkg_hash=0123456789abcdef\napp_hint=1\nbucket_id=2\nrows=2\nframes=1000\njanky=100\njank_x1000=90\n", 1000) == 1) { puts("inconsistent jank accepted"); bad = 1; }
+    if (parse_one("schema=1\ncapture=1_2\nseq=1\nepoch=1000\npkg_hash=bad\napp_hint=1\nbucket_id=2\nrows=2\nframes=1000\njanky=100\njank_x1000=100\n", 1000) == 1) { puts("bad scenario hash accepted"); bad = 1; }
+    if (parse_one("schema=1\ncapture=1_2\nseq=1\nepoch=1000\npkg_hash=0123456789abcdef\napp_hint=1\nbucket_id=2\nrows=2\nframes=1000\njanky=100\njank_x1000=100\ncommand=ignored\n", 1000) == 1) { puts("unknown key accepted"); bad = 1; }
+    if (asb_log_feedback_parse(valid, strlen(valid) - 1, 1000, &f) == 1) { puts("truncated record accepted"); bad = 1; }
+
+    put_feedback(1, 1000, "0123456789abcdef", 1, 2, 2, 1000, 100, 100);
+    asb_smooth_log_hint_tick(0x0123456789abcdefULL, 1000);
+    if (g_smooth_log_accepted != 1 || g_smooth_log_due != 1045) { printf("first valid hint not scheduled: %lu/%ld\n", g_smooth_log_accepted, g_smooth_log_due); bad = 1; }
+    asb_smooth_log_hint_tick(0x0123456789abcdefULL, 1011);
+    if (g_smooth_log_accepted != 1) { puts("same capture/sequence counted twice"); bad = 1; }
+    put_feedback(2, 1021, "0123456789abcdef", 1, 2, 2, 1000, 100, 100);
+    asb_smooth_log_hint_tick(0x0123456789abcdefULL, 1022);
+    if (g_smooth_log_accepted != 1 || g_smooth_log_suppressed != 1) { printf("per-app cooldown missing: accepted=%lu suppressed=%lu rejected=%lu status=%s\n", g_smooth_log_accepted, g_smooth_log_suppressed, g_smooth_log_rejected, g_smooth_log_status); bad = 1; }
+    put_feedback(3, 1602, "0123456789abcdef", 1, 2, 2, 1000, 100, 100);
+    asb_smooth_log_hint_tick(0x0123456789abcdefULL, 1602);
+    if (g_smooth_log_accepted != 2) { puts("fresh evidence could not recheck after cooldown"); bad = 1; }
+    put_feedback(4, 1613, "0123456789abcdef", 2, 2, 2, 1000, 100, 100);
+    asb_smooth_log_hint_tick(0x0123456789abcdefULL, 1613);
+    if (g_smooth_log_rejected != 1 || strcmp(g_smooth_log_status, "scenario")) { puts("scenario mismatch accepted"); bad = 1; }
+    put_feedback(5, 1000, "0123456789abcdef", 1, 2, 2, 1000, 100, 100);
+    asb_smooth_log_hint_tick(0x0123456789abcdefULL, 1624);
+    if (g_smooth_log_rejected != 2 || strcmp(g_smooth_log_status, "stale")) { puts("stale native hint accepted"); bad = 1; }
+    useful = 0;
+    put_feedback(6, 1635, "0123456789abcdef", 1, 2, 2, 1000, 100, 100);
+    asb_smooth_log_hint_tick(0x0123456789abcdefULL, 1635);
+    if (g_smooth_log_suppressed != 2 || strcmp(g_smooth_log_status, "plateau")) { printf("plateau gate: accepted=%lu suppressed=%lu rejected=%lu status=%s\n", g_smooth_log_accepted, g_smooth_log_suppressed, g_smooth_log_rejected, g_smooth_log_status); bad = 1; }
+    remove(ASB_LOG_FEEDBACK_FILE); g_smooth_log_due = 1636;
+    asb_smooth_log_hint_tick(0x0123456789abcdefULL, 1646);
+    if (g_smooth_log_due || strcmp(g_smooth_log_status, "disabled")) { puts("stopping the log left a pending probe"); bad = 1; }
+    return bad;
+}
+C
+"$CC" -std=gnu11 -Wall -Wextra -Werror -o "$T/t" "$T/t.c" || fail "native harness does not compile"
+"$T/t" || fail "native parser/consumer behaviour"
+
+# The REAL shell publisher: two rows, then dedup/reset and owner-only cleanup.
+sed -n '/^LK_SF_FILE=/,/^lk_init$/p' "$F" | sed '$d' > "$T/publisher.sh"
+cat > "$T/publisher_test.sh" <<'SH'
+set -eu
+T="$1"; . "$T/publisher.sh"
+LK_SF_FILE="$T/feedback.env"; LK_SF_CAPTURE='100_20'; LK_SF_SEQ=0
+lk_state_kv() { sed -n "s/^$1=//p" "$T/state" | head -n 1; }
+cat > "$T/state" <<'EOF'
+profile=smart
+smart_mode=1
+smart_pkg_detect_ok=1
+smart_thermal_veto=0
+smart_pkg_hash=0123456789abcdef
+smart_app_hint=1
+smart_bucket_id=2
+EOF
+row() {
+  LK_JANK_FEEDBACK_VALID=1; LK_JANK_FEEDBACK_PKG='com.example.feed'; LK_JANK_FEEDBACK_PHASE=active
+  LK_JANK_FEEDBACK_STATE=MODERATE; LK_JANK_FEEDBACK_DF="$1"; LK_JANK_FEEDBACK_DJ="$2"; LK_JANK_FEEDBACK_TS="$3"
+}
+row 500 50 1000; lk_smart_feedback_observe
+[ ! -e "$LK_SF_FILE" ] || { echo 'one row published a hint'; exit 1; }
+row 500 50 1045; lk_smart_feedback_observe
+[ -s "$LK_SF_FILE" ] || { echo 'two rows did not publish'; exit 1; }
+grep -qx 'seq=1' "$LK_SF_FILE" && grep -qx 'rows=2' "$LK_SF_FILE" && grep -qx 'frames=1000' "$LK_SF_FILE" && grep -qx 'janky=100' "$LK_SF_FILE"
+[ ! -e "$LK_SF_FILE.tmp.$$" ] || { echo 'temporary file left behind'; exit 1; }
+row 500 50 1090; lk_smart_feedback_observe; row 500 50 1135; lk_smart_feedback_observe
+grep -qx 'seq=2' "$LK_SF_FILE" || { echo 'new evidence did not advance sequence'; exit 1; }
+sed -i 's/^smart_bucket_id=2$/smart_bucket_id=3/' "$T/state"
+row 500 50 1180; lk_smart_feedback_observe
+grep -qx 'seq=2' "$LK_SF_FILE" || { echo 'one changed-scenario row published'; exit 1; }
+row 500 10 1225; lk_smart_feedback_observe; row 500 50 1270; lk_smart_feedback_observe
+grep -qx 'seq=2' "$LK_SF_FILE" || { echo 'low-jank row did not reset the streak'; exit 1; }
+printf 'capture=other_1\n' > "$LK_SF_FILE"; lk_smart_feedback_clear
+grep -qx 'capture=other_1' "$LK_SF_FILE" || { echo 'another capture file was removed'; exit 1; }
+printf 'capture=100_20\n' > "$LK_SF_FILE"; lk_smart_feedback_clear
+[ ! -e "$LK_SF_FILE" ] || { echo 'owned feedback was not cleared'; exit 1; }
+SH
+sh "$T/publisher_test.sh" "$T" || fail "shell publisher behaviour"
+! sed -n '/^LK_SF_FILE=/,/^lk_init$/p' "$F" | grep -Eq 'scaling_(min|max)|devfreq|sysctl|asb_smooth_window' || fail "logger became a second settings owner"
+echo "PASS smart log feedback: two-row bounded hints, freshness/scenario/sequence/cooldown/plateau gates, native-only A/B windows and owner-only cleanup"
 )
 
 t_msm_final_ceiling_runtime() (
