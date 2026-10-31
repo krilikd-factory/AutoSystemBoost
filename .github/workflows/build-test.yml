@@ -22,11 +22,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Normalize executable diagnostic script modes
+      - name: Normalize executable source script modes
         run: |
-          # Source archives and browser uploads can lose git executable mode bits. These two
-          # runtime helpers are explicitly executed by their safety contracts below.
-          chmod 0755 runtime/asb_active_efficiency_envelope.sh runtime/asb_boot_timeline.sh runtime/asb_debug_support.sh runtime/asb_stock_policy.sh runtime/asb_overlay_guard.sh runtime/asb_wifi_fallback.sh tools/asb_kernel_uv_coexist.sh tools/asb_device_info.sh
+          # Browser uploads can turn git mode 100755 into 100644. Restore every helper whose
+          # executable mode is a tested contract before regression or packaging starts.
+          chmod 0755 \
+            runtime/asb_active_efficiency_envelope.sh \
+            runtime/asb_boot_timeline.sh \
+            runtime/asb_debug_support.sh \
+            runtime/asb_stock_policy.sh \
+            runtime/asb_overlay_guard.sh \
+            runtime/asb_wifi_fallback.sh \
+            runtime/asb_package_state.sh \
+            runtime/asb_heytap_mcs.sh \
+            runtime/asb_art_compile.sh \
+            runtime/asb_documentsui_fix.sh \
+            tools/asb_kernel_uv_coexist.sh \
+            tools/asb_device_info.sh
 
       - name: Validate required source files
         run: |

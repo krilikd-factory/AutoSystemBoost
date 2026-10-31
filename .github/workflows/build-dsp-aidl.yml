@@ -206,6 +206,12 @@ jobs:
           df -h /
           test -f build/make/envsetup.sh \
             || { echo "::error::build/make missing after sync"; exit 1; }
+          # Immutable pre-mutation reference for the audit artifact. Hash every build file
+          # that auto-heal may neutralize plus the AOSP effect sources patched for V2.
+          find . -path './out' -prune -o -type f \
+            \( -name 'Android.bp' -o -name 'Android.mk' -o -name 'EffectImpl.cpp' \
+               -o -name 'EffectThread.cpp' -o -name 'EffectContext.cpp' \) -print0 \
+            | sort -z | xargs -0 sha256sum > /tmp/asb_aosp_mutable.before
           echo "=== pruning other-OS toolchains ==="
           sudo rm -rf \
             prebuilts/clang/host/darwin-x86 prebuilts/clang/host/windows-x86 \
@@ -937,6 +943,49 @@ jobs:
                 "pushed gain_mb" "settings change"
           [ "$fail" = "0" ] || { echo "::error::artifacts do not match the sources - refusing to upload"; exit 1; }
           echo "artifacts match the sources"
+
+      - name: Publish AOSP mutation audit
+        working-directory: aosp
+        run: |
+          find . -path './out' -prune -o -type f \
+            \( -name 'Android.bp' -o -name 'Android.mk' -o -name 'EffectImpl.cpp' \
+               -o -name 'EffectThread.cpp' -o -name 'EffectContext.cpp' \) -print0 \
+            | sort -z | xargs -0 sha256sum > /tmp/asb_aosp_mutable.after
+          python3 - <<'PY'
+          from pathlib import Path
+          def load(path):
+              rows = {}
+              for line in Path(path).read_text().splitlines():
+                  digest, name = line.split(maxsplit=1)
+                  rows[name.lstrip('*')] = digest
+              return rows
+          before = load('/tmp/asb_aosp_mutable.before')
+          after = load('/tmp/asb_aosp_mutable.after')
+          lines = ['status\tpath\tbefore_sha256\tafter_sha256']
+          for name in sorted(before.keys() | after.keys()):
+              b, a = before.get(name, '-'), after.get(name, '-')
+              if b == a:
+                  continue
+              status = 'added' if b == '-' else 'removed' if a == '-' else 'modified'
+              lines.append(f'{status}\t{name}\t{b}\t{a}')
+          lines.append(f'# changed_files={len(lines) - 1}')
+          Path('/tmp/asb-aosp-changed-files.tsv').write_text('\n'.join(lines) + '\n')
+          PY
+          cp /tmp/asb-aosp-changed-files.tsv "$GITHUB_WORKSPACE/"
+          cp /tmp/asb_aosp_mutable.before "$GITHUB_WORKSPACE/asb-aosp-buildfiles.before.sha256"
+          cp /tmp/asb_aosp_mutable.after "$GITHUB_WORKSPACE/asb-aosp-buildfiles.after.sha256"
+          cat "$GITHUB_WORKSPACE/asb-aosp-changed-files.tsv"
+
+      - name: Upload AOSP mutation audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: asb-aosp-mutation-audit-aidl
+          path: |
+            asb-aosp-changed-files.tsv
+            asb-aosp-buildfiles.before.sha256
+            asb-aosp-buildfiles.after.sha256
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Upload .so artifacts
         uses: actions/upload-artifact@v4
