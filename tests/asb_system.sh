@@ -2305,6 +2305,8 @@ for f in files:
     d=alld[f]
     if 'logkit' in f: d=d|alld.get('tools/logkit/_asb_logkit_common.sh',set())
     if f in ('runtime/asb_pressure.sh','runtime/asb_zygisk_info.sh'): d=d|device_defs
+    # link-status sources the read-only collector and calls its defined entry point.
+    if f == 'runtime/asb_zygisk.sh': d=d|alld.get('runtime/asb_zygisk_info.sh',set())
     for i,line in enumerate(open(f).read().split('\n'),1):
         t=line.strip()
         if t.startswith('#'): continue
@@ -7151,6 +7153,7 @@ MODPATH="$TMP/new_module"
 STATE="$TMP/state"
 mkdir -p "$NVBASE/modules_update" "$MODPATH/config" "$STATE/config_profiles/user.smart"
 cp "$ROOT/config/governor.conf.shipped" "$MODPATH/config/governor.conf"
+cp "$ROOT/module.prop" "$MODPATH/module.prop"
 
 # This represents ASB's prior atomic snapshot. There is deliberately no NVBASE/modules/<id>.
 cat > "$STATE/governor.conf.snapshot" <<'EOF'
@@ -7168,8 +7171,10 @@ printf 'module_id=AutoSystemBoost\n' > "$STATE/update_snapshot_state"
 printf '3\n' > "$STATE/config_schema"
 
 # Extract the exact production function and redirect only its durable path for test isolation.
-sed -n '/^asb_preserve_user_config() {/,/^}/p' "$ROOT/common/install.sh" | \
-  sed "s|/data/adb/asb|$STATE|g" > "$TMP/preserve_fn.sh"
+{
+  sed -n '/^asb_restore_profile_description() {/,/^}/p' "$ROOT/common/install.sh"
+  sed -n '/^asb_preserve_user_config() {/,/^}/p' "$ROOT/common/install.sh"
+} | sed "s|/data/adb/asb|$STATE|g" > "$TMP/preserve_fn.sh"
 [ -s "$TMP/preserve_fn.sh" ] || fail 'could not extract production preserve function'
 ui_print() { :; }
 asb_neutralise_fresh_install() { fail 'snapshot-only update was incorrectly treated as fresh'; }
@@ -7193,6 +7198,26 @@ need_line "$MODPATH/config/governor.conf" 'net_wifi_leave=1'
 need_line "$MODPATH/config/governor.conf" 'audio_profile=eq_friendly'
 need_line "$MODPATH/config/governor.conf" 'sustained_temp_enter=63'
 need_line "$MODPATH/current_profile" 'smart'
+need_line "$MODPATH/module.prop" 'description=status: Smart Mode 🤖 | active ✅'
+# Exercise the exact installer description writer for every preserved profile. This is
+# presentation-only: no runtime profile code is sourced and no governor is started.
+for _profile in stock performance battery balanced smart none; do
+  printf '%s\n' "$_profile" > "$MODPATH/current_profile"
+  asb_restore_profile_description
+  case "$_profile" in
+    stock) _expected='description=status: Stock 👶🏻 | active ✅' ;;
+    performance) _expected='description=status: Performance 🔥 | active ✅' ;;
+    battery) _expected='description=status: Battery 🔋 | active ✅' ;;
+    balanced) _expected='description=status: Balanced ⚖️ | active ✅' ;;
+    smart) _expected='description=status: Smart Mode 🤖 | active ✅' ;;
+    none) _expected='description=status: no profile selected — open the WebUI to choose one' ;;
+  esac
+  need_line "$MODPATH/module.prop" "$_expected"
+done
+printf 'not-a-profile\n' > "$MODPATH/current_profile"
+cp "$MODPATH/module.prop" "$TMP/module.prop.before-invalid"
+asb_restore_profile_description
+cmp -s "$MODPATH/module.prop" "$TMP/module.prop.before-invalid" || fail 'invalid profile changed module description'
 need_line "$STATE/config_profiles/user.smart/manifest" 'smart-session-payload'
 need_line "$STATE/session_history.jsonl" 'smart-history'
 [ -f "$STATE/governor.conf.snapshot" ] || fail 'migration removed its own durable snapshot'

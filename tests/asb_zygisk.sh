@@ -515,7 +515,7 @@ EOF
   printf 'L\tcom.example.sync\t5\t0\t0\nZ\tlaunch_accepted\t1\n' > "$T/run/state.armeabi-v7a.tsv"
   . "$ROOT/runtime/asb_zygisk_info.sh"; _asb_zygisk_info
   want() { grep -Fqx "zygisk_observer	$1	$2" "$T/out" || fail "missing $1=$2: $(cat "$T/out")"; }
-  want enabled 1; want enabled_packages 1; want loaded_processes 1; want events_total 10
+  want enabled 1; want enabled_packages 1; want loaded_processes 1; want events_total 10; want link_state connected
   want events_dropped_rate_limit 1; want ipc_cpu_ms 3; want ipc_wakeups 12; want memory_kb 2222
   want state_freshness current; want crash_count unknown; want anr_count unknown; want policy_hints 7
   want lifecycle_hints 1; want hints_accepted 4; want hints_vetoed 1; want hints_unavailable 1; want hints_throttled 3
@@ -525,10 +525,45 @@ EOF
   ! grep -q 'bad;pkg\|com.example.idle 0' "$T/out" || fail 'malformed or screen-on-only ledger rows leaked into the top list'
   # A reused PID with different start ticks and malformed rows never contributes RSS/processes.
   ! grep -q '9999\|com.example.stale\|com.example.bad' "$T/out" || fail 'stale/malformed process leaked into diagnostics'
+  before="$(sha256sum "$T/mod/config/governor.conf" "$T/mod/zygisk/policy" "$T/run/state.arm64-v8a.tsv")"
+  ASB_ZYGISK_MODDIR="$T/mod" ASB_ZYGISK_DIR="$T/data/asb/zygisk_observer" \
+    ASB_ZYGISK_RUN_DIR="$T/run" ASB_ZYGISK_PROC="$T/proc" ASB_ZYGISK_DATA="$T/data" \
+    sh "$ROOT/runtime/asb_zygisk.sh" link-status > "$T/link.out"
+  after="$(sha256sum "$T/mod/config/governor.conf" "$T/mod/zygisk/policy" "$T/run/state.arm64-v8a.tsv")"
+  [ "$before" = "$after" ] || fail 'link-status mutated configuration, policy or event state'
+  grep -Fqx "$(printf 'D\tzygisk_observer\tloaded_processes\t1')" "$T/link.out" || fail 'link-status omitted validated live process evidence'
+  grep -Fqx "$(printf 'D\tzygisk_observer\tstate_freshness\tcurrent')" "$T/link.out" || fail 'link-status omitted freshness evidence'
+  grep -Fqx "$(printf 'D\tzygisk_observer\tpolicy_seen_generation\t42')" "$T/link.out" || fail 'link-status omitted companion acknowledgement'
+
+  grep -Fqx "$(printf 'D\tzygisk_observer\tlink_state\tconnected')" "$T/link.out" || fail 'shared machine verdict missing'
+  {
+    sed -n '/^T_ZY_HEAD=/,/^T_ZY_UNKNOWN=/p' "$ROOT/action.sh"
+    printf '_f() { _sfmt="$1"; shift; printf "$_sfmt\\n" "$@"; }\n'
+    sed -n '/# Compact, current Zygisk evidence/,/^_bias=/p' "$ROOT/action.sh" | sed '$d'
+  } > "$T/action.zy.sh"
+  MODDIR="$T/mod" ASB_ZYGISK_MODDIR="$T/mod" ASB_ZYGISK_DIR="$T/data/asb/zygisk_observer" \
+    ASB_ZYGISK_RUN_DIR="$T/run" ASB_ZYGISK_PROC="$T/proc" ASB_ZYGISK_DATA="$T/data" \
+    sh "$T/action.zy.sh" > "$T/action.out" || fail 'Actions Zygisk block failed'
+  grep -q 'Zygisk · ASB link: Connected' "$T/action.out" || fail "Actions verdict absent: $(cat "$T/action.out")"
+  grep -q 'live processes 1 · events 10 · spawn 30' "$T/action.out" || fail 'Actions evidence counters absent'
+  grep -q 'generation 42 / acknowledged 42' "$T/action.out" || fail 'Actions policy acknowledgement absent'
+  grep -q 'not pure ASB cost' "$T/action.out" || fail 'Actions RSS basis is not honest'
+  {
+    printf 'P() { printf "%%s\\n" "$*"; }\nNOTE() { printf "%%s\\n" "$*"; }\n'
+    printf '_asb_observer_diag="$(cat "$T/diag.rows")"\n'
+    sed -n '/^    _asb_zdiag_field() {/,/^    P "  RAW PRESSURE/p' "$ROOT/tools/asb_diag.sh" | sed '$d'
+  } > "$T/asbdiag.zy.sh"
+  awk -F '\t' '$1 == "D" && $2 == "zygisk_observer" { print $2 "\t" $3 "\t" $4 }' "$T/link.out" > "$T/diag.rows"
+  T="$T" sh "$T/asbdiag.zy.sh" > "$T/asbdiag.out" || fail 'asbdiag summary failed'
+  grep -q 'CONNECTED - validated live observed process(es)' "$T/asbdiag.out" || fail 'asbdiag connected verdict absent'
+  grep -q 'written_gen=42 acknowledged_gen=42' "$T/asbdiag.out" || fail 'asbdiag policy evidence absent'
+  grep -q 'ASB <-> ZYGISK / INJECTION VERDICT' "$ROOT/tools/asb_diag.sh" || fail 'asbdiag verdict missing'
+  cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail 'asbdiag entry points differ'
+
   : > "$T/out"; rm -rf "$T/proc/4242"; printf '999.0 0.0\n' > "$T/proc/uptime"; _asb_zygisk_info
-  want loaded_processes 0; want state_freshness current
+  want loaded_processes 0; want state_freshness current; want link_state confirmed
   printf '1000.0 0.0\n' > "$T/proc/uptime"; sed -i 's/999000/1/' "$T/run/state.arm64-v8a.tsv"
-  : > "$T/out"; _asb_zygisk_info; want state_freshness stale_over_5_minutes
+  : > "$T/out"; _asb_zygisk_info; want state_freshness stale_over_5_minutes; want link_state stale
   echo 'PASS observer diagnostics: live PID/start-ticks validation, current RSS, counters, stale TTL and honest unknowns'
 )
 
@@ -543,28 +578,124 @@ t_zygisk_ui_runtime() (
 const window=globalThis; const ASB_LANG='en'; const MD='/data/adb/modules/AutoSystemBoost';
 function T(k,d){return d;} function deviceFill(k,d,v){let s=d;for(const x in v)s=s.replace('{'+x+'}',v[x]);return s;}
 function deviceFallbackLabel(k){return String(k).replace(/_/g,' ');}
-function deviceVal(d,s,k){return d.sections[s]&&d.sections[s][k]!=null?String(d.sections[s][k]):'—';}
-function mk(tag){const e={tagName:tag,className:'',children:[],style:{},disabled:false,value:'',setAttribute(){},classList:{add(){}},appendChild(c){e.children.push(c);return c;}};Object.defineProperty(e,'textContent',{get(){return e._text||''},set(v){e._text=String(v);e.children=[];}});return e;}
-const document={createElement:mk}; function logReportNote(t){const e=mk('div');e.textContent=t;return e;}
+function deviceVal(d,s,k){return d&&d.sections&&d.sections[s]&&d.sections[s][k]!=null?String(d.sections[s][k]):'—';}
+function mk(tag){const e={tagName:tag,className:'',children:[],style:{},disabled:false,value:'',attrs:{},setAttribute(k,v){e.attrs[k]=String(v);},classList:{add(){}},appendChild(c){e.children.push(c);c.parentNode=e;return c;},querySelector(sel){const c=sel.slice(1);return find(e,c);},replaceChild(n,o){const i=e.children.indexOf(o);if(i>=0){e.children[i]=n;n.parentNode=e;}return o;}};Object.defineProperty(e,'textContent',{get(){return e._text||''},set(v){e._text=String(v);e.children=[];}});return e;}
+const hosts=Array.from({length:5},()=>mk('div'));
+const document={createElement:mk,querySelectorAll(sel){if(sel==='.hdr-info')return hosts;if(sel==='.zygisk-header-link')return hosts.map(h=>find(h,'zygisk-header-link')).filter(Boolean);return [];}};
+function _el(){return null;} function openZygiskSettings(){} function shQuote(s){return "'"+s+"'";}
+function cfgRenderRow(list,it){const row=mk('div');row.className='cfg-row';row.setAttribute('data-key',it.key);const sw=mk('div');sw.className='cfg-switch';sw.setAttribute('role','switch');row.appendChild(sw);list.appendChild(row);}
+ function logReportNote(t){const e=mk('div');e.textContent=t;return e;}
 let commands=[],refreshes=0,toastText=''; async function run(c){commands.push(c);return {errno:0,stdout:''};} function runOk(r){return r.errno===0;} function runText(r){return r.stdout||'';} function toast(t){toastText=t;} function asbDeviceInfoLoad(){refreshes++;}
 JS
-    sed -n '/^function devicePressureScale(/,/^}/p; /^function deviceZygiskEditor(/,/^}/p' "$ROOT/webroot/index.html"
+    sed -n '/^function parseDeviceInfo(/,/^}/p; /^function devicePressureScale(/,/^}/p; /^function deviceZygiskLinkState(/,/^}/p; /^function deviceZygiskLinkVerdict(/,/^}/p; /^function deviceZygiskLink(/,/^}/p; /^let _zygiskHeaderSeq/p; /^function zygiskHeaderPaint(/,/^}/p; /^function zygiskHeaderInit(/,/^}/p; /^function zygiskHeaderPublish(/,/^}/p; /^async function zygiskHeaderRefresh(/,/^}/p; /^function cfgRenderZygiskCard(/,/^}/p; /^function deviceZygiskEditor(/,/^}/p' "$ROOT/webroot/index.html"
     cat <<'JS'
 let bad=0;const chk=(c,m)=>{if(!c){console.log('FAIL '+m);bad++;}};
 function find(n,c){if(n.className&&n.className.split(/\s+/).includes(c))return n;for(const x of n.children||[]){const r=find(x,c);if(r)return r;}return null;}
 const d={sections:{system_load:{score:'53',band:'high',coverage_pct:'100'},zygisk_observer:{enabled_package_list:'com.example.app',safe_mode:'off'}}};
 let scale=devicePressureScale(d),marker=find(scale,'dev-pressure-marker');chk(marker&&marker.style.left==='53%','valid pressure marker');chk(find(scale,'dev-pressure-score').textContent==='53/100','score text');
 d.sections.system_load.score='unknown';scale=devicePressureScale(d);chk(!find(scale,'dev-pressure-marker'),'unknown gained a marker');chk(find(scale,'dev-pressure-score').textContent==='unknown','unknown not shown');
+const linkBase={enabled:'1',safe_mode:'off',state_freshness:'no event state',loaded_processes:'0',events_total:'0',spawn_events:'0',policy_seen_generation:'0',policy_generation:'0',enabled_packages:'0',launch_hints:'0',spawn_ledger:'0',installed_abis:'arm64-v8a,armeabi-v7a'};
+const linkData=p=>({sections:{zygisk_observer:Object.assign({},linkBase,p||{})}});
+const linkState=(p,w)=>chk(deviceZygiskLinkState(linkData(p))===w,'link state '+w+' with '+JSON.stringify(p||{}));
+linkState({},'idle'); // The supplied fix272 diagnostic: installed/enabled, but no selected work or events.
+linkState({enabled_packages:'1',enabled_package_list:'com.example.app'},'waiting');
+linkState({launch_hints:'1'},'waiting');linkState({spawn_ledger:'1'},'waiting');
+linkState({state_freshness:'current',loaded_processes:'2',events_total:'2'},'connected');
+linkState({state_freshness:'current',events_total:'1'},'confirmed');
+linkState({state_freshness:'current',spawn_events:'1'},'confirmed');
+linkState({state_freshness:'current',policy_seen_generation:'42',policy_generation:'42'},'confirmed');
+linkState({state_freshness:'stale_over_5_minutes',events_total:'9'},'stale');
+linkState({safe_mode:'on',state_freshness:'current',loaded_processes:'2'},'safe');
+linkState({enabled:'0'},'off');linkState({events_total:'broken',state_freshness:'current'},'unknown');
+linkState({enabled:'—'},'unknown');linkState({state_freshness:'not exposed'},'unknown');
+let link=deviceZygiskLink(linkData({state_freshness:'current',loaded_processes:'2',events_total:'2'}));
+chk(link.className.includes('dev-zygisk-link-connected'),'connected badge class');chk(find(link,'dev-zygisk-link-state').textContent==='Connected','connected badge text');chk(find(link,'dev-zygisk-link-detail').textContent.includes('2'),'live process evidence missing');
+link=deviceZygiskLink(linkData({}));chk(link.className.includes('dev-zygisk-link-idle'),'installed ABI files falsely confirmed a channel');chk(find(link,'dev-zygisk-link-state').textContent==='Enabled · nothing selected','empty-selection badge text');
+zygiskHeaderInit();chk(hosts.every(h=>!!find(h,'zygisk-header-link')),'not all five page headers received the badge');
+chk(hosts.every(h=>find(h,'zygisk-header-link').attrs['data-state']==='unknown'),'missing evidence did not remain unknown');
+zygiskHeaderPublish(linkData({state_freshness:'current',loaded_processes:'2',events_total:'2'}));
+chk(hosts.every(h=>find(h,'zygisk-header-link').attrs['data-state']==='connected'),'validated live process did not paint every header');
+zygiskHeaderPublish(linkData({}));chk(hosts.every(h=>find(h,'zygisk-header-link').attrs['data-state']==='idle'),'installed ABI files falsely connected a page header');
+const unifiedList=mk('div');cfgRenderZygiskCard(unifiedList,['zygisk_enabled','zygisk_hints','zygisk_launch','zygisk_ledger'].map(key=>({key,type:'bool'})));
+const unified=find(unifiedList,'cfg-zygisk-card');chk(!!unified&&unified.children.length===5,'unified card does not contain one verdict plus four settings');
+chk(unified&&unified.children.slice(1).every(r=>find(r,'cfg-switch')),'a unified Zygisk setting lost its switch');
+chk(unified&&unified.children.slice(1).map(r=>r.attrs['data-key']).join(',')==='zygisk_enabled,zygisk_hints,zygisk_launch,zygisk_ledger','unified card changed setting ownership/order');
 (async()=>{const ed=deviceZygiskEditor(d),input=find(ed,'dev-zygisk-input'),buttons=ed.children.flatMap(x=>x.children||[]).filter(x=>x.tagName==='button');
 input.value='com.example.app;touch /tmp/pwn';await buttons[0].onclick();chk(commands.length===0,'malformed package reached shell');chk(refreshes===0,'malformed package refreshed collector');
 input.value='com.example.app, org.example.game';await buttons[0].onclick();chk(commands.length===1&&commands[0].includes("set-packages 'com.example.app' 'org.example.game'"),'valid allowlist command');chk(refreshes===1,'valid save did not refresh');
 await buttons[1].onclick();chk(commands[1].endsWith('safe-mode on'),'safe mode command');chk(refreshes===2,'safe mode did not refresh');
+// Coalesced reads are sequence-checked: an older response cannot replace newer evidence.
+commands=[];const deferred=[];run=c=>{commands.push(c);return new Promise(resolve=>deferred.push(resolve));};
+const raw=p=>Object.entries(Object.assign({},linkBase,p)).map(([k,v])=>'D\tzygisk_observer\t'+k+'\t'+v).join('\n');
+const older=zygiskHeaderRefresh();zygiskHeaderRefresh();chk(commands.length===1&&commands[0].includes('link-status'),'concurrent header reads were not coalesced');
+deferred[0]({errno:0,stdout:raw({state_freshness:'current',loaded_processes:'2',events_total:'2'}),stderr:''});await older;
+await new Promise(r=>setTimeout(r,0));chk(commands.length===2,'queued header refresh did not start');chk(hosts.every(h=>find(h,'zygisk-header-link').attrs['data-state']==='idle'),'stale header response overwrote newer request');
+deferred[1]({errno:0,stdout:raw({state_freshness:'current',loaded_processes:'2',events_total:'2'}),stderr:''});await new Promise(r=>setTimeout(r,0));
+chk(hosts.every(h=>find(h,'zygisk-header-link').attrs['data-state']==='connected'),'newest header evidence was not published');chk(commands.every(c=>!c.includes(' sync')),'evidence read unexpectedly wrote policy');
 if(bad)process.exit(1);console.log('ok');})().catch(e=>{console.error(e);process.exit(1)});
 JS
   } > "$T/test.js"
   out="$(node "$T/test.js" 2>&1)" || fail "$out"
   [ "$out" = ok ] || fail "$out"
-  echo 'PASS observer UI: clamped/unknown scale, safe allowlist validation and explicit safe-mode action'
+  python3 - "$ROOT/webroot/i18n" <<'PY' || fail 'link badge locales'
+import json, pathlib, sys
+states = ('connected', 'confirmed', 'waiting', 'idle', 'stale', 'safe', 'off', 'unknown')
+files = sorted(pathlib.Path(sys.argv[1]).glob('*.json'))
+assert len(files) == 13
+for p in files:
+    d = json.loads(p.read_text(encoding='utf-8'))
+    for state in states:
+        assert d['dev_zygisk_link_' + state].strip(), (p, state)
+        assert d['dev_zygisk_link_' + state + '_detail'].strip(), (p, state)
+    assert d['dev_zygisk_link_connected_detail'].count('{n}') == 1, p
+    assert d['cfg_ui_section_zygisk'].strip(), p
+    assert d['cfg_ui_section_zygisk_hint'].strip(), p
+PY
+  echo 'PASS observer UI: unified four-switch card, five evidence-bounded headers, 13 locales, scale and safe editor'
+)
+
+t_zygisk_capture_digest_runtime() (
+  set -eu
+  ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+  fail() { echo "FAIL observer capture digest: $*" >&2; exit 1; }
+  T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+  CAP="$T/capture"; mkdir -p "$CAP"
+  printf 'current_profile: smart\n' > "$CAP/env.txt"
+  _snap() {
+    _file="$1"; _state="$2"; _base="$3"
+    {
+      printf 'M\tcaptured_epoch=1000\n'
+      printf 'D\tzygisk_observer\tlink_state\t%s\n' "$_state"
+      printf 'D\tzygisk_observer\tenabled\t1\nD\tzygisk_observer\tsafe_mode\toff\n'
+      printf 'D\tzygisk_observer\tstate_freshness\tcurrent\nD\tzygisk_observer\tloaded_processes\t1\n'
+      printf 'D\tzygisk_observer\tpolicy_generation\t42\nD\tzygisk_observer\tpolicy_seen_generation\t42\n'
+      printf 'D\tzygisk_observer\tenabled_packages\t1\nD\tzygisk_observer\tinstalled_abis\tarm64-v8a\n'
+      printf 'D\tzygisk_observer\tlifecycle_hints\t1\nD\tzygisk_observer\tlaunch_hints\t1\nD\tzygisk_observer\tspawn_ledger\t1\nD\tzygisk_observer\tmemory_kb\t2222\n'
+      for _k in events_total spawn_events launch_events launch_accepted policy_hints hints_accepted hints_vetoed ledger_events events_dropped_total ipc_cpu_ms ipc_wakeups; do
+        printf 'D\tzygisk_observer\t%s\t%s\n' "$_k" "$_base"
+      done
+    } > "$_file"
+  }
+  _snap "$CAP/zygisk_observer_start.tsv" waiting 10
+  _snap "$CAP/zygisk_observer_latest.tsv" connected 15
+  out="$(ASB_LK_LOCK="$T/no-lock" ASB_LK_STATE_DIR="$T/state" ASB_CFG_FILE="$T/no-config" sh "$ROOT/tools/logkit/asb_fullday_digest.sh" "$CAP")"
+  zy="$(printf '%s\n' "$out" | awk -F '\t' '$1 == "zygisk"')"
+  printf '%s\n' "$zy" | grep -q $'^zygisk\tstate=connected\tstart_state=waiting\tcoverage=start_latest' || fail "capture verdict missing: $zy"
+  printf '%s\n' "$zy" | grep -q $'events_total_delta=5' || fail 'event delta missing'
+  printf '%s\n' "$zy" | grep -q $'launch_accepted_delta=5' || fail 'launch delta missing'
+  printf '%s\n' "$zy" | grep -q $'ipc_cpu_ms_delta=5' || fail 'IPC delta missing'
+  printf '%s\n' "$zy" | grep -q $'deltas=available' || fail 'valid deltas not acknowledged'
+  _snap "$CAP/zygisk_observer_latest.tsv" connected 4
+  zy="$(ASB_LK_LOCK="$T/no-lock" ASB_LK_STATE_DIR="$T/state" ASB_CFG_FILE="$T/no-config" sh "$ROOT/tools/logkit/asb_fullday_digest.sh" "$CAP" | awk -F '\t' '$1 == "zygisk"')"
+  printf '%s\n' "$zy" | grep -q $'events_total_delta=unknown' || fail 'counter reset invented a delta'
+  printf '%s\n' "$zy" | grep -q $'deltas=counter_reset_or_restart' || fail 'counter reset was not named'
+  rm "$CAP/zygisk_observer_start.tsv"
+  zy="$(ASB_LK_LOCK="$T/no-lock" ASB_LK_STATE_DIR="$T/state" ASB_CFG_FILE="$T/no-config" sh "$ROOT/tools/logkit/asb_fullday_digest.sh" "$CAP" | awk -F '\t' '$1 == "zygisk"')"
+  printf '%s\n' "$zy" | grep -q $'coverage=latest_only' || fail 'single snapshot not bounded'
+  printf '%s\n' "$zy" | grep -q $'events_total_delta=unknown' || fail 'single snapshot invented a delta'
+  rm "$CAP/zygisk_observer_latest.tsv"
+  ! ASB_LK_LOCK="$T/no-lock" ASB_LK_STATE_DIR="$T/state" ASB_CFG_FILE="$T/no-config" sh "$ROOT/tools/logkit/asb_fullday_digest.sh" "$CAP" | grep -q '^zygisk' || fail 'legacy capture gained fake Zygisk evidence'
+  echo 'PASS observer capture digest: start/latest verdicts, monotonic deltas, reset and legacy-capture honesty'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

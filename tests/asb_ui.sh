@@ -5242,7 +5242,8 @@ function T(k, d) { const L = I18N[ASB_LANG]; return (L && typeof L[k] === 'strin
 EOF
   for fn in Tcfg parseLogReport logReportT logReportDur logReportDurSec logReportAuthority logReportHolderWhat logReportIdleAwake logReportHolderName logReportTips \
     logReportSysuiSteady logReportMiB logReportNetFix logReportLteIdle logReportFullCharge logReportScreenOnDrainState logReportAnalyze logReportHistoryComparable logReportMachineDigest logReportAnalysisT \
-    logReportTipText logReportRow logReportSec logReportNote logReportHero logReportTable \
+    logReportTipText logReportRow logReportSec logReportNote logReportHero logReportTable logReportZygisk \
+    deviceVal deviceFill deviceZygiskLinkState deviceZygiskLinkVerdict deviceZygiskLink \
     logReportBrief logReportDxT logReportDiagnose logReportDiagSection logReportQualityPanel logReportRef logReportDomainRef logReportTipRef logReportDiagRef logReportAppendAnalysis logReportRender asbPageJump asbPageReference shQuote \
     asbPageClasses asbPageHas asbPageKids asbPageTxt asbPageWarn asbPageText asbPageStamp; do
     sed -n "/^function $fn(/,/^}/p" "$H"
@@ -5622,6 +5623,14 @@ chk(countClass(reportBody, 'lgr-verdict-unknown') === 5 && allText(reportBody).i
 chk(allText(reportBody).indexOf(I18N.ru.lr_summary_legend) >= 0 && countClass(reportBody, 'report-nav') === 1 && countClass(reportBody, 'lgr-details-anchor') === 1, 'fix255: report legend, working navigation model and technical-evidence anchor render');
 chk(reportBody.children.filter(c => c.children[0] && c.children[0].textContent !== I18N.ru.lr_sec_brief && c.children[0].textContent !== I18N.ru.lr_sec_dx)[0].children[0].textContent === I18N.ru.lr_sec_summary, 'smart summary is the first report section after the plain-words brief and the causes');
 chk(countClass(reportBody, 'lgr-action') === 0 && allText(reportBody).indexOf(I18N.ru.lr_no_actions_early) >= 0, 'early DOM has no unsupported action');
+const zyDay = parseLogReport('meta\telapsed_min=120\tprofile=smart\nzygisk\tstate=confirmed\tstart_state=waiting\tcoverage=start_latest\tenabled=1\tsafe_mode=off\tfreshness=current\tloaded=0\tpolicy_generation=42\tpolicy_seen_generation=42\tpackages=2\tabis=arm64-v8a\tlifecycle_hints=1\tlaunch_hints=1\tspawn_ledger=0\tevents_total_start=10\tevents_total_latest=15\tevents_total_delta=5\tlaunch_events_delta=2\tlaunch_accepted_delta=1\tpolicy_hints_delta=3\thints_accepted_delta=2\thints_vetoed_delta=1\tipc_cpu_ms_delta=4\tipc_wakeups_delta=7\tdeltas=available\n');
+logReportRender(zyDay);
+chk(!!domEl('lgr-zygisk') && countClass(reportBody, 'lgr-hero') >= 4, 'Zygisk capture card and four delta heroes render');
+chk(allText(reportBody).indexOf(I18N.ru.lr_sec_zygisk) >= 0 && allText(reportBody).indexOf(I18N.ru.lr_zy_coverage_two) >= 0, 'Zygisk capture card is localized and bounded to start/latest evidence');
+chk(allText(reportBody).indexOf('10 → 15') >= 0 && allText(reportBody).indexOf('42 / 42') >= 0, 'capture counters and policy acknowledgement render');
+const zyUnknown = parseLogReport('meta\telapsed_min=120\nzygisk\tstate=unknown\tcoverage=unavailable\tdeltas=unavailable\n');
+logReportRender(zyUnknown);
+chk(allText(reportBody).indexOf(I18N.ru.lr_zy_unavailable) >= 0, 'collector absence remains unknown, never unsupported');
 logReportRender(mixDay);
 const mixText = allText(reportBody);
 chk(mixText.indexOf(I18N.ru.lr_sec_smart) < 0, 'the Smart learner card stays off a Battery day');
@@ -6603,7 +6612,7 @@ EOF
   sed -n '/^const DEVICE_GROUP_GUIDES = {/,/^};/p' "$H"
   sed -n '/^const DEVICE_SECTION_GUIDES = {/,/^};/p' "$H"
   sed -n '/^const DEVICE_KERNEL_FEATURE_ORDER = \[/,/^\];/p' "$H"
-  for fn in parseDeviceInfo deviceVal deviceFallbackLabel deviceLabel deviceHero deviceIsLimitedValue deviceValueClass deviceNum deviceKv deviceFreqKhz deviceFreqHz deviceSizeKb deviceDuration deviceCpuCount deviceCpuList deviceYesNo deviceFill deviceBatteryMa deviceBatteryMah deviceBatteryWear deviceRootManagerDisplay deviceDisplayValue deviceInfoEvidence deviceSnapshotCard deviceInfoSnapshot deviceInfoNav deviceInfoOverview deviceInfoInsights devicePressureScale deviceZygiskEditor deviceInfoRender asbPageJump asbPageReference shQuote \
+  for fn in parseDeviceInfo deviceVal deviceFallbackLabel deviceLabel deviceHero deviceIsLimitedValue deviceValueClass deviceNum deviceKv deviceFreqKhz deviceFreqHz deviceSizeKb deviceDuration deviceCpuCount deviceCpuList deviceYesNo deviceFill deviceBatteryMa deviceBatteryMah deviceBatteryWear deviceRootManagerDisplay deviceDisplayValue deviceInfoEvidence deviceSnapshotCard deviceInfoSnapshot deviceInfoNav deviceInfoOverview deviceInfoInsights devicePressureScale deviceZygiskLinkState deviceZygiskLinkVerdict deviceZygiskLink deviceZygiskEditor deviceInfoRender asbPageJump asbPageReference shQuote \
     asbPageClasses asbPageHas asbPageKids asbPageTxt asbPageWarn asbPageText asbPageStamp; do
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
