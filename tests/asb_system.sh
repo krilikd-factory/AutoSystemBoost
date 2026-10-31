@@ -96,6 +96,10 @@ int main(void) {
     if (cfg.sustained_level != 0.62f) return 25;
     asb_config_apply_stable_override(&cfg);
     if (cfg.sustained_level != 0.62f) return 26;
+    asb_config_defaults(&cfg);
+    if (cfg.zygisk_enabled != 0 || cfg.zygisk_hints != 0) return 27;
+    if (load_text(path, "zygisk_enabled=1\nzygisk_hints=1\n", &cfg) != 0 ||
+        cfg.zygisk_enabled != 1 || cfg.zygisk_hints != 1) return 28;
 
     remove(path);
     puts("PASS config safety");
@@ -727,8 +731,8 @@ awk -F'|' '
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
-[ "$(wc -l < "$TMP/conf")" = "209" ] || fail "expected 209 config keys, got $(wc -l < "$TMP/conf")"
-[ "$(wc -l < "$TMP/registry")" = "209" ] || fail "expected 209 registry keys, got $(wc -l < "$TMP/registry")"
+[ "$(wc -l < "$TMP/conf")" = "212" ] || fail "expected 212 config keys, got $(wc -l < "$TMP/conf")"
+[ "$(wc -l < "$TMP/registry")" = "212" ] || fail "expected 212 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
 grep -qx 'kernel_sched_stats|advanced|webui_sensitive|shell' "$REG" || fail 'kernel_sched_stats consumer is not pinned to shell'
@@ -748,7 +752,7 @@ done > "$TMP/consumer_bad"
 
 sed -n '/const CFG_ITEMS = \[/,/^\];/p' "$ROOT/webroot/index.html" \
   | grep -oE "key:'[A-Za-z_][A-Za-z0-9_]*'" | sed "s/key:'//;s/'//" | sort -u > "$TMP/cards"
-[ "$(wc -l < "$TMP/cards")" = "82" ] || fail "expected 82 WebUI cards, got $(wc -l < "$TMP/cards")"
+[ "$(wc -l < "$TMP/cards")" = "84" ] || fail "expected 84 WebUI cards, got $(wc -l < "$TMP/cards")"
 _card_bad="$(while IFS= read -r key; do
   cls="$(awk -F'|' -v k="$key" '$1==k {print $2; exit}' "$REG")"
   case "$cls" in user|advanced) : ;; *) printf '%s ' "$key" ;; esac
@@ -792,7 +796,7 @@ for _c in $(grep -oE "\{ key:'[A-Za-z_][A-Za-z_0-9]*'" "$ROOT/webroot/index.html
 done
 [ -z "$_missing" ] || fail "cards missing from the install.sh settings snapshot:$_missing"
 
-echo 'PASS config ownership registry contract (209 keys; 30 user, 52 advanced, 127 internal)'
+echo 'PASS config ownership registry contract (212 keys; 32 user, 52 advanced, 128 internal)'
 )
 
 t_config_restore_outcome_runtime() (
@@ -2293,10 +2297,14 @@ root=sys.argv[1]; os.chdir(root)
 files=glob.glob('runtime/*.sh')+['action.sh','service.sh','post-fs-data.sh','apply_profile.sh','uninstall.sh','tools/asb_diag.sh']+glob.glob('tools/logkit/*.sh')
 dre=re.compile(r'^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\(\)',re.M)
 alld={f:set(dre.findall(open(f).read())) for f in files}
+# These two runtime files are sourced only by the Device collector, whose _emit/_read/_mem
+# helpers are their defined host interface (the same sourced-library model as logkit common).
+device_defs=set(dre.findall(open('tools/asb_device_info.sh').read()))
 bad=[]
 for f in files:
     d=alld[f]
     if 'logkit' in f: d=d|alld.get('tools/logkit/_asb_logkit_common.sh',set())
+    if f in ('runtime/asb_pressure.sh','runtime/asb_zygisk_info.sh'): d=d|device_defs
     for i,line in enumerate(open(f).read().split('\n'),1):
         t=line.strip()
         if t.startswith('#'): continue
@@ -3930,7 +3938,7 @@ echo "PASS: fix163 contract"
 (
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 fail() { echo "FAIL fix164: $*"; exit 1; }
-[ "$(find "$ROOT/tests" -type f -name 'asb_*.sh' | wc -l)" -eq 5 ] || fail "the host tests are not the five suites"
+[ "$(find "$ROOT/tests" -type f -name 'asb_*.sh' | wc -l)" -eq 6 ] || fail "the host tests are not the six suites"
 asb_has_test test_suite_runner_runtime.sh || fail "suite runner test missing"
 grep -q 'extra: ' "$ROOT/tools/asb_tree_check.sh" || fail "the tree check does not name leftover files"
 echo "PASS: fix164 contract"
@@ -6897,7 +6905,7 @@ echo "PASS config shipped load: the governor reads its own governor.conf ($n key
 )
 
 t_suite_runner_runtime() (
-# Runtime (fix164): the host tests are five suites, not 161 files.
+# Runtime (fix164): the host tests are six suites, not 161 files.
 #
 # Asked for: as few files in tests/ as possible. Every former script is a function t_<name> whose
 # body runs in its own subshell - its exit, trap, set -e and variables stay its own - and every C
@@ -6909,7 +6917,7 @@ set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 fail() { echo "FAIL suite runner: $*" >&2; exit 1; }
-[ "$(find "$ROOT/tests" -type f -name 'asb_*.sh' | wc -l)" -eq 5 ] || fail "want five suites"
+[ "$(find "$ROOT/tests" -type f -name 'asb_*.sh' | wc -l)" -eq 6 ] || fail "want six suites"
 d0=""
 for s in "$ROOT"/tests/asb_*.sh; do
   bash -n "$s" || fail "$(basename "$s") does not parse"
@@ -6949,11 +6957,11 @@ grep -q 'tests/test_' "$R" && fail "the regression still names a test file"
 grep -q 'bash "$MODDIR/tests/asb_smart.sh" --source "$_t"' "$ROOT/tools/asb_lint.sh" || fail "lint does not build the Smart fixtures from the suite"
 for w in build-test build-release; do
   grep -q 'tests/test_' "$ROOT/.github/workflows/$w.yml" && fail "$w.yml still requires a test file"
-  for s in asb_smart asb_features asb_ui asb_system asb_package_tweaks; do
+  for s in asb_smart asb_features asb_ui asb_system asb_package_tweaks asb_zygisk; do
     grep -q "tests/$s.sh" "$ROOT/.github/workflows/$w.yml" || fail "$w.yml does not require tests/$s.sh"
   done
 done
-echo "PASS suite runner: five suites, each test isolated in its own subshell, run one by one in parallel by the regression"
+echo "PASS suite runner: six suites, each test isolated in its own subshell, run one by one in parallel by the regression"
 )
 
 t_tree_check_runtime() (
@@ -8532,6 +8540,43 @@ grep -Fq '#define TIMER_IDLE_NOISY_S 30' "$ROOT/src/asb_governor.c" || fail 'noi
 grep -Fq 'fsm.plan.idle_noisy_slow ? TIMER_IDLE_NOISY_S' "$ROOT/src/asb_governor.c" || fail 'the slower tier is not wired into the timer'
 grep -Fq 'Display,' "$ROOT/src/asb_governor.c" || fail 'event-driven display response is not documented'
 echo "PASS fix253 power/smoothness: Battery foreground response stays below Balanced; noisy screen-off ASB checks are capped at 120/h with event-driven wake paths kept"
+)
+
+t_native_warning_locale_runtime() (
+# CI regression: GCC uses curly diagnostic quotes in a UTF-8 locale. The same reviewed
+# warning must keep the same inventory signature, while a genuinely different site fails.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d "${TMPDIR:-/tmp}/asb_warning_locale.XXXXXX")"
+trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL native warning locale: $*" >&2; exit 1; }
+cat > "$T/gcc" <<'FAKE_GCC'
+#!/bin/sh
+printf '%s\n' "${LC_ALL-}" > "$ASB_FAKE_GCC_DIR/locale"
+if [ "$LC_ALL" = C ]; then
+  printf "/work/src/asb_governor.c:10:2: warning: conversion from '%s' to 'float' may change value [-Wconversion]\n" \
+    "${ASB_FAKE_GCC_TYPE:-int}" >&2
+else
+  printf "/work/src/asb_governor.c:10:2: warning: conversion from ‘%s’ to ‘float’ may change value [-Wconversion]\n" \
+    "${ASB_FAKE_GCC_TYPE:-int}" >&2
+fi
+FAKE_GCC
+chmod 755 "$T/gcc"
+printf '1\n' > "$T/baseline"
+printf "asb_governor.c|conversion from 'int' to 'float' may change value [-Wconversion]\n" > "$T/inventory"
+export ASB_FAKE_GCC_DIR="$T"
+run_gate() {
+  env LC_ALL=C.utf8 CC="$T/gcc" ASB_WARNING_BASELINE="$T/baseline" \
+    ASB_WARNING_INVENTORY="$T/inventory" ASB_FAKE_GCC_TYPE="${1:-int}" \
+    sh "$ROOT/tools/asb_native_warning_budget.sh"
+}
+run_gate int > "$T/same.log" 2>&1 || { cat "$T/same.log" >&2; fail 'UTF-8 caller changed a reviewed warning signature'; }
+grep -qx 'C' "$T/locale" || fail "compiler locale was not pinned: $(cat "$T/locale")"
+grep -q 'GCC warning inventory: new=0 resolved=0 baseline_sites=1' "$T/same.log" || fail 'reviewed site did not match'
+if run_gate double > "$T/new.log" 2>&1; then fail 'genuinely new warning site bypassed the inventory'; fi
+grep -q 'GCC warning inventory: new=1 resolved=1 baseline_sites=1' "$T/new.log" || fail 'new-site result is not exact'
+grep -q "conversion from 'double' to 'float'" "$T/new.log" || fail 'new diagnostic was not reported'
+echo 'PASS native warning locale: deterministic GCC signatures; genuinely new warning sites still fail'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

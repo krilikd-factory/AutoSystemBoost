@@ -6503,9 +6503,9 @@ assert ordered_features == ['susfs','susfs_version','bbg_baseband_guard','bbr_v2
 # fix252: five groups in reading order - hardware, firmware and system, kernel, root, ASB.
 order = re.search(r'const DEVICE_SECTION_ORDER = \[(.*?)\n\];', h, re.S).group(1)
 specs = re.findall(r"\['([a-z_]+)', '(dev_sec_[a-z_]+)', '[^']*', '([a-z]+)'", order)
-assert [x[0] for x in specs] == ['firmware','soc','cpu_policy','gpu','memory','battery','firmware','system','kernel','kernel_origin',
+assert [x[0] for x in specs] == ['firmware','soc','cpu_policy','gpu','memory','battery','firmware','system','system_load','kernel','kernel_origin',
                                  'kernel_btf','kernel_ebpf','kernel_fuse_bpf','kernel_features','kernel_runtime','kernel_external','kernel_config',
-                                 'root','susfs','metamodule','asb','asb_caps','meta'], specs
+                                 'root','susfs','metamodule','zygisk_observer','asb','asb_caps','meta'], specs
 groups = [x[2] for x in specs]
 assert groups == sorted(groups, key=['hw','sw','kernel','root','asb'].index), 'a group is split: ' + str(groups)
 assert specs[0][1] == 'dev_sec_device' and specs[6][1] == 'dev_sec_firmware', 'the phone identity opens the hardware group'
@@ -6570,7 +6570,7 @@ EOF
   sed -n '/^const DEVICE_GROUP_GUIDES = {/,/^};/p' "$H"
   sed -n '/^const DEVICE_SECTION_GUIDES = {/,/^};/p' "$H"
   sed -n '/^const DEVICE_KERNEL_FEATURE_ORDER = \[/,/^\];/p' "$H"
-  for fn in parseDeviceInfo deviceVal deviceFallbackLabel deviceLabel deviceHero deviceIsLimitedValue deviceValueClass deviceNum deviceKv deviceFreqKhz deviceFreqHz deviceSizeKb deviceDuration deviceCpuCount deviceCpuList deviceYesNo deviceFill deviceBatteryMa deviceBatteryMah deviceBatteryWear deviceRootManagerDisplay deviceDisplayValue deviceInfoEvidence deviceSnapshotCard deviceInfoSnapshot deviceInfoNav deviceInfoOverview deviceInfoInsights deviceInfoRender asbPageJump asbPageReference shQuote \
+  for fn in parseDeviceInfo deviceVal deviceFallbackLabel deviceLabel deviceHero deviceIsLimitedValue deviceValueClass deviceNum deviceKv deviceFreqKhz deviceFreqHz deviceSizeKb deviceDuration deviceCpuCount deviceCpuList deviceYesNo deviceFill deviceBatteryMa deviceBatteryMah deviceBatteryWear deviceRootManagerDisplay deviceDisplayValue deviceInfoEvidence deviceSnapshotCard deviceInfoSnapshot deviceInfoNav deviceInfoOverview deviceInfoInsights devicePressureScale deviceZygiskEditor deviceInfoRender asbPageJump asbPageReference shQuote \
     asbPageClasses asbPageHas asbPageKids asbPageTxt asbPageWarn asbPageText asbPageStamp; do
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
@@ -6778,7 +6778,7 @@ D="$ROOT/tools/asb_device_info.sh"
 fail() { echo "FAIL device info: $*" >&2; exit 1; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 sh -n "$D" || fail "shell syntax"
-mkdir -p "$T/mod/tools" "$T/proc/sys/net/ipv4" "$T/proc/sys/net/core" \
+mkdir -p "$T/mod/tools" "$T/mod/runtime" "$T/mod/config" "$T/proc/sys/net/ipv4" "$T/proc/sys/net/core" \
   "$T/sys/module/nomount" "$T/sys/module/ntsync" "$T/sys/module/baseband_guard" \
   "$T/sys/devices/system/cpu/cpufreq/policy0" "$T/sys/class/power_supply/battery" \
   "$T/data/asb" "$T/data/modules" "$T/data/metamodule" "$T/dev" \
@@ -6788,6 +6788,9 @@ printf 'pinned\n' > "$T/sys/fs/bpf/prog_fixture"; printf '33\n' > "$T/sys/fs/fus
 mkdir -p "$T/proc/sys/net/core"; printf '1\n' > "$T/proc/sys/net/core/bpf_jit_enable"
 printf '0\n' > "$T/proc/sys/net/core/bpf_jit_harden"; printf '1\n' > "$T/proc/sys/net/core/bpf_jit_kallsyms"
 cp "$ROOT/tools/asb_kernel_uv_coexist.sh" "$T/mod/tools/"
+cp "$ROOT/runtime/asb_pressure.sh" "$ROOT/runtime/asb_zygisk.sh" "$ROOT/runtime/asb_zygisk_info.sh" "$T/mod/runtime/"
+printf 'zygisk_enabled=0\nzygisk_mode=observer\nzygisk_hints=0\n' > "$T/mod/config/governor.conf"
+printf 'cpu 100 0 100 800 0 0 0 0 0 0\n' > "$T/proc/stat"
 printf 'id=AutoSystemBoost\nversion=V65-129-fix230\nversionCode=65230\n' > "$T/mod/module.prop"
 printf 'id=MetaCore\nname=MetaCore Metamodule\nversion=1.4.0\nversionCode=140\n' > "$T/data/metamodule/module.prop"
 cat > "$T/props" <<'EOF'
@@ -6919,7 +6922,7 @@ want() {
 }
 out="$(run)"
 printf '%s\n' "$out" | awk -F '\t' 'NF < 4 || $1 != "D" || $2 == "" || $3 == "" { bad = 1 } END { exit bad }' || fail "malformed TSV"
-want meta schema 4; want firmware baseband TEST_BASEBAND; want firmware android 17; want soc soc_model SM8850
+want meta schema 5; want firmware baseband TEST_BASEBAND; want firmware android 17; want soc soc_model SM8850
 want kernel_origin assessment custom-like; want kernel_origin confidence 'indicative; not a provenance proof'
 want kernel_btf summary 'built-in config; vmlinux exposed'; want kernel_btf vmlinux 'vmlinux readable and non-empty'
 want kernel_btf module_entries '1 entries exposed'; want kernel_ebpf summary 'configured; runtime interfaces exposed'
@@ -6947,6 +6950,11 @@ want root manager ksu; want root variant 'not exposed'; want root version 'not e
 want asb_caps uclamp 1; want asb_caps battery_current 1; want asb_caps msm_performance 0
 want asb_caps overlay 'camera=1; audio=0'; want asb_caps wlan_txqlen 1; want asb_caps tunable 'camera audio perf gps'
 want battery cycle_count 370
+want system_load coverage_pct 65; want system_load band light; want system_load score 8
+want system_load cpu_busy_pct 'not exposed'; want system_load gpu_busy_pct 'not exposed'
+want zygisk_observer enabled 0; want zygisk_observer mode observer; want zygisk_observer enabled_packages 0
+want zygisk_observer lifecycle_hints 0; want zygisk_observer crash_count unknown; want zygisk_observer anr_count unknown
+want zygisk_observer policy_hints 0; want zygisk_observer foreground_events 'not exposed without global hooks; is_top_app is not tracking'
 printf '%s\n' "$out" | grep -Eq '^D	asb_caps	(android_api|kernel|model)	' && fail "ASB capabilities repeat firmware/kernel identity instead of capabilities"
 printf '%s\n' "$out" | grep -q 'DO_NOT_COLLECT' && fail "a sensitive identifier was collected"
 [ "$(wc -l < "$T/susfs.log")" = 3 ] || fail "SuSFS called more than the three show reads"
