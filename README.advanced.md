@@ -799,6 +799,24 @@ su -c 'am force-stop com.example.app; sleep 2; am start -W -n "$(cmd package res
 
 Device check that app processes can read the policy: after enabling a feature and opening one app, Device diagnostics should show `policy_seen_generation` equal to `policy_generation`. If it stays 0, look for denials with `su -c 'logcat -d | grep -i "avc.*zygote"'`.
 
+#### 12.4.2. Restart loops and LSPosed hook evidence (fix277)
+
+**Restart loops.** With `zygisk_ledger=1` the companion also keeps, per package, the screen-off start times of the last 5 minutes in a fixed 32-slot ring (256 bytes per package, at most 128 packages; no growing container). The `L` state row gains a sixth column, `burst_off`: the most screen-off starts seen inside any 5-minute window this boot. Device diagnostics shows packages with ≥6 as `ledger_restart_loops` (`pkg 9/5min`), and the Device page raises an insight. A user rarely opens an app with the screen off, so a high value points to a crash-restart loop, a sync storm or a wake chain — the case a whole-boot total hides. Nothing is restricted automatically.
+
+**Companion overhead.** The companion rewrites its tmpfs state on every accepted frame. It used to re-read `/proc/<pid>/status` of every observed process for each rewrite, so a burst of process starts multiplied those reads; RSS is now cached per PID and process start time for 30 s (`rss_reads` in the companion state file counts the real reads). The Device page reads live RSS itself and uses the companion's value only as a fallback.
+
+**LSPosed hooks: problems and battery evidence.** LSPosed does not count individual hook calls or their energy, and ASB adds no hook of its own to measure them (that would mean hooking ART inside every app — exactly the cost being looked for). The new read-only card joins evidence per hooked app instead:
+
+| Key | Source |
+|---|---|
+| `modules`, `hooked_apps`, `system_scope`, `multi_hooked` | `asb --lspd modules` — read-only SQLite query of LSPosed's own `modules` + `scope` tables (disabled modules and malformed names skipped; `system`/`android`/`com.android.systemui` scope is listed apart because those hooks run in always-on processes) |
+| `log_window_min`, `log_rate_kb_h`, `log_top`, `error_modules` | last 1 MB of the newest `modules_*.log` and `verbose_*.log`: bytes and E/F lines per app uid, rate per hour over each file's own time span, module packages seen in error stack frames |
+| `crash_hooked` | `dumpsys dropbox` (`data_app_crash`, `system_app_crash`, `data_app_anr`, 4 s timeout each, last 600 KB): only entries whose stack passes through `LSPHooker_`/XposedBridge/LSPlant frames, with the module package named in the frames |
+| `cpu_hooked_top` | `ps -A -o UID,TIME,NAME`: cumulative CPU time of hooked apps since their process start |
+| `churn_hooked_top` | the Zygisk ledger (screen-off/on starts and bursts) of hooked apps |
+
+`findings` counts what crosses a threshold: a hooked app with a hook-stacked crash/ANR, a module in ≥20 error stacks, an app writing ≥512 KB/h to LSPosed's logs, a hooked app with a ≥6/5 min screen-off burst. `findings_detail` names them (`crash:pkg errors:module log_spam:pkg loop:pkg`). asbdiag prints the same block with a verdict. A finding is a correlation: confirm it by disabling one module for that one app and comparing. The collector runs only when the Device page or asbdiag is opened; it writes nothing to LSPosed's directory or database.
+
 ### 📊 12.5. System-pressure scale
 
 Device schema 5 adds an on-demand pressure heuristic. It reads procfs/sysfs only when the Device collector or the informational `asbdiag` section is requested; there is no background pressure sampler. Every available component is shown with its measured source value and actual weight:
