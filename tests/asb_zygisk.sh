@@ -601,12 +601,14 @@ function deviceVal(d,s,k){return d&&d.sections&&d.sections[s]&&d.sections[s][k]!
 function mk(tag){const e={tagName:tag,className:'',children:[],style:{},disabled:false,value:'',attrs:{},setAttribute(k,v){e.attrs[k]=String(v);},classList:{add(){}},appendChild(c){e.children.push(c);c.parentNode=e;return c;},querySelector(sel){const c=sel.slice(1);return find(e,c);},replaceChild(n,o){const i=e.children.indexOf(o);if(i>=0){e.children[i]=n;n.parentNode=e;}return o;}};Object.defineProperty(e,'textContent',{get(){return e._text||''},set(v){e._text=String(v);e.children=[];}});return e;}
 const hosts=Array.from({length:5},()=>mk('div'));
 const document={createElement:mk,querySelectorAll(sel){if(sel==='.hdr-info')return hosts;if(sel==='.zygisk-header-link')return hosts.map(h=>find(h,'zygisk-header-link')).filter(Boolean);return [];}};
-function _el(){return null;} function openZygiskSettings(){} function shQuote(s){return "'"+s+"'";}
+function _el(){return null;} function openZygiskPage(){} function shQuote(s){return "'"+s+"'";}
+function logReportSec(t){const e=mk('div');e.className='lgr-sec';const h=mk('div');h.textContent=t;e.appendChild(h);return e;}
+function uiSound(){} function haptic(){} let pageRenders=0; function zygiskPageRender(){pageRenders++;} let _zygiskOpen=true; let _cfgVals={}; let _cfgLoadSig='x';
 function cfgRenderRow(list,it){const row=mk('div');row.className='cfg-row';row.setAttribute('data-key',it.key);const sw=mk('div');sw.className='cfg-switch';sw.setAttribute('role','switch');row.appendChild(sw);list.appendChild(row);}
  function logReportNote(t){const e=mk('div');e.textContent=t;return e;}
 let commands=[],refreshes=0,toastText=''; async function run(c){commands.push(c);return {errno:0,stdout:''};} function runOk(r){return r.errno===0;} function runText(r){return r.stdout||'';} function toast(t){toastText=t;} function asbDeviceInfoLoad(){refreshes++;}
 JS
-    sed -n '/^function parseDeviceInfo(/,/^}/p; /^function devicePressureScale(/,/^}/p; /^function deviceZygiskLinkState(/,/^}/p; /^function deviceZygiskLinkVerdict(/,/^}/p; /^function deviceZygiskLink(/,/^}/p; /^let _zygiskHeaderSeq/p; /^function zygiskHeaderPaint(/,/^}/p; /^function zygiskHeaderInit(/,/^}/p; /^function zygiskHeaderPublish(/,/^}/p; /^async function zygiskHeaderRefresh(/,/^}/p; /^function cfgRenderZygiskCard(/,/^}/p; /^function deviceZygiskEditor(/,/^}/p' "$ROOT/webroot/index.html"
+    sed -n '/^function parseDeviceInfo(/,/^}/p; /^function devicePressureScale(/,/^}/p; /^function deviceZygiskLinkState(/,/^}/p; /^function deviceZygiskLinkVerdict(/,/^}/p; /^function deviceZygiskLink(/,/^}/p; /^let _zygiskHeaderSeq/p; /^let _zygiskHeaderAt/p; /^const ZYGISK_HEADER_TTL_MS/p; /^const _ASB_PART/p; /^function runBatchCmd(/,/^}/p; /^function runBatchSplit(/,/^}/p; /^async function runBatch(/,/^}/p; /^let _zygiskLoadSeq/p; /^const ZYGISK_MODES = \[/,/^\];/p; /^function zygiskModeOf(/,/^}/p; /^function zygiskModeCard(/,/^}/p; /^async function zygiskModeSet(/,/^}/p; /^function zygiskHeaderPaint(/,/^}/p; /^function zygiskHeaderInit(/,/^}/p; /^function zygiskHeaderPublish(/,/^}/p; /^async function zygiskHeaderRefresh(/,/^}/p; /^function cfgRenderZygiskCard(/,/^}/p; /^function deviceZygiskEditor(/,/^}/p' "$ROOT/webroot/index.html"
     cat <<'JS'
 let bad=0;const chk=(c,m)=>{if(!c){console.log('FAIL '+m);bad++;}};
 function find(n,c){if(n.className&&n.className.split(/\s+/).includes(c))return n;for(const x of n.children||[]){const r=find(x,c);if(r)return r;}return null;}
@@ -651,6 +653,28 @@ deferred[0]({errno:0,stdout:raw({state_freshness:'current',loaded_processes:'2',
 await new Promise(r=>setTimeout(r,0));chk(commands.length===2,'queued header refresh did not start');chk(hosts.every(h=>find(h,'zygisk-header-link').attrs['data-state']==='idle'),'stale header response overwrote newer request');
 deferred[1]({errno:0,stdout:raw({state_freshness:'current',loaded_processes:'2',events_total:'2'}),stderr:''});await new Promise(r=>setTimeout(r,0));
 chk(hosts.every(h=>find(h,'zygisk-header-link').attrs['data-state']==='connected'),'newest header evidence was not published');chk(commands.every(c=>!c.includes(' sync')),'evidence read unexpectedly wrote policy');
+// fix278: one mode control. The four switches map to four named presets; anything else is shown as custom.
+const md=p=>({sections:{zygisk_observer:Object.assign({enabled:'1',lifecycle_hints:'0',launch_hints:'0',spawn_ledger:'0',safe_mode:'off'},p)}});
+chk(zygiskModeOf(md({enabled:'0',lifecycle_hints:'1'}))==='off','master off is Off whatever the parts say');
+chk(zygiskModeOf(md({spawn_ledger:'1'}))==='watch','ledger only is Watch');
+chk(zygiskModeOf(md({lifecycle_hints:'1',launch_hints:'1'}))==='speed','hints + launch is Response');
+chk(zygiskModeOf(md({lifecycle_hints:'1',launch_hints:'1',spawn_ledger:'1'}))==='full','all four is Full');
+chk(zygiskModeOf(md({launch_hints:'1'}))==='custom','a set no preset matches is custom');
+chk(zygiskModeOf(md({enabled:'—'}))==='unknown','an unreadable master is unknown, not Off');
+let card=zygiskModeCard(md({lifecycle_hints:'1',launch_hints:'1'})),seg=find(card,'zy-mode-seg');
+chk(seg&&seg.children.length===4,'four mode buttons');chk(seg&&seg.children[2].className==='on'&&seg.children.filter(b=>b.className==='on').length===1,'exactly the current mode is selected');
+card=zygiskModeCard(md({launch_hints:'1'}));seg=find(card,'zy-mode-seg');chk(seg.children.every(b=>b.className!=='on'),'custom selects no preset');
+// Choosing a mode is ONE root shell: the locked set-many write, the policy sync and the fresh read.
+commands=[];run=async c=>{commands.push(c);return {errno:0,stdout:'asb-mode-ok\n'+_ASB_PART+'write\n'+raw({lifecycle_hints:'1',launch_hints:'1',spawn_ledger:'1'})+'\n'+_ASB_PART+'link',stderr:''};};
+await zygiskModeSet('full');
+chk(commands.length===1,'a mode change took '+commands.length+' root shells');
+chk(/set-many --snapshot '[^']+' 'zygisk_enabled' '1' 'zygisk_hints' '1' 'zygisk_launch' '1' 'zygisk_ledger' '1' && \{ sh '[^']+asb_zygisk\.sh' sync/.test(commands[0]),'mode write is not one locked set-many followed by sync: '+commands[0]);
+chk(commands[0].indexOf('link-status')>commands[0].indexOf(' sync'),'the fresh read does not follow the write');
+chk(_cfgVals.zygisk_ledger==='1'&&_cfgVals.zygisk_hints==='1'&&_cfgLoadSig==='','Settings values not updated after the write');
+chk(/applied/.test(toastText),'success not reported: '+toastText);
+commands=[];await zygiskModeSet('off');chk(/set-many --snapshot '[^']+' 'zygisk_enabled' '0' &&/.test(commands[0]),'Off must only clear the master switch: '+commands[0]);
+run=async c=>{commands.push(c);return {errno:0,stdout:'refused\n'+_ASB_PART+'write\n'+_ASB_PART+'link',stderr:''};};_cfgVals={};
+await zygiskModeSet('watch');chk(!_cfgVals.zygisk_ledger&&/not saved/.test(toastText),'a refused write was reported as applied');
 if(bad)process.exit(1);console.log('ok');})().catch(e=>{console.error(e);process.exit(1)});
 JS
   } > "$T/test.js"

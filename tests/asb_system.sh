@@ -4291,7 +4291,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 fail() { echo "FAIL fix192: $*"; exit 1; }
 asb_has_test test_webui_header_capsules.sh || fail "test_webui_header_capsules.sh missing"
 grep -q -- '--cap-wash: linear-gradient(135deg, rgba(0,240,180,0.04), rgba(0,212,255,0.025));' "$ROOT/webroot/index.html" || fail "no shared capsule material"
-[ "$(grep -c 'class="hdr-cap hdr-info"' "$ROOT/webroot/index.html")" -eq 5 ] || fail "not every page has the chip/version capsule"
+[ "$(grep -c 'class="hdr-cap hdr-info"' "$ROOT/webroot/index.html")" -eq 6 ] || fail "not every page has the chip/version capsule"
 grep -q '^function asbHeaderFit(force) {' "$ROOT/webroot/index.html" || fail "the island is never fitted"
 echo "PASS: fix192 contract"
 ) || exit 1
@@ -6782,7 +6782,9 @@ before("const r = await run('sh ' + MD + '/apply_profile.sh ' + p);", 'ui(previo
 # Stock must return from pollLive before it can parse stale governor state or learner data.
 poll = s[s.index('async function pollLive(visible) {'):s.index('\nfunction fmtStock', s.index('async function pollLive(visible) {')) if '\nfunction fmtStock' in s[s.index('async function pollLive(visible) {'):] else len(s)]
 terminal = poll.index("if (_selectedProfile === 'stock') {")
-state_read = poll.index("const r = await run('cat /dev/.asb/state 2>/dev/null');")
+# fix278: the governor state is read in the pass's one batched shell (liveBatchParts).
+state_read = poll.index("const _lb = await runBatch(liveBatchParts(visible));")
+assert "parts = [['state', 'cat /dev/.asb/state']]" in s, 'the batched pass no longer reads the governor state first'
 assert terminal < state_read, 'Stock terminal boundary occurs after stale state read'
 stock_branch = poll[terminal:state_read]
 assert 'return;' in stock_branch, 'Stock terminal branch does not return before stale state read'

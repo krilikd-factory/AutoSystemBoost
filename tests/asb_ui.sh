@@ -1200,6 +1200,167 @@ grep -Fq "if (info.status === 'stopped') {" "$ROOT/webroot/index.html" || fail "
 echo "PASS debug support resume: the capture resumes on its own folder after a reboot (also after a late unlock), the status says resuming meanwhile, the WebUI stop cancels it, a deleted folder ends it"
 )
 
+t_debug_support_revive_runtime() (
+# Runtime (fix279): an OP15 capture stopped at 15:37:57 when the Android framework restarted
+# (SystemUI, the launcher and Bluetooth all came back within two seconds, no reboot): the
+# recorder shared the root manager's session and died with it without finalising, and the
+# boot-only resume never ran because the boot id had not changed. The recorder now starts in
+# its own session, and a recorder lost within the same boot is continued on its own folder by
+# full-day-revive (service tick and WebUI). The REAL helper runs against a stub recorder.
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+HELPER="$ROOT/runtime/asb_debug_support.sh"
+TMP="$(mktemp -d)"; trap 'kill $(jobs -p) 2>/dev/null; pkill -f "$TMP" 2>/dev/null; rm -rf "$TMP"' EXIT
+fail() { echo "FAIL debug revive: $*" >&2; exit 1; }
+alive() { [ -r "/proc/$1/stat" ] || return 1; case "$(sed 's/^.*) //' "/proc/$1/stat" | cut -c1)" in Z|X) return 1 ;; esac; return 0; }
+DBG="$TMP/mod"; mkdir -p "$DBG/tools/logkit" "$DBG/runtime"
+printf 'id=AutoSystemBoost\nversion=V65-test16\nversionCode=650\n' > "$DBG/module.prop"
+cat > "$DBG/tools/logkit/asb_log_full_day.sh" << 'EOF_REC'
+set -u
+_lock="${ASB_DEBUG_SUPPORT_LOCKDIR:-}"; _token="${ASB_DEBUG_SUPPORT_LOCK_TOKEN:-}"
+[ -d "$_lock" ] && [ "$(cat "$_lock/token")" = "$_token" ] || exit 91
+printf '%s\n' "$$" > "$_lock/pid"
+if [ -n "${ASB_LK_RESUME_DIR:-}" ] && [ -d "$ASB_LK_RESUME_DIR" ]; then
+  _out="$ASB_LK_RESUME_DIR"; echo "$$ ${ASB_LK_RESUME_KIND:-none}" >> "$_out/resumed_by"
+else
+  _out="$(dirname "$_lock")/asb_log_full_day_$$"; mkdir -p "$_out"
+fi
+sed 's/^.*) //' "/proc/$$/stat" | awk -v p="$$" '{ print ($4 == p) ? "own" : "shared" }' > "$_out/session.$$"
+printf '%s\n' "$_out" > "$_lock/output_dir"
+{ echo "dir=$_out"; echo "boot=${ASB_DEBUG_SUPPORT_BOOT_ID:-}"; } > "$ASB_DEBUG_SUPPORT_RESUMEFILE"
+trap 'echo finalized > "$_out/_full_day_report.txt"; rm -f "$ASB_DEBUG_SUPPORT_RESUMEFILE"; rm -rf "$_lock"; exit 0' TERM
+while :; do sleep 60; done
+EOF_REC
+printf 'sys.boot_completed=1\nsys.user.0.ce_available=true\n' > "$TMP/props"
+ENV=(ASB_DEBUG_SUPPORT_MODDIR="$DBG" ASB_DEBUG_SUPPORT_STATE_DIR="$TMP/state" ASB_DEBUG_SUPPORT_RUNLOG="$TMP/run.out"
+     ASB_DEBUG_SUPPORT_STOP_WAIT_S=3 ASB_DEBUG_SUPPORT_PROPS="$TMP/props")
+H() { env "${ENV[@]}" sh "$HELPER" "$@" 2>/dev/null || true; }
+LOCK="$TMP/state/full_day_webui.lock"; MARK="$TMP/state/full_day_resume"
+OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep -q 'status=started' || fail "start: $OUT"
+n=0; while [ ! -s "$MARK" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
+CAP="$(sed -n 's/^dir=//p' "$MARK")"; [ -d "$CAP" ] || fail "no resume marker"
+P1="$(tr -dc 0-9 < "$LOCK/pid")"
+if command -v setsid >/dev/null 2>&1; then
+  [ "$(cat "$CAP/session.$P1" 2>/dev/null)" = own ] || fail "the recorder still shares the launcher's session: $(cat "$CAP/session.$P1" 2>/dev/null)"
+fi
+OUT="$(H full-day-revive)"; printf '%s\n' "$OUT" | grep -qx 'status=running' || fail "revive of a live recorder: $OUT"
+kill -KILL "$P1"; n=0; while alive "$P1" && [ "$n" -lt 30 ]; do sleep 0.1; n=$((n + 1)); done
+OUT="$(H status)"
+printf '%s\n' "$OUT" | grep -qx 'status=resuming' || fail "a recorder lost in this boot must read resuming: $OUT"
+printf '%s\n' "$OUT" | grep -qx 'reason=restart' || fail "the same-boot loss is not named: $OUT"
+printf '%s\n' "$OUT" | grep -qx "output=$CAP" || fail "the folder is not named: $OUT"
+OUT="$(H full-day-resume)"; printf '%s\n' "$OUT" | grep -qx 'status=idle' || fail "the boot resume must stay boot-only: $OUT"
+printf 'sys.boot_completed=0\nsys.user.0.ce_available=true\n' > "$TMP/props"
+OUT="$(H full-day-revive)"; printf '%s\n' "$OUT" | grep -qx 'status=resuming' || fail "revive before boot completion: $OUT"
+[ -e "$CAP/resumed_by" ] && fail "revived before the framework finished starting"
+printf 'sys.boot_completed=1\nsys.user.0.ce_available=true\n' > "$TMP/props"
+OUT="$(H full-day-revive)"; printf '%s\n' "$OUT" | grep -qx 'status=started' || fail "revive: $OUT"
+n=0; while [ ! -s "$CAP/resumed_by" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
+grep -q ' restart$' "$CAP/resumed_by" || fail "the revived recorder was not told it is a same-boot restart: $(cat "$CAP/resumed_by" 2>/dev/null)"
+P2="$(tr -dc 0-9 < "$LOCK/pid")"; [ -n "$P2" ] && [ "$P2" != "$P1" ] && alive "$P2" || fail "no revived recorder"
+grep -q 'revive=start' "$TMP/state/full_day_webui.recovery.log" || fail "the revive left no note"
+OUT="$(H full-day-revive)"; printf '%s\n' "$OUT" | grep -qx 'status=running' || fail "second revive: $OUT"
+[ "$(wc -l < "$CAP/resumed_by")" = 1 ] || fail "a second recorder was started"
+OUT="$(H full-day-stop)"; printf '%s\n' "$OUT" | grep -qx 'status=stopping' || fail "stop: $OUT"
+n=0; while alive "$P2" && [ "$n" -lt 40 ]; do sleep 0.1; n=$((n + 1)); done
+[ -e "$MARK" ] && fail "stop kept the marker"
+OUT="$(H full-day-revive)"; printf '%s\n' "$OUT" | grep -qx 'status=idle' || fail "revive after a stop: $OUT"
+OUT="$(H status)"; printf '%s\n' "$OUT" | grep -qx 'status=idle' || fail "status after the stop: $OUT"
+OUT="$(H full-day-start)"; n=0; while [ ! -s "$MARK" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
+P3="$(tr -dc 0-9 < "$LOCK/pid")"; CAP3="$(sed -n 's/^dir=//p' "$MARK")"
+kill -KILL "$P3"; n=0; while alive "$P3" && [ "$n" -lt 30 ]; do sleep 0.1; n=$((n + 1)); done
+OUT="$(H full-day-stop)"; printf '%s\n' "$OUT" | grep -qx 'status=stopped' || fail "stopping a pending same-boot revive: $OUT"
+OUT="$(H full-day-revive)"; printf '%s\n' "$OUT" | grep -qx 'status=idle' || fail "a cancelled revive came back: $OUT"
+[ -e "$CAP3/resumed_by" ] && fail "a cancelled capture was revived"
+grep -Fq 'asb_debug_support.sh" full-day-revive' "$ROOT/service.sh" || fail "the service tick does not revive a lost recorder"
+grep -Fq "asb_debug_support.sh full-day-revive" "$ROOT/webroot/index.html" || fail "the WebUI does not revive a lost recorder"
+grep -Fq 'nohup $_fd_setsid sh' "$HELPER" || fail "the recorder is not started in its own session"
+echo "PASS debug support revive: own session, a recorder lost in the same boot reads resuming/restart and continues on its folder once, a stop cancels it"
+)
+
+t_webui_fix279_drain_runtime() (
+# Runtime (fix279): one screen-on figure on every screen. OP15 screenshots at 19:03 showed
+# Smart 8.8 %/h on the profile card, 10.9 %/h on the Monitor tile and, inside one sheet titled
+# "profile history", 10.8 %/h measured over 17 minutes above "Smart 8.8 %/h". The tile, the
+# card, the time to empty and the sheet headline now use the profile average; the live window
+# is its own labelled "right now" line. The REAL WebUI functions run in node.
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+command -v node >/dev/null 2>&1 || { echo "SKIP webui fix279 drain (no node)"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+python3 - "$ROOT/webroot/index.html" "$T/t.js" <<'P'
+import re, sys
+h = open(sys.argv[1], encoding='utf-8').read()
+def fn(n):
+    m = re.search(r'^(async )?function ' + re.escape(n) + r'\([^\n]*\) \{.*?^\}', h, re.M | re.S)
+    assert m, n
+    return m.group(0)
+def const(n):
+    m = re.search(r'^const ' + re.escape(n) + r' = .*?;$', h, re.M | re.S)
+    assert m, n
+    return m.group(0)
+body = r"""
+function T(k, d) { return d; }
+function techIcon() { return ''; }
+const els = {};
+function mk() {
+  const e = { children: [], className: '', innerHTML: '', title: '', hidden: false, _t: '',
+    appendChild: function (c) { this.children.push(c); return c; } };
+  Object.defineProperty(e, 'textContent', { get: function () { return this._t + this.children.map(function (c) { return c.textContent; }).join(' '); },
+    set: function (v) { this._t = String(v); this.children = []; } });
+  return e;
+}
+const document = { createElement: mk, createTextNode: function (t) { const e = mk(); e.textContent = t; return e; } };
+['bnDrain', 'bnDrainOff', 'bnDrainOnLabel', 'bnDrainOffLabel', 'liveEtaOn', 'liveEtaOff', 'liveDrainBody', 'liveDrainTitle', 'liveDrainDone', 'liveDrainSheet']
+  .forEach(function (id) { els[id] = mk(); });
+els.liveDrainSheet.hidden = true;
+function _el(id) { return els[id] || null; }
+function asbMetricPaint() {}
+let _selectedProfile = 'smart';
+"""
+src = '\n'.join([body, const('_lvMeter'), const('_lvGovOff'), const('_lvDrain'), const('_lvEta'),
+    fn('lvDurDHM'), fn('lvOffFigure'), fn('lvPct'), fn('lvMeterHasOn'), fn('lvMeterPaint'), fn('lvEtaFmt'), fn('lvEtaPaint'),
+    fn('liveDrainIsOpen'), fn('liveDrainBlock'), fn('liveDrainPaint'), fn('liveDrainCompare'), r"""
+let bad = 0; function chk(c, m) { if (!c) { bad = 1; console.log('FAIL ' + m); } }
+_lvMeter.p = { smart: { on: 88, onMin: 437, off: 43, offN: 3, offS: 30000, offLast: 0, offLastS: 0, offLastAt: 0 },
+               battery: { on: 116, onMin: 90, off: 138, offN: 2, offS: 20000, offLast: 0, offLastS: 0, offLastAt: 0 } };
+_lvEta.cap = 66; _lvEta.gov = { on: 363, onTip: 'gov', off: 9000, offTip: 'gov' };
+chk(lvMeterHasOn('smart') && !lvMeterHasOn('stock'), 'average presence');
+lvMeterPaint('smart');
+chk(els.bnDrain.textContent === '8.8%/h', 'Smart tile shows the profile average, have ' + els.bnDrain.textContent);
+chk(els.liveEtaOn.textContent === '7h 30m', 'time to empty divides by the printed average, have ' + els.liveEtaOn.textContent);
+_lvDrain.nowX = 108; _lvDrain.nowS = 1020;
+liveDrainPaint();
+const blocks = els.liveDrainBody.children.map(function (b) { return b.textContent; });
+chk(els.liveDrainTitle.textContent === 'Battery drain', 'sheet title no longer claims profile history: ' + els.liveDrainTitle.textContent);
+chk(/8\.8%\/h/.test(blocks[0]) && /average of this profile: 437 min/.test(blocks[0]) && /to 0%: 7h 30m/.test(blocks[0]), 'headline: ' + blocks[0]);
+chk(/Right now/.test(blocks[1]) && /10\.8%\/h/.test(blocks[1]) && /last 17 min/.test(blocks[1]) && /at this pace to 0%: 6h 06m/.test(blocks[1]), 'now line: ' + blocks[1]);
+chk(/Screen off/.test(blocks[2]), 'screen-off block third: ' + blocks[2]);
+const cmp = blocks.filter(function (b) { return /By profile/.test(b); })[0] || '';
+chk(/8\.8%\/h/.test(cmp) && !/10\.8/.test(cmp), 'profile comparison repeats the same average: ' + cmp);
+chk(/average of this profile/.test(blocks[blocks.length - 1]) && /Right now/.test(blocks[blocks.length - 1]), 'note explains both windows');
+const n0 = els.liveDrainBody.children.length;
+_lvDrain.nowX = 0; liveDrainPaint();
+chk(els.liveDrainBody.children.length === n0 - 1 && !/at this pace/.test(els.liveDrainBody.textContent), 'no now line without a live window');
+_selectedProfile = 'battery'; lvMeterPaint('battery');
+chk(els.bnDrain.textContent === '11.6%/h' && els.liveEtaOn.textContent === '5h 41m', 'other profiles unchanged: ' + els.bnDrain.textContent + ' ' + els.liveEtaOn.textContent);
+if (bad) process.exit(1);
+console.log('ok');
+"""])
+open(sys.argv[2], 'w', encoding='utf-8').write(src)
+P
+out="$(node "$T/t.js" 2>&1)"
+[ "$out" = ok ] || { echo "FAIL webui fix279 drain: $out" >&2; exit 1; }
+H="$ROOT/webroot/index.html"
+grep -Fq "const _smAvg = !_chg && lvMeterHasOn('smart');" "$H" || { echo "FAIL webui fix279 drain: Smart tile does not defer to the profile average" >&2; exit 1; }
+grep -Fq "if (_smAvg) {" "$H" || { echo "FAIL webui fix279 drain: Smart average branch missing" >&2; exit 1; }
+grep -q '^T_ETA_NOW=' "$ROOT/action.sh" || { echo "FAIL webui fix279 drain: the action has no right-now line" >&2; exit 1; }
+for f in "$ROOT"/runtime/i18n/action_*.sh; do
+  grep -q '^T_ETA_NOW=' "$f" && grep -q '^T_CUR_SCALE_LOW=' "$f" || { echo "FAIL webui fix279 drain: ${f##*/} lacks the new action strings" >&2; exit 1; }
+done
+echo "PASS webui fix279 drain: tile, card, time to empty and sheet headline share the profile average; the live window is a labelled right-now line"
+)
+
 t_jank_app_state_runtime() (
 # Runtime (fix140): the smoothness report compares ASB states inside the app with the most
 # frames, touched and untouched apart.
@@ -1836,7 +1997,7 @@ printf '%s\n' "$_consistency" | grep -q "governor's gauge check" && { echo 'FAIL
 # fix179: the governor's own gauge factor is named (a CPH2747 read x0.35 over 61 windows).
 lk_state_kv() { case "$1" in current_scale_x100) echo 35 ;; current_scale_windows) echo 61 ;; esac; }
 _consistency="$(lk_emit_current_soc_consistency)"
-printf '%s\n' "$_consistency" | grep -Fq "governor's gauge check: on screen-on windows current_now integrates to x0.35 of the SOC-derived drain (61 windows) - multiply screen-on mA by about 2.8" || { echo "FAIL logkit capture-quality: governor gauge factor: $_consistency" >&2; exit 1; }
+printf '%s\n' "$_consistency" | grep -Fq "governor's gauge check: on screen-on windows current_now integrates to x0.35 of the SOC-derived drain (61 windows) - multiply screen-on mA by about 2.9" || { echo "FAIL logkit capture-quality: governor gauge factor: $_consistency" >&2; exit 1; }
 lk_state_kv() { case "$1" in current_scale_x100) echo 135 ;; current_scale_windows) echo 61 ;; esac; }
 lk_emit_current_soc_consistency | grep -Fq 'integrates to x1.35 of' || { echo 'FAIL logkit capture-quality: gauge factor above 1' >&2; exit 1; }
 lk_state_kv() { case "$1" in current_scale_x100) echo 92 ;; current_scale_windows) echo 61 ;; esac; }
@@ -2088,6 +2249,29 @@ echo 1000 > "$T/pid"
 grep -q 'SYSTEMUI RESTART .* pid 1000 -> 2000' "$T/out/sysui_restarts.txt" || f "restart not recorded"
 grep -q 'FATAL EXCEPTION' "$T/out/sysui_restarts.txt" || f "crash evidence not captured"
 grep -q 'dropbox --print system_app_anr' "$T/out/sysui_restarts.txt" || f "ANR dropbox not captured"
+cat > "$T/bin/getprop" <<'X'
+#!/bin/sh
+case "$1" in sys.system_server.start_count) cat "$SSC_F" ;; sys.system_server.start_elapsed) cat "$SSE_F" ;; esac
+X
+chmod +x "$T/bin/getprop"
+mkdir -p "$T/out2"; echo 1000 > "$T/pid"; echo 1 > "$T/ssc"
+( set +u; PATH="$T/bin:$PATH"; SYSUI_PIDF="$T/pid"; SSC_F="$T/ssc"; export SYSUI_PIDF SSC_F
+  LK_SCRIPT_DIR="$ROOT/tools/logkit"; . "$C" >/dev/null 2>&1
+  lk_dumpsys() { echo "dropbox $*"; }
+  LK_OUT_DIR="$T/out2"
+  lk_sysui_watch_row
+  echo 2000 > "$T/pid"; lk_sysui_watch_row
+  echo 3000 > "$T/pid"; echo 2 > "$T/ssc"; lk_sysui_watch_row )
+grep -q '^# Android framework start count at capture start: 1$' "$T/out2/sysui_restarts.txt" || f "framework start count not recorded at start"
+[ "$(grep -c 'framework_restart=' "$T/out2/sysui_restarts.txt")" = 1 ] || f "framework restart not told apart from a SystemUI restart"
+grep -q 'pid 2000 -> 3000 .* framework_restart=1->2 =====' "$T/out2/sysui_restarts.txt" || f "framework restart header"
+grep -q '^verdict: the whole Android framework restarted (system_server start 2)' "$T/out2/sysui_restarts.txt" || f "framework restart verdict"
+_up_ms="$(cut -d' ' -f1 /proc/uptime | tr -dc 0-9)0"; _now="$(date +%s)"
+echo "$_up_ms" > "$T/sse"
+r1="$( ( set +u; PATH="$T/bin:$PATH"; SSE_F="$T/sse"; export SSE_F; LK_SCRIPT_DIR="$ROOT/tools/logkit"; . "$C" >/dev/null 2>&1; lk_restart_cause $((_now - 60)) ) )"
+echo 1000 > "$T/sse"
+r2="$( ( set +u; PATH="$T/bin:$PATH"; SSE_F="$T/sse"; export SSE_F; LK_SCRIPT_DIR="$ROOT/tools/logkit"; . "$C" >/dev/null 2>&1; lk_restart_cause $((_now - 60)) ) )"
+[ "$r1" = framework_restart ] && [ "$r2" = recorder_lost ] || f "restart cause: '$r1' '$r2'"
 grep -q 'lk_sysui_watch_row' "$ROOT/tools/logkit/asb_log_full_day.sh" || f "full-day capture does not watch SystemUI"
 grep -q 'SYSTEMUI RESTARTS' "$ROOT/tools/logkit/asb_log_full_day.sh" || f "report has no SystemUI section"
 
@@ -2194,6 +2378,11 @@ printf '%s|x|10|V65-test17|ROM2|reboot\n' "$NOW" >> "$O/reboots.txt"
 dout="$(ASB_LK_STATE_DIR="$T/st" ASB_LK_LOCK="$T/nolock" ASB_TOMBSTONE_DIR="$T/tomb" sh "$D" "$O")"
 printf '%s\n' "$dout" | grep -q '^reboot	n=2	down_min=10	mod=V65-test17	rom=ROM2$' || fail "digest reboot line: $(printf '%s\n' "$dout" | grep '^reboot')"
 printf '%s\n' "$dout" | grep -q '^phase	name=audio_bt	' || fail "the digest left out the open phase of a running capture"
+printf '%s|x|120|V65-test17|ROM2|same_boot:framework_restart\n%s|x|60|V65-test17|ROM2|same_boot:recorder_lost\n' "$NOW" "$NOW" >> "$O/reboots.txt"
+dout="$(ASB_LK_STATE_DIR="$T/st" ASB_LK_LOCK="$T/nolock" ASB_TOMBSTONE_DIR="$T/tomb" sh "$D" "$O")"
+printf '%s\n' "$dout" | grep -q '^reboot	n=2	down_min=10	' || fail "same-boot restarts were counted as reboots: $(printf '%s\n' "$dout" | grep '^reboot')"
+printf '%s\n' "$dout" | grep -q '^restart	n=2	framework=1	gap_min=3$' || fail "digest restart line: $(printf '%s\n' "$dout" | grep '^restart')"
+grep -Fq 'recorder restarted without a reboot: %d' "$FD" || fail "the text report does not count same-boot restarts"
 grep -Fq 'reboots during the capture: %d' "$FD" || fail "the text report does not count reboots"
 grep -Fq 'lk_fresh phase_ledger.tsv && printf' "$FD" || fail "the ledger header is rewritten on resume"
 grep -Fq '[ "$LK_RESUME" = 1 ] && lk_resume_merge' "$FD" || fail "the recorder does not fold the open phase on resume"
@@ -2650,6 +2839,13 @@ async function back() { if (!hist.canGoBack()) { exited++; return; } hist.go(-1)
   chk(!_deviceOpen && _cfgOpen && _cfgGroup === 'audio' && hist.idx === 2, 'back from Device preserved the Config category');
   await back(); await back();
   chk(!_cfgOpen && hist.idx === 0 && exited === 0, 'Config category and hub closed after Device');
+  /* fix278: the Zygisk page is a level of its own, over whichever page opened it. */
+  _liveOpen = true; navSync(); _zygiskOpen = true; navSync();
+  chk(hist.idx === 2, 'Zygisk over Monitor: two entries, have ' + hist.idx);
+  await back();
+  chk(!_zygiskOpen && _liveOpen && hist.idx === 1, 'back from Zygisk returned to Monitor');
+  await back();
+  chk(!_liveOpen && hist.idx === 0 && exited === 0, 'next back went Home');
 
   _lvDrain.on = 'recent'; _lvDrain.off = 'measured'; _lvDrain.offN = 3; _lvDrain.winS = 0;
   _el('bnDrain').textContent = '~8.5%/h'; _el('bnDrainOff').textContent = '0.52%/h';
@@ -2698,6 +2894,8 @@ global.T = function (k, d) { return d; };
 global.techIcon = function (k) { return '<svg data-k="' + k + '"></svg>'; };
 global.uiSound = function () {};
 global._liveOpen = false; global._cfgOpen = false; global._cfgGroup = null; global._rpOpen = false; global._deviceOpen = false;
+global._zygiskOpen = false;
+global.closeZygiskPage = function () { _zygiskOpen = false; };
 global.closeLivePage = function () { _liveOpen = false; };
 global.closeConfigPage = function () { _cfgOpen = false; _cfgGroup = null; };
 global.closeReportPage = function () { _rpOpen = false; };
@@ -3329,14 +3527,14 @@ PY
 python3 - "$H" <<'PY' || fail 'Liquid Glass coverage'
 import sys
 h = open(sys.argv[1], encoding='utf-8').read()
-for sel in ('html[data-asb-glass="1"] :is(#reportPage,#devicePage)',
-            'html[data-asb-glass="1"][data-asb-theme="light"] :is(#reportPage,#devicePage)',
+for sel in ('html[data-asb-glass="1"] :is(#reportPage,#devicePage,#zygiskPage)',
+            'html[data-asb-glass="1"][data-asb-theme="light"] :is(#reportPage,#devicePage,#zygiskPage)',
             'html[data-asb-glass="1"] :is(.smart-drain-half,.live-drain-block,.live-drain-cmp,.live-info-hist)',
             'html[data-asb-glass="1"][data-asb-theme="light"] :is(.smart-drain-half,.live-drain-block,.live-drain-cmp,.live-info-hist)',
             'html[data-asb-glass="1"] .cfg-profile-primary', 'html[data-asb-glass="1"] .toast:not(.stock-restoring)',
             'html[data-asb-glass="1"] :is(.cfg-modal,.cfg-profile-modal,.cfg-reset-modal,.diag-wait-modal,.debug-action-wait) {\n  -webkit-backdrop-filter:blur(6px)'):
     assert sel in h, sel
-assert h.index('html[data-asb-glass="1"] :is(#reportPage,#devicePage)') > h.index('#reportPage, #devicePage { background: var(--bg) !important; }'), 'the glass backdrop must come after the opaque page rule'
+assert h.index('html[data-asb-glass="1"] :is(#reportPage,#devicePage,#zygiskPage)') > h.index('#reportPage, #devicePage, #zygiskPage { background: var(--bg) !important; }'), 'the glass backdrop must come after the opaque page rule'
 PY
 echo "PASS webui live info insight: scale = the tile's own colour, history, raw facts, 13 locales, Liquid Glass coverage"
 )
@@ -4075,8 +4273,11 @@ global.document = {
 };
 global.getComputedStyle = () => ({ rowGap: '10px', gap: '10px', marginTop: '10px', paddingBottom: '0px' });
 function _el(id) { return id === 'configPage' ? page : id === 'reportPage' ? reportPage : id === 'cfgRebootWrap' ? reb : null; }
+/* fix278: asbFitPages is the coalescing scheduler; the measurement itself is asbFitPagesNow,
+ * run here synchronously exactly as the scheduler runs it once a transition has settled. */
+function asbFitPages() { return asbFitPagesNow(); }
 EOF
-  sed -n "/^function asbFitPages(/,/^}/p" "$H"
+  sed -n "/^function asbFitPagesNow(/,/^}/p" "$H"
   cat <<'EOF'
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
 asbFitPages();
@@ -4597,7 +4798,12 @@ if 'class="asb-tab-ind"' not in nav: bad.append('no sliding indicator')
 if '>Profiles</span>' not in nav: bad.append('the first tab is not called Profiles')
 if 'is-active::before' in h: bad.append('the old top-edge marker is back')
 fn = h[h.index('function asbNavSync()'):h.index('function asbNavGo(')]
-if 'asbNavIndicator();' not in fn or 'on.offsetLeft' not in fn: bad.append('the pill is not placed from the active tab')
+if 'asbNavIndicator();' not in fn or 't.offsetLeft' not in fn or 'g[on.id]' not in fn: bad.append('the pill is not placed from the active tab')
+# fix278: the tab boxes are measured once; width, scale, language and fit tier clear the cache.
+if "window.addEventListener('resize', function () { asbNavIndicator._geo = null;" not in h: bad.append('a resize keeps stale tab boxes')
+if 'asbNavIndicator._geo = null;\n  if (ASB_LANG' not in h: bad.append('a language change keeps stale tab boxes')
+if "if (window._asbUiScale !== scale) asbNavIndicator._geo = null;" not in h: bad.append('a scale change keeps stale tab boxes')
+if 'new MutationObserver(asbNavSyncSoon)' not in h: bad.append('every body-class change still re-measures the tabs synchronously')
 vis = h[h.index('function asbTabbarVisibility()'):h.index('function cfgRender()')]
 if 'asbNavIndicator()' not in vis: bad.append('returning from a category leaves the pill where it was')
 want = {'en': 'Profiles', 'ru': 'Профили', 'uk': 'Профілі', 'de': 'Profile'}
@@ -4881,7 +5087,7 @@ command -v node >/dev/null 2>&1 || { echo "SKIP webui log report: no node"; exit
 sh -n "$D" || fail "digest script has a syntax error"
 # fix231: Report and Device are fullscreen drill-ins, including when Liquid Glass opens
 # them over Monitor/Config. Their opaque page surfaces must override the Glass tab rule.
-grep -qF '#reportPage, #devicePage { background: var(--bg) !important; }' "$H" || fail "fullscreen report/device can inherit a transparent Glass page"
+grep -qF '#reportPage, #devicePage, #zygiskPage { background: var(--bg) !important; }' "$H" || fail "fullscreen report/device can inherit a transparent Glass page"
 # fix270: the success colour must resolve in dark/light themes, and the later grid rule must
 # not erase the marker gutter. Both defects were visible together in the Russian summary.
 ! grep -qF 'var(--ok)' "$H" || fail "success styles still use the undefined --ok variable"
@@ -6397,8 +6603,8 @@ out="$(node "$T/t.js" 2>&1)" || fail "$out"
 python3 - "$H" <<'PY' || fail 'markup or material'
 import sys
 h=open(sys.argv[1],encoding='utf-8').read()
-assert h.count('data-theme-choice="glass"') == 5
-assert h.count('data-theme-toggle=') == 5
+assert h.count('data-theme-choice="glass"') == 6
+assert h.count('data-theme-toggle=') == 6
 assert 'backdrop-filter:blur(8px)' in h
 assert 'html[data-asb-glass="1"]' in h
 assert 'html[data-asb-glass="1"][data-asb-theme="light"]' in h
@@ -6514,12 +6720,12 @@ python3 - "$ROOT" <<'PY' || fail 'markup, localization or read-only wiring'
 import json, re, sys
 from pathlib import Path
 root = Path(sys.argv[1]); h = (root/'webroot/index.html').read_text(encoding='utf-8')
-assert len(re.findall(r'<button class="badge badge-a" id="(?:socBadge|liveSocBadge|cfgSocBadge|rpSocBadge|devSocBadge)"', h)) == 5, 'not every SoC pill is a button'
-for i in ('socBadge','liveSocBadge','cfgSocBadge','rpSocBadge','devSocBadge'):
+assert len(re.findall(r'<button class="badge badge-a" id="(?:socBadge|liveSocBadge|cfgSocBadge|rpSocBadge|devSocBadge|zySocBadge)"', h)) == 6, 'not every SoC pill is a button'
+for i in ('socBadge','liveSocBadge','cfgSocBadge','rpSocBadge','devSocBadge','zySocBadge'):
     assert re.search(r'<button class="badge badge-a" id="%s" type="button"\s+onclick="openDevicePage\(\)"' % i, h), i
-assert h.count('data-theme-toggle=') == 5 and h.count('data-theme-choice="glass"') == 5
+assert h.count('data-theme-toggle=') == 6 and h.count('data-theme-choice="glass"') == 6
 assert '#devicePage { z-index: 140;' in h and 'id="devicePage"' in h
-assert "run('sh ' + MD + '/tools/asb_device_info.sh 2>/dev/null')" in h
+assert "run('ASB_DEVINFO_LSPOSED=0 sh ' + MD + '/tools/asb_device_info.sh 2>/dev/null')" in h
 assert 'id="devSave"' in h and "asbSavePage('device')" in h and 'id="rpSave"' in h and "asbSavePage('report')" in h
 assert 'id="devJson"' not in h and 'id="rpJson"' not in h and 'ExportJson' not in h
 loader = h[h.index('async function asbDeviceInfoLoad()'):h.index('async function asbLogReportLoad()')]
@@ -6957,7 +7163,7 @@ run() {
   ASB_DEVINFO_MODDIR="$T/mod" ASB_DEVINFO_SYS="$T/sys" ASB_DEVINFO_PROC="$T/proc" \
   ASB_DEVINFO_DATA="$T/data" ASB_DEVINFO_PROP_FILE="$T/props" ASB_DEVINFO_SUSFS="$T/susfs" \
   ASB_DEVINFO_STATE="$T/state" ASB_DEVINFO_KSUD="$T/ksud" ASB_DEVINFO_DEV="$T/dev" KSUD_MODE="${KSUD_MODE:-empty}" \
-  KSUD_LOG="$T/ksud.log" SUSFS_LOG="$T/susfs.log" sh "$D"
+  KSUD_LOG="$T/ksud.log" SUSFS_LOG="$T/susfs.log" sh "$D" "$@"
 }
 want() {
   _line="$(printf 'D\t%s\t%s\t%s' "$1" "$2" "$3")"
@@ -7094,6 +7300,17 @@ KSUD_MODE=long out="$(run)"
 ' "$out" | awk -F '	' '$2 == "root" && $3 == "version_evidence" { print length($4) }')" -le 160 ] || fail "ksud evidence was not bounded"
 [ "$(wc -l < "$T/ksud.log")" -gt 0 ] || fail "the ksud fixture was never queried"
 grep -Ev '^--version$' "$T/ksud.log" && fail "a state-changing ksud command ran"
+# fix278: the WebUI's snapshot skips the hook collector and offers it on request; --lsposed
+# runs only that collector.
+mkdir -p "$T/data/lspd"
+out="$(ASB_DEVINFO_LSPOSED=0 run)"
+want lsposed_hooks present 1; want lsposed_hooks collection on_demand
+printf '%s\n' "$out" | grep -q '^D	lsposed_hooks	database' && fail 'the quick snapshot still ran the hook collector'
+out="$(run --lsposed 2>/dev/null || true)"
+printf '%s\n' "$out" | awk -F '\t' '$2 != "meta" && $2 != "lsposed_hooks" { bad = 1 } END { exit bad }' || fail "--lsposed emitted other sections: $out"
+want lsposed_hooks present 1
+printf '%s\n' "$out" | grep -q '^D	lsposed_hooks	basis	' || fail "--lsposed did not run the collector: $out"
+rmdir "$T/data/lspd"
 echo "PASS device info: read-only TSV, metamodule/root implementation variants, bounded ksud evidence, built-in/LKM NoMount and version, kernel feature evidence and missing-config semantics"
 )
 
@@ -7448,7 +7665,7 @@ open_src = '\n'.join([
     "  this.classList={add:(...x)=>x.forEach(c=>this.classes.add(c)),remove:(...x)=>x.forEach(c=>this.classes.delete(c))}; }",
     "El.prototype.setAttribute=function(k,v){this.attrs[k]=v};",
     "const els={}; ['devicePage','devDeviceLine','deviceLine','devSocBadge','socBadge','devVerBadge','verBadge','devCurProfile','curProfile'].forEach(x=>els[x]=new El(x));",
-    "const document={body:new El('body')}; let _deviceOpen=false;",
+    "const document={body:new El('body')}; let _deviceOpen=false; function asbNavAnimMark(){}",
     "function _el(id){return els[id]||null} function uiSound(){sound++} function asbTabbarVisibility(){}",
     "function asbNavSync(){} function asbFitPages(){} function requestAnimationFrame(){}",
     "function setTimeout(f){timers.push(f)} function asbDeviceInfoLoad(){loads++}",
@@ -7518,6 +7735,129 @@ grep -q "res === 'external_ignore'" "$H" || fail 'external ignore result is not 
 grep -q "res === 'uninstalled'" "$H" || fail 'uninstalled entry result is not explained'
 grep -q 'Original AppOps modes restored' "$H" || fail 'restore result is not honest'
 echo "PASS WebUI fix276 battery evidence: immediate diagnostics, deferred loading, explicit drain windows and reversible wakelock risk states"
+)
+
+t_webui_fix278_perf_runtime() (
+# Runtime (fix278): fewer blocking root shells on navigation, and none on the tap itself.
+# KernelSU-family bridges run ksu.exec synchronously on the WebView's JS thread and start a
+# new root shell per call. The REAL batch helpers run in node against a real POSIX shell
+# (exit code and output shape as the bridge returns them); the REAL fit scheduler is driven
+# with fake frames and timers; the navigation entry points are checked for calls on the tap.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui fix278 perf: $*" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "SKIP webui fix278 perf: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+{
+  cat <<'JS'
+const cp = require('child_process');
+function shQuote(v) { return "'" + String(v).replace(/'/g, "'\\''") + "'"; }
+let calls = [];
+async function run(cmd) {
+  calls.push(cmd);
+  let out = '', code = 0;
+  try { out = cp.execFileSync('sh', ['-c', cmd], { encoding: 'utf8' }); } catch (e) { out = e.stdout || ''; code = e.status || 1; }
+  return { errno: code, stdout: out.replace(/\n$/, ''), stderr: '' };
+}
+JS
+  sed -n '/^const _ASB_PART = /p; /^function runBatchCmd(/,/^}/p; /^function runBatchSplit(/,/^}/p; /^async function runBatch(/,/^}/p' "$H"
+  cat <<'JS'
+let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
+(async () => {
+  const want = {
+    nl: 'a\nb', nonl: 'x=1\ny=2', empty: '', blank: '\nlast', fails: 'partial', tricky: '@@asb-part:notours:x\nkept'
+  };
+  const b = await runBatch([
+    ['nl', "printf 'a\\nb\\n'"], ['nonl', "printf 'x=1\\ny=2'"], ['empty', 'true'], ['blank', "printf '\\nlast\\n'"],
+    ['tricky', "printf '@@asb-part:notours:x\\nkept\\n'"], ['fails', "printf 'partial\\n'; exit 3"], ['after', "printf 'never'"]]);
+  chk(calls.length === 1, 'seven reads took ' + calls.length + ' shells');
+  Object.keys(want).forEach(k => {
+    if (k === 'fails') return;
+    chk(b[k].errno === 0 && b[k].stdout === want[k], k + ': ' + JSON.stringify(b[k]));
+  });
+  /* `exit` ends the shell: that part and every later one report a failed read, never data. */
+  chk(b.fails.errno === 1 && b.after.errno === 1 && b.after.stdout === '', 'a dead shell still produced parts: ' + JSON.stringify(b.fails) + JSON.stringify(b.after));
+  calls = [];
+  const c = await runBatch([['a', "printf 'one\\n'"], ['b', "printf 'two'"], ['c', 'cat /nonexistent']]);
+  chk(c.a.stdout === 'one' && c.b.stdout === 'two' && c.c.stdout === '' && c.c.errno === 0, 'stderr or a missing file leaked: ' + JSON.stringify(c));
+  if (bad) process.exit(1);
+  console.log('ok');
+})();
+JS
+} > "$T/batch.js"
+out="$(node "$T/batch.js" 2>&1)" || fail "batch: $out"
+[ "$out" = ok ] || fail "batch: $out"
+{
+  cat <<'JS'
+let now = 0; const performance = { now: () => now };
+let frames = [], timers = [], fits = 0;
+function requestAnimationFrame(f) { frames.push(f); }
+function setTimeout(f, ms) { timers.push({ f, at: now + ms }); }
+function _pageAnimMs() { return 320; }
+function asbFitPagesNow() { fits++; }
+JS
+  sed -n '/^var _asbNavAnimUntil = 0;/p; /^function asbNavAnimMark(/p; /^function asbAfterNavAnim(/,/^}/p; /^function asbFitPages(/,/^}/p' "$H"
+  cat <<'JS'
+let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
+const flush = () => { const f = frames; frames = []; f.forEach(x => x()); };
+const tick = ms => { now += ms; const due = timers.filter(t => t.at <= now); timers = timers.filter(t => t.at > now); due.forEach(t => t.f()); };
+asbFitPages(); asbFitPages(); asbFitPages();
+chk(fits === 0 && frames.length === 1, 'three requests did not coalesce into one frame');
+flush(); chk(fits === 1, 'the coalesced fit did not run');
+asbNavAnimMark(); asbFitPages(); asbFitPages();
+chk(frames.length === 0 && timers.length === 1, 'a fit during a page slide was not deferred');
+tick(200); chk(fits === 1 && frames.length === 0, 'the fit ran inside the slide');
+tick(200); flush(); chk(fits === 2, 'the deferred fit never ran after the slide');
+let ran = 0; asbNavAnimMark(); asbAfterNavAnim(() => ran++, 30);
+tick(300); chk(ran === 0, 'after-slide work ran early'); tick(100); chk(ran === 1, 'after-slide work never ran');
+if (bad) process.exit(1); console.log('ok');
+JS
+} > "$T/fit.js"
+out="$(node "$T/fit.js" 2>&1)" || fail "fit: $out"
+[ "$out" = ok ] || fail "fit: $out"
+python3 - "$H" <<'PY' || fail 'navigation still blocks on root shells'
+import re, sys
+h = open(sys.argv[1], encoding='utf-8').read()
+def body(sig):
+    i = h.index(sig); j = h.index('\n}\n', i); return h[i:j]
+nav = body('function asbNavGo(target) {')
+assert 'zygiskHeaderRefresh()' not in nav and 'zygiskHeaderRefreshLazy();' in nav, 'every tab tap still probes the Zygisk header'
+live = body('function openLivePage() {')
+assert 'run(' not in live and 'zygiskHeaderRefresh' not in live, 'opening Monitor starts a root shell on the tap'
+assert 'setTimeout(function () {' in live and 'pollLive(true);' in live, 'Monitor no longer reads after its slide'
+cfg = body('function openConfigPage() {')
+assert 'run(' not in cfg and 'zygiskHeaderRefresh' not in cfg and 'loadDeviceClass' not in cfg, 'opening Settings starts a root shell on the tap'
+assert 'asbAfterNavAnim(function () { if (_cfgOpen) cfgLoad(); }, 30);' in cfg, 'Settings no longer refreshes after its slide'
+assert '_cfgHubSig === cfgHubSig()' in cfg, 'an unchanged hub is rebuilt before every slide'
+load = body('async function cfgLoadNow() {')
+assert load.count('runBatch(') == 1 and ' run(' not in load, 'Settings reads are not one batch'
+assert 'if (!changed && _rebootBaselineReady)' in load, 'an unchanged refresh still repaints'
+parts = body('function cfgLoadParts() {')
+for k in ("['conf', 'cat ' + CFG_FILE]", "['ledger', CFG_LEDGER_CMD]", "['trials', CFG_TRIALS_CMD]", "['ltpo', ltpoStatusCmd()]",
+          "['mmfeed', mmfeedStatusCmd()]", "['pkg', packageTweakStatusCmd()]", "['devclass',"):
+    assert k in parts, 'Settings batch lost ' + k
+assert 'const CFG_FRESH_MS = 30000;' in h and 'function cfgLoad(force) {' in h
+assert h.count('await cfgLoad(true); cfgRender();') == 2, 'reset/import must force a fresh read'
+poll = body('async function pollLive(visible) {')
+assert poll.count('runBatch(') == 1, 'Monitor poll is not one batch'
+for old in ("await run('cat /dev/.asb/learner_state.json", "await run('/data/adb/modules/AutoSystemBoost/bin/asb status", "await run('cat /dev/.asb/recovery.json"):
+    assert old not in poll.replace('_lb.learner || ' + old, ''), 'Monitor poll still reads separately: ' + old
+pill = body('function zygiskHeaderInit() {')
+assert 'btn.onclick = openZygiskPage;' in pill, 'the header pill does not open the Zygisk page'
+zp = body('function openZygiskPage() {')
+assert 'run(' not in zp and 'asbAfterNavAnim(function () { if (_zygiskOpen) zygiskPageLoad(false); }, 30);' in zp, 'the Zygisk page reads on the tap'
+zl = body('async function zygiskPageLoad(user) {')
+assert zl.count('run(') == 1 and 'link-status' in zl and 'asb_device_info' not in zl, 'the Zygisk page runs more than its one read'
+mode = body('async function zygiskModeSet(id) {')
+assert mode.count('runBatch(') == 1 and ' run(' not in mode and 'set-many --snapshot' in mode, 'a mode change is not one locked write'
+page = h[h.index('id="zygiskPage"'):h.index('<div class="toast" id="toast">')]
+for unrelated in ('cfgList', 'cfg-tile', 'ltpo', 'haptic_strength', 'deviceBody'):
+    assert unrelated not in page, 'the Zygisk page carries unrelated content: ' + unrelated
+assert "if (_zygiskOpen) d++;" in h and "if (_zygiskOpen) { uiSound('nav'); closeZygiskPage(); return; }" in h
+assert "'ASB_DEVINFO_LSPOSED=0 sh ' + MD + '/tools/asb_device_info.sh 2>/dev/null'" in h, 'Device page still waits for the hook collector'
+PY
+echo "PASS webui fix278 perf: one shell per screen read (batch shape checked on a real shell), no root call on the tap, fits coalesced past the slide, an isolated Zygisk page with one mode write"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

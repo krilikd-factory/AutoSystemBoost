@@ -6998,19 +6998,26 @@ run_eta() {
 printf 'forecast_rate_x10=50\nforecast_basis=slot\n' > "$T/state"
 printf 'smart 3000 2800 0 0 0\nbalanced 0 0 0 0 0\ncurrent smart\n' > "$T/dm"
 out="$(run_eta smart)"
-[ "$out" = "meter|336|(measured earlier with the screen on in this profile: 33.6%/h over 50 min)" ] || fail "slot not replaced by the measured profile drain: $out"
+[ "$out" = "meter|336|(average of this profile with the screen on: 33.6%/h over 50 min)" ] || fail "slot not replaced by the measured profile drain: $out"
 out="$(run_eta balanced)"
 [ "$out" = "slot|50|(estimate for this hour 5.0%/h)" ] || fail "a profile with no measurement must keep the slot estimate: $out"
 printf 'smart 300 900 0 0 0\n' > "$T/dm"
 out="$(run_eta smart)"
 [ "${out%%|*}" = slot ] || fail "under 10 minutes measured is not a measurement: $out"
+# fix279: one screen-on figure on every screen - the profile average leads wherever the
+# meter has one (the WebUI tile and the profile card show the same), the live window and the
+# estimates stand in only where it has none.
 printf 'forecast_rate_x10=112\nforecast_basis=now\n' > "$T/state"
 printf 'smart 3000 2800 0 0 0\n' > "$T/dm"
 out="$(run_eta smart)"
-[ "$out" = "measured|112|(actual drain 11.2%/h)" ] || fail "a live measurement must lead: $out"
+[ "$out" = "meter|336|(average of this profile with the screen on: 33.6%/h over 50 min)" ] || fail "the profile average must lead over the live window: $out"
+out="$(run_eta balanced)"
+[ "$out" = "measured|112|(actual drain 11.2%/h)" ] || fail "without a profile average the live measurement must lead: $out"
 printf 'forecast_rate_x10=94\nforecast_basis=recent\n' > "$T/state"
 out="$(run_eta smart)"
-[ "${out%%|*}" = average ] || fail "recent screen-on windows must stay ahead of the meter: $out"
+[ "${out%%|*}" = meter ] || fail "the profile average must lead over recent sessions: $out"
+out="$(run_eta balanced)"
+[ "${out%%|*}" = average ] || fail "recent sessions without a profile average: $out"
 for f in "$ROOT"/runtime/i18n/action_*.sh; do
   [ "$(sed -n 's/^T_ETA_METER=//p' "$f" | grep -o '%s' | wc -l)" -eq 2 ] || fail "T_ETA_METER missing or without both values in ${f##*/}"
 done
@@ -7601,6 +7608,10 @@ chmod 755 "$T/fb/"*
 python3 - "$T/lspd/log/modules_2026-10-31T23_50_00.log" <<'P'
 import datetime, sys
 t = datetime.datetime(2026, 10, 31, 23, 50, 0); out = []
+for i in range(5):
+    out.append('[ 1970-01-01T00:00:%02d.000    10100:  1234:  1234 I/LSPosed-Bridge  ] before the clock was set' % (i * 2))
+for i in range(5):
+    out.append('[ 2026-10-30T08:00:%02d.000    10100:  1234:  1234 I/LSPosed-Bridge  ] an older session of the same file' % (i * 2))
 for i in range(400):
     ts = (t + datetime.timedelta(seconds=i * 3)).strftime('%Y-%m-%dT%H:%M:%S') + '.123'
     if i % 10 == 0:
@@ -8067,6 +8078,133 @@ grep -q 'wakelock_manual' "$ROOT/uninstall.sh" || f 'uninstall lacks exact manua
 grep -q 'wlManualOpen' "$ROOT/webroot/index.html" || f 'Battery WebUI has no manual manager'
 [ "$fail" = 0 ] && echo 'PASS wakelock manual: user-only ranked candidates, confirmed AppOps, boot persistence and exact restore'
 exit "$fail"
+)
+
+t_notif_fix_runtime() (
+# Runtime (fix279): the notification fix. The owner picks the apps whose notifications are
+# late; ASB exempts exactly those from Doze, background and data restrictions, keeps its own
+# trimming/wakelock policies off them, records every original state first and gives it back
+# when an app is unticked or the module is removed. The REAL script runs against stubs that
+# keep Android's state in files.
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+S="$ROOT/runtime/asb_notif_fix.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL notif fix: $*" >&2; exit 1; }
+sh -n "$S" || fail "syntax"
+mkdir -p "$T/bin" "$T/st" "$T/d" "$T/mod/config" "$T/mod/runtime"
+printf 'gms_trim=strict\ndoze_level=aggressive\nathena_service=stock\nheytap_mcs=stock\n' > "$T/mod/config/governor.conf"
+cat > "$T/mod/runtime/asb_wakelock_watch.sh" <<'X'
+echo "$*" >> "$NF_ST/wlcalls"
+X
+printf 'org.telegram.messenger 10234\ncom.whatsapp 10300\n' > "$T/st/pkgs"
+printf 'org.telegram.messenger|RUN_ANY_IN_BACKGROUND|ignore|default\norg.telegram.messenger|WAKE_LOCK|default|ignore\norg.telegram.messenger|POST_NOTIFICATION|ignore|default\n' > "$T/st/ops"
+printf 'system,com.google.android.gms,10120\nuser,com.whatsapp,10300\n' > "$T/st/wl"
+printf '10234\n' > "$T/st/deny"; : > "$T/st/allow"; echo enabled > "$T/st/saver"; echo 0 > "$T/st/lowpower"
+printf 'com.whatsapp\n' > "$T/d/doze_whitelist_keep"
+printf 'org.telegram.messenger|default|default\n' > "$T/d/wakelock_manual"
+cat > "$T/bin/pm" <<'X'
+#!/bin/sh
+case "$*" in
+  "list packages -3 -U") sed 's/^\([^ ]*\) \(.*\)$/package:\1 uid:\2/' "$NF_ST/pkgs" ;;
+  "list packages com.google.android.gms") echo package:com.google.android.gms ;;
+esac
+X
+cat > "$T/bin/appops" <<'X'
+#!/bin/sh
+f="$NF_ST/ops"
+if [ "$1" = get ]; then
+  awk -F'|' -v p="$2" '$1 == p { if ($4 != "default") print "Uid mode: " $2 ": " $4; if ($3 != "default") print $2 ": " $3 "; time=+1h" }' "$f"
+  exit 0
+fi
+[ "$1" = set ] || exit 1
+shift; u=0; [ "$1" = --uid ] && { u=1; shift; }
+p="$1"; op="$2"; m="$3"
+grep -q "^$p|$op|" "$f" || echo "$p|$op|default|default" >> "$f"
+awk -F'|' -v OFS='|' -v p="$p" -v o="$op" -v m="$m" -v u="$u" '$1 == p && $2 == o { if (u) $4 = m; else $3 = m } { print }' "$f" > "$f.t" && mv "$f.t" "$f"
+X
+cat > "$T/bin/dumpsys" <<'X'
+#!/bin/sh
+[ "$1 $2" = "deviceidle whitelist" ] || exit 0
+case "${3:-}" in
+  '') cat "$NF_ST/wl" ;;
+  +*) p="${3#+}"; u="$(awk -v p="$p" '$1 == p { print $2 }' "$NF_ST/pkgs")"; echo "user,$p,$u" >> "$NF_ST/wl" ;;
+  -*) p="${3#-}"; grep -v "^user,$p," "$NF_ST/wl" > "$NF_ST/wl.t"; mv "$NF_ST/wl.t" "$NF_ST/wl" ;;
+esac
+X
+cat > "$T/bin/cmd" <<'X'
+#!/bin/sh
+[ "$1" = netpolicy ] || exit 0
+case "$2 $3" in
+  "get restrict-background") echo "Restrict background status: $(cat "$NF_ST/saver")" ;;
+  "list restrict-background-blacklist") echo "Restrict background blacklisted UIDs: $(tr '\n' ' ' < "$NF_ST/deny")" ;;
+  "list restrict-background-whitelist") echo "Restrict background whitelisted UIDs: $(tr '\n' ' ' < "$NF_ST/allow")" ;;
+  "add restrict-background-blacklist") echo "$4" >> "$NF_ST/deny" ;;
+  "add restrict-background-whitelist") echo "$4" >> "$NF_ST/allow" ;;
+  "remove restrict-background-blacklist") grep -vx "$4" "$NF_ST/deny" > "$NF_ST/t"; mv "$NF_ST/t" "$NF_ST/deny" ;;
+  "remove restrict-background-whitelist") grep -vx "$4" "$NF_ST/allow" > "$NF_ST/t"; mv "$NF_ST/t" "$NF_ST/allow" ;;
+  *) echo "Error: unknown command" ;;
+esac
+X
+cat > "$T/bin/am" <<'X'
+#!/bin/sh
+[ "$1" = get-standby-bucket ] && echo 40
+X
+cat > "$T/bin/settings" <<'X'
+#!/bin/sh
+cat "$NF_ST/lowpower"
+X
+chmod +x "$T/bin/"*
+run() { PATH="$T/bin:$PATH" NF_ST="$T/st" MODDIR="$T/mod" ASB_NF_DIR="$T/d" sh "$S" "$@"; }
+mode() { awk -F'|' -v p="$1" -v o="$2" '$1 == p && $2 == o { print $3 "/" $4 }' "$T/st/ops"; }
+out="$(run apps)"
+printf '%s\n' "$out" | grep -qx 'A org.telegram.messenger' && printf '%s\n' "$out" | grep -qx 'A com.whatsapp' || fail "apps: $out"
+out="$(run set org.telegram.messenger com.whatsapp 'bad;pkg' com.not.installed)"
+printf '%s\n' "$out" | grep -qx 'result=ok' && printf '%s\n' "$out" | grep -qx 'selected=2' || fail "set: $out"
+printf '%s\n' "$out" | grep -qx 'row|org.telegram.messenger|1|user|allow|default|allow|ignore|40|ok' || fail "telegram not fixed: $out"
+printf '%s\n' "$out" | grep -q '^row|com.whatsapp|1|user|' || fail "whatsapp: $out"
+grep -qx 'user,org.telegram.messenger,10234' "$T/st/wl" || fail "no Doze exemption"
+[ "$(mode org.telegram.messenger RUN_ANY_IN_BACKGROUND)" = allow/default ] || fail "background restriction kept: $(mode org.telegram.messenger RUN_ANY_IN_BACKGROUND)"
+[ "$(mode org.telegram.messenger WAKE_LOCK)" = default/allow ] || fail "uid WAKE_LOCK ignore kept: $(mode org.telegram.messenger WAKE_LOCK)"
+[ "$(mode org.telegram.messenger POST_NOTIFICATION)" = ignore/default ] || fail "the notification permission is the owner's: it must be reported, never changed"
+grep -qx 10234 "$T/st/deny" && fail "background data still denied"
+grep -qx 10234 "$T/st/allow" && grep -qx 10300 "$T/st/allow" || fail "Data Saver allowlist: $(cat "$T/st/allow")"
+grep -qx org.telegram.messenger "$T/d/doze_whitelist_keep" || fail "not kept from ASB's own trimming"
+grep -qx 'manual-set org.telegram.messenger restore' "$T/st/wlcalls" || fail "ASB's wakelock limit not lifted"
+grep -q 'bad;pkg\|com.not.installed' "$T/d/notif_fix" && fail "invalid package recorded"
+out="$(run status)"
+printf '%s\n' "$out" | grep -qx 'findings=gms_strict doze_aggressive athena_on data_saver' || fail "findings: $(printf '%s\n' "$out" | grep findings)"
+printf '%s\n' "$out" | grep -qx 'selected=2' || fail "status count: $out"
+printf 'org.telegram.messenger|RUN_ANY_IN_BACKGROUND|ignore|default\n' >> "$T/st/ops.x"
+awk -F'|' -v OFS='|' '$1 == "org.telegram.messenger" && $2 == "RUN_ANY_IN_BACKGROUND" { $3 = "ignore" } { print }' "$T/st/ops" > "$T/st/o" && mv "$T/st/o" "$T/st/ops"
+run reapply
+[ "$(mode org.telegram.messenger RUN_ANY_IN_BACKGROUND)" = allow/default ] || fail "a reset restriction was not re-applied"
+: > "$T/st/wlcalls"
+out="$(run set com.whatsapp)"
+printf '%s\n' "$out" | grep -qx 'selected=1' || fail "untick: $out"
+[ "$(mode org.telegram.messenger RUN_ANY_IN_BACKGROUND)" = ignore/default ] || fail "background mode not restored: $(mode org.telegram.messenger RUN_ANY_IN_BACKGROUND)"
+[ "$(mode org.telegram.messenger WAKE_LOCK)" = default/ignore ] || fail "uid WAKE_LOCK not restored: $(mode org.telegram.messenger WAKE_LOCK)"
+grep -q '^user,org.telegram.messenger,' "$T/st/wl" && fail "the Doze exemption ASB gave was not withdrawn"
+grep -qx 10234 "$T/st/deny" || fail "background data denial not restored"
+grep -qx 10234 "$T/st/allow" && fail "Data Saver allowlist entry not withdrawn"
+grep -qx org.telegram.messenger "$T/d/doze_whitelist_keep" && fail "keep-list entry ASB added was left"
+grep -qx com.whatsapp "$T/d/doze_whitelist_keep" || fail "the owner's own keep-list entry was removed"
+grep -qx 'manual-set org.telegram.messenger ignore' "$T/st/wlcalls" || fail "the owner's wakelock limit was not given back"
+grep -q '^user,com.whatsapp,' "$T/st/wl" || fail "an exemption the owner had was touched"
+run set org.telegram.messenger com.whatsapp >/dev/null
+grep -v '^org.telegram.messenger ' "$T/st/pkgs" > "$T/st/p" && mv "$T/st/p" "$T/st/pkgs"
+run reapply
+grep -q '^org.telegram.messenger|' "$T/d/notif_fix" && fail "an uninstalled app stayed in the ledger"
+grep -qx org.telegram.messenger "$T/d/doze_whitelist_keep" && fail "an uninstalled app stayed in the keep list"
+out="$(run status)"; printf '%s\n' "$out" | grep -qx 'selected=1' || fail "status after uninstall: $out"
+PATH="$T/bin:$PATH" NF_ST="$T/st" MODDIR="$T/mod" ASB_NF_DIR="$T/d" ASB_NF_UNINSTALL=1 sh "$S" restore-all
+[ -e "$T/d/notif_fix" ] && fail "restore-all kept the ledger"
+grep -qx 10300 "$T/st/allow" && fail "restore-all left the Data Saver allowlist entry"
+grep -q '^user,com.whatsapp,' "$T/st/wl" || fail "restore-all removed an exemption the owner had"
+grep -q 'asb_notif_fix.sh" reapply' "$ROOT/service.sh" || fail "no boot/periodic re-apply"
+grep -q 'asb_notif_fix.sh" restore-all' "$ROOT/uninstall.sh" || fail "uninstall does not restore"
+grep -Fq "shQuote(NF_SCRIPT) + ' set'" "$ROOT/webroot/index.html" || fail "the WebUI does not apply the selection"
+echo "PASS notif fix: chosen apps get Doze, background, data and ASB-policy exemptions with read-back; untick, uninstall and removal give back exactly what was there"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
