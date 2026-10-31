@@ -214,3 +214,5 @@ ltpo_idle_rate|internal|engine_or_derived|shell
 zygisk_enabled|user|webui_standard|both
 zygisk_mode|internal|engine_or_derived|shell
 zygisk_hints|user|webui_standard|both
+zygisk_launch|user|webui_standard|both
+zygisk_ledger|user|webui_standard|both

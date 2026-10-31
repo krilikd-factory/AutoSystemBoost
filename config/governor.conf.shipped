@@ -748,3 +748,12 @@ device_bounds_override=1
 zygisk_enabled=0
 zygisk_mode=observer
 zygisk_hints=0
+# Cold-start lift (opt-in): a new top-app process started by zygote (a cold start) carries
+# the running unlock lift over the start, or arms one even inside the 5 s anti-chatter gap.
+# No package is sent; profile, thermal and warm-die gates still decide. At most 1/s, 20/min.
+zygisk_launch=0
+# Process-start ledger (opt-in): per-package process starts with the screen off/on for this
+# boot, in tmpfs only. Diagnostics; nothing is restricted automatically. One short companion
+# connection per app process start while on. Both need zygisk_enabled=1. App processes read
+# only the generated zygisk/policy (runtime/asb_zygisk.sh sync), never this file.
+zygisk_ledger=0
