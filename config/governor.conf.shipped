@@ -545,6 +545,12 @@ unlock_lift_pct=80
 # may arm the same bounded ceiling-only lift after a genuinely janky foreground window.
 # No Smart learner, no floor, no persistent tuning; thermal/camera/profile handback remains.
 battery_jank_guard=1
+# Battery scroll hold, measured per app: a finger keeps the Battery lift up through a scroll
+# only in apps where Android's own frame statistics show it removes jank (a quarter of the
+# janky frames and 1.5 points); elsewhere a scroll runs at the Battery ceilings after the
+# few-second lift. Probes only while the app in front is being tested (every 3 min), verdicts
+# in /data/adb/asb/battery_hold.tsv, retested after 21 days. 0 = every app keeps the hold.
+battery_hold_learn=1
 # Smart: the night time slots (21:00-06:00) start strongly economy-leaning because the phone is
 # normally asleep then. With the screen on, someone is using it - so a night slot then leans no
 # harder toward economy than your evening slot does. Screen-off behaviour is unchanged.
