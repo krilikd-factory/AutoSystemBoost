@@ -2304,7 +2304,7 @@ bad=[]
 for f in files:
     d=alld[f]
     if 'logkit' in f: d=d|alld.get('tools/logkit/_asb_logkit_common.sh',set())
-    if f in ('runtime/asb_pressure.sh','runtime/asb_zygisk_info.sh'): d=d|device_defs
+    if f in ('runtime/asb_pressure.sh','runtime/asb_zygisk_info.sh','runtime/asb_lsposed_info.sh'): d=d|device_defs
     # link-status sources the read-only collector and calls its defined entry point.
     if f == 'runtime/asb_zygisk.sh': d=d|alld.get('runtime/asb_zygisk_info.sh',set())
     for i,line in enumerate(open(f).read().split('\n'),1):

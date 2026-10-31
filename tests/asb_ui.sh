@@ -6547,7 +6547,7 @@ order = re.search(r'const DEVICE_SECTION_ORDER = \[(.*?)\n\];', h, re.S).group(1
 specs = re.findall(r"\['([a-z_]+)', '(dev_sec_[a-z_]+)', '[^']*', '([a-z]+)'", order)
 assert [x[0] for x in specs] == ['firmware','soc','cpu_policy','gpu','memory','battery','firmware','system','system_load','kernel','kernel_origin',
                                  'kernel_btf','kernel_ebpf','kernel_fuse_bpf','kernel_features','kernel_runtime','kernel_external','kernel_config',
-                                 'root','susfs','metamodule','zygisk_observer','asb','asb_caps','meta'], specs
+                                 'root','susfs','metamodule','zygisk_observer','lsposed_hooks','asb','asb_caps','meta'], specs
 groups = [x[2] for x in specs]
 assert groups == sorted(groups, key=['hw','sw','kernel','root','asb'].index), 'a group is split: ' + str(groups)
 assert specs[0][1] == 'dev_sec_device' and specs[6][1] == 'dev_sec_firmware', 'the phone identity opens the hardware group'
@@ -6569,7 +6569,8 @@ for p in (root/'webroot/i18n').glob('*.json'):
                 'dev_sec_insights','dev_insight_root_family','dev_insight_cpu_cap','lr_actions_verify',
                 'dev_sec_kernel_origin','dev_sec_kernel_btf','dev_sec_kernel_ebpf','dev_sec_kernel_fuse_bpf',
                 'dev_kernel_origin_assessment','dev_kernel_btf_summary','dev_kernel_ebpf_summary','dev_kernel_fuse_bpf_summary',
-                'dev_guide_kernel_origin','dev_guide_kernel_btf','dev_guide_kernel_ebpf','dev_guide_kernel_fuse_bpf','dev_insight_kernel_origin'):
+                'dev_guide_kernel_origin','dev_guide_kernel_btf','dev_guide_kernel_ebpf','dev_guide_kernel_fuse_bpf','dev_insight_kernel_origin',
+                'dev_sec_lsposed_hooks','dev_guide_lsposed_hooks','dev_lsposed_hooks_findings','dev_zygisk_observer_ledger_restart_loops'):
         assert d.get(key), '%s: %s missing' % (p.name, key)
 ru = json.loads((root/'webroot/i18n/ru.json').read_text(encoding='utf-8'))
 assert 'NoMount' in ru['dev_kernel_features_nomount'] and 'NTSync' in ru['dev_kernel_features_ntsync']
@@ -6830,7 +6831,7 @@ printf 'pinned\n' > "$T/sys/fs/bpf/prog_fixture"; printf '33\n' > "$T/sys/fs/fus
 mkdir -p "$T/proc/sys/net/core"; printf '1\n' > "$T/proc/sys/net/core/bpf_jit_enable"
 printf '0\n' > "$T/proc/sys/net/core/bpf_jit_harden"; printf '1\n' > "$T/proc/sys/net/core/bpf_jit_kallsyms"
 cp "$ROOT/tools/asb_kernel_uv_coexist.sh" "$T/mod/tools/"
-cp "$ROOT/runtime/asb_pressure.sh" "$ROOT/runtime/asb_zygisk.sh" "$ROOT/runtime/asb_zygisk_info.sh" "$T/mod/runtime/"
+cp "$ROOT/runtime/asb_pressure.sh" "$ROOT/runtime/asb_zygisk.sh" "$ROOT/runtime/asb_zygisk_info.sh" "$ROOT/runtime/asb_lsposed_info.sh" "$T/mod/runtime/"
 printf 'zygisk_enabled=0\nzygisk_mode=observer\nzygisk_hints=0\n' > "$T/mod/config/governor.conf"
 printf 'cpu 100 0 100 800 0 0 0 0 0 0\n' > "$T/proc/stat"
 printf 'id=AutoSystemBoost\nversion=V65-129-fix230\nversionCode=65230\n' > "$T/mod/module.prop"
@@ -6965,6 +6966,7 @@ want() {
 out="$(run)"
 printf '%s\n' "$out" | awk -F '\t' 'NF < 4 || $1 != "D" || $2 == "" || $3 == "" { bad = 1 } END { exit bad }' || fail "malformed TSV"
 want meta schema 5; want firmware baseband TEST_BASEBAND; want firmware android 17; want soc soc_model SM8850
+want lsposed_hooks present 0
 want kernel_origin assessment custom-like; want kernel_origin confidence 'indicative; not a provenance proof'
 want kernel_btf summary 'built-in config; vmlinux exposed'; want kernel_btf vmlinux 'vmlinux readable and non-empty'
 want kernel_btf module_entries '1 entries exposed'; want kernel_ebpf summary 'configured; runtime interfaces exposed'
@@ -7415,6 +7417,107 @@ assert 'box-shadow:inset 0 1px 0 rgba(255,255,255,.065)' in track
 print('ok')
 PY
 echo "PASS WebUI fix256 inactive profiles: matching dark-Glass inactive profile/OFF-tweak surfaces, hidden idle sheen, full foreground opacity and unchanged active/light materials"
+)
+
+t_webui_fix276_battery_evidence_runtime() (
+# Runtime (fix276): navigation and evidence collection are separate; drain tiles name their
+# own windows; the explicit wakelock manager renders only parsed user-app rows and risk state.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI fix276 battery evidence: $*" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "SKIP WebUI fix276 battery evidence: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+python3 - "$H" "$T" <<'PY' || fail 'source extraction'
+import re, sys
+from pathlib import Path
+h = Path(sys.argv[1]).read_text(encoding='utf-8')
+out = Path(sys.argv[2])
+def fn(name):
+    m = re.search(r'^function ' + re.escape(name) + r'\([^\n]*\) \{.*?^\}', h, re.M | re.S)
+    assert m, name
+    return m.group(0)
+def const(name):
+    m = re.search(r'^const ' + re.escape(name) + r' = .*?;$', h, re.M)
+    assert m, name
+    return m.group(0)
+# Opening the page must not await the collector. The timer is captured and fired explicitly.
+open_src = '\n'.join([
+    "const timers = []; let loads = 0, sound = 0;",
+    "function El(id) { this.id=id; this.textContent=id; this.scrollTop=9; this.attrs={}; this.classes=new Set();",
+    "  this.classList={add:(...x)=>x.forEach(c=>this.classes.add(c)),remove:(...x)=>x.forEach(c=>this.classes.delete(c))}; }",
+    "El.prototype.setAttribute=function(k,v){this.attrs[k]=v};",
+    "const els={}; ['devicePage','devDeviceLine','deviceLine','devSocBadge','socBadge','devVerBadge','verBadge','devCurProfile','curProfile'].forEach(x=>els[x]=new El(x));",
+    "const document={body:new El('body')}; let _deviceOpen=false;",
+    "function _el(id){return els[id]||null} function uiSound(){sound++} function asbTabbarVisibility(){}",
+    "function asbNavSync(){} function asbFitPages(){} function requestAnimationFrame(){}",
+    "function setTimeout(f){timers.push(f)} function asbDeviceInfoLoad(){loads++}",
+    fn('openDevicePage'),
+    "openDevicePage();",
+    "if (!_deviceOpen || !els.devicePage.classes.has('open') || els.devicePage.attrs['aria-hidden'] !== 'false') throw Error('page did not open synchronously');",
+    "if (els.devicePage.scrollTop !== 0 || loads !== 0 || timers.length !== 2) throw Error('collector was not deferred');",
+    "timers[0](); if (loads !== 1) throw Error('deferred collector did not start');",
+    "openDevicePage(); if (loads !== 1 || timers.length !== 2) throw Error('repeated open started another collector');",
+    "console.log('ok');"
+])
+(out/'open.js').write_text(open_src)
+
+paint_src = '\n'.join([
+    "function T(k,d){return d} function _el(id){return els[id]||null}",
+    "const els={}; ['bnDrain','bnDrainOff','bnDrainOnLabel','bnDrainOffLabel'].forEach(x=>els[x]={textContent:'',title:''});",
+    const('_lvMeter'), const('_lvGovOff'), "const _lvDrain={};",
+    fn('lvDurDHM'), fn('lvOffFigure'), fn('lvPct'),
+    "function asbMetricPaint(){} function lvEtaPaint(){} function liveDrainIsOpen(){return false}",
+    fn('lvMeterPaint'),
+    "_lvMeter.p={battery:{on:330,onMin:88,off:126,offN:3,offS:30000,offLast:138,offLastS:18000,offLastAt:1}};",
+    "lvMeterPaint('battery');",
+    "if(els.bnDrain.textContent!=='33.0%/h'||els.bnDrainOff.textContent!=='1.38%/h') throw Error('wrong drain values '+JSON.stringify(els));",
+    "if(els.bnDrainOnLabel.textContent!=='Screen on · history'||els.bnDrainOffLabel.textContent!=='Screen off · latest') throw Error('window labels missing');",
+    "if(!/88 min accumulated/.test(els.bnDrain.title)||!/Not the current log capture/.test(els.bnDrain.title)) throw Error('history tooltip missing');",
+    "_lvMeter.p.battery.offLastS=0; lvMeterPaint('battery');",
+    "if(els.bnDrainOff.textContent!=='1.26%/h'||els.bnDrainOffLabel.textContent!=='Screen off · history') throw Error('aggregate fallback mislabeled');",
+    "console.log('ok');"
+])
+(out/'paint.js').write_text(paint_src)
+
+wl_src = '\n'.join([
+    "function T(k,d){return d} function E(){this.children=[];this.textContent='';this.className='';this.disabled=false;}",
+    "E.prototype.appendChild=function(x){this.children.push(x);return x};",
+    "const document={createElement:function(){return new E()}};",
+    const('_wlManual'), fn('wlManualArmed'), fn('wlManualParse'), fn('wlManualTime'), fn('wlManualState'), fn('wlManualRow'),
+    "const d=wlManualParse('version=1\\nscan=ok\\nselected=1\\nrow|com.example.sync|3720|0|1|allow|1\\nrow|bad name|9|0|0|allow|0\\nrow|com.example.chat|25|1|0|ignore|0\\n');",
+    "if(d.scan!=='ok'||d.selected!==1||d.rows.length!==2) throw Error('status parser accepted malformed data');",
+    "const a=d.rows[0]; if(a.pkg!=='com.example.sync'||a.secs!==3720||!a.selected||!a.protected||a.held) throw Error('row fields wrong');",
+    "const r=wlManualRow(a), text=JSON.stringify(r);",
+    "if(!/is-selected/.test(r.className)||!/is-lapsed/.test(r.className)||!/Critical class/.test(text)) throw Error('selected critical row not explicit '+text);",
+    "if(r.children[1].textContent!=='Restore'||r.children[1].disabled) throw Error('restore action unavailable');",
+    "const ext=wlManualRow(d.rows[1]); if(!ext.children[1].disabled||ext.children[1].textContent!=='Freeze') throw Error('external ignore can be adopted');",
+    "if(wlManualState({selected:true,eff:'ignore'})!=='Blocked · read-back confirmed') throw Error('read-back state missing');",
+    "const free={pkg:'com.example.free',secs:60,held:false,selected:false,eff:'allow',protected:false};",
+    "let fr=wlManualRow(free); if(fr.children[1].textContent!=='Freeze'||/is-armed/.test(fr.children[1].className)) throw Error('unarmed row must read Freeze');",
+    "_wlManual.armed='com.example.free'; _wlManual.armedAt=Date.now(); fr=wlManualRow(free);",
+    "if(fr.children[1].textContent!=='Tap again to freeze'||!/is-armed/.test(fr.children[1].className)) throw Error('armed row must ask for a second tap');",
+    "if(!/may stop or arrive late/.test(JSON.stringify(fr))) throw Error('armed row must show the risk in the page');",
+    "if(wlManualArmed('com.example.other')) throw Error('arming leaked to another package');",
+    "_wlManual.armedAt=Date.now()-6000; if(wlManualArmed('com.example.free')) throw Error('arming never expires');",
+    "console.log('ok');"
+])
+(out/'wakelock.js').write_text(wl_src)
+PY
+for t in open paint wakelock; do
+  out="$(node "$T/$t.js" 2>&1)" || fail "$t: $out"
+  [ "$out" = ok ] || fail "$t: $out"
+done
+# The only mutation is an explicit package action. Scanning, page opening and loading stay
+# read-only; the visible confirmation names both the risk and the original-mode restore.
+grep -q "manual-status 2>/dev/null" "$H" || fail 'on-demand read-only scan missing'
+grep -q "manual-set ' + shQuote(a.pkg)" "$H" || fail 'explicit package action missing'
+grep -q "if (!a.selected && !wlManualArmed(a.pkg)) {" "$H" || fail 'in-page second-tap confirmation missing'
+sed -n '/^async function wlManualSet(a) {/,/^}/p' "$H" | grep -q 'confirm(' && fail 'wakelock freeze still depends on browser confirm()'
+grep -q "res === 'external_ignore'" "$H" || fail 'external ignore result is not explained'
+grep -q "res === 'uninstalled'" "$H" || fail 'uninstalled entry result is not explained'
+grep -q 'Original AppOps modes restored' "$H" || fail 'restore result is not honest'
+echo "PASS WebUI fix276 battery evidence: immediate diagnostics, deferred loading, explicit drain windows and reversible wakelock risk states"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

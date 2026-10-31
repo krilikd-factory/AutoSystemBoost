@@ -7500,6 +7500,168 @@ out="$(run sweep)"; printf '%s\n' "$out" | grep -qx 'result=absent' || fail "swe
 echo "PASS lsposed verbose: LSPosed's own switch written as Java's Boolean, remembered and put back; old logs and the modules log freed; sweep only while the card says off; foreign layouts untouched"
 )
 
+t_lsposed_hooks_runtime() (
+# Runtime (fix277): which LSPosed hooks run where, which ones show problems and which hooked
+# apps cost battery - from evidence only. LSPosed exposes no per-hook call counter, and ASB
+# adds no hook of its own. The REAL C helper reads the module/scope inventory read-only from a
+# database laid out like LSPosed's; the REAL collector joins it with LSPosed's own logs,
+# crash/ANR records whose stack passes through a hook, CPU time and the Zygisk start ledger.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL lsposed hooks: $*" >&2; exit 1; }
+CC="${CC:-cc}"; command -v "$CC" >/dev/null 2>&1 || CC=gcc
+command -v "$CC" >/dev/null 2>&1 || { echo "SKIP lsposed hooks: no C compiler"; exit 0; }
+command -v python3 >/dev/null 2>&1 || { echo "SKIP lsposed hooks: no python3"; exit 0; }
+python3 -c 'import sqlite3' 2>/dev/null || { echo "SKIP lsposed hooks: no sqlite3 module"; exit 0; }
+LIB="$(python3 -c 'import ctypes.util; print(ctypes.util.find_library("sqlite3") or "")')"
+[ -n "$LIB" ] || { echo "SKIP lsposed hooks: no libsqlite3 on this host"; exit 0; }
+C="$ROOT/runtime/asb_lsposed_info.sh"
+sh -n "$C" || fail "collector syntax"
+grep -q 'asb_lsposed_info.sh' "$ROOT/tools/asb_device_info.sh" || fail "the Device collector does not source it"
+grep -q '"lsposed_hooks"' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not report it"
+grep -qE 'appops set|pm (disable|clear|uninstall)|am (force-stop|kill)|rm -|> *"?\$_ls_' "$C" && fail "the collector must stay read-only"
+cat > "$T/m.c" <<CSRC
+#define ASB_LSPD_SQLITE_LIB "$LIB"
+#include "$ROOT/src/asb_lspd.h"
+int main(int argc, char **argv) { if (argc >= 3 && strcmp(argv[1], "--lspd") == 0) return asb_lspd_cli(argc - 2, argv + 2); return 9; }
+CSRC
+mkdir -p "$T/gov" "$T/fb" "$T/run" "$T/lspd/config" "$T/lspd/log"
+"$CC" -std=gnu11 -Wall -Werror -o "$T/gov/asb" "$T/m.c" -ldl || fail "helper does not compile"
+D="$T/lspd/config/modules_config.db"
+python3 - "$D" <<'P'
+import sqlite3, sys
+db = sqlite3.connect(sys.argv[1])
+db.executescript("""
+CREATE TABLE modules (mid integer PRIMARY KEY AUTOINCREMENT, module_pkg_name text NOT NULL UNIQUE, apk_path text NOT NULL, enabled BOOLEAN DEFAULT 0);
+CREATE TABLE scope (mid integer, app_pkg_name text NOT NULL, user_id integer NOT NULL, PRIMARY KEY (mid, app_pkg_name, user_id));
+CREATE TABLE configs (module_pkg_name text NOT NULL, user_id integer NOT NULL, `group` text NOT NULL, `key` text NOT NULL, data blob NOT NULL,
+  PRIMARY KEY (module_pkg_name, user_id, `group`, `key`));
+INSERT INTO modules (module_pkg_name, apk_path, enabled) VALUES ('lspd', '/x', 1), ('com.mod.alpha', '/a', 1), ('com.mod.beta', '/b', 1),
+  ('com.mod.off', '/c', 0), ('bad;mod', '/d', 1);
+INSERT INTO scope VALUES (2, 'system', 0), (2, 'com.app.one', 0), (2, 'com.app.two', 0), (3, 'com.app.one', 0), (4, 'com.app.three', 0),
+  (5, 'com.app.four', 0), (2, 'bad app', 0);
+""")
+db.commit()
+P
+sum0="$(cksum < "$D")"
+out="$("$T/gov/asb" --lspd modules "$D")"
+[ "$out" = "format=v1
+module|com.mod.alpha|1|4
+module|com.mod.beta|1|1
+module|com.mod.off|0|1
+scope|com.mod.alpha|com.app.one|0
+scope|com.mod.alpha|com.app.two|0
+scope|com.mod.alpha|system|0
+scope|com.mod.beta|com.app.one|0
+scope|com.mod.off|com.app.three|0
+modules=3
+scopes=5" ] || fail "inventory: $out"
+[ "$(cksum < "$D")" = "$sum0" ] || fail "reading the inventory changed LSPosed's database"
+out="$("$T/gov/asb" --lspd modules "$T/none.db" || true)"; printf '%s\n' "$out" | grep -qx 'reason=no_database' || fail "missing db: $out"
+python3 -c "import sqlite3; db=sqlite3.connect('$T/other.db'); db.execute('CREATE TABLE settings (k text)'); db.commit()"
+out="$("$T/gov/asb" --lspd modules "$T/other.db" || true)"; printf '%s\n' "$out" | grep -qx 'reason=unexpected_schema' || fail "foreign layout: $out"
+cp "$D" "$T/locked.db"
+python3 -c "
+import sqlite3, time, sys
+db = sqlite3.connect(sys.argv[1], isolation_level=None); db.execute('BEGIN EXCLUSIVE'); db.execute('UPDATE modules SET enabled = enabled')
+open(sys.argv[2], 'w').close(); time.sleep(6)" "$T/locked.db" "$T/locked.ready" &
+_lk=$!; for _i in 1 2 3 4 5 6 7 8 9 10; do [ -f "$T/locked.ready" ] && break; sleep 0.2; done
+out="$("$T/gov/asb" --lspd modules "$T/locked.db" || true)"; wait "$_lk" || :
+printf '%s\n' "$out" | grep -qx 'reason=read_failed' || fail "a locked database read as a foreign layout or an empty inventory: $out"
+cat > "$T/fb/pm" <<'S'
+#!/bin/sh
+printf 'package:com.app.one uid:10100\npackage:com.app.two uid:10101\npackage:com.mod.alpha uid:10200\n'
+S
+cat > "$T/fb/dumpsys" <<'S'
+#!/bin/sh
+[ "$1" = dropbox ] || exit 0
+case "$3" in
+  data_app_crash) cat <<'X'
+========================================
+2026-10-30 12:00:00 data_app_crash (text, 1234 bytes)
+Process: com.app.one
+java.lang.NullPointerException: boom
+	at com.mod.alpha.Hooks.after(Hooks.java:12)
+	at LSPHooker_.callback(Unknown Source)
+========================================
+2026-10-30 12:01:00 data_app_crash (text, 1234 bytes)
+Process: com.app.two
+java.lang.IllegalStateException: an ordinary crash with no hook frame
+	at com.app.two.Main.run(Main.java:5)
+X
+  ;;
+esac
+S
+cat > "$T/fb/ps" <<'S'
+#!/bin/sh
+printf 'UID TIME NAME\n10100 00:01:40 com.app.one\n1010100 00:00:20 com.app.one:remote\n10101 1-00:00:01 com.app.two\n0 05:00:00 init\n'
+S
+chmod 755 "$T/fb/"*
+python3 - "$T/lspd/log/modules_2026-10-31T23_50_00.log" <<'P'
+import datetime, sys
+t = datetime.datetime(2026, 10, 31, 23, 50, 0); out = []
+for i in range(400):
+    ts = (t + datetime.timedelta(seconds=i * 3)).strftime('%Y-%m-%dT%H:%M:%S') + '.123'
+    if i % 10 == 0:
+        out += ['[ %s    10100:  1234:  1234 E/LSPosed-Bridge  ] java.lang.RuntimeException: x' % ts,
+                '\tat com.mod.alpha.Hooks.after(Hooks.java:12)', '\tat com.mod.alpha.Hooks.other(Hooks.java:13)']
+    else:
+        out.append('[ %s    10101:123456:123456 I/LSPosed-Bridge  ] ' % ts + 'x' * 600)
+open(sys.argv[1], 'w').write('\n'.join(out) + '\n')
+P
+printf 'L\tcom.app.one\t9\t1\t1\t7\nL\tcom.app.two\t2\t0\t0\t1\nL\tcom.unhooked\t50\t0\t0\t30\n' > "$T/run/state.arm64-v8a.tsv"
+cat > "$T/h.sh" <<'S'
+_emit() { printf '%s\t%s\t%s\n' "$1" "$2" "$3"; }
+DATA=/nonexistent; MODDIR=/nonexistent
+. "$1"; _asb_lsposed_info
+S
+ls -lR "$T/lspd" > "$T/before"
+run() { PATH="$T/fb:$PATH" ASB_LSPD_DIR="$T/lspd" ASB_GOV_BIN="$T/gov/asb" ASB_ZYGISK_RUN_DIR="$T/run" sh "$T/h.sh" "$C"; }
+out="$(run)"
+want() { printf '%s\n' "$out" | grep -Fqx "lsposed_hooks	$1	$2" || fail "missing $1=$2 in: $out"; }
+want present 1; want database ok; want modules_enabled 2; want hooked_apps 2
+want modules 'com.mod.alpha 3 targets, com.mod.beta 1 targets'
+want system_scope 'com.mod.alpha: system'
+want multi_hooked 'com.app.one 2 modules'
+want log_window_min 19
+want error_modules 'com.mod.alpha 40'
+want crash_hooked 'com.app.one x1 (com.mod.alpha)'
+want cpu_hooked_top 'com.app.two 86401 s, com.app.one 120 s'
+want churn_hooked_top 'com.app.one 9/1 burst 7/5min, com.app.two 2/0'
+want findings 4
+want findings_detail 'log_spam:com.app.two errors:com.mod.alpha crash:com.app.one loop:com.app.one'
+printf '%s\n' "$out" | grep -q 'com.mod.off\|com.app.three\|bad;mod\|bad app\|com.unhooked' && fail "disabled, malformed or unhooked data leaked: $out"
+printf '%s\n' "$out" | grep -q 'per-hook call counts' || fail "the basis does not say what LSPosed cannot expose"
+ls -lR "$T/lspd" > "$T/after"; cmp -s "$T/before" "$T/after" || fail "the collector changed LSPosed's directory"
+out="$(PATH="$T/fb:$PATH" ASB_LSPD_DIR="$T/nolspd" ASB_GOV_BIN="$T/gov/asb" sh "$T/h.sh" "$C")"
+want present 0
+printf '%s\n' "$out" | awk -F '\t' '$2 == "database" { f = 1 } END { exit !f }' && fail "absent LSPosed still probed: $out"
+out="$(PATH="$T/fb:$PATH" ASB_LSPD_DIR="$T/lspd" ASB_GOV_BIN="$T/gov/missing" ASB_ZYGISK_RUN_DIR="$T/run" sh "$T/h.sh" "$C")"
+want database no_governor
+printf '%s\n' "$out" | awk -F '\t' '$2 == "modules_enabled" { f = 1 } END { exit !f }' && fail "an inventory was claimed without the helper: $out"
+if command -v node >/dev/null 2>&1; then
+  python3 - "$ROOT/webroot/index.html" "$T/f.js" <<'P'
+import re, sys
+h = open(sys.argv[1], encoding='utf-8').read()
+def fn(n):
+    m = re.search(r'^function ' + re.escape(n) + r'\([^\n]*\) \{.*?^\}', h, re.M | re.S)
+    assert m, n
+    return m.group(0)
+open(sys.argv[2], 'w').write('\n'.join(["function T(k,d){return d}", fn('deviceFallbackLabel'), fn('deviceLsposedFindings'),
+    "const r=deviceLsposedFindings('log_spam:com.app.two errors:com.mod.alpha bad;x crash:com.app.one loop:com.app.one');",
+    "if(r!=='Log Spam: com.app.two · Errors: com.mod.alpha · Crash: com.app.one · Loop: com.app.one') throw Error(r);",
+    "if(deviceLsposedFindings('—')!=='') throw Error('placeholder parsed');",
+    "console.log('ok');"]))
+P
+  [ "$(node "$T/f.js" 2>&1)" = ok ] || fail "WebUI finding labels: $(node "$T/f.js" 2>&1)"
+fi
+for k in dev_sec_lsposed_hooks dev_lsposed_db_read_failed dev_lsposed_find_crash dev_insight_lsposed dev_insight_restart_loops; do
+  grep -q "\"$k\"" "$ROOT/webroot/i18n/en.json" || fail "missing string $k"
+done
+echo 'PASS lsposed hooks: read-only module/scope inventory, log volume/errors, hook crashes, hooked-app CPU and restart loops, honest basis'
+)
+
 t_asbdiag_lsposed_modlog_runtime() (
 # Runtime (fix189): asbdiag tells the modules log apart from the verbose log and names who
 # fills it. An OP15 with LSPosed's verbose log off showed 20 MB an hour after boot - the
@@ -7800,6 +7962,111 @@ for kv in persist.asb.dsp.clarity=6 persist.vendor.asb.dsp.clarity=6 persist.asb
 done
 grep -q -- '-USR1' "$ASB_TEST_PKILL" || fail 'tone edit did not wake the attacher'
 echo 'PASS dsp tone filters: float/PCM16 responses, bypass, sample ceiling, runtime mirror and live wake'
+)
+
+t_wakelock_manual_runtime() (
+# fix276: explicit per-package WAKE_LOCK freeze is evidence-ranked, user-only, read-back
+# verified, persistent across ROM resets and exactly reversible (package AND uid modes).
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"; SRC="$ROOT/runtime/asb_wakelock_watch.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail=0; f() { echo "FAIL wakelock manual: $*" >&2; fail=1; }
+mkdir -p "$T/bin" "$T/mod/config" "$T/d"
+printf 'wakelock_action=0\nwakelock_fitness=protect\n' > "$T/mod/config/governor.conf"
+cat > "$T/bin/pm" <<'S'
+#!/bin/sh
+echo "pm $*" >> "${AM_LOG:-/dev/null}"
+cat <<'L'
+package:com.example.sync uid:10700
+package:org.thoughtcrime.securesms uid:10291
+package:com.example.notes uid:10701
+L
+S
+cat > "$T/bin/dumpsys" <<'S'
+#!/bin/sh
+case "$1" in
+  batterystats) cat <<'B'
+  Wake lock u0a700 SyncLoop: 1h 2m 0s 1ms (40 times) realtime
+  Wake lock u0a291 WebSocket: 29s 1ms (8 times) realtime
+B
+  ;;
+  power) : ;;
+esac
+S
+cat > "$T/bin/appops" <<'S'
+#!/bin/sh
+echo "appops $*" >> "$AM_LOG"
+case "$1" in
+  get) u="$(sed -n "s/^uid $2 $3 //p" "$OPS" 2>/dev/null | tail -1)"
+       m="$(sed -n "s/^$2 $3 //p" "$OPS" 2>/dev/null | tail -1)"
+       [ -n "$u" ] && echo "Uid mode: $3: $u"
+       if [ -n "$m" ]; then echo "$3: $m; time=+1m"; elif [ -z "$u" ]; then echo "No operations."; fi ;;
+  set) [ "${OPS_REFUSE:-0}" = 1 ] && exit 0
+       if [ "$2" = --uid ]; then echo "uid $3 $4 $5" >> "$OPS"; else echo "$2 $3 $4" >> "$OPS"; fi ;;
+esac
+S
+chmod +x "$T/bin/"*
+: > "$T/ops"; : > "$T/am.log"
+run() { OPS="$T/ops" AM_LOG="$T/am.log" PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_WL_DIR="$T/d" "$@"; }
+out="$(run sh "$SRC" manual-status)"
+printf '%s\n' "$out" | grep -qx 'scan=ok' || f "scan failed: $out"
+printf '%s\n' "$out" | grep -qx 'row|com.example.sync|3720|0|0|default|0' || f "candidate/rank state wrong: $out"
+printf '%s\n' "$out" | grep -q 'org.thoughtcrime.securesms' && f "29-second row should be below the ranking floor: $out"
+grep -q 'appops set' "$T/am.log" && f 'read-only status changed AppOps'
+# A protected class remains manually selectable only by explicit command, and is labelled.
+out="$(run sh "$SRC" manual-set org.thoughtcrime.securesms ignore)"
+printf '%s\n' "$out" | grep -qx 'result=limited' || f "explicit protected-class choice refused: $out"
+grep -qx 'org.thoughtcrime.securesms|default|default' "$T/d/wakelock_manual" || f 'original defaults not recorded'
+out="$(run sh "$SRC" manual-status)"
+printf '%s\n' "$out" | grep -q 'row|org.thoughtcrime.securesms|0|0|1|ignore|1' || f "selected protected row absent: $out"
+# Original non-default modes survive a later OPlus-style reset and reapply.
+run sh "$SRC" manual-set org.thoughtcrime.securesms restore >/dev/null
+printf 'com.example.sync WAKE_LOCK allow\nuid com.example.sync WAKE_LOCK allow\n' > "$T/ops"
+out="$(run sh "$SRC" manual-set com.example.sync ignore)"
+printf '%s\n' "$out" | grep -qx 'result=limited' || f "non-default limit failed: $out"
+grep -qx 'com.example.sync|allow|allow' "$T/d/wakelock_manual" || f 'package/uid originals not recorded'
+printf 'com.example.sync WAKE_LOCK default\nuid com.example.sync WAKE_LOCK default\n' > "$T/ops"
+run sh "$SRC" manual-reapply >/dev/null
+grep -q 'com.example.sync WAKE_LOCK ignore' "$T/ops" || f 'package limit not reapplied'
+grep -q 'uid com.example.sync WAKE_LOCK ignore' "$T/ops" || f 'uid limit not reapplied'
+grep -qx 'com.example.sync|allow|allow' "$T/d/wakelock_manual" || f 'reapply overwrote originals'
+out="$(run sh "$SRC" manual-set com.example.sync restore)"
+printf '%s\n' "$out" | grep -qx 'result=restored' || f "restore failed: $out"
+grep -q '^com.example.sync WAKE_LOCK allow' "$T/ops" || f 'package original not restored'
+grep -q '^uid com.example.sync WAKE_LOCK allow' "$T/ops" || f 'uid original not restored'
+[ ! -s "$T/d/wakelock_manual" ] || f 'restored entry retained'
+# External ignore is not adopted and can never be undone by this ledger.
+printf 'com.example.notes WAKE_LOCK ignore\n' > "$T/ops"
+out="$(run sh "$SRC" manual-set com.example.notes ignore)"
+printf '%s\n' "$out" | grep -qx 'result=external_ignore' || f "external ignore reported as a failure: $out"
+grep -q '^com.example.notes|' "$T/d/wakelock_manual" 2>/dev/null && f 'external ignore adopted'
+# fix277: an uninstalled package is dropped instead of leaving a Restore that can never succeed,
+# and one reapply pass lists packages once instead of once per entry.
+printf 'com.example.gone|allow|default\ncom.example.sync|default|default\norg.thoughtcrime.securesms|default|default\n' > "$T/d/wakelock_manual"
+: > "$T/ops"; : > "$T/am.log"
+run sh "$SRC" manual-reapply >/dev/null
+[ "$(grep -c '^pm list packages -3' "$T/am.log")" = 1 ] || f "reapply listed packages per entry: $(cat "$T/am.log")"
+grep -q 'com.example.gone' "$T/am.log" && f 'reapply touched an uninstalled package'
+grep -q '^com.example.gone|' "$T/d/wakelock_manual" && f 'uninstalled entry kept by reapply'
+grep -q '^com.example.sync|default|default$' "$T/d/wakelock_manual" || f 'reapply dropped an installed entry'
+grep -q 'com.example.sync WAKE_LOCK ignore' "$T/ops" || f 'installed entry not reapplied'
+printf 'com.example.gone|allow|default\n' >> "$T/d/wakelock_manual"
+out="$(run sh "$SRC" manual-set com.example.gone restore)"
+printf '%s\n' "$out" | grep -qx 'result=uninstalled' || f "uninstalled restore not resolved: $out"
+grep -q '^com.example.gone|' "$T/d/wakelock_manual" && f 'uninstalled entry kept by restore'
+: > "$T/d/wakelock_manual"; : > "$T/ops"
+# Malformed/system targets and refused writes never leave a partial restriction.
+run sh "$SRC" manual-set 'bad;name' ignore >/dev/null && f 'malformed package accepted'
+run sh "$SRC" manual-set android ignore >/dev/null && f 'non-user package accepted'
+printf 'com.example.notes WAKE_LOCK allow\n' > "$T/ops"
+out="$(OPS_REFUSE=1; export OPS_REFUSE; run sh "$SRC" manual-set com.example.notes ignore)"
+printf '%s\n' "$out" | grep -qx 'result=not_enforced' || f "refusal not reported: $out"
+grep -q '^com.example.notes|' "$T/d/wakelock_manual" 2>/dev/null && f 'refused write recorded'
+grep -q 'asb_wakelock_watch.sh" manual-reapply' "$ROOT/service.sh" || f 'existing boot pass lacks manual reapply'
+grep -q 'wakelock_manual' "$ROOT/uninstall.sh" || f 'uninstall lacks exact manual restore'
+grep -q 'wlManualOpen' "$ROOT/webroot/index.html" || f 'Battery WebUI has no manual manager'
+[ "$fail" = 0 ] && echo 'PASS wakelock manual: user-only ranked candidates, confirmed AppOps, boot persistence and exact restore'
+exit "$fail"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

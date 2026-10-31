@@ -78,6 +78,16 @@ int main() {
   for (int i=0;i<200;i++) lg.ledger_record("com.example.p"+std::to_string(i),1,false,100+i);
   assert(lg.ledger().size()==ASB_OBSERVER_LEDGER_MAX && lg.ledger_evicted()>0);
   assert(lg.ledger().count("com.example.sync")==1); // the busy entry survives one-off churn
+  // fix277: the screen-off burst is a 5-minute window over a fixed ring, never a lifetime total.
+  assert(lg.ledger().at("com.example.sync").burst_off==2);
+  AsbObserverCore bl;
+  for (int i=0;i<8;i++) bl.ledger_record("com.example.loop",0,false,1000+i*10000);
+  assert(bl.ledger().at("com.example.loop").burst_off==8);
+  for (int i=0;i<8;i++) bl.ledger_record("com.example.slow",0,false,1000+int64_t(i)*ASB_OBSERVER_BURST_WINDOW_MS);
+  assert(bl.ledger().at("com.example.slow").burst_off==1 && bl.ledger().at("com.example.slow").screen_off==8);
+  for (int i=0;i<100;i++) bl.ledger_record("com.example.storm",0,false,1000+i);
+  assert(bl.ledger().at("com.example.storm").burst_off==ASB_OBSERVER_BURST_KEEP);
+  bl.ledger_record("com.example.loop",1,true,500000); assert(bl.ledger().at("com.example.loop").burst_off==8);
   assert(asb_observer_regular_app_uid(10123) && asb_observer_regular_app_uid(1010123));
   assert(!asb_observer_regular_app_uid(1000) && !asb_observer_regular_app_uid(99123) && !asb_observer_regular_app_uid(90001));
   assert(!asb_observer_regular_app_uid(20123) && !asb_observer_regular_app_uid(-1));
@@ -303,10 +313,18 @@ int main(){
   std::string s=state();
   assert(s.find("Z\tlaunch_accepted\t1\n")!=std::string::npos);
   assert(s.find("Z\tlaunch_throttled\t1\n")!=std::string::npos);
-  assert(s.find("L\tcom.example.sync\t2\t1\t2\n")!=std::string::npos);
+  assert(s.find("L\tcom.example.sync\t2\t1\t2\t2\n")!=std::string::npos);
   assert(s.find("Z\tevents_dropped_invalid\t1\n")!=std::string::npos);
   assert(s.find("Z\tpolicy_generation_seen\t11\n")!=std::string::npos);
   close(gfd);
+  // fix277: an observed process's RSS is read once per TTL, not on every state rewrite.
+  put_policy("v=2\ngen=12\nobserver=1\nhints=0\nlaunch=0\nledger=1\npkg=com.example.app\n");
+  { int sv[2]; assert(!socketpair(AF_UNIX,SOCK_STREAM|SOCK_CLOEXEC,0,sv)); std::thread t(zygisk_companion_entry,sv[1]);
+    AsbObserverFrame st=make_frame(ASB_OBSERVER_EVENT_PROCESS_START,0,"com.example.app"); assert(write_all(sv[0],&st,sizeof(st)));
+    for(int i=0;i<5;i++){ AsbObserverFrame lf=make_frame(ASB_OBSERVER_EVENT_SPAWN,ASB_OBSERVER_FLAG_LEDGER,"com.example.mail"); assert(write_all(sv[0],&lf,sizeof(lf))); }
+    for(int i=0;i<200 && state().find("L\tcom.example.mail\t0\t5\t")==std::string::npos;i++) std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    s=state(); assert(s.find("\nP\t")!=std::string::npos); assert(s.find("Z\trss_reads\t1\n")!=std::string::npos);
+    close(sv[0]); t.join(); }
   // No policy: the companion ignores late one-shot frames instead of acting on stale state.
   unlink(ASB_ZYGISK_POLICY_ABS); companion_send(g); s=state();
   assert(s.find("Z\tevents_policy_absent\t1\n")!=std::string::npos);
@@ -486,10 +504,10 @@ Z	launch_vetoed	2
 Z	launch_unavailable	0
 Z	launch_throttled	1
 Z	ledger_events	21
-L	com.example.sync	12	3	1
-L	com.example.mail	2	5	0
+L	com.example.sync	12	3	1	7
+L	com.example.mail	2	5	0	x9
 L	com.example.idle	0	4	0
-L	bad;pkg	9	9	9
+L	bad;pkg	9	9	9	99
 Z	updated_monotonic_ms	999000
 Z	events_total	10
 Z	events_dropped_total	2
@@ -512,7 +530,7 @@ EOF
   _read() { [ -r "$1" ] && cat "$1" 2>/dev/null; }
   _emit() { printf '%s\t%s\t%s\n' "$1" "$2" "$3" >> "$T/out"; }
   MODDIR="$T/mod"; PROC="$T/proc"; DATA="$T/data"; ASB_ZYGISK_DIR="$T/data/asb/zygisk_observer"; ASB_ZYGISK_RUN_DIR="$T/run"
-  printf 'L\tcom.example.sync\t5\t0\t0\nZ\tlaunch_accepted\t1\n' > "$T/run/state.armeabi-v7a.tsv"
+  printf 'L\tcom.example.sync\t5\t0\t0\t9\nZ\tlaunch_accepted\t1\n' > "$T/run/state.armeabi-v7a.tsv"
   . "$ROOT/runtime/asb_zygisk_info.sh"; _asb_zygisk_info
   want() { grep -Fqx "zygisk_observer	$1	$2" "$T/out" || fail "missing $1=$2: $(cat "$T/out")"; }
   want enabled 1; want enabled_packages 1; want loaded_processes 1; want events_total 10; want link_state connected
@@ -522,6 +540,7 @@ EOF
   want launch_hints 1; want spawn_ledger 1; want policy_generation 42; want policy_seen_generation 42
   want spawn_events 30; want launch_events 9; want launch_accepted 7; want launch_vetoed 2; want launch_throttled 1
   want ledger_events 21; want ledger_top_screen_off 'com.example.sync 17/3, com.example.mail 2/5'
+  want ledger_restart_loops 'com.example.sync 9/5min'
   ! grep -q 'bad;pkg\|com.example.idle 0' "$T/out" || fail 'malformed or screen-on-only ledger rows leaked into the top list'
   # A reused PID with different start ticks and malformed rows never contributes RSS/processes.
   ! grep -q '9999\|com.example.stale\|com.example.bad' "$T/out" || fail 'stale/malformed process leaked into diagnostics'
