@@ -286,6 +286,17 @@ if [ -f /data/adb/asb/wakelock_fitness_uidmode ] && command -v appops >/dev/null
   rm -f /data/adb/asb/wakelock_fitness_uidmode 2>/dev/null
 fi
 
+# fix276: restore the explicit per-app WAKE_LOCK list, including the original uid override.
+# Never blanket-allow: the ledger carries the exact package and uid modes from before ASB.
+if [ -f /data/adb/asb/wakelock_manual ] && command -v appops >/dev/null 2>&1; then
+  while IFS='|' read -r _mp _mo _mu; do
+    case "$_mp" in ''|*[!A-Za-z0-9_.]*) continue ;; esac
+    _fw appops set "$_mp" WAKE_LOCK "${_mo:-default}" >/dev/null 2>&1
+    [ "${_mu:-default}" = default ] || _fw appops set --uid "$_mp" WAKE_LOCK "$_mu" >/dev/null 2>&1
+  done < /data/adb/asb/wakelock_manual
+  rm -f /data/adb/asb/wakelock_manual /data/adb/asb/wakelock_manual.tmp 2>/dev/null
+fi
+
 # Give location back to apps ASB limited.
 #
 # Recorded per package: an app the user restricted themselves in Android settings stays

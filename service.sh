@@ -3766,10 +3766,16 @@ asb_gov_liveness() {
     # off - appops for the few fitness apps, and nothing unless wakelock_fitness=limit.
     if [ "${_fit_boot:-0}" -lt 2 ]; then
       _fit_boot=$(( ${_fit_boot:-0} + 1 ))
-      if grep -E '^[[:space:]]*wakelock_fitness=' "$MODDIR/config/governor.conf" 2>/dev/null \
-           | head -1 | sed 's/.*=//' | tr -d ' \r' | grep -qix limit \
-         && [ -f "$MODDIR/runtime/asb_wakelock_watch.sh" ]; then
-        MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wakelock_watch.sh" fitness >/dev/null 2>&1
+      if [ -f "$MODDIR/runtime/asb_wakelock_watch.sh" ]; then
+        if grep -E '^[[:space:]]*wakelock_fitness=' "$MODDIR/config/governor.conf" 2>/dev/null \
+             | head -1 | sed 's/.*=//' | tr -d ' \r' | grep -qix limit; then
+          MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wakelock_watch.sh" fitness >/dev/null 2>&1
+        fi
+        # fix276: user-named WAKE_LOCK limits get the same bounded boot re-apply. The manual
+        # pass is a no-op without its ledger and reads no batterystats or device identifiers.
+        if [ -s /data/adb/asb/wakelock_manual ]; then
+          MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wakelock_watch.sh" manual-reapply >/dev/null 2>&1
+        fi
       fi
     fi
     asb_gov_liveness
