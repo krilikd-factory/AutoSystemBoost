@@ -795,6 +795,21 @@ T_SMART_HDR="Smart · slot %s/12 · %s (%s) · conf %s%%"
 T_PROFILE_SMART="Profile: %s (Smart picks caps within it)"
 T_PROFILE_MANUAL="Profile: %s (manual — Smart off)"
 T_PROFILE_STOCK="Profile: %s — the ASB governor is stopped: CPU/GPU limits, throttling and night quiet are the ROM's own"
+T_ZY_HEAD="Zygisk · ASB link: %s"
+T_ZY_EVIDENCE="Evidence: %s · live processes %s · events %s · spawn %s"
+T_ZY_FEATURES="Options: observer %s · hints %s · cold start %s · ledger %s · allowlist %s"
+T_ZY_POLICY="Policy: generation %s / acknowledged %s · installed ABI %s"
+T_ZY_COST="Observer IPC: %s ms CPU · %s wakeups · observed-app RSS %s KB (not pure ASB cost)"
+T_ZY_ON="on"
+T_ZY_OFF="off"
+T_ZY_CONNECTED="Connected"
+T_ZY_CONFIRMED="Channel confirmed"
+T_ZY_WAITING="Waiting for a selected process"
+T_ZY_IDLE="Enabled · nothing selected"
+T_ZY_STALE="No fresh evidence"
+T_ZY_SAFE="Safe mode"
+T_ZY_DISABLED="Disabled"
+T_ZY_UNKNOWN="Status unknown"
 T_LEAN_NOW="Battery lean: %s%% now"
 T_LEAN_TILT=" (your tilt: +%s%% of the remaining way to Battery)"
 T_TILT_ONLY="Battery tilt: %s%%"
@@ -1352,6 +1367,27 @@ elif [ "$PROFILE" = "stock" ]; then
 else
   _f "  🎛  $T_PROFILE_MANUAL" "$PROFILE"
 fi
+
+# Compact, current Zygisk evidence. link-status is read-only: it neither syncs policy nor
+# starts a companion/worker. The collector's link_state is shared with WebUI and asbdiag.
+_zygisk_info="$(sh "$MODDIR/runtime/asb_zygisk.sh" link-status 2>/dev/null)"
+_zygisk_field() {
+  printf '%s
+' "$_zygisk_info" | awk -F '	' -v k="$1" '$1 == "D" && $2 == "zygisk_observer" && $3 == k { print $4; found=1; exit } END { if (!found) print "unknown" }'
+}
+_zy_state="$(_zygisk_field link_state)"; [ -n "$_zy_state" ] || _zy_state=unknown
+case "$_zy_state" in
+  connected) _zy_label="$T_ZY_CONNECTED" ;; confirmed) _zy_label="$T_ZY_CONFIRMED" ;;
+  waiting) _zy_label="$T_ZY_WAITING" ;; idle) _zy_label="$T_ZY_IDLE" ;;
+  stale) _zy_label="$T_ZY_STALE" ;; safe) _zy_label="$T_ZY_SAFE" ;;
+  off) _zy_label="$T_ZY_DISABLED" ;; *) _zy_label="$T_ZY_UNKNOWN" ;;
+esac
+_zy_onoff() { [ "$1" = 1 ] && printf '%s' "$T_ZY_ON" || printf '%s' "$T_ZY_OFF"; }
+_f "  🧩  $T_ZY_HEAD" "$_zy_label"
+_f "     $T_ZY_EVIDENCE" "$(_zygisk_field state_freshness)" "$(_zygisk_field loaded_processes)" "$(_zygisk_field events_total)" "$(_zygisk_field spawn_events)"
+_f "     $T_ZY_FEATURES" "$(_zy_onoff "$(_zygisk_field enabled)")" "$(_zy_onoff "$(_zygisk_field lifecycle_hints)")" "$(_zy_onoff "$(_zygisk_field launch_hints)")" "$(_zy_onoff "$(_zygisk_field spawn_ledger)")" "$(_zygisk_field enabled_packages)"
+_f "     $T_ZY_POLICY" "$(_zygisk_field policy_generation)" "$(_zygisk_field policy_seen_generation)" "$(_zygisk_field installed_abis)"
+_f "     $T_ZY_COST" "$(_zygisk_field ipc_cpu_ms)" "$(_zygisk_field ipc_wakeups)" "$(_zygisk_field memory_kb)"
 _bias="$(grep -E '^[[:space:]]*smart_battery_bias=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ')"
 # Show the LIVE learning weight, the same number the WebUI shows as "battery-lean", so the two
 # screens agree.
