@@ -15,13 +15,16 @@
 # Light by construction: one dumpsys, one awk, at low priority; a probe still running
 # (a busy system_server) makes the next one skip instead of piling up.
 
-PKG="$1"
+PKG="$*"
 OUT="${ASB_GFX_OUT:-/dev/.asb/gfx.txt}"
 LOCK="${ASB_GFX_LOCK:-/dev/.asb/gfx.lock}"
 
-case "$PKG" in
-  ''|*[!A-Za-z0-9._]*) exit 0 ;;
-esac
+[ "$#" -ge 1 ] && [ "$#" -le 4 ] || exit 0
+for _gp in "$@"; do
+  case "$_gp" in
+    ''|*[!A-Za-z0-9._]*) exit 0 ;;
+  esac
+done
 mkdir -p "${OUT%/*}" 2>/dev/null
 
 if ! mkdir "$LOCK" 2>/dev/null; then
@@ -44,11 +47,12 @@ command -v timeout >/dev/null 2>&1 && _to="timeout 15"
 #   Janky frames: 56 (4.54%)
 #   Janky frames (legacy): ...     <- not this one
 $_to nice -n 10 dumpsys graphicsstats 2>/dev/null | nice -n 10 awk -v want="$PKG" '
+  BEGIN { n = split(want, order, " "); for (i = 1; i <= n; i++) w[order[i]] = 1 }
   /^[[:space:]]*Package: / { p = $2; next }
-  p != want { next }
-  /^[[:space:]]*Total frames rendered: / { t += $4; seen = 1; next }
-  /^[[:space:]]*Janky frames: / { j += $3; next }
-  END { if (seen) printf "%s %.0f %.0f\n", want, t, j }
+  !(p in w) { next }
+  /^[[:space:]]*Total frames rendered: / { t[p] += $4; seen[p] = 1; next }
+  /^[[:space:]]*Janky frames: / { j[p] += $3; next }
+  END { for (i = 1; i <= n; i++) { q = order[i]; if (q in seen) printf "%s %.0f %.0f\n", q, t[q], j[q] } }
 ' > "$OUT.tmp" 2>/dev/null
 mv -f "$OUT.tmp" "$OUT" 2>/dev/null
 exit 0

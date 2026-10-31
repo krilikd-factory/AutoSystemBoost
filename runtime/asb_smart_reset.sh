@@ -35,7 +35,8 @@ fi
 # per-device bounds all stay: none of them are learned, and losing them is what made the
 # manual folder deletion a bad trade.
 for _f in buckets.bin buckets.bin.bak smart_appheat.bin smart_records.bin smart_records.bin.tmp \
-          smart_prev_profile night_window.conf session_history.jsonl; do
+          smart_prev_profile night_window.conf session_history.jsonl \
+          battery_hold.tsv battery_hold.tsv.tmp; do
   rm -f "$D/$_f" 2>/dev/null
 done
 # Startup feedback also reads aggregate session outcomes. They live beside the daemon rather

@@ -169,12 +169,13 @@ _defaults() {
 # not a physical Internet path: changing the underlying Wi-Fi/mobile routes while tun0 is
 # selected can break the VPN transport even though the tunnel's own route was skipped.
 _owned_if() {
-  case "$1" in ''|lo|dummy*|ifb*|sit*|ip6tnl*|tun*|vgate*) return 1 ;; esac
+  case "$1" in ''|lo|dummy*|ifb*|sit*|ip6tnl*|tun*|vgate*|ipsec*|ppp*) return 1 ;; esac
   return 0
 }
 _vpn_owns_default() {
   _vd="$($ASB_IP route get 1.1.1.1 2>/dev/null | sed -n 's/.* dev \([^ ]*\).*/\1/p' | head -1)"
-  case "$_vd" in tun*) return 0 ;; esac
+  case "$_vd" in tun*|ipsec*|ppp*) return 0 ;; esac
+  { _defaults 4; _defaults 6; } | grep -qE ' dev (tun|ipsec|ppp)[^ ]*( |$)' && return 0
   return 1
 }
 _route_key() {

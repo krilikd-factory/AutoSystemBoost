@@ -9,6 +9,9 @@ STATE="${ASB_ART_COMPILE_STATE:-/data/adb/asb/heytap_art_compile.conf}"
 LOCK="${ASB_ART_COMPILE_LOCK:-/data/adb/asb/heytap_art_compile.lock}"
 TIMEOUT_S="${ASB_ART_COMPILE_TIMEOUT:-1800}"
 DELAY_S="${ASB_ART_COMPILE_DELAY:-10}"
+POWER="${ASB_ART_COMPILE_POWER:-/sys/class/power_supply/battery/status}"
+CHARGE_WAIT_S="${ASB_ART_COMPILE_CHARGE_WAIT:-86400}"
+CHARGE_STEP_S="${ASB_ART_COMPILE_CHARGE_STEP:-120}"
 PKG="com.heytap.mcs"
 
 [ -f "$MODDIR/runtime/asb_package_state.sh" ] && . "$MODDIR/runtime/asb_package_state.sh"
@@ -26,6 +29,13 @@ _write_state() {
 }
 _unlock() { rm -rf "$LOCK" 2>/dev/null; }
 _enabled() { [ "$(_cfg heytap_mcs)" = off ]; }
+_charging() {
+  [ -r "$POWER" ] || return 0
+  case "$(tr -d ' \r\n' < "$POWER" 2>/dev/null)" in
+    Charging|Full) return 0 ;;
+  esac
+  return 1
+}
 
 _request() {
   _enabled || { echo 'result=disabled'; return 0; }
@@ -62,6 +72,10 @@ _status() {
 }
 
 _run_pending() {
+  if [ "$(_state_value state)" = running ] && [ ! -d "$LOCK" ]; then
+    _write_state 'state=failed' 'reason=interrupted'
+    echo 'result=failed reason=interrupted'; return 0
+  fi
   [ "$(_state_value state)" = pending ] || { echo 'result=not_pending'; return 0; }
   _enabled || { rm -f "$STATE" 2>/dev/null; echo 'result=cancelled'; return 0; }
   command -v pm >/dev/null 2>&1 || {
@@ -116,6 +130,30 @@ _run_pending() {
       _write_state 'state=failed' 'reason=mcs_not_disabled'
       _unlock; echo 'result=failed reason=mcs_not_disabled'; return 0 ;;
   esac
+  case "$CHARGE_WAIT_S" in ''|*[!0-9]*) CHARGE_WAIT_S=86400 ;; esac
+  case "$CHARGE_STEP_S" in ''|*[!0-9]*|0) CHARGE_STEP_S=120 ;; esac
+  if ! _charging; then
+    _write_state 'state=pending' 'wait=charger' "pid=$$" "requested_at=$(_now)" || {
+      _unlock; echo 'result=state_write_failed'; return 1;
+    }
+    _cw=0
+    while ! _charging && [ "$_cw" -lt "$CHARGE_WAIT_S" ]; do
+      sleep "$CHARGE_STEP_S"
+      _cw=$((_cw + CHARGE_STEP_S))
+      [ "$(_state_value state)" = pending ] || { _unlock; echo 'result=cancelled'; return 0; }
+    done
+    if ! _charging; then
+      _write_state 'state=pending' "requested_at=$(_now)"
+      _unlock; echo 'result=deferred reason=not_charging'; return 0
+    fi
+    if [ "$(_state_value state)" != pending ] || ! _enabled; then
+      [ "$(_state_value state)" = pending ] && rm -f "$STATE" 2>/dev/null
+      _unlock; echo 'result=cancelled'; return 0
+    fi
+    _write_state 'state=running' "pid=$$" "started_at=$(_now)" || {
+      _unlock; echo 'result=state_write_failed'; return 1;
+    }
+  fi
   command -v timeout >/dev/null 2>&1 || {
     _write_state 'state=failed' 'reason=timeout_unavailable'
     _unlock; echo 'result=failed reason=timeout_unavailable'; return 0;

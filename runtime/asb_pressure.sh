@@ -55,7 +55,7 @@ _asb_pressure_collect() {
   fi
   if [ -n "$_pl_gpu_path" ] && [ -r "$_pl_gpu_path" ]; then
     _pl_gpu_raw="$(_read "$_pl_gpu_path")"
-    _pl_gpu_busy="$(printf '%s\n' "$_pl_gpu_raw" | awk 'NR==1 { if($1 ~ /^[0-9]+([.][0-9]+)?$/ && ($2=="" || $2=="%")){p=$1}else if($1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ && $2>0){p=$1*100/$2}else{print "not exposed";exit} if(p<0||p>100){print "not exposed";exit}printf "%.1f",p}')"
+    _pl_gpu_busy="$(printf '%s\n' "$_pl_gpu_raw" | awk 'NR==1 { if($1 ~ /^[0-9]+([.][0-9]+)?$/ && ($2=="" || $2=="%")){p=$1}else if($1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ && $2>0){p=$1*100/$2}else if($1 == "0" && $2 == "0"){p=0}else{print "not exposed";exit} if(p<0||p>100){print "not exposed";exit}printf "%.1f",p}')"
     if _asb_num "$_pl_gpu_busy"; then _pl_gpu_part="$_pl_gpu_busy"; _pl_gpu_weight=10; _pl_gpu_source="$_pl_gpu_path"; fi
   fi
 
