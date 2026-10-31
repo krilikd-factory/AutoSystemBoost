@@ -15,7 +15,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/GOVERNOR-6%20STATES-0f766e?style=for-the-badge" alt="Six governor states">
   <img src="https://img.shields.io/badge/BOUNDS-SCHEMA%203-0ea5e9?style=for-the-badge" alt="Bounds schema 3">
-  <img src="https://img.shields.io/badge/WEBUI-82%20CONTROLS-dc2626?style=for-the-badge" alt="Eighty-two WebUI controls">
+  <img src="https://img.shields.io/badge/WEBUI-84%20CONTROLS-dc2626?style=for-the-badge" alt="Eighty-four WebUI controls">
   <img src="https://img.shields.io/badge/EVIDENCE-FIRST-16a34a?style=for-the-badge" alt="Evidence first">
 </p>
 
@@ -76,6 +76,7 @@ ASB combines a native performance governor, shell runtime appliers, a WebUI, opt
 | **Profile policy** | Profile selection, range generation, manual appliers and Stock handover. | `apply_profile.sh`, `profiles/`, `runtime/profile_core.sh`, `runtime/asb_stock_policy.sh` |
 | **Device-adaptive bounds** | Read-only discovery, topology identity, OPP-aware synthesis and stale-evidence rejection. | `tools/asb_discover.sh`, `tools/asb_synthesize_bounds.sh`, `runtime/asb_device_bounds.sh` |
 | **Native governor** | Metric sampling, finite-state selection, thermal response, Smart evaluation and owned writes. | `src/asb_governor.c`, `src/asb_fsm.h`, `src/asb_writer.h`, `src/asb_smart.h` |
+| **Zygisk observer + lifecycle refresh** | Opt-in process start/disconnect telemetry; separately enabled, rate-limited requests make only the existing governor refresh evidence. | `src/zygisk/`, `runtime/asb_zygisk.sh`, `runtime/asb_zygisk_info.sh` |
 | **Runtime feature appliers** | Audio, network, Doze, interface, camera, background and vendor-facing controls. | `runtime/asb_*.sh` |
 | **WebUI and action interface** | User controls, live monitor, named configurations, device facts, reports and apply feedback. | `webroot/index.html`, `action.sh`, `webroot/config.json` |
 | **Audio DSP** | Optional processing chain, route selection, live parameters and audio-effect integration. | `src/DSP/`, `src/DSP_AIDL/`, `runtime/asb_dsp_*.sh` |
@@ -325,7 +326,7 @@ Smart can blend Battery-like and Balanced-like CPU bounds and then apply separat
 
 The bucket also retains history for idle quality, wake activity, drain and maximum temperature: `avg_idle_q_x10`, `avg_wph_x10`, `avg_drain_pctph_x10` and `avg_max_temp_x10`. Camera/profile transitions invalidate unsuitable cached decisions rather than carrying a conclusion into a different operating context.
 
-Explicit DSP, camera and other user settings remain user choices. Smart owns its performance/efficiency policy and related native runtime decisions, not an unrestricted licence to change all 82 controls.
+Explicit DSP, camera and other user settings remain user choices. Smart owns its performance/efficiency policy and related native runtime decisions, not an unrestricted licence to change all 84 controls.
 
 ### 🌡️ 8.5. Device-relative thermal and drain history
 
@@ -642,6 +643,8 @@ Animation speed changes perceived responsiveness; it does not make application c
 | `haptic_touch_strength` | Touch Feedback | `-1` | Separate touch-haptic intensity where the device exposes control. |
 | `log_level` | Log Detail | `1` | ASB diagnostic verbosity; higher detail increases I/O and log volume. |
 | `lsposed_verbose` | LSPosed Verbose Log | `keep` | Keeps or disables verbose LSPosed logging; does not imply LSPosed itself is installed. |
+| `zygisk_enabled` | Zygisk Process Observer | `0` | Opt-in selection for newly started allowlisted app processes; empty allowlist and safe-mode disable. Observation alone sends no governor request. |
+| `zygisk_hints` | Zygisk Lifecycle Refresh | `0` | Accepted lifecycle edges request fresh evidence from the existing governor only while the screen is on; 2-second spacing and 8 requests/minute per companion. No cap, profile or LSPosed policy. |
 
 Vendor-service and process controls require particular care. “More aggressive” is not synonymous with “more efficient”: repeated process restart can cost more energy and degrade notifications, widgets, media, sync and location.
 
@@ -655,7 +658,7 @@ The HeyTap ART helper is a bounded one-shot, not a boot service: `pending → ru
 |:---|:---|
 | **Profiles** | Select Smart, Performance, Balanced, Battery or Stock and inspect current high-level state. |
 | **Monitor** | Inspect live workload, clocks, thermal/battery state, Smart evidence, smoothness and limit ownership. |
-| **Config** | Change the 82 controls indexed above, with capability and reboot/apply feedback. |
+| **Config** | Change the 84 controls indexed above, with capability and reboot/apply feedback. |
 | **Device** | Request read-only hardware, kernel, root and capability facts. |
 | **Reports** | Generate support diagnostics and user-triggered extended reports. |
 
@@ -724,6 +727,75 @@ Use precise wording when extending diagnostics:
 | No stock baseline readable | Unknown baseline; do not invent a “stock” value from another device. |
 
 Kernel-origin classification is also indicative, not provenance proof. A stock-like configuration cannot establish who built the kernel.
+
+### 🛰️ 12.4. Zygisk Process Observer and bounded lifecycle refresh
+
+The observer is a native Zygisk module plus a root companion, not a Zygisk-detection label and not another governor. Its shipped defaults are:
+
+```sh
+zygisk_enabled=0
+zygisk_mode=observer
+zygisk_hints=0
+```
+
+The allowlist is empty. Enabling the setting without adding packages therefore selects no application processes. Only newly started, explicitly allowlisted ordinary apps are eligible; configuration changes do not kill or restart existing apps. Native validation rejects malformed names, process-suffix entries such as `:remote`, duplicates and more than 64 packages. `system_server`, SystemUI, package/permission/settings/phone components, root and LSPosed managers, and protected Qualcomm/vendor/safety-center families are excluded independently of the shell helper.
+
+The implemented event path is deliberately narrow:
+
+```text
+preAppSpecialize: config + safe-disable + allowlist/exclusion checks
+  → bounded companion connection and exemptFd()
+postAppSpecialize: one PROCESS_START frame
+  → peer credential + /proc/<pid>/stat start_ticks validation
+  → bounded aggregate state
+peer socket disconnect → process exit
+```
+
+There are no JNI or PLT hooks. A selected process retains the library only to own its process-lifetime socket. The fixed-size versioned frame has no policy opcode. Shared aggregation is mutex-protected; live state is capped at 64 processes, package history at 64 events per minute with a 60-second TTL, duplicate starts are suppressed, and same-package starts are rate-limited. Invalid, duplicate, rate-limited and capacity drops are counted separately. State publication uses a temporary file and atomic rename; arm64 and arm32 companions have separate state files. No per-app daemon, timer or polling loop exists.
+
+With `zygisk_hints=1`, an accepted start/exit may additionally open a short datagram round trip to `/dev/.asb/ctl.sock`. Its only opcode is `zygisk-refresh`, with a 100 ms receive timeout and no package, PID, profile or tuning payload. A per-companion budget enforces 2-second spacing and 8 requests per rolling minute. The governor independently checks both opt-in keys, safe mode and screen-on state, then invalidates the foreground cache and schedules fresh metrics. It does not force a write, clear reassert dwell, select a profile or override thermal/vendor ownership. Screen-off requests are vetoed without a metrics probe; missing/old governors time out fail-open.
+
+Lifecycle coverage is **process start and peer-disconnect exit only**. `is_top_app` is not persistent foreground tracking. Foreground/background, media, camera, audio and navigation events are `not exposed` in this stage. The safe-disable file is `/data/adb/asb/zygisk_observer/disable`; it is checked before companion connection. Failure to connect or publish state leaves application execution and governor policy unaffected.
+
+Management is available in Device diagnostics or through the source-shipped helper:
+
+```bash
+su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh list'
+su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh set-packages com.example.app org.example.game'
+su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh enable'
+su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh disable'
+su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh safe-mode on'
+su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh safe-mode off'
+su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh status'
+```
+
+`set-packages` with no names clears the list. Rejected updates preserve the previous list. Safe mode also sets `zygisk_enabled=0`; clearing safe mode does not re-enable observation automatically. The helper never manages applications, Zygisk, LSPosed or other modules.
+
+Observer diagnostics keep configuration, installed ABI, runtime event state and actual validated live PIDs separate. `memory_kb` is the sum of current application VmRSS for those PIDs, **not pure observer overhead**. `ipc_cpu_ms` and `ipc_wakeups` describe companion receive/validation/state-write/hint-round-trip handling, not whole-app CPU. Event state older than five minutes with no validated live process is `stale_over_5_minutes`. Crash and ANR counts are `unknown` because attribution evidence is `not exposed`. `policy_hints` counts attempted refresh round trips; `hints_accepted` counts the governor's `ok`, while vetoed, unavailable and locally throttled requests have separate counters. Acceptance means only that fresh evidence will be evaluated, never that a cap changed or energy was saved.
+
+### 📊 12.5. System-pressure scale
+
+Device schema 5 adds an on-demand pressure heuristic. It reads procfs/sysfs only when the Device collector or the informational `asbdiag` section is requested; there is no background pressure sampler. Every available component is shown with its measured source value and actual weight:
+
+| Component | Base weight | Component calculation |
+|:---|:---:|:---|
+| Load | 35 | `load_per_core = loadavg_1m / online_cpu_count`; `load_component = clamp(load_per_core × 50, 0, 100)` |
+| Memory | 30 | `memory_used_pct = clamp((MemTotal − MemAvailable) × 100 / MemTotal, 0, 100)`; `memory_component = clamp((memory_used_pct − 40) × 2, 0, 100)` |
+| CPU | 25 | Two `/proc/stat` reads around a 0.20-second sample; `busy = (Δtotal − Δ(idle+iowait)) × 100 / Δtotal` |
+| GPU | 10 | A valid 0–100 percentage or numerator/denominator from a supported readable `gpu_busy` interface |
+
+For available components only:
+
+```text
+score = Σ(component_i × base_weight_i) / Σ(base_weight_i)
+coverage_pct = Σ(base_weight_i)
+```
+
+A missing or invalid component is `not exposed`, receives weight zero and is not replaced with an estimate. Coverage below 40 produces `score=unknown` and `band=unknown`; no marker is drawn for an unknown score. Valid bands are **0–24 light**, **25–49 moderate**, **50–74 high** and **75–100 very high**.
+
+`loadavg` includes running/runnable and uninterruptible wait and is not CPU usage. Swap/zRAM occupancy is a supporting signal only: it is not scored and does not prove a problem by itself. Confidence is explicitly a **single on-demand snapshot** with no trend, baseline or A/B inference. The scale is not a device-health score and not an estimated battery or performance saving.
+
+Host regressions exercise native aggregation and malformed/spoofed frames, exclusions, bounds, rate limits, safe mode, formula/coverage, stale state, PID reuse and WebUI command validation. They do not establish real Zygisk injection compatibility on OnePlus/ColorOS or another physical device; that requires an on-device test with the exact root/Zygisk implementation.
 
 ## 🩺 13. Diagnostics and command-line workflow
 
@@ -831,9 +903,10 @@ AutoSystemBoost/
 │   ├── asb_fsm.h
 │   ├── asb_smart.h
 │   ├── asb_writer.h
+│   ├── zygisk/                  Observer-only Zygisk module and bounded protocol
 │   ├── DSP/
 │   └── DSP_AIDL/
-├── tests/                     Shell, Smart, system and WebUI regressions
+├── tests/                     Shell, Smart, system, WebUI and Zygisk regressions
 ├── tools/                     Discovery, diagnostics, reports and validation
 ├── webroot/                   WebUI and capability/configuration manifests
 ├── docs/                      Focused technical references
@@ -889,6 +962,7 @@ Preserve executable permissions when constructing the source ZIP. Verify the fil
 The governor and DSP have different build requirements:
 
 - governor build/test workflows use the native sources under `src/`;
+- the NDK release build compiles the observer/lifecycle `zygisk/arm64-v8a.so` and `zygisk/armeabi-v7a.so` from `src/zygisk/` and verifies both entry exports;
 - DSP legacy/AIDL components use their own sources and build integration;
 - AOSP/AIDL builds are separate from ordinary governor validation;
 - do not label reference DSP binaries as locally rebuilt when they were not;
@@ -987,6 +1061,16 @@ For camera grading, reboot when required and capture a fixed scene set: daylight
 Before an update, export configuration and record learning/state expectations. Update through the normal manager path, reboot and verify compatible configuration migration, generated-bounds identity and pending-reboot indicators.
 
 Switch to Stock and verify withdrawal of profile policy without assuming unrelated explicit tweaks were reset. Finally, test uninstall restoration in a controlled environment: owned baselines should be restored, mount-integrated behaviour should return after reboot, and no background diagnostic collector should remain.
+
+### 🛰️ 18.8. Zygisk observer and pressure evidence
+
+Start with `zygisk_enabled=0`, an empty allowlist and safe mode off. Add one non-critical test app, enable the observer, then start that app newly and inspect Device diagnostics: installed ABI, event state, validated live PID, start/disconnect counters and freshness must be described independently. Close the app and verify exit through peer disconnect; do not treat an immediately vanished process as an error in the collector. Repeat with safe mode on, an empty allowlist, a protected package and a stopped companion to verify fail-open behaviour without app or governor changes.
+
+To evaluate the performance/energy role, keep the observer enabled in both arms and compare `zygisk_hints=0` against `1` on the same build, profile, app set and repeatable workload. Alternate A/B order, allow comparable thermal/battery starting conditions, and record launch/exit responsiveness, jank, temperatures, drain, `hints_accepted`, probe misses and ASB wakeups. Use repeated runs and medians rather than one attractive result; include the extra refresh/probe cost. Stop on worse smoothness, heat, drain or background behaviour. No universal saving percentage follows from the host tests or a single before/after capture.
+
+For pressure, capture idle and repeatable busy states without leaving a collector running. Check the raw values, available weights, coverage and formula rather than only the colour. Hide or invalidate CPU/GPU fixtures in host tests to confirm renormalisation and the below-40 unknown result. A higher snapshot is not proof of poor device health, and before/after scores are not an A/B battery or performance measurement.
+
+Host success is not sufficient for injection sign-off. Record the physical device, firmware, root/Zygisk implementation, ABI and reproducible result; use `unknown` or `not exposed` when those facts cannot be established.
 
 ## 🧯 19. Troubleshooting by subsystem
 

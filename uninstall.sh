@@ -9,6 +9,23 @@
 
 MODDIR=${0%/*}
 
+_ASB_FWQ=/data/local/tmp/asb_uninstall_fw.sh
+rm -f "$_ASB_FWQ" 2>/dev/null
+_ASB_FW_LIVE=0
+[ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ] && _ASB_FW_LIVE=1
+_fw() {
+  if [ "$_ASB_FW_LIVE" = "1" ]; then
+    "$@"
+    return
+  fi
+  _fw_line=""
+  for _fw_arg in "$@"; do
+    _fw_line="$_fw_line '$(printf '%s' "$_fw_arg" | sed "s/'/'\\\\''/g")'"
+  done
+  printf '%s >/dev/null 2>&1\n' "$_fw_line" >> "$_ASB_FWQ" 2>/dev/null
+  return 0
+}
+
 # Return generic scheduler debug accounting to its exact pre-ASB boolean. The state file is
 # created only before a successful opt-in write; no file means ASB never owned the node.
 if [ -f /data/adb/asb/kernel_sched_stats.prev ] && [ -w /proc/sys/kernel/sched_stats ]; then
@@ -133,11 +150,11 @@ rm -rf /dev/.asb /dev/.asb_profile_state 2>/dev/null
 # Doze back to Android's own timings before the module goes.
 # Put Athena's component back if we were the ones who disabled it.
 if [ -f /data/adb/asb/athena_prev ]; then
-  pm enable com.oplus.athena/com.oplus.athena.client.AthenaService >/dev/null 2>&1 || true
+  _fw pm enable com.oplus.athena/com.oplus.athena.client.AthenaService >/dev/null 2>&1 || true
   rm -f /data/adb/asb/athena_prev 2>/dev/null
 fi
 
-settings delete global device_idle_constants >/dev/null 2>&1 || true
+_fw settings delete global device_idle_constants >/dev/null 2>&1 || true
 
 # Hand back location to every app the GNSS tweak restricted.
 #
@@ -194,7 +211,7 @@ if [ -f /data/adb/asb/gnss_restricted ] && command -v appops >/dev/null 2>&1; th
 
     case "$_rm" in allow|ignore|deny|default|foreground) : ;; *) _rm="allow" ;; esac
 
-    [ -n "$_rp" ] && appops set "$_rp" "$_rop" "$_rm" >/dev/null 2>&1
+    [ -n "$_rp" ] && _fw appops set "$_rp" "$_rop" "$_rm" >/dev/null 2>&1
   done < /data/adb/asb/gnss_restricted
   rm -f /data/adb/asb/gnss_restricted 2>/dev/null
 fi
@@ -211,7 +228,7 @@ rm -rf /data/adb/asb/tweak_base 2>/dev/null
 # AOD is borrowed for the night window, not turned off - restore it before the baseline
 # that records it disappears with the rest of the module state.
 if [ -f /data/adb/asb/aod_baseline ]; then
-  settings put secure doze_always_on "$(cat /data/adb/asb/aod_baseline 2>/dev/null || echo 1)" 2>/dev/null
+  _fw settings put secure doze_always_on "$(cat /data/adb/asb/aod_baseline 2>/dev/null || echo 1)" 2>/dev/null
   rm -f /data/adb/asb/aod_baseline 2>/dev/null
 fi
 
@@ -228,9 +245,9 @@ for _rf in /data/adb/asb/tracking_restore.log /data/adb/asb/oem_restore.log \
   while IFS='|' read -r _k _v; do
     [ -n "$_k" ] || continue
     if [ -z "$_v" ] || [ "$_v" = "null" ]; then
-      settings delete "$_restore_ns" "$_k" >/dev/null 2>&1 || true
+      _fw settings delete "$_restore_ns" "$_k" >/dev/null 2>&1 || true
     else
-      settings put "$_restore_ns" "$_k" "$_v" >/dev/null 2>&1 || true
+      _fw settings put "$_restore_ns" "$_k" "$_v" >/dev/null 2>&1 || true
     fi
   done < "$_rf"
 done
@@ -248,7 +265,7 @@ pkill -f "asb_net_routes.sh watch" >/dev/null 2>&1 || true
 # restricted themselves stays restricted.
 if [ -f /data/adb/asb/multicast_restricted ] && command -v appops >/dev/null 2>&1; then
   while IFS= read -r _mp; do
-    [ -n "$_mp" ] && appops set "$_mp" WIFI_MULTICAST allow >/dev/null 2>&1
+    [ -n "$_mp" ] && _fw appops set "$_mp" WIFI_MULTICAST allow >/dev/null 2>&1
   done < /data/adb/asb/multicast_restricted
   rm -f /data/adb/asb/multicast_restricted 2>/dev/null
 fi
@@ -257,14 +274,14 @@ fi
 # app-op mode it had before (recorded as pkg|mode).
 if [ -f /data/adb/asb/wakelock_fitness_limited ] && command -v appops >/dev/null 2>&1; then
   while IFS='|' read -r _fp _fo; do
-    [ -n "$_fp" ] && appops set "$_fp" WAKE_LOCK "${_fo:-default}" >/dev/null 2>&1
+    [ -n "$_fp" ] && _fw appops set "$_fp" WAKE_LOCK "${_fo:-default}" >/dev/null 2>&1
   done < /data/adb/asb/wakelock_fitness_limited
   rm -f /data/adb/asb/wakelock_fitness_limited /data/adb/asb/wakelock_fitness_ignored /data/adb/asb/wakelock_fitness_refused /data/adb/asb/dsp_effects_blocked 2>/dev/null
 fi
 # A per-uid mode set beside the package limit (fix177), handed back the same way.
 if [ -f /data/adb/asb/wakelock_fitness_uidmode ] && command -v appops >/dev/null 2>&1; then
   while IFS='|' read -r _fp _fo; do
-    [ -n "$_fp" ] && appops set --uid "$_fp" WAKE_LOCK "${_fo:-default}" >/dev/null 2>&1
+    [ -n "$_fp" ] && _fw appops set --uid "$_fp" WAKE_LOCK "${_fo:-default}" >/dev/null 2>&1
   done < /data/adb/asb/wakelock_fitness_uidmode
   rm -f /data/adb/asb/wakelock_fitness_uidmode 2>/dev/null
 fi
@@ -294,7 +311,7 @@ if [ -f /data/adb/asb/gnss_restricted ] && command -v appops >/dev/null 2>&1; th
 
     case "$_rm" in allow|ignore|deny|default|foreground) : ;; *) _rm="allow" ;; esac
 
-    [ -n "$_rp" ] && appops set "$_rp" "$_rop" "$_rm" >/dev/null 2>&1
+    [ -n "$_rp" ] && _fw appops set "$_rp" "$_rop" "$_rm" >/dev/null 2>&1
   done < /data/adb/asb/gnss_restricted
   rm -f /data/adb/asb/gnss_restricted 2>/dev/null
 fi
@@ -305,7 +322,7 @@ fi
 # restricted, because undoing their choice would be the same overreach in reverse.
 if [ -f /data/adb/asb/wakelock_restricted ] && command -v am >/dev/null 2>&1; then
   while IFS= read -r _wp; do
-    [ -n "$_wp" ] && am set-standby-bucket "$_wp" active >/dev/null 2>&1
+    [ -n "$_wp" ] && _fw am set-standby-bucket "$_wp" active >/dev/null 2>&1
   done < /data/adb/asb/wakelock_restricted
   rm -f /data/adb/asb/wakelock_restricted 2>/dev/null
 fi
@@ -320,7 +337,7 @@ if command -v am >/dev/null 2>&1; then
   if [ -f /data/adb/asb/bg_buckets_orig ]; then
     while IFS='|' read -r _bp _bb; do
       [ -n "$_bp" ] || continue
-      case "$_bb" in 10|20|30|40|45) am set-standby-bucket "$_bp" "$_bb" >/dev/null 2>&1 ;; esac
+      case "$_bb" in 10|20|30|40|45) _fw am set-standby-bucket "$_bp" "$_bb" >/dev/null 2>&1 ;; esac
     done < /data/adb/asb/bg_buckets_orig
     rm -f /data/adb/asb/bg_buckets_orig 2>/dev/null
   else
@@ -343,7 +360,7 @@ if [ -f /data/adb/asb/gms_components_frozen ] && command -v pm >/dev/null 2>&1; 
   while IFS='|' read -r _c _was; do
     [ -n "$_c" ] || continue
     [ "$_was" = "pkg-disabled" ] && continue
-    pm enable "$_c" >/dev/null 2>&1
+    _fw pm enable "$_c" >/dev/null 2>&1
   done < /data/adb/asb/gms_components_frozen
   rm -f /data/adb/asb/gms_components_frozen 2>/dev/null
 fi
@@ -379,7 +396,7 @@ if [ -f /data/adb/asb/lpm_baseline.conf ]; then
   case "$_lpm_mdao" in
     ''|null|*[!0-9]*) : ;;
     *) command -v settings >/dev/null 2>&1 \
-         && settings put global mobile_data_always_on "$_lpm_mdao" >/dev/null 2>&1 ;;
+         && _fw settings put global mobile_data_always_on "$_lpm_mdao" >/dev/null 2>&1 ;;
   esac
   case "$_lpm_ka" in
     ''|*[!0-9]*) : ;;
@@ -398,7 +415,7 @@ fi
 # 3 is Android's default (SAFE_MEDIA_VOLUME_ENABLED). Written unconditionally: the value
 # is the same on every device, so there is no baseline to consult.
 if command -v settings >/dev/null 2>&1; then
-  settings put global audio_safe_volume_state 3 >/dev/null 2>&1
+  _fw settings put global audio_safe_volume_state 3 >/dev/null 2>&1
 fi
 
 # Put the global uclamp floor back.
@@ -452,13 +469,13 @@ esac
 if [ -f /data/adb/asb/doze_whitelist_added ] && command -v dumpsys >/dev/null 2>&1; then
   while IFS= read -r _p || [ -n "$_p" ]; do
     case "$_p" in *[!A-Za-z0-9_.]*|'') continue ;; esac
-    dumpsys deviceidle whitelist "-$_p" >/dev/null 2>&1
+    _fw dumpsys deviceidle whitelist "-$_p" >/dev/null 2>&1
   done < /data/adb/asb/doze_whitelist_added
   rm -f /data/adb/asb/doze_whitelist_added 2>/dev/null
 fi
 if [ -f /data/adb/asb/doze_whitelist_removed ] && command -v dumpsys >/dev/null 2>&1; then
   while IFS= read -r _p; do
-    [ -n "$_p" ] && dumpsys deviceidle whitelist "+$_p" >/dev/null 2>&1
+    [ -n "$_p" ] && _fw dumpsys deviceidle whitelist "+$_p" >/dev/null 2>&1
   done < /data/adb/asb/doze_whitelist_removed
   rm -f /data/adb/asb/doze_whitelist_removed 2>/dev/null
 fi
@@ -469,12 +486,12 @@ fi
 # whitelist and the standby bucket are not settings - they need naming explicitly, and a
 # user who removes ASB and then misses a notification will not connect the two.
 if command -v cmd >/dev/null 2>&1; then
-  cmd appops set com.google.android.gms RUN_ANY_IN_BACKGROUND allow >/dev/null 2>&1
-  cmd appops set com.google.android.gms PSEUDO_LOCATION_REPORTING allow >/dev/null 2>&1
-  cmd appops set com.google.android.googlequicksearchbox RUN_IN_BACKGROUND allow >/dev/null 2>&1
-  am set-standby-bucket com.google.android.gms active >/dev/null 2>&1
-  am set-standby-bucket com.google.android.googlequicksearchbox active >/dev/null 2>&1
-  dumpsys deviceidle whitelist +com.google.android.gms >/dev/null 2>&1
+  _fw cmd appops set com.google.android.gms RUN_ANY_IN_BACKGROUND allow >/dev/null 2>&1
+  _fw cmd appops set com.google.android.gms PSEUDO_LOCATION_REPORTING allow >/dev/null 2>&1
+  _fw cmd appops set com.google.android.googlequicksearchbox RUN_IN_BACKGROUND allow >/dev/null 2>&1
+  _fw am set-standby-bucket com.google.android.gms active >/dev/null 2>&1
+  _fw am set-standby-bucket com.google.android.googlequicksearchbox active >/dev/null 2>&1
+  _fw dumpsys deviceidle whitelist +com.google.android.gms >/dev/null 2>&1
 fi
 
 # Restore TCP PMTUD probing exactly as it was before ASB's opt-in write.
@@ -579,9 +596,9 @@ fi
 if [ -f /data/adb/asb/avoid_bad_wifi.prev ]; then
   _abw_old="$(head -1 /data/adb/asb/avoid_bad_wifi.prev 2>/dev/null | tr -dc '0-9')"
   if [ -n "$_abw_old" ]; then
-    settings put global network_avoid_bad_wifi "$_abw_old" >/dev/null 2>&1 || true
+    _fw settings put global network_avoid_bad_wifi "$_abw_old" >/dev/null 2>&1 || true
   else
-    settings delete global network_avoid_bad_wifi >/dev/null 2>&1 || true
+    _fw settings delete global network_avoid_bad_wifi >/dev/null 2>&1 || true
   fi
 fi
 # Drop a live LTPO bind now, not at the next reboot: after removal nothing re-applies it,
@@ -597,10 +614,42 @@ fi
 # Package/component states changed by the two opt-in repair cards. Their baselines live under
 # /data/adb/asb, so hand them back before that directory is removed. ART artifacts stay under
 # Android's ownership; a pending one-shot request is cancelled, never mass-reset on uninstall.
-[ -f "$MODDIR/runtime/asb_heytap_mcs.sh" ] && \
-  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_heytap_mcs.sh" restore >/dev/null 2>&1 || true
-[ -f "$MODDIR/runtime/asb_documentsui_fix.sh" ] && \
-  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_documentsui_fix.sh" restore >/dev/null 2>&1 || true
+if [ "$(getprop sys.boot_completed)" = "1" ]; then
+  [ -f "$MODDIR/runtime/asb_heytap_mcs.sh" ] && \
+    MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_heytap_mcs.sh" restore >/dev/null 2>&1 || true
+  [ -f "$MODDIR/runtime/asb_documentsui_fix.sh" ] && \
+    MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_documentsui_fix.sh" restore >/dev/null 2>&1 || true
+fi
+if [ -f /data/adb/asb/heytap_mcs/baseline.conf ] || [ -f /data/adb/asb/documentsui_fix/baseline.conf ]; then
+  _pkg_stage=/data/local/tmp/asb_pkg_restore
+  rm -rf "$_pkg_stage" 2>/dev/null
+  if mkdir -p "$_pkg_stage/runtime" "$_pkg_stage/heytap_mcs" "$_pkg_stage/documentsui_fix" 2>/dev/null &&
+     cp "$MODDIR/runtime/asb_package_state.sh" "$MODDIR/runtime/asb_heytap_mcs.sh" \
+        "$MODDIR/runtime/asb_documentsui_fix.sh" "$_pkg_stage/runtime/" 2>/dev/null; then
+    cp /data/adb/asb/heytap_mcs/baseline.conf "$_pkg_stage/heytap_mcs/" 2>/dev/null
+    cp /data/adb/asb/documentsui_fix/baseline.conf "$_pkg_stage/documentsui_fix/" 2>/dev/null
+    (
+      exec </dev/null >/dev/null 2>&1
+      _w=0
+      until [ "$(getprop sys.boot_completed)" = "1" ] || [ "$_w" -ge 600 ]; do
+        sleep 5; _w=$((_w + 5))
+      done
+      sleep 20
+      for _try in 1 2 3; do
+        [ -f "$_pkg_stage/heytap_mcs/baseline.conf" ] && \
+          MODDIR="$_pkg_stage" ASB_CONF=/nonexistent ASB_HEYTAP_STATE_DIR="$_pkg_stage/heytap_mcs" \
+          sh "$_pkg_stage/runtime/asb_heytap_mcs.sh" restore >/dev/null 2>&1
+        [ -f "$_pkg_stage/documentsui_fix/baseline.conf" ] && \
+          MODDIR="$_pkg_stage" ASB_CONF=/nonexistent ASB_DOCUMENTSUI_STATE_DIR="$_pkg_stage/documentsui_fix" \
+          sh "$_pkg_stage/runtime/asb_documentsui_fix.sh" restore >/dev/null 2>&1
+        [ -f "$_pkg_stage/heytap_mcs/baseline.conf" ] || \
+          [ -f "$_pkg_stage/documentsui_fix/baseline.conf" ] || break
+        sleep 60
+      done
+      rm -rf "$_pkg_stage" 2>/dev/null
+    ) &
+  fi
+fi
 rm -rf /data/adb/asb 2>/dev/null
 
 # Remove the module's own persistent properties.
@@ -630,3 +679,18 @@ for _legacy in asb_active_profile asb_baseline.txt asb_profile_switches.log \
                asb_recovery_lock asb_debug; do
   rm -f "/data/adb/$_legacy" 2>/dev/null
 done
+
+if [ -s "$_ASB_FWQ" ]; then
+  cp -f "$MODDIR/runtime/asb_settings.sh" /data/local/tmp/asb_uninstall_settings.sh 2>/dev/null
+  (
+    exec </dev/null >/dev/null 2>&1
+    _w=0
+    until [ "$(getprop sys.boot_completed)" = "1" ] || [ "$_w" -ge 600 ]; do
+      sleep 5; _w=$((_w + 5))
+    done
+    sleep 20
+    [ -f /data/local/tmp/asb_uninstall_settings.sh ] && . /data/local/tmp/asb_uninstall_settings.sh
+    . "$_ASB_FWQ"
+    rm -f "$_ASB_FWQ" /data/local/tmp/asb_uninstall_settings.sh 2>/dev/null
+  ) &
+fi

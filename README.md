@@ -226,6 +226,38 @@ The **Interface** and **System** sections cover details that are easy to overloo
 
 Availability depends on the device. A visible setting is a request, while diagnostics and effective values show what the system actually accepted.
 
+## 🛰 Zygisk observer, lifecycle refresh and system pressure
+
+**Observation and lifecycle hints are separate opt-in switches, both disabled by default.** The allowlist is empty, so no app process is selected until you explicitly add ordinary application packages and enable the observer. Selection affects newly started processes only; ASB does not kill or restart existing apps. Protected system, root-manager, LSPosed-manager and vendor processes are excluded.
+
+The observer reports process start and exit derived from peer-socket disconnect. It does **not** install JNI/PLT hooks or claim foreground, media, camera, audio or navigation tracking: those events are `not exposed`. It does not manage apps, Zygisk, LSPosed or modules, and it has no frequency writer or application-policy opcode. Broker failure leaves the app and governor unaffected.
+
+**Zygisk Lifecycle Refresh** gives those events a bounded performance/efficiency role without creating a second governor. An accepted start/exit can send the fixed `zygisk-refresh` request to the existing governor while the screen is on. The governor invalidates stale foreground evidence and re-evaluates the current profile; all dwell, thermal and vendor gates still decide the result. Requests are at least 2 seconds apart and capped at 8 per minute **per active companion**. No package name or frequency target is sent. This can reduce stale-input delay at lifecycle edges, but a hint acknowledgement is not a boost or proof of energy savings. LSPosed is never secretly killed, frozen, hidden or throttled; any saving requires comparable on-device A/B measurements.
+
+You can manage it from **Device → Zygisk Observer**, or with these commands:
+
+```bash
+su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh set-packages com.example.app'
+su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh enable'
+su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh status'
+su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh safe-mode on'
+```
+
+Use `safe-mode off` only to clear the emergency disable file; it does not re-enable the observer automatically. `disable` turns selection off for new processes, `list` shows the allowlist, and `set-packages` with no package names clears it.
+
+**Device → System Pressure** shows a coloured 0–100 scale together with the actual measurements, formula, coverage and limitations:
+
+| Component | Base weight | Measured component before weighting |
+|:---|:---:|:---|
+| Load average per online CPU | 35 | `clamp((loadavg_1m / online_cpus) × 50, 0, 100)` |
+| Memory use | 30 | `memory_used = clamp((MemTotal − MemAvailable) × 100 / MemTotal, 0, 100)`; `clamp((memory_used − 40) × 2, 0, 100)` |
+| CPU busy | 25 | Busy delta from two `/proc/stat` reads around a 0.20-second on-demand sample |
+| GPU busy | 10 | A valid percentage or numerator/denominator from a supported readable `gpu_busy` interface |
+
+The final score is `sum(component × available_weight) / sum(available_weights)`. Missing components receive zero weight rather than an invented value; coverage is the sum of available base weights. Below **40% coverage**, the score and band are `unknown`. Bands are **0–24 light**, **25–49 moderate**, **50–74 high**, and **75–100 very high**. Load average includes running/runnable and uninterruptible wait, so it is not CPU usage. Swap/zRAM occupancy is shown only as a supporting signal and is not scored.
+
+This is a **single-snapshot pressure heuristic**, not a device-health score, trend or estimated battery/performance saving. Observer RSS is current application RSS for validated live PIDs, not pure observer overhead; `ipc_cpu_ms` covers companion receive/validation/state-write/hint-round-trip work, not whole-app CPU. Hint counters distinguish attempted, acknowledged, vetoed, unavailable and rate-limited requests. Crash and ANR counts remain `unknown` because attribution evidence is not exposed. Host regression tests validate the implementation contracts, but real Zygisk injection still requires testing on the target device and root implementation.
+
 ## 📊 WebUI: your control centre
 
 | Page | What you will find |

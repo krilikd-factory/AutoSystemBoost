@@ -15,7 +15,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/GOVERNOR-6%20СОСТОЯНИЙ-0f766e?style=for-the-badge" alt="Шесть состояний governor">
   <img src="https://img.shields.io/badge/BOUNDS-СХЕМА%203-0ea5e9?style=for-the-badge" alt="Схема bounds 3">
-  <img src="https://img.shields.io/badge/WEBUI-82%20НАСТРОЕК-dc2626?style=for-the-badge" alt="Восемьдесят две настройки WebUI">
+  <img src="https://img.shields.io/badge/WEBUI-84%20НАСТРОЕК-dc2626?style=for-the-badge" alt="Восемьдесят четыре настройки WebUI">
   <img src="https://img.shields.io/badge/EVIDENCE-FIRST-16a34a?style=for-the-badge" alt="Сначала доказательства">
 </p>
 
@@ -76,6 +76,7 @@ ASB объединяет нативный governor производительн�
 | **Политика профилей** | Выбор профиля, генерация диапазонов, ручные applier'ы и передача управления Stock. | `apply_profile.sh`, `profiles/`, `runtime/profile_core.sh`, `runtime/asb_stock_policy.sh` |
 | **Device-adaptive bounds** | Read-only обнаружение, идентичность топологии, OPP-aware синтез и отклонение устаревших данных. | `tools/asb_discover.sh`, `tools/asb_synthesize_bounds.sh`, `runtime/asb_device_bounds.sh` |
 | **Нативный governor** | Сбор метрик, выбор состояния, реакция на температуру, оценка Smart и принадлежащие ему записи. | `src/asb_governor.c`, `src/asb_fsm.h`, `src/asb_writer.h`, `src/asb_smart.h` |
+| **Zygisk observer + lifecycle refresh** | Opt-in телеметрия start/disconnect; отдельно включённые rate-limited запросы лишь заставляют существующий governor обновить доказательства. | `src/zygisk/`, `runtime/asb_zygisk.sh`, `runtime/asb_zygisk_info.sh` |
 | **Runtime feature appliers** | Звук, сеть, Doze, интерфейс, камера, фоновая работа и vendor-настройки. | `runtime/asb_*.sh` |
 | **WebUI и Action** | Настройки, live-monitor, именованные конфигурации, сведения об устройстве, отчёты и результат применения. | `webroot/index.html`, `action.sh`, `webroot/config.json` |
 | **Audio DSP** | Дополнительная цепочка обработки, выбор маршрута, live-параметры и интеграция audio effect. | `src/DSP/`, `src/DSP_AIDL/`, `runtime/asb_dsp_*.sh` |
@@ -325,7 +326,7 @@ Smart способен смешивать CPU bounds в стиле Battery и Ba
 
 Bucket также хранит историю качества простоя, пробуждений, расхода и максимальной температуры: `avg_idle_q_x10`, `avg_wph_x10`, `avg_drain_pctph_x10` и `avg_max_temp_x10`. Переходы камеры/профиля инвалидируют неподходящие cached decisions, а не переносят вывод в другой рабочий контекст.
 
-Явные DSP, камера и другие пользовательские настройки остаются выбором пользователя. Smart владеет своей performance/efficiency политикой и связанными native runtime-решениями, а не неограниченной лицензией менять все 82 настройки.
+Явные DSP, камера и другие пользовательские настройки остаются выбором пользователя. Smart владеет своей performance/efficiency политикой и связанными native runtime-решениями, а не неограниченной лицензией менять все 84 настройки.
 
 ### 🌡️ 8.5. Температурная и drain-история относительно устройства
 
@@ -642,6 +643,8 @@ Camera tone tables регенерируются из stock-файлов и ин�
 | `haptic_touch_strength` | Touch Feedback | `-1` | Отдельная интенсивность touch-haptics там, где устройство открывает управление. |
 | `log_level` | Log Detail | `1` | Подробность диагностики ASB; большая детализация повышает I/O и объём логов. |
 | `lsposed_verbose` | LSPosed Verbose Log | `keep` | Сохраняет или отключает verbose LSPosed logging; не означает, что LSPosed установлен. |
+| `zygisk_enabled` | Наблюдатель процессов Zygisk | `0` | Opt-in выбор новых процессов из allowlist; пустой allowlist и safe-mode disable. Само наблюдение не отправляет governor request. |
+| `zygisk_hints` | Обновление по событиям Zygisk | `0` | Подтверждённые lifecycle edges запрашивают свежие данные у существующего governor только при включённом экране; пауза 2 секунды и максимум 8 запросов/минуту на companion. Нет cap, profile или LSPosed policy. |
 
 Vendor-service и process controls требуют особой осторожности. «Агрессивнее» не означает «экономичнее»: повторный перезапуск процессов может стоить больше энергии и ухудшить уведомления, виджеты, медиа, sync и геолокацию.
 
@@ -655,7 +658,7 @@ ART helper для HeyTap является ограниченным one-shot, а 
 |:---|:---|
 | **Profiles** | Выбор Smart, Performance, Balanced, Battery или Stock и просмотр общего текущего состояния. |
 | **Monitor** | Live workload, clocks, thermal/battery state, Smart evidence, плавность и владелец лимита. |
-| **Config** | 82 настройки из указателя выше, с capability и reboot/apply feedback. |
+| **Config** | 84 настройки из указателя выше, с capability и reboot/apply feedback. |
 | **Device** | Read-only hardware, kernel, root и capability facts по запросу. |
 | **Reports** | Support diagnostics и user-triggered extended reports. |
 
@@ -724,6 +727,75 @@ Read-only сбор всё равно может дать неполный отв
 | Stock baseline нечитаем | Unknown baseline; нельзя выдумывать «stock» с другого устройства. |
 
 Классификация происхождения ядра тоже indicative, а не provenance proof. Stock-like конфигурация не устанавливает, кто собрал ядро.
+
+### 🛰️ 12.4. Наблюдатель процессов Zygisk и ограниченное lifecycle refresh
+
+Observer — нативный Zygisk-модуль с root companion, а не метка обнаружения Zygisk и не второй governor. Поставляемые значения по умолчанию:
+
+```sh
+zygisk_enabled=0
+zygisk_mode=observer
+zygisk_hints=0
+```
+
+Allowlist пуст. Поэтому включение настройки без добавления пакетов не выбирает ни одного процесса приложения. Допускаются только новые процессы явно разрешённых обычных приложений; изменение конфигурации не завершает и не перезапускает существующие приложения. Native validation отклоняет malformed names, process suffix вроде `:remote`, дубли и более 64 пакетов. `system_server`, SystemUI, package/permission/settings/phone-компоненты, root- и LSPosed-менеджеры, защищённые Qualcomm/vendor/safety-center семейства исключаются независимо от shell helper.
+
+Реализованный event path намеренно узкий:
+
+```text
+preAppSpecialize: config + safe-disable + allowlist/exclusion checks
+  → bounded companion connection и exemptFd()
+postAppSpecialize: один PROCESS_START frame
+  → peer credential + /proc/<pid>/stat start_ticks validation
+  → bounded aggregate state
+peer socket disconnect → process exit
+```
+
+JNI и PLT hooks отсутствуют. Выбранный процесс сохраняет библиотеку только ради process-lifetime socket. Fixed-size versioned frame не содержит policy opcode. Shared aggregation защищена mutex; live state ограничен 64 процессами, package history — 64 событиями в минуту с TTL 60 секунд, duplicate starts подавляются, same-package starts ограничены по частоте. Invalid, duplicate, rate-limited и capacity drops считаются отдельно. State publication использует temporary file и atomic rename; arm64 и arm32 companion имеют разные state files. Per-app daemon, timer и polling loop отсутствуют.
+
+При `zygisk_hints=1` подтверждённый start/exit может дополнительно открыть короткий datagram round trip к `/dev/.asb/ctl.sock`. Единственный opcode — `zygisk-refresh`, receive timeout 100 мс; package, PID, profile и tuning payload не передаются. Budget на companion задаёт паузу 2 секунды и максимум 8 запросов за скользящую минуту. Governor независимо проверяет оба opt-in ключа, safe mode и включённый экран, затем сбрасывает foreground cache и планирует fresh metrics. Он не форсирует запись, не сбрасывает reassert dwell, не выбирает профиль и не обходит thermal/vendor ownership. При выключенном экране запрос отклоняется без metrics probe; отсутствующий или старый governor завершает запрос timeout fail-open.
+
+Lifecycle coverage — **только process start и peer-disconnect exit**. `is_top_app` не является постоянным foreground tracking. Foreground/background, media, camera, audio и navigation events в этой стадии — `not exposed`. Safe-disable file: `/data/adb/asb/zygisk_observer/disable`; он проверяется до companion connection. Сбой подключения или state publication не влияет на выполнение приложения и governor policy.
+
+Управление доступно в Device diagnostics и через поставляемый helper:
+
+```bash
+su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh list'
+su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh set-packages com.example.app org.example.game'
+su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh enable'
+su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh disable'
+su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh safe-mode on'
+su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh safe-mode off'
+su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh status'
+```
+
+`set-packages` без имён очищает список. Отклонённое обновление сохраняет прежний список. Safe mode также задаёт `zygisk_enabled=0`; снятие safe mode автоматически не включает наблюдение. Helper не управляет приложениями, Zygisk, LSPosed или другими модулями.
+
+Observer diagnostics разделяет конфигурацию, installed ABI, runtime event state и фактически проверенные live PID. `memory_kb` — сумма текущего application VmRSS этих PID, **не чистые накладные расходы observer**. `ipc_cpu_ms` и `ipc_wakeups` описывают companion receive/validation/state-write/hint-round-trip, а не CPU всего приложения. Event state старше пяти минут без проверенного live process получает `stale_over_5_minutes`. Crash и ANR counts — `unknown`, поскольку attribution evidence `not exposed`. `policy_hints` считает попытки refresh round trip; `hints_accepted` — ответы governor `ok`; vetoed, unavailable и локально throttled запросы имеют отдельные counters. Acceptance означает только оценку свежих данных, а не изменение cap или доказанную экономию энергии.
+
+### 📊 12.5. Шкала системного давления
+
+Device schema 5 добавляет on-demand pressure heuristic. Procfs/sysfs читаются только при запросе Device collector или информационной секции `asbdiag`; фонового pressure sampler нет. Каждый доступный компонент показывается с измеренным исходным значением и фактическим весом:
+
+| Компонент | Базовый вес | Вычисление компонента |
+|:---|:---:|:---|
+| Load | 35 | `load_per_core = loadavg_1m / online_cpu_count`; `load_component = clamp(load_per_core × 50, 0, 100)` |
+| Memory | 30 | `memory_used_pct = clamp((MemTotal − MemAvailable) × 100 / MemTotal, 0, 100)`; `memory_component = clamp((memory_used_pct − 40) × 2, 0, 100)` |
+| CPU | 25 | Два чтения `/proc/stat` с интервалом 0,20 секунды; `busy = (Δtotal − Δ(idle+iowait)) × 100 / Δtotal` |
+| GPU | 10 | Корректный процент 0–100 или numerator/denominator из поддерживаемого читаемого `gpu_busy` |
+
+Только для доступных компонентов:
+
+```text
+score = Σ(component_i × base_weight_i) / Σ(base_weight_i)
+coverage_pct = Σ(base_weight_i)
+```
+
+Отсутствующий или invalid компонент получает `not exposed` и нулевой вес, а не оценочное значение. При coverage ниже 40 выводятся `score=unknown` и `band=unknown`; marker для unknown score не рисуется. Диапазоны: **0–24 — лёгкая**, **25–49 — умеренная**, **50–74 — высокая**, **75–100 — очень высокая нагрузка**.
+
+`loadavg` включает running/runnable и uninterruptible wait и не является CPU usage. Занятость swap/zRAM — только supporting signal: она не входит в score и сама по себе не доказывает проблему. Confidence явно означает **один on-demand snapshot** без trend, baseline или A/B inference. Шкала не является device-health score и не оценивает экономию батареи или прирост производительности.
+
+Host regressions проверяют native aggregation и malformed/spoofed frames, exclusions, bounds, rate limits, safe mode, formula/coverage, stale state, PID reuse и WebUI command validation. Они не подтверждают реальную Zygisk injection compatibility на OnePlus/ColorOS или другом физическом устройстве; для этого нужен on-device тест с точной root/Zygisk реализацией.
 
 ## 🩺 13. Диагностика и command-line workflow
 
@@ -831,9 +903,10 @@ AutoSystemBoost/
 │   ├── asb_fsm.h
 │   ├── asb_smart.h
 │   ├── asb_writer.h
+│   ├── zygisk/                  Observer-only Zygisk module и bounded protocol
 │   ├── DSP/
 │   └── DSP_AIDL/
-├── tests/                     Shell, Smart, system и WebUI regressions
+├── tests/                     Shell, Smart, system, WebUI и Zygisk regressions
 ├── tools/                     Discovery, diagnostics, reports и validation
 ├── webroot/                   WebUI и capability/configuration manifests
 ├── docs/                      Сфокусированные технические справки
@@ -889,6 +962,7 @@ bash tools/asb_source_regression.sh
 У governor и DSP разные build requirements:
 
 - governor build/test workflows используют native sources в `src/`;
+- NDK release build собирает observer/lifecycle `zygisk/arm64-v8a.so` и `zygisk/armeabi-v7a.so` из `src/zygisk/` и проверяет оба entry exports;
 - DSP legacy/AIDL components используют собственные sources и build integration;
 - AOSP/AIDL builds отделены от обычной governor validation;
 - нельзя называть reference DSP binaries локально пересобранными, если этого не было;
@@ -987,6 +1061,16 @@ Screen-off Bluetooth battery test нужно сравнивать с тем же
 Перед обновлением экспортируйте конфигурацию и запишите ожидания learning/state. Обновитесь обычным manager path, перезагрузитесь и проверьте migration совместимой конфигурации, generated-bounds identity и pending-reboot indicators.
 
 Переключитесь в Stock и проверьте снятие profile policy без предположения, что независимые explicit tweaks сброшены. Наконец, проверьте uninstall restoration в контролируемом окружении: owned baselines должны восстановиться, mount-integrated поведение после reboot должно вернуться, а background diagnostic collector не должен остаться.
+
+### 🛰️ 18.8. Zygisk observer и pressure evidence
+
+Начните с `zygisk_enabled=0`, пустого allowlist и выключенного safe mode. Добавьте одно некритичное тестовое приложение, включите observer, затем заново запустите приложение и проверьте Device diagnostics: installed ABI, event state, validated live PID, start/disconnect counters и freshness должны описываться независимо. Закройте приложение и проверьте exit через peer disconnect; исчезнувший к моменту сбора процесс не является ошибкой collector. Повторите с safe mode on, пустым allowlist, protected package и остановленным companion, чтобы проверить fail-open без изменения приложения или governor.
+
+Для оценки performance/energy роли оставьте observer включённым в обоих вариантах и сравните `zygisk_hints=0` и `1` на одной сборке, профиле, наборе приложений и повторяемой нагрузке. Чередуйте порядок A/B, обеспечьте сопоставимые исходные temperature/battery условия и записывайте отзывчивость при launch/exit, jank, температуры, drain, `hints_accepted`, probe misses и ASB wakeups. Используйте серию прогонов и медианы, включая стоимость дополнительных refresh/probe, а не один удачный результат. При ухудшении плавности, нагрева, drain или фоновой работы отключите функцию. Host tests и один before/after capture не дают универсального процента экономии.
+
+Для pressure снимите показания в простое и при повторяемой нагрузке, не оставляя collector работать. Проверяйте raw values, available weights, coverage и formula, а не только цвет. В host tests скрывайте или повреждайте CPU/GPU fixtures, чтобы подтвердить renormalisation и unknown ниже 40. Более высокий snapshot не доказывает плохое здоровье устройства, а before/after scores не являются A/B-измерением батареи или производительности.
+
+Успешного host test недостаточно для подтверждения injection. Записывайте физическое устройство, прошивку, root/Zygisk реализацию, ABI и воспроизводимый результат; используйте `unknown` или `not exposed`, если эти факты установить нельзя.
 
 ## 🧯 19. Диагностика по подсистемам
 

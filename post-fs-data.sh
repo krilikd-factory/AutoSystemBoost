@@ -90,6 +90,9 @@ if [ -r "$MODDIR/runtime/asb_overlay_guard.sh" ]; then
 fi
 # Force-LTPO bind: the script itself gates on the ltpo_force toggle (default off) and on
 # the bootloop fuse, and re-validates its manifest fail-closed before mounting anything.
+rm -f /data/adb/asb/ltpo_video.lock/pid 2>/dev/null
+rmdir /data/adb/asb/ltpo_video.lock 2>/dev/null
+rm -rf /data/adb/asb/heytap_art_compile.lock 2>/dev/null
 if [ -r "$MODDIR/runtime/asb_ltpo_apply.sh" ]; then
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_ltpo_apply.sh" apply >/dev/null 2>&1 || true
 fi
