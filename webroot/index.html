@@ -1728,6 +1728,41 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .device-page .dev-section-guide { margin: -3px 0 8px; padding: 0 0 7px; border-bottom: 1px solid var(--border); }
 .device-page .lgr-v.dev-unknown { color: var(--text-tertiary); font-weight: 550; }
 
+.wl-manual-sheet { min-height:min(48vh,560px); }
+.wl-manual-copy { padding:11px 12px; border:1px solid rgba(255,165,2,.28); border-radius:12px; color:var(--text-secondary); background:rgba(255,165,2,.055); }
+.wl-manual-meta { margin:8px 2px 11px; color:var(--text-tertiary); font:10px/1.45 var(--mono); }
+.wl-manual-list { display:flex; flex-direction:column; gap:8px; }
+.wl-manual-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; padding:11px 12px; border:1px solid var(--border); border-radius:13px; background:rgba(255,255,255,.025); }
+.wl-manual-row.is-selected { border-color:rgba(44,214,173,.5); background:rgba(44,214,173,.065); }
+.wl-manual-row.is-lapsed { border-color:rgba(255,165,2,.5); }
+.wl-manual-name { color:var(--text); font-size:12px; font-weight:700; overflow-wrap:anywhere; }
+.wl-manual-sub { margin-top:4px; color:var(--text-tertiary); font-size:10px; line-height:1.4; overflow-wrap:anywhere; }
+.wl-manual-risk { color:var(--bal); }
+.wl-manual-action { min-width:82px; min-height:38px; padding:7px 9px; border:1px solid var(--border-active); border-radius:10px; background:rgba(0,240,180,.07); color:var(--accent); font:700 10px/1.25 var(--sans); }
+.wl-manual-action.is-restore { color:var(--text-secondary); border-color:var(--border); background:transparent; }
+.wl-manual-action:disabled { opacity:.48; }
+.wl-manual-loading { display:flex; align-items:center; justify-content:center; gap:10px; min-height:92px; color:var(--text-secondary); font-size:12px; }
+.wl-manual-loading::before { content:''; width:22px; height:22px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:devEvidenceSpin 1s linear infinite; }
+.wl-manual-head-actions { display:flex; gap:7px; }
+@media (prefers-reduced-motion:reduce) { .wl-manual-loading::before { animation:none; } }
+.dev-loading { width:100%; box-sizing:border-box; padding:22px 16px 18px; border:1px solid var(--border);
+  border-radius:18px; background:linear-gradient(145deg,rgba(0,240,180,.065),rgba(0,212,255,.018)); text-align:center; overflow:hidden; }
+.dev-loading-orbit { position:relative; width:52px; height:52px; margin:0 auto 14px; border:1px solid var(--border); border-radius:50%; }
+.dev-loading-orbit::before { content:''; position:absolute; inset:6px; border-radius:50%; border:2px solid transparent;
+  border-top-color:var(--accent); border-right-color:var(--accent2); animation:devEvidenceSpin 1.15s linear infinite; }
+.dev-loading-orbit::after { content:''; position:absolute; inset:18px; border-radius:50%; background:var(--accent);
+  box-shadow:0 0 18px var(--accent-glow); animation:devEvidencePulse 1.15s ease-in-out infinite alternate; }
+.dev-loading-title { color:var(--text); font-size:15px; font-weight:750; }
+.dev-loading-sub { margin-top:6px; color:var(--text-secondary); font-size:11px; line-height:1.45; }
+.dev-loading-steps { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; margin-top:17px; }
+.dev-loading-step { min-width:0; padding:9px 4px; border:1px solid var(--border); border-radius:11px; color:var(--text-tertiary);
+  font:9px/1.35 var(--mono); animation:devEvidenceStep 1.8s ease-in-out infinite; }
+.dev-loading-step:nth-child(2) { animation-delay:.3s; }
+.dev-loading-step:nth-child(3) { animation-delay:.6s; }
+@keyframes devEvidenceSpin { to { transform:rotate(360deg); } }
+@keyframes devEvidencePulse { to { opacity:.38; transform:scale(.72); } }
+@keyframes devEvidenceStep { 0%,100% { opacity:.45; } 45% { opacity:1; border-color:var(--border-active); color:var(--text-secondary); } }
+@media (prefers-reduced-motion:reduce) { .dev-loading-orbit::before,.dev-loading-orbit::after,.dev-loading-step { animation:none; } }
 .device-page .dev-pressure { margin: 2px 0 12px; padding: 12px; border: 1px solid var(--border); border-radius: 14px; background: rgba(255,255,255,.025); }
 .device-page .dev-pressure-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .device-page .dev-pressure-score { font: 750 25px/1 var(--mono); color: var(--accent); }
@@ -4629,12 +4664,12 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
   <div class="smart-banner" id="liveSmartBanner" style="display:none;">
     <div class="smart-drain" id="bnDrainStrip">
       <button type="button" class="smart-drain-half" onclick="liveDrainOpen()" aria-haspopup="dialog">
-        <span class="smart-drain-top"><span class="smart-drain-ico" data-tech-icon="sun"></span><span class="smart-drain-lbl" data-i18n="lv_scr_on">Screen on</span><span class="smart-drain-more" aria-hidden="true">›</span></span>
+        <span class="smart-drain-top"><span class="smart-drain-ico" data-tech-icon="sun"></span><span class="smart-drain-lbl" id="bnDrainOnLabel" data-i18n="lv_scr_on">Screen on</span><span class="smart-drain-more" aria-hidden="true">›</span></span>
         <span class="smart-drain-val" id="bnDrain">—</span>
         <span class="smart-drain-eta"><span class="smart-drain-eta-ico" data-tech-icon="timeout"></span><span id="liveEtaOn">—</span></span>
       </button>
       <button type="button" class="smart-drain-half" onclick="liveDrainOpen()" aria-haspopup="dialog">
-        <span class="smart-drain-top"><span class="smart-drain-ico" data-tech-icon="theme_moon"></span><span class="smart-drain-lbl" data-i18n="lv_scr_off">Screen off</span><span class="smart-drain-more" aria-hidden="true">›</span></span>
+        <span class="smart-drain-top"><span class="smart-drain-ico" data-tech-icon="theme_moon"></span><span class="smart-drain-lbl" id="bnDrainOffLabel" data-i18n="lv_scr_off">Screen off</span><span class="smart-drain-more" aria-hidden="true">›</span></span>
         <span class="smart-drain-val" id="bnDrainOff">—</span>
         <span class="smart-drain-eta"><span class="smart-drain-eta-ico" data-tech-icon="timeout"></span><span id="liveEtaOff">—</span></span>
       </button>
@@ -6342,17 +6377,17 @@ function lvOffFigure(profile) {
       .replace('%s', lvDurDHM(e.offLastS)).replace('%s', String(e.offN));
   };
   if (e && e.offLastS >= 3600 && e.offN > 0) {
-    if (e.offLast > 0) return { x: e.offLast, t: lvPct(e.offLast, 100, e.offLast >= 100 ? 1 : 2), n: e.offN, src: 'meter_latest', lastS: e.offLastS, tip: latestTip(e) };
+    if (e.offLast > 0) return { x: e.offLast, t: lvPct(e.offLast, 100, 2), n: e.offN, src: 'meter_latest', lastS: e.offLastS, tip: latestTip(e) };
     const lub = Math.max(1, Math.ceil(100 * 3600 / e.offLastS));
-    return { x: lub, t: '<' + lvPct(lub, 100, lub >= 100 ? 1 : 2), n: e.offN, src: 'bound_latest', lastS: e.offLastS, tip: latestTip(e) };
+    return { x: lub, t: '<' + lvPct(lub, 100, 2), n: e.offN, src: 'bound_latest', lastS: e.offLastS, tip: latestTip(e) };
   }
-  if (e && e.off > 0) return { x: e.off, t: lvPct(e.off, 100, e.off >= 100 ? 1 : 2), n: e.offN, src: 'meter', tip: tip(e.offN) };
+  if (e && e.off > 0) return { x: e.off, t: lvPct(e.off, 100, 2), n: e.offN, src: 'meter', tip: tip(e.offN) };
   if (e && e.offN > 0 && e.offS > 0) {
     const ub = Math.max(1, Math.ceil(100 * 3600 / e.offS));
-    return { x: ub, t: '<' + lvPct(ub, 100, ub >= 100 ? 1 : 2), n: e.offN, src: 'bound', tip: tip(e.offN) };
+    return { x: ub, t: '<' + lvPct(ub, 100, 2), n: e.offN, src: 'bound', tip: tip(e.offN) };
   }
   const g = (_lvGovOff.by || {})[profile];
-  if (g && g.x > 0) return { x: g.x, t: lvPct(g.x, 100, g.x >= 100 ? 1 : 2), n: g.n, src: 'gov', tip: tip(g.n) };
+  if (g && g.x > 0) return { x: g.x, t: lvPct(g.x, 100, 2), n: g.n, src: 'gov', tip: tip(g.n) };
   return null;
 }
 function lvPct(x, div, digits) {
@@ -6376,6 +6411,16 @@ function lvMeterPaint(profile) {
   const off = lvOffFigure(profile);
   if (onEl) onEl.textContent = (e && e.on > 0) ? lvPct(e.on, 10, 1) : T('lv_measuring', 'measuring\u2026');
   if (offEl) offEl.textContent = off ? off.t : T('lv_measuring', 'measuring\u2026');
+  /* fix276: these are deliberately NOT the current infinite-log capture. Name the window on
+   * the tiles themselves, so 11.2%/h of accumulated Battery history cannot read as a
+   * contradiction of a separate 7.4%/h current active phase in the log report. */
+  const onLab = _el('bnDrainOnLabel'), offLab = _el('bnDrainOffLabel');
+  if (onLab) onLab.textContent = T('lv_scr_on_history', 'Screen on · history');
+  if (offLab) offLab.textContent = off && (off.src === 'meter_latest' || off.src === 'bound_latest')
+    ? T('lv_scr_off_latest', 'Screen off · latest') : T('lv_scr_off_history', 'Screen off · history');
+  if (onEl) onEl.title = e && e.on > 0
+    ? T('lv_drain_on_history_tip', 'Long-term history in this profile: %s min accumulated. Not the current log capture.').replace('%s', String(e.onMin))
+    : T('lv_drain_on_wait', 'needs 10 minutes with the screen on and the battery level moving');
   /* Rates are descriptive context, not alarms: both numeric %/h values stay neutral. */
   asbMetricPaint('bnDrain', 'metric-info');
   asbMetricPaint('bnDrainOff', 'metric-info');
@@ -6486,7 +6531,7 @@ function liveDrainBlock(icon, label, value, basis, left) {
 function liveDrainPaint() {
   const body = _el('liveDrainBody');
   if (!body) return;
-  _el('liveDrainTitle').textContent = T('lv_drain_title', 'Battery drain');
+  _el('liveDrainTitle').textContent = T('lv_drain_title_history', 'Battery drain · profile history');
   _el('liveDrainDone').textContent = T('doze_keep_done', 'Done');
   const onV = (_el('bnDrain') || {}).textContent || '\u2014';
   const offV = (_el('bnDrainOff') || {}).textContent || '\u2014';
@@ -6520,7 +6565,7 @@ function liveDrainPaint() {
   if (cmp) body.appendChild(cmp);
   const note = document.createElement('div');
   note.className = 'live-drain-note';
-  note.textContent = T('lv_drain_note', 'Both figures come from the battery level itself, not from the current sensor: slower to settle, but they match what the battery screen shows.');
+  note.textContent = T('lv_drain_note_history', 'Profile history, not the current infinite-log capture. Screen on is accumulated over time; screen off prefers the latest complete eligible window, otherwise its aggregate. Both use battery-level changes, not the current sensor. Open the infinite-log report for the current capture and its own time windows.');
   body.appendChild(note);
 }
 function liveDrainCompare() {
@@ -8966,6 +9011,13 @@ const _unav = ASB_CAP_REQUIRES[it.key];
     }
     top.onclick = () => row.classList.toggle('desc-open');
     row.appendChild(top);
+    if (it.key === 'wakelock_action') {
+      const wb = document.createElement('button');
+      wb.className = 'doze-edit-btn';
+      wb.textContent = T('wl_manual_open', 'Find & freeze app wakelocks');
+      wb.onclick = (e) => { e.stopPropagation(); uiSound('option'); wlManualOpen(); };
+      row.appendChild(wb);
+    }
     if (it.key === 'doze_trim_whitelist') {
       /* Outside the collapsible description on purpose.
        *
@@ -10083,6 +10135,135 @@ function dozePkgOk(p) { return /^[A-Za-z0-9_.]+$/.test(p); }
  * (org.telegram.plus, com.whatsapp.w4b), and matching the prefix catches them without
  * naming every variant.
  */
+/* Explicit, reversible per-package WAKE_LOCK manager (fix276).
+ * Evidence collection is on demand and read-only. The only mutation is Android's AppOps
+ * WAKE_LOCK mode for a user-installed package after an explicit risk confirmation. */
+const _wlManual = { tok: 0, busy: false, rows: [], labels: {} };
+function wlManualEnsure() {
+  let m = _el('wlManualModal');
+  if (m) return m;
+  m = document.createElement('div');
+  m.className = 'cfg-profile-modal'; m.id = 'wlManualModal'; m.hidden = true; m.setAttribute('aria-hidden', 'true');
+  m.innerHTML = '<div class="cfg-profile-sheet wl-manual-sheet" role="dialog" aria-modal="true" aria-labelledby="wlManualTitle">'
+    + '<div class="cfg-profile-head"><div class="cfg-profile-title" id="wlManualTitle"></div><div class="wl-manual-head-actions">'
+    + '<button class="cfg-profile-close" id="wlManualRefresh" type="button" aria-label="Refresh">↻</button>'
+    + '<button class="cfg-profile-close" id="wlManualX" type="button" aria-label="Close">×</button></div></div>'
+    + '<div class="cfg-profile-copy wl-manual-copy" id="wlManualCopy"></div>'
+    + '<div class="wl-manual-meta" id="wlManualMeta"></div><div class="wl-manual-list" id="wlManualList"></div>'
+    + '<button class="cfg-profile-primary" id="wlManualDone" type="button"></button></div>';
+  document.body.appendChild(m);
+  m.addEventListener('click', function (e) { if (e.target === m) wlManualClose(); });
+  _el('wlManualX').onclick = wlManualClose; _el('wlManualDone').onclick = wlManualClose;
+  _el('wlManualRefresh').onclick = function () { if (!_wlManual.busy) wlManualLoad(); };
+  return m;
+}
+function wlManualParse(out) {
+  const d = { scan: 'unavailable', selected: 0, rows: [] };
+  String(out || '').split('\n').forEach(function (ln) {
+    if (ln.indexOf('scan=') === 0) { d.scan = ln.slice(5); return; }
+    if (ln.indexOf('selected=') === 0) { d.selected = parseInt(ln.slice(9), 10) || 0; return; }
+    const f = ln.split('|');
+    if (f[0] !== 'row' || !/^[A-Za-z0-9_][A-Za-z0-9_.]*$/.test(f[1] || '')) return;
+    d.rows.push({ pkg:f[1], secs:Math.max(0,parseInt(f[2],10)||0), held:f[3]==='1', selected:f[4]==='1',
+      eff:f[5]||'unknown', protected:f[6]==='1' });
+  });
+  return d;
+}
+function wlManualTime(sec) {
+  sec = Math.max(0, Math.floor(+sec || 0));
+  if (sec < 60) return sec + T('unit_s', 's');
+  if (sec < 3600) return Math.floor(sec/60) + T('unit_m', 'm') + ' ' + (sec%60) + T('unit_s', 's');
+  return Math.floor(sec/3600) + T('unit_h', 'h') + ' ' + Math.floor((sec%3600)/60) + T('unit_m', 'm');
+}
+function wlManualLoading() {
+  const list = _el('wlManualList'); list.textContent = '';
+  const e = document.createElement('div'); e.className = 'wl-manual-loading';
+  e.textContent = T('wl_manual_loading', 'Reading wake evidence and actual AppOps…'); list.appendChild(e);
+}
+function wlManualState(a) {
+  if (a.selected && a.eff === 'ignore') return T('wl_manual_enforced', 'Blocked · read-back confirmed');
+  if (a.selected) return T('wl_manual_lapsed', 'Selected, but not in force now · will retry');
+  if (a.eff === 'ignore') return T('wl_manual_external', 'Already ignored outside this list');
+  if (a.eff === 'unknown') return T('wl_manual_unknown', 'Actual AppOps mode unknown');
+  return T('wl_manual_available', 'Wakelocks currently allowed');
+}
+function wlManualRow(a) {
+  const row = document.createElement('div');
+  row.className = 'wl-manual-row' + (a.selected ? ' is-selected' : '') + (a.selected && a.eff !== 'ignore' ? ' is-lapsed' : '');
+  const tx = document.createElement('div');
+  const name = document.createElement('div'); name.className = 'wl-manual-name';
+  name.textContent = _wlManual.labels[a.pkg] || a.pkg; tx.appendChild(name);
+  const sub = document.createElement('div'); sub.className = 'wl-manual-sub';
+  const evidence = a.secs > 0 ? T('wl_manual_held', 'Held since unplug: %s').replace('%s', wlManualTime(a.secs)) :
+    (a.held ? T('wl_manual_holding', 'Holding a long wakelock now') : T('wl_manual_no_row', 'No current battery-stats row'));
+  sub.textContent = evidence + ' · ' + wlManualState(a); tx.appendChild(sub);
+  if (_wlManual.labels[a.pkg] || a.protected) {
+    const sub2 = document.createElement('div'); sub2.className = 'wl-manual-sub' + (a.protected ? ' wl-manual-risk' : '');
+    const bits = []; if (_wlManual.labels[a.pkg]) bits.push(a.pkg);
+    if (a.protected) bits.push(T('wl_manual_critical', 'Critical class: messages, calls, alarms, fitness, VPN or foreground work may break'));
+    sub2.textContent = bits.join(' · '); tx.appendChild(sub2);
+  }
+  row.appendChild(tx);
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'wl-manual-action' + (a.selected ? ' is-restore' : '');
+  b.textContent = a.selected ? T('wl_manual_restore', 'Restore') : T('wl_manual_block', 'Freeze');
+  b.disabled = _wlManual.busy || (!a.selected && a.eff === 'ignore');
+  b.onclick = function () { wlManualSet(a); }; row.appendChild(b);
+  return row;
+}
+function wlManualPaint(d) {
+  _wlManual.rows = d.rows;
+  _wlManual.labels = dozeKeepLabels(d.rows.map(function (a) { return a.pkg; }));
+  const list = _el('wlManualList'); list.textContent = '';
+  if (!d.rows.length) {
+    const e = document.createElement('div'); e.className = 'cfg-profile-empty';
+    e.textContent = d.scan === 'ok' ? T('wl_manual_empty', 'No qualifying third-party app wakelocks yet. Use the phone on battery, then Refresh; no app has been changed.')
+      : T('wl_manual_unavailable', 'Wake evidence is not exposed right now. This is a collection limit, not proof that there are no wakelocks.');
+    list.appendChild(e);
+  } else d.rows.forEach(function (a) { list.appendChild(wlManualRow(a)); });
+  _el('wlManualMeta').textContent = T('wl_manual_meta', '%s app(s) selected · ranked by held time since last unplug, not by proven energy cost').replace('%s', String(d.selected));
+}
+async function wlManualLoad() {
+  const m = wlManualEnsure(), tok = ++_wlManual.tok;
+  _el('wlManualTitle').textContent = T('wl_manual_title', 'App wakelock freeze');
+  _el('wlManualCopy').textContent = T('wl_manual_warning', 'At your own risk. Blocking can delay or break messages, calls, alarms, fitness tracking, VPN and foreground services. Only user apps are listed; kernel and system wakelocks are never frozen. Restore returns the original AppOps modes.');
+  _el('wlManualDone').textContent = T('doze_keep_done', 'Done');
+  _el('wlManualMeta').textContent = T('wl_manual_readonly', 'Read-only scan · no automatic selection');
+  wlManualLoading();
+  let r = null;
+  try { r = await run('sh ' + shQuote(MD + '/runtime/asb_wakelock_watch.sh') + ' manual-status 2>/dev/null'); } catch (e) {}
+  if (tok !== _wlManual.tok || m.hidden) return;
+  if (!r || r.errno !== 0) { wlManualPaint({scan:'unavailable',selected:0,rows:[]}); return; }
+  wlManualPaint(wlManualParse(runText(r)));
+}
+async function wlManualOpen() {
+  const m = wlManualEnsure(); m.hidden = false; m.setAttribute('aria-hidden', 'false');
+  await wlManualLoad();
+}
+function wlManualClose() {
+  const m = _el('wlManualModal'); if (!m || m.hidden) return;
+  m.hidden = true; m.setAttribute('aria-hidden', 'true'); _wlManual.tok++;
+}
+async function wlManualSet(a) {
+  if (_wlManual.busy) return;
+  if (!a.selected && !confirm(T('wl_manual_confirm', 'Freeze WAKE_LOCK for %s?\n\nMessages, calls, alarms, fitness tracking, VPN or foreground work may stop or arrive late. This is your choice and your risk. ASB will record and restore the original package and uid modes.').replace('%s', a.pkg))) return;
+  _wlManual.busy = true;
+  const tok = ++_wlManual.tok;
+  _el('wlManualRefresh').disabled = true;
+  wlManualPaint(_wlManual.rows.length ? {scan:'ok',selected:_wlManual.rows.filter(function(x){return x.selected;}).length,rows:_wlManual.rows} : {scan:'unavailable',selected:0,rows:[]});
+  let r = null;
+  try { r = await run('sh ' + shQuote(MD + '/runtime/asb_wakelock_watch.sh') + ' manual-set ' + shQuote(a.pkg) + ' ' + (a.selected ? 'restore' : 'ignore')); } catch (e) {}
+  const out = r ? runText(r) : '', res = (/^result=([a-z_]+)/m.exec(out) || [])[1] || 'failed';
+  if (tok === _wlManual.tok) {
+    let msg;
+    if (res === 'limited') msg = T('wl_manual_result_limited', 'Wakelock freeze confirmed by read-back');
+    else if (res === 'restored') msg = T('wl_manual_result_restored', 'Original AppOps modes restored');
+    else msg = T('wl_manual_result_failed', 'Not applied; actual state: %s').replace('%s', ((/^effective=([a-z_]+)/m.exec(out) || [])[1] || 'unknown'));
+    toast(msg, res === 'limited' || res === 'restored' ? 'good' : 'warn');
+  }
+  _wlManual.busy = false; _el('wlManualRefresh').disabled = false;
+  if (tok === _wlManual.tok && !_el('wlManualModal').hidden) await wlManualLoad();
+}
+
 const DOZE_MESSENGERS = [
   'com.whatsapp', 'org.telegram', 'org.thunderdog', 'com.viber', 'org.thoughtcrime.securesms',
   'com.facebook.orca', 'com.facebook.mlite', 'com.instagram.android', 'com.snapchat.android',
@@ -12733,10 +12914,11 @@ function openDevicePage() {
   p.scrollTop = 0;
   document.body.classList.add('live-active', 'device-active');
   asbTabbarVisibility();
-  requestAnimationFrame(function () {
-    requestAnimationFrame(function () { if (_deviceOpen) p.classList.add('open'); });
-  });
-  asbDeviceInfoLoad();
+  /* fix276: visibility is navigation, not a consequence of evidence collection. Add the
+   * open class in this gesture, paint the shell/skeleton, then start the read-only collector.
+   * The old double-rAF plus immediate collector could leave a slow WebView looking untouched. */
+  p.classList.add('open');
+  setTimeout(function () { if (_deviceOpen) asbDeviceInfoLoad(); }, 50);
   setTimeout(asbNavSync, 60);
   requestAnimationFrame(asbFitPages);
 }
@@ -12757,6 +12939,24 @@ function closeDevicePage() {
   navSyncSoon();
   requestAnimationFrame(asbFitPages);
 }
+function deviceInfoLoading(body) {
+  body.textContent = '';
+  const card = document.createElement('div');
+  card.className = 'dev-loading';
+  card.setAttribute('role', 'status');
+  const orbit = document.createElement('div'); orbit.className = 'dev-loading-orbit'; orbit.setAttribute('aria-hidden', 'true');
+  const title = document.createElement('div'); title.className = 'dev-loading-title';
+  title.textContent = T('dev_loading', 'Reading device, firmware and kernel evidence…');
+  const sub = document.createElement('div'); sub.className = 'dev-loading-sub';
+  sub.textContent = T('dev_loading_sub', 'The page is already open. Nothing is being changed; each group appears after the read-only snapshot returns.');
+  const steps = document.createElement('div'); steps.className = 'dev-loading-steps';
+  ['dev_stage_system', 'dev_stage_kernel', 'dev_stage_battery'].forEach(function (k, i) {
+    const e = document.createElement('div'); e.className = 'dev-loading-step';
+    e.textContent = T(k, ['System', 'Kernel', 'Battery'][i]); steps.appendChild(e);
+  });
+  card.appendChild(orbit); card.appendChild(title); card.appendChild(sub); card.appendChild(steps);
+  body.appendChild(card);
+}
 async function asbDeviceInfoLoad() {
   const body = _el('deviceBody'), status = _el('deviceStatus'), btn = _el('devRefresh');
   if (!body || !status || !_deviceOpen) return;
@@ -12767,8 +12967,7 @@ async function asbDeviceInfoLoad() {
   if (saveBtn) saveBtn.disabled = true;
   if (btn) btn.disabled = true;
   status.textContent = T('dev_loading_status', 'Collecting read-only data…');
-  body.textContent = '';
-  body.appendChild(logReportNote(T('dev_loading', 'Reading device, firmware and kernel evidence…')));
+  deviceInfoLoading(body);
   let r = null;
   try { r = await run('sh ' + MD + '/tools/asb_device_info.sh 2>/dev/null'); }
   catch (e) { r = null; }
@@ -13523,7 +13722,8 @@ function logReportAppendAnalysis(body, d, analysis) {
   summary.appendChild(logReportQualityPanel(analysis));
   const context = document.createElement('div'); context.className = 'lgr-context';
   [T('lr_scenario_' + analysis.scenario, analysis.scenario),
-   logReportDur(d.sections.meta.elapsed_min || 0)].forEach(function (txt) {
+   logReportDur(d.sections.meta.elapsed_min || 0),
+   T('lr_current_capture_badge', 'Current capture · not profile history')].forEach(function (txt) {
     const c = document.createElement('span'); c.className = 'lgr-chip'; c.textContent = txt; context.appendChild(c);
   });
   summary.appendChild(context);
@@ -14564,7 +14764,7 @@ function homeMeterPaint() {
     const off = homeOffFigure(prof);
     box.textContent = '';
     if (!(e && e.on > 0) && !off) { box.hidden = true; return; }
-    [['sun', (e && e.on > 0) ? lvPct(e.on, 10, 1) : '', ''], ['theme_moon', off ? off.t : '', off ? off.tip : '']].forEach(function (c) {
+    [['sun', (e && e.on > 0) ? lvPct(e.on, 10, 1) : '', e && e.on > 0 ? T('lv_drain_on_history_tip', 'Long-term history in this profile: %s min accumulated. Not the current log capture.').replace('%s', String(e.onMin)) : ''], ['theme_moon', off ? off.t : '', off ? off.tip : '']].forEach(function (c) {
       if (!c[1]) return;
       const chip = document.createElement('span');
       chip.className = 'pmeta-chip';
