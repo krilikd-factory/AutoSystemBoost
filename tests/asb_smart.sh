@@ -4761,6 +4761,33 @@ int main(void) {
     CHK(upa(1, 1, 1, 620000) == 1 && upa(1, 0, 1, 622000) == 1 && upa(1, 0, 1, 624000) == 1,
         "fix271: the hold did not come back for a kept app");
     upa(1, 0, 0, 626000); up(1, 0, 628000);
+    /* fix272: a cold start heard through Zygisk. The tap armed a lift at 700000 (until
+     * 703000); the new process 600 ms later carries it to 703600 without counting a new
+     * lift. A cold start right after that window, inside the 5 s anti-chatter gap that
+     * refuses a touch, arms its own lift. Thermal and Performance still refuse it, and a
+     * kick is consumed by the pass that saw it. */
+    up(0, 0, 690000); P = PROFILE_BATTERY; up(1, 0, 691000); up(1, 0, 695000);
+    unsigned long lc0 = g_unlock_lifts;
+    CHK(upa(1, 1, 0, 700000) == 1 && g_unlock_lifts == lc0 + 1, "fix272: the tap did not arm");
+    g_unlock_cold_kick = 1;
+    CHK(up(1, 0, 700600) == 1 && g_unlock_until_ms == 703600 && g_unlock_lifts == lc0 + 1 && g_unlock_cold_extends == 1,
+        "fix272: a cold start did not carry the running lift over the start");
+    CHK(g_unlock_cold_kick == 0, "fix272: the cold-start kick was not consumed");
+    CHK(up(1, 0, 703500) == 1 && up(1, 0, 703700) == 0, "fix272: the carried lift did not end on time");
+    CHK(upa(1, 1, 0, 704000) == 0 && g_unlock_lifts == lc0 + 1, "touch inside the 5 s gap re-armed");
+    g_unlock_cold_kick = 1;
+    CHK(up(1, 0, 704200) == 1 && g_unlock_lifts == lc0 + 2 && g_unlock_cold_lifts == 1 &&
+        !strcmp(g_unlock_arm_why, "cold start"), "fix272: a cold start inside the gap did not arm");
+    up(1, 0, 707300);
+    TC = 1; g_unlock_cold_kick = 1;
+    CHK(up(1, 0, 712000) == 0 && g_unlock_cold_lifts == 1 && !strcmp(g_unlock_skip_why, "thermal"),
+        "fix272: a cold start bypassed the thermal gate"); TC = 0;
+    up(0, 0, 720000); P = PROFILE_PERFORMANCE; up(1, 0, 721000); up(1, 0, 725000);
+    g_unlock_cold_kick = 1;
+    CHK(up(1, 0, 730000) == 0 && g_unlock_cold_lifts == 1, "fix272: a cold start lifted on Performance");
+    g_unlock_cold_kick = 1;
+    CHK(up(0, 0, 731000) == 0 && g_unlock_cold_kick == 0, "fix272: a screen-off kick survived to the next wake");
+    P = PROFILE_SMART;
     return bad;
 }
 X

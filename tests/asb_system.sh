@@ -97,9 +97,9 @@ int main(void) {
     asb_config_apply_stable_override(&cfg);
     if (cfg.sustained_level != 0.62f) return 26;
     asb_config_defaults(&cfg);
-    if (cfg.zygisk_enabled != 0 || cfg.zygisk_hints != 0) return 27;
-    if (load_text(path, "zygisk_enabled=1\nzygisk_hints=1\n", &cfg) != 0 ||
-        cfg.zygisk_enabled != 1 || cfg.zygisk_hints != 1) return 28;
+    if (cfg.zygisk_enabled != 0 || cfg.zygisk_hints != 0 || cfg.zygisk_launch != 0 || cfg.zygisk_ledger != 0) return 27;
+    if (load_text(path, "zygisk_enabled=1\nzygisk_hints=1\nzygisk_launch=1\nzygisk_ledger=1\n", &cfg) != 0 ||
+        cfg.zygisk_enabled != 1 || cfg.zygisk_hints != 1 || cfg.zygisk_launch != 1 || cfg.zygisk_ledger != 1) return 28;
 
     remove(path);
     puts("PASS config safety");
@@ -731,8 +731,8 @@ awk -F'|' '
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
-[ "$(wc -l < "$TMP/conf")" = "213" ] || fail "expected 213 config keys, got $(wc -l < "$TMP/conf")"
-[ "$(wc -l < "$TMP/registry")" = "213" ] || fail "expected 213 registry keys, got $(wc -l < "$TMP/registry")"
+[ "$(wc -l < "$TMP/conf")" = "215" ] || fail "expected 215 config keys, got $(wc -l < "$TMP/conf")"
+[ "$(wc -l < "$TMP/registry")" = "215" ] || fail "expected 215 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
 grep -qx 'kernel_sched_stats|advanced|webui_sensitive|shell' "$REG" || fail 'kernel_sched_stats consumer is not pinned to shell'
@@ -752,7 +752,7 @@ done > "$TMP/consumer_bad"
 
 sed -n '/const CFG_ITEMS = \[/,/^\];/p' "$ROOT/webroot/index.html" \
   | grep -oE "key:'[A-Za-z_][A-Za-z0-9_]*'" | sed "s/key:'//;s/'//" | sort -u > "$TMP/cards"
-[ "$(wc -l < "$TMP/cards")" = "84" ] || fail "expected 84 WebUI cards, got $(wc -l < "$TMP/cards")"
+[ "$(wc -l < "$TMP/cards")" = "86" ] || fail "expected 86 WebUI cards, got $(wc -l < "$TMP/cards")"
 _card_bad="$(while IFS= read -r key; do
   cls="$(awk -F'|' -v k="$key" '$1==k {print $2; exit}' "$REG")"
   case "$cls" in user|advanced) : ;; *) printf '%s ' "$key" ;; esac
@@ -796,7 +796,7 @@ for _c in $(grep -oE "\{ key:'[A-Za-z_][A-Za-z_0-9]*'" "$ROOT/webroot/index.html
 done
 [ -z "$_missing" ] || fail "cards missing from the install.sh settings snapshot:$_missing"
 
-echo 'PASS config ownership registry contract (213 keys; 32 user, 52 advanced, 129 internal)'
+echo 'PASS config ownership registry contract (215 keys; 34 user, 52 advanced, 129 internal)'
 )
 
 t_config_restore_outcome_runtime() (
