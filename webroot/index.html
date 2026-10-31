@@ -378,6 +378,41 @@ body::before, body::after {
 button.badge { appearance: none; -webkit-appearance: none; cursor: pointer; text-align: start; }
 button.badge:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 3px; }
 button.badge:active { color: var(--accent); }
+.zygisk-header-link {
+  --zygisk-header-color: var(--text-tertiary);
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  min-height: 26px;
+  margin-inline-start: 10px;
+  padding: 0;
+  padding-inline-start: 10px;
+  border: 0;
+  border-inline-start: 1px solid var(--cap-edge);
+  border-radius: 0;
+  background: transparent;
+  color: var(--zygisk-header-color);
+  font: 700 9px/1 var(--mono);
+  letter-spacing: .02em;
+  cursor: pointer;
+}
+.zygisk-header-connected, .zygisk-header-confirmed { --zygisk-header-color: var(--bat); }
+.zygisk-header-waiting, .zygisk-header-stale, .zygisk-header-safe { --zygisk-header-color: var(--bal); }
+.zygisk-header-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--zygisk-header-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--zygisk-header-color) 14%, transparent);
+}
+.zygisk-header-label { white-space: nowrap; }
+.zygisk-header-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+html.asb-fit-c2 .zygisk-header-link { margin-inline-start: 7px; padding-inline-start: 7px; }
+html.asb-fit-c2 .zygisk-header-label { display: none; }
 
 /* Theme switch: a three-segment capsule with the bar's sliding pill behind the chosen icon.
  *
@@ -1706,6 +1741,19 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .device-page .dev-pressure-marker { position: absolute; top: -4px; width: 3px; height: 17px; margin-left: -1px; border-radius: 2px; background: var(--text); box-shadow: 0 0 0 2px var(--bg); }
 .device-page .dev-pressure-labels { display: flex; justify-content: space-between; color: var(--text-tertiary); font: 10px/1.4 var(--mono); }
 .device-page .dev-pressure-meta { margin-top: 8px; color: var(--text-secondary); font-size: 11px; line-height: 1.45; }
+.dev-zygisk-link { --link-color: var(--text-tertiary); display: grid; grid-template-columns: 9px minmax(0,1fr); gap: 10px; align-items: start; margin: 2px 0 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: rgba(255,255,255,.025); }
+.dev-zygisk-link-connected, .dev-zygisk-link-confirmed { --link-color: var(--bat); }
+.dev-zygisk-link-waiting, .dev-zygisk-link-stale, .dev-zygisk-link-safe { --link-color: var(--bal); }
+.dev-zygisk-link-dot { width: 8px; height: 8px; margin-top: 4px; border-radius: 50%; background: var(--link-color); box-shadow: 0 0 0 3px color-mix(in srgb,var(--link-color) 14%,transparent); }
+.dev-zygisk-link-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.dev-zygisk-link-title { color: var(--text); font-size: 12px; font-weight: 750; }
+.dev-zygisk-link-state { color: var(--link-color); font-size: 11px; font-weight: 750; }
+.dev-zygisk-link-detail { margin-top: 3px; color: var(--text-secondary); font-size: 11px; line-height: 1.4; overflow-wrap: anywhere; }
+.dev-zygisk-overview { margin: -2px 0 12px; }
+.dev-zygisk-overview .dev-zygisk-metrics { margin-bottom: 8px; }
+.dev-zygisk-features { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.dev-zygisk-feature-on { border-color: color-mix(in srgb,var(--bat) 36%,var(--border)); color: var(--text); }
+.dev-zygisk-feature-off { opacity: .72; }
 .device-page .dev-zygisk-editor { margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--border); }
 .device-page .dev-zygisk-editor label { display: block; margin-bottom: 6px; color: var(--text-secondary); font-size: 11px; font-weight: 700; }
 .device-page .dev-zygisk-input { box-sizing: border-box; width: 100%; min-height: 42px; padding: 10px 11px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); font: 11px/1.4 var(--mono); }
@@ -2066,6 +2114,33 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
   color: rgba(231,234,238,0.48);
   font: 500 11px/1.35 var(--sans);
 }
+.cfg-zygisk-card {
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--bat) 26%, var(--border));
+  border-radius: 18px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--bat) 8%, transparent), rgba(255,255,255,0.018));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.035), 0 1px 4px rgba(0,0,0,0.22);
+}
+.cfg-zygisk-card > .cfg-row {
+  margin: 0;
+  padding: 12px 14px;
+  border: 0 !important;
+  border-radius: 0;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.cfg-zygisk-card > .cfg-row + .cfg-row { border-top: 1px solid var(--border) !important; }
+.cfg-zygisk-card > .dev-zygisk-link {
+  margin: 0;
+  padding: 12px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--link-color) 5%, transparent);
+}
+html[data-asb-theme="light"] .cfg-zygisk-card { background:#fff; }
 .cfg-row {
   width: 100%;
   /* The Monitor cell material (fix195): the fix192 wash over the page background with
@@ -6042,6 +6117,7 @@ function openLivePage() {
   /* fix202: Monitor is the tall page - once it is up, measure it and compact the chrome
      if it runs past the screen (the page is full-height from its first frame; the slide
      is a transform and does not change the measurement). */
+  zygiskHeaderRefresh();
   requestAnimationFrame(asbFitPages);
 }
 const LIVE_OPEN_SETTLE_MS = 320;
@@ -7599,6 +7675,10 @@ const CFG_GROUP_SECTIONS = {
       keys:['net_rps','net_txqueue','net_route_tune','net_mtu_probing'] }
   ],
   ui: [
+    { id:'zygisk', icon:'zygisk_observer', titleKey:'cfg_ui_section_zygisk',
+      title:'Zygisk', hintKey:'cfg_ui_section_zygisk_hint',
+      hint:'Observer, lifecycle hints, cold-start lift and process ledger — one evidence-bounded integration.',
+      keys:['zygisk_enabled','zygisk_hints','zygisk_launch','zygisk_ledger'] },
     { id:'services', icon:'oem_switches', titleKey:'cfg_ui_section_services',
       title:'System Services', hintKey:'cfg_ui_section_services_hint',
       hint:'Vendor background services and process limits.',
@@ -7610,7 +7690,7 @@ const CFG_GROUP_SECTIONS = {
     { id:'diag', icon:'log_detail', titleKey:'cfg_ui_section_diag',
       title:'Diagnostics', hintKey:'cfg_ui_section_diag_hint',
       hint:'How much the module - and LSPosed - write to their logs.',
-      keys:['log_level','lsposed_verbose','zygisk_enabled','zygisk_hints','zygisk_launch','zygisk_ledger'] }
+      keys:['log_level','lsposed_verbose'] }
   ],
   camera: [
     { id:'processing', icon:'camera_level', titleKey:'cfg_camera_section_processing',
@@ -7674,6 +7754,17 @@ function cfgRenderSection(list, section, catKey) {
   list.appendChild(head);
 }
 
+function cfgRenderZygiskCard(list, items) {
+  const card = document.createElement('section');
+  card.className = 'cfg-zygisk-card';
+  card.id = 'cfgZygiskCard';
+  card.setAttribute('aria-label', T('cfg_ui_section_zygisk', 'Zygisk'));
+  const evidence = window._asbZygiskLinkData || window._asbDeviceInfoData || null;
+  card.appendChild(deviceZygiskLink(evidence || {}));
+  items.forEach(function (it) { cfgRenderRow(card, it, false); });
+  list.appendChild(card);
+}
+
 function cfgRenderGroup(list, groupId) {
   const items = CFG_ITEMS.filter(it => cfgGroupOf(it.key) === groupId);
   const sections = CFG_GROUP_SECTIONS[groupId];
@@ -7683,7 +7774,9 @@ function cfgRenderGroup(list, groupId) {
     const sectionItems = section.keys.map(key => items.find(it => it.key === key)).filter(Boolean);
     if (!sectionItems.length) return;
     cfgRenderSection(list, section, sectionItems[0].key);
-    sectionItems.forEach(it => { rendered[it.key] = true; cfgRenderRow(list, it, false); });
+    sectionItems.forEach(it => { rendered[it.key] = true; });
+    if (section.id === 'zygisk') cfgRenderZygiskCard(list, sectionItems);
+    else sectionItems.forEach(it => cfgRenderRow(list, it, false));
   });
   // Future cards still appear rather than silently disappearing when a maintainer forgets
   // to add them to a subsection. The group remains the source of truth for reachability.
@@ -9448,6 +9541,7 @@ async function cfgSet(key, val, ctl) {
       if (/^zygisk_/.test(key)) {
         /* fix272: app processes read only the generated policy file, never governor.conf. */
         try { await run('sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' sync >/dev/null 2>&1'); } catch (e) {}
+        await zygiskHeaderRefresh();
       }
       if (key === 'log_level') {
         // Applied live: extreme mode changes device properties, and leaving it restores
@@ -11810,7 +11904,7 @@ function openReportPage() {
   });
   asbLogReportLoad();
   setTimeout(asbNavSync, 60);
-  requestAnimationFrame(asbFitPages);
+  requestAnimationFrame(asbFitPages);  zygiskHeaderRefresh();
 }
 function closeReportPage() {
   const p = _el('reportPage');
@@ -12303,6 +12397,160 @@ function devicePressureScale(d) {
   wrap.appendChild(meta);
   return wrap;
 }
+/* A compact evidence verdict, not a claim that ASB controls the whole Zygisk framework.
+ * Installed ABI files and enabled configuration never count as a connection. Current
+ * companion events or validated live PID/start-tick rows do; stale state remains history. */
+function deviceZygiskLinkState(d) {
+  const sec = 'zygisk_observer';
+  const enabled = deviceVal(d, sec, 'enabled'), safe = deviceVal(d, sec, 'safe_mode');
+  if (enabled === '0') return 'off';
+  if (enabled !== '1' || (safe !== 'off' && safe !== 'on')) return 'unknown';
+  if (safe === 'on') return 'safe';
+  const reported = deviceVal(d, sec, 'link_state');
+  if (/^(connected|confirmed|waiting|idle|stale)$/.test(reported)) return reported;
+  const freshness = deviceVal(d, sec, 'state_freshness');
+  if (freshness !== 'current' && freshness !== 'stale_over_5_minutes' && freshness !== 'no event state') return 'unknown';
+  const count = function (key) {
+    const raw = deviceVal(d, sec, key);
+    return /^\d{1,15}$/.test(raw) ? Number(raw) : null;
+  };
+  const loaded = count('loaded_processes'), events = count('events_total');
+  const spawn = count('spawn_events'), seen = count('policy_seen_generation');
+  if (loaded === null || events === null || spawn === null || seen === null) return 'unknown';
+  if (freshness === 'stale_over_5_minutes') return 'stale';
+  if (freshness === 'current' && loaded > 0) return 'connected';
+  if (freshness === 'current' && (events > 0 || spawn > 0 || seen > 0)) return 'confirmed';
+  const packages = count('enabled_packages');
+  const launch = deviceVal(d, sec, 'launch_hints'), ledger = deviceVal(d, sec, 'spawn_ledger');
+  if (packages === null || !/^[01]$/.test(launch) || !/^[01]$/.test(ledger)) return 'unknown';
+  if (packages === 0 && launch === '0' && ledger === '0') return 'idle';
+  return 'waiting';
+}
+function deviceZygiskLinkVerdict(d) {
+  const state = deviceZygiskLinkState(d);
+  const labels = { connected: 'Connected', confirmed: 'Channel confirmed', waiting: 'Waiting for a selected process',
+    idle: 'Enabled · nothing selected', stale: 'No fresh evidence', safe: 'Safe mode', off: 'Disabled', unknown: 'Status unknown' };
+  const details = { connected: 'Validated live observed processes: {n}',
+    confirmed: 'Fresh companion evidence; this does not mean total control of Zygisk.',
+    waiting: 'No companion events yet. Start or restart a selected app.',
+    idle: 'Allowlist empty; cold-start lift and ledger off.',
+    stale: 'Earlier activity only; no current connection is claimed.',
+    safe: 'New injection and requests are disabled.',
+    off: 'Observer is off for new processes.',
+    unknown: 'Insufficient evidence; Zygisk support is not ruled out.' };
+  return {
+    state: state,
+    status: T('dev_zygisk_link_' + state, labels[state]),
+    detail: deviceFill('dev_zygisk_link_' + state + '_detail', details[state], { n: deviceVal(d, 'zygisk_observer', 'loaded_processes') })
+  };
+}
+function deviceZygiskLink(d) {
+  const verdict = deviceZygiskLinkVerdict(d), state = verdict.state;
+  const wrap = document.createElement('div'); wrap.className = 'dev-zygisk-link dev-zygisk-link-' + state;
+  if (wrap.setAttribute) {
+    wrap.setAttribute('role', 'status');
+    wrap.setAttribute('aria-label', 'ASB ↔ Zygisk: ' + verdict.status + '. ' + verdict.detail);
+  }
+  const dot = document.createElement('span'); dot.className = 'dev-zygisk-link-dot';
+  if (dot.setAttribute) dot.setAttribute('aria-hidden', 'true');
+  const content = document.createElement('div');
+  const head = document.createElement('div'); head.className = 'dev-zygisk-link-head';
+  const title = document.createElement('span'); title.className = 'dev-zygisk-link-title'; title.textContent = 'ASB ↔ Zygisk';
+  const value = document.createElement('span'); value.className = 'dev-zygisk-link-state'; value.textContent = verdict.status;
+  const sub = document.createElement('div'); sub.className = 'dev-zygisk-link-detail'; sub.textContent = verdict.detail;
+  head.appendChild(title); head.appendChild(value); content.appendChild(head); content.appendChild(sub);
+  wrap.appendChild(dot); wrap.appendChild(content);
+  return wrap;
+}
+function deviceZygiskOverview(d) {
+  const wrap = document.createElement('div'); wrap.className = 'dev-zygisk-overview';
+  const grid = document.createElement('div'); grid.className = 'lgr-heros dev-snapshot dev-zygisk-metrics';
+  const val = function (key) { return deviceVal(d, 'zygisk_observer', key); };
+  grid.appendChild(deviceSnapshotCard(T('dev_zygisk_metric_injection', 'Validated injection'),
+    deviceFill('dev_zygisk_metric_processes', '{n} live process(es)', { n: val('loaded_processes') }),
+    val('state_freshness'), deviceZygiskLinkState(d) === 'connected' ? 'good' : 'neutral'));
+  grid.appendChild(deviceSnapshotCard(T('dev_zygisk_metric_channel', 'Companion channel'),
+    deviceFill('dev_zygisk_metric_events', '{n} events', { n: val('events_total') }),
+    deviceFill('dev_zygisk_metric_spawn_dropped', '{spawn} spawn · {dropped} dropped', { spawn: val('spawn_events'), dropped: val('events_dropped_total') }), 'neutral'));
+  grid.appendChild(deviceSnapshotCard(T('dev_zygisk_metric_policy', 'Policy acknowledgement'),
+    deviceFill('dev_zygisk_metric_policy_fmt', '{written} written / {seen} seen', { written: val('policy_generation'), seen: val('policy_seen_generation') }),
+    deviceFill('dev_zygisk_metric_allowlist', '{n} selected app(s)', { n: val('enabled_packages') }), 'neutral'));
+  grid.appendChild(deviceSnapshotCard(T('dev_zygisk_metric_cost', 'Observer IPC cost'),
+    deviceFill('dev_zygisk_metric_cpu', '{n} ms CPU', { n: val('ipc_cpu_ms') }),
+    deviceFill('dev_zygisk_metric_cost_fmt', '{wake} wakeups · RSS {memory}', { wake: val('ipc_wakeups'), memory: deviceSizeKb(val('memory_kb')) }), 'neutral'));
+  wrap.appendChild(grid);
+  const features = document.createElement('div'); features.className = 'dev-zygisk-features';
+  [['enabled', 'dev_zygisk_feature_observer', 'Observer'], ['lifecycle_hints', 'dev_zygisk_feature_hints', 'Lifecycle hints'],
+   ['launch_hints', 'dev_zygisk_feature_launch', 'Cold-start lift'], ['spawn_ledger', 'dev_zygisk_feature_ledger', 'Process ledger']].forEach(function (spec) {
+    const chip = document.createElement('span'); chip.className = 'lgr-chip dev-zygisk-feature-' + (val(spec[0]) === '1' ? 'on' : 'off');
+    chip.textContent = T(spec[1], spec[2]) + ': ' + (val(spec[0]) === '1' ? T('st_on', 'Enabled') : T('st_off', 'Disabled'));
+    features.appendChild(chip);
+  });
+  wrap.appendChild(features);
+  const note = logReportNote(T('dev_zygisk_snapshot_note', 'Current read-only snapshot. RSS is the memory of validated observed apps, not pure ASB overhead; accepted hints do not prove a cap change, performance gain or energy saving.'));
+  note.classList.add('dev-evidence'); wrap.appendChild(note);
+  return wrap;
+}
+
+/* One compact, shared status control for every page header. It is deliberately painted
+ * from the same verdict as Diagnostics: a toggle or installed .so file is not a connection. */
+let _zygiskHeaderSeq = 0, _zygiskHeaderRunning = false, _zygiskHeaderQueued = false;
+function zygiskHeaderPaint() {
+  const verdict = deviceZygiskLinkVerdict(window._asbZygiskLinkData || {});
+  document.querySelectorAll('.zygisk-header-link').forEach(function (btn) {
+    btn.className = 'zygisk-header-link zygisk-header-' + verdict.state;
+    btn.setAttribute('data-state', verdict.state);
+    btn.setAttribute('title', 'ASB ↔ Zygisk: ' + verdict.status + '. ' + verdict.detail);
+    btn.setAttribute('aria-label', 'ASB ↔ Zygisk: ' + verdict.status + '. ' + verdict.detail);
+  });
+}
+function zygiskHeaderInit() {
+  document.querySelectorAll('.hdr-info').forEach(function (host) {
+    if (host.querySelector('.zygisk-header-link')) return;
+    const btn = document.createElement('button'); btn.type = 'button';
+    btn.className = 'zygisk-header-link zygisk-header-unknown';
+    btn.onclick = openZygiskSettings;
+    const dot = document.createElement('span'); dot.className = 'zygisk-header-dot'; dot.setAttribute('aria-hidden', 'true');
+    const label = document.createElement('span'); label.className = 'zygisk-header-label'; label.textContent = 'Zygisk';
+    btn.appendChild(dot); btn.appendChild(label); host.appendChild(btn);
+  });
+  zygiskHeaderPaint();
+}
+function zygiskHeaderPublish(d) {
+  if (!d || !d.sections) return;
+  window._asbZygiskLinkData = d;
+  zygiskHeaderPaint();
+  const card = _el('cfgZygiskCard');
+  const old = card ? card.querySelector('.dev-zygisk-link') : null;
+  if (old) card.replaceChild(deviceZygiskLink(d), old);
+}
+async function zygiskHeaderRefresh() {
+  const seq = ++_zygiskHeaderSeq;
+  if (_zygiskHeaderRunning) { _zygiskHeaderQueued = true; return; }
+  _zygiskHeaderRunning = true;
+  try {
+    const r = await run('sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' link-status 2>/dev/null');
+    const d = parseDeviceInfo(r ? runText(r) : '');
+    /* A failed read is not negative evidence. Keep the last validated snapshot; before the
+     * first successful read the header remains honestly unknown. Sequence checking prevents
+     * an older response from replacing evidence requested by a newer page/setting action. */
+    if (seq === _zygiskHeaderSeq && r && r.errno === 0 && d.count) zygiskHeaderPublish(d);
+  } catch (e) {
+    /* No connection claim is inferred from a collector error. */
+  } finally {
+    _zygiskHeaderRunning = false;
+    if (_zygiskHeaderQueued) { _zygiskHeaderQueued = false; zygiskHeaderRefresh(); }
+  }
+}
+function openZygiskSettings() {
+  if (typeof asbNavGo === 'function') asbNavGo('config');
+  else if (!_cfgOpen) openConfigPage();
+  _cfgSearch = '';
+  _cfgGroup = 'ui';
+  cfgRender();
+  zygiskHeaderRefresh();
+  requestAnimationFrame(asbFitPages);
+}
 function deviceZygiskEditor(d) {
   const wrap = document.createElement('div'); wrap.className = 'dev-zygisk-editor';
   const label = document.createElement('label'); label.textContent = T('dev_zygisk_allowlist', 'Allowlisted application packages (comma or space separated)');
@@ -12426,6 +12674,10 @@ function deviceInfoRender(d) {
     const card = logReportSec(T(spec[1], spec[2]));
     card.id = 'dev-sec-' + spec[1].slice(8).replace(/_/g, '-');
     if (spec[0] === 'system_load') card.appendChild(devicePressureScale(d));
+    if (spec[0] === 'zygisk_observer') {
+      card.appendChild(deviceZygiskLink(d));
+      card.appendChild(deviceZygiskOverview(d));
+    }
     const sectionGuide = DEVICE_SECTION_GUIDES[spec[0]];
     if (sectionGuide) {
       const sg = logReportNote(T(sectionGuide[0], sectionGuide[1])); sg.classList.add('dev-section-guide'); card.appendChild(sg);
@@ -12530,9 +12782,11 @@ async function asbDeviceInfoLoad() {
     empty.appendChild(logReportNote(T('dev_error_body', 'The read-only collector returned no usable data. Nothing was changed. Tap Refresh to try again.'), true));
     body.appendChild(empty);
     status.textContent = T('dev_error_status', 'Collection failed');
+    zygiskHeaderRefresh();
   } else {
     window._asbDeviceInfoData = d;
     window._asbDeviceInfoRaw = runText(r);
+    zygiskHeaderPublish(d);
     const shown = deviceInfoRender(d);
     status.textContent = T('dev_facts_status', '%s facts').replace('%s', String(shown));
   }
@@ -13316,6 +13570,58 @@ function logReportAppendAnalysis(body, d, analysis) {
   verify.classList.add('lgr-summary-legend'); body.appendChild(verify);
 }
 
+function logReportZygisk(d) {
+  const z = (d.sections && d.sections.zygisk) || null;
+  if (!z) return null;
+  const sec = logReportSec(T('lr_sec_zygisk', '🧩 Zygisk · ASB injection')); sec.id = 'lgr-zygisk';
+  const observer = {
+    link_state: z.state || 'unknown', enabled: z.enabled || 'unknown', safe_mode: z.safe_mode || 'unknown',
+    state_freshness: z.freshness || 'unknown', loaded_processes: z.loaded || '0',
+    events_total: z.events_total_latest || '0', spawn_events: z.spawn_events_latest || '0',
+    policy_seen_generation: z.policy_seen_generation || '0', enabled_packages: z.packages || '0',
+    launch_hints: z.launch_hints || '0', spawn_ledger: z.spawn_ledger || '0'
+  };
+  sec.appendChild(deviceZygiskLink({ sections: { zygisk_observer: observer } }));
+  if (z.coverage === 'unavailable') {
+    sec.appendChild(logReportNote(T('lr_zy_unavailable', 'The collector returned no observer evidence; Zygisk support is not ruled out.')));
+    return sec;
+  }
+  const unknown = function (v) { return v === undefined || v === '' || v === 'unknown'; };
+  const delta = function (key) { return unknown(z[key + '_delta']) ? '—' : String(z[key + '_delta']); };
+  const grid = document.createElement('div'); grid.className = 'lgr-heros';
+  grid.appendChild(logReportHero('🛰️', T('lr_zy_activity', 'Companion events in capture'), delta('events_total'),
+    logReportT('lr_zy_start_latest', '{start} → {latest}', { start: unknown(z.events_total_start) ? '—' : z.events_total_start, latest: unknown(z.events_total_latest) ? '—' : z.events_total_latest }), false));
+  grid.appendChild(logReportHero('🚀', T('lr_zy_launch', 'Cold starts heard'), delta('launch_events'),
+    logReportT('lr_zy_accepted', '{n} accepted', { n: delta('launch_accepted') }), false));
+  grid.appendChild(logReportHero('💡', T('lr_zy_hints', 'Lifecycle hints'), delta('policy_hints'),
+    logReportT('lr_zy_accept_veto', '{ok} accepted · {veto} vetoed', { ok: delta('hints_accepted'), veto: delta('hints_vetoed') }), false));
+  grid.appendChild(logReportHero('⚙️', T('lr_zy_ipc', 'Observer IPC CPU'), logReportT('lr_zy_ms', '{n} ms', { n: delta('ipc_cpu_ms') }),
+    logReportT('lr_zy_wake', '{n} wakeups', { n: delta('ipc_wakeups') }), false));
+  sec.appendChild(grid);
+  const stateText = function (state) { return T('dev_zygisk_link_' + state, state || 'unknown'); };
+  sec.appendChild(logReportRow(T('lr_zy_start_state', 'At capture start'), stateText(z.start_state)));
+  sec.appendChild(logReportRow(T('lr_zy_policy', 'Policy generation / acknowledged'), String(z.policy_generation || 'unknown') + ' / ' + String(z.policy_seen_generation || 'unknown')));
+  sec.appendChild(logReportRow(T('lr_zy_loaded', 'Validated live processes at latest snapshot'), String(z.loaded || '0')));
+  sec.appendChild(logReportRow(T('lr_zy_apps', 'Selected apps'), String(z.packages || '0')));
+  sec.appendChild(logReportRow(T('lr_zy_abi', 'Installed observer ABI'), String(z.abis || 'unknown')));
+  const features = document.createElement('div'); features.className = 'lgr-context';
+  [[z.enabled, 'dev_zygisk_feature_observer', 'Observer'], [z.lifecycle_hints, 'dev_zygisk_feature_hints', 'Lifecycle hints'],
+   [z.launch_hints, 'dev_zygisk_feature_launch', 'Cold-start lift'], [z.spawn_ledger, 'dev_zygisk_feature_ledger', 'Process ledger']].forEach(function (spec) {
+    const chip = document.createElement('span'); chip.className = 'lgr-chip';
+    chip.textContent = T(spec[1], spec[2]) + ': ' + (spec[0] === '1' ? T('st_on', 'Enabled') : T('st_off', 'Disabled'));
+    features.appendChild(chip);
+  });
+  sec.appendChild(features);
+  if (z.deltas === 'counter_reset_or_restart')
+    sec.appendChild(logReportNote(T('lr_zy_reset', 'At least one counter decreased: the companion restarted or its counters reset. Affected deltas remain unknown.'), true));
+  else if (z.coverage !== 'start_latest')
+    sec.appendChild(logReportNote(T('lr_zy_coverage_one', 'Only one snapshot is available; no in-capture delta can be inferred.')));
+  else
+    sec.appendChild(logReportNote(T('lr_zy_coverage_two', 'Start/latest snapshots: deltas cover the interval between them, but do not prove continuous observation through a restart.')));
+  sec.appendChild(logReportNote(T('lr_zy_note', 'Observed events prove companion activity, not total Zygisk control, performance improvement or energy savings. No A/B comparison is made here.')));
+  return sec;
+}
+
 function logReportRender(d) {
   const body = _el('reportBody');
   const status = _el('reportStatus');
@@ -13732,6 +14038,8 @@ function logReportRender(d) {
        "a capture under a different profile" - say it only when Smart never really ran. */
     body.appendChild(s);
   }
+  const zygiskCard = logReportZygisk(d);
+  if (zygiskCard) body.appendChild(zygiskCard);
   /* fix200: ASB's own bill - the answer to "and what does the module itself eat?". */
   if (cost) {
     const s = logReportSec(T('lr_sec_asb', '⚙️ ASB own cost')); s.id = 'lgr-asb';
@@ -14415,6 +14723,7 @@ window.addEventListener('resize', function () { asbHeaderFitSoon(); });
 })();
 
 function asbNavGo(target) {
+  zygiskHeaderRefresh();
   let at = asbNavCurrent();
   if (at === 'device') {
     closeDevicePage();
@@ -14560,6 +14869,7 @@ function openConfigPage() {
     requestAnimationFrame(function () { if (_cfgOpen) p.classList.add('open'); });
   });
   cfgLoad();
+  zygiskHeaderRefresh();
   // Device class is a shell read the page does not need to start moving - defer it past
   // the slide instead of running it synchronously on the tap.
   setTimeout(function () { try { loadDeviceClass(); } catch (e) {} }, _pageAnimMs() + 40);
@@ -16247,6 +16557,8 @@ document.addEventListener('visibilitychange', () => {
 (function() {
   try {
     applyStaticI18n();
+    zygiskHeaderInit();
+    zygiskHeaderRefresh();
     loadDebugSupport();
     // Was I18N.ru.device_line under ASB_LANG==='ru' - every other language kept the
     // English placeholder even when its locale had the string translated.
@@ -16262,7 +16574,7 @@ document.addEventListener('visibilitychange', () => {
   // above ran before those nodes existed and the tab labels stayed English in every
   // non-English locale. Re-run once parsing completes; the pass is idempotent.
   document.addEventListener('DOMContentLoaded', function () {
-    try { applyStaticI18n(); } catch (e) {}
+    try { applyStaticI18n(); zygiskHeaderPaint(); } catch (e) {}
   });
 })();
 setTimeout(() => pollLive(false), 1500);
