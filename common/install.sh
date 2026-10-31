@@ -2953,6 +2953,32 @@ ASB_CONFIG_MIGRATION_MODE=unknown
 ASB_CONFIG_MIGRATION_SOURCE=none
 ASB_CONFIG_MIGRATED_COUNT=0
 
+asb_restore_profile_description() {
+  # The ZIP always contains the fresh-install module.prop template. On an update the
+  # selected profile is preserved above, but its human-readable status used to remain
+  # "no profile selected" until service.sh ran after reboot. Restore presentation only:
+  # never apply a profile or start any service from the installer.
+  [ -r "$MODPATH/current_profile" ] && [ -f "$MODPATH/module.prop" ] || return 0
+  _pd_profile="$(cat "$MODPATH/current_profile" 2>/dev/null | tr -d ' \r\n')"
+  case "$_pd_profile" in
+    performance) _pd_desc='description=status: Performance 🔥 | active ✅' ;;
+    battery)     _pd_desc='description=status: Battery 🔋 | active ✅' ;;
+    smart)       _pd_desc='description=status: Smart Mode 🤖 | active ✅' ;;
+    stock)       _pd_desc='description=status: Stock 👶🏻 | active ✅' ;;
+    balanced)    _pd_desc='description=status: Balanced ⚖️ | active ✅' ;;
+    none|'')     _pd_desc='description=status: no profile selected — open the WebUI to choose one' ;;
+    *) return 0 ;;
+  esac
+  _pd_tmp="$MODPATH/module.prop.profile.$$"
+  if sed "s#^description=.*#$_pd_desc#" "$MODPATH/module.prop" > "$_pd_tmp" 2>/dev/null; then
+    chmod 644 "$_pd_tmp" 2>/dev/null || true
+    mv -f "$_pd_tmp" "$MODPATH/module.prop" 2>/dev/null || rm -f "$_pd_tmp" 2>/dev/null
+  else
+    rm -f "$_pd_tmp" 2>/dev/null
+  fi
+  return 0
+}
+
 asb_preserve_user_config() {
   _new_conf="$MODPATH/config/governor.conf"
   # Only create the shipped copy if the package did not bring one.
@@ -3047,6 +3073,7 @@ asb_preserve_user_config() {
         break ;;
     esac
   done
+  asb_restore_profile_description
 
   # Migrate the retired audio switches.
   # We therefore only promote to "hifi" when the user had deliberately turned EQ-compat OFF and
