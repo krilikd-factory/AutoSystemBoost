@@ -429,11 +429,19 @@
     },
     "zygisk_enabled": {
       "name": "Observador de processos Zygisk",
-      "desc": "Telemetria opcional apenas para apps explicitamente permitidas. Início/fim e overhead IPC limitado, sem hooks nem controlo de apps. Este interruptor sozinho não envia pedidos ao governor; a atualização por eventos é separada. As apps precisam ser reiniciadas."
+      "desc": "Telemetria opcional apenas para apps explicitamente permitidas. Início/fim e overhead IPC limitado, sem hooks nem controlo de apps. Este interruptor sozinho não envia pedidos ao governor; a atualização por eventos é separada. As apps precisam ser reiniciadas. Também é o interruptor principal da elevação no início a frio e do registro de inícios de processos. Com tudo desligado, o ASB fica inativo nos processos das apps: uma abertura de arquivo com falha por início, sem ler a configuração e sem IPC."
     },
     "zygisk_hints": {
       "name": "Atualização do ciclo de vida Zygisk",
       "desc": "Um início/saída confirmado de uma app da allowlist pede ao governor existente novos dados com o ecrã ligado. No máximo 8 pedidos/minuto, com pelo menos 2 segundos de intervalo. O Zygisk não escolhe frequência, perfil ou política da app; limites térmicos, de permanência e do fabricante continuam prioritários. Confirmação não é boost nem prova de poupança. O LSPosed nunca é terminado, ocultado, congelado ou limitado. O limite aplica-se a cada companion ativo."
+    },
+    "zygisk_launch": {
+      "name": "Elevação no início a frio (Zygisk)",
+      "desc": "Quando o zygote inicia um processo novo para o app que você abre (o Android o marca como app em primeiro plano), o ASB sabe na hora e cobre a abertura com a elevação de desbloqueio: uma elevação em curso é prolongada durante o início e, se não houver nenhuma, uma é armada mesmo dentro da pausa antirrepetição de 5 segundos. Nenhum nome de pacote é enviado; as regras de perfil, temperatura, chip quente e duração continuam decidindo. No máximo um início a frio por segundo e 20 por minuto; custa uma conexão curta com o companion por início a frio. Exige o interruptor \"Observador de processos Zygisk\", não a lista de permitidos. Inícios a frio mais rápidos são esperados, não comprovados: compare `am start -W` com e sem."
+    },
+    "zygisk_ledger": {
+      "name": "Registro de inícios de processos (Zygisk)",
+      "desc": "Conta, desde esta inicialização, quantos processos cada app comum inicia com a tela desligada e ligada. Apps que disparam trabalho sem parar à noite são um gasto oculto de bateria frequente; os primeiros aparecem no diagnóstico do dispositivo e no asbdiag. Apenas nomes de pacote e contadores, na memória (tmpfs); nada é restringido automaticamente. Custa uma conexão curta com o companion por início de processo de app enquanto ativo. Exige o interruptor \"Observador de processos Zygisk\"."
     }
   },
   "nav_live": "Monitor",
@@ -2172,6 +2180,18 @@
   "dev_zygisk_observer_policy_hints": "Policy hints sent",
   "dev_zygisk_observer_hints_accepted": "Policy hints accepted",
   "dev_zygisk_observer_hints_vetoed": "Policy hints vetoed",
+  "dev_zygisk_observer_launch_hints": "Elevação no início a frio",
+  "dev_zygisk_observer_spawn_ledger": "Registro de inícios de processos",
+  "dev_zygisk_observer_policy_generation": "Geração da política (escrita)",
+  "dev_zygisk_observer_policy_seen_generation": "Geração da política (vista pelos processos)",
+  "dev_zygisk_observer_spawn_events": "Eventos únicos recebidos",
+  "dev_zygisk_observer_launch_events": "Inícios a frio recebidos",
+  "dev_zygisk_observer_launch_accepted": "Inícios a frio aceitos pelo governor",
+  "dev_zygisk_observer_launch_vetoed": "Inícios a frio recusados",
+  "dev_zygisk_observer_launch_unavailable": "Inícios a frio: governor indisponível",
+  "dev_zygisk_observer_launch_throttled": "Inícios a frio limitados",
+  "dev_zygisk_observer_ledger_events": "Entradas do registro",
+  "dev_zygisk_observer_ledger_top_screen_off": "Mais inícios com a tela desligada (app desligada/ligada)",
   "dev_zygisk_observer_hints_status": "Policy-hint applicability",
   "dev_zygisk_observer_lifecycle_coverage": "Lifecycle coverage",
   "dev_zygisk_observer_foreground_events": "Foreground/background events",

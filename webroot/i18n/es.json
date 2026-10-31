@@ -429,11 +429,19 @@
     },
     "zygisk_enabled": {
       "name": "Observador de procesos Zygisk",
-      "desc": "Telemetría opcional solo para apps explícitamente permitidas. Inicio/fin y overhead IPC limitado, sin hooks ni control de apps. Este interruptor por sí solo no envía solicitudes al governor; la actualización por eventos es independiente. Las apps deben reiniciarse."
+      "desc": "Telemetría opcional solo para apps explícitamente permitidas. Inicio/fin y overhead IPC limitado, sin hooks ni control de apps. Este interruptor por sí solo no envía solicitudes al governor; la actualización por eventos es independiente. Las apps deben reiniciarse. También es el interruptor principal de la elevación en arranque en frío y del registro de inicios de procesos. Con todo apagado, ASB queda inactivo en los procesos de apps: una apertura de archivo fallida por inicio, sin leer la configuración y sin IPC."
     },
     "zygisk_hints": {
       "name": "Actualización por ciclo de vida Zygisk",
       "desc": "Un inicio/salida confirmado de una app de la lista permitida pide al governor existente datos nuevos con la pantalla encendida. Máximo 8 solicitudes/minuto y al menos 2 segundos entre ellas. Zygisk no elige frecuencia, perfil ni política de apps; los límites térmicos, de permanencia y del fabricante siguen mandando. Confirmar no significa boost ni ahorro demostrado. LSPosed nunca se finaliza, oculta, congela ni limita. El límite se aplica a cada companion activo."
+    },
+    "zygisk_launch": {
+      "name": "Elevación en arranque en frío (Zygisk)",
+      "desc": "Cuando zygote inicia un proceso nuevo para la app que abres (Android lo marca como app superior), ASB lo sabe al instante y cubre el arranque con la elevación de desbloqueo: una elevación en curso se prolonga durante el inicio y, si no hay ninguna, se arma incluso dentro de la pausa antirrepetición de 5 segundos. No se envía ningún nombre de paquete; las reglas de perfil, temperatura, chip caliente y duración siguen decidiendo. Como máximo un arranque en frío por segundo y 20 por minuto; cuesta una conexión corta al companion por arranque en frío. Requiere el interruptor «Observador de procesos Zygisk», no la lista de permitidas. Se esperan arranques en frío más rápidos, sin estar probados: compara `am start -W` con y sin."
+    },
+    "zygisk_ledger": {
+      "name": "Registro de inicios de procesos (Zygisk)",
+      "desc": "Cuenta, desde este arranque, cuántos procesos inicia cada app normal con la pantalla apagada y encendida. Las apps que lanzan trabajo una y otra vez de noche son un gasto oculto de batería frecuente; las primeras aparecen en el diagnóstico del dispositivo y en asbdiag. Solo nombres de paquete y contadores, en memoria (tmpfs); no se restringe nada automáticamente. Cuesta una conexión corta al companion por cada inicio de proceso de app mientras está activo. Requiere el interruptor «Observador de procesos Zygisk»."
     }
   },
   "nav_live": "Monitor",
@@ -2172,6 +2180,18 @@
   "dev_zygisk_observer_policy_hints": "Policy hints sent",
   "dev_zygisk_observer_hints_accepted": "Policy hints accepted",
   "dev_zygisk_observer_hints_vetoed": "Policy hints vetoed",
+  "dev_zygisk_observer_launch_hints": "Elevación en arranque en frío",
+  "dev_zygisk_observer_spawn_ledger": "Registro de inicios de procesos",
+  "dev_zygisk_observer_policy_generation": "Generación de la política (escrita)",
+  "dev_zygisk_observer_policy_seen_generation": "Generación de la política (vista por los procesos)",
+  "dev_zygisk_observer_spawn_events": "Eventos únicos recibidos",
+  "dev_zygisk_observer_launch_events": "Arranques en frío recibidos",
+  "dev_zygisk_observer_launch_accepted": "Arranques en frío aceptados por el governor",
+  "dev_zygisk_observer_launch_vetoed": "Arranques en frío rechazados",
+  "dev_zygisk_observer_launch_unavailable": "Arranques en frío: governor no disponible",
+  "dev_zygisk_observer_launch_throttled": "Arranques en frío limitados",
+  "dev_zygisk_observer_ledger_events": "Entradas del registro",
+  "dev_zygisk_observer_ledger_top_screen_off": "Más inicios con la pantalla apagada (app apagada/encendida)",
   "dev_zygisk_observer_hints_status": "Policy-hint applicability",
   "dev_zygisk_observer_lifecycle_coverage": "Lifecycle coverage",
   "dev_zygisk_observer_foreground_events": "Foreground/background events",

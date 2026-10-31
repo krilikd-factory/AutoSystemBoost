@@ -429,11 +429,19 @@
     },
     "zygisk_enabled": {
       "name": "Zygisk Süreç Gözlemcisi",
-      "desc": "Yalnızca açıkça izin verilen uygulamalar için isteğe bağlı telemetri. Başlangıç/çıkış ve sınırlı IPC yükü; hook veya uygulama denetimi yok. Bu anahtar tek başına governor isteği göndermez; yaşam döngüsü yenilemesi ayrıdır. Uygulamalar yeniden başlatılmalıdır."
+      "desc": "Yalnızca açıkça izin verilen uygulamalar için isteğe bağlı telemetri. Başlangıç/çıkış ve sınırlı IPC yükü; hook veya uygulama denetimi yok. Bu anahtar tek başına governor isteği göndermez; yaşam döngüsü yenilemesi ayrıdır. Uygulamalar yeniden başlatılmalıdır. Ayrıca soğuk başlatma yükseltmesi ve süreç başlatma kaydı için ana anahtardır. Hepsi kapalıyken ASB uygulama süreçlerinde boşta kalır: süreç başlatma başına tek başarısız dosya açma, yapılandırma okuma yok, IPC yok."
     },
     "zygisk_hints": {
       "name": "Zygisk Yaşam Döngüsü Yenilemesi",
       "desc": "İzin listesindeki bir uygulamanın doğrulanmış başlangıcı/çıkışı, ekran açıkken mevcut governor’dan yeni veri ister. Dakikada en fazla 8 istek, aralarında en az 2 saniye. Zygisk frekans, profil veya uygulama politikası seçmez; thermal, dwell ve vendor sınırları önceliklidir. Onay, boost veya kanıtlanmış enerji tasarrufu değildir. LSPosed asla sonlandırılmaz, gizlenmez, dondurulmaz veya kısıtlanmaz. Limit her etkin companion için ayrı uygulanır."
+    },
+    "zygisk_launch": {
+      "name": "Zygisk Soğuk Başlatma Yükseltmesi",
+      "desc": "zygote açtığınız uygulama için yeni bir süreç başlattığında (Android onu en üstteki uygulama olarak işaretler) ASB bunu hemen öğrenir ve başlatmayı kilit açma yükseltmesiyle kapsar: süren bir yükseltme başlatma boyunca uzatılır, yoksa 5 saniyelik tekrar önleme aralığında bile bir tane kurulur. Paket adı gönderilmez; profil, ısı, sıcak çip ve süre kuralları karar vermeye devam eder. Saniyede en fazla bir, dakikada en fazla 20 soğuk başlatma; maliyeti soğuk başlatma başına kısa bir companion bağlantısıdır. Zygisk Süreç Gözlemcisi anahtarı gerekir, izin listesi gerekmez. Daha hızlı soğuk başlatmalar beklenir, kanıtlanmış değildir: `am start -W` sürelerini açık ve kapalı karşılaştırın."
+    },
+    "zygisk_ledger": {
+      "name": "Zygisk Süreç Başlatma Kaydı",
+      "desc": "Bu açılıştan beri her sıradan uygulamanın ekran kapalı ve açıkken kaç süreç başlattığını sayar. Gece durmadan iş başlatan uygulamalar sık görülen gizli pil tüketicileridir; ilk sıradakiler cihaz tanılamasında ve asbdiag içinde görünür. Yalnızca paket adları ve sayaçlar, bellekte (tmpfs) tutulur; hiçbir şey otomatik kısıtlanmaz. Açıkken uygulama süreci başlatma başına kısa bir companion bağlantısı maliyeti vardır. Zygisk Süreç Gözlemcisi anahtarı gerekir."
     }
   },
   "nav_live": "İzleme",
@@ -2172,6 +2180,18 @@
   "dev_zygisk_observer_policy_hints": "Policy hints sent",
   "dev_zygisk_observer_hints_accepted": "Policy hints accepted",
   "dev_zygisk_observer_hints_vetoed": "Policy hints vetoed",
+  "dev_zygisk_observer_launch_hints": "Soğuk başlatma yükseltmesi",
+  "dev_zygisk_observer_spawn_ledger": "Süreç başlatma kaydı",
+  "dev_zygisk_observer_policy_generation": "İlke nesli (yazılan)",
+  "dev_zygisk_observer_policy_seen_generation": "İlke nesli (uygulama süreçlerinin gördüğü)",
+  "dev_zygisk_observer_spawn_events": "Alınan tek seferlik olaylar",
+  "dev_zygisk_observer_launch_events": "Duyulan soğuk başlatmalar",
+  "dev_zygisk_observer_launch_accepted": "Governor tarafından kabul edilen soğuk başlatmalar",
+  "dev_zygisk_observer_launch_vetoed": "Reddedilen soğuk başlatmalar",
+  "dev_zygisk_observer_launch_unavailable": "Soğuk başlatmalar: governor erişilemez",
+  "dev_zygisk_observer_launch_throttled": "Sınırlanan soğuk başlatmalar",
+  "dev_zygisk_observer_ledger_events": "Kayıt girdileri",
+  "dev_zygisk_observer_ledger_top_screen_off": "Ekran kapalıyken en çok başlatma (uygulama kapalı/açık)",
   "dev_zygisk_observer_hints_status": "Policy-hint applicability",
   "dev_zygisk_observer_lifecycle_coverage": "Lifecycle coverage",
   "dev_zygisk_observer_foreground_events": "Foreground/background events",

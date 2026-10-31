@@ -389,11 +389,19 @@
     },
     "zygisk_enabled": {
       "name": "Zygisk Process Observer",
-      "desc": "Opt-in telemetry for explicitly allowlisted apps only. Start/exit and bounded IPC overhead, with no hooks or app control. This switch alone sends no governor request; lifecycle refresh is separate. Newly started app processes are required."
+      "desc": "Opt-in telemetry for explicitly allowlisted apps only. Start/exit and bounded IPC overhead, with no hooks or app control. This switch alone sends no governor request; lifecycle refresh is separate. Newly started app processes are required. It is also the master switch for the cold-start lift and the process-start ledger. With all of them off, ASB stays dormant in app processes: one failed file open per process start, no config parsing, no IPC."
     },
     "zygisk_hints": {
       "name": "Zygisk Lifecycle Refresh",
       "desc": "An accepted start/exit from the observer allowlist asks the existing governor for fresh evidence while the screen is on. At most 8 requests/minute, at least 2 seconds apart. Zygisk chooses no frequency, profile or app policy; thermal, dwell and vendor limits remain authoritative. Acknowledgement is not a boost or proof of power saving. LSPosed is never killed, hidden, frozen or throttled. The rate limit applies per active companion."
+    },
+    "zygisk_launch": {
+      "name": "Zygisk Cold-Start Lift",
+      "desc": "When zygote starts a new process for the app you are opening (Android marks it as the top app), ASB hears it at once and covers the launch with the unlock lift: a running lift is carried over the start, otherwise one is armed even inside the 5-second anti-chatter gap. No package name is sent; profile, thermal, warm-die and lift-length rules still decide. At most one cold start per second and 20 per minute; costs one short companion connection per cold start. Needs the Zygisk Process Observer switch, not the allowlist. Faster cold starts are expected, not proven: compare `am start -W` times with this on and off."
+    },
+    "zygisk_ledger": {
+      "name": "Zygisk Process-Start Ledger",
+      "desc": "Counts, for this boot, how many processes each ordinary app starts with the screen off and on. Apps that keep starting work at night are a common hidden battery drain; the top ones appear in Device diagnostics and asbdiag. Package names and counts only, kept in memory (tmpfs); nothing is restricted automatically. Costs one short companion connection per app process start while on. Needs the Zygisk Process Observer switch."
     }
   },
   "cfg_search": "Search",
@@ -1942,6 +1950,18 @@
   "dev_zygisk_observer_policy_hints": "Policy hints sent",
   "dev_zygisk_observer_hints_accepted": "Policy hints accepted",
   "dev_zygisk_observer_hints_vetoed": "Policy hints vetoed",
+  "dev_zygisk_observer_launch_hints": "Cold-start lift",
+  "dev_zygisk_observer_spawn_ledger": "Process-start ledger",
+  "dev_zygisk_observer_policy_generation": "Policy generation (written)",
+  "dev_zygisk_observer_policy_seen_generation": "Policy generation (seen by app processes)",
+  "dev_zygisk_observer_spawn_events": "One-shot events received",
+  "dev_zygisk_observer_launch_events": "Cold starts heard",
+  "dev_zygisk_observer_launch_accepted": "Cold starts accepted by the governor",
+  "dev_zygisk_observer_launch_vetoed": "Cold starts vetoed",
+  "dev_zygisk_observer_launch_unavailable": "Cold starts: governor unavailable",
+  "dev_zygisk_observer_launch_throttled": "Cold starts throttled",
+  "dev_zygisk_observer_ledger_events": "Ledger records",
+  "dev_zygisk_observer_ledger_top_screen_off": "Most starts with the screen off (app off/on)",
   "dev_zygisk_observer_hints_status": "Policy-hint applicability",
   "dev_zygisk_observer_lifecycle_coverage": "Lifecycle coverage",
   "dev_zygisk_observer_foreground_events": "Foreground/background events",

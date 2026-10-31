@@ -429,11 +429,19 @@
     },
     "zygisk_enabled": {
       "name": "Pengamat Proses Zygisk",
-      "desc": "Telemetri opsional hanya untuk aplikasi yang diizinkan secara eksplisit. Start/exit dan overhead IPC terbatas, tanpa hook atau kontrol aplikasi. Sakelar ini sendiri tidak mengirim permintaan governor; penyegaran siklus hidup terpisah. Aplikasi harus dimulai ulang."
+      "desc": "Telemetri opsional hanya untuk aplikasi yang diizinkan secara eksplisit. Start/exit dan overhead IPC terbatas, tanpa hook atau kontrol aplikasi. Sakelar ini sendiri tidak mengirim permintaan governor; penyegaran siklus hidup terpisah. Aplikasi harus dimulai ulang. Ini juga sakelar utama untuk angkat saat mulai dingin dan catatan start proses. Jika semuanya mati, ASB diam di proses aplikasi: satu pembukaan file gagal per start proses, tanpa membaca konfigurasi, tanpa IPC."
     },
     "zygisk_hints": {
       "name": "Penyegaran Siklus Hidup Zygisk",
       "desc": "Start/exit yang tervalidasi dari aplikasi dalam allowlist meminta governor yang ada memperbarui data saat layar menyala. Maksimal 8 permintaan/menit, jeda minimal 2 detik. Zygisk tidak memilih frekuensi, profil, atau kebijakan aplikasi; batas thermal, dwell, dan vendor tetap berlaku. Konfirmasi bukan boost atau bukti penghematan daya. LSPosed tidak pernah dimatikan, disembunyikan, dibekukan, atau dibatasi. Batas berlaku untuk setiap companion aktif."
+    },
+    "zygisk_launch": {
+      "name": "Angkat Saat Mulai Dingin (Zygisk)",
+      "desc": "Saat zygote memulai proses baru untuk aplikasi yang Anda buka (Android menandainya sebagai aplikasi teratas), ASB langsung mengetahuinya dan menutupi peluncuran dengan angkat buka kunci: angkat yang sedang berjalan diperpanjang selama start, jika tidak ada maka satu dipasang bahkan di dalam jeda anti-pengulangan 5 detik. Tidak ada nama paket yang dikirim; aturan profil, suhu, chip hangat, dan durasi tetap menentukan. Paling banyak satu start dingin per detik dan 20 per menit; biayanya satu koneksi singkat ke companion per start dingin. Memerlukan sakelar Pengamat Proses Zygisk, bukan daftar izin. Start dingin yang lebih cepat diharapkan, belum terbukti: bandingkan waktu `am start -W` saat aktif dan mati."
+    },
+    "zygisk_ledger": {
+      "name": "Catatan Start Proses (Zygisk)",
+      "desc": "Menghitung, sejak boot ini, berapa banyak proses yang dimulai setiap aplikasi biasa saat layar mati dan menyala. Aplikasi yang terus memulai pekerjaan di malam hari adalah penguras baterai tersembunyi yang umum; yang teratas tampil di diagnostik perangkat dan asbdiag. Hanya nama paket dan penghitung, disimpan di memori (tmpfs); tidak ada yang dibatasi otomatis. Biayanya satu koneksi singkat ke companion per start proses aplikasi selama aktif. Memerlukan sakelar Pengamat Proses Zygisk."
     }
   },
   "nav_live": "Monitor",
@@ -2172,6 +2180,18 @@
   "dev_zygisk_observer_policy_hints": "Policy hints sent",
   "dev_zygisk_observer_hints_accepted": "Policy hints accepted",
   "dev_zygisk_observer_hints_vetoed": "Policy hints vetoed",
+  "dev_zygisk_observer_launch_hints": "Angkat saat mulai dingin",
+  "dev_zygisk_observer_spawn_ledger": "Catatan start proses",
+  "dev_zygisk_observer_policy_generation": "Generasi kebijakan (ditulis)",
+  "dev_zygisk_observer_policy_seen_generation": "Generasi kebijakan (dilihat proses aplikasi)",
+  "dev_zygisk_observer_spawn_events": "Peristiwa sekali kirim diterima",
+  "dev_zygisk_observer_launch_events": "Start dingin diterima",
+  "dev_zygisk_observer_launch_accepted": "Start dingin diterima governor",
+  "dev_zygisk_observer_launch_vetoed": "Start dingin ditolak",
+  "dev_zygisk_observer_launch_unavailable": "Start dingin: governor tidak tersedia",
+  "dev_zygisk_observer_launch_throttled": "Start dingin dibatasi",
+  "dev_zygisk_observer_ledger_events": "Entri catatan",
+  "dev_zygisk_observer_ledger_top_screen_off": "Start terbanyak saat layar mati (aplikasi mati/nyala)",
   "dev_zygisk_observer_hints_status": "Policy-hint applicability",
   "dev_zygisk_observer_lifecycle_coverage": "Lifecycle coverage",
   "dev_zygisk_observer_foreground_events": "Foreground/background events",

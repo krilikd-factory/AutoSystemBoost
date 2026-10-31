@@ -456,11 +456,19 @@
     },
     "zygisk_enabled": {
       "name": "Zygisk 进程观察器",
-      "desc": "仅针对明确允许的应用提供可选遥测。仅启动/退出和受限 IPC 开销，不使用 hook，也不控制应用。此开关本身不发送 governor 请求；生命周期刷新独立开启。应用需要重新启动。"
+      "desc": "仅针对明确允许的应用提供可选遥测。仅启动/退出和受限 IPC 开销，不使用 hook，也不控制应用。此开关本身不发送 governor 请求；生命周期刷新独立开启。应用需要重新启动。它也是冷启动提升和进程启动台账的总开关。全部关闭时，ASB 在应用进程中保持休眠：每次进程启动仅一次失败的文件打开，不解析配置，不进行 IPC。"
     },
     "zygisk_hints": {
       "name": "Zygisk 生命周期刷新",
       "desc": "允许列表中应用经过验证的启动/退出会在屏幕亮起时请求现有 governor 更新数据。每分钟最多 8 次，间隔至少 2 秒。Zygisk 不选择频率、配置文件或应用策略；温控、驻留和厂商限制仍然优先。确认不代表提升性能，也不证明省电。绝不会终止、隐藏、冻结或限制 LSPosed。 该限制按每个活动 companion 分别计算。"
+    },
+    "zygisk_launch": {
+      "name": "Zygisk 冷启动提升",
+      "desc": "当 zygote 为你正在打开的应用启动新进程时（Android 将其标记为顶层应用），ASB 会立即得知，并用解锁提升覆盖这次启动：正在进行的提升会延续到启动过程，若没有则即使在 5 秒防重复间隔内也会触发一次。不发送任何包名；配置文件、温度、芯片过热和提升时长规则仍然决定结果。每秒最多一次冷启动、每分钟最多 20 次；每次冷启动的代价是一次短暂的 companion 连接。需要开启“Zygisk 进程观察器”，无需允许列表。预期冷启动会更快，但尚未证实：请对比开启和关闭时的 `am start -W` 时间。"
+    },
+    "zygisk_ledger": {
+      "name": "Zygisk 进程启动台账",
+      "desc": "统计本次开机以来，每个普通应用在熄屏和亮屏时各启动了多少个进程。夜间反复启动任务的应用是常见的隐性耗电来源；排名靠前的会显示在设备诊断和 asbdiag 中。仅记录包名和计数，保存在内存（tmpfs）中，不会自动限制任何应用。开启期间每次应用进程启动需要一次短暂的 companion 连接。需要开启“Zygisk 进程观察器”。"
     }
   },
   "optFor": {
@@ -2172,6 +2180,18 @@
   "dev_zygisk_observer_policy_hints": "Policy hints sent",
   "dev_zygisk_observer_hints_accepted": "Policy hints accepted",
   "dev_zygisk_observer_hints_vetoed": "Policy hints vetoed",
+  "dev_zygisk_observer_launch_hints": "冷启动提升",
+  "dev_zygisk_observer_spawn_ledger": "进程启动台账",
+  "dev_zygisk_observer_policy_generation": "策略版本（已写入）",
+  "dev_zygisk_observer_policy_seen_generation": "策略版本（应用进程已读取）",
+  "dev_zygisk_observer_spawn_events": "收到的一次性事件",
+  "dev_zygisk_observer_launch_events": "收到的冷启动",
+  "dev_zygisk_observer_launch_accepted": "governor 接受的冷启动",
+  "dev_zygisk_observer_launch_vetoed": "被拒绝的冷启动",
+  "dev_zygisk_observer_launch_unavailable": "冷启动：governor 不可用",
+  "dev_zygisk_observer_launch_throttled": "被限流的冷启动",
+  "dev_zygisk_observer_ledger_events": "台账记录数",
+  "dev_zygisk_observer_ledger_top_screen_off": "熄屏时启动最多（应用 熄屏/亮屏）",
   "dev_zygisk_observer_hints_status": "Policy-hint applicability",
   "dev_zygisk_observer_lifecycle_coverage": "Lifecycle coverage",
   "dev_zygisk_observer_foreground_events": "Foreground/background events",

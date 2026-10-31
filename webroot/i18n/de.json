@@ -429,11 +429,19 @@
     },
     "zygisk_enabled": {
       "name": "Zygisk-Prozessbeobachter",
-      "desc": "Optionale Telemetrie nur für ausdrücklich erlaubte Apps. Start/Ende und begrenzter IPC-Overhead, ohne Hooks oder App-Steuerung. Dieser Schalter allein sendet keine Governor-Anfrage; die Lebenszyklus-Aktualisierung ist separat. Apps müssen neu gestartet werden."
+      "desc": "Optionale Telemetrie nur für ausdrücklich erlaubte Apps. Start/Ende und begrenzter IPC-Overhead, ohne Hooks oder App-Steuerung. Dieser Schalter allein sendet keine Governor-Anfrage; die Lebenszyklus-Aktualisierung ist separat. Apps müssen neu gestartet werden. Er ist auch der Hauptschalter für die Kaltstart-Anhebung und das Prozessstart-Protokoll. Ist alles aus, ruht ASB in App-Prozessen: ein fehlgeschlagener Dateizugriff pro Prozessstart, kein Parsen der Konfiguration, kein IPC."
     },
     "zygisk_hints": {
       "name": "Zygisk-Lebenszyklus-Aktualisierung",
       "desc": "Ein bestätigter Start/Ausstieg einer App aus der Allowlist bittet den vorhandenen Governor bei eingeschaltetem Bildschirm um neue Messwerte. Höchstens 8 Anfragen/Minute, mindestens 2 Sekunden Abstand. Zygisk wählt weder Frequenz, Profil noch App-Richtlinie; Thermal-, Dwell- und Vendor-Grenzen bleiben maßgeblich. Eine Bestätigung ist kein Boost und kein Nachweis von Energieeinsparung. LSPosed wird niemals beendet, verborgen, eingefroren oder gedrosselt. Das Limit gilt pro aktivem Companion."
+    },
+    "zygisk_launch": {
+      "name": "Zygisk-Kaltstart-Anhebung",
+      "desc": "Startet zygote einen neuen Prozess für die App, die du öffnest (Android markiert ihn als Top-App), erfährt ASB es sofort und deckt den Start mit der Entsperr-Anhebung ab: Eine laufende Anhebung wird über den Start verlängert, sonst wird eine auch innerhalb der 5-Sekunden-Sperre gegen Wiederholungen ausgelöst. Kein Paketname wird gesendet; Profil-, Thermik-, Warmchip- und Längenregeln entscheiden weiterhin. Höchstens ein Kaltstart pro Sekunde und 20 pro Minute; kostet eine kurze Companion-Verbindung pro Kaltstart. Benötigt den Schalter „Zygisk-Prozessbeobachter“, nicht die Erlaubnisliste. Schnellere Kaltstarts werden erwartet, sind aber nicht belegt: Vergleiche `am start -W` mit und ohne."
+    },
+    "zygisk_ledger": {
+      "name": "Zygisk-Prozessstart-Protokoll",
+      "desc": "Zählt seit dem aktuellen Start, wie viele Prozesse jede normale App bei aus- und eingeschaltetem Bildschirm startet. Apps, die nachts immer wieder Arbeit anstoßen, sind ein häufiger versteckter Akkuverbrauch; die Spitzenreiter erscheinen in der Gerätediagnose und in asbdiag. Nur Paketnamen und Zähler, im Speicher (tmpfs); nichts wird automatisch eingeschränkt. Kostet eine kurze Companion-Verbindung pro App-Prozessstart, solange aktiv. Benötigt den Schalter „Zygisk-Prozessbeobachter“."
     }
   },
   "nav_live": "Monitor",
@@ -2172,6 +2180,18 @@
   "dev_zygisk_observer_policy_hints": "Policy hints sent",
   "dev_zygisk_observer_hints_accepted": "Policy hints accepted",
   "dev_zygisk_observer_hints_vetoed": "Policy hints vetoed",
+  "dev_zygisk_observer_launch_hints": "Kaltstart-Anhebung",
+  "dev_zygisk_observer_spawn_ledger": "Prozessstart-Protokoll",
+  "dev_zygisk_observer_policy_generation": "Richtlinien-Generation (geschrieben)",
+  "dev_zygisk_observer_policy_seen_generation": "Richtlinien-Generation (von App-Prozessen gesehen)",
+  "dev_zygisk_observer_spawn_events": "Empfangene Einmal-Ereignisse",
+  "dev_zygisk_observer_launch_events": "Gehörte Kaltstarts",
+  "dev_zygisk_observer_launch_accepted": "Vom Governor angenommene Kaltstarts",
+  "dev_zygisk_observer_launch_vetoed": "Abgelehnte Kaltstarts",
+  "dev_zygisk_observer_launch_unavailable": "Kaltstarts: Governor nicht erreichbar",
+  "dev_zygisk_observer_launch_throttled": "Gedrosselte Kaltstarts",
+  "dev_zygisk_observer_ledger_events": "Protokolleinträge",
+  "dev_zygisk_observer_ledger_top_screen_off": "Meiste Starts bei ausgeschaltetem Bildschirm (App aus/an)",
   "dev_zygisk_observer_hints_status": "Policy-hint applicability",
   "dev_zygisk_observer_lifecycle_coverage": "Lifecycle coverage",
   "dev_zygisk_observer_foreground_events": "Foreground/background events",

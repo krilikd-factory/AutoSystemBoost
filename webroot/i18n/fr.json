@@ -523,11 +523,19 @@
     },
     "zygisk_enabled": {
       "name": "Observateur de processus Zygisk",
-      "desc": "Télémétrie optionnelle uniquement pour les applications explicitement autorisées. Début/fin et surcharge IPC limitée, sans hook ni contrôle des applications. Ce commutateur seul n’envoie aucune requête au governor ; l’actualisation du cycle de vie est distincte. Les applications doivent être relancées."
+      "desc": "Télémétrie optionnelle uniquement pour les applications explicitement autorisées. Début/fin et surcharge IPC limitée, sans hook ni contrôle des applications. Ce commutateur seul n’envoie aucune requête au governor ; l’actualisation du cycle de vie est distincte. Les applications doivent être relancées. C’est aussi l’interrupteur principal du relèvement au démarrage à froid et du registre des démarrages de processus. Tout désactivé, ASB reste inactif dans les processus d’applications : une ouverture de fichier échouée par démarrage, aucune lecture de la configuration, aucun IPC."
     },
     "zygisk_hints": {
       "name": "Actualisation du cycle de vie Zygisk",
       "desc": "Un démarrage/arrêt confirmé d’une application de la allowlist demande au governor existant des données actualisées, écran allumé. Au maximum 8 requêtes/minute, espacées d’au moins 2 secondes. Zygisk ne choisit ni fréquence, ni profil, ni politique d’application ; les limites thermiques, de maintien et du fabricant restent prioritaires. Un accusé de réception n’est ni un boost ni une preuve d’économie. LSPosed n’est jamais terminé, masqué, figé ou limité. La limite s’applique à chaque companion actif."
+    },
+    "zygisk_launch": {
+      "name": "Relèvement au démarrage à froid (Zygisk)",
+      "desc": "Quand zygote lance un nouveau processus pour l’application que vous ouvrez (Android le marque comme application au premier plan), ASB le sait aussitôt et couvre le lancement avec le relèvement de déverrouillage : un relèvement en cours est prolongé pendant le démarrage, sinon un relèvement est armé même dans la pause anti-répétition de 5 secondes. Aucun nom de paquet n’est envoyé ; les règles de profil, de température, de puce chaude et de durée décident toujours. Au plus un démarrage à froid par seconde et 20 par minute ; coût : une courte connexion au companion par démarrage à froid. Nécessite l’interrupteur « Observateur de processus Zygisk », pas la liste d’autorisation. Des démarrages à froid plus rapides sont attendus, non prouvés : comparez `am start -W` avec et sans."
+    },
+    "zygisk_ledger": {
+      "name": "Registre des démarrages de processus (Zygisk)",
+      "desc": "Compte, depuis ce démarrage du téléphone, combien de processus chaque application ordinaire lance écran éteint et allumé. Les applications qui relancent du travail sans cesse la nuit sont une cause fréquente de décharge cachée ; les premières apparaissent dans le diagnostic de l’appareil et dans asbdiag. Uniquement des noms de paquets et des compteurs, gardés en mémoire (tmpfs) ; rien n’est restreint automatiquement. Coût : une courte connexion au companion par démarrage de processus d’application tant que c’est actif. Nécessite l’interrupteur « Observateur de processus Zygisk »."
     }
   },
   "opt": {
@@ -2172,6 +2180,18 @@
   "dev_zygisk_observer_policy_hints": "Policy hints sent",
   "dev_zygisk_observer_hints_accepted": "Policy hints accepted",
   "dev_zygisk_observer_hints_vetoed": "Policy hints vetoed",
+  "dev_zygisk_observer_launch_hints": "Relèvement au démarrage à froid",
+  "dev_zygisk_observer_spawn_ledger": "Registre des démarrages de processus",
+  "dev_zygisk_observer_policy_generation": "Génération de la politique (écrite)",
+  "dev_zygisk_observer_policy_seen_generation": "Génération de la politique (vue par les processus)",
+  "dev_zygisk_observer_spawn_events": "Événements ponctuels reçus",
+  "dev_zygisk_observer_launch_events": "Démarrages à froid reçus",
+  "dev_zygisk_observer_launch_accepted": "Démarrages à froid acceptés par le governor",
+  "dev_zygisk_observer_launch_vetoed": "Démarrages à froid refusés",
+  "dev_zygisk_observer_launch_unavailable": "Démarrages à froid : governor indisponible",
+  "dev_zygisk_observer_launch_throttled": "Démarrages à froid limités",
+  "dev_zygisk_observer_ledger_events": "Entrées du registre",
+  "dev_zygisk_observer_ledger_top_screen_off": "Le plus de démarrages écran éteint (app éteint/allumé)",
   "dev_zygisk_observer_hints_status": "Policy-hint applicability",
   "dev_zygisk_observer_lifecycle_coverage": "Lifecycle coverage",
   "dev_zygisk_observer_foreground_events": "Foreground/background events",
