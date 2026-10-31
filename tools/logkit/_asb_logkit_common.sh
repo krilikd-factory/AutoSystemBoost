@@ -2474,18 +2474,54 @@ lk_sysui_verdict() {
     }'
 }
 
+lk_session_kind() {
+  _sk_f="$(sed 's/^.*) //' "/proc/$$/stat" 2>/dev/null | awk '{ print $4 }')"
+  case "$_sk_f" in
+    ''|*[!0-9]*) echo unknown ;;
+    "$$") echo own ;;
+    *) echo "shared:$_sk_f" ;;
+  esac
+}
+
+lk_ss_start_count() {
+  getprop sys.system_server.start_count 2>/dev/null | tr -dc '0-9'
+}
+
+lk_restart_cause() {
+  _rc_last="${1:-}"
+  _rc_el="$(getprop sys.system_server.start_elapsed 2>/dev/null | tr -dc '0-9')"
+  _rc_up="$(cut -d' ' -f1 /proc/uptime 2>/dev/null | tr -dc '0-9')"
+  case "$_rc_last:$_rc_el:$_rc_up" in
+    *::*|:*|*:) echo unknown; return 0 ;;
+  esac
+  _rc_start=$(( $(date +%s) - (_rc_up * 10 - _rc_el) / 1000 ))
+  if [ "$_rc_start" -ge $(( _rc_last - 5 )) ]; then echo framework_restart; else echo recorder_lost; fi
+}
+
 lk_sysui_watch_row() {
   _sw_f="$LK_OUT_DIR/sysui_restarts.txt"
   _sw_pid="$(pidof com.android.systemui 2>/dev/null | awk '{print $1}')"
   [ -n "$_sw_pid" ] || return 0
   if [ -z "${LK_SYSUI_PID:-}" ]; then
     LK_SYSUI_PID="$_sw_pid"
+    LK_SS_COUNT="$(lk_ss_start_count)"
     echo "# SystemUI pid at capture start: $_sw_pid" >> "$_sw_f" 2>/dev/null
+    [ -n "$LK_SS_COUNT" ] && echo "# Android framework start count at capture start: $LK_SS_COUNT" >> "$_sw_f" 2>/dev/null
     return 0
   fi
   [ "$_sw_pid" = "$LK_SYSUI_PID" ] && return 0
+  _sw_ssc="$(lk_ss_start_count)"
+  _sw_fw=""
+  if [ -n "$_sw_ssc" ] && [ -n "${LK_SS_COUNT:-}" ] && [ "$_sw_ssc" != "$LK_SS_COUNT" ]; then
+    _sw_fw=" framework_restart=$LK_SS_COUNT->$_sw_ssc"
+  fi
   {
-    echo "===== SYSTEMUI RESTART $(date '+%F %T') pid $LK_SYSUI_PID -> $_sw_pid phase=${_phase:-?} fsm=$(grep -m1 '^state=' /dev/.asb/state 2>/dev/null | cut -d= -f2) ====="
+    echo "===== SYSTEMUI RESTART $(date '+%F %T') pid $LK_SYSUI_PID -> $_sw_pid phase=${_phase:-?} fsm=$(grep -m1 '^state=' /dev/.asb/state 2>/dev/null | cut -d= -f2)${_sw_fw} ====="
+    if [ -n "$_sw_fw" ]; then
+      echo "--- dropbox system_server_crash / system_server_watchdog / SYSTEM_RESTART (latest) ---"
+      lk_dumpsys dropbox 2>/dev/null | grep -E ' (system_server_crash|system_server_native_crash|system_server_watchdog|SYSTEM_RESTART) ' | tail -n 6
+      lk_dumpsys dropbox --print system_server_crash 2>/dev/null | tail -n 40
+    fi
     echo "--- dropbox system_app_crash (latest) ---"
     lk_dumpsys dropbox --print system_app_crash 2>/dev/null | tail -n 60
     echo "--- dropbox system_app_anr (latest) ---"
@@ -2502,13 +2538,18 @@ lk_sysui_watch_row() {
     _sw_t0=$(( $(date +%s) - 300 ))
     _sw_sd="$(date -d "@$_sw_t0" '+%F %T' 2>/dev/null || date -r "$_sw_t0" '+%F %T' 2>/dev/null)"
     _sw_sl="$(date -d "@$_sw_t0" '+%m-%d %T' 2>/dev/null || date -r "$_sw_t0" '+%m-%d %T' 2>/dev/null)"
-    echo "verdict: $(printf '@@SINCE@@ %s|%s\n%s\n%s\n@@DROPBOX_NATIVE@@\n%s\n' "$_sw_sd" "$_sw_sl" "$_sw_cb" "$_sw_ms" "$_sw_dn" | lk_sysui_verdict)"
+    if [ -n "$_sw_fw" ]; then
+      echo "verdict: the whole Android framework restarted (system_server start ${_sw_ssc}) - SystemUI, the launcher, Bluetooth and every app started again together; not a SystemUI crash"
+    else
+      echo "verdict: $(printf '@@SINCE@@ %s|%s\n%s\n%s\n@@DROPBOX_NATIVE@@\n%s\n' "$_sw_sd" "$_sw_sl" "$_sw_cb" "$_sw_ms" "$_sw_dn" | lk_sysui_verdict)"
+    fi
     echo "--- logcat crash buffer ---"
     printf '%s\n' "$_sw_cb" | tail -n 80
     echo "--- logcat main/system: systemui / ActivityManager around the restart ---"
     printf '%s\n' "$_sw_ms"
   } >> "$_sw_f" 2>/dev/null
   LK_SYSUI_PID="$_sw_pid"
+  [ -n "$_sw_ssc" ] && LK_SS_COUNT="$_sw_ssc"
   LK_SYSUI_RESTARTS=$(( ${LK_SYSUI_RESTARTS:-0} + 1 ))
 }
 
@@ -3987,7 +4028,7 @@ lk_init() {
   echo "$LK_GOV_LOG_OFFSET" > "$LK_OUT_DIR/_govlog_start_offset.txt"
 
   echo "[$(date '+%H:%M:%S')] logkit init: moddir=$MODDIR scenario=$LK_SCENARIO out=$LK_OUT_DIR gov_offset=$LK_GOV_LOG_OFFSET cgroup=${LK_CGROUP_ESCAPE:-skipped}"
-  { echo "cgroup_escape=${LK_CGROUP_ESCAPE:-skipped}"; cat "/proc/$$/cgroup" 2>/dev/null; } > "$LK_OUT_DIR/_recorder_cgroup.txt" 2>/dev/null || true
+  { echo "cgroup_escape=${LK_CGROUP_ESCAPE:-skipped}"; echo "session=$(lk_session_kind)"; cat "/proc/$$/cgroup" 2>/dev/null; } > "$LK_OUT_DIR/_recorder_cgroup.txt" 2>/dev/null || true
   if [ "${LK_RESUME:-0}" = 1 ]; then
     lk_discover_zones
     lk_snapshot_state "reboot_$(date +%s)"

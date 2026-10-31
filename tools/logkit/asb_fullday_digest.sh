@@ -216,9 +216,11 @@ fi
 
 if [ -s "$_DIR/reboots.txt" ]; then
   awk -F'|' '!/^#/ && $1 ~ /^[0-9]+$/ {
+      if ($6 ~ /^same_boot:/) { s++; if ($3 ~ /^[0-9]+$/) sd += $3; if ($6 == "same_boot:framework_restart") f++; next }
       n++; if ($3 ~ /^[0-9]+$/) d += $3
       m = $4; r = $5; gsub(/[\t=]/, " ", m); gsub(/[\t=]/, " ", r)
-    } END { if (n > 0) printf "reboot\tn=%d\tdown_min=%d\tmod=%s\trom=%s\n", n, d / 60, m, r }' "$_DIR/reboots.txt" 2>/dev/null
+    } END { if (n > 0) printf "reboot\tn=%d\tdown_min=%d\tmod=%s\trom=%s\n", n, d / 60, m, r
+            if (s > 0) printf "restart\tn=%d\tframework=%d\tgap_min=%d\n", s, f, sd / 60 }' "$_DIR/reboots.txt" 2>/dev/null
 fi
 
 # ----- meta2: device context (fix213, audit 8.1) ----------------------------------

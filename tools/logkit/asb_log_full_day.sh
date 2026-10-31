@@ -907,7 +907,7 @@ lk_emit_current_soc_consistency() {
   case "$_cc_cs:$_cc_cn" in
     *[!0-9:]*|:*|*:) : ;;
     *) if [ "$_cc_cn" -ge 10 ] && [ "$_cc_cs" -gt 0 ] && { [ "$_cc_cs" -lt 77 ] || [ "$_cc_cs" -gt 130 ]; }; then
-         _cc_f=$(( 1000 / _cc_cs ))
+         _cc_f=$(( (10000 / _cc_cs + 5) / 10 ))
          echo "governor's gauge check: on screen-on windows current_now integrates to x$(( _cc_cs / 100 )).$(printf '%02d' $(( _cc_cs % 100 ))) of the SOC-derived drain ($_cc_cn windows) - multiply screen-on mA by about $(( _cc_f / 10 )).$(( _cc_f % 10 )); a gauge property, not the load"
        fi ;;
   esac
@@ -1541,8 +1541,11 @@ lk_emit_full_day_report() {
       echo " capture: 0h target (until stopped), $(( ($(date +%s) - LK_START_EPOCH) / 60 )) min elapsed"
     fi
     if [ -s "$LK_OUT_DIR/reboots.txt" ]; then
-      awk -F'|' '!/^#/ && $1 ~ /^[0-9]+$/ { n++; if ($3 ~ /^[0-9]+$/) d += $3; m = $4 }
-        END { if (n > 0) printf " reboots during the capture: %d (about %d min between the last sample and the resume, in no phase)%s\n", n, d / 60, (m != "" ? "; module after the last one: " m : "") }' \
+      awk -F'|' '!/^#/ && $1 ~ /^[0-9]+$/ {
+          if ($6 ~ /^same_boot:/) { r++; if ($3 ~ /^[0-9]+$/) rd += $3; if ($6 == "same_boot:framework_restart") fr++; next }
+          n++; if ($3 ~ /^[0-9]+$/) d += $3; m = $4 }
+        END { if (n > 0) printf " reboots during the capture: %d (about %d min between the last sample and the resume, in no phase)%s\n", n, d / 60, (m != "" ? "; module after the last one: " m : "")
+              if (r > 0) printf " recorder restarted without a reboot: %d (Android framework restart: %d; about %d min between the last sample and the resume, in no phase)\n", r, fr, rd / 60 }' \
         "$LK_OUT_DIR/reboots.txt" 2>/dev/null
     fi
     echo "==================================================================="
@@ -2030,6 +2033,7 @@ lk_resume_merge() {
   _rmg_ver="$(sed -n 's/^version=//p' "$MODDIR/module.prop" 2>/dev/null | head -n 1 | tr -d '|\r')"
   _rmg_rom="$(getprop ro.build.display.id 2>/dev/null | tr -d '|\r')"
   _rmg_why="$(getprop sys.boot.reason 2>/dev/null | tr -d '|\r')"
+  [ "${ASB_LK_RESUME_KIND:-}" = restart ] && _rmg_why="same_boot:$(lk_restart_cause "$_rmg_last")"
   [ -s "$LK_OUT_DIR/reboots.txt" ] || echo "# epoch|iso|down_s|module|rom|boot_reason" > "$LK_OUT_DIR/reboots.txt"
   echo "${_rmg_now}|$(date '+%Y-%m-%d %H:%M:%S')|${_rmg_down}|${_rmg_ver}|${_rmg_rom}|${_rmg_why}" >> "$LK_OUT_DIR/reboots.txt"
 }
@@ -2189,7 +2193,9 @@ lk_bt_reconnect_snapshot "$LK_TAG_BEFORE"
 lk_detect_phase "$(date +%s)"; _phase="$LK_PHASE_OUT"
 lk_capture_screenoff_class_row "$_phase"
 lk_phase_ledger_open "$_phase"
-if [ "$LK_RESUME" = 1 ]; then
+if [ "$LK_RESUME" = 1 ] && [ "${ASB_LK_RESUME_KIND:-}" = restart ]; then
+  echo "$(date +%s)|$(date '+%Y-%m-%d %H:%M:%S')|$_phase|restart" >> "$LK_OUT_DIR/phase_timeline.txt"
+elif [ "$LK_RESUME" = 1 ]; then
   echo "$(date +%s)|$(date '+%Y-%m-%d %H:%M:%S')|$_phase|reboot" >> "$LK_OUT_DIR/phase_timeline.txt"
 else
   echo "$(date +%s)|$(date '+%Y-%m-%d %H:%M:%S')|$_phase|capture_start" >> "$LK_OUT_DIR/phase_timeline.txt"
