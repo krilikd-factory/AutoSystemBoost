@@ -231,6 +231,29 @@ else
   NOTE "No boot timeline yet. Reboot once, wait for the system to finish starting, then export asbdiag again."
 fi
 
+_asb_app_crash_rows() {
+  awk '
+    function flush() {
+      if (h == "") return
+      line = h "  " (p != "" ? p : "?") "  " (ex != "" ? substr(ex, 1, 110) : "?")
+      if (hk != "") line = line "  [hook frame in the stack]"
+      if (fr != "") line = line "  first app frame: " substr(fr, 1, 90)
+      print line
+      h = ""
+    }
+    /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9:.]+ system_app_crash/ { flush(); h = substr($0, 1, 19); p = ""; ex = ""; hk = ""; fr = ""; body = 0; next }
+    h == "" { next }
+    body == 0 && /^Process: / { p = $2; next }
+    body == 0 && /^[ \t]*$/ { body = 1; next }
+    body == 1 && ex == "" && NF > 0 { ex = $0; next }
+    body == 1 && /[Xx]posed|LSPHooker|[Ll][Ss][Pp]osed/ { hk = 1 }
+    body == 1 && fr == "" && /^[ \t]+at / {
+      f = $2
+      if (f !~ /^(java|javax|android|androidx|com\.android|com\.google\.android\.material|dalvik|kotlin|kotlinx|libcore|sun|jdk|com\.oplus|com\.coloros|oplus|org\.lsposed|de\.robv|io\.github\.libxposed|LSPHooker|J)[.$_]/) fr = f
+    }
+    END { flush() }'
+}
+
 # Why did the LAST boot end? Readable on every build.
 #
 # An OP12 report: in the morning the launcher was black with only the clock, the alarm did
@@ -256,13 +279,28 @@ if [ "$_kp" = "0" ] || [ "$_kpo" = "0" ]; then
   NOTE "a kernel crash will NOT reboot this phone (panic=0 waits forever / panic_on_oops=0 runs on after an oops) - a hang then looks like a frozen black screen until a forced restart. ASB no longer sets these; if they stay 0 after a reboot, another module or the kernel does."
 fi
 [ -n "$_lb_hist" ] && P "  boot reason history   : $_lb_hist"
+_ss_cnt="$(getprop sys.system_server.start_count 2>/dev/null | tr -dc '0-9')"
+_ss_el="$(getprop sys.system_server.start_elapsed 2>/dev/null | tr -dc '0-9')"
+_ss_up="$(cut -d' ' -f1 /proc/uptime 2>/dev/null | tr -dc '0-9')"
+if [ -n "$_ss_cnt" ] && [ -n "$_ss_el" ] && [ -n "$_ss_up" ]; then
+  _ss_at=$(( $(date +%s) - (_ss_up * 10 - _ss_el) / 1000 ))
+  _ss_when="$(date -d "@$_ss_at" '+%F %T' 2>/dev/null || date -r "$_ss_at" '+%F %T' 2>/dev/null || echo "$_ss_at")"
+  P "  Android framework     : started ${_ss_cnt} time(s) this boot; the running one since ${_ss_when} ($(( _ss_el / 60000 )) min after the kernel started)"
+  if [ "$_ss_cnt" -gt 1 ] 2>/dev/null; then
+    NOTE "the Android framework (system_server) restarted $(( _ss_cnt - 1 )) time(s) without a reboot, the latest at ${_ss_when}: SystemUI, the launcher, Bluetooth and every app started again together. A system_server crash or watchdog record below names the cause; with none, it was killed or restarted from outside (a module, a root app, the ROM's hang monitor). Infinite logs started from the WebUI before fix279 stopped with it."
+  fi
+fi
 if command -v dumpsys >/dev/null 2>&1; then
   _lb_db="$(dumpsys dropbox 2>/dev/null)"
-  for _lb_tag in system_server_watchdog system_server_crash SYSTEM_TOMBSTONE SYSTEM_LAST_KMSG system_app_anr system_server_anr; do
+  for _lb_tag in system_server_watchdog system_server_crash system_server_native_crash SYSTEM_RESTART SYSTEM_TOMBSTONE SYSTEM_LAST_KMSG system_app_crash system_app_native_crash system_app_anr system_server_anr; do
     _lb_last="$(printf '%s\n' "$_lb_db" | grep -E "^[0-9-]+ [0-9:.]+ $_lb_tag( |$)" | tail -1 | cut -c1-19)"
     _lb_n="$(printf '%s\n' "$_lb_db" | grep -cE "^[0-9-]+ [0-9:.]+ $_lb_tag( |$)")"
     [ "${_lb_n:-0}" -gt 0 ] && P "  dropbox $_lb_tag : ${_lb_n} (latest ${_lb_last})"
   done
+  if printf '%s\n' "$_lb_db" | grep -qE '^[0-9-]+ [0-9:.]+ system_app_crash( |$)'; then
+    P "  latest system app crashes (Java, newest last):"
+    dumpsys dropbox --print system_app_crash 2>/dev/null | _asb_app_crash_rows | tail -n 4 | while IFS= read -r _lb_row; do P "    $_lb_row"; done
+  fi
   NOTE "After a hang or a forced reboot, export asbdiag BEFORE using the phone further: the dropbox keeps only a few entries per tag."
 fi
 # Which processes crashed (fix141). The 22:45 asbdiag on the OP15 counted 18 tombstones, the
