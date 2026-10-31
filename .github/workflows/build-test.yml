@@ -105,7 +105,15 @@ jobs:
             tests/asb_features.sh \
             tests/asb_ui.sh \
             tests/asb_system.sh \
-            tests/asb_package_tweaks.sh; do
+            tests/asb_package_tweaks.sh \
+            tests/asb_zygisk.sh \
+            "runtime/asb_zygisk.sh" \
+            "runtime/asb_zygisk_info.sh" \
+            "runtime/asb_pressure.sh" \
+            src/zygisk/zygisk.hpp \
+            src/zygisk/asb_observer_protocol.h \
+            src/zygisk/asb_observer_core.h \
+            src/zygisk/asb_observer.cpp; do
             if [ ! -f "$f" ]; then
               echo "ERROR: required file missing: $f"
               exit 1

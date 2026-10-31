@@ -110,7 +110,15 @@ jobs:
             tests/asb_features.sh \
             tests/asb_ui.sh \
             tests/asb_system.sh \
-            tests/asb_package_tweaks.sh; do
+            tests/asb_package_tweaks.sh \
+            tests/asb_zygisk.sh \
+            "runtime/asb_zygisk.sh" \
+            "runtime/asb_zygisk_info.sh" \
+            "runtime/asb_pressure.sh" \
+            src/zygisk/zygisk.hpp \
+            src/zygisk/asb_observer_protocol.h \
+            src/zygisk/asb_observer_core.h \
+            src/zygisk/asb_observer.cpp; do
             if [ ! -f "$f" ]; then
               echo "ERROR: required file missing: $f"
               exit 1
@@ -307,6 +315,15 @@ jobs:
           echo "Binary size: $SIZE bytes"
           [ "$SIZE" -gt 10000 ]   || { echo "ERROR: too small"; exit 1; }
           [ "$SIZE" -lt 2000000 ] || { echo "ERROR: too large"; exit 1; }
+
+          for Z in zygisk/arm64-v8a.so zygisk/armeabi-v7a.so; do
+            test -f "$Z" || { echo "ERROR: $Z not found"; exit 1; }
+            ZFILE="$(file "$Z")"; echo "$Z file: $ZFILE"
+            echo "$ZFILE" | grep -q "ELF" || { echo "ERROR: $Z is not ELF"; exit 1; }
+            echo "$ZFILE" | grep -q "shared object" || { echo "ERROR: $Z is not a shared object"; exit 1; }
+          done
+          file zygisk/arm64-v8a.so | grep -q "aarch64" || { echo "ERROR: wrong observer arm64 ABI"; exit 1; }
+          file zygisk/armeabi-v7a.so | grep -q "ARM" || { echo "ERROR: wrong observer arm32 ABI"; exit 1; }
 
           test -f "$SO" || { echo "ERROR: $SO not found"; exit 1; }
           ATT="bin/arm64-v8a/asb_dsp_attach"
