@@ -417,7 +417,7 @@
     },
     "heytap_mcs": {
       "name": "Notificaciones push de HeyTap / OPPO",
-      "desc": "«Desactivado» deshabilita com.heytap.mcs sin sustituir archivos del sistema. Las aplicaciones que usan HeyTap/OPPO Push pueden perder notificaciones o recibirlas tarde. Al activarlo también se solicita una única compilación ART guiada por perfil tras el siguiente reinicio; puede usar temporalmente más CPU, almacenamiento y batería. «Stock» restaura solo el estado de MCS cambiado por ASB y cancela una compilación que aún no haya comenzado.",
+      "desc": "«Desactivado» deshabilita com.heytap.mcs sin sustituir archivos del sistema. Las aplicaciones que usan HeyTap/OPPO Push pueden perder notificaciones o recibirlas tarde. Al activarlo también se solicita una única compilación ART guiada por perfil tras el siguiente reinicio; puede usar temporalmente más CPU, almacenamiento y batería. «Stock» restaura solo el estado de MCS cambiado por ASB y cancela una compilación que aún no haya comenzado. Tras el reinicio espera al cargador (Charging o Full) para no calentar ni descargar el teléfono en la mano; sin cargador en 24 h queda pendiente hasta el siguiente arranque.",
       "descOpt": {
         "stock": "MCS queda bajo el control de Android/OEM; se cancela la solicitud ART pendiente.",
         "off": "Deshabilita el transporte HeyTap Push y compila una vez tras el siguiente reinicio. Comprueba después las notificaciones."
@@ -1875,6 +1875,7 @@
   "lr_dx_fix_cap_bat": "Si los tirones te molestan, cambia a Smart o Equilibrado para las apps pesadas.",
   "lr_dx_smooth_wake": "Los tirones se concentran al desbloquear y abrir apps: allí el {pct}% de los fotogramas llega tarde frente al {ord}% del día - el impulso al tocar no sube bastante las frecuencias en este dispositivo.",
   "lr_dx_also_cap_ok": "Los techos de frecuencia de ASB no añaden tirones: {yes}% en el techo, {no}% por debajo.",
+  "lr_dx_also_bhold": "Retención al desplazar en Batería, medida por app: se mantiene donde reduce los tirones (apps: {k}), se retira donde no ayuda (apps: {r}), en prueba: {t}.",
   "lr_dx_also_vendor": "El firmware mantuvo los núcleos prime por debajo del techo de ASB en {n} de {of} comprobaciones (PowerHAL o térmica del kernel) - ASB no lo anula.",
   "lr_dx_heat_long": "La CPU pasó {min} por encima de 45 °C, sobre todo en «{phase}»; pico {cpu}°.",
   "lr_dx_fix_heat": "Reduce la carga sostenida (juegos, videollamadas largas mientras carga) o usa un perfil más suave; la funda o cargar mientras juegas añaden calor.",
@@ -2072,7 +2073,7 @@
   "dev_guide_kernel_fuse_bpf": "FUSE-BPF needs its own positive evidence. Ordinary FUSE, generic eBPF or a connection count alone is insufficient.",
   "dev_insight_kernel_origin": "Kernel origin is {origin}: this is an evidence classification, not guaranteed provenance. ASB still gates every control by the interfaces this kernel and ROM actually expose.",
   "st_hey_absent": "MCS no instalado",
-  "st_hey_pending": "MCS desactivado · ART tras reiniciar",
+  "st_hey_pending": "MCS desactivado · ART tras reiniciar, al cargar",
   "st_hey_running": "Compilando ART",
   "st_hey_done": "MCS desactivado · ART completada",
   "st_hey_failed": "MCS desactivado · ART fallida",
@@ -2080,7 +2081,7 @@
   "st_doc_absent": "DocumentsUI ausente",
   "st_doc_applied": "selector reparado",
   "st_doc_already": "ya reparado",
-  "t_hey_off": "HeyTap MCS deshabilitado · ART se compilará una vez tras el siguiente reinicio",
+  "t_hey_off": "HeyTap MCS deshabilitado · ART se compilará una vez tras el siguiente reinicio, mientras se carga",
   "t_hey_done": "HeyTap MCS sigue deshabilitado · ART ya ha terminado",
   "t_hey_compile_failed": "HeyTap MCS sigue deshabilitado · ART falló y no se reintentará automáticamente",
   "t_hey_stock": "Estado de HeyTap MCS restaurado · compilación ART pendiente cancelada",
@@ -2092,7 +2093,7 @@
   "t_doc_absent": "DocumentsUI no está instalado en este dispositivo",
   "t_doc_rolled_back": "La ROM rechazó la reparación; ASB revirtió sus cambios",
   "t_doc_failed": "DocumentsUI no se cambió de forma segura; se conservaron los estados originales",
-  "wb_heytap": "Las apps con HeyTap/OPPO Push pueden perder o retrasar notificaciones; ART se ejecuta una vez tras reiniciar",
+  "wb_heytap": "Las apps con HeyTap/OPPO Push pueden perder o retrasar notificaciones; ART se ejecuta una vez tras reiniciar, al cargar",
   "wb_documentsui": "ColorOS File Manager permanece deshabilitado mientras esta reparación esté activa",
   "dev_sec_system_load": "Current system pressure",
   "dev_sec_zygisk_observer": "Zygisk observer",

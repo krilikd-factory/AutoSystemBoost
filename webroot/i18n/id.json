@@ -417,7 +417,7 @@
     },
     "heytap_mcs": {
       "name": "Notifikasi Push HeyTap / OPPO",
-      "desc": "“Nonaktif” menonaktifkan com.heytap.mcs tanpa mengganti file sistem. Aplikasi yang memakai HeyTap/OPPO Push dapat kehilangan notifikasi atau menerimanya terlambat. Pengaktifan juga membuat satu permintaan kompilasi ART berbasis profil setelah boot ulang berikutnya; proses ini dapat sementara memakai CPU, penyimpanan, dan baterai. “Stock” hanya memulihkan status MCS yang diubah ASB dan membatalkan kompilasi yang belum dimulai.",
+      "desc": "“Nonaktif” menonaktifkan com.heytap.mcs tanpa mengganti file sistem. Aplikasi yang memakai HeyTap/OPPO Push dapat kehilangan notifikasi atau menerimanya terlambat. Pengaktifan juga membuat satu permintaan kompilasi ART berbasis profil setelah boot ulang berikutnya; proses ini dapat sementara memakai CPU, penyimpanan, dan baterai. “Stock” hanya memulihkan status MCS yang diubah ASB dan membatalkan kompilasi yang belum dimulai. Setelah boot ulang, kompilasi menunggu pengisi daya (Charging atau Full) agar tidak memanaskan atau menguras ponsel di tangan; tanpa pengisi daya dalam 24 jam, permintaan tetap tertunda hingga boot berikutnya.",
       "descOpt": {
         "stock": "MCS tetap di bawah kendali Android/OEM; permintaan ART tertunda dibatalkan.",
         "off": "Nonaktifkan transport HeyTap Push dan kompilasi sekali setelah boot ulang berikutnya. Periksa notifikasi setelahnya."
@@ -1875,6 +1875,7 @@
   "lr_dx_fix_cap_bat": "Jika tersendat mengganggu, beralihlah ke Smart atau Seimbang untuk aplikasi berat.",
   "lr_dx_smooth_wake": "Tersendat terpusat saat membuka kunci dan membuka aplikasi: di sana {pct}% frame terlambat dibanding {ord}% sepanjang hari - dorongan saat sentuh tidak cukup menaikkan frekuensi di perangkat ini.",
   "lr_dx_also_cap_ok": "Batas frekuensi ASB tidak menambah tersendat: {yes}% di batas, {no}% di bawahnya.",
+  "lr_dx_also_bhold": "Penahanan saat menggulir di Baterai, diukur per aplikasi: dipertahankan bila mengurangi patah-patah (aplikasi: {k}), dilepas bila tidak membantu (aplikasi: {r}), sedang diuji: {t}.",
   "lr_dx_also_vendor": "Firmware menahan inti prime di bawah batas ASB pada {n} dari {of} pemeriksaan (PowerHAL atau termal kernel) - ASB tidak mengesampingkannya.",
   "lr_dx_heat_long": "CPU berada di atas 45 °C selama {min}, terbanyak saat «{phase}»; puncak {cpu}°.",
   "lr_dx_fix_heat": "Kurangi beban berkepanjangan (game, panggilan video lama sambil mengisi daya) atau pakai profil yang lebih ringan; casing dan mengisi daya saat bermain menambah panas.",
@@ -2072,7 +2073,7 @@
   "dev_guide_kernel_fuse_bpf": "FUSE-BPF needs its own positive evidence. Ordinary FUSE, generic eBPF or a connection count alone is insufficient.",
   "dev_insight_kernel_origin": "Kernel origin is {origin}: this is an evidence classification, not guaranteed provenance. ASB still gates every control by the interfaces this kernel and ROM actually expose.",
   "st_hey_absent": "MCS tidak terpasang",
-  "st_hey_pending": "MCS nonaktif · ART setelah boot ulang",
+  "st_hey_pending": "MCS nonaktif · ART setelah boot ulang, saat mengisi daya",
   "st_hey_running": "Mengompilasi ART",
   "st_hey_done": "MCS nonaktif · ART selesai",
   "st_hey_failed": "MCS nonaktif · ART gagal",
@@ -2080,7 +2081,7 @@
   "st_doc_absent": "DocumentsUI tidak ada",
   "st_doc_applied": "pemilih diperbaiki",
   "st_doc_already": "sudah diperbaiki",
-  "t_hey_off": "HeyTap MCS dinonaktifkan · ART akan dikompilasi sekali setelah boot ulang berikutnya",
+  "t_hey_off": "HeyTap MCS dinonaktifkan · ART akan dikompilasi sekali setelah boot ulang berikutnya, saat mengisi daya",
   "t_hey_done": "HeyTap MCS tetap nonaktif · ART sudah selesai",
   "t_hey_compile_failed": "HeyTap MCS tetap nonaktif · ART gagal dan tidak akan diulang otomatis",
   "t_hey_stock": "Status HeyTap MCS dipulihkan · kompilasi ART tertunda dibatalkan",
@@ -2092,7 +2093,7 @@
   "t_doc_absent": "DocumentsUI tidak terpasang di perangkat ini",
   "t_doc_rolled_back": "ROM menolak perbaikan; ASB membatalkan perubahannya",
   "t_doc_failed": "DocumentsUI tidak diubah dengan aman; status asli disimpan untuk pemulihan",
-  "wb_heytap": "Aplikasi HeyTap/OPPO Push dapat kehilangan atau menunda notifikasi; ART berjalan sekali setelah boot ulang",
+  "wb_heytap": "Aplikasi HeyTap/OPPO Push dapat kehilangan atau menunda notifikasi; ART berjalan sekali setelah boot ulang, saat mengisi daya",
   "wb_documentsui": "ColorOS File Manager tetap nonaktif selama perbaikan ini aktif",
   "dev_sec_system_load": "Current system pressure",
   "dev_sec_zygisk_observer": "Zygisk observer",

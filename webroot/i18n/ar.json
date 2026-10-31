@@ -444,7 +444,7 @@
     },
     "heytap_mcs": {
       "name": "إشعارات HeyTap / OPPO Push",
-      "desc": "يعطّل «إيقاف» الحزمة com.heytap.mcs من دون استبدال ملفات النظام. قد تتوقف إشعارات التطبيقات التي تستخدم HeyTap/OPPO Push أو تتأخر. وينشئ التفعيل طلباً واحداً لتجميع ART الموجّه بالملف الشخصي بعد إعادة التشغيل التالية؛ وقد يستهلك ذلك المعالج والتخزين والبطارية مؤقتاً. يعيد «المخزون» حالة MCS التي غيّرها ASB فقط ويلغي التجميع إذا لم يبدأ.",
+      "desc": "يعطّل «إيقاف» الحزمة com.heytap.mcs من دون استبدال ملفات النظام. قد تتوقف إشعارات التطبيقات التي تستخدم HeyTap/OPPO Push أو تتأخر. وينشئ التفعيل طلباً واحداً لتجميع ART الموجّه بالملف الشخصي بعد إعادة التشغيل التالية؛ وقد يستهلك ذلك المعالج والتخزين والبطارية مؤقتاً. يعيد «المخزون» حالة MCS التي غيّرها ASB فقط ويلغي التجميع إذا لم يبدأ. بعد إعادة التشغيل ينتظر الشاحن (Charging أو Full) حتى لا يسخن الهاتف أو تنفد بطاريته في يدك؛ وإن لم يتصل الشاحن خلال 24 ساعة يبقى الطلب معلقًا حتى الإقلاع التالي.",
       "descOpt": {
         "stock": "يبقى MCS تحت إدارة Android/OEM ويُلغى طلب ART المعلق.",
         "off": "تعطيل نقل HeyTap Push والتجميع مرة واحدة بعد إعادة التشغيل التالية. تحقق من الإشعارات بعد ذلك."
@@ -1875,6 +1875,7 @@
   "lr_dx_fix_cap_bat": "إذا كان التقطّع مزعجًا فانتقل إلى الملف الذكي أو المتوازن للتطبيقات الثقيلة.",
   "lr_dx_smooth_wake": "يتركز التقطّع عند فتح القفل وفتح التطبيقات: هناك تأخّر {pct}% من الإطارات مقابل {ord}% طوال اليوم - تعزيز اللمس لا يرفع الترددات بما يكفي على هذا الجهاز.",
   "lr_dx_also_cap_ok": "أسقف التردد في ASB لا تضيف تقطّعًا: {yes}% عند السقف و{no}% تحته.",
+  "lr_dx_also_bhold": "إبقاء رفع التردد أثناء التمرير في ملف البطارية يُقاس لكل تطبيق: يُبقى حيث يقلل التقطع (التطبيقات: {k})، ويُلغى حيث لا يفيد (التطبيقات: {r})، قيد الاختبار: {t}.",
   "lr_dx_also_vendor": "أبقى البرنامج الثابت الأنوية الأقوى تحت سقف ASB في {n} من {of} فحوص (PowerHAL أو الحماية الحرارية في النواة) - ولا يتجاوز ASB ذلك.",
   "lr_dx_heat_long": "قضى المعالج {min} فوق 45 °C، أغلبها في «{phase}»؛ الذروة {cpu}°.",
   "lr_dx_fix_heat": "خفّف الحِمل المستمر (الألعاب، مكالمات الفيديو الطويلة أثناء الشحن) أو استخدم ملفًا ألطف؛ الغطاء والشحن أثناء اللعب يزيدان الحرارة.",
@@ -2072,7 +2073,7 @@
   "dev_guide_kernel_fuse_bpf": "FUSE-BPF needs its own positive evidence. Ordinary FUSE, generic eBPF or a connection count alone is insufficient.",
   "dev_insight_kernel_origin": "Kernel origin is {origin}: this is an evidence classification, not guaranteed provenance. ASB still gates every control by the interfaces this kernel and ROM actually expose.",
   "st_hey_absent": "MCS غير مثبت",
-  "st_hey_pending": "MCS متوقف · ART بعد إعادة التشغيل",
+  "st_hey_pending": "MCS متوقف · ART بعد إعادة التشغيل أثناء الشحن",
   "st_hey_running": "جارٍ تجميع ART",
   "st_hey_done": "MCS متوقف · اكتمل ART",
   "st_hey_failed": "MCS متوقف · فشل ART",
@@ -2080,7 +2081,7 @@
   "st_doc_absent": "DocumentsUI غير موجود",
   "st_doc_applied": "تم إصلاح المنتقي",
   "st_doc_already": "تم الإصلاح مسبقاً",
-  "t_hey_off": "تم تعطيل HeyTap MCS · سيُنفذ تجميع ART مرة واحدة بعد إعادة التشغيل التالية",
+  "t_hey_off": "تم تعطيل HeyTap MCS · سيُنفذ تجميع ART مرة واحدة بعد إعادة التشغيل التالية أثناء الشحن",
   "t_hey_done": "يبقى HeyTap MCS معطلاً · اكتمل تجميع ART",
   "t_hey_compile_failed": "يبقى HeyTap MCS معطلاً · فشل ART ولن يتكرر تلقائياً",
   "t_hey_stock": "استُعيدت حالة HeyTap MCS · أُلغي ART المعلق",
@@ -2092,7 +2093,7 @@
   "t_doc_absent": "DocumentsUI غير مثبت على هذا الجهاز",
   "t_doc_rolled_back": "رفضت ROM الإصلاح؛ تراجع ASB عن تغييراته",
   "t_doc_failed": "لم تتغير حالة DocumentsUI بأمان؛ حُفظت الحالات الأصلية للاستعادة",
-  "wb_heytap": "قد تفقد تطبيقات HeyTap/OPPO Push الإشعارات أو تتأخر؛ يعمل ART مرة واحدة بعد إعادة التشغيل",
+  "wb_heytap": "قد تفقد تطبيقات HeyTap/OPPO Push الإشعارات أو تتأخر؛ يعمل ART مرة واحدة بعد إعادة التشغيل أثناء الشحن",
   "wb_documentsui": "يبقى ColorOS File Manager معطلاً أثناء تفعيل هذا الإصلاح",
   "dev_sec_system_load": "Current system pressure",
   "dev_sec_zygisk_observer": "Zygisk observer",

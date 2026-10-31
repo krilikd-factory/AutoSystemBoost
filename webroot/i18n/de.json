@@ -417,7 +417,7 @@
     },
     "heytap_mcs": {
       "name": "HeyTap-/OPPO-Push-Benachrichtigungen",
-      "desc": "„Aus“ deaktiviert com.heytap.mcs ohne Ersetzen von Systemdateien. Apps mit HeyTap/OPPO Push können Benachrichtigungen verlieren oder verspätet erhalten. Beim Aktivieren wird außerdem eine einmalige profilgesteuerte ART-Kompilierung nach dem nächsten Neustart angefordert; dabei können CPU, Speicher und Akku vorübergehend stärker belastet werden. „Stock“ stellt nur den von ASB geänderten MCS-Zustand wieder her und bricht eine noch nicht gestartete Kompilierung ab.",
+      "desc": "„Aus“ deaktiviert com.heytap.mcs ohne Ersetzen von Systemdateien. Apps mit HeyTap/OPPO Push können Benachrichtigungen verlieren oder verspätet erhalten. Beim Aktivieren wird außerdem eine einmalige profilgesteuerte ART-Kompilierung nach dem nächsten Neustart angefordert; dabei können CPU, Speicher und Akku vorübergehend stärker belastet werden. „Stock“ stellt nur den von ASB geänderten MCS-Zustand wieder her und bricht eine noch nicht gestartete Kompilierung ab. Nach dem Neustart wartet sie auf das Ladegerät (Charging oder Full), damit die Kompilierung ein Telefon in der Hand weder erwärmt noch entlädt; ohne Ladegerät innerhalb von 24 h bleibt sie bis zum nächsten Start ausstehend.",
       "descOpt": {
         "stock": "MCS bleibt unter Android-/OEM-Kontrolle; eine ausstehende ART-Anfrage wird abgebrochen.",
         "off": "HeyTap-Push-Transport deaktivieren und nach dem nächsten Neustart einmal kompilieren. Danach Benachrichtigungen prüfen."
@@ -1875,6 +1875,7 @@
   "lr_dx_fix_cap_bat": "Wenn das Ruckeln stört, wechsle für schwere Apps auf Smart oder Ausgewogen.",
   "lr_dx_smooth_wake": "Das Ruckeln häuft sich beim Entsperren und App-Öffnen: dort {pct}% verspätete Bilder gegenüber {ord}% über den Tag - der Touch-Boost hebt die Takte auf diesem Gerät nicht genug an.",
   "lr_dx_also_cap_ok": "Die ASB-Frequenzgrenzen erzeugen kein Ruckeln: {yes}% an der Grenze, {no}% darunter.",
+  "lr_dx_also_bhold": "Scroll-Halt auf Akku, pro App gemessen: beibehalten, wo er das Ruckeln senkt (Apps: {k}), aufgehoben, wo er nicht hilft (Apps: {r}), in Prüfung: {t}.",
   "lr_dx_also_vendor": "Die Firmware hielt die Prime-Kerne in {n} von {of} Prüfungen unter der ASB-Grenze (PowerHAL oder Kernel-Thermik) - ASB umgeht das nicht.",
   "lr_dx_heat_long": "Die CPU lag {min} über 45 °C, am meisten in „{phase}“; Spitze {cpu}°.",
   "lr_dx_fix_heat": "Senke die Dauerlast (Spiele, lange Videoanrufe beim Laden) oder nimm ein sanfteres Profil; eine Hülle oder Laden beim Spielen bringt zusätzliche Wärme.",
@@ -2072,7 +2073,7 @@
   "dev_guide_kernel_fuse_bpf": "FUSE-BPF needs its own positive evidence. Ordinary FUSE, generic eBPF or a connection count alone is insufficient.",
   "dev_insight_kernel_origin": "Kernel origin is {origin}: this is an evidence classification, not guaranteed provenance. ASB still gates every control by the interfaces this kernel and ROM actually expose.",
   "st_hey_absent": "MCS nicht installiert",
-  "st_hey_pending": "MCS aus · ART nach Neustart",
+  "st_hey_pending": "MCS aus · ART nach Neustart, beim Laden",
   "st_hey_running": "ART wird kompiliert",
   "st_hey_done": "MCS aus · ART fertig",
   "st_hey_failed": "MCS aus · ART fehlgeschlagen",
@@ -2080,7 +2081,7 @@
   "st_doc_absent": "DocumentsUI fehlt",
   "st_doc_applied": "Picker repariert",
   "st_doc_already": "bereits repariert",
-  "t_hey_off": "HeyTap MCS deaktiviert · ART wird einmal nach dem nächsten Neustart kompiliert",
+  "t_hey_off": "HeyTap MCS deaktiviert · ART wird einmal nach dem nächsten Neustart kompiliert, sobald das Gerät lädt",
   "t_hey_done": "HeyTap MCS bleibt deaktiviert · ART ist bereits abgeschlossen",
   "t_hey_compile_failed": "HeyTap MCS bleibt deaktiviert · ART fehlgeschlagen, kein automatischer erneuter Versuch",
   "t_hey_stock": "HeyTap-MCS-Zustand wiederhergestellt · ausstehende ART-Kompilierung abgebrochen",
@@ -2092,7 +2093,7 @@
   "t_doc_absent": "DocumentsUI ist auf diesem Gerät nicht installiert",
   "t_doc_rolled_back": "ROM hat die Reparatur abgelehnt; ASB hat die Änderungen zurückgesetzt",
   "t_doc_failed": "DocumentsUI wurde nicht sicher geändert; Originalzustände bleiben zur Wiederherstellung erhalten",
-  "wb_heytap": "Apps mit HeyTap/OPPO Push können Benachrichtigungen verlieren oder verspätet erhalten; ART läuft einmal nach dem Neustart",
+  "wb_heytap": "Apps mit HeyTap/OPPO Push können Benachrichtigungen verlieren oder verspätet erhalten; ART läuft einmal nach dem Neustart, beim Laden",
   "wb_documentsui": "Der ColorOS-Dateimanager bleibt deaktiviert, solange diese Reparatur aktiv ist",
   "dev_sec_system_load": "Current system pressure",
   "dev_sec_zygisk_observer": "Zygisk observer",

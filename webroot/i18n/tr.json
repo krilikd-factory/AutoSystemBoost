@@ -417,7 +417,7 @@
     },
     "heytap_mcs": {
       "name": "HeyTap / OPPO Push bildirimleri",
-      "desc": "“Kapalı”, sistem dosyalarını değiştirmeden com.heytap.mcs paketini devre dışı bırakır. HeyTap/OPPO Push kullanan uygulamalar bildirimleri kaybedebilir veya geç alabilir. Etkinleştirme ayrıca sonraki yeniden başlatmadan sonra bir kez profil güdümlü ART derlemesi ister; bu işlem CPU, depolama ve pili geçici olarak kullanabilir. “Stock”, yalnızca ASB’nin değiştirdiği MCS durumunu geri yükler ve başlamamış derlemeyi iptal eder.",
+      "desc": "“Kapalı”, sistem dosyalarını değiştirmeden com.heytap.mcs paketini devre dışı bırakır. HeyTap/OPPO Push kullanan uygulamalar bildirimleri kaybedebilir veya geç alabilir. Etkinleştirme ayrıca sonraki yeniden başlatmadan sonra bir kez profil güdümlü ART derlemesi ister; bu işlem CPU, depolama ve pili geçici olarak kullanabilir. “Stock”, yalnızca ASB’nin değiştirdiği MCS durumunu geri yükler ve başlamamış derlemeyi iptal eder. Yeniden başlatmadan sonra derleme, elinizdeki telefonu ısıtmamak ve boşaltmamak için şarjı (Charging veya Full) bekler; 24 saat içinde şarj olmazsa istek bir sonraki açılışa kadar beklemede kalır.",
       "descOpt": {
         "stock": "MCS, Android/OEM denetiminde kalır; bekleyen ART isteği iptal edilir.",
         "off": "HeyTap Push taşımasını devre dışı bırakır ve sonraki yeniden başlatmadan sonra bir kez derler. Ardından bildirimleri kontrol edin."
@@ -1875,6 +1875,7 @@
   "lr_dx_fix_cap_bat": "Takılmalar rahatsız ediyorsa ağır uygulamalar için Smart veya Dengeli profile geçin.",
   "lr_dx_smooth_wake": "Takılmalar kilit açma ve uygulama açılışlarında yoğunlaşıyor: orada karelerin %{pct} kadarı gecikiyor, gün geneli ise %{ord} - dokunma desteği bu cihazda frekansları yeterince yükseltmiyor.",
   "lr_dx_also_cap_ok": "ASB frekans tavanları takılma eklemiyor: tavanda %{yes}, altında %{no}.",
+  "lr_dx_also_bhold": "Pil profilinde kaydırma tutma, uygulama başına ölçülür: takılmayı azalttığı yerde korunur (uygulama: {k}), yardımcı olmadığı yerde kaldırılır (uygulama: {r}), testte: {t}.",
   "lr_dx_also_vendor": "Yazılım, güçlü çekirdekleri {of} kontrolün {n} tanesinde ASB tavanının altında tuttu (PowerHAL veya çekirdek termali) - ASB bunu aşmaz.",
   "lr_dx_heat_long": "İşlemci {min} boyunca 45 °C üzerinde kaldı, en çok «{phase}» sırasında; zirve {cpu}°.",
   "lr_dx_fix_heat": "Uzun süreli yükü azaltın (oyunlar, şarjdayken uzun görüntülü aramalar) veya daha yumuşak bir profil seçin; kılıf ve oynarken şarj ısıyı artırır.",
@@ -2072,7 +2073,7 @@
   "dev_guide_kernel_fuse_bpf": "FUSE-BPF needs its own positive evidence. Ordinary FUSE, generic eBPF or a connection count alone is insufficient.",
   "dev_insight_kernel_origin": "Kernel origin is {origin}: this is an evidence classification, not guaranteed provenance. ASB still gates every control by the interfaces this kernel and ROM actually expose.",
   "st_hey_absent": "MCS yüklü değil",
-  "st_hey_pending": "MCS kapalı · ART yeniden başlatınca",
+  "st_hey_pending": "MCS kapalı · ART yeniden başlatınca, şarjda",
   "st_hey_running": "ART derleniyor",
   "st_hey_done": "MCS kapalı · ART tamam",
   "st_hey_failed": "MCS kapalı · ART başarısız",
@@ -2080,7 +2081,7 @@
   "st_doc_absent": "DocumentsUI yok",
   "st_doc_applied": "seçici onarıldı",
   "st_doc_already": "zaten onarılmış",
-  "t_hey_off": "HeyTap MCS devre dışı · ART, sonraki yeniden başlatmadan sonra bir kez derlenecek",
+  "t_hey_off": "HeyTap MCS devre dışı · ART, sonraki yeniden başlatmadan sonra şarj sırasında bir kez derlenecek",
   "t_hey_done": "HeyTap MCS devre dışı kalıyor · ART zaten tamamlandı",
   "t_hey_compile_failed": "HeyTap MCS devre dışı kalıyor · ART başarısız oldu ve otomatik yeniden denenmeyecek",
   "t_hey_stock": "HeyTap MCS durumu geri yüklendi · bekleyen ART derlemesi iptal edildi",
@@ -2092,7 +2093,7 @@
   "t_doc_absent": "DocumentsUI bu cihazda yüklü değil",
   "t_doc_rolled_back": "ROM onarımı reddetti; ASB değişikliklerini geri aldı",
   "t_doc_failed": "DocumentsUI güvenli biçimde değiştirilmedi; özgün durumlar geri yükleme için saklandı",
-  "wb_heytap": "HeyTap/OPPO Push uygulamaları bildirimleri kaybedebilir veya geciktirebilir; ART yeniden başlatma sonrası bir kez çalışır",
+  "wb_heytap": "HeyTap/OPPO Push uygulamaları bildirimleri kaybedebilir veya geciktirebilir; ART yeniden başlatma sonrası şarjda bir kez çalışır",
   "wb_documentsui": "Bu onarım açıkken ColorOS File Manager devre dışı kalır",
   "dev_sec_system_load": "Current system pressure",
   "dev_sec_zygisk_observer": "Zygisk observer",
