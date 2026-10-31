@@ -645,6 +645,8 @@ Camera tone tables регенерируются из stock-файлов и ин�
 | `lsposed_verbose` | LSPosed Verbose Log | `keep` | Сохраняет или отключает verbose LSPosed logging; не означает, что LSPosed установлен. |
 | `zygisk_enabled` | Наблюдатель процессов Zygisk | `0` | Opt-in выбор новых процессов из allowlist; пустой allowlist и safe-mode disable. Само наблюдение не отправляет governor request. |
 | `zygisk_hints` | Обновление по событиям Zygisk | `0` | Подтверждённые lifecycle edges запрашивают свежие данные у существующего governor только при включённом экране; пауза 2 секунды и максимум 8 запросов/минуту на companion. Нет cap, profile или LSPosed policy. |
+| `zygisk_launch` | Подъём на холодный старт (Zygisk) | `0` | Новый процесс верхнего приложения (холодный старт) продлевает идущий подъём на время старта или включает его внутри 5-секундной паузы; без имени пакета, не чаще 1/с и 20/мин; правила профиля, температуры и тёплого кристалла прежние. |
+| `zygisk_ledger` | Журнал запусков процессов (Zygisk) | `0` | Запуски процессов по пакетам при выключенном/включённом экране за текущую загрузку (tmpfs); только диагностика, ничего не ограничивается. |
 
 Vendor-service и process controls требуют особой осторожности. «Агрессивнее» не означает «экономичнее»: повторный перезапуск процессов может стоить больше энергии и ухудшить уведомления, виджеты, медиа, sync и геолокацию.
 
@@ -743,7 +745,7 @@ Allowlist пуст. Поэтому включение настройки без 
 Реализованный event path намеренно узкий:
 
 ```text
-preAppSpecialize: config + safe-disable + allowlist/exclusion checks
+preAppSpecialize: uid/app-zygote filter + generated zygisk/policy (allowlist/exclusion checks)
   → bounded companion connection и exemptFd()
 postAppSpecialize: один PROCESS_START frame
   → peer credential + /proc/<pid>/stat start_ticks validation
@@ -772,6 +774,30 @@ su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh status'
 `set-packages` без имён очищает список. Отклонённое обновление сохраняет прежний список. Safe mode также задаёт `zygisk_enabled=0`; снятие safe mode автоматически не включает наблюдение. Helper не управляет приложениями, Zygisk, LSPosed или другими модулями.
 
 Observer diagnostics разделяет конфигурацию, installed ABI, runtime event state и фактически проверенные live PID. `memory_kb` — сумма текущего application VmRSS этих PID, **не чистые накладные расходы observer**. `ipc_cpu_ms` и `ipc_wakeups` описывают companion receive/validation/state-write/hint-round-trip, а не CPU всего приложения. Event state старше пяти минут без проверенного live process получает `stale_over_5_minutes`. Crash и ANR counts — `unknown`, поскольку attribution evidence `not exposed`. `policy_hints` считает попытки refresh round trip; `hints_accepted` — ответы governor `ok`; vetoed, unavailable и локально throttled запросы имеют отдельные counters. Acceptance означает только оценку свежих данных, а не изменение cap или доказанную экономию энергии.
+
+#### 12.4.1. Спящая политика, подъём на холодный старт и журнал запусков (fix272)
+
+Процессы приложений больше не читают `governor.conf`, список разрешённых и ничего из `/data/adb/asb`. `runtime/asb_zygisk.sh sync` (его вызывает каждая команда помощника, каждый переключатель Zygisk в WebUI и post-fs-data до запуска zygote) пишет один маленький файл `zygisk/policy` в каталоге модуля:
+
+```text
+v=2  gen=<epoch>  observer=0|1  hints=0|1  launch=0|1  ledger=0|1  pkg=<пакет из списка>…
+```
+
+Файла **нет**, когда главный переключатель выключен, включён безопасный режим или ничего не выбрано. Горячий путь тогда такой: изолированные, SDK-sandbox, системные процессы и потомки app-zygote отсекаются по uid ещё до системных вызовов; затем один `open()` политики (ENOENT = модуль спит → `DLCLOSE`). Если zygote не может пройти в `/data/adb` (EACCES в `onLoad`), используется fd `getModuleDir()` от загрузчика, а не повторный запрещённый open. Испорченная политика ничего не наблюдает. На хосте сборки проверка спящего модуля заняла ≈0,8 мкс на fork против ≈70 мкс у прежнего разбора 40 КБ `governor.conf` (x86-64, это не цифра телефона).
+
+Companion держит состояние в `/dev/.asb/zygisk/state.<abi>.tsv` (tmpfs, только текущая загрузка) и больше не делает `fsync` во флеш на каждое событие. Обмен с governor идёт вне блокировки состояния.
+
+`zygisk_launch=1` (по желанию): когда zygote запускает новый процесс обычного приложения с флагом `is_top_app`, в companion уходит один кадр без имени пакета, а он передаёт фиксированную команду `zygisk-launch` (не чаще 1 раза в секунду и 20 в минуту). Governor проверяет `zygisk_enabled`, `zygisk_launch`, безопасный режим и экран и подаёт событие в существующий подъём при разблокировке: идущий подъём продлевается на `unlock_lift_s` от старта, а если его нет — новый включается даже внутри 5-секундной паузы. Правила профиля, температуры и тёплого кристалла не меняются. Ключи состояния: `zygisk_launch_accepted`, `zygisk_launch_vetoed`, `unlock_cold_lifts`, `unlock_cold_extends`.
+
+`zygisk_ledger=1` (по желанию): каждый запуск процесса обычного приложения передаёт базовое имя пакета; companion считает запуски по пакетам при выключенном и включённом экране (по `screen=`, который публикует governor), не более 128 пакетов. Диагностика устройства показывает лидеров по запускам при выключенном экране (`ledger_top_screen_off`). Ничего автоматически не ограничивается.
+
+Повторяемое A/B для подъёма на холодный старт (тот же профиль, то же приложение, холодный телефон, по 10 запусков):
+
+```bash
+su -c 'am force-stop com.example.app; sleep 2; am start -W -n "$(cmd package resolve-activity --brief com.example.app | tail -n 1)"' | grep TotalTime
+```
+
+Проверка на устройстве, что процессы приложений читают политику: после включения функции и открытия одного приложения в диагностике устройства `policy_seen_generation` должно совпасть с `policy_generation`. Если остаётся 0, ищите отказы: `su -c 'logcat -d | grep -i "avc.*zygote"'`.
 
 ### 📊 12.5. Шкала системного давления
 

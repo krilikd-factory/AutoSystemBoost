@@ -645,6 +645,8 @@ Animation speed changes perceived responsiveness; it does not make application c
 | `lsposed_verbose` | LSPosed Verbose Log | `keep` | Keeps or disables verbose LSPosed logging; does not imply LSPosed itself is installed. |
 | `zygisk_enabled` | Zygisk Process Observer | `0` | Opt-in selection for newly started allowlisted app processes; empty allowlist and safe-mode disable. Observation alone sends no governor request. |
 | `zygisk_hints` | Zygisk Lifecycle Refresh | `0` | Accepted lifecycle edges request fresh evidence from the existing governor only while the screen is on; 2-second spacing and 8 requests/minute per companion. No cap, profile or LSPosed policy. |
+| `zygisk_launch` | Zygisk Cold-Start Lift | `0` | A new top-app process (cold start) carries the running unlock lift over the start or arms one inside the 5 s anti-chatter gap; package-free, at most 1/s and 20/min; profile/thermal/warm gates unchanged. |
+| `zygisk_ledger` | Zygisk Process-Start Ledger | `0` | Per-package process starts with the screen off/on for this boot (tmpfs); diagnostics only, nothing restricted. |
 
 Vendor-service and process controls require particular care. “More aggressive” is not synonymous with “more efficient”: repeated process restart can cost more energy and degrade notifications, widgets, media, sync and location.
 
@@ -743,7 +745,7 @@ The allowlist is empty. Enabling the setting without adding packages therefore s
 The implemented event path is deliberately narrow:
 
 ```text
-preAppSpecialize: config + safe-disable + allowlist/exclusion checks
+preAppSpecialize: uid/app-zygote filter + generated zygisk/policy (allowlist/exclusion checks)
   → bounded companion connection and exemptFd()
 postAppSpecialize: one PROCESS_START frame
   → peer credential + /proc/<pid>/stat start_ticks validation
@@ -772,6 +774,30 @@ su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh status'
 `set-packages` with no names clears the list. Rejected updates preserve the previous list. Safe mode also sets `zygisk_enabled=0`; clearing safe mode does not re-enable observation automatically. The helper never manages applications, Zygisk, LSPosed or other modules.
 
 Observer diagnostics keep configuration, installed ABI, runtime event state and actual validated live PIDs separate. `memory_kb` is the sum of current application VmRSS for those PIDs, **not pure observer overhead**. `ipc_cpu_ms` and `ipc_wakeups` describe companion receive/validation/state-write/hint-round-trip handling, not whole-app CPU. Event state older than five minutes with no validated live process is `stale_over_5_minutes`. Crash and ANR counts are `unknown` because attribution evidence is `not exposed`. `policy_hints` counts attempted refresh round trips; `hints_accepted` counts the governor's `ok`, while vetoed, unavailable and locally throttled requests have separate counters. Acceptance means only that fresh evidence will be evaluated, never that a cap changed or energy was saved.
+
+#### 12.4.1. Dormant policy, cold-start lift and process-start ledger (fix272)
+
+App processes no longer read `governor.conf`, the allowlist or anything under `/data/adb/asb`. `runtime/asb_zygisk.sh sync` (run by every helper command, by every WebUI Zygisk switch and in post-fs-data before zygote starts) writes one small file, `zygisk/policy`, inside the module directory:
+
+```text
+v=2  gen=<epoch>  observer=0|1  hints=0|1  launch=0|1  ledger=0|1  pkg=<allowlisted package>…
+```
+
+The file is **absent** whenever the master switch is off, safe mode is on or nothing is selected. The hot path is then: reject isolated, SDK-sandbox, system and app-zygote processes by uid before any syscall; one `open()` of the policy (ENOENT = dormant → `DLCLOSE`). If zygote may not traverse `/data/adb` (EACCES at `onLoad`), the loader's `getModuleDir()` fd is used instead of repeating a denied open. A malformed policy observes nothing. On the build host the dormant check measured ≈0.8 µs per fork against ≈70 µs for the previous parse of the 40 KB `governor.conf` (x86-64, not a phone figure).
+
+The companion keeps its state in `/dev/.asb/zygisk/state.<abi>.tsv` (tmpfs, this boot only) and no longer `fsync`s to flash on every event. Governor round trips run outside the state lock.
+
+`zygisk_launch=1` (opt-in): when zygote starts a new process flagged `is_top_app` for an ordinary app, one package-free frame reaches the companion, which forwards the fixed opcode `zygisk-launch` (≥1 s apart, ≤20/min). The governor checks `zygisk_enabled`, `zygisk_launch`, safe mode and the screen, then feeds the existing unlock lift: a running lift is carried `unlock_lift_s` past the start; with none running a new one is armed even inside the 5 s anti-chatter gap. Profile, thermal and warm-die gates are unchanged. State keys: `zygisk_launch_accepted`, `zygisk_launch_vetoed`, `unlock_cold_lifts`, `unlock_cold_extends`.
+
+`zygisk_ledger=1` (opt-in): every ordinary app process start sends its base package; the companion counts starts per package with the screen off/on (from the governor's published `screen=`), bounded to 128 packages. Device diagnostics shows the top screen-off starters (`ledger_top_screen_off`). Nothing is restricted automatically.
+
+Repeatable A/B for the cold-start lift (same profile, same app, phone cool, 10 runs each):
+
+```bash
+su -c 'am force-stop com.example.app; sleep 2; am start -W -n "$(cmd package resolve-activity --brief com.example.app | tail -n 1)"' | grep TotalTime
+```
+
+Device check that app processes can read the policy: after enabling a feature and opening one app, Device diagnostics should show `policy_seen_generation` equal to `policy_generation`. If it stays 0, look for denials with `su -c 'logcat -d | grep -i "avc.*zygote"'`.
 
 ### 📊 12.5. System-pressure scale
 
