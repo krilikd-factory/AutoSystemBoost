@@ -1692,6 +1692,26 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .device-page .dev-snapshot .dev-snapshot-warn { border-color: color-mix(in srgb,var(--bal) 42%,var(--border)); }
 .device-page .dev-section-guide { margin: -3px 0 8px; padding: 0 0 7px; border-bottom: 1px solid var(--border); }
 .device-page .lgr-v.dev-unknown { color: var(--text-tertiary); font-weight: 550; }
+
+.device-page .dev-pressure { margin: 2px 0 12px; padding: 12px; border: 1px solid var(--border); border-radius: 14px; background: rgba(255,255,255,.025); }
+.device-page .dev-pressure-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.device-page .dev-pressure-score { font: 750 25px/1 var(--mono); color: var(--accent); }
+.device-page .dev-pressure-band { color: var(--text-secondary); font-size: 12px; font-weight: 700; }
+.device-page .dev-pressure-track { position: relative; display: flex; height: 9px; margin: 12px 0 6px; overflow: visible; border-radius: 8px; background: var(--border); }
+.device-page .dev-pressure-seg { height: 100%; flex: 1; }
+.device-page .dev-pressure-seg:first-child { border-radius: 8px 0 0 8px; background: var(--ok); }
+.device-page .dev-pressure-seg:nth-child(2) { background: #a9c94a; }
+.device-page .dev-pressure-seg:nth-child(3) { background: var(--bal); }
+.device-page .dev-pressure-seg:nth-child(4) { border-radius: 0 8px 8px 0; background: var(--perf); }
+.device-page .dev-pressure-marker { position: absolute; top: -4px; width: 3px; height: 17px; margin-left: -1px; border-radius: 2px; background: var(--text); box-shadow: 0 0 0 2px var(--bg); }
+.device-page .dev-pressure-labels { display: flex; justify-content: space-between; color: var(--text-tertiary); font: 10px/1.4 var(--mono); }
+.device-page .dev-pressure-meta { margin-top: 8px; color: var(--text-secondary); font-size: 11px; line-height: 1.45; }
+.device-page .dev-zygisk-editor { margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--border); }
+.device-page .dev-zygisk-editor label { display: block; margin-bottom: 6px; color: var(--text-secondary); font-size: 11px; font-weight: 700; }
+.device-page .dev-zygisk-input { box-sizing: border-box; width: 100%; min-height: 42px; padding: 10px 11px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); font: 11px/1.4 var(--mono); }
+.device-page .dev-zygisk-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
+.device-page .dev-zygisk-btn { min-height: 36px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); font: 650 11px var(--sans); }
+.device-page .dev-zygisk-btn:disabled { opacity: .5; }
 html[data-asb-theme="light"] .lgr-quality { background: #f7f9fa; }
 @media (max-width: 400px) {
   .lgr-quality { padding: 10px; }
@@ -5151,6 +5171,8 @@ const TECH_ICON_PATHS = {
   log_hook: '<rect x="3" y="3.5" width="10.5" height="17" rx="2.4"/><path d="M6.3 8h4M6.3 11.5h4M6.3 15h2.6"/><path d="M20.5 5v9.5a2.75 2.75 0 0 1-5.5 0V13"/><path d="M13.7 14.3 15 13l1.3 1.3"/>',
   /* Push transport switched off: a routed signal crossed out, not a generic service stop. */
   push_off: '<path d="M4 7h10M4 12h7M4 17h4"/><path d="m14 7 3 3-3 3M17 10h3"/><path d="m14 15 6 6M20 15l-6 6"/>',
+  zygisk_observer: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><path d="m5.6 5.6 2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>',
+  zygisk_refresh: '<path d="M20 11a8 8 0 0 0-14.9-4M4 3v5h5M4 13a8 8 0 0 0 14.9 4M20 21v-5h-5"/>',
   /* DocumentsUI picker: a document with an explicit selection check. */
   documents_picker: '<path d="M6 3.5h8l4 4V20H6z"/><path d="M14 3.5V8h4M9 12h5M9 15.5h2"/><path d="m13 16 1.5 1.5L18 14"/>',
   generic: '<path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 8v8M8.5 10l7 4M15.5 10l-7 4"/>',
@@ -7178,6 +7200,8 @@ const SNAP_KEYS = [
   'lsposed_verbose',
   'heytap_mcs',
   'documentsui_fix',
+  'zygisk_enabled',
+  'zygisk_hints',
   'doze_level',
   'phantom_procs',
   'anim_speed',
@@ -7351,6 +7375,10 @@ const CFG_ITEMS = [
   { key:'athena_service', type:'seg', def:'stock', stock:'stock', opts:['stock','off'], name:'Athena Background Killer' },
   { key:'heytap_mcs', type:'seg', def:'stock', stock:'stock', opts:['stock','off'], name:'HeyTap MCS / OPPO Push',
     desc:'Off disables com.heytap.mcs without hiding or replacing any system files. This can stop or delay push notifications from apps that use HeyTap/OPPO Push; some apps may keep their own connection alive instead. Enabling the card also requests one `pm compile -m speed-profile -a` after the next reboot, once boot is complete. That compilation can temporarily use CPU, storage and battery; it never runs on every boot. Stock restores only the MCS state ASB changed and cancels a compile that has not started.' },
+  { key:'zygisk_enabled', type:'bool', def:'0', stock:'0', name:'Zygisk Process Observer',
+    desc:'Opt-in process telemetry for explicitly allowlisted apps only. The allowlist is empty by default and is edited in Device diagnostics. ASB observes process start/exit and bounded IPC overhead: no hooks, no foreground/media inference and no app control. By itself this setting makes no policy request; lifecycle hints are a separate switch. Safe mode and a broker failure fail open; existing apps are not killed. Requires a Zygisk-capable root implementation and newly started app processes.' },
+  { key:'zygisk_hints', type:'bool', def:'0', stock:'0', name:'Zygisk Lifecycle Refresh',
+    desc:'Uses an accepted start/exit from the observer allowlist to ask the EXISTING governor for an immediate evidence refresh while the screen is on. This can remove stale-input delay at a launch or exit without Zygisk choosing any frequency, profile or app policy. At most 8 requests/minute per active companion and at least 2 seconds apart. Screen-off, disabled or malformed events cause no refresh. Thermal, dwell and vendor limits still decide the result. Accepted means acknowledged, not boosted or proven to save power. LSPosed is never killed, hidden, frozen or throttled. No saving claim is valid without comparable field A/B measurements.' },
   { key:'documentsui_fix', type:'bool', def:'0', stock:'0', name:'DocumentsUI / DSU Picker Fix',
     desc:'A one-time repair for a missing or broken system file picker on affected ColorOS/DSU setups. It enables and unhides DocumentsUI, returns its picker and files activities to their default state, and disables com.coloros.filemanager for user 0. THE COST: the ColorOS File Manager disappears until you turn this fix off. Only states ASB actually changed are recorded and restored on Off or uninstall. Nothing is re-applied at boot, and this card does not request ART compilation.' },
   { key:'ltpo_force', type:'bool', def:'0', stock:'0', name:'Force LTPO Refresh',
@@ -7486,7 +7514,7 @@ const CFG_GROUP_OF = {
   mglru_hold:'battery', kernel_sched_stats:'ui',
   night_modem_idle:'net', net_screen_off_lte:'net', net_lte_light:'net', smart_media_guard:'battery',
   net_rps:'net', net_txqueue:'net',
-  athena_service:'ui', heytap_mcs:'ui', documentsui_fix:'ui', ltpo_force:'ui', ltpo_video:'ui', mmfeed_off:'ui',
+  athena_service:'ui', heytap_mcs:'ui', documentsui_fix:'ui', zygisk_enabled:'ui', zygisk_hints:'ui', ltpo_force:'ui', ltpo_video:'ui', mmfeed_off:'ui',
   heavy_prime_escape:'battery', prime_escape_burst_s:'battery', prime_escape_rest_s:'battery', wakelock_fitness:'battery',
   sustained_temp_mode:'battery', doze_level:'battery', doze_trim_whitelist:'battery', wakelock_action:'battery', gnss_trim:'battery',
   camera_hold_enable:'camera', bt_a2dp_offload:'audio',
@@ -7571,7 +7599,7 @@ const CFG_GROUP_SECTIONS = {
     { id:'diag', icon:'log_detail', titleKey:'cfg_ui_section_diag',
       title:'Diagnostics', hintKey:'cfg_ui_section_diag_hint',
       hint:'How much the module - and LSPosed - write to their logs.',
-      keys:['log_level','lsposed_verbose'] }
+      keys:['log_level','lsposed_verbose','zygisk_enabled','zygisk_hints'] }
   ],
   camera: [
     { id:'processing', icon:'camera_level', titleKey:'cfg_camera_section_processing',
@@ -7795,7 +7823,7 @@ const CFG_ICONS = {
   wakelock_action:'wakelock', gnss_trim:'satellite', night_modem_idle:'radio_moon', net_screen_off_lte:'lte_screenoff', net_lte_light:'lte_light', night_quiet_enable:'quiet_moon', sustained_temp_mode:'thermal_mode', sustained_temp_enter:'thermal_point',
   perf_ceiling_pct:'perf_cap', cool_gaming:'cool_game', bat_suppress_gaming:'game_battery', BG_TRIM_LEVEL:'cleaner', gms_trim:'service_trim', gms_freeze:'service_freeze',
   UX_MANAGE_OEM_TOGGLES:'oem_switches', athena_service:'athena', phantom_procs:'phantom', haptic_strength:'haptic_power', haptic_touch_strength:'haptic_touch', log_level:'log_detail', lsposed_verbose:'log_hook', ltpo_force:'ltpo', ltpo_video:'ltpo_video', mmfeed_off:'mmfeed',
-  heytap_mcs:'push_off', documentsui_fix:'documents_picker',
+  heytap_mcs:'push_off', documentsui_fix:'documents_picker', zygisk_enabled:'zygisk_observer', zygisk_hints:'zygisk_refresh',
   heavy_prime_escape:'prime_lift', prime_escape_burst_s:'prime_burst', prime_escape_rest_s:'prime_rest', wakelock_fitness:'fitness_pulse',
   /* Same family as net_handover_*: the same journey off a dead Wi-Fi, made by the
    * system instead of by us. Reusing the handover glyph says that at a glance. */
@@ -8437,6 +8465,8 @@ const APPLY_MODE = {
   lsposed_verbose:APPLY_REBOOT,
   heytap_mcs:APPLY_REBOOT,
   documentsui_fix:APPLY_LIVE,
+  zygisk_enabled:APPLY_NEXT,
+  zygisk_hints:APPLY_LIVE,
   // label is reboot even though the bind lands on save.
   disable_blur:APPLY_REBOOT, ui_effects_level:APPLY_REBOOT,
   CAMERA_LEVEL:APPLY_REBOOT, CAMERA_CONTRAST:APPLY_REBOOT, CAMERA_GRAIN:APPLY_REBOOT,
@@ -11795,6 +11825,7 @@ const DEVICE_SECTION_ORDER = [
     'codename', 'oplus_ota', 'build_id', 'build_incremental', 'vendor_incremental', 'build_type', 'build_tags', 'build_date',
     'base_os', 'baseband', 'bootloader', 'fingerprint']],
   ['system', 'dev_sec_system', 'System', 'sw'],
+  ['system_load', 'dev_sec_system_load', 'Current system pressure', 'sw'],
   ['kernel', 'dev_sec_kernel', 'Kernel build', 'kernel'],
   ['kernel_origin', 'dev_sec_kernel_origin', 'Kernel origin evidence', 'kernel'],
   ['kernel_btf', 'dev_sec_kernel_btf', 'BTF evidence', 'kernel'],
@@ -11807,6 +11838,7 @@ const DEVICE_SECTION_ORDER = [
   ['root', 'dev_sec_root', 'Root implementation', 'root', ['manager', 'variant', 'version', 'variant_evidence', 'version_evidence']],
   ['susfs', 'dev_sec_susfs', 'SuSFS interface', 'root'],
   ['metamodule', 'dev_sec_metamodule', 'Metamodule', 'root'],
+  ['zygisk_observer', 'dev_sec_zygisk_observer', 'Zygisk observer', 'root'],
   ['asb', 'dev_sec_asb', 'ASB runtime', 'asb'],
   ['asb_caps', 'dev_sec_asb_caps', 'ASB device capabilities', 'asb'],
   ['meta', 'dev_sec_meta', 'Collection metadata', 'asb']
@@ -11825,6 +11857,8 @@ const DEVICE_GROUP_GUIDES = {
 const DEVICE_SECTION_GUIDES = {
   cpu_policy: ['dev_guide_cpu_policy', 'Current limits and the hardware range are different. A current limit alone does not identify ASB, the vendor or another writer.'],
   memory: ['dev_guide_memory', 'MemAvailable estimates memory available for new work. Cache is reusable and is not simply wasted memory.'],
+  system_load: ['dev_guide_system_load', 'A bounded 0-100 pressure heuristic from measured components only. Missing components are excluded and weights are renormalized; below 40% coverage the result is unknown. This is not device health, a trend, or an A/B comparison.'],
+  zygisk_observer: ['dev_guide_zygisk_observer', 'Process telemetry plus an optional bounded request for fresh governor evidence. Configuration, injection evidence, hint acknowledgement and overhead are separate facts. Missing crash/ANR attribution and app activity sources remain unknown or not exposed.'],
   kernel_origin: ['dev_guide_kernel_origin', 'Stock-like and custom-like describe exposed indicators, not a guaranteed builder or provenance. Capability decisions still use each exposed control node.'],
   kernel_btf: ['dev_guide_kernel_btf', 'BTF config, vmlinux exposure and module entries are separate facts. No BTF program or probe is loaded by this read-only page.'],
   kernel_ebpf: ['dev_guide_kernel_ebpf', 'Config and bpfs/sysctl exposure do not prove that eBPF is active. No program is loaded to test the syscall.'],
@@ -12013,6 +12047,16 @@ function deviceDisplayValue(sec, key, value, d) {
     return out;
   }
   if (sec === 'memory') return deviceSizeKb(value);
+  if (sec === 'system_load') {
+    if ((/_pct$/.test(key) || key === 'coverage_pct') && isFinite(deviceNum(value))) return value + '%';
+    if (/_kb$/.test(key)) return deviceSizeKb(value);
+    if (key === 'band') return T('dev_load_band_' + value, deviceFallbackLabel(value));
+  }
+  if (sec === 'zygisk_observer') {
+    if (key === 'enabled' || key === 'lifecycle_hints') return value === '1' ? T('st_on', 'Enabled') : T('st_off', 'Disabled');
+    if (key === 'memory_kb') return deviceSizeKb(value);
+    if (key === 'safe_mode') return T('dev_zygisk_safe_' + value, deviceFallbackLabel(value));
+  }
   if (sec === 'battery') {
     if (key === 'temp_tenths_c') { const x = deviceNum(value); return isFinite(x) ? (x / 10).toFixed(1) + '\u00a0°C' : value; }
     if (key === 'current_ua') return deviceBatteryMa(value);
@@ -12210,6 +12254,65 @@ function deviceInfoInsights(d) {
   });
   return out;
 }
+function devicePressureScale(d) {
+  const wrap = document.createElement('div'); wrap.className = 'dev-pressure';
+  const head = document.createElement('div'); head.className = 'dev-pressure-head';
+  const bandRaw = deviceVal(d, 'system_load', 'band');
+  const band = document.createElement('span'); band.className = 'dev-pressure-band';
+  band.textContent = T('dev_load_band_' + bandRaw, deviceFallbackLabel(bandRaw));
+  const scoreRaw = deviceVal(d, 'system_load', 'score');
+  const valid = /^\d{1,3}$/.test(scoreRaw) && Number(scoreRaw) <= 100;
+  const score = document.createElement('span'); score.className = 'dev-pressure-score';
+  score.textContent = valid ? scoreRaw + '/100' : T('dev_load_unknown', 'unknown');
+  head.appendChild(band); head.appendChild(score); wrap.appendChild(head);
+  const track = document.createElement('div'); track.className = 'dev-pressure-track';
+  if (track.setAttribute) { track.setAttribute('role', 'img'); track.setAttribute('aria-label', T('dev_load_scale_aria', 'Current pressure scale from 0 to 100')); }
+  for (let i = 0; i < 4; i++) { const seg = document.createElement('span'); seg.className = 'dev-pressure-seg'; track.appendChild(seg); }
+  if (valid) { const marker = document.createElement('span'); marker.className = 'dev-pressure-marker'; marker.style.left = Math.max(0, Math.min(100, Number(scoreRaw))) + '%'; track.appendChild(marker); }
+  wrap.appendChild(track);
+  const labels = document.createElement('div'); labels.className = 'dev-pressure-labels';
+  ['0–24', '25–49', '50–74', '75–100'].forEach(function (x) { const s = document.createElement('span'); s.textContent = x; labels.appendChild(s); });
+  wrap.appendChild(labels);
+  const meta = document.createElement('div'); meta.className = 'dev-pressure-meta';
+  meta.textContent = deviceFill('dev_load_coverage', 'Measured coverage: {coverage}%. Confidence: single on-demand snapshot; no trend or A/B inference.', { coverage: deviceVal(d, 'system_load', 'coverage_pct') });
+  wrap.appendChild(meta);
+  return wrap;
+}
+function deviceZygiskEditor(d) {
+  const wrap = document.createElement('div'); wrap.className = 'dev-zygisk-editor';
+  const label = document.createElement('label'); label.textContent = T('dev_zygisk_allowlist', 'Allowlisted application packages (comma or space separated)');
+  const input = document.createElement('input'); input.className = 'dev-zygisk-input'; input.type = 'text';
+  input.setAttribute('autocomplete', 'off'); input.setAttribute('spellcheck', 'false');
+  const current = deviceVal(d, 'zygisk_observer', 'enabled_package_list');
+  input.value = current === 'none' || current === '—' ? '' : current;
+  const actions = document.createElement('div'); actions.className = 'dev-zygisk-actions';
+  const save = document.createElement('button'); save.type = 'button'; save.className = 'dev-zygisk-btn'; save.textContent = T('dev_zygisk_save', 'Save allowlist');
+  const safe = document.createElement('button'); safe.type = 'button'; safe.className = 'dev-zygisk-btn';
+  const safeOn = deviceVal(d, 'zygisk_observer', 'safe_mode') === 'on';
+  safe.textContent = T(safeOn ? 'dev_zygisk_safe_off' : 'dev_zygisk_safe_on', safeOn ? 'Clear safe mode' : 'Enable safe mode');
+  save.onclick = async function () {
+    const parts = input.value.trim().split(/[\s,]+/).filter(function (x) { return x.length; });
+    if (parts.length > 64 || parts.some(function (x) { return !/^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+$/.test(x) || x.length > 127; })) {
+      toast(T('dev_zygisk_invalid', 'Enter up to 64 valid package names'), 'err'); return;
+    }
+    save.disabled = true; safe.disabled = true;
+    const args = parts.map(function (x) { return "'" + x + "'"; }).join(' ');
+    const r = await run('sh ' + MD + '/runtime/asb_zygisk.sh set-packages' + (args ? ' ' + args : ''));
+    toast(runOk(r) ? T('dev_zygisk_saved', 'Allowlist saved; new processes only') : (runText(r) || T('dev_zygisk_failed', 'Allowlist was rejected')), runOk(r) ? 'ok' : 'err');
+    asbDeviceInfoLoad();
+  };
+  safe.onclick = async function () {
+    save.disabled = true; safe.disabled = true;
+    const r = await run('sh ' + MD + '/runtime/asb_zygisk.sh safe-mode ' + (safeOn ? 'off' : 'on'));
+    toast(runOk(r) ? T('dev_zygisk_safe_changed', 'Safe mode updated') : (runText(r) || T('dev_zygisk_failed', 'Allowlist was rejected')), runOk(r) ? 'ok' : 'err');
+    asbDeviceInfoLoad();
+  };
+  actions.appendChild(save); actions.appendChild(safe);
+  const note = logReportNote(T('dev_zygisk_editor_note', 'An empty list observes nothing. Protected processes are rejected again by the native module. Enable the separate Zygisk Process Observer setting; saving this list does not enable it. Changes affect newly started processes only.'));
+  note.classList.add('dev-evidence');
+  wrap.appendChild(label); wrap.appendChild(input); wrap.appendChild(actions); wrap.appendChild(note);
+  return wrap;
+}
 function deviceInfoRender(d) {
   const body = _el('deviceBody');
   if (!body) return 0;
@@ -12297,6 +12400,7 @@ function deviceInfoRender(d) {
     }
     const card = logReportSec(T(spec[1], spec[2]));
     card.id = 'dev-sec-' + spec[1].slice(8).replace(/_/g, '-');
+    if (spec[0] === 'system_load') card.appendChild(devicePressureScale(d));
     const sectionGuide = DEVICE_SECTION_GUIDES[spec[0]];
     if (sectionGuide) {
       const sg = logReportNote(T(sectionGuide[0], sectionGuide[1])); sg.classList.add('dev-section-guide'); card.appendChild(sg);
@@ -12330,6 +12434,7 @@ function deviceInfoRender(d) {
         ln.classList.add('dev-evidence'); card.appendChild(ln);
       }
     });
+    if (spec[0] === 'zygisk_observer') card.appendChild(deviceZygiskEditor(d));
     body.appendChild(card);
   });
   requestAnimationFrame(asbFitPages);
