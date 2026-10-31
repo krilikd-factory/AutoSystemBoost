@@ -4505,9 +4505,9 @@ _ux_rows="$( {
   }' | sort -t'|' -k1,1 -k2,2n -k4,4)"
 # Informational read-only snapshot; deliberately excluded from PASS/FAIL and pass_ratio.
 P ""
-P "  CURRENT SYSTEM PRESSURE + ZYGISK OBSERVER (informational, no changes applied)"
+P "  CURRENT SYSTEM PRESSURE + ZYGISK OBSERVER + LSPOSED HOOKS (informational, no changes applied)"
 if [ -r "$MODDIR/tools/asb_device_info.sh" ]; then
-  _asb_observer_diag="$(sh "$MODDIR/tools/asb_device_info.sh" 2>/dev/null | awk -F '\t' '$1 == "D" && ($2 == "system_load" || $2 == "zygisk_observer") { print $2 "\t" $3 "\t" $4 }')"
+  _asb_observer_diag="$(sh "$MODDIR/tools/asb_device_info.sh" 2>/dev/null | awk -F '\t' '$1 == "D" && ($2 == "system_load" || $2 == "zygisk_observer" || $2 == "lsposed_hooks") { print $2 "\t" $3 "\t" $4 }')"
   if [ -n "$_asb_observer_diag" ]; then
     _asb_zdiag_field() {
       printf '%s\n' "$_asb_observer_diag" | awk -F '\t' -v k="$1" '$1 == "zygisk_observer" && $2 == k { print $3; found=1; exit } END { if (!found) print "unknown" }'
@@ -4530,8 +4530,32 @@ if [ -r "$MODDIR/tools/asb_device_info.sh" ]; then
     P "     features   : observer=$(_asb_zdiag_field enabled) lifecycle_hints=$(_asb_zdiag_field lifecycle_hints) cold_start=$(_asb_zdiag_field launch_hints) ledger=$(_asb_zdiag_field spawn_ledger) safe_mode=$(_asb_zdiag_field safe_mode)"
     P "     activity   : hints=$(_asb_zdiag_field policy_hints)/accepted=$(_asb_zdiag_field hints_accepted)/vetoed=$(_asb_zdiag_field hints_vetoed) launches=$(_asb_zdiag_field launch_events)/accepted=$(_asb_zdiag_field launch_accepted) ledger=$(_asb_zdiag_field ledger_events)"
     P "     overhead   : companion_ipc_cpu_ms=$(_asb_zdiag_field ipc_cpu_ms) ipc_wakeups=$(_asb_zdiag_field ipc_wakeups) observed_app_rss_kb=$(_asb_zdiag_field memory_kb)"
+    P "     loops      : screen_off_restart_loops=$(_asb_zdiag_field ledger_restart_loops)"
     P "     staging    : installed_abis=$(_asb_zdiag_field installed_abis) (files alone are not injection evidence)"
     NOTE "   The verdict is evidence-bounded: it does not claim total Zygisk control, a cap change, performance improvement or energy saving. RSS includes the observed apps themselves."
+    _asb_ldiag_field() {
+      printf '%s\n' "$_asb_observer_diag" | awk -F '\t' -v k="$1" '$1 == "lsposed_hooks" && $2 == k { print $3; found=1; exit } END { if (!found) print "unknown" }'
+    }
+    if [ "$(_asb_ldiag_field present)" = 1 ]; then
+      _ld_n="$(_asb_ldiag_field findings)"
+      case "$_ld_n" in
+        ''|*[!0-9]*) _ld_v='UNKNOWN - the hook evidence could not be read' ;;
+        0) _ld_v='NO FINDING - no hooked app crosses the crash, module-error, log-spam or restart-loop threshold' ;;
+        *) _ld_v="$_ld_n FINDING(S) TO CHECK - $(_asb_ldiag_field findings_detail)" ;;
+      esac
+      P "  LSPOSED HOOKS <-> STABILITY / BATTERY (correlation, not attribution)"
+      P "     verdict    : $_ld_v"
+      P "     inventory  : database=$(_asb_ldiag_field database) enabled_modules=$(_asb_ldiag_field modules_enabled) hooked_apps=$(_asb_ldiag_field hooked_apps)"
+      P "     scope      : $(_asb_ldiag_field modules)"
+      P "     system     : $(_asb_ldiag_field system_scope)"
+      P "     stacked    : $(_asb_ldiag_field multi_hooked)"
+      P "     logs       : window_min=$(_asb_ldiag_field log_window_min) rate_kb_h=$(_asb_ldiag_field log_rate_kb_h) top=$(_asb_ldiag_field log_top)"
+      P "     problems   : crash_anr=$(_asb_ldiag_field crash_hooked) module_errors=$(_asb_ldiag_field error_modules)"
+      P "     cost       : cpu=$(_asb_ldiag_field cpu_hooked_top) screen_off_starts=$(_asb_ldiag_field churn_hooked_top)"
+      NOTE "   LSPosed exposes no per-hook call count or energy. Confirm a finding by disabling one module for that one app and comparing."
+    else
+      P "  LSPOSED HOOKS: not installed"
+    fi
     P "  RAW PRESSURE + OBSERVER EVIDENCE (exact values for support)"
     printf '%s\n' "$_asb_observer_diag" | while IFS='	' read -r _od_sec _od_key _od_value; do
       P "     [$_od_sec] $_od_key = $_od_value"
