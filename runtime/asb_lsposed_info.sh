@@ -35,6 +35,15 @@ _asb_lsp_join() {
   awk -v suf="$1" 'NF >= 2 { s = s (s ? ", " : "") $2 " " $1 suf } END { print (s ? s : "none") }'
 }
 
+_asb_lsposed_quick() {
+  if [ -d "${ASB_LSPD_DIR:-$DATA/lspd}" ]; then
+    _emit lsposed_hooks present 1
+    _emit lsposed_hooks collection on_demand
+  else
+    _emit lsposed_hooks present 0
+  fi
+}
+
 _asb_lsposed_info() {
   _ls_dir="${ASB_LSPD_DIR:-$DATA/lspd}"
   _ls_db="$_ls_dir/config/modules_config.db"
@@ -89,7 +98,7 @@ _asb_lsposed_info() {
         if (t !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]/) return -1
         return days(substr(t, 1, 4) + 0, substr(t, 6, 2) + 0, substr(t, 9, 2) + 0) * 86400 + substr(t, 12, 2) * 3600 + substr(t, 15, 2) * 60 + substr(t, 18, 2)
       }
-      BEGIN { nm = split(mods, M, " "); fi = 0 }
+      BEGIN { nm = split(mods, M, " "); fi = 0; T0 = secs("2015-01-01T00:00:00") }
       substr($0, 1, 1) == "\001" { fi++; cur = ""; next }
       {
         if (substr($0, 1, 1) == "[") {
@@ -103,18 +112,26 @@ _asb_lsposed_info() {
             cur = (uid ~ /^[0-9]+$/) ? uid % 100000 : "?"
             err = (pri == "E" || pri == "F" || (pri == "W" && $0 ~ /Exception|Throwable|Error:/))
             if (err) E[cur]++
-            if (!(fi in LO) || ts < LO[fi]) LO[fi] = ts
-            if (!(fi in HI) || ts > HI[fi]) HI[fi] = ts
+            if (ts >= T0) {
+              if ((fi in HI) && (ts > HI[fi] + 21600 || ts < LS[fi] - 3600)) {
+                delete LO[fi]; delete HI[fi]
+                for (k in BF) { split(k, kk, SUBSEP); if (kk[1] == fi) delete BF[k] }
+              }
+              if (!(fi in LO) || ts < LO[fi]) LO[fi] = ts
+              if (!(fi in HI) || ts > HI[fi]) HI[fi] = ts
+              LS[fi] = ts
+            }
             split("", seen)
           }
         } else if (cur == "") next
-        BF[fi, cur] += length($0) + 1; U[cur] = 1
+        BF[fi, cur] += length($0) + 1; BT[fi, cur] += length($0) + 1; U[cur] = 1
         if (err) for (i = 1; i <= nm; i++) if (!(M[i] in seen) && index($0, M[i] ".")) { R[M[i]]++; seen[M[i]] = 1 }
       }
       END {
         w = -1; tr = 0; ok = 0
+        for (k in BT) { split(k, kk, SUBSEP); tb[kk[2]] += BT[k] }
         for (k in BF) {
-          split(k, kk, SUBSEP); x = kk[1]; u = kk[2]; tb[u] += BF[k]
+          split(k, kk, SUBSEP); x = kk[1]; u = kk[2]
           if ((x in LO) && HI[x] - LO[x] >= 60) { rr = BF[k] * 3600 / (HI[x] - LO[x]); RU[u] += rr; tr += rr; ok = 1 }
         }
         for (x in LO) if (HI[x] - LO[x] > w) w = HI[x] - LO[x]

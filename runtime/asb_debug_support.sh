@@ -128,10 +128,21 @@ resume_pending() {
   printf '%s' "$_rpd"
 }
 
+revive_pending() {
+  _vpd="$(resume_dir 2>/dev/null)" || return 1
+  _vpb="$(sed -n 's/^boot=//p' "$RESUMEFILE" 2>/dev/null | head -n 1 | tr -d ' \r')"
+  [ -n "$_vpb" ] && [ "$_vpb" = "$(current_boot_id)" ] && [ -d "$_vpd" ] || return 1
+  printf '%s' "$_vpd"
+}
+
 full_day_idle_status() {
   _fis="$(resume_pending 2>/dev/null || true)"
   if [ -n "$_fis" ]; then
     echo 'status=resuming'
+    echo "output=$_fis"
+  elif _fis="$(revive_pending 2>/dev/null)"; then
+    echo 'status=resuming'
+    echo 'reason=restart'
     echo "output=$_fis"
   else
     echo 'status=idle'
@@ -577,6 +588,7 @@ diag_start() {
 start_full_day() {
   _async="${1:-0}"
   _resume="${2:-}"
+  _resume_kind="${3:-}"
   [ -f "$MODDIR/tools/logkit/asb_log_full_day.sh" ] || { echo 'error=logkit_missing'; return 6; }
   mkdir -p "$STATE_DIR" 2>/dev/null || { echo 'error=state_dir_failed'; return 7; }
 
@@ -674,12 +686,14 @@ start_full_day() {
     return 8
   fi
 
+  _fd_setsid=""
+  [ "${ASB_DEBUG_SUPPORT_SETSID:-1}" = 1 ] && command -v setsid >/dev/null 2>&1 && _fd_setsid=setsid
   # The recorder receives the lock token and publishes its own PID before it begins capture.
   # The launcher PID is written immediately after fork to cover the publish interval.
   ASB_DEBUG_SUPPORT_LOCKDIR="$LOCKDIR" ASB_DEBUG_SUPPORT_LOCK_TOKEN="$_token" \
     ASB_DEBUG_SUPPORT_RESUMEFILE="$RESUMEFILE" ASB_DEBUG_SUPPORT_BOOT_ID="$(current_boot_id)" \
-    ASB_LK_RESUME_DIR="$_resume" \
-    nohup sh "$MODDIR/tools/logkit/asb_log_full_day.sh" 0 > "$RUNLOG" 2>&1 < /dev/null &
+    ASB_LK_RESUME_DIR="$_resume" ASB_LK_RESUME_KIND="$_resume_kind" \
+    nohup $_fd_setsid sh "$MODDIR/tools/logkit/asb_log_full_day.sh" 0 > "$RUNLOG" 2>&1 < /dev/null &
   _pid=$!
   if ! { printf '%s\n' "$_pid" > "$LAUNCHERFILE"; } 2>/dev/null; then
     # Recorder may already be alive: leave the lock in place rather than clearing ownership.
@@ -828,6 +842,33 @@ resume_full_day() {
   echo "output=$_rd"
 }
 
+revive_full_day() {
+  _vd="$(revive_pending 2>/dev/null || true)"
+  if [ -z "$_vd" ]; then
+    echo 'status=idle'
+    return 0
+  fi
+  _vp="$(lock_live_pid 2>/dev/null || true)"
+  [ -n "$_vp" ] || _vp="$(legacy_live_pid 2>/dev/null || true)"
+  if [ -n "$_vp" ]; then
+    echo 'status=running'
+    echo "pid=$_vp"
+    return 0
+  fi
+  if [ -d "$LOCKDIR" ] && ! lock_known_dead; then
+    echo 'status=starting'
+    return 0
+  fi
+  if [ "$(prop_get sys.boot_completed)" != 1 ]; then
+    echo 'status=resuming'
+    echo 'reason=restart'
+    echo "output=$_vd"
+    return 0
+  fi
+  full_day_recovery_note "revive=start"
+  start_full_day 1 "$_vd" restart
+}
+
 case "${1:-status}" in
   status) full_day_status ;;
   diag) write_diag ;;
@@ -837,5 +878,6 @@ case "${1:-status}" in
   full-day-start) start_full_day 1 ;;
   full-day-stop) stop_full_day ;;
   full-day-resume) resume_full_day ;;
+  full-day-revive) revive_full_day ;;
   *) echo 'error=bad_action'; exit 64 ;;
 esac
