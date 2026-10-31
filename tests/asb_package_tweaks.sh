@@ -373,6 +373,14 @@ t_package_tweaks_contract() (
     sh -n "$ROOT/runtime/$_f" || fail "$_f syntax"
     [ -x "$ROOT/runtime/$_f" ] || fail "$_f is not executable"
   done
+  # A ZIP retains these modes, but a browser upload to git may not. Both CI entry points must
+  # restore all four before this contract runs; checking only the first failure hides the rest.
+  for _wf in "$ROOT/.github/workflows/build-test.yml" "$ROOT/.github/workflows/build-release.yml"; do
+    for _f in asb_package_state.sh asb_heytap_mcs.sh asb_art_compile.sh asb_documentsui_fix.sh; do
+      sed -n '/- name: Normalize executable source script modes/,/- name: Validate required source files/p' "$_wf" \
+        | grep -Fq "runtime/$_f" || fail "$_wf does not restore the executable mode of $_f"
+    done
+  done
   ! grep -q '\.replace/' "$ROOT/runtime/asb_heytap_mcs.sh" || fail 'HeyTap uses a .replace overlay'
   grep -q 'timeout "$TIMEOUT_S" pm compile -m speed-profile -a' "$ROOT/runtime/asb_art_compile.sh" \
     || fail 'exact one-shot compile command missing'

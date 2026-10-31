@@ -4869,6 +4869,14 @@ sh -n "$D" || fail "digest script has a syntax error"
 # fix231: Report and Device are fullscreen drill-ins, including when Liquid Glass opens
 # them over Monitor/Config. Their opaque page surfaces must override the Glass tab rule.
 grep -qF '#reportPage, #devicePage { background: var(--bg) !important; }' "$H" || fail "fullscreen report/device can inherit a transparent Glass page"
+# fix270: the success colour must resolve in dark/light themes, and the later grid rule must
+# not erase the marker gutter. Both defects were visible together in the Russian summary.
+! grep -qF 'var(--ok)' "$H" || fail "success styles still use the undefined --ok variable"
+grep -qF '.lgr-quality-seg.lgr-state-good { background: var(--bat); opacity: 1; }' "$H" || fail "a good evidence segment is not green"
+grep -qF '.lgr-verdict-good::before { background: var(--bat); }' "$H" || fail "a good verdict marker is not green"
+grep -qF '.lgr-state-good { color: var(--bat); }' "$H" || fail "a good verdict label is not green"
+grep -qF '.lgr-verdict { position: relative; padding-inline-start: 12px; }' "$H" || fail "verdict marker gutter missing"
+grep -qF 'align-items: baseline; padding-block: 7px; border-top: 1px solid var(--border); }' "$H" || fail "the grid rule overrides the verdict inline padding"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 
 # --- fixture capture: 12h of phases, a 7.8h night chain at 1.0%/h, wakelocks, crashes ---
