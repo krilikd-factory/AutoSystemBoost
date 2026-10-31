@@ -7376,7 +7376,7 @@ const CFG_ITEMS = [
     desc:'Lets ASB manage OxygenOS toggles (RAM expansion, Adaptive Battery, Low-Heat). OFF = untouched (OOS may re-enable RAM expansion on reboot). ON = forces RAM expansion OFF every boot.' },
   { key:'athena_service', type:'seg', def:'stock', stock:'stock', opts:['stock','off'], name:'Athena Background Killer' },
   { key:'heytap_mcs', type:'seg', def:'stock', stock:'stock', opts:['stock','off'], name:'HeyTap MCS / OPPO Push',
-    desc:'Off disables com.heytap.mcs without hiding or replacing any system files. This can stop or delay push notifications from apps that use HeyTap/OPPO Push; some apps may keep their own connection alive instead. Enabling the card also requests one `pm compile -m speed-profile -a` after the next reboot, once boot is complete. That compilation can temporarily use CPU, storage and battery; it never runs on every boot. Stock restores only the MCS state ASB changed and cancels a compile that has not started.' },
+    desc:'Off disables com.heytap.mcs without hiding or replacing any system files. This can stop or delay push notifications from apps that use HeyTap/OPPO Push; some apps may keep their own connection alive instead. Enabling the card also requests one `pm compile -m speed-profile -a` after the next reboot, once boot is complete. That compilation can temporarily use CPU, storage and battery; it never runs on every boot. Stock restores only the MCS state ASB changed and cancels a compile that has not started. After the reboot it waits for the charger (Charging or Full), so the compilation does not heat or drain a phone in your hand; with no charger within 24 h it stays pending until the next boot.' },
   { key:'zygisk_enabled', type:'bool', def:'0', stock:'0', name:'Zygisk Process Observer',
     desc:'Opt-in process telemetry for explicitly allowlisted apps only. The allowlist is empty by default and is edited in Device diagnostics. ASB observes process start/exit and bounded IPC overhead: no hooks, no foreground/media inference and no app control. By itself this setting makes no policy request; lifecycle hints are a separate switch. Safe mode and a broker failure fail open; existing apps are not killed. Requires a Zygisk-capable root implementation and newly started app processes.' },
   { key:'zygisk_hints', type:'bool', def:'0', stock:'0', name:'Zygisk Lifecycle Refresh',
@@ -7997,7 +7997,7 @@ function packageTweakBadge(key, cur) {
     if (cur !== 'off') return { cls:'neutral', text:T('st_off', 'Disabled') };
     const s = _heyTweak || {};
     if (s.present === '0') return { cls:'neutral', text:T('st_hey_absent', 'MCS not installed') };
-    if (s.state === 'pending') return { cls:'warn', text:T('st_hey_pending', 'MCS off · ART next boot') };
+    if (s.state === 'pending') return { cls:'warn', text:T('st_hey_pending', 'MCS off · ART after reboot, on charger') };
     if (s.state === 'running') return { cls:'warn', text:T('st_hey_running', 'ART compiling') };
     if (s.state === 'done') return { cls:'good', text:T('st_hey_done', 'MCS off · ART done') };
     if (s.state === 'failed') return { cls:'bad', text:T('st_hey_failed', 'MCS off · ART failed') };
@@ -9409,7 +9409,7 @@ async function cfgSet(key, val, ctl) {
           else if ((res === 'disabled' || res === 'already_disabled') && compile === 'failed')
             toast(T('t_hey_compile_failed', 'HeyTap MCS remains disabled · ART compilation failed and will not retry automatically'), 'warn');
           else if (res === 'disabled' || res === 'already_disabled')
-            toast(T('t_hey_off', 'HeyTap MCS disabled · ART compilation will run once after the next reboot'), 'good');
+            toast(T('t_hey_off', 'HeyTap MCS disabled · ART compilation will run once after the next reboot, while charging'), 'good');
           else if (res === 'restored' || res === 'untouched')
             toast(T('t_hey_stock', 'HeyTap MCS state restored · pending ART compilation cancelled'), 'good');
           else if (res === 'absent') toast(T('t_hey_absent', 'HeyTap MCS is not installed on this device'), 'warn');
@@ -12825,6 +12825,7 @@ function logReportDxT(key, vars) {
     lr_dx_fix_cap_bat: "If the stutter bothers you, switch to Smart or Balanced for heavy apps.",
     lr_dx_smooth_wake: "Stutter concentrates at unlocks and app opens: {pct}% of frames late there against {ord}% over the day - the touch boost does not lift the clocks enough on this device.",
     lr_dx_also_cap_ok: "The ASB frequency ceilings add no stutter: {yes}% at the ceiling, {no}% below it.",
+    lr_dx_also_bhold: "Battery scroll hold, measured per app: kept where it cut the stutter (apps: {k}), released where it did not help (apps: {r}), under test: {t}.",
     lr_dx_also_vendor: "The firmware held the prime cores below ASB's ceiling in {n} of {of} checks (PowerHAL or kernel thermal) - ASB does not override it.",
     lr_dx_heat_long: "The CPU spent {min} above 45 °C, most of it in {phase}; peak {cpu}°.",
     lr_dx_fix_heat: "Reduce sustained load (games, long video calls while charging) or use a gentler profile; a case or charging while playing adds heat.",
@@ -13053,6 +13054,10 @@ function logReportDiagnose(d) {
     }
     if (wakeBad)
       item('smooth', 'problem', 'lr_dx_smooth_wake', { pct: String(jwake.pct), ord: String(jwake.ord) }, 'asb', 'lr_dx_fix_send', {}, true);
+    const bh = s.bhold || null;
+    const bhIt = it || out.filter(function (x) { return x.area === 'smooth'; }).pop();
+    if (bhIt && bh && prof === 'battery' && (+bh.kept || 0) + (+bh.released || 0) > 0)
+      bhIt.also.push({ key: 'lr_dx_also_bhold', v: { k: String(+bh.kept || 0), r: String(+bh.released || 0), t: String(+bh.testing || 0) } });
   }
 
   if (heat || thermal) {
