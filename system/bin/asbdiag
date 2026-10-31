@@ -4493,6 +4493,30 @@ P "  CURRENT SYSTEM PRESSURE + ZYGISK OBSERVER (informational, no changes applie
 if [ -r "$MODDIR/tools/asb_device_info.sh" ]; then
   _asb_observer_diag="$(sh "$MODDIR/tools/asb_device_info.sh" 2>/dev/null | awk -F '\t' '$1 == "D" && ($2 == "system_load" || $2 == "zygisk_observer") { print $2 "\t" $3 "\t" $4 }')"
   if [ -n "$_asb_observer_diag" ]; then
+    _asb_zdiag_field() {
+      printf '%s\n' "$_asb_observer_diag" | awk -F '\t' -v k="$1" '$1 == "zygisk_observer" && $2 == k { print $3; found=1; exit } END { if (!found) print "unknown" }'
+    }
+    _zd_state="$(_asb_zdiag_field link_state)"; [ -n "$_zd_state" ] || _zd_state=unknown
+    case "$_zd_state" in
+      connected) _zd_verdict='CONNECTED - validated live observed process(es)' ;;
+      confirmed) _zd_verdict='CHANNEL CONFIRMED - fresh companion evidence, no live PID currently validated' ;;
+      waiting) _zd_verdict='WAITING - work is selected, but no current companion event is proven' ;;
+      idle) _zd_verdict='IDLE - enabled, but no allowlisted app, cold-start lift or ledger is selected' ;;
+      stale) _zd_verdict='STALE - historical state only; no current injection is claimed' ;;
+      safe) _zd_verdict='SAFE MODE - new injection and requests are disabled' ;;
+      off) _zd_verdict='DISABLED - observer is off for new processes' ;;
+      *) _zd_verdict='UNKNOWN - insufficient read-only evidence; support is not ruled out' ;;
+    esac
+    P "  ASB <-> ZYGISK / INJECTION VERDICT"
+    P "     link       : $_zd_verdict"
+    P "     injection  : loaded=$(_asb_zdiag_field loaded_processes) freshness=$(_asb_zdiag_field state_freshness) age_ms=$(_asb_zdiag_field state_age_ms) events=$(_asb_zdiag_field events_total) spawn=$(_asb_zdiag_field spawn_events)"
+    P "     policy     : written_gen=$(_asb_zdiag_field policy_generation) acknowledged_gen=$(_asb_zdiag_field policy_seen_generation) allowlisted_apps=$(_asb_zdiag_field enabled_packages)"
+    P "     features   : observer=$(_asb_zdiag_field enabled) lifecycle_hints=$(_asb_zdiag_field lifecycle_hints) cold_start=$(_asb_zdiag_field launch_hints) ledger=$(_asb_zdiag_field spawn_ledger) safe_mode=$(_asb_zdiag_field safe_mode)"
+    P "     activity   : hints=$(_asb_zdiag_field policy_hints)/accepted=$(_asb_zdiag_field hints_accepted)/vetoed=$(_asb_zdiag_field hints_vetoed) launches=$(_asb_zdiag_field launch_events)/accepted=$(_asb_zdiag_field launch_accepted) ledger=$(_asb_zdiag_field ledger_events)"
+    P "     overhead   : companion_ipc_cpu_ms=$(_asb_zdiag_field ipc_cpu_ms) ipc_wakeups=$(_asb_zdiag_field ipc_wakeups) observed_app_rss_kb=$(_asb_zdiag_field memory_kb)"
+    P "     staging    : installed_abis=$(_asb_zdiag_field installed_abis) (files alone are not injection evidence)"
+    NOTE "   The verdict is evidence-bounded: it does not claim total Zygisk control, a cap change, performance improvement or energy saving. RSS includes the observed apps themselves."
+    P "  RAW PRESSURE + OBSERVER EVIDENCE (exact values for support)"
     printf '%s\n' "$_asb_observer_diag" | while IFS='	' read -r _od_sec _od_key _od_value; do
       P "     [$_od_sec] $_od_key = $_od_value"
     done
