@@ -1556,7 +1556,10 @@ lk_emit_jank_summary() {
           for (a in qj) if (qj[a] > qv) { qb = a; qv = qj[a] }
           if (qb != "") printf "the floor: %s drew %s of the janky frames in the quiet intervals.\n", qb, pct(qv, QJ)
         }
-        if (top1 != "" && gn[top1] * 10 >= n17 * 8) {
+        sr = ""; sv = -1; sjv = -1
+        for (a in gj) if (gn[a] * 10 >= n17 * 8 && (gn[a] > sv || (gn[a] == sv && gj[a] > sjv))) { sr = a; sv = gn[a]; sjv = gj[a] }
+        if (sr != "") top1 = sr
+        if (sr != "") {
           printf "%s missed deadlines in %d of %d screen-on intervals, whatever app was in front: a steady redraw.\n", top1, gn[top1], n17
           # fix186: an OP15 capture printed this advice under its own evidence that all three
           # were already off. Then say so and point at what is left.

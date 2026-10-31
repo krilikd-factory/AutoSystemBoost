@@ -455,6 +455,10 @@ _lte_snaps="$(for _sf in "$_DIR"/before.txt "$_DIR"/snapshot_*.txt "$_DIR"/reboo
   printf '%s %s\n' "${_se:-0}" "$_sf"
 done | sort -n | awk '{ print $2 }')"
 if [ -n "$_lte_snaps" ]; then
+  awk -F= '/^battery_hold_(kept|released|testing)=[0-9]+$/ { k = $1; sub(/^battery_hold_/, "", k); v[k] = $2 + 0; n++ }
+    END { if (("kept" in v) && ("released" in v) && ("testing" in v) && v["kept"] + v["released"] + v["testing"] > 0)
+            printf "bhold\tkept=%d\treleased=%d\ttesting=%d\n", v["kept"], v["released"], v["testing"] }' \
+    "$(printf '%s\n' "$_lte_snaps" | tail -n 1)" 2>/dev/null
   printf '%s\n' "$_lte_snaps" | while IFS= read -r _sf; do
     awk '/^  lte_screenoff status:/ { t = 1; next }
          t && /^    [a-z_]+=/ { l = $0; sub(/^ +/, "", l); k = l; sub(/=.*/, "", k); v = l; sub(/^[^=]*=/, "", v); V[k] = v; next }
