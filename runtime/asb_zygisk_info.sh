@@ -75,7 +75,9 @@ _asb_zygisk_info() {
           case "$_zi_a" in ''|*[!A-Za-z0-9_.]*|*..*) continue ;; esac
           case "$_zi_b:$_zi_c:$_zi_d" in *[!0-9:]*|:*|*::*) continue ;; esac
           [ "${#_zi_b}" -le 12 ] && [ "${#_zi_c}" -le 12 ] || continue
-          _zi_ledger_rows="$_zi_ledger_rows$_zi_a $_zi_b $_zi_c
+          _zi_burst=0
+          case "$_zi_extra" in ''|*[!0-9]*) : ;; *) [ "${#_zi_extra}" -le 6 ] && _zi_burst="$_zi_extra" ;; esac
+          _zi_ledger_rows="$_zi_ledger_rows$_zi_a $_zi_b $_zi_c $_zi_burst
 "
           ;;
         P)
@@ -106,9 +108,15 @@ _asb_zygisk_info() {
   esac
   _zi_ledger_top='none'
   if [ -n "$_zi_ledger_rows" ]; then
-    _zi_ledger_top="$(printf '%s' "$_zi_ledger_rows" | awk 'NF == 3 { off[$1] += $2; on[$1] += $3 }
+    _zi_ledger_top="$(printf '%s' "$_zi_ledger_rows" | awk 'NF >= 3 { off[$1] += $2; on[$1] += $3 }
       END { for (p in off) if (off[p] > 0) printf "%d %d %s\n", off[p], on[p], p }' | sort -rn | head -n 5 \
       | awk '{ s = s (s ? ", " : "") $3 " " $1 "/" $2 } END { print (s ? s : "none") }')"
+  fi
+  _zi_loops='none'
+  if [ -n "$_zi_ledger_rows" ]; then
+    _zi_loops="$(printf '%s' "$_zi_ledger_rows" | awk 'NF >= 4 && $4 >= 6 { if ($4 > b[$1]) b[$1] = $4 }
+      END { for (p in b) printf "%d %s\n", b[p], p }' | sort -rn | head -n 5 \
+      | awk '{ s = s (s ? ", " : "") $2 " " $1 "/5min" } END { print (s ? s : "none") }')"
   fi
   if [ "$_zi_enabled" = 0 ]; then _zi_broker='disabled for new processes'
   elif [ "$_zi_safe" = on ]; then _zi_broker='safe mode'
@@ -179,6 +187,7 @@ _asb_zygisk_info() {
   _emit zygisk_observer launch_throttled "$_zi_l_thr"
   _emit zygisk_observer ledger_events "$_zi_ledger_n"
   _emit zygisk_observer ledger_top_screen_off "$_zi_ledger_top"
+  _emit zygisk_observer ledger_restart_loops "$_zi_loops"
   _emit zygisk_observer hints_status 'accepted means governor acknowledged fresh-evidence evaluation; never proof of a cap change or energy saving'
   _emit zygisk_observer hint_bounds 'screen on; at least 2 s between requests; at most 8 per minute per companion; no package or cap sent'
   _emit zygisk_observer lifecycle_coverage 'process start and peer-disconnect exit only; neither proves foreground visibility'

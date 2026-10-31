@@ -8,20 +8,24 @@ ASB_LTPO_LOCK_DIR="${ASB_LTPO_LOCK_DIR:-$STATE_DIR/ltpo_video.lock}"
 
 asb_ltpo_lock() {
   _al_try=0
+  _al_empty=0
   while ! mkdir "$ASB_LTPO_LOCK_DIR" 2>/dev/null; do
     _al_owner="$(cat "$ASB_LTPO_LOCK_DIR/pid" 2>/dev/null | tr -dc '0-9')"
     case "$_al_owner" in
       '')
+        _al_empty=$((_al_empty + 1))
         # mkdir and the pid write are separate operations. Give a live creator several
         # rounds to publish its pid; only a persistently ownerless lock is reclaimed.
-        if [ "$_al_try" -ge 5 ] && [ ! -e "$ASB_LTPO_LOCK_DIR/pid" ]; then
+        if [ "$_al_empty" -ge 5 ] && [ ! -e "$ASB_LTPO_LOCK_DIR/pid" ]; then
           rmdir "$ASB_LTPO_LOCK_DIR" 2>/dev/null || true
+          _al_empty=0
         fi
         ;;
       *[!0-9]*)
         # Corrupt ownership is not proof that the writer is dead: fail closed.
         ;;
       *)
+        _al_empty=0
         if ! kill -0 "$_al_owner" 2>/dev/null; then
           rm -f "$ASB_LTPO_LOCK_DIR/pid" 2>/dev/null
           rmdir "$ASB_LTPO_LOCK_DIR" 2>/dev/null || true

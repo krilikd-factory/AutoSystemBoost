@@ -628,6 +628,23 @@ _wl_man_installed() {
   pm list packages -3 2>/dev/null | sed -n 's/^package:\([^ ]*\).*/\1/p' | grep -qxF "$1"
 }
 _wl_man_line() { awk -F'|' -v p="$1" '$1 == p { print; exit }' "$MAN" 2>/dev/null; }
+_wl_man_gone() {
+  _wl_man_pkgok "$1" || return 1
+  _has pm || return 1
+  _mg="${2:-$(pm list packages 2>/dev/null)}"
+  [ -n "$_mg" ] || return 1
+  printf '%s\n' "$_mg" | sed -n 's/^package:\([^ ]*\).*/\1/p' | grep -qxF "$1" && return 1
+  return 0
+}
+_wl_man_eff() {
+  _me_o="$(appops get "$1" WAKE_LOCK 2>/dev/null)"
+  _me_u="$(printf '%s\n' "$_me_o" | sed -n 's/.*Uid mode: WAKE_LOCK: \([a-z_]*\).*/\1/p' | head -1)"
+  case "$_me_u" in
+    ''|default) _me_u="$(printf '%s\n' "$_me_o" | grep -v 'Uid mode' | sed -n 's/.*WAKE_LOCK: \([a-z_]*\).*/\1/p' | head -1)"
+                printf '%s' "${_me_u:-default}" ;;
+    *) printf '%s' "$_me_u" ;;
+  esac
+}
 _wl_man_drop() {
   [ -s "$MAN" ] || return 0
   awk -F'|' -v p="$1" '$1 != p' "$MAN" > "$MAN.tmp" 2>/dev/null || return 1
@@ -654,25 +671,29 @@ _wl_man_limit() {
     printf 'result=not_enforced\neffective=%s\n' "$(_wl_fit_eff "$1")"; return 1
   fi
   # A restriction made by the user or another tool is not ours to record or later undo.
-  [ "$(_wl_fit_eff "$1")" = ignore ] || {
-    _mo="$(_wl_fit_orig "$1")"; _mu="$(_wl_fit_uidmode "$1")"; _mu="${_mu:-default}"
-    [ "$_mo" = ignore ] || appops set "$1" WAKE_LOCK ignore >/dev/null 2>&1
-    case "$_mu" in default) : ;; *) appops set --uid "$1" WAKE_LOCK ignore >/dev/null 2>&1 || : ;; esac
-    if [ "$(_wl_fit_eff "$1")" = ignore ]; then
-      mkdir -p "$D" 2>/dev/null
-      printf '%s|%s|%s\n' "$1" "${_mo:-default}" "$_mu" >> "$MAN"
-      printf 'result=limited\neffective=ignore\n'; return 0
-    fi
-    # Refusal is rolled back immediately; no unrecorded half-change is left behind.
-    appops set "$1" WAKE_LOCK "${_mo:-default}" >/dev/null 2>&1
-    [ "$_mu" = default ] || appops set --uid "$1" WAKE_LOCK "$_mu" >/dev/null 2>&1
-  }
+  if [ "$(_wl_fit_eff "$1")" = ignore ]; then
+    printf 'result=external_ignore\neffective=ignore\n'; return 1
+  fi
+  _mo="$(_wl_fit_orig "$1")"; _mu="$(_wl_fit_uidmode "$1")"; _mu="${_mu:-default}"
+  [ "$_mo" = ignore ] || appops set "$1" WAKE_LOCK ignore >/dev/null 2>&1
+  case "$_mu" in default) : ;; *) appops set --uid "$1" WAKE_LOCK ignore >/dev/null 2>&1 || : ;; esac
+  if [ "$(_wl_fit_eff "$1")" = ignore ]; then
+    mkdir -p "$D" 2>/dev/null
+    printf '%s|%s|%s\n' "$1" "${_mo:-default}" "$_mu" >> "$MAN"
+    printf 'result=limited\neffective=ignore\n'; return 0
+  fi
+  # Refusal is rolled back immediately; no unrecorded half-change is left behind.
+  appops set "$1" WAKE_LOCK "${_mo:-default}" >/dev/null 2>&1
+  [ "$_mu" = default ] || appops set --uid "$1" WAKE_LOCK "$_mu" >/dev/null 2>&1
   printf 'result=not_enforced\neffective=%s\n' "$(_wl_fit_eff "$1")"
   return 1
 }
 _wl_man_restore() {
   _ml="$(_wl_man_line "$1")"
   [ -n "$_ml" ] || { printf 'result=not_selected\n'; return 1; }
+  if _wl_man_gone "$1"; then
+    _wl_man_drop "$1" && { printf 'result=uninstalled\neffective=unknown\n'; return 0; }
+  fi
   _has appops || { printf 'result=unavailable\n'; return 1; }
   _mo="$(printf '%s' "$_ml" | cut -d'|' -f2)"; _mu="$(printf '%s' "$_ml" | cut -d'|' -f3)"
   appops set "$1" WAKE_LOCK "${_mo:-default}" >/dev/null 2>&1 || { printf 'result=restore_failed\n'; return 1; }
@@ -687,9 +708,18 @@ _wl_man_restore() {
 }
 _wl_man_reapply() {
   [ -s "$MAN" ] || return 0
+  _has pm || return 0
+  _mall="$(pm list packages 2>/dev/null)"
+  _musr="$(pm list packages -3 2>/dev/null | sed -n 's/^package:\([^ ]*\).*/\1/p')"
+  [ -n "$_mall" ] && [ -n "$_musr" ] || return 0
+  _mgone=''
   while IFS='|' read -r _mp _mo _mu; do
-    [ -n "$_mp" ] && _wl_man_installed "$_mp" && _wl_man_apply "$_mp" >/dev/null 2>&1 || :
+    _wl_man_pkgok "$_mp" || continue
+    if _wl_man_gone "$_mp" "$_mall"; then _mgone="$_mgone $_mp"; continue; fi
+    printf '%s\n' "$_musr" | grep -qxF "$_mp" || continue
+    _wl_man_apply "$_mp" </dev/null >/dev/null 2>&1 || :
   done < "$MAN"
+  for _mp in $_mgone; do _wl_man_drop "$_mp"; done
 }
 # Read-only ranked candidates. Battery-stats durations are cumulative since the last unplug,
 # not a current-capture energy attribution; the WebUI labels that basis explicitly.
@@ -722,7 +752,7 @@ if [ "${1:-}" = manual-status ]; then
       version=*|scan=*|selected=*) printf '%s\n' "$_a" ;;
       ''|*[!A-Za-z0-9_.]*) : ;;
       *) _sel=0; [ -n "$(_wl_man_line "$_a")" ] && _sel=1
-         _eff=unknown; _has appops && _eff="$(_wl_fit_eff "$_a")"
+         _eff=unknown; _has appops && _eff="$(_wl_man_eff "$_a" </dev/null)"
          _prot=0; _wl_protected "$_a" && _prot=1
          printf 'row|%s|%s|%s|%s|%s|%s\n' "$_a" "${_b:-0}" "${_c:-0}" "$_sel" "${_eff:-unknown}" "$_prot" ;;
     esac
