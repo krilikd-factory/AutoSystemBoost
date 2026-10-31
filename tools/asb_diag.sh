@@ -1109,6 +1109,22 @@ if [ -r "$_state" ]; then
       if [ "${_ullv:-0}" -gt 0 ] 2>/dev/null; then
         NOTE "  Battery lifts held by a finger kept level with the main cores: ${_ullv} time(s)$([ "${_ullk:-0}" -gt 0 ] 2>/dev/null && echo " · now prime ${_ullk} kHz")"
       fi
+      _bhk="$(_rget battery_hold_kept /dev/.asb/state 2>/dev/null)"
+      if [ -n "$_bhk" ]; then
+        _bhr="$(_rget battery_hold_released /dev/.asb/state 2>/dev/null)"
+        _bht="$(_rget battery_hold_testing /dev/.asb/state 2>/dev/null)"
+        case "$(_rget battery_hold /dev/.asb/state 2>/dev/null)" in
+          1) _bhn="held through a scroll" ;;
+          0) _bhn="released - a scroll runs at the Battery ceilings" ;;
+          2) _bhn="under test" ;;
+          *) _bhn="not measured (not Battery, screen off, a launcher, a game or the camera)" ;;
+        esac
+        if [ "$(cfg battery_hold_learn)" = 0 ]; then
+          NOTE "  Battery scroll hold, measured per app: off (battery_hold_learn=0) - every app keeps the hold"
+        else
+          NOTE "  Battery scroll hold, measured per app: kept for ${_bhk} app(s), released for ${_bhr:-0}, under test ${_bht:-0} · the app in front: ${_bhn}"
+        fi
+      fi
     fi
   fi
   # Which cluster looks bigger to the scheduler right now (fix130). Work goes where the
