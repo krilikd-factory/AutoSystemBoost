@@ -1659,11 +1659,12 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 /* Device diagnostics is a fifth, read-only page above Report. It deliberately reuses the
  * report's cards and rows so long kernel/build values get the same wrapping and contrast. */
 #devicePage { z-index: 140; overflow-y: auto !important; }
+#zygiskPage { z-index: 145; overflow-y: auto !important; }
 /* These are fullscreen drill-ins, not translucent sheets. Liquid Glass deliberately makes
  * ordinary tab pages transparent, but Report/Device may open over Monitor or Config: an
  * inherited transparent surface there exposes two screens at once. Keep the Glass cards,
  * while the page itself owns an opaque palette background in every theme and on every path. */
-#reportPage, #devicePage { background: var(--bg) !important; }
+#reportPage, #devicePage, #zygiskPage { background: var(--bg) !important; }
 .device-page .lgr-hero-val { overflow-wrap: anywhere; }
 .device-page .lgr-v.dev-long { max-width: 64%; font-family: var(--mono); font-size: 11px; line-height: 1.4; }
 .device-page .lgr-v.dev-good { color: var(--bat); }
@@ -1727,6 +1728,15 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .device-page .dev-snapshot .dev-snapshot-warn { border-color: color-mix(in srgb,var(--bal) 42%,var(--border)); }
 .device-page .dev-section-guide { margin: -3px 0 8px; padding: 0 0 7px; border-bottom: 1px solid var(--border); }
 .device-page .lgr-v.dev-unknown { color: var(--text-tertiary); font-weight: 550; }
+/* fix278: the Zygisk page. One mode control spans the card; the description under it is the
+ * selected mode's own text, so what is on and what it costs is read next to the choice. */
+.zygisk-page .zy-mode-seg { display: flex; width: 100%; margin: 2px 0 10px; }
+.zygisk-page .zy-mode-seg button { font-size: 12px; padding: 9px 6px; }
+.zygisk-page .zy-mode-desc { color: var(--text-secondary); font-size: 12.5px; line-height: 1.45; margin: 0 2px 8px; }
+.zygisk-page .zy-fine { margin-top: 10px; }
+.zygisk-page .zy-evidence { margin: 4px 0 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 14px; }
+.zygisk-page .zy-evidence summary { cursor: pointer; color: var(--text-secondary); font-size: 12.5px; font-weight: 600; }
+.zygisk-page .zy-evidence[open] summary { margin-bottom: 8px; }
 
 .wl-manual-sheet { min-height:min(48vh,560px); }
 .wl-manual-copy { padding:11px 12px; border:1px solid rgba(255,165,2,.28); border-radius:12px; color:var(--text-secondary); background:rgba(255,165,2,.055); }
@@ -2738,6 +2748,27 @@ html[data-asb-theme="light"] .cfg-zygisk-card { background:#fff; }
 .doze-keep-legend[open] { max-height: 26vh; overflow-y: auto; overscroll-behavior: contain; }
 .doze-keep-legend > div { margin-top: 6px; white-space: pre-line; }
 .doze-keep-done { margin-top: 10px; }
+.nf-card .cfg-row-top { cursor: default; }
+.nf-card-desc { margin-top: 8px; font-size: 12px; line-height: 1.45; color: rgba(231,234,238,.66); }
+.nf-oem { font-size: 11px; line-height: 1.4; color: rgba(231,234,238,.55); }
+.nf-copy { margin: 0 0 10px; }
+.nf-panel { margin-bottom: 10px; padding: 10px 11px; border-radius: 12px; border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.03); display: flex; flex-direction: column; gap: 8px; }
+.nf-panel-h { font-size: 10.5px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase; color: rgba(231,234,238,.62); }
+.nf-sel-row, .nf-find-row { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.nf-sel-txt { flex: 1 1 auto; min-width: 0; }
+.nf-sel-name { font-size: 12.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nf-sel-why, .nf-find-txt { flex: 1 1 auto; min-width: 0; font-size: 11.5px; line-height: 1.4; color: rgba(231,234,238,.70); }
+.nf-sel-row.ok .nf-sel-why { color: #5ce7c3; }
+.nf-sel-row.warn .nf-sel-why { color: #ffd38a; }
+.nf-find-fix { flex: 0 0 auto; max-width: 42%; padding: 6px 9px; border-radius: 9px; font-size: 11px; font-weight: 700;
+  border: 1px solid rgba(44,214,173,.45); background: rgba(44,214,173,.10); color: #5ce7c3; white-space: normal; text-align: center; }
+.nf-find-fix:disabled { opacity: .5; }
+html[data-asb-theme="light"] .nf-card-desc, html[data-asb-theme="light"] .nf-oem,
+html[data-asb-theme="light"] .nf-sel-why, html[data-asb-theme="light"] .nf-find-txt, html[data-asb-theme="light"] .nf-panel-h { color: rgba(20,32,30,.72) !important; }
+html[data-asb-theme="light"] .nf-panel { border-color: rgba(0,0,0,.10); background: rgba(0,0,0,.03); }
+html[data-asb-theme="light"] .nf-sel-row.ok .nf-sel-why, html[data-asb-theme="light"] .nf-find-fix { color: #00634f !important; }
+html[data-asb-theme="light"] .nf-sel-row.warn .nf-sel-why { color: #8a5a00 !important; }
 
 .cfg-desc-opts { margin-top: 10px; display: flex; flex-direction: column; gap: 7px; }
 .cfg-desc-opt {
@@ -4184,12 +4215,12 @@ html[data-asb-glass="1"][data-asb-theme="light"] .app-name {
  * inner cards, the sheets' primary button, the toast and the dialog backdrops take the
  * material too. Colours that carry meaning (drain values, metric steps, toast categories)
  * are untouched - only the fill, the edge light and the blur change. */
-html[data-asb-glass="1"] :is(#reportPage,#devicePage) {
+html[data-asb-glass="1"] :is(#reportPage,#devicePage,#zygiskPage) {
   background:
     radial-gradient(ellipse 90% 48% at 12% 0%,rgba(0,240,180,.10),transparent 68%),
     radial-gradient(ellipse 70% 42% at 100% 82%,rgba(36,58,49,.20),transparent 72%),#000 !important;
 }
-html[data-asb-glass="1"][data-asb-theme="light"] :is(#reportPage,#devicePage) {
+html[data-asb-glass="1"][data-asb-theme="light"] :is(#reportPage,#devicePage,#zygiskPage) {
   background:
     radial-gradient(ellipse 90% 48% at 12% 0%,rgba(0,124,99,.10),transparent 68%),
     radial-gradient(ellipse 70% 42% at 100% 82%,rgba(101,239,201,.15),transparent 72%),#f2f4f6 !important;
@@ -5067,6 +5098,55 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
   <div class="footer"></div>
 </div>
 
+<!-- fix278: a page of its own for Zygisk - opened from the header pill, one root read,
+     one mode control. The four separate switches stay in Settings -> System. -->
+<div class="page live-page report-page device-page zygisk-page" id="zygiskPage" aria-hidden="true">
+  <div class="live-inner">
+    <div class="header">
+      <div class="logo-c">
+        <div class="logo-glow"></div>
+        <div class="logo-ring"></div>
+        <div class="logo-inner"><span class="logo-glyph">🛸</span></div>
+      </div>
+      <div class="app-name">AutoSystemBoost</div>
+      <div class="device-line" id="zyDeviceLine">OnePlus Device &middot; Qualcomm Snapdragon</div>
+      <div class="badges">
+        <div class="hdr-cap hdr-info">
+          <button class="badge badge-a" id="zySocBadge" type="button" onclick="openDevicePage()" aria-label="Open device diagnostics" title="Device diagnostics">DEVICE</button>
+          <div class="badge badge-a" id="zyVerBadge">V65</div>
+        </div>
+        <div class="theme-toggle" role="group" data-theme-toggle="zyVerBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button><button class="theme-choice" type="button" data-theme-choice="glass" onclick="asbSetTheme('glass')" aria-label="Liquid Glass theme"><span data-tech-icon="theme_glass"></span></button></div>
+      </div>
+      <div class="status-row">
+        <div class="dot"></div>
+        <span class="status-label" data-i18n="hdr_profile">Profile:&nbsp;</span>
+        <span class="status-val" id="zyCurProfile">balanced</span>
+        <button class="live-chip" id="zyBackChip" type="button" onclick="closeZygiskPage()" aria-label="Back">
+          <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+          <span data-i18n="nav_back">Back</span>
+        </button>
+      </div>
+    </div>
+
+        <div class="sec">
+      <div class="sec-line"></div>
+      <div class="sec-label" data-i18n="zy_title">Zygisk</div>
+      <div class="sec-line"></div>
+    </div>
+    <div class="rpt-meta-row">
+      <span class="lgr-status" id="zygiskStatus" role="status" aria-live="polite"></span>
+      <div class="rpt-actions">
+        <button class="live-chip rpt-refresh" id="zyRefresh" type="button" onclick="zygiskPageLoad(true)">
+          <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 6.3"></path><path d="M20 5v6h-6"></path></svg>
+          <span data-i18n="dev_refresh">Refresh</span>
+        </button>
+      </div>
+    </div>
+    <div class="lgr-body" id="zygiskBody"></div>
+  </div>
+  <div class="footer"></div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <!-- In-page profile manager. Unlike the former browser prompt, this lists actual saved
@@ -5611,6 +5691,7 @@ function Topt(o, key) {
   return o;
 }
 function applyStaticI18n() {
+  asbNavIndicator._geo = null;
   if (ASB_LANG === 'en') return;
   // Was I18N.ru[k] for EVERY language. On a Russian device it worked by accident; on any
   // other it threw on the first node (I18N.ru is not loaded there) and the throw was
@@ -5737,11 +5818,11 @@ async function loadDeviceInfo() {
     /* Every page header at once (fix168). Monitor and Settings copied Home's line only from
      * the governor's poll, so on Stock - no governor - they kept the "OnePlus Device" and
      * "DEVICE" placeholders. */
-    ['deviceLine', 'liveDeviceLine', 'cfgDeviceLine', 'rpDeviceLine', 'devDeviceLine'].forEach(function (id) {
+    ['deviceLine', 'liveDeviceLine', 'cfgDeviceLine', 'rpDeviceLine', 'devDeviceLine', 'zyDeviceLine'].forEach(function (id) {
       const el = document.getElementById(id);
       if (el) el.textContent = model + ' / ' + soc;
     });
-    ['socBadge', 'liveSocBadge', 'cfgSocBadge', 'rpSocBadge', 'devSocBadge'].forEach(function (id) {
+    ['socBadge', 'liveSocBadge', 'cfgSocBadge', 'rpSocBadge', 'devSocBadge', 'zySocBadge'].forEach(function (id) {
       const el = document.getElementById(id);
       if (el) {
         el.textContent = chip;
@@ -5768,6 +5849,51 @@ function run(cmd) {
       else ok({errno:1, stdout:'', stderr:'no ksu'});
     } catch(x) { ok({errno:1, stdout:'', stderr:''+x}); }
   });
+}
+
+/* fix278: several reads through ONE root shell.
+ *
+ * KernelSU-family managers run ksu.exec synchronously on the WebView's JavaScript thread and
+ * start a new root shell for every call, so each separate read froze the page for one shell
+ * start plus the command - taps, the tab slide and the scroll all waited. A browser bench
+ * with the bridge modelled that way counted 7 calls on Home -> Monitor, 16 on Monitor ->
+ * Settings and 5 every 3 s on Monitor. Reads that belong to one screen now share one shell.
+ *
+ * Each part is printed after its own output with a per-session marker line, preceded by a
+ * newline so output without a trailing newline cannot swallow the marker. A part comes back
+ * exactly as its own run() would have returned it: lines joined by \n, no trailing newline,
+ * errno 0 when its marker arrived (the individual exit code is not observable here; every
+ * caller of a batched read uses its stdout only). A part whose marker never arrived - the
+ * shell died, the bridge is absent - returns errno 1 and empty stdout, the same shape as a
+ * failed run(). */
+const _ASB_PART = '@@asb-part:' + Math.random().toString(36).slice(2, 10) + ':';
+function runBatchCmd(parts) {
+  return parts.map(function (p) {
+    return '{ ' + p[1] + '; } 2>/dev/null; echo; echo ' + shQuote(_ASB_PART + p[0]);
+  }).join('; ');
+}
+function runBatchSplit(text) {
+  const out = Object.create(null);
+  let buf = [];
+  String(text || '').split('\n').forEach(function (line) {
+    if (line.indexOf(_ASB_PART) === 0) {
+      if (buf.length && buf[buf.length - 1] === '') buf.pop();
+      out[line.slice(_ASB_PART.length)] = buf.join('\n');
+      buf = [];
+    } else buf.push(line);
+  });
+  return out;
+}
+async function runBatch(parts) {
+  let r = null;
+  try { r = await run(runBatchCmd(parts)); } catch (e) { r = null; }
+  const got = runBatchSplit(r ? r.stdout : '');
+  const res = Object.create(null);
+  parts.forEach(function (p) {
+    const has = Object.prototype.hasOwnProperty.call(got, p[0]);
+    res[p[0]] = { errno: has ? 0 : 1, stdout: has ? got[p[0]] : '', stderr: '' };
+  });
+  return res;
 }
 
 let _asbDebugActionBusy = false;
@@ -6127,11 +6253,13 @@ let _liveOpen = false;
 let _rpOpen = false;
 let _deviceOpen = false;
 let _deviceLoadSeq = 0;
+let _zygiskOpen = false;
 
 function openLivePage() {
   uiSound('nav');
   const p = _el('livePage');
   if (!p) return;
+  asbNavAnimMark();
   p.classList.add('open');
   document.body.classList.add('live-active');
   asbTabbarVisibility();
@@ -6153,7 +6281,6 @@ function openLivePage() {
   /* fix202: Monitor is the tall page - once it is up, measure it and compact the chrome
      if it runs past the screen (the page is full-height from its first frame; the slide
      is a transform and does not change the measurement). */
-  zygiskHeaderRefresh();
   requestAnimationFrame(asbFitPages);
 }
 const LIVE_OPEN_SETTLE_MS = 320;
@@ -6162,6 +6289,7 @@ function closeLivePage() {
   uiSound('nav');
   const p = _el('livePage');
   if (!p) return;
+  asbNavAnimMark();
   p.classList.remove('open');
   document.body.classList.remove('live-active');
   asbTabbarVisibility();
@@ -6207,6 +6335,7 @@ function navUiDepth() {
   if (_rpOpen) d++;
   /* Device diagnostics is the top page and owns its own Back/history level. */
   if (_deviceOpen) d++;
+  if (_zygiskOpen) d++;
   return d + navOverlaysOpen().length;
 }
 function navSync() {
@@ -6230,6 +6359,7 @@ function navSyncSoon() {
 function navBackAction() {
   const o = navOverlaysOpen();
   if (o.length) { o[0].close(); return; }
+  if (_zygiskOpen) { uiSound('nav'); closeZygiskPage(); return; }
   /* Device diagnostics may sit above Report, Config or Monitor; close it first. */
   if (_deviceOpen) { uiSound('nav'); closeDevicePage(); return; }
   /* The report sits above the page it was opened from; back returns to that page. */
@@ -6406,6 +6536,10 @@ function lvSlotToMeter(rate, basis) {
 function lvMeterTip(min) {
   return T('eta_meter_tip', 'Estimate: nothing measured since the governor started - based on the screen-on drain ASB measured earlier in this profile, over %s min.').replace('%s', min);
 }
+function lvMeterHasOn(profile) {
+  const e = (_lvMeter.p && _lvMeter.p[profile]) || null;
+  return !!(e && e.on > 0);
+}
 function lvMeterPaint(profile) {
   const e = (_lvMeter.p && _lvMeter.p[profile]) || null;
   const onEl = _el('bnDrain'), offEl = _el('bnDrainOff');
@@ -6454,9 +6588,9 @@ function lvEtaPaint() {
   const meterTip = T('lv_eta_meter_tip', 'Battery level divided by the drain ASB measured in this profile.');
   let on = 0, off = 0, onTip = '', offTip = '', offEst = false;
   const cap = _lvEta.cap;
-  if (_selectedProfile === 'smart') {
-    if (g) { on = g.on; onTip = g.onTip; }
-  } else {
+  /* fix279: every profile, Smart included, divides by the figure printed above it - the
+   * profile average; the governor's forecast stands in only until the meter has one. */
+  {
     const e = (_lvMeter.p && _lvMeter.p[_selectedProfile]) || null;
     const gov = g && _selectedProfile !== 'stock';
     if (e && e.on > 0 && cap > 0) { on = Math.floor(cap * 600 / e.on); onTip = meterTip; }
@@ -6489,7 +6623,7 @@ function lvEtaPaint() {
 }
 /* Monitor: battery drain with the screen on and off (fix159). The two figures sit in the Smart
  * card; a tap opens what each one is based on and how long the battery would last. */
-const _lvDrain = { on: 'wait', off: 'wait', winS: 0, offN: 0, offX: 0, offTip: '' };
+const _lvDrain = { on: 'wait', off: 'wait', winS: 0, offN: 0, offX: 0, offTip: '', nowX: 0, nowS: 0 };
 function liveDrainIsOpen() { const m = _el('liveDrainSheet'); return !!m && !m.hidden; }
 function liveDrainEnsure() {
   let m = _el('liveDrainSheet');
@@ -6532,7 +6666,7 @@ function liveDrainBlock(icon, label, value, basis, left) {
 function liveDrainPaint() {
   const body = _el('liveDrainBody');
   if (!body) return;
-  _el('liveDrainTitle').textContent = T('lv_drain_title_history', 'Battery drain · profile history');
+  _el('liveDrainTitle').textContent = T('lv_drain_title', 'Battery drain');
   _el('liveDrainDone').textContent = T('doze_keep_done', 'Done');
   const onV = (_el('bnDrain') || {}).textContent || '\u2014';
   const offV = (_el('bnDrainOff') || {}).textContent || '\u2014';
@@ -6545,7 +6679,7 @@ function liveDrainPaint() {
     slot: T('lv_drain_on_slot', 'estimate from what this hour usually costs - nothing measured since the start yet'),
     charging: T('lv_drain_charging_tip', 'No drain while charging - the figure comes back after unplugging.'),
     wait: T('lv_drain_on_wait', 'needs 10 minutes with the screen on and the battery level moving'),
-    meter: T('lv_drain_on_meter', 'measured by ASB over %s min with the screen on in this profile').replace('%s', String(mins)),
+    meter: T('lv_drain_on_avg', 'average of this profile: %s min measured with the screen on - the same figure as on the profile card and in the manager action').replace('%s', String(mins)),
     meter_wait: T('lv_drain_on_wait', 'needs 10 minutes with the screen on and the battery level moving')
   }[_lvDrain.on] || '';
   let offBasis = _lvDrain.off === 'measured'
@@ -6560,13 +6694,21 @@ function liveDrainPaint() {
   body.textContent = '';
   body.appendChild(liveDrainBlock('sun', T('lv_scr_on', 'Screen on'), onV, onBasis,
     (etaOn && etaOn !== '\u2014' && _lvDrain.on !== 'charging') ? left.replace('%s', etaOn) : ''));
+  /* fix279: the live window, labelled as what it is and never in place of the average. */
+  if (_lvDrain.on === 'meter' && _lvDrain.nowX > 0) {
+    const nowMin = Math.max(1, Math.round((_lvDrain.nowS || 0) / 60));
+    const nowEta = _lvEta.cap > 0 ? lvEtaFmt(Math.floor(_lvEta.cap * 600 / _lvDrain.nowX)) : '';
+    body.appendChild(liveDrainBlock('timeout', T('lv_drain_now_lbl', 'Right now'), lvPct(_lvDrain.nowX, 10, 1),
+      T('lv_drain_on_now', 'measured over the last %s min with the screen on').replace('%s', String(nowMin)),
+      (nowEta && nowEta !== '\u2014') ? T('lv_drain_left_now', 'at this pace to 0%: %s').replace('%s', nowEta) : ''));
+  }
   body.appendChild(liveDrainBlock('theme_moon', T('lv_scr_off', 'Screen off'), offV, offBasis,
     (etaOff && etaOff !== '\u2014') ? left.replace('%s', etaOff) : ''));
   const cmp = liveDrainCompare();
   if (cmp) body.appendChild(cmp);
   const note = document.createElement('div');
   note.className = 'live-drain-note';
-  note.textContent = T('lv_drain_note_history', 'Profile history, not the current infinite-log capture. Screen on is accumulated over time; screen off prefers the latest complete eligible window, otherwise its aggregate. Both use battery-level changes, not the current sensor. Open the infinite-log report for the current capture and its own time windows.');
+  note.textContent = T('lv_drain_note_avg', 'Screen on is the average of this profile - the same figure on the profile cards, in the manager action and on this tile. Right now is only the latest continuous stretch with the screen on and moves with what you are doing. Screen off prefers the latest complete quiet window. The infinite-log report counts only the time of its own recording. All figures come from the battery level, not from the current sensor.');
   body.appendChild(note);
 }
 function liveDrainCompare() {
@@ -6620,7 +6762,9 @@ async function liveDrainOpen() {
   uiSound('option');
   const m = liveDrainEnsure();
   liveDrainPaint();
-  lvMeterPoll(true).then(function () { if (_selectedProfile !== 'smart') lvMeterPaint(_selectedProfile); else if (liveDrainIsOpen()) liveDrainPaint(); });
+  lvMeterPoll(true).then(function () {
+    if (_selectedProfile !== 'smart' || lvMeterHasOn('smart')) lvMeterPaint(_selectedProfile); else if (liveDrainIsOpen()) liveDrainPaint();
+  });
   m.hidden = false;
   m.setAttribute('aria-hidden', 'false');
 }
@@ -7239,6 +7383,7 @@ window.addEventListener('popstate', function (e) {
   } catch (e) {}
 })();
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && _zygiskOpen) { closeZygiskPage(); return; }
   if (e.key === 'Escape' && _deviceOpen) { closeDevicePage(); return; }
   if (e.key === 'Escape' && _rpOpen) { closeReportPage(); return; }
   if (e.key === 'Escape' && _liveOpen) closeLivePage();
@@ -7534,8 +7679,43 @@ const CFG_ITEMS = [
 let _cfgVals = {};
 let _cfgOpen = false;
 
-async function cfgLoad() {
-  const r = await run('cat ' + CFG_FILE + ' 2>/dev/null');
+/* fix278: Settings reads in one root shell, deferred past the slide and skipped while fresh.
+ *
+ * Opening Settings used to start seven reads one after another (config, ledger, trials,
+ * LTPO, multimedia, LSPosed, package tweaks) plus the device class (two more) - each a
+ * separate blocking root shell. They are one batch now. A load younger than CFG_FRESH_MS
+ * (set by this page, never by a write path) is reused as is; writes call cfgLoad(true).
+ * When a background refresh returns exactly what the page was drawn from, nothing is
+ * repainted, so an unchanged hub never rebuilds under the user's finger. */
+const CFG_FRESH_MS = 30000;
+let _cfgLoadedAt = 0, _cfgLoadSig = '', _cfgLoadRun = null;
+function cfgLoadParts() {
+  const parts = [['conf', 'cat ' + CFG_FILE], ['ledger', CFG_LEDGER_CMD], ['trials', CFG_TRIALS_CMD],
+    ['ltpo', ltpoStatusCmd()], ['mmfeed', mmfeedStatusCmd()],
+    ['lsp', 'sh ' + MD + '/runtime/asb_lsposed.sh status'], ['pkg', packageTweakStatusCmd()],
+    ['nf', 'cut -d"|" -f1 /data/adb/asb/notif_fix']];
+  if (!_deviceClassKnown) parts.push(['devclass', 'cat ' + MD + '/overlay_device_class'], ['platform', 'getprop ro.board.platform']);
+  return parts;
+}
+function cfgLoadFresh() { return _cfgLoadedAt > 0 && Date.now() - _cfgLoadedAt < CFG_FRESH_MS; }
+function cfgLoad(force) {
+  if (!force && cfgLoadFresh()) return Promise.resolve(false);
+  if (_cfgLoadRun) return _cfgLoadRun.then(function () { return force ? cfgLoadNow() : false; });
+  _cfgLoadRun = cfgLoadNow().then(function (v) { _cfgLoadRun = null; return v; }, function (e) { _cfgLoadRun = null; throw e; });
+  return _cfgLoadRun;
+}
+async function cfgLoadNow() {
+  const parts = cfgLoadParts();
+  const b = await runBatch(parts);
+  const sig = parts.map(function (p) { return (b[p[0]] || {}).stdout || ''; }).join('\u0001');
+  const changed = sig !== _cfgLoadSig;
+  _cfgLoadSig = sig;
+  if (b.conf.errno === 0) _cfgLoadedAt = Date.now();
+  if (!changed && _rebootBaselineReady) {
+    await loadWlFitStatus();
+    return false;
+  }
+  const r = b.conf;
   _cfgVals = {};
   (r.stdout || '').split(/\r?\n/).forEach(line => {
     const t = line.trim();
@@ -7557,19 +7737,22 @@ async function cfgLoad() {
   /* Load the V64 evidence before the first paint, so a card never renders as plain
    * "Enabled" and then flips to "device did not accept it" a moment later - that flicker
    * reads as a bug in the module rather than as a fact about the phone. */
-  await cfgLoadV64State();
-  await loadLtpoStatus();
-  await loadMmfeedStatus();
+  await cfgLoadV64State(b);
+  await loadLtpoStatus(b.ltpo);
+  await loadMmfeedStatus(b.mmfeed);
   await loadWlFitStatus();
-  await loadLspStatus();
-  await loadPackageTweakStatus();
+  await loadLspStatus(b.lsp);
+  await loadPackageTweakStatus(b.pkg);
+  nfLedgerLoad(b.nf);
+  if (b.devclass) await loadDeviceClass(b);
   /* Never repaint the page while it is still sliding in. openConfigPage already drew
    * the hub before the slide started; if fresh values arrive mid-motion, wait out the
    * remainder and paint once the layer has settled. Other callers leave _cfgAnimUntil
    * in the past, so this adds no delay anywhere else. */
   const _wait = _cfgAnimUntil - performance.now();
   if (_wait > 0) await new Promise(function (r) { setTimeout(r, _wait + 16); });
-  cfgRender();
+  if (_cfgOpen) cfgRender();
+  return true;
 }
 
 // Icon + status hints for the config cards (ASB's own palette/iconography).
@@ -7823,6 +8006,7 @@ function cfgRenderGroup(list, groupId) {
     sectionItems.forEach(it => { rendered[it.key] = true; });
     if (section.id === 'zygisk') cfgRenderZygiskCard(list, sectionItems);
     else sectionItems.forEach(it => cfgRenderRow(list, it, false));
+    if (groupId === 'battery' && section.id === 'standby') cfgRenderNotifCard(list);
   });
   // Future cards still appear rather than silently disappearing when a maintainer forgets
   // to add them to a subsection. The group remains the source of truth for reachability.
@@ -8003,20 +8187,24 @@ let _mmfeedStatus = '', _mmfeedState = '';
 //
 // So the option is only offered where its consequence is known to be reversible.
 let _isReference = false;
-async function loadDeviceClass() {
+let _deviceClassKnown = false;
+async function loadDeviceClass(pre) {
   try {
-    const r = await run('cat ' + MD + '/overlay_device_class 2>/dev/null');
+    const r = (pre && pre.devclass) || await run('cat ' + MD + '/overlay_device_class 2>/dev/null');
     const cls = ((r && r.stdout) || '').trim();
     if (cls === 'reference' || cls === 'generic') {
       _isReference = (cls === 'reference');
+      _deviceClassKnown = true;
       return;
     }
     // No marker: an install old enough to predate the file, or a read that failed. Ask the
     // SoC instead of guessing "reference" - guessing wrong that way OFFERS an option that
     // costs other models the Recents selector, while guessing wrong the other way only
     // hides a cosmetic setting on an OP15 until the next install writes the marker.
-    const p = await run('getprop ro.board.platform 2>/dev/null');
-    _isReference = (((p && p.stdout) || '').trim() === 'canoe');
+    const p = (pre && pre.platform) || await run('getprop ro.board.platform 2>/dev/null');
+    const plat = ((p && p.stdout) || '').trim();
+    _isReference = (plat === 'canoe');
+    if (plat) _deviceClassKnown = true;
   } catch (e) { _isReference = false; }
 }
 
@@ -8036,9 +8224,12 @@ async function loadNetResult() {
 // the installer's staged state (ready/already/unsupported). A card that says Enabled
 // while nothing is mounted is exactly the dishonesty the ledger keys above were built
 // against; this keeps the LTPO card to the same standard.
-async function loadLtpoStatus() {
+function ltpoStatusCmd() {
+  return 'sh ' + MD + '/runtime/asb_ltpo_apply.sh status 2>/dev/null; echo ---; cat /data/adb/asb/ltpo_state 2>/dev/null; echo ---; sh ' + MD + '/runtime/asb_ltpo_video.sh status 2>/dev/null';
+}
+async function loadLtpoStatus(pre) {
   try {
-    const r = await run('sh ' + MD + '/runtime/asb_ltpo_apply.sh status 2>/dev/null; echo ---; cat /data/adb/asb/ltpo_state 2>/dev/null; echo ---; sh ' + MD + '/runtime/asb_ltpo_video.sh status 2>/dev/null');
+    const r = pre || await run(ltpoStatusCmd());
     const parts = (((r && r.stdout) || '')).split('---');
     _ltpoStatus = (parts[0] || '').trim().split(/\r?\n/)[0] || '';
     _ltpoState = ((parts[1] || '').trim().split(/\r?\n/)[0]) || '';
@@ -8096,9 +8287,9 @@ function lspParse(out) {
   });
   return o.present ? o : null;
 }
-async function loadLspStatus() {
+async function loadLspStatus(pre) {
   try {
-    const r = await run('sh ' + MD + '/runtime/asb_lsposed.sh status 2>/dev/null');
+    const r = pre || await run('sh ' + MD + '/runtime/asb_lsposed.sh status 2>/dev/null');
     _lsp = lspParse((r && r.stdout) || '');
   } catch (e) { _lsp = null; }
 }
@@ -8132,9 +8323,12 @@ function packageTweakParse(out) {
   });
   return o;
 }
-async function loadPackageTweakStatus() {
+function packageTweakStatusCmd() {
+  return "sh " + MD + "/runtime/asb_heytap_mcs.sh status 2>/dev/null; echo ---; sh " + MD + "/runtime/asb_documentsui_fix.sh status 2>/dev/null";
+}
+async function loadPackageTweakStatus(pre) {
   try {
-    const r = await run("sh " + MD + "/runtime/asb_heytap_mcs.sh status 2>/dev/null; echo ---; sh " + MD + "/runtime/asb_documentsui_fix.sh status 2>/dev/null");
+    const r = pre || await run(packageTweakStatusCmd());
     const parts = String((r && r.stdout) || '').split('---');
     _heyTweak = packageTweakParse(parts[0]);
     _docTweak = packageTweakParse(parts[1]);
@@ -8163,9 +8357,12 @@ function packageTweakBadge(key, cur) {
 
 // Multimedia telemetry: the same honesty standard as the LTPO card - the badge reads
 // the bind owner and the installer state, never the toggle alone.
-async function loadMmfeedStatus() {
+function mmfeedStatusCmd() {
+  return 'sh ' + MD + '/runtime/asb_mmfeed_apply.sh status 2>/dev/null; echo ---; cat /data/adb/asb/mmfeed_state 2>/dev/null';
+}
+async function loadMmfeedStatus(pre) {
   try {
-    const r = await run('sh ' + MD + '/runtime/asb_mmfeed_apply.sh status 2>/dev/null; echo ---; cat /data/adb/asb/mmfeed_state 2>/dev/null');
+    const r = pre || await run(mmfeedStatusCmd());
     const parts = (((r && r.stdout) || '')).split('---');
     _mmfeedStatus = (parts[0] || '').trim().split(/\r?\n/)[0] || '';
     _mmfeedState = ((parts[1] || '').trim().split(/\r?\n/)[0]) || '';
@@ -8201,10 +8398,12 @@ function runOk(result) {
   return !!result && result.errno === 0;
 }
 
-async function cfgLoadV64State() {
+const CFG_LEDGER_CMD = "tail -120 /data/adb/asb/apply_ledger 2>/dev/null";
+const CFG_TRIALS_CMD = "for f in /data/adb/asb/trial/*.trial; do [ -f \"$f\" ] && cat \"$f\" && echo '---'; done 2>/dev/null";
+async function cfgLoadV64State(pre) {
   _ledger = {}; _trials = {};
   try {
-    const result = await run("tail -120 /data/adb/asb/apply_ledger 2>/dev/null");
+    const result = (pre && pre.ledger) || await run(CFG_LEDGER_CMD);
     const raw = (result && result.stdout) || '';
     raw.split('\n').forEach(function (ln) {
       const f = ln.split('|');
@@ -8214,7 +8413,7 @@ async function cfgLoadV64State() {
     });
   } catch (e) {}
   try {
-    const result = await run("for f in /data/adb/asb/trial/*.trial; do [ -f \"$f\" ] && cat \"$f\" && echo '---'; done 2>/dev/null");
+    const result = (pre && pre.trials) || await run(CFG_TRIALS_CMD);
     const raw = (result && result.stdout) || '';
     raw.split('---').forEach(function (blk) {
       const g = function (k) {
@@ -9291,6 +9490,7 @@ function cfgRender() {
     return;
   }
   list.innerHTML = '';
+  _cfgHubSig = '';
   cfgSyncChrome();
   /* Search across every setting, whichever category it lives in.
    *
@@ -9319,11 +9519,18 @@ function cfgRender() {
     _cfgEnterUntil = performance.now() + 650;
   }
   _cfgShownScreen = _screen;
-  if (!_cfgGroup) { cfgRenderHub(list); return; }
+  if (!_cfgGroup) { cfgRenderHub(list); _cfgHubSig = cfgHubSig(); return; }
   cfgRenderGroup(list, _cfgGroup);
 }
 // The screen the list last showed ('hub' or a category id); null before the first paint.
 var _cfgShownScreen = null;
+/* fix278: what the hub tiles were drawn from. Reopening Settings with the same values,
+ * language and device class keeps the hub already in the page instead of rebuilding it
+ * before the slide can start. Any other paint of the list clears it. */
+var _cfgHubSig = '';
+function cfgHubSig() {
+  return ASB_LANG + '|' + (_isReference ? 1 : 0) + '|' + JSON.stringify(_cfgVals);
+}
 // When the running entrance ends, and the one repaint waiting for it (fix145).
 var _cfgEnterUntil = 0, _cfgRepaintTimer = 0;
 
@@ -9476,6 +9683,7 @@ async function cfgSet(key, val, ctl) {
   const r = await run(cmd);
   if (ctl) ctl.classList.remove('busy');
   if (r.errno === 0) {
+    _cfgLoadSig = '';
     _cfgVals[key] = val;
     _fix.forEach(function(c) { _cfgVals[c.key] = c.val; });
     /* The other card changed too: re-draw so it no longer shows "on", then explain why. */
@@ -10070,7 +10278,7 @@ async function cfgResetSettings() {
   const snapshot = '/data/adb/asb/governor.conf.snapshot';
   const r = await run('sh ' + shQuote(writer) + ' import ' + shQuote(shipped) + ' ' + shQuote(snapshot) + ' ' + cfgProfileArgs());
   if (!r || r.errno !== 0) { toast(cfgResultText(r) || T('cfg_reset_all_fail', 'Could not reset category settings'), 'bad'); return false; }
-  await cfgLoad(); cfgRender();
+  await cfgLoad(true); cfgRender();
   toast(T('cfg_reset_all_done', 'Category settings reset to ASB defaults'), 'good'); return true;
 }
 async function cfgResetDialogRun(kind) {
@@ -10610,6 +10818,432 @@ async function dozeKeepClose() {
   toast(T('doze_keep_saved', 'Kept: %s · applied').replace('%s', String(n)), 'ok');
 }
 
+/* Notification fix (fix279).
+ *
+ * The owner picks the apps whose notifications come late - only once the app is opened, or
+ * only when the screen turns on - and one tap repairs what holds them back: Doze exemption,
+ * background AppOps, background data / Data Saver, ASB's own trimming and wakelock limits
+ * (runtime/asb_notif_fix.sh records every original state first and gives it back on untick or
+ * uninstall). What it cannot change per app - ASB settings that delay push for every app, the
+ * phone's savers, the ROM's own killer - is listed with a one-tap fix where ASB owns it. */
+const NF_SCRIPT = MD + '/runtime/asb_notif_fix.sh';
+const _nf = { tok: 0, busy: false, read: false, apps: [], sel: {}, applied: {}, rows: {}, findings: [], labels: false, q: '', filter: 'all', count: 0, bad: 0 };
+function nfParse(out) {
+  const d = { apps: [], sel: {}, rows: {}, findings: [], selected: 0, result: '' };
+  String(out || '').split('\n').forEach(function (ln) {
+    ln = ln.trim();
+    let m = /^A ([A-Za-z0-9_.]+)$/.exec(ln);
+    if (m) { d.apps.push(m[1]); return; }
+    m = /^S ([A-Za-z0-9_.]+)$/.exec(ln);
+    if (m) { d.sel[m[1]] = 1; return; }
+    if (ln.indexOf('findings=') === 0) { d.findings = ln.slice(9).split(/\s+/).filter(function (x) { return /^[a-z_]+$/.test(x); }); return; }
+    if (ln.indexOf('selected=') === 0) { d.selected = parseInt(ln.slice(9), 10) || 0; return; }
+    if (ln.indexOf('result=') === 0) { d.result = ln.slice(7); return; }
+    const f = ln.split('|');
+    if (f[0] === 'row' && f.length >= 10 && dozePkgOk(f[1]))
+      d.rows[f[1]] = { ok: f[2] === '1', doze: f[3], ra: f[4], rb: f[5], wk: f[6], post: f[7], bucket: f[8], bg: f[9] };
+  });
+  return d;
+}
+function nfRowProblems(r) {
+  const out = [];
+  if (!r) return out;
+  if (r.doze === 'none') out.push(T('nf_part_doze', 'no Doze exemption'));
+  if (/ignore|deny|errored/.test(r.ra + r.rb + r.wk)) out.push(T('nf_part_bg', 'background restricted'));
+  if (r.bg === 'denied' || r.bg === 'saver') out.push(T('nf_part_data', 'background data blocked'));
+  return out;
+}
+function nfLedgerLoad(r) {
+  if (_nf.read) return;
+  const pk = String((r && r.stdout) || '').split('\n').map(function (x) { return x.trim(); }).filter(dozePkgOk);
+  _nf.applied = {};
+  pk.forEach(function (p) { _nf.applied[p] = 1; });
+  _nf.count = pk.length;
+  _nf.bad = -1;
+}
+function nfCardText() {
+  if (!_nf.count) return T('nf_status_none', 'No apps chosen');
+  if (_nf.bad < 0) return T('nf_status_n', '%s app(s) chosen').replace('%s', String(_nf.count));
+  if (_nf.bad) return T('nf_status_partial', '%1 app(s) · %2 need attention').replace('%1', String(_nf.count)).replace('%2', String(_nf.bad));
+  return T('nf_status_ok', '%s app(s) · fixed').replace('%s', String(_nf.count));
+}
+function nfCardPaint() {
+  const st = _el('nfCardState');
+  if (st) { st.textContent = nfCardText(); st.className = 'cfg-status ' + (_nf.count ? (_nf.bad > 0 ? 'warn' : 'good') : 'neutral'); }
+}
+function cfgRenderNotifCard(list) {
+  const row = document.createElement('div');
+  row.className = 'cfg-row cat-battery nf-card' + (_nf.count ? ' is-on' : '');
+  const top = document.createElement('div');
+  top.className = 'cfg-row-top';
+  const ic = document.createElement('div');
+  ic.className = 'cfg-icon cat-battery';
+  ic.innerHTML = techIcon('doze');
+  top.appendChild(ic);
+  const main = document.createElement('div');
+  main.className = 'cfg-main';
+  const nm = document.createElement('div');
+  nm.className = 'cfg-name';
+  nm.textContent = T('nf_title', 'Notification fix');
+  main.appendChild(nm);
+  const st = document.createElement('div');
+  st.id = 'nfCardState';
+  main.appendChild(st);
+  top.appendChild(main);
+  row.appendChild(top);
+  const ds = document.createElement('div');
+  ds.className = 'nf-card-desc';
+  ds.textContent = T('nf_card_desc', 'Notifications from some apps arrive late? Choose those apps: ASB exempts them from sleep and background limits and shows what else holds push back.');
+  row.appendChild(ds);
+  const b = document.createElement('button');
+  b.className = 'doze-edit-btn';
+  b.type = 'button';
+  b.textContent = T('nf_open', 'Choose apps and fix');
+  b.onclick = function (e) { e.stopPropagation(); uiSound('option'); nfOpen(); };
+  row.appendChild(b);
+  list.appendChild(row);
+  nfCardPaint();
+}
+function nfEnsure() {
+  let m = _el('nfModal');
+  if (m) return m;
+  m = document.createElement('div');
+  m.className = 'cfg-profile-modal doze-keep-modal';
+  m.id = 'nfModal';
+  m.hidden = true;
+  m.setAttribute('aria-hidden', 'true');
+  m.innerHTML = '<div class="cfg-profile-sheet doze-keep-sheet nf-sheet" role="dialog" aria-modal="true" aria-labelledby="nfTitle">'
+    + '<div class="cfg-profile-head"><div class="cfg-profile-title" id="nfTitle"></div>'
+    + '<button class="cfg-profile-close" id="nfX" type="button" aria-label="Close">×</button></div>'
+    + '<input class="cfg-profile-name doze-keep-search" id="nfSearch" type="search" autocomplete="off" autocapitalize="off" spellcheck="false">'
+    + '<div class="cfg-profile-hint doze-keep-nolabel" id="nfNoLabel" hidden></div>'
+    + '<div class="cfg-profile-dest doze-keep-chips" id="nfChips"></div>'
+    + '<div class="doze-keep-list" id="nfList"></div>'
+    + '<button class="cfg-profile-primary doze-keep-done" id="nfApply" type="button"></button></div>';
+  document.body.appendChild(m);
+  m.addEventListener('click', function (e) { if (e.target === m) nfClose(); });
+  _el('nfX').onclick = nfClose;
+  _el('nfApply').onclick = nfApply;
+  const s = _el('nfSearch');
+  s.oninput = function () { _nf.q = s.value.trim().toLowerCase(); nfFilter(); };
+  return m;
+}
+function nfClose() {
+  const m = _el('nfModal');
+  if (!m || m.hidden) return;
+  m.hidden = true;
+  m.setAttribute('aria-hidden', 'true');
+  _nf.tok++;
+}
+function nfIsOpen() { const m = _el('nfModal'); return !!m && !m.hidden; }
+async function nfOpen() {
+  const m = nfEnsure();
+  const tok = ++_nf.tok;
+  _nf.q = ''; _nf.filter = 'all';
+  _el('nfTitle').textContent = T('nf_title', 'Notification fix');
+  _nf.copy = T('nf_copy', 'Tick the apps whose notifications arrive late - only after you open the app, or only when the screen turns on - then tap Fix. ASB exempts them from Doze and background limits, lifts background-data blocks for them, keeps its own sleep and wakelock policies off them and checks what else delays push. The previous state is recorded and comes back when you untick an app.');
+  const s = _el('nfSearch');
+  s.value = '';
+  s.placeholder = '🔍  ' + T('doze_keep_search', 'Search by name or package');
+  _nf.oem = T('nf_oem_note', 'On OxygenOS also check “Allow background activity” and auto-launch in the app’s own settings - the ROM keeps those itself and ASB does not change them.');
+  _el('nfApply').textContent = T('nf_apply', 'Fix notifications');
+  _el('nfApply').disabled = false;
+  _el('nfNoLabel').hidden = true;
+  _el('nfChips').textContent = '';
+  const list = _el('nfList');
+  list.textContent = '';
+  const ld = document.createElement('div');
+  ld.className = 'cfg-profile-empty';
+  ld.textContent = T('doze_keep_loading', 'Reading the installed apps...');
+  list.appendChild(ld);
+  m.hidden = false;
+  m.setAttribute('aria-hidden', 'false');
+  await new Promise(function (res) { setTimeout(res, 60); });
+  if (tok !== _nf.tok) return;
+  let b = null;
+  try { b = await runBatch([['apps', 'sh ' + shQuote(NF_SCRIPT) + ' apps'], ['status', 'sh ' + shQuote(NF_SCRIPT) + ' status']]); } catch (e) { b = null; }
+  if (tok !== _nf.tok) return;
+  const a = nfParse(b && b.apps && b.apps.stdout);
+  const st = nfParse(b && b.status && b.status.stdout);
+  if (!a.apps.length) { ld.textContent = T('doze_err', 'Could not read the list'); return; }
+  const labels = dozeKeepLabels(a.apps);
+  if (tok !== _nf.tok) return;
+  _nf.labels = Object.keys(labels).length > 0;
+  _nf.sel = {}; _nf.applied = {};
+  Object.keys(a.sel).forEach(function (k) { _nf.sel[k] = 1; _nf.applied[k] = 1; });
+  _nf.rows = st.rows; _nf.findings = st.findings;
+  nfCount();
+  _nf.apps = a.apps.map(function (p) {
+    const name = labels[p] || '';
+    return { pkg: p, name: name, msg: dozeIsMessenger(p), q: (name + ' ' + p).toLowerCase() };
+  });
+  _nf.apps.sort(function (x, y) {
+    const rx = _nf.sel[x.pkg] ? 0 : (x.msg ? 1 : 2), ry = _nf.sel[y.pkg] ? 0 : (y.msg ? 1 : 2);
+    if (rx !== ry) return rx - ry;
+    return (x.name || x.pkg).toLowerCase().localeCompare((y.name || y.pkg).toLowerCase());
+  });
+  if (!_nf.labels) {
+    const nl = _el('nfNoLabel');
+    nl.textContent = T('doze_keep_nolabel', 'This root manager does not give app names to the page - search by package name, for example telegram or whatsapp.');
+    nl.hidden = false;
+  }
+  nfRenderList();
+}
+function nfCount() {
+  _nf.read = true;
+  const pk = Object.keys(_nf.applied);
+  _nf.count = pk.length;
+  _nf.bad = pk.filter(function (p) { const r = _nf.rows[p]; return !r || !r.ok; }).length;
+  nfCardPaint();
+}
+function nfTag(a) {
+  const on = !!_nf.sel[a.pkg], was = !!_nf.applied[a.pkg], r = _nf.rows[a.pkg];
+  if (on && !was) return ['give', T('nf_tag_pending', 'fixed on tap')];
+  if (!on && was) return ['drop', T('nf_tag_back', 'restored on tap')];
+  if (on && r && r.doze === 'gone') return ['drop', T('nf_tag_gone', 'uninstalled')];
+  if (on && r && r.ok) return ['granted', T('nf_tag_ok', 'fixed')];
+  if (on) return ['trimmed', T('nf_tag_part', 'needs attention')];
+  return null;
+}
+function nfPaintRow(a, b) {
+  const on = !!_nf.sel[a.pkg];
+  b.classList.toggle('on', on);
+  b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  b.querySelector('.cfg-profile-check-box').textContent = on ? '✓' : '';
+  const tag = b.querySelector('.doze-keep-tag');
+  const st = nfTag(a);
+  tag.className = 'doze-keep-tag' + (st ? ' is-' + st[0] : '');
+  tag.textContent = st ? st[1] : '';
+}
+function nfRow(a) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'cfg-profile-check doze-keep-row nf-row';
+  b.dataset.pkg = a.pkg;
+  const box = document.createElement('span');
+  box.className = 'cfg-profile-check-box';
+  b.appendChild(box);
+  if (_nf.labels) {
+    const ic = document.createElement('span');
+    ic.className = 'doze-keep-ico';
+    ic.textContent = (a.name || a.pkg).charAt(0).toUpperCase();
+    const img = document.createElement('img');
+    img.alt = ''; img.loading = 'lazy'; img.decoding = 'async';
+    img.onload = function () { ic.classList.add('has-img'); };
+    img.onerror = function () { img.remove(); };
+    img.src = 'ksu://icon/' + a.pkg;
+    ic.appendChild(img);
+    b.appendChild(ic);
+  }
+  const tx = document.createElement('span');
+  tx.className = 'doze-keep-text';
+  const t1 = document.createElement('span');
+  t1.className = 'cfg-profile-check-title';
+  t1.textContent = a.name || a.pkg;
+  tx.appendChild(t1);
+  if (a.name) {
+    const t2 = document.createElement('span');
+    t2.className = 'cfg-profile-check-sub';
+    t2.textContent = a.pkg;
+    tx.appendChild(t2);
+  }
+  b.appendChild(tx);
+  const tag = document.createElement('span');
+  tag.className = 'doze-keep-tag';
+  b.appendChild(tag);
+  b.onclick = function () {
+    if (_nf.busy) return;
+    if (_nf.sel[a.pkg]) delete _nf.sel[a.pkg]; else _nf.sel[a.pkg] = 1;
+    uiSound(_nf.sel[a.pkg] ? 'toggle_on' : 'toggle_off');
+    nfPaintRow(a, b);
+    nfChips();
+  };
+  nfPaintRow(a, b);
+  return b;
+}
+function nfFindingRow(id) {
+  const fixes = { gms_strict: ['gms_trim', 'lite', T('nf_f_gms_strict_fix', 'Switch to lite')],
+    heytap_off: ['heytap_mcs', 'stock', T('nf_f_heytap_fix', 'Turn back on')],
+    athena_on: ['athena_service', 'off', T('nf_f_athena_fix', 'Switch Athena off')] };
+  const texts = {
+    gms_strict: T('nf_f_gms_strict', 'Google services trim is strict: Google Play services lost their Doze exemption, so push for every app waits for a maintenance window while the phone sleeps.'),
+    gms_not_exempt: T('nf_f_gms_not_exempt', 'Google Play services have no Doze exemption on this phone (not set by ASB): push for every app can wait until the phone wakes.'),
+    doze_aggressive: T('nf_f_doze', 'Deep sleep is aggressive: other apps can be late; the chosen apps are exempt.'),
+    doze_night: T('nf_f_doze_night', 'Deep sleep is set to night: other apps can be late inside the sleep window; the chosen apps are exempt.'),
+    doze_trim: T('nf_f_doze_trim', 'ASB trims the Doze exemption list: the chosen apps are kept off that list automatically.'),
+    wakelock_action: T('nf_f_wakelock', 'ASB restricts apps that hold the phone awake at night: the chosen apps are excluded automatically.'),
+    heytap_off: T('nf_f_heytap', 'HeyTap/OPPO push is off: apps that deliver through it get no push at all.'),
+    athena_on: T('nf_f_athena', 'The ROM’s own background killer (Athena) is active: it can close messengers in the background and no exemption above stops it. Switching it off keeps apps alive at a cost of RAM and some battery.'),
+    battery_saver: T('nf_f_saver', 'Battery Saver is on: Android holds background work and push until it is off.'),
+    data_saver: T('nf_f_datasaver', 'Data Saver is on: the chosen apps get an exception; other apps have no background mobile data.')
+  };
+  if (!texts[id]) return null;
+  const r = document.createElement('div');
+  r.className = 'nf-find-row' + (fixes[id] ? ' has-fix' : '');
+  const t = document.createElement('div');
+  t.className = 'nf-find-txt';
+  t.textContent = texts[id];
+  r.appendChild(t);
+  if (fixes[id]) {
+    const f = fixes[id];
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'nf-find-fix';
+    btn.textContent = f[2];
+    btn.onclick = async function (e) {
+      e.stopPropagation();
+      if (_nf.busy) return;
+      _nf.busy = true; btn.disabled = true;
+      try {
+        if (!_cfgVals || !Object.keys(_cfgVals).length) await cfgLoad(true);
+        await cfgSet(f[0], f[1], null);
+        _nf.findings = _nf.findings.filter(function (x) { return x !== id; });
+        r.remove();
+      } catch (er) { toast(T('nf_failed', 'Could not apply the fix'), 'bad'); btn.disabled = false; }
+      _nf.busy = false;
+    };
+    r.appendChild(btn);
+  }
+  return r;
+}
+function nfPanel() {
+  const wrap = document.createElement('div');
+  const cp = document.createElement('div');
+  cp.className = 'cfg-profile-copy nf-copy';
+  cp.textContent = _nf.copy || '';
+  wrap.appendChild(cp);
+  const box = document.createElement('div');
+  box.className = 'nf-panel';
+  wrap.appendChild(box);
+  const chosen = Object.keys(_nf.applied).sort();
+  if (chosen.length) {
+    const h = document.createElement('div');
+    h.className = 'nf-panel-h';
+    h.textContent = T('nf_sel_title', 'Chosen apps');
+    box.appendChild(h);
+    chosen.forEach(function (p) {
+      const r = _nf.rows[p];
+      const a = _nf.apps.filter(function (x) { return x.pkg === p; })[0];
+      const line = document.createElement('div');
+      line.className = 'nf-sel-row' + (r && r.ok ? ' ok' : ' warn');
+      const tx = document.createElement('div');
+      tx.className = 'nf-sel-txt';
+      const nm = document.createElement('div');
+      nm.className = 'nf-sel-name';
+      nm.textContent = (a && a.name) || p;
+      tx.appendChild(nm);
+      const why = document.createElement('div');
+      why.className = 'nf-sel-why';
+      const probs = nfRowProblems(r);
+      let w = !r ? T('nf_row_pending', 'not read yet') : r.doze === 'gone' ? T('nf_tag_gone', 'uninstalled')
+        : (probs.length ? T('nf_row_part', 'not fully applied: %s').replace('%s', probs.join(', ')) : T('nf_row_ok', 'fixed · read back from Android'));
+      if (r && r.post === 'ignore') w += ' · ' + T('nf_post_off', 'notifications are switched off for this app in Android - turn them on in its settings');
+      why.textContent = w;
+      tx.appendChild(why);
+      line.appendChild(tx);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'nf-find-fix';
+      btn.textContent = T('nf_app_settings', 'App settings');
+      btn.onclick = function (e) {
+        e.stopPropagation();
+        run('am start -a android.settings.APPLICATION_DETAILS_SETTINGS -d ' + shQuote('package:' + p) + ' >/dev/null 2>&1');
+      };
+      line.appendChild(btn);
+      box.appendChild(line);
+    });
+  }
+  const h2 = document.createElement('div');
+  h2.className = 'nf-panel-h';
+  h2.textContent = T('nf_find_title', 'What else delays notifications');
+  box.appendChild(h2);
+  const rows = _nf.findings.map(nfFindingRow).filter(Boolean);
+  if (!rows.length) {
+    const n = document.createElement('div');
+    n.className = 'nf-find-txt';
+    n.textContent = T('nf_find_none', 'Nothing else found: ASB’s settings and the phone’s savers do not hold push back.');
+    box.appendChild(n);
+  }
+  rows.forEach(function (r) { box.appendChild(r); });
+  const oem = document.createElement('div');
+  oem.className = 'nf-oem';
+  oem.textContent = _nf.oem || '';
+  box.appendChild(oem);
+  return wrap;
+}
+function nfRenderList() {
+  const list = _el('nfList');
+  if (!list) return;
+  list.textContent = '';
+  if (!_nf.labels) list.classList.add('no-ico'); else list.classList.remove('no-ico');
+  list.appendChild(nfPanel());
+  _nf.apps.forEach(function (a) { list.appendChild(nfRow(a)); });
+  const none = document.createElement('div');
+  none.className = 'cfg-profile-empty';
+  none.id = 'nfNone';
+  none.hidden = true;
+  none.textContent = T('cfg_search_none', 'Nothing matches that');
+  list.appendChild(none);
+  nfChips();
+  nfFilter();
+}
+function nfChips() {
+  const c = _el('nfChips');
+  if (!c) return;
+  const n = Object.keys(_nf.sel).length;
+  c.textContent = '';
+  [['all', T('doze_chip_all', 'All'), _nf.apps.length], ['sel', T('nf_chip_sel', 'Chosen'), n]].forEach(function (d) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = d[1] + ' · ' + d[2];
+    if (_nf.filter === d[0]) b.className = 'active';
+    b.onclick = function () { _nf.filter = d[0]; uiSound('option'); nfChips(); nfFilter(); };
+    c.appendChild(b);
+  });
+}
+function nfFilter() {
+  const list = _el('nfList');
+  if (!list) return;
+  let shown = 0;
+  list.querySelectorAll('.nf-row').forEach(function (b) {
+    const a = _nf.apps.filter(function (x) { return x.pkg === b.dataset.pkg; })[0];
+    const ok = !!a && (_nf.filter !== 'sel' || !!_nf.sel[a.pkg]) && (!_nf.q || a.q.indexOf(_nf.q) >= 0);
+    b.hidden = !ok;
+    if (ok) shown++;
+  });
+  const none = _el('nfNone');
+  if (none) none.hidden = shown > 0 || !_nf.apps.length;
+}
+async function nfApply() {
+  if (_nf.busy) return;
+  const pk = Object.keys(_nf.sel).filter(dozePkgOk).sort();
+  _nf.busy = true;
+  const btn = _el('nfApply');
+  btn.disabled = true;
+  btn.textContent = T('nf_apply_busy', 'Fixing…');
+  let r = null;
+  try { r = await run('sh ' + shQuote(NF_SCRIPT) + ' set' + pk.map(function (p) { return ' ' + shQuote(p); }).join('')); } catch (e) { r = null; }
+  const d = nfParse(r && r.stdout);
+  _nf.busy = false;
+  btn.disabled = false;
+  btn.textContent = T('nf_apply', 'Fix notifications');
+  if (!r || r.errno !== 0 || d.result !== 'ok') { uiSound('error'); toast(T('nf_failed', 'Could not apply the fix'), 'bad'); return; }
+  _nf.applied = {};
+  Object.keys(d.rows).forEach(function (p) { _nf.applied[p] = 1; });
+  _nf.sel = Object.assign({}, _nf.applied);
+  _nf.rows = d.rows;
+  nfCount();
+  try {
+    const st = nfParse(((await run('sh ' + shQuote(NF_SCRIPT) + ' status')) || {}).stdout);
+    _nf.findings = st.findings;
+  } catch (e) {}
+  if (nfIsOpen()) nfRenderList();
+  if (!_nf.count) toast(T('nf_cleared', 'Notification fix removed - the previous settings are back'), 'good');
+  else if (_nf.bad) toast(T('nf_applied_partial', 'Fixed %1 of %2 app(s) - see the list').replace('%1', String(_nf.count - _nf.bad)).replace('%2', String(_nf.count)), 'warn');
+  else toast(T('nf_applied', 'Notifications fixed for %s app(s)').replace('%s', String(_nf.count)), 'good');
+  uiSound(_nf.bad ? 'error' : 'success');
+}
+
 /* Saved configurations use one in-page manager instead of browser prompt()/confirm(). The
  * canonical profile remains checksum-protected in ASB state. Copies can go to, and come from,
  * any folder the user picks in the file browser; the helper validates the path and the
@@ -10968,7 +11602,7 @@ async function cfgProfileApply() {
              T('cfg_res_apply_failed_body', 'Nothing was changed: the current settings are kept.')] });
     return;
   }
-  _cfgProfile.busy = false; await cfgLoad(); cfgRender();
+  _cfgProfile.busy = false; await cfgLoad(true); cfgRender();
   const keys = cfgProfileKV(detail, 'keys'); const changed = cfgProfileKV(detail, 'changed');
   const smartState = cfgProfileKV(detail, 'smart_learning');
   const warn = r.errno !== 0 || /^(skipped_invalid|restore_failed)/.test(smartState);
@@ -12112,7 +12746,7 @@ function openReportPage() {
   });
   asbLogReportLoad();
   setTimeout(asbNavSync, 60);
-  requestAnimationFrame(asbFitPages);  zygiskHeaderRefresh();
+  requestAnimationFrame(asbFitPages);  zygiskHeaderRefreshLazy();
 }
 function closeReportPage() {
   const p = _el('reportPage');
@@ -12402,6 +13036,7 @@ function deviceDisplayValue(sec, key, value, d) {
     if (key === 'log_rate_kb_h' && isFinite(deviceNum(value)) && /^\d+$/.test(value)) return value + '\u00a0' + T('dev_unit_kb_h', 'KB/h');
     if (key === 'log_window_min' && /^\d+$/.test(value)) return value + '\u00a0' + T('dev_unit_min', 'min');
     if (key === 'findings_detail') return deviceLsposedFindings(value) || value;
+    if (key === 'collection') return T('dev_lsposed_collection_' + value, deviceFallbackLabel(value));
   }
   if (sec === 'battery') {
     if (key === 'temp_tenths_c') { const x = deviceNum(value); return isFinite(x) ? (x / 10).toFixed(1) + '\u00a0°C' : value; }
@@ -12733,6 +13368,19 @@ function deviceZygiskOverview(d) {
 /* One compact, shared status control for every page header. It is deliberately painted
  * from the same verdict as Diagnostics: a toggle or installed .so file is not a connection. */
 let _zygiskHeaderSeq = 0, _zygiskHeaderRunning = false, _zygiskHeaderQueued = false;
+/* fix278: the header is refreshed when something about Zygisk changes (a setting, the Zygisk
+ * page, Device diagnostics) and otherwise at most every two minutes, after a page has
+ * settled - not on every tab tap. Each refresh is a blocking root shell. */
+let _zygiskHeaderAt = 0;
+const ZYGISK_HEADER_TTL_MS = 120000;
+function zygiskHeaderRefreshLazy() {
+  if (Date.now() - _zygiskHeaderAt < ZYGISK_HEADER_TTL_MS || _zygiskHeaderRunning || zygiskHeaderRefreshLazy._q) return;
+  zygiskHeaderRefreshLazy._q = true;
+  asbAfterNavAnim(function () {
+    zygiskHeaderRefreshLazy._q = false;
+    if (!document.hidden && Date.now() - _zygiskHeaderAt >= ZYGISK_HEADER_TTL_MS) zygiskHeaderRefresh();
+  }, 400);
+}
 function zygiskHeaderPaint() {
   const verdict = deviceZygiskLinkVerdict(window._asbZygiskLinkData || {});
   document.querySelectorAll('.zygisk-header-link').forEach(function (btn) {
@@ -12747,7 +13395,7 @@ function zygiskHeaderInit() {
     if (host.querySelector('.zygisk-header-link')) return;
     const btn = document.createElement('button'); btn.type = 'button';
     btn.className = 'zygisk-header-link zygisk-header-unknown';
-    btn.onclick = openZygiskSettings;
+    btn.onclick = openZygiskPage;
     const dot = document.createElement('span'); dot.className = 'zygisk-header-dot'; dot.setAttribute('aria-hidden', 'true');
     const label = document.createElement('span'); label.className = 'zygisk-header-label'; label.textContent = 'Zygisk';
     btn.appendChild(dot); btn.appendChild(label); host.appendChild(btn);
@@ -12766,6 +13414,7 @@ async function zygiskHeaderRefresh() {
   const seq = ++_zygiskHeaderSeq;
   if (_zygiskHeaderRunning) { _zygiskHeaderQueued = true; return; }
   _zygiskHeaderRunning = true;
+  _zygiskHeaderAt = Date.now();
   try {
     const r = await run('sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' link-status 2>/dev/null');
     const d = parseDeviceInfo(r ? runText(r) : '');
@@ -12780,16 +13429,239 @@ async function zygiskHeaderRefresh() {
     if (_zygiskHeaderQueued) { _zygiskHeaderQueued = false; zygiskHeaderRefresh(); }
   }
 }
-function openZygiskSettings() {
-  if (typeof asbNavGo === 'function') asbNavGo('config');
-  else if (!_cfgOpen) openConfigPage();
-  _cfgSearch = '';
-  _cfgGroup = 'ui';
-  cfgRender();
-  zygiskHeaderRefresh();
+/* fix278: the header pill opens a page about Zygisk only.
+ *
+ * It opened Settings -> System, which rendered every System card (services, display,
+ * haptics, logs) and started the whole Settings read on the tap; in the bench that was 13
+ * blocking root calls before anything about Zygisk could change. This page paints at once
+ * from the last snapshot the header already holds, and after the slide makes ONE read
+ * (asb_zygisk.sh link-status). The four separate switches stay where they belong - Settings
+ * -> System -> Zygisk; here one mode control sets all four in one locked write. */
+let _zygiskLoadSeq = 0, _zygiskModeBusy = false;
+const ZYGISK_MODES = [
+  { id: 'off',   key: 'zy_mode_off',   label: 'Off',
+    desc: 'Nothing runs in app processes: no connection, no request, no ledger. Zero cost.' },
+  { id: 'watch', key: 'zy_mode_watch', label: 'Watch', v: { zygisk_enabled: '1', zygisk_hints: '0', zygisk_launch: '0', zygisk_ledger: '1' },
+    desc: 'Process-start ledger and screen-off restart loops for diagnostics. Never touches frequencies; one short companion connection per app process start.' },
+  { id: 'speed', key: 'zy_mode_speed', label: 'Response', v: { zygisk_enabled: '1', zygisk_hints: '1', zygisk_launch: '1', zygisk_ledger: '0' },
+    desc: 'Cold-start lift for the app you open, plus a fresh governor reading when an observed app starts or exits. No ledger.' },
+  { id: 'full',  key: 'zy_mode_full',  label: 'Full', v: { zygisk_enabled: '1', zygisk_hints: '1', zygisk_launch: '1', zygisk_ledger: '1' },
+    desc: 'Response and Watch together.' }
+];
+function zygiskModeOf(d) {
+  const val = function (k) { return deviceVal(d, 'zygisk_observer', k); };
+  const en = val('enabled');
+  if (en === '0') return 'off';
+  if (en !== '1') return 'unknown';
+  const cur = { zygisk_enabled: '1', zygisk_hints: val('lifecycle_hints'), zygisk_launch: val('launch_hints'), zygisk_ledger: val('spawn_ledger') };
+  const hit = ZYGISK_MODES.filter(function (m) {
+    return m.v && Object.keys(m.v).every(function (k) { return m.v[k] === cur[k]; });
+  })[0];
+  return hit ? hit.id : 'custom';
+}
+function zygiskModeCard(d) {
+  const card = logReportSec(T('zy_sec_mode', 'Mode'));
+  card.classList.add('zy-mode-card');
+  const mode = zygiskModeOf(d);
+  const seg = document.createElement('div'); seg.className = 'cfg-seg zy-mode-seg';
+  if (seg.setAttribute) { seg.setAttribute('role', 'radiogroup'); seg.setAttribute('aria-label', T('zy_sec_mode', 'Mode')); }
+  ZYGISK_MODES.forEach(function (m) {
+    const b = document.createElement('button'); b.type = 'button';
+    b.textContent = T(m.key, m.label);
+    if (m.id === mode) b.className = 'on';
+    if (b.setAttribute) { b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', m.id === mode ? 'true' : 'false'); }
+    b.disabled = _zygiskModeBusy;
+    b.onclick = function () { if (m.id !== mode) zygiskModeSet(m.id); };
+    seg.appendChild(b);
+  });
+  card.appendChild(seg);
+  const shown = ZYGISK_MODES.filter(function (m) { return m.id === mode; })[0];
+  const desc = document.createElement('div'); desc.className = 'zy-mode-desc';
+  if (shown) desc.textContent = T(shown.key + '_desc', shown.desc);
+  else if (mode === 'custom') {
+    const val = function (k) { return deviceVal(d, 'zygisk_observer', k); };
+    const on = [['lifecycle_hints', 'dev_zygisk_feature_hints', 'Lifecycle hints'], ['launch_hints', 'dev_zygisk_feature_launch', 'Cold-start lift'],
+      ['spawn_ledger', 'dev_zygisk_feature_ledger', 'Process ledger']].filter(function (x) { return val(x[0]) === '1'; })
+      .map(function (x) { return T(x[1], x[2]); });
+    desc.textContent = T('zy_mode_custom', 'Custom set from Settings: %s').replace('%s', on.length ? on.join(', ') : T('dev_zygisk_feature_observer', 'Observer'));
+  } else desc.textContent = T('zy_mode_unknown', 'The current mode could not be read; choosing one writes all four settings.');
+  card.appendChild(desc);
+  if (deviceVal(d, 'zygisk_observer', 'safe_mode') === 'on' && mode !== 'off') {
+    const sn = logReportNote(T('zy_mode_safe_note', 'Safe mode is on: the mode is saved, but nothing runs in app processes until safe mode is cleared below.'), true);
+    card.appendChild(sn);
+  }
+  const note = logReportNote(T('zy_mode_note', 'A change applies to app processes started after it; apps already running keep their state until they restart.'));
+  note.classList.add('dev-evidence'); card.appendChild(note);
+  const fine = document.createElement('button'); fine.type = 'button'; fine.className = 'live-chip zy-fine';
+  fine.textContent = T('zy_mode_fine', 'Fine-tune in Settings → System');
+  fine.onclick = function () {
+    closeZygiskPage();
+    if (typeof asbNavGo === 'function') asbNavGo('config'); else if (!_cfgOpen) openConfigPage();
+    _cfgSearch = ''; _cfgGroup = 'ui'; cfgRender(); requestAnimationFrame(asbFitPages);
+  };
+  card.appendChild(fine);
+  return card;
+}
+async function zygiskModeSet(id) {
+  if (_zygiskModeBusy) return;
+  const m = ZYGISK_MODES.filter(function (x) { return x.id === id; })[0];
+  if (!m) return;
+  const vals = m.v || { zygisk_enabled: '0' };
+  _zygiskModeBusy = true;
+  uiSound('toggle_on');
+  zygiskPageRender(window._asbZygiskLinkData || null);
+  const writer = MD + '/runtime/asb_config_safe.sh', snap = '/data/adb/asb/governor.conf.snapshot';
+  const pairs = Object.keys(vals).map(function (k) { return ' ' + shQuote(k) + ' ' + shQuote(vals[k]); }).join('');
+  const write = 'sh ' + shQuote(writer) + ' set-many --snapshot ' + shQuote(snap) + pairs +
+    ' && { sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' sync >/dev/null 2>&1; echo asb-mode-ok; }';
+  const b = await runBatch([['write', write], ['link', 'sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' link-status']]);
+  _zygiskModeBusy = false;
+  const ok = /(^|\n)asb-mode-ok$/.test(b.write.stdout || '');
+  if (ok) {
+    Object.keys(vals).forEach(function (k) { _cfgVals[k] = vals[k]; });
+    _cfgLoadSig = '';
+    haptic();
+    toast(T('zy_mode_applied', 'Mode applied · new app processes pick it up'), 'good');
+  } else {
+    toast(T('zy_mode_failed', 'The mode was not saved') + (b.write.stdout ? ': ' + b.write.stdout.split('\n').slice(-1)[0] : ''), 'bad');
+  }
+  const d = parseDeviceInfo(b.link.stdout);
+  if (d.count) { _zygiskHeaderAt = Date.now(); zygiskHeaderPublish(d); }
+  if (_zygiskOpen) zygiskPageRender(d.count ? d : (window._asbZygiskLinkData || null));
+}
+const ZYGISK_ROW_LABELS = {
+  ledger_restart_loops: 'Restart loops with the screen off (peak starts per 5 min)',
+  ledger_top_screen_off: 'Most starts with the screen off (app off/on)',
+  policy_hints: 'Lifecycle refresh requests', hints_accepted: 'Lifecycle refreshes accepted',
+  launch_events: 'Cold starts heard', launch_accepted: 'Cold-start lifts accepted', launch_vetoed: 'Cold-start lifts vetoed'
+};
+function zygiskPageRows(d) {
+  const sec = (d && d.sections && d.sections.zygisk_observer) || {};
+  const box = document.createElement('div');
+  Object.keys(ZYGISK_ROW_LABELS)
+    .forEach(function (k) {
+      if (!(k in sec)) return;
+      const raw = String(sec[k]);
+      const row = logReportRow(T('dev_zygisk_observer_' + k, ZYGISK_ROW_LABELS[k]), deviceDisplayValue('zygisk_observer', k, raw, d), false);
+      const v = row.querySelector('.lgr-v');
+      const cls = deviceValueClass('zygisk_observer', k, raw);
+      if (v && cls) v.classList.add(cls.trim());
+      box.appendChild(row);
+    });
+  return box;
+}
+function zygiskEvidenceCard(d) {
+  const sec = (d && d.sections && d.sections.zygisk_observer) || {};
+  const keys = Object.keys(sec);
+  const det = document.createElement('details'); det.className = 'zy-evidence';
+  const sum = document.createElement('summary');
+  sum.textContent = T('zy_evidence_show', 'All Zygisk evidence (%s values)').replace('%s', String(keys.length));
+  det.appendChild(sum);
+  /* Built on first open only: most visits never expand it, and 60 rows are not free. */
+  det.addEventListener('toggle', function () {
+    if (!det.open || det._built) return;
+    det._built = true;
+    keys.forEach(function (k) {
+      const raw = String(sec[k]);
+      const row = logReportRow(deviceLabel('zygisk_observer', k), deviceDisplayValue('zygisk_observer', k, raw, d), false);
+      const v = row.querySelector('.lgr-v');
+      if (v && raw.length > 48) v.classList.add('dev-long');
+      det.appendChild(row);
+    });
+  });
+  return det;
+}
+function zygiskPageRender(d) {
+  const body = _el('zygiskBody');
+  if (!body) return;
+  const y = _el('zygiskPage') ? _el('zygiskPage').scrollTop : 0;
+  body.textContent = '';
+  if (!d || !d.sections || !d.sections.zygisk_observer) {
+    const card = logReportSec(T('zy_sec_status', 'Connection'));
+    card.appendChild(logReportNote(T('zy_loading', 'Reading the Zygisk state…')));
+    body.appendChild(card);
+    return;
+  }
+  const st = logReportSec(T('zy_sec_status', 'Connection'));
+  st.appendChild(deviceZygiskLink(d));
+  body.appendChild(st);
+  body.appendChild(zygiskModeCard(d));
+  const act = logReportSec(T('zy_sec_activity', 'Activity and cost'));
+  act.appendChild(deviceZygiskOverview(d));
+  act.appendChild(zygiskPageRows(d));
+  body.appendChild(act);
+  const apps = logReportSec(T('zy_sec_apps', 'Observed apps and safe mode'));
+  apps.appendChild(deviceZygiskEditor(d, function () { zygiskPageLoad(true); }));
+  body.appendChild(apps);
+  body.appendChild(zygiskEvidenceCard(d));
+  if (_el('zygiskPage') && y) _el('zygiskPage').scrollTop = y;
+}
+async function zygiskPageLoad(user) {
+  const seq = ++_zygiskLoadSeq;
+  const status = _el('zygiskStatus'), btn = _el('zyRefresh');
+  if (btn) btn.disabled = true;
+  if (status) status.textContent = T('zy_status_loading', 'Reading…');
+  let r = null;
+  try { r = await run('sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' link-status 2>/dev/null'); } catch (e) { r = null; }
+  if (seq !== _zygiskLoadSeq) return;
+  if (btn) btn.disabled = false;
+  const d = parseDeviceInfo(r ? runText(r) : '');
+  if (r && r.errno === 0 && d.count) {
+    _zygiskHeaderAt = Date.now();
+    zygiskHeaderPublish(d);
+    if (_zygiskOpen) zygiskPageRender(d);
+    if (status) status.textContent = T('zy_status_ready', 'Current snapshot · read-only');
+  } else {
+    if (_zygiskOpen && user) zygiskPageRender(window._asbZygiskLinkData || null);
+    if (status) status.textContent = T('zy_status_failed', 'Could not read the state; the last snapshot is shown');
+  }
+}
+function openZygiskPage() {
+  if (_zygiskOpen) { zygiskPageLoad(true); return; }
+  uiSound('nav');
+  const p = _el('zygiskPage');
+  if (!p) return;
+  try {
+    _el('zyDeviceLine').textContent = _el('deviceLine').textContent;
+    _el('zySocBadge').textContent = _el('socBadge').textContent;
+    _el('zyVerBadge').textContent = _el('verBadge').textContent;
+    _el('zyCurProfile').textContent = _el('curProfile').textContent;
+  } catch (e) {}
+  _zygiskOpen = true;
+  asbNavAnimMark();
+  p.setAttribute('aria-hidden', 'false');
+  p.scrollTop = 0;
+  document.body.classList.add('live-active', 'zygisk-active');
+  asbTabbarVisibility();
+  p.classList.add('open');
+  zygiskPageRender(window._asbZygiskLinkData || null);
+  const status = _el('zygiskStatus');
+  if (status) status.textContent = window._asbZygiskLinkData ? T('zy_status_cached', 'Last snapshot · refreshing…') : T('zy_status_loading', 'Reading…');
+  asbAfterNavAnim(function () { if (_zygiskOpen) zygiskPageLoad(false); }, 30);
+  setTimeout(asbNavSync, 60);
   requestAnimationFrame(asbFitPages);
 }
-function deviceZygiskEditor(d) {
+function closeZygiskPage() {
+  const p = _el('zygiskPage');
+  if (!p || !_zygiskOpen) return;
+  _zygiskOpen = false;
+  _zygiskLoadSeq++;
+  asbNavAnimMark();
+  p.classList.remove('open');
+  p.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('zygisk-active');
+  if (!document.body.classList.contains('report-active') &&
+      !document.body.classList.contains('config-active') &&
+      !document.body.classList.contains('device-active') &&
+      !(typeof _liveOpen !== 'undefined' && _liveOpen)) {
+    document.body.classList.remove('live-active');
+  }
+  asbTabbarVisibility();
+  navSyncSoon();
+  requestAnimationFrame(asbFitPages);
+}
+function deviceZygiskEditor(d, onDone) {
+  const done = typeof onDone === 'function' ? onDone : asbDeviceInfoLoad;
   const wrap = document.createElement('div'); wrap.className = 'dev-zygisk-editor';
   const label = document.createElement('label'); label.textContent = T('dev_zygisk_allowlist', 'Allowlisted application packages (comma or space separated)');
   const input = document.createElement('input'); input.className = 'dev-zygisk-input'; input.type = 'text';
@@ -12810,13 +13682,13 @@ function deviceZygiskEditor(d) {
     const args = parts.map(function (x) { return "'" + x + "'"; }).join(' ');
     const r = await run('sh ' + MD + '/runtime/asb_zygisk.sh set-packages' + (args ? ' ' + args : ''));
     toast(runOk(r) ? T('dev_zygisk_saved', 'Allowlist saved; new processes only') : (runText(r) || T('dev_zygisk_failed', 'Allowlist was rejected')), runOk(r) ? 'ok' : 'err');
-    asbDeviceInfoLoad();
+    done();
   };
   safe.onclick = async function () {
     save.disabled = true; safe.disabled = true;
     const r = await run('sh ' + MD + '/runtime/asb_zygisk.sh safe-mode ' + (safeOn ? 'off' : 'on'));
     toast(runOk(r) ? T('dev_zygisk_safe_changed', 'Safe mode updated') : (runText(r) || T('dev_zygisk_failed', 'Allowlist was rejected')), runOk(r) ? 'ok' : 'err');
-    asbDeviceInfoLoad();
+    done();
   };
   actions.appendChild(save); actions.appendChild(safe);
   const note = logReportNote(T('dev_zygisk_editor_note', 'An empty list observes nothing. Protected processes are rejected again by the native module. Enable the separate Zygisk Process Observer setting; saving this list does not enable it. Changes affect newly started processes only.'));
@@ -12950,12 +13822,14 @@ function deviceInfoRender(d) {
       }
     });
     if (spec[0] === 'zygisk_observer') card.appendChild(deviceZygiskEditor(d));
+    if (spec[0] === 'lsposed_hooks' && deviceVal(d, 'lsposed_hooks', 'collection') === 'on_demand') card.appendChild(deviceLsposedCollect(d));
     body.appendChild(card);
   });
   requestAnimationFrame(asbFitPages);
   return shown;
 }
 function openDevicePage() {
+  if (typeof _zygiskOpen !== 'undefined' && _zygiskOpen) closeZygiskPage();
   if (_deviceOpen) return;
   uiSound('nav');
   const p = _el('devicePage');
@@ -12967,6 +13841,7 @@ function openDevicePage() {
     _el('devCurProfile').textContent = _el('curProfile').textContent;
   } catch (e) {}
   _deviceOpen = true;
+  asbNavAnimMark();
   p.setAttribute('aria-hidden', 'false');
   p.scrollTop = 0;
   document.body.classList.add('live-active', 'device-active');
@@ -12984,6 +13859,7 @@ function closeDevicePage() {
   if (!p) return;
   _deviceOpen = false;
   _deviceLoadSeq++;
+  asbNavAnimMark();
   p.classList.remove('open');
   p.setAttribute('aria-hidden', 'true');
   document.body.classList.remove('device-active');
@@ -13026,7 +13902,10 @@ async function asbDeviceInfoLoad() {
   status.textContent = T('dev_loading_status', 'Collecting read-only data…');
   deviceInfoLoading(body);
   let r = null;
-  try { r = await run('sh ' + MD + '/tools/asb_device_info.sh 2>/dev/null'); }
+  /* fix278: the hook evidence (LSPosed logs, crash records, package and process lists) is
+   * collected on request from its own card. It can take seconds, and ksu.exec holds the
+   * page for the whole command; the rest of the snapshot no longer waits for it. */
+  try { r = await run('ASB_DEVINFO_LSPOSED=0 sh ' + MD + '/tools/asb_device_info.sh 2>/dev/null'); }
   catch (e) { r = null; }
   if (!_deviceOpen || seq !== _deviceLoadSeq) return;
   const d = parseDeviceInfo(r ? runText(r) : '');
@@ -13089,6 +13968,35 @@ async function asbLogReportLoad() {
   /* The report's height is only known now that the digest has been painted - the fit
      check belongs here, not where the page opened (fix202). */
   requestAnimationFrame(asbFitPages);
+}
+function deviceLsposedCollect(d) {
+  const wrap = document.createElement('div'); wrap.className = 'dev-zygisk-actions';
+  const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'dev-zygisk-btn';
+  btn.textContent = T('dev_lsposed_collect', 'Collect hook evidence');
+  btn.onclick = async function () {
+    btn.disabled = true;
+    btn.textContent = T('dev_lsposed_collecting', 'Collecting… this takes a few seconds');
+    /* Let the label paint before the blocking read starts. */
+    await new Promise(function (r) { requestAnimationFrame(function () { setTimeout(r, 0); }); });
+    let r = null;
+    try { r = await run('sh ' + MD + '/tools/asb_device_info.sh --lsposed 2>/dev/null'); } catch (e) { r = null; }
+    const got = parseDeviceInfo(r ? runText(r) : '');
+    if (!_deviceOpen) return;
+    if (got.sections && got.sections.lsposed_hooks) {
+      d.sections.lsposed_hooks = got.sections.lsposed_hooks;
+      window._asbDeviceInfoRaw = (window._asbDeviceInfoRaw || '').split('\n').filter(function (l) { return l.indexOf('D\tlsposed_hooks\t') !== 0; })
+        .concat(runText(r).split('\n').filter(function (l) { return l.indexOf('D\tlsposed_hooks\t') === 0; })).join('\n');
+      const page = _el('devicePage'), y = page ? page.scrollTop : 0;
+      deviceInfoRender(d);
+      if (page) page.scrollTop = y;
+    } else {
+      btn.disabled = false;
+      btn.textContent = T('dev_lsposed_collect', 'Collect hook evidence');
+      toast(T('dev_lsposed_collect_failed', 'Hook evidence could not be read'), 'bad');
+    }
+  };
+  wrap.appendChild(btn);
+  return wrap;
 }
 function logReportHero(emo, label, value, sub, warn) {
   const t = document.createElement('div');
@@ -13926,6 +14834,14 @@ function logReportRender(d) {
       ? logReportT('lr_reboots_mod', 'Recorded across {n} reboot(s); ASB {mod} after the last one. The time the phone was off counts in no phase.', { n: String(+rb.n), mod: rbModShown })
       : logReportT('lr_reboots', 'Recorded across {n} reboot(s). The time the phone was off counts in no phase.', { n: String(+rb.n) })));
   }
+  /* fix279: a recorder lost without a reboot (an Android framework restart) and continued on
+     the same folder. The gap between the last sample and the restart counts in no phase. */
+  const rs = d.sections.restart || null;
+  if (rs && (+rs.n || 0) > 0) {
+    body.appendChild(logReportNote(logReportT('lr_restarts',
+      'The recording stopped {n} time(s) without a reboot (Android framework restart: {f}) and continued in the same folder; about {m} min are missing and count in no phase.',
+      { n: String(+rs.n), f: String(+rs.framework || 0), m: String(+rs.gap_min || 0) })));
+  }
   logReportAppendAnalysis(body, d, analysis);
   const details = document.createElement('div'); details.className = 'lgr-details-anchor'; details.id = 'lgr-details';
   const detailsTitle = document.createElement('div'); detailsTitle.className = 'lgr-details-title';
@@ -14027,7 +14943,13 @@ function logReportRender(d) {
       /* fix210: say it in the sheet itself, right under the two rows - the Monitor tiles
          count only calm stretches of an hour or more, these rows cover the whole
          capture. Different windows, both figures right. */
-      s.appendChild(logReportNote(T('lr_scr_note', 'The Monitor tiles measure only calm stretches of an hour or more; these rows cover the whole capture - different windows, both figures are right.')));
+      /* fix279: the Monitor tile and the profile cards show the profile average; name it
+         beside this recording's own figure so the two read as two windows, not a conflict. */
+      const _rpProf = String((d.sections.meta || {}).profile || '');
+      const _rpAvg = (typeof _lvMeter !== 'undefined' && _lvMeter.p && _lvMeter.p[_rpProf]) || null;
+      if (_rpAvg && _rpAvg.on > 0 && typeof lvPct === 'function')
+        s.appendChild(logReportRow(T('lr_drain_profile_avg', 'Profile average (Monitor, profile card)'), lvPct(_rpAvg.on, 10, 1), false));
+      s.appendChild(logReportNote(T('lr_scr_note2', 'The Monitor tile and the profile cards show the long-term average of the profile; these rows cover only this recording. Different windows, so the figures can differ - both are right.')));
     }
     /* fix220: on the OP15 the current sensor integrates to ~0.34 of the battery's own count
        - every mA in this sheet is a lower bound. Say it once, next to the figures it tempers. */
@@ -14553,6 +15475,12 @@ async function asbLogMenuSync() {
     const r = await run('sh ' + MD + '/runtime/asb_debug_support.sh status 2>/dev/null');
     const info = debugActionText(r);
     _asbLogRunning = !!(r && r.errno === 0 && (info.status === 'running' || info.status === 'starting' || info.status === 'resuming'));
+    /* fix279: a recorder lost in the same boot (the Android framework restarted under it) is
+       continued on its own folder at once instead of waiting for the next service tick. */
+    if (r && r.errno === 0 && info.status === 'resuming' && info.reason === 'restart') {
+      const rv = debugActionText(await run('sh ' + MD + '/runtime/asb_debug_support.sh full-day-revive 2>/dev/null'));
+      if (rv.status === 'started') toast(T('dbg_log_revived', 'The infinite log stopped when Android restarted - recording continues in the same folder'), 'warn');
+    }
   } catch (e) { _asbLogRunning = false; }
   asbLogMenuPaint();
 }
@@ -14631,6 +15559,7 @@ function asbApplyUiScale() {
        produced the first wrong reference; a real reading, visible in the UI, means the
        next adjustment is calibrated against the device rather than against my model. */
     window._asbUiWidth = w;
+    if (window._asbUiScale !== scale) asbNavIndicator._geo = null;
     window._asbUiScale = scale;
     /* Show it on the device line, but only when scaling is actually in effect - on a phone
        that needs no adjustment this would be noise. One glance answers "is the UI small
@@ -14673,7 +15602,31 @@ function asbApplyUiScale() {
  * tiles and cells only, so there they would squash the header and buy nothing. Re-run on
  * resize, page open/close and when the hub or the report is (re)built, since the header
  * can wrap differently in each language. */
+/* fix278: the fit is measured once, after a page has finished moving.
+ *
+ * Every caller schedules it with requestAnimationFrame(asbFitPages), and a single tab switch
+ * asked for it three or four times (open, close, tab-bar, render). Each pass zeroes two
+ * layout variables and reads the page box up to six times - forced synchronous layouts of the
+ * whole page, which in the bench landed in the very frames the slide had to start in. Calls
+ * now coalesce into one pass, and while a page transition is running that pass waits until
+ * the layer has settled (the slide is a transform, so the measurement does not change). */
+var _asbNavAnimUntil = 0;
+function asbNavAnimMark() { _asbNavAnimUntil = performance.now() + _pageAnimMs() + 40; }
+function asbAfterNavAnim(fn, extra) {
+  const wait = Math.max(0, (_asbNavAnimUntil || 0) - performance.now()) + (extra || 0);
+  setTimeout(fn, wait);
+}
 function asbFitPages() {
+  if (asbFitPages._q) return;
+  asbFitPages._q = true;
+  const go = function () {
+    const wait = (_asbNavAnimUntil || 0) - performance.now();
+    if (wait > 8) { setTimeout(go, wait); return; }
+    requestAnimationFrame(function () { asbFitPages._q = false; asbFitPagesNow(); });
+  };
+  go();
+}
+function asbFitPagesNow() {
   try {
     const z = window._asbUiScale || 1;
     const bar = document.querySelector('.asb-tabbar');
@@ -14733,7 +15686,8 @@ function asbFitPages() {
      * Coordinates: rects come back zoomed (--asb-ui-scale), scroll sizes do not. */
     const naturalOverflow = function () {
       let el = null;
-      if (document.body.classList.contains('device-active')) el = _el('devicePage');
+      if (document.body.classList.contains('zygisk-active')) el = _el('zygiskPage');
+      else if (document.body.classList.contains('device-active')) el = _el('devicePage');
       else if (document.body.classList.contains('report-active')) el = _el('reportPage');
       else if (document.body.classList.contains('config-active')) el = _el('configPage');
       else if (document.body.classList.contains('live-active')) el = _el('livePage');
@@ -14768,6 +15722,7 @@ function asbFitPages() {
      * such a page). Those are the scroll surfaces - the chrome stays exactly as drawn,
      * and a tier carried over from another page comes off. */
     const fittable = !document.body.classList.contains('device-active') &&
+      !document.body.classList.contains('zygisk-active') &&
       !document.body.classList.contains('report-active') &&
       !(document.body.classList.contains('config-active') && _cfgGroup);
     if (!fittable) { tier = 0; applyTier(0); }
@@ -14796,6 +15751,7 @@ function asbFitPages() {
       }
       break;
     }
+    if (asbFitPages._tier !== tier && typeof asbNavIndicator === 'function') asbNavIndicator._geo = null;
     asbFitPages._tier = tier;
     /* The decision is made; hand the free space back to the cards (or restore the previous
      * fit on a page whose cards this pass does not size). */
@@ -14893,8 +15849,13 @@ window.addEventListener('orientationchange', asbApplyUiScale);
 window.addEventListener('resize', function () { requestAnimationFrame(asbFitPages); });
 window.addEventListener('orientationchange', function () { requestAnimationFrame(asbFitPages); });
 window.addEventListener('load', function () { requestAnimationFrame(asbFitPages); setTimeout(function () { homeMeterRefresh(true); }, 1800); asbDeviceFont(); });
+/* fix278: Settings values are read once in the background after start-up (one batched shell,
+ * while nothing else is queued), so the first visit to Settings draws real values and starts
+ * no root call on the tap. */
+window.addEventListener('load', function () { setTimeout(function () { if (!_cfgOpen && !document.hidden) cfgLoad(); }, 4000); });
 
 function asbNavCurrent() {
+  if (document.body.classList.contains('zygisk-active')) return 'zygisk';
   if (document.body.classList.contains('device-active')) return 'device';
   if (document.body.classList.contains('report-active')) return 'report';
   if (document.body.classList.contains('config-active')) return 'config';
@@ -14918,18 +15879,39 @@ function asbNavSync() {
  * (inside a settings category) measures zero and is left alone; asbTabbarVisibility calls
  * this again when the bar comes back. The slide is enabled two frames after the first
  * placement, so the first paint puts the pill in place instead of animating it there. */
+/* fix278: the tab boxes are measured once and reused. offsetLeft/offsetWidth force a layout,
+ * and this ran on every body-class change of a switch - inside the frames the slide starts
+ * in. The boxes only move when the width, the scale, the language or the fit tier changes;
+ * each of those clears the cache. */
 function asbNavIndicator() {
   const bar = document.getElementById('asbTabbar');
   const on = bar && bar.querySelector('.asb-tab.is-active');
-  if (!on || !on.offsetWidth) return;
-  bar.style.setProperty('--ind-x', on.offsetLeft + 'px');
-  bar.style.setProperty('--ind-w', on.offsetWidth + 'px');
+  if (!on) return;
+  let g = asbNavIndicator._geo;
+  if (!g || !g[on.id]) {
+    if (!on.offsetWidth) return;
+    g = {};
+    bar.querySelectorAll('.asb-tab').forEach(function (t) { if (t.id && t.offsetWidth) g[t.id] = [t.offsetLeft, t.offsetWidth]; });
+    asbNavIndicator._geo = g;
+  }
+  const box = g[on.id];
+  if (!box) return;
+  if (bar._indX === box[0] && bar._indW === box[1] && bar.classList.contains('ind-anim')) return;
+  bar._indX = box[0]; bar._indW = box[1];
+  bar.style.setProperty('--ind-x', box[0] + 'px');
+  bar.style.setProperty('--ind-w', box[1] + 'px');
   if (!bar.classList.contains('ind-anim') && !bar._indArm) {
     bar._indArm = true;
     requestAnimationFrame(function () { requestAnimationFrame(function () { bar.classList.add('ind-anim'); }); });
   }
 }
-window.addEventListener('resize', function () { requestAnimationFrame(asbNavIndicator); });
+window.addEventListener('resize', function () { asbNavIndicator._geo = null; requestAnimationFrame(asbNavIndicator); });
+try { if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { asbNavIndicator._geo = null; asbNavSyncSoon(); }); } catch (e) {}
+function asbNavSyncSoon() {
+  if (asbNavSyncSoon._q) return;
+  asbNavSyncSoon._q = true;
+  requestAnimationFrame(function () { asbNavSyncSoon._q = false; asbNavSync(); });
+}
 
 /* Header island fit (fix192). The profile value is free text - "smart \u2192 performance" on
  * Monitor, a long translation of "not selected", the Armenian word for Logs - and when the
@@ -14980,8 +15962,12 @@ window.addEventListener('resize', function () { asbHeaderFitSoon(); });
 })();
 
 function asbNavGo(target) {
-  zygiskHeaderRefresh();
+  zygiskHeaderRefreshLazy();
   let at = asbNavCurrent();
+  if (at === 'zygisk') {
+    closeZygiskPage();
+    at = asbNavCurrent();
+  }
   if (at === 'device') {
     closeDevicePage();
     at = asbNavCurrent();
@@ -15060,20 +16046,23 @@ function asbNavGo(target) {
 
 document.addEventListener('DOMContentLoaded', function () {
   asbNavSync();
-  const mo = new MutationObserver(asbNavSync);
+  const mo = new MutationObserver(asbNavSyncSoon);
   mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
 });
 
 /* Page-transition length in ms, read from the same CSS variable the slide uses, so the
  * two can never drift apart. Falls back to the shipped 320 ms. */
 function _pageAnimMs() {
+  if (_pageAnimMs._v > 0) return _pageAnimMs._v;
   try {
     const v = getComputedStyle(document.documentElement).getPropertyValue('--page-anim-dur').trim();
     const n = parseFloat(v);
-    if (!isNaN(n)) return v.endsWith('ms') ? n : n * 1000;
+    if (!isNaN(n)) return (_pageAnimMs._v = v.endsWith('ms') ? n : n * 1000);
   } catch (e) {}
   return 320;
 }
+/* Read once (a computed-style query is a style flush); a resize may switch the media rules. */
+window.addEventListener('resize', function () { _pageAnimMs._v = 0; });
 let _cfgAnimUntil = 0;
 
 function openConfigPage() {
@@ -15104,10 +16093,16 @@ function openConfigPage() {
    * very first open), layout is committed, and only then does the slide begin - the
    * compositor moves a finished layer. Fresh values arrive afterwards and are painted once
    * the slide has settled (see cfgLoad), never during it. */
-  try { cfgRender(); } catch (e) {}
+  const _hubList = _el('cfgList');
+  if (!_cfgSearch && _cfgHubSig && _hubList && _hubList.firstChild && _cfgHubSig === cfgHubSig()) {
+    try { asbTabbarVisibility(); cfgSyncChrome(); } catch (e) {}
+  } else {
+    try { cfgRender(); } catch (e) {}
+  }
   p.setAttribute('aria-hidden', 'false');
   p.scrollTop = 0;
   _cfgOpen = true;
+  asbNavAnimMark();
   _cfgAnimUntil = performance.now() + _pageAnimMs() + 50;   // + the two frames before the slide starts
   /* Body classes stay synchronous, exactly as before. Navigation removes live-active just
    * before calling this when coming from Monitor; re-adding it in a later frame would leave
@@ -15125,12 +16120,13 @@ function openConfigPage() {
     // and a late 'open' would slide the page back in after the user already left it.
     requestAnimationFrame(function () { if (_cfgOpen) p.classList.add('open'); });
   });
-  cfgLoad();
-  zygiskHeaderRefresh();
-  // Device class is a shell read the page does not need to start moving - defer it past
-  // the slide instead of running it synchronously on the tap.
-  setTimeout(function () { try { loadDeviceClass(); } catch (e) {} }, _pageAnimMs() + 40);
-  setTimeout(function () { requestAnimationFrame(asbFitPages); }, _pageAnimMs() + 60);
+  /* fix278: no root call on the tap. ksu.exec blocks the page, and this used to start the
+   * config read (and the Zygisk header probe) synchronously, so the slide could not begin
+   * until the shell returned. The hub above is drawn from the last load; a refresh, one
+   * batched shell, runs after the slide and only when that load is older than 30 s. The
+   * device class travels in the same batch until it is known. */
+  asbAfterNavAnim(function () { if (_cfgOpen) cfgLoad(); }, 30);
+  requestAnimationFrame(asbFitPages);
 }
 
 // The section label and the back chip are the only chrome that has to know which screen
@@ -15180,6 +16176,7 @@ function cfgBack() {
 function closeConfigPage(toMain) {
   const p = _el('configPage');
   if (!p) return;
+  asbNavAnimMark();
   p.classList.remove('open');
   document.body.classList.remove('config-active');
   asbTabbarVisibility();
@@ -16065,6 +17062,15 @@ async function pollStockTelemetry(visible, force = false) {
   }
 }
 
+function liveBatchParts(visible) {
+  const parts = [['state', 'cat /dev/.asb/state']];
+  if (!_batCapFullMah) parts.push(['cfull', 'cat /sys/class/power_supply/battery/charge_full']);
+  if (visible) parts.push(['learner', 'cat /dev/.asb/learner_state.json']);
+  parts.push(['status', MD + '/bin/asb status']);
+  parts.push(['recovery', 'cat /dev/.asb/recovery.json']);
+  if (visible) parts.push(['lpm', 'cat /dev/.asb/lpm_mode']);
+  return parts;
+}
 async function pollLive(visible) {
   /* Nothing to draw for nobody. The manager keeps this WebView alive in the background,
    * and its timers keep firing there: the Live page polled every 3 s and the home screen
@@ -16084,7 +17090,9 @@ async function pollLive(visible) {
     await lvMeterPoll(false);
     /* Collection happens once per pass, after the governor state is read - see the call
      * further down. Calling it here as well would double the /sys reads for nothing. */
-    const r = await run('cat /dev/.asb/state 2>/dev/null');
+    /* fix278: every read of this pass shares one root shell (was five, every 3 s). */
+    const _lb = await runBatch(liveBatchParts(visible));
+    const r = _lb.state;
     /*
      * keep Live chip always visible — Live page handles its own empty-state fallback.
      */
@@ -16107,7 +17115,7 @@ async function pollLive(visible) {
 
     if (!_batCapFullMah) {
       try {
-        const cf = await run('cat /sys/class/power_supply/battery/charge_full 2>/dev/null');
+        const cf = _lb.cfull || await run('cat /sys/class/power_supply/battery/charge_full 2>/dev/null');
         if (cf && cf.stdout) {
           const v = parseInt(cf.stdout.trim(), 10);
           if (v > 0) _batCapFullMah = Math.floor(v / 1000);
@@ -16130,7 +17138,7 @@ async function pollLive(visible) {
 
     let learner = null;
     if (visible) {
-      const lj = await run('cat /dev/.asb/learner_state.json 2>/dev/null');
+      const lj = _lb.learner || await run('cat /dev/.asb/learner_state.json 2>/dev/null');
       if (lj && lj.stdout && lj.stdout.trim()) {
         try { learner = JSON.parse(lj.stdout); } catch(e) {}
       }
@@ -16138,7 +17146,7 @@ async function pollLive(visible) {
 
     let st = null;
     try {
-      const sj = await run('/data/adb/modules/AutoSystemBoost/bin/asb status 2>/dev/null');
+      const sj = _lb.status;
       if (sj && sj.stdout) st = JSON.parse(sj.stdout);
     } catch(e) {}
 
@@ -16169,7 +17177,7 @@ async function pollLive(visible) {
     const advActive = (st && st.adv_active) || 0;
     let recCount = 0, recDisabled = 0, recReason = '';
     try {
-      const rj = await run('cat /dev/.asb/recovery.json 2>/dev/null');
+      const rj = _lb.recovery;
       if (rj && rj.stdout && rj.stdout.trim()) {
         const ro = JSON.parse(rj.stdout);
         recCount = ro.recovery_count || 0;
@@ -16432,7 +17440,7 @@ async function pollLive(visible) {
     // it can be watched changing instead of re-opening the action sheet.
     const lpmEl = _el('bnLpm');
     if (lpmEl) {
-      run('cat /dev/.asb/lpm_mode 2>/dev/null').then(function(r) {
+      (_lb.lpm ? Promise.resolve(_lb.lpm) : run('cat /dev/.asb/lpm_mode 2>/dev/null')).then(function(r) {
         const raw = ((r && r.stdout) || '').trim();
         // lpm_mode also records the handover choice after `|`; LPM state remains the first
         // token so legacy reports and this card continue to present the actual power mode.
@@ -16706,8 +17714,16 @@ async function pollLive(visible) {
              * read the same forecast pair; this tile simply refused the estimate half. It now
              * shows it, marked with "~", until the measured figure replaces it. */
             const _chg = !!(st && st.charging);
-            if (_act > 0) {
-              _lastDrain = _act;
+            /* fix279: one screen-on figure everywhere. The tile, the profile card and the
+             * manager's action show the profile's average; this pass's live window (the last
+             * 10+ minutes) is kept for the sheet's "right now" line, never in its place. */
+            _lvDrain.nowX = (_act > 0 && !_chg) ? _act : 0;
+            _lvDrain.nowS = _lvDrain.nowX ? parseInt(kv.smart_drain_window_s || '0', 10) : 0;
+            const _smAvg = !_chg && lvMeterHasOn('smart');
+            if (_act > 0) _lastDrain = _act;
+            if (_smAvg) {
+              lvMeterPaint('smart');
+            } else if (_act > 0) {
               _bdEl.textContent = (_act / 10).toFixed(1) + T('unit_pcth', '%/h');
               _bdEl.title = T('lv_avgdrain_tip',
                 'Actual screen-on drain: how fast the battery level is falling now, over the last minutes - not a model.');
@@ -16725,11 +17741,15 @@ async function pollLive(visible) {
               _bdEl.title = T('lv_avgdrain_tip',
                 'Actual screen-on drain: how fast the battery level is falling now, over the last minutes - not a model.');
             }
-            _lvDrain.on = _act > 0 ? 'now' : (_chg ? 'charging' : ((_frt > 0 && (_fbs === 'recent' || _fbs === 'slot' || _fbs === 'meter')) ? _fbs : 'wait'));
-            /* Only the explicit charging state is animated; every numeric %/h rate and the
-             * warm-up text use the same neutral colour as the modem's ordinary state. */
-            asbMetricPaint('bnDrain', _chg ? 'metric-charge' : 'metric-info');
-            _lvDrain.winS = _lvDrain.on === 'meter' ? _fpk.min * 60 : parseInt(kv.smart_drain_window_s || '0', 10);
+            if (!_smAvg) {
+              _lvDrain.on = _act > 0 ? 'now' : (_chg ? 'charging' : ((_frt > 0 && (_fbs === 'recent' || _fbs === 'slot' || _fbs === 'meter')) ? _fbs : 'wait'));
+              /* Only the explicit charging state is animated; every numeric %/h rate and the
+               * warm-up text use the same neutral colour as the modem's ordinary state. */
+              asbMetricPaint('bnDrain', _chg ? 'metric-charge' : 'metric-info');
+              _lvDrain.winS = _lvDrain.on === 'meter' ? _fpk.min * 60 : parseInt(kv.smart_drain_window_s || '0', 10);
+              const _onLab = _el('bnDrainOnLabel');
+              if (_onLab) _onLab.textContent = T('lv_scr_on', 'Screen on');
+            }
             /* Smart's own screen-off figure (fix189), by the rule every card uses - not the
              * phone-wide one, which only feeds the time to empty (marked "~" there). */
             const _sOff = lvOffFigure('smart');
@@ -16815,7 +17835,7 @@ document.addEventListener('visibilitychange', () => {
   try {
     applyStaticI18n();
     zygiskHeaderInit();
-    zygiskHeaderRefresh();
+    setTimeout(zygiskHeaderRefresh, 2500);
     loadDebugSupport();
     // Was I18N.ru.device_line under ASB_LANG==='ru' - every other language kept the
     // English placeholder even when its locale had the string translated.
