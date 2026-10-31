@@ -236,6 +236,8 @@ typedef struct {
      * profile. They never select a cap, bypass a thermal gate or manage LSPosed. */
     int   zygisk_enabled;             /* observer master switch, default 0 */
     int   zygisk_hints;               /* bounded start/exit refresh requests, default 0 */
+    int   zygisk_launch;              /* fix272: a new top-app process covers its launch, default 0 */
+    int   zygisk_ledger;              /* fix272: per-package process-start ledger, default 0 */
 } asb_runtime_config_t;
 
 /*
@@ -409,6 +411,8 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->smart_debug_log              = 0;
     c->zygisk_enabled               = 0;
     c->zygisk_hints                 = 0;
+    c->zygisk_launch                = 0;
+    c->zygisk_ledger                = 0;
 }
 
 static inline char *asb_cfg_trim(char *s) {
@@ -672,6 +676,8 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "smart_debug_log"))         c->smart_debug_log = atoi(v);
     else if (!strcmp(k, "zygisk_enabled"))          c->zygisk_enabled = atoi(v) ? 1 : 0;
     else if (!strcmp(k, "zygisk_hints"))            c->zygisk_hints = atoi(v) ? 1 : 0;
+    else if (!strcmp(k, "zygisk_launch"))           c->zygisk_launch = atoi(v) ? 1 : 0;
+    else if (!strcmp(k, "zygisk_ledger"))           c->zygisk_ledger = atoi(v) ? 1 : 0;
 }
 
 /*

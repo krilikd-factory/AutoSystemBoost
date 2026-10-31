@@ -79,6 +79,8 @@ asb_runtime_config_t g_asb_cfg;
  * "fresh metrics will be evaluated", never "a frequency was raised" or "power was saved". */
 static unsigned long g_zygisk_refresh_accepted = 0;
 static unsigned long g_zygisk_refresh_vetoed = 0;
+static unsigned long g_zygisk_launch_accepted = 0;   /* fix272: new top-app processes heard */
+static unsigned long g_zygisk_launch_vetoed = 0;
 static time_t g_last_reassert = 0;
 static int g_last_reassert_ok = 0;
 
@@ -3185,6 +3187,9 @@ static long   g_unlock_armed_ms    = 0;   /* boottime ms of the arm behind the r
 static int    g_unlock_level_khz   = 0;   /* prime ceiling a held Battery lift was levelled to, 0 = none */
 static unsigned long g_unlock_levels = 0; /* held lifts that were levelled */
 static int    g_bhold_allow        = 1;   /* fix271: a finger may hold the Battery lift for the app in front */
+static int    g_unlock_cold_kick   = 0;   /* fix272: Zygisk saw zygote start a new top-app process */
+static unsigned long g_unlock_cold_lifts = 0;   /* lifts a cold start armed */
+static unsigned long g_unlock_cold_extends = 0; /* running lifts a cold start carried over the launch */
 
 /* Who the lift is for. Battery and Balanced are exactly the profiles that jank on a wake -
  * their ceilings are the shell's static caps - and Smart has always had it. Performance is
@@ -3221,7 +3226,10 @@ static int asb_unlock_lift_update(int screen_on, int touch_kick, int touch_activ
                                   int lock_kick, int launch_kick,
                                   long now_ms, int profile_idx, int thermal_cap, int die_c) {
     int prev = g_unlock_prev_screen;
-    int arm = 0;
+    int arm = 0, cold = 0;
+    /* fix272: a cold start is heard once, whatever this pass decides. */
+    int cold_kick = g_unlock_cold_kick;
+    g_unlock_cold_kick = 0;
     g_unlock_prev_screen = screen_on ? 1 : 0;
     g_unlock_profile = profile_idx;
     if (!screen_on) {
@@ -3242,6 +3250,27 @@ static int asb_unlock_lift_update(int screen_on, int touch_kick, int touch_activ
         g_launch_arm_ms = now_ms;
         arm = 1;
         g_unlock_arm_why = "first touch";
+    } else if (cold_kick) {
+        /* fix272: zygote is starting a new process for the app being opened. The tap that
+         * asked for it usually armed a lift already; that window is carried over the start
+         * (bounded by unlock_lift_s from now), so a heavy cold start does not finish on the
+         * static ceilings. With no lift running, the start arms one even inside the 5 s
+         * anti-chatter gap - the companion already limits cold starts to 1 s apart and 20 a
+         * minute, and every profile/thermal/warm gate below still applies. */
+        if (g_unlock_until_ms > now_ms) {
+            if (g_asb_cfg.unlock_lift_s > 0 && asb_unlock_lift_profile_ok(profile_idx) && !thermal_cap) {
+                long until = now_ms + (long)g_asb_cfg.unlock_lift_s * 1000L;
+                if (until > g_unlock_until_ms) {
+                    g_unlock_until_ms = until;
+                    g_unlock_cold_extends++;
+                }
+            }
+        } else {
+            g_launch_arm_ms = now_ms;
+            arm = 1;
+            cold = 1;
+            g_unlock_arm_why = "cold start";
+        }
     } else if ((touch_kick || lock_kick || launch_kick) && g_unlock_until_ms <= now_ms &&
                now_ms - g_launch_arm_ms >= ASB_LAUNCH_LIFT_GAP_MS) {
         /* fix212: a foreground-app change. fix220: the tap that starts an open/close and
@@ -3267,6 +3296,7 @@ static int asb_unlock_lift_update(int screen_on, int touch_kick, int touch_activ
             if (until > g_unlock_until_ms) g_unlock_until_ms = until;
             g_unlock_armed_ms = now_ms;
             g_unlock_lifts++;
+            if (cold) g_unlock_cold_lifts++;
         }
     }
     /* A continuous Battery scroll is one interaction, not a new lift on every tick. Extend
@@ -3978,6 +4008,10 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             g_stat_probe_topapp, g_stat_probe_topapp_empty, g_stat_probe_topapp_ambig);
     fprintf(f, "zygisk_refresh_accepted=%lu\nzygisk_refresh_vetoed=%lu\n",
             g_zygisk_refresh_accepted, g_zygisk_refresh_vetoed);
+    fprintf(f, "zygisk_launch_accepted=%lu\nzygisk_launch_vetoed=%lu\n"
+               "unlock_cold_lifts=%lu\nunlock_cold_extends=%lu\n",
+            g_zygisk_launch_accepted, g_zygisk_launch_vetoed,
+            g_unlock_cold_lifts, g_unlock_cold_extends);
     fprintf(f, "governor_transitions=%lu\ngovernor_writes=%lu\n"
                "governor_readbacks=%lu\ngovernor_vendor_overrides=%lu\n",
             g_stat_transitions, g_stat_writes, g_stat_readbacks,
@@ -9264,7 +9298,8 @@ int main(int argc, char **argv) {
                  * was nothing else, so the transitions and audits worth reading had
                  * scrolled out before anyone looked. Commands that change something are
                  * still logged; status only at the most verbose level. */
-                if ((strcmp(cmd, "status") == 0 || strcmp(cmd, "zygisk-refresh") == 0)
+                if ((strcmp(cmd, "status") == 0 || strcmp(cmd, "zygisk-refresh") == 0 ||
+                     strcmp(cmd, "zygisk-launch") == 0)
                         ? g_asb_cfg.log_level >= 3 : g_asb_cfg.log_level >= 1)
                     asb_log("cmd: %s", cmd);
 
@@ -9418,6 +9453,26 @@ int main(int argc, char **argv) {
                         asb_smart_pkg_cache_invalidate();
                         need_metrics = 1;
                         g_zygisk_refresh_accepted++;
+                        asb_sock_reply(sockfd, &src, srclen, "ok");
+                    }
+                }
+                else if (strcmp(cmd, "zygisk-launch") == 0) {
+                    /* fix272: zygote is creating a new top-app process (a cold start). The
+                     * observer names no app and no value; this only feeds the unlock lift's
+                     * existing launch window and asks for fresh foreground evidence. The
+                     * profile, thermal, warm-die and lift-length gates decide the rest. */
+                    if (!g_asb_cfg.zygisk_enabled || !g_asb_cfg.zygisk_launch ||
+                        access("/data/adb/asb/zygisk_observer/disable", F_OK) == 0) {
+                        g_zygisk_launch_vetoed++;
+                        asb_sock_reply(sockfd, &src, srclen, "err:disabled");
+                    } else if (!metrics.misc.screen_on) {
+                        g_zygisk_launch_vetoed++;
+                        asb_sock_reply(sockfd, &src, srclen, "err:screen_off");
+                    } else {
+                        g_unlock_cold_kick = 1;
+                        asb_smart_pkg_cache_invalidate();
+                        need_metrics = 1;
+                        g_zygisk_launch_accepted++;
                         asb_sock_reply(sockfd, &src, srclen, "ok");
                     }
                 }
