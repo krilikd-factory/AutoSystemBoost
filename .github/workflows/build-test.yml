@@ -121,6 +121,7 @@ jobs:
             tests/asb_zygisk.sh \
             "runtime/asb_zygisk.sh" \
             "runtime/asb_zygisk_info.sh" \
+            "runtime/asb_lsposed_info.sh" \
             "runtime/asb_pressure.sh" \
             src/zygisk/zygisk.hpp \
             src/zygisk/asb_observer_protocol.h \
