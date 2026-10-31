@@ -8,6 +8,7 @@ ZDIR="${ASB_ZYGISK_DIR:-/data/adb/asb/zygisk_observer}"
 CONF="$MODDIR/config/governor.conf"
 LIST="$ZDIR/packages.list"
 DISABLE="$ZDIR/disable"
+POLICY="${ASB_ZYGISK_POLICY:-$MODDIR/zygisk/policy}"
 
 _zygisk_prepare() {
   mkdir -p "$ZDIR" 2>/dev/null || return 1
@@ -27,7 +28,7 @@ _zygisk_package_invalid() {
   case "$_p" in
     system_server|zygote|zygote32|zygote64|com.android.systemui|com.android.packageinstaller|\
     com.android.permissioncontroller|com.android.settings|com.android.phone|\
-    com.android.providers.media|com.android.providers.downloads|com.android.shell|\
+    com.android.providers.media|com.android.providers.downloads|com.android.shell*|\
     me.weishu.kernelsu|com.rifsxd.ksunext|com.topjohnwu.magisk|io.github.vvb2060.magisk|\
     org.lsposed.manager|com.tsng.hidemyapplist|android.*|com.qualcomm.*|com.qti.*|vendor.*|\
     com.oplus.safecenter*|com.coloros.safecenter*|com.heytap.safecenter*) return 1 ;;
@@ -76,28 +77,74 @@ _zygisk_set_packages() {
   mv -f "$_tmp" "$LIST"
 }
 
+_zygisk_cfg() {
+  sed -n "s/^[[:space:]]*$1=//p" "$CONF" 2>/dev/null | tail -n 1 | tr -d ' \r'
+}
+
+_zygisk_sync() {
+  _s_en="$(_zygisk_cfg zygisk_enabled)"
+  _s_mode="$(_zygisk_cfg zygisk_mode)"
+  _s_hints="$(_zygisk_cfg zygisk_hints)"
+  _s_launch="$(_zygisk_cfg zygisk_launch)"
+  _s_ledger="$(_zygisk_cfg zygisk_ledger)"
+  [ "$_s_hints" = 1 ] || _s_hints=0
+  [ "$_s_launch" = 1 ] || _s_launch=0
+  [ "$_s_ledger" = 1 ] || _s_ledger=0
+  _s_pkgs="$(_zygisk_list)"
+  _s_obs=0
+  [ -n "$_s_pkgs" ] && _s_obs=1
+  if [ "$_s_en" != 1 ] || [ -e "$DISABLE" ] || { [ -n "$_s_mode" ] && [ "$_s_mode" != observer ]; } || \
+     { [ "$_s_obs" = 0 ] && [ "$_s_launch" = 0 ] && [ "$_s_ledger" = 0 ]; }; then
+    rm -f "$POLICY" "$POLICY.tmp" 2>/dev/null
+    echo 'policy=absent'
+    return 0
+  fi
+  [ -d "${POLICY%/*}" ] || { echo 'policy=unavailable'; return 1; }
+  _s_gen="$(date +%s 2>/dev/null)"
+  case "$_s_gen" in ''|*[!0-9]*) _s_gen=1 ;; esac
+  {
+    printf 'v=2\ngen=%s\nobserver=%s\nhints=%s\nlaunch=%s\nledger=%s\n' \
+      "$_s_gen" "$_s_obs" "$_s_hints" "$_s_launch" "$_s_ledger"
+    printf '%s\n' "$_s_pkgs" | while IFS= read -r _s_p; do
+      if [ -n "$_s_p" ]; then printf 'pkg=%s\n' "$_s_p"; fi
+    done
+  } > "$POLICY.tmp" 2>/dev/null || { rm -f "$POLICY.tmp" 2>/dev/null; echo 'policy=write_failed'; return 1; }
+  chmod 644 "$POLICY.tmp" 2>/dev/null || true
+  chcon u:object_r:system_file:s0 "$POLICY.tmp" 2>/dev/null || true
+  mv -f "$POLICY.tmp" "$POLICY" 2>/dev/null || { rm -f "$POLICY.tmp" 2>/dev/null; echo 'policy=write_failed'; return 1; }
+  echo "policy=written gen=$_s_gen observer=$_s_obs hints=$_s_hints launch=$_s_launch ledger=$_s_ledger"
+}
+
 case "${1:-}" in
+  sync)
+    _zygisk_sync
+    ;;
   list)
     _zygisk_list
     ;;
   set-packages)
     shift
-    _zygisk_set_packages "$@"
+    _zygisk_set_packages "$@" || exit $?
+    _zygisk_sync >/dev/null 2>&1 || true
     ;;
   enable)
     [ ! -e "$DISABLE" ] || { echo 'Safe mode is active; clear it explicitly first' >&2; exit 3; }
-    _zygisk_prepare && _zygisk_set_conf zygisk_enabled 1 && _zygisk_set_conf zygisk_mode observer
+    _zygisk_prepare && _zygisk_set_conf zygisk_enabled 1 && _zygisk_set_conf zygisk_mode observer || exit 1
+    _zygisk_sync >/dev/null 2>&1 || true
     ;;
   disable)
-    _zygisk_set_conf zygisk_enabled 0
+    _zygisk_set_conf zygisk_enabled 0 || exit 1
+    _zygisk_sync >/dev/null 2>&1 || true
     ;;
   safe-mode)
     case "${2:-on}" in
       on)
-        _zygisk_prepare && true > "$DISABLE" && chmod 600 "$DISABLE" && _zygisk_set_conf zygisk_enabled 0
+        _zygisk_prepare && true > "$DISABLE" && chmod 600 "$DISABLE" && _zygisk_set_conf zygisk_enabled 0 || exit 1
+        _zygisk_sync >/dev/null 2>&1 || true
         ;;
       off)
         rm -f "$DISABLE" 2>/dev/null
+        _zygisk_sync >/dev/null 2>&1 || true
         ;;
       *) echo 'Usage: safe-mode on|off' >&2; exit 2 ;;
     esac
@@ -106,11 +153,14 @@ case "${1:-}" in
     printf 'enabled=%s\n' "$(sed -n 's/^zygisk_enabled=//p' "$CONF" 2>/dev/null | head -n 1)"
     printf 'mode=%s\n' "$(sed -n 's/^zygisk_mode=//p' "$CONF" 2>/dev/null | head -n 1)"
     printf 'lifecycle_hints=%s\n' "$(sed -n 's/^zygisk_hints=//p' "$CONF" 2>/dev/null | head -n 1)"
+    printf 'cold_start_lift=%s\n' "$(_zygisk_cfg zygisk_launch)"
+    printf 'process_ledger=%s\n' "$(_zygisk_cfg zygisk_ledger)"
+    printf 'policy=%s\n' "$([ -s "$POLICY" ] && sed -n 's/^gen=//p' "$POLICY" | head -n 1 || echo absent)"
     printf 'safe_mode=%s\n' "$([ -e "$DISABLE" ] && echo on || echo off)"
     printf 'packages=%s\n' "$(_zygisk_list | wc -l | tr -d ' ')"
     ;;
   *)
-    echo 'Usage: asb_zygisk.sh list|set-packages [pkg ...]|enable|disable|safe-mode on|off|status' >&2
+    echo 'Usage: asb_zygisk.sh sync|list|set-packages [pkg ...]|enable|disable|safe-mode on|off|status' >&2
     exit 2
     ;;
 esac
