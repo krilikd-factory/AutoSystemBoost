@@ -1740,6 +1740,7 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .wl-manual-risk { color:var(--bal); }
 .wl-manual-action { min-width:82px; min-height:38px; padding:7px 9px; border:1px solid var(--border-active); border-radius:10px; background:rgba(0,240,180,.07); color:var(--accent); font:700 10px/1.25 var(--sans); }
 .wl-manual-action.is-restore { color:var(--text-secondary); border-color:var(--border); background:transparent; }
+.wl-manual-action.is-armed { color:var(--bal); border-color:var(--bal); background:rgba(255,165,2,.12); }
 .wl-manual-action:disabled { opacity:.48; }
 .wl-manual-loading { display:flex; align-items:center; justify-content:center; gap:10px; min-height:92px; color:var(--text-secondary); font-size:12px; }
 .wl-manual-loading::before { content:''; width:22px; height:22px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:devEvidenceSpin 1s linear infinite; }
@@ -10138,7 +10139,10 @@ function dozePkgOk(p) { return /^[A-Za-z0-9_.]+$/.test(p); }
 /* Explicit, reversible per-package WAKE_LOCK manager (fix276).
  * Evidence collection is on demand and read-only. The only mutation is Android's AppOps
  * WAKE_LOCK mode for a user-installed package after an explicit risk confirmation. */
-const _wlManual = { tok: 0, busy: false, rows: [], labels: {} };
+const _wlManual = { tok: 0, busy: false, rows: [], labels: {}, armed: '', armedAt: 0, armTimer: 0 };
+/* fix277: a freeze needs a second tap on the same row within 5 s. Browser confirm() is not
+ * used: some WebView hosts return false without showing it, which made Freeze a silent no-op. */
+function wlManualArmed(pkg) { return !!pkg && _wlManual.armed === pkg && Date.now() - _wlManual.armedAt < 5000; }
 function wlManualEnsure() {
   let m = _el('wlManualModal');
   if (m) return m;
@@ -10205,7 +10209,15 @@ function wlManualRow(a) {
   }
   row.appendChild(tx);
   const b = document.createElement('button'); b.type = 'button'; b.className = 'wl-manual-action' + (a.selected ? ' is-restore' : '');
-  b.textContent = a.selected ? T('wl_manual_restore', 'Restore') : T('wl_manual_block', 'Freeze');
+  const armed = !a.selected && wlManualArmed(a.pkg);
+  b.textContent = a.selected ? T('wl_manual_restore', 'Restore') : armed ? T('wl_manual_confirm_tap', 'Tap again to freeze') : T('wl_manual_block', 'Freeze');
+  if (armed) {
+    b.className += ' is-armed';
+    const warn = document.createElement('div'); warn.className = 'wl-manual-sub wl-manual-risk';
+    warn.textContent = T('wl_manual_confirm', 'Freeze WAKE_LOCK for %s?\n\nMessages, calls, alarms, fitness tracking, VPN or foreground work may stop or arrive late. This is your choice and your risk. ASB will record and restore the original package and uid modes.')
+      .replace('%s', _wlManual.labels[a.pkg] || a.pkg).replace(/\s*\n+\s*/g, ' ');
+    tx.appendChild(warn);
+  }
   b.disabled = _wlManual.busy || (!a.selected && a.eff === 'ignore');
   b.onclick = function () { wlManualSet(a); }; row.appendChild(b);
   return row;
@@ -10242,10 +10254,23 @@ async function wlManualOpen() {
 function wlManualClose() {
   const m = _el('wlManualModal'); if (!m || m.hidden) return;
   m.hidden = true; m.setAttribute('aria-hidden', 'true'); _wlManual.tok++;
+  _wlManual.armed = ''; clearTimeout(_wlManual.armTimer);
 }
 async function wlManualSet(a) {
   if (_wlManual.busy) return;
-  if (!a.selected && !confirm(T('wl_manual_confirm', 'Freeze WAKE_LOCK for %s?\n\nMessages, calls, alarms, fitness tracking, VPN or foreground work may stop or arrive late. This is your choice and your risk. ASB will record and restore the original package and uid modes.').replace('%s', a.pkg))) return;
+  if (!a.selected && !wlManualArmed(a.pkg)) {
+    _wlManual.armed = a.pkg; _wlManual.armedAt = Date.now();
+    wlManualPaint({scan:'ok',selected:_wlManual.rows.filter(function(x){return x.selected;}).length,rows:_wlManual.rows});
+    clearTimeout(_wlManual.armTimer);
+    _wlManual.armTimer = setTimeout(function () {
+      if (!_wlManual.armed || wlManualArmed(_wlManual.armed)) return;
+      _wlManual.armed = '';
+      const m = _el('wlManualModal');
+      if (m && !m.hidden && !_wlManual.busy) wlManualPaint({scan:'ok',selected:_wlManual.rows.filter(function(x){return x.selected;}).length,rows:_wlManual.rows});
+    }, 5100);
+    return;
+  }
+  _wlManual.armed = ''; clearTimeout(_wlManual.armTimer);
   _wlManual.busy = true;
   const tok = ++_wlManual.tok;
   _el('wlManualRefresh').disabled = true;
@@ -10257,8 +10282,10 @@ async function wlManualSet(a) {
     let msg;
     if (res === 'limited') msg = T('wl_manual_result_limited', 'Wakelock freeze confirmed by read-back');
     else if (res === 'restored') msg = T('wl_manual_result_restored', 'Original AppOps modes restored');
+    else if (res === 'external_ignore') msg = T('wl_manual_external', 'Already ignored outside this list');
+    else if (res === 'uninstalled') msg = T('wl_manual_result_uninstalled', 'App is no longer installed; its entry was removed');
     else msg = T('wl_manual_result_failed', 'Not applied; actual state: %s').replace('%s', ((/^effective=([a-z_]+)/m.exec(out) || [])[1] || 'unknown'));
-    toast(msg, res === 'limited' || res === 'restored' ? 'good' : 'warn');
+    toast(msg, res === 'limited' || res === 'restored' || res === 'uninstalled' ? 'good' : 'warn');
   }
   _wlManual.busy = false; _el('wlManualRefresh').disabled = false;
   if (tok === _wlManual.tok && !_el('wlManualModal').hidden) await wlManualLoad();
@@ -12138,6 +12165,7 @@ const DEVICE_SECTION_ORDER = [
   ['susfs', 'dev_sec_susfs', 'SuSFS interface', 'root'],
   ['metamodule', 'dev_sec_metamodule', 'Metamodule', 'root'],
   ['zygisk_observer', 'dev_sec_zygisk_observer', 'Zygisk observer', 'root'],
+  ['lsposed_hooks', 'dev_sec_lsposed_hooks', 'LSPosed hooks: problems and battery evidence', 'root'],
   ['asb', 'dev_sec_asb', 'ASB runtime', 'asb'],
   ['asb_caps', 'dev_sec_asb_caps', 'ASB device capabilities', 'asb'],
   ['meta', 'dev_sec_meta', 'Collection metadata', 'asb']
@@ -12158,6 +12186,7 @@ const DEVICE_SECTION_GUIDES = {
   memory: ['dev_guide_memory', 'MemAvailable estimates memory available for new work. Cache is reusable and is not simply wasted memory.'],
   system_load: ['dev_guide_system_load', 'A bounded 0-100 pressure heuristic from measured components only. Missing components are excluded and weights are renormalized; below 40% coverage the result is unknown. This is not device health, a trend, or an A/B comparison.'],
   zygisk_observer: ['dev_guide_zygisk_observer', 'Process telemetry plus an optional bounded request for fresh governor evidence. Configuration, injection evidence, hint acknowledgement and overhead are separate facts. Missing crash/ANR attribution and app activity sources remain unknown or not exposed.'],
+  lsposed_hooks: ['dev_guide_lsposed_hooks', 'LSPosed does not count individual hook calls or their energy, and ASB adds no hook of its own to measure them. This card joins evidence per hooked app: enabled modules and their scope, LSPosed log volume and errors, crash and ANR records whose stack passes through a hook, CPU time of hooked apps and restart loops from the Zygisk start ledger. A finding is a correlation to check by disabling one module for one app, not a proven cause.'],
   kernel_origin: ['dev_guide_kernel_origin', 'Stock-like and custom-like describe exposed indicators, not a guaranteed builder or provenance. Capability decisions still use each exposed control node.'],
   kernel_btf: ['dev_guide_kernel_btf', 'BTF config, vmlinux exposure and module entries are separate facts. No BTF program or probe is loaded by this read-only page.'],
   kernel_ebpf: ['dev_guide_kernel_ebpf', 'Config and bpfs/sysctl exposure do not prove that eBPF is active. No program is loaded to test the syscall.'],
@@ -12223,6 +12252,8 @@ function deviceValueClass(sec, key, value) {
   if ((sec === 'susfs' && key === 'interface') || (sec === 'kernel_config' && key === 'available'))
     return (v === 'available' || v === 'yes') ? ' dev-good' : '';
   if (sec === 'kernel_external' && key === 'status' && /conflict|error|unsafe/.test(v)) return ' dev-bad';
+  if (sec === 'lsposed_hooks' && key === 'findings') return v === '0' ? ' dev-good' : ' dev-warn';
+  if (sec === 'zygisk_observer' && key === 'ledger_restart_loops' && v !== 'none') return ' dev-warn';
   return '';
 }
 /* fix242: human-readable values. The collector keeps raw kernel units (kHz, kB, tenths of a
@@ -12286,6 +12317,14 @@ function deviceYesNo(v) {
   if (x === '1' || x === 'yes' || x === 'y') return T('dev_yes', 'yes');
   if (x === '0' || x === 'no' || x === 'n') return T('dev_no', 'no');
   return String(v);
+}
+/* fix277: "kind:package" findings from the LSPosed collector, as words. Malformed tokens are dropped. */
+function deviceLsposedFindings(raw) {
+  return String(raw || '').trim().split(/\s+/).filter(function (x) { return /^[a-z_]+:[A-Za-z0-9_.]+$/.test(x); })
+    .map(function (x) {
+      const i = x.indexOf(':'), kind = x.slice(0, i);
+      return T('dev_lsposed_find_' + kind, deviceFallbackLabel(kind)) + ': ' + x.slice(i + 1);
+    }).join(' · ');
 }
 function deviceFill(key, fallback, vars) {
   let t = T(key, fallback);
@@ -12356,6 +12395,13 @@ function deviceDisplayValue(sec, key, value, d) {
       return value === '1' ? T('st_on', 'Enabled') : T('st_off', 'Disabled');
     if (key === 'memory_kb') return deviceSizeKb(value);
     if (key === 'safe_mode') return T('dev_zygisk_safe_' + value, deviceFallbackLabel(value));
+  }
+  if (sec === 'lsposed_hooks') {
+    if (key === 'present') return value === '1' ? T('dev_lsposed_present_1', 'Installed') : T('dev_lsposed_present_0', 'Not installed');
+    if (key === 'database') return T('dev_lsposed_db_' + value, deviceFallbackLabel(value));
+    if (key === 'log_rate_kb_h' && isFinite(deviceNum(value)) && /^\d+$/.test(value)) return value + '\u00a0' + T('dev_unit_kb_h', 'KB/h');
+    if (key === 'log_window_min' && /^\d+$/.test(value)) return value + '\u00a0' + T('dev_unit_min', 'min');
+    if (key === 'findings_detail') return deviceLsposedFindings(value) || value;
   }
   if (sec === 'battery') {
     if (key === 'temp_tenths_c') { const x = deviceNum(value); return isFinite(x) ? (x / 10).toFixed(1) + '\u00a0°C' : value; }
@@ -12551,6 +12597,17 @@ function deviceInfoInsights(d) {
   if (wear !== null && wear < 85) out.push({
     text: deviceFill('dev_insight_battery', 'The battery reports {pct}% of design capacity. This is a fuel-gauge estimate from the exposed charge values, not a direct cell measurement.', { pct: wear }),
     targets: ['dev-sec-battery'], label: T('dev_sec_battery', 'Battery')
+  });
+  const lspN = deviceNum(deviceVal(d, 'lsposed_hooks', 'findings'));
+  if (lspN > 0) out.push({
+    text: deviceFill('dev_insight_lsposed', '{n} LSPosed finding(s) to check: {list}. LSPosed counts no hook calls, so confirm one at a time: disable one module for that one app and compare.',
+      { n: lspN, list: deviceLsposedFindings(deviceVal(d, 'lsposed_hooks', 'findings_detail')) || '—' }),
+    targets: ['dev-sec-lsposed-hooks'], label: T('dev_sec_lsposed_hooks', 'LSPosed hooks: problems and battery evidence')
+  });
+  const loops = deviceVal(d, 'zygisk_observer', 'ledger_restart_loops');
+  if (loops !== 'none' && !deviceIsLimitedValue(loops)) out.push({
+    text: deviceFill('dev_insight_restart_loops', 'Restart loops with the screen off: {list}. A process that keeps restarting while the screen is off costs wakeups; check its background and battery settings first.', { list: loops }),
+    targets: ['dev-sec-zygisk-observer'], label: T('dev_sec_zygisk_observer', 'Zygisk observer')
   });
   return out;
 }
