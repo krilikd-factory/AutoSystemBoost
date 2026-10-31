@@ -3104,12 +3104,12 @@ case "$_odm" in ''|0|*[!0-9]*) : ;; *)
 esac
 _dmf=/dev/.asb_drain_meter; [ -s "$_dmf" ] || _dmf=/data/adb/asb/drain_meter
 if [ -s "$_dmf" ]; then
-  NOTE "drain by profile (the same meter for each, Stock included):"
+  NOTE "LONG-TERM drain history by profile (NOT the current infinite-log capture):"
   awk '$1 != "current" && NF >= 6 {
-         on = ($2 >= 600 && $3 > 0) ? sprintf("%.1f%%/h over %d min", $3 * 36 / $2, $2 / 60) : "not measured";
-         off = ($6 >= 1 && $4 > 0) ? sprintf("%.2f%%/h over %d window(s)", $5 * 36 / $4, $6) : "not measured";
-         latest = (NF >= 9 && $8 >= 3600) ? sprintf(" · latest %.2f%%/h over %d min", $7 / 100, $8 / 60) : "";
-         printf "    %-12s screen on %s · screen off %s%s\n", $1, on, off, latest }' "$_dmf" 2>/dev/null | while IFS= read -r _dml; do P "$_dml"; done
+         on = ($2 >= 600 && $3 > 0) ? sprintf("%.1f%%/h, %d min accumulated", $3 * 36 / $2, $2 / 60) : "not measured";
+         off = ($6 >= 1 && $4 > 0) ? sprintf("%.2f%%/h, %d qualifying window(s) accumulated", $5 * 36 / $4, $6) : "not measured";
+         latest = (NF >= 9 && $8 >= 3600) ? sprintf(" · LATEST complete screen-off window: %.2f%%/h over %d min (this is the WebUI tile value)", $7 / 100, $8 / 60) : "";
+         printf "    %-12s screen-on history: %s · screen-off aggregate: %s%s\n", $1, on, off, latest }' "$_dmf" 2>/dev/null | while IFS= read -r _dml; do P "$_dml"; done
   # fix189: the screen-off windows of 10+ min the meter did not count, and why.
   if [ -r /data/adb/asb/drain_meter.rej ]; then
     read -r _dmrm _dmrs _dmrc _dmrl < /data/adb/asb/drain_meter.rej 2>/dev/null
@@ -3286,11 +3286,27 @@ if [ -s /data/adb/asb/wakelock_apps ]; then
       protected)  _avt="protected: messenger/alarm/fitness class or on the battery-optimisation whitelist - never auto-restricted" ;;
       in_use)     _avt="visible or audible to you - left alone" ;;
       limited)    _avt="wakelocks ignored by your wakelock_fitness=limit (undone on protect/uninstall)" ;;
+      manual)     _avt="WAKE_LOCK=ignore from your explicit app list; read-back confirms it (restorable)" ;;
+      manual_lapsed) _avt="explicit WAKE_LOCK limit is recorded but NOT in force now; ASB will retry on its existing passes" ;;
       limit_ignored) _avt="wakelock_fitness=limit is set, but this Android does not enforce the WAKE_LOCK app-op - the app still held the CPU (not DISABLED) after it was set" ;;
       *)          _avt="report only" ;;
     esac
     P "    $_ap  ·  $_al  ·  $_avt"
   done < /data/adb/asb/wakelock_apps
+fi
+if [ -s /data/adb/asb/wakelock_manual ]; then
+  NOTE "explicit user-selected WAKE_LOCK limits (package | original package/uid modes | effective now):"
+  while IFS='|' read -r _mp _mo _mu; do
+    case "$_mp" in ''|*[!A-Za-z0-9_.]*) continue ;; esac
+    _me=unknown
+    if command -v appops >/dev/null 2>&1; then
+      _me="$(appops get "$_mp" WAKE_LOCK 2>/dev/null | grep -v 'Uid mode' | sed -n 's/.*WAKE_LOCK: \([a-z_]*\).*/\1/p' | head -1)"
+      _mu_now="$(appops get "$_mp" WAKE_LOCK 2>/dev/null | sed -n 's/.*Uid mode: WAKE_LOCK: \([a-z_]*\).*/\1/p' | head -1)"
+      case "$_mu_now" in ''|default) : ;; *) _me="$_mu_now" ;; esac
+    fi
+    P "    $_mp | ${_mo:-default}/${_mu:-default} | ${_me:-unknown}"
+  done < /data/adb/asb/wakelock_manual
+  NOTE "manual limits are user-risk choices; kernel and system wake sources are never blocked"
 fi
 if [ -s /data/adb/asb/wakelock_multicast ]; then
   _mct="$(sed -n 's/^total|//p' /data/adb/asb/wakelock_multicast | head -1)"
