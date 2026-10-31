@@ -5,6 +5,8 @@
  *     asb --lspd verbose-get  [db]          -> "verbose=on|off|default_on|unknown"
  *     asb --lspd verbose-set  on|off [db]   -> writes LSPosed's own setting, prints the new state
  *     asb --lspd verbose-unset [db]         -> removes the row (LSPosed's default again)
+ *     asb --lspd modules [db]               -> fix277: read-only module/scope inventory
+ *                                              "module|pkg|enabled|scopes" and "scope|module|app|user"
  *
  * Asked for by a user whose LSPosed had written 31 MB of verbose logs. LSPosed keeps the
  * switch in its own SQLite database, /data/adb/lspd/config/modules_config.db, table configs,
@@ -43,6 +45,8 @@ typedef struct {
     int (*step)(sqlite3_stmt_h *);
     const void *(*column_blob)(sqlite3_stmt_h *, int);
     int (*column_bytes)(sqlite3_stmt_h *, int);
+    const unsigned char *(*column_text)(sqlite3_stmt_h *, int);
+    int (*column_int)(sqlite3_stmt_h *, int);
     int (*finalize)(sqlite3_stmt_h *);
     void (*sfree)(void *);
 } asb_sqlite_t;
@@ -85,10 +89,13 @@ static int asb_sqlite_load(asb_sqlite_t *s) {
     s->step         = (int (*)(sqlite3_stmt_h *))dlsym(h, "sqlite3_step");
     s->column_blob  = (const void *(*)(sqlite3_stmt_h *, int))dlsym(h, "sqlite3_column_blob");
     s->column_bytes = (int (*)(sqlite3_stmt_h *, int))dlsym(h, "sqlite3_column_bytes");
+    s->column_text  = (const unsigned char *(*)(sqlite3_stmt_h *, int))dlsym(h, "sqlite3_column_text");
+    s->column_int   = (int (*)(sqlite3_stmt_h *, int))dlsym(h, "sqlite3_column_int");
     s->finalize     = (int (*)(sqlite3_stmt_h *))dlsym(h, "sqlite3_finalize");
     s->sfree        = (void (*)(void *))dlsym(h, "sqlite3_free");
     return (s->open_v2 && s->close && s->busy_timeout && s->exec && s->prepare_v2 && s->step &&
-            s->column_blob && s->column_bytes && s->finalize && s->sfree) ? 0 : -1;
+            s->column_blob && s->column_bytes && s->column_text && s->column_int &&
+            s->finalize && s->sfree) ? 0 : -1;
 }
 
 /* 1 on, 0 off, 2 no row (LSPosed's default: on), -1 unreadable / not a Boolean. */
@@ -116,12 +123,98 @@ static const char *asb_lspd_name(int v) {
     return v == 1 ? "on" : v == 0 ? "off" : v == 2 ? "default_on" : "unknown";
 }
 
+/* fix277: the module and scope tables, read-only. ASB answers "which LSPosed modules hook
+ * which apps" from LSPosed's own database instead of guessing from logs. Names that are not
+ * plain package identifiers are skipped, so nothing the shell parses can carry a separator
+ * or a command; the framework's own "lspd" row is not a module. Output is bounded. */
+static int asb_lspd_name_ok(const unsigned char *t) {
+    if (!t || !*t) return 0;
+    size_t n = 0;
+    for (const unsigned char *c = t; *c; c++, n++) {
+        if (n >= 127) return 0;
+        if (!((*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') ||
+              (*c >= '0' && *c <= '9') || *c == '.' || *c == '_')) return 0;
+    }
+    return 1;
+}
+
+static int asb_lspd_modules(asb_sqlite_t *s, sqlite3_h *db) {
+    sqlite3_stmt_h *st = NULL;
+    const char *qm = "SELECT m.module_pkg_name, m.enabled, "
+                     "(SELECT COUNT(*) FROM scope sc WHERE sc.mid = m.mid) "
+                     "FROM modules m ORDER BY m.module_pkg_name";
+    int prc = s->prepare_v2(db, qm, -1, &st, NULL);
+    if (prc != ASB_SQLITE_OK || !st) {
+        if (st) s->finalize(st);
+        /* SQLITE_BUSY / SQLITE_LOCKED: LSPosed holds a write lock; that is not a foreign layout. */
+        puts((prc == 5 || prc == 6) ? "modules=unknown\nreason=read_failed" : "modules=unknown\nreason=unexpected_schema");
+        return (prc == 5 || prc == 6) ? 7 : 6;
+    }
+    int n = 0, rc;
+    puts("format=v1");
+    while ((rc = s->step(st)) == ASB_SQLITE_ROW && n < 256) {
+        const unsigned char *name = s->column_text(st, 0);
+        if (!asb_lspd_name_ok(name) || strcmp((const char *)name, "lspd") == 0) continue;
+        printf("module|%s|%d|%d\n", (const char *)name, s->column_int(st, 1) ? 1 : 0, s->column_int(st, 2));
+        n++;
+    }
+    s->finalize(st);
+    st = NULL;
+    /* A busy or damaged database must not read as a short, complete inventory. */
+    if (rc != ASB_SQLITE_DONE && rc != ASB_SQLITE_ROW) {
+        puts("modules=unknown\nreason=read_failed");
+        return 7;
+    }
+    const char *qs = "SELECT m.module_pkg_name, sc.app_pkg_name, sc.user_id "
+                     "FROM scope sc JOIN modules m ON m.mid = sc.mid ORDER BY 1, 2";
+    prc = s->prepare_v2(db, qs, -1, &st, NULL);
+    if (prc != ASB_SQLITE_OK || !st) {
+        if (st) s->finalize(st);
+        puts((prc == 5 || prc == 6) ? "scope=unknown\nreason=read_failed" : "scope=unknown\nreason=unexpected_schema");
+        return (prc == 5 || prc == 6) ? 7 : 6;
+    }
+    int k = 0;
+    while ((rc = s->step(st)) == ASB_SQLITE_ROW && k < 4096) {
+        const unsigned char *mod = s->column_text(st, 0);
+        const unsigned char *app = s->column_text(st, 1);
+        if (!asb_lspd_name_ok(mod) || !asb_lspd_name_ok(app) || strcmp((const char *)mod, "lspd") == 0) continue;
+        printf("scope|%s|%s|%d\n", (const char *)mod, (const char *)app, s->column_int(st, 2));
+        k++;
+    }
+    s->finalize(st);
+    if (rc != ASB_SQLITE_DONE && rc != ASB_SQLITE_ROW) {
+        puts("scope=unknown\nreason=read_failed");
+        return 7;
+    }
+    printf("modules=%d\nscopes=%d\n", n, k);
+    return 0;
+}
+
 static int asb_lspd_cli(int argc, char **argv) {
     if (argc < 1) {
-        fprintf(stderr, "usage: asb --lspd verbose-get|verbose-set on|off|verbose-unset [db]\n");
+        fprintf(stderr, "usage: asb --lspd verbose-get|verbose-set on|off|verbose-unset|modules [db]\n");
         return 2;
     }
     const char *cmd = argv[0];
+    if (strcmp(cmd, "modules") == 0) {
+        const char *mpath = (argc > 1) ? argv[1] : ASB_LSPD_DB;
+        FILE *mp = fopen(mpath, "rb");
+        if (!mp) { puts("modules=unknown\nreason=no_database"); return 3; }
+        fclose(mp);
+        asb_sqlite_t ms;
+        memset(&ms, 0, sizeof(ms));
+        if (asb_sqlite_load(&ms) != 0) { puts("modules=unknown\nreason=no_sqlite"); return 4; }
+        sqlite3_h *mdb = NULL;
+        if (ms.open_v2(mpath, &mdb, ASB_SQLITE_OPEN_READONLY, NULL) != ASB_SQLITE_OK || !mdb) {
+            if (mdb) ms.close(mdb);
+            puts("modules=unknown\nreason=open_failed");
+            return 5;
+        }
+        ms.busy_timeout(mdb, 3000);
+        int mrc = asb_lspd_modules(&ms, mdb);
+        ms.close(mdb);
+        return mrc;
+    }
     int set = -1, unset = 0;
     int ai = 1;
     if (strcmp(cmd, "verbose-set") == 0) {
