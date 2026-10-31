@@ -46,6 +46,40 @@ LDFLAGS=(-lm -ldl)   # -ldl: dlsym for __system_property_wait (fix116)
 chmod 0755 "$OUT_DIR/$ASB_BIN_NAME"
 ls -lh "$OUT_DIR/$ASB_BIN_NAME"
 
+# --------------------------------------------------------------------------- Zygisk observer
+# Observer-only shared libraries. No hooks, no governor socket and no policy opcodes.
+# Both ABIs are required because Zygisk matches the bitness of each selected app process.
+for _zabi in arm64-v8a armeabi-v7a; do
+  case "$_zabi" in
+    arm64-v8a) _ztriple="aarch64-linux-android" ;;
+    armeabi-v7a) _ztriple="armv7a-linux-androideabi" ;;
+  esac
+  _zxx="$TOOLCHAIN/${_ztriple}${API}-clang++"
+  if [ ! -x "$_zxx" ]; then
+    _zxx="$(ls "$TOOLCHAIN/${_ztriple}"[0-9]*-clang++ 2>/dev/null | head -1 || true)"
+  fi
+  if [ -z "$_zxx" ] || [ ! -x "$_zxx" ]; then
+    echo "[ASB] ERROR: no clang++ for Zygisk observer ABI $_zabi" >&2
+    exit 1
+  fi
+  _zout="$ROOT_DIR/zygisk"
+  mkdir -p "$_zout"
+  "$_zxx" -std=c++17 -O2 -fPIC -shared -fstack-protector-strong \
+    -D_FORTIFY_SOURCE=2 -Wall -Wextra -Werror -Wno-unused-parameter \
+    -fvisibility=hidden -static-libstdc++ -I"$SCRIPT_DIR/zygisk" \
+    -DASB_ABI_TAG=\"$_zabi\" "$SCRIPT_DIR/zygisk/asb_observer.cpp" \
+    -o "$_zout/$_zabi.so"
+  "$STRIP" "$_zout/$_zabi.so" || true
+  chmod 0644 "$_zout/$_zabi.so"
+  if command -v "$TOOLCHAIN/llvm-nm" >/dev/null 2>&1; then
+    "$TOOLCHAIN/llvm-nm" -D --defined-only "$_zout/$_zabi.so" | grep -q ' zygisk_module_entry$' \
+      || { echo "[ASB] ERROR: zygisk_module_entry missing for $_zabi" >&2; exit 1; }
+    "$TOOLCHAIN/llvm-nm" -D --defined-only "$_zout/$_zabi.so" | grep -q ' zygisk_companion_entry$' \
+      || { echo "[ASB] ERROR: zygisk_companion_entry missing for $_zabi" >&2; exit 1; }
+  fi
+  echo "[ASB] Zygisk observer: $_zabi (entry exports verified)"
+done
+
 # --------------------------------------------------------------------------- ASB DSP audio
 # effect (libasbdsp.so) A shared library loaded by audioserver, so it needs -shared/-fPIC
 # instead of the PIE flags used for the governor binary.

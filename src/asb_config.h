@@ -231,6 +231,10 @@ typedef struct {
     int   smart_net_conservative_max; /* bias clamp max x1000, default 1000 */
     int   smart_battery_bias;         /* extra battery lean added to effective alpha, x1000, default 0 */
     int   smart_debug_log;            /* extra logging for alpha, default 0 */
+    /* Zygisk lifecycle events may only ask this governor to re-evaluate its current
+     * profile. They never select a cap, bypass a thermal gate or manage LSPosed. */
+    int   zygisk_enabled;             /* observer master switch, default 0 */
+    int   zygisk_hints;               /* bounded start/exit refresh requests, default 0 */
 } asb_runtime_config_t;
 
 /*
@@ -401,6 +405,8 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->smart_net_conservative_max   = 1000;
     c->smart_battery_bias           = 0;
     c->smart_debug_log              = 0;
+    c->zygisk_enabled               = 0;
+    c->zygisk_hints                 = 0;
 }
 
 static inline char *asb_cfg_trim(char *s) {
@@ -661,6 +667,8 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "smart_net_conservative_max")) c->smart_net_conservative_max = atoi(v);
     else if (!strcmp(k, "smart_battery_bias"))      c->smart_battery_bias = atoi(v);
     else if (!strcmp(k, "smart_debug_log"))         c->smart_debug_log = atoi(v);
+    else if (!strcmp(k, "zygisk_enabled"))          c->zygisk_enabled = atoi(v) ? 1 : 0;
+    else if (!strcmp(k, "zygisk_hints"))            c->zygisk_hints = atoi(v) ? 1 : 0;
 }
 
 /*

@@ -75,6 +75,10 @@ static int g_unlock_lift_now;
 static FILE *g_logf = NULL;
 static void asb_log(const char *fmt, ...) __attribute__((format(printf,1,2)));  /* forward decl */
 asb_runtime_config_t g_asb_cfg;
+/* Acknowledged lifecycle refreshes are observability too: an accepted request means
+ * "fresh metrics will be evaluated", never "a frequency was raised" or "power was saved". */
+static unsigned long g_zygisk_refresh_accepted = 0;
+static unsigned long g_zygisk_refresh_vetoed = 0;
 static time_t g_last_reassert = 0;
 static int g_last_reassert_ok = 0;
 
@@ -3718,6 +3722,8 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     /* Foreground answered from the top-app cgroup, no fork (fix124). */
     fprintf(f, "probe_topapp=%lu\nprobe_topapp_empty=%lu\nprobe_topapp_ambiguous=%lu\n",
             g_stat_probe_topapp, g_stat_probe_topapp_empty, g_stat_probe_topapp_ambig);
+    fprintf(f, "zygisk_refresh_accepted=%lu\nzygisk_refresh_vetoed=%lu\n",
+            g_zygisk_refresh_accepted, g_zygisk_refresh_vetoed);
     fprintf(f, "governor_transitions=%lu\ngovernor_writes=%lu\n"
                "governor_readbacks=%lu\ngovernor_vendor_overrides=%lu\n",
             g_stat_transitions, g_stat_writes, g_stat_readbacks,
@@ -8997,8 +9003,8 @@ int main(int argc, char **argv) {
                  * was nothing else, so the transitions and audits worth reading had
                  * scrolled out before anyone looked. Commands that change something are
                  * still logged; status only at the most verbose level. */
-                if (strcmp(cmd, "status") == 0 ? g_asb_cfg.log_level >= 3
-                                               : g_asb_cfg.log_level >= 1)
+                if ((strcmp(cmd, "status") == 0 || strcmp(cmd, "zygisk-refresh") == 0)
+                        ? g_asb_cfg.log_level >= 3 : g_asb_cfg.log_level >= 1)
                     asb_log("cmd: %s", cmd);
 
                 if (strncmp(cmd, "profile:", 8) == 0) {
@@ -9134,6 +9140,24 @@ int main(int argc, char **argv) {
                         asb_log_critical("profile changed to %d (session reset)", new_idx);
                     } else {
                         asb_sock_reply(sockfd, &src, srclen, "ok:nochange");
+                    }
+                }
+                else if (strcmp(cmd, "zygisk-refresh") == 0) {
+                    /* The observer supplies a lifecycle edge, not a foreground verdict or
+                     * a target cap. Screen-off events cost no metrics probe. Every normal
+                     * profile, dwell, thermal and vendor decision still applies below. */
+                    if (!g_asb_cfg.zygisk_enabled || !g_asb_cfg.zygisk_hints ||
+                        access("/data/adb/asb/zygisk_observer/disable", F_OK) == 0) {
+                        g_zygisk_refresh_vetoed++;
+                        asb_sock_reply(sockfd, &src, srclen, "err:disabled");
+                    } else if (!metrics.misc.screen_on) {
+                        g_zygisk_refresh_vetoed++;
+                        asb_sock_reply(sockfd, &src, srclen, "err:screen_off");
+                    } else {
+                        asb_smart_pkg_cache_invalidate();
+                        need_metrics = 1;
+                        g_zygisk_refresh_accepted++;
+                        asb_sock_reply(sockfd, &src, srclen, "ok");
                     }
                 }
                 else if (strcmp(cmd, "status") == 0) {
