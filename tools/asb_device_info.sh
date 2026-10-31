@@ -44,6 +44,11 @@ _mem() { sed -n "s/^$2:[[:space:]]*//p" "$1" 2>/dev/null | head -n 1; }
 [ -r "$MODDIR/runtime/asb_pressure.sh" ] && . "$MODDIR/runtime/asb_pressure.sh"
 [ -r "$MODDIR/runtime/asb_zygisk_info.sh" ] && . "$MODDIR/runtime/asb_zygisk_info.sh"
 [ -r "$MODDIR/runtime/asb_lsposed_info.sh" ] && . "$MODDIR/runtime/asb_lsposed_info.sh"
+if [ "${1:-}" = --lsposed ]; then
+  _emit meta schema 5
+  command -v _asb_lsposed_info >/dev/null 2>&1 && _asb_lsposed_info
+  exit 0
+fi
 
 _emit meta schema 5
 _emit meta generated_epoch "$(date +%s 2>/dev/null)"
@@ -545,5 +550,9 @@ fi
 # Pressure and observer metrics stay separate: neither is a health score or a policy input.
 command -v _asb_pressure_collect >/dev/null 2>&1 && _asb_pressure_collect
 command -v _asb_zygisk_info >/dev/null 2>&1 && _asb_zygisk_info
-command -v _asb_lsposed_info >/dev/null 2>&1 && _asb_lsposed_info
+if [ "${ASB_DEVINFO_LSPOSED:-1}" = 0 ]; then
+  command -v _asb_lsposed_quick >/dev/null 2>&1 && _asb_lsposed_quick
+else
+  command -v _asb_lsposed_info >/dev/null 2>&1 && _asb_lsposed_info
+fi
 exit 0
