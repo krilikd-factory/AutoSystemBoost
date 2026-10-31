@@ -3184,6 +3184,7 @@ static const char *g_unlock_arm_why = "-";/* what armed the running lift, for th
 static long   g_unlock_armed_ms    = 0;   /* boottime ms of the arm behind the running lift (fix248) */
 static int    g_unlock_level_khz   = 0;   /* prime ceiling a held Battery lift was levelled to, 0 = none */
 static unsigned long g_unlock_levels = 0; /* held lifts that were levelled */
+static int    g_bhold_allow        = 1;   /* fix271: a finger may hold the Battery lift for the app in front */
 
 /* Who the lift is for. Battery and Balanced are exactly the profiles that jank on a wake -
  * their ceilings are the shell's static caps - and Smart has always had it. Performance is
@@ -3274,7 +3275,7 @@ static int asb_unlock_lift_update(int screen_on, int touch_kick, int touch_activ
      * down. The two-second active cadence is shorter than the three-second window, and the
      * normal expiry/handback runs as soon as the touch stream stops. */
     if (touch_active && profile_idx == PROFILE_BATTERY && g_unlock_until_ms > 0 &&
-        g_asb_cfg.unlock_lift_s > 0 && !thermal_cap) {
+        g_asb_cfg.unlock_lift_s > 0 && !thermal_cap && g_bhold_allow) {
         long until = now_ms + (long)g_asb_cfg.unlock_lift_s * 1000L;
         if (until > g_unlock_until_ms) g_unlock_until_ms = until;
     }
@@ -3365,6 +3366,250 @@ static void asb_unlock_lift_apply(asb_profile_caps_t *caps) {
 
 /* Smart night slot with the screen on (fix150) - see asb_smart_night_awake. */
 
+/* Battery scroll hold, measured per app (fix271).
+ *
+ * fix223 keeps a Battery lift up for as long as a finger stays on the glass, so a feed scrolls
+ * at 64 % of each cluster's maximum instead of the static Battery ceilings. An OP15 Battery
+ * evening (capture 30677, 3 h, screen on 96 % of it) had the main ceiling lifted in 78 % of
+ * its samples and the main cores at the lifted 2227200 kHz for 13 % of the whole capture, and
+ * the hold paid off in one app: a social feed drew 14.8 % janky frames of its own at the static
+ * ceilings and 7.6 % under the levelled hold. A chat client (0.7-5.1 % against 1.3-6.6 %) and a
+ * photo feed (1.2-2.4 % against 1.3-2.7 %) were as smooth either way, while the lifted intervals sampled
+ * 1.4-1.8 times the current - touching and scrolling draw more by themselves, so that is an
+ * upper bound on what the hold cost, but an app the hold does not help pays it for nothing.
+ *
+ * So whether a finger may hold the lift is decided per app, from the app's own frames: windows
+ * of Android's frame statistics (the probe Smart's smoothness check uses) alternate between
+ * hold and no hold. The hold is kept where, after at least three windows and 4000 frames on
+ * each side, it removes a quarter of the janky frames and at least 1.5 points - Smart's bar
+ * for more headroom; after six windows a side without that it is released. A released app
+ * still gets the lift for the first unlock_lift_s seconds of every wake, app open or close,
+ * first touch after a calm spell and lock press - the animations - and scrolls at the static
+ * Battery ceilings after that. A test short of frames, or an app that draws no frames Android
+ * counts, keeps the hold. Verdicts persist in /data/adb/asb/battery_hold.tsv (24 apps, the
+ * least recently used replaced) and are tested again after 21 days. A probe runs only while
+ * the app in front is under test, at most every three minutes; SystemUI and launchers, games,
+ * the camera and a thermal cap stay out. The recorder-only jank guard does not arm for an app
+ * whose hold was released, and any window it lifted is discarded rather than counted.
+ * battery_hold_learn=0 turns the measuring off and every app keeps the hold, as before. */
+#ifndef ASB_BHOLD_FILE
+#define ASB_BHOLD_FILE        "/data/adb/asb/battery_hold.tsv"
+#endif
+#define ASB_BHOLD_APPS        24
+#define ASB_BHOLD_PROBE_S     180
+#define ASB_BHOLD_MIN_WINDOWS 3
+#define ASB_BHOLD_MAX_WINDOWS 6
+#define ASB_BHOLD_MIN_FRAMES  4000L
+#define ASB_BHOLD_GAIN_REL    0.25
+#define ASB_BHOLD_GAIN_ABS    0.015
+#define ASB_BHOLD_MAX_EMPTY   6
+#define ASB_BHOLD_RECHECK_S   (21L * 24 * 3600)
+typedef struct {
+    uint64_t hash;
+    long     last_ts, decided_ts;
+    int      state;             /* 0 under test, 1 hold kept, 2 hold released */
+    int      arm;               /* under test: the side the next window runs on, 1 hold, 0 none */
+    int      empty;             /* probes in a row that found no frames for the app */
+    long     frames[2], janky[2];
+    int      windows[2];
+} asb_bhold_app_t;
+static asb_bhold_app_t g_bhold[ASB_BHOLD_APPS];
+static int      g_bhold_loaded = 0;
+static uint64_t g_bhold_win_hash = 0;
+static char     g_bhold_win_pkg[64];
+static long     g_bhold_win_frames = -1, g_bhold_win_janky = -1;
+static int      g_bhold_win_arm = -1;   /* side in force since the window began, -2 spoiled */
+static long     g_bhold_probe_ts = 0, g_bhold_gfx_seen = 0;
+static int      g_bhold_now = -1;       /* app in front: -1 not measured, 0 released, 1 kept, 2 under test */
+static unsigned long g_bhold_probes = 0, g_bhold_windows = 0;
+static char     g_bhold_msg[220];
+static int      g_bhold_spoil = 0;      /* the jank guard lifted during the window */
+
+static void asb_bhold_load(void) {
+    g_bhold_loaded = 1;
+    memset(g_bhold, 0, sizeof(g_bhold));
+    FILE *f = fopen(ASB_BHOLD_FILE, "r");
+    if (!f) return;
+    char line[256];
+    int n = 0;
+    while (n < ASB_BHOLD_APPS && fgets(line, sizeof(line), f)) {
+        unsigned long long h = 0;
+        int st = -1, arm = -1, em = -1, w0 = -1, w1 = -1;
+        long f0 = -1, j0 = -1, f1 = -1, j1 = -1, dt = 0, lt = 0;
+        if (sscanf(line, "%llx %d %d %d %ld %ld %ld %ld %d %d %ld %ld", &h, &st, &arm, &em,
+                   &f0, &j0, &f1, &j1, &w0, &w1, &dt, &lt) != 12) continue;
+        if (!h || st < 0 || st > 2 || arm < 0 || arm > 1 || em < 0 || em > 1000 ||
+            f0 < 0 || f1 < 0 || j0 < 0 || j1 < 0 || j0 > f0 || j1 > f1 ||
+            w0 < 0 || w1 < 0 || w0 > 1000 || w1 > 1000 || dt < 0 || lt < 0) continue;
+        int dup = 0;
+        for (int i = 0; i < n; i++) if (g_bhold[i].hash == (uint64_t)h) dup = 1;
+        if (dup) continue;
+        asb_bhold_app_t *a = &g_bhold[n++];
+        a->hash = (uint64_t)h; a->state = st; a->arm = arm; a->empty = em;
+        a->frames[0] = f0; a->janky[0] = j0; a->frames[1] = f1; a->janky[1] = j1;
+        a->windows[0] = w0; a->windows[1] = w1; a->decided_ts = dt; a->last_ts = lt;
+    }
+    fclose(f);
+}
+
+static void asb_bhold_save(void) {
+    char tmp[96];
+    snprintf(tmp, sizeof(tmp), "%s.tmp", ASB_BHOLD_FILE);
+    FILE *f = fopen(tmp, "w");
+    if (!f) return;
+    for (int i = 0; i < ASB_BHOLD_APPS; i++) {
+        const asb_bhold_app_t *a = &g_bhold[i];
+        if (!a->hash) continue;
+        fprintf(f, "%016llx %d %d %d %ld %ld %ld %ld %d %d %ld %ld\n", (unsigned long long)a->hash,
+                a->state, a->arm, a->empty, a->frames[0], a->janky[0], a->frames[1], a->janky[1],
+                a->windows[0], a->windows[1], a->decided_ts, a->last_ts);
+    }
+    int ok = (fflush(f) == 0);
+    if (fclose(f) != 0) ok = 0;
+    if (!ok || rename(tmp, ASB_BHOLD_FILE) != 0) remove(tmp);
+}
+
+static asb_bhold_app_t *asb_bhold_find(uint64_t hash, long now) {
+    asb_bhold_app_t *lru = NULL;
+    for (int i = 0; i < ASB_BHOLD_APPS; i++) {
+        asb_bhold_app_t *a = &g_bhold[i];
+        if (a->hash == hash) return a;
+        if (!lru || (lru->hash != 0 && (a->hash == 0 || a->last_ts < lru->last_ts))) lru = a;
+    }
+    memset(lru, 0, sizeof(*lru));
+    lru->hash = hash; lru->last_ts = now; lru->arm = 1;
+    return lru;
+}
+
+/* The side in force for the app: 1 the finger may hold the lift, 0 it may not. */
+static int asb_bhold_side(asb_bhold_app_t *a, long now) {
+    if ((a->state == 1 || a->state == 2) && now - a->decided_ts >= ASB_BHOLD_RECHECK_S) {
+        a->state = 0; a->arm = 1; a->empty = 0;
+        a->frames[0] = a->frames[1] = a->janky[0] = a->janky[1] = 0;
+        a->windows[0] = a->windows[1] = 0;
+    }
+    if (a->state == 1) return 1;
+    if (a->state == 2) return 0;
+    return a->arm;
+}
+
+/* One finished window of the app under side `arm`. Returns 1 when the app got its verdict
+ * (the message is in g_bhold_msg). */
+static int asb_bhold_window(asb_bhold_app_t *a, const char *disp, long df, long dj, int arm, long now) {
+    if (!a || a->state != 0 || arm != a->arm || df < 0 || dj < 0 || dj > df) return 0;
+    a->frames[arm] += df; a->janky[arm] += dj; a->windows[arm]++;
+    a->arm ^= 1;
+    int enough = a->windows[0] >= ASB_BHOLD_MIN_WINDOWS && a->windows[1] >= ASB_BHOLD_MIN_WINDOWS &&
+                 a->frames[0] >= ASB_BHOLD_MIN_FRAMES && a->frames[1] >= ASB_BHOLD_MIN_FRAMES;
+    int full = a->windows[0] >= ASB_BHOLD_MAX_WINDOWS && a->windows[1] >= ASB_BHOLD_MAX_WINDOWS;
+    double j0 = a->frames[0] > 0 ? (double)a->janky[0] / (double)a->frames[0] : 0.0;
+    double j1 = a->frames[1] > 0 ? (double)a->janky[1] / (double)a->frames[1] : 0.0;
+    if (enough && j1 <= j0 * (1.0 - ASB_BHOLD_GAIN_REL) && j0 - j1 >= ASB_BHOLD_GAIN_ABS) {
+        a->state = 1;
+        snprintf(g_bhold_msg, sizeof(g_bhold_msg),
+                 "battery_hold: %s - holding the lift through a scroll helps (janky %.1f %% without, %.1f %% with): kept",
+                 disp, 100.0 * j0, 100.0 * j1);
+    } else if (full && enough) {
+        a->state = 2;
+        snprintf(g_bhold_msg, sizeof(g_bhold_msg),
+                 "battery_hold: %s - the hold does not help (janky %.1f %% without, %.1f %% with): a scroll runs at the Battery ceilings",
+                 disp, 100.0 * j0, 100.0 * j1);
+    } else if (full) {
+        a->state = 1;
+        snprintf(g_bhold_msg, sizeof(g_bhold_msg),
+                 "battery_hold: %s - a full test without enough frames for a verdict: the hold stays", disp);
+    } else {
+        return 0;
+    }
+    a->decided_ts = now;
+    return 1;
+}
+
+static void asb_bhold_tick(const asb_fsm_t *fsm, const asb_metrics_t *m) {
+    long now = (long)time(NULL);
+    int on = g_asb_cfg.battery_hold_learn && g_asb_cfg.unlock_lift_s > 0 &&
+             fsm->profile_idx == PROFILE_BATTERY && m->misc.screen_on && !m->misc.camera_active &&
+             g_pkg_detect_ok && g_smart_rt.app_hash != 0 && g_smart_rt.app_hint < ASB_APP_GAMING &&
+             g_smart_rt.app_pkg_cached[0] && !asb_smart_is_system_ui(g_smart_rt.app_pkg_cached);
+    if (!on) {
+        g_bhold_allow = 1;
+        g_bhold_now = -1;
+        g_bhold_win_hash = 0; g_bhold_win_pkg[0] = 0;
+        g_bhold_win_frames = -1; g_bhold_win_janky = -1; g_bhold_win_arm = -1;
+        return;
+    }
+    if (!g_bhold_loaded) asb_bhold_load();
+    uint64_t h = g_smart_rt.app_hash;
+    if (h != g_bhold_win_hash) {
+        g_bhold_win_hash = h;
+        snprintf(g_bhold_win_pkg, sizeof(g_bhold_win_pkg), "%s", g_smart_rt.app_pkg_cached);
+        g_bhold_win_frames = -1; g_bhold_win_janky = -1; g_bhold_win_arm = -1;
+    }
+    asb_bhold_app_t *a = asb_bhold_find(h, now);
+    a->last_ts = now;
+    int side = asb_bhold_side(a, now);
+    if (g_bhold_win_arm == -1) g_bhold_win_arm = side;
+    else if (g_bhold_win_arm != side) g_bhold_win_arm = -2;
+    if (fsm->thermal_cap || g_bhold_spoil) g_bhold_win_arm = -2;
+    g_bhold_spoil = 0;
+    struct stat st;
+    if (stat(ASB_GFX_FILE, &st) == 0 && (long)st.st_mtime != g_bhold_gfx_seen &&
+        g_bhold_probe_ts > 0 && (long)st.st_mtime >= g_bhold_probe_ts) {
+        g_bhold_gfx_seen = (long)st.st_mtime;
+        long fr = -1, jk = -1;
+        if (asb_gfx_read_pkg(g_bhold_win_pkg, &fr, &jk) == 0) {
+            a->empty = 0;
+            if (a->state == 0 && g_bhold_win_frames >= 0 && fr >= g_bhold_win_frames &&
+                jk >= g_bhold_win_janky && g_bhold_win_arm >= 0) {
+                char disp[64];
+                if (g_asb_cfg.smart_pkg_plaintext || ASB_DEBUG_BUILD)
+                    snprintf(disp, sizeof(disp), "%s", g_bhold_win_pkg);
+                else
+                    snprintf(disp, sizeof(disp), "app %016llx", (unsigned long long)h);
+                g_bhold_windows++;
+                if (asb_bhold_window(a, disp, fr - g_bhold_win_frames, jk - g_bhold_win_janky,
+                                     g_bhold_win_arm, now))
+                    asb_log("%s", g_bhold_msg);
+                asb_bhold_save();
+            }
+            g_bhold_win_frames = fr; g_bhold_win_janky = jk;
+        } else if (a->state == 0 && ++a->empty >= ASB_BHOLD_MAX_EMPTY) {
+            a->state = 1; a->decided_ts = now;
+            asb_log("battery_hold: an app with no frames Android counts after %d probes - the hold stays",
+                    ASB_BHOLD_MAX_EMPTY);
+            asb_bhold_save();
+        }
+        side = asb_bhold_side(a, now);
+        g_bhold_win_arm = side;
+    }
+    g_bhold_allow = side;
+    g_bhold_now = a->state == 0 ? 2 : (a->state == 1 ? 1 : 0);
+    if (a->state == 0 && (g_bhold_probe_ts == 0 || now - g_bhold_probe_ts >= ASB_BHOLD_PROBE_S ||
+                          now < g_bhold_probe_ts)) {
+        const char *pk = g_bhold_win_pkg;
+        int ok = pk[0] != 0;
+        for (const char *c = pk; *c && ok; c++)
+            ok = ((*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') ||
+                  (*c >= '0' && *c <= '9') || *c == '.' || *c == '_');
+        g_bhold_probe_ts = now;
+        if (!ok) return;
+        g_bhold_probes++;
+        asb_run_modscript("runtime/asb_gfx_probe.sh", pk);
+    }
+}
+
+/* kept, released, under test: the verdicts on record. */
+static void asb_bhold_counts(int *kept, int *released, int *testing) {
+    *kept = *released = *testing = 0;
+    if (!g_bhold_loaded) asb_bhold_load();
+    for (int i = 0; i < ASB_BHOLD_APPS; i++) {
+        if (!g_bhold[i].hash) continue;
+        if (g_bhold[i].state == 1) (*kept)++;
+        else if (g_bhold[i].state == 2) (*released)++;
+        else (*testing)++;
+    }
+}
+
 /* Battery jank insurance (fix236).
  *
  * This is deliberately NOT Smart's per-app learner. It runs only in Battery and only while
@@ -3450,7 +3695,9 @@ static void asb_bjank_eval_window(const char *pkg, long df, long dj, long now_ms
     int short_window = df >= ASB_BJANK_SHORT_FRAMES && df < ASB_BJANK_MIN_FRAMES &&
                        dj >= ASB_BJANK_SHORT_JANKY &&
                        dj * 100L >= df * ASB_BJANK_SHORT_PCT;
-    if (long_window || short_window) {
+    if ((long_window || short_window) &&
+        (g_bhold_allow || strcmp(pkg, "com.android.systemui") == 0)) {
+        g_bhold_spoil = 1;
         g_unlock_until_ms = now_ms + ASB_BJANK_TTL_MS;
         g_unlock_lift_now = 1;
         g_unlock_edge = 1;
@@ -3522,7 +3769,14 @@ static void asb_battery_jank_guard_tick(const asb_fsm_t *fsm, const asb_metrics_
         g_bjank_probe_ts = now;
         if (!ok) return;
         g_bjank_probes++;
-        asb_run_modscript("runtime/asb_gfx_probe.sh", pk);
+        /* fix271: the probe writes only the packages it is asked for, so SystemUI is named
+         * here - without it the SystemUI window above never had a line to read. */
+        char _bj_args[160];
+        if (strcmp(pk, "com.android.systemui") != 0)
+            snprintf(_bj_args, sizeof(_bj_args), "%s com.android.systemui", pk);
+        else
+            snprintf(_bj_args, sizeof(_bj_args), "%s", pk);
+        asb_run_modscript("runtime/asb_gfx_probe.sh", _bj_args);
     }
 }
 
@@ -4295,6 +4549,13 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     fprintf(f, "unlock_lift=%d\nunlock_lifts=%lu\nunlock_lift_skips=%lu\nunlock_lift_skip_why=%s\n",
             g_unlock_applied, g_unlock_lifts, g_unlock_skips, g_unlock_skip_why);
     fprintf(f, "unlock_level_khz=%d\nunlock_levels=%lu\n", g_unlock_level_khz, g_unlock_levels);
+    {
+        int _bk, _br, _bt;
+        asb_bhold_counts(&_bk, &_br, &_bt);
+        fprintf(f, "battery_hold=%d\nbattery_hold_kept=%d\nbattery_hold_released=%d\nbattery_hold_testing=%d\n"
+                   "battery_hold_probes=%lu\nbattery_hold_windows=%lu\n",
+                g_bhold_now, _bk, _br, _bt, g_bhold_probes, g_bhold_windows);
+    }
     {
         long _pe_t = g_prime_escape_total_ms;
         if (g_prime_escape_since_ms > 0) _pe_t += asb_clock_ms(CLOCK_BOOTTIME) - g_prime_escape_since_ms;
@@ -10312,6 +10573,7 @@ int main(int argc, char **argv) {
                 }
                 asb_rec_tick(&_ri);
                 asb_smooth_probe_tick(&fsm, &metrics);
+                asb_bhold_tick(&fsm, &metrics);
                 asb_battery_jank_guard_tick(&fsm, &metrics);
                 if (g_rec_event) { asb_log("%s", g_rec_event_msg); g_rec_event = 0; }
                 if (g_rec_knob_changed) { g_rec_knob_changed = 0; force_write = 1; }
