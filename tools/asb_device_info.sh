@@ -40,7 +40,11 @@ _prop() {
 _kv() { sed -n "s/^$2=//p" "$1" 2>/dev/null | head -n 1; }
 _mem() { sed -n "s/^$2:[[:space:]]*//p" "$1" 2>/dev/null | head -n 1; }
 
-_emit meta schema 4
+# Shared, read-only collectors. Both run only for this explicit snapshot and leave no worker.
+[ -r "$MODDIR/runtime/asb_pressure.sh" ] && . "$MODDIR/runtime/asb_pressure.sh"
+[ -r "$MODDIR/runtime/asb_zygisk_info.sh" ] && . "$MODDIR/runtime/asb_zygisk_info.sh"
+
+_emit meta schema 5
 _emit meta generated_epoch "$(date +%s 2>/dev/null)"
 _emit meta access read_only
 _emit meta module_version "$(_kv "$MODDIR/module.prop" version)"
@@ -536,4 +540,8 @@ if [ -r "$_probe" ]; then
   done
   _emit asb_caps tunable "${_tl# }"
 fi
+
+# Pressure and observer metrics stay separate: neither is a health score or a policy input.
+command -v _asb_pressure_collect >/dev/null 2>&1 && _asb_pressure_collect
+command -v _asb_zygisk_info >/dev/null 2>&1 && _asb_zygisk_info
 exit 0

@@ -32,7 +32,11 @@ case "$BASELINE" in ''|*[!0-9]*) echo "invalid warning baseline: $BASELINE" >&2;
 
 # The production build keeps its current ABI flags. The strict pass is syntax
 # only: it reveals narrowing/sign changes while remaining device-independent.
-if ! "$CC_BIN" -fsyntax-only -I"$ROOT/src" -Wall -Wextra -Wconversion -Wsign-conversion \
+# GCC localizes diagnostic punctuation as well as prose: under a UTF-8 locale it quotes
+# types with U+2018/U+2019, while the reviewed inventory uses the C locale's apostrophes.
+# Pin the compiler itself to C so identical warning sites have identical signatures on CI
+# and developer hosts. Do not normalize arbitrary diagnostics: a real new site must fail.
+if ! LC_ALL=C "$CC_BIN" -fsyntax-only -I"$ROOT/src" -Wall -Wextra -Wconversion -Wsign-conversion \
   -Wno-unused-parameter -Wno-sign-compare "$ROOT/src/asb_governor.c" >"$TMP" 2>&1; then
   cat "$TMP" >&2
   exit 1

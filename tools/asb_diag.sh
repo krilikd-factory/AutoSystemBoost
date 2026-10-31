@@ -4467,6 +4467,22 @@ _ux_rows="$( {
     for (k in R) if (nb && (k in B) && (k in C) && B[k] != C[k]) printf "P|%s|%s|%s|%s\n", (k in N) ? N[k] : k, k, cut(B[k]), cut(C[k])
     printf "T|%d|%d\n", tot, nb ? 1 : 0
   }' | sort -t'|' -k1,1 -k2,2n -k4,4)"
+# Informational read-only snapshot; deliberately excluded from PASS/FAIL and pass_ratio.
+P ""
+P "  CURRENT SYSTEM PRESSURE + ZYGISK OBSERVER (informational, no changes applied)"
+if [ -r "$MODDIR/tools/asb_device_info.sh" ]; then
+  _asb_observer_diag="$(sh "$MODDIR/tools/asb_device_info.sh" 2>/dev/null | awk -F '\t' '$1 == "D" && ($2 == "system_load" || $2 == "zygisk_observer") { print $2 "\t" $3 "\t" $4 }')"
+  if [ -n "$_asb_observer_diag" ]; then
+    printf '%s\n' "$_asb_observer_diag" | while IFS='	' read -r _od_sec _od_key _od_value; do
+      P "     [$_od_sec] $_od_key = $_od_value"
+    done
+  else
+    P "     unknown: the read-only collector returned no pressure/observer records"
+  fi
+else
+  P "     not exposed: tools/asb_device_info.sh is unavailable"
+fi
+P "     Pressure is a snapshot heuristic, not health or a savings estimate; observer hints are observer-only."
 P ""
 P "  A. WHAT YOU CHOSE  (WebUI settings that differ from the shipped default)"
 _ux_tot="$(printf '%s\n' "$_ux_rows" | awk -F'|' '$1 == "T" { print $2; exit }')"
