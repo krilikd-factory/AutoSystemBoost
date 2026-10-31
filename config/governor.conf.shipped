@@ -731,3 +731,14 @@ smart_media_guard=0
 # --- Device-adaptive bounds (Phase 2) --- 0 = governor uses its compiled-in OP15 bounds
 # (default, what ships).
 device_bounds_override=1
+
+# Zygisk process observer: opt-in, empty allowlist by default. Select packages in
+# Device diagnostics or with runtime/asb_zygisk.sh set-packages. Existing apps are
+# never killed; injection changes affect subsequently started processes.
+# zygisk_hints is separately opt-in: an accepted start/exit only wakes the existing
+# governor for fresh evidence while the screen is on. It selects no frequencies,
+# changes no profile and bypasses no thermal/vendor gate. At most 8 requests/minute
+# per active companion, at least 2 seconds apart; LSPosed stays untouched.
+zygisk_enabled=0
+zygisk_mode=observer
+zygisk_hints=0

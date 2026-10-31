@@ -210,3 +210,6 @@ mmfeed_off|user|webui_standard|shell
 battery_jank_guard|internal|engine_or_derived|native
 ltpo_idle_s|internal|engine_or_derived|shell
 ltpo_idle_rate|internal|engine_or_derived|shell
+zygisk_enabled|user|webui_standard|both
+zygisk_mode|internal|engine_or_derived|shell
+zygisk_hints|user|webui_standard|both
