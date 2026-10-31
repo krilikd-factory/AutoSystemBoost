@@ -29,6 +29,7 @@
 #   smart    watching=<n>  testing=<n>  helped=<n>  nothelped=<n>  ctxlearn=<n>
 #   mwake    n=<n>  per_night=<x.x>  typical_s=<n>     (night habits, fix213)
 #   cfg      key=<setting>  value=<v>                  (the settings the advice can point at)
+#   zygisk   state=<verdict> coverage=<start_latest|...> ..._delta=<n|unknown>  (fix275)
 #   wl       pkg=<package>  sec=<n>            (up to 5 rows, worst first)
 #   wl       none=1                            (nothing recorded)
 #   wlive    tag=<cleaned tag>  pct=<n>  min=<n>  pkg=<package|''>   (up to 3 rows)
@@ -155,6 +156,64 @@ printf 'meta\telapsed_min=%s\ttarget_h=%s\trunning=%d\tstarted=%s\tprofile=%s\n'
 # The structured report export belongs beside the capture, not in an unrelated global state
 # directory. This is a path, not device content; the WebUI shell-quotes it before writing.
 printf 'capture\tdir=%s\n' "$_DIR"
+# ----- Zygisk / ASB injection evidence over the capture (fix275) ----------------------
+# Start and latest are snapshots, not a continuous history. Deltas are emitted only when
+# both counters are numeric and monotonic; a companion restart/reset is named, never hidden.
+_ZY_S="$_DIR/zygisk_observer_start.tsv"
+_ZY_L="$_DIR/zygisk_observer_latest.tsv"
+if [ -f "$_ZY_S" ] || [ -f "$_ZY_L" ]; then
+  set --
+  [ -f "$_ZY_S" ] && set -- "$@" "$_ZY_S"
+  [ -f "$_ZY_L" ] && set -- "$@" "$_ZY_L"
+  awk -F '\t' -v SF="$_ZY_S" -v LF="$_ZY_L" '
+    function store(which, key, value) {
+      if (which == "S") { SV[key]=value; hs=1 } else { LV[key]=value; hl=1 }
+    }
+    FILENAME == SF && $1 == "M" {
+      for (i=2;i<=NF;i++) if ($i ~ /^captured_epoch=/) { se=substr($i,16) }
+      next
+    }
+    FILENAME == LF && $1 == "M" {
+      for (i=2;i<=NF;i++) if ($i ~ /^captured_epoch=/) { le=substr($i,16) }
+      next
+    }
+    $1 == "D" && $2 == "zygisk_observer" && NF >= 4 {
+      v=$4; for (i=5;i<=NF;i++) v=v "\t" $i
+      store((FILENAME == SF ? "S" : "L"), $3, v)
+    }
+    END {
+      if (!hs && !hl) {
+        printf "zygisk\tstate=unknown\tcoverage=unavailable\tdeltas=unavailable\n"; exit
+      }
+      cov=(hs && hl ? "start_latest" : (hl ? "latest_only" : "start_only"))
+      split("", U)
+      if (hl) for (k in LV) U[k]=LV[k]
+      else for (k in SV) U[k]=SV[k]
+      out="zygisk"
+      add("state", U["link_state"] != "" ? U["link_state"] : "unknown")
+      add("start_state", hs && SV["link_state"] != "" ? SV["link_state"] : "unknown")
+      add("coverage", cov); add("start_epoch", se); add("latest_epoch", le)
+      add("enabled", U["enabled"]); add("safe_mode", U["safe_mode"])
+      add("freshness", U["state_freshness"]); add("loaded", U["loaded_processes"])
+      add("policy_generation", U["policy_generation"]); add("policy_seen_generation", U["policy_seen_generation"])
+      add("packages", U["enabled_packages"]); add("abis", U["installed_abis"])
+      add("lifecycle_hints", U["lifecycle_hints"]); add("launch_hints", U["launch_hints"]); add("spawn_ledger", U["spawn_ledger"])
+      add("memory_kb", U["memory_kb"])
+      reset=0
+      nd=split("events_total spawn_events launch_events launch_accepted policy_hints hints_accepted hints_vetoed ledger_events events_dropped_total ipc_cpu_ms ipc_wakeups", keys, " ")
+      for (i=1;i<=nd;i++) {
+        k=keys[i]; sv=SV[k]; lv=LV[k]
+        if (hs && hl && sv ~ /^[0-9]+$/ && lv ~ /^[0-9]+$/ && lv+0 >= sv+0) d=lv-sv
+        else { d="unknown"; if (hs && hl && sv ~ /^[0-9]+$/ && lv ~ /^[0-9]+$/ && lv+0 < sv+0) reset=1 }
+        add(k "_start", hs ? sv : "unknown"); add(k "_latest", hl ? lv : "unknown"); add(k "_delta", d)
+      }
+      add("deltas", hs && hl && !reset ? "available" : (reset ? "counter_reset_or_restart" : "unavailable"))
+      print out
+    }
+    function add(k,v) { if (v == "") v="unknown"; gsub(/[\t\r\n]/, " ", v); out=out "\t" k "=" v }
+  ' "$@" 2>/dev/null
+fi
+
 if [ -s "$_DIR/reboots.txt" ]; then
   awk -F'|' '!/^#/ && $1 ~ /^[0-9]+$/ {
       n++; if ($3 ~ /^[0-9]+$/) d += $3

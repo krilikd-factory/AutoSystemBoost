@@ -1509,6 +1509,26 @@ lk_emit_wifi_leave_summary() {
   echo ""
 }
 
+# Bounded Zygisk evidence at the capture edges. The existing report schedule refreshes
+# "latest"; no observer poll, collector service or additional worker is introduced.
+lk_zygisk_snapshot() {
+  _zs_tag="$1"
+  _zs_out="$LK_OUT_DIR/zygisk_observer_${_zs_tag}.tsv"
+  _zs_tmp="$_zs_out.tmp.$$"
+  {
+    printf '# ASB read-only Zygisk snapshot; D rows share the device-info schema\n'
+    printf 'M\tcaptured_epoch=%s\tcapture_start=%s\tpoint=%s\n' "$(date +%s)" "$LK_START_EPOCH" "$_zs_tag"
+    sh "$MODDIR/runtime/asb_zygisk.sh" link-status 2>/dev/null
+  } > "$_zs_tmp" 2>/dev/null
+  if awk -F '	' '$1 == "D" && $2 == "zygisk_observer" { found=1 } END { exit !found }' "$_zs_tmp" 2>/dev/null || [ ! -s "$_zs_out" ]; then
+    mv -f "$_zs_tmp" "$_zs_out" 2>/dev/null || rm -f "$_zs_tmp"
+  else
+    # A transient failed read never destroys the last usable capture evidence.
+    rm -f "$_zs_tmp"
+  fi
+  return 0
+}
+
 lk_emit_full_day_report() {
   _led="$LK_OUT_DIR/phase_ledger.tsv"
   _out="$LK_OUT_DIR/_full_day_report.txt"
@@ -2096,6 +2116,8 @@ lk_fresh phase_ledger.tsv && printf '# phase\tstart\tend\tstart_pct\tend_pct\tma
 [ "$LK_RESUME" = 1 ] && lk_resume_merge
 LK_TAG_BEFORE=before; LK_TAG_START=start
 [ "$LK_RESUME" = 1 ] && { LK_TAG_BEFORE=resume; LK_TAG_START=resume; }
+[ -s "$LK_OUT_DIR/zygisk_observer_start.tsv" ] || lk_zygisk_snapshot start
+lk_zygisk_snapshot latest
 
 # wakelock baseline + reset
 lk_wakelock_kernel_baseline
@@ -2110,6 +2132,7 @@ lk_finalize() {
   lk_smart_feedback_clear
   lk_wl_release
   lk_bt_reconnect_snapshot "end"
+  lk_zygisk_snapshot latest
   lk_bt_reconnect_stop
   lk_phase_ledger_accumulate
   lk_phase_ledger_flush
@@ -2253,6 +2276,7 @@ while : ; do
 
   # every 15 min: keep the report current for a folder collected at any moment
   if [ $(( _now - _last_report )) -ge "$LK_REPORT_S" ]; then
+    lk_zygisk_snapshot latest
     lk_emit_phase_summary 2>/dev/null || true
     lk_emit_full_day_report 2>/dev/null || true
     _last_report=$_now
