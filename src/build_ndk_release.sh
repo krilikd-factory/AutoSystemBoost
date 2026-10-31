@@ -47,7 +47,8 @@ chmod 0755 "$OUT_DIR/$ASB_BIN_NAME"
 ls -lh "$OUT_DIR/$ASB_BIN_NAME"
 
 # --------------------------------------------------------------------------- Zygisk observer
-# Observer-only shared libraries. No hooks, no governor socket and no policy opcodes.
+# Observer shared libraries. No hooks, direct hardware writes or policy opcodes; the only
+# governor request is the separately opt-in, bounded zygisk-refresh evidence invalidation.
 # Both ABIs are required because Zygisk matches the bitness of each selected app process.
 for _zabi in arm64-v8a armeabi-v7a; do
   case "$_zabi" in
