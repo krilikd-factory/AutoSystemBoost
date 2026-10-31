@@ -288,6 +288,10 @@ fi
 
 # fix276: restore the explicit per-app WAKE_LOCK list, including the original uid override.
 # Never blanket-allow: the ledger carries the exact package and uid modes from before ASB.
+if [ -f /data/adb/asb/notif_fix ] && [ -f "$MODDIR/runtime/asb_notif_fix.sh" ]; then
+  MODDIR="$MODDIR" ASB_NF_UNINSTALL=1 sh "$MODDIR/runtime/asb_notif_fix.sh" restore-all >/dev/null 2>&1
+fi
+rm -f /data/adb/asb/notif_fix /data/adb/asb/notif_fix.tmp 2>/dev/null
 if [ -f /data/adb/asb/wakelock_manual ] && command -v appops >/dev/null 2>&1; then
   while IFS='|' read -r _mp _mo _mu; do
     case "$_mp" in ''|*[!A-Za-z0-9_.]*) continue ;; esac

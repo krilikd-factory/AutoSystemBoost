@@ -662,6 +662,7 @@ The HeyTap ART helper is a bounded one-shot, not a boot service: `pending → ru
 | **Monitor** | Inspect live workload, clocks, thermal/battery state, Smart evidence, smoothness and limit ownership. |
 | **Config** | Change the 84 controls indexed above, with capability and reboot/apply feedback. |
 | **Device** | Request read-only hardware, kernel, root and capability facts. |
+| **Zygisk** | Opened from the Zygisk pill in every header: connection verdict, one mode control, activity and cost, observed apps and safe mode. One read (`asb_zygisk.sh link-status`). |
 | **Reports** | Generate support diagnostics and user-triggered extended reports. |
 
 The WebUI supports English, Russian, German, Spanish, French, Italian, Portuguese, Turkish, Ukrainian, Chinese, Indonesian, Arabic and Armenian. It provides dark, light and Liquid Glass presentation, with layouts intended for narrow phone viewports as well as larger screens.
@@ -695,6 +696,32 @@ Named configurations are useful for repeatable testing, but they are not univers
 4. inspect capability and not-applied feedback;
 5. regenerate or validate device-specific bounds where required;
 6. test each affected subsystem independently.
+
+### ⚡ 11.5. Why page switches do not wait for root shells (fix278)
+
+KernelSU-family managers run `ksu.exec` synchronously on the WebView's JavaScript thread and start a new root shell for every call, so each call freezes taps, scrolling and the page slide for one shell start plus the command. The WebUI therefore follows four rules:
+
+- **No root call on a tap.** Opening Monitor, Settings, the Zygisk page or Device starts its slide first; the reads run after the slide (the page's transition time + 30 ms).
+- **One shell per screen read.** Reads that belong to one screen share one shell, with a per-session marker line between parts (`runBatch`): Settings (config, ledger, trials, LTPO, multimedia, LSPosed, package tweaks, device class) and every Monitor poll (state, learner, native status, recovery, LPM).
+- **Fresh data is reused.** A Settings load younger than 30 s is not repeated, and a refresh that returns exactly what the page was drawn from repaints nothing; writes force a fresh read. The config is read once in the background 4 s after start-up, so the first visit draws real values. The Zygisk header pill is refreshed by Zygisk actions and otherwise at most every two minutes.
+- **Layout is measured once, after motion.** The page-fit pass coalesces into one run after the slide; the tab-indicator boxes are measured once and re-measured only on resize, scale, language or fit-tier change.
+
+Browser bench with the bridge modelled as blocking (60 ms per call), fix277 → fix278: Home → Monitor 7 → 1 root calls, Monitor → Settings 16 → 2, Home → Settings 11 → 0, Settings → Home 1 → 0, Zygisk pill 13 → 1, Monitor open for 9 s 19 → 3. These are call counts on a desktop host; the time each call costs depends on the phone and the manager.
+
+On Device diagnostics the LSPosed hook evidence (logs, crash records, package and process lists) is collected from its own card on request (`asb_device_info.sh --lsposed`); asbdiag still collects it in full.
+
+### 🔔 11.6. Notification fix and one battery-drain figure (fix279)
+
+**Notification fix** (Config → Battery → Sleep & Background) is a per-app repair for notifications that arrive late — only once the app is opened, or only when the screen turns on. The user ticks the affected apps and taps *Fix notifications*; `runtime/asb_notif_fix.sh` then, for exactly those user apps:
+
+- adds a user Doze exemption (`deviceidle whitelist +pkg`) where the app had none;
+- sets `RUN_ANY_IN_BACKGROUND`, `RUN_IN_BACKGROUND` and `WAKE_LOCK` back to `allow` where a package or uid mode restricted them;
+- removes the uid from the background-data denylist and, while Data Saver is on, adds it to the Data Saver allowlist;
+- puts the app on ASB's own keep list, so Doze trimming, the wakelock watcher and background trim leave it alone, and lifts an ASB per-app wakelock limit on it.
+
+Every original package mode, uid mode, exemption and list membership is recorded first (`/data/adb/asb/notif_fix`) and read back after the change; unticking an app, removing every app or uninstalling the module restores exactly what was there. The two early service ticks and the half-hourly tick re-apply a selection that the ROM's boot sweep reset. The notification permission itself and the ROM's own per-app switches (background activity, auto-launch) are reported, never changed. ASB settings that delay push for every app (strict Google services trim, HeyTap push off, the ROM's Athena killer) are listed with a one-tap change through the normal Settings path; savers are listed as information.
+
+**Battery drain.** The Monitor screen-on tile, the profile card, the manager action headline and the time to empty all use one figure — the profile's long-term screen-on average from the drain meter. The governor's live window (the last ≥10 minutes with the screen on) is shown in the drain sheet as its own *Right now* line with its own time to empty, never in place of the average. The infinite-log report keeps its own window (the time of that recording) and names the profile average beside it. The current-sensor scale is written the same way everywhere (“reads about N× low”, rounded to one decimal).
 
 ## 🔐 12. Device information, privacy and evidence quality
 
@@ -927,6 +954,11 @@ Repeat runs. Report spread and anomalies rather than selecting the best-looking 
 Do not derive a universal battery-saving percentage from one before/after log. Do not call a lower average clock proof of better efficiency when work completed more slowly. Do not call higher benchmark throughput proof of better sustained user experience without heat and frame stability.
 
 A good result names its scope: device, firmware, scenario, configuration, sample count and uncertainty.
+
+
+### ♻️ 14.4. Infinite log across an Android framework restart (fix279)
+
+A field capture stopped at the moment the Android framework restarted (SystemUI, the launcher and Bluetooth all came back within two seconds, the kernel kept running): the recorder shared the root manager's process session and died with the app processes without finalising, and the reboot-only resume never ran because the boot id had not changed. The recorder now starts in its own session (`setsid`, recorded as `session=` in `_recorder_cgroup.txt`). A recorder lost within the same boot reads `status=resuming reason=restart`; the five-minute service tick or the next opening of the log menu continues it on the same folder (`full-day-revive`), and the report lists such restarts separately from reboots, with the gap counted in no phase. While running, the SystemUI watch tells a whole-framework restart (`sys.system_server.start_count` changed) from a SystemUI crash. asbdiag prints the framework start count and time and counts `SYSTEM_RESTART`, `system_server_native_crash`, `system_app_crash` and `system_app_native_crash`, with the newest app crashes and their first non-platform frame.
 
 ## 🗂️ 15. Source-tree guide
 

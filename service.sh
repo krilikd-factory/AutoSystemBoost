@@ -3777,11 +3777,20 @@ asb_gov_liveness() {
           MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wakelock_watch.sh" manual-reapply >/dev/null 2>&1
         fi
       fi
+      if [ -s /data/adb/asb/notif_fix ] && [ -f "$MODDIR/runtime/asb_notif_fix.sh" ]; then
+        MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_notif_fix.sh" reapply >/dev/null 2>&1
+      fi
     fi
     asb_gov_liveness
+    if [ -f /data/adb/asb/logkit/full_day_resume ] && [ -f "$MODDIR/runtime/asb_debug_support.sh" ]; then
+      ASB_DEBUG_SUPPORT_MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_debug_support.sh" full-day-revive >/dev/null 2>&1
+    fi
     _ho_now="$(date +%s 2>/dev/null || echo 0)"
     [ $(( _ho_now - _wd_last )) -ge 1800 ] 2>/dev/null || continue
     _wd_last="$_ho_now"
+    if [ -s /data/adb/asb/notif_fix ] && [ -f "$MODDIR/runtime/asb_notif_fix.sh" ]; then
+      MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_notif_fix.sh" reapply >/dev/null 2>&1
+    fi
     # Bring the route link watcher back if it died.
 #
 # It is started once, post-boot, and never checked again. `ip monitor` blocks on a netlink

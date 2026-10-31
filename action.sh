@@ -838,13 +838,15 @@ T_ETA_MEASURED="(actual drain %s)"
 T_ETA_HEUR="(heuristic)"
 T_ETA_AVG="(estimate from recent sessions %s)"
 T_ETA_SLOT="(estimate for this hour %s)"
-T_ETA_METER="(measured earlier with the screen on in this profile: %s over %s min)"
+T_ETA_METER="(average of this profile with the screen on: %s over %s min)"
+T_ETA_NOW="right now: %s%%/h over the last %s min with the screen on"
 T_ETA_SCREEN="~%sh %sm"
 T_ETA_IDLE_MEAS="idle figure measured: %s%%/h with the screen off"
 T_ETA_IDLE_N=" (from %s screen-off window(s) of 1 h+)"
 T_ETA_LINE="~%sh %sm screen on  ·  ~%sh %sm idle"
 T_ETA_LINE_CAP="~%sh %sm screen on  ·  > 72h idle"
 T_CUR_SCALE="battery current sensor reads x%s of the real drain (%s measurements) - mA values on this phone are understated"
+T_CUR_SCALE_LOW="battery current sensor reads about %s× low (%s measurements) - mA values on this phone are understated"
 T_GS_DEEP="deep idle"
 T_GS_LIGHT="light idle"
 T_GS_MOD="moderate load"
@@ -1191,13 +1193,18 @@ else
     _eta_kind=slot
   fi
 fi
-if [ "$_eta_kind" = slot ]; then
-  _dmf=/dev/.asb_drain_meter; [ -s "$_dmf" ] || _dmf=/data/adb/asb/drain_meter
-  _dmr="$(awk -v p="$PROFILE" '$1 == p && $2 >= 600 && $3 > 0 { printf "%d %d\n", int($3 * 360 / $2 + 0.5), int($2 / 60) }' "$_dmf" 2>/dev/null | head -1)"
-  case "$_dmr" in
-    [1-9]*' '[0-9]*) _ewma_x10="${_dmr%% *}"; _dm_min="${_dmr##* }"; _eta_kind=meter ;;
-  esac
+_now_x10=0; _now_min=0
+if [ "$_eta_gov" = 1 ] && [ "$_frb" = now ]; then
+  _now_x10=$_frx
+  _now_min=$(grep -m1 "^smart_drain_window_s=" /dev/.asb/state 2>/dev/null | cut -d= -f2)
+  case "$_now_min" in ''|*[!0-9]*) _now_min=0 ;; esac
+  _now_min=$(( _now_min / 60 ))
 fi
+_dmf=/dev/.asb_drain_meter; [ -s "$_dmf" ] || _dmf=/data/adb/asb/drain_meter
+_dmr="$(awk -v p="$PROFILE" '$1 == p && $2 >= 600 && $3 > 0 { printf "%d %d\n", int($3 * 360 / $2 + 0.5), int($2 / 60) }' "$_dmf" 2>/dev/null | head -1)"
+case "$_dmr" in
+  [1-9]*' '[0-9]*) _ewma_x10="${_dmr%% *}"; _dm_min="${_dmr##* }"; _eta_kind=meter ;;
+esac
 _on_ma=0
 _eta_rate=0
 if [ "$_ewma_x10" -gt 0 ] 2>/dev/null; then
@@ -1487,6 +1494,9 @@ case "$_bstat" in
     else
       _f "       $T_ETA_LINE" "$_ton_h" "$_ton_m" "$_toff_h" "$_toff_m"
     fi
+    if [ "$_eta_kind" = meter ] && [ "$_now_x10" -gt 0 ] 2>/dev/null && [ "$_now_min" -gt 0 ] 2>/dev/null; then
+      _f "       $T_ETA_NOW" "$((_now_x10 / 10)).$((_now_x10 % 10))" "$_now_min"
+    fi
     if [ "$_idle_measured" = 1 ]; then
       # How many windows stand behind the figure: one night is a point, not a rate.
       # _offn was read with _offx above and follows its scope (the profile's own count when
@@ -1506,7 +1516,12 @@ _csn="$(grep -m1 '^current_scale_windows=' /dev/.asb/state 2>/dev/null | cut -d=
 case "$_csx$_csn" in *[!0-9-]*|'') _csx=-1 ;; esac
 if [ "${_csx:--1}" -gt 0 ] 2>/dev/null && [ "${_csn:-0}" -ge 2 ] 2>/dev/null \
    && { [ "$_csx" -lt 80 ] || [ "$_csx" -gt 125 ]; }; then
-  _f "       $T_CUR_SCALE" "$((_csx / 100)).$(printf '%02d' $((_csx % 100)))" "$_csn"
+  if [ "$_csx" -lt 80 ]; then
+    _csm=$(( (10000 / _csx + 5) / 10 ))
+    _f "       $T_CUR_SCALE_LOW" "$((_csm / 10)).$((_csm % 10))" "$_csn"
+  else
+    _f "       $T_CUR_SCALE" "$((_csx / 100)).$(printf '%02d' $((_csx % 100)))" "$_csn"
+  fi
 fi
 
 # ── Live state ──────────────────────────────────────────────────────────────────
