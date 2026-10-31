@@ -32,6 +32,8 @@ _fixture() {
   ASB_ART_COMPILE_LOCK="$T/state/art.lock"; export ASB_ART_COMPILE_LOCK
   ASB_ART_COMPILE_DELAY=0; export ASB_ART_COMPILE_DELAY
   ASB_ART_COMPILE_TIMEOUT=30; export ASB_ART_COMPILE_TIMEOUT
+  echo Charging > "$T/power_status"
+  ASB_ART_COMPILE_POWER="$T/power_status"; export ASB_ART_COMPILE_POWER
 
   cat > "$T/bin/pm" <<'STUB'
 #!/bin/sh
@@ -292,6 +294,54 @@ t_art_compile_cancel_and_failure() (
   echo 'PASS ART lifecycle: cancel before boot, failed means no retry, MCS state gate'
 )
 
+t_art_compile_charger_gate() (
+  # fix271: the all-package compile is real heat and drain right after a reboot. It waits
+  # for the charger (Charging/Full), stays pending - never failed - when none arrives in the
+  # window, can still be cancelled while waiting, and a compile cut short by a reboot is
+  # recorded as interrupted instead of showing "running" forever.
+  set -eu
+  ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+  T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+  fail() { echo "FAIL ART charger gate: $*" >&2; exit 1; }
+  _fixture "$ROOT" "$T"
+  echo 2 > "$PKG_DB/mcs.enabled"
+  echo Discharging > "$ASB_ART_COMPILE_POWER"
+  _run asb_art_compile.sh request >/dev/null
+  _out="$(ASB_ART_COMPILE_CHARGE_WAIT=0 _run asb_art_compile.sh run-pending)"
+  printf '%s\n' "$_out" | grep -q 'result=deferred reason=not_charging' || fail "no charger: $_out"
+  [ "$(_compile_count)" = 0 ] || fail 'compiled on battery'
+  grep -qx 'state=pending' "$ASB_ART_COMPILE_STATE" || fail 'deferred request was not kept pending'
+  [ ! -e "$ASB_ART_COMPILE_LOCK" ] || fail 'deferred run kept its lock'
+
+  printf '#!/bin/sh\necho Charging > "%s"\n' "$ASB_ART_COMPILE_POWER" > "$T/bin/sleep"
+  chmod 755 "$T/bin/sleep"
+  _out="$(ASB_ART_COMPILE_CHARGE_STEP=1 _run asb_art_compile.sh run-pending)"
+  printf '%s\n' "$_out" | grep -q 'result=done exit_code=0' || fail "charger arrived: $_out"
+  [ "$(_compile_count)" = 1 ] || fail 'compile did not run once on the charger'
+
+  rm -f "$T/bin/sleep"
+  _run asb_art_compile.sh cancel >/dev/null
+  _conf stock 0; _conf off 0
+  rm -f "$ASB_ART_COMPILE_STATE"
+  _run asb_art_compile.sh request >/dev/null
+  echo Discharging > "$ASB_ART_COMPILE_POWER"
+  printf '#!/bin/sh\nrm -f "%s"\n' "$ASB_ART_COMPILE_STATE" > "$T/bin/sleep"
+  chmod 755 "$T/bin/sleep"
+  _out="$(ASB_ART_COMPILE_CHARGE_STEP=1 _run asb_art_compile.sh run-pending)"
+  printf '%s\n' "$_out" | grep -q 'result=cancelled' || fail "cancel while waiting: $_out"
+  [ "$(_compile_count)" = 1 ] || fail 'cancelled wait still compiled'
+  rm -f "$T/bin/sleep"
+
+  printf 'state=running\npid=999999\nstarted_at=1\n' > "$ASB_ART_COMPILE_STATE"
+  rm -rf "$ASB_ART_COMPILE_LOCK"
+  _out="$(_run asb_art_compile.sh run-pending)"
+  printf '%s\n' "$_out" | grep -q 'result=failed reason=interrupted' || fail "stale running: $_out"
+  grep -qx 'state=failed' "$ASB_ART_COMPILE_STATE" || fail 'interrupted compile not recorded'
+  [ "$(_compile_count)" = 1 ] || fail 'interrupted compile retried automatically'
+  grep -q 'heytap_art_compile.lock' "$ROOT/post-fs-data.sh" || fail 'boot does not clear a stale ART lock'
+  echo 'PASS ART charger gate: waits for the charger, stays pending, cancellable, interrupted is final'
+)
+
 t_documentsui_lifecycle() (
   set -eu
   ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
@@ -437,6 +487,54 @@ JS
   grep -q 'await loadPackageTweakStatus();' "$ROOT/webroot/index.html" || fail 'status refresh missing'
   grep -q 'loadPackageTweakStatus();' "$ROOT/webroot/index.html" || fail 'initial status load missing'
   echo 'PASS WebUI package tweaks: parser, absent/pending/running/done/failed and DocumentsUI badges'
+)
+
+t_uninstall_deferred_restore_runtime() (
+  # fix271: root managers run uninstall.sh early in the boot after removal, before
+  # PackageManager / Settings / AppOps answer. A direct restore there fails, and the state
+  # directory is removed right after, so the old package baselines were lost for good.
+  # The REAL uninstall blocks run against a fake boot: pm/settings fail until boot_completed,
+  # and the stub sleep advances the boot, so the detached waiters finish within the test.
+  set -eu
+  ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+  T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+  fail() { echo "FAIL uninstall deferred restore: $*" >&2; exit 1; }
+  _fixture "$ROOT" "$T"
+  U="$ROOT/uninstall.sh"
+  _run asb_heytap_mcs.sh apply >/dev/null
+  _run asb_documentsui_fix.sh apply >/dev/null
+  [ "$(_state mcs)" = 2 ] || fail 'fixture did not disable MCS'
+  [ -f "$ASB_DOCUMENTSUI_STATE_DIR/baseline.conf" ] || fail 'fixture did not record DocumentsUI'
+  mkdir -p "$T/data/adb/asb/heytap_mcs" "$T/data/adb/asb/documentsui_fix" "$T/tmp"
+  cp "$ASB_HEYTAP_STATE_DIR/baseline.conf" "$T/data/adb/asb/heytap_mcs/"
+  cp "$ASB_DOCUMENTSUI_STATE_DIR/baseline.conf" "$T/data/adb/asb/documentsui_fix/"
+  mv "$T/bin/pm" "$T/bin/pm.real"
+  printf '#!/bin/sh\n[ "$(cat "$BOOT_FILE")" = 1 ] || exit 20\nexec "%s" "$@"\n' "$T/bin/pm.real" > "$T/bin/pm"
+  printf '#!/bin/sh\necho 1 > "$BOOT_FILE"\n' > "$T/bin/sleep"
+  printf '#!/bin/sh\n[ "$(cat "$BOOT_FILE")" = 1 ] || exit 20\nprintf "%%s\\n" "$*" >> "%s"\n' "$T/settings.log" > "$T/bin/settings"
+  chmod 755 "$T/bin/pm" "$T/bin/sleep" "$T/bin/settings"
+  echo 0 > "$BOOT_FILE"
+  {
+    sed -n '/^_ASB_FWQ=/,/^}$/p' "$U"
+    sed -n '/^if \[ "$(getprop sys.boot_completed)" = "1" \]; then$/,/^rm -rf \/data\/adb\/asb 2>\/dev\/null$/p' "$U"
+    echo '_fw settings put global network_avoid_bad_wifi 0 >/dev/null 2>&1 || true'
+    sed -n '/^if \[ -s "$_ASB_FWQ" \]; then$/,/^fi$/p' "$U"
+  } | sed -e "s#/data/adb/asb#$T/data/adb/asb#g" -e "s#/data/local/tmp#$T/tmp#g" > "$T/u.sh"
+  grep -q 'asb_heytap_mcs.sh" restore' "$T/u.sh" || fail 'uninstall package block not found'
+  grep -q '_ASB_FWQ' "$T/u.sh" || fail 'uninstall framework queue not found'
+  MODDIR="$T/mod" PATH="$T/bin:$PATH" sh "$T/u.sh" >/dev/null 2>&1
+  [ ! -e "$T/data/adb/asb" ] || fail 'uninstall block did not remove the state directory'
+  _i=0
+  while { [ -e "$T/tmp/asb_pkg_restore" ] || [ -e "$T/tmp/asb_uninstall_fw.sh" ]; } && [ "$_i" -lt 100 ]; do
+    /bin/sleep 0.1; _i=$((_i + 1))
+  done
+  [ ! -e "$T/tmp/asb_pkg_restore" ] || fail 'package waiter never finished'
+  [ ! -e "$T/tmp/asb_uninstall_fw.sh" ] || fail 'framework waiter never finished'
+  [ "$(_state mcs)" = 1 ] || fail "MCS stayed disabled after uninstall (state $(_state mcs))"
+  [ "$(cat "$PKG_DB/doc.hidden")" = 1 ] || fail 'DocumentsUI hidden state was not handed back'
+  [ "$(_state pick)" = 2 ] || fail 'picker component was not handed back'
+  grep -qx 'put global network_avoid_bad_wifi 0' "$T/settings.log" || fail 'queued Settings restore never ran'
+  echo 'PASS uninstall deferred restore: package baselines and Settings writes survive an early-boot uninstall'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

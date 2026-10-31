@@ -1275,6 +1275,19 @@ printf '%s\n' "$out" | grep -q '^com.android.systemui missed deadlines in 14 of 
 printf '%s\n' "$out" | grep -q '^(the app in front is credited with every app' || f "front-app caveat missing: $out"
 printf '%s\n' "$out" | grep -qE 'main cores at the ASB ceiling \(end of interval\): yes - of 0 frames \(-/s\), no 3\.2% of 32720 frames \(1\.55/s\)' || f "ceiling line without janky/s: $out"
 
+# --- 1b. fix271: the steady source is not the app with the most janky frames -----------------
+# A feed burst out-janks SystemUI in 4 intervals, while SystemUI janks in all 14. The steady
+# line used to look only at the top janky app and so said nothing at all (capture 30677).
+mkdir -p "$T/a2"; J="$T/a2/jank_trace.tsv"; i=0
+echo "# header" > "$J"
+for k in 1 2 3 4 5 6 7 8 9 10; do row MODERATE 3000 10 "com.android.systemui:10:12"; done
+for k in 1 2 3 4; do row MODERATE 3000 210 "com.android.systemui:10:12,com.example.feed:200:3000"; done
+out="$(sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_emit_jank_summary' "$C" "$T/a2" 2>&1)"
+printf '%s\n' "$out" | grep -qE '^  com\.example\.feed +800 ' || f "the burst app is not the top janky row: $out"
+printf '%s\n' "$out" | grep -q '^com.android.systemui missed deadlines in 14 of 14 screen-on intervals, whatever app was in front' \
+  || f "a steady SystemUI redraw hidden behind a burstier app: $out"
+printf '%s\n' "$out" | grep -q '^com.example.feed missed deadlines' && f "a 4-of-14 burst called a steady redraw: $out"
+
 # --- 2. no floor: janky frames only where much is drawn ---------------------------------------
 mkdir -p "$T/b"; J="$T/b/jank_trace.tsv"; i=0
 echo "# header" > "$J"
@@ -5758,6 +5771,15 @@ chk(capTxt.indexOf(I18N.ru.lr_dx_owner_asb) >= 0 && capTxt.indexOf(I18N.ru.lr_dx
 capDay.sections.meta.profile = 'battery';
 const bdx = logReportDiagnose(capDay).find(x => x.cause === 'lr_dx_smooth_cap_bat');
 chk(bdx && bdx.owner === 'user' && !bdx.send && bdx.state === 'normal', 'on Battery the low ceilings are the profile, not a fault');
+/* fix271: the per-app Battery scroll-hold verdicts ride along the smoothness card on Battery. */
+capDay.sections.bhold = { kept: '2', released: '3', testing: '1' };
+const bhIt = logReportDiagnose(capDay).find(x => x.area === 'smooth' && x.also.some(a => a.key === 'lr_dx_also_bhold'));
+chk(bhIt && JSON.stringify(bhIt.also.find(a => a.key === 'lr_dx_also_bhold').v) === JSON.stringify({ k: '2', r: '3', t: '1' }),
+    'fix271: Battery scroll-hold verdicts missing from the smoothness card');
+capDay.sections.meta.profile = 'smart';
+chk(!logReportDiagnose(capDay).some(x => x.also.some(a => a.key === 'lr_dx_also_bhold')), 'fix271: hold verdicts shown outside Battery');
+capDay.sections.meta.profile = 'battery';
+delete capDay.sections.bhold;
 /* Nothing explains it: the log is requested instead of a guess. */
 const unkDay = parseLogReport(['meta\telapsed_min=600\tprofile=smart',
   'scr\ton_pctph=6.0\toff_pctph=2.5\ton_min=40\toff_min=400\tidle_pctph=2.5\tidle_min=400\tmusic_min=0',
@@ -5993,7 +6015,7 @@ KEYS += ['lr_sec_dx','lr_dx_fix_label','lr_dx_send','lr_dx_send_btn','lr_dx_area
          'lr_dx_screen_hz','lr_dx_fix_screen_hz','lr_dx_screen_unknown','lr_dx_smooth_sysui','lr_dx_src_netspeed','lr_dx_src_clocksec',
          'lr_dx_src_livewp','lr_dx_src_hooks','lr_dx_src_other','lr_dx_fix_netspeed','lr_dx_fix_clocksec','lr_dx_fix_livewp',
          'lr_dx_fix_hooks','lr_dx_fix_sysui','lr_dx_smooth_app','lr_dx_fix_smooth_app','lr_dx_smooth_ok','lr_dx_smooth_unknown',
-         'lr_dx_smooth_cap','lr_dx_smooth_cap_bat','lr_dx_fix_cap_bat','lr_dx_smooth_wake','lr_dx_also_cap_ok','lr_dx_also_vendor',
+         'lr_dx_smooth_cap','lr_dx_smooth_cap_bat','lr_dx_fix_cap_bat','lr_dx_smooth_wake','lr_dx_also_cap_ok','lr_dx_also_bhold','lr_dx_also_vendor',
          'lr_dx_heat_long','lr_dx_fix_heat','lr_dx_fix_heat_set','lr_dx_heat_some','lr_dx_heat_ok','lr_dx_also_clamps','lr_dx_asb_crash',
          'lr_dx_fix_asbdiag','lr_dx_asb_cost','lr_dx_asb_ok','lr_dx_sysui_inj','lr_dx_fix_inj','lr_dx_crashes','lr_dx_fix_crashes',
          'lr_dx_gauge','lr_dx_short']
@@ -6006,7 +6028,7 @@ PH.update({'lr_dx_idle_short':['{min}'], 'lr_dx_idle_good':['{pct}','{deep}'], '
       'lr_dx_screen_hz':['{pct}','{share}'], 'lr_dx_screen_unknown':['{pct}'], 'lr_dx_smooth_sysui':['{pct}','{n}','{of}','{spct}','{src}'],
       'lr_dx_src_hooks':['{hooks}'], 'lr_dx_smooth_app':['{pct}','{app}','{apct}'], 'lr_dx_smooth_ok':['{pct}'], 'lr_dx_smooth_unknown':['{pct}'],
       'lr_dx_smooth_cap':['{cl}','{yes}','{no}'], 'lr_dx_smooth_cap_bat':['{cl}','{yes}','{no}','{prof}'], 'lr_dx_smooth_wake':['{pct}','{ord}'],
-      'lr_dx_also_cap_ok':['{yes}','{no}'], 'lr_dx_also_vendor':['{n}','{of}'], 'lr_dx_heat_long':['{min}','{phase}','{cpu}'],
+      'lr_dx_also_cap_ok':['{yes}','{no}'], 'lr_dx_also_bhold':['{k}','{r}','{t}'], 'lr_dx_also_vendor':['{n}','{of}'], 'lr_dx_heat_long':['{min}','{phase}','{cpu}'],
       'lr_dx_fix_heat_set':['{set}'], 'lr_dx_heat_some':['{min}','{cpu}'], 'lr_dx_heat_ok':['{cpu}'], 'lr_dx_also_clamps':['{n}'],
       'lr_dx_asb_crash':['{n}'], 'lr_dx_asb_cost':['{ms}','{per}'], 'lr_dx_asb_ok':['{ms}','{per}'], 'lr_dx_sysui_inj':['{n}','{m}','{pkg}'],
       'lr_dx_fix_inj':['{pkg}'], 'lr_dx_crashes':['{n}'], 'lr_dx_gauge':['{x}'], 'lr_dx_short':['{min}']})
@@ -6275,6 +6297,8 @@ snap() {
 snap 0 19 685 35 "$CAP/before.txt"
 snap 1 20 690 35 "$CAP/snapshot_$((S0 + 3600)).txt"
 snap 0 21 700 36 "$CAP/snapshot_$((S0 + 9000)).txt"
+printf 'battery_hold=1\nbattery_hold_kept=2\nbattery_hold_released=3\nbattery_hold_testing=1\n' >> "$CAP/snapshot_$((S0 + 3600)).txt"
+printf 'battery_hold=0\nbattery_hold_kept=2\nbattery_hold_released=4\nbattery_hold_testing=0\n' >> "$CAP/snapshot_$((S0 + 9000)).txt"
 cat > "$CAP/_full_day_report.txt" <<'EOF'
  capture: 0h target (until stopped), 180 min elapsed
 refresh_hz  samples  share   avg_brightness%  avg_mA
@@ -6303,6 +6327,7 @@ _since="$(date -d "@$S0" '+%H:%M' 2>/dev/null || date -r "$S0" '+%H:%M')"
 [ "$(line rapp)" = "$(printf 'rapp\tpkg=com.moonshot.kimichat\tmib=510.0\nrapp\tpkg=org.telegram.messenger\tmib=100.0')" ] || fail "apps by mobile data, named, under 8 MiB left out: $(line rapp)"
 [ "$(line rat)" = "$(printf 'rat\tnsa=2\tsa=0\tlte=1\tof=3')" ] || fail "radio network per check: $(line rat)"
 [ "$(line lte)" = "$(printf 'lte\ten=1\tlight=1\tapplies=2\tlte_min=15\twatch=1\tsnaps=3\tunsup=0\tquiet=1')" ] || fail "LTE switch activity between the snapshots: $(line lte)"
+[ "$(line bhold)" = "$(printf 'bhold\tkept=2\treleased=4\ttesting=0')" ] || fail "fix271: Battery hold verdicts from the last snapshot: $(line bhold)"
 [ "$(line netma)" = "$(printf 'netma\tlo=250\tlo_n=30\thi=340\thi_n=29')" ] || fail "screen-on current by traffic: $(line netma)"
 [ "$(line hz | wc -l)" = 2 ] && line hz | grep -q 'mode=60' || fail "the refresh table stopped at the '?' row: $(line hz)"
 [ "$(line bright)" = "$(printf 'bright\tavg=14')" ] || fail "average brightness: $(line bright)"

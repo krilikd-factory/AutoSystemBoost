@@ -4492,7 +4492,24 @@ grep -q 'dev rmnet_data2 .*initcwnd 10 ' "$ROUTES4" && fail 'uninstall left an A
 grep -q 'dev rmnet_data2 .*congctl cubic' "$ROUTES4" || fail 'window restore erased another owner congestion attribute'
 grep -q 'default via 192.168.77.1 dev wlan0 ' "$ROUTES4" || fail 'uninstall restored a stale route'
 
-echo 'PASS net route VPN: no underlying writes with VPN, exact handback, reconnect and uninstall restore'
+# fix271: a per-app VPN does not cover uid 0, so root's own lookup answers through Wi-Fi
+# while Android's tun table still carries the tunnel. Its transport rides the physical
+# routes all the same: no window writes while any tun/ipsec/ppp default exists.
+{ physical_routes; vpn_route; } > "$ROUTES4"
+printf '%s\n' '1.1.1.1 via 192.168.1.1 dev wlan0 table wlan0 src 192.168.1.2 uid 0' > "$ACTIVE"
+: > "$CALLS"
+run apply
+[ ! -s "$CALLS" ] || fail "per-app VPN still rewrote underlying routes: $(cat "$CALLS")"
+no_windows || fail 'per-app VPN acquired route windows'
+printf '%s\n' 'default via 192.168.1.1 dev wlan0 table wlan0 proto static' \
+  'default dev ipsec1 table ipsec1 proto static' > "$ROUTES4"
+run apply
+[ ! -s "$CALLS" ] || fail "IKEv2 ipsec VPN still rewrote underlying routes: $(cat "$CALLS")"
+vpn_down
+run apply
+grep -q 'dev wlan0 .*initcwnd 16 initrwnd 64' "$ROUTES4" || fail 'Wi-Fi window not applied after the VPN went away'
+
+echo 'PASS net route VPN: no underlying writes with VPN (also per-app/IKEv2), exact handback, reconnect and uninstall restore'
 )
 
 t_net_mtu_probing_runtime() (

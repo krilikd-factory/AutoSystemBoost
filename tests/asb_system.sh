@@ -731,8 +731,8 @@ awk -F'|' '
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
-[ "$(wc -l < "$TMP/conf")" = "212" ] || fail "expected 212 config keys, got $(wc -l < "$TMP/conf")"
-[ "$(wc -l < "$TMP/registry")" = "212" ] || fail "expected 212 registry keys, got $(wc -l < "$TMP/registry")"
+[ "$(wc -l < "$TMP/conf")" = "213" ] || fail "expected 213 config keys, got $(wc -l < "$TMP/conf")"
+[ "$(wc -l < "$TMP/registry")" = "213" ] || fail "expected 213 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
 grep -qx 'kernel_sched_stats|advanced|webui_sensitive|shell' "$REG" || fail 'kernel_sched_stats consumer is not pinned to shell'
@@ -796,7 +796,7 @@ for _c in $(grep -oE "\{ key:'[A-Za-z_][A-Za-z_0-9]*'" "$ROOT/webroot/index.html
 done
 [ -z "$_missing" ] || fail "cards missing from the install.sh settings snapshot:$_missing"
 
-echo 'PASS config ownership registry contract (212 keys; 32 user, 52 advanced, 128 internal)'
+echo 'PASS config ownership registry contract (213 keys; 32 user, 52 advanced, 129 internal)'
 )
 
 t_config_restore_outcome_runtime() (
@@ -8321,6 +8321,8 @@ typedef struct { struct { int screen_on, camera_active; } misc; } asb_metrics_t;
 static struct { int battery_jank_guard, unlock_lift_pct; } g_asb_cfg = { 1, 80 };
 static struct { uint64_t app_hash; int app_hint; char app_pkg_cached[64]; } g_smart_rt = { 7, 0, "com.example.launcher" };
 static int g_pkg_detect_ok = 1;
+static int g_bhold_allow = 1, g_bhold_spoil = 0;
+static char probe_args[200];
 static long g_unlock_until_ms = 0, test_now_ms = 10000;
 static int g_unlock_lift_now = 0, g_unlock_edge = 0, probe_calls = 0;
 static const char *g_unlock_arm_why = "";
@@ -8333,7 +8335,7 @@ static int asb_gfx_read_pkg(const char *pkg, long *fr, long *jk) {
     return -1;
 }
 static void asb_run_modscript(const char *script, const char *pkg) {
-    (void)script; (void)pkg; probe_calls++;
+    (void)script; snprintf(probe_args, sizeof(probe_args), "%s", pkg); probe_calls++;
 }
 static void asb_log(const char *fmt, ...) { (void)fmt; }
 static int asb_unlock_lift_share(int profile_idx) { return profile_idx == PROFILE_BATTERY ? g_asb_cfg.unlock_lift_pct * 4 / 5 : g_asb_cfg.unlock_lift_pct; }
@@ -8351,6 +8353,8 @@ int main(void) {
     asb_metrics_t m = { { 1, 0 } };
     asb_battery_jank_guard_tick(&f, &m);
     CHK(probe_calls == 1 && !g_unlock_lift_now, "initial probe triggered a lift");
+    CHK(!strcmp(probe_args, "com.example.launcher com.android.systemui"),
+        "fix271: the probe does not name the SystemUI window the guard reads");
     advance_file(); asb_battery_jank_guard_tick(&f, &m);
     CHK(g_bjank_frames == 1000 && g_bjank_janky == 10, "baseline not captured");
     CHK(probe_calls == 1 && !g_unlock_lift_now, "baseline triggered a lift");
@@ -8402,12 +8406,184 @@ int main(void) {
     asb_battery_jank_guard_tick(&f, &m);
     CHK(g_bjank_triggers == before + 1 && g_bjank_armed,
         "short 150-frame high-jank window did not arm the bounded guard");
+    CHK(g_bhold_spoil == 1, "fix271: a guard lift did not spoil the hold measurement window");
+    /* fix271: an app whose measured hold was released is not lifted by the guard either;
+     * SystemUI is a separate surface and keeps its own window. */
+    f.profile_idx = PROFILE_BALANCED; asb_battery_jank_guard_tick(&f, &m);
+    f.profile_idx = PROFILE_BATTERY; g_smart_rt.app_hash = 11; g_bhold_allow = 0; g_bhold_spoil = 0;
+    gfx_frames = 4000; gfx_janky = 40; sys_frames = 2000; sys_janky = 20;
+    advance_file(); asb_battery_jank_guard_tick(&f, &m);
+    advance_file(); gfx_frames = 4400; gfx_janky = 120;
+    before = g_bjank_triggers;
+    asb_battery_jank_guard_tick(&f, &m);
+    CHK(g_bjank_triggers == before && !g_bjank_armed && !g_bhold_spoil,
+        "fix271: the guard lifted an app whose hold was released");
+    advance_file(); gfx_frames = 4800; gfx_janky = 125; sys_frames = 2400; sys_janky = 80;
+    asb_battery_jank_guard_tick(&f, &m);
+    CHK(g_bjank_triggers == before + 1 && g_bjank_armed, "fix271: SystemUI jank lost its own window");
+    g_bhold_allow = 1;
     return bad;
 }
 X
 "$CC" -std=c11 -Wall -Wextra -Werror -D_GNU_SOURCE -I"$T" "$T/t.c" -o "$T/t" || fail 'runtime fixture did not compile'
 "$T/t" || fail 'runtime behavior mismatch'
 echo "PASS Battery jank guard: live capture gate, long/short windows, SystemUI and bounded handback"
+)
+
+t_battery_hold_learn_runtime() (
+# fix271: whether a finger may hold the Battery lift is decided per app from that app's own
+# frames - windows alternate hold / no hold; kept where the hold removes a quarter of the
+# janky frames and 1.5 points, released after six windows a side without that, kept when the
+# frames are too few or absent. Thermal or a jank-guard lift spoils a window. Verdicts persist
+# and are retested after 21 days. The REAL block runs against a fake clock and frame file.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+G="$ROOT/src/asb_governor.c"
+fail() { echo "FAIL Battery hold learner: $*" >&2; exit 1; }
+for pin in \
+  'g_asb_cfg.unlock_lift_s > 0 && !thermal_cap && g_bhold_allow' \
+  'asb_bhold_tick(&fsm, &metrics);' \
+  '(g_bhold_allow || strcmp(pkg, "com.android.systemui") == 0)' \
+  'battery_hold=%d\nbattery_hold_kept=%d'; do
+  grep -Fq "$pin" "$G" || fail "missing pin: $pin"
+done
+grep -q '^battery_hold_learn=1$' "$ROOT/config/governor.conf" || fail 'not shipped on'
+grep -q '^battery_hold_learn|internal|' "$ROOT/config/key_ownership.tsv" || fail 'key not registered'
+grep -q 'battery_hold.tsv' "$ROOT/runtime/asb_smart_reset.sh" || fail 'the Smart reset keeps stale verdicts'
+grep -q 'Battery scroll hold, measured per app' "$ROOT/tools/asb_diag.sh" || fail 'asbdiag says nothing about the verdicts'
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail 'system/bin/asbdiag is stale'
+CC=""; for c in gcc clang cc; do command -v "$c" >/dev/null 2>&1 && { CC="$c"; break; }; done
+[ -n "$CC" ] || { echo "PASS Battery hold learner (source pins only)"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+sed -n '/^\/\* Battery scroll hold, measured per app (fix271)/,/^\/\* Battery jank insurance (fix236)/p' "$G" | sed '$d' > "$T/b.c"
+grep -q 'static void asb_bhold_tick' "$T/b.c" || fail 'block extraction failed'
+cat > "$T/t.c" <<X
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <stdarg.h>
+static long fake_now = 1800000000L;
+#define time(x) ((time_t)fake_now)
+#define ASB_GFX_FILE "$T/gfx"
+#define ASB_BHOLD_FILE "$T/hold.tsv"
+#define ASB_DEBUG_BUILD 0
+#define ASB_APP_GAMING 3
+enum { PROFILE_BATTERY, PROFILE_BALANCED, PROFILE_PERFORMANCE, PROFILE_SMART };
+typedef struct { int profile_idx, thermal_cap; } asb_fsm_t;
+typedef struct { struct { int screen_on, camera_active; } misc; } asb_metrics_t;
+static struct { int battery_hold_learn, unlock_lift_s, smart_pkg_plaintext; } g_asb_cfg = { 1, 3, 1 };
+static struct { uint64_t app_hash; int app_hint; char app_pkg_cached[64]; } g_smart_rt = { 1, 0, "com.example.feed" };
+static int g_pkg_detect_ok = 1, g_bhold_allow = 1, probe_calls = 0;
+static char last_log[300];
+static long cur_frames = 0, cur_janky = 0;
+static int file_has_pkg = 1;
+static int asb_smart_is_system_ui(const char *p) { return !strcmp(p, "com.android.systemui"); }
+static int asb_gfx_read_pkg(const char *pkg, long *fr, long *jk) {
+    if (!file_has_pkg || strcmp(pkg, g_smart_rt.app_pkg_cached)) return -1;
+    *fr = cur_frames; *jk = cur_janky; return 0;
+}
+static void asb_run_modscript(const char *s, const char *a) { (void)s; (void)a; probe_calls++; }
+static void asb_log(const char *fmt, ...) { va_list ap; va_start(ap, fmt); vsnprintf(last_log, sizeof(last_log), fmt, ap); va_end(ap); }
+#include "b.c"
+static int bad = 0;
+#define CHK(c, what) do { if (!(c)) { printf("%s\\n", what); bad = 1; } } while (0)
+static asb_fsm_t F = { PROFILE_BATTERY, 0 };
+static asb_metrics_t M = { { 1, 0 } };
+static void touch_file(void) {
+    FILE *f = fopen(ASB_GFX_FILE, "w"); if (f) { fputs("x\\n", f); fclose(f); }
+    struct timespec ts[2]; ts[0].tv_sec = fake_now; ts[0].tv_nsec = 0; ts[1] = ts[0];
+    utimensat(AT_FDCWD, ASB_GFX_FILE, ts, 0);
+}
+/* One probe answer 180 s later carrying df/dj more frames since the last one. */
+static void step(long df, long dj) {
+    fake_now += 180; cur_frames += df; cur_janky += dj; touch_file(); asb_bhold_tick(&F, &M);
+}
+static void app(uint64_t h, const char *pkg) {
+    g_smart_rt.app_hash = h; snprintf(g_smart_rt.app_pkg_cached, 64, "%s", pkg);
+    cur_frames = 100000; cur_janky = 1000;
+}
+static asb_bhold_app_t *rec(uint64_t h) {
+    for (int i = 0; i < ASB_BHOLD_APPS; i++) if (g_bhold[i].hash == h) return &g_bhold[i];
+    return NULL;
+}
+int main(void) {
+    /* Not Battery: nothing measured, the hold allowed. */
+    F.profile_idx = PROFILE_BALANCED; asb_bhold_tick(&F, &M);
+    CHK(probe_calls == 0 && g_bhold_allow == 1 && g_bhold_now == -1, "measured outside Battery");
+    F.profile_idx = PROFILE_BATTERY;
+    /* App 1: the hold cuts the jank (3 % with, 10 % without) - kept. */
+    app(1, "com.example.feed");
+    asb_bhold_tick(&F, &M);
+    CHK(probe_calls == 1 && g_bhold_now == 2 && g_bhold_allow == 1, "a new app is not tested hold-first");
+    step(0, 0);
+    for (int w = 0; w < 6 && rec(1)->state == 0; w++) {
+        int arm = g_bhold_allow;
+        step(1500, arm ? 45 : 150);
+    }
+    CHK(rec(1) && rec(1)->state == 1 && g_bhold_allow == 1, "a helpful hold was not kept");
+    CHK(strstr(last_log, "helps") != NULL, "the verdict was not logged");
+    long pc = probe_calls; step(1500, 45);
+    CHK(probe_calls == pc, "a decided app is still probed");
+    /* App 2: the hold changes nothing (5 % either way) - released after six windows a side. */
+    app(2, "com.example.chat");
+    asb_bhold_tick(&F, &M); step(0, 0);
+    for (int w = 0; w < 14 && rec(2)->state == 0; w++) step(1500, 75);
+    CHK(rec(2)->state == 2 && g_bhold_allow == 0 && g_bhold_now == 0, "a useless hold was not released");
+    CHK(rec(2)->windows[0] == 6 && rec(2)->windows[1] == 6, "released before six windows a side");
+    /* App 3: thermal spoils the window it touched. */
+    app(3, "com.example.maps");
+    asb_bhold_tick(&F, &M); step(0, 0);
+    F.thermal_cap = 1; asb_bhold_tick(&F, &M); F.thermal_cap = 0;
+    step(1500, 30);
+    CHK(rec(3)->windows[0] + rec(3)->windows[1] == 0, "a thermally capped window was counted");
+    g_bhold_spoil = 1; step(1500, 30);
+    CHK(rec(3)->windows[0] + rec(3)->windows[1] == 0, "a jank-guard-lifted window was counted");
+    step(1500, 30);
+    CHK(rec(3)->windows[0] + rec(3)->windows[1] == 1, "a clean window after a spoiled one was lost");
+    /* App 4: no frames Android counts - the hold stays after six probes. */
+    app(4, "com.example.reader"); file_has_pkg = 0;
+    asb_bhold_tick(&F, &M);
+    for (int w = 0; w < 6; w++) step(0, 0);
+    CHK(rec(4)->state == 1 && g_bhold_allow == 1, "an app with no frames lost the hold");
+    file_has_pkg = 1;
+    /* SystemUI / launcher and games stay out and are never probed. */
+    pc = probe_calls;
+    app(5, "com.android.systemui"); asb_bhold_tick(&F, &M);
+    CHK(g_bhold_allow == 1 && probe_calls == pc && !rec(5), "SystemUI entered the learner");
+    app(6, "com.example.game"); g_smart_rt.app_hint = ASB_APP_GAMING; asb_bhold_tick(&F, &M);
+    CHK(g_bhold_allow == 1 && probe_calls == pc && !rec(6), "a game entered the learner");
+    g_smart_rt.app_hint = 0;
+    /* Off switch: every app keeps the hold, as before. */
+    app(2, "com.example.chat"); g_asb_cfg.battery_hold_learn = 0; asb_bhold_tick(&F, &M);
+    CHK(g_bhold_allow == 1, "battery_hold_learn=0 still released the hold");
+    g_asb_cfg.battery_hold_learn = 1;
+    /* Persistence: the verdicts come back after a restart. */
+    memset(g_bhold, 0, sizeof(g_bhold)); g_bhold_loaded = 0;
+    asb_bhold_tick(&F, &M);
+    CHK(rec(1) && rec(1)->state == 1 && rec(2) && rec(2)->state == 2 && g_bhold_allow == 0,
+        "verdicts were not persisted");
+    /* After 21 days a verdict is tested again, hold-first. */
+    fake_now += 22L * 24 * 3600; asb_bhold_tick(&F, &M);
+    CHK(rec(2)->state == 0 && g_bhold_allow == 1 && g_bhold_now == 2, "an old verdict was not retested");
+    /* A corrupt file is ignored line by line, never trusted. */
+    FILE *hf = fopen(ASB_BHOLD_FILE, "w");
+    fputs("zz 1 1 0 1 1 1 1 1 1 1 1\\n00000000000000aa 1 0 0 10 20 0 0 0 0 0 0\\n00000000000000bb 2 0 0 10 1 10 1 6 6 5 5\\n", hf);
+    fclose(hf);
+    memset(g_bhold, 0, sizeof(g_bhold)); g_bhold_loaded = 0; asb_bhold_load();
+    CHK(!rec(0xaa) && rec(0xbb) && rec(0xbb)->state == 2, "a corrupt verdict line was trusted");
+    int k, r, t; asb_bhold_counts(&k, &r, &t);
+    CHK(k == 0 && r == 1 && t == 0, "counts wrong");
+    return bad;
+}
+X
+"$CC" -std=c11 -Wall -Wextra -Werror -Wno-unused-function -D_GNU_SOURCE -I"$T" "$T/t.c" -o "$T/t" 2>"$T/cc.log" || { cat "$T/cc.log" >&2; fail 'fixture did not compile'; }
+"$T/t" || fail 'runtime behavior mismatch'
+echo "PASS Battery hold learner: kept where it cuts the jank, released where it does not, spoiled/empty windows, gates, persistence and retest"
 )
 
 t_manual_screen_switches_runtime() (

@@ -4750,6 +4750,17 @@ int main(void) {
     asb_profile_caps_t h7 = { { 1996800, 1862400, 0 }, { 0, 0, 0 }, 50, 32 };
     asb_unlock_lift_apply(&h7);
     CHK(h7.cpu_max[1] == 3686400, "fix248: Smart's lift was levelled");
+    /* fix271: an app whose measured Battery hold was released keeps every armed window - the
+     * animation - but a finger no longer extends it past unlock_lift_s. */
+    up(0, 0, 600000); P = PROFILE_BATTERY; up(1, 0, 601000); up(1, 0, 605000);
+    g_bhold_allow = 0;
+    CHK(upa(1, 1, 1, 610000) == 1, "fix271: a released app lost the touch arm");
+    CHK(upa(1, 0, 1, 612000) == 1, "fix271: the armed window of a released app ended early");
+    CHK(upa(1, 0, 1, 614000) == 0, "fix271: a finger still held the lift for a released app");
+    g_bhold_allow = 1;
+    CHK(upa(1, 1, 1, 620000) == 1 && upa(1, 0, 1, 622000) == 1 && upa(1, 0, 1, 624000) == 1,
+        "fix271: the hold did not come back for a kept app");
+    upa(1, 0, 0, 626000); up(1, 0, 628000);
     return bad;
 }
 X
@@ -5699,6 +5710,13 @@ PATH="$T/bin:$PATH" ASB_GFX_OUT="$T/gfx3.txt" ASB_GFX_LOCK="$T/gfx.lock" sh "$P"
 rmdir "$T/gfx.lock"
 PATH="$T/bin:$PATH" ASB_GFX_OUT="$T/gfx4.txt" ASB_GFX_LOCK="$T/gfx.lock" sh "$P" com.absent.app
 [ -e "$T/gfx4.txt" ] && [ ! -s "$T/gfx4.txt" ] || fail "an app with no frames should leave an empty answer"
+# fix271: the Battery jank guard names SystemUI beside the app in front; one dump answers both,
+# each on its own line and never summed together, and a missing one is simply absent.
+PATH="$T/bin:$PATH" ASB_GFX_OUT="$T/gfx5.txt" ASB_GFX_LOCK="$T/gfx.lock" sh "$P" com.example.feed com.other.app com.absent.app
+[ "$(cat "$T/gfx5.txt")" = "$(printf 'com.example.feed 15000 1050\ncom.other.app 999 500')" ] || fail "two-package probe: $(cat "$T/gfx5.txt")"
+PATH="$T/bin:$PATH" ASB_GFX_OUT="$T/gfx6.txt" ASB_GFX_LOCK="$T/gfx.lock" sh "$P" com.example.feed 'x;y'
+[ ! -e "$T/gfx6.txt" ] || fail "one bad name among several reached dumpsys"
+grep -Fq '"%s com.android.systemui", pk' "$G" || fail "the jank guard does not ask for the SystemUI window it reads"
 cat > "$T/t.c" <<X
 #define ASB_REC_FILE "$T/rec.bin"
 #define ASB_REC_SUMMARY "$T/rec.txt"

@@ -219,6 +219,12 @@ SH
   grep -q $'^system_load\tcpu_busy_pct\t50.0$' "$T/out" || fail 'CPU delta was not measured'
   grep -q $'^system_load\tgpu_busy_pct\t50.0$' "$T/out" || fail 'GPU busy was not measured'
   grep -q $'^system_load\tscore\t53$' "$T/out" && grep -q $'^system_load\tband\thigh$' "$T/out" || fail 'full formula result'
+  # fix271: an idle Adreno reports "0 0" (no busy and no total time since the last read).
+  # That is a measured 0 %, not a missing counter that would drop the GPU weight.
+  printf '0 0\n' > "$T/gpu"; : > "$T/out"
+  PATH="$T/bin:$PATH" PROC="$T/proc" SYS="$T/sys" OUT="$T/out" ASB_PRESSURE_CPU_SAMPLE_S=0.20 ASB_PRESSURE_GPU_BUSY="$T/gpu" "$T/run.sh" "$ROOT" "$T/out"
+  grep -q $'^system_load\tgpu_busy_pct\t0.0$' "$T/out" || fail 'idle Adreno 0 0 was not read as 0 %'
+  grep -q $'^system_load\tgpu_weight\t10$' "$T/out" || fail 'idle GPU dropped its weight'
   echo 'PASS pressure score: renormalized weights, insufficient/malformed coverage, CPU delta, GPU and unscored swap'
 )
 
