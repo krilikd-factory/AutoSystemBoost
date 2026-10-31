@@ -149,6 +149,18 @@ case "${1:-}" in
       *) echo 'Usage: safe-mode on|off' >&2; exit 2 ;;
     esac
     ;;
+  link-status)
+    # Small on-demand evidence snapshot for the shared WebUI header and unified card.
+    # Reuse the exact read-only diagnostics collector; configuration and installed ABI
+    # files alone never become connection evidence. No sync, writer or worker is started.
+    PROC="${ASB_ZYGISK_PROC:-/proc}"
+    DATA="${ASB_ZYGISK_DATA:-/data}"
+    _read() { [ -r "$1" ] && cat "$1" 2>/dev/null; }
+    _emit() { printf 'D\t%s\t%s\t%s\n' "$1" "$2" "$3"; }
+    [ -r "$MODDIR/runtime/asb_zygisk_info.sh" ] || exit 1
+    . "$MODDIR/runtime/asb_zygisk_info.sh" || exit 1
+    _asb_zygisk_info
+    ;;
   status)
     printf 'enabled=%s\n' "$(sed -n 's/^zygisk_enabled=//p' "$CONF" 2>/dev/null | head -n 1)"
     printf 'mode=%s\n' "$(sed -n 's/^zygisk_mode=//p' "$CONF" 2>/dev/null | head -n 1)"
@@ -160,7 +172,7 @@ case "${1:-}" in
     printf 'packages=%s\n' "$(_zygisk_list | wc -l | tr -d ' ')"
     ;;
   *)
-    echo 'Usage: asb_zygisk.sh sync|list|set-packages [pkg ...]|enable|disable|safe-mode on|off|status' >&2
+    echo 'Usage: asb_zygisk.sh sync|list|set-packages [pkg ...]|enable|disable|safe-mode on|off|status|link-status' >&2
     exit 2
     ;;
 esac

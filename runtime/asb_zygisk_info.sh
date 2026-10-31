@@ -116,6 +116,18 @@ _asb_zygisk_info() {
   elif [ "$_zi_state" = 1 ]; then _zi_broker='event state available'
   else _zi_broker='no events or companion not started'; fi
 
+  # One machine-readable verdict for Actions, asbdiag, log capture and WebUI.
+  # Configuration and staged ABI files are deliberately absent from the positive tests.
+  _zi_link=unknown
+  if [ "$_zi_enabled" = 0 ]; then _zi_link=off
+  elif [ "$_zi_safe" = on ]; then _zi_link=safe
+  elif [ "$_zi_freshness" = stale_over_5_minutes ]; then _zi_link=stale
+  elif [ "$_zi_freshness" = current ] && [ "$_zi_loaded" -gt 0 ]; then _zi_link=connected
+  elif [ "$_zi_freshness" = current ] && { [ "$_zi_events" -gt 0 ] || [ "$_zi_spawn" -gt 0 ] || [ "$_zi_seen_gen" -gt 0 ]; }; then _zi_link=confirmed
+  elif [ "$_zi_packages" = 0 ] && [ "$_zi_launch_on" = 0 ] && [ "$_zi_ledger_on" = 0 ]; then _zi_link=idle
+  elif [ "$_zi_freshness" = current ] || [ "$_zi_freshness" = 'no event state' ]; then _zi_link=waiting
+  fi
+
   _zi_abis='not installed'
   if [ -f "$MODDIR/zygisk/arm64-v8a.so" ] || [ -f "$MODDIR/zygisk/armeabi-v7a.so" ]; then
     _zi_abis=''
@@ -137,6 +149,7 @@ _asb_zygisk_info() {
   _emit zygisk_observer enabled_package_list "${_zi_package_list:-none}"
   _emit zygisk_observer loaded_processes "$_zi_loaded"
   _emit zygisk_observer broker_status "$_zi_broker"
+  _emit zygisk_observer link_state "$_zi_link"
   _emit zygisk_observer state_freshness "$_zi_freshness"
   _emit zygisk_observer state_age_ms "$_zi_age"
   _emit zygisk_observer events_total "$_zi_events"
