@@ -31,6 +31,17 @@ if [ ! -f "$MODPATH/config/governor.conf" ]; then
   ui_print " "
 fi
 
+# Observer configuration is root-owned, preserved across updates and empty on first install.
+# No companion starts here; injection remains default-off until both explicit opt-ins exist.
+if [ ! -d /data/adb/asb/zygisk_observer ]; then
+  mkdir -p /data/adb/asb/zygisk_observer 2>/dev/null || true
+fi
+chmod 700 /data/adb/asb/zygisk_observer 2>/dev/null || true
+if [ ! -f /data/adb/asb/zygisk_observer/packages.list ]; then
+  true > /data/adb/asb/zygisk_observer/packages.list 2>/dev/null || true
+fi
+chmod 600 /data/adb/asb/zygisk_observer/packages.list 2>/dev/null || true
+
 # An update may carry a fixed LTE helper, so a previous "unsupported" verdict is not
 # carried over: the first version marked phones unsupported because it addressed the SIM
 # by subscription id instead of slot. The helper re-checks, and re-marks if it must.
@@ -3068,7 +3079,7 @@ bt_absvol_mode mglru_hold kernel_sched_stats BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable \
 night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_mtu_probing net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile net_wifi_leave wifi_powersave net_screen_off_lte net_lte_light wifi_country wifi_scan_throttle radio_policy_enable net_wifi_leave haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_voice dsp_width dsp_clarity dsp_rumble dsp_compressor dsp_headroom dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs kernel_sched_stats anim_speed dsp_outputs gms_trim audio_remove_volume_limit audio_resampler media_vol_steps purge_vendor_logs doze_trim_whitelist gms_freeze wakelock_action perf_ceiling_pct gnss_trim athena_service net_rps net_txqueue night_modem_idle smart_media_guard bt_link_stability ltpo_force mmfeed_off wakelock_fitness ltpo_video heavy_prime_escape prime_escape_burst_s prime_escape_rest_s lsposed_verbose heytap_mcs documentsui_fix "
+region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_mtu_probing net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile net_wifi_leave wifi_powersave net_screen_off_lte net_lte_light wifi_country wifi_scan_throttle radio_policy_enable net_wifi_leave haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_voice dsp_width dsp_clarity dsp_rumble dsp_compressor dsp_headroom dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs kernel_sched_stats anim_speed dsp_outputs gms_trim audio_remove_volume_limit audio_resampler media_vol_steps purge_vendor_logs doze_trim_whitelist gms_freeze wakelock_action perf_ceiling_pct gnss_trim athena_service net_rps net_txqueue night_modem_idle smart_media_guard bt_link_stability ltpo_force mmfeed_off wakelock_fitness ltpo_video heavy_prime_escape prime_escape_burst_s prime_escape_rest_s lsposed_verbose heytap_mcs documentsui_fix zygisk_enabled zygisk_hints "
 
   _migrated=0
   # Which numbering the stored values were written against. Absent means "before schemas
@@ -3164,7 +3175,7 @@ asb_snapshot_user_config() {
 smart_battery_bias bt_absvol_mode mglru_hold BG_TRIM_LEVEL cool_gaming \
 auto_battery_enable charge_aware_enable night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
-region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_mtu_probing net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle radio_policy_enable net_wifi_leave wifi_powersave haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_voice dsp_width dsp_clarity dsp_rumble dsp_compressor dsp_headroom dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs kernel_sched_stats anim_speed dsp_outputs gms_trim audio_remove_volume_limit audio_resampler media_vol_steps purge_vendor_logs doze_trim_whitelist gms_freeze wakelock_action perf_ceiling_pct gnss_trim athena_service net_rps net_txqueue night_modem_idle smart_media_guard ltpo_force mmfeed_off net_screen_off_lte net_lte_light wakelock_fitness ltpo_video heavy_prime_escape prime_escape_burst_s prime_escape_rest_s bt_link_stability lsposed_verbose heytap_mcs documentsui_fix"
+region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_mtu_probing net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle radio_policy_enable net_wifi_leave wifi_powersave haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_voice dsp_width dsp_clarity dsp_rumble dsp_compressor dsp_headroom dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs kernel_sched_stats anim_speed dsp_outputs gms_trim audio_remove_volume_limit audio_resampler media_vol_steps purge_vendor_logs doze_trim_whitelist gms_freeze wakelock_action perf_ceiling_pct gnss_trim athena_service net_rps net_txqueue night_modem_idle smart_media_guard ltpo_force mmfeed_off net_screen_off_lte net_lte_light wakelock_fitness ltpo_video heavy_prime_escape prime_escape_burst_s prime_escape_rest_s bt_link_stability lsposed_verbose heytap_mcs documentsui_fix zygisk_enabled zygisk_hints"
   {
     echo "# ASB WebUI settings snapshot — survives module update/reinstall"
     for _k in $_keys; do
