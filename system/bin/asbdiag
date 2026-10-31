@@ -1125,6 +1125,10 @@ if [ -r "$_state" ]; then
           NOTE "  Battery scroll hold, measured per app: kept for ${_bhk} app(s), released for ${_bhr:-0}, under test ${_bht:-0} · the app in front: ${_bhn}"
         fi
       fi
+      _zcl="$(_rget zygisk_launch_accepted /dev/.asb/state 2>/dev/null)"
+      if [ "$(cfg zygisk_launch)" = 1 ] || [ "${_zcl:-0}" -gt 0 ] 2>/dev/null; then
+        NOTE "  Zygisk cold starts heard: ${_zcl:-0}, vetoed $(_rget zygisk_launch_vetoed /dev/.asb/state 2>/dev/null || echo 0) · lifts armed by a cold start: $(_rget unlock_cold_lifts /dev/.asb/state 2>/dev/null || echo 0) · running lifts carried over a cold start: $(_rget unlock_cold_extends /dev/.asb/state 2>/dev/null || echo 0)"
+      fi
     fi
   fi
   # Which cluster looks bigger to the scheduler right now (fix130). Work goes where the
