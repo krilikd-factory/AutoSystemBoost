@@ -807,7 +807,13 @@ resume_full_day() {
           _rup="$(cut -d. -f1 /proc/uptime 2>/dev/null | tr -dc '0-9')"
           [ "${_rup:-0}" -ge "${ASB_DEBUG_SUPPORT_RESUME_SETTLE_S:-90}" ] && break
         elif [ "$(prop_get sys.user.0.ce_available)" = true ]; then
-          [ "$_rce" -ge "${ASB_DEBUG_SUPPORT_RESUME_GRACE_S:-60}" ] && { rm -f "$RESUMEFILE" 2>/dev/null; full_day_recovery_note "resume=dir_missing"; exit 0; }
+          if [ "$_rce" -ge "${ASB_DEBUG_SUPPORT_RESUME_GRACE_S:-60}" ]; then
+            # Publish the reason before removing the marker. A status watcher treats marker
+            # removal as completed cancellation and must never observe a missing explanation.
+            full_day_recovery_note "resume=dir_missing"
+            rm -f "$RESUMEFILE" 2>/dev/null
+            exit 0
+          fi
           _rce=$(( _rce + _rpoll ))
         fi
       fi
