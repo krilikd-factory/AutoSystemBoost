@@ -2,6 +2,7 @@
 #define ASB_OBSERVER_CORE_H
 
 #include "asb_observer_protocol.h"
+#include <array>
 #include <deque>
 #include <map>
 
@@ -12,7 +13,17 @@ class AsbObserverCore {
 public:
     struct Process { std::string package; uint64_t start_ticks; int64_t started_ms; };
 
-    struct LedgerEntry { uint64_t screen_off = 0, screen_on = 0, top_app = 0; int64_t last_ms = 0; };
+    /* fix277: burst_off is the most screen-off starts seen inside any 5-minute window. A user
+     * rarely opens an app with the screen off, so a high value there points to a restart loop
+     * or a wake storm - the energy case a whole-boot total hides. The window is a fixed ring
+     * (32 x 8 bytes per package, 128 packages at most), not a growing container. */
+    struct LedgerEntry {
+        uint64_t screen_off = 0, screen_on = 0, top_app = 0;
+        int64_t last_ms = 0;
+        uint32_t burst_off = 0;
+        uint32_t off_head = 0, off_count = 0;
+        std::array<int64_t, ASB_OBSERVER_BURST_KEEP> off_ring{};
+    };
 
     AsbObserverResult start(const AsbObserverFrame &frame, int64_t now_ms) {
         if (!asb_observer_frame_valid(frame) || frame.kind != ASB_OBSERVER_EVENT_PROCESS_START) {
@@ -99,7 +110,22 @@ public:
             }
             it = ledger_.emplace(package, LedgerEntry()).first;
         }
-        if (screen_on == 0) ++it->second.screen_off; else ++it->second.screen_on;
+        if (screen_on == 0) {
+            LedgerEntry &e = it->second;
+            ++e.screen_off;
+            e.off_ring[e.off_head] = now_ms;
+            e.off_head = (e.off_head + 1u) % ASB_OBSERVER_BURST_KEEP;
+            if (e.off_count < ASB_OBSERVER_BURST_KEEP) ++e.off_count;
+            uint32_t recent = 0;
+            for (uint32_t i = 0; i < e.off_count; ++i) {
+                const uint32_t at = (e.off_head + ASB_OBSERVER_BURST_KEEP - 1u - i) % ASB_OBSERVER_BURST_KEEP;
+                if (now_ms - e.off_ring[at] >= ASB_OBSERVER_BURST_WINDOW_MS) break;
+                ++recent;
+            }
+            if (recent > e.burst_off) e.burst_off = recent;
+        } else {
+            ++it->second.screen_on;
+        }
         if (top_app) ++it->second.top_app;
         it->second.last_ms = now_ms;
         ++ledger_events_;

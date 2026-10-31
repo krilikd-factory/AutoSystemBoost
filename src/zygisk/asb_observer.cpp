@@ -337,9 +337,13 @@ private:
         out << "Z\tlaunch_throttled\t" << launch_throttled_ << "\n";
         out << "Z\tledger_events\t" << core_.ledger_events() << "\n";
         out << "Z\tledger_evicted\t" << core_.ledger_evicted() << "\n";
+        out << "Z\trss_reads\t" << rss_reads_ << "\n";
         long rss = 0;
+        for (auto it = rss_cache_.begin(); it != rss_cache_.end();) {
+            if (core_.processes().count(it->first)) ++it; else it = rss_cache_.erase(it);
+        }
         for (const auto &entry : core_.processes()) {
-            const long current_rss = process_rss_kb(entry.first);
+            const long current_rss = cached_rss_locked(entry.first, entry.second.start_ticks, now);
             if (current_rss > 0) rss += current_rss;
             out << "P\t" << entry.first << "\t" << entry.second.start_ticks << "\t"
                 << entry.second.package << "\t" << current_rss << "\n";
@@ -347,7 +351,8 @@ private:
         out << "Z\tmemory_kb\t" << rss << "\n";
         for (const auto &entry : core_.ledger()) {
             out << "L\t" << entry.first << "\t" << entry.second.screen_off << "\t"
-                << entry.second.screen_on << "\t" << entry.second.top_app << "\n";
+                << entry.second.screen_on << "\t" << entry.second.top_app << "\t"
+                << entry.second.burst_off << "\n";
         }
         const std::string data = out.str();
         const char *p = data.data();
@@ -362,9 +367,27 @@ private:
         if (left == 0) rename(tmp.c_str(), path.c_str()); else unlink(tmp.c_str());
     }
 
+    /* fix277: RSS of observed processes is re-read at most every ASB_OBSERVER_RSS_TTL_MS. The
+     * state file is rewritten on every accepted frame, so a burst of process starts used to
+     * reread /proc/<pid>/status of every observed process each time; the diagnostics reader
+     * reads live RSS itself and uses this value only as a fallback. Bounded by processes(). */
+    struct RssSample { long kb; int64_t at_ms; uint64_t start_ticks; };
+    long cached_rss_locked(int pid, uint64_t start_ticks, int64_t now) {
+        auto it = rss_cache_.find(pid);
+        if (it != rss_cache_.end() && it->second.start_ticks == start_ticks &&
+            now - it->second.at_ms >= 0 && now - it->second.at_ms < ASB_OBSERVER_RSS_TTL_MS)
+            return it->second.kb;
+        const long kb = process_rss_kb(pid);
+        rss_cache_[pid] = RssSample{kb, now, start_ticks};
+        ++rss_reads_;
+        return kb;
+    }
+
     std::mutex mutex_;
     std::mutex ipc_mutex_;
     AsbObserverCore core_;
+    std::map<int, RssSample> rss_cache_;
+    uint64_t rss_reads_ = 0;
     uint64_t ipc_cpu_us_ = 0;
     uint64_t wakeups_ = 0;
     uint64_t policy_hints_ = 0, hints_accepted_ = 0, hints_vetoed_ = 0;
