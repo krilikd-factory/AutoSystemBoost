@@ -509,7 +509,16 @@ asb_wl_relax() {
     # right now. Below that it is ordinary background chatter.
     [ "$_s" -ge 120 ] 2>/dev/null || [ "$_h" = 1 ] || continue
     for _p in $(printf '%s' "$_pl" | tr ',' ' '); do
-      if grep -qxF "$_p" "$D/wakelock_restricted" 2>/dev/null; then
+      if [ -n "$(_wl_man_line "$_p")" ]; then
+        # fix276: the explicit list owns this app's WAKE_LOCK op; do not additionally move
+        # its standby bucket through the generic automatic policy. Read-back stays decisive.
+        if [ "$(_wl_fit_eff "$_p")" = ignore ]; then
+          _v=manual
+        else
+          _wl_man_apply "$_p" >/dev/null 2>&1
+          [ "$(_wl_fit_eff "$_p")" = ignore ] && _v=manual || _v=manual_lapsed
+        fi
+      elif grep -qxF "$_p" "$D/wakelock_restricted" 2>/dev/null; then
         _v=restricted
       elif grep -q "^$_p|" "$FIT" 2>/dev/null && { [ "$_fitmode" != limit ] || _wl_fit_limit "$_p" >/dev/null; }; then
         # (_wl_fit_limit above re-asserts a lapsed op before any verdict is drawn: a lock
@@ -601,6 +610,135 @@ asb_wl_snapshot_bs() {
   [ -s "$STATE" ]
 }
 
+# --- explicit per-app WAKE_LOCK control (fix276) --------------------------------------
+#
+# The automatic watcher above remains conservative. This separate, user-named list is the
+# deliberate exception: only a user-installed package, only Android's WAKE_LOCK app-op, and
+# only after the WebUI's warning/confirmation. Kernel wakeup sources and system packages are
+# never writable targets. The ledger stores BOTH original modes before the first change;
+# read-back, not the ledger, decides whether a limit is actually in force.
+MAN="$D/wakelock_manual"
+_wl_man_pkgok() {
+  case "$1" in ''|*[!A-Za-z0-9_.]*|.*|*..*) return 1 ;; esac
+  return 0
+}
+_wl_man_installed() {
+  _wl_man_pkgok "$1" || return 1
+  _has pm || return 1
+  pm list packages -3 2>/dev/null | sed -n 's/^package:\([^ ]*\).*/\1/p' | grep -qxF "$1"
+}
+_wl_man_line() { awk -F'|' -v p="$1" '$1 == p { print; exit }' "$MAN" 2>/dev/null; }
+_wl_man_drop() {
+  [ -s "$MAN" ] || return 0
+  awk -F'|' -v p="$1" '$1 != p' "$MAN" > "$MAN.tmp" 2>/dev/null || return 1
+  if [ -s "$MAN.tmp" ]; then mv -f "$MAN.tmp" "$MAN"; else rm -f "$MAN.tmp" "$MAN"; fi
+}
+# Apply an existing ledger entry without replacing its original modes. This is used by the
+# existing boot and screen-off passes, not by a new polling worker.
+_wl_man_apply() {
+  _ml="$(_wl_man_line "$1")"
+  [ -n "$_ml" ] || return 1
+  _has appops || return 1
+  [ "$(_wl_fit_eff "$1")" = ignore ] && return 0
+  _mo="$(printf '%s' "$_ml" | cut -d'|' -f2)"
+  _mu="$(printf '%s' "$_ml" | cut -d'|' -f3)"
+  [ "$(_wl_fit_orig "$1")" = ignore ] || appops set "$1" WAKE_LOCK ignore >/dev/null 2>&1 || return 1
+  case "${_mu:-default}" in ''|default) : ;; *) appops set --uid "$1" WAKE_LOCK ignore >/dev/null 2>&1 || : ;; esac
+  [ "$(_wl_fit_eff "$1")" = ignore ]
+}
+_wl_man_limit() {
+  _has appops || { printf 'result=unavailable\n'; return 1; }
+  _wl_man_installed "$1" || { printf 'result=not_user_app\n'; return 1; }
+  if [ -n "$(_wl_man_line "$1")" ]; then
+    if _wl_man_apply "$1"; then printf 'result=limited\neffective=ignore\n'; return 0; fi
+    printf 'result=not_enforced\neffective=%s\n' "$(_wl_fit_eff "$1")"; return 1
+  fi
+  # A restriction made by the user or another tool is not ours to record or later undo.
+  [ "$(_wl_fit_eff "$1")" = ignore ] || {
+    _mo="$(_wl_fit_orig "$1")"; _mu="$(_wl_fit_uidmode "$1")"; _mu="${_mu:-default}"
+    [ "$_mo" = ignore ] || appops set "$1" WAKE_LOCK ignore >/dev/null 2>&1
+    case "$_mu" in default) : ;; *) appops set --uid "$1" WAKE_LOCK ignore >/dev/null 2>&1 || : ;; esac
+    if [ "$(_wl_fit_eff "$1")" = ignore ]; then
+      mkdir -p "$D" 2>/dev/null
+      printf '%s|%s|%s\n' "$1" "${_mo:-default}" "$_mu" >> "$MAN"
+      printf 'result=limited\neffective=ignore\n'; return 0
+    fi
+    # Refusal is rolled back immediately; no unrecorded half-change is left behind.
+    appops set "$1" WAKE_LOCK "${_mo:-default}" >/dev/null 2>&1
+    [ "$_mu" = default ] || appops set --uid "$1" WAKE_LOCK "$_mu" >/dev/null 2>&1
+  }
+  printf 'result=not_enforced\neffective=%s\n' "$(_wl_fit_eff "$1")"
+  return 1
+}
+_wl_man_restore() {
+  _ml="$(_wl_man_line "$1")"
+  [ -n "$_ml" ] || { printf 'result=not_selected\n'; return 1; }
+  _has appops || { printf 'result=unavailable\n'; return 1; }
+  _mo="$(printf '%s' "$_ml" | cut -d'|' -f2)"; _mu="$(printf '%s' "$_ml" | cut -d'|' -f3)"
+  appops set "$1" WAKE_LOCK "${_mo:-default}" >/dev/null 2>&1 || { printf 'result=restore_failed\n'; return 1; }
+  [ "${_mu:-default}" = default ] || appops set --uid "$1" WAKE_LOCK "$_mu" >/dev/null 2>&1
+  # Verify the individual modes too: a stale uid override must not survive a "Restore" tap.
+  _rp="$(_wl_fit_orig "$1")"; _ru="$(_wl_fit_uidmode "$1")"; _ru="${_ru:-default}"
+  if [ "$_rp" = "${_mo:-default}" ] && [ "$_ru" = "${_mu:-default}" ]; then
+    _wl_man_drop "$1" && printf 'result=restored\neffective=%s\n' "$(_wl_fit_eff "$1")" && return 0
+  fi
+  printf 'result=restore_failed\neffective=%s\n' "$(_wl_fit_eff "$1")"
+  return 1
+}
+_wl_man_reapply() {
+  [ -s "$MAN" ] || return 0
+  while IFS='|' read -r _mp _mo _mu; do
+    [ -n "$_mp" ] && _wl_man_installed "$_mp" && _wl_man_apply "$_mp" >/dev/null 2>&1 || :
+  done < "$MAN"
+}
+# Read-only ranked candidates. Battery-stats durations are cumulative since the last unplug,
+# not a current-capture energy attribution; the WebUI labels that basis explicitly.
+_wl_man_scan() {
+  _has dumpsys && _has pm || return 1
+  _map="$(_wl_pkgmap)"; [ -n "$_map" ] || return 1
+  { _wl_bs_uid_secs; _wl_power_long_uids | sed 's/$/ L/'; } | awk -v map="$_map" '
+    BEGIN { n=split(map,a,"\n"); for(i=1;i<=n;i++) if(split(a[i],b," ")==2)
+              pkg[b[1]]=(pkg[b[1]] ? pkg[b[1]] "," : "") b[2] }
+    $2 == "L" { held[$1]=1; next }
+    { secs[$1]=$2 }
+    END { for(u in secs) if((u in pkg) && secs[u]>=30) {
+              n=split(pkg[u],pa,","); for(i=1;i<=n;i++) print pa[i] "|" secs[u] "|" (held[u]?1:0) }
+          for(u in held) if((u in pkg) && !(u in secs)) {
+              n=split(pkg[u],pa,","); for(i=1;i<=n;i++) print pa[i] "|0|1" } }' \
+    | sort -t'|' -k2,2nr | head -16
+}
+_wl_man_status() {
+  _rows="$(_wl_man_scan)"; _scan=$?
+  printf 'version=1\nscan=%s\n' "$([ "$_scan" -eq 0 ] && echo ok || echo unavailable)"
+  _n=0; [ -s "$MAN" ] && _n="$(grep -c '|' "$MAN" 2>/dev/null)"
+  printf 'selected=%s\n' "${_n:-0}"
+  # Candidate rows plus selected apps that have no current batterystats row.
+  { printf '%s\n' "$_rows"; [ -s "$MAN" ] && cut -d'|' -f1 "$MAN" | sed 's/$/|0|0/'; } \
+    | awk -F'|' 'NF>=3 && $1!="" && !seen[$1]++ { print $1 "|" $2 "|" $3 }'
+}
+if [ "${1:-}" = manual-status ]; then
+  _wl_man_status | while IFS='|' read -r _a _b _c; do
+    case "$_a" in
+      version=*|scan=*|selected=*) printf '%s\n' "$_a" ;;
+      ''|*[!A-Za-z0-9_.]*) : ;;
+      *) _sel=0; [ -n "$(_wl_man_line "$_a")" ] && _sel=1
+         _eff=unknown; _has appops && _eff="$(_wl_fit_eff "$_a")"
+         _prot=0; _wl_protected "$_a" && _prot=1
+         printf 'row|%s|%s|%s|%s|%s|%s\n' "$_a" "${_b:-0}" "${_c:-0}" "$_sel" "${_eff:-unknown}" "$_prot" ;;
+    esac
+  done
+  exit 0
+fi
+if [ "${1:-}" = manual-set ]; then
+  case "${3:-}" in
+    ignore) _wl_man_limit "${2:-}" ;;
+    restore) _wl_man_restore "${2:-}" ;;
+    *) printf 'result=bad_request\n'; exit 2 ;;
+  esac
+  exit $?
+fi
+if [ "${1:-}" = manual-reapply ]; then _wl_man_reapply; exit 0; fi
+
 # fitness-status (fix177): what the WebUI badge needs, read-only. Installed step/fitness apps
 # (third-party: the class wakelock_fitness acts on), how many ASB recorded as limited, how
 # many have the limit in force with no record (set before - by the user, another tool or an
@@ -654,6 +792,10 @@ if [ "${1:-}" = fitness ]; then
   rm -f "$FIT.reapplied" 2>/dev/null
   exit 0
 fi
+
+# A manual choice is independent of the automatic wakelock_action gate. Re-assert it after
+# ROM permission sweeps on this existing pass; never create another worker for it.
+_wl_man_reapply
 
 asb_wl_snapshot || asb_wl_snapshot_bs || :
 
