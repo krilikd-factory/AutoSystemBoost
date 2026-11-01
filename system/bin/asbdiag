@@ -4620,7 +4620,7 @@ if [ -r "$MODDIR/tools/asb_device_info.sh" ]; then
     P "     injection  : loaded=$(_asb_zdiag_field loaded_processes) freshness=$(_asb_zdiag_field state_freshness) age_ms=$(_asb_zdiag_field state_age_ms) events=$(_asb_zdiag_field events_total) spawn=$(_asb_zdiag_field spawn_events)"
     P "     policy     : written_gen=$(_asb_zdiag_field policy_generation) acknowledged_gen=$(_asb_zdiag_field policy_seen_generation) allowlisted_apps=$(_asb_zdiag_field enabled_packages)"
     P "     features   : observer=$(_asb_zdiag_field enabled) lifecycle_hints=$(_asb_zdiag_field lifecycle_hints) cold_start=$(_asb_zdiag_field launch_hints) ledger=$(_asb_zdiag_field spawn_ledger) safe_mode=$(_asb_zdiag_field safe_mode)"
-    P "     activity   : hints=$(_asb_zdiag_field policy_hints)/accepted=$(_asb_zdiag_field hints_accepted)/vetoed=$(_asb_zdiag_field hints_vetoed) launches=$(_asb_zdiag_field launch_events)/accepted=$(_asb_zdiag_field launch_accepted) ledger=$(_asb_zdiag_field ledger_events)"
+    P "     activity   : hints=$(_asb_zdiag_field policy_hints)/accepted=$(_asb_zdiag_field hints_accepted)/vetoed=$(_asb_zdiag_field hints_vetoed)/not_sent_screen_off=$(_asb_zdiag_field hints_screen_off) launches=$(_asb_zdiag_field launch_events)/accepted=$(_asb_zdiag_field launch_accepted) ledger=$(_asb_zdiag_field ledger_events)"
     P "     overhead   : companion_ipc_cpu_ms=$(_asb_zdiag_field ipc_cpu_ms) ipc_wakeups=$(_asb_zdiag_field ipc_wakeups) observed_app_rss_kb=$(_asb_zdiag_field memory_kb)"
     P "     loops      : screen_off_restart_loops=$(_asb_zdiag_field ledger_restart_loops)"
     P "     staging    : installed_abis=$(_asb_zdiag_field installed_abis) (files alone are not injection evidence)"
@@ -4644,6 +4644,32 @@ if [ -r "$MODDIR/tools/asb_device_info.sh" ]; then
           if ($8 > 0) printf "; before compile %s ms over %s, after %s ms over %s", ($13 > 0 ? $13 : "-"), $12, ($15 > 0 ? $15 : "-"), $14
           printf "\n"
         }' | while IFS= read -r _za_l; do P "$_za_l"; done
+    fi
+    if [ -f "$MODDIR/runtime/asb_zygisk_link.sh" ]; then
+      _zl_out="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_link.sh" status 2>/dev/null)"
+      _zl_kv() { printf '%s\n' "$_zl_out" | sed -n "s/^$1=//p" | head -1; }
+      P "     link_class : file=$(_zl_kv classes) slow=$(_zl_kv classes_slow) fast=$(_zl_kv classes_fast) companion_reads_classes=$(_zl_kv comp_supported) companion_loaded=$(_zl_kv comp_classes_loaded) requests_long=$(_zl_kv comp_long) requests_short=$(_zl_kv comp_short) fallback_plain=$(_zl_kv comp_fallback)"
+      P "     link_gov   : launches_accepted=$(_zl_kv gov_launch) long=$(_zl_kv gov_long) short=$(_zl_kv gov_short) long_windows=$(_zl_kv gov_cold_long) tap_lifts_ended_early=$(_zl_kv gov_trims)"
+      P "     link_hooks : lsposed=$(_zl_kv lsposed) modules_on=$(_zl_kv lsposed_modules) hooked_apps=$(_zl_kv lsposed_apps) framework_modules=$(_zl_kv lsposed_system) systemui_modules=$(_zl_kv lsposed_sysui) denylist_starts=$(_zl_kv denylist_spawns)"
+      printf '%s\n' "$_zl_out" | awk -F'|' '
+          $1 == "zmod" { z = z (z ? ", " : "") $4 ($3 == 1 ? "" : " (off)") }
+          $1 == "cmp" { printf "       cold start median: apps with LSPosed modules %s ms (%s apps), without %s ms (%s apps) - different apps, not the hooks alone\n", $2, $3, $4, $5 }
+          $1 == "app" && n < 12 {
+            n++
+            printf "       %s: class %s", $2, $3
+            if ($4 != $3 && $5 != "excluded") printf " (next pass: %s)", $4
+            if ($5 == "measured") printf ", cold start median %s ms over %s", $7, $6; else if ($5 == "hooks") printf ", %s of 3 cold starts measured", $6
+            if ($5 == "excluded") printf ", protected system app (never classed)"
+            if ($8 > 0) printf ", LSPosed modules %s: %s", $8, $9
+            if ($10 > 0) printf ", opened %s", $10
+            if ($11 >= 0) printf ", background starts %s", $11
+            if ($12 != "-") printf ", guard %s", $12
+            if ($13 != "-") printf ", ART %s", $13
+            if ($14 != "-") printf ", protected (%s)", $14
+            if ($15 == 1) printf ", is an LSPosed module (guard never restricts it)"
+            printf "\n"
+          }
+          END { printf "       other Zygisk modules: %s\n", (z ? z : "none") }' | while IFS= read -r _zl_l; do P "$_zl_l"; done
     fi
     NOTE "   The verdict is evidence-bounded: it does not claim total Zygisk control, a cap change, performance improvement or energy saving. RSS includes the observed apps themselves."
     _asb_ldiag_field() {
