@@ -16,6 +16,7 @@ BASE="$TMPD/zygisk_guard.base"
 SEEN="$TMPD/zygisk_guard.seen"
 KEEP="${ASB_DOZE_KEEP:-$D/doze_whitelist_keep}"
 NFL="$D/notif_fix"
+LSPMOD="$D/zygisk_lsposed_modules"
 BOOTID="${ASB_ZG_BOOTID:-/proc/sys/kernel/random/boot_id}"
 MIN="${ASB_ZG_MIN_STARTS:-6}"
 WMIN="${ASB_ZG_WAKER_STARTS:-8}"
@@ -66,6 +67,7 @@ _protected() {
   esac
   grep -qxF "$1" "$KEEP" 2>/dev/null && return 0
   grep -q "^$1|" "$NFL" 2>/dev/null && return 0
+  grep -qxF "$1" "$LSPMOD" 2>/dev/null && return 0
   dumpsys deviceidle whitelist 2>/dev/null | grep -qE "^user,$1,"  && return 0
   return 1
 }

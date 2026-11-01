@@ -38,6 +38,7 @@ _asb_zygisk_info() {
   _zi_hints=0; _zi_accepted=0; _zi_vetoed=0; _zi_unavailable=0; _zi_throttled=0
   _zi_spawn=0; _zi_l_events=0; _zi_l_ok=0; _zi_l_veto=0; _zi_l_none=0; _zi_l_thr=0
   _zi_ledger_n=0; _zi_absent=0; _zi_seen_gen=0; _zi_ledger_rows=''
+  _zi_l_long=0; _zi_l_short=0; _zi_l_fb=0; _zi_cls_on=0; _zi_cls_slow=0; _zi_cls_fast=0; _zi_deny=0; _zi_h_off=0
   for _zi_file in "$_zi_run/state.arm64-v8a.tsv" "$_zi_run/state.armeabi-v7a.tsv"; do
     [ -r "$_zi_file" ] || continue
     _zi_state=1
@@ -47,7 +48,7 @@ _asb_zygisk_info() {
       case "$_zi_type" in
         Z)
           case "$_zi_a" in
-            events_total|events_dropped_total|events_dropped_rate_limit|events_dropped_duplicate|events_dropped_invalid|events_dropped_capacity|ipc_cpu_ms|ipc_wakeups|policy_hints|hints_accepted|hints_vetoed|hints_unavailable|hints_throttled|updated_monotonic_ms|updated_boottime_ms|spawn_events|launch_events|launch_accepted|launch_vetoed|launch_unavailable|launch_throttled|ledger_events|events_policy_absent|policy_generation_seen)
+            events_total|events_dropped_total|events_dropped_rate_limit|events_dropped_duplicate|events_dropped_invalid|events_dropped_capacity|ipc_cpu_ms|ipc_wakeups|policy_hints|hints_accepted|hints_vetoed|hints_unavailable|hints_throttled|updated_monotonic_ms|updated_boottime_ms|spawn_events|launch_events|launch_accepted|launch_vetoed|launch_unavailable|launch_throttled|ledger_events|events_policy_absent|policy_generation_seen|launch_long|launch_short|launch_class_fallback|classes_loaded|classes_slow|classes_fast|denylist_spawns|hints_screen_off)
               case "$_zi_b" in ''|*[!0-9]*) continue ;; esac
               [ "${#_zi_b}" -le 18 ] || continue
               case "$_zi_a" in
@@ -75,6 +76,14 @@ _asb_zygisk_info() {
                 ledger_events) _zi_ledger_n=$((_zi_ledger_n + _zi_b)) ;;
                 events_policy_absent) _zi_absent=$((_zi_absent + _zi_b)) ;;
                 policy_generation_seen) [ "$_zi_b" -gt "$_zi_seen_gen" ] && _zi_seen_gen="$_zi_b" ;;
+                launch_long) _zi_l_long=$((_zi_l_long + _zi_b)) ;;
+                launch_short) _zi_l_short=$((_zi_l_short + _zi_b)) ;;
+                launch_class_fallback) _zi_l_fb=$((_zi_l_fb + _zi_b)) ;;
+                classes_loaded) [ "$_zi_b" -gt "$_zi_cls_on" ] && _zi_cls_on="$_zi_b" ;;
+                classes_slow) [ "$_zi_b" -gt "$_zi_cls_slow" ] && _zi_cls_slow="$_zi_b" ;;
+                classes_fast) [ "$_zi_b" -gt "$_zi_cls_fast" ] && _zi_cls_fast="$_zi_b" ;;
+                denylist_spawns) _zi_deny=$((_zi_deny + _zi_b)) ;;
+                hints_screen_off) _zi_h_off=$((_zi_h_off + _zi_b)) ;;
               esac ;;
           esac ;;
         L)
@@ -201,12 +210,19 @@ _asb_zygisk_info() {
   _emit zygisk_observer hints_vetoed "$_zi_vetoed"
   _emit zygisk_observer hints_unavailable "$_zi_unavailable"
   _emit zygisk_observer hints_throttled "$_zi_throttled"
+  _emit zygisk_observer hints_screen_off "$_zi_h_off"
   _emit zygisk_observer spawn_events "$_zi_spawn"
   _emit zygisk_observer launch_events "$_zi_l_events"
   _emit zygisk_observer launch_accepted "$_zi_l_ok"
   _emit zygisk_observer launch_vetoed "$_zi_l_veto"
   _emit zygisk_observer launch_unavailable "$_zi_l_none"
   _emit zygisk_observer launch_throttled "$_zi_l_thr"
+  _emit zygisk_observer launch_long "$_zi_l_long"
+  _emit zygisk_observer launch_short "$_zi_l_short"
+  _emit zygisk_observer launch_class_fallback "$_zi_l_fb"
+  _emit zygisk_observer launch_classes_loaded "$_zi_cls_on"
+  _emit zygisk_observer launch_classes "slow $_zi_cls_slow, fast $_zi_cls_fast"
+  _emit zygisk_observer denylist_spawns "$_zi_deny"
   _emit zygisk_observer ledger_events "$_zi_ledger_n"
   _emit zygisk_observer ledger_top_screen_off "$_zi_ledger_top"
   _emit zygisk_observer ledger_restart_loops "$_zi_loops"
@@ -216,5 +232,6 @@ _asb_zygisk_info() {
   _emit zygisk_observer foreground_events 'not exposed without global hooks; is_top_app is not tracking'
   _emit zygisk_observer media_camera_audio_navigation 'not exposed in observer-only stage'
   _emit zygisk_observer overhead_confidence "$([ "$_zi_state" = 1 ] && echo 'measured event counters; snapshot only' || echo 'unknown: no event state')"
-  _emit zygisk_observer data_minimization 'package name, PID/start ticks, process RSS and bounded counters; the ledger keeps package names and start counts for this boot in tmpfs only'
+  _emit zygisk_observer data_minimization 'package name, PID/start ticks, process RSS and bounded counters; the ledger keeps package names and start counts for this boot in tmpfs only; a top-app start names its package to the root companion only for the launch-class lookup, which is not kept'
+  _emit zygisk_observer denylist_basis 'apps the root manager hides root from never keep the observer library or a socket; their one-shot record is sent before specialization'
 }

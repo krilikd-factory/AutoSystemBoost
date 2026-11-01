@@ -9,6 +9,7 @@ LAUNCH="$D/zygisk_aot_launch"
 SCAN="$D/zygisk_aot_scan"
 LOG="$D/zygisk_aot_log"
 LOCK="$D/zygisk_aot.lock"
+CLASSES="${ASB_ZYGISK_CLASSES:-$MODDIR/zygisk/classes}"
 POWER="${ASB_ZA_POWER:-/sys/class/power_supply/battery}"
 BOOTID="${ASB_ZA_BOOTID:-/proc/sys/kernel/random/boot_id}"
 TOP="${ASB_ZA_TOP:-8}"
@@ -151,14 +152,15 @@ _strong() {
   return 1
 }
 _ranked() {
-  awk -v cf="$CUM" -v lf="$LAUNCH" '
+  awk -v cf="$CUM" -v lf="$LAUNCH" -v kf="$CLASSES" '
     BEGIN {
       while ((getline ln < cf) > 0) { n = split(ln, f, " "); if (n == 3 && f[1] ~ /^[A-Za-z0-9_.]+$/) z[f[1]] = f[2] + 0 }
       while ((getline ln < lf) > 0) { n = split(ln, f, "|"); if (n == 4 && f[2] ~ /^[A-Za-z0-9_.]+$/) e[f[2]]++ }
+      while ((getline ln < kf) > 0) if (ln ~ /^slow=[A-Za-z0-9_.]+$/) sl[substr(ln, 6)] = 1
       for (p in z) sc[p] = z[p]
       for (p in e) if (!(p in sc) || e[p] > sc[p]) sc[p] = e[p]
-      for (p in sc) print p, sc[p]
-    }' | awk '$2 >= 2' | sort -k2,2nr | head -n "$TOP"
+      for (p in sc) print p, sc[p], (p in sl) ? 1 : 0
+    }' | awk '$2 >= 2' | sort -k3,3nr -k2,2nr | head -n "$TOP" | awk '{ print $1, $2 }'
 }
 _refresh() {
   _rt="$(_now)"
@@ -286,6 +288,7 @@ case "${1:-status}" in
   enable) mkdir -p "$D" 2>/dev/null; true > "$ON" && { _launch_scan; _count_update; _refresh; echo 'result=enabled'; } ;;
   disable) rm -f "$ON" 2>/dev/null; echo 'result=disabled' ;;
   tick) _tick ;;
+  scan) _launch_scan ;;
   compile-run) _compile_run ;;
   restore-all) rm -rf "$ON" "$APPS" "$APPS.new" "$APPS.t" "$CUM" "$CUM.tmp" "$CUM.new" "$LAUNCH" "$LAUNCH.tmp" "$SCAN" "$LOG" "$LOG.tmp" "$LOCK" 2>/dev/null ;;
   *) echo 'result=bad_request'; exit 2 ;;

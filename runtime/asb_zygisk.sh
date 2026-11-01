@@ -13,6 +13,7 @@ AUTO="$ZDIR/auto"
 AUTO_BACKUP="$ZDIR/packages.before_auto"
 AUTO_RUN="${ASB_ZYGISK_RUN_DIR:-/dev/.asb/zygisk}"
 AUTO_COUNT="${ASB_ZYGISK_AOT_COUNT:-${ZDIR%/*}/zygisk_aot_count}"
+CLASSES="${ASB_ZYGISK_CLASSES:-${POLICY%/*}/classes}"
 
 _zygisk_prepare() {
   mkdir -p "$ZDIR" 2>/dev/null || return 1
@@ -85,6 +86,12 @@ _zygisk_cfg() {
   sed -n "s/^[[:space:]]*$1=//p" "$CONF" 2>/dev/null | tail -n 1 | tr -d ' \r'
 }
 
+_zygisk_classes() {
+  [ -f "$MODDIR/runtime/asb_zygisk_link.sh" ] || return 0
+  MODDIR="$MODDIR" ASB_ZL_DIR="${ZDIR%/*}" ASB_ZYGISK_CLASSES="$CLASSES" sh "$MODDIR/runtime/asb_zygisk_link.sh" classes --no-scan >/dev/null 2>&1
+  return 0
+}
+
 _zygisk_sync() {
   _s_en="$(_zygisk_cfg zygisk_enabled)"
   _s_mode="$(_zygisk_cfg zygisk_mode)"
@@ -99,7 +106,8 @@ _zygisk_sync() {
   [ -n "$_s_pkgs" ] && _s_obs=1
   if [ "$_s_en" != 1 ] || [ -e "$DISABLE" ] || { [ -n "$_s_mode" ] && [ "$_s_mode" != observer ]; } || \
      { [ "$_s_obs" = 0 ] && [ "$_s_launch" = 0 ] && [ "$_s_ledger" = 0 ]; }; then
-    rm -f "$POLICY" "$POLICY.tmp" 2>/dev/null
+    rm -f "$POLICY" "$POLICY.tmp" "$CLASSES" "$CLASSES.tmp" 2>/dev/null
+    _zygisk_classes
     echo 'policy=absent'
     return 0
   fi
@@ -116,6 +124,7 @@ _zygisk_sync() {
   chmod 644 "$POLICY.tmp" 2>/dev/null || true
   chcon u:object_r:system_file:s0 "$POLICY.tmp" 2>/dev/null || true
   mv -f "$POLICY.tmp" "$POLICY" 2>/dev/null || { rm -f "$POLICY.tmp" 2>/dev/null; echo 'policy=write_failed'; return 1; }
+  _zygisk_classes
   echo "policy=written gen=$_s_gen observer=$_s_obs hints=$_s_hints launch=$_s_launch ledger=$_s_ledger"
 }
 
@@ -217,6 +226,9 @@ case "${1:-}" in
   sync)
     _zygisk_sync
     ;;
+  classes)
+    _zygisk_classes
+    ;;
   auto-enable)
     _zygisk_auto_enable
     ;;
@@ -280,7 +292,7 @@ case "${1:-}" in
     printf 'packages=%s\n' "$(_zygisk_list | wc -l | tr -d ' ')"
     ;;
   *)
-    echo 'Usage: asb_zygisk.sh sync|list|set-packages [pkg ...]|auto-enable|auto-refresh|auto-disable|enable|disable|safe-mode on|off|status|link-status' >&2
+    echo 'Usage: asb_zygisk.sh sync|classes|list|set-packages [pkg ...]|auto-enable|auto-refresh|auto-disable|enable|disable|safe-mode on|off|status|link-status' >&2
     exit 2
     ;;
 esac
