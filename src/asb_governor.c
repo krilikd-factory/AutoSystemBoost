@@ -81,6 +81,8 @@ static unsigned long g_zygisk_refresh_accepted = 0;
 static unsigned long g_zygisk_refresh_vetoed = 0;
 static unsigned long g_zygisk_launch_accepted = 0;   /* fix272: new top-app processes heard */
 static unsigned long g_zygisk_launch_vetoed = 0;
+static unsigned long g_zygisk_launch_long = 0;      /* fix286: accepted for slow-to-start apps */
+static unsigned long g_zygisk_launch_short = 0;     /* fix286: accepted for fast-to-start apps */
 static time_t g_last_reassert = 0;
 static int g_last_reassert_ok = 0;
 
@@ -3190,6 +3192,34 @@ static int    g_bhold_allow        = 1;   /* fix271: a finger may hold the Batte
 static int    g_unlock_cold_kick   = 0;   /* fix272: Zygisk saw zygote start a new top-app process */
 static unsigned long g_unlock_cold_lifts = 0;   /* lifts a cold start armed */
 static unsigned long g_unlock_cold_extends = 0; /* running lifts a cold start carried over the launch */
+static unsigned long g_unlock_cold_long = 0;    /* fix286: cold starts covered by the longer window */
+static unsigned long g_unlock_cold_trims = 0;   /* fix286: tap lifts a fast cold start ended early */
+
+/* fix286: launch classes from the Zygisk companion. ASB_COLD_NORMAL is the plain
+ * "zygisk-launch"; a slow-to-start app (measured cold-start median of a second or more, or
+ * not yet measured and loaded with LSPosed modules) gets twice the lift, at most 10 s, so the
+ * work after its first frame does not land on the static ceilings; a fast one (median of
+ * 400 ms or less) gets half, at least 1 s, and also ends a tap's lift early, since it has
+ * drawn long before the usual window runs out. The class is the companion's lookup of a file
+ * the shell writes; the opcode carries no package and no value, and every profile, thermal
+ * and warm-die gate below still decides. */
+#define ASB_COLD_NORMAL 1
+#define ASB_COLD_LONG   2
+#define ASB_COLD_SHORT  3
+#define ASB_COLD_TRIM_MS 1500L
+static long asb_cold_lift_ms(int cold_class, int lift_s) {
+    long s = lift_s;
+    if (s <= 0) return 0;
+    if (cold_class == ASB_COLD_LONG) { s *= 2; if (s > 10) s = 10; }
+    else if (cold_class == ASB_COLD_SHORT) { s = (s + 1) / 2; if (s < 1) s = 1; }
+    return s * 1000L;
+}
+/* Two requests between two passes: the longer need wins (long, then normal, then short). */
+static int asb_cold_kick_merge(int cur, int cls) {
+    if (cur == 0 || cls == ASB_COLD_LONG) return cls;
+    if (cur == ASB_COLD_SHORT && cls == ASB_COLD_NORMAL) return cls;
+    return cur;
+}
 
 /* Who the lift is for. Battery and Balanced are exactly the profiles that jank on a wake -
  * their ceilings are the shell's static caps - and Smart has always had it. Performance is
@@ -3229,6 +3259,7 @@ static int asb_unlock_lift_update(int screen_on, int touch_kick, int touch_activ
     int arm = 0, cold = 0;
     /* fix272: a cold start is heard once, whatever this pass decides. */
     int cold_kick = g_unlock_cold_kick;
+    long cold_ms = asb_cold_lift_ms(cold_kick, g_asb_cfg.unlock_lift_s);
     g_unlock_cold_kick = 0;
     g_unlock_prev_screen = screen_on ? 1 : 0;
     g_unlock_profile = profile_idx;
@@ -3259,10 +3290,17 @@ static int asb_unlock_lift_update(int screen_on, int touch_kick, int touch_activ
          * minute, and every profile/thermal/warm gate below still applies. */
         if (g_unlock_until_ms > now_ms) {
             if (g_asb_cfg.unlock_lift_s > 0 && asb_unlock_lift_profile_ok(profile_idx) && !thermal_cap) {
-                long until = now_ms + (long)g_asb_cfg.unlock_lift_s * 1000L;
+                long until = now_ms + cold_ms;
                 if (until > g_unlock_until_ms) {
                     g_unlock_until_ms = until;
                     g_unlock_cold_extends++;
+                    if (cold_kick == ASB_COLD_LONG) g_unlock_cold_long++;
+                } else if (cold_kick == ASB_COLD_SHORT && now_ms - g_unlock_armed_ms <= ASB_COLD_TRIM_MS &&
+                           (strcmp(g_unlock_arm_why, "touch") == 0 || strcmp(g_unlock_arm_why, "app switch") == 0)) {
+                    /* fix286: only the lift the tap that opened this fast app armed; a
+                     * wake, first touch or lock press keeps its full window. */
+                    g_unlock_until_ms = until;
+                    g_unlock_cold_trims++;
                 }
             }
         } else {
@@ -3292,11 +3330,12 @@ static int asb_unlock_lift_update(int screen_on, int touch_kick, int touch_activ
             g_unlock_skips++;
             snprintf(g_unlock_skip_why, sizeof(g_unlock_skip_why), "%s", why);
         } else {
-            long until = now_ms + (long)g_asb_cfg.unlock_lift_s * 1000L;
+            long until = now_ms + (cold ? cold_ms : (long)g_asb_cfg.unlock_lift_s * 1000L);
             if (until > g_unlock_until_ms) g_unlock_until_ms = until;
             g_unlock_armed_ms = now_ms;
             g_unlock_lifts++;
             if (cold) g_unlock_cold_lifts++;
+            if (cold && cold_kick == ASB_COLD_LONG) g_unlock_cold_long++;
         }
     }
     /* A continuous Battery scroll is one interaction, not a new lift on every tick. Extend
@@ -4012,6 +4051,10 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                "unlock_cold_lifts=%lu\nunlock_cold_extends=%lu\n",
             g_zygisk_launch_accepted, g_zygisk_launch_vetoed,
             g_unlock_cold_lifts, g_unlock_cold_extends);
+    fprintf(f, "zygisk_launch_long=%lu\nzygisk_launch_short=%lu\n"
+               "unlock_cold_long=%lu\nunlock_cold_trims=%lu\n",
+            g_zygisk_launch_long, g_zygisk_launch_short,
+            g_unlock_cold_long, g_unlock_cold_trims);
     fprintf(f, "governor_transitions=%lu\ngovernor_writes=%lu\n"
                "governor_readbacks=%lu\ngovernor_vendor_overrides=%lu\n",
             g_stat_transitions, g_stat_writes, g_stat_readbacks,
@@ -9299,7 +9342,8 @@ int main(int argc, char **argv) {
                  * scrolled out before anyone looked. Commands that change something are
                  * still logged; status only at the most verbose level. */
                 if ((strcmp(cmd, "status") == 0 || strcmp(cmd, "zygisk-refresh") == 0 ||
-                     strcmp(cmd, "zygisk-launch") == 0)
+                     strcmp(cmd, "zygisk-launch") == 0 || strcmp(cmd, "zygisk-launch-long") == 0 ||
+                     strcmp(cmd, "zygisk-launch-short") == 0)
                         ? g_asb_cfg.log_level >= 3 : g_asb_cfg.log_level >= 1)
                     asb_log("cmd: %s", cmd);
 
@@ -9456,11 +9500,15 @@ int main(int argc, char **argv) {
                         asb_sock_reply(sockfd, &src, srclen, "ok");
                     }
                 }
-                else if (strcmp(cmd, "zygisk-launch") == 0) {
+                else if (strcmp(cmd, "zygisk-launch") == 0 || strcmp(cmd, "zygisk-launch-long") == 0 ||
+                         strcmp(cmd, "zygisk-launch-short") == 0) {
                     /* fix272: zygote is creating a new top-app process (a cold start). The
                      * observer names no app and no value; this only feeds the unlock lift's
                      * existing launch window and asks for fresh foreground evidence. The
-                     * profile, thermal, warm-die and lift-length gates decide the rest. */
+                     * profile, thermal, warm-die and lift-length gates decide the rest.
+                     * fix286: the -long/-short opcodes pick the window's length only. */
+                    int cold_class = strcmp(cmd, "zygisk-launch-long") == 0 ? ASB_COLD_LONG
+                                   : strcmp(cmd, "zygisk-launch-short") == 0 ? ASB_COLD_SHORT : ASB_COLD_NORMAL;
                     if (!g_asb_cfg.zygisk_enabled || !g_asb_cfg.zygisk_launch ||
                         access("/data/adb/asb/zygisk_observer/disable", F_OK) == 0) {
                         g_zygisk_launch_vetoed++;
@@ -9469,10 +9517,12 @@ int main(int argc, char **argv) {
                         g_zygisk_launch_vetoed++;
                         asb_sock_reply(sockfd, &src, srclen, "err:screen_off");
                     } else {
-                        g_unlock_cold_kick = 1;
+                        g_unlock_cold_kick = asb_cold_kick_merge(g_unlock_cold_kick, cold_class);
                         asb_smart_pkg_cache_invalidate();
                         need_metrics = 1;
                         g_zygisk_launch_accepted++;
+                        if (cold_class == ASB_COLD_LONG) g_zygisk_launch_long++;
+                        else if (cold_class == ASB_COLD_SHORT) g_zygisk_launch_short++;
                         asb_sock_reply(sockfd, &src, srclen, "ok");
                     }
                 }
