@@ -129,6 +129,8 @@ _asb_zygisk_info() {
   _zi_link=unknown
   if [ "$_zi_enabled" = 0 ]; then _zi_link=off
   elif [ "$_zi_safe" = on ]; then _zi_link=safe
+  elif [ "$_zi_freshness" = stale_over_5_minutes ] && [ "$_zi_seen_gen" -gt 0 ] && [ "$_zi_seen_gen" = "$_zi_policy_gen" ] \
+       && { [ "$_zi_spawn" -gt 0 ] || [ "$_zi_events" -gt 0 ]; }; then _zi_link=quiet
   elif [ "$_zi_freshness" = stale_over_5_minutes ]; then _zi_link=stale
   elif [ "$_zi_freshness" = current ] && [ "$_zi_loaded" -gt 0 ]; then _zi_link=connected
   elif [ "$_zi_freshness" = current ] && { [ "$_zi_events" -gt 0 ] || [ "$_zi_spawn" -gt 0 ] || [ "$_zi_seen_gen" -gt 0 ]; }; then _zi_link=confirmed

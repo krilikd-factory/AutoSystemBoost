@@ -190,6 +190,33 @@ _asb_lsposed_info() {
     _emit lsposed_hooks crash_hooked unknown
   fi
 
+  _ls_tdir="${ASB_TOMBSTONE_DIR:-/data/tombstones}"
+  _ls_tl="$(ls -t "$_ls_tdir"/tombstone_[0-9][0-9] 2>/dev/null | head -n 16)"
+  if [ -n "$_ls_tl" ]; then
+    _ls_nat="$(awk -v mods="$_ls_modl" '
+      BEGIN { nm = split(mods, M, " ") }
+      FNR == 1 { if (pk != "") print pk " " proc; pk = ""; proc = ""; b = 0; done = 0 }
+      /^Cmdline: / && proc == "" { proc = $2; sub(/:.*/, "", proc) }
+      /^backtrace:/ && !done { b = 1; next }
+      b && /^[[:space:]]*$/ { b = 0; done = 1 }
+      b && pk == "" && /#[0-9]+ pc / {
+        if ($0 ~ /\/data\/app\//) {
+          q = $0; sub(/^.*\/data\/app\//, "", q); if (q ~ /^~~/) sub(/^[^\/]*\//, "", q); sub(/[-\/].*$/, "", q)
+          if (q != "" && q != proc && q !~ /^com\.(google\.android\.(webview|trichromelibrary)|android\.(webview|chrome))/) pk = q
+        }
+        if (pk == "") for (i = 1; i <= nm; i++) if (index($0, "(" M[i] ".")) { pk = M[i]; break }
+      }
+      END { if (pk != "") print pk " " proc }' $_ls_tl 2>/dev/null | awk 'NF == 2 { c[$1]++; w[$1 " " $2]++ }
+      END { for (k in w) { split(k, a, " "); W[a[1]] = W[a[1]] (W[a[1]] ? ", " : "") a[2] " " w[k] }
+            for (m in c) printf "%d %s %s\n", c[m], m, W[m] }' | sort -k1,1nr -k2,2 | head -n 5)"
+    _emit lsposed_hooks tombstone_hooked "$(printf '%s\n' "$_ls_nat" | awk 'NF >= 3 { n = $1; m = $2; $1 = ""; $2 = ""; sub(/^  /, ""); s = s (s ? "; " : "") m " x" n " (" $0 ")" } END { print (s ? s : "none") }')"
+    for _ls_x in $(printf '%s\n' "$_ls_nat" | awk 'NF >= 3 && $1 >= 2 { print $2 }'); do
+      _ls_found=$((_ls_found + 1)); _ls_detail="$_ls_detail native:$_ls_x"
+    done
+  else
+    _emit lsposed_hooks tombstone_hooked none
+  fi
+
   if [ -n "$_ls_appl" ]; then
     _ls_ps="$(ps -A -o UID,TIME,NAME 2>/dev/null)"
     if [ -n "$_ls_ps" ] && [ -n "$_ls_map" ]; then

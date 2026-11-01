@@ -309,6 +309,9 @@ fi
 # safety: delay, call check, save/verify/restore. Screen-off only starts its timer;
 # screen-on always restores, whatever the toggle says, so turning the option off can
 # never strand the modem without 5G.
+if [ "$SCREEN" != "0" ] && [ -s /data/adb/asb/zygisk_guard_active ] && [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk_guard.sh ]; then
+  sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk_guard.sh screen_on >/dev/null 2>&1
+fi
 if [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_lte_screenoff.sh ]; then
   if [ "$SCREEN" = "0" ]; then
     sh /data/adb/modules/AutoSystemBoost/runtime/asb_lte_screenoff.sh arm >/dev/null 2>&1

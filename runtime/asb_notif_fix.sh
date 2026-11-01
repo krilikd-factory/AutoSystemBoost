@@ -118,7 +118,8 @@ _check() {
   [ "$_cd" = none ] && _cok=0
   case "$_cra$_crb$_cwk" in *ignore*|*deny*|*errored*) _cok=0 ;; esac
   [ "$_cbg" = ok ] || _cok=0
-  printf 'row|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' "$1" "$_cok" "$_cd" "$_cra" "$_crb" "$_cwk" "$_cpn" "$(_bucket "$1")" "$_cbg"
+  _czo="$(cat "${ASB_ZYGISK_RUN_DIR:-/dev/.asb/zygisk}"/state.*.tsv 2>/dev/null | awk -F'\t' -v p="$1" '$1 == "L" && $2 == p { s += $3; f = 1 } END { print (f ? s : "-") }')"
+  printf 'row|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' "$1" "$_cok" "$_cd" "$_cra" "$_crb" "$_cwk" "$_cpn" "$(_bucket "$1")" "$_cbg" "${_czo:--}"
 }
 _rop() {
   [ "$(_pmode "$_ro" "$1" | sed 's/^$/default/')" = "$2" ] || appops set "$_rp" "$1" "$2" >/dev/null 2>&1
@@ -173,7 +174,7 @@ _status() {
   while IFS='|' read -r _sp _suid _rest; do
     _pkgok "$_sp" || continue
     if printf '%s\n' "$_su" | grep -q "^$_sp "; then _check "$_sp" "$_suid" </dev/null
-    else printf 'row|%s|0|gone|-|-|-|-|-|-\n' "$_sp"; fi
+    else printf 'row|%s|0|gone|-|-|-|-|-|-|-\n' "$_sp"; fi
   done < "$LED"
 }
 _set() {
