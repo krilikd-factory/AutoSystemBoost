@@ -291,7 +291,7 @@ fi
 if [ -f "$MODDIR/runtime/asb_zygisk_guard.sh" ]; then
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_guard.sh" restore-all >/dev/null 2>&1
 fi
-rm -f /data/adb/asb/zygisk_guard /data/adb/asb/zygisk_guard_active /data/adb/asb/zygisk_guard_log /data/adb/asb/zygisk_guard_night 2>/dev/null
+rm -f /data/adb/asb/zygisk_guard /data/adb/asb/zygisk_guard_active /data/adb/asb/zygisk_guard_log /data/adb/asb/zygisk_guard_night /data/adb/asb/zygisk_guard_hist /data/adb/asb/zygisk_guard_ghost /data/adb/asb/zygisk_guard_ghost_cand 2>/dev/null
 if [ -f "$MODDIR/runtime/asb_zygisk_aot.sh" ]; then
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_aot.sh" restore-all >/dev/null 2>&1
 fi

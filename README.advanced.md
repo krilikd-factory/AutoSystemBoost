@@ -747,6 +747,14 @@ The restart-loop guard (11.7) has a second level, **Loops + night wakers**. An a
 
 Each restriction records the start-ledger count when it began, so the page, the lift event and asbdiag show how many process starts still happened while it held. Every screen-off period of 15 minutes or more leaves a summary — process starts of all apps between the first and the last screen-off sample, apps restricted, the top three — and the last seven are kept. Compare periods with and without the level to see what it changes on a given phone; no saving is assumed.
 
+### ☀️ 11.10. The guard with the screen on and apps you never open (fix283)
+
+**Screen-on loops.** While the screen is on the guard counts each app's *background* process starts (screen-on starts minus top-app starts in the ledger). A user app whose background starts grow by 6 or more in 5 minutes while none of its processes is visible (`dumpsys activity lru`) is restricted for 30 minutes and given back as soon as it is in use; screen edges do not end the hold.
+
+**Start history.** With the guard on, start counts are summed across reboots. The page and asbdiag list the apps with the most background starts and how often each was opened.
+
+**Apps you never open.** After 3 days, a user app with 30+ background starts, no top-app start, `am get-inactive` = idle and none of the guard's protections is suggested. One tap sets `RUN_ANY_IN_BACKGROUND=ignore` (Android's "Restricted" battery setting); opening the app, "Give back", guard off or uninstall restores the recorded mode. Each restricted app shows its background starts per day before and after.
+
 ## 🔐 12. Device information, privacy and evidence quality
 
 ### 🕵️ 12.1. Read-only, on-demand collection
