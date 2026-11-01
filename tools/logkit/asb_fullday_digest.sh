@@ -889,8 +889,9 @@ if [ -f "$_sdr" ]; then
     _slw='?'
     if grep -q '^wallpaper: static image' "$_sdc" 2>/dev/null; then _slw=0
     elif grep -q '^wallpaper: .*wallpaper service' "$_sdc" 2>/dev/null; then _slw=1; fi
-    printf 'sysuidraw\tintv=%s\tof=%s\tpct=%s\tnetspeed=%s\tclocksec=%s\tlivewp=%s\n' \
-      "${_sd% *}" "${_sd#* }" "${_sj:-0}" "${_sns:-?}" "$_scs" "$_slw"
+    _shk="$(sed -n 's/^sysui_hook: \([A-Za-z0-9_.]*\)$/\1/p' "$_sdc" 2>/dev/null | head -n 4 | awk 'NF { s = s (s ? ", " : "") $0 } END { print s }')"
+    printf 'sysuidraw\tintv=%s\tof=%s\tpct=%s\tnetspeed=%s\tclocksec=%s\tlivewp=%s\thooks=%s\n' \
+      "${_sd% *}" "${_sd#* }" "${_sj:-0}" "${_sns:-?}" "$_scs" "$_slw" "$_shk"
   fi
 fi
 

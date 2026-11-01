@@ -902,6 +902,15 @@ lk_display_config_capture() {
             print $1 "=" v }' \
         | head -8 | sed "s/^/$_ns: /"
     done
+    echo "## modules loaded into SystemUI (LSPosed scope)"
+    _lk_lsdb="${ASB_LSPD_DB:-/data/adb/lspd/config/modules_config.db}"
+    _lk_gb="${ASB_GOV_BIN:-${LK_MODDIR:-$MODDIR}/bin/asb}"
+    if [ -r "$_lk_lsdb" ] && [ -x "$_lk_gb" ]; then
+      "$_lk_gb" --lspd modules "$_lk_lsdb" 2>/dev/null \
+        | awk -F'|' '$1 == "module" && $3 == 1 && NF == 4 { on[$2] = 1 }
+            $1 == "scope" && NF == 4 && $3 == "com.android.systemui" && $2 ~ /^[A-Za-z0-9_.]+$/ { sc[$2] = 1 }
+            END { for (m in sc) if (m in on) print "sysui_hook: " m }' | sort | head -8
+    fi
     echo "## dumpsys display (modes and rates)"
     dumpsys display 2>/dev/null | grep -iE 'refresh|frameRate|fps=|supportedModes|mActiveMode|modeId' | head -60
     echo "## LTPO table in front of the display stack"
