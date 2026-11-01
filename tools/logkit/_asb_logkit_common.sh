@@ -2559,6 +2559,38 @@ lk_sysui_watch_row() {
 # tombstones newer than the capture start: time, process, signal, abort message, and whether
 # ASB code is in the crashed process or the crashing thread's backtrace (not the memory map,
 # which lists every library the process had loaded).
+lk_tomb_detail() {
+  awk -v proc="$2" '
+        function clean(s) { sub(/ \(BuildId: [^)]*\)/, "", s); gsub(/ \(offset 0x[0-9a-fA-F]+\)/, "", s); return s }
+        /^Cause: / && cause == "" { cause = substr($0, 8) }
+        /^pid: [0-9]+, tid: [0-9]+, name: / && thr == "" { t = $0; sub(/^.*, name: /, "", t); sub(/ +>>>.*$/, "", t); thr = t }
+        /^backtrace:/ && !done { b = 1; next }
+        b && /^[[:space:]]*$/ { b = 0; done = 1 }
+        b && /#[0-9]+ pc / {
+          l = clean($0)
+          if (l ~ /LSPHooker|[Xx]posed|lspd|LSPosed/) hook = 1
+          r = l; sub(/^[[:space:]]*#[0-9]+ pc [0-9a-fA-F]+ +/, "", r)
+          path = r; sub(/ .*$/, "", path)
+          fn = r; sub(/^[^ ]* */, "", fn)
+          if (fn ~ /^\(.*\)$/) fn = substr(fn, 2, length(fn) - 2); else fn = ""
+          sub(/\+[0-9]+$/, "", fn)
+          if (injpkg == "" && path ~ /\/data\/app\//) {
+            q = path; sub(/^.*\/data\/app\//, "", q); if (q ~ /^~~/) sub(/^[^\/]*\//, "", q); sub(/[-\/].*$/, "", q)
+            if (q != "" && q != proc && q !~ /^com\.(google\.android\.(webview|trichromelibrary)|android\.(webview|chrome)|chrome\.)/) { lib = path; sub(/^.*[!\/]/, "", lib); injpkg = q; injfn = lib (fn != "" ? " (" substr(fn, 1, 70) ")" : "") }
+          }
+          if (fn ~ /^([A-Za-z_$][A-Za-z0-9_$]*\.)+[A-Za-z_$<][A-Za-z0-9_$<>]*$/ && fn ~ /\..*\./ &&
+              fn !~ /^(java|javax|android|androidx|dalvik|kotlin|kotlinx|libcore|sun|jdk|com\.android|com\.google\.android|com\.oplus|art)\./ &&
+              !(fn in seen) && nj < 3) { seen[fn] = 1; j = j (j != "" ? " <- " : "") fn; nj++ }
+        }
+        END {
+          if (thr != "") print "T|" substr(thr, 1, 40)
+          if (cause != "") print "C|" substr(cause, 1, 110)
+          if (injpkg != "") print "I|" injpkg "|" injfn
+          if (j != "") print "J|" j
+          if (hook) print "H|1"
+        }' "$1" 2>/dev/null
+}
+
 lk_emit_native_crashes() {
   _nc_dir="${ASB_TOMBSTONE_DIR:-/data/tombstones}"
   _nc_t0="${LK_START_EPOCH:-0}"
@@ -2582,11 +2614,18 @@ lk_emit_native_crashes() {
     _nc_fr="$(printf '%s\n' "$_nc_bt" | awk '/#[0-9]+ pc / {
         for (i = 1; i <= NF; i++) if ($i == "pc") { lib = $(i + 2); fn = $(i + 3); break }
         if (lib ~ /\/(libc|libc\+\+|libbase|liblog|libutils)\.so$/) next
-        if (fn !~ /^\(/) fn = ""
+        if (fn !~ /^\(/ || fn ~ /^\(offset/) fn = ""
         print lib (fn != "" ? " " fn : ""); exit }' | cut -c1-110)"
     echo "  $(date -d "@$_nc_m" '+%m-%d %H:%M:%S' 2>/dev/null || echo "$_nc_m")  ${_nc_cmd:-?}  ${_nc_sig}${_nc_flag}"
     [ -n "$_nc_ab" ] && echo "      $_nc_ab"
     [ -n "$_nc_fr" ] && echo "      first frame outside libc: $_nc_fr"
+    _nc_det="$(lk_tomb_detail "$_nc" "${_nc_cmd%%:*}")"
+    printf '%s\n' "$_nc_det" | awk -F'|' '
+      $1 == "T" { print "      crashing thread: " $2 }
+      $1 == "C" { print "      cause: " $2 }
+      $1 == "I" { print "      crashed inside code of " $2 ": " $3 " - an installed app loaded into this process (a hook module)" }
+      $1 == "J" { print "      app/hook code on the stack (nearest first): " substr($0, 3) }
+      $1 == "H" { print "      the stack passes through the hook framework (a hooked method was running)" }'
   done
   if [ "$_nc_n" -eq 0 ]; then
     if [ -d "$_nc_dir" ]; then echo "none (no tombstone newer than the capture start)"

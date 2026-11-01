@@ -194,7 +194,7 @@ if [ -f "$_ZY_S" ] || [ -f "$_ZY_L" ]; then
       add("start_state", hs && SV["link_state"] != "" ? SV["link_state"] : "unknown")
       add("coverage", cov); add("start_epoch", se); add("latest_epoch", le)
       add("enabled", U["enabled"]); add("safe_mode", U["safe_mode"])
-      add("freshness", U["state_freshness"]); add("loaded", U["loaded_processes"])
+      add("freshness", U["state_freshness"]); add("loaded", U["loaded_processes"]); add("age_ms", U["state_age_ms"])
       add("policy_generation", U["policy_generation"]); add("policy_seen_generation", U["policy_seen_generation"])
       add("packages", U["enabled_packages"]); add("abis", U["installed_abis"])
       add("lifecycle_hints", U["lifecycle_hints"]); add("launch_hints", U["launch_hints"]); add("spawn_ledger", U["spawn_ledger"])
