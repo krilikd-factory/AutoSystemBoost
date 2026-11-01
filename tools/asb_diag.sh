@@ -334,11 +334,54 @@ _asb_tombstones() {
       _tb_fr="$(printf '%s\n' "$_tb_bt" | awk '/#[0-9]+ pc / {
           for (i = 1; i <= NF; i++) if ($i == "pc") { lib = $(i + 2); fn = $(i + 3); break }
           if (lib ~ /\/(libc|libc\+\+|libbase|liblog|libutils)\.so$/) next
-          if (fn !~ /^\(/) fn = ""
+          if (fn !~ /^\(/ || fn ~ /^\(offset/) fn = ""
           print lib (fn != "" ? " " fn : ""); exit }' | cut -c1-110)"
       P "    ${_tb_ts:-?}  ${_tb_cmd:-?}  ${_tb_sig:-}${_tb_asb}"
       [ -n "$_tb_ab" ] && P "      $_tb_ab"
       [ -n "$_tb_fr" ] && P "      first frame outside libc: $_tb_fr"
+      _tb_det="$(awk -v proc="${_tb_cmd%%:*}" '
+        function clean(s) { sub(/ \(BuildId: [^)]*\)/, "", s); gsub(/ \(offset 0x[0-9a-fA-F]+\)/, "", s); return s }
+        /^Cause: / && cause == "" { cause = substr($0, 8) }
+        /^pid: [0-9]+, tid: [0-9]+, name: / && thr == "" { t = $0; sub(/^.*, name: /, "", t); sub(/ +>>>.*$/, "", t); thr = t }
+        /^backtrace:/ && !done { b = 1; next }
+        b && /^[[:space:]]*$/ { b = 0; done = 1 }
+        b && /#[0-9]+ pc / {
+          l = clean($0)
+          if (l ~ /LSPHooker|[Xx]posed|lspd|LSPosed/) hook = 1
+          r = l; sub(/^[[:space:]]*#[0-9]+ pc [0-9a-fA-F]+ +/, "", r)
+          path = r; sub(/ .*$/, "", path)
+          fn = r; sub(/^[^ ]* */, "", fn)
+          if (fn ~ /^\(.*\)$/) fn = substr(fn, 2, length(fn) - 2); else fn = ""
+          sub(/\+[0-9]+$/, "", fn)
+          if (injpkg == "" && path ~ /\/data\/app\//) {
+            q = path; sub(/^.*\/data\/app\//, "", q); if (q ~ /^~~/) sub(/^[^\/]*\//, "", q); sub(/[-\/].*$/, "", q)
+            if (q != "" && q != proc && q !~ /^com\.(google\.android\.(webview|trichromelibrary)|android\.(webview|chrome)|chrome\.)/) { lib = path; sub(/^.*[!\/]/, "", lib); injpkg = q; injfn = lib (fn != "" ? " (" substr(fn, 1, 70) ")" : "") }
+          }
+          if (fn ~ /^([A-Za-z_$][A-Za-z0-9_$]*\.)+[A-Za-z_$<][A-Za-z0-9_$<>]*$/ && fn ~ /\..*\./ &&
+              fn !~ /^(java|javax|android|androidx|dalvik|kotlin|kotlinx|libcore|sun|jdk|com\.android|com\.google\.android|com\.oplus|art)\./ &&
+              !(fn in seen) && nj < 3) { seen[fn] = 1; j = j (j != "" ? " <- " : "") fn; nj++ }
+        }
+        END {
+          if (thr != "") print "T|" substr(thr, 1, 40)
+          if (cause != "") print "C|" substr(cause, 1, 110)
+          if (injpkg != "") print "I|" injpkg "|" injfn
+          if (j != "") print "J|" j
+          if (hook) print "H|1"
+        }' "$_tb" 2>/dev/null)"
+      _tb_thr="$(printf '%s\n' "$_tb_det" | sed -n 's/^T|//p')"
+      _tb_cause="$(printf '%s\n' "$_tb_det" | sed -n 's/^C|//p')"
+      _tb_ip="$(printf '%s\n' "$_tb_det" | sed -n 's/^I|\([^|]*\)|.*/\1/p')"
+      _tb_if="$(printf '%s\n' "$_tb_det" | sed -n 's/^I|[^|]*|//p')"
+      _tb_jv="$(printf '%s\n' "$_tb_det" | sed -n 's/^J|//p')"
+      [ -n "$_tb_thr" ] && P "      crashing thread: $_tb_thr"
+      [ -n "$_tb_cause" ] && P "      cause: $_tb_cause"
+      [ -n "$_tb_ip" ] && P "      crashed inside code of $_tb_ip: $_tb_if"
+      [ -n "$_tb_jv" ] && P "      app/hook code on the stack (nearest first): $_tb_jv"
+      printf '%s\n' "$_tb_det" | grep -q '^H|1' && P "      the stack passes through the hook framework (a hooked method was running)"
+      if [ -n "$_tb_ip" ]; then
+        _tb_injdet="${_tb_injdet:-}$_tb_ip|${_tb_cmd%%:*}|$_tb_if|$_tb_jv
+"
+      fi
       [ -n "$_tb_ab" ] && _tb_abs="${_tb_abs:-}$_tb_ab
 "
       # Code of an installed app inside a system process (fix178): a CPH2691 listed eight
@@ -365,6 +408,16 @@ _asb_tombstones() {
     if [ -n "${_tb_injs:-}" ]; then
       printf '%s' "$_tb_injs" | sort | uniq -c | sort -rn | while read -r _tb_in _tb_ip; do
         NOTE "$_tb_in of the listed crashes start in code of $_tb_ip, loaded into another app's process (a hook / Xposed module) - its hooks there are the first thing to switch off"
+        _tb_where="$(printf '%s' "${_tb_injdet:-}" | awk -F'|' -v p="$_tb_ip" '$1 == p { c[$2]++ } END { for (k in c) printf "%d %s\n", c[k], k }' | sort -rn | awk '{ printf "%s%s x%d", (NR > 1 ? ", " : ""), $2, $1 }')"
+        _tb_fns="$(printf '%s' "${_tb_injdet:-}" | awk -F'|' -v p="$_tb_ip" '$1 == p && $3 != "" { c[$3]++ } END { for (k in c) printf "%d %s\n", c[k], k }' | sort -rn | head -2 | sed 's/^[0-9]* //' | tr '\n' ';' | sed 's/;$//; s/;/; /g')"
+        _tb_jvs="$(printf '%s' "${_tb_injdet:-}" | awk -F'|' -v p="$_tb_ip" '$1 == p && $4 != "" { c[$4]++ } END { for (k in c) printf "%d %s\n", c[k], k }' | sort -rn | head -2 | sed 's/^[0-9]* //' | tr '\n' ';' | sed 's/;$//; s/;/; /g')"
+        _tb_scope=""
+        _tb_gb="${ASB_GOV_BIN:-${MODDIR:-/data/adb/modules/AutoSystemBoost}/bin/asb}"
+        _tb_db="${ASB_LSPD_DIR:-/data/adb/lspd}/config/modules_config.db"
+        if [ -x "$_tb_gb" ] && [ -f "$_tb_db" ]; then
+          _tb_scope="$("$_tb_gb" --lspd modules "$_tb_db" 2>/dev/null | awk -F'|' -v p="$_tb_ip" '$1 == "scope" && $2 == p { s = s (s ? ", " : "") $3 } END { print s }')"
+        fi
+        NOTE "  $_tb_ip - crashed in: ${_tb_where:-?}${_tb_fns:+; failing code: $_tb_fns}${_tb_jvs:+; its classes on the stack: $_tb_jvs}${_tb_scope:+; enabled in the hook framework for: $_tb_scope}"
       done
     fi
     if [ -n "${_tb_libs:-}" ]; then
@@ -4556,6 +4609,7 @@ if [ -r "$MODDIR/tools/asb_device_info.sh" ]; then
       confirmed) _zd_verdict='CHANNEL CONFIRMED - fresh companion evidence, no live PID currently validated' ;;
       waiting) _zd_verdict='WAITING - work is selected, but no current companion event is proven' ;;
       idle) _zd_verdict='IDLE - enabled, but no allowlisted app, cold-start lift or ledger is selected' ;;
+      quiet) _zd_verdict="QUIET - channel confirmed with the current policy; no app process has started for $(( $(_asb_zdiag_field state_age_ms | tr -dc '0-9' | sed 's/^$/0/') / 60000 )) min (the channel only speaks when one starts)" ;;
       stale) _zd_verdict='STALE - historical state only; no current injection is claimed' ;;
       safe) _zd_verdict='SAFE MODE - new injection and requests are disabled' ;;
       off) _zd_verdict='DISABLED - observer is off for new processes' ;;
@@ -4570,6 +4624,24 @@ if [ -r "$MODDIR/tools/asb_device_info.sh" ]; then
     P "     overhead   : companion_ipc_cpu_ms=$(_asb_zdiag_field ipc_cpu_ms) ipc_wakeups=$(_asb_zdiag_field ipc_wakeups) observed_app_rss_kb=$(_asb_zdiag_field memory_kb)"
     P "     loops      : screen_off_restart_loops=$(_asb_zdiag_field ledger_restart_loops)"
     P "     staging    : installed_abis=$(_asb_zdiag_field installed_abis) (files alone are not injection evidence)"
+    if [ -f "$MODDIR/runtime/asb_zygisk_guard.sh" ]; then
+      _zg_out="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_guard.sh" status 2>/dev/null)"
+      P "     guard      : level=$(printf '%s\n' "$_zg_out" | sed -n 's/^level=//p' | head -1) restricted_now=$(printf '%s\n' "$_zg_out" | grep -c '^active|') recent_events=$(printf '%s\n' "$_zg_out" | grep -c '^event|') screen_off_periods=$(printf '%s\n' "$_zg_out" | grep -c '^night|')"
+      printf '%s\n' "$_zg_out" | awk -F'|' '$1 == "active" { printf "       restricted now: %s (%s, restricted after %s starts, %s starts since)\n", $2, $5, $4, ($6 == "" ? "?" : $6) }
+          $1 == "night" { printf "       screen-off period of %d min: %s process starts, %s app(s) restricted, most: %s\n", int(($3 - $2) / 60), $4, $5, $6 }' \
+        | tail -n 6 | while IFS= read -r _zg_l; do P "$_zg_l"; done
+    fi
+    if [ -f "$MODDIR/runtime/asb_zygisk_aot.sh" ]; then
+      _za_out="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_aot.sh" status 2>/dev/null)"
+      _za_kv() { printf '%s\n' "$_za_out" | sed -n "s/^$1=//p" | head -1; }
+      P "     launch_art : enabled=$(_za_kv enabled) charging=$(_za_kv charging) compiling=$(_za_kv running) launches_recorded=$(_za_kv launches) apps=$(printf '%s\n' "$_za_out" | grep -c '^app|')"
+      printf '%s\n' "$_za_out" | awk -F'|' '$1 == "app" {
+          printf "       %s: %s launches, ART %s (%s), last result %s", $2, $3, $4, $5, $7
+          if ($10 > 0) printf ", cold start median %s ms over %s", $11, $10; else printf ", no cold start recorded"
+          if ($8 > 0) printf "; before compile %s ms over %s, after %s ms over %s", ($13 > 0 ? $13 : "-"), $12, ($15 > 0 ? $15 : "-"), $14
+          printf "\n"
+        }' | while IFS= read -r _za_l; do P "$_za_l"; done
+    fi
     NOTE "   The verdict is evidence-bounded: it does not claim total Zygisk control, a cap change, performance improvement or energy saving. RSS includes the observed apps themselves."
     _asb_ldiag_field() {
       printf '%s\n' "$_asb_observer_diag" | awk -F '\t' -v k="$1" '$1 == "lsposed_hooks" && $2 == k { print $3; found=1; exit } END { if (!found) print "unknown" }'
