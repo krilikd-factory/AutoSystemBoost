@@ -2163,6 +2163,7 @@ lk_on_signal() {
     lk_webui_guard_release
     exit 0
   fi
+  trap '' TERM INT HUP
   lk_finalize
   lk_resume_owned && rm -f "$LK_RESUME_FILE" 2>/dev/null
   lk_webui_guard_release
