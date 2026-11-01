@@ -102,6 +102,8 @@ jobs:
             runtime/asb_lte_screenoff.sh \
             runtime/asb_mmfeed_apply.sh \
             runtime/asb_notif_fix.sh \
+            runtime/asb_zygisk_guard.sh \
+            runtime/asb_zygisk_aot.sh \
             runtime/asb_ltpo_video.sh \
             runtime/asb_odm_rebind.sh \
             runtime/asb_stock_policy.sh \
@@ -632,6 +634,8 @@ jobs:
             "runtime/asb_lte_screenoff.sh" \
             "runtime/asb_mmfeed_apply.sh" \
             "runtime/asb_notif_fix.sh" \
+            "runtime/asb_zygisk_guard.sh" \
+            "runtime/asb_zygisk_aot.sh" \
             "runtime/asb_ltpo_video.sh" \
             "runtime/asb_odm_rebind.sh" \
             "runtime/asb_stock_policy.sh" \
