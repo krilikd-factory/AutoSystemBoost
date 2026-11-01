@@ -7,16 +7,26 @@ ON="$D/zygisk_guard"
 ACT="$D/zygisk_guard_active"
 LOG="$D/zygisk_guard_log"
 NIGHT="$D/zygisk_guard_night"
+HIST="$D/zygisk_guard_hist"
+GHOST="$D/zygisk_guard_ghost"
+GHC="$D/zygisk_guard_ghost_cand"
 PREV="$TMPD/zygisk_guard.prev"
+PREVON="$TMPD/zygisk_guard.prev_on"
 BASE="$TMPD/zygisk_guard.base"
 SEEN="$TMPD/zygisk_guard.seen"
 KEEP="${ASB_DOZE_KEEP:-$D/doze_whitelist_keep}"
 NFL="$D/notif_fix"
+BOOTID="${ASB_ZG_BOOTID:-/proc/sys/kernel/random/boot_id}"
 MIN="${ASB_ZG_MIN_STARTS:-6}"
 WMIN="${ASB_ZG_WAKER_STARTS:-8}"
 NIGHT_MIN_S="${ASB_ZG_NIGHT_MIN_S:-900}"
+HOLD_S="${ASB_ZG_ON_HOLD_S:-1800}"
+GDAYS="${ASB_ZG_GHOST_DAYS:-3}"
+GMIN="${ASB_ZG_GHOST_MIN:-30}"
+GEVERY="${ASB_ZG_GHOST_EVERY_S:-3600}"
 
 _has() { command -v "$1" >/dev/null 2>&1; }
+_now() { date +%s 2>/dev/null || echo 0; }
 _pkgok() {
   case "$1" in ''|*[!A-Za-z0-9_.]*|.*|*..*) return 1 ;; esac
   return 0
@@ -36,9 +46,13 @@ _screen_on() {
   _so="$(grep -m1 '^screen=' "${ASB_ZG_STATE:-/dev/.asb/state}" 2>/dev/null | cut -d= -f2)"
   [ "$_so" != 0 ]
 }
-_ledger() {
-  cat "$RUN"/state.*.tsv 2>/dev/null | awk -F'\t' '$1 == "L" && $2 ~ /^[A-Za-z0-9_.]+$/ { off[$2] += $3 } END { for (p in off) print p, off[p] }'
+_ledger_cols() {
+  cat "$RUN"/state.*.tsv 2>/dev/null | awk -F'\t' '$1 == "L" && $2 ~ /^[A-Za-z0-9_.]+$/ { o[$2] += $3; n[$2] += $4; t[$2] += $5 }
+    END { for (p in o) print p, o[p], n[p], t[p] }'
 }
+_ledger() { _ledger_cols | awk '{ print $1, $2 }'; }
+_ledger_bg_on() { _ledger_cols | awk '{ b = $3 - $4; if (b < 0) b = 0; print $1, b }'; }
+_users() { pm list packages -3 2>/dev/null | sed -n 's/^package:\([A-Za-z0-9_.]*\).*/\1/p'; }
 _protected() {
   case "$1" in
     *authenticator*|*.auth.*|*.otp.*|*twofactor*|*passkey*|*.mfa.*|\
@@ -64,7 +78,7 @@ _umode() {
 }
 _note() {
   mkdir -p "$D" 2>/dev/null
-  { [ -f "$LOG" ] && tail -n 49 "$LOG"; printf '%s|%s|%s|%s|%s\n' "$(date +%s)" "$1" "$2" "$3" "$4"; } > "$LOG.tmp" 2>/dev/null \
+  { [ -f "$LOG" ] && tail -n 49 "$LOG"; printf '%s|%s|%s|%s|%s\n' "$(_now)" "$1" "$2" "$3" "$4"; } > "$LOG.tmp" 2>/dev/null \
     && mv -f "$LOG.tmp" "$LOG"
 }
 _note_once() {
@@ -73,9 +87,15 @@ _note_once() {
   echo "$1|$3" >> "$SEEN" 2>/dev/null
   _note "$1" "$2" "$3" ""
 }
+_restricted_now() {
+  _ro="$(_ops "$1")"
+  case "$(_pmode "$_ro" RUN_ANY_IN_BACKGROUND)$(_umode "$_ro" RUN_ANY_IN_BACKGROUND)" in *ignore*|*deny*) return 0 ;; esac
+  return 1
+}
 _limit() {
-  _lp="$1"; _ln="$2"; _lw="${3:-loop}"; _lt="$4"
+  _lp="$1"; _ln="$2"; _lw="${3:-loop}"; _lt="$4"; _lx="${5:-0}"
   grep -q "^$_lp|" "$ACT" 2>/dev/null && return 0
+  grep -q "^$_lp|" "$GHOST" 2>/dev/null && return 0
   _lo="$(_ops "$_lp")"
   _lm="$(_pmode "$_lo" RUN_ANY_IN_BACKGROUND)"; _lm="${_lm:-default}"
   _lu="$(_umode "$_lo" RUN_ANY_IN_BACKGROUND)"; _lu="${_lu:-default}"
@@ -83,7 +103,7 @@ _limit() {
   appops set "$_lp" RUN_ANY_IN_BACKGROUND ignore >/dev/null 2>&1
   if [ "$(_pmode "$(_ops "$_lp")" RUN_ANY_IN_BACKGROUND)" = ignore ]; then
     mkdir -p "$D" 2>/dev/null
-    printf '%s|%s|%s|%s|%s|%s|%s\n' "$_lp" "$_lm" "$_lu" "$(date +%s)" "$_ln" "$_lw" "$_lt" >> "$ACT"
+    printf '%s|%s|%s|%s|%s|%s|%s|%s\n' "$_lp" "$_lm" "$_lu" "$(_now)" "$_ln" "$_lw" "$_lt" "$_lx" >> "$ACT"
     _note "$_lp" "$_ln" limited "$_lw"
   else
     appops set "$_lp" RUN_ANY_IN_BACKGROUND "$_lm" >/dev/null 2>&1
@@ -96,16 +116,32 @@ _since_limit() {
   case "$_sc" in ''|*[!0-9]*) return 0 ;; esac
   if [ "$_sc" -ge "$2" ]; then echo $(( _sc - $2 )); else echo "$_sc"; fi
 }
-_lift_all() {
+_lift_rows() {
   [ -s "$ACT" ] || { rm -f "$ACT" 2>/dev/null; return 0; }
-  _lc="$(_ledger)"
-  while IFS='|' read -r _fp _fm _fu _fs _fn _fw _ft; do
+  _lr="$1"; _lsel="$2"; _lpk="${3:-}"
+  _lc="$(_ledger)"; _lb="$(_ledger_bg_on)"
+  true > "$ACT.keep" 2>/dev/null || return 0
+  while IFS='|' read -r _fp _fm _fu _fs _fn _fw _ft _fx; do
     _pkgok "$_fp" || continue
-    appops set "$_fp" RUN_ANY_IN_BACKGROUND "${_fm:-default}" >/dev/null 2>&1
-    [ "${ASB_ZG_QUIET:-0}" = 1 ] || _note "$_fp" "${_fn:-0}" "lifted_$1" "$(_since_limit "$_fp" "$_ft" "$_lc")"
+    case "$_fw" in loop_on|waker) ;; *) _fw=loop ;; esac
+    _go=0
+    case "$_lsel" in
+      all) _go=1 ;;
+      off) [ "$_fw" != loop_on ] && _go=1 ;;
+      expired) [ "$_fw" = loop_on ] && case "$_fx" in ''|*[!0-9]*) _go=1 ;; *) [ "$(_now)" -ge "$_fx" ] && _go=1 ;; esac ;;
+      pkg) [ "$_fp" = "$_lpk" ] && _go=1 ;;
+    esac
+    if [ "$_go" = 1 ]; then
+      appops set "$_fp" RUN_ANY_IN_BACKGROUND "${_fm:-default}" >/dev/null 2>&1
+      if [ "$_fw" = loop_on ]; then _fa="$(_since_limit "$_fp" "$_ft" "$_lb")"; else _fa="$(_since_limit "$_fp" "$_ft" "$_lc")"; fi
+      [ "${ASB_ZG_QUIET:-0}" = 1 ] || _note "$_fp" "${_fn:-0}" "lifted_$_lr" "$_fa"
+    else
+      printf '%s|%s|%s|%s|%s|%s|%s|%s\n' "$_fp" "$_fm" "$_fu" "$_fs" "$_fn" "$_fw" "$_ft" "$_fx" >> "$ACT.keep"
+    fi
   done < "$ACT"
-  rm -f "$ACT" "$ACT.tmp" 2>/dev/null
+  if [ -s "$ACT.keep" ]; then mv -f "$ACT.keep" "$ACT"; else rm -f "$ACT" "$ACT.keep" 2>/dev/null; fi
 }
+_lift_all() { _lift_rows "$1" all; }
 _session_end() {
   if [ -s "$BASE" ] && [ -s "$PREV" ]; then
     _st="$(sed -n '1s/^t //p' "$BASE" 2>/dev/null)"; _et="$(sed -n '1s/^t //p' "$PREV" 2>/dev/null)"
@@ -118,7 +154,7 @@ _session_end() {
             NR > 1 && NF == 2 { d = $2 - (($1 in b) ? b[$1] : 0); if (d > 0) print d, $1 }' "$PREV" 2>/dev/null | sort -k1,1nr)"
           _tot="$(printf '%s\n' "$_dl" | awk 'NF == 2 { s += $1 } END { print s + 0 }')"
           _top="$(printf '%s\n' "$_dl" | awk 'NF == 2 && NR <= 3 { printf "%s%s:%s", (NR > 1 ? "," : ""), $2, $1 }')"
-          _nr="$(grep -c '|' "$ACT" 2>/dev/null)"
+          _nr="$(awk -F'|' '$6 != "loop_on"' "$ACT" 2>/dev/null | grep -c '|')"
           mkdir -p "$D" 2>/dev/null
           { [ -f "$NIGHT" ] && tail -n 6 "$NIGHT"; printf '%s|%s|%s|%s|%s\n' "$_st" "$_et" "$_tot" "${_nr:-0}" "${_top:--}"; } > "$NIGHT.tmp" 2>/dev/null \
             && mv -f "$NIGHT.tmp" "$NIGHT"
@@ -128,20 +164,172 @@ _session_end() {
   fi
   rm -f "$BASE" "$SEEN" 2>/dev/null
 }
+_hist_update() {
+  _hb="$(tr -d ' \r\n' < "$BOOTID" 2>/dev/null)"; _hb="${_hb:-none}"
+  _hh="$(sed -n 1p "$HIST" 2>/dev/null)"
+  _hob="$(printf '%s' "$_hh" | awk '$1 == "b" { print $2 }')"
+  _hf="$(printf '%s' "$_hh" | awk '$1 == "b" { print $3 }')"
+  case "$_hf" in ''|*[!0-9]*) _hf="$(_now)" ;; esac
+  _hs=0; [ "$_hb" = "$_hob" ] && _hs=1
+  mkdir -p "$D" 2>/dev/null
+  _ledger_cols | awk -v same="$_hs" -v bid="$_hb" -v first="$_hf" -v hf="$HIST" '
+    BEGIN {
+      while ((getline ln < hf) > 0) {
+        n = split(ln, f, " ")
+        if (n == 7 && f[1] ~ /^[A-Za-z0-9_.]+$/) {
+          o[f[1]] = f[2] + 0; w[f[1]] = f[3] + 0; t[f[1]] = f[4] + 0
+          lo[f[1]] = same ? f[5] + 0 : 0; lw[f[1]] = same ? f[6] + 0 : 0; lt[f[1]] = same ? f[7] + 0 : 0
+        }
+      }
+    }
+    function add(cur, last) { return (cur >= last) ? cur - last : cur }
+    NF == 4 && $1 ~ /^[A-Za-z0-9_.]+$/ {
+      p = $1
+      o[p] += add($2 + 0, lo[p] + 0); w[p] += add($3 + 0, lw[p] + 0); t[p] += add($4 + 0, lt[p] + 0)
+      lo[p] = $2 + 0; lw[p] = $3 + 0; lt[p] = $4 + 0
+    }
+    END { print "b " bid " " first; for (p in o) print p, o[p] + 0, w[p] + 0, t[p] + 0, lo[p] + 0, lw[p] + 0, lt[p] + 0 }' > "$HIST.tmp" 2>/dev/null || return 0
+  { sed -n 1p "$HIST.tmp"; sed 1d "$HIST.tmp" | awk '{ print $2 + $3, $0 }' | sort -k1,1nr | head -n 96 | cut -d' ' -f2-; } > "$HIST.new" 2>/dev/null \
+    && mv -f "$HIST.new" "$HIST"
+  rm -f "$HIST.tmp" 2>/dev/null
+}
+_hist_days10() {
+  _hf2="$(sed -n '1s/^b [^ ]* \([0-9]*\)$/\1/p' "$HIST" 2>/dev/null)"
+  case "$_hf2" in ''|*[!0-9]*) echo 0; return 0 ;; esac
+  echo $(( ( $(_now) - _hf2 ) * 10 / 86400 ))
+}
+_hist_row() { awk -v p="$1" '$1 == p && NF == 7 { b = $2 + $3 - $4; if (b < 0) b = 0; print b, $4; exit }' "$HIST" 2>/dev/null; }
+_ghost_scan() {
+  _gt="$(sed -n '1s/^at //p' "$GHC" 2>/dev/null)"
+  case "$_gt" in ''|*[!0-9]*) _gt=0 ;; esac
+  [ $(( $(_now) - _gt )) -ge "$GEVERY" ] || return 0
+  _gd="$(_hist_days10)"
+  mkdir -p "$D" 2>/dev/null
+  { echo "at $(_now)"
+    if [ "$_gd" -ge $(( GDAYS * 10 )) ]; then
+      _gu="$(_users)"
+      awk -v gmin="$GMIN" 'NF == 7 && $1 ~ /^[A-Za-z0-9_.]+$/ { b = $2 + $3 - $4; if ($4 == 0 && b >= gmin) print $1, b }' "$HIST" 2>/dev/null \
+        | sort -k2,2nr | head -n 8 | while read -r _gp _gb; do
+          _pkgok "$_gp" || continue
+          printf '%s\n' "$_gu" | grep -qxF "$_gp" || continue
+          grep -q "^$_gp|" "$GHOST" 2>/dev/null && continue
+          _protected "$_gp" && continue
+          case "$(am get-inactive "$_gp" 2>/dev/null)" in *Idle=true*) ;; *) continue ;; esac
+          printf '%s|%s|%s\n' "$_gp" "$_gb" "$_gd"
+        done
+    fi
+  } > "$GHC.tmp" 2>/dev/null && mv -f "$GHC.tmp" "$GHC"
+}
+_ghost_check() {
+  [ -s "$GHOST" ] || return 0
+  while IFS='|' read -r _hp _hm _hu _hs _hb _hd _ht; do
+    _pkgok "$_hp" || continue
+    _hr="$(_hist_row "$_hp")"; _hrt="${_hr#* }"
+    case "$_hrt$_ht" in ''|*[!0-9]*) continue ;; esac
+    [ "$_hrt" -gt "$_ht" ] && _ghost_release "$_hp" opened >/dev/null
+  done < "$GHOST"
+}
+_ghost_restrict() {
+  _pkgok "$1" || { echo 'result=bad_request'; return 0; }
+  _users | grep -qxF "$1" || { echo 'result=not_user_app'; return 0; }
+  _protected "$1" && { echo 'result=protected'; return 0; }
+  grep -q "^$1|" "$GHOST" 2>/dev/null && { echo 'result=already'; return 0; }
+  grep -q "^$1|" "$ACT" 2>/dev/null && _lift_rows released pkg "$1"
+  _restricted_now "$1" && { echo 'result=already_restricted'; return 0; }
+  _go="$(_ops "$1")"
+  _gm="$(_pmode "$_go" RUN_ANY_IN_BACKGROUND)"; _gm="${_gm:-default}"
+  _gu2="$(_umode "$_go" RUN_ANY_IN_BACKGROUND)"; _gu2="${_gu2:-default}"
+  appops set "$1" RUN_ANY_IN_BACKGROUND ignore >/dev/null 2>&1
+  if [ "$(_pmode "$(_ops "$1")" RUN_ANY_IN_BACKGROUND)" != ignore ]; then
+    appops set "$1" RUN_ANY_IN_BACKGROUND "$_gm" >/dev/null 2>&1
+    _note "$1" 0 refused ghost; echo 'result=refused'; return 0
+  fi
+  _gr="$(_hist_row "$1")"; _gb2="${_gr%% *}"; _gt2="${_gr#* }"
+  case "$_gb2" in ''|*[!0-9]*) _gb2=0 ;; esac
+  case "$_gt2" in ''|*[!0-9]*) _gt2=0 ;; esac
+  mkdir -p "$D" 2>/dev/null
+  printf '%s|%s|%s|%s|%s|%s|%s\n' "$1" "$_gm" "$_gu2" "$(_now)" "$_gb2" "$(_hist_days10)" "$_gt2" >> "$GHOST"
+  awk -F'|' -v p="$1" 'NR == 1 || $1 != p' "$GHC" > "$GHC.t" 2>/dev/null && mv -f "$GHC.t" "$GHC"
+  _note "$1" "$_gb2" limited ghost
+  echo 'result=restricted'
+}
+_ghost_release() {
+  _pkgok "$1" || { echo 'result=bad_request'; return 0; }
+  _rl="$(grep -m1 "^$1|" "$GHOST" 2>/dev/null)"
+  [ -n "$_rl" ] || { echo 'result=not_held'; return 0; }
+  _rm="$(printf '%s' "$_rl" | cut -d'|' -f2)"; _rb="$(printf '%s' "$_rl" | cut -d'|' -f5)"
+  appops set "$1" RUN_ANY_IN_BACKGROUND "${_rm:-default}" >/dev/null 2>&1
+  awk -F'|' -v p="$1" '$1 != p' "$GHOST" > "$GHOST.t" 2>/dev/null && mv -f "$GHOST.t" "$GHOST"
+  [ -s "$GHOST" ] || rm -f "$GHOST" 2>/dev/null
+  _hr2="$(_hist_row "$1")"; _hn="${_hr2%% *}"
+  _ha=""; case "$_hn$_rb" in ''|*[!0-9]*) ;; *) [ "$_hn" -ge "$_rb" ] && _ha=$(( _hn - _rb )) ;; esac
+  [ "${ASB_ZG_QUIET:-0}" = 1 ] || _note "$1" "${_rb:-0}" "lifted_${2:-released}" "$_ha"
+  echo 'result=released'
+}
+_ghost_release_all() {
+  [ -s "$GHOST" ] || return 0
+  cut -d'|' -f1 "$GHOST" | while read -r _ap; do _ghost_release "$_ap" "$1" >/dev/null; done
+  rm -f "$GHOST" "$GHOST.t" 2>/dev/null
+}
+_tick_on() {
+  _lift_rows screen_on off
+  rm -f "$PREV" 2>/dev/null
+  _lift_rows expired expired
+  if [ -s "$ACT" ] && grep -q '|loop_on|' "$ACT" 2>/dev/null; then
+    [ -f "$MODDIR/runtime/asb_procstate.sh" ] && . "$MODDIR/runtime/asb_procstate.sh" 2>/dev/null
+    if command -v asb_lru_load >/dev/null 2>&1; then
+      asb_lru_load
+      awk -F'|' '$6 == "loop_on" { print $1 }' "$ACT" | while read -r _vp; do
+        [ "$(asb_pkg_proc_class "$_vp")" = active ] && _lift_rows in_use pkg "$_vp"
+      done
+    fi
+  fi
+  _on_now="$(_now)"
+  _on_cur="$(_ledger_bg_on)"
+  [ -n "$_on_cur" ] || return 0
+  _on_pt="$(sed -n '1s/^t //p' "$PREVON" 2>/dev/null)"
+  sed '1d' "$PREVON" > "$PREVON.old" 2>/dev/null || rm -f "$PREVON.old" 2>/dev/null
+  mkdir -p "$TMPD" 2>/dev/null
+  { echo "t $_on_now"; printf '%s\n' "$_on_cur"; } > "$PREVON.tmp" 2>/dev/null && mv -f "$PREVON.tmp" "$PREVON"
+  case "$_on_pt" in ''|*[!0-9]*) rm -f "$PREVON.old"; return 0 ;; esac
+  _on_dt=$(( _on_now - _on_pt ))
+  { [ "$_on_dt" -gt 0 ] && [ "$_on_dt" -le 1800 ]; } || { rm -f "$PREVON.old"; return 0; }
+  _on_c="$(printf '%s\n' "$_on_cur" | awk -v pf="$PREVON.old" -v dt="$_on_dt" -v min="$MIN" '
+    BEGIN { while ((getline l < pf) > 0) { n = split(l, f, " "); if (n == 2) pv[f[1]] = f[2] + 0 } }
+    NF == 2 && ($1 in pv) { d = $2 - pv[$1]; if (d >= min && int(d * 300 / dt) >= min) print $1, d, $2 }')"
+  rm -f "$PREVON.old" 2>/dev/null
+  [ -n "$_on_c" ] || return 0
+  [ -f "$MODDIR/runtime/asb_procstate.sh" ] && . "$MODDIR/runtime/asb_procstate.sh" 2>/dev/null
+  command -v asb_lru_load >/dev/null 2>&1 || return 0
+  asb_lru_load
+  _on_u="$(_users)"
+  printf '%s\n' "$_on_c" | while read -r _op _od _ot; do
+    _pkgok "$_op" || continue
+    printf '%s\n' "$_on_u" | grep -qxF "$_op" || continue
+    case "$(asb_pkg_proc_class "$_op")" in cached|background|none) ;; *) continue ;; esac
+    if _protected "$_op"; then _note_once "$_op" "$_od" protected; continue; fi
+    _limit "$_op" "$_od" loop_on "$_ot" $(( _on_now + HOLD_S ))
+  done
+}
 _tick() {
   [ -f "$ON" ] || return 0
   _has appops && _has pm && _has dumpsys || return 0
-  if _screen_on; then _session_end; _lift_all screen_on; rm -f "$PREV" 2>/dev/null; return 0; fi
-  _now="$(date +%s)"
+  _hist_update
+  _ghost_check
+  _ghost_scan
+  if _screen_on; then _session_end; _tick_on; return 0; fi
+  rm -f "$PREVON" 2>/dev/null
+  _lift_rows expired expired
+  _now_t="$(_now)"
   _cur="$(_ledger)"
   [ -n "$_cur" ] || return 0
   mkdir -p "$TMPD" 2>/dev/null
-  [ -s "$BASE" ] || { echo "t $_now"; printf '%s\n' "$_cur"; } > "$BASE" 2>/dev/null
+  [ -s "$BASE" ] || { echo "t $_now_t"; printf '%s\n' "$_cur"; } > "$BASE" 2>/dev/null
   _pt="$(sed -n '1s/^t //p' "$PREV" 2>/dev/null)"
   sed '1d' "$PREV" > "$PREV.old" 2>/dev/null || rm -f "$PREV.old" 2>/dev/null
-  { echo "t $_now"; printf '%s\n' "$_cur"; } > "$PREV.tmp" 2>/dev/null && mv -f "$PREV.tmp" "$PREV"
+  { echo "t $_now_t"; printf '%s\n' "$_cur"; } > "$PREV.tmp" 2>/dev/null && mv -f "$PREV.tmp" "$PREV"
   _dt=0
-  case "$_pt" in ''|*[!0-9]*) ;; *) _dt=$(( _now - _pt )); { [ "$_dt" -gt 0 ] && [ "$_dt" -le 1800 ]; } || _dt=0 ;; esac
+  case "$_pt" in ''|*[!0-9]*) ;; *) _dt=$(( _now_t - _pt )); { [ "$_dt" -gt 0 ] && [ "$_dt" -le 1800 ]; } || _dt=0 ;; esac
   _wk=0; [ "$(_level)" = wakers ] && _wk=1
   _cands="$(printf '%s\n' "$_cur" | awk -v pf="$PREV.old" -v bf="$BASE" -v dt="$_dt" -v min="$MIN" -v wmin="$WMIN" -v wk="$_wk" '
     BEGIN {
@@ -155,10 +343,10 @@ _tick() {
     }')"
   rm -f "$PREV.old" 2>/dev/null
   [ -n "$_cands" ] || return 0
-  _users="$(pm list packages -3 2>/dev/null | sed -n 's/^package:\([A-Za-z0-9_.]*\).*/\1/p')"
+  _tu="$(_users)"
   printf '%s\n' "$_cands" | while read -r _cp _cn _cw _ct; do
     _pkgok "$_cp" || continue
-    printf '%s\n' "$_users" | grep -qxF "$_cp" || continue
+    printf '%s\n' "$_tu" | grep -qxF "$_cp" || continue
     if _protected "$_cp"; then _note_once "$_cp" "$_cn" protected; continue; fi
     _limit "$_cp" "$_cn" "$_cw" "$_ct"
   done
@@ -171,13 +359,39 @@ _status() {
   [ -n "$(cat "$RUN"/state.*.tsv 2>/dev/null | awk -F'\t' '$1 == "L"' | head -1)" ] && echo 'ledger=1' || echo 'ledger=0'
   echo "threshold=$MIN"
   echo "waker_min=$WMIN"
+  echo "ghost_min=$GMIN"
+  echo "ghost_days=$GDAYS"
+  echo "history_days10=$(_hist_days10)"
   if [ -s "$ACT" ]; then
-    _lc="$(_ledger)"
-    while IFS='|' read -r _sp _sm _su _ss _sn _sw _st; do
+    _lc="$(_ledger)"; _lb="$(_ledger_bg_on)"
+    while IFS='|' read -r _sp _sm _su _ss _sn _sw _st _sx; do
       _pkgok "$_sp" || continue
-      case "$_sw" in waker) ;; *) _sw=loop ;; esac
-      printf 'active|%s|%s|%s|%s|%s\n' "$_sp" "${_ss:-0}" "${_sn:-0}" "$_sw" "$(_since_limit "$_sp" "$_st" "$_lc")"
+      case "$_sw" in waker|loop_on) ;; *) _sw=loop ;; esac
+      if [ "$_sw" = loop_on ]; then _sa="$(_since_limit "$_sp" "$_st" "$_lb")"; else _sa="$(_since_limit "$_sp" "$_st" "$_lc")"; fi
+      case "$_sx" in ''|*[!0-9]*) _sx=0 ;; esac
+      printf 'active|%s|%s|%s|%s|%s|%s\n' "$_sp" "${_ss:-0}" "${_sn:-0}" "$_sw" "$_sa" "$_sx"
     done < "$ACT"
+  fi
+  if [ -s "$HIST" ]; then
+    awk 'NF == 7 && $1 ~ /^[A-Za-z0-9_.]+$/ { b = $2 + $3 - $4; if (b < 0) b = 0; if (b > 0) print b, $1, $2, $3, $4 }' "$HIST" 2>/dev/null \
+      | sort -k1,1nr | head -n 8 | while read -r _xb _xp _xo _xn _xt; do
+        printf 'bg|%s|%s|%s|%s|%s\n' "$_xp" "$_xb" "$_xo" "$_xn" "$_xt"
+      done
+  fi
+  [ -s "$GHC" ] && sed 1d "$GHC" | while IFS='|' read -r _cp _cb _cd; do
+    _pkgok "$_cp" && printf 'suggest|%s|%s|%s\n' "$_cp" "$_cb" "$_cd"
+  done
+  if [ -s "$GHOST" ]; then
+    _hd="$(_hist_days10)"
+    while IFS='|' read -r _hp _hm _hu _hs _hb _hdd _ht; do
+      _pkgok "$_hp" || continue
+      _hr="$(_hist_row "$_hp")"; _hn="${_hr%% *}"
+      case "$_hn" in ''|*[!0-9]*) _hn="$_hb" ;; esac
+      _hsince=$(( ( $(_now) - _hs ) * 10 / 86400 ))
+      _pre=0; [ "${_hdd:-0}" -gt 0 ] 2>/dev/null && _pre=$(( _hb * 100 / _hdd ))
+      _post=-1; [ "$_hsince" -ge 5 ] 2>/dev/null && _post=$(( (_hn - _hb) * 100 / _hsince ))
+      printf 'held|%s|%s|%s|%s|%s\n' "$_hp" "$_hs" "$_pre" "$_post" "$_hsince"
+    done < "$GHOST"
   fi
   [ -s "$LOG" ] && tail -n 12 "$LOG" | while IFS='|' read -r _le _lp _ln _la _lx; do
     _pkgok "$_lp" && printf 'event|%s|%s|%s|%s|%s\n' "$_le" "$_lp" "$_ln" "$_la" "$_lx"
@@ -194,11 +408,15 @@ case "${1:-status}" in
   status) _status ;;
   enable)
     case "${2:-loops}" in loops|wakers) ;; *) echo 'result=bad_request'; exit 2 ;; esac
-    mkdir -p "$D" 2>/dev/null; printf '%s\n' "${2:-loops}" > "$ON" && echo 'result=enabled' ;;
-  disable) rm -f "$ON" "$PREV" "$BASE" "$SEEN" 2>/dev/null; _lift_all disabled; echo 'result=disabled' ;;
+    mkdir -p "$D" 2>/dev/null; printf '%s\n' "${2:-loops}" > "$ON" && { _hist_update; echo 'result=enabled'; } ;;
+  disable) rm -f "$ON" "$PREV" "$PREVON" "$BASE" "$SEEN" 2>/dev/null; _lift_all disabled; _ghost_release_all disabled; echo 'result=disabled' ;;
   tick) _tick ;;
-  screen_on) _session_end; [ -s "$ACT" ] && _lift_all screen_on; rm -f "$PREV" 2>/dev/null ;;
-  restore-all) ASB_ZG_QUIET=1 _lift_all uninstall; rm -f "$ON" "$PREV" "$BASE" "$SEEN" "$LOG" "$NIGHT" 2>/dev/null ;;
+  screen_on) _session_end; [ -s "$ACT" ] && _lift_rows screen_on off; rm -f "$PREV" 2>/dev/null ;;
+  ghost-restrict) [ -f "$ON" ] || { echo 'result=disabled'; exit 0; }; _ghost_restrict "$2" ;;
+  ghost-release) _ghost_release "$2" released ;;
+  restore-all)
+    ASB_ZG_QUIET=1 _lift_all uninstall; ASB_ZG_QUIET=1 _ghost_release_all uninstall
+    rm -f "$ON" "$PREV" "$PREVON" "$BASE" "$SEEN" "$LOG" "$NIGHT" "$HIST" "$GHOST" "$GHC" "$GHC.tmp" "$HIST.tmp" "$HIST.new" 2>/dev/null ;;
   *) echo 'result=bad_request'; exit 2 ;;
 esac
 exit 0
