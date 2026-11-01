@@ -4041,7 +4041,8 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
      * The logkit labelled any sustained GPU streak as a gaming phase - video and maps
      * included - because GPU load was the only signal it had. The governor already knows
      * the answer from the package table; it just never published it. */
-    fprintf(f, "app_hint=%d\n", g_smart_rt.app_hint);
+    fprintf(f, "app_hint=%d\napp_hint_inferred=%d\n",
+            g_smart_rt.app_hint, g_smart_rt.app_hint_inferred);
     /* How long THIS governor has been running.
      *
      * Every counter above is cumulative since the governor started, and the report divides
@@ -4135,7 +4136,7 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             "smart_mode=%d\nsmart_bucket_id=%d\nsmart_daypart=%d\nsmart_is_weekend=%d\n"
             "smart_confidence=%d\nsmart_alpha_battery=%d\nsmart_interactive_bonus=%d\n"
             "smart_sleep_override=%d\nsmart_thermal_veto=%d\nsmart_thermal_veto_reason=%d\n"
-            "smart_app_hint=%d\nsmart_fallback_level=%d\n"
+            "smart_app_hint=%d\nsmart_app_hint_inferred=%d\nsmart_fallback_level=%d\n"
             /* Learned per-bucket history, exposed so the effect is observable. Without
              * these two the thermal lean is invisible: alpha moves and nothing says why. */
             "smart_bucket_temp_x10=%d\nsmart_bucket_drain_x10=%d\n"
@@ -4154,6 +4155,7 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             g_smart_rt.thermal_veto ? 1 : 0,
             g_smart_rt.thermal_veto_reason,
             g_smart_rt.app_hint,
+            g_smart_rt.app_hint_inferred ? 1 : 0,
             g_smart_rt.fallback_level,
             g_smart_rt.bucket_temp_x10,
             g_smart_rt.bucket_drain_x10,
@@ -7155,6 +7157,9 @@ static void asb_fg_classify_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     _prev_on = m->misc.screen_on ? 1 : 0;
     if (_last && now - _last < ASB_SMART_APP_CACHE_S) return;
 
+    /* Reset with the class, never with the cache tick: provenance belongs to the
+     * currently published hint and survives until that hint is recomputed. */
+    g_smart_rt.app_hint_inferred = 0;
     if (!m->misc.screen_on) {
         g_smart_rt.app_hint = ASB_APP_IDLE;
         g_smart_rt.app_hash = 0;
@@ -7225,11 +7230,13 @@ static void asb_fg_classify_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
             int cam_open = m->misc.camera_active;
             if (fsm->state == ASB_STATE_GAMING && fresh_pkg && !media_known) {
                 g_smart_rt.app_hint = ASB_APP_GAMING;
+                g_smart_rt.app_hint_inferred = 1;
             } else if (!boot_grace && !cam_open &&
                        fsm->state == ASB_STATE_SUSTAINED &&
                        m->therm.cpu_max_c >= 60 && m->gpu.load_pct >= 30 &&
                        fresh_pkg && !media_known) {
                 g_smart_rt.app_hint = ASB_APP_GAMING;
+                g_smart_rt.app_hint_inferred = 1;
             } else if (!boot_grace && !cam_open &&
                        g_asb_cfg.bat_suppress_gaming &&
                        fsm->state == ASB_STATE_HEAVY &&
@@ -7237,8 +7244,10 @@ static void asb_fg_classify_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
                        m->cpu.load1 >= 3.0f &&
                        fresh_pkg && !media_known) {
                 /* A suppressed game is still a game - see the Smart twin of this
-                 * branch for the full reasoning. */
+                 * branch for the full reasoning. It remains an inference, not a
+                 * package-table identification. */
                 g_smart_rt.app_hint = ASB_APP_GAMING;
+                g_smart_rt.app_hint_inferred = 1;
             }
         }
     }
@@ -7323,6 +7332,9 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
         _app_prev_on = screen_on ? 1 : 0;
     }
     if (now - g_smart_rt.app_cache_last_refresh >= ASB_SMART_APP_CACHE_S) {
+        /* A package-confirmed game and a hot/GPU-busy inferred game share hint 4
+         * for native policy, but must not share a confirmed-game UI label. */
+        g_smart_rt.app_hint_inferred = 0;
         if (!screen_on) {
             g_smart_rt.app_hint = ASB_APP_IDLE;
             g_smart_rt.app_hash = 0;
@@ -7419,11 +7431,13 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
                 if (fsm->state == ASB_STATE_GAMING && fresh_pkg &&
                     !g_smart_media_pkg_known) {
                     g_smart_rt.app_hint = ASB_APP_GAMING;
+                    g_smart_rt.app_hint_inferred = 1;
                 } else if (!boot_grace && !cam_open &&
                            fsm->state == ASB_STATE_SUSTAINED &&
                            cpu_max_c >= 60 && m->gpu.load_pct >= 30 &&
                            fresh_pkg && !g_smart_media_pkg_known) {
                     g_smart_rt.app_hint = ASB_APP_GAMING;
+                    g_smart_rt.app_hint_inferred = 1;
                 } else if (!boot_grace && !cam_open &&
                            g_asb_cfg.bat_suppress_gaming &&
                            fsm->state == ASB_STATE_HEAVY &&
@@ -7451,6 +7465,7 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
                      * tightened for in V63 - it is sustained rendering work.
                      */
                     g_smart_rt.app_hint = ASB_APP_GAMING;
+                    g_smart_rt.app_hint_inferred = 1;
                 }
             }
         }

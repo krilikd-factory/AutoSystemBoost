@@ -57,6 +57,9 @@ typedef struct {
     int fallback_level;
 
     int app_hint;
+    /* 1 only when the heat/GPU/FSM heuristic inferred GAMING; a package-table
+     * game is confirmed (0). Presentation provenance, not a policy switch. */
+    int app_hint_inferred;
     uint64_t app_hash;
     uint64_t app_hash_session_top;
     int app_hint_session_top;
