@@ -8248,6 +8248,40 @@ grep -q '^    lk_emit_jank_why$' "$ROOT/tools/logkit/asb_log_full_day.sh" || f "
 exit "$fail"
 )
 
+t_webui_fix289_zygisk_pulse() (
+# fix289: the green Zygisk dot breathes. The header pill's dot and the link card's dot pulse
+# slowly in the green states only (connected, confirmed, quiet), with opacity and scale (no
+# repainted property), and reduced motion stops them.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+python3 - "$ROOT/webroot/index.html" <<'PY'
+import re, sys
+h = open(sys.argv[1], encoding='utf-8').read()
+hc = re.sub(r'/\*.*?\*/', '', h, flags=re.S)
+def rule(sel):
+    for m in re.finditer(r'([^{}]+)\{([^{}]*)\}', hc):
+        sels = [x.strip() for x in m.group(1).split(',')]
+        if sel in sels: return m.group(2)
+    return None
+for st in ('connected', 'confirmed', 'quiet'):
+    for dot, wrap in (('zygisk-header-dot', 'zygisk-header-'), ('dev-zygisk-link-dot', 'dev-zygisk-link-')):
+        r = rule('.%s%s .%s' % (wrap, st, dot))
+        assert r and re.search(r'animation:\s*zyLivePulse\s+3\.6s\s+ease-in-out\s+infinite', r), 'no slow pulse: %s %s' % (dot, st)
+        a = rule('.%s%s .%s::after' % (wrap, st, dot))
+        assert a and 'zyLiveRing 3.6s' in a, 'no ring: %s %s' % (dot, st)
+for st in ('waiting', 'stale', 'safe', 'unknown'):
+    assert not re.search(r'\.zygisk-header-%s \.zygisk-header-dot[^{]*\{[^}]*animation' % st, h), 'a non-green state pulses: ' + st
+    assert not re.search(r'\.dev-zygisk-link-%s \.dev-zygisk-link-dot[^{]*\{[^}]*animation' % st, h), 'a non-green card pulses: ' + st
+for k in ('zyLivePulse', 'zyLiveRing'):
+    m = re.search(r'@keyframes %s \{(.*?)\n\}' % k, h, re.S)
+    assert m, 'keyframes missing: ' + k
+    props = set(re.findall(r'([a-z-]+)\s*:', m.group(1)))
+    assert props <= {'opacity', 'transform'}, 'the pulse animates a repainted property: %s %s' % (k, props)
+assert re.search(r'@media \(prefers-reduced-motion: reduce\) \{\s*\.zygisk-header-dot, \.zygisk-header-dot::after, \.dev-zygisk-link-dot, \.dev-zygisk-link-dot::after \{ animation: none !important; \}', h), 'reduced motion does not stop the pulse'
+PY
+echo "PASS webui fix289 zygisk pulse: the green link dots breathe slowly (opacity and scale only), other states stay still, reduced motion stops them"
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;
