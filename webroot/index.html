@@ -4818,7 +4818,7 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
     <div class="sec-line"></div>
   </div>
 
-  <div class="live-metrics">
+  <div class="live-metrics" id="liveMetrics">
 
     <div class="live-row">
       <div class="live-cell" data-lvi="cpu">
@@ -6334,6 +6334,7 @@ function openLivePage() {
   p.scrollTop = 0;
   _liveOpen = true;
   liveHeaderSync();
+  if (lvMonTilesRestore()) lvStale(true);
   if (_selectedProfile !== 'smart') {
     if (!Object.keys(_stockTelemetryKv).length && _lvMonCache.rom && Object.keys(_lvMonCache.rom).length) {
       paintStockLive(_lvMonCache.rom);
@@ -6569,11 +6570,11 @@ async function lvMeterPoll(force) {
  * restored, so a stale value can never become half of a fresh measurement. */
 const LV_MON_CACHE_KEY = 'asb_monitor_cache';
 const LV_MON_CACHE_MAX_MS = 1800000;
-const _lvMonCache = { t: 0, meter: '', rom: null, loaded: false };
+const _lvMonCache = { t: 0, meter: '', rom: null, tiles: null, loaded: false };
 function lvMonCacheSave() {
   try {
     _lvMonCache.t = Date.now();
-    localStorage.setItem(LV_MON_CACHE_KEY, JSON.stringify({ t: _lvMonCache.t, meter: _lvMonCache.meter, rom: _lvMonCache.rom }));
+    localStorage.setItem(LV_MON_CACHE_KEY, JSON.stringify({ t: _lvMonCache.t, meter: _lvMonCache.meter, rom: _lvMonCache.rom, tiles: _lvMonCache.tiles }));
   } catch (e) {}
 }
 function lvMonCacheRom(kv) {
@@ -6592,12 +6593,44 @@ function lvMonCacheRestore() {
     _lvMonCache.t = d.t;
     if (typeof d.meter === 'string') { _lvMonCache.meter = d.meter; lvMeterApply(d.meter, true); }
     if (d.rom && typeof d.rom === 'object') _lvMonCache.rom = lvMonCacheRom(d.rom);
+    if (d.tiles && typeof d.tiles === 'object') _lvMonCache.tiles = d.tiles;
     _lvMonCache.loaded = true;
   } catch (e) {}
 }
 lvMonCacheRestore();
+/* fix290: cache the nine already-painted live cells as a VIEW, never as source counters.
+ * The fix287 meter/ROM cache left exactly the nine cells the owner photographed at "—" until
+ * the first fresh shell returned. A display snapshot contains no cpustat/thermal history and
+ * cannot become either side of a delta. It is profile/language bound, expires in 30 minutes,
+ * is dimmed and is replaced by the ordinary fresh render. */
+const LV_MON_TILE_IDS = ['liveCpu','liveSkin','liveSurface','liveState','liveGpu','liveHeadroom','liveCapSrc','liveClamp','liveLearner'];
+function lvMonTilesCapture(profile) {
+  const values = {};
+  LV_MON_TILE_IDS.forEach(function (id) {
+    const el = _el(id); if (!el) return;
+    const label = el.parentElement ? el.parentElement.querySelector('.live-cell-label') : null;
+    values[id] = { v: String(el.textContent || ''), c: String(el.className || 'live-cell-value'),
+      t: String(el.title || ''), l: label ? String(label.textContent || '') : '' };
+  });
+  _lvMonCache.tiles = { at: Date.now(), profile: String(profile || ''), lang: ASB_LANG, values: values };
+  lvMonCacheSave();
+}
+function lvMonTilesRestore() {
+  const snap = _lvMonCache.tiles, now = Date.now();
+  if (!snap || !(snap.at > 0) || now < snap.at || now - snap.at > LV_MON_CACHE_MAX_MS ||
+      snap.profile !== _selectedProfile || snap.lang !== ASB_LANG || !snap.values) return false;
+  LV_MON_TILE_IDS.forEach(function (id) {
+    const v = snap.values[id], el = _el(id);
+    if (!v || !el || typeof v.v !== 'string') return;
+    el.textContent = v.v; el.className = typeof v.c === 'string' ? v.c : 'live-cell-value';
+    el.title = typeof v.t === 'string' ? v.t : '';
+    const label = el.parentElement ? el.parentElement.querySelector('.live-cell-label') : null;
+    if (label && typeof v.l === 'string' && v.l) label.textContent = v.l;
+  });
+  return true;
+}
 function lvStale(on) {
-  ['liveStockRomBanner', 'bnDrainStrip'].forEach(function (id) {
+  ['liveStockRomBanner', 'bnDrainStrip', 'liveMetrics'].forEach(function (id) {
     const el = _el(id);
     if (el) el.classList.toggle('lv-stale', !!on);
   });
@@ -14737,46 +14770,99 @@ async function asbDeviceInfoLoad() {
   if (saveBtn) saveBtn.disabled = !window._asbDeviceInfoData;
   requestAnimationFrame(asbFitPages);
 }
-async function asbLogReportLoad() {
-  const body = _el('reportBody');
-  const status = _el('reportStatus');
-  if (!body || !status) return;
-  status.textContent = '';
-  body.textContent = '';
-  body.appendChild(logReportNote(T('lr_loading', 'Reading log data…')));
-  let out = '';
+/* fix290: the last digest is a viewer snapshot, not a new measurement. Paint it at once,
+ * let the entrance/loading frame reach the WebView, then refresh in the same on-demand read.
+ * A failed refresh no longer erases a complete report. Persistent cache is bounded and expires;
+ * the in-memory copy also covers managers that disable or quota-limit localStorage. */
+const LOG_REPORT_CACHE_KEY = 'asb_log_report_cache';
+const LOG_REPORT_CACHE_MAX_MS = 7 * 86400000;
+let _logReportLoading = false;
+function logReportCacheGet() {
+  const raw = window._asbLogReportRaw, at = window._asbLogReportAt || 0;
+  if (typeof raw === 'string' && raw && at > 0 && Date.now() >= at && Date.now() - at <= LOG_REPORT_CACHE_MAX_MS)
+    return { raw: raw, t: at };
   try {
-    out = runText(await run('sh ' + MD + '/tools/logkit/asb_fullday_digest.sh 2>/dev/null'));
-  } catch (e) { out = ''; }
-  if (!_rpOpen) return;   // the user left while the shell read the capture
-  window._asbLogReportRaw = out;
-  const d = parseLogReport(out);
-  if (d.error === 'no_capture') {
-    status.textContent = '';
-    body.textContent = '';
-    const s0 = logReportSec(T('lr_none_title', 'No capture found'));
-    s0.classList.add('lgr-empty');
-    const em = document.createElement('span');
-    em.className = 'lgr-empty-emo';
-    em.textContent = '📭';
-    s0.insertBefore(em, s0.firstChild);
-    s0.appendChild(logReportNote(T('lr_none_body', 'Start an infinite log from this menu first. The report appears here as data accumulates - even while it is still recording.')));
-    body.appendChild(s0);
-    requestAnimationFrame(asbFitPages);
-    return;
-  }
-  if (!d.ok) {
-    status.textContent = '';
-    body.textContent = '';
-    body.appendChild(logReportNote(T('lr_failed', 'Could not read the log data.'), true));
-    requestAnimationFrame(asbFitPages);
-    return;
-  }
-  logReportRender(d);
-  /* The report's height is only known now that the digest has been painted - the fit
-     check belongs here, not where the page opened (fix202). */
-  requestAnimationFrame(asbFitPages);
+    const c = JSON.parse(localStorage.getItem(LOG_REPORT_CACHE_KEY) || 'null');
+    if (c && typeof c.raw === 'string' && c.raw && c.raw.length < 600000 && c.t > 0 &&
+        Date.now() >= c.t && Date.now() - c.t <= LOG_REPORT_CACHE_MAX_MS) return c;
+  } catch (e) {}
+  return null;
 }
+function logReportCacheSet(raw) {
+  const at = Date.now();
+  window._asbLogReportRaw = String(raw || ''); window._asbLogReportAt = at;
+  try {
+    if (String(raw || '').length < 600000)
+      localStorage.setItem(LOG_REPORT_CACHE_KEY, JSON.stringify({ t: at, raw: String(raw || '') }));
+  } catch (e) {}
+}
+function logReportCacheClear() {
+  window._asbLogReportRaw = ''; window._asbLogReportAt = 0; window._asbLogReportData = null;
+  try { localStorage.removeItem(LOG_REPORT_CACHE_KEY); } catch (e) {}
+}
+function logReportLoading(body) {
+  body.textContent = '';
+  const card = document.createElement('div'); card.className = 'dev-loading'; card.setAttribute('role', 'status');
+  const orbit = document.createElement('div'); orbit.className = 'dev-loading-orbit'; orbit.setAttribute('aria-hidden', 'true');
+  const title = document.createElement('div'); title.className = 'dev-loading-title'; title.textContent = T('lr_loading', 'Reading log data…');
+  const sub = document.createElement('div'); sub.className = 'dev-loading-sub';
+  sub.textContent = T('lr_loading_sub', 'The report is already open. The read-only digest will replace this card; nothing is being changed.');
+  card.appendChild(orbit); card.appendChild(title); card.appendChild(sub); body.appendChild(card);
+}
+function logReportCachedPaint(cache) {
+  const body = _el('reportBody'), status = _el('reportStatus');
+  if (!cache || !body || !status) return false;
+  const d = parseLogReport(cache.raw);
+  if (!d.ok) return false;
+  const reuse = body.children.length > 0 && window._asbLogReportData && window._asbLogReportRaw === cache.raw;
+  window._asbLogReportRaw = cache.raw; window._asbLogReportAt = cache.t;
+  if (!reuse) logReportRender(d);
+  body.classList.add('lv-stale'); body.dataset.lrShown = '1'; body.dataset.lrAt = String(cache.t);
+  status.textContent = T('lr_cached_status', 'Snapshot from %s · refreshing…').replace('%s', deviceInfoStamp(cache.t));
+  return true;
+}
+async function asbLogReportLoad() {
+  const body = _el('reportBody'), status = _el('reportStatus'), btn = _el('rpRefresh');
+  if (!body || !status) return;
+  const cache = logReportCacheGet();
+  const cached = logReportCachedPaint(cache);
+  if (_logReportLoading) return;
+  _logReportLoading = true;
+  if (btn) btn.disabled = true;
+  status.classList.add('dev-status-busy');
+  if (!cached) { body.classList.remove('lv-stale'); logReportLoading(body); }
+  try {
+    /* Do not enter the synchronous root bridge until the cached report/loading card painted. */
+    await asbPaintYield();
+    let out = '';
+    try { out = runText(await run('sh ' + MD + '/tools/logkit/asb_fullday_digest.sh 2>/dev/null')); }
+    catch (e) { out = ''; }
+    const d = parseLogReport(out);
+    if (d.ok) logReportCacheSet(out);
+    else if (d.error === 'no_capture') logReportCacheClear();
+    if (!_rpOpen) return; // cache a finished read, but never repaint a page the user left
+    if (d.error === 'no_capture') {
+      status.textContent = ''; body.textContent = ''; body.classList.remove('lv-stale'); body.dataset.lrShown = '0';
+      const s0 = logReportSec(T('lr_none_title', 'No capture found')); s0.classList.add('lgr-empty');
+      const em = document.createElement('span'); em.className = 'lgr-empty-emo'; em.textContent = '📭'; s0.insertBefore(em, s0.firstChild);
+      s0.appendChild(logReportNote(T('lr_none_body', 'Start an infinite log from this menu first. The report appears here as data accumulates - even while it is still recording.')));
+      body.appendChild(s0); requestAnimationFrame(asbFitPages); return;
+    }
+    if (!d.ok) {
+      if (cached) status.textContent = T('lr_cached_failed', 'Could not refresh · the snapshot from %s is shown').replace('%s', deviceInfoStamp(cache.t));
+      else { status.textContent = ''; body.textContent = ''; body.appendChild(logReportNote(T('lr_failed', 'Could not read the log data.'), true)); }
+      requestAnimationFrame(asbFitPages); return;
+    }
+    logReportRender(d);
+    body.classList.remove('lv-stale'); body.dataset.lrShown = '1'; body.dataset.lrAt = String(window._asbLogReportAt || Date.now());
+    requestAnimationFrame(asbFitPages);
+  } finally {
+    _logReportLoading = false;
+    if (btn) btn.disabled = false;
+    status.classList.remove('dev-status-busy');
+  }
+}
+
 function deviceLsposedCollect(d) {
   const wrap = document.createElement('div'); wrap.className = 'dev-zygisk-actions';
   const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'dev-zygisk-btn';
@@ -17982,7 +18068,7 @@ function stockTelemetryApply(r) {
   if (pre) pre.textContent = text || T('stock_telemetry_unavailable', 'ROM telemetry unavailable');
 }
 
-function liveBatchParts(visible) {
+function liveBatchParts(visible, prime) {
   const parts = [['state', 'cat /dev/.asb/state']];
   /* fix287: the drain meter and the ROM snapshot ride the same root shell as the governor
    * state when they are due (was two more shells, one after another, before the card). */
@@ -17996,7 +18082,7 @@ function liveBatchParts(visible) {
     parts.push(['rom', stockTelemetryCmd(refresh)]);
   }
   if (!_batCapFullMah) parts.push(['cfull', 'cat /sys/class/power_supply/battery/charge_full']);
-  if (visible) parts.push(['learner', 'cat /dev/.asb/learner_state.json']);
+  if (visible || prime) parts.push(['learner', 'cat /dev/.asb/learner_state.json']);
   parts.push(['status', MD + '/bin/asb status']);
   parts.push(['recovery', 'cat /dev/.asb/recovery.json']);
   if (visible) parts.push(['lpm', 'cat /dev/.asb/lpm_mode']);
@@ -18017,11 +18103,12 @@ async function pollLive(visible) {
       else pollStockTelemetry(false);
       return;
     }
+    const prime = !visible && (!_lvMonCache.tiles || _lvMonCache.tiles.profile !== _selectedProfile || _lvMonCache.tiles.lang !== ASB_LANG);
     restoreManagedLiveLabels();
     /* Collection happens once per pass, after the governor state is read - see the call
      * further down. Calling it here as well would double the /sys reads for nothing. */
     /* fix278: every read of this pass shares one root shell (was five, every 3 s). */
-    const _lb = await runBatch(liveBatchParts(visible));
+    const _lb = await runBatch(liveBatchParts(visible, prime));
     if (_lb.meter) lvMeterApply(_lb.meter.stdout || '', false);
     if (_lb.rom) stockTelemetryApply(_lb.rom);
     const r = _lb.state;
@@ -18069,7 +18156,7 @@ async function pollLive(visible) {
     renderSmartSubLine(kv);
 
     let learner = null;
-    if (visible) {
+    if (visible || prime) {
       const lj = _lb.learner || await run('cat /dev/.asb/learner_state.json 2>/dev/null');
       if (lj && lj.stdout && lj.stdout.trim()) {
         try { learner = JSON.parse(lj.stdout); } catch(e) {}
@@ -18136,7 +18223,7 @@ async function pollLive(visible) {
      * Smart is excluded inside pollStockTelemetry itself, so passing the real visibility
      * here does not compete with its own richer banner. */
     if (_selectedProfile !== 'stock') pollStockTelemetry(visible);
-    if (!visible) return;
+    if (!visible && !prime) return;
 
     // During warm-up the state file still carries the governor's initialised default -
     // "balanced" - while the main page reads current_profile off disk and is already right.
@@ -18754,6 +18841,8 @@ async function pollLive(visible) {
       }
     } catch(e) {}
 
+    lvMonTilesCapture(_selectedProfile !== 'none' ? _selectedProfile : profile);
+    lvStale(false);
   } catch(e) { }
 }
 
@@ -18786,7 +18875,7 @@ document.addEventListener('visibilitychange', () => {
     try { applyStaticI18n(); zygiskHeaderPaint(); } catch (e) {}
   });
 })();
-setTimeout(() => pollLive(false), 1500);
+setTimeout(() => pollLive(false), 250);
 
 /* Ten quick taps on the logo: the saucer leaves its nest, flies, and lands back in it.
  *
