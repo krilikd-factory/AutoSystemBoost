@@ -5529,7 +5529,7 @@ let ASB_LANG = 'ru';
 function T(k, d) { const L = I18N[ASB_LANG]; return (L && typeof L[k] === 'string') ? L[k] : d; }
 EOF
   for fn in Tcfg parseLogReport logReportT logReportDur logReportDurSec logReportAuthority logReportHolderWhat logReportIdleAwake logReportHolderName logReportTips \
-    logReportSysuiSteady logReportMiB logReportNetFix logReportLteIdle logReportFullCharge logReportScreenOnDrainState logReportAnalyze logReportHistoryComparable logReportMachineDigest logReportAnalysisT \
+    logReportSysuiSteady logReportJwhyShare logReportJwhyCause logReportJwhyTop logReportMiB logReportNetFix logReportLteIdle logReportFullCharge logReportScreenOnDrainState logReportAnalyze logReportHistoryComparable logReportMachineDigest logReportAnalysisT \
     logReportTipText logReportRow logReportSec logReportNote logReportHero logReportTable logReportZygisk \
     deviceVal deviceFill deviceZygiskLinkState deviceZygiskLinkVerdict deviceZygiskLink \
     logReportBrief logReportDxT logReportSelfPush logReportDiagnose logReportDiagSection logReportQualityPanel logReportRef logReportDomainRef logReportTipRef logReportDiagRef logReportAppendAnalysis logReportRender asbPageJump asbPageReference shQuote \
@@ -5976,6 +5976,41 @@ chk(reportStatus.textContent === I18N.ru.lr_running_open.split('{min}').join('90
 rbDay.sections.reboot.mod = 'V65-test16';
 logReportRender(rbDay);
 chk(allText(reportBody).indexOf(I18N.ru.lr_reboots.split('{n}').join('2')) >= 0, 'the same build reads as plain reboots');
+/* fix288: why the late frames were late, from the digest's jwhy rows (Android's own per-frame
+   times): parsed, rendered in Russian with the per-state GPU line and its ceiling, named in the
+   smoothness cause, and - when one app pacing its own frames holds most late frames - the advice
+   no longer sends a Battery day to a profile with higher ceilings. */
+{
+  const jwRows = ['meta\telapsed_min=200\tprofile=battery', 'jank\tpct=11.3\tjps=3.61\tframes=140031',
+    'jwhy\tpkg=com.anthropic.claude\tstate=MODERATE\tframes=12600\tjanky=3300\tui=200\tdraw=60\tgn=12500\tg8=80\tg16=15\tgp90=4\tfp90=30\tlvl=9\tmhz=500\tcause=other',
+    'jwhy\tpkg=com.anthropic.claude\tstate=LIGHT_IDLE\tframes=7516\tjanky=3199\tui=120\tdraw=40\tgn=7400\tg8=90\tg16=20\tgp90=5\tfp90=34\tlvl=17\tmhz=160\tcause=other',
+    'jwhy\tpkg=com.android.systemui\tstate=LIGHT_IDLE\tframes=3212\tjanky=1502\tui=1400\tdraw=10\tgn=3200\tg8=0\tg16=0\tgp90=2\tfp90=40\tlvl=17\tmhz=160\tcause=ui',
+    'jwhy\tpkg=com.anthropic.claude\tstate=mixed\tframes=6998\tjanky=2405\tui=90\tdraw=30\tgn=6900\tg8=40\tg16=10\tgp90=4\tfp90=32\tlvl=17\tmhz=160\tcause=other'];
+  const jwDay = parseLogReport(jwRows.join('\n'));
+  chk(jwDay.jwhys.length === 4 && jwDay.jwhys[1].state === 'LIGHT_IDLE' && jwDay.jwhys[1].g16 === 20 && jwDay.jwhys[1].mhz === '160' && jwDay.jwhys[2].cause === 'ui',
+    'fix288: jwhy rows parse: ' + JSON.stringify(jwDay.jwhys));
+  const jwTips = logReportTips(jwDay, true).map(function (t) { return t.key; });
+  chk(jwTips.indexOf('lr_tip_jank_bad_pace') >= 0 && jwTips.indexOf('lr_tip_jank_bad_bat') < 0, 'fix288: one app pacing most late frames gets the pacing advice: ' + jwTips);
+  const jwPace = logReportTips(jwDay, true).filter(function (t) { return t.key === 'lr_tip_jank_bad_pace'; })[0];
+  chk(jwPace && jwPace.vars.app === 'com.anthropic.claude' && jwPace.vars.pct === '11.3', 'fix288: the pacing advice names the app');
+  const jwFew = parseLogReport(jwRows.slice(0, 2).concat([jwRows[3].replace('janky=3199', 'janky=900'), jwRows[4]]).join('\n'));
+  chk(logReportTips(jwFew, true).some(function (t) { return t.key === 'lr_tip_jank_bad_bat'; }), 'fix288: under half of the late frames keeps the Battery advice');
+  const jwGpu = parseLogReport(jwRows.map(function (r) { return r.indexOf('anthropic') >= 0 ? r.replace('cause=other', 'cause=gpu') : r; }).join('\n'));
+  chk(logReportTips(jwGpu, true).some(function (t) { return t.key === 'lr_tip_jank_bad_bat'; }), 'fix288: GPU-bound late frames keep the Battery advice');
+  const jwTop = logReportJwhyTop(jwDay);
+  chk(jwTop && jwTop.pkg === 'com.anthropic.claude' && jwTop.state === 'MODERATE', 'fix288: the top late app is not SystemUI');
+  const jwDx = logReportDiagnose(jwDay).filter(function (x) { return x.area === 'smooth'; });
+  chk(jwDx.some(function (x) { return x.also.some(function (a) { return a.key === 'lr_dx_also_jwhy' && a.v.app === 'com.anthropic.claude' && a.v.cause === I18N.ru.lr_jwhy_c_other; }); }),
+    'fix288: the smoothness cause names the app and why: ' + JSON.stringify(jwDx.map(function (x) { return x.also; })));
+  logReportRender(jwDay);
+  const jwText = allText(reportBody);
+  chk(jwText.indexOf(I18N.ru.lr_jwhy_head) >= 0 && jwText.indexOf(I18N.ru.lr_jwhy_c_other) >= 0 && jwText.indexOf(I18N.ru.lr_jwhy_c_ui) >= 0, 'fix288: the breakdown renders in Russian');
+  chk(jwText.indexOf('com.anthropic.claude · LIGHT_IDLE') >= 0 && jwText.indexOf('43%') >= 0 && jwText.indexOf('1%') >= 0, 'fix288: shares of the late frames render');
+  chk(jwText.indexOf(I18N.ru.lr_jwhy_states.split('{app}').join('com.anthropic.claude').split(' {list}')[0]) >= 0 &&
+      jwText.indexOf(I18N.ru.lr_jwhy_cap.split('{mhz}').join('160')) >= 0 && jwText.indexOf(I18N.ru.lr_jwhy_cap.split('{mhz}').join('500')) >= 0,
+    'fix288: the per-state GPU line names both ceilings');
+  chk(logReportJwhyShare(5, 3) === '100%' && logReportJwhyShare(1, 0) === '-', 'fix288: shares are capped and guarded');
+}
 logReportRender(typicalScreen);
 chk(countClass(reportBody, 'lgr-state-problem') === 0 && countClass(reportBody, 'lgr-warn') === 0, 'neither summary nor detail paints 10.1%/h red');
 const trendText = 'meta\telapsed_min=120\ttarget_h=24\trunning=0\tstarted=2026-10-21 09:40\tprofile=smart\nmeta2\tdevice=OP611FL1\trom=TESTBUILD\ndrain\tpctph=2.0\n';
@@ -8101,6 +8136,116 @@ assert "if (_zygiskOpen) d++;" in h and "if (_zygiskOpen) { uiSound('nav'); clos
 assert "'ASB_DEVINFO_LSPOSED=0 sh ' + MD + '/tools/asb_device_info.sh 2>/dev/null'" in h, 'Device page still waits for the hook collector'
 PY
 echo "PASS webui fix278 perf: one shell per screen read (batch shape checked on a real shell), no root call on the tap, fits coalesced past the slide, an isolated Zygisk page with one mode write"
+)
+
+t_logkit_jank_why_runtime() (
+# Runtime (fix288): why the late frames were late. LIGHT_IDLE on an OP15 Battery capture read
+# 44 % janky; its intervals were one app streaming text untouched and SystemUI's per-second
+# redraw, and nothing in the capture could say whether the GPU ceiling (160 MHz there) or the
+# app held those frames. The REAL collector runs over graphicsstats dumps with frame and GPU
+# histograms: per interval it writes the app with the most janky frames and SystemUI with
+# their slow-UI / slow-draw counts and the interval's own frame and GPU percentiles (bucket
+# deltas), GPU frames over 8/16 ms, and the GPU ceiling level with its MHz. An app idle for an
+# interval keeps no histogram ("?", so the per-poll file stays small) and gets "-" times on its
+# next row; a pruned day writes no row; the report and the digest name the cause.
+set -u
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+C="$ROOT/tools/logkit/_asb_logkit_common.sh"
+DG="$ROOT/tools/logkit/asb_fullday_digest.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail=0; f() { echo "FAIL jank why: $*" >&2; fail=1; }
+mkdir -p "$T/out" "$T/cpufreq/policy0" "$T/cpufreq/policy6" "$T/kgsl"
+echo 1555200 > "$T/cpufreq/policy0/scaling_max_freq"; echo 1555200 > "$T/cpufreq/policy0/scaling_cur_freq"
+echo 1862400 > "$T/cpufreq/policy6/scaling_max_freq"; echo 768000 > "$T/cpufreq/policy6/scaling_cur_freq"
+echo 17 > "$T/kgsl/max_pwrlevel"
+echo "1200000000 1100000000 1000000000 900000000 850000000 800000000 750000000 700000000 650000000 600000000 550000000 500000000 450000000 400000000 350000000 300000000 222000000 160000000" > "$T/kgsl/gpu_available_frequencies"
+g() {   # $1 file, sysui: $2 frames $3 janky $4 slow UI $5 5ms bucket $6 20ms bucket, app: $7 frames $8 janky $9 slow draw ${10} ${11} ${12} buckets
+  cat > "$1" <<GFX
+
+Package: com.android.systemui
+Version: 36
+Stats since: 1000ns
+Stats end: 2000ns
+Total frames rendered: $2
+Janky frames: $3 (1.00%)
+Janky frames (legacy): 999 (9.99%)
+50th percentile: 5ms
+Number Missed Vsync: 0
+Number High input latency: 1
+Number Slow UI thread: $4
+Number Slow bitmap uploads: 0
+Number Slow issue draw commands: 0
+Number Frame deadline missed: $3
+HISTOGRAM: 5ms=$5 6ms=2 20ms=$6
+50th gpu percentile: 1ms
+GPU HISTOGRAM: 1ms=$5 2ms=$6
+Package: com.anthropic.claude
+Version: 1
+Stats since: 1000ns
+Stats end: 2000ns
+Total frames rendered: $7
+Janky frames: $8 (2.00%)
+Number Missed Vsync: 0
+Number High input latency: 0
+Number Slow UI thread: 3
+Number Slow bitmap uploads: 0
+Number Slow issue draw commands: $9
+Number Frame deadline missed: $8
+HISTOGRAM: 5ms=${10} 12ms=${11} 34ms=${12}
+GPU HISTOGRAM: 3ms=${10} 5ms=${11} 16ms=${12}
+GFX
+}
+g "$T/g1" 1000 10 5 990 10 5000 50 2 4000 950 50
+g "$T/g2" 1060 62 57 1043 17 6600 950 12 4600 1650 350
+g "$T/g3" 1110 110 105 1090 20 6600 950 12 4600 1650 350
+g "$T/g4" 1160 160 155 1137 23 7000 1000 14 4800 1700 500
+g "$T/g5" 1210 210 205 1184 26 100 10 0 90 10 0
+printf 'state=LIGHT_IDLE\ntouch_starts=10\n' > "$T/st"
+out="$(LK_OUT_DIR="$T/out" ASB_LK_CPUFREQ_ROOT="$T/cpufreq" ASB_LK_KGSL="$T/kgsl" ASB_LK_STATE_FILE="$T/st" sh -c '
+  . "$0" >/dev/null 2>&1
+  T="$1"
+  lk_jank_trace_header
+  for n in 1 2 3; do ASB_LK_GFXSTATS_DUMP="$T/g$n" lk_capture_jank_row active 1; done
+  echo "--- x3"; cat "$LK_OUT_DIR/.jank_pkgx_prev"
+  for n in 4 5; do ASB_LK_GFXSTATS_DUMP="$T/g$n" lk_capture_jank_row active 1; done
+  echo "--- detail"; grep -v "^#" "$LK_OUT_DIR/jank_detail.tsv"
+  echo "--- why"; lk_emit_jank_why
+  ASB_LK_GFXSTATS_DUMP="$T/g5" lk_capture_jank_row idle 0
+  [ -e "$LK_OUT_DIR/.jank_pkgx_prev" ] && echo "x kept over screen off"
+  echo "--- end"
+' "$C" "$T" 2>&1)"
+det="$(printf '%s\n' "$out" | sed -n '/^--- detail/,/^--- why/p' | grep '|')"
+a2="$(printf '%s\n' "$det" | grep '|com.anthropic.claude|' | head -1)"
+[ "$(printf '%s' "$a2" | cut -d'|' -f2-20)" = "LIGHT_IDLE|com.anthropic.claude|1600|900|0|10|0|900|12|34|34|5|16|16|1600|300|300|17|160" ] \
+  || f "the streaming app's interval: counters, percentiles, GPU over 8/16 ms, ceiling: $a2"
+s2="$(printf '%s\n' "$det" | grep '|com.android.systemui|' | head -1)"
+[ "$(printf '%s' "$s2" | cut -d'|' -f4-18)" = "60|52|52|0|0|52|5|20|20|1|2|2|60|0|0" ] || f "SystemUI's interval: $s2"
+[ "$(printf '%s\n' "$det" | grep -c '|com.anthropic.claude|')" = 2 ] || f "an idle interval or a pruned day wrote an app row: $det"
+[ "$(printf '%s\n' "$det" | grep -c '|com.android.systemui|')" = 3 ] || f "SystemUI rows (none for the pruned day): $det"
+a4="$(printf '%s\n' "$det" | grep '|com.anthropic.claude|' | sed -n 2p)"
+[ "$(printf '%s' "$a4" | cut -d'|' -f4-20)" = "400|50|0|2|0|50|-|-|-|-|-|-|0|-|-|17|160" ] || f "an app back from an idle interval has counters but no times: $a4"
+printf '%s\n' "$out" | sed -n '/^--- x3/,/^--- detail/p' | grep -qx 'com.anthropic.claude|6600|950|3|0|12|950|?|?' || f "an idle app kept its histograms in the per-poll file: $out"
+printf '%s\n' "$out" | sed -n '/^--- x3/,/^--- detail/p' | grep -q '^com.android.systemui|1110|110|105|0|0|110|5:1090,6:2,20:20|1:1090,2:20$' || f "SystemUI's histograms are not kept: $out"
+why="$(printf '%s\n' "$out" | sed -n '/^--- why/,/^--- end/p')"
+printf '%s\n' "$why" | grep -q '^why frames were late' || f "no summary: $why"
+printf '%s\n' "$why" | grep -Eq '^  com.anthropic.claude +LIGHT_IDLE +2000 +48% \| +0% +1% +32% +32% \| +16 ms +34 ms  17 \(160 MHz\)$' || f "summary row: $why"
+printf '%s\n' "$why" | grep -q 'com.anthropic.claude in LIGHT_IDLE: neither the GPU nor the UI thread' || f "pacing verdict: $why"
+printf '%s\n' "$why" | grep -q 'com.android.systemui in LIGHT_IDLE: its UI thread was slow' || f "SystemUI verdict: $why"
+printf '%s\n' "$out" | grep -q 'x kept over screen off' && f "the per-package histograms survived a screen-off stretch"
+# The digest's jwhy rows from the same file; a resumed older capture has no detail file.
+touch "$T/out/_full_day_report.txt"
+dg="$(sh "$DG" "$T/out" 2>/dev/null | grep '^jwhy')"
+printf '%s\n' "$dg" | grep -q "^jwhy	pkg=com.anthropic.claude	state=LIGHT_IDLE	frames=2000	janky=950	ui=0	draw=12	gn=1600	g8=300	g16=300	gp90=16	fp90=34	lvl=17	mhz=160	cause=other$" || f "digest app row: $dg"
+printf '%s\n' "$dg" | grep -q "^jwhy	pkg=com.android.systemui	state=LIGHT_IDLE	frames=160	janky=150	ui=150	.*cause=ui$" || f "digest SystemUI row: $dg"
+mkdir -p "$T/old"
+LK_OUT_DIR="$T/old" ASB_LK_CPUFREQ_ROOT="$T/cpufreq" ASB_LK_STATE_FILE="$T/st" sh -c '
+  . "$0" >/dev/null 2>&1
+  : > "$LK_OUT_DIR/jank_trace.tsv"
+  for n in 1 2; do ASB_LK_GFXSTATS_DUMP="$1/g$n" lk_capture_jank_row active 1; done' "$C" "$T" 2>/dev/null
+[ -e "$T/old/jank_detail.tsv" ] && f "a capture started by an older recorder grew a detail file"
+grep -q '^    lk_emit_jank_why$' "$ROOT/tools/logkit/asb_log_full_day.sh" || f "the final report does not print the breakdown"
+[ "$fail" = 0 ] && echo "PASS logkit jank why: per-interval frame and GPU times of the top janky app and SystemUI, causes in the report and the digest, small per-poll file"
+exit "$fail"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

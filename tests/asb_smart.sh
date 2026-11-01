@@ -4499,11 +4499,17 @@ t_unlock_lift_runtime() (
 # gates - so the open/close/unlock/lock animations of ColorOS 17 run on lifted ceilings.
 # fix223: on manual Battery, continuous touch extends an already-armed window; quiet reading,
 # Smart/Balanced/Performance and a vetoed (off/warm/thermal) start gain no new lift path.
+# fix288: on Battery a lift also releases the light-idle GPU step (bat_light_idle_gpu) to the
+# profile's own 40 % envelope for its length, counted once per lift; other profiles, a higher
+# GPU ceiling and an unmanaged one are left alone.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 G="$ROOT/src/asb_governor.c"
 W="$ROOT/src/asb_writer.h"
 fail() { echo "FAIL unlock lift: $*" >&2; exit 1; }
+grep -q 'unlock_gpu=%d\\nunlock_gpu_lifts=%lu\\n' "$G" || fail "fix288: the GPU release is not published"
+grep -q 'unlock_gpu_lifts' "$ROOT/tools/asb_diag.sh" || fail "fix288: asbdiag says nothing about the GPU release"
+grep -q '#define ASB_BAT_LIFT_GPU_PCT ASB_BATTERY_FLOOR_GPU_MAX_PCT' "$G" || fail "fix288: the GPU release is not Battery's own envelope"
 
 # Wiring: decided before the touch kick is answered, applied after every trim, forces the
 # write on an edge, keeps the 2 s cadence while it runs, survives a heartbeat refresh,
@@ -4560,7 +4566,8 @@ cat > "$T/t.c" <<'X'
 #include <string.h>
 #include <time.h>
 enum { PROFILE_BATTERY, PROFILE_BALANCED, PROFILE_PERFORMANCE, PROFILE_SMART };
-typedef struct { int cpu_max[3]; int cpu_min[3]; int uclamp_top_max; int uclamp_bg_max; } asb_profile_caps_t;
+typedef struct { int cpu_max[3]; int cpu_min[3]; int uclamp_top_max; int uclamp_bg_max; int gpu_max_pct; } asb_profile_caps_t;
+#define ASB_BATTERY_FLOOR_GPU_MAX_PCT 40
 static struct { int unlock_lift_s, unlock_lift_pct, bat_comfort_temp, main_capacity_parity; } g_asb_cfg = { 3, 80, 48, 1 };
 static int g_cpu_slot_hwmax[3] = { 3628800, 4608000, 0 };
 static int g_cpu_all_count = 2;
@@ -4868,6 +4875,31 @@ int main(void) {
     up(1, 0, 796100);
     TC = 1; g_unlock_cold_kick = ASB_COLD_LONG;
     CHK(up(1, 0, 800000) == 0 && g_unlock_cold_long == 2, "fix286: a slow app bypassed the thermal gate"); TC = 0;
+    /* fix288: a Battery lift releases the light-idle GPU step for its length, once counted. */
+    up(0, 0, 900000); P = PROFILE_BATTERY; up(1, 0, 901000); g_now_ms = 901000;
+    unsigned long g0 = g_unlock_gpu_lifts;
+    asb_profile_caps_t gl = { { 1785600, 1747200, 0 }, { 0, 0, 0 }, 50, 30, 10 };
+    asb_unlock_lift_apply(&gl);
+    CHK(gl.gpu_max_pct == 40 && g_unlock_gpu_on == 1 && g_unlock_gpu_lifts == g0 + 1,
+        "fix288: a Battery lift left the GPU at the light-idle step");
+    asb_profile_caps_t gl2 = { { 1785600, 1747200, 0 }, { 0, 0, 0 }, 50, 30, 10 };
+    asb_unlock_lift_apply(&gl2);
+    CHK(gl2.gpu_max_pct == 40 && g_unlock_gpu_lifts == g0 + 1, "fix288: one lift counted twice");
+    asb_profile_caps_t gm = { { 1785600, 1747200, 0 }, { 0, 0, 0 }, 50, 30, 42 };
+    asb_unlock_lift_apply(&gm);
+    CHK(gm.gpu_max_pct == 42, "fix288: a higher GPU ceiling was lowered");
+    asb_profile_caps_t g00 = { { 1785600, 1747200, 0 }, { 0, 0, 0 }, 50, 30, 0 };
+    asb_unlock_lift_apply(&g00);
+    CHK(g00.gpu_max_pct == 0, "fix288: an unmanaged GPU became managed");
+    CHK(up(1, 0, 904100) == 0 && g_unlock_gpu_on == 0, "fix288: the GPU release outlived the lift");
+    CHK(up(1, 1, 906000) == 1, "fix288: second Battery lift");
+    asb_profile_caps_t gl3 = { { 1785600, 1747200, 0 }, { 0, 0, 0 }, 50, 30, 10 };
+    asb_unlock_lift_apply(&gl3);
+    CHK(gl3.gpu_max_pct == 40 && g_unlock_gpu_lifts == g0 + 2, "fix288: the next lift was not counted");
+    up(0, 0, 910000); P = PROFILE_SMART; up(1, 0, 911000);
+    asb_profile_caps_t gs = { { 1996800, 1862400, 0 }, { 0, 0, 0 }, 50, 32, 10 };
+    asb_unlock_lift_apply(&gs);
+    CHK(gs.gpu_max_pct == 10 && g_unlock_gpu_lifts == g0 + 2, "fix288: Smart's GPU ceiling was moved by the lift");
     P = PROFILE_SMART;
     return bad;
 }

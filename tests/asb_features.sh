@@ -6176,6 +6176,10 @@ fail=0; f() { echo "FAIL wakelock runtime: $*" >&2; fail=1; }
 mkdir -p "$T/bin" "$T/mod/config" "$T/d"
 cat > "$T/bin/dumpsys" <<'S'
 #!/bin/sh
+[ -n "${DS_LOG:-}" ] && echo "$*" >> "$DS_LOG"
+if [ "$1" = batterystats ] && [ "${2:-}" = --charged ] && [ "${BS_NOCHARGED:-0}" = 1 ]; then
+  echo "Unknown option: --charged"; exit 0
+fi
 case "$1" in
   batterystats) cat <<'B'
   All partial wake locks:
@@ -6245,13 +6249,18 @@ chmod +x "$T/bin/"*
 run() {
   echo "wakelock_action=$1" > "$T/mod/config/governor.conf"
   printf 'awake_pct_screenoff=%s\nawake_window_min=90\n' "$2" > "$T/state"
-  AM_LOG="$T/am.log" PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_WL_DIR="$T/d" ASB_WL_STATE="$T/state" \
+  AM_LOG="$T/am.log" DS_LOG="$T/ds.log" PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_WL_DIR="$T/d" ASB_WL_STATE="$T/state" \
     sh "$SRC" >/dev/null 2>&1
 }
 
 # Switched off: ranks and reports, changes nothing.
+: > "$T/ds.log"
 run 0 60
 A="$T/d/wakelock_apps"
+# fix288: one batterystats read per hourly pass (it was up to four: two for the kernel
+# wakelock fallback, one for the app ranking, one for multicast), without the history.
+[ "$(grep -c '^batterystats' "$T/ds.log")" = 1 ] || f "fix288: the pass read batterystats more than once: $(grep '^batterystats' "$T/ds.log" | tr '\n' ';')"
+grep -qx 'batterystats --charged' "$T/ds.log" || f "fix288: the pass did not ask for the since-charge statistics only"
 [ -s "$A" ] || f "no wakelock_apps written while report-only"
 [ ! -s "$T/am.log" ] || f "acted while wakelock_action=0"
 head -1 "$A" | grep -q '^com.example.sync|3720|0|report$' || f "top row wrong: $(head -1 "$A")"
@@ -6306,6 +6315,13 @@ grep -q 'set-standby-bucket com.example.sync active' "$T/am.log" || f "off did n
 grep -q 'appops set com.example.sync WIFI_MULTICAST allow' "$T/am.log" || f "off did not give multicast back"
 [ -f "$T/d/wakelock_restricted" ] && f "restricted record kept after off"
 
+# fix288: a ROM whose dumpsys does not know --charged: one plain read, same ranking.
+: > "$T/ds.log"; rm -f "$T/d/wakelock_apps"
+printf 'wakelock_action=0\n' > "$T/mod/config/governor.conf"
+BS_NOCHARGED=1 AM_LOG="$T/am.log" DS_LOG="$T/ds.log" PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_WL_DIR="$T/d" ASB_WL_STATE="$T/state" \
+  sh "$SRC" >/dev/null 2>&1
+[ "$(grep -c '^batterystats' "$T/ds.log")" = 2 ] && grep -qx 'batterystats' "$T/ds.log" || f "fix288: no plain read after --charged was refused: $(tr '\n' ';' < "$T/ds.log")"
+grep -q '^com.example.sync|3720|' "$T/d/wakelock_apps" 2>/dev/null || f "fix288: the fallback read was not parsed"
 [ "$fail" = 0 ] && echo "PASS wakelock watcher runtime"
 exit "$fail"
 )
