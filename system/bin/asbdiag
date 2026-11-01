@@ -4626,10 +4626,13 @@ if [ -r "$MODDIR/tools/asb_device_info.sh" ]; then
     P "     staging    : installed_abis=$(_asb_zdiag_field installed_abis) (files alone are not injection evidence)"
     if [ -f "$MODDIR/runtime/asb_zygisk_guard.sh" ]; then
       _zg_out="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_guard.sh" status 2>/dev/null)"
-      P "     guard      : level=$(printf '%s\n' "$_zg_out" | sed -n 's/^level=//p' | head -1) restricted_now=$(printf '%s\n' "$_zg_out" | grep -c '^active|') recent_events=$(printf '%s\n' "$_zg_out" | grep -c '^event|') screen_off_periods=$(printf '%s\n' "$_zg_out" | grep -c '^night|')"
-      printf '%s\n' "$_zg_out" | awk -F'|' '$1 == "active" { printf "       restricted now: %s (%s, restricted after %s starts, %s starts since)\n", $2, $5, $4, ($6 == "" ? "?" : $6) }
+      P "     guard      : level=$(printf '%s\n' "$_zg_out" | sed -n 's/^level=//p' | head -1) restricted_now=$(printf '%s\n' "$_zg_out" | grep -c '^active|') unused_apps_restricted=$(printf '%s\n' "$_zg_out" | grep -c '^held|') unused_apps_suggested=$(printf '%s\n' "$_zg_out" | grep -c '^suggest|') history_days10=$(printf '%s\n' "$_zg_out" | sed -n 's/^history_days10=//p' | head -1) screen_off_periods=$(printf '%s\n' "$_zg_out" | grep -c '^night|')"
+      printf '%s\n' "$_zg_out" | awk -F'|' '$1 == "active" { printf "       restricted now: %s (%s, restricted after %s starts, %s starts since%s)\n", $2, $5, $4, ($6 == "" ? "?" : $6), ($5 == "loop_on" ? ", held until epoch " $7 : "") }
+          $1 == "held" { printf "       unused app restricted by the owner: %s (background starts/day x10 before %s, after %s)\n", $2, $4, ($5 < 0 ? "counting" : $5) }
+          $1 == "suggest" { printf "       unused app suggested: %s (%s background starts in %.1f days, never opened)\n", $2, $3, $4 / 10 }
+          $1 == "bg" { printf "       background starts since enabled: %s %s (screen off %s, screen on %s, opened %s)\n", $2, $3, $4, $5, $6 }
           $1 == "night" { printf "       screen-off period of %d min: %s process starts, %s app(s) restricted, most: %s\n", int(($3 - $2) / 60), $4, $5, $6 }' \
-        | tail -n 6 | while IFS= read -r _zg_l; do P "$_zg_l"; done
+        | head -n 24 | while IFS= read -r _zg_l; do P "$_zg_l"; done
     fi
     if [ -f "$MODDIR/runtime/asb_zygisk_aot.sh" ]; then
       _za_out="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_aot.sh" status 2>/dev/null)"
