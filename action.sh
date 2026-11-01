@@ -811,6 +811,7 @@ T_ZY_QUIET="Channel confirmed · quiet (no app started recently)"
 T_ZY_SAFE="Safe mode"
 T_ZY_DISABLED="Disabled"
 T_ZY_UNKNOWN="Status unknown"
+T_ZY_AUTO="Automatic setup: on · observation list selected from user apps and usage history"
 T_LEAN_NOW="Battery lean: %s%% now"
 T_LEAN_TILT=" (your tilt: +%s%% of the remaining way to Battery)"
 T_TILT_ONLY="Battery tilt: %s%%"
@@ -1376,26 +1377,6 @@ else
   _f "  🎛  $T_PROFILE_MANUAL" "$PROFILE"
 fi
 
-# Compact, current Zygisk evidence. link-status is read-only: it neither syncs policy nor
-# starts a companion/worker. The collector's link_state is shared with WebUI and asbdiag.
-_zygisk_info="$(sh "$MODDIR/runtime/asb_zygisk.sh" link-status 2>/dev/null)"
-_zygisk_field() {
-  printf '%s
-' "$_zygisk_info" | awk -F '	' -v k="$1" '$1 == "D" && $2 == "zygisk_observer" && $3 == k { print $4; found=1; exit } END { if (!found) print "unknown" }'
-}
-_zy_state="$(_zygisk_field link_state)"; [ -n "$_zy_state" ] || _zy_state=unknown
-case "$_zy_state" in
-  connected) _zy_label="$T_ZY_CONNECTED" ;; confirmed) _zy_label="$T_ZY_CONFIRMED" ;;
-  waiting) _zy_label="$T_ZY_WAITING" ;; idle) _zy_label="$T_ZY_IDLE" ;;
-  stale) _zy_label="$T_ZY_STALE" ;; quiet) _zy_label="$T_ZY_QUIET" ;; safe) _zy_label="$T_ZY_SAFE" ;;
-  off) _zy_label="$T_ZY_DISABLED" ;; *) _zy_label="$T_ZY_UNKNOWN" ;;
-esac
-_zy_onoff() { [ "$1" = 1 ] && printf '%s' "$T_ZY_ON" || printf '%s' "$T_ZY_OFF"; }
-_f "  🧩  $T_ZY_HEAD" "$_zy_label"
-_f "     $T_ZY_EVIDENCE" "$(_zygisk_field state_freshness)" "$(_zygisk_field loaded_processes)" "$(_zygisk_field events_total)" "$(_zygisk_field spawn_events)"
-_f "     $T_ZY_FEATURES" "$(_zy_onoff "$(_zygisk_field enabled)")" "$(_zy_onoff "$(_zygisk_field lifecycle_hints)")" "$(_zy_onoff "$(_zygisk_field launch_hints)")" "$(_zy_onoff "$(_zygisk_field spawn_ledger)")" "$(_zygisk_field enabled_packages)"
-_f "     $T_ZY_POLICY" "$(_zygisk_field policy_generation)" "$(_zygisk_field policy_seen_generation)" "$(_zygisk_field installed_abis)"
-_f "     $T_ZY_COST" "$(_zygisk_field ipc_cpu_ms)" "$(_zygisk_field ipc_wakeups)" "$(_zygisk_field memory_kb)"
 _bias="$(grep -E '^[[:space:]]*smart_battery_bias=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' ')"
 # Show the LIVE learning weight, the same number the WebUI shows as "battery-lean", so the two
 # screens agree.
@@ -2614,6 +2595,32 @@ esac
 [ "$(_cfg doze_trim_whitelist)" = 1 ] && _sx="$(_join "$_sx" "$T_S_DOZE_WL")"
 [ "$(_cfg night_modem_idle)" = 1 ] && _sx="$(_join "$_sx" "$T_S_NIGHT_MODEM")"
 [ -n "$_sx" ] && _f "       $T_ALSO" "$_sx"
+
+echo ""
+# Compact, current Zygisk evidence. fix284: this belongs with Sleep/System integration,
+# not between the profile header and thermal/battery readings. link-status is read-only: it neither
+# syncs policy nor starts a companion/worker. The collector verdict is shared with WebUI/asbdiag.
+_zygisk_info="$(sh "$MODDIR/runtime/asb_zygisk.sh" link-status 2>/dev/null)"
+_zygisk_field() {
+  printf '%s
+' "$_zygisk_info" | awk -F '	' -v k="$1" '$1 == "D" && $2 == "zygisk_observer" && $3 == k { print $4; found=1; exit } END { if (!found) print "unknown" }'
+}
+_zy_state="$(_zygisk_field link_state)"; [ -n "$_zy_state" ] || _zy_state=unknown
+case "$_zy_state" in
+  connected) _zy_label="$T_ZY_CONNECTED" ;; confirmed) _zy_label="$T_ZY_CONFIRMED" ;;
+  waiting) _zy_label="$T_ZY_WAITING" ;; idle) _zy_label="$T_ZY_IDLE" ;;
+  stale) _zy_label="$T_ZY_STALE" ;; quiet) _zy_label="$T_ZY_QUIET" ;; safe) _zy_label="$T_ZY_SAFE" ;;
+  off) _zy_label="$T_ZY_DISABLED" ;; *) _zy_label="$T_ZY_UNKNOWN" ;;
+esac
+_zy_onoff() { [ "$1" = 1 ] && printf '%s' "$T_ZY_ON" || printf '%s' "$T_ZY_OFF"; }
+_f "  🧩  $T_ZY_HEAD" "$_zy_label"
+_f "     $T_ZY_EVIDENCE" "$(_zygisk_field state_freshness)" "$(_zygisk_field loaded_processes)" "$(_zygisk_field events_total)" "$(_zygisk_field spawn_events)"
+_f "     $T_ZY_FEATURES" "$(_zy_onoff "$(_zygisk_field enabled)")" "$(_zy_onoff "$(_zygisk_field lifecycle_hints)")" "$(_zy_onoff "$(_zygisk_field launch_hints)")" "$(_zy_onoff "$(_zygisk_field spawn_ledger)")" "$(_zygisk_field enabled_packages)"
+_f "     $T_ZY_POLICY" "$(_zygisk_field policy_generation)" "$(_zygisk_field policy_seen_generation)" "$(_zygisk_field installed_abis)"
+_f "     $T_ZY_COST" "$(_zygisk_field ipc_cpu_ms)" "$(_zygisk_field ipc_wakeups)" "$(_zygisk_field memory_kb)"
+if [ "$(_zygisk_field auto_mode)" = 1 ]; then
+  _f "     $T_ZY_AUTO"
+fi
 
 echo ""
 echo "  ⚙️  ${H_SYSTEM}"

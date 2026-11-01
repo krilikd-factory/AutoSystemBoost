@@ -234,6 +234,8 @@ The observer reports process start and exit derived from peer-socket disconnect.
 
 **Zygisk Lifecycle Refresh** gives those events a bounded performance/efficiency role without creating a second governor. An accepted start/exit can send the fixed `zygisk-refresh` request to the existing governor while the screen is on. The governor invalidates stale foreground evidence and re-evaluates the current profile; all dwell, thermal and vendor gates still decide the result. Requests are at least 2 seconds apart and capped at 8 per minute **per active companion**. No package name or frequency target is sent. This can reduce stale-input delay at lifecycle edges, but a hint acknowledgement is not a boost or proof of energy savings. LSPosed is never secretly killed, frozen, hidden or throttled; any saving requires comparable on-device A/B measurements.
 
+For a non-expert setup, open the **Zygisk** page and tap **Set up automatically**. ASB selects up to 64 user-installed apps for observation (frequently opened apps first), enables the Full preset, the evidence-gated Background guard and ART compilation only under its charging/screen-off/temperature gates. You do not need to fill in a package list. Turning automatic setup off restores your previous manual list and disables those automatic features. Safe mode is never cleared automatically; observation alone does not restrict apps, and no performance or battery saving is promised without an on-device A/B measurement.
+
 You can manage it from **Device → Zygisk Observer**, or with these commands:
 
 ```bash

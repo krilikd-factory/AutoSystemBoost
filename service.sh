@@ -3780,6 +3780,12 @@ asb_gov_liveness() {
       if [ -s /data/adb/asb/notif_fix ] && [ -f "$MODDIR/runtime/asb_notif_fix.sh" ]; then
         MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_notif_fix.sh" reapply >/dev/null 2>&1
       fi
+      # Refresh an explicitly enabled automatic Zygisk allowlist after Package Manager is up.
+      # This uses the existing five-minute service pass; it starts no worker and writes nothing
+      # when the candidate list is unchanged or Package Manager is not ready.
+      if [ "${_fit_boot:-0}" = 1 ] && [ -f /data/adb/asb/zygisk_observer/auto ]; then
+        ASB_ZYGISK_MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk.sh" auto-refresh >/dev/null 2>&1
+      fi
     fi
     asb_gov_liveness
     if [ -f /data/adb/asb/zygisk_guard ] && [ -f "$MODDIR/runtime/asb_zygisk_guard.sh" ]; then
@@ -3796,6 +3802,11 @@ asb_gov_liveness() {
     _wd_last="$_ho_now"
     if [ -s /data/adb/asb/notif_fix ] && [ -f "$MODDIR/runtime/asb_notif_fix.sh" ]; then
       MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_notif_fix.sh" reapply >/dev/null 2>&1
+    fi
+    # Newly installed/removed user apps join/leave an opted-in automatic observation list on
+    # the existing hourly pass. No package is selected for restriction by this refresh.
+    if [ -f /data/adb/asb/zygisk_observer/auto ]; then
+      ASB_ZYGISK_MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk.sh" auto-refresh >/dev/null 2>&1
     fi
     # Bring the route link watcher back if it died.
 #

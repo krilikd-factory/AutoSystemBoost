@@ -755,6 +755,12 @@ Each restriction records the start-ledger count when it began, so the page, the 
 
 **Apps you never open.** After 3 days, a user app with 30+ background starts, no top-app start, `am get-inactive` = idle and none of the guard's protections is suggested. One tap sets `RUN_ANY_IN_BACKGROUND=ignore` (Android's "Restricted" battery setting); opening the app, "Give back", guard off or uninstall restores the recorded mode. Each restricted app shows its background starts per day before and after.
 
+### 🤖 11.11. Automatic setup and Actions placement (fix284)
+
+**Automatic setup** is an explicit one-tap choice on the Zygisk page. It ranks `pm list packages -3` candidates by existing top-app start counts (persistent ART counts plus the current native ledger), then by package name, validates every name again and keeps at most 64 for observation. It selects Full, Background guard `wakers` and ART. The observation list is not an AppOps restriction list; only the existing measured guard can restrict an eligible app. An empty Package Manager answer preserves the last good list.
+
+The pre-automatic manual list is restored exactly on disable, which also disables guard and ART. Safe mode refuses automatic enable and is never cleared. Existing boot/hourly service passes refresh membership; unchanged refreshes do not rewrite policy. Commands: `auto-enable`, `auto-refresh`, `auto-disable`. In Actions, the Zygisk evidence block now follows Sleep and precedes System.
+
 ## 🔐 12. Device information, privacy and evidence quality
 
 ### 🕵️ 12.1. Read-only, on-demand collection
