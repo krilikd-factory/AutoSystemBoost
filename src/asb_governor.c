@@ -3194,6 +3194,8 @@ static unsigned long g_unlock_cold_lifts = 0;   /* lifts a cold start armed */
 static unsigned long g_unlock_cold_extends = 0; /* running lifts a cold start carried over the launch */
 static unsigned long g_unlock_cold_long = 0;    /* fix286: cold starts covered by the longer window */
 static unsigned long g_unlock_cold_trims = 0;   /* fix286: tap lifts a fast cold start ended early */
+static int    g_unlock_gpu_on      = 0;   /* fix288: this lift released the Battery light-idle GPU step */
+static unsigned long g_unlock_gpu_lifts = 0;    /* fix288: lifts that released it */
 
 /* fix286: launch classes from the Zygisk companion. ASB_COLD_NORMAL is the plain
  * "zygisk-launch"; a slow-to-start app (measured cold-start median of a second or more, or
@@ -3352,7 +3354,7 @@ static int asb_unlock_lift_update(int screen_on, int touch_kick, int touch_activ
         (thermal_cap || !asb_unlock_lift_profile_ok(profile_idx) || now_ms >= g_unlock_until_ms))
         g_unlock_until_ms = 0;
     g_unlock_lift_now = (g_unlock_until_ms > 0);
-    if (!g_unlock_lift_now) g_unlock_level_khz = 0;
+    if (!g_unlock_lift_now) { g_unlock_level_khz = 0; g_unlock_gpu_on = 0; }
     return g_unlock_lift_now;
 }
 
@@ -3395,6 +3397,7 @@ static int asb_unlock_lift_share(int profile_idx) {
  * guard's lift. Two clusters only, from each device's own cpu_capacity and frequency table;
  * never below the prime's ceiling before the lift; main_capacity_parity=0 turns it off. */
 static int g_bjank_armed;
+#define ASB_BAT_LIFT_GPU_PCT ASB_BATTERY_FLOOR_GPU_MAX_PCT
 static void asb_unlock_lift_apply(asb_profile_caps_t *caps) {
     int pct = asb_unlock_lift_share(g_unlock_profile);
     int prime_before = caps->cpu_max[1];
@@ -3406,6 +3409,20 @@ static void asb_unlock_lift_apply(asb_profile_caps_t *caps) {
         if (caps->cpu_max[i] < want) caps->cpu_max[i] = want;
     }
     if (caps->uclamp_top_max > 0 && caps->uclamp_top_max < pct) caps->uclamp_top_max = pct;
+    /* fix288: the GPU too, on Battery. Its light idle draws at bat_light_idle_gpu - the lowest
+     * GPU step, 160 MHz on SM8850 - and every lift until now raised the CPU ceilings and the
+     * top-app uclamp only. A wake or a touch leaves light idle on its own (the screen-on grace
+     * and the touch floor, fix240), but the jank guard's lift does not: an OP15 Battery
+     * capture (3639) had it fire four times for an app streaming text untouched, "ceilings to
+     * 64 %", while the GPU stayed at 160 MHz through every one of those windows. For the
+     * length of a lift the GPU ceiling is Battery's own light-idle envelope without that
+     * step (40 %), still under every other profile; devfreq still picks the clock, and the
+     * ordinary expiry hands the step back. */
+    if (g_unlock_profile == PROFILE_BATTERY && caps->gpu_max_pct > 0 &&
+        caps->gpu_max_pct < ASB_BAT_LIFT_GPU_PCT) {
+        caps->gpu_max_pct = ASB_BAT_LIFT_GPU_PCT;
+        if (!g_unlock_gpu_on) { g_unlock_gpu_on = 1; g_unlock_gpu_lifts++; }
+    }
     int lvl = 0;
     if (g_unlock_profile == PROFILE_BATTERY && g_asb_cfg.main_capacity_parity && !g_bjank_armed &&
         g_asb_cfg.unlock_lift_s > 0 && g_unlock_armed_ms > 0 &&
@@ -4626,6 +4643,7 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     fprintf(f, "unlock_lift=%d\nunlock_lifts=%lu\nunlock_lift_skips=%lu\nunlock_lift_skip_why=%s\n",
             g_unlock_applied, g_unlock_lifts, g_unlock_skips, g_unlock_skip_why);
     fprintf(f, "unlock_level_khz=%d\nunlock_levels=%lu\n", g_unlock_level_khz, g_unlock_levels);
+    fprintf(f, "unlock_gpu=%d\nunlock_gpu_lifts=%lu\n", g_unlock_gpu_on, g_unlock_gpu_lifts);
     {
         int _bk, _br, _bt;
         asb_bhold_counts(&_bk, &_br, &_bt);
