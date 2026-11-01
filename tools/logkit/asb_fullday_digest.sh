@@ -200,7 +200,7 @@ if [ -f "$_ZY_S" ] || [ -f "$_ZY_L" ]; then
       add("lifecycle_hints", U["lifecycle_hints"]); add("launch_hints", U["launch_hints"]); add("spawn_ledger", U["spawn_ledger"])
       add("memory_kb", U["memory_kb"])
       reset=0
-      nd=split("events_total spawn_events launch_events launch_accepted policy_hints hints_accepted hints_vetoed ledger_events events_dropped_total ipc_cpu_ms ipc_wakeups", keys, " ")
+      nd=split("events_total spawn_events launch_events launch_accepted launch_vetoed launch_unavailable launch_throttled launch_long launch_short launch_class_fallback denylist_spawns policy_hints hints_accepted hints_vetoed hints_screen_off ledger_events events_dropped_total ipc_cpu_ms ipc_wakeups", keys, " ")
       for (i=1;i<=nd;i++) {
         k=keys[i]; sv=SV[k]; lv=LV[k]
         if (hs && hl && sv ~ /^[0-9]+$/ && lv ~ /^[0-9]+$/ && lv+0 >= sv+0) d=lv-sv
