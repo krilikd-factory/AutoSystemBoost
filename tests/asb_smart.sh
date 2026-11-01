@@ -6279,7 +6279,7 @@ typedef struct { int cpu_max_c; } therm_t;
 typedef struct { int screen_on, camera_active; } misc_t;
 typedef struct { cpu_t cpu; gpu_t gpu; therm_t therm; misc_t misc; } asb_metrics_t;
 typedef struct { int state; } asb_fsm_t;
-static struct { int enabled; int app_hint; uint64_t app_hash; char app_pkg_cached[128]; } g_smart_rt;
+static struct { int enabled; int app_hint; int app_hint_inferred; uint64_t app_hash; char app_pkg_cached[128]; } g_smart_rt;
 static int g_smart_store_loaded = 0;
 static int g_pkg_detect_ok = 0, g_pkg_detect_status = 0, g_pkg_detect_source = 0;
 static float g_ui_quiet_floor = 0.0f;
@@ -6319,6 +6319,7 @@ int main(void) {
     det("com.miHoYo.GenshinImpact", ASB_APP_GAMING, ASB_PKG_OK, 0);
     asb_fg_classify_tick(&M, &F);
     if (g_smart_rt.app_hint != ASB_APP_GAMING) { puts("a known game lost its hint"); bad = 1; }
+    if (g_smart_rt.app_hint_inferred) { puts("a package-table game was marked as inferred"); bad = 1; }
     /* A paused game (idle FSM, quiet GPU) is one step down, not GAMING. */
     det("com.miHoYo.GenshinImpact", ASB_APP_GAMING, ASB_PKG_OK, 0);
     F.state = ASB_STATE_LIGHT_IDLE; M.gpu.load_pct = 4; M.cpu.load1 = 5.0f;
@@ -6334,11 +6335,13 @@ int main(void) {
     F.state = ASB_STATE_SUSTAINED; M.therm.cpu_max_c = 60; M.gpu.load_pct = 45; M.cpu.load1 = 6.0f;
     asb_fg_classify_tick(&M, &F);
     if (g_smart_rt.app_hint != ASB_APP_GAMING) { puts("a hot GPU-busy unknown was not inferred as a game"); bad = 1; }
+    if (g_smart_rt.app_hint_inferred != 1) { puts("heat/GPU inference lost its provenance"); bad = 1; }
     /* ... but the camera is not a game, whatever the heat. */
     det("com.newgame.unlisted", ASB_APP_MEDIUM, ASB_PKG_OK, 0);
     M.misc.camera_active = 1;
     asb_fg_classify_tick(&M, &F);
     if (g_smart_rt.app_hint == ASB_APP_GAMING) { puts("the camera was inferred as a game"); bad = 1; }
+    if (g_smart_rt.app_hint_inferred) { puts("camera reclassification retained stale inference provenance"); bad = 1; }
     M.misc.camera_active = 0;
     /* ... and neither is a video app. */
     det("com.google.android.youtube", ASB_APP_MEDIUM, ASB_PKG_OK, 1);
@@ -6361,6 +6364,7 @@ int main(void) {
     M.misc.screen_on = 0;
     asb_fg_classify_tick(&M, &F);
     if (g_smart_rt.app_hint != ASB_APP_IDLE || g_smart_rt.app_hash != 0) { puts("screen off is not idle"); bad = 1; }
+    if (g_smart_rt.app_hint_inferred) { puts("screen off retained inference provenance"); bad = 1; }
     M.misc.screen_on = 1;
     /* Smart active: the function keeps its hands off Smart's classification. */
     g_smart_rt.enabled = 1; g_smart_store_loaded = 1; g_smart_rt.app_hint = ASB_APP_LIGHT;
@@ -6374,7 +6378,16 @@ int main(void) {
 C
 "$CC" -std=gnu11 -Wall -Werror -Wno-unused-function -o "$T/t" "$T/t.c" -I"$T" || fail "harness does not compile"
 "$T/t" || fail "behaviour"
-echo "PASS fg classify manual gaming: a feed under load is not a game, a known game is, the heat inference keeps the camera and media out, Smart keeps owning its own"
+# Smart has the same three inference branches and publishes their provenance. The
+# manual runtime above exercises the shared struct/reset semantics; these anchors cover
+# the Smart-owned block without replacing it with a detached classifier model.
+S="$T/smart_block.c"
+sed -n '/^static int asb_smart_tick/,/^static void asb_smart_persist_check/p' "$G" > "$S"
+[ "$(grep -c 'g_smart_rt.app_hint_inferred = 0;' "$S")" -eq 1 ] || fail 'Smart does not reset provenance on reclassification'
+[ "$(grep -c 'g_smart_rt.app_hint_inferred = 1;' "$S")" -eq 3 ] || fail 'Smart heat/FSM inference branches do not all publish provenance'
+grep -Fq 'smart_app_hint_inferred=%d' "$G" || fail 'Smart state has no inference provenance'
+grep -Fq 'app_hint_inferred=%d' "$G" || fail 'general app telemetry has no inference provenance'
+echo "PASS app-class provenance: package games confirmed, heat/GPU guesses marked, camera/media/screen-off reset it, Smart publishes all three inference paths"
 )
 
 t_writer_cap_composition_properties() (

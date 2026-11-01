@@ -3703,7 +3703,7 @@ PY
   echo "const _node = { className: 'live-cell-value cap-raised metric-good' }; function _el(id) { return id === 'x' ? _node : null; }"
   sed -n '/^const METRIC_CLASSES = /,/];$/p' "$H"
   sed -n '/^const METRIC_STEPS = /p' "$H"
-  for fn in asbMetricPaint asbMetricStep asbLoadMetric asbThermalMetric asbRamMetric asbDrainMetric asbClockMetric asbHeadroomMetric asbConfidenceMetric asbConfPctMetric asbBasisMetric asbModemMetric asbSlotMetric asbTrendMetric asbFsmMetric asbAppMetric asbClampMetric asbCeilMetric asbBatLevelMetric lvSlotHeat; do
+  for fn in asbMetricPaint asbMetricStep asbLoadMetric asbThermalMetric asbRamMetric asbDrainMetric asbClockMetric asbHeadroomMetric asbConfidenceMetric asbConfPctMetric asbBasisMetric asbModemMetric asbSlotMetric asbTrendMetric asbFsmMetric asbAppMetric lvAppView asbClampMetric asbCeilMetric asbBatLevelMetric lvSlotHeat; do
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
   cat <<'EOF'
@@ -3761,6 +3761,13 @@ eq(asbFsmMetric('—'), 'metric-normal', 'unknown state');
 eq(asbAppMetric(0), 'metric-fsm-deep', 'idle app load'); eq(asbAppMetric(1), 'metric-fsm-light', 'light app load');
 eq(asbAppMetric(2), 'metric-fsm-moderate', 'medium app load'); eq(asbAppMetric(3), 'metric-fsm-heavy', 'heavy app load'); eq(asbAppMetric(4), 'metric-fsm-gaming', 'gaming load');
 eq(asbAppMetric(9), 'metric-neutral', 'unknown app load');
+eq(lvAppView(4, 0, false).text, 'gaming', 'package-confirmed game');
+eq(lvAppView(4, 0, false).metric, 'metric-fsm-gaming', 'confirmed game colour');
+eq(lvAppView(4, 1, false).text, 'high · GPU', 'inferred load is not a confirmed game');
+eq(lvAppView(4, 1, false).metric, 'metric-fsm-heavy', 'inferred load uses heavy colour');
+chk(lvAppView(4, 1, false).tip.includes('no game was positively identified'), 'inferred load lacks its evidence tooltip');
+eq(lvAppView(4, 1, true).text, '…', 'warm-up hides unobserved app class');
+eq(lvAppView(4, 1, true).metric, 'metric-neutral', 'warm-up app colour');
 eq(asbClampMetric(1), 'metric-good', 'a clamp an hour is ordinary'); eq(asbClampMetric(2), 'metric-fair', 'occasional clamps'); eq(asbClampMetric(6), 'metric-mild', 'several clamps');
 eq(asbClampMetric(15), 'metric-warm', 'frequent clamps'); eq(asbClampMetric(30), 'metric-hot', 'dozens of clamps'); eq(asbClampMetric(50), 'metric-severe', 'almost constant clamping'); eq(asbClampMetric(65), 'metric-bad', 'constant clamping');
 eq(asbCeilMetric(100), 'metric-good', 'free CPU'); eq(asbCeilMetric(90), 'metric-fair', 'nearly free CPU'); eq(asbCeilMetric(70), 'metric-mild', 'mild ROM ceiling');
@@ -5521,6 +5528,37 @@ rc="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST
 # dash must not break the row or count as a number.
 printf '%s\n' "$rc" | grep -Eq '^hist	started=[0-9-]+ [0-9:]+	night=1.0	drain=2.0	jank=-	cpu=41	clamps=-	device=-	rom=-	mod=-	elapsed=2866	on_pct=-	off_min=-	dm=2$' || fail "a capture without jank data still trends, with dashes and explicit unknown context: $(printf '%s\n' "$rc" | grep '^hist')"
 
+# Existing observer snapshots expose more independent evidence without adding a device read.
+ZC="$T/zygisk-counters"; mkdir -p "$ZC"
+cat > "$ZC/zygisk_observer_start.tsv" <<'EOF_ZY_START'
+M	captured_epoch=100
+D	zygisk_observer	link_state	confirmed
+D	zygisk_observer	launch_throttled	0
+D	zygisk_observer	launch_long	1
+D	zygisk_observer	launch_short	2
+D	zygisk_observer	launch_class_fallback	1
+D	zygisk_observer	denylist_spawns	169
+D	zygisk_observer	hints_screen_off	0
+EOF_ZY_START
+cat > "$ZC/zygisk_observer_latest.tsv" <<'EOF_ZY_LATEST'
+M	captured_epoch=200
+D	zygisk_observer	link_state	confirmed
+D	zygisk_observer	launch_throttled	6
+D	zygisk_observer	launch_long	2
+D	zygisk_observer	launch_short	43
+D	zygisk_observer	launch_class_fallback	1
+D	zygisk_observer	denylist_spawns	1135
+D	zygisk_observer	hints_screen_off	4
+EOF_ZY_LATEST
+zyout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST" sh "$D" "$ZC")"
+for field in launch_throttled_delta=6 launch_long_delta=1 launch_short_delta=41 launch_class_fallback_delta=0 denylist_spawns_delta=966 hints_screen_off_delta=4 deltas=available; do
+  printf '%s\n' "$zyout" | grep '^zygisk' | grep -q "	$field" || fail "observer counter projection: $field"
+done
+sed -i 's/launch_short	43/launch_short	1/' "$ZC/zygisk_observer_latest.tsv"
+zyreset="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST" sh "$D" "$ZC")"
+printf '%s\n' "$zyreset" | grep '^zygisk' | grep -q '	launch_short_delta=unknown' || fail 'a decreasing launch-class counter must have an unknown delta'
+printf '%s\n' "$zyreset" | grep '^zygisk' | grep -q '	deltas=counter_reset_or_restart' || fail 'a decreasing launch-class counter must name reset/restart'
+
 # --- the REAL parser/tips in node, fed the fixture digest and the shipped locales ---
 {
   printf 'const I18N = { en: %s, ru: %s };\n' "$(cat "$ROOT/webroot/i18n/en.json")" "$(cat "$ROOT/webroot/i18n/ru.json")"
@@ -5879,6 +5917,7 @@ const injDay = parseLogReport('meta\telapsed_min=131\ttarget_h=0\trunning=0\tpro
 const injA = logReportAnalyze(injDay);
 chk(injA.actions.some(t => t.key === 'lr_tip_sysui_inj' && t.vars.n === '7' && t.vars.m === '1' && t.vars.pkg === 'com.example.hooker'), 'the restart action names the injecting app: ' + JSON.stringify(injA.actions.map(t => t.key)));
 chk(injA.chains.some(c => c.key === 'lr_chain_sysui_inj'), 'the restart chain is explained: ' + JSON.stringify(injA.chains.map(c => c.key)));
+chk(injA.chains.some(c => c.key === 'lr_chain_sysui_inj' && c.kind === 'hypothesis'), 'SystemUI stack attribution is a hypothesis, not a sole-cause fact');
 /* fix244: the stutter advice names the profile the day ran on. */
 const jkTip = function (prof) { return logReportTips(parseLogReport('meta\telapsed_min=200\tprofile=' + prof + '\njank\tpct=8.0\tjps=3.00\tframes=30000\n'), true).map(function (t) { return t.key; }); };
 chk(jkTip('battery').indexOf('lr_tip_jank_bad_bat') >= 0 && jkTip('battery').indexOf('lr_tip_jank_bad') < 0, 'a Battery day is not told about the Smart learner: ' + jkTip('battery'));
@@ -5936,6 +5975,20 @@ logReportRender(zyDay);
 chk(!!domEl('lgr-zygisk') && countClass(reportBody, 'lgr-hero') >= 4, 'Zygisk capture card and four delta heroes render');
 chk(allText(reportBody).indexOf(I18N.ru.lr_sec_zygisk) >= 0 && allText(reportBody).indexOf(I18N.ru.lr_zy_coverage_two) >= 0, 'Zygisk capture card is localized and bounded to start/latest evidence');
 chk(allText(reportBody).indexOf('10 → 15') >= 0 && allText(reportBody).indexOf('42 / 42') >= 0, 'capture counters and policy acknowledgement render');
+/* Independent observer channels: a zero accepted start/exit counter does not erase spawn,
+   cold-start or ledger activity. Launch classes and accepted-request semantics stay visible. */
+const zyChannels = parseLogReport('meta\telapsed_min=390\tprofile=battery\nzygisk\tstate=confirmed\tstart_state=confirmed\tcoverage=start_latest\tenabled=1\tsafe_mode=off\tfreshness=current\tloaded=0\tpolicy_generation=1793567101\tpolicy_seen_generation=1793567101\tpackages=64\tabis=arm64-v8a\tlifecycle_hints=1\tlaunch_hints=1\tspawn_ledger=1\tevents_total_start=0\tevents_total_latest=0\tevents_total_delta=0\tspawn_events_delta=1064\tlaunch_events_delta=135\tlaunch_accepted_delta=129\tlaunch_long_delta=1\tlaunch_short_delta=41\tlaunch_class_fallback_delta=0\tlaunch_throttled_delta=6\tledger_events_delta=1064\tpolicy_hints_delta=0\thints_accepted_delta=0\thints_vetoed_delta=0\tipc_cpu_ms_delta=215\tipc_wakeups_delta=2128\tdeltas=available\n');
+logReportRender(zyChannels);
+const zyChannelsText = allText(reportBody);
+chk(zyChannelsText.indexOf(I18N.ru.lr_zy_quiet_channels) >= 0 && zyChannelsText.indexOf(I18N.ru.lr_zy_live_zero) >= 0, 'zero events/live set do not contradict independent historical activity');
+chk(zyChannelsText.indexOf(I18N.ru.lr_zy_accept_note) >= 0 && zyChannelsText.indexOf(I18N.ru.lr_zy_spawns + '|1064') >= 0, 'spawn count and accepted lift-request caveat render');
+chk(zyChannelsText.indexOf(I18N.ru.dev_zygisk_observer_launch_long + '|1') >= 0 && zyChannelsText.indexOf(I18N.ru.dev_zygisk_observer_launch_short + '|41') >= 0 && zyChannelsText.indexOf(I18N.ru.lr_zy_launch_fallback + '|0') >= 0, 'slow/fast/fallback launch classes render as independent deltas: ' + zyChannelsText);
+const zyReset = parseLogReport('meta\telapsed_min=120\nzygisk\tstate=confirmed\tcoverage=start_latest\tloaded=0\tevents_total_delta=unknown\tspawn_events_delta=unknown\tlaunch_events_delta=unknown\tlaunch_accepted_delta=unknown\tdeltas=counter_reset_or_restart\n');
+logReportRender(zyReset);
+chk(allText(reportBody).indexOf(I18N.ru.lr_zy_reset) >= 0 && allText(reportBody).indexOf(I18N.ru.lr_zy_live_zero) < 0, 'counter reset keeps deltas unknown and invents no historical activity');
+const zyOne = parseLogReport('meta\telapsed_min=120\nzygisk\tstate=confirmed\tcoverage=latest_only\tloaded=0\tevents_total_delta=unknown\tspawn_events_delta=unknown\tdeltas=unavailable\n');
+logReportRender(zyOne);
+chk(allText(reportBody).indexOf(I18N.ru.lr_zy_coverage_one) >= 0 && allText(reportBody).indexOf(I18N.ru.lr_zy_live_zero) < 0, 'one snapshot cannot manufacture a delta or live-set explanation');
 const zyUnknown = parseLogReport('meta\telapsed_min=120\nzygisk\tstate=unknown\tcoverage=unavailable\tdeltas=unavailable\n');
 logReportRender(zyUnknown);
 chk(allText(reportBody).indexOf(I18N.ru.lr_zy_unavailable) >= 0, 'collector absence remains unknown, never unsupported');
@@ -5957,6 +6010,11 @@ chk(allText(reportBody).indexOf(I18N.ru.lr_zy_unavailable) >= 0, 'collector abse
 logReportRender(mixDay);
 const mixText = allText(reportBody);
 chk(mixText.indexOf(I18N.ru.lr_sec_smart) < 0, 'the Smart learner card stays off a Battery day');
+const smartRecordDay = JSON.parse(JSON.stringify(mixDay)); smartRecordDay.sections.smart.helped = '2';
+const smartRecordTips = logReportTips(smartRecordDay, true).filter(t => t.key === 'lr_tip_smart_help_manual');
+chk(smartRecordTips.length === 1 && !logReportTips(smartRecordDay, true).some(t => t.key === 'lr_tip_smart_help'), 'Smart records on Battery are measurements, not active Smart control');
+const smartActiveDay = JSON.parse(JSON.stringify(smartRecordDay)); smartActiveDay.sections.meta.profile = 'smart';
+chk(logReportTips(smartActiveDay, true).some(t => t.key === 'lr_tip_smart_help') && !logReportTips(smartActiveDay, true).some(t => t.key === 'lr_tip_smart_help_manual'), 'the active-Smart wording remains exclusive to Smart');
 chk(mixText.indexOf(I18N.ru.lr_idle) < 0, 'a five-minute pause gets no worst-idle row');
 chk(mixText.indexOf(I18N.ru.lr_audio_spk) < 0, 'one minute of speaker sound is no playback row');
 chk(mixText.indexOf(I18N.ru.lr_drain_idle) >= 0 && mixText.indexOf(I18N.ru.lr_drain_short_note0.slice(0, 30)) >= 0, 'the short-pause idle figure carries its explanation');
@@ -6138,6 +6196,20 @@ chk(capTxt.indexOf(I18N.ru.lr_dx_owner_asb) >= 0 && capTxt.indexOf(I18N.ru.lr_dx
 capDay.sections.meta.profile = 'battery';
 const bdx = logReportDiagnose(capDay).find(x => x.cause === 'lr_dx_smooth_cap_bat');
 chk(bdx && bdx.owner === 'user' && !bdx.send && bdx.state === 'normal', 'on Battery the low ceilings are the profile, not a fault');
+const capExternal = JSON.parse(JSON.stringify(capDay));
+capExternal.sections.meta.profile = 'smart';
+capExternal.sections.jcap_main = null;
+capExternal.sections.jcap_prime = { yes:'9.5', yes_f:'20000', yes_jps:'3.50', no:'5.0', no_f:'30000', no_jps:'2.00' };
+capExternal.sections.vcap = { n:'10', prime_vendor:'10', prime_asb:'0', main_vendor:'0', main_asb:'0' };
+const externalDx = logReportDiagnose(capExternal).find(x => x.cause === 'lr_dx_smooth_cap_external');
+chk(externalDx && externalDx.owner === 'rom' && !externalDx.send && !logReportDiagnose(capExternal).some(x => x.cause === 'lr_dx_smooth_cap'), 'ROM-owned prime-cap correlation is not blamed on ASB');
+const capFairDay = parseLogReport('meta\telapsed_min=390\tprofile=battery\njank\tpct=6.6\tjps=3.35\tframes=1009444\njcap_main\tyes=5.6\tyes_f=188151\tyes_jps=2.90\tno=6.8\tno_f=821293\tno_jps=3.45\nvcap\tn=10\tprime_vendor=10\n');
+chk(logReportTips(capFairDay, true).some(t => t.key === 'lr_tip_jank_bad_evidence') && !logReportTips(capFairDay, true).some(t => t.key === 'lr_tip_jank_bad_bat'), 'measured at-cap evidence suppresses unsupported higher-ceiling advice');
+const thinDay = parseLogReport('meta\telapsed_min=180\tprofile=battery\nscr\ton_min=120\toff_min=60\ton_pctph=5\njank\tpct=6.0\tframes=1200\n');
+chk(logReportDiagnose(thinDay).some(x => x.area === 'data' && x.cause === 'lr_dx_frames_thin' && x.owner === 'unknown'), 'thin HWUI evidence gets an explicit unknown-data card');
+chk(logReportAnalyze(thinDay).verdicts.some(v => v.domain === 'smoothness' && v.state === 'unknown'), 'thin HWUI evidence still has no smoothness verdict');
+const noFrames = JSON.parse(JSON.stringify(thinDay)); delete noFrames.sections.jank;
+chk(logReportDiagnose(noFrames).some(x => x.cause === 'lr_dx_frames_absent'), 'missing HWUI counters are unknown, not zero jank');
 /* fix271: the per-app Battery scroll-hold verdicts ride along the smoothness card on Battery. */
 capDay.sections.bhold = { kept: '2', released: '3', testing: '1' };
 const bhIt = logReportDiagnose(capDay).find(x => x.area === 'smooth' && x.also.some(a => a.key === 'lr_dx_also_bhold'));
@@ -6800,7 +6872,8 @@ for selector in (
     'html[data-asb-glass="1"] .smart-banner-value .load-mid',
 ):
     assert selector in h, selector
-assert "asbMetricPaint('bnApp', warm ? 'metric-neutral' : asbAppMetric(appH))" in h
+assert "asbMetricPaint('bnApp', appView.metric)" in h
+assert "lvAppView(appH, parseInt(kv.smart_app_hint_inferred || '0', 10), warm)" in h
 assert '.smart-banner-value.load-mid,' in h and 'color: var(--bal);' in h
 for cls in ('good', 'warm', 'bad', 'neutral'):
     assert '.smart-banner-value.metric-' + cls in h
@@ -6997,16 +7070,19 @@ t_webui_fix290_instant_runtime() (
 const window=globalThis, ASB_LANG='en', MD='/data/adb/modules/AutoSystemBoost';
 let _selectedProfile='balanced', _rpOpen=true;
 const store={};const localStorage={getItem:k=>store[k]||null,setItem:(k,v)=>store[k]=String(v),removeItem:k=>delete store[k]};
-function mk(tag='div'){const e={tagName:tag,children:[],dataset:{},className:'',title:'',textContent:'',disabled:false,classList:{set:new Set(),add(x){this.set.add(x)},remove(x){this.set.delete(x)},toggle(x,on){on?this.set.add(x):this.set.delete(x)},contains(x){return this.set.has(x)}},setAttribute(){},appendChild(c){e.children.push(c);return c;},insertBefore(c){e.children.unshift(c);return c;},querySelector(sel){return sel==='.live-cell-label'?e.label:null;}};return e;}
-const ids={};['liveCpu','liveSkin','liveSurface','liveState','liveGpu','liveHeadroom','liveCapSrc','liveClamp','liveLearner'].forEach(id=>{const e=mk();e.id=id;e.parentElement=mk();e.parentElement.label=mk();ids[id]=e;});
+function mk(tag='div'){const e={tagName:tag,children:[],dataset:{},style:{},className:'',title:'',textContent:'',disabled:false,classList:{set:new Set(),add(x){this.set.add(x)},remove(x){this.set.delete(x)},toggle(x,on){on?this.set.add(x):this.set.delete(x)},contains(x){return this.set.has(x)}},setAttribute(){},appendChild(c){e.children.push(c);return c;},insertBefore(c){e.children.unshift(c);return c;},querySelector(sel){return sel==='.live-cell-label'?e.label:sel==='.smart-banner-pill'?(e.pill||null):null;}};return e;}
+const ids={};['liveCpu','liveSkin','liveSurface','liveState','liveGpu','liveHeadroom','liveCapSrc','liveClamp','liveLearner','liveSmartBanner','bnDrain','liveEtaOn','bnDrainOff','liveEtaOff','bnBucket','bnConf','bnAlpha','bnApp','bnBasis','bnSlotTemp','bnTrend','bnLpm'].forEach(id=>{const e=mk();e.id=id;e.style={display:id==='liveSmartBanner'?'none':''};e.parentElement=mk();e.parentElement.label=mk();ids[id]=e;});
 const reportBody=mk(),reportStatus=mk(),rpRefresh=mk();const liveMetrics=mk();
 function _el(id){if(id==='reportBody')return reportBody;if(id==='reportStatus')return reportStatus;if(id==='rpRefresh')return rpRefresh;if(id==='liveMetrics')return liveMetrics;return ids[id]||null;}
 const document={createElement:mk,hidden:false};let renders=0,yields=0,runs=0,rawFixture='good1',runGate=null;
 function T(k,d){return d;}function deviceInfoStamp(){return 'time';}function requestAnimationFrame(f){f();}function asbFitPages(){}
+let topCalls=0,drainHomes=0;function lvTopSec(smart){chk(smart===true,'wrong Monitor section restored');topCalls++;}function lvDrainHome(b){chk(b===ids.liveSmartBanner,'drain strip not homed to Smart');drainHomes++;}
 function asbPaintYield(){yields++;return Promise.resolve();}
 function run(){runs++;return runGate?new Promise(r=>runGate(r)):Promise.resolve({errno:0,stdout:rawFixture});}function runText(r){return r.stdout||'';}
 JS_FIX290
     sed -n '/^const LV_MON_CACHE_KEY/,/^function lvStale/p' "$H" | sed '$d'
+    sed -n '/^function lvAppView/,/^}/p' "$H"
+    sed -n '/^function asbAppMetric/,/^}/p' "$H"
     sed -n '/^const LOG_REPORT_CACHE_KEY/,/^async function asbLogReportLoad/p' "$H" | sed '$d'
     sed -n '/^async function asbLogReportLoad/,/^function deviceLsposedCollect/p' "$H" | sed '$d'
     cat <<'JS_FIX290'
@@ -7021,6 +7097,20 @@ const chk=(c,m)=>{if(!c)throw new Error(m);};
   ids.liveCpu.textContent='—';chk(lvMonTilesRestore(),'matching snapshot did not restore');chk(ids.liveCpu.textContent==='39°C'&&ids.liveCpu.title==='tip'&&ids.liveCpu.parentElement.label.textContent==='CPU','display snapshot incomplete');
   _selectedProfile='battery';chk(!lvMonTilesRestore(),'snapshot crossed profile ownership');_selectedProfile='balanced';
   _lvMonCache.tiles.at=Date.now()-LV_MON_CACHE_MAX_MS-1;chk(!lvMonTilesRestore(),'expired live snapshot restored');_lvMonCache.tiles.at=Date.now();
+  _selectedProfile='smart';ids.liveSmartBanner.style.display='';
+  ids.bnApp.textContent='high · GPU';ids.bnApp.className='smart-banner-value metric-fsm-heavy';ids.bnApp.title='not a confirmed game';
+  ids.bnBasis.textContent='own slot';ids.bnBasis.title='basis tip';ids.bnDrain.textContent='8.4%/h';
+  ids.bnBucket.textContent='morningwknd';ids.bnBucket.pill=mk('span');ids.bnBucket.pill.textContent='wknd';ids.bnBucket.pill.className='smart-banner-pill we';
+  lvMonTilesCapture('smart');chk(_lvMonCache.smart&&_lvMonCache.smart.values.bnApp.v==='high · GPU','Smart card not captured');
+  chk(_lvMonCache.smart.values.bnBucket.v==='morning'&&_lvMonCache.smart.values.bnBucket.p.v==='wknd','bucket pill was flattened into its value');
+  chk(!store[LV_MON_CACHE_KEY].includes('smart_app_hint')&&!store[LV_MON_CACHE_KEY].includes('app_hash'),'raw Smart source state entered the view cache');
+  ids.bnApp.textContent='—';ids.bnApp.title='';ids.bnBasis.textContent='—';ids.bnBucket.textContent='—';ids.liveSmartBanner.style.display='none';
+  chk(lvMonSmartRestore(),'matching Smart snapshot did not restore');
+  chk(ids.liveSmartBanner.style.display===''&&ids.bnApp.textContent==='high · GPU'&&ids.bnApp.title==='not a confirmed game'&&ids.bnBasis.textContent==='own slot','complete Smart view was not restored');
+  chk(ids.bnBucket.textContent==='morning'&&ids.bnBucket.children.length===1&&ids.bnBucket.children[0].textContent==='wknd'&&topCalls===1&&drainHomes===1,'Smart section, drain home or bucket pill missing on first paint');
+  _selectedProfile='balanced';chk(!lvMonSmartRestore(),'Smart card crossed profile ownership');_selectedProfile='smart';
+  _lvMonCache.smart.lang='ru';chk(!lvMonSmartRestore(),'Smart card crossed language ownership');_lvMonCache.smart.lang='en';
+  _lvMonCache.smart.at=Date.now()-LV_MON_CACHE_MAX_MS-1;chk(!lvMonSmartRestore(),'expired Smart card restored');_lvMonCache.smart.at=Date.now();
   let releaseFirst;runGate=r=>releaseFirst=r;let p=asbLogReportLoad();await Promise.resolve();await Promise.resolve();await Promise.resolve();chk(yields===1&&runs===1,'paint yield missing');
   chk(reportBody.children.length===1&&reportBody.children[0].className==='dev-loading','first report has no painted loading card');
   releaseFirst({errno:0,stdout:'good1'});runGate=null;await p;chk(window._asbLogReportRaw==='good1'&&renders===1&&store[LOG_REPORT_CACHE_KEY].includes('good1'),'fresh report not cached');
@@ -7038,9 +7128,11 @@ JS_FIX290
   } > "$T/test.js"
   out="$(node "$T/test.js" 2>&1)" || fail "$out"; [ "$out" = ok ] || fail "$out"
   grep -Fq 'if (lvMonTilesRestore()) lvStale(true);' "$H" || fail 'Monitor does not paint its live snapshot on entry'
+  grep -Fq 'if (lvMonSmartRestore()) lvStale(true);' "$H" || fail 'Monitor does not paint its Smart snapshot on entry'
+  grep -Fq "['liveSmartBanner', 'liveStockRomBanner', 'bnDrainStrip', 'liveMetrics']" "$H" || fail 'restored Smart card is not marked stale'
   grep -Fq 'runBatch(liveBatchParts(visible, prime))' "$H" || fail 'Monitor priming added a separate shell'
   grep -Fq 'await asbPaintYield();' "$H" || fail 'report root read is not behind a painted frame'
-  echo 'PASS webui fix290 instant pages: nine-cell view snapshot, profile/language/TTL bounds, no source counters, one-time prime in existing shell, cached/painted log report and failure preservation'
+  echo 'PASS webui instant Monitor: complete Smart card plus nine cells, provenance-aware load label, profile/language/TTL bounds, no source counters, existing-shell prime and failure-safe report cache'
 )
 
 t_webui_device_page_runtime() (
@@ -7133,6 +7225,7 @@ function mk(tag) {
   const e = { tagName: tag, className: '', children: [], _text: '',
     classList: { add(c) { const a = new Set(e.className.split(/\s+/).filter(Boolean)); a.add(c); e.className = Array.from(a).join(' '); } },
     appendChild(c) { e.children.push(c); return c; },
+    setAttribute(k, v) { e[k] = String(v); },
     querySelector(sel) { const want = sel.slice(1); let found = null;
       (function walk(n) { if (found) return; if (n.className && n.className.split(/\s+/).includes(want)) { found = n; return; } (n.children || []).forEach(walk); })(e);
       return found; }
@@ -7330,6 +7423,18 @@ deviceInfoRender(d2);
   const notices = [];
   globalThis.run = async function (cmd) { exportCalls++; commands.push(cmd); return { errno: 0, stdout: '', stderr: '' }; };
   globalThis.toast = function (text, kind) { notices.push({ text, kind }); };
+  globalThis.MD = '/md';
+  globalThis.runOk = r => !!r && r.errno === 0;
+  globalThis.runText = r => r && r.stdout || '';
+  const safeButtons = [];
+  for (const mode of ['off', 'on']) {
+    const ed = deviceZygiskEditor(parseDeviceInfo('D\tzygisk_observer\tsafe_mode\t' + mode + '\nD\tzygisk_observer\tenabled_package_list\tcom.example.app\n'), function () {});
+    const actions = ed.children.find(x => String(x.className).includes('dev-zygisk-actions'));
+    const safe = actions.children[1]; safeButtons.push(safe.textContent);
+    await safe.onclick();
+  }
+  chk(safeButtons[0] === 'Enable safe mode' && safeButtons[1] === 'Clear safe mode', 'Safe mode labels describe the action, not the current state: ' + safeButtons.join(','));
+  chk(commands.some(c => c.endsWith('/runtime/asb_zygisk.sh safe-mode on')) && commands.some(c => c.endsWith('/runtime/asb_zygisk.sh safe-mode off')), 'Safe mode action labels send the opposite state command');
   await asbSavePage('device');
   const b64 = commands.filter(c => c.indexOf("printf '%s' ") >= 0).map(c => c.match(/printf '%s' '([^']*)'/)[1]).join('');
   const saved = Buffer.from(b64, 'base64').toString('utf8');
