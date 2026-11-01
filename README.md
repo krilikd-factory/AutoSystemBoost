@@ -272,6 +272,8 @@ This is a **single-snapshot pressure heuristic**, not a device-health score, tre
 
 The interface includes **13 languages**, dark and light themes, and **Liquid Glass**. Layouts are designed for narrow phones as well as larger screens. Metric colours indicate meaning, not decoration: unknown or warming-up data stays neutral instead of being painted as a success or failure.
 
+Monitor and an existing infinite-log report reopen from their last complete local snapshot, visibly dimmed and timestamped until fresh data arrives. A first report shows an animated loading card instead of a blank wait. These snapshots never become new measurements and do not require a background collection worker.
+
 Named configurations, backups, export to **Downloads** or **Documents**, and separate resets for settings and Smart learning are built in.
 
 ## 🧾 Reports that do not jump to conclusions

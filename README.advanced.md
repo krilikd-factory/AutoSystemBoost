@@ -697,7 +697,7 @@ Named configurations are useful for repeatable testing, but they are not univers
 5. regenerate or validate device-specific bounds where required;
 6. test each affected subsystem independently.
 
-### ⚡ 11.5. Why page switches do not wait for root shells (fix278)
+### ⚡ 11.5. Why page switches do not wait for root shells
 
 KernelSU-family managers run `ksu.exec` synchronously on the WebView's JavaScript thread and start a new root shell for every call, so each call freezes taps, scrolling and the page slide for one shell start plus the command. The WebUI therefore follows four rules:
 
@@ -706,11 +706,11 @@ KernelSU-family managers run `ksu.exec` synchronously on the WebView's JavaScrip
 - **Fresh data is reused.** A Settings load younger than 30 s is not repeated, and a refresh that returns exactly what the page was drawn from repaints nothing; writes force a fresh read. The config is read once in the background 4 s after start-up, so the first visit draws real values. The Zygisk header pill is refreshed by Zygisk actions and otherwise at most every two minutes.
 - **Layout is measured once, after motion.** The page-fit pass coalesces into one run after the slide; the tab-indicator boxes are measured once and re-measured only on resize, scale, language or fit-tier change.
 
-Browser bench with the bridge modelled as blocking (60 ms per call), fix277 → fix278: Home → Monitor 7 → 1 root calls, Monitor → Settings 16 → 2, Home → Settings 11 → 0, Settings → Home 1 → 0, Zygisk pill 13 → 1, Monitor open for 9 s 19 → 3. These are call counts on a desktop host; the time each call costs depends on the phone and the manager.
+Browser bench with the bridge modelled as blocking (60 ms per call), before → after: Home → Monitor 7 → 1 root calls, Monitor → Settings 16 → 2, Home → Settings 11 → 0, Settings → Home 1 → 0, Zygisk pill 13 → 1, Monitor open for 9 s 19 → 3. These are call counts on a desktop host; the time each call costs depends on the phone and the manager.
 
 On Device diagnostics the LSPosed hook evidence (logs, crash records, package and process lists) is collected from its own card on request (`asb_device_info.sh --lsposed`); asbdiag still collects it in full.
 
-### 🔔 11.6. Notification fix and one battery-drain figure (fix279)
+### 🔔 11.6. Notification fix and one battery-drain figure
 
 **Notification fix** (Config → Battery → Sleep & Background) is a per-app repair for notifications that arrive late — only once the app is opened, or only when the screen turns on. The user ticks the affected apps and taps *Fix notifications*; `runtime/asb_notif_fix.sh` then, for exactly those user apps:
 
@@ -723,7 +723,7 @@ Every original package mode, uid mode, exemption and list membership is recorded
 
 **Battery drain.** The Monitor screen-on tile, the profile card, the manager action headline and the time to empty all use one figure — the profile's long-term screen-on average from the drain meter. The governor's live window (the last ≥10 minutes with the screen on) is shown in the drain sheet as its own *Right now* line with its own time to empty, never in place of the average. The infinite-log report keeps its own window (the time of that recording) and names the profile average beside it. The current-sensor scale is written the same way everywhere (“reads about N× low”, rounded to one decimal).
 
-### 🧷 11.7. Hook-module crash detail and the restart-loop guard (fix280)
+### 🧷 11.7. Hook-module crash detail and the restart-loop guard
 
 **Crash detail.** For every native crash (tombstone) asbdiag, the infinite-log report and Device diagnostics print the crashing thread, the `Cause:` line, the failing function inside an injected library (an installed app's code loaded into another process — typically a hook module), the module's own Java classes on the crashing stack nearest first, and whether a hooked method was running. asbdiag then summarises per module: processes taken down and how often, failing function, classes on the stack and, when the hook framework's database is readable, the apps the module is enabled for. Device diagnostics counts native crashes per module (`tombstone_hooked`); two or more become a finding. This is attribution from the stack, not a verdict on the module: confirm by disabling the module for the named app.
 
@@ -733,7 +733,7 @@ Every original package mode, uid mode, exemption and list membership is recorded
 
 **Self-push card.** The infinite-log report names an app that restarts its own notification service on a wakeup alarm 30 times or more in Android's battery history, and points to the app's own keep-alive switch. With Google services trim on strict the card names that setting first, because it removes the Doze exemption push relies on.
 
-### ⚡ 11.8. Faster app starts from the Zygisk start ledger (fix281)
+### ⚡ 11.8. Faster app starts from the Zygisk start ledger
 
 **What it does** (Zygisk page, off by default). `runtime/asb_zygisk_aot.sh` ranks the apps you open by their top-app process starts in the Zygisk start ledger, summed across boots (without the ledger, by the launches in Android's launch log), and reads each app's ART state. An app among the eight most opened that runs without ahead-of-time code (`verify`, `quicken`, `run-from-apk` …) is compiled with `pm compile -r bg-dexopt` — the reason Android's nightly maintenance uses, speed-profile at background priority.
 
@@ -741,13 +741,13 @@ Every original package mode, uid mode, exemption and list membership is recorded
 
 **Measurement.** The five-minute service tick reads `wm_activity_launch_time` and `am_proc_start` from the events buffer (the ActivityTaskManager "Displayed" lines as fallback) and keeps the last 400 launches; a launch is cold when Android started the app's process for it. The card and asbdiag (`launch_art`) show each app's cold-start median and, for an app ASB compiled, the median before and after. Compiled code is the state Android's own maintenance produces, so disabling or uninstalling has nothing to restore; the feature's files are removed.
 
-### 🌙 11.9. Night wakers and screen-off period summaries (fix282)
+### 🌙 11.9. Night wakers and screen-off period summaries
 
 The restart-loop guard (11.7) has a second level, **Loops + night wakers**. An app whose process starts 8 or more times during one screen-off period, at any pace, is restricted the same way as a loop until the screen turns on; the count runs from the first screen-off sample of the period. The same protections apply, and "Restrain loops" is unchanged.
 
 Each restriction records the start-ledger count when it began, so the page, the lift event and asbdiag show how many process starts still happened while it held. Every screen-off period of 15 minutes or more leaves a summary — process starts of all apps between the first and the last screen-off sample, apps restricted, the top three — and the last seven are kept. Compare periods with and without the level to see what it changes on a given phone; no saving is assumed.
 
-### ☀️ 11.10. The guard with the screen on and apps you never open (fix283)
+### ☀️ 11.10. The guard with the screen on and apps you never open
 
 **Screen-on loops.** While the screen is on the guard counts each app's *background* process starts (screen-on starts minus top-app starts in the ledger). A user app whose background starts grow by 6 or more in 5 minutes while none of its processes is visible (`dumpsys activity lru`) is restricted for 30 minutes and given back as soon as it is in use; screen edges do not end the hold.
 
@@ -755,23 +755,23 @@ Each restriction records the start-ledger count when it began, so the page, the 
 
 **Apps you never open.** After 3 days, a user app with 30+ background starts, no top-app start, `am get-inactive` = idle and none of the guard's protections is suggested. One tap sets `RUN_ANY_IN_BACKGROUND=ignore` (Android's "Restricted" battery setting); opening the app, "Give back", guard off or uninstall restores the recorded mode. Each restricted app shows its background starts per day before and after.
 
-### 🤖 11.11. Automatic setup and Actions placement (fix284)
+### 🤖 11.11. Automatic setup and Actions placement
 
 **Automatic setup** is an explicit one-tap choice on the Zygisk page. It ranks `pm list packages -3` candidates by existing top-app start counts (persistent ART counts plus the current native ledger), then by package name, validates every name again and keeps at most 64 for observation. It selects Full, Background guard `wakers` and ART. The observation list is not an AppOps restriction list; only the existing measured guard can restrict an eligible app. An empty Package Manager answer preserves the last good list.
 
 The pre-automatic manual list is restored exactly on disable, which also disables guard and ART. Safe mode refuses automatic enable and is never cleared. Existing boot/hourly service passes refresh membership; unchanged refreshes do not rewrite policy. Commands: `auto-enable`, `auto-refresh`, `auto-disable`. In Actions, the Zygisk evidence block now follows Sleep and precedes System.
 
-### 🔗 11.12. One engine: launch classes, LSPosed and other Zygisk modules (fix286)
+### 🔗 11.12. One engine: launch classes, LSPosed and other Zygisk modules
 
-**Launch classes.** `runtime/asb_zygisk_link.sh classes` joins Android's launch log (cold-start times, the same data as 11.8) with LSPosed's scope (read-only through `asb --lspd modules`). An app with 3 or more measured cold starts and a median of 1000 ms or more is *slow*, 400 ms or less *fast*; before 3 starts are measured, an app with an enabled LSPosed module scoped to it is *slow* once the median of its measured starts is a second or more (fix287; fix286 classed every hooked app, 27 on the owner's phone, most of them never opened). Measured data always wins. Protected names (SystemUI, the framework, root managers…) are never classed. At most 64 apps per class go to `zygisk/classes` (`v=1`, `slow=`, `fast=`), written only when the set changes, removed when the cold-start lift, the observer or safe mode is off. The policy sync builds it (without reading logs, so the boot-time sync stays fast) and the half-hourly service pass refreshes it.
+**Launch classes.** `runtime/asb_zygisk_link.sh classes` joins Android's launch log (cold-start times, the same data as 11.8) with LSPosed's scope (read-only through `asb --lspd modules`). An app with 3 or more measured cold starts and a median of 1000 ms or more is *slow*, 400 ms or less *fast*; before 3 starts are measured, an app with an enabled LSPosed module scoped to it is *slow* once the median of its measured starts is a second or more; the earlier implementation classed every hooked app, 27 on the owner's phone, most of them never opened. Measured data always wins. Protected names (SystemUI, the framework, root managers…) are never classed. At most 64 apps per class go to `zygisk/classes` (`v=1`, `slow=`, `fast=`), written only when the set changes, removed when the cold-start lift, the observer or safe mode is off. The policy sync builds it (without reading logs, so the boot-time sync stays fast) and the half-hourly service pass refreshes it.
 
-**Companion and governor.** For a top-app cold start the zygote side now names the package to the root companion; the companion looks up the class (re-reading the file only when it changes) and sends a fixed opcode: `zygisk-launch-long`, `zygisk-launch-short` or the usual `zygisk-launch`. No package reaches the governor. A slow app's cold start carries the lift to twice `unlock_lift_s` (10 s at most) or arms one that long; a fast app's arms half (1 s at least) and ends early only the lift its own tap armed — never a wake's, a first touch's or a lock press's. Profile, thermal and warm-die gates are unchanged. A governor that does not answer the new opcodes gets the plain one. The classes file is separate from the policy, so a Zygisk library built before fix286 never sees an unknown key; it simply keeps the usual lift.
+**Companion and governor.** For a top-app cold start the zygote side now names the package to the root companion; the companion looks up the class (re-reading the file only when it changes) and sends a fixed opcode: `zygisk-launch-long`, `zygisk-launch-short` or the usual `zygisk-launch`. No package reaches the governor. A slow app's cold start carries the lift to twice `unlock_lift_s` (10 s at most) or arms one that long; a fast app's arms half (1 s at least) and ends early only the lift its own tap armed — never a wake's, a first touch's or a lock press's. Profile, thermal and warm-die gates are unchanged. A governor that does not answer the new opcodes gets the plain one. The classes file is separate from the policy, so a Zygisk library without launch-class support never sees an unknown key; it simply keeps the usual lift.
 
-**LSPosed and other modules.** The guard (11.7–11.10) never restricts an app that is an enabled LSPosed module (`/data/adb/asb/zygisk_lsposed_modules`, refreshed with the classes). The root manager's unmount flag (`PROCESS_ON_DENYLIST`) is only counted: KernelSU sets it for every app without root by default, so fix286's rule to keep the observer out of flagged apps silenced the whole allowlist and was withdrawn in fix287. Other Zygisk modules are listed (name, on/off) and never changed. ART (11.8) compiles slow-starting apps first. With the screen off (as the governor published it) the companion does not send a lifecycle refresh the governor would only wake up to veto (`hints_screen_off`).
+**LSPosed and other modules.** The guard (11.7–11.10) never restricts an app that is an enabled LSPosed module (`/data/adb/asb/zygisk_lsposed_modules`, refreshed with the classes). The root manager's unmount flag (`PROCESS_ON_DENYLIST`) is only counted: KernelSU sets it for every app without root by default, so the earlier rule to keep the observer out of flagged apps silenced the whole allowlist and was later withdrawn. Other Zygisk modules are listed (name, on/off) and never changed. ART (11.8) compiles slow-starting apps first. With the screen off (as the governor published it) the companion does not send a lifecycle refresh the governor would only wake up to veto (`hints_screen_off`).
 
 **What you see.** The Zygisk page card "One engine" and asbdiag (`link_class`, `link_gov`, `link_hooks`) show the classes, the governor's class counters, the LSPosed inventory, other Zygisk modules, the cold-start median of hooked against unhooked apps (different apps — a comparison, not the cost of hooks) and one row per app: class and why, LSPosed modules, opens, background starts, guard, ART and protection lists. No saving or speed-up is assumed; the counters and medians are there to measure it.
 
-### ⏱️ 11.13. Pages that paint before they wait, a one-tap log stop and a wakelock history (fix287)
+### ⏱️ 11.13. Pages that paint before they wait, a one-tap log stop and a wakelock history
 
 **Synchronous root calls.** KernelSU-family managers run `ksu.exec` on the page's thread. Every place that shows a loading or busy state now awaits `asbPaintYield()` before its root call, so the state reaches the screen. The Device page and the Monitor's battery card also start from the last reading kept in this WebView's storage (Device 7 days, Monitor 30 minutes), dimmed until fresh. The Monitor reads the drain meter and the ROM snapshot in the governor's batch.
 
@@ -779,13 +779,19 @@ The pre-automatic manual list is restored exactly on disable, which also disable
 
 **Wakelock history.** `wakelock_hist` (`epoch|package|seconds`, 7 days, 3000 lines at most) grows on the hourly screen-off pass and on every opening of the picker from the change of Android's since-unplug counters; a counter that went backwards (a charge, a restart) counts whole. The picker ranks by the larger of the two windows and lists every other user app for an explicit choice.
 
-### 🎞️ 11.14. Why a frame was late, the Battery lift and the GPU, one battery-statistics read (fix288)
+### 🎞️ 11.14. Why a frame was late, the Battery lift and the GPU, one battery-statistics read
 
 **Why frames were late.** `jank_trace.tsv` says how many frames missed their deadline; it cannot say why. From the same `dumpsys graphicsstats` the recorder already reads each screen-on poll, `jank_detail.tsv` keeps two rows per interval - the app with the most janky frames and SystemUI: frames, janky, slow UI thread, slow draw commands, slow bitmap uploads, deadline missed, the interval's frame-time and GPU-time p50/p90/p99 (deltas of Android's own histograms), frames whose GPU work alone took 8 or 16 ms or more, and the GPU ceiling (kgsl `max_pwrlevel` and its MHz). The report groups them by app and ASB state and names a cause: GPU (GPU work over a 60 Hz frame in at least 40 % of the late frames), UI thread, RenderThread, GPU at 120 Hz only, or none of these (the app or the compositor pacing its own frames - no ceiling changes that). An app seen in two states gets its GPU-over-a-frame share under each GPU ceiling; that comparison is what decides whether Battery's light-idle GPU step (`bat_light_idle_gpu`) costs frames. The per-poll package file keeps histograms only for apps that drew since the previous poll (`?` for the rest).
 
 **The Battery lift and the GPU.** Every lift - wake, first touch, tap, app switch, lock press, cold start and the recorder-only jank guard - raises the CPU ceilings and the top-app uclamp. On Battery it now also lifts a GPU ceiling below Battery's own light-idle envelope (`ASB_BATTERY_FLOOR_GPU_MAX_PCT`, 40 %) to that envelope for the length of the lift; a higher ceiling is never lowered and an unmanaged GPU stays unmanaged. `unlock_gpu` / `unlock_gpu_lifts` in the state file and asbdiag.
 
 **One battery-statistics read per pass.** The hourly screen-off wakelock pass takes `dumpsys batterystats --charged` once (a plain dump where the option is refused) and every parser - kernel wakelocks, the app ranking, the 7-day history, Wi-Fi multicast - reads that copy. It used to dump the full statistics, history included, up to four times per pass.
+
+### ⚡ 11.15. Complete Monitor and report views before the fresh read
+
+**Monitor's display snapshot.** The 30-minute WebView snapshot now includes all nine live cells: their painted text, metric class, dynamic label and tooltip. It is accepted only for the same selected profile and UI language and is dimmed until fresh data arrives. Raw between-read state (`cpustat`, thermal-trend history and similar counters) is deliberately excluded, so restoring a view cannot alter the next delta. The single scheduled start-up poll begins after 250 ms rather than 1.5 s; when the view needs priming, learner data rides that existing `runBatch` shell. There is no additional poll, worker or root shell.
+
+**Infinite-log report snapshot.** A non-empty digest below 600,000 characters is kept in this WebView for up to 7 days. Opening the page parses and paints it immediately with its timestamp and stale styling, then refreshes through one coalesced digest call. With no snapshot, `asbPaintYield()` lets the animated loading card reach the screen before the synchronous root bridge. A failed refresh keeps the complete last good report; `no_capture` clears it. A completion after page close can update the cache but cannot repaint the closed page.
 
 ## 🔐 12. Device information, privacy and evidence quality
 
@@ -866,7 +872,7 @@ su -c 'sh /data/adb/modules/AutoSystemBoost/runtime/asb_zygisk.sh status'
 
 Observer diagnostics keep configuration, installed ABI, runtime event state and actual validated live PIDs separate. `memory_kb` is the sum of current application VmRSS for those PIDs, **not pure observer overhead**. `ipc_cpu_ms` and `ipc_wakeups` describe companion receive/validation/state-write/hint-round-trip handling, not whole-app CPU. Event state older than five minutes with no validated live process is `stale_over_5_minutes`. Crash and ANR counts are `unknown` because attribution evidence is `not exposed`. `policy_hints` counts attempted refresh round trips; `hints_accepted` counts the governor's `ok`, while vetoed, unavailable and locally throttled requests have separate counters. Acceptance means only that fresh evidence will be evaluated, never that a cap changed or energy was saved.
 
-#### 12.4.1. Dormant policy, cold-start lift and process-start ledger (fix272)
+#### 12.4.1. Dormant policy, cold-start lift and process-start ledger
 
 App processes no longer read `governor.conf`, the allowlist or anything under `/data/adb/asb`. `runtime/asb_zygisk.sh sync` (run by every helper command, by every WebUI Zygisk switch and in post-fs-data before zygote starts) writes one small file, `zygisk/policy`, inside the module directory:
 
@@ -890,7 +896,7 @@ su -c 'am force-stop com.example.app; sleep 2; am start -W -n "$(cmd package res
 
 Device check that app processes can read the policy: after enabling a feature and opening one app, Device diagnostics should show `policy_seen_generation` equal to `policy_generation`. If it stays 0, look for denials with `su -c 'logcat -d | grep -i "avc.*zygote"'`.
 
-#### 12.4.2. Restart loops and LSPosed hook evidence (fix277)
+#### 12.4.2. Restart loops and LSPosed hook evidence
 
 **Restart loops.** With `zygisk_ledger=1` the companion also keeps, per package, the screen-off start times of the last 5 minutes in a fixed 32-slot ring (256 bytes per package, at most 128 packages; no growing container). The `L` state row gains a sixth column, `burst_off`: the most screen-off starts seen inside any 5-minute window this boot. Device diagnostics shows packages with ≥6 as `ledger_restart_loops` (`pkg 9/5min`), and the Device page raises an insight. A user rarely opens an app with the screen off, so a high value points to a crash-restart loop, a sync storm or a wake chain — the case a whole-boot total hides. Nothing is restricted automatically.
 
@@ -1020,7 +1026,7 @@ Do not derive a universal battery-saving percentage from one before/after log. D
 A good result names its scope: device, firmware, scenario, configuration, sample count and uncertainty.
 
 
-### ♻️ 14.4. Infinite log across an Android framework restart (fix279)
+### ♻️ 14.4. Infinite log across an Android framework restart
 
 A field capture stopped at the moment the Android framework restarted (SystemUI, the launcher and Bluetooth all came back within two seconds, the kernel kept running): the recorder shared the root manager's process session and died with the app processes without finalising, and the reboot-only resume never ran because the boot id had not changed. The recorder now starts in its own session (`setsid`, recorded as `session=` in `_recorder_cgroup.txt`). A recorder lost within the same boot reads `status=resuming reason=restart`; the five-minute service tick or the next opening of the log menu continues it on the same folder (`full-day-revive`), and the report lists such restarts separately from reboots, with the gap counted in no phase. While running, the SystemUI watch tells a whole-framework restart (`sys.system_server.start_count` changed) from a SystemUI crash. asbdiag prints the framework start count and time and counts `SYSTEM_RESTART`, `system_server_native_crash`, `system_app_crash` and `system_app_native_crash`, with the newest app crashes and their first non-platform frame.
 
