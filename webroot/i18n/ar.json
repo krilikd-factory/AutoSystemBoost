@@ -2496,5 +2496,21 @@
   "zy_guard_ev_lifted_expired": "أُعيد بعد 30 دقيقة",
   "zy_guard_ev_lifted_in_use": "أُعيد: أنت تستخدمه",
   "zy_guard_ev_lifted_opened": "أُعيد: لقد فتحته",
-  "zy_guard_ev_lifted_released": "أعدته أنت"
+  "zy_guard_ev_lifted_released": "أعدته أنت",
+  "zy_auto_title": "Automatic setup",
+  "zy_auto_recommended": "Recommended · no package lists to fill in",
+  "zy_auto_desc": "ASB selects user apps to observe, enables launch response and the process ledger, guards against restart loops and night wakers, and optimizes frequently opened apps with ART only while charging. You do not need to choose packages or tune the engine.",
+  "zy_auto_enable": "Set up automatically",
+  "zy_auto_refresh": "Refresh automatic app selection",
+  "zy_auto_disable": "Turn off automatic setup",
+  "zy_auto_summary": "Automatic mode is on · %1 observed app(s) · Background guard: %2 · ART: %3",
+  "zy_auto_note": "Only user-installed apps enter the observation list. Background restrictions still require measured start thresholds, skip protected apps and are read back and reversible. Safe mode is never cleared automatically. No LSPosed, kernel, frequency or thermal setting is changed.",
+  "zy_auto_enabled": "Automatic Zygisk setup is on",
+  "zy_auto_refreshed": "Automatic app selection refreshed",
+  "zy_auto_disabled": "Automatic features off · previous app list restored",
+  "zy_auto_failed": "Automatic setup was not completed; no unsupported package or policy was selected",
+  "zy_auto_safe": "Safe mode is on. Automatic setup will not clear it; clear Safe mode explicitly first.",
+  "zy_auto_managed_label": "Apps selected automatically by ASB",
+  "zy_auto_managed_note": "This list is managed by Automatic setup. It refreshes after package changes on existing service passes or from the button above. Turn off Automatic setup before editing it manually. Safe mode remains available here.",
+  "lr_tip_sysui_hooks": "يتقطع SystemUI في {n} من {of} فترات والشاشة مضاءة رغم إيقاف المصادر المعتادة التي تتحدث كل ثانية، ويحمّل إطار الخطافات فيه هذه الوحدات: {hooks}. أوقفها لـ System UI واحدة تلو الأخرى وقارن بالتسجيل التالي."
 }
