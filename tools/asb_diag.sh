@@ -4650,7 +4650,7 @@ if [ -r "$MODDIR/tools/asb_device_info.sh" ]; then
       _zl_kv() { printf '%s\n' "$_zl_out" | sed -n "s/^$1=//p" | head -1; }
       P "     link_class : file=$(_zl_kv classes) slow=$(_zl_kv classes_slow) fast=$(_zl_kv classes_fast) companion_reads_classes=$(_zl_kv comp_supported) companion_loaded=$(_zl_kv comp_classes_loaded) requests_long=$(_zl_kv comp_long) requests_short=$(_zl_kv comp_short) fallback_plain=$(_zl_kv comp_fallback)"
       P "     link_gov   : launches_accepted=$(_zl_kv gov_launch) long=$(_zl_kv gov_long) short=$(_zl_kv gov_short) long_windows=$(_zl_kv gov_cold_long) tap_lifts_ended_early=$(_zl_kv gov_trims)"
-      P "     link_hooks : lsposed=$(_zl_kv lsposed) modules_on=$(_zl_kv lsposed_modules) hooked_apps=$(_zl_kv lsposed_apps) framework_modules=$(_zl_kv lsposed_system) systemui_modules=$(_zl_kv lsposed_sysui) denylist_starts=$(_zl_kv denylist_spawns)"
+      P "     link_hooks : lsposed=$(_zl_kv lsposed) modules_on=$(_zl_kv lsposed_modules) hooked_apps=$(_zl_kv lsposed_apps) framework_modules=$(_zl_kv lsposed_system) systemui_modules=$(_zl_kv lsposed_sysui) unmount_flagged_starts=$(_zl_kv denylist_spawns)"
       printf '%s\n' "$_zl_out" | awk -F'|' '
           $1 == "zmod" { z = z (z ? ", " : "") $4 ($3 == 1 ? "" : " (off)") }
           $1 == "cmp" { printf "       cold start median: apps with LSPosed modules %s ms (%s apps), without %s ms (%s apps) - different apps, not the hooks alone\n", $2, $3, $4, $5 }
