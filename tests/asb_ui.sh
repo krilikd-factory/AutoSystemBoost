@@ -2496,6 +2496,17 @@ grep -q 'screen_off_timeout\|doze_always_on\|wifi_on' "$D" && f "unrelated setti
 grep -q 'smart5g_apk_cfg' "$D" && f "a setting matched on its value"
 grep -qx 'secure: icon_blacklist=rotate,ime,show_network_speed,vpn' "$D" || f "hidden status-bar icons not recorded"
 grep -qx 'wallpaper: ComponentInfo{com.example.live/com.example.live.Waves} - a wallpaper service; a live one redraws whenever it is visible' "$D" || f "wallpaper not recorded"
+grep -q '^sysui_hook:' "$D" && f "hook modules recorded without a hook database"
+cat > "$T/bin/asbgov" <<'S'
+#!/bin/sh
+[ "$1 $2" = "--lspd modules" ] || exit 1
+printf '%s\n' 'format=v1' 'module|com.mod.alpha|1|x' 'module|com.mod.off|0|x' 'module|com.mod.launch|1|x' \
+  'scope|com.mod.alpha|com.android.systemui|0' 'scope|com.mod.off|com.android.systemui|0' 'scope|com.mod.launch|com.android.launcher|0'
+S
+chmod +x "$T/bin/asbgov"; : > "$T/lspd.db"
+PATH="$T/bin:$PATH" ASB_GOV_BIN="$T/bin/asbgov" ASB_LSPD_DB="$T/lspd.db" sh -c '. "$0" >/dev/null 2>&1; LK_OUT_DIR="$1"; lk_display_config_capture' "$C" "$T/a"
+grep -qx 'sysui_hook: com.mod.alpha' "$D" || f "an enabled module scoped to SystemUI not recorded: $(cat "$D")"
+grep -q 'com.mod.off\|com.mod.launch' "$D" && f "a disabled module or one scoped elsewhere was recorded as loaded into SystemUI"
 J="$T/a/jank_trace.tsv"
 echo "# epoch|iso_time|phase|fsm_state|interval_s|main_at_cap|prime_at_cap|touches|frames|janky|deadline_missed|slow_ui|high_input|main_cap_pct|prime_cap_pct|fg_pkg|jank_pkgs" > "$J"
 i=0
@@ -5326,13 +5337,17 @@ cat > "$MIX/display_config.txt" <<EOF
 wallpaper: static image (ComponentInfo{com.android.systemui/com.android.systemui.wallpapers.ImageWallpaper})
 system: show_network_speed=1
 secure: clock_seconds=0
+## modules loaded into SystemUI (LSPosed scope)
+sysui_hook: com.mod.alpha
+sysui_hook: com.mod.beta
+sysui_hook: bad;name
 EOF
 mout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state6" sh "$D" "$MIX")" || fail "mixed fixture digest exit"
 printf '%s\n' "$mout" | grep -q '^drain	pctph=4.5	total_drop=9	hours=2.0	ma=' || fail "zero-step phases must count and charging stay out: $(printf '%s\n' "$mout" | grep '^drain')"
 printf '%s\n' "$mout" | grep -q '^thermal	cpu=43	surf=39$' || fail "a zero-length row set the temperature peak: $(printf '%s\n' "$mout" | grep '^thermal')"
 printf '%s\n' "$mout" | grep -q '^heat	peak_phase=active	peak_c=43	' || fail "a zero-length row named the hottest phase: $(printf '%s\n' "$mout" | grep '^heat')"
 printf '%s\n' "$mout" | grep -q '^scr	on_pctph=6.0	off_pctph=1.5	on_min=80	off_min=40	idle_pctph=0.0	idle_min=10	music_min=30$' || fail "idle and screen-off music split: $(printf '%s\n' "$mout" | grep '^scr')"
-printf '%s\n' "$mout" | grep -q '^sysuidraw	intv=81	of=81	pct=13.8	netspeed=1	clocksec=0	livewp=0$' || fail "SystemUI steady redraw line: $(printf '%s\n' "$mout" | grep '^sysuidraw')"
+printf '%s\n' "$mout" | grep -q '^sysuidraw	intv=81	of=81	pct=13.8	netspeed=1	clocksec=0	livewp=0	hooks=com.mod.alpha, com.mod.beta$' || fail "SystemUI steady redraw line: $(printf '%s\n' "$mout" | grep '^sysuidraw')"
 # fix243: a restart whose crash sits in a library loaded from an installed app's APK names
 # that app - from the verdict, or from the dropbox record when it is SystemUI's own or the
 # system reported a SystemUI crash. A record of another process names nobody.
@@ -5576,6 +5591,17 @@ const tipH = logReportTips(d).filter(function (t) { return t.key === 'lr_tip_awa
 chk(tipH.length === 1 && tipH[0].vars.who === '*alarm*', 'no alarms either - the tip names the loudest holder: ' + JSON.stringify(tipH));
 d.wlt = [];
 chk(logReportTips(d).map(function (t) { return t.key; }).indexOf('lr_tip_awake') >= 0, 'no causes at all - the generic awake tip');
+/* fix285: an OP15 night of 3 h 43 min at 0.5 %/h and 97% deep sleep, one 39-minute stretch
+   34% awake, a contacts sync caught in 68% of the screen-off checks: no awake or sync action. */
+{
+  const goodNight = parseLogReport(['meta\telapsed_min=366\tprofile=smart', 'night\tdur_min=223\tdrop=2\tpctph=0.5\tawake=3',
+    'idlemax\tawake=34\tphase=sleep\tdur_min=39', 'wlive\ttag=contacts\tpct=68\tmin=0\tpkg=com.whatsapp\tkind=sync',
+    'wlive\ttag=signal:PushNotificationReceiveJob\tpct=62\tmin=0\tpkg=org.thoughtcrime.securesms\tkind=lock'].join('\n'));
+  const gk = logReportTips(goodNight, true).map(function (t) { return t.key; });
+  chk(gk.indexOf('lr_tip_awake_sync') < 0 && gk.indexOf('lr_tip_sync_loop') < 0 && !gk.some(function (k) { return /^lr_tip_awake/.test(k); }), 'a night that slept well draws no awake or sync action: ' + gk.join(','));
+  goodNight.sections.night.awake = '12'; goodNight.sections.night.pctph = '1.6';
+  chk(logReportTips(goodNight, true).some(function (t) { return t.key === 'lr_tip_awake_sync'; }), 'a restless night still names the sync');
+}
 d.wlt = [{ tag: '*alarm*', n: 54 }, { tag: '*launch*', n: 28 }];
 d.wla = [{ tag: 'com.android.systemui.aod.HIDE_TIME', n: 18 }, { tag: 'android.app.backup.FullBackupJob', n: 6 }];
 d.wlive = [{ tag: 'TgWsProxy::ServiceWakeLock', pct: 78, min: 24, pkg: 'com.amurcanov.tgwsproxy' }];
@@ -5797,6 +5823,15 @@ mixInj.sections.sysuiinj.pkg = 'com.example.hooker'; mixInj.sections.sysuiinj.n 
 chk(!logReportTips(mixInj, true).some(t => t.key === 'lr_tip_sysui_inj'), 'no restart, no restart action');
 const mixSd = JSON.parse(JSON.stringify(mixDay)); mixSd.sections.sysuidraw.netspeed = '0'; mixSd.sections.sysuidraw.livewp = '1';
 chk(logReportTips(mixSd, true).some(t => t.key === 'lr_tip_sysui_livewp'), 'a live wallpaper is named when the meter is off');
+/* fix285: with every per-second source off, the hook modules the capture found in SystemUI's
+   scope are named - in the action and in the smooth verdict. */
+const mixHk = JSON.parse(JSON.stringify(mixDay));
+Object.assign(mixHk.sections.sysuidraw, { netspeed: '0', clocksec: '0', livewp: '0', hooks: 'com.mod.alpha, com.mod.beta' });
+chk(logReportTips(mixHk, true).some(t => t.key === 'lr_tip_sysui_hooks' && t.vars.hooks === 'com.mod.alpha, com.mod.beta'), 'the SystemUI hook modules are named: ' + JSON.stringify(logReportTips(mixHk, true).map(t => t.key)));
+const hkDx = logReportDiagnose(mixHk).find(x => x.cause === 'lr_dx_smooth_sysui');
+chk(hkDx && hkDx.fix === 'lr_dx_fix_hooks' && hkDx.owner === 'app' && hkDx.cv.src.indexOf('com.mod.alpha') >= 0, 'the smooth verdict points at the hook modules: ' + JSON.stringify(hkDx));
+mixHk.sections.sysuidraw.hooks = '';
+chk(logReportTips(mixHk, true).some(t => t.key === 'lr_tip_sysui_other'), 'without hook evidence the generic advice stays');
 mixSd.sections.sysuidraw.intv = '40';
 chk(!logReportTips(mixSd, true).some(t => t.key.indexOf('lr_tip_sysui_') === 0), 'SystemUI janky in half the intervals is no steady redraw');
 const oldHistory = d.hist[0];
@@ -5837,6 +5872,21 @@ chk(allText(reportBody).indexOf('10 → 15') >= 0 && allText(reportBody).indexOf
 const zyUnknown = parseLogReport('meta\telapsed_min=120\nzygisk\tstate=unknown\tcoverage=unavailable\tdeltas=unavailable\n');
 logReportRender(zyUnknown);
 chk(allText(reportBody).indexOf(I18N.ru.lr_zy_unavailable) >= 0, 'collector absence remains unknown, never unsupported');
+/* fix285: the battery section's screen-on/off durations come from the same split as the
+   drain rows and the brief, and a holder whose holds never reached a minute is not marked. */
+{
+  const scrDay = parseLogReport(['meta\telapsed_min=366\tprofile=smart', 'cover\ton_min=60\toff_min=306\ton_pct=16',
+    'scr\ton_pctph=6.6\toff_pctph=0.6\ton_min=81\toff_min=283\tidle_pctph=0.6\tidle_min=283\tmusic_min=0',
+    'drain\tpctph=2.0\ttotal_drop=12\thours=6.1\tma=244',
+    'wlive\ttag=signal:PushNotificationReceiveJob\tpct=62\tmin=0\tpkg=org.thoughtcrime.securesms\tkind=lock',
+    'wlive\ttag=contacts\tpct=68\tmin=11\tpkg=com.whatsapp\tkind=sync'].join('\n'));
+  logReportRender(scrDay);
+  const st = allText(reportBody);
+  chk(st.indexOf(logReportDur(81) + ' (22%)') >= 0 && st.indexOf(logReportDur(283)) >= 0 && st.indexOf(logReportDur(306)) < 0, 'screen durations follow the drain split: ' + st.slice(0, 0));
+  const warnRows = [];
+  (function walk(e) { if (String(e.className).indexOf('lgr-warn') >= 0) warnRows.push(e.textContent); e.children.forEach(walk); })(reportBody);
+  chk(!warnRows.some(function (t) { return /62%/.test(t); }) && warnRows.some(function (t) { return /68%/.test(t); }), 'only holds of a minute or more are marked: ' + JSON.stringify(warnRows));
+}
 logReportRender(mixDay);
 const mixText = allText(reportBody);
 chk(mixText.indexOf(I18N.ru.lr_sec_smart) < 0, 'the Smart learner card stays off a Battery day');

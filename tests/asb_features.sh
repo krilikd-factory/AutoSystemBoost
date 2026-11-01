@@ -8631,11 +8631,11 @@ grep -qx "$((now-899))|com.ig.app|820|1" "$T/d/zygisk_aot_launch" && grep -qx "$
 grep -q 'com.svc.app' "$T/d/zygisk_aot_launch" && fail "a service start or an absurd time was taken as a launch"
 [ "$(sed -n 1p "$T/d/zygisk_aot_apps" | cut -d'|' -f1)" = com.yt.app ] || [ "$(sed -n 1p "$T/d/zygisk_aot_apps" | cut -d'|' -f1)" = com.ig.app ] || fail "ranking: $(cat "$T/d/zygisk_aot_apps")"
 row com.once.app >/dev/null && fail "an app opened once was listed"
-row com.ig.app | grep -q '^com.ig.app|2|verify|install|' || fail "ART state of a listed app: $(row com.ig.app)"
+row com.ig.app | grep -q '^com.ig.app|3|verify|install|' || fail "ART state of a listed app (2 cold starts, 3 launches in Android's log): $(row com.ig.app)"
 row com.yt.app | grep -q '^com.yt.app|3|speed-profile|bg-dexopt|' || fail "primary-ABI state not preferred: $(row com.yt.app)"
 out="$(run status)"
 printf '%s\n' "$out" | grep -qx 'enabled=1' && printf '%s\n' "$out" | grep -qx 'ledger=1' && printf '%s\n' "$out" | grep -qx 'launches=4' || fail "status head: $out"
-printf '%s\n' "$out" | grep -qx 'app|com.ig.app|2|verify|install|0|-|0|-|2|800|0|0|0|0' || fail "status app row: $out"
+printf '%s\n' "$out" | grep -qx 'app|com.ig.app|3|verify|install|0|-|0|-|2|800|0|0|0|0' || fail "status app row: $out"
 run tick; [ "$(pmn)" = 0 ] || fail "compiled with the screen on and no charger"
 echo screen=0 > "$T/state"; run tick; [ "$(pmn)" = 0 ] || fail "compiled without a charger"
 echo Charging > "$T/pw/status"; echo 420 > "$T/pw/temp"; run tick; [ "$(pmn)" = 0 ] || fail "compiled on a warm battery"
@@ -8647,7 +8647,7 @@ grep -qx 'pm compile -r bg-dexopt com.ig.app' "$T/pm.log" && grep -qx 'pm compil
   && grep -qx 'pm compile -r bg-dexopt com.mail.app' "$T/pm.log" || fail "weak apps not compiled at background priority: $(cat "$T/pm.log")"
 grep -q 'com.yt.app' "$T/pm.log" && fail "an app with AOT code was recompiled"
 [ -d "$T/d/zygisk_aot.lock" ] && fail "the lock was left behind"
-row com.ig.app | grep -q '^com.ig.app|2|speed-profile|cmdline|[0-9]*|[0-9]*|compiled|[1-9][0-9]*|verify$' || fail "compiled row: $(row com.ig.app)"
+row com.ig.app | grep -q '^com.ig.app|3|speed-profile|cmdline|[0-9]*|[0-9]*|compiled|[1-9][0-9]*|verify$' || fail "compiled row: $(row com.ig.app)"
 row com.np.app | grep -q '|no_profile|0|verify$' || fail "no-profile row: $(row com.np.app)"
 grep -q '|com.ig.app|compiled|verify>speed-profile$' "$T/d/zygisk_aot_log" && grep -q '|com.np.app|no_profile|verify$' "$T/d/zygisk_aot_log" || fail "events: $(cat "$T/d/zygisk_aot_log")"
 n1="$(pmn)"; run tick; [ "$(pmn)" = "$n1" ] || fail "a no-profile app was retried before 7 days"
@@ -8656,7 +8656,7 @@ ca="$(row com.ig.app | cut -d'|' -f8)"
 printf '%s\n' "$((ca+5)).100  1000  1500 I am_proc_start: [0,4009,10201,com.ig.app,next-top-activity,{com.ig.app/com.ig.app.Main}]" \
   "$((ca+6)).100  1000  1500 I wm_activity_launch_time: [0,119,com.ig.app/.Main,600]" >> "$T/events"
 echo screen=1 > "$T/state"; run tick
-run status | grep -qx "app|com.ig.app|2|speed-profile|cmdline|[0-9]*|compiled|$ca|verify|3|780|2|800|1|600" || fail "before/after medians: $(run status | grep '^app|com.ig')"
+run status | grep -qx "app|com.ig.app|3|speed-profile|cmdline|[0-9]*|compiled|$ca|verify|3|780|2|800|1|600" || fail "before/after medians: $(run status | grep '^app|com.ig')"
 echo boot-1 > "$T/bootid"; run tick; grep -qx 'com.ig.app 2 2' "$T/d/zygisk_aot_count" || fail "the same boot was counted twice: $(cat "$T/d/zygisk_aot_count")"
 echo boot-2 > "$T/bootid"; led 1 0 0 0; run tick
 grep -qx 'com.ig.app 3 1' "$T/d/zygisk_aot_count" && grep -qx 'b boot-2' "$T/d/zygisk_aot_count" || fail "launches across boots: $(cat "$T/d/zygisk_aot_count")"
@@ -8666,6 +8666,10 @@ printf '%s\n' "$((now+50)).000  1000  1500 I ActivityManager: Start proc 5001:co
   "$((now+90)).000  1000  1500 I ActivityTaskManager: Displayed com.main.app/.Home for user 0: +310ms" > "$T/main"
 run tick
 grep -qx "$((now+51))|com.main.app|1020|1" "$T/d/zygisk_aot_launch" && grep -qx "$((now+90))|com.main.app|310|0" "$T/d/zygisk_aot_launch" || fail "main-log fallback: $(tail -3 "$T/d/zygisk_aot_launch")"
+printf 'com.warm.app 1 1\n' >> "$T/d/zygisk_aot_count"
+printf '%s|com.warm.app|300|0\n%s|com.warm.app|280|0\n' "$((now+60))" "$((now+70))" >> "$T/d/zygisk_aot_launch"
+ASB_ZA_REFRESH_S=0 run tick
+row com.warm.app | grep -q '^com.warm.app|2|unknown|-|' || fail "an app opened warm twice with one cold start was not ranked by its launches: $(cat "$T/d/zygisk_aot_apps")"
 echo 999999 > "$T/govpid"; echo screen=1 > "$T/state"; echo Asleep > "$T/wake"
 run status | grep -qx 'screen=0' || fail "with the governor stopped the screen state did not come from the power service"
 out="$(run disable)"; [ "$out" = result=disabled ] && [ ! -e "$T/d/zygisk_aot" ] || fail "disable: $out"

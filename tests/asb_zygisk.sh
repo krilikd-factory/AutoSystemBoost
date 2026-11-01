@@ -207,7 +207,12 @@ CPP
       -DASB_ABI_TAG='"arm64-v8a"' "$T/ipc.cpp" -o "$T/ipc" || fail 'native IPC fixture build'
     "$T/ipc" "$T" || fail 'governor refresh ack/veto/timeout runtime'
   fi
-  echo 'PASS observer native contract: fail-open, no hooks/cap writer, bounded refresh IPC, two ABIs and synchronized diagnostics'
+  # fix285: the companion's windows and state age are on the suspend-aware clock.
+  grep -q 'clock_gettime(CLOCK_BOOTTIME, &ts)' "$ROOT/src/zygisk/asb_observer_protocol.h" || fail 'no CLOCK_BOOTTIME source'
+  grep -q 'const int64_t now = asb_observer_boottime_ms();' "$ROOT/src/zygisk/asb_observer.cpp" || fail 'companion windows still on CLOCK_MONOTONIC'
+  grep -q 'updated_boottime_ms' "$ROOT/src/zygisk/asb_observer.cpp" || fail 'state does not carry a boottime stamp'
+  ! grep -q 'asb_observer_monotonic_ms()' "$ROOT/src/zygisk/asb_observer_core.h" || fail 'the core reads a clock itself'
+  echo 'PASS observer native contract: fail-open, no hooks/cap writer, bounded refresh IPC, two ABIs, suspend-aware windows and synchronized diagnostics'
 )
 
 t_zygisk_hot_path_runtime() (
@@ -374,6 +379,70 @@ t_zygisk_allowlist_runtime() (
   echo 'PASS observer allowlist: empty default, native-equivalent validation, protected names, bounds and explicit safe mode'
 )
 
+t_zygisk_auto_setup_runtime() (
+  # fix284: one-tap automation is bounded to observation, the existing evidence guard and ART.
+  set -eu
+  ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+  fail() { echo "FAIL observer automatic setup: $*" >&2; exit 1; }
+  T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+  mkdir -p "$T/mod/config" "$T/mod/runtime" "$T/mod/zygisk" "$T/state/zygisk_observer" "$T/run" "$T/bin"
+  cp "$ROOT/config/governor.conf" "$ROOT/config/governor.conf.shipped" "$T/mod/config/"
+  cp "$ROOT/runtime/asb_config_safe.sh" "$ROOT/runtime/asb_zygisk_guard.sh" "$ROOT/runtime/asb_zygisk_aot.sh" "$T/mod/runtime/"
+  printf 'com.example.manual\norg.example.keep\n' > "$T/state/zygisk_observer/packages.list"
+  : > "$T/packages"
+  i=0; while [ $i -lt 70 ]; do printf 'com.example.p%02d\n' "$i" >> "$T/packages"; i=$((i+1)); done
+  printf 'com.android.systemui\ncom.topjohnwu.magisk\n' >> "$T/packages"
+  cat > "$T/bin/pm" <<'SH'
+#!/bin/sh
+if [ "$1 $2 $3" = "list packages -3" ]; then sed 's/^/package:/' "$PKG_FILE"; fi
+SH
+  cat > "$T/bin/logcat" <<'SH'
+#!/bin/sh
+exit 0
+SH
+  chmod +x "$T/bin/pm" "$T/bin/logcat"
+  run() { PATH="$T/bin:$PATH" PKG_FILE="$T/packages" ASB_ZYGISK_MODDIR="$T/mod" ASB_ZYGISK_DIR="$T/state/zygisk_observer" ASB_ZYGISK_RUN_DIR="$T/run" sh "$ROOT/runtime/asb_zygisk.sh" "$@"; }
+  run safe-mode on
+  run auto-enable > "$T/safe.out" 2>/dev/null && fail 'automatic setup cleared or bypassed Safe mode'
+  grep -qx 'result=safe_mode' "$T/safe.out" || fail 'Safe mode refusal not explicit'
+  [ ! -e "$T/state/zygisk_guard" ] && [ ! -e "$T/state/zygisk_aot" ] || fail 'Safe-mode refusal enabled features'
+  run safe-mode off
+  printf 'b test\ncom.example.p69 900 0\ncom.example.p05 800 0\n' > "$T/state/zygisk_aot_count"
+  run auto-enable > "$T/enable.out" || fail "automatic enable failed: $(cat "$T/enable.out")"
+  grep -qx 'result=enabled' "$T/enable.out" && grep -qx 'packages=64' "$T/enable.out" || fail "wrong enable result: $(cat "$T/enable.out")"
+  [ "$(run list | wc -l)" = 64 ] || fail 'automatic list exceeded or missed the 64-package bound'
+  run list | grep -qx 'com.example.p69' || fail 'usage history did not prioritise frequently opened apps'
+  run list | grep -qx 'com.example.p05' || fail 'second usage-ranked app missing'
+  run list | grep -qE 'com\.android\.systemui|com\.topjohnwu\.magisk' && fail 'protected/system package entered automatic list'
+  for k in zygisk_enabled zygisk_hints zygisk_launch zygisk_ledger; do grep -qx "$k=1" "$T/mod/config/governor.conf" || fail "$k not enabled"; done
+  grep -qx wakers "$T/state/zygisk_guard" || fail 'evidence guard is not at loops + night wakers'
+  [ -f "$T/state/zygisk_aot" ] && [ -f "$T/state/zygisk_observer/auto" ] || fail 'ART or automatic marker absent'
+  grep -qx 'observer=1' "$T/mod/zygisk/policy" && grep -qx 'ledger=1' "$T/mod/zygisk/policy" || fail 'automatic policy incomplete'
+  run status | grep -qx 'automatic=on' || fail 'status does not expose automatic ownership'
+  # Unchanged refresh does not advance policy generation or rewrite the policy.
+  before="$(sha256sum "$T/mod/zygisk/policy")"; sleep 1
+  run auto-refresh > "$T/refresh.out"
+  after="$(sha256sum "$T/mod/zygisk/policy")"; [ "$before" = "$after" ] || fail 'unchanged automatic refresh rewrote policy'
+  # A newly installed, frequently opened app joins without a new worker; a package-manager
+  # outage keeps the last good list instead of proving that no apps exist.
+  printf 'com.example.new 1000 0\n' >> "$T/state/zygisk_aot_count"
+  printf 'com.example.new\n' >> "$T/packages"
+  run auto-refresh >/dev/null; run list | grep -qx 'com.example.new' || fail 'new user app not added on refresh'
+  : > "$T/packages"; run auto-refresh >/dev/null
+  run list | grep -qx 'com.example.new' || fail 'empty Package Manager response erased the last good list'
+  run auto-disable > "$T/disable.out" || fail 'automatic disable failed'
+  grep -qx 'result=disabled' "$T/disable.out" || fail 'disable result missing'
+  printf 'com.example.manual\norg.example.keep\n' > "$T/want"
+  cmp -s "$T/want" "$T/state/zygisk_observer/packages.list" || fail 'previous manual list was not restored exactly'
+  for k in zygisk_enabled zygisk_hints zygisk_launch zygisk_ledger; do grep -qx "$k=0" "$T/mod/config/governor.conf" || fail "$k left enabled after auto disable"; done
+  [ ! -e "$T/state/zygisk_guard" ] && [ ! -e "$T/state/zygisk_aot" ] && [ ! -e "$T/state/zygisk_observer/auto" ] || fail 'automatic flags survived disable'
+  [ ! -e "$T/mod/zygisk/policy" ] || fail 'automatic disable left an active policy'
+  grep -q 'zygisk_observer/auto' "$ROOT/service.sh" && grep -q 'auto-refresh' "$ROOT/service.sh" || fail 'existing service refresh hook missing'
+  grep -q 'zygisk_observer/packages.before_auto' "$ROOT/uninstall.sh" || fail 'uninstall cleanup missing'
+  ! grep -qE 'auto.*(appops|RUN_ANY_IN_BACKGROUND)|appops.*auto' "$ROOT/runtime/asb_zygisk.sh" || fail 'automatic package selection became an AppOps writer'
+  echo 'PASS observer automatic setup: usage-ranked user apps, 64 bound, Full + evidence guard + charging ART, safe-mode refusal, unchanged-read-only refresh and exact restore'
+)
+
 t_zygisk_policy_sync_runtime() (
   # fix272: runtime/asb_zygisk.sh is the only writer of the zygote-side policy. Every switch
   # change rewrites it atomically; disable, safe mode or nothing selected removes it (absent =
@@ -534,6 +603,7 @@ EOF
   . "$ROOT/runtime/asb_zygisk_info.sh"; _asb_zygisk_info
   want() { grep -Fqx "zygisk_observer	$1	$2" "$T/out" || fail "missing $1=$2: $(cat "$T/out")"; }
   want enabled 1; want enabled_packages 1; want loaded_processes 1; want events_total 10; want link_state connected
+  want auto_mode 0
   want events_dropped_rate_limit 1; want ipc_cpu_ms 3; want ipc_wakeups 12; want memory_kb 2222
   want state_freshness current; want crash_count unknown; want anr_count unknown; want policy_hints 7
   want lifecycle_hints 1; want hints_accepted 4; want hints_vetoed 1; want hints_unavailable 1; want hints_throttled 3
@@ -558,7 +628,7 @@ EOF
   {
     sed -n '/^T_ZY_HEAD=/,/^T_ZY_UNKNOWN=/p' "$ROOT/action.sh"
     printf '_f() { _sfmt="$1"; shift; printf "$_sfmt\\n" "$@"; }\n'
-    sed -n '/# Compact, current Zygisk evidence/,/^_bias=/p' "$ROOT/action.sh" | sed '$d'
+    sed -n '/# Compact, current Zygisk evidence/,/^echo "  ⚙️  \${H_SYSTEM}"$/p' "$ROOT/action.sh" | sed '$d'
   } > "$T/action.zy.sh"
   MODDIR="$T/mod" ASB_ZYGISK_MODDIR="$T/mod" ASB_ZYGISK_DIR="$T/data/asb/zygisk_observer" \
     ASB_ZYGISK_RUN_DIR="$T/run" ASB_ZYGISK_PROC="$T/proc" ASB_ZYGISK_DATA="$T/data" \
@@ -567,6 +637,7 @@ EOF
   grep -q 'live processes 1 · events 10 · spawn 30' "$T/action.out" || fail 'Actions evidence counters absent'
   grep -q 'generation 42 / acknowledged 42' "$T/action.out" || fail 'Actions policy acknowledgement absent'
   grep -q 'not pure ASB cost' "$T/action.out" || fail 'Actions RSS basis is not honest'
+  awk '/^echo "  🌙  \${H_SLEEP}"/ { s=NR } /T_ZY_HEAD.*_zy_label/ { z=NR } /^echo "  ⚙️  \${H_SYSTEM}"/ { y=NR } END { if (!(s && z && y && s < z && z < y)) exit 1 }' "$ROOT/action.sh" || fail 'Actions Zygisk block is not between Sleep and System'
   {
     printf 'P() { printf "%%s\\n" "$*"; }\nNOTE() { printf "%%s\\n" "$*"; }\n'
     printf '_asb_observer_diag="$(cat "$T/diag.rows")"\n'
@@ -580,13 +651,24 @@ EOF
   cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail 'asbdiag entry points differ'
 
   : > "$T/out"; rm -rf "$T/proc/4242"; printf '999.0 0.0\n' > "$T/proc/uptime"; _asb_zygisk_info
-  want loaded_processes 0; want state_freshness current; want link_state confirmed
-  printf '1000.0 0.0\n' > "$T/proc/uptime"; sed -i 's/999000/1/' "$T/run/state.arm64-v8a.tsv"
+  want loaded_processes 0; want state_freshness current; want link_state confirmed; want state_age_clock file_mtime
+  # fix285: a companion writing only CLOCK_MONOTONIC falls behind /proc/uptime by every second
+  # of deep sleep. A night of suspend must not turn a file written just now into "stale".
+  printf '20000.0 0.0\n' > "$T/proc/uptime"
+  : > "$T/out"; _asb_zygisk_info; want state_freshness current; want link_state confirmed
+  touch -d "@$(( $(date +%s) - 600 ))" "$T/run/state.arm64-v8a.tsv" "$T/run/state.armeabi-v7a.tsv"
   : > "$T/out"; _asb_zygisk_info; want state_freshness stale_over_5_minutes; want link_state quiet
+  grep -Fqx "$(printf 'zygisk_observer\tstate_age_ms\t600000')" "$T/out" || grep -Eq "^zygisk_observer	state_age_ms	(599|60[01])[0-9]{3}$" "$T/out" || fail "age from the file time: $(grep state_age "$T/out")"
   sed -i 's/^gen=42$/gen=43/' "$T/mod/zygisk/policy"
   : > "$T/out"; _asb_zygisk_info; want state_freshness stale_over_5_minutes; want link_state stale
   sed -i 's/^gen=43$/gen=42/' "$T/mod/zygisk/policy"
-  echo 'PASS observer diagnostics: live PID/start-ticks validation, current RSS, counters, stale TTL and honest unknowns'
+  # A rebuilt companion also writes CLOCK_BOOTTIME; that is compared with /proc/uptime directly.
+  printf 'Z\tupdated_boottime_ms\t19990000\n' >> "$T/run/state.arm64-v8a.tsv"
+  touch -d "@$(( $(date +%s) - 3600 ))" "$T/run/state.arm64-v8a.tsv" "$T/run/state.armeabi-v7a.tsv"
+  : > "$T/out"; _asb_zygisk_info; want state_freshness current; want state_age_ms 10000; want state_age_clock boottime
+  printf '21000.0 0.0\n' > "$T/proc/uptime"
+  : > "$T/out"; _asb_zygisk_info; want state_freshness stale_over_5_minutes; want state_age_ms 1010000; want link_state quiet
+  echo 'PASS observer diagnostics: live PID/start-ticks validation, current RSS, counters, stale TTL on suspend-aware clocks and honest unknowns'
 )
 
 t_zygisk_ui_runtime() (
@@ -606,12 +688,13 @@ const hosts=Array.from({length:5},()=>mk('div'));
 const document={createElement:mk,querySelectorAll(sel){if(sel==='.hdr-info')return hosts;if(sel==='.zygisk-header-link')return hosts.map(h=>find(h,'zygisk-header-link')).filter(Boolean);return [];}};
 function _el(){return null;} function openZygiskPage(){} function shQuote(s){return "'"+s+"'";}
 function logReportSec(t){const e=mk('div');e.className='lgr-sec';const h=mk('div');h.textContent=t;e.appendChild(h);return e;}
+let _zyGuard={enabled:true,level:'wakers'},_zyAot={enabled:true}; function zygiskGuardParse(s){return {enabled:/^enabled=1$/m.test(s),level:(/^level=(.+)$/m.exec(s)||[])[1]||'off'};} function zygiskAotParse(s){return {enabled:/^enabled=1$/m.test(s)};}
 function uiSound(){} function haptic(){} let pageRenders=0; function zygiskPageRender(){pageRenders++;} let _zygiskOpen=true; let _cfgVals={}; let _cfgLoadSig='x';
 function cfgRenderRow(list,it){const row=mk('div');row.className='cfg-row';row.setAttribute('data-key',it.key);const sw=mk('div');sw.className='cfg-switch';sw.setAttribute('role','switch');row.appendChild(sw);list.appendChild(row);}
  function logReportNote(t){const e=mk('div');e.textContent=t;return e;}
 let commands=[],refreshes=0,toastText=''; async function run(c){commands.push(c);return {errno:0,stdout:''};} function runOk(r){return r.errno===0;} function runText(r){return r.stdout||'';} function toast(t){toastText=t;} function asbDeviceInfoLoad(){refreshes++;}
 JS
-    sed -n '/^function parseDeviceInfo(/,/^}/p; /^function devicePressureScale(/,/^}/p; /^function deviceZygiskLinkState(/,/^}/p; /^function deviceZygiskLinkVerdict(/,/^}/p; /^function deviceZygiskLink(/,/^}/p; /^let _zygiskHeaderSeq/p; /^let _zygiskHeaderAt/p; /^const ZYGISK_HEADER_TTL_MS/p; /^const _ASB_PART/p; /^function runBatchCmd(/,/^}/p; /^function runBatchSplit(/,/^}/p; /^async function runBatch(/,/^}/p; /^let _zygiskLoadSeq/p; /^const ZYGISK_MODES = \[/,/^\];/p; /^function zygiskModeOf(/,/^}/p; /^function zygiskModeCard(/,/^}/p; /^async function zygiskModeSet(/,/^}/p; /^function zygiskHeaderPaint(/,/^}/p; /^function zygiskHeaderInit(/,/^}/p; /^function zygiskHeaderPublish(/,/^}/p; /^async function zygiskHeaderRefresh(/,/^}/p; /^function cfgRenderZygiskCard(/,/^}/p; /^function deviceZygiskEditor(/,/^}/p' "$ROOT/webroot/index.html"
+    sed -n '/^function parseDeviceInfo(/,/^}/p; /^function devicePressureScale(/,/^}/p; /^function deviceZygiskLinkState(/,/^}/p; /^function deviceZygiskLinkVerdict(/,/^}/p; /^function deviceZygiskLink(/,/^}/p; /^let _zygiskHeaderSeq/p; /^let _zygiskHeaderAt/p; /^const ZYGISK_HEADER_TTL_MS/p; /^const _ASB_PART/p; /^function runBatchCmd(/,/^}/p; /^function runBatchSplit(/,/^}/p; /^async function runBatch(/,/^}/p; /^let _zygiskLoadSeq/p; /^const ZYGISK_MODES = \[/,/^\];/p; /^function zygiskModeOf(/,/^}/p; /^function zygiskAutoCard(/,/^}/p; /^async function zygiskAutoSet(/,/^}/p; /^function zygiskModeCard(/,/^}/p; /^async function zygiskModeSet(/,/^}/p; /^function zygiskHeaderPaint(/,/^}/p; /^function zygiskHeaderInit(/,/^}/p; /^function zygiskHeaderPublish(/,/^}/p; /^async function zygiskHeaderRefresh(/,/^}/p; /^function cfgRenderZygiskCard(/,/^}/p; /^function deviceZygiskEditor(/,/^}/p' "$ROOT/webroot/index.html"
     cat <<'JS'
 let bad=0;const chk=(c,m)=>{if(!c){console.log('FAIL '+m);bad++;}};
 function find(n,c){if(n.className&&n.className.split(/\s+/).includes(c))return n;for(const x of n.children||[]){const r=find(x,c);if(r)return r;}return null;}
@@ -681,6 +764,23 @@ chk(/applied/.test(toastText),'success not reported: '+toastText);
 commands=[];await zygiskModeSet('off');chk(/set-many --snapshot '[^']+' 'zygisk_enabled' '0' &&/.test(commands[0]),'Off must only clear the master switch: '+commands[0]);
 run=async c=>{commands.push(c);return {errno:0,stdout:'refused\n'+_ASB_PART+'write\n'+_ASB_PART+'link',stderr:''};};_cfgVals={};
 await zygiskModeSet('watch');chk(!_cfgVals.zygisk_ledger&&/not saved/.test(toastText),'a refused write was reported as applied');
+// fix284: automatic card, its single-shell command flow and read-only package editor.
+let autoCard=zygiskAutoCard(md({auto_mode:'1',enabled_packages:'64'}));
+chk(find(autoCard,'zy-auto-summary').textContent.includes('64')&&find(autoCard,'zy-auto-summary').textContent.includes('Loops + night wakers')&&find(autoCard,'zy-auto-summary').textContent.includes('ART: On'),'automatic summary does not show actual package/guard/ART state');
+chk(find(autoCard,'zy-auto-actions').children.length===2,'enabled automatic card lacks refresh/disable actions');
+chk(zygiskAutoCard(md({auto_mode:'0'})).children.length>0&&find(zygiskAutoCard(md({auto_mode:'0'})),'zy-auto-actions').children.length===1,'off automatic card must offer only enable');
+const autoEd=deviceZygiskEditor(md({auto_mode:'1',enabled_package_list:'com.example.auto'}));
+chk(find(autoEd,'dev-zygisk-input').attrs.readonly==='readonly','automatic package editor is not read-only');
+chk(autoEd.children.flatMap(x=>x.children||[]).filter(x=>x.tagName==='button')[0].hidden===true,'manual save remains visible in automatic mode');
+const autoOutput=(result,auto)=>result+'\n'+_ASB_PART+'set\n'+raw({auto_mode:auto?'1':'0',enabled_packages:auto?'64':'0'})+'\n'+_ASB_PART+'link\nversion=1\nenabled='+(auto?'1':'0')+'\nlevel=wakers\n'+_ASB_PART+'guard\nversion=1\nenabled='+(auto?'1':'0')+'\n'+_ASB_PART+'aot';
+commands=[];run=async c=>{commands.push(c);return {errno:0,stdout:autoOutput('result=enabled',true),stderr:''};};
+await zygiskAutoSet('enable');
+chk(commands.length===1&&commands[0].includes('auto-enable'),'automatic enable is not one shell');
+chk(commands[0].indexOf('auto-enable')<commands[0].indexOf('link-status')&&commands[0].includes('asb_zygisk_guard.sh')&&commands[0].includes('asb_zygisk_aot.sh'),'automatic enable did not refresh all state');
+chk(/Automatic Zygisk setup is on/.test(toastText),'automatic enable result not reported');
+commands=[];run=async c=>{commands.push(c);return {errno:0,stdout:autoOutput('result=refreshed',true),stderr:''};};await zygiskAutoSet('refresh');chk(commands.length===1&&commands[0].includes('auto-refresh')&&/refreshed/.test(toastText),'automatic refresh flow failed');
+commands=[];run=async c=>{commands.push(c);return {errno:0,stdout:autoOutput('result=disabled',false),stderr:''};};await zygiskAutoSet('disable');chk(commands.length===1&&commands[0].includes('auto-disable')&&/previous app list restored/.test(toastText),'automatic disable/restore flow failed');
+commands=[];run=async c=>{commands.push(c);return {errno:0,stdout:autoOutput('result=safe_mode',false),stderr:''};};await zygiskAutoSet('enable');chk(/Safe mode is on/.test(toastText)&&!/_cfgLoadSig/.test(''),'Safe mode refusal was not explained');
 if(bad)process.exit(1);console.log('ok');})().catch(e=>{console.error(e);process.exit(1)});
 JS
   } > "$T/test.js"
@@ -699,6 +799,9 @@ for p in files:
     assert d['dev_zygisk_link_connected_detail'].count('{n}') == 1, p
     assert d['cfg_ui_section_zygisk'].strip(), p
     assert d['cfg_ui_section_zygisk_hint'].strip(), p
+    auto_keys = ('title','recommended','desc','enable','refresh','disable','summary','note','enabled','refreshed','disabled','failed','safe','managed_label','managed_note')
+    for key in auto_keys:
+        assert d['zy_auto_' + key].strip(), (p, key)
 PY
   echo 'PASS observer UI: unified four-switch card, five evidence-bounded headers, 13 locales, scale and safe editor'
 )
