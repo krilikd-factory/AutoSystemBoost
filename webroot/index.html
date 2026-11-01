@@ -410,6 +410,38 @@ button.badge:active { color: var(--accent); }
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--zygisk-header-color) 14%, transparent);
 }
 .zygisk-header-label { white-space: nowrap; }
+/* fix289: a live link breathes. The green states (connected, confirmed, quiet) pulse slowly -
+ * opacity and scale only, so the compositor animates them without a repaint - in the header
+ * pill and on the link card; waiting/stale/safe and unknown stay still, and reduced motion
+ * stops it. */
+.zygisk-header-connected .zygisk-header-dot, .zygisk-header-confirmed .zygisk-header-dot, .zygisk-header-quiet .zygisk-header-dot,
+.dev-zygisk-link-connected .dev-zygisk-link-dot, .dev-zygisk-link-confirmed .dev-zygisk-link-dot, .dev-zygisk-link-quiet .dev-zygisk-link-dot {
+  position: relative;
+  animation: zyLivePulse 3.6s ease-in-out infinite;
+}
+.zygisk-header-connected .zygisk-header-dot::after, .zygisk-header-confirmed .zygisk-header-dot::after, .zygisk-header-quiet .zygisk-header-dot::after,
+.dev-zygisk-link-connected .dev-zygisk-link-dot::after, .dev-zygisk-link-confirmed .dev-zygisk-link-dot::after, .dev-zygisk-link-quiet .dev-zygisk-link-dot::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  color: var(--bat);
+  opacity: 0;
+  animation: zyLiveRing 3.6s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes zyLivePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .5; transform: scale(.85); }
+}
+@keyframes zyLiveRing {
+  0%, 100% { opacity: .4; transform: scale(1); }
+  50% { opacity: 0; transform: scale(1.7); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .zygisk-header-dot, .zygisk-header-dot::after, .dev-zygisk-link-dot, .dev-zygisk-link-dot::after { animation: none !important; }
+}
 .zygisk-header-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 html.asb-fit-c2 .zygisk-header-link { margin-inline-start: 7px; padding-inline-start: 7px; }
 html.asb-fit-c2 .zygisk-header-label { display: none; }
