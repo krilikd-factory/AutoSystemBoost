@@ -273,7 +273,7 @@ case "${1:-}" in
     # Reuse the exact read-only diagnostics collector; configuration and installed ABI
     # files alone never become connection evidence. No sync, writer or worker is started.
     PROC="${ASB_ZYGISK_PROC:-/proc}"
-    DATA="${ASB_ZYGISK_DATA:-/data}"
+    DATA="${ASB_ZYGISK_DATA:-/data/adb}"
     _read() { [ -r "$1" ] && cat "$1" 2>/dev/null; }
     _emit() { printf 'D\t%s\t%s\t%s\n' "$1" "$2" "$3"; }
     [ -r "$MODDIR/runtime/asb_zygisk_info.sh" ] || exit 1

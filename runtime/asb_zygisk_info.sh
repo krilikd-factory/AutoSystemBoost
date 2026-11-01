@@ -233,5 +233,5 @@ _asb_zygisk_info() {
   _emit zygisk_observer media_camera_audio_navigation 'not exposed in observer-only stage'
   _emit zygisk_observer overhead_confidence "$([ "$_zi_state" = 1 ] && echo 'measured event counters; snapshot only' || echo 'unknown: no event state')"
   _emit zygisk_observer data_minimization 'package name, PID/start ticks, process RSS and bounded counters; the ledger keeps package names and start counts for this boot in tmpfs only; a top-app start names its package to the root companion only for the launch-class lookup, which is not kept'
-  _emit zygisk_observer denylist_basis 'apps the root manager hides root from never keep the observer library or a socket; their one-shot record is sent before specialization'
+  _emit zygisk_observer denylist_basis 'starts the root manager flags for module unmounting; on KernelSU that is every app without root by default, so it is counted only and changes nothing'
 }

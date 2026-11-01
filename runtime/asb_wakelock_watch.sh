@@ -190,6 +190,10 @@ _wl_pkgmap() {
 
 # uid -> seconds held since batterystats last reset (the last unplug), summed over tags.
 _wl_bs_uid_secs() {
+  if [ -n "${_WL_BS_SET:-}" ]; then
+    [ -n "$_WL_BS" ] && printf '%s\n' "$_WL_BS"
+    return 0
+  fi
   dumpsys batterystats 2>/dev/null | awk "$_WL_DUR_AWK"'
     /^[ \t]*Wake lock u[0-9]+a[0-9]+ / {
       u = $3; sub(/^u/, "", u); split(u, p, "a")
@@ -203,6 +207,48 @@ _wl_bs_uid_secs() {
     }
     END { for (k in best) { split(k, q, SUBSEP); sum[q[1]] += best[k] }
           for (u in sum) if (sum[u] > 0) print u, sum[u] }'
+}
+
+_wl_bs_load() {
+  _WL_BS="$(_wl_bs_uid_secs)"
+  _WL_BS_SET=1
+}
+
+WLHIST="$D/wakelock_hist"
+WLBASE="$D/wakelock_hist_base"
+_wl_hist_update() {
+  [ -n "${_WL_BS_SET:-}" ] && [ -n "$_map" ] || return 0
+  mkdir -p "$D" 2>/dev/null
+  _hn="$(date +%s 2>/dev/null)"
+  case "$_hn" in ''|*[!0-9]*) return 0 ;; esac
+  printf '%s\n' "$_WL_BS" | awk -v map="$_map" -v bf="$WLBASE" -v now="$_hn" -v hf="$WLHIST.add" -v nb="$WLBASE.new" '
+    BEGIN {
+      n = split(map, a, "\n")
+      for (i = 1; i <= n; i++) if (split(a[i], b, " ") == 2) pkg[b[1]] = (pkg[b[1]] ? pkg[b[1]] "," : "") b[2]
+      while ((getline ln < bf) > 0) { if (split(ln, f, " ") == 2 && f[2] ~ /^[0-9]+$/) base[f[1]] = f[2] + 0 }
+      printf "" > hf; printf "" > nb
+    }
+    NF == 2 && ($1 in pkg) && $2 ~ /^[0-9]+$/ {
+      c = $2 + 0; np = split(pkg[$1], pa, ",")
+      for (i = 1; i <= np; i++) {
+        p = pa[i]; d = (p in base && c >= base[p]) ? c - base[p] : c
+        if (d > 0) printf "%d|%s|%d\n", now, p, d >> hf
+        printf "%s %d\n", p, c >> nb
+      }
+    }' 2>/dev/null || { rm -f "$WLHIST.add" "$WLBASE.new"; return 0; }
+  mv -f "$WLBASE.new" "$WLBASE" 2>/dev/null
+  _hc=$((_hn - ${ASB_WL_HIST_DAYS:-7} * 86400))
+  { cat "$WLHIST" 2>/dev/null; cat "$WLHIST.add" 2>/dev/null; } \
+    | awk -F'|' -v cut="$_hc" 'NF == 3 && $1 ~ /^[0-9]+$/ && $1 >= cut && $2 ~ /^[A-Za-z0-9_.]+$/ && $3 ~ /^[0-9]+$/' \
+    | tail -n 3000 > "$WLHIST.tmp" 2>/dev/null && mv -f "$WLHIST.tmp" "$WLHIST" 2>/dev/null
+  rm -f "$WLHIST.add" "$WLHIST.tmp" 2>/dev/null
+  [ -s "$WLHIST" ] || rm -f "$WLHIST" 2>/dev/null
+  return 0
+}
+_wl_hist_sum() {
+  _hs="$(date +%s 2>/dev/null)"
+  case "$_hs" in ''|*[!0-9]*) return 0 ;; esac
+  awk -F'|' -v cut="$((_hs - ${ASB_WL_HIST_DAYS:-7} * 86400))" 'NF == 3 && $1 >= cut { s[$2] += $3 } END { for (p in s) if (s[p] > 0) print p, s[p] }' "$WLHIST" 2>/dev/null
 }
 
 # uids holding a partial wakelock right now that the framework has flagged LONG (> 1 min).
@@ -725,36 +771,46 @@ _wl_man_reapply() {
 # not a current-capture energy attribution; the WebUI labels that basis explicitly.
 _wl_man_scan() {
   _has dumpsys && _has pm || return 1
-  _map="$(_wl_pkgmap)"; [ -n "$_map" ] || return 1
-  { _wl_bs_uid_secs; _wl_power_long_uids | sed 's/$/ L/'; } | awk -v map="$_map" '
+  [ -n "${_map:-}" ] || _map="$(_wl_pkgmap)"
+  [ -n "$_map" ] || return 1
+  _wl_bs_load
+  _wl_hist_update
+  _week="$(_wl_hist_sum)"
+  { printf '%s\n' "$_WL_BS"; _wl_power_long_uids | sed 's/$/ L/'; } | awk -v map="$_map" -v week="$_week" '
     BEGIN { n=split(map,a,"\n"); for(i=1;i<=n;i++) if(split(a[i],b," ")==2)
-              pkg[b[1]]=(pkg[b[1]] ? pkg[b[1]] "," : "") b[2] }
+              pkg[b[1]]=(pkg[b[1]] ? pkg[b[1]] "," : "") b[2]
+            n=split(week,a,"\n"); for(i=1;i<=n;i++) if(split(a[i],b," ")==2) wk[b[1]]=b[2]+0 }
     $2 == "L" { held[$1]=1; next }
-    { secs[$1]=$2 }
-    END { for(u in secs) if((u in pkg) && secs[u]>=30) {
-              n=split(pkg[u],pa,","); for(i=1;i<=n;i++) print pa[i] "|" secs[u] "|" (held[u]?1:0) }
-          for(u in held) if((u in pkg) && !(u in secs)) {
-              n=split(pkg[u],pa,","); for(i=1;i<=n;i++) print pa[i] "|0|1" } }' \
-    | sort -t'|' -k2,2nr | head -16
+    NF == 2 { secs[$1]=$2 }
+    END { for(u in pkg) { n=split(pkg[u],pa,","); for(i=1;i<=n;i++) {
+              p=pa[i]; s=(u in secs)?secs[u]+0:0; h=held[u]?1:0; w=wk[p]+0
+              if(s>=30 || h || w>=30) print ((s>w)?s:w) "|" p "|" s "|" h "|" w } } }' \
+    | sort -t'|' -k1,1nr -k2,2 | cut -d'|' -f2- | head -16
 }
 _wl_man_status() {
+  _map=""; _has pm && _map="$(_wl_pkgmap)"
   _rows="$(_wl_man_scan)"; _scan=$?
   printf 'version=1\nscan=%s\n' "$([ "$_scan" -eq 0 ] && echo ok || echo unavailable)"
   _n=0; [ -s "$MAN" ] && _n="$(grep -c '|' "$MAN" 2>/dev/null)"
   printf 'selected=%s\n' "${_n:-0}"
   # Candidate rows plus selected apps that have no current batterystats row.
-  { printf '%s\n' "$_rows"; [ -s "$MAN" ] && cut -d'|' -f1 "$MAN" | sed 's/$/|0|0/'; } \
-    | awk -F'|' 'NF>=3 && $1!="" && !seen[$1]++ { print $1 "|" $2 "|" $3 }'
+  { printf '%s\n' "$_rows"; [ -s "$MAN" ] && cut -d'|' -f1 "$MAN" | sed 's/$/|0|0|0/'; } \
+    | awk -F'|' 'NF>=4 && $1!="" && !seen[$1]++ { print $1 "|" $2 "|" $3 "|" $4 }'
+  [ "$_scan" -eq 0 ] && printf '%s\n' "$_map" | awk -v rows="$_rows" -v man="$MAN" '
+    BEGIN { n=split(rows,a,"\n"); for(i=1;i<=n;i++) { split(a[i],b,"|"); if(b[1]!="") skip[b[1]]=1 }
+            while ((getline ln < man) > 0) { split(ln,b,"|"); if(b[1]!="") skip[b[1]]=1 } }
+    NF == 2 && !($2 in skip) && !seen[$2]++ { print "other|" $2 }'
 }
 if [ "${1:-}" = manual-status ]; then
-  _wl_man_status | while IFS='|' read -r _a _b _c; do
+  _wl_man_status | while IFS='|' read -r _a _b _c _d; do
     case "$_a" in
       version=*|scan=*|selected=*) printf '%s\n' "$_a" ;;
+      other) case "$_b" in ''|*[!A-Za-z0-9_.]*) : ;; *) printf 'app|%s\n' "$_b" ;; esac ;;
       ''|*[!A-Za-z0-9_.]*) : ;;
       *) _sel=0; [ -n "$(_wl_man_line "$_a")" ] && _sel=1
          _eff=unknown; _has appops && _eff="$(_wl_man_eff "$_a" </dev/null)"
          _prot=0; _wl_protected "$_a" && _prot=1
-         printf 'row|%s|%s|%s|%s|%s|%s\n' "$_a" "${_b:-0}" "${_c:-0}" "$_sel" "${_eff:-unknown}" "$_prot" ;;
+         printf 'row|%s|%s|%s|%s|%s|%s|%s\n' "$_a" "${_b:-0}" "${_c:-0}" "$_sel" "${_eff:-unknown}" "$_prot" "${_d:-0}" ;;
     esac
   done
   exit 0
@@ -859,6 +915,10 @@ _wl_may_act() {
 }
 
 _has pm && _map="$(_wl_pkgmap)" || _map=""
+if _has dumpsys && [ -n "$_map" ]; then
+  _wl_bs_load
+  _wl_hist_update
+fi
 _lru="$(dumpsys activity lru 2>/dev/null)"
 # Switched off: hand back what this watcher restricted.
 #

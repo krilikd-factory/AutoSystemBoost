@@ -69,6 +69,7 @@ RECOVERY_LOG="${ASB_DEBUG_SUPPORT_RECOVERY_LOG:-$STATE_DIR/full_day_webui.recove
 # Kept injectable for the host contract only; production always reads Android's /proc.
 PROC_ROOT="${ASB_DEBUG_SUPPORT_PROC_ROOT:-/proc}"
 RESUMEFILE="$STATE_DIR/full_day_resume"
+STOPFILE="$STATE_DIR/full_day_stopping"
 DIAG_OUTDIR="${ASB_DEBUG_SUPPORT_DIAG_OUTDIR:-/sdcard/Download}"
 # A WebView bridge waits for stdout to close. Long actions therefore need a deliberately
 # detached launcher and a tiny status file: otherwise the browser cannot paint feedback
@@ -359,14 +360,29 @@ lock_known_dead() {
   return 0
 }
 
+stopping_since() {
+  [ -n "${1:-}" ] && [ -r "$STOPFILE" ] || return 1
+  [ "$(sed -n 's/^pid=//p' "$STOPFILE" 2>/dev/null | head -n 1 | tr -dc '0-9')" = "$1" ] || return 1
+  _sst="$(sed -n 's/^at=//p' "$STOPFILE" 2>/dev/null | head -n 1 | tr -dc '0-9')"
+  printf '%s' "${_sst:-0}"
+}
+
 full_day_status() {
   _pid="$(lock_live_pid 2>/dev/null || true)"
   if [ -n "$_pid" ]; then
+    if _since="$(stopping_since "$_pid")"; then
+      echo "status=stopping"
+      echo "pid=$_pid"
+      echo "since=$_since"
+      echo "log=$RUNLOG"
+      return 0
+    fi
     echo "status=running"
     echo "pid=$_pid"
     echo "log=$RUNLOG"
     return 0
   fi
+  rm -f "$STOPFILE" 2>/dev/null || true
   _pid="$(legacy_live_pid 2>/dev/null || true)"
   if [ -n "$_pid" ]; then
     echo "status=running"
@@ -677,6 +693,7 @@ start_full_day() {
     return 0
   fi
   _token="$(date +%s 2>/dev/null || echo now).$$"
+  rm -f "$STOPFILE" 2>/dev/null || true
   # Stamp the boot session before anything else. Written first so a lock can never exist
   # without the one fact that makes its PIDs interpretable.
   { printf '%s\n' "$(current_boot_id)" > "$BOOTIDFILE"; } 2>/dev/null || true
@@ -763,11 +780,20 @@ stop_full_day() {
     echo "pid=$_sp"
     return 0
   fi
+  _so="$(cat "$OUTPUTFILE" 2>/dev/null || true)"
+  if _since="$(stopping_since "$_sp")"; then
+    echo 'status=stopping'
+    echo "pid=$_sp"
+    echo "since=$_since"
+    [ -n "$_so" ] && echo "output=$_so"
+    return 0
+  fi
   [ -f "$MODDIR/runtime/asb_cgroup.sh" ] && . "$MODDIR/runtime/asb_cgroup.sh" && asb_cgroup_detach $$ >/dev/null 2>&1
   rm -f "$RESUMEFILE" 2>/dev/null || true
-  _so="$(cat "$OUTPUTFILE" 2>/dev/null || true)"
   _sk="$(pid_descendants "$_sp")"
   kill -TERM "$_sp" 2>/dev/null || { echo 'error=stop_failed'; return 9; }
+  mkdir -p "$STATE_DIR" 2>/dev/null
+  printf 'pid=%s\nat=%s\n' "$_sp" "$(date +%s 2>/dev/null || echo 0)" > "$STOPFILE" 2>/dev/null || true
   for _sc in $_sk; do
     _scc="$(tr '\000' ' ' < "$PROC_ROOT/$_sc/cmdline" 2>/dev/null || true)"
     case "$_scc" in sleep\ *|*/sleep\ *) kill -TERM "$_sc" 2>/dev/null || true ;; esac
@@ -790,6 +816,7 @@ stop_full_day() {
     if [ -d "$LOCKDIR" ] && [ "$(pid_from_file "$PIDFILE" 2>/dev/null || true)" = "$_sp" ] && ! pid_is_live "$_sp"; then
       rm -rf "$LOCKDIR" 2>/dev/null || true
     fi
+    pid_is_live "$_sp" || rm -f "$STOPFILE" 2>/dev/null || true
   ) &
   echo 'status=stopping'
   echo "pid=$_sp"
