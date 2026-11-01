@@ -57,9 +57,13 @@ int main() {
   assert(asb_observer_frame_valid(sp));
   sp.flags=ASB_OBSERVER_FLAG_LAUNCH; assert(!asb_observer_frame_valid(sp)); // launch needs top-app
   sp.flags=ASB_OBSERVER_FLAG_TOP_APP; assert(!asb_observer_frame_valid(sp)); // nothing requested
-  sp.flags=ASB_OBSERVER_FLAG_TOP_APP|ASB_OBSERVER_FLAG_LAUNCH|8u; assert(!asb_observer_frame_valid(sp)); // unknown bit
+  sp.flags=ASB_OBSERVER_FLAG_TOP_APP|ASB_OBSERVER_FLAG_LAUNCH|16u; assert(!asb_observer_frame_valid(sp)); // unknown bit
+  sp.flags=ASB_OBSERVER_FLAG_TOP_APP|ASB_OBSERVER_FLAG_LAUNCH|ASB_OBSERVER_FLAG_DENYLIST; assert(asb_observer_frame_valid(sp));
   sp.flags=ASB_OBSERVER_FLAG_TOP_APP|ASB_OBSERVER_FLAG_LAUNCH; snprintf(sp.package,sizeof(sp.package),"com.example.app");
-  assert(!asb_observer_frame_valid(sp)); // a launch-only record names no package
+  assert(asb_observer_frame_valid(sp)); // fix286: a launch-only record may name its package for the class lookup
+  snprintf(sp.package,sizeof(sp.package),"com.android.systemui"); assert(!asb_observer_frame_valid(sp));
+  snprintf(sp.package,sizeof(sp.package),"bad name"); assert(!asb_observer_frame_valid(sp));
+  snprintf(sp.package,sizeof(sp.package),"com.example.app");
   sp.flags=ASB_OBSERVER_FLAG_LEDGER; assert(asb_observer_frame_valid(sp));
   snprintf(sp.package,sizeof(sp.package),"com.android.systemui"); assert(!asb_observer_frame_valid(sp));
   sp.version=1; snprintf(sp.package,sizeof(sp.package),"com.example.app"); assert(!asb_observer_frame_valid(sp));
@@ -101,12 +105,32 @@ int main() {
   const char idle[]="v=2\nobserver=0\nhints=1\nlaunch=0\nledger=0\n"; assert(asb_observer_policy_parse(idle,sizeof(idle)-1,pol) && !pol.active());
   std::string many="v=2\nobserver=1\n"; for (int i=0;i<65;i++) many+="pkg=com.example.p"+std::to_string(i)+"\n";
   assert(!asb_observer_policy_parse(many.data(),many.size(),pol));
+  // fix286: launch classes - strict, bounded, and an invalid file leaves every app normal.
+  static AsbObserverClasses cl;
+  const char cok[]="v=1\nslow=com.example.heavy\nslow=org.example.hooked\nfast=com.example.light\n";
+  assert(asb_observer_classes_parse(cok,sizeof(cok)-1,cl) && cl.valid && cl.slow==2 && cl.fast==1);
+  assert(cl.lookup("com.example.heavy")==ASB_LAUNCH_LONG && cl.lookup("org.example.hooked")==ASB_LAUNCH_LONG);
+  assert(cl.lookup("com.example.light")==ASB_LAUNCH_SHORT && cl.lookup("com.example.other")==ASB_LAUNCH_NORMAL);
+  assert(cl.lookup("")==ASB_LAUNCH_NORMAL && cl.lookup(nullptr)==ASB_LAUNCH_NORMAL);
+  const char cnov[]="slow=com.example.heavy\n"; assert(!asb_observer_classes_parse(cnov,sizeof(cnov)-1,cl) && cl.lookup("com.example.heavy")==ASB_LAUNCH_NORMAL);
+  const char cv2[]="v=2\nslow=com.example.heavy\n"; assert(!asb_observer_classes_parse(cv2,sizeof(cv2)-1,cl));
+  const char cdup[]="v=1\nslow=com.example.app\nfast=com.example.app\n"; assert(!asb_observer_classes_parse(cdup,sizeof(cdup)-1,cl));
+  const char cdup2[]="v=1\nfast=com.example.app\nfast=com.example.app\n"; assert(!asb_observer_classes_parse(cdup2,sizeof(cdup2)-1,cl));
+  const char cden[]="v=1\nslow=com.android.systemui\n"; assert(!asb_observer_classes_parse(cden,sizeof(cden)-1,cl));
+  const char ckey[]="v=1\nslow=com.example.heavy\nlift=10\n"; assert(!asb_observer_classes_parse(ckey,sizeof(ckey)-1,cl) && !cl.valid);
+  const char cbad[]="v=1\nslow=com.example.heavy;rm\n"; assert(!asb_observer_classes_parse(cbad,sizeof(cbad)-1,cl));
+  const char cnoeq[]="v=1\nslow\n"; assert(!asb_observer_classes_parse(cnoeq,sizeof(cnoeq)-1,cl));
+  std::string cmany="v=1\n"; for (int i=0;i<65;i++) cmany+="slow=com.example.s"+std::to_string(i)+"\n";
+  assert(!asb_observer_classes_parse(cmany.data(),cmany.size(),cl));
+  std::string cfull="v=1\n"; for (int i=0;i<64;i++) cfull+="slow=com.example.s"+std::to_string(i)+"\nfast=com.example.f"+std::to_string(i)+"\n";
+  assert(cfull.size()<=ASB_OBSERVER_CLASSES_MAX_BYTES && asb_observer_classes_parse(cfull.data(),cfull.size(),cl) && cl.slow==64 && cl.fast==64);
+  const char cempty[]="v=1\n"; assert(asb_observer_classes_parse(cempty,sizeof(cempty)-1,cl) && cl.lookup("com.example.s1")==ASB_LAUNCH_NORMAL);
   std::cout << "observer core ok\n";
 }
 CPP
   g++ -std=c++17 -Wall -Wextra -Werror -I"$ROOT/src/zygisk" "$T/core.cpp" -o "$T/core" || fail 'C++ build'
   "$T/core" | grep -qx 'observer core ok' || fail 'core assertions'
-  echo 'PASS observer native core: validation, exclusions, lifecycle/hint/cold-start bounds, ledger, policy parser, exit and TTL'
+  echo 'PASS observer native core: validation, exclusions, lifecycle/hint/cold-start bounds, ledger, policy and launch-class parsers, exit and TTL'
 )
 
 t_zygisk_native_contract() (
@@ -132,6 +156,15 @@ t_zygisk_native_contract() (
   grep -q 'ASB_GOVERNOR_SOCKET "/dev/.asb/ctl.sock"' "$S" || fail 'bounded governor refresh channel missing'
   grep -q 'static const char command\[\] = "zygisk-refresh"' "$S" || fail 'refresh carries more than its fixed opcode'
   grep -q 'static const char command\[\] = "zygisk-launch"' "$S" || fail 'cold start carries more than its fixed opcode'
+  grep -q 'static const char command\[\] = "zygisk-launch-long"' "$S" && grep -q 'static const char command\[\] = "zygisk-launch-short"' "$S" \
+    || fail 'launch classes are not fixed opcodes'
+  ! grep -q 'request_governor(frame\|request_governor(base\|request_governor(package\|request_governor(std::' "$S" || fail 'a package reaches the governor request'
+  grep -q 'api_->getFlags() & zygisk::PROCESS_ON_DENYLIST' "$S" && grep -q 'const bool observe = !hidden &&' "$S" \
+    || fail 'an app hidden from root can keep the observer loaded'
+  [ "$(grep -c 'classes_locked()' "$S")" = 2 ] || fail 'launch classes are read outside the companion'
+  sed -n '/void preAppSpecialize/,/void postAppSpecialize/p' "$S" | grep -q 'CLASSES' && fail 'the zygote side reads the launch classes'
+  grep -q 'ASB_ZYGISK_CLASSES_ABS "/data/adb/modules/AutoSystemBoost/zygisk/classes"' "$ROOT/src/zygisk/asb_observer_protocol.h" || fail 'classes path'
+  ! grep -q 'slow=\|fast=' "$ROOT/runtime/asb_zygisk.sh" || fail 'the policy file gained keys an older library would reject'
   ! grep -q 'fsync' "$S" || fail 'companion state is fsynced to flash on every event'
   grep -q 'ASB_GOVERNOR_HINT_TIMEOUT_US 100000' "$S" || fail 'governor round trip is not bounded to 100 ms'
   ! grep -q 'profile:\|start-session:\|zygisk-refresh:' "$S" || fail 'observer gained a profile/policy command'
@@ -146,10 +179,14 @@ t_zygisk_native_contract() (
   grep -q 'need_metrics = 1' "$T.hint" && grep -q 'asb_smart_pkg_cache_invalidate' "$T.hint" || fail 'hint does not request fresh evidence'
   ! grep -q 'force_write = 1\|g_last_reassert = 0\|profile_idx =\|CPU_MAX\|scaling_' "$T.hint" || fail 'hint bypassed normal governor policy'
   rm -f "$T.hint"
-  sed -n '/else if (strcmp(cmd, "zygisk-launch") == 0)/,/else if (strcmp(cmd, "status")/p' "$G" > "$T.launch"
+  sed -n '/else if (strcmp(cmd, "zygisk-launch") == 0 ||/,/else if (strcmp(cmd, "status")/p' "$G" > "$T.launch"
   grep -q 'g_asb_cfg.zygisk_enabled' "$T.launch" && grep -q 'g_asb_cfg.zygisk_launch' "$T.launch" || fail 'cold-start opt-in gates missing'
   grep -q 'zygisk_observer/disable' "$T.launch" && grep -q 'err:screen_off' "$T.launch" || fail 'cold-start safe-mode/screen-off veto missing'
-  grep -q 'g_unlock_cold_kick = 1' "$T.launch" && grep -q 'need_metrics = 1' "$T.launch" || fail 'cold start does not feed the existing lift'
+  grep -q 'g_unlock_cold_kick = asb_cold_kick_merge(g_unlock_cold_kick, cold_class);' "$T.launch" && grep -q 'need_metrics = 1' "$T.launch" \
+    || fail 'cold start does not feed the existing lift'
+  grep -q 'strcmp(cmd, "zygisk-launch-long") == 0 ? ASB_COLD_LONG' "$T.launch" && grep -q 'strcmp(cmd, "zygisk-launch-short") == 0 ? ASB_COLD_SHORT : ASB_COLD_NORMAL' "$T.launch" \
+    || fail 'launch class opcodes are not decoded'
+  grep -q 'strcmp(cmd, "zygisk-launch-long") == 0 ||' "$G" && grep -q 'strcmp(cmd, "zygisk-launch-short") == 0)' "$G" || fail 'class opcodes are logged on every launch'
   ! grep -q 'force_write = 1\|g_last_reassert = 0\|profile_idx =\|CPU_MAX\|scaling_\|g_unlock_until_ms' "$T.launch" \
     || fail 'cold start bypassed the lift gates or wrote a cap'
   rm -f "$T.launch"
@@ -253,7 +290,8 @@ static bool exempt(int){ ++g_exempt; return true; }
 static int connect_c(void*){ ++g_connects; int sv[2]; if (socketpair(AF_UNIX,SOCK_STREAM|SOCK_CLOEXEC,0,sv)) return -1; g_peer=sv[1]; return sv[0]; }
 static void setopt(void*, zygisk::Option o){ if (o==zygisk::DLCLOSE_MODULE_LIBRARY) ++g_dlclose; }
 static int moddir(void*){ return -1; }
-static uint32_t flags_fn(void*){ return 0; }
+static uint32_t g_flags=0;
+static uint32_t flags_fn(void*){ return g_flags; }
 static void put_policy(const char *text){ std::ofstream f(ASB_ZYGISK_POLICY_ABS); f<<text; }
 static jint uid=10123, gid=10123, rf=0, me=0; static jintArray gids=nullptr; static jobjectArray rl=nullptr;
 static jstring se=nullptr, nn=reinterpret_cast<jstring>(1), isa=nullptr, add=nullptr; static jboolean child=0, top=0;
@@ -278,10 +316,11 @@ int main(){
   double ns=std::chrono::duration<double,std::nano>(std::chrono::steady_clock::now()-t0).count()/20000;
   std::cout<<"dormant_ns="<<static_cast<long>(ns)<<"\n";
   assert(g_connects==0);
-  // Cold-start lift only: a top-app regular app sends one package-free frame and unloads.
+  // Cold-start lift only: a top-app regular app sends one frame and unloads. fix286: the frame
+  // names the package for the companion's launch-class lookup (never stored, never sent on).
   put_policy("v=2\ngen=7\nobserver=0\nhints=0\nlaunch=1\nledger=0\n");
   int dl=g_dlclose; pre(); assert(g_connects==1 && g_dlclose==dl+1 && g_exempt==0);
-  AsbObserverFrame f=take(); assert(f.kind==ASB_OBSERVER_EVENT_SPAWN && f.package[0]==0);
+  AsbObserverFrame f=take(); assert(f.kind==ASB_OBSERVER_EVENT_SPAWN && std::string(f.package)=="com.example.app");
   assert(f.flags==(ASB_OBSERVER_FLAG_TOP_APP|ASB_OBSERVER_FLAG_LAUNCH) && asb_observer_frame_valid(f));
   char extra; assert(recv(g_peer,&extra,1,0)==0); close(g_peer); g_peer=-1; // closed in pre-specialize
   top=0; pre(); assert(g_connects==1); // background start: nothing to say
@@ -298,6 +337,15 @@ int main(){
   f=take(); assert(f.kind==ASB_OBSERVER_EVENT_SPAWN && (f.flags&ASB_OBSERVER_FLAG_LAUNCH));
   g_abi->postAppSpecialize(g_abi->impl,&args); f=take(); assert(f.kind==ASB_OBSERVER_EVENT_PROCESS_START && std::string(f.package)=="com.example.app");
   close(g_peer); g_peer=-1;
+  // fix286: an app the root manager hides root from never keeps the library or the socket; its
+  // one-shot record says so.
+  g_flags=zygisk::PROCESS_ON_DENYLIST; int ex0=g_exempt; dl=g_dlclose; pre();
+  assert(g_exempt==ex0 && g_dlclose==dl+1);
+  f=take(); assert((f.flags&ASB_OBSERVER_FLAG_DENYLIST) && (f.flags&ASB_OBSERVER_FLAG_LAUNCH) && asb_observer_frame_valid(f));
+  close(g_peer); g_peer=-1; g_flags=0;
+  // A protected name still starts with the plain, package-free launch record.
+  g_nice="com.android.settings"; pre(); f=take(); assert(f.package[0]==0 && asb_observer_frame_valid(f)); close(g_peer); g_peer=-1;
+  g_nice="com.example.app";
   // A malformed policy observes nothing.
   put_policy("v=2\nlaunch=1\ncap=1\n"); int c0=g_connects; pre(); assert(g_connects==c0);
   // Companion: cold start -> one "zygisk-launch", throttled inside a second; ledger split by screen.
@@ -330,6 +378,74 @@ int main(){
     for(int i=0;i<200 && state().find("L\tcom.example.mail\t0\t5\t")==std::string::npos;i++) std::this_thread::sleep_for(std::chrono::milliseconds(5));
     s=state(); assert(s.find("\nP\t")!=std::string::npos); assert(s.find("Z\trss_reads\t1\n")!=std::string::npos);
     close(sv[0]); t.join(); }
+  // fix286: launch classes. A slow app's cold start asks for "zygisk-launch-long", a fast one's
+  // for "zygisk-launch-short", anything else for the plain opcode - never a package. A governor
+  // that does not answer a class opcode gets the plain one. A broken classes file = all normal.
+  put_policy("v=2\ngen=13\nobserver=0\nhints=0\nlaunch=1\nledger=0\n");
+  { std::ofstream c(ASB_ZYGISK_CLASSES_ABS); c<<"v=1\nslow=com.example.heavy\nfast=com.example.light\n"; }
+  { std::ofstream st(ASB_GOVERNOR_STATE); st<<"state=ACTIVE\nprofile=battery\nscreen=1\n"; }
+  gov_cmds.clear();
+  gfd=socket(AF_UNIX,SOCK_DGRAM|SOCK_CLOEXEC,0); unlink(ga.sun_path);
+  assert(bind(gfd,reinterpret_cast<sockaddr*>(&ga),sizeof(ga))==0);
+  std::thread ct(governor,gfd,3);
+  const uint32_t lf=ASB_OBSERVER_FLAG_TOP_APP|ASB_OBSERVER_FLAG_LAUNCH;
+  std::this_thread::sleep_for(std::chrono::milliseconds(1050)); // outside the previous launch's 1 s gap
+  companion_send(make_frame(ASB_OBSERVER_EVENT_SPAWN,lf,"com.example.heavy"));
+  std::this_thread::sleep_for(std::chrono::milliseconds(1050));
+  companion_send(make_frame(ASB_OBSERVER_EVENT_SPAWN,lf,"com.example.light"));
+  std::this_thread::sleep_for(std::chrono::milliseconds(1050));
+  companion_send(make_frame(ASB_OBSERVER_EVENT_SPAWN,lf,"com.example.plain"));
+  ct.join();
+  assert(gov_cmds.size()==3 && gov_cmds[0]=="zygisk-launch-long" && gov_cmds[1]=="zygisk-launch-short" && gov_cmds[2]=="zygisk-launch");
+  s=state();
+  assert(s.find("Z\tlaunch_long\t1\n")!=std::string::npos && s.find("Z\tlaunch_short\t1\n")!=std::string::npos);
+  assert(s.find("Z\tclasses_loaded\t1\n")!=std::string::npos && s.find("Z\tclasses_slow\t1\n")!=std::string::npos);
+  assert(s.find("Z\tclasses_reads\t1\n")!=std::string::npos); // re-read only when the file changes
+  assert(s.find("com.example.plain")==std::string::npos && s.find("com.example.heavy")==std::string::npos); // not stored
+  close(gfd);
+  // An older governor ignores the class opcode: one 100 ms timeout, then the plain request.
+  gov_cmds.clear();
+  gfd=socket(AF_UNIX,SOCK_DGRAM|SOCK_CLOEXEC,0); unlink(ga.sun_path);
+  assert(bind(gfd,reinterpret_cast<sockaddr*>(&ga),sizeof(ga))==0);
+  std::thread ot([&]{ for(int i=0;i<2;i++){ char b[64]{}; sockaddr_un src{}; socklen_t l=sizeof(src);
+    timeval tv{2,0}; setsockopt(gfd,SOL_SOCKET,SO_RCVTIMEO,&tv,sizeof(tv));
+    ssize_t r=recvfrom(gfd,b,sizeof(b)-1,0,reinterpret_cast<sockaddr*>(&src),&l); if(r<=0) return; gov_cmds.push_back(b);
+    if (std::strcmp(b,"zygisk-launch")==0) sendto(gfd,"ok",2,0,reinterpret_cast<sockaddr*>(&src),l);} });
+  std::this_thread::sleep_for(std::chrono::milliseconds(1050));
+  companion_send(make_frame(ASB_OBSERVER_EVENT_SPAWN,lf,"com.example.heavy"));
+  ot.join();
+  assert(gov_cmds.size()==2 && gov_cmds[0]=="zygisk-launch-long" && gov_cmds[1]=="zygisk-launch");
+  s=state(); assert(s.find("Z\tlaunch_class_fallback\t1\n")!=std::string::npos);
+  close(gfd);
+  { std::ofstream c(ASB_ZYGISK_CLASSES_ABS); c<<"v=1\nslow=com.android.systemui\n"; }
+  gov_cmds.clear();
+  gfd=socket(AF_UNIX,SOCK_DGRAM|SOCK_CLOEXEC,0); unlink(ga.sun_path);
+  assert(bind(gfd,reinterpret_cast<sockaddr*>(&ga),sizeof(ga))==0);
+  std::thread bt(governor,gfd,1);
+  std::this_thread::sleep_for(std::chrono::milliseconds(1050));
+  companion_send(make_frame(ASB_OBSERVER_EVENT_SPAWN,lf,"com.example.heavy"));
+  bt.join(); assert(gov_cmds.size()==1 && gov_cmds[0]=="zygisk-launch");
+  s=state(); assert(s.find("Z\tclasses_loaded\t0\n")!=std::string::npos);
+  // The denylist record is counted, not acted on.
+  companion_send(make_frame(ASB_OBSERVER_EVENT_SPAWN,ASB_OBSERVER_FLAG_LEDGER|ASB_OBSERVER_FLAG_DENYLIST,"com.example.bank"));
+  s=state(); assert(s.find("Z\tdenylist_spawns\t1\n")!=std::string::npos);
+  close(gfd); unlink(ASB_ZYGISK_CLASSES_ABS);
+  // fix286: with the screen off (as the governor published it) a lifecycle refresh is not
+  // sent - the governor would only veto it after waking up; with the screen on it is.
+  put_policy("v=2\ngen=14\nobserver=1\nhints=1\nlaunch=0\nledger=0\npkg=com.example.hint\n");
+  { std::ofstream st(ASB_GOVERNOR_STATE); st<<"state=IDLE\nprofile=battery\nscreen=0\n"; }
+  gov_cmds.clear();
+  gfd=socket(AF_UNIX,SOCK_DGRAM|SOCK_CLOEXEC,0); unlink(ga.sun_path);
+  assert(bind(gfd,reinterpret_cast<sockaddr*>(&ga),sizeof(ga))==0);
+  companion_send(make_frame(ASB_OBSERVER_EVENT_PROCESS_START,0,"com.example.hint"));
+  s=state(); assert(s.find("Z\thints_screen_off\t2\n")!=std::string::npos); // start and exit
+  { std::ofstream st(ASB_GOVERNOR_STATE); st<<"state=ACTIVE\nprofile=battery\nscreen=1\n"; }
+  std::thread ht(governor,gfd,1);
+  std::this_thread::sleep_for(std::chrono::milliseconds(1050));
+  companion_send(make_frame(ASB_OBSERVER_EVENT_PROCESS_START,0,"com.example.hint"));
+  ht.join(); assert(gov_cmds.size()==1 && gov_cmds[0]=="zygisk-refresh");
+  s=state(); assert(s.find("Z\thints_screen_off\t2\n")!=std::string::npos);
+  close(gfd);
   // No policy: the companion ignores late one-shot frames instead of acting on stale state.
   unlink(ASB_ZYGISK_POLICY_ABS); companion_send(g); s=state();
   assert(s.find("Z\tevents_policy_absent\t1\n")!=std::string::npos);
@@ -339,13 +455,13 @@ int main(){
 CPP
   g++ -std=c++17 -O2 -Wall -Wextra -Werror -Wno-unused-parameter -Wno-missing-field-initializers -pthread \
     -I"$T/inc" -I"$ROOT/src/zygisk" -DASB_ABI_TAG='"arm64-v8a"' \
-    -DASB_ZYGISK_POLICY_ABS="\"$T/policy\"" -DASB_ZYGISK_RUN_DIR="\"$T/run\"" \
+    -DASB_ZYGISK_POLICY_ABS="\"$T/policy\"" -DASB_ZYGISK_RUN_DIR="\"$T/run\"" -DASB_ZYGISK_CLASSES_ABS="\"$T/classes\"" \
     -DASB_GOVERNOR_STATE="\"$T/gov/state\"" -DASB_GOVERNOR_SOCKET="\"$T/gov/ctl.sock\"" \
     -DASB_GOVERNOR_CLIENT_DIR="\"$T/gov\"" "$T/hot.cpp" -o "$T/hot" 2>"$T/cc.log" || { cat "$T/cc.log" >&2; fail 'host harness build'; }
   out="$("$T/hot")" || fail "runtime: $out"
   printf '%s\n' "$out" | grep -qx 'hot path ok' || fail "$out"
   ns="$(printf '%s\n' "$out" | sed -n 's/^dormant_ns=//p')"
-  echo "PASS observer hot path: dormant ${ns} ns/fork on this host, uid/child prefilter, package-free cold start, ledger, allowlist fd, companion launch/throttle/spoof/ledger/no-policy"
+  echo "PASS observer hot path: dormant ${ns} ns/fork on this host, uid/child prefilter, cold start with class lookup, denylist never retained, ledger, allowlist fd, companion launch/class opcodes/old-governor fallback/screen-off refresh skipped/throttle/spoof/ledger/no-policy"
 )
 
 t_zygisk_allowlist_runtime() (
@@ -600,8 +716,12 @@ EOF
   _emit() { printf '%s\t%s\t%s\n' "$1" "$2" "$3" >> "$T/out"; }
   MODDIR="$T/mod"; PROC="$T/proc"; DATA="$T/data"; ASB_ZYGISK_DIR="$T/data/asb/zygisk_observer"; ASB_ZYGISK_RUN_DIR="$T/run"
   printf 'L\tcom.example.sync\t5\t0\t0\t9\nZ\tlaunch_accepted\t1\n' > "$T/run/state.armeabi-v7a.tsv"
+  printf 'Z\tlaunch_long\t4\nZ\tlaunch_short\t2\nZ\tlaunch_class_fallback\t1\nZ\tclasses_loaded\t1\nZ\tclasses_slow\t5\nZ\tclasses_fast\t3\nZ\tdenylist_spawns\t6\nZ\tlaunch_long\tx\nZ\thints_screen_off\t9\n' >> "$T/run/state.arm64-v8a.tsv"
+  printf 'Z\tlaunch_long\t1\nZ\tdenylist_spawns\t2\n' >> "$T/run/state.armeabi-v7a.tsv"
   . "$ROOT/runtime/asb_zygisk_info.sh"; _asb_zygisk_info
   want() { grep -Fqx "zygisk_observer	$1	$2" "$T/out" || fail "missing $1=$2: $(cat "$T/out")"; }
+  want launch_long 5; want launch_short 2; want launch_class_fallback 1; want launch_classes_loaded 1
+  want launch_classes 'slow 5, fast 3'; want denylist_spawns 8; want hints_screen_off 9
   want enabled 1; want enabled_packages 1; want loaded_processes 1; want events_total 10; want link_state connected
   want auto_mode 0
   want events_dropped_rate_limit 1; want ipc_cpu_ms 3; want ipc_wakeups 12; want memory_kb 2222
@@ -848,6 +968,204 @@ t_zygisk_capture_digest_runtime() (
   rm "$CAP/zygisk_observer_latest.tsv"
   ! ASB_LK_LOCK="$T/no-lock" ASB_LK_STATE_DIR="$T/state" ASB_CFG_FILE="$T/no-config" sh "$ROOT/tools/logkit/asb_fullday_digest.sh" "$CAP" | grep -q '^zygisk' || fail 'legacy capture gained fake Zygisk evidence'
   echo 'PASS observer capture digest: start/latest verdicts, monotonic deltas, reset and legacy-capture honesty'
+)
+
+t_zygisk_link_runtime() (
+  # fix286: one engine. The REAL runtime/asb_zygisk_link.sh joins LSPosed's scope (through the
+  # same "asb --lspd modules" reader asbdiag uses), Android's launch log and the guard/ART/
+  # protection files. It writes the launch classes the companion reads - parsed here by the
+  # native parser itself, so a name the native side would refuse can never invalidate the file
+  # - writes them only when they change, withdraws them with the cold-start lift, keeps the
+  # list of LSPosed module apps the guard never restricts, and reports one row per app.
+  set -eu
+  ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+  fail() { echo "FAIL zygisk link: $*" >&2; exit 1; }
+  S="$ROOT/runtime/asb_zygisk_link.sh"
+  sh -n "$S" || fail syntax
+  T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+  mkdir -p "$T/mod/config" "$T/mod/zygisk" "$T/mod/runtime" "$T/asb/zygisk_observer" "$T/run" "$T/lspd/config" "$T/bin" "$T/tmp" \
+    "$T/mods/zygisk_lsposed/zygisk" "$T/mods/other_x/zygisk" "$T/mods/plain" "$T/mods/AutoSystemBoost/zygisk"
+  cp "$ROOT/runtime/asb_zygisk_aot.sh" "$T/mod/runtime/"
+  printf 'zygisk_enabled=1\nzygisk_launch=1\nzygisk_ledger=1\n' > "$T/mod/config/governor.conf"
+  : > "$T/lspd/config/modules_config.db"
+  cat > "$T/bin/asb" <<'SH'
+#!/bin/sh
+[ "$1" = --lspd ] && [ "$2" = modules ] || exit 1
+cat "$ZL_T/lspd.out"
+SH
+  cat > "$T/bin/logcat" <<'SH'
+#!/bin/sh
+case "$*" in *"-b events"*) cat "$ZL_T/events" 2>/dev/null ;; esac
+SH
+  cat > "$T/bin/pm" <<'SH'
+#!/bin/sh
+[ "$1 $2 $3" = "list packages -3" ] && printf 'package:com.luckyzyx.luckytool\npackage:com.example.plainapp\n'
+exit 0
+SH
+  chmod +x "$T/bin/"*
+  cat > "$T/lspd.out" <<'E'
+format=v1
+module|com.luckyzyx.luckytool|1|x
+module|it.dhd.oxygencustomizer|1|x
+module|com.off.mod|0|x
+scope|com.luckyzyx.luckytool|com.android.systemui|0
+scope|com.luckyzyx.luckytool|android|0
+scope|com.luckyzyx.luckytool|system|0
+scope|com.luckyzyx.luckytool|com.example.hooked|0
+scope|it.dhd.oxygencustomizer|com.android.systemui|0
+scope|it.dhd.oxygencustomizer|com.example.hooked|0
+scope|it.dhd.oxygencustomizer|com.example.hookedfast|0
+scope|com.luckyzyx.luckytool|com.example.hookedfast|0
+scope|com.off.mod|com.example.offonly|0
+scope|com.luckyzyx.luckytool|com.example.hookednolaunch|0
+scope|it.dhd.oxygencustomizer|com.example.hookedmid|0
+E
+  now=1730000000
+  { for i in 1 2 3 4; do echo "$((now+i))|com.example.slowapp|$((1200+i*10))|1"; done
+    for i in 1 2 3; do echo "$((now+10+i))|com.example.fastapp|$((300+i))|1"; done
+    for i in 1 2 3; do echo "$((now+20+i))|com.example.midapp|700|1"; done
+    for i in 1 2 3; do echo "$((now+30+i))|com.example.hookedfast|350|1"; done
+    echo "$((now+40))|com.example.hooked|900|1"; echo "$((now+41))|com.example.hooked|200|0"
+    for i in 1 2 3; do echo "$((now+50+i))|com.android.settings|1500|1"; done
+    for i in 1 2 3; do echo "$((now+60+i))|com.example.offonly|500|1"; done
+    for i in 1 2 3; do echo "$((now+65+i))|com.example.hookedmid|800|1"; done
+  } > "$T/asb/zygisk_aot_launch"
+  printf 'b boot-1 %s\ncom.example.slowapp 30 20 4 0 0 0\n' "$now" > "$T/asb/zygisk_guard_hist"
+  printf 'com.example.midapp|default|default|%s|7|loop|7|0\n' "$now" > "$T/asb/zygisk_guard_active"
+  printf 'com.example.fastapp|4|verify|install|%s|0|-|0|-\n' "$now" > "$T/asb/zygisk_aot_apps"
+  printf 'com.example.midapp|1|2\n' > "$T/asb/notif_fix"
+  printf 'name=Zygisk - LSPosed\n' > "$T/mods/zygisk_lsposed/module.prop"; : > "$T/mods/zygisk_lsposed/zygisk/arm64-v8a.so"
+  printf 'name=Other `x`;$(id)\n' > "$T/mods/other_x/module.prop"; : > "$T/mods/other_x/zygisk/arm64-v8a.so"; : > "$T/mods/other_x/disable"
+  : > "$T/mods/AutoSystemBoost/zygisk/arm64-v8a.so"
+  printf 'zygisk_launch_long=4\nzygisk_launch_short=2\nunlock_cold_long=3\nunlock_cold_trims=1\nzygisk_launch_accepted=20\n' > "$T/gstate"
+  printf 'Z\tevents_total\t3\nZ\tlaunch_long\t5\nZ\tlaunch_short\t3\nZ\tdenylist_spawns\t7\nZ\tclasses_loaded\t1\n' > "$T/run/state.arm64-v8a.tsv"
+  run() { PATH="$T/bin:$PATH" ZL_T="$T" MODDIR="$T/mod" ASB_ZL_DIR="$T/asb" ASB_ZYGISK_RUN_DIR="$T/run" ASB_LSPD_DIR="$T/lspd" \
+    ASB_GOV_BIN="$T/bin/asb" ASB_ZL_MODULES="$T/mods" ASB_ZL_GOV_STATE="$T/gstate" ASB_ZL_TMP="$T/tmp" ASB_DOZE_KEEP="$T/asb/keep" sh "$S" "$@"; }
+  out="$(run classes)"; [ "$out" = 'result=written slow=3 fast=2' ] || fail "classes: $out"
+  C="$T/mod/zygisk/classes"
+  [ "$(cat "$C")" = "$(printf 'v=1\nslow=com.example.slowapp\nslow=com.example.hooked\nslow=com.example.hookednolaunch\nfast=com.example.fastapp\nfast=com.example.hookedfast')" ] \
+    || fail "classes file: $(cat "$C")"
+  grep -q 'systemui\|android$\|=system$\|settings\|offonly\|midapp' "$C" && fail 'a protected, unhooked-by-enabled or usual app was classed'
+  [ "$(cat "$T/asb/zygisk_lsposed_modules")" = "$(printf 'com.luckyzyx.luckytool\nit.dhd.oxygencustomizer')" ] || fail "module list: $(cat "$T/asb/zygisk_lsposed_modules")"
+  if command -v g++ >/dev/null 2>&1; then
+    cat > "$T/p.cpp" <<'CPP'
+#include "asb_observer_protocol.h"
+#include <cassert>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+int main(int, char **argv) {
+  std::ifstream f(argv[1]); std::stringstream b; b << f.rdbuf(); const std::string t = b.str();
+  static AsbObserverClasses c;
+  assert(asb_observer_classes_parse(t.data(), t.size(), c) && c.slow == 3 && c.fast == 2);
+  assert(c.lookup("com.example.slowapp") == ASB_LAUNCH_LONG && c.lookup("com.example.hookedfast") == ASB_LAUNCH_SHORT);
+  std::cout << "parsed\n";
+}
+CPP
+    g++ -std=c++17 -Wall -Wextra -Werror -I"$ROOT/src/zygisk" "$T/p.cpp" -o "$T/p" || fail 'parser fixture build'
+    [ "$("$T/p" "$C")" = parsed ] || fail 'the native parser refused the generated classes'
+  fi
+  m0="$(stat -c %Y.%i "$C")"; sleep 1
+  out="$(run classes)"; [ "$out" = 'result=unchanged slow=3 fast=2' ] && [ "$(stat -c %Y.%i "$C")" = "$m0" ] || fail "an unchanged pass rewrote the file: $out"
+  ls "$T/asb" | grep -q 'zygisk_link\.' && fail "temporary files left: $(ls "$T/asb")"
+  st="$(run status)"
+  for want in version=1 classes=on classes_slow=3 classes_fast=2 comp_state=1 comp_supported=1 comp_long=5 comp_short=3 comp_classes_loaded=1 \
+      denylist_spawns=7 gov_launch=20 gov_long=4 gov_short=2 gov_cold_long=3 gov_trims=1 lsposed=1 lsposed_modules=2 lsposed_apps=5 lsposed_system=1 lsposed_sysui=2 \
+      'zmod|other_x|0|Other x(id)' 'zmod|zygisk_lsposed|1|Zygisk - LSPosed' 'cmp|575|2|700|5'; do
+    printf '%s\n' "$st" | grep -qxF "$want" || fail "status lacks '$want': $st"
+  done
+  printf '%s\n' "$st" | grep -q 'AutoSystemBoost' && fail 'ASB listed itself among other Zygisk modules'
+  printf '%s\n' "$st" | grep -qxF 'app|com.example.midapp|normal|normal|measured|3|700|0|-|3|-1|loop|-|notif|0' || fail "guarded + protected row: $st"
+  printf '%s\n' "$st" | grep -qxF 'app|com.example.slowapp|slow|slow|measured|4|1225|0|-|4|46|-|-|-|0' || fail "slow row with background history: $st"
+  printf '%s\n' "$st" | grep -qxF 'app|com.example.fastapp|fast|fast|measured|3|302|0|-|3|-1|-|verify|-|0' || fail "fast row with ART: $st"
+  printf '%s\n' "$st" | grep -qxF 'app|com.example.hooked|slow|slow|hooks|1|900|2|it.dhd.oxygencustomizer,com.luckyzyx.luckytool|2|-1|-|-|-|0' \
+    || printf '%s\n' "$st" | grep -qxF 'app|com.example.hooked|slow|slow|hooks|1|900|2|com.luckyzyx.luckytool,it.dhd.oxygencustomizer|2|-1|-|-|-|0' || fail "hooked row: $st"
+  printf '%s\n' "$st" | grep -qxF 'app|com.android.settings|normal|normal|excluded|3|1500|0|-|3|-1|-|-|-|0' || fail "excluded row: $st"
+  printf '%s\n' "$st" | grep -qxF 'app|com.example.hookedmid|normal|normal|measured|3|800|1|it.dhd.oxygencustomizer|3|-1|-|-|-|0' || fail "measured beats hooks: $st"
+  printf '%s\n' "$st" | awk -F'|' '$1 == "app" && NF != 15 { exit 1 }' || fail 'an app row is not 15 fields'
+  [ "$(printf '%s\n' "$st" | sed -n '/^app|/{p;q}' | cut -d'|' -f2)" = com.example.slowapp ] || fail "rows not ordered by action, then use: $st"
+  ASB_ZL_ROWS=2 run status | grep -c '^app|' | grep -qx 2 || fail 'row cap ignored'
+  ls "$T/tmp" | grep -q . && fail "status left temporary files: $(ls "$T/tmp")"
+  printf 'v=1\nslow=com.example.oldstale\n' > "$C"
+  run status | grep -qxF 'app|com.example.oldstale|slow|normal|-|0|0|0|-|0|-1|-|-|-|0' || fail "a class in effect without evidence is not shown as changing: $(run status | grep oldstale)"
+  printf '%s\n' "$((now+70)).100  1000  1500 I am_proc_start: [0,4001,10201,com.example.newapp,next-top-activity,{com.example.newapp/.Main}]" \
+    "$((now+70)).600  1000  1500 I wm_activity_launch_time: [0,111,com.example.newapp/.Main,1500]" > "$T/events"
+  run classes --no-scan >/dev/null
+  grep -q "|com.example.newapp|" "$T/asb/zygisk_aot_launch" && fail 'the boot-time pass read the log'
+  run classes >/dev/null
+  grep -q "|com.example.newapp|1500|1" "$T/asb/zygisk_aot_launch" || fail 'without ART the classes pass did not read the launch log'
+  [ ! -e "$T/asb/zygisk_aot" ] && [ ! -e "$T/asb/zygisk_aot_apps.new" ] || fail 'the scan enabled or ran ART'
+  sed -i 's/^zygisk_launch=1/zygisk_launch=0/' "$T/mod/config/governor.conf"
+  out="$(run classes)"; [ "$out" = 'result=absent slow=0 fast=0' ] && [ ! -e "$C" ] || fail "classes survived the lift being switched off: $out"
+  [ -s "$T/asb/zygisk_lsposed_modules" ] || fail 'the guard lost the module list with the lift off'
+  run status | grep -qx 'classes=absent' || fail 'status after withdraw'
+  sed -i 's/^zygisk_launch=0/zygisk_launch=1/' "$T/mod/config/governor.conf"; : > "$T/asb/zygisk_observer/disable"
+  out="$(run classes)"; [ "$out" = 'result=absent slow=0 fast=0' ] || fail "safe mode kept classes: $out"
+  rm -f "$T/asb/zygisk_observer/disable"
+  printf 'format=v1\nmodule|com.luckyzyx.luckytool|0|x\n' > "$T/lspd.out"
+  run classes >/dev/null; [ ! -e "$T/asb/zygisk_lsposed_modules" ] || fail 'a disabled module stayed protected'
+  printf 'format=v1\nmodule|com.luckyzyx.luckytool|1|x\n' > "$T/lspd.out"; run classes >/dev/null
+  # The guard never restricts an enabled LSPosed module app; another user app is not protected by it.
+  : > "$T/asb/zygisk_guard"
+  g() { PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_ZG_DIR="$T/asb" ASB_ZG_TMP="$T/tmp" ASB_ZYGISK_RUN_DIR="$T/run" ASB_DOZE_KEEP="$T/asb/keep" sh "$ROOT/runtime/asb_zygisk_guard.sh" "$@"; }
+  [ "$(g ghost-restrict com.luckyzyx.luckytool)" = result=protected ] || fail 'the guard would restrict an LSPosed module app'
+  [ "$(g ghost-restrict com.example.plainapp)" != result=protected ] || fail 'the module list protected an ordinary app'
+  out="$(run restore-all)"; [ "$out" = result=removed ] && [ ! -e "$T/asb/zygisk_lsposed_modules" ] || fail "restore-all: $out"
+  # Wiring: the policy sync builds or withdraws the classes, the service refreshes them, the
+  # uninstaller removes them, the workflows ship the script, asbdiag and the page show it.
+  grep -q 'asb_zygisk_link.sh" classes --no-scan' "$ROOT/runtime/asb_zygisk.sh" && grep -q '_zygisk_classes$' "$ROOT/runtime/asb_zygisk.sh" && grep -q 'rm -f "$POLICY" "$POLICY.tmp" "$CLASSES" "$CLASSES.tmp"' "$ROOT/runtime/asb_zygisk.sh" || fail 'sync does not drive the classes'
+  grep -q 'asb_zygisk_link.sh" classes' "$ROOT/service.sh" || fail 'no periodic refresh'
+  grep -q 'asb_zygisk_link.sh" restore-all' "$ROOT/uninstall.sh" || fail 'uninstall does not clean up'
+  grep -q 'runtime/asb_zygisk_link.sh' "$ROOT/.github/workflows/build-test.yml" && grep -q 'runtime/asb_zygisk_link.sh' "$ROOT/.github/workflows/build-release.yml" || fail 'not in the workflow file lists'
+  grep -q 'grep -qxF "$1" "$LSPMOD"' "$ROOT/runtime/asb_zygisk_guard.sh" || fail 'guard protection missing'
+  grep -q 'link_class :' "$ROOT/tools/asb_diag.sh" && cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail 'asbdiag does not show it'
+  grep -Fq 'body.appendChild(zygiskLinkCard());' "$ROOT/webroot/index.html" || fail 'the Zygisk page does not show it'
+  echo 'PASS zygisk link: classes from LSPosed scope and measured cold starts, accepted by the native parser, written only on change, withdrawn with the lift or safe mode, LSPosed module apps protected from the guard, per-app evidence'
+)
+
+t_zygisk_link_ui_runtime() (
+  # fix286: the page parses the engine status defensively and says what each app gets.
+  set -eu
+  ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+  fail() { echo "FAIL zygisk link UI: $*" >&2; exit 1; }
+  command -v node >/dev/null 2>&1 || { echo 'SKIP zygisk link UI: no node'; exit 0; }
+  T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+  H="$ROOT/webroot/index.html"
+  {
+    echo "const T = (k, d) => d;"
+    for fn in dozePkgOk zygiskLinkParse zygiskLinkAppValue; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+    cat <<'JS'
+let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
+const out = [
+  'version=1', 'launch=1', 'classes=on', 'classes_slow=3', 'comp_supported=0', 'comp_state=1', 'gov_long=-',
+  'zmod|zygisk_lsposed|1|Zygisk - LSPosed', 'zmod|bad id;|1|x', 'zmod|other_x|0|Other <b>x</b>',
+  'cmp|1192|2|700|3',
+  'app|com.example.slowapp|slow|slow|measured|4|1225|0|-|4|46|-|-|-|0',
+  'app|com.example.hooked|slow|fast|hooks|1|900|5|com.a.mod,com.b.mod,com.c.mod|2|-1|loop|speed-profile|notif|0',
+  'app|com.luckyzyx.luckytool|normal|normal|-|0|0|0|-|1|-1|-|-|keep|1',
+  'app|com.android.settings|normal|slow|excluded|3|1500|0|-|3|-1|-|-|-|0',
+  'app|bad pkg|slow|slow|measured|4|1|0|-|4|0|-|-|-|0', 'app|com.x.y|slow|slow|measured|4',
+  'classes_at=$(id)'
+].join('\n');
+const g = zygiskLinkParse(out);
+chk(g.ok && g.kv.classes === 'on' && g.kv.comp_supported === '0' && g.kv.gov_long === '-' && !('classes_at' in g.kv), 'kv: ' + JSON.stringify(g.kv));
+chk(g.apps.length === 4, 'unsafe rows rejected: ' + g.apps.length);
+chk(g.zmods.length === 2 && g.zmods[1].name === 'Other bxb' && !g.zmods[1].on, 'module names sanitized: ' + JSON.stringify(g.zmods));
+chk(g.cmp && g.cmp.hooked === 1192 && g.cmp.plainN === 3, 'cmp');
+const nm = p => ({ 'com.a.mod': 'Mod A' })[p] || p;
+const v0 = zygiskLinkAppValue(g.apps[0], nm);
+chk(v0 === 'slow start · median 1225 ms over 4', 'slow app: ' + v0);
+const v1 = zygiskLinkAppValue(g.apps[1], nm);
+chk(/^slow start · 1 of 3 cold starts measured · next update: fast start · LSPosed: Mod A, com\.b\.mod, com\.c\.mod \+2 · background restricted · ART speed.profile · notification fix$/.test(v1), 'hooked app: ' + v1);
+chk(/LSPosed module, never restricted/.test(zygiskLinkAppValue(g.apps[2], nm)) && /Doze keep list/.test(zygiskLinkAppValue(g.apps[2], nm)), 'module app');
+const v3 = zygiskLinkAppValue(g.apps[3], nm);
+chk(v3 === 'usual start · protected system app, never classed', 'excluded app: ' + v3);
+chk(!/%[0-9s]/.test(v0 + v1 + v3), 'placeholder left');
+process.exit(bad ? 1 : 0);
+JS
+  } > "$T/l.js"
+  node "$T/l.js" || fail 'parser/value assertions'
+  echo 'PASS zygisk link UI: defensive parse, sanitized module names, per-app value text'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

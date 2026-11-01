@@ -4823,6 +4823,51 @@ int main(void) {
     CHK(up(1, 0, 730000) == 0 && g_unlock_cold_lifts == 1, "fix272: a cold start lifted on Performance");
     g_unlock_cold_kick = 1;
     CHK(up(0, 0, 731000) == 0 && g_unlock_cold_kick == 0, "fix272: a screen-off kick survived to the next wake");
+    /* fix286: launch classes. A slow app's cold start carries the running lift to twice
+     * unlock_lift_s from its start (10 s at most) or arms one that long; a fast app's arms
+     * half (1 s at least) and ends early only the lift its own tap armed, never a wake's or a
+     * first touch's. Two requests between passes: the longer need wins. */
+    CHK(asb_cold_lift_ms(ASB_COLD_LONG, 3) == 6000 && asb_cold_lift_ms(ASB_COLD_SHORT, 3) == 2000 &&
+        asb_cold_lift_ms(ASB_COLD_NORMAL, 3) == 3000 && asb_cold_lift_ms(ASB_COLD_LONG, 8) == 10000 &&
+        asb_cold_lift_ms(ASB_COLD_SHORT, 1) == 1000 && asb_cold_lift_ms(ASB_COLD_LONG, 0) == 0,
+        "fix286: class window lengths");
+    CHK(asb_cold_kick_merge(0, ASB_COLD_SHORT) == ASB_COLD_SHORT &&
+        asb_cold_kick_merge(ASB_COLD_SHORT, ASB_COLD_NORMAL) == ASB_COLD_NORMAL &&
+        asb_cold_kick_merge(ASB_COLD_NORMAL, ASB_COLD_SHORT) == ASB_COLD_NORMAL &&
+        asb_cold_kick_merge(ASB_COLD_NORMAL, ASB_COLD_LONG) == ASB_COLD_LONG &&
+        asb_cold_kick_merge(ASB_COLD_LONG, ASB_COLD_SHORT) == ASB_COLD_LONG, "fix286: the shorter request won a merge");
+    up(0, 0, 740000); P = PROFILE_BATTERY; up(1, 0, 741000);
+    CHK(upa(1, 1, 0, 742000) == 1 && !strcmp(g_unlock_arm_why, "first touch"), "fix286: first touch did not re-arm");
+    up(1, 0, 745500);
+    CHK(upa(1, 1, 0, 750000) == 1 && g_unlock_until_ms == 753000 && !strcmp(g_unlock_arm_why, "touch"), "fix286: the tap did not arm");
+    g_unlock_cold_kick = ASB_COLD_LONG;
+    CHK(up(1, 0, 750400) == 1 && g_unlock_until_ms == 756400 && g_unlock_cold_long == 1,
+        "fix286: a slow app's start was not carried for 6 s");
+    CHK(up(1, 0, 756300) == 1 && up(1, 0, 756500) == 0, "fix286: the long window did not end on time");
+    CHK(upa(1, 1, 0, 762000) == 1 && g_unlock_until_ms == 765000, "fix286: the second tap did not arm");
+    g_unlock_cold_kick = ASB_COLD_SHORT;
+    CHK(up(1, 0, 762300) == 1 && g_unlock_until_ms == 764300 && g_unlock_cold_trims == 1,
+        "fix286: a fast app kept its tap's full window");
+    CHK(up(1, 0, 764400) == 0, "fix286: the shortened window did not end");
+    up(0, 0, 770000); up(1, 0, 771000);
+    g_unlock_cold_kick = ASB_COLD_SHORT;
+    CHK(up(1, 0, 771300) == 1 && g_unlock_until_ms == 774000 && g_unlock_cold_trims == 1,
+        "fix286: a fast app shortened a wake's lift");
+    CHK(upa(1, 1, 0, 772000) == 1 && !strcmp(g_unlock_arm_why, "first touch"), "fix286: first touch after the wake");
+    g_unlock_cold_kick = ASB_COLD_SHORT;
+    CHK(up(1, 0, 772300) == 1 && g_unlock_until_ms == 775000 && g_unlock_cold_trims == 1,
+        "fix286: a fast app shortened a first touch's lift");
+    up(1, 0, 775100);
+    g_unlock_cold_kick = ASB_COLD_SHORT;
+    CHK(up(1, 0, 780000) == 1 && g_unlock_until_ms == 782000 && !strcmp(g_unlock_arm_why, "cold start"),
+        "fix286: a fast app's own lift is not 2 s");
+    up(1, 0, 782100);
+    g_unlock_cold_kick = ASB_COLD_LONG;
+    CHK(up(1, 0, 790000) == 1 && g_unlock_until_ms == 796000 && g_unlock_cold_long == 2,
+        "fix286: a slow app's own lift is not 6 s");
+    up(1, 0, 796100);
+    TC = 1; g_unlock_cold_kick = ASB_COLD_LONG;
+    CHK(up(1, 0, 800000) == 0 && g_unlock_cold_long == 2, "fix286: a slow app bypassed the thermal gate"); TC = 0;
     P = PROFILE_SMART;
     return bad;
 }
