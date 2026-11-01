@@ -807,6 +807,7 @@ T_ZY_CONFIRMED="Channel confirmed"
 T_ZY_WAITING="Waiting for a selected process"
 T_ZY_IDLE="Enabled · nothing selected"
 T_ZY_STALE="No fresh evidence"
+T_ZY_QUIET="Channel confirmed · quiet (no app started recently)"
 T_ZY_SAFE="Safe mode"
 T_ZY_DISABLED="Disabled"
 T_ZY_UNKNOWN="Status unknown"
@@ -1386,7 +1387,7 @@ _zy_state="$(_zygisk_field link_state)"; [ -n "$_zy_state" ] || _zy_state=unknow
 case "$_zy_state" in
   connected) _zy_label="$T_ZY_CONNECTED" ;; confirmed) _zy_label="$T_ZY_CONFIRMED" ;;
   waiting) _zy_label="$T_ZY_WAITING" ;; idle) _zy_label="$T_ZY_IDLE" ;;
-  stale) _zy_label="$T_ZY_STALE" ;; safe) _zy_label="$T_ZY_SAFE" ;;
+  stale) _zy_label="$T_ZY_STALE" ;; quiet) _zy_label="$T_ZY_QUIET" ;; safe) _zy_label="$T_ZY_SAFE" ;;
   off) _zy_label="$T_ZY_DISABLED" ;; *) _zy_label="$T_ZY_UNKNOWN" ;;
 esac
 _zy_onoff() { [ "$1" = 1 ] && printf '%s' "$T_ZY_ON" || printf '%s' "$T_ZY_OFF"; }

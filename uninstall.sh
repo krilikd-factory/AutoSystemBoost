@@ -288,6 +288,14 @@ fi
 
 # fix276: restore the explicit per-app WAKE_LOCK list, including the original uid override.
 # Never blanket-allow: the ledger carries the exact package and uid modes from before ASB.
+if [ -f "$MODDIR/runtime/asb_zygisk_guard.sh" ]; then
+  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_guard.sh" restore-all >/dev/null 2>&1
+fi
+rm -f /data/adb/asb/zygisk_guard /data/adb/asb/zygisk_guard_active /data/adb/asb/zygisk_guard_log /data/adb/asb/zygisk_guard_night 2>/dev/null
+if [ -f "$MODDIR/runtime/asb_zygisk_aot.sh" ]; then
+  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_aot.sh" restore-all >/dev/null 2>&1
+fi
+rm -rf /data/adb/asb/zygisk_aot /data/adb/asb/zygisk_aot_apps /data/adb/asb/zygisk_aot_count /data/adb/asb/zygisk_aot_launch /data/adb/asb/zygisk_aot_scan /data/adb/asb/zygisk_aot_log /data/adb/asb/zygisk_aot.lock 2>/dev/null
 if [ -f /data/adb/asb/notif_fix ] && [ -f "$MODDIR/runtime/asb_notif_fix.sh" ]; then
   MODDIR="$MODDIR" ASB_NF_UNINSTALL=1 sh "$MODDIR/runtime/asb_notif_fix.sh" restore-all >/dev/null 2>&1
 fi

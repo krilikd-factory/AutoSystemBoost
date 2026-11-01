@@ -723,6 +723,30 @@ Every original package mode, uid mode, exemption and list membership is recorded
 
 **Battery drain.** The Monitor screen-on tile, the profile card, the manager action headline and the time to empty all use one figure — the profile's long-term screen-on average from the drain meter. The governor's live window (the last ≥10 minutes with the screen on) is shown in the drain sheet as its own *Right now* line with its own time to empty, never in place of the average. The infinite-log report keeps its own window (the time of that recording) and names the profile average beside it. The current-sensor scale is written the same way everywhere (“reads about N× low”, rounded to one decimal).
 
+### 🧷 11.7. Hook-module crash detail and the restart-loop guard (fix280)
+
+**Crash detail.** For every native crash (tombstone) asbdiag, the infinite-log report and Device diagnostics print the crashing thread, the `Cause:` line, the failing function inside an injected library (an installed app's code loaded into another process — typically a hook module), the module's own Java classes on the crashing stack nearest first, and whether a hooked method was running. asbdiag then summarises per module: processes taken down and how often, failing function, classes on the stack and, when the hook framework's database is readable, the apps the module is enabled for. Device diagnostics counts native crashes per module (`tombstone_hooked`); two or more become a finding. This is attribution from the stack, not a verdict on the module: confirm by disabling the module for the named app.
+
+**Restart-loop guard** (Zygisk page, off by default). `runtime/asb_zygisk_guard.sh` samples the Zygisk start ledger on the five-minute service tick while the screen is off. A user app whose screen-off starts grow by 6 or more per 5 minutes gets `RUN_ANY_IN_BACKGROUND=ignore` with its previous mode recorded and read back; the screen-transition tuner gives it back at screen-on, as do switching the guard off and uninstalling. Protected classes (messaging, mail, alarms, navigation, wearables, VPN, authenticators), the Doze keep list, notification-fix apps, user-exempted apps, apps the user already restricted and system apps are never touched. Every decision is kept in a bounded event log shown on the page. The guard needs the start ledger (Watch or Full).
+
+**Link state "quiet".** The Zygisk companion writes its state only when an app process starts. When it has confirmed the current policy and recorded starts, but nothing has started for more than 5 minutes, the link reads `quiet` ("Channel confirmed · quiet", with the minutes since the last start) instead of `stale`. `stale` remains for a companion that never confirmed the current policy.
+
+**Self-push card.** The infinite-log report names an app that restarts its own notification service on a wakeup alarm 30 times or more in Android's battery history, and points to the app's own keep-alive switch. With Google services trim on strict the card names that setting first, because it removes the Doze exemption push relies on.
+
+### ⚡ 11.8. Faster app starts from the Zygisk start ledger (fix281)
+
+**What it does** (Zygisk page, off by default). `runtime/asb_zygisk_aot.sh` ranks the apps you open by their top-app process starts in the Zygisk start ledger, summed across boots (without the ledger, by the launches in Android's launch log), and reads each app's ART state. An app among the eight most opened that runs without ahead-of-time code (`verify`, `quicken`, `run-from-apk` …) is compiled with `pm compile -r bg-dexopt` — the reason Android's nightly maintenance uses, speed-profile at background priority.
+
+**When.** Only while charging, with the screen off and the battery below 40 °C; at most four apps per run, one run at a time, 15 minutes per app at most. The conditions are checked again before every app. Apps that already have compiled code are never recompiled; an app whose compile changes nothing (no usage profile yet) is retried after 7 days.
+
+**Measurement.** The five-minute service tick reads `wm_activity_launch_time` and `am_proc_start` from the events buffer (the ActivityTaskManager "Displayed" lines as fallback) and keeps the last 400 launches; a launch is cold when Android started the app's process for it. The card and asbdiag (`launch_art`) show each app's cold-start median and, for an app ASB compiled, the median before and after. Compiled code is the state Android's own maintenance produces, so disabling or uninstalling has nothing to restore; the feature's files are removed.
+
+### 🌙 11.9. Night wakers and screen-off period summaries (fix282)
+
+The restart-loop guard (11.7) has a second level, **Loops + night wakers**. An app whose process starts 8 or more times during one screen-off period, at any pace, is restricted the same way as a loop until the screen turns on; the count runs from the first screen-off sample of the period. The same protections apply, and "Restrain loops" is unchanged.
+
+Each restriction records the start-ledger count when it began, so the page, the lift event and asbdiag show how many process starts still happened while it held. Every screen-off period of 15 minutes or more leaves a summary — process starts of all apps between the first and the last screen-off sample, apps restricted, the top three — and the last seven are kept. Compare periods with and without the level to see what it changes on a given phone; no saving is assumed.
+
 ## 🔐 12. Device information, privacy and evidence quality
 
 ### 🕵️ 12.1. Read-only, on-demand collection

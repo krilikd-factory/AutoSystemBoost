@@ -3782,6 +3782,12 @@ asb_gov_liveness() {
       fi
     fi
     asb_gov_liveness
+    if [ -f /data/adb/asb/zygisk_guard ] && [ -f "$MODDIR/runtime/asb_zygisk_guard.sh" ]; then
+      MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_guard.sh" tick >/dev/null 2>&1
+    fi
+    if [ -f /data/adb/asb/zygisk_aot ] && [ -f "$MODDIR/runtime/asb_zygisk_aot.sh" ]; then
+      MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_aot.sh" tick >/dev/null 2>&1
+    fi
     if [ -f /data/adb/asb/logkit/full_day_resume ] && [ -f "$MODDIR/runtime/asb_debug_support.sh" ]; then
       ASB_DEBUG_SUPPORT_MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_debug_support.sh" full-day-revive >/dev/null 2>&1
     fi
