@@ -1747,6 +1747,12 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .zygisk-page .zy-evidence[open] summary { margin-bottom: 8px; }
 
 .wl-manual-sheet { min-height:min(48vh,560px); }
+.lv-stale { opacity:.6; transition:opacity .35s ease; }
+.zygisk-page .zy-auto-btn.is-busy { display:inline-flex; align-items:center; gap:8px; opacity:.92; }
+.zygisk-page .zy-auto-btn.is-busy::before { content:''; width:13px; height:13px; flex:0 0 auto; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:devEvidenceSpin 1s linear infinite; }
+.dev-stale { opacity:.62; transition:opacity .35s ease; }
+.dev-status-busy::before { content:''; display:inline-block; width:10px; height:10px; margin-right:6px; vertical-align:-1px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:devEvidenceSpin 1s linear infinite; }
+@media (prefers-reduced-motion:reduce) { .zygisk-page .zy-auto-btn.is-busy::before, .dev-status-busy::before { animation:none; } }
 .wl-manual-copy { padding:11px 12px; border:1px solid rgba(255,165,2,.28); border-radius:12px; color:var(--text-secondary); background:rgba(255,165,2,.055); }
 .wl-manual-meta { margin:8px 2px 11px; color:var(--text-tertiary); font:10px/1.45 var(--mono); }
 .wl-manual-list { display:flex; flex-direction:column; gap:8px; }
@@ -1763,6 +1769,11 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .wl-manual-loading { display:flex; align-items:center; justify-content:center; gap:10px; min-height:92px; color:var(--text-secondary); font-size:12px; }
 .wl-manual-loading::before { content:''; width:22px; height:22px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:devEvidenceSpin 1s linear infinite; }
 .wl-manual-head-actions { display:flex; gap:7px; }
+.wl-manual-others { margin-top:6px; padding:10px 12px; border:1px solid var(--border); border-radius:13px; }
+.wl-manual-others summary { cursor:pointer; color:var(--text-secondary); font-size:12px; font-weight:700; }
+.wl-manual-others[open] summary { margin-bottom:8px; }
+.wl-manual-others-note { margin:0 0 8px; }
+.wl-manual-search { width:100%; box-sizing:border-box; margin:0 0 8px; padding:9px 11px; border:1px solid var(--border); border-radius:10px; background:var(--surface); color:var(--text); font:12px var(--sans); }
 @media (prefers-reduced-motion:reduce) { .wl-manual-loading::before { animation:none; } }
 .dev-loading { width:100%; box-sizing:border-box; padding:22px 16px 18px; border:1px solid var(--border);
   border-radius:18px; background:linear-gradient(145deg,rgba(0,240,180,.065),rgba(0,212,255,.018)); text-align:center; overflow:hidden; }
@@ -3977,6 +3988,8 @@ html[data-asb-theme="light"] .log-menu {
   animation: logRecPulse 1.6s ease-in-out infinite;
 }
 .log-menu-item.is-recording { color: #ef4444; font-weight: 600; }
+.log-menu-item.is-stopping { color: var(--bal); font-weight: 600; }
+.log-menu-item.is-stopping::before { content: ''; display: inline-block; width: 9px; height: 9px; margin-right: 7px; border: 2px solid var(--border); border-top-color: var(--bal); border-radius: 50%; animation: devEvidenceSpin 1s linear infinite; }
 .log-menu-item.is-armed { background: rgba(245,158,11,.14); color: #f59e0b; }
 .log-menu-item.is-armed::before { background: #f59e0b; box-shadow: 0 0 0 3px rgba(245,158,11,.2); }
 @keyframes logRecPulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
@@ -5852,6 +5865,22 @@ function liveHeaderSync() {
 }
 
 let _id = 0;
+/* fix287: KernelSU-family managers run ksu.exec synchronously on the page's thread, so a loading
+ * state set right before a root call was never painted - the Device page sat blank for the
+ * whole collection although its loading card was already in the DOM, and a Zygisk button kept
+ * its old label while the setup ran. Awaiting this first lets the frame with the new state
+ * reach the screen. rAF does not fire in a hidden page, so a short timer always finishes it. */
+function asbPaintYield() {
+  return new Promise(function (res) {
+    let done = false;
+    const fin = function () { if (!done) { done = true; res(); } };
+    try {
+      if (!document.hidden && typeof requestAnimationFrame === 'function')
+        requestAnimationFrame(function () { setTimeout(fin, 0); });
+    } catch (e) {}
+    setTimeout(fin, 80);
+  });
+}
 function run(cmd) {
   return new Promise(ok => {
     const cb = 'asb_' + (++_id) + '_' + Date.now();
@@ -6005,7 +6034,7 @@ async function debugFullDayStopPoll() {
     await debugDelay(2000);
     const r = await run('sh ' + MD + '/runtime/asb_debug_support.sh status 2>/dev/null');
     const info = debugActionText(r);
-    if (r && r.errno === 0 && info.status === 'idle') return true;
+    if (r && r.errno === 0 && (info.status === 'idle' || info.status === 'resuming')) return true;
   }
   return false;
 }
@@ -6025,7 +6054,8 @@ async function asbDebugStopFullDay() {
       toast(T('dbg_log_stop_failed', 'Could not stop the infinite log'), 'bad');
       return;
     }
-    _asbLogRunning = false;
+    _asbLogRunning = info.status === 'stopping';
+    _asbLogStopping = info.status === 'stopping';
     asbLogMenuPaint();
     if (info.status === 'idle') { toast(T('dbg_log_not_running', 'No infinite log is running'), 'warn'); return; }
     /* fix244: a capture waiting to resume after a reboot has no process yet - stopping it
@@ -6037,14 +6067,7 @@ async function asbDebugStopFullDay() {
     }
     toast(T('dbg_log_stopping', 'Stopping the infinite log · the report is being finalised'), 'warn');
     _asbDebugActionBusy = false;
-    const done = await debugFullDayStopPoll();
-    if (done) {
-      uiSound('success');
-      const out = info.output ? ' · ' + info.output.replace(/^\/(sdcard|storage\/emulated\/0)\//, '') : '';
-      toast(T('dbg_log_stopped', 'Infinite log stopped') + out, 'good');
-    } else {
-      toast(T('dbg_log_stop_slow', 'The infinite log is still finishing its report'), 'warn');
-    }
+    await asbLogStopWatch(info.output || '');
   } catch (e) {
     toast(T('dbg_log_stop_failed', 'Could not stop the infinite log'), 'bad');
   } finally {
@@ -6279,7 +6302,12 @@ function openLivePage() {
   p.scrollTop = 0;
   _liveOpen = true;
   liveHeaderSync();
-  if (_selectedProfile !== 'smart') paintStockLive(_stockTelemetryKv);
+  if (_selectedProfile !== 'smart') {
+    if (!Object.keys(_stockTelemetryKv).length && _lvMonCache.rom && Object.keys(_lvMonCache.rom).length) {
+      paintStockLive(_lvMonCache.rom);
+      lvStale(true);
+    } else paintStockLive(_stockTelemetryKv);
+  }
   /* Slide in first, read after (fix177). The root call blocks the page while it runs, and on
    * Stock it ran here, before the slide had a frame - "Monitor opens slowly on Stock". The
    * last ROM sample is painted at once; the fresh read starts once the page has moved. */
@@ -6480,19 +6508,67 @@ function lvMeterParse(text) {
   });
   return out;
 }
+/* fix189: with the governor's per-profile screen-off figures, read from its file so the
+ * home cards have them on every profile, Stock included (no state is read there). */
+const LV_METER_CMD = '{ cat /dev/.asb_drain_meter 2>/dev/null || cat /data/adb/asb/drain_meter 2>/dev/null; }; echo ---; cat /data/adb/asb/offdrain_profiles 2>/dev/null; echo ---; cat /dev/.asb_drain_meter.boot 2>/dev/null';
+function lvMeterApply(text, cached) {
+  const parts = String(text || '').split('---');
+  const m = lvMeterParse(parts[0] || '');
+  if (cached && !Object.keys(m.p).length) return;
+  _lvMeter.cur = m.cur; _lvMeter.p = m.p;
+  _lvGovOff.by = lvGovOffParse(parts[1] || '');
+  _lvMeter.boot = lvBootParse(parts[2] || '');
+  if (!cached) { _lvMonCache.meter = String(text || ''); lvMonCacheSave(); }
+}
 async function lvMeterPoll(force) {
   if (!force && Date.now() - _lvMeter.at < 30000) return;
   _lvMeter.at = Date.now();
   try {
-    /* fix189: with the governor's per-profile screen-off figures, read from its file so the
-     * home cards have them on every profile, Stock included (no state is read there). */
-    const r = await run('{ cat /dev/.asb_drain_meter 2>/dev/null || cat /data/adb/asb/drain_meter 2>/dev/null; }; echo ---; cat /data/adb/asb/offdrain_profiles 2>/dev/null; echo ---; cat /dev/.asb_drain_meter.boot 2>/dev/null');
-    const parts = ((r && r.stdout) || '').split('---');
-    const m = lvMeterParse(parts[0] || '');
-    _lvMeter.cur = m.cur; _lvMeter.p = m.p;
-    _lvGovOff.by = lvGovOffParse(parts[1] || '');
-    _lvMeter.boot = lvBootParse(parts[2] || '');
+    const r = await run(LV_METER_CMD);
+    lvMeterApply((r && r.stdout) || '', false);
   } catch (e) {}
+}
+/* fix287: the Monitor opened with its battery card missing for seconds. The WebView is a new
+ * page on every visit, so there was no reading to paint until three root shells (the drain
+ * meter, the governor batch and the ROM snapshot) had run one after another, each blocking
+ * the page. The last readings are kept for the next visit (30 minutes at most, this viewer
+ * only): the card is drawn from them at once, dimmed until the first fresh reading replaces
+ * them. Counters that measure between two reads (CPU busy, the thermal trend) are not
+ * restored, so a stale value can never become half of a fresh measurement. */
+const LV_MON_CACHE_KEY = 'asb_monitor_cache';
+const LV_MON_CACHE_MAX_MS = 1800000;
+const _lvMonCache = { t: 0, meter: '', rom: null, loaded: false };
+function lvMonCacheSave() {
+  try {
+    _lvMonCache.t = Date.now();
+    localStorage.setItem(LV_MON_CACHE_KEY, JSON.stringify({ t: _lvMonCache.t, meter: _lvMonCache.meter, rom: _lvMonCache.rom }));
+  } catch (e) {}
+}
+function lvMonCacheRom(kv) {
+  const out = {};
+  Object.keys(kv || {}).forEach(function (k) {
+    if (k === 'tsms' || k === 'ts' || k === 'cpustat') return;
+    const v = kv[k];
+    if (typeof v === 'string' && v.length < 200) out[k] = v;
+  });
+  return out;
+}
+function lvMonCacheRestore() {
+  try {
+    const d = JSON.parse(localStorage.getItem(LV_MON_CACHE_KEY) || 'null');
+    if (!d || !(d.t > 0) || Date.now() - d.t > LV_MON_CACHE_MAX_MS || Date.now() < d.t) return;
+    _lvMonCache.t = d.t;
+    if (typeof d.meter === 'string') { _lvMonCache.meter = d.meter; lvMeterApply(d.meter, true); }
+    if (d.rom && typeof d.rom === 'object') _lvMonCache.rom = lvMonCacheRom(d.rom);
+    _lvMonCache.loaded = true;
+  } catch (e) {}
+}
+lvMonCacheRestore();
+function lvStale(on) {
+  ['liveStockRomBanner', 'bnDrainStrip'].forEach(function (id) {
+    const el = _el(id);
+    if (el) el.classList.toggle('lv-stale', !!on);
+  });
 }
 /* "name rate windows" lines, /data/adb/asb/offdrain_profiles (fix189). */
 function lvGovOffParse(text) {
@@ -10359,7 +10435,7 @@ function dozePkgOk(p) { return /^[A-Za-z0-9_.]+$/.test(p); }
 /* Explicit, reversible per-package WAKE_LOCK manager (fix276).
  * Evidence collection is on demand and read-only. The only mutation is Android's AppOps
  * WAKE_LOCK mode for a user-installed package after an explicit risk confirmation. */
-const _wlManual = { tok: 0, busy: false, rows: [], labels: {}, armed: '', armedAt: 0, armTimer: 0 };
+const _wlManual = { tok: 0, busy: false, rows: [], others: [], othersOpen: false, labels: {}, armed: '', armedAt: 0, armTimer: 0 };
 /* fix277: a freeze needs a second tap on the same row within 5 s. Browser confirm() is not
  * used: some WebView hosts return false without showing it, which made Freeze a silent no-op. */
 function wlManualArmed(pkg) { return !!pkg && _wlManual.armed === pkg && Date.now() - _wlManual.armedAt < 5000; }
@@ -10382,14 +10458,16 @@ function wlManualEnsure() {
   return m;
 }
 function wlManualParse(out) {
-  const d = { scan: 'unavailable', selected: 0, rows: [] };
+  const d = { scan: 'unavailable', selected: 0, rows: [], others: [] };
   String(out || '').split('\n').forEach(function (ln) {
     if (ln.indexOf('scan=') === 0) { d.scan = ln.slice(5); return; }
     if (ln.indexOf('selected=') === 0) { d.selected = parseInt(ln.slice(9), 10) || 0; return; }
     const f = ln.split('|');
-    if (f[0] !== 'row' || !/^[A-Za-z0-9_][A-Za-z0-9_.]*$/.test(f[1] || '')) return;
+    if (!/^[A-Za-z0-9_][A-Za-z0-9_.]*$/.test(f[1] || '')) return;
+    if (f[0] === 'app' && f.length === 2) { d.others.push(f[1]); return; }
+    if (f[0] !== 'row') return;
     d.rows.push({ pkg:f[1], secs:Math.max(0,parseInt(f[2],10)||0), held:f[3]==='1', selected:f[4]==='1',
-      eff:f[5]||'unknown', protected:f[6]==='1' });
+      eff:/^[a-z_]+$/.test(f[5]||'') ? f[5] : 'unknown', protected:f[6]==='1', week:Math.max(0,parseInt(f[7],10)||0) });
   });
   return d;
 }
@@ -10405,6 +10483,7 @@ function wlManualLoading() {
   e.textContent = T('wl_manual_loading', 'Reading wake evidence and actual AppOps…'); list.appendChild(e);
 }
 function wlManualState(a) {
+  if (a.other) return T('wl_manual_other_state', 'No wakelock recorded on this phone');
   if (a.selected && a.eff === 'ignore') return T('wl_manual_enforced', 'Blocked · read-back confirmed');
   if (a.selected) return T('wl_manual_lapsed', 'Selected, but not in force now · will retry');
   if (a.eff === 'ignore') return T('wl_manual_external', 'Already ignored outside this list');
@@ -10418,9 +10497,10 @@ function wlManualRow(a) {
   const name = document.createElement('div'); name.className = 'wl-manual-name';
   name.textContent = _wlManual.labels[a.pkg] || a.pkg; tx.appendChild(name);
   const sub = document.createElement('div'); sub.className = 'wl-manual-sub';
-  const evidence = a.secs > 0 ? T('wl_manual_held', 'Held since unplug: %s').replace('%s', wlManualTime(a.secs)) :
-    (a.held ? T('wl_manual_holding', 'Holding a long wakelock now') : T('wl_manual_no_row', 'No current battery-stats row'));
-  sub.textContent = evidence + ' · ' + wlManualState(a); tx.appendChild(sub);
+  let evidence = a.secs > 0 ? T('wl_manual_held', 'Held since unplug: %s').replace('%s', wlManualTime(a.secs)) :
+    (a.held ? T('wl_manual_holding', 'Holding a long wakelock now') : (a.week > 0 ? '' : T('wl_manual_no_row', 'No current battery-stats row')));
+  if (a.week > a.secs) evidence = (evidence ? evidence + ' · ' : '') + T('wl_manual_week', 'Held in the last 7 days: %s').replace('%s', wlManualTime(a.week));
+  sub.textContent = (a.other ? '' : evidence + ' · ') + wlManualState(a); tx.appendChild(sub);
   if (_wlManual.labels[a.pkg] || a.protected) {
     const sub2 = document.createElement('div'); sub2.className = 'wl-manual-sub' + (a.protected ? ' wl-manual-risk' : '');
     const bits = []; if (_wlManual.labels[a.pkg]) bits.push(a.pkg);
@@ -10444,15 +10524,59 @@ function wlManualRow(a) {
 }
 function wlManualPaint(d) {
   _wlManual.rows = d.rows;
+  if (d.others) _wlManual.others = d.others;
   _wlManual.labels = dozeKeepLabels(d.rows.map(function (a) { return a.pkg; }));
   const list = _el('wlManualList'); list.textContent = '';
   if (!d.rows.length) {
     const e = document.createElement('div'); e.className = 'cfg-profile-empty';
-    e.textContent = d.scan === 'ok' ? T('wl_manual_empty', 'No qualifying third-party app wakelocks yet. Use the phone on battery, then Refresh; no app has been changed.')
+    e.textContent = d.scan === 'ok' ? T('wl_manual_empty', 'No user app has held a wakelock long enough to rank in the last 7 days. Android counts app wakelocks only on battery with the screen off, so a night on the charger adds nothing; ASB keeps its own 7-day history across charges and restarts. You can still choose any app below.')
       : T('wl_manual_unavailable', 'Wake evidence is not exposed right now. This is a collection limit, not proof that there are no wakelocks.');
     list.appendChild(e);
   } else d.rows.forEach(function (a) { list.appendChild(wlManualRow(a)); });
+  const others = (_wlManual.others || []).filter(function (p) { return !d.rows.some(function (a) { return a.pkg === p; }); });
+  if (others.length) list.appendChild(wlManualOthers(others, !d.rows.length));
   _el('wlManualMeta').textContent = T('wl_manual_meta', '%s app(s) selected · ranked by held time since last unplug, not by proven energy cost').replace('%s', String(d.selected));
+}
+/* fix287: the picker showed nothing to choose after a night on the charger - Android counts app
+ * wakelocks only on battery with the screen off and starts over after a charge. Besides the ranked
+ * apps (now also from ASB's own 7-day history), every other user app can be chosen explicitly:
+ * no wakelock evidence is claimed for them, and the same two-tap confirmation, read-back and
+ * exact restore apply. The rows are built when the list is opened, labels included. */
+function wlManualOthers(pkgs, open) {
+  const box = document.createElement('details'); box.className = 'wl-manual-others';
+  const sm = document.createElement('summary');
+  sm.textContent = T('wl_manual_others', 'Other user apps (%s)').replace('%s', String(pkgs.length));
+  box.appendChild(sm);
+  const note = document.createElement('div'); note.className = 'wl-manual-sub wl-manual-others-note';
+  note.textContent = T('wl_manual_others_note', 'No wakelock is recorded for these apps on this phone. Freeze one only if you know it keeps the phone awake.');
+  box.appendChild(note);
+  const q = document.createElement('input'); q.type = 'search'; q.className = 'wl-manual-search';
+  q.placeholder = T('wl_manual_search', 'Search apps'); q.setAttribute('aria-label', q.placeholder);
+  box.appendChild(q);
+  const wrap = document.createElement('div'); wrap.className = 'wl-manual-list';
+  box.appendChild(wrap);
+  let built = false;
+  const build = function () {
+    if (built) return; built = true;
+    const lab = dozeKeepLabels(pkgs);
+    Object.keys(lab).forEach(function (k) { _wlManual.labels[k] = lab[k]; });
+    pkgs.slice().sort(function (a, b) { return String(lab[a] || a).localeCompare(String(lab[b] || b)); }).forEach(function (p) {
+      const r = wlManualRow({ pkg: p, secs: 0, held: false, selected: false, eff: 'unknown', protected: dozeIsMessenger(p), week: 0, other: true });
+      r.dataset.q = ((lab[p] || '') + ' ' + p).toLowerCase();
+      wrap.appendChild(r);
+    });
+  };
+  const filter = function () {
+    const v = q.value.trim().toLowerCase();
+    _wlManual.q = q.value;
+    wrap.querySelectorAll('.wl-manual-row').forEach(function (r) { r.style.display = !v || r.dataset.q.indexOf(v) >= 0 ? '' : 'none'; });
+  };
+  q.value = _wlManual.q || '';
+  q.oninput = filter;
+  box.addEventListener('toggle', function () { if (box.open) { build(); filter(); } });
+  if (open || _wlManual.othersOpen) { box.open = true; build(); filter(); }
+  box.addEventListener('toggle', function () { _wlManual.othersOpen = box.open; });
+  return box;
 }
 async function wlManualLoad() {
   const m = wlManualEnsure(), tok = ++_wlManual.tok;
@@ -10461,6 +10585,8 @@ async function wlManualLoad() {
   _el('wlManualDone').textContent = T('doze_keep_done', 'Done');
   _el('wlManualMeta').textContent = T('wl_manual_readonly', 'Read-only scan · no automatic selection');
   wlManualLoading();
+  await asbPaintYield();
+  if (tok !== _wlManual.tok || m.hidden) return;
   let r = null;
   try { r = await run('sh ' + shQuote(MD + '/runtime/asb_wakelock_watch.sh') + ' manual-status 2>/dev/null'); } catch (e) {}
   if (tok !== _wlManual.tok || m.hidden) return;
@@ -13463,7 +13589,7 @@ async function zygiskHeaderRefresh() {
  * from the last snapshot the header already holds, and after the slide makes ONE read
  * (asb_zygisk.sh link-status). The four separate switches stay where they belong - Settings
  * -> System -> Zygisk; here one mode control sets all four in one locked write. */
-let _zygiskLoadSeq = 0, _zygiskModeBusy = false;
+let _zygiskLoadSeq = 0, _zygiskModeBusy = false, _zygiskAutoBusy = '';
 const ZYGISK_MODES = [
   { id: 'off',   key: 'zy_mode_off',   label: 'Off',
     desc: 'Nothing runs in app processes: no connection, no request, no ledger. Zero cost.' },
@@ -13503,12 +13629,17 @@ function zygiskAutoCard(d) {
   }
   const actions = document.createElement('div'); actions.className = 'zy-auto-actions';
   const primary = document.createElement('button'); primary.type = 'button'; primary.className = 'zy-auto-btn zy-auto-btn-primary';
-  primary.textContent = on ? T('zy_auto_refresh', 'Refresh automatic app selection') : T('zy_auto_enable', 'Set up automatically');
+  primary.textContent = _zygiskAutoBusy === 'enable' ? T('zy_auto_working', 'Setting up…')
+    : _zygiskAutoBusy === 'refresh' ? T('zy_auto_refreshing', 'Refreshing…')
+    : on ? T('zy_auto_refresh', 'Refresh automatic app selection') : T('zy_auto_enable', 'Set up automatically');
   primary.disabled = _zygiskModeBusy;
+  if (_zygiskAutoBusy === 'enable' || _zygiskAutoBusy === 'refresh') primary.classList.add('is-busy');
   primary.onclick = function () { zygiskAutoSet(on ? 'refresh' : 'enable'); }; actions.appendChild(primary);
   if (on) {
     const off = document.createElement('button'); off.type = 'button'; off.className = 'zy-auto-btn';
-    off.textContent = T('zy_auto_disable', 'Turn off automatic setup'); off.disabled = _zygiskModeBusy;
+    off.textContent = _zygiskAutoBusy === 'disable' ? T('zy_auto_disabling', 'Turning off…') : T('zy_auto_disable', 'Turn off automatic setup');
+    off.disabled = _zygiskModeBusy;
+    if (_zygiskAutoBusy === 'disable') off.classList.add('is-busy');
     off.onclick = function () { zygiskAutoSet('disable'); }; actions.appendChild(off);
   }
   card.appendChild(actions);
@@ -13519,8 +13650,10 @@ function zygiskAutoCard(d) {
 async function zygiskAutoSet(action) {
   if (_zygiskModeBusy || ['enable','refresh','disable'].indexOf(action) < 0) return;
   _zygiskModeBusy = true;
+  _zygiskAutoBusy = action;
   uiSound(action === 'disable' ? 'toggle_off' : 'toggle_on');
   if (_zygiskOpen) zygiskPageRender(window._asbZygiskLinkData || null);
+  await asbPaintYield();
   let b = null;
   try {
     b = await runBatch([
@@ -13532,6 +13665,7 @@ async function zygiskAutoSet(action) {
     ]);
   } catch (e) { b = null; }
   _zygiskModeBusy = false;
+  _zygiskAutoBusy = '';
   if (b && b.engine && b.engine.errno === 0) _zyLink = zygiskLinkParse(b.engine.stdout);
   const out = b && b.set ? (b.set.stdout || '') : '';
   const result = (/^result=([a-z_]+)/m.exec(out) || [])[1] || 'failed';
@@ -13602,6 +13736,7 @@ async function zygiskModeSet(id) {
   _zygiskModeBusy = true;
   uiSound('toggle_on');
   zygiskPageRender(window._asbZygiskLinkData || null);
+  await asbPaintYield();
   const writer = MD + '/runtime/asb_config_safe.sh', snap = '/data/adb/asb/governor.conf.snapshot';
   const pairs = Object.keys(vals).map(function (k) { return ' ' + shQuote(k) + ' ' + shQuote(vals[k]); }).join('');
   const write = 'sh ' + shQuote(writer) + ' set-many --snapshot ' + shQuote(snap) + pairs +
@@ -13893,6 +14028,8 @@ async function zygiskGuardGhost(pkgs, restrict) {
   if (!pkgs.length) return;
   _zygiskModeBusy = true;
   uiSound(restrict ? 'toggle_on' : 'toggle_off');
+  if (_zygiskOpen) zygiskPageRender(window._asbZygiskLinkData || null);
+  await asbPaintYield();
   const parts = pkgs.map(function (p, i) {
     return ['s' + i, 'sh ' + shQuote(MD + '/runtime/asb_zygisk_guard.sh') + (restrict ? ' ghost-restrict ' : ' ghost-release ') + shQuote(p)];
   });
@@ -13912,6 +14049,8 @@ async function zygiskGuardSet(level) {
   if (level !== 'loops' && level !== 'wakers') level = 'off';
   _zygiskModeBusy = true;
   uiSound(level !== 'off' ? 'toggle_on' : 'toggle_off');
+  if (_zygiskOpen) zygiskPageRender(window._asbZygiskLinkData || null);
+  await asbPaintYield();
   let b = null;
   try {
     b = await runBatch([['set', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_guard.sh') + (level !== 'off' ? ' enable ' + level : ' disable')],
@@ -14015,6 +14154,8 @@ async function zygiskAotSet(on) {
   if (_zygiskModeBusy) return;
   _zygiskModeBusy = true;
   uiSound(on ? 'toggle_on' : 'toggle_off');
+  if (_zygiskOpen) zygiskPageRender(window._asbZygiskLinkData || null);
+  await asbPaintYield();
   let b = null;
   try {
     b = await runBatch([['set', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_aot.sh') + (on ? ' enable' : ' disable')],
@@ -14077,12 +14218,12 @@ function zygiskLinkCard() {
   const g = _zyLink || zygiskLinkParse('');
   const kv = g.kv;
   const card = logReportSec(T('zy_link_title', 'One engine: Zygisk · governor · LSPosed'));
-  card.appendChild(logReportNote(T('zy_link_desc', 'The Zygisk companion hears every app start, LSPosed tells which apps carry hook modules and Android\'s launch log measures each cold start. From that ASB sorts the apps you open into slow and fast starters: the governor keeps the cold-start lift twice as long for a slow one and ends it at half for a fast one. The background guard never restricts an LSPosed module app, and an app your root manager hides root from never keeps ASB loaded.')));
+  card.appendChild(logReportNote(T('zy_link_desc', 'The Zygisk companion hears every app start, LSPosed tells which apps carry hook modules and Android\'s launch log measures each cold start. From that ASB sorts the apps you open into slow and fast starters: the governor keeps the cold-start lift twice as long for a slow one and ends it at half for a fast one. The background guard never restricts an LSPosed module app.')));
   if (!g.ok) { card.appendChild(logReportNote(T('zy_link_unread', 'Not read yet.'))); return card; }
   const clock = function (sec) { return sec > 0 ? zygiskGuardClock(sec) : '-'; };
   let cls;
   if (kv.launch !== '1' || kv.enabled !== '1') cls = T('zy_link_cls_off', 'off - needs the cold-start lift (Response or Full mode)');
-  else if (kv.classes !== 'on') cls = T('zy_link_cls_none', 'no app classed yet - an app needs 3 measured cold starts or LSPosed modules on it');
+  else if (kv.classes !== 'on') cls = T('zy_link_cls_none', 'no app classed yet - an app needs 3 measured cold starts, or LSPosed modules and one start of a second or more');
   else cls = T('zy_link_cls_val', '%1 slow · %2 fast · built at %3').replace('%1', kv.classes_slow || '0').replace('%2', kv.classes_fast || '0').replace('%3', clock(parseInt(kv.classes_at, 10) || 0));
   card.appendChild(logReportRow(T('zy_link_row_classes', 'Launch classes'), cls, false));
   if (kv.classes === 'on' && kv.comp_state === '1' && kv.comp_supported !== '1')
@@ -14101,8 +14242,6 @@ function zygiskLinkCard() {
   card.appendChild(logReportRow(T('zy_link_row_zmods', 'Other Zygisk modules'), g.zmods.length
     ? g.zmods.map(function (z) { return z.name + (z.on ? '' : ' (' + T('zy_link_zmod_off', 'off') + ')'); }).join(', ')
     : T('zy_link_zmods_none', 'none'), false));
-  if (parseInt(kv.denylist_spawns, 10) > 0)
-    card.appendChild(logReportRow(T('zy_link_row_deny', 'Apps hidden from root'), T('zy_link_deny_val', '%s start(s) this boot · ASB never stays loaded in them').replace('%s', kv.denylist_spawns), false));
   if (g.cmp && g.cmp.hooked > 0 && g.cmp.plain > 0)
     card.appendChild(logReportNote(T('zy_link_cmp', 'Median cold start: apps with LSPosed modules %1 ms (%2 apps), without %3 ms (%4 apps). These are different apps, so the gap is not the cost of the hooks alone.')
       .replace('%1', String(g.cmp.hooked)).replace('%2', String(g.cmp.hookedN)).replace('%3', String(g.cmp.plain)).replace('%4', String(g.cmp.plainN))));
@@ -14127,6 +14266,8 @@ async function zygiskPageLoad(user) {
   const status = _el('zygiskStatus'), btn = _el('zyRefresh');
   if (btn) btn.disabled = true;
   if (status) status.textContent = T('zy_status_loading', 'Reading…');
+  await asbPaintYield();
+  if (seq !== _zygiskLoadSeq) return;
   let b = null;
   try {
     b = await runBatch([['link', 'sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' link-status'],
@@ -14433,17 +14574,56 @@ function deviceInfoLoading(body) {
   card.appendChild(orbit); card.appendChild(title); card.appendChild(sub); card.appendChild(steps);
   body.appendChild(card);
 }
+/* fix287: the Device page stayed blank for the whole collection on a phone: its loading card
+ * was in the DOM, but the root call that followed blocked the page before a frame could show
+ * it. The loading state is now painted first (asbPaintYield), and the last snapshot is kept for
+ * the next visit (seven days at most, this viewer only): device, firmware and kernel rarely
+ * change, so the page shows it at once, dimmed and marked with its time, and replaces it when
+ * the fresh read returns. Save stays off until then, so a saved file is always fresh. */
+const DEV_CACHE_KEY = 'asb_device_cache';
+const DEV_CACHE_MAX_MS = 7 * 86400000;
+function deviceInfoCacheGet() {
+  try {
+    const c = JSON.parse(localStorage.getItem(DEV_CACHE_KEY) || 'null');
+    if (c && typeof c.raw === 'string' && c.raw.length < 600000 && c.t > 0 && Date.now() >= c.t && Date.now() - c.t <= DEV_CACHE_MAX_MS) return c;
+  } catch (e) {}
+  return null;
+}
+function deviceInfoCacheSet(raw) {
+  try { localStorage.setItem(DEV_CACHE_KEY, JSON.stringify({ t: Date.now(), raw: String(raw || '') })); } catch (e) {}
+}
+function deviceInfoStamp(t) {
+  try { return new Date(t).toLocaleString(ASB_LANG || undefined, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+  catch (e) { return ''; }
+}
 async function asbDeviceInfoLoad() {
   const body = _el('deviceBody'), status = _el('deviceStatus'), btn = _el('devRefresh');
   if (!body || !status || !_deviceOpen) return;
   const seq = ++_deviceLoadSeq;
   const saveBtn = _el('devSave');
+  const page = _el('devicePage');
   window._asbDeviceInfoData = null;
   window._asbDeviceInfoRaw = '';
   if (saveBtn) saveBtn.disabled = true;
   if (btn) btn.disabled = true;
-  status.textContent = T('dev_loading_status', 'Collecting read-only data…');
-  deviceInfoLoading(body);
+  status.classList.add('dev-status-busy');
+  const cache = body.dataset.devShown === '1' ? null : deviceInfoCacheGet();
+  const cd = cache ? parseDeviceInfo(cache.raw) : null;
+  if (cd && cd.count) {
+    deviceInfoRender(cd);
+    body.dataset.devShown = '1';
+    body.dataset.devAt = String(cache.t);
+    body.classList.add('dev-stale');
+    status.textContent = T('dev_cached_status', 'Snapshot from %s · refreshing…').replace('%s', deviceInfoStamp(cache.t));
+  } else if (body.dataset.devShown === '1') {
+    body.classList.add('dev-stale');
+    status.textContent = T('dev_loading_status', 'Collecting read-only data…');
+  } else {
+    status.textContent = T('dev_loading_status', 'Collecting read-only data…');
+    deviceInfoLoading(body);
+  }
+  await asbPaintYield();
+  if (!_deviceOpen || seq !== _deviceLoadSeq) return;
   let r = null;
   /* fix278: the hook evidence (LSPosed logs, crash records, package and process lists) is
    * collected on request from its own card. It can take seconds, and ksu.exec holds the
@@ -14452,6 +14632,15 @@ async function asbDeviceInfoLoad() {
   catch (e) { r = null; }
   if (!_deviceOpen || seq !== _deviceLoadSeq) return;
   const d = parseDeviceInfo(r ? runText(r) : '');
+  status.classList.remove('dev-status-busy');
+  body.classList.remove('dev-stale');
+  if ((!r || r.errno !== 0 || !d.count) && body.dataset.devShown === '1') {
+    status.textContent = T('dev_cached_failed', 'Could not refresh · the snapshot from %s is shown').replace('%s', deviceInfoStamp(parseInt(body.dataset.devAt, 10) || Date.now()));
+    if (btn) btn.disabled = false;
+    requestAnimationFrame(asbFitPages);
+    return;
+  }
+  const scrollY = page ? page.scrollTop : 0;
   body.textContent = '';
   if (!r || r.errno !== 0 || !d.count) {
     window._asbDeviceInfoData = null;
@@ -14464,8 +14653,12 @@ async function asbDeviceInfoLoad() {
   } else {
     window._asbDeviceInfoData = d;
     window._asbDeviceInfoRaw = runText(r);
+    deviceInfoCacheSet(window._asbDeviceInfoRaw);
     zygiskHeaderPublish(d);
     const shown = deviceInfoRender(d);
+    body.dataset.devShown = '1';
+    body.dataset.devAt = String(Date.now());
+    if (page && scrollY) page.scrollTop = scrollY;
     status.textContent = T('dev_facts_status', '%s facts').replace('%s', String(shown));
   }
   if (btn) btn.disabled = false;
@@ -16043,16 +16236,39 @@ function logReportRender(d) {
 
 let _asbLogRunning = false;
 let _asbLogStopArmed = 0;
+/* fix287: a stop was sent, and the recorder is finishing its report (a minute or more on a long
+ * capture). The status said "running" all that time, so the menu offered Stop again - and the
+ * second stop cut the report short. The helper now answers "stopping" for that interval and a
+ * repeated stop sends nothing; the menu says so and needs no second tap. */
+let _asbLogStopping = false, _asbLogStopWatch = false;
 function asbLogMenuPaint() {
   const item = document.getElementById('logMenuSession');
   const label = document.getElementById('logMenuSessionLabel');
   if (!item || !label) return;
-  const armed = _asbLogRunning && _asbLogStopArmed && Date.now() - _asbLogStopArmed < 4000;
-  item.classList.toggle('is-recording', _asbLogRunning);
+  const armed = _asbLogRunning && !_asbLogStopping && _asbLogStopArmed && Date.now() - _asbLogStopArmed < 4000;
+  item.classList.toggle('is-recording', _asbLogRunning && !_asbLogStopping);
+  item.classList.toggle('is-stopping', _asbLogStopping);
   item.classList.toggle('is-armed', !!armed);
   label.removeAttribute('data-i18n');
-  label.textContent = !_asbLogRunning ? T('dbg_log_btn', 'Infinite log') :
+  label.textContent = _asbLogStopping ? T('dbg_log_stopping_menu', 'Stopping · finishing the report…') :
+    !_asbLogRunning ? T('dbg_log_btn', 'Infinite log') :
     (armed ? T('dbg_log_stop_confirm', 'Tap again to stop') : T('dbg_log_stop_btn', 'Stop infinite log'));
+}
+async function asbLogStopWatch(output) {
+  if (_asbLogStopWatch) return;
+  _asbLogStopWatch = true;
+  let done = false;
+  try { done = await debugFullDayStopPoll(); } catch (e) { done = false; }
+  _asbLogStopWatch = false;
+  if (done) {
+    _asbLogStopping = false; _asbLogRunning = false;
+    asbLogMenuPaint();
+    uiSound('success');
+    const out = output ? ' · ' + output.replace(/^\/(sdcard|storage\/emulated\/0)\//, '') : '';
+    toast(T('dbg_log_stopped', 'Infinite log stopped') + out, 'good');
+  } else {
+    toast(T('dbg_log_stop_slow', 'The infinite log is still finishing its report'), 'warn');
+  }
 }
 async function asbLogMenuSync() {
   _asbLogStopArmed = 0;
@@ -16060,7 +16276,9 @@ async function asbLogMenuSync() {
   try {
     const r = await run('sh ' + MD + '/runtime/asb_debug_support.sh status 2>/dev/null');
     const info = debugActionText(r);
-    _asbLogRunning = !!(r && r.errno === 0 && (info.status === 'running' || info.status === 'starting' || info.status === 'resuming'));
+    _asbLogStopping = !!(r && r.errno === 0 && info.status === 'stopping');
+    _asbLogRunning = !!(r && r.errno === 0 && (info.status === 'running' || info.status === 'starting' || info.status === 'resuming' || info.status === 'stopping'));
+    if (_asbLogStopping) asbLogStopWatch('');
     /* fix279: a recorder lost in the same boot (the Android framework restarted under it) is
        continued on its own folder at once instead of waiting for the next service tick. */
     if (r && r.errno === 0 && info.status === 'resuming' && info.reason === 'restart') {
@@ -16071,6 +16289,10 @@ async function asbLogMenuSync() {
   asbLogMenuPaint();
 }
 function asbLogMenuPick(action) {
+  if (action === 'full-day' && _asbLogStopping) {
+    toast(T('dbg_log_stopping_wait', 'The report is being finished - the log stops by itself, no second tap needed'), 'warn');
+    return;
+  }
   if (action === 'full-day' && _asbLogRunning) {
     if (!_asbLogStopArmed || Date.now() - _asbLogStopArmed >= 4000) {
       _asbLogStopArmed = Date.now();
@@ -17627,29 +17849,49 @@ async function pollStockTelemetry(visible, force = false) {
      * once a minute. */
     const refresh = (now - _stockSettingsAtMs) >= 60000;
     if (refresh) _stockSettingsAtMs = now;
-    const cmd = 'sh ' + MD + '/runtime/asb_rom_telemetry.sh' + (refresh ? ' refresh' : '') + ' 2>/dev/null';
-    const r = await run(cmd);
+    const r = await run(stockTelemetryCmd(refresh));
     await lvMeterPoll(false);
-    const text = ((r && r.stdout) || '').trim();
-    const freshKv = parseStockTelemetry(text);
-    /* A transient root/sysfs failure is not a new thermal sample. Keep the last complete
-     * snapshot (and its timestamp/verdict) visible instead of blanking the whole card until
-     * the next successful poll. A retry with real data replaces it atomically. */
-    if (Object.keys(freshKv).length) {
-      _stockTelemetryKv = freshKv;
-      /* The sample time is the page's own clock in ms (the script runs no `date`). */
-      _stockTelemetryKv.tsms = String(Date.now());
-    }
-    paintStockLive(_stockTelemetryKv);
-    if (pre) pre.textContent = text || T('stock_telemetry_unavailable', 'ROM telemetry unavailable');
+    stockTelemetryApply(r);
   } catch(e) {
     paintStockLive(_stockTelemetryKv);
     if (pre) pre.textContent = T('stock_telemetry_unavailable', 'ROM telemetry unavailable');
   }
 }
+function stockTelemetryCmd(refresh) {
+  return 'sh ' + MD + '/runtime/asb_rom_telemetry.sh' + (refresh ? ' refresh' : '') + ' 2>/dev/null';
+}
+function stockTelemetryApply(r) {
+  const pre = _el('liveStockTelemetry');
+  const text = ((r && r.stdout) || '').trim();
+  const freshKv = parseStockTelemetry(text);
+  /* A transient root/sysfs failure is not a new thermal sample. Keep the last complete
+   * snapshot (and its timestamp/verdict) visible instead of blanking the whole card until
+   * the next successful poll. A retry with real data replaces it atomically. */
+  if (Object.keys(freshKv).length) {
+    _stockTelemetryKv = freshKv;
+    /* The sample time is the page's own clock in ms (the script runs no `date`). */
+    _stockTelemetryKv.tsms = String(Date.now());
+    _lvMonCache.rom = lvMonCacheRom(freshKv);
+    lvMonCacheSave();
+    lvStale(false);
+  }
+  paintStockLive(Object.keys(_stockTelemetryKv).length ? _stockTelemetryKv : (_lvMonCache.rom || {}));
+  if (pre) pre.textContent = text || T('stock_telemetry_unavailable', 'ROM telemetry unavailable');
+}
 
 function liveBatchParts(visible) {
   const parts = [['state', 'cat /dev/.asb/state']];
+  /* fix287: the drain meter and the ROM snapshot ride the same root shell as the governor
+   * state when they are due (was two more shells, one after another, before the card). */
+  const now = Date.now();
+  if (now - _lvMeter.at >= 30000) { _lvMeter.at = now; parts.push(['meter', LV_METER_CMD]); }
+  if (visible && _selectedProfile !== 'smart' && _selectedProfile !== 'stock' &&
+      now - _stockTelemetryLastMs >= STOCK_TELEMETRY_MIN_INTERVAL_MS) {
+    const refresh = (now - _stockSettingsAtMs) >= 60000;
+    if (refresh) _stockSettingsAtMs = now;
+    _stockTelemetryLastMs = now;
+    parts.push(['rom', stockTelemetryCmd(refresh)]);
+  }
   if (!_batCapFullMah) parts.push(['cfull', 'cat /sys/class/power_supply/battery/charge_full']);
   if (visible) parts.push(['learner', 'cat /dev/.asb/learner_state.json']);
   parts.push(['status', MD + '/bin/asb status']);
@@ -17673,11 +17915,12 @@ async function pollLive(visible) {
       return;
     }
     restoreManagedLiveLabels();
-    await lvMeterPoll(false);
     /* Collection happens once per pass, after the governor state is read - see the call
      * further down. Calling it here as well would double the /sys reads for nothing. */
     /* fix278: every read of this pass shares one root shell (was five, every 3 s). */
     const _lb = await runBatch(liveBatchParts(visible));
+    if (_lb.meter) lvMeterApply(_lb.meter.stdout || '', false);
+    if (_lb.rom) stockTelemetryApply(_lb.rom);
     const r = _lb.state;
     /*
      * keep Live chip always visible — Live page handles its own empty-state fallback.
