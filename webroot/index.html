@@ -1806,6 +1806,9 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .device-page .dev-zygisk-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
 .device-page .dev-zygisk-btn { min-height: 36px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); font: 650 11px var(--sans); }
 .device-page .dev-zygisk-btn:disabled { opacity: .5; }
+.zy-ghost { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; border-top: 1px solid var(--border); }
+.zy-ghost .dev-zygisk-btn, .zy-ghost-all { align-self: flex-end; }
+.zy-ghost-all { display: block; margin: 6px 0 2px auto; }
 html[data-asb-theme="light"] .lgr-quality { background: #f7f9fa; }
 @media (max-width: 400px) {
   .lgr-quality { padding: 10px; }
@@ -13616,8 +13619,10 @@ function zygiskPageRender(d) {
  * and every screen-off period of 15 min or more leaves a summary of process starts. */
 let _zyGuard = null;
 function zygiskGuardParse(out) {
-  const g = { ok: false, enabled: false, level: 'off', ledger: false, threshold: 6, wakerMin: 8, active: [], events: [], nights: [] };
+  const g = { ok: false, enabled: false, level: 'off', ledger: false, threshold: 6, wakerMin: 8, ghostMin: 30, ghostDays: 3, histDays10: 0,
+    active: [], events: [], nights: [], bg: [], suggest: [], held: [] };
   const num = function (v) { const n = parseInt(v, 10); return isFinite(n) && n > 0 ? n : 0; };
+  const dig = function (v) { return /^\d+$/.test(v || ''); };
   String(out || '').split('\n').forEach(function (ln) {
     ln = ln.trim();
     if (ln === 'version=1') g.ok = true;
@@ -13626,17 +13631,27 @@ function zygiskGuardParse(out) {
     else if (ln === 'ledger=1') g.ledger = true;
     else if (/^threshold=\d+$/.test(ln)) g.threshold = parseInt(ln.slice(10), 10);
     else if (/^waker_min=\d+$/.test(ln)) g.wakerMin = parseInt(ln.slice(10), 10);
+    else if (/^ghost_min=\d+$/.test(ln)) g.ghostMin = parseInt(ln.slice(10), 10);
+    else if (/^ghost_days=\d+$/.test(ln)) g.ghostDays = parseInt(ln.slice(11), 10);
+    else if (/^history_days10=\d+$/.test(ln)) g.histDays10 = parseInt(ln.slice(15), 10);
     else {
       const f = ln.split('|');
       if (f[0] === 'active' && dozePkgOk(f[1] || ''))
-        g.active.push({ pkg: f[1], since: num(f[2]), n: num(f[3]), why: f[4] === 'waker' ? 'waker' : 'loop', after: /^\d+$/.test(f[5] || '') ? parseInt(f[5], 10) : -1 });
+        g.active.push({ pkg: f[1], since: num(f[2]), n: num(f[3]), why: /^(waker|loop_on)$/.test(f[4] || '') ? f[4] : 'loop',
+          after: dig(f[5]) ? parseInt(f[5], 10) : -1, until: num(f[6]) });
       else if (f[0] === 'event' && dozePkgOk(f[2] || '') && /^[a-z_]+$/.test(f[4] || ''))
-        g.events.push({ at: num(f[1]), pkg: f[2], n: num(f[3]), what: f[4], extra: /^(loop|waker|\d+)$/.test(f[5] || '') ? f[5] : '' });
-      else if (f[0] === 'night' && /^\d+$/.test(f[1] || '') && /^\d+$/.test(f[2] || '') && /^\d+$/.test(f[3] || '') && /^\d+$/.test(f[4] || '')) {
+        g.events.push({ at: num(f[1]), pkg: f[2], n: num(f[3]), what: f[4], extra: /^(loop|waker|loop_on|ghost|\d+)$/.test(f[5] || '') ? f[5] : '' });
+      else if (f[0] === 'night' && dig(f[1]) && dig(f[2]) && dig(f[3]) && dig(f[4])) {
         const top = String(f[5] || '').split(',').map(function (x) { const q = x.split(':'); return { pkg: q[0], n: num(q[1]) }; })
           .filter(function (x) { return dozePkgOk(x.pkg) && x.n > 0; });
         g.nights.push({ from: num(f[1]), to: num(f[2]), total: num(f[3]), restricted: num(f[4]), top: top });
       }
+      else if (f[0] === 'bg' && dozePkgOk(f[1] || '') && dig(f[2]) && dig(f[3]) && dig(f[4]) && dig(f[5]))
+        g.bg.push({ pkg: f[1], n: num(f[2]), off: num(f[3]), on: num(f[4]), top: num(f[5]) });
+      else if (f[0] === 'suggest' && dozePkgOk(f[1] || '') && dig(f[2]) && dig(f[3]))
+        g.suggest.push({ pkg: f[1], n: num(f[2]), days10: num(f[3]) });
+      else if (f[0] === 'held' && dozePkgOk(f[1] || '') && dig(f[2]) && dig(f[3]) && /^(-1|\d+)$/.test(f[4] || '') && dig(f[5]))
+        g.held.push({ pkg: f[1], since: num(f[2]), pre10: parseInt(f[3], 10), post10: parseInt(f[4], 10), days10: num(f[5]) });
     }
   });
   if (g.enabled && g.level === 'off') g.level = 'loops';
@@ -13647,21 +13662,45 @@ function zygiskGuardClock(sec) {
   const t = new Date(sec * 1000);
   return (t.getHours() < 10 ? '0' : '') + t.getHours() + ':' + (t.getMinutes() < 10 ? '0' : '') + t.getMinutes();
 }
+function zygiskGuardDay(sec) {
+  const d = new Date(sec * 1000);
+  return (d.getDate() < 10 ? '0' : '') + d.getDate() + '.' + (d.getMonth() < 9 ? '0' : '') + (d.getMonth() + 1);
+}
+function zygiskGuardTenth(x) { return (Math.round(x) / 10).toFixed(1).replace(/\.0$/, ''); }
 function zygiskGuardWhy(w) {
-  return w === 'waker' ? T('zy_guard_why_waker', 'night waker') : T('zy_guard_why_loop', 'restart loop');
+  if (w === 'waker') return T('zy_guard_why_waker', 'night waker');
+  if (w === 'loop_on') return T('zy_guard_why_loop_on', 'background loop, screen on');
+  if (w === 'ghost') return T('zy_guard_why_ghost', 'app you never open');
+  return T('zy_guard_why_loop', 'restart loop');
 }
 function zygiskGuardNightRow(n, nm) {
-  const d = new Date(n.from * 1000);
-  const day = (d.getDate() < 10 ? '0' : '') + d.getDate() + '.' + (d.getMonth() < 9 ? '0' : '') + (d.getMonth() + 1);
-  const k = day + ' ' + zygiskGuardClock(n.from) + '–' + zygiskGuardClock(n.to) + ' · ' + logReportDur((n.to - n.from) / 60);
+  const k = zygiskGuardDay(n.from) + ' ' + zygiskGuardClock(n.from) + '–' + zygiskGuardClock(n.to) + ' · ' + logReportDur((n.to - n.from) / 60);
   let v = T('zy_guard_night_row', '%1 process starts · %2 restricted').replace('%1', String(n.total)).replace('%2', String(n.restricted));
   if (n.top.length) v += ' · ' + T('zy_guard_night_top', 'most: %s').replace('%s', n.top.map(function (x) { return nm(x.pkg) + ' ' + x.n; }).join(', '));
   return logReportRow(k, v, false);
 }
+function zygiskGuardHeldText(h) {
+  const pre = zygiskGuardTenth(h.pre10);
+  if (h.post10 < 0) return T('zy_guard_ghost_counting', 'restricted since %1 · %2/day before · after: still counting').replace('%1', zygiskGuardDay(h.since)).replace('%2', pre);
+  return T('zy_guard_ghost_held', 'restricted since %1 · %2/day before → %3/day after').replace('%1', zygiskGuardDay(h.since)).replace('%2', pre).replace('%3', zygiskGuardTenth(h.post10));
+}
+function zygiskGuardActionRow(label, value, btnText, onTap) {
+  const w = document.createElement('div');
+  w.className = 'zy-ghost';
+  w.appendChild(logReportRow(label, value, false));
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'dev-zygisk-btn';
+  b.textContent = btnText;
+  b.onclick = onTap;
+  w.appendChild(b);
+  return w;
+}
 function zygiskGuardCard() {
   const g = _zyGuard || zygiskGuardParse('');
-  const card = logReportSec(T('zy_guard_title', 'Restart-loop guard'));
+  const card = logReportSec(T('zy_guard_title', 'Background guard'));
   card.appendChild(logReportNote(T('zy_guard_desc', 'With the screen off, an app that starts again and again (%s or more process starts in 5 minutes, counted by the Zygisk start ledger) gets its background activity restricted until the screen turns on; then the previous setting comes back. Messengers, mail, alarms, navigation, watches, VPN and the apps on the Doze keep list or in the notification fix are never touched.').replace('%s', String(g.threshold))));
+  card.appendChild(logReportNote(T('zy_guard_desc_screen_on', 'With the screen on, an app whose background processes - not the app in front - start %s or more times in 5 minutes while nothing of it is visible is restricted for 30 minutes, and given back at once when you use it.').replace('%s', String(g.threshold))));
   card.appendChild(logReportNote(T('zy_guard_desc_wakers', 'Loops + night wakers: an app whose process starts %s or more times during one screen-off period, at any pace, is restricted the same way until the screen turns on. Each restriction counts the starts that still happened while it was in place.').replace('%s', String(g.wakerMin))));
   const seg = document.createElement('div');
   seg.className = 'cfg-seg zy-mode-seg zy-guard-seg';
@@ -13680,16 +13719,61 @@ function zygiskGuardCard() {
   g.active.forEach(function (a) { pk.push(a.pkg); });
   g.events.forEach(function (e) { pk.push(e.pkg); });
   g.nights.forEach(function (n) { n.top.forEach(function (x) { pk.push(x.pkg); }); });
+  g.bg.forEach(function (x) { pk.push(x.pkg); });
+  g.suggest.forEach(function (x) { pk.push(x.pkg); });
+  g.held.forEach(function (x) { pk.push(x.pkg); });
   const names = dozeKeepLabels(pk);
   const nm = function (p) { return names[p] || p; };
   if (g.active.length) {
     g.active.forEach(function (a) {
       let v = T('zy_guard_active', 'restricted since %1 · %2 starts').replace('%1', zygiskGuardClock(a.since)).replace('%2', String(a.n)) + ' · ' + zygiskGuardWhy(a.why);
+      if (a.why === 'loop_on' && a.until > 0) v += ' · ' + T('zy_guard_until', 'until %s').replace('%s', zygiskGuardClock(a.until));
       if (a.after >= 0) v += ' · ' + T('zy_guard_after', 'starts while restricted: %s').replace('%s', String(a.after));
       card.appendChild(logReportRow(nm(a.pkg), v, false));
     });
   } else if (g.ok && g.enabled) {
     card.appendChild(logReportNote(T('zy_guard_none', 'No app is restricted now.')));
+  }
+  if (g.ok && g.enabled) {
+    const gh = document.createElement('details');
+    gh.className = 'zy-evidence';
+    gh.open = !!(g.suggest.length || g.held.length);
+    const gs = document.createElement('summary');
+    gs.textContent = T('zy_guard_ghost_title', 'Apps you never open (%s)').replace('%s', String(g.suggest.length + g.held.length));
+    gh.appendChild(gs);
+    gh.appendChild(logReportNote(T('zy_guard_ghost_desc', 'Started in the background %1 or more times over %2 days, never opened, and Android itself marks them idle. Restricting one is the same as choosing "Restricted" in its battery settings: no background work, the app still works when you open it - and opening it gives the background back.').replace('%1', String(g.ghostMin)).replace('%2', String(g.ghostDays))));
+    g.held.forEach(function (h) {
+      gh.appendChild(zygiskGuardActionRow(nm(h.pkg), zygiskGuardHeldText(h), T('zy_guard_ghost_release', 'Give back'), function () { zygiskGuardGhost([h.pkg], false); }));
+    });
+    g.suggest.forEach(function (x) {
+      gh.appendChild(zygiskGuardActionRow(nm(x.pkg), T('zy_guard_ghost_row', '%1 background starts in %2 days, never opened').replace('%1', String(x.n)).replace('%2', zygiskGuardTenth(x.days10)),
+        T('zy_guard_ghost_restrict', 'Restrict'), function () { zygiskGuardGhost([x.pkg], true); }));
+    });
+    if (g.suggest.length > 1) {
+      const all = document.createElement('button');
+      all.type = 'button';
+      all.className = 'dev-zygisk-btn zy-ghost-all';
+      all.textContent = T('zy_guard_ghost_restrict_all', 'Restrict all (%s)').replace('%s', String(g.suggest.length));
+      all.onclick = function () { zygiskGuardGhost(g.suggest.map(function (x) { return x.pkg; }), true); };
+      gh.appendChild(all);
+    }
+    if (!g.suggest.length && !g.held.length) {
+      if (g.histDays10 < g.ghostDays * 10) gh.appendChild(logReportNote(T('zy_guard_ghost_wait', 'Suggestions need %1 days of start history; there are %2 so far.').replace('%1', String(g.ghostDays)).replace('%2', zygiskGuardTenth(g.histDays10))));
+      else gh.appendChild(logReportNote(T('zy_guard_ghost_none', 'No app qualifies: every app that starts in the background is either opened by you, protected, or still in use according to Android.')));
+    }
+    card.appendChild(gh);
+  }
+  if (g.bg.length) {
+    const bb = document.createElement('details');
+    bb.className = 'zy-evidence';
+    const bs = document.createElement('summary');
+    bs.textContent = T('zy_guard_bg_title', 'Background starts · %s days').replace('%s', zygiskGuardTenth(g.histDays10));
+    bb.appendChild(bs);
+    g.bg.forEach(function (x) {
+      bb.appendChild(logReportRow(nm(x.pkg), T('zy_guard_bg_row', '%1 in the background · %2 with the screen off · opened %3').replace('%1', String(x.n)).replace('%2', String(x.off)).replace('%3', String(x.top)), false));
+    });
+    bb.appendChild(logReportNote(T('zy_guard_bg_note', 'Process starts the user did not ask for, summed across reboots since the guard was switched on: starts with the screen off plus starts with the screen on minus the ones as the app in front. Every one wakes the CPU and initialises the app.')));
+    card.appendChild(bb);
   }
   if (g.nights.length) {
     const nb = document.createElement('details');
@@ -13710,13 +13794,33 @@ function zygiskGuardCard() {
     ev.appendChild(sm);
     g.events.slice().reverse().forEach(function (e) {
       let what = T('zy_guard_ev_' + e.what, e.what.replace(/_/g, ' ')) + (e.n ? ' · ' + e.n : '');
-      if (e.extra === 'loop' || e.extra === 'waker') what += ' · ' + zygiskGuardWhy(e.extra);
+      if (/^(loop|waker|loop_on|ghost)$/.test(e.extra)) what += ' · ' + zygiskGuardWhy(e.extra);
       else if (/^\d+$/.test(e.extra) && /^lifted_/.test(e.what)) what += ' · ' + T('zy_guard_after', 'starts while restricted: %s').replace('%s', e.extra);
       ev.appendChild(logReportRow(zygiskGuardClock(e.at) + ' · ' + nm(e.pkg), what, false));
     });
     card.appendChild(ev);
   }
   return card;
+}
+async function zygiskGuardGhost(pkgs, restrict) {
+  if (_zygiskModeBusy) return;
+  pkgs = (pkgs || []).filter(dozePkgOk).slice(0, 8);
+  if (!pkgs.length) return;
+  _zygiskModeBusy = true;
+  uiSound(restrict ? 'toggle_on' : 'toggle_off');
+  const parts = pkgs.map(function (p, i) {
+    return ['s' + i, 'sh ' + shQuote(MD + '/runtime/asb_zygisk_guard.sh') + (restrict ? ' ghost-restrict ' : ' ghost-release ') + shQuote(p)];
+  });
+  parts.push(['guard', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_guard.sh') + ' status']);
+  let b = null;
+  try { b = await runBatch(parts); } catch (e) { b = null; }
+  _zygiskModeBusy = false;
+  let done = 0;
+  pkgs.forEach(function (p, i) { if (b && b['s' + i] && /result=(restricted|released)/.test(b['s' + i].stdout || '')) done++; });
+  if (b && b.guard && b.guard.errno === 0) _zyGuard = zygiskGuardParse(b.guard.stdout);
+  toast(done ? (restrict ? T('zy_guard_ghost_done_on', 'Background restricted') : T('zy_guard_ghost_done_off', 'Background given back'))
+             : T('zy_mode_failed', 'Could not change the mode'), done ? 'good' : 'bad');
+  if (_zygiskOpen) zygiskPageRender(window._asbZygiskLinkData || null);
 }
 async function zygiskGuardSet(level) {
   if (_zygiskModeBusy) return;
