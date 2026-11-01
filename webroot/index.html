@@ -13527,10 +13527,12 @@ async function zygiskAutoSet(action) {
       ['set', 'sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' auto-' + action],
       ['link', 'sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' link-status'],
       ['guard', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_guard.sh') + ' status'],
-      ['aot', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_aot.sh') + ' status']
+      ['aot', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_aot.sh') + ' status'],
+      ['engine', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_link.sh') + ' status']
     ]);
   } catch (e) { b = null; }
   _zygiskModeBusy = false;
+  if (b && b.engine && b.engine.errno === 0) _zyLink = zygiskLinkParse(b.engine.stdout);
   const out = b && b.set ? (b.set.stdout || '') : '';
   const result = (/^result=([a-z_]+)/m.exec(out) || [])[1] || 'failed';
   const ok = (action === 'enable' && result === 'enabled') || (action === 'refresh' && result === 'refreshed') || (action === 'disable' && result === 'disabled');
@@ -13604,8 +13606,10 @@ async function zygiskModeSet(id) {
   const pairs = Object.keys(vals).map(function (k) { return ' ' + shQuote(k) + ' ' + shQuote(vals[k]); }).join('');
   const write = 'sh ' + shQuote(writer) + ' set-many --snapshot ' + shQuote(snap) + pairs +
     ' && { sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' sync >/dev/null 2>&1; echo asb-mode-ok; }';
-  const b = await runBatch([['write', write], ['link', 'sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' link-status']]);
+  const b = await runBatch([['write', write], ['link', 'sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' link-status'],
+    ['engine', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_link.sh') + ' status']]);
   _zygiskModeBusy = false;
+  if (b && b.engine && b.engine.errno === 0) _zyLink = zygiskLinkParse(b.engine.stdout);
   const ok = /(^|\n)asb-mode-ok$/.test(b.write.stdout || '');
   if (ok) {
     Object.keys(vals).forEach(function (k) { _cfgVals[k] = vals[k]; });
@@ -13681,6 +13685,7 @@ function zygiskPageRender(d) {
   act.appendChild(deviceZygiskOverview(d));
   act.appendChild(zygiskPageRows(d));
   body.appendChild(act);
+  body.appendChild(zygiskLinkCard());
   body.appendChild(zygiskGuardCard());
   body.appendChild(zygiskAotCard());
   const apps = logReportSec(T('zy_sec_apps', 'Observed apps and safe mode'));
@@ -14022,6 +14027,101 @@ async function zygiskAotSet(on) {
            : T('zy_mode_failed', 'Could not change the mode'), ok ? 'good' : 'bad');
   if (_zygiskOpen) zygiskPageRender(window._asbZygiskLinkData || null);
 }
+/* fix286: one engine. runtime/asb_zygisk_link.sh joins what each part of ASB knows about an app:
+ * the Zygisk start ledger, the LSPosed modules scoped to it, its cold-start median from Android's
+ * launch log, the background guard, ART and the protection lists. From the cold-start median (or,
+ * before three starts are measured, the LSPosed modules on it) each app gets a launch class the
+ * Zygisk companion looks up at the next cold start: the governor keeps the lift twice as long for
+ * a slow starter and half as long for a fast one. Other Zygisk modules and LSPosed are read only. */
+let _zyLink = null;
+function zygiskLinkParse(out) {
+  const g = { ok: false, kv: {}, apps: [], zmods: [], cmp: null };
+  const num = function (v) { const n = parseInt(v, 10); return isFinite(n) && n > 0 ? n : 0; };
+  String(out || '').split('\n').forEach(function (ln) {
+    ln = ln.trim();
+    if (ln === 'version=1') { g.ok = true; return; }
+    const m = /^([a-z_]+)=([A-Za-z0-9_-]*)$/.exec(ln);
+    if (m) { g.kv[m[1]] = m[2]; return; }
+    const f = ln.split('|');
+    if (f[0] === 'app' && f.length >= 15 && dozePkgOk(f[1] || '')) {
+      const cls = function (v) { return /^(slow|fast|normal)$/.test(v) ? v : 'normal'; };
+      g.apps.push({ pkg: f[1], cls: cls(f[2]), next: cls(f[3]), why: /^(measured|hooks|excluded)$/.test(f[4]) ? f[4] : '-',
+        n: num(f[5]), med: num(f[6]), hooks: num(f[7]),
+        mods: f[8] === '-' ? [] : f[8].split(',').filter(dozePkgOk).slice(0, 3),
+        use: num(f[9]), bg: /^\d+$/.test(f[10]) ? num(f[10]) : -1,
+        guard: /^[a-z_]+$/.test(f[11]) ? f[11] : '-', art: /^[a-z-]+$/.test(f[12]) ? f[12] : '-',
+        prot: /^(notif|keep)$/.test(f[13]) ? f[13] : '-', mod: f[14] === '1' });
+    } else if (f[0] === 'zmod' && f.length >= 4 && /^[A-Za-z0-9_.-]+$/.test(f[1] || '')) {
+      g.zmods.push({ id: f[1], on: f[2] === '1', name: String(f.slice(3).join('|')).replace(/[^A-Za-z0-9 ._()+-]/g, '').slice(0, 48) || f[1] });
+    } else if (f[0] === 'cmp' && f.length >= 5) {
+      g.cmp = { hooked: num(f[1]), hookedN: num(f[2]), plain: num(f[3]), plainN: num(f[4]) };
+    }
+  });
+  return g;
+}
+function zygiskLinkAppValue(a, nm) {
+  const parts = [T('zy_link_cls_' + a.cls, a.cls === 'slow' ? 'slow start' : a.cls === 'fast' ? 'fast start' : 'usual start')];
+  if (a.why === 'measured' && a.med > 0) parts.push(T('zy_link_app_med', 'median %1 ms over %2').replace('%1', String(a.med)).replace('%2', String(a.n)));
+  else if (a.why === 'hooks') parts.push(T('zy_link_app_unmeasured', '%s of 3 cold starts measured').replace('%s', String(a.n)));
+  else if (a.why === 'excluded') parts.push(T('zy_link_app_excluded', 'protected system app, never classed'));
+  if (a.next !== a.cls && a.why !== 'excluded') parts.push(T('zy_link_app_next', 'next update: %s').replace('%s', T('zy_link_cls_' + a.next, a.next === 'slow' ? 'slow start' : a.next === 'fast' ? 'fast start' : 'usual start')));
+  if (a.hooks > 0) parts.push(T('zy_link_app_mods', 'LSPosed: %s').replace('%s', a.mods.map(nm).join(', ') + (a.hooks > a.mods.length ? ' +' + (a.hooks - a.mods.length) : '')));
+  if (a.guard !== '-') parts.push(T('zy_link_app_guard', 'background restricted'));
+  if (a.art !== '-') parts.push(T('zy_link_app_art', 'ART %s').replace('%s', a.art.replace(/-/g, '\u2011')));
+  if (a.prot === 'notif') parts.push(T('zy_link_app_notif', 'notification fix'));
+  else if (a.prot === 'keep') parts.push(T('zy_link_app_keep', 'Doze keep list'));
+  if (a.mod) parts.push(T('zy_link_app_ismod', 'LSPosed module, never restricted'));
+  return parts.join(' · ');
+}
+function zygiskLinkCard() {
+  const g = _zyLink || zygiskLinkParse('');
+  const kv = g.kv;
+  const card = logReportSec(T('zy_link_title', 'One engine: Zygisk · governor · LSPosed'));
+  card.appendChild(logReportNote(T('zy_link_desc', 'The Zygisk companion hears every app start, LSPosed tells which apps carry hook modules and Android\'s launch log measures each cold start. From that ASB sorts the apps you open into slow and fast starters: the governor keeps the cold-start lift twice as long for a slow one and ends it at half for a fast one. The background guard never restricts an LSPosed module app, and an app your root manager hides root from never keeps ASB loaded.')));
+  if (!g.ok) { card.appendChild(logReportNote(T('zy_link_unread', 'Not read yet.'))); return card; }
+  const clock = function (sec) { return sec > 0 ? zygiskGuardClock(sec) : '-'; };
+  let cls;
+  if (kv.launch !== '1' || kv.enabled !== '1') cls = T('zy_link_cls_off', 'off - needs the cold-start lift (Response or Full mode)');
+  else if (kv.classes !== 'on') cls = T('zy_link_cls_none', 'no app classed yet - an app needs 3 measured cold starts or LSPosed modules on it');
+  else cls = T('zy_link_cls_val', '%1 slow · %2 fast · built at %3').replace('%1', kv.classes_slow || '0').replace('%2', kv.classes_fast || '0').replace('%3', clock(parseInt(kv.classes_at, 10) || 0));
+  card.appendChild(logReportRow(T('zy_link_row_classes', 'Launch classes'), cls, false));
+  if (kv.classes === 'on' && kv.comp_state === '1' && kv.comp_supported !== '1')
+    card.appendChild(logReportNote(T('zy_link_old_lib', 'The Zygisk library in use is older than launch classes: they apply once the module\'s libraries are rebuilt and the phone restarts. Until then every app gets the usual lift.'), true));
+  const gv = function (k) { return /^\d+$/.test(kv[k] || '') ? kv[k] : null; };
+  if (gv('gov_long') !== null)
+    card.appendChild(logReportRow(T('zy_link_row_gov', 'Governor this boot'), T('zy_link_gov_val', 'slow starts %1 · fast starts %2 · tap lifts ended early %3')
+      .replace('%1', gv('gov_long')).replace('%2', gv('gov_short') || '0').replace('%3', gv('gov_trims') || '0'), false));
+  else card.appendChild(logReportRow(T('zy_link_row_gov', 'Governor this boot'), T('zy_link_gov_none', 'not reported by the running governor'), false));
+  if (kv.lsposed === '1') {
+    const lv = kv.lsposed_modules === '-' ? T('zy_link_lsp_unread', 'installed; its database could not be read')
+      : T('zy_link_lsp_val', '%1 module(s) on · %2 app(s) hooked · framework %3 · System UI %4').replace('%1', kv.lsposed_modules || '0')
+        .replace('%2', kv.lsposed_apps || '0').replace('%3', kv.lsposed_system || '0').replace('%4', kv.lsposed_sysui || '0');
+    card.appendChild(logReportRow('LSPosed', lv, false));
+  } else card.appendChild(logReportRow('LSPosed', T('zy_link_lsp_none', 'not installed'), false));
+  card.appendChild(logReportRow(T('zy_link_row_zmods', 'Other Zygisk modules'), g.zmods.length
+    ? g.zmods.map(function (z) { return z.name + (z.on ? '' : ' (' + T('zy_link_zmod_off', 'off') + ')'); }).join(', ')
+    : T('zy_link_zmods_none', 'none'), false));
+  if (parseInt(kv.denylist_spawns, 10) > 0)
+    card.appendChild(logReportRow(T('zy_link_row_deny', 'Apps hidden from root'), T('zy_link_deny_val', '%s start(s) this boot · ASB never stays loaded in them').replace('%s', kv.denylist_spawns), false));
+  if (g.cmp && g.cmp.hooked > 0 && g.cmp.plain > 0)
+    card.appendChild(logReportNote(T('zy_link_cmp', 'Median cold start: apps with LSPosed modules %1 ms (%2 apps), without %3 ms (%4 apps). These are different apps, so the gap is not the cost of the hooks alone.')
+      .replace('%1', String(g.cmp.hooked)).replace('%2', String(g.cmp.hookedN)).replace('%3', String(g.cmp.plain)).replace('%4', String(g.cmp.plainN))));
+  if (g.apps.length) {
+    const pk = [];
+    g.apps.forEach(function (a) { pk.push(a.pkg); a.mods.forEach(function (m) { pk.push(m); }); });
+    const names = dozeKeepLabels(pk);
+    const nm = function (p) { return names[p] || p; };
+    const box = document.createElement('details'); box.className = 'zy-evidence'; box.open = true;
+    const sm = document.createElement('summary');
+    sm.textContent = T('zy_link_apps', 'Each app: what ASB knows and does (%s)').replace('%s', String(g.apps.length));
+    box.appendChild(sm);
+    g.apps.forEach(function (a) { box.appendChild(logReportRow(nm(a.pkg), zygiskLinkAppValue(a, nm), false)); });
+    card.appendChild(box);
+  }
+  const note = logReportNote(T('zy_link_note', 'Classes are rebuilt every 30 minutes from the newest data, and an app\'s class applies from its next cold start. ASB only reads LSPosed and the other Zygisk modules: it never enables, disables or changes them.'));
+  note.classList.add('dev-evidence'); card.appendChild(note);
+  return card;
+}
 async function zygiskPageLoad(user) {
   const seq = ++_zygiskLoadSeq;
   const status = _el('zygiskStatus'), btn = _el('zyRefresh');
@@ -14031,9 +14131,11 @@ async function zygiskPageLoad(user) {
   try {
     b = await runBatch([['link', 'sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' link-status'],
       ['guard', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_guard.sh') + ' status'],
-      ['aot', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_aot.sh') + ' status']]);
+      ['aot', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_aot.sh') + ' status'],
+      ['engine', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_link.sh') + ' status']]);
   } catch (e) { b = null; }
   if (seq !== _zygiskLoadSeq) return;
+  if (b && b.engine && b.engine.errno === 0) _zyLink = zygiskLinkParse(b.engine.stdout);
   if (btn) btn.disabled = false;
   const r = b ? b.link : null;
   if (b && b.guard && b.guard.errno === 0) _zyGuard = zygiskGuardParse(b.guard.stdout);
