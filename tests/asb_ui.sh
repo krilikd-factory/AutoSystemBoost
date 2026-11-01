@@ -3211,7 +3211,7 @@ for h, val, eta in zip(halves, ("bnDrain", "bnDrainOff"), ("liveEtaOn", "liveEta
 for k in ("lv_bucket", "lv_conf", "lv_alpha", "lv_app", "lv_basis", "lv_slot_heat", "lv_trend", "lv_lpm"):
     assert ('data-i18n="%s"' % k) in sb, "Smart reading %s missing or untranslated" % k
 assert 'id="bnSes"' not in sb and 'id="bnBasis"' in sb, "Basis did not take the sessions slot"
-g = s[s.index('<div class="live-metrics">'):s.index('<section class="stock-telemetry"')]
+g = s[s.index('<div class="live-metrics" id="liveMetrics">'):s.index('<section class="stock-telemetry"')]
 rows = g.count('<div class="live-row">')
 cells = len(re.findall(r'<div class="live-cell"(?: data-lvi="[a-z]+")?>', g))
 assert rows == 3 and cells == 9 and "live-cell-wide" not in g, "live grid is %d rows / %d cells, want 3 x 3" % (rows, cells)
@@ -3324,9 +3324,9 @@ s = open(sys.argv[1], encoding="utf-8").read()
 b = s[s.index('id="liveSmartBanner"'):s.index('id="liveStockRomBanner"')]
 assert b.index('id="bnDrainStrip"') < b.index('id="bnBucket"'), "drain pair is not the first row of the Smart card"
 assert 'data-i18n="lv_slot_heat"' in b and 'lv_slot_temp' not in b, "the usual-peak tile is still a bare temperature"
-st = s[s.index('id="liveStockRomBanner"'):s.index('<div class="live-metrics">')]
+st = s[s.index('id="liveStockRomBanner"'):s.index('<div class="live-metrics" id="liveMetrics">')]
 assert 'id="bnStockDrain"' in st, "stock card lost its battery current"
-g = s[s.index('<div class="live-metrics">'):s.index('<section class="stock-telemetry"')]
+g = s[s.index('<div class="live-metrics" id="liveMetrics">'):s.index('<section class="stock-telemetry"')]
 for i in ("liveCpu", "liveSkin", "liveSurface", "liveState", "liveGpu", "liveHeadroom", "liveCapSrc", "liveClamp", "liveLearner"):
     assert ('id="%s"' % i) in g, "metric %s lost" % i
 for i in ("liveEtaOn", "liveEtaOff"):
@@ -6984,6 +6984,63 @@ assert 'if (_lb.meter) lvMeterApply(' in pl and 'if (_lb.rom) stockTelemetryAppl
 assert 'await lvMeterPoll(false);' not in pl[:pl.index('runBatch(liveBatchParts')], 'the meter is still read in its own shell first'
 P
 echo 'PASS webui fix287 waits: Device page paints loading or the last snapshot before the collector and keeps it on failure, Monitor cache without between-read counters and one shell per pass, picker history and other apps, busy states painted before root calls'
+)
+
+t_webui_fix290_instant_runtime() (
+  set -eu
+  ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"; H="$ROOT/webroot/index.html"
+  fail() { echo "FAIL webui fix290 instant pages: $*" >&2; exit 1; }
+  command -v node >/dev/null 2>&1 || { echo 'SKIP webui fix290 instant pages: no node'; exit 0; }
+  T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+  {
+    cat <<'JS_FIX290'
+const window=globalThis, ASB_LANG='en', MD='/data/adb/modules/AutoSystemBoost';
+let _selectedProfile='balanced', _rpOpen=true;
+const store={};const localStorage={getItem:k=>store[k]||null,setItem:(k,v)=>store[k]=String(v),removeItem:k=>delete store[k]};
+function mk(tag='div'){const e={tagName:tag,children:[],dataset:{},className:'',title:'',textContent:'',disabled:false,classList:{set:new Set(),add(x){this.set.add(x)},remove(x){this.set.delete(x)},toggle(x,on){on?this.set.add(x):this.set.delete(x)},contains(x){return this.set.has(x)}},setAttribute(){},appendChild(c){e.children.push(c);return c;},insertBefore(c){e.children.unshift(c);return c;},querySelector(sel){return sel==='.live-cell-label'?e.label:null;}};return e;}
+const ids={};['liveCpu','liveSkin','liveSurface','liveState','liveGpu','liveHeadroom','liveCapSrc','liveClamp','liveLearner'].forEach(id=>{const e=mk();e.id=id;e.parentElement=mk();e.parentElement.label=mk();ids[id]=e;});
+const reportBody=mk(),reportStatus=mk(),rpRefresh=mk();const liveMetrics=mk();
+function _el(id){if(id==='reportBody')return reportBody;if(id==='reportStatus')return reportStatus;if(id==='rpRefresh')return rpRefresh;if(id==='liveMetrics')return liveMetrics;return ids[id]||null;}
+const document={createElement:mk,hidden:false};let renders=0,yields=0,runs=0,rawFixture='good1',runGate=null;
+function T(k,d){return d;}function deviceInfoStamp(){return 'time';}function requestAnimationFrame(f){f();}function asbFitPages(){}
+function asbPaintYield(){yields++;return Promise.resolve();}
+function run(){runs++;return runGate?new Promise(r=>runGate(r)):Promise.resolve({errno:0,stdout:rawFixture});}function runText(r){return r.stdout||'';}
+JS_FIX290
+    sed -n '/^const LV_MON_CACHE_KEY/,/^function lvStale/p' "$H" | sed '$d'
+    sed -n '/^const LOG_REPORT_CACHE_KEY/,/^async function asbLogReportLoad/p' "$H" | sed '$d'
+    sed -n '/^async function asbLogReportLoad/,/^function deviceLsposedCollect/p' "$H" | sed '$d'
+    cat <<'JS_FIX290'
+function parseLogReport(raw){if(raw==='none')return {error:'no_capture'};return raw.indexOf('good')===0?{ok:true,raw:raw}:{ok:false};}
+function logReportRender(d){renders++;reportBody.children=[mk()];window._asbLogReportData=d;reportStatus.textContent='fresh '+d.raw;}
+function logReportSec(t){const e=mk();e.textContent=t;return e;}function logReportNote(t){const e=mk();e.textContent=t;return e;}
+const chk=(c,m)=>{if(!c)throw new Error(m);};
+(async()=>{
+  ids.liveCpu.textContent='39°C';ids.liveCpu.className='live-cell-value metric-good';ids.liveCpu.title='tip';ids.liveCpu.parentElement.label.textContent='CPU';
+  lvMonTilesCapture('balanced');chk(_lvMonCache.tiles.values.liveCpu.v==='39°C','live tile not captured');
+  chk(!store[LV_MON_CACHE_KEY].includes('cpustat')&&!store[LV_MON_CACHE_KEY].includes('thermal_trend'),'raw between-read counters entered the view cache');
+  ids.liveCpu.textContent='—';chk(lvMonTilesRestore(),'matching snapshot did not restore');chk(ids.liveCpu.textContent==='39°C'&&ids.liveCpu.title==='tip'&&ids.liveCpu.parentElement.label.textContent==='CPU','display snapshot incomplete');
+  _selectedProfile='battery';chk(!lvMonTilesRestore(),'snapshot crossed profile ownership');_selectedProfile='balanced';
+  _lvMonCache.tiles.at=Date.now()-LV_MON_CACHE_MAX_MS-1;chk(!lvMonTilesRestore(),'expired live snapshot restored');_lvMonCache.tiles.at=Date.now();
+  let releaseFirst;runGate=r=>releaseFirst=r;let p=asbLogReportLoad();await Promise.resolve();await Promise.resolve();await Promise.resolve();chk(yields===1&&runs===1,'paint yield missing');
+  chk(reportBody.children.length===1&&reportBody.children[0].className==='dev-loading','first report has no painted loading card');
+  releaseFirst({errno:0,stdout:'good1'});runGate=null;await p;chk(window._asbLogReportRaw==='good1'&&renders===1&&store[LOG_REPORT_CACHE_KEY].includes('good1'),'fresh report not cached');
+  let release;runGate=r=>release=r;rawFixture='bad';runs=0;
+  p=asbLogReportLoad();await Promise.resolve();await Promise.resolve();await Promise.resolve();
+  chk(reportBody.classList.contains('lv-stale')&&reportStatus.textContent.includes('Snapshot from time'),'cached report not shown immediately');
+  const again=asbLogReportLoad();await again;chk(runs===1,'concurrent report opens started duplicate digest shells');release({errno:0,stdout:'bad'});await p;
+  chk(renders===1&&reportBody.children.length===1&&reportStatus.textContent.includes('Could not refresh'),'failed refresh erased the complete report');
+  chk(window._asbLogReportRaw==='good1','failed refresh replaced the last good cache');
+  runGate=null;rawFixture='good2';await asbLogReportLoad();chk(renders===2&&window._asbLogReportRaw==='good2'&&!reportBody.classList.contains('lv-stale'),'fresh digest did not replace snapshot');
+  rawFixture='none';await asbLogReportLoad();chk(!store[LOG_REPORT_CACHE_KEY]&&!window._asbLogReportRaw,'no-capture response left a stale report cache');
+  console.log('ok');
+})().catch(e=>{console.error(e);process.exit(1)});
+JS_FIX290
+  } > "$T/test.js"
+  out="$(node "$T/test.js" 2>&1)" || fail "$out"; [ "$out" = ok ] || fail "$out"
+  grep -Fq 'if (lvMonTilesRestore()) lvStale(true);' "$H" || fail 'Monitor does not paint its live snapshot on entry'
+  grep -Fq 'runBatch(liveBatchParts(visible, prime))' "$H" || fail 'Monitor priming added a separate shell'
+  grep -Fq 'await asbPaintYield();' "$H" || fail 'report root read is not behind a painted frame'
+  echo 'PASS webui fix290 instant pages: nine-cell view snapshot, profile/language/TTL bounds, no source counters, one-time prime in existing shell, cached/painted log report and failure preservation'
 )
 
 t_webui_device_page_runtime() (

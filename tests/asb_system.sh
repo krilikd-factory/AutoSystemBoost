@@ -6790,7 +6790,7 @@ before("const r = await run('sh ' + MD + '/apply_profile.sh ' + p);", 'ui(previo
 poll = s[s.index('async function pollLive(visible) {'):s.index('\nfunction fmtStock', s.index('async function pollLive(visible) {')) if '\nfunction fmtStock' in s[s.index('async function pollLive(visible) {'):] else len(s)]
 terminal = poll.index("if (_selectedProfile === 'stock') {")
 # fix278: the governor state is read in the pass's one batched shell (liveBatchParts).
-state_read = poll.index("const _lb = await runBatch(liveBatchParts(visible));")
+state_read = poll.index("const _lb = await runBatch(liveBatchParts(visible, prime));")
 assert "parts = [['state', 'cat /dev/.asb/state']]" in s, 'the batched pass no longer reads the governor state first'
 assert terminal < state_read, 'Stock terminal boundary occurs after stale state read'
 stock_branch = poll[terminal:state_read]
