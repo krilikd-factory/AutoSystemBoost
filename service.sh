@@ -3808,6 +3808,10 @@ asb_gov_liveness() {
     if [ -f /data/adb/asb/zygisk_observer/auto ]; then
       ASB_ZYGISK_MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk.sh" auto-refresh >/dev/null 2>&1
     fi
+    if [ -f "$MODDIR/runtime/asb_zygisk_link.sh" ] && { [ -f /data/adb/asb/zygisk_guard ] || \
+         grep -q '^[[:space:]]*zygisk_enabled=1' "$MODDIR/config/governor.conf" 2>/dev/null; }; then
+      MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_link.sh" classes >/dev/null 2>&1
+    fi
     # Bring the route link watcher back if it died.
 #
 # It is started once, post-boot, and never checked again. `ip monitor` blocks on a netlink
