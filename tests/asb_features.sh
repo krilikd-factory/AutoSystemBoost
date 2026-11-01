@@ -8283,7 +8283,7 @@ grep -q 'com.sys.app' "$T/d/zygisk_guard_log" && fail "a system app was consider
 grep -q '|com.already.app|10|already_restricted|$' "$T/d/zygisk_guard_log" || fail "an app restricted by the owner was taken over"
 grep -q '^com.already.app|' "$T/d/zygisk_guard_active" && fail "an external restriction was recorded as the guard's"
 out="$(run status)"
-printf '%s\n' "$out" | grep -q '^active|com.loop.app|[0-9]*|10|loop|0$' && printf '%s\n' "$out" | grep -qx 'ledger=1' || fail "status: $out"
+printf '%s\n' "$out" | grep -q '^active|com.loop.app|[0-9]*|10|loop|0|0$' && printf '%s\n' "$out" | grep -qx 'ledger=1' || fail "status: $out"
 ledger 40; age_prev 4000; run tick
 [ "$(grep -c '|limited|loop$' "$T/d/zygisk_guard_log")" = 1 ] || fail "a stale sample acted or an app was limited twice"
 echo screen=1 > "$T/state"; run tick
@@ -8362,7 +8362,7 @@ led 24 6 24 70; age prev 1200; run tick
 [ "$(mode com.feed.app)" = ignore ] && fail "4 starts in a screen-off period were treated as a waker"
 led 28 7 28 90; age prev 1200; run tick
 [ "$(mode com.feed.app)" = ignore ] || fail "8 starts in one screen-off period: not restricted"
-grep -q '^com.feed.app|default|default|[0-9]*|8|waker|28$' "$T/d/zygisk_guard_active" || fail "waker record: $(cat "$T/d/zygisk_guard_active")"
+grep -q '^com.feed.app|default|default|[0-9]*|8|waker|28|0$' "$T/d/zygisk_guard_active" || fail "waker record: $(cat "$T/d/zygisk_guard_active")"
 grep -q '|com.feed.app|8|limited|waker$' "$T/d/zygisk_guard_log" || fail "waker event: $(cat "$T/d/zygisk_guard_log")"
 [ "$(mode com.slow.app)" = ignore ] && fail "an app with 2 starts was restricted"
 [ "$(mode com.oem.sys)" = ignore ] && fail "a system app was restricted"
@@ -8370,7 +8370,7 @@ grep -q '|com.feed.app|8|limited|waker$' "$T/d/zygisk_guard_log" || fail "waker 
 led 30 7 33 95; age prev 1200; run tick
 [ "$(grep -c 'com.whatsapp' "$T/d/zygisk_guard_log")" = 1 ] || fail "a protected app was logged on every tick"
 [ "$(grep -c '|limited|' "$T/d/zygisk_guard_log")" = 1 ] || fail "an app was restricted twice"
-run status | grep -qx 'active|com.feed.app|[0-9]*|8|waker|2' || fail "starts while restricted: $(run status | grep '^active')"
+run status | grep -qx 'active|com.feed.app|[0-9]*|8|waker|2|0' || fail "starts while restricted: $(run status | grep '^active')"
 age base 5400
 echo screen=1 > "$T/state"; led 31 7 34 99; run screen_on
 [ "$(mode com.feed.app)" = default ] || fail "screen-on did not give the background back"
@@ -8395,7 +8395,7 @@ grep -q 'zygisk_guard_night' "$ROOT/uninstall.sh" || fail "uninstall.sh does not
 H="$ROOT/webroot/index.html"
 {
   echo "const T = (k, d) => d; const logReportDur = m => Math.round(m) + ' min'; const logReportRow = (k, v) => ({ k: k, v: v });"
-  for fn in dozePkgOk zygiskGuardParse zygiskGuardClock zygiskGuardWhy zygiskGuardNightRow; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  for fn in dozePkgOk zygiskGuardParse zygiskGuardClock zygiskGuardDay zygiskGuardWhy zygiskGuardNightRow; do sed -n "/^function $fn(/,/^}/p" "$H"; done
   cat <<'EOF'
 let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
 const g = zygiskGuardParse(['version=1', 'enabled=1', 'level=wakers', 'ledger=1', 'threshold=6', 'waker_min=8',
@@ -8415,6 +8415,146 @@ EOF
 } > "$T/g.js"
 node "$T/g.js" || fail "WebUI parse/format"
 echo "PASS zygisk guard wakers: 8+ starts in one screen-off period restrained until screen-on, starts while restricted recorded, bounded night summaries, protected apps logged once per period"
+)
+
+t_zygisk_guard_screen_on_runtime() (
+# Runtime (fix283): the guard while the screen is on, and apps that run in the background but
+# are never opened. (1) A user app whose BACKGROUND process starts (screen-on starts minus
+# top-app starts) grow by 6+ in 5 minutes while nothing of it is visible is restricted for 30
+# minutes - lifted early when the app comes into use, never by the screen-on/off edges.
+# (2) Start counts are kept across boots; after 3 days an app with 30+ background starts, no
+# top-app start and Android calling it idle is suggested; one tap restricts it until the user
+# opens it, releases it or switches the guard off, and the background starts per day before and
+# after are reported. Real script and real procstate helper on stubs.
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+S="$ROOT/runtime/asb_zygisk_guard.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL zygisk guard screen-on: $*" >&2; exit 1; }
+mkdir -p "$T/bin" "$T/d" "$T/run" "$T/tmp" "$T/mod/runtime"
+cp "$ROOT/runtime/asb_procstate.sh" "$T/mod/runtime/"
+printf 'com.spin.app\ncom.seen.app\ncom.open.app\ncom.ghost.app\ncom.busy.app\ncom.whatsapp\ncom.own.app\n' > "$T/users"
+: > "$T/ops"; : > "$T/wl"; echo boot-1 > "$T/bootid"
+printf '  #1: fg     TOP  LCM 2001:com.seen.app/u0a301 act:activities\n  #5: cch+5 CEM ---- 2002:com.spin.app/u0a302\n  #6: cch+5 CEM ---- 2003:com.whatsapp/u0a303\n' > "$T/lru"
+printf 'com.ghost.app true\ncom.busy.app false\ncom.whatsapp true\ncom.own.app true\n' > "$T/idle"
+cat > "$T/bin/pm" <<'X'
+#!/bin/sh
+sed 's/^/package:/' "$ZG_T/users"
+X
+cat > "$T/bin/dumpsys" <<'X'
+#!/bin/sh
+[ "$1 $2" = "deviceidle whitelist" ] && cat "$ZG_T/wl"
+[ "$1 $2" = "activity lru" ] && cat "$ZG_T/lru"
+exit 0
+X
+cat > "$T/bin/am" <<'X'
+#!/bin/sh
+[ "$1" = get-inactive ] && echo "Idle=$(awk -v p="$2" '$1 == p { print $2 }' "$ZG_T/idle")"
+X
+cat > "$T/bin/appops" <<'X'
+#!/bin/sh
+f="$ZG_T/ops"
+if [ "$1" = get ]; then
+  awk -F'|' -v p="$2" '$1 == p { if ($4 != "default") print "Uid mode: " $2 ": " $4; if ($3 != "default") print $2 ": " $3 }' "$f"; exit 0
+fi
+shift; u=0; [ "$1" = --uid ] && { u=1; shift; }
+grep -q "^$1|$2|" "$f" || echo "$1|$2|default|default" >> "$f"
+awk -F'|' -v OFS='|' -v p="$1" -v o="$2" -v m="$3" -v u="$u" '$1 == p && $2 == o { if (u) $4 = m; else $3 = m } { print }' "$f" > "$f.t" && mv "$f.t" "$f"
+X
+chmod +x "$T/bin/"*
+sleep 3600 & _gov=$!; echo "$_gov" > "$T/govpid"
+trap 'kill $_gov 2>/dev/null; rm -rf "$T"' EXIT
+led() { printf 'L\tcom.spin.app\t0\t%s\t0\t0\nL\tcom.seen.app\t0\t%s\t0\t0\nL\tcom.open.app\t0\t%s\t%s\t0\nL\tcom.whatsapp\t0\t%s\t0\t0\nL\tcom.ghost.app\t%s\t%s\t0\t0\nL\tcom.busy.app\t%s\t%s\t0\t0\nL\tcom.own.app\t0\t%s\t0\t0\n' "$@" > "$T/run/state.arm64-v8a.tsv"; }
+run() { PATH="$T/bin:$PATH" ZG_T="$T" MODDIR="$T/mod" ASB_ZG_DIR="$T/d" ASB_ZYGISK_RUN_DIR="$T/run" ASB_ZG_TMP="$T/tmp" ASB_ZG_STATE="$T/state" ASB_ZG_GOVPID="$T/govpid" ASB_ZG_BOOTID="$T/bootid" ASB_ZG_GHOST_EVERY_S=0 sh "$S" "$@"; }
+mode() { awk -F'|' -v p="$1" '$1 == p && $2 == "RUN_ANY_IN_BACKGROUND" { print $3 }' "$T/ops"; }
+age() { sed -i "1s/^t .*/t $(( $(date +%s) - $2 ))/" "$T/tmp/zygisk_guard.$1"; }
+[ "$(run ghost-restrict com.ghost.app)" = result=disabled ] || fail "a ghost was restricted with the guard off"
+run enable loops >/dev/null
+echo screen=1 > "$T/state"
+led 2 2 2 2 2 1 1 1 1 2; run tick
+[ -s "$T/tmp/zygisk_guard.prev_on" ] || fail "no screen-on sample"
+led 10 10 12 12 9 1 1 1 1 9; age prev_on 300; run tick
+[ "$(mode com.spin.app)" = ignore ] || fail "a background restart loop with the screen on was not restricted"
+grep -Eq '^com.spin.app\|default\|default\|[0-9]+\|8\|loop_on\|10\|[0-9]+$' "$T/d/zygisk_guard_active" || fail "screen-on loop record: $(cat "$T/d/zygisk_guard_active")"
+until_s="$(grep '^com.spin.app|' "$T/d/zygisk_guard_active" | cut -d'|' -f8)"; [ $(( until_s - $(date +%s) )) -ge 1700 ] || fail "hold shorter than 30 min"
+[ "$(mode com.seen.app)" = ignore ] && fail "an app the user can see was restricted"
+[ "$(mode com.open.app)" = ignore ] && fail "an app the user keeps opening was restricted (top starts are not background)"
+grep -q '|com.whatsapp|7|protected|$' "$T/d/zygisk_guard_log" || fail "protected app not logged: $(cat "$T/d/zygisk_guard_log")"
+[ "$(mode com.own.app)" = ignore ] || fail "a looping unprotected app was skipped"
+run status | grep -Eqx 'active\|com.spin.app\|[0-9]+\|8\|loop_on\|0\|[0-9]+' || fail "status row: $(run status | grep '^active')"
+led 13 10 12 12 12 1 1 1 1 9; age prev_on 4000; run tick
+[ "$(grep -c '|limited|loop_on$' "$T/d/zygisk_guard_log")" = 2 ] || fail "a stale screen-on sample acted"
+echo screen=0 > "$T/state"; run tick
+[ "$(mode com.spin.app)" = ignore ] || fail "the screen-off edge lifted a screen-on hold"
+echo screen=1 > "$T/state"; run screen_on; run tick
+[ "$(mode com.spin.app)" = ignore ] || fail "the screen-on edge lifted a screen-on hold"
+printf '  #1: fg     TOP  LCM 2002:com.spin.app/u0a302 act:activities\n' > "$T/lru"; run tick
+[ "$(mode com.spin.app)" = default ] || fail "an app that came into use stayed restricted"
+grep -q '|com.spin.app|8|lifted_in_use|3$' "$T/d/zygisk_guard_log" || fail "in-use lift: $(tail -3 "$T/d/zygisk_guard_log")"
+awk -F'|' -v OFS='|' '$1 == "com.own.app" { $8 = 1 } { print }' "$T/d/zygisk_guard_active" > "$T/a" && mv "$T/a" "$T/d/zygisk_guard_active"
+run tick; [ "$(mode com.own.app)" = default ] && grep -q '|com.own.app|7|lifted_expired|' "$T/d/zygisk_guard_log" || fail "the 30-minute hold did not expire"
+[ -e "$T/d/zygisk_guard_active" ] && fail "active list not emptied"
+h="$T/d/zygisk_guard_hist"
+grep -q '^com.ghost.app 1 1 0 1 1 0$' "$h" || fail "history row: $(grep ghost "$h")"
+echo boot-2 > "$T/bootid"; led 1 1 1 1 1 20 25 20 25 1; run tick
+grep -q '^com.ghost.app 21 26 0 20 25 0$' "$h" && grep -q '^com.busy.app 21 26 0 20 25 0$' "$h" || fail "history across boots: $(grep -E 'ghost|busy' "$h")"
+run tick; grep -q '^com.ghost.app 21 26 0 20 25 0$' "$h" || fail "the same boot counted twice"
+run status | grep -q '^suggest|' && fail "suggested before 3 days of history"
+sed -i "1s/ [0-9]*\$/ $(( $(date +%s) - 4 * 86400 ))/" "$h"; run tick
+out="$(run status)"
+printf '%s\n' "$out" | grep -qx 'suggest|com.ghost.app|47|40' || fail "ghost not suggested: $out"
+printf '%s\n' "$out" | grep -q 'suggest|com.busy.app' && fail "an app Android calls in use was suggested"
+printf '%s\n' "$out" | grep -q 'suggest|com.whatsapp' && fail "a protected app was suggested"
+printf '%s\n' "$out" | grep -q 'suggest|com.open.app' && fail "an app with top-app starts was suggested"
+printf '%s\n' "$out" | grep -qx 'bg|com.ghost.app|47|21|26|0' || fail "background history line: $out"
+ZG_T="$T" "$T/bin/appops" set com.own.app RUN_ANY_IN_BACKGROUND ignore
+[ "$(run ghost-restrict com.own.app)" = result=already_restricted ] && [ "$(mode com.own.app)" = ignore ] || fail "the owner's restriction was taken over"
+awk -F'|' -v OFS='|' '$1 == "com.own.app" { $3 = "default" } { print }' "$T/ops" > "$T/o" && mv "$T/o" "$T/ops"
+[ "$(run ghost-restrict com.whatsapp)" = result=protected ] && [ "$(run ghost-restrict com.oem.sys)" = result=not_user_app ] && [ "$(run ghost-restrict 'a;b')" = result=bad_request ] || fail "unsafe ghost requests"
+[ "$(run ghost-restrict com.ghost.app)" = result=restricted ] && [ "$(mode com.ghost.app)" = ignore ] || fail "ghost restrict"
+grep -Eq '^com.ghost.app\|default\|default\|[0-9]+\|47\|4[0-9]\|0$' "$T/d/zygisk_guard_ghost" || fail "ghost record: $(cat "$T/d/zygisk_guard_ghost")"
+run status | grep -q '^suggest|com.ghost.app' && fail "a restricted ghost is still suggested"
+run status | grep -Eqx 'held\|com.ghost.app\|[0-9]+\|11[0-9]\|-1\|0' || fail "held line: $(run status | grep '^held')"
+awk -F'|' -v OFS='|' '$1 == "com.ghost.app" { $4 = $4 - 86400 } { print }' "$T/d/zygisk_guard_ghost" > "$T/g" && mv "$T/g" "$T/d/zygisk_guard_ghost"
+led 1 1 1 1 1 23 28 20 25 1; run tick
+run status | grep -Eqx 'held\|com.ghost.app\|[0-9]+\|11[0-9]\|60\|10' || fail "after-rate: $(run status | grep '^held')"
+echo screen=0 > "$T/state"; run tick; echo screen=1 > "$T/state"; run screen_on; run tick
+[ "$(mode com.ghost.app)" = ignore ] || fail "a screen edge released a ghost"
+led 1 1 1 1 1 23 28 20 25 1; sed -i 's/^\(L\tcom.ghost.app\t23\t28\t\)0/\11/' "$T/run/state.arm64-v8a.tsv"; run tick
+[ "$(mode com.ghost.app)" = default ] && grep -q '|com.ghost.app|47|lifted_opened|5$' "$T/d/zygisk_guard_log" || fail "opening the app did not release it: $(tail -2 "$T/d/zygisk_guard_log")"
+[ "$(run ghost-restrict com.busy.app)" = result=restricted ] || fail "manual restrict of an unsuggested user app"
+[ "$(run ghost-release com.busy.app)" = result=released ] && [ "$(mode com.busy.app)" = default ] || fail "ghost release"
+[ "$(run ghost-release com.busy.app)" = result=not_held ] || fail "double release"
+run ghost-restrict com.busy.app >/dev/null; out="$(run disable)"
+[ "$out" = result=disabled ] && [ "$(mode com.busy.app)" = default ] && [ ! -e "$T/d/zygisk_guard_ghost" ] || fail "disable kept a ghost restriction"
+run enable wakers >/dev/null; run ghost-restrict com.busy.app >/dev/null; run restore-all
+[ "$(mode com.busy.app)" = default ] || fail "uninstall left a ghost restriction"
+ls "$T/d" | grep -q zygisk_guard && fail "uninstall left files: $(ls "$T/d")"
+grep -q 'zygisk_guard_hist' "$ROOT/uninstall.sh" && grep -q 'zygisk_guard_ghost' "$ROOT/uninstall.sh" || fail "uninstall.sh does not remove the history and ghost files"
+H="$ROOT/webroot/index.html"
+{
+  echo "const T = (k, d) => d;"
+  for fn in dozePkgOk zygiskGuardParse zygiskGuardClock zygiskGuardDay zygiskGuardTenth zygiskGuardWhy zygiskGuardHeldText; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  cat <<'EOF'
+let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
+const g = zygiskGuardParse(['version=1', 'enabled=1', 'level=loops', 'ghost_min=30', 'ghost_days=3', 'history_days10=41',
+  'active|com.spin.app|1793490000|8|loop_on|0|1793491800', 'bg|com.ghost.app|47|21|26|0', 'bg|x y|1|1|1|1',
+  'suggest|com.ghost.app|47|40', 'suggest|com.ghost.app;rm|47|40',
+  'held|com.busy.app|1793400000|117|60|10', 'held|com.new.app|1793480000|90|-1|2', 'event|1793490000|com.busy.app|47|limited|ghost'].join('\n'));
+chk(g.histDays10 === 41 && g.ghostMin === 30 && g.ghostDays === 3, 'head: ' + JSON.stringify(g));
+chk(g.active.length === 1 && g.active[0].why === 'loop_on' && g.active[0].until === 1793491800, 'loop_on row: ' + JSON.stringify(g.active));
+chk(g.bg.length === 1 && g.bg[0].n === 47 && g.bg[0].off === 21 && g.bg[0].on === 26, 'bg: ' + JSON.stringify(g.bg));
+chk(g.suggest.length === 1 && g.suggest[0].days10 === 40, 'suggest: ' + JSON.stringify(g.suggest));
+chk(g.held.length === 2 && g.held[1].post10 === -1, 'held: ' + JSON.stringify(g.held));
+chk(g.events[0].extra === 'ghost' && zygiskGuardWhy('ghost') === 'app you never open' && zygiskGuardWhy('loop_on') === 'background loop, screen on', 'why');
+const t1 = zygiskGuardHeldText(g.held[0]), t2 = zygiskGuardHeldText(g.held[1]);
+chk(/11\.7\/day before → 6\/day after$/.test(t1) && /9\/day before · after: still counting$/.test(t2), 'held text: ' + t1 + ' | ' + t2);
+process.exit(bad ? 1 : 0);
+EOF
+} > "$T/g.js"
+node "$T/g.js" || fail "WebUI parse/format"
+grep -Fq "' ghost-restrict ' : ' ghost-release ') + shQuote(p)" "$H" || fail "the WebUI does not quote the package it sends"
+echo "PASS zygisk guard screen-on: background restart loops held 30 min while unseen, lifted on use or expiry and not by screen edges; cross-boot history, never-opened idle apps suggested, one-tap restriction released on open, release, off or uninstall"
 )
 
 t_zygisk_aot_runtime() (
