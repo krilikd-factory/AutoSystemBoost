@@ -12033,7 +12033,7 @@ function asbToggleLogMenu(ev) {
  * capture too: the digest folds in the still-open phase, so the numbers move as the
  * day goes on. */
 function parseLogReport(txt) {
-  const d = { ok: false, error: '', sections: {}, wl: [], wlive: [], wlt: [], wla: [], profs: [], phases: [], kwk: [], japps: [], jphases: [], jstates: [], hzs: [], hist: [], rapps: [], btdrops: [], cfg: {} };
+  const d = { ok: false, error: '', sections: {}, wl: [], wlive: [], wlt: [], wla: [], profs: [], phases: [], kwk: [], japps: [], jphases: [], jstates: [], jwhys: [], hzs: [], hist: [], rapps: [], btdrops: [], cfg: {} };
   if (!txt) { d.error = 'empty'; return d; }
   const lines = String(txt).split('\n');
   for (const raw of lines) {
@@ -12086,6 +12086,12 @@ function parseLogReport(txt) {
          signature of ceilings too tight for the moment. */
       if (kv.state) d.jstates.push({ state: kv.state, intv: +kv.intv || 0, frames: +kv.frames || 0,
         pct: +kv.pct || 0, jps: +kv.jps || 0 });
+    } else if (tag === 'jwhy') {
+      /* fix288: why the late frames were late, from Android's own per-frame times - GPU work
+         over a frame, a slow UI thread, slow draw commands, or none of these (pacing). */
+      if (kv.pkg && kv.state) d.jwhys.push({ pkg: kv.pkg, state: kv.state, frames: +kv.frames || 0, janky: +kv.janky || 0,
+        ui: +kv.ui || 0, draw: +kv.draw || 0, gn: +kv.gn || 0, g8: +kv.g8 || 0, g16: +kv.g16 || 0,
+        mhz: kv.mhz || '-', cause: kv.cause || 'unknown' });
     } else if (tag === 'hz') {
       if (kv.mode) d.hzs.push({ mode: kv.mode, share: +kv.share || 0, ma: +kv.ma || 0 });
     } else if (tag === 'btdrop') {
@@ -12253,7 +12259,17 @@ function logReportTips(d, all) {
        the Smart learner is doing about it. */
     if ((+jank.pct || 0) >= 6) {
       const jp = String((s.meta || {}).profile || '');
-      tips.push({ ic: 'warn', key: jp === 'battery' ? 'lr_tip_jank_bad_bat' : (jp === 'balanced' || jp === 'performance' || jp === 'stock') ? 'lr_tip_jank_bad_man' : 'lr_tip_jank_bad', vars: { pct: String(jank.pct) } });
+      /* fix288: when Android's own frame times put most of the late frames on one app pacing
+         its frames itself - neither GPU work over a frame nor a slow UI thread - higher
+         ceilings would not remove them, and the advice says so instead. */
+      const jtot = (+jank.frames || 0) * (+jank.pct || 0) / 100;
+      const pace = {};
+      (d.jwhys || []).forEach(function (w) { if (w.cause === 'other' && w.pkg !== 'com.android.systemui') pace[w.pkg] = (pace[w.pkg] || 0) + w.janky; });
+      const pk = Object.keys(pace).sort(function (a, b) { return pace[b] - pace[a]; })[0];
+      if (pk && jtot > 0 && pace[pk] * 2 >= jtot)
+        tips.push({ ic: 'warn', key: 'lr_tip_jank_bad_pace', vars: { pct: String(jank.pct), app: pk } });
+      else
+        tips.push({ ic: 'warn', key: jp === 'battery' ? 'lr_tip_jank_bad_bat' : (jp === 'balanced' || jp === 'performance' || jp === 'stock') ? 'lr_tip_jank_bad_man' : 'lr_tip_jank_bad', vars: { pct: String(jank.pct) } });
     }
     else if ((+jank.pct || 0) <= 2) tips.push({ ic: 'ok', key: 'lr_tip_jank_ok', vars: { pct: String(jank.pct) } });
   }
@@ -12400,6 +12416,30 @@ function logReportLteIdle(s) {
   if (lightIdle) names.push(Tcfg('net_lte_light', 'name', '5G Only When Needed'));
   if (offIdle) names.push(Tcfg('net_screen_off_lte', 'name', 'LTE While Screen Off'));
   return { set: names.join(' / '), n: String(+lte.snaps || 0) };
+}
+/* fix288: shares of the late frames, capped at 100 (a frame can be late for several reasons). */
+function logReportJwhyShare(a, b) {
+  if (!(b > 0)) return '-';
+  return String(Math.min(100, Math.round(100 * a / b))) + '%';
+}
+function logReportJwhyCause(w) {
+  const fb = {
+    gpu: 'The GPU work alone took longer than a frame in most of them: the GPU, or its ceiling in this state, is the limit.',
+    ui: "The app's UI thread was slow: CPU work inside the app.",
+    draw: 'The RenderThread was slow issuing draw commands: the CPU side of drawing.',
+    gpu8: 'The GPU fits a 60 Hz frame but not a 120 Hz one in most of them.',
+    other: 'Neither the GPU nor the UI thread: the app or the compositor paced these frames, and a clock ceiling does not change that.',
+    unknown: 'Android kept no GPU times for this app.',
+    few: 'Too few late frames for a verdict.'
+  };
+  const c = fb[w.cause] ? w.cause : 'unknown';
+  return T('lr_jwhy_c_' + c, fb[c]);
+}
+/* The app with the most late frames that has a verdict; SystemUI has its own finding. */
+function logReportJwhyTop(d) {
+  return (d.jwhys || []).filter(function (w) {
+    return w.pkg !== 'com.android.systemui' && w.janky >= 30 && w.cause !== 'few';
+  }).sort(function (a, b) { return b.janky - a.janky; })[0] || null;
 }
 function logReportSysuiSteady(sd) {
   return !!(sd && (+sd.of || 0) >= 10 && (+sd.intv || 0) * 10 >= (+sd.of || 0) * 8);
@@ -12588,7 +12628,7 @@ function logReportAnalyze(d) {
     lr_tip_crashes: 88, lr_tip_awake_aod: 86, lr_tip_awake_who: 84, lr_tip_awake_alarm: 84,
     lr_tip_awake_sync: 87, lr_tip_awake_worker: 84, lr_tip_sync_loop: 80, lr_tip_worker: 60,
     lr_tip_awake_hold: 84, lr_tip_awake: 80, lr_tip_sradio: 82, lr_tip_night_modem: 78,
-    lr_tip_night: 76, lr_tip_jank_bad: 72, lr_tip_jank_bad_bat: 72, lr_tip_jank_bad_man: 72, lr_tip_jank_wake: 70, lr_tip_jank_wake_wh: 70,
+    lr_tip_night: 76, lr_tip_jank_bad: 72, lr_tip_jank_bad_bat: 72, lr_tip_jank_bad_man: 72, lr_tip_jank_bad_pace: 72, lr_tip_jank_wake: 70, lr_tip_jank_wake_wh: 70,
     lr_tip_sysui_netspeed: 68, lr_tip_sysui_clocksec: 68, lr_tip_sysui_livewp: 66, lr_tip_sysui_hooks: 50, lr_tip_sysui_other: 30,
     lr_tip_sysui_inj: 90,
     lr_tip_wl_enable: 64, lr_tip_app: 62, lr_tip_audio: 45, lr_tip_ltpo: 15,
@@ -14822,6 +14862,7 @@ function logReportTipText(tip) {
     lr_tip_night_modem: 'Overnight the phone lost ~{pct}%/h - try "{set}" in Settings, it quiets the modem in your own sleeping hours.',
     lr_tip_jank_bad: 'About {pct}% of frames missed their deadline - stutter is visible. On Smart the learner is already testing the worst apps; heavy games do better on Performance.',
     lr_tip_jank_bad_bat: 'About {pct}% of frames missed their deadline - stutter is visible. Battery keeps the ceilings low on purpose; for heavy apps Smart or Balanced give more room. The Smoothness section lists the apps that drop the most.',
+    lr_tip_jank_bad_pace: "About {pct}% of frames missed their deadline, most of them in {app}. Android's own frame times put neither the GPU nor the UI thread at fault there: the app paces those frames itself, so a profile with higher ceilings would not remove them. The Smoothness section has the breakdown.",
     lr_tip_jank_bad_man: 'About {pct}% of frames missed their deadline - stutter is visible. The Smoothness section lists the apps that drop the most; Smart adapts the ceilings to them.',
     lr_tip_jank_ok: 'Smoothness is excellent: only {pct}% of frames janky.',
     lr_tip_jank_wake: 'Stutter concentrates at the wakes: {pct}% of frames at unlocks and app opens against {ord}% over the day; the most janky there is {who}.',
@@ -15007,6 +15048,7 @@ function logReportDxT(key, vars) {
     lr_dx_fix_cap_bat: "If the stutter bothers you, switch to Smart or Balanced for heavy apps.",
     lr_dx_smooth_wake: "Stutter concentrates at unlocks and app opens: {pct}% of frames late there against {ord}% over the day - the touch boost does not lift the clocks enough on this device.",
     lr_dx_also_cap_ok: "The ASB frequency ceilings add no stutter: {yes}% at the ceiling, {no}% below it.",
+    lr_dx_also_jwhy: "Most late frames: {app} in {state}, {pct} of its frames. {cause}",
     lr_dx_also_bhold: "Battery scroll hold, measured per app: kept where it cut the stutter (apps: {k}), released where it did not help (apps: {r}), under test: {t}.",
     lr_dx_also_vendor: "The firmware held the prime cores below ASB's ceiling in {n} of {of} checks (PowerHAL or kernel thermal) - ASB does not override it.",
     lr_dx_heat_long: "The CPU spent {min} above 45 °C, most of it in {phase}; peak {cpu}°.",
@@ -15238,6 +15280,9 @@ function logReportDiagnose(d) {
       else if (jp < 6) it = item('smooth', st, 'lr_dx_smooth_ok', pv);
     }
     if (it && capFair) it.also.push({ key: 'lr_dx_also_cap_ok', v: { yes: String(capFair.yes), no: String(capFair.no) } });
+    const jwt = logReportJwhyTop(d);
+    if (it && jwt) it.also.push({ key: 'lr_dx_also_jwhy', v: { app: jwt.pkg, state: jwt.state,
+      pct: logReportJwhyShare(jwt.janky, jwt.frames), cause: logReportJwhyCause(jwt) } });
     if (it && vendorLine && jp >= 6) it.also.push(vendorLine);
     if (capBad) {
       const cv = { cl: logReportDxT('lr_dx_cl_' + capBad[0], {}), yes: String(capBad[1].yes), no: String(capBad[1].no),
@@ -15951,6 +15996,32 @@ function logReportRender(d) {
           return [String(p.state), String(p.frames),
                   { txt: String(p.pct) + '%', warn: p.pct >= 6 }, String(p.jps)];
         }), [2]));
+    }
+    /* fix288: why the late frames were late, per app and ASB state, and - for an app seen in
+       two states - whether its GPU work ran over a frame more often under the lower ceiling. */
+    if (d.jwhys.length) {
+      s.appendChild(logReportNote(T('lr_jwhy_head', "Why frames were late (Android's own per-frame times, the app with the most late frames in each interval):")));
+      d.jwhys.slice(0, 4).forEach(function (w) {
+        s.appendChild(logReportRow(w.pkg + ' · ' + w.state,
+          logReportT('lr_jwhy_fmt', '{pct} of {frames} frames late · of them: GPU over a 60 Hz frame {g16} · slow UI thread {ui} · slow drawing {draw}', {
+            pct: logReportJwhyShare(w.janky, w.frames), frames: String(w.frames),
+            g16: w.gn > 0 ? logReportJwhyShare(w.g16, w.janky) : '-', ui: logReportJwhyShare(w.ui, w.janky),
+            draw: logReportJwhyShare(w.draw, w.janky) }), w.cause === 'gpu'));
+        s.appendChild(logReportNote(logReportJwhyCause(w)));
+      });
+      const byApp = {};
+      d.jwhys.forEach(function (w) {
+        if (w.state === 'mixed' || w.frames < 300 || w.gn <= 0) return;
+        (byApp[w.pkg] = byApp[w.pkg] || []).push(w);
+      });
+      Object.keys(byApp).forEach(function (a) {
+        if (byApp[a].length < 2) return;
+        const list = byApp[a].map(function (w) {
+          return w.state + ' ' + logReportJwhyShare(w.g16, w.gn) +
+            (/^[0-9]+$/.test(String(w.mhz)) ? logReportT('lr_jwhy_cap', ' (ceiling {mhz} MHz)', { mhz: String(w.mhz) }) : '');
+        }).join(', ');
+        s.appendChild(logReportNote(logReportT('lr_jwhy_states', '{app}: GPU work over a 60 Hz frame by ASB state - {list}', { app: a, list: list })));
+      });
     }
     body.appendChild(s);
   }
