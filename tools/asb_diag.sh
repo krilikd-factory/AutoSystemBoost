@@ -1200,6 +1200,10 @@ if [ -r "$_state" ]; then
       if [ "${_ullv:-0}" -gt 0 ] 2>/dev/null; then
         NOTE "  Battery lifts held by a finger kept level with the main cores: ${_ullv} time(s)$([ "${_ullk:-0}" -gt 0 ] 2>/dev/null && echo " · now prime ${_ullk} kHz")"
       fi
+      _ulg="$(_rget unlock_gpu_lifts /dev/.asb/state 2>/dev/null)"
+      if [ "${_ulg:-0}" -gt 0 ] 2>/dev/null; then
+        NOTE "  Battery lifts that also released the light-idle GPU step: ${_ulg}$([ "$(_rget unlock_gpu /dev/.asb/state 2>/dev/null)" = 1 ] && echo ' · released now')"
+      fi
       _bhk="$(_rget battery_hold_kept /dev/.asb/state 2>/dev/null)"
       if [ -n "$_bhk" ]; then
         _bhr="$(_rget battery_hold_released /dev/.asb/state 2>/dev/null)"
