@@ -2,8 +2,10 @@
 #define ASB_OBSERVER_PROTOCOL_H
 
 /* Versioned process-lifecycle protocol. The governor requests are fixed opcodes only:
- * "zygisk-refresh" (fresh evidence) and "zygisk-launch" (a new top-app process exists).
- * Neither carries a package, cap, profile or application-policy value. */
+ * "zygisk-refresh" (fresh evidence) and "zygisk-launch" (a new top-app process exists), and
+ * since fix286 "zygisk-launch-long" / "zygisk-launch-short" (the same, for an app the launch
+ * classes file marks as slow or fast to start). None carries a package, cap, profile or
+ * application-policy value: the companion looks the class up and sends only the opcode. */
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
@@ -34,6 +36,11 @@
 #ifndef ASB_GOVERNOR_STATE
 #define ASB_GOVERNOR_STATE "/dev/.asb/state"
 #endif
+/* fix286: per-app launch classes, read by the root companion only. A separate file, so a
+ * library built before it never sees an unknown key and the zygote side reads nothing new. */
+#ifndef ASB_ZYGISK_CLASSES_ABS
+#define ASB_ZYGISK_CLASSES_ABS "/data/adb/modules/AutoSystemBoost/zygisk/classes"
+#endif
 
 #define ASB_OBSERVER_MAGIC 0x4153425au /* "ASBZ" */
 #define ASB_OBSERVER_VERSION 2u
@@ -42,7 +49,8 @@
 #define ASB_OBSERVER_FLAG_TOP_APP 1u         /* zygote started it as the top app */
 #define ASB_OBSERVER_FLAG_LAUNCH 2u          /* ask the governor to cover the launch */
 #define ASB_OBSERVER_FLAG_LEDGER 4u          /* count it in the process-start ledger */
-#define ASB_OBSERVER_FLAGS_KNOWN 7u
+#define ASB_OBSERVER_FLAG_DENYLIST 8u        /* the root manager hides root from this app */
+#define ASB_OBSERVER_FLAGS_KNOWN 15u
 #define ASB_OBSERVER_MAX_PROCESSES 64u
 #define ASB_OBSERVER_MAX_EVENTS_PER_MINUTE 64u
 #define ASB_OBSERVER_HINT_MAX_PER_MINUTE 8u
@@ -54,6 +62,8 @@
 #define ASB_OBSERVER_BURST_KEEP 32u
 #define ASB_OBSERVER_RSS_TTL_MS 30000
 #define ASB_OBSERVER_POLICY_MAX_BYTES 12288u
+#define ASB_OBSERVER_CLASS_MAX 64u
+#define ASB_OBSERVER_CLASSES_MAX_BYTES 18432u
 
 #pragma pack(push, 1)
 struct AsbObserverFrame {
@@ -145,10 +155,71 @@ inline bool asb_observer_frame_valid(const AsbObserverFrame &frame) {
     if (!(frame.flags & (ASB_OBSERVER_FLAG_LAUNCH | ASB_OBSERVER_FLAG_LEDGER))) return false;
     if ((frame.flags & ASB_OBSERVER_FLAG_LAUNCH) && !(frame.flags & ASB_OBSERVER_FLAG_TOP_APP))
         return false;
-    /* A launch-only event names no package; a ledger event must name a valid one. */
-    if (frame.flags & ASB_OBSERVER_FLAG_LEDGER)
-        return asb_observer_package_valid(package) && !asb_observer_package_denied(package);
-    return package.empty();
+    /* A ledger event must name a valid package. fix286: a launch-only event may name one too,
+     * for the launch-class lookup only (never stored, never sent on); empty is still valid. */
+    if (!(frame.flags & ASB_OBSERVER_FLAG_LEDGER) && package.empty()) return true;
+    return asb_observer_package_valid(package) && !asb_observer_package_denied(package);
+}
+
+/* fix286: launch classes. "slow=" apps get the longer cold-start lift, "fast=" apps the
+ * shorter one, every other app the usual one. The shell derives them from the measured
+ * cold-start medians in Android's launch log and, before enough starts are measured, from the
+ * LSPosed modules scoped to the app. Strict like the policy: anything malformed, a package in
+ * both lists or more than 64 a list makes the whole file invalid, and every app is normal. */
+enum AsbLaunchClass { ASB_LAUNCH_NORMAL = 0, ASB_LAUNCH_LONG = 1, ASB_LAUNCH_SHORT = 2 };
+
+struct AsbObserverClasses {
+    bool valid = false;
+    unsigned slow = 0, fast = 0;
+    char slow_pkg[ASB_OBSERVER_CLASS_MAX][128] {};
+    char fast_pkg[ASB_OBSERVER_CLASS_MAX][128] {};
+
+    int find(const char *base) const {
+        if (!base || !*base) return ASB_LAUNCH_NORMAL;
+        for (unsigned i = 0; i < slow; ++i) if (std::strcmp(slow_pkg[i], base) == 0) return ASB_LAUNCH_LONG;
+        for (unsigned i = 0; i < fast; ++i) if (std::strcmp(fast_pkg[i], base) == 0) return ASB_LAUNCH_SHORT;
+        return ASB_LAUNCH_NORMAL;
+    }
+    int lookup(const char *base) const { return valid ? find(base) : ASB_LAUNCH_NORMAL; }
+};
+
+inline bool asb_observer_classes_parse(const char *text, size_t len, AsbObserverClasses &out) {
+    out.valid = false; out.slow = 0; out.fast = 0;
+    if (!text || !len || len > ASB_OBSERVER_CLASSES_MAX_BYTES) return false;
+    bool version = false;
+    size_t pos = 0;
+    while (pos < len) {
+        const char *line = text + pos;
+        const char *nl = static_cast<const char *>(std::memchr(line, '\n', len - pos));
+        const size_t n = nl ? static_cast<size_t>(nl - line) : len - pos;
+        pos += n + (nl ? 1 : 0);
+        if (!n) continue;
+        const char *eq = static_cast<const char *>(std::memchr(line, '=', n));
+        if (!eq) { out.slow = out.fast = 0; return false; }
+        const size_t kn = static_cast<size_t>(eq - line);
+        const char *v = eq + 1;
+        const size_t vn = n - kn - 1;
+        if (kn == 1 && line[0] == 'v') {
+            if (vn != 1 || v[0] != '1') { out.slow = out.fast = 0; return false; }
+            version = true;
+            continue;
+        }
+        const bool is_slow = kn == 4 && std::memcmp(line, "slow", 4) == 0;
+        const bool is_fast = kn == 4 && std::memcmp(line, "fast", 4) == 0;
+        if (!is_slow && !is_fast) { out.slow = out.fast = 0; return false; }
+        const std::string p(v, vn);
+        if (vn >= 128 || !asb_observer_package_valid(p) || asb_observer_package_denied(p) ||
+            out.find(p.c_str()) != ASB_LAUNCH_NORMAL) { out.slow = out.fast = 0; return false; }
+        unsigned &count = is_slow ? out.slow : out.fast;
+        char (*list)[128] = is_slow ? out.slow_pkg : out.fast_pkg;
+        if (count >= ASB_OBSERVER_CLASS_MAX) { out.slow = out.fast = 0; return false; }
+        std::memcpy(list[count], v, vn);
+        list[count][vn] = 0;
+        ++count;
+    }
+    if (!version) { out.slow = out.fast = 0; return false; }
+    out.valid = true;
+    return true;
 }
 
 /* The generated policy: "key=value" lines, at most 64 "pkg=" lines. Anything malformed

@@ -201,6 +201,17 @@ GovernorHintResult request_governor_launch() {
     return request_governor(command);
 }
 
+/* fix286: the same cold start for an app the launch classes mark slow or fast to start. */
+GovernorHintResult request_governor_launch_long() {
+    static const char command[] = "zygisk-launch-long";
+    return request_governor(command);
+}
+
+GovernorHintResult request_governor_launch_short() {
+    static const char command[] = "zygisk-launch-short";
+    return request_governor(command);
+}
+
 class Broker {
 public:
     static Broker &instance() { static Broker broker; return broker; }
@@ -250,13 +261,26 @@ public:
              * governor never stalls another app's start or exit record. */
             const uint64_t cpu_ipc = cpu_us();
             GovernorHintResult outcome = GovernorHintResult::unavailable;
+            bool fell_back = false;
             if (request != Request::none) {
                 std::lock_guard<std::mutex> ipc(ipc_mutex_);
-                outcome = request == Request::launch ? request_governor_launch() : request_governor_refresh();
+                if (request == Request::launch_long) outcome = request_governor_launch_long();
+                else if (request == Request::launch_short) outcome = request_governor_launch_short();
+                else if (request == Request::launch) outcome = request_governor_launch();
+                else outcome = request_governor_refresh();
+                /* A governor built before fix286 does not answer the class opcodes: the
+                 * plain cold-start request still gets the usual lift. */
+                if (outcome == GovernorHintResult::unavailable &&
+                    (request == Request::launch_long || request == Request::launch_short)) {
+                    outcome = request_governor_launch();
+                    fell_back = true;
+                }
             }
             {
                 std::lock_guard<std::mutex> lock(mutex_);
-                if (request == Request::launch) count(outcome, launch_accepted_, launch_vetoed_, launch_unavailable_);
+                if (fell_back) ++launch_class_fallback_;
+                if (request == Request::launch || request == Request::launch_long || request == Request::launch_short)
+                    count(outcome, launch_accepted_, launch_vetoed_, launch_unavailable_);
                 if (request == Request::refresh) count(outcome, hints_accepted_, hints_vetoed_, hints_unavailable_);
                 ipc_cpu_us_ += cpu_us() - cpu_ipc;
                 persist_locked(now, policy);
@@ -267,7 +291,7 @@ public:
     }
 
 private:
-    enum class Request { none, refresh, launch };
+    enum class Request { none, refresh, launch, launch_long, launch_short };
 
     static uint64_t cpu_us() {
         struct timespec ts {};
@@ -285,6 +309,10 @@ private:
 
     Request refresh_locked(bool changed, const AsbObserverPolicy &policy, int64_t now) {
         if (!changed || !policy.valid || !policy.hints) return Request::none;
+        /* fix286: the governor vetoes a refresh with the screen off; when it has published
+         * screen=0 the round trip (a governor wakeup per observed start or exit during sleep)
+         * is not made at all. An unknown state still asks. */
+        if (governor_screen_on() == 0) { ++hints_screen_off_; return Request::none; }
         if (!core_.hint_permit(now)) { ++hints_throttled_; return Request::none; }
         ++policy_hints_;
         return Request::refresh;
@@ -297,10 +325,43 @@ private:
         const bool top = (frame.flags & ASB_OBSERVER_FLAG_TOP_APP) != 0;
         if ((frame.flags & ASB_OBSERVER_FLAG_LEDGER) && policy.ledger)
             core_.ledger_record(frame.package, governor_screen_on(), top, now);
+        if (frame.flags & ASB_OBSERVER_FLAG_DENYLIST) ++denylist_spawns_;
         if (!(frame.flags & ASB_OBSERVER_FLAG_LAUNCH) || !policy.launch) return Request::none;
         ++launch_events_;
         if (!core_.launch_permit(now)) { ++launch_throttled_; return Request::none; }
-        return Request::launch;
+        classes_locked();
+        switch (classes_.lookup(frame.package)) {
+            case ASB_LAUNCH_LONG: ++launch_long_; return Request::launch_long;
+            case ASB_LAUNCH_SHORT: ++launch_short_; return Request::launch_short;
+            default: return Request::launch;
+        }
+    }
+
+    /* fix286: re-read the launch classes only when the file changed (inode, size, mtime). A
+     * missing or malformed file leaves every app on the usual cold-start lift. */
+    void classes_locked() {
+        struct stat st {};
+        if (stat(ASB_ZYGISK_CLASSES_ABS, &st) != 0 || !S_ISREG(st.st_mode)) {
+            classes_.valid = false; classes_.slow = classes_.fast = 0;
+            classes_ino_ = 0; classes_size_ = -1; classes_mtime_ns_ = -1;
+            return;
+        }
+        const int64_t mtime_ns = static_cast<int64_t>(st.st_mtim.tv_sec) * 1000000000LL + st.st_mtim.tv_nsec;
+        if (static_cast<uint64_t>(st.st_ino) == classes_ino_ && static_cast<int64_t>(st.st_size) == classes_size_ &&
+            mtime_ns == classes_mtime_ns_) return;
+        classes_ino_ = static_cast<uint64_t>(st.st_ino);
+        classes_size_ = static_cast<int64_t>(st.st_size);
+        classes_mtime_ns_ = mtime_ns;
+        ++classes_reads_;
+        classes_.valid = false; classes_.slow = classes_.fast = 0;
+        if (st.st_size <= 0 || st.st_size > static_cast<off_t>(ASB_OBSERVER_CLASSES_MAX_BYTES)) return;
+        const int fd = open(ASB_ZYGISK_CLASSES_ABS, O_RDONLY | O_CLOEXEC);
+        if (fd < 0) return;
+        char buf[ASB_OBSERVER_CLASSES_MAX_BYTES + 1];
+        const ssize_t n = read_small(fd, buf, sizeof(buf));
+        close(fd);
+        if (n <= 0 || static_cast<size_t>(n) > ASB_OBSERVER_CLASSES_MAX_BYTES) return;
+        asb_observer_classes_parse(buf, static_cast<size_t>(n), classes_);
     }
 
     void persist_locked(int64_t now, const AsbObserverPolicy &policy) {
@@ -330,12 +391,21 @@ private:
         out << "Z\thints_vetoed\t" << hints_vetoed_ << "\n";
         out << "Z\thints_unavailable\t" << hints_unavailable_ << "\n";
         out << "Z\thints_throttled\t" << hints_throttled_ << "\n";
+        out << "Z\thints_screen_off\t" << hints_screen_off_ << "\n";
         out << "Z\tspawn_events\t" << spawn_events_ << "\n";
         out << "Z\tlaunch_events\t" << launch_events_ << "\n";
         out << "Z\tlaunch_accepted\t" << launch_accepted_ << "\n";
         out << "Z\tlaunch_vetoed\t" << launch_vetoed_ << "\n";
         out << "Z\tlaunch_unavailable\t" << launch_unavailable_ << "\n";
         out << "Z\tlaunch_throttled\t" << launch_throttled_ << "\n";
+        out << "Z\tlaunch_long\t" << launch_long_ << "\n";
+        out << "Z\tlaunch_short\t" << launch_short_ << "\n";
+        out << "Z\tlaunch_class_fallback\t" << launch_class_fallback_ << "\n";
+        out << "Z\tclasses_loaded\t" << (classes_.valid ? 1 : 0) << "\n";
+        out << "Z\tclasses_slow\t" << (classes_.valid ? classes_.slow : 0u) << "\n";
+        out << "Z\tclasses_fast\t" << (classes_.valid ? classes_.fast : 0u) << "\n";
+        out << "Z\tclasses_reads\t" << classes_reads_ << "\n";
+        out << "Z\tdenylist_spawns\t" << denylist_spawns_ << "\n";
         out << "Z\tledger_events\t" << core_.ledger_events() << "\n";
         out << "Z\tledger_evicted\t" << core_.ledger_evicted() << "\n";
         out << "Z\trss_reads\t" << rss_reads_ << "\n";
@@ -392,9 +462,13 @@ private:
     uint64_t ipc_cpu_us_ = 0;
     uint64_t wakeups_ = 0;
     uint64_t policy_hints_ = 0, hints_accepted_ = 0, hints_vetoed_ = 0;
-    uint64_t hints_unavailable_ = 0, hints_throttled_ = 0;
+    uint64_t hints_unavailable_ = 0, hints_throttled_ = 0, hints_screen_off_ = 0;
     uint64_t spawn_events_ = 0, launch_events_ = 0, launch_accepted_ = 0, launch_vetoed_ = 0;
     uint64_t launch_unavailable_ = 0, launch_throttled_ = 0, policy_absent_ = 0;
+    uint64_t launch_long_ = 0, launch_short_ = 0, launch_class_fallback_ = 0, denylist_spawns_ = 0;
+    uint64_t classes_reads_ = 0, classes_ino_ = 0;
+    int64_t classes_size_ = -1, classes_mtime_ns_ = -1;
+    AsbObserverClasses classes_;
     unsigned long policy_generation_ = 0;
 };
 
@@ -418,8 +492,11 @@ public:
         if (!read_policy(policy) || !policy.active()) return skip();
         const bool top = args->is_top_app && *args->is_top_app;
         const bool launch = policy.launch && top;
+        /* fix286: an app the root manager hides root from never keeps this library or a
+         * socket; its one-shot record (if any) is sent before specialization, then unloaded. */
+        const bool hidden = (api_->getFlags() & zygisk::PROCESS_ON_DENYLIST) != 0;
         std::string base;
-        if (((policy.observer && policy.packages) || policy.ledger) && args->nice_name) {
+        if (((policy.observer && policy.packages) || policy.ledger || launch) && args->nice_name) {
             const char *raw = env_->GetStringUTFChars(args->nice_name, nullptr);
             if (raw) {
                 base = asb_observer_base_package(raw);
@@ -427,7 +504,7 @@ public:
             }
             if (!asb_observer_package_valid(base) || asb_observer_package_denied(base)) base.clear();
         }
-        const bool observe = !base.empty() && policy.selected(base.c_str());
+        const bool observe = !hidden && !base.empty() && policy.selected(base.c_str());
         const bool ledger = !base.empty() && policy.ledger;
         if (!observe && !launch && !ledger) return skip();
         const int sock = api_->connectCompanion();
@@ -435,9 +512,11 @@ public:
         if (launch || ledger) {
             const uint32_t flags = (top ? ASB_OBSERVER_FLAG_TOP_APP : 0u) |
                                    (launch ? ASB_OBSERVER_FLAG_LAUNCH : 0u) |
-                                   (ledger ? ASB_OBSERVER_FLAG_LEDGER : 0u);
-            const AsbObserverFrame frame = make_frame(ASB_OBSERVER_EVENT_SPAWN, flags,
-                                                      ledger ? base : std::string());
+                                   (ledger ? ASB_OBSERVER_FLAG_LEDGER : 0u) |
+                                   (hidden ? ASB_OBSERVER_FLAG_DENYLIST : 0u);
+            /* The launch class is looked up by the companion; the name is not stored for a
+             * launch-only record and never reaches the governor. */
+            const AsbObserverFrame frame = make_frame(ASB_OBSERVER_EVENT_SPAWN, flags, base);
             if (!write_all(sock, &frame, sizeof(frame))) { close(sock); return skip(); }
         }
         /* Not allowlisted: the one-shot record is sent; nothing stays in the process. */
