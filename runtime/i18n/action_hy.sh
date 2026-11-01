@@ -309,3 +309,4 @@ T_ZY_QUIET="Կապուղին հաստատված է · հանգիստ (վերջե
 T_ZY_SAFE="Safe mode"
 T_ZY_DISABLED="Անջատված"
 T_ZY_UNKNOWN="Վիճակը անհայտ է"
+T_ZY_AUTO="Automatic setup: on · observation list selected from user apps and usage history"

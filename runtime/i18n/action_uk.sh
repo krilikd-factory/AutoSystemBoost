@@ -309,3 +309,4 @@ T_ZY_QUIET="Канал підтверджено · тихо (нових проц
 T_ZY_SAFE="Safe mode"
 T_ZY_DISABLED="Вимкнено"
 T_ZY_UNKNOWN="Стан невідомий"
+T_ZY_AUTO="Automatic setup: on · observation list selected from user apps and usage history"
