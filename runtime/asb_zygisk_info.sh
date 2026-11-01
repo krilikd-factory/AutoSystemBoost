@@ -23,6 +23,9 @@ _asb_zygisk_info() {
     case "$_zi_policy_gen" in ''|*[!0-9]*) _zi_policy_gen=0 ;; esac
   fi
   _zi_safe=off; [ -e "$_zi_dir/disable" ] && _zi_safe=on
+  _zi_auto=0; [ -f "$_zi_dir/auto" ] && _zi_auto=1
+  _zi_auto_updated="$(sed -n 's/^updated=//p' "$_zi_dir/auto" 2>/dev/null | head -n 1)"
+  case "$_zi_auto_updated" in ''|*[!0-9]*) _zi_auto_updated=0 ;; esac
   _zi_packages=0; _zi_package_list=''
   if [ -x "$MODDIR/runtime/asb_zygisk.sh" ] || [ -f "$MODDIR/runtime/asb_zygisk.sh" ]; then
     _zi_package_list="$(ASB_ZYGISK_MODDIR="$MODDIR" ASB_ZYGISK_DIR="$_zi_dir" sh "$MODDIR/runtime/asb_zygisk.sh" list 2>/dev/null | awk 'NF { a=a (a ? "," : "") $0 } END { print a }' 2>/dev/null)"
@@ -31,18 +34,20 @@ _asb_zygisk_info() {
   case "$_zi_packages" in ''|*[!0-9]*) _zi_packages=0 ;; esac
 
   _zi_events=0; _zi_dropped=0; _zi_rate=0; _zi_duplicate=0; _zi_invalid=0; _zi_capacity=0
-  _zi_cpu=0; _zi_wake=0; _zi_loaded=0; _zi_memory=0; _zi_seen_pids=' '; _zi_state=0; _zi_updated=0
+  _zi_cpu=0; _zi_wake=0; _zi_loaded=0; _zi_memory=0; _zi_seen_pids=' '; _zi_state=0; _zi_updated=0; _zi_boot_upd=0; _zi_mtime=0
   _zi_hints=0; _zi_accepted=0; _zi_vetoed=0; _zi_unavailable=0; _zi_throttled=0
   _zi_spawn=0; _zi_l_events=0; _zi_l_ok=0; _zi_l_veto=0; _zi_l_none=0; _zi_l_thr=0
   _zi_ledger_n=0; _zi_absent=0; _zi_seen_gen=0; _zi_ledger_rows=''
   for _zi_file in "$_zi_run/state.arm64-v8a.tsv" "$_zi_run/state.armeabi-v7a.tsv"; do
     [ -r "$_zi_file" ] || continue
     _zi_state=1
+    _zi_mt="$(stat -c %Y "$_zi_file" 2>/dev/null)"
+    case "$_zi_mt" in ''|*[!0-9]*) : ;; *) [ "$_zi_mt" -gt "$_zi_mtime" ] && _zi_mtime="$_zi_mt" ;; esac
     while IFS="$(printf '\t')" read -r _zi_type _zi_a _zi_b _zi_c _zi_d _zi_extra; do
       case "$_zi_type" in
         Z)
           case "$_zi_a" in
-            events_total|events_dropped_total|events_dropped_rate_limit|events_dropped_duplicate|events_dropped_invalid|events_dropped_capacity|ipc_cpu_ms|ipc_wakeups|policy_hints|hints_accepted|hints_vetoed|hints_unavailable|hints_throttled|updated_monotonic_ms|spawn_events|launch_events|launch_accepted|launch_vetoed|launch_unavailable|launch_throttled|ledger_events|events_policy_absent|policy_generation_seen)
+            events_total|events_dropped_total|events_dropped_rate_limit|events_dropped_duplicate|events_dropped_invalid|events_dropped_capacity|ipc_cpu_ms|ipc_wakeups|policy_hints|hints_accepted|hints_vetoed|hints_unavailable|hints_throttled|updated_monotonic_ms|updated_boottime_ms|spawn_events|launch_events|launch_accepted|launch_vetoed|launch_unavailable|launch_throttled|ledger_events|events_policy_absent|policy_generation_seen)
               case "$_zi_b" in ''|*[!0-9]*) continue ;; esac
               [ "${#_zi_b}" -le 18 ] || continue
               case "$_zi_a" in
@@ -60,6 +65,7 @@ _asb_zygisk_info() {
                 hints_unavailable) _zi_unavailable=$((_zi_unavailable + _zi_b)) ;;
                 hints_throttled) _zi_throttled=$((_zi_throttled + _zi_b)) ;;
                 updated_monotonic_ms) [ "$_zi_b" -gt "$_zi_updated" ] && _zi_updated="$_zi_b" ;;
+                updated_boottime_ms) [ "$_zi_b" -gt "$_zi_boot_upd" ] && _zi_boot_upd="$_zi_b" ;;
                 spawn_events) _zi_spawn=$((_zi_spawn + _zi_b)) ;;
                 launch_events) _zi_l_events=$((_zi_l_events + _zi_b)) ;;
                 launch_accepted) _zi_l_ok=$((_zi_l_ok + _zi_b)) ;;
@@ -99,12 +105,22 @@ _asb_zygisk_info() {
   done
 
   _zi_uptime_ms="$(awk '{printf "%.0f",$1*1000}' "$PROC/uptime" 2>/dev/null)"
-  _zi_age='unknown'; _zi_freshness='no event state'
-  case "$_zi_uptime_ms" in ''|*[!0-9]*) : ;; *)
-    if [ "$_zi_updated" -gt 0 ]; then
-      _zi_age=$((_zi_uptime_ms - _zi_updated)); [ "$_zi_age" -lt 0 ] && _zi_age=0
-      if [ "$_zi_age" -le 300000 ] || [ "$_zi_loaded" -gt 0 ]; then _zi_freshness=current; else _zi_freshness=stale_over_5_minutes; fi
-    fi ;;
+  _zi_now_s="${ASB_ZYGISK_NOW_S:-$(date +%s 2>/dev/null)}"
+  _zi_age='unknown'; _zi_freshness='no event state'; _zi_age_clock=none
+  case "$_zi_uptime_ms" in ''|*[!0-9]*) _zi_uptime_ms='' ;; esac
+  case "$_zi_now_s" in ''|*[!0-9]*) _zi_now_s='' ;; esac
+  if [ "$_zi_boot_upd" -gt 0 ] && [ -n "$_zi_uptime_ms" ]; then
+    _zi_age=$((_zi_uptime_ms - _zi_boot_upd)); _zi_age_clock=boottime
+  elif [ "$_zi_updated" -gt 0 ] && [ "$_zi_mtime" -gt 0 ] && [ -n "$_zi_now_s" ]; then
+    _zi_age=$(( (_zi_now_s - _zi_mtime) * 1000 )); _zi_age_clock=file_mtime
+  elif [ "$_zi_updated" -gt 0 ] && [ -n "$_zi_uptime_ms" ]; then
+    _zi_age=$((_zi_uptime_ms - _zi_updated)); _zi_age_clock=monotonic_vs_uptime
+  fi
+  case "$_zi_age" in
+    unknown) : ;;
+    *)
+      [ "$_zi_age" -lt 0 ] && _zi_age=0
+      if [ "$_zi_age" -le 300000 ] || [ "$_zi_loaded" -gt 0 ]; then _zi_freshness=current; else _zi_freshness=stale_over_5_minutes; fi ;;
   esac
   _zi_ledger_top='none'
   if [ -n "$_zi_ledger_rows" ]; then
@@ -153,6 +169,9 @@ _asb_zygisk_info() {
   _emit zygisk_observer policy_generation "$_zi_policy_gen"
   _emit zygisk_observer policy_seen_generation "$_zi_seen_gen"
   _emit zygisk_observer safe_mode "$_zi_safe"
+  _emit zygisk_observer auto_mode "$_zi_auto"
+  _emit zygisk_observer auto_updated "$_zi_auto_updated"
+  _emit zygisk_observer auto_package_basis 'user-installed apps only; top-app start history first, then package name; at most 64; observation only'
   _emit zygisk_observer framework_status 'not runtime-discoverable from process events alone'
   _emit zygisk_observer installed_abis "$_zi_abis"
   _emit zygisk_observer enabled_packages "$_zi_packages"
@@ -162,6 +181,7 @@ _asb_zygisk_info() {
   _emit zygisk_observer link_state "$_zi_link"
   _emit zygisk_observer state_freshness "$_zi_freshness"
   _emit zygisk_observer state_age_ms "$_zi_age"
+  _emit zygisk_observer state_age_clock "$_zi_age_clock"
   _emit zygisk_observer events_total "$_zi_events"
   _emit zygisk_observer events_dropped_total "$_zi_dropped"
   _emit zygisk_observer events_dropped_rate_limit "$_zi_rate"

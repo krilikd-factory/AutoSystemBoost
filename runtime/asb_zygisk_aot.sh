@@ -155,8 +155,9 @@ _ranked() {
     BEGIN {
       while ((getline ln < cf) > 0) { n = split(ln, f, " "); if (n == 3 && f[1] ~ /^[A-Za-z0-9_.]+$/) z[f[1]] = f[2] + 0 }
       while ((getline ln < lf) > 0) { n = split(ln, f, "|"); if (n == 4 && f[2] ~ /^[A-Za-z0-9_.]+$/) e[f[2]]++ }
-      for (p in z) print p, z[p]
-      for (p in e) if (!(p in z)) print p, e[p]
+      for (p in z) sc[p] = z[p]
+      for (p in e) if (!(p in sc) || e[p] > sc[p]) sc[p] = e[p]
+      for (p in sc) print p, sc[p]
     }' | awk '$2 >= 2' | sort -k2,2nr | head -n "$TOP"
 }
 _refresh() {
