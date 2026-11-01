@@ -211,7 +211,7 @@ public:
             const uint64_t cpu_before = cpu_us();
             AsbObserverFrame frame {};
             const int result = read_frame(client, frame);
-            const int64_t now = asb_observer_monotonic_ms();
+            const int64_t now = asb_observer_boottime_ms();
             AsbObserverPolicy policy;
             load_policy_root(policy);
             Request request = Request::none;
@@ -312,7 +312,8 @@ private:
         if (fd < 0) return;
         std::ostringstream out;
         out << "Z\tschema\t2\nZ\tmode\tobserver\nZ\tabi\t" ASB_ABI_TAG "\n";
-        out << "Z\tupdated_monotonic_ms\t" << now << "\n";
+        out << "Z\tupdated_monotonic_ms\t" << asb_observer_monotonic_ms() << "\n";
+        out << "Z\tupdated_boottime_ms\t" << now << "\n";
         out << "Z\tpolicy_generation\t" << (policy.valid ? policy.generation : policy_generation_) << "\n";
         out << "Z\tpolicy_generation_seen\t" << policy_generation_ << "\n";
         out << "Z\tevents_total\t" << core_.events_total() << "\n";

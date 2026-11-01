@@ -75,6 +75,17 @@ inline int64_t asb_observer_monotonic_ms() {
         ? static_cast<int64_t>(ts.tv_sec) * 1000 + ts.tv_nsec / 1000000 : 0;
 }
 
+/* fix285: the companion's windows (rate limits, hint and launch budgets, the 5-minute
+ * screen-off burst) and the state age run on CLOCK_BOOTTIME. CLOCK_MONOTONIC stops in
+ * suspend: across a night of deep sleep every screen-off start fell into one "5-minute"
+ * window, and the state age read against /proc/uptime grew by the whole suspended time
+ * (a field capture: "no app process started for 282 min" while processes were starting). */
+inline int64_t asb_observer_boottime_ms() {
+    struct timespec ts {};
+    return clock_gettime(CLOCK_BOOTTIME, &ts) == 0
+        ? static_cast<int64_t>(ts.tv_sec) * 1000 + ts.tv_nsec / 1000000 : 0;
+}
+
 inline std::string asb_observer_base_package(const std::string &process_name) {
     const size_t colon = process_name.find(':');
     return process_name.substr(0, colon);
