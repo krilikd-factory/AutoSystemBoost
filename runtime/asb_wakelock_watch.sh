@@ -26,6 +26,28 @@ _cfg() {
 }
 _has() { command -v "$1" >/dev/null 2>&1; }
 
+_wl_bs_read() {
+  _br="$(dumpsys batterystats --charged 2>/dev/null)"
+  case "$_br" in
+    ''|*'Unknown option'*) dumpsys batterystats 2>/dev/null ;;
+    *) printf '%s\n' "$_br" ;;
+  esac
+}
+_WL_BSRAW=""
+_WL_BSRAW_SET=""
+_wl_bs_fetch() {
+  [ -n "$_WL_BSRAW_SET" ] && return 0
+  _WL_BSRAW="$(_wl_bs_read)"
+  _WL_BSRAW_SET=1
+}
+_wl_bs_dump() {
+  if [ -n "$_WL_BSRAW_SET" ]; then
+    [ -n "$_WL_BSRAW" ] && printf '%s\n' "$_WL_BSRAW"
+    return 0
+  fi
+  _wl_bs_read
+}
+
 # --- measure -------------------------------------------------------------------------
 #
 # /sys/kernel/debug/wakeup_sources is the kernel's own account and needs no permissions
@@ -83,7 +105,7 @@ asb_wl_relax_multicast() {
   MC="$D/wakelock_multicast"
   # Hours included. The old parse took "^([0-9]*)m" and read "1h 2m" as nothing at all -
   # so the worst case, multicast held for over an hour, was the one case never reported.
-  _mcs="$(dumpsys batterystats 2>/dev/null | awk "$_WL_DUR_AWK"'
+  _mcs="$(_wl_bs_dump | awk "$_WL_DUR_AWK"'
     /Total WiFi Multicast wakelock time:/ { s = $0; sub(/.*time: /, "", s); print dur(s); exit }')"
   case "$_mcs" in ''|*[!0-9]*) _mcs=0 ;; esac
   mkdir -p "$D" 2>/dev/null
@@ -194,7 +216,7 @@ _wl_bs_uid_secs() {
     [ -n "$_WL_BS" ] && printf '%s\n' "$_WL_BS"
     return 0
   fi
-  dumpsys batterystats 2>/dev/null | awk "$_WL_DUR_AWK"'
+  _wl_bs_dump | awk "$_WL_DUR_AWK"'
     /^[ \t]*Wake lock u[0-9]+a[0-9]+ / {
       u = $3; sub(/^u/, "", u); split(u, p, "a")
       uid = p[1] * 100000 + 10000 + p[2]
@@ -646,11 +668,11 @@ asb_wl_relax() {
 asb_wl_snapshot_bs() {
   _has dumpsys || return 1
   mkdir -p "$D" 2>/dev/null
-  dumpsys batterystats 2>/dev/null \
+  _wl_bs_dump \
     | sed -n 's/.*Kernel Wake lock \([^:]*\): \([0-9hms ]*\).*/\1|\2/p' \
     | head -12 > "$STATE" 2>/dev/null
   # Multicast is reported on its own line and is worth naming separately.
-  dumpsys batterystats 2>/dev/null \
+  _wl_bs_dump \
     | sed -n 's/.*Total WiFi Multicast wakelock time: \(.*\)/WiFi-Multicast|\1|0/p' \
     | head -1 >> "$STATE" 2>/dev/null
   [ -s "$STATE" ]
@@ -883,6 +905,7 @@ fi
 # ROM permission sweeps on this existing pass; never create another worker for it.
 _wl_man_reapply
 
+_has dumpsys && _wl_bs_fetch
 asb_wl_snapshot || asb_wl_snapshot_bs || :
 
 # Whether this pass may act. The ranking below runs either way: measure always, report
