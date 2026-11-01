@@ -6335,6 +6335,7 @@ function openLivePage() {
   _liveOpen = true;
   liveHeaderSync();
   if (lvMonTilesRestore()) lvStale(true);
+  if (lvMonSmartRestore()) lvStale(true);
   if (_selectedProfile !== 'smart') {
     if (!Object.keys(_stockTelemetryKv).length && _lvMonCache.rom && Object.keys(_lvMonCache.rom).length) {
       paintStockLive(_lvMonCache.rom);
@@ -6570,11 +6571,11 @@ async function lvMeterPoll(force) {
  * restored, so a stale value can never become half of a fresh measurement. */
 const LV_MON_CACHE_KEY = 'asb_monitor_cache';
 const LV_MON_CACHE_MAX_MS = 1800000;
-const _lvMonCache = { t: 0, meter: '', rom: null, tiles: null, loaded: false };
+const _lvMonCache = { t: 0, meter: '', rom: null, tiles: null, smart: null, loaded: false };
 function lvMonCacheSave() {
   try {
     _lvMonCache.t = Date.now();
-    localStorage.setItem(LV_MON_CACHE_KEY, JSON.stringify({ t: _lvMonCache.t, meter: _lvMonCache.meter, rom: _lvMonCache.rom, tiles: _lvMonCache.tiles }));
+    localStorage.setItem(LV_MON_CACHE_KEY, JSON.stringify({ t: _lvMonCache.t, meter: _lvMonCache.meter, rom: _lvMonCache.rom, tiles: _lvMonCache.tiles, smart: _lvMonCache.smart }));
   } catch (e) {}
 }
 function lvMonCacheRom(kv) {
@@ -6594,6 +6595,7 @@ function lvMonCacheRestore() {
     if (typeof d.meter === 'string') { _lvMonCache.meter = d.meter; lvMeterApply(d.meter, true); }
     if (d.rom && typeof d.rom === 'object') _lvMonCache.rom = lvMonCacheRom(d.rom);
     if (d.tiles && typeof d.tiles === 'object') _lvMonCache.tiles = d.tiles;
+    if (d.smart && typeof d.smart === 'object') _lvMonCache.smart = d.smart;
     _lvMonCache.loaded = true;
   } catch (e) {}
 }
@@ -6613,6 +6615,7 @@ function lvMonTilesCapture(profile) {
       t: String(el.title || ''), l: label ? String(label.textContent || '') : '' };
   });
   _lvMonCache.tiles = { at: Date.now(), profile: String(profile || ''), lang: ASB_LANG, values: values };
+  lvMonSmartCapture(profile);
   lvMonCacheSave();
 }
 function lvMonTilesRestore() {
@@ -6629,8 +6632,51 @@ function lvMonTilesRestore() {
   });
   return true;
 }
+/* The Smart card is part of the same display snapshot. Cache only rendered text,
+ * classes, titles and the bucket pill; no governor counters or package identity enter
+ * storage. The profile/language/TTL contract is identical to the nine live cells. */
+const LV_MON_SMART_VALUE_IDS = ['bnDrain','liveEtaOn','bnDrainOff','liveEtaOff','bnBucket','bnConf','bnAlpha','bnApp','bnBasis','bnSlotTemp','bnTrend','bnLpm'];
+function lvMonSmartCapture(profile) {
+  const banner = _el('liveSmartBanner');
+  if (String(profile || '') !== 'smart' || !banner || banner.style.display === 'none') return;
+  const values = {};
+  LV_MON_SMART_VALUE_IDS.forEach(function (id) {
+    const el = _el(id); if (!el) return;
+    let text = String(el.textContent || ''), pill = null;
+    const p = el.querySelector ? el.querySelector('.smart-banner-pill') : null;
+    if (p) {
+      const pt = String(p.textContent || '');
+      if (pt && text.slice(-pt.length) === pt) text = text.slice(0, -pt.length);
+      pill = { v: pt, c: String(p.className || 'smart-banner-pill') };
+    }
+    values[id] = { v: text, c: String(el.className || 'smart-banner-value'), t: String(el.title || ''), p: pill };
+  });
+  _lvMonCache.smart = { at: Date.now(), profile: 'smart', lang: ASB_LANG, values: values };
+}
+function lvMonSmartRestore() {
+  const snap = _lvMonCache.smart, now = Date.now();
+  if (_selectedProfile !== 'smart' || !snap || !(snap.at > 0) || now < snap.at ||
+      now - snap.at > LV_MON_CACHE_MAX_MS || snap.profile !== 'smart' ||
+      snap.lang !== ASB_LANG || !snap.values) return false;
+  const banner = _el('liveSmartBanner'); if (!banner) return false;
+  LV_MON_SMART_VALUE_IDS.forEach(function (id) {
+    const v = snap.values[id], el = _el(id);
+    if (!v || !el || typeof v.v !== 'string') return;
+    el.textContent = v.v;
+    el.className = typeof v.c === 'string' ? v.c : 'smart-banner-value';
+    el.title = typeof v.t === 'string' ? v.t : '';
+    if (v.p && typeof v.p.v === 'string' && v.p.v && document.createElement) {
+      const p = document.createElement('span');
+      p.className = typeof v.p.c === 'string' ? v.p.c : 'smart-banner-pill';
+      p.textContent = v.p.v; el.appendChild(p);
+    }
+  });
+  banner.style.display = '';
+  lvDrainHome(banner); lvTopSec(true);
+  return true;
+}
 function lvStale(on) {
-  ['liveStockRomBanner', 'bnDrainStrip', 'liveMetrics'].forEach(function (id) {
+  ['liveSmartBanner', 'liveStockRomBanner', 'bnDrainStrip', 'liveMetrics'].forEach(function (id) {
     const el = _el(id);
     if (el) el.classList.toggle('lv-stale', !!on);
   });
@@ -12333,8 +12379,23 @@ function logReportTips(d, all) {
       const pk = Object.keys(pace).sort(function (a, b) { return pace[b] - pace[a]; })[0];
       if (pk && jtot > 0 && pace[pk] * 2 >= jtot)
         tips.push({ ic: 'warn', key: 'lr_tip_jank_bad_pace', vars: { pct: String(jank.pct), app: pk } });
-      else
-        tips.push({ ic: 'warn', key: jp === 'battery' ? 'lr_tip_jank_bad_bat' : (jp === 'balanced' || jp === 'performance' || jp === 'stock') ? 'lr_tip_jank_bad_man' : 'lr_tip_jank_bad', vars: { pct: String(jank.pct) } });
+      else {
+        /* A measured at-cap comparison is correlation, not a controlled experiment. When
+           at-cap frames are no worse - or the named cap is mostly ROM-owned - do not turn
+           visible jank into automatic advice to raise ASB ceilings. */
+        const measuredCap = function (c) { return !!(c && (+c.yes_f || 0) >= 10000 && (+c.no_f || 0) >= 10000); };
+        const capWorse = function (c) { return measuredCap(c) && (+c.yes || 0) >= (+c.no || 0) + 1.5 && (+c.yes_jps || 0) >= (+c.no_jps || 0) * 1.2; };
+        const cm = s.jcap_main || null, cp = s.jcap_prime || null;
+        const badCap = capWorse(cm) ? ['main', cm] : capWorse(cp) ? ['prime', cp] : null;
+        const fairCap = !badCap && (measuredCap(cm) ? cm : measuredCap(cp) ? cp : null);
+        const vc = s.vcap || null;
+        const romHeld = !!(badCap && badCap[0] === 'prime' && vc && (+vc.n || 0) >= 10 && (+vc.prime_vendor || 0) * 2 > (+vc.n || 0));
+        if (fairCap || romHeld) {
+          const cap = fairCap || badCap[1];
+          tips.push({ ic: 'info', key: 'lr_tip_jank_bad_evidence', vars: { pct: String(jank.pct), yes: String(cap.yes), no: String(cap.no) } });
+        } else
+          tips.push({ ic: 'warn', key: jp === 'battery' ? 'lr_tip_jank_bad_bat' : (jp === 'balanced' || jp === 'performance' || jp === 'stock') ? 'lr_tip_jank_bad_man' : 'lr_tip_jank_bad', vars: { pct: String(jank.pct) } });
+      }
     }
     else if ((+jank.pct || 0) <= 2) tips.push({ ic: 'ok', key: 'lr_tip_jank_ok', vars: { pct: String(jank.pct) } });
   }
@@ -12416,8 +12477,10 @@ function logReportTips(d, all) {
         cheap: T('prof_' + cheap.name, cheap.name), x: cheap.onP.toFixed(1),
         busy: T('prof_' + busy.name, busy.name), y: busy.onP.toFixed(1) } });
   }
-  if (smart && (+smart.helped || 0) > 0)
-    tips.push({ ic: 'ok', key: 'lr_tip_smart_help', vars: { n: String(smart.helped) } });
+  if (smart && (+smart.helped || 0) > 0) {
+    const smartActive = String((s.meta || {}).profile || '') === 'smart';
+    tips.push({ ic: smartActive ? 'ok' : 'info', key: smartActive ? 'lr_tip_smart_help' : 'lr_tip_smart_help_manual', vars: { n: String(smart.helped) } });
+  }
   if (cost && (+cost.cpu_msh || 0) > 0) {
     /* The unit travels with the number: "{ms} of CPU per hour" reads "1851 ms of ...".
        fix211: per hour is the wrong ruler - a day that is 87 % screen-on ticks far more
@@ -12681,7 +12744,7 @@ function logReportAnalyze(d) {
     chain(68, 'fact', 'lr_chain_sysui', { n: String(sdraw.intv), of: String(sdraw.of), pct: String(sdraw.pct) });
   const sinj = s.sysuiinj || null;
   if (sinj && sinj.pkg && (+sinj.n || 0) > 0 && s.sysui && (+s.sysui.count || 0) > 0)
-    chain(88, 'fact', 'lr_chain_sysui_inj', { n: String(+s.sysui.count || 0), m: String(+sinj.n || 0), pkg: String(sinj.pkg) });
+    chain(88, 'hypothesis', 'lr_chain_sysui_inj', { n: String(+s.sysui.count || 0), m: String(+sinj.n || 0), pkg: String(sinj.pkg) });
   if (scr && (+scr.music_min || 0) >= 20 && (+scr.off_min || 0) > 0)
     chain(40, 'fact', 'lr_chain_music_off', { off: logReportDur(scr.off_min), music: logReportDur(scr.music_min) });
   if (cost && ((+cost.cpu_msh || 0) > 10000 || ((+cost.cpu_msh || 0) > 2500 && (msPerWake === null || msPerWake > 8))))
@@ -12693,7 +12756,7 @@ function logReportAnalyze(d) {
     lr_tip_crashes: 88, lr_tip_awake_aod: 86, lr_tip_awake_who: 84, lr_tip_awake_alarm: 84,
     lr_tip_awake_sync: 87, lr_tip_awake_worker: 84, lr_tip_sync_loop: 80, lr_tip_worker: 60,
     lr_tip_awake_hold: 84, lr_tip_awake: 80, lr_tip_sradio: 82, lr_tip_night_modem: 78,
-    lr_tip_night: 76, lr_tip_jank_bad: 72, lr_tip_jank_bad_bat: 72, lr_tip_jank_bad_man: 72, lr_tip_jank_bad_pace: 72, lr_tip_jank_wake: 70, lr_tip_jank_wake_wh: 70,
+    lr_tip_night: 76, lr_tip_jank_bad: 72, lr_tip_jank_bad_bat: 72, lr_tip_jank_bad_man: 72, lr_tip_jank_bad_pace: 72, lr_tip_jank_bad_evidence: 72, lr_tip_jank_wake: 70, lr_tip_jank_wake_wh: 70,
     lr_tip_sysui_netspeed: 68, lr_tip_sysui_clocksec: 68, lr_tip_sysui_livewp: 66, lr_tip_sysui_hooks: 50, lr_tip_sysui_other: 30,
     lr_tip_sysui_inj: 90,
     lr_tip_wl_enable: 64, lr_tip_app: 62, lr_tip_audio: 45, lr_tip_ltpo: 15,
@@ -14459,7 +14522,7 @@ function deviceZygiskEditor(d, onDone) {
   if (automatic) save.hidden = true;
   const safe = document.createElement('button'); safe.type = 'button'; safe.className = 'dev-zygisk-btn';
   const safeOn = deviceVal(d, 'zygisk_observer', 'safe_mode') === 'on';
-  safe.textContent = T(safeOn ? 'dev_zygisk_safe_off' : 'dev_zygisk_safe_on', safeOn ? 'Clear safe mode' : 'Enable safe mode');
+  safe.textContent = T(safeOn ? 'dev_zygisk_safe_clear' : 'dev_zygisk_safe_enable', safeOn ? 'Clear safe mode' : 'Enable safe mode');
   save.onclick = async function () {
     const parts = input.value.trim().split(/[\s,]+/).filter(function (x) { return x.length; });
     if (parts.length > 64 || parts.some(function (x) { return !/^[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+$/.test(x) || x.length > 127; })) {
@@ -14948,7 +15011,7 @@ function logReportAnalysisT(key, vars) {
     lr_chain_cost: 'ASB used {ms} ms/h over {wakes} wakeups/h → {per} ms per wake → above the usual overhead budget.',
     lr_chain_sysui: 'SystemUI missed frames in {n} of {of} screen-on intervals ({pct}% of its frames) whatever app was open → something in the status bar redraws all the time.',
     lr_chain_music_off: 'Screen off for {off}, of which {music} was music → the screen-off verdict counts only the idle part; playback is work, not idle drain.',
-    lr_chain_sysui_inj: '{m} of {n} SystemUI restarts → a native crash inside code {pkg} injects into SystemUI → that module, not ASB or the ROM, brought SystemUI down.',
+    lr_chain_sysui_inj: '{m} of {n} SystemUI restarts → the recorded stack points to code injected by {pkg} → a candidate to verify by disabling that module for SystemUI, not a verdict on ASB or the ROM.',
     lr_no_actions: 'No priority change is supported by this capture. Keep settings unchanged and collect a comparable capture.',
     lr_no_actions_early: 'No settings recommendation yet: let the capture accumulate evidence.',
     lr_actions_verify: 'Next capture: change one setting at a time and keep the scenario comparable. A second capture is an observation, not a controlled A/B test.',
@@ -14993,13 +15056,15 @@ function logReportTipText(tip) {
     lr_tip_cost_ok: 'ASB itself is cheap: {ms} of CPU per hour.',
     lr_tip_cost_hi: 'ASB used {ms} of CPU per hour - more than usual; worth sending this log to the developer.',
     lr_tip_smart_help: 'Smart proved extra headroom helps {n} of your apps and keeps it just for them.',
+    lr_tip_smart_help_manual: 'Recorded Smart measurements found extra headroom useful for {n} apps. This capture used a manual profile, so those records do not show Smart actively controlling it.',
+    lr_tip_jank_bad_evidence: 'About {pct}% of frames missed their deadline. Measured at-cap windows are not materially worse ({yes}% at cap versus {no}% below), or the named cap is mostly ROM-owned. This correlation does not clear every ceiling, but it does not support raising them as the first action; use the per-frame breakdown.',
     lr_tip_ltpo: 'Tip: "{set}" in Settings lowers the refresh rate on video and saves battery.',
     lr_tip_sysui_netspeed: 'SystemUI stutters in {n} of {of} screen-on intervals and the network-speed meter in the status bar is on - it redraws every second. Turn it off in the status-bar settings and compare the stutter in the next capture.',
     lr_tip_sysui_clocksec: 'SystemUI stutters in {n} of {of} screen-on intervals and the status-bar clock shows seconds - it redraws every second. Turn the seconds off and compare the stutter in the next capture.',
     lr_tip_sysui_livewp: 'SystemUI stutters in {n} of {of} screen-on intervals and a live wallpaper is set - it redraws whenever it is visible. Try a static wallpaper and compare the stutter in the next capture.',
     lr_tip_sysui_other: 'SystemUI stutters in {n} of {of} screen-on intervals although the usual per-second sources are off - look for an animated icon, a floating overlay or a module hooking SystemUI.',
     lr_tip_sysui_hooks: 'SystemUI stutters in {n} of {of} screen-on intervals although the usual per-second sources are off, and the hook framework loads these modules into it: {hooks}. Switch them off for System UI one at a time and compare the next capture.',
-    lr_tip_sysui_inj: 'SystemUI restarted {n} times; {m} of the recorded restarts crashed inside code that {pkg} injects into SystemUI. Update or disable that module - every restart rebuilds the status bar, drops frames and costs battery.',
+    lr_tip_sysui_inj: 'SystemUI restarted {n} times; the stack for {m} recorded restarts points to code injected by {pkg}. This is a lead, not sole-cause proof: update it or disable it for SystemUI one at a time and compare the next capture.',
     lr_tip_lte_idle: '"{set}" was on but did not run once in this capture - an ASB fault on the manual profiles. Install the current build: the switches now run on every profile.',
     lr_tip_net_heavy: '{mib} of mobile data went through the modem, the most by {app} ({amib}). The Mobile data card shows the breakdown.'
   }[tip.key] || '', tip.vars);
@@ -15165,7 +15230,10 @@ function logReportDxT(key, vars) {
     lr_dx_smooth_cap_bat: "With the {cl} at the ceiling {yes}% of frames were late, against {no}% below it: {prof} keeps the ceilings low on purpose.",
     lr_dx_fix_cap_bat: "If the stutter bothers you, switch to Smart or Balanced for heavy apps.",
     lr_dx_smooth_wake: "Stutter concentrates at unlocks and app opens: {pct}% of frames late there against {ord}% over the day - the touch boost does not lift the clocks enough on this device.",
-    lr_dx_also_cap_ok: "The ASB frequency ceilings add no stutter: {yes}% at the ceiling, {no}% below it.",
+    lr_dx_also_cap_ok: "In this capture, at-cap jank is not higher: {yes}% at the ceiling versus {no}% below it. This is correlation, not controlled proof that ceilings never affect smoothness.",
+    lr_dx_smooth_cap_external: "At the {cl} ceiling jank was {yes}% versus {no}% below it, but the ROM held that cluster in most checks. This correlation does not establish that an ASB ceiling caused the jank; do not raise it from this capture alone.",
+    lr_dx_frames_thin: "Only {frames} HWUI frames were usable, so no stable smoothness verdict is made. A thin sample is unknown evidence, not proof of smoothness; GL/Vulkan game surfaces can be outside this metric.",
+    lr_dx_frames_absent: "No usable HWUI frame sample was collected during substantial screen-on time. Smoothness remains unknown, not zero-jank; missing counters can reflect unsupported collection or non-HWUI surfaces.",
     lr_dx_also_jwhy: "Most late frames: {app} in {state}, {pct} of its frames. {cause}",
     lr_dx_also_bhold: "Battery scroll hold, measured per app: kept where it cut the stutter (apps: {k}), released where it did not help (apps: {r}), under test: {t}.",
     lr_dx_also_vendor: "The firmware held the prime cores below ASB's ceiling in {n} of {of} checks (PowerHAL or kernel thermal) - ASB does not override it.",
@@ -15179,11 +15247,11 @@ function logReportDxT(key, vars) {
     lr_dx_fix_asbdiag: "Run asbdiag in the Logs menu and send it to the developer together with this report.",
     lr_dx_asb_cost: "ASB used {ms} ms of CPU per hour ({per} ms per wakeup) - more than its usual budget.",
     lr_dx_asb_ok: "ASB itself costs little: {ms} ms of CPU per hour, {per} ms per wakeup.",
-    lr_dx_sysui_inj: "SystemUI restarted {n} times; {m} of the recorded restarts crashed inside code that {pkg} injects into SystemUI.",
+    lr_dx_sysui_inj: "SystemUI restarted {n} times; the stack for {m} recorded restarts points to code injected by {pkg}. Stack attribution is a lead, not proof of the sole cause.",
     lr_dx_fix_inj: "Update or disable {pkg} - every restart rebuilds the status bar, drops frames and costs battery.",
     lr_dx_crashes: "{n} native crashes during the capture, none in ASB code.",
     lr_dx_fix_crashes: "If an app misbehaves, update it; the crash list is in the full report.",
-    lr_dx_gauge: "The current sensor on this phone reads about {x}× low - mA figures are a lower bound; the %/h figures from the battery counter are exact.",
+    lr_dx_gauge: "The current sensor on this phone reads about {x}× low - mA figures are a lower bound. Battery-counter %/h figures use whole-percent steps and eligible windows, so treat them as estimates rather than exact rates.",
     lr_dx_screen_net: "With the screen on: {pct}%/h; the modem moved {mib} meanwhile ({ph} an hour) - mobile data is the likely main cost here.",
     lr_dx_screen_data: "With the screen on the modem moved {mib} ({ph} an hour) - see Mobile data.",
     lr_dx_screen_bright_low: "Average brightness {b}% - the panel is not what costs here.",
@@ -15405,7 +15473,9 @@ function logReportDiagnose(d) {
     if (capBad) {
       const cv = { cl: logReportDxT('lr_dx_cl_' + capBad[0], {}), yes: String(capBad[1].yes), no: String(capBad[1].no),
         prof: T('prof_' + prof, prof) };
-      if (prof === 'battery') item('smooth', 'normal', 'lr_dx_smooth_cap_bat', cv, 'user', 'lr_dx_fix_cap_bat');
+      if (capBad[0] === 'prime' && vendorHeld)
+        item('smooth', 'normal', 'lr_dx_smooth_cap_external', cv, 'rom');
+      else if (prof === 'battery') item('smooth', 'normal', 'lr_dx_smooth_cap_bat', cv, 'user', 'lr_dx_fix_cap_bat');
       else item('smooth', 'problem', 'lr_dx_smooth_cap', cv, 'asb', 'lr_dx_fix_send', {}, true);
     }
     if (wakeBad)
@@ -15414,6 +15484,11 @@ function logReportDiagnose(d) {
     const bhIt = it || out.filter(function (x) { return x.area === 'smooth'; }).pop();
     if (bhIt && bh && prof === 'battery' && (+bh.kept || 0) + (+bh.released || 0) > 0)
       bhIt.also.push({ key: 'lr_dx_also_bhold', v: { k: String(+bh.kept || 0), r: String(+bh.released || 0), t: String(+bh.testing || 0) } });
+  }
+
+  if ((!jank || (+jank.frames || 0) < 20000) && scr && (+scr.on_min || 0) >= 30) {
+    const cv = { frames: jank && jank.frames !== undefined ? String(jank.frames) : '0' };
+    item('data', 'normal', jank && (+jank.frames || 0) > 0 ? 'lr_dx_frames_thin' : 'lr_dx_frames_absent', cv, 'unknown');
   }
 
   if (heat || thermal) {
@@ -15687,11 +15762,14 @@ function logReportZygisk(d) {
   }
   const unknown = function (v) { return v === undefined || v === '' || v === 'unknown'; };
   const delta = function (key) { return unknown(z[key + '_delta']) ? '—' : String(z[key + '_delta']); };
+  const numericDelta = function (key) { return unknown(z[key + '_delta']) ? null : +z[key + '_delta']; };
+  const spawnDelta = numericDelta('spawn_events'), eventDelta = numericDelta('events_total');
+  const launchDelta = numericDelta('launch_events'), ledgerDelta = numericDelta('ledger_events');
   const grid = document.createElement('div'); grid.className = 'lgr-heros';
   grid.appendChild(logReportHero('🛰️', T('lr_zy_activity', 'Companion events in capture'), delta('events_total'),
     logReportT('lr_zy_start_latest', '{start} → {latest}', { start: unknown(z.events_total_start) ? '—' : z.events_total_start, latest: unknown(z.events_total_latest) ? '—' : z.events_total_latest }), false));
   grid.appendChild(logReportHero('🚀', T('lr_zy_launch', 'Cold starts heard'), delta('launch_events'),
-    logReportT('lr_zy_accepted', '{n} accepted', { n: delta('launch_accepted') }), false));
+    logReportT('lr_zy_accepted', '{n} accepted lift requests', { n: delta('launch_accepted') }), false));
   grid.appendChild(logReportHero('💡', T('lr_zy_hints', 'Lifecycle hints'), delta('policy_hints'),
     logReportT('lr_zy_accept_veto', '{ok} accepted · {veto} vetoed', { ok: delta('hints_accepted'), veto: delta('hints_vetoed') }), false));
   grid.appendChild(logReportHero('⚙️', T('lr_zy_ipc', 'Observer IPC CPU'), logReportT('lr_zy_ms', '{n} ms', { n: delta('ipc_cpu_ms') }),
@@ -15703,6 +15781,17 @@ function logReportZygisk(d) {
   sec.appendChild(logReportRow(T('lr_zy_loaded', 'Validated live processes at latest snapshot'), String(z.loaded || '0')));
   sec.appendChild(logReportRow(T('lr_zy_apps', 'Selected apps'), String(z.packages || '0')));
   sec.appendChild(logReportRow(T('lr_zy_abi', 'Installed observer ABI'), String(z.abis || 'unknown')));
+  if (spawnDelta !== null)
+    sec.appendChild(logReportRow(T('lr_zy_spawns', 'Observed process starts in capture'), String(spawnDelta)));
+  const launchRows = ['launch_long', 'launch_short', 'launch_class_fallback', 'launch_vetoed', 'launch_unavailable', 'launch_throttled'].filter(function (k) { return numericDelta(k) !== null; });
+  if (z.launch_hints === '1' && launchRows.length) {
+    const labels = { launch_long: 'dev_zygisk_observer_launch_long', launch_short: 'dev_zygisk_observer_launch_short', launch_class_fallback: 'lr_zy_launch_fallback', launch_vetoed: 'dev_zygisk_observer_launch_vetoed', launch_unavailable: 'dev_zygisk_observer_launch_unavailable', launch_throttled: 'dev_zygisk_observer_launch_throttled' };
+    launchRows.forEach(function (k) { sec.appendChild(logReportRow(T(labels[k], k), delta(k))); });
+  }
+  if (numericDelta('denylist_spawns') !== null)
+    sec.appendChild(logReportRow(T('dev_zygisk_observer_denylist_spawns', 'Starts flagged for module unmounting'), delta('denylist_spawns')));
+  if (numericDelta('hints_screen_off') !== null)
+    sec.appendChild(logReportRow(T('dev_zygisk_observer_hints_screen_off', 'Refreshes not sent with the screen off'), delta('hints_screen_off')));
   const features = document.createElement('div'); features.className = 'lgr-context';
   [[z.enabled, 'dev_zygisk_feature_observer', 'Observer'], [z.lifecycle_hints, 'dev_zygisk_feature_hints', 'Lifecycle hints'],
    [z.launch_hints, 'dev_zygisk_feature_launch', 'Cold-start lift'], [z.spawn_ledger, 'dev_zygisk_feature_ledger', 'Process ledger']].forEach(function (spec) {
@@ -15717,6 +15806,12 @@ function logReportZygisk(d) {
     sec.appendChild(logReportNote(T('lr_zy_coverage_one', 'Only one snapshot is available; no in-capture delta can be inferred.')));
   else
     sec.appendChild(logReportNote(T('lr_zy_coverage_two', 'Start/latest snapshots: deltas cover the interval between them, but do not prove continuous observation through a restart.')));
+  if (eventDelta === 0 && ((spawnDelta || 0) > 0 || (launchDelta || 0) > 0 || (ledgerDelta || 0) > 0))
+    sec.appendChild(logReportNote(T('lr_zy_quiet_channels', 'The accepted start/exit counter is zero, but spawn, cold-start or ledger channels recorded activity. These channels are independent; zero here does not mean the observer was absent.')));
+  if ((+z.loaded || 0) === 0 && ((spawnDelta || 0) > 0 || (launchDelta || 0) > 0 || (ledgerDelta || 0) > 0))
+    sec.appendChild(logReportNote(T('lr_zy_live_zero', 'No validated process was live in the latest snapshot, while earlier activity was recorded. This describes the current live set, not failed injection throughout the capture.')));
+  if ((launchDelta || 0) > 0 || (numericDelta('launch_accepted') || 0) > 0)
+    sec.appendChild(logReportNote(T('lr_zy_accept_note', 'An accepted cold-start request passed the companion checks; it is not proof that the governor changed a frequency ceiling.')));
   sec.appendChild(logReportNote(T('lr_zy_note', 'Observed events prove companion activity, not total Zygisk control, performance improvement or energy savings. No A/B comparison is made here.')));
   return sec;
 }
@@ -15898,7 +15993,7 @@ function logReportRender(d) {
     const gauge = d.sections.gauge || null;
     if (gauge && (+gauge.factor || 1) > 0 && (+gauge.factor || 1) <= 0.75 && (+gauge.windows || 0) >= 10)
       s.appendChild(logReportNote(logReportT('lr_gauge_note',
-        'The current sensor on this phone reads about {x}× low ({w} checks) - every mA figure here is a lower bound; the %/h figures from the battery counter are exact.',
+        'The current sensor on this phone reads about {x}× low ({w} checks) - mA figures are a lower bound. Battery-counter %/h figures use whole-percent steps and eligible windows, so treat them as estimates rather than exact rates.',
         { x: String(gauge.mult || ''), w: String(gauge.windows || '') })));
     /* fix242: a five-minute pause fully awake says nothing - the row needs the same twenty
        minutes as the advice before it is shown at all. */
@@ -17515,6 +17610,15 @@ function lvLoadShare(raw, cpus) {
 const METRIC_CLASSES = ['metric-good', 'metric-fair', 'metric-warm', 'metric-bad', 'metric-neutral', 'metric-normal',
   'metric-mild', 'metric-hot', 'metric-severe', 'metric-info', 'metric-charge', 'metric-fsm-deep', 'metric-fsm-light',
   'metric-fsm-moderate', 'metric-fsm-heavy', 'metric-fsm-sustained', 'metric-fsm-gaming'];
+function lvAppView(appH, inferred, warm) {
+  const appNames = ['idle','light','medium','heavy','gaming'];
+  const guessed = (appH === 4 && inferred === 1);
+  return {
+    text: warm ? '\u2026' : guessed ? T('lv_app_inferred', 'high · GPU') : T('lv_app_' + appH, appNames[appH] || '?'),
+    metric: warm ? 'metric-neutral' : asbAppMetric(guessed ? 3 : appH),
+    tip: (!warm && guessed) ? T('lv_app_inferred_tip', 'Estimated from CPU/GPU load and heat; no game was positively identified.') : ''
+  };
+}
 function asbMetricPaint(id, state) {
   const el = _el(id); if (!el) return;
   const kept = String(el.className || '').split(/\s+/).filter(c => c && !METRIC_CLASSES.includes(c));
@@ -18669,7 +18773,6 @@ async function pollLive(visible) {
           const appH  = parseInt(kv.smart_app_hint || '0', 10);
           const dpNames = ['sleep','wake','morning','day','evening','late'];
           const fbNames = ['own slot','neighbour','similar','overall','cold start'];
-          const appNames = ['idle','light','medium','heavy','gaming'];
 
           // Warm-up: the governor publishes state from its first tick, before it has sampled a
           // package or resolved the profile, so those values are initialised defaults rather
@@ -18702,9 +18805,11 @@ async function pollLive(visible) {
           asbMetricPaint('bnAlpha', 'metric-info');
           asbMetricPaint('bnBucket', 'metric-info');
           const appEl = _el('bnApp');
-          appEl.textContent = warm ? '\u2026' : T('lv_app_' + appH, appNames[appH] || '?');
+          const appView = lvAppView(appH, parseInt(kv.smart_app_hint_inferred || '0', 10), warm);
+          appEl.textContent = appView.text;
+          appEl.title = appView.tip;
           appEl.className = 'smart-banner-value';
-          asbMetricPaint('bnApp', warm ? 'metric-neutral' : asbAppMetric(appH));
+          asbMetricPaint('bnApp', appView.metric);
 
           // Second row: four more Smart-owned readings, so the card is two full rows instead
           // of one row plus an orphan hanging under Bucket. The session count sits in the
