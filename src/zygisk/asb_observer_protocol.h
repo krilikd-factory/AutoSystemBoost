@@ -49,7 +49,7 @@
 #define ASB_OBSERVER_FLAG_TOP_APP 1u         /* zygote started it as the top app */
 #define ASB_OBSERVER_FLAG_LAUNCH 2u          /* ask the governor to cover the launch */
 #define ASB_OBSERVER_FLAG_LEDGER 4u          /* count it in the process-start ledger */
-#define ASB_OBSERVER_FLAG_DENYLIST 8u        /* the root manager hides root from this app */
+#define ASB_OBSERVER_FLAG_DENYLIST 8u        /* the root manager unmounts modules for this app */
 #define ASB_OBSERVER_FLAGS_KNOWN 15u
 #define ASB_OBSERVER_MAX_PROCESSES 64u
 #define ASB_OBSERVER_MAX_EVENTS_PER_MINUTE 64u

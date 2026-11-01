@@ -492,8 +492,10 @@ public:
         if (!read_policy(policy) || !policy.active()) return skip();
         const bool top = args->is_top_app && *args->is_top_app;
         const bool launch = policy.launch && top;
-        /* fix286: an app the root manager hides root from never keeps this library or a
-         * socket; its one-shot record (if any) is sent before specialization, then unloaded. */
+        /* fix287: PROCESS_ON_DENYLIST is only counted. fix286 kept the library out of such
+         * apps, but KernelSU marks every app without root for module unmounting by default:
+         * a field capture had 462 of 465 starts flagged, and the allowlist went silent - no
+         * process start, exit or lifecycle refresh for any observed app. */
         const bool hidden = (api_->getFlags() & zygisk::PROCESS_ON_DENYLIST) != 0;
         std::string base;
         if (((policy.observer && policy.packages) || policy.ledger || launch) && args->nice_name) {
@@ -504,7 +506,7 @@ public:
             }
             if (!asb_observer_package_valid(base) || asb_observer_package_denied(base)) base.clear();
         }
-        const bool observe = !hidden && !base.empty() && policy.selected(base.c_str());
+        const bool observe = !base.empty() && policy.selected(base.c_str());
         const bool ledger = !base.empty() && policy.ledger;
         if (!observe && !launch && !ledger) return skip();
         const int sock = api_->connectCompanion();
