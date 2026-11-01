@@ -5450,7 +5450,7 @@ EOF
     logReportSysuiSteady logReportMiB logReportNetFix logReportLteIdle logReportFullCharge logReportScreenOnDrainState logReportAnalyze logReportHistoryComparable logReportMachineDigest logReportAnalysisT \
     logReportTipText logReportRow logReportSec logReportNote logReportHero logReportTable logReportZygisk \
     deviceVal deviceFill deviceZygiskLinkState deviceZygiskLinkVerdict deviceZygiskLink \
-    logReportBrief logReportDxT logReportDiagnose logReportDiagSection logReportQualityPanel logReportRef logReportDomainRef logReportTipRef logReportDiagRef logReportAppendAnalysis logReportRender asbPageJump asbPageReference shQuote \
+    logReportBrief logReportDxT logReportSelfPush logReportDiagnose logReportDiagSection logReportQualityPanel logReportRef logReportDomainRef logReportTipRef logReportDiagRef logReportAppendAnalysis logReportRender asbPageJump asbPageReference shQuote \
     asbPageClasses asbPageHas asbPageKids asbPageTxt asbPageWarn asbPageText asbPageStamp; do
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
@@ -6004,6 +6004,29 @@ chk(udx && udx.cause === 'lr_dx_idle_unknown' && udx.owner === 'unknown' && udx.
 unkDay.sections.night.awake = '5'; unkDay.sections.idlemax.awake = '5';
 const adx = logReportDiagnose(unkDay).find(x => x.area === 'idle');
 chk(adx && adx.cause === 'lr_dx_idle_asleep' && adx.send, 'drain while asleep points past the CPU: ' + JSON.stringify(adx));
+/* fix280: an app restarting its own notification service on a wakeup alarm (an OP15
+   capture: one messenger's NotificationsService x108) gets its own push card, unless the
+   idle verdict already names that alarm - then that card's fix becomes the specific one. */
+const spBase = ['meta\telapsed_min=158\tprofile=smart', 'wla\ttag=org.example.chat/.NotificationsService\tn=108',
+  'wla\ttag=com.android.server.audio.action.CHECK_MUSIC_ACTIVE\tn=14', 'cfg\tkey=gms_trim\tvalue=lite', 'cfg\tkey=gms_freeze\tvalue=max'];
+let spx = logReportDiagnose(parseLogReport(spBase.join('\n'))).filter(x => x.area === 'push');
+chk(spx.length === 1 && spx[0].cause === 'lr_dx_selfpush' && spx[0].owner === 'app' && spx[0].fix === 'lr_dx_fix_selfpush'
+  && spx[0].cv.who === 'org.example.chat' && spx[0].cv.n === '108', 'self-push card: ' + JSON.stringify(spx));
+chk(logReportDxT(spx[0].cause, spx[0].cv).indexOf('org.example.chat') >= 0 && logReportDxT(spx[0].cause, spx[0].cv).indexOf('108') >= 0, 'self-push text names the app and the count');
+chk(!/\{\w+\}/.test(logReportDxT(spx[0].cause, spx[0].cv)), 'self-push text leaves no placeholder');
+spx = logReportDiagnose(parseLogReport(spBase.concat(['cfg\tkey=gms_trim\tvalue=strict']).join('\n'))).filter(x => x.area === 'push');
+chk(spx.length === 1 && spx[0].cause === 'lr_dx_selfpush_gms' && spx[0].owner === 'asb' && spx[0].fix === 'lr_dx_fix_selfpush_gms',
+  'strict Google services trim names ASB: ' + JSON.stringify(spx));
+chk(spx.length === 1 && !/\{\w+\}/.test(logReportDxT(spx[0].cause, spx[0].cv)) && logReportDxT(spx[0].cause, spx[0].cv).indexOf(Tcfg('gms_trim', 'name', 'Google Services Trim')) >= 0,
+  'strict variant names the setting: ' + (spx[0] && logReportDxT(spx[0].cause, spx[0].cv)));
+chk(!logReportDiagnose(parseLogReport(spBase.map(l => l.replace('n=108', 'n=12')).join('\n'))).some(x => x.area === 'push'), 'a dozen restarts are no self-push finding');
+chk(!logReportDiagnose(parseLogReport(spBase.map(l => l.replace('/.NotificationsService', '.SYNC_TICK')).join('\n'))).some(x => x.area === 'push'), 'an ordinary alarm is no self-push finding');
+const spIdle = parseLogReport(spBase.concat(['scr\ton_pctph=6.0\toff_pctph=2.5\ton_min=40\toff_min=400\tidle_pctph=2.5\tidle_min=400\tmusic_min=0',
+  'night\tdur_min=360\tdrop=9\tpctph=2.5\tawake=30', 'idlemax\tawake=30\tphase=sleep\tdur_min=300']).join('\n'));
+const spDx = logReportDiagnose(spIdle);
+const spAl = spDx.find(x => x.cause === 'lr_dx_idle_alarm');
+chk(spAl && spAl.cv.who === 'org.example.chat/.NotificationsService' && spAl.fix === 'lr_dx_fix_selfpush' && !spDx.some(x => x.area === 'push'),
+  'the idle alarm verdict takes the specific fix instead of a second card: ' + JSON.stringify(spDx.map(x => [x.area, x.cause, x.fix])));
 /* fix248: the owner's Battery day - 92 % on screen, 1.9 GiB over LTE + 5G NSA, and the two
    LTE switches on yet never running (the manual-profile fault). The report now names the
    switch as ASB's fault, gives mobile data its own card with the apps and the setting for
@@ -7848,7 +7871,7 @@ assert 'btn.onclick = openZygiskPage;' in pill, 'the header pill does not open t
 zp = body('function openZygiskPage() {')
 assert 'run(' not in zp and 'asbAfterNavAnim(function () { if (_zygiskOpen) zygiskPageLoad(false); }, 30);' in zp, 'the Zygisk page reads on the tap'
 zl = body('async function zygiskPageLoad(user) {')
-assert zl.count('run(') == 1 and 'link-status' in zl and 'asb_device_info' not in zl, 'the Zygisk page runs more than its one read'
+assert zl.count('runBatch(') == 1 and zl.replace('runBatch(', '').count('run(') == 0 and 'link-status' in zl and 'asb_zygisk_guard.sh' in zl and 'asb_zygisk_aot.sh' in zl and 'asb_device_info' not in zl, 'the Zygisk page runs more than its one read'
 mode = body('async function zygiskModeSet(id) {')
 assert mode.count('runBatch(') == 1 and ' run(' not in mode and 'set-many --snapshot' in mode, 'a mode change is not one locked write'
 page = h[h.index('id="zygiskPage"'):h.index('<div class="toast" id="toast">')]

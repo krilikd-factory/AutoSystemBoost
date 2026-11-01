@@ -3214,6 +3214,42 @@ printf '%s\n' "$out" | grep -q '^NOTE 2 of the listed crashes start in code of c
 printf '%s\n' "$out" | grep -q 'code of com.example.app' && fail "an app crashing in its own code was called injected: $out"
 printf '%s\n' "$out" | grep -q 'code of com.google.android.webview' && fail "WebView called a hook module: $out"
 printf '%s\n' "$out" | grep -q '^NOTE 1 of the listed crashes are in Android System WebView, inside com.booking - shared browser code' || fail "WebView crash not named as such: $out"
+# fix280: what inside the module failed - the crashing thread, the function in its library,
+# its own (and the hook framework's) Java frames on the stack, and one line per module that
+# says which processes it took down.
+D3="$T/tomb3"; mkdir -p "$D3"
+for i in 0 1 2; do
+  _p=com.android.launcher; [ "$i" = 2 ] && _p=com.android.systemui
+  cat > "$D3/tombstone_0$i" <<X
+Timestamp: 2026-10-31 11:00:5$i.123456789+0100
+Cmdline: $_p
+pid: 4321, tid: 4400, name: DexKitWorker  >>> $_p <<<
+signal 6 (SIGABRT), code -1 (SI_QUEUE), fault addr --------
+Abort message: 'terminating due to uncaught exception of type std::out_of_range: vector'
+
+backtrace:
+      #00 pc 000000000005f1ec  /apex/com.android.runtime/lib64/bionic/libc.so (abort+164) (BuildId: abc)
+      #01 pc 00000000000a1234  $_lt (dexkit::DexKit::BatchFind(int)+120) (BuildId: def)
+      #02 pc 0000000000123456  /apex/com.android.art/lib64/libart.so (art_quick_generic_jni_trampoline+152)
+      #03 pc 00000000000abcde  /data/app/~~YGeVTP2n1kPkEgS4384O3Q==/com.luckyzyx.luckytool-aI8mTJHJqW11-BdKHZEvyQ==/base.apk (org.luckypray.dexkit.DexKitBridge.nativeBatchFind+0)
+      #04 pc 00000000000abcf0  /data/app/~~YGeVTP2n1kPkEgS4384O3Q==/com.luckyzyx.luckytool-aI8mTJHJqW11-BdKHZEvyQ==/base.apk (com.luckyzyx.luckytool.hook.scope.launcher.Layout.onHook+44)
+      #05 pc 0000000000011111  /system/framework/arm64/boot-framework.oat (android.app.Instrumentation.callApplicationOnCreate+60)
+      #06 pc 0000000000022222  [anon:dalvik-classes.dex extracted in memory] (LSPHooker_.callback+12)
+
+X
+done
+out="$(P() { echo "$*"; }; NOTE() { echo "NOTE $*"; }; . "$T/fn.sh"; ASB_TOMBSTONE_DIR="$D3" _asb_tombstones)"
+printf '%s\n' "$out" | grep -q '(of$' && fail "a cut '(offset' is printed as the frame's function: $out"
+[ "$(printf '%s\n' "$out" | grep -c '^      crashing thread: DexKitWorker$')" = 3 ] || fail "crashing thread not named: $out"
+printf '%s\n' "$out" | grep -q '^      crashed inside code of com.luckyzyx.luckytool: libdexkit.so (dexkit::DexKit::BatchFind(int))$' || fail "failing function not named: $out"
+printf '%s\n' "$out" | grep -q '^      app/hook code on the stack (nearest first): org.luckypray.dexkit.DexKitBridge.nativeBatchFind <- com.luckyzyx.luckytool.hook.scope.launcher.Layout.onHook$' || fail "hook classes not named: $out"
+printf '%s\n' "$out" | grep -q 'Instrumentation' && fail "platform frames listed as hook code: $out"
+printf '%s\n' "$out" | grep -q '^      the stack passes through the hook framework' || fail "hook framework frame not flagged: $out"
+printf '%s\n' "$out" | grep -q '^NOTE   com.luckyzyx.luckytool - crashed in: com.android.launcher x2, com.android.systemui x1; failing code: libdexkit.so (dexkit::DexKit::BatchFind(int)); its classes on the stack: org.luckypray.dexkit' || fail "module summary: $out"
+out="$( (set +u; LK_SCRIPT_DIR="$ROOT/tools/logkit"; . "$ROOT/tools/logkit/_asb_logkit_common.sh" >/dev/null 2>&1
+         LK_START_EPOCH=0 ASB_TOMBSTONE_DIR="$D3" lk_emit_native_crashes) )"
+printf '%s\n' "$out" | grep -q 'crashed inside code of com.luckyzyx.luckytool: libdexkit.so (dexkit::DexKit::BatchFind(int)) - an installed app' || fail "report: failing function: $out"
+printf '%s\n' "$out" | grep -q 'app/hook code on the stack (nearest first): org.luckypray.dexkit.DexKitBridge.nativeBatchFind <- com.luckyzyx.luckytool.hook.scope.launcher.Layout.onHook' || fail "report: hook classes: $out"
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 
 # Full-day report: only tombstones newer than the capture start.

@@ -582,7 +582,10 @@ EOF
   : > "$T/out"; rm -rf "$T/proc/4242"; printf '999.0 0.0\n' > "$T/proc/uptime"; _asb_zygisk_info
   want loaded_processes 0; want state_freshness current; want link_state confirmed
   printf '1000.0 0.0\n' > "$T/proc/uptime"; sed -i 's/999000/1/' "$T/run/state.arm64-v8a.tsv"
+  : > "$T/out"; _asb_zygisk_info; want state_freshness stale_over_5_minutes; want link_state quiet
+  sed -i 's/^gen=42$/gen=43/' "$T/mod/zygisk/policy"
   : > "$T/out"; _asb_zygisk_info; want state_freshness stale_over_5_minutes; want link_state stale
+  sed -i 's/^gen=43$/gen=42/' "$T/mod/zygisk/policy"
   echo 'PASS observer diagnostics: live PID/start-ticks validation, current RSS, counters, stale TTL and honest unknowns'
 )
 
@@ -626,6 +629,9 @@ linkState({state_freshness:'current',events_total:'1'},'confirmed');
 linkState({state_freshness:'current',spawn_events:'1'},'confirmed');
 linkState({state_freshness:'current',policy_seen_generation:'42',policy_generation:'42'},'confirmed');
 linkState({state_freshness:'stale_over_5_minutes',events_total:'9'},'stale');
+linkState({state_freshness:'stale_over_5_minutes',spawn_events:'438',policy_seen_generation:'7',policy_generation:'7'},'quiet');
+linkState({state_freshness:'stale_over_5_minutes',spawn_events:'438',policy_seen_generation:'6',policy_generation:'7'},'stale');
+linkState({link_state:'quiet'},'quiet');
 linkState({safe_mode:'on',state_freshness:'current',loaded_processes:'2'},'safe');
 linkState({enabled:'0'},'off');linkState({events_total:'broken',state_freshness:'current'},'unknown');
 linkState({enabled:'—'},'unknown');linkState({state_freshness:'not exposed'},'unknown');
@@ -682,7 +688,7 @@ JS
   [ "$out" = ok ] || fail "$out"
   python3 - "$ROOT/webroot/i18n" <<'PY' || fail 'link badge locales'
 import json, pathlib, sys
-states = ('connected', 'confirmed', 'waiting', 'idle', 'stale', 'safe', 'off', 'unknown')
+states = ('connected', 'confirmed', 'waiting', 'idle', 'quiet', 'stale', 'safe', 'off', 'unknown')
 files = sorted(pathlib.Path(sys.argv[1]).glob('*.json'))
 assert len(files) == 13
 for p in files:

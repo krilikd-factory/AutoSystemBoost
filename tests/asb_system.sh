@@ -5958,6 +5958,13 @@ assert paths, 'TECH_ICON_PATHS block missing'
 path_kinds = set(re.findall(r'^\s*([a-z_]+):', paths.group(1), re.M))
 unknown = sorted(set(used_kinds) - path_kinds)
 assert not unknown, f'visible tweak mappings miss SVG paths: {unknown}'
+glyph = dict(re.findall(r"^\s*([a-z_0-9]+):\s*'([^']*)'", paths.group(1), re.M))
+same = sorted({k for k, v in glyph.items() if list(glyph.values()).count(v) > 1})
+assert not same, f'icon kinds share one identical SVG: {same}'
+zy = glyph.get('zygisk_observer', '')
+assert zy and zy != glyph.get('sun'), 'Zygisk icon missing or identical to the light-theme sun'
+assert 'r="3"' not in zy and 'M12 3v3' not in zy and 'm5.6 5.6' not in zy, 'Zygisk icon still draws a dot with sun rays'
+assert '19.8 7.3v9.4' in zy and 'h6l-6' in zy, 'Zygisk icon lost its hexagon-and-Z glyph'
 assert not re.search(r"CFG_ICONS = \{[^}]*\\uD83|CFG_ICONS = \{[^}]*\\u26", block.group(0), re.S), 'emoji literal remains in CFG_ICONS'
 print(f'PASS unique SVG icon coverage: {len(items)} config keys')
 PY
