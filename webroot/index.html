@@ -399,7 +399,7 @@ button.badge:active { color: var(--accent); }
   letter-spacing: .02em;
   cursor: pointer;
 }
-.zygisk-header-connected, .zygisk-header-confirmed { --zygisk-header-color: var(--bat); }
+.zygisk-header-connected, .zygisk-header-confirmed, .zygisk-header-quiet { --zygisk-header-color: var(--bat); }
 .zygisk-header-waiting, .zygisk-header-stale, .zygisk-header-safe { --zygisk-header-color: var(--bal); }
 .zygisk-header-dot {
   flex: 0 0 auto;
@@ -1788,7 +1788,7 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .device-page .dev-pressure-labels { display: flex; justify-content: space-between; color: var(--text-tertiary); font: 10px/1.4 var(--mono); }
 .device-page .dev-pressure-meta { margin-top: 8px; color: var(--text-secondary); font-size: 11px; line-height: 1.45; }
 .dev-zygisk-link { --link-color: var(--text-tertiary); display: grid; grid-template-columns: 9px minmax(0,1fr); gap: 10px; align-items: start; margin: 2px 0 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: rgba(255,255,255,.025); }
-.dev-zygisk-link-connected, .dev-zygisk-link-confirmed { --link-color: var(--bat); }
+.dev-zygisk-link-connected, .dev-zygisk-link-confirmed, .dev-zygisk-link-quiet { --link-color: var(--bat); }
 .dev-zygisk-link-waiting, .dev-zygisk-link-stale, .dev-zygisk-link-safe { --link-color: var(--bal); }
 .dev-zygisk-link-dot { width: 8px; height: 8px; margin-top: 4px; border-radius: 50%; background: var(--link-color); box-shadow: 0 0 0 3px color-mix(in srgb,var(--link-color) 14%,transparent); }
 .dev-zygisk-link-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
@@ -5364,7 +5364,8 @@ const TECH_ICON_PATHS = {
   log_hook: '<rect x="3" y="3.5" width="10.5" height="17" rx="2.4"/><path d="M6.3 8h4M6.3 11.5h4M6.3 15h2.6"/><path d="M20.5 5v9.5a2.75 2.75 0 0 1-5.5 0V13"/><path d="M13.7 14.3 15 13l1.3 1.3"/>',
   /* Push transport switched off: a routed signal crossed out, not a generic service stop. */
   push_off: '<path d="M4 7h10M4 12h7M4 17h4"/><path d="m14 7 3 3-3 3M17 10h3"/><path d="m14 15 6 6M20 15l-6 6"/>',
-  zygisk_observer: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><path d="m5.6 5.6 2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>',
+  /* fix280: a hexagonal cell with a Z. The old dot with eight rays read as the light-theme sun beside it. */
+  zygisk_observer: '<path d="M12 2.8 19.8 7.3v9.4L12 21.2 4.2 16.7V7.3z"/><path d="M9 8.8h6l-6 6.4h6"/>',
   zygisk_refresh: '<path d="M20 11a8 8 0 0 0-14.9-4M4 3v5h5M4 13a8 8 0 0 0 14.9 4M20 21v-5h-5"/>',
   /* fix272: a launch arrow leaving a process ring; and a counted list of process starts. */
   zygisk_launch: '<circle cx="8" cy="16" r="4"/><path d="M11 13 19.5 4.5M14 4.5h5.5V10"/><path d="M8 14.2v1.8l1.2 1.2"/>',
@@ -10841,7 +10842,8 @@ function nfParse(out) {
     if (ln.indexOf('result=') === 0) { d.result = ln.slice(7); return; }
     const f = ln.split('|');
     if (f[0] === 'row' && f.length >= 10 && dozePkgOk(f[1]))
-      d.rows[f[1]] = { ok: f[2] === '1', doze: f[3], ra: f[4], rb: f[5], wk: f[6], post: f[7], bucket: f[8], bg: f[9] };
+      d.rows[f[1]] = { ok: f[2] === '1', doze: f[3], ra: f[4], rb: f[5], wk: f[6], post: f[7], bucket: f[8], bg: f[9],
+        zoff: /^\d+$/.test(f[10] || '') ? parseInt(f[10], 10) : -1 };
   });
   return d;
 }
@@ -11137,6 +11139,7 @@ function nfPanel() {
       const probs = nfRowProblems(r);
       let w = !r ? T('nf_row_pending', 'not read yet') : r.doze === 'gone' ? T('nf_tag_gone', 'uninstalled')
         : (probs.length ? T('nf_row_part', 'not fully applied: %s').replace('%s', probs.join(', ')) : T('nf_row_ok', 'fixed · read back from Android'));
+      if (r && r.zoff >= 0) w += ' · ' + T('nf_zoff', 'Zygisk: started %s time(s) with the screen off since boot - each is a push or job waking it').replace('%s', String(r.zoff));
       if (r && r.post === 'ignore') w += ' · ' + T('nf_post_off', 'notifications are switched off for this app in Android - turn them on in its settings');
       why.textContent = w;
       tx.appendChild(why);
@@ -13280,7 +13283,7 @@ function deviceZygiskLinkState(d) {
   if (enabled !== '1' || (safe !== 'off' && safe !== 'on')) return 'unknown';
   if (safe === 'on') return 'safe';
   const reported = deviceVal(d, sec, 'link_state');
-  if (/^(connected|confirmed|waiting|idle|stale)$/.test(reported)) return reported;
+  if (/^(connected|confirmed|waiting|idle|quiet|stale)$/.test(reported)) return reported;
   const freshness = deviceVal(d, sec, 'state_freshness');
   if (freshness !== 'current' && freshness !== 'stale_over_5_minutes' && freshness !== 'no event state') return 'unknown';
   const count = function (key) {
@@ -13290,6 +13293,9 @@ function deviceZygiskLinkState(d) {
   const loaded = count('loaded_processes'), events = count('events_total');
   const spawn = count('spawn_events'), seen = count('policy_seen_generation');
   if (loaded === null || events === null || spawn === null || seen === null) return 'unknown';
+  /* fix280: the channel speaks only when an app process starts; an acknowledged current
+   * policy plus earlier events is a quiet channel, not a lost one. */
+  if (freshness === 'stale_over_5_minutes' && seen > 0 && count('policy_generation') === seen && (spawn > 0 || events > 0)) return 'quiet';
   if (freshness === 'stale_over_5_minutes') return 'stale';
   if (freshness === 'current' && loaded > 0) return 'connected';
   if (freshness === 'current' && (events > 0 || spawn > 0 || seen > 0)) return 'confirmed';
@@ -13302,11 +13308,12 @@ function deviceZygiskLinkState(d) {
 function deviceZygiskLinkVerdict(d) {
   const state = deviceZygiskLinkState(d);
   const labels = { connected: 'Connected', confirmed: 'Channel confirmed', waiting: 'Waiting for a selected process',
-    idle: 'Enabled · nothing selected', stale: 'No fresh evidence', safe: 'Safe mode', off: 'Disabled', unknown: 'Status unknown' };
+    idle: 'Enabled · nothing selected', quiet: 'Channel confirmed · quiet', stale: 'No fresh evidence', safe: 'Safe mode', off: 'Disabled', unknown: 'Status unknown' };
   const details = { connected: 'Validated live observed processes: {n}',
     confirmed: 'Fresh companion evidence; this does not mean total control of Zygisk.',
     waiting: 'No companion events yet. Start or restart a selected app.',
     idle: 'Allowlist empty; cold-start lift and ledger off.',
+    quiet: 'Worked with the current policy; no app process has started for {m} min - the channel only speaks when one does.',
     stale: 'Earlier activity only; no current connection is claimed.',
     safe: 'New injection and requests are disabled.',
     off: 'Observer is off for new processes.',
@@ -13314,7 +13321,8 @@ function deviceZygiskLinkVerdict(d) {
   return {
     state: state,
     status: T('dev_zygisk_link_' + state, labels[state]),
-    detail: deviceFill('dev_zygisk_link_' + state + '_detail', details[state], { n: deviceVal(d, 'zygisk_observer', 'loaded_processes') })
+    detail: deviceFill('dev_zygisk_link_' + state + '_detail', details[state], { n: deviceVal(d, 'zygisk_observer', 'loaded_processes'),
+      m: (/^\d+$/.test(deviceVal(d, 'zygisk_observer', 'state_age_ms')) ? String(Math.round(parseInt(deviceVal(d, 'zygisk_observer', 'state_age_ms'), 10) / 60000)) : '>5') })
   };
 }
 function deviceZygiskLink(d) {
@@ -13590,21 +13598,262 @@ function zygiskPageRender(d) {
   act.appendChild(deviceZygiskOverview(d));
   act.appendChild(zygiskPageRows(d));
   body.appendChild(act);
+  body.appendChild(zygiskGuardCard());
+  body.appendChild(zygiskAotCard());
   const apps = logReportSec(T('zy_sec_apps', 'Observed apps and safe mode'));
   apps.appendChild(deviceZygiskEditor(d, function () { zygiskPageLoad(true); }));
   body.appendChild(apps);
   body.appendChild(zygiskEvidenceCard(d));
   if (_el('zygiskPage') && y) _el('zygiskPage').scrollTop = y;
 }
+/* fix280: the restart-loop guard - the Zygisk start ledger drives an action. With the screen
+ * off, an app that starts again and again (runtime/asb_zygisk_guard.sh: 6+ process starts in
+ * five minutes between two service ticks) gets its background activity restricted until the
+ * screen turns on; the previous AppOps mode is recorded and given back. Protected classes,
+ * the Doze keep list and notification-fix apps are never touched. fix282: a second level,
+ * "loops + night wakers", restricts an app whose process starts 8+ times in one screen-off
+ * period at any pace; each restriction reports the starts that still happened while it held,
+ * and every screen-off period of 15 min or more leaves a summary of process starts. */
+let _zyGuard = null;
+function zygiskGuardParse(out) {
+  const g = { ok: false, enabled: false, level: 'off', ledger: false, threshold: 6, wakerMin: 8, active: [], events: [], nights: [] };
+  const num = function (v) { const n = parseInt(v, 10); return isFinite(n) && n > 0 ? n : 0; };
+  String(out || '').split('\n').forEach(function (ln) {
+    ln = ln.trim();
+    if (ln === 'version=1') g.ok = true;
+    else if (ln === 'enabled=1') g.enabled = true;
+    else if (/^level=(off|loops|wakers)$/.test(ln)) g.level = ln.slice(6);
+    else if (ln === 'ledger=1') g.ledger = true;
+    else if (/^threshold=\d+$/.test(ln)) g.threshold = parseInt(ln.slice(10), 10);
+    else if (/^waker_min=\d+$/.test(ln)) g.wakerMin = parseInt(ln.slice(10), 10);
+    else {
+      const f = ln.split('|');
+      if (f[0] === 'active' && dozePkgOk(f[1] || ''))
+        g.active.push({ pkg: f[1], since: num(f[2]), n: num(f[3]), why: f[4] === 'waker' ? 'waker' : 'loop', after: /^\d+$/.test(f[5] || '') ? parseInt(f[5], 10) : -1 });
+      else if (f[0] === 'event' && dozePkgOk(f[2] || '') && /^[a-z_]+$/.test(f[4] || ''))
+        g.events.push({ at: num(f[1]), pkg: f[2], n: num(f[3]), what: f[4], extra: /^(loop|waker|\d+)$/.test(f[5] || '') ? f[5] : '' });
+      else if (f[0] === 'night' && /^\d+$/.test(f[1] || '') && /^\d+$/.test(f[2] || '') && /^\d+$/.test(f[3] || '') && /^\d+$/.test(f[4] || '')) {
+        const top = String(f[5] || '').split(',').map(function (x) { const q = x.split(':'); return { pkg: q[0], n: num(q[1]) }; })
+          .filter(function (x) { return dozePkgOk(x.pkg) && x.n > 0; });
+        g.nights.push({ from: num(f[1]), to: num(f[2]), total: num(f[3]), restricted: num(f[4]), top: top });
+      }
+    }
+  });
+  if (g.enabled && g.level === 'off') g.level = 'loops';
+  return g;
+}
+function zygiskGuardClock(sec) {
+  if (!(sec > 0)) return '';
+  const t = new Date(sec * 1000);
+  return (t.getHours() < 10 ? '0' : '') + t.getHours() + ':' + (t.getMinutes() < 10 ? '0' : '') + t.getMinutes();
+}
+function zygiskGuardWhy(w) {
+  return w === 'waker' ? T('zy_guard_why_waker', 'night waker') : T('zy_guard_why_loop', 'restart loop');
+}
+function zygiskGuardNightRow(n, nm) {
+  const d = new Date(n.from * 1000);
+  const day = (d.getDate() < 10 ? '0' : '') + d.getDate() + '.' + (d.getMonth() < 9 ? '0' : '') + (d.getMonth() + 1);
+  const k = day + ' ' + zygiskGuardClock(n.from) + '–' + zygiskGuardClock(n.to) + ' · ' + logReportDur((n.to - n.from) / 60);
+  let v = T('zy_guard_night_row', '%1 process starts · %2 restricted').replace('%1', String(n.total)).replace('%2', String(n.restricted));
+  if (n.top.length) v += ' · ' + T('zy_guard_night_top', 'most: %s').replace('%s', n.top.map(function (x) { return nm(x.pkg) + ' ' + x.n; }).join(', '));
+  return logReportRow(k, v, false);
+}
+function zygiskGuardCard() {
+  const g = _zyGuard || zygiskGuardParse('');
+  const card = logReportSec(T('zy_guard_title', 'Restart-loop guard'));
+  card.appendChild(logReportNote(T('zy_guard_desc', 'With the screen off, an app that starts again and again (%s or more process starts in 5 minutes, counted by the Zygisk start ledger) gets its background activity restricted until the screen turns on; then the previous setting comes back. Messengers, mail, alarms, navigation, watches, VPN and the apps on the Doze keep list or in the notification fix are never touched.').replace('%s', String(g.threshold))));
+  card.appendChild(logReportNote(T('zy_guard_desc_wakers', 'Loops + night wakers: an app whose process starts %s or more times during one screen-off period, at any pace, is restricted the same way until the screen turns on. Each restriction counts the starts that still happened while it was in place.').replace('%s', String(g.wakerMin))));
+  const seg = document.createElement('div');
+  seg.className = 'cfg-seg zy-mode-seg zy-guard-seg';
+  [['off', T('zy_guard_off', 'Off')], ['loops', T('zy_guard_on', 'Restrain loops')], ['wakers', T('zy_guard_wakers', 'Loops + night wakers')]].forEach(function (o) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = o[1];
+    if (o[0] === g.level) b.classList.add('on');
+    b.onclick = function () { zygiskGuardSet(o[0]); };
+    seg.appendChild(b);
+  });
+  card.appendChild(seg);
+  if (!g.ok) card.appendChild(logReportNote(T('zy_guard_unread', 'The guard state has not been read yet.')));
+  else if (g.enabled && !g.ledger) card.appendChild(logReportNote(T('zy_guard_needs_ledger', 'Needs the process-start ledger: choose Watch or Full above.')));
+  const pk = [];
+  g.active.forEach(function (a) { pk.push(a.pkg); });
+  g.events.forEach(function (e) { pk.push(e.pkg); });
+  g.nights.forEach(function (n) { n.top.forEach(function (x) { pk.push(x.pkg); }); });
+  const names = dozeKeepLabels(pk);
+  const nm = function (p) { return names[p] || p; };
+  if (g.active.length) {
+    g.active.forEach(function (a) {
+      let v = T('zy_guard_active', 'restricted since %1 · %2 starts').replace('%1', zygiskGuardClock(a.since)).replace('%2', String(a.n)) + ' · ' + zygiskGuardWhy(a.why);
+      if (a.after >= 0) v += ' · ' + T('zy_guard_after', 'starts while restricted: %s').replace('%s', String(a.after));
+      card.appendChild(logReportRow(nm(a.pkg), v, false));
+    });
+  } else if (g.ok && g.enabled) {
+    card.appendChild(logReportNote(T('zy_guard_none', 'No app is restricted now.')));
+  }
+  if (g.nights.length) {
+    const nb = document.createElement('details');
+    nb.className = 'zy-evidence';
+    nb.open = true;
+    const ns = document.createElement('summary');
+    ns.textContent = T('zy_guard_nights', 'Screen-off periods (%s)').replace('%s', String(g.nights.length));
+    nb.appendChild(ns);
+    g.nights.slice().reverse().forEach(function (n) { nb.appendChild(zygiskGuardNightRow(n, nm)); });
+    nb.appendChild(logReportNote(T('zy_guard_nights_note', 'Process starts of every app, system ones included, between the first and the last screen-off sample of each period of 15 minutes or more.')));
+    card.appendChild(nb);
+  }
+  if (g.events.length) {
+    const ev = document.createElement('details');
+    ev.className = 'zy-evidence';
+    const sm = document.createElement('summary');
+    sm.textContent = T('zy_guard_history', 'Recent guard events (%s)').replace('%s', String(g.events.length));
+    ev.appendChild(sm);
+    g.events.slice().reverse().forEach(function (e) {
+      let what = T('zy_guard_ev_' + e.what, e.what.replace(/_/g, ' ')) + (e.n ? ' · ' + e.n : '');
+      if (e.extra === 'loop' || e.extra === 'waker') what += ' · ' + zygiskGuardWhy(e.extra);
+      else if (/^\d+$/.test(e.extra) && /^lifted_/.test(e.what)) what += ' · ' + T('zy_guard_after', 'starts while restricted: %s').replace('%s', e.extra);
+      ev.appendChild(logReportRow(zygiskGuardClock(e.at) + ' · ' + nm(e.pkg), what, false));
+    });
+    card.appendChild(ev);
+  }
+  return card;
+}
+async function zygiskGuardSet(level) {
+  if (_zygiskModeBusy) return;
+  if (level !== 'loops' && level !== 'wakers') level = 'off';
+  _zygiskModeBusy = true;
+  uiSound(level !== 'off' ? 'toggle_on' : 'toggle_off');
+  let b = null;
+  try {
+    b = await runBatch([['set', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_guard.sh') + (level !== 'off' ? ' enable ' + level : ' disable')],
+      ['guard', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_guard.sh') + ' status']]);
+  } catch (e) { b = null; }
+  _zygiskModeBusy = false;
+  const ok = !!(b && b.set && /result=(enabled|disabled)/.test(b.set.stdout || ''));
+  if (b && b.guard && b.guard.errno === 0) _zyGuard = zygiskGuardParse(b.guard.stdout);
+  toast(ok ? (level === 'wakers' ? T('zy_guard_set_wakers', 'Guard on: restart loops and night wakers')
+           : level === 'loops' ? T('zy_guard_set_on', 'Restart-loop guard on') : T('zy_guard_set_off', 'Restart-loop guard off · every restriction given back'))
+           : T('zy_mode_failed', 'Could not change the mode'), ok ? 'good' : 'bad');
+  if (_zygiskOpen) zygiskPageRender(window._asbZygiskLinkData || null);
+}
+/* fix281: faster app starts from the Zygisk start ledger. runtime/asb_zygisk_aot.sh ranks the
+ * apps the user opens most (top-app process starts in the ledger, launches in Android's own
+ * launch log otherwise), reads their ART compile state and, only while charging with the screen
+ * off and the battery below 40 C, compiles the ones running without ahead-of-time code the way
+ * the nightly maintenance job does (bg-dexopt: speed-profile at background priority). The card
+ * shows each app's cold-start median from Android's launch log before and after. */
+let _zyAot = null;
+function zygiskAotParse(out) {
+  const g = { ok: false, enabled: false, ledger: false, charging: false, screen: true, running: false, checked: 0, launches: 0, apps: [], events: [] };
+  const num = function (v) { const n = parseInt(v, 10); return isFinite(n) && n > 0 ? n : 0; };
+  String(out || '').split('\n').forEach(function (ln) {
+    ln = ln.trim();
+    if (ln === 'version=1') g.ok = true;
+    else if (ln === 'enabled=1') g.enabled = true;
+    else if (ln === 'ledger=1') g.ledger = true;
+    else if (ln === 'charging=1') g.charging = true;
+    else if (ln === 'screen=0') g.screen = false;
+    else if (ln === 'running=1') g.running = true;
+    else if (/^checked=\d+$/.test(ln)) g.checked = num(ln.slice(8));
+    else if (/^launches=\d+$/.test(ln)) g.launches = num(ln.slice(9));
+    else {
+      const f = ln.split('|');
+      if (f[0] === 'app' && f.length >= 15 && dozePkgOk(f[1] || '') && /^[a-z-]+$/.test(f[3] || ''))
+        g.apps.push({ pkg: f[1], n: num(f[2]), filter: f[3], reason: /^[A-Za-z0-9_.-]+$/.test(f[4]) ? f[4] : '-',
+          tried: num(f[5]), result: /^[a-z_-]+$/.test(f[6]) ? f[6] : '-', at: num(f[7]), before: /^[a-z-]+$/.test(f[8]) ? f[8] : '-',
+          coldN: num(f[9]), cold: num(f[10]), preN: num(f[11]), pre: num(f[12]), postN: num(f[13]), post: num(f[14]) });
+      else if (f[0] === 'event' && dozePkgOk(f[2] || '') && /^[a-z_]+$/.test(f[3] || ''))
+        g.events.push({ at: num(f[1]), pkg: f[2], what: f[3], detail: /^[a-z>-]+$/.test(f[4] || '') ? f[4] : '' });
+    }
+  });
+  return g;
+}
+function zygiskAotStrong(f) { return /^(speed-profile|speed|everything|everything-profile)$/.test(f); }
+function zygiskAotWeak(f) { return /^(verify|quicken|extract|assume-verified|run-from-apk|run-from-apk-fallback|run-from-vdex-fallback|space|space-profile|error)$/.test(f); }
+function zygiskAotValue(a) {
+  const parts = [T('zy_aot_launches', '%s launches').replace('%s', String(a.n))];
+  if (zygiskAotStrong(a.filter)) parts.push(T('zy_aot_strong', 'compiled (%s)').replace('%s', a.filter));
+  else if (zygiskAotWeak(a.filter)) parts.push(T('zy_aot_weak', 'no AOT code (%s)').replace('%s', a.filter));
+  else parts.push(T('zy_aot_unknown', 'compile state unknown'));
+  if (a.at > 0 && a.pre > 0 && a.post > 0)
+    parts.push(T('zy_aot_cold_ba', 'cold start %1 → %2 ms').replace('%1', String(a.pre)).replace('%2', String(a.post)));
+  else if (a.cold > 0) parts.push(T('zy_aot_cold', 'cold start %s ms').replace('%s', String(a.cold)));
+  return parts.map(function (x) { return x.replace(/-/g, '\u2011').replace(/(\d) /g, '$1\u00a0').replace(/ → /g, '\u00a0→ '); }).join(' · ');
+}
+function zygiskAotCard() {
+  const g = _zyAot || zygiskAotParse('');
+  const card = logReportSec(T('zy_aot_title', 'Faster app starts (ART)'));
+  card.appendChild(logReportNote(T('zy_aot_desc', 'ASB counts how often you open each app (Zygisk start ledger) and how long its cold start takes (Android\'s own launch log). Apps you open often that run without ahead-of-time compiled code are compiled the way Android\'s nightly maintenance does it - only while charging with the screen off and the battery below 40 °C. Compiled code needs less JIT work while the app runs and usually starts faster; the times below show what it did on this phone.')));
+  const seg = document.createElement('div');
+  seg.className = 'cfg-seg zy-mode-seg zy-aot-seg';
+  [['off', T('zy_aot_off', 'Off')], ['on', T('zy_aot_on', 'Compile while charging')]].forEach(function (o) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = o[1];
+    if ((o[0] === 'on') === g.enabled) b.classList.add('on');
+    b.onclick = function () { zygiskAotSet(o[0] === 'on'); };
+    seg.appendChild(b);
+  });
+  card.appendChild(seg);
+  if (!g.ok) { card.appendChild(logReportNote(T('zy_aot_unread', 'The compile state has not been read yet.'))); return card; }
+  if (g.enabled && !g.ledger) card.appendChild(logReportNote(T('zy_aot_no_ledger', 'Without the process-start ledger (Watch or Full above) apps are ranked by the launches Android logged.')));
+  const weak = g.apps.filter(function (a) { return zygiskAotWeak(a.filter) && a.result !== 'no_profile'; }).length;
+  if (g.enabled) {
+    if (g.running) card.appendChild(logReportNote(T('zy_aot_running', 'Compiling now (background priority).')));
+    else if (!g.apps.length) card.appendChild(logReportNote(T('zy_aot_empty', 'Not enough launches yet: apps are listed after you open them a few times.')));
+    else if (weak) card.appendChild(logReportNote(T('zy_aot_waiting', '%s app(s) without AOT code wait for the charger with the screen off.').replace('%s', String(weak))));
+    else card.appendChild(logReportNote(T('zy_aot_all_good', 'Every listed app already has compiled code; nothing to do.')));
+  }
+  const names = dozeKeepLabels(g.apps.map(function (a) { return a.pkg; }).concat(g.events.map(function (e) { return e.pkg; })));
+  const nm = function (p) { return names[p] || p; };
+  g.apps.forEach(function (a) { card.appendChild(logReportRow(nm(a.pkg), zygiskAotValue(a), false)); });
+  if (g.apps.length) card.appendChild(logReportNote(T('zy_aot_note', 'Times come from Android\'s launch log (until the first frame); a cold start is one where Android had to start the app\'s process. They vary with what the app loads - compare medians over several starts.')));
+  if (g.events.length) {
+    const ev = document.createElement('details');
+    ev.className = 'zy-evidence';
+    const sm = document.createElement('summary');
+    sm.textContent = T('zy_aot_history', 'Recent compile events (%s)').replace('%s', String(g.events.length));
+    ev.appendChild(sm);
+    g.events.slice().reverse().forEach(function (e) {
+      const what = T('zy_aot_ev_' + e.what, e.what.replace(/_/g, ' '));
+      ev.appendChild(logReportRow(zygiskGuardClock(e.at) + ' · ' + nm(e.pkg), what + (e.detail ? ' · ' + e.detail.replace('>', ' → ') : ''), false));
+    });
+    card.appendChild(ev);
+  }
+  return card;
+}
+async function zygiskAotSet(on) {
+  if (_zygiskModeBusy) return;
+  _zygiskModeBusy = true;
+  uiSound(on ? 'toggle_on' : 'toggle_off');
+  let b = null;
+  try {
+    b = await runBatch([['set', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_aot.sh') + (on ? ' enable' : ' disable')],
+      ['aot', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_aot.sh') + ' status']]);
+  } catch (e) { b = null; }
+  _zygiskModeBusy = false;
+  const ok = !!(b && b.set && /result=(enabled|disabled)/.test(b.set.stdout || ''));
+  if (b && b.aot && b.aot.errno === 0) _zyAot = zygiskAotParse(b.aot.stdout);
+  toast(ok ? (on ? T('zy_aot_set_on', 'Compiling while charging: on') : T('zy_aot_set_off', 'Compiling while charging: off'))
+           : T('zy_mode_failed', 'Could not change the mode'), ok ? 'good' : 'bad');
+  if (_zygiskOpen) zygiskPageRender(window._asbZygiskLinkData || null);
+}
 async function zygiskPageLoad(user) {
   const seq = ++_zygiskLoadSeq;
   const status = _el('zygiskStatus'), btn = _el('zyRefresh');
   if (btn) btn.disabled = true;
   if (status) status.textContent = T('zy_status_loading', 'Reading…');
-  let r = null;
-  try { r = await run('sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' link-status 2>/dev/null'); } catch (e) { r = null; }
+  let b = null;
+  try {
+    b = await runBatch([['link', 'sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' link-status'],
+      ['guard', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_guard.sh') + ' status'],
+      ['aot', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_aot.sh') + ' status']]);
+  } catch (e) { b = null; }
   if (seq !== _zygiskLoadSeq) return;
   if (btn) btn.disabled = false;
+  const r = b ? b.link : null;
+  if (b && b.guard && b.guard.errno === 0) _zyGuard = zygiskGuardParse(b.guard.stdout);
+  if (b && b.aot && b.aot.errno === 0) _zyAot = zygiskAotParse(b.aot.stdout);
   const d = parseDeviceInfo(r ? runText(r) : '');
   if (r && r.errno === 0 && d.count) {
     _zygiskHeaderAt = Date.now();
@@ -14234,6 +14483,10 @@ function logReportDxT(key, vars) {
     lr_dx_fix_radio: "Check which apps download in the background (messengers with auto-download, photo backup) and limit them to Wi-Fi.",
     lr_dx_fix_asleep: "Compare a night with mobile data or Bluetooth off. If the drain stays this high night after night, send the log to the developer.",
     lr_dx_fix_alarm: "Restrict the background activity of the app behind that wakeup, or turn off its scheduled notifications.",
+    lr_dx_selfpush: "{who} woke the phone {n} times by restarting its own notification service on an alarm (Android battery history since the last charge). The app keeps its own message connection alive besides Google push, and every restart wakes the phone.",
+    lr_dx_selfpush_gms: "{who} woke the phone {n} times by restarting its own notification service on an alarm (Android battery history since the last charge). \"{set}\" is on strict in ASB: Google services lose their Doze exemption, so push can arrive late while the phone sleeps - a common reason to keep an app's own connection on.",
+    lr_dx_fix_selfpush: "In the app's own notification settings turn off its keep-alive or background-connection service, then check with the notification fix that messages still arrive on time.",
+    lr_dx_fix_selfpush_gms: "Set Google Services Trim to light in ASB first; if messages then arrive on time, turn off the app's own keep-alive service.",
     lr_dx_fix_send: "Use Save for the developer and send the saved report to the developer.",
     lr_dx_also_holder: "Also: {who}, in {hpct}% of the checks.",
     lr_dx_bgheat: "With the screen off the CPU reached {cpu}° at times - something did heavy work in the background (media downloads, a backup, app updates).",
@@ -14308,6 +14561,14 @@ function logReportDxT(key, vars) {
     lr_dx_short: "Only {min} recorded - the causes above are early. Let the log run through a night and a day."
   };
   return logReportT(key, fallback[key] || key, vars || {});
+}
+function logReportSelfPush(d) {
+  const cfg = (d && d.cfg) || {};
+  const sp = ((d && d.wla) || []).filter(function (w) {
+    return (+w.n || 0) >= 30 && /NotificationsService|KeepAlive|keep_?alive|PushService|push_?service|Heartbeat/i.test(String(w.tag));
+  })[0];
+  if (!sp) return null;
+  return { tag: String(sp.tag), who: String(sp.tag).split('/')[0], n: +sp.n, gms: cfg.gms_trim === 'strict' };
 }
 function logReportDiagnose(d) {
   const s = d.sections || {}, cfg = d.cfg || {}, meta = s.meta || {};
@@ -14519,6 +14780,21 @@ function logReportDiagnose(d) {
     }
   }
 
+  /* fix280: an app restarting its own notification service on a wakeup alarm (an OP15
+   * capture: one messenger's NotificationsService 108 times) keeps its own message
+   * connection alive. When the idle verdict already names that alarm, its fix is made
+   * specific instead of a second card. */
+  {
+    const sp = logReportSelfPush(d);
+    if (sp) {
+      const pv = { who: sp.who, n: String(sp.n), set: Tcfg('gms_trim', 'name', 'Google Services Trim') };
+      const fx = sp.gms ? 'lr_dx_fix_selfpush_gms' : 'lr_dx_fix_selfpush';
+      const prev = out.filter(function (x) { return x.cause === 'lr_dx_idle_alarm' && x.cv && x.cv.who === sp.tag; })[0];
+      if (prev) { prev.fix = fx; prev.fv = pv; }
+      else item('push', 'normal', sp.gms ? 'lr_dx_selfpush_gms' : 'lr_dx_selfpush', pv, sp.gms ? 'asb' : 'app', fx, pv);
+    }
+  }
+
   if (sinj && sinj.pkg && (+sinj.n || 0) > 0 && sysui && (+sysui.count || 0) > 0)
     item('stab', 'problem', 'lr_dx_sysui_inj', { n: String(sysui.count), m: String(sinj.n), pkg: String(sinj.pkg) }, 'app', 'lr_dx_fix_inj', { pkg: String(sinj.pkg) });
   else if (crash && (+crash.count || 0) > 2 && !((+crash.asb || 0) > 0))
@@ -14565,7 +14841,7 @@ function logReportDiagSection(items) {
     asbfix: 'Source: an ASB fault, fixed in this build' };
   const areaFb = { idle: 'Battery with the screen off', screen: 'Battery with the screen on', smooth: 'Smoothness',
     heat: 'Heat and throttling', bgheat: 'Background work', stab: 'Stability', asb: 'ASB itself', data: 'Measurement',
-    net: 'Mobile data', lte: 'ASB network switches' };
+    net: 'Mobile data', lte: 'ASB network switches', push: 'Push notifications' };
   items.forEach(function (it) {
     const box = document.createElement('div');
     box.className = 'lgr-dx lgr-dx-' + it.state;
@@ -14672,6 +14948,7 @@ function logReportDiagRef(it) {
   if (it.area === 'heat' || it.area === 'bgheat') return logReportRef(['lgr-thermal', 'lgr-drain'], 'lr_sec_thermal');
   if (it.area === 'asb') return logReportRef(['lgr-asb', 'lgr-details'], 'lr_sec_asb');
   if (it.area === 'stab') return logReportRef(['lgr-crash', 'lgr-details'], 'lr_sec_crash');
+  if (it.area === 'push') return logReportRef(['lgr-wake', 'lgr-drain'], 'lr_sec_nightd_short');
   if (it.area === 'idle' || it.area === 'screen' || it.area === 'net' || it.area === 'lte')
     return logReportRef(['lgr-drain', 'lgr-night', 'lgr-wake'], 'lr_sec_drain');
   if (it.area === 'data') return logReportRef(['lgr-details'], 'lr_sec_details');
@@ -14740,9 +15017,12 @@ function logReportZygisk(d) {
   if (!z) return null;
   const sec = logReportSec(T('lr_sec_zygisk', '🧩 Zygisk · ASB injection')); sec.id = 'lgr-zygisk';
   const observer = {
-    link_state: z.state || 'unknown', enabled: z.enabled || 'unknown', safe_mode: z.safe_mode || 'unknown',
-    state_freshness: z.freshness || 'unknown', loaded_processes: z.loaded || '0',
+    /* fix280: a capture taken by an older collector says "stale" for a quiet channel; let the
+       page decide from the policy acknowledgement and the counters instead. */
+    link_state: (z.state === 'stale' ? '' : (z.state || 'unknown')), enabled: z.enabled || 'unknown', safe_mode: z.safe_mode || 'unknown',
+    state_freshness: z.freshness || 'unknown', loaded_processes: z.loaded || '0', state_age_ms: z.age_ms || '',
     events_total: z.events_total_latest || '0', spawn_events: z.spawn_events_latest || '0',
+    policy_generation: z.policy_generation || '0',
     policy_seen_generation: z.policy_seen_generation || '0', enabled_packages: z.packages || '0',
     launch_hints: z.launch_hints || '0', spawn_ledger: z.spawn_ledger || '0'
   };
