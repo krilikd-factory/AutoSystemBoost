@@ -779,6 +779,14 @@ The pre-automatic manual list is restored exactly on disable, which also disable
 
 **Wakelock history.** `wakelock_hist` (`epoch|package|seconds`, 7 days, 3000 lines at most) grows on the hourly screen-off pass and on every opening of the picker from the change of Android's since-unplug counters; a counter that went backwards (a charge, a restart) counts whole. The picker ranks by the larger of the two windows and lists every other user app for an explicit choice.
 
+### 🎞️ 11.14. Why a frame was late, the Battery lift and the GPU, one battery-statistics read (fix288)
+
+**Why frames were late.** `jank_trace.tsv` says how many frames missed their deadline; it cannot say why. From the same `dumpsys graphicsstats` the recorder already reads each screen-on poll, `jank_detail.tsv` keeps two rows per interval - the app with the most janky frames and SystemUI: frames, janky, slow UI thread, slow draw commands, slow bitmap uploads, deadline missed, the interval's frame-time and GPU-time p50/p90/p99 (deltas of Android's own histograms), frames whose GPU work alone took 8 or 16 ms or more, and the GPU ceiling (kgsl `max_pwrlevel` and its MHz). The report groups them by app and ASB state and names a cause: GPU (GPU work over a 60 Hz frame in at least 40 % of the late frames), UI thread, RenderThread, GPU at 120 Hz only, or none of these (the app or the compositor pacing its own frames - no ceiling changes that). An app seen in two states gets its GPU-over-a-frame share under each GPU ceiling; that comparison is what decides whether Battery's light-idle GPU step (`bat_light_idle_gpu`) costs frames. The per-poll package file keeps histograms only for apps that drew since the previous poll (`?` for the rest).
+
+**The Battery lift and the GPU.** Every lift - wake, first touch, tap, app switch, lock press, cold start and the recorder-only jank guard - raises the CPU ceilings and the top-app uclamp. On Battery it now also lifts a GPU ceiling below Battery's own light-idle envelope (`ASB_BATTERY_FLOOR_GPU_MAX_PCT`, 40 %) to that envelope for the length of the lift; a higher ceiling is never lowered and an unmanaged GPU stays unmanaged. `unlock_gpu` / `unlock_gpu_lifts` in the state file and asbdiag.
+
+**One battery-statistics read per pass.** The hourly screen-off wakelock pass takes `dumpsys batterystats --charged` once (a plain dump where the option is refused) and every parser - kernel wakelocks, the app ranking, the 7-day history, Wi-Fi multicast - reads that copy. It used to dump the full statistics, history included, up to four times per pass.
+
 ## 🔐 12. Device information, privacy and evidence quality
 
 ### 🕵️ 12.1. Read-only, on-demand collection
