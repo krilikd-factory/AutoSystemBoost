@@ -2579,5 +2579,8 @@
   "zy_auto_safe": "الوضع الآمن مفعّل. لا يلغيه الإعداد التلقائي؛ ألغِ الوضع الآمن صراحةً أولاً.",
   "zy_auto_managed_label": "تطبيقات اختارها ASB تلقائياً",
   "zy_auto_managed_note": "يدير الإعداد التلقائي هذه القائمة. تُحدَّث بعد تغيّر الحزم في دورات الخدمة الحالية أو من الزر أعلاه. أوقف الإعداد التلقائي لتعديلها يدوياً. يبقى الوضع الآمن متاحاً هنا.",
-  "lr_tip_sysui_hooks": "يتقطع SystemUI في {n} من {of} فترات والشاشة مضاءة رغم إيقاف المصادر المعتادة التي تتحدث كل ثانية، ويحمّل إطار الخطافات فيه هذه الوحدات: {hooks}. أوقفها لـ System UI واحدة تلو الأخرى وقارن بالتسجيل التالي."
+  "lr_tip_sysui_hooks": "يتقطع SystemUI في {n} من {of} فترات والشاشة مضاءة رغم إيقاف المصادر المعتادة التي تتحدث كل ثانية، ويحمّل إطار الخطافات فيه هذه الوحدات: {hooks}. أوقفها لـ System UI واحدة تلو الأخرى وقارن بالتسجيل التالي.",
+  "lr_cached_status": "Snapshot from %s · refreshing…",
+  "lr_cached_failed": "Could not refresh · the snapshot from %s is shown",
+  "lr_loading_sub": "The report is already open. The read-only digest will replace this card; nothing is being changed."
 }

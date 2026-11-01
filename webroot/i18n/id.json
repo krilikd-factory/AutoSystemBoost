@@ -2579,5 +2579,8 @@
   "zy_auto_safe": "Mode aman aktif. Penyiapan otomatis tidak mematikannya; matikan mode aman secara eksplisit lebih dulu.",
   "zy_auto_managed_label": "Aplikasi yang dipilih otomatis oleh ASB",
   "zy_auto_managed_note": "Daftar ini dikelola penyiapan otomatis. Daftar disegarkan setelah perubahan paket pada putaran layanan yang ada atau lewat tombol di atas. Matikan penyiapan otomatis untuk mengeditnya secara manual. Mode aman tetap tersedia di sini.",
-  "lr_tip_sysui_hooks": "SystemUI tersendat di {n} dari {of} interval layar menyala meskipun sumber per detik yang biasa sudah mati, dan framework hook memuat modul ini ke dalamnya: {hooks}. Matikan satu per satu untuk System UI dan bandingkan dengan rekaman berikutnya."
+  "lr_tip_sysui_hooks": "SystemUI tersendat di {n} dari {of} interval layar menyala meskipun sumber per detik yang biasa sudah mati, dan framework hook memuat modul ini ke dalamnya: {hooks}. Matikan satu per satu untuk System UI dan bandingkan dengan rekaman berikutnya.",
+  "lr_cached_status": "Snapshot from %s · refreshing…",
+  "lr_cached_failed": "Could not refresh · the snapshot from %s is shown",
+  "lr_loading_sub": "The report is already open. The read-only digest will replace this card; nothing is being changed."
 }

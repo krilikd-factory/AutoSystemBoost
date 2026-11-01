@@ -2579,5 +2579,8 @@
   "zy_auto_safe": "Der abgesicherte Modus ist aktiv. Die automatische Einrichtung hebt ihn nicht auf; hebe ihn zuerst ausdrücklich auf.",
   "zy_auto_managed_label": "Von ASB automatisch gewählte Apps",
   "zy_auto_managed_note": "Diese Liste verwaltet die automatische Einrichtung. Sie wird nach Paketänderungen bei den bestehenden Service-Durchläufen oder über die Schaltfläche oben aktualisiert. Schalte die automatische Einrichtung aus, um sie von Hand zu bearbeiten. Der abgesicherte Modus bleibt hier verfügbar.",
-  "lr_tip_sysui_hooks": "SystemUI ruckelt in {n} von {of} Intervallen mit Bildschirm an, obwohl die üblichen sekündlichen Quellen aus sind, und das Hook-Framework lädt diese Module hinein: {hooks}. Schalte sie für System UI einzeln aus und vergleiche mit der nächsten Aufzeichnung."
+  "lr_tip_sysui_hooks": "SystemUI ruckelt in {n} von {of} Intervallen mit Bildschirm an, obwohl die üblichen sekündlichen Quellen aus sind, und das Hook-Framework lädt diese Module hinein: {hooks}. Schalte sie für System UI einzeln aus und vergleiche mit der nächsten Aufzeichnung.",
+  "lr_cached_status": "Snapshot from %s · refreshing…",
+  "lr_cached_failed": "Could not refresh · the snapshot from %s is shown",
+  "lr_loading_sub": "The report is already open. The read-only digest will replace this card; nothing is being changed."
 }

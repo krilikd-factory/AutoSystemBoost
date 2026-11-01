@@ -2349,5 +2349,8 @@
   "zy_auto_safe": "Safe mode is on. Automatic setup will not clear it; clear Safe mode explicitly first.",
   "zy_auto_managed_label": "Apps selected automatically by ASB",
   "zy_auto_managed_note": "This list is managed by Automatic setup. It refreshes after package changes on existing service passes or from the button above. Turn off Automatic setup before editing it manually. Safe mode remains available here.",
-  "lr_tip_sysui_hooks": "SystemUI stutters in {n} of {of} screen-on intervals although the usual per-second sources are off, and the hook framework loads these modules into it: {hooks}. Switch them off for System UI one at a time and compare the next capture."
+  "lr_tip_sysui_hooks": "SystemUI stutters in {n} of {of} screen-on intervals although the usual per-second sources are off, and the hook framework loads these modules into it: {hooks}. Switch them off for System UI one at a time and compare the next capture.",
+  "lr_cached_status": "Snapshot from %s · refreshing…",
+  "lr_cached_failed": "Could not refresh · the snapshot from %s is shown",
+  "lr_loading_sub": "The report is already open. The read-only digest will replace this card; nothing is being changed."
 }

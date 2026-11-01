@@ -2579,5 +2579,8 @@
   "zy_auto_safe": "Güvenli mod açık. Otomatik kurulum onu kaldırmaz; önce güvenli modu açıkça kaldırın.",
   "zy_auto_managed_label": "ASB'nin otomatik seçtiği uygulamalar",
   "zy_auto_managed_note": "Bu listeyi otomatik kurulum yönetir. Paket değişikliklerinden sonra mevcut servis geçişlerinde veya yukarıdaki düğmeyle yenilenir. Elle düzenlemek için otomatik kurulumu kapatın. Güvenli mod burada kullanılabilir kalır.",
-  "lr_tip_sysui_hooks": "Alışılmış saniyelik kaynaklar kapalı olduğu hâlde SystemUI ekran açık {of} aralığın {n} tanesinde takılıyor ve hook çatısı içine şu modülleri yüklüyor: {hooks}. Bunları System UI için tek tek kapatın ve bir sonraki kayıtla karşılaştırın."
+  "lr_tip_sysui_hooks": "Alışılmış saniyelik kaynaklar kapalı olduğu hâlde SystemUI ekran açık {of} aralığın {n} tanesinde takılıyor ve hook çatısı içine şu modülleri yüklüyor: {hooks}. Bunları System UI için tek tek kapatın ve bir sonraki kayıtla karşılaştırın.",
+  "lr_cached_status": "Snapshot from %s · refreshing…",
+  "lr_cached_failed": "Could not refresh · the snapshot from %s is shown",
+  "lr_loading_sub": "The report is already open. The read-only digest will replace this card; nothing is being changed."
 }

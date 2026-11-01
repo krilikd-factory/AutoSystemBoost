@@ -2579,5 +2579,8 @@
   "zy_auto_safe": "安全模式已开启。自动设置不会解除它；请先明确解除安全模式。",
   "zy_auto_managed_label": "由 ASB 自动选择的应用",
   "zy_auto_managed_note": "此列表由自动设置管理。软件包变化后，它会在现有的 service 周期中或通过上方按钮刷新。要手动编辑，请先关闭自动设置。安全模式在此处仍可用。",
-  "lr_tip_sysui_hooks": "虽然常见的每秒刷新来源都已关闭，SystemUI 仍在 {of} 个亮屏区间中的 {n} 个出现卡顿，而且 Hook 框架向其中加载了这些模块：{hooks}。请逐个对 System UI 关闭它们，并与下一次记录比较。"
+  "lr_tip_sysui_hooks": "虽然常见的每秒刷新来源都已关闭，SystemUI 仍在 {of} 个亮屏区间中的 {n} 个出现卡顿，而且 Hook 框架向其中加载了这些模块：{hooks}。请逐个对 System UI 关闭它们，并与下一次记录比较。",
+  "lr_cached_status": "Snapshot from %s · refreshing…",
+  "lr_cached_failed": "Could not refresh · the snapshot from %s is shown",
+  "lr_loading_sub": "The report is already open. The read-only digest will replace this card; nothing is being changed."
 }

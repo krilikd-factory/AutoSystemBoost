@@ -2579,5 +2579,8 @@
   "zy_auto_safe": "Le mode sans échec est actif. La configuration automatique ne le lève pas ; levez-le d'abord explicitement.",
   "zy_auto_managed_label": "Applis choisies automatiquement par ASB",
   "zy_auto_managed_note": "Cette liste est gérée par la configuration automatique. Elle s'actualise après des changements de paquets lors des passages de service existants ou via le bouton ci-dessus. Désactivez la configuration automatique pour la modifier à la main. Le mode sans échec reste disponible ici.",
-  "lr_tip_sysui_hooks": "SystemUI saccade dans {n} intervalles écran allumé sur {of} alors que les sources habituelles à la seconde sont coupées, et le framework de hooks y charge ces modules : {hooks}. Désactivez-les pour System UI un par un et comparez avec la capture suivante."
+  "lr_tip_sysui_hooks": "SystemUI saccade dans {n} intervalles écran allumé sur {of} alors que les sources habituelles à la seconde sont coupées, et le framework de hooks y charge ces modules : {hooks}. Désactivez-les pour System UI un par un et comparez avec la capture suivante.",
+  "lr_cached_status": "Snapshot from %s · refreshing…",
+  "lr_cached_failed": "Could not refresh · the snapshot from %s is shown",
+  "lr_loading_sub": "The report is already open. The read-only digest will replace this card; nothing is being changed."
 }

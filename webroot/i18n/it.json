@@ -2579,5 +2579,8 @@
   "zy_auto_safe": "La modalità sicura è attiva. La configurazione automatica non la disattiva; disattivala prima in modo esplicito.",
   "zy_auto_managed_label": "App scelte automaticamente da ASB",
   "zy_auto_managed_note": "Questo elenco è gestito dalla configurazione automatica. Si aggiorna dopo modifiche ai pacchetti nei passaggi di servizio esistenti o con il pulsante qui sopra. Disattiva la configurazione automatica per modificarlo a mano. La modalità sicura resta disponibile qui.",
-  "lr_tip_sysui_hooks": "SystemUI scatta in {n} intervalli su {of} a schermo acceso anche se le solite fonti al secondo sono spente, e il framework di hook vi carica questi moduli: {hooks}. Disattivali per System UI uno alla volta e confronta con la prossima registrazione."
+  "lr_tip_sysui_hooks": "SystemUI scatta in {n} intervalli su {of} a schermo acceso anche se le solite fonti al secondo sono spente, e il framework di hook vi carica questi moduli: {hooks}. Disattivali per System UI uno alla volta e confronta con la prossima registrazione.",
+  "lr_cached_status": "Snapshot from %s · refreshing…",
+  "lr_cached_failed": "Could not refresh · the snapshot from %s is shown",
+  "lr_loading_sub": "The report is already open. The read-only digest will replace this card; nothing is being changed."
 }
