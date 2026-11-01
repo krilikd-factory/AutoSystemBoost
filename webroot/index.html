@@ -1734,6 +1734,14 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .zygisk-page .zy-mode-seg button { font-size: 12px; padding: 9px 6px; }
 .zygisk-page .zy-mode-desc { color: var(--text-secondary); font-size: 12.5px; line-height: 1.45; margin: 0 2px 8px; }
 .zygisk-page .zy-fine { margin-top: 10px; }
+.zygisk-page .zy-auto-card { border-color: color-mix(in srgb,var(--accent) 32%,var(--border)); }
+.zygisk-page .zy-auto-badge { display:inline-block; margin:0 0 8px; padding:4px 8px; border-radius:999px; background:color-mix(in srgb,var(--accent) 13%,transparent); color:var(--accent); font:700 10px/1.2 var(--sans); }
+.zygisk-page .zy-auto-desc { margin:0 0 10px; color:var(--text-secondary); font-size:12.5px; line-height:1.5; }
+.zygisk-page .zy-auto-summary { margin:8px 0 10px; padding:10px 12px; border:1px solid var(--border); border-radius:12px; color:var(--text); background:rgba(255,255,255,.025); font-size:12px; line-height:1.45; }
+.zygisk-page .zy-auto-actions { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0; }
+.zygisk-page .zy-auto-btn { min-height:40px; padding:9px 14px; border:1px solid var(--border); border-radius:11px; background:var(--surface); color:var(--text); font:700 12px var(--sans); }
+.zygisk-page .zy-auto-btn-primary { border-color:color-mix(in srgb,var(--accent) 45%,var(--border)); background:color-mix(in srgb,var(--accent) 15%,var(--surface)); color:var(--text); }
+.zygisk-page .zy-auto-btn:disabled { opacity:.5; }
 .zygisk-page .zy-evidence { margin: 4px 0 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 14px; }
 .zygisk-page .zy-evidence summary { cursor: pointer; color: var(--text-secondary); font-size: 12.5px; font-weight: 600; }
 .zygisk-page .zy-evidence[open] summary { margin-bottom: 8px; }
@@ -12057,7 +12065,11 @@ function logReportTips(d, all) {
   /* fix222: the awake verdict needs a stretch that can carry it - a five-minute gap fully
      awake is noise, and the worst-stretch row used to turn red over exactly that. Under
      twenty minutes there is no awake tip. */
-  if (idle && (+idle.awake || 0) > 15 && (+idle.dur_min || 0) >= 20) {
+  /* fix285: one restless stretch inside a night that slept well is no action. A field capture
+     put "awake 3%" (the night) over a gate on its worst 39-minute stretch (34% awake) at the
+     top of the priority list, beside a 0.5 %/h night with 97% deep sleep. */
+  const _sleptWell = !!(s.night && (+s.night.dur_min || 0) >= 60 && (+s.night.awake || 0) <= 5 && (+s.night.pctph || 0) <= 1);
+  if (idle && !_sleptWell && (+idle.awake || 0) > 15 && (+idle.dur_min || 0) >= 20) {
     /* fix206: name the culprit when the power-manager samples caught one - "something
        prevents deep sleep" next to a named holder is a finding, without it a shrug.
        fix210: and when even the samples are empty, the occurrence counts still know who
@@ -12093,8 +12105,10 @@ function logReportTips(d, all) {
   /* fix246: a sync that never finishes and a background task that keeps coming back are
      findings with a remedy the user can apply in the system settings - ASB itself never
      cuts a sync (that can lose data) and leaves an app's own scheduled work alone. */
+  /* fix285: a holder caught in most screen-off checks of a phone that slept well held it only
+     in the moments the phone was awake anyway - no action to rank. */
   d.wlive.forEach(function (w) {
-    if (!w.pkg || _holderTipped[w.pkg]) return;
+    if (!w.pkg || _holderTipped[w.pkg] || _sleptWell) return;
     if (w.kind === 'sync' && w.pct >= 30) {
       tips.push({ ic: 'info', key: 'lr_tip_sync_loop', vars: { app: w.pkg, what: logReportAuthority(w.tag), pct: String(w.pct) } });
       _holderTipped[w.pkg] = 1;
@@ -12146,7 +12160,8 @@ function logReportTips(d, all) {
   if (logReportSysuiSteady(sdraw)) {
     const sv = { n: String(sdraw.intv), of: String(sdraw.of), pct: String(sdraw.pct) };
     tips.push({ ic: 'info', key: sdraw.netspeed === '1' ? 'lr_tip_sysui_netspeed' :
-      sdraw.clocksec === '1' ? 'lr_tip_sysui_clocksec' : sdraw.livewp === '1' ? 'lr_tip_sysui_livewp' : 'lr_tip_sysui_other', vars: sv });
+      sdraw.clocksec === '1' ? 'lr_tip_sysui_clocksec' : sdraw.livewp === '1' ? 'lr_tip_sysui_livewp' :
+      sdraw.hooks ? 'lr_tip_sysui_hooks' : 'lr_tip_sysui_other', vars: Object.assign({ hooks: String(sdraw.hooks || '') }, sv) });
   }
   /* fix222: the red background-traffic line had no advice next to it (the owner's Smart
      day: 214.7 MiB with the screen off, radio wakelocks holding the modem). When the
@@ -12448,7 +12463,7 @@ function logReportAnalyze(d) {
     lr_tip_awake_sync: 87, lr_tip_awake_worker: 84, lr_tip_sync_loop: 80, lr_tip_worker: 60,
     lr_tip_awake_hold: 84, lr_tip_awake: 80, lr_tip_sradio: 82, lr_tip_night_modem: 78,
     lr_tip_night: 76, lr_tip_jank_bad: 72, lr_tip_jank_bad_bat: 72, lr_tip_jank_bad_man: 72, lr_tip_jank_wake: 70, lr_tip_jank_wake_wh: 70,
-    lr_tip_sysui_netspeed: 68, lr_tip_sysui_clocksec: 68, lr_tip_sysui_livewp: 66, lr_tip_sysui_other: 30,
+    lr_tip_sysui_netspeed: 68, lr_tip_sysui_clocksec: 68, lr_tip_sysui_livewp: 66, lr_tip_sysui_hooks: 50, lr_tip_sysui_other: 30,
     lr_tip_sysui_inj: 90,
     lr_tip_wl_enable: 64, lr_tip_app: 62, lr_tip_audio: 45, lr_tip_ltpo: 15,
     lr_tip_lte_idle: 94, lr_tip_net_heavy: 74
@@ -13470,6 +13485,70 @@ function zygiskModeOf(d) {
   })[0];
   return hit ? hit.id : 'custom';
 }
+function zygiskAutoCard(d) {
+  const on = deviceVal(d, 'zygisk_observer', 'auto_mode') === '1';
+  const card = logReportSec(T('zy_auto_title', 'Automatic setup'));
+  card.classList.add('zy-auto-card');
+  const badge = document.createElement('div'); badge.className = 'zy-auto-badge';
+  badge.textContent = T('zy_auto_recommended', 'Recommended · no package lists to fill in'); card.appendChild(badge);
+  const desc = document.createElement('div'); desc.className = 'zy-auto-desc';
+  desc.textContent = T('zy_auto_desc', 'ASB selects user apps to observe, enables launch response and the process ledger, guards against restart loops and night wakers, and optimizes frequently opened apps with ART only while charging. You do not need to choose packages or tune the engine.'); card.appendChild(desc);
+  if (on) {
+    const summary = document.createElement('div'); summary.className = 'zy-auto-summary';
+    const n = deviceVal(d, 'zygisk_observer', 'enabled_packages');
+    const guard = _zyGuard && _zyGuard.enabled ? (_zyGuard.level === 'wakers' ? T('zy_guard_wakers', 'Loops + night wakers') : T('zy_guard_on', 'Restrain loops')) : T('zy_guard_off', 'Off');
+    const aot = _zyAot && _zyAot.enabled ? T('zy_aot_on', 'On') : T('zy_aot_off', 'Off');
+    summary.textContent = T('zy_auto_summary', 'Automatic mode is on · %1 observed app(s) · Background guard: %2 · ART: %3').replace('%1', n).replace('%2', guard).replace('%3', aot);
+    card.appendChild(summary);
+  }
+  const actions = document.createElement('div'); actions.className = 'zy-auto-actions';
+  const primary = document.createElement('button'); primary.type = 'button'; primary.className = 'zy-auto-btn zy-auto-btn-primary';
+  primary.textContent = on ? T('zy_auto_refresh', 'Refresh automatic app selection') : T('zy_auto_enable', 'Set up automatically');
+  primary.disabled = _zygiskModeBusy;
+  primary.onclick = function () { zygiskAutoSet(on ? 'refresh' : 'enable'); }; actions.appendChild(primary);
+  if (on) {
+    const off = document.createElement('button'); off.type = 'button'; off.className = 'zy-auto-btn';
+    off.textContent = T('zy_auto_disable', 'Turn off automatic setup'); off.disabled = _zygiskModeBusy;
+    off.onclick = function () { zygiskAutoSet('disable'); }; actions.appendChild(off);
+  }
+  card.appendChild(actions);
+  const note = logReportNote(T('zy_auto_note', 'Only user-installed apps enter the observation list. Background restrictions still require measured start thresholds, skip protected apps and are read back and reversible. Safe mode is never cleared automatically. No LSPosed, kernel, frequency or thermal setting is changed.'));
+  note.classList.add('dev-evidence'); card.appendChild(note);
+  return card;
+}
+async function zygiskAutoSet(action) {
+  if (_zygiskModeBusy || ['enable','refresh','disable'].indexOf(action) < 0) return;
+  _zygiskModeBusy = true;
+  uiSound(action === 'disable' ? 'toggle_off' : 'toggle_on');
+  if (_zygiskOpen) zygiskPageRender(window._asbZygiskLinkData || null);
+  let b = null;
+  try {
+    b = await runBatch([
+      ['set', 'sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' auto-' + action],
+      ['link', 'sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' link-status'],
+      ['guard', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_guard.sh') + ' status'],
+      ['aot', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_aot.sh') + ' status']
+    ]);
+  } catch (e) { b = null; }
+  _zygiskModeBusy = false;
+  const out = b && b.set ? (b.set.stdout || '') : '';
+  const result = (/^result=([a-z_]+)/m.exec(out) || [])[1] || 'failed';
+  const ok = (action === 'enable' && result === 'enabled') || (action === 'refresh' && result === 'refreshed') || (action === 'disable' && result === 'disabled');
+  if (b && b.guard && b.guard.errno === 0) _zyGuard = zygiskGuardParse(b.guard.stdout);
+  if (b && b.aot && b.aot.errno === 0) _zyAot = zygiskAotParse(b.aot.stdout);
+  const d = parseDeviceInfo(b && b.link ? b.link.stdout : '');
+  if (d.count) { _zygiskHeaderAt = Date.now(); zygiskHeaderPublish(d); }
+  if (ok) {
+    _cfgLoadSig = ''; haptic();
+    toast(T(action === 'enable' ? 'zy_auto_enabled' : action === 'refresh' ? 'zy_auto_refreshed' : 'zy_auto_disabled',
+      action === 'enable' ? 'Automatic Zygisk setup is on' : action === 'refresh' ? 'Automatic app selection refreshed' : 'Automatic features off · previous app list restored'), 'good');
+  } else if (result === 'safe_mode') {
+    toast(T('zy_auto_safe', 'Safe mode is on. Automatic setup will not clear it; clear Safe mode explicitly first.'), 'warn');
+  } else {
+    toast(T('zy_auto_failed', 'Automatic setup was not completed; no unsupported package or policy was selected'), 'bad');
+  }
+  if (_zygiskOpen) zygiskPageRender(d.count ? d : (window._asbZygiskLinkData || null));
+}
 function zygiskModeCard(d) {
   const card = logReportSec(T('zy_sec_mode', 'Mode'));
   card.classList.add('zy-mode-card');
@@ -13596,6 +13675,7 @@ function zygiskPageRender(d) {
   const st = logReportSec(T('zy_sec_status', 'Connection'));
   st.appendChild(deviceZygiskLink(d));
   body.appendChild(st);
+  body.appendChild(zygiskAutoCard(d));
   body.appendChild(zygiskModeCard(d));
   const act = logReportSec(T('zy_sec_activity', 'Activity and cost'));
   act.appendChild(deviceZygiskOverview(d));
@@ -14019,10 +14099,16 @@ function deviceZygiskEditor(d, onDone) {
   const label = document.createElement('label'); label.textContent = T('dev_zygisk_allowlist', 'Allowlisted application packages (comma or space separated)');
   const input = document.createElement('input'); input.className = 'dev-zygisk-input'; input.type = 'text';
   input.setAttribute('autocomplete', 'off'); input.setAttribute('spellcheck', 'false');
+  const automatic = deviceVal(d, 'zygisk_observer', 'auto_mode') === '1';
   const current = deviceVal(d, 'zygisk_observer', 'enabled_package_list');
   input.value = current === 'none' || current === '—' ? '' : current;
+  if (automatic) {
+    label.textContent = T('zy_auto_managed_label', 'Apps selected automatically by ASB');
+    input.setAttribute('readonly', 'readonly');
+  }
   const actions = document.createElement('div'); actions.className = 'dev-zygisk-actions';
   const save = document.createElement('button'); save.type = 'button'; save.className = 'dev-zygisk-btn'; save.textContent = T('dev_zygisk_save', 'Save allowlist');
+  if (automatic) save.hidden = true;
   const safe = document.createElement('button'); safe.type = 'button'; safe.className = 'dev-zygisk-btn';
   const safeOn = deviceVal(d, 'zygisk_observer', 'safe_mode') === 'on';
   safe.textContent = T(safeOn ? 'dev_zygisk_safe_off' : 'dev_zygisk_safe_on', safeOn ? 'Clear safe mode' : 'Enable safe mode');
@@ -14044,7 +14130,9 @@ function deviceZygiskEditor(d, onDone) {
     done();
   };
   actions.appendChild(save); actions.appendChild(safe);
-  const note = logReportNote(T('dev_zygisk_editor_note', 'An empty list observes nothing. Protected processes are rejected again by the native module. Enable the separate Zygisk Process Observer setting; saving this list does not enable it. Changes affect newly started processes only.'));
+  const note = logReportNote(automatic
+    ? T('zy_auto_managed_note', 'This list is managed by Automatic setup. It refreshes after package changes on existing service passes or from the button above. Turn off Automatic setup before editing it manually. Safe mode remains available here.')
+    : T('dev_zygisk_editor_note', 'An empty list observes nothing. Protected processes are rejected again by the native module. Enable the separate Zygisk Process Observer setting; saving this list does not enable it. Changes affect newly started processes only.'));
   note.classList.add('dev-evidence');
   wrap.appendChild(label); wrap.appendChild(input); wrap.appendChild(actions); wrap.appendChild(note);
   return wrap;
@@ -14456,6 +14544,7 @@ function logReportTipText(tip) {
     lr_tip_sysui_clocksec: 'SystemUI stutters in {n} of {of} screen-on intervals and the status-bar clock shows seconds - it redraws every second. Turn the seconds off and compare the stutter in the next capture.',
     lr_tip_sysui_livewp: 'SystemUI stutters in {n} of {of} screen-on intervals and a live wallpaper is set - it redraws whenever it is visible. Try a static wallpaper and compare the stutter in the next capture.',
     lr_tip_sysui_other: 'SystemUI stutters in {n} of {of} screen-on intervals although the usual per-second sources are off - look for an animated icon, a floating overlay or a module hooking SystemUI.',
+    lr_tip_sysui_hooks: 'SystemUI stutters in {n} of {of} screen-on intervals although the usual per-second sources are off, and the hook framework loads these modules into it: {hooks}. Switch them off for System UI one at a time and compare the next capture.',
     lr_tip_sysui_inj: 'SystemUI restarted {n} times; {m} of the recorded restarts crashed inside code that {pkg} injects into SystemUI. Update or disable that module - every restart rebuilds the status bar, drops frames and costs battery.',
     lr_tip_lte_idle: '"{set}" was on but did not run once in this capture - an ASB fault on the manual profiles. Install the current build: the switches now run on every profile.',
     lr_tip_net_heavy: '{mib} of mobile data went through the modem, the most by {app} ({amib}). The Mobile data card shows the breakdown.'
@@ -14836,10 +14925,13 @@ function logReportDiagnose(d) {
     const st = jp >= 6 ? 'problem' : jp <= 2 ? 'good' : 'normal';
     let it;
     if (logReportSysuiSteady(sdraw)) {
+      /* fix285: the hook modules the capture found in SystemUI's scope name the remaining
+         candidate when no per-second source is on - not only the ones a restart recorded. */
+      const hk = String((sinj && sinj.hooks) || sdraw.hooks || '');
       const src = sdraw.netspeed === '1' ? 'netspeed' : sdraw.clocksec === '1' ? 'clocksec' : sdraw.livewp === '1' ? 'livewp' :
-        (sinj && sinj.hooks) ? 'hooks' : 'other';
+        hk ? 'hooks' : 'other';
       const sv = Object.assign({}, pv, { n: String(sdraw.intv), of: String(sdraw.of), spct: String(sdraw.pct),
-        src: logReportDxT('lr_dx_src_' + src, { hooks: String((sinj && sinj.hooks) || '') }) });
+        src: logReportDxT('lr_dx_src_' + src, { hooks: hk }) });
       it = item('smooth', st === 'good' ? 'normal' : st, 'lr_dx_smooth_sysui', sv,
         src === 'hooks' ? 'app' : src === 'other' ? 'unknown' : 'user', 'lr_dx_fix_' + (src === 'other' ? 'sysui' : src));
     } else {
@@ -15290,7 +15382,15 @@ function logReportRender(d) {
       if (heroes === 1) g.classList.add('single');
       s.appendChild(g);
     }
-    if (cover) {
+    /* fix285: the durations come from the same split as the drain rows below and the summary
+       ("screen on 1 h 21 min: 6.6 %/h") - the sampled coverage said 1 h / 5 h 6 min for the same
+       capture. The coverage stays the fallback for captures without the phase ledger. */
+    const _scrT = scr && ((+scr.on_min || 0) + (+scr.off_min || 0)) > 0 ? scr : null;
+    if (_scrT) {
+      const _sOn = +_scrT.on_min || 0, _sOff = +_scrT.off_min || 0;
+      s.appendChild(logReportRow(T('lr_screen_on', 'Screen on'), logReportDur(_sOn) + ' (' + String(Math.round(_sOn * 100 / (_sOn + _sOff))) + '%)'));
+      s.appendChild(logReportRow(T('lr_screen_off', 'Screen off'), logReportDur(_sOff)));
+    } else if (cover) {
       s.appendChild(logReportRow(T('lr_screen_on', 'Screen on'), logReportDur(cover.on_min) + ' (' + String(cover.on_pct) + '%)'));
       s.appendChild(logReportRow(T('lr_screen_off', 'Screen off'), logReportDur(cover.off_min)));
     }
@@ -15640,7 +15740,7 @@ function logReportRender(d) {
       const what = logReportHolderWhat(w);
       const label = w.pkg ? (w.pkg + ' · ' + what) : what;
       s.appendChild(logReportRow(label, logReportT('lr_wlive_fmt', 'held in {pct}% of checks · longest {dur}', {
-        pct: String(w.pct), dur: logReportDur(w.min) }), w.pct >= 30));
+        pct: String(w.pct), dur: logReportDur(w.min) }), w.pct >= 30 && (+w.min || 0) >= 1));
       liveShown++;
     });
     /* fix210: the causes by occurrence. Held-time counters stay flat while charging and
