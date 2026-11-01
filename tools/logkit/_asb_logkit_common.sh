@@ -985,6 +985,11 @@ lk_jank_trace_header() {
     echo "# epoch|iso_time|phase|fsm_state|interval_s|main_at_cap|prime_at_cap|touches|frames|janky|deadline_missed|slow_ui|high_input|main_cap_pct|prime_cap_pct|fg_pkg|jank_pkgs|wake"
     echo "# wake (column 18): the row spans a screen-off stretch - last screen-on poll before it to the first after it (fix150)"
   } > "$LK_OUT_DIR/jank_trace.tsv"
+  {
+    echo "# Why frames were late (fix288) - per interval, the app with the most janky frames and SystemUI; graphicsstats per-package deltas"
+    echo "# epoch|fsm_state|pkg|frames|janky|slow_ui|slow_draw|slow_bitmap|deadline_missed|frame_p50|frame_p90|frame_p99|gpu_p50|gpu_p90|gpu_p99|gpu_frames|gpu_ge8|gpu_ge16|gpu_cap_lvl|gpu_cap_mhz"
+    echo "# times in ms; gpu_ge8/gpu_ge16 = frames whose GPU work alone took 8/16 ms or more (longer than a 120/60 Hz frame); '-' = no histogram"
+  } > "$LK_OUT_DIR/jank_detail.tsv"
   lk_cluster_layout_write
   lk_energy_model_write
 }
@@ -1062,18 +1067,115 @@ lk_cluster_layout_write() {
 # between two polls is what it drew in between.
 lk_gfx_totals() {
   if [ -n "${ASB_LK_GFXSTATS_DUMP:-}" ]; then cat "$ASB_LK_GFXSTATS_DUMP" 2>/dev/null
-  else lk_dumpsys graphicsstats 2>/dev/null; fi | awk -v P="${1:-}" '
+  else lk_dumpsys graphicsstats 2>/dev/null; fi | awk -v P="${1:-}" -v X="${2:-}" -v PX="${3:-}" '
+    BEGIN {
+      havepx = 0
+      if (X != "" && PX != "") while ((getline ln < PX) > 0) { if (split(ln, a, "|") >= 2) { pfr[a[1]] = a[2]; havepx = 1 } }
+    }
+    function hist(arr, keys, from,   i, kv) {
+      for (i = from; i <= NF; i++) {
+        if (split($i, kv, "ms=") != 2 || kv[1] !~ /^[0-9]+$/ || kv[2] !~ /^[0-9]+$/ || kv[2] + 0 == 0) continue
+        if (!((pkg, kv[1] + 0) in arr)) keys[pkg] = keys[pkg] (keys[pkg] == "" ? "" : ",") (kv[1] + 0)
+        arr[pkg, kv[1] + 0] += kv[2]
+      }
+    }
+    function out(arr, keys, p,   n, a, i, r) {
+      r = ""; n = split(keys[p], a, ",")
+      for (i = 1; i <= n; i++) r = r (r == "" ? "" : ",") a[i] ":" arr[p, a[i]]
+      return r
+    }
     { sub(/^[ \t]+/, "") }
     /^Package:/                        { pkg = $2 }
     /^Total frames rendered:/          { f += $4; seen = 1; if (pkg != "") { pf[pkg] += $4; pj[pkg] += 0 } }
     /^Janky frames:/                   { j += $3; if (pkg != "") pj[pkg] += $3 }
-    /^Number Frame deadline missed:/   { d += $5 }
-    /^Number Slow UI thread:/          { u += $5 }
+    /^Number Frame deadline missed:/   { d += $5; if (pkg != "" && $NF ~ /^[0-9]+$/) pd[pkg] += $NF }
+    /^Number Slow UI thread:/          { u += $5; if (pkg != "" && $NF ~ /^[0-9]+$/) pu[pkg] += $NF }
     /^Number High input latency:/      { i += $5 }
+    /^Number Slow bitmap uploads:/     { if (pkg != "" && $NF ~ /^[0-9]+$/) pb[pkg] += $NF }
+    /^Number Slow issue draw commands:/ { if (pkg != "" && $NF ~ /^[0-9]+$/) pw[pkg] += $NF }
+    X != "" && pkg != "" && /^HISTOGRAM:/     { hist(fh, fk, 2) }
+    X != "" && pkg != "" && /^GPU HISTOGRAM:/ { hist(gh, gk, 3) }
     END {
       if (seen) printf "%.0f %.0f %.0f %.0f %.0f\n", f, j, d, u, i
       if (P != "") { printf "" > P; for (p in pf) printf "%s %.0f %.0f\n", p, pf[p], pj[p] > P }
+      if (X != "") {
+        printf "" > X
+        for (p in pf) {
+          keep = !havepx || !(p in pfr) || pfr[p] != sprintf("%.0f", pf[p])
+          printf "%s|%.0f|%.0f|%.0f|%.0f|%.0f|%.0f|%s|%s\n", p, pf[p], pj[p], pu[p], pb[p], pw[p], pd[p], \
+            keep ? out(fh, fk, p) : "?", keep ? out(gh, gk, p) : "?" > X
+        }
+      }
     }'
+}
+
+lk_gpu_cap_now() {
+  _gk="${ASB_LK_KGSL:-/sys/class/kgsl/kgsl-3d0}"
+  _gl="$(cat "$_gk/max_pwrlevel" 2>/dev/null | tr -dc '0-9')"
+  [ -n "$_gl" ] || { echo "- -"; return 0; }
+  _gm="$(awk -v l="$_gl" '{ if (l + 1 <= NF && $(l + 1) ~ /^[0-9]+$/) printf "%d", $(l + 1) / 1000000 }' "$_gk/gpu_available_frequencies" 2>/dev/null)"
+  echo "$_gl ${_gm:--}"
+}
+
+lk_gfx_detail() {
+  [ -s "$1" ] && [ -s "$2" ] || return 0
+  awk -F'|' -v E="$3" -v S="$4" -v G="${5:-- -}" '
+    function hmap(str, arr,   n, a, i, kv) {
+      n = split(str, a, ",")
+      for (i = 1; i <= n; i++) if (split(a[i], kv, ":") == 2) arr[kv[1] + 0] = kv[2] + 0
+    }
+    function pct(arr, keys, n, tot, p,   i, c) {
+      c = 0
+      for (i = 1; i <= n; i++) { c += arr[keys[i]]; if (c * 100 >= tot * p) return keys[i] }
+      return keys[n]
+    }
+    function hdelta(cs, os, dk, dv,   cm, om, k, n, i, j, t, tot) {
+      dk[0] = 0
+      if (cs == "?" || os == "?") return -1
+      split("", cm); split("", om); hmap(cs, cm); hmap(os, om)
+      n = 0; tot = 0
+      for (k in om) if (!(k in cm) || cm[k] < om[k]) return -1
+      for (k in cm) {
+        t = cm[k] - om[k] + 0
+        if (t < 0) return -1
+        if (t > 0) { n++; dk[n] = k + 0; dv[k + 0] = t; tot += t }
+      }
+      for (i = 2; i <= n; i++) { t = dk[i]; j = i - 1; while (j >= 1 && dk[j] > t) { dk[j + 1] = dk[j]; j-- } dk[j + 1] = t }
+      dk[0] = n
+      return tot
+    }
+    function emit(p,   c, o, i, d, fk, fv, gk, gv, ft, gt, f50, f90, f99, g50, g90, g99, g8, g16, n, gl) {
+      split(nw[p], c, "|")
+      if (p in pv) split(pv[p], o, "|"); else split("", o)
+      for (i = 2; i <= 7; i++) { d[i] = c[i] - (o[i] + 0); if (d[i] < 0) return }
+      if (d[2] <= 0) return
+      split("", fk); split("", fv); split("", gk); split("", gv)
+      ft = hdelta(c[8], o[8], fk, fv); gt = hdelta(c[9], o[9], gk, gv)
+      f50 = f90 = f99 = g50 = g90 = g99 = "-"; g8 = g16 = "-"; n = 0
+      if (ft > 0) { f50 = pct(fv, fk, fk[0], ft, 50); f90 = pct(fv, fk, fk[0], ft, 90); f99 = pct(fv, fk, fk[0], ft, 99) }
+      if (gt > 0) {
+        g50 = pct(gv, gk, gk[0], gt, 50); g90 = pct(gv, gk, gk[0], gt, 90); g99 = pct(gv, gk, gk[0], gt, 99)
+        g8 = 0; g16 = 0; n = gt
+        for (i = 1; i <= gk[0]; i++) { if (gk[i] >= 8) g8 += gv[gk[i]]; if (gk[i] >= 16) g16 += gv[gk[i]] }
+      }
+      split(G, gl, " ")
+      printf "%s|%s|%s|%d|%d|%d|%d|%d|%d|%s|%s|%s|%s|%s|%s|%d|%s|%s|%s|%s\n", E, S, p, d[2], d[3], d[4], d[6], d[5], d[7], \
+        f50, f90, f99, g50, g90, g99, n, g8, g16, (gl[1] == "" ? "-" : gl[1]), (gl[2] == "" ? "-" : gl[2])
+    }
+    NR == FNR { if ($1 != "") pv[$1] = $0; next }
+    $1 != "" { nw[$1] = $0 }
+    END {
+      top = ""; tj = 0
+      for (p in nw) {
+        if (p == "com.android.systemui") continue
+        split(nw[p], c, "|")
+        if (p in pv) split(pv[p], o, "|"); else split("", o)
+        dj = c[3] - (o[3] + 0)
+        if (c[2] - (o[2] + 0) >= 0 && dj > tj) { top = p; tj = dj }
+      }
+      if (top != "") emit(top)
+      if ("com.android.systemui" in nw) emit("com.android.systemui")
+    }' "$1" "$2" 2>/dev/null
 }
 
 # Which apps drew the janky frames of one interval (fix143): "pkg:janky:frames" for the four
@@ -1162,10 +1264,10 @@ lk_capture_jank_row() {
       LK_JANK_OFF="$LK_JANK_PREV"; LK_JANK_OFF_TS="${LK_JANK_PREV_TS:-0}"; LK_JANK_OFF_TOUCH="${LK_JANK_PREV_TOUCH:-}"
       mv -f "$LK_OUT_DIR/.jank_pkg_prev" "$LK_OUT_DIR/.jank_pkg_off" 2>/dev/null || rm -f "$LK_OUT_DIR/.jank_pkg_off" 2>/dev/null
     fi
-    LK_JANK_PREV=""; rm -f "$LK_OUT_DIR/.jank_tis_lo" "$LK_OUT_DIR/.jank_tis_hi" "$LK_OUT_DIR/.jank_pkg_prev" 2>/dev/null; return 0
+    LK_JANK_PREV=""; rm -f "$LK_OUT_DIR/.jank_tis_lo" "$LK_OUT_DIR/.jank_tis_hi" "$LK_OUT_DIR/.jank_pkg_prev" "$LK_OUT_DIR/.jank_pkgx_prev" 2>/dev/null; return 0
   fi
-  _jt="$(lk_gfx_totals "$LK_OUT_DIR/.jank_pkg_now")"
-  if [ -z "$_jt" ]; then LK_JANK_PREV=""; LK_JANK_OFF=""; rm -f "$LK_OUT_DIR/.jank_pkg_prev" "$LK_OUT_DIR/.jank_pkg_off" 2>/dev/null; return 0; fi
+  _jt="$(lk_gfx_totals "$LK_OUT_DIR/.jank_pkg_now" "$LK_OUT_DIR/.jank_pkgx_now" "$LK_OUT_DIR/.jank_pkgx_prev")"
+  if [ -z "$_jt" ]; then LK_JANK_PREV=""; LK_JANK_OFF=""; rm -f "$LK_OUT_DIR/.jank_pkg_prev" "$LK_OUT_DIR/.jank_pkg_off" "$LK_OUT_DIR/.jank_pkgx_prev" "$LK_OUT_DIR/.jank_pkgx_now" 2>/dev/null; return 0; fi
   _jnow="$(date +%s)"
   _jst="$(lk_state_kv state)"; [ -n "$_jst" ] || _jst="-"
   _jtc="$(lk_state_kv touch_starts | tr -dc '0-9')"
@@ -1230,6 +1332,8 @@ lk_capture_jank_row() {
         "$_jmc" "$_jpc" "$_jto" "$_df" "$_dj" "$_dd" "$_du" "$_di" \
         "$_jmcs" "$_jpcs" "$_jfb_pkg" \
         "$(lk_gfx_pkg_delta "$LK_OUT_DIR/.jank_pkg_prev" "$LK_OUT_DIR/.jank_pkg_now")" >> "$LK_OUT_DIR/jank_trace.tsv"
+      [ -f "$LK_OUT_DIR/jank_detail.tsv" ] && \
+        lk_gfx_detail "$LK_OUT_DIR/.jank_pkgx_prev" "$LK_OUT_DIR/.jank_pkgx_now" "$_jnow" "$_jsa" "$(lk_gpu_cap_now)" >> "$LK_OUT_DIR/jank_detail.tsv"
       # A hint input only. The native governor takes a fresh probe for its own A/B
       # window; these deltas are never injected into asb_smooth_window a second time.
       LK_JANK_FEEDBACK_VALID=1
@@ -1238,6 +1342,7 @@ lk_capture_jank_row() {
     fi
   fi
   mv -f "$LK_OUT_DIR/.jank_pkg_now" "$LK_OUT_DIR/.jank_pkg_prev" 2>/dev/null
+  mv -f "$LK_OUT_DIR/.jank_pkgx_now" "$LK_OUT_DIR/.jank_pkgx_prev" 2>/dev/null
   LK_JANK_PREV="$_jt"; LK_JANK_PREV_TS="$_jnow"; LK_JANK_PREV_STATE="$_jst"; LK_JANK_PREV_TOUCH="$_jtc"
 }
 
@@ -1629,6 +1734,80 @@ lk_emit_jank_summary() {
       print "120/165 Hz panel it is high for every app and says little about lag by itself."
       print ""
     }' "$_jk"
+}
+
+lk_emit_jank_why() {
+  _jd="$LK_OUT_DIR/jank_detail.tsv"
+  [ -s "$_jd" ] || return 0
+  awk -F'|' '
+    /^#/ { next }
+    NF < 20 || $4 !~ /^[0-9]+$/ || $4 + 0 == 0 { next }
+    {
+      k = $3 SUBSEP $2
+      if (!(k in fr)) ord[++n] = k
+      fr[k] += $4; jk[k] += $5; ui[k] += $6; dr[k] += $7
+      if ($16 + 0 > 0 && $17 ~ /^[0-9]+$/ && $18 ~ /^[0-9]+$/) { gn[k] += $16; g8[k] += $17; g16[k] += $18 }
+      if ($14 ~ /^[0-9]+$/ && $16 + 0 > 0) { gp[k] += $14 * $16; gw[k] += $16 }
+      if ($11 ~ /^[0-9]+$/) { fp[k] += $11 * $4; fw[k] += $4 }
+      if ($19 ~ /^[0-9]+$/) { lv[k SUBSEP $19] += $4; if ($20 ~ /^[0-9]+$/) mz[$19] = $20 }
+    }
+    function cause(k,   j) {
+      j = jk[k]
+      if (j < 30) return "few"
+      if (gn[k] > 0 && g16[k] * 100 >= j * 40) return "gpu"
+      if (ui[k] * 100 >= j * 40) return "ui"
+      if (dr[k] * 100 >= j * 40) return "draw"
+      if (gn[k] > 0 && g8[k] * 100 >= j * 40) return "gpu8"
+      if (gn[k] == 0) return "unknown"
+      return "other"
+    }
+    function share(a, b,   v) { if (b <= 0) return "-"; v = 100.0 * a / b; if (v > 100) v = 100; return sprintf("%.0f%%", v) }
+    function level(k,   x, z, best, bv) {
+      best = ""; bv = -1
+      for (x in lv) { split(x, z, SUBSEP); if (z[1] SUBSEP z[2] == k && lv[x] > bv) { best = z[3]; bv = lv[x] } }
+      if (best == "") return "-"
+      return (best in mz) ? best " (" mz[best] " MHz)" : best
+    }
+    END {
+      if (n == 0) exit
+      for (i = 1; i <= n; i++) for (j = i + 1; j <= n; j++) if (jk[ord[j]] > jk[ord[i]]) { t = ord[i]; ord[i] = ord[j]; ord[j] = t }
+      print "why frames were late (Android'"'"'s own per-frame times; the app with the most janky frames in each interval, and SystemUI):"
+      printf "  %-36s %-11s %7s %7s | of the late: %7s %9s %9s %8s | %7s %9s  %s\n", "app", "ASB state", "frames", "janky", "slow UI", "slow draw", "GPU>=16ms", "GPU>=8ms", "GPU p90", "frame p90", "GPU ceiling"
+      shown = 0
+      for (i = 1; i <= n && shown < 8; i++) {
+        k = ord[i]; if (fr[k] < 120) continue
+        split(k, z, SUBSEP)
+        printf "  %-36s %-11s %7d %7s | %20s %9s %9s %8s | %7s %9s  %s\n", z[1], z[2], fr[k], share(jk[k], fr[k]), \
+          share(ui[k], jk[k]), share(dr[k], jk[k]), (gn[k] > 0 ? share(g16[k], jk[k]) : "-"), (gn[k] > 0 ? share(g8[k], jk[k]) : "-"), \
+          (gw[k] > 0 ? sprintf("%d ms", gp[k] / gw[k] + 0.5) : "-"), (fw[k] > 0 ? sprintf("%d ms", fp[k] / fw[k] + 0.5) : "-"), level(k)
+        shown++
+        c = cause(k)
+        if (c == "gpu") v = "the GPU work alone took longer than a 60 Hz frame in most of them: the GPU, or its ceiling in this state, is the limit"
+        else if (c == "ui") v = "its UI thread was slow: CPU work inside the app"
+        else if (c == "draw") v = "its RenderThread was slow issuing draw commands: the CPU side of drawing"
+        else if (c == "gpu8") v = "the GPU fits a 60 Hz frame but not a 120 Hz one in most of them"
+        else if (c == "other") v = "neither the GPU nor the UI thread: the app or the compositor paced these frames, which a clock ceiling does not change"
+        else if (c == "unknown") v = "Android kept no GPU times for this app"
+        else v = ""
+        if (v != "") vl = vl sprintf("  %s in %s: %s\n", z[1], z[2], v)
+      }
+      if (vl != "") printf "%s", vl
+      for (i = 1; i <= n; i++) {
+        split(ord[i], z, SUBSEP); a = z[1]
+        if (a in seen) continue
+        seen[a] = 1; cl = ""; cn = 0
+        for (j = 1; j <= n; j++) {
+          split(ord[j], y, SUBSEP)
+          if (y[1] != a || fr[ord[j]] < 300 || gn[ord[j]] <= 0 || y[2] == "mixed") continue
+          cl = cl (cl == "" ? "" : ", ") sprintf("%s %s of its frames (ceiling level %s)", y[2], share(g16[ord[j]], gn[ord[j]]), level(ord[j]))
+          cn++
+        }
+        if (cn >= 2) printf "  %s, GPU work over a 60 Hz frame by ASB state: %s\n", a, cl
+      }
+      print "  slow UI / slow draw / GPU>=16ms are shares of the late frames (a frame can be late for more than one reason);"
+      print "  a GPU ceiling that held the frames back shows as GPU>=16ms rising in the state with the lower ceiling."
+      print ""
+    }' "$_jd" 2>/dev/null
 }
 
 # "cpu|surface" in whole degrees from the zones this capture resolved (fix141) - the prime

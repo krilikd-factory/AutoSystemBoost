@@ -998,6 +998,45 @@ if [ -f "$_RPT" ]; then
   awk '/^steady floor: [0-9.]+ janky frames a second/ { q = $3; getline; b = $1 }
        /^the floor: [a-z0-9._]+ drew [0-9.]+% of the janky frames/ { a = $3; sh = $5; sub(/%$/, "", sh) }
        END { if (q != "") printf "jfloor\tquiet=%s\tbusy=%s\tapp=%s\tshare=%s\n", q, b, a, sh }' "$_RPT" 2>/dev/null
+  if [ -s "$_DIR/jank_detail.tsv" ]; then
+    awk -F'|' '
+      /^#/ { next }
+      NF < 20 || $4 !~ /^[0-9]+$/ || $4 + 0 == 0 || $3 !~ /^[A-Za-z0-9_.]+$/ || $2 !~ /^[A-Za-z_-]+$/ { next }
+      {
+        k = $3 SUBSEP $2
+        if (!(k in fr)) ord[++n] = k
+        fr[k] += $4; jk[k] += $5; ui[k] += $6; dr[k] += $7
+        if ($16 + 0 > 0 && $17 ~ /^[0-9]+$/ && $18 ~ /^[0-9]+$/) { gn[k] += $16; g8[k] += $17; g16[k] += $18 }
+        if ($14 ~ /^[0-9]+$/ && $16 + 0 > 0) { gp[k] += $14 * $16; gw[k] += $16 }
+        if ($11 ~ /^[0-9]+$/) { fp[k] += $11 * $4; fw[k] += $4 }
+        if ($19 ~ /^[0-9]+$/) { lv[k SUBSEP $19] += $4; if ($20 ~ /^[0-9]+$/) mz[$19] = $20 }
+      }
+      function cause(k,   j) {
+        j = jk[k]
+        if (j < 30) return "few"
+        if (gn[k] > 0 && g16[k] * 100 >= j * 40) return "gpu"
+        if (ui[k] * 100 >= j * 40) return "ui"
+        if (dr[k] * 100 >= j * 40) return "draw"
+        if (gn[k] > 0 && g8[k] * 100 >= j * 40) return "gpu8"
+        if (gn[k] == 0) return "unknown"
+        return "other"
+      }
+      END {
+        for (i = 1; i <= n; i++) for (j = i + 1; j <= n; j++) if (jk[ord[j]] > jk[ord[i]]) { t = ord[i]; ord[i] = ord[j]; ord[j] = t }
+        shown = 0
+        for (i = 1; i <= n && shown < 6; i++) {
+          k = ord[i]; if (fr[k] < 120) continue
+          split(k, z, SUBSEP)
+          best = "-"; bv = -1
+          for (x in lv) { split(x, y, SUBSEP); if (y[1] == z[1] && y[2] == z[2] && lv[x] > bv) { best = y[3]; bv = lv[x] } }
+          printf "jwhy\tpkg=%s\tstate=%s\tframes=%d\tjanky=%d\tui=%d\tdraw=%d\tgn=%d\tg8=%d\tg16=%d\tgp90=%s\tfp90=%s\tlvl=%s\tmhz=%s\tcause=%s\n", \
+            z[1], z[2], fr[k], jk[k], ui[k], dr[k], gn[k], g8[k], g16[k], \
+            (gw[k] > 0 ? sprintf("%d", gp[k] / gw[k] + 0.5) : "-"), (fw[k] > 0 ? sprintf("%d", fp[k] / fw[k] + 0.5) : "-"), \
+            best, ((best in mz) ? mz[best] : "-"), cause(k)
+          shown++
+        }
+      }' "$_DIR/jank_detail.tsv" 2>/dev/null
+  fi
   awk '/^who held the lower ceiling, per cluster \(/ { t = 1; n = $0; sub(/^[^(]*\(/, "", n); sub(/[^0-9].*$/, "", n); next }
        t && /^  (main|little|prime):/ {
          k = ($1 == "prime:") ? "prime" : "main"

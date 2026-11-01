@@ -1561,6 +1561,7 @@ lk_emit_full_day_report() {
     lk_emit_wifi_leave_summary
     lk_emit_cluster_work_summary
     lk_emit_jank_summary
+    lk_emit_jank_why
     if [ -r "$LK_OUT_DIR/phase_summary.txt" ]; then
       cat "$LK_OUT_DIR/phase_summary.txt"
     fi
