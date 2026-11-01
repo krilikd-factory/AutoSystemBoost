@@ -1051,6 +1051,71 @@ grep -Fq "Date.now() - _asbLogStopArmed >= 4000" "$H" || fail "stopping has no s
 echo "PASS debug support stop: TERM ends the capture at once with its report finalised, the bridge returns immediately, a recorder that ignores TERM is ended, the menu asks twice"
 )
 
+t_debug_support_stop_finalize_runtime() (
+# Runtime (fix287): the owner tapped Stop, saw "stopping · the report is being finalised", and
+# on the next visit the menu offered Stop again - the status said "running" while the recorder
+# finished its report, and the second stop cut it short. The helper now reports "stopping" for
+# that interval, a repeated stop sends no second signal, and the recorder ignores further
+# signals while it finalises. The REAL helper runs against a stub with a slow finaliser.
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+HELPER="$ROOT/runtime/asb_debug_support.sh"
+TMP="$(mktemp -d)"; trap 'kill $(jobs -p) 2>/dev/null; pkill -f "$TMP" 2>/dev/null; rm -rf "$TMP"' EXIT
+fail() { echo "FAIL debug stop finalize: $*" >&2; exit 1; }
+alive() { [ -r "/proc/$1/stat" ] || return 1; case "$(sed 's/^.*) //' "/proc/$1/stat" | cut -c1)" in Z|X) return 1 ;; esac; return 0; }
+DBG="$TMP/mod"; mkdir -p "$DBG/tools/logkit" "$DBG/runtime"
+printf 'id=AutoSystemBoost\nversion=V65-test16\nversionCode=650\n' > "$DBG/module.prop"
+cat > "$DBG/tools/logkit/asb_log_full_day.sh" << 'EOF_REC'
+set -u
+_lock="${ASB_DEBUG_SUPPORT_LOCKDIR:-}"; _token="${ASB_DEBUG_SUPPORT_LOCK_TOKEN:-}"
+[ -d "$_lock" ] && [ "$(cat "$_lock/token")" = "$_token" ] || exit 91
+printf '%s\n' "$$" > "$_lock/pid"
+_out="$(dirname "$_lock")/capture_$$"; mkdir -p "$_out"; printf '%s\n' "$_out" > "$_lock/output_dir"
+fin() {
+  echo term >> "$_out/terms"
+  [ -f "$_out/finalizing" ] && return 0
+  : > "$_out/finalizing"
+  n=0; while [ "$n" -lt 25 ] && [ ! -f "$_out/release" ]; do sleep 0.1; n=$((n + 1)); done
+  echo finalized > "$_out/_full_day_report.txt"; rm -rf "$_lock"; exit 0
+}
+trap fin TERM
+while :; do sleep 60; done
+EOF_REC
+ENV=(ASB_DEBUG_SUPPORT_MODDIR="$DBG" ASB_DEBUG_SUPPORT_STATE_DIR="$TMP/state" ASB_DEBUG_SUPPORT_RUNLOG="$TMP/run.out" ASB_DEBUG_SUPPORT_STOP_WAIT_S=20)
+H() { env "${ENV[@]}" sh "$HELPER" "$@" 2>/dev/null || true; }
+LOCK="$TMP/state/full_day_webui.lock"
+OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep -q 'status=started' || fail "start: $OUT"
+n=0; while [ ! -s "$LOCK/output_dir" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
+P="$(tr -dc 0-9 < "$LOCK/pid" 2>/dev/null)"; CAP="$(cat "$LOCK/output_dir")"
+OUT="$(H full-day-stop)"; printf '%s\n' "$OUT" | grep -qx 'status=stopping' || fail "stop: $OUT"
+n=0; while [ ! -f "$CAP/finalizing" ] && [ "$n" -lt 40 ]; do sleep 0.1; n=$((n + 1)); done
+[ -f "$CAP/finalizing" ] || fail 'the recorder never started finalising'
+OUT="$(H status)"
+printf '%s\n' "$OUT" | grep -qx 'status=stopping' || fail "status while the report is finalised still says: $OUT"
+printf '%s\n' "$OUT" | grep -q '^since=[0-9][0-9]*$' || fail "stopping has no start time: $OUT"
+OUT="$(H full-day-stop)"
+printf '%s\n' "$OUT" | grep -qx 'status=stopping' && printf '%s\n' "$OUT" | grep -qx "output=$CAP" || fail "a repeated stop: $OUT"
+sleep 0.5
+[ "$(grep -c term "$CAP/terms" 2>/dev/null)" = 1 ] || fail "a repeated stop signalled the finalising recorder again ($(grep -c term "$CAP/terms") signals)"
+: > "$CAP/release"
+n=0; while alive "$P" && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
+alive "$P" && fail 'the recorder did not finish'
+grep -qx finalized "$CAP/_full_day_report.txt" || fail 'the report was not finalised'
+OUT="$(H status)"; printf '%s\n' "$OUT" | grep -qx 'status=idle' || fail "status after the report: $OUT"
+[ -e "$TMP/state/full_day_stopping" ] && fail 'the stopping marker outlived the recorder'
+OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep -q 'status=started' || fail "a new start after the stop: $OUT"
+n=0; while [ ! -s "$LOCK/output_dir" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
+OUT="$(H status)"; printf '%s\n' "$OUT" | grep -qx 'status=running' || fail "a new capture reads as stopping: $OUT"
+H full-day-stop >/dev/null; : > "$(cat "$LOCK/output_dir" 2>/dev/null)/release" 2>/dev/null
+F="$ROOT/tools/logkit/asb_log_full_day.sh"
+awk '/^lk_on_signal\(\) \{/ { f = 1 } f && /trap .. TERM INT HUP/ { t = NR } f && /^  lk_finalize$/ { l = NR } f && /^}/ { exit } END { exit !(t && l && t < l) }' "$F" \
+  || fail 'the recorder can still be interrupted while it finalises its report'
+W="$ROOT/webroot/index.html"
+grep -Fq "_asbLogStopping = !!(r && r.errno === 0 && info.status === 'stopping');" "$W" || fail 'the menu does not read the stopping state'
+grep -Fq "if (action === 'full-day' && _asbLogStopping) {" "$W" || fail 'the menu still offers Stop while the report is finalised'
+echo "PASS debug support stop finalize: 'stopping' until the report is written, no second signal, uninterruptible finalisation, a menu that waits"
+)
+
 t_debug_support_stop_fast_runtime() (
 # Runtime (fix246): stopping the infinite log answers at once on a loaded phone.
 #
@@ -3749,7 +3814,9 @@ command -v node >/dev/null 2>&1 || { echo "SKIP webui stock monitor: no node"; e
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 grep -Fq "if (Object.keys(_stockTelemetryKv).length) paintStockLive(_stockTelemetryKv);" "$H" || fail "a throttled read still leaves the cells empty"
 grep -Fq "    if (_selectedProfile === 'stock') pollStockTelemetry(true, true);" "$H" || fail "opening Monitor on Stock does not read a fresh sample"
-grep -Fq "  if (_selectedProfile !== 'smart') paintStockLive(_stockTelemetryKv);" "$H" || fail "opening Monitor does not paint the last ROM sample"
+grep -Fq "    } else paintStockLive(_stockTelemetryKv);" "$H" || fail "opening Monitor does not paint the last ROM sample"
+# fix287: a new WebView paints the last visit's ROM snapshot at once, dimmed until fresh.
+grep -Fq "      paintStockLive(_lvMonCache.rom);" "$H" && grep -Fq "      lvStale(true);" "$H" || fail "a fresh page opens Monitor without the cached card"
 # fix177: the read waits for the slide, and is a script of builtin reads, not a cat per value.
 python3 - "$H" <<'P' || fail "Monitor open order / ROM read"
 import sys
@@ -6737,11 +6804,12 @@ const STOCK_TELEMETRY_MIN_INTERVAL_MS = 10000, MD = '/mod';
 let painted = [];
 function paintStockLive(kv) { painted.push(kv); _el('liveStockRomBanner').style.display = Object.keys(kv).length ? '' : 'none'; }
 function lvTopSecSync() {} async function lvMeterPoll() {}
+const _lvMonCache = { rom: null }; let saves = 0; function lvMonCacheSave() { saves++; } function lvStale() {}
 let calls = 0;
 async function run() { calls++; if (calls === 1) throw new Error('temporary root failure'); return { stdout:'thermal.cpu-1-1-0=42000\n' }; }
 let clock = 10000; Date.now = () => clock;
 EOF
-  for fn in parseStockTelemetry pollStockTelemetry; do sed -n "/^\\(async \\)\\{0,1\\}function $fn(/,/^}/p" "$H"; done
+  for fn in parseStockTelemetry pollStockTelemetry stockTelemetryCmd stockTelemetryApply lvMonCacheRom; do sed -n "/^\\(async \\)\\{0,1\\}function $fn(/,/^}/p" "$H"; done
   cat <<'EOF'
 (async function () {
   await pollStockTelemetry(true, true);
@@ -6750,6 +6818,7 @@ EOF
   clock = 30000;
   await pollStockTelemetry(true, true);
   if (calls !== 2 || _stockTelemetryKv['thermal.cpu-1-1-0'] !== '42000' || !painted[1].tsms) throw new Error('retry did not replace the cache with fresh telemetry');
+  if (saves !== 1 || !_lvMonCache.rom || _lvMonCache.rom.tsms || _lvMonCache.rom['thermal.cpu-1-1-0'] !== '42000') throw new Error('fix287: the fresh sample was not kept for the next visit without its clock');
   console.log('ok');
 })().catch(e => { console.error(e.message); process.exit(1); });
 EOF
@@ -6779,6 +6848,107 @@ for name in ('smart','performance','theme_glass'):
 assert h.count('const TECH_ICON_PATHS = {') == 1, 'icon definitions diverged by page'
 PY
 echo "PASS webui visual hierarchy: DSP Outputs first; global Smart, Performance and Liquid Glass icons use the cleaned geometry"
+)
+
+t_webui_fix287_waits_runtime() (
+# Runtime (fix287): what the owner saw as blank screens and buttons that did not react.
+# KernelSU-family managers run ksu.exec synchronously, so a loading state set right before a
+# root call never reached the screen. The REAL functions run in node with that bridge modelled:
+# the Device page paints its loading card or the last snapshot BEFORE the collector runs, keeps
+# that snapshot on a failed refresh, and saves a fresh one for the next visit; the Monitor keeps
+# its last ROM card without the counters that measure between two reads, and reads the drain
+# meter and the ROM snapshot in the governor's shell; the wakelock picker offers every other
+# user app and shows the 7-day history; the paint yield finishes in a hidden page.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui fix287 waits: $*" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo 'SKIP webui fix287 waits: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+{
+  cat <<'JS'
+const T = (k, d) => d;
+let ASB_LANG = 'en';
+const store = {}; const localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } };
+const log = [];
+function mkNode(id) { return { id, textContent: '', disabled: false, scrollTop: 0, childElementCount: 0, dataset: {}, cls: new Set(), style: {},
+  classList: { add(c) { this.o.cls.add(c); }, remove(c) { this.o.cls.delete(c); }, toggle(c, on) { on ? this.o.cls.add(c) : this.o.cls.delete(c); }, contains(c) { return this.o.cls.has(c); } },
+  appendChild() {}, querySelectorAll() { return []; } }; }
+const nodes = {}; function _el(id) { if (!nodes[id]) { nodes[id] = mkNode(id); nodes[id].classList.o = nodes[id]; } return nodes[id]; }
+let _deviceOpen = true, _deviceLoadSeq = 0;
+let document = { hidden: false };
+let rafs = [];
+function requestAnimationFrame(f) { rafs.push(f); }
+function asbFitPages() {}
+function parseDeviceInfo(t) { const n = String(t || '').split('\n').filter(x => x.startsWith('D\t')).length; return { count: n, raw: t }; }
+function deviceInfoRender(d) { log.push('render:' + d.count + ':' + _el('deviceStatus').textContent); return d.count; }
+function deviceInfoLoading() { log.push('loading'); }
+function zygiskHeaderPublish() {} function zygiskHeaderRefresh() {}
+function logReportSec() { return { classList: { add() {} }, appendChild() {} }; } function logReportNote() { return {}; }
+function runText(r) { return r.stdout || ''; }
+let runOut = null;
+async function run(c) { log.push('run:' + (_el('deviceBody').classList.contains('dev-stale') ? 'stale:' : '') + _el('deviceStatus').textContent); return runOut; }
+async function asbPaintYield() { log.push('yield'); }
+const MD = "/mod"; const window = {};
+JS
+  for fn in deviceInfoCacheGet deviceInfoCacheSet deviceInfoStamp asbDeviceInfoLoad lvMonCacheRom wlManualParse wlManualTime wlManualState wlManualOthers; do
+    sed -n "/^\(async \)\{0,1\}function $fn(/,/^}/p" "$H"
+  done
+  sed -n '/^const DEV_CACHE_KEY/p; /^const DEV_CACHE_MAX_MS/p' "$H"
+  sed -n '/^function asbPaintYield(/,/^}/p' "$H" | sed 's/^function asbPaintYield(/function realPaintYield(/'
+  cat <<'JS'
+let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
+(async function () {
+  const fresh = 'D\tsoc\tsoc_model\tSM8850\nD\tfirmware\tmodel\tCPH2745\n';
+  runOut = { errno: 0, stdout: fresh };
+  await asbDeviceInfoLoad();
+  chk(log.join('|') === 'loading|yield|run:Collecting read-only data…|render:2:Collecting read-only data…', 'first visit order: ' + log.join('|'));
+  chk(nodes.deviceBody.dataset.devShown === '1' && JSON.parse(store.asb_device_cache).raw === fresh, 'fresh snapshot not kept for the next visit');
+  chk(!nodes.devSave.disabled && !nodes.deviceStatus.cls.has('dev-status-busy'), 'save or busy state after a fresh read');
+  delete nodes.deviceBody; log.length = 0;
+  runOut = { errno: 0, stdout: fresh + 'D\tkernel\trelease\t6.12\n' };
+  await asbDeviceInfoLoad();
+  chk(/^render:2:[^|]*\|yield\|run:stale:Snapshot from .* · refreshing…\|render:3:/.test(log.join('|')), 'a new page does not show the last snapshot before the read: ' + log.join('|'));
+  chk(log[log.length - 1].indexOf('render:3:') === 0 && !nodes.deviceBody.cls.has('dev-stale'), 'the fresh read did not replace the snapshot: ' + log.join('|'));
+  delete nodes.deviceBody; log.length = 0;
+  runOut = { errno: 1, stdout: '' };
+  await asbDeviceInfoLoad();
+  chk(log.filter(x => x.indexOf('render:') === 0).length === 1 && /^Could not refresh · the snapshot from /.test(nodes.deviceStatus.textContent), 'a failed refresh lost the snapshot: ' + nodes.deviceStatus.textContent);
+  chk(nodes.devSave.disabled === true && nodes.devRefresh.disabled === false, 'a stale snapshot can be saved or not refreshed');
+  store.asb_device_cache = JSON.stringify({ t: Date.now() - 8 * 86400000, raw: fresh });
+  chk(deviceInfoCacheGet() === null, 'an 8-day-old snapshot was used');
+  const kv = lvMonCacheRom({ tsms: '5', ts: '6', cpustat: '1 2 3 4', 'thermal.cpu': '41000', uptime: '99', big: 'x'.repeat(300) });
+  chk(!('tsms' in kv) && !('ts' in kv) && !('cpustat' in kv) && kv['thermal.cpu'] === '41000' && !('big' in kv), 'Monitor cache kept a between-reads counter: ' + JSON.stringify(kv));
+  const d = wlManualParse('version=1\nscan=ok\nselected=0\nrow|com.example.sync|0|0|0|default|0|4320\napp|com.example.notes\napp|bad name\napp|com.x.y|z\n');
+  chk(d.rows.length === 1 && d.rows[0].week === 4320 && d.others.length === 1 && d.others[0] === 'com.example.notes', 'picker parse: ' + JSON.stringify(d));
+  document.hidden = true; rafs = [];
+  const t0 = Date.now(); await realPaintYield();
+  chk(Date.now() - t0 < 1000 && rafs.length === 0, 'the paint yield waited for a frame in a hidden page');
+  document.hidden = false; rafs = [];
+  const p = realPaintYield(); chk(rafs.length === 1, 'the paint yield did not wait for a frame'); rafs[0](); await p;
+  process.exit(bad ? 1 : 0);
+})().catch(e => { console.log('FAIL ' + e.stack); process.exit(1); });
+JS
+} > "$T/t.js"
+node "$T/t.js" || fail 'runtime assertions'
+python3 - "$H" <<'P' || fail 'wiring'
+import sys
+h = open(sys.argv[1], encoding='utf-8').read()
+def body(start, end):
+    return h[h.index(start):h.index(end, h.index(start))]
+for name in ('async function zygiskAutoSet(', 'async function zygiskModeSet(', 'async function zygiskGuardSet(', 'async function zygiskAotSet(', 'async function zygiskPageLoad(', 'async function wlManualLoad('):
+    b = body(name, '\n}\n')
+    assert 'await asbPaintYield();' in b, name + ' does not let its busy state paint'
+    first_root = min(i for i in (b.find('await runBatch('), b.find('await run(')) if i >= 0)
+    assert b.index('await asbPaintYield();') < first_root, name + ' yields after its root call'
+lp = body('function liveBatchParts(', '\n}\n')
+assert "parts.push(['meter', LV_METER_CMD])" in lp and "parts.push(['rom', stockTelemetryCmd(refresh)])" in lp, 'Monitor still spends separate shells'
+assert "_selectedProfile !== 'smart' && _selectedProfile !== 'stock'" in lp, 'the ROM part runs on Smart or doubles Stock'
+pl = body('async function pollLive(', '\n}\n')
+assert 'if (_lb.meter) lvMeterApply(' in pl and 'if (_lb.rom) stockTelemetryApply(_lb.rom);' in pl
+assert 'await lvMeterPoll(false);' not in pl[:pl.index('runBatch(liveBatchParts')], 'the meter is still read in its own shell first'
+P
+echo 'PASS webui fix287 waits: Device page paints loading or the last snapshot before the collector and keeps it on failure, Monitor cache without between-read counters and one shell per pass, picker history and other apps, busy states painted before root calls'
 )
 
 t_webui_device_page_runtime() (

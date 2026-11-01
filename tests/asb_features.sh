@@ -8008,10 +8008,11 @@ S
 cat > "$T/bin/dumpsys" <<'S'
 #!/bin/sh
 case "$1" in
-  batterystats) cat <<'B'
+  batterystats) if [ -n "${BS_FILE:-}" ]; then cat "$BS_FILE" 2>/dev/null; else cat <<'B'
   Wake lock u0a700 SyncLoop: 1h 2m 0s 1ms (40 times) realtime
   Wake lock u0a291 WebSocket: 29s 1ms (8 times) realtime
 B
+  fi
   ;;
   power) : ;;
 esac
@@ -8033,8 +8034,30 @@ chmod +x "$T/bin/"*
 run() { OPS="$T/ops" AM_LOG="$T/am.log" PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_WL_DIR="$T/d" "$@"; }
 out="$(run sh "$SRC" manual-status)"
 printf '%s\n' "$out" | grep -qx 'scan=ok' || f "scan failed: $out"
-printf '%s\n' "$out" | grep -qx 'row|com.example.sync|3720|0|0|default|0' || f "candidate/rank state wrong: $out"
-printf '%s\n' "$out" | grep -q 'org.thoughtcrime.securesms' && f "29-second row should be below the ranking floor: $out"
+printf '%s\n' "$out" | grep -qx 'row|com.example.sync|3720|0|0|default|0|3720' || f "candidate/rank state wrong: $out"
+# fix287: every other user app is offered for an explicit choice, without an AppOps read each.
+printf '%s\n' "$out" | grep -qx 'app|com.example.notes' && printf '%s\n' "$out" | grep -qx 'app|org.thoughtcrime.securesms' \
+  || f "other user apps not offered: $out"
+printf '%s\n' "$out" | grep -qx 'app|com.example.sync' && f 'a ranked app was listed twice'
+[ "$(grep -c 'appops get' "$T/am.log")" -le 2 ] || f "AppOps read for every listed app: $(grep -c 'appops get' "$T/am.log")"
+# fix287: a 7-day history survives Android's counter reset (a charge, a restart) and a night on
+# the charger, where batterystats counts nothing; older entries fall out of the window.
+printf '  Wake lock u0a700 SyncLoop: 10m 0s 1ms (4 times) realtime\n' > "$T/bs"
+out="$(BS_FILE="$T/bs" run sh "$SRC" manual-status)"
+printf '%s\n' "$out" | grep -qx 'row|com.example.sync|600|0|0|default|0|4320' || f "reset counter not added to the history: $out"
+: > "$T/bs"
+out="$(BS_FILE="$T/bs" run sh "$SRC" manual-status)"
+printf '%s\n' "$out" | grep -qx 'row|com.example.sync|0|0|0|default|0|4320' || f "history lost after a charge: $out"
+printf '%s\n' "$out" | grep -qx 'scan=ok' || f "an empty batterystats window is not a failed scan: $out"
+awk -F'|' -v OFS='|' '{ $1 = $1 - 8 * 86400; print }' "$T/d/wakelock_hist" > "$T/h.old" && mv "$T/h.old" "$T/d/wakelock_hist"
+out="$(BS_FILE="$T/bs" run sh "$SRC" manual-status)"
+printf '%s\n' "$out" | grep -q '^row|com.example.sync|' && f "an 8-day-old hold still ranked: $out"
+printf '%s\n' "$out" | grep -qx 'app|com.example.sync' || f "an app that fell out of the window is not offered: $out"
+printf '  Wake lock u0a700 SyncLoop: 15m 0s 1ms (4 times) realtime\n' > "$T/bs"
+BS_FILE="$T/bs" run sh "$SRC" >/dev/null 2>&1
+grep -q '|com.example.sync|900$' "$T/d/wakelock_hist" || f "the hourly pass does not add to the history: $(cat "$T/d/wakelock_hist" 2>/dev/null)"
+rm -f "$T/d/wakelock_hist" "$T/d/wakelock_hist_base"; : > "$T/am.log"
+printf '%s\n' "$out" | grep -q '^row|org.thoughtcrime.securesms' && f "29-second row should be below the ranking floor: $out"
 grep -q 'appops set' "$T/am.log" && f 'read-only status changed AppOps'
 # A protected class remains manually selectable only by explicit command, and is labelled.
 out="$(run sh "$SRC" manual-set org.thoughtcrime.securesms ignore)"
