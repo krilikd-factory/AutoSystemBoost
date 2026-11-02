@@ -943,6 +943,15 @@ static int  g_thermal_peer_hi = 0;
 static int  g_thermal_peer_lo = 0;
 static int  g_thermal_peer_n  = 0;
 
+/* One-tick upward-spike evidence. A hold is deliberately session-local: it tells the
+ * diagnostic that an isolated candidate was deferred, not that the sensor is broken. */
+static int           g_thermal_spike_hold_active = 0;
+static unsigned long g_thermal_spike_holds = 0;
+static int           g_thermal_spike_last_c = 0;
+static int           g_thermal_spike_last_peer_hi = 0;
+static int           g_thermal_spike_last_peer_n = 0;
+static time_t        g_thermal_spike_last_ts = 0;
+
 static inline int thermal_raw_to_c(int raw) {
     if (raw <= 0) return 0;
     return (raw > 200) ? (raw / 1000) : raw;
@@ -960,6 +969,41 @@ static int thermal_sensor_validate(int zone) {
     int v3 = sysfs_read_int(path, -999);
     if (v1 == v2 && v2 == v3 && (c > 90 || c < 5)) return 0;  /* flat + extreme = dead */
     return 1;  /* sensor is alive */
+}
+
+/* Read independent CPU evidence only when the control candidate is already suspicious.
+ * The hottest valid peer is used, not an average: one other hot core must be enough to
+ * leave the candidate alone. The selected zone is excluded so it cannot validate itself. */
+static int thermal_spike_peer_high(int *hi_out, int *n_out) {
+    char path[128];
+    int hi = 0, n = 0, fallback_seen = 0;
+    for (int i = 0; i < g_thermal_cpu_peer_n && i < 24; i++) {
+        int z = g_thermal_cpu_peer_z[i];
+        if (z < 0 || z == g_thermal_cpu_zone) continue;
+        if (z == g_thermal_cpu_fallback_zone) fallback_seen = 1;
+        snprintf(path, sizeof(path), THERMAL_BASE "/thermal_zone%d/temp", z);
+        int raw = sysfs_read_int(path, 0);
+        int c = thermal_raw_to_c(raw);
+        if (c <= 10 || c >= 120) continue;
+        if (c > hi) hi = c;
+        n++;
+    }
+    /* Preserve the old single-fallback cross-check on small sensor tables. Discovery may
+     * clear that fallback after socd rejection; the peer list above still remains usable. */
+    if (!fallback_seen && g_thermal_cpu_fallback_zone >= 0 &&
+        g_thermal_cpu_fallback_zone != g_thermal_cpu_zone) {
+        snprintf(path, sizeof(path), THERMAL_BASE "/thermal_zone%d/temp",
+                 g_thermal_cpu_fallback_zone);
+        int raw = sysfs_read_int(path, 0);
+        int c = thermal_raw_to_c(raw);
+        if (c > 10 && c < 120) {
+            if (c > hi) hi = c;
+            n++;
+        }
+    }
+    *hi_out = hi;
+    *n_out = n;
+    return n;
 }
 
 static void thermal_discover(void) {
@@ -1493,6 +1537,7 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
                         snprintf(t->temp_invalid_reason, sizeof(t->temp_invalid_reason), "rebind");
                         g_last_thermal_read_ts = time(NULL);
                         g_last_thermal_value = c_now;
+                        g_thermal_spike_hold_active = 0;
                         if (c_now > g_asb_cfg.thermal_throttle_temp) t->throttling = 1;
                         raw_too_low_streak = 0;
                         rebound_this_tick = 1;
@@ -1506,29 +1551,39 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
             } else {
                 /* Plausible reading — reset the streak */
                 raw_too_low_streak = 0;
-int spike_detected = 0;
-                if (g_last_thermal_value > 0 &&
-                    c_now >= g_last_thermal_value + 25 &&
-                    g_thermal_cpu_fallback_zone >= 0 &&
-                    !used_fallback) {
-                    char fbpath[128];
-                    snprintf(fbpath, sizeof(fbpath),
-                        THERMAL_BASE "/thermal_zone%d/temp", g_thermal_cpu_fallback_zone);
-                    int fb_raw = sysfs_read_int(fbpath, 0);
-                    int fb_cross = (fb_raw > 0) ? thermal_raw_to_c(fb_raw) : 0;
-                    if (fb_cross > 0 && c_now >= fb_cross + 25) {
+                int spike_detected = 0;
+                int sudden_rise = (g_last_thermal_value > 0 &&
+                                   c_now >= g_last_thermal_value + 25);
+                int first_extreme = (g_last_thermal_value <= 0 &&
+                    c_now >= (g_asb_cfg.thermal_throttle_temp > 0 ?
+                              g_asb_cfg.thermal_throttle_temp : 60));
+                /* A spike gets exactly one deferred read. If the high value repeats, it is
+                 * repeated heat evidence as far as this collector can tell and MUST be
+                 * accepted. The old fallback-only path could keep rejecting it forever. */
+                if (!g_thermal_spike_hold_active && !used_fallback &&
+                    (sudden_rise || first_extreme)) {
+                    int peer_hi = 0, peer_n = 0;
+                    thermal_spike_peer_high(&peer_hi, &peer_n);
+                    int enough_peers = (peer_n >= 2 ||
+                        (g_thermal_cpu_fallback_zone >= 0 && peer_n >= 1));
+                    if (enough_peers && peer_hi > 0 && c_now >= peer_hi + 25) {
                         spike_detected = 1;
+                        g_thermal_spike_hold_active = 1;
+                        g_thermal_spike_holds++;
+                        g_thermal_spike_last_c = c_now;
+                        g_thermal_spike_last_peer_hi = peer_hi;
+                        g_thermal_spike_last_peer_n = peer_n;
+                        g_thermal_spike_last_ts = time(NULL);
                     }
                 }
                 if (spike_detected) {
-                    /* Hold last good value, don't advance throttling on this tick */
+                    /* Hold only the last good value and do not advance throttling this tick.
+                     * With no previous value the candidate is unknown, never a valid 0 C. */
                     t->cpu_max_c = g_last_thermal_value;
-                    t->temp_valid = 1;   /* still "valid" — we have a good cached number */
+                    t->temp_valid = (g_last_thermal_value > 0) ? 1 : 0;
                     snprintf(t->temp_invalid_reason, sizeof(t->temp_invalid_reason), "spike");
-                    /* Don't update g_last_thermal_value or g_last_thermal_read_ts
-                     * so next tick compares against the pre-spike baseline.
-                     * Don't set throttling from the spike value. */
                 } else {
+                    g_thermal_spike_hold_active = 0;
                     t->cpu_max_c = c_now;
                     t->temp_valid = 1;
                     snprintf(t->temp_invalid_reason, sizeof(t->temp_invalid_reason),

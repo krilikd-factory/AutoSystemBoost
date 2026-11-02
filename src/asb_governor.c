@@ -4382,6 +4382,9 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                    "thermal_source_confidence=%d\nthermal_rejected_type=\"%s\"\n"
                    "thermal_rejected_raw=%d\nthermal_peer_hi=%d\nthermal_peer_lo=%d\n"
                    "thermal_peer_n=%d\nthermal_consensus=\"%s\"\n"
+                   "thermal_spike_holds=%lu\nthermal_spike_last_c=%d\n"
+                   "thermal_spike_last_peer_hi=%d\nthermal_spike_last_peer_n=%d\n"
+                   "thermal_spike_last_epoch=%ld\n"
                    /* Same file the diagnostic reads. This was published only into the
                     * status JSON, so the report could never see it - the identical
                     * producer/consumer split that hid the consensus fields before. */
@@ -4411,6 +4414,9 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
                 g_thermal_source_confidence, g_thermal_rejected_type, g_thermal_rejected_raw,
                 g_thermal_peer_hi, g_thermal_peer_lo, g_thermal_peer_n,
                 g_thermal_consensus_note,
+                g_thermal_spike_holds, g_thermal_spike_last_c,
+                g_thermal_spike_last_peer_hi, g_thermal_spike_last_peer_n,
+                (long)g_thermal_spike_last_ts,
                 writer_freq_table_len(0), writer_freq_table_len(1), writer_freq_table_len(2),
                 writer_last_uclamp_top(), writer_last_uclamp_bg(),
                 g_ses_last_temp, g_ses_last_dur, g_ses_last_reason,
@@ -5218,6 +5224,9 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         /* Consensus v2: what the control value was checked against, and what that
          * check concluded. An empty note means the sources agreed. */
         "\"thermal_peer_hi\":%d,\"thermal_peer_n\":%d,\"thermal_consensus\":\"%s\","
+        "\"thermal_spike_holds\":%lu,\"thermal_spike_last_c\":%d,"
+        "\"thermal_spike_last_peer_hi\":%d,\"thermal_spike_last_peer_n\":%d,"
+        "\"thermal_spike_last_epoch\":%ld,"
         /* How many OPP steps the writer could enumerate per cluster. Zero means
          * cpu_snap_freq is a no-op and every ceiling is written unsnapped - which
          * looks identical to a vendor override in the failure log and took three
@@ -5274,6 +5283,11 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
         g_thermal_peer_hi,
         g_thermal_peer_n,
         g_thermal_consensus_note,
+        g_thermal_spike_holds,
+        g_thermal_spike_last_c,
+        g_thermal_spike_last_peer_hi,
+        g_thermal_spike_last_peer_n,
+        (long)g_thermal_spike_last_ts,
         writer_freq_table_len(0), writer_freq_table_len(1), writer_freq_table_len(2),
         g_thermal_skin_zone,
         g_thermal_surface_zone,
