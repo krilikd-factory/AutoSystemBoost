@@ -480,6 +480,9 @@ absent; consumers must treat every line as optional. Tags in emission order:
 ```
 meta     elapsed_min, target_h, running (1 = capture live), started (YYYY-MM-DD HH:MM
          from the ledger's first phase, may be empty), profile (env.txt current_profile)
+zygisk   coverage, state, policy and companion counters as *_start, *_latest, *_delta
+zygov    coverage and Governor counters as *_start, *_latest, *_delta (from the state
+         blocks of before.txt / after.txt; no additional device read)
 cover    on_min, off_min, on_pct          (only with >= 10 min of battery_trace)
 drain    pctph, total_drop, hours, ma     (discharging phases only)
 night    dur_min, drop, pctph, awake      (longest idle/sleep chain >= 15 min)
@@ -495,19 +498,92 @@ japp     pkg, frames, pct                 (top four apps; the split-screen "mult
                                            pseudo-row is dropped)
 hz       mode, share, ma                  (per-refresh-rate rows)
 asbcost  cpu_msh, writes_h, wakes_h       (ASB's own bill)
+capcheck total, ok, vendor, other           (cap_verify readback observations; not unique
+                                           writes or an energy outcome)
 audio    spk_min, pctph, ma               (speaker playback, from the phase table whose
                                            header carries pct/h - never the sampled-
                                            current table, which reuses the column for mA)
 charge   types                            (e.g. "Fast(17) N/A(197)")
+wifileave releases, out_of_range, no_internet, returned, failed, recovered
+                                           (Wi-Fi Leave action counters from the report)
 smart    watching, testing, helped, nothelped, ctxlearn   (smooth| line of
                                            smart_records.txt plus learned contexts)
+mwake    n, nights, per_night, typical_s   (night-check snapshot; nights=0 means
+                                           no completed night, not a zero average)
 cfg      key, value                       (seven advice-relevant switches, read from the
                                            CURRENT config, one line per key)
 error    no_capture                       (nothing found - the only failure line)
 ```
 
 The WebUI parser keys on the tag; unknown tags are kept in `sections` and unknown keys
-are preserved, so older WebUIs tolerate newer digests and vice versa.
+are preserved, so older WebUIs tolerate newer digests and vice versa. In the `zygisk`
+row, a decreasing counter marks a companion restart/reset. If the counter belongs to the
+cold-start family, every `launch_*_delta` becomes `unknown`: the total and other outcomes
+can look monotonic across the reset by coincidence and cannot be reconciled as one window.
+Independent monotonic spawn/ledger counters retain their deltas.
+
+`launch_screen_off` (fix300) counts cold-start requests vetoed by the companion itself when
+the Governor has already published `screen=0`. The process-start ledger entry is still
+recorded, but no launch datagram is sent and the one-second/20-per-minute launch budget is
+not consumed. This counter is a **subset** of `launch_vetoed`, not an additional outcome:
+`launch_events = launch_accepted + launch_vetoed + launch_unavailable + launch_throttled`
+still holds, subject to the existing snapshot/in-flight caveat. An unknown screen state still
+uses the normal fixed-opcode Governor request path.
+
+The `zygov` row projects only these whitelisted numeric keys from `--- state (key=value) ---`:
+`zygisk_launch_accepted`, `zygisk_launch_vetoed`, `zygisk_refresh_accepted`,
+`zygisk_refresh_vetoed`, `unlock_cold_lifts`, `unlock_cold_extends`, `unlock_cold_long` and
+`unlock_cold_trims`. Text outside that block is ignored. A single snapshot yields cumulative
+`latest`/`start` values but `delta=unknown`; if any included counter decreases, **all** `zygov`
+deltas become `unknown` and `deltas=counter_reset_or_restart`. These are Governor-side request
+and lift-window actions, not proof of a hardware ceiling write, continuous control of other
+Zygisk modules, improved performance or reduced energy use.
+
+The WebUI **Tweak evidence** card (fix301) combines only existing capture facts: `capcheck`
+readback observations, at-cap/below-cap jank associations with both frame populations,
+Zygisk/Governor action deltas, LTPO lowered time, Wi-Fi Leave actions, Smart learner decisions
+and `asbcost`. The card labels direct observations, associations and snapshot scope separately.
+It never converts them into a battery, temperature or smoothness benefit. A causal result needs
+a comparable one-variable on-device A/B. An omitted tweak means **not exposed in this capture**,
+not unsupported and not zero effect. No collection worker or device read was added for it.
+
+---
+
+## Zygisk automatic setup, guard and ART local state (fix301)
+
+These files and status rows are local control state, not additional capture workers. They are
+listed here because Device diagnostics, the WebUI and host fixtures consume them.
+
+- `/data/adb/asb/zygisk_observer/auto` is `version=2`, `mode=observe|launch|battery` and
+  `updated=<epoch>`. `asb_zygisk.sh status` exposes `automatic=on|off` and
+  `automatic_profile=observe|launch|battery`; an old marker without a recognized `mode` is
+  honestly reported as `automatic_profile=legacy`, not as one of the new profiles. Observe means
+  observer + ledger only, Launch adds cold-start assist, and Battery adds guard level `wakers`.
+  None of the three enables ART. `/data/adb/asb/zygisk_observer/auto.before` is the internal
+  pre-automatic snapshot used to restore the package list, four observer settings, guard level
+  and ART state; it is not telemetry.
+- Policy synchronization treats `zygisk/policy` and `zygisk/classes` as one input contract.
+  `.rollback.tmp` / `.restore.tmp` files are transient. If classes generation fails after a
+  policy replacement, both previous files are restored byte-for-byte, the temporary files are
+  removed and the command returns nonzero with `policy=rolled_back reason=classes_write_failed`.
+- Guard status adds `sessions_required=2` and dry-run rows
+  `pending|PKG|SESSIONS|STARTS|WHY|APPROVED`, where `WHY=loop|waker|loop_on`. Pending evidence is in tmpfs at
+  `/dev/.asb/zygisk_guard.pending`; explicit package approvals are persistent in
+  `/data/adb/asb/zygisk_guard_approved`. Approval alone and first-session evidence do not write
+  AppOps. After the required evidence and approval, the existing active row, baseline, readback
+  and exact-restore contract applies. `release PKG` restores that package immediately and removes
+  its pending row and approval. Positive exact-alarm, foreground-service and notification
+  listener/policy-access evidence produces `protected_alarm`, `protected_fgs` or
+  `protected_notifications`; empty/unknown runtime output is not negative proof.
+- `/data/adb/asb/zygisk_aot_charge` contains `state=0|1`, `batch=0|1` and
+  `boot=BOOT_ID|unknown`; `last_charge_batch=available|used|unknown` is exposed by ART status.
+  `batch=1` prevents another package batch in the same charging session, including after the
+  ordinary seven-day per-package retry expires. A missing or malformed battery temperature is
+  unknown and blocks compilation; it is never treated as cool.
+
+Host fixtures validate parsing, gating and rollback only. They do not prove Android framework
+behavior, vendor AppOps semantics, real Zygisk loading, notification latency, thermal response or
+battery/performance changes on a phone.
 
 ---
 
