@@ -563,14 +563,17 @@ not unsupported and not zero effect. No collection worker or device read was add
 These files and status rows are local control state, not additional capture workers. They are
 listed here because Device diagnostics, the WebUI and host fixtures consume them.
 
-- `/data/adb/asb/zygisk_observer/auto` is `version=2`, `mode=observe|launch|battery` and
+- `/data/adb/asb/zygisk_observer/auto` is `version=2`, `mode=observe|launch|battery|auto` and
   `updated=<epoch>`. `asb_zygisk.sh status` exposes `automatic=on|off` and
-  `automatic_profile=observe|launch|battery`; an old marker without a recognized `mode` is
-  honestly reported as `automatic_profile=legacy`, not as one of the new profiles. Observe means
-  observer + ledger only, Launch adds cold-start assist, and Battery adds guard level `wakers`.
-  None of the three enables ART. `/data/adb/asb/zygisk_observer/auto.before` is the internal
-  pre-automatic snapshot used to restore the package list, four observer settings, guard level
-  and ART state; it is not telemetry.
+  `automatic_profile=observe|launch|battery|auto`; an old marker without a recognized `mode` is
+  honestly reported as `automatic_profile=legacy`, not as one of the current profiles. Observe
+  remains a compatibility profile with observer + ledger only. The three WebUI presets are
+  Battery (`battery`: observer + ledger + guard `wakers`, without cold-start or lifecycle
+  requests), Performance (`launch`: observer + ledger + cold-start assist, guard off), and Auto
+  (`auto`: observer + ledger + cold-start assist + lifecycle hints + guard `wakers`). None of
+  them enables ART. `/data/adb/asb/zygisk_observer/auto.before` is the internal pre-automatic
+  snapshot used to restore the package list, four observer settings, guard level and ART state;
+  it is not telemetry.
 - Policy synchronization treats `zygisk/policy` and `zygisk/classes` as one input contract.
   `.rollback.tmp` / `.restore.tmp` files are transient. If classes generation fails after a
   policy replacement, both previous files are restored byte-for-byte, the temporary files are
