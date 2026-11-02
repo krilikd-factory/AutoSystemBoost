@@ -222,8 +222,15 @@ This is **not** JSON despite logkit's `lk_status_json()` parsing it. Each line i
 - `thermal_rejected_type` — quoted type label of a rejected candidate such as `socd`; empty when no candidate was rejected.
 - `thermal_rejected_raw` — raw integer from the rejected zone. It **must not** be interpreted as °C: Android thermal zones can use different scales. It is evidence for diagnosis only.
 - `startup_quarantined` — cumulative number of early boot samples excluded from Smart learning during the settle window. It is a counter, not a current-mode boolean.
+- `thermal_spike_holds` — session-local count of isolated upward CPU candidates deferred for exactly one reading. It is not a sensor-fault counter.
+- `thermal_spike_last_c` — last deferred candidate in °C; `0` means none recorded since governor start.
+- `thermal_spike_last_peer_hi` — hottest valid independent CPU peer in °C for that decision. The selected zone is excluded.
+- `thermal_spike_last_peer_n` — number of valid independent CPU peers used for that decision. At least two are required, except for the legacy single-fallback path.
+- `thermal_spike_last_epoch` — wall-clock epoch of the last deferral; `0` means none recorded since governor start.
 
-The concurrent native status JSON uses the corresponding fields `thermal_cpu_type`, `thermal_cpu_zone`, `thermal_src_conf`, `thermal_rejected_type`, and `thermal_rejected_raw`. The shorter `thermal_src_conf` spelling is retained for status JSON compatibility; consumers must not assume that the two files share every key name.
+The concurrent native status JSON uses the corresponding fields `thermal_cpu_type`, `thermal_cpu_zone`, `thermal_src_conf`, `thermal_rejected_type`, `thermal_rejected_raw`, and the five `thermal_spike_*` fields above. The shorter `thermal_src_conf` spelling is retained for status JSON compatibility; consumers must not assume that the two files share every key name.
+
+For spike handling, an upward candidate at least 25 °C above the hottest independent peer is held once; a repeated high reading is accepted on the next tick. Shared heating and candidates without sufficient independent peer evidence are accepted immediately. On a first extreme candidate with no cached baseline, `temp_valid=0` and `temp_reason=spike` describe unavailable confirmed temperature, not a valid 0 °C sample. A hold never proves that firmware or the sensor is faulty.
 
 **Battery measurement confidence **
 - `battery_window_confidence` — `0` no usable window, `1` one SOC step or less, `2` short but usable window, `3` settled window with material SOC movement.
@@ -341,7 +348,7 @@ Pipe-delimited CSV. First non-comment line is the header (also starts with `#`).
 - `temp` — `cap_temp` ASB uses
 - `temp_valid` — 1 if last read was OK
 - `temp_age_s` — seconds since last successful read
-- `temp_reason` — `ok` or invalid reason string
+- `temp_reason` — `ok`, another invalid reason string, or `spike` for the one-tick isolated-candidate deferral; `spike` is not a sensor-fault verdict
 - `cpu_type` — `g_thermal_cpu_type` resolved name (cpu-1-1-0 etc.)
 - `cpu_zone`, `skin_zone`, `surface_zone` — zone IDs ASB picked
 - `skin_temp`, `surface_hotspot` — derived combined sensors
@@ -522,6 +529,8 @@ cold-start family, every `launch_*_delta` becomes `unknown`: the total and other
 can look monotonic across the reset by coincidence and cannot be reconciled as one window.
 Independent monotonic spawn/ledger counters retain their deltas.
 
+`denylist_spawns` records the root manager's unmount/denylist launch flag. A one-shot cold-start record can be sent before specialization even for a package outside the resident-observer allowlist; no observer then remains in that process. The counter is neither a failed-injection count nor evidence that the allowlist should be changed. `launch_accepted` is only a Governor acknowledgement, not proof of an applied ceiling or an energy benefit.
+
 `launch_screen_off` (fix300) counts cold-start requests vetoed by the companion itself when
 the Governor has already published `screen=0`. The process-start ledger entry is still
 recorded, but no launch datagram is sent and the one-second/20-per-minute launch budget is
@@ -617,7 +626,7 @@ Lifecycle: `lk_bt_reconnect_start` at capture start, `lk_bt_reconnect_snapshot` 
 
 The same rule runs in `tools/asb_diag.sh` and in `tools/logkit/_asb_logkit_common.sh`, and `donor_telemetry_contract` in `tests/asb_system.sh` asserts both. The two copies once diverged — the manual report was tightened while every full-day archive kept the weaker single-signal logic — which is why the assertions test for the *shape* of the verdict rather than its wording.
 
-`network_trace.txt` records live route and TCP state followed by ASB network provenance. For every `net_congestion` and `net_qdisc` global/per-link key the snapshot reports the requested config and the last result from `net_apply_result` (`ok`, `pending`, `failed`, `unavailable` or `not_applied`). The current kernel qdisc/congestion values remain the live authority. Its `# wifi link` block (fix178) is one `link:` line - frequency and band, RSSI, link speed, Wi-Fi standard - from `cmd wifi status` or the wifi dump; the SSID and BSSID are not recorded.
+`network_trace.txt` records live route and TCP state followed by ASB network provenance. For every `net_congestion` and `net_qdisc` global/per-link key the snapshot reports the requested config and the last result from `net_apply_result` (`ok`, `pending`, `failed`, `unavailable` or `not_applied`). A pending Wi-Fi key while the global Wi-Fi switch is off means there is no applicable link, not a failed apply; mobile pending keys retain their own link-waiting semantics. The current kernel qdisc/congestion values remain the live authority. Its `# wifi link` block (fix178) is one `link:` line - frequency and band, RSSI, link speed, Wi-Fi standard - from `cmd wifi status` or the wifi dump; the SSID and BSSID are not recorded.
 
 `kernel_params.txt` records ZRAM compression/size/stats where exported and `/proc/pressure/memory` lines. Memory PSI is read-only and must not be interpreted as a request to rebuild ZRAM or alter VM policy. This is specifically designed to distinguish a genuine memory-pressure hypothesis from an unrelated night-drain cause.
 
