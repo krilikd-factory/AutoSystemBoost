@@ -1718,7 +1718,8 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .lgr-quality-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .lgr-quality-title { color: var(--text-secondary); font-size: 11px; font-weight: 700;
   letter-spacing: .05em; text-transform: uppercase; }
-.lgr-quality-level { color: var(--text); font-size: 12px; font-weight: 750; text-align: end; }
+.lgr-quality-level { color: var(--text); font: 750 12px/1.3 var(--mono); text-align: end;
+  font-variant-numeric: tabular-nums; white-space: nowrap; }
 .lgr-quality-map { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 5px; margin: 9px 0 7px; }
 .lgr-quality-seg { height: 5px; border-radius: 4px; background: var(--text-tertiary); opacity: .7; }
 .lgr-quality-seg.lgr-state-good { background: var(--bat); opacity: 1; }
@@ -1781,11 +1782,16 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .zygisk-page .zy-mode-seg { display: flex; width: 100%; margin: 2px 0 10px; }
 .zygisk-page .zy-mode-seg button { font-size: 12px; padding: 9px 6px; }
 .zygisk-page .zy-mode-desc { color: var(--text-secondary); font-size: 12.5px; line-height: 1.45; margin: 0 2px 8px; }
+.zygisk-page .zy-goal-guide { display:grid; gap:7px; }
+.zygisk-page .zy-goal-row { padding:9px 11px; border:1px solid var(--border); border-radius:13px; background:color-mix(in srgb,var(--surface) 82%,transparent); }
+.zygisk-page .zy-goal-label { color:var(--text); font-size:11.5px; font-weight:750; line-height:1.35; margin-bottom:3px; }
+.zygisk-page .zy-goal-text { color:var(--text-secondary); font-size:12px; line-height:1.48; overflow-wrap:anywhere; }
 .zygisk-page .zy-fine { margin-top: 10px; }
 .zygisk-page .zy-auto-card { border-color: color-mix(in srgb,var(--accent) 32%,var(--border)); }
 .zygisk-page .zy-auto-badge { display:inline-block; margin:0 0 8px; padding:4px 8px; border-radius:999px; background:color-mix(in srgb,var(--accent) 13%,transparent); color:var(--accent); font:700 10px/1.2 var(--sans); }
 .zygisk-page .zy-auto-desc { margin:0 0 10px; color:var(--text-secondary); font-size:12.5px; line-height:1.5; }
-.zygisk-page .zy-auto-summary { margin:8px 0 10px; padding:10px 12px; border:1px solid var(--border); border-radius:12px; color:var(--text); background:rgba(255,255,255,.025); font-size:12px; line-height:1.45; }
+.zygisk-page .zy-auto-summary { margin:8px 0 6px; padding:10px 12px; border:1px solid var(--border); border-radius:12px; color:var(--text); background:rgba(255,255,255,.025); font-size:12px; line-height:1.5; overflow-wrap:anywhere; }
+.zygisk-page .zy-auto-current { margin:0 2px 10px; color:var(--text-secondary); font-size:11.5px; line-height:1.5; overflow-wrap:anywhere; }
 .zygisk-page .zy-auto-actions { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0; }
 .zygisk-page .zy-auto-btn { min-height:40px; padding:9px 14px; border:1px solid var(--border); border-radius:11px; background:var(--surface); color:var(--text); font:700 12px var(--sans); }
 .zygisk-page .zy-auto-btn-primary { border-color:color-mix(in srgb,var(--accent) 45%,var(--border)); background:color-mix(in srgb,var(--accent) 15%,var(--surface)); color:var(--text); }
@@ -1793,6 +1799,9 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .zygisk-page .zy-evidence { margin: 4px 0 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 14px; }
 .zygisk-page .zy-evidence summary { cursor: pointer; color: var(--text-secondary); font-size: 12.5px; font-weight: 600; }
 .zygisk-page .zy-evidence[open] summary { margin-bottom: 8px; }
+.zygisk-page .zy-evidence .lgr-row-long { flex-direction:column; align-items:stretch; gap:4px; padding:8px 0; border-top:1px solid var(--border); }
+.zygisk-page .zy-evidence .lgr-row-long .lgr-v { max-width:100%; text-align:start; font:11px/1.5 var(--mono); overflow-wrap:anywhere; word-break:break-word; }
+.zygisk-page .dev-zygisk-input { min-height:84px; resize:vertical; white-space:pre-wrap; overflow-wrap:anywhere; }
 
 .wl-manual-sheet { min-height:min(48vh,560px); }
 .lv-stale { opacity:.6; transition:opacity .35s ease; }
@@ -1943,14 +1952,14 @@ html[data-asb-theme="light"] .lgr-chip { background: #f7f9fa; }
 .lgr-brief-warn::before { color: var(--perf); }
 .lgr-dx { padding: 9px 0 10px; border-top: 1px solid var(--border); font-size: 12.5px; line-height: 1.45; }
 .lgr-dx:first-of-type { border-top: 0; padding-top: 2px; }
-.lgr-dx-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 3px; }
+.lgr-dx-head { display: flex; flex-wrap:wrap; justify-content: space-between; align-items: baseline; gap: 4px 10px; margin-bottom: 4px; }
 .lgr-dx-area { color: var(--text); font-weight: 700; font-size: 13px; }
 .lgr-dx-state { font-weight: 700; font-size: 12px; white-space: nowrap; }
-.lgr-dx-cause { color: var(--text); }
-.lgr-dx-also { color: var(--text-secondary); margin-top: 3px; }
+.lgr-dx-cause { color: var(--text); line-height:1.5; overflow-wrap:anywhere; }
+.lgr-dx-also { color: var(--text-secondary); margin-top: 5px; padding-inline-start:9px; border-inline-start:1px solid var(--border); font-size:12px; line-height:1.5; overflow-wrap:anywhere; }
 .lgr-dx-fix { margin-top: 5px; padding-inline-start: 9px; border-inline-start: 2px solid var(--accent); color: var(--text); }
 .lgr-dx-fix-l { color: var(--accent); font-weight: 700; margin-inline-end: 5px; }
-.lgr-dx-owner { margin-top: 5px; color: var(--text-tertiary); font-size: 11.5px; }
+.lgr-dx-owner { margin-top: 6px; color: var(--text-tertiary); font-size: 11px; line-height:1.45; overflow-wrap:anywhere; }
 .lgr-dx-owner-asb, .lgr-dx-owner-unknown, .lgr-dx-owner-asbfix { color: var(--perf); }
 .lgr-dx-send { margin-top: 7px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; color: var(--text-secondary); }
 .lgr-dx-btn { font-size: 12px; }
@@ -1963,7 +1972,7 @@ html[data-asb-theme="light"] .lgr-chip { background: #f7f9fa; }
 .lgr-table td { font-size: 12.5px; color: var(--text); padding: 5px 6px;
   border-top: 1px solid var(--border); font-variant-numeric: tabular-nums; }
 .lgr-table th:first-child { width: 50%; }
-.lgr-table td.lgr-td-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lgr-table td.lgr-td-name { overflow-wrap:anywhere; white-space:normal; }
 .lgr-table td.lgr-td-num, .lgr-table th.lgr-td-num { text-align: end; }
 .lgr-table td.lgr-warn, .lgr-table td .lgr-warn { color: var(--perf); }
 .lgr-tip { display: flex; gap: 9px; align-items: flex-start; padding: 5px 0; font-size: 12.5px;
@@ -12536,8 +12545,9 @@ function logReportTips(d, all) {
   if (lteIdle) tips.push({ ic: 'warn', key: 'lr_tip_lte_idle', vars: lteIdle });
   const radioT = s.radio || null;
   if (radioT && (+radioT.mib || 0) >= 256 && d.rapps && d.rapps.length) {
-    const rh = Math.max(0.5, (+(s.meta || {}).elapsed_min || 0) / 60);
-    tips.push({ ic: (+radioT.mib || 0) / rh >= 250 ? 'warn' : 'info', key: 'lr_tip_net_heavy',
+    /* Traffic is measured context, not a per-UID or radio-energy attribution. Its volume
+       alone must not create a red warning or a priority action. */
+    tips.push({ ic: 'info', key: 'lr_tip_net_heavy',
       vars: { mib: logReportMiB(radioT.mib), app: d.rapps[0].pkg, amib: logReportMiB(d.rapps[0].mib) } });
   }
   if (cfg.ltpo_video === '0')
@@ -12796,7 +12806,11 @@ function logReportAnalyze(d) {
     lr_tip_wl_enable: 64, lr_tip_app: 62, lr_tip_audio: 45, lr_tip_ltpo: 15,
     lr_tip_lte_idle: 94, lr_tip_net_heavy: 74
   };
-  const actions = logReportTips(d, true).filter(function (t) { return t.ic !== 'ok' && weights[t.key]; })
+  const actions = logReportTips(d, true).filter(function (t) {
+    /* Keep measured traffic visible in observations, but never promote volume alone
+       into the three priority actions. */
+    return t.ic !== 'ok' && t.key !== 'lr_tip_net_heavy' && weights[t.key];
+  })
     .map(function (t, i) { return { tip: t, weight: weights[t.key] || 0, order: i }; })
     .sort(function (a, b) { return b.weight - a.weight || a.order - b.order; }).slice(0, 3)
     .map(function (x) { return x.tip; });
@@ -13729,6 +13743,11 @@ function deviceZygiskOverview(d) {
     features.appendChild(chip);
   });
   wrap.appendChild(features);
+  if (val('loaded_processes') === '0' && val('enabled') === '1' &&
+      val('state_freshness') === 'current' && val('safe_mode') !== 'on') {
+    const zero = logReportNote(T('dev_zygisk_zero_processes', 'At this snapshot, no validated observed app process is resident. This is not an injection-failure count: channel confirmation and cold-start requests are separate evidence.'));
+    zero.classList.add('dev-zygisk-zero'); wrap.appendChild(zero);
+  }
   const note = logReportNote(T('dev_zygisk_snapshot_note', 'Current read-only snapshot. RSS is the memory of validated observed apps, not pure ASB overhead; accepted hints do not prove a cap change, performance gain or energy saving.'));
   note.classList.add('dev-evidence'); wrap.appendChild(note);
   return wrap;
@@ -13868,6 +13887,17 @@ function zygiskAutoCard(d) {
     const aot = _zyAot && _zyAot.enabled ? T('zy_aot_on', 'On') : T('zy_aot_off', 'Off');
     summary.textContent = T('zy_auto_summary', 'Automatic profile: %1 · %2 observed app(s) · Background guard: %3 · ART (independent): %4').replace('%1', profile).replace('%2', n).replace('%3', guard).replace('%4', aot);
     card.appendChild(summary);
+    const currentLine = document.createElement('div'); currentLine.className = 'zy-auto-current';
+    const featureState = function (key, label, fallback) {
+      const value = deviceVal(d, 'zygisk_observer', key);
+      return T(label, fallback) + ': ' + (value === '1' ? T('st_on', 'Enabled') : value === '0' ? T('st_off', 'Disabled') : T('dev_load_band_unknown', 'Unknown'));
+    };
+    currentLine.textContent = T('zy_auto_current', 'Current independent switches: %s').replace('%s', [
+      featureState('enabled', 'dev_zygisk_feature_observer', 'Observer'),
+      featureState('lifecycle_hints', 'dev_zygisk_feature_hints', 'Lifecycle hints'),
+      featureState('launch_hints', 'dev_zygisk_feature_launch', 'Cold-start lift'),
+      featureState('spawn_ledger', 'dev_zygisk_feature_ledger', 'Process ledger')].join(' · '));
+    card.appendChild(currentLine);
   }
   const actions = document.createElement('div'); actions.className = 'zy-auto-actions';
   if (on) {
@@ -13927,6 +13957,23 @@ async function zygiskAutoSet(action, profile) {
   }
   if (_zygiskOpen) zygiskPageRender(d.count ? d : (window._asbZygiskLinkData || null));
 }
+function zygiskGoalGuide() {
+  const card = logReportSec(T('zy_guide_title', 'What to choose'), 'switches');
+  card.classList.add('zy-goal-card');
+  const guide = document.createElement('div'); guide.className = 'zy-goal-guide';
+  [
+    ['zy_guide_response', 'Responsiveness', 'zy_guide_response_text', 'Launch assist: cold starts only. Response: cold starts + lifecycle hints. Full adds the process journal. These enable requests; they do not guarantee a faster device.'],
+    ['zy_guide_battery', 'Battery', 'zy_guide_battery_text', 'Battery guard can restrain proven restart loops after separate observations and your confirmation. Background work and notifications may be delayed; Watch alone does not save power.'],
+    ['zy_guide_minimal', 'Minimal intervention', 'zy_guide_minimal_text', 'Observe only / Watch: diagnostics without frequency requests. Off: no companion work in app processes.']
+  ].forEach(function (spec) {
+    const row = document.createElement('div'); row.className = 'zy-goal-row';
+    const label = document.createElement('div'); label.className = 'zy-goal-label'; label.textContent = T(spec[0], spec[1]);
+    const text = document.createElement('div'); text.className = 'zy-goal-text'; text.textContent = T(spec[2], spec[3]);
+    row.appendChild(label); row.appendChild(text); guide.appendChild(row);
+  });
+  card.appendChild(guide);
+  return card;
+}
 function zygiskModeCard(d) {
   const card = logReportSec(T('zy_sec_mode', 'Mode'), 'switches');
   card.classList.add('zy-mode-card');
@@ -13936,6 +13983,7 @@ function zygiskModeCard(d) {
   ZYGISK_MODES.forEach(function (m) {
     const b = document.createElement('button'); b.type = 'button';
     b.textContent = T(m.key, m.label);
+    b.title = T(m.key + '_desc', m.desc);
     if (m.id === mode) b.className = 'on';
     if (b.setAttribute) { b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', m.id === mode ? 'true' : 'false'); }
     b.disabled = _zygiskModeBusy;
@@ -14038,7 +14086,10 @@ function zygiskEvidenceCard(d) {
       const raw = String(sec[k]);
       const row = logReportRow(deviceLabel('zygisk_observer', k), deviceDisplayValue('zygisk_observer', k, raw, d), false);
       const v = row.querySelector('.lgr-v');
-      if (v && raw.length > 48) v.classList.add('dev-long');
+      if (raw.length > 48) {
+        row.classList.add('lgr-row-long');
+        if (v) v.classList.add('dev-long');
+      }
       det.appendChild(row);
     });
   });
@@ -14058,6 +14109,7 @@ function zygiskPageRender(d) {
   const st = logReportSec(T('zy_sec_status', 'Connection'), 'zygisk_observer');
   st.appendChild(deviceZygiskLink(d));
   body.appendChild(st);
+  body.appendChild(zygiskGoalGuide());
   body.appendChild(zygiskAutoCard(d));
   body.appendChild(zygiskModeCard(d));
   const act = logReportSec(T('zy_sec_activity', 'Activity and cost'), 'zygisk_activity');
@@ -14618,7 +14670,8 @@ function deviceZygiskEditor(d, onDone) {
   const done = typeof onDone === 'function' ? onDone : asbDeviceInfoLoad;
   const wrap = document.createElement('div'); wrap.className = 'dev-zygisk-editor';
   const label = document.createElement('label'); label.textContent = T('dev_zygisk_allowlist', 'Allowlisted application packages (comma or space separated)');
-  const input = document.createElement('input'); input.className = 'dev-zygisk-input'; input.type = 'text';
+  const input = document.createElement('textarea'); input.className = 'dev-zygisk-input'; input.rows = 4;
+  input.setAttribute('wrap', 'soft');
   input.setAttribute('autocomplete', 'off'); input.setAttribute('spellcheck', 'false');
   const automatic = deviceVal(d, 'zygisk_observer', 'auto_mode') === '1';
   const current = deviceVal(d, 'zygisk_observer', 'enabled_package_list');
@@ -15364,12 +15417,12 @@ function logReportDxT(key, vars) {
     lr_dx_crashes: "{n} native crashes during the capture, none in ASB code.",
     lr_dx_fix_crashes: "If an app misbehaves, update it; the crash list is in the full report.",
     lr_dx_gauge: "The current sensor on this phone reads about {x}× low - mA figures are a lower bound. Battery-counter %/h figures use whole-percent steps and eligible windows, so treat them as estimates rather than exact rates.",
-    lr_dx_screen_net: "With the screen on: {pct}%/h; the modem moved {mib} meanwhile ({ph} an hour) - mobile data is the likely main cost here.",
+    lr_dx_screen_net: "With the screen on: {pct}%/h; the modem moved {mib} meanwhile ({ph} an hour). This is measured radio context, not proof that mobile data caused the drain.",
     lr_dx_screen_data: "With the screen on the modem moved {mib} ({ph} an hour) - see Mobile data.",
     lr_dx_screen_bright_low: "Average brightness {b}% - the panel is not what costs here.",
     lr_dx_screen_bright_high: "Average brightness {b}% - a bright panel is one of the main costs; auto-brightness helps.",
     lr_dx_screen_top: "{app} was in front for {pct}% of the frames drawn.",
-    lr_dx_net_heavy: "{mib} of mobile data over {h}, {on} of it with the screen on - with this much traffic the modem is one of the main costs.",
+    lr_dx_net_heavy: "{mib} of mobile data over {h}, including {on} with the screen on. Traffic volume alone does not establish its share of battery drain.",
     lr_dx_net_nsa: "The modem was on LTE + 5G at once (5G NSA) in {n} of {of} checks - two radios powered for one connection.",
     lr_dx_net_apps: "Most of it, by Android's per-app count since {since} ({tot}): {list}.",
     lr_dx_net_ma: "In screen-on stretches with data moving the battery current was about {pct}% higher than in quiet ones ({hi} against {lo} mA, a lower bound). An app that streams also computes, so this is a correlation, not a split.",
@@ -15490,7 +15543,7 @@ function logReportDiagnose(d) {
     else if (hz >= 60)
       sit = item('screen', st, 'lr_dx_screen_hz', { pct: String(r), share: String(hz) }, 'user', 'lr_dx_fix_screen_hz');
     else if (dataHeavy)
-      sit = item('screen', st, 'lr_dx_screen_net', { pct: String(r), mib: logReportMiB(radioOn), ph: logReportMiB(radioOn / onHours) }, 'app');
+      sit = item('screen', st, 'lr_dx_screen_net', { pct: String(r), mib: logReportMiB(radioOn), ph: logReportMiB(radioOn / onHours) }, 'none');
     else sit = item('screen', st, 'lr_dx_screen_unknown', { pct: String(r) }, 'asb', 'lr_dx_fix_send', {}, true);
     /* fix248: what the screen time went on, from the facts the capture holds - the modem's
        share, the brightness, the app in front. Each is stated as measured, none as a
@@ -15513,12 +15566,11 @@ function logReportDiagnose(d) {
   const radio = s.radio || null;
   if (radio && (+radio.mib || 0) >= 256) {
     const mib = +radio.mib || 0;
-    const hrs = Math.max(0.5, (+meta.elapsed_min || 0) / 60);
-    const st = mib / hrs >= 250 ? 'problem' : 'normal';
+    const st = 'normal';
     const rapps = d.rapps || [];
     const fix = rapps.length ? logReportNetFix(rapps[0].pkg) : 'lr_dx_fix_net_none';
     const it = item('net', st, 'lr_dx_net_heavy', { mib: logReportMiB(mib), h: logReportDur(meta.elapsed_min || 0),
-      on: logReportMiB(+radio.on || 0) }, 'app', fix, { app: rapps.length ? rapps[0].pkg : '' });
+      on: logReportMiB(+radio.on || 0) }, 'none', fix, { app: rapps.length ? rapps[0].pkg : '' });
     const rat = s.rat || null;
     if (rat && (+rat.of || 0) >= 3 && (+rat.nsa || 0) * 2 > (+rat.of || 0))
       it.also.push({ key: 'lr_dx_net_nsa', v: { n: String(rat.nsa), of: String(rat.of) } });
@@ -15733,9 +15785,8 @@ function logReportDiagSection(items) {
 function logReportQualityPanel(analysis) {
   const panel = document.createElement('div'); panel.className = 'lgr-quality';
   const head = document.createElement('div'); head.className = 'lgr-quality-head';
-  const title = document.createElement('span'); title.className = 'lgr-quality-title'; title.textContent = T('lr_quality_title', 'Evidence quality');
+  const title = document.createElement('span'); title.className = 'lgr-quality-title'; title.textContent = T('lr_quality_title', 'Evidence coverage');
   const level = document.createElement('span'); level.className = 'lgr-quality-level';
-  level.textContent = T('lr_quality_' + analysis.quality.level, analysis.quality.level);
   head.appendChild(title); head.appendChild(level); panel.appendChild(head);
   const map = document.createElement('div'); map.className = 'lgr-quality-map';
   let known = 0, problems = 0, unknown = 0;
@@ -15745,6 +15796,9 @@ function logReportQualityPanel(analysis) {
     const seg = document.createElement('span'); seg.className = 'lgr-quality-seg lgr-state-' + v.state;
     map.appendChild(seg);
   });
+  /* A long capture can still have unknown domains and lower-bound sensors. Show neutral
+     per-domain coverage, never a global High/Medium confidence badge as a health score. */
+  level.textContent = String(known) + ' / ' + String(analysis.verdicts.length);
   panel.appendChild(map);
   const count = document.createElement('div'); count.className = 'lgr-quality-count';
   count.textContent = logReportT('lr_quality_coverage', '{known} of {total} areas have enough data', { known: known, total: analysis.verdicts.length });
@@ -15956,7 +16010,7 @@ function logReportZygisk(d) {
   if (denylistDelta !== null) {
     sec.appendChild(logReportRow(T('dev_zygisk_observer_denylist_spawns', 'Starts flagged for module unmounting'), delta('denylist_spawns')));
     if (denylistDelta > 0)
-      sec.appendChild(logReportNote(T('lr_zy_denylist_note', 'A root-manager unmount/denylist flag describes how the process was started. Its count alone does not prove failed injection or justify changing the allowlist.')));
+      sec.appendChild(logReportNote(T('lr_zy_denylist_note', 'A root-manager unmount/denylist flag describes how the process was started. A one-shot cold-start request can be sent before specialization even when the process is not allowlisted; no resident observer is then retained. The flag count is not a failed-injection or non-actionable-event count and does not justify changing the allowlist.')));
   }
   if (numericDelta('hints_screen_off') !== null)
     sec.appendChild(logReportRow(T('dev_zygisk_observer_hints_screen_off', 'Refreshes not sent with the screen off'), delta('hints_screen_off')));
