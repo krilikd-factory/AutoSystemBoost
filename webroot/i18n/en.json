@@ -396,8 +396,8 @@
       }
     },
     "zygisk_enabled": {
-      "name": "Zygisk Process Observer",
-      "desc": "Opt-in telemetry for explicitly allowlisted apps only. Start/exit and bounded IPC overhead, with no hooks or app control. This switch alone sends no governor request; lifecycle refresh is separate. Newly started app processes are required. It is also the master switch for the cold-start lift and the process-start ledger. With all of them off, ASB stays dormant in app processes: one failed file open per process start, no config parsing, no IPC."
+      "name": "ASB Zygisk",
+      "desc": "Master switch for attaching ASB to Zygisk in newly started app processes, or leaving them unattached after their next restart. Off preserves the selected mode, automatic app list, feature switches, guard and ART settings; enabling again restores that saved setup without silently choosing a new preset. The full control panel is on the ZYGISK page. Requires a Zygisk-capable root implementation. Safe mode and a broker failure fail open; existing apps are not killed."
     },
     "zygisk_hints": {
       "name": "Zygisk Lifecycle Refresh",
@@ -2142,7 +2142,7 @@
   "dev_zygisk_link_off_detail": "Observer is off for new processes.",
   "dev_zygisk_link_unknown_detail": "Insufficient evidence; Zygisk support is not ruled out.",
   "cfg_ui_section_zygisk": "Zygisk",
-  "cfg_ui_section_zygisk_hint": "Opt-in process observation and bounded requests to the existing governor. Zygisk does not select profiles, frequencies or app policies.",
+  "cfg_ui_section_zygisk_hint": "One master switch and connection status. Modes, features and app selection live on the ZYGISK page.",
   "dev_zygisk_metric_injection": "Validated injection",
   "dev_zygisk_metric_processes": "{n} live process(es)",
   "dev_zygisk_metric_channel": "Companion channel",
@@ -2517,5 +2517,27 @@
   "lr_impact_cost_fmt": "{cpu} ms/h · {writes} writes/h · {wakes} wakeups/h",
   "lr_impact_cost_scope": "Measured ASB cost · not the net battery effect",
   "lr_impact_ab_note": "No battery %, temperature or smoothness gain is assigned to a tweak here. For a causal figure, change one toggle and compare similar captures. A tweak not listed has no evidence exposed in this capture; that does not mean it is unsupported or had zero effect.",
-  "zy_auto_current": "Current independent switches: %s"
+  "zy_auto_current": "Current independent switches: %s",
+  "zy_mode_battery": "Battery",
+  "zy_mode_battery_desc": "Observer and process journal, plus the evidence-gated background guard. Cold-start lifts and lifecycle requests are off. Approved restrictions can delay background work and notifications.",
+  "zy_mode_performance": "Performance",
+  "zy_mode_performance_desc": "Observer, process journal and cold-start assistance. Background guard is off. Existing profile and thermal gates still apply; a faster device is not guaranteed.",
+  "zy_mode_auto": "Auto",
+  "zy_mode_auto_desc": "Cold-start assistance and lifecycle hints for responsiveness, plus the evidence-gated background guard. ART stays separate. This balances mechanisms; it does not promise maximum speed and battery life at once.",
+  "zy_mode_custom_short": "Custom",
+  "zy_mode_custom_unified": "Custom: switches or the guard differ from the preset. ASB will not silently undo your manual choice. Choose a mode above to reapply its complete set.",
+  "zy_mode_custom_warning": "Manual override active. In particular, cold-start or lifecycle requests added to Battery can increase activity; the interface will not keep calling that set Battery.",
+  "zy_auto_managed_by_mode": "Follows the mode above · no package lists to fill in",
+  "zy_auto_desc_unified": "The selected mode automatically fills the observation list with user apps and applies its matching switches and guard baseline. ART compilation remains a separate manual choice below.",
+  "zy_settings_mode": "Zygisk mode: %s",
+  "zy_settings_custom": "Manual override active; ASB will not silently restore a preset.",
+  "zy_settings_open": "Open ZYGISK control panel",
+  "zy_sec_controls": "ASB Zygisk controls",
+  "zy_controls_note": "These switches fine-tune the current mode. A mismatch is shown as Custom and is never silently rolled back. Master, cold-start and ledger changes affect newly started or restarted app processes.",
+  "zy_control_failed": "Zygisk setting was not changed; check the current state",
+  "zy_off_title": "ASB Zygisk is off",
+  "zy_off_desc": "ASB will not attach to Zygisk in newly started app processes. Apps that are already running keep their previous state until they are restarted.",
+  "zy_off_kept": "Your mode, automatic app selection, feature switches, guard and ART settings are preserved. Enabling again restores that setup; it does not silently choose a new preset.",
+  "zy_off_enable": "Enable ASB Zygisk",
+  "zy_off_settings": "Settings → System"
 }

@@ -428,8 +428,8 @@
       "desc": "Etkilenen ColorOS/DSU kurulumlarında sistem dosya seçici için tek seferlik onarım. DocumentsUI’yi etkinleştirip görünür yapar, seçici/dosya etkinliklerini varsayılana döndürür ve kullanıcı 0 için ColorOS File Manager’ı devre dışı bırakır. “Kapalı” ile Dosya Yöneticisi geri gelir. Yalnızca ASB’nin değiştirdiği durumlar geri yüklenir; açılışta yeniden uygulanmaz."
     },
     "zygisk_enabled": {
-      "name": "Zygisk Süreç Gözlemcisi",
-      "desc": "Yalnızca açıkça izin verilen uygulamalar için isteğe bağlı telemetri. Başlangıç/çıkış ve sınırlı IPC yükü; hook veya uygulama denetimi yok. Bu anahtar tek başına governor isteği göndermez; yaşam döngüsü yenilemesi ayrıdır. Uygulamalar yeniden başlatılmalıdır. Ayrıca soğuk başlatma yükseltmesi ve süreç başlatma kaydı için ana anahtardır. Hepsi kapalıyken ASB uygulama süreçlerinde boşta kalır: süreç başlatma başına tek başarısız dosya açma, yapılandırma okuma yok, IPC yok."
+      "name": "ASB Zygisk bağlantısı",
+      "desc": "Yeni başlatılan uygulama süreçlerinde ASB’yi Zygisk’e bağlamak veya bir sonraki yeniden başlatmada ayırmak için ana anahtar. Kapalıyken mod, otomatik uygulama listesi, özellik anahtarları, Guard ve ART korunur; yeniden açmak bu kurulumu gizlice yeni bir preset seçmeden geri getirir. Tam kontrol paneli ZYGISK sayfasındadır. Zygisk uyumlu bir root uygulaması gerekir. Safe mode ve broker hatası fail-open çalışır; çalışan uygulamalar kapatılmaz."
     },
     "zygisk_hints": {
       "name": "Zygisk Yaşam Döngüsü Yenilemesi",
@@ -2283,7 +2283,7 @@
   "dev_zygisk_link_off_detail": "Observer yeni işlemler için kapalı.",
   "dev_zygisk_link_unknown_detail": "Yetersiz kanıt; Zygisk desteği dışlanmıyor.",
   "cfg_ui_section_zygisk": "Zygisk",
-  "cfg_ui_section_zygisk_hint": "İsteğe bağlı işlem gözlemi ve mevcut governor'a sınırlı istekler. Zygisk profil, frekans veya uygulama politikası seçmez.",
+  "cfg_ui_section_zygisk_hint": "Tek ana anahtar ve bağlantı durumu. Modlar, özellikler ve uygulama seçimi ZYGISK sayfasındadır.",
   "dev_zygisk_metric_injection": "Doğrulanmış enjeksiyon",
   "dev_zygisk_metric_processes": "{n} canlı işlem",
   "dev_zygisk_metric_channel": "Companion kanalı",
@@ -2658,5 +2658,27 @@
   "lr_impact_cost_fmt": "{cpu} ms/sa · {writes} yazma/sa · {wakes} uyandırma/sa",
   "lr_impact_cost_scope": "Ölçülen ASB maliyeti · net pil etkisi değil",
   "lr_impact_ab_note": "Burada bir tweak’e pil yüzdesi, sıcaklık veya akıcılık kazancı atanmaz. Nedensel bir değer için tek anahtarı değiştirip benzer kayıtları karşılaştırın. Listelenmeyen tweak için bu kayıtta evidence yoktur; desteklenmediği veya etkisinin sıfır olduğu anlamına gelmez.",
-  "zy_auto_current": "Geçerli bağımsız anahtarlar: %s"
+  "zy_auto_current": "Geçerli bağımsız anahtarlar: %s",
+  "zy_mode_battery": "Tasarruf",
+  "zy_mode_battery_desc": "Observer ve işlem günlüğü, ayrıca kanıta bağlı arka plan guard’ı. Soğuk başlatma desteği ve lifecycle istekleri kapalı. Onaylanan kısıtlamalar arka plan çalışmasını ve bildirimleri geciktirebilir.",
+  "zy_mode_performance": "Performans",
+  "zy_mode_performance_desc": "Observer, işlem günlüğü ve soğuk başlatma desteği. Arka plan guard’ı kapalı. Mevcut profil ve thermal sınırları geçerlidir; daha hızlı bir cihaz garanti edilmez.",
+  "zy_mode_auto": "Otomatik",
+  "zy_mode_auto_desc": "Yanıt hızı için soğuk başlatma desteği ve lifecycle ipuçları, ayrıca kanıta bağlı arka plan guard’ı. ART ayrı kalır. Mekanizmaları dengeler; aynı anda en yüksek hız ve pil ömrü vaat etmez.",
+  "zy_mode_custom_short": "Özel",
+  "zy_mode_custom_unified": "Özel: anahtarlar veya guard hazır ayardan farklı. ASB manuel seçiminizi gizlice geri almaz. Tam seti yeniden uygulamak için yukarıdan bir mod seçin.",
+  "zy_mode_custom_warning": "Manuel geçersiz kılma etkin. Özellikle Tasarruf’a eklenen soğuk başlatma veya lifecycle istekleri etkinliği artırabilir; arayüz bu seti Tasarruf olarak adlandırmaya devam etmez.",
+  "zy_auto_managed_by_mode": "Yukarıdaki modu izler · paket listesi doldurulmaz",
+  "zy_auto_desc_unified": "Seçilen mod, gözlem listesini kullanıcı uygulamalarıyla otomatik doldurur ve eşleşen anahtarlarla guard tabanını uygular. ART derlemesi aşağıda ayrı bir manuel seçim olarak kalır.",
+  "zy_settings_mode": "Zygisk modu: %s",
+  "zy_settings_custom": "Manuel geçersiz kılma etkin; ASB bir hazır ayarı gizlice geri yüklemez.",
+  "zy_settings_open": "ZYGISK kontrol panelini aç",
+  "zy_sec_controls": "ASB Zygisk kontrolleri",
+  "zy_controls_note": "Bu anahtarlar geçerli modu hassas ayarlar. Farklılık Özel olarak gösterilir ve asla gizlice geri alınmaz. Master, soğuk başlatma ve kayıt değişiklikleri yeni ya da yeniden başlatılan uygulama süreçlerini etkiler.",
+  "zy_control_failed": "Zygisk ayarı değiştirilmedi; geçerli durumu kontrol edin",
+  "zy_off_title": "ASB Zygisk kapalı",
+  "zy_off_desc": "ASB, yeni başlatılan uygulama süreçlerinde Zygisk’e bağlanmayacak. Zaten çalışan uygulamalar yeniden başlatılana kadar önceki durumlarını korur.",
+  "zy_off_kept": "Modunuz, otomatik uygulama seçiminiz, özellik anahtarları, Guard ve ART ayarları korunur. Yeniden açmak bu kurulumu geri getirir; gizlice yeni bir preset seçmez.",
+  "zy_off_enable": "ASB Zygisk’i etkinleştir",
+  "zy_off_settings": "Ayarlar → Sistem"
 }

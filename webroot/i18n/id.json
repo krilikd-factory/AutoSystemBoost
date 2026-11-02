@@ -428,8 +428,8 @@
       "desc": "Perbaikan satu kali untuk pemilih file sistem pada konfigurasi ColorOS/DSU yang terdampak. Mengaktifkan dan menampilkan DocumentsUI, mengembalikan aktivitas picker/files ke default, dan menonaktifkan ColorOS File Manager untuk pengguna 0. File Manager kembali saat “Nonaktif”. Hanya status yang diubah ASB yang dipulihkan; tidak ada penerapan ulang saat boot."
     },
     "zygisk_enabled": {
-      "name": "Pengamat Proses Zygisk",
-      "desc": "Telemetri opsional hanya untuk aplikasi yang diizinkan secara eksplisit. Start/exit dan overhead IPC terbatas, tanpa hook atau kontrol aplikasi. Sakelar ini sendiri tidak mengirim permintaan governor; penyegaran siklus hidup terpisah. Aplikasi harus dimulai ulang. Ini juga sakelar utama untuk angkat saat mulai dingin dan catatan start proses. Jika semuanya mati, ASB diam di proses aplikasi: satu pembukaan file gagal per start proses, tanpa membaca konfigurasi, tanpa IPC."
+      "name": "Koneksi ASB Zygisk",
+      "desc": "Saklar utama untuk menghubungkan ASB ke Zygisk pada proses aplikasi yang baru dimulai, atau melepaskannya setelah mulai ulang berikutnya. Nonaktif mempertahankan mode, daftar aplikasi otomatis, saklar fitur, Guard, dan ART; mengaktifkannya lagi memulihkan setelan tersebut tanpa diam-diam memilih preset baru. Panel lengkap ada di halaman ZYGISK. Memerlukan implementasi root yang mendukung Zygisk. Safe mode dan kegagalan broker bersifat fail-open; aplikasi yang berjalan tidak dimatikan."
     },
     "zygisk_hints": {
       "name": "Penyegaran Siklus Hidup Zygisk",
@@ -2283,7 +2283,7 @@
   "dev_zygisk_link_off_detail": "Observer nonaktif untuk proses baru.",
   "dev_zygisk_link_unknown_detail": "Bukti tidak cukup; dukungan Zygisk tidak disangkal.",
   "cfg_ui_section_zygisk": "Zygisk",
-  "cfg_ui_section_zygisk_hint": "Observasi proses opt-in dan permintaan terbatas ke governor yang ada. Zygisk tidak memilih profil, frekuensi, atau kebijakan aplikasi.",
+  "cfg_ui_section_zygisk_hint": "Satu saklar utama dan status koneksi. Mode, fitur, dan pemilihan aplikasi berada di halaman ZYGISK.",
   "dev_zygisk_metric_injection": "Injeksi tervalidasi",
   "dev_zygisk_metric_processes": "{n} proses aktif",
   "dev_zygisk_metric_channel": "Kanal companion",
@@ -2658,5 +2658,27 @@
   "lr_impact_cost_fmt": "{cpu} ms/jam · {writes} penulisan/jam · {wakes} wakeup/jam",
   "lr_impact_cost_scope": "Biaya ASB terukur · bukan efek baterai bersih",
   "lr_impact_ab_note": "Tidak ada persen baterai, suhu, atau peningkatan kelancaran yang dikaitkan ke tweak di sini. Untuk angka kausal, ubah satu sakelar dan bandingkan capture serupa. Tweak yang tidak tercantum berarti capture ini tidak menyediakan evidence, bukan berarti tidak didukung atau tanpa efek.",
-  "zy_auto_current": "Sakelar independen saat ini: %s"
+  "zy_auto_current": "Sakelar independen saat ini: %s",
+  "zy_mode_battery": "Hemat",
+  "zy_mode_battery_desc": "Observer dan jurnal proses, serta guard latar belakang berbasis bukti. Bantuan cold-start dan permintaan lifecycle nonaktif. Pembatasan yang disetujui dapat menunda pekerjaan latar belakang dan notifikasi.",
+  "zy_mode_performance": "Performa",
+  "zy_mode_performance_desc": "Observer, jurnal proses, dan bantuan cold-start. Guard latar belakang nonaktif. Batas profil dan thermal yang ada tetap berlaku; perangkat yang lebih cepat tidak dijamin.",
+  "zy_mode_auto": "Otomatis",
+  "zy_mode_auto_desc": "Bantuan cold-start dan petunjuk lifecycle untuk responsivitas, serta guard latar belakang berbasis bukti. ART tetap terpisah. Ini menyeimbangkan mekanisme; tidak menjanjikan kecepatan dan daya tahan baterai maksimum sekaligus.",
+  "zy_mode_custom_short": "Kustom",
+  "zy_mode_custom_unified": "Kustom: sakelar atau guard berbeda dari preset. ASB tidak akan diam-diam membatalkan pilihan manual Anda. Pilih mode di atas untuk menerapkan kembali set lengkapnya.",
+  "zy_mode_custom_warning": "Penggantian manual aktif. Khususnya, permintaan cold-start atau lifecycle yang ditambahkan ke Hemat dapat meningkatkan aktivitas; antarmuka tidak akan terus menyebut set itu Hemat.",
+  "zy_auto_managed_by_mode": "Mengikuti mode di atas · tidak ada daftar paket untuk diisi",
+  "zy_auto_desc_unified": "Mode yang dipilih otomatis mengisi daftar observasi dengan aplikasi pengguna dan menerapkan sakelar serta guard dasar yang sesuai. Kompilasi ART tetap menjadi pilihan manual terpisah di bawah.",
+  "zy_settings_mode": "Mode Zygisk: %s",
+  "zy_settings_custom": "Penggantian manual aktif; ASB tidak akan diam-diam memulihkan preset.",
+  "zy_settings_open": "Buka panel kontrol ZYGISK",
+  "zy_sec_controls": "Kontrol ASB Zygisk",
+  "zy_controls_note": "Saklar ini menyesuaikan mode saat ini. Perbedaan ditampilkan sebagai Kustom dan tidak pernah dikembalikan diam-diam. Perubahan master, cold-start, dan ledger berlaku untuk proses aplikasi baru atau yang dimulai ulang.",
+  "zy_control_failed": "Setelan Zygisk tidak diubah; periksa status saat ini",
+  "zy_off_title": "ASB Zygisk nonaktif",
+  "zy_off_desc": "ASB tidak akan terhubung ke Zygisk pada proses aplikasi yang baru dimulai. Aplikasi yang sudah berjalan mempertahankan status sebelumnya hingga dimulai ulang.",
+  "zy_off_kept": "Mode, pemilihan aplikasi otomatis, saklar fitur, Guard, dan setelan ART dipertahankan. Mengaktifkannya lagi memulihkan setelan tersebut tanpa diam-diam memilih preset baru.",
+  "zy_off_enable": "Aktifkan ASB Zygisk",
+  "zy_off_settings": "Setelan → Sistem"
 }

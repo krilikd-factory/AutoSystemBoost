@@ -428,8 +428,8 @@
       "desc": "Einmalige Reparatur der System-Dateiauswahl auf betroffenen ColorOS-/DSU-Systemen. Aktiviert und blendet DocumentsUI ein, setzt die Picker-/Datei-Aktivitäten zurück und deaktiviert den ColorOS-Dateimanager für Benutzer 0. Bei „Aus“ kehrt der Dateimanager zurück. Nur von ASB geänderte Zustände werden wiederhergestellt; beim Start erfolgt keine erneute Anwendung."
     },
     "zygisk_enabled": {
-      "name": "Zygisk-Prozessbeobachter",
-      "desc": "Optionale Telemetrie nur für ausdrücklich erlaubte Apps. Start/Ende und begrenzter IPC-Overhead, ohne Hooks oder App-Steuerung. Dieser Schalter allein sendet keine Governor-Anfrage; die Lebenszyklus-Aktualisierung ist separat. Apps müssen neu gestartet werden. Er ist auch der Hauptschalter für die Kaltstart-Anhebung und das Prozessstart-Protokoll. Ist alles aus, ruht ASB in App-Prozessen: ein fehlgeschlagener Dateizugriff pro Prozessstart, kein Parsen der Konfiguration, kein IPC."
+      "name": "ASB-Zygisk-Verbindung",
+      "desc": "Hauptschalter für die ASB-Anbindung an Zygisk in neu gestarteten App-Prozessen oder deren Trennung nach dem nächsten Neustart. Aus erhält Modus, automatische App-Liste, Funktionsschalter, Guard und ART; erneutes Einschalten stellt diesen Satz wieder her, ohne heimlich ein neues Preset zu wählen. Die vollständige Steuerung befindet sich auf ZYGISK. Eine Zygisk-fähige Root-Implementierung ist erforderlich. Safe Mode und Broker-Fehler arbeiten fail-open; laufende Apps werden nicht beendet."
     },
     "zygisk_hints": {
       "name": "Zygisk-Lebenszyklus-Aktualisierung",
@@ -2283,7 +2283,7 @@
   "dev_zygisk_link_off_detail": "Observer ist für neue Prozesse deaktiviert.",
   "dev_zygisk_link_unknown_detail": "Unzureichende Daten; Zygisk-Unterstützung ist damit nicht ausgeschlossen.",
   "cfg_ui_section_zygisk": "Zygisk",
-  "cfg_ui_section_zygisk_hint": "Opt-in-Prozessbeobachtung und begrenzte Anfragen an den vorhandenen Governor. Zygisk wählt keine Profile, Frequenzen oder App-Richtlinien.",
+  "cfg_ui_section_zygisk_hint": "Ein Hauptschalter und der Verbindungsstatus. Modi, Funktionen und App-Auswahl befinden sich auf der Seite ZYGISK.",
   "dev_zygisk_metric_injection": "Validierte Injektion",
   "dev_zygisk_metric_processes": "{n} Live-Prozess(e)",
   "dev_zygisk_metric_channel": "Companion-Kanal",
@@ -2658,5 +2658,27 @@
   "lr_impact_cost_fmt": "{cpu} ms/h · {writes} Schreibvorgänge/h · {wakes} Aufweckungen/h",
   "lr_impact_cost_scope": "Gemessene ASB-Kosten · kein Netto-Akkueffekt",
   "lr_impact_ab_note": "Hier werden einem Tweak weder Akku-Prozent, Temperatur noch Flüssigkeitsgewinn zugeschrieben. Für einen kausalen Wert nur einen Schalter ändern und ähnliche Aufzeichnungen vergleichen. Nicht aufgeführt bedeutet: keine Evidence in dieser Aufzeichnung, nicht fehlende Unterstützung oder null Effekt.",
-  "zy_auto_current": "Aktuelle unabhängige Schalter: %s"
+  "zy_auto_current": "Aktuelle unabhängige Schalter: %s",
+  "zy_mode_battery": "Sparen",
+  "zy_mode_battery_desc": "Observer und Prozessjournal plus evidence-basiertem Hintergrund-Guard. Kaltstart-Unterstützung und Lifecycle-Anfragen sind aus. Genehmigte Beschränkungen können Hintergrundarbeit und Benachrichtigungen verzögern.",
+  "zy_mode_performance": "Leistung",
+  "zy_mode_performance_desc": "Observer, Prozessjournal und Kaltstart-Unterstützung. Der Hintergrund-Guard ist aus. Bestehende Profil- und Thermal-Grenzen gelten weiter; ein schnelleres Gerät ist nicht garantiert.",
+  "zy_mode_auto": "Auto",
+  "zy_mode_auto_desc": "Kaltstart-Unterstützung und Lifecycle-Hinweise für Reaktionsfähigkeit plus evidence-basiertem Hintergrund-Guard. ART bleibt separat. Dies balanciert Mechanismen, verspricht aber nicht gleichzeitig maximale Geschwindigkeit und Akkulaufzeit.",
+  "zy_mode_custom_short": "Benutzerdefiniert",
+  "zy_mode_custom_unified": "Benutzerdefiniert: Schalter oder Guard weichen vom Preset ab. ASB macht Ihre manuelle Wahl nicht heimlich rückgängig. Wählen Sie oben einen Modus, um seinen vollständigen Satz erneut anzuwenden.",
+  "zy_mode_custom_warning": "Manuelle Anpassung aktiv. Insbesondere Kaltstart- oder Lifecycle-Anfragen im Modus „Sparen“ können die Aktivität erhöhen; die Oberfläche bezeichnet diesen Satz nicht weiter als „Sparen“.",
+  "zy_auto_managed_by_mode": "Folgt dem Modus oben · keine Paketlisten auszufüllen",
+  "zy_auto_desc_unified": "Der gewählte Modus füllt die Beobachtungsliste automatisch mit Nutzer-Apps und wendet passende Schalter und Guard-Basis an. Die ART-Kompilierung bleibt unten eine separate manuelle Wahl.",
+  "zy_settings_mode": "Zygisk-Modus: %s",
+  "zy_settings_custom": "Manuelle Anpassung aktiv; ASB stellt kein Preset heimlich wieder her.",
+  "zy_settings_open": "ZYGISK-Steuerung öffnen",
+  "zy_sec_controls": "ASB-Zygisk-Steuerung",
+  "zy_controls_note": "Diese Schalter verfeinern den aktuellen Modus. Abweichungen werden als Benutzerdefiniert angezeigt und nicht heimlich zurückgesetzt. Änderungen an Master, Kaltstart und Protokoll gelten für neu gestartete App-Prozesse.",
+  "zy_control_failed": "Zygisk-Einstellung wurde nicht geändert; aktuellen Status prüfen",
+  "zy_off_title": "ASB Zygisk ist aus",
+  "zy_off_desc": "ASB verbindet sich in neu gestarteten App-Prozessen nicht mit Zygisk. Bereits laufende Apps behalten ihren bisherigen Zustand bis zum Neustart.",
+  "zy_off_kept": "Modus, automatische App-Auswahl, Funktionsschalter, Guard und ART-Einstellungen bleiben erhalten. Erneutes Einschalten stellt diesen Satz wieder her, ohne heimlich ein neues Preset zu wählen.",
+  "zy_off_enable": "ASB Zygisk aktivieren",
+  "zy_off_settings": "Einstellungen → System"
 }

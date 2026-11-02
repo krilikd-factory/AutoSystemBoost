@@ -428,8 +428,8 @@
       "desc": "Correção única do seletor de arquivos do sistema em configurações ColorOS/DSU afetadas. Ativa e exibe o DocumentsUI, restaura as atividades de seleção/arquivos ao padrão e desabilita o ColorOS File Manager para o usuário 0. O gerenciador de arquivos retorna em «Desativado». Somente estados alterados pelo ASB são restaurados; nada é reaplicado na inicialização."
     },
     "zygisk_enabled": {
-      "name": "Observador de processos Zygisk",
-      "desc": "Telemetria opcional apenas para apps explicitamente permitidas. Início/fim e overhead IPC limitado, sem hooks nem controlo de apps. Este interruptor sozinho não envia pedidos ao governor; a atualização por eventos é separada. As apps precisam ser reiniciadas. Também é o interruptor principal da elevação no início a frio e do registro de inícios de processos. Com tudo desligado, o ASB fica inativo nos processos das apps: uma abertura de arquivo com falha por início, sem ler a configuração e sem IPC."
+      "name": "Ligação ASB Zygisk",
+      "desc": "Interruptor principal para ligar o ASB ao Zygisk em novos processos de aplicações ou desligá-lo após o próximo reinício. Desativado preserva o modo, a lista automática de aplicações, os interruptores, Guard e ART; ao ativar novamente, esse conjunto é restaurado sem escolher outro preset em segredo. O painel completo está em ZYGISK. Requer uma implementação root compatível com Zygisk. Safe mode e falhas do broker são fail-open; aplicações em execução não são terminadas."
     },
     "zygisk_hints": {
       "name": "Atualização do ciclo de vida Zygisk",
@@ -2283,7 +2283,7 @@
   "dev_zygisk_link_off_detail": "Observer está desativado para novos processos.",
   "dev_zygisk_link_unknown_detail": "Evidência insuficiente; o suporte ao Zygisk não é descartado.",
   "cfg_ui_section_zygisk": "Zygisk",
-  "cfg_ui_section_zygisk_hint": "Observação de processos opt-in e pedidos limitados ao governor existente. O Zygisk não escolhe perfis, frequências ou políticas de aplicações.",
+  "cfg_ui_section_zygisk_hint": "Um interruptor principal e o estado da ligação. Modos, funcionalidades e seleção de aplicações estão na página ZYGISK.",
   "dev_zygisk_metric_injection": "Injeção validada",
   "dev_zygisk_metric_processes": "{n} processo(s) ativo(s)",
   "dev_zygisk_metric_channel": "Canal companion",
@@ -2658,5 +2658,27 @@
   "lr_impact_cost_fmt": "{cpu} ms/h · {writes} escritas/h · {wakes} ativações/h",
   "lr_impact_cost_scope": "Custo ASB medido · não efeito líquido na bateria",
   "lr_impact_ab_note": "Não se atribuem aqui percentagens de bateria, temperatura ou ganho de fluidez a um ajuste. Para um valor causal, mude um único interruptor e compare capturas semelhantes. Um ajuste ausente significa que esta captura não expõe evidência, não que seja incompatível ou tenha efeito zero.",
-  "zy_auto_current": "Interruptores independentes atuais: %s"
+  "zy_auto_current": "Interruptores independentes atuais: %s",
+  "zy_mode_battery": "Economia",
+  "zy_mode_battery_desc": "Observer e diário de processos, além do guard em segundo plano controlado por evidências. Auxílio de arranque a frio e pedidos lifecycle desativados. As restrições aprovadas podem atrasar tarefas e notificações em segundo plano.",
+  "zy_mode_performance": "Desempenho",
+  "zy_mode_performance_desc": "Observer, diário de processos e auxílio de arranque a frio. Guard em segundo plano desativado. Os limites do perfil e térmicos continuam aplicados; um dispositivo mais rápido não é garantido.",
+  "zy_mode_auto": "Auto",
+  "zy_mode_auto_desc": "Auxílio de arranque a frio e sugestões lifecycle para resposta, além do guard em segundo plano controlado por evidências. ART permanece separado. Equilibra mecanismos; não promete velocidade e autonomia máximas ao mesmo tempo.",
+  "zy_mode_custom_short": "Personalizado",
+  "zy_mode_custom_unified": "Personalizado: os interruptores ou o guard diferem do preset. ASB não desfará silenciosamente a sua escolha manual. Escolha um modo acima para reaplicar o conjunto completo.",
+  "zy_mode_custom_warning": "Substituição manual ativa. Em particular, pedidos de arranque a frio ou lifecycle adicionados a Economia podem aumentar a atividade; a interface não continuará a chamar Economia a esse conjunto.",
+  "zy_auto_managed_by_mode": "Segue o modo acima · sem listas de pacotes para preencher",
+  "zy_auto_desc_unified": "O modo selecionado preenche automaticamente a lista de observação com aplicações do utilizador e aplica os interruptores e o guard base correspondentes. A compilação ART continua a ser uma escolha manual separada abaixo.",
+  "zy_settings_mode": "Modo Zygisk: %s",
+  "zy_settings_custom": "Substituição manual ativa; ASB não restaurará silenciosamente um preset.",
+  "zy_settings_open": "Abrir painel de controlo do ZYGISK",
+  "zy_sec_controls": "Controlos do ASB Zygisk",
+  "zy_controls_note": "Estes interruptores ajustam o modo atual. Uma diferença aparece como Personalizado e nunca é revertida em segredo. Alterações de master, arranque a frio e registo aplicam-se a processos novos ou reiniciados.",
+  "zy_control_failed": "A definição do Zygisk não foi alterada; verifique o estado atual",
+  "zy_off_title": "ASB Zygisk está desativado",
+  "zy_off_desc": "O ASB não se ligará ao Zygisk em novos processos de aplicações. As aplicações já em execução mantêm o estado anterior até serem reiniciadas.",
+  "zy_off_kept": "O modo, a seleção automática de aplicações, os interruptores, Guard e as definições ART são preservados. Ao ativar novamente, esse conjunto é restaurado sem escolher outro preset em segredo.",
+  "zy_off_enable": "Ativar ASB Zygisk",
+  "zy_off_settings": "Definições → Sistema"
 }

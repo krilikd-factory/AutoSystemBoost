@@ -455,8 +455,8 @@
       "desc": "针对受影响的 ColorOS/DSU 配置，一次性修复系统文件选择器。启用并显示 DocumentsUI，将 picker/files 活动恢复为默认状态，并为用户 0 禁用 ColorOS 文件管理器。选择“关闭”后文件管理器会恢复。仅恢复 ASB 修改过的状态；开机时不会重复应用。"
     },
     "zygisk_enabled": {
-      "name": "Zygisk 进程观察器",
-      "desc": "仅针对明确允许的应用提供可选遥测。仅启动/退出和受限 IPC 开销，不使用 hook，也不控制应用。此开关本身不发送 governor 请求；生命周期刷新独立开启。应用需要重新启动。它也是冷启动提升和进程启动台账的总开关。全部关闭时，ASB 在应用进程中保持休眠：每次进程启动仅一次失败的文件打开，不解析配置，不进行 IPC。"
+      "name": "ASB Zygisk 连接",
+      "desc": "总开关用于在新启动的应用进程中让 ASB 接入 Zygisk，或在下次重启后断开。关闭会保留所选模式、自动应用列表、功能开关、Guard 和 ART；再次启用会恢复这套设置，不会暗中选择新预设。完整控制面板位于 ZYGISK 页面。需要支持 Zygisk 的 root 实现。Safe mode 和 broker 故障采用 fail-open；不会终止已运行的应用。"
     },
     "zygisk_hints": {
       "name": "Zygisk 生命周期刷新",
@@ -2283,7 +2283,7 @@
   "dev_zygisk_link_off_detail": "Observer 已对新进程停用。",
   "dev_zygisk_link_unknown_detail": "证据不足；并不排除支持 Zygisk。",
   "cfg_ui_section_zygisk": "Zygisk",
-  "cfg_ui_section_zygisk_hint": "可选进程观察和向现有 governor 发出的有界请求。Zygisk 不选择配置、频率或应用策略。",
+  "cfg_ui_section_zygisk_hint": "仅保留一个总开关和连接状态。模式、功能与应用选择均位于 ZYGISK 页面。",
   "dev_zygisk_metric_injection": "已验证注入",
   "dev_zygisk_metric_processes": "{n} 个活跃进程",
   "dev_zygisk_metric_channel": "Companion 通道",
@@ -2658,5 +2658,27 @@
   "lr_impact_cost_fmt": "{cpu} 毫秒/小时 · {writes} 次写入/小时 · {wakes} 次唤醒/小时",
   "lr_impact_cost_scope": "测得的 ASB 成本 · 不是对电池的净影响",
   "lr_impact_ab_note": "此处不会把电池百分比、温度或流畅度提升归因于某个调校项。要获得因果数值，请只更改一个开关并比较相似记录。未列出仅表示本次记录未提供该项证据，不代表不受支持或效果为零。",
-  "zy_auto_current": "当前独立开关：%s"
+  "zy_auto_current": "当前独立开关：%s",
+  "zy_mode_battery": "省电",
+  "zy_mode_battery_desc": "观察器和进程日志，以及由证据门控的后台 guard。冷启动提升和 lifecycle 请求关闭。经批准的限制可能延迟后台工作和通知。",
+  "zy_mode_performance": "性能",
+  "zy_mode_performance_desc": "观察器、进程日志和冷启动辅助。后台 guard 关闭。现有配置和温度限制仍然有效；不保证设备会更快。",
+  "zy_mode_auto": "自动",
+  "zy_mode_auto_desc": "冷启动辅助和 lifecycle 提示用于提升响应，同时使用由证据门控的后台 guard。ART 保持独立。此模式平衡各项机制，不承诺同时达到最高速度和最长续航。",
+  "zy_mode_custom_short": "自定义",
+  "zy_mode_custom_unified": "自定义：开关或 guard 与预设不同。ASB 不会悄悄撤销您的手动选择。选择上方模式即可重新应用其完整设置。",
+  "zy_mode_custom_warning": "手动覆盖已启用。尤其是，在省电模式中添加冷启动或 lifecycle 请求可能增加活动；界面不会继续把该组合称为省电。",
+  "zy_auto_managed_by_mode": "跟随上方模式 · 无需填写软件包列表",
+  "zy_auto_desc_unified": "所选模式会自动用用户应用填充观察列表，并应用对应的开关和 guard 基线。ART 编译仍是下方单独的手动选项。",
+  "zy_settings_mode": "Zygisk 模式：%s",
+  "zy_settings_custom": "手动覆盖已启用；ASB 不会悄悄恢复预设。",
+  "zy_settings_open": "打开 ZYGISK 控制面板",
+  "zy_sec_controls": "ASB Zygisk 控制",
+  "zy_controls_note": "这些开关用于微调当前模式。与预设不一致时会显示为“自定义”，且绝不会暗中回滚。总开关、冷启动和日志的更改适用于新启动或重新启动的应用进程。",
+  "zy_control_failed": "Zygisk 设置未更改；请检查当前状态",
+  "zy_off_title": "ASB Zygisk 已关闭",
+  "zy_off_desc": "ASB 不会在新启动的应用进程中接入 Zygisk。已运行的应用会保留先前状态，直到重新启动。",
+  "zy_off_kept": "模式、自动应用选择、功能开关、Guard 和 ART 设置均会保留。再次启用会恢复这套设置，不会暗中选择新预设。",
+  "zy_off_enable": "启用 ASB Zygisk",
+  "zy_off_settings": "设置 → 系统"
 }
