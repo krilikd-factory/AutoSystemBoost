@@ -1782,11 +1782,18 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .zygisk-page .zy-mode-seg { display: flex; width: 100%; margin: 2px 0 10px; }
 .zygisk-page .zy-mode-seg button { font-size: 12px; padding: 9px 6px; }
 .zygisk-page .zy-mode-desc { color: var(--text-secondary); font-size: 12.5px; line-height: 1.45; margin: 0 2px 8px; }
-.zygisk-page .zy-goal-guide { display:grid; gap:7px; }
-.zygisk-page .zy-goal-row { padding:9px 11px; border:1px solid var(--border); border-radius:13px; background:color-mix(in srgb,var(--surface) 82%,transparent); }
-.zygisk-page .zy-goal-label { color:var(--text); font-size:11.5px; font-weight:750; line-height:1.35; margin-bottom:3px; }
-.zygisk-page .zy-goal-text { color:var(--text-secondary); font-size:12px; line-height:1.48; overflow-wrap:anywhere; }
+.zygisk-page .zy-unified-modes button { min-width:0; min-height:44px; display:inline-flex; align-items:center; justify-content:center; gap:5px; line-height:1.25; }
+.zygisk-page .zy-unified-modes .zy-btn-icon { flex:0 0 auto; width:15px; height:15px; }
+.zygisk-page .zy-unified-modes button.is-busy { opacity:.72; }
+.zygisk-page .zy-custom-note { overflow-wrap:anywhere; }
+.cfg-zygisk-preset { margin:9px 2px 10px; padding:9px 11px; border:1px solid var(--border); border-radius:12px; color:var(--text-secondary); font-size:12px; line-height:1.45; overflow-wrap:anywhere; }
+.cfg-zygisk-preset strong { color:var(--text); }
 .zygisk-page .zy-fine { margin-top: 10px; }
+.cfg-zygisk-card > .cfg-zygisk-open { margin:10px 14px 12px; max-width:calc(100% - 28px); }
+.zygisk-page .zy-controls-card > .cfg-row { margin:8px 0; padding:12px; border-radius:14px; }
+.zygisk-page .zy-off-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.zygisk-page .zy-off-actions .live-chip { flex:1 1 150px; justify-content:center; text-align:center; }
+.zygisk-page .zy-off-enable { color:var(--good); border-color:color-mix(in srgb, var(--good) 42%, var(--border)); }
 .zygisk-page .zy-auto-card { border-color: color-mix(in srgb,var(--accent) 32%,var(--border)); }
 .zygisk-page .zy-auto-badge { display:inline-block; margin:0 0 8px; padding:4px 8px; border-radius:999px; background:color-mix(in srgb,var(--accent) 13%,transparent); color:var(--accent); font:700 10px/1.2 var(--sans); }
 .zygisk-page .zy-auto-desc { margin:0 0 10px; color:var(--text-secondary); font-size:12.5px; line-height:1.5; }
@@ -5463,6 +5470,7 @@ const TECH_ICON_PATHS = {
   zygisk_ledger: '<rect x="4" y="3.5" width="16" height="17" rx="2.4"/><path d="M8 8.5h5M8 12h5M8 15.5h5"/><path d="M16 8.5h.01M16 12h.01M16 15.5h.01"/>',
   /* Dedicated-page section glyphs: setup, live activity, the shared engine, guard and apps. */
   zygisk_auto: '<path d="M12 3 19 7v10l-7 4-7-4V7z"/><path d="m8.2 12 2.3 2.3 5.2-5.2"/><path d="M18.5 2.5v3M17 4h3"/>',
+  zygisk_wand: '<path d="m4 20 11.8-11.8 2.2 2.2L6.2 22.2 4 20z"/><path d="m13.7 6.2 4.1 4.1M15.5 3.5l.6-1.8.6 1.8 1.8.6-1.8.6-.6 1.8-.6-1.8-1.8-.6 1.8-.6zM20 9l.4-1.2.4 1.2 1.2.4-1.2.4-.4 1.2-.4-1.2-1.2-.4 1.2-.4zM7 4.5v2M6 5.5h2"/>',
   zygisk_activity: '<path d="M2.8 12h3.4l2-5 3.8 10 2.2-5h3.3"/><path d="M5 4.5h14M5 19.5h14" opacity=".45"/>',
   zygisk_engine: '<rect x="9" y="9" width="6" height="6" rx="1.2"/><path d="M12 4.5V9M5 17.5 9 14M19 17.5 15 14"/><circle cx="12" cy="3" r="1.5"/><circle cx="4" cy="18.5" r="1.5"/><circle cx="20" cy="18.5" r="1.5"/>',
   zygisk_guard: '<path d="M12 2.8 20 6v5.2c0 4.7-3.3 8-8 10-4.7-2-8-5.3-8-10V6z"/><path d="m8.3 12 2.3 2.3 5.1-5.1"/>',
@@ -7889,8 +7897,8 @@ const CFG_ITEMS = [
   { key:'athena_service', type:'seg', desc:'Controls OxygenOS\'s AthenaService background-app killer. Off disables only that component while leaving the rest of com.oplus.athena in place; this may help apps that the OEM kills despite Android battery exemptions. More apps remaining active can increase RAM use and background drain, and notification behaviour still depends on each app. Stock restores the component state recorded by ASB; uninstall also restores it.', def:'stock', stock:'stock', opts:['stock','off'], name:'Athena Background Killer' },
   { key:'heytap_mcs', type:'seg', def:'stock', stock:'stock', opts:['stock','off'], name:'HeyTap MCS / OPPO Push',
     desc:'Off disables com.heytap.mcs without hiding or replacing any system files. This can stop or delay push notifications from apps that use HeyTap/OPPO Push; some apps may keep their own connection alive instead. Enabling the card also requests one `pm compile -m speed-profile -a` after the next reboot, once boot is complete. That compilation can temporarily use CPU, storage and battery; it never runs on every boot. Stock restores only the MCS state ASB changed and cancels a compile that has not started. After the reboot it waits for the charger (Charging or Full), so the compilation does not heat or drain a phone in your hand; with no charger within 24 h it stays pending until the next boot.' },
-  { key:'zygisk_enabled', type:'bool', def:'0', stock:'0', name:'Zygisk Process Observer',
-    desc:'Opt-in process telemetry for explicitly allowlisted apps only. The allowlist is empty by default and is edited in Device diagnostics. ASB observes process start/exit and bounded IPC overhead: no hooks, no foreground/media inference and no app control. By itself this setting makes no policy request; lifecycle hints are a separate switch. Safe mode and a broker failure fail open; existing apps are not killed. Requires a Zygisk-capable root implementation and newly started app processes. It is also the master switch for the cold-start lift and the process-start ledger. With all of them off, ASB stays dormant in app processes: one failed file open per process start, no config parsing, no IPC.' },
+  { key:'zygisk_enabled', type:'bool', def:'0', stock:'0', name:'ASB Zygisk',
+    desc:'Master switch for attaching ASB to Zygisk in newly started app processes, or leaving them unattached after their next restart. Off preserves the selected mode, automatic app list, feature switches, guard and ART settings; enabling again restores that saved setup without silently choosing a new preset. The full control panel is on the ZYGISK page. Requires a Zygisk-capable root implementation. Safe mode and a broker failure fail open; existing apps are not killed.' },
   { key:'zygisk_hints', type:'bool', def:'0', stock:'0', name:'Zygisk Lifecycle Refresh',
     desc:'Uses an accepted start/exit from the observer allowlist to ask the EXISTING governor for an immediate evidence refresh while the screen is on. This can remove stale-input delay at a launch or exit without Zygisk choosing any frequency, profile or app policy. At most 8 requests/minute per active companion and at least 2 seconds apart. Screen-off, disabled or malformed events cause no refresh. Thermal, dwell and vendor limits still decide the result. Accepted means acknowledged, not boosted or proven to save power. LSPosed is never killed, hidden, frozen or throttled. No saving claim is valid without comparable field A/B measurements.' },
   { key:'zygisk_launch', type:'bool', def:'0', stock:'0', name:'Zygisk Cold-Start Lift',
@@ -8092,6 +8100,9 @@ function cfgGroupOf(key){ return CFG_GROUP_OF[key] || 'ui'; }
 /* Audio stays one top-level group. Output routing is the first DSP decision: it defines
  * where the whole chain runs before the user adjusts gain or tone. Playback/Bluetooth follows
  * and hearing safety remains separate. Presentation order only; setting ownership is unchanged. */
+const ZYGISK_CONTROL_KEYS = ['zygisk_enabled', 'zygisk_hints', 'zygisk_launch', 'zygisk_ledger'];
+const ZYGISK_PANEL_ONLY_KEYS = ZYGISK_CONTROL_KEYS.slice(1);
+
 const CFG_GROUP_SECTIONS = {
   audio: [
     { id:'dsp', icon:'dsp', titleKey:'cfg_audio_section_dsp',
@@ -8146,8 +8157,8 @@ const CFG_GROUP_SECTIONS = {
   ui: [
     { id:'zygisk', icon:'zygisk_observer', titleKey:'cfg_ui_section_zygisk',
       title:'Zygisk', hintKey:'cfg_ui_section_zygisk_hint',
-      hint:'Observer, lifecycle hints, cold-start lift and process ledger — one evidence-bounded integration.',
-      keys:['zygisk_enabled','zygisk_hints','zygisk_launch','zygisk_ledger'] },
+      hint:'One master switch and connection status. Modes, features and app selection live on the ZYGISK page.',
+      keys:['zygisk_enabled'] },
     { id:'services', icon:'oem_switches', titleKey:'cfg_ui_section_services',
       title:'System Services', hintKey:'cfg_ui_section_services_hint',
       hint:'Vendor background services and process limits.',
@@ -8230,7 +8241,16 @@ function cfgRenderZygiskCard(list, items) {
   card.setAttribute('aria-label', T('cfg_ui_section_zygisk', 'Zygisk'));
   const evidence = window._asbZygiskLinkData || window._asbDeviceInfoData || null;
   card.appendChild(deviceZygiskLink(evidence || {}));
-  items.forEach(function (it) { cfgRenderRow(card, it, false); });
+  const evidenceEnabled = evidence ? deviceVal(evidence, 'zygisk_observer', 'enabled') : '—';
+  if (evidenceEnabled === '0' || evidenceEnabled === '1') _cfgVals.zygisk_enabled = evidenceEnabled;
+  const master = items.filter(function (it) { return it.key === 'zygisk_enabled'; })[0];
+  if (master) cfgRenderRow(card, master, false);
+  const open = document.createElement('button'); open.type = 'button';
+  open.className = 'live-chip cfg-zygisk-open';
+  open.textContent = T('zy_settings_open', 'Open ZYGISK control panel');
+  zygiskButtonIcon(open, 'zygisk_observer');
+  open.onclick = openZygiskPage;
+  card.appendChild(open);
   list.appendChild(card);
 }
 
@@ -8250,7 +8270,8 @@ function cfgRenderGroup(list, groupId) {
   });
   // Future cards still appear rather than silently disappearing when a maintainer forgets
   // to add them to a subsection. The group remains the source of truth for reachability.
-  items.filter(it => !rendered[it.key]).forEach(it => cfgRenderRow(list, it, false));
+  items.filter(it => !rendered[it.key] && ZYGISK_PANEL_ONLY_KEYS.indexOf(it.key) < 0)
+    .forEach(it => cfgRenderRow(list, it, false));
 }
 
 // null = the hub is showing; a group id = that group's screen is.
@@ -9208,6 +9229,7 @@ function cfgRenderRow(list, it, showCat) {
     const isOn = cfgIsActive(it, cur);
     const row = document.createElement('div');
     row.className = 'cfg-row ' + cfgCatClass(it.key) + (isOn ? ' is-on' : '');
+    row.setAttribute('data-key', it.key);
     const top = document.createElement('div');
     top.className = 'cfg-row-top';
 
@@ -9683,7 +9705,8 @@ function cfgRenderMatches(list) {
   }
   /* Results carry their category, because the same word can land in two of them and
      "which section was this in" is half of what the user is trying to find out. */
-  hits.forEach(it => cfgRenderRow(list, it, true));
+  hits.filter(it => ZYGISK_PANEL_ONLY_KEYS.indexOf(it.key) < 0)
+    .forEach(it => cfgRenderRow(list, it, true));
 }
 
 /* Single place that decides whether the tab bar is on screen.
@@ -10043,6 +10066,11 @@ async function cfgSet(key, val, ctl) {
         /* fix272: app processes read only the generated policy file, never governor.conf. */
         try { await run('sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' sync >/dev/null 2>&1'); } catch (e) {}
         await zygiskHeaderRefresh();
+        toast(cfgToastText(key, val) + (applyModeOf(key) === APPLY_NEXT
+          ? T('t_cfg_next', ' \u00b7 restart the app') : T('t_cfg_live', ' \u00b7 applied')), cfgToastType(key));
+        cfgRender();
+        if (ctl) ctl.classList.remove('busy');
+        return;
       }
       if (key === 'log_level') {
         // Applied live: extreme mode changes device properties, and leaving it restores
@@ -13835,28 +13863,44 @@ async function zygiskHeaderRefresh() {
  * blocking root calls before anything about Zygisk could change. This page paints at once
  * from the last snapshot the header already holds, and after the slide makes ONE read
  * (asb_zygisk.sh link-status). The four separate switches stay where they belong - Settings
- * -> System -> Zygisk; here one mode control sets all four in one locked write. */
+ * -> System -> Zygisk; here one preset drives automatic app selection, all four switches and
+ * the guard baseline in one existing transactional flow. Manual deviations become Custom. */
 let _zygiskLoadSeq = 0, _zygiskModeBusy = false, _zygiskAutoBusy = '';
 const ZYGISK_MODES = [
-  { id: 'off',   key: 'zy_mode_off',   label: 'Off',
-    desc: 'Nothing runs in app processes: no connection, no request, no ledger. Zero cost.' },
-  { id: 'watch', key: 'zy_mode_watch', label: 'Watch', v: { zygisk_enabled: '1', zygisk_hints: '0', zygisk_launch: '0', zygisk_ledger: '1' },
-    desc: 'Process-start ledger and screen-off restart loops for diagnostics. Never touches frequencies; one short companion connection per app process start.' },
-  { id: 'speed', key: 'zy_mode_speed', label: 'Response', v: { zygisk_enabled: '1', zygisk_hints: '1', zygisk_launch: '1', zygisk_ledger: '0' },
-    desc: 'Cold-start lift for the app you open, plus a fresh governor reading when an observed app starts or exits. No ledger.' },
-  { id: 'full',  key: 'zy_mode_full',  label: 'Full', v: { zygisk_enabled: '1', zygisk_hints: '1', zygisk_launch: '1', zygisk_ledger: '1' },
-    desc: 'Response and Watch together.' }
+  { id: 'battery', key: 'zy_mode_battery', label: 'Battery', profile: 'battery', icon: 'game_battery', guard: 'wakers',
+    v: { zygisk_enabled: '1', zygisk_hints: '0', zygisk_launch: '0', zygisk_ledger: '1' },
+    desc: 'Observer and process journal, plus the evidence-gated background guard. Cold-start lifts and lifecycle requests are off. Approved restrictions can delay background work and notifications.' },
+  { id: 'performance', key: 'zy_mode_performance', label: 'Performance', profile: 'launch', icon: 'zygisk_launch', guard: 'off',
+    v: { zygisk_enabled: '1', zygisk_hints: '0', zygisk_launch: '1', zygisk_ledger: '1' },
+    desc: 'Observer, process journal and cold-start assistance. Background guard is off. Existing profile and thermal gates still apply; a faster device is not guaranteed.' },
+  { id: 'auto', key: 'zy_mode_auto', label: 'Auto', profile: 'auto', icon: 'zygisk_wand', guard: 'wakers',
+    v: { zygisk_enabled: '1', zygisk_hints: '1', zygisk_launch: '1', zygisk_ledger: '1' },
+    desc: 'Cold-start assistance and lifecycle hints for responsiveness, plus the evidence-gated background guard. ART stays separate. This balances mechanisms; it does not promise maximum speed and battery life at once.' }
 ];
 function zygiskModeOf(d) {
   const val = function (k) { return deviceVal(d, 'zygisk_observer', k); };
   const en = val('enabled');
   if (en === '0') return 'off';
   if (en !== '1') return 'unknown';
+  if (val('auto_mode') !== '1') return 'custom';
   const cur = { zygisk_enabled: '1', zygisk_hints: val('lifecycle_hints'), zygisk_launch: val('launch_hints'), zygisk_ledger: val('spawn_ledger') };
   const hit = ZYGISK_MODES.filter(function (m) {
-    return m.v && Object.keys(m.v).every(function (k) { return m.v[k] === cur[k]; });
+    return m.profile === val('auto_profile') && Object.keys(m.v).every(function (k) { return m.v[k] === cur[k]; });
   })[0];
-  return hit ? hit.id : 'custom';
+  if (!hit) return 'custom';
+  /* A preset owns the guard baseline as well as the four switches. Until guard evidence
+     arrives, do not call a possibly conflicting set a clean preset. A switch mismatch above
+     is already enough to identify Custom even while the guard read is pending. */
+  if (!_zyGuard) return 'unknown';
+  const guard = _zyGuard.enabled ? _zyGuard.level : 'off';
+  return guard === hit.guard ? hit.id : 'custom';
+}
+function zygiskModeLabel(mode) {
+  const hit = ZYGISK_MODES.filter(function (m) { return m.id === mode; })[0];
+  if (hit) return T(hit.key, hit.label);
+  if (mode === 'off') return T('zy_mode_off', 'Off');
+  if (mode === 'custom') return T('zy_mode_custom_short', 'Custom');
+  return T('dev_load_band_unknown', 'Unknown');
 }
 function zygiskAutoCard(d) {
   const on = deviceVal(d, 'zygisk_observer', 'auto_mode') === '1';
@@ -13864,25 +13908,14 @@ function zygiskAutoCard(d) {
   const card = logReportSec(T('zy_auto_title', 'Automatic setup'), 'zygisk_auto');
   card.classList.add('zy-auto-card');
   const badge = document.createElement('div'); badge.className = 'zy-auto-badge';
-  badge.textContent = T('zy_auto_recommended', 'Choose one policy · no package lists to fill in'); card.appendChild(badge);
+  badge.textContent = T('zy_auto_managed_by_mode', 'Follows the mode above · no package lists to fill in'); card.appendChild(badge);
   const desc = document.createElement('div'); desc.className = 'zy-auto-desc';
-  desc.textContent = T('zy_auto_desc', 'ASB fills the observation list with user apps. Choose observation only, cold-start assist, or background guard. ART compilation is never enabled by this card and remains a separate manual choice below.'); card.appendChild(desc);
-  const profiles = document.createElement('div'); profiles.className = 'cfg-seg zy-mode-seg zy-auto-profiles';
-  ['observe', 'launch', 'battery'].forEach(function (p) {
-    const b = document.createElement('button'); b.type = 'button'; b.className = 'zy-auto-btn';
-    b.textContent = _zygiskAutoBusy === 'enable:' + p ? T('zy_auto_working', 'Setting up…') : T('zy_auto_profile_' + p, p);
-    if (on && current === p) b.classList.add('on');
-    b.disabled = _zygiskModeBusy;
-    if (_zygiskAutoBusy === 'enable:' + p) b.classList.add('is-busy');
-    b.onclick = function () { zygiskAutoSet('enable', p); };
-    profiles.appendChild(b);
-  });
-  card.appendChild(profiles);
-  card.appendChild(logReportNote(T('zy_auto_profile_note', 'Observe: ledger only. Launch: cold-start assist and ledger, without AppOps. Battery: guard after two separate session observations and your per-app confirmation; no ART.')));
+  desc.textContent = T('zy_auto_desc_unified', 'The selected mode automatically fills the observation list with user apps and applies its matching switches and guard baseline. ART compilation remains a separate manual choice below.'); card.appendChild(desc);
   if (on) {
     const summary = document.createElement('div'); summary.className = 'zy-auto-summary';
     const n = deviceVal(d, 'zygisk_observer', 'enabled_packages');
-    const profile = T('zy_auto_profile_' + current, current);
+    const profileKey = current === 'launch' ? 'zy_mode_performance' : current === 'battery' ? 'zy_mode_battery' : current === 'auto' ? 'zy_mode_auto' : 'zy_auto_profile_' + current;
+    const profile = T(profileKey, current);
     const guard = _zyGuard && _zyGuard.enabled ? (_zyGuard.level === 'wakers' ? T('zy_guard_wakers', 'Loops + night wakers') : T('zy_guard_on', 'Restrain loops')) : T('zy_guard_off', 'Off');
     const aot = _zyAot && _zyAot.enabled ? T('zy_aot_on', 'On') : T('zy_aot_off', 'Off');
     summary.textContent = T('zy_auto_summary', 'Automatic profile: %1 · %2 observed app(s) · Background guard: %3 · ART (independent): %4').replace('%1', profile).replace('%2', n).replace('%3', guard).replace('%4', aot);
@@ -13920,7 +13953,7 @@ function zygiskAutoCard(d) {
 }
 async function zygiskAutoSet(action, profile) {
   if (_zygiskModeBusy || ['enable','refresh','disable'].indexOf(action) < 0) return;
-  if (action === 'enable' && ['observe', 'launch', 'battery'].indexOf(profile) < 0) return;
+  if (action === 'enable' && ['launch', 'battery', 'auto'].indexOf(profile) < 0) return;
   _zygiskModeBusy = true;
   _zygiskAutoBusy = action === 'enable' ? 'enable:' + profile : action;
   uiSound(action === 'disable' ? 'toggle_off' : 'toggle_on');
@@ -13947,44 +13980,108 @@ async function zygiskAutoSet(action, profile) {
   const d = parseDeviceInfo(b && b.link ? b.link.stdout : '');
   if (d.count) { _zygiskHeaderAt = Date.now(); zygiskHeaderPublish(d); }
   if (ok) {
+    if (action === 'enable') {
+      const preset = ZYGISK_MODES.filter(function (m) { return m.profile === profile; })[0];
+      if (preset) Object.keys(preset.v).forEach(function (k) { _cfgVals[k] = preset.v[k]; });
+    }
     _cfgLoadSig = ''; haptic();
-    toast(T(action === 'enable' ? 'zy_auto_enabled' : action === 'refresh' ? 'zy_auto_refreshed' : 'zy_auto_disabled',
-      action === 'enable' ? 'Automatic Zygisk setup is on' : action === 'refresh' ? 'Automatic app selection refreshed' : 'Automatic setup off · previous Zygisk state restored'), 'good');
+    toast(action === 'enable' ? T('zy_mode_applied', 'Mode applied · new app processes pick it up') :
+      T(action === 'refresh' ? 'zy_auto_refreshed' : 'zy_auto_disabled', action === 'refresh' ? 'Automatic app selection refreshed' : 'Automatic setup off · previous Zygisk state restored'), 'good');
   } else if (result === 'safe_mode') {
     toast(T('zy_auto_safe', 'Safe mode is on. Automatic setup will not clear it; clear Safe mode explicitly first.'), 'warn');
   } else {
-    toast(T('zy_auto_failed', 'Automatic setup was not completed; no unsupported package or policy was selected'), 'bad');
+    toast(T('zy_auto_failed', 'Automatic setup was not completed; check the current state before retrying'), 'bad');
   }
   if (_zygiskOpen) zygiskPageRender(d.count ? d : (window._asbZygiskLinkData || null));
 }
-function zygiskGoalGuide() {
-  const card = logReportSec(T('zy_guide_title', 'What to choose'), 'switches');
-  card.classList.add('zy-goal-card');
-  const guide = document.createElement('div'); guide.className = 'zy-goal-guide';
-  [
-    ['zy_guide_response', 'Responsiveness', 'zy_guide_response_text', 'Launch assist: cold starts only. Response: cold starts + lifecycle hints. Full adds the process journal. These enable requests; they do not guarantee a faster device.'],
-    ['zy_guide_battery', 'Battery', 'zy_guide_battery_text', 'Battery guard can restrain proven restart loops after separate observations and your confirmation. Background work and notifications may be delayed; Watch alone does not save power.'],
-    ['zy_guide_minimal', 'Minimal intervention', 'zy_guide_minimal_text', 'Observe only / Watch: diagnostics without frequency requests. Off: no companion work in app processes.']
-  ].forEach(function (spec) {
-    const row = document.createElement('div'); row.className = 'zy-goal-row';
-    const label = document.createElement('div'); label.className = 'zy-goal-label'; label.textContent = T(spec[0], spec[1]);
-    const text = document.createElement('div'); text.className = 'zy-goal-text'; text.textContent = T(spec[2], spec[3]);
-    row.appendChild(label); row.appendChild(text); guide.appendChild(row);
+let _zygiskControlBusy = '';
+function zygiskControlsCard(d) {
+  const card = logReportSec(T('zy_sec_controls', 'ASB Zygisk controls'), 'switches');
+  card.classList.add('zy-controls-card');
+  const evidenceKeys = {
+    zygisk_enabled: 'enabled', zygisk_hints: 'lifecycle_hints',
+    zygisk_launch: 'launch_hints', zygisk_ledger: 'spawn_ledger'
+  };
+  ZYGISK_CONTROL_KEYS.forEach(function (key) {
+    const raw = deviceVal(d, 'zygisk_observer', evidenceKeys[key]);
+    if (raw === '0' || raw === '1') _cfgVals[key] = raw;
+    const it = CFG_ITEMS.filter(function (x) { return x.key === key; })[0];
+    if (!it) return;
+    const before = card.children.length;
+    cfgRenderRow(card, it, false);
+    if (card.children.length === before) return;
+    const row = card.children[card.children.length - 1];
+    row.classList.add('zy-control-row');
+    const sw = row.querySelector('.cfg-switch');
+    if (sw) sw.onclick = function (e) {
+      if (e && e.stopPropagation) e.stopPropagation();
+      const cur = (_cfgVals[key] !== undefined) ? String(_cfgVals[key]) : String(it.def);
+      zygiskControlSet(key, cur === '1' ? '0' : '1', sw);
+    };
   });
-  card.appendChild(guide);
+  const note = logReportNote(T('zy_controls_note', 'These switches fine-tune the current mode. A mismatch is shown as Custom and is never silently rolled back. Master, cold-start and ledger changes affect newly started or restarted app processes.'));
+  note.classList.add('dev-evidence'); card.appendChild(note);
+  return card;
+}
+async function zygiskControlSet(key, val, ctl) {
+  if (_zygiskControlBusy || ZYGISK_CONTROL_KEYS.indexOf(key) < 0 || !/^[01]$/.test(String(val))) return false;
+  _zygiskControlBusy = key;
+  if (ctl) ctl.classList.add('busy');
+  await asbPaintYield();
+  let ok = false;
+  try {
+    await cfgSet(key, String(val), ctl);
+    ok = String(_cfgVals[key]) === String(val);
+  } catch (e) {
+    toast(T('zy_control_failed', 'Zygisk setting was not changed; check the current state'), 'bad');
+  } finally {
+    _zygiskControlBusy = '';
+    if (ctl) ctl.classList.remove('busy');
+    if (_zygiskOpen) await zygiskPageLoad(true);
+  }
+  return ok;
+}
+function zygiskOpenSettings() {
+  closeZygiskPage();
+  if (typeof asbNavGo === 'function') asbNavGo('config'); else if (!_cfgOpen) openConfigPage();
+  _cfgSearch = ''; _cfgGroup = 'ui'; cfgRender(); requestAnimationFrame(asbFitPages);
+}
+function zygiskOffCard() {
+  const card = logReportSec(T('zy_off_title', 'ASB Zygisk is off'), 'switches');
+  card.classList.add('zy-off-card');
+  card.appendChild(logReportNote(T('zy_off_desc', 'ASB will not attach to Zygisk in newly started app processes. Apps that are already running keep their previous state until they are restarted.')));
+  const kept = logReportNote(T('zy_off_kept', 'Your mode, automatic app selection, feature switches, guard and ART settings are preserved. Enabling again restores that setup; it does not silently choose a new preset.'));
+  kept.classList.add('dev-evidence'); card.appendChild(kept);
+  const actions = document.createElement('div'); actions.className = 'zy-off-actions';
+  const enable = document.createElement('button'); enable.type = 'button';
+  enable.className = 'live-chip zy-off-enable';
+  enable.textContent = _zygiskControlBusy === 'zygisk_enabled' ? T('zy_auto_working', 'Setting up…') : T('zy_off_enable', 'Enable ASB Zygisk');
+  zygiskButtonIcon(enable, 'zygisk_observer');
+  enable.disabled = !!_zygiskControlBusy;
+  enable.onclick = function () { zygiskControlSet('zygisk_enabled', '1', enable); };
+  actions.appendChild(enable);
+  const settings = document.createElement('button'); settings.type = 'button';
+  settings.className = 'live-chip zy-off-settings';
+  settings.textContent = T('zy_off_settings', 'Settings → System');
+  zygiskButtonIcon(settings, 'switches');
+  settings.onclick = zygiskOpenSettings;
+  actions.appendChild(settings);
+  card.appendChild(actions);
   return card;
 }
 function zygiskModeCard(d) {
   const card = logReportSec(T('zy_sec_mode', 'Mode'), 'switches');
   card.classList.add('zy-mode-card');
   const mode = zygiskModeOf(d);
-  const seg = document.createElement('div'); seg.className = 'cfg-seg zy-mode-seg';
+  const seg = document.createElement('div'); seg.className = 'cfg-seg zy-mode-seg zy-unified-modes';
   if (seg.setAttribute) { seg.setAttribute('role', 'radiogroup'); seg.setAttribute('aria-label', T('zy_sec_mode', 'Mode')); }
   ZYGISK_MODES.forEach(function (m) {
     const b = document.createElement('button'); b.type = 'button';
-    b.textContent = T(m.key, m.label);
+    b.textContent = _zygiskAutoBusy === 'enable:' + m.profile ? T('zy_auto_working', 'Setting up…') : T(m.key, m.label);
     b.title = T(m.key + '_desc', m.desc);
-    if (m.id === mode) b.className = 'on';
+    zygiskButtonIcon(b, m.icon);
+    if (m.id === mode) b.classList.add('on');
+    if (_zygiskAutoBusy === 'enable:' + m.profile) b.classList.add('is-busy');
     if (b.setAttribute) { b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', m.id === mode ? 'true' : 'false'); }
     b.disabled = _zygiskModeBusy;
     b.onclick = function () { if (m.id !== mode) zygiskModeSet(m.id); };
@@ -13994,60 +14091,26 @@ function zygiskModeCard(d) {
   const shown = ZYGISK_MODES.filter(function (m) { return m.id === mode; })[0];
   const desc = document.createElement('div'); desc.className = 'zy-mode-desc';
   if (shown) desc.textContent = T(shown.key + '_desc', shown.desc);
-  else if (mode === 'custom') {
-    const val = function (k) { return deviceVal(d, 'zygisk_observer', k); };
-    const on = [['lifecycle_hints', 'dev_zygisk_feature_hints', 'Lifecycle hints'], ['launch_hints', 'dev_zygisk_feature_launch', 'Cold-start lift'],
-      ['spawn_ledger', 'dev_zygisk_feature_ledger', 'Process ledger']].filter(function (x) { return val(x[0]) === '1'; })
-      .map(function (x) { return T(x[1], x[2]); });
-    desc.textContent = T('zy_mode_custom', 'Custom set from Settings: %s').replace('%s', on.length ? on.join(', ') : T('dev_zygisk_feature_observer', 'Observer'));
-  } else desc.textContent = T('zy_mode_unknown', 'The current mode could not be read; choosing one writes all four settings.');
+  else if (mode === 'custom') desc.textContent = T('zy_mode_custom_unified', 'Custom: switches or the guard differ from the preset. ASB will not silently undo your manual choice. Choose a mode above to reapply its complete set.');
+  else if (mode === 'off') desc.textContent = T('zy_mode_off_desc', 'Nothing runs in app processes: no connection, no request, no ledger. Zero cost.');
+  else desc.textContent = T('zy_mode_unknown', 'The current mode could not be read; choosing one writes all four settings.');
   card.appendChild(desc);
+  if (mode === 'custom') {
+    const custom = logReportNote(T('zy_mode_custom_warning', 'Manual override active. In particular, cold-start or lifecycle requests added to Battery can increase activity; the interface will not keep calling that set Battery.'), true);
+    custom.classList.add('zy-custom-note'); card.appendChild(custom);
+  }
   if (deviceVal(d, 'zygisk_observer', 'safe_mode') === 'on' && mode !== 'off') {
-    const sn = logReportNote(T('zy_mode_safe_note', 'Safe mode is on: the mode is saved, but nothing runs in app processes until safe mode is cleared below.'), true);
-    card.appendChild(sn);
+    card.appendChild(logReportNote(T('zy_mode_safe_note', 'Safe mode is on: the mode is saved, but nothing runs in app processes until safe mode is cleared below.'), true));
   }
   const note = logReportNote(T('zy_mode_note', 'A change applies to app processes started after it; apps already running keep their state until they restart.'));
   note.classList.add('dev-evidence'); card.appendChild(note);
-  const fine = document.createElement('button'); fine.type = 'button'; fine.className = 'live-chip zy-fine';
-  fine.textContent = T('zy_mode_fine', 'Fine-tune in Settings → System');
-  zygiskButtonIcon(fine, 'switches');
-  fine.onclick = function () {
-    closeZygiskPage();
-    if (typeof asbNavGo === 'function') asbNavGo('config'); else if (!_cfgOpen) openConfigPage();
-    _cfgSearch = ''; _cfgGroup = 'ui'; cfgRender(); requestAnimationFrame(asbFitPages);
-  };
-  card.appendChild(fine);
   return card;
 }
 async function zygiskModeSet(id) {
   if (_zygiskModeBusy) return;
   const m = ZYGISK_MODES.filter(function (x) { return x.id === id; })[0];
   if (!m) return;
-  const vals = m.v || { zygisk_enabled: '0' };
-  _zygiskModeBusy = true;
-  uiSound('toggle_on');
-  zygiskPageRender(window._asbZygiskLinkData || null);
-  await asbPaintYield();
-  const writer = MD + '/runtime/asb_config_safe.sh', snap = '/data/adb/asb/governor.conf.snapshot';
-  const pairs = Object.keys(vals).map(function (k) { return ' ' + shQuote(k) + ' ' + shQuote(vals[k]); }).join('');
-  const write = 'sh ' + shQuote(writer) + ' set-many --snapshot ' + shQuote(snap) + pairs +
-    ' && { sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' sync >/dev/null 2>&1; echo asb-mode-ok; }';
-  const b = await runBatch([['write', write], ['link', 'sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' link-status'],
-    ['engine', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_link.sh') + ' status']]);
-  _zygiskModeBusy = false;
-  if (b && b.engine && b.engine.errno === 0) _zyLink = zygiskLinkParse(b.engine.stdout);
-  const ok = /(^|\n)asb-mode-ok$/.test(b.write.stdout || '');
-  if (ok) {
-    Object.keys(vals).forEach(function (k) { _cfgVals[k] = vals[k]; });
-    _cfgLoadSig = '';
-    haptic();
-    toast(T('zy_mode_applied', 'Mode applied · new app processes pick it up'), 'good');
-  } else {
-    toast(T('zy_mode_failed', 'The mode was not saved') + (b.write.stdout ? ': ' + b.write.stdout.split('\n').slice(-1)[0] : ''), 'bad');
-  }
-  const d = parseDeviceInfo(b.link.stdout);
-  if (d.count) { _zygiskHeaderAt = Date.now(); zygiskHeaderPublish(d); }
-  if (_zygiskOpen) zygiskPageRender(d.count ? d : (window._asbZygiskLinkData || null));
+  return zygiskAutoSet('enable', m.profile);
 }
 const ZYGISK_ROW_LABELS = {
   ledger_restart_loops: 'Restart loops with the screen off (peak starts per 5 min)',
@@ -14109,9 +14172,14 @@ function zygiskPageRender(d) {
   const st = logReportSec(T('zy_sec_status', 'Connection'), 'zygisk_observer');
   st.appendChild(deviceZygiskLink(d));
   body.appendChild(st);
-  body.appendChild(zygiskGoalGuide());
-  body.appendChild(zygiskAutoCard(d));
+  if (deviceVal(d, 'zygisk_observer', 'enabled') === '0') {
+    body.appendChild(zygiskOffCard());
+    if (_el('zygiskPage') && y) _el('zygiskPage').scrollTop = y;
+    return;
+  }
   body.appendChild(zygiskModeCard(d));
+  body.appendChild(zygiskControlsCard(d));
+  body.appendChild(zygiskAutoCard(d));
   const act = logReportSec(T('zy_sec_activity', 'Activity and cost'), 'zygisk_activity');
   act.appendChild(deviceZygiskOverview(d));
   act.appendChild(zygiskPageRows(d));
