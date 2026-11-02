@@ -328,6 +328,14 @@ private:
         if (frame.flags & ASB_OBSERVER_FLAG_DENYLIST) ++denylist_spawns_;
         if (!(frame.flags & ASB_OBSERVER_FLAG_LAUNCH) || !policy.launch) return Request::none;
         ++launch_events_;
+        /* A published screen-off state already proves that the governor will veto a launch
+         * lift. Do not wake it for that fixed answer: count a local veto, keep the ledger,
+         * and leave the one-second launch budget untouched for the next real screen-on start.
+         * Unknown state still asks the governor, exactly like the lifecycle-hint path. */
+        if (governor_screen_on() == 0) {
+            ++launch_screen_off_; ++launch_vetoed_;
+            return Request::none;
+        }
         if (!core_.launch_permit(now)) { ++launch_throttled_; return Request::none; }
         classes_locked();
         switch (classes_.lookup(frame.package)) {
@@ -398,6 +406,7 @@ private:
         out << "Z\tlaunch_vetoed\t" << launch_vetoed_ << "\n";
         out << "Z\tlaunch_unavailable\t" << launch_unavailable_ << "\n";
         out << "Z\tlaunch_throttled\t" << launch_throttled_ << "\n";
+        out << "Z\tlaunch_screen_off\t" << launch_screen_off_ << "\n";
         out << "Z\tlaunch_long\t" << launch_long_ << "\n";
         out << "Z\tlaunch_short\t" << launch_short_ << "\n";
         out << "Z\tlaunch_class_fallback\t" << launch_class_fallback_ << "\n";
@@ -464,7 +473,7 @@ private:
     uint64_t policy_hints_ = 0, hints_accepted_ = 0, hints_vetoed_ = 0;
     uint64_t hints_unavailable_ = 0, hints_throttled_ = 0, hints_screen_off_ = 0;
     uint64_t spawn_events_ = 0, launch_events_ = 0, launch_accepted_ = 0, launch_vetoed_ = 0;
-    uint64_t launch_unavailable_ = 0, launch_throttled_ = 0, policy_absent_ = 0;
+    uint64_t launch_unavailable_ = 0, launch_throttled_ = 0, launch_screen_off_ = 0, policy_absent_ = 0;
     uint64_t launch_long_ = 0, launch_short_ = 0, launch_class_fallback_ = 0, denylist_spawns_ = 0;
     uint64_t classes_reads_ = 0, classes_ino_ = 0;
     int64_t classes_size_ = -1, classes_mtime_ns_ = -1;
