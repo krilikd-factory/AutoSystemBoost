@@ -300,7 +300,7 @@ if [ -f "$MODDIR/runtime/asb_zygisk_link.sh" ]; then
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_link.sh" restore-all >/dev/null 2>&1
 fi
 rm -f /data/adb/asb/zygisk_lsposed_modules /data/adb/asb/zygisk_lsposed_modules.tmp /data/adb/asb/zygisk_link.ev /data/adb/asb/zygisk_link.hooks 2>/dev/null
-rm -f /data/adb/asb/zygisk_observer/auto /data/adb/asb/zygisk_observer/auto.tmp /data/adb/asb/zygisk_observer/packages.before_auto /data/adb/asb/zygisk_observer/packages.auto.tmp /data/adb/asb/zygisk_observer/auto-usage.tmp 2>/dev/null
+rm -f /data/adb/asb/zygisk_observer/auto /data/adb/asb/zygisk_observer/auto.tmp /data/adb/asb/zygisk_observer/auto.before /data/adb/asb/zygisk_observer/auto.before.tmp /data/adb/asb/zygisk_observer/packages.before_auto /data/adb/asb/zygisk_observer/packages.auto.tmp /data/adb/asb/zygisk_observer/auto-usage.tmp 2>/dev/null
 if [ -f /data/adb/asb/notif_fix ] && [ -f "$MODDIR/runtime/asb_notif_fix.sh" ]; then
   MODDIR="$MODDIR" ASB_NF_UNINSTALL=1 sh "$MODDIR/runtime/asb_notif_fix.sh" restore-all >/dev/null 2>&1
 fi
