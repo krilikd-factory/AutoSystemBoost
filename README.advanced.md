@@ -466,6 +466,8 @@ CPU, junction, board, skin and battery temperatures answer different questions. 
 
 A missing skin/board zone can limit surface-based policy even when CPU temperature remains readable. Conversely, a hot battery is not interchangeable with a CPU die reading.
 
+An isolated upward CPU candidate at least 25 °C above the hottest available independent CPU peer is deferred for one reading. The selected zone cannot corroborate itself, and normally at least two independent peers are required; the legacy single-fallback path remains compatible. A repeated high reading is accepted on the next tick, shared CPU heat is accepted immediately, and insufficient peer evidence does not suppress heat evidence. A first extreme candidate without a cached baseline is marked invalid rather than exposing a fictitious valid 0 °C. The diagnostic hold counters are session-local and do not prove a faulty sensor or a false original reading. Vendor thermal protection remains authoritative.
+
 ### 📉 9.2. Adaptive thermal budget
 
 The governor can reduce performance before the platform reaches a severe clamp. This proactive budget is intended to avoid inefficient peak-and-throttle oscillation and make sustained behaviour more predictable.
@@ -666,6 +668,12 @@ The HeyTap ART helper is a bounded one-shot, not a boot service: `pending → ru
 | **Reports** | Generate support diagnostics and user-triggered extended reports. |
 
 The WebUI supports English, Russian, German, Spanish, French, Italian, Portuguese, Turkish, Ukrainian, Chinese, Indonesian, Arabic and Armenian. It provides dark, light and Liquid Glass presentation, with layouts intended for narrow phone viewports as well as larger screens.
+
+The full-day report presents evidence coverage per domain rather than treating a global confidence badge as a health score. Mobile bytes are context, not per-UID radio-energy attribution: traffic volume alone does not create a priority action or establish that mobile data caused screen-on drain. The automatic Zygisk card reports its selected profile separately from the four independent feature switches. A denylist/unmount spawn flag can accompany a one-shot pre-specialization cold-start record even when no resident observer remains; it is not a failed-injection count.
+
+The Zygisk page places **What to choose** immediately before Automatic setup and the manual mode controls. For responsiveness it distinguishes **Launch assist** (cold starts only), **Response** (cold starts plus lifecycle hints) and **Full** (those requests plus the process journal). For battery-oriented use it names **Battery guard** and explicitly warns that background work and notifications may be delayed; **Watch** alone saves no power. For minimal intervention it names **Observe only / Watch**, and **Off** when no companion work should run in app processes. These are explanations of existing requests and evidence gates, not guaranteed speed or energy improvements; the guide never changes a selection by itself.
+
+In Device diagnostics, `loaded_processes=0` in a current, enabled, non-safe snapshot gains a bounded explanation: no validated observed app process is resident at that instant. It is not an injection-failure count; channel confirmation, cold-start requests and resident processes remain separate evidence. Stale, disabled, safe-mode and nonzero snapshots do not receive this note.
 
 ### 🔍 11.2. Requested versus effective
 
