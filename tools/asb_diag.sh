@@ -2639,7 +2639,17 @@ if [ -f "$_nvf" ]; then
             fi ;;
           *)                P "  [N/A ] $_nk (link has no queue - the driver owns this interface)" ;;
         esac ;;
-      pending)     NOTE "$_nk = $_nw - stored, waiting for a link to apply it to" ;;
+      pending)
+        case "$_nk" in
+          net_*_wifi|wifi_*)
+            _pending_wifi_on="$(settings get global wifi_on 2>/dev/null)"
+            if [ "$_pending_wifi_on" = 0 ]; then
+              NOTE "$_nk = $_nw - stored; Wi-Fi is off, so there is no applicable link right now (pending, not a failed apply)"
+            else
+              NOTE "$_nk = $_nw - stored, waiting for a link to apply it to"
+            fi ;;
+          *) NOTE "$_nk = $_nw - stored, waiting for a link to apply it to" ;;
+        esac ;;
       *)           NOTE "$_nk = $_nw - no verdict recorded yet (the network apply has not reached this key since it was set)" ;;
     esac
   done
@@ -3251,6 +3261,7 @@ _tpl="$(grep -m1 '^thermal_peer_lo=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 _tpn="$(grep -m1 '^thermal_peer_n=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 _tcn="$(grep -m1 '^thermal_consensus=' /dev/.asb/state 2>/dev/null | cut -d= -f2- | tr -d '\"')"
 _trt="$(grep -m1 '^thermal_rejected_type=' /dev/.asb/state 2>/dev/null | cut -d= -f2 | tr -d '\"')"
+_tsh="$(grep -m1 '^thermal_spike_holds=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 NOTE "control source: ${_tct:-unknown}"
 case "${_tsc:-0}" in
   3) NOTE "confidence: HIGH - cross-checked and agrees with independent sensors" ;;
@@ -3265,6 +3276,16 @@ if [ -n "$_trt" ]; then
   # Raw, never with a degree sign: the whole point is that it is not degrees.
   _trr="$(grep -m1 '^thermal_rejected_raw=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
   NOTE "rejected candidate: ${_trt} (raw ${_trr}, not a temperature)"
+fi
+if [ -n "$_tsh" ]; then
+  _tslc="$(grep -m1 '^thermal_spike_last_c=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  _tslp="$(grep -m1 '^thermal_spike_last_peer_hi=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  _tsln="$(grep -m1 '^thermal_spike_last_peer_n=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  NOTE "one-tick CPU spike holds: ${_tsh} (last candidate ${_tslc:-?}C, hottest of ${_tsln:-0} independent CPU peer(s) ${_tslp:-?}C)"
+  case "${_tsh:-0}" in
+    ''|*[!0-9]|0) ;;
+    *) NOTE "a repeated high reading is accepted on the next tick; a hold is not proof that the sensor is faulty" ;;
+  esac
 fi
 
 SEC "5a8. TRIALS  (settings on probation)"
@@ -3528,10 +3549,20 @@ else
   NOTE "camera bind: no odm_bind_manifest.txt"
 fi
 grep 'odm_bind' /data/adb/asb/vendor_mounts.log 2>/dev/null | tail -n 6 | while IFS= read -r _cbl; do P "    $_cbl"; done
-# Read-back per manifest line (live = init's namespace reads the payload).
+# Read-back per manifest line (live = init's namespace reads the payload). A root
+# manager may already expose the same bytes through its module/overlay path, so a
+# separate visible bind mount is not required when state=live. Do not call that a
+# staged/live mismatch; NOT_LIVE and payload_missing remain different states.
+camera_bind_readback_note() {
+  NOTE "bind read-back: $1"
+  case "$1" in
+    *" state=live mounted=no")
+      NOTE "  content already matches the payload through the live module/overlay path; no separate visible bind mount is required - not a mismatch" ;;
+  esac
+}
 if [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_odm_rebind.sh ]; then
   sh /data/adb/modules/AutoSystemBoost/runtime/asb_odm_rebind.sh status 2>/dev/null \
-    | while IFS= read -r _cbl; do NOTE "bind read-back: $_cbl"; done
+    | while IFS= read -r _cbl; do camera_bind_readback_note "$_cbl"; done
 fi
 # Every layer on the camera paths, as init sees them, and the module's own copies - if a
 # root-manager layer (magic mount, NoMount, overlayfs) sits in front of the bind, this is
