@@ -216,7 +216,7 @@ _zygisk_auto_config() {
 
 _zygisk_auto_mode() {
   _am="$(sed -n 's/^mode=//p' "$AUTO" 2>/dev/null | head -n 1)"
-  case "$_am" in observe|launch|battery) echo "$_am" ;; *) [ -e "$AUTO" ] && echo legacy || echo off ;; esac
+  case "$_am" in observe|launch|battery|auto) echo "$_am" ;; *) [ -e "$AUTO" ] && echo legacy || echo off ;; esac
 }
 _zygisk_guard_apply() {
   [ -f "$MODDIR/runtime/asb_zygisk_guard.sh" ] || { [ "$1" = off ]; return; }
@@ -289,22 +289,22 @@ _zygisk_auto_rollback() {
 
 _zygisk_auto_enable() {
   _mode="${1:-observe}"
-  case "$_mode" in observe|launch|battery) ;; *) echo 'result=bad_request'; return 2 ;; esac
+  case "$_mode" in observe|launch|battery|auto) ;; *) echo 'result=bad_request'; return 2 ;; esac
   [ ! -e "$DISABLE" ] || { echo 'result=safe_mode'; return 3; }
-  [ "$_mode" != battery ] || [ -f "$MODDIR/runtime/asb_zygisk_guard.sh" ] || { echo 'result=unavailable'; return 1; }
+  case "$_mode" in battery|auto) [ -f "$MODDIR/runtime/asb_zygisk_guard.sh" ] || { echo 'result=unavailable'; return 1; } ;; esac
   _zygisk_auto_backup_state || { echo 'result=failed'; return 1; }
   _old_mode="$(_zygisk_auto_mode)"
   _zygisk_auto_apply_list >/dev/null || { echo 'result=failed'; return 1; }
   case "$_mode" in
     observe|battery) _zygisk_auto_config 1 0 0 1 >/dev/null 2>&1 || { _zygisk_auto_rollback; return 1; } ;;
     launch) _zygisk_auto_config 1 0 1 1 >/dev/null 2>&1 || { _zygisk_auto_rollback; return 1; } ;;
+    auto) _zygisk_auto_config 1 1 1 1 >/dev/null 2>&1 || { _zygisk_auto_rollback; return 1; } ;;
   esac
   _zygisk_sync >/dev/null 2>&1 || { _zygisk_auto_rollback; return 1; }
-  if [ "$_mode" = battery ]; then
-    _zygisk_guard_apply wakers || { _zygisk_auto_rollback; return 1; }
-  else
-    case "$_old_mode" in battery|legacy) _zygisk_guard_apply off || { _zygisk_auto_rollback; return 1; } ;; esac
-  fi
+  case "$_mode" in
+    battery|auto) _zygisk_guard_apply wakers || { _zygisk_auto_rollback; return 1; } ;;
+    *) case "$_old_mode" in battery|auto|legacy) _zygisk_guard_apply off || { _zygisk_auto_rollback; return 1; } ;; esac ;;
+  esac
   # ART is never an implicit part of a new automatic profile. Only the old combined
   # automatic mode owned an ART flag; selecting a new profile withdraws that legacy ownership.
   [ "$_old_mode" != legacy ] || _zygisk_aot_apply 0 || { _zygisk_auto_rollback; return 1; }
@@ -404,7 +404,7 @@ case "${1:-}" in
     printf 'packages=%s\n' "$(_zygisk_list | wc -l | tr -d ' ')"
     ;;
   *)
-    echo 'Usage: asb_zygisk.sh sync|classes|list|set-packages [pkg ...]|auto-enable [observe|launch|battery]|auto-refresh|auto-disable|enable|disable|safe-mode on|off|status|link-status' >&2
+    echo 'Usage: asb_zygisk.sh sync|classes|list|set-packages [pkg ...]|auto-enable [observe|launch|battery|auto]|auto-refresh|auto-disable|enable|disable|safe-mode on|off|status|link-status' >&2
     exit 2
     ;;
 esac

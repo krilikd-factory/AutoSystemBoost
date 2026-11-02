@@ -27,7 +27,7 @@ _asb_zygisk_info() {
   _zi_auto_profile=off
   if [ "$_zi_auto" = 1 ]; then
     _zi_auto_profile="$(sed -n 's/^mode=//p' "$_zi_dir/auto" 2>/dev/null | head -n 1)"
-    case "$_zi_auto_profile" in observe|launch|battery) ;; *) _zi_auto_profile=legacy ;; esac
+    case "$_zi_auto_profile" in observe|launch|battery|auto) ;; *) _zi_auto_profile=legacy ;; esac
   fi
   _zi_auto_updated="$(sed -n 's/^updated=//p' "$_zi_dir/auto" 2>/dev/null | head -n 1)"
   case "$_zi_auto_updated" in ''|*[!0-9]*) _zi_auto_updated=0 ;; esac
