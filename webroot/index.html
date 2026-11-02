@@ -409,7 +409,12 @@ button.badge:active { color: var(--accent); }
   background: var(--zygisk-header-color);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--zygisk-header-color) 14%, transparent);
 }
-.zygisk-header-label { white-space: nowrap; }
+.zygisk-header-label { display: inline-flex; align-items: center; flex: 0 0 auto; white-space: nowrap; line-height: 0; }
+.zygisk-header-wordmark { display: block; width: 42px; height: 8px; overflow: visible; }
+/* A local vector wordmark, not a platform font: its angular cuts stay identical in the
+ * bundled and device-font modes, and currentColor preserves every existing link state. */
+.zygisk-header-text { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 /* fix289: a live link breathes. The green states (connected, confirmed, quiet) pulse slowly -
  * opacity and scale only, so the compositor animates them without a repaint - in the header
  * pill and on the link card; waiting/stale/safe and unknown stay still, and reduced motion
@@ -1762,6 +1767,17 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .device-page .lgr-v.dev-unknown { color: var(--text-tertiary); font-weight: 550; }
 /* fix278: the Zygisk page. One mode control spans the card; the description under it is the
  * selected mode's own text, so what is on and what it costs is read next to the choice. */
+.zygisk-page .lgr-sec-t-tech { display: flex; align-items: center; gap: 9px; }
+.zygisk-page .zy-sec-icon { display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; width: 27px; height: 27px; box-sizing: border-box; padding: 4px;
+  border: 1px solid color-mix(in srgb,var(--accent) 24%,var(--border)); border-radius: 8px;
+  color: var(--accent); background: color-mix(in srgb,var(--accent) 7%,transparent); }
+.zygisk-page .zy-sec-icon .tech-icon { width: 17px; height: 17px; }
+.zygisk-page .zy-icon-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+.zygisk-page .zy-btn-icon { display: inline-flex; flex: 0 0 auto; color: var(--accent); }
+.zygisk-page .zy-btn-icon .tech-icon { width: 15px; height: 15px; }
+.zygisk-page .is-busy .zy-btn-icon { display: none; }
+.zygisk-page .zy-auto-card { background: linear-gradient(145deg,color-mix(in srgb,var(--accent) 6%,transparent),transparent 58%),var(--surface); }
 .zygisk-page .zy-mode-seg { display: flex; width: 100%; margin: 2px 0 10px; }
 .zygisk-page .zy-mode-seg button { font-size: 12px; padding: 9px 6px; }
 .zygisk-page .zy-mode-desc { color: var(--text-secondary); font-size: 12.5px; line-height: 1.45; margin: 0 2px 8px; }
@@ -5292,9 +5308,19 @@ const TECH_ICON_PATHS = {
          + '<path d="M9.5 12.5l1.8 1.8 3.4-3.6"></path>',
   kernel: '<rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 9h6v6H9zM9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>',
   /* Completed ASB vector system: centred silhouettes, 4–20px optical frame and one coherent rounded-line language. */
-  /* Smart: an adaptive core with four independent sensor inputs. The small neural spark
-     sits on a clean chip plane instead of the old ambiguous star-and-orbits drawing. */
-  smart: '<rect x="5" y="5" width="14" height="14" rx="4"/><path d="M9 2.8v2.2M15 2.8v2.2M9 19v2.2M15 19v2.2M2.8 9H5M2.8 15H5M19 9h2.2M19 15h2.2"/><path d="M12 8.2l1.05 2.75L15.8 12l-2.75 1.05L12 15.8l-1.05-2.75L8.2 12l2.75-1.05z"/>',
+  /* Smart: a bespoke top-down brain with two rounded hemispheres, a central processor
+     and four circuit terminals. The open centre split and mirrored gyri keep the brain
+     silhouette readable at 19–26px; no lettering or third-party branding is embedded. */
+  smart: '<g stroke-width="1.35">'
+         + '<path d="M10.9 8.2V6.2C10.9 4.3 9.7 3.1 8.1 3.2C6.8 2.4 5.2 3.1 4.7 4.5C3.6 4.9 3.1 6.2 3.6 7.4C2.5 8.3 2.5 10 3.5 10.9C2.6 12.1 2.9 13.8 4.1 14.5C3.8 16 4.9 17.4 6.4 17.5C7 19.2 8.8 19.8 10.1 18.8C10.7 18.3 10.9 17.5 10.9 16.6"/>'
+         + '<path d="M13.1 8.2V6.2C13.1 4.3 14.3 3.1 15.9 3.2C17.2 2.4 18.8 3.1 19.3 4.5C20.4 4.9 20.9 6.2 20.4 7.4C21.5 8.3 21.5 10 20.5 10.9C21.4 12.1 21.1 13.8 19.9 14.5C20.2 16 19.1 17.4 17.6 17.5C17 19.2 15.2 19.8 13.9 18.8C13.3 18.3 13.1 17.5 13.1 16.6"/>'
+         + '<path d="M4.8 6.5C5.6 5.6 6.9 5.6 7.6 6.4C8.4 5.9 9.4 6.2 9.8 7M3.9 10.4C4.8 9.6 6 9.8 6.5 10.8C5.8 11.7 6 12.8 6.9 13.3M4.9 14.8C5.9 14.2 7.1 14.6 7.5 15.6"/>'
+         + '<path d="M19.2 6.5C18.4 5.6 17.1 5.6 16.4 6.4C15.6 5.9 14.6 6.2 14.2 7M20.1 10.4C19.2 9.6 18 9.8 17.5 10.8C18.2 11.7 18 12.8 17.1 13.3M19.1 14.8C18.1 14.2 16.9 14.6 16.5 15.6"/>'
+         + '<rect x="8.2" y="8.2" width="7.6" height="7.6" rx="1.35"/>'
+         + '<path d="M10.2 10.2h3.6v3.6h-3.6zM10 6.4v1.8M14 6.4v1.8M10 15.8v1.8M14 15.8v1.8M6.4 10h1.8M6.4 14h1.8M15.8 10h1.8M15.8 14h1.8"/>'
+         + '<path d="M3.6 7.4H2.4M4.1 14.5H2.4M20.4 7.4h1.2M19.9 14.5h1.2"/>'
+         + '<circle cx="1.6" cy="7.4" r=".8"/><circle cx="1.6" cy="14.5" r=".8"/><circle cx="22.4" cy="7.4" r=".8"/><circle cx="22.4" cy="14.5" r=".8"/>'
+         + '</g>',
   /* Performance: one confident flame silhouette. No second flame or stray line inside it. */
   performance: '<path d="M12 2.8c1.1 3.5 2.8 5.2 4.4 7.1 1.3 1.5 2.1 3.1 2.1 5a6.5 6.5 0 0 1-13 0c0-2.3 1-4.2 2.7-6.1.2 1.5.8 2.5 1.8 3.1.5-3.1 1-6 2-9.1z"/>',
   balanced: '<path d="M12 4.5V17M8.5 20h7"/><path d="M12 6.5H4.5M12 6.5h7.5"/><path d="M4.5 6.5 2 12h5z"/><path d="M2 12a2.5 2.5 0 0 0 5 0"/><path d="M19.5 6.5 17 12h5z"/><path d="M17 12a2.5 2.5 0 0 0 5 0"/>',
@@ -5426,6 +5452,12 @@ const TECH_ICON_PATHS = {
   /* fix272: a launch arrow leaving a process ring; and a counted list of process starts. */
   zygisk_launch: '<circle cx="8" cy="16" r="4"/><path d="M11 13 19.5 4.5M14 4.5h5.5V10"/><path d="M8 14.2v1.8l1.2 1.2"/>',
   zygisk_ledger: '<rect x="4" y="3.5" width="16" height="17" rx="2.4"/><path d="M8 8.5h5M8 12h5M8 15.5h5"/><path d="M16 8.5h.01M16 12h.01M16 15.5h.01"/>',
+  /* Dedicated-page section glyphs: setup, live activity, the shared engine, guard and apps. */
+  zygisk_auto: '<path d="M12 3 19 7v10l-7 4-7-4V7z"/><path d="m8.2 12 2.3 2.3 5.2-5.2"/><path d="M18.5 2.5v3M17 4h3"/>',
+  zygisk_activity: '<path d="M2.8 12h3.4l2-5 3.8 10 2.2-5h3.3"/><path d="M5 4.5h14M5 19.5h14" opacity=".45"/>',
+  zygisk_engine: '<rect x="9" y="9" width="6" height="6" rx="1.2"/><path d="M12 4.5V9M5 17.5 9 14M19 17.5 15 14"/><circle cx="12" cy="3" r="1.5"/><circle cx="4" cy="18.5" r="1.5"/><circle cx="20" cy="18.5" r="1.5"/>',
+  zygisk_guard: '<path d="M12 2.8 20 6v5.2c0 4.7-3.3 8-8 10-4.7-2-8-5.3-8-10V6z"/><path d="m8.3 12 2.3 2.3 5.1-5.1"/>',
+  zygisk_apps: '<rect x="4" y="4" width="6" height="6" rx="1.4"/><rect x="14" y="4" width="6" height="6" rx="1.4"/><rect x="4" y="14" width="6" height="6" rx="1.4"/><rect x="14" y="14" width="6" height="6" rx="1.4"/><path d="m15.3 17 1.2 1.2 2.3-2.4"/>',
   /* DocumentsUI picker: a document with an explicit selection check. */
   documents_picker: '<path d="M6 3.5h8l4 4V20H6z"/><path d="M14 3.5V8h4M9 12h5M9 15.5h2"/><path d="m13 16 1.5 1.5L18 14"/>',
   generic: '<path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 8v8M8.5 10l7 4M15.5 10l-7 4"/>',
@@ -7703,17 +7735,17 @@ const CFG_ITEMS = [
   { key:'bt_absvol_mode', type:'seg', def:'stock', opts:['stock','disabled'], name:'Bluetooth Volume Control',
     desc:'Stock = one shared scale: the phone slider moves the headset volume directly. Disabled = the two are independent, so the phone applies its own gain on top of whatever the headset is set to - usually louder, and what ViPER/EQ need. The trade is that the two scales no longer line up, which on some headsets makes the lowest steps too quiet. Applies without a reboot.' },
   { key:'bt_link_stability', type:'seg', def:'stock', stock:'stock', opts:['stock','stable'], name:'Bluetooth Link Stability',
-    desc:'For phones where Bluetooth headphones disconnect on their own during playback. Most devices never do this, so it is off by default - it is here for the ones that do.\n\nOn stable, Wi-Fi stops scanning for new networks while audio is playing. The 2.4 GHz band and Bluetooth share one antenna on every phone, and a scan sweeps the whole band: a stream that misses its slot does not get quieter, it disconnects. This is the standard remedy for that symptom.\n\nThe cost is that new Wi-Fi networks appear more slowly in the list. Nothing else changes.\n\nIt does not force an audio codec. LDAC and aptX HD on a weak link do cause dropouts, but which one your headset uses is your choice and your headset\u2019s - changing it silently would change how your music sounds without asking.' },
+    desc:'Optional workaround for Bluetooth audio dropouts during playback. Stable suppresses Wi-Fi scanning while audio plays, which can help on devices where the two radios interfere. New networks may appear more slowly. No codec is forced and pairing is unchanged. Leave this off if your connection is already stable.' },
   { key:'bt_a2dp_offload', type:'seg', def:'auto', opts:['auto','on','off'], name:'Bluetooth Audio Offload',
     desc:'Whether Bluetooth audio is encoded by the dedicated hardware block or by the CPU. Auto is the hands-off setting: ASB writes nothing and whatever the ROM chose stays. On actively writes hardware encoding (usually also what the phone ships with, but ASB sets it rather than leaving it). Off moves it to the CPU, which some codecs and some equaliser apps need in order to work at all. If your Bluetooth equaliser does nothing, off is the setting to try. Auto leaves whatever the device decided.' },
   { key:'dsp_outputs', type:'seg', def:'all', stock:'all', opts:['off','all','speaker','wired','bt','speaker+wired','speaker+bt','wired+bt'], name:'DSP Outputs',
-    desc:'Off switches the whole DSP off in one step - loudness, bass, voice tone and compressor keep their positions and come back as they were when you pick an output again.\n\nWhich outputs the DSP is allowed to work on. It used to attach to all of them at once, so a boost meant for Bluetooth headphones also lifted the loudspeaker - the smallest driver in the phone and the one least able to take extra gain. Pick only what you actually want processed: speaker is the built-in one, wired covers headphone jack and USB DACs, bt is Bluetooth. Outputs this phone does not have are simply never matched. Bluetooth and battery: an audio effect on the wireless output can take the stream off the offloaded playback path, so the CPU stays awake as long as audio plays with the screen off - one full-day capture showed 100% awake during Bluetooth listening with gain on. If battery life during long screen-off listening matters, leave Bluetooth out.' },
+    desc:'Choose which outputs ASB DSP may process: the built-in speaker, wired headphones/USB DACs, or Bluetooth. Unavailable outputs are ignored. Off bypasses the whole DSP while preserving every level for later. Bluetooth processing can move playback away from hardware offload and increase screen-off CPU use; exclude Bluetooth if long listening sessions matter more than the effect.' },
   { key:'dsp_loudness', type:'range', def:'0', min:0, max:25, step:1, name:'DSP Loudness',
-    desc:'ASB\u2019s own DSP engine: gain beyond the system maximum, up to +25 dB. A soft-knee compressor lifts the body of the track and a peak limiter holds the ceiling \u2014 it cannot clip however high you push it. Attaches to music by itself, no companion app. Start at +3; +12 and above squash loud masters hard but stay clip-free. First enable needs a reboot. Switched off entirely while the Audio Profile is set to the equaliser mode: that profile hands the stream to an external engine, and our effect on the same output would stop that engine from seeing the stream. On the loudspeaker the gain steps down while the phone is hot (battery from 42 \u00b0C) and returns below 40 \u00b0C; Bluetooth and wired outputs are never reduced.' },
+    desc:'ASB DSP adds up to +25 dB of gain, with optional compression and a final sample-peak limiter. Start at +3 dB: high settings can sound heavily compressed even when peaks are limited. The first enable needs a reboot. DSP is bypassed in the external-EQ audio profile. On the speaker, gain is reduced when the battery reaches 42 °C and restored below 40 °C; wired and Bluetooth gains are not reduced by this rule.' },
   { key:'dsp_bass', type:'range', def:'0', min:0, max:10, step:1, name:'DSP Bass Boost',
     desc:'Needs DSP Loudness above. A low shelf at 90 Hz: the full lift lands on the low end, half of it at the corner, nothing above about 1 kHz \u2014 mids and vocals stay untouched. It runs at the head of the chain, so the added bass is limited like everything else and cannot clip on its own. The trade is headroom: every dB of bass makes the limiter engage sooner, so a big boost on top of a high gain costs overall loudness. 3\u20136 suits most headphones.' },
   { key:'dsp_voice', type:'range', def:'0', min:0, max:10, step:1, name:'DSP Voice Tone',
-    desc:'Needs DSP Loudness above. For voices that sound thin or shrill on the phone speaker - the usual complaint when comparing a video with the same clip on an iPhone. Two broad bands move together: body at 350 Hz goes up (+0.5 dB per step) and the 3 kHz edge goes down (-0.6 dB per step), so level 10 is +5 / -6 dB. Bass Boost works at 90 Hz, mostly below what a phone speaker can play; this band is where a speaker still has output, so it is what makes a voice sound fuller. Runs before the limiter and cannot clip. Start at 4-6; on headphones less is usually enough - use DSP Outputs to keep it on the speaker only.' },
+    desc:'Requires DSP Loudness. Two broad bands adjust voice body at 350 Hz and upper-edge sharpness at 3 kHz. Level 10 applies +5 dB and −6 dB respectively. This can make thin or harsh speech fuller, especially on the phone speaker; high values may sound unnatural. Start at 4–6 and use DSP Outputs to limit the effect to the outputs that need it. Changes apply live before the limiter.' },
   { key:'dsp_width', type:'range', def:'0', min:0, max:10, step:1, name:'DSP Stereo Width',
     desc:'Needs DSP Loudness above. Makes the sound wider and more spacious: the difference between the left and right channels is raised above 180 Hz, 10% per step, so level 10 is twice as wide. What sits in the centre - vocals, dialogue, a mono recording - is not touched at all, and the bass stays centred so it keeps its punch. Strongest on headphones and Bluetooth; the two speakers of a phone sit close together, so there the effect is smaller. Start at 3-5. Runs before the limiter and cannot clip. Stereo tracks only.' },
   { key:'dsp_clarity', type:'range', def:'0', min:0, max:8, step:1, stock:'0', name:'DSP Clarity',
@@ -7726,72 +7758,72 @@ const CFG_ITEMS = [
     desc:'On suits large gain: it holds the body of a track down so peaks stay clean. Off suits modest gain (+2..+4 dB), where the compressor only squashes dynamics that never needed it. The sample-peak limiter stays either way, so off cannot clip - but at high gain it makes the limiter work constantly, which sounds worse. Does nothing while DSP Loudness is off.' },
   // --- Audio ---,
   { key:'audio_remove_volume_limit', type:'seg', def:'0', stock:'0', opts:['0','1'], name:'Headphone Volume Limit',
-    desc:'Android caps headphone output above the level the EU considers unsafe for sustained listening, and warns you when you cross it. Removing that cap lets the existing volume slider go further - it does not make anything louder by itself.\n\nASB used to remove it silently as part of another category. It is now a choice, off by default, because how loud is too loud in your ears is not a decision a performance module should make for you.\n\nHearing damage from sustained loud listening is cumulative and permanent. If you remove the cap, watch the duration as much as the level.' },
+    desc:'Removes Android\'s headphone volume ceiling so the existing slider can go higher; it does not add gain by itself. Off by default. This reduces a safety boundary, not just a warning: sustained loud listening can cause permanent hearing damage. Use the lowest comfortable level and limit listening time. Reboot if your ROM reads the policy only at startup.' },
   { key:'audio_resampler', type:'seg', def:'stock', stock:'stock', opts:['stock','high','max'], name:'Resampler Quality',
-    desc:'How Android converts audio between sample rates. It only matters when a track and the output run at different rates - typically 44.1 kHz music on a 48 kHz output, which covers most streaming and most local files. Stock keeps the resampler exactly as the ROM ships it.\n\nHigh gives that conversion a longer, steeper filter (140 dB stopband instead of about 90, five times the length) on every output from 44.1 kHz up: less aliasing, a cleaner top octave. Max goes further still (179 dB, ten times the length). The difference is measurable; whether you hear it depends on your ears and headphones - for most people on most material it is inaudible.\n\nNot affected: playback that already runs at the output rate, offloaded playback (the audio DSP converts there on its own) and the Bluetooth codec itself. The cost is CPU while audio plays: small on High, noticeably more on Max. Reboot to apply - the audio server reads it only at start.' },
+    desc:'Controls the quality of Android\'s sample-rate conversion when the source and output rates differ. Stock leaves the ROM unchanged; High and Max use longer, steeper filters, with Max costing the most CPU. Any audible difference depends on the recording and equipment and may be negligible. Playback already at the output rate, hardware-offloaded playback and Bluetooth codec encoding are not changed. Reboot to apply.' },
   { key:'media_vol_steps', type:'range', def:'stock', stock:'stock', stockAt:15, min:15, max:100, step:5, name:'Media Volume Steps',
-    desc:'How many positions the media volume slider has. Stock keeps what the phone ships with (15 on plain Android; some ROMs use more) - the far left of the slider. 20 to 100, in steps of 5, make each step smaller, so you can set the level you want instead of choosing between a bit too quiet and a bit too loud - useful at night and with sensitive headphones.\n\nThe loudest position stays exactly as loud as before; only the spacing changes. After the reboot the slider keeps its saved step number, so the first playback can be quieter than you left it - raise it once. Some ROMs ignore this setting; the action button and asbdiag show the number of steps the system actually uses. Reboot to apply.' },
+    desc:'Changes the number of media-volume positions without raising the maximum volume. More steps give finer control, especially at low listening levels. Stock keeps the ROM value; 20–100 selects a fixed count in steps of five. Reboot to apply. The saved slider position may then map to a quieter level, so check it once. Some ROMs ignore this setting; the action button and asbdiag report the value actually in use.' },
   { key:'CAMERA_LEVEL', type:'range', def:'0', min:0, max:10, step:1, name:'Camera Grade',
-    desc:'Photo + video colour, detail and sharpness: 0 = stock. Levels 1–6 are progressive, while 7–10 are deliberately strong and visibly stylised. The grade multiplies your firmware’s own values, so it works across different OnePlus tuning files. Level 10 reaches 2.5× chroma, 3.4× AI blend and 3.5× sharpness before capability clamps. Reboot to re-grade from a clean baseline; high levels can band in deep shadows.' },
+    desc:'Scales the firmware\'s own photo/video colour, detail and sharpening values. 0 keeps stock tuning; 1–6 increase processing gradually, while 7–10 are deliberately strong and stylised. Device capability limits still apply. Level 10 targets up to 2.5× chroma, 3.4× AI blend and 3.5× sharpness before those clamps. Reboot to rebuild from the stock baseline. High levels can exaggerate noise or banding in deep shadows.' },
   { key:'CAMERA_CONTRAST', type:'range', def:'3', min:0, max:10, step:1, name:'Contrast & Colour Depth',
-    desc:'The tone curve’s contrast and saturation scales. This is a different axis from Camera Grade: that one changes the colour matrix, this one gives darker shadows and richer colour. 3 is stock; 10 reaches 170% for a clearly visible result. Reboot to apply.' },
+    desc:'Adjusts the tone curve\'s contrast and saturation independently of Camera Grade. 3 is stock; higher values deepen shadows and strengthen colour, with 10 targeting 170% of the firmware scales. This does not raise Camera Grade\'s colour-matrix or detail multipliers. Reboot to apply. High values can clip shadow detail or make colours look unnatural.' },
   { key:'CAMERA_GRAIN', type:'range', def:'3', min:0, max:10, step:1, name:'Film Grain',
-    desc:'The camera adds grain back after denoising, because a perfectly smooth image reads as plastic. 3 is stock, 0 removes it, and 10 reaches 16× the shipped grain for a deliberately extreme film look. Every addNoiseWeight* key present in the firmware tuning is patched, including mode-specific variants. High levels are intentionally visible and can look coarse in shadows. Reboot to apply.' },
+    desc:'Controls grain added after noise reduction. 3 is stock, 0 removes this added grain, and higher values create an increasingly visible film texture; 10 targets 16× the shipped amount. ASB patches every addNoiseWeight* key present in the device\'s own tuning, including mode-specific variants. High values can look coarse in shadows. Reboot to apply.' },
   { key:'CAMERA_PORTRAIT', type:'range', def:'0', min:0, max:6, step:1, name:'Portrait AI',
-    desc:'Neural processing on faces and skin, which ships switched off — the weights are all zero. Raising it restores detail that the denoiser flattens; level 6 reaches the safe blend-weight ceiling. Start at 1–2, because high levels are intentionally stylised. Portrait modes only; reboot to apply.' },
+    desc:'Adjusts neural face and skin blending in supported portrait modes. Stock firmware may ship these weights at zero; higher levels can restore texture reduced by denoising, but can also make skin look artificial. Level 6 reaches the implemented blend-weight ceiling. Start at 1–2. This does not affect every camera mode. Reboot to apply.' },
   { key:'CAMERA_LOWLIGHT', type:'range', def:'0', min:0, max:10, step:1, name:'Macro & Low-light Sharpening',
-    desc:'Macro and low-light have separate sharpening scales. 0 follows the main Camera Grade; 10 reaches 3.2× for a deliberately visible correction. Close subjects and high ISO amplify halos, so use the upper levels only when these modes look genuinely soft. Reboot to apply.' },
+    desc:'Controls separate sharpening scales for macro and low-light processing. 0 follows Camera Grade; higher values add a progressively stronger correction, with 10 targeting 3.2× before firmware limits. Close subjects and high ISO can make halos more visible. Raise this only when those modes are genuinely soft. Reboot to apply.' },
   { key:'camera_hold_enable', type:'bool', def:'1', name:'Hold Performance While Camera Runs',
-    desc:'While the camera is streaming, the governor stops lowering the CPU and keeps the cores it is already using. That is what prevents a dropped frame in the middle of a burst or a video, at the cost of a little battery for as long as the camera app is open. On means held (the stock module behaviour), off lets the governor throttle the camera like any other app.' },
+    desc:'While the camera is actively streaming, the governor keeps the current CPU ceiling and cores instead of lowering them. This can reduce performance dips during bursts or video, but uses more power while the camera remains open. On preserves the hold; Off lets normal governor rules apply. Thermal and vendor safety limits remain authoritative.' },
   { key:'UX_MANAGE_TIMEOUTS', type:'bool', def:'0', name:'Manage UI Speed (anim + touch)',
-    desc:'Performance shortens animations (~0.8x) and long-press/multi-tap windows for a snappier, more responsive UI; Battery keeps stock. OFF = untouched.' },
+    desc:'Master switch for profile-managed interface timing. Performance shortens animations and long-press/multi-tap windows; Battery keeps stock timing. Off leaves these values under ROM control. Use Animation Speed below for a fixed animation scale independent of the power profile.' },
   { key:'anim_speed', type:'range', def:'-1', min:-1, max:8, step:1, stock:'-1', name:'Animation Speed',
-    desc:'How fast the system animates. -1 keeps the old behaviour, where the power profile decides - Performance was 0.8x, Battery 1.0x - so UI speed was a side effect of a battery setting. 0 is Android stock; negative of that is faster, positive is slower, and the far left removes animations entirely. Takes effect on the next transition.' },
+    desc:'Sets a fixed Android animation scale. −1 lets the power profile manage animations; 0 is the Android default, negative values are faster, positive values are slower, and the far-left setting disables animations. It applies to subsequent transitions. Very short or disabled animations can make transitions harder to follow but do not increase an app\'s actual processing speed.' },
   { key:'UX_ANIM_FORCE_RESTART', type:'bool', def:'0', name:'Force Animation Restart',
-    desc:'Almost never needed. WindowManager reads the animation scales as soon as they are written, so a plain settings change is enough and UI Speed Management works without this. The switch exists only for builds that ignore a live change, and it applies by restarting SystemUI: the screen blinks, the lock screen returns, and overlays from other modules (status-bar themes) are torn down. Only fires on a profile switch you made yourself. Turn it on only if you have confirmed the scales do not apply otherwise.' },
+    desc:'Fallback for ROMs that ignore live animation-scale changes. When enabled, a manual profile switch also restarts SystemUI: the screen may blink, the lock screen may return, and overlays from other modules can be torn down. It does not run on every automatic profile change. Leave this off unless you have confirmed that ordinary scale changes do not apply.' },
   // --- Display ---,
   { key:'disable_blur', type:'bool', def:'0', name:'Disable Blur',
-    desc:'Turns off window blur everywhere - shade, notifications, volume panel, transitions. Lighter on the GPU, and the shade gets a solid backdrop instead of a translucent one. Note that a heads-up notification then has no blurred backdrop either, so its text sits on whatever is behind it. There is no partial setting: the only two controls this platform exposes are both global. The window half applies at once, the compositor half after a reboot.' },
+    desc:'Disables system window blur in areas such as the shade, notifications, volume panel and transitions. This can reduce GPU work, but replaces translucent backgrounds with solid ones; heads-up notification text may be harder to read over some content. The setting is global rather than per panel. Window blur changes live; compositor blur may require a reboot.' },
   { key:'ui_effects_level', type:'seg', def:'auto', opts:['auto','stock','flat'], name:'System Animations',
-    desc:'How richly the system draws transitions and Recents. Normal is what the device ships with. Simplified uses fewer effects and a little less GPU. IMPORTANT: with simplified, Recents becomes a plain list and OxygenOS removes the Cards/Simple selector from Recent Tasks Manager altogether - the only way back is setting this to normal and rebooting. If you want the card previews, leave this alone. The simplified option is offered on the OnePlus 15 only: on other models it removes the selector with no way back except this same setting, so it is not shown there.' },
+    desc:'Normal keeps the device\'s full transition and Recents effects. Simplified reduces visual effects and may lower GPU use, but Recents becomes a plain list and OxygenOS removes the Cards/Simple selector. Restore Normal and reboot to recover it. The simplified option is exposed only on the OnePlus 15 because its behaviour on other models has not been validated.' },
   // ---- Network ----------------------------------------------------------------,
   // The explicit radio master belongs first: every ASB modem/handover choice below depends on it.
   { key:'radio_policy_enable', type:'bool', def:'0', stock:'0', name:'Cellular / radio controls',
     desc:'Independent master for ASB modem controls. OFF is the default: choosing any power profile leaves Android’s mobile-data context and TCP keepalive settings untouched. This is the recommended setting on WiFi-only or no-SIM devices. Turn it on only if this phone uses a SIM/eSIM and you deliberately want ASB’s separate radio options below. Turning it off immediately restores the Android values recorded before ASB changed them; it never changes airplane mode, carrier selection, roaming, preferred network type, Bluetooth or audio.' },
   { key:'night_modem_idle', type:'bool', def:'0', name:'Quiet Radio at Night',
-    desc:'Requires Cellular / radio controls above. When they are off, this and every power profile leave Android radio policy untouched. When enabled, it lets the modem settle during the hours the learner worked out from your own nights. Keepalives go to six times the profile value and the probe burst is shortened, so fewer sockets knock on the door. THE COST: an app that polls its own server can be late until morning. Calls, SMS and high-priority push are untouched - this changes timing, never the radio power state.' },
+    desc:'During the learned sleep window, extends cellular keepalive intervals and gates selected rmnet data-path wakeups so the modem path can stay idle longer. Push notifications and app sync may wait until a later wake. Calls and SMS use separate modem paths; ASB does not change radio power, airplane mode, roaming or network selection. Changes are recorded and restored when disabled or uninstalled.' },
   { key:'net_screen_off_lte', type:'bool', def:'0', name:'LTE While Screen Off',
-    desc:'After the screen has been off for 90 s, drops the 5G leg and keeps data on LTE; 5G comes back as soon as the screen turns on. A download keeps 5G: a check at 3 Mbit/s or more is a transfer, not a stream - LTE is not chosen then, and if LTE is already on, 5G comes back for at least 10 minutes. Off by default: switching allowed network types re-registers the data link.' },
+    desc:'After the screen has been off for 90 seconds, prefers LTE instead of keeping 5G NSA active; the previous setting returns when the screen turns on. Calls and sufficiently heavy transfers are excluded, and a recent transfer can keep 5G for at least 10 minutes. Off by default because changing allowed network types can briefly re-register mobile data. If the ROM rejects the change, ASB restores the previous value and stops retrying.' },
   { key:'net_lte_light', type:'bool', def:'0', name:'5G Only When Needed',
-    desc:'With the screen on: after 3 minutes of light mobile traffic (under 2 Mbit/s - feeds, music) drops the 5G leg and stays on LTE, which carries that easily. A download brings 5G back within about 20 seconds (3 Mbit/s or more in two 10-second checks in a row, or one check over 12 Mbit/s) and keeps it for 10 minutes. 5G NSA keeps two radios busy for a trickle of data. Never during a call, tethering or a game, never on Wi-Fi. Off by default: each switch re-registers the data link for a second or two.' },
+    desc:'With the screen on, switches from 5G NSA to LTE after three minutes of light mobile traffic below 2 Mbit/s. Sustained traffic above the implemented thresholds restores 5G and holds it for 10 minutes. ASB does not switch during calls, tethering, games or Wi-Fi use. Off by default: every network-type change can briefly re-register mobile data, and actual power use depends on the modem and signal.' },
   { key:'net_congestion', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'Download Ramp \u00b7 other links',
     desc:'How the phone ramps up when downloading - for links the two cards below do not cover: USB tethering, VPN, Bluetooth tethering, Ethernet. WiFi and mobile take their own values from the cards below. Stock is what the device shipped with. bbr paces to the real measured speed, cubic is the classic. Stock kernels usually lack bbr, and the card will say \u201cnot supported\u201d rather than pretend.' },
   { key:'net_congestion_wifi', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'Download Ramp \u00b7 WiFi',
     desc:'Download ramp for WiFi only. As global takes the value from the card above. A separate value is worth it when WiFi and mobile want different answers - they run at the same time and do not interfere.' },
   { key:'net_congestion_mobile', type:'seg', def:'auto', opts:['auto','bbr','cubic'], name:'Download Ramp \u00b7 mobile',
-    desc:'Download ramp for mobile data only. As global takes the value from the card above. bbr usually wins here: on a radio link a lost packet normally means interference rather than congestion, and cubic throws away speed for nothing.' },
+    desc:'Selects the TCP congestion-control algorithm for mobile data only. As Global follows the general Download Ramp card. Stock leaves the device value unchanged. BBR and CUBIC respond differently to loss and delay; neither is universally faster, and the better choice depends on the carrier and radio conditions. The card reports an unsupported algorithm instead of claiming it was applied.' },
   { key:'net_qdisc', type:'seg', def:'auto', opts:['auto','fq','fq_codel','cake'], name:'Packet Queue \u00b7 other links',
-    desc:'How the phone shares the connection between apps - for links the two cards below do not cover: USB tethering, VPN, Bluetooth tethering, an Ethernet adapter. WiFi and mobile take their own values from the cards below and ignore this one. Stock is what it was. fq_codel is the right answer for most people: video stops stuttering when something downloads in the background. fq is similar and pairs well with bbr. cake is the most thorough but slightly heavier on the CPU. Unsure? fq_codel.' },
+    desc:'Controls packet queuing on links not covered by the Wi-Fi and mobile cards, including USB/Bluetooth tethering, VPN and Ethernet. Stock preserves the device configuration. fq_codel can reduce latency under load, fq pairs with flow pacing, and cake offers more queue management at extra CPU cost. Results depend on the link; no option guarantees higher throughput or stutter-free video.' },
   { key:'net_qdisc_wifi', type:'seg', def:'auto', opts:['auto','fq','fq_codel','cake'], name:'Packet Queue \u00b7 WiFi',
     desc:'Queue discipline for WiFi only. As global takes the value from the card above. Independent of mobile data.' },
   { key:'net_qdisc_mobile', type:'seg', def:'auto', opts:['auto','fq','fq_codel','cake'], name:'Packet Queue \u00b7 mobile',
     desc:'Queue discipline for mobile data only. As global takes the value from the card above. Independent of WiFi - both links can differ at the same time.' },
   { key:'net_rps', type:'seg', def:'stock', stock:'stock', opts:['stock','little','all'], name:'Spread Network Load',
-    desc:'Which cores handle incoming network packets. Stock leaves every packet on the one core the interrupt landed on, which caps throughput on fast WiFi and pins that core high. Little spreads the work across the efficiency cluster; all uses every core. Costs a little CPU to wake a second core, so it earns its keep on a fast link and loses on a slow one. Applies to Wi-Fi only: mobile data is left to the phone\'s own hardware distribution, which a manual mask can only slow down.' },
+    desc:'Chooses which CPU cores may receive packets for Wi-Fi interfaces. Stock leaves the kernel and driver configuration untouched. Little uses the efficiency cluster; All allows every core. Spreading work can help on fast links but wakes more CPUs and may cost power on light traffic. Mobile-data receive distribution is left to the device. Actual gains depend on the driver and link.' },
   { key:'net_txqueue', type:'seg', def:'stock', stock:'stock', opts:['stock','short','shorter'], name:'Transmit Queue',
-    desc:'How many packets may wait to be sent. The stock 1000 is a wired-Ethernet default from the 1990s that survived into wireless drivers; on a link as variable as WiFi a deep queue mostly adds latency under load rather than throughput. Short is 256, shorter is 128. If uploads feel slower, go back to stock.' },
+    desc:'Sets how many packets may wait in the Wi-Fi transmit queue. Stock keeps the driver value; Short uses 256 and Shorter uses 128. Smaller queues can reduce delay under load, but may limit throughput or increase loss on fast or variable links. If uploads, streaming or latency become worse, return to Stock.' },
   { key:'net_route_tune', type:'seg', def:'auto', stock:'off', opts:['auto','off','conservative','aggressive'], name:'Network Buffers',
-    desc:'How much the phone sends in one burst before waiting for a reply. Smart lets ASB look at your actual WiFi or mobile speed and size it: bigger on a fast link, left at the factory value on a weak one, because a big burst there only causes losses. Moderate uses the factory value everywhere. Aggressive goes one class higher if you trust your link. Stock puts it back. Start with Smart.' },
+    desc:'Adjusts the initial TCP burst size for routes. Smart chooses from measured link conditions and leaves weak links closer to the factory value; Moderate is conservative, while Aggressive selects a larger class and can increase retransmissions on poor links. Stock restores the previous route values. This changes connection ramp-up, not the maximum speed of the radio or service.' },
   { key:'net_mtu_probing', type:'seg', def:'stock', stock:'stock', opts:['stock','on'], name:'TCP MTU Recovery',
     desc:'Recovery for mobile or VPN routes that silently discard packets when path MTU discovery is blocked. On enables the kernel\'s black-hole-only probe (tcp_mtu_probing=1): healthy routes keep their normal MSS, while a suspected black hole can recover instead of stalling. It is not a general speed boost. Stock restores the exact 0, 1 or 2 value the device had before ASB; uninstall does the same.' },
   { key:'wifi_country', type:'seg', def:'auto', opts:['auto','CR','US','DE','JP'], name:'WiFi Region',
-    desc:'The region decides which WiFi channels your phone may use, and that sets the ceiling on link speed. CR opens the widest set of channels - usually the fastest WiFi. Stock keeps the region the phone gets from the SIM. IMPORTANT: using channels not permitted where you are is your call and your responsibility.' },
+    desc:'Selects the Wi-Fi regulatory domain, which controls the channels and transmit rules the driver may use. Stock keeps the value supplied by the device. CR explicitly selects the Costa Rica domain; it is not a universal speed setting, and availability still depends on the ROM, access point and hardware. Use only channels and power levels permitted in your actual location.' },
   { key:'wifi_scan_throttle', type:'range', def:'2', min:0, max:5, step:1,
-    name:'WiFi Scan Rate', cat:'net' },
-  { key:'net_wifi_leave', type:'seg', def:'off', stock:'off',
+    name:'WiFi Scan Rate', desc:'Controls how often ASB allows background Wi-Fi scanning. Less frequent scanning can reduce radio activity when you stay in one place, but known and new networks may be discovered later. This does not change the active connection\'s data rate. Choose Unthrottled to leave scanning unrestricted; the option descriptions below show each interval.', cat:'net' },
+  { key:'net_wifi_leave', type:'seg', desc:'Helps move away from a connected Wi-Fi network that has a weak signal or carries no usable traffic. Higher levels act sooner. With the screen on, ASB turns Wi-Fi off briefly and back on; repeated failures lengthen the pause from 30 seconds up to five minutes. This can interrupt active Wi-Fi sessions and may cause mobile-data use. It works independently of Cellular controls.', def:'off', stock:'off',
     opts:['off','weak','unusable','aggressive'], name:'Leave Bad Wi-Fi',
     cat:'net' },
-  { key:'wifi_powersave', type:'seg', def:'off', stock:'off',
+  { key:'wifi_powersave', type:'seg', desc:'Controls Wi-Fi power saving between packets. Screen Off enables it only while the display is off; Always also enables it during use. Lower radio activity can reduce power use but may add latency or affect games, casting and Wi-Fi calls. Off keeps the radio fully awake. Actual behaviour and savings depend on the driver and access point.', def:'off', stock:'off',
     opts:['off','screen_off','always'], name:'WiFi Power Save', cat:'net' },
   { key:'auto_battery_enable', type:'bool', def:'1', name:'Auto Battery Profile',
     desc:'Switches to Battery profile on low charge, restores your profile after charging.' },
@@ -7809,30 +7841,30 @@ const CFG_ITEMS = [
   { key:'charge_aware_enable', type:'bool', def:'1', name:'Charge-Aware Mode',
     desc:'While charging: more performance when cool, backs off when the battery heats up.' },
   { key:'doze_level', type:'seg', def:'stock', stock:'stock', opts:['stock','night','moderate','aggressive'], name:'Deep Sleep',
-    desc:'How soon Android puts the phone into Doze once the screen is off. Stock waits 30 minutes, which on a phone picked up every few minutes is 30 minutes that never elapse - a full-day capture showed the idle phase awake 45% of the time against a 5% target. Moderate starts idle after 5 minutes, aggressive after 2. THE COST: in Doze the system holds background network until the next maintenance window, so an app that polls on its own can be late - high-priority push still breaks through. If messages arriving on time matter more than standby drain, leave this on stock. Only ever writes one setting, and stock deletes it.' },
+    desc:'Controls how quickly Android enters Doze after the screen turns off. Stock keeps the ROM timing; Moderate targets five minutes and Aggressive two minutes, while Night applies only in the learned sleep window. Doze can defer background network, jobs and alarms until maintenance windows; high-priority push may still arrive. Use Stock if timely background activity matters more than earlier idle entry. Stock removes the ASB timing override.' },
   { key:'doze_trim_whitelist', type:'seg', def:'0', stock:'0', opts:['0','1'], name:'Trim Doze Exemptions',
-    desc:'Deep Sleep decides how soon Doze starts. This decides who ignores it.\n\nApps on Android\u2019s exemption list keep their alarms and network through every idle window, so a phone can sit in deep doze all night while three exempted apps wake it anyway - which is why tuning only the timings can look like it changed nothing.\n\nOnly user-installed apps are touched. The dialer, SMS app, clock and your root manager are never removed, because that is how a module ends up blamed for a missed alarm. Every removal is recorded and put back when you set this to 0 or uninstall ASB.\n\nThe button under the switch opens your apps with a search. Ticked apps are never trimmed, and if one has no exemption, ASB gives it - undone the same way at 0 or on uninstall. Tick the messengers, mail and VPN whose notifications must arrive on time at night.\n\nApplies with Deep Sleep set to aggressive, or to night - then only inside the sleep window. Ticked apps stay exempt around the clock either way, by day too.' },
+    desc:'Controls Android\'s Doze exemptions separately from Doze timing. Trimming exemptions lets user-installed apps follow idle restrictions; protected system apps such as the dialer, SMS, clock and root manager are not removed. The app list lets you keep selected messengers, mail or VPN apps exempt. Changes are recorded and restored at level 0 or on uninstall. Trimming can delay notifications and background sync.' },
   { key:'wakelock_action', type:'seg', def:'0', stock:'0', opts:['0','1'], name:'Act on Wakelocks',
-    desc:'A wakelock is an app telling Android \u201Cdo not sleep yet\u201D. One app holding one all night is the single most expensive thing that can happen to a battery - more than any setting here can save - and no amount of tuning helps, because the phone never reaches the states those settings govern.\n\nMeasuring is always on; this decides whether ASB acts. With it on, a user-installed app still holding a wakelock after 45+ minutes of screen-off, on a phone that is measurably staying awake, is moved to Android\u2019s restricted bucket.\n\nNever touched: kernel and system sources - modem, display, alarm timer, sensors - and authenticators, dialer, SMS, messaging and clock apps. Nothing is force-stopped; restricted is a state Android manages and can undo.\n\nLeave it off if you would rather see the name and decide yourself. The report names the holder either way. In detail: only an app that held the CPU for 10+ minutes (or holds a long lock right now) and that Android does not count as used today. Also never touched: apps you exempted from battery optimisation, mail, navigation and keyboards.' },
+    desc:'Chooses whether ASB acts on persistent app wakelocks; measurement and reporting remain available either way. When enabled, only eligible user-installed apps are considered after 45+ minutes of screen-off wakefulness with evidence that the phone is staying awake. In detail: only an app that held the CPU for 10+ minutes (or holds a long lock right now) and that Android does not count as used today can be moved to Android\'s restricted standby bucket. Kernel/system sources, critical apps, battery-optimization exemptions, mail, navigation and keyboards are excluded. Nothing is force-stopped; restrictions can delay background work or notifications. Leave Off to inspect reports without intervention.' },
   { key:'wakelock_fitness', type:'seg', def:'protect', stock:'protect', opts:['protect','limit'], name:'Fitness Apps & Wakelocks',
-    desc:'Step counters and fitness trackers are protected from every wakelock rule by default, because a tracker that cannot wake loses what it was installed for. In field captures one of them - Samsung Health\u2019s pedometer - was still the largest single thing keeping the phone awake at night, minutes of CPU every night.\n\nLimit tells Android to ignore wakelocks from the step and fitness apps installed on this phone. Each app keeps running whenever the phone is awake anyway; it just cannot keep the CPU up by itself. The step sensor counts in its own low-power chip regardless, so the daily total usually survives.\n\nWHAT CAN SUFFER: the minute-by-minute step timeline, and a workout recorded with the screen off. Watch and band companion apps are never included - they would stop delivering notifications to your wrist. The previous state is recorded and restored on Protect or uninstall. Independent of Act on Wakelocks.' },
+    desc:'By default, fitness and step-counter apps are protected from ASB wakelock intervention. Limit asks Android to ignore their wakelocks so they cannot keep the CPU awake by themselves. Watch and band companion apps are excluded. Step timelines, background workouts and sync can become incomplete even if hardware step counting continues. Protect or uninstall restores the recorded state. This setting works independently of Act on Wakelocks.' },
   { key:'gnss_trim', type:'seg', def:'0', stock:'0', opts:['0','1'], name:'Trim Background GPS',
-    desc:'GPS is one of the most expensive things a phone can do, and Android reports how much of it happens in CACHED processes - apps that are closed and doing nothing you asked for.\n\nIn one field capture that was 53 of 56 mAh of GPS drain, from an app shut minutes earlier. Nobody chose it and nobody benefits from it.\n\nWhen on, a user-installed app still holding location while its process is cached and the screen is off is limited to coarse accuracy. It gets full precision back the moment you open it - Android restores it as soon as the process leaves the cache.\n\nNever touched: maps and navigation, fitness and route tracking, emergency and find-my apps, and anything in the foreground. Permissions are not revoked; every change is recorded and undone when you set this back to off or uninstall ASB.' },
+    desc:'Limits background location use by eligible user-installed apps whose processes are cached while the screen is off. Such apps are reduced to coarse location and regain normal precision when opened. Navigation, fitness/route tracking, emergency, find-my and foreground apps are excluded. This can reduce location-related wakeups, but background features in an affected app may lose precise tracks or geofence accuracy.' },
   { key:'night_quiet_enable', type:'bool', def:'1', name:'Quiet Night',
-    desc:'Overnight, while the screen has been off for a long stretch, the governor stops its own periodic work and lets the device sit in deep idle instead. This is where most of the overnight drain saving comes from. Off keeps the normal polling around the clock - only worth it if you suspect the quiet window is delaying something you need at night.' },
+    desc:'During a long screen-off stretch in the learned night window, the governor pauses its own nonessential periodic work so the device can remain idle. It does not silence apps, disable radios or guarantee a specific battery saving. Off keeps normal governor scheduling around the clock. Turn it off only if you need those governor updates during the night window.' },
   { key:'sustained_temp_mode', type:'seg', def:'smart', stock:'stock', opts:['stock','smart','manual'], name:'Throttling Point',
     desc:'When ASB starts holding performance back to keep the phone cooler. Stock uses this device own trip point, read from the CPU thermal zone at boot - not a number guessed for phones in general. Smart starts from that and nudges it up by 2 degrees whenever a session reaches sustained load within a minute, up to a ceiling, so a device that trips too eagerly settles itself. Manual pins exactly the temperature on the slider below and nothing moves it. Pick Manual if you have measured your device and know what you want.' },
   { key:'sustained_temp_enter', type:'range', def:'65', min:52, max:70, step:1, name:'Throttling Temperature',
-    desc:'The temperature at which ASB starts holding performance back to keep the phone cooler. Lower means it intervenes sooner - a cooler phone that gives up peak speed earlier; higher lets it run hard for longer and get warmer. 65 is the default. This is ASB\u2019s own threshold, not the vendor\u2019s: the firmware keeps its own hard limits underneath and those cannot be raised from here, so a high value does not make the phone unsafe, it just means the vendor decides first. IMPORTANT: a value below the temperature the phone simply idles at (typically 38-47C) means throttling is ALWAYS on - clocks pinned permanently, work takes longer, and the phone ends up hotter and flatter rather than cooler. Hence the 52C floor: the governor compares the point against the HOTTEST CPU zone, and on a OnePlus 15 that reads 48C at rest while the shell reads 38C - so even 48 would mean throttling all the time.' },
+    desc:'Sets the CPU-zone temperature at which ASB begins limiting sustained performance in Manual mode. Lower values intervene earlier; higher values allow more heat before ASB backs off. The vendor\'s thermal limits remain active, and this slider is not a safety control. The default is 65 and the lower bound is 52 because some CPU zones read much hotter than the battery or shell. A threshold near or below the device\'s normal reading can cause constant throttling, longer work and more heat.' },
   { key:'perf_ceiling_pct', type:'range', def:'100', min:65, max:100, step:5, stock:'100', name:'Performance Ceiling',
-    desc:'Caps how high the CPU and GPU may go, as a share of what your phone can do.\n\nThe limit applies to the PEAK, not to everything: at rest the phone is already low and trimming it further does not save power - it makes ordinary work take longer, and a longer task keeps the cores, the screen and the radio awake for all of it. Below roughly half of peak, finishing later costs more than running slower saves.\n\nSo lower values hold back heavy work while leaving light work alone. 85 is a good place to start if the phone runs warm under load; 100 leaves ASB in charge without a cap.\n\nGoing lower is not automatically better for battery. If a low setting does not measurably help on your device, raise it back - a phone that crawls is not a phone that saves.' },
+    desc:'Caps the peak CPU and GPU performance available to ASB as a percentage of the device maximum. It mainly limits demanding work; light tasks may never reach the cap. Lower values can reduce peaks and heat but can also lengthen tasks and keep components awake longer, so battery life does not automatically improve. 100 leaves ASB without this additional cap. Start near 85 if needed and compare heat, responsiveness and drain on your device.' },
   { key:'cool_gaming', type:'bool', def:'1', name:'Cool Gaming',
-    desc:'Cools games by leaning thermal earlier (~40\u00b0C), no real fps loss. OFF for unrestrained peak fps.' },
+    desc:'Uses an earlier thermal response during games, around 40 °C, instead of waiting for higher sustained-load thresholds. This can reduce heat, but frame rate and frame-time stability may also fall depending on the game and device. Off leaves games under the normal profile and thermal policy; it does not disable vendor thermal protection.' },
   // --- Memory & UX ---,
   { key:'bat_suppress_gaming', type:'bool', def:'1', name:'No Game Mode on Battery Profile',
     desc:'On the Battery profile, treat a game as ordinary heavy load rather than entering the gaming state. Gaming mode raises frequency ceilings, which is the opposite of what the Battery profile is for - so this keeps that profile honest. Off lets games get the full gaming treatment even on Battery. Affects the Battery profile only; the other three are untouched.' },
   { key:'BG_TRIM_LEVEL', type:'seg', def:'safe', opts:['off','safe','aggressive'], name:'Background Trim Level',
-    desc:'How hard background apps are trimmed. Heavy apps are demoted only when Android says they are not in daily use. Aggressive adds a 6-hourly re-check, a memory ceiling and a screen-off trim; package disabling needs the opt-in file /data/adb/asb/allow_disruptive_bg_trim. Off returns every app to the bucket it had before ASB.' },
+    desc:'Controls how strongly ASB restricts background apps. Off leaves Android in charge and restores buckets changed by ASB. Safe adjusts standby buckets for apps that Android reports as unused, with critical apps protected. Aggressive adds stronger background and memory limits; apps may wake less often, lose state or deliver notifications late. Disruptive package or vendor-service actions require a separate explicit opt-in and are not enabled by this level alone.' },
   { key:'mglru_hold', type:'seg', def:'stock', stock:'stock',
     opts:['stock','hold','aggressive'], name:'Keep Apps In Memory',
     cat:'battery' },
@@ -7840,12 +7872,12 @@ const CFG_ITEMS = [
     opts:['stock','off'], name:'Scheduler Debug Accounting', cat:'system',
     desc:'Opt-in generic kernel tweak. Off disables scheduler debug statistics through /proc/sys/kernel/sched_stats when the kernel exposes a writable node; it does not change scheduling policy, CPU frequencies or SoC-specific drivers. Stock and uninstall restore the exact original 0/1. Leave stock if you use scheduler diagnostics. Any battery effect is device-dependent and is not assigned an unmeasured percentage.' },
   { key:'gms_trim', type:'seg', def:'stock', stock:'stock', opts:['stock','lite','strict'], name:'Google Services Trim',
-    desc:'Reduces what Google Play services does in the background. This does NOT freeze or disable GMS - push notifications, sign-in, payments and the Play Store keep working, because a module that broke those would be lying about what it is for.\n\nlite stops location reporting and the search widget\u2019s background work; neither is involved in delivering a notification. strict additionally removes GMS from the Doze whitelist, which is where the real saving is on a phone where Google services are the main drain - and which can delay notifications by minutes while the phone is asleep. If messages arriving late would bother you, stay on lite.\n\nFully reversible: the permissions changed are recorded and restored when ASB is removed.' },
+    desc:'Reduces selected Google Play services background activity without disabling Play services itself. Lite limits location reporting and search-widget background work. Strict also removes Play services from the Doze exemption list, which can delay push notifications, sync and other background jobs. Choose Lite or Stock if timely delivery is essential. Changed permissions and exemptions are recorded and restored when ASB is removed.' },
   { key:'gms_freeze', type:'seg', def:'off', stock:'off', opts:['off','safe','more','max'], name:'Freeze Google Components',
     desc:'Disables individual components inside Google Play services. This is not package freezing - GMS itself stays enabled, so push notifications, sign-in, payments and the Play Store keep working.\n\nsafe turns off telemetry, usage reporting, checkin and analytics. Nothing user-facing depends on them; the phone does not notice they are gone.\n\nmore adds ads personalisation and location history uploads. Ads still appear, they are just less targeted; Maps still works but Timeline stops recording where you have been.\n\nNever touched at any level: push delivery, module loading, account sign-in and payments - freezing those is how a battery module turns into a thread about missing notifications.\n\nEvery component\u2019s prior state is recorded. Setting this back to off, or uninstalling ASB, puts them back - except ones you had already disabled yourself, which stay that way.' },
   { key:'UX_MANAGE_OEM_TOGGLES', type:'bool', def:'0', name:'Manage OEM Toggles (RAM/Battery/Heat)',
     desc:'Lets ASB manage OxygenOS toggles (RAM expansion, Adaptive Battery, Low-Heat). OFF = untouched (OOS may re-enable RAM expansion on reboot). ON = forces RAM expansion OFF every boot.' },
-  { key:'athena_service', type:'seg', def:'stock', stock:'stock', opts:['stock','off'], name:'Athena Background Killer' },
+  { key:'athena_service', type:'seg', desc:'Controls OxygenOS\'s AthenaService background-app killer. Off disables only that component while leaving the rest of com.oplus.athena in place; this may help apps that the OEM kills despite Android battery exemptions. More apps remaining active can increase RAM use and background drain, and notification behaviour still depends on each app. Stock restores the component state recorded by ASB; uninstall also restores it.', def:'stock', stock:'stock', opts:['stock','off'], name:'Athena Background Killer' },
   { key:'heytap_mcs', type:'seg', def:'stock', stock:'stock', opts:['stock','off'], name:'HeyTap MCS / OPPO Push',
     desc:'Off disables com.heytap.mcs without hiding or replacing any system files. This can stop or delay push notifications from apps that use HeyTap/OPPO Push; some apps may keep their own connection alive instead. Enabling the card also requests one `pm compile -m speed-profile -a` after the next reboot, once boot is complete. That compilation can temporarily use CPU, storage and battery; it never runs on every boot. Stock restores only the MCS state ASB changed and cancels a compile that has not started. After the reboot it waits for the charger (Charging or Full), so the compilation does not heat or drain a phone in your hand; with no charger within 24 h it stays pending until the next boot.' },
   { key:'zygisk_enabled', type:'bool', def:'0', stock:'0', name:'Zygisk Process Observer',
@@ -7859,21 +7891,21 @@ const CFG_ITEMS = [
   { key:'documentsui_fix', type:'bool', def:'0', stock:'0', name:'DocumentsUI / DSU Picker Fix',
     desc:'A one-time repair for a missing or broken system file picker on affected ColorOS/DSU setups. It enables and unhides DocumentsUI, returns its picker and files activities to their default state, and disables com.coloros.filemanager for user 0. THE COST: the ColorOS File Manager disappears until you turn this fix off. Only states ASB actually changed are recorded and restored on Off or uninstall. Nothing is re-applied at boot, and this card does not request ART compilation.' },
   { key:'ltpo_force', type:'bool', def:'0', stock:'0', name:'Force LTPO Refresh',
-    desc:'LTPO panels can fall to their lowest refresh rate when nothing on the screen moves; OxygenOS ships parts of that path switched off. This patch takes your device\u2019s OWN refresh-rate table (oplus_vrr_config.json), flips only the idle frame-drop switches the OEM left disabled, and binds the result over the stock file - nothing is copied from another model, and the stock file itself is never modified.\n\nThe patch is prepared while the module installs, and this switch decides whether it is applied: off by default, and turning it on takes effect after a reboot. If the installer found no refresh-rate table on your device, this switch does nothing - the install log says which.\n\nOn a table the OEM already ships fully enabled the switch also does nothing: binding an identical file would be a mount with no effect.\n\nThe switch also opens the Android side of the range, and that part applies at once, without a reboot: no refresh floor, and the peak set to the highest mode this panel reports (165 Hz on the OnePlus 15). The low end - the panel\u2019s own idle rates below 60 Hz - is the table\u2019s job, because Android does not list those rates at all. What was set before is recorded and restored when you switch off. The OEM\u2019s own cap on the render rate (90 Hz on some builds) is left alone.\n\nIntegrated interaction control uses blocking touchscreen events, not polling: the panel maximum is restored on touch, and after two quiet seconds ASB selects 60 Hz so the patched ADFR path can idle down. Camera and game states are kept active, video keeps its own owner, and previous range values are restored exactly on handback. If OnePlus15-165HZ-LTPO is installed, ASB stays off and yields by default; explicitly enabling this switch pauses only its verified writer and gives ASB priority. Switching ASB off requests a clean external-service resume.' },
+    desc:'Applies a patch prepared from the device\'s own oplus_vrr_config.json: it enables supported panel power-saving paths left off by the OEM and disables selected display telemetry. The stock file is not modified. If no suitable table or change is found, the switch does nothing and the status badge explains why. Applying the table requires a reboot.\n\nThe Android refresh range is also opened: ASB removes its floor, uses the highest reported panel mode, restores the maximum on touch and selects 60 Hz after two quiet seconds so panel adaptation can continue. Camera, game and video ownership are preserved, and previous range values are restored on handback. If the verified OnePlus15-165HZ-LTPO writer is present, ASB yields unless you explicitly give ASB priority. Power savings and low-idle rates depend on the panel and ROM; neither is guaranteed.' },
   { key:'ltpo_video', type:'bool', def:'0', stock:'0', name:'Lowest Refresh for Video',
-    desc:'While a video plays, the panel stays at the rate the system picked for everything else - on this phone family 90 Hz for a 30 fps stream, which is three refreshes per frame where two would do.\n\nWith this on, ASB lowers the peak refresh rate to the smallest panel mode that is an exact multiple of the video (60 Hz for 30 and 60 fps), so motion stays judder-free. It acts only when: the screen is on, audio is playing, a video layer asks for 30 or 60 fps, no layer asks for high smoothness, and the screen has not been touched for 3 seconds.\n\nThe first touch restores the previous value at once, as do the end of playback, the video closing and the screen turning off - so scrolling and animations run at full rate. The honest catch: the very first frames after that touch (about 0.1-0.2 s) can still be at the lower rate. 24, 25 and 50 fps video has no lower judder-free mode and is left alone. Applies immediately.' },
+    desc:'During eligible video playback, limits the panel peak to the lowest reported mode that matches 30 or 60 fps content, such as 60 Hz for either rate. ASB acts only with the screen on, audio playing, a compatible video layer, no high-smoothness request and no touch for three seconds. Touch, playback end or screen-off restores the previous value; the first instant after touch can still use the lower rate. Other frame rates are left unchanged. Matching modes avoids unnecessary refreshes without changing the video\'s frame rate.' },
   { key:'phantom_procs', type:'seg', def:'relaxed', stock:'stock', opts:['stock','relaxed','strict'], name:'Background Process Limit',
-    desc:'Android kills so-called phantom processes - the ones an app spawns outside the normal lifecycle - once there are more than 32. It is why long compiles, emulators and terminal sessions die halfway through on Android 12 and later.\n\nno limit turns the monitor off. limit 32 switches Android\u2019s own ceiling back on explicitly.\n\nleave alone is not the same as limit 32: it keeps whatever the device currently holds, which past ASB versions or another module may have changed. Pick one of the first two if you want a predictable result.\n\nThe app needs restarting because Android reads the limit when a process starts - apps already running keep the old behaviour.' },
+    desc:'Controls Android\'s limit on app-created phantom processes outside the normal activity lifecycle. No Limit disables that protection so long terminal jobs, emulators and compiles can survive, but runaway apps can also consume more memory and CPU. Limit 32 explicitly restores Android\'s ceiling. Leave Alone preserves the current device value, which another tool may have changed. Restart the affected app because the limit is read when its process starts.' },
   { key:'haptic_strength', type:'range', def:'-1', min:-1, max:10, step:1, name:'Vibration',
     desc:'Ten steps on the OEM\u2019s own finer scale - Android\u2019s 0-3 setting was already at maximum here, so raising it changed nothing. auto leaves whatever the device had, which is not the same as any number: it is a decision not to have an opinion. Drag it and the phone buzzes at the level you land on. 10 is the top of the OEM range; past it the vibration service rejects the value outright and the phone goes silent rather than buzzing harder.' },
   { key:'haptic_touch_strength', type:'range', def:'-1', min:-1, max:10, step:1, name:'Touch Feedback',
     desc:'Typing and tap feedback, on its own scale. The OEM sets these separately from alerts - its slider writes 1500 for notifications and 1600 for touch - and the two wants are different: an alert should be felt through a pocket, keypress feedback should not be punishing to hold. auto follows the strength above. There is no duration control to offer: nothing in the system exposes one, and Android takes duration from each effect\u2019s own waveform.' },
   { key:'mmfeed_off', type:'bool', def:'0', stock:'0', name:'Multimedia Telemetry Off',
-    desc:'OxygenOS runs a multimedia feedback collector: audio, video and display diag events with log dumps and uploads, opened by Multimedia_Feedback_List.xml. This patch takes your device\u2019s OWN copy of that file, flips only its isOpen switch to false, and binds the result over the stock file - nothing is copied from another model, and the stock file itself is never modified.\n\nThe patch is prepared while the module installs, and this switch decides whether it is applied: off by default, and turning it on takes effect after a reboot. If the installer found no such file on your device, or the OEM already ships it closed, this switch does nothing - the status badge says which.\n\nLess event logging and fewer dumps means free battery and less I/O; audio and video themselves are untouched.' },
+    desc:'Uses the device\'s own Multimedia_Feedback_List.xml to disable the multimedia feedback collector\'s isOpen switch, then binds the patched copy over the stock path without modifying the original file. The patch is prepared during installation and applied only when this switch is on; a reboot is required. If the file is absent or already closed, the switch does nothing and the badge reports that state. This can reduce diagnostic logging and I/O, but battery savings are not guaranteed. Audio and video processing are not changed.' },
   { key:'log_level', type:'seg', def:'1', stock:'stock', opts:['stock','0','1','2','3'], name:'Log Detail',
-    desc:'What the module writes to its log, and how much the DEVICE logs. Stock is the only value that leaves the phone\u2019s own logging untouched. 0 is extreme: it cuts device logging and debug output as far as it goes, which saves the writes and wakeups logging costs - and makes almost any bug report from this phone useless, including ours. 1 is normal, what the module has always done. 2 adds learner updates and screen transitions - switch this on before sending a log about battery behaviour. 3 is verbose and fills the log fast; use it only while reproducing something. Leaving extreme puts your logging back the way it was.' },
+    desc:'Controls ASB log detail and, except in Stock, selected device logging. Stock leaves device logging untouched. 0 minimises device and module diagnostics, making later bug reports much less useful. 1 records normal significant events; 2 adds learner and screen-transition details useful for battery reports; 3 is verbose and grows quickly, so use it only while reproducing a problem. Returning from 0 restores the logging state recorded by ASB.' },
   { key:'lsposed_verbose', type:'seg', def:'keep', stock:'keep', opts:['keep','off'], name:'LSPosed Verbose Log',
-    desc:'LSPosed keeps a detailed log of its own that grows to tens of megabytes (31 MB on one phone). Off writes LSPosed\'s own setting - the same switch as Settings > Verbose log in its manager - and deletes the old verbose log files; LSPosed reads the setting when it starts, so it takes effect after a reboot. The modules log - what the LSPosed modules themselves write - has no switch in LSPosed, so while the card is Off ASB also empties it in the background every few minutes. Keep leaves LSPosed completely alone, and if ASB switched the verbose log off, puts back what LSPosed had. If you turn the log back on in LSPosed later, ASB does not undo that. Turn it on again before reporting a problem to the author of an LSPosed module.' },
+    desc:'Keep leaves LSPosed settings and logs under LSPosed\'s control. Off changes LSPosed\'s own Verbose log setting, removes old verbose-log files and takes effect after LSPosed restarts or the phone reboots. The modules log - what the LSPosed modules themselves write - has no switch in LSPosed, so while Off is selected ASB also clears it periodically. This can remove evidence needed to debug another module. If you later enable verbose logging in LSPosed, ASB does not reverse that choice; Keep restores ownership without secretly managing LSPosed.' },
 ];
 let _cfgVals = {};
 let _cfgOpen = false;
@@ -12480,6 +12512,8 @@ function logReportTips(d, all) {
   if (smart && (+smart.helped || 0) > 0) {
     const smartActive = String((s.meta || {}).profile || '') === 'smart';
     tips.push({ ic: smartActive ? 'ok' : 'info', key: smartActive ? 'lr_tip_smart_help' : 'lr_tip_smart_help_manual', vars: { n: String(smart.helped) } });
+  } else if (smart && (+smart.nothelped || 0) > 0) {
+    tips.push({ ic: 'ok', key: 'lr_tip_smart_nohelp', vars: { n: String(smart.nothelped) } });
   }
   if (cost && (+cost.cpu_msh || 0) > 0) {
     /* The unit travels with the number: "{ms} of CPU per hour" reads "1851 ms of ...".
@@ -12949,8 +12983,9 @@ async function asbSavePage(kind) {
   }
 }
 
-/* Everything below builds DOM with textContent only: package names and tombstone
- * cmdlines are device data and must never become markup. */
+/* Device values below are inserted with textContent only: package names and tombstone
+ * cmdlines must never become markup. Decorative icons are the sole exception and accept
+ * only the fixed TECH_ICON_PATHS registry, never a device-controlled string. */
 function logReportRow(k, v, warn) {
   const r = document.createElement('div');
   r.className = 'lgr-row';
@@ -12966,14 +13001,28 @@ function logReportRow(k, v, warn) {
   r.appendChild(b);
   return r;
 }
-function logReportSec(title) {
+function logReportSec(title, icon) {
   const s = document.createElement('div');
   s.className = 'lgr-sec';
   const t = document.createElement('div');
   t.className = 'lgr-sec-t';
-  t.textContent = title;
+  if (icon) {
+    /* The title remains a text node; only the decorative icon uses the trusted SVG registry. */
+    t.classList.add('lgr-sec-t-tech');
+    s.setAttribute('data-zygisk-icon', icon);
+    const glyph = document.createElement('span'); glyph.className = 'zy-sec-icon';
+    glyph.setAttribute('aria-hidden', 'true'); glyph.innerHTML = techIcon(icon);
+    const text = document.createElement('span'); text.textContent = title;
+    t.appendChild(glyph); t.appendChild(text);
+  } else t.textContent = title;
   s.appendChild(t);
   return s;
+}
+function zygiskButtonIcon(btn, kind) {
+  const glyph = document.createElement('span'); glyph.className = 'zy-btn-icon';
+  glyph.setAttribute('aria-hidden', 'true'); glyph.innerHTML = techIcon(kind);
+  btn.classList.add('zy-icon-btn'); btn.insertBefore(glyph, btn.firstChild);
+  return btn;
 }
 function logReportNote(txt, warn) {
   const p = document.createElement('div');
@@ -13710,6 +13759,17 @@ function zygiskHeaderPaint() {
     btn.setAttribute('aria-label', 'ASB ↔ Zygisk: ' + verdict.status + '. ' + verdict.detail);
   });
 }
+function zygiskHeaderWordmark() {
+  /* Six custom angular letterforms: no network font, no platform font and no image asset. */
+  return '<svg class="zygisk-header-wordmark" viewBox="0 0 68 10" fill="currentColor" stroke="none" aria-hidden="true" focusable="false">'
+    + '<path d="M0 1H9V2.7L3.6 7.3H9V9H0V7.3L5.4 2.7H0Z"/>'
+    + '<path d="M11 1H13.5L16 3.6 18.5 1H21L17.2 5.3V9H14.8V5.3Z"/>'
+    + '<path d="M24 1H33V2.8H25.6V7.2H31.2V5.9H28.3V4.2H33V9H24L23 8V2Z"/>'
+    + '<path d="M36 1H44V2.7H41.2V7.3H44V9H36V7.3H38.8V2.7H36Z"/>'
+    + '<path d="M48 1H56V2.7H49.5V4.2H54.8L56 5.4V7.8L54.8 9H47V7.3H53.7V5.8H48.2L47 4.6V2.2Z"/>'
+    + '<path d="M58 1H60.4V4.1L64.3 1H67L62.6 4.9 67.2 9H64.4L60.4 5.6V9H58Z"/>'
+    + '</svg><span class="zygisk-header-text">ZYGISK</span>';
+}
 function zygiskHeaderInit() {
   document.querySelectorAll('.hdr-info').forEach(function (host) {
     if (host.querySelector('.zygisk-header-link')) return;
@@ -13717,7 +13777,7 @@ function zygiskHeaderInit() {
     btn.className = 'zygisk-header-link zygisk-header-unknown';
     btn.onclick = openZygiskPage;
     const dot = document.createElement('span'); dot.className = 'zygisk-header-dot'; dot.setAttribute('aria-hidden', 'true');
-    const label = document.createElement('span'); label.className = 'zygisk-header-label'; label.textContent = 'Zygisk';
+    const label = document.createElement('span'); label.className = 'zygisk-header-label'; label.innerHTML = zygiskHeaderWordmark();
     btn.appendChild(dot); btn.appendChild(label); host.appendChild(btn);
   });
   zygiskHeaderPaint();
@@ -13781,29 +13841,42 @@ function zygiskModeOf(d) {
 }
 function zygiskAutoCard(d) {
   const on = deviceVal(d, 'zygisk_observer', 'auto_mode') === '1';
-  const card = logReportSec(T('zy_auto_title', 'Automatic setup'));
+  const current = deviceVal(d, 'zygisk_observer', 'auto_profile');
+  const card = logReportSec(T('zy_auto_title', 'Automatic setup'), 'zygisk_auto');
   card.classList.add('zy-auto-card');
   const badge = document.createElement('div'); badge.className = 'zy-auto-badge';
-  badge.textContent = T('zy_auto_recommended', 'Recommended · no package lists to fill in'); card.appendChild(badge);
+  badge.textContent = T('zy_auto_recommended', 'Choose one policy · no package lists to fill in'); card.appendChild(badge);
   const desc = document.createElement('div'); desc.className = 'zy-auto-desc';
-  desc.textContent = T('zy_auto_desc', 'ASB selects user apps to observe, enables launch response and the process ledger, guards against restart loops and night wakers, and optimizes frequently opened apps with ART only while charging. You do not need to choose packages or tune the engine.'); card.appendChild(desc);
+  desc.textContent = T('zy_auto_desc', 'ASB fills the observation list with user apps. Choose observation only, cold-start assist, or background guard. ART compilation is never enabled by this card and remains a separate manual choice below.'); card.appendChild(desc);
+  const profiles = document.createElement('div'); profiles.className = 'cfg-seg zy-mode-seg zy-auto-profiles';
+  ['observe', 'launch', 'battery'].forEach(function (p) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'zy-auto-btn';
+    b.textContent = _zygiskAutoBusy === 'enable:' + p ? T('zy_auto_working', 'Setting up…') : T('zy_auto_profile_' + p, p);
+    if (on && current === p) b.classList.add('on');
+    b.disabled = _zygiskModeBusy;
+    if (_zygiskAutoBusy === 'enable:' + p) b.classList.add('is-busy');
+    b.onclick = function () { zygiskAutoSet('enable', p); };
+    profiles.appendChild(b);
+  });
+  card.appendChild(profiles);
+  card.appendChild(logReportNote(T('zy_auto_profile_note', 'Observe: ledger only. Launch: cold-start assist and ledger, without AppOps. Battery: guard after two separate session observations and your per-app confirmation; no ART.')));
   if (on) {
     const summary = document.createElement('div'); summary.className = 'zy-auto-summary';
     const n = deviceVal(d, 'zygisk_observer', 'enabled_packages');
+    const profile = T('zy_auto_profile_' + current, current);
     const guard = _zyGuard && _zyGuard.enabled ? (_zyGuard.level === 'wakers' ? T('zy_guard_wakers', 'Loops + night wakers') : T('zy_guard_on', 'Restrain loops')) : T('zy_guard_off', 'Off');
     const aot = _zyAot && _zyAot.enabled ? T('zy_aot_on', 'On') : T('zy_aot_off', 'Off');
-    summary.textContent = T('zy_auto_summary', 'Automatic mode is on · %1 observed app(s) · Background guard: %2 · ART: %3').replace('%1', n).replace('%2', guard).replace('%3', aot);
+    summary.textContent = T('zy_auto_summary', 'Automatic profile: %1 · %2 observed app(s) · Background guard: %3 · ART (independent): %4').replace('%1', profile).replace('%2', n).replace('%3', guard).replace('%4', aot);
     card.appendChild(summary);
   }
   const actions = document.createElement('div'); actions.className = 'zy-auto-actions';
-  const primary = document.createElement('button'); primary.type = 'button'; primary.className = 'zy-auto-btn zy-auto-btn-primary';
-  primary.textContent = _zygiskAutoBusy === 'enable' ? T('zy_auto_working', 'Setting up…')
-    : _zygiskAutoBusy === 'refresh' ? T('zy_auto_refreshing', 'Refreshing…')
-    : on ? T('zy_auto_refresh', 'Refresh automatic app selection') : T('zy_auto_enable', 'Set up automatically');
-  primary.disabled = _zygiskModeBusy;
-  if (_zygiskAutoBusy === 'enable' || _zygiskAutoBusy === 'refresh') primary.classList.add('is-busy');
-  primary.onclick = function () { zygiskAutoSet(on ? 'refresh' : 'enable'); }; actions.appendChild(primary);
   if (on) {
+    const primary = document.createElement('button'); primary.type = 'button'; primary.className = 'zy-auto-btn zy-auto-btn-primary';
+    primary.textContent = _zygiskAutoBusy === 'refresh' ? T('zy_auto_refreshing', 'Refreshing…') : T('zy_auto_refresh', 'Refresh automatic app selection');
+    primary.disabled = _zygiskModeBusy;
+    if (_zygiskAutoBusy === 'refresh') primary.classList.add('is-busy');
+    zygiskButtonIcon(primary, 'zygisk_refresh');
+    primary.onclick = function () { zygiskAutoSet('refresh'); }; actions.appendChild(primary);
     const off = document.createElement('button'); off.type = 'button'; off.className = 'zy-auto-btn';
     off.textContent = _zygiskAutoBusy === 'disable' ? T('zy_auto_disabling', 'Turning off…') : T('zy_auto_disable', 'Turn off automatic setup');
     off.disabled = _zygiskModeBusy;
@@ -13811,21 +13884,22 @@ function zygiskAutoCard(d) {
     off.onclick = function () { zygiskAutoSet('disable'); }; actions.appendChild(off);
   }
   card.appendChild(actions);
-  const note = logReportNote(T('zy_auto_note', 'Only user-installed apps enter the observation list. Background restrictions still require measured start thresholds, skip protected apps and are read back and reversible. Safe mode is never cleared automatically. No LSPosed, kernel, frequency or thermal setting is changed.'));
+  const note = logReportNote(T('zy_auto_note', 'Only user-installed apps enter the observation list. Turning automatic setup off restores the previous app list, observer settings, guard and ART state. Safe mode is never cleared automatically. No LSPosed, kernel, frequency or thermal setting is changed.'));
   note.classList.add('dev-evidence'); card.appendChild(note);
   return card;
 }
-async function zygiskAutoSet(action) {
+async function zygiskAutoSet(action, profile) {
   if (_zygiskModeBusy || ['enable','refresh','disable'].indexOf(action) < 0) return;
+  if (action === 'enable' && ['observe', 'launch', 'battery'].indexOf(profile) < 0) return;
   _zygiskModeBusy = true;
-  _zygiskAutoBusy = action;
+  _zygiskAutoBusy = action === 'enable' ? 'enable:' + profile : action;
   uiSound(action === 'disable' ? 'toggle_off' : 'toggle_on');
   if (_zygiskOpen) zygiskPageRender(window._asbZygiskLinkData || null);
   await asbPaintYield();
   let b = null;
   try {
     b = await runBatch([
-      ['set', 'sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' auto-' + action],
+      ['set', 'sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' auto-' + action + (action === 'enable' ? ' ' + profile : '')],
       ['link', 'sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' link-status'],
       ['guard', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_guard.sh') + ' status'],
       ['aot', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_aot.sh') + ' status'],
@@ -13845,7 +13919,7 @@ async function zygiskAutoSet(action) {
   if (ok) {
     _cfgLoadSig = ''; haptic();
     toast(T(action === 'enable' ? 'zy_auto_enabled' : action === 'refresh' ? 'zy_auto_refreshed' : 'zy_auto_disabled',
-      action === 'enable' ? 'Automatic Zygisk setup is on' : action === 'refresh' ? 'Automatic app selection refreshed' : 'Automatic features off · previous app list restored'), 'good');
+      action === 'enable' ? 'Automatic Zygisk setup is on' : action === 'refresh' ? 'Automatic app selection refreshed' : 'Automatic setup off · previous Zygisk state restored'), 'good');
   } else if (result === 'safe_mode') {
     toast(T('zy_auto_safe', 'Safe mode is on. Automatic setup will not clear it; clear Safe mode explicitly first.'), 'warn');
   } else {
@@ -13854,7 +13928,7 @@ async function zygiskAutoSet(action) {
   if (_zygiskOpen) zygiskPageRender(d.count ? d : (window._asbZygiskLinkData || null));
 }
 function zygiskModeCard(d) {
-  const card = logReportSec(T('zy_sec_mode', 'Mode'));
+  const card = logReportSec(T('zy_sec_mode', 'Mode'), 'switches');
   card.classList.add('zy-mode-card');
   const mode = zygiskModeOf(d);
   const seg = document.createElement('div'); seg.className = 'cfg-seg zy-mode-seg';
@@ -13888,6 +13962,7 @@ function zygiskModeCard(d) {
   note.classList.add('dev-evidence'); card.appendChild(note);
   const fine = document.createElement('button'); fine.type = 'button'; fine.className = 'live-chip zy-fine';
   fine.textContent = T('zy_mode_fine', 'Fine-tune in Settings → System');
+  zygiskButtonIcon(fine, 'switches');
   fine.onclick = function () {
     closeZygiskPage();
     if (typeof asbNavGo === 'function') asbNavGo('config'); else if (!_cfgOpen) openConfigPage();
@@ -13930,7 +14005,8 @@ const ZYGISK_ROW_LABELS = {
   ledger_restart_loops: 'Restart loops with the screen off (peak starts per 5 min)',
   ledger_top_screen_off: 'Most starts with the screen off (app off/on)',
   policy_hints: 'Lifecycle refresh requests', hints_accepted: 'Lifecycle refreshes accepted',
-  launch_events: 'Cold starts heard', launch_accepted: 'Cold-start lifts accepted', launch_vetoed: 'Cold-start lifts vetoed'
+  launch_events: 'Cold starts heard', launch_accepted: 'Cold-start lifts accepted', launch_vetoed: 'Cold-start lifts vetoed',
+  launch_screen_off: 'Cold starts vetoed locally with the screen off'
 };
 function zygiskPageRows(d) {
   const sec = (d && d.sections && d.sections.zygisk_observer) || {};
@@ -13974,24 +14050,24 @@ function zygiskPageRender(d) {
   const y = _el('zygiskPage') ? _el('zygiskPage').scrollTop : 0;
   body.textContent = '';
   if (!d || !d.sections || !d.sections.zygisk_observer) {
-    const card = logReportSec(T('zy_sec_status', 'Connection'));
+    const card = logReportSec(T('zy_sec_status', 'Connection'), 'zygisk_observer');
     card.appendChild(logReportNote(T('zy_loading', 'Reading the Zygisk state…')));
     body.appendChild(card);
     return;
   }
-  const st = logReportSec(T('zy_sec_status', 'Connection'));
+  const st = logReportSec(T('zy_sec_status', 'Connection'), 'zygisk_observer');
   st.appendChild(deviceZygiskLink(d));
   body.appendChild(st);
   body.appendChild(zygiskAutoCard(d));
   body.appendChild(zygiskModeCard(d));
-  const act = logReportSec(T('zy_sec_activity', 'Activity and cost'));
+  const act = logReportSec(T('zy_sec_activity', 'Activity and cost'), 'zygisk_activity');
   act.appendChild(deviceZygiskOverview(d));
   act.appendChild(zygiskPageRows(d));
   body.appendChild(act);
   body.appendChild(zygiskLinkCard());
   body.appendChild(zygiskGuardCard());
   body.appendChild(zygiskAotCard());
-  const apps = logReportSec(T('zy_sec_apps', 'Observed apps and safe mode'));
+  const apps = logReportSec(T('zy_sec_apps', 'Observed apps and safe mode'), 'zygisk_apps');
   apps.appendChild(deviceZygiskEditor(d, function () { zygiskPageLoad(true); }));
   body.appendChild(apps);
   body.appendChild(zygiskEvidenceCard(d));
@@ -14007,8 +14083,8 @@ function zygiskPageRender(d) {
  * and every screen-off period of 15 min or more leaves a summary of process starts. */
 let _zyGuard = null;
 function zygiskGuardParse(out) {
-  const g = { ok: false, enabled: false, level: 'off', ledger: false, threshold: 6, wakerMin: 8, ghostMin: 30, ghostDays: 3, histDays10: 0,
-    active: [], events: [], nights: [], bg: [], suggest: [], held: [] };
+  const g = { ok: false, enabled: false, level: 'off', ledger: false, threshold: 6, wakerMin: 8, ghostMin: 30, ghostDays: 3, histDays10: 0, sessionsRequired: 2,
+    active: [], pending: [], events: [], nights: [], bg: [], suggest: [], held: [] };
   const num = function (v) { const n = parseInt(v, 10); return isFinite(n) && n > 0 ? n : 0; };
   const dig = function (v) { return /^\d+$/.test(v || ''); };
   String(out || '').split('\n').forEach(function (ln) {
@@ -14022,9 +14098,12 @@ function zygiskGuardParse(out) {
     else if (/^ghost_min=\d+$/.test(ln)) g.ghostMin = parseInt(ln.slice(10), 10);
     else if (/^ghost_days=\d+$/.test(ln)) g.ghostDays = parseInt(ln.slice(11), 10);
     else if (/^history_days10=\d+$/.test(ln)) g.histDays10 = parseInt(ln.slice(15), 10);
+    else if (/^sessions_required=\d+$/.test(ln)) g.sessionsRequired = parseInt(ln.slice(18), 10);
     else {
       const f = ln.split('|');
-      if (f[0] === 'active' && dozePkgOk(f[1] || ''))
+      if (f[0] === 'pending' && dozePkgOk(f[1] || '') && dig(f[2]) && dig(f[3]) && /^(loop|waker|loop_on)$/.test(f[4] || '') && /^(0|1)$/.test(f[5] || ''))
+        g.pending.push({ pkg: f[1], sessions: parseInt(f[2], 10), n: parseInt(f[3], 10), why: f[4], approved: f[5] === '1' });
+      else if (f[0] === 'active' && dozePkgOk(f[1] || ''))
         g.active.push({ pkg: f[1], since: num(f[2]), n: num(f[3]), why: /^(waker|loop_on)$/.test(f[4] || '') ? f[4] : 'loop',
           after: dig(f[5]) ? parseInt(f[5], 10) : -1, until: num(f[6]) });
       else if (f[0] === 'event' && dozePkgOk(f[2] || '') && /^[a-z_]+$/.test(f[4] || ''))
@@ -14086,10 +14165,11 @@ function zygiskGuardActionRow(label, value, btnText, onTap) {
 }
 function zygiskGuardCard() {
   const g = _zyGuard || zygiskGuardParse('');
-  const card = logReportSec(T('zy_guard_title', 'Background guard'));
+  const card = logReportSec(T('zy_guard_title', 'Background guard'), 'zygisk_guard');
   card.appendChild(logReportNote(T('zy_guard_desc', 'With the screen off, an app that starts again and again (%s or more process starts in 5 minutes, counted by the Zygisk start ledger) gets its background activity restricted until the screen turns on; then the previous setting comes back. Messengers, mail, alarms, navigation, watches, VPN and the apps on the Doze keep list or in the notification fix are never touched.').replace('%s', String(g.threshold))));
   card.appendChild(logReportNote(T('zy_guard_desc_screen_on', 'With the screen on, an app whose background processes - not the app in front - start %s or more times in 5 minutes while nothing of it is visible is restricted for 30 minutes, and given back at once when you use it.').replace('%s', String(g.threshold))));
   card.appendChild(logReportNote(T('zy_guard_desc_wakers', 'Loops + night wakers: an app whose process starts %s or more times during one screen-off period, at any pace, is restricted the same way until the screen turns on. Each restriction counts the starts that still happened while it was in place.').replace('%s', String(g.wakerMin))));
+  card.appendChild(logReportNote(T('zy_guard_confirm_desc', 'Before an automatic AppOps restriction ASB requires the same evidence in %s separate screen sessions and your confirmation for that package. A proposal changes nothing yet. Restrictions can delay background work and notifications; Give back now restores the recorded mode immediately.').replace('%s', String(g.sessionsRequired))));
   const seg = document.createElement('div');
   seg.className = 'cfg-seg zy-mode-seg zy-guard-seg';
   [['off', T('zy_guard_off', 'Off')], ['loops', T('zy_guard_on', 'Restrain loops')], ['wakers', T('zy_guard_wakers', 'Loops + night wakers')]].forEach(function (o) {
@@ -14105,6 +14185,7 @@ function zygiskGuardCard() {
   else if (g.enabled && !g.ledger) card.appendChild(logReportNote(T('zy_guard_needs_ledger', 'Needs the process-start ledger: choose Watch or Full above.')));
   const pk = [];
   g.active.forEach(function (a) { pk.push(a.pkg); });
+  g.pending.forEach(function (a) { pk.push(a.pkg); });
   g.events.forEach(function (e) { pk.push(e.pkg); });
   g.nights.forEach(function (n) { n.top.forEach(function (x) { pk.push(x.pkg); }); });
   g.bg.forEach(function (x) { pk.push(x.pkg); });
@@ -14112,12 +14193,23 @@ function zygiskGuardCard() {
   g.held.forEach(function (x) { pk.push(x.pkg); });
   const names = dozeKeepLabels(pk);
   const nm = function (p) { return names[p] || p; };
+  if (g.pending.length) {
+    const pd = document.createElement('details'); pd.className = 'zy-evidence'; pd.open = true;
+    const ps = document.createElement('summary'); ps.textContent = T('zy_guard_pending_title', 'Confirm background restrictions (%s)').replace('%s', String(g.pending.length)); pd.appendChild(ps);
+    pd.appendChild(logReportNote(T('zy_guard_pending_desc', 'Dry run: no proposal below has changed AppOps by itself. Confirm only an app whose background work and possible notification delay you accept.')));
+    g.pending.forEach(function (a) {
+      const v = T('zy_guard_pending_row', '%1 starts · %2/%3 sessions · %4').replace('%1', String(a.n)).replace('%2', String(a.sessions)).replace('%3', String(g.sessionsRequired)).replace('%4', zygiskGuardWhy(a.why));
+      const bt = a.approved ? T('zy_guard_pending_approved', 'Confirmed · waiting for evidence') : T('zy_guard_pending_approve', 'Confirm this app');
+      pd.appendChild(zygiskGuardActionRow(nm(a.pkg), v, bt, function () { if (!a.approved) zygiskGuardPackage('approve', a.pkg); }));
+    });
+    card.appendChild(pd);
+  }
   if (g.active.length) {
     g.active.forEach(function (a) {
       let v = T('zy_guard_active', 'restricted since %1 · %2 starts').replace('%1', zygiskGuardClock(a.since)).replace('%2', String(a.n)) + ' · ' + zygiskGuardWhy(a.why);
       if (a.why === 'loop_on' && a.until > 0) v += ' · ' + T('zy_guard_until', 'until %s').replace('%s', zygiskGuardClock(a.until));
       if (a.after >= 0) v += ' · ' + T('zy_guard_after', 'starts while restricted: %s').replace('%s', String(a.after));
-      card.appendChild(logReportRow(nm(a.pkg), v, false));
+      card.appendChild(zygiskGuardActionRow(nm(a.pkg), v, T('zy_guard_release_now', 'Give back now'), function () { zygiskGuardPackage('release', a.pkg); }));
     });
   } else if (g.ok && g.enabled) {
     card.appendChild(logReportNote(T('zy_guard_none', 'No app is restricted now.')));
@@ -14189,6 +14281,24 @@ function zygiskGuardCard() {
     card.appendChild(ev);
   }
   return card;
+}
+async function zygiskGuardPackage(action, pkg) {
+  if (_zygiskModeBusy || ['approve', 'release'].indexOf(action) < 0 || !dozePkgOk(pkg)) return;
+  _zygiskModeBusy = true;
+  uiSound(action === 'release' ? 'toggle_off' : 'toggle_on');
+  let b = null;
+  try {
+    b = await runBatch([
+      ['set', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_guard.sh') + ' ' + action + ' ' + shQuote(pkg)],
+      ['guard', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_guard.sh') + ' status']
+    ]);
+  } catch (e) { b = null; }
+  _zygiskModeBusy = false;
+  if (b && b.guard && b.guard.errno === 0) _zyGuard = zygiskGuardParse(b.guard.stdout);
+  const out = b && b.set ? (b.set.stdout || '') : '';
+  const ok = /result=(approved|released)/.test(out);
+  toast(ok ? T(action === 'approve' ? 'zy_guard_approved' : 'zy_guard_released', action === 'approve' ? 'Package confirmed; two-session evidence is still required' : 'Previous background mode restored') : T('zy_mode_failed', 'Could not change the mode'), ok ? 'good' : 'bad');
+  if (_zygiskOpen) zygiskPageRender(window._asbZygiskLinkData || null);
 }
 async function zygiskGuardGhost(pkgs, restrict) {
   if (_zygiskModeBusy) return;
@@ -14278,8 +14388,8 @@ function zygiskAotValue(a) {
 }
 function zygiskAotCard() {
   const g = _zyAot || zygiskAotParse('');
-  const card = logReportSec(T('zy_aot_title', 'Faster app starts (ART)'));
-  card.appendChild(logReportNote(T('zy_aot_desc', 'ASB counts how often you open each app (Zygisk start ledger) and how long its cold start takes (Android\'s own launch log). Apps you open often that run without ahead-of-time compiled code are compiled the way Android\'s nightly maintenance does it - only while charging with the screen off and the battery below 40 °C. Compiled code needs less JIT work while the app runs and usually starts faster; the times below show what it did on this phone.')));
+  const card = logReportSec(T('zy_aot_title', 'Faster app starts (ART)'), 'zygisk_launch');
+  card.appendChild(logReportNote(T('zy_aot_desc', 'ASB counts how often you open each app (Zygisk start ledger) and how long its cold start takes (Android\'s own launch log). Only frequently opened apps without ahead-of-time code are considered, one batch per charging session, with the screen off and a known battery temperature below 40 °C. This can improve startup, but does not guarantee battery savings; compilation itself costs CPU and storage writes.')));
   const seg = document.createElement('div');
   seg.className = 'cfg-seg zy-mode-seg zy-aot-seg';
   [['off', T('zy_aot_off', 'Off')], ['on', T('zy_aot_on', 'Compile while charging')]].forEach(function (o) {
@@ -14385,7 +14495,7 @@ function zygiskLinkAppValue(a, nm) {
 function zygiskLinkCard() {
   const g = _zyLink || zygiskLinkParse('');
   const kv = g.kv;
-  const card = logReportSec(T('zy_link_title', 'One engine: Zygisk · governor · LSPosed'));
+  const card = logReportSec(T('zy_link_title', 'One engine: Zygisk · governor · LSPosed'), 'zygisk_engine');
   card.appendChild(logReportNote(T('zy_link_desc', 'The Zygisk companion hears every app start, LSPosed tells which apps carry hook modules and Android\'s launch log measures each cold start. From that ASB sorts the apps you open into slow and fast starters: the governor keeps the cold-start lift twice as long for a slow one and ends it at half for a fast one. The background guard never restricts an LSPosed module app.')));
   if (!g.ok) { card.appendChild(logReportNote(T('zy_link_unread', 'Not read yet.'))); return card; }
   const clock = function (sec) { return sec > 0 ? zygiskGuardClock(sec) : '-'; };
@@ -15045,18 +15155,19 @@ function logReportTipText(tip) {
     lr_tip_jank_bad_bat: 'About {pct}% of frames missed their deadline - stutter is visible. Battery keeps the ceilings low on purpose; for heavy apps Smart or Balanced give more room. The Smoothness section lists the apps that drop the most.',
     lr_tip_jank_bad_pace: "About {pct}% of frames missed their deadline, most of them in {app}. Android's own frame times put neither the GPU nor the UI thread at fault there: the app paces those frames itself, so a profile with higher ceilings would not remove them. The Smoothness section has the breakdown.",
     lr_tip_jank_bad_man: 'About {pct}% of frames missed their deadline - stutter is visible. The Smoothness section lists the apps that drop the most; Smart adapts the ceilings to them.',
-    lr_tip_jank_ok: 'Smoothness is excellent: only {pct}% of frames janky.',
+    lr_tip_jank_ok: 'Smoothness is good: only {pct}% of frames were late.',
     lr_tip_jank_wake: 'Stutter concentrates at the wakes: {pct}% of frames at unlocks and app opens against {ord}% over the day; the most janky there is {who}.',
     lr_tip_jank_wake_wh: 'Stutter concentrates at the wakes: {pct}% of frames at unlocks and app opens against {ord}% over the day.',
     lr_tip_audio: 'Speaker playback cost ~{pct}%/h. For long sessions, headphones or a gentler DSP preset are kinder to the battery.',
     lr_tip_prof_save: 'Your own measurements: {cheap} cost {x}%/h at the screen against {y}%/h on {busy} - for reading and music it is noticeably cheaper.',
-    lr_tip_heat_warm: 'The phone spent {min} hot, mostly in {phase} - reduce sustained load or use a gentler profile.',
+    lr_tip_heat_warm: 'The phone spent {min} hot in total; the hottest named phase was {phase}. Reduce sustained load or use a gentler profile.',
     lr_tip_heat_warm_set: 'The phone spent {min} hot, mostly in {phase} - check "{set}" in Settings if you want ASB thermal protection.',
     lr_tip_heat_calm: 'No sustained heat or throttling detected; peak CPU temperature was {cpu}°C.',
     lr_tip_cost_ok: 'ASB itself is cheap: {ms} of CPU per hour.',
     lr_tip_cost_hi: 'ASB used {ms} of CPU per hour - more than usual; worth sending this log to the developer.',
-    lr_tip_smart_help: 'Smart proved extra headroom helps {n} of your apps and keeps it just for them.',
-    lr_tip_smart_help_manual: 'Recorded Smart measurements found extra headroom useful for {n} apps. This capture used a manual profile, so those records do not show Smart actively controlling it.',
+    lr_tip_smart_help: "Smart's measured comparisons favored extra headroom for {n} apps, and it is kept only for them; this is not a guarantee for every workload.",
+    lr_tip_smart_help_manual: 'Recorded Smart comparisons favored extra headroom for {n} apps. This capture used a manual profile, so those records do not show Smart actively controlling it.',
+    lr_tip_smart_nohelp: "Smart's comparisons did not favor extra headroom for {n} apps, so their previous ceilings were kept. This does not identify another cause of their late frames.",
     lr_tip_jank_bad_evidence: 'About {pct}% of frames missed their deadline. Measured at-cap windows are not materially worse ({yes}% at cap versus {no}% below), or the named cap is mostly ROM-owned. This correlation does not clear every ceiling, but it does not support raising them as the first action; use the per-frame breakdown.',
     lr_tip_ltpo: 'Tip: "{set}" in Settings lowers the refresh rate on video and saves battery.',
     lr_tip_sysui_netspeed: 'SystemUI stutters in {n} of {of} screen-on intervals and the network-speed meter in the status bar is on - it redraws every second. Turn it off in the status-bar settings and compare the stutter in the next capture.',
@@ -15149,7 +15260,7 @@ function logReportBrief(d, analysis) {
     lr_brief_cause_radio: 'The phone did not fall asleep {awake}% of the screen-off time; background mobile data used {mib} MiB meanwhile.',
     lr_brief_cause_none: 'The phone did not fall asleep {awake}% of the screen-off time; no single app stood out.',
     lr_brief_night_hot: 'With the screen off the CPU reached {cpu}° at times - something did heavy work in the background.',
-    lr_brief_smooth_ok: 'Smoothness is excellent: {pct}% of frames were late.',
+    lr_brief_smooth_ok: 'Smoothness is good: {pct}% of frames were late.',
     lr_brief_smooth_mid: 'Smoothness is normal: {pct}% of frames were late - occasional stutter.',
     lr_brief_smooth_bad: 'Stutter is noticeable: {pct}% of frames were late.',
     lr_brief_sysui_net: 'The status bar redraws all the time because the network-speed meter is on - it costs frames in every app.',
@@ -15237,10 +15348,11 @@ function logReportDxT(key, vars) {
     lr_dx_also_jwhy: "Most late frames: {app} in {state}, {pct} of its frames. {cause}",
     lr_dx_also_bhold: "Battery scroll hold, measured per app: kept where it cut the stutter (apps: {k}), released where it did not help (apps: {r}), under test: {t}.",
     lr_dx_also_vendor: "The firmware held the prime cores below ASB's ceiling in {n} of {of} checks (PowerHAL or kernel thermal) - ASB does not override it.",
-    lr_dx_heat_long: "The CPU spent {min} above 45 °C, most of it in {phase}; peak {cpu}°.",
+    lr_dx_heat_long: "The CPU spent {min} above 45 °C in total; the hottest named phase was {phase}, with peak {cpu}°.",
     lr_dx_fix_heat: "Reduce sustained load (games, long video calls while charging) or use a gentler profile; a case or charging while playing adds heat.",
     lr_dx_fix_heat_set: "Check \"{set}\" in ASB settings - with Stock, ASB thermal protection is off.",
-    lr_dx_heat_some: "The CPU spent {min} above 45 °C (peak {cpu}°) - short spells of load, nothing sustained.",
+    lr_dx_heat_some: "The CPU spent {min} above 45 °C in total (peak {cpu}°). The total alone does not show whether the load was sustained.",
+    lr_dx_heat_some_runs: "The CPU spent {min} above 45 °C across {n} warm spells (longest {longest}; peak {cpu}°). No single spell reached 30 minutes.",
     lr_dx_heat_ok: "No overheating: the CPU peaked at {cpu}°.",
     lr_dx_also_clamps: "Frequencies were limited {n} times briefly - the protection doing its job, without sustained heat.",
     lr_dx_asb_crash: "ASB code is involved in {n} native crash(es) during the capture.",
@@ -15264,7 +15376,7 @@ function logReportDxT(key, vars) {
     lr_dx_lte_ran: "LTE was chosen {n} times in this capture, {min} on LTE in all.",
     lr_dx_net_try_light: "Try \"{set}\" in ASB settings: with light traffic the modem keeps to LTE, and 5G comes back for a big download.",
     lr_dx_also_fix: "Also: {txt}",
-    lr_dx_fix_net_play: "Google Play updated apps over mobile data: Play Store → Settings → Network preferences → Auto-update apps → Over Wi-Fi only.",
+    lr_dx_fix_net_play: "Google Play used mobile data; the counters do not distinguish app updates from other downloads. If you do not want updates on mobile data: Play Store → Settings → Network preferences → Auto-update apps → Over Wi-Fi only.",
     lr_dx_fix_net_tg: "In {app}: Settings → Data and storage → Automatic media download → turn off downloads over mobile data, or lower the size limit.",
     lr_dx_fix_net_wa: "In WhatsApp: Settings → Storage and data → Media auto-download → When using mobile data → no media.",
     lr_dx_fix_net_video: "{app} streams video: turn on its data saver or lower the video quality on mobile data.",
@@ -15501,7 +15613,12 @@ function logReportDiagnose(d) {
       it = cfg.sustained_temp_mode === 'stock'
         ? item('heat', 'problem', 'lr_dx_heat_long', hv, 'user', 'lr_dx_fix_heat_set', { set: Tcfg('sustained_temp_mode', 'name', 'Throttling Point') })
         : item('heat', 'problem', 'lr_dx_heat_long', hv, 'load', 'lr_dx_fix_heat');
-    } else if (wm >= 10) it = item('heat', 'normal', 'lr_dx_heat_some', { min: logReportDur(wm), cpu: String(pk) }, 'load');
+    } else if (wm >= 10) {
+      const episodes = heat ? +heat.warm_episodes || 0 : 0;
+      const longest = heat ? +heat.warm_run_min || 0 : 0;
+      const hv = { min: logReportDur(wm), cpu: String(pk), n: String(episodes), longest: logReportDur(longest) };
+      it = item('heat', 'normal', episodes > 0 ? 'lr_dx_heat_some_runs' : 'lr_dx_heat_some', hv, 'load');
+    }
     else if (pk > 0) it = item('heat', 'good', 'lr_dx_heat_ok', { cpu: String(pk) });
     if (it) {
       if (vendorLine) it.also.push(vendorLine);
@@ -15741,23 +15858,55 @@ function logReportAppendAnalysis(body, d, analysis) {
   verify.classList.add('lgr-summary-legend'); body.appendChild(verify);
 }
 
+function logReportZygiskGovernor(sec, g) {
+  if (!g) return false;
+  const unknown = function (v) { return v === undefined || v === '' || v === 'unknown'; };
+  const numericDelta = function (key) { return unknown(g[key + '_delta']) ? null : +g[key + '_delta']; };
+  const labels = {
+    zygisk_launch_accepted: 'dev_zygisk_observer_launch_accepted',
+    zygisk_launch_vetoed: 'dev_zygisk_observer_launch_vetoed',
+    zygisk_refresh_accepted: 'dev_zygisk_observer_hints_accepted',
+    zygisk_refresh_vetoed: 'dev_zygisk_observer_hints_vetoed',
+    unlock_cold_lifts: 'lr_zy_gov_cold_lifts', unlock_cold_extends: 'lr_zy_gov_cold_extends',
+    unlock_cold_long: 'lr_zy_gov_cold_long', unlock_cold_trims: 'lr_zy_gov_cold_trims'
+  };
+  let action = false;
+  sec.appendChild(logReportNote(T('lr_zy_gov_title', 'Governor-side actions on the ASB cold-start lift window')));
+  Object.keys(labels).forEach(function (k) {
+    const n = numericDelta(k); if (n === null) return;
+    if ((k === 'unlock_cold_lifts' || k === 'unlock_cold_extends' || k === 'unlock_cold_long' || k === 'unlock_cold_trims') && n > 0) action = true;
+    sec.appendChild(logReportRow(T(labels[k], k), String(n)));
+  });
+  if (g.deltas === 'counter_reset_or_restart')
+    sec.appendChild(logReportNote(T('lr_zy_gov_reset', 'At least one Governor counter decreased: all Governor-side deltas remain unknown for this interval.'), true));
+  else if (g.coverage !== 'start_latest')
+    sec.appendChild(logReportNote(T('lr_zy_gov_coverage_one', 'Only one Governor snapshot is available; its cumulative counters are not presented as in-capture actions.')));
+  sec.appendChild(logReportNote(T('lr_zy_gov_note', 'These counters record decisions and changes to ASB’s own lift window, not a hardware ceiling write or an A/B performance/energy benefit.')));
+  return action;
+}
+
 function logReportZygisk(d) {
   const z = (d.sections && d.sections.zygisk) || null;
-  if (!z) return null;
+  const gov = (d.sections && d.sections.zygov) || null;
+  if (!z && !gov) return null;
   const sec = logReportSec(T('lr_sec_zygisk', '🧩 Zygisk · ASB injection')); sec.id = 'lgr-zygisk';
-  const observer = {
-    /* fix280: a capture taken by an older collector says "stale" for a quiet channel; let the
-       page decide from the policy acknowledgement and the counters instead. */
-    link_state: (z.state === 'stale' ? '' : (z.state || 'unknown')), enabled: z.enabled || 'unknown', safe_mode: z.safe_mode || 'unknown',
-    state_freshness: z.freshness || 'unknown', loaded_processes: z.loaded || '0', state_age_ms: z.age_ms || '',
-    events_total: z.events_total_latest || '0', spawn_events: z.spawn_events_latest || '0',
-    policy_generation: z.policy_generation || '0',
-    policy_seen_generation: z.policy_seen_generation || '0', enabled_packages: z.packages || '0',
-    launch_hints: z.launch_hints || '0', spawn_ledger: z.spawn_ledger || '0'
-  };
-  sec.appendChild(deviceZygiskLink({ sections: { zygisk_observer: observer } }));
+  if (z) {
+    const observer = {
+      /* fix280: a capture taken by an older collector says "stale" for a quiet channel; let the
+         page decide from the policy acknowledgement and the counters instead. */
+      link_state: (z.state === 'stale' ? '' : (z.state || 'unknown')), enabled: z.enabled || 'unknown', safe_mode: z.safe_mode || 'unknown',
+      state_freshness: z.freshness || 'unknown', loaded_processes: z.loaded || '0', state_age_ms: z.age_ms || '',
+      events_total: z.events_total_latest || '0', spawn_events: z.spawn_events_latest || '0',
+      policy_generation: z.policy_generation || '0',
+      policy_seen_generation: z.policy_seen_generation || '0', enabled_packages: z.packages || '0',
+      launch_hints: z.launch_hints || '0', spawn_ledger: z.spawn_ledger || '0'
+    };
+    sec.appendChild(deviceZygiskLink({ sections: { zygisk_observer: observer } }));
+  }
+  if (!z) { logReportZygiskGovernor(sec, gov); return sec; }
   if (z.coverage === 'unavailable') {
     sec.appendChild(logReportNote(T('lr_zy_unavailable', 'The collector returned no observer evidence; Zygisk support is not ruled out.')));
+    logReportZygiskGovernor(sec, gov);
     return sec;
   }
   const unknown = function (v) { return v === undefined || v === '' || v === 'unknown'; };
@@ -15766,7 +15915,7 @@ function logReportZygisk(d) {
   const spawnDelta = numericDelta('spawn_events'), eventDelta = numericDelta('events_total');
   const launchDelta = numericDelta('launch_events'), ledgerDelta = numericDelta('ledger_events');
   const grid = document.createElement('div'); grid.className = 'lgr-heros';
-  grid.appendChild(logReportHero('🛰️', T('lr_zy_activity', 'Companion events in capture'), delta('events_total'),
+  grid.appendChild(logReportHero('🛰️', T('lr_zy_activity', 'Accepted process start/exit events'), delta('events_total'),
     logReportT('lr_zy_start_latest', '{start} → {latest}', { start: unknown(z.events_total_start) ? '—' : z.events_total_start, latest: unknown(z.events_total_latest) ? '—' : z.events_total_latest }), false));
   grid.appendChild(logReportHero('🚀', T('lr_zy_launch', 'Cold starts heard'), delta('launch_events'),
     logReportT('lr_zy_accepted', '{n} accepted lift requests', { n: delta('launch_accepted') }), false));
@@ -15783,13 +15932,32 @@ function logReportZygisk(d) {
   sec.appendChild(logReportRow(T('lr_zy_abi', 'Installed observer ABI'), String(z.abis || 'unknown')));
   if (spawnDelta !== null)
     sec.appendChild(logReportRow(T('lr_zy_spawns', 'Observed process starts in capture'), String(spawnDelta)));
-  const launchRows = ['launch_long', 'launch_short', 'launch_class_fallback', 'launch_vetoed', 'launch_unavailable', 'launch_throttled'].filter(function (k) { return numericDelta(k) !== null; });
+  if (!unknown(z.ledger_top_screen_off) && z.ledger_top_screen_off !== 'none')
+    sec.appendChild(logReportRow(T('dev_zygisk_observer_ledger_top_screen_off', 'Most starts with the screen off (app off/on)'), String(z.ledger_top_screen_off)));
+  if (!unknown(z.ledger_restart_loops))
+    sec.appendChild(logReportRow(T('dev_zygisk_observer_ledger_restart_loops', 'Restart loops with the screen off (peak starts per 5 min)'), String(z.ledger_restart_loops), z.ledger_restart_loops !== 'none'));
+  const launchRows = ['launch_long', 'launch_short', 'launch_class_fallback', 'launch_vetoed', 'launch_screen_off', 'launch_unavailable', 'launch_throttled'].filter(function (k) { return numericDelta(k) !== null; });
   if (z.launch_hints === '1' && launchRows.length) {
-    const labels = { launch_long: 'dev_zygisk_observer_launch_long', launch_short: 'dev_zygisk_observer_launch_short', launch_class_fallback: 'lr_zy_launch_fallback', launch_vetoed: 'dev_zygisk_observer_launch_vetoed', launch_unavailable: 'dev_zygisk_observer_launch_unavailable', launch_throttled: 'dev_zygisk_observer_launch_throttled' };
+    const labels = { launch_long: 'dev_zygisk_observer_launch_long', launch_short: 'dev_zygisk_observer_launch_short', launch_class_fallback: 'lr_zy_launch_fallback', launch_vetoed: 'dev_zygisk_observer_launch_vetoed', launch_screen_off: 'dev_zygisk_observer_launch_screen_off', launch_unavailable: 'dev_zygisk_observer_launch_unavailable', launch_throttled: 'dev_zygisk_observer_launch_throttled' };
     launchRows.forEach(function (k) { sec.appendChild(logReportRow(T(labels[k], k), delta(k))); });
   }
-  if (numericDelta('denylist_spawns') !== null)
+  if ((launchDelta || 0) > 0) {
+    const accepted = numericDelta('launch_accepted'), vetoed = numericDelta('launch_vetoed');
+    const unavailable = numericDelta('launch_unavailable'), throttled = numericDelta('launch_throttled');
+    if (accepted !== null && vetoed !== null && unavailable !== null && throttled !== null) {
+      const bv = { n: String(launchDelta), ok: String(accepted), veto: String(vetoed), unavailable: String(unavailable), throttled: String(throttled) };
+      const accounted = accepted + vetoed + unavailable + throttled;
+      sec.appendChild(logReportNote(logReportT(accounted === launchDelta ? 'lr_zy_launch_balanced' : 'lr_zy_launch_unresolved',
+        accounted === launchDelta ? 'All {n} cold starts have a recorded outcome: {ok} accepted, {veto} vetoed, {unavailable} governor-unavailable, {throttled} throttled.' :
+          'Of {n} cold starts, {ok} were accepted, {veto} vetoed, {unavailable} governor-unavailable and {throttled} throttled. The remainder can be in flight at a snapshot; the difference alone is not an error.', bv)));
+    }
+  }
+  const denylistDelta = numericDelta('denylist_spawns');
+  if (denylistDelta !== null) {
     sec.appendChild(logReportRow(T('dev_zygisk_observer_denylist_spawns', 'Starts flagged for module unmounting'), delta('denylist_spawns')));
+    if (denylistDelta > 0)
+      sec.appendChild(logReportNote(T('lr_zy_denylist_note', 'A root-manager unmount/denylist flag describes how the process was started. Its count alone does not prove failed injection or justify changing the allowlist.')));
+  }
   if (numericDelta('hints_screen_off') !== null)
     sec.appendChild(logReportRow(T('dev_zygisk_observer_hints_screen_off', 'Refreshes not sent with the screen off'), delta('hints_screen_off')));
   const features = document.createElement('div'); features.className = 'lgr-context';
@@ -15807,15 +15975,80 @@ function logReportZygisk(d) {
   else
     sec.appendChild(logReportNote(T('lr_zy_coverage_two', 'Start/latest snapshots: deltas cover the interval between them, but do not prove continuous observation through a restart.')));
   if (eventDelta === 0 && ((spawnDelta || 0) > 0 || (launchDelta || 0) > 0 || (ledgerDelta || 0) > 0))
-    sec.appendChild(logReportNote(T('lr_zy_quiet_channels', 'The accepted start/exit counter is zero, but spawn, cold-start or ledger channels recorded activity. These channels are independent; zero here does not mean the observer was absent.')));
+    sec.appendChild(logReportNote(T('lr_zy_quiet_channels', 'The process start/exit lifecycle channel stayed at zero while independent spawn, cold-start or ledger channels recorded activity. This confirms companion IPC, but not resident process observation; it is not proof that injection failed.')));
   if ((+z.loaded || 0) === 0 && ((spawnDelta || 0) > 0 || (launchDelta || 0) > 0 || (ledgerDelta || 0) > 0))
     sec.appendChild(logReportNote(T('lr_zy_live_zero', 'No validated process was live in the latest snapshot, while earlier activity was recorded. This describes the current live set, not failed injection throughout the capture.')));
   if ((launchDelta || 0) > 0 || (numericDelta('launch_accepted') || 0) > 0)
-    sec.appendChild(logReportNote(T('lr_zy_accept_note', 'An accepted cold-start request passed the companion checks; it is not proof that the governor changed a frequency ceiling.')));
-  sec.appendChild(logReportNote(T('lr_zy_note', 'Observed events prove companion activity, not total Zygisk control, performance improvement or energy savings. No A/B comparison is made here.')));
+    sec.appendChild(logReportNote(T('lr_zy_accept_note', 'An accepted cold-start request was acknowledged by the governor after its enabled/screen checks. This is not proof that a lift was armed or that a frequency ceiling changed; thermal and other governor gates still apply.')));
+  const governorAction = logReportZygiskGovernor(sec, gov);
+  sec.appendChild(logReportNote(T(governorAction ? 'lr_zy_note_actions' : 'lr_zy_note',
+    governorAction ? 'Governor-side counters confirm that ASB armed, extended or shortened its own cold-start lift window. They do not prove a hardware ceiling write, total control of other Zygisk modules, performance improvement or energy savings. No A/B comparison is made here.' :
+      'Observed events prove companion activity, not total Zygisk control, performance improvement or energy savings. No A/B comparison is made here.')));
   return sec;
 }
 
+/* fix301: per-tweak evidence, not causal attribution. Every number below is already in
+ * the capture. Direct counters/readbacks prove an action or observation only; at-cap jank
+ * is an association with different workloads mixed in. Neither becomes a battery, thermal
+ * or smoothness benefit without a comparable one-variable A/B. */
+function logReportTweakEvidence(d) {
+  const s = d.sections || {}, rows = [];
+  const num = function (v) { return /^[0-9]+$/.test(String(v === undefined ? '' : v)) ? String(v) : '—'; };
+  const cc = s.capcheck || null;
+  if (cc && (+cc.total || 0) > 0) {
+    rows.push([T('lr_impact_cap_readback', 'CPU ceiling readback'),
+      logReportT('lr_impact_cap_readback_fmt', '{ok}/{total} matched ASB · {vendor} vendor overrides · {other} other', {
+        ok: num(cc.ok), total: num(cc.total), vendor: num(cc.vendor), other: num(cc.other) }),
+      T('lr_impact_readback', 'Direct readback observations · not an energy effect')]);
+  }
+  [['jcap_main', 'lr_impact_cap_main', 'CPU ceiling · main cluster'],
+   ['jcap_prime', 'lr_impact_cap_prime', 'CPU ceiling · prime cluster']].forEach(function (spec) {
+    const c = s[spec[0]] || null;
+    if (!c || (+c.yes_f || 0) < 10000 || (+c.no_f || 0) < 10000) return;
+    rows.push([T(spec[1], spec[2]),
+      logReportT('lr_impact_cap_fmt', '{yes}% at cap vs {no}% below cap · {frames} frames', {
+        yes: String(c.yes), no: String(c.no), frames: String((+c.yes_f || 0) + (+c.no_f || 0)) }),
+      T('lr_impact_correlation', 'Observed together, different workloads · A/B required')]);
+  });
+  const z = s.zygisk || null, zg = s.zygov || null;
+  if (z || zg) {
+    const accepted = zg && zg.zygisk_launch_accepted_delta !== undefined ? zg.zygisk_launch_accepted_delta : (z ? z.launch_accepted_delta : undefined);
+    const armed = zg ? zg.unlock_cold_lifts_delta : undefined;
+    const extended = zg ? zg.unlock_cold_extends_delta : undefined;
+    if ([accepted, armed, extended].some(function (v) { return /^[0-9]+$/.test(String(v === undefined ? '' : v)); })) {
+      rows.push([T('lr_impact_zygisk', 'Zygisk cold-start assist'),
+        logReportT('lr_impact_zygisk_fmt', '{accepted} accepted · {armed} lifts armed · {extended} extended', {
+          accepted: num(accepted), armed: num(armed), extended: num(extended) }),
+        T('lr_impact_direct', 'Measured actions · performance/energy benefit needs A/B')]);
+    }
+  }
+  const lt = s.ltpo || null;
+  if (lt) rows.push([T('lr_ltpo', 'LTPO video drop'),
+    logReportT('lr_ltpo_fmt', '{n} times · {min} at the lower rate', { n: num(lt.n), min: logReportDur(lt.min) }),
+    T('lr_impact_direct', 'Measured actions · performance/energy benefit needs A/B')]);
+  const wl = s.wifileave || null;
+  if (wl) rows.push([T('lr_impact_wifi', 'Leave bad Wi-Fi'),
+    logReportT('lr_impact_wifi_fmt', '{releases} releases · {returned} returned · {recovered} recovered before release', {
+      releases: num(wl.releases), returned: num(wl.returned), recovered: num(wl.recovered) }),
+    T('lr_impact_direct', 'Measured actions · performance/energy benefit needs A/B')]);
+  const sm = s.smart || null;
+  if (sm) rows.push([T('lr_impact_smart', 'Smart headroom learner'),
+    logReportT('lr_impact_smart_fmt', '{helped} kept · {nothelped} ruled out · {testing} testing', {
+      helped: num(sm.helped), nothelped: num(sm.nothelped), testing: num(sm.testing) }),
+    T('lr_impact_smart_scope', 'Governor-session decision snapshot · not a saving percentage')]);
+  const cost = s.asbcost || null;
+  if (cost) rows.push([T('lr_impact_cost', 'ASB governor overhead'),
+    logReportT('lr_impact_cost_fmt', '{cpu} ms/h · {writes} writes/h · {wakes} wakeups/h', {
+      cpu: num(cost.cpu_msh), writes: num(cost.writes_h), wakes: num(cost.wakes_h) }),
+    T('lr_impact_cost_scope', 'Measured ASB cost · not the net battery effect')]);
+  if (!rows.length) return null;
+  const sec = logReportSec(T('lr_sec_impact', '📏 Tweak evidence')); sec.id = 'lgr-impact';
+  sec.appendChild(logReportTable([T('lr_impact_tweak', 'Tweak'), T('lr_impact_measured', 'Measured in this capture'),
+    T('lr_impact_meaning', 'What the number proves')], rows, [2]));
+  sec.appendChild(logReportNote(T('lr_impact_ab_note',
+    'No battery %, temperature or smoothness gain is assigned to a tweak here. For a causal figure, change one toggle and compare similar captures. A tweak not listed has no evidence exposed in this capture; that does not mean it is unsupported or had zero effect.')));
+  return sec;
+}
 function logReportRender(d) {
   const body = _el('reportBody');
   const status = _el('reportStatus');
@@ -15877,6 +16110,8 @@ function logReportRender(d) {
   detailsTitle.textContent = T('lr_sec_details', '🔎 Technical evidence'); details.appendChild(detailsTitle);
   details.appendChild(logReportNote(T('lr_details_note', 'Measured values behind the summary. Rates apply only to their stated windows.')));
   body.appendChild(details);
+  const tweakEvidence = logReportTweakEvidence(d);
+  if (tweakEvidence) body.appendChild(tweakEvidence);
   const drain = d.sections.drain || null;
   const cover = d.sections.cover || null;
   const night = d.sections.night || null;
@@ -16079,10 +16314,15 @@ function logReportRender(d) {
     /* fix213 (audit 8.8): the microwake learner's long-term answer to "does my phone
        sleep at night?" - how rarely it stirs and for how long. A calm fact, not an
        alarm, so it sits among the rows, not in the advice. */
-    if (mwake && (+mwake.n || 0) > 0)
+    if (mwake && (+mwake.n || 0) > 0) {
+      /* nights=0 is an unconfirmed-night sample, not a measured average of zero.
+         Older digest fixtures have no nights field and keep the legacy wording. */
+      const mwNoNights = String(mwake.nights || '') === '0';
       s.appendChild(logReportRow(T('lr_mwake', 'Night wakes (learned)'),
-        logReportT('lr_mwake_fmt', '{n} checks · {per} a night · ~{sec} s each', {
-          n: String(mwake.n), per: String(mwake.per_night), sec: String(mwake.typical_s) })));
+        logReportT(mwNoNights ? 'lr_mwake_unconfirmed' : 'lr_mwake_fmt',
+          mwNoNights ? '{n} checks · no completed nights for an average yet · ~{sec} s each' : '{n} checks · {per} a night · ~{sec} s each', {
+            n: String(mwake.n), per: String(mwake.per_night), sec: String(mwake.typical_s) })));
+    }
     if (aod && (+aod.lit || 0) > 0)
       s.appendChild(logReportRow(T('lr_aod', 'Always-on display'),
         logReportT('lr_aod_fmt', 'panel lit in {lit} of {of} screen-off checks', { lit: String(aod.lit), of: String(aod.of) })));
@@ -16265,13 +16505,14 @@ function logReportRender(d) {
   const _smDay = String(meta.profile || '') === 'smart' || !String(meta.profile || '') || _smRan;
   if (smart && _smDay) {
     const s = logReportSec(T('lr_sec_smart', '🧠 Smart learner')); s.id = 'lgr-smart';
-    s.appendChild(logReportRow(T('lr_sm_ctx', 'Situations with a verdict'), String(smart.ctxlearn || 0)));
+    s.appendChild(logReportRow(T('lr_sm_ctx', 'Tracked situations'), String(smart.ctxlearn || 0)));
     s.appendChild(logReportRow(T('lr_sm_watching', 'Apps watched for stutter'), String(smart.watching || 0)));
     if ((+smart.testing || 0) > 0) s.appendChild(logReportRow(T('lr_sm_testing', 'In a headroom test'), String(smart.testing)));
     if ((+smart.helped || 0) > 0) s.appendChild(logReportRow(T('lr_sm_helped', 'Kept extra headroom'), String(smart.helped)));
     if ((+smart.nothelped || 0) > 0) s.appendChild(logReportRow(T('lr_sm_nothelped', 'Headroom ruled out'), String(smart.nothelped)));
     if ((+smart.ctxlearn || 0) === 0 && (+smart.watching || 0) === 0)
       s.appendChild(logReportNote(T('lr_sm_fresh', 'Smart is still collecting its first days - verdicts appear as the evidence accumulates.')));
+    s.appendChild(logReportNote(T('lr_sm_scope', 'End-of-capture snapshot: counters can include earlier work in the same governor session. Tracked situations include tests still running.')));
     /* fix206: the usage records behind the verdicts only meter while Smart is the active
        profile (asb_governor.c gates the meter on PROFILE_SMART). On a day spent in
        Balanced the counters stand still - say so, or "0 verdicts" reads as broken.
