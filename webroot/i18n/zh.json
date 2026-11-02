@@ -52,14 +52,14 @@
       "name": "蓝牙音频卸载",
       "desc": "把蓝牙音频编码交给专用信号处理器，而不是主处理器。\n\n「自动」遵循厂商为该机型的决定 — 通常这才是对的，因为能否卸载取决于实际存在的硬件。「开启」强制启用，「关闭」禁止。\n\n卸载在长时间聆听时更省电，但某些固件在这条通路上不支持全部编码。",
       "descOpt": {
-        "auto": "不干预——保留固件的选择。",
-        "off": "由 CPU 编码。某些均衡器需要此模式才能看到音频流。",
-        "on": "硬件编码。更省电，手机出厂通常就是这样工作的。"
+        "auto": "不改变 ROM 选择的蓝牙音频路径。",
+        "on": "在支持时请求硬件/offload 编码。实际功耗取决于设备和编解码器。",
+        "off": "使用 CPU 编码。可让某些均衡器处理蓝牙音频，但可能增加 CPU 使用。"
       }
     },
     "dsp_loudness": {
       "name": "DSP 增益",
-      "desc": "在其他一切之后施加的数字增益，配有防削波限制器。\n\n每一档等于 1 分贝。即便 +6 dB 也只是「稍响一点」；超过 +15 dB 时，现代录音会让限制器持续工作，声音变响的同时也失去了呼吸感。\n\n零表示效果完全脱离音频链路，而不是以零值运行。 在扬声器上，手机发热时（电池 42 °C 起）增益会分级降低，低于 40 °C 后恢复；蓝牙和有线输出从不降低。"
+      "desc": "ASB DSP 最高增加 +25 dB 增益，并提供可选压缩和最终采样峰值限制器。从 +3 dB 开始：即使峰值受限，高设置仍可能听起来过度压缩。首次启用需要重启。在外部均衡器音频配置下会绕过 DSP。扬声器增益在电池达到 42 °C 时降低，低于 40 °C 时恢复；此规则不会降低有线和蓝牙增益。"
     },
     "dsp_bass": {
       "name": "DSP 低音增强",
@@ -67,7 +67,7 @@
     },
     "dsp_voice": {
       "name": "DSP\n人声音色",
-      "desc": "需要开启 DSP 响度。针对手机扬声器上人声发薄、刺耳的问题。两个宽频段同时调整：350 Hz 的人声厚度提升（每级 +0.5 dB），3 kHz 的尖锐感降低（每级 −0.6 dB）；10 级 = +5 / −6 dB。低音增强作用于 90 Hz，大多低于手机扬声器能发出的频率；这一频段正是扬声器仍能发声的范围，因此能让人声更饱满。位于限幅器之前，不会削波。建议从 4–6 开始；仅用于扬声器请在 DSP 输出中选择。"
+      "desc": "需要 DSP Loudness。两个宽频段分别调整 350 Hz 的人声厚度和 3 kHz 的高频锐度。级别 10 分别应用 +5 dB 和 −6 dB。可让单薄或刺耳的语音更饱满，尤其是在手机扬声器上；过高可能不自然。从 4–6 开始，并用 DSP Outputs 把效果限制在需要的输出。更改会在限制器之前实时生效。"
     },
     "dsp_width": {
       "name": "DSP\n立体声宽度",
@@ -79,55 +79,55 @@
     },
     "dsp_outputs": {
       "name": "DSP 输出",
-      "desc": "允许信号处理器在哪些输出上工作。\n\n以前它同时接管所有输出：为耳机设计的增益也会抬高外放 — 手机里最小的发声单元，最不适合额外增益。\n\n「扬声器」是内置的。「USB」是有线耳机和 USB 解码器。「Bluetooth」是无线设备。手机没有的输出不会匹配到任何东西。\n\n只有在开启音量增益或低音增强时才有意义 — 否则没有东西可处理。\n\n关于蓝牙与续航：无线输出上的音效可能使音频流脱离硬件卸载播放路径，熄屏播放期间处理器将一直无法休眠。在一份全天日志中，开启增益的蓝牙收听让处理器 100% 时间保持唤醒。若在意长时间熄屏收听的续航，请不要把蓝牙加入此列表。"
+      "desc": "选择 ASB DSP 可以处理的输出：手机扬声器、有线耳机/USB DAC 或蓝牙。不存在的输出会被忽略。“关闭”绕过整个 DSP，同时保留所有级别。蓝牙处理可能使播放离开硬件 offload 路径，增加熄屏时的 CPU 使用；若长时间聆听的续航比效果更重要，请排除蓝牙。"
     },
     "CAMERA_LEVEL": {
       "name": "相机处理强度",
-      "desc": "相机对每张照片施加的处理强度：饱和度、AI 锐化、清晰度。\n\n这是相对刻度 — 它在你设备原有数值上做乘法而非替换，所以厂商的色彩风格得以保留。第 4 档接近中性；再往上照片更鲜艳锐利，接近上限时会显得不自然。\n\n作用于调校文件，因此需要重启相机。"
+      "desc": "缩放设备固件自身的照片/视频颜色、细节和锐化值。0 保持原厂；1–6 逐步增强，7–10 则刻意强烈且风格化。设备能力限制仍然有效。在这些限制之前，级别 10 的目标最高为 2.5× 色度、3.4× AI 混合和 3.5× 锐化。重启后从原厂基线重新生成。高级别可能加重深阴影中的噪点或色带。"
     },
     "CAMERA_CONTRAST": {
       "name": "对比度与色彩深度",
-      "desc": "对比度与色彩深度，与整体处理强度分开控制。\n\n3 是原始值。更高会压深阴影、加浓色彩 — 照片更「有冲击力」，但暗部细节更少。更低则提亮阴影、让色彩收敛。"
+      "desc": "独立于 Camera Grade 调整色调曲线的对比度和饱和度。3 为原厂；更高值加深阴影并增强颜色，10 的目标为固件刻度的 170%。不会提高 Camera Grade 的颜色矩阵或细节乘数。需要重启。高值可能损失阴影细节或让颜色不自然。"
     },
     "CAMERA_GRAIN": {
       "name": "胶片颗粒",
-      "desc": "刻意加入画面的细颗粒。\n\n3 是原始值。颗粒能掩盖降噪留下的痕迹 — 弱光下那种「塑料感」的平涂区域 — 于是照片虽然多了噪点，看起来反而更自然。\n\n这属于口味问题：有人看到胶片感，有人只看到脏。"
+      "desc": "控制降噪后添加的颗粒。3 为原厂，0 移除添加的颗粒；更高值产生越来越明显的胶片质感，10 的目标为原厂数量的 16×。ASB 会修改设备自身调校中所有存在的 addNoiseWeight* 键，包括特定模式的变体。高值在阴影中可能显得粗糙。需要重启。"
     },
     "CAMERA_PORTRAIT": {
       "name": "人像 AI",
-      "desc": "人像模式下 AI 处理的强度：磨皮与五官修饰。\n\n零表示完全关闭 — 这也是出厂状态。数值越高磨皮越重；到上限时皮肤会失去质感。"
+      "desc": "调整支持的 portrait 模式中人脸和皮肤的神经混合。原厂固件可能把这些权重设为零；提高后可恢复降噪抹去的纹理，但也可能让皮肤显得不自然。级别 6 达到已实现的混合权重上限。从 1–2 开始。并非影响所有相机模式。需要重启。"
     },
     "CAMERA_LOWLIGHT": {
       "name": "微距与弱光锐化",
-      "desc": "微距和弱光场景下的锐化 — 这两种情况画面细节最容易丢失。\n\n高数值找回细节，同时也把噪点一并放大。对普通日光拍摄没有影响。"
+      "desc": "控制微距和低光处理的独立锐化刻度。0 跟随 Camera Grade；更高值逐步加强校正，10 在固件限制前的目标为 3.2×。近摄主体和高 ISO 可能让光晕更明显。仅在这些模式确实偏软时提高。需要重启。"
     },
     "camera_hold_enable": {
       "name": "相机运行时保持性能",
-      "desc": "相机运行期间阻止降频。\n\n4K 录制不会抬高 GPU 占用或平均负载 — 工作由图像处理器和硬件编码器承担 — 但 HAL 线程需要在 16.6 毫秒的期限内拿到 CPU。没有这一项，录像会卡顿，而所有指标看起来都很平静。\n\n长时间拍摄会略微升温，这是有意为之。"
+      "desc": "相机主动传输画面时，governor 保持当前 CPU 上限和正在使用的核心，而不是降低它们。这可减少连拍或录像中的性能下跌，但相打开期间会消耗更多电量。开启保持性能；关闭应用正常 governor 规则。散热和厂商安全限制仍具有最高优先级。"
     },
     "UX_MANAGE_TIMEOUTS": {
       "name": "管理界面速度",
-      "desc": "允许 ASB 调整界面速度：动画缩放和触摸响应。\n\n关闭时两者都不会被触碰，「动画速度」卡片也随之失效。"
+      "desc": "按电源配置管理界面时序的总开关。Performance 缩短动画以及长按/多击窗口；Battery 保持原厂。关闭时由 ROM 控制这些值。若需要独立于电源配置的固定动画速度，请使用下面的设置。"
     },
     "anim_speed": {
       "name": "动画速度",
-      "desc": "系统动画的速度。−1 保持旧行为，由电源配置决定 — 于是界面速度成了电池设置的副产品。\n\n0 完全取消动画，「原始 1x」就是 Android 自己使用的值。数值越小越快，越大越慢。\n\n在下一次转场时生效。"
+      "desc": "设置固定的 Android 动画缩放。−1 交由电源配置管理；0 是 Android 默认值，负值更快，正值更慢，最左端关闭动画。对后续过渡生效。极短或关闭的动画可能让过渡难以跟随，但不会加快应用的实际处理速度。"
     },
     "UX_ANIM_FORCE_RESTART": {
       "name": "强制重启动画",
-      "desc": "修改动画缩放后重启系统界面，使其立即生效。\n\n自 V62 起，切换配置不再重启系统界面 — 那会无缘无故地闪屏。此选项用于新缩放值不重启就不生效的情况。"
+      "desc": "用于忽略实时动画缩放更改的 ROM 的备用方案。手动切换配置时还会重启 SystemUI：屏幕可能闪烁、返回锁屏，其他模块的 overlay 可能被移除。并非每次自动切换都会执行。只有确认普通缩放更改无效后才启用。"
     },
     "disable_blur": {
       "name": "关闭模糊",
-      "desc": "关闭通知栏和菜单后面的毛玻璃效果。\n\n模糊每一帧都由 GPU 计算，所以关掉它在每次下拉通知栏时都省电 — 一天几百次。\n\n一半改动立即生效（窗口管理器），另一半需要重启（合成器）。"
+      "desc": "关闭下拉栏、通知、音量面板和过渡中的系统窗口模糊。可减少 GPU 工作，但会用纯色替代半透明背景；某些内容上的 heads-up 通知文字可能更难阅读。此设置全局生效，不能按面板区分。窗口模糊实时改变；合成器模糊可能需要重启。"
     },
     "ui_effects_level": {
       "name": "系统动画",
-      "desc": "系统动画的丰富程度。\n\n「自动」跟随你的无障碍设置。「常规」保持原样。「简化」用简单转场替代复杂的 — GPU 工作更少，观感也不那么灵动。",
+      "desc": "Normal 保留设备完整的过渡和 Recents 效果。Simplified 减少视觉效果并可能降低 GPU 使用，但 Recents 会变为简单列表，OxygenOS 会移除 Cards/Simple 选择器。恢复时选择 Normal 并重启。Simplified 仅在 OnePlus 15 上提供，因为其他型号上的行为尚未验证。",
       "descOpt": {
-        "auto": "不改动系统特效级别。",
-        "flat": "简化。“最近任务”变为简单列表，OxygenOS 会移除“卡片/简单”切换开关。仅限 OnePlus 15。",
-        "stock": "默认特效，与出厂一致。"
+        "auto": "不改变系统当前效果级别。",
+        "stock": "使用设备正常效果和 Recents 呈现。",
+        "flat": "简化效果。Recents 变为列表，OxygenOS 隐藏 Cards/Simple；仅限 OnePlus 15。"
       }
     },
     "net_congestion": {
@@ -140,11 +140,11 @@
     },
     "net_congestion_mobile": {
       "name": "下载加速 · 移动网络",
-      "desc": "移动网络的拥塞控制算法。\n\n蜂窝网络的时延波动比 Wi-Fi 大得多 — 信号弱时激进的算法反而会让情况更糟。"
+      "desc": "仅为移动数据选择 TCP 拥塞控制算法。As Global 跟随通用 Download Ramp 卡片。Stock 保留设备值。BBR 和 CUBIC 对丢包和延迟的反应不同；没有一种始终更快。结果取决于运营商和无线环境。不支持的算法会如实报告，而不会显示为已应用。"
     },
     "net_qdisc": {
       "name": "数据包队列 · 其他",
-      "desc": "数据包发送前如何排队，用于其他链路。\n\nfq_codel 在各应用之间公平分配并抑制缓冲膨胀 — 大文件下载不再拖垮其他一切。pfifo_fast 则是简单的先到先发。"
+      "desc": "控制 Wi-Fi 和移动网络卡片未涵盖连接的包队列，包括 USB/蓝牙网络共享、VPN 和以太网。Stock 保留设备配置。fq_codel 可降低负载下延迟，fq 适合流 pacing，cake 以更额外 CPU 开销提供更完整的队列管理。结果取决于链路；任何选项都不保证更高吞吐量或视频不卡顿。"
     },
     "net_qdisc_wifi": {
       "name": "数据包队列 · Wi-Fi",
@@ -156,28 +156,28 @@
     },
     "net_route_tune": {
       "name": "网络缓冲区",
-      "desc": "手机在等待确认之前，第一「波」发送多少数据。太少则连接加速缓慢，太多则在弱通道上丢包，反而比原来更糟。\n\n「自适应」由 ASB 判断通道类型（Wi-Fi、5G、LTE、弱信号）并选择相应大小。「适中」始终按弱通道的大小，无论当前连的是什么：保守的选择。「激进」在任何情况下都按快速通道的大小；如果你对自己的网络有把握，这有意义。「原始」完全不碰路由。\n\n建议从「自适应」开始：另外三个是手动固定大小，而合适的大小取决于全天都在变化的通道。",
+      "desc": "调整路由的初始 TCP 突发大小。Smart 根据测得的链路状况选择，并让弱链路接近出厂值；Moderate 较保守，Aggressive 选择更大的类别，在差链路上可能增加重传。Stock 恢复先前路由值。它改变的是连接启动加速，而不是射频或服务的最大速度。",
       "descOpt": {
-        "aggressive": "最大窗口。在快速稳定的链路上表现好，弱链路上会产生丢包。",
-        "auto": "智能：ASB 测量链路并为其匹配初始窗口。",
-        "conservative": "窗口略大于原生。",
-        "off": "原生。路由保留 Android 设定的值。"
+        "auto": "根据测得的链路状况选择初始路由窗口。",
+        "off": "恢复 ASB 更改前记录的路由值。",
+        "conservative": "适度增大窗口。",
+        "aggressive": "使用更大窗口；差链路可能出现更多重传。"
       }
     },
     "wifi_country": {
       "name": "Wi-Fi 区域",
-      "desc": "Wi-Fi 的监管区域代码 — 决定允许使用的信道和发射功率。\n\n「自动」跟随网络。选择其他区域可能会开启你所在地法律不允许的信道，也可能导致无法连接使用你真实区域信道的接入点。"
+      "desc": "选择 Wi-Fi 监管域，决定驱动可使用的信道和功率规则。Stock 保留设备提供的值。CR 明确选择哥斯达黎加域；它不是通用速度设置，可用性仍取决于 ROM、接入点和硬件。只能使用实际所在地允许的信道和功率。"
     },
     "wifi_scan_throttle": {
       "name": "Wi-Fi 扫描频率",
-      "desc": "允许应用请求 Wi-Fi 扫描的频率。\n\nAndroid 将其限制为每两分钟四次。放宽限制后在接入点之间切换更快，也更耗电 — 每次扫描都会让射频满功率工作。",
+      "desc": "控制 ASB 允许后台 Wi-Fi 扫描的频率。较少扫描可在固定位置减少射频活动，但会推迟已知和新网络的发现。不会改变活动连接的数据速率。Unthrottled 取消限制；各间隔见下方选项说明。",
       "descOpt": {
-        "0": "不进行后台扫描。只有打开 Wi-Fi 设置时才会显示网络。",
-        "1": "每 10 分钟一次。手机静置不动时射频工作时间明显减少。",
-        "2": "每 5 分钟一次 —— Android 自带默认值。",
-        "3": "每 2 分钟一次。更快发现你走入覆盖范围的网络。",
-        "4": "不限制。发现最快，耗电也最高。",
-        "5": "每 30 分钟。明确的省电级别；发现新网络会更慢。"
+        "0": "抑制 ASB 管理的后台扫描；系统或用户仍可发起手动扫描。",
+        "1": "约每 10 分钟允许一次后台扫描。",
+        "2": "约每 5 分钟允许一次后台扫描。",
+        "3": "约每 2 分钟允许一次后台扫描。",
+        "4": "不限制后台扫描。",
+        "5": "约每 30 分钟允许一次扫描；发现网络可能慢得多。"
       }
     },
     "auto_battery_enable": {
@@ -194,34 +194,34 @@
     },
     "doze_level": {
       "name": "深度休眠",
-      "desc": "Android 何时进入休眠以及进入多深。\n\n「原始」是系统的时序。「适中」五分钟后开始，而不是三十分钟。「激进」两分钟后 — 省得更多，后台消息可能延迟。「夜间」仅在学到的睡眠窗口内激进，白天保持原始。\n\n它同时调整轻度阶段 — 那才是手机放在口袋里时真正运行的阶段，因为深度休眠要求设备静止不动。",
+      "desc": "控制熄屏后 Android 进入 Doze 的速度。Stock 保留 ROM 时序；Moderate 目标为五分钟，Aggressive 为两分钟，Night 仅在学习到的睡眠窗口内应用。Doze 可能把后台网络、任务和闹钟推迟到维护窗口；高优先级推送仍可能到达。如果及时的后台活动更重要，请使用 Stock。Stock 会删除 ASB 时序覆盖。",
       "descOpt": {
-        "aggressive": "2 分钟后进入，传感器和定位窗口也更短。自行轮询服务器的应用可能延迟；高优先级推送始终送达。",
-        "moderate": "5 分钟后打盹。适合大多数人。",
-        "night": "仅在学习到的睡眠时段内。白天行为不变。",
-        "stock": "Android 自身的时序：熄屏 30 分钟后开始打盹。"
+        "stock": "保留 ROM 的 Doze 时序并移除 ASB 覆盖。",
+        "night": "仅在学习到的睡眠窗口内提前进入 Doze。",
+        "moderate": "熄屏约五分钟后进入 idle。",
+        "aggressive": "约两分钟后进入 idle，并缩短选定的 sensing/location 窗口。后台工作可能推迟。"
       }
     },
     "night_quiet_enable": {
       "name": "安静夜间",
-      "desc": "在学到的睡眠窗口内降低后台活动。\n\n窗口由你的实际作息推断，而非固定钟点 — 所以作息变了它也会跟着变。"
+      "desc": "在学习到的夜间窗口内长时间熄屏后，governor 暂停自身非必要的周期性工作，让设备保持空闲。不会静音应用、关闭射频，也不保证特定节电量。Off 全天保持正常 governor 调度。只有需要在夜间窗口进行这些 governor 更新时才关闭。"
     },
     "sustained_temp_mode": {
       "name": "降频点",
       "desc": "由谁决定热限制的起始点。\n\n「原始」从 CPU 热区读取本机的触发点 — 也就是厂商设计的数值。「智能」以此为起点，若发现过于保守则允许自己略微上调。「手动」使用你在下面滑块上选择的值。",
       "descOpt": {
-        "manual": "严格使用下方滑块的值。没有任何东西会改变它。",
-        "smart": "从该值开始，若会话升温过快则自动上调。",
-        "stock": "设备自身的阈值，开机时从 CPU 热区读取。"
+        "stock": "使用启动时从 CPU 散热区域读取的设备触发点。",
+        "smart": "从该点开始，在符合条件的持续会话后允许有界上调。",
+        "manual": "使用下面选择的温度，不进行 Smart 调整。"
       }
     },
     "sustained_temp_enter": {
       "name": "降频温度",
-      "desc": "ASB 开始降频的温度。\n\n数值低意味着手机更凉也更慢；数值高则相反。低于 45°C 时，即便没有负载限制也几乎始终生效 — 那不是调校，而是持续变慢。"
+      "desc": "设置 Manual 模式下 ASB 开始限制持续性能的 CPU 区域温度。较低值更早干预；较高值在 ASB 降低性能前允许更多热量。厂商散热限制仍然有效，此滑块不是安全控制。默认 65，下限 52，因为某些 CPU 区域的读数远高于电池或机身。阈值接近或低于设备正常读数可能导致持续节流、工作耗时更长和更多热量。"
     },
     "cool_gaming": {
       "name": "低温游戏",
-      "desc": "牺牲游戏峰值性能，换取更低的温度和更稳的帧率。\n\n最高帧数会下降，但波动更小 — 这恰恰让人觉得更流畅，尽管数字更小。"
+      "desc": "游戏中使用更早的散热响应，约 40 °C，而不是等待更高的持续负载阈值。可减少热量，但帧率和帧时间稳定性也可能下降，具体取决于游戏和设备。Off 恢复正常配置和温度策略；不会禁用厂商散热保护。"
     },
     "bat_suppress_gaming": {
       "name": "省电配置下不启用游戏模式",
@@ -229,15 +229,15 @@
     },
     "BG_TRIM_LEVEL": {
       "name": "后台清理",
-      "desc": "限制后台应用的力度。\n\noff — 完全不动：由 Android 自行决定。如果你只想要 ASB 的 CPU 和温控效果，且对后台现状满意，选这个。\n\nsafe — 对很久没打开的应用使用适度的待机桶。通知照常到达，不会有应用被冻结。\n\naggressive — 更强：后台应用可能丢失状态、唤醒更少。身份验证器、拨号器和蓝牙协议栈在所有级别都受保护。\n\n切回 off 时，每个应用都会回到 ASB 改动之前所在的待机桶。\n\n重型应用（Instagram、Facebook、TikTok…）只有在 Android 自身判断你并非每天使用时才会被移入 \"rare\"；你每天打开的应用不会被改动。\n\naggressive 另外增加：每 6 小时重新检查、为重型应用设置内存上限、在屏幕关闭时回收闲置重型应用的内存。停用软件包和停止厂商服务只有在存在明确授权文件 /data/adb/asb/allow_disruptive_bg_trim 时才会执行。"
+      "desc": "控制 ASB 限制后台应用的强度。Off 交由 Android 管理，并恢复 ASB 改过的 bucket。Safe 调整 Android 报告为未使用应用的 standby bucket，并保护关键应用。Aggressive 增加更强的后台和内存限制；应用可能更少唤醒、丢失状态或延迟通知。对软件包或厂商服务的破坏性操作需要单独明确授权，不会仅凭此级别启用。"
     },
     "gms_trim": {
       "name": "限制谷歌服务",
-      "desc": "减少 Google Play 服务的后台工作。这不是冻结也不是禁用 — 推送通知、登录、支付和 Play 商店照常工作。\n\n「适中」停止位置上报和搜索小部件的后台活动；两者都与通知送达无关。「严格」额外把 GMS 移出 Doze 豁免名单 — 在以 Google 服务为主要耗电来源的手机上，这里省得最多，同时也可能让休眠时的通知延迟数分钟。\n\n完全可逆。",
+      "desc": "减少选定的 Google Play services 后台活动，而不禁用该服务。Lite 限制位置报告和搜索小部件后台工作。Strict 还会把 Play services 从 Doze 豁免列表移除，可能延迟推送、同步和其他后台任务。如果及时送达很重要，请选择 Lite 或 Stock。更改的权限和豁免会记录，并在移除 ASB 时恢复。",
       "descOpt": {
-        "lite": "后台任务更少，不关闭任何功能。",
-        "stock": "Google 服务按自己的意愿安排后台工作。",
-        "strict": "明显减少。部分同步可能延迟。"
+        "stock": "让 Play services 后台调度由 ROM 控制。",
+        "lite": "限制选定的位置和搜索小部件后台工作。",
+        "strict": "还移除 Play services 的 Doze 豁免；推送和同步可能延迟。"
       }
     },
     "UX_MANAGE_OEM_TOGGLES": {
@@ -246,11 +246,11 @@
     },
     "phantom_procs": {
       "name": "后台进程上限",
-      "desc": "当所谓「幽灵进程」— 应用在正常生命周期之外派生的进程 — 超过 32 个时，Android 会将其杀死。这就是 Android 12 及以后长时间编译、模拟器和终端会话中途中断的原因。\n\n「不限制」关闭这项监控。「限制 32」明确重新启用 Android 自己的上限。\n\n「不改动」与「限制 32」不同：它保留设备当前的值，而这个值可能已被旧版 ASB 或其他模块改过。想要可预测的结果，请选前两个之一。\n\n需要重启应用，因为 Android 在进程启动时读取该上限。",
+      "desc": "控制 Android 对应用在正常 activity 生命周期之外创建的 phantom 进程的限制。No Limit 关闭此保护，让长时间终端任务、模拟器和编译可以存活，但失控应用也可能消耗更多内存和 CPU。Limit 32 明确恢复 Android 上限。Leave Alone 保留设备当前值，其他工具可能已修改它。重启受影响的应用，因为限制在进程启动时读取。",
       "descOpt": {
-        "relaxed": "无限制。终端和后台编译不会被打断。",
-        "stock": "遵循 Android 自身的限制——后台子进程会被终止。",
-        "strict": "限制 32。后台进程比原生允许的更少。"
+        "stock": "不改变当前 phantom 进程设置。",
+        "relaxed": "禁用限制。后台子进程可以存活，但对失控资源使用的约束更少。",
+        "strict": "明确把 Android 限制设为 32 个 phantom 进程。"
       }
     },
     "haptic_strength": {
@@ -263,81 +263,81 @@
     },
     "log_level": {
       "name": "日志详细度",
-      "desc": "ASB 写入日志的详细程度。\n\n「原始」是最低限度。更高的级别在排查问题时有用，也会更多地写入存储。除非你正在为报告收集日志，否则保持较低。",
+      "desc": "控制 ASB 日志详细程度，以及 Stock 以外的选定设备日志。Stock 不改变设备日志。0 尽量减少设备和 ASB 诊断，使之后的错误报告很难有用。1 记录正常重要事件；2 增加 learner 和屏幕转换细节，适合电池报告；3 为详细模式，日志增长很快，仅在复现问题时使用。离开 0 时恢复 ASB 记录的日志状态。",
       "descOpt": {
-        "0": "极限：尽可能削减日志。节省写入和唤醒——但几乎任何错误报告都会失去价值。",
-        "1": "普通。仅记录重要事件——模块一贯的做法。",
-        "2": "详细：增加学习和屏幕切换记录。提交耗电日志前请开启。",
-        "3": "调试。日志增长很快；仅在复现问题时使用。",
-        "stock": "ASB 完全不干预设备日志。"
+        "0": "尽量减少设备和 ASB 诊断。之后的报告可能缺少分析证据。",
+        "1": "记录正常重要 ASB 事件。",
+        "2": "增加 learner 更新和屏幕转换；适合电池调查。",
+        "3": "详细诊断增长很快。仅在复现问题时使用。",
+        "stock": "不通过此设置改变设备日志。"
       }
     },
     "audio_remove_volume_limit": {
       "name": "耳机音量上限",
-      "desc": "Android 会在欧盟认为长时间聆听不安全的音量之上加以限制。解除上限让原有音量滑块可以继续往上 — 它本身不会让任何东西变响。\n\nASB 过去在另一个类别里悄悄解除了它。现在这是一个选择，默认关闭：多响算太响，对你的耳朵而言不该由一个性能模块替你决定。\n\n长期大音量对听力的损伤会累积且不可逆。若解除上限，请像关注音量一样关注时长。"
+      "desc": "移除 Android 耳机音量上限，让现有滑块可以调得更高；本身不会增加增益。默认关闭。它移除的是安全边界，不只是警告：长时间高音量聆听可能造成永久听力损伤。请使用最低舒适音量并限制时长。如果 ROM 只在启动时读取策略，则需要重启。"
     },
     "audio_resampler": {
       "name": "重采样质量",
-      "desc": "Android 如何在不同采样率之间转换音频。只有当曲目与输出采样率不同时才有意义——通常是 44.1 kHz 音乐在 48 kHz 输出上播放，也就是大多数流媒体和本地文件。默认保持 ROM 自带的重采样器。\n\n高：从 44.1 kHz 起给这次转换使用更长、更陡的滤波器（阻带衰减 140 dB，而不是约 90 dB，长度为五倍）：混叠更少，高音区更干净。最大更进一步（179 dB，长度为十倍）。差别可以测量；能否听出取决于你的耳朵和耳机——对大多数人来说听不出来。\n\n不受影响：已经以输出采样率播放的音频、offload 播放以及蓝牙编解码器本身。播放时会占用 CPU：高档很少，最大档明显更多。需要重启——音频服务只在启动时读取。"
+      "desc": "控制音源与输出采样率不同时 Android 的采样率转换质量。Stock 保持 ROM 不变；High 和 Max 使用更长、更陡的滤波器，Max 的 CPU 开销最高。能否听出差别取决于录音和设备，差别也可能很小。已经以输出采样率播放的内容、硬件 offload 播放和蓝牙编解码器编码不受影响。需要重启。"
     },
     "media_vol_steps": {
       "name": "媒体音量级数",
-      "desc": "媒体音量滑块有多少档。默认保留手机的设定（原生 Android 为 15 档，部分 ROM 更多）。20 到 100（每次 5 档）让每一档更细——夜间和使用灵敏耳机时很有用。\n\n最大音量保持不变，只改变档位间距。重启后滑块保留原来的档位编号，所以第一次播放可能更小声——调高一次即可。部分 ROM 会忽略此设置；操作按钮和 asbdiag 会显示系统实际使用的档数。需要重启。"
+      "desc": "改变媒体音量位置数量，不提高最大音量。更多步进可实现更精细的控制，尤其适合低音量聆听。Stock 保留 ROM 值；20–100 以五为步长选择固定数量。需要重启。之后保存的滑块位置可能对应更低音量，请检查一次。某些 ROM 会忽略此设置；操作按钮和 asbdiag 会显示实际使用的值。"
     },
     "doze_trim_whitelist": {
       "name": "精简休眠豁免",
-      "desc": "「深度休眠」决定 Doze 何时开始。这一项决定谁可以无视它。\n\n豁免名单中的应用在每个空闲窗口都保留闹钟和网络 — 于是手机可以整夜深度休眠，而三个豁免应用照样把它唤醒。这正是只调时序却看不到效果的原因。\n\n只涉及你自己安装的应用。电话、短信、时钟和你的 root 管理器永远不会被移除。每次移除都会记录，回到「不改动」或卸载 ASB 时恢复。\n\n需要「深度休眠」设为「激进」或「夜间」。"
+      "desc": "独立于 Doze 时序控制 Android 的 Doze 豁免。减少豁免会让用户安装的应用遵守空闲限制；不会移除电话、短信、时钟和 root 管理器等受保护系统应用。应用列表可让选定的即时通信、邮件或 VPN 保持豁免。更改会记录，并在级别 0 或卸载时恢复。减少豁免可能延迟通知和后台同步。"
     },
     "gms_freeze": {
       "name": "冻结谷歌组件",
       "desc": "停用 Google Play 服务的单个组件。级别是累积的。SAFE：遥测、统计与分析——手机不需要的东西。MORE：再增加广告标识符、位置上报和备份计划器。MAX：再增加 Icing 索引和 Fitness 后台记录。MAX 的代价：应用内和系统搜索会漏掉部分结果，步数不再在后台统计。任何级别都不影响推送通知。切换到关闭即可全部恢复——每个组件的原始状态都会被记录。",
       "descOpt": {
-        "more": "额外冻结广告和分析组件。可逆，但请检查你常用的功能。",
-        "off": "不冻结任何内容，Google 服务照常运行。",
-        "safe": "仅冻结遥测和报告。推送、登录和支付不受影响。"
+        "off": "让每个受管 Google 组件保持记录的原始状态。",
+        "safe": "禁用选定的遥测和报告组件。检查依赖它们的应用。",
+        "more": "还禁用选定的广告和测量组件。可逆，但依赖功能可能改变。"
       }
     },
     "athena_service": {
       "name": "Athena 后台杀手",
-      "desc": "OxygenOS 自带后台应用杀手 com.oplus.athena，其中决定「杀谁」的组件就是 AthenaService。这就是为什么留在后台的即时通讯应用会停止推送通知直到你重新打开它——而且电池白名单无济于事，因为作祟的不是 Android 的 Doze。关闭只禁用这一个组件；软件包的其余部分继续运行，因此温控上报和设置面板不受影响。完全可逆：改动前会记录先前状态，切回默认或移除模块时恢复。预计内存占用更高、耗电略增——这就是让应用保活的代价。",
+      "desc": "控制 OxygenOS 的 AthenaService 后台应用终止组件。Off 只禁用该组件，保留 com.oplus.athena 的其余部分；可能有助于被 OEM 无视 Android 豁免而终止的应用。更多应用保持活动可能增加 RAM 和后台耗电；通知行为仍取决于各应用。Stock 恢复 ASB 记录的组件状态；卸载也会恢复。",
       "descOpt": {
-        "off": "AthenaService 已停用——应用保持活跃并发送通知。预计内存占用更高，耗电略增。",
-        "stock": "OxygenOS 照常清理后台应用。"
+        "stock": "OxygenOS 保持正常的 Athena 后台策略。",
+        "off": "仅禁用 AthenaService。应用可能更久保持活动，增加 RAM 和后台耗电。"
       }
     },
     "net_rps": {
       "name": "分散网络负载",
-      "desc": "哪些核心处理传入的网络数据包。默认情况下，所有包都落在中断所触发的那一个核心上——这会限制快速 Wi-Fi 下的吞吐，并把该核心钉在高频。「小核」把工作分摊到能效簇，「全部」则使用所有核心。唤醒第二个核心要付出一点 CPU 开销，因此在快速链路上有收益，在慢速链路上反而吃亏。 仅作用于 Wi-Fi：移动数据交由手机自身的硬件分流处理，手动掩码只会拖慢它。",
+      "desc": "选择可处理 Wi-Fi 接口入站数据包的 CPU 核心。Stock 不修改内核和驱动配置。Little 使用能效簇；All 允许所有核心。分散处理可能有助于高速链路，但会唤醒更多 CPU，并可能在轻流量时增加功耗。移动数据接收分配交由设备处理。实际收益取决于驱动和链路。",
       "descOpt": {
-        "stock": "每个数据包留在其中断所落的核上 —— Android 自身的行为。",
-        "little": "分摊到能效簇上。两个选项中更稳妥的一个。",
-        "all": "分配到所有核心。快速 Wi-Fi 下吞吐最佳，但唤醒的 CPU 最多。"
+        "stock": "不改变内核和驱动的数据包接收掩码。",
+        "little": "允许在能效簇处理接收。",
+        "all": "允许在所有 CPU 簇处理接收；更多核心可能唤醒。"
       }
     },
     "net_txqueue": {
       "name": "发送队列",
-      "desc": "允许多少数据包排队等待发送。默认值 1000 源自上世纪 90 年代有线以太网，一路沿用到了无线驱动；在 Wi-Fi 这种波动很大的链路上，深队列大多只会在负载下增加延迟。",
+      "desc": "设置 Wi-Fi 发送队列中可以等待的数据包数量。Stock 保留驱动值；Short 使用 256，Shorter 使用 128。较小队列可降低负载下延迟，但在高速或变化较大的链路上可能限制吞吐量或增加丢包。如果上传、流媒体或延迟变差，请恢复 Stock。",
       "descOpt": {
-        "stock": "1000 个数据包，驱动出厂默认。",
-        "short": "256。负载下延迟更低，大多数链路上吞吐不变。",
-        "shorter": "128。延迟最低；在极快链路上可能牺牲吞吐。"
+        "stock": "保留驱动的发送队列长度。",
+        "short": "256 个数据包。可降低排队延迟，但并非适合所有高速链路。",
+        "shorter": "128 个数据包。在负载下测试吞吐量、丢包和延迟。"
       }
     },
     "perf_ceiling_pct": {
       "name": "性能上限",
-      "desc": "手机可以用到配置自身上限的多少。100% 保持配置不变。\n\n更低的数值按比例削减所有上限：更凉、续航更久，在你真正等待的时候也更慢。\n\n按配置比例缩放，而不是按机型固定：配置里的数值本就已经匹配你的硬件。\n\n只有上限会变；保证滚动和音频流畅的下限不受影响。"
+      "desc": "以设备最大值的百分比限制 ASB 可用的 CPU 和 GPU 峰值性能。主要限制高负载工作；轻任务可能永远达不到上限。较低值可降低峰值和热量，但也可能延长任务并让组件更久保持唤醒，因此续航不会自动改善。100 不添加此 ASB 上限。如有需要，从约 85 开始，在自己的设备上比较热量、响应和耗电。"
     },
     "wakelock_action": {
       "name": "处理唤醒锁",
-      "desc": "唤醒锁是应用在对 Android 说「先别休眠」。一个应用整夜这样做，代价超过这里任何设置能省下的电量。\n\n测量始终开启；此项决定 ASB 是否介入。开启后，你自己安装的应用若在息屏 45 分钟以上仍持有唤醒锁，会被移入 Android 的「受限」分组。\n\n从不触碰：内核和系统来源，以及身份验证器、电话、短信、即时通讯和时钟应用。 具体规则：只针对占用 CPU 10 分钟以上（或此刻正持有长时间锁）且 Android 认为今天未使用过的应用。你排除在电池优化之外的应用、邮件、导航和输入法也从不触碰。"
+      "desc": "选择 ASB 是否对持续的应用 wakelock 采取行动；两种方式下都可测量和报告。启用后，只有在熄屏活动 45+ 分钟且有证据表明手机一直保持唤醒时，才会考虑合适的用户应用。具体来说：只有占用 CPU 超过 10 分钟（或当前仍持有长时间锁）且 Android 今天未计为已使用的应用，才可移入受限 standby bucket。内核/系统来源、关键应用、电池优化豁免、邮件、导航和键盘均被排除。不会强制停止；限制可能延迟后台工作或通知。Off 仅查看报告而不干预。"
     },
     "night_modem_idle": {
       "name": "夜间安静射频",
-      "desc": "让调制解调器在模块从你自己的夜晚中学到的时段里安静下来。一次夜间抓取显示，唤醒 CPU 的不是应用，而是网络路径：来自 IPA 和 rmnet 的唤醒超过一百次。此调整只在你的睡眠窗口内削减这类活动，你一醒来就全部放开。"
+      "desc": "在学习到的睡眠窗口内延长蜂窝 keepalive 间隔，并限制选定的 rmnet 数据路径唤醒，让调制解调器路径更久保持空闲。推送通知和应用同步可能等到之后的唤醒。通话和短信使用独立的调制解调器路径；ASB 不改变射频功率、飞行模式、漫游或网络选择。所有更改都会记录，并在禁用或卸载时恢复。"
     },
     "gnss_trim": {
       "name": "精简后台 GPS",
-      "desc": "GPS 是手机最耗电的功能之一。Android 会单独统计其中有多少来自处于缓存中的进程：那些已经关闭、并没有在做你要求的任何事的应用。\n\n在一份日志里，这占了 GPS 总耗电 56 mAh 中的 53 mAh。\n\n开启后，进程处于缓存且屏幕熄灭时仍持有定位的应用会被限制为粗略精度。你一打开它，完整精度立即恢复。\n\n从不触碰：地图与导航、健身与轨迹记录、紧急和查找设备类应用。"
+      "desc": "熄屏时限制进程处于 cached 状态的合适用户应用的后台定位。这些应用只能获得粗略位置，打开后恢复正常精度。导航、健身/路线、紧急、find-my 和前台应用会被排除。可减少定位相关唤醒，但受影响应用的后台功能可能失去精确轨迹或地理围栏准确性。"
     },
     "smart_media_guard": {
       "name": "Smart 媒体保护",
@@ -349,7 +349,7 @@
     },
     "bt_link_stability": {
       "name": "蓝牙连接稳定性",
-      "desc": "适用于播放音频时蓝牙耳机无故断连的手机。大多数设备从不会出现这种情况，因此默认关闭。\n\n设为 stable 后，音频播放期间 Wi-Fi 停止扫描新网络：2.4 GHz 频段与蓝牙共用一副天线，扫描会扫遍整个频段——错过时隙的音频流就会断连。\n\n代价：新的 Wi-Fi 网络出现得更慢。其他一切不变。\n\n不强制指定任何编解码器。"
+      "desc": "用于播放期间蓝牙音频断连的可选规避方案。“稳定”会在播放音频时抑制 Wi-Fi 扫描，在两种射频互相干扰的设备上可能有帮助。新网络可能更慢出现。不会强制指定编解码器，也不改变配对。连接已经稳定时保持关闭。"
     },
     "mglru_hold": {
       "name": "应用常驻内存",
@@ -357,22 +357,22 @@
     },
     "net_wifi_leave": {
       "name": "离开故障 Wi-Fi",
-      "desc": "已连接但无法使用的 Wi-Fi 会让手机持续重试，而不是切换到移动网络。每一档都更早离开。 离开方式：亮屏时 ASB 关闭 Wi-Fi 30 秒后重新打开；若手机又连回同一个弱网络，暂停时间翻倍，最长 5 分钟。无需开启蜂窝网络控制。",
+      "desc": "帮助离开已连接但信号弱或没有可用流量的 Wi-Fi 网络。更高级别会更早行动。亮屏时，ASB 会短暂关闭再打开 Wi-Fi；重复失败会把暂停从 30 秒逐步增加到五分钟。这可能中断活动 Wi-Fi 会话并使用移动数据。独立于 Cellular controls 工作。",
       "descOpt": {
-        "off": "出厂默认：仅在连接真正断开时才放弃 Wi-Fi。",
-        "weak": "信号低于 -80 dBm 时离开。",
-        "unusable": "在上一档基础上，再离开已连接但无数据流量的链路。",
-        "aggressive": "在上一档基础上，不等链路失败就切换到移动网络。"
+        "off": "不主动离开 Wi-Fi；由 Android 和驱动控制切换。",
+        "weak": "信号低于 −80 dBm 时行动。",
+        "unusable": "已连接链路没有可用流量时也行动。",
+        "aggressive": "使用最快的切换规则；更可能中断 Wi-Fi 并使用移动数据。"
       }
     },
     "wifi_powersave": {
       "name": "Wi-Fi 省电",
       "descOpt": {
-        "off": "射频始终保持完全唤醒 —— 出厂默认行为。",
-        "screen_off": "屏幕熄灭时在信标之间让射频休眠。",
-        "always": "无论亮屏还是熄屏，始终保持省电模式开启。"
+        "off": "让 Wi-Fi 射频在数据包之间保持唤醒。",
+        "screen_off": "仅在熄屏时启用 Wi-Fi 节能。",
+        "always": "在使用期间和熄屏时都保持 Wi-Fi 节能。"
       },
-      "desc": "让 Wi-Fi 模块在数据包之间休眠。「息屏时」是稳妥选择；「始终」更省电，但可能给游戏和通话增加延迟。"
+      "desc": "控制数据包之间的 Wi-Fi 节能。Screen Off 仅在熄屏时启用；Always 在使用期间也启用。较少射频活动可能降低功耗，但会增加延迟或影响游戏、投屏和 Wi-Fi 通话。Off 让射频保持唤醒。实际行为和节省取决于驱动及接入点。"
     },
     "CAMERA_AGGRESSIVE_INJECT": {
       "name": "相机密钥模式",
@@ -380,19 +380,19 @@
     },
     "ltpo_force": {
       "name": "强制 LTPO 刷新",
-      "desc": "LTPO 屏幕可以在画面静止时降到最低的刷新率；但 OxygenOS 出厂时关闭了这条路径的一部分。此补丁读取你设备自带的刷新率表（oplus_vrr_config.json），把厂商遗留关闭的所有面板节能开关全部打开（ADFR、PDFR、刷新率调度、直方图背光控制等），并额外关闭显示栈自身的遥测（VRR 信息记录、直方图采样、big-data 与着色器缓存未命中上报）——不耗性能、白捡续航。不会从其他机型复制任何内容，也绝不改动原始文件。\n\n补丁在模块安装时生成，由这个开关决定是否应用：默认关闭，开启后需重启生效。如果安装程序在你的设备上没有找到刷新率表，或表里没有可改进之处，此开关不会有任何作用——安装日志和状态徽章会说明是哪种情况。\n\n对于厂商出厂已全开的表（OnePlus 15 即是），补丁依然有用：挂载的是一份仅砍掉遥测开关的相同副本。\n\n该开关还会放开 Android 一侧的刷新范围，这部分无需重启、即时生效：不设刷新率下限，峰值设为这块屏幕报告的最高档位（OnePlus 15 上为 165 Hz）。范围的低端——屏幕自身低于 60 Hz 的空闲刷新率——由刷新率表负责，因为 Android 根本不会列出这些档位。原先的设置会被记录，并在关闭时恢复。厂商自身对渲染帧率的上限（部分版本为 90 Hz）不做改动。"
+      "desc": "应用从设备自身 oplus_vrr_config.json 准备的补丁：启用 OEM 未开启的受支持面板节能路径，并禁用选定的显示遥测。不会修改原厂文件。如果没有合适表格或更改，开关不会执行任何操作，状态徽章会说明原因。应用表格需要重启。\n\n同时打开 Android 刷新率范围：ASB 移除下限，使用面板报告的最高模式，触摸时恢复最大值，并在静止两秒后选择 60 Hz，以便面板继续自适应。保留相机、游戏和视频的控制权，交还时恢复先前范围值。如果存在已验证的 OnePlus15-165HZ-LTPO writer，除非明确给予 ASB 优先级，否则 ASB 会让出控制。节能和低空闲刷新率取决于面板和 ROM，不作保证。"
     },
     "mmfeed_off": {
       "name": "关闭多媒体遥测",
-      "desc": "OxygenOS 会运行多媒体反馈收集器：由 Multimedia_Feedback_List.xml 开启的音频、视频和显示诊断事件，包含日志转储与上传。此补丁读取你设备上该文件的自有副本，只把其中的 isOpen 开关改为 false，然后把结果挂载覆盖到原始文件上——不会从其他机型复制任何内容，也绝不改动原始文件。\n\n补丁在模块安装时生成，由这个开关决定是否应用：默认关闭，开启后需重启生效。如果安装程序在你的设备上没有找到该文件，或厂商出厂时已将其关闭，此开关不会有任何作用——状态徽章会说明是哪种情况。\n\n更少的事件日志和转储意味着白捡的续航与更少的 I/O；音频和视频本身不受影响。"
+      "desc": "使用设备自身的 Multimedia_Feedback_List.xml，将多媒体反馈收集器的 isOpen 开关设为 false，再把补丁副本绑定到原厂路径，而不修改原文件。补丁在安装时准备，只有开关打开时才应用；需要重启。如果文件不存在或已经关闭，开关不会执行任何操作，徽章会报告该状态。可减少诊断日志和 I/O，但不保证节省电量。音频和视频处理不会改变。"
     },
     "net_screen_off_lte": {
       "name": "熄屏时使用 LTE",
-      "desc": "屏幕关闭 90 秒后关闭 5G 分支，数据保持在 LTE 上；屏幕一亮立即恢复 5G。5G NSA 会同时占用两套射频，而熄屏听音频流时 LTE 绰绰有余。通话期间绝不触发。默认关闭：更改允许的网络类型会重新建立数据连接。若系统不接受更改，模块会恢复原值并停止尝试。 下载保持 5G：检测到 3 Mbit/s 及以上即视为传输而非流媒体——此时不会切到 LTE；若已在 LTE，则恢复 5G 至少 10 分钟。"
+      "desc": "熄屏 90 秒后优先使用 LTE，而不是继续保持 5G NSA；亮屏时恢复先前设置。通话和足够重的传输会被排除，近期传输可让 5G 至少保持 10 分钟。默认关闭，因为更改允许的网络类型可能让移动数据短暂重新注册。如果 ROM 拒绝更改，ASB 会恢复原值并停止重试。"
     },
     "net_lte_light": {
       "name": "仅在需要时使用 5G",
-      "desc": "亮屏时：移动流量连续 3 分钟较轻（低于 2 Mbit/s——信息流、音乐）时关闭 5G 分支，留在足以应付的 LTE 上。下载会在约 20 秒内恢复 5G（连续两次 10 秒检测均达到 3 Mbit/s 及以上，或单次检测超过 12 Mbit/s），并保持 10 分钟。5G NSA 为细小的数据流同时占用两路射频。通话、网络共享、游戏期间以及 Wi-Fi 下从不触发。默认关闭：每次切换都会让数据连接重新注册一两秒。"
+      "desc": "亮屏时，低于 2 Mbit/s 的轻度移动流量持续三分钟后，从 5G NSA 切换到 LTE。持续流量超过已实现阈值会恢复 5G 并保持 10 分钟。通话、网络共享、游戏或 Wi-Fi 使用期间不会切换。默认关闭：每次切换都可能让数据短暂重新注册，实际功耗取决于调制解调器和信号。"
     },
     "heavy_prime_escape": {
       "name": "超大核短时提升",
@@ -408,18 +408,18 @@
     },
     "wakelock_fitness": {
       "name": "健身应用与唤醒锁",
-      "desc": "计步器和健身追踪应用默认不受任何唤醒锁规则影响，因为无法唤醒的追踪器就失去了安装它的意义。但在实测日志中，其中之一——Samsung Health 的计步器——仍是夜间让手机保持唤醒的最大单一来源：每晚占用数分钟 CPU。\n\n“限制”会让 Android 忽略本机已安装的计步和健身应用的唤醒锁。只要手机因其他原因处于唤醒状态，应用照常运行；它只是不能再自行让 CPU 保持唤醒。计步传感器无论如何都在自己的低功耗芯片中计数，因此每日总步数通常不受影响。\n\n可能受影响的：逐分钟的步数时间线，以及熄屏状态下记录的锻炼。手表和手环的配套应用永远不在其列——否则通知将无法推送到手腕。之前的状态会被记录，并在选择“保护”或卸载模块时恢复。与“处理唤醒锁”相互独立。"
+      "desc": "默认保护健身和计步应用不受 ASB wakelock 干预。Limit 要求 Android 忽略其 wakelock，使其无法单独保持 CPU 唤醒。手表和手环配套应用会被排除。即使硬件继续计步，步数时间线、后台锻炼和同步也可能不完整。Protect 或卸载会恢复记录的状态。独立于 Act on Wakelocks。"
     },
     "ltpo_video": {
       "name": "视频最低刷新率",
-      "desc": "播放视频时，屏幕会保持系统为其他内容选择的刷新率：在这一系列手机上，30 fps 的视频流会跑在 90 Hz——每帧刷新三次，而两次就足够。\n\n开启后，ASB 会把峰值刷新率降到屏幕支持的、恰为视频帧率整数倍的最低档位（30 和 60 fps 对应 60 Hz），画面依然没有抖动。仅在以下条件同时满足时生效：亮屏、正在播放音频、有视频图层请求 30 或 60 fps、没有任何图层请求高流畅度、且屏幕 3 秒内未被触摸。\n\n第一次触摸会立即恢复原值，播放结束、关闭视频和熄屏也一样——因此滑动和动画都以全刷新率运行。坦白说明：触摸后的最初几帧（约 0.1–0.2 秒）可能仍处于较低刷新率。24、25 和 50 fps 的视频没有更低的无抖动档位，不做改动。即时生效。"
+      "desc": "在符合条件的视频播放期间，把面板上限限制为与 30 或 60 fps 内容匹配的最低已报告模式，例如两者都使用 60 Hz。仅在亮屏、音频播放、存在兼容视频层、没有高流畅度请求且三秒未触摸时生效。触摸、播放结束或熄屏会恢复先前值；触摸后的最初瞬间仍可能使用较低刷新率。其他帧率保持不变。匹配模式可避免不必要的刷新，而不改变视频帧率。"
     },
     "lsposed_verbose": {
       "name": "LSPosed 详细日志",
-      "desc": "LSPosed 会保存自己的详细日志，可增长到几十 MB（某台手机上为 31 MB）。“关闭”会写入 LSPosed 自身的设置——即其管理器中“设置 > 详细日志”的同一开关——并删除旧的详细日志文件；LSPosed 在启动时读取该设置，因此重启后生效。模块日志——LSPosed 模块自己写入的内容——在 LSPosed 中没有开关，因此当此卡片处于“关闭”时，ASB 还会每隔几分钟在后台清空它。“保持”完全不改动 LSPosed；如果 ASB 曾关闭详细日志，则恢复 LSPosed 原来的值。之后若您在 LSPosed 中重新打开日志，ASB 不会撤销。向 LSPosed 模块作者报告问题前请重新打开它。",
+      "desc": "Keep 让 LSPosed 设置和日志由 LSPosed 自己控制。Off 修改 LSPosed 自身的 Verbose log 设置、删除旧 verbose 文件，并在 LSPosed 或手机重启后生效。由于 LSPosed 没有模块日志的对应开关，选择 Off 时 ASB 还会定期清空它。这可能删除调试其他模块所需的证据。如果之后在 LSPosed 中启用 verbose，ASB 不会撤销该选择；Keep 交还控制权，不会暗中管理 LSPosed。",
       "descOpt": {
-        "keep": "ASB 不改动 LSPosed 的设置。",
-        "off": "下次启动起关闭 LSPosed 详细日志；旧日志文件立即删除。"
+        "keep": "让 LSPosed 设置和日志由其自己控制。",
+        "off": "从下次启动起禁用 LSPosed verbose，删除旧 verbose 日志并定期清空 Modules log。"
       }
     },
     "dsp_headroom": {
@@ -438,16 +438,16 @@
       "name": "调度器调试统计",
       "desc": "可选的通用内核调整。仅在 /proc/sys/kernel/sched_stats 可用且可写时，关闭才会禁用调度器调试统计。调度策略、CPU 频率和 SoC 驱动程序均不改变。Stock 和卸载会恢复原始 0/1。不声称未经测量的省电百分比。",
       "descOpt": {
-        "stock": "默认：不改动调度器调试统计。",
-        "off": "仅关闭可用的通用 sched_stats 节点；选择默认或卸载时会精确恢复原始值。"
+        "stock": "不改变调度器调试统计。",
+        "off": "仅禁用已暴露且可写的 sched_stats 节点；Stock 或卸载时恢复记录值。"
       }
     },
     "heytap_mcs": {
       "name": "HeyTap / OPPO 推送通知",
       "desc": "“关闭”会禁用 com.heytap.mcs，而不替换系统文件。使用 HeyTap/OPPO Push 的应用可能丢失或延迟收到通知。启用时还会请求在下次重启后执行一次按配置文件引导的 ART 编译；期间可能暂时占用 CPU、存储和电量。“原生”仅恢复 ASB 修改过的 MCS 状态，并取消尚未开始的编译。重启后会等待充电（Charging 或 Full）再编译，避免手持时发热和耗电；24 小时内未充电则保持待处理，直到下次启动。",
       "descOpt": {
-        "stock": "MCS 保持由 Android/OEM 控制；取消等待中的 ART 请求。",
-        "off": "禁用 HeyTap Push 传输，并在下次重启后编译一次。之后请检查通知。"
+        "stock": "让 MCS 由 Android/OEM 控制，并取消尚未开始的编译。",
+        "off": "禁用 HeyTap 推送传输，并在下次重启后请求一次 ART 编译。检查受影响应用的通知。"
       }
     },
     "documentsui_fix": {
@@ -784,9 +784,9 @@
   "cfg_profile_load_short": "↓ 打开",
   "cfg_profile_storage_hint": "配置安全保存在 ASB 内部；请选择名称，而非路径。",
   "cfg_audio_section_playback": "播放与蓝牙",
-  "cfg_audio_section_playback_hint": "选择音频路径和蓝牙行为。",
+  "cfg_audio_section_playback_hint": "选择音频路径、音量行为和蓝牙处理路径。",
   "cfg_audio_section_dsp": "ASB DSP 引擎",
-  "cfg_audio_section_dsp_hint": "为所选输出提供可选的增益、低音和动态处理。",
+  "cfg_audio_section_dsp_hint": "为选定输出提供可选 ASB 处理。增益和效果共用一个余量限制器；更多处理并不总是意味着更干净的声音。",
   "cfg_audio_section_safety": "聆听安全",
   "cfg_audio_section_safety_hint": "除非你明确更改，否则系统的听力保护音量限制保持不变。",
   "t_quick_explain": "快速重启仅重启 Android；overlay 仍需要完整重启。",
@@ -868,7 +868,7 @@
   "lr_th_ma": "平均电流",
   "lr_hz_unit": "赫兹",
   "lr_sec_smart": "🧠 智能学习",
-  "lr_sm_ctx": "已学习场景",
+  "lr_sm_ctx": "正在跟踪的情境",
   "lr_sm_watching": "观察中",
   "lr_sm_testing": "测试中",
   "lr_sm_helped": "调校有效",
@@ -884,13 +884,13 @@
   "lr_tip_wl_enable": "{app} 每天让手机保持唤醒约 {min} 分钟。「{set}」设置可以限制它。",
   "lr_tip_night_modem": "夜间待机消耗 {pct}%。「{set}」设置可以让调制解调器在这些时段保持安静。",
   "lr_tip_jank_bad": "卡顿率 {pct}%：偏高。建议尝试 120/90 赫兹或开放 (stock) 模式。",
-  "lr_tip_jank_ok": "卡顿率 {pct}% —— 非常好。当前设置很适合你。",
+  "lr_tip_jank_ok": "流畅度良好：仅 {pct}% 的帧出现延迟。",
   "lr_tip_jank_wake": "卡顿集中在唤醒时：解锁和打开应用时有 {pct}% 的帧卡顿，而全天为 {ord}%；其中最卡顿的是 {who}。",
   "lr_tip_jank_wake_wh": "卡顿集中在唤醒时：解锁和打开应用时有 {pct}% 的帧卡顿，而全天为 {ord}%。",
   "lr_tip_audio": "扬声器播放音频每小时耗电约 {pct}% —— 全天耗电最高的阶段。电池主要耗在这里。",
   "lr_tip_cost_ok": "ASB 每小时约用 {ms} CPU —— 模块自身几乎零成本。",
   "lr_tip_cost_hi": "ASB 每小时约用 {ms} CPU：略高，日志会告诉你是哪个触发器在工作。",
-  "lr_tip_smart_help": "智能学习确实改善了 {n} 个被观察场景中的调校。",
+  "lr_tip_smart_help": "在实测比较中，额外频率余量有利于 {n} 个应用，Smart 仅为这些应用保留；这不保证适用于所有负载。",
   "lr_tip_ltpo": "视频播放一直保持高刷新率。「{set}」设置会把视频降到最低帧率。",
   "dbg_only": "Debug build only",
   "dbg_diag_saved": "asbdiag 已保存",
@@ -1056,19 +1056,19 @@
   "cfg_net_section_wifi": "Wi-Fi",
   "cfg_net_section_wifi_hint": "扫描、省电、区域，以及何时离开不佳的网络。",
   "cfg_net_section_speed": "下载速度",
-  "cfg_net_section_speed_hint": "按网络类型设置下载加速速度与数据包排队方式。",
+  "cfg_net_section_speed_hint": "按链路设置拥塞控制和数据包队列。改变启动加速和负载下延迟，而非链路标称速度。",
   "cfg_net_section_stack": "网络协议栈",
-  "cfg_net_section_stack_hint": "进阶：网络负载如何在核心间分配与缓冲。",
+  "cfg_net_section_stack_hint": "高级接收核心、发送队列和路由窗口控制。请在自己的链路上测试吞吐量、延迟和耗电。",
   "cfg_ui_section_services": "系统服务",
   "cfg_ui_section_services_hint": "厂商后台服务与进程限制。",
   "cfg_ui_section_feel": "显示与振动",
   "cfg_ui_section_feel_hint": "刷新率行为以及振动和触控反馈的手感。",
   "cfg_ui_section_diag": "诊断",
-  "cfg_ui_section_diag_hint": "模块与 LSPosed 写入各自日志的详细程度。",
+  "cfg_ui_section_diag_hint": "控制 ASB 和设备诊断，而不接管 LSPosed 设置。",
   "cfg_camera_section_processing": "照片处理",
-  "cfg_camera_section_processing_hint": "相机处理图像的强度：对比度、颗粒、人像、弱光。",
+  "cfg_camera_section_processing_hint": "独立的固件调校控制，涵盖颜色、对比度、颗粒、人像混合和低光锐化。每项均在重启后生效。",
   "cfg_camera_section_perf": "相机性能",
-  "cfg_camera_section_perf_hint": "相机打开时保持手机流畅。",
+  "cfg_camera_section_perf_hint": "仅在传输画面时保持相机性能；散热和厂商限制仍然有效。",
   "cfg_iface_section_speed": "界面速度",
   "cfg_iface_section_speed_hint": "动画速度与触控时序。",
   "cfg_iface_section_effects": "视觉效果",
@@ -1412,11 +1412,12 @@
   "lr_heat_peak": "最热的阶段",
   "lr_heat_warm_fmt": "CPU 超过 45 °C",
   "lr_heat_skin_fmt": "机身超过 40 °C",
-  "lr_tip_heat_warm": "CPU 在 45 °C 以上持续了 {min}（最热阶段：{phase}）——持续发热耗电也影响舒适度。",
+  "lr_tip_heat_warm": "手机累计发热 {min}；最热的已命名阶段为“{phase}”。请减少持续负载或改用更温和的配置文件。",
   "lr_tip_heat_warm_set": "CPU 在 45 °C 以上持续了 {min}（最热阶段：{phase}）——设置中的「{set}」仍为 Stock，保护介入得比本可以更晚。",
   "lr_tip_heat_calm": "手机全天保持凉爽（峰值 {cpu} °C）且从未降频——无需改动。",
   "lr_mwake": "夜间唤醒（已学习）",
   "lr_mwake_fmt": "{n} 次检查 · 每晚 {per} 次 · 每次约 {sec} 秒",
+  "lr_mwake_unconfirmed": "{n} 次检查 · 尚无完整夜晚，无法计算平均值 · 每次约 {sec} 秒",
   "lr_sec_trend": "📈 趋势",
   "lr_trend_night": "夜间：{was} %/小时 → {now} %/小时",
   "lr_trend_day": "日间耗电：{was} %/小时 → {now} %/小时",
@@ -1824,7 +1825,7 @@
   "lr_brief_cause_radio": "熄屏期间手机有 {awake}% 的时间没有进入休眠；同期后台移动数据用量 {mib} MiB。",
   "lr_brief_cause_none": "熄屏期间手机有 {awake}% 的时间没有进入休眠；没有某个应用特别突出。",
   "lr_brief_night_hot": "熄屏时 CPU 不时升到 {cpu}°——后台有程序在进行繁重的工作。",
-  "lr_brief_smooth_ok": "流畅度极佳：只有 {pct}% 的帧延迟。",
+  "lr_brief_smooth_ok": "流畅度良好：{pct}% 的帧出现延迟。",
   "lr_brief_smooth_mid": "流畅度正常：{pct}% 的帧延迟——偶有卡顿。",
   "lr_brief_smooth_bad": "卡顿明显：{pct}% 的帧延迟。",
   "lr_brief_sysui_net": "由于开启了网速显示，状态栏一直在重绘——这会在每个应用中造成掉帧。",
@@ -1905,10 +1906,10 @@
   "lr_dx_also_jwhy": "延迟帧最多：{app} 在 {state}，占其帧数 {pct}。{cause}",
   "lr_dx_also_bhold": "“省电”下滚动时的频率保持按应用测量：在能减少卡顿的应用中保留（应用数：{k}），无帮助的应用中取消（应用数：{r}），测试中：{t}。",
   "lr_dx_also_vendor": "在 {of} 次检查中有 {n} 次，是系统固件（PowerHAL 或内核温控）而非 ASB 把超大核压在了 ASB 上限以下——ASB 不会绕过它。",
-  "lr_dx_heat_long": "CPU 有 {min} 高于 45 °C，主要在“{phase}”阶段；峰值 {cpu}°。",
+  "lr_dx_heat_long": "CPU 累计有 {min} 高于 45 °C；最热的已命名阶段为“{phase}”，峰值 {cpu}°。",
   "lr_dx_fix_heat": "减少持续高负载（游戏、边充电边长时间视频通话），或换用更温和的配置；手机壳和边玩边充都会增加发热。",
   "lr_dx_fix_heat_set": "检查 ASB 设置中的“{set}”——设为“原厂”时 ASB 的温控保护是关闭的。",
-  "lr_dx_heat_some": "CPU 有 {min} 高于 45 °C（峰值 {cpu}°）——只是短暂的负载高峰，没有持续发热。",
+  "lr_dx_heat_some": "CPU 累计有 {min} 高于 45 °C（峰值 {cpu}°）。仅凭总时长无法判断负载是否持续。",
   "lr_dx_heat_ok": "没有过热：CPU 峰值 {cpu}°。",
   "lr_dx_also_clamps": "频率被短暂限制了 {n} 次——这是保护机制在工作，没有持续发热。",
   "lr_dx_asb_crash": "记录期间有 {n} 次原生崩溃涉及 ASB 代码。",
@@ -1942,7 +1943,7 @@
   "lr_dx_lte_ran": "本次记录中选择了 {n} 次 LTE，共 {min} 处于 LTE。",
   "lr_dx_net_try_light": "试试 ASB 设置中的“{set}”：流量小时基带保持 LTE，大文件下载时 5G 会回来。",
   "lr_dx_also_fix": "另外：{txt}",
-  "lr_dx_fix_net_play": "Google Play 用移动数据更新了应用：Play 商店 → 设置 → 网络偏好设置 → 自动更新应用 → 仅限 WLAN。",
+  "lr_dx_fix_net_play": "Google Play 使用了移动数据；计数器无法区分应用更新与其他下载。若不希望使用移动数据更新：Play 商店 → 设置 → 网络偏好设置 → 自动更新应用 → 仅通过 Wi-Fi。",
   "lr_dx_fix_net_tg": "在 {app} 中：设置 → 数据与存储 → 自动下载媒体 → 关闭移动数据下的下载，或降低大小上限。",
   "lr_dx_fix_net_wa": "在 WhatsApp 中：设置 → 存储和数据 → 媒体自动下载 → 使用移动数据时 → 不下载媒体。",
   "lr_dx_fix_net_video": "{app} 在播放视频：打开它的省流模式，或在移动数据下降低画质。",
@@ -2208,6 +2209,7 @@
   "dev_zygisk_observer_launch_events": "收到的冷启动",
   "dev_zygisk_observer_launch_accepted": "governor 接受的冷启动",
   "dev_zygisk_observer_launch_vetoed": "被拒绝的冷启动",
+  "dev_zygisk_observer_launch_screen_off": "屏幕关闭时在本地否决的冷启动",
   "dev_zygisk_observer_launch_unavailable": "冷启动：governor 不可用",
   "dev_zygisk_observer_launch_throttled": "被限流的冷启动",
   "dev_zygisk_observer_hints_screen_off": "屏幕关闭时未发送的刷新",
@@ -2281,7 +2283,7 @@
   "dev_zygisk_link_off_detail": "Observer 已对新进程停用。",
   "dev_zygisk_link_unknown_detail": "证据不足；并不排除支持 Zygisk。",
   "cfg_ui_section_zygisk": "Zygisk",
-  "cfg_ui_section_zygisk_hint": "观察者、生命周期提示、冷启动加速和进程记录——统一集成，并以实际证据显示状态。",
+  "cfg_ui_section_zygisk_hint": "可选进程观察和向现有 governor 发出的有界请求。Zygisk 不选择配置、频率或应用策略。",
   "dev_zygisk_metric_injection": "已验证注入",
   "dev_zygisk_metric_processes": "{n} 个活跃进程",
   "dev_zygisk_metric_channel": "Companion 通道",
@@ -2300,7 +2302,7 @@
   "dev_zygisk_snapshot_note": "当前只读快照。RSS 是已验证被观测应用的内存，并非 ASB 净开销；接受的提示不证明限制改变、性能提升或节能。",
   "dev_zygisk_observer_link_state": "ASB 连接结论（机器状态）",
   "lr_sec_zygisk": "🧩 Zygisk · ASB 注入",
-  "lr_zy_activity": "捕获期间的 companion 事件",
+  "lr_zy_activity": "已接受的进程启动/退出事件",
   "lr_zy_launch": "听到的冷启动",
   "lr_zy_hints": "生命周期提示",
   "lr_zy_ipc": "观察器 IPC CPU",
@@ -2318,6 +2320,16 @@
   "lr_zy_coverage_one": "仅有一个快照，无法推断捕获期间差值。",
   "lr_zy_coverage_two": "开始/最近快照：差值涵盖两点之间，但不证明重启期间持续观测。",
   "lr_zy_note": "事件证明 companion 活动，不证明完全控制 Zygisk、性能提升或节能。此处未进行 A/B 比较。",
+  "lr_zy_gov_title": "Governor 对 ASB 自有冷启动提升窗口执行的操作",
+  "lr_zy_gov_cold_lifts": "触发了提升的冷启动",
+  "lr_zy_gov_cold_extends": "为冷启动延长的进行中的提升",
+  "lr_zy_gov_cold_long": "由较长窗口覆盖的冷启动",
+  "lr_zy_gov_cold_trims": "为快速冷启动缩短的触摸提升",
+  "lr_zy_gov_note": "这些计数器记录的是 ASB 自有提升窗口的决策和变化，而不是硬件上限写入或经 A/B 证实的性能/能耗收益。",
+  "lr_zy_gov_reset": "至少一个 Governor 计数器下降：此间隔内所有 Governor 侧增量均保持 unknown。",
+  "lr_zy_gov_coverage_one": "只有一个 Governor 快照可用；其累计计数不会作为捕获期间的操作展示。",
+  "lr_zy_note_actions": "Governor 侧计数器确认 ASB 触发、延长或缩短了自有冷启动提升窗口。它们不能证明写入了硬件上限、完全控制其他 Zygisk 模块、性能提升或节能。这里不进行 A/B 比较。",
+  "lr_zy_denylist_note": "Root 管理器的 unmount/denylist 标记描述进程的启动方式。仅凭标记数量不能证明注入失败，也不构成修改 allowlist 的依据。",
   "lr_zy_unavailable": "Collector 未返回观察器证据；不能据此排除 Zygisk 支持。",
   "dev_loading_sub": "The page is already open. Nothing is being changed; each group appears after the read-only snapshot returns.",
   "dev_stage_system": "System",
@@ -2472,7 +2484,7 @@
   "lr_dx_fix_selfpush": "在该应用自己的通知设置中关闭其保活（keep-alive）或后台连接服务，然后用通知修复确认消息仍能按时到达。",
   "lr_dx_fix_selfpush_gms": "先在 ASB 中把“限制谷歌服务”设为轻度；如果之后消息能按时到达，再关闭该应用自己的保活服务。",
   "zy_aot_title": "加快应用启动（ART）",
-  "zy_aot_desc": "ASB 统计你打开每个应用的次数（Zygisk 启动记录）以及它冷启动的耗时（Android 自己的启动日志）。经常打开却没有预先编译代码的应用，会按 Android 夜间维护的方式编译——仅在充电、熄屏且电池低于 40 °C 时进行。编译后的代码在应用运行时需要更少的 JIT 工作，通常也启动得更快；下面的时间显示了它在这台手机上的效果。",
+  "zy_aot_desc": "ASB 统计应用打开次数和冷启动耗时。只考虑经常使用且没有 AOT 代码的应用：每个充电会话最多一批，屏幕关闭且已知电池温度低于 40 °C。这可能改善启动，但不保证节省电量；编译本身会消耗 CPU 并写入存储。",
   "zy_aot_off": "关闭",
   "zy_aot_on": "充电时编译",
   "zy_aot_unread": "尚未读取编译状态。",
@@ -2564,20 +2576,20 @@
   "zy_guard_ev_lifted_opened": "已恢复：你打开了它",
   "zy_guard_ev_lifted_released": "已由你恢复",
   "zy_auto_title": "自动设置",
-  "zy_auto_recommended": "推荐 · 无需填写应用列表",
-  "zy_auto_desc": "ASB 会自动选择要观察的用户应用，开启启动响应和进程日志，抑制重启循环和夜间唤醒，并仅在充电时用 ART 优化常用应用。你无需选择软件包，也无需调整引擎。",
+  "zy_auto_recommended": "选择一种策略 · 无需填写软件包列表",
+  "zy_auto_desc": "ASB 会用用户应用填充观察列表。可选择仅观察、冷启动辅助或后台守护。此卡片绝不会启用 ART；ART 仍是下方独立的手动选项。",
   "zy_auto_enable": "自动设置",
   "zy_auto_refresh": "刷新自动应用选择",
   "zy_auto_disable": "关闭自动设置",
   "zy_auto_working": "正在设置…",
   "zy_auto_refreshing": "正在刷新…",
   "zy_auto_disabling": "正在关闭…",
-  "zy_auto_summary": "自动模式已开启 · 观察的应用 %1 个 · 后台抑制：%2 · ART：%3",
-  "zy_auto_note": "只有用户安装的应用会进入观察列表。后台限制仍需要实测的启动阈值，跳过受保护的应用，会回读验证且可撤销。安全模式永远不会被自动解除。不修改任何 LSPosed、内核、频率或温控设置。",
+  "zy_auto_summary": "自动配置文件：%1 · 观察应用：%2 · 后台守护：%3 · ART（独立）：%4",
+  "zy_auto_note": "只有用户应用会进入观察列表。关闭自动设置会恢复此前的应用列表及 observer、guard 和 ART 状态。不会自动解除 Safe mode。不会更改 LSPosed、内核、频率或温度限制。",
   "zy_auto_enabled": "Zygisk 自动设置已开启",
   "zy_auto_refreshed": "自动应用选择已刷新",
-  "zy_auto_disabled": "自动功能已关闭 · 已恢复之前的应用列表",
-  "zy_auto_failed": "自动设置未完成；未选择任何不受支持的软件包或策略",
+  "zy_auto_disabled": "自动设置已关闭 · 已恢复此前的 Zygisk 状态",
+  "zy_auto_failed": "自动设置未完成；重试前请检查当前状态",
   "zy_auto_safe": "安全模式已开启。自动设置不会解除它；请先明确解除安全模式。",
   "zy_auto_managed_label": "由 ASB 自动选择的应用",
   "zy_auto_managed_note": "此列表由自动设置管理。软件包变化后，它会在现有的 service 周期中或通过上方按钮刷新。要手动编辑，请先关闭自动设置。安全模式在此处仍可用。",
@@ -2587,14 +2599,55 @@
   "lr_loading_sub": "The report is already open. The read-only digest will replace this card; nothing is being changed.",
   "dev_zygisk_safe_enable": "启用安全模式",
   "dev_zygisk_safe_clear": "关闭安全模式",
-  "lr_tip_smart_help_manual": "Recorded Smart measurements found extra headroom useful for {n} apps. This capture used a manual profile, so those records do not show Smart actively controlling it.",
+  "lr_tip_smart_help_manual": "已保存的 Smart 比较表明额外频率余量有利于 {n} 个应用。本次采集使用手动配置文件，因此这些记录不表示 Smart 正在主动控制。",
   "lr_tip_jank_bad_evidence": "About {pct}% of frames missed their deadline. Measured at-cap windows are not worse ({yes}% at cap versus {no}% below), or the named cap is mostly ROM-owned. This correlation does not clear every ceiling, but it does not support raising them as the first action; use the per-frame breakdown.",
   "lr_dx_smooth_cap_external": "At the {cl} ceiling jank was {yes}% versus {no}% below it, but the ROM held that cluster in most checks. This correlation does not establish that an ASB ceiling caused the jank; do not raise it from this capture alone.",
   "lr_dx_frames_thin": "Only {frames} HWUI frames were usable, so no stable smoothness verdict is made. A thin sample is unknown evidence, not proof of smoothness; GL/Vulkan game surfaces can be outside this metric.",
   "lr_dx_frames_absent": "No usable HWUI frame sample was collected during substantial screen-on time. Smoothness remains unknown, not zero-jank; missing counters can reflect unsupported collection or non-HWUI surfaces.",
   "lr_zy_spawns": "Observed process starts in capture",
   "lr_zy_launch_fallback": "Cold starts without a measured launch class",
-  "lr_zy_quiet_channels": "The accepted start/exit counter is zero, but spawn, cold-start or ledger channels recorded activity. These channels are independent; zero here does not mean the observer was absent.",
+  "lr_zy_quiet_channels": "进程启动/退出通道保持为零，而独立的 spawn、冷启动或日志通道记录到活动。这证实 companion IPC，但不能证实常驻进程观察；也不能据此断定注入失败。",
   "lr_zy_live_zero": "No validated process was live in the latest snapshot, while earlier activity was recorded. This describes the current live set, not failed injection throughout the capture.",
-  "lr_zy_accept_note": "An accepted cold-start request passed the companion checks; it is not proof that the governor changed a frequency ceiling."
+  "lr_zy_accept_note": "已接受的冷启动请求在启用/屏幕检查后得到 governor 确认。这不证明已准备提升或频率上限已改变；温控及其他 governor 限制仍然有效。",
+  "lr_tip_smart_nohelp": "Smart 的比较未显示额外频率余量有助于 {n} 个应用，因此保留其原先限制。这并不能确定帧延迟的其他原因。",
+  "lr_sm_scope": "采集结束时的快照：计数器可能包含同一 governor 会话中较早的工作。正在跟踪的情境包括仍在进行的测试。",
+  "lr_dx_heat_some_runs": "CPU 在 {n} 个发热片段中累计有 {min} 高于 45 °C（最长 {longest}；峰值 {cpu}°）。没有单个片段达到 30 分钟。",
+  "lr_zy_launch_balanced": "全部 {n} 次冷启动均有结果：接受 {ok}，拒绝 {veto}，governor 不可用 {unavailable}，限流 {throttled}。",
+  "lr_zy_launch_unresolved": "{n} 次冷启动中：接受 {ok}，拒绝 {veto}，governor 不可用 {unavailable}，限流 {throttled}。其余可能在快照时仍在处理；仅有差值并不表示错误。",
+  "zy_auto_profile_observe": "仅观察",
+  "zy_auto_profile_launch": "启动辅助",
+  "zy_auto_profile_battery": "电池守护",
+  "zy_auto_profile_note": "观察：仅记录。启动：冷启动辅助和记录，不使用 AppOps。电池：在两个不同会话中观察并由你逐个确认应用后才启用 guard；不含 ART。",
+  "zy_guard_confirm_desc": "自动限制 AppOps 前，ASB 要求在 %s 个不同屏幕会话中获得相同证据，并由你确认该软件包。提议本身不会更改任何内容。后台工作和通知可能延迟；“立即恢复”会马上还原已记录的模式。",
+  "zy_guard_pending_title": "确认后台限制（%s）",
+  "zy_guard_pending_desc": "试运行：以下提议不会自行更改 AppOps。只确认你接受暂停后台工作及可能延迟通知的应用。",
+  "zy_guard_pending_row": "%1 次启动 · %2/%3 个会话 · %4",
+  "zy_guard_pending_approved": "已确认 · 等待证据",
+  "zy_guard_pending_approve": "确认此应用",
+  "zy_guard_release_now": "立即恢复",
+  "zy_guard_approved": "软件包已确认；仍需要两个会话的证据",
+  "zy_guard_released": "已恢复此前的后台模式",
+  "lr_sec_impact": "📏 各调校项的证据",
+  "lr_impact_tweak": "调校项",
+  "lr_impact_measured": "本次记录中的测量值",
+  "lr_impact_meaning": "数字能证明什么",
+  "lr_impact_cap_readback": "CPU 上限回读",
+  "lr_impact_cap_readback_fmt": "{ok}/{total} 与 ASB 一致 · {vendor} 次 ROM 覆盖 · {other} 次其他",
+  "lr_impact_readback": "直接回读观察 · 不是能耗效果",
+  "lr_impact_cap_main": "CPU 上限 · 主集群",
+  "lr_impact_cap_prime": "CPU 上限 · prime 集群",
+  "lr_impact_cap_fmt": "达到上限 {yes}% 对比低于上限 {no}% · {frames} 帧",
+  "lr_impact_correlation": "在不同负载下共同观察到 · 需要 A/B",
+  "lr_impact_zygisk": "Zygisk 冷启动辅助",
+  "lr_impact_zygisk_fmt": "{accepted} 次接受 · {armed} 次 lift 已启用 · {extended} 次延长",
+  "lr_impact_direct": "测得的操作 · 性能/能耗收益需要 A/B",
+  "lr_impact_wifi": "离开不良 Wi-Fi",
+  "lr_impact_wifi_fmt": "{releases} 次断开 · {returned} 次恢复 · {recovered} 次断开前自行恢复",
+  "lr_impact_smart": "Smart 余量学习",
+  "lr_impact_smart_fmt": "{helped} 次保留 · {nothelped} 次排除 · {testing} 次测试中",
+  "lr_impact_smart_scope": "governor 会话决策快照 · 不是省电百分比",
+  "lr_impact_cost": "ASB governor 自身开销",
+  "lr_impact_cost_fmt": "{cpu} 毫秒/小时 · {writes} 次写入/小时 · {wakes} 次唤醒/小时",
+  "lr_impact_cost_scope": "测得的 ASB 成本 · 不是对电池的净影响",
+  "lr_impact_ab_note": "此处不会把电池百分比、温度或流畅度提升归因于某个调校项。要获得因果数值，请只更改一个开关并比较相似记录。未列出仅表示本次记录未提供该项证据，不代表不受支持或效果为零。"
 }

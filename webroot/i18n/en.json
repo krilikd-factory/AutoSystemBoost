@@ -197,18 +197,18 @@
     },
     "athena_service": {
       "name": "Athena Background Killer",
-      "desc": "OxygenOS has its own background app killer - com.oplus.athena - and AthenaService is the part that decides what to kill. It is why a messenger left in the background stops delivering notifications until you reopen it, which no amount of battery whitelisting fixes because it is not Android's Doze doing it. Off disables that one component; the rest of the package keeps running, so thermal reporting and the settings panels are unaffected. Fully reversible: the previous state is recorded before anything changes and put back when you set this to stock or remove the module. Expect more RAM in use and slightly more drain - that is what keeping apps alive costs.",
+      "desc": "Controls OxygenOS's AthenaService background-app killer. Off disables only that component while leaving the rest of com.oplus.athena in place; this may help apps that the OEM kills despite Android battery exemptions. More apps remaining active can increase RAM use and background drain, and notification behaviour still depends on each app. Stock restores the component state recorded by ASB; uninstall also restores it.",
       "descOpt": {
-        "stock": "OxygenOS keeps killing background apps as it normally does.",
-        "off": "AthenaService is disabled, so apps stay alive and keep notifying. Expect more RAM used and slightly more drain."
+        "stock": "OxygenOS keeps its normal Athena background policy.",
+        "off": "Disable only AthenaService. Apps may stay active longer, with more RAM use and background drain."
       }
     },
     "heytap_mcs": {
       "name": "HeyTap MCS / OPPO Push",
       "desc": "Off disables com.heytap.mcs without replacing system files. Apps using HeyTap/OPPO Push can stop receiving notifications or receive them late. Enabling also requests one profile-guided ART compilation after the next reboot; it can temporarily use CPU, storage and battery. Stock restores the MCS state ASB changed and cancels a compilation that has not started. After the reboot it waits for the charger (Charging or Full), so the compilation does not heat or drain a phone in your hand; with no charger within 24 h it stays pending until the next boot.",
       "descOpt": {
-        "stock": "MCS stays under Android/OEM control; a pending ART request is cancelled.",
-        "off": "Disable HeyTap push transport and compile once after the next reboot. Check notifications afterwards."
+        "stock": "Leave MCS under Android/OEM control and cancel a compilation request that has not started.",
+        "off": "Disable HeyTap push transport and request one ART compilation after the next reboot. Check affected app notifications."
       }
     },
     "documentsui_fix": {
@@ -217,97 +217,103 @@
     },
     "doze_level": {
       "descOpt": {
-        "stock": "Android's own timing: idle begins 30 minutes after the screen goes off.",
-        "night": "Only during your learned sleep window. Daytime behaviour is untouched.",
-        "moderate": "Idle after 5 minutes. The change most people want.",
-        "aggressive": "Idle after 2 minutes, plus shorter sensing and locating windows. Apps that poll on their own can be late; high-priority push still arrives."
-      }
+        "stock": "Keep the ROM's Doze timing; remove the ASB override.",
+        "night": "Apply earlier Doze only during the learned sleep window.",
+        "moderate": "Target idle entry after five minutes with the screen off.",
+        "aggressive": "Target idle entry after two minutes and shorten selected sensing/location windows. Background work may be deferred."
+      },
+      "desc": "Controls how quickly Android enters Doze after the screen turns off. Stock keeps the ROM timing; Moderate targets five minutes and Aggressive two minutes, while Night applies only in the learned sleep window. Doze can defer background network, jobs and alarms until maintenance windows; high-priority push may still arrive. Use Stock if timely background activity matters more than earlier idle entry. Stock removes the ASB timing override."
     },
     "gms_freeze": {
       "descOpt": {
-        "off": "Nothing is frozen. Play services behave as shipped.",
-        "safe": "Telemetry and reporting components only. Push, sign-in and payments keep working.",
-        "more": "Adds ads and measurement components. Reversible, but check anything you depend on."
+        "off": "Leave every managed Google component in its recorded original state.",
+        "safe": "Disable selected telemetry and reporting components. Check apps that depend on them.",
+        "more": "Also disable selected advertising and measurement components. Reversible, but dependent features may change."
       },
       "desc": "Disables individual Google Play services components. Levels are cumulative. SAFE: telemetry, stats and analytics - nothing the phone needs. MORE: adds the ad identifier, location reporting and the backup scheduler. MAX: adds Icing indexing and background Fitness recording. THE COST OF MAX: in-app and system search will miss some results, and steps are not counted in the background. Push notifications are untouched at every level. Everything is restored by switching to off - each component's original state is recorded."
     },
     "gms_trim": {
       "descOpt": {
-        "stock": "Play services schedule background work as they like.",
-        "lite": "Fewer background jobs, nothing disabled.",
-        "strict": "Noticeably fewer. Some sync may be delayed."
-      }
+        "stock": "Leave Play services background scheduling under ROM control.",
+        "lite": "Limit selected location and search-widget background work.",
+        "strict": "Also remove the Play services Doze exemption; push and sync may be delayed."
+      },
+      "desc": "Reduces selected Google Play services background activity without disabling Play services itself. Lite limits location reporting and search-widget background work. Strict also removes Play services from the Doze exemption list, which can delay push notifications, sync and other background jobs. Choose Lite or Stock if timely delivery is essential. Changed permissions and exemptions are recorded and restored when ASB is removed."
     },
     "phantom_procs": {
       "descOpt": {
-        "stock": "Android's own limit applies - background child processes get killed.",
-        "relaxed": "No limit. Terminal sessions and background compiles survive.",
-        "strict": "Limit of 32. Fewer background processes than stock allows."
-      }
+        "stock": "Leave the current phantom-process setting untouched.",
+        "relaxed": "Disable the limit. Background child processes can survive, but runaway resource use is less contained.",
+        "strict": "Explicitly set Android's limit to 32 phantom processes."
+      },
+      "desc": "Controls Android's limit on app-created phantom processes outside the normal activity lifecycle. No Limit disables that protection so long terminal jobs, emulators and compiles can survive, but runaway apps can also consume more memory and CPU. Limit 32 explicitly restores Android's ceiling. Leave Alone preserves the current device value, which another tool may have changed. Restart the affected app because the limit is read when its process starts."
     },
     "log_level": {
       "descOpt": {
-        "0": "Extreme: cuts device logging as far as it goes. Saves writes and wakeups, and makes almost any bug report from this phone useless.",
-        "1": "Normal. Significant events only - what the module has always done.",
-        "2": "Detailed: adds learner updates and screen transitions. Turn this on before sending a battery log.",
-        "3": "Verbose. Fills the log fast; only while reproducing something.",
-        "stock": "ASB does not touch the device's logging at all."
-      }
+        "0": "Minimise device and ASB diagnostics. Later bug reports may lack the evidence needed for analysis.",
+        "1": "Record normal significant ASB events.",
+        "2": "Add learner updates and screen transitions; useful for battery investigations.",
+        "3": "Verbose diagnostics that grow quickly. Use only while reproducing a problem.",
+        "stock": "Do not change device logging through this setting."
+      },
+      "desc": "Controls ASB log detail and, except in Stock, selected device logging. Stock leaves device logging untouched. 0 minimises device and module diagnostics, making later bug reports much less useful. 1 records normal significant events; 2 adds learner and screen-transition details useful for battery reports; 3 is verbose and grows quickly, so use it only while reproducing a problem. Returning from 0 restores the logging state recorded by ASB."
     },
     "sustained_temp_mode": {
       "descOpt": {
-        "stock": "This device's own trip point, read from its CPU thermal zone at boot.",
-        "smart": "Starts from that point and nudges it up when sessions heat quickly.",
-        "manual": "Exactly the temperature on the slider below. Nothing moves it."
+        "stock": "Use the device trip point read from its CPU thermal zone at boot.",
+        "smart": "Start from that point and allow bounded upward adjustment after qualifying sustained sessions.",
+        "manual": "Use the temperature selected below without Smart adjustment."
       }
     },
     "ui_effects_level": {
       "descOpt": {
-        "auto": "Leave the system's own effect level alone.",
-        "stock": "Normal effects, as the device shipped.",
-        "flat": "Simplified. Recents becomes a plain list and OxygenOS hides the Cards/Simple selector entirely. OnePlus 15 only."
-      }
+        "auto": "Do not change the system's current effect level.",
+        "stock": "Use the device's normal effects and Recents presentation.",
+        "flat": "Simplify effects. Recents becomes a plain list and OxygenOS hides the Cards/Simple selector; OnePlus 15 only."
+      },
+      "desc": "Normal keeps the device's full transition and Recents effects. Simplified reduces visual effects and may lower GPU use, but Recents becomes a plain list and OxygenOS removes the Cards/Simple selector. Restore Normal and reboot to recover it. The simplified option is exposed only on the OnePlus 15 because its behaviour on other models has not been validated."
     },
     "net_route_tune": {
       "descOpt": {
-        "auto": "Smart: ASB measures the link and sizes the initial window for it.",
-        "off": "Stock. The route keeps the values Android set.",
-        "conservative": "Slightly larger window than stock.",
-        "aggressive": "Largest window. Best on a fast, stable link; can cost retransmits on a weak one."
-      }
+        "auto": "Choose an initial route window from measured link conditions.",
+        "off": "Restore the route values recorded before ASB changed them.",
+        "conservative": "Use a modest window increase.",
+        "aggressive": "Use a larger window; poor links may see more retransmissions."
+      },
+      "desc": "Adjusts the initial TCP burst size for routes. Smart chooses from measured link conditions and leaves weak links closer to the factory value; Moderate is conservative, while Aggressive selects a larger class and can increase retransmissions on poor links. Stock restores the previous route values. This changes connection ramp-up, not the maximum speed of the radio or service."
     },
     "bt_a2dp_offload": {
       "descOpt": {
-        "auto": "Hands off - whatever the ROM chose stays.",
-        "on": "Hardware encoding. Less battery, and usually what the phone ships with.",
-        "off": "CPU encoding. Needed for some equaliser apps to see the stream at all."
+        "auto": "Leave the ROM's Bluetooth audio path unchanged.",
+        "on": "Request hardware/offloaded encoding where supported. Actual power use depends on the device and codec.",
+        "off": "Use CPU encoding. This can let some equaliser apps process Bluetooth audio, with potentially higher CPU use."
       }
     },
     "net_rps": {
       "name": "Spread Network Load",
-      "desc": "Which cores handle incoming network packets. Stock leaves every packet on the one core the interrupt landed on, which caps throughput on fast WiFi and pins that core high. Little spreads the work across the efficiency cluster; all uses every core. Waking a second core costs a little CPU, so this earns its keep on a fast link and loses on a slow one. Applies to Wi-Fi only: mobile data is left to the phone's own hardware distribution, which a manual mask can only slow down.",
+      "desc": "Chooses which CPU cores may receive packets for Wi-Fi interfaces. Stock leaves the kernel and driver configuration untouched. Little uses the efficiency cluster; All allows every core. Spreading work can help on fast links but wakes more CPUs and may cost power on light traffic. Mobile-data receive distribution is left to the device. Actual gains depend on the driver and link.",
       "descOpt": {
-        "stock": "Every packet stays on the core its interrupt landed on - Android's own behaviour.",
-        "little": "Spread across the efficiency cluster. The safer of the two.",
-        "all": "Every core. Best throughput on fast WiFi, most CPU woken."
+        "stock": "Leave the kernel and driver receive-packet masks untouched.",
+        "little": "Allow receive processing on the efficiency cluster.",
+        "all": "Allow receive processing on every CPU cluster; more cores may wake."
       }
     },
     "net_txqueue": {
       "name": "Transmit Queue",
-      "desc": "How many packets may wait to be sent. The stock 1000 is a wired-Ethernet default from the 1990s that survived into wireless drivers; on a link as variable as WiFi a deep queue mostly adds latency under load rather than throughput. If uploads feel slower, go back to stock.",
+      "desc": "Sets how many packets may wait in the Wi-Fi transmit queue. Stock keeps the driver value; Short uses 256 and Shorter uses 128. Smaller queues can reduce delay under load, but may limit throughput or increase loss on fast or variable links. If uploads, streaming or latency become worse, return to Stock.",
       "descOpt": {
-        "stock": "1000 packets, as the driver ships.",
-        "short": "256. Less delay under load, same throughput on most links.",
-        "shorter": "128. Lowest latency; can cost throughput on a very fast link."
+        "stock": "Keep the driver's transmit-queue length.",
+        "short": "Use 256 packets. Can reduce queued delay but may not suit every fast link.",
+        "shorter": "Use 128 packets. Test throughput, loss and latency under load."
       }
     },
     "night_modem_idle": {
       "name": "Quiet Radio at Night",
-      "desc": "Lets the modem settle during the hours the learner worked out from your own nights. A night capture showed the CPU was woken not by apps but by the network path: over a hundred resumes from IPA and rmnet. This stretches keepalive sixfold AND gates data-path wakeups at the rmnet level - top and bottom of the stack together. THE COST: a push notification may arrive at the next wake rather than instantly. Calls and SMS travel the modem's own channel and are untouched; radio power and airplane mode are never altered. Every change is recorded and restored on disable or uninstall."
+      "desc": "During the learned sleep window, extends cellular keepalive intervals and gates selected rmnet data-path wakeups so the modem path can stay idle longer. Push notifications and app sync may wait until a later wake. Calls and SMS use separate modem paths; ASB does not change radio power, airplane mode, roaming or network selection. Changes are recorded and restored when disabled or uninstalled."
     },
     "gnss_trim": {
       "name": "Trim Background GPS",
-      "desc": "GPS is one of the most expensive things a phone can do, and Android reports how much of it happens in CACHED processes - apps that are closed and doing nothing you asked for.\n\nIn one field capture that was 53 of 56 mAh of GPS drain.\n\nWhen on, a user-installed app still holding location while its process is cached and the screen is off is limited to coarse accuracy. It gets full precision back the moment you open it.\n\nNever touched: maps and navigation, fitness and route tracking, emergency and find-my apps, and anything in the foreground."
+      "desc": "Limits background location use by eligible user-installed apps whose processes are cached while the screen is off. Such apps are reduced to coarse location and regain normal precision when opened. Navigation, fitness/route tracking, emergency, find-my and foreground apps are excluded. This can reduce location-related wakeups, but background features in an affected app may lose precise tracks or geofence accuracy."
     },
     "smart_media_guard": {
       "name": "Smart Media Guard",
@@ -319,10 +325,10 @@
     },
     "bt_link_stability": {
       "name": "Bluetooth Link Stability",
-      "desc": "For phones where Bluetooth headphones disconnect on their own during playback. Most devices never do this, so it is off by default.\n\nOn stable, Wi-Fi stops scanning for new networks while audio is playing: the 2.4 GHz band and Bluetooth share one antenna, and a scan sweeps the whole band - a stream that misses its slot disconnects.\n\nThe cost is that new Wi-Fi networks appear more slowly. Nothing else changes.\n\nNo codec is forced."
+      "desc": "Optional workaround for Bluetooth audio dropouts during playback. Stable suppresses Wi-Fi scanning while audio plays, which can help on devices where the two radios interfere. New networks may appear more slowly. No codec is forced and pairing is unchanged. Leave this off if your connection is already stable."
     },
     "BG_TRIM_LEVEL": {
-      "desc": "How hard to limit background apps.\n\noff - do not touch them at all: Android alone decides. Pick this if you want ASB for CPU and thermals and are happy with how background apps behave.\n\nsafe - moderate standby buckets for apps you have not opened in a while. Notifications still arrive, nothing freezes.\n\naggressive - stronger: background apps may lose state and wake less often. Authenticators, the dialer and the Bluetooth stack are protected at every level.\n\nSwitching to off returns every app to the bucket it had before ASB moved it.\n\nHeavy apps (Instagram, Facebook, TikTok…) are moved to \"rare\" only when Android itself says they are not in daily use; an app you open every day is left alone.\n\nAggressive adds a re-check every 6 hours, a memory ceiling for heavy apps and a memory trim of idle heavy apps while the screen is off. Package disabling and vendor service stops happen only with the explicit opt-in file /data/adb/asb/allow_disruptive_bg_trim."
+      "desc": "Controls how strongly ASB restricts background apps. Off leaves Android in charge and restores buckets changed by ASB. Safe adjusts standby buckets for apps that Android reports as unused, with critical apps protected. Aggressive adds stronger background and memory limits; apps may wake less often, lose state or deliver notifications late. Disruptive package or vendor-service actions require a separate explicit opt-in and are not enabled by this level alone."
     },
     "mglru_hold": {
       "name": "Keep Apps In Memory",
@@ -330,61 +336,63 @@
     },
     "net_wifi_leave": {
       "name": "Leave Bad Wi-Fi",
-      "desc": "Wi-Fi that is connected but not working keeps the phone retrying instead of switching to mobile. Each rung leaves sooner: weak signal, then a link carrying no traffic, then handing over without waiting. How it leaves: with the screen on, ASB switches Wi-Fi off for 30 s and back on; if it keeps rejoining the same weak network, the pause doubles up to 5 min. Works without Cellular controls.",
+      "desc": "Helps move away from a connected Wi-Fi network that has a weak signal or carries no usable traffic. Higher levels act sooner. With the screen on, ASB turns Wi-Fi off briefly and back on; repeated failures lengthen the pause from 30 seconds up to five minutes. This can interrupt active Wi-Fi sessions and may cause mobile-data use. It works independently of Cellular controls.",
       "descOpt": {
-        "off": "Stock: Wi-Fi is released only when the link actually drops.",
-        "weak": "Leave when the signal falls below -80 dBm.",
-        "unusable": "The above, plus leave a link that is connected but carries no traffic.",
-        "aggressive": "The above, plus hand over to mobile without waiting for the link to fail."
+        "off": "Do not actively leave Wi-Fi; Android and the driver control handover.",
+        "weak": "Act when signal falls below −80 dBm.",
+        "unusable": "Also act when a connected link carries no usable traffic.",
+        "aggressive": "Use the fastest handover rules; Wi-Fi interruptions and mobile-data use are more likely."
       }
     },
     "wifi_scan_throttle": {
       "descOpt": {
-        "0": "No background scanning. Networks appear only when you open Wi-Fi settings.",
-        "1": "Every 10 minutes. Noticeably less radio time on a phone that stays in one place.",
-        "2": "Every 5 minutes - Android's own default.",
-        "3": "Every 2 minutes. Faster to spot a network you walk into.",
-        "4": "Unthrottled. Fastest discovery, highest cost.",
-        "5": "Every 30 minutes. The explicit battery-saving rung; new networks are discovered more slowly."
-      }
+        "0": "Suppress ASB-managed background scans; manual scans can still be initiated by the system or user.",
+        "1": "Allow a background scan about every 10 minutes.",
+        "2": "Allow a background scan about every 5 minutes.",
+        "3": "Allow a background scan about every 2 minutes.",
+        "4": "Do not throttle background scanning.",
+        "5": "Allow a background scan about every 30 minutes; discovery can be much slower."
+      },
+      "desc": "Controls how often ASB allows background Wi-Fi scanning. Less frequent scanning can reduce radio activity when you stay in one place, but known and new networks may be discovered later. This does not change the active connection's data rate. Choose Unthrottled to leave scanning unrestricted; the option descriptions below show each interval."
     },
     "wifi_powersave": {
       "name": "WiFi Power Save",
       "descOpt": {
-        "off": "Radio stays fully awake - the shipped behaviour.",
-        "screen_off": "Sleep the radio between beacons while the display is off.",
-        "always": "Keep power save on at all times, screen up or down."
+        "off": "Keep the Wi-Fi radio awake between packets.",
+        "screen_off": "Enable Wi-Fi power saving only while the display is off.",
+        "always": "Keep Wi-Fi power saving enabled during use and with the screen off."
       },
-      "desc": "Lets the Wi-Fi radio doze between packets. \"Screen off\" is the safe choice: latency only rises while you are not looking. \"Always\" saves more but can add a fraction of a second to games and voice calls over Wi-Fi."
+      "desc": "Controls Wi-Fi power saving between packets. Screen Off enables it only while the display is off; Always also enables it during use. Lower radio activity can reduce power use but may add latency or affect games, casting and Wi-Fi calls. Off keeps the radio fully awake. Actual behaviour and savings depend on the driver and access point."
     },
     "ltpo_force": {
       "name": "Force LTPO Refresh",
-      "desc": "LTPO panels can fall to their lowest refresh rate when nothing on the screen moves; OxygenOS ships parts of that path switched off. This patch takes your device's OWN refresh-rate table (oplus_vrr_config.json), enables every panel power-saving switch the OEM left disabled (ADFR, PDFR, refresh-rate director, histogram backlight control and more), and additionally turns OFF the display stack's own telemetry (VRR info records, histogram sampling, big-data and shader cache-miss upload) - free battery with zero impact on the picture. Nothing is copied from another model, and the stock file itself is never modified.\n\nThe patch is prepared while the module installs, and this switch decides whether it is applied: off by default, and turning it on takes effect after a reboot. If the installer found no refresh-rate table on your device, or nothing left to improve in it, the switch does nothing - the install log and the status badge say which.\n\nOn a table the OEM already ships fully enabled (OnePlus 15 is one) the patch still earns its keep: an identical copy is bound with only the telemetry switches cut.\n\nThe switch also opens the Android side of the range, and that part applies at once, without a reboot: no refresh floor, and the peak set to the highest mode this panel reports (165 Hz on the OnePlus 15). The low end - the panel's own idle rates below 60 Hz - is the table's job, because Android does not list those rates at all. What was set before is recorded and restored when you switch off. The OEM's own cap on the render rate (90 Hz on some builds) is left alone.\n\nIntegrated interaction control uses blocking touchscreen events, not polling: the panel maximum is restored on touch, and after two quiet seconds ASB selects 60 Hz so the patched ADFR path can idle down. Camera and game states are kept active, video keeps its own owner, and previous range values are restored exactly on handback. If OnePlus15-165HZ-LTPO is installed, ASB stays off and yields by default; explicitly enabling this switch pauses only its verified writer and gives ASB priority. Switching ASB off requests a clean external-service resume."
+      "desc": "Applies a patch prepared from the device's own oplus_vrr_config.json: it enables supported panel power-saving paths left off by the OEM and disables selected display telemetry. The stock file is not modified. If no suitable table or change is found, the switch does nothing and the status badge explains why. Applying the table requires a reboot.\n\nThe Android refresh range is also opened: ASB removes its floor, uses the highest reported panel mode, restores the maximum on touch and selects 60 Hz after two quiet seconds so panel adaptation can continue. Camera, game and video ownership are preserved, and previous range values are restored on handback. If the verified OnePlus15-165HZ-LTPO writer is present, ASB yields unless you explicitly give ASB priority. Power savings and low-idle rates depend on the panel and ROM; neither is guaranteed."
     },
     "mmfeed_off": {
       "name": "Multimedia Telemetry Off",
-      "desc": "OxygenOS runs a multimedia feedback collector: audio, video and display diag events with log dumps and uploads, opened by Multimedia_Feedback_List.xml. This patch takes your device's OWN copy of that file, flips only its isOpen switch to false, and binds the result over the stock file - nothing is copied from another model, and the stock file itself is never modified.\n\nThe patch is prepared while the module installs, and this switch decides whether it is applied: off by default, and turning it on takes effect after a reboot. If the installer found no such file on your device, or the OEM already ships it closed, this switch does nothing - the status badge says which.\n\nLess event logging and fewer dumps means free battery and less I/O; audio and video themselves are untouched."
+      "desc": "Uses the device's own Multimedia_Feedback_List.xml to disable the multimedia feedback collector's isOpen switch, then binds the patched copy over the stock path without modifying the original file. The patch is prepared during installation and applied only when this switch is on; a reboot is required. If the file is absent or already closed, the switch does nothing and the badge reports that state. This can reduce diagnostic logging and I/O, but battery savings are not guaranteed. Audio and video processing are not changed."
     },
     "net_screen_off_lte": {
       "name": "LTE While Screen Off",
-      "desc": "After the screen has been off for 90 seconds, drops the 5G leg and keeps data on LTE; 5G comes back the moment the screen turns on. 5G NSA keeps two radios busy at once, while listening to a stream with the screen dark needs far less than LTE alone carries. Never acts during a call. Off by default: changing the allowed network types re-registers the data link, which takes a few seconds on some ROMs. If the ROM does not accept the change, the module restores the original value and stops trying. A download keeps 5G: a check at 3 Mbit/s or more is a transfer, not a stream - LTE is not chosen then, and if LTE is already on, 5G comes back for at least 10 minutes."
+      "desc": "After the screen has been off for 90 seconds, prefers LTE instead of keeping 5G NSA active; the previous setting returns when the screen turns on. Calls and sufficiently heavy transfers are excluded, and a recent transfer can keep 5G for at least 10 minutes. Off by default because changing allowed network types can briefly re-register mobile data. If the ROM rejects the change, ASB restores the previous value and stops retrying."
     },
     "net_lte_light": {
       "name": "5G Only When Needed",
-      "desc": "With the screen on: after 3 minutes of light mobile traffic (under 2 Mbit/s - feeds, music) drops the 5G leg and stays on LTE, which carries that easily. A download brings 5G back within about 20 seconds (3 Mbit/s or more in two 10-second checks in a row, or one check over 12 Mbit/s) and keeps it for 10 minutes. 5G NSA keeps two radios busy for a trickle of data. Never during a call, tethering or a game, never on Wi-Fi. Off by default: each switch re-registers the data link for a second or two."
+      "desc": "With the screen on, switches from 5G NSA to LTE after three minutes of light mobile traffic below 2 Mbit/s. Sustained traffic above the implemented thresholds restores 5G and holds it for 10 minutes. ASB does not switch during calls, tethering, games or Wi-Fi use. Off by default: every network-type change can briefly re-register mobile data, and actual power use depends on the modem and signal."
     },
     "lsposed_verbose": {
       "descOpt": {
-        "keep": "ASB does not touch LSPosed's settings.",
-        "off": "LSPosed's verbose log off from the next boot; old verbose logs deleted now."
-      }
+        "keep": "Leave LSPosed settings and logs under LSPosed's control.",
+        "off": "Disable LSPosed verbose logging from its next start, remove old verbose logs and periodically clear the Modules log."
+      },
+      "desc": "Keep leaves LSPosed settings and logs under LSPosed's control. Off changes LSPosed's own Verbose log setting, removes old verbose-log files and takes effect after LSPosed restarts or the phone reboots. The modules log - what the LSPosed modules themselves write - has no switch in LSPosed, so while Off is selected ASB also clears it periodically. This can remove evidence needed to debug another module. If you later enable verbose logging in LSPosed, ASB does not reverse that choice; Keep restores ownership without secretly managing LSPosed."
     },
     "kernel_sched_stats": {
       "name": "Scheduler Debug Accounting",
       "desc": "Opt-in generic kernel tweak. Off disables scheduler debug statistics only when /proc/sys/kernel/sched_stats is exposed and writable. Scheduling policy, CPU frequencies and SoC drivers are untouched. Stock and uninstall restore the exact original 0/1. No unmeasured battery percentage is claimed.",
       "descOpt": {
-        "stock": "Stock: leave scheduler debug accounting untouched.",
-        "off": "Disable only the exposed generic sched_stats node; restore the exact original on stock or uninstall."
+        "stock": "Leave scheduler debug accounting unchanged.",
+        "off": "Disable only an exposed writable sched_stats node; restore its recorded value on Stock or uninstall."
       }
     },
     "zygisk_enabled": {
@@ -402,6 +410,87 @@
     "zygisk_ledger": {
       "name": "Zygisk Process-Start Ledger",
       "desc": "Counts, for this boot, how many processes each ordinary app starts with the screen off and on. Apps that keep starting work at night are a common hidden battery drain; the top ones appear in Device diagnostics and asbdiag. Package names and counts only, kept in memory (tmpfs); nothing is restricted automatically. Costs one short companion connection per app process start while on. Needs the Zygisk Process Observer switch."
+    },
+    "dsp_outputs": {
+      "desc": "Choose which outputs ASB DSP may process: the built-in speaker, wired headphones/USB DACs, or Bluetooth. Unavailable outputs are ignored. Off bypasses the whole DSP while preserving every level for later. Bluetooth processing can move playback away from hardware offload and increase screen-off CPU use; exclude Bluetooth if long listening sessions matter more than the effect."
+    },
+    "dsp_loudness": {
+      "desc": "ASB DSP adds up to +25 dB of gain, with optional compression and a final sample-peak limiter. Start at +3 dB: high settings can sound heavily compressed even when peaks are limited. The first enable needs a reboot. DSP is bypassed in the external-EQ audio profile. On the speaker, gain is reduced when the battery reaches 42 °C and restored below 40 °C; wired and Bluetooth gains are not reduced by this rule."
+    },
+    "dsp_voice": {
+      "desc": "Requires DSP Loudness. Two broad bands adjust voice body at 350 Hz and upper-edge sharpness at 3 kHz. Level 10 applies +5 dB and −6 dB respectively. This can make thin or harsh speech fuller, especially on the phone speaker; high values may sound unnatural. Start at 4–6 and use DSP Outputs to limit the effect to the outputs that need it. Changes apply live before the limiter."
+    },
+    "audio_remove_volume_limit": {
+      "desc": "Removes Android's headphone volume ceiling so the existing slider can go higher; it does not add gain by itself. Off by default. This reduces a safety boundary, not just a warning: sustained loud listening can cause permanent hearing damage. Use the lowest comfortable level and limit listening time. Reboot if your ROM reads the policy only at startup."
+    },
+    "audio_resampler": {
+      "desc": "Controls the quality of Android's sample-rate conversion when the source and output rates differ. Stock leaves the ROM unchanged; High and Max use longer, steeper filters, with Max costing the most CPU. Any audible difference depends on the recording and equipment and may be negligible. Playback already at the output rate, hardware-offloaded playback and Bluetooth codec encoding are not changed. Reboot to apply."
+    },
+    "media_vol_steps": {
+      "desc": "Changes the number of media-volume positions without raising the maximum volume. More steps give finer control, especially at low listening levels. Stock keeps the ROM value; 20–100 selects a fixed count in steps of five. Reboot to apply. The saved slider position may then map to a quieter level, so check it once. Some ROMs ignore this setting; the action button and asbdiag report the value actually in use."
+    },
+    "CAMERA_LEVEL": {
+      "desc": "Scales the firmware's own photo/video colour, detail and sharpening values. 0 keeps stock tuning; 1–6 increase processing gradually, while 7–10 are deliberately strong and stylised. Device capability limits still apply. Level 10 targets up to 2.5× chroma, 3.4× AI blend and 3.5× sharpness before those clamps. Reboot to rebuild from the stock baseline. High levels can exaggerate noise or banding in deep shadows."
+    },
+    "CAMERA_CONTRAST": {
+      "desc": "Adjusts the tone curve's contrast and saturation independently of Camera Grade. 3 is stock; higher values deepen shadows and strengthen colour, with 10 targeting 170% of the firmware scales. This does not raise Camera Grade's colour-matrix or detail multipliers. Reboot to apply. High values can clip shadow detail or make colours look unnatural."
+    },
+    "CAMERA_GRAIN": {
+      "desc": "Controls grain added after noise reduction. 3 is stock, 0 removes this added grain, and higher values create an increasingly visible film texture; 10 targets 16× the shipped amount. ASB patches every addNoiseWeight* key present in the device's own tuning, including mode-specific variants. High values can look coarse in shadows. Reboot to apply."
+    },
+    "CAMERA_PORTRAIT": {
+      "desc": "Adjusts neural face and skin blending in supported portrait modes. Stock firmware may ship these weights at zero; higher levels can restore texture reduced by denoising, but can also make skin look artificial. Level 6 reaches the implemented blend-weight ceiling. Start at 1–2. This does not affect every camera mode. Reboot to apply."
+    },
+    "CAMERA_LOWLIGHT": {
+      "desc": "Controls separate sharpening scales for macro and low-light processing. 0 follows Camera Grade; higher values add a progressively stronger correction, with 10 targeting 3.2× before firmware limits. Close subjects and high ISO can make halos more visible. Raise this only when those modes are genuinely soft. Reboot to apply."
+    },
+    "camera_hold_enable": {
+      "desc": "While the camera is actively streaming, the governor keeps the current CPU ceiling and cores instead of lowering them. This can reduce performance dips during bursts or video, but uses more power while the camera remains open. On preserves the hold; Off lets normal governor rules apply. Thermal and vendor safety limits remain authoritative."
+    },
+    "UX_MANAGE_TIMEOUTS": {
+      "desc": "Master switch for profile-managed interface timing. Performance shortens animations and long-press/multi-tap windows; Battery keeps stock timing. Off leaves these values under ROM control. Use Animation Speed below for a fixed animation scale independent of the power profile."
+    },
+    "anim_speed": {
+      "desc": "Sets a fixed Android animation scale. −1 lets the power profile manage animations; 0 is the Android default, negative values are faster, positive values are slower, and the far-left setting disables animations. It applies to subsequent transitions. Very short or disabled animations can make transitions harder to follow but do not increase an app's actual processing speed."
+    },
+    "UX_ANIM_FORCE_RESTART": {
+      "desc": "Fallback for ROMs that ignore live animation-scale changes. When enabled, a manual profile switch also restarts SystemUI: the screen may blink, the lock screen may return, and overlays from other modules can be torn down. It does not run on every automatic profile change. Leave this off unless you have confirmed that ordinary scale changes do not apply."
+    },
+    "disable_blur": {
+      "desc": "Disables system window blur in areas such as the shade, notifications, volume panel and transitions. This can reduce GPU work, but replaces translucent backgrounds with solid ones; heads-up notification text may be harder to read over some content. The setting is global rather than per panel. Window blur changes live; compositor blur may require a reboot."
+    },
+    "net_congestion_mobile": {
+      "desc": "Selects the TCP congestion-control algorithm for mobile data only. As Global follows the general Download Ramp card. Stock leaves the device value unchanged. BBR and CUBIC respond differently to loss and delay; neither is universally faster, and the better choice depends on the carrier and radio conditions. The card reports an unsupported algorithm instead of claiming it was applied."
+    },
+    "net_qdisc": {
+      "desc": "Controls packet queuing on links not covered by the Wi-Fi and mobile cards, including USB/Bluetooth tethering, VPN and Ethernet. Stock preserves the device configuration. fq_codel can reduce latency under load, fq pairs with flow pacing, and cake offers more queue management at extra CPU cost. Results depend on the link; no option guarantees higher throughput or stutter-free video."
+    },
+    "wifi_country": {
+      "desc": "Selects the Wi-Fi regulatory domain, which controls the channels and transmit rules the driver may use. Stock keeps the value supplied by the device. CR explicitly selects the Costa Rica domain; it is not a universal speed setting, and availability still depends on the ROM, access point and hardware. Use only channels and power levels permitted in your actual location."
+    },
+    "doze_trim_whitelist": {
+      "desc": "Controls Android's Doze exemptions separately from Doze timing. Trimming exemptions lets user-installed apps follow idle restrictions; protected system apps such as the dialer, SMS, clock and root manager are not removed. The app list lets you keep selected messengers, mail or VPN apps exempt. Changes are recorded and restored at level 0 or on uninstall. Trimming can delay notifications and background sync."
+    },
+    "wakelock_action": {
+      "desc": "Chooses whether ASB acts on persistent app wakelocks; measurement and reporting remain available either way. When enabled, only eligible user-installed apps are considered after 45+ minutes of screen-off wakefulness with evidence that the phone is staying awake. In detail: only an app that held the CPU for 10+ minutes (or holds a long lock right now) and that Android does not count as used today can be moved to Android's restricted standby bucket. Kernel/system sources, critical apps, battery-optimization exemptions, mail, navigation and keyboards are excluded. Nothing is force-stopped; restrictions can delay background work or notifications. Leave Off to inspect reports without intervention."
+    },
+    "wakelock_fitness": {
+      "desc": "By default, fitness and step-counter apps are protected from ASB wakelock intervention. Limit asks Android to ignore their wakelocks so they cannot keep the CPU awake by themselves. Watch and band companion apps are excluded. Step timelines, background workouts and sync can become incomplete even if hardware step counting continues. Protect or uninstall restores the recorded state. This setting works independently of Act on Wakelocks."
+    },
+    "night_quiet_enable": {
+      "desc": "During a long screen-off stretch in the learned night window, the governor pauses its own nonessential periodic work so the device can remain idle. It does not silence apps, disable radios or guarantee a specific battery saving. Off keeps normal governor scheduling around the clock. Turn it off only if you need those governor updates during the night window."
+    },
+    "sustained_temp_enter": {
+      "desc": "Sets the CPU-zone temperature at which ASB begins limiting sustained performance in Manual mode. Lower values intervene earlier; higher values allow more heat before ASB backs off. The vendor's thermal limits remain active, and this slider is not a safety control. The default is 65 and the lower bound is 52 because some CPU zones read much hotter than the battery or shell. A threshold near or below the device's normal reading can cause constant throttling, longer work and more heat."
+    },
+    "perf_ceiling_pct": {
+      "desc": "Caps the peak CPU and GPU performance available to ASB as a percentage of the device maximum. It mainly limits demanding work; light tasks may never reach the cap. Lower values can reduce peaks and heat but can also lengthen tasks and keep components awake longer, so battery life does not automatically improve. 100 leaves ASB without this additional cap. Start near 85 if needed and compare heat, responsiveness and drain on your device."
+    },
+    "cool_gaming": {
+      "desc": "Uses an earlier thermal response during games, around 40 °C, instead of waiting for higher sustained-load thresholds. This can reduce heat, but frame rate and frame-time stability may also fall depending on the game and device. Off leaves games under the normal profile and thermal policy; it does not disable vendor thermal protection."
+    },
+    "ltpo_video": {
+      "desc": "During eligible video playback, limits the panel peak to the lowest reported mode that matches 30 or 60 fps content, such as 60 Hz for either rate. ASB acts only with the screen on, audio playing, a compatible video layer, no high-smoothness request and no touch for three seconds. Touch, playback end or screen-off restores the previous value; the first instant after touch can still use the lower rate. Other frame rates are left unchanged. Matching modes avoids unnecessary refreshes without changing the video's frame rate."
     }
   },
   "cfg_search": "Search",
@@ -578,9 +667,9 @@
   "cfg_reset_all_done": "Category settings reset to ASB defaults",
   "cfg_reset_all_fail": "Could not reset category settings",
   "cfg_audio_section_playback": "Playback & Bluetooth",
-  "cfg_audio_section_playback_hint": "Choose the audio path and Bluetooth behaviour.",
+  "cfg_audio_section_playback_hint": "Choose the audio path, volume behaviour and Bluetooth processing path.",
   "cfg_audio_section_dsp": "ASB DSP Engine",
-  "cfg_audio_section_dsp_hint": "Optional gain, bass and dynamics processing on the outputs you select.",
+  "cfg_audio_section_dsp_hint": "Optional ASB processing for selected outputs. Gain and effects share one headroom limiter; more processing is not always cleaner.",
   "cfg_audio_section_safety": "Listening Safety",
   "cfg_audio_section_safety_hint": "The system hearing limit is left untouched unless you explicitly change it.",
   "t_quick_explain": "Quick restart restarts Android only; overlays still need a full reboot.",
@@ -662,7 +751,7 @@
   "lr_th_ma": "Avg draw",
   "lr_hz_unit": "Hz",
   "lr_sec_smart": "🧠 Smart learner",
-  "lr_sm_ctx": "Situations with a verdict",
+  "lr_sm_ctx": "Tracked situations",
   "lr_sm_watching": "Apps watched for stutter",
   "lr_sm_testing": "In a headroom test",
   "lr_sm_helped": "Kept extra headroom",
@@ -678,13 +767,13 @@
   "lr_tip_wl_enable": "{app} held the phone awake for {min} min - turn on \"{set}\" in Settings and ASB will rein such apps in for you.",
   "lr_tip_night_modem": "Overnight the phone lost ~{pct}%/h - try \"{set}\" in Settings, it quiets the modem in your own sleeping hours.",
   "lr_tip_jank_bad": "About {pct}% of frames missed their deadline - stutter is visible. On Smart the learner is already testing the worst apps; heavy games do better on Performance.",
-  "lr_tip_jank_ok": "Smoothness is excellent: only {pct}% of frames janky.",
+  "lr_tip_jank_ok": "Smoothness is good: only {pct}% of frames were late.",
   "lr_tip_jank_wake": "Stutter concentrates at the wakes: {pct}% of frames at unlocks and app opens against {ord}% over the day; the most janky there is {who}.",
   "lr_tip_jank_wake_wh": "Stutter concentrates at the wakes: {pct}% of frames at unlocks and app opens against {ord}% over the day.",
   "lr_tip_audio": "Speaker playback cost ~{pct}%/h. For long sessions, headphones or a gentler DSP preset are kinder to the battery.",
   "lr_tip_cost_ok": "ASB itself is cheap: {ms} of CPU per hour.",
   "lr_tip_cost_hi": "ASB used {ms} of CPU per hour - more than usual; worth sending this log to the developer.",
-  "lr_tip_smart_help": "Smart proved extra headroom helps {n} of your apps and keeps it just for them.",
+  "lr_tip_smart_help": "Smart's measured comparisons favored extra headroom for {n} apps, and it is kept only for them; this is not a guarantee for every workload.",
   "lr_tip_ltpo": "Tip: \"{set}\" in Settings lowers the refresh rate on video and saves battery.",
   "dbg_only": "Debug build only",
   "dbg_diag_saved": "asbdiag saved",
@@ -828,19 +917,19 @@
   "cfg_net_section_wifi": "Wi-Fi",
   "cfg_net_section_wifi_hint": "Scanning, power saving, region and when to give up on a bad network.",
   "cfg_net_section_speed": "Download Speed",
-  "cfg_net_section_speed_hint": "How fast downloads ramp up and how packets queue, per network type.",
+  "cfg_net_section_speed_hint": "Per-link congestion control and packet queuing. These change ramp-up and delay under load, not the link's advertised speed.",
   "cfg_net_section_stack": "Network Stack",
-  "cfg_net_section_stack_hint": "Advanced: how network work is spread across cores and buffered.",
+  "cfg_net_section_stack_hint": "Advanced receive-core, transmit-queue and route-window controls. Test throughput, latency and drain on your own links.",
   "cfg_ui_section_services": "System Services",
   "cfg_ui_section_services_hint": "Vendor background services and process limits.",
   "cfg_ui_section_feel": "Display & Haptics",
   "cfg_ui_section_feel_hint": "Refresh-rate behaviour and how vibration and touch feedback feel.",
   "cfg_ui_section_diag": "Diagnostics",
-  "cfg_ui_section_diag_hint": "How much the module - and LSPosed - write to their logs.",
+  "cfg_ui_section_diag_hint": "Control ASB and device diagnostics without taking ownership of LSPosed settings.",
   "cfg_camera_section_processing": "Photo Processing",
-  "cfg_camera_section_processing_hint": "How strongly the camera processes the image: contrast, grain, portraits, low light.",
+  "cfg_camera_section_processing_hint": "Independent firmware-tuning controls for colour, contrast, grain, portrait blending and low-light sharpening. Each takes effect after a reboot.",
   "cfg_camera_section_perf": "Camera Performance",
-  "cfg_camera_section_perf_hint": "Keep the phone responsive while the camera is open.",
+  "cfg_camera_section_perf_hint": "Hold camera performance only while streaming; thermal and vendor limits still apply.",
   "cfg_iface_section_speed": "Interface Speed",
   "cfg_iface_section_speed_hint": "Animation speed and touch timings.",
   "cfg_iface_section_effects": "Visual Effects",
@@ -1205,11 +1294,12 @@
   "lr_heat_peak": "Hottest phase",
   "lr_heat_warm_fmt": "CPU above 45 °C",
   "lr_heat_skin_fmt": "Skin above 40 °C",
-  "lr_tip_heat_warm": "The CPU held 45 °C+ for {min} (hottest: {phase}) - sustained heat costs battery and comfort.",
+  "lr_tip_heat_warm": "The phone spent {min} hot in total; the hottest named phase was {phase}. Reduce sustained load or use a gentler profile.",
   "lr_tip_heat_warm_set": "The CPU held 45 °C+ for {min} (hottest: {phase}) - \"{set}\" in Settings is on Stock, so the protection kicks in later than it could.",
   "lr_tip_heat_calm": "The phone stayed cool all day (peak {cpu} °C) and never throttled - nothing to change.",
   "lr_mwake": "Night wakes (learned)",
   "lr_mwake_fmt": "{n} checks · {per} a night · ~{sec} s each",
+  "lr_mwake_unconfirmed": "{n} checks · no completed nights for an average yet · ~{sec} s each",
   "lr_sec_trend": "📈 Trend",
   "lr_trend_night": "Night: {was} %/h → {now} %/h",
   "lr_trend_day": "Day drain: {was} %/h → {now} %/h",
@@ -1617,7 +1707,7 @@
   "lr_brief_cause_radio": "The phone did not fall asleep {awake}% of the screen-off time; background mobile data used {mib} MiB meanwhile.",
   "lr_brief_cause_none": "The phone did not fall asleep {awake}% of the screen-off time; no single app stood out.",
   "lr_brief_night_hot": "With the screen off the CPU reached {cpu}° at times - something did heavy work in the background.",
-  "lr_brief_smooth_ok": "Smoothness is excellent: {pct}% of frames were late.",
+  "lr_brief_smooth_ok": "Smoothness is good: {pct}% of frames were late.",
   "lr_brief_smooth_mid": "Smoothness is normal: {pct}% of frames were late - occasional stutter.",
   "lr_brief_smooth_bad": "Stutter is noticeable: {pct}% of frames were late.",
   "lr_brief_sysui_net": "The status bar redraws all the time because the network-speed meter is on - it costs frames in every app.",
@@ -1698,10 +1788,10 @@
   "lr_dx_also_jwhy": "Most late frames: {app} in {state}, {pct} of its frames. {cause}",
   "lr_dx_also_bhold": "Battery scroll hold, measured per app: kept where it cut the stutter (apps: {k}), released where it did not help (apps: {r}), under test: {t}.",
   "lr_dx_also_vendor": "The firmware held the prime cores below ASB's ceiling in {n} of {of} checks (PowerHAL or kernel thermal) - ASB does not override it.",
-  "lr_dx_heat_long": "The CPU spent {min} above 45 °C, most of it in {phase}; peak {cpu}°.",
+  "lr_dx_heat_long": "The CPU spent {min} above 45 °C in total; the hottest named phase was {phase}, with peak {cpu}°.",
   "lr_dx_fix_heat": "Reduce sustained load (games, long video calls while charging) or use a gentler profile; a case or charging while playing adds heat.",
   "lr_dx_fix_heat_set": "Check \"{set}\" in ASB settings - with Stock, ASB thermal protection is off.",
-  "lr_dx_heat_some": "The CPU spent {min} above 45 °C (peak {cpu}°) - short spells of load, nothing sustained.",
+  "lr_dx_heat_some": "The CPU spent {min} above 45 °C in total (peak {cpu}°). The total alone does not show whether the load was sustained.",
   "lr_dx_heat_ok": "No overheating: the CPU peaked at {cpu}°.",
   "lr_dx_also_clamps": "Frequencies were limited {n} times briefly - the protection doing its job, without sustained heat.",
   "lr_dx_asb_crash": "ASB code is involved in {n} native crash(es) during the capture.",
@@ -1735,7 +1825,7 @@
   "lr_dx_lte_ran": "LTE was chosen {n} times in this capture, {min} on LTE in all.",
   "lr_dx_net_try_light": "Try \"{set}\" in ASB settings: with light traffic the modem keeps to LTE, and 5G comes back for a big download.",
   "lr_dx_also_fix": "Also: {txt}",
-  "lr_dx_fix_net_play": "Google Play updated apps over mobile data: Play Store → Settings → Network preferences → Auto-update apps → Over Wi-Fi only.",
+  "lr_dx_fix_net_play": "Google Play used mobile data; the counters do not distinguish app updates from other downloads. If you do not want updates on mobile data: Play Store → Settings → Network preferences → Auto-update apps → Over Wi-Fi only.",
   "lr_dx_fix_net_tg": "In {app}: Settings → Data and storage → Automatic media download → turn off downloads over mobile data, or lower the size limit.",
   "lr_dx_fix_net_wa": "In WhatsApp: Settings → Storage and data → Media auto-download → When using mobile data → no media.",
   "lr_dx_fix_net_video": "{app} streams video: turn on its data saver or lower the video quality on mobile data.",
@@ -1978,6 +2068,7 @@
   "dev_zygisk_observer_launch_events": "Cold starts heard",
   "dev_zygisk_observer_launch_accepted": "Cold starts accepted by the governor",
   "dev_zygisk_observer_launch_vetoed": "Cold starts vetoed",
+  "dev_zygisk_observer_launch_screen_off": "Cold starts vetoed locally with the screen off",
   "dev_zygisk_observer_launch_unavailable": "Cold starts: governor unavailable",
   "dev_zygisk_observer_launch_throttled": "Cold starts throttled",
   "dev_zygisk_observer_hints_screen_off": "Refreshes not sent with the screen off",
@@ -2051,7 +2142,7 @@
   "dev_zygisk_link_off_detail": "Observer is off for new processes.",
   "dev_zygisk_link_unknown_detail": "Insufficient evidence; Zygisk support is not ruled out.",
   "cfg_ui_section_zygisk": "Zygisk",
-  "cfg_ui_section_zygisk_hint": "Observer, lifecycle hints, cold-start lift and process ledger — one evidence-bounded integration.",
+  "cfg_ui_section_zygisk_hint": "Opt-in process observation and bounded requests to the existing governor. Zygisk does not select profiles, frequencies or app policies.",
   "dev_zygisk_metric_injection": "Validated injection",
   "dev_zygisk_metric_processes": "{n} live process(es)",
   "dev_zygisk_metric_channel": "Companion channel",
@@ -2070,7 +2161,7 @@
   "dev_zygisk_snapshot_note": "Current read-only snapshot. RSS is the memory of validated observed apps, not pure ASB overhead; accepted hints do not prove a cap change, performance gain or energy saving.",
   "dev_zygisk_observer_link_state": "ASB link verdict (machine state)",
   "lr_sec_zygisk": "🧩 Zygisk · ASB injection",
-  "lr_zy_activity": "Companion events in capture",
+  "lr_zy_activity": "Accepted process start/exit events",
   "lr_zy_launch": "Cold starts heard",
   "lr_zy_hints": "Lifecycle hints",
   "lr_zy_ipc": "Observer IPC CPU",
@@ -2088,6 +2179,16 @@
   "lr_zy_coverage_one": "Only one snapshot is available; no in-capture delta can be inferred.",
   "lr_zy_coverage_two": "Start/latest snapshots: deltas cover the interval between them, but do not prove continuous observation through a restart.",
   "lr_zy_note": "Observed events prove companion activity, not total Zygisk control, performance improvement or energy savings. No A/B comparison is made here.",
+  "lr_zy_gov_title": "Governor-side actions on the ASB cold-start lift window",
+  "lr_zy_gov_cold_lifts": "Cold starts that armed a lift",
+  "lr_zy_gov_cold_extends": "Running lifts extended for a cold start",
+  "lr_zy_gov_cold_long": "Cold starts covered by the longer window",
+  "lr_zy_gov_cold_trims": "Tap lifts shortened for a fast cold start",
+  "lr_zy_gov_note": "These counters record decisions and changes to ASB’s own lift window, not a hardware ceiling write or an A/B performance/energy benefit.",
+  "lr_zy_gov_reset": "At least one Governor counter decreased: all Governor-side deltas remain unknown for this interval.",
+  "lr_zy_gov_coverage_one": "Only one Governor snapshot is available; its cumulative counters are not presented as in-capture actions.",
+  "lr_zy_note_actions": "Governor-side counters confirm that ASB armed, extended or shortened its own cold-start lift window. They do not prove a hardware ceiling write, total control of other Zygisk modules, performance improvement or energy savings. No A/B comparison is made here.",
+  "lr_zy_denylist_note": "A root-manager unmount/denylist flag describes how the process was started. Its count alone does not prove failed injection or justify changing the allowlist.",
   "lr_zy_unavailable": "The collector returned no observer evidence; Zygisk support is not ruled out.",
   "dev_loading_sub": "The page is already open. Nothing is being changed; each group appears after the read-only snapshot returns.",
   "dev_stage_system": "System",
@@ -2242,7 +2343,7 @@
   "lr_dx_fix_selfpush": "In the app's own notification settings turn off its keep-alive or background-connection service, then check with the notification fix that messages still arrive on time.",
   "lr_dx_fix_selfpush_gms": "Set Google Services Trim to light in ASB first; if messages then arrive on time, turn off the app's own keep-alive service.",
   "zy_aot_title": "Faster app starts (ART)",
-  "zy_aot_desc": "ASB counts how often you open each app (Zygisk start ledger) and how long its cold start takes (Android's own launch log). Apps you open often that run without ahead-of-time compiled code are compiled the way Android's nightly maintenance does it - only while charging with the screen off and the battery below 40 °C. Compiled code needs less JIT work while the app runs and usually starts faster; the times below show what it did on this phone.",
+  "zy_aot_desc": "ASB counts how often you open each app (Zygisk start ledger) and how long its cold start takes (Android's own launch log). Only frequently opened apps without ahead-of-time code are considered, one batch per charging session, with the screen off and a known battery temperature below 40 °C. This can improve startup, but does not guarantee battery savings; compilation itself costs CPU and storage writes.",
   "zy_aot_off": "Off",
   "zy_aot_on": "Compile while charging",
   "zy_aot_unread": "The compile state has not been read yet.",
@@ -2334,20 +2435,20 @@
   "zy_guard_ev_lifted_opened": "given back: you opened it",
   "zy_guard_ev_lifted_released": "given back by you",
   "zy_auto_title": "Automatic setup",
-  "zy_auto_recommended": "Recommended · no package lists to fill in",
-  "zy_auto_desc": "ASB selects user apps to observe, enables launch response and the process ledger, guards against restart loops and night wakers, and optimizes frequently opened apps with ART only while charging. You do not need to choose packages or tune the engine.",
+  "zy_auto_recommended": "Choose one policy · no package lists to fill in",
+  "zy_auto_desc": "ASB fills the observation list with user apps. Choose observation only, cold-start assist, or background guard. ART compilation is never enabled by this card and remains a separate manual choice below.",
   "zy_auto_enable": "Set up automatically",
   "zy_auto_refresh": "Refresh automatic app selection",
   "zy_auto_disable": "Turn off automatic setup",
   "zy_auto_working": "Setting up…",
   "zy_auto_refreshing": "Refreshing…",
   "zy_auto_disabling": "Turning off…",
-  "zy_auto_summary": "Automatic mode is on · %1 observed app(s) · Background guard: %2 · ART: %3",
-  "zy_auto_note": "Only user-installed apps enter the observation list. Background restrictions still require measured start thresholds, skip protected apps and are read back and reversible. Safe mode is never cleared automatically. No LSPosed, kernel, frequency or thermal setting is changed.",
+  "zy_auto_summary": "Automatic profile: %1 · %2 observed app(s) · Background guard: %3 · ART (independent): %4",
+  "zy_auto_note": "Only user-installed apps enter the observation list. Turning automatic setup off restores the previous app list, observer settings, guard and ART state. Safe mode is never cleared automatically. No LSPosed, kernel, frequency or thermal setting is changed.",
   "zy_auto_enabled": "Automatic Zygisk setup is on",
   "zy_auto_refreshed": "Automatic app selection refreshed",
-  "zy_auto_disabled": "Automatic features off · previous app list restored",
-  "zy_auto_failed": "Automatic setup was not completed; no unsupported package or policy was selected",
+  "zy_auto_disabled": "Automatic setup off · previous Zygisk state restored",
+  "zy_auto_failed": "Automatic setup was not completed; check the current state before retrying",
   "zy_auto_safe": "Safe mode is on. Automatic setup will not clear it; clear Safe mode explicitly first.",
   "zy_auto_managed_label": "Apps selected automatically by ASB",
   "zy_auto_managed_note": "This list is managed by Automatic setup. It refreshes after package changes on existing service passes or from the button above. Turn off Automatic setup before editing it manually. Safe mode remains available here.",
@@ -2357,14 +2458,55 @@
   "lr_loading_sub": "The report is already open. The read-only digest will replace this card; nothing is being changed.",
   "dev_zygisk_safe_enable": "Enable safe mode",
   "dev_zygisk_safe_clear": "Clear safe mode",
-  "lr_tip_smart_help_manual": "Recorded Smart measurements found extra headroom useful for {n} apps. This capture used a manual profile, so those records do not show Smart actively controlling it.",
+  "lr_tip_smart_help_manual": "Recorded Smart comparisons favored extra headroom for {n} apps. This capture used a manual profile, so those records do not show Smart actively controlling it.",
   "lr_tip_jank_bad_evidence": "About {pct}% of frames missed their deadline. Measured at-cap windows are not materially worse ({yes}% at cap versus {no}% below), or the named cap is mostly ROM-owned. This correlation does not clear every ceiling, but it does not support raising them as the first action; use the per-frame breakdown.",
   "lr_dx_smooth_cap_external": "At the {cl} ceiling jank was {yes}% versus {no}% below it, but the ROM held that cluster in most checks. This correlation does not establish that an ASB ceiling caused the jank; do not raise it from this capture alone.",
   "lr_dx_frames_thin": "Only {frames} HWUI frames were usable, so no stable smoothness verdict is made. A thin sample is unknown evidence, not proof of smoothness; GL/Vulkan game surfaces can be outside this metric.",
   "lr_dx_frames_absent": "No usable HWUI frame sample was collected during substantial screen-on time. Smoothness remains unknown, not zero-jank; missing counters can reflect unsupported collection or non-HWUI surfaces.",
   "lr_zy_spawns": "Observed process starts in capture",
   "lr_zy_launch_fallback": "Cold starts without a measured launch class",
-  "lr_zy_quiet_channels": "The accepted start/exit counter is zero, but spawn, cold-start or ledger channels recorded activity. These channels are independent; zero here does not mean the observer was absent.",
+  "lr_zy_quiet_channels": "The process start/exit lifecycle channel stayed at zero while independent spawn, cold-start or ledger channels recorded activity. This confirms companion IPC, but not resident process observation; it is not proof that injection failed.",
   "lr_zy_live_zero": "No validated process was live in the latest snapshot, while earlier activity was recorded. This describes the current live set, not failed injection throughout the capture.",
-  "lr_zy_accept_note": "An accepted cold-start request passed the companion checks; it is not proof that the governor changed a frequency ceiling."
+  "lr_zy_accept_note": "An accepted cold-start request was acknowledged by the governor after its enabled/screen checks. This is not proof that a lift was armed or that a frequency ceiling changed; thermal and other governor gates still apply.",
+  "lr_tip_smart_nohelp": "Smart's comparisons did not favor extra headroom for {n} apps, so their previous ceilings were kept. This does not identify another cause of their late frames.",
+  "lr_sm_scope": "End-of-capture snapshot: counters can include earlier work in the same governor session. Tracked situations include tests still running.",
+  "lr_dx_heat_some_runs": "The CPU spent {min} above 45 °C across {n} warm spells (longest {longest}; peak {cpu}°). No single spell reached 30 minutes.",
+  "lr_zy_launch_balanced": "All {n} cold starts have a recorded outcome: {ok} accepted, {veto} vetoed, {unavailable} governor-unavailable, {throttled} throttled.",
+  "lr_zy_launch_unresolved": "Of {n} cold starts, {ok} were accepted, {veto} vetoed, {unavailable} governor-unavailable and {throttled} throttled. The remainder can be in flight at a snapshot; the difference alone is not an error.",
+  "zy_auto_profile_observe": "Observe only",
+  "zy_auto_profile_launch": "Launch assist",
+  "zy_auto_profile_battery": "Battery guard",
+  "zy_auto_profile_note": "Observe: ledger only. Launch: cold-start assist and ledger, without AppOps. Battery: guard after two separate session observations and your per-app confirmation; no ART.",
+  "zy_guard_confirm_desc": "Before an automatic AppOps restriction ASB requires the same evidence in %s separate screen sessions and your confirmation for that package. A proposal changes nothing yet. Restrictions can delay background work and notifications; Give back now restores the recorded mode immediately.",
+  "zy_guard_pending_title": "Confirm background restrictions (%s)",
+  "zy_guard_pending_desc": "Dry run: no proposal below has changed AppOps by itself. Confirm only an app whose background work and possible notification delay you accept.",
+  "zy_guard_pending_row": "%1 starts · %2/%3 sessions · %4",
+  "zy_guard_pending_approved": "Confirmed · waiting for evidence",
+  "zy_guard_pending_approve": "Confirm this app",
+  "zy_guard_release_now": "Give back now",
+  "zy_guard_approved": "Package confirmed; two-session evidence is still required",
+  "zy_guard_released": "Previous background mode restored",
+  "lr_sec_impact": "📏 Tweak evidence",
+  "lr_impact_tweak": "Tweak",
+  "lr_impact_measured": "Measured in this capture",
+  "lr_impact_meaning": "What the number proves",
+  "lr_impact_cap_readback": "CPU ceiling readback",
+  "lr_impact_cap_readback_fmt": "{ok}/{total} matched ASB · {vendor} vendor overrides · {other} other",
+  "lr_impact_readback": "Direct readback observations · not an energy effect",
+  "lr_impact_cap_main": "CPU ceiling · main cluster",
+  "lr_impact_cap_prime": "CPU ceiling · prime cluster",
+  "lr_impact_cap_fmt": "{yes}% at cap vs {no}% below cap · {frames} frames",
+  "lr_impact_correlation": "Observed together, different workloads · A/B required",
+  "lr_impact_zygisk": "Zygisk cold-start assist",
+  "lr_impact_zygisk_fmt": "{accepted} accepted · {armed} lifts armed · {extended} extended",
+  "lr_impact_direct": "Measured actions · performance/energy benefit needs A/B",
+  "lr_impact_wifi": "Leave bad Wi-Fi",
+  "lr_impact_wifi_fmt": "{releases} releases · {returned} returned · {recovered} recovered before release",
+  "lr_impact_smart": "Smart headroom learner",
+  "lr_impact_smart_fmt": "{helped} kept · {nothelped} ruled out · {testing} testing",
+  "lr_impact_smart_scope": "Governor-session decision snapshot · not a saving percentage",
+  "lr_impact_cost": "ASB governor overhead",
+  "lr_impact_cost_fmt": "{cpu} ms/h · {writes} writes/h · {wakes} wakeups/h",
+  "lr_impact_cost_scope": "Measured ASB cost · not the net battery effect",
+  "lr_impact_ab_note": "No battery %, temperature or smoothness gain is assigned to a tweak here. For a causal figure, change one toggle and compare similar captures. A tweak not listed has no evidence exposed in this capture; that does not mean it is unsupported or had zero effect."
 }

@@ -25,14 +25,14 @@
       "name": "Bluetooth ses boşaltma",
       "desc": "Bluetooth sesini kimin kodladığı: ayrı donanım bloğu mu, işlemci mi. «Otomatik» karışmaz: ROM'un seçtiği kalır. «Açık» donanım kodlamayı açıkça etkinleştirir (genelde fabrika ayarıyla aynıdır ama burada ASB yazar). «Kapalı» işi işlemciye taşır; bazı codec'ler ve ekolayzer uygulamaları ancak böyle çalışır.",
       "descOpt": {
-        "auto": "Karışma — üretici yazılımının seçimi kalır.",
-        "off": "İşlemci kodlar. Bazı ekolayzırların akışı görmesi için gerekir.",
-        "on": "Donanım kodlaması. Daha az tüketim; telefon kutudan genelde böyle çalışır."
+        "auto": "ROM'un seçtiği Bluetooth ses yolunu değiştirme.",
+        "on": "Destekleniyorsa donanım/offload kodlaması iste. Gerçek tüketim cihaza ve codec'e bağlıdır.",
+        "off": "CPU kodlaması kullan. Bazı ekolayzerlerin Bluetooth sesi işlemesini sağlayabilir; CPU kullanımı artabilir."
       }
     },
     "dsp_loudness": {
       "name": "DSP ses yükseltme",
-      "desc": "ASB'nin kendi ses motoruyla sistem azamisinin üzerinde ses kazancı. Yumuşak sınırlayıcı sesin boğulmasını engeller: çıkış tasarım gereği sınırlıdır, bu yüzden fazladan desibeller sesin temizliğini değil yoğunluğunu değiştirir. Hoparlörde telefon sıcakken (pil 42 °C ve üzeri) kazanç kademeli olarak düşer ve 40 °C altında geri gelir; Bluetooth ve kablolu çıkışlar asla düşürülmez."
+      "desc": "ASB DSP, isteğe bağlı sıkıştırma ve son örnek-tepe sınırlayıcıyla +25 dB'ye kadar kazanç ekler. +3 dB ile başlayın: Yüksek ayarlar, tepeler sınırlansa bile yoğun sıkıştırılmış duyulabilir. İlk etkinleştirme yeniden başlatma ister. Harici ekolayzer ses profilinde DSP atlanır. Hoparlörde kazanç pil 42 °C'ye ulaşınca azalır ve 40 °C altında geri gelir; bu kural kablolu ve Bluetooth kazancını azaltmaz."
     },
     "dsp_bass": {
       "name": "DSP bas yükseltme",
@@ -40,7 +40,7 @@
     },
     "dsp_voice": {
       "name": "DSP\nSes tonu",
-      "desc": "DSP Ses Yüksekliği gerekir. Telefon hoparlöründe ince veya cırtlak duyulan sesler için. İki geniş bant birlikte hareket eder: 350 Hz’deki gövde yükselir (adım başına +0,5 dB), 3 kHz’deki sertlik azalır (adım başına −0,6 dB); seviye 10 = +5 / −6 dB. Bas güçlendirme 90 Hz’de çalışır, çoğunlukla telefon hoparlörünün çalabildiğinin altında; bu bant hoparlörün hâlâ ses verdiği yerdedir. Sınırlayıcıdan önce çalışır, kırpma yapmaz. 4–6 ile başlayın; yalnızca hoparlör için DSP Çıkışları’nı kullanın."
+      "desc": "DSP Loudness gerektirir. İki geniş bant, 350 Hz'de ses gövdesini ve 3 kHz'de üst kenar sertliğini ayarlar. Seviye 10 sırasıyla +5 ve −6 dB uygular. İnce veya sert konuşmayı özellikle telefon hoparlöründe dolgunlaştırabilir; yüksek değerler doğal olmayabilir. 4–6 ile başlayın ve DSP Outputs ile efekti gereken çıkışlarla sınırlayın. Değişiklikler sınırlayıcıdan önce canlı uygulanır."
     },
     "dsp_width": {
       "name": "DSP\nStereo genişlik",
@@ -52,55 +52,55 @@
     },
     "dsp_outputs": {
       "name": "DSP çıkışları",
-      "desc": "DSP efektinin hangi çıkışlara uygulanacağı. Eskiden hepsine birden tutunuyordu, bu yüzden kulaklık için düşünülen bir kazanç telefonun hoparlörünü de yükseltiyordu — bunu en az kaldırabileni.\n\nBluetooth ve pil: kablosuz çıkıştaki bir ses efekti akışı boşaltılmış oynatmadan çıkarabilir; o zaman ekran kapalıyken ses çaldığı sürece işlemci uyumaz. Bir günlük kayıtta kazançlı Bluetooth dinleme işlemciyi zamanın %100'ünde uyanık tuttu. Ekran kapalı uzun dinlemelerde pil süresi önemliyse Bluetooth'u bu listeye eklemeyin."
+      "desc": "ASB DSP'nin işleyeceği çıkışları seçer: telefon hoparlörü, kablolu kulaklık/USB DAC veya Bluetooth. Bulunmayan çıkışlar yok sayılır. Kapalı, tüm DSP'yi devre dışı bırakırken seviyeleri korur. Bluetooth işleme, donanım offload yolundan çıkabilir ve ekran kapalıyken CPU kullanımını artırabilir; uzun dinlemede pil, efektten önemliyse Bluetooth'u hariç tutun."
     },
     "CAMERA_LEVEL": {
       "name": "Kamera işleme",
-      "desc": "Fotoğraf ve videolar için renk, kontrast ve detay gücü: 0 = fabrika, daha yüksek = daha doygun ve kontrastlı. GÖRECELİ çalışır: ROM'unuzda gerçekten bulunan değerleri çarpar, dolayısıyla üreticinin seçtiği sayılara bağlı değildir."
+      "desc": "Cihazın kendi firmware fotoğraf/video renk, ayrıntı ve keskinlik değerlerini ölçekler. 0 stock ayarını korur; 1–6 işlemeyi kademeli artırır, 7–10 bilinçli olarak güçlü ve stilize edilmiştir. Cihaz yetenek sınırları geçerlidir. Bu sınırlardan önce seviye 10, 2,5× chroma, 3,4× AI karışımı ve 3,5× keskinliğe kadar hedefler. Stock tabandan yeniden kurmak için yeniden başlatın. Yüksek seviyeler koyu gölgelerde gürültü veya bantlanmayı artırabilir."
     },
     "CAMERA_CONTRAST": {
       "name": "Kontrast ve renk derinliği",
-      "desc": "Ton eğrisinin kontrastı ve doygunluğu. 3 tam olarak fabrikadır (100%), 0 daha düz (70%), 6 belirgin biçimde daha kontrastlı (130%). Renk matrisinde çalışan «İşleme düzeyi»nden bağımsızdır."
+      "desc": "Ton eğrisinin kontrastını ve doygunluğunu Camera Grade'den bağımsız ayarlar. 3 stock'tur; yüksek değerler gölgeleri koyulaştırıp rengi güçlendirir, 10 firmware ölçeklerinin %170'ini hedefler. Camera Grade'in renk matrisi veya ayrıntı çarpanlarını yükseltmez. Yeniden başlatma gerekir. Yüksek değerler gölge ayrıntısını kaybedebilir veya renkleri doğal olmayan hale getirebilir."
     },
     "CAMERA_GRAIN": {
       "name": "Film graini",
-      "desc": "Gürültü azaltmadan sonra kamera bir miktar grenini geri katar — kusursuz pürüzsüz bir görüntü plastik gibi durur. 3 fabrikadır: temiz görünüm için daha düşük, belirgin doku için daha yüksek, 0 greni tamamen kaldırır."
+      "desc": "Gürültü azaltmadan sonra eklenen grain'i kontrol eder. 3 stock, 0 eklenen grain'i kaldırır; yüksek değerler giderek görünür film dokusu oluşturur, 10 orijinal miktarın 16×'ini hedefler. ASB, cihazın kendi ayarlarında bulunan moda özgü türevler dahil tüm addNoiseWeight* anahtarlarını değiştirir. Yüksek değerler gölgelerde kaba görünebilir. Yeniden başlatma gerekir."
     },
     "CAMERA_PORTRAIT": {
       "name": "Portre yapay zekâ",
-      "desc": "Yüzlerin sinirsel işlenmesi: fabrika ROM'u bunu kapalı tutar (ağırlıklar 0.0), bu yüzden burada çarpan değil mutlak değerler yazılır. Yalnızca yukarı: ROM zaten seviyenin istediğinden fazlasını içeriyorsa olduğu gibi kalır."
+      "desc": "Desteklenen portre modlarında nöral yüz ve cilt karışımını ayarlar. Stock firmware bu ağırlıkları sıfır gönderebilir; artırmak, gürültü azaltmanın yok ettiği dokuyu geri getirebilir ama cildi yapay da gösterebilir. Seviye 6, uygulanan karışım ağırlığı tavanına ulaşır. 1–2 ile başlayın. Her kamera modunu etkilemez. Yeniden başlatma gerekir."
     },
     "CAMERA_LOWLIGHT": {
       "name": "Makro ve düşük ışık keskinliği",
-      "desc": "Makro ve az ışığın kendi keskinlik ölçeği vardır ve aşırılık en çok orada görünür: yakın nesneler ve yüksek ISO haleleri artırır. 0 ana işlemeyi izler; yalnızca bu modlar yumuşak görünüyorsa yükseltin."
+      "desc": "Makro ve düşük ışık için ayrı keskinlik ölçeklerini kontrol eder. 0, Camera Grade'i izler; yüksek değerler giderek güçlü düzeltme uygular, 10 firmware sınırlarından önce 3,2× hedefler. Yakın nesneler ve yüksek ISO haleleri görünür kılabilir. Yalnızca bu modlar gerçekten yumuşaksa artırın. Yeniden başlatma gerekir."
     },
     "camera_hold_enable": {
       "name": "Kamera açıkken performansı koru",
-      "desc": "Kamera görüntü aktarırken governor frekansları düşürmeyi bırakır ve zaten meşgul çekirdekleri tutar. Seri çekimde ya da videoda kare kaybını önleyen budur; bedeli, kamera uygulaması açıkken biraz pil. «Kapalı» governor'ın kamerayı diğer uygulamalar gibi sınırlamasına izin verir."
+      "desc": "Kamera etkin akış yaparken governor, mevcut CPU tavanını ve kullanılan çekirdekleri azaltmak yerine korur. Seri çekim veya videoda performans düşüşlerini azaltabilir, ancak kamera açık kaldığı sürece daha fazla güç kullanır. Açık performansı tutar; Kapalı normal governor kurallarını uygular. Termal ve üretici güvenlik sınırları öncelikli kalır."
     },
     "UX_MANAGE_TIMEOUTS": {
       "name": "Arayüz hızını yönet",
-      "desc": "Performans animasyonları (~0,8x) ve uzun basma ile çoklu dokunma pencerelerini tepki lehine kısaltır; Pil fabrika ayarında kalır. KAPALI = hiçbir şeye dokunma."
+      "desc": "Profile göre yönetilen arayüz zamanlamalarının ana anahtarı. Performance animasyonları ve uzun basma/çoklu dokunma pencerelerini kısaltır; Battery stock değerleri korur. Kapalı bu değerleri ROM kontrolünde bırakır. Güç profilinden bağımsız sabit animasyon hızı için aşağıdaki ayarı kullanın."
     },
     "anim_speed": {
       "name": "Animasyon hızı",
-      "desc": "Sistemin geçişleri ne kadar hızlı çizdiği. «Profile göre» eski davranıştır: hızı güç profili seçerdi, yani arayüzün tepkisi bir pil ayarının yan etkisiydi. Artık ayrı bir karar."
+      "desc": "Sabit bir Android animasyon ölçeği belirler. −1 kontrolü güç profiline verir; 0 Android varsayılanıdır, negatifler daha hızlı, pozitifler daha yavaştır, en sol animasyonları kapatır. Sonraki geçişlerde uygulanır. Çok kısa veya kapalı animasyonlar geçişleri izlemeyi zorlaştırabilir, ancak uygulamanın gerçek işlem hızını artırmaz."
     },
     "UX_ANIM_FORCE_RESTART": {
       "name": "Animasyonları yeniden başlatmaya zorla",
-      "desc": "Neredeyse hiç gerekmez. WindowManager animasyon ölçeklerini yazıldıktan hemen sonra yeniden okur — ayarı değiştirmek yeterlidir. Bu anahtar yalnızca tanılama toplamak için var."
+      "desc": "Canlı animasyon ölçeği değişikliklerini yok sayan ROM'lar için yedek seçenek. Elle profil değişiminde SystemUI da yeniden başlatılır: ekran yanıp sönebilir, kilit ekranı dönebilir ve diğer modüllerin overlay'leri kaldırılabilir. Her otomatik değişimde çalışmaz. Normal ölçek değişiminin işe yaramadığını doğrulamadıysanız açmayın."
     },
     "disable_blur": {
       "name": "Bulanıklığı kapat",
-      "desc": "Bulanıklığı her yerde kapatır: perde, bildirimler, ses paneli, geçişler. Daha az GPU yükü, perde buzlu yerine mat olur. Not: açılır bildirim de bulanık zeminini kaybeder."
+      "desc": "Shade, bildirimler, ses paneli ve geçişlerde sistem pencere bulanıklığını kapatır. GPU işini azaltabilir, ancak yarı saydam arka planları düz renkle değiştirir; heads-up bildirim metni bazı içeriklerde daha zor okunabilir. Ayar panel bazlı değil, geneldir. Pencere bulanıklığı hemen değişir; compositor bulanıklığı yeniden başlatma gerektirebilir."
     },
     "ui_effects_level": {
       "name": "Sistem animasyonları",
-      "desc": "Sistemin geçişleri ve Son Kullanılanlar'ı ne kadar zengin çizdiği. «Normal» fabrikadan çıktığı gibidir. «Basitleştirilmiş» daha az efekt ve biraz daha az GPU kullanır. ÖNEMLİ: basitleştirilmişte Son Kullanılanlar düz bir listeye döner ve OxygenOS Kartlar/Basit seçicisini TAMAMEN kaldırır. Yalnızca OnePlus 15'te mevcuttur.",
+      "desc": "Normal, cihazın tam geçiş ve Recents efektlerini korur. Simplified görsel efektleri azaltır ve GPU kullanımını düşürebilir, ancak Recents basit liste olur ve OxygenOS Cards/Simple seçicisini kaldırır. Geri getirmek için Normal seçip yeniden başlatın. Simplified yalnızca OnePlus 15'te sunulur; diğer modellerdeki davranışı doğrulanmamıştır.",
       "descOpt": {
-        "auto": "Sistemin efekt düzeyine dokunma.",
-        "flat": "Sade. «Son kullanılanlar» basit listeye döner ve OxygenOS «Kartlar/Basit» anahtarını kaldırır. Yalnızca OnePlus 15’te.",
-        "stock": "Fabrikadaki gibi normal efektler."
+        "auto": "Mevcut sistem efekt seviyesini değiştirme.",
+        "stock": "Cihazın normal efektlerini ve Recents sunumunu kullan.",
+        "flat": "Efektleri sadeleştir. Recents liste olur ve OxygenOS Cards/Simple'ı gizler; yalnızca OnePlus 15."
       }
     },
     "net_congestion": {
@@ -113,11 +113,11 @@
     },
     "net_congestion_mobile": {
       "name": "İndirme hızlanması · mobil",
-      "desc": "Yalnızca mobil veri için indirme hızlandırma. «Genel gibi» üstteki kartın değerini alır. Burada genelde bbr kazanır: telsiz bağlantıda kaybolan paket tıkanıklık değil parazit demektir ve cubic boşuna hız bırakır."
+      "desc": "Yalnızca mobil veri için TCP tıkanıklık kontrol algoritmasını seçer. As Global, genel Download Ramp kartını izler. Stock cihaz değerini değiştirmez. BBR ve CUBIC kayıp ve gecikmeye farklı tepki verir; hiçbiri her zaman daha hızlı değildir. Sonuç operatöre ve radyo koşullarına bağlıdır. Desteklenmeyen algoritma uygulanmış gibi değil, desteklenmiyor olarak bildirilir."
     },
     "net_qdisc": {
       "name": "Paket kuyruğu · diğer",
-      "desc": "Telefonun bağlantıyı uygulamalar arasında nasıl paylaştırdığı — aşağıdaki iki kartın kapsamadığı ağlar için: USB paylaşımı, VPN, Bluetooth paylaşımı, Ethernet adaptörü. «fq_codel» çoğu kişiye uyar: arka planda bir şey inerken video takılmayı bırakır. «cake» en özenlisidir ama işlemci için biraz daha ağırdır."
+      "desc": "Wi-Fi ve mobil kartların kapsamadığı USB/Bluetooth tethering, VPN ve Ethernet gibi bağlantılarda paket kuyruğunu kontrol eder. Stock cihaz yapılandırmasını korur. fq_codel yük altında gecikmeyi azaltabilir, fq akış pacing ile çalışır, cake daha fazla kuyruk yönetimini ek CPU ile sunar. Sonuç bağlantıya bağlıdır; hiçbir seçenek daha yüksek throughput veya takılmayan video garanti etmez."
     },
     "net_qdisc_wifi": {
       "name": "Paket kuyruğu · Wi-Fi",
@@ -129,28 +129,28 @@
     },
     "net_route_tune": {
       "name": "Ağ tamponları",
-      "desc": "İlk yanıttan önce tek seferde ne kadar veri gittiği. Akıllı mod bağlantınızı ölçer — hız, MTU, telsiz türü — ve boyutu kendi seçer: hızlı hatta daha büyük, zayıf hatta fabrika değeri kalır, çünkü orada büyük bir atım tam da önlemesi gereken kayıpları doğurur.",
+      "desc": "Rotalar için başlangıç TCP patlama boyutunu ayarlar. Smart ölçülen bağlantı koşullarına göre seçer ve zayıf bağlantıları fabrika değerine yakın bırakır; Moderate tutucudur, Aggressive daha büyük sınıf seçer ve kötü bağlantılarda yeniden iletimi artırabilir. Stock önceki rota değerlerini geri yükler. Bu, radyo veya hizmetin azami hızını değil, bağlantının hızlanma başlangıcını değiştirir.",
       "descOpt": {
-        "aggressive": "Maksimum pencere. Hızlı ve kararlı hatta iyi, zayıf hatta kayıp verir.",
-        "auto": "Akıllı: ASB hattı ölçer ve başlangıç penceresini ona göre seçer.",
-        "conservative": "Pencere stoktan biraz büyük.",
-        "off": "Stok. Rota Android’in verdiği değerlerde kalır."
+        "auto": "Ölçülen bağlantı koşullarına göre başlangıç rota penceresi seç.",
+        "off": "ASB değişikliklerinden önce kaydedilen rota değerlerini geri yükle.",
+        "conservative": "Ölçülü pencere artışı kullan.",
+        "aggressive": "Daha büyük pencere kullan; kötü bağlantılarda yeniden iletim artabilir."
       }
     },
     "wifi_country": {
       "name": "Wi-Fi bölgesi",
-      "desc": "Telefonun hangi kanalları kullanabileceğini belirler ve azami hız buna bağlıdır. «CR» en geniş kümeyi açar. Ülkenizde izin verilmeyen kanalların kullanımı sizin kararınızdır."
+      "desc": "Sürücünün kullanabileceği kanalları ve güç kurallarını belirleyen Wi-Fi düzenleme alanını seçer. Stock cihaz değerini korur. CR açıkça Kosta Rika alanını seçer; evrensel hız ayarı değildir ve kullanılabilirlik ROM, erişim noktası ve donanıma bağlıdır. Yalnızca gerçek konumunuzda izin verilen kanal ve güçleri kullanın."
     },
     "wifi_scan_throttle": {
       "name": "Wi-Fi tarama sıklığı",
-      "desc": "Telefonun daha iyi bir Wi-Fi noktasını ne sıklıkla aradığı. Evde dolaşırken Wi-Fi zayıf bir noktaya yapışıp kalıyorsa sınırı kaldırın. Biraz pil pahasına.",
+      "desc": "ASB'nin arka plan Wi-Fi taramasına ne sıklıkta izin verdiğini kontrol eder. Daha seyrek tarama, aynı yerdeyken radyo etkinliğini azaltabilir, ancak bilinen ve yeni ağların bulunmasını geciktirir. Etkin bağlantının veri hızını değiştirmez. Unthrottled sınırlamayı kaldırır; aralıklar aşağıdaki seçenek açıklamalarındadır.",
       "descOpt": {
-        "0": "Arka plan taraması yok. Ağlar yalnızca Wi-Fi ayarlarını açtığınızda görünür.",
-        "1": "Her 10 dakikada bir. Yerinde duran bir telefonda radyo süresi belirgin azalır.",
-        "2": "Her 5 dakikada bir — Android’in kendi varsayılanı.",
-        "3": "Her 2 dakikada bir. Kapsama alanına girdiğiniz ağı daha hızlı bulur.",
-        "4": "Kısıtlamasız. En hızlı bulma, en yüksek maliyet.",
-        "5": "Her 30 dakikada bir. Açık pil tasarrufu seviyesi; yeni ağlar daha yavaş bulunur."
+        "0": "ASB yönetimli arka plan taramalarını bastır; sistem veya kullanıcı yine manuel tarama başlatabilir.",
+        "1": "Yaklaşık 10 dakikada bir arka plan taramasına izin ver.",
+        "2": "Yaklaşık 5 dakikada bir arka plan taramasına izin ver.",
+        "3": "Yaklaşık 2 dakikada bir arka plan taramasına izin ver.",
+        "4": "Arka plan taramasını sınırlama.",
+        "5": "Yaklaşık 30 dakikada bir taramaya izin ver; bulma çok daha yavaş olabilir."
       }
     },
     "auto_battery_enable": {
@@ -167,34 +167,34 @@
     },
     "doze_level": {
       "name": "Derin uyku",
-      "desc": "Android'in ekran kapandıktan sonra telefonu ne kadar çabuk derin uykuya aldığı. Fabrika 30 dakika bekler — birkaç dakikada bir eline alınan bir telefonda bu 30 dakika hiç gelmez. BEDELİ: derin uykuda sistem arka plan ağını bir sonraki bakım penceresine kadar tutar, dolayısıyla sunucuyu kendi sorgulayan bir uygulama gecikebilir — yüksek öncelikli push her zaman geçer.",
+      "desc": "Ekran kapandıktan sonra Android'in Doze'a ne kadar hızlı girdiğini kontrol eder. Stock ROM zamanlamasını korur; Moderate beş dakikayı, Aggressive iki dakikayı hedefler, Night yalnızca öğrenilen uyku aralığında uygulanır. Doze arka plan ağını, işleri ve alarmları bakım pencerelerine erteleyebilir; yüksek öncelikli push yine gelebilir. Zamanında arka plan etkinliği daha önemliyse Stock kullanın. Stock ASB zamanlama geçersiz kılmasını kaldırır.",
       "descOpt": {
-        "aggressive": "2 dakika sonra, ayrıca daha kısa sensör ve konum pencereleri. Sunucuyu kendi sorgulayan uygulamalar gecikebilir; öncelikli push’lar her zaman gelir.",
-        "moderate": "5 dakika sonra uyku. Çoğu kullanıcıya uygun.",
-        "night": "Yalnızca öğrenilen uyku penceresinde. Gündüz davranışı değişmez.",
-        "stock": "Android’in kendi zamanlaması: uyku, ekran kapandıktan 30 dakika sonra başlar."
+        "stock": "ROM Doze zamanlamasını koru ve ASB geçersiz kılmasını kaldır.",
+        "night": "Daha erken Doze yalnızca öğrenilen uyku aralığında.",
+        "moderate": "Ekran kapandıktan yaklaşık beş dakika sonra idle'a gir.",
+        "aggressive": "Yaklaşık iki dakika sonra idle'a gir ve seçili sensing/location pencerelerini kısalt. Arka plan işi ertelenebilir."
       }
     },
     "night_quiet_enable": {
       "name": "Sessiz gece",
-      "desc": "Gece, ekran uzun süredir kapalıyken governor kendi düzenli işini durdurur ve cihazın daha derin uyumasına izin verir. Gece tasarrufunun büyük kısmı buradan gelir."
+      "desc": "Öğrenilen gece aralığında ekran uzun süre kapalıyken governor, cihazın boşta kalabilmesi için kendi gerekli olmayan periyodik işini duraklatır. Uygulamaları susturmaz, radyoları kapatmaz veya belirli pil tasarrufu garanti etmez. Off normal governor zamanlamasını gün boyu korur. Yalnızca bu governor güncellemeleri gece aralığında gerekliyse kapatın."
     },
     "sustained_temp_mode": {
       "name": "Kısıtlama noktası",
       "desc": "ASB'nin telefonu daha serin tutmak için performansı ne zaman kısmaya başladığı. «Fabrika» cihazınızın kendi eşiğini kullanır; açılışta işlemcinin termal bölgesinden okunur. «Akıllı» oradan başlar ve bir oturum bir dakikadan kısa sürede sürekli yüke ulaşırsa eşiği 2 derece yükseltir. «Elle» aşağıdaki kaydırıcının değerini birebir sabitler.",
       "descOpt": {
-        "manual": "Tam olarak aşağıdaki kaydırıcıdaki değer. Hiçbir şey onu değiştirmez.",
-        "smart": "Ondan başlar ve oturumlar hızlı ısınırsa yükseltir.",
-        "stock": "Açılışta CPU termal bölgesinden okunan cihazın kendi eşiği."
+        "stock": "Önyüklemede CPU termal bölgesinden okunan cihaz eşiğini kullan.",
+        "smart": "Bu noktadan başla ve uygun sürekli oturumlardan sonra sınırlı yukarı ayara izin ver.",
+        "manual": "Aşağıda seçilen sıcaklığı Smart ayarı olmadan kullan."
       }
     },
     "sustained_temp_enter": {
       "name": "Kısıtlama sıcaklığı",
-      "desc": "ASB'nin performansı kısmaya başladığı sıcaklık. Daha düşük, daha erken müdahale demektir: daha serin ama daha erken yavaşlayan bir telefon. ÖNEMLİ: telefonun öylece dururken ulaştığı sıcaklığın (genelde 38–48 °C) altındaki bir değer, kısıtlamanın HER ZAMAN açık olduğu anlamına gelir — frekanslar sürekli baskılanır, iş daha uzun sürer ve telefon daha serin değil daha sıcak ve daha çabuk boşalan hale gelir. Bu yüzden alt sınır 52 °C."
+      "desc": "Manual modda ASB'nin sürekli performansı sınırlamaya başlayacağı CPU bölgesi sıcaklığını belirler. Düşük değerler daha erken müdahale eder; yüksek değerler geri çekilmeden önce daha fazla ısıya izin verir. Üretici termal sınırları etkin kalır ve bu kaydırıcı güvenlik kontrolü değildir. Varsayılan 65, alt sınır 52'dir; bazı CPU bölgeleri pil veya gövdeden çok daha sıcak okur. Cihazın normal okumasına yakın veya altındaki eşik sürekli throttling, daha uzun iş ve daha fazla ısıya neden olabilir."
     },
     "cool_gaming": {
       "name": "Serin oyun",
-      "desc": "Oyunlarda termal eşik daha erken devreye girer, telefon birkaç kare pahasına daha serin kalır. Uzun oturumlarda faydalı, kısalarda gereksiz."
+      "desc": "Oyunlarda daha yüksek sürekli yük eşiklerini beklemek yerine yaklaşık 40 °C'de daha erken termal tepki kullanır. Isıyı azaltabilir, ancak oyuna ve cihaza bağlı olarak kare hızı ve frame-time kararlılığı da düşebilir. Off normal profil ve sıcaklık politikasına döner; üretici termal korumasını kapatmaz."
     },
     "bat_suppress_gaming": {
       "name": "Pil profilinde oyun modu yok",
@@ -202,15 +202,15 @@
     },
     "BG_TRIM_LEVEL": {
       "name": "Arka plan temizleme",
-      "desc": "Arka plan uygulamaları ne kadar sınırlanacak.\n\noff — hiç dokunma: kararı yalnızca Android verir. ASB’yi CPU ve sıcaklık için istiyor, arka plandan memnunsanız bunu seçin.\n\nsafe — bir süredir açmadığınız uygulamalar için ılımlı bekleme grupları. Bildirimler gelmeye devam eder, hiçbir şey donmaz.\n\naggressive — daha sert: arka plan uygulamaları durumunu kaybedebilir ve daha seyrek uyanabilir. Kimlik doğrulayıcılar, telefon uygulaması ve Bluetooth yığını her seviyede korunur.\n\noff’a geçince her uygulama ASB’den önceki grubuna döner.\n\nAğır uygulamalar (Instagram, Facebook, TikTok…) yalnızca Android onları günlük kullanılmıyor saydığında \"rare\" grubuna alınır; her gün açtığınız bir uygulamaya dokunulmaz.\n\naggressive; 6 saatte bir yeniden kontrol, ağır uygulamalar için bellek tavanı ve ekran kapalıyken boştaki ağır uygulamaların belleğinin boşaltılmasını ekler. Paket devre dışı bırakma ve üretici servislerini durdurma yalnızca /data/adb/asb/allow_disruptive_bg_trim onay dosyasıyla yapılır."
+      "desc": "ASB'nin arka plan uygulamalarını ne kadar güçlü sınırladığını kontrol eder. Off kontrolü Android'e bırakır ve ASB'nin değiştirdiği bucket'ları geri yükler. Safe, Android'in kullanılmadığını bildirdiği uygulamaların standby bucket'larını ayarlar ve kritik uygulamaları korur. Aggressive daha güçlü arka plan ve bellek sınırları ekler; uygulamalar daha az uyanabilir, durum kaybedebilir veya bildirimleri geç iletebilir. Paket veya üretici hizmetlerine yönelik yıkıcı eylemler ayrı açık onay gerektirir ve yalnızca bu seviyeyle etkinleşmez."
     },
     "gms_trim": {
       "name": "Google hizmetlerini kısıtla",
-      "desc": "Google hizmetlerinin arka planda yapabildiklerini hiçbir şeyi kapatmadan daraltır. «Sıkı» belirgin biçimde azaltır: bazı eşitlemeler gecikebilir.",
+      "desc": "Google Play services'ın seçili arka plan etkinliğini, hizmeti devre dışı bırakmadan azaltır. Lite konum raporlamasını ve arama widget'ı arka plan işini sınırlar. Strict ayrıca Play services'i Doze muafiyet listesinden çıkarır; push, eşitleme ve diğer arka plan işleri gecikebilir. Zamanında teslim önemliyse Lite veya Stock seçin. Değiştirilen izinler ve muafiyetler kaydedilir ve ASB kaldırıldığında geri yüklenir.",
       "descOpt": {
-        "lite": "Daha az arka plan görevi, hiçbir şey kapatılmaz.",
-        "stock": "Google hizmetleri arka plan işini istediği gibi planlar.",
-        "strict": "Belirgin şekilde daha az. Bazı eşitlemeler gecikebilir."
+        "stock": "Play services arka plan zamanlamasını ROM kontrolünde bırak.",
+        "lite": "Seçili konum ve arama widget'ı arka plan işini sınırla.",
+        "strict": "Play services Doze muafiyetini de kaldır; push ve eşitleme gecikebilir."
       }
     },
     "UX_MANAGE_OEM_TOGGLES": {
@@ -219,11 +219,11 @@
     },
     "phantom_procs": {
       "name": "Arka plan işlem sınırı",
-      "desc": "Android'in arka plan alt süreçleri için sınırı — terminal oturumlarını ve arka plan derlemelerini yarıda kesen budur. «Sınırsız» onu tamamen kaldırır.",
+      "desc": "Normal activity yaşam döngüsü dışında uygulamaların oluşturduğu phantom işlemlere Android sınırını kontrol eder. No Limit bu korumayı kapatarak uzun terminal işleri, emülatörler ve derlemelerin yaşamasına izin verir, ancak kontrolden çıkan uygulamalar daha fazla bellek ve CPU kullanabilir. Limit 32 Android tavanını açıkça geri getirir. Leave Alone, başka aracın değiştirmiş olabileceği mevcut cihaz değerini korur. Sınır işlem başlangıcında okunduğundan etkilenen uygulamayı yeniden başlatın.",
       "descOpt": {
-        "relaxed": "Sınır yok. Terminal ve arka plan derlemesi kesintiye uğramaz.",
-        "stock": "Android’in kendi sınırı geçerli — arka plan alt süreçleri öldürülür.",
-        "strict": "Sınır 32. Stokun izin verdiğinden daha az arka plan süreci."
+        "stock": "Mevcut phantom işlem ayarını değiştirme.",
+        "relaxed": "Sınırı kapat. Arka plan alt işlemleri yaşayabilir, ancak kontrolsüz kaynak kullanımı daha az sınırlanır.",
+        "strict": "Android sınırını açıkça 32 phantom işlem olarak ayarla."
       }
     },
     "haptic_strength": {
@@ -236,81 +236,81 @@
     },
     "log_level": {
       "name": "Günlük ayrıntısı",
-      "desc": "Modülün kendi günlüğüne ne kadar yazdığı ve cihazın kendisinin ne kadar günlük tuttuğu. «Fabrika», telefonun günlüklemesine hiç dokunmayan tek değerdir. «0» aşırıdır: günlükleri ve hata ayıklama çıktısını mümkün olduğunca keser, yazmalardan ve uyanmalardan tasarruf eder — ve bu telefondan gelen hemen her hata bildirimini işe yaramaz kılar, bizimki dahil.",
+      "desc": "ASB günlük ayrıntısını ve Stock dışında seçili cihaz günlüğünü kontrol eder. Stock cihaz günlüğünü değiştirmez. 0 cihaz ve ASB tanılamasını en aza indirir, sonraki hata raporlarını çok daha az kullanışlı yapar. 1 normal önemli olayları kaydeder; 2 pil raporları için learner ve ekran geçişlerini ekler; 3 ayrıntılıdır, hızla büyür ve yalnızca sorunu yeniden oluştururken kullanılmalıdır. 0'dan çıkmak ASB'nin kaydettiği günlük durumunu geri yükler.",
       "descOpt": {
-        "0": "Aşırı: günlükleri olabildiğince kırpar. Yazma ve uyanış tasarrufu sağlar — ve neredeyse her hata raporunu işe yaramaz kılar.",
-        "1": "Normal. Yalnızca önemli olaylar — modülün hep yaptığı.",
-        "2": "Ayrıntılı: öğrenme ve ekran geçişlerini ekler. Pil günlüğü göndermeden önce açın.",
-        "3": "Hata ayıklama. Günlük hızla dolar; yalnızca sorunu yeniden oluştururken.",
-        "stock": "ASB cihaz günlüklemesine hiç dokunmaz."
+        "0": "Cihaz ve ASB tanılamasını en aza indir. Sonraki raporlarda analiz kanıtı bulunmayabilir.",
+        "1": "Normal önemli ASB olaylarını kaydet.",
+        "2": "Learner güncellemeleri ve ekran geçişleri ekle; pil incelemesinde yararlı.",
+        "3": "Hızla büyüyen ayrıntılı tanılama. Yalnızca sorunu yeniden oluştururken kullan.",
+        "stock": "Bu ayarla cihaz günlüğünü değiştirme."
       }
     },
     "audio_remove_volume_limit": {
       "name": "Kulaklık ses sınırı",
-      "desc": "AB düzenlemelerinin gerektirdiği kulaklık ses sınırını kaldırır. DİKKAT: uzun süre yüksek sesle dinlemek işitmeye zarar verir. Tam da bu yüzden varsayılan olarak kapalı."
+      "desc": "Android kulaklık ses tavanını kaldırarak mevcut kaydırıcının daha yükseğe çıkmasını sağlar; kendi başına kazanç eklemez. Varsayılan olarak kapalıdır. Bu yalnızca uyarıyı değil, güvenlik sınırını kaldırır: Uzun süre yüksek sesle dinlemek kalıcı işitme hasarına yol açabilir. En düşük rahat seviyeyi kullanın ve süreyi sınırlayın. ROM politikayı yalnızca başlangıçta okuyorsa yeniden başlatma gerekir."
     },
     "audio_resampler": {
       "name": "Yeniden örnekleyici kalitesi",
-      "desc": "Android’in sesi örnekleme hızları arasında nasıl dönüştürdüğü. Yalnızca parça ile çıkış farklı hızlarda çalışırken önemlidir – genellikle 48 kHz çıkışta 44,1 kHz müzik; yani akışların ve yerel dosyaların çoğu. Varsayılan, yeniden örnekleyiciyi ROM’un sunduğu gibi bırakır.\n\nYüksek, bu dönüşüme 44,1 kHz’den itibaren daha uzun ve dik bir filtre verir (yaklaşık 90 yerine 140 dB bastırma, beş kat uzunluk): daha az aliasing, daha temiz üst oktav. Maksimum daha da ileri gider (179 dB, on kat uzunluk). Fark ölçülebilir; duyup duymamanız kulaklarınıza ve kulaklığınıza bağlıdır – çoğu kişi için duyulmaz.\n\nEtkilenmeyenler: zaten çıkış hızında çalan ses, offload oynatma ve Bluetooth codec’inin kendisi. Ses çalarken CPU harcar: Yüksek’te az, Maksimum’da belirgin şekilde fazla. Yeniden başlatma gerekir – ses sunucusu bunu yalnızca açılışta okur."
+      "desc": "Kaynak ve çıkış hızları farklı olduğunda Android örnekleme hızı dönüşüm kalitesini kontrol eder. Stock, ROM'u değiştirmez; High ve Max daha uzun, dik filtreler kullanır, Max en çok CPU harcar. Duyulabilir fark kayda ve ekipmana bağlıdır ve önemsiz olabilir. Zaten çıkış hızında olan oynatma, donanım offload ve Bluetooth codec kodlaması değişmez. Yeniden başlatma gerekir."
     },
     "media_vol_steps": {
       "name": "Medya sesi adımları",
-      "desc": "Medya ses kaydırıcısının kaç konumu olduğu. Varsayılan, telefonun değerini korur (saf Android’de 15, bazı ROM’larda daha fazla). 20 ile 100 arası (5'er adımla) her adımı daha ince yapar – gece ve hassas kulaklıklarla kullanışlıdır.\n\nEn yüksek konum aynı yükseklikte kalır; yalnızca aralık değişir. Yeniden başlatmadan sonra kaydırıcı adım numarasını korur, bu yüzden ilk çalma daha kısık gelebilir – bir kez artırın. Bazı ROM’lar bu ayarı yok sayar; eylem düğmesi ve asbdiag gerçekte kullanılan adımları gösterir. Yeniden başlatma gerekir."
+      "desc": "Maksimum sesi yükseltmeden medya sesi konumlarının sayısını değiştirir. Daha fazla adım, özellikle düşük dinlemede daha hassas kontrol sağlar. Stock ROM değerini korur; 20–100 beşer adımla sabit sayı seçer. Yeniden başlatma gerekir. Kayıtlı kaydırıcı konumu daha sonra daha düşük sese karşılık gelebilir; bir kez kontrol edin. Bazı ROM'lar bunu yok sayar; eylem düğmesi ve asbdiag gerçekte kullanılan değeri gösterir."
     },
     "doze_trim_whitelist": {
       "name": "Doze muafiyetlerini kırp",
-      "desc": "Uygulamalarınızı derin uyku muafiyet listesinden çıkarır; sistem uygulamalarına (telefon, SMS, saat, root yöneticisi) dokunulmaz. Aşağıdaki düğme şu anda hangi uygulamaların muaf olduğunu gösterir ve ihtiyacınız olanları korumanızı sağlar."
+      "desc": "Android Doze muafiyetlerini Doze zamanlamasından ayrı kontrol eder. Muafiyetleri azaltmak kullanıcı uygulamalarının boşta kısıtlarına uymasını sağlar; telefon, SMS, saat ve root yöneticisi gibi korunan sistem uygulamaları çıkarılmaz. Uygulama listesi seçilen mesajlaşma, e-posta veya VPN uygulamalarını muaf tutar. Değişiklikler kaydedilir ve seviye 0'da veya kaldırmada geri yüklenir. Azaltma bildirimleri ve eşitlemeyi geciktirebilir."
     },
     "gms_freeze": {
       "name": "Google bileşenlerini dondur",
       "desc": "Google Play hizmetlerinin tekil bileşenlerini devre dışı bırakır. Seviyeler birikimlidir. SAFE: telemetri, istatistik ve analitik — telefonun ihtiyaç duymadığı şeyler. MORE: reklam kimliği, konum raporlama ve yedekleme zamanlayıcısını ekler. MAX: Icing dizinleme ve arka plan Fitness kaydını ekler. MAX’İN BEDELİ: uygulama içi ve sistem araması bazı sonuçları kaçırır ve adımlar arka planda sayılmaz. Anlık bildirimler hiçbir seviyede etkilenmez. Kapalıya geçince her şey geri yüklenir — her bileşenin özgün durumu kaydedilmiştir.",
       "descOpt": {
-        "more": "Reklam ve analiz bileşenlerini ekler. Geri alınabilir ama kullandıklarınızı kontrol edin.",
-        "off": "Hiçbir şey dondurulmaz, Google hizmetleri olduğu gibi çalışır.",
-        "safe": "Yalnızca telemetri ve raporlar. Push, giriş ve ödemeler çalışmaya devam eder."
+        "off": "Yönetilen her Google bileşenini kayıtlı özgün durumunda bırak.",
+        "safe": "Seçili telemetri ve raporlama bileşenlerini kapat. Bağımlı uygulamaları kontrol et.",
+        "more": "Seçili reklam ve ölçüm bileşenlerini de kapat. Geri alınabilir, ancak bağımlı özellikler değişebilir."
       }
     },
     "athena_service": {
       "name": "Athena arka plan öldürücüsü",
-      "desc": "OxygenOS’un kendi arka plan uygulama öldürücüsü var — com.oplus.athena — ve neyin öldürüleceğine karar veren parça AthenaService. Arka planda bırakılan bir mesajlaşma uygulamasının yeniden açana kadar bildirim göndermemesinin nedeni budur; pil beyaz listesi işe yaramaz çünkü bunu yapan Android’in Doze’u değildir. Kapalı yalnızca bu bileşeni devre dışı bırakır; paketin geri kalanı çalışmaya devam eder, yani termal raporlama ve ayar panelleri etkilenmez. Tamamen geri alınabilir: önceki durum herhangi bir değişiklikten önce kaydedilir ve stok ayarına dönüldüğünde ya da modül kaldırıldığında geri yüklenir. Daha fazla RAM kullanımı ve biraz daha fazla tüketim bekleyin — uygulamaları canlı tutmanın bedeli budur.",
+      "desc": "OxygenOS'un AthenaService arka plan uygulama sonlandırıcısını kontrol eder. Off yalnızca bu bileşeni kapatır ve com.oplus.athena'nın geri kalanını korur; OEM'in Android muafiyetlerine rağmen kapattığı uygulamalara yardımcı olabilir. Daha fazla etkin uygulama RAM ve arka plan tüketimini artırabilir; bildirimler yine uygulamaya bağlıdır. Stock, ASB'nin kaydettiği bileşen durumunu geri yükler; kaldırma da geri yükler.",
       "descOpt": {
-        "off": "AthenaService kapalı — uygulamalar canlı kalır ve bildirim gönderir. Daha dolu bellek ve biraz daha fazla tüketim bekleyin.",
-        "stock": "OxygenOS arka plan uygulamalarını her zamanki gibi kaldırmaya devam eder."
+        "stock": "OxygenOS normal Athena arka plan politikasını korur.",
+        "off": "Yalnızca AthenaService'i kapat. Uygulamalar daha uzun etkin kalabilir; RAM ve arka plan tüketimi artabilir."
       }
     },
     "net_rps": {
       "name": "Ağ yükünü dağıt",
-      "desc": "Gelen ağ paketlerini hangi çekirdeklerin işlediği. Fabrika ayarı her paketi kesmenin düştüğü çekirdekte bırakır; bu hızlı Wi-Fi'da hızı sınırlar ve o çekirdeği yüksek tutar. «Küçükler» verimli kümeye dağıtır, «tümü» her çekirdeği kullanır. İkinci bir çekirdeği uyandırmak biraz işlemci harcar, dolayısıyla hızlı hatta kazandırır, yavaşta kaybettirir. Yalnızca Wi-Fi için geçerlidir: mobil veri, telefonun kendi donanım dağıtımına bırakılır; elle ayarlanan maske onu yalnızca yavaşlatabilir.",
+      "desc": "Wi-Fi arayüzlerinde gelen paketleri işleyebilecek CPU çekirdeklerini seçer. Stock çekirdek ve sürücü yapılandırmasını değiştirmez. Little verimlilik kümesini kullanır; All tüm çekirdeklere izin verir. Dağıtım hızlı bağlantılarda yardımcı olabilir, ancak daha fazla CPU uyandırır ve hafif trafikte güç harcayabilir. Mobil veri alma dağıtımı cihazda kalır. Sonuç sürücüye ve bağlantıya bağlıdır.",
       "descOpt": {
-        "stock": "Her paket, kesmesinin düştüğü çekirdekte kalır — Android’in kendi davranışı.",
-        "little": "Verimlilik kümesine dağıtım. İki seçenekten daha güvenli olanı.",
-        "all": "Tüm çekirdeklerde. Hızlı Wi-Fi’da en iyi aktarım, en çok CPU uyanır."
+        "stock": "Çekirdek ve sürücü paket-alma maskelerini değiştirme.",
+        "little": "Alma işlemine verimlilik kümesinde izin ver.",
+        "all": "Tüm CPU kümelerinde almaya izin ver; daha fazla çekirdek uyanabilir."
       }
     },
     "net_txqueue": {
       "name": "Gönderim kuyruğu",
-      "desc": "Kaç paketin gönderilmeyi bekleyebileceği. Fabrikadaki 1000, 1990'ların kablolu Ethernet varsayılanıdır ve kablosuz sürücülerde hayatta kalmıştır; Wi-Fi kadar değişken bir hatta derin kuyruk hızdan çok gecikme ekler. Yüklemeler yavaşlıyorsa fabrika ayarına dönün.",
+      "desc": "Wi-Fi iletim kuyruğunda bekleyebilecek paket sayısını belirler. Stock sürücü değerini korur; Short 256, Shorter 128 kullanır. Küçük kuyruklar yük altında gecikmeyi azaltabilir, ancak hızlı veya değişken bağlantılarda throughput'u sınırlayıp kaybı artırabilir. Yükleme, akış veya gecikme kötüleşirse Stock'a dönün.",
       "descOpt": {
-        "stock": "1000 paket, sürücünün geldiği hâliyle.",
-        "short": "256. Yük altında daha az gecikme, çoğu bağlantıda aynı aktarım hızı.",
-        "shorter": "128. En düşük gecikme; çok hızlı bağlantıda aktarımdan götürebilir."
+        "stock": "Sürücünün iletim kuyruğu uzunluğunu koru.",
+        "short": "256 paket. Kuyruk gecikmesini azaltabilir, ancak her hızlı bağlantıya uymaz.",
+        "shorter": "128 paket. Yük altında throughput, kayıp ve gecikmeyi test et."
       }
     },
     "perf_ceiling_pct": {
       "name": "Performans tavanı",
-      "desc": "Telefonun profilin kendi sınırının ne kadarına ulaşabileceği. 100% profili olduğu gibi bırakır.\n\nDaha düşük değerler tüm tavanları orantılı olarak kırpar: daha serin, daha uzun pil ve gerçekten beklediğiniz yerde daha yavaş.\n\nModele göre değil, profilden ölçeklenir: profilin sayıları zaten donanımınıza göre ayarlı.\n\nSadece tavanlar hareket eder; kaydırma ve sesi akıcı tutan tabanlara dokunulmaz."
+      "desc": "ASB'nin kullanabileceği CPU ve GPU tepe performansını cihaz maksimumunun yüzdesi olarak sınırlar. Esas olarak ağır işi sınırlar; hafif görevler tavana hiç ulaşmayabilir. Düşük değerler tepe ve ısıyı azaltabilir, ancak görevleri uzatıp bileşenleri daha uzun uyanık tutabilir, bu nedenle pil ömrü otomatik iyileşmez. 100 ek ASB tavanı uygulamaz. Gerekirse 85 civarından başlayıp kendi cihazınızda ısı, tepki ve tüketimi karşılaştırın."
     },
     "wakelock_action": {
       "name": "Wakelock'lara müdahale",
-      "desc": "Wakelock, bir uygulamanın Android'e «henüz uyuma» demesidir. Bunu bütün gece yapan tek bir uygulama, buradaki her ayarın kazandırabileceğinden pahalıya mal olur.\n\nÖlçüm her zaman açık; bu, ASB'nin müdahale edip etmeyeceğine karar verir. Açıkken, ekran kapandıktan 45+ dakika sonra hâlâ wakelock tutan, sizin yüklediğiniz bir uygulama Android'in «kısıtlı» kovasına taşınır.\n\nAsla dokunulmaz: çekirdek ve sistem kaynakları ile kimlik doğrulayıcı, telefon, SMS, mesajlaşma ve saat uygulamaları. Ayrıntı: yalnızca işlemciyi 10+ dakika tutmuş (veya şu anda uzun bir kilit tutan) ve Android’in bugün kullanılmış saymadığı bir uygulama. Pil optimizasyonundan hariç tuttuğun uygulamalar, e-posta, navigasyon ve klavyelere de hiç dokunulmaz."
+      "desc": "ASB'nin kalıcı uygulama wakelock'larına müdahale edip etmeyeceğini seçer; ölçüm ve raporlar iki durumda da vardır. Açıkken yalnızca uygun kullanıcı uygulamaları, ekran kapalıyken 45+ dakikalık etkinlik ve telefonun uyanık kaldığı kanıtı sonrasında değerlendirilir. Ayrıntı: CPU'yu 10+ dakika meşgul etmiş (veya şu anda uzun bir kilit tutan) ve Android'in bugün kullanılmış saymadığı bir uygulama kısıtlı standby bucket'ına taşınabilir. Çekirdek/sistem kaynakları, kritik uygulamalar, pil optimizasyonu istisnaları, e-posta, navigasyon ve klavyeler hariçtir. Force-stop yapılmaz; kısıtlar arka plan işini veya bildirimleri geciktirebilir. Off, müdahalesiz rapor sağlar."
     },
     "night_modem_idle": {
       "name": "Gece sessiz radyo",
-      "desc": "Modemin, modülün sizin gecelerinizden öğrendiği saatlerde sakinleşmesini sağlar. Bir gece ölçümü, CPU’yu uyandıranın uygulamalar değil ağ yolu olduğunu gösterdi: IPA ve rmnet’ten yüzden fazla uyanış. İnce ayar bu etkinliği yalnızca uyku pencerenizde kırpar ve siz uyanır uyanmaz her şeyi serbest bırakır."
+      "desc": "Öğrenilen uyku aralığında hücresel keepalive sürelerini uzatır ve belirli rmnet veri-yolu uyanmalarını sınırlayarak modem yolunun daha uzun boşta kalmasını sağlar. Push bildirimleri ve eşitleme sonraki uyanmayı bekleyebilir. Aramalar ve SMS ayrı modem yollarını kullanır; ASB radyo gücünü, uçak modunu, dolaşımı veya ağ seçimini değiştirmez. Değişiklikler kaydedilir ve kapatma ya da kaldırmada geri yüklenir."
     },
     "gnss_trim": {
       "name": "Arka plan GPS'ini kırp",
-      "desc": "GPS bir telefonun yapabileceği en pahalı işlerden biri. Android bunun ne kadarının ÖNBELLEKTEKİ süreçlerden geldiğini ayrıca sayar: kapalı olan ve sizin istemediğiniz hiçbir şey yapmayan uygulamalar.\n\nBir günlükte bu, toplam GPS tüketiminin 56 mAh'ından 53'üydü.\n\nAçıkken, süreci önbellekteyken ve ekran kapalıyken konum tutan bir uygulama kaba doğrulukla sınırlanır. Tam doğruluk uygulamayı açar açmaz geri gelir.\n\nAsla dokunulmaz: haritalar ve navigasyon, fitness ve rota takibi, acil durum ve cihaz bulma uygulamaları."
+      "desc": "Ekran kapalıyken işlemleri önbellekte olan uygun kullanıcı uygulamalarının arka plan konumunu sınırlar. Bunlar yaklaşık konum alır ve açıldığında normal hassasiyeti geri kazanır. Navigasyon, fitness/rota, acil durum, find-my ve ön plan uygulamaları hariçtir. Konum uyanmalarını azaltabilir, ancak arka plan özellikleri hassas izleri veya geofence doğruluğunu kaybedebilir."
     },
     "smart_media_guard": {
       "name": "Smart medya koruması",
@@ -322,7 +322,7 @@
     },
     "bt_link_stability": {
       "name": "Bluetooth bağlantı kararlılığı",
-      "desc": "Bluetooth kulaklıkların çalma sırasında kendiliğinden bağlantısının kesildiği telefonlar için. Çoğu cihazda bu hiç olmaz, bu yüzden varsayılan olarak kapalıdır.\n\nstable modunda, ses çalarken Wi-Fi yeni ağ taramayı bırakır: 2,4 GHz bandı ile Bluetooth aynı anteni paylaşır ve tarama tüm bandı süpürür — sırasını kaçıran akışın bağlantısı kopar.\n\nBedeli: yeni Wi-Fi ağları daha yavaş görünür. Başka hiçbir şey değişmez.\n\nHiçbir codec dayatılmaz."
+      "desc": "Oynatma sırasında Bluetooth ses kopmaları için isteğe bağlı geçici çözüm. Kararlı, ses çalarken Wi-Fi taramasını bastırır; iki radyonun birbirini etkilediği cihazlarda yardımcı olabilir. Yeni ağlar daha yavaş görünebilir. Codec zorlanmaz ve eşleşme değişmez. Bağlantı zaten kararlıysa kapalı bırakın."
     },
     "mglru_hold": {
       "name": "Uygulamaları bellekte tut",
@@ -330,22 +330,22 @@
     },
     "net_wifi_leave": {
       "name": "Bozuk Wi-Fi'dan ayrıl",
-      "desc": "Bağlı ama çalışmayan Wi-Fi, telefonun mobil ağa geçmek yerine denemeye devam etmesine yol açar. Her kademe daha erken ayrılır. Nasıl çıkar: ekran açıkken ASB Wi-Fi'yi 30 sn kapatıp yeniden açar; telefon aynı zayıf ağa tekrar bağlanırsa ara 5 dk'ya kadar iki katına çıkar. Hücresel denetim kapalıyken de çalışır.",
+      "desc": "Bağlı olup sinyali zayıf veya kullanılabilir trafik taşımayan Wi-Fi ağından ayrılmaya yardımcı olur. Yüksek seviyeler daha erken davranır. Ekran açıkken ASB Wi-Fi'yi kısa süre kapatıp açar; yinelenen başarısızlıklar beklemeyi 30 saniyeden beş dakikaya çıkarır. Etkin Wi-Fi oturumlarını kesebilir ve mobil veri kullanımına yol açabilir. Cellular controls'dan bağımsız çalışır.",
       "descOpt": {
-        "off": "Varsayılan: Wi-Fi ancak bağlantı gerçekten koptuğunda bırakılır.",
-        "weak": "Sinyal -80 dBm altına düşünce ayrıl.",
-        "unusable": "Yukarıdakine ek olarak, bağlı ama trafik taşımayan bağlantıdan ayrıl.",
-        "aggressive": "Yukarıdakine ek olarak, bağlantının kopmasını beklemeden mobile geç."
+        "off": "Wi-Fi'den etkin biçimde ayrılma; handover'ı Android ve sürücü yönetir.",
+        "weak": "Sinyal −80 dBm altına düşünce davran.",
+        "unusable": "Bağlı hat kullanılabilir trafik taşımadığında da davran.",
+        "aggressive": "En hızlı handover kuralları; Wi-Fi kesintisi ve mobil veri kullanımı daha olası."
       }
     },
     "wifi_powersave": {
       "name": "Wi-Fi güç tasarrufu",
       "descOpt": {
-        "off": "Radyo hep tam uyanık kalır — fabrika davranışı.",
-        "screen_off": "Ekran kapalıyken radyoyu beacon’lar arasında uyut.",
-        "always": "Güç tasarrufunu her zaman açık tut, ekran açık ya da kapalı."
+        "off": "Wi-Fi radyosunu paketler arasında uyanık tut.",
+        "screen_off": "Wi-Fi güç tasarrufunu yalnızca ekran kapalıyken etkinleştir.",
+        "always": "Wi-Fi güç tasarrufunu kullanım sırasında ve ekran kapalıyken etkin tut."
       },
-      "desc": "Wi-Fi radyosunun paketler arasında uyumasına izin verir. \"Ekran kapalı\" güvenli seçimdir; \"Her zaman\" daha çok tasarruf eder ama oyunlarda gecikme ekleyebilir."
+      "desc": "Paketler arasında Wi-Fi güç tasarrufunu kontrol eder. Screen Off yalnızca ekran kapalıyken etkinleştirir; Always kullanım sırasında da etkin tutar. Daha az radyo etkinliği güç tasarrufu sağlayabilir, ancak gecikme ekleyip oyunları, yayınları ve Wi-Fi aramalarını etkileyebilir. Off radyoyu uyanık tutar. Davranış ve tasarruf sürücüye ve erişim noktasına bağlıdır."
     },
     "CAMERA_AGGRESSIVE_INJECT": {
       "name": "Kamera anahtarı modu",
@@ -353,19 +353,19 @@
     },
     "ltpo_force": {
       "name": "LTPO'yu Zorla",
-      "desc": "LTPO paneller, ekranda hiçbir şey kımıldamadığında yenileme hızını en düşüğe indirebilir; OxygenOS bu yolun bir kısmını kapalı gönderir. Bu yama cihazınızın KENDİ yenileme tablosunu (oplus_vrr_config.json) alır, üreticinin kapalı bıraktığı tüm panel güç-tasarrufu anahtarlarını açar (ADFR, PDFR, yenileme yöneticisi, histogram tabanlı arka ışık kontrolü vb.) ve ayrıca ekran yığınının kendi telemetrisini KAPATIR (VRR kayıtları, histogram örnekleme, big-data ve shader önbellek ıskalama yüklemeleri) — görüntüye sıfır etkiyle bedava pil. Başka bir modelden hiçbir şey kopyalanmaz ve orijinal dosya asla değiştirilmez.\n\nYama modül kurulurken hazırlanır ve bu anahtar uygulanıp uygulanmayacağına karar verir: varsayılan olarak kapalıdır, açılması yeniden başlatmadan sonra etki eder. Kurucu cihazınızda tablo bulamadıysa ya da iyileştirilecek bir şey kalmadıysa anahtar hiçbir şey yapmaz — kurulum günlüğü ve durum rozeti hangi durum olduğunu söyler.\n\nÜreticinin zaten tamamen açık gönderdiği tablolarda (OnePlus 15 böyledir) yama yine işe yarar: yalnızca telemetri anahtarları kesilmiş özdeş bir kopya bağlanır.\n\nAnahtar ayrıca aralığın Android tarafını da açar ve bu kısım yeniden başlatmadan hemen uygulanır: alt yenileme sınırı yok, en yüksek değer bu panelin bildirdiği en yüksek moda ayarlanır (OnePlus 15'te 165 Hz). Alt uç - panelin 60 Hz altındaki kendi boşta hızları - tablonun işidir, çünkü Android bu hızları hiç listelemez. Önceki değerler kaydedilir ve kapatınca geri verilir. Üreticinin çizim hızı için kendi sınırına (bazı sürümlerde 90 Hz) dokunulmaz."
+      "desc": "Cihazın kendi oplus_vrr_config.json dosyasından hazırlanan yamayı uygular: OEM'in kapalı bıraktığı desteklenen panel güç tasarrufu yollarını açar ve seçili ekran telemetrisini kapatır. Stock dosya değiştirilmez. Uygun tablo veya değişiklik yoksa anahtar hiçbir şey yapmaz ve durum nedenini açıklar. Tabloyu uygulamak yeniden başlatma gerektirir.\n\nAndroid yenileme aralığı da açılır: ASB alt sınırı kaldırır, bildirilen en yüksek panel modunu kullanır, dokunuşta maksimumu geri yükler ve panel adaptasyonu sürsün diye iki sakin saniyeden sonra 60 Hz seçer. Kamera, oyun ve video sahipliği korunur, önceki aralık değerleri geri vermede geri yüklenir. Doğrulanmış OnePlus15-165HZ-LTPO writer varsa, açık öncelik verilmedikçe ASB ona yol verir. Güç tasarrufu ve düşük boşta hızları panele ve ROM'a bağlıdır; garanti edilmez."
     },
     "mmfeed_off": {
       "name": "Multimedya Telemetrisi Kapalı",
-      "desc": "OxygenOS bir multimedya geri bildirim toplayıcısı çalıştırır: Multimedia_Feedback_List.xml ile açılan, günlük dökümleri ve yüklemeler içeren ses, video ve ekran tanılama olayları. Bu yama cihazınızdaki dosyanın KENDİ kopyasını alır, yalnızca isOpen anahtarını false yapar ve sonucu orijinal dosyanın üzerine bağlar — başka bir modelden hiçbir şey kopyalanmaz ve orijinal dosya asla değiştirilmez.\n\nYama modül kurulurken hazırlanır ve bu anahtar uygulanıp uygulanmayacağına karar verir: varsayılan olarak kapalıdır, açılması yeniden başlatmadan sonra etki eder. Kurucu cihazınızda böyle bir dosya bulamadıysa ya da üretici dosyayı zaten kapalı gönderiyorsa anahtar hiçbir şey yapmaz — durum rozeti hangi durum olduğunu söyler.\n\nDaha az olay günlüğü ve daha az döküm, bedava pil ve daha az G/Ç demektir; ses ve videonun kendisine dokunulmaz."
+      "desc": "Multimedya geri bildirim toplayıcısının isOpen anahtarını false yapmak için cihazın kendi Multimedia_Feedback_List.xml dosyasını kullanır ve yamalı kopyayı orijinali değiştirmeden stock yolun üzerine bağlar. Yama kurulumda hazırlanır ve yalnızca anahtar açıkken uygulanır; yeniden başlatma gerekir. Dosya yoksa veya zaten kapalıysa hiçbir şey yapmaz ve rozet durumu bildirir. Tanılama günlüğü ve G/Ç azalabilir, ancak pil tasarrufu garanti değildir. Ses ve video işleme değişmez."
     },
     "net_screen_off_lte": {
       "name": "Ekran kapalıyken LTE",
-      "desc": "Ekran 90 saniye kapalı kaldıktan sonra 5G bacağını kapatır ve veriyi LTE üzerinde tutar; ekran açılınca 5G hemen geri gelir. 5G NSA iki radyoyu aynı anda çalıştırır; ekran kapalıyken bir yayını dinlemek için LTE fazlasıyla yeter. Arama sırasında asla devreye girmez. Varsayılan olarak kapalı: izin verilen ağ türlerini değiştirmek veri bağlantısını yeniden kurar. ROM değişikliği kabul etmezse modül özgün değeri geri yükler ve tekrar denemez. İndirmeler 5G'de kalır: 3 Mbit/s veya üzeri bir ölçüm akış değil aktarımdır — o zaman LTE seçilmez, LTE zaten açıksa 5G en az 10 dakikalığına geri gelir."
+      "desc": "Ekran kapandıktan 90 saniye sonra 5G NSA'yı etkin tutmak yerine LTE'yi tercih eder; ekran açıldığında önceki ayar döner. Aramalar ve yeterince yoğun aktarımlar hariçtir; yakın zamandaki aktarım 5G'yi en az 10 dakika tutabilir. Varsayılan kapalıdır çünkü izin verilen ağ türlerini değiştirmek mobil veriyi kısa süre yeniden kaydettirebilir. ROM reddederse ASB önceki değeri geri yükler ve yeniden denemeyi bırakır."
     },
     "net_lte_light": {
       "name": "Yalnızca gerektiğinde 5G",
-      "desc": "Ekran açıkken: 3 dakika boyunca mobil trafik hafifse (2 Mbit/s altı — akışlar, müzik) 5G bacağını kapatır ve bunu rahatça taşıyan LTE'de kalır. Bir indirme 5G'yi yaklaşık 20 saniyede geri getirir (art arda iki 10 saniyelik ölçümde 3 Mbit/s veya üzeri ya da 12 Mbit/s üzerinde tek ölçüm) ve 10 dakika tutar. 5G NSA, ince bir veri akışı için iki radyoyu birden meşgul eder. Arama, internet paylaşımı veya oyun sırasında ve Wi-Fi'de asla devreye girmez. Varsayılan olarak kapalı: her geçiş veri bağlantısını bir iki saniyeliğine yeniden kaydeder."
+      "desc": "Ekran açıkken, 2 Mbit/s altındaki hafif mobil trafik üç dakika sürünce 5G NSA'dan LTE'ye geçer. Uygulanan eşiklerin üzerindeki sürekli trafik 5G'yi geri getirir ve 10 dakika tutar. Arama, tethering, oyun veya Wi-Fi sırasında geçiş yapmaz. Varsayılan kapalıdır: Her geçiş veriyi kısa süre yeniden kaydettirebilir ve gerçek tüketim modeme ve sinyale bağlıdır."
     },
     "heavy_prime_escape": {
       "name": "Prime çekirdek yükseltme",
@@ -381,18 +381,18 @@
     },
     "wakelock_fitness": {
       "name": "Fitness uygulamaları ve wakelock",
-      "desc": "Adımsayarlar ve fitness izleyicileri varsayılan olarak tüm wakelock kurallarından korunur, çünkü uyanamayan bir izleyici kurulma amacını kaybeder. Saha kayıtlarında bunlardan biri - Samsung Health adımsayarı - yine de telefonu geceleri en çok uyanık tutan tek şeydi: her gece dakikalarca CPU.\n\nSınırla, bu telefonda yüklü adımsayar ve fitness uygulamalarının wakelock'larını yok saymasını Android'e söyler. Uygulama, telefon başka bir nedenle uyanıkken çalışmaya devam eder; yalnızca CPU'yu kendi başına uyanık tutamaz. Adım sensörü her durumda kendi düşük güçlü çipinde sayar, bu yüzden günlük toplam genelde korunur.\n\nZARAR GÖREBİLECEKLER: dakika dakika adım zaman çizelgesi ve ekran kapalıyken kaydedilen bir antrenman. Saat ve bileklik eşlik uygulamaları asla dahil edilmez - aksi halde bileğinize bildirim iletmeyi bırakırlardı. Önceki durum kaydedilir ve Koru seçildiğinde ya da kaldırmada geri verilir. «Wakelock'lara müdahale» ayarından bağımsızdır."
+      "desc": "Varsayılan olarak fitness ve adım sayaç uygulamaları ASB wakelock müdahalesinden korunur. Limit, Android'den bunların wakelock'larını yok saymasını ister, böylece CPU'yu tek başlarına uyanık tutamazlar. Saat ve bileklik yardımcı uygulamaları hariçtir. Donanım sayımı sürse bile adım zaman çizelgeleri, arka plan antrenmanları ve eşitleme eksik kalabilir. Protect veya kaldırma kayıtlı durumu geri yükler. Act on Wakelocks'tan bağımsızdır."
     },
     "ltpo_video": {
       "name": "Video için en düşük yenileme",
-      "desc": "Bir video oynarken panel, sistemin geri kalan her şey için seçtiği hızda kalır: bu telefon ailesinde 30 fps bir yayın için 90 Hz - ikisinin yeteceği yerde kare başına üç yenileme.\n\nBu açıkken ASB, en yüksek yenileme hızını videonun tam katı olan en küçük panel moduna düşürür (30 ve 60 fps için 60 Hz), böylece hareket takılmasız kalır. Yalnızca şu durumda devreye girer: ekran açık, ses çalıyor, bir video katmanı 30 veya 60 fps istiyor, hiçbir katman yüksek akıcılık istemiyor ve ekrana 3 saniyedir dokunulmadı.\n\nİlk dokunuş önceki değeri hemen geri getirir; oynatmanın bitmesi, videonun kapanması ve ekranın kapanması da öyle - bu yüzden kaydırma ve animasyonlar tam hızda çalışır. Dürüst not: o dokunuştan sonraki ilk kareler (yaklaşık 0,1-0,2 sn) hâlâ düşük hızda olabilir. 24, 25 ve 50 fps videonun daha düşük takılmasız modu yoktur, dokunulmaz. Hemen uygulanır."
+      "desc": "Uygun video oynatımında panel tepesini 30 veya 60 fps içerikle eşleşen bildirilen en düşük modla sınırlar; örneğin ikisi için 60 Hz. ASB yalnızca ekran açık, ses çalıyor, uyumlu video katmanı var, yüksek akıcılık isteği yok ve üç saniyedir dokunulmuyorken çalışır. Dokunma, oynatma sonu veya ekran kapanması önceki değeri geri yükler; dokunmadan hemen sonra kısa süre düşük hız sürebilir. Diğer kare hızları değişmez. Eşleşen modlar, videonun kare hızını değiştirmeden gereksiz yenilemeleri önler."
     },
     "lsposed_verbose": {
       "name": "LSPosed ayrıntılı günlüğü",
-      "desc": "LSPosed, onlarca megabayta varan kendi ayrıntılı günlüğünü tutar (bir telefonda 31 MB). Kapalı, LSPosed’in kendi ayarını yazar – yöneticisindeki Ayarlar > Ayrıntılı günlük ile aynı anahtar – ve eski ayrıntılı günlük dosyalarını siler; LSPosed ayarı başlarken okur, bu yüzden yeniden başlatmadan sonra geçerli olur. Modül günlüğünün – LSPosed modüllerinin kendi yazdığı günlüğün – LSPosed’de bir anahtarı yoktur, bu yüzden kart Kapalı’dayken ASB onu da birkaç dakikada bir arka planda boşaltır. Dokunma, LSPosed’e hiç dokunmaz ve ASB ayrıntılı günlüğü kapattıysa LSPosed’in önceki değerini geri koyar. Günlüğü daha sonra LSPosed’de yeniden açarsanız ASB bunu geri almaz. Bir LSPosed modülünün yazarına sorun bildirmeden önce yeniden açın.",
+      "desc": "Keep, LSPosed ayarlarını ve günlüklerini LSPosed kontrolünde bırakır. Off, LSPosed'in kendi Verbose log ayarını değiştirir, eski verbose dosyalarını siler ve LSPosed veya telefon yeniden başladıktan sonra etkili olur. Modül günlüğünün LSPosed'de eşdeğer anahtarı olmadığından, Off seçiliyken ASB onu da düzenli olarak boşaltır. Bu, başka modülde hata ayıklamak için gereken kanıtı silebilir. Daha sonra LSPosed'de verbose açarsanız ASB bu seçimi geri almaz; Keep, LSPosed'i gizlice yönetmeden kontrolü geri verir.",
       "descOpt": {
-        "keep": "ASB, LSPosed ayarlarına dokunmaz.",
-        "off": "LSPosed ayrıntılı günlüğü bir sonraki açılışta kapanır; eski dosyalar hemen silinir."
+        "keep": "LSPosed ayarlarını ve günlüklerini kendi kontrolünde bırak.",
+        "off": "LSPosed verbose'u sonraki başlangıçtan itibaren kapat, eski verbose günlüklerini sil ve Modules log'u düzenli boşalt."
       }
     },
     "dsp_headroom": {
@@ -411,16 +411,16 @@
       "name": "Zamanlayıcı Hata Ayıklama İstatistikleri",
       "desc": "İsteğe bağlı genel çekirdek ayarı. Kapalı, yalnızca /proc/sys/kernel/sched_stats kullanılabilir ve yazılabilir olduğunda zamanlayıcı hata ayıklama istatistiklerini kapatır. Zamanlama politikası, CPU frekansları ve SoC sürücüleri değişmez. Stock ve kaldırma, özgün 0/1 değerini geri yükler. Ölçülmemiş pil tasarrufu yüzdesi iddia edilmez.",
       "descOpt": {
-        "stock": "Varsayılan: zamanlayıcı hata ayıklama sayımına dokunulmaz.",
-        "off": "Yalnızca mevcut genel sched_stats düğümünü kapatır; Varsayılan ya da kaldırma tam özgün değeri geri yükler."
+        "stock": "Zamanlayıcı hata ayıklama hesaplamasını değiştirme.",
+        "off": "Yalnızca sunulan yazılabilir sched_stats düğümünü kapat; Stock veya kaldırmada kayıtlı değeri geri yükle."
       }
     },
     "heytap_mcs": {
       "name": "HeyTap / OPPO Push bildirimleri",
       "desc": "“Kapalı”, sistem dosyalarını değiştirmeden com.heytap.mcs paketini devre dışı bırakır. HeyTap/OPPO Push kullanan uygulamalar bildirimleri kaybedebilir veya geç alabilir. Etkinleştirme ayrıca sonraki yeniden başlatmadan sonra bir kez profil güdümlü ART derlemesi ister; bu işlem CPU, depolama ve pili geçici olarak kullanabilir. “Stock”, yalnızca ASB’nin değiştirdiği MCS durumunu geri yükler ve başlamamış derlemeyi iptal eder. Yeniden başlatmadan sonra derleme, elinizdeki telefonu ısıtmamak ve boşaltmamak için şarjı (Charging veya Full) bekler; 24 saat içinde şarj olmazsa istek bir sonraki açılışa kadar beklemede kalır.",
       "descOpt": {
-        "stock": "MCS, Android/OEM denetiminde kalır; bekleyen ART isteği iptal edilir.",
-        "off": "HeyTap Push taşımasını devre dışı bırakır ve sonraki yeniden başlatmadan sonra bir kez derler. Ardından bildirimleri kontrol edin."
+        "stock": "MCS'yi Android/OEM kontrolünde bırak ve henüz başlamayan derlemeyi iptal et.",
+        "off": "HeyTap push taşımayı kapat ve sonraki yeniden başlatmadan sonra bir ART derlemesi iste. Etkilenen bildirimleri kontrol et."
       }
     },
     "documentsui_fix": {
@@ -784,9 +784,9 @@
   "cfg_profile_load_short": "↓ Aç",
   "cfg_profile_storage_hint": "Profiller ASB içinde güvenle saklanır; yol değil, ad seçin.",
   "cfg_audio_section_playback": "Oynatma ve Bluetooth",
-  "cfg_audio_section_playback_hint": "Ses yolunu ve Bluetooth davranışını seçin.",
+  "cfg_audio_section_playback_hint": "Ses yolunu, ses davranışını ve Bluetooth işleme yolunu seçin.",
   "cfg_audio_section_dsp": "ASB DSP Motoru",
-  "cfg_audio_section_dsp_hint": "Seçtiğiniz çıkışlarda isteğe bağlı kazanç, bas ve dinamik işleme.",
+  "cfg_audio_section_dsp_hint": "Seçilen çıkışlar için isteğe bağlı ASB işleme. Kazanç ve efektler bir headroom sınırlayıcı paylaşır; daha fazla işleme her zaman daha temiz ses demek değildir.",
   "cfg_audio_section_safety": "Dinleme güvenliği",
   "cfg_audio_section_safety_hint": "Sistem işitme koruması sınırı siz açıkça değiştirmedikçe olduğu gibi kalır.",
   "t_quick_explain": "Hızlı yeniden başlatma yalnızca Android’i yeniden başlatır; overlay’ler için tam yeniden başlatma gerekir.",
@@ -868,7 +868,7 @@
   "lr_th_ma": "Ort. akım",
   "lr_hz_unit": "Hz",
   "lr_sec_smart": "🧠 Akıllı öğrenen",
-  "lr_sm_ctx": "Öğrenilen bağlam",
+  "lr_sm_ctx": "İzlenen durumlar",
   "lr_sm_watching": "İzleniyor",
   "lr_sm_testing": "Test ediliyor",
   "lr_sm_helped": "Ayar yardımcı oldu",
@@ -884,13 +884,13 @@
   "lr_tip_wl_enable": "{app} telefonu günde ~{min} dak uyanık tutuyor. {set} ayarı sınırlamaya yardımcı olabilir.",
   "lr_tip_night_modem": "Gece boşta tüketim %{pct}. {set} ayarı bu saatlerde modemi susturabilir.",
   "lr_tip_jank_bad": "Takılma %{pct}: yükselmiş. 120/90 Hz veya Açık (stock) profili düşünün.",
-  "lr_tip_jank_ok": "Takılma %{pct} — mükemmel. Akım ayarlar size uyuyor.",
+  "lr_tip_jank_ok": "Akıcılık iyi: karelerin yalnızca %{pct} kadarı geç kaldı.",
   "lr_tip_jank_wake": "Takılmalar uyanışlarda yoğunlaşıyor: kilit açma ve uygulama açılışlarında karelerin {pct}% kadarı, güne kıyasla {ord}%; orada en çok takılan {who}.",
   "lr_tip_jank_wake_wh": "Takılmalar uyanışlarda yoğunlaşıyor: kilit açma ve uygulama açılışlarında karelerin {pct}% kadarı, güne kıyasla {ord}%.",
   "lr_tip_audio": "Hoparlörde ses saatte ~{pct}% tüketti — günün en yüksek faz tüketimi. Batarya işte buraya gidiyor.",
   "lr_tip_cost_ok": "ASB saatte ~{ms} CPU kullanıyor — modülün kendisi neredeyse bedava.",
   "lr_tip_cost_hi": "ASB saatte ~{ms} CPU kullanıyor: biraz yüksek, loglar hangi tetikleyicinin çalıştığını söyler.",
-  "lr_tip_smart_help": "Akıllı öğrenen izlediği {n} bağlamda ayarı gerçekten iyileştirdi.",
+  "lr_tip_smart_help": "Ölçülen karşılaştırmalarda ek frekans payı {n} uygulama için avantajlıydı ve Smart yalnızca onlar için saklıyor; bu her yük için garanti değildir.",
   "lr_tip_ltpo": "Video oynatma sürekli yüksek yenilemede kalıyor. {set} ayarı videoyu en düşük kare hızına indirir.",
   "dbg_only": "Debug build only",
   "dbg_diag_saved": "asbdiag kaydedildi",
@@ -1056,19 +1056,19 @@
   "cfg_net_section_wifi": "Wi-Fi",
   "cfg_net_section_wifi_hint": "Tarama, güç tasarrufu, bölge ve kötü bir ağdan ne zaman ayrılınacağı.",
   "cfg_net_section_speed": "İndirme hızı",
-  "cfg_net_section_speed_hint": "İndirmeler ne kadar hızlı ivmelenir ve paketler nasıl sıralanır, ağ türüne göre.",
+  "cfg_net_section_speed_hint": "Bağlantı türüne göre tıkanıklık kontrolü ve paket kuyrukları. Bağlantının ilan edilen hızını değil, hızlanma ve yük altındaki gecikmeyi değiştirir.",
   "cfg_net_section_stack": "Ağ yığını",
-  "cfg_net_section_stack_hint": "Gelişmiş: ağ yükü çekirdeklere nasıl dağıtılır ve tamponlanır.",
+  "cfg_net_section_stack_hint": "Gelişmiş alma çekirdeği, iletim kuyruğu ve rota penceresi kontrolleri. Kendi bağlantılarınızda throughput, gecikme ve tüketimi test edin.",
   "cfg_ui_section_services": "Sistem hizmetleri",
   "cfg_ui_section_services_hint": "Üreticinin arka plan hizmetleri ve işlem sınırları.",
   "cfg_ui_section_feel": "Ekran ve titreşim",
   "cfg_ui_section_feel_hint": "Yenileme hızı ile titreşim ve dokunma geri bildirimi hissi.",
   "cfg_ui_section_diag": "Tanılama",
-  "cfg_ui_section_diag_hint": "Modülün – ve LSPosed’in – günlüklerine ne kadar yazdığı.",
+  "cfg_ui_section_diag_hint": "LSPosed ayarlarının sahipliğini almadan ASB ve cihaz tanılamasını kontrol edin.",
   "cfg_camera_section_processing": "Fotoğraf işleme",
-  "cfg_camera_section_processing_hint": "Kameranın görüntüyü ne kadar işlediği: kontrast, gren, portre, düşük ışık.",
+  "cfg_camera_section_processing_hint": "Renk, kontrast, grain, portre karışımı ve düşük ışık keskinliği için bağımsız firmware ayarları. Her biri yeniden başlatmadan sonra uygulanır.",
   "cfg_camera_section_perf": "Kamera performansı",
-  "cfg_camera_section_perf_hint": "Kamera açıkken telefonu duyarlı tut.",
+  "cfg_camera_section_perf_hint": "Kamera performansını yalnızca akış sırasında tutun; termal ve üretici sınırları geçerlidir.",
   "cfg_iface_section_speed": "Arayüz hızı",
   "cfg_iface_section_speed_hint": "Animasyon hızı ve dokunma zamanlamaları.",
   "cfg_iface_section_effects": "Görsel efektler",
@@ -1412,11 +1412,12 @@
   "lr_heat_peak": "En sıcak evre",
   "lr_heat_warm_fmt": "CPU 45 °C üzerinde",
   "lr_heat_skin_fmt": "Kasa 40 °C üzerinde",
-  "lr_tip_heat_warm": "CPU {min} boyunca 45 °C+ üzerinde kaldı (en sıcak: {phase}) - uzun süren ısı pili ve konforu tüketir.",
+  "lr_tip_heat_warm": "Telefon toplam {min} sıcak kaldı; en sıcak adlandırılmış aşama «{phase}». Sürekli yükü azaltın veya daha yumuşak profil kullanın.",
   "lr_tip_heat_warm_set": "CPU {min} boyunca 45 °C+ üzerinde kaldı (en sıcak: {phase}) - Ayarlar’da «{set}» Stock’ta: koruma olabileceğinden geç devreye girer.",
   "lr_tip_heat_calm": "Telefon gün boyu serin kaldı (tepe {cpu} °C) ve hiç kısıtlamadı - değişecek bir şey yok.",
   "lr_mwake": "Gece uyanışları (öğrenildi)",
   "lr_mwake_fmt": "{n} kontrol · gecede {per} · her biri ~{sec} sn",
+  "lr_mwake_unconfirmed": "{n} kontrol · ortalama için henüz tamamlanmış gece yok · her biri ~{sec} sn",
   "lr_sec_trend": "📈 Eğilim",
   "lr_trend_night": "Gece: {was} %/sa → {now} %/sa",
   "lr_trend_day": "Gündüz tüketimi: {was} %/sa → {now} %/sa",
@@ -1824,7 +1825,7 @@
   "lr_brief_cause_radio": "Ekran kapalıyken telefon zamanın %{awake} kadarında uykuya geçmedi; bu sürede arka plan mobil verisi: {mib} MiB.",
   "lr_brief_cause_none": "Ekran kapalıyken telefon zamanın %{awake} kadarında uykuya geçmedi; öne çıkan tek bir uygulama yok.",
   "lr_brief_night_hot": "Ekran kapalıyken işlemci zaman zaman {cpu}° oldu - arka planda ağır bir iş yapıldı.",
-  "lr_brief_smooth_ok": "Akıcılık mükemmel: karelerin %{pct} kadarı gecikti.",
+  "lr_brief_smooth_ok": "Akıcılık iyi: karelerin %{pct} kadarı geç kaldı.",
   "lr_brief_smooth_mid": "Akıcılık normal: karelerin %{pct} kadarı gecikti - ara sıra takılma.",
   "lr_brief_smooth_bad": "Takılmalar fark ediliyor: karelerin %{pct} kadarı gecikti.",
   "lr_brief_sysui_net": "Ağ hızı göstergesi açık olduğu için durum çubuğu sürekli yeniden çiziliyor - bu her uygulamada kare kaybettiriyor.",
@@ -1905,10 +1906,10 @@
   "lr_dx_also_jwhy": "En çok geç kare: {app}, {state} durumunda, karelerinin {pct} kadarı. {cause}",
   "lr_dx_also_bhold": "Pil profilinde kaydırma tutma, uygulama başına ölçülür: takılmayı azalttığı yerde korunur (uygulama: {k}), yardımcı olmadığı yerde kaldırılır (uygulama: {r}), testte: {t}.",
   "lr_dx_also_vendor": "Yazılım, güçlü çekirdekleri {of} kontrolün {n} tanesinde ASB tavanının altında tuttu (PowerHAL veya çekirdek termali) - ASB bunu aşmaz.",
-  "lr_dx_heat_long": "İşlemci {min} boyunca 45 °C üzerinde kaldı, en çok «{phase}» sırasında; zirve {cpu}°.",
+  "lr_dx_heat_long": "CPU toplam {min} 45 °C üzerinde kaldı; en sıcak adlandırılmış aşama «{phase}», tepe {cpu}°.",
   "lr_dx_fix_heat": "Uzun süreli yükü azaltın (oyunlar, şarjdayken uzun görüntülü aramalar) veya daha yumuşak bir profil seçin; kılıf ve oynarken şarj ısıyı artırır.",
   "lr_dx_fix_heat_set": "ASB ayarlarında «{set}» seçeneğini kontrol edin - Stock modunda ASB ısı koruması kapalıdır.",
-  "lr_dx_heat_some": "İşlemci {min} boyunca 45 °C üzerinde kaldı (zirve {cpu}°) - kısa yük patlamaları, uzun süreli değil.",
+  "lr_dx_heat_some": "CPU toplam {min} 45 °C üzerinde kaldı (tepe {cpu}°). Toplam süre tek başına yükün sürekli olup olmadığını göstermez.",
   "lr_dx_heat_ok": "Aşırı ısınma yok: işlemci en fazla {cpu}° oldu.",
   "lr_dx_also_clamps": "Frekanslar {n} kez kısa süreliğine sınırlandı - uzun süreli ısınma olmadan korumanın işi.",
   "lr_dx_asb_crash": "Kayıt sırasında {n} yerel çökmede ASB kodu var.",
@@ -1942,7 +1943,7 @@
   "lr_dx_lte_ran": "Bu kayıtta LTE {n} kez seçildi, toplam {min} LTE'de.",
   "lr_dx_net_try_light": "ASB ayarlarında «{set}» seçeneğini deneyin: hafif trafikte modem LTE'de kalır, büyük bir indirmede 5G geri gelir.",
   "lr_dx_also_fix": "Ayrıca: {txt}",
-  "lr_dx_fix_net_play": "Google Play uygulamaları mobil veriyle güncelledi: Play Store → Ayarlar → Ağ tercihleri → Uygulamaları otomatik güncelle → Yalnızca kablosuz ağ üzerinden.",
+  "lr_dx_fix_net_play": "Google Play mobil veri kullandı; sayaçlar uygulama güncellemelerini diğer indirmelerden ayırmaz. Mobil veriyle güncelleme istemiyorsanız: Play Store → Ayarlar → Ağ tercihleri → Uygulamaları otomatik güncelle → Yalnızca Wi-Fi.",
   "lr_dx_fix_net_tg": "{app} içinde: Ayarlar → Veri ve depolama → Otomatik medya indirme → mobil veriyle indirmeyi kapatın veya boyut sınırını düşürün.",
   "lr_dx_fix_net_wa": "WhatsApp'ta: Ayarlar → Depolama ve veri → Medya otomatik indirme → Mobil veri kullanırken → medya yok.",
   "lr_dx_fix_net_video": "{app} video oynatıyor: veri tasarrufunu açın veya mobil veride video kalitesini düşürün.",
@@ -2208,6 +2209,7 @@
   "dev_zygisk_observer_launch_events": "Duyulan soğuk başlatmalar",
   "dev_zygisk_observer_launch_accepted": "Governor tarafından kabul edilen soğuk başlatmalar",
   "dev_zygisk_observer_launch_vetoed": "Reddedilen soğuk başlatmalar",
+  "dev_zygisk_observer_launch_screen_off": "Ekran kapalıyken yerel olarak reddedilen soğuk başlatmalar",
   "dev_zygisk_observer_launch_unavailable": "Soğuk başlatmalar: governor erişilemez",
   "dev_zygisk_observer_launch_throttled": "Sınırlanan soğuk başlatmalar",
   "dev_zygisk_observer_hints_screen_off": "Ekran kapalıyken gönderilmeyen yenilemeler",
@@ -2281,7 +2283,7 @@
   "dev_zygisk_link_off_detail": "Observer yeni işlemler için kapalı.",
   "dev_zygisk_link_unknown_detail": "Yetersiz kanıt; Zygisk desteği dışlanmıyor.",
   "cfg_ui_section_zygisk": "Zygisk",
-  "cfg_ui_section_zygisk_hint": "Gözlemci, yaşam döngüsü ipuçları, soğuk başlatma desteği ve işlem günlüğü — kanıta dayalı durumla tek entegrasyon.",
+  "cfg_ui_section_zygisk_hint": "İsteğe bağlı işlem gözlemi ve mevcut governor'a sınırlı istekler. Zygisk profil, frekans veya uygulama politikası seçmez.",
   "dev_zygisk_metric_injection": "Doğrulanmış enjeksiyon",
   "dev_zygisk_metric_processes": "{n} canlı işlem",
   "dev_zygisk_metric_channel": "Companion kanalı",
@@ -2300,7 +2302,7 @@
   "dev_zygisk_snapshot_note": "Geçerli salt okunur anlık görüntü. RSS, izlenen uygulamaların belleğidir, saf ASB yükü değildir; kabul edilen ipuçları limit değişimini, performansı veya tasarrufu kanıtlamaz.",
   "dev_zygisk_observer_link_state": "ASB bağlantı kararı (makine durumu)",
   "lr_sec_zygisk": "🧩 Zygisk · ASB enjeksiyonu",
-  "lr_zy_activity": "Capture sırasında companion olayları",
+  "lr_zy_activity": "Kabul edilen işlem başlangıç/çıkış olayları",
   "lr_zy_launch": "Algılanan soğuk başlatmalar",
   "lr_zy_hints": "Yaşam döngüsü ipuçları",
   "lr_zy_ipc": "Gözlemci IPC CPU",
@@ -2318,6 +2320,16 @@
   "lr_zy_coverage_one": "Yalnızca bir anlık görüntü var; capture içi delta çıkarılamaz.",
   "lr_zy_coverage_two": "Başlangıç/son anlık görüntüler: deltalar aradaki süreyi kapsar, ancak yeniden başlatma boyunca kesintisiz gözlemi kanıtlamaz.",
   "lr_zy_note": "Olaylar companion etkinliğini kanıtlar; tam Zygisk kontrolünü, performans artışını veya enerji tasarrufunu kanıtlamaz. Burada A/B karşılaştırması yoktur.",
+  "lr_zy_gov_title": "Governor tarafında ASB’nin soğuk başlatma yükseltme penceresine yapılan işlemler",
+  "lr_zy_gov_cold_lifts": "Bir yükseltmeyi etkinleştiren soğuk başlatmalar",
+  "lr_zy_gov_cold_extends": "Soğuk başlatma için uzatılan etkin yükseltmeler",
+  "lr_zy_gov_cold_long": "Daha uzun pencereyle kapsanan soğuk başlatmalar",
+  "lr_zy_gov_cold_trims": "Hızlı soğuk başlatma için kısaltılan dokunma yükseltmeleri",
+  "lr_zy_gov_note": "Bu sayaçlar ASB’nin kendi yükseltme penceresindeki kararları ve değişiklikleri kaydeder; donanım sınırı yazımını veya A/B ile kanıtlanmış performans/enerji yararını göstermez.",
+  "lr_zy_gov_reset": "En az bir Governor sayacı azaldı: bu aralık için Governor tarafındaki tüm deltalar unknown kalır.",
+  "lr_zy_gov_coverage_one": "Yalnızca bir Governor anlık görüntüsü var; birikimli sayaçları yakalama sırasındaki işlemler olarak gösterilmez.",
+  "lr_zy_note_actions": "Governor sayaçları ASB’nin kendi soğuk başlatma yükseltme penceresini etkinleştirdiğini, uzattığını veya kısalttığını doğrular. Donanım sınırı yazımını, diğer Zygisk modülleri üzerinde tam denetimi, performans artışını veya enerji tasarrufunu kanıtlamaz. Burada A/B karşılaştırması yapılmaz.",
+  "lr_zy_denylist_note": "Root yöneticisinin unmount/denylist bayrağı işlemin nasıl başlatıldığını açıklar. Tek başına sayısı, injection hatasını kanıtlamaz veya allowlist değişikliğini gerektirmez.",
   "lr_zy_unavailable": "Collector gözlemci kanıtı döndürmedi; Zygisk desteği dışlanmaz.",
   "dev_loading_sub": "The page is already open. Nothing is being changed; each group appears after the read-only snapshot returns.",
   "dev_stage_system": "System",
@@ -2472,7 +2484,7 @@
   "lr_dx_fix_selfpush": "Uygulamanın kendi bildirim ayarlarında keep-alive veya arka plan bağlantı hizmetini kapatın, ardından bildirim düzeltmesiyle mesajların hâlâ zamanında geldiğini kontrol edin.",
   "lr_dx_fix_selfpush_gms": "Önce ASB'de \"Google hizmetlerini kısıtla\" ayarını hafif yapın; mesajlar o zaman zamanında gelirse uygulamanın kendi keep-alive hizmetini kapatın.",
   "zy_aot_title": "Daha hızlı uygulama açılışı (ART)",
-  "zy_aot_desc": "ASB her uygulamayı ne sıklıkla açtığınızı (Zygisk başlatma kaydı) ve soğuk başlatmasının ne kadar sürdüğünü (Android'in kendi başlatma kaydı) sayar. Sık açtığınız ve önceden derlenmiş kod olmadan çalışan uygulamalar, Android'in gece bakımının yaptığı gibi derlenir - yalnızca şarj olurken, ekran kapalıyken ve pil 40 °C'nin altındayken. Derlenmiş kod, uygulama çalışırken daha az JIT işi gerektirir ve genellikle daha hızlı açılır; aşağıdaki süreler bunun bu telefonda ne sağladığını gösterir.",
+  "zy_aot_desc": "ASB uygulama açma ve soğuk başlatma sürelerini sayar. Yalnızca AOT kodu olmayan sık açılan uygulamalar değerlendirilir: şarj oturumu başına bir batch, ekran kapalı ve bilinen pil sıcaklığı 40 °C altında. Başlatmayı iyileştirebilir ancak pil tasarrufunu garanti etmez; derleme CPU ve depolama yazımı harcar.",
   "zy_aot_off": "Kapalı",
   "zy_aot_on": "Şarjda derle",
   "zy_aot_unread": "Derleme durumu henüz okunmadı.",
@@ -2564,20 +2576,20 @@
   "zy_guard_ev_lifted_opened": "geri verildi: açtınız",
   "zy_guard_ev_lifted_released": "sizin tarafınızdan geri verildi",
   "zy_auto_title": "Otomatik kurulum",
-  "zy_auto_recommended": "Önerilir · doldurulacak uygulama listesi yok",
-  "zy_auto_desc": "ASB izlenecek kullanıcı uygulamalarını seçer, açılış tepkisini ve süreç günlüğünü açar, yeniden başlatma döngülerini ve gece uyandırmalarını frenler ve sık açılan uygulamaları yalnızca şarj sırasında ART ile iyileştirir. Paket seçmeniz veya motoru ayarlamanız gerekmez.",
+  "zy_auto_recommended": "Bir politika seçin · paket listesi gerekmez",
+  "zy_auto_desc": "ASB gözlem listesini kullanıcı uygulamalarıyla doldurur. Yalnızca gözlem, soğuk başlatma yardımı veya arka plan koruması seçin. Bu kart ART’yi asla etkinleştirmez; ART aşağıda ayrı bir manuel seçimdir.",
   "zy_auto_enable": "Otomatik kur",
   "zy_auto_refresh": "Otomatik uygulama seçimini yenile",
   "zy_auto_disable": "Otomatik kurulumu kapat",
   "zy_auto_working": "Kuruluyor…",
   "zy_auto_refreshing": "Yenileniyor…",
   "zy_auto_disabling": "Kapatılıyor…",
-  "zy_auto_summary": "Otomatik mod açık · %1 izlenen uygulama · Arka plan freni: %2 · ART: %3",
-  "zy_auto_note": "İzleme listesine yalnızca kullanıcının kurduğu uygulamalar girer. Arka plan kısıtlamaları yine ölçülmüş başlatma eşikleri gerektirir, korunan uygulamaları atlar, geri okunur ve geri alınabilir. Güvenli mod asla otomatik kaldırılmaz. LSPosed, çekirdek, frekans veya sıcaklık ayarlarına dokunulmaz.",
+  "zy_auto_summary": "Otomatik profil: %1 · %2 gözlenen uygulama · Arka plan koruması: %3 · ART (bağımsız): %4",
+  "zy_auto_note": "Listeye yalnızca kullanıcı uygulamaları girer. Kapatma önceki listeyi ve observer, guard ve ART durumlarını geri yükler. Safe mode otomatik kaldırılmaz. LSPosed, çekirdek, frekans ve termal sınırlar değişmez.",
   "zy_auto_enabled": "Otomatik Zygisk kurulumu açık",
   "zy_auto_refreshed": "Otomatik uygulama seçimi yenilendi",
-  "zy_auto_disabled": "Otomatik özellikler kapalı · önceki uygulama listesi geri yüklendi",
-  "zy_auto_failed": "Otomatik kurulum tamamlanmadı; desteklenmeyen bir paket veya politika seçilmedi",
+  "zy_auto_disabled": "Otomatik kurulum kapalı · önceki Zygisk durumu geri yüklendi",
+  "zy_auto_failed": "Otomatik kurulum tamamlanmadı; yeniden denemeden önce mevcut durumu kontrol edin",
   "zy_auto_safe": "Güvenli mod açık. Otomatik kurulum onu kaldırmaz; önce güvenli modu açıkça kaldırın.",
   "zy_auto_managed_label": "ASB'nin otomatik seçtiği uygulamalar",
   "zy_auto_managed_note": "Bu listeyi otomatik kurulum yönetir. Paket değişikliklerinden sonra mevcut servis geçişlerinde veya yukarıdaki düğmeyle yenilenir. Elle düzenlemek için otomatik kurulumu kapatın. Güvenli mod burada kullanılabilir kalır.",
@@ -2587,14 +2599,55 @@
   "lr_loading_sub": "The report is already open. The read-only digest will replace this card; nothing is being changed.",
   "dev_zygisk_safe_enable": "Güvenli modu aç",
   "dev_zygisk_safe_clear": "Güvenli modu kapat",
-  "lr_tip_smart_help_manual": "Recorded Smart measurements found extra headroom useful for {n} apps. This capture used a manual profile, so those records do not show Smart actively controlling it.",
+  "lr_tip_smart_help_manual": "Kayıtlı Smart karşılaştırmaları {n} uygulama için ek frekans payını destekledi. Yakalama manuel profil kullandığından bunlar etkin Smart kontrolünü göstermez.",
   "lr_tip_jank_bad_evidence": "About {pct}% of frames missed their deadline. Measured at-cap windows are not worse ({yes}% at cap versus {no}% below), or the named cap is mostly ROM-owned. This correlation does not clear every ceiling, but it does not support raising them as the first action; use the per-frame breakdown.",
   "lr_dx_smooth_cap_external": "At the {cl} ceiling jank was {yes}% versus {no}% below it, but the ROM held that cluster in most checks. This correlation does not establish that an ASB ceiling caused the jank; do not raise it from this capture alone.",
   "lr_dx_frames_thin": "Only {frames} HWUI frames were usable, so no stable smoothness verdict is made. A thin sample is unknown evidence, not proof of smoothness; GL/Vulkan game surfaces can be outside this metric.",
   "lr_dx_frames_absent": "No usable HWUI frame sample was collected during substantial screen-on time. Smoothness remains unknown, not zero-jank; missing counters can reflect unsupported collection or non-HWUI surfaces.",
   "lr_zy_spawns": "Observed process starts in capture",
   "lr_zy_launch_fallback": "Cold starts without a measured launch class",
-  "lr_zy_quiet_channels": "The accepted start/exit counter is zero, but spawn, cold-start or ledger channels recorded activity. These channels are independent; zero here does not mean the observer was absent.",
+  "lr_zy_quiet_channels": "İşlem başlangıç/çıkış kanalı sıfırda kalırken bağımsız spawn, soğuk başlatma veya kayıt kanalları etkinlik gördü. Bu companion IPC’yi doğrular, resident gözlemi değil; enjeksiyon hatası kanıtı değildir.",
   "lr_zy_live_zero": "No validated process was live in the latest snapshot, while earlier activity was recorded. This describes the current live set, not failed injection throughout the capture.",
-  "lr_zy_accept_note": "An accepted cold-start request passed the companion checks; it is not proof that the governor changed a frequency ceiling."
+  "lr_zy_accept_note": "Kabul edilen soğuk başlatma, etkinlik/ekran denetimlerinden sonra governor tarafından onaylandı. Bu, yükseltme kurulduğunu veya frekans sınırının değiştiğini kanıtlamaz; diğer governor denetimleri sürer.",
+  "lr_tip_smart_nohelp": "Smart karşılaştırmalarında ek frekans payı {n} uygulamaya yardımcı olmadı ve önceki sınırları korundu. Bu, geç karelerin başka nedenini belirlemez.",
+  "lr_sm_scope": "Yakalama sonu anlık görüntüsü: sayaçlar aynı governor oturumundaki önceki çalışmayı içerebilir. İzlenen durumlara süren testler de dahildir.",
+  "lr_dx_heat_some_runs": "CPU, {n} sıcak epizotta {min} 45 °C üzerinde kaldı (en uzun {longest}; tepe {cpu}°). Hiçbir epizot 30 dakikaya ulaşmadı.",
+  "lr_zy_launch_balanced": "{n} soğuk başlatmanın tümünde sonuç var: {ok} kabul, {veto} ret, {unavailable} governor yok, {throttled} kısıtlı.",
+  "lr_zy_launch_unresolved": "{n} soğuk başlatmadan {ok} kabul, {veto} ret, {unavailable} governor yok ve {throttled} kısıtlı. Kalanlar anlık görüntüde işleniyor olabilir; fark tek başına hata değildir.",
+  "zy_auto_profile_observe": "Yalnızca gözlem",
+  "zy_auto_profile_launch": "Başlatma yardımı",
+  "zy_auto_profile_battery": "Pil koruması",
+  "zy_auto_profile_note": "Gözlem: yalnızca kayıt. Başlatma: soğuk başlatma yardımı ve kayıt, AppOps yok. Pil: iki ayrı oturumda gözlem ve uygulama başına onaydan sonra guard; ART yok.",
+  "zy_guard_confirm_desc": "Otomatik AppOps kısıtlamasından önce ASB, %s ayrı ekran oturumunda aynı kanıtı ve paket için onayınızı ister. Öneri henüz hiçbir şeyi değiştirmez. Arka plan işi ve bildirimler gecikebilir; «Şimdi geri ver» kayıtlı modu hemen geri yükler.",
+  "zy_guard_pending_title": "Arka plan kısıtlamalarını onayla (%s)",
+  "zy_guard_pending_desc": "Deneme: hiçbir öneri AppOps’u kendiliğinden değiştirmez. Yalnızca arka plan askıya alınmasını ve olası bildirim gecikmesini kabul ettiğiniz uygulamayı onaylayın.",
+  "zy_guard_pending_row": "%1 başlatma · %2/%3 oturum · %4",
+  "zy_guard_pending_approved": "Onaylandı · kanıt bekleniyor",
+  "zy_guard_pending_approve": "Bu uygulamayı onayla",
+  "zy_guard_release_now": "Şimdi geri ver",
+  "zy_guard_approved": "Paket onaylandı; iki oturumluk kanıt yine gerekli",
+  "zy_guard_released": "Önceki arka plan modu geri yüklendi",
+  "lr_sec_impact": "📏 Twe başına kanıt",
+  "lr_impact_tweak": "Tweak",
+  "lr_impact_measured": "Bu kayıtta ölçülen",
+  "lr_impact_meaning": "Sayının kanıtladığı",
+  "lr_impact_cap_readback": "CPU sınırı readback",
+  "lr_impact_cap_readback_fmt": "{ok}/{total} ASB ile eşleşti · {vendor} ROM geçersiz kılma · {other} diğer",
+  "lr_impact_readback": "Doğrudan readback gözlemleri · enerji etkisi değil",
+  "lr_impact_cap_main": "CPU sınırı · ana küme",
+  "lr_impact_cap_prime": "CPU sınırı · prime kümesi",
+  "lr_impact_cap_fmt": "Sınırda %{yes}, sınır altında %{no} · {frames} kare",
+  "lr_impact_correlation": "Farklı yüklerde birlikte gözlendi · A/B gerekli",
+  "lr_impact_zygisk": "Zygisk soğuk başlatma yardımı",
+  "lr_impact_zygisk_fmt": "{accepted} kabul · {armed} lift kuruldu · {extended} uzatıldı",
+  "lr_impact_direct": "Ölçülen eylemler · performans/enerji yararı A/B gerektirir",
+  "lr_impact_wifi": "Kötü Wi-Fi’den çık",
+  "lr_impact_wifi_fmt": "{releases} bırakma · {returned} geri verme · {recovered} önceden düzelme",
+  "lr_impact_smart": "Smart pay öğrenimi",
+  "lr_impact_smart_fmt": "{helped} korundu · {nothelped} elendi · {testing} testte",
+  "lr_impact_smart_scope": "Governor oturumu karar görüntüsü · tasarruf yüzdesi değil",
+  "lr_impact_cost": "ASB governor kendi maliyeti",
+  "lr_impact_cost_fmt": "{cpu} ms/sa · {writes} yazma/sa · {wakes} uyandırma/sa",
+  "lr_impact_cost_scope": "Ölçülen ASB maliyeti · net pil etkisi değil",
+  "lr_impact_ab_note": "Burada bir tweak’e pil yüzdesi, sıcaklık veya akıcılık kazancı atanmaz. Nedensel bir değer için tek anahtarı değiştirip benzer kayıtları karşılaştırın. Listelenmeyen tweak için bu kayıtta evidence yoktur; desteklenmediği veya etkisinin sıfır olduğu anlamına gelmez."
 }
