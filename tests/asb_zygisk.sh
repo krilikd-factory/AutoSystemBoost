@@ -859,7 +859,7 @@ const window=globalThis; const ASB_LANG='en'; const MD='/data/adb/modules/AutoSy
 function T(k,d){return d;} function deviceFill(k,d,v){let s=d;for(const x in v)s=s.replace('{'+x+'}',v[x]);return s;}
 function deviceFallbackLabel(k){return String(k).replace(/_/g,' ');}
 function deviceVal(d,s,k){return d&&d.sections&&d.sections[s]&&d.sections[s][k]!=null?String(d.sections[s][k]):'—';}
-function mk(tag){const e={tagName:tag,className:'',children:[],style:{},disabled:false,value:'',attrs:{},setAttribute(k,v){e.attrs[k]=String(v);},classList:{add(){}},appendChild(c){e.children.push(c);c.parentNode=e;return c;},querySelector(sel){const c=sel.slice(1);return find(e,c);},replaceChild(n,o){const i=e.children.indexOf(o);if(i>=0){e.children[i]=n;n.parentNode=e;}return o;}};Object.defineProperty(e,'textContent',{get(){return e._text||''},set(v){e._text=String(v);e.children=[];}});return e;}
+function mk(tag){const e={tagName:tag,className:'',children:[],style:{},disabled:false,value:'',attrs:{},setAttribute(k,v){e.attrs[k]=String(v);},classList:{add(...cs){e.className=(e.className+' '+cs.join(' ')).trim();}},appendChild(c){e.children.push(c);c.parentNode=e;return c;},querySelector(sel){const c=sel.slice(1);return find(e,c);},replaceChild(n,o){const i=e.children.indexOf(o);if(i>=0){e.children[i]=n;n.parentNode=e;}return o;}};Object.defineProperty(e,'textContent',{get(){return e._text||''},set(v){e._text=String(v);e.children=[];}});return e;}
 const hosts=Array.from({length:5},()=>mk('div'));
 const document={createElement:mk,querySelectorAll(sel){if(sel==='.hdr-info')return hosts;if(sel==='.zygisk-header-link')return hosts.map(h=>find(h,'zygisk-header-link')).filter(Boolean);return [];}};
 function _el(){return null;} function openZygiskPage(){} function shQuote(s){return "'"+s+"'";} function dozePkgOk(s){return /^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)+$/.test(s||'');}
@@ -869,9 +869,10 @@ let _zyGuard={enabled:true,level:'wakers'},_zyAot={enabled:true}; function zygis
 function uiSound(){} function haptic(){} let pageRenders=0; function zygiskPageRender(){pageRenders++;} let _zygiskOpen=true; let _cfgVals={}; let _cfgLoadSig='x';
 function cfgRenderRow(list,it){const row=mk('div');row.className='cfg-row';row.setAttribute('data-key',it.key);const sw=mk('div');sw.className='cfg-switch';sw.setAttribute('role','switch');row.appendChild(sw);list.appendChild(row);}
  function logReportNote(t){const e=mk('div');e.textContent=t;return e;}
+function deviceSnapshotCard(title,value,detail,tone){const e=mk('div');e.textContent=title+' '+value+' '+detail+' '+tone;return e;} function deviceSizeKb(v){return v+' KiB';}
 let commands=[],refreshes=0,toastText=''; async function asbPaintYield(){} async function run(c){commands.push(c);return {errno:0,stdout:''};} function runOk(r){return r.errno===0;} function runText(r){return r.stdout||'';} function toast(t){toastText=t;} function asbDeviceInfoLoad(){refreshes++;}
 JS
-    sed -n '/^function parseDeviceInfo(/,/^}/p; /^function devicePressureScale(/,/^}/p; /^function deviceZygiskLinkState(/,/^}/p; /^function deviceZygiskLinkVerdict(/,/^}/p; /^function deviceZygiskLink(/,/^}/p; /^let _zygiskHeaderSeq/p; /^let _zygiskHeaderAt/p; /^const ZYGISK_HEADER_TTL_MS/p; /^const _ASB_PART/p; /^function runBatchCmd(/,/^}/p; /^function runBatchSplit(/,/^}/p; /^async function runBatch(/,/^}/p; /^let _zygiskLoadSeq/p; /^const ZYGISK_MODES = \[/,/^\];/p; /^function zygiskModeOf(/,/^}/p; /^function zygiskAutoCard(/,/^}/p; /^async function zygiskAutoSet(/,/^}/p; /^async function zygiskGuardPackage(/,/^}/p; /^function zygiskModeCard(/,/^}/p; /^async function zygiskModeSet(/,/^}/p; /^function zygiskHeaderPaint(/,/^}/p; /^function zygiskHeaderWordmark(/,/^}/p; /^function zygiskHeaderInit(/,/^}/p; /^function zygiskHeaderPublish(/,/^}/p; /^async function zygiskHeaderRefresh(/,/^}/p; /^function cfgRenderZygiskCard(/,/^}/p; /^function deviceZygiskEditor(/,/^}/p' "$ROOT/webroot/index.html"
+    sed -n '/^function parseDeviceInfo(/,/^}/p; /^function devicePressureScale(/,/^}/p; /^function deviceZygiskLinkState(/,/^}/p; /^function deviceZygiskLinkVerdict(/,/^}/p; /^function deviceZygiskLink(/,/^}/p; /^let _zygiskHeaderSeq/p; /^let _zygiskHeaderAt/p; /^const ZYGISK_HEADER_TTL_MS/p; /^const _ASB_PART/p; /^function runBatchCmd(/,/^}/p; /^function runBatchSplit(/,/^}/p; /^async function runBatch(/,/^}/p; /^let _zygiskLoadSeq/p; /^const ZYGISK_MODES = \[/,/^\];/p; /^function zygiskModeOf(/,/^}/p; /^function zygiskAutoCard(/,/^}/p; /^async function zygiskAutoSet(/,/^}/p; /^async function zygiskGuardPackage(/,/^}/p; /^function zygiskGoalGuide(/,/^}/p; /^function zygiskModeCard(/,/^}/p; /^async function zygiskModeSet(/,/^}/p; /^function zygiskHeaderPaint(/,/^}/p; /^function zygiskHeaderWordmark(/,/^}/p; /^function zygiskHeaderInit(/,/^}/p; /^function zygiskHeaderPublish(/,/^}/p; /^async function zygiskHeaderRefresh(/,/^}/p; /^function cfgRenderZygiskCard(/,/^}/p; /^function deviceZygiskOverview(/,/^}/p; /^function deviceZygiskEditor(/,/^}/p' "$ROOT/webroot/index.html"
     cat <<'JS'
 let bad=0;const chk=(c,m)=>{if(!c){console.log('FAIL '+m);bad++;}};
 function find(n,c){if(n.className&&n.className.split(/\s+/).includes(c))return n;for(const x of n.children||[]){const r=find(x,c);if(r)return r;}return null;}
@@ -898,6 +899,19 @@ linkState({enabled:'—'},'unknown');linkState({state_freshness:'not exposed'},'
 let link=deviceZygiskLink(linkData({state_freshness:'current',loaded_processes:'2',events_total:'2'}));
 chk(link.className.includes('dev-zygisk-link-connected'),'connected badge class');chk(find(link,'dev-zygisk-link-state').textContent==='Connected','connected badge text');chk(find(link,'dev-zygisk-link-detail').textContent.includes('2'),'live process evidence missing');
 link=deviceZygiskLink(linkData({}));chk(link.className.includes('dev-zygisk-link-idle'),'installed ABI files falsely confirmed a channel');chk(find(link,'dev-zygisk-link-state').textContent==='Enabled · nothing selected','empty-selection badge text');
+const zeroNote=p=>find(deviceZygiskOverview(linkData(p)),'dev-zygisk-zero');
+chk(zeroNote({state_freshness:'current',loaded_processes:'0'}),'current enabled zero-resident snapshot lacks its bounded explanation');
+chk(zeroNote({state_freshness:'current',loaded_processes:'0'}).textContent.includes('not an injection-failure count'),'zero-resident explanation lost the evidence boundary');
+chk(!zeroNote({state_freshness:'current',loaded_processes:'1'}),'resident process still shows the zero explanation');
+chk(!zeroNote({state_freshness:'stale_over_5_minutes',loaded_processes:'0'}),'stale snapshot claims a current zero-resident state');
+chk(!zeroNote({state_freshness:'current',loaded_processes:'0',safe_mode:'on'}),'safe mode incorrectly uses the ordinary zero explanation');
+chk(!zeroNote({state_freshness:'current',loaded_processes:'0',enabled:'0'}),'disabled observer incorrectly uses the enabled zero explanation');
+const commandsBeforeGuide=commands.length,guide=zygiskGoalGuide(),goalGuide=find(guide,'zy-goal-guide');
+chk(goalGuide&&goalGuide.children.length===3,'goal guide does not contain exactly three choices');
+const goalText=goalGuide.children.map(r=>r.children.map(x=>x.textContent).join(' ')).join(' | ');
+for(const label of ['Launch assist','Response','Full','Battery guard','Watch','Observe only','Off'])chk(goalText.includes(label),'goal guide omits '+label);
+chk(goalText.includes('do not guarantee')&&goalText.includes('notifications may be delayed'),'goal guide lost its honesty/trade-off warnings');
+chk(commands.length===commandsBeforeGuide&&!/(set-many|appops|cmd |pm |am )/i.test(goalText),'goal guide performs or recommends a hidden writer/mode change');
 zygiskHeaderInit();chk(hosts.every(h=>!!find(h,'zygisk-header-link')),'not all five page headers received the badge');
 chk(hosts.every(h=>find(h,'zygisk-header-link').attrs['data-state']==='unknown'),'missing evidence did not remain unknown');
 zygiskHeaderPublish(linkData({state_freshness:'current',loaded_processes:'2',events_total:'2'}));
@@ -908,6 +922,7 @@ const unified=find(unifiedList,'cfg-zygisk-card');chk(!!unified&&unified.childre
 chk(unified&&unified.children.slice(1).every(r=>find(r,'cfg-switch')),'a unified Zygisk setting lost its switch');
 chk(unified&&unified.children.slice(1).map(r=>r.attrs['data-key']).join(',')==='zygisk_enabled,zygisk_hints,zygisk_launch,zygisk_ledger','unified card changed setting ownership/order');
 (async()=>{const ed=deviceZygiskEditor(d),input=find(ed,'dev-zygisk-input'),buttons=ed.children.flatMap(x=>x.children||[]).filter(x=>x.tagName==='button');
+chk(input.tagName==='textarea'&&input.rows===4,'allowlist editor is not a four-row wrapping textarea');
 input.value='com.example.app;touch /tmp/pwn';await buttons[0].onclick();chk(commands.length===0,'malformed package reached shell');chk(refreshes===0,'malformed package refreshed collector');
 input.value='com.example.app, org.example.game';await buttons[0].onclick();chk(commands.length===1&&commands[0].includes("set-packages 'com.example.app' 'org.example.game'"),'valid allowlist command');chk(refreshes===1,'valid save did not refresh');
 await buttons[1].onclick();chk(commands[1].endsWith('safe-mode on'),'safe mode command');chk(refreshes===2,'safe mode did not refresh');
@@ -929,6 +944,7 @@ chk(zygiskModeOf(md({launch_hints:'1'}))==='custom','a set no preset matches is 
 chk(zygiskModeOf(md({enabled:'—'}))==='unknown','an unreadable master is unknown, not Off');
 let card=zygiskModeCard(md({lifecycle_hints:'1',launch_hints:'1'})),seg=find(card,'zy-mode-seg');
 chk(seg&&seg.children.length===4,'four mode buttons');chk(seg&&seg.children[2].className==='on'&&seg.children.filter(b=>b.className==='on').length===1,'exactly the current mode is selected');
+chk(seg&&seg.children.every(b=>b.title&&b.title.length>20),'manual mode buttons lack their explanatory native titles');
 card=zygiskModeCard(md({launch_hints:'1'}));seg=find(card,'zy-mode-seg');chk(seg.children.every(b=>b.className!=='on'),'custom selects no preset');
 // Choosing a mode is ONE root shell: the locked set-many write, the policy sync and the fresh read.
 commands=[];run=async c=>{commands.push(c);return {errno:0,stdout:'asb-mode-ok\n'+_ASB_PART+'write\n'+raw({lifecycle_hints:'1',launch_hints:'1',spawn_ledger:'1'})+'\n'+_ASB_PART+'link',stderr:''};};
@@ -942,8 +958,9 @@ commands=[];await zygiskModeSet('off');chk(/set-many --snapshot '[^']+' 'zygisk_
 run=async c=>{commands.push(c);return {errno:0,stdout:'refused\n'+_ASB_PART+'write\n'+_ASB_PART+'link',stderr:''};};_cfgVals={};
 await zygiskModeSet('watch');chk(!_cfgVals.zygisk_ledger&&/not saved/.test(toastText),'a refused write was reported as applied');
 // fix284: automatic card, its single-shell command flow and read-only package editor.
-let autoCard=zygiskAutoCard(md({auto_mode:'1',auto_profile:'battery',enabled_packages:'64'}));
+let autoCard=zygiskAutoCard(md({auto_mode:'1',auto_profile:'battery',enabled_packages:'64',enabled:'1',lifecycle_hints:'0',launch_hints:'1',spawn_ledger:'1'}));
 chk(find(autoCard,'zy-auto-summary').textContent.includes('64')&&find(autoCard,'zy-auto-summary').textContent.includes('Loops + night wakers')&&find(autoCard,'zy-auto-summary').textContent.includes('ART (independent): On'),'automatic summary does not show actual profile/package/guard/independent ART state');
+chk(find(autoCard,'zy-auto-current').textContent==='Current independent switches: Observer: Enabled · Lifecycle hints: Disabled · Cold-start lift: Enabled · Process ledger: Enabled','automatic profile hides or misreports the independent Zygisk switches');
 chk(find(autoCard,'zy-auto-profiles').children.length===3,'automatic card lacks independent Observe/Launch/Battery profiles');
 chk(find(autoCard,'zy-auto-actions').children.length===2,'enabled automatic card lacks refresh/disable actions');
 chk(zygiskAutoCard(md({auto_mode:'0'})).children.length>0&&find(zygiskAutoCard(md({auto_mode:'0'})),'zy-auto-actions').children.length===0,'off automatic card has an obsolete combined enable action');
@@ -991,8 +1008,18 @@ for p in files:
     auto_keys = ('title','recommended','desc','enable','refresh','disable','summary','note','enabled','refreshed','disabled','failed','safe','managed_label','managed_note')
     for key in auto_keys:
         assert d['zy_auto_' + key].strip(), (p, key)
+    goal_keys = ('zy_guide_title', 'zy_guide_response', 'zy_guide_response_text',
+                 'zy_guide_battery', 'zy_guide_battery_text', 'zy_guide_minimal',
+                 'zy_guide_minimal_text', 'dev_zygisk_zero_processes')
+    for key in goal_keys:
+        assert d[key].strip(), (p, key)
+source = (pathlib.Path(sys.argv[1]).parent / 'index.html').read_text(encoding='utf-8')
+page = source.split('function zygiskPageRender(d) {', 1)[1].split('/* fix280:', 1)[0]
+assert page.index('body.appendChild(zygiskGoalGuide());') < page.index('body.appendChild(zygiskAutoCard(d));') < page.index('body.appendChild(zygiskModeCard(d));')
+lazy = source.split('function zygiskHeaderRefreshLazy() {', 1)[1].split('\n}', 1)[0]
+assert lazy.count('zygiskHeaderRefresh();') == 1, 'lazy header refresh must have exactly one delayed refresh call'
 PY
-  echo 'PASS observer UI: unified four-switch card, five evidence-bounded headers, 13 locales, scale and safe editor'
+  echo 'PASS observer UI: goal guide, bounded zero-process evidence, mode titles, unified card, 13 locales and safe editor'
 )
 
 t_zygisk_capture_digest_runtime() (

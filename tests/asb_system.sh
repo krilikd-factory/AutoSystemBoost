@@ -7558,6 +7558,11 @@ grep -Fq 'thermal_peer_hi=' "$GOV" || fail "state misses thermal_peer_hi"
 grep -Fq 'thermal_peer_lo=' "$GOV" || fail "state misses thermal_peer_lo"
 grep -Fq 'thermal_peer_n=' "$GOV" || fail "state misses thermal_peer_n"
 grep -Fq 'thermal_consensus=' "$GOV" || fail "state misses thermal_consensus"
+grep -Fq 'thermal_spike_holds=' "$GOV" || fail "state misses thermal spike hold count"
+grep -Fq 'thermal_spike_last_c=' "$GOV" || fail "state misses thermal spike candidate"
+grep -Fq '\"thermal_spike_holds\"' "$GOV" || fail "JSON misses thermal spike hold count"
+grep -Fq 'thermal_spike_holds=' "$DIAG" || fail "diag misses thermal spike holds"
+grep -Fq 'a repeated high reading is accepted on the next tick' "$DIAG" || fail "diag omits sustained-heat acceptance"
 grep -Fq "^thermal_control_source=" "$DIAG" || fail "diag reads stale thermal_cpu_type key"
 grep -Fq "^thermal_source_confidence=" "$DIAG" || fail "diag reads stale thermal_src_conf key"
 grep -Fq "^thermal_peer_hi=" "$DIAG" || fail "diag misses peer high"
@@ -7569,6 +7574,9 @@ cons_line=$(grep -n 'Thermal consensus v2:' "$MET" | head -1 | cut -d: -f1)
 [ -n "$board_line" ] && [ -n "$cons_line" ] && [ "$board_line" -lt "$cons_line" ] || fail "board read order is stale"
 grep -Fq 'g_thermal_peer_n  = 0;' "$MET" || fail "peer count is not reset"
 grep -Fq "g_thermal_consensus_note[0] = '\\0';" "$MET" || fail "consensus note is not reset"
+grep -Fq 'if (z < 0 || z == g_thermal_cpu_zone) continue;' "$MET" || fail "spike peer check can count the control sensor itself"
+grep -Fq 'if (!g_thermal_spike_hold_active && !used_fallback &&' "$MET" || fail "spike hold is not limited to one read"
+grep -Fq 'g_thermal_spike_hold_active = 0;' "$MET" || fail "spike hold latch is never cleared"
 pass "thermal state/diagnostic and non-CPU control contract"
 
 # --- Trial transaction contract ------------------------------------------------------------
@@ -8789,6 +8797,45 @@ if run_gate double > "$T/new.log" 2>&1; then fail 'genuinely new warning site by
 grep -q 'GCC warning inventory: new=1 resolved=1 baseline_sites=1' "$T/new.log" || fail 'new-site result is not exact'
 grep -q "conversion from 'double' to 'float'" "$T/new.log" || fail 'new diagnostic was not reported'
 echo 'PASS native warning locale: deterministic GCC signatures; genuinely new warning sites still fail'
+)
+
+
+t_diag_pending_camera_readback() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d "${TMPDIR:-/tmp}/asb_diag_pending.XXXXXX")"
+trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL diag pending/camera read-back: $*" >&2; exit 1; }
+D="$ROOT/tools/asb_diag.sh"
+cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail 'asbdiag copies differ'
+{
+  printf '%s\n' 'NOTE() { printf "%s\n" "$*"; }' \
+    'settings() { [ "$1 $2 $3" = "get global wifi_on" ] || return 2; printf "%s\n" "$ASB_TEST_WIFI_ON"; }' \
+    'run_pending() { _nk="$1"; _nw="$2"; case pending in'
+  sed -n '/^      pending)$/,/^        esac ;;/p' "$D"
+  printf '%s\n' 'esac; }'
+} > "$T/pending.sh"
+. "$T/pending.sh"
+ASB_TEST_WIFI_ON=0 run_pending net_qdisc_wifi fq_codel > "$T/wifi_off"
+grep -Fq 'Wi-Fi is off' "$T/wifi_off" || fail 'Wi-Fi-off pending state is not explained'
+grep -Fq 'pending, not a failed apply' "$T/wifi_off" || fail 'Wi-Fi-off pending state became a failure'
+ASB_TEST_WIFI_ON=1 run_pending net_qdisc_wifi fq_codel > "$T/wifi_on"
+grep -Fq 'waiting for a link' "$T/wifi_on" || fail 'Wi-Fi-on pending state regressed'
+! grep -Fq 'Wi-Fi is off' "$T/wifi_on" || fail 'enabled Wi-Fi was reported off'
+ASB_TEST_WIFI_ON=0 run_pending net_qdisc_mobile fq_codel > "$T/mobile"
+grep -Fq 'waiting for a link' "$T/mobile" || fail 'mobile pending state was changed by Wi-Fi state'
+! grep -Fq 'Wi-Fi is off' "$T/mobile" || fail 'mobile key inherited the Wi-Fi-off explanation'
+{
+  printf '%s\n' 'NOTE() { printf "%s\n" "$*"; }'
+  sed -n '/^camera_bind_readback_note() {/,/^}/p' "$D"
+} > "$T/camera.sh"
+. "$T/camera.sh"
+camera_bind_readback_note 'camera.xml state=live mounted=no' > "$T/live"
+grep -Fq 'content already matches the payload' "$T/live" || fail 'live payload equivalence is not explained'
+grep -Fq 'not a mismatch' "$T/live" || fail 'live mounted=no was not explicitly cleared as a mismatch'
+camera_bind_readback_note 'camera.xml state=stale mounted=no' > "$T/stale"
+! grep -Fq 'not a mismatch' "$T/stale" || fail 'stale payload was falsely cleared as equivalent'
+echo 'PASS diag pending/camera read-back: Wi-Fi-off, mobile pending and live-without-bind semantics stay non-fatal and domain-specific'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

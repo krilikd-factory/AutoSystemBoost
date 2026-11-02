@@ -6353,8 +6353,8 @@ chk(ddx[0].area === 'lte' && ddx[0].cause === 'lr_dx_lte_idle' && ddx[0].owner =
     'the switch that never ran leads, as an ASB fault fixed in the build: ' + JSON.stringify(ddx[0]));
 chk(ddx[0].cv.set === I18N.ru.cfg.net_lte_light.name && ddx[0].cv.n === '8', 'it names 5G-only-when-needed only: the screen was off 21 min, too short to blame the screen-off switch: ' + ddx[0].cv.set);
 const net = ddx.find(x => x.area === 'net');
-chk(net && net.cause === 'lr_dx_net_heavy' && net.state === 'problem' && net.owner === 'app' && net.fix === 'lr_dx_fix_net_app' && net.fv.app === 'com.moonshot.kimichat',
-    'mobile data has its own card, the heaviest app and its remedy: ' + JSON.stringify(net));
+chk(net && net.cause === 'lr_dx_net_heavy' && net.state === 'normal' && net.owner === 'none' && net.fix === 'lr_dx_fix_net_app' && net.fv.app === 'com.moonshot.kimichat',
+    'mobile data stays measured context with an optional remedy, not a red causal verdict: ' + JSON.stringify(net));
 chk(net.cv.mib === '1.9 GiB' && net.cv.on === '1.8 GiB', 'the card quotes the total and the screen-on share');
 const nk = net.also.map(a => a.key);
 chk(nk.indexOf('lr_dx_net_nsa') >= 0 && nk.indexOf('lr_dx_net_apps') >= 0 && nk.indexOf('lr_dx_net_ma') >= 0, 'NSA, the apps and the current split are stated: ' + nk.join(','));
@@ -6366,10 +6366,19 @@ const scrc = ddx.find(x => x.area === 'screen');
 const sk = scrc.also.map(a => a.key);
 chk(sk.indexOf('lr_dx_screen_data') >= 0 && sk.indexOf('lr_dx_screen_bright_low') >= 0 && sk.indexOf('lr_dx_screen_top') >= 0, 'screen-on drain is decomposed: ' + sk.join(','));
 chk(scrc.also.find(a => a.key === 'lr_dx_screen_top').v.pct === '25', 'the app in front by its share of frames');
+const dataHigh = JSON.parse(JSON.stringify(dataDay));
+dataHigh.sections.scr.on_pctph = '16.0'; dataHigh.sections.lte = null;
+const screenNet = logReportDiagnose(dataHigh).find(x => x.area === 'screen');
+chk(screenNet && screenNet.cause === 'lr_dx_screen_net' && screenNet.owner === 'none' && !screenNet.fix,
+  'heavy traffic beside high screen-on drain does not acquire an app/ASB causal owner: ' + JSON.stringify(screenNet));
+chk(logReportDxT(screenNet.cause, screenNet.cv) === I18N.ru.lr_dx_screen_net.replace('{pct}', '16').replace('{mib}', '1.8 GiB').replace('{ph}', logReportMiB(1832.9 / (339 / 60))),
+  'screen/radio wording uses the neutral localized template');
 const asbc = ddx.find(x => x.area === 'asb');
 chk(asbc.state === 'good' && asbc.also[0].key === 'lr_dx_asb_core' && asbc.also[0].v.pct === '0.14' && asbc.also[0].v.on === '1271', 'ASB cost as a share of one core with the wake split: ' + JSON.stringify(asbc.also));
 const dacts = logReportAnalyze(dataDay).actions.map(t => t.key);
-chk(dacts[0] === 'lr_tip_lte_idle' && dacts.indexOf('lr_tip_net_heavy') >= 0, 'the fault and the data come first in the priority actions: ' + dacts.join(','));
+chk(dacts[0] === 'lr_tip_lte_idle' && dacts.indexOf('lr_tip_net_heavy') < 0 &&
+    logReportAnalyze(dataDay).observations.some(t => t.key === 'lr_tip_net_heavy' && t.ic === 'info'),
+  'the real fault stays actionable; traffic volume is neutral observation context: ' + dacts.join(','));
 const lteTip = logReportTipText(logReportTips(dataDay, true).find(t => t.key === 'lr_tip_lte_idle'));
 chk(lteTip.indexOf(I18N.ru.cfg.net_lte_light.name) >= 0 && lteTip.indexOf('{') < 0, 'the action names the switch: ' + lteTip);
 logReportRender(dataDay);
@@ -6382,6 +6391,8 @@ chk(dAll.indexOf(logReportT('lr_rat_nsa', '', { n: '7', of: '8' })) >= 0 && dAll
 chk(dAll.indexOf(I18N.ru.lr_drain_idle + '|—') >= 0, 'the screen-off row shows no rate over 21 minutes');
 chk(dAll.indexOf(logReportT('lr_trend_vs', '', { when: '2026-10-27 21:00' })) >= 0 && dAll.indexOf('2026-10-28 19:51') < 0, 'the trend compares with the latest comparable capture, not the 32 % evening');
 chk(dAll.indexOf(I18N.ru.lr_cost_core) >= 0, 'the cost section shows the share of a core');
+chk(dAll.indexOf(I18N.ru.lr_quality_title) >= 0 && dAll.indexOf(I18N.ru.lr_quality_high) < 0 &&
+    dAll.indexOf(I18N.ru.lr_quality_medium) < 0, 'coverage replaces the misleading global confidence headline');
 const btDay = parseLogReport(['meta\telapsed_min=373\tprofile=battery', 'bt\tacl=5\tlost=3\tby_dev=1\tby_phone=1\tmedia=1\twhole=1\tstreams=43',
   'btdrop\tat=10-29 19:29\twho=stack\twhole=1\tback=0'].join('\n'));
 chk(btDay.btdrops.length === 1 && btDay.btdrops[0].whole && !btDay.btdrops[0].back, 'media drops parsed');
@@ -6474,7 +6485,7 @@ KEYS = ['lr_menu','lr_refresh','lr_loading','lr_none_title','lr_none_body','lr_f
 KEYS += ['lr_sec_summary','lr_sec_causes','lr_sec_actions','lr_sec_observations',
          'lr_sum_drain','lr_sum_thermal','lr_sum_smooth','lr_sum_sleep','lr_sum_asb',
          'lr_state_good','lr_state_normal','lr_state_problem','lr_state_unknown',
-         'lr_quality_low','lr_quality_medium','lr_quality_high',
+         'lr_quality_low','lr_quality_medium','lr_quality_high','lr_quality_title','zy_auto_current',
          'lr_scenario_charging','lr_scenario_audio_speaker','lr_scenario_screen_on_heavy',
          'lr_scenario_screen_off_idle','lr_scenario_screen_off_network_active',
          'lr_scenario_screen_on_light','lr_scenario_mixed','lr_kind_fact','lr_kind_hypothesis',
@@ -6519,7 +6530,7 @@ PH = {'lr_running': ['{min}', '{h}'], 'lr_running_open': ['{min}'], 'lr_crash_n'
       'lr_jwake_fmt': ['{n}', '{pct}', '{ord}'], 'lr_jwake_top': ['{pkg}', '{pct}'],
       'lr_gauge_note': ['{x}', '{w}'], 'lr_nd_verdict_short': ['{min}', '{pct}'],
       'lr_tip_jank_wake': ['{pct}', '{ord}', '{who}'], 'lr_tip_jank_wake_wh': ['{pct}', '{ord}'],
-      'lr_tip_awake_aod': ['{awake}', '{lit}', '{of}'], 'lr_tip_sradio': ['{mib}', '{set}']}
+      'lr_tip_awake_aod': ['{awake}', '{lit}', '{of}'], 'lr_tip_sradio': ['{mib}', '{set}'], 'zy_auto_current': ['%s']}
 PH.update({'lr_sum_drain_on':['{min}'], 'lr_sum_drain_night':['{min}','{deep}'],
       'lr_sum_drain_off':['{min}'], 'lr_sum_thermal_detail':['{warm}','{clamps}'],
       'lr_sum_smooth_detail':['{frames}','{wake}'], 'lr_sum_sleep_detail':['{awake}','{min}'],

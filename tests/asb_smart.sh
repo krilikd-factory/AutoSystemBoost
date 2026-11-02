@@ -1556,7 +1556,17 @@ static void fixture_reset(void) {
     g_thermal_cpu_reason[0] = '\0';
     g_thermal_rejected_type[0] = '\0';
     g_thermal_rejected_raw = 0;
+    g_thermal_cpu_peer_n = 0;
     g_last_thermal_rescan = 0;
+    g_last_thermal_value = 0;
+    g_last_thermal_read_ts = 0;
+    g_thermal_spike_hold_active = 0;
+    g_thermal_spike_holds = 0;
+    g_thermal_spike_last_c = 0;
+    g_thermal_spike_last_peer_hi = 0;
+    g_thermal_spike_last_peer_n = 0;
+    g_thermal_spike_last_ts = 0;
+    g_asb_cfg.thermal_throttle_temp = 60;
 }
 
 static void add_zone(int zone, const char *type, int raw) {
@@ -1821,6 +1831,101 @@ static void case_qualcomm_keeps_priority(void) {
     check_s("qcom: prime sensor still wins over a generic cpu_ zone", g_thermal_cpu_type, "cpu-1-1-0");
 }
 
+/* Field regression: after percentage-like socd was rejected, the selected real CPU zone
+ * cleared its fallback. The old spike filter then had nothing left to cross-check. */
+static void case_core_spike_without_fallback_held_once(void) {
+    asb_thermal_t t;
+    fixture_reset();
+    add_zone(0, "socd\n", 25);
+    add_three_cpu_peers(40000, 41000, 39000);
+    thermal_discover();
+    metrics_read_thermal(&t, 0);
+    check_i("spike fixture: baseline accepted", t.cpu_max_c, 40);
+    check_i("spike fixture: runtime fallback is cleared", g_thermal_cpu_fallback_zone, -1);
+
+    write_temp(1, 88000);
+    metrics_read_thermal(&t, 0);
+    check_i("isolated core spike: cached temperature held", t.cpu_max_c, 40);
+    check_i("isolated core spike: cached value remains valid", t.temp_valid, 1);
+    check_s("isolated core spike: reason exposed", t.temp_invalid_reason, "spike");
+    check_i("isolated core spike: one hold recorded", (int)g_thermal_spike_holds, 1);
+    check_i("isolated core spike: candidate recorded", g_thermal_spike_last_c, 88);
+    check_i("isolated core spike: hottest peer recorded", g_thermal_spike_last_peer_hi, 41);
+    check_i("isolated core spike: two independent peers", g_thermal_spike_last_peer_n, 2);
+
+    write_temp(1, 40000);
+    metrics_read_thermal(&t, 0);
+    check_i("vanished spike: normal reading resumes", t.cpu_max_c, 40);
+    check_s("vanished spike: reason returns to ok", t.temp_invalid_reason, "ok");
+    check_i("vanished spike: hold latch cleared", g_thermal_spike_hold_active, 0);
+}
+
+static void case_repeated_core_spike_is_accepted(void) {
+    asb_thermal_t t;
+    fixture_reset();
+    add_zone(0, "socd\n", 25);
+    add_three_cpu_peers(40000, 41000, 39000);
+    thermal_discover();
+    metrics_read_thermal(&t, 0);
+
+    write_temp(1, 88000);
+    metrics_read_thermal(&t, 0);
+    check_i("repeated spike: first read deferred", t.cpu_max_c, 40);
+    metrics_read_thermal(&t, 0);
+    check_i("repeated spike: second high read accepted", t.cpu_max_c, 88);
+    check_i("repeated spike: accepted value valid", t.temp_valid, 1);
+    check_i("repeated spike: throttle evidence restored", t.throttling, 1);
+    check_s("repeated spike: no stale spike reason", t.temp_invalid_reason, "ok");
+    check_i("repeated spike: no endless suppression", (int)g_thermal_spike_holds, 1);
+}
+
+static void case_shared_cpu_heat_is_not_a_spike(void) {
+    asb_thermal_t t;
+    fixture_reset();
+    add_zone(0, "socd\n", 25);
+    add_three_cpu_peers(40000, 41000, 39000);
+    thermal_discover();
+    metrics_read_thermal(&t, 0);
+
+    write_temp(1, 88000);
+    write_temp(2, 86000);
+    write_temp(3, 87000);
+    metrics_read_thermal(&t, 0);
+    check_i("shared CPU heat: accepted immediately", t.cpu_max_c, 88);
+    check_i("shared CPU heat: throttle evidence intact", t.throttling, 1);
+    check_i("shared CPU heat: no hold recorded", (int)g_thermal_spike_holds, 0);
+}
+
+static void case_first_extreme_needs_confirmation(void) {
+    asb_thermal_t t;
+    fixture_reset();
+    add_zone(0, "socd\n", 25);
+    add_three_cpu_peers(88000, 41000, 40000);
+    thermal_discover();
+    metrics_read_thermal(&t, 0);
+    check_i("first extreme: no valid cached temperature", t.cpu_max_c, 0);
+    check_i("first extreme: zero is not published as valid", t.temp_valid, 0);
+    check_s("first extreme: spike reason exposed", t.temp_invalid_reason, "spike");
+
+    metrics_read_thermal(&t, 0);
+    check_i("first extreme: repeated heat accepted", t.cpu_max_c, 88);
+    check_i("first extreme: repeated heat valid", t.temp_valid, 1);
+}
+
+static void case_single_peer_cannot_hold_spike(void) {
+    asb_thermal_t t;
+    fixture_reset();
+    add_zone(0, "socd\n", 25);
+    add_zone(1, "cpu-1-1-0\n", 40000);
+    add_zone(2, "cpu-0-5-0\n", 41000);
+    thermal_discover();
+    metrics_read_thermal(&t, 0);
+    write_temp(1, 88000);
+    metrics_read_thermal(&t, 0);
+    check_i("one independent peer: fail open to heat evidence", t.cpu_max_c, 88);
+    check_i("one independent peer: no spike hold", (int)g_thermal_spike_holds, 0);
+}
+
 int main(void) {
     puts("P0 thermal socd validation fixtures");
     case_high_socd_rebinds_to_live_peer();
@@ -1837,6 +1942,11 @@ int main(void) {
     case_mediatek_lvts_names();
     case_mediatek_helio_single_zone();
     case_qualcomm_keeps_priority();
+    case_core_spike_without_fallback_held_once();
+    case_repeated_core_spike_is_accepted();
+    case_shared_cpu_heat_is_not_a_spike();
+    case_first_extreme_needs_confirmation();
+    case_single_peer_cannot_hold_spike();
 
     fixture_reset();
     if (g_failures) {
