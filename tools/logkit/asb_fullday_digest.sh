@@ -23,13 +23,16 @@
 #   jstate   state=<name>  intv=<n>  frames=<n>  pct=<x.x>  jps=<x.xx>               (fix220)
 #   hz       mode=<60|90|120|..>  share=<n>  ma=<n>    (one row per refresh rate)
 #   asbcost  cpu_msh=<n>  writes_h=<n>  wakes_h=<n>
+#   capcheck total=<n> ok=<n> vendor=<n> other=<n>  (cap_verify observations)
+#   wifileave releases=<n> returned=<n> failed=<n> recovered=<n>
 #   gauge    factor=<x.xx>  windows=<n>  mult=<x.x>    (current_now vs SOC, fix220)
 #   audio    spk_min=<n>  pctph=<x.x>  ma=<n>
 #   charge   types=<Fast(17) N/A(197)>
 #   smart    watching=<n>  testing=<n>  helped=<n>  nothelped=<n>  ctxlearn=<n>
-#   mwake    n=<n>  per_night=<x.x>  typical_s=<n>     (night habits, fix213)
+#   mwake    n=<n>  nights=<n|unknown>  per_night=<x.x>  typical_s=<n>
 #   cfg      key=<setting>  value=<v>                  (the settings the advice can point at)
 #   zygisk   state=<verdict> coverage=<start_latest|...> ..._delta=<n|unknown>  (fix275)
+#   zygov    coverage=<start_latest|...> ..._delta=<n|unknown>  (governor-side actions)
 #   wl       pkg=<package>  sec=<n>            (up to 5 rows, worst first)
 #   wl       none=1                            (nothing recorded)
 #   wlive    tag=<cleaned tag>  pct=<n>  min=<n>  pkg=<package|''>   (up to 3 rows)
@@ -46,7 +49,8 @@
 #   crash    count=<n>  asb=<n>  latest=<cmdline|none>  ltime=<HH:MM>
 #   sysui    count=<n>
 #   thermal  cpu=<n>  surf=<n>
-#   heat     peak_phase=<name>  peak_c=<n>  warm_min=<n>  skin_min=<n>   (durations hot, fix213; peak_c fix218)
+#   heat     peak_phase=<name>  peak_c=<n>  warm_min=<n>  skin_min=<n>
+#            warm_episodes=<n>  warm_run_min=<n>  (episode count and longest continuous run)
 #   throttle clamps=<n>  owner=<dominant>  by=<owner:n,...>   (per-owner split, fix219)
 #   radio    mib=<x.x>
 #   hist     started=<...>  night=<x.x>  drain=<x.x>  jank=<x.x>  cpu=<n>  clamps=<n>
@@ -199,18 +203,85 @@ if [ -f "$_ZY_S" ] || [ -f "$_ZY_L" ]; then
       add("packages", U["enabled_packages"]); add("abis", U["installed_abis"])
       add("lifecycle_hints", U["lifecycle_hints"]); add("launch_hints", U["launch_hints"]); add("spawn_ledger", U["spawn_ledger"])
       add("memory_kb", U["memory_kb"])
-      reset=0
-      nd=split("events_total spawn_events launch_events launch_accepted launch_vetoed launch_unavailable launch_throttled launch_long launch_short launch_class_fallback denylist_spawns policy_hints hints_accepted hints_vetoed hints_screen_off ledger_events events_dropped_total ipc_cpu_ms ipc_wakeups", keys, " ")
+      add("ledger_top_screen_off", U["ledger_top_screen_off"])
+      add("ledger_restart_loops", U["ledger_restart_loops"])
+      reset=0; launch_reset=0
+      nd=split("events_total spawn_events launch_events launch_accepted launch_vetoed launch_unavailable launch_throttled launch_screen_off launch_long launch_short launch_class_fallback denylist_spawns policy_hints hints_accepted hints_vetoed hints_screen_off ledger_events events_dropped_total ipc_cpu_ms ipc_wakeups", keys, " ")
+      # A decreasing cold-start outcome proves a restart/reset of the whole launch
+      # counter family. The total and the other outcomes can look monotonic by chance:
+      # an unchanged 10 -> 10 beside accepted 8 -> 9 and unavailable 2 -> 1 is not a
+      # zero-launch window. Keep independent spawn/ledger channels usable, but make
+      # every cold-start delta unknown rather than inventing a partial reconciliation.
+      for (i=1;i<=nd;i++) {
+        k=keys[i]; sv=SV[k]; lv=LV[k]
+        if (hs && hl && sv ~ /^[0-9]+$/ && lv ~ /^[0-9]+$/ && lv+0 < sv+0) {
+          reset=1
+          if (k ~ /^launch_/) launch_reset=1
+        }
+      }
       for (i=1;i<=nd;i++) {
         k=keys[i]; sv=SV[k]; lv=LV[k]
         if (hs && hl && sv ~ /^[0-9]+$/ && lv ~ /^[0-9]+$/ && lv+0 >= sv+0) d=lv-sv
-        else { d="unknown"; if (hs && hl && sv ~ /^[0-9]+$/ && lv ~ /^[0-9]+$/ && lv+0 < sv+0) reset=1 }
+        else d="unknown"
+        if (launch_reset && k ~ /^launch_/) d="unknown"
         add(k "_start", hs ? sv : "unknown"); add(k "_latest", hl ? lv : "unknown"); add(k "_delta", d)
       }
       add("deltas", hs && hl && !reset ? "available" : (reset ? "counter_reset_or_restart" : "unavailable"))
       print out
     }
     function add(k,v) { if (v == "") v="unknown"; gsub(/[\t\r\n]/, " ", v); out=out "\t" k "=" v }
+  ' "$@" 2>/dev/null
+fi
+
+# Governor-side outcome evidence. The companion's accepted counter is only an IPC
+# acknowledgement; these independent counters show whether the existing governor actually
+# armed, extended or shortened a cold-start lift. They still do not prove a cap write or
+# an A/B benefit. A governor restart resets the whole family, so one decrease invalidates
+# every governor-side delta instead of producing a partly reconciled interval.
+_ZG_S="$_DIR/before.txt"
+_ZG_L="$_DIR/after.txt"
+if [ -f "$_ZG_S" ] || [ -f "$_ZG_L" ]; then
+  set --
+  [ -f "$_ZG_S" ] && set -- "$@" "$_ZG_S"
+  [ -f "$_ZG_L" ] && set -- "$@" "$_ZG_L"
+  awk -v SF="$_ZG_S" -v LF="$_ZG_L" '
+    function wanted(k) {
+      return k == "zygisk_launch_accepted" || k == "zygisk_launch_vetoed" ||
+             k == "zygisk_refresh_accepted" || k == "zygisk_refresh_vetoed" ||
+             k == "unlock_cold_lifts" || k == "unlock_cold_extends" ||
+             k == "unlock_cold_long" || k == "unlock_cold_trims"
+    }
+    FNR == 1 { inside=0 }
+    $0 == "--- state (key=value) ---" { inside=1; next }
+    inside && ($0 ~ /^--- / || $0 ~ /^===== /) { inside=0; next }
+    inside {
+      p=index($0, "="); if (p <= 1) next
+      k=substr($0,1,p-1); v=substr($0,p+1)
+      if (!wanted(k) || v !~ /^[0-9]+$/) next
+      if (FILENAME == SF) { SV[k]=v; hs=1 } else if (FILENAME == LF) { LV[k]=v; hl=1 }
+    }
+    END {
+      if (!hs && !hl) exit
+      cov=(hs && hl ? "start_latest" : (hl ? "latest_only" : "start_only"))
+      out="zygov"; add("coverage",cov)
+      nd=split("zygisk_launch_accepted zygisk_launch_vetoed zygisk_refresh_accepted zygisk_refresh_vetoed unlock_cold_lifts unlock_cold_extends unlock_cold_long unlock_cold_trims",keys," ")
+      reset=0
+      for (i=1;i<=nd;i++) {
+        k=keys[i]; sv=SV[k]; lv=LV[k]
+        if (hs && hl && sv ~ /^[0-9]+$/ && lv ~ /^[0-9]+$/ && lv+0 < sv+0) reset=1
+      }
+      for (i=1;i<=nd;i++) {
+        k=keys[i]; sv=SV[k]; lv=LV[k]
+        if (!reset && hs && hl && sv ~ /^[0-9]+$/ && lv ~ /^[0-9]+$/ && lv+0 >= sv+0) d=lv-sv
+        else d="unknown"
+        add(k "_start",hs && sv ~ /^[0-9]+$/ ? sv : "unknown")
+        add(k "_latest",hl && lv ~ /^[0-9]+$/ ? lv : "unknown")
+        add(k "_delta",d)
+      }
+      add("deltas",hs && hl && !reset ? "available" : (reset ? "counter_reset_or_restart" : "unavailable"))
+      print out
+    }
+    function add(k,v) { if (v == "") v="unknown"; gsub(/[\t\r\n]/," ",v); out=out "\t" k "=" v }
   ' "$@" 2>/dev/null
 fi
 
@@ -232,6 +303,21 @@ if [ -f "$_DIR/env.txt" ]; then
   _m2() { sed -n "s/^$1:[[:space:]]*//p" "$_DIR/env.txt" 2>/dev/null | head -n 1 | tr -d '\t'; }
   printf 'meta2\tmodel=%s\tdevice=%s\tsoc=%s\trom=%s\tmod=%s\n' \
     "$(_m2 model)" "$(_m2 device)" "$(_m2 soc_model)" "$(_m2 oem_build)" "$(_m2 module_version)"
+fi
+
+# Direct cap readback observations already collected at finalization. These are snapshots,
+# not unique writes: vendor_raised/vendor_clamp describe an external override, not an ASB
+# failure or an energy outcome. Keep the residual bucket visible instead of dropping an
+# unfamiliar future verdict.
+if [ -s "$_DIR/cap_verify.txt" ]; then
+  awk '/^policy[0-9]+ .* -> / {
+    n++
+    if ($0 ~ /-> ok_asb_/) ok++
+    else if ($0 ~ /-> DESYNC_vendor_(clamp|raised)/) vendor++
+    else other++
+  } END {
+    if (n > 0) printf "capcheck\ttotal=%d\tok=%d\tvendor=%d\tother=%d\n", n, ok, vendor, other
+  }' "$_DIR/cap_verify.txt" 2>/dev/null
 fi
 
 # ----- cover (screen on/off split, time-weighted) ---------------------------
@@ -374,10 +460,21 @@ if [ "$_HAVE_LEDGER" = "1" ]; then
   _h_trace_heat=""
   [ -s "$_DIR/battery_trace.txt" ] && _h_trace_heat="$(awk -F'|' '
     $1 ~ /^[0-9]+$/ {
-      if (pe != "") { dt = $1 - pe; if (dt > 0 && dt <= 300) { n++; if (pc >= 45) w += dt; if (ps >= 40) k += dt } }
+      if (pe != "") {
+        dt = $1 - pe
+        if (dt > 0 && dt <= 300) {
+          n++
+          if (pc >= 45) {
+            w += dt
+            if (!warm) { episodes++; run = 0 }
+            warm = 1; run += dt; if (run > longest) longest = run
+          } else { warm = 0; run = 0 }
+          if (ps >= 40) k += dt
+        } else { warm = 0; run = 0 }
+      }
       pe = $1; pc = $10 + 0; ps = $12 + 0
     }
-    END { if (n >= 10) printf "%d %d\n", w / 60, k / 60 }' "$_DIR/battery_trace.txt" 2>/dev/null)"
+    END { if (n >= 10) printf "%d %d %d %d\n", w / 60, k / 60, episodes, longest / 60 }' "$_DIR/battery_trace.txt" 2>/dev/null)"
   _cat_ledger | awk -F'\t' -v th="$_h_trace_heat" '
     /^#/ { next }
     ($3 - $2) <= 0 { next }
@@ -389,9 +486,9 @@ if [ "$_HAVE_LEDGER" = "1" ]; then
       if (s >= 40) sm += dur
     }
     END {
-      if (th != "") { split(th, tv, " "); cm = tv[1] + 0; sm = tv[2] + 0 }
+      if (th != "") { split(th, tv, " "); cm = tv[1] + 0; sm = tv[2] + 0; ce = tv[3] + 0; cl = tv[4] + 0 }
       if (mp == "") { mp = mpa; mcn = mc }
-      if (mc > 0) printf "heat\tpeak_phase=%s\tpeak_c=%d\twarm_min=%d\tskin_min=%d\n", mp, mcn, cm, sm
+      if (mc > 0) printf "heat\tpeak_phase=%s\tpeak_c=%d\twarm_min=%d\tskin_min=%d\twarm_episodes=%d\twarm_run_min=%d\n", mp, mcn, cm, sm, ce, cl
     }' 2>/dev/null
 
   # ----- radio traffic -------------------------------------------------------
@@ -1104,6 +1201,19 @@ if [ -f "$_RPT" ]; then
   if [ -n "$_lt" ]; then
     printf 'ltpo\tn=%s\tmin=%s\n' "${_lt% *}" "${_lt#* }"
   fi
+  # Wi-Fi Leave's own action counters. A recovered failing streak is not a release and
+  # none of these numbers proves a network or battery benefit.
+  awk '/^releases: [0-9]+ / {
+      releases=$2
+      x=$0; sub(/^.*\(out of range /, "", x); out_range=x+0
+      x=$0; sub(/^.*no internet /, "", x); no_internet=x+0
+      x=$0; sub(/^.*given back after the window: /, "", x); returned=x+0
+      x=$0; sub(/^.*could not disable: /, "", x); failed=x+0
+    }
+    /^failing streaks that recovered before a release: [0-9]+/ { recovered=$NF }
+    END {
+      if (releases != "") printf "wifileave\treleases=%d\tout_of_range=%d\tno_internet=%d\treturned=%d\tfailed=%d\trecovered=%d\n", releases, out_range, no_internet, returned, failed, recovered
+    }' "$_RPT" 2>/dev/null
   # Always-on display share of screen-off time (fix206): "always-on display: X of Y
   # screen-off samples had the panel lit ..." - AOD is a steady idle drain worth naming.
   _ao="$(sed -n 's/^always-on display: \([0-9][0-9]*\) of \([0-9][0-9]*\) screen-off samples had the panel lit.*/\1 \2/p' "$_RPT" 2>/dev/null | head -n 1)"
@@ -1117,12 +1227,17 @@ if [ -s "$_DIR/smart_records.txt" ]; then
   _sm="$(grep -m1 '^smooth|' "$_DIR/smart_records.txt" 2>/dev/null)"
   if [ -n "$_sm" ]; then
     _cl="$(awk -F'|' '$1 ~ /^(off_night|off_day|on_light_dim|on_light_bright|on_medium_dim|on_medium_bright)$/ && $2 != "measuring" { n++ } END { print n + 0 }' "$_DIR/smart_records.txt" 2>/dev/null)"
-    printf 'smart\twatching=%s\ttesting=%s\thelped=%s\tnothelped=%s\tctxlearn=%s\n' \
-      "$(printf '%s' "$_sm" | sed -n 's/.*watching=\([0-9]*\).*/\1/p')" \
-      "$(printf '%s' "$_sm" | sed -n 's/.*|testing=\([0-9]*\).*/\1/p')" \
-      "$(printf '%s' "$_sm" | sed -n 's/.*helped=\([0-9]*\).*/\1/p')" \
-      "$(printf '%s' "$_sm" | sed -n 's/.*not_helped=\([0-9]*\).*/\1/p')" \
-      "${_cl:-0}"
+    # Split pipe-delimited fields by their exact names. A greedy .*helped= match used to
+    # read not_helped as helped and could invent retained headroom that Smart never kept.
+    printf '%s\n' "$_sm" | awk -F'|' -v ctx="${_cl:-0}" '
+      { for (i = 1; i <= NF; i++) {
+          split($i, kv, "=")
+          if (kv[1] == "watching") watching = kv[2]
+          else if (kv[1] == "testing") testing = kv[2]
+          else if (kv[1] == "helped") helped = kv[2]
+          else if (kv[1] == "not_helped") nothelped = kv[2]
+        } }
+      END { printf "smart\twatching=%d\ttesting=%d\thelped=%d\tnothelped=%d\tctxlearn=%d\n", watching, testing, helped, nothelped, ctx }'
   fi
   # ----- night habits (fix213, audit 8.8) ---------------------------------------
   # The microwake learner's summary rides in the same file. A reassuring fact the page
@@ -1131,8 +1246,9 @@ if [ -s "$_DIR/smart_records.txt" ]; then
   _mw="$(grep -m1 '^microwake|' "$_DIR/smart_records.txt" 2>/dev/null)"
   if [ -n "$_mw" ]; then
     _mwn="$(printf '%s' "$_mw" | sed -n 's/.*learned=\([0-9]*\).*/\1/p')"
-    [ -n "$_mwn" ] && printf 'mwake\tn=%s\tper_night=%s\ttypical_s=%s\n' \
-      "$_mwn" \
+    _mw_nights="$(printf '%s' "$_mw" | sed -n 's/.*nights=\([0-9]*\).*/\1/p')"
+    [ -n "$_mwn" ] && printf 'mwake\tn=%s\tnights=%s\tper_night=%s\ttypical_s=%s\n' \
+      "$_mwn" "${_mw_nights:-unknown}" \
       "$(printf '%s' "$_mw" | sed -n 's/.*per_night=\([0-9.]*\).*/\1/p')" \
       "$(printf '%s' "$_mw" | sed -n 's/.*typical_s=\([0-9]*\).*/\1/p')"
   fi
