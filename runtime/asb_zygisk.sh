@@ -11,6 +11,7 @@ DISABLE="$ZDIR/disable"
 POLICY="${ASB_ZYGISK_POLICY:-$MODDIR/zygisk/policy}"
 AUTO="$ZDIR/auto"
 AUTO_BACKUP="$ZDIR/packages.before_auto"
+AUTO_PREV="$ZDIR/auto.before"
 AUTO_RUN="${ASB_ZYGISK_RUN_DIR:-/dev/.asb/zygisk}"
 AUTO_COUNT="${ASB_ZYGISK_AOT_COUNT:-${ZDIR%/*}/zygisk_aot_count}"
 CLASSES="${ASB_ZYGISK_CLASSES:-${POLICY%/*}/classes}"
@@ -89,7 +90,35 @@ _zygisk_cfg() {
 _zygisk_classes() {
   [ -f "$MODDIR/runtime/asb_zygisk_link.sh" ] || return 0
   MODDIR="$MODDIR" ASB_ZL_DIR="${ZDIR%/*}" ASB_ZYGISK_CLASSES="$CLASSES" sh "$MODDIR/runtime/asb_zygisk_link.sh" classes --no-scan >/dev/null 2>&1
+}
+
+# Policy and classes are one native input contract. Keep their previous pair until both
+# writers succeed; a half-applied launch policy is worse than refusing the update.
+_zygisk_sync_backup() {
+  rm -f "$POLICY.rollback.tmp" "$CLASSES.rollback.tmp" 2>/dev/null
+  if [ -f "$POLICY" ]; then
+    cp "$POLICY" "$POLICY.rollback.tmp" 2>/dev/null || { rm -f "$POLICY.rollback.tmp"; return 1; }
+  fi
+  if [ -f "$CLASSES" ]; then
+    cp "$CLASSES" "$CLASSES.rollback.tmp" 2>/dev/null || { rm -f "$POLICY.rollback.tmp" "$CLASSES.rollback.tmp"; return 1; }
+  fi
   return 0
+}
+_zygisk_sync_restore() {
+  if [ -f "$POLICY.rollback.tmp" ]; then
+    cp "$POLICY.rollback.tmp" "$POLICY.restore.tmp" 2>/dev/null && mv -f "$POLICY.restore.tmp" "$POLICY" 2>/dev/null
+  else
+    rm -f "$POLICY" 2>/dev/null
+  fi
+  if [ -f "$CLASSES.rollback.tmp" ]; then
+    cp "$CLASSES.rollback.tmp" "$CLASSES.restore.tmp" 2>/dev/null && mv -f "$CLASSES.restore.tmp" "$CLASSES" 2>/dev/null
+  else
+    rm -f "$CLASSES" 2>/dev/null
+  fi
+  rm -f "$POLICY.rollback.tmp" "$CLASSES.rollback.tmp" "$POLICY.restore.tmp" "$CLASSES.restore.tmp" 2>/dev/null
+}
+_zygisk_sync_done() {
+  rm -f "$POLICY.rollback.tmp" "$CLASSES.rollback.tmp" 2>/dev/null
 }
 
 _zygisk_sync() {
@@ -104,14 +133,20 @@ _zygisk_sync() {
   _s_pkgs="$(_zygisk_list)"
   _s_obs=0
   [ -n "$_s_pkgs" ] && _s_obs=1
+  _zygisk_sync_backup || { echo 'policy=backup_failed'; return 1; }
   if [ "$_s_en" != 1 ] || [ -e "$DISABLE" ] || { [ -n "$_s_mode" ] && [ "$_s_mode" != observer ]; } || \
      { [ "$_s_obs" = 0 ] && [ "$_s_launch" = 0 ] && [ "$_s_ledger" = 0 ]; }; then
     rm -f "$POLICY" "$POLICY.tmp" "$CLASSES" "$CLASSES.tmp" 2>/dev/null
-    _zygisk_classes
+    if ! _zygisk_classes; then
+      _zygisk_sync_restore
+      echo 'policy=rolled_back reason=classes_write_failed'
+      return 1
+    fi
+    _zygisk_sync_done
     echo 'policy=absent'
     return 0
   fi
-  [ -d "${POLICY%/*}" ] || { echo 'policy=unavailable'; return 1; }
+  [ -d "${POLICY%/*}" ] || { _zygisk_sync_done; echo 'policy=unavailable'; return 1; }
   _s_gen="$(date +%s 2>/dev/null)"
   case "$_s_gen" in ''|*[!0-9]*) _s_gen=1 ;; esac
   {
@@ -120,11 +155,16 @@ _zygisk_sync() {
     printf '%s\n' "$_s_pkgs" | while IFS= read -r _s_p; do
       if [ -n "$_s_p" ]; then printf 'pkg=%s\n' "$_s_p"; fi
     done
-  } > "$POLICY.tmp" 2>/dev/null || { rm -f "$POLICY.tmp" 2>/dev/null; echo 'policy=write_failed'; return 1; }
+  } > "$POLICY.tmp" 2>/dev/null || { rm -f "$POLICY.tmp" 2>/dev/null; _zygisk_sync_done; echo 'policy=write_failed'; return 1; }
   chmod 644 "$POLICY.tmp" 2>/dev/null || true
   chcon u:object_r:system_file:s0 "$POLICY.tmp" 2>/dev/null || true
-  mv -f "$POLICY.tmp" "$POLICY" 2>/dev/null || { rm -f "$POLICY.tmp" 2>/dev/null; echo 'policy=write_failed'; return 1; }
-  _zygisk_classes
+  mv -f "$POLICY.tmp" "$POLICY" 2>/dev/null || { rm -f "$POLICY.tmp" 2>/dev/null; _zygisk_sync_done; echo 'policy=write_failed'; return 1; }
+  if ! _zygisk_classes; then
+    _zygisk_sync_restore
+    echo 'policy=rolled_back reason=classes_write_failed'
+    return 1
+  fi
+  _zygisk_sync_done
   echo "policy=written gen=$_s_gen observer=$_s_obs hints=$_s_hints launch=$_s_launch ledger=$_s_ledger"
 }
 
@@ -174,23 +214,104 @@ _zygisk_auto_config() {
     zygisk_enabled "$1" zygisk_hints "$2" zygisk_launch "$3" zygisk_ledger "$4"
 }
 
-_zygisk_auto_enable() {
-  [ ! -e "$DISABLE" ] || { echo 'result=safe_mode'; return 3; }
-  [ -f "$MODDIR/runtime/asb_zygisk_guard.sh" ] && [ -f "$MODDIR/runtime/asb_zygisk_aot.sh" ] || { echo 'result=unavailable'; return 1; }
-  _zygisk_prepare || { echo 'result=failed'; return 1; }
-  if [ ! -e "$AUTO" ] && [ ! -e "$AUTO_BACKUP" ]; then
-    [ -f "$LIST" ] || true > "$LIST"
-    cp "$LIST" "$AUTO_BACKUP" 2>/dev/null || { echo 'result=failed'; return 1; }
-    chmod 600 "$AUTO_BACKUP" 2>/dev/null || true
+_zygisk_auto_mode() {
+  _am="$(sed -n 's/^mode=//p' "$AUTO" 2>/dev/null | head -n 1)"
+  case "$_am" in observe|launch|battery) echo "$_am" ;; *) [ -e "$AUTO" ] && echo legacy || echo off ;; esac
+}
+_zygisk_guard_apply() {
+  [ -f "$MODDIR/runtime/asb_zygisk_guard.sh" ] || { [ "$1" = off ]; return; }
+  if [ "$1" = off ]; then
+    MODDIR="$MODDIR" ASB_ZG_DIR="${ASB_ZG_DIR:-${ZDIR%/*}}" ASB_ZYGISK_RUN_DIR="$AUTO_RUN" sh "$MODDIR/runtime/asb_zygisk_guard.sh" disable >/dev/null 2>&1
+  else
+    MODDIR="$MODDIR" ASB_ZG_DIR="${ASB_ZG_DIR:-${ZDIR%/*}}" ASB_ZYGISK_RUN_DIR="$AUTO_RUN" sh "$MODDIR/runtime/asb_zygisk_guard.sh" enable "$1" >/dev/null 2>&1
   fi
-  _zygisk_auto_apply_list || { echo 'result=failed'; return 1; }
-  _zygisk_auto_config 1 1 1 1 >/dev/null 2>&1 || { echo 'result=config_refused'; return 1; }
-  _zygisk_sync >/dev/null 2>&1 || { echo 'result=policy_failed'; return 1; }
-  MODDIR="$MODDIR" ASB_ZG_DIR="${ASB_ZG_DIR:-${ZDIR%/*}}" ASB_ZYGISK_RUN_DIR="$AUTO_RUN" sh "$MODDIR/runtime/asb_zygisk_guard.sh" enable wakers >/dev/null 2>&1 || { echo 'result=guard_failed'; return 1; }
-  MODDIR="$MODDIR" ASB_ZA_DIR="${ASB_ZA_DIR:-${ZDIR%/*}}" ASB_ZYGISK_RUN_DIR="$AUTO_RUN" sh "$MODDIR/runtime/asb_zygisk_aot.sh" enable >/dev/null 2>&1 || { echo 'result=aot_failed'; return 1; }
-  { echo 'version=1'; _at="$(date +%s 2>/dev/null)"; case "$_at" in ''|*[!0-9]*) _at=0 ;; esac; echo "updated=$_at"; } > "$AUTO.tmp" 2>/dev/null && mv -f "$AUTO.tmp" "$AUTO" || { echo 'result=failed'; return 1; }
+}
+_zygisk_aot_apply() {
+  [ -f "$MODDIR/runtime/asb_zygisk_aot.sh" ] || { [ "$1" = 0 ]; return; }
+  if [ "$1" = 1 ]; then
+    [ -f "${ASB_ZA_DIR:-${ZDIR%/*}}/zygisk_aot" ] || MODDIR="$MODDIR" ASB_ZA_DIR="${ASB_ZA_DIR:-${ZDIR%/*}}" ASB_ZYGISK_RUN_DIR="$AUTO_RUN" sh "$MODDIR/runtime/asb_zygisk_aot.sh" enable >/dev/null 2>&1
+  else
+    MODDIR="$MODDIR" ASB_ZA_DIR="${ASB_ZA_DIR:-${ZDIR%/*}}" ASB_ZYGISK_RUN_DIR="$AUTO_RUN" sh "$MODDIR/runtime/asb_zygisk_aot.sh" disable >/dev/null 2>&1
+  fi
+}
+_zygisk_auto_prev() {
+  _pv="$(sed -n "s/^$1=//p" "$AUTO_PREV" 2>/dev/null | head -n 1)"
+  case "$_pv" in ''|*[!A-Za-z0-9_-]*) _pv="$2" ;; esac
+  echo "$_pv"
+}
+_zygisk_auto_backup_state() {
+  [ -e "$AUTO" ] || [ -e "$AUTO_PREV" ] && return 0
+  _zygisk_prepare || return 1
+  [ -f "$LIST" ] || true > "$LIST" || return 1
+  cp "$LIST" "$AUTO_BACKUP" 2>/dev/null || return 1
+  _bg=off
+  if [ -f "${ASB_ZG_DIR:-${ZDIR%/*}}/zygisk_guard" ]; then
+    _bg="$(head -n 1 "${ASB_ZG_DIR:-${ZDIR%/*}}/zygisk_guard" 2>/dev/null)"
+    case "$_bg" in loops|wakers) ;; *) _bg=loops ;; esac
+  fi
+  _ba=0; [ -f "${ASB_ZA_DIR:-${ZDIR%/*}}/zygisk_aot" ] && _ba=1
+  {
+    echo 'version=1'
+    echo "enabled=$(_zygisk_cfg zygisk_enabled)"
+    echo "hints=$(_zygisk_cfg zygisk_hints)"
+    echo "launch=$(_zygisk_cfg zygisk_launch)"
+    echo "ledger=$(_zygisk_cfg zygisk_ledger)"
+    echo "guard=$_bg"
+    echo "aot=$_ba"
+  } > "$AUTO_PREV.tmp" 2>/dev/null && mv -f "$AUTO_PREV.tmp" "$AUTO_PREV" || return 1
+  chmod 600 "$AUTO_BACKUP" "$AUTO_PREV" 2>/dev/null || true
+}
+_zygisk_auto_restore_state() {
+  _rr=0
+  _zygisk_prepare || return 1
+  set --
+  if [ -r "$AUTO_BACKUP" ]; then
+    while IFS= read -r _rp; do [ -n "$_rp" ] && set -- "$@" "$_rp"; done < "$AUTO_BACKUP"
+    _zygisk_set_packages "$@" || _rr=1
+  fi
+  _zygisk_auto_config "$(_zygisk_auto_prev enabled 0)" "$(_zygisk_auto_prev hints 0)" \
+    "$(_zygisk_auto_prev launch 0)" "$(_zygisk_auto_prev ledger 0)" >/dev/null 2>&1 || _rr=1
+  _zygisk_guard_apply "$(_zygisk_auto_prev guard off)" || _rr=1
+  _zygisk_aot_apply "$(_zygisk_auto_prev aot 0)" || _rr=1
+  _zygisk_sync >/dev/null 2>&1 || _rr=1
+  return "$_rr"
+}
+_zygisk_auto_cleanup() {
+  rm -f "$AUTO" "$AUTO.tmp" "$AUTO_BACKUP" "$AUTO_PREV" "$AUTO_PREV.tmp" "$ZDIR/auto-usage.tmp" "$ZDIR/packages.auto.tmp" 2>/dev/null
+}
+_zygisk_auto_rollback() {
+  _zygisk_auto_restore_state; _rc=$?
+  [ "$_rc" = 0 ] || { echo 'result=restore_failed'; return 1; }
+  _zygisk_auto_cleanup
+  echo 'result=rolled_back'
+  return 1
+}
+
+_zygisk_auto_enable() {
+  _mode="${1:-observe}"
+  case "$_mode" in observe|launch|battery) ;; *) echo 'result=bad_request'; return 2 ;; esac
+  [ ! -e "$DISABLE" ] || { echo 'result=safe_mode'; return 3; }
+  [ "$_mode" != battery ] || [ -f "$MODDIR/runtime/asb_zygisk_guard.sh" ] || { echo 'result=unavailable'; return 1; }
+  _zygisk_auto_backup_state || { echo 'result=failed'; return 1; }
+  _old_mode="$(_zygisk_auto_mode)"
+  _zygisk_auto_apply_list >/dev/null || { echo 'result=failed'; return 1; }
+  case "$_mode" in
+    observe|battery) _zygisk_auto_config 1 0 0 1 >/dev/null 2>&1 || { _zygisk_auto_rollback; return 1; } ;;
+    launch) _zygisk_auto_config 1 0 1 1 >/dev/null 2>&1 || { _zygisk_auto_rollback; return 1; } ;;
+  esac
+  _zygisk_sync >/dev/null 2>&1 || { _zygisk_auto_rollback; return 1; }
+  if [ "$_mode" = battery ]; then
+    _zygisk_guard_apply wakers || { _zygisk_auto_rollback; return 1; }
+  else
+    case "$_old_mode" in battery|legacy) _zygisk_guard_apply off || { _zygisk_auto_rollback; return 1; } ;; esac
+  fi
+  # ART is never an implicit part of a new automatic profile. Only the old combined
+  # automatic mode owned an ART flag; selecting a new profile withdraws that legacy ownership.
+  [ "$_old_mode" != legacy ] || _zygisk_aot_apply 0 || { _zygisk_auto_rollback; return 1; }
+  { echo 'version=2'; echo "mode=$_mode"; _at="$(date +%s 2>/dev/null)"; case "$_at" in ''|*[!0-9]*) _at=0 ;; esac; echo "updated=$_at"; } > "$AUTO.tmp" 2>/dev/null && mv -f "$AUTO.tmp" "$AUTO" || { _zygisk_auto_rollback; return 1; }
   chmod 600 "$AUTO" 2>/dev/null || true
   echo 'result=enabled'
+  echo "profile=$_mode"
   echo "packages=$(_zygisk_list | wc -l | tr -d ' ')"
 }
 
@@ -202,23 +323,13 @@ _zygisk_auto_refresh() {
     _zygisk_sync >/dev/null 2>&1 || { echo 'result=policy_failed'; return 1; }
   fi
   echo 'result=refreshed'
+  echo "profile=$(_zygisk_auto_mode)"
   echo "packages=$(_zygisk_list | wc -l | tr -d ' ')"
 }
 
 _zygisk_auto_disable() {
-  [ -f "$MODDIR/runtime/asb_zygisk_guard.sh" ] && MODDIR="$MODDIR" ASB_ZG_DIR="${ASB_ZG_DIR:-${ZDIR%/*}}" ASB_ZYGISK_RUN_DIR="$AUTO_RUN" sh "$MODDIR/runtime/asb_zygisk_guard.sh" disable >/dev/null 2>&1
-  [ -f "$MODDIR/runtime/asb_zygisk_aot.sh" ] && MODDIR="$MODDIR" ASB_ZA_DIR="${ASB_ZA_DIR:-${ZDIR%/*}}" ASB_ZYGISK_RUN_DIR="$AUTO_RUN" sh "$MODDIR/runtime/asb_zygisk_aot.sh" disable >/dev/null 2>&1
-  _zygisk_prepare || return 1
-  set --
-  if [ -r "$AUTO_BACKUP" ]; then
-    while IFS= read -r _rp; do
-      [ -n "$_rp" ] && set -- "$@" "$_rp"
-    done < "$AUTO_BACKUP"
-  fi
-  _zygisk_set_packages "$@" || { echo 'result=restore_failed'; return 1; }
-  _zygisk_auto_config 0 0 0 0 >/dev/null 2>&1 || { echo 'result=config_refused'; return 1; }
-  _zygisk_sync >/dev/null 2>&1 || true
-  rm -f "$AUTO" "$AUTO.tmp" "$AUTO_BACKUP" "$ZDIR/auto-usage.tmp" "$ZDIR/packages.auto.tmp" 2>/dev/null
+  _zygisk_auto_restore_state || { echo 'result=restore_failed'; return 1; }
+  _zygisk_auto_cleanup
   echo 'result=disabled'
 }
 
@@ -230,7 +341,7 @@ case "${1:-}" in
     _zygisk_classes
     ;;
   auto-enable)
-    _zygisk_auto_enable
+    _zygisk_auto_enable "${2:-}"
     ;;
   auto-refresh)
     _zygisk_auto_refresh
@@ -289,10 +400,11 @@ case "${1:-}" in
     printf 'policy=%s\n' "$([ -s "$POLICY" ] && sed -n 's/^gen=//p' "$POLICY" | head -n 1 || echo absent)"
     printf 'safe_mode=%s\n' "$([ -e "$DISABLE" ] && echo on || echo off)"
     printf 'automatic=%s\n' "$([ -e "$AUTO" ] && echo on || echo off)"
+    printf 'automatic_profile=%s\n' "$(_zygisk_auto_mode)"
     printf 'packages=%s\n' "$(_zygisk_list | wc -l | tr -d ' ')"
     ;;
   *)
-    echo 'Usage: asb_zygisk.sh sync|classes|list|set-packages [pkg ...]|auto-enable|auto-refresh|auto-disable|enable|disable|safe-mode on|off|status|link-status' >&2
+    echo 'Usage: asb_zygisk.sh sync|classes|list|set-packages [pkg ...]|auto-enable [observe|launch|battery]|auto-refresh|auto-disable|enable|disable|safe-mode on|off|status|link-status' >&2
     exit 2
     ;;
 esac

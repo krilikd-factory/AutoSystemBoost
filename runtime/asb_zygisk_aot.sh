@@ -9,6 +9,7 @@ LAUNCH="$D/zygisk_aot_launch"
 SCAN="$D/zygisk_aot_scan"
 LOG="$D/zygisk_aot_log"
 LOCK="$D/zygisk_aot.lock"
+CHARGE="$D/zygisk_aot_charge"
 CLASSES="${ASB_ZYGISK_CLASSES:-$MODDIR/zygisk/classes}"
 POWER="${ASB_ZA_POWER:-/sys/class/power_supply/battery}"
 BOOTID="${ASB_ZA_BOOTID:-/proc/sys/kernel/random/boot_id}"
@@ -46,9 +47,28 @@ _charging() {
   return 1
 }
 _cool() {
-  _bt="$(tr -d ' \r\n' < "$POWER/temp" 2>/dev/null)"
-  case "$_bt" in ''|*[!0-9-]*) return 0 ;; esac
+  _bt=""; [ -r "$POWER/temp" ] && _bt="$(tr -d ' \r\n' < "$POWER/temp" 2>/dev/null)"
+  # Missing thermal evidence is not permission to compile on a charger.
+  case "$_bt" in ''|*[!0-9-]*) return 1 ;; esac
   [ "$_bt" -lt "$HOT" ]
+}
+_charge_session() {
+  _cs_state=0; _charging && _cs_state=1
+  _cs_boot="$(tr -d ' \r\n' < "$BOOTID" 2>/dev/null)"; _cs_boot="${_cs_boot:-unknown}"
+  _cs_old="$(sed -n 's/^state=//p' "$CHARGE" 2>/dev/null | head -n 1)"
+  _cs_oboot="$(sed -n 's/^boot=//p' "$CHARGE" 2>/dev/null | head -n 1)"
+  _cs_batch="$(sed -n 's/^batch=//p' "$CHARGE" 2>/dev/null | head -n 1)"
+  case "$_cs_batch" in 0|1) ;; *) _cs_batch=0 ;; esac
+  if [ "$_cs_state" != "$_cs_old" ] || [ "$_cs_boot" != "$_cs_oboot" ]; then
+    _cs_batch=0
+    mkdir -p "$D" 2>/dev/null
+    { echo "state=$_cs_state"; echo "batch=0"; echo "boot=$_cs_boot"; } > "$CHARGE.tmp" 2>/dev/null && mv -f "$CHARGE.tmp" "$CHARGE"
+  fi
+}
+_charge_batch_consume() {
+  [ "$_cs_state" = 1 ] && [ "$_cs_batch" = 0 ] || return 1
+  { echo 'state=1'; echo 'batch=1'; echo "boot=$_cs_boot"; } > "$CHARGE.tmp" 2>/dev/null && mv -f "$CHARGE.tmp" "$CHARGE" || return 1
+  _cs_batch=1
 }
 _running() {
   [ -d "$LOCK" ] || return 1
@@ -235,6 +255,7 @@ _compile_run() {
 }
 _tick() {
   [ -f "$ON" ] || return 0
+  _charge_session
   _sa="$(sed -n 's/^at=//p' "$SCAN" 2>/dev/null)"
   case "$_sa" in ''|*[!0-9]*) _sa=0 ;; esac
   if ! _screen_off || [ $(( $(_now) - _sa )) -ge 1800 ]; then _launch_scan; fi
@@ -243,6 +264,8 @@ _tick() {
   _charging && _screen_off && _cool || return 0
   _running && return 0
   [ -n "$(_candidates)" ] || return 0
+  [ "$_cs_batch" = 0 ] || return 0
+  _charge_batch_consume || return 0
   if [ "${ASB_ZA_SYNC:-0}" = 1 ]; then _compile_run; else MODDIR="$MODDIR" sh "$0" compile-run >/dev/null 2>&1 & fi
 }
 _status() {
@@ -252,6 +275,8 @@ _status() {
   _charging && echo 'charging=1' || echo 'charging=0'
   _screen_off && echo 'screen=0' || echo 'screen=1'
   _running && echo 'running=1' || echo 'running=0'
+  _csb="$(sed -n 's/^batch=//p' "$CHARGE" 2>/dev/null | head -n 1)"
+  case "$_csb" in 0) echo 'last_charge_batch=available' ;; 1) echo 'last_charge_batch=used' ;; *) echo 'last_charge_batch=unknown' ;; esac
   _ck="$(head -n 1 "$APPS" 2>/dev/null | cut -d'|' -f5)"
   echo "checked=${_ck:-0}"
   _lc="$(grep -c '|' "$LAUNCH" 2>/dev/null)"
@@ -290,7 +315,7 @@ case "${1:-status}" in
   tick) _tick ;;
   scan) _launch_scan ;;
   compile-run) _compile_run ;;
-  restore-all) rm -rf "$ON" "$APPS" "$APPS.new" "$APPS.t" "$CUM" "$CUM.tmp" "$CUM.new" "$LAUNCH" "$LAUNCH.tmp" "$SCAN" "$LOG" "$LOG.tmp" "$LOCK" 2>/dev/null ;;
+  restore-all) rm -rf "$ON" "$APPS" "$APPS.new" "$APPS.t" "$CUM" "$CUM.tmp" "$CUM.new" "$LAUNCH" "$LAUNCH.tmp" "$SCAN" "$LOG" "$LOG.tmp" "$LOCK" "$CHARGE" "$CHARGE.tmp" 2>/dev/null ;;
   *) echo 'result=bad_request'; exit 2 ;;
 esac
 exit 0

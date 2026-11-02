@@ -1,5 +1,6 @@
 #!/system/bin/sh
 MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
+[ -f "$MODDIR/runtime/asb_settings.sh" ] && . "$MODDIR/runtime/asb_settings.sh"
 D="${ASB_ZG_DIR:-/data/adb/asb}"
 RUN="${ASB_ZYGISK_RUN_DIR:-/dev/.asb/zygisk}"
 TMPD="${ASB_ZG_TMP:-/dev/.asb}"
@@ -14,6 +15,9 @@ PREV="$TMPD/zygisk_guard.prev"
 PREVON="$TMPD/zygisk_guard.prev_on"
 BASE="$TMPD/zygisk_guard.base"
 SEEN="$TMPD/zygisk_guard.seen"
+PEND="$TMPD/zygisk_guard.pending"
+ONSESS="$TMPD/zygisk_guard.session_on"
+APPROVED="$D/zygisk_guard_approved"
 KEEP="${ASB_DOZE_KEEP:-$D/doze_whitelist_keep}"
 NFL="$D/notif_fix"
 LSPMOD="$D/zygisk_lsposed_modules"
@@ -25,6 +29,9 @@ HOLD_S="${ASB_ZG_ON_HOLD_S:-1800}"
 GDAYS="${ASB_ZG_GHOST_DAYS:-3}"
 GMIN="${ASB_ZG_GHOST_MIN:-30}"
 GEVERY="${ASB_ZG_GHOST_EVERY_S:-3600}"
+MINSESS="${ASB_ZG_MIN_SESSIONS:-2}"
+case "$MINSESS" in ''|*[!0-9]*) MINSESS=2 ;; esac
+[ "$MINSESS" -ge 2 ] 2>/dev/null || MINSESS=2
 
 _has() { command -v "$1" >/dev/null 2>&1; }
 _now() { date +%s 2>/dev/null || echo 0; }
@@ -102,6 +109,17 @@ _limit() {
   _lm="$(_pmode "$_lo" RUN_ANY_IN_BACKGROUND)"; _lm="${_lm:-default}"
   _lu="$(_umode "$_lo" RUN_ANY_IN_BACKGROUND)"; _lu="${_lu:-default}"
   case "$_lm$_lu" in *ignore*|*deny*) _note_once "$_lp" "$_ln" already_restricted; return 0 ;; esac
+  # Positive runtime evidence wins over the package-name heuristic. Empty/unknown output is
+  # not treated as proof that no service or permission exists; user confirmation is still required.
+  case "$_lo" in *'SCHEDULE_EXACT_ALARM: allow'*|*'USE_EXACT_ALARM: allow'*) _note_once "$_lp" "$_ln" protected_alarm; return 0 ;; esac
+  if dumpsys activity services "$_lp" 2>/dev/null | grep -qE 'isForeground=true|foregroundServiceTypes?=[1-9]'; then
+    _note_once "$_lp" "$_ln" protected_fgs; return 0
+  fi
+  if _has settings; then
+    _nl="$(settings get secure enabled_notification_listeners 2>/dev/null)"
+    _na="$(settings get secure enabled_notification_policy_access_packages 2>/dev/null)"
+    case "$_nl:$_na" in *"$_lp/"*|*"$_lp:"*|*"$_lp;"*) _note_once "$_lp" "$_ln" protected_notifications; return 0 ;; esac
+  fi
   appops set "$_lp" RUN_ANY_IN_BACKGROUND ignore >/dev/null 2>&1
   if [ "$(_pmode "$(_ops "$_lp")" RUN_ANY_IN_BACKGROUND)" = ignore ]; then
     mkdir -p "$D" 2>/dev/null
@@ -111,6 +129,37 @@ _limit() {
     appops set "$_lp" RUN_ANY_IN_BACKGROUND "$_lm" >/dev/null 2>&1
     _note_once "$_lp" "$_ln" refused
   fi
+}
+_pending_drop() {
+  [ -s "$PEND" ] || return 0
+  awk -F'|' -v p="$1" '$1 != p' "$PEND" > "$PEND.tmp" 2>/dev/null || return 0
+  if [ -s "$PEND.tmp" ]; then mv -f "$PEND.tmp" "$PEND"; else rm -f "$PEND" "$PEND.tmp"; fi
+}
+_guard_admit() {
+  _gp="$1"; _gn="$2"; _gw="$3"; _gt="$4"; _gx="$5"; _gs="$6"
+  grep -q "^$_gp|" "$ACT" 2>/dev/null && return 0
+  grep -q "^$_gp|" "$GHOST" 2>/dev/null && return 0
+  case "$_gs" in ''|*[!0-9]*) _gs=0 ;; esac
+  _gns=1; _gpr="$(grep -m1 "^$_gp|" "$PEND" 2>/dev/null)"
+  if [ -n "$_gpr" ]; then
+    _gns="$(printf '%s' "$_gpr" | cut -d'|' -f2)"
+    _gls="$(printf '%s' "$_gpr" | cut -d'|' -f3)"
+    case "$_gns" in ''|*[!0-9]*) _gns=1 ;; esac
+    [ "$_gls" = "$_gs" ] || _gns=$(( _gns + 1 ))
+  fi
+  mkdir -p "$TMPD" 2>/dev/null
+  awk -F'|' -v p="$_gp" '$1 != p' "$PEND" 2>/dev/null > "$PEND.tmp" 2>/dev/null || true
+  printf '%s|%s|%s|%s|%s|%s|%s\n' "$_gp" "$_gns" "$_gs" "$_gn" "$_gw" "$_gt" "$_gx" >> "$PEND.tmp" 2>/dev/null && mv -f "$PEND.tmp" "$PEND"
+  if [ "$_gns" -lt "$MINSESS" ]; then
+    _note_once "$_gp" "$_gn" evidence_session "$_gw"
+    return 0
+  fi
+  if ! grep -qxF "$_gp" "$APPROVED" 2>/dev/null; then
+    _note_once "$_gp" "$_gn" confirmation_required "$_gw"
+    return 0
+  fi
+  _limit "$_gp" "$_gn" "$_gw" "$_gt" "$_gx"
+  grep -q "^$_gp|" "$ACT" 2>/dev/null && _pending_drop "$_gp"
 }
 _since_limit() {
   case "$2" in ''|*[!0-9]*) return 0 ;; esac
@@ -274,6 +323,9 @@ _ghost_release_all() {
   rm -f "$GHOST" "$GHOST.t" 2>/dev/null
 }
 _tick_on() {
+  _on_now="$(_now)"
+  if [ ! -s "$ONSESS" ]; then mkdir -p "$TMPD" 2>/dev/null; echo "$_on_now" > "$ONSESS" 2>/dev/null; fi
+  _ons="$(head -n 1 "$ONSESS" 2>/dev/null)"; case "$_ons" in ''|*[!0-9]*) _ons="$_on_now" ;; esac
   _lift_rows screen_on off
   rm -f "$PREV" 2>/dev/null
   _lift_rows expired expired
@@ -286,7 +338,6 @@ _tick_on() {
       done
     fi
   fi
-  _on_now="$(_now)"
   _on_cur="$(_ledger_bg_on)"
   [ -n "$_on_cur" ] || return 0
   _on_pt="$(sed -n '1s/^t //p' "$PREVON" 2>/dev/null)"
@@ -310,7 +361,7 @@ _tick_on() {
     printf '%s\n' "$_on_u" | grep -qxF "$_op" || continue
     case "$(asb_pkg_proc_class "$_op")" in cached|background|none) ;; *) continue ;; esac
     if _protected "$_op"; then _note_once "$_op" "$_od" protected; continue; fi
-    _limit "$_op" "$_od" loop_on "$_ot" $(( _on_now + HOLD_S ))
+    _guard_admit "$_op" "$_od" loop_on "$_ot" $(( _on_now + HOLD_S )) "$_ons"
   done
 }
 _tick() {
@@ -320,13 +371,14 @@ _tick() {
   _ghost_check
   _ghost_scan
   if _screen_on; then _session_end; _tick_on; return 0; fi
-  rm -f "$PREVON" 2>/dev/null
+  rm -f "$PREVON" "$ONSESS" 2>/dev/null
   _lift_rows expired expired
   _now_t="$(_now)"
   _cur="$(_ledger)"
   [ -n "$_cur" ] || return 0
   mkdir -p "$TMPD" 2>/dev/null
   [ -s "$BASE" ] || { echo "t $_now_t"; printf '%s\n' "$_cur"; } > "$BASE" 2>/dev/null
+  _bs="$(sed -n '1s/^t //p' "$BASE" 2>/dev/null)"; case "$_bs" in ''|*[!0-9]*) _bs="$_now_t" ;; esac
   _pt="$(sed -n '1s/^t //p' "$PREV" 2>/dev/null)"
   sed '1d' "$PREV" > "$PREV.old" 2>/dev/null || rm -f "$PREV.old" 2>/dev/null
   { echo "t $_now_t"; printf '%s\n' "$_cur"; } > "$PREV.tmp" 2>/dev/null && mv -f "$PREV.tmp" "$PREV"
@@ -350,7 +402,7 @@ _tick() {
     _pkgok "$_cp" || continue
     printf '%s\n' "$_tu" | grep -qxF "$_cp" || continue
     if _protected "$_cp"; then _note_once "$_cp" "$_cn" protected; continue; fi
-    _limit "$_cp" "$_cn" "$_cw" "$_ct"
+    _guard_admit "$_cp" "$_cn" "$_cw" "$_ct" 0 "$_bs"
   done
 }
 _status() {
@@ -364,6 +416,16 @@ _status() {
   echo "ghost_min=$GMIN"
   echo "ghost_days=$GDAYS"
   echo "history_days10=$(_hist_days10)"
+  echo "sessions_required=$MINSESS"
+  if [ -s "$PEND" ]; then
+    while IFS='|' read -r _pp _ps _pl _pn _pw _pt _px; do
+      _pkgok "$_pp" || continue
+      case "$_ps$_pl$_pn$_pt$_px" in *[!0-9]*) continue ;; esac
+      case "$_pw" in loop|waker|loop_on) ;; *) continue ;; esac
+      _pa=0; grep -qxF "$_pp" "$APPROVED" 2>/dev/null && _pa=1
+      printf 'pending|%s|%s|%s|%s|%s\n' "$_pp" "$_ps" "$_pn" "$_pw" "$_pa"
+    done < "$PEND"
+  fi
   if [ -s "$ACT" ]; then
     _lc="$(_ledger)"; _lb="$(_ledger_bg_on)"
     while IFS='|' read -r _sp _sm _su _ss _sn _sw _st _sx; do
@@ -411,14 +473,28 @@ case "${1:-status}" in
   enable)
     case "${2:-loops}" in loops|wakers) ;; *) echo 'result=bad_request'; exit 2 ;; esac
     mkdir -p "$D" 2>/dev/null; printf '%s\n' "${2:-loops}" > "$ON" && { _hist_update; echo 'result=enabled'; } ;;
-  disable) rm -f "$ON" "$PREV" "$PREVON" "$BASE" "$SEEN" 2>/dev/null; _lift_all disabled; _ghost_release_all disabled; echo 'result=disabled' ;;
+  disable) rm -f "$ON" "$PREV" "$PREVON" "$BASE" "$SEEN" "$PEND" "$PEND.tmp" "$ONSESS" 2>/dev/null; _lift_all disabled; _ghost_release_all disabled; echo 'result=disabled' ;;
   tick) _tick ;;
   screen_on) _session_end; [ -s "$ACT" ] && _lift_rows screen_on off; rm -f "$PREV" 2>/dev/null ;;
+  approve)
+    _pkgok "$2" && grep -q "^$2|" "$PEND" 2>/dev/null || { echo 'result=not_pending'; exit 0; }
+    mkdir -p "$D" 2>/dev/null
+    grep -qxF "$2" "$APPROVED" 2>/dev/null || { echo "$2" >> "$APPROVED" 2>/dev/null; }
+    echo 'result=approved' ;;
+  release)
+    _pkgok "$2" && grep -q "^$2|" "$ACT" 2>/dev/null || { echo 'result=not_held'; exit 0; }
+    _lift_rows emergency pkg "$2"
+    _pending_drop "$2"
+    if [ -s "$APPROVED" ]; then
+      grep -vxF "$2" "$APPROVED" > "$APPROVED.tmp" 2>/dev/null && mv -f "$APPROVED.tmp" "$APPROVED"
+      [ -s "$APPROVED" ] || rm -f "$APPROVED" 2>/dev/null
+    fi
+    echo 'result=released' ;;
   ghost-restrict) [ -f "$ON" ] || { echo 'result=disabled'; exit 0; }; _ghost_restrict "$2" ;;
   ghost-release) _ghost_release "$2" released ;;
   restore-all)
     ASB_ZG_QUIET=1 _lift_all uninstall; ASB_ZG_QUIET=1 _ghost_release_all uninstall
-    rm -f "$ON" "$PREV" "$PREVON" "$BASE" "$SEEN" "$LOG" "$NIGHT" "$HIST" "$GHOST" "$GHC" "$GHC.tmp" "$HIST.tmp" "$HIST.new" 2>/dev/null ;;
+    rm -f "$ON" "$PREV" "$PREVON" "$BASE" "$SEEN" "$PEND" "$PEND.tmp" "$ONSESS" "$APPROVED" "$APPROVED.tmp" "$LOG" "$NIGHT" "$HIST" "$GHOST" "$GHC" "$GHC.tmp" "$HIST.tmp" "$HIST.new" 2>/dev/null ;;
   *) echo 'result=bad_request'; exit 2 ;;
 esac
 exit 0

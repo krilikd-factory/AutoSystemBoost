@@ -24,6 +24,11 @@ _asb_zygisk_info() {
   fi
   _zi_safe=off; [ -e "$_zi_dir/disable" ] && _zi_safe=on
   _zi_auto=0; [ -f "$_zi_dir/auto" ] && _zi_auto=1
+  _zi_auto_profile=off
+  if [ "$_zi_auto" = 1 ]; then
+    _zi_auto_profile="$(sed -n 's/^mode=//p' "$_zi_dir/auto" 2>/dev/null | head -n 1)"
+    case "$_zi_auto_profile" in observe|launch|battery) ;; *) _zi_auto_profile=legacy ;; esac
+  fi
   _zi_auto_updated="$(sed -n 's/^updated=//p' "$_zi_dir/auto" 2>/dev/null | head -n 1)"
   case "$_zi_auto_updated" in ''|*[!0-9]*) _zi_auto_updated=0 ;; esac
   _zi_packages=0; _zi_package_list=''
@@ -36,7 +41,7 @@ _asb_zygisk_info() {
   _zi_events=0; _zi_dropped=0; _zi_rate=0; _zi_duplicate=0; _zi_invalid=0; _zi_capacity=0
   _zi_cpu=0; _zi_wake=0; _zi_loaded=0; _zi_memory=0; _zi_seen_pids=' '; _zi_state=0; _zi_updated=0; _zi_boot_upd=0; _zi_mtime=0
   _zi_hints=0; _zi_accepted=0; _zi_vetoed=0; _zi_unavailable=0; _zi_throttled=0
-  _zi_spawn=0; _zi_l_events=0; _zi_l_ok=0; _zi_l_veto=0; _zi_l_none=0; _zi_l_thr=0
+  _zi_spawn=0; _zi_l_events=0; _zi_l_ok=0; _zi_l_veto=0; _zi_l_none=0; _zi_l_thr=0; _zi_l_off=0
   _zi_ledger_n=0; _zi_absent=0; _zi_seen_gen=0; _zi_ledger_rows=''
   _zi_l_long=0; _zi_l_short=0; _zi_l_fb=0; _zi_cls_on=0; _zi_cls_slow=0; _zi_cls_fast=0; _zi_deny=0; _zi_h_off=0
   for _zi_file in "$_zi_run/state.arm64-v8a.tsv" "$_zi_run/state.armeabi-v7a.tsv"; do
@@ -48,7 +53,7 @@ _asb_zygisk_info() {
       case "$_zi_type" in
         Z)
           case "$_zi_a" in
-            events_total|events_dropped_total|events_dropped_rate_limit|events_dropped_duplicate|events_dropped_invalid|events_dropped_capacity|ipc_cpu_ms|ipc_wakeups|policy_hints|hints_accepted|hints_vetoed|hints_unavailable|hints_throttled|updated_monotonic_ms|updated_boottime_ms|spawn_events|launch_events|launch_accepted|launch_vetoed|launch_unavailable|launch_throttled|ledger_events|events_policy_absent|policy_generation_seen|launch_long|launch_short|launch_class_fallback|classes_loaded|classes_slow|classes_fast|denylist_spawns|hints_screen_off)
+            events_total|events_dropped_total|events_dropped_rate_limit|events_dropped_duplicate|events_dropped_invalid|events_dropped_capacity|ipc_cpu_ms|ipc_wakeups|policy_hints|hints_accepted|hints_vetoed|hints_unavailable|hints_throttled|updated_monotonic_ms|updated_boottime_ms|spawn_events|launch_events|launch_accepted|launch_vetoed|launch_unavailable|launch_throttled|launch_screen_off|ledger_events|events_policy_absent|policy_generation_seen|launch_long|launch_short|launch_class_fallback|classes_loaded|classes_slow|classes_fast|denylist_spawns|hints_screen_off)
               case "$_zi_b" in ''|*[!0-9]*) continue ;; esac
               [ "${#_zi_b}" -le 18 ] || continue
               case "$_zi_a" in
@@ -73,6 +78,7 @@ _asb_zygisk_info() {
                 launch_vetoed) _zi_l_veto=$((_zi_l_veto + _zi_b)) ;;
                 launch_unavailable) _zi_l_none=$((_zi_l_none + _zi_b)) ;;
                 launch_throttled) _zi_l_thr=$((_zi_l_thr + _zi_b)) ;;
+                launch_screen_off) _zi_l_off=$((_zi_l_off + _zi_b)) ;;
                 ledger_events) _zi_ledger_n=$((_zi_ledger_n + _zi_b)) ;;
                 events_policy_absent) _zi_absent=$((_zi_absent + _zi_b)) ;;
                 policy_generation_seen) [ "$_zi_b" -gt "$_zi_seen_gen" ] && _zi_seen_gen="$_zi_b" ;;
@@ -179,6 +185,7 @@ _asb_zygisk_info() {
   _emit zygisk_observer policy_seen_generation "$_zi_seen_gen"
   _emit zygisk_observer safe_mode "$_zi_safe"
   _emit zygisk_observer auto_mode "$_zi_auto"
+  _emit zygisk_observer auto_profile "$_zi_auto_profile"
   _emit zygisk_observer auto_updated "$_zi_auto_updated"
   _emit zygisk_observer auto_package_basis 'user-installed apps only; top-app start history first, then package name; at most 64; observation only'
   _emit zygisk_observer framework_status 'not runtime-discoverable from process events alone'
@@ -217,6 +224,7 @@ _asb_zygisk_info() {
   _emit zygisk_observer launch_vetoed "$_zi_l_veto"
   _emit zygisk_observer launch_unavailable "$_zi_l_none"
   _emit zygisk_observer launch_throttled "$_zi_l_thr"
+  _emit zygisk_observer launch_screen_off "$_zi_l_off"
   _emit zygisk_observer launch_long "$_zi_l_long"
   _emit zygisk_observer launch_short "$_zi_l_short"
   _emit zygisk_observer launch_class_fallback "$_zi_l_fb"
