@@ -5259,6 +5259,8 @@ screen-off samples: 200
 
 always-on display: 11 of 520 screen-off samples had the panel lit (10 with Android display state doze)
 ltpo_video (lifetime): lowered 79 times, 11 min at the lower rate, 79 restored by touch
+releases: 2 (out of range 1, no internet 1) - Wi-Fi given back after the window: 2, could not disable: 0
+failing streaks that recovered before a release: 3
 kernel holder on the charger: rx_wake_lock 343 min
 kernel holder on the charger: qcom_rx_wakelock 13 min
 EOF
@@ -5288,12 +5290,19 @@ oem_build:       CPH2745_16.0.10.601(EX01)
 module_version:  V65-test
 EOF
 cat > "$CAP/smart_records.txt" <<EOF
-smooth|watching=3|testing=0|helped=0|not_helped=0
+# The exact field split matters: a greedy helped= match must never read not_helped.
+smooth|watching=15|testing=1|helped=0|not_helped=3
 off_night|ok|1760000000
 on_light_dim|ok|1760000001
 off_day|measuring|1760000002
 microwake|learned=14|nights=9|per_night=2.6|typical_s=38|usual=03:00-03:30
 EOF
+cat > "$CAP/cap_verify.txt" <<'EOF_CAP'
+policy0 (MAIN) actual_max=100 -> ok_asb_dynamic (actual = ASB's own request)
+policy6 (BIG) actual_max=100 -> ok_asb_dynamic (actual = ASB's own request)
+policy0 (MAIN) actual_max=90 -> DESYNC_vendor_clamp (asb_declared=100 actual=90)
+policy6 (BIG) actual_max=110 -> DESYNC_mismatch (profile=100 actual=110)
+EOF_CAP
 printf 'Cmdline: com.crashy.app\nsignal 11\n' > "$T/tomb/tombstone_01"; touch -d "@$((NOW-4000))" "$T/tomb/tombstone_01"
 printf 'Cmdline: /vendor/bin/hw/foo\nlibasbdsp x\n' > "$T/tomb/tombstone_02"; touch -d "@$((NOW-3000))" "$T/tomb/tombstone_02"
 printf 'Cmdline: old.crash\n' > "$T/tomb/tombstone_03"; touch -d "@$((NOW-200000))" "$T/tomb/tombstone_03"
@@ -5314,8 +5323,13 @@ printf '%s\n' "$out" | grep -q '^sysuiinj' && fail "restarts without injected co
 printf '%s\n' "$out" | grep -q '^thermal	cpu=41	surf=35$' || fail "thermal peaks"
 # fix213: device context, heat durations and night habits ride the same digest.
 printf '%s\n' "$out" | grep -q '^meta2	model=CPH2745	device=OP611FL1	soc=SM8850	rom=CPH2745_16.0.10.601(EX01)	mod=V65-test$' || fail "meta2 device context: $(printf '%s\n' "$out" | grep '^meta2')"
-printf '%s\n' "$out" | grep -q '^heat	peak_phase=active	peak_c=41	warm_min=0	skin_min=0$' || fail "heat detail: $(printf '%s\n' "$out" | grep '^heat')"
-printf '%s\n' "$out" | grep -q '^mwake	n=14	per_night=2.6	typical_s=38$' || fail "night habits: $(printf '%s\n' "$out" | grep '^mwake')"
+printf '%s\n' "$out" | grep -q '^heat	peak_phase=active	peak_c=41	warm_min=0	skin_min=0	warm_episodes=0	warm_run_min=0$' || fail "heat detail: $(printf '%s\n' "$out" | grep '^heat')"
+printf '%s\n' "$out" | grep -q '^mwake	n=14	nights=9	per_night=2.6	typical_s=38$' || fail "night habits: $(printf '%s\n' "$out" | grep '^mwake')"
+MW0="$T/mw-no-completed-night"; mkdir -p "$MW0"
+printf 'current_profile: smart\n' > "$MW0/env.txt"
+printf 'microwake|learned=53|nights=0|per_night=0.0|typical_s=23|usual=19:30-20:00\n' > "$MW0/smart_records.txt"
+mw0out="$(ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state0" ASB_CFG_FILE="$T/no-config" sh "$D" "$MW0")"
+printf '%s\n' "$mw0out" | grep -q '^mwake	n=53	nights=0	per_night=0.0	typical_s=23$' || fail "an unconfirmed-night record must retain nights=0: $(printf '%s\n' "$mw0out" | grep '^mwake')"
 printf '%s\n' "$out" | grep -q '^cfg	key=sustained_temp_mode	value=' || fail "the thermal setting is not in the advice snapshot"
 printf '%s\n' "$out" | grep -q '^throttle	clamps=2	owner=asb_governor	by=asb_governor:1,thermal:1$' || fail "throttle clamp periods: $(printf '%s\n' "$out" | grep '^throttle')"
 printf '%s\n' "$out" | grep -q '^radio	mib=17.5	on=16.4$' || fail "radio MiB with the screen-on share: $(printf '%s\n' "$out" | grep '^radio')"
@@ -5335,7 +5349,7 @@ printf '%s\n' "$out" | grep -q '^hz	mode=120	share=13	ma=380$' || fail "120 Hz r
 printf '%s\n' "$out" | grep -q '^asbcost	cpu_msh=1851	writes_h=176	wakes_h=491	wakes_on=	wakes_off=	noalarm=0$' || fail "ASB own cost: $(printf '%s\n' "$out" | grep '^asbcost')"
 printf '%s\n' "$out" | grep -q '^audio	spk_min=72	pctph=8.31	ma=362$' || fail "speaker audio cost"
 printf '%s\n' "$out" | grep -q '^charge	types=Fast(17) N/A(197)$' || fail "charge types"
-printf '%s\n' "$out" | grep -q '^smart	watching=3	testing=0	helped=0	nothelped=0	ctxlearn=2$' || fail "smart learner line"
+printf '%s\n' "$out" | grep -q '^smart	watching=15	testing=1	helped=0	nothelped=3	ctxlearn=2$' || fail "smart learner line must not confuse helped with not_helped: $(printf '%s\n' "$out" | grep '^smart')"
 printf '%s\n' "$out" | grep -q '^cfg	key=wakelock_action	value=0$' || fail "cfg snapshot for wakelock_action"
 printf '%s\n' "$out" | grep -q '^cfg	key=night_modem_idle	value=0$' || fail "cfg snapshot for night_modem_idle"
 # fix206: live wakelock holders from the power-manager samples, per-profile drain from
@@ -5348,6 +5362,8 @@ printf '%s\n' "$out" | grep -q '^prof	name=p	on_min=3	off_min=3	on_pctph=36.0	of
 printf '%s\n' "$out" | grep -q '^prof	name=b	on_min=3	off_min=0	on_pctph=36.0	off_pctph=0.0$' || fail "per-profile row b"
 printf '%s\n' "$out" | grep -q '^chg	min=60	gain=14	sess=1$' || fail "charging sessions: $(printf '%s\n' "$out" | grep '^chg')"
 printf '%s\n' "$out" | grep -q '^ltpo	n=79	min=11$' || fail "ltpo line"
+printf '%s\n' "$out" | grep -q '^capcheck	total=4	ok=2	vendor=1	other=1$' || fail "cap readback observations"
+printf '%s\n' "$out" | grep -q '^wifileave	releases=2	out_of_range=1	no_internet=1	returned=2	failed=0	recovered=3$' || fail "Wi-Fi Leave action counters"
 printf '%s\n' "$out" | grep -q '^aod	lit=11	of=520$' || fail "aod line"
 # fix207: the screen on/off split over the whole ledger (the figure that reconciles with
 # Monitor's tile), the per-phase breakdown and the kernel holders on the charger.
@@ -5378,7 +5394,7 @@ gap	$((NOW-4800))	$((NOW-4680))	88	88	52	33	1700	0	0	0	100	450	0	0	0
 EOF
 gout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state4" sh "$D" "$GAPP")" || fail "gap fixture digest exit"
 printf '%s\n' "$gout" | grep -q '^thermal	cpu=52	surf=35$' || fail "the true peak still reports: $(printf '%s\n' "$gout" | grep '^thermal')"
-printf '%s\n' "$gout" | grep -q '^heat	peak_phase=active	peak_c=41	warm_min=2	skin_min=0$' || fail "a gap must not be named the hottest phase: $(printf '%s\n' "$gout" | grep '^heat')"
+printf '%s\n' "$gout" | grep -q '^heat	peak_phase=active	peak_c=41	warm_min=2	skin_min=0	warm_episodes=0	warm_run_min=0$' || fail "a gap must not be named the hottest phase: $(printf '%s\n' "$gout" | grep '^heat')"
 grep -qF "((+heat.peak_c || 0) > 0 ? ' · ' + String(+heat.peak_c) + '°' : '')" "$H" || fail "the hottest-phase row lost its peak temperature"
 grep -qF ".replace(/\//g, '/\u2060');" "$H" || fail "the phase drain cell can orphan its unit again"
 # fix219: the throttle owner was the LAST period's owner - a capture with 3 ASB, 6
@@ -5534,6 +5550,7 @@ cat > "$ZC/zygisk_observer_start.tsv" <<'EOF_ZY_START'
 M	captured_epoch=100
 D	zygisk_observer	link_state	confirmed
 D	zygisk_observer	launch_throttled	0
+D	zygisk_observer	launch_screen_off	0
 D	zygisk_observer	launch_long	1
 D	zygisk_observer	launch_short	2
 D	zygisk_observer	launch_class_fallback	1
@@ -5544,6 +5561,7 @@ cat > "$ZC/zygisk_observer_latest.tsv" <<'EOF_ZY_LATEST'
 M	captured_epoch=200
 D	zygisk_observer	link_state	confirmed
 D	zygisk_observer	launch_throttled	6
+D	zygisk_observer	launch_screen_off	3
 D	zygisk_observer	launch_long	2
 D	zygisk_observer	launch_short	43
 D	zygisk_observer	launch_class_fallback	1
@@ -5551,7 +5569,7 @@ D	zygisk_observer	denylist_spawns	1135
 D	zygisk_observer	hints_screen_off	4
 EOF_ZY_LATEST
 zyout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST" sh "$D" "$ZC")"
-for field in launch_throttled_delta=6 launch_long_delta=1 launch_short_delta=41 launch_class_fallback_delta=0 denylist_spawns_delta=966 hints_screen_off_delta=4 deltas=available; do
+for field in launch_throttled_delta=6 launch_screen_off_delta=3 launch_long_delta=1 launch_short_delta=41 launch_class_fallback_delta=0 denylist_spawns_delta=966 hints_screen_off_delta=4 deltas=available; do
   printf '%s\n' "$zyout" | grep '^zygisk' | grep -q "	$field" || fail "observer counter projection: $field"
 done
 sed -i 's/launch_short	43/launch_short	1/' "$ZC/zygisk_observer_latest.tsv"
@@ -5568,7 +5586,7 @@ function T(k, d) { const L = I18N[ASB_LANG]; return (L && typeof L[k] === 'strin
 EOF
   for fn in Tcfg parseLogReport logReportT logReportDur logReportDurSec logReportAuthority logReportHolderWhat logReportIdleAwake logReportHolderName logReportTips \
     logReportSysuiSteady logReportJwhyShare logReportJwhyCause logReportJwhyTop logReportMiB logReportNetFix logReportLteIdle logReportFullCharge logReportScreenOnDrainState logReportAnalyze logReportHistoryComparable logReportMachineDigest logReportAnalysisT \
-    logReportTipText logReportRow logReportSec logReportNote logReportHero logReportTable logReportZygisk \
+    logReportTipText logReportRow logReportSec logReportNote logReportHero logReportTable logReportTweakEvidence logReportZygiskGovernor logReportZygisk \
     deviceVal deviceFill deviceZygiskLinkState deviceZygiskLinkVerdict deviceZygiskLink \
     logReportBrief logReportDxT logReportSelfPush logReportDiagnose logReportDiagSection logReportQualityPanel logReportRef logReportDomainRef logReportTipRef logReportDiagRef logReportAppendAnalysis logReportRender asbPageJump asbPageReference shQuote \
     asbPageClasses asbPageHas asbPageKids asbPageTxt asbPageWarn asbPageText asbPageStamp; do
@@ -5583,7 +5601,7 @@ const txt = [
   'meta2\tmodel=CPH2745\tdevice=OP611FL1\tsoc=SM8850\trom=TESTBUILD\tmod=V65-test',
   'capture\tdir=/storage/emulated/0/asb_log_full_day_test',
   'heat\tpeak_phase=active\tpeak_c=41\twarm_min=0\tskin_min=0',
-  'mwake\tn=14\tper_night=2.6\ttypical_s=38',
+  'mwake\tn=14\tnights=9\tper_night=2.6\ttypical_s=38',
   'hist\tstarted=2026-10-20 09:10\tnight=0.6\tdrain=2.4\tjank=5.1\tcpu=41\tclamps=2',
   'cover\ton_min=200\toff_min=520\ton_pct=27',
   'drain\tpctph=2.0\ttotal_drop=22\thours=10.8\tma=99',
@@ -5625,6 +5643,8 @@ const txt = [
   'hz\tmode=60\tshare=64\tma=264',
   'hz\tmode=90\tshare=23\tma=301',
   'hz\tmode=120\tshare=13\tma=380',
+  'capcheck\ttotal=4\tok=2\tvendor=1\tother=1',
+  'wifileave\treleases=2\treturned=2\trecovered=3',
   'asbcost\tcpu_msh=1851\twrites_h=176\twakes_h=491',
   'audio\tspk_min=72\tpctph=8.31\tma=362',
   'charge\ttypes=Fast(17) N/A(197)',
@@ -5635,6 +5655,7 @@ const txt = [
   ''].join('\n');
 const d = parseLogReport(txt);
 chk(d.ok === true, 'fixture digest parses');
+
 chk(d.sections.meta.running === '1' && d.sections.meta.elapsed_min === '720', 'meta fields');
 chk(d.sections.meta.started === '2026-10-21 09:40' && d.sections.meta.profile === 'smart', 'meta names when the capture ran and under which profile');
 /* fix213: the new sections parse - device context, heat durations, night habits, and
@@ -5642,7 +5663,7 @@ chk(d.sections.meta.started === '2026-10-21 09:40' && d.sections.meta.profile ==
 chk(d.sections.meta2.model === 'CPH2745' && d.sections.meta2.soc === 'SM8850' && d.sections.meta2.mod === 'V65-test', 'meta2 device context parses: ' + JSON.stringify(d.sections.meta2));
 chk(d.sections.heat.peak_phase === 'active' && d.sections.heat.peak_c === '41' && d.sections.heat.warm_min === '0' && d.sections.heat.skin_min === '0', 'heat detail parses: ' + JSON.stringify(d.sections.heat));
 chk(d.sections.throttle.by === 'asb_governor:1,thermal:1', 'fix219: the per-owner throttle split parses: ' + JSON.stringify(d.sections.throttle));
-chk(d.sections.mwake.n === '14' && d.sections.mwake.per_night === '2.6' && d.sections.mwake.typical_s === '38', 'night habits parse: ' + JSON.stringify(d.sections.mwake));
+chk(d.sections.mwake.n === '14' && d.sections.mwake.nights === '9' && d.sections.mwake.per_night === '2.6' && d.sections.mwake.typical_s === '38', 'night habits parse: ' + JSON.stringify(d.sections.mwake));
 chk(d.hist.length === 1 && d.hist[0].started === '2026-10-20 09:10' && d.hist[0].night === '0.6' && d.hist[0].drain === '2.4' && d.hist[0].clamps === '2', 'history rows parse: ' + JSON.stringify(d.hist));
 chk(d.sections.drain.pctph === '2.0' && d.sections.night.dur_min === '469', 'drain/night fields');
 chk(d.wl.length === 2 && d.wl[0].pkg === 'com.instagram.android' && d.wl[0].sec === 3661, 'wakelock rows: ' + JSON.stringify(d.wl));
@@ -5758,6 +5779,11 @@ chk(hk2.indexOf('lr_tip_heat_calm') < 0, 'a cool day WITH throttles does not cla
 const hk3 = dheat({ peak_phase: 'active', warm_min: '12', skin_min: '0' }, { cpu: '46' }, { clamps: '0' }, {});
 chk(hk3.indexOf('lr_tip_heat_warm') < 0 && hk3.indexOf('lr_tip_heat_calm') < 0, 'a short warm spell stays quiet');
 chk(logReportT('lr_tip_heat_warm', '', { min: '47 мин', phase: 'Игры' }).indexOf('{') < 0, 'the heat tip fills its placeholders');
+const heatRunsDay = parseLogReport('meta\telapsed_min=390\nheat\tpeak_phase=active\tpeak_c=58\twarm_min=10\tskin_min=0\twarm_episodes=8\twarm_run_min=2\n');
+const heatRunsDx = logReportDiagnose(heatRunsDay).find(x => x.cause === 'lr_dx_heat_some_runs');
+chk(heatRunsDx && heatRunsDx.cv.n === '8' && heatRunsDx.cv.longest === logReportDur(2), 'eight short warm spells are not described as one sustained load: ' + JSON.stringify(heatRunsDx));
+const heatUnknownRuns = parseLogReport('meta\telapsed_min=390\nheat\tpeak_phase=active\tpeak_c=58\twarm_min=10\tskin_min=0\n');
+chk(logReportDiagnose(heatUnknownRuns).some(x => x.cause === 'lr_dx_heat_some'), 'an old digest without episode facts uses the bounded total-only wording');
 /* fix220: a short night is noise, not a verdict - under two hours no red card (the owner's
    Battery capture read "1.5 %/h over 40 min" off a single battery-percent step). */
 const dn1 = JSON.parse(JSON.stringify(d));
@@ -5960,6 +5986,14 @@ const reportBody = domEl('div'), reportStatus = domEl('div'), jsonButton = domEl
 function findReportId(e, id) { if (e.id === id) return e; for (const c of e.children) { const hit = findReportId(c, id); if (hit) return hit; } return null; }
 function _el(id) { return id === 'reportBody' ? reportBody : id === 'reportStatus' ? reportStatus : id === 'rpSave' ? jsonButton : findReportId(reportBody, id); }
 const document = { createElement:domEl };
+const impactDay = parseLogReport(txt + '\njcap_main\tyes=2.5\tyes_f=20000\tyes_jps=1.68\tno=3.6\tno_f=30000\tno_jps=1.74');
+const impactCard = logReportTweakEvidence(impactDay), impactText = asbPageText(impactCard);
+chk(impactCard && impactCard.id === 'lgr-impact', 'per-tweak evidence card renders');
+chk(impactText.indexOf('2/4') >= 0 && impactText.indexOf('1') >= 0, 'cap readback observations render');
+chk(impactText.indexOf('2.5%') >= 0 && impactText.indexOf('3.6%') >= 0 && impactText.indexOf('50000') >= 0, 'at-cap association keeps both samples and frame count: ' + impactText);
+chk(impactText.indexOf('79') >= 0 && impactText.indexOf('11') >= 0 && impactText.indexOf('1851') >= 0, 'LTPO and ASB cost render');
+chk(impactText.indexOf('A/B') >= 0 && impactText.indexOf('не означает') >= 0, 'A/B and not-exposed caveats render');
+chk(logReportTweakEvidence(parseLogReport('meta\telapsed_min=10\n')) === null, 'no empty evidence card');
 global.window = {};
 function allText(e) { return (e.textContent || '') + e.children.map(allText).join('|'); }
 function countClass(e, name) { return (String(e.className).split(/\s+/).indexOf(name) >= 0 ? 1 : 0) + e.children.reduce((n,c) => n + countClass(c,name), 0); }
@@ -5970,28 +6004,59 @@ chk(countClass(reportBody, 'lgr-verdict-unknown') === 5 && allText(reportBody).i
 chk(allText(reportBody).indexOf(I18N.ru.lr_summary_legend) >= 0 && countClass(reportBody, 'report-nav') === 1 && countClass(reportBody, 'lgr-details-anchor') === 1, 'fix255: report legend, working navigation model and technical-evidence anchor render');
 chk(reportBody.children.filter(c => c.children[0] && c.children[0].textContent !== I18N.ru.lr_sec_brief && c.children[0].textContent !== I18N.ru.lr_sec_dx)[0].children[0].textContent === I18N.ru.lr_sec_summary, 'smart summary is the first report section after the plain-words brief and the causes');
 chk(countClass(reportBody, 'lgr-action') === 0 && allText(reportBody).indexOf(I18N.ru.lr_no_actions_early) >= 0, 'early DOM has no unsupported action');
-const zyDay = parseLogReport('meta\telapsed_min=120\tprofile=smart\nzygisk\tstate=confirmed\tstart_state=waiting\tcoverage=start_latest\tenabled=1\tsafe_mode=off\tfreshness=current\tloaded=0\tpolicy_generation=42\tpolicy_seen_generation=42\tpackages=2\tabis=arm64-v8a\tlifecycle_hints=1\tlaunch_hints=1\tspawn_ledger=0\tevents_total_start=10\tevents_total_latest=15\tevents_total_delta=5\tlaunch_events_delta=2\tlaunch_accepted_delta=1\tpolicy_hints_delta=3\thints_accepted_delta=2\thints_vetoed_delta=1\tipc_cpu_ms_delta=4\tipc_wakeups_delta=7\tdeltas=available\n');
+const zyDay = parseLogReport('meta\telapsed_min=120\tprofile=smart\nzygisk\tstate=confirmed\tstart_state=waiting\tcoverage=start_latest\tenabled=1\tsafe_mode=off\tfreshness=current\tloaded=0\tpolicy_generation=42\tpolicy_seen_generation=42\tpackages=2\tabis=arm64-v8a\tlifecycle_hints=1\tlaunch_hints=1\tspawn_ledger=0\tevents_total_start=10\tevents_total_latest=15\tevents_total_delta=5\tlaunch_events_delta=2\tlaunch_accepted_delta=1\tlaunch_screen_off_delta=1\tpolicy_hints_delta=3\thints_accepted_delta=2\thints_vetoed_delta=1\tipc_cpu_ms_delta=4\tipc_wakeups_delta=7\tdeltas=available\nzygov\tcoverage=start_latest\tzygisk_launch_accepted_delta=1\tzygisk_launch_vetoed_delta=0\tzygisk_refresh_accepted_delta=2\tzygisk_refresh_vetoed_delta=1\tunlock_cold_lifts_delta=1\tunlock_cold_extends_delta=0\tunlock_cold_long_delta=1\tunlock_cold_trims_delta=0\tdeltas=available\n');
+const zyImpact = asbPageText(logReportTweakEvidence(zyDay));
+chk(zyImpact.indexOf('1') >= 0 && zyImpact.indexOf('A/B') >= 0, 'Zygisk evidence shows actions without claiming a benefit');
 logReportRender(zyDay);
 chk(!!domEl('lgr-zygisk') && countClass(reportBody, 'lgr-hero') >= 4, 'Zygisk capture card and four delta heroes render');
 chk(allText(reportBody).indexOf(I18N.ru.lr_sec_zygisk) >= 0 && allText(reportBody).indexOf(I18N.ru.lr_zy_coverage_two) >= 0, 'Zygisk capture card is localized and bounded to start/latest evidence');
 chk(allText(reportBody).indexOf('10 → 15') >= 0 && allText(reportBody).indexOf('42 / 42') >= 0, 'capture counters and policy acknowledgement render');
+const zyDayText = allText(reportBody);
+chk(zyDayText.indexOf(I18N.ru.dev_zygisk_observer_launch_screen_off + '|1') >= 0, 'local screen-off cold-start veto renders as its own counter');
+chk(zyDayText.indexOf(I18N.ru.lr_zy_gov_title) >= 0 && zyDayText.indexOf(I18N.ru.lr_zy_gov_cold_lifts + '|1') >= 0 && zyDayText.indexOf(I18N.ru.lr_zy_gov_cold_extends + '|0') >= 0 && zyDayText.indexOf(I18N.ru.lr_zy_gov_cold_long + '|1') >= 0 && zyDayText.indexOf(I18N.ru.lr_zy_gov_cold_trims + '|0') >= 0, 'all Governor lift-window action rows render: ' + zyDayText);
+chk(zyDayText.indexOf(I18N.ru.lr_zy_gov_note) >= 0 && zyDayText.indexOf(I18N.ru.lr_zy_note_actions) >= 0 && zyDayText.indexOf(I18N.ru.lr_zy_note) < 0, 'real Governor actions replace the companion-only final caveat without claiming cap writes or A/B benefits');
 /* Independent observer channels: a zero accepted start/exit counter does not erase spawn,
    cold-start or ledger activity. Launch classes and accepted-request semantics stay visible. */
-const zyChannels = parseLogReport('meta\telapsed_min=390\tprofile=battery\nzygisk\tstate=confirmed\tstart_state=confirmed\tcoverage=start_latest\tenabled=1\tsafe_mode=off\tfreshness=current\tloaded=0\tpolicy_generation=1793567101\tpolicy_seen_generation=1793567101\tpackages=64\tabis=arm64-v8a\tlifecycle_hints=1\tlaunch_hints=1\tspawn_ledger=1\tevents_total_start=0\tevents_total_latest=0\tevents_total_delta=0\tspawn_events_delta=1064\tlaunch_events_delta=135\tlaunch_accepted_delta=129\tlaunch_long_delta=1\tlaunch_short_delta=41\tlaunch_class_fallback_delta=0\tlaunch_throttled_delta=6\tledger_events_delta=1064\tpolicy_hints_delta=0\thints_accepted_delta=0\thints_vetoed_delta=0\tipc_cpu_ms_delta=215\tipc_wakeups_delta=2128\tdeltas=available\n');
+const zyChannels = parseLogReport('meta\telapsed_min=390\tprofile=battery\nzygisk\tstate=confirmed\tstart_state=confirmed\tcoverage=start_latest\tenabled=1\tsafe_mode=off\tfreshness=current\tloaded=0\tpolicy_generation=1793567101\tpolicy_seen_generation=1793567101\tpackages=64\tabis=arm64-v8a\tlifecycle_hints=1\tlaunch_hints=1\tspawn_ledger=1\tevents_total_start=0\tevents_total_latest=0\tevents_total_delta=0\tspawn_events_delta=1064\tlaunch_events_delta=135\tlaunch_accepted_delta=129\tlaunch_vetoed_delta=0\tlaunch_unavailable_delta=0\tlaunch_long_delta=1\tlaunch_short_delta=41\tlaunch_class_fallback_delta=0\tlaunch_throttled_delta=6\tdenylist_spawns_delta=214\tledger_events_delta=1064\tledger_top_screen_off=com.example.sync 17/3\tledger_restart_loops=4\tpolicy_hints_delta=0\thints_accepted_delta=0\thints_vetoed_delta=0\tipc_cpu_ms_delta=215\tipc_wakeups_delta=2128\tdeltas=available\n');
 logReportRender(zyChannels);
 const zyChannelsText = allText(reportBody);
 chk(zyChannelsText.indexOf(I18N.ru.lr_zy_quiet_channels) >= 0 && zyChannelsText.indexOf(I18N.ru.lr_zy_live_zero) >= 0, 'zero events/live set do not contradict independent historical activity');
 chk(zyChannelsText.indexOf(I18N.ru.lr_zy_accept_note) >= 0 && zyChannelsText.indexOf(I18N.ru.lr_zy_spawns + '|1064') >= 0, 'spawn count and accepted lift-request caveat render');
+chk(zyChannelsText.indexOf(I18N.ru.dev_zygisk_observer_denylist_spawns + '|214') >= 0 && zyChannelsText.indexOf(I18N.ru.lr_zy_denylist_note) >= 0, 'denylist flags are reported without being called an injection failure');
 chk(zyChannelsText.indexOf(I18N.ru.dev_zygisk_observer_launch_long + '|1') >= 0 && zyChannelsText.indexOf(I18N.ru.dev_zygisk_observer_launch_short + '|41') >= 0 && zyChannelsText.indexOf(I18N.ru.lr_zy_launch_fallback + '|0') >= 0, 'slow/fast/fallback launch classes render as independent deltas: ' + zyChannelsText);
+const zyBalancedText = logReportT('lr_zy_launch_balanced', '', {n:'135',ok:'129',veto:'0',unavailable:'0',throttled:'6'});
+chk(zyChannelsText.indexOf(zyBalancedText) >= 0, 'all cold-start outcomes reconcile: ' + zyBalancedText);
+chk(zyChannelsText.indexOf(I18N.ru.dev_zygisk_observer_ledger_top_screen_off + '|com.example.sync 17/3') >= 0 &&
+  zyChannelsText.indexOf(I18N.ru.dev_zygisk_observer_ledger_restart_loops + '|4') >= 0, 'screen-off ledger leader and restart-loop peak survive into the report');
+const zyUnresolved = parseLogReport('meta\telapsed_min=390\nzygisk\tstate=confirmed\tcoverage=start_latest\tlaunch_events_delta=22\tlaunch_accepted_delta=20\tlaunch_vetoed_delta=1\tlaunch_unavailable_delta=0\tlaunch_throttled_delta=0\tdeltas=available\n');
+logReportRender(zyUnresolved);
+const zyUnresolvedText = logReportT('lr_zy_launch_unresolved', '', {n:'22',ok:'20',veto:'1',unavailable:'0',throttled:'0'});
+chk(allText(reportBody).indexOf(zyUnresolvedText) >= 0, 'an unaccounted cold-start remainder is bounded as in-flight, not called an error: ' + zyUnresolvedText);
 const zyReset = parseLogReport('meta\telapsed_min=120\nzygisk\tstate=confirmed\tcoverage=start_latest\tloaded=0\tevents_total_delta=unknown\tspawn_events_delta=unknown\tlaunch_events_delta=unknown\tlaunch_accepted_delta=unknown\tdeltas=counter_reset_or_restart\n');
 logReportRender(zyReset);
 chk(allText(reportBody).indexOf(I18N.ru.lr_zy_reset) >= 0 && allText(reportBody).indexOf(I18N.ru.lr_zy_live_zero) < 0, 'counter reset keeps deltas unknown and invents no historical activity');
 const zyOne = parseLogReport('meta\telapsed_min=120\nzygisk\tstate=confirmed\tcoverage=latest_only\tloaded=0\tevents_total_delta=unknown\tspawn_events_delta=unknown\tdeltas=unavailable\n');
 logReportRender(zyOne);
 chk(allText(reportBody).indexOf(I18N.ru.lr_zy_coverage_one) >= 0 && allText(reportBody).indexOf(I18N.ru.lr_zy_live_zero) < 0, 'one snapshot cannot manufacture a delta or live-set explanation');
+const zyGovReset = parseLogReport('meta\telapsed_min=120\nzygov\tcoverage=start_latest\tzygisk_launch_accepted_delta=unknown\tzygisk_launch_vetoed_delta=unknown\tzygisk_refresh_accepted_delta=unknown\tzygisk_refresh_vetoed_delta=unknown\tunlock_cold_lifts_delta=unknown\tunlock_cold_extends_delta=unknown\tunlock_cold_long_delta=unknown\tunlock_cold_trims_delta=unknown\tdeltas=counter_reset_or_restart\n');
+logReportRender(zyGovReset);
+chk(allText(reportBody).indexOf(I18N.ru.lr_zy_gov_reset) >= 0 && allText(reportBody).indexOf(I18N.ru.lr_zy_note_actions) < 0 && allText(reportBody).indexOf(I18N.ru.lr_zy_gov_cold_lifts + '|') < 0, 'a Governor reset renders no action delta and no stronger conclusion');
+const zyGovOne = parseLogReport('meta\telapsed_min=120\nzygov\tcoverage=latest_only\tunlock_cold_lifts_latest=7\tunlock_cold_lifts_delta=unknown\tdeltas=unavailable\n');
+logReportRender(zyGovOne);
+chk(allText(reportBody).indexOf(I18N.ru.lr_zy_gov_coverage_one) >= 0 && allText(reportBody).indexOf(I18N.ru.lr_zy_gov_cold_lifts + '|7') < 0 && allText(reportBody).indexOf(I18N.ru.lr_zy_note_actions) < 0, 'one Governor snapshot does not turn a cumulative counter into an in-capture action');
+const zyGovZero = parseLogReport('meta\telapsed_min=120\nzygisk\tstate=confirmed\tcoverage=start_latest\tdeltas=available\nzygov\tcoverage=start_latest\tzygisk_launch_accepted_delta=0\tzygisk_launch_vetoed_delta=0\tzygisk_refresh_accepted_delta=0\tzygisk_refresh_vetoed_delta=0\tunlock_cold_lifts_delta=0\tunlock_cold_extends_delta=0\tunlock_cold_long_delta=0\tunlock_cold_trims_delta=0\tdeltas=available\n');
+logReportRender(zyGovZero);
+chk(allText(reportBody).indexOf(I18N.ru.lr_zy_gov_cold_lifts + '|0') >= 0 && allText(reportBody).indexOf(I18N.ru.lr_zy_note) >= 0 && allText(reportBody).indexOf(I18N.ru.lr_zy_note_actions) < 0, 'zero Governor actions keep the companion-only final wording');
 const zyUnknown = parseLogReport('meta\telapsed_min=120\nzygisk\tstate=unknown\tcoverage=unavailable\tdeltas=unavailable\n');
 logReportRender(zyUnknown);
 chk(allText(reportBody).indexOf(I18N.ru.lr_zy_unavailable) >= 0, 'collector absence remains unknown, never unsupported');
+const mw0Day = parseLogReport('meta\telapsed_min=3164\tprofile=smart\nnight\tdur_min=139\tdrop=3\tpctph=1.3\tawake=38\nnightd\tma=210\tradio_mib=37.6\tcpu_t=36\tskin_t=33\twake_pk=0\nmwake\tn=53\tnights=0\tper_night=0.0\ttypical_s=23\n');
+logReportRender(mw0Day);
+const mw0Expected = logReportT('lr_mwake_unconfirmed', '', {n:'53',sec:'23'});
+chk(allText(reportBody).indexOf(mw0Expected) >= 0 && allText(reportBody).indexOf('0.0') < 0, 'nights=0 is an unconfirmed sample, not a zero-per-night average: ' + mw0Expected);
+const mwLegacyDay = parseLogReport('meta\telapsed_min=180\nnight\tdur_min=139\tdrop=3\tpctph=1.3\tawake=38\nnightd\tma=210\nmwake\tn=14\tper_night=2.6\ttypical_s=38\n');
+logReportRender(mwLegacyDay);
+chk(allText(reportBody).indexOf(logReportT('lr_mwake_fmt', '', {n:'14',per:'2.6',sec:'38'})) >= 0, 'a legacy digest without nights keeps its established night-average wording');
 /* fix285: the battery section's screen-on/off durations come from the same split as the
    drain rows and the brief, and a holder whose holds never reached a minute is not marked. */
 {
@@ -6015,6 +6080,13 @@ const smartRecordTips = logReportTips(smartRecordDay, true).filter(t => t.key ==
 chk(smartRecordTips.length === 1 && !logReportTips(smartRecordDay, true).some(t => t.key === 'lr_tip_smart_help'), 'Smart records on Battery are measurements, not active Smart control');
 const smartActiveDay = JSON.parse(JSON.stringify(smartRecordDay)); smartActiveDay.sections.meta.profile = 'smart';
 chk(logReportTips(smartActiveDay, true).some(t => t.key === 'lr_tip_smart_help') && !logReportTips(smartActiveDay, true).some(t => t.key === 'lr_tip_smart_help_manual'), 'the active-Smart wording remains exclusive to Smart');
+const smartNoHelpDay = JSON.parse(JSON.stringify(smartActiveDay));
+smartNoHelpDay.sections.smart.helped = '0'; smartNoHelpDay.sections.smart.nothelped = '3';
+const smartNoHelpTips = logReportTips(smartNoHelpDay, true);
+chk(smartNoHelpTips.some(t => t.key === 'lr_tip_smart_nohelp' && t.vars.n === '3') &&
+  !smartNoHelpTips.some(t => /^lr_tip_smart_help/.test(t.key)), 'zero retained headroom and three failed comparisons must not become three helped apps');
+logReportRender(smartNoHelpDay);
+chk(allText(reportBody).indexOf(I18N.ru.lr_sm_scope) >= 0, 'Smart snapshot scope and still-running tests are explained');
 chk(mixText.indexOf(I18N.ru.lr_idle) < 0, 'a five-minute pause gets no worst-idle row');
 chk(mixText.indexOf(I18N.ru.lr_audio_spk) < 0, 'one minute of speaker sound is no playback row');
 chk(mixText.indexOf(I18N.ru.lr_drain_idle) >= 0 && mixText.indexOf(I18N.ru.lr_drain_short_note0.slice(0, 30)) >= 0, 'the short-pause idle figure carries its explanation');
@@ -6533,6 +6605,17 @@ PH.update({'lr_brief_split_short':['{on}','{onr}','{off}'], 'lr_brief_data':['{m
       'lr_dx_asb_core2':['{pct}'], 'lr_tip_lte_idle':['{set}'], 'lr_tip_net_heavy':['{mib}','{app}','{amib}'],
       'lr_radio_on':['{on}'], 'lr_rapp_head':['{since}','{tot}'], 'lr_rat_nsa':['{n}','{of}'], 'lr_rat_sa':['{n}','{of}'],
       'lr_rat_lte':['{n}','{of}'], 'lr_bt_acl_fmt':['{n}','{l}','{d}','{p}'], 'lr_bt_streams':['{n}']})
+# fix298-fix300: exact Smart outcomes, thermal/night scope and bounded Zygisk/Governor evidence.
+KEYS += ['lr_sm_scope','lr_tip_smart_help_manual','lr_tip_smart_nohelp','lr_dx_heat_some_runs',
+         'lr_zy_activity','lr_zy_launch_balanced','lr_zy_launch_unresolved','lr_zy_accept_note','lr_zy_quiet_channels',
+         'lr_mwake_unconfirmed','lr_zy_denylist_note','dev_zygisk_observer_launch_screen_off',
+         'lr_zy_gov_title','lr_zy_gov_cold_lifts','lr_zy_gov_cold_extends','lr_zy_gov_cold_long','lr_zy_gov_cold_trims',
+         'lr_zy_gov_note','lr_zy_gov_reset','lr_zy_gov_coverage_one','lr_zy_note_actions']
+PH.update({'lr_tip_smart_help_manual':['{n}'], 'lr_tip_smart_nohelp':['{n}'],
+           'lr_dx_heat_some_runs':['{min}','{n}','{longest}','{cpu}'],
+           'lr_zy_launch_balanced':['{n}','{ok}','{veto}','{unavailable}','{throttled}'],
+           'lr_zy_launch_unresolved':['{n}','{ok}','{veto}','{unavailable}','{throttled}'],
+           'lr_mwake_unconfirmed':['{n}','{sec}']})
 files = sorted((root / 'webroot' / 'i18n').glob('*.json'))
 assert len(files) == 13, 'locale count'
 for p in files:
@@ -6554,7 +6637,13 @@ for p in files:
         assert d['lr_sec_smooth'] == '\U0001f4f1 Smoothness'
         assert d['lr_saved'] == 'saved capture \u00b7 {when} \u00b7 {profile}'
         assert d['lr_jank_all'] == 'of {frames} frames' and d['lr_ms_h'] == '{n} ms/h'
-        assert d['lr_tip_jank_ok'] == 'Smoothness is excellent: only {pct}% of frames janky.'
+        assert d['lr_tip_jank_ok'] == 'Smoothness is good: only {pct}% of frames were late.'
+        assert 'proved' not in d['lr_tip_smart_help'].lower()
+        assert 'mostly in {phase}' not in d['lr_tip_heat_warm']
+        assert 'do not distinguish app updates' in d['lr_dx_fix_net_play']
+        assert 'not proof that a lift was armed' in d['lr_zy_accept_note']
+        assert 'not a hardware ceiling write' in d['lr_zy_gov_note']
+        assert 'total control of other Zygisk modules' in d['lr_zy_note_actions'] and 'No A/B comparison' in d['lr_zy_note_actions']
     if p.name == 'ru.json':
         assert d['lr_sec_drain'] == '\U0001f50b Разряд батареи'
         assert d['lr_menu'] == 'Отчёт бесконечного лога' and d['lr_refresh'] == 'Обновить'
@@ -6662,7 +6751,7 @@ printf '%s\n' "$out" | grep -q '^wlive	tag=contacts	pct=68	min=0	pkg=com.whatsap
 printf '%s\n' "$out" | grep -q '^wlive	tag=MediaCountUploadWorker	pct=22	min=0	pkg=com.facebook.katana	kind=worker$' || fail "worker holder: $(printf '%s\n' "$out" | grep '^wlive' | sed -n 2p)"
 printf '%s\n' "$out" | grep -q '^wlive	tag=Tick	pct=10	min=2	pkg=com.example	kind=alarm$' || fail "alarm holder: $(printf '%s\n' "$out" | grep '^wlive' | sed -n 3p)"
 printf '%s\n' "$out" | grep -q '^thermal	cpu=57	surf=42$' || fail "trace peak: $(printf '%s\n' "$out" | grep '^thermal')"
-printf '%s\n' "$out" | grep -q '^heat	peak_phase=active	peak_c=44	warm_min=20	skin_min=20$' || fail "trace durations: $(printf '%s\n' "$out" | grep '^heat')"
+printf '%s\n' "$out" | grep -q '^heat	peak_phase=active	peak_c=44	warm_min=20	skin_min=20	warm_episodes=1	warm_run_min=20$' || fail "trace durations: $(printf '%s\n' "$out" | grep '^heat')"
 printf '%s\n' "$out" | grep -q '^nightd	.*	cpu_t=57	skin_t=42	' || fail "night peaks from the trace: $(printf '%s\n' "$out" | grep '^nightd')"
 printf '%s\n' "$out" | grep -q '^nightw' && fail "the night window leaked into the digest"
 # fix247: the facts the causes card reads - whether the ASB ceiling costs frames, the jank
@@ -6674,11 +6763,23 @@ printf '%s\n' "$out" | grep -q '^vcap	n=26	main_vendor=0	main_asb=0	prime_vendor
 head -n 32 "$CAP/battery_trace.txt" > "$T/bt" && mv "$T/bt" "$CAP/battery_trace.txt"
 printf 'active\t%s\t%s\t80\t78\t44\t41\t1800\t20\t0\t0\t100\t300\t0\t0\t0\n' $((S0)) $((S0+1800)) > "$CAP/phase_ledger.tsv"
 out2="$(sh "$D" "$CAP" 2>/dev/null)"
-printf '%s\n' "$out2" | grep -q '^heat	peak_phase=active	peak_c=44	warm_min=20	skin_min=20$' || fail "screen-on trace: $(printf '%s\n' "$out2" | grep '^heat')"
+printf '%s\n' "$out2" | grep -q '^heat	peak_phase=active	peak_c=44	warm_min=20	skin_min=20	warm_episodes=1	warm_run_min=20$' || fail "screen-on trace: $(printf '%s\n' "$out2" | grep '^heat')"
 printf 'epoch|x\n1|a\n' > "$CAP/battery_trace.txt"
 out3="$(sh "$D" "$CAP" 2>/dev/null)"
-printf '%s\n' "$out3" | grep -q '^heat	peak_phase=active	peak_c=44	warm_min=0	skin_min=30$' || fail "ledger fallback: $(printf '%s\n' "$out3" | grep '^heat')"
+printf '%s\n' "$out3" | grep -q '^heat	peak_phase=active	peak_c=44	warm_min=0	skin_min=30	warm_episodes=0	warm_run_min=0$' || fail "ledger fallback: $(printf '%s\n' "$out3" | grep '^heat')"
 printf '%s\n' "$out3" | grep -q '^thermal	cpu=44	surf=41$' || fail "ledger peak fallback: $(printf '%s\n' "$out3" | grep '^thermal')"
+# fix298: total hot minutes alone cannot distinguish one sustained run from separated spells.
+# Two warm episodes (2 and 3 minutes) must retain their own count and longest continuous run.
+{
+  echo 'epoch|datetime|fsm_state|profile|screen|bat_pct|bat_mA|bat_uV|bat_dC|cpu_max_c|skin_c|surface_c|board_c'
+  i=0
+  for c in 40 46 46 40 40 46 46 46 40 40 40 40; do
+    echo "$((S0 + i * 60))|d|MODERATE|battery|1|80|300|0|0|$c|35|35|35"
+    i=$((i + 1))
+  done
+} > "$CAP/battery_trace.txt"
+out4="$(sh "$D" "$CAP" 2>/dev/null)"
+printf '%s\n' "$out4" | grep -q '^heat	peak_phase=active	peak_c=44	warm_min=5	skin_min=0	warm_episodes=2	warm_run_min=3$' || fail "warm episodes/longest run: $(printf '%s\n' "$out4" | grep '^heat')"
 
 Z="$T/tz"; for z in 26 15 74 83 76; do mkdir -p "$Z/thermal_zone$z"; done
 echo 34000 > "$Z/thermal_zone26/temp"; echo 33000 > "$Z/thermal_zone15/temp"
@@ -6947,15 +7048,20 @@ import re, sys
 h = open(sys.argv[1], encoding='utf-8').read()
 assert "keys:['dsp_outputs','dsp_loudness','dsp_bass','dsp_voice','dsp_width','dsp_clarity','dsp_rumble','dsp_compressor','dsp_headroom']" in h, 'DSP Outputs is not first'
 for name in ('smart','performance','theme_glass'):
-    m = re.search(r'^  %s: \'([^\']*)\'' % name, h, re.M)
+    if name == 'smart':
+        m = re.search(r'^  smart: ([\s\S]*?),\n  /\* Performance:', h, re.M)
+    else:
+        m = re.search(r'^  %s: \'([^\']*)\'' % name, h, re.M)
     assert m, '%s missing from TECH_ICON_PATHS' % name
     if name in ('performance','theme_glass'):
         assert m.group(1).count('<path') == 1 and '<circle' not in m.group(1) and '<rect' not in m.group(1), '%s has an unwanted inner glyph' % name
     else:
-        assert '<rect' in m.group(1) and m.group(1).count('<path') >= 2, 'Smart lost its adaptive-core glyph'
+        assert m.group(1).count('<path') == 6 and m.group(1).count('<rect') == 1 and m.group(1).count('<circle') == 4 and '<g stroke-width="1.35">' in m.group(1), 'Smart lost its top-down processor-brain geometry'
+        assert 'M10.9 8.2V6.2' in m.group(1) and 'M13.1 8.2V6.2' in m.group(1), 'Smart hemispheres are missing'
+        assert 'x="8.2" y="8.2" width="7.6" height="7.6"' in m.group(1), 'Smart processor core is missing'
 assert h.count('const TECH_ICON_PATHS = {') == 1, 'icon definitions diverged by page'
 PY
-echo "PASS webui visual hierarchy: DSP Outputs first; global Smart, Performance and Liquid Glass icons use the cleaned geometry"
+echo "PASS webui visual hierarchy: DSP Outputs first; Smart uses the top-down processor-brain and the global silhouettes stay clean"
 )
 
 t_webui_fix287_waits_runtime() (
@@ -7165,7 +7271,10 @@ assert "'/sdcard/Download/'" in save_fn and 'asb_device_' in save_fn and 'asb_re
 assert 'asb_device_info.sh' not in save_fn and 'setInterval' not in save_fn
 assert 'window._asbDeviceInfoRaw = runText(r);' in loader
 segment = h[h.index('function parseDeviceInfo('):h.index('function openDevicePage()')]
-assert '.innerHTML' not in segment and 'textContent' in segment
+# Decorative section/action icons may come only from the fixed inline-SVG registry. Every
+# device-controlled value in this segment still has to use textContent, never markup.
+trusted_icons = segment.replace('glyph.innerHTML = techIcon(icon);', '').replace('glyph.innerHTML = techIcon(kind);', '').replace('label.innerHTML = zygiskHeaderWordmark();', '')
+assert '.innerHTML' not in trusted_icons and 'textContent' in segment
 assert "['kernel_features', 'dev_sec_kernel_features'" in h
 assert "['metamodule', 'dev_sec_metamodule'" in h
 assert "['root', 'dev_sec_root'" in h and "s.id = 'lgr-smooth';" in h and "s.id = 'lgr-drain';" in h
@@ -7863,13 +7972,36 @@ for m in re.finditer(r"\{\s*key:'(\w+)',\s*type:'(\w+)'(.*?)(?=\n\s*\{\s*key:'|\
     k, t, rest = m.group(1), m.group(2), m.group(3)
     om = re.search(r"opts:\[([^\]]*)\]", rest)
     nm = re.search(r"name:'((?:[^'\\]|\\.)*)'", rest)
-    items[k] = {'type': t, 'opts': re.findall(r"'([^']*)'", om.group(1)) if om else [], 'name': nm.group(1) if nm else ''}
+    dm = re.search(r"desc:'((?:[^'\\]|\\.)*)'", rest)
+    items[k] = {'type': t, 'opts': re.findall(r"'([^']*)'", om.group(1)) if om else [], 'name': nm.group(1) if nm else '', 'desc': dm.group(0) if dm else ''}
 assert len(items) >= 70, 'CFG_ITEMS parse: %d' % len(items)
 for k in ('dsp_clarity', 'dsp_rumble', 'dsp_headroom', 'kernel_sched_stats', 'athena_service', 'net_rps'):
     assert k in items, 'CFG_ITEMS lost ' + k
 files = sorted((root / 'webroot' / 'i18n').glob('*.json'))
 assert len(files) == 13, len(files)
 en = json.loads((root / 'webroot' / 'i18n' / 'en.json').read_text(encoding='utf-8'))
+# fix296 semantic copy audit: the English overlay and source fallback must not drift for
+# rewritten cards. These strings are rendered with textContent, never as device markup.
+audited = set('''bt_link_stability dsp_outputs dsp_loudness dsp_voice audio_remove_volume_limit
+audio_resampler media_vol_steps CAMERA_LEVEL CAMERA_CONTRAST CAMERA_GRAIN CAMERA_PORTRAIT
+CAMERA_LOWLIGHT camera_hold_enable UX_MANAGE_TIMEOUTS anim_speed UX_ANIM_FORCE_RESTART
+disable_blur ui_effects_level night_modem_idle net_screen_off_lte net_lte_light
+net_congestion_mobile net_qdisc net_rps net_txqueue net_route_tune wifi_country
+wifi_scan_throttle net_wifi_leave wifi_powersave doze_level doze_trim_whitelist
+wakelock_action wakelock_fitness gnss_trim night_quiet_enable sustained_temp_enter
+perf_ceiling_pct cool_gaming BG_TRIM_LEVEL gms_trim athena_service ltpo_force ltpo_video
+phantom_procs mmfeed_off log_level lsposed_verbose'''.split())
+def jsq(v):
+    return "desc:'" + v.replace('\\', '\\\\').replace("'", "\\'").replace('\n', '\\n') + "'"
+for k in audited:
+    assert k in items, 'audited card missing: ' + k
+    assert items[k]['desc'] == jsq(en['cfg'][k]['desc']), 'English/source description drift: ' + k
+all_en = json.dumps(en, ensure_ascii=False)
+for rejected in ('no real fps loss', 'free battery with zero impact', 'This is where most of the overnight drain saving comes from', 'the single most expensive thing that can happen to a battery'):
+    assert rejected not in all_en, 'unsupported absolute returned: ' + rejected
+hint_keys = set('''cfg_audio_section_playback_hint cfg_audio_section_dsp_hint
+cfg_camera_section_processing_hint cfg_camera_section_perf_hint cfg_net_section_speed_hint
+cfg_net_section_stack_hint cfg_ui_section_diag_hint cfg_ui_section_zygisk_hint'''.split())
 same = {('de', 'haptic_strength'), ('fr', 'haptic_strength')}
 def lab(d, k, o):
     v = d.get('optFor', {}).get(k, {}).get(o)
@@ -7880,6 +8012,10 @@ for p in files:
     d = json.loads(p.read_text(encoding='utf-8'))
     if 'desc' in d:
         probs.append('%s: stray top-level "desc" table' % lg)
+    if lg != 'en':
+        for hk in hint_keys:
+            if not str(d.get(hk, '')).strip() or d.get(hk) == en.get(hk):
+                probs.append('%s: audited section hint %s missing or untranslated' % (lg, hk))
     for k, v in d.get('cfg', {}).items():
         if not isinstance(v, dict):
             probs.append('%s: cfg.%s is a %s, Tcfg needs {name, desc}' % (lg, k, type(v).__name__))
@@ -8442,6 +8578,73 @@ for k in ('zyLivePulse', 'zyLiveRing'):
 assert re.search(r'@media \(prefers-reduced-motion: reduce\) \{\s*\.zygisk-header-dot, \.zygisk-header-dot::after, \.dev-zygisk-link-dot, \.dev-zygisk-link-dot::after \{ animation: none !important; \}', h), 'reduced motion does not stop the pulse'
 PY
 echo "PASS webui fix289 zygisk pulse: the green link dots breathe slowly (opacity and scale only), other states stay still, reduced motion stops them"
+)
+
+t_webui_smart_brain_header_label_runtime() (
+# Smart has one reusable top-down processor-brain at every registry-driven location. The custom
+# vector ZYGISK wordmark is created by the same idempotent six-header builder and collapses at c2.
+# The dedicated page's section/action icons use the same registry without changing their controls.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cat > "$T/visual.js" <<'JS'
+const fs = require('fs');
+const h = fs.readFileSync(process.argv[2], 'utf8');
+const icons = h.match(/(const TECH_ICON_PATHS = \{[\s\S]*?\n\};)\n(function techIcon\(kind\) \{[\s\S]*?\n\})/);
+if (!icons) throw new Error('the inline SVG registry or renderer is missing');
+eval(icons[1] + '\n' + icons[2]);
+const brain = techIcon('smart');
+if ((brain.match(/<path /g) || []).length !== 6 || (brain.match(/<rect /g) || []).length !== 1 || (brain.match(/<circle /g) || []).length !== 4) throw new Error('the top-down brain lost its hemispheres, processor or four terminals');
+for (const token of ['viewBox="0 0 24 24"', 'stroke="currentColor"', '<g stroke-width="1.35">', 'M10.9 8.2V6.2', 'M13.1 8.2V6.2', '<rect x="8.2" y="8.2" width="7.6" height="7.6"', 'cx="22.4" cy="14.5"']) {
+  if (!brain.includes(token)) throw new Error('Smart processor-brain geometry/paint missing: ' + token);
+}
+if (h.includes('M12 8.2l1.05 2.75L15.8 12') || h.includes('M12 5.1C11.4 3.8') || h.includes('M10.4 18.1C9.4 17.6')) throw new Error('an old Smart chip, emblem or side-view brain is still present');
+if (!h.includes('data-tech-icon="smart"') || !h.includes("{ id:'smart', icon:'smart'")) throw new Error('a Smart icon consumer left the shared registry');
+if (!h.includes('.zygisk-header-wordmark { display: block; width: 42px; height: 8px; overflow: visible; }')) throw new Error('the compact custom vector wordmark styling is missing');
+if (!h.includes('html.asb-fit-c2 .zygisk-header-label { display: none; }')) throw new Error('the compact header no longer hides its label');
+const wordmarkFn = h.match(/function zygiskHeaderWordmark\(\) \{[\s\S]*?\n\}/);
+if (!wordmarkFn) throw new Error('the local ZYGISK vector wordmark is missing');
+eval(wordmarkFn[0]);
+const wordmark = zygiskHeaderWordmark();
+if ((wordmark.match(/<path /g) || []).length !== 6 || !wordmark.includes('viewBox="0 0 68 10"') || !wordmark.includes('>ZYGISK</span>')) throw new Error('the six-letter angular wordmark regressed');
+function openZygiskPage() {}
+function zygiskHeaderPaint() {}
+function el(tag, cls) {
+  const node = { tag, className: cls || '', textContent: '', innerHTML: '', children: [], attrs: {}, firstChild: null,
+    setAttribute(k, v) { this.attrs[k] = v; },
+    appendChild(c) { this.children.push(c); this.firstChild = this.children[0] || null; return c; },
+    insertBefore(c, before) { const at = before ? this.children.indexOf(before) : 0; this.children.splice(at < 0 ? 0 : at, 0, c); this.firstChild = this.children[0] || null; return c; },
+    querySelector(sel) { return this.children.find(c => sel === '.zygisk-header-link' && c.className.includes('zygisk-header-link')) || null; }
+  };
+  const classes = new Set(String(node.className).split(/\s+/).filter(Boolean));
+  node.classList = { add(c) { classes.add(c); node.className = Array.from(classes).join(' '); } };
+  return node;
+}
+const hosts = [el('div', 'hdr-info'), el('div', 'hdr-info'), el('div', 'hdr-info')];
+global.document = { createElement(tag) { return el(tag); }, querySelectorAll(sel) { return sel === '.hdr-info' ? hosts : []; } };
+const init = h.match(/function zygiskHeaderInit\(\) \{[\s\S]*?\n\}/);
+if (!init) throw new Error('the shared Zygisk header builder is missing');
+eval(init[0]);
+zygiskHeaderInit(); zygiskHeaderInit();
+for (const host of hosts) {
+  if (host.children.length !== 1) throw new Error('the header builder duplicated its button');
+  const btn = host.children[0], label = btn.children[1];
+  if (btn.onclick !== openZygiskPage || label.innerHTML !== wordmark) throw new Error('the vector wordmark or existing navigation regressed');
+}
+for (const fn of ['logReportSec', 'zygiskButtonIcon']) {
+  const src = h.match(new RegExp('function ' + fn + '\\([^)]*\\) \\{[\\s\\S]*?\\n\\}'));
+  if (!src) throw new Error('missing Zygisk icon helper: ' + fn);
+  eval(src[0]);
+}
+const sec = logReportSec('Connection', 'zygisk_observer');
+if (sec.attrs['data-zygisk-icon'] !== 'zygisk_observer' || sec.children[0].children.length !== 2 || !sec.children[0].children[0].innerHTML.includes('<svg') || sec.children[0].children[1].textContent !== 'Connection') throw new Error('a Zygisk section icon replaced or duplicated its title');
+const action = el('button'); action.textContent = 'Set up automatically'; zygiskButtonIcon(action, 'zygisk_auto');
+if (action.children.length !== 1 || !action.children[0].innerHTML.includes('<svg') || action.textContent !== 'Set up automatically' || !action.className.includes('zy-icon-btn')) throw new Error('a Zygisk action icon changed its existing button label');
+console.log('ok');
+JS
+out="$(node "$T/visual.js" "$ROOT/webroot/index.html" 2>&1)" || { echo "FAIL Smart brain/header: $out" >&2; exit 1; }
+[ "$out" = ok ] || { echo "FAIL Smart brain/header: $out" >&2; exit 1; }
+echo "PASS webui Smart brain/header: one top-down processor-brain at both consumers, six-letter vector ZYGISK wordmark, themed page icons, idempotent navigation and compact hiding"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

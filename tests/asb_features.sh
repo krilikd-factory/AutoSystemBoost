@@ -8274,10 +8274,10 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 fail() { echo "FAIL zygisk guard: $*" >&2; exit 1; }
 sh -n "$S" || fail "syntax"
 mkdir -p "$T/bin" "$T/d" "$T/run" "$T/tmp"
-printf 'com.loop.app\ncom.whatsapp\ncom.keep.app\ncom.nf.app\ncom.already.app\n' > "$T/users"
+printf 'com.loop.app\ncom.whatsapp\ncom.keep.app\ncom.nf.app\ncom.already.app\ncom.exact.app\ncom.fgs.app\ncom.nl.app\n' > "$T/users"
 printf 'com.keep.app\n' > "$T/d/doze_whitelist_keep"
 printf 'com.nf.app|10400|0|default|default|default|default|default|default|0|0|0|1\n' > "$T/d/notif_fix"
-printf 'com.already.app|RUN_ANY_IN_BACKGROUND|ignore|default\n' > "$T/ops"
+printf 'com.already.app|RUN_ANY_IN_BACKGROUND|ignore|default\ncom.exact.app|SCHEDULE_EXACT_ALARM|allow|default\n' > "$T/ops"
 printf 'system,com.google.android.gms,10120\n' > "$T/wl"
 cat > "$T/bin/pm" <<'X'
 #!/bin/sh
@@ -8286,6 +8286,12 @@ X
 cat > "$T/bin/dumpsys" <<'X'
 #!/bin/sh
 [ "$1 $2" = "deviceidle whitelist" ] && cat "$ZG_T/wl"
+[ "$1 $2 $3" = "activity services com.fgs.app" ] && printf 'isForeground=true foregroundServiceType=8\n'
+X
+cat > "$T/bin/settings" <<'X'
+#!/bin/sh
+[ "$1 $2 $3" = "get secure enabled_notification_listeners" ] && printf 'com.nl.app/com.nl.app.Listener\n'
+[ "$1 $2 $3" = "get secure enabled_notification_policy_access_packages" ] && printf 'null\n'
 X
 cat > "$T/bin/appops" <<'X'
 #!/bin/sh
@@ -8298,7 +8304,7 @@ grep -q "^$1|$2|" "$f" || echo "$1|$2|default|default" >> "$f"
 awk -F'|' -v OFS='|' -v p="$1" -v o="$2" -v m="$3" -v u="$u" '$1 == p && $2 == o { if (u) $4 = m; else $3 = m } { print }' "$f" > "$f.t" && mv "$f.t" "$f"
 X
 chmod +x "$T/bin/"*
-ledger() { printf 'L\tcom.loop.app\t%s\t0\t0\t1\nL\tcom.whatsapp\t%s\t0\t0\t1\nL\tcom.keep.app\t%s\t0\t0\t1\nL\tcom.nf.app\t%s\t0\t0\t1\nL\tcom.sys.app\t%s\t0\t0\t1\nL\tcom.already.app\t%s\t0\t0\t1\n' "$1" "$1" "$1" "$1" "$1" "$1" > "$T/run/state.arm64-v8a.tsv"; }
+ledger() { printf 'L\tcom.loop.app\t%s\t0\t0\t1\nL\tcom.whatsapp\t%s\t0\t0\t1\nL\tcom.keep.app\t%s\t0\t0\t1\nL\tcom.nf.app\t%s\t0\t0\t1\nL\tcom.sys.app\t%s\t0\t0\t1\nL\tcom.already.app\t%s\t0\t0\t1\nL\tcom.exact.app\t%s\t0\t0\t1\nL\tcom.fgs.app\t%s\t0\t0\t1\nL\tcom.nl.app\t%s\t0\t0\t1\n' "$1" "$1" "$1" "$1" "$1" "$1" "$1" "$1" "$1" > "$T/run/state.arm64-v8a.tsv"; }
 sleep 3600 & _gov=$!; echo "$_gov" > "$T/govpid"
 trap 'kill $_gov 2>/dev/null; rm -rf "$T"' EXIT
 run() { PATH="$T/bin:$PATH" ZG_T="$T" MODDIR="$T/mod" ASB_ZG_DIR="$T/d" ASB_ZYGISK_RUN_DIR="$T/run" ASB_ZG_TMP="$T/tmp" ASB_ZG_STATE="$T/state" ASB_ZG_GOVPID="$T/govpid" sh "$S" "$@"; }
@@ -8311,7 +8317,26 @@ run tick; [ -s "$T/d/zygisk_guard_active" ] && fail "the first sample acted"
 ledger 13; age_prev 300; run tick
 [ -s "$T/d/zygisk_guard_active" ] && fail "3 starts in 5 minutes were treated as a loop"
 ledger 23; age_prev 300; run tick
-[ "$(mode com.loop.app)" = ignore ] || fail "a looping app was not restricted"
+[ "$(mode com.loop.app)" = ignore ] && fail "one session restricted an app without confirmation"
+run status | grep -qx 'pending|com.loop.app|1|10|loop|0' || fail "dry-run proposal missing: $(run status | grep '^pending')"
+[ "$(run approve com.loop.app)" = result=approved ] || fail 'per-package confirmation failed'
+for p in com.exact.app com.fgs.app com.nl.app; do
+  run approve "$p" >/dev/null || fail "safety fixture approval failed: $p"
+  [ "$(mode "$p")" = ignore ] && fail "confirmation alone restricted $p"
+done
+[ "$(mode com.loop.app)" = ignore ] && fail 'confirmation alone changed AppOps without a second session'
+echo screen=1 > "$T/state"; run tick; echo screen=0 > "$T/state"; run tick
+# Distinct evidence sessions must not collapse merely because a fast fixture crosses screen edges
+# within one wall-clock second. The production session marker is the screen-off baseline time.
+sed -i "1s/^t .*/t $(( $(date +%s) - 300 ))/" "$T/tmp/zygisk_guard.base"
+ledger 30; age_prev 300; run tick
+[ "$(mode com.loop.app)" = ignore ] || fail "a confirmed two-session looping app was not restricted"
+for p in com.exact.app com.fgs.app com.nl.app; do
+  [ "$(mode "$p")" = ignore ] && fail "positive runtime safety evidence ignored for $p"
+done
+grep -q '|com.exact.app|7|protected_alarm|$' "$T/d/zygisk_guard_log" || fail 'exact-alarm protection not logged'
+grep -q '|com.fgs.app|7|protected_fgs|$' "$T/d/zygisk_guard_log" || fail 'foreground-service protection not logged'
+grep -q '|com.nl.app|7|protected_notifications|$' "$T/d/zygisk_guard_log" || fail 'notification-access protection not logged'
 grep -q '^com.loop.app|default|default|' "$T/d/zygisk_guard_active" || fail "previous mode not recorded: $(cat "$T/d/zygisk_guard_active" 2>/dev/null)"
 for p in com.whatsapp com.keep.app com.nf.app com.sys.app; do
   [ "$(mode "$p")" = ignore ] && fail "$p was restricted"
@@ -8319,26 +8344,27 @@ done
 grep -q '|com.whatsapp|10|protected|$' "$T/d/zygisk_guard_log" && grep -q '|com.keep.app|10|protected|$' "$T/d/zygisk_guard_log" \
   && grep -q '|com.nf.app|10|protected|$' "$T/d/zygisk_guard_log" || fail "protected apps not logged: $(cat "$T/d/zygisk_guard_log")"
 grep -q 'com.sys.app' "$T/d/zygisk_guard_log" && fail "a system app was considered"
-grep -q '|com.already.app|10|already_restricted|$' "$T/d/zygisk_guard_log" || fail "an app restricted by the owner was taken over"
+[ "$(mode com.already.app)" = ignore ] || fail "the owner's restriction was changed before guard admission"
 grep -q '^com.already.app|' "$T/d/zygisk_guard_active" && fail "an external restriction was recorded as the guard's"
 out="$(run status)"
-printf '%s\n' "$out" | grep -q '^active|com.loop.app|[0-9]*|10|loop|0|0$' && printf '%s\n' "$out" | grep -qx 'ledger=1' || fail "status: $out"
+printf '%s\n' "$out" | grep -q '^active|com.loop.app|[0-9]*|7|loop|0|0$' && printf '%s\n' "$out" | grep -qx 'ledger=1' || fail "status: $out"
 ledger 40; age_prev 4000; run tick
 [ "$(grep -c '|limited|loop$' "$T/d/zygisk_guard_log")" = 1 ] || fail "a stale sample acted or an app was limited twice"
 echo screen=1 > "$T/state"; run tick
 [ "$(mode com.loop.app)" = default ] || fail "screen-on did not give the background back"
 [ -e "$T/d/zygisk_guard_active" ] && fail "the active list survived screen-on"
-grep -q '|com.loop.app|10|lifted_screen_on|17$' "$T/d/zygisk_guard_log" || fail "lift not logged"
+grep -q '|com.loop.app|7|lifted_screen_on|10$' "$T/d/zygisk_guard_log" || fail "lift not logged"
 [ "$(mode com.already.app)" = ignore ] || fail "the owner's own restriction was lifted"
-echo screen=0 > "$T/state"; run tick; ledger 60; age_prev 300; run tick
+echo screen=0 > "$T/state"; run tick; printf 'com.loop.app|1|0|0|loop|0|0\n' > "$T/tmp/zygisk_guard.pending"; ledger 60; age_prev 300; run tick
 [ "$(mode com.loop.app)" = ignore ] || fail "second loop not restricted"
+[ "$(run release com.loop.app)" = result=released ] && [ "$(mode com.loop.app)" = default ] || fail 'emergency per-package release failed'
 run screen_on; [ "$(mode com.loop.app)" = default ] || fail "screen_on hook did not lift"
-run tick; ledger 80; age_prev 300; run tick; [ "$(mode com.loop.app)" = ignore ] || fail "third loop"
+run tick; printf 'com.loop.app|1|0|0|loop|0|0\n' > "$T/tmp/zygisk_guard.pending"; run approve com.loop.app >/dev/null; ledger 80; age_prev 300; run tick; [ "$(mode com.loop.app)" = ignore ] || fail "third loop"
 out="$(run disable)"; [ "$out" = result=disabled ] && [ "$(mode com.loop.app)" = default ] && [ ! -e "$T/d/zygisk_guard" ] || fail "disable: $out"
-run enable >/dev/null; run tick; ledger 100; age_prev 300; run tick; [ "$(mode com.loop.app)" = ignore ] || fail "fourth loop"
+run enable >/dev/null; run tick; printf 'com.loop.app|1|0|0|loop|0|0\n' > "$T/tmp/zygisk_guard.pending"; ledger 100; age_prev 300; run tick; [ "$(mode com.loop.app)" = ignore ] || fail "fourth loop"
 echo 999999 > "$T/govpid"; run tick
 [ "$(mode com.loop.app)" = default ] || fail "with the governor stopped (Stock) its last screen state kept a restriction"
-echo "$_gov" > "$T/govpid"; run tick; ledger 120; age_prev 300; run tick; [ "$(mode com.loop.app)" = ignore ] || fail "fifth loop"
+echo "$_gov" > "$T/govpid"; run tick; printf 'com.loop.app|1|0|0|loop|0|0\n' > "$T/tmp/zygisk_guard.pending"; ledger 120; age_prev 300; run tick; [ "$(mode com.loop.app)" = ignore ] || fail "fifth loop"
 run restore-all; [ "$(mode com.loop.app)" = default ] || fail "uninstall left a restriction"
 [ -e "$T/d/zygisk_guard" ] || [ -e "$T/d/zygisk_guard_active" ] || [ -e "$T/d/zygisk_guard_log" ] && fail "uninstall left guard files"
 grep -q 'asb_zygisk_guard.sh" tick' "$ROOT/service.sh" || fail "no service tick"
@@ -8397,6 +8423,7 @@ echo screen=1 > "$T/state"; run tick; [ -e "$T/tmp/zygisk_guard.base" ] && fail 
 [ "$(run enable wakers)" = result=enabled ] && run status | grep -qx 'level=wakers' && run status | grep -qx 'waker_min=8' || fail "wakers level"
 echo screen=0 > "$T/state"; led 20 5 20 60; run tick
 [ -s "$T/tmp/zygisk_guard.base" ] || fail "no baseline at the first screen-off sample"
+printf 'com.feed.app|1|0|0|waker|0|0\n' > "$T/tmp/zygisk_guard.pending"; run approve com.feed.app >/dev/null
 led 24 6 24 70; age prev 1200; run tick
 [ "$(mode com.feed.app)" = ignore ] && fail "4 starts in a screen-off period were treated as a waker"
 led 28 7 28 90; age prev 1200; run tick
@@ -8437,12 +8464,14 @@ H="$ROOT/webroot/index.html"
   for fn in dozePkgOk zygiskGuardParse zygiskGuardClock zygiskGuardDay zygiskGuardWhy zygiskGuardNightRow; do sed -n "/^function $fn(/,/^}/p" "$H"; done
   cat <<'EOF'
 let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
-const g = zygiskGuardParse(['version=1', 'enabled=1', 'level=wakers', 'ledger=1', 'threshold=6', 'waker_min=8',
+const g = zygiskGuardParse(['version=1', 'enabled=1', 'level=wakers', 'ledger=1', 'threshold=6', 'waker_min=8', 'sessions_required=2',
+  'pending|com.feed.app|1|8|waker|0', 'pending|com.old.app|2|11|loop|1', 'pending|bad pkg|2|11|loop|1', 'pending|com.bad.app|x|11|loop|0',
   'active|com.feed.app|1793490000|8|waker|2', 'active|com.old.app|1793490000|11',
   'event|1793490000|com.feed.app|8|limited|waker', 'event|1793490100|com.old.app|11|lifted_screen_on',
   'event|1793490200|com.feed.app|8|lifted_screen_on|3', 'event|1793490300|bad pkg|1|limited|',
   'night|1793460000|1793486000|60|1|com.oem.sys:35,com.whatsapp:13,bad pkg:9', 'night|x|1|2|3|-'].join('\n'));
-chk(g.ok && g.enabled && g.level === 'wakers' && g.wakerMin === 8, 'head: ' + JSON.stringify(g));
+chk(g.ok && g.enabled && g.level === 'wakers' && g.wakerMin === 8 && g.sessionsRequired === 2, 'head: ' + JSON.stringify(g));
+chk(g.pending.length === 2 && g.pending[0].pkg === 'com.feed.app' && g.pending[0].sessions === 1 && !g.pending[0].approved && g.pending[1].approved, 'pending dry-run rows: ' + JSON.stringify(g.pending));
 chk(g.active.length === 2 && g.active[0].why === 'waker' && g.active[0].after === 2 && g.active[1].why === 'loop' && g.active[1].after === -1, 'active rows, old and new: ' + JSON.stringify(g.active));
 chk(g.events.length === 3 && g.events[0].extra === 'waker' && g.events[1].extra === '' && g.events[2].extra === '3', 'events: ' + JSON.stringify(g.events));
 chk(g.nights.length === 1 && g.nights[0].total === 60 && g.nights[0].top.length === 2 && g.nights[0].top[0].pkg === 'com.oem.sys', 'nights: ' + JSON.stringify(g.nights));
@@ -8512,6 +8541,8 @@ run enable loops >/dev/null
 echo screen=1 > "$T/state"
 led 2 2 2 2 2 1 1 1 1 2; run tick
 [ -s "$T/tmp/zygisk_guard.prev_on" ] || fail "no screen-on sample"
+printf 'com.spin.app|1|0|0|loop_on|0|0\ncom.own.app|1|0|0|loop_on|0|0\n' > "$T/tmp/zygisk_guard.pending"
+run approve com.spin.app >/dev/null; run approve com.own.app >/dev/null
 led 10 10 12 12 9 1 1 1 1 9; age prev_on 300; run tick
 [ "$(mode com.spin.app)" = ignore ] || fail "a background restart loop with the screen on was not restricted"
 grep -Eq '^com.spin.app\|default\|default\|[0-9]+\|8\|loop_on\|10\|[0-9]+$' "$T/d/zygisk_guard_active" || fail "screen-on loop record: $(cat "$T/d/zygisk_guard_active")"
@@ -8677,7 +8708,8 @@ printf '%s\n' "$out" | grep -qx 'enabled=1' && printf '%s\n' "$out" | grep -qx '
 printf '%s\n' "$out" | grep -qx 'app|com.ig.app|3|verify|install|0|-|0|-|2|800|0|0|0|0' || fail "status app row: $out"
 run tick; [ "$(pmn)" = 0 ] || fail "compiled with the screen on and no charger"
 echo screen=0 > "$T/state"; run tick; [ "$(pmn)" = 0 ] || fail "compiled without a charger"
-echo Charging > "$T/pw/status"; echo 420 > "$T/pw/temp"; run tick; [ "$(pmn)" = 0 ] || fail "compiled on a warm battery"
+echo Charging > "$T/pw/status"; rm -f "$T/pw/temp"; run tick; [ "$(pmn)" = 0 ] || fail "compiled with unknown battery temperature"
+echo 420 > "$T/pw/temp"; run tick; [ "$(pmn)" = 0 ] || fail "compiled on a warm battery"
 mkdir "$T/d/zygisk_aot.lock"; echo "$_gov" > "$T/d/zygisk_aot.lock/pid"; echo 300 > "$T/pw/temp"
 run tick; [ "$(pmn)" = 0 ] || fail "a second compile ran beside a live one"
 echo 999999 > "$T/d/zygisk_aot.lock/pid"
@@ -8690,7 +8722,9 @@ row com.ig.app | grep -q '^com.ig.app|3|speed-profile|cmdline|[0-9]*|[0-9]*|comp
 row com.np.app | grep -q '|no_profile|0|verify$' || fail "no-profile row: $(row com.np.app)"
 grep -q '|com.ig.app|compiled|verify>speed-profile$' "$T/d/zygisk_aot_log" && grep -q '|com.np.app|no_profile|verify$' "$T/d/zygisk_aot_log" || fail "events: $(cat "$T/d/zygisk_aot_log")"
 n1="$(pmn)"; run tick; [ "$(pmn)" = "$n1" ] || fail "a no-profile app was retried before 7 days"
-ASB_ZA_RETRY_S=0 run tick >/dev/null; [ "$(pmn)" -gt "$n1" ] || fail "no retry after the retry window"
+ASB_ZA_RETRY_S=0 run tick >/dev/null; [ "$(pmn)" = "$n1" ] || fail "a second package batch ran in the same charging session"
+echo Discharging > "$T/pw/status"; run tick
+echo Charging > "$T/pw/status"; ASB_ZA_RETRY_S=0 run tick >/dev/null; [ "$(pmn)" -gt "$n1" ] || fail "no retry in a new charging session after the retry window"
 ca="$(row com.ig.app | cut -d'|' -f8)"
 printf '%s\n' "$((ca+5)).100  1000  1500 I am_proc_start: [0,4009,10201,com.ig.app,next-top-activity,{com.ig.app/com.ig.app.Main}]" \
   "$((ca+6)).100  1000  1500 I wm_activity_launch_time: [0,119,com.ig.app/.Main,600]" >> "$T/events"

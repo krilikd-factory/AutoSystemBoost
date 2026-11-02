@@ -350,25 +350,34 @@ int main(){
   g_nice="com.example.app";
   // A malformed policy observes nothing.
   put_policy("v=2\nlaunch=1\ncap=1\n"); int c0=g_connects; pre(); assert(g_connects==c0);
-  // Companion: cold start -> one "zygisk-launch", throttled inside a second; ledger split by screen.
+  // Companion: a published screen-off state vetoes locally without a datagram and without
+  // consuming the one-second launch budget. The next screen-on start must reach the governor;
+  // only the following start inside that second is throttled. The ledger still keeps both sides.
   put_policy("v=2\ngen=11\nobserver=0\nhints=0\nlaunch=1\nledger=1\n");
   { std::ofstream st(ASB_GOVERNOR_STATE); st<<"state=IDLE\nprofile=battery\nscreen=0\n"; }
   int gfd=socket(AF_UNIX,SOCK_DGRAM|SOCK_CLOEXEC,0); sockaddr_un ga{}; ga.sun_family=AF_UNIX;
   snprintf(ga.sun_path,sizeof(ga.sun_path),"%s",ASB_GOVERNOR_SOCKET); unlink(ga.sun_path);
   assert(bind(gfd,reinterpret_cast<sockaddr*>(&ga),sizeof(ga))==0);
-  std::thread gt(governor,gfd,1);
   AsbObserverFrame l=make_frame(ASB_OBSERVER_EVENT_SPAWN,ASB_OBSERVER_FLAG_TOP_APP|ASB_OBSERVER_FLAG_LAUNCH|ASB_OBSERVER_FLAG_LEDGER,"com.example.sync");
+  companion_send(l);
+  timeval no_ipc_tv{0,100000}; setsockopt(gfd,SOL_SOCKET,SO_RCVTIMEO,&no_ipc_tv,sizeof(no_ipc_tv));
+  char no_ipc[64]{}; sockaddr_un no_ipc_src{}; socklen_t no_ipc_len=sizeof(no_ipc_src);
+  assert(recvfrom(gfd,no_ipc,sizeof(no_ipc),0,reinterpret_cast<sockaddr*>(&no_ipc_src),&no_ipc_len)<0 &&
+         (errno==EAGAIN || errno==EWOULDBLOCK)); // any datagram here is a regression
+  { std::ofstream st(ASB_GOVERNOR_STATE); st<<"state=ACTIVE\nprofile=battery\nscreen=1\n"; }
+  std::thread gt(governor,gfd,1);
   companion_send(l); gt.join();
   assert(gov_cmds.size()==1 && gov_cmds[0]=="zygisk-launch");
   l=make_frame(ASB_OBSERVER_EVENT_SPAWN,ASB_OBSERVER_FLAG_TOP_APP|ASB_OBSERVER_FLAG_LAUNCH|ASB_OBSERVER_FLAG_LEDGER,"com.example.sync");
-  companion_send(l); // inside one second: throttled locally, no governor round trip
+  companion_send(l); // inside one second after the real screen-on launch: throttled locally
   AsbObserverFrame spoof=l; spoof.pid=1234567; companion_send(spoof); // peer/PID mismatch
-  { std::ofstream st(ASB_GOVERNOR_STATE); st<<"state=ACTIVE\nprofile=battery\nscreen=1\n"; }
   AsbObserverFrame g=make_frame(ASB_OBSERVER_EVENT_SPAWN,ASB_OBSERVER_FLAG_LEDGER,"com.example.sync"); companion_send(g);
   std::string s=state();
   assert(s.find("Z\tlaunch_accepted\t1\n")!=std::string::npos);
+  assert(s.find("Z\tlaunch_vetoed\t1\n")!=std::string::npos);
+  assert(s.find("Z\tlaunch_screen_off\t1\n")!=std::string::npos);
   assert(s.find("Z\tlaunch_throttled\t1\n")!=std::string::npos);
-  assert(s.find("L\tcom.example.sync\t2\t1\t2\t2\n")!=std::string::npos);
+  assert(s.find("L\tcom.example.sync\t1\t3\t3\t1\n")!=std::string::npos);
   assert(s.find("Z\tevents_dropped_invalid\t1\n")!=std::string::npos);
   assert(s.find("Z\tpolicy_generation_seen\t11\n")!=std::string::npos);
   close(gfd);
@@ -463,7 +472,7 @@ CPP
   out="$("$T/hot")" || fail "runtime: $out"
   printf '%s\n' "$out" | grep -qx 'hot path ok' || fail "$out"
   ns="$(printf '%s\n' "$out" | sed -n 's/^dormant_ns=//p')"
-  echo "PASS observer hot path: dormant ${ns} ns/fork on this host, uid/child prefilter, cold start with class lookup, unmount flag counted and never silencing the allowlist, ledger, allowlist fd, companion launch/class opcodes/old-governor fallback/screen-off refresh skipped/throttle/spoof/ledger/no-policy"
+  echo "PASS observer hot path: dormant ${ns} ns/fork on this host, uid/child prefilter, cold start with class lookup, unmount flag counted and never silencing the allowlist, ledger, allowlist fd, companion launch/class opcodes/old-governor fallback/screen-off launch veto without IPC or budget use/screen-off refresh skipped/throttle/spoof/ledger/no-policy"
 )
 
 t_zygisk_allowlist_runtime() (
@@ -532,11 +541,12 @@ SH
   run list | grep -qx 'com.example.p69' || fail 'usage history did not prioritise frequently opened apps'
   run list | grep -qx 'com.example.p05' || fail 'second usage-ranked app missing'
   run list | grep -qE 'com\.android\.systemui|com\.topjohnwu\.magisk' && fail 'protected/system package entered automatic list'
-  for k in zygisk_enabled zygisk_hints zygisk_launch zygisk_ledger; do grep -qx "$k=1" "$T/mod/config/governor.conf" || fail "$k not enabled"; done
-  grep -qx wakers "$T/state/zygisk_guard" || fail 'evidence guard is not at loops + night wakers'
-  [ -f "$T/state/zygisk_aot" ] && [ -f "$T/state/zygisk_observer/auto" ] || fail 'ART or automatic marker absent'
+  grep -qx 'zygisk_enabled=1' "$T/mod/config/governor.conf" && grep -qx 'zygisk_ledger=1' "$T/mod/config/governor.conf" || fail 'Observe did not enable observer + ledger'
+  grep -qx 'zygisk_hints=0' "$T/mod/config/governor.conf" && grep -qx 'zygisk_launch=0' "$T/mod/config/governor.conf" || fail 'Observe enabled launch policy'
+  [ ! -e "$T/state/zygisk_guard" ] && [ ! -e "$T/state/zygisk_aot" ] || fail 'Observe enabled AppOps guard or ART'
+  grep -qx 'mode=observe' "$T/state/zygisk_observer/auto" || fail 'Observe marker absent'
   grep -qx 'observer=1' "$T/mod/zygisk/policy" && grep -qx 'ledger=1' "$T/mod/zygisk/policy" || fail 'automatic policy incomplete'
-  run status | grep -qx 'automatic=on' || fail 'status does not expose automatic ownership'
+  run status | grep -qx 'automatic=on' && run status | grep -qx 'automatic_profile=observe' || fail 'status does not expose automatic ownership/profile'
   # Unchanged refresh does not advance policy generation or rewrite the policy.
   before="$(sha256sum "$T/mod/zygisk/policy")"; sleep 1
   run auto-refresh > "$T/refresh.out"
@@ -548,6 +558,15 @@ SH
   run auto-refresh >/dev/null; run list | grep -qx 'com.example.new' || fail 'new user app not added on refresh'
   : > "$T/packages"; run auto-refresh >/dev/null
   run list | grep -qx 'com.example.new' || fail 'empty Package Manager response erased the last good list'
+  run auto-enable launch > "$T/launch.out" || fail 'Launch profile failed'
+  grep -qx 'zygisk_launch=1' "$T/mod/config/governor.conf" && grep -qx 'zygisk_hints=0' "$T/mod/config/governor.conf" || fail "Launch profile has wrong observer switches: $(cat "$T/launch.out") $(cat "$T/state/zygisk_observer/auto") $(grep '^zygisk_' "$T/mod/config/governor.conf" | tr '\n' ' ')"
+  [ ! -e "$T/state/zygisk_guard" ] && [ ! -e "$T/state/zygisk_aot" ] || fail 'Launch enabled AppOps guard or ART'
+  run auto-enable battery >/dev/null || fail 'Battery profile failed'
+  grep -qx wakers "$T/state/zygisk_guard" || fail 'Battery did not enable evidence guard'
+  [ ! -e "$T/state/zygisk_aot" ] || fail 'Battery implicitly enabled ART'
+  grep -qx 'zygisk_launch=0' "$T/mod/config/governor.conf" || fail 'Battery left launch assist enabled'
+  run auto-enable observe >/dev/null || fail 'switch back to Observe failed'
+  [ ! -e "$T/state/zygisk_guard" ] && [ ! -e "$T/state/zygisk_aot" ] || fail 'Observe retained automatic guard/ART'
   run auto-disable > "$T/disable.out" || fail 'automatic disable failed'
   grep -qx 'result=disabled' "$T/disable.out" || fail 'disable result missing'
   printf 'com.example.manual\norg.example.keep\n' > "$T/want"
@@ -558,7 +577,13 @@ SH
   grep -q 'zygisk_observer/auto' "$ROOT/service.sh" && grep -q 'auto-refresh' "$ROOT/service.sh" || fail 'existing service refresh hook missing'
   grep -q 'zygisk_observer/packages.before_auto' "$ROOT/uninstall.sh" || fail 'uninstall cleanup missing'
   ! grep -qE 'auto.*(appops|RUN_ANY_IN_BACKGROUND)|appops.*auto' "$ROOT/runtime/asb_zygisk.sh" || fail 'automatic package selection became an AppOps writer'
-  echo 'PASS observer automatic setup: usage-ranked user apps, 64 bound, Full + evidence guard + charging ART, safe-mode refusal, unchanged-read-only refresh and exact restore'
+  sed -i 's/^zygisk_enabled=.*/zygisk_enabled=1/; s/^zygisk_hints=.*/zygisk_hints=1/; s/^zygisk_launch=.*/zygisk_launch=0/; s/^zygisk_ledger=.*/zygisk_ledger=0/' "$T/mod/config/governor.conf"
+  printf 'loops\n' > "$T/state/zygisk_guard"; : > "$T/state/zygisk_aot"
+  run auto-enable launch >/dev/null || fail 'automatic enable over manual state failed'
+  run auto-disable >/dev/null || fail 'restore over manual state failed'
+  for kv in zygisk_enabled=1 zygisk_hints=1 zygisk_launch=0 zygisk_ledger=0; do grep -qx "$kv" "$T/mod/config/governor.conf" || fail "previous config not restored: $kv"; done
+  grep -qx loops "$T/state/zygisk_guard" && [ -f "$T/state/zygisk_aot" ] || fail 'previous manual guard/ART state not restored'
+  echo 'PASS observer automatic setup: independent Observe/Launch/Battery profiles, no implicit ART, 64 bound, safe-mode refusal, unchanged refresh and exact pre-automatic state restore'
 )
 
 t_zygisk_policy_sync_runtime() (
@@ -606,6 +631,19 @@ CPP
   run safe-mode off
   [ ! -e "$P" ] || fail 'clearing safe mode silently re-enabled injection'
   run enable; [ -s "$P" ] || fail 're-enable did not restore the policy'
+  mkdir -p "$T/mod/runtime"
+  cat > "$T/mod/runtime/asb_zygisk_link.sh" <<'SH'
+#!/bin/sh
+printf 'v=1\nslow=com.example.partial\n' > "$ASB_ZYGISK_CLASSES"
+exit 1
+SH
+  printf 'v=1\nslow=com.example.previous\n' > "$T/mod/zygisk/classes"
+  cp "$P" "$T/policy.good"; cp "$T/mod/zygisk/classes" "$T/classes.good"
+  run sync > "$T/rollback.out" 2>/dev/null && fail 'classes writer failure was masked'
+  grep -qx 'policy=rolled_back reason=classes_write_failed' "$T/rollback.out" || fail "rollback result: $(cat "$T/rollback.out")"
+  cmp -s "$P" "$T/policy.good" && cmp -s "$T/mod/zygisk/classes" "$T/classes.good" || fail 'policy/classes pair was not restored exactly'
+  [ ! -e "$P.rollback.tmp" ] && [ ! -e "$T/mod/zygisk/classes.rollback.tmp" ] || fail 'rollback temporary files survived'
+  rm -f "$T/mod/runtime/asb_zygisk_link.sh"
   run disable; [ ! -e "$P" ] || fail 'disable left the policy'
   run status | grep -qx 'policy=absent' || fail 'status does not report the policy'
   grep -q 'asb_zygisk.sh" sync' "$ROOT/post-fs-data.sh" || fail 'boot does not regenerate the policy before zygote'
@@ -718,12 +756,12 @@ EOF
   _emit() { printf '%s\t%s\t%s\n' "$1" "$2" "$3" >> "$T/out"; }
   MODDIR="$T/mod"; PROC="$T/proc"; DATA="$T/data"; ASB_ZYGISK_DIR="$T/data/asb/zygisk_observer"; ASB_ZYGISK_RUN_DIR="$T/run"
   printf 'L\tcom.example.sync\t5\t0\t0\t9\nZ\tlaunch_accepted\t1\n' > "$T/run/state.armeabi-v7a.tsv"
-  printf 'Z\tlaunch_long\t4\nZ\tlaunch_short\t2\nZ\tlaunch_class_fallback\t1\nZ\tclasses_loaded\t1\nZ\tclasses_slow\t5\nZ\tclasses_fast\t3\nZ\tdenylist_spawns\t6\nZ\tlaunch_long\tx\nZ\thints_screen_off\t9\n' >> "$T/run/state.arm64-v8a.tsv"
-  printf 'Z\tlaunch_long\t1\nZ\tdenylist_spawns\t2\n' >> "$T/run/state.armeabi-v7a.tsv"
+  printf 'Z\tlaunch_long\t4\nZ\tlaunch_short\t2\nZ\tlaunch_class_fallback\t1\nZ\tclasses_loaded\t1\nZ\tclasses_slow\t5\nZ\tclasses_fast\t3\nZ\tdenylist_spawns\t6\nZ\tlaunch_long\tx\nZ\thints_screen_off\t9\nZ\tlaunch_screen_off\t1\n' >> "$T/run/state.arm64-v8a.tsv"
+  printf 'Z\tlaunch_long\t1\nZ\tdenylist_spawns\t2\nZ\tlaunch_screen_off\t1\n' >> "$T/run/state.armeabi-v7a.tsv"
   . "$ROOT/runtime/asb_zygisk_info.sh"; _asb_zygisk_info
   want() { grep -Fqx "zygisk_observer	$1	$2" "$T/out" || fail "missing $1=$2: $(cat "$T/out")"; }
   want launch_long 5; want launch_short 2; want launch_class_fallback 1; want launch_classes_loaded 1
-  want launch_classes 'slow 5, fast 3'; want denylist_spawns 8; want hints_screen_off 9
+  want launch_classes 'slow 5, fast 3'; want denylist_spawns 8; want hints_screen_off 9; want launch_screen_off 2
   want enabled 1; want enabled_packages 1; want loaded_processes 1; want events_total 10; want link_state connected
   want auto_mode 0
   want events_dropped_rate_limit 1; want ipc_cpu_ms 3; want ipc_wakeups 12; want memory_kb 2222
@@ -758,6 +796,7 @@ EOF
   env -u ASB_ZYGISK_DIR ASB_ZYGISK_MODDIR="$T/mod" ASB_ZYGISK_RUN_DIR="$T/run" ASB_ZYGISK_PROC="$T/proc" ASB_ZYGISK_DATA="$T/adb" \
     sh "$ROOT/runtime/asb_zygisk.sh" link-status > "$T/link2.out"
   grep -Fqx "$(printf 'D\tzygisk_observer\tauto_mode\t1')" "$T/link2.out" || fail "automatic setup not seen by link-status: $(grep auto_mode "$T/link2.out")"
+  grep -Fqx "$(printf 'D\tzygisk_observer\tauto_profile\tlegacy')" "$T/link2.out" || fail 'legacy automatic profile was not reported honestly'
   grep -Fqx "$(printf 'D\tzygisk_observer\tenabled_packages\t2')" "$T/link2.out" || fail 'observed apps not seen by link-status'
   : > "$T/adb/asb/zygisk_observer/disable"
   env -u ASB_ZYGISK_DIR ASB_ZYGISK_MODDIR="$T/mod" ASB_ZYGISK_RUN_DIR="$T/run" ASB_ZYGISK_PROC="$T/proc" ASB_ZYGISK_DATA="$T/adb" \
@@ -823,15 +862,16 @@ function deviceVal(d,s,k){return d&&d.sections&&d.sections[s]&&d.sections[s][k]!
 function mk(tag){const e={tagName:tag,className:'',children:[],style:{},disabled:false,value:'',attrs:{},setAttribute(k,v){e.attrs[k]=String(v);},classList:{add(){}},appendChild(c){e.children.push(c);c.parentNode=e;return c;},querySelector(sel){const c=sel.slice(1);return find(e,c);},replaceChild(n,o){const i=e.children.indexOf(o);if(i>=0){e.children[i]=n;n.parentNode=e;}return o;}};Object.defineProperty(e,'textContent',{get(){return e._text||''},set(v){e._text=String(v);e.children=[];}});return e;}
 const hosts=Array.from({length:5},()=>mk('div'));
 const document={createElement:mk,querySelectorAll(sel){if(sel==='.hdr-info')return hosts;if(sel==='.zygisk-header-link')return hosts.map(h=>find(h,'zygisk-header-link')).filter(Boolean);return [];}};
-function _el(){return null;} function openZygiskPage(){} function shQuote(s){return "'"+s+"'";}
+function _el(){return null;} function openZygiskPage(){} function shQuote(s){return "'"+s+"'";} function dozePkgOk(s){return /^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)+$/.test(s||'');}
 function logReportSec(t){const e=mk('div');e.className='lgr-sec';const h=mk('div');h.textContent=t;e.appendChild(h);return e;}
+function zygiskButtonIcon(btn){return btn;}
 let _zyGuard={enabled:true,level:'wakers'},_zyAot={enabled:true}; function zygiskGuardParse(s){return {enabled:/^enabled=1$/m.test(s),level:(/^level=(.+)$/m.exec(s)||[])[1]||'off'};} function zygiskAotParse(s){return {enabled:/^enabled=1$/m.test(s)};}
 function uiSound(){} function haptic(){} let pageRenders=0; function zygiskPageRender(){pageRenders++;} let _zygiskOpen=true; let _cfgVals={}; let _cfgLoadSig='x';
 function cfgRenderRow(list,it){const row=mk('div');row.className='cfg-row';row.setAttribute('data-key',it.key);const sw=mk('div');sw.className='cfg-switch';sw.setAttribute('role','switch');row.appendChild(sw);list.appendChild(row);}
  function logReportNote(t){const e=mk('div');e.textContent=t;return e;}
 let commands=[],refreshes=0,toastText=''; async function asbPaintYield(){} async function run(c){commands.push(c);return {errno:0,stdout:''};} function runOk(r){return r.errno===0;} function runText(r){return r.stdout||'';} function toast(t){toastText=t;} function asbDeviceInfoLoad(){refreshes++;}
 JS
-    sed -n '/^function parseDeviceInfo(/,/^}/p; /^function devicePressureScale(/,/^}/p; /^function deviceZygiskLinkState(/,/^}/p; /^function deviceZygiskLinkVerdict(/,/^}/p; /^function deviceZygiskLink(/,/^}/p; /^let _zygiskHeaderSeq/p; /^let _zygiskHeaderAt/p; /^const ZYGISK_HEADER_TTL_MS/p; /^const _ASB_PART/p; /^function runBatchCmd(/,/^}/p; /^function runBatchSplit(/,/^}/p; /^async function runBatch(/,/^}/p; /^let _zygiskLoadSeq/p; /^const ZYGISK_MODES = \[/,/^\];/p; /^function zygiskModeOf(/,/^}/p; /^function zygiskAutoCard(/,/^}/p; /^async function zygiskAutoSet(/,/^}/p; /^function zygiskModeCard(/,/^}/p; /^async function zygiskModeSet(/,/^}/p; /^function zygiskHeaderPaint(/,/^}/p; /^function zygiskHeaderInit(/,/^}/p; /^function zygiskHeaderPublish(/,/^}/p; /^async function zygiskHeaderRefresh(/,/^}/p; /^function cfgRenderZygiskCard(/,/^}/p; /^function deviceZygiskEditor(/,/^}/p' "$ROOT/webroot/index.html"
+    sed -n '/^function parseDeviceInfo(/,/^}/p; /^function devicePressureScale(/,/^}/p; /^function deviceZygiskLinkState(/,/^}/p; /^function deviceZygiskLinkVerdict(/,/^}/p; /^function deviceZygiskLink(/,/^}/p; /^let _zygiskHeaderSeq/p; /^let _zygiskHeaderAt/p; /^const ZYGISK_HEADER_TTL_MS/p; /^const _ASB_PART/p; /^function runBatchCmd(/,/^}/p; /^function runBatchSplit(/,/^}/p; /^async function runBatch(/,/^}/p; /^let _zygiskLoadSeq/p; /^const ZYGISK_MODES = \[/,/^\];/p; /^function zygiskModeOf(/,/^}/p; /^function zygiskAutoCard(/,/^}/p; /^async function zygiskAutoSet(/,/^}/p; /^async function zygiskGuardPackage(/,/^}/p; /^function zygiskModeCard(/,/^}/p; /^async function zygiskModeSet(/,/^}/p; /^function zygiskHeaderPaint(/,/^}/p; /^function zygiskHeaderWordmark(/,/^}/p; /^function zygiskHeaderInit(/,/^}/p; /^function zygiskHeaderPublish(/,/^}/p; /^async function zygiskHeaderRefresh(/,/^}/p; /^function cfgRenderZygiskCard(/,/^}/p; /^function deviceZygiskEditor(/,/^}/p' "$ROOT/webroot/index.html"
     cat <<'JS'
 let bad=0;const chk=(c,m)=>{if(!c){console.log('FAIL '+m);bad++;}};
 function find(n,c){if(n.className&&n.className.split(/\s+/).includes(c))return n;for(const x of n.children||[]){const r=find(x,c);if(r)return r;}return null;}
@@ -902,25 +942,34 @@ commands=[];await zygiskModeSet('off');chk(/set-many --snapshot '[^']+' 'zygisk_
 run=async c=>{commands.push(c);return {errno:0,stdout:'refused\n'+_ASB_PART+'write\n'+_ASB_PART+'link',stderr:''};};_cfgVals={};
 await zygiskModeSet('watch');chk(!_cfgVals.zygisk_ledger&&/not saved/.test(toastText),'a refused write was reported as applied');
 // fix284: automatic card, its single-shell command flow and read-only package editor.
-let autoCard=zygiskAutoCard(md({auto_mode:'1',enabled_packages:'64'}));
-chk(find(autoCard,'zy-auto-summary').textContent.includes('64')&&find(autoCard,'zy-auto-summary').textContent.includes('Loops + night wakers')&&find(autoCard,'zy-auto-summary').textContent.includes('ART: On'),'automatic summary does not show actual package/guard/ART state');
+let autoCard=zygiskAutoCard(md({auto_mode:'1',auto_profile:'battery',enabled_packages:'64'}));
+chk(find(autoCard,'zy-auto-summary').textContent.includes('64')&&find(autoCard,'zy-auto-summary').textContent.includes('Loops + night wakers')&&find(autoCard,'zy-auto-summary').textContent.includes('ART (independent): On'),'automatic summary does not show actual profile/package/guard/independent ART state');
+chk(find(autoCard,'zy-auto-profiles').children.length===3,'automatic card lacks independent Observe/Launch/Battery profiles');
 chk(find(autoCard,'zy-auto-actions').children.length===2,'enabled automatic card lacks refresh/disable actions');
-chk(zygiskAutoCard(md({auto_mode:'0'})).children.length>0&&find(zygiskAutoCard(md({auto_mode:'0'})),'zy-auto-actions').children.length===1,'off automatic card must offer only enable');
+chk(zygiskAutoCard(md({auto_mode:'0'})).children.length>0&&find(zygiskAutoCard(md({auto_mode:'0'})),'zy-auto-actions').children.length===0,'off automatic card has an obsolete combined enable action');
 const autoEd=deviceZygiskEditor(md({auto_mode:'1',enabled_package_list:'com.example.auto'}));
 chk(find(autoEd,'dev-zygisk-input').attrs.readonly==='readonly','automatic package editor is not read-only');
 chk(autoEd.children.flatMap(x=>x.children||[]).filter(x=>x.tagName==='button')[0].hidden===true,'manual save remains visible in automatic mode');
 const autoOutput=(result,auto)=>result+'\n'+_ASB_PART+'set\n'+raw({auto_mode:auto?'1':'0',enabled_packages:auto?'64':'0'})+'\n'+_ASB_PART+'link\nversion=1\nenabled='+(auto?'1':'0')+'\nlevel=wakers\n'+_ASB_PART+'guard\nversion=1\nenabled='+(auto?'1':'0')+'\n'+_ASB_PART+'aot';
 let busyAtRun='',labelAtRun='';
-commands=[];run=async c=>{commands.push(c);busyAtRun=_zygiskAutoBusy;labelAtRun=find(zygiskAutoCard(md({auto_mode:'0'})),'zy-auto-btn-primary').textContent;return {errno:0,stdout:autoOutput('result=enabled',true),stderr:''};};
-await zygiskAutoSet('enable');
-chk(busyAtRun==='enable'&&labelAtRun==='Setting up…','fix287: the button did not say it was working while the setup ran');
+commands=[];run=async c=>{commands.push(c);busyAtRun=_zygiskAutoBusy;labelAtRun=find(zygiskAutoCard(md({auto_mode:'0'})),'zy-auto-profiles').children[1].textContent;return {errno:0,stdout:autoOutput('result=enabled',true),stderr:''};};
+await zygiskAutoSet('enable','launch');
+chk(busyAtRun==='enable:launch'&&labelAtRun==='Setting up…','the selected independent profile did not say it was working while setup ran');
 chk(_zygiskAutoBusy==='','fix287: the busy label outlived the setup');
-chk(commands.length===1&&commands[0].includes('auto-enable'),'automatic enable is not one shell');
+chk(commands.length===1&&commands[0].includes('auto-enable launch'),'automatic enable is not one profile-specific shell');
 chk(commands[0].indexOf('auto-enable')<commands[0].indexOf('link-status')&&commands[0].includes('asb_zygisk_guard.sh')&&commands[0].includes('asb_zygisk_aot.sh'),'automatic enable did not refresh all state');
 chk(/Automatic Zygisk setup is on/.test(toastText),'automatic enable result not reported');
 commands=[];run=async c=>{commands.push(c);return {errno:0,stdout:autoOutput('result=refreshed',true),stderr:''};};await zygiskAutoSet('refresh');chk(commands.length===1&&commands[0].includes('auto-refresh')&&/refreshed/.test(toastText),'automatic refresh flow failed');
-commands=[];run=async c=>{commands.push(c);return {errno:0,stdout:autoOutput('result=disabled',false),stderr:''};};await zygiskAutoSet('disable');chk(commands.length===1&&commands[0].includes('auto-disable')&&/previous app list restored/.test(toastText),'automatic disable/restore flow failed');
-commands=[];run=async c=>{commands.push(c);return {errno:0,stdout:autoOutput('result=safe_mode',false),stderr:''};};await zygiskAutoSet('enable');chk(/Safe mode is on/.test(toastText)&&!/_cfgLoadSig/.test(''),'Safe mode refusal was not explained');
+commands=[];run=async c=>{commands.push(c);return {errno:0,stdout:autoOutput('result=disabled',false),stderr:''};};await zygiskAutoSet('disable');chk(commands.length===1&&commands[0].includes('auto-disable')&&/previous Zygisk state restored/.test(toastText),'automatic disable/restore flow failed');
+commands=[];run=async c=>{commands.push(c);return {errno:0,stdout:'result=approved\n'+_ASB_PART+'set\nversion=1\nenabled=1\nlevel=wakers\n'+_ASB_PART+'guard\n',stderr:''};};
+await zygiskGuardPackage('approve','com.loop.app');
+chk(commands.length===1&&commands[0].includes("asb_zygisk_guard.sh' approve 'com.loop.app'")&&commands[0].includes("asb_zygisk_guard.sh' status"),'guard approval is not one shell followed by a fresh status');
+chk(_zyGuard.enabled&&_zyGuard.level==='wakers'&&!_zygiskModeBusy&&/two-session evidence/.test(toastText),'guard approval did not update state/busy/toast');
+commands=[];run=async c=>{commands.push(c);return {errno:0,stdout:'result=released\n'+_ASB_PART+'set\nversion=1\nenabled=1\nlevel=wakers\n'+_ASB_PART+'guard\n',stderr:''};};
+await zygiskGuardPackage('release','com.loop.app');
+chk(commands.length===1&&commands[0].includes("asb_zygisk_guard.sh' release 'com.loop.app'")&&/Previous background mode restored/.test(toastText),'emergency per-package release flow failed');
+commands=[];await zygiskGuardPackage('delete','com.loop.app');chk(commands.length===0,'an unsupported guard package action reached the shell');
+commands=[];run=async c=>{commands.push(c);return {errno:0,stdout:autoOutput('result=safe_mode',false),stderr:''};};await zygiskAutoSet('enable','observe');chk(/Safe mode is on/.test(toastText)&&!/_cfgLoadSig/.test(''),'Safe mode refusal was not explained');
 if(bad)process.exit(1);console.log('ok');})().catch(e=>{console.error(e);process.exit(1)});
 JS
   } > "$T/test.js"
@@ -963,10 +1012,15 @@ t_zygisk_capture_digest_runtime() (
       printf 'D\tzygisk_observer\tpolicy_generation\t42\nD\tzygisk_observer\tpolicy_seen_generation\t42\n'
       printf 'D\tzygisk_observer\tenabled_packages\t1\nD\tzygisk_observer\tinstalled_abis\tarm64-v8a\n'
       printf 'D\tzygisk_observer\tlifecycle_hints\t1\nD\tzygisk_observer\tlaunch_hints\t1\nD\tzygisk_observer\tspawn_ledger\t1\nD\tzygisk_observer\tmemory_kb\t2222\n'
-      for _k in events_total spawn_events launch_events launch_accepted policy_hints hints_accepted hints_vetoed ledger_events events_dropped_total ipc_cpu_ms ipc_wakeups; do
+      printf 'D\tzygisk_observer\tledger_top_screen_off\tcom.example.sync 17/3\nD\tzygisk_observer\tledger_restart_loops\t4\n'
+      for _k in events_total spawn_events launch_events launch_accepted launch_vetoed launch_unavailable launch_throttled launch_screen_off policy_hints hints_accepted hints_vetoed ledger_events events_dropped_total ipc_cpu_ms ipc_wakeups; do
         printf 'D\tzygisk_observer\t%s\t%s\n' "$_k" "$_base"
       done
     } > "$_file"
+  }
+  _set_counter() {
+    awk -F '\t' -v OFS='\t' -v key="$2" -v value="$3" '$3 == key { $4=value } { print }' "$1" > "$1.tmp"
+    mv "$1.tmp" "$1"
   }
   _snap "$CAP/zygisk_observer_start.tsv" waiting 10
   _snap "$CAP/zygisk_observer_latest.tsv" connected 15
@@ -975,8 +1029,75 @@ t_zygisk_capture_digest_runtime() (
   printf '%s\n' "$zy" | grep -q $'^zygisk\tstate=connected\tstart_state=waiting\tcoverage=start_latest' || fail "capture verdict missing: $zy"
   printf '%s\n' "$zy" | grep -q $'events_total_delta=5' || fail 'event delta missing'
   printf '%s\n' "$zy" | grep -q $'launch_accepted_delta=5' || fail 'launch delta missing'
+  printf '%s\n' "$zy" | grep -q $'launch_vetoed_delta=5' && printf '%s\n' "$zy" | grep -q $'launch_unavailable_delta=5' && printf '%s\n' "$zy" | grep -q $'launch_throttled_delta=5' && printf '%s\n' "$zy" | grep -q $'launch_screen_off_delta=5' || fail 'cold-start outcome deltas missing'
+  printf '%s\n' "$zy" | grep -q $'memory_kb=2222' && printf '%s\n' "$zy" | grep -q $'ledger_top_screen_off=com.example.sync 17/3' && printf '%s\n' "$zy" | grep -q $'ledger_restart_loops=4' || fail 'ledger diagnostics missing'
   printf '%s\n' "$zy" | grep -q $'ipc_cpu_ms_delta=5' || fail 'IPC delta missing'
   printf '%s\n' "$zy" | grep -q $'deltas=available' || fail 'valid deltas not acknowledged'
+  # Governor-side action evidence comes only from the state blocks already present in
+  # before/after snapshots. Decoys outside that block must never enter the projection.
+  cat > "$CAP/before.txt" <<'EOF_GOV_BEFORE'
+===== before =====
+zygisk_launch_accepted=999
+--- state (key=value) ---
+zygisk_launch_accepted=10
+zygisk_launch_vetoed=2
+zygisk_refresh_accepted=7
+zygisk_refresh_vetoed=1
+unlock_cold_lifts=4
+unlock_cold_extends=3
+unlock_cold_long=2
+unlock_cold_trims=1
+unrelated_counter=500
+--- end state ---
+unlock_cold_lifts=999
+EOF_GOV_BEFORE
+  cat > "$CAP/after.txt" <<'EOF_GOV_AFTER'
+===== after =====
+--- state (key=value) ---
+zygisk_launch_accepted=15
+zygisk_launch_vetoed=4
+zygisk_refresh_accepted=10
+zygisk_refresh_vetoed=2
+unlock_cold_lifts=7
+unlock_cold_extends=5
+unlock_cold_long=4
+unlock_cold_trims=2
+--- end state ---
+EOF_GOV_AFTER
+  gov="$(ASB_LK_LOCK="$T/no-lock" ASB_LK_STATE_DIR="$T/state" ASB_CFG_FILE="$T/no-config" sh "$ROOT/tools/logkit/asb_fullday_digest.sh" "$CAP" | awk -F '\t' '$1 == "zygov"')"
+  printf '%s\n' "$gov" | grep -q $'^zygov\tcoverage=start_latest' || fail "governor coverage missing: $gov"
+  for field in zygisk_launch_accepted_delta=5 zygisk_launch_vetoed_delta=2 zygisk_refresh_accepted_delta=3 zygisk_refresh_vetoed_delta=1 unlock_cold_lifts_delta=3 unlock_cold_extends_delta=2 unlock_cold_long_delta=2 unlock_cold_trims_delta=1 deltas=available; do
+    printf '%s\n' "$gov" | grep -q "	$field" || fail "governor action projection: $field: $gov"
+  done
+  ! printf '%s\n' "$gov" | grep -q '999\|unrelated_counter' || fail 'state-block allowlist leaked decoy evidence'
+  sed -i 's/^unlock_cold_lifts=7$/unlock_cold_lifts=3/' "$CAP/after.txt"
+  gov="$(ASB_LK_LOCK="$T/no-lock" ASB_LK_STATE_DIR="$T/state" ASB_CFG_FILE="$T/no-config" sh "$ROOT/tools/logkit/asb_fullday_digest.sh" "$CAP" | awk -F '\t' '$1 == "zygov"')"
+  for k in zygisk_launch_accepted zygisk_launch_vetoed zygisk_refresh_accepted zygisk_refresh_vetoed unlock_cold_lifts unlock_cold_extends unlock_cold_long unlock_cold_trims; do
+    printf '%s\n' "$gov" | grep -q "	${k}_delta=unknown" || fail "governor reset invented $k: $gov"
+  done
+  printf '%s\n' "$gov" | grep -q $'deltas=counter_reset_or_restart' || fail 'governor reset was not named'
+  rm "$CAP/before.txt"
+  gov="$(ASB_LK_LOCK="$T/no-lock" ASB_LK_STATE_DIR="$T/state" ASB_CFG_FILE="$T/no-config" sh "$ROOT/tools/logkit/asb_fullday_digest.sh" "$CAP" | awk -F '\t' '$1 == "zygov"')"
+  printf '%s\n' "$gov" | grep -q $'coverage=latest_only' && printf '%s\n' "$gov" | grep -q $'unlock_cold_lifts_latest=3' && printf '%s\n' "$gov" | grep -q $'unlock_cold_lifts_delta=unknown' || fail "single governor snapshot was not bounded: $gov"
+  rm "$CAP/after.txt"
+  # SM8750 field shape: an outcome decreased across a companion restart while the total
+  # stayed at ten and accepted rose. No cold-start delta is comparable in that window;
+  # independent spawn activity remains a valid monotonic counter.
+  _snap "$CAP/zygisk_observer_start.tsv" confirmed 0
+  _snap "$CAP/zygisk_observer_latest.tsv" confirmed 0
+  for pair in 'launch_events 10' 'launch_accepted 8' 'launch_vetoed 0' 'launch_unavailable 2' 'launch_throttled 0' 'spawn_events 92'; do
+    set -- $pair; _set_counter "$CAP/zygisk_observer_start.tsv" "$1" "$2"
+  done
+  for pair in 'launch_events 10' 'launch_accepted 9' 'launch_vetoed 0' 'launch_unavailable 1' 'launch_throttled 0' 'spawn_events 102'; do
+    set -- $pair; _set_counter "$CAP/zygisk_observer_latest.tsv" "$1" "$2"
+  done
+  zy="$(ASB_LK_LOCK="$T/no-lock" ASB_LK_STATE_DIR="$T/state" ASB_CFG_FILE="$T/no-config" sh "$ROOT/tools/logkit/asb_fullday_digest.sh" "$CAP" | awk -F '\t' '$1 == "zygisk"')"
+  for k in launch_events launch_accepted launch_vetoed launch_unavailable launch_throttled launch_screen_off; do
+    printf '%s\n' "$zy" | grep -q "	${k}_delta=unknown" || fail "reset launch family invented $k: $zy"
+  done
+  printf '%s\n' "$zy" | grep -q $'spawn_events_delta=10' || fail 'an independent monotonic spawn counter was discarded'
+  printf '%s\n' "$zy" | grep -q $'deltas=counter_reset_or_restart' || fail 'partial cold-start reset was not named'
+  _snap "$CAP/zygisk_observer_start.tsv" waiting 10
   _snap "$CAP/zygisk_observer_latest.tsv" connected 4
   zy="$(ASB_LK_LOCK="$T/no-lock" ASB_LK_STATE_DIR="$T/state" ASB_CFG_FILE="$T/no-config" sh "$ROOT/tools/logkit/asb_fullday_digest.sh" "$CAP" | awk -F '\t' '$1 == "zygisk"')"
   printf '%s\n' "$zy" | grep -q $'events_total_delta=unknown' || fail 'counter reset invented a delta'
@@ -986,8 +1107,10 @@ t_zygisk_capture_digest_runtime() (
   printf '%s\n' "$zy" | grep -q $'coverage=latest_only' || fail 'single snapshot not bounded'
   printf '%s\n' "$zy" | grep -q $'events_total_delta=unknown' || fail 'single snapshot invented a delta'
   rm "$CAP/zygisk_observer_latest.tsv"
-  ! ASB_LK_LOCK="$T/no-lock" ASB_LK_STATE_DIR="$T/state" ASB_CFG_FILE="$T/no-config" sh "$ROOT/tools/logkit/asb_fullday_digest.sh" "$CAP" | grep -q '^zygisk' || fail 'legacy capture gained fake Zygisk evidence'
-  echo 'PASS observer capture digest: start/latest verdicts, monotonic deltas, reset and legacy-capture honesty'
+  legacy="$(ASB_LK_LOCK="$T/no-lock" ASB_LK_STATE_DIR="$T/state" ASB_CFG_FILE="$T/no-config" sh "$ROOT/tools/logkit/asb_fullday_digest.sh" "$CAP")"
+  ! printf '%s\n' "$legacy" | grep -q '^zygisk' || fail 'legacy capture gained fake Zygisk evidence'
+  ! printf '%s\n' "$legacy" | grep -q '^zygov' || fail 'legacy capture gained fake Governor action evidence'
+  echo 'PASS observer capture digest: companion/Governor start/latest verdicts, monotonic deltas, full-family resets, single-snapshot and legacy-capture honesty'
 )
 
 t_zygisk_link_runtime() (
