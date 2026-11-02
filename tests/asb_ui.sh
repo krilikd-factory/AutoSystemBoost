@@ -7161,11 +7161,13 @@ import sys
 h = open(sys.argv[1], encoding='utf-8').read()
 def body(start, end):
     return h[h.index(start):h.index(end, h.index(start))]
-for name in ('async function zygiskAutoSet(', 'async function zygiskModeSet(', 'async function zygiskGuardSet(', 'async function zygiskAotSet(', 'async function zygiskPageLoad(', 'async function wlManualLoad('):
+for name in ('async function zygiskAutoSet(', 'async function zygiskGuardSet(', 'async function zygiskAotSet(', 'async function zygiskPageLoad(', 'async function wlManualLoad('):
     b = body(name, '\n}\n')
     assert 'await asbPaintYield();' in b, name + ' does not let its busy state paint'
     first_root = min(i for i in (b.find('await runBatch('), b.find('await run(')) if i >= 0)
     assert b.index('await asbPaintYield();') < first_root, name + ' yields after its root call'
+mode = body('async function zygiskModeSet(', '\n}\n')
+assert "return zygiskAutoSet('enable', m.profile);" in mode and 'await run' not in mode, 'unified Mode bypasses the yielding automatic flow'
 lp = body('function liveBatchParts(', '\n}\n')
 assert "parts.push(['meter', LV_METER_CMD])" in lp and "parts.push(['rom', stockTelemetryCmd(refresh)])" in lp, 'Monitor still spends separate shells'
 assert "_selectedProfile !== 'smart' && _selectedProfile !== 'stock'" in lp, 'the ROM part runs on Smart or doubles Stock'
@@ -8437,14 +8439,16 @@ assert 'run(' not in zp and 'asbAfterNavAnim(function () { if (_zygiskOpen) zygi
 zl = body('async function zygiskPageLoad(user) {')
 assert zl.count('runBatch(') == 1 and zl.replace('runBatch(', '').count('run(') == 0 and 'link-status' in zl and 'asb_zygisk_guard.sh' in zl and 'asb_zygisk_aot.sh' in zl and 'asb_device_info' not in zl, 'the Zygisk page runs more than its one read'
 mode = body('async function zygiskModeSet(id) {')
-assert mode.count('runBatch(') == 1 and ' run(' not in mode and 'set-many --snapshot' in mode, 'a mode change is not one locked write'
+assert mode.count('runBatch(') == 0 and ' run(' not in mode and "return zygiskAutoSet('enable', m.profile);" in mode, 'a unified mode does not delegate to the transactional automatic flow'
+auto = body('async function zygiskAutoSet(action, profile) {')
+assert auto.count('runBatch(') == 1 and ' run(' not in auto and "' auto-' + action" in auto, 'automatic mode change is not one locked batch'
 page = h[h.index('id="zygiskPage"'):h.index('<div class="toast" id="toast">')]
 for unrelated in ('cfgList', 'cfg-tile', 'ltpo', 'haptic_strength', 'deviceBody'):
     assert unrelated not in page, 'the Zygisk page carries unrelated content: ' + unrelated
 assert "if (_zygiskOpen) d++;" in h and "if (_zygiskOpen) { uiSound('nav'); closeZygiskPage(); return; }" in h
 assert "'ASB_DEVINFO_LSPOSED=0 sh ' + MD + '/tools/asb_device_info.sh 2>/dev/null'" in h, 'Device page still waits for the hook collector'
 PY
-echo "PASS webui fix278 perf: one shell per screen read (batch shape checked on a real shell), no root call on the tap, fits coalesced past the slide, an isolated Zygisk page with one mode write"
+echo "PASS webui fix278 perf: one shell per screen read (batch shape checked on a real shell), no root call on the tap, fits coalesced past the slide, an isolated Zygisk page with one delegated transactional mode write"
 )
 
 t_logkit_jank_why_runtime() (
