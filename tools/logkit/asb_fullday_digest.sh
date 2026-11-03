@@ -614,10 +614,15 @@ _lte_snaps="$(for _sf in "$_DIR"/before.txt "$_DIR"/snapshot_*.txt "$_DIR"/reboo
   printf '%s %s\n' "${_se:-0}" "$_sf"
 done | sort -n | awk '{ print $2 }')"
 if [ -n "$_lte_snaps" ]; then
-  awk -F= '/^battery_hold_(kept|released|testing)=[0-9]+$/ { k = $1; sub(/^battery_hold_/, "", k); v[k] = $2 + 0; n++ }
-    END { if (("kept" in v) && ("released" in v) && ("testing" in v) && v["kept"] + v["released"] + v["testing"] > 0)
-            printf "bhold\tkept=%d\treleased=%d\ttesting=%d\n", v["kept"], v["released"], v["testing"] }' \
-    "$(printf '%s\n' "$_lte_snaps" | tail -n 1)" 2>/dev/null
+  awk -F= '
+    /^battery_hold_(kept|released|testing)=[0-9]+$/ { k = $1; sub(/^battery_hold_/, "", k); v[k] = $2 + 0 }
+    /^thermal_spike_(holds|last_c|last_peer_hi|last_peer_n)=[0-9]+$/ { t[$1] = $2 + 0 }
+    END {
+      if (("kept" in v) && ("released" in v) && ("testing" in v) && v["kept"] + v["released"] + v["testing"] > 0)
+        printf "bhold\tkept=%d\treleased=%d\ttesting=%d\n", v["kept"], v["released"], v["testing"]
+      if ("thermal_spike_holds" in t)
+        printf "tspike\tholds=%d\tlast_c=%d\tpeer_hi=%d\tpeer_n=%d\n", t["thermal_spike_holds"], t["thermal_spike_last_c"], t["thermal_spike_last_peer_hi"], t["thermal_spike_last_peer_n"]
+    }' "$(printf '%s\n' "$_lte_snaps" | tail -n 1)" 2>/dev/null
   printf '%s\n' "$_lte_snaps" | while IFS= read -r _sf; do
     awk '/^  lte_screenoff status:/ { t = 1; next }
          t && /^    [a-z_]+=/ { l = $0; sub(/^ +/, "", l); k = l; sub(/=.*/, "", k); v = l; sub(/^[^=]*=/, "", v); V[k] = v; next }
@@ -626,6 +631,30 @@ if [ -n "$_lte_snaps" ]; then
   done | awk '
     NF >= 7 { n++; if (n == 1) { a0 = $3; m0 = $4; q0 = $7 } en = $1; li = $2; a1 = $3; m1 = $4; q1 = $7; if ($5 == 1) w++; if ($6 == 1) us = 1 }
     END { if (n >= 2 && (en == 1 || li == 1)) printf "lte\ten=%d\tlight=%d\tapplies=%d\tlte_min=%d\twatch=%d\tsnaps=%d\tunsup=%d\tquiet=%d\n", en, li, a1 - a0, m1 - m0, w, n, us, q1 - q0 }'
+fi
+
+# Recent scroll-hold verdicts are already event-driven governor output.  Republish
+# at most the last six; never start a collector or invent a verdict for a missing log.
+if [ -s "$_DIR/governor.log.session" ]; then
+  awk '
+    /battery_hold: .* - (kept|released|a scroll run|full test)/ {
+      line = $0; sub(/^.*battery_hold: /, "", line)
+      app = line; sub(/ - .*/, "", app); gsub(/[\t\r\n]/, " ", app)
+      state = "inconclusive"
+      if (line ~ /: kept$/ || line ~ /: helps scrolling/) state = "kept"
+      else if (line ~ /does not help/) state = "released"
+      without = "-"; with = "-"
+      if (line ~ /janky [0-9.]+% without, [0-9.]+% with/) {
+        rates = line; sub(/^.*janky /, "", rates)
+        without = rates; sub(/%.*/, "", without)
+        with = rates; sub(/^[^,]*, /, "", with); sub(/%.*/, "", with)
+      }
+      n++; apps[n] = app; states[n] = state; wo[n] = without; wi[n] = with
+    }
+    END { start = n > 6 ? n - 5 : 1
+      for (i = start; i <= n; i++)
+        printf "bhv\tapp=%s\tstate=%s\twithout=%s\twith=%s\n", apps[i], states[i], wo[i], wi[i]
+    }' "$_DIR/governor.log.session" 2>/dev/null
 fi
 
 # ----- wakelocks (top apps by held time) -------------------------------------
