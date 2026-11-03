@@ -3670,8 +3670,14 @@ static void asb_bhold_tick(const asb_fsm_t *fsm, const asb_metrics_t *m) {
     }
     g_bhold_allow = side;
     g_bhold_now = a->state == 0 ? 2 : (a->state == 1 ? 1 : 0);
-    if (a->state == 0 && (g_bhold_probe_ts == 0 || now - g_bhold_probe_ts >= ASB_BHOLD_PROBE_S ||
-                          now < g_bhold_probe_ts)) {
+    /* Do not launch another passive scroll experiment while the screen has
+     * stayed untouched since the previous probe.  If the kernel exposes no
+     * readable touch stream, keep the old bounded cadence as the fallback. */
+    int interacted = g_touch_last_ts == 0 || g_bhold_probe_ts == 0 ||
+                     g_touch_last_ts > g_bhold_probe_ts || now < g_bhold_probe_ts;
+    if (a->state == 0 && interacted &&
+        (g_bhold_probe_ts == 0 || now - g_bhold_probe_ts >= ASB_BHOLD_PROBE_S ||
+         now < g_bhold_probe_ts)) {
         const char *pk = g_bhold_win_pkg;
         int ok = pk[0] != 0;
         for (const char *c = pk; *c && ok; c++)
