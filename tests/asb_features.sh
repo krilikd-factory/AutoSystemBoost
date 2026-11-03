@@ -8190,6 +8190,105 @@ grep -q 'wlManualOpen' "$ROOT/webroot/index.html" || f 'Battery WebUI has no man
 exit "$fail"
 )
 
+t_wakelock_service_runtime() (
+# fix319: service-level control is component disabling, never package/process freezing.
+# Exercise the real runtime with Android-like stateful pm/dumpsys fixtures, including exact
+# default/enabled restore, refusal rollback, external-state ownership and uninstall cleanup.
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"; SRC="$ROOT/runtime/asb_wakelock_watch.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail=0; f() { echo "FAIL wakelock service: $*" >&2; fail=1; }
+mkdir -p "$T/bin" "$T/mod/config" "$T/d"
+printf 'wakelock_action=0\n' > "$T/mod/config/governor.conf"
+cat > "$T/bin/pm" <<'S'
+#!/bin/sh
+echo "pm $*" >> "$PM_LOG"
+if [ "$1" = list ] && [ "$2" = packages ]; then
+  printf 'package:com.example.sync\npackage:com.example.notes\n'; exit 0
+fi
+for c in "$@"; do :; done
+case "$1" in disable|enable|default-state) ;; *) exit 1 ;; esac
+[ "${PM_REFUSE:-0}" = 1 ] && exit 1
+case "$1" in disable) s=disabled ;; enable) s=enabled ;; default-state) s=default ;; esac
+awk -F'|' -v c="$c" -v s="$s" 'BEGIN{found=0} $1==c {$2=s;found=1} {print} END{if(!found) print c "|" s}' OFS='|' "$PM_STATE" > "$PM_STATE.t" && mv "$PM_STATE.t" "$PM_STATE"
+S
+cat > "$T/bin/dumpsys" <<'S'
+#!/bin/sh
+if [ "$1 $2" = "activity services" ]; then
+  while IFS= read -r c; do [ -n "$c" ] && printf '  * ServiceRecord{abc u0 %s}\n    intent={cmp=%s}\n' "$c" "$c"; done < "$RUNNING"
+  exit 0
+fi
+[ "$1" = package ] || exit 0
+printf 'Package [%s]\n' "$2"
+printf '  enabledComponents:\n'
+awk -F'|' -v p="$2" '$2=="enabled" && index($1,p "/")==1 {print "    " $1}' "$PM_STATE"
+printf '  disabledComponents:\n'
+[ "${DUMP_HIDE_DISABLED:-0}" = 1 ] || awk -F'|' -v p="$2" '$2=="disabled" && index($1,p "/")==1 {print "    " $1}' "$PM_STATE"
+printf '  Queries:\n'
+S
+chmod +x "$T/bin/"*
+: > "$T/state"; : > "$T/pm.log"; : > "$T/running"
+run() { PM_STATE="$T/state" RUNNING="$T/running" PM_LOG="$T/pm.log" PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_WL_DIR="$T/d" "$@"; }
+a='com.example.sync/com.example.sync.SyncService'; b='com.example.sync/com.example.sync.MediaService'
+printf '%s\n%s\n' "$a" "$b" > "$T/running"
+out="$(run sh "$SRC" service-list com.example.sync)"
+printf '%s\n' "$out" | grep -qx 'scan=ok' || f "service scan failed: $out"
+printf '%s\n' "$out" | grep -qx "service|$a|0|default|1" || f "running default service missing: $out"
+printf '%s\n' "$out" | grep -qx "service|$b|0|default|1" || f "second running service missing: $out"
+out="$(run sh "$SRC" service-set com.example.sync disable "$a")"
+printf '%s\n' "$out" | grep -qx 'result=disabled' || f "default disable failed: $out"
+grep -qx "com.example.sync|$a|default" "$T/d/wakelock_services" || f 'default original not recorded'
+grep -qx "$a|disabled" "$T/state" || f 'component not disabled'
+: > "$T/running"
+out="$(run sh "$SRC" service-list com.example.sync)"
+printf '%s\n' "$out" | grep -qx "service|$a|1|disabled|0" || f "selected stopped service cannot be restored: $out"
+out="$(run sh "$SRC" service-set com.example.sync restore "$a")"
+printf '%s\n' "$out" | grep -qx 'result=restored' || f "default restore failed: $out"
+grep -qx "$a|default" "$T/state" || f 'default-state not restored'
+[ ! -s "$T/d/wakelock_services" ] || f 'restored service ledger entry retained'
+# Explicit enabled must never be restored to default.
+printf '%s|enabled\n' "$b" > "$T/state"; printf '%s\n' "$b" > "$T/running"
+run sh "$SRC" service-set com.example.sync disable "$b" >/dev/null
+grep -qx "com.example.sync|$b|enabled" "$T/d/wakelock_services" || f 'enabled original not recorded'
+run sh "$SRC" service-set com.example.sync restore "$b" >/dev/null
+grep -qx "$b|enabled" "$T/state" || f 'enabled original restored as another state'
+# Externally disabled and non-running components are not adopted.
+c='com.example.sync/com.example.sync.ExternalService'
+printf '%s|disabled\n' "$c" >> "$T/state"
+out="$(run sh "$SRC" service-set com.example.sync disable "$c")"
+printf '%s\n' "$out" | grep -qx 'result=external_disabled' || f "external disabled state adopted: $out"
+grep -q "|$c|" "$T/d/wakelock_services" 2>/dev/null && f 'external component recorded'
+printf '%s|default\n' "$c" > "$T/state"; : > "$T/running"
+out="$(run sh "$SRC" service-set com.example.sync disable "$c")"
+printf '%s\n' "$out" | grep -qx 'result=not_running' || f "non-running default component accepted: $out"
+grep -qx "$c|default" "$T/state" || f 'non-running component changed'
+# Refused write and false-success read-back both roll back and never record success.
+printf '%s|default\n' "$a" > "$T/state"; printf '%s\n' "$a" > "$T/running"
+out="$(PM_REFUSE=1; export PM_REFUSE; run sh "$SRC" service-set com.example.sync disable "$a")"
+printf '%s\n' "$out" | grep -qx 'result=not_enforced' || f "refusal not reported: $out"
+grep -q "|$a|" "$T/d/wakelock_services" 2>/dev/null && f 'refused disable recorded'
+out="$(DUMP_HIDE_DISABLED=1; export DUMP_HIDE_DISABLED; run sh "$SRC" service-set com.example.sync disable "$a")"
+printf '%s\n' "$out" | grep -qx 'result=not_enforced' || f "false read-back accepted: $out"
+grep -qx "$a|default" "$T/state" || f 'unconfirmed component not rolled back'
+grep -q "|$a|" "$T/d/wakelock_services" 2>/dev/null && f 'unconfirmed disable recorded'
+# Malformed/system requests never reach pm; uninstalled selected entries are cleaned up.
+: > "$T/pm.log"
+run sh "$SRC" service-set com.example.sync disable 'bad;component' >/dev/null && f 'malformed component accepted'
+run sh "$SRC" service-set android disable android/.SystemService >/dev/null && f 'system package accepted'
+grep -Eq 'disable.*bad;component|disable.*android' "$T/pm.log" && f 'invalid target reached pm'
+printf 'com.example.gone|com.example.gone/com.example.gone.SyncService|default\n' > "$T/d/wakelock_services"
+out="$(run sh "$SRC" service-set com.example.gone restore com.example.gone/com.example.gone.SyncService)"
+printf '%s\n' "$out" | grep -qx 'result=uninstalled' || f "uninstalled service not resolved: $out"
+[ ! -s "$T/d/wakelock_services" ] || f 'uninstalled service ledger entry retained'
+# The component path has no process/package freezer and needs no periodic reapply worker.
+sed -n '/individual service control (fix319)/,/if \[ "${1:-}" = manual-status \]/p' "$SRC" | grep -E 'force-stop|pkill|kill|appops|sleep ' && f 'service manager contains package/process control or polling'
+grep -q 'wakelock_services' "$ROOT/uninstall.sh" || f 'uninstall lacks component restore'
+grep -q 'default-state --user 0' "$ROOT/uninstall.sh" || f 'uninstall cannot restore default state'
+grep -q 'wlServiceOpen' "$ROOT/webroot/index.html" || f 'WebUI has no individual service manager'
+[ "$fail" = 0 ] && echo 'PASS wakelock services: running user components only, exact state ledger, read-back/rollback and restore without package freeze or polling'
+exit "$fail"
+)
+
 t_notif_fix_runtime() (
 # Runtime (fix279): the notification fix. The owner picks the apps whose notifications are
 # late; ASB exempts exactly those from Doze, background and data restrictions, keeps its own

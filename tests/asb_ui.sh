@@ -6013,13 +6013,18 @@ chk(!logReportHistoryComparable(histBase, histBaseA, Object.assign({}, sameHisto
 /* Real DOM-building functions over a small DOM stub: summary precedes details, five
    verdicts are visible, incompatible history never prints a numeric improvement. */
 ASB_LANG = 'ru';
-function domEl(tag) { return { tag:tag, children:[], _text:'', className:'', disabled:false,
+function domEl(tag) { return { tag:tag, children:[], _text:'', className:'', disabled:false, attrs:{},
   get textContent() { return this._text; }, set textContent(v) { this._text = String(v); this.children = []; },
-  appendChild(c) { this.children.push(c); return c; }, classList:{ add() {} } }; }
+  setAttribute(k,v) { this.attrs[k]=String(v); }, removeAttribute(k) { delete this.attrs[k]; },
+  appendChild(c) { this.children.push(c); return c; }, classList:{ add() {}, remove() {}, contains() { return false; } } }; }
 const reportBody = domEl('div'), reportStatus = domEl('div'), jsonButton = domEl('button');
 function findReportId(e, id) { if (e.id === id) return e; for (const c of e.children) { const hit = findReportId(c, id); if (hit) return hit; } return null; }
 function _el(id) { return id === 'reportBody' ? reportBody : id === 'reportStatus' ? reportStatus : id === 'rpSave' ? jsonButton : findReportId(reportBody, id); }
 const document = { createElement:domEl };
+function techIcon() { return ''; }
+function asbPageJumpIcon() { return 'panel'; }
+function asbPageJumpIndicator() {}
+function logReportDetailBind(el) { return el; }
 const impactDay = parseLogReport(txt + '\njcap_main\tyes=2.5\tyes_f=20000\tyes_jps=1.68\tno=3.6\tno_f=30000\tno_jps=1.74');
 const impactCard = logReportTweakEvidence(impactDay), impactText = asbPageText(impactCard);
 chk(impactCard && impactCard.id === 'lgr-impact', 'per-tweak evidence card renders');
@@ -8346,8 +8351,9 @@ paint_src = '\n'.join([
 (out/'paint.js').write_text(paint_src)
 
 wl_src = '\n'.join([
-    "function T(k,d){return d} function E(){this.children=[];this.textContent='';this.className='';this.disabled=false;}",
+    "function T(k,d){return d} function E(){this.children=[];this.textContent='';this.className='';this.disabled=false;this.attrs={};}",
     "E.prototype.appendChild=function(x){this.children.push(x);return x};",
+    "E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};",
     "const document={createElement:function(){return new E()}};",
     const('_wlManual'), fn('wlManualArmed'), fn('wlManualParse'), fn('wlManualTime'), fn('wlManualState'), fn('wlManualRow'),
     "const d=wlManualParse('version=1\\nscan=ok\\nselected=1\\nrow|com.example.sync|3720|0|1|allow|1\\nrow|bad name|9|0|0|allow|0\\nrow|com.example.chat|25|1|0|ignore|0\\n');",
@@ -8356,13 +8362,14 @@ wl_src = '\n'.join([
     "const r=wlManualRow(a), text=JSON.stringify(r);",
     "if(!/is-selected/.test(r.className)||!/is-lapsed/.test(r.className)||!/Critical class/.test(text)) throw Error('selected critical row not explicit '+text);",
     "if(r.children[1].textContent!=='Restore'||r.children[1].disabled) throw Error('restore action unavailable');",
-    "const ext=wlManualRow(d.rows[1]); if(!ext.children[1].disabled||ext.children[1].textContent!=='Freeze') throw Error('external ignore can be adopted');",
+    "const ext=wlManualRow(d.rows[1]); if(!ext.children[1].disabled||ext.children[1].textContent!=='Block wakelocks') throw Error('external ignore can be adopted');",
     "if(wlManualState({selected:true,eff:'ignore'})!=='Blocked · read-back confirmed') throw Error('read-back state missing');",
     "const free={pkg:'com.example.free',secs:60,held:false,selected:false,eff:'allow',protected:false};",
-    "let fr=wlManualRow(free); if(fr.children[1].textContent!=='Freeze'||/is-armed/.test(fr.children[1].className)) throw Error('unarmed row must read Freeze');",
+    "let fr=wlManualRow(free); if(fr.children[1].textContent!=='Block wakelocks'||/is-armed/.test(fr.children[1].className)) throw Error('unarmed row must name package-wide blocking');",
     "_wlManual.armed='com.example.free'; _wlManual.armedAt=Date.now(); fr=wlManualRow(free);",
-    "if(fr.children[1].textContent!=='Tap again to freeze'||!/is-armed/.test(fr.children[1].className)) throw Error('armed row must ask for a second tap');",
+    "if(fr.children[1].textContent!=='Tap again to block'||!/is-armed/.test(fr.children[1].className)) throw Error('armed row must ask for a second tap');",
     "if(!/may stop or arrive late/.test(JSON.stringify(fr))) throw Error('armed row must show the risk in the page');",
+    "if(fr.children[2].textContent!=='Services'||typeof fr.children[2].onclick!=='function') throw Error('individual service entry missing');",
     "if(wlManualArmed('com.example.other')) throw Error('arming leaked to another package');",
     "_wlManual.armedAt=Date.now()-6000; if(wlManualArmed('com.example.free')) throw Error('arming never expires');",
     "console.log('ok');"
@@ -8382,6 +8389,10 @@ sed -n '/^async function wlManualSet(a) {/,/^}/p' "$H" | grep -q 'confirm(' && f
 grep -q "res === 'external_ignore'" "$H" || fail 'external ignore result is not explained'
 grep -q "res === 'uninstalled'" "$H" || fail 'uninstalled entry result is not explained'
 grep -q 'Original AppOps modes restored' "$H" || fail 'restore result is not honest'
+grep -q "service-list ' + shQuote(pkg)" "$H" || fail 'on-demand service list missing'
+grep -q "service-set ' + shQuote(pkg)" "$H" || fail 'explicit component action missing'
+grep -q 'App wakelock blocking' "$H" || fail 'package AppOps still uses freeze terminology'
+grep -q 'not a process freezer' "$H" || fail 'component disabling semantics are not explicit'
 echo "PASS WebUI fix276 battery evidence: immediate diagnostics, deferred loading, explicit drain windows and reversible wakelock risk states"
 )
 
@@ -8807,18 +8818,21 @@ from pathlib import Path
 r=Path(sys.argv[1]); h=(r/'webroot/index.html').read_text()
 def body(sig):
     i=h.index(sig); return h[i:h.index('\n}\n',i)]
-for token in ('.report-nav, .zy-page-nav { display: none; position: fixed; left: 50%;',
-              'bottom: max(10px, env(safe-area-inset-bottom, 0px));', 'overflow-x: auto;',
-              'scrollbar-width: none;', 'min-width: calc(44px / var(--asb-ui-scale)); min-height: calc(44px / var(--asb-ui-scale));',
+for token in ('.report-nav, .zy-page-nav { display: none; position: fixed; left: 12px; right: 12px;',
+              'bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);', 'overflow-x: auto;',
+              'scrollbar-width: none;', 'flex: 0 0 72px; min-width: 64px; min-height: 60px;',
               "b.setAttribute('aria-current', 'location')", "page.addEventListener('scroll', onScroll, { passive: true })",
               'padding-bottom: calc(102px / var(--asb-ui-scale) + env(safe-area-inset-bottom, 0px));',
               'if (prevScroll > 0) el.scrollTop = prevScroll;',
               'background: var(--cap-wash), var(--tabbar-bg, #000000);',
-              'background: var(--pill-wash); box-shadow: var(--pill-edge);',
+              'background: var(--pill-wash);', 'box-shadow: var(--pill-edge);',
               '.report-nav,.zy-page-nav,.asb-tabbar)',
               "head.className = 'lgr-jump-head'", "track.className = 'lgr-jump-track'",
-              'nav._asbJumpCurrent.textContent = b.textContent;',
+              "b.className = dock ? 'lgr-chip lgr-jump-btn asb-tab'", "icon.className = 'asb-tab-ico'",
+              'nav._asbJumpCurrent.textContent = b._asbJumpLabel || b.textContent;',
               'targets.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);',
+              'id="zyLogsBtn"', 'id="zyTgBtn"', 'class="status-row has-back"',
+              'font: 700 23px/1.15 var(--sans);',
               "x.open('GET', 'i18n/' + code + '.json', true)", 'I18N_READY.then(boot);',
               "document.body.classList.contains('zygisk-active')"):
     assert token in h, token
@@ -8857,9 +8871,10 @@ function el(tag, cls) {
   };
   const classes = new Set(String(n.className).split(/\s+/).filter(Boolean));
   n.attrs={}; n.setAttribute=(k,v)=>{n.attrs[k]=String(v);}; n.removeAttribute=k=>{delete n.attrs[k];};
-  n.classList = { add(c) { classes.add(c); n.className=Array.from(classes).join(' '); },
-    remove(c) { classes.delete(c); n.className=Array.from(classes).join(' '); },
-    contains(c) { return classes.has(c); } };
+  const sync=()=>String(n.className).split(/\s+/).filter(Boolean).forEach(c=>classes.add(c));
+  n.classList = { add(c) { sync(); classes.add(c); n.className=Array.from(classes).join(' '); },
+    remove(c) { sync(); classes.delete(c); n.className=Array.from(classes).join(' '); },
+    contains(c) { sync(); return classes.has(c); } };
   return n;
 }
 const body=el('div'), page=el('div'); page.scrollTop=0;
@@ -8872,10 +8887,13 @@ function logReportSec(title) { const c=el('div','lgr-sec'); c.appendChild(el('di
 function logReportNote(t) { const n=el('div','lgr-note'); n.textContent=t; return n; }
 function deviceZygiskLink() { return el('div','dev-zygisk-link'); }
 function zygiskOffCard() { return el('div','zy-off'); }
+function techIcon() { return ''; }
 for (const name of ['zygiskModeCard','zygiskAutoCard','zygiskControlsCard','zygiskLinkCard','zygiskGuardCard','zygiskAotCard'])
   global[name]=function () { return el('div','lgr-sec '+name); };
 for (const name of ['deviceZygiskOverview','zygiskPageRows','deviceZygiskEditor','zygiskEvidenceCard'])
   global[name]=function () { return el(name==='zygiskEvidenceCard'?'details':'div',name); }
+eval(grab('asbPageJumpIcon'));
+eval(grab('asbPageJumpIndicator'));
 eval(grab('asbPageJumpClear'));
 eval(grab('asbPageJumpActive'));
 eval(grab('asbPageJumpWatch'));
@@ -8899,10 +8917,11 @@ const nav=navs()[0], buttons=nav._asbJumpButtons;
 chk(buttons.length===7,'the populated section map lost a control');
 chk(nav.attrs.role==='navigation' && buttons.every(b=>b.attrs['aria-controls']),'navigation semantics/controlled section missing');
 chk(buttons[0].attrs['aria-current']==='location' && buttons[0].classList.contains('is-active'),'initial active section is not exposed');
-chk(nav._asbJumpCurrent.textContent===buttons[0].textContent && nav._asbJumpTrack.children.length===7,'dock header/track did not render');
-buttons.forEach(b=>{ chk(typeof b.onclick==='function','jump has no handler: '+b.textContent); b.onclick(); });
+chk(nav._asbJumpCurrent.textContent===buttons[0]._asbJumpLabel && nav._asbJumpTrack.children.length===7,'dock header/track did not render');
+chk(buttons.every(b=>String(b.className).split(/\s+/).includes('asb-tab') && b.children[0].className==='asb-tab-ico' && b.children[1].className==='asb-tab-label'),'dock does not reuse the main tab structure');
+buttons.forEach(b=>{ chk(typeof b.onclick==='function','jump has no handler: '+b._asbJumpLabel); b.onclick(); });
 chk(buttons.filter(b=>b.attrs['aria-current']==='location'&&b.classList.contains('is-active')).length===1,'active section is ambiguous after jumps');
-chk(nav._asbJumpCurrent.textContent===buttons[buttons.length-1].textContent,'dock header does not follow the active section');
+chk(nav._asbJumpCurrent.textContent===buttons[buttons.length-1]._asbJumpLabel,'dock header does not follow the active section');
 for (const id of ['zy-mode','zy-auto','zy-controls','zy-activity','zy-guard','zy-aot','zy-apps'])
   chk(_el(id) && _el(id).scrollHits===1,'jump did not reach its real section: '+id);
 /* Nav order may intentionally differ from section order. Execute the real watcher with
@@ -8917,9 +8936,9 @@ buttons.forEach(b=>{ b._asbJumpTarget && (_el(b._asbJumpTarget).getBoundingClien
 _el(buttons[0]._asbJumpTarget).getBoundingClientRect=()=>({top:-500});
 _el(buttons[1]._asbJumpTarget).getBoundingClientRect=()=>({top:-200});
 _el(buttons[buttons.length-1]._asbJumpTarget).getBoundingClientRect=()=>({top:-50});
-asbPageJumpWatch(nav,buttons.map(b=>[b._asbJumpTarget,b.textContent]));
+asbPageJumpWatch(nav,buttons.map(b=>[b._asbJumpTarget,b._asbJumpLabel]));
 chk(buttons[buttons.length-1].attrs['aria-current']==='location','scroll-spy followed nav order instead of rendered section order');
-chk(nav._asbJumpCurrent.textContent===buttons[buttons.length-1].textContent,'current section did not follow reordered scroll-spy');
+chk(nav._asbJumpCurrent.textContent===buttons[buttons.length-1]._asbJumpLabel,'current section did not follow reordered scroll-spy');
 page.scrollTop=4400;
 buttons.forEach(b=>{ _el(b._asbJumpTarget).getBoundingClientRect=()=>({top:-100}); });
 _el(buttons[2]._asbJumpTarget).getBoundingClientRect=()=>({top:500});
@@ -8930,6 +8949,101 @@ JS
 out="$(node "$T/render.js" "$H" 2>&1)" || { echo "FAIL fix311 presentation: $out" >&2; exit 1; }
 [ "$out" = ok ] || { echo "FAIL fix311 presentation: $out" >&2; exit 1; }
 echo "PASS fix311 drill-in presentation: real loading/Off/populated rendering, stable anchors and scroll restoration, seven working jumps, conditional report map, progressive disclosure and 13 complete locales"
+)
+
+
+t_webui_fix319_details_services_runtime() (
+# fix319: report/ZYGISK cards open the same accessible detail sheet, and the Services
+# action really targets one component after a second tap. Execute the real parser, rows,
+# arm/write path and detail binder; no package/process freeze is hidden in the command.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+command -v node >/dev/null 2>&1 || { echo "SKIP fix319 details/services runtime: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+python3 - "$ROOT" <<'PY'
+import json, re, sys
+from pathlib import Path
+r=Path(sys.argv[1]); h=(r/'webroot/index.html').read_text()
+keys=('lr_detail_capture','lr_detail_cpu_peak','lr_detail_drain','lr_detail_idle','lr_detail_idle_floor',
+      'lr_detail_jank','lr_detail_jps','lr_detail_open','lr_detail_skin_peak','lr_detail_verdict',
+      'lr_zy_detail_events','lr_zy_detail_hints','lr_zy_detail_ipc','lr_zy_detail_per_wake',
+      'wl_service_confirm','wl_service_confirm_tap','wl_service_copy','wl_service_disable','wl_service_empty',
+      'wl_service_external','wl_service_loading','wl_service_meta','wl_service_not_running','wl_service_restore',
+      'wl_service_result_disabled','wl_service_result_failed','wl_service_result_restored','wl_service_state_disabled',
+      'wl_service_state_lapsed','wl_service_state_running','wl_service_state_unknown','wl_service_title',
+      'wl_service_unavailable','wl_services_open')
+files=sorted((r/'webroot/i18n').glob('*.json')); assert len(files)==13
+for p in files:
+    x=json.loads(p.read_text())
+    for k in keys:
+        assert isinstance(x.get(k),str) and x[k].strip(), (p,k)
+    assert x['wl_manual_block'] != 'Freeze', p
+    assert x['wl_manual_title'] != 'App wakelock freeze', p
+for name in ('wlServiceParse','wlServiceState','wlServiceRow','wlServiceSet','logReportDetailBind','liveInfoOpenData'):
+    assert re.search(r'function '+name+r'\([^)]*\) \{',h), name
+assert "service-set ' + shQuote(pkg)" in h
+assert "service-list ' + shQuote(pkg)" in h
+PY
+cat > "$T/test.js" <<'JS'
+const fs=require('fs'), h=fs.readFileSync(process.argv[2],'utf8');
+function grab(name){const m=h.match(new RegExp('(?:async )?function '+name+'\\([^)]*\\) \\{[\\s\\S]*?\\n\\}'));if(!m)throw Error('missing '+name);return m[0];}
+function E(tag){this.tag=tag;this.children=[];this.textContent='';this.className='';this.attrs={};this.hidden=false;this.disabled=false;this.style={};this.focused=0;}
+E.prototype.appendChild=function(x){this.children.push(x);return x};
+E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};
+E.prototype.focus=function(){this.focused++};
+Object.defineProperty(E.prototype,'classList',{get(){const self=this;return{add(c){if(!self.className.split(/\s+/).includes(c))self.className=(self.className+' '+c).trim()}}}});
+const ids={}; function _el(id){return ids[id]||(ids[id]=new E('div'));}
+global.document={createElement:t=>new E(t),activeElement:null};
+global.window={}; global.MD='/mod';
+global.T=(k,f)=>f; global.uiSound=()=>{}; global.navSyncSoon=()=>{};
+global.requestAnimationFrame=f=>f(); global.toast=(m,c)=>{toasts.push([m,c])};
+global.runText=r=>r.out; global.shQuote=s=>"'"+String(s).replace(/'/g,"'\\''")+"'";
+global.clearTimeout=()=>{}; global.setTimeout=()=>1;
+let runs=[],toasts=[],loads=0,painted=null,opened=null;
+global.run=async c=>{runs.push(c);return{out:'result=disabled\neffective=disabled\n'}};
+global.wlServicePaint=d=>{painted=d}; global.wlServiceLoad=async()=>{loads++};
+global.liveInfoOpenData=d=>{opened=d};
+eval("var _wlService = { tok: 0, busy: false, pkg: '', rows: [], armed: '', armedAt: 0, armTimer: 0 };");
+for(const n of ['wlServiceArmed','wlServiceParse','wlServiceState','wlServiceRow','wlServiceSet','logReportDetailBind'])eval(grab(n));
+const parsed=wlServiceParse('scan=ok\nselected=1\nservice|com.example.app/.SyncService|0|default|1\nservice|com.example.app/.MediaService|1|disabled|0\nservice|com.other/.Wrong|0|enabled|1\nservice|com.example.app/bad name|0|enabled|1\nservice|com.example.app/.OddService|0|not-exposed|0\n','com.example.app');
+if(parsed.scan!=='ok'||parsed.selected!==1||parsed.rows.length!==3)throw Error('service parser accepted wrong/malformed rows');
+if(parsed.rows[2].state!=='unknown'||parsed.rows[2].running)throw Error('unknown state was guessed');
+_wlService.pkg='com.example.app'; _wlService.rows=[parsed.rows[0]]; _el('wlServiceModal').hidden=false;
+let row=wlServiceRow(parsed.rows[0]);
+if(row.children[1].textContent!=='Disable service'||row.children[1].disabled)throw Error('initial service action wrong');
+if(!wlServiceState(parsed.rows[1]).startsWith('Disabled')||!wlServiceState(parsed.rows[0]).startsWith('Running'))throw Error('state labels wrong');
+(async()=>{
+ await wlServiceSet(parsed.rows[0]);
+ if(runs.length||_wlService.armed!==parsed.rows[0].comp||!painted)throw Error('first tap wrote without confirmation');
+ row=wlServiceRow(parsed.rows[0]);
+ if(row.children[1].textContent!=='Tap again to disable'||!row.children[0].children.some(x=>String(x.textContent).includes(parsed.rows[0].comp)))throw Error('armed row lacks explicit scoped warning');
+ await wlServiceSet(parsed.rows[0]);
+ if(runs.length!==1||!runs[0].includes(" service-set 'com.example.app' disable 'com.example.app/.SyncService'"))throw Error('disable did not target exact component: '+runs);
+ if(_wlService.busy||loads!==1||toasts[0][1]!=='good')throw Error('confirmed disable did not refresh/report');
+ const sel=parsed.rows[1]; _wlService.rows=[sel]; await wlServiceSet(sel);
+ if(runs.length!==2||!runs[1].includes(" service-set 'com.example.app' restore 'com.example.app/.MediaService'"))throw Error('restore did not target exact component');
+ if(runs.some(c=>/appops|force-stop|pkill|kill /.test(c)))throw Error('component action contains package/process freeze');
+ const card=new E('div'), detail={title:'<b>Events</b>',value:'37',text:'Facts',lines:['a','b']};
+ logReportDetailBind(card,detail);
+ if(card.attrs.role!=='button'||card.attrs.tabindex!=='0'||card.attrs['aria-haspopup']!=='dialog')throw Error('detail card is not keyboard/dialog accessible');
+ card.onclick(); if(opened!==detail||detail.returnTo!==card)throw Error('click did not open current detail');
+ let prevented=0; card.onkeydown({key:'Enter',preventDefault(){prevented++}}); card.onkeydown({key:' ',preventDefault(){prevented++}});
+ card.onkeydown({key:'Escape',preventDefault(){prevented++}});
+ if(prevented!==2)throw Error('Enter/Space keyboard contract wrong');
+ // Real custom-sheet painter: all captured/device text goes through textContent.
+ global.liveInfoEnsure=()=>_el('liveInfoModal'); let _liveInfoReturn=null;
+ eval(grab('liveInfoOpenData'));
+ opened=null; liveInfoOpenData(detail);
+ if(_el('liveInfoTitle').textContent!=='<b>Events</b>'||_el('liveInfoVal').textContent!=='37'||_el('liveInfoSrc').textContent!=='a\nb')throw Error('detail values were not rendered verbatim');
+ if(!_el('liveInfoScale').hidden||!_el('liveInfoHist').hidden||_el('liveInfoModal').hidden||_el('liveInfoModal').attrs['aria-hidden']!=='false')throw Error('detail sheet stale state/visibility');
+ if(_liveInfoReturn!==card||_el('liveInfoX').focused!==1)throw Error('detail sheet focus/return contract wrong');
+ console.log('ok');
+})().catch(e=>{console.error(e&&e.stack||e);process.exit(1)});
+JS
+out="$(node "$T/test.js" "$H" 2>&1)" || { echo "FAIL fix319 details/services: $out" >&2; exit 1; }
+[ "$out" = ok ] || { echo "FAIL fix319 details/services: $out" >&2; exit 1; }
+echo "PASS fix319 detail sheets/services: current-data popups, keyboard activation/focus, strict parser, exact component two-tap disable/restore and no package/process freezing"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
