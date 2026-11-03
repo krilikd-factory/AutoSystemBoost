@@ -727,6 +727,9 @@ SEC "0b2. LTPO REFRESH PATCH  (is the patched table actually in front of the dis
 # the display service reads against the payload that should be shadowing it.
 _lt_state="$(cat /data/adb/asb/ltpo_state 2>/dev/null)"
 _lt_force="$(grep -m1 '^ltpo_force=' /data/adb/asb/governor.conf.snapshot /data/adb/modules/AutoSystemBoost/config/governor.conf 2>/dev/null | tail -1 | cut -d= -f2 | tr -d ' \r')"
+_lt_runtime=""
+[ -f /data/adb/modules/AutoSystemBoost/runtime/asb_ltpo_apply.sh ] && \
+  _lt_runtime="$(MODDIR=/data/adb/modules/AutoSystemBoost sh /data/adb/modules/AutoSystemBoost/runtime/asb_ltpo_apply.sh status 2>/dev/null)"
 NOTE "staged state: ${_lt_state:-none - installer never ran on this build}   toggle ltpo_force=${_lt_force:-0}"
 if [ -f /data/adb/asb/ltpo_bind_manifest.txt ]; then
   _lt_t="$(cut -d'|' -f1 /data/adb/asb/ltpo_bind_manifest.txt 2>/dev/null | head -1)"
@@ -736,6 +739,9 @@ if [ -f /data/adb/asb/ltpo_bind_manifest.txt ]; then
     V "LTPO manifest parses (target|payload)" "well-formed" "malformed"
   elif [ ! -f "$_lt_p" ]; then
     V "LTPO payload exists" "present" "missing"
+  elif [ "$_lt_runtime" = "ltpo_external_bind" ] && grep -q " $_lt_t " /proc/mounts 2>/dev/null; then
+    NOTE "an external module owns the live LTPO table; ASB leaves its bind and refresh policy untouched"
+    NOTE "  this is external ownership evidence, not an ASB patch success or failure"
   elif grep -q " $_lt_t " /proc/mounts 2>/dev/null &&
        [ "$_lt_force" != "1" ] && [ ! -f /data/adb/asb/ltpo_bind.active ]; then
     # Toggle off and no bind of ours on record, yet the file is a mountpoint: something
@@ -766,6 +772,7 @@ elif [ "$_lt_state" = "unsupported" ]; then
 elif [ "$_lt_state" = "ready" ]; then
   V "LTPO manifest present (state says ready)" "present" "missing"
 fi
+NOTE "LTPO evidence limit: a matching table and the Android refresh range do not prove a 1 Hz panel mode; actual low-rate selection is not exposed by this report"
 # Refresh range (ltpo_force range half) and the video watcher.
 if [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_ltpo_apply.sh ]; then
   NOTE "refresh range: $(MODDIR=/data/adb/modules/AutoSystemBoost sh /data/adb/modules/AutoSystemBoost/runtime/asb_ltpo_apply.sh range 2>/dev/null)"
@@ -2858,7 +2865,9 @@ case "$_vr" in
   4) NOTE "thermal veto: ON - vendor clamps in the last hour over the veto limit" ;;
   5) NOTE "thermal veto: ON - recovery window" ;;
 esac
-NOTE "bucket avg temp = ${_sb_t:-0} (tenths C)  ·  avg drain = ${_sb_d:-0} (tenths %/h)"
+case "${_sb_t:-}" in ''|*[!0-9]*|0) _sb_t_txt="not learned" ;; *) _sb_t_txt="$_sb_t" ;; esac
+case "${_sb_d:-}" in ''|*[!0-9]*|0) _sb_d_txt="not learned" ;; *) _sb_d_txt="$_sb_d" ;; esac
+NOTE "bucket avg temp = ${_sb_t_txt} (tenths C)  ·  avg drain = ${_sb_d_txt} (tenths %/h); not learned means no usable history, not a zero measurement"
 # Night slot with the screen on (fix150): the evening's lean replaces the night seed.
 _sna="$(_rget smart_night_awake /dev/.asb/state 2>/dev/null)"
 if [ "$_sna" = 1 ]; then
@@ -2975,11 +2984,18 @@ _tw="$(grep -m1 '^smart_therm_warm_x10=' /dev/.asb/state 2>/dev/null | cut -d= -
 _tc="$(grep -m1 '^smart_therm_cool_x10=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
 # Learned from this device's own median, not hardcoded - a OnePlus 12 and a 15 idle at
 # different temperatures, so an absolute threshold would be right for one and wrong for
-# the other. 420/380 showing here means not enough buckets have history yet.
-NOTE "thresholds in force: warm above ${_tw:-?}, cool below ${_tc:-?} (tenths C, learned from this device)"
-case "${_tw:-0}" in
-  420) NOTE "still using fallback thresholds - fewer than 4 buckets have enough history" ;;
-esac
+# the other. 420/380 showing here means not enough buckets have history yet. Zero, empty
+# and malformed state are not thermal thresholds and must not be presented as if they were.
+case "${_tw:-}" in ''|*[!0-9]*|0) _tw_txt="not learned" ;; *) _tw_txt="$_tw" ;; esac
+case "${_tc:-}" in ''|*[!0-9]*|0) _tc_txt="not learned" ;; *) _tc_txt="$_tc" ;; esac
+if [ "$_tw_txt" = "not learned" ] || [ "$_tc_txt" = "not learned" ]; then
+  NOTE "thermal thresholds (tenths C): warm above ${_tw_txt}, cool below ${_tc_txt} - no usable device-specific history for a missing mark"
+else
+  NOTE "thresholds in force: warm above ${_tw_txt}, cool below ${_tc_txt} (tenths C, learned from this device)"
+  case "${_tw:-0}" in
+    420) NOTE "still using fallback thresholds - fewer than 4 buckets have enough history" ;;
+  esac
+fi
 # These two drive the thermal lean added in V62. A bucket with zero here has not reached
 # the observation floor yet, which is not a fault - it means the lean is not applied.
 #
@@ -3430,8 +3446,9 @@ if [ -s /data/adb/asb/wakelock_multicast ]; then
   if [ "$(cat /sys/class/net/wlan0/operstate 2>/dev/null)" = up ]; then
     NOTE "Wi-Fi multicast held $(( _mct / 60 )) min since the last unplug (radio cannot use its packet filter while held)"
   else
-    # batterystats keeps counting a held lock with Wi-Fi off (fix142).
-    NOTE "Wi-Fi multicast held $(( _mct / 60 )) min since the last unplug - Wi-Fi is off now, so a held lock costs nothing"
+    # batterystats keeps counting a held lock with Wi-Fi off (fix142). The current radio
+    # state says nothing about the past, and held time alone is not an energy measurement.
+    NOTE "Wi-Fi multicast held $(( _mct / 60 )) min since the last unplug - Wi-Fi is off now; current radio cost is not shown, and past cost cannot be inferred from held time alone"
   fi
   grep -v '^total|' /data/adb/asb/wakelock_multicast | while IFS='|' read -r _mp _mv; do
     [ -n "$_mp" ] && P "    holding now: $_mp  ·  $_mv"
@@ -4771,6 +4788,7 @@ else
 fi
 [ "$OFFN" -gt 0 ] && P "     not checked, the setting is off or on auto: $OFF_LIST"
 _ux_led="${ASB_CONFIG_STATE:-/data/adb/asb}/apply_ledger"
+_ux_refused=0
 if [ -s "$_ux_led" ]; then
   # fix221: a settings key this ROM does not have (ColorOS 16 refuses to create unknown
   # keys; the ledger marks them "unsupported" since fix221) is listed apart from real
@@ -4783,6 +4801,8 @@ if [ -s "$_ux_led" ]; then
             else if (last[k] == "unsupported" && k ~ /^settings\//) { u++; printf "U|%s|%s\n", k, req[k] } }
           printf "C|%d|%d|%d|%d\n", c["applied"], c["already_set"], c["not_writable"] + c["readback_mismatch"], u }' "$_ux_led" 2>/dev/null)"
   _ux_c="$(printf '%s\n' "$_ux_ls" | grep '^C|')"
+  _ux_refused="$(printf '%s' "$_ux_c" | cut -d'|' -f4)"
+  case "$_ux_refused" in ''|*[!0-9]*) _ux_refused=0 ;; esac
   _ux_na="$(printf '%s' "$_ux_c" | cut -d'|' -f5)"
   P "     system settings ASB writes (by key, last result): applied $(printf '%s' "$_ux_c" | cut -d'|' -f2) · already set $(printf '%s' "$_ux_c" | cut -d'|' -f3) · refused by Android $(printf '%s' "$_ux_c" | cut -d'|' -f4)$(case "${_ux_na:-0}" in ''|*[!0-9]*|0) ;; *) printf ' · not on this ROM %s' "$_ux_na" ;; esac)"
   printf '%s\n' "$_ux_ls" | grep '^X|' | sort | head -10 | while IFS='|' read -r _x _xk _xr _xn; do
@@ -4806,13 +4826,18 @@ fi
 P ""
 P "  C. VERDICT"
 if [ "$FAIL" -eq 0 ]; then
-  P "     FAIL=0 - everything this report can check for your settings is in effect."
+  if [ "$_ux_refused" -gt 0 ]; then
+    P "     FAIL=0 · REFUSED=$_ux_refused - every live check passed, but $_ux_refused Android system setting(s) are not in effect (listed above)."
+  else
+    P "     FAIL=0 - everything this report can check for your settings is in effect."
+  fi
 else
   P "     FAIL=$FAIL - these did not take effect (details in the sections above):"
   printf '%s' "$CHK_LIST" | while IFS='	' read -r _cs _cl _ce _ca; do
     [ "$_cs" = FAIL ] || continue
     P "       $_cl: want $_ce, live ${_ca:-<none>}"
   done
+  [ "$_ux_refused" -gt 0 ] && P "     REFUSED=$_ux_refused - Android also kept $_ux_refused requested system setting(s) unchanged (listed above)."
 fi
 P "     Why another phone shows a different PASS count: every PASS is one check of a tweak that"
 P "     is ON on that phone. More tweaks on means more checks, fewer tweaks on means fewer -"
