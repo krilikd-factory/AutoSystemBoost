@@ -2349,12 +2349,15 @@ grep -q '^# Android framework start count at capture start: 1$' "$T/out2/sysui_r
 [ "$(grep -c 'framework_restart=' "$T/out2/sysui_restarts.txt")" = 1 ] || f "framework restart not told apart from a SystemUI restart"
 grep -q 'pid 2000 -> 3000 .* framework_restart=1->2 =====' "$T/out2/sysui_restarts.txt" || f "framework restart header"
 grep -q '^verdict: the whole Android framework restarted (system_server start 2)' "$T/out2/sysui_restarts.txt" || f "framework restart verdict"
-_up_ms="$(cut -d' ' -f1 /proc/uptime | tr -dc 0-9)0"; _now="$(date +%s)"
+printf '600.00 1200.00\n' > "$T/uptime"; _now="$(date +%s)"; _up_ms=600000
 echo "$_up_ms" > "$T/sse"
-r1="$( ( set +u; PATH="$T/bin:$PATH"; SSE_F="$T/sse"; export SSE_F; LK_SCRIPT_DIR="$ROOT/tools/logkit"; . "$C" >/dev/null 2>&1; lk_restart_cause $((_now - 60)) ) )"
+r1="$( ( set +u; PATH="$T/bin:$PATH"; SSE_F="$T/sse" ASB_LK_UPTIME_FILE="$T/uptime"; export SSE_F ASB_LK_UPTIME_FILE; LK_SCRIPT_DIR="$ROOT/tools/logkit"; . "$C" >/dev/null 2>&1; lk_restart_cause $((_now - 60)) ) )"
 echo 1000 > "$T/sse"
-r2="$( ( set +u; PATH="$T/bin:$PATH"; SSE_F="$T/sse"; export SSE_F; LK_SCRIPT_DIR="$ROOT/tools/logkit"; . "$C" >/dev/null 2>&1; lk_restart_cause $((_now - 60)) ) )"
+r2="$( ( set +u; PATH="$T/bin:$PATH"; SSE_F="$T/sse" ASB_LK_UPTIME_FILE="$T/uptime"; export SSE_F ASB_LK_UPTIME_FILE; LK_SCRIPT_DIR="$ROOT/tools/logkit"; . "$C" >/dev/null 2>&1; lk_restart_cause $((_now - 60)) ) )"
 [ "$r1" = framework_restart ] && [ "$r2" = recorder_lost ] || f "restart cause: '$r1' '$r2'"
+echo 600001 > "$T/sse"
+r3="$( ( set +u; PATH="$T/bin:$PATH"; SSE_F="$T/sse" ASB_LK_UPTIME_FILE="$T/uptime"; export SSE_F ASB_LK_UPTIME_FILE; LK_SCRIPT_DIR="$ROOT/tools/logkit"; . "$C" >/dev/null 2>&1; lk_restart_cause $((_now - 60)) ) )"
+[ "$r3" = unknown ] || f "impossible system_server elapsed accepted: '$r3'"
 grep -q 'lk_sysui_watch_row' "$ROOT/tools/logkit/asb_log_full_day.sh" || f "full-day capture does not watch SystemUI"
 grep -q 'SYSTEMUI RESTARTS' "$ROOT/tools/logkit/asb_log_full_day.sh" || f "report has no SystemUI section"
 

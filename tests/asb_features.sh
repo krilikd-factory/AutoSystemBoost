@@ -7858,10 +7858,14 @@ grep -qx 'orig=144.0' "$STATE_DIR/ltpo_video.lowered" || fail 'restore target no
 grep -qx 'owner=fixture' "$STATE_DIR/ltpo_video.lowered" || fail 'metadata not preserved'
 [ ! -e "$ASB_LTPO_LOCK_DIR" ] || fail 'lock not released'
 printf '0\n' > "$T/count"
+# The old rm(pid)+rmdir release could lose updates on a loaded runner. Four hundred
+# competing critical sections make that window observable; atomic whole-directory release
+# must preserve every one of them.
+grep -Fq 'mv "$ASB_LTPO_LOCK_DIR" "$_al_release"' "$L" || fail 'release is not an atomic whole-lock rename'
 worker() (
   . "$L"
   i=0
-  while [ "$i" -lt 25 ]; do
+  while [ "$i" -lt 100 ]; do
     asb_ltpo_lock || exit 1
     n="$(cat "$T/count")"
     printf '%s\n' "$((n + 1))" > "$T/count"
@@ -7872,8 +7876,9 @@ worker() (
 worker & p1=$!
 worker & p2=$!
 worker & p3=$!
-wait "$p1"; wait "$p2"; wait "$p3"
-[ "$(cat "$T/count")" = 75 ] || fail "concurrent critical sections lost updates: $(cat "$T/count")"
+worker & p4=$!
+wait "$p1"; wait "$p2"; wait "$p3"; wait "$p4"
+[ "$(cat "$T/count")" = 400 ] || fail "concurrent critical sections lost updates: $(cat "$T/count")"
 mkdir -p "$ASB_LTPO_LOCK_DIR"
 sh -c 'exit 0' & dead=$!
 wait "$dead" 2>/dev/null || true
