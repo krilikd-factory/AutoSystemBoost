@@ -306,14 +306,15 @@ if [ -f "$_DIR/env.txt" ]; then
 fi
 
 # Direct cap readback observations already collected at finalization. These are snapshots,
-# not unique writes: vendor_raised/vendor_clamp describe an external override, not an ASB
-# failure or an energy outcome. Keep the residual bucket visible instead of dropping an
-# unfamiliar future verdict.
+# not unique writes: ok, ok (shell-applied) and ok_asb_* are all successful readbacks.
+# The legacy "vendor" digest field is the external-override bucket: vendor clamps/raises
+# and shell overrides belong there, never in the residual. These are observations, not an
+# ASB failure or an energy outcome. Keep unknown future verdicts visible in "other".
 if [ -s "$_DIR/cap_verify.txt" ]; then
   awk '/^policy[0-9]+ .* -> / {
     n++
-    if ($0 ~ /-> ok_asb_/) ok++
-    else if ($0 ~ /-> DESYNC_vendor_(clamp|raised)/) vendor++
+    if ($0 ~ /-> ok( |$)/ || $0 ~ /-> ok_asb_/) ok++
+    else if ($0 ~ /-> (DESYNC_vendor_(clamp|raised)|(DESYNC_)?shell_overridden_(up|down))/) vendor++
     else other++
   } END {
     if (n > 0) printf "capcheck\ttotal=%d\tok=%d\tvendor=%d\tother=%d\n", n, ok, vendor, other
