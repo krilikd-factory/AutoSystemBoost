@@ -94,6 +94,27 @@ _is_bound() {
   grep -q " $1 " "${ASB_LTPO_PROC_MOUNTS:-/proc/mounts}" 2>/dev/null
 }
 
+# A second module may already bind the same JSON (the standalone Force ltpo module does).
+# Stacking ASB's bind over it would replace the working table, and unmounting on handback
+# would remove somebody else's mount. Only an explicit module-path source is sufficient
+# evidence: an opaque root-manager mount remains unknown and is not claimed either way.
+_ltpo_external_bind() {
+  [ -f "$MAN" ] || return 1
+  while IFS='|' read -r _eb_t _eb_p; do
+    case "$_eb_t" in ''|'#'*) continue ;; esac
+    _is_bound "$_eb_t" || continue
+    _eb_s="$(awk -v t="$_eb_t" '$2 == t { print $1; exit }' \
+      "${ASB_LTPO_PROC_MOUNTS:-/proc/mounts}" 2>/dev/null)"
+    case "$_eb_s" in
+      "${EXT_MODULES_ROOT%/}"/*)
+        case "$_eb_s" in "${MODDIR%/}"/*) continue ;; esac
+        return 0
+        ;;
+    esac
+  done < "$MAN"
+  return 1
+}
+
 _bind_one() {
   _b_t="$1"; _b_p="$2"
   _is_bound "$_b_t" && { cmp -s "$_b_t" "$_b_p" 2>/dev/null && return 0; }
@@ -218,7 +239,7 @@ _ltpo_range_restore() {
     esac
   fi
   case "$_om" in
-    __unset|'') : ;;
+    __unset|'') _ltpo_del min_refresh_rate || { asb_ltpo_unlock; return 0; } ;;
     *) _ltpo_put min_refresh_rate "$_om" || { asb_ltpo_unlock; return 0; } ;;
   esac
   rm -f "$RANGE_ORIG" 2>/dev/null
@@ -296,26 +317,37 @@ _ltpo_touch_stop() {
 case "${1:-apply}" in
   apply)
     if [ "$(_cfg ltpo_force)" = "1" ]; then
-      # Explicit ASB enable has priority only after its independent touch controller is
-      # actually live. A missing input node/getevent/panel mode must not strand the user
-      # with both touch writers stopped.
-      if [ ! -f "$BLOCK" ] && _ltpo_guard; then
-        _ltpo_bind_all && _log 'action=ltpo_bind result=applied owner=asb'
-      elif [ -f "$ACTIVE" ]; then
-        _ltpo_unbind_all && _log 'action=ltpo_bind result=removed reason=guard'
-      fi
-      if _ltpo_framework_up; then
-        _ltpo_range_open
-        if _ltpo_touch_start; then
-          _ltpo_external_pause
-        else
-          _ltpo_external_resume
-          _log 'action=ltpo_touch result=unavailable external=fallback'
+      if _ltpo_external_bind; then
+        # Same-target ownership is exclusive. Keep the external table and its daemon
+        # untouched; also hand back any range ASB opened before discovering the owner.
+        _ltpo_touch_stop
+        rm -f "$ACTIVE" 2>/dev/null
+        _ltpo_framework_up && _ltpo_range_restore
+        _log 'action=ltpo_bind result=yielded owner=external_module'
+      else
+        # Explicit ASB enable has priority only after its independent touch controller is
+        # actually live. A missing input node/getevent/panel mode must not strand the user
+        # with both touch writers stopped.
+        if [ ! -f "$BLOCK" ] && _ltpo_guard; then
+          _ltpo_bind_all && _log 'action=ltpo_bind result=applied owner=asb'
+        elif [ -f "$ACTIVE" ]; then
+          _ltpo_unbind_all && _log 'action=ltpo_bind result=removed reason=guard'
+        fi
+        if _ltpo_framework_up; then
+          _ltpo_range_open
+          if _ltpo_touch_start; then
+            _ltpo_external_pause
+          else
+            _ltpo_external_resume
+            _log 'action=ltpo_touch result=unavailable external=fallback'
+          fi
         fi
       fi
     else
       _ltpo_touch_stop
-      if [ -f "$ACTIVE" ]; then
+      if _ltpo_external_bind; then
+        rm -f "$ACTIVE" 2>/dev/null
+      elif [ -f "$ACTIVE" ]; then
         _ltpo_unbind_all && _log 'action=ltpo_bind result=removed'
       fi
       _ltpo_framework_up && _ltpo_range_restore
@@ -324,7 +356,12 @@ case "${1:-apply}" in
     ;;
   remove)
     _ltpo_touch_stop
-    _ltpo_unbind_all && _log 'action=ltpo_bind result=removed reason=uninstall'
+    if _ltpo_external_bind; then
+      rm -f "$ACTIVE" 2>/dev/null
+      _log 'action=ltpo_bind result=kept owner=external_module'
+    else
+      _ltpo_unbind_all && _log 'action=ltpo_bind result=removed reason=uninstall'
+    fi
     _ltpo_framework_up && _ltpo_range_restore
     _ltpo_external_resume
     ;;
@@ -339,7 +376,9 @@ case "${1:-apply}" in
       "${_pk:-unset}" "${_mn:-none (floor open)}" "$_rec"
     ;;
   status)
-    if [ "$(_cfg ltpo_force)" != "1" ]; then
+    if _ltpo_external_bind; then
+      echo 'ltpo_external_bind'
+    elif [ "$(_cfg ltpo_force)" != "1" ]; then
       if _ltpo_external_owner; then echo 'ltpo_external_owner'; else echo 'ltpo_off'; fi
     elif [ -f "$ACTIVE" ] && _ltpo_touch_live; then
       echo 'ltpo_active_touch'
