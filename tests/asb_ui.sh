@@ -725,7 +725,9 @@ REC_PID="$(printf '%s\n' "$RECOVERED" | sed -n 's/^pid=//p' | tail -n 1)"
 
 # Repeat simultaneous starts from a clean state. One and only one recorder may be created in
 # every round; the losing request must publish the winner PID rather than relying on a
-# short-lived helper process or a removable empty PID file.
+# short-lived helper process or a removable empty PID file. Inspect the answer files directly:
+# under pipefail, `printf ... | grep -q` can report SIGPIPE after grep has already found its
+# match, turning two correct answers into a random false failure on a loaded runner.
 for round in $(seq 1 12); do
   kill -KILL "$REC_PID" 2>/dev/null || true
   wait "$REC_PID" 2>/dev/null || true
@@ -740,10 +742,16 @@ for round in $(seq 1 12); do
   wait "$C1" || true; wait "$C2" || true
   CONCURRENT="$(cat "$TMP/concurrent_${round}_a.out" "$TMP/concurrent_${round}_b.out")"
   [ "$(printf '%s\n' "$CONCURRENT" | grep -c '^status=started$')" -eq 1 ] || { echo "FAIL debug support: concurrent start count round=$round" >&2; exit 1; }
-  printf '%s\n' "$CONCURRENT" | grep -Fq 'status=already_running' || { echo "FAIL debug support: concurrent guard did not report running round=$round" >&2; exit 1; }
-  REC_PID="$(printf '%s\n' "$CONCURRENT" | sed -n 's/^pid=//p' | grep -E '^[0-9]+$' | head -n 1)"
+  if ! grep -Fq 'status=already_running' "$TMP/concurrent_${round}_a.out" "$TMP/concurrent_${round}_b.out"; then
+    echo "FAIL debug support: concurrent guard did not report running round=$round" >&2
+    printf '  concurrent answers:\n%s\n' "$CONCURRENT" >&2
+    printf '  recorder log:\n' >&2; tail -n 12 "$TMP/full_day.out" >&2 2>/dev/null || true
+    printf '  lock files:\n' >&2; find "$TMP/state/full_day_webui.lock" -maxdepth 1 -type f -print -exec cat {} \; >&2 2>/dev/null || true
+    exit 1
+  fi
+  REC_PID="$(awk -F= '/^pid=[0-9]+$/ { print $2; exit }' "$TMP/concurrent_${round}_a.out" "$TMP/concurrent_${round}_b.out")"
   [ -n "$REC_PID" ] && kill -0 "$REC_PID" 2>/dev/null || { echo "FAIL debug support: concurrent recorder missing round=$round" >&2; exit 1; }
-  printf '%s\n' "$CONCURRENT" | grep -Fq "pid=$REC_PID" || { echo "FAIL debug support: loser did not observe winner PID round=$round" >&2; exit 1; }
+  grep -Fq "pid=$REC_PID" "$TMP/concurrent_${round}_a.out" "$TMP/concurrent_${round}_b.out" || { echo "FAIL debug support: loser did not observe winner PID round=$round" >&2; exit 1; }
 done
 
 # A killed recorder leaves a known-dead PID. The next action may reclaim only that stale lock.
