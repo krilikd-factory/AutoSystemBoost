@@ -2678,11 +2678,15 @@ lk_ss_start_count() {
 lk_restart_cause() {
   _rc_last="${1:-}"
   _rc_el="$(getprop sys.system_server.start_elapsed 2>/dev/null | tr -dc '0-9')"
-  _rc_up="$(cut -d' ' -f1 /proc/uptime 2>/dev/null | tr -dc '0-9')"
+  # Keep uptime in milliseconds. Cutting the integer seconds and multiplying by ten was both
+  # needlessly lossy and dependent on the host clock in the regression fixture.
+  _rc_up="$(awk 'NR == 1 { printf "%d", $1 * 1000 }' "${ASB_LK_UPTIME_FILE:-/proc/uptime}" 2>/dev/null)"
   case "$_rc_last:$_rc_el:$_rc_up" in
     *::*|:*|*:) echo unknown; return 0 ;;
   esac
-  _rc_start=$(( $(date +%s) - (_rc_up * 10 - _rc_el) / 1000 ))
+  case "$_rc_last:$_rc_el:$_rc_up" in *[!0-9:]*) echo unknown; return 0 ;; esac
+  [ "$_rc_el" -le "$_rc_up" ] || { echo unknown; return 0; }
+  _rc_start=$(( $(date +%s) - (_rc_up - _rc_el) / 1000 ))
   if [ "$_rc_start" -ge $(( _rc_last - 5 )) ]; then echo framework_restart; else echo recorder_lost; fi
 }
 
