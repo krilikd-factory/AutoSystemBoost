@@ -1823,13 +1823,16 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .wl-manual-copy { padding:11px 12px; border:1px solid rgba(255,165,2,.28); border-radius:12px; color:var(--text-secondary); background:rgba(255,165,2,.055); }
 .wl-manual-meta { margin:8px 2px 11px; color:var(--text-tertiary); font:10px/1.45 var(--mono); }
 .wl-manual-list { display:flex; flex-direction:column; gap:8px; }
-.wl-manual-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; padding:11px 12px; border:1px solid var(--border); border-radius:13px; background:rgba(255,255,255,.025); }
+.wl-manual-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px 10px; align-items:center; padding:11px 12px; border:1px solid var(--border); border-radius:13px; background:rgba(255,255,255,.025); }
+.wl-manual-row > :first-child { grid-row:1 / span 2; }
+.wl-service-row > :first-child { grid-row:auto; }
+.wl-manual-services { grid-column:2; color:var(--text-secondary); border-color:var(--border); background:transparent; }
 .wl-manual-row.is-selected { border-color:rgba(44,214,173,.5); background:rgba(44,214,173,.065); }
 .wl-manual-row.is-lapsed { border-color:rgba(255,165,2,.5); }
 .wl-manual-name { color:var(--text); font-size:12px; font-weight:700; overflow-wrap:anywhere; }
 .wl-manual-sub { margin-top:4px; color:var(--text-tertiary); font-size:10px; line-height:1.4; overflow-wrap:anywhere; }
 .wl-manual-risk { color:var(--bal); }
-.wl-manual-action { min-width:82px; min-height:38px; padding:7px 9px; border:1px solid var(--border-active); border-radius:10px; background:rgba(0,240,180,.07); color:var(--accent); font:700 10px/1.25 var(--sans); }
+.wl-manual-action { min-width:82px; min-height:44px; padding:7px 9px; border:1px solid var(--border-active); border-radius:10px; background:rgba(0,240,180,.07); color:var(--accent); font:700 10px/1.25 var(--sans); }
 .wl-manual-action.is-restore { color:var(--text-secondary); border-color:var(--border); background:transparent; }
 .wl-manual-action.is-armed { color:var(--bal); border-color:var(--bal); background:rgba(255,165,2,.12); }
 .wl-manual-action:disabled { opacity:.48; }
@@ -1946,6 +1949,11 @@ html[data-asb-theme="light"] .lgr-chip { background: #f7f9fa; }
 .lgr-hero { display: flex; flex-direction: column; gap: 3px; border-radius: 14px; padding: 10px 12px;
   border: 1px solid var(--border); background: rgba(255,255,255,0.025); }
 .lgr-hero-warn { border-color: rgba(245,180,94,0.35); background: rgba(245,180,94,0.06); }
+.lgr-hero[role="button"] { position: relative; cursor: pointer; padding-inline-end: 30px; -webkit-tap-highlight-color: transparent; }
+.lgr-hero[role="button"]::after { content: 'ⓘ'; position: absolute; inset-block-start: 10px; inset-inline-end: 10px;
+  color: var(--text-tertiary); font: 600 13px/1 var(--sans); }
+.lgr-hero[role="button"]:focus-visible, .lgr-verdict[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lgr-verdict[role="button"] { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .lgr-hero-emo { font-size: 14px; line-height: 1; }
 .lgr-hero-lbl { font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
   color: var(--text-tertiary); }
@@ -2007,46 +2015,31 @@ html[data-asb-theme="light"] .lgr-chip { background: #f7f9fa; }
 body.report-active > .report-nav, body.zygisk-active > .zy-page-nav { display: flex; }
 #reportPage .lgr-body, #zygiskPage .lgr-body {
   padding-bottom: calc(102px / var(--asb-ui-scale) + env(safe-area-inset-bottom, 0px)); }
-.report-nav, .zy-page-nav { display: none; position: fixed; left: 50%;
-  transform: translateX(-50%); bottom: max(10px, env(safe-area-inset-bottom, 0px)); z-index: 160;
-  box-sizing: border-box; width: min(calc(100% - 20px), 400px); max-width: calc(100% - 20px);
-  flex-direction: column; align-items: stretch; gap: calc(4px / var(--asb-ui-scale));
-  margin: 0; padding: calc(7px / var(--asb-ui-scale)) calc(8px / var(--asb-ui-scale));
-  overflow: hidden; border: 1px solid var(--cap-edge); border-radius: calc(27px / var(--asb-ui-scale));
-  background: var(--cap-wash), var(--tabbar-bg, #000000);
-  box-shadow: var(--cap-shadow); }
-.report-nav .lgr-jump-head, .zy-page-nav .lgr-jump-head {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  min-height: calc(16px / var(--asb-ui-scale)); padding-inline: calc(4px / var(--asb-ui-scale));
-  font-size: calc(10.5px / var(--asb-ui-scale)); line-height: calc(14px / var(--asb-ui-scale)); }
-.report-nav .lgr-jump-label, .zy-page-nav .lgr-jump-label {
-  flex: 0 0 auto; color: var(--text-tertiary); font-weight: 700;
-  letter-spacing: .065em; text-transform: uppercase; }
-.report-nav .lgr-jump-current, .zy-page-nav .lgr-jump-current {
-  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  color: var(--text); font-weight: 650; text-align: end; }
+/* The drill-in dock is the main tab bar's visual component, not a second capsule:
+ * identical insets, width, 31 px outline, material, 60 px targets and icon-top labels. */
+.report-nav, .zy-page-nav { display: none; position: fixed; left: 12px; right: 12px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); z-index: 160;
+  box-sizing: border-box; width: auto; max-width: 460px; margin: 0 auto; padding: 0 4px;
+  overflow: hidden; border: 1px solid var(--cap-edge); border-radius: 31px;
+  background: var(--cap-wash), var(--tabbar-bg, #000000); box-shadow: var(--cap-shadow); }
+.report-nav .lgr-jump-head, .zy-page-nav .lgr-jump-head { display: none; }
 .report-nav .lgr-jump-track, .zy-page-nav .lgr-jump-track {
-  display: flex; flex-wrap: nowrap; align-items: center; gap: calc(5px / var(--asb-ui-scale));
+  position: relative; display: flex; flex-wrap: nowrap; align-items: stretch; gap: 0;
   width: 100%; overflow-x: auto; overflow-y: hidden; overscroll-behavior-inline: contain;
   -webkit-overflow-scrolling: touch; scrollbar-width: none; scroll-padding-inline: 4px; }
 .report-nav .lgr-jump-track::-webkit-scrollbar, .zy-page-nav .lgr-jump-track::-webkit-scrollbar { display: none; }
-.report-nav .lgr-jump-btn, .zy-page-nav .lgr-jump-btn {
-  flex: 0 0 auto; min-width: calc(44px / var(--asb-ui-scale)); min-height: calc(44px / var(--asb-ui-scale));
-  padding: calc(7px / var(--asb-ui-scale)) calc(12px / var(--asb-ui-scale));
-  border: 1px solid transparent; border-radius: calc(11px / var(--asb-ui-scale)); white-space: nowrap;
-  font-size: calc(12px / var(--asb-ui-scale)); line-height: calc(16px / var(--asb-ui-scale));
-  color: var(--text-secondary); background: transparent; }
-.report-nav .lgr-jump-btn.is-active, .zy-page-nav .lgr-jump-btn.is-active {
-  color: var(--accent); border-color: transparent; font-weight: 650;
-  background: var(--pill-wash); box-shadow: var(--pill-edge); }
+.report-nav .lgr-jump-btn, .zy-page-nav .lgr-jump-btn { flex: 0 0 72px; min-width: 64px; min-height: 60px; }
+.report-nav .asb-tab-ico, .zy-page-nav .asb-tab-ico { flex: 0 0 32px; }
+.report-nav .asb-tab-label, .zy-page-nav .asb-tab-label { width: 100%; text-align: center; }
+.lgr-jump-track.ind-anim .asb-tab-ind { transition: transform .34s cubic-bezier(.3,.8,.25,1), width .34s ease; }
 #reportPage .lgr-sec[id], #zygiskPage .lgr-sec[id], #reportPage .lgr-details-anchor {
   scroll-margin-top: calc(var(--status-scrim-top) + 20px); }
 #reportPage .lgr-sec > .lgr-sec-t, #zygiskPage .lgr-sec > .lgr-sec-t {
   margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border);
   font-size: 11.5px; line-height: 1.35; letter-spacing: .065em; }
 #reportPage .lgr-hero, #zygiskPage .lgr-hero { min-width: 0; gap: 5px; padding: 12px; }
-#reportPage .lgr-hero-val, #zygiskPage .lgr-hero-val { font: 750 23px/1.15 var(--mono);
-  letter-spacing: -.035em; overflow-wrap: anywhere; }
+#reportPage .lgr-hero-val, #zygiskPage .lgr-hero-val { font: 700 23px/1.15 var(--sans);
+  letter-spacing: normal; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 #reportPage .lgr-hero-lbl, #zygiskPage .lgr-hero-lbl { line-height: 1.35; letter-spacing: .045em; }
 #reportPage .lgr-hero-sub, #zygiskPage .lgr-hero-sub { line-height: 1.45; overflow-wrap: anywhere; }
 #reportPage .lgr-row, #zygiskPage .lgr-row { padding: 6px 0; gap: 12px; line-height: 1.45; }
@@ -2067,7 +2060,7 @@ body.report-active > .report-nav, body.zygisk-active > .zy-page-nav { display: f
 #zygiskPage .zy-auto-card { background: linear-gradient(145deg,color-mix(in srgb,var(--accent) 5%,transparent),transparent 62%),var(--surface); }
 #zygiskPage .zy-auto-summary { border-inline-start: 2px solid var(--accent); line-height: 1.55; }
 #zygiskPage .zy-auto-current { color: var(--text-tertiary); }
-#zygiskPage .dev-zygisk-metrics .lgr-hero-val { font-size: 16px; line-height: 1.25; letter-spacing: -.025em; }
+#zygiskPage .dev-zygisk-metrics .lgr-hero-val { font-size: 16px; line-height: 1.25; letter-spacing: normal; }
 #zygiskPage .dev-zygisk-metrics .lgr-hero-lbl { font-size: 9.5px; }
 #zygiskPage .zy-evidence summary { line-height: 1.45; padding: 2px 0; }
 html[data-asb-theme="light"] .report-nav, html[data-asb-theme="light"] .zy-page-nav { background: var(--bg); }
@@ -4014,7 +4007,7 @@ html[data-asb-theme="light"] {
   --cap-edge: rgba(11,56,47,.16);
 }
 @media (prefers-reduced-motion: reduce) {
-  .asb-tabbar.ind-anim .asb-tab-ind, .asb-tab-ico, .asb-tab-ico .f, .theme-toggle::before { transition: none; }
+  .asb-tabbar.ind-anim .asb-tab-ind, .lgr-jump-track.ind-anim .asb-tab-ind, .asb-tab-ico, .asb-tab-ico .f, .theme-toggle::before { transition: none; }
 }
 
 /* Give every page room so its last row is never trapped under the bar. */
@@ -4031,7 +4024,7 @@ body { padding-bottom: calc(var(--tabbar-space, 82px) + env(safe-area-inset-bott
  * without it a user who opened Audio had to leave for Monitor and come back to Config just
  * to reach Camera. The tab bar cannot do this job - it moves between pages, and this is
  * movement inside one. */
-.status-row .live-chip:not(#cfgBackChip) { display: none; }
+.status-row:not(.has-back) .live-chip:not(#cfgBackChip) { display: none; }
 
 
 /* Live and Config are position:fixed from top:0 to bottom:0, so the padding on <body>
@@ -5053,7 +5046,7 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
       </div>
       <div class="theme-toggle" role="group" data-theme-toggle="cfgVerBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button><button class="theme-choice" type="button" data-theme-choice="glass" onclick="asbSetTheme('glass')" aria-label="Liquid Glass theme"><span data-tech-icon="theme_glass"></span></button></div>
     </div>
-    <div class="status-row">
+    <div class="status-row has-back">
       <div class="dot"></div>
       <span class="status-label" data-i18n="hdr_profile">Profile:&nbsp;</span>
       <span class="status-val" id="cfgCurProfile">balanced</span>
@@ -5311,10 +5304,23 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
         </div>
         <div class="theme-toggle" role="group" data-theme-toggle="zyVerBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button><button class="theme-choice" type="button" data-theme-choice="glass" onclick="asbSetTheme('glass')" aria-label="Liquid Glass theme"><span data-tech-icon="theme_glass"></span></button></div>
       </div>
-      <div class="status-row">
+      <div class="status-row has-back">
         <div class="dot"></div>
         <span class="status-label" data-i18n="hdr_profile">Profile:&nbsp;</span>
         <span class="status-val" id="zyCurProfile">balanced</span>
+        <div class="island-actions">
+          <button class="island-btn" id="zyLogsBtn" type="button"
+                  onclick="asbToggleLogMenu(event)" aria-haspopup="menu"
+                  aria-expanded="false" aria-label="Logs">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+            <span data-i18n="nav_logs">Logs</span>
+          </button>
+          <a class="island-btn" id="zyTgBtn" href="tg://resolve?domain=AutoSystemBoost"
+             onclick="openTelegram(event)" aria-label="Telegram">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            <span data-i18n="nav_channel">Channel</span>
+          </a>
+        </div>
         <button class="live-chip" id="zyBackChip" type="button" onclick="closeZygiskPage()" aria-label="Back">
           <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
           <span data-i18n="nav_back">Back</span>
@@ -6543,6 +6549,8 @@ const NAV_OVERLAYS = [
   { id: 'logMenu',          close: function () { asbCloseLogMenu(); } },
   { id: 'liveDrainSheet',   close: function () { liveDrainClose(); } },
   { id: 'liveInfoSheet',    close: function () { liveInfoClose(); } },
+  { id: 'wlServiceModal',   close: function () { wlServiceClose(); } },
+  { id: 'wlManualModal',    close: function () { wlManualClose(); } },
   { id: 'cfgFm',            close: function () { cfgFmClose(); } },
   { id: 'dozeKeepModal',    close: function () { dozeKeepClose(); } },
   { id: 'cfgResetModal',    close: function () { cfgResetDialogClose(); } },
@@ -7671,8 +7679,10 @@ function liveInfoValText(val) {
   t = t.trim();
   return t || ((val.textContent || '').trim()) || '—';
 }
+let _liveInfoReturn = null;
 function liveInfoOpen(cell) {
   if (!cell) return;
+  _liveInfoReturn = cell;
   const key = lviKeyOf(cell);
   const txt = LVI_TEXT[key];
   if (!txt) return;
@@ -7709,11 +7719,33 @@ function liveInfoOpen(cell) {
   m.setAttribute('aria-hidden', 'false');
   navSyncSoon();
 }
+function liveInfoOpenData(detail) {
+  if (!detail) return;
+  uiSound('option');
+  const m = liveInfoEnsure();
+  _liveInfoReturn = detail.returnTo || (typeof document !== 'undefined' ? document.activeElement : null);
+  _el('liveInfoTitle').textContent = String(detail.title || '');
+  _el('liveInfoNowLbl').textContent = detail.nowLabel || T('lvi_now', 'Now');
+  const iv = _el('liveInfoVal'); iv.textContent = String(detail.value === undefined ? '—' : detail.value);
+  iv.className = 'live-info-val'; iv.style.color = '';
+  _el('liveInfoText').textContent = String(detail.text || '');
+  _el('liveInfoScale').hidden = true; _el('liveInfoScale').textContent = '';
+  _el('liveInfoHist').hidden = true; _el('liveInfoHist').textContent = '';
+  const src = _el('liveInfoSrc'), lines = Array.isArray(detail.lines) ? detail.lines : [];
+  src.textContent = lines.filter(function (x) { return x !== undefined && x !== null && String(x) !== ''; }).map(String).join('\n');
+  src.hidden = !src.textContent;
+  _el('liveInfoDone').textContent = T('doze_keep_done', 'Done');
+  m.hidden = false; m.setAttribute('aria-hidden', 'false');
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function () { const x = _el('liveInfoX'); if (x && x.focus) x.focus(); });
+  navSyncSoon();
+}
 function liveInfoClose() {
   const m = _el('liveInfoSheet');
   if (!m || m.hidden) return;
   m.hidden = true;
   m.setAttribute('aria-hidden', 'true');
+  const back = _liveInfoReturn; _liveInfoReturn = null;
+  if (back && back.isConnected !== false && back.focus) { try { back.focus(); } catch (e) {} }
   navSyncSoon();
 }
 document.addEventListener('click', function (e) {
@@ -7735,6 +7767,13 @@ window.addEventListener('popstate', function (e) {
   } catch (e) {}
 })();
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && liveInfoIsOpen()) { e.preventDefault(); liveInfoClose(); return; }
+  const wls = _el('wlServiceModal');
+  if (e.key === 'Escape' && wls && !wls.hidden) { e.preventDefault(); wlServiceClose(); return; }
+  const wlm = _el('wlManualModal');
+  if (e.key === 'Escape' && wlm && !wlm.hidden) { e.preventDefault(); wlManualClose(); return; }
+  const logMenu = _el('logMenu');
+  if (e.key === 'Escape' && logMenu && !logMenu.hidden) { e.preventDefault(); asbCloseLogMenu(); return; }
   if (e.key === 'Escape' && _zygiskOpen) { closeZygiskPage(); return; }
   if (e.key === 'Escape' && _deviceOpen) { closeDevicePage(); return; }
   if (e.key === 'Escape' && _rpOpen) { closeReportPage(); return; }
@@ -10799,16 +10838,22 @@ function wlManualRow(a) {
   row.appendChild(tx);
   const b = document.createElement('button'); b.type = 'button'; b.className = 'wl-manual-action' + (a.selected ? ' is-restore' : '');
   const armed = !a.selected && wlManualArmed(a.pkg);
-  b.textContent = a.selected ? T('wl_manual_restore', 'Restore') : armed ? T('wl_manual_confirm_tap', 'Tap again to freeze') : T('wl_manual_block', 'Freeze');
+  b.textContent = a.selected ? T('wl_manual_restore', 'Restore') : armed ? T('wl_manual_confirm_tap', 'Tap again to block') : T('wl_manual_block', 'Block wakelocks');
   if (armed) {
     b.className += ' is-armed';
     const warn = document.createElement('div'); warn.className = 'wl-manual-sub wl-manual-risk';
-    warn.textContent = T('wl_manual_confirm', 'Freeze WAKE_LOCK for %s?\n\nMessages, calls, alarms, fitness tracking, VPN or foreground work may stop or arrive late. This is your choice and your risk. ASB will record and restore the original package and uid modes.')
+    warn.textContent = T('wl_manual_confirm', 'Block WAKE_LOCK for the whole %s app?\n\nThis package/uid AppOps restriction does not select or freeze an individual service. Messages, calls, alarms, fitness tracking, VPN or foreground work may stop or arrive late. ASB will record and restore the original package and uid modes.')
       .replace('%s', _wlManual.labels[a.pkg] || a.pkg).replace(/\s*\n+\s*/g, ' ');
     tx.appendChild(warn);
   }
   b.disabled = _wlManual.busy || (!a.selected && a.eff === 'ignore');
   b.onclick = function () { wlManualSet(a); }; row.appendChild(b);
+  const services = document.createElement('button'); services.type = 'button';
+  services.className = 'wl-manual-action wl-manual-services';
+  services.textContent = T('wl_services_open', 'Services');
+  services.setAttribute('aria-label', T('wl_services_open', 'Services') + ': ' + (_wlManual.labels[a.pkg] || a.pkg));
+  services.disabled = _wlManual.busy; services.onclick = function () { wlServiceOpen(a.pkg); };
+  row.appendChild(services);
   return row;
 }
 function wlManualPaint(d) {
@@ -10837,7 +10882,7 @@ function wlManualOthers(pkgs, open) {
   sm.textContent = T('wl_manual_others', 'Other user apps (%s)').replace('%s', String(pkgs.length));
   box.appendChild(sm);
   const note = document.createElement('div'); note.className = 'wl-manual-sub wl-manual-others-note';
-  note.textContent = T('wl_manual_others_note', 'No wakelock is recorded for these apps on this phone. Freeze one only if you know it keeps the phone awake.');
+  note.textContent = T('wl_manual_others_note', 'No wakelock is recorded for these apps on this phone. Block one only if you understand the risk. The Services list shows running components even when no wakelock attribution is exposed; presence there is not proof of energy cost.');
   box.appendChild(note);
   const q = document.createElement('input'); q.type = 'search'; q.className = 'wl-manual-search';
   q.placeholder = T('wl_manual_search', 'Search apps'); q.setAttribute('aria-label', q.placeholder);
@@ -10869,8 +10914,8 @@ function wlManualOthers(pkgs, open) {
 }
 async function wlManualLoad() {
   const m = wlManualEnsure(), tok = ++_wlManual.tok;
-  _el('wlManualTitle').textContent = T('wl_manual_title', 'App wakelock freeze');
-  _el('wlManualCopy').textContent = T('wl_manual_warning', 'At your own risk. Blocking can delay or break messages, calls, alarms, fitness tracking, VPN and foreground services. Only user apps are listed; kernel and system wakelocks are never frozen. Restore returns the original AppOps modes.');
+  _el('wlManualTitle').textContent = T('wl_manual_title', 'App wakelock blocking');
+  _el('wlManualCopy').textContent = T('wl_manual_warning', 'At your own risk. “Block wakelocks” changes package/uid AppOps for the whole app; it does not freeze the app or select a service. “Services” opens a separate list of individual running service components that can be disabled and restored. Either action can delay or break messages, calls, alarms, fitness tracking, VPN and foreground work. Only user apps are listed; kernel and system wakelocks are never writable targets.');
   _el('wlManualDone').textContent = T('doze_keep_done', 'Done');
   _el('wlManualMeta').textContent = T('wl_manual_readonly', 'Read-only scan · no automatic selection');
   wlManualLoading();
@@ -10887,6 +10932,7 @@ async function wlManualOpen() {
   await wlManualLoad();
 }
 function wlManualClose() {
+  if (typeof wlServiceClose === 'function') wlServiceClose();
   const m = _el('wlManualModal'); if (!m || m.hidden) return;
   m.hidden = true; m.setAttribute('aria-hidden', 'true'); _wlManual.tok++;
   _wlManual.armed = ''; clearTimeout(_wlManual.armTimer);
@@ -10915,7 +10961,7 @@ async function wlManualSet(a) {
   const out = r ? runText(r) : '', res = (/^result=([a-z_]+)/m.exec(out) || [])[1] || 'failed';
   if (tok === _wlManual.tok) {
     let msg;
-    if (res === 'limited') msg = T('wl_manual_result_limited', 'Wakelock freeze confirmed by read-back');
+    if (res === 'limited') msg = T('wl_manual_result_limited', 'Package-wide wakelock blocking confirmed by read-back');
     else if (res === 'restored') msg = T('wl_manual_result_restored', 'Original AppOps modes restored');
     else if (res === 'external_ignore') msg = T('wl_manual_external', 'Already ignored outside this list');
     else if (res === 'uninstalled') msg = T('wl_manual_result_uninstalled', 'App is no longer installed; its entry was removed');
@@ -10924,6 +10970,143 @@ async function wlManualSet(a) {
   }
   _wlManual.busy = false; _el('wlManualRefresh').disabled = false;
   if (tok === _wlManual.tok && !_el('wlManualModal').hidden) await wlManualLoad();
+}
+
+/* Individual service components are a different operation from package WAKE_LOCK AppOps.
+ * The runtime lists only currently running services plus components already disabled through
+ * this ledger. No process/package freeze and no background polling are involved. */
+const _wlService = { tok: 0, busy: false, pkg: '', rows: [], armed: '', armedAt: 0, armTimer: 0 };
+function wlServiceArmed(comp) { return !!comp && _wlService.armed === comp && Date.now() - _wlService.armedAt < 5000; }
+function wlServiceEnsure() {
+  let m = _el('wlServiceModal');
+  if (m) return m;
+  m = document.createElement('div'); m.className = 'cfg-profile-modal'; m.id = 'wlServiceModal';
+  m.hidden = true; m.setAttribute('aria-hidden', 'true');
+  m.innerHTML = '<div class="cfg-profile-sheet wl-manual-sheet" role="dialog" aria-modal="true" aria-labelledby="wlServiceTitle">'
+    + '<div class="cfg-profile-head"><div class="cfg-profile-title" id="wlServiceTitle"></div><div class="wl-manual-head-actions">'
+    + '<button class="cfg-profile-close" id="wlServiceRefresh" type="button" aria-label="Refresh">↻</button>'
+    + '<button class="cfg-profile-close" id="wlServiceX" type="button" aria-label="Close">×</button></div></div>'
+    + '<div class="cfg-profile-copy wl-manual-copy" id="wlServiceCopy"></div>'
+    + '<div class="wl-manual-meta" id="wlServiceMeta"></div><div class="wl-manual-list" id="wlServiceList"></div>'
+    + '<button class="cfg-profile-primary" id="wlServiceDone" type="button"></button></div>';
+  document.body.appendChild(m);
+  m.addEventListener('click', function (e) { if (e.target === m) wlServiceClose(); });
+  _el('wlServiceX').onclick = wlServiceClose; _el('wlServiceDone').onclick = wlServiceClose;
+  _el('wlServiceRefresh').onclick = function () { if (!_wlService.busy) wlServiceLoad(); };
+  return m;
+}
+function wlServiceParse(out, pkg) {
+  const d = { scan: 'unavailable', selected: 0, rows: [] };
+  String(out || '').split('\n').forEach(function (ln) {
+    if (ln.indexOf('scan=') === 0) { d.scan = ln.slice(5); return; }
+    if (ln.indexOf('selected=') === 0) { d.selected = Math.max(0, parseInt(ln.slice(9), 10) || 0); return; }
+    const f = ln.split('|'), comp = f[1] || '';
+    if (f[0] !== 'service' || f.length !== 5 || comp.indexOf(pkg + '/') !== 0) return;
+    if (!/^[A-Za-z0-9_.]+\/[A-Za-z0-9_.$]+$/.test(comp)) return;
+    d.rows.push({ comp: comp, selected: f[2] === '1', state: /^(default|enabled|disabled)$/.test(f[3]) ? f[3] : 'unknown', running: f[4] === '1' });
+  });
+  return d;
+}
+function wlServiceState(a) {
+  if (a.selected && a.state === 'disabled') return T('wl_service_state_disabled', 'Disabled · read-back confirmed');
+  if (a.selected) return T('wl_service_state_lapsed', 'Selected, but not disabled now · use Restore to finish restoring it');
+  if (a.running) return T('wl_service_state_running', 'Running now · the app package remains enabled');
+  return T('wl_service_state_unknown', 'Current component state is not exposed');
+}
+function wlServiceRow(a) {
+  const row = document.createElement('div');
+  row.className = 'wl-manual-row wl-service-row' + (a.selected ? ' is-selected' : '') + (a.selected && a.state !== 'disabled' ? ' is-lapsed' : '');
+  const tx = document.createElement('div'), name = document.createElement('div'), sub = document.createElement('div');
+  name.className = 'wl-manual-name'; name.textContent = a.comp.slice(_wlService.pkg.length + 1);
+  sub.className = 'wl-manual-sub'; sub.textContent = a.comp + ' · ' + wlServiceState(a);
+  tx.appendChild(name); tx.appendChild(sub); row.appendChild(tx);
+  const b = document.createElement('button'); b.type = 'button';
+  b.className = 'wl-manual-action' + (a.selected ? ' is-restore' : '');
+  const armed = !a.selected && wlServiceArmed(a.comp);
+  b.textContent = a.selected ? T('wl_service_restore', 'Restore service') : armed ? T('wl_service_confirm_tap', 'Tap again to disable') : T('wl_service_disable', 'Disable service');
+  if (armed) {
+    b.classList.add('is-armed');
+    const warn = document.createElement('div'); warn.className = 'wl-manual-sub wl-manual-risk';
+    warn.textContent = T('wl_service_confirm', 'Disable only %s? The app package is not frozen, but this service can stop working until restored. Notifications, sync, media, calls, alarms or other app features may break. ASB records and restores the exact original component state.')
+      .replace('%s', a.comp);
+    tx.appendChild(warn);
+  }
+  b.disabled = _wlService.busy; b.onclick = function () { wlServiceSet(a); }; row.appendChild(b);
+  return row;
+}
+function wlServicePaint(d) {
+  _wlService.rows = d.rows || [];
+  const list = _el('wlServiceList'); list.textContent = '';
+  if (!_wlService.rows.length) {
+    const e = document.createElement('div'); e.className = 'cfg-profile-empty';
+    e.textContent = d.scan === 'ok' ? T('wl_service_empty', 'No running service components are exposed for this app right now. This does not prove that the app has no services; start or use the app, then refresh. Components already disabled through ASB remain listed for Restore.')
+      : T('wl_service_unavailable', 'Service records or component state are not exposed right now. Nothing was changed.');
+    list.appendChild(e);
+  } else _wlService.rows.forEach(function (a) { list.appendChild(wlServiceRow(a)); });
+  _el('wlServiceMeta').textContent = T('wl_service_meta', '%s service(s) selected · on-demand read · no automatic freezing or polling').replace('%s', String(d.selected || 0));
+}
+async function wlServiceLoad() {
+  const m = wlServiceEnsure(), tok = ++_wlService.tok, pkg = _wlService.pkg;
+  if (!pkg) return;
+  _el('wlServiceTitle').textContent = T('wl_service_title', 'Services · %s').replace('%s', _wlManual.labels[pkg] || pkg);
+  _el('wlServiceCopy').textContent = T('wl_service_copy', 'Disable one Android service component, not the whole app. This is component disabling, not a process freezer. The list comes from currently running service records; it does not prove that a service holds a wakelock or costs energy. Restore returns the recorded default/enabled state.');
+  _el('wlServiceDone').textContent = T('doze_keep_done', 'Done');
+  _el('wlServiceMeta').textContent = T('wl_manual_readonly', 'Read-only scan · no automatic selection');
+  const list = _el('wlServiceList'); list.textContent = '';
+  const loading = document.createElement('div'); loading.className = 'wl-manual-loading';
+  loading.textContent = T('wl_service_loading', 'Reading running services and actual component states…'); list.appendChild(loading);
+  await asbPaintYield();
+  if (tok !== _wlService.tok || m.hidden || pkg !== _wlService.pkg) return;
+  let r = null;
+  try { r = await run('sh ' + shQuote(MD + '/runtime/asb_wakelock_watch.sh') + ' service-list ' + shQuote(pkg) + ' 2>/dev/null'); } catch (e) {}
+  if (tok !== _wlService.tok || m.hidden || pkg !== _wlService.pkg) return;
+  wlServicePaint(r && r.errno === 0 ? wlServiceParse(runText(r), pkg) : { scan: 'unavailable', selected: 0, rows: [] });
+}
+async function wlServiceOpen(pkg) {
+  if (!dozePkgOk(pkg)) return;
+  const m = wlServiceEnsure(); _wlService.pkg = pkg; _wlService.rows = []; _wlService.armed = '';
+  m.hidden = false; m.setAttribute('aria-hidden', 'false'); navSyncSoon();
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function () { const x = _el('wlServiceX'); if (x && x.focus) x.focus(); });
+  await wlServiceLoad();
+}
+function wlServiceClose() {
+  const m = _el('wlServiceModal'); if (!m || m.hidden) return;
+  m.hidden = true; m.setAttribute('aria-hidden', 'true'); _wlService.tok++;
+  _wlService.armed = ''; clearTimeout(_wlService.armTimer); navSyncSoon();
+}
+async function wlServiceSet(a) {
+  if (_wlService.busy) return;
+  if (!a.selected && !wlServiceArmed(a.comp)) {
+    _wlService.armed = a.comp; _wlService.armedAt = Date.now();
+    wlServicePaint({ scan: 'ok', selected: _wlService.rows.filter(function (x) { return x.selected; }).length, rows: _wlService.rows });
+    clearTimeout(_wlService.armTimer);
+    _wlService.armTimer = setTimeout(function () {
+      if (!_wlService.armed || wlServiceArmed(_wlService.armed)) return;
+      _wlService.armed = '';
+      const m = _el('wlServiceModal');
+      if (m && !m.hidden && !_wlService.busy) wlServicePaint({ scan: 'ok', selected: _wlService.rows.filter(function (x) { return x.selected; }).length, rows: _wlService.rows });
+    }, 5100);
+    return;
+  }
+  _wlService.armed = ''; clearTimeout(_wlService.armTimer); _wlService.busy = true;
+  const tok = ++_wlService.tok, pkg = _wlService.pkg;
+  _el('wlServiceRefresh').disabled = true;
+  wlServicePaint({ scan: 'ok', selected: _wlService.rows.filter(function (x) { return x.selected; }).length, rows: _wlService.rows });
+  let r = null;
+  try { r = await run('sh ' + shQuote(MD + '/runtime/asb_wakelock_watch.sh') + ' service-set ' + shQuote(pkg) + ' ' + (a.selected ? 'restore ' : 'disable ') + shQuote(a.comp)); } catch (e) {}
+  const out = r ? runText(r) : '', res = (/^result=([a-z_]+)/m.exec(out) || [])[1] || 'failed';
+  if (tok === _wlService.tok) {
+    let msg;
+    if (res === 'disabled') msg = T('wl_service_result_disabled', 'Service disabled; component read-back confirmed');
+    else if (res === 'restored') msg = T('wl_service_result_restored', 'Original service component state restored');
+    else if (res === 'uninstalled') msg = T('wl_manual_result_uninstalled', 'App is no longer installed; its entry was removed');
+    else if (res === 'external_disabled') msg = T('wl_service_external', 'Already disabled outside ASB; it was not adopted and will not be restored by ASB');
+    else if (res === 'not_running') msg = T('wl_service_not_running', 'The service is no longer running or its original state is not exposed; nothing was changed');
+    else msg = T('wl_service_result_failed', 'Not applied; actual state: %s').replace('%s', ((/^effective=([a-z_]+)/m.exec(out) || [])[1] || 'unknown'));
+    toast(msg, res === 'disabled' || res === 'restored' || res === 'uninstalled' ? 'good' : 'warn');
+  }
+  _wlService.busy = false; _el('wlServiceRefresh').disabled = false;
+  if (tok === _wlService.tok && !_el('wlServiceModal').hidden) await wlServiceLoad();
 }
 
 const DOZE_MESSENGERS = [
@@ -13182,12 +13365,30 @@ function logReportNote(txt, warn) {
   return p;
 }
 /* In-page navigation is real DOM, not links to routes that a static WebView cannot resolve. */
+function asbPageJumpIndicator(nav) {
+  const track = nav && nav._asbJumpTrack;
+  if (!track || !track.insertBefore) return;
+  let ind = nav._asbJumpIndicator;
+  if (!ind) {
+    ind = document.createElement('div'); ind.className = 'asb-tab-ind';
+    ind.setAttribute('aria-hidden', 'true'); track.insertBefore(ind, track.firstChild || null);
+    nav._asbJumpIndicator = ind;
+  }
+  const on = (nav._asbJumpButtons || []).filter(function (b) { return b.classList.contains('is-active'); })[0];
+  if (!on || !on.offsetWidth) return;
+  track.style.setProperty('--ind-x', on.offsetLeft + 'px');
+  track.style.setProperty('--ind-w', on.offsetWidth + 'px');
+  if (!track.classList.contains('ind-anim') && !track._asbIndArm) {
+    track._asbIndArm = true;
+    requestAnimationFrame(function () { requestAnimationFrame(function () { track.classList.add('ind-anim'); }); });
+  }
+}
 function asbPageJumpActive(nav, id, center) {
   const buttons = nav._asbJumpButtons || Array.from(nav.children);
   let changed = nav._asbJumpId !== id;
   for (const b of buttons) {
     const on = b._asbJumpTarget === id;
-    if (on && nav._asbJumpCurrent) nav._asbJumpCurrent.textContent = b.textContent;
+    if (on && nav._asbJumpCurrent) nav._asbJumpCurrent.textContent = b._asbJumpLabel || b.textContent;
     if (b.classList) {
       if (on && b.classList.add) b.classList.add('is-active');
       if (!on && b.classList.remove) b.classList.remove('is-active');
@@ -13206,6 +13407,10 @@ function asbPageJumpActive(nav, id, center) {
       track.scrollLeft += br.left + br.width / 2 - tr.left - tr.width / 2;
       break;
     }
+  }
+  if (nav._asbJumpTrack) {
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function () { asbPageJumpIndicator(nav); });
+    else asbPageJumpIndicator(nav);
   }
 }
 function asbPageJumpClear(page) {
@@ -13258,6 +13463,16 @@ function asbPageJumpWatch(nav, items) {
   page._asbJumpDispose = function () { page.removeEventListener('scroll', onScroll); };
   update();
 }
+function asbPageJumpIcon(id) {
+  const icons = {
+    'lgr-summary': 'panel', 'lgr-actions': 'switches', 'lgr-drain': 'battery',
+    'lgr-smooth': 'zygisk_activity', 'lgr-thermal': 'thermal_point', 'lgr-zygisk': 'zygisk_observer',
+    'lgr-details': 'log_detail', 'zy-mode': 'zygisk_mode', 'zy-auto': 'zygisk_auto',
+    'zy-controls': 'switches', 'zy-activity': 'zygisk_activity', 'zy-guard': 'zygisk_guard',
+    'zy-aot': 'zygisk_art', 'zy-apps': 'zygisk_apps'
+  };
+  return icons[id] || 'panel';
+}
 function asbPageJump(items, label, extraClass) {
   const nav = document.createElement('div');
   const dock = extraClass === 'report-nav' || extraClass === 'zy-page-nav';
@@ -13280,8 +13495,15 @@ function asbPageJump(items, label, extraClass) {
     nav.appendChild(l);
   }
   items.forEach(function (it) {
-    const b = document.createElement('button'); b.type = 'button'; b.className = 'lgr-chip lgr-jump-btn';
-    b.textContent = it[1]; b._asbJumpTarget = it[0];
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = dock ? 'lgr-chip lgr-jump-btn asb-tab' : 'lgr-chip lgr-jump-btn';
+    b._asbJumpTarget = it[0]; b._asbJumpLabel = it[1];
+    if (dock) {
+      const icon = document.createElement('span'); icon.className = 'asb-tab-ico'; icon.setAttribute('aria-hidden', 'true');
+      icon.innerHTML = techIcon(asbPageJumpIcon(it[0]));
+      const text = document.createElement('span'); text.className = 'asb-tab-label'; text.textContent = it[1];
+      b.appendChild(icon); b.appendChild(text); b.setAttribute('aria-label', it[1]);
+    } else b.textContent = it[1];
     if (b.setAttribute) b.setAttribute('aria-controls', it[0]);
     b.onclick = function () {
       const target = _el(it[0]);
@@ -15414,7 +15636,19 @@ function deviceLsposedCollect(d) {
   wrap.appendChild(btn);
   return wrap;
 }
-function logReportHero(emo, label, value, sub, warn) {
+function logReportDetailBind(el, detail) {
+  if (!el || !detail) return el;
+  detail.returnTo = el;
+  el.setAttribute('role', 'button'); el.setAttribute('tabindex', '0'); el.setAttribute('aria-haspopup', 'dialog');
+  el.setAttribute('aria-label', String(detail.title || '') + ' · ' + T('lr_detail_open', 'More information'));
+  el.onclick = function () { liveInfoOpenData(detail); };
+  el.onkeydown = function (e) {
+    if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+    e.preventDefault(); liveInfoOpenData(detail);
+  };
+  return el;
+}
+function logReportHero(emo, label, value, sub, warn, detail) {
   const t = document.createElement('div');
   t.className = 'lgr-hero' + (warn ? ' lgr-hero-warn' : '');
   const e = document.createElement('span');
@@ -15435,7 +15669,7 @@ function logReportHero(emo, label, value, sub, warn) {
     u.textContent = sub;
     t.appendChild(u);
   }
-  return t;
+  return detail ? logReportDetailBind(t, detail) : t;
 }
 function logReportAnalysisT(key, vars) {
   const fallback = {
@@ -16187,6 +16421,13 @@ function logReportAppendAnalysis(body, d, analysis) {
     detail.textContent = logReportAnalysisT(v.detail_key, v.vars);
     row.appendChild(name); row.appendChild(value); row.appendChild(detail);
     const ref = logReportDomainRef(v.domain, v.state); if (ref) row.appendChild(ref);
+    logReportDetailBind(row, {
+      title: T(names[v.domain], v.domain), value: value.textContent,
+      nowLabel: T('lr_detail_verdict', 'This capture'),
+      text: detail.textContent,
+      lines: [T('lr_summary_legend', 'Good and Normal describe only this capture. Not enough data is not a clean bill of health.'),
+        logReportAnalysisT(analysis.quality.level === 'low' ? 'lr_quality_short' : 'lr_quality_full', { min: logReportDur(d.sections.meta.elapsed_min || 0) })]
+    });
     summary.appendChild(row);
   });
   const legend = logReportNote(T('lr_summary_legend', 'Good and Normal describe only this capture. Not enough data is not a clean bill of health.'));
@@ -16272,14 +16513,54 @@ function logReportZygisk(d) {
   const spawnDelta = numericDelta('spawn_events'), eventDelta = numericDelta('events_total');
   const launchDelta = numericDelta('launch_events'), ledgerDelta = numericDelta('ledger_events');
   const grid = document.createElement('div'); grid.className = 'lgr-heros';
-  grid.appendChild(logReportHero('🛰️', T('lr_zy_activity', 'Accepted process start/exit events'), delta('events_total'),
-    logReportT('lr_zy_start_latest', '{start} → {latest}', { start: unknown(z.events_total_start) ? '—' : z.events_total_start, latest: unknown(z.events_total_latest) ? '—' : z.events_total_latest }), false));
-  grid.appendChild(logReportHero('🚀', T('lr_zy_launch', 'Cold starts heard'), delta('launch_events'),
-    logReportT('lr_zy_accepted', '{n} accepted lift requests', { n: delta('launch_accepted') }), false));
-  grid.appendChild(logReportHero('💡', T('lr_zy_hints', 'Lifecycle hints'), delta('policy_hints'),
-    logReportT('lr_zy_accept_veto', '{ok} accepted · {veto} vetoed', { ok: delta('hints_accepted'), veto: delta('hints_vetoed') }), false));
-  grid.appendChild(logReportHero('⚙️', T('lr_zy_ipc', 'Observer IPC CPU'), logReportT('lr_zy_ms', '{n} ms', { n: delta('ipc_cpu_ms') }),
-    logReportT('lr_zy_wake', '{n} wakeups', { n: delta('ipc_wakeups') }), false));
+  const coverageText = T(z.deltas === 'counter_reset_or_restart' ? 'lr_zy_reset' : z.coverage === 'start_latest' ? 'lr_zy_coverage_two' : 'lr_zy_coverage_one',
+    z.deltas === 'counter_reset_or_restart' ? 'At least one counter decreased: affected deltas remain unknown.' :
+      z.coverage === 'start_latest' ? 'Start/latest snapshots: deltas cover the interval between them, but do not prove continuous observation through a restart.' :
+        'Only one snapshot is available; no in-capture delta can be inferred.');
+  const startLatest = function (key) {
+    return logReportT('lr_zy_start_latest', '{start} → {latest}', {
+      start: unknown(z[key + '_start']) ? '—' : z[key + '_start'], latest: unknown(z[key + '_latest']) ? '—' : z[key + '_latest'] });
+  };
+  const detail = function (title, value, text, lines) {
+    return { title: title, value: value, nowLabel: T('lr_detail_capture', 'In this capture'), text: text, lines: lines.concat([coverageText]) };
+  };
+  const counter = function (key, label) { return label + ': ' + delta(key); };
+  const activityTitle = T('lr_zy_activity', 'Accepted process start/exit events');
+  const activityValue = delta('events_total');
+  grid.appendChild(logReportHero('🛰️', activityTitle, activityValue, startLatest('events_total'), false,
+    detail(activityTitle, activityValue, T('lr_zy_detail_events', 'Accepted start/exit notifications from the observer lifecycle channel. This is not a count of boosted apps and does not measure a performance gain.'), [
+      startLatest('events_total'), counter('spawn_events', T('lr_zy_spawns', 'Observed process starts in capture')),
+      counter('events_dropped_total', T('dev_zygisk_observer_events_dropped_total', 'Dropped events · total')),
+      T('lr_zy_loaded', 'Validated live processes at latest snapshot') + ': ' + String(z.loaded || '0')])));
+  const launchTitle = T('lr_zy_launch', 'Cold starts heard'), launchValue = delta('launch_events');
+  grid.appendChild(logReportHero('🚀', launchTitle, launchValue,
+    logReportT('lr_zy_accepted', '{n} accepted lift requests', { n: delta('launch_accepted') }), false,
+    detail(launchTitle, launchValue, T('lr_zy_accept_note', 'An accepted cold-start request was acknowledged by the governor after its enabled/screen checks. This is not proof that a lift was armed or that a frequency ceiling changed; thermal and other governor gates still apply.'), [
+      startLatest('launch_events'), counter('launch_accepted', T('dev_zygisk_observer_launch_accepted', 'Cold starts accepted by the governor')),
+      counter('launch_vetoed', T('dev_zygisk_observer_launch_vetoed', 'Cold starts vetoed')),
+      counter('launch_unavailable', T('dev_zygisk_observer_launch_unavailable', 'Cold starts: governor unavailable')),
+      counter('launch_throttled', T('dev_zygisk_observer_launch_throttled', 'Cold starts throttled')),
+      counter('launch_long', T('dev_zygisk_observer_launch_long', 'Cold starts of slow-starting apps')),
+      counter('launch_short', T('dev_zygisk_observer_launch_short', 'Cold starts of fast-starting apps')),
+      counter('launch_class_fallback', T('lr_zy_launch_fallback', 'Cold starts without a measured launch class')),
+      counter('launch_screen_off', T('dev_zygisk_observer_launch_screen_off', 'Cold starts vetoed locally with the screen off'))])));
+  const hintsTitle = T('lr_zy_hints', 'Lifecycle hints'), hintsValue = delta('policy_hints');
+  grid.appendChild(logReportHero('💡', hintsTitle, hintsValue,
+    logReportT('lr_zy_accept_veto', '{ok} accepted · {veto} vetoed', { ok: delta('hints_accepted'), veto: delta('hints_vetoed') }), false,
+    detail(hintsTitle, hintsValue, T('lr_zy_detail_hints', 'Lifecycle hints ask the governor to refresh its policy after a relevant app state change. Zero means that no hint was sent in this interval, not that apps had no lifecycle events. Accepted or vetoed describes the request only; it is not an energy measurement.'), [
+      startLatest('policy_hints'), counter('hints_accepted', T('dev_zygisk_observer_hints_accepted', 'Policy hints accepted')),
+      counter('hints_vetoed', T('dev_zygisk_observer_hints_vetoed', 'Policy hints vetoed')),
+      counter('hints_screen_off', T('dev_zygisk_observer_hints_screen_off', 'Refreshes not sent with the screen off'))])));
+  const ipcTitle = T('lr_zy_ipc', 'Observer IPC CPU');
+  const ipcValue = logReportT('lr_zy_ms', '{n} ms', { n: delta('ipc_cpu_ms') });
+  const ipcLines = [startLatest('ipc_cpu_ms'), counter('ipc_cpu_ms', T('lr_zy_ipc', 'Observer IPC CPU')),
+    counter('ipc_wakeups', T('dev_zygisk_observer_ipc_wakeups', 'IPC wakeups'))];
+  const ipcMs = numericDelta('ipc_cpu_ms'), ipcWakes = numericDelta('ipc_wakeups');
+  if (ipcMs !== null && ipcWakes !== null && ipcWakes > 0)
+    ipcLines.push(T('lr_zy_detail_per_wake', 'CPU per wakeup') + ': ' + (ipcMs / ipcWakes).toFixed(3) + ' ms');
+  grid.appendChild(logReportHero('⚙️', ipcTitle, ipcValue,
+    logReportT('lr_zy_wake', '{n} wakeups', { n: delta('ipc_wakeups') }), false,
+    detail(ipcTitle, ipcValue, T('lr_zy_detail_ipc', 'CPU time spent by the observer IPC path between the two snapshots. It covers this observer path, not every ASB component. Milliseconds per wakeup are shown only when both counters are known; neither number proves a net battery cost or saving.'), ipcLines)));
   sec.appendChild(grid);
   const stateText = function (state) { return T('dev_zygisk_link_' + state, state || 'unknown'); };
   sec.appendChild(logReportRow(T('lr_zy_start_state', 'At capture start'), stateText(z.start_state)));
@@ -16510,7 +16791,13 @@ function logReportRender(d) {
       if ((+drain.hours || 0) >= 1 && (+drain.total_drop || 0) >= 3)
         dsub.push(logReportT('lr_drain_est', '≈{h} from 100%', { h: logReportFullCharge(drain.pctph) }));
       g.appendChild(logReportHero('📉', T('lr_overall', 'Average drain'),
-        String(drain.pctph) + T('lr_per_hour', '%/h'), dsub.join(' · '), false));
+        String(drain.pctph) + T('lr_per_hour', '%/h'), dsub.join(' · '), false, {
+          title: T('lr_overall', 'Average drain'), value: String(drain.pctph) + T('lr_per_hour', '%/h'),
+          nowLabel: T('lr_detail_capture', 'In this capture'),
+          text: T('lr_detail_drain', 'Battery percentage lost divided by eligible off-charger time. Charging is excluded. The estimate from a full charge is only this capture’s pace projected forward, not a promise of battery life or proof that a tweak caused the result.'),
+          lines: [T('lr_th_time', 'Time') + ': ' + logReportDur(Math.round((+drain.hours || 0) * 60)),
+            T('lr_th_drop', 'Drain') + ': −' + String(drain.total_drop || 0) + '%',
+            logReportAnalysisT('lr_actions_verify', {})] }));
       heroes++;
     }
     if (night) {
@@ -16521,7 +16808,13 @@ function logReportRender(d) {
          step already reads past the 0.8 %/h mark, and that is noise, not a finding. */
       g.appendChild(logReportHero('🌙', T('lr_night', 'Longest idle stretch'),
         String(night.pctph) + T('lr_per_hour', '%/h'),
-        logReportDur(night.dur_min) + ' · ' + logReportT('lr_deep_sleep', 'deep sleep {pct}%', { pct: String(deep) }), (+night.pctph || 0) > 0.8 && (+night.dur_min || 0) >= 120));
+        logReportDur(night.dur_min) + ' · ' + logReportT('lr_deep_sleep', 'deep sleep {pct}%', { pct: String(deep) }), (+night.pctph || 0) > 0.8 && (+night.dur_min || 0) >= 120, {
+          title: T('lr_night', 'Longest idle stretch'), value: String(night.pctph) + T('lr_per_hour', '%/h'),
+          nowLabel: T('lr_detail_capture', 'In this capture'),
+          text: T('lr_detail_idle', 'This is the longest eligible quiet screen-off chain, not the average of every short pause and not necessarily a whole night. Deep sleep is the share when the device was not awake. Short chains and whole-percent battery steps can make the rate noisy.'),
+          lines: [T('lr_th_time', 'Time') + ': ' + logReportDur(night.dur_min),
+            logReportT('lr_deep_sleep', 'deep sleep {pct}%', { pct: String(deep) }),
+            T('lr_detail_idle_floor', 'A stable verdict needs an idle chain of at least two hours.')] }));
       heroes++;
     }
     if (heroes) {
@@ -16766,9 +17059,19 @@ function logReportRender(d) {
       const g = document.createElement('div');
       g.className = 'lgr-heros';
       g.appendChild(logReportHero('🎞', T('lr_jank_hero', 'Janky frames'),
-        String(jank.pct) + '%', logReportT('lr_jank_all', 'of {frames} frames', { frames: String(jank.frames) }), (+jank.pct || 0) >= 6));
+        String(jank.pct) + '%', logReportT('lr_jank_all', 'of {frames} frames', { frames: String(jank.frames) }), (+jank.pct || 0) >= 6, {
+          title: T('lr_jank_hero', 'Janky frames'), value: String(jank.pct) + '%', nowLabel: T('lr_detail_capture', 'In this capture'),
+          text: T('lr_detail_jank', 'The share of sampled frames that missed their deadline. It describes rendered frames in this capture; it does not by itself identify whether the app, ROM, thermal state or ASB caused the delay. Use the per-app and wake-window breakdown below.'),
+          lines: [T('lr_th_frames', 'Frames') + ': ' + String(jank.frames),
+            T('lr_jps_hero', 'Stutter rate') + ': ' + String(jank.jps) + ' ' + T('lr_jps_sub', 'janky frames per second'),
+            logReportAnalysisT('lr_sum_need_frames', {})] }));
       g.appendChild(logReportHero('⏱', T('lr_jps_hero', 'Stutter rate'),
-        String(jank.jps), T('lr_jps_sub', 'janky frames per second'), (+jank.jps || 0) >= 3));
+        String(jank.jps), T('lr_jps_sub', 'janky frames per second'), (+jank.jps || 0) >= 3, {
+          title: T('lr_jps_hero', 'Stutter rate'), value: String(jank.jps), nowLabel: T('lr_detail_capture', 'In this capture'),
+          text: T('lr_detail_jps', 'Janky frames divided by sampled frame time. Unlike a percentage, this also reflects how often a visible hitch occurred. It is an observed smoothness metric, not an FPS average or proof that changing a ceiling will improve it.'),
+          lines: [T('lr_th_frames', 'Frames') + ': ' + String(jank.frames),
+            T('lr_jank_hero', 'Janky frames') + ': ' + String(jank.pct) + '%',
+            logReportAnalysisT('lr_sum_need_frames', {})] }));
       s.appendChild(g);
     }
     const bhold = d.sections.bhold || null;
@@ -17043,8 +17346,15 @@ function logReportRender(d) {
     if (thermal) {
       const g = document.createElement('div');
       g.className = 'lgr-heros';
-      g.appendChild(logReportHero('🎯', 'CPU', String(thermal.cpu) + '°', T('lr_peak', 'peak'), (+thermal.cpu || 0) >= 45));
-      g.appendChild(logReportHero('🧊', T('lr_temp_surf', 'Skin'), String(thermal.surf) + '°', T('lr_peak', 'peak'), (+thermal.surf || 0) >= 40));
+      g.appendChild(logReportHero('🎯', 'CPU', String(thermal.cpu) + '°', T('lr_peak', 'peak'), (+thermal.cpu || 0) >= 45, {
+        title: 'CPU', value: String(thermal.cpu) + '°', nowLabel: T('lr_peak', 'peak'),
+        text: T('lr_detail_cpu_peak', 'The highest sampled CPU thermal reading in this capture, not the average temperature and not proof of sustained throttling. The duration above 45 °C and the named hottest phase below show how long and where heat actually persisted.'),
+        lines: heat ? [T('lr_heat_warm_fmt', 'CPU above 45 °C') + ': ' + logReportDur(+heat.warm_min || 0),
+          T('lr_heat_peak', 'Hottest phase') + ': ' + T('lr_ph_' + String(heat.peak_phase || 'unknown'), String(heat.peak_phase || 'unknown'))] : [] }));
+      g.appendChild(logReportHero('🧊', T('lr_temp_surf', 'Skin'), String(thermal.surf) + '°', T('lr_peak', 'peak'), (+thermal.surf || 0) >= 40, {
+        title: T('lr_temp_surf', 'Skin'), value: String(thermal.surf) + '°', nowLabel: T('lr_peak', 'peak'),
+        text: T('lr_detail_skin_peak', 'The highest sampled surface or skin-sensor reading. It is closer to how warm the phone feels than the CPU die peak, but it is still a snapshot maximum. The time above 40 °C below is the useful duration evidence.'),
+        lines: heat ? [T('lr_heat_skin_fmt', 'Skin above 40 °C') + ': ' + logReportDur(+heat.skin_min || 0)] : [] }));
       s.appendChild(g);
     }
     /* fix213 (audit 8.3): peaks are the headline; the DURATION hot is the cost. The rows
