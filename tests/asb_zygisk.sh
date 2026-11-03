@@ -840,9 +840,12 @@ EOF
   # of deep sleep. A night of suspend must not turn a file written just now into "stale".
   printf '20000.0 0.0\n' > "$T/proc/uptime"
   : > "$T/out"; _asb_zygisk_info; want state_freshness current; want link_state confirmed
-  touch -d "@$(( $(date +%s) - 600 ))" "$T/run/state.arm64-v8a.tsv" "$T/run/state.armeabi-v7a.tsv"
-  : > "$T/out"; _asb_zygisk_info; want state_freshness stale_over_5_minutes; want link_state quiet
-  grep -Fqx "$(printf 'zygisk_observer\tstate_age_ms\t600000')" "$T/out" || grep -Eq "^zygisk_observer	state_age_ms	(599|60[01])[0-9]{3}$" "$T/out" || fail "age from the file time: $(grep state_age "$T/out")"
+  # Pin both sides of the file-mtime calculation. Under the eight-worker CI queue a slow
+  # scheduling slice otherwise turns this exact 600 s fixture into a flaky 601/602 s result.
+  _zi_fixture_now="$(date +%s)"
+  touch -d "@$(( _zi_fixture_now - 600 ))" "$T/run/state.arm64-v8a.tsv" "$T/run/state.armeabi-v7a.tsv"
+  : > "$T/out"; ASB_ZYGISK_NOW_S="$_zi_fixture_now" _asb_zygisk_info; unset ASB_ZYGISK_NOW_S
+  want state_freshness stale_over_5_minutes; want link_state quiet; want state_age_ms 600000
   sed -i 's/^gen=42$/gen=43/' "$T/mod/zygisk/policy"
   : > "$T/out"; _asb_zygisk_info; want state_freshness stale_over_5_minutes; want link_state stale
   sed -i 's/^gen=43$/gen=42/' "$T/mod/zygisk/policy"
@@ -871,7 +874,7 @@ function mk(tag){const e={tagName:tag,className:'',children:[],style:{},disabled
 const hosts=Array.from({length:5},()=>mk('div'));
 const document={createElement:mk,querySelectorAll(sel){if(sel==='.hdr-info')return hosts;if(sel==='.zygisk-header-link')return hosts.map(h=>find(h,'zygisk-header-link')).filter(Boolean);return [];}};
 function _el(){return null;} function openZygiskPage(){} function shQuote(s){return "'"+s+"'";} function dozePkgOk(s){return /^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)+$/.test(s||'');}
-function logReportSec(t){const e=mk('div');e.className='lgr-sec';const h=mk('div');h.textContent=t;e.appendChild(h);return e;}
+function logReportSec(t,icon){const e=mk('div');e.className='lgr-sec';if(icon)e.setAttribute('data-zygisk-icon',icon);const h=mk('div');h.textContent=t;e.appendChild(h);return e;}
 function zygiskButtonIcon(btn){return btn;}
 let _zyGuard={enabled:true,level:'wakers'},_zyAot={enabled:true}; function zygiskGuardParse(s){return {enabled:/^enabled=1$/m.test(s),level:(/^level=(.+)$/m.exec(s)||[])[1]||'off'};} function zygiskAotParse(s){return {enabled:/^enabled=1$/m.test(s)};}
 function uiSound(){} function haptic(){} let pageRenders=0; function zygiskPageRender(){pageRenders++;} let _zygiskOpen=true; let _cfgVals={}; let _cfgLoadSig='x';
@@ -889,7 +892,7 @@ function cfgRenderRow(list,it){const cur=_cfgVals[it.key]===undefined?it.def:_cf
 function deviceSnapshotCard(title,value,detail,tone){const e=mk('div');e.textContent=title+' '+value+' '+detail+' '+tone;return e;} function deviceSizeKb(v){return v+' KiB';}
 let commands=[],refreshes=0,toastText=''; async function asbPaintYield(){paintYields++;} async function run(c){commands.push(c);return {errno:0,stdout:''};} function runOk(r){return r.errno===0;} function runText(r){return r.stdout||'';} function toast(t){toastText=t;} function asbDeviceInfoLoad(){refreshes++;}
 JS
-    sed -n '/^function parseDeviceInfo(/,/^}/p; /^function devicePressureScale(/,/^}/p; /^function deviceZygiskLinkState(/,/^}/p; /^function deviceZygiskLinkVerdict(/,/^}/p; /^function deviceZygiskLink(/,/^}/p; /^let _zygiskHeaderSeq/p; /^let _zygiskHeaderAt/p; /^const ZYGISK_HEADER_TTL_MS/p; /^const _ASB_PART/p; /^function runBatchCmd(/,/^}/p; /^function runBatchSplit(/,/^}/p; /^async function runBatch(/,/^}/p; /^let _zygiskLoadSeq/p; /^const ZYGISK_MODES = \[/,/^\];/p; /^function zygiskModeOf(/,/^}/p; /^function zygiskModeLabel(/,/^}/p; /^function zygiskAutoCard(/,/^}/p; /^const ZYGISK_CONTROL_KEYS =/p; /^const ZYGISK_PANEL_ONLY_KEYS =/p; /^let _zygiskControlBusy/p; /^function zygiskControlsCard(/,/^}/p; /^async function zygiskControlSet(/,/^}/p; /^function zygiskOpenSettings(/,/^}/p; /^function zygiskOffCard(/,/^}/p; /^async function zygiskAutoSet(/,/^}/p; /^async function zygiskGuardPackage(/,/^}/p; /^function zygiskModeCard(/,/^}/p; /^async function zygiskModeSet(/,/^}/p; /^function zygiskHeaderPaint(/,/^}/p; /^function zygiskHeaderWordmark(/,/^}/p; /^function zygiskHeaderInit(/,/^}/p; /^function zygiskHeaderPublish(/,/^}/p; /^async function zygiskHeaderRefresh(/,/^}/p; /^function cfgRenderZygiskCard(/,/^}/p; /^function deviceZygiskOverview(/,/^}/p; /^function deviceZygiskEditor(/,/^}/p' "$ROOT/webroot/index.html"
+    sed -n '/^const TECH_ICON_PATHS = {/,/^};/p; /^function parseDeviceInfo(/,/^}/p; /^function devicePressureScale(/,/^}/p; /^function deviceZygiskLinkState(/,/^}/p; /^function deviceZygiskLinkVerdict(/,/^}/p; /^function deviceZygiskLink(/,/^}/p; /^let _zygiskHeaderSeq/p; /^let _zygiskHeaderAt/p; /^const ZYGISK_HEADER_TTL_MS/p; /^const _ASB_PART/p; /^function runBatchCmd(/,/^}/p; /^function runBatchSplit(/,/^}/p; /^async function runBatch(/,/^}/p; /^let _zygiskLoadSeq/p; /^const ZYGISK_MODES = \[/,/^\];/p; /^function zygiskModeOf(/,/^}/p; /^function zygiskModeLabel(/,/^}/p; /^function zygiskAutoCard(/,/^}/p; /^const ZYGISK_CONTROL_KEYS =/p; /^const ZYGISK_PANEL_ONLY_KEYS =/p; /^let _zygiskControlBusy/p; /^function zygiskControlsCard(/,/^}/p; /^async function zygiskControlSet(/,/^}/p; /^function zygiskOpenSettings(/,/^}/p; /^function zygiskOffCard(/,/^}/p; /^async function zygiskAutoSet(/,/^}/p; /^async function zygiskGuardPackage(/,/^}/p; /^function zygiskModeCard(/,/^}/p; /^async function zygiskModeSet(/,/^}/p; /^function zygiskHeaderPaint(/,/^}/p; /^function zygiskHeaderWordmark(/,/^}/p; /^function zygiskHeaderInit(/,/^}/p; /^function zygiskHeaderPublish(/,/^}/p; /^async function zygiskHeaderRefresh(/,/^}/p; /^function cfgRenderZygiskCard(/,/^}/p; /^function deviceZygiskOverview(/,/^}/p; /^function deviceZygiskEditor(/,/^}/p' "$ROOT/webroot/index.html"
     cat <<'JS'
 let bad=0;const chk=(c,m)=>{if(!c){console.log('FAIL '+m);bad++;}};
 function find(n,c){if(n.className&&n.className.split(/\s+/).includes(c))return n;for(const x of n.children||[]){const r=find(x,c);if(r)return r;}return null;}
@@ -968,20 +971,23 @@ _zyGuard=null;chk(zygiskModeOf(md({}))==='unknown','pending guard evidence does 
 chk(zygiskModeOf(md({auto_profile:'battery',launch_hints:'0',lifecycle_hints:'1'}))==='custom','a known switch conflict is Custom even before guard evidence arrives');
 _zyGuard={enabled:false,level:'off'};
 let card=zygiskModeCard(md({})),seg=find(card,'zy-mode-seg');
+chk(card.attrs['data-zygisk-icon']==='zygisk_mode','Mode still reuses the Controls glyph');
 chk(seg&&seg.children.length===3,'unified mode does not have exactly three choices');
-chk(seg&&seg.children[1].className.split(/\s+/).includes('on')&&seg.children.filter(b=>b.className.split(/\s+/).includes('on')).length===1,'exactly Performance is selected');
+chk(seg&&seg.children[2].className.split(/\s+/).includes('on')&&seg.children.filter(b=>b.className.split(/\s+/).includes('on')).length===1,'exactly Performance is selected');
 chk(seg&&seg.children.every(b=>b.title&&b.title.length>20),'unified mode buttons lack their explanatory native titles');
-chk(seg.children[0].textContent==='Battery'&&seg.children[1].textContent==='Performance'&&seg.children[2].textContent==='Auto','unified mode labels/order changed');
+chk(seg.children[0].textContent==='Auto'&&seg.children[1].textContent==='Battery'&&seg.children[2].textContent==='Performance','unified mode labels/order changed');
 card=zygiskModeCard(md({auto_profile:'battery',launch_hints:'0',lifecycle_hints:'1'}));seg=find(card,'zy-mode-seg');
 chk(seg.children.every(b=>!b.className.split(/\s+/).includes('on'))&&find(card,'zy-custom-note'),'Custom selects no preset and explains the manual override');
 // fix306: one control panel owns the master and all three feature switches.
 _zyGuard={enabled:false,level:'off'};_cfgVals={zygisk_enabled:'0',zygisk_hints:'0',zygisk_launch:'0',zygisk_ledger:'0'};
 const controls=zygiskControlsCard(md({}));
+chk(controls.attrs['data-zygisk-icon']==='switches','Controls lost its dedicated sliders glyph');
 const controlRows=controls.children.filter(r=>r.attrs&&r.attrs['data-key']);
 chk(controlRows.length===4&&controlRows.map(r=>r.attrs['data-key']).join(',')===ZYGISK_CONTROL_KEYS.join(','),'ZYGISK panel does not own all four controls in order');
 chk(controlRows[0].querySelector('.cfg-switch').attrs['aria-checked']==='true','master is not synchronized from current evidence');
 chk(controlRows[1].querySelector('.cfg-switch').attrs['aria-checked']==='false'&&controlRows[2].querySelector('.cfg-switch').attrs['aria-checked']==='true'&&controlRows[3].querySelector('.cfg-switch').attrs['aria-checked']==='true','feature switches are not synchronized from current evidence');
 const off=zygiskOffCard();chk(find(off,'zy-off-enable')&&find(off,'zy-off-settings'),'Off state lacks Enable or Settings navigation');
+chk(off.attrs['data-zygisk-icon']==='zygisk_master','Off state still reuses the Controls glyph');
 chk(!find(off,'zy-mode-seg')&&!find(off,'zy-auto-actions')&&!find(off,'dev-zygisk-editor'),'Off state exposes inactive preset/automatic/app controls');
 chk(off.children.some(x=>String(x.textContent).includes('already running')&&String(x.textContent).includes('restarted')),'Off state does not bound the restart semantics');
 cfgWrites=[];pageLoads=0;paintYields=0;_cfgVals={zygisk_enabled:'0',zygisk_hints:'1',zygisk_launch:'0',zygisk_ledger:'1',other:'kept'};
@@ -1006,7 +1012,7 @@ chk(find(autoEd,'dev-zygisk-input').attrs.readonly==='readonly','automatic packa
 chk(autoEd.children.flatMap(x=>x.children||[]).filter(x=>x.tagName==='button')[0].hidden===true,'manual save remains visible in automatic mode');
 const autoOutput=(result,auto)=>result+'\n'+_ASB_PART+'set\n'+raw({auto_mode:auto?'1':'0',enabled_packages:auto?'64':'0'})+'\n'+_ASB_PART+'link\nversion=1\nenabled='+(auto?'1':'0')+'\nlevel=wakers\n'+_ASB_PART+'guard\nversion=1\nenabled='+(auto?'1':'0')+'\n'+_ASB_PART+'aot';
 let busyAtRun='',labelAtRun='';
-commands=[];run=async c=>{commands.push(c);busyAtRun=_zygiskAutoBusy;labelAtRun=find(zygiskModeCard(md({auto_mode:'0'})),'zy-mode-seg').children[1].textContent;return {errno:0,stdout:autoOutput('result=enabled',true),stderr:''};};
+commands=[];run=async c=>{commands.push(c);busyAtRun=_zygiskAutoBusy;labelAtRun=find(zygiskModeCard(md({auto_mode:'0'})),'zy-mode-seg').children[2].textContent;return {errno:0,stdout:autoOutput('result=enabled',true),stderr:''};};
 await zygiskAutoSet('enable','launch');
 chk(busyAtRun==='enable:launch'&&labelAtRun==='Setting up…','the selected unified mode did not say it was working while setup ran');
 chk(_zygiskAutoBusy==='','fix287: the busy label outlived the setup');
@@ -1017,7 +1023,11 @@ commands=[];_cfgVals={};run=async c=>{commands.push(c);return {errno:0,stdout:au
 await zygiskModeSet('auto');
 chk(commands.length===1&&commands[0].includes('auto-enable auto'),'Auto mode does not delegate to the single transactional Auto profile');
 chk(_cfgVals.zygisk_enabled==='1'&&_cfgVals.zygisk_hints==='1'&&_cfgVals.zygisk_launch==='1'&&_cfgVals.zygisk_ledger==='1','Auto did not synchronize all four Settings switches');
-chk(ZYGISK_MODES[2].icon==='zygisk_wand','Auto lost its magic-wand icon');
+chk(ZYGISK_MODES[0].icon==='zygisk_mode_auto'&&ZYGISK_MODES[2].icon==='zygisk_mode_performance','Auto/Performance lost their dedicated mode icons');
+chk(TECH_ICON_PATHS.zygisk_mode_auto.includes('M18.8 8A7.5')&&TECH_ICON_PATHS.zygisk_mode_performance.includes('M3.5 17a8.5'),'dedicated mode glyphs regressed');
+chk(ZYGISK_MODES[2].icon!=='zygisk_launch'&&TECH_ICON_PATHS.zygisk_launch.includes('M11 13 19.5 4.5'),'Performance icon change leaked into Cold-start');
+chk(['zygisk_master','zygisk_mode','zygisk_art'].every(k=>typeof TECH_ICON_PATHS[k]==='string'&&TECH_ICON_PATHS[k].length>20),'master/Mode/ART dedicated glyphs are missing');
+chk(new Set([TECH_ICON_PATHS.zygisk_master,TECH_ICON_PATHS.zygisk_mode,TECH_ICON_PATHS.zygisk_art,TECH_ICON_PATHS.switches,TECH_ICON_PATHS.zygisk_observer,TECH_ICON_PATHS.zygisk_launch]).size===6,'semantically different Zygisk sections still share identical glyph geometry');
 commands=[];run=async c=>{commands.push(c);return {errno:0,stdout:autoOutput('result=refreshed',true),stderr:''};};await zygiskAutoSet('refresh');chk(commands.length===1&&commands[0].includes('auto-refresh')&&/refreshed/.test(toastText),'automatic refresh flow failed');
 commands=[];run=async c=>{commands.push(c);return {errno:0,stdout:autoOutput('result=disabled',false),stderr:''};};await zygiskAutoSet('disable');chk(commands.length===1&&commands[0].includes('auto-disable')&&/previous Zygisk state restored/.test(toastText),'automatic disable/restore flow failed');
 commands=[];run=async c=>{commands.push(c);return {errno:0,stdout:'result=approved\n'+_ASB_PART+'set\nversion=1\nenabled=1\nlevel=wakers\n'+_ASB_PART+'guard\n',stderr:''};};
@@ -1065,6 +1075,12 @@ page = source.split('function zygiskPageRender(d) {', 1)[1].split('/* fix280:', 
 assert page.index("deviceVal(d, 'zygisk_observer', 'enabled') === '0'") < page.index('body.appendChild(zygiskModeCard(d));')
 assert page.index('body.appendChild(zygiskOffCard());') < page.index('body.appendChild(zygiskModeCard(d));')
 assert page.index('body.appendChild(zygiskModeCard(d));') < page.index('body.appendChild(zygiskControlsCard(d));') < page.index('body.appendChild(zygiskAutoCard(d));')
+assert "zygisk_enabled:'zygisk_master'" in source, 'master still reuses Connection evidence glyph'
+assert "logReportSec(T('zy_sec_mode', 'Mode'), 'zygisk_mode')" in source, 'Mode still reuses Controls glyph'
+assert "logReportSec(T('zy_sec_controls', 'ASB Zygisk controls'), 'switches')" in source, 'Controls glyph changed unexpectedly'
+assert "logReportSec(T('zy_aot_title', 'Faster app starts (ART)'), 'zygisk_art')" in source, 'ART still reuses Cold-start glyph'
+assert "logReportSec(T('zy_off_title', 'ASB Zygisk is off'), 'zygisk_master')" in source, 'Off still reuses Controls glyph'
+assert "zygiskButtonIcon(open, 'switches');" in source, 'Open ZYGISK navigation still duplicates Connection glyph'
 assert 'zygiskGoalGuide' not in source and 'zy-auto-profiles' not in source, 'obsolete competing Zygisk controls remain'
 assert 'zy_mode_fine' not in page and 'Fine-tune in Settings' not in source, 'obsolete second fine-tuning panel remains'
 writer = source.split('async function cfgSet(key, val, ctl) {', 1)[1].split('let _cfgRebootArmed', 1)[0]

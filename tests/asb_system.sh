@@ -7722,6 +7722,13 @@ for WF in "$ROOT/.github/workflows/build-test.yml" "$ROOT/.github/workflows/buil
   case "$_norm:$_validate:$_tests" in *[!0-9:]*|:) fail "expected steps missing in $WF" ;; esac
   [ "$_norm" -lt "$_validate" ] && [ "$_validate" -lt "$_tests" ] \
     || fail "normalize step must precede validation and tests in $WF"
+  _wait=$(grep -n 'name: Verify canonical host regression result' "$WF" | head -1 | cut -d: -f1)
+  _package=$(grep -n 'name: Package .* zip' "$WF" | head -1 | cut -d: -f1)
+  case "$_wait:$_package" in *[!0-9:]*|:) fail "parallel regression gate/package step missing in $WF" ;; esac
+  [ "$_tests" -lt "$_wait" ] && [ "$_wait" -lt "$_package" ] \
+    || fail "parallel regression must finish before packaging in $WF"
+  grep -Fq 'ASB_REGRESSION_JOBS=8' "$WF" || fail "CI did not adopt the measured eight-worker queue in $WF"
+  grep -Fq 'rsync -a ./ "$_host_root"/' "$WF" || fail "parallel regression is not isolated from native outputs in $WF"
   grep -Fq 'for tool in zip unzip curl file rsync jq; do' "$WF" \
     || fail "jq must be a verified runner dependency in $WF"
   for p in $_helpers; do

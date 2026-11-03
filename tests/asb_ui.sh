@@ -8113,6 +8113,20 @@ for sel in (
     assert 'var(--accent)' not in body and 'var(--cat' not in body, sel
 on = rule('html[data-asb-glass="1"] .cfg-row.is-on')
 assert 'var(--cat,var(--accent))' in on
+# fix307: the Settings Zygisk summary participates in both Glass palettes as one parent
+# material. Its evidence/master children must win over the generic row ON/OFF paints above.
+for prefix in ('html[data-asb-glass="1"] ', 'html[data-asb-glass="1"][data-asb-theme="light"] '):
+    start = s.index(prefix + ':is(.hdr-cap,.theme-toggle,.status-row,.live-chip,.tg-link,.debug-support-btn,')
+    body = s[start:s.index('}', start)]
+    assert '.cfg-zygisk-card' in body and 'backdrop-filter:blur(8px)' in body, prefix
+child_sel = 'html[data-asb-glass="1"] .cfg-zygisk-card > :is(.dev-zygisk-link,.cfg-row)'
+child = rule(child_sel)
+assert 'background:transparent !important' in child and 'box-shadow:none !important' in child
+assert '-webkit-backdrop-filter:none' in child and 'backdrop-filter:none' in child
+assert s.index(child_sel) > s.index('html[data-asb-glass="1"] .cfg-row.is-on')
+assert s.index(child_sel) > s.index('html[data-asb-glass="1"][data-asb-theme="light"] .cfg-row:not(.is-on)')
+light_child = rule('html[data-asb-glass="1"][data-asb-theme="light"] .cfg-zygisk-card > :is(.dev-zygisk-link,.cfg-row)')
+assert 'background:transparent !important' in light_child and 'box-shadow:none !important' in light_child
 # Text contrast for the actual owner colours on their card-family surfaces.
 def rgb(h):
     h = h.lstrip('#'); return tuple(int(h[i:i+2], 16) / 255 for i in (0, 2, 4))
