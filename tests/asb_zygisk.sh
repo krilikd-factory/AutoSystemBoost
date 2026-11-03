@@ -1072,9 +1072,9 @@ for p in files:
         assert d[key].strip(), (p, key)
 source = (pathlib.Path(sys.argv[1]).parent / 'index.html').read_text(encoding='utf-8')
 page = source.split('function zygiskPageRender(d) {', 1)[1].split('/* fix280:', 1)[0]
-assert page.index("deviceVal(d, 'zygisk_observer', 'enabled') === '0'") < page.index('body.appendChild(zygiskModeCard(d));')
-assert page.index('body.appendChild(zygiskOffCard());') < page.index('body.appendChild(zygiskModeCard(d));')
-assert page.index('body.appendChild(zygiskModeCard(d));') < page.index('body.appendChild(zygiskControlsCard(d));') < page.index('body.appendChild(zygiskAutoCard(d));')
+assert page.index("deviceVal(d, 'zygisk_observer', 'enabled') === '0'") < page.index('const mode = zygiskModeCard(d);')
+assert page.index('body.appendChild(zygiskOffCard());') < page.index('const mode = zygiskModeCard(d);')
+assert page.index('const mode = zygiskModeCard(d);') < page.index('const automatic = zygiskAutoCard(d);') < page.index('const controls = zygiskControlsCard(d);')
 assert "zygisk_enabled:'zygisk_master'" in source, 'master still reuses Connection evidence glyph'
 assert "logReportSec(T('zy_sec_mode', 'Mode'), 'zygisk_mode')" in source, 'Mode still reuses Controls glyph'
 assert "logReportSec(T('zy_sec_controls', 'ASB Zygisk controls'), 'switches')" in source, 'Controls glyph changed unexpectedly'
@@ -1360,7 +1360,7 @@ CPP
   grep -q 'runtime/asb_zygisk_link.sh' "$ROOT/.github/workflows/build-test.yml" && grep -q 'runtime/asb_zygisk_link.sh' "$ROOT/.github/workflows/build-release.yml" || fail 'not in the workflow file lists'
   grep -q 'grep -qxF "$1" "$LSPMOD"' "$ROOT/runtime/asb_zygisk_guard.sh" || fail 'guard protection missing'
   grep -q 'link_class :' "$ROOT/tools/asb_diag.sh" && cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail 'asbdiag does not show it'
-  grep -Fq 'body.appendChild(zygiskLinkCard());' "$ROOT/webroot/index.html" || fail 'the Zygisk page does not show it'
+  grep -Fq "const engine = zygiskLinkCard(); engine.id = 'zy-engine'; body.appendChild(engine);" "$ROOT/webroot/index.html" || fail 'the Zygisk page does not show it'
   echo 'PASS zygisk link: classes from LSPosed scope and measured cold starts, accepted by the native parser, written only on change, withdrawn with the lift or safe mode, LSPosed module apps protected from the guard, per-app evidence'
 )
 

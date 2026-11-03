@@ -269,7 +269,13 @@ printf '%s\n' "$o" | grep -q 'Read FAIL, not PASS' || f "PASS-count explanation 
 o="$(run "$T/conf" "$T/boot_same" 10)"
 printf '%s\n' "$o" | grep -q '^     waiting for a reboot: nothing' || f "nothing pending not said when the boot copy matches"
 printf '%s\n' "$o" | grep -q '(waits for a reboot)' && f "a change already booted with flagged as waiting"
-printf '%s\n' "$o" | grep -q '^     FAIL=0 - everything this report can check for your settings is in effect.$' || f "clean verdict missing"
+printf '%s\n' "$o" | grep -q '^     FAIL=0 · REFUSED=1 - every live check passed, but 1 Android system setting(s) are not in effect (listed above).$' || f "refused setting disappeared from the FAIL=0 verdict"
+printf '%s\n' "$o" | grep -q 'FAIL=0 - everything this report can check' && f "refused setting still allows the unconditional clean verdict"
+
+mv "$T/state/apply_ledger" "$T/state/apply_ledger.off"
+o="$(run "$T/conf" "$T/boot_same" 10)"
+printf '%s\n' "$o" | grep -q '^     FAIL=0 - everything this report can check for your settings is in effect.$' || f "genuinely clean verdict missing"
+mv "$T/state/apply_ledger.off" "$T/state/apply_ledger"
 
 o="$(run "$S" "$T/missing" 10)"
 printf '%s\n' "$o" | grep -q '^     nothing - every setting is at its shipped default$' || f "all-default config not described: $o"
@@ -278,7 +284,7 @@ printf '%s\n' "$o" | grep -q 'not an install error' || f "default-is-not-an-erro
 
 grep -q 'cp -f "$MODDIR/config/governor.conf" /dev/.asb_profile_state/governor.boot.conf' "$ROOT/post-fs-data.sh" \
   || f "post-fs-data does not keep the config this boot used"
-[ "$fail" = 0 ] && echo "PASS asbdiag settings summary: your choices, what is live, refused writes, pending reboots and a FAIL-based verdict"
+[ "$fail" = 0 ] && echo "PASS asbdiag settings summary: your choices, what is live, refused writes, pending reboots and REFUSED-aware verdicts"
 exit "$fail"
 )
 
@@ -5300,8 +5306,13 @@ EOF
 cat > "$CAP/cap_verify.txt" <<'EOF_CAP'
 policy0 (MAIN) actual_max=100 -> ok_asb_dynamic (actual = ASB's own request)
 policy6 (BIG) actual_max=100 -> ok_asb_dynamic (actual = ASB's own request)
+policy0 (MAIN) actual_max=100 -> ok
+policy6 (BIG) actual_max=100 -> ok (shell-applied)
 policy0 (MAIN) actual_max=90 -> DESYNC_vendor_clamp (asb_declared=100 actual=90)
-policy6 (BIG) actual_max=110 -> DESYNC_mismatch (profile=100 actual=110)
+policy6 (BIG) actual_max=110 -> DESYNC_vendor_raised (asb_declared=100 actual=110)
+policy0 (MAIN) actual_max=110 -> DESYNC_shell_overridden_up (profile=100 actual=110)
+policy6 (BIG) actual_max=90 -> shell_overridden_down (profile=100 actual=90)
+policy0 (MAIN) actual_max=110 -> DESYNC_mismatch (profile=100 actual=110)
 EOF_CAP
 printf 'Cmdline: com.crashy.app\nsignal 11\n' > "$T/tomb/tombstone_01"; touch -d "@$((NOW-4000))" "$T/tomb/tombstone_01"
 printf 'Cmdline: /vendor/bin/hw/foo\nlibasbdsp x\n' > "$T/tomb/tombstone_02"; touch -d "@$((NOW-3000))" "$T/tomb/tombstone_02"
@@ -5362,7 +5373,7 @@ printf '%s\n' "$out" | grep -q '^prof	name=p	on_min=3	off_min=3	on_pctph=36.0	of
 printf '%s\n' "$out" | grep -q '^prof	name=b	on_min=3	off_min=0	on_pctph=36.0	off_pctph=0.0$' || fail "per-profile row b"
 printf '%s\n' "$out" | grep -q '^chg	min=60	gain=14	sess=1$' || fail "charging sessions: $(printf '%s\n' "$out" | grep '^chg')"
 printf '%s\n' "$out" | grep -q '^ltpo	n=79	min=11$' || fail "ltpo line"
-printf '%s\n' "$out" | grep -q '^capcheck	total=4	ok=2	vendor=1	other=1$' || fail "cap readback observations"
+printf '%s\n' "$out" | grep -q '^capcheck	total=9	ok=4	vendor=4	other=1$' || fail "cap readback observations: $(printf '%s\n' "$out" | grep '^capcheck')"
 printf '%s\n' "$out" | grep -q '^wifileave	releases=2	out_of_range=1	no_internet=1	returned=2	failed=0	recovered=3$' || fail "Wi-Fi Leave action counters"
 printf '%s\n' "$out" | grep -q '^aod	lit=11	of=520$' || fail "aod line"
 # fix207: the screen on/off split over the whole ledger (the figure that reconciles with
@@ -5643,7 +5654,7 @@ const txt = [
   'hz\tmode=60\tshare=64\tma=264',
   'hz\tmode=90\tshare=23\tma=301',
   'hz\tmode=120\tshare=13\tma=380',
-  'capcheck\ttotal=4\tok=2\tvendor=1\tother=1',
+  'capcheck\ttotal=9\tok=4\tvendor=4\tother=1',
   'wifileave\treleases=2\treturned=2\trecovered=3',
   'asbcost\tcpu_msh=1851\twrites_h=176\twakes_h=491',
   'audio\tspk_min=72\tpctph=8.31\tma=362',
@@ -5989,7 +6000,7 @@ const document = { createElement:domEl };
 const impactDay = parseLogReport(txt + '\njcap_main\tyes=2.5\tyes_f=20000\tyes_jps=1.68\tno=3.6\tno_f=30000\tno_jps=1.74');
 const impactCard = logReportTweakEvidence(impactDay), impactText = asbPageText(impactCard);
 chk(impactCard && impactCard.id === 'lgr-impact', 'per-tweak evidence card renders');
-chk(impactText.indexOf('2/4') >= 0 && impactText.indexOf('1') >= 0, 'cap readback observations render');
+chk(impactText.indexOf('4/9') >= 0 && (impactText.indexOf('4 external overrides') >= 0 || impactText.indexOf('внешних переопределений: 4') >= 0), 'cap readback observations render: ' + impactText);
 chk(impactText.indexOf('2.5%') >= 0 && impactText.indexOf('3.6%') >= 0 && impactText.indexOf('50000') >= 0, 'at-cap association keeps both samples and frame count: ' + impactText);
 chk(impactText.indexOf('79') >= 0 && impactText.indexOf('11') >= 0 && impactText.indexOf('1851') >= 0, 'LTPO and ASB cost render');
 chk(impactText.indexOf('A/B') >= 0 && impactText.indexOf('не означает') >= 0, 'A/B and not-exposed caveats render');
@@ -6002,7 +6013,7 @@ chk(countClass(reportBody, 'lgr-verdict') === 5, 'summary renders all five verdi
 chk(countClass(reportBody, 'lgr-quality') === 1 && countClass(reportBody, 'lgr-quality-seg') === 5, 'fix255: evidence panel has five domain segments, not an invented score');
 chk(countClass(reportBody, 'lgr-verdict-unknown') === 5 && allText(reportBody).indexOf('0 из 5') >= 0, 'fix255: an early capture explicitly has no supported verdicts');
 chk(allText(reportBody).indexOf(I18N.ru.lr_summary_legend) >= 0 && countClass(reportBody, 'report-nav') === 1 && countClass(reportBody, 'lgr-details-anchor') === 1, 'fix255: report legend, working navigation model and technical-evidence anchor render');
-chk(reportBody.children.filter(c => c.children[0] && c.children[0].textContent !== I18N.ru.lr_sec_brief && c.children[0].textContent !== I18N.ru.lr_sec_dx)[0].children[0].textContent === I18N.ru.lr_sec_summary, 'smart summary is the first report section after the plain-words brief and the causes');
+chk(reportBody.children.filter(c => c.children[0] && String(c.className).split(/\s+/).indexOf('report-nav') < 0 && c.children[0].textContent !== I18N.ru.lr_sec_brief && c.children[0].textContent !== I18N.ru.lr_sec_dx)[0].children[0].textContent === I18N.ru.lr_sec_summary, 'smart summary is the first report section after the plain-words brief and the causes');
 chk(countClass(reportBody, 'lgr-action') === 0 && allText(reportBody).indexOf(I18N.ru.lr_no_actions_early) >= 0, 'early DOM has no unsupported action');
 const zyDay = parseLogReport('meta\telapsed_min=120\tprofile=smart\nzygisk\tstate=confirmed\tstart_state=waiting\tcoverage=start_latest\tenabled=1\tsafe_mode=off\tfreshness=current\tloaded=0\tpolicy_generation=42\tpolicy_seen_generation=42\tpackages=2\tabis=arm64-v8a\tlifecycle_hints=1\tlaunch_hints=1\tspawn_ledger=0\tevents_total_start=10\tevents_total_latest=15\tevents_total_delta=5\tlaunch_events_delta=2\tlaunch_accepted_delta=1\tlaunch_screen_off_delta=1\tpolicy_hints_delta=3\thints_accepted_delta=2\thints_vetoed_delta=1\tipc_cpu_ms_delta=4\tipc_wakeups_delta=7\tdeltas=available\nzygov\tcoverage=start_latest\tzygisk_launch_accepted_delta=1\tzygisk_launch_vetoed_delta=0\tzygisk_refresh_accepted_delta=2\tzygisk_refresh_vetoed_delta=1\tunlock_cold_lifts_delta=1\tunlock_cold_extends_delta=0\tunlock_cold_long_delta=1\tunlock_cold_trims_delta=0\tdeltas=available\n');
 const zyImpact = asbPageText(logReportTweakEvidence(zyDay));
@@ -8674,6 +8685,173 @@ JS
 out="$(node "$T/visual.js" "$ROOT/webroot/index.html" 2>&1)" || { echo "FAIL Smart brain/header: $out" >&2; exit 1; }
 [ "$out" = ok ] || { echo "FAIL Smart brain/header: $out" >&2; exit 1; }
 echo "PASS webui Smart brain/header: one top-down processor-brain at both consumers, six-letter vector ZYGISK wordmark, themed page icons, idempotent navigation and compact hiding"
+)
+
+
+t_fix309_evidence_presentation_contract() (
+# fix309: field captures exposed four report/presentation contradictions. Successful direct and
+# shell-applied cap readbacks are successes; refused Android settings survive a zero live-FAIL
+# verdict; held multicast time is not an energy measurement; temperature and brightness are
+# context rather than app attribution. The fixed-page status scrim sits above every page and
+# below navigation/modals, and the ART candidate count has an explicit whole-list scope note.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+python3 - "$ROOT" <<'PY'
+import json, re, sys
+from pathlib import Path
+r=Path(sys.argv[1]); h=(r/'webroot/index.html').read_text(); d=(r/'tools/asb_diag.sh').read_text()
+assert h.count('class="status-bar-scrim"')==1 and 'aria-hidden="true"' in h
+m=re.search(r'\.status-bar-scrim \{([^}]*)\}',h); assert m
+css=m.group(1)
+for token in ('position: fixed','height: var(--status-scrim-top)','z-index: 150','pointer-events: none','background: var(--bg)'):
+    assert token in css, token
+assert '--status-scrim-top: max(28px, var(--window-inset-top))' in h
+assert '.zygisk-page .lgr-row:not(.lgr-row-long) .lgr-v' in h
+assert "T('zy_aot_list_scope'" in h
+assert 'REFUSED=$_ux_refused' in d and '_ux_refused=0' in d
+assert 'past cost cannot be inferred from held time alone' in d
+assert 'held lock costs nothing' not in d
+assert '_sb_t_txt="not learned"' in d and '_tw_txt="not learned"' in d
+assert 'thresholds in force: warm above ${_tw:-?}' not in d
+assert '-> ok( |$)' in (r/'tools/logkit/asb_fullday_digest.sh').read_text()
+assert '(DESYNC_)?shell_overridden_(up|down)' in (r/'tools/logkit/asb_fullday_digest.sh').read_text()
+old={
+'lr_brief_night_hot':'With the screen off the CPU reached {cpu}° at times - something did heavy work in the background.',
+'lr_dx_bgheat':'With the screen off the CPU reached {cpu}° at times - something did heavy work in the background (media downloads, a backup, app updates).',
+'lr_dx_screen_bright_low':'Average brightness {b}% - the panel is not what costs here.'}
+files=sorted((r/'webroot/i18n').glob('*.json')); assert len(files)==13
+for p in files:
+    x=json.loads(p.read_text())
+    assert x.get('zy_aot_list_scope'), p
+    for k,v in old.items(): assert x[k]!=v, (p,k)
+    assert '{cpu}' in x['lr_brief_night_hot'] and '{cpu}' in x['lr_dx_bgheat'] and '{b}' in x['lr_dx_screen_bright_low']
+    for ph in ('{ok}','{total}','{vendor}','{other}'): assert ph in x['lr_impact_cap_readback_fmt'], (p,ph)
+en=json.loads((r/'webroot/i18n/en.json').read_text())
+assert 'Temperature alone does not identify' in en['lr_brief_night_hot']
+assert 'not proof of heavy background work' in en['lr_dx_bgheat']
+assert 'Brightness alone does not establish' in en['lr_dx_screen_bright_low']
+assert 'external overrides' in en['lr_impact_cap_readback_fmt']
+# Every action locale carries the same non-zero-cost semantics; English and Russian are exact.
+a=(r/'action.sh').read_text(); ru=(r/'runtime/i18n/action_ru.sh').read_text()
+assert 'current radio cost is not shown, and past cost cannot be inferred from held time alone' in a
+assert 'текущий расход радиомодуля здесь не показан' in ru and 'прошлый расход нельзя определить' in ru
+assert len(list((r/'runtime/i18n').glob('action_*.sh')))==12
+PY
+# Execute the real extracted thermal presentation snippets, not just their source text.
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+awk '/^case "\$\{_sb_t:-\}"/ { on=1 } on { print } on && /^NOTE "bucket avg temp/ { exit }' "$ROOT/tools/asb_diag.sh" > "$T/bucket.sh"
+awk '/^case "\$\{_tw:-\}"/ { on=1 } on { print } on && /^# These two drive/ { exit }' "$ROOT/tools/asb_diag.sh" > "$T/thermal.sh"
+cat > "$T/run.sh" <<'SH'
+NOTE() { printf '%s\n' "$1"; }
+_sb_t="$1"; _sb_d="$2"; _tw="$3"; _tc="$4"
+. "$5/bucket.sh"
+. "$5/thermal.sh"
+SH
+zero="$(sh "$T/run.sh" 0 0 0 0 "$T")"
+printf '%s\n' "$zero" | grep -q 'bucket avg temp = not learned.*avg drain = not learned'
+printf '%s\n' "$zero" | grep -q 'thermal thresholds (tenths C): warm above not learned, cool below not learned'
+printf '%s\n' "$zero" | grep -q 'thresholds in force' && { echo 'zero thermal state presented as active thresholds' >&2; exit 1; }
+valid="$(sh "$T/run.sh" 503 7 539 381 "$T")"
+printf '%s\n' "$valid" | grep -q 'bucket avg temp = 503.*avg drain = 7'
+printf '%s\n' "$valid" | grep -q 'thresholds in force: warm above 539, cool below 381'
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag"
+echo "PASS fix309 evidence/presentation: cap success forms, REFUSED verdict, multicast/thermal honesty, scoped ART list, 13 locales and status-bar layering"
+)
+
+t_fix311_drill_in_presentation_contract() (
+# fix311: the report and ZYGISK drill-ins expose their information hierarchy without changing
+# evidence or controls. Exercise the REAL page renderer for loading/off/populated states and
+# every jump target; keep long evidence collapsed while approvals and active restrictions stay
+# visible. Sticky strips own their horizontal scrolling; the fixed pages never do.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+python3 - "$ROOT" <<'PY'
+import json, re, sys
+from pathlib import Path
+r=Path(sys.argv[1]); h=(r/'webroot/index.html').read_text()
+def body(sig):
+    i=h.index(sig); return h[i:h.index('\n}\n',i)]
+for token in ('.report-nav, .zy-page-nav { position: sticky;',
+              'top: var(--status-scrim-top);', 'overflow-x: auto;',
+              'scrollbar-width: none;', 'scroll-margin-top: calc(var(--status-scrim-top) + 124px);'):
+    assert token in h, token
+report=body('function logReportAppendAnalysis(body, d, analysis) {')
+assert report.index('body.appendChild(asbPageJump(') < report.index('const brief = logReportBrief')
+for token in ("d.sections.drain || d.sections.cover || d.sections.night", "d.sections.jank || d.japps.length",
+              "d.sections.thermal || d.sections.throttle || d.sections.heat", "d.sections.zygisk || d.sections.zygov"):
+    assert token in report, token
+link=body('function zygiskLinkCard() {')
+assert "document.createElement('details')" in link and 'box.open' not in link
+guard=body('function zygiskGuardCard() {')
+assert "pd.open = true" in guard and 'nb.open' not in guard and 'bb.open' not in guard and 'ev.open' not in guard
+assert 'gh.open = !!(g.suggest.length || g.held.length);' in guard
+keys=('lr_nav_drain','lr_nav_smooth','lr_nav_thermal','lr_nav_zygisk','zy_nav_mode','zy_nav_auto',
+      'zy_nav_controls','zy_nav_activity','zy_nav_guard','zy_nav_art','zy_nav_apps')
+files=sorted((r/'webroot/i18n').glob('*.json')); assert len(files)==13
+for p in files:
+    x=json.loads(p.read_text())
+    for k in keys: assert isinstance(x.get(k),str) and x[k].strip(), (p,k)
+PY
+cat > "$T/render.js" <<'JS'
+const fs = require('fs');
+const h = fs.readFileSync(process.argv[2], 'utf8');
+function grab(name) {
+  const m = h.match(new RegExp('function ' + name + '\\([^)]*\\) \\{[\\s\\S]*?\\n\\}'));
+  if (!m) throw new Error('missing renderer: ' + name);
+  return m[0];
+}
+function el(tag, cls) {
+  const n = { tag, children:[], _text:'', className:cls || '', id:'', open:false, scrollHits:0,
+    set textContent(v) { this._text=String(v); this.children=[]; }, get textContent() { return this._text; },
+    appendChild(c) { this.children.push(c); return c; },
+    scrollIntoView() { this.scrollHits++; }
+  };
+  const classes = new Set(String(n.className).split(/\s+/).filter(Boolean));
+  n.classList = { add(c) { classes.add(c); n.className=Array.from(classes).join(' '); } };
+  return n;
+}
+const body=el('div'), page=el('div'); page.scrollTop=0;
+function find(n,id) { if (n.id===id) return n; for (const c of n.children) { const hit=find(c,id); if (hit) return hit; } return null; }
+function _el(id) { return id==='zygiskBody' ? body : id==='zygiskPage' ? page : find(body,id); }
+global.document={createElement:el}; global.window={};
+function T(k,f) { return f; }
+function deviceVal(d,s,k) { return String((((d||{}).sections||{})[s]||{})[k] || ''); }
+function logReportSec(title) { const c=el('div','lgr-sec'); c.appendChild(el('div','lgr-sec-t')); c.children[0].textContent=title; return c; }
+function logReportNote(t) { const n=el('div','lgr-note'); n.textContent=t; return n; }
+function deviceZygiskLink() { return el('div','dev-zygisk-link'); }
+function zygiskOffCard() { return el('div','zy-off'); }
+for (const name of ['zygiskModeCard','zygiskAutoCard','zygiskControlsCard','zygiskLinkCard','zygiskGuardCard','zygiskAotCard'])
+  global[name]=function () { return el('div','lgr-sec '+name); };
+for (const name of ['deviceZygiskOverview','zygiskPageRows','deviceZygiskEditor','zygiskEvidenceCard'])
+  global[name]=function () { return el(name==='zygiskEvidenceCard'?'details':'div',name); }
+eval(grab('asbPageJump'));
+eval(grab('zygiskPageRender'));
+const chk=(c,m)=>{ if(!c) throw new Error(m); };
+const navs=()=>body.children.filter(c=>String(c.className).split(/\s+/).includes('zy-page-nav'));
+zygiskPageRender(null);
+chk(body.children.length===1 && navs().length===0,'loading state grew populated-page navigation');
+const off={sections:{zygisk_observer:{enabled:'0'}}};
+zygiskPageRender(off);
+chk(body.children.length===2 && body.children[0].id==='zy-status' && navs().length===0,'Off state grew irrelevant navigation');
+page.scrollTop=417;
+zygiskPageRender({sections:{zygisk_observer:{enabled:'1'}}});
+chk(navs().length===1,'populated state must have exactly one section map');
+const ids=body.children.filter(c=>c.id).map(c=>c.id);
+const expected=['zy-status','zy-mode','zy-auto','zy-controls','zy-activity','zy-engine','zy-guard','zy-aot','zy-apps','zy-evidence'];
+chk(JSON.stringify(ids)===JSON.stringify(expected),'section order/IDs regressed: '+JSON.stringify(ids));
+chk(page.scrollTop===417,'an unchanged refresh lost the reading position');
+const nav=navs()[0], buttons=nav.children.slice(1);
+chk(buttons.length===7,'the populated section map lost a control');
+buttons.forEach(b=>{ chk(typeof b.onclick==='function','jump has no handler: '+b.textContent); b.onclick(); });
+for (const id of ['zy-mode','zy-auto','zy-controls','zy-activity','zy-guard','zy-aot','zy-apps'])
+  chk(_el(id) && _el(id).scrollHits===1,'jump did not reach its real section: '+id);
+console.log('ok');
+JS
+out="$(node "$T/render.js" "$H" 2>&1)" || { echo "FAIL fix311 presentation: $out" >&2; exit 1; }
+[ "$out" = ok ] || { echo "FAIL fix311 presentation: $out" >&2; exit 1; }
+echo "PASS fix311 drill-in presentation: real loading/Off/populated rendering, stable anchors and scroll restoration, seven working jumps, conditional report map, progressive disclosure and 13 complete locales"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

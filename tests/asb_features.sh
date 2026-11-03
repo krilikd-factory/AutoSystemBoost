@@ -3617,14 +3617,17 @@ grep -q "ltpo: '<rect" "$WEB" || fail 'ltpo icon glyph missing from TECH_ICON_PA
 grep -q "ltpo_force:APPLY_REBOOT" "$WEB" || fail 'ltpo_force must honestly label as reboot-to-apply'
 grep -q "'ltpo_force'," "$WEB" || fail 'ltpo_force missing from SNAP_KEYS (export/restore)'
 grep -q "runtime/asb_ltpo_apply.sh apply" "$WEB" || fail 'cfgSet never calls the apply script'
+grep -q "_ltpoStatus === 'ltpo_external_bind'" "$WEB" || fail 'external same-target owner has no honest WebUI badge'
+grep -q 'actual low-rate selection is not exposed by this report' "$ROOT/tools/asb_diag.sh" || fail 'asbdiag overclaims a mounted table as observed 1 Hz'
+grep -q 'an external module owns the live LTPO table' "$ROOT/tools/asb_diag.sh" || fail 'asbdiag does not recognize an external same-target owner'
 
-# --- i18n: every shipped locale carries name + desc ---
+# --- i18n: every shipped locale carries name + desc + external-owner status ---
 for f in "$ROOT"/webroot/i18n/*.json; do
   python3 -c "
 import json,sys
 d=json.load(open('$f'))
 c=d.get('cfg',{}).get('ltpo_force')
-sys.exit(0 if (c and c.get('name') and c.get('desc')) else 1)
+sys.exit(0 if (c and c.get('name') and c.get('desc') and d.get('st_ltpo_external')) else 1)
 " || fail "ltpo_force i18n missing in $(basename "$f")"
 done
 
@@ -3798,10 +3801,30 @@ run apply
 [ -f "$TMP/state/ltpo_bind.active" ] || fail 'ASB priority did not resume after external re-enable'
 run remove
 
-# status vocabulary: default-off yields to an enabled external owner; without one it is off.
+# A separate Force-LTPO-style module can already own a bind on the SAME JSON target.
+# ASB must neither stack its payload over that working table nor unmount it on off/remove.
+EXT_PAY="$TMP/modules/ltpo/my_product/etc/oplus_vrr_config.json"
+mkdir -p "$(dirname "$EXT_PAY")"
+printf '[{"external_ltpo":true}]\n' > "$EXT_PAY"
+printf '%s %s ext4 rw 0 0\n' "$EXT_PAY" "$LIVE" > "$TMP/mounts"
+: > "$TMP/state/ltpo_bind.active"
+: > "$ASB_LTPO_LOG"
+printf 'ltpo_force=1\n' > "$TMP/mod/config/governor.conf"
+run apply
+[ "$(run status)" = 'ltpo_external_bind' ] || fail 'external same-target bind not reported'
+grep -q -- "--bind $PAYLOAD $LIVE" "$ASB_LTPO_LOG" && fail 'ASB stacked its bind over an external owner'
+grep -q "umount $LIVE" "$ASB_LTPO_LOG" && fail 'ASB unmounted an external owner on apply'
+[ ! -f "$TMP/state/ltpo_bind.active" ] || fail 'external bind was claimed as ASB active'
+run remove
+grep -q "umount $LIVE" "$ASB_LTPO_LOG" && fail 'ASB remove unmounted an external owner'
+
+# status vocabulary: default-off yields to an enabled external writer; without one it is off.
+# Clear the preceding same-target bind so this assertion exercises the writer-only path.
+: > "$TMP/mounts"
 printf 'ltpo_force=0\n' > "$TMP/mod/config/governor.conf"
 [ "$(run status)" = 'ltpo_external_owner' ] || fail 'default-off external ownership not reported'
 : > "$EXT/disable"
+: > "$TMP/mounts"
 [ "$(run status)" = 'ltpo_off' ] || fail 'status off vocabulary changed'
 
 # --- executable install-patcher fixture: the REAL staging function against fixture
@@ -3928,12 +3951,15 @@ echo ltpo_force=0 > "$T/mod/config/governor.conf"; sh "$A" apply
 [ "$(cat "$T/s/peak_refresh_rate")" = 120.0 ] && [ "$(cat "$T/s/min_refresh_rate")" = 60.0 ] || f "off did not restore peak/min"
 [ -f "$T/d/ltpo_range.orig" ] && f "baseline kept after restore"
 
-# Unset values come back as unset.
+# Unset values come back as unset, including a floor written by somebody else while
+# ASB owned the range: __unset is a value to restore, not permission to leave a new floor.
 rm -f "$T/s/peak_refresh_rate" "$T/s/min_refresh_rate"
 echo ltpo_force=1 > "$T/mod/config/governor.conf"; sh "$A" apply
 grep -qx 'peak=__unset' "$T/d/ltpo_range.orig" || f "unset peak not recorded as unset"
+echo 90.0 > "$T/s/min_refresh_rate"
 echo ltpo_force=0 > "$T/mod/config/governor.conf"; sh "$A" apply
 [ -f "$T/s/peak_refresh_rate" ] && f "unset peak not deleted on restore"
+[ -f "$T/s/min_refresh_rate" ] && f "unset min left a later 90 Hz floor behind"
 
 # Booting into a lowered video peak: the video record's original is the user's peak.
 echo 60.0 > "$T/s/peak_refresh_rate"
@@ -8761,7 +8787,7 @@ grep -q 'asb_zygisk_aot.sh" tick' "$ROOT/service.sh" || fail "no service tick"
 grep -q 'asb_zygisk_aot.sh" restore-all' "$ROOT/uninstall.sh" || fail "uninstall does not clean up"
 grep -q 'runtime/asb_zygisk_aot.sh' "$ROOT/.github/workflows/build-test.yml" && grep -q 'runtime/asb_zygisk_aot.sh' "$ROOT/.github/workflows/build-release.yml" || fail "not in the workflow file lists"
 grep -q 'launch_art :' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not show it"
-grep -Fq 'body.appendChild(zygiskAotCard());' "$ROOT/webroot/index.html" && grep -Fq "['aot', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_aot.sh') + ' status']" "$ROOT/webroot/index.html" || fail "the Zygisk page does not read or show it"
+grep -Fq "const aot = zygiskAotCard(); aot.id = 'zy-aot'; body.appendChild(aot);" "$ROOT/webroot/index.html" && grep -Fq "['aot', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_aot.sh') + ' status']" "$ROOT/webroot/index.html" || fail "the Zygisk page does not read or show it"
 H="$ROOT/webroot/index.html"
 {
   echo "const T = (k, d) => d;"
