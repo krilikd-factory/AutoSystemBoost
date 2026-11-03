@@ -1997,9 +1997,9 @@ html[data-asb-theme="light"] .lgr-chip { background: #f7f9fa; }
 .lgr-empty { text-align: center; padding: 26px 16px; }
 .lgr-empty-emo { display: block; font-size: 34px; line-height: 1; margin-bottom: 10px; }
 .lgr-empty-t { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
-/* fix311: the two longest drill-ins read as an overview followed by evidence. Their headers
- * stay complete but leave room for content; navigation scrolls inside its own strip and sticks
- * below the status scrim, so neither the fixed page nor a translated label creates page overflow. */
+/* Long drill-ins keep their section switcher in the thumb zone.  The page itself
+ * is the scroll container, so this fixed dock stays reachable after any amount of
+ * scrolling; its opaque material and 44 px targets remain usable over content. */
 #reportPage .header, #zygiskPage .header { margin-bottom: 16px; }
 #reportPage .logo-c, #zygiskPage .logo-c { width: 46px; height: 46px; margin-bottom: 9px; }
 #reportPage .logo-inner, #zygiskPage .logo-inner { border-radius: 14px; font-size: 22px; }
@@ -2010,20 +2010,31 @@ html[data-asb-theme="light"] .lgr-chip { background: #f7f9fa; }
 #reportPage .badges, #zygiskPage .badges { margin-bottom: 10px; }
 #reportPage .sec, #zygiskPage .sec { margin-bottom: 12px; }
 #reportPage .lgr-body, #zygiskPage .lgr-body { gap: 10px; }
-.report-nav, .zy-page-nav { position: sticky; top: var(--status-scrim-top); z-index: 8;
-  box-sizing: border-box; width: 100%; max-width: 100%; flex-wrap: nowrap; align-items: center;
-  margin: 0 0 2px; padding: 6px; overflow-x: auto; overflow-y: hidden;
-  overscroll-behavior-inline: contain; -webkit-overflow-scrolling: touch; scrollbar-width: none;
-  border: 1px solid var(--border); border-radius: 14px; background: var(--bg);
-  box-shadow: 0 7px 16px color-mix(in srgb,var(--bg) 88%,transparent); }
+body.report-active > .report-nav, body.zygisk-active > .zy-page-nav { display: flex; }
+#reportPage .lgr-body, #zygiskPage .lgr-body {
+  padding-bottom: calc(78px / var(--asb-ui-scale) + env(safe-area-inset-bottom, 0px)); }
+.report-nav, .zy-page-nav { display: none; position: fixed; left: 50%;
+  transform: translateX(-50%); bottom: max(10px, env(safe-area-inset-bottom, 0px)); z-index: 160;
+  box-sizing: border-box; width: min(calc(100% - 20px), 400px); max-width: calc(100% - 20px); min-height: calc(58px / var(--asb-ui-scale));
+  flex-wrap: nowrap; align-items: center; gap: 5px; margin: 0; padding: 6px;
+  overflow-x: auto; overflow-y: hidden; overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  border: 1px solid color-mix(in srgb,var(--border) 72%,var(--accent));
+  border-radius: 18px; background: color-mix(in srgb,var(--bg) 96%,var(--accent));
+  box-shadow: 0 10px 28px color-mix(in srgb,#000 28%,transparent), inset 0 1px 0 color-mix(in srgb,var(--text) 7%,transparent); }
 .report-nav::-webkit-scrollbar, .zy-page-nav::-webkit-scrollbar { display: none; }
-.report-nav .lgr-jump-label, .zy-page-nav .lgr-jump-label { flex: 0 0 auto; margin-inline: 3px 2px; }
-.report-nav .lgr-jump-btn, .zy-page-nav .lgr-jump-btn { flex: 0 0 auto; min-height: 32px;
-  padding: 5px 10px; white-space: nowrap; }
+.report-nav .lgr-jump-label, .zy-page-nav .lgr-jump-label {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.report-nav .lgr-jump-btn, .zy-page-nav .lgr-jump-btn {
+  flex: 0 0 auto; min-width: calc(44px / var(--asb-ui-scale)); min-height: calc(44px / var(--asb-ui-scale)); padding: 8px 13px;
+  border: 1px solid transparent; border-radius: 12px; white-space: nowrap;
+  color: var(--text-secondary); background: transparent; }
+.report-nav .lgr-jump-btn.is-active, .zy-page-nav .lgr-jump-btn.is-active {
+  color: var(--bg); border-color: var(--accent); background: var(--accent);
+  box-shadow: 0 3px 10px color-mix(in srgb,var(--accent) 24%,transparent); }
 #reportPage .lgr-sec[id], #zygiskPage .lgr-sec[id], #reportPage .lgr-details-anchor {
-  /* The fixed page's own top padding sits outside the sticky containing block: 84 px was
-     not enough in Chromium and put the heading beneath the strip. Keep the whole strip clear. */
-  scroll-margin-top: calc(var(--status-scrim-top) + 124px); }
+  scroll-margin-top: calc(var(--status-scrim-top) + 20px); }
 #reportPage .lgr-sec > .lgr-sec-t, #zygiskPage .lgr-sec > .lgr-sec-t {
   margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border);
   font-size: 11.5px; line-height: 1.35; letter-spacing: .065em; }
@@ -5773,46 +5784,38 @@ const ASB_LANG = (function() {
 asbApplyDirection(ASB_LANG);
 
 // Translations live in webroot/i18n/<lang>.json, one file per language.
-//
-// They used to sit here inline - 58 KB of the 221 KB this file weighs, a quarter of it.
-// That made every translation contribution a patch to the same 4700-line file the UI code
-// is in, which is a real barrier for someone who speaks Polish but not JavaScript.
-//
-// Loaded synchronously on purpose. An async fetch would let the first paint happen before
-// the strings arrive, and the page would flash English before switching - worse than a
-// few milliseconds of blocking on a local file that the WebView reads from disk.
+// Keep the first paint non-blocking: English and the selected overlay load in
+// parallel, then localized boot runs once.  A missing locale never leaves blank
+// labels: T() still falls back to the English dictionary, key by key.
 var I18N = { en: {} };
+var I18N_READY;
 
 (function loadI18N() {
   function readLang(code) {
-    // Two attempts, because a silent miss here costs the whole translation.
-    //
-    // A file the WebView cannot read returns status 0 with an empty body, which parsed
-    // as a failure and dropped the language without a word: the UI came up English
-    // while the picker still highlighted Russian, since ASB_LANG had resolved fine and
-    // only the strings were missing. Retrying through the shell covers the case where
-    // file:// access is blocked but the module's own runner is not.
-    try {
-      var x = new XMLHttpRequest();
-      x.open('GET', 'i18n/' + code + '.json', false);   // false = synchronous
-      x.send(null);
-      if ((x.status === 200 || x.status === 0) && x.responseText) {
-        return JSON.parse(x.responseText);
+    return new Promise(function (resolve) {
+      var settled = false;
+      function done(value) {
+        if (settled) return;
+        settled = true;
+        resolve(value);
       }
-    } catch (e) {}
-    return null;
+      try {
+        var x = new XMLHttpRequest();
+        x.open('GET', 'i18n/' + code + '.json', true);
+        x.onload = function () {
+          try {
+            if ((x.status === 200 || x.status === 0) && x.responseText) {
+              done(JSON.parse(x.responseText));
+              return;
+            }
+          } catch (e) {}
+          done(null);
+        };
+        x.onerror = x.onabort = x.ontimeout = function () { done(null); };
+        x.send(null);
+      } catch (e) { done(null); }
+    });
   }
-  // English first and always: every other language is a partial overlay on it, and a
-  // missing or malformed file must degrade to English rather than to blank labels.
-  var en = readLang('en');
-  if (en) I18N.en = en;
-  /* Load the language that will actually be USED, not the device's.
-   *
-   * This picked navigator.language while ASB_LANG below picks the stored choice first, so
-   * the two disagreed the moment anyone used the picker: the file for the chosen language
-   * was never fetched, Tcfg fell back to English, and switching appeared to work "only
-   * sometimes" - it worked exactly when the choice happened to match the system language.
-   * One decision, made once, used by both. */
   var want = (function () {
     try {
       var saved = null;
@@ -5830,17 +5833,15 @@ var I18N = { en: {} };
     } catch (e) {}
     return 'en';
   })();
-  if (want !== 'en') {
-    var d = readLang(want);
-    if (d) {
-      I18N[want] = d;
-    } else {
-      // Leave a trace. This failure is invisible from the screen - everything renders,
-      // just in the wrong language - so without a log line the only symptom is a
-      // confused user.
-      try { console.warn('ASB: i18n/' + want + '.json could not be read; using English'); } catch (e) {}
-    }
-  }
+  I18N_READY = Promise.all([readLang('en'), want === 'en' ? Promise.resolve(null) : readLang(want)])
+    .then(function (langs) {
+      if (langs[0]) I18N.en = langs[0];
+      else { try { console.warn('ASB: English locale could not be read'); } catch (e) {} }
+      if (want !== 'en') {
+        if (langs[1]) I18N[want] = langs[1];
+        else { try { console.warn('ASB: i18n/' + want + '.json could not be read; using English'); } catch (e) {} }
+      }
+    });
 })();
 
 // Any language, with English as the fallback for anything not yet translated.
@@ -9819,10 +9820,13 @@ function asbTabbarVisibility() {
                      document.body.classList.contains('config-active') &&
                      !(typeof _deviceOpen !== 'undefined' && _deviceOpen) &&
                      !(typeof _rpOpen !== 'undefined' && _rpOpen);
+  const drillIn = document.body.classList.contains('report-active') ||
+                  document.body.classList.contains('zygisk-active');
+  const hideBar = inCategory || drillIn;
   const bar = document.querySelector('.asb-tabbar');
-  if (bar) bar.style.display = inCategory ? 'none' : '';
-  document.documentElement.style.setProperty('--tabbar-space', inCategory ? '16px' : '82px');
-  if (!inCategory && typeof asbNavIndicator === 'function') asbNavIndicator();
+  if (bar) bar.style.display = hideBar ? 'none' : '';
+  document.documentElement.style.setProperty('--tabbar-space', hideBar ? '16px' : '82px');
+  if (!hideBar && typeof asbNavIndicator === 'function') asbNavIndicator();
 }
 
 function cfgRender() {
@@ -13169,17 +13173,106 @@ function logReportNote(txt, warn) {
   return p;
 }
 /* In-page navigation is real DOM, not links to routes that a static WebView cannot resolve. */
+function asbPageJumpActive(nav, id, center) {
+  let changed = nav._asbJumpId !== id;
+  for (const b of nav.children) {
+    if (!b._asbJumpTarget) continue;
+    const on = b._asbJumpTarget === id;
+    if (b.classList) {
+      if (on && b.classList.add) b.classList.add('is-active');
+      if (!on && b.classList.remove) b.classList.remove('is-active');
+    }
+    if (b.setAttribute) {
+      if (on) b.setAttribute('aria-current', 'location');
+      else if (b.removeAttribute) b.removeAttribute('aria-current');
+    }
+  }
+  nav._asbJumpId = id;
+  if (center && changed && nav.getBoundingClientRect && nav.scrollWidth > nav.clientWidth) {
+    for (const b of nav.children) {
+      if (b._asbJumpTarget !== id || !b.getBoundingClientRect) continue;
+      const nr = nav.getBoundingClientRect(), br = b.getBoundingClientRect();
+      nav.scrollLeft += br.left + br.width / 2 - nr.left - nr.width / 2;
+      break;
+    }
+  }
+}
+function asbPageJumpClear(page) {
+  if (!page) return;
+  if (page._asbJumpDispose) page._asbJumpDispose();
+  const old = page._asbJumpNav;
+  if (old && old.parentNode) old.parentNode.removeChild(old);
+  page._asbJumpDispose = null; page._asbJumpNav = null;
+}
+function asbPageJumpWatch(nav, items) {
+  if (!nav.classList || (!nav.classList.contains('report-nav') && !nav.classList.contains('zy-page-nav'))) return;
+  if (!nav.closest || !nav.isConnected) return;
+  const page = nav.closest('.live-page');
+  if (!page || !page.addEventListener) return;
+  asbPageJumpClear(page);
+  /* A transformed, self-scrolling overlay is the containing block for fixed
+   * descendants in Chromium/WebView. Portal only the two bottom docks to body;
+   * otherwise the dock would scroll away with the very content it controls. */
+  if ((nav.classList.contains('report-nav') || nav.classList.contains('zy-page-nav')) && document.body) {
+    document.body.appendChild(nav);
+  }
+  page._asbJumpNav = nav;
+  let queued = false;
+  function update() {
+    queued = false;
+    if (!nav.isConnected) return;
+    const targets = items.map(it => _el(it[0])).filter(Boolean);
+    if (!targets.length || !page.getBoundingClientRect) return;
+    let active = targets[0];
+    const line = page.getBoundingClientRect().top + Math.min(160, page.clientHeight * 0.3);
+    for (const target of targets) {
+      if (target.getBoundingClientRect().top <= line) active = target;
+      else break;
+    }
+    if (page.scrollTop + page.clientHeight >= page.scrollHeight - 4) active = targets[targets.length - 1];
+    asbPageJumpActive(nav, active.id, true);
+  }
+  function onScroll() {
+    if (queued) return;
+    queued = true;
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(update);
+    else update();
+  }
+  page.addEventListener('scroll', onScroll, { passive: true });
+  page._asbJumpDispose = function () { page.removeEventListener('scroll', onScroll); };
+  update();
+}
 function asbPageJump(items, label, extraClass) {
   const nav = document.createElement('div');
   nav.className = 'lgr-jump' + (extraClass ? ' ' + extraClass : '');
+  if (nav.setAttribute) {
+    nav.setAttribute('role', 'navigation');
+    nav.setAttribute('aria-label', label);
+  }
   const l = document.createElement('span'); l.className = 'lgr-jump-label'; l.textContent = label;
   nav.appendChild(l);
   items.forEach(function (it) {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'lgr-chip lgr-jump-btn';
-    b.textContent = it[1];
-    b.onclick = function () { const target = _el(it[0]); if (target && target.scrollIntoView) target.scrollIntoView({ block: 'start' }); };
+    b.textContent = it[1]; b._asbJumpTarget = it[0];
+    if (b.setAttribute) b.setAttribute('aria-controls', it[0]);
+    b.onclick = function () {
+      const target = _el(it[0]);
+      if (!target) return;
+      asbPageJumpActive(nav, it[0], true);
+      const page = target.closest ? target.closest('.live-page') : null;
+      if (page && page.scrollTo && page.getBoundingClientRect && target.getBoundingClientRect) {
+        const z = window._asbUiScale || 1;
+        const margin = parseFloat(getComputedStyle(target).scrollMarginTop) || 0;
+        const top = page.scrollTop + (target.getBoundingClientRect().top - page.getBoundingClientRect().top) / z - margin;
+        page.scrollTo({ top: Math.max(0, top), behavior: 'auto' });
+      } else if (target.scrollIntoView) target.scrollIntoView({ block: 'start', behavior: 'auto' });
+    };
     nav.appendChild(b);
   });
+  if (items.length) asbPageJumpActive(nav, items[0][0], false);
+  if ((extraClass === 'report-nav' || extraClass === 'zy-page-nav') && typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(function () { asbPageJumpWatch(nav, items); });
+  }
   return nav;
 }
 /* A compact evidence link does not depend on whether the target is above or below.
@@ -14256,6 +14349,7 @@ function zygiskEvidenceCard(d) {
   return det;
 }
 function zygiskPageRender(d) {
+  const page = _el('zygiskPage'); asbPageJumpClear(page);
   const body = _el('zygiskBody');
   if (!body) return;
   const y = _el('zygiskPage') ? _el('zygiskPage').scrollTop : 0;
@@ -16285,6 +16379,7 @@ function logReportTweakEvidence(d) {
   return sec;
 }
 function logReportRender(d) {
+  asbPageJumpClear(_el('reportPage'));
   const body = _el('reportBody');
   const status = _el('reportStatus');
   const meta = d.sections.meta || {};
@@ -16541,6 +16636,15 @@ function logReportRender(d) {
     if ((+nightd.cpu_t || 0) > 0)
       s.appendChild(logReportRow(T('lr_nd_temp', 'Peak temperatures'),
         logReportT('lr_nd_temp_fmt', 'CPU {cpu}° · skin {skin}°', { cpu: String(nightd.cpu_t), skin: String(nightd.skin_t) }), (+nightd.skin_t || 0) >= 40));
+    const tspike = d.sections.tspike || null;
+    if (tspike && /^[0-9]+$/.test(String(tspike.holds || ''))) {
+      const holds = +tspike.holds || 0;
+      const detail = holds > 0 && (+tspike.last_c || 0) > 0
+        ? logReportT('lr_nd_spike_fmt', '{n} holds · last {c}°C · {hi} of {pn} hot peers',
+            { n: String(holds), c: String(tspike.last_c), hi: String(tspike.peer_hi), pn: String(tspike.peer_n) })
+        : T('lr_nd_spike_none', 'No sensor-spike holds in this snapshot');
+      s.appendChild(logReportRow(T('lr_nd_spike', 'Thermal-spike protection'), detail));
+    }
     const holder = d.wlive.length ? logReportHolderName(d.wlive[0]) : (d.wl.length ? d.wl[0].pkg : '');
     /* fix222: the holder list is capture-wide - naming it "at night" over a 40-minute
        daytime stretch blamed SystemUI's AOD for a night that never happened. */
@@ -16628,7 +16732,7 @@ function logReportRender(d) {
     body.appendChild(s);
   }
   /* fix200: smoothness, with the per-app frame table - the real numbers, not vibes. */
-  if (jank || d.japps.length) {
+  if (jank || d.japps.length || d.sections.bhold || (d.bhv || []).length) {
     const s = logReportSec(T('lr_sec_smooth', '📱 Smoothness')); s.id = 'lgr-smooth';
     if (jank) {
       const g = document.createElement('div');
@@ -16638,6 +16742,21 @@ function logReportRender(d) {
       g.appendChild(logReportHero('⏱', T('lr_jps_hero', 'Stutter rate'),
         String(jank.jps), T('lr_jps_sub', 'janky frames per second'), (+jank.jps || 0) >= 3));
       s.appendChild(g);
+    }
+    const bhold = d.sections.bhold || null;
+    if (bhold) {
+      s.appendChild(logReportRow(T('lr_bhold', 'Battery scroll-hold'),
+        logReportT('lr_bhold_fmt', '{k} kept · {r} released · {t} testing',
+          { k: String(bhold.kept), r: String(bhold.released), t: String(bhold.testing) })));
+    }
+    if ((d.bhv || []).length) {
+      s.appendChild(logReportNote(T('lr_bhold_recent', 'Recent app verdicts:')));
+      (d.bhv || []).slice(-6).forEach(function (v) {
+        const state = T('lr_bhold_' + v.state, v.state);
+        const rates = v.without !== '-' && v.with !== '-'
+          ? ' · ' + String(v.without) + '% → ' + String(v.with) + '%' : '';
+        s.appendChild(logReportRow(String(v.app), state + rates));
+      });
     }
     if (d.japps.length) {
       s.appendChild(logReportTable(
@@ -17264,10 +17383,16 @@ function asbFitPagesNow() {
       const pb = parseFloat(getComputedStyle(el).paddingBottom) || 0;
       const st = el.style;
       if (!st) return NaN;
-      const prevB = st.bottom, prevH = st.height;
+      const prevB = st.bottom, prevH = st.height, prevScroll = el.scrollTop;
       st.bottom = 'auto'; st.height = 'auto';
       let bottom = NaN;
-      try { bottom = el.getBoundingClientRect().bottom; } finally { st.bottom = prevB; st.height = prevH; }
+      try { bottom = el.getBoundingClientRect().bottom; }
+      finally {
+        st.bottom = prevB; st.height = prevH;
+        /* Unclamping a scrolled fixed box can clear its scroll offset in Chromium.
+         * Measurement must never move the user's reading position. */
+        if (prevScroll > 0) el.scrollTop = prevScroll;
+      }
       return bottom - pb * z - stop;
     };
 
@@ -19432,28 +19557,29 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) pollLive(_liveOpen);
 });
 
-// ── apply Russian localization on load (no-op for en) ──
+// ── localized boot: wait for the non-blocking locale pair, including when
+// DOMContentLoaded happened before the local files finished reading ──
 (function() {
-  try {
-    applyStaticI18n();
-    zygiskHeaderInit();
-    setTimeout(zygiskHeaderRefresh, 2500);
-    loadDebugSupport();
-    // Was I18N.ru.device_line under ASB_LANG==='ru' - every other language kept the
-    // English placeholder even when its locale had the string translated.
-    var dl = T('device_line', null);
-    if (dl) {
-      ['deviceLine','liveDeviceLine','cfgDeviceLine'].forEach(function(id){
-        var el = document.getElementById(id);
-        if (el && /OnePlus Device/.test(el.textContent)) el.textContent = dl;
-      });
-    }
-  } catch (e) {}
-  // The bottom navigation markup sits AFTER this script in the document, so the pass
-  // above ran before those nodes existed and the tab labels stayed English in every
-  // non-English locale. Re-run once parsing completes; the pass is idempotent.
+  function boot() {
+    try {
+      applyStaticI18n();
+      zygiskHeaderInit();
+      setTimeout(zygiskHeaderRefresh, 2500);
+      loadDebugSupport();
+      var dl = T('device_line', null);
+      if (dl) {
+        ['deviceLine','liveDeviceLine','cfgDeviceLine'].forEach(function(id){
+          var el = document.getElementById(id);
+          if (el && /OnePlus Device/.test(el.textContent)) el.textContent = dl;
+        });
+      }
+    } catch (e) {}
+  }
+  I18N_READY.then(boot);
   document.addEventListener('DOMContentLoaded', function () {
-    try { applyStaticI18n(); zygiskHeaderPaint(); } catch (e) {}
+    I18N_READY.then(function () {
+      try { applyStaticI18n(); zygiskHeaderPaint(); } catch (e) {}
+    });
   });
 })();
 setTimeout(() => pollLive(false), 250);
