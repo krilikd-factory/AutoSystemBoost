@@ -8811,11 +8811,19 @@ for token in ('.report-nav, .zy-page-nav { display: none; position: fixed; left:
               'bottom: max(10px, env(safe-area-inset-bottom, 0px));', 'overflow-x: auto;',
               'scrollbar-width: none;', 'min-width: calc(44px / var(--asb-ui-scale)); min-height: calc(44px / var(--asb-ui-scale));',
               "b.setAttribute('aria-current', 'location')", "page.addEventListener('scroll', onScroll, { passive: true })",
-              'padding-bottom: calc(78px / var(--asb-ui-scale) + env(safe-area-inset-bottom, 0px));',
+              'padding-bottom: calc(102px / var(--asb-ui-scale) + env(safe-area-inset-bottom, 0px));',
               'if (prevScroll > 0) el.scrollTop = prevScroll;',
+              'background: var(--cap-wash), var(--tabbar-bg, #000000);',
+              'background: var(--pill-wash); box-shadow: var(--pill-edge);',
+              '.report-nav,.zy-page-nav,.asb-tabbar)',
+              "head.className = 'lgr-jump-head'", "track.className = 'lgr-jump-track'",
+              'nav._asbJumpCurrent.textContent = b.textContent;',
+              'targets.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);',
               "x.open('GET', 'i18n/' + code + '.json', true)", 'I18N_READY.then(boot);',
               "document.body.classList.contains('zygisk-active')"):
     assert token in h, token
+for token in ('#reportPage .logo-c', '#zygiskPage .logo-c', 'zoom: calc(1 / var(--asb-ui-scale))'):
+    assert token not in h, 'drill-in header has independent scaling: ' + token
 report=body('function logReportAppendAnalysis(body, d, analysis) {')
 assert report.index('body.appendChild(asbPageJump(') < report.index('const brief = logReportBrief')
 for token in ("d.sections.drain || d.sections.cover || d.sections.night", "d.sections.jank || d.japps.length",
@@ -8870,6 +8878,7 @@ for (const name of ['deviceZygiskOverview','zygiskPageRows','deviceZygiskEditor'
   global[name]=function () { return el(name==='zygiskEvidenceCard'?'details':'div',name); }
 eval(grab('asbPageJumpClear'));
 eval(grab('asbPageJumpActive'));
+eval(grab('asbPageJumpWatch'));
 eval(grab('asbPageJump'));
 eval(grab('zygiskPageRender'));
 const chk=(c,m)=>{ if(!c) throw new Error(m); };
@@ -8886,14 +8895,36 @@ const ids=body.children.filter(c=>c.id).map(c=>c.id);
 const expected=['zy-status','zy-mode','zy-auto','zy-controls','zy-activity','zy-engine','zy-guard','zy-aot','zy-apps','zy-evidence'];
 chk(JSON.stringify(ids)===JSON.stringify(expected),'section order/IDs regressed: '+JSON.stringify(ids));
 chk(page.scrollTop===417,'an unchanged refresh lost the reading position');
-const nav=navs()[0], buttons=nav.children.slice(1);
+const nav=navs()[0], buttons=nav._asbJumpButtons;
 chk(buttons.length===7,'the populated section map lost a control');
 chk(nav.attrs.role==='navigation' && buttons.every(b=>b.attrs['aria-controls']),'navigation semantics/controlled section missing');
 chk(buttons[0].attrs['aria-current']==='location' && buttons[0].classList.contains('is-active'),'initial active section is not exposed');
+chk(nav._asbJumpCurrent.textContent===buttons[0].textContent && nav._asbJumpTrack.children.length===7,'dock header/track did not render');
 buttons.forEach(b=>{ chk(typeof b.onclick==='function','jump has no handler: '+b.textContent); b.onclick(); });
 chk(buttons.filter(b=>b.attrs['aria-current']==='location'&&b.classList.contains('is-active')).length===1,'active section is ambiguous after jumps');
+chk(nav._asbJumpCurrent.textContent===buttons[buttons.length-1].textContent,'dock header does not follow the active section');
 for (const id of ['zy-mode','zy-auto','zy-controls','zy-activity','zy-guard','zy-aot','zy-apps'])
   chk(_el(id) && _el(id).scrollHits===1,'jump did not reach its real section: '+id);
+/* Nav order may intentionally differ from section order. Execute the real watcher with
+ * that arrangement, then verify that the bottom rule also uses rendered section order. */
+global.getComputedStyle=()=>({scrollMarginTop:'48px'});
+page.clientHeight=600; page.scrollHeight=5000; page.scrollTop=0;
+page.getBoundingClientRect=()=>({top:0});
+page.addEventListener=(type,fn)=>{ if(type==='scroll') page._asbScroll=fn; };
+nav.classList.add('zy-page-nav'); /* keep this lightweight className/classList mock in sync */
+nav.closest=()=>page; nav.isConnected=true;
+buttons.forEach(b=>{ b._asbJumpTarget && (_el(b._asbJumpTarget).getBoundingClientRect=()=>({top:300})); });
+_el(buttons[0]._asbJumpTarget).getBoundingClientRect=()=>({top:-500});
+_el(buttons[1]._asbJumpTarget).getBoundingClientRect=()=>({top:-200});
+_el(buttons[buttons.length-1]._asbJumpTarget).getBoundingClientRect=()=>({top:-50});
+asbPageJumpWatch(nav,buttons.map(b=>[b._asbJumpTarget,b.textContent]));
+chk(buttons[buttons.length-1].attrs['aria-current']==='location','scroll-spy followed nav order instead of rendered section order');
+chk(nav._asbJumpCurrent.textContent===buttons[buttons.length-1].textContent,'current section did not follow reordered scroll-spy');
+page.scrollTop=4400;
+buttons.forEach(b=>{ _el(b._asbJumpTarget).getBoundingClientRect=()=>({top:-100}); });
+_el(buttons[2]._asbJumpTarget).getBoundingClientRect=()=>({top:500});
+page._asbScroll();
+chk(buttons[2].attrs['aria-current']==='location','bottom scroll-spy did not select the last rendered section');
 console.log('ok');
 JS
 out="$(node "$T/render.js" "$H" 2>&1)" || { echo "FAIL fix311 presentation: $out" >&2; exit 1; }
