@@ -19,7 +19,65 @@ permissions:
   contents: write
 
 jobs:
+  regression:
+    name: Host regression / ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: features
+            suites: features
+          - name: system-smart
+            suites: system smart
+          - name: ui-zygisk-package
+            suites: ui zygisk package_tweaks
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Normalize executable source script modes
+        run: |
+          # Browser uploads can turn git mode 100755 into 100644. Restore every helper whose
+          # executable mode is a tested contract before regression or packaging starts.
+          chmod 0755 \
+            runtime/asb_active_efficiency_envelope.sh \
+            runtime/asb_boot_timeline.sh \
+            runtime/asb_debug_support.sh \
+            runtime/asb_stock_policy.sh \
+            runtime/asb_overlay_guard.sh \
+            runtime/asb_wifi_fallback.sh \
+            runtime/asb_package_state.sh \
+            runtime/asb_heytap_mcs.sh \
+            runtime/asb_art_compile.sh \
+            runtime/asb_documentsui_fix.sh \
+            tools/asb_kernel_uv_coexist.sh \
+            tools/asb_device_info.sh
+
+      - name: Verify runner tools
+        shell: bash
+        run: |
+          missing=()
+          for tool in zip unzip curl file rsync jq; do
+            command -v "$tool" >/dev/null 2>&1 || missing+=("$tool")
+          done
+          if [ "${#missing[@]}" -eq 0 ]; then
+            printf 'Runner tools already available: %s\n' 'zip unzip curl file rsync jq'
+            exit 0
+          fi
+          echo "::warning::Installing missing runner tools: ${missing[*]}"
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends "${missing[@]}"
+
+      - name: Run canonical host regression shard
+        shell: bash
+        run: |
+          ASB_REGRESSION_JOBS=8 ASB_REGRESSION_SUITES="${{ matrix.suites }}" \
+            bash tools/asb_full_regression.sh
+
   build-release:
+    needs: regression
     runs-on: ubuntu-latest
     name: Release (unified diagnostics)
 
@@ -178,34 +236,6 @@ jobs:
           echo "::warning::Installing missing runner tools: ${missing[*]}"
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends "${missing[@]}"
-
-      - name: Run canonical host regression
-        shell: bash
-        run: |
-          # Run the complete strict suite in an isolated source copy while NDK/native work
-          # proceeds below. Eight workers shorten the timer-heavy queue; no test is skipped.
-          # The native build cannot race test fixtures: it writes only the original workspace.
-          _host_root="$RUNNER_TEMP/asb-host-regression"
-          _host_log="$RUNNER_TEMP/asb-host-regression.log"
-          _host_rc="$RUNNER_TEMP/asb-host-regression.rc"
-          rm -rf "$_host_root" "$_host_log" "$_host_rc" "$RUNNER_TEMP/asb-host-regression.pid"
-          mkdir -p "$_host_root"
-          rsync -a ./ "$_host_root"/ \
-            --exclude '.git' --exclude 'android-ndk*' --exclude 'pkg-*' --exclude '*.zip'
-          cat > "$RUNNER_TEMP/asb-run-host-regression.sh" <<'HOST_REGRESSION'
-          set -u
-          _root="$1"
-          _rc_file="$2"
-          cd "$_root" || exit 97
-          _rc=0
-          ASB_REGRESSION_JOBS=8 bash tools/asb_full_regression.sh || _rc=$?
-          printf '%s\n' "$_rc" > "$_rc_file.tmp"
-          mv "$_rc_file.tmp" "$_rc_file"
-          exit "$_rc"
-          HOST_REGRESSION
-          nohup bash "$RUNNER_TEMP/asb-run-host-regression.sh" "$_host_root" "$_host_rc" > "$_host_log" 2>&1 &
-          echo "$!" > "$RUNNER_TEMP/asb-host-regression.pid"
-          echo "Canonical strict regression started in $_host_root (8 workers); packaging remains gated on its result."
 
       - name: Cache Android NDK
         id: cache-ndk
@@ -385,23 +415,6 @@ jobs:
               echo "::warning::$so exports neither createEffect nor AELI - effect will not load"
             fi
           done
-
-      - name: Verify canonical host regression result
-        shell: bash
-        run: |
-          _pid="$(cat "$RUNNER_TEMP/asb-host-regression.pid")"
-          _rc_file="$RUNNER_TEMP/asb-host-regression.rc"
-          while [ ! -f "$_rc_file" ]; do
-            if ! kill -0 "$_pid" 2>/dev/null; then
-              cat "$RUNNER_TEMP/asb-host-regression.log" >&2
-              echo "::error::Canonical regression exited without a result file"
-              exit 1
-            fi
-            sleep 1
-          done
-          cat "$RUNNER_TEMP/asb-host-regression.log"
-          _rc="$(cat "$_rc_file")"
-          case "$_rc" in 0) ;; ''|*[!0-9]*) echo "::error::Invalid regression exit status: $_rc"; exit 1 ;; *) exit "$_rc" ;; esac
 
       - name: Package RELEASE zip
         run: |
