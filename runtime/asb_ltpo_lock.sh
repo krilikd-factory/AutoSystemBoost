@@ -27,8 +27,15 @@ asb_ltpo_lock() {
       *)
         _al_empty=0
         if ! kill -0 "$_al_owner" 2>/dev/null; then
-          rm -f "$ASB_LTPO_LOCK_DIR/pid" 2>/dev/null
-          rmdir "$ASB_LTPO_LOCK_DIR" 2>/dev/null || true
+          # Reclaim the whole dead lock atomically. Removing pid first left an ownerless
+          # directory that another writer could reap while a third writer was acquiring it.
+          _al_dead="$ASB_LTPO_LOCK_DIR.dead.$$"
+          rm -f "$_al_dead/pid" 2>/dev/null
+          rmdir "$_al_dead" 2>/dev/null || true
+          if mv "$ASB_LTPO_LOCK_DIR" "$_al_dead" 2>/dev/null; then
+            rm -f "$_al_dead/pid" 2>/dev/null
+            rmdir "$_al_dead" 2>/dev/null || true
+          fi
           continue
         fi
         ;;
@@ -47,8 +54,18 @@ asb_ltpo_lock() {
 }
 
 asb_ltpo_unlock() {
-  rm -f "$ASB_LTPO_LOCK_DIR/pid" 2>/dev/null
-  rmdir "$ASB_LTPO_LOCK_DIR" 2>/dev/null || true
+  [ -d "$ASB_LTPO_LOCK_DIR" ] || return 0
+  _al_owner="$(cat "$ASB_LTPO_LOCK_DIR/pid" 2>/dev/null | tr -dc '0-9')"
+  # Never remove a lock now owned by another writer. The normal release is one atomic
+  # rename: there is no interval with an empty pid file at the live lock path.
+  [ -n "$_al_owner" ] && [ "$_al_owner" = "$$" ] || return 0
+  _al_release="$ASB_LTPO_LOCK_DIR.release.$$"
+  rm -f "$_al_release/pid" 2>/dev/null
+  rmdir "$_al_release" 2>/dev/null || true
+  if mv "$ASB_LTPO_LOCK_DIR" "$_al_release" 2>/dev/null; then
+    rm -f "$_al_release/pid" 2>/dev/null
+    rmdir "$_al_release" 2>/dev/null || true
+  fi
 }
 
 # Replace only the restore target, preserving every other ownership field. The
