@@ -2043,7 +2043,7 @@ lk_wakelock_kernel_snapshot() {
         if (ac>0 || as>0 || pst>0)
           printf "%-28s active=%-6d active_since_ms=%-10d total_ms=%-10d prevent_suspend_ms=%-10d\n", name, ac, as, tt, pst
       }
-    ' "$_src" 2>/dev/null | sort -t= -k5 -rn | head -40
+    ' "$_src" 2>/dev/null | sort -t '=' -k5 -rn | head -40
     echo ""
   } >> "$LK_OUT_DIR/wake_sources.txt"
 }
