@@ -313,6 +313,20 @@ if [ -f /data/adb/asb/wakelock_manual ] && command -v appops >/dev/null 2>&1; th
   done < /data/adb/asb/wakelock_manual
   rm -f /data/adb/asb/wakelock_manual /data/adb/asb/wakelock_manual.tmp 2>/dev/null
 fi
+# Individual services disabled by the explicit wakelock/component manager. Restore only
+# ledger-owned entries and only their recorded state: default-state is not interchangeable
+# with enable, and a component disabled elsewhere was never admitted to this ledger.
+if [ -f /data/adb/asb/wakelock_services ] && command -v pm >/dev/null 2>&1; then
+  while IFS='|' read -r _sp _sc _so; do
+    case "$_sp" in ''|*[!A-Za-z0-9_.]*) continue ;; esac
+    case "$_sc" in "$_sp"/[A-Za-z0-9_.\$]*) ;; *) continue ;; esac
+    case "$_so" in
+      enabled) _fw pm enable --user 0 "$_sc" >/dev/null 2>&1 ;;
+      default) _fw pm default-state --user 0 "$_sc" >/dev/null 2>&1 ;;
+    esac
+  done < /data/adb/asb/wakelock_services
+  rm -f /data/adb/asb/wakelock_services /data/adb/asb/wakelock_services.tmp 2>/dev/null
+fi
 
 # Give location back to apps ASB limited.
 #
