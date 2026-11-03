@@ -823,6 +823,129 @@ _wl_man_status() {
             while ((getline ln < man) > 0) { split(ln,b,"|"); if(b[1]!="") skip[b[1]]=1 } }
     NF == 2 && !($2 in skip) && !seen[$2]++ { print "other|" $2 }'
 }
+# --- explicit individual service control (fix319) -------------------------------------
+# AppOps WAKE_LOCK above is package/uid-wide and is NOT a service freezer. This separate
+# API disables one currently running, user-app service component with pm. The candidate
+# list is read-only and on demand. A ledger entry stores the exact original state we can
+# prove (default or enabled); pre-disabled/external components are never adopted. Android
+# persists the component state itself, so there is no polling or reapply worker.
+SVC="$D/wakelock_services"
+_wl_svc_compok() {
+  _wl_man_pkgok "${1:-}" || return 1
+  case "${2:-}" in
+    "${1}/"*) _scc="${2#*/}" ;;
+    *) return 1 ;;
+  esac
+  case "$_scc" in ''|.*|*..*|*[!A-Za-z0-9_.\$]*) return 1 ;; esac
+  return 0
+}
+_wl_svc_line() { awk -F'|' -v c="${2:-}" '$2 == c { print; exit }' "$SVC" 2>/dev/null; }
+_wl_svc_drop() {
+  [ -s "$SVC" ] || return 0
+  awk -F'|' -v c="${2:-}" '$2 != c' "$SVC" > "$SVC.tmp" 2>/dev/null || return 1
+  if [ -s "$SVC.tmp" ]; then mv -f "$SVC.tmp" "$SVC"; else rm -f "$SVC.tmp" "$SVC"; fi
+}
+_wl_svc_state() {
+  # $1 is a package dump, $2 the fully qualified package/Class component. An empty
+  # result means Android's default state, not a proven manifest-enabled flag; only a
+  # service seen running may be newly disabled with that original state recorded.
+  printf '%s\n' "${1:-}" | awk -v c="${2:-}" '
+    /^[ \t]*disabledComponents:/ { m="disabled"; next }
+    /^[ \t]*enabledComponents:/ { m="enabled"; next }
+    /^[ \t]*[A-Za-z][A-Za-z ]*:/ { m="" }
+    m != "" { n=split($0,a,/[ \t,]+/); for(i=1;i<=n;i++) if(a[i]==c) { print m; exit } }'
+}
+_wl_svc_running() {
+  _has dumpsys || return 1
+  dumpsys activity services "$1" 2>/dev/null | awk -v p="$1" '
+    { s=$0; while(match(s,/[A-Za-z0-9_.$]+\/[A-Za-z0-9_.$]+/)) {
+        c=substr(s,RSTART,RLENGTH); if(index(c,p "/")==1) print c;
+        s=substr(s,RSTART+RLENGTH) } }' | sort -u
+}
+_wl_svc_restore_state() {
+  case "${2:-}" in
+    enabled) pm enable --user 0 "$1" >/dev/null 2>&1 ;;
+    default) pm default-state --user 0 "$1" >/dev/null 2>&1 ;;
+    *) return 1 ;;
+  esac
+}
+_wl_svc_status() {
+  _sp="${1:-}"
+  _wl_man_installed "$_sp" || { printf 'result=not_user_app\nscan=unavailable\n'; return 1; }
+  _has dumpsys || { printf 'result=unavailable\nscan=unavailable\n'; return 1; }
+  _sd="$(dumpsys package "$_sp" 2>/dev/null)"
+  [ -n "$_sd" ] || { printf 'result=unavailable\nscan=unavailable\n'; return 1; }
+  _sr="$(_wl_svc_running "$_sp")"
+  printf 'version=1\nscan=ok\n'
+  _sn=0; [ -s "$SVC" ] && _sn="$(awk -F'|' -v p="$_sp" '$1 == p { n++ } END { print n+0 }' "$SVC")"
+  printf 'selected=%s\n' "${_sn:-0}"
+  { printf '%s\n' "$_sr"; [ -s "$SVC" ] && awk -F'|' -v p="$_sp" '$1 == p { print $2 }' "$SVC"; } \
+    | awk 'NF && !seen[$0]++' | while IFS= read -r _sc; do
+        _wl_svc_compok "$_sp" "$_sc" || continue
+        _sl="$(_wl_svc_line "$_sp" "$_sc")"; _ss=0; [ -n "$_sl" ] && _ss=1
+        _st="$(_wl_svc_state "$_sd" "$_sc")"; _st="${_st:-default}"
+        _run=0; printf '%s\n' "$_sr" | grep -qxF "$_sc" && _run=1
+        [ "$_ss" = 1 ] || [ "$_run" = 1 ] || continue
+        [ "$_ss" = 1 ] || [ "$_st" != disabled ] || continue
+        printf 'service|%s|%s|%s|%s\n' "$_sc" "$_ss" "$_st" "$_run"
+      done
+}
+_wl_svc_disable() {
+  _sp="${1:-}"; _sc="${2:-}"
+  _wl_svc_compok "$_sp" "$_sc" || { printf 'result=bad_request\n'; return 1; }
+  _wl_man_installed "$_sp" || { printf 'result=not_user_app\n'; return 1; }
+  _has dumpsys && _has pm || { printf 'result=unavailable\n'; return 1; }
+  _sd="$(dumpsys package "$_sp" 2>/dev/null)"; [ -n "$_sd" ] || { printf 'result=unavailable\n'; return 1; }
+  _sl="$(_wl_svc_line "$_sp" "$_sc")"
+  if [ -n "$_sl" ]; then
+    _st="$(_wl_svc_state "$_sd" "$_sc")"
+    [ "$_st" = disabled ] && { printf 'result=disabled\neffective=disabled\n'; return 0; }
+    printf 'result=not_enforced\neffective=%s\n' "${_st:-unknown}"; return 1
+  fi
+  _st="$(_wl_svc_state "$_sd" "$_sc")"
+  [ "$_st" = disabled ] && { printf 'result=external_disabled\neffective=disabled\n'; return 1; }
+  if [ "$_st" = enabled ]; then _orig=enabled
+  elif [ -z "$_st" ] && _wl_svc_running "$_sp" | grep -qxF "$_sc"; then _orig=default
+  else printf 'result=not_running\neffective=%s\n' "${_st:-unknown}"; return 1
+  fi
+  pm disable --user 0 "$_sc" >/dev/null 2>&1 || { printf 'result=not_enforced\neffective=%s\n' "$_orig"; return 1; }
+  _after="$(_wl_svc_state "$(dumpsys package "$_sp" 2>/dev/null)" "$_sc")"
+  if [ "$_after" != disabled ]; then
+    _wl_svc_restore_state "$_sc" "$_orig" >/dev/null 2>&1 || :
+    printf 'result=not_enforced\neffective=%s\n' "${_after:-unknown}"; return 1
+  fi
+  mkdir -p "$D" 2>/dev/null && printf '%s|%s|%s\n' "$_sp" "$_sc" "$_orig" >> "$SVC" || {
+    _wl_svc_restore_state "$_sc" "$_orig" >/dev/null 2>&1 || :
+    printf 'result=not_recorded\neffective=%s\n' "$_orig"; return 1;
+  }
+  printf 'result=disabled\neffective=disabled\n'; return 0
+}
+_wl_svc_restore() {
+  _sp="${1:-}"; _sc="${2:-}"
+  _wl_svc_compok "$_sp" "$_sc" || { printf 'result=bad_request\n'; return 1; }
+  _sl="$(_wl_svc_line "$_sp" "$_sc")"; [ -n "$_sl" ] || { printf 'result=not_selected\n'; return 1; }
+  if _wl_man_gone "$_sp"; then
+    _wl_svc_drop "$_sp" "$_sc" && { printf 'result=uninstalled\neffective=unknown\n'; return 0; }
+  fi
+  _has dumpsys && _has pm || { printf 'result=unavailable\n'; return 1; }
+  _orig="$(printf '%s' "$_sl" | cut -d'|' -f3)"
+  _wl_svc_restore_state "$_sc" "$_orig" || { printf 'result=restore_failed\neffective=unknown\n'; return 1; }
+  _after="$(_wl_svc_state "$(dumpsys package "$_sp" 2>/dev/null)" "$_sc")"; _after="${_after:-default}"
+  if [ "$_after" = "$_orig" ]; then
+    _wl_svc_drop "$_sp" "$_sc" && printf 'result=restored\neffective=%s\n' "$_orig" && return 0
+  fi
+  printf 'result=restore_failed\neffective=%s\n' "$_after"; return 1
+}
+if [ "${1:-}" = service-list ]; then _wl_svc_status "${2:-}"; exit $?; fi
+if [ "${1:-}" = service-set ]; then
+  case "${3:-}" in
+    disable) _wl_svc_disable "${2:-}" "${4:-}" ;;
+    restore) _wl_svc_restore "${2:-}" "${4:-}" ;;
+    *) printf 'result=bad_request\n'; exit 2 ;;
+  esac
+  exit $?
+fi
+
 if [ "${1:-}" = manual-status ]; then
   _wl_man_status | while IFS='|' read -r _a _b _c _d; do
     case "$_a" in
