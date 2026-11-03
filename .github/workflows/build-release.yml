@@ -156,35 +156,13 @@ jobs:
           fi
           echo "Generated bounds artefacts up-to-date."
 
-      - name: Validate generated governor schema baseline
-        run: |
-          chmod +x tools/asb_schema_sync.sh
-          tools/asb_schema_sync.sh check
-
-      - name: DSP source checks (catches the errors that reached main)
-        run: |
-          # The AIDL library is built by a separate soong workflow, so nothing on this
-          # path compiles it. A revision with three compile errors reached main because of
-          # that gap. This does not build the library - it checks the source for the
-          # specific mistakes that got through.
-          bash tools/dsp_stubs/asb_dsp_syntax_check.sh
-
+      # Schema sync, DSP source checks and lint run inside the canonical regression below.
+      # Do not repeat them as serial preflight steps: that cost CI time without adding a gate.
       - name: Enforce native strict-warning budget (clang + GCC inventory)
         run: |
           chmod +x tools/asb_native_warning_budget.sh
           CC=clang tools/asb_native_warning_budget.sh
           CC=gcc tools/asb_native_warning_budget.sh
-
-      - name: Run asb_lint.sh
-        run: |
-          if [ ! -f tools/asb_lint.sh ]; then
-            echo "WARNING: tools/asb_lint.sh missing — skipping"
-            exit 0
-          fi
-          MODDIR="$(pwd)" bash tools/asb_lint.sh
-
-      - name: Run canonical host regression
-        run: bash tools/asb_full_regression.sh
 
       - name: Verify runner tools
         shell: bash
@@ -200,6 +178,34 @@ jobs:
           echo "::warning::Installing missing runner tools: ${missing[*]}"
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends "${missing[@]}"
+
+      - name: Run canonical host regression
+        shell: bash
+        run: |
+          # Run the complete strict suite in an isolated source copy while NDK/native work
+          # proceeds below. Eight workers shorten the timer-heavy queue; no test is skipped.
+          # The native build cannot race test fixtures: it writes only the original workspace.
+          _host_root="$RUNNER_TEMP/asb-host-regression"
+          _host_log="$RUNNER_TEMP/asb-host-regression.log"
+          _host_rc="$RUNNER_TEMP/asb-host-regression.rc"
+          rm -rf "$_host_root" "$_host_log" "$_host_rc" "$RUNNER_TEMP/asb-host-regression.pid"
+          mkdir -p "$_host_root"
+          rsync -a ./ "$_host_root"/ \
+            --exclude '.git' --exclude 'android-ndk*' --exclude 'pkg-*' --exclude '*.zip'
+          cat > "$RUNNER_TEMP/asb-run-host-regression.sh" <<'HOST_REGRESSION'
+          set -u
+          _root="$1"
+          _rc_file="$2"
+          cd "$_root" || exit 97
+          _rc=0
+          ASB_REGRESSION_JOBS=8 bash tools/asb_full_regression.sh || _rc=$?
+          printf '%s\n' "$_rc" > "$_rc_file.tmp"
+          mv "$_rc_file.tmp" "$_rc_file"
+          exit "$_rc"
+          HOST_REGRESSION
+          nohup bash "$RUNNER_TEMP/asb-run-host-regression.sh" "$_host_root" "$_host_rc" > "$_host_log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/asb-host-regression.pid"
+          echo "Canonical strict regression started in $_host_root (8 workers); packaging remains gated on its result."
 
       - name: Cache Android NDK
         id: cache-ndk
@@ -379,6 +385,23 @@ jobs:
               echo "::warning::$so exports neither createEffect nor AELI - effect will not load"
             fi
           done
+
+      - name: Verify canonical host regression result
+        shell: bash
+        run: |
+          _pid="$(cat "$RUNNER_TEMP/asb-host-regression.pid")"
+          _rc_file="$RUNNER_TEMP/asb-host-regression.rc"
+          while [ ! -f "$_rc_file" ]; do
+            if ! kill -0 "$_pid" 2>/dev/null; then
+              cat "$RUNNER_TEMP/asb-host-regression.log" >&2
+              echo "::error::Canonical regression exited without a result file"
+              exit 1
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/asb-host-regression.log"
+          _rc="$(cat "$_rc_file")"
+          case "$_rc" in 0) ;; ''|*[!0-9]*) echo "::error::Invalid regression exit status: $_rc"; exit 1 ;; *) exit "$_rc" ;; esac
 
       - name: Package RELEASE zip
         run: |
