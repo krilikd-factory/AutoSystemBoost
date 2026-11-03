@@ -3187,7 +3187,7 @@ grep -q 'int cam_open = m->misc.camera_active;' "$G" || fail "camera flag not re
 grep -q 'static const char \*_snames\[\]' "$G" && fail "heartbeat still carries its own state-name table"
 grep -q 'asb_state_names\[fsm.state\] : "?",' "$G" || fail "heartbeat does not use the FSM state names"
 # The name table must follow the enum, entry for entry.
-_enum="$(sed -n '/^typedef enum {/,/} asb_state_t;/p' "$F" | grep -oE 'ASB_STATE_[A-Z_]+ *= *[0-9]+' | grep -v COUNT | sort -t= -k2 -n | sed -E 's/ASB_STATE_([A-Z_]+).*/\1/' | tr '\n' ' ')"
+_enum="$(sed -n '/^typedef enum {/,/} asb_state_t;/p' "$F" | grep -oE 'ASB_STATE_[A-Z_]+ *= *[0-9]+' | grep -v COUNT | sort -t '=' -k2,2n | sed -E 's/ASB_STATE_([A-Z_]+).*/\1/' | tr '\n' ' ')"
 _names="$(sed -n '/^static const char \*asb_state_names\[\] = {/,/};/p' "$F" | grep -oE '"[A-Z_]+"' | tr -d '"' | tr '\n' ' ')"
 [ -n "$_enum" ] || fail "state enum not found"
 [ "$_enum" = "$_names" ] || fail "asb_state_names ($_names) does not follow the enum ($_enum)"
@@ -7705,8 +7705,9 @@ ASB_PY_EOF
 )
 
 t_workflow_executable_modes_contract() (
-# Contract: uploaded source archives may lose executable bits, but CI must restore modes before
-# contracts execute runtime helpers. Execute the real YAML run block against mode-0644 copies.
+# Contract: uploaded source archives may lose executable bits, but every CI job must restore
+# them before use. The canonical suite is split over three independent runners; their matrix
+# must cover every suite exactly once and the package job must depend on all of them.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 TMP="$(mktemp -d)"
@@ -7716,28 +7717,33 @@ fail() { echo "FAIL workflow executable modes: $*" >&2; exit 1; }
 
 for WF in "$ROOT/.github/workflows/build-test.yml" "$ROOT/.github/workflows/build-release.yml"; do
   [ -f "$WF" ] || fail "missing $WF"
-  _norm=$(grep -n 'name: Normalize executable source script modes' "$WF" | head -1 | cut -d: -f1)
-  _validate=$(grep -n 'name: Validate required source files' "$WF" | head -1 | cut -d: -f1)
-  _tests=$(grep -n 'name: Run canonical host regression' "$WF" | head -1 | cut -d: -f1)
-  case "$_norm:$_validate:$_tests" in *[!0-9:]*|:) fail "expected steps missing in $WF" ;; esac
-  [ "$_norm" -lt "$_validate" ] && [ "$_validate" -lt "$_tests" ] \
-    || fail "normalize step must precede validation and tests in $WF"
-  _wait=$(grep -n 'name: Verify canonical host regression result' "$WF" | head -1 | cut -d: -f1)
-  _package=$(grep -n 'name: Package .* zip' "$WF" | head -1 | cut -d: -f1)
-  case "$_wait:$_package" in *[!0-9:]*|:) fail "parallel regression gate/package step missing in $WF" ;; esac
-  [ "$_tests" -lt "$_wait" ] && [ "$_wait" -lt "$_package" ] \
-    || fail "parallel regression must finish before packaging in $WF"
-  grep -Fq 'ASB_REGRESSION_JOBS=8' "$WF" || fail "CI did not adopt the measured eight-worker queue in $WF"
-  grep -Fq 'rsync -a ./ "$_host_root"/' "$WF" || fail "parallel regression is not isolated from native outputs in $WF"
+  [ "$(grep -c 'name: Normalize executable source script modes' "$WF")" = 2 ] \
+    || fail "regression and package jobs do not both normalize modes in $WF"
+  grep -Fq 'needs: regression' "$WF" || fail "package job is not gated by every regression shard in $WF"
+  grep -Fq 'fail-fast: false' "$WF" || fail "one shard can hide the diagnostics of another in $WF"
+  [ "$(sed -n 's/^            suites: //p' "$WF" | wc -l)" = 3 ] \
+    || fail "expected exactly three regression shards in $WF"
+  _coverage=" $(sed -n 's/^            suites: //p' "$WF" | tr '\n' ' ') "
+  for area in features package_tweaks smart system ui zygisk; do
+    [ "$(printf '%s\n' "$_coverage" | grep -ow "$area" | wc -l)" = 1 ] \
+      || fail "$area is missing or duplicated in the $WF shard matrix"
+  done
+  grep -Fq 'ASB_REGRESSION_SUITES="${{ matrix.suites }}"' "$WF" \
+    || fail "matrix selection is not passed to the canonical runner in $WF"
+  grep -Fq 'ASB_REGRESSION_JOBS=8' "$WF" || fail "CI did not retain the measured eight-worker queue in $WF"
   grep -Fq 'for tool in zip unzip curl file rsync jq; do' "$WF" \
     || fail "jq must be a verified runner dependency in $WF"
   for p in $_helpers; do
-    sed -n "${_norm},$(( _validate - 1 ))p" "$WF" | grep -Fq "$p" \
-      || fail "$WF does not restore $p"
+    [ "$(grep -c "$p" "$WF")" -ge 2 ] || fail "$WF does not restore $p in both jobs"
   done
 done
+grep -Fq 'ASB_REGRESSION_SUITES:-' "$ROOT/tools/asb_full_regression.sh" \
+  || fail "canonical runner has no explicit suite selection"
+grep -Fq 'unknown regression suite:' "$ROOT/tools/asb_full_regression.sh" \
+  || fail "canonical runner silently accepts an unknown shard"
 
-# Simulate browser/git mode loss. Both exact CI blocks must restore every contracted helper.
+# Simulate browser/git mode loss and execute all four real normalization blocks (two jobs in
+# each workflow), not a hand-copied chmod list.
 for p in $_helpers; do
   mkdir -p "$TMP/$(dirname "$p")"
   cp "$ROOT/$p" "$TMP/$p"
@@ -7745,16 +7751,26 @@ for p in $_helpers; do
 done
 _n=0
 for WF in "$ROOT/.github/workflows/build-test.yml" "$ROOT/.github/workflows/build-release.yml"; do
-  _n=$(( _n + 1 ))
-  _norm=$(grep -n 'name: Normalize executable source script modes' "$WF" | head -1 | cut -d: -f1)
-  _validate=$(grep -n 'name: Validate required source files' "$WF" | head -1 | cut -d: -f1)
-  sed -n "${_norm},$(( _validate - 1 ))p" "$WF" | sed -n 's/^          //p' > "$TMP/normalize.$_n.sh"
-  for p in $_helpers; do chmod 0644 "$TMP/$p"; done
-  (cd "$TMP" && sh "$TMP/normalize.$_n.sh") || fail "extracted normalize step failed for $WF"
-  for p in $_helpers; do [ -x "$TMP/$p" ] || fail "$WF did not restore $p"; done
+  awk '
+    /- name: Normalize executable source script modes/ { capture=1; next }
+    capture && /^      - name:/ { capture=0 }
+    capture && /^          / {
+      line=$0; sub(/^          /, "", line)
+      if (line != "run: |") print line
+    }
+  ' "$WF" > "$TMP/blocks.sh"
+  # Split at the second chmod comment: each block is complete and independently executable.
+  awk -v prefix="$TMP/normalize." '/# Browser uploads can turn git mode/{n++} {print > (prefix n ".sh")}' "$TMP/blocks.sh"
+  for block in "$TMP/normalize.1.sh" "$TMP/normalize.2.sh"; do
+    _n=$(( _n + 1 ))
+    for p in $_helpers; do chmod 0644 "$TMP/$p"; done
+    (cd "$TMP" && sh "$block") || fail "extracted normalize step failed for $WF block $_n"
+    for p in $_helpers; do [ -x "$TMP/$p" ] || fail "$WF block $_n did not restore $p"; done
+    rm -f "$block"
+  done
 done
 
-echo 'PASS workflow executable-mode contract: both real CI blocks restore 12 helpers'
+echo 'PASS workflow shard/mode contract: six suites covered once, packaging gated, four real CI blocks restore 12 helpers'
 )
 
 t_workflow_required_files_shell() (

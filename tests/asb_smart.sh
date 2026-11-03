@@ -5208,6 +5208,7 @@ grep -q '^static int writer_write_int_confirmed(asb_write_node_t node, const cha
 : > "$T/node"
 cat > "$T/t.c" <<'X'
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <limits.h>
 #include <time.h>

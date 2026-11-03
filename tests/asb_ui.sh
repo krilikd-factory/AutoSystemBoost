@@ -750,16 +750,28 @@ done
 kill -KILL "$REC_PID" 2>/dev/null || true
 wait "$REC_PID" 2>/dev/null || true
 # The recorder is not this shell's child, so `wait` returns at once; SIGKILL lands
-# asynchronously. Give it up to 5 s to be gone or a zombie before asking (fix136 - the
-# full regression failed here once in a while on a loaded host, never on a device).
+# asynchronously. The lock records BOTH recorder and launcher, and lock_known_dead rightly
+# refuses reclamation while either identity is live. Wait for both to be gone or zombies,
+# rather than timing out on the recorder alone while the launcher is still exiting on a
+# loaded host. The 15 s bound is used only by this abnormal-death fixture.
+_dead_launcher="$(tr -dc '0-9' < "$TMP/state/full_day_webui.lock/launcher" 2>/dev/null || true)"
 _dk=0
-while [ "$_dk" -lt 50 ]; do
-  kill -0 "$REC_PID" 2>/dev/null || break
-  case "$(cat "/proc/$REC_PID/stat" 2>/dev/null)" in *') Z '*) break ;; esac
+while [ "$_dk" -lt 150 ]; do
+  _dk_live=0
+  for _dead_pid in "$REC_PID" "$_dead_launcher"; do
+    [ -n "$_dead_pid" ] || continue
+    kill -0 "$_dead_pid" 2>/dev/null || continue
+    case "$(cat "/proc/$_dead_pid/stat" 2>/dev/null)" in *') Z '*|*') X '*|*') x '*) ;; *) _dk_live=1 ;; esac
+  done
+  [ "$_dk_live" = 0 ] && break
   sleep 0.1; _dk=$((_dk + 1))
 done
 STALE="$(env "${ENV[@]}" sh "$HELPER" full-day || true)"
-echo "$STALE" | grep -Fq 'status=started' || { echo 'FAIL debug support: known-dead lock not reclaimed' >&2; exit 1; }
+echo "$STALE" | grep -Fq 'status=started' || {
+  printf 'FAIL debug support: known-dead lock not reclaimed after %s waits; recorder=%s launcher=%s\n%s\n' \
+    "$_dk" "$REC_PID" "${_dead_launcher:-missing}" "$STALE" >&2
+  exit 1
+}
 REC_PID="$(printf '%s\n' "$STALE" | sed -n 's/^pid=//p')"
 
 # The helper accepts a fixed enum only; it has no eval/source/untrusted command interpolation.
