@@ -7858,10 +7858,32 @@ grep -qx 'orig=144.0' "$STATE_DIR/ltpo_video.lowered" || fail 'restore target no
 grep -qx 'owner=fixture' "$STATE_DIR/ltpo_video.lowered" || fail 'metadata not preserved'
 [ ! -e "$ASB_LTPO_LOCK_DIR" ] || fail 'lock not released'
 printf '0\n' > "$T/count"
-# The old rm(pid)+rmdir release could lose updates on a loaded runner. Four hundred
-# competing critical sections make that window observable; atomic whole-directory release
-# must preserve every one of them.
+# The old rm(pid)+rmdir release and separately published pid could lose updates on a
+# loaded runner. Four hundred competing critical sections exercise the complete lock;
+# ownership must be present atomically when the slot first appears.
+grep -Fq 'ln -s "$$" "$ASB_LTPO_LOCK_DIR"' "$L" || fail 'acquisition does not publish its owner atomically'
 grep -Fq 'mv "$ASB_LTPO_LOCK_DIR" "$_al_release"' "$L" || fail 'release is not an atomic whole-lock rename'
+# Delay the first competing acquisition after the real mkdir/ln has succeeded but before
+# the command returns. The legacy directory format is reclaimed here and loses mutual
+# exclusion; an atomic owner symlink remains live and attributable throughout the delay.
+REAL_MKDIR="$(command -v mkdir)"; REAL_LN="$(command -v ln)"
+mkdir -p "$T/bin"
+for _cmd in mkdir ln; do
+  case "$_cmd" in mkdir) _real="$REAL_MKDIR" ;; ln) _real="$REAL_LN" ;; esac
+  cat > "$T/bin/$_cmd" <<EOF_DELAY
+#!/bin/sh
+"$_real" "\$@"; _rc=\$?
+for _last do :; done
+if [ "\$_rc" = 0 ] && [ "\$_last" = "\$ASB_LTPO_LOCK_DIR" ] && [ -e "$T/delay.armed" ] && [ ! -e "$T/delay.once" ]; then
+  : > "$T/delay.once"
+  sleep 0.5
+fi
+exit "\$_rc"
+EOF_DELAY
+  chmod 0755 "$T/bin/$_cmd"
+done
+: > "$T/delay.armed"
+PATH="$T/bin:$PATH"; export PATH
 worker() (
   . "$L"
   i=0
@@ -7878,13 +7900,19 @@ worker & p2=$!
 worker & p3=$!
 worker & p4=$!
 wait "$p1"; wait "$p2"; wait "$p3"; wait "$p4"
+[ -e "$T/delay.once" ] || fail 'delayed-publication fixture did not run'
 [ "$(cat "$T/count")" = 400 ] || fail "concurrent critical sections lost updates: $(cat "$T/count")"
+sh -c 'exit 0' & dead=$!
+wait "$dead" 2>/dev/null || true
+ln -s "$dead" "$ASB_LTPO_LOCK_DIR"
+( . "$L"; asb_ltpo_lock && asb_ltpo_unlock ) || fail 'dead owner symlink lock was not reclaimed'
+# A dead directory lock from the previous release remains recoverable during an update.
 mkdir -p "$ASB_LTPO_LOCK_DIR"
 sh -c 'exit 0' & dead=$!
 wait "$dead" 2>/dev/null || true
 printf '%s\n' "$dead" > "$ASB_LTPO_LOCK_DIR/pid"
-( . "$L"; asb_ltpo_lock && asb_ltpo_unlock ) || fail 'dead owner lock was not reclaimed'
-echo 'PASS LTPO ownership lock: mutual exclusion, atomic orig update and stale recovery'
+( . "$L"; asb_ltpo_lock && asb_ltpo_unlock ) || fail 'legacy dead owner lock was not reclaimed'
+echo 'PASS LTPO ownership lock: atomic owner publication, mutual exclusion, orig update and stale recovery'
 )
 
 
