@@ -28,6 +28,9 @@
    * barely noticeable. clamp keeps it between 56 and 84. */
   --page-top: clamp(56px, 9vh, 84px);
   --window-inset-bottom: env(safe-area-inset-bottom, 0px);
+  /* Some ColorOS WebViews report a zero top inset while the system status bar still
+   * overlaps the last raster rows. This is only the scrim fallback, not page layout. */
+  --status-scrim-top: max(28px, var(--window-inset-top));
 
   /*
    * Unified page-transition motion.
@@ -1953,6 +1956,12 @@ html[data-asb-theme="light"] .lgr-chip { background: #f7f9fa; }
 .lgr-k { color: var(--text-secondary); flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
 .lgr-v { font-weight: 600; color: var(--text); text-align: end; flex: 0 1 auto; max-width: 58%;
   overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+/* Long ZYGISK evidence stays readable without making every value a bold multi-line headline. */
+.zygisk-page .lgr-row:not(.lgr-row-long) .lgr-v { font-size: 12px; font-weight: 550; line-height: 1.4; }
+/* Fixed pages scroll underneath the system status bar. Keep that strip opaque, above every
+ * page (including ZYGISK at 145) and below navigation (200), toasts and modals. */
+.status-bar-scrim { position: fixed; top: 0; left: 0; right: 0; height: var(--status-scrim-top);
+  z-index: 150; pointer-events: none; background: var(--bg); }
 .lgr-note { font-size: 12.5px; line-height: 1.45; color: var(--text-secondary); padding: 2px 0; }
 .lgr-brief { position: relative; font-size: 13px; line-height: 1.5; color: var(--text); padding: 3px 0; padding-inline-start: 14px; }
 .lgr-brief::before { content: '•'; position: absolute; inset-inline-start: 2px; color: var(--accent); font-weight: 800; }
@@ -1988,6 +1997,63 @@ html[data-asb-theme="light"] .lgr-chip { background: #f7f9fa; }
 .lgr-empty { text-align: center; padding: 26px 16px; }
 .lgr-empty-emo { display: block; font-size: 34px; line-height: 1; margin-bottom: 10px; }
 .lgr-empty-t { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+/* fix311: the two longest drill-ins read as an overview followed by evidence. Their headers
+ * stay complete but leave room for content; navigation scrolls inside its own strip and sticks
+ * below the status scrim, so neither the fixed page nor a translated label creates page overflow. */
+#reportPage .header, #zygiskPage .header { margin-bottom: 16px; }
+#reportPage .logo-c, #zygiskPage .logo-c { width: 46px; height: 46px; margin-bottom: 9px; }
+#reportPage .logo-inner, #zygiskPage .logo-inner { border-radius: 14px; font-size: 22px; }
+#reportPage .logo-glow, #zygiskPage .logo-glow { border-radius: 17px; filter: blur(6px); }
+#reportPage .logo-ring, #zygiskPage .logo-ring { border-radius: 15px; }
+#reportPage .app-name, #zygiskPage .app-name { font-size: 21px; margin-bottom: 4px; }
+#reportPage .device-line, #zygiskPage .device-line { margin-bottom: 10px; }
+#reportPage .badges, #zygiskPage .badges { margin-bottom: 10px; }
+#reportPage .sec, #zygiskPage .sec { margin-bottom: 12px; }
+#reportPage .lgr-body, #zygiskPage .lgr-body { gap: 10px; }
+.report-nav, .zy-page-nav { position: sticky; top: var(--status-scrim-top); z-index: 8;
+  box-sizing: border-box; width: 100%; max-width: 100%; flex-wrap: nowrap; align-items: center;
+  margin: 0 0 2px; padding: 6px; overflow-x: auto; overflow-y: hidden;
+  overscroll-behavior-inline: contain; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  border: 1px solid var(--border); border-radius: 14px; background: var(--bg);
+  box-shadow: 0 7px 16px color-mix(in srgb,var(--bg) 88%,transparent); }
+.report-nav::-webkit-scrollbar, .zy-page-nav::-webkit-scrollbar { display: none; }
+.report-nav .lgr-jump-label, .zy-page-nav .lgr-jump-label { flex: 0 0 auto; margin-inline: 3px 2px; }
+.report-nav .lgr-jump-btn, .zy-page-nav .lgr-jump-btn { flex: 0 0 auto; min-height: 32px;
+  padding: 5px 10px; white-space: nowrap; }
+#reportPage .lgr-sec[id], #zygiskPage .lgr-sec[id], #reportPage .lgr-details-anchor {
+  /* The fixed page's own top padding sits outside the sticky containing block: 84 px was
+     not enough in Chromium and put the heading beneath the strip. Keep the whole strip clear. */
+  scroll-margin-top: calc(var(--status-scrim-top) + 124px); }
+#reportPage .lgr-sec > .lgr-sec-t, #zygiskPage .lgr-sec > .lgr-sec-t {
+  margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border);
+  font-size: 11.5px; line-height: 1.35; letter-spacing: .065em; }
+#reportPage .lgr-hero, #zygiskPage .lgr-hero { min-width: 0; gap: 5px; padding: 12px; }
+#reportPage .lgr-hero-val, #zygiskPage .lgr-hero-val { font: 750 23px/1.15 var(--mono);
+  letter-spacing: -.035em; overflow-wrap: anywhere; }
+#reportPage .lgr-hero-lbl, #zygiskPage .lgr-hero-lbl { line-height: 1.35; letter-spacing: .045em; }
+#reportPage .lgr-hero-sub, #zygiskPage .lgr-hero-sub { line-height: 1.45; overflow-wrap: anywhere; }
+#reportPage .lgr-row, #zygiskPage .lgr-row { padding: 6px 0; gap: 12px; line-height: 1.45; }
+#reportPage .lgr-row + .lgr-row, #zygiskPage .lgr-row + .lgr-row { border-top: 1px solid var(--border); }
+#reportPage .lgr-k, #zygiskPage .lgr-k { line-height: 1.45; }
+#reportPage .lgr-row:not(.lgr-row-long) .lgr-v, #zygiskPage .lgr-row:not(.lgr-row-long) .lgr-v {
+  font-family: var(--mono); font-size: 12px; line-height: 1.45; }
+#reportPage .lgr-note, #zygiskPage .lgr-note { padding: 4px 0; font-size: 12px; line-height: 1.55; }
+#reportPage .lgr-verdict-name, #reportPage .lgr-verdict-value { line-height: 1.45; }
+#reportPage .lgr-verdict-value { font-family: var(--mono); font-size: 12px; }
+#reportPage .lgr-verdict-detail { line-height: 1.5; }
+#reportPage .lgr-details-anchor { margin-top: 3px; padding: 13px 3px 2px; border-top: 1px solid var(--border); }
+#reportPage .lgr-details-title { font-size: 15px; line-height: 1.35; }
+#reportPage .lgr-table th { padding-block: 6px 4px; line-height: 1.35; }
+#reportPage .lgr-table td { padding-block: 7px; line-height: 1.4; }
+#reportPage .lgr-table td.lgr-td-num { font-family: var(--mono); font-size: 11.5px; }
+#zygiskPage .zy-status-card .dev-zygisk-link { margin-bottom: 0; }
+#zygiskPage .zy-auto-card { background: linear-gradient(145deg,color-mix(in srgb,var(--accent) 5%,transparent),transparent 62%),var(--surface); }
+#zygiskPage .zy-auto-summary { border-inline-start: 2px solid var(--accent); line-height: 1.55; }
+#zygiskPage .zy-auto-current { color: var(--text-tertiary); }
+#zygiskPage .dev-zygisk-metrics .lgr-hero-val { font-size: 16px; line-height: 1.25; letter-spacing: -.025em; }
+#zygiskPage .dev-zygisk-metrics .lgr-hero-lbl { font-size: 9.5px; }
+#zygiskPage .zy-evidence summary { line-height: 1.45; padding: 2px 0; }
+html[data-asb-theme="light"] .report-nav, html[data-asb-theme="light"] .zy-page-nav { background: var(--bg); }
 html[data-asb-theme="light"] .lgr-sec { background: #fff; box-shadow: 0 1px 2px rgba(16,24,32,.05); }
 html[data-asb-theme="light"] .lgr-hero { background: #f7f9fa; }
 .live-drain-cmp { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 14px;
@@ -4572,6 +4638,7 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
 </style>
 </head>
 <body>
+<div class="status-bar-scrim" aria-hidden="true"></div>
 <!-- Debug-only actions use this modal while the root export command is executing.
      It is hidden for normal navigation and contains no destructive control. -->
 <div class="debug-action-wait" id="debugActionWait" hidden role="status" aria-live="assertive" aria-modal="true">
@@ -7935,7 +8002,7 @@ const CFG_ITEMS = [
   { key:'documentsui_fix', type:'bool', def:'0', stock:'0', name:'DocumentsUI / DSU Picker Fix',
     desc:'A one-time repair for a missing or broken system file picker on affected ColorOS/DSU setups. It enables and unhides DocumentsUI, returns its picker and files activities to their default state, and disables com.coloros.filemanager for user 0. THE COST: the ColorOS File Manager disappears until you turn this fix off. Only states ASB actually changed are recorded and restored on Off or uninstall. Nothing is re-applied at boot, and this card does not request ART compilation.' },
   { key:'ltpo_force', type:'bool', def:'0', stock:'0', name:'Force LTPO Refresh',
-    desc:'Applies a patch prepared from the device\'s own oplus_vrr_config.json: it enables supported panel power-saving paths left off by the OEM and disables selected display telemetry. The stock file is not modified. If no suitable table or change is found, the switch does nothing and the status badge explains why. Applying the table requires a reboot.\n\nThe Android refresh range is also opened: ASB removes its floor, uses the highest reported panel mode, restores the maximum on touch and selects 60 Hz after two quiet seconds so panel adaptation can continue. Camera, game and video ownership are preserved, and previous range values are restored on handback. If the verified OnePlus15-165HZ-LTPO writer is present, ASB yields unless you explicitly give ASB priority. Power savings and low-idle rates depend on the panel and ROM; neither is guaranteed.' },
+    desc:'Applies a patch prepared from the device\'s own oplus_vrr_config.json: it enables supported panel power-saving paths left off by the OEM and disables selected display telemetry. The stock file is not modified. If no suitable table or change is found, the switch does nothing and the status badge explains why. Applying the table requires a reboot.\n\nThe Android refresh range is also opened: ASB removes its floor, uses the highest reported panel mode, restores the maximum on touch and selects 60 Hz after two quiet seconds so panel adaptation can continue. Camera, game and video ownership are preserved, and previous range values are restored on handback. If the verified OnePlus15-165HZ-LTPO writer is present, ASB yields unless you explicitly give ASB priority. A same-target bind from another module always keeps ownership: ASB neither stacks over it nor removes it. Power savings and low-idle rates depend on the panel and ROM; neither is guaranteed.' },
   { key:'ltpo_video', type:'bool', def:'0', stock:'0', name:'Lowest Refresh for Video',
     desc:'During eligible video playback, limits the panel peak to the lowest reported mode that matches 30 or 60 fps content, such as 60 Hz for either rate. ASB acts only with the screen on, audio playing, a compatible video layer, no high-smoothness request and no touch for three seconds. Touch, playback end or screen-off restores the previous value; the first instant after touch can still use the lower rate. Other frame rates are left unchanged. Matching modes avoids unnecessary refreshes without changing the video\'s frame rate.' },
   { key:'phantom_procs', type:'seg', def:'relaxed', stock:'stock', opts:['stock','relaxed','strict'], name:'Background Process Limit',
@@ -8822,6 +8889,8 @@ function cfgStatus(it, cur) {
     return { cls:'warn', text:T('st_pending', 'pending') };
   }
   if (it.key === 'ltpo_force') {
+    if (_ltpoStatus === 'ltpo_external_owner' || _ltpoStatus === 'ltpo_external_bind')
+      return { cls:'neutral', text:T('st_ltpo_external', 'external module active') };
     if (cur === '1') {
       if (_ltpoStatus === 'ltpo_active' || _ltpoStatus === 'ltpo_active_touch') return { cls:'good', text:T('st_on', 'Enabled') };
       if (_ltpoStatus === 'ltpo_pending_boot') return { cls:'warn', text:T('st_pending', 'pending') };
@@ -14198,6 +14267,7 @@ function zygiskPageRender(d) {
     return;
   }
   const st = logReportSec(T('zy_sec_status', 'Connection'), 'zygisk_observer');
+  st.id = 'zy-status'; st.classList.add('zy-status-card');
   st.appendChild(deviceZygiskLink(d));
   body.appendChild(st);
   if (deviceVal(d, 'zygisk_observer', 'enabled') === '0') {
@@ -14205,20 +14275,28 @@ function zygiskPageRender(d) {
     if (_el('zygiskPage') && y) _el('zygiskPage').scrollTop = y;
     return;
   }
-  body.appendChild(zygiskModeCard(d));
-  body.appendChild(zygiskControlsCard(d));
-  body.appendChild(zygiskAutoCard(d));
+  body.appendChild(asbPageJump([
+    ['zy-mode', T('zy_nav_mode', 'Mode')], ['zy-auto', T('zy_nav_auto', 'Automatic')],
+    ['zy-controls', T('zy_nav_controls', 'Controls')], ['zy-activity', T('zy_nav_activity', 'Activity')],
+    ['zy-guard', T('zy_nav_guard', 'Guard')], ['zy-aot', T('zy_nav_art', 'ART')],
+    ['zy-apps', T('zy_nav_apps', 'Apps')]
+  ], T('dev_nav_title', 'Jump to'), 'zy-page-nav'));
+  const mode = zygiskModeCard(d); mode.id = 'zy-mode'; body.appendChild(mode);
+  const automatic = zygiskAutoCard(d); automatic.id = 'zy-auto'; body.appendChild(automatic);
+  const controls = zygiskControlsCard(d); controls.id = 'zy-controls'; body.appendChild(controls);
   const act = logReportSec(T('zy_sec_activity', 'Activity and cost'), 'zygisk_activity');
+  act.id = 'zy-activity';
   act.appendChild(deviceZygiskOverview(d));
   act.appendChild(zygiskPageRows(d));
   body.appendChild(act);
-  body.appendChild(zygiskLinkCard());
-  body.appendChild(zygiskGuardCard());
-  body.appendChild(zygiskAotCard());
+  const engine = zygiskLinkCard(); engine.id = 'zy-engine'; body.appendChild(engine);
+  const guard = zygiskGuardCard(); guard.id = 'zy-guard'; body.appendChild(guard);
+  const aot = zygiskAotCard(); aot.id = 'zy-aot'; body.appendChild(aot);
   const apps = logReportSec(T('zy_sec_apps', 'Observed apps and safe mode'), 'zygisk_apps');
+  apps.id = 'zy-apps';
   apps.appendChild(deviceZygiskEditor(d, function () { zygiskPageLoad(true); }));
   body.appendChild(apps);
-  body.appendChild(zygiskEvidenceCard(d));
+  const evidence = zygiskEvidenceCard(d); evidence.id = 'zy-evidence'; body.appendChild(evidence);
   if (_el('zygiskPage') && y) _el('zygiskPage').scrollTop = y;
 }
 /* fix280: the restart-loop guard - the Zygisk start ledger drives an action. With the screen
@@ -14406,7 +14484,6 @@ function zygiskGuardCard() {
   if (g.nights.length) {
     const nb = document.createElement('details');
     nb.className = 'zy-evidence';
-    nb.open = true;
     const ns = document.createElement('summary');
     ns.textContent = T('zy_guard_nights', 'Screen-off periods (%s)').replace('%s', String(g.nights.length));
     nb.appendChild(ns);
@@ -14560,6 +14637,7 @@ function zygiskAotCard() {
   }
   const names = dozeKeepLabels(g.apps.map(function (a) { return a.pkg; }).concat(g.events.map(function (e) { return e.pkg; })));
   const nm = function (p) { return names[p] || p; };
+  if (g.apps.length) card.appendChild(logReportNote(T('zy_aot_list_scope', 'Observed apps below: waiting, compiled and unknown states are listed together.')));
   g.apps.forEach(function (a) { card.appendChild(logReportRow(nm(a.pkg), zygiskAotValue(a), false)); });
   if (g.apps.length) card.appendChild(logReportNote(T('zy_aot_note', 'Times come from Android\'s launch log (until the first frame); a cold start is one where Android had to start the app\'s process. They vary with what the app loads - compare medians over several starts.')));
   if (g.events.length) {
@@ -14676,7 +14754,7 @@ function zygiskLinkCard() {
     g.apps.forEach(function (a) { pk.push(a.pkg); a.mods.forEach(function (m) { pk.push(m); }); });
     const names = dozeKeepLabels(pk);
     const nm = function (p) { return names[p] || p; };
-    const box = document.createElement('details'); box.className = 'zy-evidence'; box.open = true;
+    const box = document.createElement('details'); box.className = 'zy-evidence';
     const sm = document.createElement('summary');
     sm.textContent = T('zy_link_apps', 'Each app: what ASB knows and does (%s)').replace('%s', String(g.apps.length));
     box.appendChild(sm);
@@ -15408,7 +15486,7 @@ function logReportBrief(d, analysis) {
     lr_brief_cause: 'The phone did not fall asleep {awake}% of the screen-off time; the main reason: {who}, in {pct}% of the checks.',
     lr_brief_cause_radio: 'The phone did not fall asleep {awake}% of the screen-off time; background mobile data used {mib} MiB meanwhile.',
     lr_brief_cause_none: 'The phone did not fall asleep {awake}% of the screen-off time; no single app stood out.',
-    lr_brief_night_hot: 'With the screen off the CPU reached {cpu}° at times - something did heavy work in the background.',
+    lr_brief_night_hot: 'With the screen off the CPU reached {cpu}° at times. Temperature alone does not identify background work or an app.',
     lr_brief_smooth_ok: 'Smoothness is good: {pct}% of frames were late.',
     lr_brief_smooth_mid: 'Smoothness is normal: {pct}% of frames were late - occasional stutter.',
     lr_brief_smooth_bad: 'Stutter is noticeable: {pct}% of frames were late.',
@@ -15461,8 +15539,8 @@ function logReportDxT(key, vars) {
     lr_dx_fix_selfpush_gms: "Set Google Services Trim to light in ASB first; if messages then arrive on time, turn off the app's own keep-alive service.",
     lr_dx_fix_send: "Use Save for the developer and send the saved report to the developer.",
     lr_dx_also_holder: "Also: {who}, in {hpct}% of the checks.",
-    lr_dx_bgheat: "With the screen off the CPU reached {cpu}° at times - something did heavy work in the background (media downloads, a backup, app updates).",
-    lr_dx_fix_bgheat: "In Settings → Battery see which app used power at that time. Move backups and auto-downloads to Wi-Fi and charging.",
+    lr_dx_bgheat: "With the screen off the CPU reached {cpu}° at times. This is thermal context, not proof of heavy background work or a particular app.",
+    lr_dx_fix_bgheat: "Check Settings → Battery and the capture timeline for the same period. If an app's power use coincides, consider moving its backups and auto-downloads to Wi-Fi and charging.",
     lr_dx_screen_ok: "With the screen on: {pct}%/h - normal for this kind of use (about {est} of screen time from a full charge).",
     lr_dx_screen_heavy: "With the screen on: {pct}%/h - heavy load ran for {min} (games or a hot phone), and it costs this much.",
     lr_dx_fix_screen_heavy: "Expected for games. For long sessions, Balanced or lower graphics settings keep it cooler and cheaper.",
@@ -15515,7 +15593,7 @@ function logReportDxT(key, vars) {
     lr_dx_gauge: "The current sensor on this phone reads about {x}× low - mA figures are a lower bound. Battery-counter %/h figures use whole-percent steps and eligible windows, so treat them as estimates rather than exact rates.",
     lr_dx_screen_net: "With the screen on: {pct}%/h; the modem moved {mib} meanwhile ({ph} an hour). This is measured radio context, not proof that mobile data caused the drain.",
     lr_dx_screen_data: "With the screen on the modem moved {mib} ({ph} an hour) - see Mobile data.",
-    lr_dx_screen_bright_low: "Average brightness {b}% - the panel is not what costs here.",
+    lr_dx_screen_bright_low: "Average brightness {b}%. Brightness alone does not establish the panel's share of this drain.",
     lr_dx_screen_bright_high: "Average brightness {b}% - a bright panel is one of the main costs; auto-brightness helps.",
     lr_dx_screen_top: "{app} was in front for {pct}% of the frames drawn.",
     lr_dx_net_heavy: "{mib} of mobile data over {h}, including {on} with the screen on. Traffic volume alone does not establish its share of battery drain.",
@@ -15951,6 +16029,17 @@ function logReportDiagRef(it) {
   return null;
 }
 function logReportAppendAnalysis(body, d, analysis) {
+  /* Put the map before the prose. Only sections supported by this capture become targets;
+   * Summary, Actions and Details always exist. The strip itself scrolls, never the page sideways. */
+  const navItems = [['lgr-summary', T('lr_nav_summary', 'Summary')], ['lgr-actions', T('lr_nav_actions', 'Actions')]];
+  if (d.sections.drain || d.sections.cover || d.sections.night || d.sections.idlemax || d.sections.radio || d.sections.chg)
+    navItems.push(['lgr-drain', T('lr_nav_drain', 'Battery')]);
+  if (d.sections.jank || d.japps.length) navItems.push(['lgr-smooth', T('lr_nav_smooth', 'Smoothness')]);
+  if (d.sections.thermal || d.sections.throttle || d.sections.heat)
+    navItems.push(['lgr-thermal', T('lr_nav_thermal', 'Thermals')]);
+  if (d.sections.zygisk || d.sections.zygov) navItems.push(['lgr-zygisk', T('lr_nav_zygisk', 'Zygisk')]);
+  navItems.push(['lgr-details', T('lr_nav_details', 'Details')]);
+  body.appendChild(asbPageJump(navItems, T('dev_nav_title', 'Jump to'), 'report-nav'));
   const brief = logReportBrief(d, analysis);
   if (brief) body.appendChild(brief);
   d.diagnosis = logReportDiagnose(d);
@@ -15983,10 +16072,6 @@ function logReportAppendAnalysis(body, d, analysis) {
   summary.appendChild(logReportNote(logReportAnalysisT(analysis.quality.level === 'low' ? 'lr_quality_short' : 'lr_quality_full',
     { min: logReportDur(d.sections.meta.elapsed_min || 0) })));
   body.appendChild(summary);
-  body.appendChild(asbPageJump([
-    ['lgr-summary', T('lr_nav_summary', 'Summary')], ['lgr-actions', T('lr_nav_actions', 'Actions')],
-    ['lgr-details', T('lr_nav_details', 'Details')]
-  ], T('dev_nav_title', 'Jump to'), 'report-nav'));
 
   if (analysis.actions.length) {
     const sec = logReportSec(T('lr_sec_actions', '🎯 Priority actions')); sec.id = 'lgr-actions';
@@ -16147,7 +16232,7 @@ function logReportTweakEvidence(d) {
   const cc = s.capcheck || null;
   if (cc && (+cc.total || 0) > 0) {
     rows.push([T('lr_impact_cap_readback', 'CPU ceiling readback'),
-      logReportT('lr_impact_cap_readback_fmt', '{ok}/{total} matched ASB · {vendor} vendor overrides · {other} other', {
+      logReportT('lr_impact_cap_readback_fmt', '{ok}/{total} matched the expected ceiling · {vendor} external overrides · {other} other', {
         ok: num(cc.ok), total: num(cc.total), vendor: num(cc.vendor), other: num(cc.other) }),
       T('lr_impact_readback', 'Direct readback observations · not an energy effect')]);
   }
