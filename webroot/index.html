@@ -3474,7 +3474,7 @@ html[data-asb-glass="1"] body {
 }
 html[data-asb-glass="1"] :is(.page,.live-page,.config-page) { background:transparent !important; color:var(--text); }
 html[data-asb-glass="1"] :is(.hdr-cap,.theme-toggle,.status-row,.live-chip,.tg-link,.debug-support-btn,
-  .cfg-backup,.cfg-lang-btn,.cfg-lang-pop,.cfg-sel-btn,.cfg-sel-pop,.cfg-tile,.cfg-row,
+  .cfg-backup,.cfg-lang-btn,.cfg-lang-pop,.cfg-sel-btn,.cfg-sel-pop,.cfg-tile,.cfg-row,.cfg-zygisk-card,
   .live-cell,.stock-telemetry,.smart-banner,.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet,
   .log-menu,.cfg-fm-box,.asb-tabbar) {
   background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.018)),rgba(8,13,10,.90) !important;
@@ -4219,7 +4219,7 @@ html[data-asb-glass="1"][data-asb-theme="light"] body {
 }
 html[data-asb-glass="1"][data-asb-theme="light"] :is(.page,.live-page,.config-page) { background:transparent !important; }
 html[data-asb-glass="1"][data-asb-theme="light"] :is(.hdr-cap,.theme-toggle,.status-row,.live-chip,.tg-link,.debug-support-btn,
-  .cfg-backup,.cfg-lang-btn,.cfg-lang-pop,.cfg-sel-btn,.cfg-sel-pop,.cfg-tile,.cfg-row,
+  .cfg-backup,.cfg-lang-btn,.cfg-lang-pop,.cfg-sel-btn,.cfg-sel-pop,.cfg-tile,.cfg-row,.cfg-zygisk-card,
   .live-cell,.stock-telemetry,.smart-banner,.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet,
   .log-menu,.cfg-fm-box,.asb-tabbar) {
   background:linear-gradient(145deg,rgba(255,255,255,.64),rgba(244,252,248,.36)),rgba(255,255,255,.54) !important;
@@ -4290,6 +4290,25 @@ html[data-asb-glass="1"][data-asb-theme="light"] .cfg-row:not(.is-on) {
 html[data-asb-glass="1"][data-asb-theme="light"] .cfg-switch:not(.on) {
   background:rgba(255,255,255,.48); border-color:rgba(16,24,32,.16);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.68);
+}
+/* The Settings Zygisk summary is ONE glass surface. The generic ON/OFF row materials must
+ * not repaint its embedded master switch as a second card, and the evidence area must not
+ * become an opaque stripe over the parent's backdrop blur. State colours, separators and
+ * the navigation button keep their own meaning; only the duplicate child material is removed. */
+html[data-asb-glass="1"] .cfg-zygisk-card > :is(.dev-zygisk-link,.cfg-row) {
+  background:transparent !important;
+  box-shadow:none !important;
+  -webkit-backdrop-filter:none; backdrop-filter:none;
+}
+html[data-asb-glass="1"] .cfg-zygisk-card > .dev-zygisk-link { border-color:var(--border) !important; }
+html[data-asb-glass="1"] .cfg-zygisk-card > .cfg-row:is(.is-on,:not(.is-on)) {
+  border-color:transparent !important;
+}
+/* Light Glass adds one more attribute to its generic ON/OFF selectors. Match that
+ * specificity explicitly so the embedded row stays part of the parent in this palette too. */
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-zygisk-card > :is(.dev-zygisk-link,.cfg-row) {
+  background:transparent !important;
+  box-shadow:none !important;
 }
 html[data-asb-glass="1"][data-asb-theme="light"] .app-name {
   background:linear-gradient(105deg,transparent 0%,rgba(255,255,255,0) 40%,rgba(255,255,255,.78) 50%,rgba(255,255,255,0) 60%,transparent 100%),
@@ -5464,13 +5483,21 @@ const TECH_ICON_PATHS = {
   push_off: '<path d="M4 7h10M4 12h7M4 17h4"/><path d="m14 7 3 3-3 3M17 10h3"/><path d="m14 15 6 6M20 15l-6 6"/>',
   /* fix280: a hexagonal cell with a Z. The old dot with eight rays read as the light-theme sun beside it. */
   zygisk_observer: '<path d="M12 2.8 19.8 7.3v9.4L12 21.2 4.2 16.7V7.3z"/><path d="M9 8.8h6l-6 6.4h6"/>',
+  /* Power owns only the master/Off state. Connection keeps the Z cell, so status and control
+   * no longer look interchangeable. Layered profiles identify Mode without copying Controls. */
+  zygisk_master: '<path d="M12 2.8v8.4"/><path d="M7 5.8a8 8 0 1 0 10 0"/>',
+  zygisk_mode: '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/>',
   zygisk_refresh: '<path d="M20 11a8 8 0 0 0-14.9-4M4 3v5h5M4 13a8 8 0 0 0 14.9 4M20 21v-5h-5"/>',
   /* fix272: a launch arrow leaving a process ring; and a counted list of process starts. */
   zygisk_launch: '<circle cx="8" cy="16" r="4"/><path d="M11 13 19.5 4.5M14 4.5h5.5V10"/><path d="M8 14.2v1.8l1.2 1.2"/>',
   zygisk_ledger: '<rect x="4" y="3.5" width="16" height="17" rx="2.4"/><path d="M8 8.5h5M8 12h5M8 15.5h5"/><path d="M16 8.5h.01M16 12h.01M16 15.5h.01"/>',
   /* Dedicated-page section glyphs: setup, live activity, the shared engine, guard and apps. */
   zygisk_auto: '<path d="M12 3 19 7v10l-7 4-7-4V7z"/><path d="m8.2 12 2.3 2.3 5.2-5.2"/><path d="M18.5 2.5v3M17 4h3"/>',
-  zygisk_wand: '<path d="m4 20 11.8-11.8 2.2 2.2L6.2 22.2 4 20z"/><path d="m13.7 6.2 4.1 4.1M15.5 3.5l.6-1.8.6 1.8 1.8.6-1.8.6-.6 1.8-.6-1.8-1.8-.6 1.8-.6zM20 9l.4-1.2.4 1.2 1.2.4-1.2.4-.4 1.2-.4-1.2-1.2-.4 1.2-.4zM7 4.5v2M6 5.5h2"/>',
+  /* Mode-only glyphs: Auto is a closed adaptation loop around a sparkle; Performance is
+   * a legible speedometer. Cold-start keeps its launch arrow; ART has its own code glyph. */
+  zygisk_mode_auto: '<path d="M18.8 8A7.5 7.5 0 0 0 5 6.5L3.5 8.5M3.5 5v3.5H7M5.2 16A7.5 7.5 0 0 0 19 17.5l1.5-2M20.5 19v-3.5H17"/><path d="m12 8 1 2 2 1-2 1-1 2-1-2-2-1 2-1z"/>',
+  zygisk_mode_performance: '<path d="M3.5 17a8.5 8.5 0 1 1 17 0"/><path d="M12 17 17.2 10"/><circle cx="12" cy="17" r="1.25" fill="currentColor" stroke="none"/><path d="M5.2 12.8l-1.5-.7M12 8.5V6.8M18.8 12.8l1.5-.7"/>',
+  zygisk_art: '<path d="M8 5H6a2 2 0 0 0-2 2v3l-2 2 2 2v3a2 2 0 0 0 2 2h2M16 5h2a2 2 0 0 1 2 2v3l2 2-2 2v3a2 2 0 0 1-2 2h-2M13 7l-2 10"/>',
   zygisk_activity: '<path d="M2.8 12h3.4l2-5 3.8 10 2.2-5h3.3"/><path d="M5 4.5h14M5 19.5h14" opacity=".45"/>',
   zygisk_engine: '<rect x="9" y="9" width="6" height="6" rx="1.2"/><path d="M12 4.5V9M5 17.5 9 14M19 17.5 15 14"/><circle cx="12" cy="3" r="1.5"/><circle cx="4" cy="18.5" r="1.5"/><circle cx="20" cy="18.5" r="1.5"/>',
   zygisk_guard: '<path d="M12 2.8 20 6v5.2c0 4.7-3.3 8-8 10-4.7-2-8-5.3-8-10V6z"/><path d="m8.3 12 2.3 2.3 5.1-5.1"/>',
@@ -8248,7 +8275,7 @@ function cfgRenderZygiskCard(list, items) {
   const open = document.createElement('button'); open.type = 'button';
   open.className = 'live-chip cfg-zygisk-open';
   open.textContent = T('zy_settings_open', 'Open ZYGISK control panel');
-  zygiskButtonIcon(open, 'zygisk_observer');
+  zygiskButtonIcon(open, 'switches');
   open.onclick = openZygiskPage;
   card.appendChild(open);
   list.appendChild(card);
@@ -8418,7 +8445,7 @@ const CFG_ICONS = {
   wakelock_action:'wakelock', gnss_trim:'satellite', night_modem_idle:'radio_moon', net_screen_off_lte:'lte_screenoff', net_lte_light:'lte_light', night_quiet_enable:'quiet_moon', sustained_temp_mode:'thermal_mode', sustained_temp_enter:'thermal_point',
   perf_ceiling_pct:'perf_cap', cool_gaming:'cool_game', bat_suppress_gaming:'game_battery', BG_TRIM_LEVEL:'cleaner', gms_trim:'service_trim', gms_freeze:'service_freeze',
   UX_MANAGE_OEM_TOGGLES:'oem_switches', athena_service:'athena', phantom_procs:'phantom', haptic_strength:'haptic_power', haptic_touch_strength:'haptic_touch', log_level:'log_detail', lsposed_verbose:'log_hook', ltpo_force:'ltpo', ltpo_video:'ltpo_video', mmfeed_off:'mmfeed',
-  heytap_mcs:'push_off', documentsui_fix:'documents_picker', zygisk_enabled:'zygisk_observer', zygisk_hints:'zygisk_refresh', zygisk_launch:'zygisk_launch', zygisk_ledger:'zygisk_ledger',
+  heytap_mcs:'push_off', documentsui_fix:'documents_picker', zygisk_enabled:'zygisk_master', zygisk_hints:'zygisk_refresh', zygisk_launch:'zygisk_launch', zygisk_ledger:'zygisk_ledger',
   heavy_prime_escape:'prime_lift', prime_escape_burst_s:'prime_burst', prime_escape_rest_s:'prime_rest', wakelock_fitness:'fitness_pulse',
   /* Same family as net_handover_*: the same journey off a dead Wi-Fi, made by the
    * system instead of by us. Reusing the handover glyph says that at a glance. */
@@ -13862,20 +13889,21 @@ async function zygiskHeaderRefresh() {
  * haptics, logs) and started the whole Settings read on the tap; in the bench that was 13
  * blocking root calls before anything about Zygisk could change. This page paints at once
  * from the last snapshot the header already holds, and after the slide makes ONE read
- * (asb_zygisk.sh link-status). The four separate switches stay where they belong - Settings
- * -> System -> Zygisk; here one preset drives automatic app selection, all four switches and
- * the guard baseline in one existing transactional flow. Manual deviations become Custom. */
+ * (asb_zygisk.sh link-status). Settings -> System keeps only evidence and the master switch;
+ * this page owns the detailed controls. One preset drives automatic app selection, all four
+ * switches and the guard baseline in one existing transactional flow. Manual deviations become
+ * Custom. Auto is the leftmost/default-looking choice; internal profile IDs stay unchanged. */
 let _zygiskLoadSeq = 0, _zygiskModeBusy = false, _zygiskAutoBusy = '';
 const ZYGISK_MODES = [
+  { id: 'auto', key: 'zy_mode_auto', label: 'Auto', profile: 'auto', icon: 'zygisk_mode_auto', guard: 'wakers',
+    v: { zygisk_enabled: '1', zygisk_hints: '1', zygisk_launch: '1', zygisk_ledger: '1' },
+    desc: 'Cold-start assistance and lifecycle hints for responsiveness, plus the evidence-gated background guard. ART stays separate. This balances mechanisms; it does not promise maximum speed and battery life at once.' },
   { id: 'battery', key: 'zy_mode_battery', label: 'Battery', profile: 'battery', icon: 'game_battery', guard: 'wakers',
     v: { zygisk_enabled: '1', zygisk_hints: '0', zygisk_launch: '0', zygisk_ledger: '1' },
     desc: 'Observer and process journal, plus the evidence-gated background guard. Cold-start lifts and lifecycle requests are off. Approved restrictions can delay background work and notifications.' },
-  { id: 'performance', key: 'zy_mode_performance', label: 'Performance', profile: 'launch', icon: 'zygisk_launch', guard: 'off',
+  { id: 'performance', key: 'zy_mode_performance', label: 'Performance', profile: 'launch', icon: 'zygisk_mode_performance', guard: 'off',
     v: { zygisk_enabled: '1', zygisk_hints: '0', zygisk_launch: '1', zygisk_ledger: '1' },
-    desc: 'Observer, process journal and cold-start assistance. Background guard is off. Existing profile and thermal gates still apply; a faster device is not guaranteed.' },
-  { id: 'auto', key: 'zy_mode_auto', label: 'Auto', profile: 'auto', icon: 'zygisk_wand', guard: 'wakers',
-    v: { zygisk_enabled: '1', zygisk_hints: '1', zygisk_launch: '1', zygisk_ledger: '1' },
-    desc: 'Cold-start assistance and lifecycle hints for responsiveness, plus the evidence-gated background guard. ART stays separate. This balances mechanisms; it does not promise maximum speed and battery life at once.' }
+    desc: 'Observer, process journal and cold-start assistance. Background guard is off. Existing profile and thermal gates still apply; a faster device is not guaranteed.' }
 ];
 function zygiskModeOf(d) {
   const val = function (k) { return deviceVal(d, 'zygisk_observer', k); };
@@ -14047,7 +14075,7 @@ function zygiskOpenSettings() {
   _cfgSearch = ''; _cfgGroup = 'ui'; cfgRender(); requestAnimationFrame(asbFitPages);
 }
 function zygiskOffCard() {
-  const card = logReportSec(T('zy_off_title', 'ASB Zygisk is off'), 'switches');
+  const card = logReportSec(T('zy_off_title', 'ASB Zygisk is off'), 'zygisk_master');
   card.classList.add('zy-off-card');
   card.appendChild(logReportNote(T('zy_off_desc', 'ASB will not attach to Zygisk in newly started app processes. Apps that are already running keep their previous state until they are restarted.')));
   const kept = logReportNote(T('zy_off_kept', 'Your mode, automatic app selection, feature switches, guard and ART settings are preserved. Enabling again restores that setup; it does not silently choose a new preset.'));
@@ -14056,7 +14084,7 @@ function zygiskOffCard() {
   const enable = document.createElement('button'); enable.type = 'button';
   enable.className = 'live-chip zy-off-enable';
   enable.textContent = _zygiskControlBusy === 'zygisk_enabled' ? T('zy_auto_working', 'Setting up…') : T('zy_off_enable', 'Enable ASB Zygisk');
-  zygiskButtonIcon(enable, 'zygisk_observer');
+  zygiskButtonIcon(enable, 'zygisk_master');
   enable.disabled = !!_zygiskControlBusy;
   enable.onclick = function () { zygiskControlSet('zygisk_enabled', '1', enable); };
   actions.appendChild(enable);
@@ -14070,7 +14098,7 @@ function zygiskOffCard() {
   return card;
 }
 function zygiskModeCard(d) {
-  const card = logReportSec(T('zy_sec_mode', 'Mode'), 'switches');
+  const card = logReportSec(T('zy_sec_mode', 'Mode'), 'zygisk_mode');
   card.classList.add('zy-mode-card');
   const mode = zygiskModeOf(d);
   const seg = document.createElement('div'); seg.className = 'cfg-seg zy-mode-seg zy-unified-modes';
@@ -14508,7 +14536,7 @@ function zygiskAotValue(a) {
 }
 function zygiskAotCard() {
   const g = _zyAot || zygiskAotParse('');
-  const card = logReportSec(T('zy_aot_title', 'Faster app starts (ART)'), 'zygisk_launch');
+  const card = logReportSec(T('zy_aot_title', 'Faster app starts (ART)'), 'zygisk_art');
   card.appendChild(logReportNote(T('zy_aot_desc', 'ASB counts how often you open each app (Zygisk start ledger) and how long its cold start takes (Android\'s own launch log). Only frequently opened apps without ahead-of-time code are considered, one batch per charging session, with the screen off and a known battery temperature below 40 °C. This can improve startup, but does not guarantee battery savings; compilation itself costs CPU and storage writes.')));
   const seg = document.createElement('div');
   seg.className = 'cfg-seg zy-mode-seg zy-aot-seg';
