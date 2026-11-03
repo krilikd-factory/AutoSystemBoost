@@ -5622,7 +5622,7 @@ EOF
     logReportSysuiSteady logReportJwhyShare logReportJwhyCause logReportJwhyTop logReportMiB logReportNetFix logReportLteIdle logReportFullCharge logReportScreenOnDrainState logReportAnalyze logReportHistoryComparable logReportMachineDigest logReportAnalysisT \
     logReportTipText logReportRow logReportSec logReportNote logReportHero logReportTable logReportTweakEvidence logReportZygiskGovernor logReportZygisk \
     deviceVal deviceFill deviceZygiskLinkState deviceZygiskLinkVerdict deviceZygiskLink \
-    logReportBrief logReportDxT logReportSelfPush logReportDiagnose logReportDiagSection logReportQualityPanel logReportRef logReportDomainRef logReportTipRef logReportDiagRef logReportAppendAnalysis logReportRender asbPageJump asbPageReference shQuote \
+    logReportBrief logReportDxT logReportSelfPush logReportDiagnose logReportDiagSection logReportQualityPanel logReportRef logReportDomainRef logReportTipRef logReportDiagRef logReportAppendAnalysis logReportRender asbPageJumpClear asbPageJumpActive asbPageJump asbPageReference shQuote \
     asbPageClasses asbPageHas asbPageKids asbPageTxt asbPageWarn asbPageText asbPageStamp; do
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
@@ -6292,12 +6292,17 @@ chk(cdx.some(x => x.cause === 'lr_dx_screen_unknown' && x.owner === 'asb' && x.s
 chk(!cdx.some(x => x.cause === 'lr_dx_smooth_ok'), 'a 7.5% day is never called smooth because the ceilings explain it');
 chk(cdx.some(x => x.cause === 'lr_dx_idle_good' && x.state === 'good'), 'a good idle says so');
 chk(cdx[0].state === 'problem' && cdx[cdx.length - 1].state === 'good', 'problems first, healthy last');
+capDay.sections.nightd = { cpu_t:'45', skin_t:'38' };
+capDay.sections.tspike = { holds:'3', last_c:'61', peer_hi:'2', peer_n:'5' };
+capDay.sections.bhold = { kept:'2', released:'3', testing:'1' };
+capDay.bhv = [{ app:'com.example.feed', state:'kept', without:'10.0', with:'3.0' }];
 logReportRender(capDay);
 function findBtn(e) { return (String(e.className).split(/\s+/).indexOf('lgr-dx-btn') >= 0 ? [e] : []).concat(e.children.flatMap(findBtn)); }
 const btns = findBtn(reportBody);
 chk(btns.length === 2 && btns[0].textContent === I18N.ru.lr_dx_send_btn && typeof btns[0].onclick === 'function', 'each ASB-side card carries a Save-for-the-developer button');
 chk(allText(reportBody).indexOf(I18N.ru.lr_dx_send) >= 0 && allText(reportBody).indexOf(I18N.ru.lr_dx_owner_asb) >= 0, 'the card says the developer is needed and why');
 const capTxt = asbPageText(reportBody);
+chk(capTxt.includes(I18N.ru.lr_nd_spike) && capTxt.includes('61°C') && capTxt.includes(I18N.ru.lr_bhold) && capTxt.includes('com.example.feed') && capTxt.includes('10.0% → 3.0%'), 'thermal/bhold visibility: '+JSON.stringify({spike:capTxt.includes(I18N.ru.lr_nd_spike),temp:capTxt.includes('61°C'),bhold:capTxt.includes(I18N.ru.lr_bhold),app:capTxt.includes('com.example.feed'),rates:capTxt.includes('10.0% → 3.0%')}));
 chk(capTxt.indexOf(I18N.ru.lr_dx_owner_asb) >= 0 && capTxt.indexOf(I18N.ru.lr_dx_send_btn) < 0, 'the saved text keeps the cause and drops the button label');
 capDay.sections.meta.profile = 'battery';
 const bdx = logReportDiagnose(capDay).find(x => x.cause === 'lr_dx_smooth_cap_bat');
@@ -6906,7 +6911,11 @@ snap 0 19 685 35 "$CAP/before.txt"
 snap 1 20 690 35 "$CAP/snapshot_$((S0 + 3600)).txt"
 snap 0 21 700 36 "$CAP/snapshot_$((S0 + 9000)).txt"
 printf 'battery_hold=1\nbattery_hold_kept=2\nbattery_hold_released=3\nbattery_hold_testing=1\n' >> "$CAP/snapshot_$((S0 + 3600)).txt"
-printf 'battery_hold=0\nbattery_hold_kept=2\nbattery_hold_released=4\nbattery_hold_testing=0\n' >> "$CAP/snapshot_$((S0 + 9000)).txt"
+printf 'battery_hold=0\nbattery_hold_kept=2\nbattery_hold_released=4\nbattery_hold_testing=0\nthermal_spike_holds=3\nthermal_spike_last_c=61\nthermal_spike_last_peer_hi=2\nthermal_spike_last_peer_n=5\n' >> "$CAP/snapshot_$((S0 + 9000)).txt"
+cat > "$CAP/governor.log.session" <<'EOF'
+11-03 10:00:00 battery_hold: com.example.feed - kept (12 windows; janky 10.0% without, 3.0% with): helps scrolling
+11-03 10:05:00 battery_hold: com.example.chat - released after 12 windows (janky 5.0% without, 5.0% with): does not help
+EOF
 cat > "$CAP/_full_day_report.txt" <<'EOF'
  capture: 0h target (until stopped), 180 min elapsed
 refresh_hz  samples  share   avg_brightness%  avg_mA
@@ -6936,6 +6945,8 @@ _since="$(date -d "@$S0" '+%H:%M' 2>/dev/null || date -r "$S0" '+%H:%M')"
 [ "$(line rat)" = "$(printf 'rat\tnsa=2\tsa=0\tlte=1\tof=3')" ] || fail "radio network per check: $(line rat)"
 [ "$(line lte)" = "$(printf 'lte\ten=1\tlight=1\tapplies=2\tlte_min=15\twatch=1\tsnaps=3\tunsup=0\tquiet=1')" ] || fail "LTE switch activity between the snapshots: $(line lte)"
 [ "$(line bhold)" = "$(printf 'bhold\tkept=2\treleased=4\ttesting=0')" ] || fail "fix271: Battery hold verdicts from the last snapshot: $(line bhold)"
+[ "$(line tspike)" = "$(printf 'tspike\tholds=3\tlast_c=61\tpeer_hi=2\tpeer_n=5')" ] || fail "thermal spike evidence: $(line tspike)"
+[ "$(line bhv)" = "$(printf 'bhv\tapp=com.example.feed\tstate=kept\twithout=10.0\twith=3.0\nbhv\tapp=com.example.chat\tstate=released\twithout=5.0\twith=5.0')" ] || fail "recent hold verdicts: $(line bhv)"
 [ "$(line netma)" = "$(printf 'netma\tlo=250\tlo_n=30\thi=340\thi_n=29')" ] || fail "screen-on current by traffic: $(line netma)"
 [ "$(line hz | wc -l)" = 2 ] && line hz | grep -q 'mode=60' || fail "the refresh table stopped at the '?' row: $(line hz)"
 [ "$(line bright)" = "$(printf 'bright\tavg=14')" ] || fail "average brightness: $(line bright)"
@@ -7403,7 +7414,7 @@ EOF
   sed -n '/^const DEVICE_GROUP_GUIDES = {/,/^};/p' "$H"
   sed -n '/^const DEVICE_SECTION_GUIDES = {/,/^};/p' "$H"
   sed -n '/^const DEVICE_KERNEL_FEATURE_ORDER = \[/,/^\];/p' "$H"
-  for fn in parseDeviceInfo deviceVal deviceFallbackLabel deviceLabel deviceHero deviceIsLimitedValue deviceValueClass deviceNum deviceKv deviceFreqKhz deviceFreqHz deviceSizeKb deviceDuration deviceCpuCount deviceCpuList deviceYesNo deviceFill deviceBatteryMa deviceBatteryMah deviceBatteryWear deviceRootManagerDisplay deviceDisplayValue deviceInfoEvidence deviceSnapshotCard deviceInfoSnapshot deviceInfoNav deviceInfoOverview deviceInfoInsights devicePressureScale deviceZygiskLinkState deviceZygiskLinkVerdict deviceZygiskLink deviceZygiskEditor deviceInfoRender asbPageJump asbPageReference shQuote \
+  for fn in parseDeviceInfo deviceVal deviceFallbackLabel deviceLabel deviceHero deviceIsLimitedValue deviceValueClass deviceNum deviceKv deviceFreqKhz deviceFreqHz deviceSizeKb deviceDuration deviceCpuCount deviceCpuList deviceYesNo deviceFill deviceBatteryMa deviceBatteryMah deviceBatteryWear deviceRootManagerDisplay deviceDisplayValue deviceInfoEvidence deviceSnapshotCard deviceInfoSnapshot deviceInfoNav deviceInfoOverview deviceInfoInsights devicePressureScale deviceZygiskLinkState deviceZygiskLinkVerdict deviceZygiskLink deviceZygiskEditor deviceInfoRender asbPageJumpClear asbPageJumpActive asbPageJump asbPageReference shQuote \
     asbPageClasses asbPageHas asbPageKids asbPageTxt asbPageWarn asbPageText asbPageStamp; do
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
@@ -8785,7 +8796,7 @@ t_fix311_drill_in_presentation_contract() (
 # fix311: the report and ZYGISK drill-ins expose their information hierarchy without changing
 # evidence or controls. Exercise the REAL page renderer for loading/off/populated states and
 # every jump target; keep long evidence collapsed while approvals and active restrictions stay
-# visible. Sticky strips own their horizontal scrolling; the fixed pages never do.
+# visible. Bottom docks own their horizontal scrolling, expose the active section and keep 44 px touch targets.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 H="$ROOT/webroot/index.html"
@@ -8796,9 +8807,14 @@ from pathlib import Path
 r=Path(sys.argv[1]); h=(r/'webroot/index.html').read_text()
 def body(sig):
     i=h.index(sig); return h[i:h.index('\n}\n',i)]
-for token in ('.report-nav, .zy-page-nav { position: sticky;',
-              'top: var(--status-scrim-top);', 'overflow-x: auto;',
-              'scrollbar-width: none;', 'scroll-margin-top: calc(var(--status-scrim-top) + 124px);'):
+for token in ('.report-nav, .zy-page-nav { display: none; position: fixed; left: 50%;',
+              'bottom: max(10px, env(safe-area-inset-bottom, 0px));', 'overflow-x: auto;',
+              'scrollbar-width: none;', 'min-width: calc(44px / var(--asb-ui-scale)); min-height: calc(44px / var(--asb-ui-scale));',
+              "b.setAttribute('aria-current', 'location')", "page.addEventListener('scroll', onScroll, { passive: true })",
+              'padding-bottom: calc(78px / var(--asb-ui-scale) + env(safe-area-inset-bottom, 0px));',
+              'if (prevScroll > 0) el.scrollTop = prevScroll;',
+              "x.open('GET', 'i18n/' + code + '.json', true)", 'I18N_READY.then(boot);',
+              "document.body.classList.contains('zygisk-active')"):
     assert token in h, token
 report=body('function logReportAppendAnalysis(body, d, analysis) {')
 assert report.index('body.appendChild(asbPageJump(') < report.index('const brief = logReportBrief')
@@ -8832,7 +8848,10 @@ function el(tag, cls) {
     scrollIntoView() { this.scrollHits++; }
   };
   const classes = new Set(String(n.className).split(/\s+/).filter(Boolean));
-  n.classList = { add(c) { classes.add(c); n.className=Array.from(classes).join(' '); } };
+  n.attrs={}; n.setAttribute=(k,v)=>{n.attrs[k]=String(v);}; n.removeAttribute=k=>{delete n.attrs[k];};
+  n.classList = { add(c) { classes.add(c); n.className=Array.from(classes).join(' '); },
+    remove(c) { classes.delete(c); n.className=Array.from(classes).join(' '); },
+    contains(c) { return classes.has(c); } };
   return n;
 }
 const body=el('div'), page=el('div'); page.scrollTop=0;
@@ -8849,6 +8868,8 @@ for (const name of ['zygiskModeCard','zygiskAutoCard','zygiskControlsCard','zygi
   global[name]=function () { return el('div','lgr-sec '+name); };
 for (const name of ['deviceZygiskOverview','zygiskPageRows','deviceZygiskEditor','zygiskEvidenceCard'])
   global[name]=function () { return el(name==='zygiskEvidenceCard'?'details':'div',name); }
+eval(grab('asbPageJumpClear'));
+eval(grab('asbPageJumpActive'));
 eval(grab('asbPageJump'));
 eval(grab('zygiskPageRender'));
 const chk=(c,m)=>{ if(!c) throw new Error(m); };
@@ -8867,7 +8888,10 @@ chk(JSON.stringify(ids)===JSON.stringify(expected),'section order/IDs regressed:
 chk(page.scrollTop===417,'an unchanged refresh lost the reading position');
 const nav=navs()[0], buttons=nav.children.slice(1);
 chk(buttons.length===7,'the populated section map lost a control');
+chk(nav.attrs.role==='navigation' && buttons.every(b=>b.attrs['aria-controls']),'navigation semantics/controlled section missing');
+chk(buttons[0].attrs['aria-current']==='location' && buttons[0].classList.contains('is-active'),'initial active section is not exposed');
 buttons.forEach(b=>{ chk(typeof b.onclick==='function','jump has no handler: '+b.textContent); b.onclick(); });
+chk(buttons.filter(b=>b.attrs['aria-current']==='location'&&b.classList.contains('is-active')).length===1,'active section is ambiguous after jumps');
 for (const id of ['zy-mode','zy-auto','zy-controls','zy-activity','zy-guard','zy-aot','zy-apps'])
   chk(_el(id) && _el(id).scrollHits===1,'jump did not reach its real section: '+id);
 console.log('ok');

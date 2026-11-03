@@ -8546,6 +8546,7 @@ static struct { uint64_t app_hash; int app_hint; char app_pkg_cached[64]; } g_sm
 static int g_pkg_detect_ok = 1, g_bhold_allow = 1, probe_calls = 0;
 static char last_log[300];
 static long cur_frames = 0, cur_janky = 0;
+static long g_touch_last_ts = 0;
 static int file_has_pkg = 1;
 static int asb_smart_is_system_ui(const char *p) { return !strcmp(p, "com.android.systemui"); }
 static int asb_gfx_read_pkg(const char *pkg, long *fr, long *jk) {
@@ -8566,7 +8567,11 @@ static void touch_file(void) {
 }
 /* One probe answer 180 s later carrying df/dj more frames since the last one. */
 static void step(long df, long dj) {
-    fake_now += 180; cur_frames += df; cur_janky += dj; touch_file(); asb_bhold_tick(&F, &M);
+    fake_now += 180; g_touch_last_ts = fake_now;
+    cur_frames += df; cur_janky += dj; touch_file(); asb_bhold_tick(&F, &M);
+}
+static void step_idle(void) {
+    fake_now += 180; touch_file(); asb_bhold_tick(&F, &M);
 }
 static void app(uint64_t h, const char *pkg) {
     g_smart_rt.app_hash = h; snprintf(g_smart_rt.app_pkg_cached, 64, "%s", pkg);
@@ -8582,10 +8587,13 @@ int main(void) {
     CHK(probe_calls == 0 && g_bhold_allow == 1 && g_bhold_now == -1, "measured outside Battery");
     F.profile_idx = PROFILE_BATTERY;
     /* App 1: the hold cuts the jank (3 % with, 10 % without) - kept. */
-    app(1, "com.example.feed");
+    app(1, "com.example.feed"); g_touch_last_ts = fake_now;
     asb_bhold_tick(&F, &M);
     CHK(probe_calls == 1 && g_bhold_now == 2 && g_bhold_allow == 1, "a new app is not tested hold-first");
+    step_idle();
+    CHK(probe_calls == 1, "an untouched screen launched another probe");
     step(0, 0);
+    CHK(probe_calls == 2, "new interaction did not permit the next probe");
     for (int w = 0; w < 6 && rec(1)->state == 0; w++) {
         int arm = g_bhold_allow;
         step(1500, arm ? 45 : 150);
@@ -8643,6 +8651,10 @@ int main(void) {
     CHK(!rec(0xaa) && rec(0xbb) && rec(0xbb)->state == 2, "a corrupt verdict line was trusted");
     int k, r, t; asb_bhold_counts(&k, &r, &t);
     CHK(k == 0 && r == 1 && t == 0, "counts wrong");
+    /* No readable touch stream: retain the old bounded probe cadence. */
+    app(7, "com.example.nosensors"); g_touch_last_ts = 0;
+    asb_bhold_tick(&F, &M); pc = probe_calls; step_idle();
+    CHK(probe_calls == pc + 1, "touch-not-exposed fallback disabled learning");
     return bad;
 }
 X
