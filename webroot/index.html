@@ -2000,39 +2000,45 @@ html[data-asb-theme="light"] .lgr-chip { background: #f7f9fa; }
 /* Long drill-ins keep their section switcher in the thumb zone.  The page itself
  * is the scroll container, so this fixed dock stays reachable after any amount of
  * scrolling; its opaque material and 44 px targets remain usable over content. */
-#reportPage .header, #zygiskPage .header { margin-bottom: 16px; }
-#reportPage .logo-c, #zygiskPage .logo-c { width: 46px; height: 46px; margin-bottom: 9px; }
-#reportPage .logo-inner, #zygiskPage .logo-inner { border-radius: 14px; font-size: 22px; }
-#reportPage .logo-glow, #zygiskPage .logo-glow { border-radius: 17px; filter: blur(6px); }
-#reportPage .logo-ring, #zygiskPage .logo-ring { border-radius: 15px; }
-#reportPage .app-name, #zygiskPage .app-name { font-size: 21px; margin-bottom: 4px; }
-#reportPage .device-line, #zygiskPage .device-line { margin-bottom: 10px; }
-#reportPage .badges, #zygiskPage .badges { margin-bottom: 10px; }
+/* Drill-in headers inherit the shared .header geometry verbatim. Page-specific zoom or
+ * logo/type sizing made the same brand block visibly shrink and distort beside Home. */
 #reportPage .sec, #zygiskPage .sec { margin-bottom: 12px; }
 #reportPage .lgr-body, #zygiskPage .lgr-body { gap: 10px; }
 body.report-active > .report-nav, body.zygisk-active > .zy-page-nav { display: flex; }
 #reportPage .lgr-body, #zygiskPage .lgr-body {
-  padding-bottom: calc(78px / var(--asb-ui-scale) + env(safe-area-inset-bottom, 0px)); }
+  padding-bottom: calc(102px / var(--asb-ui-scale) + env(safe-area-inset-bottom, 0px)); }
 .report-nav, .zy-page-nav { display: none; position: fixed; left: 50%;
   transform: translateX(-50%); bottom: max(10px, env(safe-area-inset-bottom, 0px)); z-index: 160;
-  box-sizing: border-box; width: min(calc(100% - 20px), 400px); max-width: calc(100% - 20px); min-height: calc(58px / var(--asb-ui-scale));
-  flex-wrap: nowrap; align-items: center; gap: 5px; margin: 0; padding: 6px;
-  overflow-x: auto; overflow-y: hidden; overscroll-behavior-inline: contain;
-  -webkit-overflow-scrolling: touch; scrollbar-width: none;
-  border: 1px solid color-mix(in srgb,var(--border) 72%,var(--accent));
-  border-radius: 18px; background: color-mix(in srgb,var(--bg) 96%,var(--accent));
-  box-shadow: 0 10px 28px color-mix(in srgb,#000 28%,transparent), inset 0 1px 0 color-mix(in srgb,var(--text) 7%,transparent); }
-.report-nav::-webkit-scrollbar, .zy-page-nav::-webkit-scrollbar { display: none; }
+  box-sizing: border-box; width: min(calc(100% - 20px), 400px); max-width: calc(100% - 20px);
+  flex-direction: column; align-items: stretch; gap: calc(4px / var(--asb-ui-scale));
+  margin: 0; padding: calc(7px / var(--asb-ui-scale)) calc(8px / var(--asb-ui-scale));
+  overflow: hidden; border: 1px solid var(--cap-edge); border-radius: calc(27px / var(--asb-ui-scale));
+  background: var(--cap-wash), var(--tabbar-bg, #000000);
+  box-shadow: var(--cap-shadow); }
+.report-nav .lgr-jump-head, .zy-page-nav .lgr-jump-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  min-height: calc(16px / var(--asb-ui-scale)); padding-inline: calc(4px / var(--asb-ui-scale));
+  font-size: calc(10.5px / var(--asb-ui-scale)); line-height: calc(14px / var(--asb-ui-scale)); }
 .report-nav .lgr-jump-label, .zy-page-nav .lgr-jump-label {
-  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+  flex: 0 0 auto; color: var(--text-tertiary); font-weight: 700;
+  letter-spacing: .065em; text-transform: uppercase; }
+.report-nav .lgr-jump-current, .zy-page-nav .lgr-jump-current {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text); font-weight: 650; text-align: end; }
+.report-nav .lgr-jump-track, .zy-page-nav .lgr-jump-track {
+  display: flex; flex-wrap: nowrap; align-items: center; gap: calc(5px / var(--asb-ui-scale));
+  width: 100%; overflow-x: auto; overflow-y: hidden; overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch; scrollbar-width: none; scroll-padding-inline: 4px; }
+.report-nav .lgr-jump-track::-webkit-scrollbar, .zy-page-nav .lgr-jump-track::-webkit-scrollbar { display: none; }
 .report-nav .lgr-jump-btn, .zy-page-nav .lgr-jump-btn {
-  flex: 0 0 auto; min-width: calc(44px / var(--asb-ui-scale)); min-height: calc(44px / var(--asb-ui-scale)); padding: 8px 13px;
-  border: 1px solid transparent; border-radius: 12px; white-space: nowrap;
+  flex: 0 0 auto; min-width: calc(44px / var(--asb-ui-scale)); min-height: calc(44px / var(--asb-ui-scale));
+  padding: calc(7px / var(--asb-ui-scale)) calc(12px / var(--asb-ui-scale));
+  border: 1px solid transparent; border-radius: calc(11px / var(--asb-ui-scale)); white-space: nowrap;
+  font-size: calc(12px / var(--asb-ui-scale)); line-height: calc(16px / var(--asb-ui-scale));
   color: var(--text-secondary); background: transparent; }
 .report-nav .lgr-jump-btn.is-active, .zy-page-nav .lgr-jump-btn.is-active {
-  color: var(--bg); border-color: var(--accent); background: var(--accent);
-  box-shadow: 0 3px 10px color-mix(in srgb,var(--accent) 24%,transparent); }
+  color: var(--accent); border-color: transparent; font-weight: 650;
+  background: var(--pill-wash); box-shadow: var(--pill-edge); }
 #reportPage .lgr-sec[id], #zygiskPage .lgr-sec[id], #reportPage .lgr-details-anchor {
   scroll-margin-top: calc(var(--status-scrim-top) + 20px); }
 #reportPage .lgr-sec > .lgr-sec-t, #zygiskPage .lgr-sec > .lgr-sec-t {
@@ -3553,7 +3559,7 @@ html[data-asb-glass="1"] :is(.page,.live-page,.config-page) { background:transpa
 html[data-asb-glass="1"] :is(.hdr-cap,.theme-toggle,.status-row,.live-chip,.tg-link,.debug-support-btn,
   .cfg-backup,.cfg-lang-btn,.cfg-lang-pop,.cfg-sel-btn,.cfg-sel-pop,.cfg-tile,.cfg-row,.cfg-zygisk-card,
   .live-cell,.stock-telemetry,.smart-banner,.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet,
-  .log-menu,.cfg-fm-box,.asb-tabbar) {
+  .log-menu,.cfg-fm-box,.asb-tabbar,.report-nav,.zy-page-nav) {
   background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.018)),rgba(8,13,10,.90) !important;
   color:var(--text) !important; border-color:var(--border) !important;
   box-shadow:0 14px 34px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.14),inset 0 0 0 1px rgba(255,255,255,.025);
@@ -3616,7 +3622,7 @@ html[data-asb-theme="light"] :is(.hdr-cap,.theme-toggle,.status-row,.live-chip,.
   .live-cell,.stock-telemetry,.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet,
   /* The tab bar now carries the same teal wash as .status-row, so it needs the same
    * light-theme override - otherwise the wash sits over white and turns the bar green. */
-  .asb-tabbar) {
+  .report-nav,.zy-page-nav,.asb-tabbar) {
   background:#ffffff !important; color:var(--text) !important; border-color:var(--border) !important;
   box-shadow:0 10px 28px rgba(20,50,42,.10);
 }
@@ -4298,7 +4304,7 @@ html[data-asb-glass="1"][data-asb-theme="light"] :is(.page,.live-page,.config-pa
 html[data-asb-glass="1"][data-asb-theme="light"] :is(.hdr-cap,.theme-toggle,.status-row,.live-chip,.tg-link,.debug-support-btn,
   .cfg-backup,.cfg-lang-btn,.cfg-lang-pop,.cfg-sel-btn,.cfg-sel-pop,.cfg-tile,.cfg-row,.cfg-zygisk-card,
   .live-cell,.stock-telemetry,.smart-banner,.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet,
-  .log-menu,.cfg-fm-box,.asb-tabbar) {
+  .log-menu,.cfg-fm-box,.asb-tabbar,.report-nav,.zy-page-nav) {
   background:linear-gradient(145deg,rgba(255,255,255,.64),rgba(244,252,248,.36)),rgba(255,255,255,.54) !important;
   color:var(--text) !important; border-color:var(--border) !important;
   box-shadow:0 14px 34px rgba(20,50,42,.14),inset 0 1px 0 rgba(255,255,255,.76),inset 0 0 0 1px rgba(255,255,255,.20) !important;
@@ -4319,6 +4325,9 @@ html[data-asb-glass="1"][data-asb-theme="light"] :is(input,select,textarea,.seg,
 }
 html[data-asb-glass="1"][data-asb-theme="light"] :is(.lgr-chip,.pmeta-chip,.cfg-icon) {
   background:rgba(255,255,255,.46) !important; border-color:var(--border) !important;
+}
+html[data-asb-glass="1"][data-asb-theme="light"] :is(.report-nav,.zy-page-nav) .lgr-jump-btn.is-active {
+  background:var(--pill-wash) !important; border-color:transparent !important; box-shadow:var(--pill-edge);
 }
 html[data-asb-glass="1"][data-asb-theme="light"] :is(.pbtn.on,.cfg-tile.active,.cfg-profile-row.selected,.cfg-row.is-on) {
   border-color:var(--accent) !important; box-shadow:0 0 0 1px var(--accent-glow),inset 0 1px 0 rgba(255,255,255,.72) !important;
@@ -13174,10 +13183,11 @@ function logReportNote(txt, warn) {
 }
 /* In-page navigation is real DOM, not links to routes that a static WebView cannot resolve. */
 function asbPageJumpActive(nav, id, center) {
+  const buttons = nav._asbJumpButtons || Array.from(nav.children);
   let changed = nav._asbJumpId !== id;
-  for (const b of nav.children) {
-    if (!b._asbJumpTarget) continue;
+  for (const b of buttons) {
     const on = b._asbJumpTarget === id;
+    if (on && nav._asbJumpCurrent) nav._asbJumpCurrent.textContent = b.textContent;
     if (b.classList) {
       if (on && b.classList.add) b.classList.add('is-active');
       if (!on && b.classList.remove) b.classList.remove('is-active');
@@ -13188,11 +13198,12 @@ function asbPageJumpActive(nav, id, center) {
     }
   }
   nav._asbJumpId = id;
-  if (center && changed && nav.getBoundingClientRect && nav.scrollWidth > nav.clientWidth) {
-    for (const b of nav.children) {
+  const track = nav._asbJumpTrack || nav;
+  if (center && changed && track.getBoundingClientRect && track.scrollWidth > track.clientWidth) {
+    for (const b of buttons) {
       if (b._asbJumpTarget !== id || !b.getBoundingClientRect) continue;
-      const nr = nav.getBoundingClientRect(), br = b.getBoundingClientRect();
-      nav.scrollLeft += br.left + br.width / 2 - nr.left - nr.width / 2;
+      const tr = track.getBoundingClientRect(), br = b.getBoundingClientRect();
+      track.scrollLeft += br.left + br.width / 2 - tr.left - tr.width / 2;
       break;
     }
   }
@@ -13223,8 +13234,13 @@ function asbPageJumpWatch(nav, items) {
     if (!nav.isConnected) return;
     const targets = items.map(it => _el(it[0])).filter(Boolean);
     if (!targets.length || !page.getBoundingClientRect) return;
+    /* The thumb-friendly nav order is not the document order (Details sits near the top,
+     * while its button is last). Scroll-spy must follow the rendered sections, not buttons. */
+    targets.sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top);
     let active = targets[0];
-    const line = page.getBoundingClientRect().top + Math.min(160, page.clientHeight * 0.3);
+    const margin = parseFloat(getComputedStyle(targets[0]).scrollMarginTop) || 0;
+    const z = window._asbUiScale || 1;
+    const line = page.getBoundingClientRect().top + Math.max(Math.min(160, page.clientHeight * 0.3), margin * z + 2);
     for (const target of targets) {
       if (target.getBoundingClientRect().top <= line) active = target;
       else break;
@@ -13244,13 +13260,25 @@ function asbPageJumpWatch(nav, items) {
 }
 function asbPageJump(items, label, extraClass) {
   const nav = document.createElement('div');
+  const dock = extraClass === 'report-nav' || extraClass === 'zy-page-nav';
   nav.className = 'lgr-jump' + (extraClass ? ' ' + extraClass : '');
+  nav._asbJumpButtons = [];
   if (nav.setAttribute) {
     nav.setAttribute('role', 'navigation');
     nav.setAttribute('aria-label', label);
   }
-  const l = document.createElement('span'); l.className = 'lgr-jump-label'; l.textContent = label;
-  nav.appendChild(l);
+  let parent = nav;
+  if (dock) {
+    const head = document.createElement('div'); head.className = 'lgr-jump-head';
+    const l = document.createElement('span'); l.className = 'lgr-jump-label'; l.textContent = label;
+    const current = document.createElement('span'); current.className = 'lgr-jump-current';
+    head.appendChild(l); head.appendChild(current); nav.appendChild(head);
+    const track = document.createElement('div'); track.className = 'lgr-jump-track';
+    nav.appendChild(track); nav._asbJumpTrack = track; nav._asbJumpCurrent = current; parent = track;
+  } else {
+    const l = document.createElement('span'); l.className = 'lgr-jump-label'; l.textContent = label;
+    nav.appendChild(l);
+  }
   items.forEach(function (it) {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'lgr-chip lgr-jump-btn';
     b.textContent = it[1]; b._asbJumpTarget = it[0];
@@ -13267,10 +13295,10 @@ function asbPageJump(items, label, extraClass) {
         page.scrollTo({ top: Math.max(0, top), behavior: 'auto' });
       } else if (target.scrollIntoView) target.scrollIntoView({ block: 'start', behavior: 'auto' });
     };
-    nav.appendChild(b);
+    parent.appendChild(b); nav._asbJumpButtons.push(b);
   });
   if (items.length) asbPageJumpActive(nav, items[0][0], false);
-  if ((extraClass === 'report-nav' || extraClass === 'zy-page-nav') && typeof requestAnimationFrame === 'function') {
+  if (dock && typeof requestAnimationFrame === 'function') {
     requestAnimationFrame(function () { asbPageJumpWatch(nav, items); });
   }
   return nav;
