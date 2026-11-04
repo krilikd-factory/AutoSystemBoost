@@ -183,6 +183,7 @@ asb_end_banner() {
   _bat_any=0
   case "$(_sg auto_battery_enable)" in 1) _bat_any=1 ;; esac
   case "$(_sg charge_aware_enable)" in 1) _bat_any=1 ;; esac
+  case "$(_sg night_charge_enable)" in 1) _bat_any=1 ;; esac
   case "$(_sg cool_gaming)" in 1) _bat_any=1 ;; esac
   if [ "$_bat_any" = "1" ]; then
     ui_print " "
@@ -192,6 +193,9 @@ asb_end_banner() {
     esac
     case "$(_sg charge_aware_enable)" in
       1) ui_print "      + ${ASB_L_BAT_CHARGE:-more headroom while charging and cool, less as it warms}" ;;
+    esac
+    case "$(_sg night_charge_enable)" in
+      1) ui_print "      + ${ASB_L_BAT_NIGHT:-night ceiling: around 80%, 22:00-06:00 (only with a supported kernel control)}" ;;
     esac
     case "$(_sg cool_gaming)" in
       1) ui_print "      + ${ASB_L_BAT_COOL:-games lean thermal earlier, for a cooler phone}" ;;
@@ -212,25 +216,30 @@ asb_end_banner() {
   # The per-topic sections above (display, vibration, battery, memory) each describe something
   # that was actually done, and they read as a continuation of the install log right above
   # them.
-  _en=""; _en_n=0; _en_line=""
-  for _c in CPU VM AUDIO BT NFC CAMERA MEDIA NET WIFI GPS KERNEL LOG LPM \
-            RADIO_IMS DISPLAY FPS SECURITY BG_TRIM VENDOR_OVERLAY; do
+  _en_n=0
+  # Presentation-only logical grouping: core, visual/media, connectivity, then system.
+  # The actual selection flags, application order and installation mechanism are untouched.
+  for _c in CPU VM KERNEL DISPLAY FPS AUDIO MEDIA CAMERA BT WIFI NET RADIO_IMS \
+            GPS NFC LPM BG_TRIM SECURITY LOG VENDOR_OVERLAY; do
     eval "_cv=\"\$ASB_${_c}\""
     [ "$_cv" = "true" ] || continue
-    _en_line="${_en_line}${_en_line:+ · }${_c}"
-    _en_n=$((_en_n + 1))
-    if [ "$_en_n" -ge 5 ]; then
-      _en="${_en}${_en:+
-}      ${_en_line}"; _en_line=""; _en_n=0
+    case "$_c" in
+      CPU) _ci='⚙️' ;; VM) _ci='🧠' ;; KERNEL) _ci='🐧' ;;
+      DISPLAY) _ci='🖥️' ;; FPS) _ci='🎮' ;; AUDIO) _ci='🎧' ;;
+      MEDIA) _ci='🎞️' ;; CAMERA) _ci='📷' ;; BT) _ci='🔗' ;;
+      WIFI) _ci='📶' ;; NET) _ci='🌐' ;; RADIO_IMS) _ci='📡' ;;
+      GPS) _ci='🛰️' ;; NFC) _ci='💡' ;; LPM) _ci='🔋' ;;
+      BG_TRIM) _ci='🧹' ;; SECURITY) _ci='🛡️' ;; LOG) _ci='📜' ;;
+      VENDOR_OVERLAY) _ci='🧩' ;; *) _ci='•' ;;
+    esac
+    eval "_cl=\"\${ASB_CAT_${_c}:-${_c}}\""
+    if [ "$_en_n" -eq 0 ]; then
+      ui_print " "
+      ui_print "  📋  ${ASB_SEC_CATEGORIES:-PREPARED COMPONENTS}"
     fi
+    ui_print "      ✓  ${_ci}  ${_cl}"
+    _en_n=$((_en_n + 1))
   done
-  [ -n "$_en_line" ] && _en="${_en}${_en:+
-}      ${_en_line}"
-  if [ -n "$_en" ]; then
-    ui_print " "
-    ui_print "  📋  ${ASB_SEC_CATEGORIES:-ENABLED CATEGORIES}"
-    printf '%s\n' "$_en" | while IFS= read -r _l; do ui_print "$_l"; done
-  fi
   # Clear the screen before the summary.
   #
   # The installer view does not scroll back on most managers, so whatever sits at the
@@ -3103,7 +3112,7 @@ asb_preserve_user_config() {
   _user_keys="audio_profile audio_dac_hifi CAMERA_LEVEL CAMERA_GRAIN CAMERA_CONTRAST CAMERA_PORTRAIT CAMERA_LOWLIGHT CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
 smart_battery_bias \
 bt_absvol_mode mglru_hold kernel_sched_stats BG_TRIM_LEVEL cool_gaming \
-auto_battery_enable charge_aware_enable \
+auto_battery_enable charge_aware_enable night_charge_enable \
 night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
 region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_mtu_probing net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile net_wifi_leave wifi_powersave net_screen_off_lte net_lte_light wifi_country wifi_scan_throttle radio_policy_enable net_wifi_leave haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_voice dsp_width dsp_clarity dsp_rumble dsp_compressor dsp_headroom dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs kernel_sched_stats anim_speed dsp_outputs gms_trim audio_remove_volume_limit audio_resampler media_vol_steps purge_vendor_logs doze_trim_whitelist gms_freeze wakelock_action perf_ceiling_pct gnss_trim athena_service net_rps net_txqueue night_modem_idle smart_media_guard bt_link_stability ltpo_force mmfeed_off wakelock_fitness ltpo_video heavy_prime_escape prime_escape_burst_s prime_escape_rest_s lsposed_verbose heytap_mcs documentsui_fix zygisk_enabled zygisk_hints zygisk_launch zygisk_ledger "
@@ -3200,7 +3209,7 @@ asb_snapshot_user_config() {
   mkdir -p "$(dirname "$_snap_conf")" 2>/dev/null || true
   _keys="audio_profile audio_dac_hifi CAMERA_LEVEL CAMERA_GRAIN CAMERA_CONTRAST CAMERA_PORTRAIT CAMERA_LOWLIGHT CAMERA_AGGRESSIVE CAMERA_AGGRESSIVE_INJECT \
 smart_battery_bias bt_absvol_mode mglru_hold BG_TRIM_LEVEL cool_gaming \
-auto_battery_enable charge_aware_enable night_quiet_enable night_quiet_auto \
+auto_battery_enable charge_aware_enable night_charge_enable night_quiet_enable night_quiet_auto \
 UX_ANIM_FORCE_RESTART UX_MANAGE_TIMEOUTS UX_MANAGE_OEM_TOGGLES \
 region_allow_locale disable_blur ui_effects_level haptic_strength net_congestion net_qdisc net_route_tune net_mtu_probing net_congestion_wifi net_congestion_mobile net_qdisc_wifi net_qdisc_mobile wifi_country wifi_scan_throttle radio_policy_enable net_wifi_leave wifi_powersave haptic_touch_strength media_loudness dsp_loudness dsp_bass dsp_voice dsp_width dsp_clarity dsp_rumble dsp_compressor dsp_headroom dsp_effect_abi sustained_temp_enter sustained_temp_mode sustained_temp_ceiling camera_hold_enable bt_a2dp_offload bat_suppress_gaming log_level log_verbosity doze_level phantom_procs kernel_sched_stats anim_speed dsp_outputs gms_trim audio_remove_volume_limit audio_resampler media_vol_steps purge_vendor_logs doze_trim_whitelist gms_freeze wakelock_action perf_ceiling_pct gnss_trim athena_service net_rps net_txqueue night_modem_idle smart_media_guard ltpo_force mmfeed_off net_screen_off_lte net_lte_light wakelock_fitness ltpo_video heavy_prime_escape prime_escape_burst_s prime_escape_rest_s bt_link_stability lsposed_verbose heytap_mcs documentsui_fix zygisk_enabled zygisk_hints zygisk_launch zygisk_ledger"
   {
