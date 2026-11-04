@@ -6115,10 +6115,23 @@ logReportRender(mixDay);
 const mixText = allText(reportBody);
 chk(mixText.indexOf(I18N.ru.lr_sec_smart) < 0, 'the Smart learner card stays off a Battery day');
 const smartRecordDay = JSON.parse(JSON.stringify(mixDay)); smartRecordDay.sections.smart.helped = '2';
+smartRecordDay.sections.smartlive = {state:'manual',profile:'battery',smart_mode:'0',feedback:'disabled',coverage:'start_latest',deltas:'available',accepted_delta:'0',suppressed_delta:'0',rejected_delta:'0'};
 const smartRecordTips = logReportTips(smartRecordDay, true).filter(t => t.key === 'lr_tip_smart_help_manual');
 chk(smartRecordTips.length === 1 && !logReportTips(smartRecordDay, true).some(t => t.key === 'lr_tip_smart_help'), 'Smart records on Battery are measurements, not active Smart control');
+logReportRender(smartRecordDay);
+const smartRecordText = allText(reportBody);
+chk(smartRecordText.indexOf(I18N.ru.lr_sm_state_manual) >= 0 && smartRecordText.indexOf(I18N.ru.lr_sm_feedback_note) >= 0, 'a Battery capture explicitly separates stored Smart records from live adaptation');
+chk(smartRecordText.indexOf(I18N.ru.lr_sm_feedback_fmt.split('{accepted}').join('0').split('{suppressed}').join('0').split('{rejected}').join('0')) >= 0, 'Battery exposes zero in-capture Smart hints without hiding the channel');
 const smartActiveDay = JSON.parse(JSON.stringify(smartRecordDay)); smartActiveDay.sections.meta.profile = 'smart';
+smartActiveDay.sections.smartlive = {state:'active',profile:'smart',smart_mode:'1',feedback:'disabled',coverage:'latest_only',deltas:'unavailable'};
 chk(logReportTips(smartActiveDay, true).some(t => t.key === 'lr_tip_smart_help') && !logReportTips(smartActiveDay, true).some(t => t.key === 'lr_tip_smart_help_manual'), 'the active-Smart wording remains exclusive to Smart');
+logReportRender(smartActiveDay);
+chk(allText(reportBody).indexOf(I18N.ru.lr_sm_feedback_unknown) >= 0, 'one Smart snapshot cannot manufacture an in-capture feedback delta');
+const smartAdaptingDay = JSON.parse(JSON.stringify(smartActiveDay));
+smartAdaptingDay.sections.smartlive = {state:'adapting',profile:'smart',smart_mode:'1',feedback:'accepted',coverage:'start_latest',deltas:'available',accepted_delta:'2',suppressed_delta:'1',rejected_delta:'3'};
+logReportRender(smartAdaptingDay);
+const smartAdaptText = allText(reportBody);
+chk(smartAdaptText.indexOf(I18N.ru.lr_sm_state_adapting.split('{n}').join('2')) >= 0 && smartAdaptText.indexOf(I18N.ru.lr_sm_feedback_fmt.split('{accepted}').join('2').split('{suppressed}').join('1').split('{rejected}').join('3')) >= 0, 'accepted native log hints and their capture deltas are visible');
 const smartNoHelpDay = JSON.parse(JSON.stringify(smartActiveDay));
 smartNoHelpDay.sections.smart.helped = '0'; smartNoHelpDay.sections.smart.nothelped = '3';
 const smartNoHelpTips = logReportTips(smartNoHelpDay, true);
@@ -6661,12 +6674,15 @@ PH.update({'lr_brief_split_short':['{on}','{onr}','{off}'], 'lr_brief_data':['{m
       'lr_radio_on':['{on}'], 'lr_rapp_head':['{since}','{tot}'], 'lr_rat_nsa':['{n}','{of}'], 'lr_rat_sa':['{n}','{of}'],
       'lr_rat_lte':['{n}','{of}'], 'lr_bt_acl_fmt':['{n}','{l}','{d}','{p}'], 'lr_bt_streams':['{n}']})
 # fix298-fix300: exact Smart outcomes, thermal/night scope and bounded Zygisk/Governor evidence.
-KEYS += ['lr_sm_scope','lr_tip_smart_help_manual','lr_tip_smart_nohelp','lr_dx_heat_some_runs',
+KEYS += ['lr_sm_scope','lr_sm_capture','lr_sm_state_adapting','lr_sm_state_active','lr_sm_state_manual',
+         'lr_sm_state_disabled','lr_sm_state_unknown','lr_sm_feedback','lr_sm_feedback_fmt','lr_sm_feedback_unknown',
+         'lr_sm_feedback_note','lr_tip_smart_help_manual','lr_tip_smart_nohelp','lr_dx_heat_some_runs',
          'lr_zy_activity','lr_zy_launch_balanced','lr_zy_launch_unresolved','lr_zy_accept_note','lr_zy_quiet_channels',
          'lr_mwake_unconfirmed','lr_zy_denylist_note','dev_zygisk_observer_launch_screen_off',
          'lr_zy_gov_title','lr_zy_gov_cold_lifts','lr_zy_gov_cold_extends','lr_zy_gov_cold_long','lr_zy_gov_cold_trims',
          'lr_zy_gov_note','lr_zy_gov_reset','lr_zy_gov_coverage_one','lr_zy_note_actions']
 PH.update({'lr_tip_smart_help_manual':['{n}'], 'lr_tip_smart_nohelp':['{n}'],
+           'lr_sm_state_adapting':['{n}'], 'lr_sm_feedback_fmt':['{accepted}','{suppressed}','{rejected}'],
            'lr_dx_heat_some_runs':['{min}','{n}','{longest}','{cpu}'],
            'lr_zy_launch_balanced':['{n}','{ok}','{veto}','{unavailable}','{throttled}'],
            'lr_zy_launch_unresolved':['{n}','{ok}','{veto}','{unavailable}','{throttled}'],

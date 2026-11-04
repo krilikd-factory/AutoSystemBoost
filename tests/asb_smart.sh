@@ -6682,6 +6682,70 @@ C
 "$T/t" || fail "behaviour"
 )
 
+t_smart_log_capture_state_runtime() (
+# fix321: stored Smart records and live Infinite-Log feedback are different evidence. Run
+# the real digest over saved start/end snapshots; no current live state may leak into them.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+D="$T/capture"; mkdir -p "$D" "$T/state"
+fail() { echo "FAIL Smart capture state: $*" >&2; exit 1; }
+printf 'current_profile: smart\n' > "$D/env.txt"
+printf 'smooth|watching=15|testing=1|helped=0|not_helped=3\n' > "$D/smart_records.txt"
+state() {
+  _file="$1"; _profile="$2"; _enabled="$3"; _accepted="$4"; _rejected="$5"; _suppressed="$6"
+  {
+    printf '%s\n' '--- state (key=value) ---'
+    printf 'profile=%s\nsmart_mode=%s\n' "$_profile" "$_enabled"
+    printf 'smooth_log_status=%s\n' "$([ "$_profile" = smart ] && [ "$_enabled" = 1 ] && [ "$_accepted" -gt 0 ] && printf accepted || printf disabled)"
+    printf 'smooth_log_accepted=%s\nsmooth_log_rejected=%s\nsmooth_log_suppressed=%s\nsmooth_log_checks=20\nsmooth_log_reads=4\n' \
+      "$_accepted" "$_rejected" "$_suppressed"
+  } > "$_file"
+}
+state "$D/before.txt" smart 1 1 2 3
+state "$D/after.txt" smart 1 4 5 6
+printf 'profile=smart\nsmart_mode=1\nsmooth_log_accepted=999\n' > "$T/live-state"
+digest() {
+  ASB_LK_DIGEST_DIR="$D" ASB_LK_STATE_DIR="$T/state" ASB_CFG_FILE="$T/no-config" \
+    ASB_GOV_STATE_FILE="$T/live-state" sh "$ROOT/tools/logkit/asb_fullday_digest.sh"
+}
+out="$(digest)"
+printf '%s\n' "$out" | grep -qxF 'smart	watching=15	testing=1	helped=0	nothelped=3	ctxlearn=0' || fail "stored summary changed: $out"
+printf '%s\n' "$out" | grep -q '^smartlive	state=adapting	profile=smart	smart_mode=1	feedback=accepted	coverage=start_latest' || fail "active capture not recognized: $out"
+printf '%s\n' "$out" | grep -q '	accepted_delta=3	' && printf '%s\n' "$out" | grep -q '	rejected_delta=3	' && printf '%s\n' "$out" | grep -q '	suppressed_delta=3	' || fail "native counter deltas wrong: $out"
+printf '%s\n' "$out" | grep -q '999' && fail 'an unrelated current live state leaked into a saved capture'
+state "$D/after.txt" battery 0 4 5 6
+out="$(digest)"
+printf '%s\n' "$out" | grep -q '^smartlive	state=manual	profile=battery	smart_mode=0	feedback=disabled	coverage=start_latest' || fail "Battery was not distinguished from Smart: $out"
+state "$D/after.txt" smart 0 4 5 6
+digest | grep -q '^smartlive	state=disabled	profile=smart	smart_mode=0' || fail 'Smart mode-off state was hidden'
+state "$D/after.txt" smart 1 0 5 6
+out="$(digest)"
+printf '%s\n' "$out" | grep -q '^smartlive	state=active.*	deltas=counter_reset_or_restart$' || fail "counter reset was not bounded: $out"
+printf '%s\n' "$out" | grep -q '	accepted_delta=unknown	' || fail 'counter reset invented an accepted delta'
+rm -f "$D/before.txt"
+out="$(digest)"
+printf '%s\n' "$out" | grep -q '^smartlive	state=active	profile=smart	smart_mode=1	feedback=disabled	coverage=latest_only' || fail "single snapshot state wrong: $out"
+printf '%s\n' "$out" | grep -q '	accepted_delta=unknown	' || fail 'single cumulative counter became an in-capture delta'
+rm -f "$D/after.txt"
+state "$D/snapshot_100.txt" smart 1 2 1 0
+digest | grep -q '^smartlive	state=active	profile=smart	smart_mode=1	feedback=accepted	coverage=latest_only' || fail 'latest capture snapshot fallback missing'
+# A genuinely running capture alone may use /dev/.asb/state (overridden here). The lock's
+# process identity is still checked by the real digest; no helper is left running.
+state "$D/before.txt" battery 0 0 0 0
+printf '%s\n' 'profile=smart' 'smart_mode=1' 'smooth_log_status=accepted' \
+  'smooth_log_accepted=2' 'smooth_log_rejected=0' 'smooth_log_suppressed=1' \
+  'smooth_log_checks=8' 'smooth_log_reads=2' > "$T/live-state"
+bash -c 'exec -a asb_log_full_day sleep 30' & _live_pid=$!
+printf '%s\n' "$D" > "$T/state/output_dir"
+printf '%s\n' "$_live_pid" > "$T/state/pid"
+out="$(digest)"
+kill "$_live_pid" 2>/dev/null || true; wait "$_live_pid" 2>/dev/null || true
+printf '%s\n' "$out" | grep -q '^smartlive	state=adapting	profile=smart	smart_mode=1	feedback=accepted	coverage=start_latest' || fail "running capture did not use its live state: $out"
+printf '%s\n' "$out" | grep -q '	accepted_delta=2	' || fail 'running capture live delta is wrong'
+echo 'PASS Smart capture state: live/manual/disabled/adapting separation, monotonic deltas, reset, single-snapshot and live-capture source ownership'
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;

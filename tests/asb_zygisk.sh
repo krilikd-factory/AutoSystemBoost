@@ -1281,9 +1281,9 @@ E
   printf 'Z\tevents_total\t3\nZ\tlaunch_long\t5\nZ\tlaunch_short\t3\nZ\tdenylist_spawns\t7\nZ\tclasses_loaded\t1\n' > "$T/run/state.arm64-v8a.tsv"
   run() { PATH="$T/bin:$PATH" ZL_T="$T" MODDIR="$T/mod" ASB_ZL_DIR="$T/asb" ASB_ZYGISK_RUN_DIR="$T/run" ASB_LSPD_DIR="$T/lspd" \
     ASB_GOV_BIN="$T/bin/asb" ASB_ZL_MODULES="$T/mods" ASB_ZL_GOV_STATE="$T/gstate" ASB_ZL_TMP="$T/tmp" ASB_DOZE_KEEP="$T/asb/keep" sh "$S" "$@"; }
-  out="$(run classes)"; [ "$out" = 'result=written slow=2 fast=2' ] || fail "classes: $out"
+  out="$(run classes)"; [ "$out" = 'result=written slow=1 fast=2' ] || fail "classes: $out"
   C="$T/mod/zygisk/classes"
-  [ "$(cat "$C")" = "$(printf 'v=1\nslow=com.example.slowapp\nslow=com.example.hooked\nfast=com.example.fastapp\nfast=com.example.hookedfast')" ] \
+  [ "$(cat "$C")" = "$(printf 'v=1\nslow=com.example.slowapp\nfast=com.example.fastapp\nfast=com.example.hookedfast')" ] \
     || fail "classes file: $(cat "$C")"
   grep -q 'systemui\|android$\|=system$\|settings\|offonly\|midapp\|hookednolaunch' "$C" && fail 'a protected, unhooked-by-enabled, usual or never-measured hooked app was classed'
   [ "$(cat "$T/asb/zygisk_lsposed_modules")" = "$(printf 'com.luckyzyx.luckytool\nit.dhd.oxygencustomizer')" ] || fail "module list: $(cat "$T/asb/zygisk_lsposed_modules")"
@@ -1297,7 +1297,7 @@ E
 int main(int, char **argv) {
   std::ifstream f(argv[1]); std::stringstream b; b << f.rdbuf(); const std::string t = b.str();
   static AsbObserverClasses c;
-  assert(asb_observer_classes_parse(t.data(), t.size(), c) && c.slow == 2 && c.fast == 2);
+  assert(asb_observer_classes_parse(t.data(), t.size(), c) && c.slow == 1 && c.fast == 2);
   assert(c.lookup("com.example.slowapp") == ASB_LAUNCH_LONG && c.lookup("com.example.hookedfast") == ASB_LAUNCH_SHORT);
   std::cout << "parsed\n";
 }
@@ -1306,10 +1306,10 @@ CPP
     [ "$("$T/p" "$C")" = parsed ] || fail 'the native parser refused the generated classes'
   fi
   m0="$(stat -c %Y.%i "$C")"; sleep 1
-  out="$(run classes)"; [ "$out" = 'result=unchanged slow=2 fast=2' ] && [ "$(stat -c %Y.%i "$C")" = "$m0" ] || fail "an unchanged pass rewrote the file: $out"
+  out="$(run classes)"; [ "$out" = 'result=unchanged slow=1 fast=2' ] && [ "$(stat -c %Y.%i "$C")" = "$m0" ] || fail "an unchanged pass rewrote the file: $out"
   ls "$T/asb" | grep -q 'zygisk_link\.' && fail "temporary files left: $(ls "$T/asb")"
   st="$(run status)"
-  for want in version=1 classes=on classes_slow=2 classes_fast=2 comp_state=1 comp_supported=1 comp_long=5 comp_short=3 comp_classes_loaded=1 \
+  for want in version=1 classes=on classes_slow=1 classes_fast=2 comp_state=1 comp_supported=1 comp_long=5 comp_short=3 comp_classes_loaded=1 \
       denylist_spawns=7 gov_launch=20 gov_long=4 gov_short=2 gov_cold_long=3 gov_trims=1 lsposed=1 lsposed_modules=2 lsposed_apps=5 lsposed_system=1 lsposed_sysui=2 \
       'zmod|other_x|0|Other x(id)' 'zmod|zygisk_lsposed|1|Zygisk - LSPosed' 'cmp|575|2|700|5'; do
     printf '%s\n' "$st" | grep -qxF "$want" || fail "status lacks '$want': $st"
@@ -1318,8 +1318,8 @@ CPP
   printf '%s\n' "$st" | grep -qxF 'app|com.example.midapp|normal|normal|measured|3|700|0|-|3|-1|loop|-|notif|0' || fail "guarded + protected row: $st"
   printf '%s\n' "$st" | grep -qxF 'app|com.example.slowapp|slow|slow|measured|4|1225|0|-|4|46|-|-|-|0' || fail "slow row with background history: $st"
   printf '%s\n' "$st" | grep -qxF 'app|com.example.fastapp|fast|fast|measured|3|302|0|-|3|-1|-|verify|-|0' || fail "fast row with ART: $st"
-  printf '%s\n' "$st" | grep -qxF 'app|com.example.hooked|slow|slow|hooks|1|1300|2|it.dhd.oxygencustomizer,com.luckyzyx.luckytool|2|-1|-|-|-|0' \
-    || printf '%s\n' "$st" | grep -qxF 'app|com.example.hooked|slow|slow|hooks|1|1300|2|com.luckyzyx.luckytool,it.dhd.oxygencustomizer|2|-1|-|-|-|0' || fail "hooked row: $st"
+  printf '%s\n' "$st" | grep -qxF 'app|com.example.hooked|normal|normal|hooks|1|1300|2|it.dhd.oxygencustomizer,com.luckyzyx.luckytool|2|-1|-|-|-|0' \
+    || printf '%s\n' "$st" | grep -qxF 'app|com.example.hooked|normal|normal|hooks|1|1300|2|com.luckyzyx.luckytool,it.dhd.oxygencustomizer|2|-1|-|-|-|0' || fail "one hooked slow launch must keep the normal lift: $st"
   printf '%s\n' "$st" | grep -q '^app|com.example.hookednolaunch|' && fail "fix287: a hooked app never opened is listed or classed: $st"
   printf '%s\n' "$st" | grep -qxF 'app|com.android.settings|normal|normal|excluded|3|1500|0|-|3|-1|-|-|-|0' || fail "excluded row: $st"
   printf '%s\n' "$st" | grep -qxF 'app|com.example.hookedmid|normal|normal|measured|3|800|1|it.dhd.oxygencustomizer|3|-1|-|-|-|0' || fail "measured beats hooks: $st"
@@ -1327,6 +1327,12 @@ CPP
   [ "$(printf '%s\n' "$st" | sed -n '/^app|/{p;q}' | cut -d'|' -f2)" = com.example.slowapp ] || fail "rows not ordered by action, then use: $st"
   ASB_ZL_ROWS=2 run status | grep -c '^app|' | grep -qx 2 || fail 'row cap ignored'
   ls "$T/tmp" | grep -q . && fail "status left temporary files: $(ls "$T/tmp")"
+  # fix321: hooks remain context, not an evidence shortcut. The same app earns the long
+  # class only after the ordinary three-sample measured median is available.
+  printf '%s\n' "$((now+42))|com.example.hooked|1250|1" "$((now+43))|com.example.hooked|1200|1" >> "$T/asb/zygisk_aot_launch"
+  out="$(run classes)"; [ "$out" = 'result=written slow=2 fast=2' ] || fail "measured hooked app was not promoted: $out"
+  grep -qx 'slow=com.example.hooked' "$C" || fail "three slow hooked launches did not produce the measured class"
+  run status | grep -qE '^app\|com\.example\.hooked\|slow\|slow\|measured\|3\|1250\|2\|' || fail "promoted hooked row is not measured: $(run status | grep hooked)"
   printf 'v=1\nslow=com.example.oldstale\n' > "$C"
   run status | grep -qxF 'app|com.example.oldstale|slow|normal|-|0|0|0|-|0|-1|-|-|-|0' || fail "a class in effect without evidence is not shown as changing: $(run status | grep oldstale)"
   printf '%s\n' "$((now+70)).100  1000  1500 I am_proc_start: [0,4001,10201,com.example.newapp,next-top-activity,{com.example.newapp/.Main}]" \

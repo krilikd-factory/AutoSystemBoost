@@ -2195,6 +2195,31 @@ grep -Fq '#define ASB_GAIN_MB_MAX    2500' "$ROOT/src/DSP_AIDL/asb_dsp_core.h" |
 grep -Fq '[ "$_dsp_applied_mb" -gt 2500 ] && _dsp_applied_mb=2500' "$ROOT/runtime/asb_audio_apply.sh" || { echo 'FAIL: runtime DSP cap is not +25 dB' >&2; exit 1; }
 grep -Fq '[ "$_dsp_expected_mb" -gt 2500 ] && _dsp_expected_mb=2500' "$ROOT/tools/asb_diag.sh" || { echo 'FAIL: diagnostic DSP cap is not +25 dB' >&2; exit 1; }
 
+# fix320: host package evidence and runtime loading evidence are separate manifest fields.
+# Both workflows must carry every reference/AIDL artifact, but neither may claim that a host
+# grep proved audioserver loaded the effect. Also shell-parse the exact embedded run fragment.
+for _wf in build-release.yml build-test.yml; do
+  W="$ROOT/.github/workflows/$_wf"
+  for _field in dsp_reference_present dsp_aidl_built dsp_runtime_verified dsp_runtime_evidence; do
+    [ "$(grep -c "\"$_field\"" "$W")" -ge 1 ] || { echo "FAIL: $_wf lacks $_field" >&2; exit 1; }
+  done
+  grep -Fq '"dsp_runtime_verified": ${DSP_RUNTIME_VERIFIED}' "$W" || { echo "FAIL: $_wf runtime evidence is not explicit" >&2; exit 1; }
+  grep -Fq '"dsp_runtime_evidence": "not_run_on_host"' "$W" || { echo "FAIL: $_wf lacks host evidence boundary" >&2; exit 1; }
+  grep -Fq '.dsp_reference_present == true and .dsp_aidl_built == true and .dsp_runtime_verified == false and .dsp_runtime_evidence == "not_run_on_host"' "$W" \
+    || { echo "FAIL: $_wf does not enforce the DSP manifest evidence contract" >&2; exit 1; }
+  ! grep -Fq '""$PKG_' "$W" || { echo "FAIL: $_wf has malformed package-variable quoting" >&2; exit 1; }
+  python3 - "$W" "$TMP/${_wf}.sh" <<'PY' || exit 1
+import pathlib, sys
+lines = pathlib.Path(sys.argv[1]).read_text().splitlines()
+start = next((i for i, line in enumerate(lines) if line.strip() == 'DSP_REFERENCE_PRESENT=true'), None)
+end = next((i for i, line in enumerate(lines) if line.strip() == 'DSP_RUNTIME_VERIFIED=false'), None)
+assert start is not None and end is not None and end > start, 'DSP evidence block not found'
+indent = len(lines[start]) - len(lines[start].lstrip())
+pathlib.Path(sys.argv[2]).write_text('\n'.join(line[indent:] for line in lines[start:end + 1]) + '\n')
+PY
+  sh -n "$TMP/${_wf}.sh" || { echo "FAIL: $_wf DSP evidence block is not valid shell" >&2; exit 1; }
+done
+
 if [ "$_pb_missing" = 1 ]; then
   printf '%s\n' 'SKIP DSP reference staging: prebuilt libraries absent, ASB_DSP_REFERENCE_OPTIONAL=1 (static gates passed)'
   exit 0
@@ -6223,19 +6248,28 @@ B
     PARTIAL_WAKE_LOCK                 'Short' ACQ=-3s (uid=10800 pid=1)
 P
   ;;
-  activity) cat <<'A'
+  activity) if [ "${DS_SYNC_FG:-0}" = 1 ]; then
+    cat <<'A'
+  #45: fg     TOP  LCMNFU  ---- 1234:com.android.launcher/u0a12
+  #30: prcp   FGS  ----    ---- 4567:com.example.player/u0a901
+  #20: fg    TOP  LCMNFU  ---- 5678:com.example.sync/u0a700
+A
+  else
+    cat <<'A'
   #45: fg     TOP  LCMNFU  ---- 1234:com.android.launcher/u0a12
   #30: prcp   FGS  ----    ---- 4567:com.example.player/u0a901
   #20: cch+ 5 CEM  ----    ---- 5678:com.example.sync/u0a700
 A
+  fi
   ;;
   deviceidle) echo false ;;
-  wifi) cat <<'W'
+  wifi) if [ "${DS_NO_WIFI:-0}" != 1 ]; then cat <<'W'
 Multicast Locks held:
     Multicaster{mdns-discovery uid=10700}
     Multicaster{CastDiscovery uid=10950}
     Multicaster{NearbyMediums uid=1000}
 W
+  fi
   ;;
 esac
 S
@@ -6268,14 +6302,19 @@ echo "appops $*" >> "$AM_LOG"
 case "$1" in
   get) m="$(sed -n "s/^$2 $3 //p" "$AM_LOG.ops" 2>/dev/null | tail -1)"
        if [ -n "$m" ]; then echo "$3: $m; time=+1h"; else echo "No operations."; fi ;;
-  set) echo "$2 $3 $4" >> "$AM_LOG.ops" ;;
+  set) if [ "$2" = com.example.sync ] && [ "$3" = WIFI_MULTICAST ] && [ "$4" != ignore ] && [ "${DS_MC_RESTORE_FAIL:-0}" = 1 ]; then
+         exit 1
+       fi
+       echo "$2 $3 $4" >> "$AM_LOG.ops" ;;
 esac
 S
 chmod +x "$T/bin/"*
 run() {
   echo "wakelock_action=$1" > "$T/mod/config/governor.conf"
   printf 'awake_pct_screenoff=%s\nawake_window_min=90\n' "$2" > "$T/state"
-  AM_LOG="$T/am.log" DS_LOG="$T/ds.log" PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_WL_DIR="$T/d" ASB_WL_STATE="$T/state" \
+  AM_LOG="$T/am.log" DS_LOG="$T/ds.log" DS_NO_WIFI="${DS_NO_WIFI:-0}" DS_SYNC_FG="${DS_SYNC_FG:-0}" \
+    DS_MC_RESTORE_FAIL="${DS_MC_RESTORE_FAIL:-0}" \
+    PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_WL_DIR="$T/d" ASB_WL_STATE="$T/state" \
     sh "$SRC" >/dev/null 2>&1
 }
 
@@ -6324,6 +6363,58 @@ echo "com.example.sync WIFI_MULTICAST default" >> "$T/am.log.ops"
 run 1 40
 [ "$(grep -c 'appops set com.example.sync WIFI_MULTICAST ignore' "$T/am.log")" = 2 ] || f "reset multicast denial not re-applied"
 grep -q '^com.example.sync|3720|0|restricted$' "$A" || f "verdict not updated to restricted"
+grep -Eq '^com\.example\.sync\|[0-9]+\|[0-9]+\|default$' "$T/d/multicast_restricted" || f "multicast original mode/timestamps not recorded"
+
+# A foreground app is released on the existing pass, without a timer or a polling worker.
+DS_SYNC_FG=1 run 1 40
+grep -q 'appops set com.example.sync WIFI_MULTICAST default' "$T/am.log" || f "foreground multicast restriction not restored to default"
+[ ! -e "$T/d/multicast_restricted" ] || f "foreground app retained in multicast ledger"
+grep -qx 'com.example.sync|in_use' "$M" || f "foreground multicast holder not reported in_use"
+DS_SYNC_FG=0 run 1 40
+
+# TTL is evaluated on demand. Twenty minutes without a current holder restores the exact
+# original mode and drops the ledger; the next fresh cached-holder pass may requalify it.
+DS_NO_WIFI=1 run 1 40
+[ -e "$T/d/multicast_restricted" ] || f "fresh multicast ledger expired before 20 min"
+awk -F'|' 'BEGIN{OFS="|"} {$3=$3-1201; print}' "$T/d/multicast_restricted" > "$T/d/mc.old"
+mv "$T/d/mc.old" "$T/d/multicast_restricted"
+DS_NO_WIFI=1 run 1 40
+[ ! -e "$T/d/multicast_restricted" ] || f "expired multicast ledger retained"
+DS_NO_WIFI=0 run 1 40
+[ -s "$T/d/multicast_restricted" ] || f "fresh qualifying multicast holder not re-recorded"
+
+# Aged but still observed: refresh in place, with no restore/restrict flap.
+_mc_restore_n="$(grep -c 'appops set com.example.sync WIFI_MULTICAST default' "$T/am.log")"
+awk -F'|' 'BEGIN{OFS="|"} {$3=$3-1201; print}' "$T/d/multicast_restricted" > "$T/d/mc.old"
+mv "$T/d/mc.old" "$T/d/multicast_restricted"
+run 1 40
+[ "$(grep -c 'appops set com.example.sync WIFI_MULTICAST default' "$T/am.log")" = "$_mc_restore_n" ] || f "aged current holder was restored before refresh"
+[ -s "$T/d/multicast_restricted" ] || f "aged current holder lost its ledger"
+
+# A failed restore keeps the ASB-owned ledger and ignore; the next existing pass retries.
+awk -F'|' 'BEGIN{OFS="|"} {$3=$3-1201; print}' "$T/d/multicast_restricted" > "$T/d/mc.old"
+mv "$T/d/mc.old" "$T/d/multicast_restricted"
+DS_NO_WIFI=1 DS_MC_RESTORE_FAIL=1 run 1 40
+[ -s "$T/d/multicast_restricted" ] || f "failed multicast restore dropped the ownership ledger"
+grep -q '^com.example.sync WIFI_MULTICAST ignore$' "$T/am.log.ops" || f "failed-restore fixture did not retain ignore"
+DS_NO_WIFI=1 DS_MC_RESTORE_FAIL=0 run 1 40
+[ ! -e "$T/d/multicast_restricted" ] || f "successful retry did not clear the multicast ledger"
+
+# An externally changed mode is released from our ledger without a second write. An ignore
+# that predates ASB is never adopted as ASB-owned either.
+DS_NO_WIFI=0 run 1 40
+[ -s "$T/d/multicast_restricted" ] || f "holder not re-recorded before external-mode case"
+echo "com.example.sync WIFI_MULTICAST default" >> "$T/am.log.ops"
+awk -F'|' 'BEGIN{OFS="|"} {$3=$3-1201; print}' "$T/d/multicast_restricted" > "$T/d/mc.old"
+mv "$T/d/mc.old" "$T/d/multicast_restricted"
+_mc_restore_n="$(grep -c 'appops set com.example.sync WIFI_MULTICAST default' "$T/am.log")"
+DS_NO_WIFI=1 run 1 40
+[ "$(grep -c 'appops set com.example.sync WIFI_MULTICAST default' "$T/am.log")" = "$_mc_restore_n" ] || f "external multicast mode was overwritten"
+[ ! -e "$T/d/multicast_restricted" ] || f "external mode left a stale ASB ledger"
+echo "com.example.sync WIFI_MULTICAST ignore" >> "$T/am.log.ops"
+DS_NO_WIFI=0 run 1 40
+[ ! -e "$T/d/multicast_restricted" ] || f "pre-existing external ignore was adopted"
+echo "com.example.sync WIFI_MULTICAST default" >> "$T/am.log.ops"
 
 # fix137: an app Android says was used today (active/working_set) is never restricted.
 : > "$T/am.log"; rm -f "$T/d/wakelock_restricted"
@@ -6338,7 +6429,7 @@ run 1 40
 : > "$T/am.log"
 run 0 40
 grep -q 'set-standby-bucket com.example.sync active' "$T/am.log" || f "off did not release the restricted bucket"
-grep -q 'appops set com.example.sync WIFI_MULTICAST allow' "$T/am.log" || f "off did not give multicast back"
+grep -q 'appops set com.example.sync WIFI_MULTICAST default' "$T/am.log" || f "off did not restore multicast default"
 [ -f "$T/d/wakelock_restricted" ] && f "restricted record kept after off"
 
 # fix288: a ROM whose dumpsys does not know --charged: one plain read, same ranking.
@@ -6911,6 +7002,56 @@ X
 "$CC" -O1 -Wall -Wno-unused-function -Wno-unused-variable -I"$T" -o "$T/t" "$T/t.c" 2>"$T/cc.log" || { cat "$T/cc.log" >&2; fail "harness did not compile"; }
 out="$("$T/t")" || { printf '%s\n' "$out" >&2; fail "keepalive wrong"; }
 echo "PASS thermal keepalive: the 29835 cooldown releases within two minutes, deep idle reads every five, the published age is the real one"
+)
+
+t_action_refused_summary_runtime() (
+# Runtime (fix320): a successful governor pass must not hide a ROM-refused Android key.
+# The REAL final Action block reads the latest result per domain/key, not a stale refusal.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+A="$ROOT/action.sh"
+fail() { echo "FAIL action refused summary: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+{
+  echo '_bad=""; _f() { _fmt="$1"; shift; printf "$_fmt\\n" "$@"; }'
+  sed -n '/^T_ALL_OK=/p; /^T_ALL_REFUSED=/p' "$A"
+  sed -n '/^if \[ -n "\$_bad" \]; then$/,/^fi$/p' "$A"
+} | sed "s#/data/adb/asb/apply_ledger#$T/ledger#g" > "$T/run.sh"
+grep -q '_act_ref_rows=' "$T/run.sh" || fail 'real summary block not extracted'
+run() { sh "$T/run.sh"; }
+: > "$T/ledger"
+out="$(run)"
+printf '%s\n' "$out" | grep -q 'All configured tweaks verified applied' || fail "empty ledger not clean: $out"
+cat > "$T/ledger" <<'L'
+1790000000|settings|network_recommendations_enabled|0|1|fixture|not_writable
+1790000001|settings|other_android_key|0|1|fixture|readback_mismatch
+L
+out="$(run)"
+printf '%s\n' "$out" | grep -q 'Applied except 2 Android setting(s): settings/network_recommendations_enabled, settings/other_android_key' || fail "outstanding refusals not reported: $out"
+printf '%s\n' "$out" | grep -q 'All configured tweaks verified applied' && fail 'refusal also printed the all-OK verdict'
+cat > "$T/ledger" <<'L'
+1790000000|settings|network_recommendations_enabled|0|1|fixture|not_writable
+1790000010|settings|network_recommendations_enabled|0|1|fixture|applied
+1790000011|reconcile|network_recommendations_enabled|0|1|fixture|not_writable
+L
+out="$(run)"
+printf '%s\n' "$out" | grep -q 'All configured tweaks verified applied' || fail "recovered key or reconcile row poisoned summary: $out"
+printf '%s\n' "$out" | grep -q 'Applied except' && fail "recovered key still listed: $out"
+# Russian uses the same real block and must not silently fall back to the English claim.
+{
+  echo '_bad=""; _f() { _fmt="$1"; shift; printf "$_fmt\\n" "$@"; }'
+  sed -n '/^T_ALL_OK=/p; /^T_ALL_REFUSED=/p' "$A"
+  cat "$ROOT/runtime/i18n/action_ru.sh"
+  sed -n '/^if \[ -n "\$_bad" \]; then$/,/^fi$/p' "$A"
+} | sed "s#/data/adb/asb/apply_ledger#$T/ledger#g" > "$T/run-ru.sh"
+printf '1790000000|settings|network_recommendations_enabled|0|1|fixture|not_writable\n' > "$T/ledger"
+out="$(sh "$T/run-ru.sh")"
+printf '%s\n' "$out" | grep -q 'Применено всё, кроме настроек Android: 1' || fail "Russian refusal missing: $out"
+for f in "$ROOT"/runtime/i18n/action_*.sh; do
+  [ "$(grep -c '^T_ALL_REFUSED=' "$f")" = 1 ] || fail "T_ALL_REFUSED missing/duplicated in ${f##*/}"
+  [ "$(sed -n 's/^T_ALL_REFUSED=//p' "$f" | grep -o '%s' | wc -l)" -eq 2 ] || fail "T_ALL_REFUSED placeholders in ${f##*/}"
+done
+echo 'PASS action refused summary: latest per-key ledger state, recovery, localized refusal and no false all-OK'
 )
 
 t_action_stock_header_runtime() (
@@ -7725,6 +7866,41 @@ for k in dev_sec_lsposed_hooks dev_lsposed_db_read_failed dev_lsposed_find_crash
   grep -q "\"$k\"" "$ROOT/webroot/i18n/en.json" || fail "missing string $k"
 done
 echo 'PASS lsposed hooks: read-only module/scope inventory, log volume/errors, hook crashes, hooked-app CPU and restart loops, honest basis'
+)
+
+t_asbdiag_large_audio_dump_runtime() (
+# Runtime (fix320): dumpsys audio may exceed MAX_ARG_STRLEN. The real route parser must
+# accept it through awk stdin rather than an external printf argument, and still stop at
+# the next stream so a later Bluetooth route cannot be mistaken for STREAM_MUSIC.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+D="$ROOT/tools/asb_diag.sh"
+fail() { echo "FAIL asbdiag large audio dump: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+{
+  awk 'BEGIN { for (i = 0; i < 12000; i++) print "  filler audio record 0123456789abcdefghij" }'
+  cat <<'A'
+- STREAM_MUSIC:
+   Devices: bt_a2dp
+A
+  awk 'BEGIN { for (i = 0; i < 12000; i++) print "  trailing audio record 0123456789abcdefghij" }'
+  cat <<'A'
+- STREAM_RING:
+   Devices: speaker
+A
+} > "$T/audio.dump"
+[ "$(wc -c < "$T/audio.dump")" -gt 262144 ] || fail 'fixture is not larger than the per-argument limit'
+{
+  echo '_ap="$(cat "$1")"'
+  sed -n '/^_lr_d="\$(awk /,/^)"$/p' "$D"
+  echo 'printf "%s\\n" "$_lr_d"'
+} > "$T/run.sh"
+grep -q '<<EOF' "$T/run.sh" || fail 'real awk here-document not extracted'
+out="$(sh "$T/run.sh" "$T/audio.dump")" || fail "large dump aborted: $out"
+[ "$out" = '   Devices: bt_a2dp' ] || fail "wrong route parsed: $out"
+! grep -Fq 'printf '\''%s\n'\'' "${_ap:-}"' "$D" || fail 'whole dump still passed to external printf'
+cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail 'asbdiag copies differ'
+echo 'PASS asbdiag large audio dump: >256 KiB parsed via stdin with the correct stream route'
 )
 
 t_asbdiag_lsposed_modlog_runtime() (

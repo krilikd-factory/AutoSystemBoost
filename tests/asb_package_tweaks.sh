@@ -505,18 +505,32 @@ t_uninstall_deferred_restore_runtime() (
   _run asb_documentsui_fix.sh apply >/dev/null
   [ "$(_state mcs)" = 2 ] || fail 'fixture did not disable MCS'
   [ -f "$ASB_DOCUMENTSUI_STATE_DIR/baseline.conf" ] || fail 'fixture did not record DocumentsUI'
-  mkdir -p "$T/data/adb/asb/heytap_mcs" "$T/data/adb/asb/documentsui_fix" "$T/tmp"
+  mkdir -p "$T/data/adb/asb/heytap_mcs" "$T/data/adb/asb/documentsui_fix" "$T/tmp" "$T/ops"
+  printf 'com.example.mc|1|2|allow\ncom.example.external|1|2|allow\n' > "$T/data/adb/asb/multicast_restricted"
+  printf 'ignore\n' > "$T/ops/com.example.mc"
+  printf 'default\n' > "$T/ops/com.example.external"
   cp "$ASB_HEYTAP_STATE_DIR/baseline.conf" "$T/data/adb/asb/heytap_mcs/"
   cp "$ASB_DOCUMENTSUI_STATE_DIR/baseline.conf" "$T/data/adb/asb/documentsui_fix/"
   mv "$T/bin/pm" "$T/bin/pm.real"
   printf '#!/bin/sh\n[ "$(cat "$BOOT_FILE")" = 1 ] || exit 20\nexec "%s" "$@"\n' "$T/bin/pm.real" > "$T/bin/pm"
   printf '#!/bin/sh\necho 1 > "$BOOT_FILE"\n' > "$T/bin/sleep"
   printf '#!/bin/sh\n[ "$(cat "$BOOT_FILE")" = 1 ] || exit 20\nprintf "%%s\\n" "$*" >> "%s"\n' "$T/settings.log" > "$T/bin/settings"
-  chmod 755 "$T/bin/pm" "$T/bin/sleep" "$T/bin/settings"
+  cat > "$T/bin/appops" <<EOF
+#!/bin/sh
+[ "\$(cat "$BOOT_FILE")" = 1 ] || exit 20
+case "\$1" in
+  get) cat "$T/ops/\$2" 2>/dev/null | sed 's/^/WIFI_MULTICAST: /' ;;
+  set) printf '%s\\n' "\$*" >> "$T/appops.log"; printf '%s\\n' "\$4" > "$T/ops/\$2" ;;
+esac
+EOF
+  chmod 755 "$T/bin/pm" "$T/bin/sleep" "$T/bin/settings" "$T/bin/appops"
   echo 0 > "$BOOT_FILE"
   {
     sed -n '/^_ASB_FWQ=/,/^}$/p' "$U"
-    sed -n '/^if \[ "$(getprop sys.boot_completed)" = "1" \]; then$/,/^rm -rf \/data\/adb\/asb 2>\/dev\/null$/p' "$U"
+    sed -n '/^if \[ "$(getprop sys.boot_completed)" = "1" \]; then$/,/^rm -rf \/data\/adb\/asb 2>\/dev\/null$/p' "$U" \
+      | sed '/^rm -rf \/data\/adb\/asb 2>\/dev\/null$/d'
+    sed -n '/^if \[ -f \/data\/adb\/asb\/multicast_restricted \]/,/^fi$/p' "$U"
+    echo 'rm -rf /data/adb/asb 2>/dev/null'
     echo '_fw settings put global network_avoid_bad_wifi 0 >/dev/null 2>&1 || true'
     sed -n '/^if \[ -s "$_ASB_FWQ" \]; then$/,/^fi$/p' "$U"
   } | sed -e "s#/data/adb/asb#$T/data/adb/asb#g" -e "s#/data/local/tmp#$T/tmp#g" > "$T/u.sh"
@@ -534,7 +548,10 @@ t_uninstall_deferred_restore_runtime() (
   [ "$(cat "$PKG_DB/doc.hidden")" = 1 ] || fail 'DocumentsUI hidden state was not handed back'
   [ "$(_state pick)" = 2 ] || fail 'picker component was not handed back'
   grep -qx 'put global network_avoid_bad_wifi 0' "$T/settings.log" || fail 'queued Settings restore never ran'
-  echo 'PASS uninstall deferred restore: package baselines and Settings writes survive an early-boot uninstall'
+  [ "$(cat "$T/ops/com.example.mc")" = allow ] || fail 'queued multicast restore did not return the original allow'
+  [ "$(cat "$T/ops/com.example.external")" = default ] || fail 'queued multicast restore overwrote an externally changed mode'
+  grep -q 'com.example.external' "$T/appops.log" 2>/dev/null && fail 'external multicast package received a write'
+  echo 'PASS uninstall deferred restore: package baselines, Settings and owned multicast modes survive early boot; external AppOps stay untouched'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

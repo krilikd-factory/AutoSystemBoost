@@ -4965,7 +4965,8 @@ grep -qF 'd.wlive.push' "$H" || fail "the report parser dropped live holders"
 grep -qF 'd.profs.push' "$H" || fail "the report parser dropped per-profile rows"
 grep -qF "lr_sec_profiles" "$H" || fail "the profiles comparison section is not rendered"
 grep -qF "lr_tip_awake_who" "$H" || fail "the awake tip does not name its holder"
-grep -qF "if (smart && _smDay) {" "$H" || fail "the Smart learner card is shown on a day Smart never ran"
+grep -qF "if ((smart || smartLive) && (_smDay || smartLive)) {" "$H" || fail "Smart card lost its capture-state gate"
+grep -qF "slState === 'manual'" "$H" || fail "a manual day with stored records is not explicitly labelled (fix321)"
 grep -qF "lr_wlive_fmt" "$H" || fail "the live-holder row format is gone"
 echo "PASS: fix206 contract"
 ) || exit 1
@@ -8871,6 +8872,38 @@ grep -Fq 'not a mismatch' "$T/live" || fail 'live mounted=no was not explicitly 
 camera_bind_readback_note 'camera.xml state=stale mounted=no' > "$T/stale"
 ! grep -Fq 'not a mismatch' "$T/stale" || fail 'stale payload was falsely cleared as equivalent'
 echo 'PASS diag pending/camera read-back: Wi-Fi-off, mobile pending and live-without-bind semantics stay non-fatal and domain-specific'
+)
+
+t_fix321_smart_zygisk_contract() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL fix321 Smart/Zygisk: $*" >&2; exit 1; }
+Z="$ROOT/runtime/asb_zygisk_link.sh"
+D="$ROOT/tools/logkit/asb_fullday_digest.sh"
+H="$ROOT/webroot/index.html"
+# LSPosed scope is not causal evidence. One hooked cold outlier retains the normal lift;
+# only the common measured-median threshold may select the long class.
+grep -Fq 'A hook scope is context, not proof' "$Z" || fail 'hook evidence bound missing'
+! grep -Fq 'if (k >= 1 && md >= slow) cls = "slow"' "$Z" || fail 'one hooked launch still selects the long class'
+grep -Fq 'else if (k >= minn)' "$Z" || fail 'common measured threshold missing'
+grep -Fq 'one hooked slow launch must keep the normal lift' "$ROOT/tests/asb_zygisk.sh" || fail 'hooked outlier regression missing'
+grep -Fq 't_smart_log_capture_state_runtime' "$ROOT/tests/asb_smart.sh" || fail 'Smart digest runtime regression missing'
+grep -Fq 't_webui_log_report_runtime' "$ROOT/tests/asb_ui.sh" || fail 'WebUI report runtime regression missing'
+# Live state belongs only to a running capture. Saved captures use their own snapshots,
+# monotonic in-capture deltas and explicit unknown/reset states.
+grep -Fq 'if [ "$_running" = 1 ] && [ -r "${ASB_GOV_STATE_FILE:-/dev/.asb/state}" ]' "$D" || fail 'saved report can read current live state'
+grep -Fq 'state="adapting"' "$D" || fail 'positive accepted delta is not distinguished'
+grep -Fq 'deltas",hs && hl ? (reset ? "counter_reset_or_restart"' "$D" || fail 'counter-reset bound missing'
+grep -Fq 'const smartLive = d.sections.smartlive || null;' "$H" || fail 'WebUI does not consume smartlive'
+grep -Fq "T('lr_sm_feedback_note'" "$H" || fail 'native ownership of log hints is not explained'
+for l in ar de en es fr hy id it pt ru tr uk zh; do
+  for k in lr_sm_capture lr_sm_state_adapting lr_sm_state_active lr_sm_state_manual lr_sm_state_disabled lr_sm_state_unknown lr_sm_feedback lr_sm_feedback_fmt lr_sm_feedback_unknown lr_sm_feedback_note; do
+    grep -q "\"$k\"" "$ROOT/webroot/i18n/$l.json" || fail "$l lacks $k"
+  done
+done
+grep -Fq 'Digest row `smartlive` (fix321)' "$ROOT/docs/log_schemas.md" || fail 'smartlive schema undocumented'
+grep -Fq 'an enabled LSPosed scope is context only' "$ROOT/docs/log_schemas.md" || fail 'hook evidence rule undocumented'
+echo 'PASS fix321 Smart/Zygisk: measured-only hooked long class, live versus stored Smart evidence, bounded deltas and 13 locales'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
