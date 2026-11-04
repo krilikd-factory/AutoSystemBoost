@@ -2080,7 +2080,13 @@ case "$(gp persist.asb.dsp.outputs)" in
   *)      _pr_note="" ;;
 esac
 NOTE "  DSP requested/applied gain: requested=$(gp persist.asb.dsp.gain_requested_mb)mB  ·  applied=$(gp persist.asb.dsp.gain_applied_mb)mB  ·  published_route=$(gp persist.asb.dsp.route)$_pr_note"
-_lr_d="$(printf '%s\n' "${_ap:-}" | awk '/^[[:space:]]*- STREAM_MUSIC:/ { m = 1; next } m && /^[[:space:]]*- STREAM_/ { exit } m && /Devices:/ { print; exit }')"
+# dumpsys audio can exceed the kernel's per-argument exec limit. Passing the whole
+# capture to /system/bin/printf aborted this probe with "Argument list too long";
+# a here-document feeds awk without putting the dump in an exec argument.
+_lr_d="$(awk '/^[[:space:]]*- STREAM_MUSIC:/ { m = 1; next } m && /^[[:space:]]*- STREAM_/ { exit } m && /Devices:/ { print; exit }' <<EOF
+${_ap:-}
+EOF
+)"
 case "$_lr_d" in
   *bt_sco*|*BLUETOOTH_SCO*) _lr="call" ;;
   *ble_headset*|*ble_speaker*|*ble_broadcast*|*le_audio*|*BLE_*|*bt_a2dp*|*BLUETOOTH_A2DP*|*bt_le*) _lr="bt" ;;
