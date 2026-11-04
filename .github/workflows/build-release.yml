@@ -671,6 +671,7 @@ jobs:
             "runtime/asb_net_offload.sh" \
             "runtime/asb_athena_apply.sh" \
             "runtime/asb_config_safe.sh" \
+            "runtime/asb_night_charge.sh" \
             "runtime/asb_arbiter.sh" \
             "runtime/asb_capabilities.sh" \
             "runtime/asb_active_efficiency_envelope.sh" \
