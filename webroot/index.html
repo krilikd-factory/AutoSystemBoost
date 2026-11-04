@@ -10,6 +10,14 @@
 <title>AutoSystemBoost</title>
 <meta name="theme-color" content="#000000">
 <meta name="color-scheme" content="dark light">
+<style>
+/* Critical canvas only: a WebView can paint before the full stylesheet is parsed.
+ * Give it ASB's palette immediately instead of the host's light-grey default. The
+ * following parser-local script selects the saved light palette before first paint. */
+html,body{background:#000}
+html{color-scheme:dark}
+html[data-asb-theme="light"],html[data-asb-theme="light"] body{background:#f3f7f6;color-scheme:light}
+</style>
 <script>(function(){try{var t=localStorage.getItem('asb_theme'),b=localStorage.getItem('asb_glass_base');if(t==='light'||(t==='glass'&&b==='light'))document.documentElement.setAttribute('data-asb-theme','light');if(t==='glass')document.documentElement.setAttribute('data-asb-glass','1');}catch(e){}})();</script>
 <script>document.documentElement.classList.add('asb-home-pending');</script>
 <meta name="mobile-web-app-capable" content="yes">
@@ -2025,29 +2033,32 @@ html[data-asb-theme="light"] .lgr-chip { background: #f7f9fa; }
  * scrolling; its opaque material and 44 px targets remain usable over content. */
 /* Drill-in headers inherit the shared .header geometry verbatim. Page-specific zoom or
  * logo/type sizing made the same brand block visibly shrink and distort beside Home. */
-#reportPage .sec, #zygiskPage .sec { margin-bottom: 12px; }
-#reportPage .lgr-body, #zygiskPage .lgr-body { gap: 10px; }
-body.report-active > .report-nav, body.zygisk-active > .zy-page-nav { display: flex; }
-#reportPage .lgr-body, #zygiskPage .lgr-body {
+#reportPage .sec, #zygiskPage .sec, #devicePage .sec { margin-bottom: 12px; }
+#reportPage .lgr-body, #zygiskPage .lgr-body, #devicePage .lgr-body, #configPage .cfg-list { gap: 10px; }
+body.report-active > .report-nav, body.zygisk-active > .zy-page-nav,
+body.device-active > .dev-page-nav, body.config-active > .cfg-page-nav { display: flex; }
+#reportPage .lgr-body, #zygiskPage .lgr-body, #devicePage .lgr-body,
+body.config-active #configPage .cfg-list {
   padding-bottom: calc(102px / var(--asb-ui-scale) + env(safe-area-inset-bottom, 0px)); }
 /* The drill-in dock is the main tab bar's visual component, not a second capsule:
  * identical insets, width, 31 px outline, material, 60 px targets and icon-top labels. */
-.report-nav, .zy-page-nav { display: none; position: fixed; left: 12px; right: 12px;
+.report-nav, .zy-page-nav, .dev-page-nav, .cfg-page-nav { display: none; position: fixed; left: 12px; right: 12px;
   bottom: calc(env(safe-area-inset-bottom, 0px) + 10px); z-index: 160;
   box-sizing: border-box; width: auto; max-width: 460px; margin: 0 auto; padding: 0 4px;
   overflow: hidden; border: 1px solid var(--cap-edge); border-radius: 31px;
   background: var(--cap-wash), var(--tabbar-bg, #000000); box-shadow: var(--cap-shadow); }
-.report-nav .lgr-jump-head, .zy-page-nav .lgr-jump-head { display: none; }
-.report-nav .lgr-jump-track, .zy-page-nav .lgr-jump-track {
+:is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .lgr-jump-head { display: none; }
+:is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .lgr-jump-track {
   position: relative; display: flex; flex-wrap: nowrap; align-items: stretch; gap: 0;
   width: 100%; overflow-x: auto; overflow-y: hidden; overscroll-behavior-inline: contain;
   -webkit-overflow-scrolling: touch; scrollbar-width: none; scroll-padding-inline: 4px; }
-.report-nav .lgr-jump-track::-webkit-scrollbar, .zy-page-nav .lgr-jump-track::-webkit-scrollbar { display: none; }
-.report-nav .lgr-jump-btn, .zy-page-nav .lgr-jump-btn { flex: 0 0 72px; min-width: 64px; min-height: 60px; }
-.report-nav .asb-tab-ico, .zy-page-nav .asb-tab-ico { flex: 0 0 32px; }
-.report-nav .asb-tab-label, .zy-page-nav .asb-tab-label { width: 100%; text-align: center; }
+:is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .lgr-jump-track::-webkit-scrollbar { display: none; }
+:is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .lgr-jump-btn { flex: 0 0 72px; min-width: 64px; min-height: 60px; }
+:is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .asb-tab-ico { flex: 0 0 32px; }
+:is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .asb-tab-label { width: 100%; text-align: center; }
 .lgr-jump-track.ind-anim .asb-tab-ind { transition: transform .34s cubic-bezier(.3,.8,.25,1), width .34s ease; }
-#reportPage .lgr-sec[id], #zygiskPage .lgr-sec[id], #reportPage .lgr-details-anchor {
+#reportPage .lgr-sec[id], #zygiskPage .lgr-sec[id], #reportPage .lgr-details-anchor,
+#devicePage .dev-group[id], #configPage .cfg-section[id] {
   scroll-margin-top: calc(var(--status-scrim-top) + 20px); }
 #reportPage .lgr-sec > .lgr-sec-t, #zygiskPage .lgr-sec > .lgr-sec-t {
   margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border);
@@ -2529,6 +2540,7 @@ html[data-asb-theme="light"] .cfg-zygisk-card { background:#fff; }
    under the icon. */
 .cfg-row-top > .cfg-seg,
 .cfg-row-top > .cfg-range { flex: 0 0 auto; margin-left: auto; }
+.cfg-row-top > .cfg-time { flex:0 0 auto; margin-inline-start:auto; }
 @media (max-width: 400px) {
   /* Narrow or dense screens: give the controls the full row from the start. */
   .cfg-row-top > .cfg-seg,
@@ -3149,6 +3161,13 @@ html[data-asb-theme="light"] .nf-sel-row.warn .nf-sel-why { color: #8a5a00 !impo
   opacity: 1;
   font-weight: 600;
 }
+.cfg-time {
+  min-height:40px; max-width:138px; padding:7px 10px;
+  border:1px solid var(--border); border-radius:12px;
+  background:var(--surface); color:var(--text);
+  font:700 15px var(--mono); font-variant-numeric:tabular-nums;
+}
+.cfg-time.busy { opacity:.45; pointer-events:none; }
 .cfg-range {
   display: inline-flex;
   align-items: center;
@@ -3567,7 +3586,7 @@ html[data-asb-glass="1"] :is(.page,.live-page,.config-page) { background:transpa
 html[data-asb-glass="1"] :is(.hdr-cap,.theme-toggle,.status-row,.live-chip,.tg-link,.debug-support-btn,
   .cfg-backup,.cfg-lang-btn,.cfg-lang-pop,.cfg-sel-btn,.cfg-sel-pop,.cfg-tile,.cfg-row,.cfg-zygisk-card,
   .live-cell,.stock-telemetry,.smart-banner,.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet,
-  .log-menu,.cfg-fm-box,.asb-tabbar,.report-nav,.zy-page-nav) {
+  .log-menu,.cfg-fm-box,.asb-tabbar,.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) {
   background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.018)),rgba(8,13,10,.90) !important;
   color:var(--text) !important; border-color:var(--border) !important;
   box-shadow:0 14px 34px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.14),inset 0 0 0 1px rgba(255,255,255,.025);
@@ -3630,7 +3649,7 @@ html[data-asb-theme="light"] :is(.hdr-cap,.theme-toggle,.status-row,.live-chip,.
   .live-cell,.stock-telemetry,.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet,
   /* The tab bar now carries the same teal wash as .status-row, so it needs the same
    * light-theme override - otherwise the wash sits over white and turns the bar green. */
-  .report-nav,.zy-page-nav,.asb-tabbar) {
+  .report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav,.asb-tabbar) {
   background:#ffffff !important; color:var(--text) !important; border-color:var(--border) !important;
   box-shadow:0 10px 28px rgba(20,50,42,.10);
 }
@@ -4312,7 +4331,7 @@ html[data-asb-glass="1"][data-asb-theme="light"] :is(.page,.live-page,.config-pa
 html[data-asb-glass="1"][data-asb-theme="light"] :is(.hdr-cap,.theme-toggle,.status-row,.live-chip,.tg-link,.debug-support-btn,
   .cfg-backup,.cfg-lang-btn,.cfg-lang-pop,.cfg-sel-btn,.cfg-sel-pop,.cfg-tile,.cfg-row,.cfg-zygisk-card,
   .live-cell,.stock-telemetry,.smart-banner,.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet,
-  .log-menu,.cfg-fm-box,.asb-tabbar,.report-nav,.zy-page-nav) {
+  .log-menu,.cfg-fm-box,.asb-tabbar,.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) {
   background:linear-gradient(145deg,rgba(255,255,255,.64),rgba(244,252,248,.36)),rgba(255,255,255,.54) !important;
   color:var(--text) !important; border-color:var(--border) !important;
   box-shadow:0 14px 34px rgba(20,50,42,.14),inset 0 1px 0 rgba(255,255,255,.76),inset 0 0 0 1px rgba(255,255,255,.20) !important;
@@ -4334,7 +4353,7 @@ html[data-asb-glass="1"][data-asb-theme="light"] :is(input,select,textarea,.seg,
 html[data-asb-glass="1"][data-asb-theme="light"] :is(.lgr-chip,.pmeta-chip,.cfg-icon) {
   background:rgba(255,255,255,.46) !important; border-color:var(--border) !important;
 }
-html[data-asb-glass="1"][data-asb-theme="light"] :is(.report-nav,.zy-page-nav) .lgr-jump-btn.is-active {
+html[data-asb-glass="1"][data-asb-theme="light"] :is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .lgr-jump-btn.is-active {
   background:var(--pill-wash) !important; border-color:transparent !important; box-shadow:var(--pill-edge);
 }
 html[data-asb-glass="1"][data-asb-theme="light"] :is(.pbtn.on,.cfg-tile.active,.cfg-profile-row.selected,.cfg-row.is-on) {
@@ -4676,6 +4695,11 @@ html:root[data-asb-glass="1"] {
   --glass-surface:rgba(12,18,15,.58);
   --glass-surface-quiet:rgba(8,13,10,.46);
   --glass-surface-strong:rgba(10,15,13,.78);
+  /* Navigation is seen against black and scrolling cards, so the shared floating wash
+   * made it look lighter than the header capsules. Keep its geometry and blur intact,
+   * but give only the navigation docks a quieter highlight and a darker base. */
+  --glass-nav-surface:rgba(6,10,8,.86);
+  --glass-nav-wash:linear-gradient(135deg,rgba(255,255,255,.045),rgba(255,255,255,.008) 48%,rgba(255,255,255,.018));
   --glass-control:rgba(20,27,24,.48);
   --glass-edge:rgba(255,255,255,.16);
   --glass-highlight:rgba(255,255,255,.20);
@@ -4700,6 +4724,8 @@ html:root[data-asb-glass="1"][data-asb-theme="light"] {
   --glass-surface:rgba(255,255,255,.44);
   --glass-surface-quiet:rgba(255,255,255,.34);
   --glass-surface-strong:rgba(250,252,251,.72);
+  --glass-nav-surface:var(--glass-surface-strong);
+  --glass-nav-wash:var(--glass-wash);
   --glass-control:rgba(255,255,255,.38);
   --glass-edge:rgba(70,85,80,.15);
   --glass-highlight:rgba(255,255,255,.86);
@@ -4730,13 +4756,16 @@ html:root[data-asb-glass="1"] :is(.hdr-cap,.theme-toggle,.status-row,.live-chip,
 }
 /* Floating surfaces must remain legible over scrolling content; inline cards need less
  * density. These rules change material only, never the measured header/dock geometry. */
-html:root[data-asb-glass="1"] :is(.asb-tabbar,.report-nav,.zy-page-nav,.log-menu,.cfg-lang-pop,.cfg-sel-pop) {
+html:root[data-asb-glass="1"] :is(.asb-tabbar,.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav,.log-menu,.cfg-lang-pop,.cfg-sel-pop) {
   background:var(--glass-wash),var(--glass-surface-strong) !important;
   border-color:var(--glass-edge) !important;
   box-shadow:0 16px 38px rgba(0,0,0,.32),inset 0 1px 0 var(--glass-highlight) !important;
   -webkit-backdrop-filter:blur(26px) saturate(1.28); backdrop-filter:blur(26px) saturate(1.28);
 }
-html:root[data-asb-glass="1"][data-asb-theme="light"] :is(.asb-tabbar,.report-nav,.zy-page-nav,.log-menu,.cfg-lang-pop,.cfg-sel-pop) {
+html:root[data-asb-glass="1"] :is(.asb-tabbar,.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) {
+  background:var(--glass-nav-wash),var(--glass-nav-surface) !important;
+}
+html:root[data-asb-glass="1"][data-asb-theme="light"] :is(.asb-tabbar,.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav,.log-menu,.cfg-lang-pop,.cfg-sel-pop) {
   box-shadow:0 16px 38px rgba(40,50,65,.16),inset 0 1px 0 var(--glass-highlight) !important;
 }
 html:root[data-asb-glass="1"] :is(.hdr-cap,.theme-toggle,.status-row) {
@@ -4745,6 +4774,10 @@ html:root[data-asb-glass="1"] :is(.hdr-cap,.theme-toggle,.status-row) {
   -webkit-backdrop-filter:blur(18px) saturate(1.2); backdrop-filter:blur(18px) saturate(1.2);
 }
 html:root[data-asb-glass="1"] .log-menu { border-radius:20px; }
+/* #zygiskPage .lgr-note used to reset all padding after .dev-evidence had created
+ * its gutter. Restore only this note's logical gutter; physical left/right assumptions
+ * would put the text back against the line in RTL. */
+#zygiskPage .zy-controls-card > .dev-evidence { padding-inline-start:12px; }
 html:root[data-asb-glass="1"] :is(.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet,.cfg-fm-box) {
   background:var(--glass-wash),var(--glass-surface-strong) !important;
   border-color:var(--glass-edge) !important;
@@ -4853,7 +4886,7 @@ html:root[data-asb-glass="1"] { background:var(--glass-canvas-image); }
 html:root[data-asb-glass="1"] :is(.page,.live-page,.config-page) {
   background:transparent !important;
 }
-html:root[data-asb-glass="1"] :is(.report-nav,.zy-page-nav) .lgr-jump-btn {
+html:root[data-asb-glass="1"] :is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .lgr-jump-btn {
   background:transparent !important;
   border-color:transparent !important;
   box-shadow:none !important;
@@ -4876,14 +4909,40 @@ html:root[data-asb-glass="1"][data-asb-theme="light"] .pbtn.on .pchk svg { fill:
 /* The restart row is now a small toolbar menu. Its freed height is assigned by
  * asbFitPagesNow(); these slightly softer tiles use that space without changing 3 × 2. */
 .cfg-tile { border-radius:20px; gap:7px; padding:14px 9px 12px; }
-.cfg-tile-ico { width:46px; height:46px; border-radius:16px; }
-.cfg-tile-ico .tech-icon { width:25px; height:25px; }
+.cfg-tile-ico { width:54px; height:54px; border-radius:18px; }
+.cfg-tile-ico .tech-icon { width:30px; height:30px; }
 html.asb-fit-c1 .cfg-tile { padding:11px 7px 9px; }
-html.asb-fit-c1 .cfg-tile-ico { width:40px; height:40px; }
+html.asb-fit-c1 .cfg-tile-ico { width:46px; height:46px; }
+html.asb-fit-c1 .cfg-tile-ico .tech-icon { width:26px; height:26px; }
 html.asb-fit-c2 .cfg-tile { padding:9px 6px 8px; }
-html.asb-fit-c2 .cfg-tile-ico { width:34px; height:34px; }
+html.asb-fit-c2 .cfg-tile-ico { width:40px; height:40px; }
+html.asb-fit-c2 .cfg-tile-ico .tech-icon { width:23px; height:23px; }
 #cfgRebootMenuWrap { position:relative; flex:0 0 auto; display:flex; }
-.cfg-lang-btn .tech-icon { display:block; width:18px; height:18px; margin:auto; }
+.cfg-lang-btn {
+  --tool:#4cd3e8; width:40px; height:40px; border-radius:14px;
+  display:inline-flex; align-items:center; justify-content:center; box-sizing:border-box;
+  color:var(--tool); background:color-mix(in srgb,var(--tool) 11%,var(--tabbar-bg,#000));
+  border:1px solid color-mix(in srgb,var(--tool) 32%,var(--cap-edge));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 5px 16px -12px var(--tool);
+}
+#cfgLangBtn { --tool:#4cd3e8; }
+#cfgSoundBtn { --tool:#f98d9e; }
+#cfgRebootMenuBtn { --tool:#63daa3; }
+.cfg-lang-btn > span { display:inline-flex; align-items:center; justify-content:center; }
+.cfg-lang-btn .tech-icon { display:block; width:20px; height:20px; margin:auto; }
+.cfg-lang-btn:focus-visible { outline:2px solid var(--tool); outline-offset:3px; }
+.cfg-lang-btn:active { border-color:color-mix(in srgb,var(--tool) 65%,var(--cap-edge)); }
+html[data-asb-theme="light"] .cfg-lang-btn {
+  background:color-mix(in srgb,var(--tool) 9%,#fff);
+  border-color:color-mix(in srgb,var(--tool) 34%,var(--cap-edge));
+}
+/* Glass intentionally owns the shared surface, but it must not erase the three tool
+ * accents. Keep the material and add a higher-specificity ink/edge rule above it. */
+html:root .cfg-lang-btn,
+html:root[data-asb-glass="1"] .cfg-lang-btn {
+  color:var(--tool) !important;
+  border-color:color-mix(in srgb,var(--tool) 45%,var(--cap-edge)) !important;
+}
 .cfg-lang-pop.cfg-reboot-pop { min-width:220px; padding:6px; transform-origin:top right; z-index:1200; }
 .cfg-lang-pop.cfg-reboot-pop button {
   justify-content:flex-start; gap:10px; min-height:44px; margin:0;
@@ -5114,21 +5173,21 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
  * receive the same hierarchy with opaque paints. No text is left over an unpredictable
  * background, and no feature depends on blur support. */
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
-  html:root[data-asb-glass="1"] { --glass-surface:#151c18; --glass-surface-quiet:#101613; --glass-surface-strong:#151c18; --glass-control:#1b231f; }
-  html:root[data-asb-glass="1"][data-asb-theme="light"] { --glass-surface:#f7f9fa; --glass-surface-quiet:#f1f4f3; --glass-surface-strong:#fff; --glass-control:#f3f5f7; }
-  html:root[data-asb-glass="1"] :is(.pbtn,.cfg-tile,.cfg-row,.live-cell,.lgr-sec,.asb-tabbar,.report-nav,.zy-page-nav,.log-menu,.cfg-lang-pop,.cfg-sel-pop,.cfg-profile-sheet,.cfg-reset-dialog) {
+  html:root[data-asb-glass="1"] { --glass-surface:#151c18; --glass-surface-quiet:#101613; --glass-surface-strong:#151c18; --glass-nav-surface:#101511; --glass-control:#1b231f; }
+  html:root[data-asb-glass="1"][data-asb-theme="light"] { --glass-surface:#f7f9fa; --glass-surface-quiet:#f1f4f3; --glass-surface-strong:#fff; --glass-nav-surface:#fff; --glass-control:#f3f5f7; }
+  html:root[data-asb-glass="1"] :is(.pbtn,.cfg-tile,.cfg-row,.live-cell,.lgr-sec,.asb-tabbar,.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav,.log-menu,.cfg-lang-pop,.cfg-sel-pop,.cfg-profile-sheet,.cfg-reset-dialog) {
     -webkit-backdrop-filter:none; backdrop-filter:none;
   }
 }
 @media (prefers-reduced-transparency:reduce) {
-  html:root[data-asb-glass="1"] { --glass-surface:#151c18; --glass-surface-quiet:#101613; --glass-surface-strong:#151c18; --glass-control:#1b231f; }
-  html:root[data-asb-glass="1"][data-asb-theme="light"] { --glass-surface:#f7f9fa; --glass-surface-quiet:#f1f4f3; --glass-surface-strong:#fff; --glass-control:#f3f5f7; }
-  html:root[data-asb-glass="1"] :is(.pbtn,.cfg-tile,.cfg-row,.live-cell,.lgr-sec,.asb-tabbar,.report-nav,.zy-page-nav,.log-menu,.cfg-lang-pop,.cfg-sel-pop,.cfg-profile-sheet,.cfg-reset-dialog) {
+  html:root[data-asb-glass="1"] { --glass-surface:#151c18; --glass-surface-quiet:#101613; --glass-surface-strong:#151c18; --glass-nav-surface:#101511; --glass-control:#1b231f; }
+  html:root[data-asb-glass="1"][data-asb-theme="light"] { --glass-surface:#f7f9fa; --glass-surface-quiet:#f1f4f3; --glass-surface-strong:#fff; --glass-nav-surface:#fff; --glass-control:#f3f5f7; }
+  html:root[data-asb-glass="1"] :is(.pbtn,.cfg-tile,.cfg-row,.live-cell,.lgr-sec,.asb-tabbar,.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav,.log-menu,.cfg-lang-pop,.cfg-sel-pop,.cfg-profile-sheet,.cfg-reset-dialog) {
     -webkit-backdrop-filter:none !important; backdrop-filter:none !important;
   }
 }
 @media (forced-colors:active) {
-  html:root[data-asb-glass="1"][data-asb-glass="1"] :is(body,.page,.live-page,.config-page,.pbtn,.cfg-tile,.cfg-row,.live-cell,.lgr-sec,.lgr-hero,.lgr-quality,.asb-tabbar,.report-nav,.zy-page-nav,.log-menu,.cfg-lang-pop,.cfg-sel-pop,.cfg-profile-sheet,.cfg-reset-dialog,input,select,textarea,button) {
+  html:root[data-asb-glass="1"][data-asb-glass="1"] :is(body,.page,.live-page,.config-page,.pbtn,.cfg-tile,.cfg-row,.live-cell,.lgr-sec,.lgr-hero,.lgr-quality,.asb-tabbar,.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav,.log-menu,.cfg-lang-pop,.cfg-sel-pop,.cfg-profile-sheet,.cfg-reset-dialog,input,select,textarea,button) {
     background:Canvas !important; color:CanvasText !important; border-color:ButtonBorder !important;
     box-shadow:none !important; -webkit-backdrop-filter:none !important; backdrop-filter:none !important;
   }
@@ -5609,11 +5668,11 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
       <!-- Row one: search plus the globe. Search takes whatever the globe does not, so
            there is no dead space beside it. -->
       <div id="cfgLangWrap">
-        <button class="cfg-lang-btn" id="cfgLangBtn" onclick="cfgToggleLangPop(event)" aria-label="Language">🌐</button>
+        <button class="cfg-lang-btn" id="cfgLangBtn" type="button" onclick="cfgToggleLangPop(event)" aria-label="Language"><span data-tech-icon="language_globe"></span></button>
         <div class="cfg-lang-pop" id="cfgLangPop" hidden></div>
       </div>
       <!-- Interface sounds on/off (fix145); quiet anyway while another app plays. -->
-      <button class="cfg-lang-btn" id="cfgSoundBtn" onclick="uiSoundToggle()" aria-label="Interface sounds" aria-pressed="true">🔊</button>
+      <button class="cfg-lang-btn" id="cfgSoundBtn" type="button" onclick="uiSoundToggle()" aria-label="Interface sounds" aria-pressed="true"><span data-tech-icon="sound_on"></span></button>
       <div id="cfgRebootMenuWrap">
         <button class="cfg-lang-btn" id="cfgRebootMenuBtn" type="button"
                 onclick="cfgToggleRebootMenu(event)" onkeydown="cfgRebootMenuKey(event)"
@@ -6039,6 +6098,8 @@ const TECH_ICON_PATHS = {
   media_guard: '<path d="M12 3 20 6.2v5c0 4.8-3.4 8.2-8 9.8-4.6-1.6-8-5-8-9.8v-5z"/><path d="M10.2 9.3v5.4l4.6-2.7z" fill="currentColor" stroke="none"/>',
   charge_aware: '<rect x="2.8" y="8.5" width="14.5" height="8.5" rx="2.4"/><path d="M19.8 11.5v2.5"/><path d="M11.8 9.8 9.7 12.9h2.8l-2.1 3.1"/>',
   night_charge: '<rect x="2.8" y="10.5" width="14.5" height="8.5" rx="2.4"/><path d="M19.8 13.5v2.5"/><path d="M6 15h5"/><path d="M14.8 2.8a4.3 4.3 0 1 0 5.2 5.6 3.5 3.5 0 0 1-5.2-5.6z"/>',
+  night_charge_start: '<circle cx="11" cy="13" r="7.5"/><path d="M11 8.5V13l3 2M18 3h3v3M21 3l-4 4"/>',
+  night_charge_end: '<circle cx="13" cy="13" r="7.5"/><path d="M13 8.5V13l-3 2M6 3H3v3M3 3l4 4"/>',
   doze: '<path d="M19.8 13.8A8 8 0 1 1 10.2 3.4a6.6 6.6 0 0 0 9.6 10.4z"/><path d="M15.4 3.4h2.9l-2.9 3.2h2.9"/>',
   whitelist: '<path d="M19 13A7 7 0 1 1 11 4.2 5.8 5.8 0 0 0 19 13z"/><path d="M9.5 12.6l2 2 3.6-3.7"/>',
   wakelock: '<rect x="5" y="10.5" width="14" height="9.5" rx="2.2"/><path d="M8.2 10.5V7.8a3.8 3.8 0 0 1 7.6 0v2.7"/><path d="M12.4 13l-.9 2h1.8l-.9 2" />',
@@ -6112,6 +6173,9 @@ const TECH_ICON_PATHS = {
   zygisk_apps: '<rect x="4" y="4" width="6" height="6" rx="1.4"/><rect x="14" y="4" width="6" height="6" rx="1.4"/><rect x="4" y="14" width="6" height="6" rx="1.4"/><rect x="14" y="14" width="6" height="6" rx="1.4"/><path d="m15.3 17 1.2 1.2 2.3-2.4"/>',
   /* DocumentsUI picker: a document with an explicit selection check. */
   documents_picker: '<path d="M6 3.5h8l4 4V20H6z"/><path d="M14 3.5V8h4M9 12h5M9 15.5h2"/><path d="m13 16 1.5 1.5L18 14"/>',
+  language_globe: '<circle cx="12" cy="12" r="9"/><path d="M3.5 9h17M3.5 15h17M12 3c-4.6 5-4.6 13 0 18M12 3c4.6 5 4.6 13 0 18"/>',
+  sound_on: '<path d="M4 9.5v5h3.2l4.8 4V5.5l-4.8 4z"/><path d="M15 9a4.2 4.2 0 0 1 0 6M17.5 6.5a8 8 0 0 1 0 11"/>',
+  sound_off: '<path d="M4 9.5v5h3.2l4.8 4V5.5l-4.8 4z"/><path d="m15.5 9 5 6M20.5 9l-5 6"/>',
   generic: '<path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 8v8M8.5 10l7 4M15.5 10l-7 4"/>',
 };
 function techIcon(kind) {
@@ -6196,7 +6260,7 @@ function uiOtherAudioRefresh() {
 function uiSoundPaintBtn() {
   const b = _el('cfgSoundBtn');
   if (!b) return;
-  b.textContent = _uiSoundOn ? '\uD83D\uDD0A' : '\uD83D\uDD07';
+  b.innerHTML = techIcon(_uiSoundOn ? 'sound_on' : 'sound_off');
   b.setAttribute('aria-pressed', _uiSoundOn ? 'true' : 'false');
   b.setAttribute('aria-label', T('ui_sound_aria', 'Interface sounds'));
 }
@@ -8390,6 +8454,8 @@ const SNAP_KEYS = [
   'auto_battery_enable',
   'charge_aware_enable',
   'night_charge_enable',
+  'night_charge_start',
+  'night_charge_end',
   'night_quiet_enable',
   'night_quiet_auto',
   'UX_ANIM_FORCE_RESTART',
@@ -8569,8 +8635,12 @@ const CFG_ITEMS = [
   // --- Power & battery ---,
   { key:'charge_aware_enable', type:'bool', def:'1', name:'Charge-Aware Mode',
     desc:'While charging: more performance when cool, backs off when the battery heats up.' },
-  { key:'night_charge_enable', type:'bool', def:'0', stock:'0', name:'Night Charge Limit (22:00–06:00)',
-    desc:'Optional overnight charging control. While a charger is connected between 22:00 and 06:00, ASB asks a standard kernel interface to stop at 80%; after 06:00 it restores the exact previous value so charging can continue toward 100%. It never discharges a battery that is already above 80%, and it does not change or replace the OEM Adaptive Charging setting. Off by default. If the firmware exposes no supported writable interface, the badge says not exposed and no success is claimed. Disable or uninstall restores only values still owned by ASB.' },
+  { key:'night_charge_enable', type:'bool', def:'0', stock:'0', name:'Night Charge Limit',
+    desc:'Optional charging control for the custom interval below. While a charger is connected inside that window, ASB asks a standard kernel interface to stop at 80%; at the end it restores the exact previous value so charging can continue toward 100%. Start is inclusive and end exclusive; windows may cross midnight, but equal endpoints are invalid. ASB never discharges a battery already above 80% and does not replace OEM Adaptive Charging. Off by default. If no supported writable interface exists, the badge says not exposed. Disable, window exit or uninstall restores only values still owned by ASB.' },
+  { key:'night_charge_start', type:'time', def:'22:00', stock:'22:00', name:'Charge Limit Start',
+    desc:'Local time at which the optional 80% charging window begins. Any HH:MM value is accepted; changing it reapplies the ownership-aware helper immediately.' },
+  { key:'night_charge_end', type:'time', def:'06:00', stock:'06:00', name:'Charge Limit End',
+    desc:'Local time at which ASB restores the exact previous kernel value. Any HH:MM value is accepted, but it must differ from the start. An end earlier than the start makes the window cross midnight.' },
   { key:'doze_level', type:'seg', def:'stock', stock:'stock', opts:['stock','night','moderate','aggressive'], name:'Deep Sleep',
     desc:'Controls how quickly Android enters Doze after the screen turns off. Stock keeps the ROM timing; Moderate targets five minutes and Aggressive two minutes, while Night applies only in the learned sleep window. Doze can defer background network, jobs and alarms until maintenance windows; high-priority push may still arrive. Use Stock if timely background activity matters more than earlier idle entry. Stock removes the ASB timing override.' },
   { key:'doze_trim_whitelist', type:'seg', def:'0', stock:'0', opts:['0','1'], name:'Trim Doze Exemptions',
@@ -8737,7 +8807,7 @@ const CFG_CAT = {
   dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_width:'audio', dsp_clarity:'audio', dsp_rumble:'audio', dsp_compressor:'audio', dsp_headroom:'audio', dsp_outputs:'audio', audio_remove_volume_limit:'audio', audio_resampler:'audio', media_vol_steps:'audio', bt_absvol_mode:'audio', bt_link_stability:'audio',
   CAMERA_LEVEL:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_PORTRAIT:'camera', CAMERA_CONTRAST:'camera', CAMERA_GRAIN:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   cool_gaming:'battery',
-  smart_battery_bias:'battery', charge_aware_enable:'battery', night_charge_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery',
+  smart_battery_bias:'battery', charge_aware_enable:'battery', night_charge_enable:'battery', night_charge_start:'battery', night_charge_end:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery',
   BG_TRIM_LEVEL:'battery', gms_trim:'battery', gms_freeze:'battery',
   UX_MANAGE_OEM_TOGGLES:'system', UX_MANAGE_TIMEOUTS:'iface', anim_speed:'iface', UX_ANIM_FORCE_RESTART:'iface',
   camera_hold_enable:'camera',
@@ -8804,7 +8874,7 @@ const CFG_GROUP_OF = {
   bt_absvol_mode:'audio', bt_link_stability:'audio',
   CAMERA_LEVEL:'camera', CAMERA_GRAIN:'camera', CAMERA_CONTRAST:'camera',
   CAMERA_PORTRAIT:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
-  smart_battery_bias:'battery', charge_aware_enable:'battery', night_charge_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery', perf_ceiling_pct:'battery', 
+  smart_battery_bias:'battery', charge_aware_enable:'battery', night_charge_enable:'battery', night_charge_start:'battery', night_charge_end:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery', perf_ceiling_pct:'battery', 
   BG_TRIM_LEVEL:'battery', gms_trim:'battery', gms_freeze:'battery', cool_gaming:'battery',
   UX_MANAGE_OEM_TOGGLES:'ui', UX_MANAGE_TIMEOUTS:'iface', anim_speed:'iface', UX_ANIM_FORCE_RESTART:'iface',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net', net_mtu_probing:'net',
@@ -8842,7 +8912,7 @@ const CFG_GROUP_SECTIONS = {
     { id:'charging', icon:'charge_aware', titleKey:'cfg_battery_section_charging',
       title:'Charging', hintKey:'cfg_battery_section_charging_hint',
       hint:'Performance while charging and an optional fixed overnight charge ceiling.',
-      keys:['charge_aware_enable','night_charge_enable'] },
+      keys:['charge_aware_enable','night_charge_enable','night_charge_start','night_charge_end'] },
     { id:'standby', icon:'doze', titleKey:'cfg_battery_section_standby',
       title:'Sleep & Background', hintKey:'cfg_battery_section_standby_hint',
       hint:'What the phone does while the screen is off: doze depth, wakelocks, background GPS.',
@@ -8926,7 +8996,7 @@ function cfgEnsureCaps() {
   cfgLoadCaps().then(function () { try { cfgRender(); } catch (e) {} });
 }
 
-function cfgRenderSection(list, section, catKey) {
+function cfgRenderSection(list, section, catKey, groupId) {
   cfgEnsureCaps();
   if (ASB_GRADE === null) { ASB_GRADE = {}; cfgLoadGrade().then(function(){ try { cfgRender(); } catch(e){} }); }
   const head = document.createElement('div');
@@ -8939,6 +9009,7 @@ function cfgRenderSection(list, section, catKey) {
    * The category comes from the section's own first card, so a heading is always the
    * colour of what it introduces and there is no second table to keep in step. */
   head.className = 'cfg-section' + (catKey ? ' ' + cfgCatClass(catKey) : '');
+  if (groupId) head.id = 'cfg-sec-' + groupId + '-' + section.id;
   const ico = document.createElement('span');
   ico.className = 'cfg-section-ico';
   ico.innerHTML = techIcon(section.icon);
@@ -8978,11 +9049,12 @@ function cfgRenderGroup(list, groupId) {
   const items = CFG_ITEMS.filter(it => cfgGroupOf(it.key) === groupId);
   const sections = CFG_GROUP_SECTIONS[groupId];
   if (!sections) { items.forEach(it => cfgRenderRow(list, it, false)); return; }
-  const rendered = {};
+  const rendered = {}, navItems = [];
   sections.forEach(section => {
     const sectionItems = section.keys.map(key => items.find(it => it.key === key)).filter(Boolean);
     if (!sectionItems.length) return;
-    cfgRenderSection(list, section, sectionItems[0].key);
+    cfgRenderSection(list, section, sectionItems[0].key, groupId);
+    navItems.push(['cfg-sec-' + groupId + '-' + section.id, T(section.titleKey, section.title), section.icon]);
     sectionItems.forEach(it => { rendered[it.key] = true; });
     if (section.id === 'zygisk') cfgRenderZygiskCard(list, sectionItems);
     else sectionItems.forEach(it => cfgRenderRow(list, it, false));
@@ -8992,6 +9064,7 @@ function cfgRenderGroup(list, groupId) {
   // to add them to a subsection. The group remains the source of truth for reachability.
   items.filter(it => !rendered[it.key] && ZYGISK_PANEL_ONLY_KEYS.indexOf(it.key) < 0)
     .forEach(it => cfgRenderRow(list, it, false));
+  if (navItems.length > 1) list.appendChild(asbPageJump(navItems, T('dev_nav_title', 'Jump to'), 'cfg-page-nav'));
 }
 
 // null = the hub is showing; a group id = that group's screen is.
@@ -9134,7 +9207,7 @@ const CFG_ICONS = {
   UX_MANAGE_TIMEOUTS:'timeout', anim_speed:'anim_speed', UX_ANIM_FORCE_RESTART:'anim_restart', disable_blur:'blur', ui_effects_level:'effects',
   net_congestion:'congestion', net_congestion_wifi:'wifi_congestion', net_congestion_mobile:'mobile_congestion', net_qdisc:'qdisc', net_qdisc_wifi:'wifi_queue', net_qdisc_mobile:'mobile_queue',
   net_rps:'rps', net_txqueue:'txqueue', net_route_tune:'route', net_mtu_probing:'mtu_probe', wifi_country:'globe_pin', wifi_scan_throttle:'radar', radio_policy_enable:'cellular_controls',
-  auto_battery_enable:'battery_auto', smart_battery_bias:'battery_bias', smart_media_guard:'media_guard', charge_aware_enable:'charge_aware', night_charge_enable:'night_charge', doze_level:'doze', doze_trim_whitelist:'whitelist',
+  auto_battery_enable:'battery_auto', smart_battery_bias:'battery_bias', smart_media_guard:'media_guard', charge_aware_enable:'charge_aware', night_charge_enable:'night_charge', night_charge_start:'night_charge_start', night_charge_end:'night_charge_end', doze_level:'doze', doze_trim_whitelist:'whitelist',
   wakelock_action:'wakelock', gnss_trim:'satellite', night_modem_idle:'radio_moon', net_screen_off_lte:'lte_screenoff', net_lte_light:'lte_light', night_quiet_enable:'quiet_moon', sustained_temp_mode:'thermal_mode', sustained_temp_enter:'thermal_point',
   perf_ceiling_pct:'perf_cap', cool_gaming:'cool_game', bat_suppress_gaming:'game_battery', BG_TRIM_LEVEL:'cleaner', gms_trim:'service_trim', gms_freeze:'service_freeze',
   UX_MANAGE_OEM_TOGGLES:'oem_switches', athena_service:'athena', phantom_procs:'phantom', haptic_strength:'haptic_power', haptic_touch_strength:'haptic_touch', log_level:'log_detail', lsposed_verbose:'log_hook', ltpo_force:'ltpo', ltpo_video:'ltpo_video', mmfeed_off:'mmfeed',
@@ -9207,7 +9280,8 @@ function nightChargeBadge(state) {
     case 'off': return { cls:'neutral', text:T('nc_state_off', 'Disabled') };
     case 'waiting': return { cls:'neutral', text:T('nc_state_waiting', 'waiting for charging / below 80%') };
     case 'holding': return { cls:'good', text:T('nc_state_holding', '80% ceiling active') };
-    case 'released': return { cls:'good', text:T('nc_state_released', 'released after 06:00') };
+    case 'released': return { cls:'good', text:T('nc_state_released', 'released at window end') };
+    case 'invalid_window': return { cls:'bad', text:T('nc_state_invalid_window', 'invalid interval: start and end must differ') };
     case 'not_exposed': return { cls:'warn', text:T('nc_state_not_exposed', 'not exposed by this kernel') };
     case 'write_failed': return { cls:'bad', text:T('nc_state_write_failed', 'kernel rejected the limit') };
     case 'restore_failed': return { cls:'bad', text:T('nc_state_restore_failed', 'original value not restored') };
@@ -9818,7 +9892,7 @@ const APPLY_MODE = {
   smart_battery_bias:APPLY_LIVE, smart_media_guard:APPLY_LIVE, auto_battery_enable:APPLY_LIVE,
   heavy_prime_escape:APPLY_LIVE, prime_escape_burst_s:APPLY_LIVE, prime_escape_rest_s:APPLY_LIVE,
   wakelock_fitness:APPLY_LIVE, ltpo_video:APPLY_LIVE,
-  charge_aware_enable:APPLY_LIVE, night_charge_enable:APPLY_LIVE, cool_gaming:APPLY_LIVE, bat_suppress_gaming:APPLY_LIVE,
+  charge_aware_enable:APPLY_LIVE, night_charge_enable:APPLY_LIVE, night_charge_start:APPLY_LIVE, night_charge_end:APPLY_LIVE, cool_gaming:APPLY_LIVE, bat_suppress_gaming:APPLY_LIVE,
   night_quiet_enable:APPLY_LIVE, night_modem_idle:APPLY_LIVE, net_screen_off_lte:APPLY_LIVE, net_lte_light:APPLY_LIVE, sustained_temp_mode:APPLY_LIVE,
   sustained_temp_enter:APPLY_LIVE, BG_TRIM_LEVEL:APPLY_LIVE, doze_level:APPLY_LIVE,
   UX_MANAGE_OEM_TOGGLES:APPLY_LIVE, UX_MANAGE_TIMEOUTS:APPLY_LIVE,
@@ -10157,6 +10231,17 @@ const _unav = ASB_CAP_REQUIRES[it.key];
       wrap.appendChild(rng);
       wrap.appendChild(val);
       top.appendChild(wrap);
+    } else if (it.type === 'time') {
+      const time = document.createElement('input');
+      time.type = 'time'; time.className = 'cfg-time';
+      time.step = '60'; time.value = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(cur)) ? String(cur) : it.def;
+      time.setAttribute('aria-label', Tcfg(it.key, 'name', it.name));
+      time.onclick = (e) => e.stopPropagation();
+      time.onchange = () => {
+        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time.value)) { time.value = cur; return; }
+        if (time.value !== String(cur)) cfgSet(it.key, time.value, time);
+      };
+      top.appendChild(time);
     } else {
         const _opts = cfgOptsFor(it);
         if (_opts.length >= 4) {
@@ -10481,7 +10566,8 @@ function asbTabbarVisibility() {
                      !(typeof _deviceOpen !== 'undefined' && _deviceOpen) &&
                      !(typeof _rpOpen !== 'undefined' && _rpOpen);
   const drillIn = document.body.classList.contains('report-active') ||
-                  document.body.classList.contains('zygisk-active');
+                  document.body.classList.contains('zygisk-active') ||
+                  document.body.classList.contains('device-active');
   const hideBar = inCategory || drillIn;
   const bar = document.querySelector('.asb-tabbar');
   if (bar) bar.style.display = hideBar ? 'none' : '';
@@ -10512,6 +10598,7 @@ function cfgRender() {
     }, Math.max(0, _cfgEnterUntil - performance.now()) + 16);
     return;
   }
+  asbPageJumpClear(_el('configPage'));
   list.innerHTML = '';
   _cfgHubSig = '';
   cfgSyncChrome();
@@ -10832,9 +10919,10 @@ async function cfgSet(key, val, ctl) {
         if (ctl) ctl.classList.remove('busy');
         return;
       }
-      if (key === 'night_charge_enable') {
-        /* Saving 1 is only intent. Apply through the ownership-aware helper and report
-         * the device result, never a generic success for an absent or rejected sysfs node. */
+      if (key === 'night_charge_enable' || key === 'night_charge_start' || key === 'night_charge_end') {
+        /* Saving intent or a new boundary is not a kernel result. Reconcile immediately
+         * through the ownership-aware helper; changing a boundary can therefore release an
+         * old hold without waiting for the maintenance loop. */
         let nc = { state:'unknown' };
         try {
           const nr = await run('sh ' + shQuote(MD + '/runtime/asb_night_charge.sh') + ' apply 2>/dev/null');
@@ -10842,9 +10930,8 @@ async function cfgSet(key, val, ctl) {
         } catch (e) {}
         _nightCharge = Object.assign(_nightCharge, nc);
         const nb = nightChargeBadge(nc.state);
-        toast(String(val) === '1' ? nb.text
-          : (nc.state === 'restore_failed' ? nb.text
-            : T('t_nc_off', 'Night charge limit off · ASB restriction released')), nb.cls);
+        const ncOff = key === 'night_charge_enable' && String(val) !== '1' && nc.state !== 'restore_failed';
+        toast(ncOff ? T('t_nc_off', 'Night charge limit off · ASB restriction released') : nb.text, nb.cls);
         cfgRender();
         if (ctl) ctl.classList.remove('busy');
         return;
@@ -14158,6 +14245,11 @@ function asbPageJumpActive(nav, id, center) {
     else asbPageJumpIndicator(nav);
   }
 }
+function asbPageJumpIsDock(nav) {
+  return !!(nav && nav.classList && (nav.classList.contains('report-nav') ||
+    nav.classList.contains('zy-page-nav') || nav.classList.contains('dev-page-nav') ||
+    nav.classList.contains('cfg-page-nav')));
+}
 function asbPageJumpClear(page) {
   if (!page) return;
   if (page._asbJumpDispose) page._asbJumpDispose();
@@ -14166,17 +14258,15 @@ function asbPageJumpClear(page) {
   page._asbJumpDispose = null; page._asbJumpNav = null;
 }
 function asbPageJumpWatch(nav, items) {
-  if (!nav.classList || (!nav.classList.contains('report-nav') && !nav.classList.contains('zy-page-nav'))) return;
+  if (!asbPageJumpIsDock(nav)) return;
   if (!nav.closest || !nav.isConnected) return;
   const page = nav.closest('.live-page');
   if (!page || !page.addEventListener) return;
   asbPageJumpClear(page);
   /* A transformed, self-scrolling overlay is the containing block for fixed
-   * descendants in Chromium/WebView. Portal only the two bottom docks to body;
-   * otherwise the dock would scroll away with the very content it controls. */
-  if ((nav.classList.contains('report-nav') || nav.classList.contains('zy-page-nav')) && document.body) {
-    document.body.appendChild(nav);
-  }
+   * descendants in Chromium/WebView. Portal bottom docks to body; ownership stays
+   * with the source page so back/close/render removes both DOM and scroll listener. */
+  if (document.body) document.body.appendChild(nav);
   page._asbJumpNav = nav;
   let queued = false;
   function update() {
@@ -14220,7 +14310,7 @@ function asbPageJumpIcon(id) {
 }
 function asbPageJump(items, label, extraClass) {
   const nav = document.createElement('div');
-  const dock = extraClass === 'report-nav' || extraClass === 'zy-page-nav';
+  const dock = ['report-nav', 'zy-page-nav', 'dev-page-nav', 'cfg-page-nav'].indexOf(extraClass) >= 0;
   nav.className = 'lgr-jump' + (extraClass ? ' ' + extraClass : '');
   nav._asbJumpButtons = [];
   if (nav.setAttribute) {
@@ -14245,7 +14335,7 @@ function asbPageJump(items, label, extraClass) {
     b._asbJumpTarget = it[0]; b._asbJumpLabel = it[1];
     if (dock) {
       const icon = document.createElement('span'); icon.className = 'asb-tab-ico'; icon.setAttribute('aria-hidden', 'true');
-      icon.innerHTML = techIcon(asbPageJumpIcon(it[0]));
+      icon.innerHTML = techIcon(it[2] || asbPageJumpIcon(it[0]));
       const text = document.createElement('span'); text.className = 'asb-tab-label'; text.textContent = it[1];
       b.appendChild(icon); b.appendChild(text); b.setAttribute('aria-label', it[1]);
     } else b.textContent = it[1];
@@ -14750,10 +14840,11 @@ function deviceInfoNav(d) {
     const group = spec[3];
     if (!seen[group] && d.sections[spec[0]] && DEVICE_GROUPS[group]) {
       seen[group] = true;
-      items.push(['dev-group-' + group, T(DEVICE_GROUPS[group][0], DEVICE_GROUPS[group][1])]);
+      const icons = { hw:'kernel', sw:'panel', kernel:'kernel', root:'zygisk_guard', asb:'switches' };
+      items.push(['dev-group-' + group, T(DEVICE_GROUPS[group][0], DEVICE_GROUPS[group][1]), icons[group] || 'panel']);
     }
   });
-  return items.length > 1 ? asbPageJump(items, T('dev_nav_title', 'Jump to'), 'dev-nav') : null;
+  return items.length > 1 ? asbPageJump(items, T('dev_nav_title', 'Jump to'), 'dev-page-nav') : null;
 }
 function deviceInfoOverview(d) {
   const rows = [];
@@ -15977,6 +16068,7 @@ function deviceZygiskEditor(d, onDone) {
 function deviceInfoRender(d) {
   const body = _el('deviceBody');
   if (!body) return 0;
+  asbPageJumpClear(_el('devicePage'));
   body.textContent = '';
   const note = logReportNote(T('dev_readonly_note', 'Read-only snapshot. ASB reads firmware, procfs, sysfs and its own runtime state; it does not change kernel, SuSFS, CPU, GPU or network settings.'));
   note.classList.add('dev-evidence');
@@ -16143,6 +16235,7 @@ function closeDevicePage() {
   p.classList.remove('open');
   p.setAttribute('aria-hidden', 'true');
   document.body.classList.remove('device-active');
+  asbPageJumpClear(p);
   if (!document.body.classList.contains('report-active') &&
       !document.body.classList.contains('config-active') &&
       !(typeof _liveOpen !== 'undefined' && _liveOpen)) {
@@ -17270,6 +17363,19 @@ function logReportZygisk(d) {
   const unknown = function (v) { return v === undefined || v === '' || v === 'unknown'; };
   const delta = function (key) { return unknown(z[key + '_delta']) ? '—' : String(z[key + '_delta']); };
   const numericDelta = function (key) { return unknown(z[key + '_delta']) ? null : +z[key + '_delta']; };
+  /* A reset makes the capture delta unknowable, not the latest absolute counter. Show
+   * that real value at hero size, but label its scope explicitly and never turn it into
+   * a capture delta or a claim of continuous observation. */
+  const useLatest = function (key) {
+    return z.deltas === 'counter_reset_or_restart' && numericDelta(key) === null && !unknown(z[key + '_latest']);
+  };
+  const heroDelta = function (key) { return useLatest(key) ? String(z[key + '_latest']) : delta(key); };
+  const heroScope = function (key, ordinary) {
+    const prefix = T('lr_zy_since_restart', 'current total · capture delta unknown');
+    /* A subtitle can contain another counter with a different availability. Mark that
+     * counter too, but do not print the same scope twice when the whole card reset. */
+    return useLatest(key) ? (ordinary.indexOf(prefix) === 0 ? ordinary : prefix + ' · ' + ordinary) : ordinary;
+  };
   const spawnDelta = numericDelta('spawn_events'), eventDelta = numericDelta('events_total');
   const launchDelta = numericDelta('launch_events'), ledgerDelta = numericDelta('ledger_events');
   const grid = document.createElement('div'); grid.className = 'lgr-heros';
@@ -17281,20 +17387,23 @@ function logReportZygisk(d) {
     return logReportT('lr_zy_start_latest', '{start} → {latest}', {
       start: unknown(z[key + '_start']) ? '—' : z[key + '_start'], latest: unknown(z[key + '_latest']) ? '—' : z[key + '_latest'] });
   };
-  const detail = function (title, value, text, lines) {
-    return { title: title, value: value, nowLabel: T('lr_detail_capture', 'In this capture'), text: text, lines: lines.concat([coverageText]) };
+  const detail = function (title, value, text, lines, currentTotal) {
+    return { title: title, value: value,
+      nowLabel: T(currentTotal ? 'lr_detail_current_total' : 'lr_detail_capture', currentTotal ? 'Current companion total' : 'In this capture'),
+      text: text, lines: lines.concat([coverageText]) };
   };
   const counter = function (key, label) { return label + ': ' + delta(key); };
   const activityTitle = T('lr_zy_activity', 'Accepted process start/exit events');
-  const activityValue = delta('events_total');
-  grid.appendChild(logReportHero('🛰️', activityTitle, activityValue, startLatest('events_total'), false,
+  const activityValue = heroDelta('events_total');
+  grid.appendChild(logReportHero('🛰️', activityTitle, activityValue,
+    heroScope('events_total', startLatest('events_total')), false,
     detail(activityTitle, activityValue, T('lr_zy_detail_events', 'Accepted start/exit notifications from the observer lifecycle channel. This is not a count of boosted apps and does not measure a performance gain.'), [
       startLatest('events_total'), counter('spawn_events', T('lr_zy_spawns', 'Observed process starts in capture')),
       counter('events_dropped_total', T('dev_zygisk_observer_events_dropped_total', 'Dropped events · total')),
-      T('lr_zy_loaded', 'Validated live processes at latest snapshot') + ': ' + String(z.loaded || '0')])));
-  const launchTitle = T('lr_zy_launch', 'Cold starts heard'), launchValue = delta('launch_events');
+      T('lr_zy_loaded', 'Validated live processes at latest snapshot') + ': ' + String(z.loaded || '0')], useLatest('events_total'))));
+  const launchTitle = T('lr_zy_launch', 'Cold starts heard'), launchValue = heroDelta('launch_events');
   grid.appendChild(logReportHero('🚀', launchTitle, launchValue,
-    logReportT('lr_zy_accepted', '{n} accepted lift requests', { n: delta('launch_accepted') }), false,
+    heroScope('launch_events', heroScope('launch_accepted', logReportT('lr_zy_accepted', '{n} accepted lift requests', { n: heroDelta('launch_accepted') }))), false,
     detail(launchTitle, launchValue, T('lr_zy_accept_note', 'An accepted cold-start request was acknowledged by the governor after its enabled/screen checks. This is not proof that a lift was armed or that a frequency ceiling changed; thermal and other governor gates still apply.'), [
       startLatest('launch_events'), counter('launch_accepted', T('dev_zygisk_observer_launch_accepted', 'Cold starts accepted by the governor')),
       counter('launch_vetoed', T('dev_zygisk_observer_launch_vetoed', 'Cold starts vetoed')),
@@ -17303,24 +17412,24 @@ function logReportZygisk(d) {
       counter('launch_long', T('dev_zygisk_observer_launch_long', 'Cold starts of slow-starting apps')),
       counter('launch_short', T('dev_zygisk_observer_launch_short', 'Cold starts of fast-starting apps')),
       counter('launch_class_fallback', T('lr_zy_launch_fallback', 'Cold starts without a measured launch class')),
-      counter('launch_screen_off', T('dev_zygisk_observer_launch_screen_off', 'Cold starts vetoed locally with the screen off'))])));
-  const hintsTitle = T('lr_zy_hints', 'Lifecycle hints'), hintsValue = delta('policy_hints');
+      counter('launch_screen_off', T('dev_zygisk_observer_launch_screen_off', 'Cold starts vetoed locally with the screen off'))], useLatest('launch_events'))));
+  const hintsTitle = T('lr_zy_hints', 'Lifecycle hints'), hintsValue = heroDelta('policy_hints');
   grid.appendChild(logReportHero('💡', hintsTitle, hintsValue,
-    logReportT('lr_zy_accept_veto', '{ok} accepted · {veto} vetoed', { ok: delta('hints_accepted'), veto: delta('hints_vetoed') }), false,
+    heroScope('policy_hints', heroScope('hints_accepted', heroScope('hints_vetoed', logReportT('lr_zy_accept_veto', '{ok} accepted · {veto} vetoed', { ok: heroDelta('hints_accepted'), veto: heroDelta('hints_vetoed') })))), false,
     detail(hintsTitle, hintsValue, T('lr_zy_detail_hints', 'Lifecycle hints ask the governor to refresh its policy after a relevant app state change. Zero means that no hint was sent in this interval, not that apps had no lifecycle events. Accepted or vetoed describes the request only; it is not an energy measurement.'), [
       startLatest('policy_hints'), counter('hints_accepted', T('dev_zygisk_observer_hints_accepted', 'Policy hints accepted')),
       counter('hints_vetoed', T('dev_zygisk_observer_hints_vetoed', 'Policy hints vetoed')),
-      counter('hints_screen_off', T('dev_zygisk_observer_hints_screen_off', 'Refreshes not sent with the screen off'))])));
+      counter('hints_screen_off', T('dev_zygisk_observer_hints_screen_off', 'Refreshes not sent with the screen off'))], useLatest('policy_hints'))));
   const ipcTitle = T('lr_zy_ipc', 'Observer IPC CPU');
-  const ipcValue = logReportT('lr_zy_ms', '{n} ms', { n: delta('ipc_cpu_ms') });
+  const ipcValue = logReportT('lr_zy_ms', '{n} ms', { n: heroDelta('ipc_cpu_ms') });
   const ipcLines = [startLatest('ipc_cpu_ms'), counter('ipc_cpu_ms', T('lr_zy_ipc', 'Observer IPC CPU')),
     counter('ipc_wakeups', T('dev_zygisk_observer_ipc_wakeups', 'IPC wakeups'))];
   const ipcMs = numericDelta('ipc_cpu_ms'), ipcWakes = numericDelta('ipc_wakeups');
   if (ipcMs !== null && ipcWakes !== null && ipcWakes > 0)
     ipcLines.push(T('lr_zy_detail_per_wake', 'CPU per wakeup') + ': ' + (ipcMs / ipcWakes).toFixed(3) + ' ms');
   grid.appendChild(logReportHero('⚙️', ipcTitle, ipcValue,
-    logReportT('lr_zy_wake', '{n} wakeups', { n: delta('ipc_wakeups') }), false,
-    detail(ipcTitle, ipcValue, T('lr_zy_detail_ipc', 'CPU time spent by the observer IPC path between the two snapshots. It covers this observer path, not every ASB component. Milliseconds per wakeup are shown only when both counters are known; neither number proves a net battery cost or saving.'), ipcLines)));
+    heroScope('ipc_cpu_ms', heroScope('ipc_wakeups', logReportT('lr_zy_wake', '{n} wakeups', { n: heroDelta('ipc_wakeups') }))), false,
+    detail(ipcTitle, ipcValue, T('lr_zy_detail_ipc', 'CPU time spent by the observer IPC path between the two snapshots. It covers this observer path, not every ASB component. Milliseconds per wakeup are shown only when both counters are known; neither number proves a net battery cost or saving.'), ipcLines, useLatest('ipc_cpu_ms'))));
   sec.appendChild(grid);
   const stateText = function (state) { return T('dev_zygisk_link_' + state, state || 'unknown'); };
   sec.appendChild(logReportRow(T('lr_zy_start_state', 'At capture start'), stateText(z.start_state)));
@@ -19013,6 +19122,7 @@ function closeConfigPage(toMain) {
   asbNavAnimMark();
   p.classList.remove('open');
   document.body.classList.remove('config-active');
+  asbPageJumpClear(p);
   asbTabbarVisibility();
   // Two exit paths: - swipe-right from Config when Live is mounted underneath: just drop
   // config-active and Live fades straight back in (no tear-down → no double animation).
