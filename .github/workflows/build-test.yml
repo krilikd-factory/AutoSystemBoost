@@ -541,6 +541,24 @@ jobs:
             fi
           done
 
+          # Host packaging evidence is deliberately separate from on-device runtime proof.
+          # SOURCE_ONLY archives may omit these external prebuilts; a release/test flashable
+          # package must carry both AIDL interface versions, both bitnesses and the attacher.
+          DSP_REFERENCE_PRESENT=true
+          for _dr in \
+            arm64-v8a/libasbdsp_v2.so armeabi-v7a/libasbdsp_v2.so \
+            arm64-v8a/libasbdsp_v3.so armeabi-v7a/libasbdsp_v3.so \
+            arm64-v8a/asb_dsp_attach; do
+            [ -s "src/DSP_AIDL/prebuilt/$_dr" ] || DSP_REFERENCE_PRESENT=false
+          done
+          DSP_AIDL_BUILT=false
+          if [ "$DSP_REFERENCE_PRESENT" = true ] \
+             && grep -aq 'ASB createEffect' "$PKG_TEST/bin/libasbdsp_v3.so" 2>/dev/null \
+             && grep -aq 'ASB createEffect' "$PKG_TEST/bin/libasbdsp_v3_32.so" 2>/dev/null; then
+            DSP_AIDL_BUILT=true
+          fi
+          # No host-side package check can prove that audioserver loaded this build.
+          DSP_RUNTIME_VERIFIED=false
           ASB_VER=$(grep '^version=' module.prop | cut -d= -f2)
           ASB_CODE=$(grep '^versionCode=' module.prop | cut -d= -f2)
           BASE_VER="$ASB_VER"
@@ -570,6 +588,10 @@ jobs:
             "version": "${ASB_VER}",
             "versionCode": ${ASB_CODE},
             "source_commit": "${ASB_COMMIT}",
+            "dsp_reference_present": ${DSP_REFERENCE_PRESENT},
+            "dsp_aidl_built": ${DSP_AIDL_BUILT},
+            "dsp_runtime_verified": ${DSP_RUNTIME_VERIFIED},
+            "dsp_runtime_evidence": "not_run_on_host",
             "required_artifacts": ["bin/asb", "bin/asb_dsp_attach", "service.sh", "runtime/asb_arbiter.sh", "runtime/asb_capabilities.sh", "tools/asb_config_backup.sh", "tools/logkit/asb_log_full_day.sh"],
             "artifacts": {"bin/asb": {"abi": "arm64-v8a", "sha256": "${ASB_BIN_SHA}"}}
           }
@@ -756,6 +778,9 @@ jobs:
           done
           unzip -p "$ZIP_TEST" release-manifest.json | grep -q '"distribution": "flashable-module"' || { echo "ERROR: release manifest missing/invalid"; exit 1; }
           unzip -p "$ZIP_TEST" release-manifest.json | grep -q '"abi": "arm64-v8a"' || { echo "ERROR: release manifest ABI missing"; exit 1; }
+          unzip -p "$ZIP_TEST" release-manifest.json | jq -e \
+            '.dsp_reference_present == true and .dsp_aidl_built == true and .dsp_runtime_verified == false and .dsp_runtime_evidence == "not_run_on_host"' >/dev/null \
+            || { echo "ERROR: DSP packaging/runtime evidence fields are missing or overclaim runtime verification"; exit 1; }
           echo "TEST zip validation passed"
 
       # Upload the package CONTENTS, not the packaged zip. actions/upload-artifact always
