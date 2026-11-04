@@ -1,15 +1,16 @@
 {
   "cfg_battery_section_charging": "充电",
-  "cfg_battery_section_charging_hint": "充电时的性能策略和可选的固定夜间上限。",
+  "cfg_battery_section_charging_hint": "充电性能和可选的 80% 限制，支持自定义本地时间区间。",
   "nc_state_off": "已关闭",
   "nc_state_waiting": "等待充电 / 电量低于 80%",
   "nc_state_holding": "80% 上限已生效",
-  "nc_state_released": "06:00 后已解除限制",
+  "nc_state_released": "已在区间结束时解除限制",
   "nc_state_not_exposed": "此内核未提供控制接口",
   "nc_state_write_failed": "内核拒绝写入上限",
   "nc_state_restore_failed": "原值尚未恢复",
   "nc_state_external": "其他组件更改了充电状态",
   "nc_state_unknown": "充电状态未知",
+  "nc_state_invalid_window": "无效区间：开始和结束时间必须不同",
   "t_nc_off": "夜间上限已关闭 · ASB 限制已解除",
   "nav_live": "监控",
   "lv_ses": "会话",
@@ -41,8 +42,16 @@
   "wb_handover": "屏幕开启时移动数据会保持就绪，耗电会略有增加",
   "cfg": {
     "night_charge_enable": {
-      "name": "夜间充电上限（22:00–06:00）",
-      "desc": "可选的夜间充电上限。22:00 至 06:00 充电时，ASB 通过受支持的标准内核接口将电量维持在约 80%；06:00 后恢复原值，以便继续充电。不会主动放空已超过 80% 的电池，不替代厂商自适应充电，默认关闭。若内核未提供受支持的可写接口，状态会如实显示。关闭或卸载时，仅恢复仍由 ASB 持有的值。"
+      "name": "夜间充电限制",
+      "desc": "可选的自定义区间充电控制。在区间内充电时，ASB 使用受支持的标准内核接口将电量保持在约 80%；结束时恢复此前的确切值。包含开始时间，不包含结束时间；区间可以跨越午夜，但两个端点不能相同。不会将高于 80% 的电池放电，不替代厂商自适应充电，默认关闭。没有可写接口时，状态会显示 not exposed。停用、区间结束或卸载仅恢复仍由 ASB 控制的值。"
+    },
+    "night_charge_start": {
+      "name": "充电区间开始",
+      "desc": "可选 80% 窗口的本地开始时间。包含开始时间；更改后立即重新应用充电状态。"
+    },
+    "night_charge_end": {
+      "name": "充电区间结束",
+      "desc": "ASB 恢复此前内核值的本地时间。不包含结束时间，且必须与开始时间不同；更早的结束时间表示跨越午夜。"
     },
     "net_mtu_probing": {
       "name": "TCP MTU 恢复",
@@ -2355,6 +2364,8 @@
   "lr_zy_apps": "已选应用",
   "lr_zy_abi": "已安装的观察器 ABI",
   "lr_zy_reset": "至少一个计数器减少：companion 已重启或计数器已重置。相关差值仍为未知。",
+  "lr_zy_since_restart": "当前总计 · 捕获增量未知",
+  "lr_detail_current_total": "当前 companion 总计",
   "lr_zy_coverage_one": "仅有一个快照，无法推断捕获期间差值。",
   "lr_zy_coverage_two": "开始/最近快照：差值涵盖两点之间，但不证明重启期间持续观测。",
   "lr_zy_note": "事件证明 companion 活动，不证明完全控制 Zygisk、性能提升或节能。此处未进行 A/B 比较。",

@@ -1,21 +1,30 @@
 {
   "cfg_battery_section_charging": "Şarj",
-  "cfg_battery_section_charging_hint": "Şarj sırasında performans ve isteğe bağlı sabit gece sınırı.",
+  "cfg_battery_section_charging_hint": "Şarj performansı ve özel yerel zaman aralığıyla isteğe bağlı %80 sınırı.",
   "nc_state_off": "Devre dışı",
   "nc_state_waiting": "şarj bekleniyor / %80’in altında",
   "nc_state_holding": "%80 sınırı etkin",
-  "nc_state_released": "06:00’dan sonra serbest bırakıldı",
+  "nc_state_released": "kısıtlama aralık sonunda kaldırıldı",
   "nc_state_not_exposed": "bu çekirdek denetimi sunmuyor",
   "nc_state_write_failed": "çekirdek sınırı reddetti",
   "nc_state_restore_failed": "özgün değer geri yüklenemedi",
   "nc_state_external": "başka bir bileşen şarjı değiştirdi",
   "nc_state_unknown": "şarj durumu bilinmiyor",
+  "nc_state_invalid_window": "geçersiz aralık: başlangıç ve bitiş farklı olmalı",
   "t_nc_off": "Gece sınırı kapalı · ASB kısıtlaması kaldırıldı",
   "wb_handover": "Mobil veri ekran açıkken hazır tutulur ve biraz daha fazla pil tüketir",
   "cfg": {
     "night_charge_enable": {
-      "name": "Gece Şarj Sınırı (22:00–06:00)",
-      "desc": "İsteğe bağlı gece sınırı. 22:00–06:00 arasında şarj olurken ASB, desteklenen standart bir çekirdek denetimiyle yaklaşık %80’de tutar; 06:00’dan sonra şarjın sürebilmesi için önceki değeri geri yükler. %80’in üzerindeki pili boşaltmaz, OEM uyarlanabilir şarjını değiştirmez ve varsayılan olarak kapalıdır. Desteklenen yazılabilir denetim yoksa durum bunu açıkça belirtir. Kapatma veya kaldırma sırasında yalnızca hâlâ ASB’ye ait olan değer geri yüklenir."
+      "name": "Gece Şarj Sınırı",
+      "desc": "Özel aralıklı isteğe bağlı şarj denetimi. Pencere içinde şarj olurken ASB, desteklenen standart çekirdek denetimiyle yaklaşık %80 düzeyini korur; sonda önceki değeri aynen geri yükler. Başlangıç dahil, bitiş hariçtir; pencere gece yarısını geçebilir, ancak eşit sınırlar geçersizdir. %80 üzerindeki pili boşaltmaz, OEM uyarlanabilir şarjını değiştirmez ve varsayılan olarak kapalıdır. Yazılabilir denetim yoksa durum not exposed der. Kapatma, pencere sonu veya kaldırma yalnızca hâlâ ASB’ye ait değerleri geri yükler."
+    },
+    "night_charge_start": {
+      "name": "Şarj aralığı başlangıcı",
+      "desc": "İsteğe bağlı %80 penceresinin yerel başlangıç saati. Başlangıç dahildir; değişiklik hemen uygulanır."
+    },
+    "night_charge_end": {
+      "name": "Şarj aralığı bitişi",
+      "desc": "ASB’nin önceki çekirdek değerini geri yüklediği yerel saat. Bitiş hariçtir ve başlangıçtan farklı olmalıdır; daha erken bitiş gece yarısını geçer."
     },
     "net_mtu_probing": {
       "name": "TCP MTU kurtarma",
@@ -2355,6 +2364,8 @@
   "lr_zy_apps": "Seçili uygulamalar",
   "lr_zy_abi": "Kurulu gözlemci ABI",
   "lr_zy_reset": "En az bir sayaç azaldı: companion yeniden başladı veya sayaçlar sıfırlandı. Etkilenen deltalar bilinmiyor.",
+  "lr_zy_since_restart": "geçerli toplam · capture deltası bilinmiyor",
+  "lr_detail_current_total": "Geçerli companion toplamı",
   "lr_zy_coverage_one": "Yalnızca bir anlık görüntü var; capture içi delta çıkarılamaz.",
   "lr_zy_coverage_two": "Başlangıç/son anlık görüntüler: deltalar aradaki süreyi kapsar, ancak yeniden başlatma boyunca kesintisiz gözlemi kanıtlamaz.",
   "lr_zy_note": "Olaylar companion etkinliğini kanıtlar; tam Zygisk kontrolünü, performans artışını veya enerji tasarrufunu kanıtlamaz. Burada A/B karşılaştırması yoktur.",

@@ -1,21 +1,30 @@
 {
   "cfg_battery_section_charging": "Pengisian daya",
-  "cfg_battery_section_charging_hint": "Performa saat mengisi daya dan batas malam tetap opsional.",
+  "cfg_battery_section_charging_hint": "Performa pengisian dan batas 80% opsional dengan interval waktu lokal kustom.",
   "nc_state_off": "Nonaktif",
   "nc_state_waiting": "menunggu pengisian / di bawah 80%",
   "nc_state_holding": "batas 80% aktif",
-  "nc_state_released": "dilepas setelah pukul 06:00",
+  "nc_state_released": "pembatasan dilepas pada akhir interval",
   "nc_state_not_exposed": "kernel ini tidak menyediakan kontrol",
   "nc_state_write_failed": "kernel menolak batas",
   "nc_state_restore_failed": "nilai asli belum dipulihkan",
   "nc_state_external": "komponen lain mengubah pengisian",
   "nc_state_unknown": "status pengisian tidak diketahui",
+  "nc_state_invalid_window": "interval tidak valid: awal dan akhir harus berbeda",
   "t_nc_off": "Batas malam nonaktif · pembatasan ASB dilepas",
   "wb_handover": "Data seluler tetap siap saat layar menyala dan memakai sedikit lebih banyak baterai",
   "cfg": {
     "night_charge_enable": {
-      "name": "Batas Pengisian Malam (22:00–06:00)",
-      "desc": "Batas malam opsional. Saat mengisi daya pukul 22:00–06:00, ASB memakai kontrol kernel standar yang didukung untuk menahan sekitar 80%; setelah pukul 06:00 nilai sebelumnya dipulihkan agar pengisian dapat berlanjut. Baterai di atas 80% tidak dikosongkan. Fitur ini tidak menggantikan pengisian adaptif OEM dan nonaktif secara default. Jika kontrol yang dapat ditulis tidak tersedia, status akan menyatakannya. Saat dinonaktifkan atau dihapus, hanya nilai yang masih dimiliki ASB yang dipulihkan."
+      "name": "Batas Pengisian Malam",
+      "desc": "Kontrol pengisian opsional dengan interval kustom. Saat mengisi di dalam jendela, ASB memakai kontrol kernel standar yang didukung untuk menahan sekitar 80%; di akhir, nilai sebelumnya dipulihkan persis. Awal termasuk dan akhir tidak; jendela dapat melewati tengah malam, tetapi titik yang sama tidak valid. Baterai di atas 80% tidak dikosongkan. Pengisian adaptif OEM tidak diganti dan fitur nonaktif secara default. Tanpa kontrol yang dapat ditulis, status menunjukkan tidak tersedia. Menonaktifkan, akhir jendela, atau penghapusan hanya memulihkan nilai yang masih dimiliki ASB."
+    },
+    "night_charge_start": {
+      "name": "Awal interval pengisian",
+      "desc": "Waktu lokal mulai jendela 80% opsional. Awal termasuk; perubahan langsung diterapkan."
+    },
+    "night_charge_end": {
+      "name": "Akhir interval pengisian",
+      "desc": "Waktu lokal saat ASB memulihkan nilai kernel sebelumnya. Akhir tidak termasuk dan harus berbeda dari awal; akhir yang lebih awal melewati tengah malam."
     },
     "net_mtu_probing": {
       "name": "Pemulihan MTU TCP",
@@ -2355,6 +2364,8 @@
   "lr_zy_apps": "Aplikasi dipilih",
   "lr_zy_abi": "ABI observer terpasang",
   "lr_zy_reset": "Setidaknya satu counter menurun: companion dimulai ulang atau counter direset. Delta terkait tetap tidak diketahui.",
+  "lr_zy_since_restart": "total saat ini · delta capture tidak diketahui",
+  "lr_detail_current_total": "Total companion saat ini",
   "lr_zy_coverage_one": "Hanya satu snapshot tersedia; delta dalam capture tidak dapat disimpulkan.",
   "lr_zy_coverage_two": "Snapshot awal/akhir: delta mencakup interval tersebut, tetapi tidak membuktikan pengamatan terus-menerus selama restart.",
   "lr_zy_note": "Peristiwa membuktikan aktivitas companion, bukan kendali penuh Zygisk, peningkatan performa, atau penghematan energi. Tidak ada perbandingan A/B di sini.",

@@ -1,15 +1,16 @@
 {
   "cfg_battery_section_charging": "Charging",
-  "cfg_battery_section_charging_hint": "Performance while charging and an optional fixed overnight charge ceiling.",
+  "cfg_battery_section_charging_hint": "Charging performance and an optional 80% limit with a custom local-time interval.",
   "nc_state_off": "Disabled",
   "nc_state_waiting": "waiting for charging / below 80%",
   "nc_state_holding": "80% ceiling active",
-  "nc_state_released": "released after 06:00",
+  "nc_state_released": "restriction released at window end",
   "nc_state_not_exposed": "not exposed by this kernel",
   "nc_state_write_failed": "kernel rejected the limit",
   "nc_state_restore_failed": "original value not restored",
   "nc_state_external": "another component changed charging",
   "nc_state_unknown": "charging status unknown",
+  "nc_state_invalid_window": "invalid interval: start and end must differ",
   "t_nc_off": "Night charge limit off · ASB restriction released",
   "opt": {
     "3": "+3 dB",
@@ -204,8 +205,16 @@
   "wb_handover": "Mobile data stays ready while the screen is on, which uses a little more battery",
   "cfg": {
     "night_charge_enable": {
-      "name": "Night Charge Limit (22:00–06:00)",
-      "desc": "Optional overnight ceiling. While charging from 22:00 to 06:00, ASB uses a supported standard kernel control to hold around 80%; after 06:00 it restores the previous value so charging can continue. It never discharges a battery already above 80%, does not replace OEM Adaptive Charging, and is off by default. If no supported writable control exists, the status says not exposed. Disable or uninstall restores only a value still owned by ASB."
+      "name": "Night Charge Limit",
+      "desc": "Optional charging control for a custom interval. While charging inside the window, ASB uses a supported standard kernel control to hold around 80%; at the end it restores the exact previous value. Start is inclusive, end exclusive; windows may cross midnight, but equal endpoints are invalid. It never discharges a battery above 80%, does not replace OEM Adaptive Charging and is off by default. If no writable control exists, the status says not exposed. Disable, window exit or uninstall restores only values still owned by ASB."
+    },
+    "night_charge_start": {
+      "name": "Charge window start",
+      "desc": "Local time when the optional 80% window begins. Start is inclusive; changing it reconciles charging immediately."
+    },
+    "night_charge_end": {
+      "name": "Charge window end",
+      "desc": "Local time when ASB restores the previous kernel value. End is exclusive and must differ from start; an earlier end crosses midnight."
     },
     "net_mtu_probing": {
       "name": "TCP MTU Recovery",
@@ -2214,6 +2223,8 @@
   "lr_zy_apps": "Selected apps",
   "lr_zy_abi": "Installed observer ABI",
   "lr_zy_reset": "At least one counter decreased: the companion restarted or its counters reset. Affected deltas remain unknown.",
+  "lr_zy_since_restart": "current total · capture delta unknown",
+  "lr_detail_current_total": "Current companion total",
   "lr_zy_coverage_one": "Only one snapshot is available; no in-capture delta can be inferred.",
   "lr_zy_coverage_two": "Start/latest snapshots: deltas cover the interval between them, but do not prove continuous observation through a restart.",
   "lr_zy_note": "Observed events prove companion activity, not total Zygisk control, performance improvement or energy savings. No A/B comparison is made here.",

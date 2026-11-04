@@ -1,21 +1,30 @@
 {
   "cfg_battery_section_charging": "Laden",
-  "cfg_battery_section_charging_hint": "Leistung beim Laden und eine optionale feste Ladegrenze für die Nacht.",
+  "cfg_battery_section_charging_hint": "Ladeleistung und optionale 80-%-Grenze mit frei wählbarem lokalem Zeitintervall.",
   "nc_state_off": "Deaktiviert",
   "nc_state_waiting": "wartet auf Laden / unter 80 %",
   "nc_state_holding": "80-%-Grenze aktiv",
-  "nc_state_released": "nach 06:00 Uhr freigegeben",
+  "nc_state_released": "Begrenzung am Intervallende aufgehoben",
   "nc_state_not_exposed": "von diesem Kernel nicht bereitgestellt",
   "nc_state_write_failed": "Kernel hat die Grenze abgelehnt",
   "nc_state_restore_failed": "Ausgangswert nicht wiederhergestellt",
   "nc_state_external": "eine andere Komponente hat das Laden geändert",
   "nc_state_unknown": "Ladestatus unbekannt",
+  "nc_state_invalid_window": "ungültiges Intervall: Start und Ende müssen sich unterscheiden",
   "t_nc_off": "Nachtladegrenze aus · ASB-Beschränkung aufgehoben",
   "wb_handover": "Mobilfunkdaten bleiben bei eingeschaltetem Display bereit und verbrauchen etwas mehr Akku",
   "cfg": {
     "night_charge_enable": {
-      "name": "Nachtladegrenze (22:00–06:00)",
-      "desc": "Optionale Ladegrenze für die Nacht. Beim Laden zwischen 22:00 und 06:00 Uhr nutzt ASB eine unterstützte Standard-Kernelschnittstelle, um etwa 80 % zu halten; nach 06:00 Uhr wird der vorherige Wert wiederhergestellt, damit der Ladevorgang fortgesetzt werden kann. Ein Akku über 80 % wird nicht entladen. Die OEM-Funktion für adaptives Laden wird nicht ersetzt; standardmäßig ist die Option aus. Ohne unterstützte schreibbare Schnittstelle meldet der Status dies ehrlich. Beim Deaktivieren oder Deinstallieren wird nur ein noch von ASB kontrollierter Wert wiederhergestellt."
+      "name": "Nachtladegrenze",
+      "desc": "Optionale Ladebegrenzung für ein frei wählbares Intervall. Beim Laden innerhalb des Fensters hält ASB über eine unterstützte Standard-Kernelschnittstelle etwa 80 %; am Ende wird der exakte vorherige Wert wiederhergestellt. Der Start ist eingeschlossen, das Ende ausgeschlossen; das Fenster darf über Mitternacht reichen, gleiche Grenzen sind ungültig. Akkus über 80 % werden nicht entladen. OEM Adaptive Charging wird nicht ersetzt; standardmäßig ist die Option aus. Ohne schreibbare Schnittstelle meldet der Status not exposed. Deaktivieren, Intervallende oder Deinstallation stellt nur noch von ASB kontrollierte Werte wieder her."
+    },
+    "night_charge_start": {
+      "name": "Beginn des Ladeintervalls",
+      "desc": "Lokale Startzeit des optionalen 80-%-Fensters. Der Start ist eingeschlossen; eine Änderung wird sofort angewendet."
+    },
+    "night_charge_end": {
+      "name": "Ende des Ladeintervalls",
+      "desc": "Lokale Zeit für die Wiederherstellung des vorherigen Kernelwerts. Das Ende ist ausgeschlossen und muss sich vom Start unterscheiden; ein früheres Ende überschreitet Mitternacht."
     },
     "net_mtu_probing": {
       "name": "TCP-MTU-Wiederherstellung",
@@ -2355,6 +2364,8 @@
   "lr_zy_apps": "Ausgewählte Apps",
   "lr_zy_abi": "Installierte Observer-ABI",
   "lr_zy_reset": "Mindestens ein Zähler sank: Companion-Neustart oder Zähler-Reset. Betroffene Deltas bleiben unbekannt.",
+  "lr_zy_since_restart": "aktueller Gesamtwert · Capture-Delta unbekannt",
+  "lr_detail_current_total": "Aktueller Companion-Gesamtwert",
   "lr_zy_coverage_one": "Nur ein Snapshot vorhanden; kein Capture-Delta ableitbar.",
   "lr_zy_coverage_two": "Start-/End-Snapshots: Deltas gelten für das Intervall dazwischen, beweisen aber keine kontinuierliche Beobachtung über einen Neustart.",
   "lr_zy_note": "Ereignisse beweisen Companion-Aktivität, nicht vollständige Zygisk-Kontrolle, mehr Leistung oder Energieeinsparung. Hier erfolgt kein A/B-Vergleich.",

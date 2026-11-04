@@ -1,15 +1,16 @@
 {
   "cfg_battery_section_charging": "Ricarica",
-  "cfg_battery_section_charging_hint": "Prestazioni durante la ricarica e limite notturno fisso opzionale.",
+  "cfg_battery_section_charging_hint": "Prestazioni di ricarica e limite opzionale dell’80% con intervallo locale personalizzato.",
   "nc_state_off": "Disattivato",
   "nc_state_waiting": "in attesa di ricarica / sotto l’80%",
   "nc_state_holding": "limite dell’80% attivo",
-  "nc_state_released": "rilasciato dopo le 06:00",
+  "nc_state_released": "restrizione rimossa alla fine dell’intervallo",
   "nc_state_not_exposed": "controllo non esposto da questo kernel",
   "nc_state_write_failed": "il kernel ha rifiutato il limite",
   "nc_state_restore_failed": "valore originale non ripristinato",
   "nc_state_external": "un altro componente ha modificato la ricarica",
   "nc_state_unknown": "stato di ricarica sconosciuto",
+  "nc_state_invalid_window": "intervallo non valido: inizio e fine devono essere diversi",
   "t_nc_off": "Limite notturno disattivato · restrizione ASB rimossa",
   "nav_live": "Monitor",
   "lv_ses": "Sessioni",
@@ -41,8 +42,16 @@
   "wb_handover": "I dati mobili restano pronti a schermo acceso e consumano un po’ più batteria",
   "cfg": {
     "night_charge_enable": {
-      "name": "Limite di ricarica notturno (22:00–06:00)",
-      "desc": "Limite notturno opzionale. Durante la ricarica dalle 22:00 alle 06:00, ASB usa un controllo standard supportato dal kernel per mantenere circa l’80%; dopo le 06:00 ripristina il valore precedente affinché la ricarica possa continuare. Non scarica una batteria già sopra l’80%, non sostituisce la ricarica adattiva OEM ed è disattivato per impostazione predefinita. Se manca un controllo scrivibile supportato, lo stato lo segnala. Alla disattivazione o disinstallazione viene ripristinato solo un valore ancora controllato da ASB."
+      "name": "Limite di ricarica notturno",
+      "desc": "Controllo di ricarica opzionale con intervallo personalizzato. Durante la ricarica nella finestra, ASB usa un controllo standard supportato dal kernel per mantenere circa l’80%; alla fine ripristina il valore precedente esatto. L’inizio è incluso e la fine esclusa; la finestra può attraversare la mezzanotte, ma estremi uguali non sono validi. Non scarica batterie sopra l’80%, non sostituisce la ricarica adattiva OEM ed è disattivato per impostazione predefinita. Senza un controllo scrivibile, lo stato indica non esposto. Disattivazione, fine della finestra o disinstallazione ripristinano solo valori ancora controllati da ASB."
+    },
+    "night_charge_start": {
+      "name": "Inizio intervallo di ricarica",
+      "desc": "Ora locale di inizio della finestra opzionale all’80%. L’inizio è incluso; la modifica viene applicata subito."
+    },
+    "night_charge_end": {
+      "name": "Fine intervallo di ricarica",
+      "desc": "Ora locale in cui ASB ripristina il valore precedente del kernel. La fine è esclusa e deve differire dall’inizio; una fine precedente attraversa la mezzanotte."
     },
     "net_mtu_probing": {
       "name": "Recupero MTU TCP",
@@ -2355,6 +2364,8 @@
   "lr_zy_apps": "App selezionate",
   "lr_zy_abi": "ABI dell’observer installata",
   "lr_zy_reset": "Almeno un contatore è diminuito: riavvio del companion o reset. I delta interessati restano sconosciuti.",
+  "lr_zy_since_restart": "totale attuale · delta di cattura sconosciuto",
+  "lr_detail_current_total": "Totale attuale del companion",
   "lr_zy_coverage_one": "È disponibile un solo snapshot; non si può dedurre un delta della capture.",
   "lr_zy_coverage_two": "Snapshot iniziale/finale: i delta coprono quell’intervallo, ma non provano osservazione continua durante un riavvio.",
   "lr_zy_note": "Gli eventi provano attività del companion, non controllo totale di Zygisk, migliori prestazioni o risparmio energetico. Qui non viene fatta una comparazione A/B.",

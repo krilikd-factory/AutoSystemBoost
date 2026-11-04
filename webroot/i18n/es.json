@@ -1,21 +1,30 @@
 {
   "cfg_battery_section_charging": "Carga",
-  "cfg_battery_section_charging_hint": "Rendimiento durante la carga y un límite nocturno fijo opcional.",
+  "cfg_battery_section_charging_hint": "Rendimiento de carga y límite opcional del 80 % con un intervalo horario local personalizado.",
   "nc_state_off": "Desactivado",
   "nc_state_waiting": "esperando carga / por debajo del 80 %",
   "nc_state_holding": "límite del 80 % activo",
-  "nc_state_released": "liberado después de las 06:00",
+  "nc_state_released": "restricción retirada al final del intervalo",
   "nc_state_not_exposed": "este kernel no ofrece el control",
   "nc_state_write_failed": "el kernel rechazó el límite",
   "nc_state_restore_failed": "valor original no restaurado",
   "nc_state_external": "otro componente cambió la carga",
   "nc_state_unknown": "estado de carga desconocido",
+  "nc_state_invalid_window": "intervalo no válido: inicio y fin deben ser distintos",
   "t_nc_off": "Límite nocturno desactivado · restricción de ASB liberada",
   "wb_handover": "Los datos móviles se mantienen listos con la pantalla encendida y consumen algo más de batería",
   "cfg": {
     "night_charge_enable": {
-      "name": "Límite de carga nocturna (22:00–06:00)",
-      "desc": "Límite nocturno opcional. Durante la carga de 22:00 a 06:00, ASB usa un control estándar compatible del kernel para mantener alrededor del 80 %; después de las 06:00 restaura el valor anterior para que la carga pueda continuar. No descarga una batería que ya supere el 80 %, no sustituye la carga adaptativa del fabricante y está desactivado por defecto. Si no existe un control compatible y escribible, el estado lo indicará. Al desactivar o desinstalar solo se restaura un valor que ASB todavía controle."
+      "name": "Límite de carga nocturna",
+      "desc": "Control de carga opcional con un intervalo personalizado. Durante la carga dentro de la ventana, ASB usa un control estándar compatible del kernel para mantener alrededor del 80 %; al finalizar restaura el valor anterior exacto. El inicio está incluido y el fin excluido; la ventana puede cruzar la medianoche, pero los extremos iguales no son válidos. No descarga baterías por encima del 80 %, no sustituye la carga adaptativa del fabricante y está desactivado por defecto. Sin un control escribible, el estado indica no expuesto. Desactivar, terminar la ventana o desinstalar restaura solo valores que ASB todavía controla."
+    },
+    "night_charge_start": {
+      "name": "Inicio del intervalo de carga",
+      "desc": "Hora local de inicio de la ventana opcional del 80 %. El inicio está incluido; el cambio se aplica de inmediato."
+    },
+    "night_charge_end": {
+      "name": "Fin del intervalo de carga",
+      "desc": "Hora local en la que ASB restaura el valor anterior del kernel. El fin está excluido y debe diferir del inicio; un fin anterior cruza la medianoche."
     },
     "net_mtu_probing": {
       "name": "Recuperación de MTU TCP",
@@ -2355,6 +2364,8 @@
   "lr_zy_apps": "Apps seleccionadas",
   "lr_zy_abi": "ABI del observador instalada",
   "lr_zy_reset": "Al menos un contador disminuyó: el companion se reinició o los contadores se restablecieron. Esas diferencias quedan desconocidas.",
+  "lr_zy_since_restart": "total actual · delta de captura desconocido",
+  "lr_detail_current_total": "Total actual de companion",
   "lr_zy_coverage_one": "Solo hay una instantánea; no se puede inferir una diferencia de la captura.",
   "lr_zy_coverage_two": "Instantáneas inicial/final: las diferencias cubren ese intervalo, pero no prueban observación continua durante un reinicio.",
   "lr_zy_note": "Los eventos prueban actividad del companion, no control total de Zygisk, mejor rendimiento ni ahorro de energía. Aquí no hay comparación A/B.",

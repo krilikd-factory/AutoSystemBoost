@@ -1,15 +1,16 @@
 {
   "cfg_battery_section_charging": "Charge",
-  "cfg_battery_section_charging_hint": "Performances pendant la charge et limite nocturne fixe facultative.",
+  "cfg_battery_section_charging_hint": "Performances de charge et limite facultative de 80 % avec un intervalle local personnalisé.",
   "nc_state_off": "Désactivé",
   "nc_state_waiting": "en attente de charge / sous 80 %",
   "nc_state_holding": "limite de 80 % active",
-  "nc_state_released": "libéré après 06:00",
+  "nc_state_released": "restriction levée à la fin de l’intervalle",
   "nc_state_not_exposed": "contrôle non exposé par ce noyau",
   "nc_state_write_failed": "le noyau a refusé la limite",
   "nc_state_restore_failed": "valeur d’origine non restaurée",
   "nc_state_external": "un autre composant a modifié la charge",
   "nc_state_unknown": "état de charge inconnu",
+  "nc_state_invalid_window": "intervalle non valide : début et fin doivent différer",
   "t_nc_off": "Limite nocturne désactivée · restriction ASB levée",
   "nav_live": "Moniteur",
   "nav_config": "Réglages",
@@ -109,8 +110,16 @@
   "t_rebooting": "Redémarrage…",
   "cfg": {
     "night_charge_enable": {
-      "name": "Limite de charge nocturne (22:00–06:00)",
-      "desc": "Limite nocturne facultative. Pendant la charge de 22:00 à 06:00, ASB utilise un contrôle standard pris en charge par le noyau pour maintenir environ 80 % ; après 06:00, il restaure la valeur précédente afin que la charge puisse continuer. Il ne décharge pas une batterie déjà au-dessus de 80 %, ne remplace pas la charge adaptative du fabricant et est désactivé par défaut. Si aucun contrôle accessible en écriture n’est pris en charge, l’état l’indique. À la désactivation ou à la désinstallation, seule une valeur encore contrôlée par ASB est restaurée."
+      "name": "Limite de charge nocturne",
+      "desc": "Contrôle de charge facultatif avec intervalle personnalisé. Pendant la charge dans cette fenêtre, ASB utilise un contrôle standard pris en charge par le noyau pour maintenir environ 80 % ; à la fin, il restaure exactement la valeur précédente. Le début est inclus, la fin exclue ; la fenêtre peut traverser minuit, mais des bornes identiques sont invalides. La batterie au-dessus de 80 % n’est pas déchargée. La charge adaptative du fabricant n’est pas remplacée et l’option est désactivée par défaut. Sans contrôle accessible en écriture, l’état indique non exposé. Désactivation, fin de fenêtre ou désinstallation restaure uniquement les valeurs encore contrôlées par ASB."
+    },
+    "night_charge_start": {
+      "name": "Début de l’intervalle de charge",
+      "desc": "Heure locale de début de la fenêtre facultative à 80 %. Le début est inclus ; toute modification est appliquée immédiatement."
+    },
+    "night_charge_end": {
+      "name": "Fin de l’intervalle de charge",
+      "desc": "Heure locale à laquelle ASB restaure la valeur précédente du noyau. La fin est exclue et doit différer du début ; une fin antérieure traverse minuit."
     },
     "net_mtu_probing": {
       "name": "Récupération MTU TCP",
@@ -2355,6 +2364,8 @@
   "lr_zy_apps": "Applications sélectionnées",
   "lr_zy_abi": "ABI de l’observateur installée",
   "lr_zy_reset": "Au moins un compteur a diminué : redémarrage du companion ou réinitialisation. Les deltas concernés restent inconnus.",
+  "lr_zy_since_restart": "total actuel · delta de capture inconnu",
+  "lr_detail_current_total": "Total actuel du companion",
   "lr_zy_coverage_one": "Un seul instantané est disponible ; aucun delta de capture ne peut être déduit.",
   "lr_zy_coverage_two": "Instantanés initial/final : les deltas couvrent cet intervalle, sans prouver une observation continue pendant un redémarrage.",
   "lr_zy_note": "Les événements prouvent l’activité du companion, pas un contrôle total de Zygisk, un gain de performance ou une économie d’énergie. Aucune comparaison A/B ici.",
