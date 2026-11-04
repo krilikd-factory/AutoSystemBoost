@@ -4648,6 +4648,212 @@ html.asb-fit-c2 .smart-banner { margin-top: 8px; margin-bottom: 10px; padding: 8
 html.asb-fit-c2 .smart-banner-row { gap: 7px 8px; }
 html.asb-fit-c2 .smart-drain-half { padding: 9px; }
 html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
+
+/* ── ColorOS-style Liquid Glass material (fix322) ───────────────────────────────
+ * Keep the established geometry and profile/category colours. What changes is the
+ * material hierarchy: a lit canvas, translucent content, quieter nested surfaces,
+ * and denser floating chrome. A neutral rim belongs to the glass; green remains a
+ * selection/state accent instead of outlining every popup and card. */
+html:root[data-asb-glass="1"] {
+  --glass-canvas-image:
+    radial-gradient(ellipse 105% 42% at 4% 0%,rgba(116,145,133,.22),transparent 70%),
+    radial-gradient(ellipse 80% 38% at 100% 78%,rgba(0,240,180,.075),transparent 72%),
+    linear-gradient(180deg,#111713 0%,#050807 48%,#000 100%);
+  --glass-surface:rgba(12,18,15,.58);
+  --glass-surface-quiet:rgba(8,13,10,.46);
+  --glass-surface-strong:rgba(10,15,13,.78);
+  --glass-control:rgba(20,27,24,.48);
+  --glass-edge:rgba(255,255,255,.16);
+  --glass-highlight:rgba(255,255,255,.20);
+  --glass-wash:linear-gradient(135deg,rgba(255,255,255,.105),rgba(255,255,255,.022) 48%,rgba(255,255,255,.048));
+  --glass-shadow:0 12px 30px rgba(0,0,0,.25);
+  --glass-blur:blur(20px) saturate(1.24);
+  --glass-scrim:linear-gradient(180deg,rgba(5,8,7,.96),rgba(5,8,7,.76) 62%,transparent);
+  --surface:var(--glass-surface);
+  --surface-hover:rgba(255,255,255,.10);
+  --tabbar-bg:var(--glass-surface-strong);
+  --border:var(--glass-edge);
+  --border-active:rgba(0,240,180,.48);
+  --cap-edge:var(--glass-edge);
+  --cap-shadow:0 8px 24px rgba(0,0,0,.24),inset 0 1px 0 var(--glass-highlight);
+}
+html:root[data-asb-glass="1"][data-asb-theme="light"] {
+  --glass-canvas-image:
+    radial-gradient(ellipse 100% 44% at 4% 0%,rgba(255,255,255,.82),transparent 72%),
+    radial-gradient(ellipse 84% 40% at 100% 78%,rgba(0,124,99,.075),transparent 74%),
+    linear-gradient(180deg,#e4e5f9 0%,#edf4f1 52%,#f2f4f6 100%);
+  --glass-surface:rgba(255,255,255,.44);
+  --glass-surface-quiet:rgba(255,255,255,.34);
+  --glass-surface-strong:rgba(250,252,251,.72);
+  --glass-control:rgba(255,255,255,.38);
+  --glass-edge:rgba(70,85,80,.15);
+  --glass-highlight:rgba(255,255,255,.86);
+  --glass-wash:linear-gradient(135deg,rgba(255,255,255,.62),rgba(255,255,255,.18) 50%,rgba(255,255,255,.34));
+  --glass-shadow:0 12px 30px rgba(40,50,65,.11);
+  --glass-scrim:linear-gradient(180deg,rgba(237,240,244,.96),rgba(237,240,244,.74) 62%,transparent);
+  --text-tertiary:#65717b;
+  --border-active:rgba(0,124,99,.40);
+  --cap-shadow:0 8px 24px rgba(40,50,65,.10),inset 0 1px 0 var(--glass-highlight);
+}
+html:root[data-asb-glass="1"] body,
+html:root[data-asb-glass="1"] :is(#reportPage,#devicePage,#zygiskPage) {
+  background:var(--glass-canvas-image) !important;
+}
+html:root[data-asb-glass="1"] .status-bar-scrim {
+  background:var(--glass-scrim);
+  -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
+}
+html:root[data-asb-glass="1"] :is(.hdr-cap,.theme-toggle,.status-row,.live-chip,.tg-link,.debug-support-btn,
+  .cfg-backup,.cfg-lang-btn,.cfg-lang-pop,.cfg-sel-btn,.cfg-sel-pop,.cfg-tile,.cfg-row,.cfg-zygisk-card,
+  .live-cell,.stock-telemetry,.smart-banner,.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet,
+  .log-menu,.cfg-fm-box,.pbtn,.lgr-sec,.dev-loading,.live-info-now,.live-info-src,
+  .smart-drain-half,.live-drain-block,.live-drain-cmp,.live-info-hist) {
+  background:var(--glass-wash),var(--glass-surface) !important;
+  border-color:var(--glass-edge) !important;
+  box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-highlight),inset 0 0 0 1px rgba(255,255,255,.025) !important;
+  -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur);
+}
+/* Floating surfaces must remain legible over scrolling content; inline cards need less
+ * density. These rules change material only, never the measured header/dock geometry. */
+html:root[data-asb-glass="1"] :is(.asb-tabbar,.report-nav,.zy-page-nav,.log-menu,.cfg-lang-pop,.cfg-sel-pop) {
+  background:var(--glass-wash),var(--glass-surface-strong) !important;
+  border-color:var(--glass-edge) !important;
+  box-shadow:0 16px 38px rgba(0,0,0,.32),inset 0 1px 0 var(--glass-highlight) !important;
+  -webkit-backdrop-filter:blur(26px) saturate(1.28); backdrop-filter:blur(26px) saturate(1.28);
+}
+html:root[data-asb-glass="1"][data-asb-theme="light"] :is(.asb-tabbar,.report-nav,.zy-page-nav,.log-menu,.cfg-lang-pop,.cfg-sel-pop) {
+  box-shadow:0 16px 38px rgba(40,50,65,.16),inset 0 1px 0 var(--glass-highlight) !important;
+}
+html:root[data-asb-glass="1"] :is(.hdr-cap,.theme-toggle,.status-row) {
+  background:var(--glass-wash),var(--glass-surface-quiet) !important;
+  box-shadow:var(--cap-shadow) !important;
+  -webkit-backdrop-filter:blur(18px) saturate(1.2); backdrop-filter:blur(18px) saturate(1.2);
+}
+html:root[data-asb-glass="1"] .log-menu { border-radius:20px; }
+html:root[data-asb-glass="1"] :is(.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet,.cfg-fm-box) {
+  background:var(--glass-wash),var(--glass-surface-strong) !important;
+  border-color:var(--glass-edge) !important;
+  box-shadow:0 24px 64px rgba(0,0,0,.42),inset 0 1px 0 var(--glass-highlight) !important;
+  -webkit-backdrop-filter:blur(30px) saturate(1.25); backdrop-filter:blur(30px) saturate(1.25);
+}
+html:root[data-asb-glass="1"] :is(.cfg-modal,.cfg-profile-modal,.cfg-reset-modal,.diag-wait-modal,.debug-action-wait,.cfg-fm) {
+  background:rgba(0,0,0,.52) !important;
+  -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
+}
+html:root[data-asb-glass="1"][data-asb-theme="light"] :is(.cfg-modal,.cfg-profile-modal,.cfg-reset-modal,.diag-wait-modal,.debug-action-wait,.cfg-fm) {
+  background:rgba(30,38,42,.30) !important;
+}
+/* Controls are inset into the parent, not a second set of floating cards. They do not
+ * need their own backdrop pass; the parent already owns that material. */
+html:root[data-asb-glass="1"] :is(input,select,textarea,.seg,.seg-opt,.cfg-profile-name,.cfg-reset-choice,.cfg-profile-row,.cfg-profile-actions button,
+  .cfg-fm-btn,.cfg-fm-place,.cfg-fm-cancel,.cfg-profile-close,.cfg-reset-close,.cfg-profile-dest button,.cfg-profile-check,.cfg-profile-result-reboot,.dev-loading-step) {
+  background:var(--glass-control) !important;
+  border-color:var(--glass-edge) !important;
+  box-shadow:inset 0 1px 0 var(--glass-highlight) !important;
+  -webkit-backdrop-filter:none; backdrop-filter:none;
+}
+html:root[data-asb-glass="1"] :is(.lgr-chip,.pmeta-chip,.cfg-icon,.pchk) {
+  background:rgba(128,128,128,.12) !important;
+  border-color:var(--glass-edge) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.10);
+}
+html:root[data-asb-glass="1"] .pbtn:not(.on) {
+  background:var(--glass-wash),var(--glass-surface-quiet) !important;
+  border-color:var(--glass-edge) !important;
+  box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-highlight) !important;
+}
+html:root[data-asb-glass="1"] .pbtn.on {
+  background:linear-gradient(135deg,color-mix(in srgb,var(--c,var(--accent)) 15%,transparent),rgba(255,255,255,.025)),var(--glass-surface) !important;
+  border-color:color-mix(in srgb,var(--c,var(--accent)) 58%,var(--glass-edge)) !important;
+  box-shadow:0 12px 30px rgba(0,0,0,.24),inset 0 1px 0 var(--glass-highlight) !important;
+}
+html:root[data-asb-glass="1"] .pbtn .pico {
+  background:linear-gradient(135deg,rgba(255,255,255,.09),rgba(255,255,255,.025)),rgba(128,128,128,.08) !important;
+  border-color:var(--glass-edge) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.12);
+}
+html:root[data-asb-glass="1"] .pbtn.on .pico {
+  background:linear-gradient(135deg,color-mix(in srgb,var(--c,var(--accent)) 20%,transparent),rgba(255,255,255,.04)) !important;
+  border-color:color-mix(in srgb,var(--c,var(--accent)) 46%,var(--glass-edge)) !important;
+  box-shadow:inset 0 1px 0 var(--glass-highlight);
+}
+html:root[data-asb-glass="1"] .cfg-row:not(.is-on) {
+  background:var(--glass-wash),var(--glass-surface-quiet) !important;
+  border-color:var(--glass-edge) !important;
+  box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-highlight) !important;
+}
+html:root[data-asb-glass="1"] .cfg-row.is-on {
+  background:linear-gradient(135deg,color-mix(in srgb,var(--cat,var(--accent)) 13%,transparent),rgba(255,255,255,.025)),var(--glass-surface) !important;
+  border-color:color-mix(in srgb,var(--cat,var(--accent)) 32%,var(--glass-edge)) !important;
+  box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-highlight) !important;
+}
+html:root[data-asb-glass="1"] :is(.cfg-row:not(.is-on) .cfg-icon,.cfg-switch:not(.on)) {
+  background:rgba(128,128,128,.13) !important;
+  border-color:var(--glass-edge) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.10);
+}
+html:root[data-asb-glass="1"] .cfg-tile[class*="cat-"] {
+  background:linear-gradient(145deg,color-mix(in srgb,var(--cat) 14%,transparent),rgba(255,255,255,.018) 62%),var(--glass-surface) !important;
+  border-color:color-mix(in srgb,var(--cat) 28%,var(--glass-edge)) !important;
+  box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-highlight) !important;
+}
+html:root[data-asb-glass="1"] .cfg-tile[class*="cat-"] .cfg-tile-ico {
+  background:color-mix(in srgb,var(--cat) 13%,var(--glass-control));
+  border-color:color-mix(in srgb,var(--cat) 32%,var(--glass-edge));
+  box-shadow:inset 0 1px 0 var(--glass-highlight);
+}
+html:root[data-asb-glass="1"] .cfg-reboot-tile {
+  background:linear-gradient(135deg,color-mix(in srgb,var(--rb) 10%,transparent),rgba(255,255,255,.018)),var(--glass-control) !important;
+  border-color:color-mix(in srgb,var(--rb) 24%,var(--glass-edge)) !important;
+  box-shadow:inset 0 1px 0 var(--glass-highlight) !important;
+}
+/* A report section owns the outer glass. Heroes and quality evidence inside it are
+ * inset regions, not additional floating glass panels with a second blur and shadow. */
+html:root[data-asb-glass="1"] :is(.lgr-sec,.cfg-zygisk-card) :is(.lgr-hero,.lgr-quality,.live-info-now,.live-info-src) {
+  background:rgba(128,128,128,.085) !important;
+  border-color:var(--glass-edge) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.10) !important;
+  -webkit-backdrop-filter:none; backdrop-filter:none;
+}
+html:root[data-asb-glass="1"] .lgr-quality { background:var(--glass-control) !important; }
+html:root[data-asb-glass="1"] .cfg-profile-primary {
+  background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 18%,transparent),rgba(255,255,255,.035)),var(--glass-control) !important;
+  border-color:var(--border-active) !important;
+  box-shadow:inset 0 1px 0 var(--glass-highlight) !important;
+}
+html:root[data-asb-glass="1"] .toast:not(.stock-restoring) {
+  background:var(--glass-wash),color-mix(in srgb,currentColor 10%,var(--glass-surface-strong)) !important;
+  border-color:var(--glass-edge) !important;
+  box-shadow:0 16px 38px rgba(0,0,0,.34),inset 0 1px 0 var(--glass-highlight);
+  -webkit-backdrop-filter:blur(24px) saturate(1.25); backdrop-filter:blur(24px) saturate(1.25);
+}
+html:root[data-asb-glass="1"] :is(.pbtn,.cfg-tile,.cfg-row,.cfg-backup,.cfg-reboot-tile,.log-menu-item,.lgr-hero[role="button"]):active {
+  border-color:var(--border-active) !important;
+  box-shadow:inset 0 2px 7px rgba(0,0,0,.16) !important;
+}
+/* WebViews without backdrop filtering, and users asking for reduced transparency,
+ * receive the same hierarchy with opaque paints. No text is left over an unpredictable
+ * background, and no feature depends on blur support. */
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
+  html:root[data-asb-glass="1"] { --glass-surface:#151c18; --glass-surface-quiet:#101613; --glass-surface-strong:#151c18; --glass-control:#1b231f; }
+  html:root[data-asb-glass="1"][data-asb-theme="light"] { --glass-surface:#f7f9fa; --glass-surface-quiet:#f1f4f3; --glass-surface-strong:#fff; --glass-control:#f3f5f7; }
+  html:root[data-asb-glass="1"] :is(.pbtn,.cfg-tile,.cfg-row,.live-cell,.lgr-sec,.asb-tabbar,.report-nav,.zy-page-nav,.log-menu,.cfg-profile-sheet,.cfg-reset-dialog) {
+    -webkit-backdrop-filter:none; backdrop-filter:none;
+  }
+}
+@media (prefers-reduced-transparency:reduce) {
+  html:root[data-asb-glass="1"] { --glass-surface:#151c18; --glass-surface-quiet:#101613; --glass-surface-strong:#151c18; --glass-control:#1b231f; }
+  html:root[data-asb-glass="1"][data-asb-theme="light"] { --glass-surface:#f7f9fa; --glass-surface-quiet:#f1f4f3; --glass-surface-strong:#fff; --glass-control:#f3f5f7; }
+  html:root[data-asb-glass="1"] :is(.pbtn,.cfg-tile,.cfg-row,.live-cell,.lgr-sec,.asb-tabbar,.report-nav,.zy-page-nav,.log-menu,.cfg-profile-sheet,.cfg-reset-dialog) {
+    -webkit-backdrop-filter:none !important; backdrop-filter:none !important;
+  }
+}
+@media (forced-colors:active) {
+  html:root[data-asb-glass="1"][data-asb-glass="1"] :is(body,.page,.live-page,.config-page,.pbtn,.cfg-tile,.cfg-row,.live-cell,.lgr-sec,.lgr-hero,.lgr-quality,.asb-tabbar,.report-nav,.zy-page-nav,.log-menu,.cfg-profile-sheet,.cfg-reset-dialog,input,select,textarea,button) {
+    background:Canvas !important; color:CanvasText !important; border-color:ButtonBorder !important;
+    box-shadow:none !important; -webkit-backdrop-filter:none !important; backdrop-filter:none !important;
+  }
+}
 </style>
 </head>
 <body>
