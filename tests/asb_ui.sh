@@ -3334,12 +3334,12 @@ echo "PASS webui monitor card: section title, two drain tiles with their time to
 
 t_webui_monitor_compact_runtime() (
 # Runtime (fix161): the Monitor fits with room to spare, its heat tile no longer scares, every
-# profile shows both drains, and the Settings restarts are one row of small tiles.
+# profile shows both drains, and the Settings restarts share one compact toolbar menu.
 #
 # Owner's screenshot: the last row of Monitor tiles touched the tab bar after the screen-on /
 # screen-off pair went into the Smart card, and "usual peak 51.8 C" read as a hot phone - it is
 # the hottest core at its busiest moment, and this phone's own norm is 41-49 C. Asked too: the
-# drain pair on every profile (Stock included) and lighter restart buttons. The REAL page
+# drain pair on every profile (Stock included) and lighter restart controls. The REAL page
 # functions run in node; the markup is checked for the new layout.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
@@ -3360,10 +3360,11 @@ for i in ("liveCpu", "liveSkin", "liveSurface", "liveState", "liveGpu", "liveHea
     assert ('id="%s"' % i) in g, "metric %s lost" % i
 for i in ("liveEtaOn", "liveEtaOff"):
     assert ('id="%s"' % i) in b, "time to empty %s is not beside the drain figures" % i
-r = s[s.index('<div id="cfgRebootWrap" class="cfg-reboot-row">'):]
+r = s[s.index('<div class="cfg-lang-pop cfg-reboot-pop" id="cfgRebootPop"'):]
 r = r[:r.index('</div>')]
-assert r.count('class="cfg-reboot-tile') == 3, "restarts are not three tiles"
-assert "#cfgRebootWrap.cfg-reboot-row { display: grid; grid-template-columns: repeat(3, 1fr);" in s, "restart tiles not in one row"
+assert r.count('role="menuitem"') == 3, "restarts are not three menu actions"
+assert 'id="cfgRebootMenuBtn"' in s and 'aria-haspopup="menu"' in s, "restart menu trigger is missing"
+assert 'id="cfgRebootWrap"' not in s, "the old separate restart row is back"
 assert re.search(r"if \(stockBanner\) \{ lvDrainHome\(stockBanner\);[^}]*lvMeterPaint\(_selectedProfile\); \}", s), "other profiles do not get the drain pair"
 P
 for l in en ru uk de es fr it pt tr id ar hy zh; do
@@ -3419,7 +3420,7 @@ EOF
 } > "$T/t.js"
 out="$(node "$T/t.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo "PASS webui monitor compact: drain pair first in the card on every profile, heat against the phone's own norm, restarts as one row of tiles"
+echo "PASS webui monitor compact: drain pair first in the card on every profile, heat against the phone's own norm, restarts in one accessible toolbar menu"
 )
 
 t_webui_quiet_ui_runtime() (
@@ -4298,7 +4299,7 @@ for t in ('html.asb-fit-c1', 'html.asb-fit-c2'):
     assert t + ' .live-cell {' in s and t + ' .tg-link-wrap {' in s, t + ' does not compact the Monitor cells and the support rail'
     assert t + ' .cfg-tile {' in s, t + ' does not compact the Settings tiles'
 assert "classList.toggle('asb-fit-c1'" in s and "classList.toggle('asb-fit-c2'" in s, "the fit never raises a compaction tier"
-assert '[68, 58, 48][tier]' in s and '[104, 92, 80][tier]' in s, "the card/tile floors do not step down with the tier"
+assert '[68, 58, 48][tier]' in s and '[112, 96, 84][tier]' in s, "the card/tile floors do not step down with the tier"
 assert 'asbFitPages._tier' in s, "the tier is not remembered between passes"
 # fix203: the tier decision reads the page as it asks to be - the fitted heights are zeroed
 # for the measurement, the floating bar's reserved padding is out of the reading, a fixed
@@ -4366,7 +4367,6 @@ const page = { scrollTop: 0, style: {}, getAttribute() { return cfgOpen ? 'false
       ? { top: 0, bottom: (cfgBase - tierOf() * 80) * (window._asbUiScale || 1) }
       : { top: 0, bottom: clientH };
   } };
-const reb = box(0, 84);
 const reportPage = { scrollTop: 0, style: {}, get clientHeight() { return clientH; },
   getBoundingClientRect() {
     return this.style.height === 'auto'
@@ -4386,7 +4386,7 @@ global.document = {
   }
 };
 global.getComputedStyle = () => ({ rowGap: '10px', gap: '10px', marginTop: '10px', paddingBottom: '0px' });
-function _el(id) { return id === 'configPage' ? page : id === 'reportPage' ? reportPage : id === 'cfgRebootWrap' ? reb : null; }
+function _el(id) { return id === 'configPage' ? page : id === 'reportPage' ? reportPage : null; }
 /* fix278: asbFitPages is the coalescing scheduler; the measurement itself is asbFitPagesNow,
  * run here synchronously exactly as the scheduler runs it once a transition has settled. */
 function asbFitPages() { return asbFitPagesNow(); }
@@ -4403,15 +4403,15 @@ chk(tierOf() === 0 && props['--pbtn-h'] === '68px', '82 px past the fit line jus
 chk(props['--cfg-tile-h'] === undefined, 'Settings closed: tiles untouched');
 cfgOpen = true; barTop = 1200; delete props['--pbtn-h']; asbFitPages();
 chk(props['--pbtn-h'] === undefined, 'Home cards are not refitted while Settings covers them');
-chk(props['--cfg-tile-h'] === '158px', 'two rows of tiles share the height left over the restart row: ' + props['--cfg-tile-h']);
+chk(props['--cfg-tile-h'] === '184px', 'two rows of tiles use the height freed by the restart menu: ' + props['--cfg-tile-h']);
 _cfgGroup = 'audio'; props['--cfg-tile-h'] = 'x'; asbFitPages();
 chk(props['--cfg-tile-h'] === 'x', 'an open category leaves the hub alone');
 _cfgGroup = null; barTop = 2600; asbFitPages();
-chk(props['--cfg-tile-h'] === '176px', 'upper limit on Settings: ' + props['--cfg-tile-h']);
+chk(props['--cfg-tile-h'] === '184px', 'upper limit on Settings: ' + props['--cfg-tile-h']);
 barTop = 900; cfgBase = 975; asbFitPages();
-chk(tierOf() === 0 && props['--cfg-tile-h'] === '104px', 'a Settings page at the allowance keeps the tier-0 floor: ' + props['--cfg-tile-h'] + ' tier ' + tierOf());
+chk(tierOf() === 0 && props['--cfg-tile-h'] === '112px', 'a Settings page at the allowance keeps the tier-0 floor: ' + props['--cfg-tile-h'] + ' tier ' + tierOf());
 window._asbUiScale = 0.82; barTop = 1120; asbFitPages();
-chk(props['--cfg-tile-h'] === '148px', 'a scaled UI shares out unscaled pixels: ' + props['--cfg-tile-h']);
+chk(props['--cfg-tile-h'] === '184px', 'a scaled UI shares out unscaled pixels: ' + props['--cfg-tile-h']);
 /* fix203: a page genuinely past its viewport compacts in tiers; a page only a little past
    the fit line keeps its look and scrolls (the allowance is a fifth of the screen). */
 resetFit(); cfgOpen = false; live = false; window._asbUiScale = 1;
@@ -4435,7 +4435,7 @@ asbFitPages();
 chk(tierOf() === 1 && fitCls.has('asb-fit-c1') && !fitCls.has('asb-fit-c2'), 'past the allowance the page compacts, and stays compact: tier ' + tierOf());
 resetFit(); cfgOpen = true; clientH = 700; window.innerHeight = 700; barTop = 640; cfgBase = 1400;   /* Settings 780 px past */
 asbFitPages();
-chk(tierOf() === 2 && props['--cfg-tile-h'] === '80px', 'the Settings tiles compact too: ' + props['--cfg-tile-h']);
+chk(tierOf() === 2 && props['--cfg-tile-h'] === '84px', 'the Settings tiles compact too: ' + props['--cfg-tile-h']);
 /* fix205: the scroll surfaces never take a tier. The report is 2380 px past the fit line
    on this small screen - and the header still stays exactly as drawn. */
 resetFit(); reportOpen = true; cfgOpen = false; reportBase = 3000;
@@ -8387,6 +8387,645 @@ PY
 echo "PASS WebUI fix322 Liquid Glass: layered dark/light materials, neutral floating chrome, quiet nesting, pressed states and no-blur/reduced-transparency/forced-colours fallbacks"
 )
 
+t_webui_fix324_boot_intro() (
+# Contract (fix324): dark Glass is black; the once-per-boot preview performs real bounded
+# collector/cache work, never replays within one boot and always returns the ordinary UI.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI fix324 boot intro: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'PY' || fail 'source/visual/localization contract'
+import json, re, sys
+from pathlib import Path
+root=Path(sys.argv[1]); s=(root/'webroot/index.html').read_text(encoding='utf-8')
+# Rejected on-device: a green full-screen wash. Dark is black, light remains ambient.
+dark=re.search(r'html:root\[data-asb-glass="1"\] \{([\s\S]*?)\n\}',s).group(1)
+assert '--glass-canvas-image:#000;' in dark
+assert 'radial-gradient' not in dark and '#151c18' not in dark
+light=re.search(r'html:root\[data-asb-glass="1"\]\[data-asb-theme="light"\] \{([\s\S]*?)\n\}',s).group(1)
+assert 'radial-gradient' in light and 'linear-gradient(180deg,#e4e5f9' in light
+mark=s[s.index('<div class="asb-boot-intro"'):s.index('<div class="status-bar-scrim"')]
+assert mark.count('id="asbBootIntro"')==1 and 'hidden aria-hidden="true"' in mark
+assert 'role="status"' in mark and 'aria-live="polite"' in mark
+assert mark.count('data-boot-stage=')==4 and 'role="progressbar"' in mark
+assert '<button' not in mark
+for token in ('@keyframes asbBootSpin','@keyframes asbBootPulse','@keyframes asbBootScan',
+              '@media (prefers-reduced-motion:reduce)','@media (forced-colors:active)',
+              'animation:none !important'):
+    assert token in s, token
+start=s.index("const ASB_BOOT_INTRO_KEY = 'asb_boot_intro_v1'")
+end=s.index('// ── localized boot:',start)
+js=s[start:end]
+assert 'ASB_BOOT_INTRO_MIN_MS = 3200' in js and 'ASB_BOOT_INTRO_MAX_MS = 9000' in js
+assert 'await asbStartupSnapshot()' in js and 'startup && startup.boot' in js
+assert 'asbBootIntroSeen(boot)' in js and 'asbBootIntroRemember(boot);' in js
+assert js.index('asbBootIntroRemember(boot);') < js.index('const jobs = [')
+assert 'Promise.race([' in js and '} finally {' in js and 'window._asbBootIntroActive = false;' in js
+assert 'setInterval(' not in js and 'setTimeout(() => pollLive' not in js
+for token in ('Promise.resolve(pollLive(true))','return cfgLoad();',
+              'Promise.all([loadDeviceInfo(), asbDeviceInfoLoad(true)])',
+              'return zygiskHeaderRefresh();','asbBootIntroPaint(done, jobs.length)',
+              "T('boot_intro_warm'","T('boot_intro_ready'"):
+    assert token in js, token
+for forbidden in ('serial','imei','account','android_id','setInterval('):
+    assert forbidden not in js.lower(), forbidden
+assert 'window._asbBootIntroProbe = I18N_READY.then(asbBootIntroStart, asbBootIntroStart);' in s
+assert 'if (!shown) pollLive(false);' in s
+loader=s[s.index('async function asbDeviceInfoLoad()'):s.index('async function asbLogReportLoad()')]
+assert 'const background = arguments[0] === true;' in loader
+assert 'if (background) {' in loader and 'deviceInfoCacheSet(window._asbDeviceInfoRaw);' in loader
+assert 'if (!background && cd && cd.count)' in loader
+for p in (root/'webroot/i18n').glob('*.json'):
+    d=json.loads(p.read_text(encoding='utf-8'))
+    assert d.get('boot_intro_warm') and d.get('boot_intro_ready'), p.name
+assert len(list((root/'webroot/i18n').glob('*.json')))==13
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI fix324 intro runtime: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cat > "$T/test.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+function E(id){this.id=id;this.hidden=true;this.attrs={};this.style={};this.textContent='';this.set=new Set();this.classList={toggle:(c,v)=>{if(v)this.set.add(c);else this.set.delete(c)},add:c=>this.set.add(c),remove:c=>this.set.delete(c),contains:c=>this.set.has(c)}}
+E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};E.prototype.getAttribute=function(k){return k in this.attrs?this.attrs[k]:null};E.prototype.removeAttribute=function(k){delete this.attrs[k]};
+const overlay=new E('asbBootIntro'),status=new E('asbBootIntroStatus'),bar=new E('asbBootIntroBar'),progress=new E('asbBootIntroProgress'),count=new E('asbBootIntroCount'),body=new E('body');
+const stages=[0,1,2,3].map(()=>new E('stage'));
+const els={asbBootIntro:overlay,asbBootIntroStatus:status,asbBootIntroBar:bar,asbBootIntroProgress:progress,asbBootIntroCount:count};
+global.document={body,querySelectorAll:s=>s==='.asb-boot-stage'?stages:[]};global.window={};global._el=id=>els[id]||null;global.T=(k,d)=>d;
+const local={},session={};global.localStorage={getItem:k=>local[k]||null,setItem:(k,v)=>local[k]=String(v)};global.sessionStorage={getItem:k=>session[k]||null,setItem:(k,v)=>session[k]=String(v)};
+let boot='11111111-1111-4111-8111-111111111111',failBoot=false,hang=false,calls=[];
+global.run=async c=>{calls.push('boot-id');return{errno:failBoot?1:0,stdout:failBoot?'':boot,stderr:''}};
+global.asbStartupSnapshot=async()=>({boot:await run('boot-id')});
+global.pollLive=async v=>{calls.push('live:'+v)};global.homeMeterPaint=()=>calls.push('home-paint');global.cfgLoad=()=>{calls.push('config');return hang?new Promise(()=>{}):Promise.resolve()};
+global.loadDeviceInfo=async()=>{calls.push('device-info')};global.asbDeviceInfoLoad=async bg=>{calls.push('device:'+bg)};global.zygiskHeaderRefresh=async()=>{calls.push('zygisk')};
+let src=h.slice(h.indexOf("const ASB_BOOT_INTRO_KEY = 'asb_boot_intro_v1'"),h.indexOf('let _asbHomeRevealed = false;',h.indexOf("const ASB_BOOT_INTRO_KEY = 'asb_boot_intro_v1'")));
+src=src.replace('ASB_BOOT_INTRO_MIN_MS = 3200','ASB_BOOT_INTRO_MIN_MS = 20').replace('ASB_BOOT_INTRO_MAX_MS = 9000','ASB_BOOT_INTRO_MAX_MS = 60').replace('setTimeout(resolve, 360)','setTimeout(resolve, 5)');
+eval(src+`\n(async()=>{
+ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+ let p=asbBootIntroStart();await sleep(2);
+ if(overlay.hidden||!window._asbBootIntroActive||body.attrs['aria-busy']!=='true')throw Error('first boot did not paint');
+ if(!await p||!overlay.hidden||window._asbBootIntroActive||body.getAttribute('aria-busy')!==null)throw Error('first boot did not clean up');
+ for(const x of ['live:true','config','device-info','device:true','zygisk','home-paint'])if(!calls.includes(x))throw Error('missing warmer '+x);
+ if(progress.attrs['aria-valuenow']!=='100'||local[ASB_BOOT_INTRO_KEY]!==boot)throw Error('progress/marker failed');
+ const n=calls.length;if(await asbBootIntroStart()||calls.length!==n+1||!overlay.hidden)throw Error('same boot replayed or started a warmer');
+ boot='22222222-2222-4222-8222-222222222222';if(!await asbBootIntroStart())throw Error('new boot skipped');
+ failBoot=true;boot='33333333-3333-4333-8333-333333333333';if(await asbBootIntroStart()||!overlay.hidden)throw Error('unreadable boot id replayed');
+ failBoot=false;hang=true;boot='44444444-4444-4444-8444-444444444444';const at=Date.now();
+ if(!await asbBootIntroStart()||Date.now()-at>500||!overlay.hidden||window._asbBootIntroActive)throw Error('timeout fail-safe stuck');
+ if(progress.attrs['aria-valuenow']==='100')throw Error('timed-out warm claimed complete');
+ console.log('ok');
+})().catch(e=>{console.error(e&&e.stack||e);process.exit(1)});`);
+JS
+out="$(node "$T/test.js" "$H" 2>&1)" || { echo "FAIL WebUI fix324 intro runtime: $out" >&2; exit 1; }
+[ "$out" = ok ] || { echo "FAIL WebUI fix324 intro runtime: $out" >&2; exit 1; }
+echo "PASS WebUI fix324: black dark Glass, localized hi-tech once-per-boot preview, real Live/Config/Device/ZYGISK cache warm, no replay and bounded fail-safe"
+)
+
+t_webui_fix325_startup_performance() (
+# Contract (fix325): one shared startup batch, immediate post-paint cache warming without
+# duplicate intro collectors, Home meter reuse, and visibility-aware Live collector sharing.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI fix325 startup performance: $*" >&2; exit 1; }
+python3 - "$H" <<'PY' || fail 'source/scheduling contract'
+import re, sys
+s=open(sys.argv[1],encoding='utf-8').read()
+assert '@import "https://mui.kernelsu.org/internal/insets.css"' not in s
+head=s[:s.index('<style>')]
+assert "link.rel = 'stylesheet'" in head and "link.media = 'print'" in head
+assert "link.addEventListener('load'" in head and "link.media = 'all'" in head
+assert 'https://mui.kernelsu.org/internal/insets.css' in head and 'document.head.appendChild(link)' in head
+assert '--window-inset-top: env(safe-area-inset-top, 0px);' in s
+def body(sig):
+    i=s.index(sig); return s[i:s.index('\n}\n',i)+2]
+startup=s[s.index('let _asbStartupSnapshotRun = null;'):s.index('let _asbDebugActionBusy',s.index('let _asbStartupSnapshotRun = null;'))]
+assert startup.count('runBatch([')==1
+for key,path in (('profile','/current_profile'),('state','/dev/.asb/state'),
+                 ('smart_pending','/data/adb/asb/smart_mode_enabled'),('boot','/proc/sys/kernel/random/boot_id')):
+    assert "['%s'," % key in startup and path in startup, key
+assert 'if (!_asbStartupSnapshotRun)' in startup and 'return _asbStartupSnapshotRun;' in startup
+home=s[s.index('(async () => {',s.index('function openTelegram')):s.index('function fmtTempC')]
+assert 'await asbStartupSnapshot();' in home and 'refreshSmartSubLine(startup);' in home
+assert "await run('cat ' + MD + '/current_profile" not in home
+smart=body('async function refreshSmartSubLine(pre) {')
+assert 'pre && pre.state' in smart and smart.count('runBatch([')==1
+assert 'smart_pending' in smart and "kv._smartPending = 1" in smart
+warm=body('function asbStartupWarmCaches() {')
+assert 'probe.then(warm' in warm and 'if (introShown || document.hidden) return;' in warm
+assert 'cfgLoad();' in warm and 'zygiskHeaderRefresh();' in warm and 'setTimeout(' not in warm
+assert 'setTimeout(zygiskHeaderRefresh, 2500)' not in s
+load=s[s.index("window.addEventListener('load', function () {",s.index('function asbStartupWarmCaches')):s.index('function asbNavCurrent')]
+assert 'homeMeterRefresh(true)' not in load
+# fix328: local warm-up starts after the first frame, not after an external stylesheet can
+# delay window.load. The warm function/probe and its request counts remain unchanged.
+assert 'asbStartupWarmCaches' not in load
+schedule='requestAnimationFrame(function () { setTimeout(asbStartupWarmCaches, 0); });'
+assert schedule in s and s.index(schedule) < s.index("window.addEventListener('load', function () {",s.index('function asbStartupWarmCaches'))
+assert s.count('homeMeterRefresh(true);')==1  # only the intentional post-profile-switch refresh
+initial=s[s.index('/* Coordinate the ordinary cold read'):s.index('window._asbBootIntroProbe =',s.index('/* Coordinate the ordinary cold read'))]
+assert 'requestAnimationFrame(() => setTimeout(() => {' in initial and '}, 0));' in initial
+assert 'if (!shown) pollLive(false);' in initial and ', 250);' not in initial
+poll=body('async function pollLive(visible) {')
+for token in ('if (_livePollRun) {','if (!visible || _livePollVisible) return _livePollRun;',
+              'if (!_livePollFollow) {','return pollLive(true);','} finally {',
+              '_livePollRun = null;','if (releasePoll) releasePoll();',
+              'else await pollStockTelemetry(false);'):
+    assert token in poll, token
+assert 'if (_lb.meter && !visible) homeMeterPaint();' in poll
+assert poll.count('runBatch(liveBatchParts(visible, prime))')==1
+open_dev=body('function openDevicePage() {')
+assert 'asbDeviceInfoLoad();' in open_dev and 'asbDeviceInfoLoad(); }, 50)' not in open_dev
+intro=s[s.index('async function asbBootIntroStart()'):s.index('// ── localized boot:')]
+assert 'await asbStartupSnapshot()' in intro and "run('cat /proc/sys/kernel/random/boot_id" not in intro
+# No persistent worker was added to make the UI appear faster.
+assert intro.count('setInterval(')==0 and warm.count('setInterval(')==0
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI fix325 runtime: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cat > "$T/test.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+function grab(sig){const i=h.indexOf(sig);if(i<0)throw Error('missing '+sig);const j=h.indexOf('\n}\n',i);if(j<0)throw Error('unterminated '+sig);return h.slice(i,j+2);}
+const chk=(c,m)=>{if(!c)throw Error(m)};
+const flush=()=>new Promise(r=>setImmediate(r));
+(async()=>{
+  let batches=[],snapshot={profile:{errno:0,stdout:'balanced'},state:{errno:0,stdout:'smart_mode=0'},smart_pending:{errno:0,stdout:'1'},boot:{errno:0,stdout:'11111111-1111-4111-8111-111111111111'}};
+  global.MD='/mod';global.runBatch=async parts=>{batches.push(parts);return snapshot};
+  const a=h.indexOf('let _asbStartupSnapshotRun = null;'),b=h.indexOf('let _asbDebugActionBusy',a);
+  eval(h.slice(a,b)+';globalThis.startup=asbStartupSnapshot;');
+  const s1=await startup(),s2=await startup();
+  chk(s1===s2&&batches.length===1,'startup snapshot was not shared');
+  chk(JSON.stringify(batches[0].map(p=>p[0]))===JSON.stringify(['profile','state','smart_pending','boot']),'startup batch parts changed');
+
+  let rendered=null;global.renderSmartSubLine=kv=>{rendered=Object.assign({},kv)};
+  eval(grab('async function refreshSmartSubLine(pre) {')+';globalThis.refresh=refreshSmartSubLine;');
+  chk(await refresh(s1)===false&&rendered._smartPending===1,'startup Smart pending state was lost');
+  chk(batches.length===1,'startup Smart subtitle started another shell');
+  snapshot={state:{errno:0,stdout:'smart_mode=1'},smart_pending:{errno:0,stdout:'1'}};
+  chk(await refresh()===true&&rendered.smart_mode==='1'&&!('_smartPending' in rendered),'active Smart was marked pending');
+  chk(batches.length===2&&batches[1].length===2,'post-switch Smart read was not one batch');
+
+  let cfg=0,zy=0,hidden=false;global._cfgOpen=false;global.cfgLoad=()=>{cfg++};global.zygiskHeaderRefresh=()=>{zy++};
+  global.document={hidden:false};global.window={};
+  eval(grab('function asbStartupWarmCaches() {')+';globalThis.warm=asbStartupWarmCaches;');
+  window._asbBootIntroProbe=Promise.resolve(false);warm();await flush();
+  chk(cfg===1&&zy===1,'ordinary opening did not warm caches');
+  window._asbBootIntroProbe=Promise.resolve(true);warm();await flush();
+  chk(cfg===1&&zy===1,'boot intro collectors were duplicated');
+  document.hidden=true;window._asbBootIntroProbe=Promise.resolve(false);warm();await flush();
+  chk(cfg===1&&zy===1,'hidden page performed speculative root work');
+  document.hidden=false;window._asbBootIntroProbe=null;warm();
+  chk(cfg===2&&zy===2,'missing probe did not retain ordinary warm-up');
+
+  global._selectedProfile='stock';
+  const starts=[],gates=[];
+  global.pollStockTelemetry=v=>{starts.push(v);let resolve;const promise=new Promise(r=>resolve=r);gates.push({resolve});return promise;};
+  const decl=h.slice(h.indexOf('let _livePollRun = null,'),h.indexOf('\n',h.indexOf('let _livePollRun = null,')));
+  eval(decl+'\n'+grab('async function pollLive(visible) {')+';globalThis.poll=pollLive;');
+  const bg=poll(false),bgJoin=poll(false),vis=poll(true),visJoin=poll(true);
+  chk(starts.length===1&&starts[0]===false,'background pass was duplicated');
+  gates[0].resolve();await flush();await flush();
+  chk(starts.length===2&&starts[1]===true,'visible page did not get its own fresh pass');
+  gates[1].resolve();await Promise.all([bg,bgJoin,vis,visJoin]);
+  const active=poll(true),activeJoin=poll(true),activeBg=poll(false);
+  chk(starts.length===3,'visible/visible or visible/background overlap started a duplicate');
+  gates[2].resolve();await Promise.all([active,activeJoin,activeBg]);
+  document.hidden=true;await poll(true);chk(starts.length===3,'hidden page polled');
+  document.hidden=false;const last=poll(true);chk(starts.length===4,'poll gate did not reset');
+  gates[3].resolve();await last;
+  console.log('ok');
+})().catch(e=>{console.error(e&&e.stack||e);process.exit(1)});
+JS
+out="$(node "$T/test.js" "$H" 2>&1)" || { echo "FAIL WebUI fix325 runtime: $out" >&2; exit 1; }
+[ "$out" = ok ] || { echo "FAIL WebUI fix325 runtime: $out" >&2; exit 1; }
+echo "PASS WebUI fix325: shared profile/Smart/boot startup, post-paint warm without intro duplicates, meter reuse, immediate Device paint and visibility-safe Live collector sharing"
+)
+
+t_webui_fix326_viewport_scale_runtime() (
+# Contract (fix326): making the optional inset stylesheet asynchronous must not leave the
+# early, provisional WebView width frozen into body zoom. Recalibrate at load, then fit.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI fix326 viewport scale: $*" >&2; exit 1; }
+python3 - "$H" <<'PY' || fail 'source/load-order contract'
+import sys
+s=open(sys.argv[1],encoding='utf-8').read()
+load=s[s.index("window.addEventListener('load', function () {",s.index('function asbStartupWarmCaches')):s.index('function asbNavCurrent')]
+assert load.index('asbApplyUiScale();') < load.index('requestAnimationFrame(asbFitPages);')
+assert load.index('asbApplyUiScale();') < load.index('asbDeviceFont();')
+assert '@import "https://mui.kernelsu.org/internal/insets.css"' not in s
+assert "window.addEventListener('resize', asbApplyUiScale);" in s
+assert "window.addEventListener('orientationchange', asbApplyUiScale);" in s
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI fix326 runtime: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cat > "$T/test.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+const chk=(c,m)=>{if(!c)throw Error(m)};
+let width=980,props={},classes=new Set(),onload=null,fitWidth='',fonts=0,warm=0;
+const root={style:{setProperty:(k,v)=>{props[k]=v}},dataset:{}};
+Object.defineProperty(root,'clientWidth',{get:()=>width});
+global.document={documentElement:root,body:{classList:{toggle:(c,on)=>{if(on)classes.add(c);else classes.delete(c)}}}};
+global.window={_asbUiScale:1,addEventListener:(name,fn)=>{if(name==='load')onload=fn}};
+global.asbNavIndicator={_geo:{stale:true}};
+const a=h.indexOf('const ASB_UI_REFERENCE_W = 440;'),b=h.indexOf('/* Fill the screen',a);
+eval(h.slice(a,b));
+asbApplyUiScale();
+chk(window._asbUiScale===1&&root.dataset.asbUi==='980px@1','early provisional width fixture failed');
+const start=h.indexOf("window.addEventListener('load', function () {",h.indexOf('function asbStartupWarmCaches'));
+const end=h.indexOf('\n});',start)+4;
+global.requestAnimationFrame=fn=>fn();
+global.asbFitPages=()=>{fitWidth=root.dataset.asbUi};
+global.asbDeviceFont=()=>{fonts++};
+global.asbStartupWarmCaches=()=>{warm++};
+global.setTimeout=fn=>fn();
+eval(h.slice(start,end));
+chk(typeof onload==='function','load recalibration is not registered');
+width=411;onload();
+chk(window._asbUiScale===0.93&&props['--asb-ui-scale']==='0.93','final WebView width did not correct early zoom: '+root.dataset.asbUi);
+chk(classes.has('asb-scaled')&&root.dataset.asbUi==='411px@0.93','scaled body/debug evidence was not updated');
+chk(asbNavIndicator._geo===null,'stale navigation geometry survived rescaling');
+chk(fitWidth==='411px@0.93','page fit ran before the final scale');
+chk(fonts===1&&warm===0,'load recalibration must not wait for or duplicate the independent warm-up');
+width=500;onload();
+chk(window._asbUiScale===1&&!classes.has('asb-scaled')&&fitWidth==='500px@1','scale did not recover on a wider viewport');
+console.log('ok');
+JS
+out="$(node "$T/test.js" "$H" 2>&1)" || { echo "FAIL WebUI fix326 runtime: $out" >&2; exit 1; }
+[ "$out" = ok ] || { echo "FAIL WebUI fix326 runtime: $out" >&2; exit 1; }
+echo "PASS WebUI fix326: final WebView viewport recalibrates early zoom before fit, preserving async inset loading and existing warm-up"
+)
+
+t_webui_fix327_inset_cascade_runtime() (
+# Contract (fix327): asynchronous loading must retain the old top-@import cascade order.
+# A late link appended after the main style let manager insets override env() fallbacks and
+# shifted every page header. Fetch before the main style with print media, promote on load.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI fix327 inset cascade: $*" >&2; exit 1; }
+python3 - "$H" <<'PY' || fail 'source/cascade contract'
+import sys
+s=open(sys.argv[1],encoding='utf-8').read()
+style=s.index('<style>')
+head=s[:style]
+assert s.count('https://mui.kernelsu.org/internal/insets.css')==1
+assert '@import "https://mui.kernelsu.org/internal/insets.css"' not in s
+assert head.rindex('document.head.appendChild(link)') < style
+assert "window.addEventListener('load'" not in head
+for token in ("link.rel = 'stylesheet'","link.media = 'print'","link.addEventListener('load'","link.media = 'all'"):
+    assert token in head, token
+main=s[style:s.index('/* No text selection',style)]
+assert '--window-inset-top: env(safe-area-inset-top, 0px);' in main
+assert '--window-inset-bottom: env(safe-area-inset-bottom, 0px);' in main
+# The local rules remain later in cascade, exactly as with the former leading @import.
+assert s.index('--window-inset-top: env(safe-area-inset-top, 0px);') > head.rindex('document.head.appendChild(link)')
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI fix327 runtime: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cat > "$T/test.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+const chk=(c,m)=>{if(!c)throw Error(m)};
+let appended=null,created=0;
+const link={handlers:{},addEventListener(n,f){this.handlers[n]=f}};
+global.document={createElement(tag){created++;chk(tag==='link','unexpected element');return link},head:{appendChild(el){chk(!appended,'duplicate stylesheet');chk(el.media==='print','stylesheet blocked rendering before load');appended=el}}};
+const start=h.indexOf("/* KernelSU's optional inset stylesheet"),end=h.indexOf('})();',start)+5;
+eval(h.slice(start,end));
+chk(created===1&&appended===link,'stylesheet was not installed during head parsing');
+chk(link.rel==='stylesheet'&&link.href==='https://mui.kernelsu.org/internal/insets.css','stylesheet target changed');
+chk(link.media==='print','initial non-blocking medium missing');
+chk(typeof link.handlers.load==='function','load promotion missing');
+link.handlers.load();chk(link.media==='all','loaded stylesheet was not promoted');
+console.log('ok');
+JS
+out="$(node "$T/test.js" "$H" 2>&1)" || { echo "FAIL WebUI fix327 runtime: $out" >&2; exit 1; }
+[ "$out" = ok ] || { echo "FAIL WebUI fix327 runtime: $out" >&2; exit 1; }
+echo "PASS WebUI fix327: non-blocking manager insets stay before the main style in cascade, so late custom properties cannot push page headers down"
+)
+
+t_webui_fix328_home_frame_category_hub() (
+# Contract (fix328): the first Home frame makes no unverified profile/Smart/device claim;
+# cached header facts paint synchronously and refresh immediately, local warm-up does not
+# wait for window.load, and all six category buttons share one accessible visual structure.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI fix328 Home/category hub: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'PY' || fail 'source/locale contract'
+import json, re, sys
+from pathlib import Path
+root=Path(sys.argv[1]); s=(root/'webroot/index.html').read_text(encoding='utf-8')
+for token in ('<div class="device-line" id="deviceLine">OnePlus · —</div>',
+              '<span class="status-val asb-value-pending" id="curProfile" aria-busy="true">—</span>',
+              '<div class="psub asb-value-pending" id="smartSubLine" aria-busy="true">—</div>',
+              '<div class="pbtn pbtn-stock" data-p="stock"'):
+    assert token in s, token
+assert '<div class="pbtn pbtn-stock on"' not in s
+assert '<span class="status-val" id="curProfile">balanced</span>' not in s
+assert 'id="smartSubLine">adaptive · learning<' not in s
+home=s[s.index('(async () => {',s.index('function openTelegram')):s.index('function fmtTempC')]
+assert home.index('loadDeviceInfo();') < home.index('await asbStartupSnapshot();')
+assert 'setTimeout(loadDeviceInfo' not in home
+assert 'const DEVICE_HEADER_CACHE_KEY' in s and 'deviceHeaderPaint(cached.model, cached.soc, cached.chip);' in s
+assert "localStorage.setItem(DEVICE_HEADER_CACHE_KEY" in s
+assert "fetch('device_info.json?ts='" in s
+warm=s[s.index('function asbStartupWarmCaches()'):s.index('function asbNavCurrent')]
+schedule='requestAnimationFrame(function () { setTimeout(asbStartupWarmCaches, 0); });'
+assert schedule in warm and warm.index(schedule) < warm.index("window.addEventListener('load'")
+load=warm[warm.index("window.addEventListener('load'"):]
+assert 'asbStartupWarmCaches' not in load
+assert 'html .page:not(.live-page) > *,\nhtml .profiles > * { animation:none; }' in s
+scale=s[s.index('asbApplyUiScale();',s.index('const ASB_UI_REFERENCE_W')):s.index("window.addEventListener('resize', asbApplyUiScale);")]
+assert 'requestAnimationFrame(asbFitPages);' in scale
+for token in ('html .cfg-tile-ico {','place-items:center;','align-self:center;',
+              'html .cfg-tile-name {','overflow-wrap:anywhere;',
+              'html .cfg-tile-desc {','min-height:2.6em;','-webkit-line-clamp:3;',
+              'text-align:center;','html .cfg-tile-bar { width:100%; height:3px; }',
+              "tile.setAttribute('aria-label'", "bar.setAttribute('aria-hidden', 'true')"):
+    assert token in s, token
+assert 'grid-template-columns: repeat(3, 1fr);' in s
+expected={
+'en':['DSP, volume, Bluetooth','Presets, processing, detail','Animations, blur','Wi-Fi, LTE, queues','Smart, Doze, heat, RAM','Services, LTPO, haptics'],
+'ru':['DSP, громкость, Bluetooth','Пресеты, обработка, детали','Анимации, размытие','Wi-Fi, LTE, очереди','Smart, Doze, нагрев, RAM','Службы, LTPO, вибрация'],
+'uk':['DSP, гучність, Bluetooth','Пресети, обробка, деталі','Анімації, розмиття','Wi-Fi, LTE, черги','Smart, Doze, нагрів, RAM','Служби, LTPO, вібрація'],
+'de':['DSP, Lautstärke, Bluetooth','Presets, Verarbeitung, Details','Animationen, Weichzeichnung','WLAN, LTE, Warteschlangen','Smart, Doze, Wärme, RAM','Dienste, LTPO, Haptik'],
+'es':['DSP, volumen, Bluetooth','Presets, procesado, detalle','Animaciones, desenfoque','Wi-Fi, LTE, colas','Smart, Doze, calor, RAM','Servicios, LTPO, vibración'],
+'fr':['DSP, volume, Bluetooth','Préréglages, traitement, détails','Animations, flou','Wi-Fi, LTE, files','Smart, Doze, chaleur, RAM','Services, LTPO, vibrations'],
+'it':['DSP, volume, Bluetooth','Preset, elaborazione, dettagli','Animazioni, sfocatura','Wi-Fi, LTE, code','Smart, Doze, calore, RAM','Servizi, LTPO, vibrazione'],
+'pt':['DSP, volume, Bluetooth','Presets, processamento, detalhe','Animações, desfoque','Wi-Fi, LTE, filas','Smart, Doze, calor, RAM','Serviços, LTPO, vibração'],
+'tr':['DSP, ses, Bluetooth','Ön ayarlar, işleme, detay','Animasyonlar, bulanıklık','Wi-Fi, LTE, kuyruklar','Smart, Doze, ısı, RAM','Servisler, LTPO, titreşim'],
+'id':['DSP, volume, Bluetooth','Preset, pemrosesan, detail','Animasi, blur','Wi-Fi, LTE, antrean','Smart, Doze, panas, RAM','Layanan, LTPO, getaran'],
+'ar':['DSP والصوت وبلوتوث','إعدادات ومعالجة وتفاصيل','الحركات والتمويه','Wi-Fi وLTE والإرسال','Smart وDoze والحرارة وRAM','الخدمات وLTPO والاهتزاز'],
+'hy':['DSP, ձայն, Bluetooth','Պրեսետներ, մշակում','Անիմացիա, լղոզում','Wi-Fi, LTE, հերթեր','Smart, Doze, տաքացում, RAM','Ծառայություններ, LTPO, թրթռում'],
+'zh':['DSP、音量、蓝牙','预设、处理、细节','动画、模糊效果','Wi-Fi、LTE、队列','智能、Doze、发热、内存','服务、LTPO、振动']}
+files=sorted((root/'webroot/i18n').glob('*.json'))
+assert len(files)==13
+keys=['audio','camera','iface','net','battery','ui']
+for p in files:
+    d=json.loads(p.read_text(encoding='utf-8'))
+    assert [d['grp_'+k+'_desc'] for k in keys]==expected[p.stem], p.name
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI fix328 runtime: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cat > "$T/test.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+const chk=(c,m)=>{if(!c)throw Error(m)};
+function grab(sig,next){const a=h.indexOf(sig);if(a<0)throw Error('missing '+sig);const b=h.indexOf(next,a);if(b<0)throw Error('missing '+next);return h.slice(a,b);}
+function E(tag){this.tag=tag;this.children=[];this.textContent='';this.className='';this.attrs={};this.style={};this.hidden=false;}
+E.prototype.appendChild=function(x){this.children.push(x);return x};
+E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};
+(async()=>{
+  const ids={};for(const id of ['deviceLine','liveDeviceLine','cfgDeviceLine','rpDeviceLine','devDeviceLine','zyDeviceLine','socBadge','liveSocBadge','cfgSocBadge','rpSocBadge','devSocBadge','zySocBadge'])ids[id]=new E('div');
+  global.document={getElementById:id=>ids[id]||null};global.T=(k,f)=>f;
+  let stored={'asb_device_header_cache':JSON.stringify({t:Date.now(),model:'OnePlus 15',soc:'Snapdragon 8 Elite Gen 5',chip:'SM8850'})};
+  global.localStorage={getItem:k=>stored[k]||null,setItem:(k,v)=>{stored[k]=v}};
+  let resolveFetch;global.fetch=()=>new Promise(r=>{resolveFetch=r});
+  eval(grab('const MODEL_MAP','const DEVICE_HEADER_CACHE_KEY'));
+  eval(grab('const DEVICE_HEADER_CACHE_KEY','function liveHeaderSync()')+';globalThis.loadHeader=loadDeviceInfo;');
+  const loading=loadHeader();
+  chk(ids.deviceLine.textContent==='OnePlus 15 / Snapdragon 8 Elite Gen 5'&&ids.socBadge.textContent==='SM8850','valid cached device header did not paint synchronously');
+  chk(ids.zyDeviceLine.textContent===ids.deviceLine.textContent&&ids.rpSocBadge.textContent==='SM8850','cached header did not reach every page');
+  resolveFetch({ok:true,json:async()=>({model_code:'ONEPLUS_13',name_code:'',soc_code:'sm8650'})});await loading;
+  chk(ids.deviceLine.textContent==='OnePlus 13 / Snapdragon 8 Gen 3'&&ids.socBadge.textContent==='SM8650','fresh local JSON did not replace the cached header: '+ids.deviceLine.textContent+' / '+ids.socBadge.textContent);
+  const saved=JSON.parse(stored['asb_device_header_cache']);chk(saved.model==='OnePlus 13'&&saved.chip==='SM8650','fresh header cache was not saved');
+  chk(!('raw' in saved)&&!('serial' in saved)&&!('imei' in saved),'header cache stored unrelated device data');
+
+  const created=[];global.document={createElement:t=>{const e=new E(t);created.push(e);return e}};
+  global.CFG_GROUPS=['audio','camera','iface','net','battery','ui'].map(id=>({id,icon:id,name:id}));
+  global.CFG_ITEMS=CFG_GROUPS.map(g=>({key:g.id,def:'0'}));
+  global.cfgGroupOf=k=>k;global._cfgVals={audio:'1'};global.cfgIsActive=(it,cur)=>String(cur)==='1';
+  global.CFG_GROUP_DESC={audio:'DSP, volume, Bluetooth',camera:'Presets, processing, detail',iface:'Animations, blur',net:'Wi-Fi, LTE, queues',battery:'Smart, Doze, heat, RAM',ui:'Services, LTPO, haptics'};
+  global.grpName=g=>g.name;global.T=(k,f)=>f;global.techIcon=k=>'<svg data-kind="'+k+'"></svg>';
+  global.uiSound=()=>{};global._cfgGroup='';global.cfgRender=()=>{};global.requestAnimationFrame=()=>{};global.asbFitPages=()=>{};
+  eval(grab('function cfgRenderHub(list) {','// Settings whose effect lands in a file')+';globalThis.renderHub=cfgRenderHub;');
+  const list=new E('div');renderHub(list);const hub=list.children[0];
+  chk(hub.className==='cfg-hub'&&hub.children.length===6,'six-category hub was not rendered');
+  hub.children.forEach((tile,i)=>{
+    chk(tile.tag==='button'&&tile.children.map(x=>x.className).join('|')==='cfg-tile-ico|cfg-tile-name|cfg-tile-desc|cfg-tile-foot','tile structure differs at '+i);
+    chk(tile.children[0].innerHTML.includes('data-kind="'+CFG_GROUPS[i].id+'"'),'icon is missing at '+i);
+    chk(tile.attrs['aria-label'].includes(tile.children[2].textContent),'accessible label lacks the scope at '+i);
+    const foot=tile.children[3];chk(foot.children[0].className.includes('cfg-tile-count')&&foot.children[1].attrs['aria-hidden']==='true','footer/count contract differs at '+i);
+  });
+  chk(hub.children[0].children[3].children[0].textContent==='1 / 1','active count was lost');
+  chk(hub.children[1].children[3].children[0].textContent==='1','empty count was invented');
+  console.log('ok');
+})().catch(e=>{console.error(e&&e.stack||e);process.exit(1)});
+JS
+out="$(node "$T/test.js" "$H" 2>&1)" || { echo "FAIL WebUI fix328 runtime: $out" >&2; exit 1; }
+[ "$out" = ok ] || { echo "FAIL WebUI fix328 runtime: $out" >&2; exit 1; }
+echo "PASS WebUI fix328: neutral first Home frame, synchronous bounded header cache, pre-load warm-up and one aligned accessible six-category structure in 13 locales"
+)
+
+t_webui_fix329_home_monitor_entrance() (
+# Contract (fix329): Home enters with Monitor's short fade/scale only after local labels and
+# the fixed-width ZYGISK control exist. Final geometry is measured before motion, pending
+# values stay honest, and every category shares a centred visual axis.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI fix329 Home entrance/category axis: $*" >&2; exit 1; }
+python3 - "$H" <<'PY' || fail 'source/ordering contract'
+import sys
+s=open(sys.argv[1],encoding='utf-8').read()
+head=s[:s.index('<style>')]
+assert "document.documentElement.classList.add('asb-home-pending');" in head
+assert 'html.asb-home-pending .page:not(.live-page) { opacity:0; pointer-events:none; }' in s
+assert '--page-fade-in: 0.26s;' in s and '--page-fade-delay: 0.06s;' in s
+home=s[s.index('(async () => {',s.index('function openTelegram')):s.index('function fmtTempC')]
+assert home.index('loadDeviceInfo();') < home.index('await asbStartupSnapshot();')
+assert home.index('await asbStartupSnapshot();') < home.index('await I18N_READY;')
+reveal=s[s.index('let _asbHomeRevealed = false;'):s.index('// ── localized boot:')]
+for token in ('function asbHomeReveal() {','asbNavAnimMark();','asbFitPagesNow();',
+              "root.classList.remove('asb-home-pending');","transform:'scale(.985)'",
+              "transform:'scale(1)'",'duration:260','delay:60',
+              "easing:'cubic-bezier(.2,.7,.25,1)'",'window.addEventListener(\'load\', asbHomeReveal',
+              'setTimeout(asbHomeReveal, 1600);'):
+    assert token in reveal, token
+assert reveal.index('asbFitPagesNow();') < reveal.index('home.animate(')
+assert 'run(' not in reveal and 'runBatch(' not in reveal
+boot=s[s.index('function boot() {',s.index('// ── localized boot:')):s.index('I18N_READY.then(boot);')]
+assert boot.index('applyStaticI18n();') < boot.index('zygiskHeaderInit();') < boot.index('asbHomeReveal();')
+assert 'asbHomeValueResolve(current);' in s and 'asbHomeValueResolve(smartSub);' in s
+assert s.count('asb-value-pending') >= 8
+for token in ('html .cfg-tile {\n  align-items:center;','text-align:center;',
+              'html .cfg-tile-ico {\n  display:grid;\n  place-items:center;\n  align-self:center;',
+              'html .cfg-tile-name {\n  width:100%;','html .cfg-tile-desc {\n  width:100%;',
+              'html .cfg-tile-count { font:600 10.5px/1.2 var(--mono); letter-spacing:.02em; text-align:center; }'):
+    assert token in s, token
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI fix329 runtime: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cat > "$T/test.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+const chk=(c,m)=>{if(!c)throw Error(m)};
+function grab(a,b){const i=h.indexOf(a);if(i<0)throw Error('missing '+a);const j=h.indexOf(b,i);if(j<0)throw Error('missing '+b);return h.slice(i,j);}
+const pending=new Set(['asb-value-pending']),attrs={};
+const el={classList:{contains:c=>pending.has(c),remove:c=>pending.delete(c),add:c=>pending.add(c)},setAttribute:(k,v)=>attrs[k]=v};
+eval(grab('function asbHomeValueResolve(el) {','let _selectedProfile'));
+asbHomeValueResolve(el);
+chk(!pending.has('asb-value-pending')&&pending.has('asb-value-arrived')&&attrs['aria-busy']==='false','resolved value did not leave its pending state');
+const events=[];
+const rootClasses=new Set(['asb-home-pending']);
+const root={classList:{remove:c=>rootClasses.delete(c)}};
+const home={style:{transition:''},offsetWidth:412,animate:(frames,options)=>{events.push('animate');chk(options.duration===260&&options.delay===60,'Monitor timing was not reused');chk(frames[0].transform==='scale(.985)'&&frames[1].transform==='scale(1)','fade/scale keyframes differ');return {cancel:()=>events.push('cancel'),set onfinish(fn){this.done=fn}}}};
+global.document={documentElement:root,querySelector:s=>s==='.page:not(.live-page)'?home:null};
+global.window={matchMedia:()=>({matches:false}),addEventListener:()=>{}};
+global.setTimeout=()=>{};global.requestAnimationFrame=fn=>{events.push('raf');fn()};
+global.asbNavAnimMark=()=>events.push('mark');
+global.asbFitPagesNow=()=>{events.push('fit');chk(!rootClasses.has('asb-home-pending'),'fit ran before final layout state');chk(home.style.transition==='none','CSS transition conflicts with WAAPI fit')};
+global.asbFitPages=()=>events.push('fit-queued');
+eval(grab('let _asbHomeRevealed = false;','// ── localized boot:'));
+asbHomeReveal();
+chk(events.join('|')==='mark|fit|animate','unexpected reveal order: '+events.join('|'));
+chk(home.style.transition===''&&!rootClasses.has('asb-home-pending'),'Home did not reach its interactive final state');
+asbHomeReveal();chk(events.length===3,'reveal was not idempotent');
+rootClasses.add('asb-home-pending');events.length=0;
+window.matchMedia=()=>({matches:true});home.animate=()=>{throw Error('reduced motion animated')};
+eval(grab('let _asbHomeRevealed = false;','// ── localized boot:').replaceAll('asbHomeReveal','asbHomeRevealReduced').replace('let _asbHomeRevealed','let _asbHomeRevealedReduced'));
+asbHomeRevealReduced();
+chk(events.join('|')==='raf|fit-queued'&&!rootClasses.has('asb-home-pending'),'reduced-motion fallback failed: '+events.join('|')+' pending='+rootClasses.has('asb-home-pending'));
+console.log('ok');
+JS
+out="$(node "$T/test.js" "$H" 2>&1)" || { echo "FAIL WebUI fix329 runtime: $out" >&2; exit 1; }
+[ "$out" = ok ] || { echo "FAIL WebUI fix329 runtime: $out" >&2; exit 1; }
+echo "PASS WebUI fix329: Monitor-matched Home entrance, pre-motion final fit, honest pending values, reduced motion and centred category axis"
+)
+
+t_webui_fix323_glass_navigation_actions() (
+# Contract (fix323): the full-height canvas is actually visible, drill-in navigation has
+# one parent Glass material, and the three existing guarded restart actions share an
+# accessible toolbar menu. No new command path, worker or second navigation router.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI fix323 Glass/navigation/actions: $*" >&2; exit 1; }
+python3 - "$H" <<'PY' || fail 'source/layout/accessibility contract'
+import re, sys
+s = open(sys.argv[1], encoding='utf-8').read()
+marker = '/* ── Device-visual corrections (fix323)'
+assert s.count(marker) == 1
+b = s[s.index(marker):s.index('/* WebViews without backdrop filtering', s.index(marker))]
+# Fixed pages do not contribute to body height: the root, not that short body, owns canvas.
+assert 'html:root[data-asb-glass="1"] { background:var(--glass-canvas-image); }' in b
+assert ':is(.page,.live-page,.config-page)' in b and 'background:transparent !important' in b
+# fix324: dark Glass is explicitly black; the coloured full-screen wash was rejected on-device.
+assert '--glass-canvas-image:#000;' in s
+assert 'radial-gradient(ellipse 120% 48% at 0% 0%,rgba(130,157,143,.28)' not in s
+assert 'linear-gradient(180deg,#111713 0%,#050807 48%,#000 100%)' not in s
+# Parent dock keeps the shared floating material; child buttons cannot become loose circles.
+dock = re.search(r'html:root\[data-asb-glass="1"\] :is\(\.report-nav,\.zy-page-nav\) \.lgr-jump-btn \{([^}]*)\}', b)
+assert dock, 'dock rest-state override missing'
+for token in ('background:transparent !important', 'border-color:transparent !important',
+              'box-shadow:none !important', 'backdrop-filter:none'):
+    assert token in dock.group(1), token
+# The specific active check follows the generic chip and cannot be painted grey by it.
+generic = s.index('html:root[data-asb-glass="1"] :is(.lgr-chip,.pmeta-chip,.cfg-icon,.pchk)')
+active = s.index('html:root[data-asb-glass="1"] .pbtn.on .pchk {', generic)
+assert active > generic
+check = re.search(r'html:root\[data-asb-glass="1"\] \.pbtn\.on \.pchk \{([^}]*)\}', b)
+assert check and 'background:var(--c) !important' in check.group(1)
+assert 'width:22px; height:22px' in check.group(1) and 'transform:none' in check.group(1)
+# Exactly three circular tools; exactly three existing actions in the small menu.
+tools = re.search(r'<div id="cfgToolsRow">([\s\S]*?)\n    </div>', s)
+assert tools, 'tools row missing'
+assert tools.group(1).count('class="cfg-lang-btn"') == 3
+for token in ('id="cfgRebootMenuBtn"', 'aria-haspopup="menu"', 'aria-expanded="false"',
+              'aria-controls="cfgRebootPop"', 'id="cfgRebootPop"', 'role="menu"'):
+    assert token in tools.group(1), token
+pop = re.search(r'<div class="cfg-lang-pop cfg-reboot-pop" id="cfgRebootPop"[\s\S]*?</div>', s)
+assert pop and pop.group(0).count('role="menuitem"') == 3
+for key in ('cfg_reboot_tile', 'cfg_soft_tile', 'cfg_sysui_tile'):
+    assert key in pop.group(0), key
+assert 'id="cfgRebootWrap"' not in s
+assert 'class="cfg-reboot-tile' not in s
+# Freed height goes to the existing fitter; compact tiers and the 3 × 2 grid remain.
+fit = re.search(r'^function asbFitPagesNow\(\) \{[\s\S]*?^\}', s, re.M)
+assert fit and 'cfgRebootWrap' not in fit.group(0) and 'rebH' not in fit.group(0)
+assert 'Math.max([112, 96, 84][tier], Math.min(184, Math.floor(h)))' in fit.group(0)
+assert 'grid-template-columns: repeat(3, 1fr)' in s
+# Menu code delegates to the existing actions and owns no shell command or polling worker.
+start = s.index('var _cfgRebootMenuDismissArmed')
+end = s.index('/* Close an open dropdown when the next tap lands anywhere else.', start)
+js = s[start:end]
+assert "await cfgReboot();" in js and "await cfgSoftReboot();" in js and "await cfgRestartSysUI();" in js
+assert 'run(' not in js and 'setInterval(' not in js and 'setTimeout(' not in js
+# A body-portalled fixed popup sits above Config and uses zoom-corrected viewport geometry.
+assert 'document.body.appendChild(initialPop)' in js
+assert '.cfg-lang-pop.cfg-reboot-pop { min-width:220px; padding:6px; transform-origin:top right; z-index:1200; }' in s
+for token in ("ev.key === 'Escape'", 'cfgRebootMenuClose(true)', "['ArrowDown','ArrowUp','Home','End']",
+              "document.addEventListener('click'", "window.addEventListener('resize'",
+              "pop.style.position = 'fixed'", "btn.setAttribute('aria-expanded', 'true')",
+              'const z = window._asbUiScale || 1;',
+              "pop.style.top = ((r.bottom + 8) / z) + 'px'",
+              "pop.style.right = (Math.max(8, (window.innerWidth || 360) - r.right) / z) + 'px'",
+              "pop.style.maxHeight = (Math.max(152, (window.innerHeight || 640) - r.bottom - 24) / z) + 'px'"):
+    assert token in js, token
+hard = re.search(r'^async function cfgReboot\(\) \{[\s\S]*?^\}', s, re.M).group(0)
+soft = re.search(r'^async function cfgSoftReboot\(\) \{[\s\S]*?^\}', s, re.M).group(0)
+assert 'now - _cfgRebootArmed > 4000' in hard and 'now - _cfgSoftArmed > 4000' in soft
+assert "svc power reboot 2>/dev/null || reboot" in hard
+assert "ASB_QUICK_RESTART) + ' status'" in soft and "ASB_QUICK_RESTART) + ' restart'" in soft
+assert 'if (_cfgGroup) cfgRebootMenuClose(false);' in s
+assert re.search(r'^function closeConfigPage\(toMain\) \{\n  cfgRebootMenuClose\(false\);', s, re.M)
+PY
+command -v node >/dev/null 2>&1 || { echo "SKIP WebUI fix323 menu runtime: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cat > "$T/test.js" <<'JS'
+const fs=require('fs'), h=fs.readFileSync(process.argv[2],'utf8');
+function grab(name){const m=h.match(new RegExp('(?:async )?function '+name+'\\([^)]*\\) \\{[\\s\\S]*?\\n\\}'));if(!m)throw Error('missing '+name);return m[0];}
+function E(id,cls){this.id=id||'';this.className=cls||'';this.hidden=true;this.attrs={};this.style={};this.children=[];this.textContent='';this.title='';this.label={textContent:id||''};const set=new Set((cls||'').split(/\s+/).filter(Boolean));this.classList={contains:c=>set.has(c),toggle:(c,v)=>{if(v)set.add(c);else set.delete(c)}};}
+E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};
+E.prototype.querySelectorAll=function(){return this.children};
+E.prototype.querySelector=function(){return this.label};
+E.prototype.contains=function(x){return x===this||this.children.includes(x)};
+E.prototype.focus=function(){document.activeElement=this};
+E.prototype.getBoundingClientRect=function(){return{right:345,bottom:350}};
+const pop=new E('cfgRebootPop','cfg-lang-pop cfg-reboot-pop');
+for(const [kind,key] of [['hard','Reboot'],['soft','Soft reboot'],['sysui','Restart SystemUI']]){const b=new E('',kind);b.label.textContent=key;pop.children.push(b)}
+const btn=new E('cfgRebootMenuBtn','cfg-lang-btn'),wrap=new E('cfgRebootMenuWrap');wrap.children=[btn,pop];
+const lang=new E('cfgLangPop'),outside=new E('outside');
+const els={cfgRebootPop:pop,cfgRebootMenuBtn:btn,cfgRebootMenuWrap:wrap,cfgLangPop:lang};
+const listeners={keydown:[],click:[]};
+global.document={activeElement:null,addEventListener:(k,f)=>listeners[k].push(f)};
+global.window={innerWidth:360,innerHeight:800,_asbUiScale:.8,addEventListener:()=>{}};
+global._el=id=>els[id]||null; global.T=(k,d)=>d; global.uiSound=()=>{}; global.toast=()=>{};
+global.shQuote=s=>"'"+s+"'"; global.ASB_QUICK_RESTART='/mod/runtime/asb_quick_restart.sh';
+const commands=[]; global.run=async c=>{commands.push(c);return{errno:0,stdout:'',stderr:''}};
+const source=[
+ 'var _cfgRebootMenuDismissArmed=false; let _cfgRebootArmed=0; let _cfgSoftArmed=0;',
+ ...['cfgReboot','cfgSoftReboot','cfgRestartSysUI','cfgRebootMenuItems','cfgRebootMenuPaint','cfgRebootMenuClose','cfgRebootMenuInit','cfgToggleRebootMenu','cfgRebootMenuKey','cfgRebootMenuAction'].map(grab)
+].join('\n');
+eval(source+`\n(async()=>{
+ const ev=()=>({stopped:0,prevented:0,stopPropagation(){this.stopped++},preventDefault(){this.prevented++},key:''});
+ cfgToggleRebootMenu(ev());
+ if(pop.hidden||btn.attrs['aria-expanded']!=='true'||document.activeElement!==pop.children[0])throw Error('open/focus failed');
+ if(pop.style.position!=='fixed'||pop.style.top!=='447.5px'||pop.style.right!=='18.75px'||pop.style.maxHeight!=='532.5px')throw Error('scale-corrected placement failed: '+JSON.stringify(pop.style));
+ await cfgRebootMenuAction(ev(),'hard');
+ if(commands.some(c=>c.includes('svc power reboot'))||pop.hidden||!pop.children[0].classList.contains('armed'))throw Error('full reboot first tap was not armed');
+ await cfgRebootMenuAction(ev(),'hard');
+ if(!commands.some(c=>c.includes('svc power reboot'))||!pop.hidden)throw Error('confirmed full reboot failed');
+ cfgToggleRebootMenu(ev()); await cfgRebootMenuAction(ev(),'soft');
+ if(commands.filter(c=>c.includes('asb_quick_restart.sh')).length!==1||pop.hidden||!pop.children[1].classList.contains('armed'))throw Error('quick restart first tap was not armed');
+ await cfgRebootMenuAction(ev(),'soft');
+ if(!commands.some(c=>c.includes("asb_quick_restart.sh' restart"))||!pop.hidden)throw Error('confirmed quick restart failed');
+ cfgToggleRebootMenu(ev()); await cfgRebootMenuAction(ev(),'sysui');
+ if(!commands.some(c=>c.includes('pkill -f com.android.systemui'))||!pop.hidden)throw Error('SystemUI delegation failed');
+ cfgToggleRebootMenu(ev()); listeners.click[0]({target:outside});
+ if(!pop.hidden)throw Error('outside dismissal failed');
+ cfgToggleRebootMenu(ev()); let e=ev();e.key='ArrowDown';listeners.keydown[0](e);
+ if(document.activeElement!==pop.children[1]||!e.prevented||!e.stopped)throw Error('ArrowDown failed');
+ e=ev();e.key='End';listeners.keydown[0](e);if(document.activeElement!==pop.children[2])throw Error('End failed');
+ e=ev();e.key='Escape';listeners.keydown[0](e);
+ if(!pop.hidden||document.activeElement!==btn||btn.attrs['aria-expanded']!=='false'||!e.stopped)throw Error('Escape/focus return failed');
+ cfgRebootMenuKey(Object.assign(ev(),{key:'ArrowDown'}));if(pop.hidden)throw Error('trigger ArrowDown failed');
+ if(listeners.click.length!==1||listeners.keydown.length!==1)throw Error('listeners stacked');
+ console.log('ok');
+})().catch(e=>{console.error(e&&e.stack||e);process.exit(1)});`);
+JS
+out="$(node "$T/test.js" "$H" 2>&1)" || { echo "FAIL WebUI fix323 menu runtime: $out" >&2; exit 1; }
+[ "$out" = ok ] || { echo "FAIL WebUI fix323 menu runtime: $out" >&2; exit 1; }
+echo "PASS WebUI fix323: full-height canvas, unified drill-in Glass docks, accent profile check, larger hub tiles and guarded accessible restart menu"
+)
+
 t_webui_fix276_battery_evidence_runtime() (
 # Runtime (fix276): navigation and evidence collection are separate; drain tiles name their
 # own windows; the explicit wakelock manager renders only parsed user-app rows and risk state.
@@ -8409,7 +9048,8 @@ def const(name):
     m = re.search(r'^const ' + re.escape(name) + r' = .*?;$', h, re.M)
     assert m, name
     return m.group(0)
-# Opening the page must not await the collector. The timer is captured and fired explicitly.
+# Opening the page must not await the collector. fix325 invokes the loader immediately so its
+# cached/loading state can paint; the real collector remains behind asbPaintYield (fix287 test).
 open_src = '\n'.join([
     "const timers = []; let loads = 0, sound = 0;",
     "function El(id) { this.id=id; this.textContent=id; this.scrollTop=9; this.attrs={}; this.classes=new Set();",
@@ -8423,9 +9063,8 @@ open_src = '\n'.join([
     fn('openDevicePage'),
     "openDevicePage();",
     "if (!_deviceOpen || !els.devicePage.classes.has('open') || els.devicePage.attrs['aria-hidden'] !== 'false') throw Error('page did not open synchronously');",
-    "if (els.devicePage.scrollTop !== 0 || loads !== 0 || timers.length !== 2) throw Error('collector was not deferred');",
-    "timers[0](); if (loads !== 1) throw Error('deferred collector did not start');",
-    "openDevicePage(); if (loads !== 1 || timers.length !== 2) throw Error('repeated open started another collector');",
+    "if (els.devicePage.scrollTop !== 0 || loads !== 1 || timers.length !== 1) throw Error('loading state was not started immediately');",
+    "openDevicePage(); if (loads !== 1 || timers.length !== 1) throw Error('repeated open started another collector');",
     "console.log('ok');"
 ])
 (out/'open.js').write_text(open_src)
@@ -8491,7 +9130,7 @@ grep -q "service-list ' + shQuote(pkg)" "$H" || fail 'on-demand service list mis
 grep -q "service-set ' + shQuote(pkg)" "$H" || fail 'explicit component action missing'
 grep -q 'App wakelock blocking' "$H" || fail 'package AppOps still uses freeze terminology'
 grep -q 'not a process freezer' "$H" || fail 'component disabling semantics are not explicit'
-echo "PASS WebUI fix276 battery evidence: immediate diagnostics, deferred loading, explicit drain windows and reversible wakelock risk states"
+echo "PASS WebUI fix276 battery evidence: immediate diagnostics, paint-yielded collection, explicit drain windows and reversible wakelock risk states"
 )
 
 t_webui_fix278_perf_runtime() (
@@ -9142,6 +9781,85 @@ JS
 out="$(node "$T/test.js" "$H" 2>&1)" || { echo "FAIL fix319 details/services: $out" >&2; exit 1; }
 [ "$out" = ok ] || { echo "FAIL fix319 details/services: $out" >&2; exit 1; }
 echo "PASS fix319 detail sheets/services: current-data popups, keyboard activation/focus, strict parser, exact component two-tap disable/restore and no package/process freezing"
+)
+
+
+t_webui_night_charge_runtime() (
+# fix330: saved intent and kernel outcome are separate; the live toast follows the latter.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI night charge: $*" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "SKIP WebUI night charge: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+python3 - "$ROOT/webroot/i18n" <<'PY' || fail 'locale schema'
+import json, pathlib, sys
+files=sorted(pathlib.Path(sys.argv[1]).glob('*.json'))
+assert len(files)==13
+keys=('cfg_battery_section_charging','cfg_battery_section_charging_hint','nc_state_off',
+      'nc_state_waiting','nc_state_holding','nc_state_released','nc_state_not_exposed',
+      'nc_state_write_failed','nc_state_restore_failed','nc_state_external','nc_state_unknown','t_nc_off')
+for p in files:
+    d=json.loads(p.read_text())
+    for k in keys: assert d.get(k), (p.name,k)
+    card=d.get('cfg',{}).get('night_charge_enable',{})
+    assert card.get('name') and card.get('desc'), p.name+' card'
+    assert d['nc_state_holding'] != d['nc_state_not_exposed'], p.name+' honest states'
+PY
+{
+  printf 'const I18N = { en: %s, ru: %s };\n' "$(cat "$ROOT/webroot/i18n/en.json")" "$(cat "$ROOT/webroot/i18n/ru.json")"
+  cat <<'EOF'
+let ASB_LANG='en';
+function T(k,d) { const L=I18N[ASB_LANG]; return L && L[k] != null ? L[k] : d; }
+let _nightCharge={state:'unknown'};
+function ledgerBadge(){return null} function trialHoursLeft(){return 0} function trialExpired(){return false}
+const _netResult={};
+let runs=[],toasts=[],renders=0;
+const MD='/mod';
+function shQuote(s){return "'"+String(s).replace(/'/g,"'\\''")+"'"}
+function cfgConflictResolve(){return []} function cfgRequireNotes(){return []} function cfgCurVal(){}
+function cfgMarkPending(){} function cfgRuleNotice(){} function haptic(){} function uiSound(){}
+function cfgSoundKind(){return ''} function cfgRender(){renders++} function cfgIsActive(){return true}
+const CFG_ITEMS=[{key:'night_charge_enable',type:'bool'}], CFG_SILENT_KEYS=[];
+let _cfgLoadSig='x', _cfgVals={};
+let helperState='holding';
+async function run(c){runs.push(c);if(runs.length===1)return{errno:0,stdout:''};return{errno:0,stdout:'version=1\nenabled=1\nstate='+helperState+'\nresult='+helperState+'\ninterface=limit\ncapacity=80\ncharging=1\ntarget=80\nwindow=22:00-06:00\n'};}
+function toast(m,c){toasts.push([m,c])}
+const ctl={classList:{add(){},remove(){}},closest(){return null}};
+EOF
+  for fn in nightChargeParse cfgLoadNightCharge nightChargeBadge cfgStatus; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  sed -n '/^async function cfgSet(/,/^}/p' "$H"
+  cat <<'EOF'
+let bad=0;const chk=(c,m)=>{if(!c){console.log('FAIL '+m);bad++}};
+const parsed=nightChargeParse('state=holding\ninterface=limit\ncapacity=80\ncharging=1\nstate=not_exposed\n<script>=bad\nunknown=x\n');
+chk(parsed.state==='not_exposed'&&parsed.capacity==='80'&&parsed.interface==='limit','strict parser');
+chk(nightChargeBadge('holding').cls==='good'&&nightChargeBadge('not_exposed').cls==='warn','badge classes');
+chk(cfgStatus({key:'night_charge_enable'},'1').text===I18N.en.nc_state_unknown,'unknown enabled badge');
+_nightCharge.state='restore_failed';
+chk(cfgStatus({key:'night_charge_enable'},'0').cls==='bad','disabled card hides restore failure');
+_nightCharge.state='holding';
+chk(cfgStatus({key:'night_charge_enable'},'0').text===I18N.en.nc_state_off,'off badge');
+(async()=>{
+ await cfgSet('night_charge_enable','1',ctl);
+ chk(runs.length===2&&runs[1].includes("asb_night_charge.sh' apply"),'live helper apply missing: '+runs);
+ chk(toasts[0][0]===I18N.en.nc_state_holding&&toasts[0][1]==='good','holding toast: '+JSON.stringify(toasts));
+ helperState='not_exposed';runs=[];await cfgSet('night_charge_enable','1',ctl);
+ chk(toasts[1][0]===I18N.en.nc_state_not_exposed&&toasts[1][1]==='warn','unsupported false success: '+JSON.stringify(toasts[1]));
+ helperState='write_failed';runs=[];await cfgSet('night_charge_enable','1',ctl);
+ chk(toasts[2][1]==='bad'&&toasts[2][0]===I18N.en.nc_state_write_failed,'write failure toast');
+ helperState='off';runs=[];await cfgSet('night_charge_enable','0',ctl);
+ chk(toasts[3][0]===I18N.en.t_nc_off,'disable handback toast');
+ chk(renders===4,'cards did not redraw');
+ ASB_LANG='ru';chk(nightChargeBadge('holding').text===I18N.ru.nc_state_holding,'Russian badge');
+ if(bad)process.exit(1);console.log('ok');
+})();
+EOF
+} > "$T/t.js"
+out="$(node "$T/t.js" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+grep -Fq "['nightcharge', 'sh ' + shQuote(MD + '/runtime/asb_night_charge.sh') + ' status']" "$H" || fail 'batched status read missing'
+grep -Fq 'nm.textContent = Tcfg(it.key, "name", it.name);' "$H" || fail 'card value insertion no longer uses textContent'
+echo 'PASS WebUI night charge: parser, honest badges, immediate apply/toasts and all 13 locales'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

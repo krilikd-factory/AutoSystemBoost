@@ -731,8 +731,8 @@ awk -F'|' '
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
-[ "$(wc -l < "$TMP/conf")" = "215" ] || fail "expected 215 config keys, got $(wc -l < "$TMP/conf")"
-[ "$(wc -l < "$TMP/registry")" = "215" ] || fail "expected 215 registry keys, got $(wc -l < "$TMP/registry")"
+[ "$(wc -l < "$TMP/conf")" = "216" ] || fail "expected 216 config keys, got $(wc -l < "$TMP/conf")"
+[ "$(wc -l < "$TMP/registry")" = "216" ] || fail "expected 216 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
 grep -qx 'kernel_sched_stats|advanced|webui_sensitive|shell' "$REG" || fail 'kernel_sched_stats consumer is not pinned to shell'
@@ -752,7 +752,7 @@ done > "$TMP/consumer_bad"
 
 sed -n '/const CFG_ITEMS = \[/,/^\];/p' "$ROOT/webroot/index.html" \
   | grep -oE "key:'[A-Za-z_][A-Za-z0-9_]*'" | sed "s/key:'//;s/'//" | sort -u > "$TMP/cards"
-[ "$(wc -l < "$TMP/cards")" = "86" ] || fail "expected 86 WebUI cards, got $(wc -l < "$TMP/cards")"
+[ "$(wc -l < "$TMP/cards")" = "87" ] || fail "expected 87 WebUI cards, got $(wc -l < "$TMP/cards")"
 _card_bad="$(while IFS= read -r key; do
   cls="$(awk -F'|' -v k="$key" '$1==k {print $2; exit}' "$REG")"
   case "$cls" in user|advanced) : ;; *) printf '%s ' "$key" ;; esac
@@ -796,7 +796,7 @@ for _c in $(grep -oE "\{ key:'[A-Za-z_][A-Za-z_0-9]*'" "$ROOT/webroot/index.html
 done
 [ -z "$_missing" ] || fail "cards missing from the install.sh settings snapshot:$_missing"
 
-echo 'PASS config ownership registry contract (215 keys; 34 user, 52 advanced, 129 internal)'
+echo 'PASS config ownership registry contract (216 keys; 34 user, 53 advanced, 129 internal)'
 )
 
 t_config_restore_outcome_runtime() (
@@ -3906,7 +3906,8 @@ grep -q 'runtime/asb_drain_meter.sh" run' "$ROOT/service.sh" || fail "the meter 
 [ -f "$ROOT/tools/asb_tree_check.sh" ] || fail "no tree check"
 [ -s "$ROOT/tools/asb_tree.sha256" ] || fail "no delivered-tree manifest"
 grep -q 'data-i18n="lv_slot_heat"' "$H" || fail "the usual-peak tile is still a bare temperature"
-grep -q 'class="cfg-reboot-row"' "$H" || fail "restarts are still three full-width bars"
+grep -q 'class="cfg-lang-pop cfg-reboot-pop"' "$H" || fail "compact restart menu is missing"
+grep -q 'id="cfgRebootWrap"' "$H" && fail "the old separate restart row is back"
 grep -q '^	    ui_print "      + ${ASB_SEC_AUDIO:-AUDIO}: ${ASB_I_HP_LIMIT' "$ROOT/common/install.sh" || fail "the headphone limiter is still a warning"
 grep -q 'берегите слух' "$ROOT/common/russiantext.sh" && fail "the hearing warning text is still there"
 for t in test_drain_meter_runtime.sh test_tree_check_runtime.sh test_webui_monitor_compact_runtime.sh; do asb_has_test "$t" || fail "$t missing"; done
@@ -5072,7 +5073,7 @@ for t in asb-fit-c1 asb-fit-c2; do
 done
 grep -qF "classList.toggle('asb-fit-c1', t >= 1)" "$H" || fail "tier classes are not raised from the measurement"
 grep -qF 'Math.max([68, 58, 48][tier]' "$H" || fail "the profile-card floor does not step down"
-grep -qF 'Math.max([104, 92, 80][tier]' "$H" || fail "the tile floor does not step down"
+grep -qF 'Math.max([112, 96, 84][tier]' "$H" || fail "the tile floor does not step down"
 grep -qF 'else if (document.body.classList.contains('"'"'live-active'"'"')) el = _el('"'"'livePage'"'"');' "$H" || fail "the Monitor page is not the thing measured while it is open"
 # The fix201 fallback must survive intact: overlays still scroll themselves.
 grep -q 't_webui_page_scroll' "$ROOT/tests/asb_ui.sh" || fail "the scroll regression test is missing"
@@ -6695,9 +6696,10 @@ need "$INSTALL" 'stock|performance|battery|balanced|smart|none)'
 need "$INSTALL" 'Stock profile active; ASB CPU/GPU/governor policy is off'
 need "$INSTALL" 'asb_stock_policy.sh'
 
-# WebUI: one fifth Stock card starts selected in shipped markup; live load replaces it with the
-# actual stored profile. The compact spacing retains the support rail's three equal controls.
-need "$UI" "class=\"pbtn pbtn-stock on\" data-p=\"stock\" onclick=\"go('stock')\""
+# WebUI: shipped markup must not invent a selected Stock card before the stored profile is
+# known. The neutral first frame is replaced by live load with the actual stored profile.
+# Compact spacing retains the support rail's three equal controls.
+need "$UI" "class=\"pbtn pbtn-stock\" data-p=\"stock\" onclick=\"go('stock')\""
 need "$UI" '<div class="pico" data-tech-icon="stock"></div>'
 need "$UI" 'data-i18n="prof_stock"'
 need "$UI" 'data-i18n="prof_stock_sub"'
@@ -8904,6 +8906,249 @@ done
 grep -Fq 'Digest row `smartlive` (fix321)' "$ROOT/docs/log_schemas.md" || fail 'smartlive schema undocumented'
 grep -Fq 'an enabled LSPosed scope is context only' "$ROOT/docs/log_schemas.md" || fail 'hook evidence rule undocumented'
 echo 'PASS fix321 Smart/Zygisk: measured-only hooked long class, live versus stored Smart evidence, bounded deltas and 13 locales'
+)
+
+
+t_night_charge_sysfs_runtime() (
+# fix330: exercise the real helper against a temporary power-supply directory.
+# This is lifecycle/host validation, not a claim that OnePlus 15 exposes either node.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/runtime/asb_night_charge.sh"
+T="$(mktemp -d "${TMPDIR:-/tmp}/asb_night_charge.XXXXXX")"
+trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL night charge sysfs: $*" >&2; exit 1; }
+state() { printf '%s\n' "$1" | sed -n 's/^state=//p' | head -1; }
+setup_case() {
+  rm -rf "$T/case"
+  mkdir -p "$T/case/mod/config" "$T/case/psy" "$T/case/state"
+  printf 'night_charge_enable=1\n' > "$T/case/mod/config/governor.conf"
+  printf 'boot-a\n' > "$T/case/boot"
+  printf '75\n' > "$T/case/psy/capacity"
+  printf 'Charging\n' > "$T/case/psy/status"
+  NOW=1320
+}
+run_nc() {
+  MODDIR="$T/case/mod" ASB_NC_PSY="$T/case/psy" ASB_NC_STATE="$T/case/state" \
+    ASB_NC_BOOTID="$T/case/boot" ASB_NC_NOW_MIN="$NOW" sh "$H" "${1:-apply}"
+}
+make_limit() {
+  printf '100\n' > "$T/case/psy/charge_control_limit_max"
+  printf '100\n' > "$T/case/psy/charge_control_limit"
+}
+make_switch() { printf '1\n' > "$T/case/psy/charging_enabled"; }
+
+# The real clock parser is exercised with a stub date, independently of NOW_MIN.
+setup_case; make_limit
+mkdir "$T/case/bin"
+printf '#!/bin/sh\nprintf "22 00\\n"\n' > "$T/case/bin/date"
+chmod +x "$T/case/bin/date"
+out="$(MODDIR="$T/case/mod" ASB_NC_PSY="$T/case/psy" ASB_NC_STATE="$T/case/state" \
+  ASB_NC_BOOTID="$T/case/boot" PATH="$T/case/bin:$PATH" sh "$H" apply)"
+[ "$(state "$out")" = holding ] || fail "22:00 real-clock arithmetic: $out"
+[ "$(cat "$T/case/psy/charge_control_limit")" = 80 ] || fail '22:00 did not set the limit'
+
+# Limit interface: before the window, across midnight, and exact handback at 06:00.
+setup_case; make_limit
+NOW=1319; out="$(run_nc apply)"; [ "$(state "$out")" = released ] || fail "21:59: $out"
+[ "$(cat "$T/case/psy/charge_control_limit")" = 100 ] || fail '21:59 changed the node'
+[ ! -e "$T/case/state/night_charge.ledger" ] || fail '21:59 created ownership'
+NOW=1320; out="$(run_nc apply)"; [ "$(state "$out")" = holding ] || fail "22:00: $out"
+[ "$(cat "$T/case/psy/charge_control_limit")" = 80 ] || fail 'limit is not 80'
+grep -qx 'original=100' "$T/case/state/night_charge.ledger" || fail 'original limit not saved'
+NOW=0; out="$(run_nc tick)"; [ "$(state "$out")" = holding ] || fail "00:00: $out"
+NOW=359; out="$(run_nc tick)"; [ "$(state "$out")" = holding ] || fail "05:59: $out"
+NOW=360; out="$(run_nc tick)"; [ "$(state "$out")" = released ] || fail "06:00: $out"
+[ "$(cat "$T/case/psy/charge_control_limit")" = 100 ] || fail '06:00 did not restore 100'
+[ ! -e "$T/case/state/night_charge.ledger" ] || fail '06:00 retained ownership'
+
+# Already above 80: charging may stop, capacity is never artificially lowered.
+setup_case; make_limit; printf '91\n' > "$T/case/psy/capacity"
+out="$(run_nc apply)"; [ "$(state "$out")" = holding ] || fail "above 80: $out"
+[ "$(cat "$T/case/psy/capacity")" = 91 ] || fail 'helper discharged the fixture battery'
+printf 'night_charge_enable=0\n' > "$T/case/mod/config/governor.conf"
+out="$(run_nc apply)"; [ "$(state "$out")" = off ] || fail "disable: $out"
+[ "$(cat "$T/case/psy/charge_control_limit")" = 100 ] || fail 'disable did not restore the original'
+
+# Binary switch: wait below 80, hold at 80, and do not mistake Not charging for unplug.
+setup_case; make_switch; printf '79\n' > "$T/case/psy/capacity"
+out="$(run_nc apply)"; [ "$(state "$out")" = waiting ] || fail "switch below 80: $out"
+[ "$(cat "$T/case/psy/charging_enabled")" = 1 ] || fail 'switch changed below 80'
+printf '80\n' > "$T/case/psy/capacity"
+out="$(run_nc tick)"; [ "$(state "$out")" = holding ] || fail "switch at 80: $out"
+[ "$(cat "$T/case/psy/charging_enabled")" = 0 ] || fail 'switch did not stop charging'
+printf 'Not charging\n' > "$T/case/psy/status"
+out="$(run_nc tick)"; [ "$(state "$out")" = holding ] || fail "own Not charging released the switch: $out"
+[ "$(cat "$T/case/psy/charging_enabled")" = 0 ] || fail 'Not charging caused an apply/release oscillation'
+printf '79\n' > "$T/case/psy/capacity"
+out="$(run_nc tick)"; [ "$(state "$out")" = waiting ] || fail "switch below target resume: $out"
+[ "$(cat "$T/case/psy/charging_enabled")" = 1 ] || fail 'charging was not resumed below 80'
+printf '85\n' > "$T/case/psy/capacity"
+printf 'Charging\n' > "$T/case/psy/status"
+out="$(run_nc tick)"; [ "$(state "$out")" = holding ] || fail "switch above 80: $out"
+printf 'Discharging\n' > "$T/case/psy/status"
+out="$(run_nc tick)"; [ "$(state "$out")" = waiting ] || fail "explicit unplug: $out"
+[ "$(cat "$T/case/psy/charging_enabled")" = 1 ] || fail 'unplug did not hand the switch back'
+
+# Unsupported hardware and an external owner are explicit, never false success.
+setup_case
+out="$(run_nc apply)"; [ "$(state "$out")" = not_exposed ] || fail "unsupported state: $out"
+setup_case; make_limit; out="$(run_nc apply)"
+printf '100\n' > "$T/case/psy/charge_control_limit"
+out="$(run_nc tick)"; [ "$(state "$out")" = external_change ] || fail "external change: $out"
+grep -qx 'owned=0' "$T/case/state/night_charge.ledger" || fail 'external ownership not yielded'
+printf 'night_charge_enable=0\n' > "$T/case/mod/config/governor.conf"
+out="$(run_nc apply)"
+[ "$(cat "$T/case/psy/charge_control_limit")" = 100 ] || fail 'disable overwrote the external value'
+
+# Uninstall calls the same restore command and hands back an ASB-owned value.
+setup_case; make_limit; out="$(run_nc apply)"
+out="$(run_nc restore)"; [ "$(state "$out")" = off ] || fail "restore command: $out"
+[ "$(cat "$T/case/psy/charge_control_limit")" = 100 ] || fail 'restore command left 80'
+grep -Fq 'asb_night_charge.sh restore' "$ROOT/uninstall.sh" || fail 'uninstall does not invoke restore'
+
+echo 'PASS night charge sysfs: window, limit/switch hold, unplug, external ownership, disable and uninstall restore'
+)
+
+t_night_charge_failure_runtime() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/runtime/asb_night_charge.sh"
+T="$(mktemp -d "${TMPDIR:-/tmp}/asb_night_charge_fail.XXXXXX")"
+trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL night charge failure: $*" >&2; exit 1; }
+state() { printf '%s\n' "$1" | sed -n 's/^state=//p' | head -1; }
+mkdir -p "$T/mod/config" "$T/psy" "$T/state"
+printf 'night_charge_enable=1\n' > "$T/mod/config/governor.conf"
+printf 'boot-a\n' > "$T/boot"
+printf '75\nCharging\n' > "$T/psy/capacity"
+printf 'Charging\n' > "$T/psy/status"
+printf '100\n' > "$T/psy/charge_control_limit_max"
+printf '100\n' > "$T/psy/charge_control_limit"
+run_nc() {
+  MODDIR="$T/mod" ASB_NC_PSY="$T/psy" ASB_NC_STATE="$T/state" ASB_NC_BOOTID="$T/boot" \
+    ASB_NC_NOW_MIN=1320 sh "$H" "${1:-apply}"
+}
+# A ledger path occupied by a directory must fail closed and roll the sysfs write back.
+mkdir "$T/state/night_charge.ledger"
+out="$(run_nc apply)"; [ "$(state "$out")" = write_failed ] || fail "ledger failure: $out"
+[ "$(cat "$T/psy/charge_control_limit")" = 100 ] || fail 'ledger failure did not roll back sysfs'
+rmdir "$T/state/night_charge.ledger"
+
+# A read-back mismatch follows the same rollback path. Extract the production functions,
+# then replace only the read seam: the write and rollback themselves remain real.
+sed '/^case "${1:-apply}" in$/,$d' "$H" > "$T/functions.sh"
+cat > "$T/readback.sh" <<'EOF_READBACK'
+. "$1"
+STATE="$2/state"; LEDGER="$STATE/night_charge.ledger"; STATUS="$STATE/night_charge.status"
+NC_KIND=limit; NC_NODE="$2/psy/charge_control_limit"; NC_ENABLED=1; NC_CAPACITY=75; NC_CHARGING=1; NC_BOOT=boot-a
+_nc_read() { printf '100\n'; }
+_nc_apply_new limit "$NC_NODE" 80
+EOF_READBACK
+out="$(sh "$T/readback.sh" "$T/functions.sh" "$T")"
+[ "$(state "$out")" = write_failed ] || fail "read-back mismatch: $out"
+[ "$(cat "$T/psy/charge_control_limit")" = 100 ] || fail 'read-back mismatch was not rolled back'
+[ ! -e "$T/state/night_charge.ledger" ] || fail 'failed read-back created ownership'
+
+# Restore failure remains visible in the read-only status command even after disabling.
+rm -f "$T/state/night_charge.ledger" "$T/state/night_charge.status"
+out="$(run_nc apply)"; [ "$(state "$out")" = holding ] || fail "setup for restore failure: $out"
+printf 'night_charge_enable=0\n' > "$T/mod/config/governor.conf"
+chmod 0444 "$T/psy/charge_control_limit"
+out="$(run_nc apply)"; [ "$(state "$out")" = restore_failed ] || fail "restore failure: $out"
+out="$(run_nc status)"; [ "$(state "$out")" = restore_failed ] || fail "status hid restore failure: $out"
+[ "$(cat "$T/psy/charge_control_limit")" = 80 ] || fail 'restore failure fixture changed unexpectedly'
+chmod 0644 "$T/psy/charge_control_limit"
+
+# Ownership never crosses a boot ID; a stale ledger is discarded instead of replayed.
+printf 'night_charge_enable=1\n' > "$T/mod/config/governor.conf"
+out="$(run_nc apply)"; [ "$(state "$out")" = holding ] || fail "reboot setup: $out"
+printf 'boot-b\n' > "$T/boot"
+printf 'night_charge_enable=0\n' > "$T/mod/config/governor.conf"
+out="$(run_nc apply)"; [ "$(state "$out")" = off ] || fail "stale boot handback: $out"
+[ ! -e "$T/state/night_charge.ledger" ] || fail 'stale boot ledger survived'
+
+# Shell ownership stays outside the native governor key set and no second worker is added.
+! grep -Eq "night_charge_enable.*GOV_KEYS|GOV_KEYS.*night_charge_enable" "$ROOT/src/asb_governor.c" || fail 'native governor owns the shell key'
+[ "$(grep -Fc 'sh "$MODDIR/runtime/asb_night_charge.sh' "$ROOT/service.sh")" -eq 2 ] || fail 'expected boot apply and existing-loop tick only'
+grep -Fq "night_charge_enable|advanced|webui_sensitive|shell" "$ROOT/config/key_ownership.tsv" || fail 'key ownership missing'
+echo 'PASS night charge failures: ledger/read-back rollback, visible restore failure, boot-scoped ownership and scheduler contract'
+)
+
+
+
+t_night_charge_config_writer() (
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d "${TMPDIR:-/tmp}/asb_night_charge_config.XXXXXX")"
+trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL night charge config: $*" >&2; exit 1; }
+mkdir -p "$T/mod/config" "$T/state"
+cp "$ROOT/config/governor.conf" "$T/mod/config/governor.conf"
+cp "$ROOT/config/governor.conf.shipped" "$T/mod/config/governor.conf.shipped"
+grep -qx 'night_charge_enable=0' "$T/mod/config/governor.conf" || fail 'active default is not off'
+grep -qx 'night_charge_enable=0' "$T/mod/config/governor.conf.shipped" || fail 'shipped default is not off'
+run_writer() { MODDIR="$T/mod" ASB_CONFIG_STATE="$T/state" sh "$ROOT/runtime/asb_config_safe.sh" "$@"; }
+run_writer set night_charge_enable 1 "$T/state/governor.conf.snapshot" >/dev/null || fail 'valid enable rejected'
+grep -qx 'night_charge_enable=1' "$T/mod/config/governor.conf" || fail 'active config not written'
+grep -qx 'night_charge_enable=1' "$T/state/governor.conf.snapshot" || fail 'snapshot not written atomically'
+before="$(sha256sum "$T/mod/config/governor.conf" | cut -d' ' -f1)"
+if run_writer set night_charge_enable 2 "$T/state/governor.conf.snapshot" >/dev/null 2>&1; then fail 'invalid value accepted'; fi
+after="$(sha256sum "$T/mod/config/governor.conf" | cut -d' ' -f1)"
+[ "$before" = "$after" ] || fail 'invalid write changed active config'
+grep -qx 'night_charge_enable=1' "$T/state/governor.conf.snapshot" || fail 'invalid write changed snapshot'
+run_writer set night_charge_enable 0 "$T/state/governor.conf.snapshot" >/dev/null || fail 'disable rejected'
+# A pre-fix330 config has no key: validation remains optional during migration, and the
+# normal writer can add the new setting without weakening its closed schema.
+sed -i '/^night_charge_enable=/d;/^# Optional 22:00-06:00 charge ceiling/d' "$T/mod/config/governor.conf"
+run_writer set night_charge_enable 1 "$T/state/governor.conf.snapshot" >/dev/null || fail 'legacy config migration rejected'
+[ "$(grep -c '^night_charge_enable=' "$T/mod/config/governor.conf")" -eq 1 ] || fail 'migration did not add one key'
+[ "$(grep -c 'night_charge_enable' "$ROOT/common/install.sh")" -ge 4 ] || fail 'upgrade/snapshot preservation lists incomplete'
+echo 'PASS night charge config: default off, atomic writer/snapshot, invalid rollback and legacy migration'
+)
+
+t_installer_presentation_fix330() (
+# Cosmetic-only contract: all languages gain icons/labels, numeric IDs stay stable,
+# and the summary executes against selected flags without implying unselected work.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+I="$ROOT/common/install.sh"
+T="$(mktemp -d "${TMPDIR:-/tmp}/asb_installer_presentation.XXXXXX")"
+trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL installer presentation: $*" >&2; exit 1; }
+for f in englishtext russiantext ukrainiantext germantext spanishtext portuguesetext \
+         turkishtext indonesiantext italiantext frenchtext armeniantext arabictext chinesetext; do
+  L="$ROOT/common/$f.sh"
+  [ "$(grep -c '^ASB_MENU_' "$L")" -eq 15 ] || fail "$f menu count"
+  [ "$(grep -c '^ASB_CAT_' "$L")" -eq 19 ] || fail "$f category count"
+  grep -q '^ASB_L_BAT_NIGHT=' "$L" || fail "$f night summary"
+  grep -q '🎧' "$L" && grep -q '🛡️' "$L" || fail "$f icons"
+  bash -n "$L" || fail "$f syntax"
+done
+# IDs remain bound to their original categories in every language.
+for pair in 'AUDIO 1' 'BT 2' 'CAMERA 3' 'CPU 4' 'VM 5' 'NET 6' 'WIFI 7' 'GPS 8' \
+            'KERNEL 9' 'LOG 10' 'RADIO_IMS 11' 'DISPLAY 12' 'FPS 13' 'SECURITY 14' 'BG_TRIM 15'; do
+  set -- $pair
+  grep -Eq "^ASB_MENU_$1=\" *$2\\)" "$ROOT/common/englishtext.sh" || fail "menu ID changed: $pair"
+done
+sed -n '/^  _en_n=0$/,/^  done$/p' "$I" > "$T/loop.sh"
+grep -Fq 'for _c in CPU VM KERNEL DISPLAY FPS AUDIO MEDIA CAMERA BT WIFI NET RADIO_IMS' "$T/loop.sh" || fail 'logical category order missing'
+cat > "$T/render.sh" <<'EOF_RENDER'
+. "$1"
+ui_print() { printf '%s\n' "$1"; }
+for c in CPU VM KERNEL DISPLAY FPS AUDIO MEDIA CAMERA BT WIFI NET RADIO_IMS GPS NFC LPM BG_TRIM SECURITY LOG VENDOR_OVERLAY; do eval "ASB_$c=false"; done
+ASB_CPU=true; ASB_AUDIO=true; ASB_WIFI=true
+. "$2"
+EOF_RENDER
+out="$(sh "$T/render.sh" "$ROOT/common/russiantext.sh" "$T/loop.sh")"
+[ "$(printf '%s\n' "$out" | grep -c '✓')" -eq 3 ] || fail "selected count: $out"
+printf '%s\n' "$out" | grep -q '⚙️  CPU' || fail "CPU icon/label: $out"
+printf '%s\n' "$out" | grep -q '🎧  Аудио' || fail "localized audio: $out"
+printf '%s\n' "$out" | grep -q '📶  Wi-Fi' || fail "Wi-Fi icon/label: $out"
+! printf '%s\n' "$out" | grep -q 'Камера' || fail "unselected camera was presented"
+[ "$(printf '%s\n' "$out" | grep '✓' | sed -n '1p')" = '      ✓  ⚙️  CPU' ] || fail 'summary order changed'
+grep -Fq 'case "$(_sg night_charge_enable)" in' "$I" || fail 'enabled night option absent from battery summary'
+echo 'PASS installer presentation: 13 localized icon menus, stable IDs, logical selected-only summary and night-charge note'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
