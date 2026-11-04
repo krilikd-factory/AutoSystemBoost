@@ -11,11 +11,26 @@
 <meta name="theme-color" content="#000000">
 <meta name="color-scheme" content="dark light">
 <script>(function(){try{var t=localStorage.getItem('asb_theme'),b=localStorage.getItem('asb_glass_base');if(t==='light'||(t==='glass'&&b==='light'))document.documentElement.setAttribute('data-asb-theme','light');if(t==='glass')document.documentElement.setAttribute('data-asb-glass','1');}catch(e){}})();</script>
+<script>document.documentElement.classList.add('asb-home-pending');</script>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<script>
+/* KernelSU's optional inset stylesheet must not hold the first paint or the main script
+ * hostage to a network/DNS response. Keep it BEFORE the main style in cascade order, as the
+ * former top-level @import was: appending a late <link> after our rules let manager custom
+ * properties override the native safe-area fallbacks and pushed every header down (fix327).
+ * A non-matching print medium fetches it without render-blocking; load only promotes the
+ * already ordered stylesheet. A network failure leaves the local env() fallbacks intact. */
+(function () {
+  var link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = 'https://mui.kernelsu.org/internal/insets.css';
+  link.media = 'print';
+  link.addEventListener('load', function () { link.media = 'all'; }, { once:true });
+  document.head.appendChild(link);
+})();
+</script>
 <style>
-@import "https://mui.kernelsu.org/internal/insets.css";
-
 :root {
   --window-inset-top: env(safe-area-inset-top, 0px);
   /* One source for the top gap, so every page starts at the same height.
@@ -4655,10 +4670,9 @@ html.asb-fit-c2 .tg-link-wrap { padding-top: 10px; gap: 8px; }
  * and denser floating chrome. A neutral rim belongs to the glass; green remains a
  * selection/state accent instead of outlining every popup and card. */
 html:root[data-asb-glass="1"] {
-  --glass-canvas-image:
-    radial-gradient(ellipse 105% 42% at 4% 0%,rgba(116,145,133,.22),transparent 70%),
-    radial-gradient(ellipse 80% 38% at 100% 78%,rgba(0,240,180,.075),transparent 72%),
-    linear-gradient(180deg,#111713 0%,#050807 48%,#000 100%);
+  /* Dark Glass keeps the owner's genuinely black canvas. Accent light belongs to
+   * controls and the logo, never to a screen-sized background wash (fix324). */
+  --glass-canvas-image:#000;
   --glass-surface:rgba(12,18,15,.58);
   --glass-surface-quiet:rgba(8,13,10,.46);
   --glass-surface-strong:rgba(10,15,13,.78);
@@ -4668,7 +4682,7 @@ html:root[data-asb-glass="1"] {
   --glass-wash:linear-gradient(135deg,rgba(255,255,255,.105),rgba(255,255,255,.022) 48%,rgba(255,255,255,.048));
   --glass-shadow:0 12px 30px rgba(0,0,0,.25);
   --glass-blur:blur(20px) saturate(1.24);
-  --glass-scrim:linear-gradient(180deg,rgba(5,8,7,.96),rgba(5,8,7,.76) 62%,transparent);
+  --glass-scrim:linear-gradient(180deg,rgba(0,0,0,.96),rgba(0,0,0,.76) 62%,transparent);
   --surface:var(--glass-surface);
   --surface-hover:rgba(255,255,255,.10);
   --tabbar-bg:var(--glass-surface-strong);
@@ -4680,6 +4694,7 @@ html:root[data-asb-glass="1"] {
 html:root[data-asb-glass="1"][data-asb-theme="light"] {
   --glass-canvas-image:
     radial-gradient(ellipse 100% 44% at 4% 0%,rgba(255,255,255,.82),transparent 72%),
+    radial-gradient(ellipse 110% 46% at 100% 45%,rgba(125,145,180,.09),transparent 74%),
     radial-gradient(ellipse 84% 40% at 100% 78%,rgba(0,124,99,.075),transparent 74%),
     linear-gradient(180deg,#e4e5f9 0%,#edf4f1 52%,#f2f4f6 100%);
   --glass-surface:rgba(255,255,255,.44);
@@ -4831,25 +4846,289 @@ html:root[data-asb-glass="1"] :is(.pbtn,.cfg-tile,.cfg-row,.cfg-backup,.cfg-rebo
   border-color:var(--border-active) !important;
   box-shadow:inset 0 2px 7px rgba(0,0,0,.16) !important;
 }
+/* ── Device-visual corrections (fix323) ───────────────────────────────────────
+ * One glass layer per dock: the parent owns the material and blur, while its buttons
+ * stay as transparent targets around the same moving tonal pill used by the main bar. */
+html:root[data-asb-glass="1"] { background:var(--glass-canvas-image); }
+html:root[data-asb-glass="1"] :is(.page,.live-page,.config-page) {
+  background:transparent !important;
+}
+html:root[data-asb-glass="1"] :is(.report-nav,.zy-page-nav) .lgr-jump-btn {
+  background:transparent !important;
+  border-color:transparent !important;
+  box-shadow:none !important;
+  -webkit-backdrop-filter:none; backdrop-filter:none;
+}
+/* The active profile check is a compact accent mark, not another grey Glass chip. */
+html:root[data-asb-glass="1"] .pbtn.on .pchk {
+  width:22px; height:22px;
+  background:var(--c) !important;
+  border:1px solid color-mix(in srgb,var(--c) 82%,white) !important;
+  box-shadow:0 2px 8px color-mix(in srgb,var(--c) 24%,transparent),inset 0 1px 0 rgba(255,255,255,.24) !important;
+  transform:none;
+}
+html:root[data-asb-glass="1"] .pbtn.on .pchk svg { width:11px; height:11px; fill:#03130e; }
+html:root[data-asb-glass="1"][data-asb-theme="light"] .pbtn.on .pchk {
+  border-color:color-mix(in srgb,var(--c) 84%,black) !important;
+  box-shadow:0 2px 7px color-mix(in srgb,var(--c) 18%,transparent),inset 0 1px 0 rgba(255,255,255,.26) !important;
+}
+html:root[data-asb-glass="1"][data-asb-theme="light"] .pbtn.on .pchk svg { fill:#fff; }
+/* The restart row is now a small toolbar menu. Its freed height is assigned by
+ * asbFitPagesNow(); these slightly softer tiles use that space without changing 3 × 2. */
+.cfg-tile { border-radius:20px; gap:7px; padding:14px 9px 12px; }
+.cfg-tile-ico { width:46px; height:46px; border-radius:16px; }
+.cfg-tile-ico .tech-icon { width:25px; height:25px; }
+html.asb-fit-c1 .cfg-tile { padding:11px 7px 9px; }
+html.asb-fit-c1 .cfg-tile-ico { width:40px; height:40px; }
+html.asb-fit-c2 .cfg-tile { padding:9px 6px 8px; }
+html.asb-fit-c2 .cfg-tile-ico { width:34px; height:34px; }
+#cfgRebootMenuWrap { position:relative; flex:0 0 auto; display:flex; }
+.cfg-lang-btn .tech-icon { display:block; width:18px; height:18px; margin:auto; }
+.cfg-lang-pop.cfg-reboot-pop { min-width:220px; padding:6px; transform-origin:top right; z-index:1200; }
+.cfg-lang-pop.cfg-reboot-pop button {
+  justify-content:flex-start; gap:10px; min-height:44px; margin:0;
+  padding:7px 9px; border:1px solid transparent; border-radius:12px;
+  color:var(--text); font-size:13px; font-weight:600; text-align:start;
+}
+.cfg-reboot-pop .hard { --rb:#ff6b6b; }
+.cfg-reboot-pop .soft { --rb:#ffa94d; }
+.cfg-reboot-pop .sysui { --rb:#ffd43b; }
+.cfg-reboot-pop .cfg-reboot-ico { flex:0 0 30px; }
+.cfg-lang-pop.cfg-reboot-pop button:active,
+.cfg-lang-pop.cfg-reboot-pop button.armed {
+  background:color-mix(in srgb,var(--rb) 13%,transparent);
+  border-color:color-mix(in srgb,var(--rb) 38%,transparent);
+}
+html[data-asb-theme="light"] .cfg-lang-pop.cfg-reboot-pop { background:#fff; color:var(--text); }
+html[data-asb-theme="light"] .cfg-lang-pop.cfg-reboot-pop button { color:var(--text); }
+html[data-asb-theme="light"] .cfg-lang-pop.cfg-reboot-pop button.armed {
+  background:color-mix(in srgb,var(--rb) 12%,white);
+}
+
+/* ── Once-per-boot metric warm-up (fix324) ──────────────────────────────────
+ * This is a short preview over real collectors, not a timer pretending to load.
+ * All motion is compositor-only transform/opacity and stops with reduced motion. */
+.asb-boot-intro {
+  --boot-accent:#00f0b4; --boot-accent2:#00d4ff; --boot-text:#eefcf7; --boot-muted:#78968b;
+  position:fixed; inset:0; z-index:20000; display:grid; place-items:center;
+  padding:max(28px,env(safe-area-inset-top,0px)) 22px max(28px,env(safe-area-inset-bottom,0px));
+  overflow:hidden; isolation:isolate; background:#000; color:var(--boot-text);
+  opacity:1; transition:opacity .36s ease;
+}
+.asb-boot-intro[hidden] { display:none !important; }
+.asb-boot-intro.is-leaving { opacity:0; pointer-events:none; }
+.asb-boot-grid {
+  position:absolute; inset:-12%; z-index:-2; opacity:.22;
+  background-image:linear-gradient(rgba(0,240,180,.13) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,240,180,.13) 1px,transparent 1px);
+  background-size:44px 44px; transform:perspective(520px) rotateX(58deg) translateY(24%);
+  transform-origin:center bottom;
+  -webkit-mask-image:radial-gradient(ellipse at center,#000 0%,transparent 69%);
+  mask-image:radial-gradient(ellipse at center,#000 0%,transparent 69%);
+}
+.asb-boot-scan {
+  position:absolute; left:0; right:0; top:0; height:1px; z-index:-1;
+  background:linear-gradient(90deg,transparent,var(--boot-accent2),var(--boot-accent),transparent);
+  box-shadow:0 0 22px rgba(0,240,180,.30); opacity:.52;
+  animation:asbBootScan 3.4s cubic-bezier(.45,0,.55,1) infinite;
+}
+.asb-boot-panel { width:min(100%,340px); text-align:center; }
+.asb-boot-kicker {
+  display:flex; align-items:center; justify-content:center; gap:9px;
+  color:var(--boot-muted); font:600 10px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace;
+  letter-spacing:2.2px; text-transform:uppercase;
+}
+.asb-boot-kicker::before,.asb-boot-kicker::after {
+  content:""; width:28px; height:1px; background:currentColor; opacity:.45;
+}
+.asb-boot-core { position:relative; width:172px; height:172px; margin:38px auto 29px; }
+.asb-boot-orbit,.asb-boot-ring,.asb-boot-chip { position:absolute; inset:0; margin:auto; }
+.asb-boot-orbit { border:1px solid rgba(0,240,180,.20); border-radius:50%; }
+.asb-boot-orbit::before,.asb-boot-orbit::after {
+  content:""; position:absolute; width:6px; height:6px; border-radius:50%;
+  background:var(--boot-accent); box-shadow:0 0 14px var(--boot-accent);
+}
+.asb-boot-orbit::before { top:13px; left:27px; }
+.asb-boot-orbit::after { right:9px; bottom:43px; background:var(--boot-accent2); }
+.asb-boot-orbit.a { animation:asbBootSpin 7s linear infinite; }
+.asb-boot-orbit.b { inset:15px; border-style:dashed; border-color:rgba(0,212,255,.27); animation:asbBootSpin 10s linear infinite reverse; }
+.asb-boot-ring { inset:31px; border:1px solid rgba(0,240,180,.38); transform:rotate(45deg); border-radius:25px; }
+.asb-boot-ring.b { inset:40px; border-color:rgba(0,212,255,.23); transform:rotate(22.5deg); }
+.asb-boot-chip {
+  inset:50px; display:grid; place-items:center; border:1px solid rgba(0,240,180,.56);
+  border-radius:22px; background:linear-gradient(145deg,rgba(0,240,180,.16),rgba(0,212,255,.055));
+  box-shadow:0 0 32px rgba(0,240,180,.17),inset 0 0 22px rgba(0,240,180,.07);
+  animation:asbBootPulse 2.2s ease-in-out infinite;
+}
+.asb-boot-chip svg { width:40px; height:40px; color:var(--boot-accent); filter:drop-shadow(0 0 8px rgba(0,240,180,.38)); }
+.asb-boot-brand { font-size:25px; line-height:1.1; font-weight:740; letter-spacing:-.8px; }
+.asb-boot-brand b { color:var(--boot-accent); font-weight:inherit; }
+.asb-boot-status { min-height:20px; margin-top:13px; color:var(--boot-muted); font-size:12px; font-weight:550; }
+.asb-boot-progress {
+  height:3px; margin:25px 8px 0; overflow:hidden; border-radius:99px; background:rgba(120,150,139,.20);
+}
+.asb-boot-progress > i {
+  display:block; width:100%; height:100%; border-radius:inherit;
+  background:linear-gradient(90deg,var(--boot-accent2),var(--boot-accent));
+  box-shadow:0 0 12px rgba(0,240,180,.38); transform:scaleX(0); transform-origin:left center;
+  transition:transform .28s ease;
+}
+.asb-boot-count { margin-top:9px; color:var(--boot-muted); font:600 10px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace; letter-spacing:1.4px; }
+.asb-boot-stages { display:grid; grid-template-columns:repeat(4,1fr); gap:7px; margin-top:29px; }
+.asb-boot-stage { color:var(--boot-muted); font:600 9px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace; letter-spacing:.8px; opacity:.52; transition:opacity .2s,color .2s; }
+.asb-boot-stage::before { content:""; display:block; width:4px; height:4px; margin:0 auto 8px; border-radius:50%; background:currentColor; }
+.asb-boot-stage.is-active { color:var(--boot-accent2); opacity:1; }
+.asb-boot-stage.is-done { color:var(--boot-accent); opacity:1; }
+html[data-asb-theme="light"] .asb-boot-intro {
+  --boot-accent:#007c63; --boot-accent2:#087f9a; --boot-text:#10211c; --boot-muted:#5d746b;
+  background:#edf4f1;
+}
+html[data-asb-theme="light"] .asb-boot-grid { opacity:.16; }
+html[data-asb-theme="light"] .asb-boot-chip { background:rgba(255,255,255,.56); }
+html[dir="rtl"] .asb-boot-progress > i { transform-origin:right center; }
+@keyframes asbBootSpin { to { transform:rotate(360deg); } }
+@keyframes asbBootPulse { 50% { transform:scale(.92); opacity:.76; } }
+@keyframes asbBootScan { 0%,100% { transform:translateY(8vh); opacity:0; } 15%,85% { opacity:.52; } 50% { transform:translateY(82vh); } }
+@media (max-height:640px) {
+  .asb-boot-core { width:142px; height:142px; margin:24px auto 20px; }
+  .asb-boot-chip { inset:42px; }
+  .asb-boot-orbit.b { inset:12px; }
+  .asb-boot-ring { inset:25px; }
+  .asb-boot-ring.b { inset:33px; }
+  .asb-boot-stages { margin-top:20px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .asb-boot-intro,.asb-boot-progress > i,.asb-boot-stage { transition:none !important; }
+  .asb-boot-scan,.asb-boot-orbit,.asb-boot-chip { animation:none !important; }
+}
+@media (forced-colors:active) {
+  .asb-boot-intro { background:Canvas !important; color:CanvasText !important; }
+  .asb-boot-grid,.asb-boot-scan { display:none; }
+  .asb-boot-kicker,.asb-boot-status,.asb-boot-count,.asb-boot-stage { color:CanvasText !important; }
+  .asb-boot-orbit,.asb-boot-ring,.asb-boot-chip,.asb-boot-progress { border-color:CanvasText !important; }
+  .asb-boot-chip { background:Canvas !important; color:CanvasText !important; box-shadow:none; }
+  .asb-boot-progress > i { background:Highlight !important; box-shadow:none; }
+}
+
+
+/* ── fix328/fix329: settled Home content and a coherent six-category hub ─────────────
+ * Profile rows stay static so their fitted geometry never changes mid-entrance. The Home
+ * page itself receives the same short fade/scale as Monitor from asbHomeReveal(), after the
+ * local locale and fixed-width ZYGISK control exist. Pending values are honest loading
+ * indicators, not provisional profile or Smart claims. */
+html .page:not(.live-page) > *,
+html .profiles > * { animation:none; }
+html.asb-home-pending .page:not(.live-page) { opacity:0; pointer-events:none; }
+html .device-line { min-height:14px; }
+html .status-val.asb-value-pending { min-width:52px; justify-content:center; }
+html .psub.asb-value-pending { width:min(150px,82%); min-height:14px; border-radius:5px; }
+html .asb-value-pending {
+  position:relative;
+  overflow:hidden;
+  color:transparent !important;
+  -webkit-text-fill-color:transparent;
+  text-shadow:none !important;
+  background:linear-gradient(100deg,rgba(255,255,255,.045),rgba(255,255,255,.085),rgba(255,255,255,.045)) !important;
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.035);
+}
+html .asb-value-pending::after {
+  content:'';
+  position:absolute;
+  inset:0;
+  background:linear-gradient(100deg,transparent 20%,rgba(255,255,255,.10) 50%,transparent 80%);
+  transform:translateX(-100%);
+  animation:asbHomePending 1.15s ease-in-out infinite;
+}
+html .asb-value-arrived { animation:asbHomeValueIn .22s cubic-bezier(.2,.7,.25,1) both; }
+html[data-asb-theme="light"] .asb-value-pending {
+  background:linear-gradient(100deg,rgba(21,35,32,.055),rgba(21,35,32,.10),rgba(21,35,32,.055)) !important;
+}
+@keyframes asbHomePending { to { transform:translateX(100%); } }
+@keyframes asbHomeValueIn { from { opacity:.25; transform:translateY(3px); } to { opacity:1; transform:none; } }
+@media (prefers-reduced-motion:reduce) {
+  html .asb-value-pending::after,html .asb-value-arrived { animation:none; }
+}
+html .cfg-tile {
+  align-items:center;
+  justify-content:flex-start;
+  gap:0;
+  padding:14px 12px 12px;
+  text-align:center;
+  background:linear-gradient(155deg,color-mix(in srgb,var(--cat,var(--accent)) 10%,transparent),color-mix(in srgb,var(--cat,var(--accent)) 3%,transparent) 62%,transparent),rgba(255,255,255,.018);
+  border-color:color-mix(in srgb,var(--cat,var(--accent)) 24%,var(--border));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.055),0 8px 22px -18px color-mix(in srgb,var(--cat,var(--accent)) 60%,transparent);
+}
+html .cfg-tile-ico {
+  display:grid;
+  place-items:center;
+  align-self:center;
+  flex:0 0 auto;
+  width:42px;
+  height:42px;
+  margin:0 0 12px;
+  border-radius:14px;
+}
+html .cfg-tile-ico .tech-icon { width:24px; height:24px; margin:0; }
+html .cfg-tile-name {
+  width:100%;
+  min-height:1.25em;
+  color:var(--text);
+  font-size:14px;
+  font-weight:650;
+  line-height:1.25;
+  letter-spacing:0;
+  overflow-wrap:anywhere;
+}
+html .cfg-tile-desc {
+  width:100%;
+  min-height:2.6em;
+  margin-top:5px;
+  color:var(--text-tertiary);
+  font-size:10.5px;
+  line-height:1.3;
+  letter-spacing:0;
+  -webkit-line-clamp:3;
+  overflow-wrap:anywhere;
+}
+html .cfg-tile-foot { align-items:stretch; gap:7px; padding-top:10px; }
+html .cfg-tile-count { font:600 10.5px/1.2 var(--mono); letter-spacing:.02em; text-align:center; }
+html .cfg-tile-bar { width:100%; height:3px; }
+html[data-asb-theme="light"] .cfg-tile {
+  background:linear-gradient(155deg,color-mix(in srgb,var(--cat) 8%,transparent),transparent 70%),#fff !important;
+  border-color:color-mix(in srgb,var(--cat) 24%,var(--border)) !important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.82),0 8px 20px -18px color-mix(in srgb,var(--cat) 35%,transparent) !important;
+}
+html[data-asb-theme="light"] .cfg-tile-desc { color:var(--text-secondary) !important; }
+html.asb-fit-c1 .cfg-tile { padding:11px 10px 10px; }
+html.asb-fit-c1 .cfg-tile-ico { width:38px; height:38px; margin-bottom:9px; }
+html.asb-fit-c1 .cfg-tile-desc { font-size:10px; }
+html.asb-fit-c1 .cfg-tile-foot { padding-top:8px; }
+html.asb-fit-c2 .cfg-tile { padding:9px; }
+html.asb-fit-c2 .cfg-tile-ico { width:34px; height:34px; margin-bottom:7px; border-radius:12px; }
+html.asb-fit-c2 .cfg-tile-ico .tech-icon { width:21px; height:21px; }
+html.asb-fit-c2 .cfg-tile-name { font-size:13px; }
+html.asb-fit-c2 .cfg-tile-desc { min-height:2.5em; margin-top:4px; font-size:9.5px; line-height:1.25; }
+html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
+
 /* WebViews without backdrop filtering, and users asking for reduced transparency,
  * receive the same hierarchy with opaque paints. No text is left over an unpredictable
  * background, and no feature depends on blur support. */
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
   html:root[data-asb-glass="1"] { --glass-surface:#151c18; --glass-surface-quiet:#101613; --glass-surface-strong:#151c18; --glass-control:#1b231f; }
   html:root[data-asb-glass="1"][data-asb-theme="light"] { --glass-surface:#f7f9fa; --glass-surface-quiet:#f1f4f3; --glass-surface-strong:#fff; --glass-control:#f3f5f7; }
-  html:root[data-asb-glass="1"] :is(.pbtn,.cfg-tile,.cfg-row,.live-cell,.lgr-sec,.asb-tabbar,.report-nav,.zy-page-nav,.log-menu,.cfg-profile-sheet,.cfg-reset-dialog) {
+  html:root[data-asb-glass="1"] :is(.pbtn,.cfg-tile,.cfg-row,.live-cell,.lgr-sec,.asb-tabbar,.report-nav,.zy-page-nav,.log-menu,.cfg-lang-pop,.cfg-sel-pop,.cfg-profile-sheet,.cfg-reset-dialog) {
     -webkit-backdrop-filter:none; backdrop-filter:none;
   }
 }
 @media (prefers-reduced-transparency:reduce) {
   html:root[data-asb-glass="1"] { --glass-surface:#151c18; --glass-surface-quiet:#101613; --glass-surface-strong:#151c18; --glass-control:#1b231f; }
   html:root[data-asb-glass="1"][data-asb-theme="light"] { --glass-surface:#f7f9fa; --glass-surface-quiet:#f1f4f3; --glass-surface-strong:#fff; --glass-control:#f3f5f7; }
-  html:root[data-asb-glass="1"] :is(.pbtn,.cfg-tile,.cfg-row,.live-cell,.lgr-sec,.asb-tabbar,.report-nav,.zy-page-nav,.log-menu,.cfg-profile-sheet,.cfg-reset-dialog) {
+  html:root[data-asb-glass="1"] :is(.pbtn,.cfg-tile,.cfg-row,.live-cell,.lgr-sec,.asb-tabbar,.report-nav,.zy-page-nav,.log-menu,.cfg-lang-pop,.cfg-sel-pop,.cfg-profile-sheet,.cfg-reset-dialog) {
     -webkit-backdrop-filter:none !important; backdrop-filter:none !important;
   }
 }
 @media (forced-colors:active) {
-  html:root[data-asb-glass="1"][data-asb-glass="1"] :is(body,.page,.live-page,.config-page,.pbtn,.cfg-tile,.cfg-row,.live-cell,.lgr-sec,.lgr-hero,.lgr-quality,.asb-tabbar,.report-nav,.zy-page-nav,.log-menu,.cfg-profile-sheet,.cfg-reset-dialog,input,select,textarea,button) {
+  html:root[data-asb-glass="1"][data-asb-glass="1"] :is(body,.page,.live-page,.config-page,.pbtn,.cfg-tile,.cfg-row,.live-cell,.lgr-sec,.lgr-hero,.lgr-quality,.asb-tabbar,.report-nav,.zy-page-nav,.log-menu,.cfg-lang-pop,.cfg-sel-pop,.cfg-profile-sheet,.cfg-reset-dialog,input,select,textarea,button) {
     background:Canvas !important; color:CanvasText !important; border-color:ButtonBorder !important;
     box-shadow:none !important; -webkit-backdrop-filter:none !important; backdrop-filter:none !important;
   }
@@ -4857,6 +5136,31 @@ html:root[data-asb-glass="1"] :is(.pbtn,.cfg-tile,.cfg-row,.cfg-backup,.cfg-rebo
 </style>
 </head>
 <body>
+<div class="asb-boot-intro" id="asbBootIntro" hidden aria-hidden="true" role="status" aria-live="polite">
+  <div class="asb-boot-grid" aria-hidden="true"></div>
+  <div class="asb-boot-scan" aria-hidden="true"></div>
+  <div class="asb-boot-panel">
+    <div class="asb-boot-kicker">ASB // BOOT CACHE</div>
+    <div class="asb-boot-core" aria-hidden="true">
+      <div class="asb-boot-orbit a"></div><div class="asb-boot-orbit b"></div>
+      <div class="asb-boot-ring a"></div><div class="asb-boot-ring b"></div>
+      <div class="asb-boot-chip"><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" focusable="false">
+        <rect x="17" y="17" width="30" height="30" rx="7"/><rect x="25" y="25" width="14" height="14" rx="3"/>
+        <path d="M24 7v10M32 7v10M40 7v10M24 47v10M32 47v10M40 47v10M7 24h10M7 32h10M7 40h10M47 24h10M47 32h10M47 40h10"/>
+      </svg></div>
+    </div>
+    <div class="asb-boot-brand">AutoSystem<b>Boost</b></div>
+    <div class="asb-boot-status" id="asbBootIntroStatus">Preloading ASB metrics…</div>
+    <div class="asb-boot-progress" id="asbBootIntroProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="asbBootIntroBar"></i></div>
+    <div class="asb-boot-count" id="asbBootIntroCount">0 / 4</div>
+    <div class="asb-boot-stages" aria-hidden="true">
+      <span class="asb-boot-stage is-active" data-boot-stage="live">LIVE</span>
+      <span class="asb-boot-stage" data-boot-stage="config">CONFIG</span>
+      <span class="asb-boot-stage" data-boot-stage="device">DEVICE</span>
+      <span class="asb-boot-stage" data-boot-stage="zygisk">ZYGISK</span>
+    </div>
+  </div>
+</div>
 <div class="status-bar-scrim" aria-hidden="true"></div>
 <!-- Debug-only actions use this modal while the root export command is executing.
      It is hidden for normal navigation and contains no destructive control. -->
@@ -4877,7 +5181,7 @@ html:root[data-asb-glass="1"] :is(.pbtn,.cfg-tile,.cfg-row,.cfg-backup,.cfg-rebo
       <div class="logo-inner"><span class="logo-glyph">🛸</span></div>
     </div>
     <div class="app-name">AutoSystemBoost</div>
-    <div class="device-line" id="deviceLine">OnePlus Device · Qualcomm Snapdragon</div>
+    <div class="device-line" id="deviceLine">OnePlus · —</div>
     <div class="badges">
       <div class="hdr-cap hdr-info">
       <button class="badge badge-a" id="socBadge" type="button" onclick="openDevicePage()" aria-label="Open device diagnostics" title="Device diagnostics">DEVICE</button>
@@ -4888,7 +5192,7 @@ html:root[data-asb-glass="1"] :is(.pbtn,.cfg-tile,.cfg-row,.cfg-backup,.cfg-rebo
     <div class="status-row">
       <div class="dot"></div>
       <span class="status-label" data-i18n="hdr_profile">Profile:&nbsp;</span>
-      <span class="status-val" id="curProfile">balanced</span>
+      <span class="status-val asb-value-pending" id="curProfile" aria-busy="true">—</span>
       <!-- Log tools and the channel, on the profile island.
            Both were duplicated on three pages before this - the same two debug buttons in
            the main, Live and Config footers - so a user hunting for a capture had to know
@@ -4949,7 +5253,7 @@ html:root[data-asb-glass="1"] :is(.pbtn,.cfg-tile,.cfg-row,.cfg-backup,.cfg-rebo
       </div>
       <div class="pinfo">
         <div class="pname"><span data-i18n="prof_smart">Smart</span> <span class="alpha-tag" id="smartEngineTag" style="display:none"></span></div>
-        <div class="psub" id="smartSubLine">adaptive · learning</div>
+        <div class="psub asb-value-pending" id="smartSubLine" aria-busy="true">—</div>
         <div class="pmeta" data-meter="smart" hidden></div>
       </div>
       <div class="pload"></div>
@@ -4990,7 +5294,7 @@ html:root[data-asb-glass="1"] :is(.pbtn,.cfg-tile,.cfg-row,.cfg-backup,.cfg-rebo
       <div class="pchk"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
     </div>
 
-    <div class="pbtn pbtn-stock on" data-p="stock" onclick="go('stock')">
+    <div class="pbtn pbtn-stock" data-p="stock" onclick="go('stock')">
       <div class="pico" data-tech-icon="stock"></div>
       <div class="pinfo">
         <div class="pname" data-i18n="prof_stock">Stock</div>
@@ -5310,6 +5614,18 @@ html:root[data-asb-glass="1"] :is(.pbtn,.cfg-tile,.cfg-row,.cfg-backup,.cfg-rebo
       </div>
       <!-- Interface sounds on/off (fix145); quiet anyway while another app plays. -->
       <button class="cfg-lang-btn" id="cfgSoundBtn" onclick="uiSoundToggle()" aria-label="Interface sounds" aria-pressed="true">🔊</button>
+      <div id="cfgRebootMenuWrap">
+        <button class="cfg-lang-btn" id="cfgRebootMenuBtn" type="button"
+                onclick="cfgToggleRebootMenu(event)" onkeydown="cfgRebootMenuKey(event)"
+                aria-label="Reboot" aria-haspopup="menu" aria-expanded="false"
+                aria-controls="cfgRebootPop"><span data-tech-icon="power_cycle"></span></button>
+        <div class="cfg-lang-pop cfg-reboot-pop" id="cfgRebootPop" role="menu"
+             aria-label="Reboot" hidden>
+          <button class="hard" type="button" role="menuitem" onclick="cfgRebootMenuAction(event,'hard')"><span class="cfg-reboot-ico" data-tech-icon="power_cycle"></span><span data-i18n="cfg_reboot_tile">Reboot</span></button>
+          <button class="soft" type="button" role="menuitem" onclick="cfgRebootMenuAction(event,'soft')"><span class="cfg-reboot-ico" data-tech-icon="soft_restart"></span><span data-i18n="cfg_soft_tile">Soft reboot</span></button>
+          <button class="sysui" type="button" role="menuitem" onclick="cfgRebootMenuAction(event,'sysui')"><span class="cfg-reboot-ico" data-tech-icon="panel"></span><span data-i18n="cfg_sysui_tile">Restart SystemUI</span></button>
+        </div>
+      </div>
     </div>
 
     <!-- Profile actions share one compact row so the config hub has the same footer level
@@ -5322,14 +5638,6 @@ html:root[data-asb-glass="1"] :is(.pbtn,.cfg-tile,.cfg-row,.cfg-backup,.cfg-rebo
 
     <div class="cfg-list" id="cfgList"></div>
 
-  <!-- Reboot actions. cfgSyncChrome shows them on the hub and hides them inside a
-       category, where a full reboot button under a list of settings is easy to hit by
-       accident while still choosing. -->
-  <div id="cfgRebootWrap" class="cfg-reboot-row">
-    <button class="cfg-reboot-tile hard" type="button" onclick="cfgReboot()"><span class="cfg-reboot-ico" data-tech-icon="power_cycle"></span><span class="cfg-reboot-lbl" data-i18n="cfg_reboot_tile">Reboot</span></button>
-    <button class="cfg-reboot-tile soft" type="button" onclick="cfgSoftReboot()"><span class="cfg-reboot-ico" data-tech-icon="soft_restart"></span><span class="cfg-reboot-lbl" data-i18n="cfg_soft_tile">Soft reboot</span></button>
-    <button class="cfg-reboot-tile sysui" type="button" onclick="cfgRestartSysUI()"><span class="cfg-reboot-ico" data-tech-icon="panel"></span><span class="cfg-reboot-lbl" data-i18n="cfg_sysui_tile">Restart SystemUI</span></button>
-  </div>
   </div>
 
   <!-- One unified support rail per page: asbdiag, Telegram and session log on every build. -->
@@ -5730,6 +6038,7 @@ const TECH_ICON_PATHS = {
   battery_bias: '<rect x="2.8" y="8.5" width="14.5" height="8.5" rx="2.4"/><path d="M19.8 11.5v2.5"/><path d="M6 12.7h6.4"/><circle cx="13.4" cy="12.7" r="1.6"/>',
   media_guard: '<path d="M12 3 20 6.2v5c0 4.8-3.4 8.2-8 9.8-4.6-1.6-8-5-8-9.8v-5z"/><path d="M10.2 9.3v5.4l4.6-2.7z" fill="currentColor" stroke="none"/>',
   charge_aware: '<rect x="2.8" y="8.5" width="14.5" height="8.5" rx="2.4"/><path d="M19.8 11.5v2.5"/><path d="M11.8 9.8 9.7 12.9h2.8l-2.1 3.1"/>',
+  night_charge: '<rect x="2.8" y="10.5" width="14.5" height="8.5" rx="2.4"/><path d="M19.8 13.5v2.5"/><path d="M6 15h5"/><path d="M14.8 2.8a4.3 4.3 0 1 0 5.2 5.6 3.5 3.5 0 0 1-5.2-5.6z"/>',
   doze: '<path d="M19.8 13.8A8 8 0 1 1 10.2 3.4a6.6 6.6 0 0 0 9.6 10.4z"/><path d="M15.4 3.4h2.9l-2.9 3.2h2.9"/>',
   whitelist: '<path d="M19 13A7 7 0 1 1 11 4.2 5.8 5.8 0 0 0 19 13z"/><path d="M9.5 12.6l2 2 3.6-3.7"/>',
   wakelock: '<rect x="5" y="10.5" width="14" height="9.5" rx="2.2"/><path d="M8.2 10.5V7.8a3.8 3.8 0 0 1 7.6 0v2.7"/><path d="M12.4 13l-.9 2h1.8l-.9 2" />',
@@ -6229,7 +6538,37 @@ function prettySoc(code) {
   return SOC_MAP[c] || c || 'Qualcomm Snapdragon';
 }
 
+/* fix328: the static header contains no pretend model while the local JSON is in flight.
+ * Repeat openings synchronously reuse only these three non-sensitive display fields, then
+ * still fetch the fresh file. This runs before the first paint; it is not a root read and
+ * never turns the cached label into a claim about a live metric. */
+const DEVICE_HEADER_CACHE_KEY = 'asb_device_header_cache';
+const DEVICE_HEADER_CACHE_MAX_MS = 7 * 86400000;
+function deviceHeaderPaint(model, soc, chip) {
+  ['deviceLine', 'liveDeviceLine', 'cfgDeviceLine', 'rpDeviceLine', 'devDeviceLine', 'zyDeviceLine'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = model + ' / ' + soc;
+  });
+  ['socBadge', 'liveSocBadge', 'cfgSocBadge', 'rpSocBadge', 'devSocBadge', 'zySocBadge'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.textContent = chip;
+      el.setAttribute('aria-label', T('dev_open', 'Open device diagnostics') + ': ' + chip);
+      el.title = T('dev_title', 'Device diagnostics');
+    }
+  });
+}
+function deviceHeaderCacheGet() {
+  try {
+    const c = JSON.parse(localStorage.getItem(DEVICE_HEADER_CACHE_KEY) || 'null');
+    if (!c || !c.t || Date.now() < c.t || Date.now() - c.t > DEVICE_HEADER_CACHE_MAX_MS) return null;
+    if (![c.model, c.soc, c.chip].every(function (v) { return typeof v === 'string' && v.length > 0 && v.length < 160; })) return null;
+    return c;
+  } catch (e) { return null; }
+}
 async function loadDeviceInfo() {
+  const cached = deviceHeaderCacheGet();
+  if (cached) deviceHeaderPaint(cached.model, cached.soc, cached.chip);
   try {
     const r = await fetch('device_info.json?ts=' + Date.now());
     if (!r.ok) return;
@@ -6237,21 +6576,8 @@ async function loadDeviceInfo() {
     const model = prettyModel(d.model_code||'', d.name_code||'');
     const soc   = prettySoc(d.soc_code||'');
     const chip  = (d.soc_code||'').trim().toUpperCase() || 'DEVICE';
-    /* Every page header at once (fix168). Monitor and Settings copied Home's line only from
-     * the governor's poll, so on Stock - no governor - they kept the "OnePlus Device" and
-     * "DEVICE" placeholders. */
-    ['deviceLine', 'liveDeviceLine', 'cfgDeviceLine', 'rpDeviceLine', 'devDeviceLine', 'zyDeviceLine'].forEach(function (id) {
-      const el = document.getElementById(id);
-      if (el) el.textContent = model + ' / ' + soc;
-    });
-    ['socBadge', 'liveSocBadge', 'cfgSocBadge', 'rpSocBadge', 'devSocBadge', 'zySocBadge'].forEach(function (id) {
-      const el = document.getElementById(id);
-      if (el) {
-        el.textContent = chip;
-        el.setAttribute('aria-label', T('dev_open', 'Open device diagnostics') + ': ' + chip);
-        el.title = T('dev_title', 'Device diagnostics');
-      }
-    });
+    deviceHeaderPaint(model, soc, chip);
+    try { localStorage.setItem(DEVICE_HEADER_CACHE_KEY, JSON.stringify({ t:Date.now(), model:model, soc:soc, chip:chip })); } catch (e) {}
   } catch(e) {}
 }
 function liveHeaderSync() {
@@ -6332,6 +6658,23 @@ async function runBatch(parts) {
     res[p[0]] = { errno: has ? 0 : 1, stdout: has ? got[p[0]] : '', stderr: '' };
   });
   return res;
+}
+
+/* fix325: the first paint, Smart subtitle and once-per-boot guard used to start three
+ * independent root shells (and a fourth for the Smart state). They are immutable startup
+ * evidence for the lifetime of this WebView, so share one batch and one Promise. The random
+ * boot id is used only by the intro marker; no hardware, account or network identifier is read. */
+let _asbStartupSnapshotRun = null;
+function asbStartupSnapshot() {
+  if (!_asbStartupSnapshotRun) {
+    _asbStartupSnapshotRun = runBatch([
+      ['profile', 'cat ' + MD + '/current_profile 2>/dev/null || echo none'],
+      ['state', 'cat /dev/.asb/state 2>/dev/null'],
+      ['smart_pending', 'cat /data/adb/asb/smart_mode_enabled 2>/dev/null'],
+      ['boot', 'cat /proc/sys/kernel/random/boot_id 2>/dev/null']
+    ]).catch(function () { return null; });
+  }
+  return _asbStartupSnapshotRun;
 }
 
 let _asbDebugActionBusy = false;
@@ -6571,6 +6914,13 @@ async function haptic() {
   try { if (navigator.vibrate) navigator.vibrate(18); } catch(e) {}
 }
 
+function asbHomeValueResolve(el) {
+  if (!el) return;
+  const pending = el.classList.contains('asb-value-pending');
+  el.classList.remove('asb-value-pending');
+  el.setAttribute('aria-busy', 'false');
+  if (pending) el.classList.add('asb-value-arrived');
+}
 let _selectedProfile = 'none';
 function ui(p) {
   // Keep the machine-readable selection separately from the translated header. The live
@@ -6584,9 +6934,11 @@ function ui(p) {
   // 'none' is not a profile name to print - it is the absence of one, and printing it
   // raw would read like a fifth mode. No button is highlighted either, because none of
   // them is active.
-  document.getElementById('curProfile').textContent =
+  const current = document.getElementById('curProfile');
+  current.textContent =
     (p === 'none' || !p) ? T('prof_none', 'not selected') :
     (p === 'stock' ? T('prof_stock', 'Stock') : p);
+  asbHomeValueResolve(current);
 }
 
 let switching = false;
@@ -6654,19 +7006,25 @@ function openTelegram(e) {
 }
 
 (async () => {
-  requestAnimationFrame(() => setTimeout(loadDeviceInfo, 0));
+  /* Cache paint and the local JSON request start immediately, before any root bridge work.
+   * The fetch itself is asynchronous; no shell or network response blocks the first frame. */
+  loadDeviceInfo();
   // No file, or "none", means nobody has chosen yet - do not invent a choice.
   //
   // Three separate 'balanced' fallbacks lived on this line, so a fresh install showed
   // BALANCED on the home screen no matter what the installer had done. The user then
   // sees a profile they never picked and has no way to tell it is not applied.
-  const r = await run('cat ' + MD + '/current_profile 2>/dev/null || echo none');
-  const p = (r.stdout || 'none').trim();
+  const startup = await asbStartupSnapshot();
+  /* Root evidence and the local locale load in parallel. Painting waits only for their
+   * intersection, so a fast root response cannot leave an English dynamic value behind. */
+  await I18N_READY;
+  const r = startup && startup.profile;
+  const p = ((r && r.stdout) || 'none').trim();
   ui(['stock','performance','balanced','battery','smart'].includes(p) ? p : 'none');
   /* The markup ships "adaptive · learning" as a placeholder, which is a claim about
-   * state rather than a neutral label. Resolve it from the device on first paint so the
-   * home screen never shows something it has not actually checked. */
-  refreshSmartSubLine();
+   * state rather than a neutral label. Resolve it from the same first device snapshot so
+   * the home screen neither shows an unchecked claim nor starts another root shell. */
+  refreshSmartSubLine(startup);
 })();
 
 function fmtTempC(deci) {
@@ -6680,6 +7038,10 @@ function _el(id) { return document.getElementById(id); }
 let _liveTimer = null;
 let _liveBgTimer = null;
 let _liveOpen = false;
+/* A visible Monitor request may join a visible pass already in flight, but must not mistake a
+ * background Home prime for its own fresh page collection. At most one visible follow-up is
+ * queued; background/background and visible/visible overlaps share the active pass. */
+let _livePollRun = null, _livePollVisible = false, _livePollFollow = null;
 /* Declared up here with the other page flags, not next to the report page: navUiDepth()
  * reads it and lives earlier in the file, and a let read before its declaration throws. */
 let _rpOpen = false;
@@ -8027,6 +8389,7 @@ const SNAP_KEYS = [
   'cool_gaming',
   'auto_battery_enable',
   'charge_aware_enable',
+  'night_charge_enable',
   'night_quiet_enable',
   'night_quiet_auto',
   'UX_ANIM_FORCE_RESTART',
@@ -8206,6 +8569,8 @@ const CFG_ITEMS = [
   // --- Power & battery ---,
   { key:'charge_aware_enable', type:'bool', def:'1', name:'Charge-Aware Mode',
     desc:'While charging: more performance when cool, backs off when the battery heats up.' },
+  { key:'night_charge_enable', type:'bool', def:'0', stock:'0', name:'Night Charge Limit (22:00–06:00)',
+    desc:'Optional overnight charging control. While a charger is connected between 22:00 and 06:00, ASB asks a standard kernel interface to stop at 80%; after 06:00 it restores the exact previous value so charging can continue toward 100%. It never discharges a battery that is already above 80%, and it does not change or replace the OEM Adaptive Charging setting. Off by default. If the firmware exposes no supported writable interface, the badge says not exposed and no success is claimed. Disable or uninstall restores only values still owned by ASB.' },
   { key:'doze_level', type:'seg', def:'stock', stock:'stock', opts:['stock','night','moderate','aggressive'], name:'Deep Sleep',
     desc:'Controls how quickly Android enters Doze after the screen turns off. Stock keeps the ROM timing; Moderate targets five minutes and Aggressive two minutes, while Night applies only in the learned sleep window. Doze can defer background network, jobs and alarms until maintenance windows; high-priority push may still arrive. Use Stock if timely background activity matters more than earlier idle entry. Stock removes the ASB timing override.' },
   { key:'doze_trim_whitelist', type:'seg', def:'0', stock:'0', opts:['0','1'], name:'Trim Doze Exemptions',
@@ -8290,7 +8655,8 @@ function cfgLoadParts() {
   const parts = [['conf', 'cat ' + CFG_FILE], ['ledger', CFG_LEDGER_CMD], ['trials', CFG_TRIALS_CMD],
     ['ltpo', ltpoStatusCmd()], ['mmfeed', mmfeedStatusCmd()],
     ['lsp', 'sh ' + MD + '/runtime/asb_lsposed.sh status'], ['pkg', packageTweakStatusCmd()],
-    ['nf', 'cut -d"|" -f1 /data/adb/asb/notif_fix']];
+    ['nf', 'cut -d"|" -f1 /data/adb/asb/notif_fix'],
+    ['nightcharge', 'sh ' + shQuote(MD + '/runtime/asb_night_charge.sh') + ' status']];
   if (!_deviceClassKnown) parts.push(['devclass', 'cat ' + MD + '/overlay_device_class'], ['platform', 'getprop ro.board.platform']);
   return parts;
 }
@@ -8335,6 +8701,7 @@ async function cfgLoadNow() {
    * "Enabled" and then flips to "device did not accept it" a moment later - that flicker
    * reads as a bug in the module rather than as a fact about the phone. */
   await cfgLoadV64State(b);
+  cfgLoadNightCharge(b.nightcharge);
   await loadLtpoStatus(b.ltpo);
   await loadMmfeedStatus(b.mmfeed);
   await loadWlFitStatus();
@@ -8370,7 +8737,7 @@ const CFG_CAT = {
   dsp_loudness:'audio', dsp_bass:'audio', dsp_voice:'audio', dsp_width:'audio', dsp_clarity:'audio', dsp_rumble:'audio', dsp_compressor:'audio', dsp_headroom:'audio', dsp_outputs:'audio', audio_remove_volume_limit:'audio', audio_resampler:'audio', media_vol_steps:'audio', bt_absvol_mode:'audio', bt_link_stability:'audio',
   CAMERA_LEVEL:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_PORTRAIT:'camera', CAMERA_CONTRAST:'camera', CAMERA_GRAIN:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
   cool_gaming:'battery',
-  smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery',
+  smart_battery_bias:'battery', charge_aware_enable:'battery', night_charge_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery',
   BG_TRIM_LEVEL:'battery', gms_trim:'battery', gms_freeze:'battery',
   UX_MANAGE_OEM_TOGGLES:'system', UX_MANAGE_TIMEOUTS:'iface', anim_speed:'iface', UX_ANIM_FORCE_RESTART:'iface',
   camera_hold_enable:'camera',
@@ -8398,12 +8765,12 @@ function grpName(g) {
 }
 
 const CFG_GROUP_DESC = {
-  audio: 'Playback, DSP, Bluetooth',
-  camera: 'Photo processing, speed',
-  iface: 'Animations, effects',
-  net: 'Mobile, Wi-Fi, speed',
-  battery: 'Smart, sleep, heat, memory',
-  ui: 'Services, display, haptics'
+  audio: 'DSP, volume, Bluetooth',
+  camera: 'Presets, processing, detail',
+  iface: 'Animations, blur',
+  net: 'Wi-Fi, LTE, queues',
+  battery: 'Smart, Doze, heat, RAM',
+  ui: 'Services, LTPO, haptics'
 };
 const CFG_GROUPS = [
   { id:'audio',   icon:'headphones', name:'Audio',     ru:'\u0410\u0443\u0434\u0438\u043E' },
@@ -8437,7 +8804,7 @@ const CFG_GROUP_OF = {
   bt_absvol_mode:'audio', bt_link_stability:'audio',
   CAMERA_LEVEL:'camera', CAMERA_GRAIN:'camera', CAMERA_CONTRAST:'camera',
   CAMERA_PORTRAIT:'camera', CAMERA_LOWLIGHT:'camera', CAMERA_AGGRESSIVE:'camera', CAMERA_AGGRESSIVE_INJECT:'camera',
-  smart_battery_bias:'battery', charge_aware_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery', perf_ceiling_pct:'battery', 
+  smart_battery_bias:'battery', charge_aware_enable:'battery', night_charge_enable:'battery', auto_battery_enable:'battery', sustained_temp_enter:'battery', perf_ceiling_pct:'battery', 
   BG_TRIM_LEVEL:'battery', gms_trim:'battery', gms_freeze:'battery', cool_gaming:'battery',
   UX_MANAGE_OEM_TOGGLES:'ui', UX_MANAGE_TIMEOUTS:'iface', anim_speed:'iface', UX_ANIM_FORCE_RESTART:'iface',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net', net_mtu_probing:'net',
@@ -8471,7 +8838,11 @@ const CFG_GROUP_SECTIONS = {
     { id:'smart', icon:'smart', titleKey:'cfg_battery_section_smart',
       title:'Smart & Auto Profile', hintKey:'cfg_battery_section_smart_hint',
       hint:'How Smart balances battery against performance and when it switches profile.',
-      keys:['auto_battery_enable','smart_battery_bias','heavy_prime_escape','prime_escape_burst_s','prime_escape_rest_s','charge_aware_enable','smart_media_guard'] },
+      keys:['auto_battery_enable','smart_battery_bias','heavy_prime_escape','prime_escape_burst_s','prime_escape_rest_s','smart_media_guard'] },
+    { id:'charging', icon:'charge_aware', titleKey:'cfg_battery_section_charging',
+      title:'Charging', hintKey:'cfg_battery_section_charging_hint',
+      hint:'Performance while charging and an optional fixed overnight charge ceiling.',
+      keys:['charge_aware_enable','night_charge_enable'] },
     { id:'standby', icon:'doze', titleKey:'cfg_battery_section_standby',
       title:'Sleep & Background', hintKey:'cfg_battery_section_standby_hint',
       hint:'What the phone does while the screen is off: doze depth, wakelocks, background GPS.',
@@ -8763,7 +9134,7 @@ const CFG_ICONS = {
   UX_MANAGE_TIMEOUTS:'timeout', anim_speed:'anim_speed', UX_ANIM_FORCE_RESTART:'anim_restart', disable_blur:'blur', ui_effects_level:'effects',
   net_congestion:'congestion', net_congestion_wifi:'wifi_congestion', net_congestion_mobile:'mobile_congestion', net_qdisc:'qdisc', net_qdisc_wifi:'wifi_queue', net_qdisc_mobile:'mobile_queue',
   net_rps:'rps', net_txqueue:'txqueue', net_route_tune:'route', net_mtu_probing:'mtu_probe', wifi_country:'globe_pin', wifi_scan_throttle:'radar', radio_policy_enable:'cellular_controls',
-  auto_battery_enable:'battery_auto', smart_battery_bias:'battery_bias', smart_media_guard:'media_guard', charge_aware_enable:'charge_aware', doze_level:'doze', doze_trim_whitelist:'whitelist',
+  auto_battery_enable:'battery_auto', smart_battery_bias:'battery_bias', smart_media_guard:'media_guard', charge_aware_enable:'charge_aware', night_charge_enable:'night_charge', doze_level:'doze', doze_trim_whitelist:'whitelist',
   wakelock_action:'wakelock', gnss_trim:'satellite', night_modem_idle:'radio_moon', net_screen_off_lte:'lte_screenoff', net_lte_light:'lte_light', night_quiet_enable:'quiet_moon', sustained_temp_mode:'thermal_mode', sustained_temp_enter:'thermal_point',
   perf_ceiling_pct:'perf_cap', cool_gaming:'cool_game', bat_suppress_gaming:'game_battery', BG_TRIM_LEVEL:'cleaner', gms_trim:'service_trim', gms_freeze:'service_freeze',
   UX_MANAGE_OEM_TOGGLES:'oem_switches', athena_service:'athena', phantom_procs:'phantom', haptic_strength:'haptic_power', haptic_touch_strength:'haptic_touch', log_level:'log_detail', lsposed_verbose:'log_hook', ltpo_force:'ltpo', ltpo_video:'ltpo_video', mmfeed_off:'mmfeed',
@@ -8816,6 +9187,33 @@ async function loadDeviceClass(pre) {
     _isReference = (plat === 'canoe');
     if (plat) _deviceClassKnown = true;
   } catch (e) { _isReference = false; }
+}
+
+let _nightCharge = { state:'unknown', interface:'none', capacity:'unknown', charging:'unknown', target:'80', window:'22:00-06:00' };
+function nightChargeParse(raw) {
+  const out = { state:'unknown', interface:'none', capacity:'unknown', charging:'unknown', target:'80', window:'22:00-06:00' };
+  String(raw || '').split(/\r?\n/).forEach(function(line) {
+    const m = /^([a-z_]+)=([A-Za-z0-9:_.-]+)$/.exec(line);
+    if (m && Object.prototype.hasOwnProperty.call(out, m[1])) out[m[1]] = m[2];
+  });
+  return out;
+}
+function cfgLoadNightCharge(pre) {
+  _nightCharge = nightChargeParse(pre && pre.stdout);
+}
+
+function nightChargeBadge(state) {
+  switch (state) {
+    case 'off': return { cls:'neutral', text:T('nc_state_off', 'Disabled') };
+    case 'waiting': return { cls:'neutral', text:T('nc_state_waiting', 'waiting for charging / below 80%') };
+    case 'holding': return { cls:'good', text:T('nc_state_holding', '80% ceiling active') };
+    case 'released': return { cls:'good', text:T('nc_state_released', 'released after 06:00') };
+    case 'not_exposed': return { cls:'warn', text:T('nc_state_not_exposed', 'not exposed by this kernel') };
+    case 'write_failed': return { cls:'bad', text:T('nc_state_write_failed', 'kernel rejected the limit') };
+    case 'restore_failed': return { cls:'bad', text:T('nc_state_restore_failed', 'original value not restored') };
+    case 'external_change': return { cls:'warn', text:T('nc_state_external', 'another component changed charging') };
+    default: return { cls:'warn', text:T('nc_state_unknown', 'charging status unknown') };
+  }
 }
 
 async function loadNetResult() {
@@ -9120,6 +9518,12 @@ function cfgStatus(it, cur) {
   if (_tl > 0) return { cls:'warn', text: T('st_on_trial', 'on trial') + ' · ' + _tl + 'h' };
   if (trialExpired(it.key)) return { cls:'warn', text: T('trial_expired_wait', 'trial expired — restoring') };
 
+  if (it.key === 'night_charge_enable') {
+    const _ncs = cur === '1' ? _nightCharge.state
+      : (_nightCharge.state === 'restore_failed' ? 'restore_failed' : 'off');
+    return nightChargeBadge(_ncs);
+  }
+
   const nr = _netResult[it.key];
   if (nr === 'unavailable') return { cls:'bad', text:T('st_unavail', 'not supported') };
   if (nr === 'failed')      return { cls:'bad', text:T('st_failed', 'not applied') };
@@ -9326,8 +9730,10 @@ function cfgRenderHub(list) {
     cnt.className = 'cfg-tile-count' + (on ? ' has-on' : '');
     cnt.textContent = on ? (on + ' / ' + items.length) : String(items.length);
     foot.appendChild(cnt);
+    tile.setAttribute('aria-label', grpName(g) + '. ' + ds.textContent + '. ' + cnt.textContent);
     const bar = document.createElement('div');
     bar.className = 'cfg-tile-bar';
+    bar.setAttribute('aria-hidden', 'true');
     const fill = document.createElement('i');
     fill.style.width = Math.round(on * 100 / items.length) + '%';
     bar.appendChild(fill);
@@ -9412,7 +9818,7 @@ const APPLY_MODE = {
   smart_battery_bias:APPLY_LIVE, smart_media_guard:APPLY_LIVE, auto_battery_enable:APPLY_LIVE,
   heavy_prime_escape:APPLY_LIVE, prime_escape_burst_s:APPLY_LIVE, prime_escape_rest_s:APPLY_LIVE,
   wakelock_fitness:APPLY_LIVE, ltpo_video:APPLY_LIVE,
-  charge_aware_enable:APPLY_LIVE, cool_gaming:APPLY_LIVE, bat_suppress_gaming:APPLY_LIVE,
+  charge_aware_enable:APPLY_LIVE, night_charge_enable:APPLY_LIVE, cool_gaming:APPLY_LIVE, bat_suppress_gaming:APPLY_LIVE,
   night_quiet_enable:APPLY_LIVE, night_modem_idle:APPLY_LIVE, net_screen_off_lte:APPLY_LIVE, net_lte_light:APPLY_LIVE, sustained_temp_mode:APPLY_LIVE,
   sustained_temp_enter:APPLY_LIVE, BG_TRIM_LEVEL:APPLY_LIVE, doze_level:APPLY_LIVE,
   UX_MANAGE_OEM_TOGGLES:APPLY_LIVE, UX_MANAGE_TIMEOUTS:APPLY_LIVE,
@@ -10426,6 +10832,23 @@ async function cfgSet(key, val, ctl) {
         if (ctl) ctl.classList.remove('busy');
         return;
       }
+      if (key === 'night_charge_enable') {
+        /* Saving 1 is only intent. Apply through the ownership-aware helper and report
+         * the device result, never a generic success for an absent or rejected sysfs node. */
+        let nc = { state:'unknown' };
+        try {
+          const nr = await run('sh ' + shQuote(MD + '/runtime/asb_night_charge.sh') + ' apply 2>/dev/null');
+          nc = nightChargeParse(nr && nr.stdout);
+        } catch (e) {}
+        _nightCharge = Object.assign(_nightCharge, nc);
+        const nb = nightChargeBadge(nc.state);
+        toast(String(val) === '1' ? nb.text
+          : (nc.state === 'restore_failed' ? nb.text
+            : T('t_nc_off', 'Night charge limit off · ASB restriction released')), nb.cls);
+        cfgRender();
+        if (ctl) ctl.classList.remove('busy');
+        return;
+      }
       if (key === 'log_level') {
         // Applied live: extreme mode changes device properties, and leaving it restores
         // them - waiting for a reboot would leave the phone in whichever state it was.
@@ -10801,6 +11224,7 @@ const ASB_LANG_NAMES = { en:'English', ru:'Русский', uk:'Українсь
  */
 function cfgToggleLangPop(e) {
   if (e) e.stopPropagation();
+  cfgRebootMenuClose(false);
   const pop = _el('cfgLangPop');
   if (!pop) return;
   pop.hidden = !pop.hidden;
@@ -10827,6 +11251,120 @@ function cfgToggleLangPop(e) {
   const fromRight = Math.max(8, (window.innerWidth || 360) - r.right);
   pop.style.right = fromRight + 'px';
   pop.style.maxHeight = Math.max(160, (window.innerHeight || 640) - r.bottom - 24) + 'px';
+}
+
+/* The three existing restart actions share one measured, hub-only toolbar menu.
+ * This adds presentation and keyboard handling only: cfgReboot/cfgSoftReboot still own
+ * their capability checks, two-tap windows and shell commands. */
+var _cfgRebootMenuDismissArmed = false;
+function cfgRebootMenuItems() {
+  const pop = _el('cfgRebootPop');
+  return pop ? Array.from(pop.querySelectorAll('[role="menuitem"]')) : [];
+}
+function cfgRebootMenuPaint() {
+  const now = Date.now();
+  const armed = {
+    hard: !!_cfgRebootArmed && now - _cfgRebootArmed <= 4000,
+    soft: !!_cfgSoftArmed && now - _cfgSoftArmed <= 4000
+  };
+  cfgRebootMenuItems().forEach(function (b) {
+    const kind = b.classList.contains('hard') ? 'hard' : b.classList.contains('soft') ? 'soft' : 'sysui';
+    const yes = !!armed[kind];
+    b.classList.toggle('armed', yes);
+    const label = b.querySelector('[data-i18n]');
+    const text = label ? label.textContent : b.textContent;
+    b.setAttribute('aria-label', text + (yes ? ' · ' + T('cfg_reset_confirm', 'Tap again to confirm') : ''));
+  });
+  const name = T('cfg_reboot_tile', 'Reboot');
+  const btn = _el('cfgRebootMenuBtn'), pop = _el('cfgRebootPop');
+  if (btn) { btn.setAttribute('aria-label', name); btn.title = name; }
+  if (pop) pop.setAttribute('aria-label', name);
+}
+function cfgRebootMenuClose(restoreFocus) {
+  const pop = _el('cfgRebootPop'), btn = _el('cfgRebootMenuBtn');
+  if (pop) pop.hidden = true;
+  if (btn) {
+    btn.setAttribute('aria-expanded', 'false');
+    if (restoreFocus && btn.focus) btn.focus();
+  }
+}
+function cfgRebootMenuInit() {
+  if (_cfgRebootMenuDismissArmed) return;
+  _cfgRebootMenuDismissArmed = true;
+  /* A fixed descendant of the animated/self-scrolling Config overlay can use that overlay
+   * as its containing block. Portal only the popup, as with drill-in docks, so measured
+   * viewport coordinates cannot drift over the adjacent language/sound controls. */
+  const initialPop = _el('cfgRebootPop');
+  if (initialPop && document.body && initialPop.parentNode !== document.body) document.body.appendChild(initialPop);
+  document.addEventListener('click', function (ev) {
+    const pop = _el('cfgRebootPop'), wrap = _el('cfgRebootMenuWrap');
+    if (!pop || pop.hidden || (wrap && wrap.contains(ev.target)) || pop.contains(ev.target)) return;
+    cfgRebootMenuClose(false);
+  });
+  document.addEventListener('keydown', function (ev) {
+    const pop = _el('cfgRebootPop');
+    if (!pop || pop.hidden) return;
+    if (ev.key === 'Escape') {
+      ev.preventDefault(); ev.stopPropagation(); cfgRebootMenuClose(true); return;
+    }
+    if (['ArrowDown','ArrowUp','Home','End'].indexOf(ev.key) < 0) return;
+    const items = cfgRebootMenuItems(); if (!items.length) return;
+    ev.preventDefault(); ev.stopPropagation();
+    let i = items.indexOf(document.activeElement);
+    if (ev.key === 'Home') i = 0;
+    else if (ev.key === 'End') i = items.length - 1;
+    else if (ev.key === 'ArrowDown') i = (i + 1 + items.length) % items.length;
+    else i = (i - 1 + items.length) % items.length;
+    items[i].focus();
+  }, true);
+  window.addEventListener('resize', function () { cfgRebootMenuClose(false); });
+}
+function cfgToggleRebootMenu(e) {
+  if (e) e.stopPropagation();
+  const pop = _el('cfgRebootPop'), btn = _el('cfgRebootMenuBtn');
+  if (!pop || !btn) return;
+  if (!pop.hidden) { cfgRebootMenuClose(true); return; }
+  const lang = _el('cfgLangPop'); if (lang) lang.hidden = true;
+  cfgRebootMenuInit();
+  cfgRebootMenuPaint();
+  pop.hidden = false;
+  btn.setAttribute('aria-expanded', 'true');
+  /* getBoundingClientRect() is in physical viewport pixels, while a popup portalled
+   * into the scaled body accepts coordinates before body zoom. Convert them back,
+   * otherwise the menu moves up over the language/sound buttons on dense phones. */
+  const z = window._asbUiScale || 1;
+  const r = btn.getBoundingClientRect();
+  pop.style.position = 'fixed'; pop.style.left = 'auto';
+  pop.style.top = ((r.bottom + 8) / z) + 'px';
+  pop.style.right = (Math.max(8, (window.innerWidth || 360) - r.right) / z) + 'px';
+  pop.style.maxHeight = (Math.max(152, (window.innerHeight || 640) - r.bottom - 24) / z) + 'px';
+  const items = cfgRebootMenuItems();
+  const current = items.filter(function (b) { return b.classList.contains('armed'); })[0];
+  if ((current || items[0]) && (current || items[0]).focus) (current || items[0]).focus();
+}
+function cfgRebootMenuKey(e) {
+  if (!e || e.key !== 'ArrowDown') return;
+  const pop = _el('cfgRebootPop');
+  if (pop && pop.hidden) { e.preventDefault(); cfgToggleRebootMenu(e); }
+}
+async function cfgRebootMenuAction(e, kind) {
+  if (e) e.stopPropagation();
+  if (kind === 'sysui') {
+    cfgRebootMenuClose(false);
+    await cfgRestartSysUI();
+    return;
+  }
+  if (kind === 'hard') await cfgReboot();
+  else if (kind === 'soft') await cfgSoftReboot();
+  else return;
+  const now = Date.now();
+  const armed = kind === 'hard'
+    ? !!_cfgRebootArmed && now - _cfgRebootArmed <= 4000
+    : !!_cfgSoftArmed && now - _cfgSoftArmed <= 4000;
+  cfgRebootMenuPaint();
+  if (!armed) { cfgRebootMenuClose(false); return; }
+  const item = cfgRebootMenuItems().filter(function (b) { return b.classList.contains(kind); })[0];
+  if (item && item.focus) item.focus();
 }
 
 /* Close an open dropdown when the next tap lands anywhere else.
@@ -15590,7 +16128,9 @@ function openDevicePage() {
    * open class in this gesture, paint the shell/skeleton, then start the read-only collector.
    * The old double-rAF plus immediate collector could leave a slow WebView looking untouched. */
   p.classList.add('open');
-  setTimeout(function () { if (_deviceOpen) asbDeviceInfoLoad(); }, 50);
+  /* The loader paints cache/loading and awaits asbPaintYield before its collector; a separate
+   * 50 ms timer only postponed that first useful frame. */
+  asbDeviceInfoLoad();
   setTimeout(asbNavSync, 60);
   requestAnimationFrame(asbFitPages);
 }
@@ -15653,41 +16193,54 @@ function deviceInfoStamp(t) {
   catch (e) { return ''; }
 }
 async function asbDeviceInfoLoad() {
+  const background = arguments[0] === true;
   const body = _el('deviceBody'), status = _el('deviceStatus'), btn = _el('devRefresh');
-  if (!body || !status || !_deviceOpen) return;
+  if (!body || !status || (!background && !_deviceOpen)) return;
   const seq = ++_deviceLoadSeq;
   const saveBtn = _el('devSave');
   const page = _el('devicePage');
-  window._asbDeviceInfoData = null;
-  window._asbDeviceInfoRaw = '';
-  if (saveBtn) saveBtn.disabled = true;
-  if (btn) btn.disabled = true;
-  status.classList.add('dev-status-busy');
-  const cache = body.dataset.devShown === '1' ? null : deviceInfoCacheGet();
+  if (!background) {
+    window._asbDeviceInfoData = null;
+    window._asbDeviceInfoRaw = '';
+    if (saveBtn) saveBtn.disabled = true;
+    if (btn) btn.disabled = true;
+    status.classList.add('dev-status-busy');
+  }
+  const cache = background || body.dataset.devShown === '1' ? null : deviceInfoCacheGet();
   const cd = cache ? parseDeviceInfo(cache.raw) : null;
-  if (cd && cd.count) {
+  if (!background && cd && cd.count) {
     deviceInfoRender(cd);
     body.dataset.devShown = '1';
     body.dataset.devAt = String(cache.t);
     body.classList.add('dev-stale');
     status.textContent = T('dev_cached_status', 'Snapshot from %s · refreshing…').replace('%s', deviceInfoStamp(cache.t));
-  } else if (body.dataset.devShown === '1') {
+  } else if (!background && body.dataset.devShown === '1') {
     body.classList.add('dev-stale');
     status.textContent = T('dev_loading_status', 'Collecting read-only data…');
-  } else {
+  } else if (!background) {
     status.textContent = T('dev_loading_status', 'Collecting read-only data…');
     deviceInfoLoading(body);
   }
   await asbPaintYield();
-  if (!_deviceOpen || seq !== _deviceLoadSeq) return;
+  if ((!background && !_deviceOpen) || seq !== _deviceLoadSeq) return;
   let r = null;
   /* fix278: the hook evidence (LSPosed logs, crash records, package and process lists) is
    * collected on request from its own card. It can take seconds, and ksu.exec holds the
    * page for the whole command; the rest of the snapshot no longer waits for it. */
   try { r = await run('ASB_DEVINFO_LSPOSED=0 sh ' + MD + '/tools/asb_device_info.sh 2>/dev/null'); }
   catch (e) { r = null; }
-  if (!_deviceOpen || seq !== _deviceLoadSeq) return;
+  if ((!background && !_deviceOpen) || seq !== _deviceLoadSeq) return;
   const d = parseDeviceInfo(r ? runText(r) : '');
+  if (background) {
+    /* Cache only: no closed-page loading card, focus change or evidence claim on failure. */
+    if (r && r.errno === 0 && d.count) {
+      window._asbDeviceInfoData = d;
+      window._asbDeviceInfoRaw = runText(r);
+      deviceInfoCacheSet(window._asbDeviceInfoRaw);
+      zygiskHeaderPublish(d);
+    }
+    return;
+  }
   status.classList.remove('dev-status-busy');
   body.classList.remove('dev-stale');
   if ((!r || r.errno !== 0 || !d.count) && body.dataset.devShown === '1') {
@@ -17910,12 +18463,10 @@ function asbFitPagesNow() {
       if (hub && page && page.getAttribute('aria-hidden') === 'false' && !_cfgGroup) {
         const tiles = hub.querySelectorAll('.cfg-tile');
         const rows = Math.ceil(tiles.length / 3) || 1;
-        const reb = _el('cfgRebootWrap');
-        const rebH = reb ? (reb.getBoundingClientRect().height / z + (parseFloat(getComputedStyle(reb).marginTop) || 0)) : 0;
         const top = hub.getBoundingClientRect().top + page.scrollTop;
         const gap = parseFloat(getComputedStyle(hub).rowGap || getComputedStyle(hub).gap) || 9;
-        let h = ((stop - top) / z - rebH - gap * (rows - 1)) / rows;
-        h = Math.max([104, 92, 80][tier], Math.min(176, Math.floor(h)));
+        let h = ((stop - top) / z - gap * (rows - 1)) / rows;
+        h = Math.max([112, 96, 84][tier], Math.min(184, Math.floor(h)));
         root.style.setProperty('--cfg-tile-h', h + 'px');
       }
     };
@@ -18102,15 +18653,39 @@ async function asbDeviceFont() {
 }
 
 asbApplyUiScale();
+/* Fit the already complete DOM now as well as at final load (fix326). This removes the
+ * avoidable first-frame → loaded-card geometry jump without a fixed timer or root read. */
+requestAnimationFrame(asbFitPages);
 window.addEventListener('resize', asbApplyUiScale);
 window.addEventListener('orientationchange', asbApplyUiScale);
 window.addEventListener('resize', function () { requestAnimationFrame(asbFitPages); });
 window.addEventListener('orientationchange', function () { requestAnimationFrame(asbFitPages); });
-window.addEventListener('load', function () { requestAnimationFrame(asbFitPages); setTimeout(function () { homeMeterRefresh(true); }, 1800); asbDeviceFont(); });
-/* fix278: Settings values are read once in the background after start-up (one batched shell,
- * while nothing else is queued), so the first visit to Settings draws real values and starts
- * no root call on the tap. */
-window.addEventListener('load', function () { setTimeout(function () { if (!_cfgOpen && !document.hidden) cfgLoad(); }, 4000); });
+/* fix325: start useful cache work after the first painted frame, not at arbitrary 1.8/2.5/4 s
+ * timers. The boot preview owns the same collectors when shown; an ordinary opening warms them
+ * immediately. The initial Live batch already contains the drain meter, so no second forced
+ * meter shell is needed. Hidden pages do no speculative root work. */
+function asbStartupWarmCaches() {
+  const warm = function (introShown) {
+    if (introShown || document.hidden) return;
+    if (!_cfgOpen) cfgLoad();
+    zygiskHeaderRefresh();
+  };
+  const probe = window._asbBootIntroProbe;
+  if (probe && typeof probe.then === 'function') probe.then(warm, function () { warm(false); });
+  else warm(false);
+}
+/* fix328: do not make local Config/ZYGISK warm-up wait for window.load. Even a non-blocking
+ * print-medium manager stylesheet can delay that event while its network request settles.
+ * The existing probe still gives the boot preview exclusive ownership of its collectors. */
+requestAnimationFrame(function () { setTimeout(asbStartupWarmCaches, 0); });
+window.addEventListener('load', function () {
+  /* fix326: the non-blocking inset stylesheet lets the main script run while a WebView can
+   * still report its provisional width. Re-read the final viewport before fitting pages;
+   * otherwise the early zoom (often 1) remains frozen and the whole interface grows. */
+  asbApplyUiScale();
+  requestAnimationFrame(asbFitPages);
+  asbDeviceFont();
+});
 
 function asbNavCurrent() {
   if (document.body.classList.contains('zygisk-active')) return 'zygisk';
@@ -18400,9 +18975,9 @@ function cfgSyncChrome() {
       lbl.textContent = T('sec_config', 'Configuration');
     }
   }
-  // Reboot actions belong to the hub only.
-  const rw = _el('cfgRebootWrap');
-  if (rw) rw.style.display = _cfgGroup ? 'none' : '';
+  // Restart actions live in the hub toolbar; never leave a hidden popup over a category.
+  if (_cfgGroup) cfgRebootMenuClose(false);
+  cfgRebootMenuPaint();
   const tr = _el('cfgToolsRow');
   if (tr) { tr.style.display = _cfgGroup ? 'none' : 'flex'; cfgFillLangs(); uiSoundPaintBtn(); }
   /* The back chip only means something inside a category.
@@ -18432,6 +19007,7 @@ function cfgBack() {
 }
 
 function closeConfigPage(toMain) {
+  cfgRebootMenuClose(false);
   const p = _el('configPage');
   if (!p) return;
   asbNavAnimMark();
@@ -18677,15 +19253,22 @@ function renderSmartSubLine(kv) {
     } else {
       smartSub.textContent = T('smart_disabled', 'disabled \u00b7 tap to enable');
     }
+    asbHomeValueResolve(smartSub);
   } catch(e) {}
 }
 
 /* Read the state directly and re-render the sub-line. Used after a profile switch,
  * where waiting for the next live poll is what caused the stale label. */
-async function refreshSmartSubLine() {
+async function refreshSmartSubLine(pre) {
   try {
     const kv = {};
-    const r = await run('cat /dev/.asb/state 2>/dev/null');
+    /* Startup reuses the shared snapshot. Post-switch refreshes still read current evidence,
+     * but state and the pending flag now travel in one shell instead of up to two. */
+    const b = pre && pre.state ? pre : await runBatch([
+      ['state', 'cat /dev/.asb/state 2>/dev/null'],
+      ['smart_pending', 'cat /data/adb/asb/smart_mode_enabled 2>/dev/null']
+    ]);
+    const r = b && b.state;
     if (r && r.stdout) {
       r.stdout.split(/\r?\n/).forEach(line => {
         const eq = line.indexOf('=');
@@ -18693,7 +19276,7 @@ async function refreshSmartSubLine() {
       });
     }
     if (parseInt(kv.smart_mode || '0', 10) !== 1) {
-      const f = await run('cat /data/adb/asb/smart_mode_enabled 2>/dev/null');
+      const f = b && b.smart_pending;
       if (f && f.stdout && f.stdout.trim() === '1') kv._smartPending = 1;
     }
     renderSmartSubLine(kv);
@@ -19364,13 +19947,27 @@ async function pollLive(visible) {
    * every 30 s, each pass spawning root shells, while the user was in another app with the
    * screen on. A hidden page is caught up the moment it is shown again (listener below). */
   if (document.hidden) return;
+  if (_livePollRun) {
+    if (!visible || _livePollVisible) return _livePollRun;
+    if (!_livePollFollow) {
+      _livePollFollow = _livePollRun.then(function () {
+        if (!document.hidden) return pollLive(true);
+      }).then(function (v) { _livePollFollow = null; return v; }, function (e) {
+        _livePollFollow = null; throw e;
+      });
+    }
+    return _livePollFollow;
+  }
+  let releasePoll = null;
+  _livePollVisible = !!visible;
+  _livePollRun = new Promise(function (resolve) { releasePoll = resolve; });
   try {
     if (_selectedProfile === 'stock') {
       // Terminal boundary: never read /dev/.asb/state, learner_state.json, native status or
       // recovery.json while Stock is selected. Those files may be from the outgoing Smart tick
       // and mixing them into a ROM snapshot was the source of stale 95°C/cap/forecast cards.
       if (visible) await pollStockTelemetry(true);
-      else pollStockTelemetry(false);
+      else await pollStockTelemetry(false);
       return;
     }
     const prime = !visible && (!_lvMonCache.tiles || _lvMonCache.tiles.profile !== _selectedProfile || _lvMonCache.tiles.lang !== ASB_LANG);
@@ -19380,6 +19977,9 @@ async function pollLive(visible) {
     /* fix278: every read of this pass shares one root shell (was five, every 3 s). */
     const _lb = await runBatch(liveBatchParts(visible, prime));
     if (_lb.meter) lvMeterApply(_lb.meter.stdout || '', false);
+    /* Ordinary cold start paints Home from this same read. The boot preview's visible
+     * warmer paints it after the complete Live pass instead of forcing another shell. */
+    if (_lb.meter && !visible) homeMeterPaint();
     if (_lb.rom) stockTelemetryApply(_lb.rom);
     const r = _lb.state;
     /*
@@ -20114,13 +20714,136 @@ async function pollLive(visible) {
 
     lvMonTilesCapture(_selectedProfile !== 'none' ? _selectedProfile : profile);
     lvStale(false);
-  } catch(e) { }
+  } catch(e) {
+  } finally {
+    _livePollRun = null;
+    _livePollVisible = false;
+    if (releasePoll) releasePoll();
+  }
 }
 
 _liveBgTimer = setInterval(() => { if (!_liveOpen) pollLive(false); }, 30000);
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) pollLive(_liveOpen);
 });
+
+/* Once per Android boot, hide the first cold-cache reads behind a short ASB preview.
+ * The boot id is random per boot (not a hardware/account identifier). The marker is
+ * written BEFORE work starts, so reloading or closing the manager cannot replay it.
+ * No worker survives the WebView: these are the same bounded collectors used by pages. */
+const ASB_BOOT_INTRO_KEY = 'asb_boot_intro_v1';
+const ASB_BOOT_INTRO_MIN_MS = 3200, ASB_BOOT_INTRO_MAX_MS = 9000;
+function asbBootIntroSeen(id) {
+  try { if (localStorage.getItem(ASB_BOOT_INTRO_KEY) === id) return true; } catch (e) {}
+  try { return sessionStorage.getItem(ASB_BOOT_INTRO_KEY) === id; } catch (e) { return false; }
+}
+function asbBootIntroRemember(id) {
+  try { localStorage.setItem(ASB_BOOT_INTRO_KEY, id); } catch (e) {}
+  try { sessionStorage.setItem(ASB_BOOT_INTRO_KEY, id); } catch (e) {}
+}
+function asbBootIntroPaint(done, total) {
+  const pct = total > 0 ? Math.round(done * 100 / total) : 0;
+  const bar = _el('asbBootIntroBar'), progress = _el('asbBootIntroProgress'), count = _el('asbBootIntroCount');
+  if (bar) bar.style.transform = 'scaleX(' + (pct / 100) + ')';
+  if (progress) progress.setAttribute('aria-valuenow', String(pct));
+  if (count) count.textContent = done + ' / ' + total;
+  const stages = document.querySelectorAll('.asb-boot-stage');
+  stages.forEach(function (el, i) {
+    el.classList.toggle('is-done', i < done);
+    el.classList.toggle('is-active', i === done && done < total);
+  });
+}
+async function asbBootIntroStart() {
+  const overlay = _el('asbBootIntro');
+  if (!overlay || window._asbBootIntroActive) return false;
+  let r = null;
+  try { const startup = await asbStartupSnapshot(); r = startup && startup.boot; } catch (e) { return false; }
+  const boot = String((r && r.stdout) || '').trim();
+  /* Fail closed for the animation, never for the UI: an unreadable boot id must not
+   * produce a splash on every ordinary opening. Existing collectors still run normally. */
+  if (!r || r.errno !== 0 || !/^[0-9a-f-]{16,64}$/i.test(boot) || asbBootIntroSeen(boot)) return false;
+  asbBootIntroRemember(boot);
+  window._asbBootIntroActive = true;
+  const oldBusy = document.body.getAttribute('aria-busy');
+  const status = _el('asbBootIntroStatus');
+  overlay.hidden = false;
+  overlay.setAttribute('aria-hidden', 'false');
+  overlay.classList.remove('is-leaving');
+  document.body.setAttribute('aria-busy', 'true');
+  if (status) status.textContent = T('boot_intro_warm', 'Preloading ASB metrics…');
+  const jobs = [
+    ['live', function () { return Promise.resolve(pollLive(true)).then(function () { homeMeterPaint(); }); }],
+    ['config', function () { return cfgLoad(); }],
+    ['device', function () { return Promise.all([loadDeviceInfo(), asbDeviceInfoLoad(true)]); }],
+    ['zygisk', function () { return zygiskHeaderRefresh(); }]
+  ];
+  asbBootIntroPaint(0, jobs.length);
+  const started = Date.now();
+  let done = 0;
+  const tasks = jobs.map(function (job) {
+    return Promise.resolve().then(job[1]).catch(function () {
+      /* A collector keeps its own honest unknown/error state. A failed read still ends
+       * this attempt, but is never presented as a successful metric or capability. */
+    }).then(function () { done++; asbBootIntroPaint(done, jobs.length); });
+  });
+  try {
+    let timer = 0;
+    const completed = await Promise.race([
+      Promise.all(tasks).then(function () { return true; }),
+      new Promise(function (resolve) { timer = setTimeout(function () { resolve(false); }, ASB_BOOT_INTRO_MAX_MS); })
+    ]);
+    if (timer) clearTimeout(timer);
+    if (completed) asbBootIntroPaint(jobs.length, jobs.length);
+    const remaining = ASB_BOOT_INTRO_MIN_MS - (Date.now() - started);
+    if (remaining > 0) await new Promise(function (resolve) { setTimeout(resolve, remaining); });
+    if (status) status.textContent = T('boot_intro_ready', 'Interface ready');
+    overlay.classList.add('is-leaving');
+    await new Promise(function (resolve) { setTimeout(resolve, 360); });
+  } catch (e) {
+    /* Fail-safe below always returns the ordinary interface. */
+  } finally {
+    overlay.hidden = true;
+    overlay.setAttribute('aria-hidden', 'true');
+    overlay.classList.remove('is-leaving');
+    window._asbBootIntroActive = false;
+    if (oldBusy === null) document.body.removeAttribute('aria-busy');
+    else document.body.setAttribute('aria-busy', oldBusy);
+  }
+  return true;
+}
+
+let _asbHomeRevealed = false;
+function asbHomeReveal() {
+  if (_asbHomeRevealed) return;
+  const root = document.documentElement;
+  const home = document.querySelector('.page:not(.live-page)');
+  if (!root || !home) return;
+  _asbHomeRevealed = true;
+  const reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  if (!reduced && typeof home.animate === 'function') {
+    /* Monitor uses opacity + .985 → 1 scale over 260 ms after a 60 ms delay. Home uses the
+     * same visual contract through WAAPI: measure the final, unscaled layout first, then
+     * start the compositor animation before this task can paint. No late fit changes cards. */
+    asbNavAnimMark();
+    home.style.transition = 'none';
+    root.classList.remove('asb-home-pending');
+    asbFitPagesNow();
+    void home.offsetWidth;
+    home.style.transition = '';
+    const entrance = home.animate([
+      { opacity:0, transform:'scale(.985)' },
+      { opacity:1, transform:'scale(1)' }
+    ], { duration:260, delay:60, easing:'cubic-bezier(.2,.7,.25,1)', fill:'both' });
+    entrance.onfinish = function () { entrance.cancel(); };
+  } else {
+    root.classList.remove('asb-home-pending');
+    requestAnimationFrame(asbFitPages);
+  }
+}
+/* Local locale reads normally settle immediately. These are fail-safe exits only: a broken
+ * local request must never leave the ordinary interface transparent indefinitely. */
+window.addEventListener('load', asbHomeReveal, { once:true });
+setTimeout(asbHomeReveal, 1600);
 
 // ── localized boot: wait for the non-blocking locale pair, including when
 // DOMContentLoaded happened before the local files finished reading ──
@@ -20129,7 +20852,6 @@ document.addEventListener('visibilitychange', () => {
     try {
       applyStaticI18n();
       zygiskHeaderInit();
-      setTimeout(zygiskHeaderRefresh, 2500);
       loadDebugSupport();
       var dl = T('device_line', null);
       if (dl) {
@@ -20139,6 +20861,7 @@ document.addEventListener('visibilitychange', () => {
         });
       }
     } catch (e) {}
+    asbHomeReveal();
   }
   I18N_READY.then(boot);
   document.addEventListener('DOMContentLoaded', function () {
@@ -20147,7 +20870,15 @@ document.addEventListener('visibilitychange', () => {
     });
   });
 })();
-setTimeout(() => pollLive(false), 250);
+/* Coordinate the ordinary cold read with the boot preview: no duplicate governor/ROM
+ * batch while the same metrics are being warmed, and no delay after a normal opening. */
+requestAnimationFrame(() => setTimeout(() => {
+  const probe = window._asbBootIntroProbe;
+  if (probe && typeof probe.then === 'function') {
+    probe.then(function (shown) { if (!shown) pollLive(false); }, function () { pollLive(false); });
+  } else pollLive(false);
+}, 0));
+window._asbBootIntroProbe = I18N_READY.then(asbBootIntroStart, asbBootIntroStart);
 
 /* Ten quick taps on the logo: the saucer leaves its nest, flies, and lands back in it.
  *
