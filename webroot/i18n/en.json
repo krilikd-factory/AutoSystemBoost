@@ -2499,7 +2499,7 @@
   "lr_zy_live_zero": "No validated process was live in the latest snapshot, while earlier activity was recorded. This describes the current live set, not failed injection throughout the capture.",
   "lr_zy_accept_note": "An accepted cold-start request was acknowledged by the governor after its enabled/screen checks. This is not proof that a lift was armed or that a frequency ceiling changed; thermal and other governor gates still apply.",
   "lr_tip_smart_nohelp": "Smart's comparisons did not favor extra headroom for {n} apps, so their previous ceilings were kept. This does not identify another cause of their late frames.",
-  "lr_sm_scope": "End-of-capture snapshot: counters can include earlier work in the same governor session. Tracked situations include tests still running.",
+  "lr_sm_scope": "Stored governor-session snapshot: counters can include earlier work. Tracked situations include tests still running.",
   "lr_dx_heat_some_runs": "The CPU spent {min} above 45 °C across {n} warm spells (longest {longest}; peak {cpu}°). No single spell reached 30 minutes.",
   "lr_zy_launch_balanced": "All {n} cold starts have a recorded outcome: {ok} accepted, {veto} vetoed, {unavailable} governor-unavailable, {throttled} throttled.",
   "lr_zy_launch_unresolved": "Of {n} cold starts, {ok} were accepted, {veto} vetoed, {unavailable} governor-unavailable and {throttled} throttled. The remainder can be in flight at a snapshot; the difference alone is not an error.",
@@ -2595,5 +2595,15 @@
   "wl_service_state_unknown": "Current component state is not exposed",
   "wl_service_title": "Services · %s",
   "wl_service_unavailable": "Service records or component state are not exposed right now. Nothing was changed.",
-  "wl_services_open": "Services"
+  "wl_services_open": "Services",
+  "lr_sm_capture": "Real-time adaptation",
+  "lr_sm_state_adapting": "Smart active · {n} log hints accepted in this capture",
+  "lr_sm_state_active": "Smart active · native A/B owns decisions",
+  "lr_sm_state_manual": "Manual profile at the last snapshot · stored records are not live adaptation",
+  "lr_sm_state_disabled": "Smart profile, but Smart mode is off",
+  "lr_sm_state_unknown": "Smart capture state: unknown",
+  "lr_sm_feedback": "Infinite Log → Smart",
+  "lr_sm_feedback_fmt": "{accepted} accepted · {suppressed} suppressed · {rejected} rejected",
+  "lr_sm_feedback_unknown": "In-capture delta unknown",
+  "lr_sm_feedback_note": "The log supplies sustained-jank evidence only. Smart re-reads Android frame statistics and owns A/B windows, plateau and cooldown decisions; report recommendations are never executed as settings."
 }

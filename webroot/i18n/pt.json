@@ -2640,7 +2640,7 @@
   "lr_zy_live_zero": "No validated process was live in the latest snapshot, while earlier activity was recorded. This describes the current live set, not failed injection throughout the capture.",
   "lr_zy_accept_note": "O governor confirmou a inicialização a frio aceita após as verificações de ativação e tela. Isso não prova impulso armado nem limite alterado; as demais verificações do governor continuam valendo.",
   "lr_tip_smart_nohelp": "Nas comparações do Smart, margem extra não favoreceu {n} apps e seus limites anteriores foram mantidos. Isso não identifica outra causa dos quadros atrasados.",
-  "lr_sm_scope": "Instantâneo do fim da captura: contadores podem incluir trabalho anterior da mesma sessão do governor. Situações acompanhadas incluem testes em andamento.",
+  "lr_sm_scope": "Instantâneo salvo da sessão do governor: os contadores podem incluir trabalho anterior. As situações acompanhadas incluem testes em andamento.",
   "lr_dx_heat_some_runs": "A CPU passou {min} acima de 45 °C em {n} episódios quentes (o mais longo {longest}; pico {cpu}°). Nenhum episódio chegou a 30 minutos.",
   "lr_zy_launch_balanced": "Todas as {n} inicializações a frio têm resultado: {ok} aceitas, {veto} recusadas, {unavailable} governor indisponível, {throttled} limitadas.",
   "lr_zy_launch_unresolved": "De {n} inicializações a frio: {ok} aceitas, {veto} recusadas, {unavailable} governor indisponível e {throttled} limitadas. O restante pode estar em andamento no instantâneo; a diferença sozinha não é erro.",
@@ -2736,5 +2736,15 @@
   "wl_service_state_unknown": "O estado atual do componente não está exposto",
   "wl_service_title": "Serviços · %s",
   "wl_service_unavailable": "Os registos de serviços ou o estado do componente não estão expostos neste momento. Nada foi alterado.",
-  "wl_services_open": "Serviços"
+  "wl_services_open": "Serviços",
+  "lr_sm_capture": "Adaptação em tempo real",
+  "lr_sm_state_adapting": "Smart ativo · {n} sugestões do registro aceitas nesta captura",
+  "lr_sm_state_active": "Smart ativo · o mecanismo A/B nativo toma as decisões",
+  "lr_sm_state_manual": "Perfil manual no último instantâneo · registros armazenados não são adaptação ao vivo",
+  "lr_sm_state_disabled": "Perfil Smart, mas o modo Smart está desativado",
+  "lr_sm_state_unknown": "Estado do Smart na captura: desconhecido",
+  "lr_sm_feedback": "Registro infinito → Smart",
+  "lr_sm_feedback_fmt": "{accepted} aceitas · {suppressed} adiadas · {rejected} rejeitadas",
+  "lr_sm_feedback_unknown": "Delta desta captura desconhecido",
+  "lr_sm_feedback_note": "O registro fornece apenas evidências de jank sustentado. O Smart relê as estatísticas de quadros do Android e controla as janelas A/B, o patamar e o cooldown; recomendações do relatório nunca são executadas como configurações."
 }

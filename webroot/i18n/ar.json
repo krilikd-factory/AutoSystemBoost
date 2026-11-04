@@ -2640,7 +2640,7 @@
   "lr_zy_live_zero": "No validated process was live in the latest snapshot, while earlier activity was recorded. This describes the current live set, not failed injection throughout the capture.",
   "lr_zy_accept_note": "أكد governor طلب البدء البارد المقبول بعد فحوص التمكين والشاشة. لا يثبت هذا تجهيز رفع أو تغيير حد التردد؛ وتستمر فحوص governor الحرارية وغيرها.",
   "lr_tip_smart_nohelp": "لم تُظهر مقارنات Smart فائدة الهامش الإضافي لعدد {n} من التطبيقات، لذا حُفظت حدودها السابقة. لا يحدد هذا سببًا آخر للإطارات المتأخرة.",
-  "lr_sm_scope": "لقطة نهاية الالتقاط: قد تشمل العدادات عملًا سابقًا في جلسة governor نفسها. تشمل الحالات المتتبعة اختبارات ما زالت جارية.",
+  "lr_sm_scope": "لقطة محفوظة لجلسة governor: قد تتضمن العدادات عملًا سابقًا. تتضمن الحالات المتتبعة اختبارات ما زالت جارية.",
   "lr_dx_heat_some_runs": "قضى المعالج {min} فوق 45 °C في {n} فترات ساخنة (الأطول {longest}؛ الذروة {cpu}°). لم تبلغ أي فترة 30 دقيقة.",
   "lr_zy_launch_balanced": "كل عمليات البدء البارد وعددها {n} لها نتيجة: قبول {ok}، رفض {veto}، governor غير متاح {unavailable}، تقييد {throttled}.",
   "lr_zy_launch_unresolved": "من {n} عملية بدء بارد: قبول {ok}، رفض {veto}، governor غير متاح {unavailable}، وتقييد {throttled}. قد تكون البقية قيد المعالجة وقت اللقطة؛ الفرق وحده ليس خطأً.",
@@ -2736,5 +2736,15 @@
   "wl_service_state_unknown": "حالة المكوّن الحالية not exposed",
   "wl_service_title": "الخدمات · %s",
   "wl_service_unavailable": "سجلات الخدمات أو حالة المكوّن not exposed حالياً. لم يتغير شيء.",
-  "wl_services_open": "الخدمات"
+  "wl_services_open": "الخدمات",
+  "lr_sm_capture": "التكيف في الوقت الفعلي",
+  "lr_sm_state_adapting": "Smart نشط · قُبل {n} من تلميحات السجل في هذا الالتقاط",
+  "lr_sm_state_active": "Smart نشط · محرك A/B الأصلي يتخذ القرارات",
+  "lr_sm_state_manual": "ملف يدوي في آخر لقطة · السجلات المحفوظة ليست تكيفًا مباشرًا",
+  "lr_sm_state_disabled": "ملف Smart، لكن وضع Smart متوقف",
+  "lr_sm_state_unknown": "حالة Smart في الالتقاط: غير معروفة",
+  "lr_sm_feedback": "السجل الدائم → Smart",
+  "lr_sm_feedback_fmt": "قُبل {accepted} · أُجل {suppressed} · رُفض {rejected}",
+  "lr_sm_feedback_unknown": "فرق هذا الالتقاط غير معروف",
+  "lr_sm_feedback_note": "يقدم السجل دليل jank المستمر فقط. يعيد Smart قراءة إحصاءات إطارات Android ويدير نوافذ A/B والاستقرار وفترة الانتظار بنفسه؛ لا تُنفذ توصيات التقرير كإعدادات أبدًا."
 }

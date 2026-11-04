@@ -2640,7 +2640,7 @@
   "lr_zy_live_zero": "No validated process was live in the latest snapshot, while earlier activity was recorded. This describes the current live set, not failed injection throughout the capture.",
   "lr_zy_accept_note": "Ein angenommener Kaltstart wurde vom Governor nach den Aktivierungs-/Bildschirmprüfungen bestätigt. Das beweist weder einen aktivierten Lift noch eine geänderte Frequenzgrenze; thermische und andere Governor-Gates gelten weiterhin.",
   "lr_tip_smart_nohelp": "In Smart-Vergleichen half zusätzlicher Headroom {n} Apps nicht; ihre bisherigen Limits blieben bestehen. Andere Ursachen später Frames werden dadurch nicht bestimmt.",
-  "lr_sm_scope": "Momentaufnahme am Capture-Ende: Zähler können frühere Arbeit derselben Governor-Sitzung enthalten. Verfolgte Situationen umfassen auch laufende Tests.",
+  "lr_sm_scope": "Gespeicherter Governor-Sitzungs-Snapshot: Zähler können frühere Arbeit enthalten. Verfolgte Situationen umfassen auch laufende Tests.",
   "lr_dx_heat_some_runs": "Die CPU lag {min} über 45 °C in {n} Wärmephasen (längste {longest}; Spitze {cpu}°). Keine einzelne Phase erreichte 30 Minuten.",
   "lr_zy_launch_balanced": "Für alle {n} Kaltstarts liegt ein Ergebnis vor: {ok} angenommen, {veto} abgelehnt, {unavailable} Governor nicht verfügbar, {throttled} gedrosselt.",
   "lr_zy_launch_unresolved": "Von {n} Kaltstarts: {ok} angenommen, {veto} abgelehnt, {unavailable} Governor nicht verfügbar, {throttled} gedrosselt. Der Rest kann beim Snapshot in Bearbeitung sein; die Differenz allein ist kein Fehler.",
@@ -2736,5 +2736,15 @@
   "wl_service_state_unknown": "Aktueller Komponentenzustand wird nicht angezeigt",
   "wl_service_title": "Dienste · %s",
   "wl_service_unavailable": "Service-Einträge oder Komponentenzustand werden derzeit nicht angezeigt. Nichts wurde geändert.",
-  "wl_services_open": "Dienste"
+  "wl_services_open": "Dienste",
+  "lr_sm_capture": "Echtzeit-Anpassung",
+  "lr_sm_state_adapting": "Smart aktiv · {n} Protokollhinweise in dieser Aufzeichnung akzeptiert",
+  "lr_sm_state_active": "Smart aktiv · native A/B-Logik trifft die Entscheidungen",
+  "lr_sm_state_manual": "Manuelles Profil im letzten Snapshot · gespeicherte Einträge sind keine Live-Anpassung",
+  "lr_sm_state_disabled": "Smart-Profil, aber Smart-Modus ist aus",
+  "lr_sm_state_unknown": "Smart-Status der Aufzeichnung: unbekannt",
+  "lr_sm_feedback": "Infinite Log → Smart",
+  "lr_sm_feedback_fmt": "{accepted} akzeptiert · {suppressed} zurückgestellt · {rejected} abgelehnt",
+  "lr_sm_feedback_unknown": "Delta dieser Aufzeichnung unbekannt",
+  "lr_sm_feedback_note": "Das Protokoll liefert nur Belege für anhaltenden Jank. Smart liest Androids Frame-Statistik erneut und steuert selbst A/B-Fenster, Plateau und Cooldown; Berichtsempfehlungen werden nie als Einstellungen ausgeführt."
 }

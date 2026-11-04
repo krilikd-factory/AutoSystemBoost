@@ -2640,7 +2640,7 @@
   "lr_zy_live_zero": "No validated process was live in the latest snapshot, while earlier activity was recorded. This describes the current live set, not failed injection throughout the capture.",
   "lr_zy_accept_note": "Il governor ha confermato l’avvio a freddo accettato dopo i controlli di attivazione e schermo. Non prova un impulso armato o un limite cambiato; gli altri controlli del governor restano attivi.",
   "lr_tip_smart_nohelp": "Nei confronti Smart il margine extra non ha favorito {n} app, quindi sono stati mantenuti i limiti precedenti. Non identifica un’altra causa dei frame in ritardo.",
-  "lr_sm_scope": "Istantanea di fine cattura: i contatori possono includere lavoro precedente della stessa sessione del governor. Le situazioni monitorate includono test ancora in corso.",
+  "lr_sm_scope": "Istantanea salvata della sessione del governor: i contatori possono includere lavoro precedente. Le situazioni monitorate includono test ancora in corso.",
   "lr_dx_heat_some_runs": "La CPU ha trascorso {min} sopra 45 °C in {n} episodi caldi (il più lungo {longest}; picco {cpu}°). Nessun episodio ha raggiunto 30 minuti.",
   "lr_zy_launch_balanced": "Tutti i {n} avvii a freddo hanno un esito: {ok} accettati, {veto} respinti, {unavailable} governor non disponibile, {throttled} limitati.",
   "lr_zy_launch_unresolved": "Su {n} avvii a freddo: {ok} accettati, {veto} respinti, {unavailable} governor non disponibile e {throttled} limitati. Il resto può essere in corso nell’istantanea; la differenza non è di per sé un errore.",
@@ -2736,5 +2736,15 @@
   "wl_service_state_unknown": "Lo stato attuale del componente non è esposto",
   "wl_service_title": "Servizi · %s",
   "wl_service_unavailable": "I record dei servizi o lo stato del componente non sono attualmente esposti. Nulla è stato modificato.",
-  "wl_services_open": "Servizi"
+  "wl_services_open": "Servizi",
+  "lr_sm_capture": "Adattamento in tempo reale",
+  "lr_sm_state_adapting": "Smart attivo · {n} suggerimenti del log accettati in questa cattura",
+  "lr_sm_state_active": "Smart attivo · le decisioni A/B appartengono al governor nativo",
+  "lr_sm_state_manual": "Profilo manuale nell’ultima istantanea · i record salvati non sono adattamento live",
+  "lr_sm_state_disabled": "Profilo Smart, ma modalità Smart disattivata",
+  "lr_sm_state_unknown": "Stato Smart della cattura: sconosciuto",
+  "lr_sm_feedback": "Log infinito → Smart",
+  "lr_sm_feedback_fmt": "{accepted} accettati · {suppressed} rimandati · {rejected} rifiutati",
+  "lr_sm_feedback_unknown": "Delta di questa cattura sconosciuto",
+  "lr_sm_feedback_note": "Il log fornisce solo prove di jank prolungato. Smart rilegge le statistiche dei frame di Android e gestisce finestre A/B, plateau e cooldown; le raccomandazioni del report non vengono mai eseguite come impostazioni."
 }

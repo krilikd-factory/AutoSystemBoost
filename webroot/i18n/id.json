@@ -2640,7 +2640,7 @@
   "lr_zy_live_zero": "No validated process was live in the latest snapshot, while earlier activity was recorded. This describes the current live set, not failed injection throughout the capture.",
   "lr_zy_accept_note": "Cold start yang diterima dikonfirmasi governor setelah pemeriksaan aktif/layar. Ini tidak membuktikan lift disiapkan atau batas frekuensi berubah; pemeriksaan governor lain tetap berlaku.",
   "lr_tip_smart_nohelp": "Dalam perbandingan Smart, headroom tambahan tidak membantu {n} aplikasi sehingga batas sebelumnya dipertahankan. Ini tidak menentukan penyebab lain frame terlambat.",
-  "lr_sm_scope": "Snapshot akhir tangkapan: penghitung dapat mencakup pekerjaan sebelumnya dalam sesi governor yang sama. Situasi yang dipantau mencakup pengujian yang masih berjalan.",
+  "lr_sm_scope": "Snapshot sesi governor tersimpan: penghitung dapat mencakup pekerjaan sebelumnya. Situasi yang dipantau mencakup pengujian yang masih berjalan.",
   "lr_dx_heat_some_runs": "CPU menghabiskan {min} di atas 45 °C dalam {n} episode hangat (terlama {longest}; puncak {cpu}°). Tidak ada episode yang mencapai 30 menit.",
   "lr_zy_launch_balanced": "Semua {n} cold start memiliki hasil: {ok} diterima, {veto} ditolak, {unavailable} governor tidak tersedia, {throttled} dibatasi.",
   "lr_zy_launch_unresolved": "Dari {n} cold start: {ok} diterima, {veto} ditolak, {unavailable} governor tidak tersedia dan {throttled} dibatasi. Sisanya mungkin sedang diproses saat snapshot; selisih saja bukan kesalahan.",
@@ -2736,5 +2736,15 @@
   "wl_service_state_unknown": "Status komponen saat ini not exposed",
   "wl_service_title": "Layanan · %s",
   "wl_service_unavailable": "Catatan layanan atau status komponen saat ini not exposed. Tidak ada yang diubah.",
-  "wl_services_open": "Layanan"
+  "wl_services_open": "Layanan",
+  "lr_sm_capture": "Adaptasi waktu nyata",
+  "lr_sm_state_adapting": "Smart aktif · {n} petunjuk log diterima dalam tangkapan ini",
+  "lr_sm_state_active": "Smart aktif · keputusan A/B dikendalikan governor native",
+  "lr_sm_state_manual": "Profil manual pada snapshot terakhir · catatan tersimpan bukan adaptasi langsung",
+  "lr_sm_state_disabled": "Profil Smart, tetapi mode Smart nonaktif",
+  "lr_sm_state_unknown": "Status Smart dalam tangkapan: tidak diketahui",
+  "lr_sm_feedback": "Log Infinite → Smart",
+  "lr_sm_feedback_fmt": "{accepted} diterima · {suppressed} ditunda · {rejected} ditolak",
+  "lr_sm_feedback_unknown": "Delta tangkapan ini tidak diketahui",
+  "lr_sm_feedback_note": "Log hanya memberikan bukti jank berkelanjutan. Smart membaca ulang statistik frame Android dan mengendalikan jendela A/B, plateau, serta cooldown; rekomendasi laporan tidak pernah dijalankan sebagai pengaturan."
 }

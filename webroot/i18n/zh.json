@@ -2640,7 +2640,7 @@
   "lr_zy_live_zero": "No validated process was live in the latest snapshot, while earlier activity was recorded. This describes the current live set, not failed injection throughout the capture.",
   "lr_zy_accept_note": "已接受的冷启动请求在启用/屏幕检查后得到 governor 确认。这不证明已准备提升或频率上限已改变；温控及其他 governor 限制仍然有效。",
   "lr_tip_smart_nohelp": "Smart 的比较未显示额外频率余量有助于 {n} 个应用，因此保留其原先限制。这并不能确定帧延迟的其他原因。",
-  "lr_sm_scope": "采集结束时的快照：计数器可能包含同一 governor 会话中较早的工作。正在跟踪的情境包括仍在进行的测试。",
+  "lr_sm_scope": "已保存的 governor 会话快照：计数器可能包含较早的工作。跟踪的情境包括仍在进行的测试。",
   "lr_dx_heat_some_runs": "CPU 在 {n} 个发热片段中累计有 {min} 高于 45 °C（最长 {longest}；峰值 {cpu}°）。没有单个片段达到 30 分钟。",
   "lr_zy_launch_balanced": "全部 {n} 次冷启动均有结果：接受 {ok}，拒绝 {veto}，governor 不可用 {unavailable}，限流 {throttled}。",
   "lr_zy_launch_unresolved": "{n} 次冷启动中：接受 {ok}，拒绝 {veto}，governor 不可用 {unavailable}，限流 {throttled}。其余可能在快照时仍在处理；仅有差值并不表示错误。",
@@ -2736,5 +2736,15 @@
   "wl_service_state_unknown": "当前组件状态 not exposed",
   "wl_service_title": "服务 · %s",
   "wl_service_unavailable": "当前服务记录或组件状态 not exposed。未做任何更改。",
-  "wl_services_open": "服务"
+  "wl_services_open": "服务",
+  "lr_sm_capture": "实时自适应",
+  "lr_sm_state_adapting": "Smart 已启用 · 本次采集中接受了 {n} 条日志提示",
+  "lr_sm_state_active": "Smart 已启用 · 由原生 A/B 引擎作出决策",
+  "lr_sm_state_manual": "最后一个快照为手动配置文件 · 已保存记录不代表实时自适应",
+  "lr_sm_state_disabled": "当前为 Smart 配置文件，但 Smart 模式已关闭",
+  "lr_sm_state_unknown": "采集中的 Smart 状态：未知",
+  "lr_sm_feedback": "无限日志 → Smart",
+  "lr_sm_feedback_fmt": "已接受 {accepted} · 已抑制 {suppressed} · 已拒绝 {rejected}",
+  "lr_sm_feedback_unknown": "本次采集的增量未知",
+  "lr_sm_feedback_note": "日志仅提供持续卡顿的证据。Smart 会重新读取 Android 帧统计，并自行管理 A/B 窗口、平台期和冷却时间；报告建议绝不会作为设置执行。"
 }

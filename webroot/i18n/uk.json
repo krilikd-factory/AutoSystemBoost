@@ -2640,7 +2640,7 @@
   "lr_zy_live_zero": "No validated process was live in the latest snapshot, while earlier activity was recorded. This describes the current live set, not failed injection throughout the capture.",
   "lr_zy_accept_note": "Governor підтвердив прийнятий холодний запуск після перевірок ввімкнення й екрана. Це не доводить підготовку підйому або зміну частотного обмеження; теплові та інші обмеження governor діють далі.",
   "lr_tip_smart_nohelp": "У порівняннях Smart додатковий запас частот не допоміг {n} застосункам, тому збережено їхні попередні обмеження. Це не визначає іншу причину запізнілих кадрів.",
-  "lr_sm_scope": "Знімок наприкінці захоплення: лічильники можуть включати попередню роботу тієї ж сесії governor. Відстежувані ситуації включають поточні тести.",
+  "lr_sm_scope": "Збережений знімок сесії governor: лічильники можуть включати попередню роботу. Відстежувані ситуації включають поточні тести.",
   "lr_dx_heat_some_runs": "Процесор провів {min} вище 45 °C; теплих епізодів: {n} (найдовший — {longest}; пік {cpu}°). Жоден епізод не сягнув 30 хвилин.",
   "lr_zy_launch_balanced": "Для всіх {n} холодних запусків записано результат: прийнято {ok}, відхилено {veto}, governor недоступний {unavailable}, обмежено {throttled}.",
   "lr_zy_launch_unresolved": "Із {n} холодних запусків: прийнято {ok}, відхилено {veto}, governor недоступний {unavailable}, обмежено {throttled}. Решта могла оброблятися на момент знімка; сама різниця не є помилкою.",
@@ -2736,5 +2736,15 @@
   "wl_service_state_unknown": "Поточний стан компонента not exposed",
   "wl_service_title": "Служби · %s",
   "wl_service_unavailable": "Записи служб або стан компонента зараз not exposed. Нічого не змінено.",
-  "wl_services_open": "Служби"
+  "wl_services_open": "Служби",
+  "lr_sm_capture": "Адаптація в реальному часі",
+  "lr_sm_state_adapting": "Smart активний · у цьому захопленні прийнято підказок із журналу: {n}",
+  "lr_sm_state_active": "Smart активний · рішення A/B приймає нативний governor",
+  "lr_sm_state_manual": "В останньому знімку ручний профіль · збережені записи не означають живу адаптацію",
+  "lr_sm_state_disabled": "Профіль Smart, але режим Smart вимкнено",
+  "lr_sm_state_unknown": "Стан Smart у захопленні: unknown",
+  "lr_sm_feedback": "Нескінченний журнал → Smart",
+  "lr_sm_feedback_fmt": "Прийнято: {accepted} · відкладено: {suppressed} · відхилено: {rejected}",
+  "lr_sm_feedback_unknown": "Дельта за це захоплення невідома",
+  "lr_sm_feedback_note": "Журнал передає лише докази затяжного jank. Smart повторно зчитує статистику кадрів Android і сам керує A/B-вікнами, плато та cooldown; рекомендації звіту ніколи не виконуються як налаштування."
 }

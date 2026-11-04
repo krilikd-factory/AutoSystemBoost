@@ -2640,7 +2640,7 @@
   "lr_zy_live_zero": "No validated process was live in the latest snapshot, while earlier activity was recorded. This describes the current live set, not failed injection throughout the capture.",
   "lr_zy_accept_note": "Kabul edilen soğuk başlatma, etkinlik/ekran denetimlerinden sonra governor tarafından onaylandı. Bu, yükseltme kurulduğunu veya frekans sınırının değiştiğini kanıtlamaz; diğer governor denetimleri sürer.",
   "lr_tip_smart_nohelp": "Smart karşılaştırmalarında ek frekans payı {n} uygulamaya yardımcı olmadı ve önceki sınırları korundu. Bu, geç karelerin başka nedenini belirlemez.",
-  "lr_sm_scope": "Yakalama sonu anlık görüntüsü: sayaçlar aynı governor oturumundaki önceki çalışmayı içerebilir. İzlenen durumlara süren testler de dahildir.",
+  "lr_sm_scope": "Kayıtlı governor oturumu anlık görüntüsü: sayaçlar önceki çalışmayı içerebilir. İzlenen durumlara süren testler de dahildir.",
   "lr_dx_heat_some_runs": "CPU, {n} sıcak epizotta {min} 45 °C üzerinde kaldı (en uzun {longest}; tepe {cpu}°). Hiçbir epizot 30 dakikaya ulaşmadı.",
   "lr_zy_launch_balanced": "{n} soğuk başlatmanın tümünde sonuç var: {ok} kabul, {veto} ret, {unavailable} governor yok, {throttled} kısıtlı.",
   "lr_zy_launch_unresolved": "{n} soğuk başlatmadan {ok} kabul, {veto} ret, {unavailable} governor yok ve {throttled} kısıtlı. Kalanlar anlık görüntüde işleniyor olabilir; fark tek başına hata değildir.",
@@ -2736,5 +2736,15 @@
   "wl_service_state_unknown": "Geçerli bileşen durumu not exposed",
   "wl_service_title": "Hizmetler · %s",
   "wl_service_unavailable": "Hizmet kayıtları veya bileşen durumu şu anda not exposed. Hiçbir şey değiştirilmedi.",
-  "wl_services_open": "Hizmetler"
+  "wl_services_open": "Hizmetler",
+  "lr_sm_capture": "Gerçek zamanlı uyarlama",
+  "lr_sm_state_adapting": "Smart etkin · bu yakalamada {n} günlük ipucu kabul edildi",
+  "lr_sm_state_active": "Smart etkin · kararları yerel A/B motoru verir",
+  "lr_sm_state_manual": "Son anlık görüntüde manuel profil · kayıtlı veriler canlı uyarlama değildir",
+  "lr_sm_state_disabled": "Smart profili, ancak Smart modu kapalı",
+  "lr_sm_state_unknown": "Yakalamadaki Smart durumu: bilinmiyor",
+  "lr_sm_feedback": "Sonsuz Günlük → Smart",
+  "lr_sm_feedback_fmt": "{accepted} kabul edildi · {suppressed} ertelendi · {rejected} reddedildi",
+  "lr_sm_feedback_unknown": "Bu yakalamanın deltası bilinmiyor",
+  "lr_sm_feedback_note": "Günlük yalnızca sürekli jank kanıtı sağlar. Smart, Android kare istatistiklerini yeniden okur ve A/B pencerelerini, platoyu ve bekleme süresini kendisi yönetir; rapor önerileri asla ayar olarak uygulanmaz."
 }
