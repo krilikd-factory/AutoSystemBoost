@@ -241,6 +241,10 @@ _validate() {
   _handover_active="$(awk -F= '$1 ~ "^[[:space:]]*net_handover_active[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
   _net_mtu="$(awk -F= '$1 ~ "^[[:space:]]*net_mtu_probing[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
   _night_charge="$(awk -F= '$1 ~ "^[[:space:]]*night_charge_enable[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
+  _night_start="$(awk -F= '$1 ~ "^[[:space:]]*night_charge_start[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
+  _night_end="$(awk -F= '$1 ~ "^[[:space:]]*night_charge_end[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
+  [ -n "$_night_start" ] || _night_start=22:00
+  [ -n "$_night_end" ] || _night_end=06:00
 
   if ! _between "$_enter" 40 70 || ! _between "$_exit" 30 69 || [ "$_exit" -ge "$_enter" ]; then _die "invalid sustained temperature hysteresis"; fi
   _between "$_ceiling" "$_enter" 70 || _die "sustained_temp_ceiling must be enter..70"
@@ -295,6 +299,9 @@ _validate() {
   case "$_handover_active" in ''|0|1) : ;; *) _die "net_handover_active must be 0 or 1" ;; esac
   case "$_net_mtu" in ''|stock|on) : ;; *) _die "net_mtu_probing must be stock or on" ;; esac
   case "$_night_charge" in ''|0|1) : ;; *) _die "night_charge_enable must be 0 or 1" ;; esac
+  case "$_night_start" in [0-1][0-9]:[0-5][0-9]|2[0-3]:[0-5][0-9]) : ;; *) _die "night_charge_start must be HH:MM" ;; esac
+  case "$_night_end" in [0-1][0-9]:[0-5][0-9]|2[0-3]:[0-5][0-9]) : ;; *) _die "night_charge_end must be HH:MM" ;; esac
+  [ "$_night_start" != "$_night_end" ] || _die "night charge start and end must differ"
   return 0
 }
 
