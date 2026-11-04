@@ -82,7 +82,11 @@ _evidence() {
         else if (k >= minn) {
           why = "measured"
           if (md >= slow) cls = "slow"; else if (md <= fast) cls = "fast"
-        } else if (hk[p] > 0) { why = "hooks"; if (k >= 1 && md >= slow) cls = "slow" }
+        } else if (hk[p] > 0) {
+          # A hook scope is context, not proof that one slow launch needs a longer lift.
+          # Keep the normal bounded response until the same measured median as any other app.
+          why = "hooks"
+        }
         printf "%s %s %s %d %d %d %d %s\n", p, cls, why, k, md, hk[p] + 0, use[p] + 0, (hm[p] ? hm[p] : "-")
       }
     }'

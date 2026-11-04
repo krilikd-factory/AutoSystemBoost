@@ -99,10 +99,88 @@ asb_wl_snapshot() {
 # The same three conditions as the GPS trim, for the same reason: user-installed app, its
 # process CACHED, screen off. An app being looked at is never touched, and neither is a
 # system component. Recorded per package so it is undone on uninstall.
+# Multicast ledger: package|first_seen|last_seen|original_mode. Legacy package-only
+# entries remain readable and acquire a fresh observation window instead of being orphaned.
+# There is no TTL worker: expiry and foreground release run on the existing watcher pass.
+_wl_mc_line() {
+  [ -s "$D/multicast_restricted" ] || return 1
+  awk -F'|' -v p="$1" '$1 == p { print; exit }' "$D/multicast_restricted" 2>/dev/null
+}
+_wl_mc_mode() {
+  _mcm="$(appops get "$1" WIFI_MULTICAST 2>/dev/null | grep -v 'Uid mode' \
+    | sed -n 's/.*WIFI_MULTICAST: \([a-z_]*\).*/\1/p' | head -1)"
+  printf '%s' "${_mcm:-default}"
+}
+_wl_mc_release() {
+  _mcr="$(_wl_mc_line "$1")" || return 0
+  _mco="$(printf '%s' "$_mcr" | cut -d'|' -f4)"
+  case "$_mco" in allow|default) : ;; *) _mco=default ;; esac
+  # Never overwrite another owner's newer mode. If ASB's ignore is gone, the entry is
+  # already released; if it is still ours, hand back the exact recorded original.
+  if [ "$(_wl_mc_mode "$1")" = ignore ]; then
+    appops set "$1" WIFI_MULTICAST "$_mco" >/dev/null 2>&1 || return 1
+  fi
+  awk -F'|' -v p="$1" 'NF >= 4 && $1 != p { print }' "$D/multicast_restricted" 2>/dev/null > "$D/multicast_restricted.tmp" 2>/dev/null
+  if [ -s "$D/multicast_restricted.tmp" ]; then
+    mv -f "$D/multicast_restricted.tmp" "$D/multicast_restricted" 2>/dev/null
+  else
+    rm -f "$D/multicast_restricted.tmp" "$D/multicast_restricted" 2>/dev/null
+  fi
+  echo "wakelock: $1 multicast restored to $_mco (in use, policy off, or no qualifying observation for 20 min)"
+  return 0
+}
+
 asb_wl_relax_multicast() {
   _act="${1:-0}"
   _has dumpsys || return 0
   MC="$D/wakelock_multicast"
+  _mc_now="$(date +%s 2>/dev/null)"
+  case "$_mc_now" in ''|*[!0-9]*) _mc_now=0 ;; esac
+
+  # Read the current holders once. An aged entry with a holder still present is refreshed
+  # below, not restored and immediately restricted again; TTL expires only after the
+  # qualifying observation itself has been absent for twenty minutes.
+  _mc_wifi="$(dumpsys wifi 2>/dev/null)"
+  _mc_uids="$(printf '%s\n' "$_mc_wifi" \
+    | sed -n 's/.*Multicaster{.* uid=\([0-9][0-9]*\).*/\1/p' | sort -u)"
+  _mc_current=""
+  for _u in $_mc_uids; do
+    _pl="$(printf '%s\n' "$_map" | awk -v u="$_u" '$1 == u { print $2 }')"
+    for _p in $_pl; do
+      case " $_mc_current " in *" $_p "*) ;; *) _mc_current="$_mc_current $_p" ;; esac
+    done
+  done
+
+  # Reevaluate entries even when the package is not a holder in this snapshot. The old
+  # package-only ledger kept denying multicast until uninstall, including after the app
+  # became visible or all qualifying evidence disappeared.
+  if [ -s "$D/multicast_restricted" ] && _has appops; then
+    rm -f "$D/multicast_restricted.keep" 2>/dev/null
+    while IFS='|' read -r _mrp _mrf _mrl _mro; do
+      case "$_mrp" in ''|*[!A-Za-z0-9_.]*) continue ;; esac
+      case "${_mrl:-}" in ''|*[!0-9]*) _mrl="$_mc_now" ;; esac
+      _mr_release=0
+      [ "$_act" = 1 ] || _mr_release=1
+      if [ "$_mc_now" -gt 0 ] && [ "$_mrl" -gt 0 ] && [ $((_mc_now - _mrl)) -ge 1200 ]; then
+        case " $_mc_current " in *" $_mrp "*) : ;; *) _mr_release=1 ;; esac
+      fi
+      if _wl_in_use "$_mrp" || _wl_fgs_running "$_mrp"; then _mr_release=1; fi
+      if [ "$_mr_release" = 1 ]; then
+        # A failed restore must keep both the ledger and the last-seen evidence: dropping
+        # the record here would leave ASB's ignore in force with no way to undo it later.
+        _wl_mc_release "$_mrp" || \
+          printf '%s|%s|%s|%s\n' "$_mrp" "${_mrf:-$_mc_now}" "$_mrl" "${_mro:-default}" >> "$D/multicast_restricted.keep"
+      else
+        printf '%s|%s|%s|%s\n' "$_mrp" "${_mrf:-$_mc_now}" "$_mrl" "${_mro:-default}" >> "$D/multicast_restricted.keep"
+      fi
+    done < "$D/multicast_restricted"
+    if [ -s "$D/multicast_restricted.keep" ]; then
+      mv -f "$D/multicast_restricted.keep" "$D/multicast_restricted" 2>/dev/null
+    else
+      rm -f "$D/multicast_restricted.keep" "$D/multicast_restricted" 2>/dev/null
+    fi
+  fi
+
   # Hours included. The old parse took "^([0-9]*)m" and read "1h 2m" as nothing at all -
   # so the worst case, multicast held for over an hour, was the one case never reported.
   _mcs="$(_wl_bs_dump | awk "$_WL_DUR_AWK"'
@@ -113,8 +191,7 @@ asb_wl_relax_multicast() {
   # Holders right now. WifiMulticastLockManager prints each as "Multicaster{tag uid=10123}";
   # the old sed expected a package name after the uid and captured an empty string, so
   # the trim below never had a candidate. Resolved by uid like the CPU wakelocks.
-  for _u in $(dumpsys wifi 2>/dev/null \
-              | sed -n 's/.*Multicaster{.* uid=\([0-9][0-9]*\).*/\1/p' | sort -u); do
+  for _u in $_mc_uids; do
     _pl="$(printf '%s\n' "$_map" | awk -v u="$_u" '$1 == u { print $2 }')"
     if [ -z "$_pl" ]; then
       # A system component (Nearby, the cast receiver, the framework). Named, never touched.
@@ -122,14 +199,25 @@ asb_wl_relax_multicast() {
       continue
     fi
     for _p in $_pl; do
-      if grep -qxF "$_p" "$D/multicast_restricted" 2>/dev/null; then
+      _mc_line="$(_wl_mc_line "$_p")"
+      if [ -n "$_mc_line" ]; then
         _v=restricted
-        # Holding multicast although ASB denied it: the op was reset (app update, permission
-        # reset, boot sweep). Re-assert instead of reporting a restriction that is not in
-        # force (fix100, same failure as the fitness WAKE_LOCK limit).
-        if _has appops && ! appops get "$_p" WIFI_MULTICAST 2>/dev/null | grep -q 'WIFI_MULTICAST: ignore'; then
-          appops set "$_p" WIFI_MULTICAST ignore >/dev/null 2>&1 \
-            && echo "wakelock: $_p had WIFI_MULTICAST reset by the system - denial re-applied"
+        _mc_first="$(printf '%s' "$_mc_line" | cut -d'|' -f2)"
+        _mc_orig="$(printf '%s' "$_mc_line" | cut -d'|' -f4)"
+        # A ROM reset is re-asserted only while fresh cached-holder evidence remains.
+        _mc_reapplied=0
+        if [ "$(_wl_mc_mode "$_p")" != ignore ]; then
+          appops set "$_p" WIFI_MULTICAST ignore >/dev/null 2>&1 || true
+          _mc_reapplied=1
+        fi
+        if [ "$(_wl_mc_mode "$_p")" = ignore ]; then
+          [ "$_mc_reapplied" = 0 ] || echo "wakelock: $_p had WIFI_MULTICAST reset by the system - denial re-applied"
+          awk -F'|' -v p="$_p" 'NF >= 4 && $1 != p { print }' "$D/multicast_restricted" 2>/dev/null > "$D/multicast_restricted.tmp" 2>/dev/null
+          printf '%s|%s|%s|%s\n' "$_p" "${_mc_first:-$_mc_now}" "$_mc_now" "${_mc_orig:-default}" >> "$D/multicast_restricted.tmp"
+          mv -f "$D/multicast_restricted.tmp" "$D/multicast_restricted" 2>/dev/null
+        else
+          _v=report
+          _wl_mc_release "$_p" || true
         fi
       else
         # Casting, printing and local-device control need multicast the moment the user
@@ -150,11 +238,15 @@ asb_wl_relax_multicast() {
             # forgot to release it". Below that, leave it alone.
             if [ "$_v" = cached ]; then
               _v=report
-              if [ "$_act" = 1 ] && [ "$_mcs" -ge 600 ] && _has appops \
-                 && appops set "$_p" WIFI_MULTICAST ignore >/dev/null 2>&1; then
-                echo "$_p" >> "$D/multicast_restricted"
-                echo "wakelock: $_p held multicast while cached - denied until ASB is uninstalled"
-                _v=restricted
+              if [ "$_act" = 1 ] && [ "$_mcs" -ge 600 ] && _has appops; then
+                _mc_orig="$(_wl_mc_mode "$_p")"
+                # An ignore already owned by the user/another tool is never adopted.
+                if [ "$_mc_orig" != ignore ] && appops set "$_p" WIFI_MULTICAST ignore >/dev/null 2>&1 \
+                   && [ "$(_wl_mc_mode "$_p")" = ignore ]; then
+                  printf '%s|%s|%s|%s\n' "$_p" "$_mc_now" "$_mc_now" "$_mc_orig" >> "$D/multicast_restricted"
+                  echo "wakelock: $_p held multicast while cached - limited; restored on use, policy off, or after 20 min without qualifying observations"
+                  _v=restricted
+                fi
               fi
             fi ;;
         esac
@@ -1082,12 +1174,8 @@ case "$(_cfg wakelock_action)" in
       rm -f "$D/wakelock_restricted" 2>/dev/null
       echo "wakelock: off - apps ASB had restricted are released"
     fi
-    if [ -s "$D/multicast_restricted" ] && _has appops; then
-      while IFS= read -r _rp; do
-        [ -n "$_rp" ] && appops set "$_rp" WIFI_MULTICAST allow >/dev/null 2>&1
-      done < "$D/multicast_restricted"
-      rm -f "$D/multicast_restricted" 2>/dev/null
-    fi
+    # Multicast is released by asb_wl_relax_multicast 0 below. That path checks that
+    # the current ignore is still ASB-owned and retains the ledger if restoration fails.
     ;;
 esac
 
