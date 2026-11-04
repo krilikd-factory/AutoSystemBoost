@@ -12839,7 +12839,8 @@ function logReportTips(d, all) {
         busy: T('prof_' + busy.name, busy.name), y: busy.onP.toFixed(1) } });
   }
   if (smart && (+smart.helped || 0) > 0) {
-    const smartActive = String((s.meta || {}).profile || '') === 'smart';
+    const sl = s.smartlive || null;
+    const smartActive = sl ? (sl.state === 'active' || sl.state === 'adapting') : String((s.meta || {}).profile || '') === 'smart';
     tips.push({ ic: smartActive ? 'ok' : 'info', key: smartActive ? 'lr_tip_smart_help' : 'lr_tip_smart_help_manual', vars: { n: String(smart.helped) } });
   } else if (smart && (+smart.nothelped || 0) > 0) {
     tips.push({ ic: 'ok', key: 'lr_tip_smart_nohelp', vars: { n: String(smart.nothelped) } });
@@ -17182,22 +17183,42 @@ function logReportRender(d) {
     }
     body.appendChild(s);
   }
-  /* fix200: what Smart has already figured out - records and the smoothness learner. */
-  /* fix242: the learner card belongs to Smart days. Its records meter only while Smart is
-     the active profile, so on a Battery capture the counters are yesterday's - shown, they
-     read as part of this day. A capture that switched to Smart for half an hour keeps it. */
+  /* fix200: what Smart has already figured out - records and the smoothness learner.
+     fix321: on a manual-profile capture the card may still appear, but only with an explicit
+     live-state row separating historical records from this capture's native feedback. */
   const _smRan = d.profs.some(function (p) { return p.name === 'smart' && (p.onMin + p.offMin) >= 30; });
   const _smDay = String(meta.profile || '') === 'smart' || !String(meta.profile || '') || _smRan;
-  if (smart && _smDay) {
+  const smartLive = d.sections.smartlive || null;
+  if ((smart || smartLive) && (_smDay || smartLive)) {
     const s = logReportSec(T('lr_sec_smart', '🧠 Smart learner')); s.id = 'lgr-smart';
-    s.appendChild(logReportRow(T('lr_sm_ctx', 'Tracked situations'), String(smart.ctxlearn || 0)));
-    s.appendChild(logReportRow(T('lr_sm_watching', 'Apps watched for stutter'), String(smart.watching || 0)));
-    if ((+smart.testing || 0) > 0) s.appendChild(logReportRow(T('lr_sm_testing', 'In a headroom test'), String(smart.testing)));
-    if ((+smart.helped || 0) > 0) s.appendChild(logReportRow(T('lr_sm_helped', 'Kept extra headroom'), String(smart.helped)));
-    if ((+smart.nothelped || 0) > 0) s.appendChild(logReportRow(T('lr_sm_nothelped', 'Headroom ruled out'), String(smart.nothelped)));
-    if ((+smart.ctxlearn || 0) === 0 && (+smart.watching || 0) === 0)
-      s.appendChild(logReportNote(T('lr_sm_fresh', 'Smart is still collecting its first days - verdicts appear as the evidence accumulates.')));
-    s.appendChild(logReportNote(T('lr_sm_scope', 'End-of-capture snapshot: counters can include earlier work in the same governor session. Tracked situations include tests still running.')));
+    if (smartLive) {
+      const slState = String(smartLive.state || 'unknown');
+      const slText = slState === 'adapting'
+        ? logReportT('lr_sm_state_adapting', 'Smart active · {n} log hints accepted in this capture', { n: String(smartLive.accepted_delta || '0') })
+        : T('lr_sm_state_' + slState, slState === 'active' ? 'Smart active · native A/B owns decisions' :
+          slState === 'manual' ? 'Manual profile at the last snapshot · stored records are not live adaptation' :
+          slState === 'disabled' ? 'Smart profile, but Smart mode is off' : 'Smart capture state: unknown');
+      s.appendChild(logReportRow(T('lr_sm_capture', 'Real-time adaptation'), slText));
+      if (smartLive.coverage === 'start_latest' && smartLive.deltas === 'available') {
+        s.appendChild(logReportRow(T('lr_sm_feedback', 'Infinite Log → Smart'),
+          logReportT('lr_sm_feedback_fmt', '{accepted} accepted · {suppressed} suppressed · {rejected} rejected', {
+            accepted: String(smartLive.accepted_delta || '0'), suppressed: String(smartLive.suppressed_delta || '0'),
+            rejected: String(smartLive.rejected_delta || '0') })));
+      } else {
+        s.appendChild(logReportRow(T('lr_sm_feedback', 'Infinite Log → Smart'), T('lr_sm_feedback_unknown', 'In-capture delta unknown')));
+      }
+      s.appendChild(logReportNote(T('lr_sm_feedback_note', 'The log supplies sustained-jank evidence only. Smart re-reads Android frame statistics and owns A/B windows, plateau and cooldown decisions; report recommendations are never executed as settings.')));
+    }
+    if (smart) {
+      s.appendChild(logReportRow(T('lr_sm_ctx', 'Tracked situations'), String(smart.ctxlearn || 0)));
+      s.appendChild(logReportRow(T('lr_sm_watching', 'Apps watched for stutter'), String(smart.watching || 0)));
+      if ((+smart.testing || 0) > 0) s.appendChild(logReportRow(T('lr_sm_testing', 'In a headroom test'), String(smart.testing)));
+      if ((+smart.helped || 0) > 0) s.appendChild(logReportRow(T('lr_sm_helped', 'Kept extra headroom'), String(smart.helped)));
+      if ((+smart.nothelped || 0) > 0) s.appendChild(logReportRow(T('lr_sm_nothelped', 'Headroom ruled out'), String(smart.nothelped)));
+      if ((+smart.ctxlearn || 0) === 0 && (+smart.watching || 0) === 0)
+        s.appendChild(logReportNote(T('lr_sm_fresh', 'Smart is still collecting its first days - verdicts appear as the evidence accumulates.')));
+      s.appendChild(logReportNote(T('lr_sm_scope', 'Stored governor-session snapshot: counters can include earlier work. Tracked situations include tests still running.')));
+    }
     /* fix206: the usage records behind the verdicts only meter while Smart is the active
        profile (asb_governor.c gates the meter on PROFILE_SMART). On a day spent in
        Balanced the counters stand still - say so, or "0 verdicts" reads as broken.
