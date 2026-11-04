@@ -8305,6 +8305,88 @@ PY
 echo "PASS WebUI fix256 inactive profiles: matching dark-Glass inactive profile/OFF-tweak surfaces, hidden idle sheen, full foreground opacity and unchanged active/light materials"
 )
 
+t_webui_fix322_liquid_glass_material() (
+# Contract (fix322): Glass is a layered, neutral material system rather than a set of
+# nearly opaque green cards. Keep this final cascade focused on paint: header/dock geometry
+# and all profile, Smart, evidence and navigation behaviour remain owned by earlier code.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI fix322 Liquid Glass material: $*" >&2; exit 1; }
+python3 - "$H" <<'PY' || fail 'material cascade or accessibility fallback'
+import re, sys
+s = open(sys.argv[1], encoding='utf-8').read()
+marker = '/* ── ColorOS-style Liquid Glass material (fix322)'
+assert s.count(marker) == 1
+b = s[s.index(marker):s.index('</style>', s.index(marker))]
+assert b.count('html:root[data-asb-glass="1"]') >= 20
+for token in (
+    '--glass-surface:rgba(12,18,15,.58)',
+    '--glass-surface-quiet:rgba(8,13,10,.46)',
+    '--glass-surface-strong:rgba(10,15,13,.78)',
+    '--glass-edge:rgba(255,255,255,.16)',
+    '--glass-blur:blur(20px) saturate(1.24)',
+    '--glass-surface:rgba(255,255,255,.44)',
+    '--glass-surface-strong:rgba(250,252,251,.72)',
+    '--glass-edge:rgba(70,85,80,.15)',
+    'linear-gradient(180deg,#e4e5f9 0%,#edf4f1 52%,#f2f4f6 100%)',
+):
+    assert token in b, token
+# The same canvas reaches drill-in pages; the status scrim has no hard opaque cutoff.
+assert 'background:var(--glass-canvas-image) !important' in b
+assert '#reportPage,#devicePage,#zygiskPage' in b
+assert 'background:var(--glass-scrim)' in b
+# Every important surface family participates, including previously easy-to-miss controls.
+shared = b[b.index('html:root[data-asb-glass="1"] :is(.hdr-cap'):]
+shared = shared[:shared.index('}')]
+for cls in ('.cfg-tile', '.cfg-row', '.cfg-zygisk-card', '.live-cell', '.smart-banner',
+            '.cfg-profile-sheet', '.cfg-reset-dialog', '.log-menu', '.cfg-fm-box',
+            '.pbtn', '.lgr-sec', '.dev-loading', '.live-info-hist'):
+    assert cls in shared, cls
+# Only floating chrome/dialogs get the denser material. Neutral edges replace the old
+# accent outline around ordinary menus and dialogs.
+floating = b[b.index('html:root[data-asb-glass="1"] :is(.asb-tabbar'):]
+floating = floating[:floating.index('}')]
+assert '.report-nav,.zy-page-nav,.log-menu' in floating
+assert 'var(--glass-surface-strong)' in floating and 'blur(26px)' in floating
+assert 'border-color:var(--glass-edge) !important' in floating
+# Nested report evidence must not double the parent's blur/shadow.
+nested = re.search(r'html:root\[data-asb-glass="1"\] :is\(\.lgr-sec,\.cfg-zygisk-card\) :is\(\.lgr-hero,\.lgr-quality,\.live-info-now,\.live-info-src\) \{([^}]*)\}', b)
+assert nested and '-webkit-backdrop-filter:none' in nested.group(1)
+assert 'box-shadow:inset 0 1px 0' in nested.group(1)
+# Selected profiles/categories keep identity through a restrained tint, not a luminous slab.
+assert 'color-mix(in srgb,var(--c,var(--accent)) 15%,transparent)' in b
+assert 'color-mix(in srgb,var(--cat) 14%,transparent)' in b
+assert '.cfg-reboot-tile' in b
+assert ':active' in b and 'inset 0 2px 7px' in b
+# No-blur, reduced-transparency and forced-colours modes stay readable without depending
+# on compositor support. These are real paints, not merely an unsupported media query.
+assert '@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px)))' in b
+assert '@media (prefers-reduced-transparency:reduce)' in b
+assert '@media (forced-colors:active)' in b
+for token in ('--glass-surface:#151c18', '--glass-surface:#f7f9fa',
+              'background:Canvas !important', 'color:CanvasText !important'):
+    assert token in b, token
+# This revision must not reintroduce the old header deformation or ad-hoc navigation sizing.
+for pattern in (r'\.header\s*\{', r'\.logo-c\s*\{', r'\.asb-tabbar\s*\{[^}]*(?:width|height|transform)\s*:',
+                r'\.status-row\s*\{[^}]*(?:width|height|transform)\s*:'):
+    assert not re.search(pattern, b, re.S), pattern
+# Fallback text contrast is checked independently in both palettes.
+def rgb(h):
+    h = h.lstrip('#'); return tuple(int(h[i:i+2], 16) / 255 for i in (0, 2, 4))
+def lum(h):
+    c = [v / 12.92 if v <= .04045 else ((v + .055) / 1.055) ** 2.4 for v in rgb(h)]
+    return .2126*c[0] + .7152*c[1] + .0722*c[2]
+def contrast(a, b):
+    x, y = sorted((lum(a), lum(b)), reverse=True); return (x + .05) / (y + .05)
+for bg, colors in {'#151c18':('#f2fff9','#b8cec4','#91aa9f'),
+                   '#f7f9fa':('#15191e','#4a5561','#65717b')}.items():
+    for fg in colors:
+        assert contrast(fg, bg) >= 4.5, (fg, bg, contrast(fg, bg))
+PY
+echo "PASS WebUI fix322 Liquid Glass: layered dark/light materials, neutral floating chrome, quiet nesting, pressed states and no-blur/reduced-transparency/forced-colours fallbacks"
+)
+
 t_webui_fix276_battery_evidence_runtime() (
 # Runtime (fix276): navigation and evidence collection are separate; drain tiles name their
 # own windows; the explicit wakelock manager renders only parsed user-app rows and risk state.
