@@ -240,6 +240,7 @@ _validate() {
   _handover_fast="$(awk -F= '$1 ~ "^[[:space:]]*net_handover_fast[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
   _handover_active="$(awk -F= '$1 ~ "^[[:space:]]*net_handover_active[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
   _net_mtu="$(awk -F= '$1 ~ "^[[:space:]]*net_mtu_probing[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
+  _night_charge="$(awk -F= '$1 ~ "^[[:space:]]*night_charge_enable[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
 
   if ! _between "$_enter" 40 70 || ! _between "$_exit" 30 69 || [ "$_exit" -ge "$_enter" ]; then _die "invalid sustained temperature hysteresis"; fi
   _between "$_ceiling" "$_enter" 70 || _die "sustained_temp_ceiling must be enter..70"
@@ -293,6 +294,7 @@ _validate() {
   case "$_handover_fast" in ''|0|1) : ;; *) _die "net_handover_fast must be 0 or 1" ;; esac
   case "$_handover_active" in ''|0|1) : ;; *) _die "net_handover_active must be 0 or 1" ;; esac
   case "$_net_mtu" in ''|stock|on) : ;; *) _die "net_mtu_probing must be stock or on" ;; esac
+  case "$_night_charge" in ''|0|1) : ;; *) _die "night_charge_enable must be 0 or 1" ;; esac
   return 0
 }
 
