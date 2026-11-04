@@ -1,4 +1,16 @@
 {
+  "cfg_battery_section_charging": "Ricarica",
+  "cfg_battery_section_charging_hint": "Prestazioni durante la ricarica e limite notturno fisso opzionale.",
+  "nc_state_off": "Disattivato",
+  "nc_state_waiting": "in attesa di ricarica / sotto l’80%",
+  "nc_state_holding": "limite dell’80% attivo",
+  "nc_state_released": "rilasciato dopo le 06:00",
+  "nc_state_not_exposed": "controllo non esposto da questo kernel",
+  "nc_state_write_failed": "il kernel ha rifiutato il limite",
+  "nc_state_restore_failed": "valore originale non ripristinato",
+  "nc_state_external": "un altro componente ha modificato la ricarica",
+  "nc_state_unknown": "stato di ricarica sconosciuto",
+  "t_nc_off": "Limite notturno disattivato · restrizione ASB rimossa",
   "nav_live": "Monitor",
   "lv_ses": "Sessioni",
   "lv_drain": "Consumo app",
@@ -28,6 +40,10 @@
   "grp_ui": "Sistema",
   "wb_handover": "I dati mobili restano pronti a schermo acceso e consumano un po’ più batteria",
   "cfg": {
+    "night_charge_enable": {
+      "name": "Limite di ricarica notturno (22:00–06:00)",
+      "desc": "Limite notturno opzionale. Durante la ricarica dalle 22:00 alle 06:00, ASB usa un controllo standard supportato dal kernel per mantenere circa l’80%; dopo le 06:00 ripristina il valore precedente affinché la ricarica possa continuare. Non scarica una batteria già sopra l’80%, non sostituisce la ricarica adattiva OEM ed è disattivato per impostazione predefinita. Se manca un controllo scrivibile supportato, lo stato lo segnala. Alla disattivazione o disinstallazione viene ripristinato solo un valore ancora controllato da ASB."
+    },
     "net_mtu_probing": {
       "name": "Recupero MTU TCP",
       "desc": "Per route mobili o VPN in cui la path MTU discovery bloccata blocca le connessioni. Attivo abilita il controllo del kernel solo dopo un sospetto black hole; le route sane mantengono il normale MSS. Non è un aumento generale di velocità. Originale e disinstallazione ripristinano esattamente il precedente valore 0, 1 o 2."
@@ -1269,12 +1285,12 @@
   "prof_performance_desc": "Frequenze massime per giochi e app pesanti",
   "prof_balanced_desc": "Uso quotidiano: fluido e parsimonioso",
   "prof_battery_desc": "Massima autonomia, frequenze più basse",
-  "grp_audio_desc": "Riproduzione, DSP, Bluetooth",
-  "grp_camera_desc": "Elaborazione foto, velocità",
-  "grp_iface_desc": "Animazioni, effetti",
-  "grp_net_desc": "Rete mobile, Wi-Fi, velocità",
-  "grp_battery_desc": "Smart, riposo, calore, memoria",
-  "grp_ui_desc": "Servizi, display, vibrazione",
+  "grp_audio_desc": "DSP, volume, Bluetooth",
+  "grp_camera_desc": "Preset, elaborazione, dettagli",
+  "grp_iface_desc": "Animazioni, sfocatura",
+  "grp_net_desc": "Wi-Fi, LTE, code",
+  "grp_battery_desc": "Smart, Doze, calore, RAM",
+  "grp_ui_desc": "Servizi, LTPO, vibrazione",
   "stock_cpu_ceiling": "Tetto CPU",
   "stock_gpu_clock": "Frequenza GPU",
   "stock_bat_temp": "Temp. batteria",
@@ -2746,5 +2762,7 @@
   "lr_sm_feedback": "Log infinito → Smart",
   "lr_sm_feedback_fmt": "{accepted} accettati · {suppressed} rimandati · {rejected} rifiutati",
   "lr_sm_feedback_unknown": "Delta di questa cattura sconosciuto",
-  "lr_sm_feedback_note": "Il log fornisce solo prove di jank prolungato. Smart rilegge le statistiche dei frame di Android e gestisce finestre A/B, plateau e cooldown; le raccomandazioni del report non vengono mai eseguite come impostazioni."
+  "lr_sm_feedback_note": "Il log fornisce solo prove di jank prolungato. Smart rilegge le statistiche dei frame di Android e gestisce finestre A/B, plateau e cooldown; le raccomandazioni del report non vengono mai eseguite come impostazioni.",
+  "boot_intro_warm": "Precaricamento metriche ASB…",
+  "boot_intro_ready": "Interfaccia pronta"
 }

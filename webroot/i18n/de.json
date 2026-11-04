@@ -1,6 +1,22 @@
 {
+  "cfg_battery_section_charging": "Laden",
+  "cfg_battery_section_charging_hint": "Leistung beim Laden und eine optionale feste Ladegrenze für die Nacht.",
+  "nc_state_off": "Deaktiviert",
+  "nc_state_waiting": "wartet auf Laden / unter 80 %",
+  "nc_state_holding": "80-%-Grenze aktiv",
+  "nc_state_released": "nach 06:00 Uhr freigegeben",
+  "nc_state_not_exposed": "von diesem Kernel nicht bereitgestellt",
+  "nc_state_write_failed": "Kernel hat die Grenze abgelehnt",
+  "nc_state_restore_failed": "Ausgangswert nicht wiederhergestellt",
+  "nc_state_external": "eine andere Komponente hat das Laden geändert",
+  "nc_state_unknown": "Ladestatus unbekannt",
+  "t_nc_off": "Nachtladegrenze aus · ASB-Beschränkung aufgehoben",
   "wb_handover": "Mobilfunkdaten bleiben bei eingeschaltetem Display bereit und verbrauchen etwas mehr Akku",
   "cfg": {
+    "night_charge_enable": {
+      "name": "Nachtladegrenze (22:00–06:00)",
+      "desc": "Optionale Ladegrenze für die Nacht. Beim Laden zwischen 22:00 und 06:00 Uhr nutzt ASB eine unterstützte Standard-Kernelschnittstelle, um etwa 80 % zu halten; nach 06:00 Uhr wird der vorherige Wert wiederhergestellt, damit der Ladevorgang fortgesetzt werden kann. Ein Akku über 80 % wird nicht entladen. Die OEM-Funktion für adaptives Laden wird nicht ersetzt; standardmäßig ist die Option aus. Ohne unterstützte schreibbare Schnittstelle meldet der Status dies ehrlich. Beim Deaktivieren oder Deinstallieren wird nur ein noch von ASB kontrollierter Wert wiederhergestellt."
+    },
     "net_mtu_probing": {
       "name": "TCP-MTU-Wiederherstellung",
       "desc": "Für Mobilfunk- oder VPN-Routen, bei denen eine blockierte Path-MTU-Discovery Verbindungen zum Stillstand bringt. Ein aktiviert die Kernel-Prüfung nur bei Verdacht auf ein Blackhole; gesunde Routen behalten ihre normale MSS. Das ist keine allgemeine Beschleunigung. Standard und Deinstallation stellen den vorherigen Wert 0, 1 oder 2 exakt wieder her."
@@ -1269,12 +1285,12 @@
   "prof_performance_desc": "Höchste Takte für Spiele und schwere Apps",
   "prof_balanced_desc": "Alltag - flüssig und sparsam",
   "prof_battery_desc": "Längste Akkulaufzeit, niedrigere Takte",
-  "grp_audio_desc": "Wiedergabe, DSP, Bluetooth",
-  "grp_camera_desc": "Fotoverarbeitung, Tempo",
-  "grp_iface_desc": "Animationen, Effekte",
-  "grp_net_desc": "Mobilfunk, WLAN, Tempo",
-  "grp_battery_desc": "Smart, Schlaf, Wärme, Speicher",
-  "grp_ui_desc": "Dienste, Display, Haptik",
+  "grp_audio_desc": "DSP, Lautstärke, Bluetooth",
+  "grp_camera_desc": "Presets, Verarbeitung, Details",
+  "grp_iface_desc": "Animationen, Weichzeichnung",
+  "grp_net_desc": "WLAN, LTE, Warteschlangen",
+  "grp_battery_desc": "Smart, Doze, Wärme, RAM",
+  "grp_ui_desc": "Dienste, LTPO, Haptik",
   "stock_cpu_ceiling": "CPU-Obergrenze",
   "stock_gpu_clock": "GPU-Takt",
   "stock_bat_temp": "Akkutemperatur",
@@ -2746,5 +2762,7 @@
   "lr_sm_feedback": "Infinite Log → Smart",
   "lr_sm_feedback_fmt": "{accepted} akzeptiert · {suppressed} zurückgestellt · {rejected} abgelehnt",
   "lr_sm_feedback_unknown": "Delta dieser Aufzeichnung unbekannt",
-  "lr_sm_feedback_note": "Das Protokoll liefert nur Belege für anhaltenden Jank. Smart liest Androids Frame-Statistik erneut und steuert selbst A/B-Fenster, Plateau und Cooldown; Berichtsempfehlungen werden nie als Einstellungen ausgeführt."
+  "lr_sm_feedback_note": "Das Protokoll liefert nur Belege für anhaltenden Jank. Smart liest Androids Frame-Statistik erneut und steuert selbst A/B-Fenster, Plateau und Cooldown; Berichtsempfehlungen werden nie als Einstellungen ausgeführt.",
+  "boot_intro_warm": "ASB-Metriken werden vorgeladen…",
+  "boot_intro_ready": "Oberfläche bereit"
 }

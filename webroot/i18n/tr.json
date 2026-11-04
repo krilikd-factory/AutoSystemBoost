@@ -1,6 +1,22 @@
 {
+  "cfg_battery_section_charging": "Şarj",
+  "cfg_battery_section_charging_hint": "Şarj sırasında performans ve isteğe bağlı sabit gece sınırı.",
+  "nc_state_off": "Devre dışı",
+  "nc_state_waiting": "şarj bekleniyor / %80’in altında",
+  "nc_state_holding": "%80 sınırı etkin",
+  "nc_state_released": "06:00’dan sonra serbest bırakıldı",
+  "nc_state_not_exposed": "bu çekirdek denetimi sunmuyor",
+  "nc_state_write_failed": "çekirdek sınırı reddetti",
+  "nc_state_restore_failed": "özgün değer geri yüklenemedi",
+  "nc_state_external": "başka bir bileşen şarjı değiştirdi",
+  "nc_state_unknown": "şarj durumu bilinmiyor",
+  "t_nc_off": "Gece sınırı kapalı · ASB kısıtlaması kaldırıldı",
   "wb_handover": "Mobil veri ekran açıkken hazır tutulur ve biraz daha fazla pil tüketir",
   "cfg": {
+    "night_charge_enable": {
+      "name": "Gece Şarj Sınırı (22:00–06:00)",
+      "desc": "İsteğe bağlı gece sınırı. 22:00–06:00 arasında şarj olurken ASB, desteklenen standart bir çekirdek denetimiyle yaklaşık %80’de tutar; 06:00’dan sonra şarjın sürebilmesi için önceki değeri geri yükler. %80’in üzerindeki pili boşaltmaz, OEM uyarlanabilir şarjını değiştirmez ve varsayılan olarak kapalıdır. Desteklenen yazılabilir denetim yoksa durum bunu açıkça belirtir. Kapatma veya kaldırma sırasında yalnızca hâlâ ASB’ye ait olan değer geri yüklenir."
+    },
     "net_mtu_probing": {
       "name": "TCP MTU kurtarma",
       "desc": "Engellenen yol MTU keşfinin bağlantıları durdurduğu mobil veya VPN rotaları için. Açık, çekirdek yoklamasını yalnızca kara delik şüphesinde etkinleştirir; sağlıklı rotalar normal MSS değerini korur. Genel bir hız artışı değildir. Stok ve kaldırma, önceki 0, 1 veya 2 değerini aynen geri yükler."
@@ -1269,12 +1285,12 @@
   "prof_performance_desc": "Oyunlar ve ağır uygulamalar için en yüksek hızlar",
   "prof_balanced_desc": "Günlük kullanım: akıcı ve tutumlu",
   "prof_battery_desc": "En uzun pil ömrü, daha düşük hızlar",
-  "grp_audio_desc": "Oynatma, DSP, Bluetooth",
-  "grp_camera_desc": "Fotoğraf işleme, hız",
-  "grp_iface_desc": "Animasyonlar, efektler",
-  "grp_net_desc": "Mobil, Wi-Fi, hız",
-  "grp_battery_desc": "Smart, uyku, ısı, bellek",
-  "grp_ui_desc": "Servisler, ekran, titreşim",
+  "grp_audio_desc": "DSP, ses, Bluetooth",
+  "grp_camera_desc": "Ön ayarlar, işleme, detay",
+  "grp_iface_desc": "Animasyonlar, bulanıklık",
+  "grp_net_desc": "Wi-Fi, LTE, kuyruklar",
+  "grp_battery_desc": "Smart, Doze, ısı, RAM",
+  "grp_ui_desc": "Servisler, LTPO, titreşim",
   "stock_cpu_ceiling": "CPU tavanı",
   "stock_gpu_clock": "GPU saati",
   "stock_bat_temp": "Pil sıcaklığı",
@@ -2746,5 +2762,7 @@
   "lr_sm_feedback": "Sonsuz Günlük → Smart",
   "lr_sm_feedback_fmt": "{accepted} kabul edildi · {suppressed} ertelendi · {rejected} reddedildi",
   "lr_sm_feedback_unknown": "Bu yakalamanın deltası bilinmiyor",
-  "lr_sm_feedback_note": "Günlük yalnızca sürekli jank kanıtı sağlar. Smart, Android kare istatistiklerini yeniden okur ve A/B pencerelerini, platoyu ve bekleme süresini kendisi yönetir; rapor önerileri asla ayar olarak uygulanmaz."
+  "lr_sm_feedback_note": "Günlük yalnızca sürekli jank kanıtı sağlar. Smart, Android kare istatistiklerini yeniden okur ve A/B pencerelerini, platoyu ve bekleme süresini kendisi yönetir; rapor önerileri asla ayar olarak uygulanmaz.",
+  "boot_intro_warm": "ASB ölçümleri önceden yükleniyor…",
+  "boot_intro_ready": "Arayüz hazır"
 }

@@ -1,6 +1,22 @@
 {
+  "cfg_battery_section_charging": "Carga",
+  "cfg_battery_section_charging_hint": "Rendimiento durante la carga y un límite nocturno fijo opcional.",
+  "nc_state_off": "Desactivado",
+  "nc_state_waiting": "esperando carga / por debajo del 80 %",
+  "nc_state_holding": "límite del 80 % activo",
+  "nc_state_released": "liberado después de las 06:00",
+  "nc_state_not_exposed": "este kernel no ofrece el control",
+  "nc_state_write_failed": "el kernel rechazó el límite",
+  "nc_state_restore_failed": "valor original no restaurado",
+  "nc_state_external": "otro componente cambió la carga",
+  "nc_state_unknown": "estado de carga desconocido",
+  "t_nc_off": "Límite nocturno desactivado · restricción de ASB liberada",
   "wb_handover": "Los datos móviles se mantienen listos con la pantalla encendida y consumen algo más de batería",
   "cfg": {
+    "night_charge_enable": {
+      "name": "Límite de carga nocturna (22:00–06:00)",
+      "desc": "Límite nocturno opcional. Durante la carga de 22:00 a 06:00, ASB usa un control estándar compatible del kernel para mantener alrededor del 80 %; después de las 06:00 restaura el valor anterior para que la carga pueda continuar. No descarga una batería que ya supere el 80 %, no sustituye la carga adaptativa del fabricante y está desactivado por defecto. Si no existe un control compatible y escribible, el estado lo indicará. Al desactivar o desinstalar solo se restaura un valor que ASB todavía controle."
+    },
     "net_mtu_probing": {
       "name": "Recuperación de MTU TCP",
       "desc": "Para rutas móviles o VPN donde el descubrimiento de MTU bloqueado detiene las conexiones. Activado habilita la prueba del kernel solo tras sospechar un agujero negro; las rutas sanas conservan su MSS normal. No es una mejora general de velocidad. Original y la desinstalación restauran exactamente el valor anterior 0, 1 o 2."
@@ -1269,12 +1285,12 @@
   "prof_performance_desc": "Frecuencias máximas para juegos y apps pesadas",
   "prof_balanced_desc": "Uso diario: fluido y austero",
   "prof_battery_desc": "Más autonomía, frecuencias más bajas",
-  "grp_audio_desc": "Reproducción, DSP, Bluetooth",
-  "grp_camera_desc": "Procesado de fotos, rapidez",
-  "grp_iface_desc": "Animaciones, efectos",
-  "grp_net_desc": "Móvil, Wi-Fi, velocidad",
-  "grp_battery_desc": "Smart, reposo, calor, memoria",
-  "grp_ui_desc": "Servicios, pantalla, vibración",
+  "grp_audio_desc": "DSP, volumen, Bluetooth",
+  "grp_camera_desc": "Presets, procesado, detalle",
+  "grp_iface_desc": "Animaciones, desenfoque",
+  "grp_net_desc": "Wi-Fi, LTE, colas",
+  "grp_battery_desc": "Smart, Doze, calor, RAM",
+  "grp_ui_desc": "Servicios, LTPO, vibración",
   "stock_cpu_ceiling": "Techo de CPU",
   "stock_gpu_clock": "Reloj de GPU",
   "stock_bat_temp": "Temp. batería",
@@ -2746,5 +2762,7 @@
   "lr_sm_feedback": "Registro infinito → Smart",
   "lr_sm_feedback_fmt": "{accepted} aceptados · {suppressed} pospuestos · {rejected} rechazados",
   "lr_sm_feedback_unknown": "Delta de esta captura desconocido",
-  "lr_sm_feedback_note": "El registro solo aporta evidencia de jank sostenido. Smart vuelve a leer las estadísticas de fotogramas de Android y controla las ventanas A/B, la meseta y el cooldown; las recomendaciones del informe nunca se ejecutan como ajustes."
+  "lr_sm_feedback_note": "El registro solo aporta evidencia de jank sostenido. Smart vuelve a leer las estadísticas de fotogramas de Android y controla las ventanas A/B, la meseta y el cooldown; las recomendaciones del informe nunca se ejecutan como ajustes.",
+  "boot_intro_warm": "Cargando métricas de ASB…",
+  "boot_intro_ready": "Interfaz lista"
 }

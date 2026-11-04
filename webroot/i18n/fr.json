@@ -1,4 +1,16 @@
 {
+  "cfg_battery_section_charging": "Charge",
+  "cfg_battery_section_charging_hint": "Performances pendant la charge et limite nocturne fixe facultative.",
+  "nc_state_off": "Désactivé",
+  "nc_state_waiting": "en attente de charge / sous 80 %",
+  "nc_state_holding": "limite de 80 % active",
+  "nc_state_released": "libéré après 06:00",
+  "nc_state_not_exposed": "contrôle non exposé par ce noyau",
+  "nc_state_write_failed": "le noyau a refusé la limite",
+  "nc_state_restore_failed": "valeur d’origine non restaurée",
+  "nc_state_external": "un autre composant a modifié la charge",
+  "nc_state_unknown": "état de charge inconnu",
+  "t_nc_off": "Limite nocturne désactivée · restriction ASB levée",
   "nav_live": "Moniteur",
   "nav_config": "Réglages",
   "nav_back": "Retour",
@@ -96,6 +108,10 @@
   "t_reboot_confirm": "Appuyez à nouveau",
   "t_rebooting": "Redémarrage…",
   "cfg": {
+    "night_charge_enable": {
+      "name": "Limite de charge nocturne (22:00–06:00)",
+      "desc": "Limite nocturne facultative. Pendant la charge de 22:00 à 06:00, ASB utilise un contrôle standard pris en charge par le noyau pour maintenir environ 80 % ; après 06:00, il restaure la valeur précédente afin que la charge puisse continuer. Il ne décharge pas une batterie déjà au-dessus de 80 %, ne remplace pas la charge adaptative du fabricant et est désactivé par défaut. Si aucun contrôle accessible en écriture n’est pris en charge, l’état l’indique. À la désactivation ou à la désinstallation, seule une valeur encore contrôlée par ASB est restaurée."
+    },
     "net_mtu_probing": {
       "name": "Récupération MTU TCP",
       "desc": "Pour les routes mobiles ou VPN où la découverte de MTU bloquée fige les connexions. Activé déclenche la sonde du noyau uniquement en cas de suspicion de trou noir ; les routes saines conservent leur MSS normal. Ce n’est pas une accélération générale. Origine et la désinstallation restaurent exactement l’ancienne valeur 0, 1 ou 2."
@@ -1269,12 +1285,12 @@
   "prof_performance_desc": "Fréquences maximales pour les jeux et les apps lourdes",
   "prof_balanced_desc": "Usage quotidien : fluide et sobre",
   "prof_battery_desc": "Autonomie maximale, fréquences plus basses",
-  "grp_audio_desc": "Lecture, DSP, Bluetooth",
-  "grp_camera_desc": "Traitement photo, rapidité",
-  "grp_iface_desc": "Animations, effets",
-  "grp_net_desc": "Mobile, Wi-Fi, débit",
-  "grp_battery_desc": "Smart, veille, chaleur, mémoire",
-  "grp_ui_desc": "Services, écran, vibrations",
+  "grp_audio_desc": "DSP, volume, Bluetooth",
+  "grp_camera_desc": "Préréglages, traitement, détails",
+  "grp_iface_desc": "Animations, flou",
+  "grp_net_desc": "Wi-Fi, LTE, files",
+  "grp_battery_desc": "Smart, Doze, chaleur, RAM",
+  "grp_ui_desc": "Services, LTPO, vibrations",
   "stock_cpu_ceiling": "Plafond CPU",
   "stock_gpu_clock": "Fréquence GPU",
   "stock_bat_temp": "Temp. batterie",
@@ -2746,5 +2762,7 @@
   "lr_sm_feedback": "Journal infini → Smart",
   "lr_sm_feedback_fmt": "{accepted} acceptées · {suppressed} différées · {rejected} rejetées",
   "lr_sm_feedback_unknown": "Delta de cette capture inconnu",
-  "lr_sm_feedback_note": "Le journal fournit uniquement des preuves de jank soutenu. Smart relit les statistiques de frames Android et gère lui-même les fenêtres A/B, le plateau et le cooldown ; les recommandations du rapport ne sont jamais exécutées comme réglages."
+  "lr_sm_feedback_note": "Le journal fournit uniquement des preuves de jank soutenu. Smart relit les statistiques de frames Android et gère lui-même les fenêtres A/B, le plateau et le cooldown ; les recommandations du rapport ne sont jamais exécutées comme réglages.",
+  "boot_intro_warm": "Préchargement des métriques ASB…",
+  "boot_intro_ready": "Interface prête"
 }

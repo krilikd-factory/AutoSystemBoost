@@ -1,4 +1,16 @@
 {
+  "cfg_battery_section_charging": "充电",
+  "cfg_battery_section_charging_hint": "充电时的性能策略和可选的固定夜间上限。",
+  "nc_state_off": "已关闭",
+  "nc_state_waiting": "等待充电 / 电量低于 80%",
+  "nc_state_holding": "80% 上限已生效",
+  "nc_state_released": "06:00 后已解除限制",
+  "nc_state_not_exposed": "此内核未提供控制接口",
+  "nc_state_write_failed": "内核拒绝写入上限",
+  "nc_state_restore_failed": "原值尚未恢复",
+  "nc_state_external": "其他组件更改了充电状态",
+  "nc_state_unknown": "充电状态未知",
+  "t_nc_off": "夜间上限已关闭 · ASB 限制已解除",
   "nav_live": "监控",
   "lv_ses": "会话",
   "lv_drain": "应用耗电",
@@ -28,6 +40,10 @@
   "grp_ui": "系统",
   "wb_handover": "屏幕开启时移动数据会保持就绪，耗电会略有增加",
   "cfg": {
+    "night_charge_enable": {
+      "name": "夜间充电上限（22:00–06:00）",
+      "desc": "可选的夜间充电上限。22:00 至 06:00 充电时，ASB 通过受支持的标准内核接口将电量维持在约 80%；06:00 后恢复原值，以便继续充电。不会主动放空已超过 80% 的电池，不替代厂商自适应充电，默认关闭。若内核未提供受支持的可写接口，状态会如实显示。关闭或卸载时，仅恢复仍由 ASB 持有的值。"
+    },
     "net_mtu_probing": {
       "name": "TCP MTU 恢复",
       "desc": "用于路径 MTU 发现被阻断而导致连接停滞的移动或 VPN 路由。开启后，内核只在怀疑出现黑洞时进行探测，正常路由保持原有 MSS，并非通用提速。选择原厂或卸载模块都会精确恢复此前的 0、1 或 2。"
@@ -1269,12 +1285,12 @@
   "prof_performance_desc": "为游戏和重度应用提供最高频率",
   "prof_balanced_desc": "日常使用：流畅且省电",
   "prof_battery_desc": "最长续航，较低频率",
-  "grp_audio_desc": "播放、DSP、蓝牙",
-  "grp_camera_desc": "照片处理、速度",
-  "grp_iface_desc": "动画、效果",
-  "grp_net_desc": "移动网络、Wi-Fi、速度",
-  "grp_battery_desc": "智能、睡眠、发热、内存",
-  "grp_ui_desc": "服务、屏幕、振动",
+  "grp_audio_desc": "DSP、音量、蓝牙",
+  "grp_camera_desc": "预设、处理、细节",
+  "grp_iface_desc": "动画、模糊效果",
+  "grp_net_desc": "Wi-Fi、LTE、队列",
+  "grp_battery_desc": "智能、Doze、发热、内存",
+  "grp_ui_desc": "服务、LTPO、振动",
   "stock_cpu_ceiling": "CPU 上限",
   "stock_gpu_clock": "GPU 频率",
   "stock_bat_temp": "电池温度",
@@ -2746,5 +2762,7 @@
   "lr_sm_feedback": "无限日志 → Smart",
   "lr_sm_feedback_fmt": "已接受 {accepted} · 已抑制 {suppressed} · 已拒绝 {rejected}",
   "lr_sm_feedback_unknown": "本次采集的增量未知",
-  "lr_sm_feedback_note": "日志仅提供持续卡顿的证据。Smart 会重新读取 Android 帧统计，并自行管理 A/B 窗口、平台期和冷却时间；报告建议绝不会作为设置执行。"
+  "lr_sm_feedback_note": "日志仅提供持续卡顿的证据。Smart 会重新读取 Android 帧统计，并自行管理 A/B 窗口、平台期和冷却时间；报告建议绝不会作为设置执行。",
+  "boot_intro_warm": "正在预载 ASB 指标…",
+  "boot_intro_ready": "界面已就绪"
 }

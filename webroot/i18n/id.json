@@ -1,6 +1,22 @@
 {
+  "cfg_battery_section_charging": "Pengisian daya",
+  "cfg_battery_section_charging_hint": "Performa saat mengisi daya dan batas malam tetap opsional.",
+  "nc_state_off": "Nonaktif",
+  "nc_state_waiting": "menunggu pengisian / di bawah 80%",
+  "nc_state_holding": "batas 80% aktif",
+  "nc_state_released": "dilepas setelah pukul 06:00",
+  "nc_state_not_exposed": "kernel ini tidak menyediakan kontrol",
+  "nc_state_write_failed": "kernel menolak batas",
+  "nc_state_restore_failed": "nilai asli belum dipulihkan",
+  "nc_state_external": "komponen lain mengubah pengisian",
+  "nc_state_unknown": "status pengisian tidak diketahui",
+  "t_nc_off": "Batas malam nonaktif · pembatasan ASB dilepas",
   "wb_handover": "Data seluler tetap siap saat layar menyala dan memakai sedikit lebih banyak baterai",
   "cfg": {
+    "night_charge_enable": {
+      "name": "Batas Pengisian Malam (22:00–06:00)",
+      "desc": "Batas malam opsional. Saat mengisi daya pukul 22:00–06:00, ASB memakai kontrol kernel standar yang didukung untuk menahan sekitar 80%; setelah pukul 06:00 nilai sebelumnya dipulihkan agar pengisian dapat berlanjut. Baterai di atas 80% tidak dikosongkan. Fitur ini tidak menggantikan pengisian adaptif OEM dan nonaktif secara default. Jika kontrol yang dapat ditulis tidak tersedia, status akan menyatakannya. Saat dinonaktifkan atau dihapus, hanya nilai yang masih dimiliki ASB yang dipulihkan."
+    },
     "net_mtu_probing": {
       "name": "Pemulihan MTU TCP",
       "desc": "Untuk rute seluler atau VPN saat path MTU discovery yang diblokir membuat koneksi macet. Aktif menjalankan pemeriksaan kernel hanya setelah dugaan black hole; rute sehat mempertahankan MSS normal. Ini bukan peningkatan kecepatan umum. Bawaan dan penghapusan memulihkan nilai 0, 1, atau 2 sebelumnya dengan tepat."
@@ -1269,12 +1285,12 @@
   "prof_performance_desc": "Frekuensi tertinggi untuk game dan aplikasi berat",
   "prof_balanced_desc": "Pemakaian harian: mulus dan hemat",
   "prof_battery_desc": "Baterai paling awet, frekuensi lebih rendah",
-  "grp_audio_desc": "Pemutaran, DSP, Bluetooth",
-  "grp_camera_desc": "Pemrosesan foto, kecepatan",
-  "grp_iface_desc": "Animasi, efek",
-  "grp_net_desc": "Seluler, Wi-Fi, kecepatan",
-  "grp_battery_desc": "Smart, tidur, panas, memori",
-  "grp_ui_desc": "Layanan, layar, getaran",
+  "grp_audio_desc": "DSP, volume, Bluetooth",
+  "grp_camera_desc": "Preset, pemrosesan, detail",
+  "grp_iface_desc": "Animasi, blur",
+  "grp_net_desc": "Wi-Fi, LTE, antrean",
+  "grp_battery_desc": "Smart, Doze, panas, RAM",
+  "grp_ui_desc": "Layanan, LTPO, getaran",
   "stock_cpu_ceiling": "Batas CPU",
   "stock_gpu_clock": "Clock GPU",
   "stock_bat_temp": "Suhu baterai",
@@ -2746,5 +2762,7 @@
   "lr_sm_feedback": "Log Infinite → Smart",
   "lr_sm_feedback_fmt": "{accepted} diterima · {suppressed} ditunda · {rejected} ditolak",
   "lr_sm_feedback_unknown": "Delta tangkapan ini tidak diketahui",
-  "lr_sm_feedback_note": "Log hanya memberikan bukti jank berkelanjutan. Smart membaca ulang statistik frame Android dan mengendalikan jendela A/B, plateau, serta cooldown; rekomendasi laporan tidak pernah dijalankan sebagai pengaturan."
+  "lr_sm_feedback_note": "Log hanya memberikan bukti jank berkelanjutan. Smart membaca ulang statistik frame Android dan mengendalikan jendela A/B, plateau, serta cooldown; rekomendasi laporan tidak pernah dijalankan sebagai pengaturan.",
+  "boot_intro_warm": "Memuat metrik ASB…",
+  "boot_intro_ready": "Antarmuka siap"
 }
