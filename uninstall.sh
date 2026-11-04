@@ -134,6 +134,13 @@ done
 # removed below, so this is just belt-and-braces if that dir moved).
 rm -f /data/adb/asb/governor.conf.snapshot 2>/dev/null
 
+# Return a night charge limit before its ownership ledger disappears. This restores only
+# a node that still contains the exact value written by ASB; an external change is left alone.
+if [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_night_charge.sh ]; then
+  MODDIR=/data/adb/modules/AutoSystemBoost \
+    sh /data/adb/modules/AutoSystemBoost/runtime/asb_night_charge.sh restore >/dev/null 2>&1 || true
+fi
+
 # Stop our own daemons FIRST.
 #
 # Uninstall removed every file and restored every setting, and then left the governor and the

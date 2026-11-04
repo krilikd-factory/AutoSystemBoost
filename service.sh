@@ -4029,6 +4029,12 @@ esac
   [ -f "$MODDIR/runtime/asb_net_offload.sh" ] && \
     sh "$MODDIR/runtime/asb_net_offload.sh" >/dev/null 2>&1
   
+  # Restore/reconcile the optional night charge ceiling once after boot. The recurring
+  # pass below shares the existing network maintenance clock instead of adding a daemon.
+  if [ -f "$MODDIR/runtime/asb_night_charge.sh" ]; then
+    sh "$MODDIR/runtime/asb_night_charge.sh" apply >/dev/null 2>&1
+  fi
+
   # Re-apply when new receive queues appear.
   #
   # This ran exactly once, at boot. But rmnet interfaces are created when the data call is
@@ -4065,6 +4071,13 @@ esac
         false|Asleep) sleep 600 ;;
         *)            sleep 120 ;;
       esac
+      if [ -f "$MODDIR/runtime/asb_night_charge.sh" ]; then
+        _nc_want="$(grep -E '^[[:space:]]*night_charge_enable=' "$MODDIR/config/governor.conf" 2>/dev/null \
+                    | head -1 | sed 's/.*=//' | tr -d ' \r')"
+        if [ "$_nc_want" = "1" ] || [ -f /data/adb/asb/night_charge.ledger ]; then
+          sh "$MODDIR/runtime/asb_night_charge.sh" tick >/dev/null 2>&1
+        fi
+      fi
       case "$_nl_scr" in
         false|Asleep)
           # Screen just went off: flush a configuration broadcast held back earlier.
