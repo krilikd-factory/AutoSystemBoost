@@ -928,7 +928,11 @@ if [ -d "$_tdir" ]; then
     case "$_mt" in ''|*[!0-9]*) _mt=0 ;; esac
     [ "$_mt" -lt "$_start" ] && continue
     _cn=$((_cn + 1))
-    if grep -q -e 'libasbdsp' -e 'asb_dsp_attach' -e 'AutoSystemBoost' -e '/data/adb/asb/' "$_f" 2>/dev/null; then
+    # Match the full recorder's evidence boundary: an ASB path in a memory map only
+    # says that the process loaded/mapped something, not that ASB code crashed it.
+    _dcmd="$(grep -m1 '^Cmdline:' "$_f" 2>/dev/null)"
+    _dbt="$(awk '/^backtrace:/ { b = 1; next } b && /^[[:space:]]*$/ { exit } b' "$_f" 2>/dev/null)"
+    if printf '%s\n%s\n' "$_dcmd" "$_dbt" | grep -qE 'libasbdsp|asb_dsp_attach|AutoSystemBoost|/data/adb/asb/'; then
       _ca=$((_ca + 1))
     fi
     if [ "$_mt" -gt "$_clt" ]; then
