@@ -3519,7 +3519,7 @@ printf '%s\n' "$r" | grep -q 'backAfterStop=true' || fail "cues did not come bac
 printf '%s\n' "$r" | grep -q 'noLookRightAfterOwnCue=true' || fail "looked while its own stream could be counted: $r"
 printf '%s\n' "$r" | grep -q 'off=true/0' || fail "switch off did not silence or was not stored: $r"
 printf '%s\n' "$r" | grep -q 'on=true/1' || fail "switch on: $r"
-grep -q 'id="cfgSoundBtn" onclick="uiSoundToggle()"' "$W" || fail "no sound switch in the settings tools row"
+grep -q 'id="cfgSoundBtn" type="button" onclick="uiSoundToggle()"' "$W" || fail "no sound switch in the settings tools row"
 for f in "$ROOT"/webroot/i18n/*.json; do
   for k in ui_sound_aria ui_sound_on ui_sound_off; do grep -q "\"$k\":" "$f" || fail "$k missing in ${f##*/}"; done
 done
@@ -5338,8 +5338,10 @@ policy6 (BIG) actual_max=90 -> shell_overridden_down (profile=100 actual=90)
 policy0 (MAIN) actual_max=110 -> DESYNC_mismatch (profile=100 actual=110)
 EOF_CAP
 printf 'Cmdline: com.crashy.app\nsignal 11\n' > "$T/tomb/tombstone_01"; touch -d "@$((NOW-4000))" "$T/tomb/tombstone_01"
-printf 'Cmdline: /vendor/bin/hw/foo\nlibasbdsp x\n' > "$T/tomb/tombstone_02"; touch -d "@$((NOW-3000))" "$T/tomb/tombstone_02"
+printf 'Cmdline: /vendor/bin/hw/foo\nbacktrace:\n  #00 pc 00000088  /vendor/lib64/soundfx/libasbdsp.so\n\n' > "$T/tomb/tombstone_02"; touch -d "@$((NOW-3000))" "$T/tomb/tombstone_02"
 printf 'Cmdline: old.crash\n' > "$T/tomb/tombstone_03"; touch -d "@$((NOW-200000))" "$T/tomb/tombstone_03"
+# A library in maps is not proof that its code is in the crashing thread.
+printf 'Cmdline: com.maps.only\nmemory map:\n7a00000000-7a00010000 r-xp /vendor/lib64/soundfx/libasbdsp.so\n' > "$T/tomb/tombstone_04"; touch -d "@$((NOW-5000))" "$T/tomb/tombstone_04"
 
 out="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state0" sh "$D" "$CAP")" || fail "digest exit"
 printf '%s\n' "$out" | grep -Eq '^meta	elapsed_min=720	target_h=24	running=0	started=[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}	profile=smart$' || fail "meta line: $(printf '%s' "$out" | head -1)"
@@ -5351,7 +5353,7 @@ printf '%s\n' "$out" | grep -q '^night	dur_min=469	drop=8	pctph=1.0	awake=8$' ||
 printf '%s\n' "$out" | grep -q '^nightd	ma=36	radio_mib=1.1	cpu_t=31	skin_t=29	wake_pk=5$' || fail "night detail: $(printf '%s\n' "$out" | grep '^nightd')"
 printf '%s\n' "$out" | grep -q '^idlemax	awake=25	phase=sleep	dur_min=60$' || fail "idlemax"
 printf '%s\n' "$out" | grep -q '^wl	pkg=com.instagram.android	sec=3661$' || fail "top wakelock app"
-printf '%s\n' "$out" | grep -Eq '^crash	count=2	asb=1	latest=/vendor/bin/hw/foo	ltime=[0-9]{2}:[0-9]{2}$' || fail "crash window, ASB attribution or the crash time"
+printf '%s\n' "$out" | grep -Eq '^crash	count=3	asb=1	latest=/vendor/bin/hw/foo	ltime=[0-9]{2}:[0-9]{2}$' || fail "crash window, backtrace-only ASB attribution or the crash time"
 printf '%s\n' "$out" | grep -q '^sysui	count=2$' || fail "sysui restarts"
 printf '%s\n' "$out" | grep -q '^sysuiinj' && fail "restarts without injected code named a module"
 printf '%s\n' "$out" | grep -q '^thermal	cpu=41	surf=35$' || fail "thermal peaks"
@@ -5557,7 +5559,7 @@ printf '%s\n' "$fout" | grep -Eq '^crash	count=1	asb=0	latest=fresh.crash	ltime=
 CMNT="$T/asb_log_full_day_cmnt"; mkdir -p "$CMNT"
 printf '# phase start end ...\nactive	%s	%s	95	89\n' "$((NOW-72000))" "$((NOW-68400))" > "$CMNT/phase_ledger.tsv"
 cout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state4" sh "$D" "$CMNT")"
-printf '%s\n' "$cout" | grep -Eq '^crash	count=4	asb=1	latest=fresh.crash' || fail "the window must skip the ledger's comment header: $(printf '%s' "$cout" | grep '^crash')"
+printf '%s\n' "$cout" | grep -Eq '^crash	count=5	asb=1	latest=fresh.crash' || fail "the window must skip the ledger's comment header: $(printf '%s' "$cout" | grep '^crash')"
 
 # fix213 (audit 8.2): a finished capture leaves one compact line in report_history.tsv,
 # and the NEXT capture's digest carries the earlier one as a hist row - that is the trend
@@ -5583,6 +5585,8 @@ ZC="$T/zygisk-counters"; mkdir -p "$ZC"
 cat > "$ZC/zygisk_observer_start.tsv" <<'EOF_ZY_START'
 M	captured_epoch=100
 D	zygisk_observer	link_state	confirmed
+D	zygisk_observer	launch_events	2
+D	zygisk_observer	launch_accepted	1
 D	zygisk_observer	launch_throttled	0
 D	zygisk_observer	launch_screen_off	0
 D	zygisk_observer	launch_long	1
@@ -5594,6 +5598,8 @@ EOF_ZY_START
 cat > "$ZC/zygisk_observer_latest.tsv" <<'EOF_ZY_LATEST'
 M	captured_epoch=200
 D	zygisk_observer	link_state	confirmed
+D	zygisk_observer	launch_events	8
+D	zygisk_observer	launch_accepted	7
 D	zygisk_observer	launch_throttled	6
 D	zygisk_observer	launch_screen_off	3
 D	zygisk_observer	launch_long	2
@@ -5603,13 +5609,16 @@ D	zygisk_observer	denylist_spawns	1135
 D	zygisk_observer	hints_screen_off	4
 EOF_ZY_LATEST
 zyout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST" sh "$D" "$ZC")"
-for field in launch_throttled_delta=6 launch_screen_off_delta=3 launch_long_delta=1 launch_short_delta=41 launch_class_fallback_delta=0 denylist_spawns_delta=966 hints_screen_off_delta=4 deltas=available; do
+for field in launch_events_start=2 launch_events_latest=8 launch_events_delta=6 launch_accepted_start=1 launch_accepted_latest=7 launch_accepted_delta=6 launch_throttled_delta=6 launch_screen_off_delta=3 launch_long_delta=1 launch_short_delta=41 launch_class_fallback_delta=0 denylist_spawns_delta=966 hints_screen_off_delta=4 deltas=available; do
   printf '%s\n' "$zyout" | grep '^zygisk' | grep -q "	$field" || fail "observer counter projection: $field"
 done
 sed -i 's/launch_short	43/launch_short	1/' "$ZC/zygisk_observer_latest.tsv"
 zyreset="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST" sh "$D" "$ZC")"
 printf '%s\n' "$zyreset" | grep '^zygisk' | grep -q '	launch_short_delta=unknown' || fail 'a decreasing launch-class counter must have an unknown delta'
 printf '%s\n' "$zyreset" | grep '^zygisk' | grep -q '	deltas=counter_reset_or_restart' || fail 'a decreasing launch-class counter must name reset/restart'
+for field in launch_events_start=2 launch_events_latest=8 launch_events_delta=unknown launch_accepted_start=1 launch_accepted_latest=7 launch_accepted_delta=unknown; do
+  printf '%s\n' "$zyreset" | grep '^zygisk' | grep -q "	$field" || fail "reset must preserve latest absolute evidence, not invent a delta: $field"
+done
 
 # --- the REAL parser/tips in node, fed the fixture digest and the shipped locales ---
 {
@@ -6071,9 +6080,17 @@ const zyUnresolved = parseLogReport('meta\telapsed_min=390\nzygisk\tstate=confir
 logReportRender(zyUnresolved);
 const zyUnresolvedText = logReportT('lr_zy_launch_unresolved', '', {n:'22',ok:'20',veto:'1',unavailable:'0',throttled:'0'});
 chk(allText(reportBody).indexOf(zyUnresolvedText) >= 0, 'an unaccounted cold-start remainder is bounded as in-flight, not called an error: ' + zyUnresolvedText);
-const zyReset = parseLogReport('meta\telapsed_min=120\nzygisk\tstate=confirmed\tcoverage=start_latest\tloaded=0\tevents_total_delta=unknown\tspawn_events_delta=unknown\tlaunch_events_delta=unknown\tlaunch_accepted_delta=unknown\tdeltas=counter_reset_or_restart\n');
+const zyReset = parseLogReport('meta\telapsed_min=120\nzygisk\tstate=confirmed\tcoverage=start_latest\tloaded=0\tevents_total_start=10\tevents_total_latest=15\tevents_total_delta=unknown\tspawn_events_delta=unknown\tlaunch_events_start=2\tlaunch_events_latest=8\tlaunch_events_delta=unknown\tlaunch_accepted_start=1\tlaunch_accepted_latest=7\tlaunch_accepted_delta=unknown\tpolicy_hints_start=3\tpolicy_hints_latest=9\tpolicy_hints_delta=unknown\thints_accepted_start=2\thints_accepted_latest=8\thints_accepted_delta=unknown\thints_vetoed_start=1\thints_vetoed_latest=1\thints_vetoed_delta=unknown\tipc_cpu_ms_start=4\tipc_cpu_ms_latest=12\tipc_cpu_ms_delta=unknown\tipc_wakeups_start=7\tipc_wakeups_latest=19\tipc_wakeups_delta=unknown\tdeltas=counter_reset_or_restart\n');
 logReportRender(zyReset);
-chk(allText(reportBody).indexOf(I18N.ru.lr_zy_reset) >= 0 && allText(reportBody).indexOf(I18N.ru.lr_zy_live_zero) < 0, 'counter reset keeps deltas unknown and invents no historical activity');
+const zyResetText = allText(reportBody);
+chk(zyResetText.indexOf(I18N.ru.lr_zy_reset) >= 0 && zyResetText.indexOf(I18N.ru.lr_zy_live_zero) < 0, 'counter reset keeps deltas unknown and invents no historical activity');
+chk(zyResetText.indexOf('10 → 15') >= 0 && zyResetText.indexOf(logReportT('lr_zy_accepted', '', {n:'7'})) >= 0 && zyResetText.indexOf(I18N.ru.lr_zy_since_restart) >= 0, 'reset heroes show real latest totals with explicit non-capture scope: ' + zyResetText);
+chk(zyReset.sections.zygisk.launch_events_delta === 'unknown' && zyReset.sections.zygisk.launch_accepted_delta === 'unknown', 'latest totals never overwrite unknown capture deltas');
+const zyMixed = parseLogReport('meta\telapsed_min=120\nzygisk\tstate=confirmed\tcoverage=start_latest\tloaded=0\tevents_total_delta=0\tlaunch_events_start=2\tlaunch_events_latest=8\tlaunch_events_delta=6\tlaunch_accepted_start=1\tlaunch_accepted_latest=7\tlaunch_accepted_delta=unknown\tdeltas=counter_reset_or_restart\n');
+logReportRender(zyMixed);
+const zyMixedText = allText(reportBody);
+chk(zyMixedText.indexOf(I18N.ru.lr_zy_since_restart) >= 0 && zyMixedText.indexOf(logReportT('lr_zy_accepted', '', {n:'7'})) >= 0, 'a latest-only accepted subtitle is labelled even when the launch total delta is known: ' + zyMixedText);
+chk(zyMixed.sections.zygisk.launch_events_delta === '6' && zyMixed.sections.zygisk.launch_accepted_delta === 'unknown', 'mixed known/unknown counters remain independent');
 const zyOne = parseLogReport('meta\telapsed_min=120\nzygisk\tstate=confirmed\tcoverage=latest_only\tloaded=0\tevents_total_delta=unknown\tspawn_events_delta=unknown\tdeltas=unavailable\n');
 logReportRender(zyOne);
 chk(allText(reportBody).indexOf(I18N.ru.lr_zy_coverage_one) >= 0 && allText(reportBody).indexOf(I18N.ru.lr_zy_live_zero) < 0, 'one snapshot cannot manufacture a delta or live-set explanation');
@@ -7408,6 +7425,7 @@ PY
 const ASB_LANG = 'en';
 const window = globalThis;
 function T(k, d) { return d; }
+function techIcon(kind) { return "svg:" + kind; }
 function requestAnimationFrame() {} function asbFitPages() {}
 function mk(tag) {
   const e = { tagName: tag, className: '', children: [], _text: '',
@@ -7435,7 +7453,7 @@ EOF
   sed -n '/^const DEVICE_GROUP_GUIDES = {/,/^};/p' "$H"
   sed -n '/^const DEVICE_SECTION_GUIDES = {/,/^};/p' "$H"
   sed -n '/^const DEVICE_KERNEL_FEATURE_ORDER = \[/,/^\];/p' "$H"
-  for fn in parseDeviceInfo deviceVal deviceFallbackLabel deviceLabel deviceHero deviceIsLimitedValue deviceValueClass deviceNum deviceKv deviceFreqKhz deviceFreqHz deviceSizeKb deviceDuration deviceCpuCount deviceCpuList deviceYesNo deviceFill deviceBatteryMa deviceBatteryMah deviceBatteryWear deviceRootManagerDisplay deviceDisplayValue deviceInfoEvidence deviceSnapshotCard deviceInfoSnapshot deviceInfoNav deviceInfoOverview deviceInfoInsights devicePressureScale deviceZygiskLinkState deviceZygiskLinkVerdict deviceZygiskLink deviceZygiskEditor deviceInfoRender asbPageJumpClear asbPageJumpActive asbPageJump asbPageReference shQuote \
+  for fn in parseDeviceInfo deviceVal deviceFallbackLabel deviceLabel deviceHero deviceIsLimitedValue deviceValueClass deviceNum deviceKv deviceFreqKhz deviceFreqHz deviceSizeKb deviceDuration deviceCpuCount deviceCpuList deviceYesNo deviceFill deviceBatteryMa deviceBatteryMah deviceBatteryWear deviceRootManagerDisplay deviceDisplayValue deviceInfoEvidence deviceSnapshotCard deviceInfoSnapshot deviceInfoNav deviceInfoOverview deviceInfoInsights devicePressureScale deviceZygiskLinkState deviceZygiskLinkVerdict deviceZygiskLink deviceZygiskEditor deviceInfoRender asbPageJumpIsDock asbPageJumpClear asbPageJumpActive asbPageJump asbPageReference shQuote \
     asbPageClasses asbPageHas asbPageKids asbPageTxt asbPageWarn asbPageText asbPageStamp; do
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
@@ -7532,7 +7550,7 @@ deviceInfoRender(d2);
 const d2dump = (function walk(n) { return [n.textContent || ''].concat((n.children || []).flatMap(walk)); })(body).join('\n').replace(/\u00a0/g, ' ');
 chk(d2dump.includes('At a glance') && d2dump.includes('8 cores · 2 clusters · up to 4.61 GHz'), 'overview processor line: ' + d2dump);
 chk(countDeviceClass(body, 'dev-snapshot') === 1 && countDeviceClass(body, 'lgr-hero') >= 3 && d2dump.includes('31% available'), 'fix255: device snapshot presents available memory and supporting evidence');
-chk(d2dump.includes(I18N_EN_DEV_GUIDE) && countDeviceClass(body, 'dev-nav') === 1, 'fix255: device limits explanation and group navigation render');
+chk(d2dump.includes(I18N_EN_DEV_GUIDE) && countDeviceClass(body, 'dev-page-nav') === 1, 'fix255: device limits explanation and group navigation render');
 chk(d2dump.includes('8 min · CPU idle 67%') && !d2dump.includes('508.51 2724.42'), 'raw /proc/uptime pair shown instead of a duration');
 chk(d2dump.includes('7.18 · 7.95 · 4.97 (1 / 5 / 15 min) · 3 of 11967 threads running') && !d2dump.includes('3/11967 8744'), 'raw /proc/loadavg line shown');
 chk(d2dump.includes('Load average counts tasks'), 'load average explanation missing');
@@ -8324,10 +8342,14 @@ for token in (
     '--glass-surface:rgba(12,18,15,.58)',
     '--glass-surface-quiet:rgba(8,13,10,.46)',
     '--glass-surface-strong:rgba(10,15,13,.78)',
+    '--glass-nav-surface:rgba(6,10,8,.86)',
+    '--glass-nav-wash:linear-gradient(135deg,rgba(255,255,255,.045),rgba(255,255,255,.008) 48%,rgba(255,255,255,.018))',
     '--glass-edge:rgba(255,255,255,.16)',
     '--glass-blur:blur(20px) saturate(1.24)',
     '--glass-surface:rgba(255,255,255,.44)',
     '--glass-surface-strong:rgba(250,252,251,.72)',
+    '--glass-nav-surface:var(--glass-surface-strong)',
+    '--glass-nav-wash:var(--glass-wash)',
     '--glass-edge:rgba(70,85,80,.15)',
     'linear-gradient(180deg,#e4e5f9 0%,#edf4f1 52%,#f2f4f6 100%)',
 ):
@@ -8347,9 +8369,20 @@ for cls in ('.cfg-tile', '.cfg-row', '.cfg-zygisk-card', '.live-cell', '.smart-b
 # accent outline around ordinary menus and dialogs.
 floating = b[b.index('html:root[data-asb-glass="1"] :is(.asb-tabbar'):]
 floating = floating[:floating.index('}')]
-assert '.report-nav,.zy-page-nav,.log-menu' in floating
+assert '.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav,.log-menu' in floating
 assert 'var(--glass-surface-strong)' in floating and 'blur(26px)' in floating
 assert 'border-color:var(--glass-edge) !important' in floating
+# fix332: only navigation docks get the darker dark-Glass material; light Glass and
+# header capsules keep their approved paints. The rule must follow the dense base rule.
+nav_selector = 'html:root[data-asb-glass="1"] :is(.asb-tabbar,.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav)'
+assert b.count(nav_selector + ' {') == 1
+nav = b[b.index(nav_selector + ' {'):]
+nav = nav[:nav.index('}')]
+assert 'background:var(--glass-nav-wash),var(--glass-nav-surface) !important' in nav
+assert '.log-menu' not in nav and '.hdr-cap' not in nav
+assert b.index(nav_selector + ' {') > b.index('html:root[data-asb-glass="1"] :is(.asb-tabbar')
+# The Zygisk note's logical gutter survives the more specific lgr-note reset, including RTL.
+assert '#zygiskPage .zy-controls-card > .dev-evidence { padding-inline-start:12px; }' in b
 # Nested report evidence must not double the parent's blur/shadow.
 nested = re.search(r'html:root\[data-asb-glass="1"\] :is\(\.lgr-sec,\.cfg-zygisk-card\) :is\(\.lgr-hero,\.lgr-quality,\.live-info-now,\.live-info-src\) \{([^}]*)\}', b)
 assert nested and '-webkit-backdrop-filter:none' in nested.group(1)
@@ -8365,6 +8398,7 @@ assert '@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:b
 assert '@media (prefers-reduced-transparency:reduce)' in b
 assert '@media (forced-colors:active)' in b
 for token in ('--glass-surface:#151c18', '--glass-surface:#f7f9fa',
+              '--glass-nav-surface:#101511', '--glass-nav-surface:#fff',
               'background:Canvas !important', 'color:CanvasText !important'):
     assert token in b, token
 # This revision must not reintroduce the old header deformation or ad-hoc navigation sizing.
@@ -8490,7 +8524,17 @@ python3 - "$H" <<'PY' || fail 'source/scheduling contract'
 import re, sys
 s=open(sys.argv[1],encoding='utf-8').read()
 assert '@import "https://mui.kernelsu.org/internal/insets.css"' not in s
-head=s[:s.index('<style>')]
+# fix332: the critical canvas is parsed before the optional inset stylesheet, main CSS,
+# locale or root bridge. A saved light palette is selected parser-locally; dark never
+# depends on the WebView host's initial light-grey default.
+critical_start=s.index('<style>')
+critical_end=s.index('</style>',critical_start)+len('</style>')
+critical=s[critical_start:critical_end]
+assert 'html,body{background:#000}' in critical and 'html{color-scheme:dark}' in critical
+assert 'html[data-asb-theme="light"],html[data-asb-theme="light"] body{background:#f3f7f6;color-scheme:light}' in critical
+assert 'localStorage.getItem(\'asb_theme\')' in s[critical_end:s.index('<style>',critical_end)]
+assert s.index("link.rel = 'stylesheet'") > critical_end
+head=s[:s.index('<style>\n:root {')]
 assert "link.rel = 'stylesheet'" in head and "link.media = 'print'" in head
 assert "link.addEventListener('load'" in head and "link.media = 'all'" in head
 assert 'https://mui.kernelsu.org/internal/insets.css' in head and 'document.head.appendChild(link)' in head
@@ -8666,7 +8710,7 @@ fail() { echo "FAIL WebUI fix327 inset cascade: $*" >&2; exit 1; }
 python3 - "$H" <<'PY' || fail 'source/cascade contract'
 import sys
 s=open(sys.argv[1],encoding='utf-8').read()
-style=s.index('<style>')
+style=s.index('<style>\n:root {')
 head=s[:style]
 assert s.count('https://mui.kernelsu.org/internal/insets.css')==1
 assert '@import "https://mui.kernelsu.org/internal/insets.css"' not in s
@@ -8826,7 +8870,7 @@ fail() { echo "FAIL WebUI fix329 Home entrance/category axis: $*" >&2; exit 1; }
 python3 - "$H" <<'PY' || fail 'source/ordering contract'
 import sys
 s=open(sys.argv[1],encoding='utf-8').read()
-head=s[:s.index('<style>')]
+head=s[:s.index('<style>\n:root {')]
 assert "document.documentElement.classList.add('asb-home-pending');" in head
 assert 'html.asb-home-pending .page:not(.live-page) { opacity:0; pointer-events:none; }' in s
 assert '--page-fade-in: 0.26s;' in s and '--page-fade-delay: 0.06s;' in s
@@ -8912,7 +8956,7 @@ assert '--glass-canvas-image:#000;' in s
 assert 'radial-gradient(ellipse 120% 48% at 0% 0%,rgba(130,157,143,.28)' not in s
 assert 'linear-gradient(180deg,#111713 0%,#050807 48%,#000 100%)' not in s
 # Parent dock keeps the shared floating material; child buttons cannot become loose circles.
-dock = re.search(r'html:root\[data-asb-glass="1"\] :is\(\.report-nav,\.zy-page-nav\) \.lgr-jump-btn \{([^}]*)\}', b)
+dock = re.search(r'html:root\[data-asb-glass="1"\] :is\(\.report-nav,\.zy-page-nav,\.dev-page-nav,\.cfg-page-nav\) \.lgr-jump-btn \{([^}]*)\}', b)
 assert dock, 'dock rest-state override missing'
 for token in ('background:transparent !important', 'border-color:transparent !important',
               'box-shadow:none !important', 'backdrop-filter:none'):
@@ -9555,7 +9599,7 @@ from pathlib import Path
 r=Path(sys.argv[1]); h=(r/'webroot/index.html').read_text()
 def body(sig):
     i=h.index(sig); return h[i:h.index('\n}\n',i)]
-for token in ('.report-nav, .zy-page-nav { display: none; position: fixed; left: 12px; right: 12px;',
+for token in ('.report-nav, .zy-page-nav, .dev-page-nav, .cfg-page-nav { display: none; position: fixed; left: 12px; right: 12px;',
               'bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);', 'overflow-x: auto;',
               'scrollbar-width: none;', 'flex: 0 0 72px; min-width: 64px; min-height: 60px;',
               "b.setAttribute('aria-current', 'location')", "page.addEventListener('scroll', onScroll, { passive: true })",
@@ -9563,7 +9607,7 @@ for token in ('.report-nav, .zy-page-nav { display: none; position: fixed; left:
               'if (prevScroll > 0) el.scrollTop = prevScroll;',
               'background: var(--cap-wash), var(--tabbar-bg, #000000);',
               'background: var(--pill-wash);', 'box-shadow: var(--pill-edge);',
-              '.report-nav,.zy-page-nav,.asb-tabbar)',
+              '.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav,.asb-tabbar)',
               "head.className = 'lgr-jump-head'", "track.className = 'lgr-jump-track'",
               "b.className = dock ? 'lgr-chip lgr-jump-btn asb-tab'", "icon.className = 'asb-tab-ico'",
               'nav._asbJumpCurrent.textContent = b._asbJumpLabel || b.textContent;',
@@ -9630,6 +9674,7 @@ for (const name of ['zygiskModeCard','zygiskAutoCard','zygiskControlsCard','zygi
 for (const name of ['deviceZygiskOverview','zygiskPageRows','deviceZygiskEditor','zygiskEvidenceCard'])
   global[name]=function () { return el(name==='zygiskEvidenceCard'?'details':'div',name); }
 eval(grab('asbPageJumpIcon'));
+eval(grab('asbPageJumpIsDock'));
 eval(grab('asbPageJumpIndicator'));
 eval(grab('asbPageJumpClear'));
 eval(grab('asbPageJumpActive'));
@@ -9784,6 +9829,96 @@ echo "PASS fix319 detail sheets/services: current-data popups, keyboard activati
 )
 
 
+t_webui_fix331_navigation_toolbar_runtime() (
+# fix331: six real category maps, modern Device navigation and one coloured SVG toolbar.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI fix331: $*" >&2; exit 1; }
+python3 - "$H" <<'PY' || fail 'source/geometry/accessibility contract'
+import re, sys
+s=open(sys.argv[1],encoding='utf-8').read()
+for token in (
+ '.cfg-tile-ico { width:54px; height:54px; border-radius:18px; }',
+ '.cfg-tile-ico .tech-icon { width:30px; height:30px; }',
+ 'html.asb-fit-c1 .cfg-tile-ico { width:46px; height:46px; }',
+ 'html.asb-fit-c2 .cfg-tile-ico { width:40px; height:40px; }',
+ 'grid-template-columns: repeat(3, 1fr)',
+ '#cfgLangBtn { --tool:#4cd3e8; }', '#cfgSoundBtn { --tool:#f98d9e; }',
+ '#cfgRebootMenuBtn { --tool:#63daa3; }',
+ ':is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .lgr-jump-track',
+ 'html:root[data-asb-glass="1"] .cfg-lang-btn',
+ 'color:var(--tool) !important;',
+ 'border-color:color-mix(in srgb,var(--tool) 45%,var(--cap-edge)) !important;',
+ 'data-tech-icon="language_globe"', 'data-tech-icon="sound_on"',
+ "b.innerHTML = techIcon(_uiSoundOn ? 'sound_on' : 'sound_off');",
+ 'body.device-active > .dev-page-nav', 'body.config-active > .cfg-page-nav',
+ "asbPageJump(navItems, T('dev_nav_title', 'Jump to'), 'cfg-page-nav')",
+ "asbPageJump(items, T('dev_nav_title', 'Jump to'), 'dev-page-nav')",
+ 'function asbPageJumpIsDock(nav)', "techIcon(it[2] || asbPageJumpIcon(it[0]))",
+ "document.body.classList.contains('device-active');"):
+    assert token in s, token
+assert "'dev-nav'" not in s and '>🌐</button>' not in s and '>🔊</button>' not in s
+assert s.count('asbPageJumpClear(p);') >= 2, 'Device/Config close cleanup missing'
+assert "asbPageJumpClear(_el('configPage'));" in s
+assert "asbPageJumpClear(_el('devicePage'));" in s
+for key in ('language_globe','sound_on','sound_off'):
+    assert re.search(r'^  '+key+r": '",s,re.M), key
+print('source contract ok')
+PY
+command -v node >/dev/null 2>&1 || { echo "SKIP WebUI fix331 runtime: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+cat > "$T/test.js" <<'JS'
+const fs=require('fs'), h=fs.readFileSync(process.argv[2],'utf8');
+function grab(name){const line=h.match(new RegExp('^function '+name+'\\([^\\n]*$','m'));if(line&&line[0].includes('}'))return line[0];const m=h.match(new RegExp('function '+name+'\\([^)]*\\) \\{[\\s\\S]*?\\n\\}'));if(!m)throw Error('missing '+name);return m[0];}
+function between(a,b){const i=h.indexOf(a),j=h.indexOf(b,i);if(i<0||j<0)throw Error('missing block '+a);return h.slice(i,j);}
+const raf=[];global.requestAnimationFrame=fn=>raf.push(fn);function flush(){while(raf.length)raf.shift()();}
+function E(tag,cls){const n={tag,children:[],className:cls||'',id:'',attrs:{},style:{setProperty(){}},parentNode:null,isConnected:true,offsetWidth:72,offsetLeft:0,
+ setAttribute(k,v){this.attrs[k]=String(v)},removeAttribute(k){delete this.attrs[k]},
+ appendChild(c){c.parentNode=this;this.children.push(c);return c},insertBefore(c,b){c.parentNode=this;const i=this.children.indexOf(b);this.children.splice(i<0?this.children.length:i,0,c);return c},
+ removeChild(c){const i=this.children.indexOf(c);if(i>=0)this.children.splice(i,1);c.parentNode=null;return c},
+ closest(sel){for(let p=this;p;p=p.parentNode)if(sel==='.live-page'&&String(p.className).split(/\s+/).includes('live-page'))return p;return null},
+ getBoundingClientRect(){return this._rect||{top:0,left:0,width:72}},scrollIntoView(){this.scrollHits=(this.scrollHits||0)+1}};const set=new Set(String(n.className).split(/\s+/).filter(Boolean));
+ const sync=()=>String(n.className).split(/\s+/).filter(Boolean).forEach(c=>set.add(c));
+ n.classList={add(c){sync();set.add(c);n.className=[...set].join(' ')},remove(c){sync();set.delete(c);n.className=[...set].join(' ')},contains(c){sync();return set.has(c)}};return n;}
+const body=E('body'),doc={createElement:E,body};global.document=doc;global.window={_asbUiScale:1};global.getComputedStyle=()=>({scrollMarginTop:'12px'});
+global.T=(k,d)=>d;global.techIcon=k=>'svg:'+k;global.ASB_GRADE={};global.cfgEnsureCaps=()=>{};global.cfgLoadGrade=()=>Promise.resolve();
+global.cfgRenderRow=(list,it)=>{const n=E('div','cfg-row');n.datasetKey=it.key;list.appendChild(n)};
+global.cfgRenderZygiskCard=list=>list.appendChild(E('section','cfg-zygisk-card'));global.cfgRenderNotifCard=()=>{};
+eval(between('const CFG_GROUP_OF = {','function cfgGroupOf').replace(/^const /gm,'var '));
+eval(grab('cfgGroupOf'));eval(between('const CFG_ITEMS = [','// Icon + status hints').replace(/^const /gm,'var '));
+eval(between('const CFG_CAT = {','function cfgGroupOf').replace(/^const /gm,'var '));
+eval(between('const ZYGISK_CONTROL_KEYS =','const CFG_GROUP_SECTIONS =').replace(/^const /gm,'var '));
+eval(between('const CFG_GROUP_SECTIONS = {','function cfgRenderSection').replace(/^const /gm,'var '));
+cfgEnsureCaps=function(){};ASB_GRADE={};cfgRenderRow=(list,it)=>{const n=E('div','cfg-row');n.datasetKey=it.key;list.appendChild(n)};
+cfgRenderZygiskCard=list=>list.appendChild(E('section','cfg-zygisk-card'));cfgRenderNotifCard=()=>{};
+eval(grab('cfgCatClass'));eval(grab('cfgRenderSection'));eval(grab('cfgRenderGroup'));
+for(const n of ['asbPageJumpIsDock','asbPageJumpIndicator','asbPageJumpActive','asbPageJumpClear','asbPageJumpWatch','asbPageJumpIcon','asbPageJump'])eval(grab(n));
+function find(n,id){if(n.id===id)return n;for(const c of n.children){const x=find(c,id);if(x)return x}return null;}
+const expected={audio:['dsp','playback','safety'],camera:['processing','perf'],iface:['speed','effects'],net:['cellular','wifi','speed','stack'],battery:['smart','charging','standby','thermal','memory'],ui:['zygisk','services','feel','diag']};
+for(const [group,sections] of Object.entries(expected)){
+ const page=E('div','live-page config-page');page.id='configPage';page.clientHeight=600;page.scrollHeight=2400;page.scrollTop=0;page.scrollCalls=[];
+ page.addEventListener=(t,f)=>{if(t==='scroll')page._scroll=f};page.removeEventListener=(t,f)=>{if(t==='scroll'&&page._scroll===f)page._scroll=null};page.scrollTo=o=>{page.scrollTop=o.top;page.scrollCalls.push(o.top)};
+ const list=E('div','cfg-list');list.parentNode=page;page.appendChild(list);global._el=id=>id==='configPage'?page:find(page,id);
+ cfgRenderGroup(list,group);flush();
+ const nav=page._asbJumpNav;if(!nav)throw Error(group+': dock missing');
+ if(nav.parentNode!==body)throw Error(group+': dock not portalled');
+ if(nav._asbJumpButtons.length!==sections.length)throw Error(group+': wrong dock count');
+ nav._asbJumpButtons.forEach((b,i)=>{const id='cfg-sec-'+group+'-'+sections[i];if(b._asbJumpTarget!==id||!find(page,id))throw Error(group+': dead/theoretical target '+id);if(b.children[0].innerHTML!=='svg:'+CFG_GROUP_SECTIONS[group][i].icon)throw Error(group+': wrong icon '+sections[i]);b.onclick();});
+ if(page.scrollCalls.length!==sections.length)throw Error(group+': a jump has no working scroll');
+ const bs=nav._asbJumpButtons;bs.forEach((b,i)=>{find(page,b._asbJumpTarget)._rect={top:i===0?-300:i===1?-20:400,left:0,width:72}});page._scroll();flush();
+ if(bs[1].attrs['aria-current']!=='location'||bs.some((b,i)=>i!==1&&b.attrs['aria-current']))throw Error(group+': scroll-spy active state');
+ page.scrollTop=page.scrollHeight-page.clientHeight;page._scroll();flush();if(bs[bs.length-1].attrs['aria-current']!=='location')throw Error(group+': bottom rule');
+ asbPageJumpClear(page);if(page._asbJumpNav||page._asbJumpDispose||page._scroll||nav.parentNode)throw Error(group+': dock/listener cleanup');
+ body.children=[];
+}
+console.log('ok');
+JS
+out="$(node "$T/test.js" "$H" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo 'PASS WebUI fix331: six rendered category docks with icons/jumps/scroll-spy/cleanup, modern Device contract, horizontal docks, larger tiles and Glass-safe coloured SVG tools'
+)
+
 t_webui_night_charge_runtime() (
 # fix330: saved intent and kernel outcome are separate; the live toast follows the latter.
 set -eu
@@ -9798,12 +9933,14 @@ files=sorted(pathlib.Path(sys.argv[1]).glob('*.json'))
 assert len(files)==13
 keys=('cfg_battery_section_charging','cfg_battery_section_charging_hint','nc_state_off',
       'nc_state_waiting','nc_state_holding','nc_state_released','nc_state_not_exposed',
-      'nc_state_write_failed','nc_state_restore_failed','nc_state_external','nc_state_unknown','t_nc_off')
+      'nc_state_invalid_window','nc_state_write_failed','nc_state_restore_failed',
+      'nc_state_external','nc_state_unknown','t_nc_off')
 for p in files:
     d=json.loads(p.read_text())
     for k in keys: assert d.get(k), (p.name,k)
-    card=d.get('cfg',{}).get('night_charge_enable',{})
-    assert card.get('name') and card.get('desc'), p.name+' card'
+    for key in ('night_charge_enable','night_charge_start','night_charge_end'):
+        card=d.get('cfg',{}).get(key,{})
+        assert card.get('name') and card.get('desc'), (p.name,key+' card')
     assert d['nc_state_holding'] != d['nc_state_not_exposed'], p.name+' honest states'
 PY
 {
@@ -9820,7 +9957,7 @@ function shQuote(s){return "'"+String(s).replace(/'/g,"'\\''")+"'"}
 function cfgConflictResolve(){return []} function cfgRequireNotes(){return []} function cfgCurVal(){}
 function cfgMarkPending(){} function cfgRuleNotice(){} function haptic(){} function uiSound(){}
 function cfgSoundKind(){return ''} function cfgRender(){renders++} function cfgIsActive(){return true}
-const CFG_ITEMS=[{key:'night_charge_enable',type:'bool'}], CFG_SILENT_KEYS=[];
+const CFG_ITEMS=[{key:'night_charge_enable',type:'bool'},{key:'night_charge_start',type:'time'},{key:'night_charge_end',type:'time'}], CFG_SILENT_KEYS=[];
 let _cfgLoadSig='x', _cfgVals={};
 let helperState='holding';
 async function run(c){runs.push(c);if(runs.length===1)return{errno:0,stdout:''};return{errno:0,stdout:'version=1\nenabled=1\nstate='+helperState+'\nresult='+helperState+'\ninterface=limit\ncapacity=80\ncharging=1\ntarget=80\nwindow=22:00-06:00\n'};}
@@ -9834,6 +9971,7 @@ let bad=0;const chk=(c,m)=>{if(!c){console.log('FAIL '+m);bad++}};
 const parsed=nightChargeParse('state=holding\ninterface=limit\ncapacity=80\ncharging=1\nstate=not_exposed\n<script>=bad\nunknown=x\n');
 chk(parsed.state==='not_exposed'&&parsed.capacity==='80'&&parsed.interface==='limit','strict parser');
 chk(nightChargeBadge('holding').cls==='good'&&nightChargeBadge('not_exposed').cls==='warn','badge classes');
+chk(nightChargeBadge('invalid_window').cls==='bad'&&nightChargeBadge('invalid_window').text===I18N.en.nc_state_invalid_window,'invalid interval badge');
 chk(cfgStatus({key:'night_charge_enable'},'1').text===I18N.en.nc_state_unknown,'unknown enabled badge');
 _nightCharge.state='restore_failed';
 chk(cfgStatus({key:'night_charge_enable'},'0').cls==='bad','disabled card hides restore failure');
@@ -9849,7 +9987,12 @@ chk(cfgStatus({key:'night_charge_enable'},'0').text===I18N.en.nc_state_off,'off 
  chk(toasts[2][1]==='bad'&&toasts[2][0]===I18N.en.nc_state_write_failed,'write failure toast');
  helperState='off';runs=[];await cfgSet('night_charge_enable','0',ctl);
  chk(toasts[3][0]===I18N.en.t_nc_off,'disable handback toast');
- chk(renders===4,'cards did not redraw');
+ helperState='released';runs=[];await cfgSet('night_charge_start','08:15',ctl);
+ chk(runs.length===2&&runs[0].includes("set 'night_charge_start' '08:15'")&&runs[1].includes("asb_night_charge.sh' apply"),'start boundary did not reconcile immediately: '+runs);
+ chk(toasts[4][0]===I18N.en.nc_state_released&&toasts[4][1]==='good','start boundary must follow helper outcome');
+ runs=[];await cfgSet('night_charge_end','17:45',ctl);
+ chk(runs.length===2&&runs[0].includes("set 'night_charge_end' '17:45'")&&runs[1].includes("asb_night_charge.sh' apply"),'end boundary did not reconcile immediately: '+runs);
+ chk(renders===6,'cards did not redraw');
  ASB_LANG='ru';chk(nightChargeBadge('holding').text===I18N.ru.nc_state_holding,'Russian badge');
  if(bad)process.exit(1);console.log('ok');
 })();
@@ -9859,7 +10002,10 @@ out="$(node "$T/t.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 grep -Fq "['nightcharge', 'sh ' + shQuote(MD + '/runtime/asb_night_charge.sh') + ' status']" "$H" || fail 'batched status read missing'
 grep -Fq 'nm.textContent = Tcfg(it.key, "name", it.name);' "$H" || fail 'card value insertion no longer uses textContent'
-echo 'PASS WebUI night charge: parser, honest badges, immediate apply/toasts and all 13 locales'
+grep -Fq "{ key:'night_charge_start', type:'time', def:'22:00', stock:'22:00'" "$H" || fail 'start time control missing'
+grep -Fq "{ key:'night_charge_end', type:'time', def:'06:00', stock:'06:00'" "$H" || fail 'end time control missing'
+grep -Fq "time.type = 'time'; time.className = 'cfg-time';" "$H" || fail 'native time input contract missing'
+echo 'PASS WebUI night charge: parser, honest badges, custom time controls, immediate apply/toasts and all 13 locales'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

@@ -3043,6 +3043,10 @@ i=0; while [ "$i" -lt 12 ] && [ ! -f "$SAVE" ]; do b=$((b + 50000)); rx $b; slee
 i=0; while [ "$i" -lt 12 ] && [ -f "$SAVE" ]; do b=$((b + 600000)); rx $b; sleep 0.5; i=$((i + 1)); done
 [ -f "$SAVE" ] && f "a transfer on LTE did not give 5G back"
 [ "$(mask)" = "$NR_ON" ] || f "mask not 5G after the transfer give-back"
+# The state handback and its log line are separate watcher operations. Under a parallel
+# regression the saved file can disappear just before the line is flushed; wait briefly
+# for that same required evidence instead of turning a valid handback into a host flake.
+i=0; while [ "$i" -lt 20 ] && ! grep -q 'bulk: .* kbit/s with the screen off - 5G back for at least 2s' "$T/st/lte_screenoff.log" 2>/dev/null; do sleep 0.1; i=$((i + 1)); done
 grep -q 'bulk: .* kbit/s with the screen off - 5G back for at least 2s' "$T/st/lte_screenoff.log" || f "transfer give-back not logged"
 # Inside the hold a stream does not switch back at once...
 b=$((b + 50000)); rx $b; sleep 0.6

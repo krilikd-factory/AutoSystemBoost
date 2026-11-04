@@ -731,8 +731,8 @@ awk -F'|' '
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
-[ "$(wc -l < "$TMP/conf")" = "216" ] || fail "expected 216 config keys, got $(wc -l < "$TMP/conf")"
-[ "$(wc -l < "$TMP/registry")" = "216" ] || fail "expected 216 registry keys, got $(wc -l < "$TMP/registry")"
+[ "$(wc -l < "$TMP/conf")" = "218" ] || fail "expected 218 config keys, got $(wc -l < "$TMP/conf")"
+[ "$(wc -l < "$TMP/registry")" = "218" ] || fail "expected 218 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
 grep -qx 'kernel_sched_stats|advanced|webui_sensitive|shell' "$REG" || fail 'kernel_sched_stats consumer is not pinned to shell'
@@ -752,7 +752,7 @@ done > "$TMP/consumer_bad"
 
 sed -n '/const CFG_ITEMS = \[/,/^\];/p' "$ROOT/webroot/index.html" \
   | grep -oE "key:'[A-Za-z_][A-Za-z0-9_]*'" | sed "s/key:'//;s/'//" | sort -u > "$TMP/cards"
-[ "$(wc -l < "$TMP/cards")" = "87" ] || fail "expected 87 WebUI cards, got $(wc -l < "$TMP/cards")"
+[ "$(wc -l < "$TMP/cards")" = "89" ] || fail "expected 89 WebUI cards, got $(wc -l < "$TMP/cards")"
 _card_bad="$(while IFS= read -r key; do
   cls="$(awk -F'|' -v k="$key" '$1==k {print $2; exit}' "$REG")"
   case "$cls" in user|advanced) : ;; *) printf '%s ' "$key" ;; esac
@@ -3654,7 +3654,7 @@ echo "PASS: fix144 contract"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 fail() { echo "FAIL fix145: $*"; exit 1; }
 W="$ROOT/webroot/index.html"; D="$ROOT/tools/asb_diag.sh"
-grep -q 'id="cfgSoundBtn" onclick="uiSoundToggle()"' "$W" || fail "no switch for the interface sounds"
+grep -q 'id="cfgSoundBtn" type="button" onclick="uiSoundToggle()"' "$W" || fail "no switch for the interface sounds"
 grep -q '^function uiOtherAudioRefresh() {' "$W" || fail "cues still play over another app's audio"
 grep -q "if (_screen !== _cfgShownScreen) {" "$W" || fail "settings entrance runs on every repaint (cards twitch)"
 grep -q '^_vlim="$(dumpsys audio' "$D" || fail "asbdiag does not show Android's volume limits"
@@ -8962,6 +8962,32 @@ NOW=360; out="$(run_nc tick)"; [ "$(state "$out")" = released ] || fail "06:00: 
 [ "$(cat "$T/case/psy/charge_control_limit")" = 100 ] || fail '06:00 did not restore 100'
 [ ! -e "$T/case/state/night_charge.ledger" ] || fail '06:00 retained ownership'
 
+# Custom same-day interval: minute precision, inclusive start and exclusive end.
+setup_case; make_limit
+printf 'night_charge_start=08:15\nnight_charge_end=17:45\n' >> "$T/case/mod/config/governor.conf"
+NOW=494; out="$(run_nc apply)"; [ "$(state "$out")" = released ] || fail "08:14 custom same-day: $out"
+NOW=495; out="$(run_nc apply)"; [ "$(state "$out")" = holding ] || fail "08:15 custom start: $out"
+printf '%s\n' "$out" | grep -qx 'window=08:15-17:45' || fail "custom status window: $out"
+NOW=1064; out="$(run_nc tick)"; [ "$(state "$out")" = holding ] || fail "17:44 custom same-day: $out"
+NOW=1065; out="$(run_nc tick)"; [ "$(state "$out")" = released ] || fail "17:45 custom end: $out"
+[ "$(cat "$T/case/psy/charge_control_limit")" = 100 ] || fail 'custom end did not restore the original'
+
+# A boundary edit while holding must release immediately; malformed/equal manual values
+# fail closed and still hand back the old hold instead of stranding it.
+sed -i 's/^night_charge_start=.*/night_charge_start=23:17/;s/^night_charge_end=.*/night_charge_end=04:19/' "$T/case/mod/config/governor.conf"
+NOW=1397; out="$(run_nc apply)"; [ "$(state "$out")" = holding ] || fail "23:17 custom overnight: $out"
+[ "$(cat "$T/case/psy/charge_control_limit")" = 80 ] || fail 'custom overnight did not hold'
+# The config writer keeps one key per setting; emulate its atomic result, not a duplicate.
+sed -i 's/^night_charge_start=.*/night_charge_start=22:00/;s/^night_charge_end=.*/night_charge_end=23:00/' "$T/case/mod/config/governor.conf"
+NOW=1397; out="$(run_nc apply)"; [ "$(state "$out")" = released ] || fail "active window edit handback: $out"
+[ "$(cat "$T/case/psy/charge_control_limit")" = 100 ] || fail 'active window edit left the old hold'
+NOW=1320; out="$(run_nc apply)"; [ "$(state "$out")" = holding ] || fail "edited overnight start: $out"
+sed -i 's/^night_charge_end=.*/night_charge_end=22:00/' "$T/case/mod/config/governor.conf"
+out="$(run_nc apply)"; [ "$(state "$out")" = invalid_window ] || fail "equal endpoints: $out"
+[ "$(cat "$T/case/psy/charge_control_limit")" = 100 ] || fail 'equal endpoints stranded a hold'
+sed -i 's/^night_charge_end=.*/night_charge_end=24:00/' "$T/case/mod/config/governor.conf"
+out="$(run_nc status)"; [ "$(state "$out")" = invalid_window ] || fail "invalid HH:MM status: $out"
+
 # Already above 80: charging may stop, capacity is never artificially lowered.
 setup_case; make_limit; printf '91\n' > "$T/case/psy/capacity"
 out="$(run_nc apply)"; [ "$(state "$out")" = holding ] || fail "above 80: $out"
@@ -9007,7 +9033,7 @@ out="$(run_nc restore)"; [ "$(state "$out")" = off ] || fail "restore command: $
 [ "$(cat "$T/case/psy/charge_control_limit")" = 100 ] || fail 'restore command left 80'
 grep -Fq 'asb_night_charge.sh restore' "$ROOT/uninstall.sh" || fail 'uninstall does not invoke restore'
 
-echo 'PASS night charge sysfs: window, limit/switch hold, unplug, external ownership, disable and uninstall restore'
+echo 'PASS night charge sysfs: default/custom same-day/overnight windows, exact handback, invalid fail-safe, limit/switch, unplug and uninstall'
 )
 
 t_night_charge_failure_runtime() (
@@ -9057,6 +9083,8 @@ printf 'night_charge_enable=0\n' > "$T/mod/config/governor.conf"
 chmod 0444 "$T/psy/charge_control_limit"
 out="$(run_nc apply)"; [ "$(state "$out")" = restore_failed ] || fail "restore failure: $out"
 out="$(run_nc status)"; [ "$(state "$out")" = restore_failed ] || fail "status hid restore failure: $out"
+printf 'night_charge_enable=1\nnight_charge_start=22:00\nnight_charge_end=22:00\n' > "$T/mod/config/governor.conf"
+out="$(run_nc status)"; [ "$(state "$out")" = restore_failed ] || fail "invalid window hid restore failure: $out"
 [ "$(cat "$T/psy/charge_control_limit")" = 80 ] || fail 'restore failure fixture changed unexpectedly'
 chmod 0644 "$T/psy/charge_control_limit"
 
@@ -9098,57 +9126,93 @@ after="$(sha256sum "$T/mod/config/governor.conf" | cut -d' ' -f1)"
 [ "$before" = "$after" ] || fail 'invalid write changed active config'
 grep -qx 'night_charge_enable=1' "$T/state/governor.conf.snapshot" || fail 'invalid write changed snapshot'
 run_writer set night_charge_enable 0 "$T/state/governor.conf.snapshot" >/dev/null || fail 'disable rejected'
-# A pre-fix330 config has no key: validation remains optional during migration, and the
-# normal writer can add the new setting without weakening its closed schema.
-sed -i '/^night_charge_enable=/d;/^# Optional 22:00-06:00 charge ceiling/d' "$T/mod/config/governor.conf"
+run_writer set night_charge_start 08:15 "$T/state/governor.conf.snapshot" >/dev/null || fail 'valid custom start rejected'
+run_writer set night_charge_end 17:45 "$T/state/governor.conf.snapshot" >/dev/null || fail 'valid custom end rejected'
+grep -qx 'night_charge_start=08:15' "$T/state/governor.conf.snapshot" || fail 'custom start missing from snapshot'
+grep -qx 'night_charge_end=17:45' "$T/state/governor.conf.snapshot" || fail 'custom end missing from snapshot'
+for pair in 'night_charge_start 24:00' 'night_charge_start 8:15' 'night_charge_end 12:60' 'night_charge_end 08:15'; do
+  before="$(sha256sum "$T/mod/config/governor.conf" | cut -d' ' -f1)"
+  if run_writer set $pair "$T/state/governor.conf.snapshot" >/dev/null 2>&1; then fail "invalid interval accepted: $pair"; fi
+  after="$(sha256sum "$T/mod/config/governor.conf" | cut -d' ' -f1)"
+  [ "$before" = "$after" ] || fail "invalid interval changed config: $pair"
+done
+# A pre-fix330/332 config has none of these keys: validation remains optional during
+# migration, and the normal writer can add them without weakening its closed schema.
+sed -i '/^night_charge_enable=/d;/^night_charge_start=/d;/^night_charge_end=/d;/^# Optional 22:00-06:00 charge ceiling/d;/^# Optional charge ceiling in a custom HH:MM interval/d;/^# Start is inclusive, end exclusive/d' "$T/mod/config/governor.conf"
 run_writer set night_charge_enable 1 "$T/state/governor.conf.snapshot" >/dev/null || fail 'legacy config migration rejected'
 [ "$(grep -c '^night_charge_enable=' "$T/mod/config/governor.conf")" -eq 1 ] || fail 'migration did not add one key'
 [ "$(grep -c 'night_charge_enable' "$ROOT/common/install.sh")" -ge 4 ] || fail 'upgrade/snapshot preservation lists incomplete'
 echo 'PASS night charge config: default off, atomic writer/snapshot, invalid rollback and legacy migration'
 )
 
-t_installer_presentation_fix330() (
-# Cosmetic-only contract: all languages gain icons/labels, numeric IDs stay stable,
-# and the summary executes against selected flags without implying unselected work.
+t_installer_presentation_fix331() (
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 I="$ROOT/common/install.sh"
-T="$(mktemp -d "${TMPDIR:-/tmp}/asb_installer_presentation.XXXXXX")"
-trap 'rm -rf "$T"' EXIT HUP INT TERM
 fail() { echo "FAIL installer presentation: $*" >&2; exit 1; }
-for f in englishtext russiantext ukrainiantext germantext spanishtext portuguesetext \
-         turkishtext indonesiantext italiantext frenchtext armeniantext arabictext chinesetext; do
-  L="$ROOT/common/$f.sh"
-  [ "$(grep -c '^ASB_MENU_' "$L")" -eq 15 ] || fail "$f menu count"
-  [ "$(grep -c '^ASB_CAT_' "$L")" -eq 19 ] || fail "$f category count"
-  grep -q '^ASB_L_BAT_NIGHT=' "$L" || fail "$f night summary"
-  grep -q '🎧' "$L" && grep -q '🛡️' "$L" || fail "$f icons"
-  bash -n "$L" || fail "$f syntax"
+[ -f "$I" ] || fail "common/install.sh missing"
+bash -n "$I" || fail "installer syntax"
+# The rejected duplicate category checklist is gone; the detailed topic sections remain.
+grep -q 'ASB_SEC_CATEGORIES\|ASB_CAT_' "$I" && fail 'rejected category checklist remains'
+grep -q 'for _c in CPU VM KERNEL DISPLAY FPS AUDIO MEDIA CAMERA' "$I" && fail 'category loop remains'
+for key in ASB_SEC_AUDIO ASB_SEC_CAMERA ASB_SEC_PERF ASB_SEC_LOCATION ASB_SEC_WIFI ASB_SEC_SYSTEM \
+           ASB_SEC_BATTERY ASB_SEC_MEMORY ASB_L_BAT_NIGHT; do
+  grep -q "$key" "$I" || fail "detailed section lost: $key"
 done
-# IDs remain bound to their original categories in every language.
-for pair in 'AUDIO 1' 'BT 2' 'CAMERA 3' 'CPU 4' 'VM 5' 'NET 6' 'WIFI 7' 'GPS 8' \
-            'KERNEL 9' 'LOG 10' 'RADIO_IMS 11' 'DISPLAY 12' 'FPS 13' 'SECURITY 14' 'BG_TRIM 15'; do
-  set -- $pair
-  grep -Eq "^ASB_MENU_$1=\" *$2\\)" "$ROOT/common/englishtext.sh" || fail "menu ID changed: $pair"
+for token in 'ASB_SEC_ZYGISK' 'zygisk/arm64-v8a.so' 'zygisk/armeabi-v7a.so' \
+             'ASB_L_ZY_BOTH' 'ASB_L_ZY_ARM64' 'ASB_L_ZY_ARM32' 'ASB_L_ZY_NONE' 'ASB_L_ZY_CHECK'; do
+  grep -q "$token" "$I" || fail "Zygisk package state missing: $token"
 done
-sed -n '/^  _en_n=0$/,/^  done$/p' "$I" > "$T/loop.sh"
-grep -Fq 'for _c in CPU VM KERNEL DISPLAY FPS AUDIO MEDIA CAMERA BT WIFI NET RADIO_IMS' "$T/loop.sh" || fail 'logical category order missing'
-cat > "$T/render.sh" <<'EOF_RENDER'
-. "$1"
+grep -q 'runtime activation: check WebUI after reboot' "$I" || fail 'runtime verification is not deferred to WebUI'
+python3 - "$ROOT/common" <<'PY'
+from pathlib import Path
+import re, sys
+root=Path(sys.argv[1]); files=sorted(root.glob('*text.sh'))
+assert len(files)==13, len(files)
+menu=(('AUDIO',1),('BT',2),('CAMERA',3),('CPU',4),('VM',5),('NET',6),('WIFI',7),('GPS',8),
+      ('KERNEL',9),('LOG',10),('RADIO_IMS',11),('DISPLAY',12),('FPS',13),('SECURITY',14),('BG_TRIM',15))
+zykeys=('ASB_SEC_ZYGISK','ASB_L_ZY_BOTH','ASB_L_ZY_ARM64','ASB_L_ZY_ARM32','ASB_L_ZY_NONE','ASB_L_ZY_CHECK')
+for p in files:
+    s=p.read_text(encoding='utf-8')
+    assert len(re.findall(r'^ASB_MENU_[A-Z_]+=',s,re.M))==15, p.name+' menu count'
+    for key,i in menu:
+        assert re.search(r'^ASB_MENU_'+key+r'=" *'+str(i)+r'\)',s,re.M), (p.name,key,'stable numeric id')
+    assert 'ASB_SEC_CATEGORIES' not in s and not re.search(r'^ASB_CAT_',s,re.M), p.name+' stale checklist labels'
+    for key in zykeys:
+        m=re.search(r'^'+key+r'="([^"]+)"$',s,re.M)
+        assert m and m.group(1).strip(), (p.name,key)
+    assert 'ASB_L_BAT_NIGHT=' in s, p.name+' night note'
+print('13 locales: stable menu IDs, detailed sections, six Zygisk summary keys')
+PY
+for f in "$ROOT"/common/*text.sh; do bash -n "$f" || fail "locale syntax: ${f##*/}"; done
+# Execute the real summary against all four actual ABI payload states.
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+sed -n '/^asb_end_banner() {/,/^}/p' "$I" > "$T/summary.sh"
+[ -s "$T/summary.sh" ] || fail 'summary extraction'
+. "$ROOT/common/englishtext.sh"
+. "$T/summary.sh"
 ui_print() { printf '%s\n' "$1"; }
-for c in CPU VM KERNEL DISPLAY FPS AUDIO MEDIA CAMERA BT WIFI NET RADIO_IMS GPS NFC LPM BG_TRIM SECURITY LOG VENDOR_OVERLAY; do eval "ASB_$c=false"; done
-ASB_CPU=true; ASB_AUDIO=true; ASB_WIFI=true
-. "$2"
-EOF_RENDER
-out="$(sh "$T/render.sh" "$ROOT/common/russiantext.sh" "$T/loop.sh")"
-[ "$(printf '%s\n' "$out" | grep -c '✓')" -eq 3 ] || fail "selected count: $out"
-printf '%s\n' "$out" | grep -q '⚙️  CPU' || fail "CPU icon/label: $out"
-printf '%s\n' "$out" | grep -q '🎧  Аудио' || fail "localized audio: $out"
-printf '%s\n' "$out" | grep -q '📶  Wi-Fi' || fail "Wi-Fi icon/label: $out"
-! printf '%s\n' "$out" | grep -q 'Камера' || fail "unselected camera was presented"
-[ "$(printf '%s\n' "$out" | grep '✓' | sed -n '1p')" = '      ✓  ⚙️  CPU' ] || fail 'summary order changed'
-grep -Fq 'case "$(_sg night_charge_enable)" in' "$I" || fail 'enabled night option absent from battery summary'
-echo 'PASS installer presentation: 13 localized icon menus, stable IDs, logical selected-only summary and night-charge note'
+SEPARATOR='---'; INFO=''; NVBASE="$T"; MODID=AutoSystemBoost; ASB_NOTES=''; ASB_NOTES_N=0
+for state in both arm64 arm32 none; do
+  MODPATH="$T/$state"; mkdir -p "$MODPATH/zygisk" "$MODPATH/config"
+  : > "$MODPATH/config/governor.conf"; printf 'version=V65\n' > "$MODPATH/module.prop"
+  case "$state" in
+    both) printf x > "$MODPATH/zygisk/arm64-v8a.so"; printf x > "$MODPATH/zygisk/armeabi-v7a.so" ;;
+    arm64) printf x > "$MODPATH/zygisk/arm64-v8a.so" ;;
+    arm32) printf x > "$MODPATH/zygisk/armeabi-v7a.so" ;;
+  esac
+  out="$(asb_end_banner)"
+  printf '%s\n' "$out" | grep -q 'ZYGISK OBSERVER' || fail "$state: section absent"
+  printf '%s\n' "$out" | grep -q 'runtime activation: check WebUI after reboot' || fail "$state: runtime boundary absent"
+  case "$state" in
+    both) printf '%s\n' "$out" | grep -q 'arm64 + arm32 libraries staged' || fail "$state: wrong payload" ;;
+    arm64) printf '%s\n' "$out" | grep -q 'arm64 library staged; arm32 not present' || fail "$state: wrong payload" ;;
+    arm32) printf '%s\n' "$out" | grep -q 'arm32 library staged; arm64 not present' || fail "$state: wrong payload" ;;
+    none) printf '%s\n' "$out" | grep -q 'native libraries not present in this package' || fail "$state: false payload success" ;;
+  esac
+  printf '%s\n' "$out" | grep -q 'PREPARED COMPONENTS' && fail "$state: rejected list printed"
+done
+echo 'PASS installer presentation fix331: detailed sections kept, no duplicate checklist, four honest Zygisk ABI states and 13 locales'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
