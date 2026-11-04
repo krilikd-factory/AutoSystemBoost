@@ -166,6 +166,7 @@ night_quiet_auto|internal|engine_or_derived|both
 night_modem_idle|user|webui_standard|both
 night_quiet_auto_min_samples|internal|engine_or_derived|both
 charge_aware_enable|user|webui_standard|both
+night_charge_enable|advanced|webui_sensitive|shell
 cool_gaming|user|webui_standard|both
 main_capacity_parity|internal|engine_or_derived|native
 unlock_lift_s|internal|engine_or_derived|both
