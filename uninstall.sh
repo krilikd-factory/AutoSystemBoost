@@ -264,8 +264,17 @@ pkill -f "asb_net_routes.sh watch" >/dev/null 2>&1 || true
 # Same shape as the location restore below: recorded per package, so an app the user
 # restricted themselves stays restricted.
 if [ -f /data/adb/asb/multicast_restricted ] && command -v appops >/dev/null 2>&1; then
-  while IFS= read -r _mp; do
-    [ -n "$_mp" ] && _fw appops set "$_mp" WIFI_MULTICAST allow >/dev/null 2>&1
+  while IFS='|' read -r _mp _mf _ml _mo; do
+    case "$_mp" in ''|*[!A-Za-z0-9_.]*) continue ;; esac
+    case "$_mo" in allow|default) : ;; *) _mo=default ;; esac
+    # Restore only ASB's still-active package ignore. A mode changed by the user or
+    # another tool after our write is not ours to overwrite, including in the deferred
+    # boot-time queue. Read-back runs when the queued command actually executes.
+    _fw sh -c '
+      _m="$(appops get "$1" WIFI_MULTICAST 2>/dev/null | grep -v "Uid mode" \
+        | sed -n "s/.*WIFI_MULTICAST: \([a-z_]*\).*/\1/p" | head -1)"
+      [ "$_m" = ignore ] && appops set "$1" WIFI_MULTICAST "$2" >/dev/null 2>&1 || true
+    ' _ "$_mp" "$_mo" >/dev/null 2>&1
   done < /data/adb/asb/multicast_restricted
   rm -f /data/adb/asb/multicast_restricted 2>/dev/null
 fi

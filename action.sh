@@ -1084,6 +1084,7 @@ T_Y_LTPO="LTPO: ASB has priority"
 T_AB="switched here automatically · returns to %s when charged"
 T_BAD_HEAD="NOT APPLIED"
 T_ALL_OK="All configured tweaks verified applied"
+T_ALL_REFUSED="Applied except %s Android setting(s): %s - not in effect; this is not an install failure (details: asbdiag)"
 T_B_GOV="governor is not running"
 T_B_UHQA="hi-fi profile — persist.audio.uhqa is not 1 (restart audioserver?)"
 T_B_LOUD="loudness %s — volume table not reshaped (reboot needed?)"
@@ -2854,7 +2855,22 @@ if [ -n "$_bad" ]; then
   _f "  ⚠️  $T_BAD_HEAD"
   printf '%s\n' "$_bad"
 else
-  _f "  ✅  $T_ALL_OK"
+  # A clean governor/app-op apply does not make a ROM-refused settings key applied.
+  # Use each key's latest ledger result, exactly as asbdiag's REFUSED verdict does;
+  # an earlier refusal corrected by a later write must not poison this summary.
+  _act_ref_rows="$(awk -F'|' '$2 != "reconcile" {
+      k = $2 "/" $3; last[k] = $7
+    }
+    END {
+      for (k in last) if (last[k] == "not_writable" || last[k] == "readback_mismatch") print k
+    }' /data/adb/asb/apply_ledger 2>/dev/null | sort)"
+  _act_ref_n="$(printf '%s\n' "$_act_ref_rows" | awk 'NF { n++ } END { print n+0 }')"
+  if [ "$_act_ref_n" -gt 0 ]; then
+    _act_ref_names="$(printf '%s\n' "$_act_ref_rows" | awk 'NF && n < 3 { s = s (s ? ", " : "") $0; n++ } END { print s }')"
+    _f "  ⚠️  $T_ALL_REFUSED" "$_act_ref_n" "${_act_ref_names:-unknown}"
+  else
+    _f "  ✅  $T_ALL_OK"
+  fi
 fi
 
 # The link, not the launch.
