@@ -29,6 +29,9 @@
 #   audio    spk_min=<n>  pctph=<x.x>  ma=<n>
 #   charge   types=<Fast(17) N/A(197)>
 #   smart    watching=<n>  testing=<n>  helped=<n>  nothelped=<n>  ctxlearn=<n>
+#   smartlive state=<adapting|active|manual|disabled|unknown> profile=<name>
+#            feedback=<native status> coverage=<start_latest|...>
+#            accepted_delta=<n|unknown> ... (native log-feedback counters, fix321)
 #   mwake    n=<n>  nights=<n|unknown>  per_night=<x.x>  typical_s=<n>
 #   cfg      key=<setting>  value=<v>                  (the settings the advice can point at)
 #   zygisk   state=<verdict> coverage=<start_latest|...> ..._delta=<n|unknown>  (fix275)
@@ -1282,6 +1285,73 @@ if [ -s "$_DIR/smart_records.txt" ]; then
       "$(printf '%s' "$_mw" | sed -n 's/.*per_night=\([0-9.]*\).*/\1/p')" \
       "$(printf '%s' "$_mw" | sed -n 's/.*typical_s=\([0-9]*\).*/\1/p')"
   fi
+fi
+
+# ----- Smart live state versus stored decisions (fix321) -------------------------
+# A smart_records.txt summary is a governor-session store, not proof that Smart ran during
+# this capture. Use the live state only for the capture that is still running; a saved
+# capture uses its own end/latest/before snapshots. Counter deltas need two monotonic
+# snapshots: a restart or a single snapshot leaves them unknown instead of relabelling
+# cumulative values as work done by this capture.
+_SM_S="$_DIR/before.txt"
+_SM_L=""
+if [ "$_running" = 1 ] && [ -r "${ASB_GOV_STATE_FILE:-/dev/.asb/state}" ]; then
+  _SM_L="${ASB_GOV_STATE_FILE:-/dev/.asb/state}"
+elif [ -r "$_DIR/after.txt" ]; then
+  _SM_L="$_DIR/after.txt"
+else
+  _SM_L="$(ls -1 "$_DIR"/snapshot_*.txt 2>/dev/null | sort | tail -n 1)"
+fi
+set --
+[ -r "$_SM_S" ] && set -- "$@" "$_SM_S"
+[ -n "$_SM_L" ] && [ -r "$_SM_L" ] && [ "$_SM_L" != "$_SM_S" ] && set -- "$@" "$_SM_L"
+if [ "$#" -gt 0 ]; then
+  awk -v SF="$_SM_S" -v LF="$_SM_L" '
+    function wanted(k) {
+      return k == "profile" || k == "smart_mode" || k == "smooth_log_status" ||
+             k == "smooth_log_accepted" || k == "smooth_log_rejected" ||
+             k == "smooth_log_suppressed" || k == "smooth_log_checks" ||
+             k == "smooth_log_reads"
+    }
+    FNR == 1 { inside=(FILENAME !~ /\.txt$/); marked=0 }
+    $0 == "--- state (key=value) ---" { inside=1; marked=1; next }
+    marked && $0 ~ /^--- / { inside=0; next }
+    inside {
+      p=index($0,"="); if (p <= 1) next
+      k=substr($0,1,p-1); v=substr($0,p+1)
+      if (!wanted(k)) next
+      if (FILENAME == SF) { SV[k]=v; hs=1 }
+      if (FILENAME == LF && LF != SF) { LV[k]=v; hl=1 }
+    }
+    function add(k,v) { if (v == "") v="unknown"; gsub(/[\t\r\n]/," ",v); out=out "\t" k "=" v }
+    END {
+      if (!hs && !hl) exit
+      for (k in LV) U[k]=LV[k]
+      for (k in SV) if (!(k in U)) U[k]=SV[k]
+      p=U["profile"]; en=U["smart_mode"]
+      state=(p == "" ? "unknown" : (p != "smart" ? "manual" : (en == "0" ? "disabled" : (en == "1" ? "active" : "unknown"))))
+      cov=(hs && hl ? "start_latest" : (hl ? "latest_only" : "start_only"))
+      reset=0
+      n=split("smooth_log_accepted smooth_log_rejected smooth_log_suppressed smooth_log_checks smooth_log_reads", keys, " ")
+      for (i=1;i<=n;i++) {
+        k=keys[i]
+        if (hs && hl && SV[k] ~ /^[0-9]+$/ && LV[k] ~ /^[0-9]+$/ && LV[k]+0 < SV[k]+0) reset=1
+      }
+      if (state == "active" && !reset && hs && hl && SV["smooth_log_accepted"] ~ /^[0-9]+$/ &&
+          LV["smooth_log_accepted"] ~ /^[0-9]+$/ && LV["smooth_log_accepted"]+0 > SV["smooth_log_accepted"]+0) state="adapting"
+      out="smartlive"; add("state",state); add("profile",p); add("smart_mode",en)
+      add("feedback",U["smooth_log_status"]); add("coverage",cov)
+      for (i=1;i<=n;i++) {
+        k=keys[i]; short=k; sub(/^smooth_log_/,"",short)
+        if (!reset && hs && hl && SV[k] ~ /^[0-9]+$/ && LV[k] ~ /^[0-9]+$/ && LV[k]+0 >= SV[k]+0) d=LV[k]-SV[k]
+        else d="unknown"
+        add(short "_start",hs && SV[k] ~ /^[0-9]+$/ ? SV[k] : "unknown")
+        add(short "_latest",hl && LV[k] ~ /^[0-9]+$/ ? LV[k] : "unknown")
+        add(short "_delta",d)
+      }
+      add("deltas",hs && hl ? (reset ? "counter_reset_or_restart" : "available") : "unavailable")
+      print out
+    }' "$@" 2>/dev/null
 fi
 
 # ----- the settings the advice can point at (fix200) -----------------------------
