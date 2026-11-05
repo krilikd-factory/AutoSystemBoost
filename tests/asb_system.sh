@@ -8965,8 +8965,10 @@ NOW=360; out="$(run_nc tick)"; [ "$(state "$out")" = released ] || fail "06:00: 
 # Custom same-day interval: minute precision, inclusive start and exclusive end.
 setup_case; make_limit
 printf 'night_charge_start=08:15\nnight_charge_end=17:45\n' >> "$T/case/mod/config/governor.conf"
+grep -qx 'night_charge_start=08:15' "$T/case/mod/config/governor.conf" || fail 'custom start fixture not written'
+grep -qx 'night_charge_end=17:45' "$T/case/mod/config/governor.conf" || fail 'custom end fixture not written'
 NOW=494; out="$(run_nc apply)"; [ "$(state "$out")" = released ] || fail "08:14 custom same-day: $out"
-NOW=495; out="$(run_nc apply)"; [ "$(state "$out")" = holding ] || fail "08:15 custom start: $out"
+NOW=495; out="$(run_nc apply)"; [ "$(state "$out")" = holding ] || { cat "$T/case/mod/config/governor.conf" >&2; fail "08:15 custom start: $out"; }
 printf '%s\n' "$out" | grep -qx 'window=08:15-17:45' || fail "custom status window: $out"
 NOW=1064; out="$(run_nc tick)"; [ "$(state "$out")" = holding ] || fail "17:44 custom same-day: $out"
 NOW=1065; out="$(run_nc tick)"; [ "$(state "$out")" = released ] || fail "17:45 custom end: $out"

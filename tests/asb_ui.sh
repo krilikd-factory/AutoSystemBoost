@@ -741,7 +741,12 @@ for round in $(seq 1 12); do
   # the losing side of this race - that is the behaviour being measured.
   wait "$C1" || true; wait "$C2" || true
   CONCURRENT="$(cat "$TMP/concurrent_${round}_a.out" "$TMP/concurrent_${round}_b.out")"
-  [ "$(printf '%s\n' "$CONCURRENT" | grep -c '^status=started$')" -eq 1 ] || { echo "FAIL debug support: concurrent start count round=$round" >&2; exit 1; }
+  if [ "$(printf '%s\n' "$CONCURRENT" | grep -c '^status=started$')" -ne 1 ]; then
+    echo "FAIL debug support: concurrent start count round=$round" >&2
+    printf '  concurrent answers:\n%s\n' "$CONCURRENT" >&2
+    printf '  recorder log:\n' >&2; tail -n 12 "$TMP/full_day.out" >&2 2>/dev/null || true
+    exit 1
+  fi
   if ! grep -Fq 'status=already_running' "$TMP/concurrent_${round}_a.out" "$TMP/concurrent_${round}_b.out"; then
     echo "FAIL debug support: concurrent guard did not report running round=$round" >&2
     printf '  concurrent answers:\n%s\n' "$CONCURRENT" >&2
