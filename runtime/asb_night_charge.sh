@@ -14,6 +14,8 @@ BOOTID_FILE="${ASB_NC_BOOTID:-/proc/sys/kernel/random/boot_id}"
 TARGET=80
 START_MIN=1320
 END_MIN=360
+NC_START=22:00
+NC_END=06:00
 NC_KIND=none
 NC_NODE=""
 NC_ENABLED=0
@@ -24,11 +26,49 @@ NC_BOOT=unknown
 L_KIND=""; L_ORIG=""; L_APPLIED=""; L_OWNED=""; L_BOOT=""
 L_FOUND=0
 
-_nc_cfg() {
-  grep -E '^[[:space:]]*night_charge_enable=' "$CONF" 2>/dev/null \
-    | head -1 | sed 's/.*=//' | tr -d ' \r'
+_nc_cfg_key() {
+  # Read the small config synchronously in the shell. A pipeline here used to turn a
+  # transient fork/read failure into an empty value, silently restoring 22:00-06:00.
+  # Preserve the old grammar: first exact key, optional leading whitespace, and spaces/CR
+  # removed from its value. No background process or retry loop is introduced.
+  [ -r "$CONF" ] || return 0
+  _ck_key="$1"; _ck_cr="$(printf '\r')"
+  while IFS= read -r _ck_line || [ -n "$_ck_line" ]; do
+    case "$_ck_line" in *=*) ;; *) continue ;; esac
+    _ck_name="${_ck_line%%=*}"
+    while :; do
+      case "$_ck_name" in [[:space:]]*) _ck_name="${_ck_name#?}" ;; *) break ;; esac
+    done
+    [ "$_ck_name" = "$_ck_key" ] || continue
+    _ck_value="${_ck_line#*=}"; _ck_out=""
+    while [ -n "$_ck_value" ]; do
+      _ck_rest="${_ck_value#?}"
+      _ck_char="${_ck_value%"$_ck_rest"}"
+      _ck_value="$_ck_rest"
+      case "$_ck_char" in ' '|"$_ck_cr") ;; *) _ck_out="$_ck_out$_ck_char" ;; esac
+    done
+    printf '%s\n' "$_ck_out"
+    return 0
+  done < "$CONF"
 }
+_nc_cfg() { _nc_cfg_key night_charge_enable; }
 _nc_num() { case "$1" in ''|*[!0-9]*) return 1 ;; *) return 0 ;; esac; }
+_nc_hm_min() {
+  case "$1" in [0-1][0-9]:[0-5][0-9]|2[0-3]:[0-5][0-9]) ;; *) return 1 ;; esac
+  _h="${1%%:*}"; _m="${1##*:}"
+  printf '%s\n' "$((1$_h * 60 + 1$_m - 6100))"
+}
+_nc_load_window() {
+  _s="$(_nc_cfg_key night_charge_start)"; _e="$(_nc_cfg_key night_charge_end)"
+  [ -n "$_s" ] || _s=22:00
+  [ -n "$_e" ] || _e=06:00
+  _sm="$(_nc_hm_min "$_s")" || return 1
+  _em="$(_nc_hm_min "$_e")" || return 1
+  # Equal endpoints are rejected rather than silently becoming a 24-hour hold.
+  [ "$_sm" != "$_em" ] || return 1
+  START_MIN="$_sm"; END_MIN="$_em"; NC_START="$_s"; NC_END="$_e"
+  return 0
+}
 _nc_read() { cat "$1" 2>/dev/null | head -1 | tr -d ' \r\n'; }
 _nc_boot() {
   _b="$(_nc_read "$BOOTID_FILE")"
@@ -103,7 +143,7 @@ interface=$NC_KIND
 capacity=$NC_CAPACITY
 charging=$NC_CHARGING
 target=$TARGET
-window=22:00-06:00"
+window=$NC_START-$NC_END"
   _old="$(cat "$STATUS" 2>/dev/null)"
   if [ "$_old" != "$_out" ]; then
     mkdir -p "$STATE" 2>/dev/null || true
@@ -122,7 +162,11 @@ _nc_window() {
     _now=$((1$_h * 60 + 1$_m - 6100))
   fi
   _nc_num "$_now" && [ "$_now" -le 1439 ] 2>/dev/null || return 1
-  [ "$_now" -ge "$START_MIN" ] || [ "$_now" -lt "$END_MIN" ]
+  if [ "$START_MIN" -lt "$END_MIN" ]; then
+    [ "$_now" -ge "$START_MIN" ] && [ "$_now" -lt "$END_MIN" ]
+  else
+    [ "$_now" -ge "$START_MIN" ] || [ "$_now" -lt "$END_MIN" ]
+  fi
 }
 _nc_stale_boot() {
   _nc_ledger_load || return 1
@@ -169,6 +213,7 @@ _nc_apply_new() {
 _nc_reconcile() {
   NC_ENABLED=0
   [ "$(_nc_cfg)" = 1 ] && NC_ENABLED=1
+  _window_ok=1; _nc_load_window || _window_ok=0
   _nc_probe_battery
   _nc_boot
   _nc_discover || true
@@ -179,6 +224,12 @@ _nc_reconcile() {
   if [ "$NC_ENABLED" != 1 ]; then
     _r="$(_nc_release)"
     case "$_r" in failed|invalid) _nc_status restore_failed ;; *) _nc_status off ;; esac
+    return 0
+  fi
+  if [ "$_window_ok" != 1 ]; then
+    # A malformed/equal window must never strand ASB's previous hold.
+    _r="$(_nc_release)"
+    case "$_r" in failed|invalid) _nc_status restore_failed ;; *) _nc_status invalid_window ;; esac
     return 0
   fi
   if ! _nc_window; then
@@ -228,6 +279,7 @@ _nc_reconcile() {
 _nc_status_only() {
   NC_ENABLED=0
   [ "$(_nc_cfg)" = 1 ] && NC_ENABLED=1
+  _window_ok=1; _nc_load_window || _window_ok=0
   _nc_probe_battery
   _nc_discover || true
   _st=unknown
@@ -241,6 +293,11 @@ _nc_status_only() {
   fi
   if [ "$NC_ENABLED" = 1 ]; then
     [ "$_st" = off ] && _st=unknown
+    # An invalid interval must not hide an earlier failed restore: the kernel node
+    # may still be owned by ASB even though no new hold can be reconciled.
+    if [ "$_st" != restore_failed ] && [ "$_window_ok" != 1 ]; then
+      _st=invalid_window
+    fi
   else
     # A failed handback remains visible after the toggle is off; hiding it behind
     # a calm "off" badge would leave the user unaware of a still-owned node.
@@ -248,7 +305,7 @@ _nc_status_only() {
   fi
   printf '%s\n' "version=1" "enabled=$NC_ENABLED" "state=$_st" "result=$_st" \
     "interface=$NC_KIND" "capacity=$NC_CAPACITY" "charging=$NC_CHARGING" \
-    "target=$TARGET" "window=22:00-06:00"
+    "target=$TARGET" "window=$NC_START-$NC_END"
 }
 case "${1:-apply}" in
   status) _nc_status_only ;;
@@ -256,12 +313,13 @@ case "${1:-apply}" in
     mkdir -p "$STATE" 2>/dev/null || true
     if ! mkdir "$LOCK" 2>/dev/null; then
       NC_ENABLED=0; [ "$(_nc_cfg)" = 1 ] && NC_ENABLED=1
+      _nc_load_window || true
       _nc_probe_battery; _nc_discover || true; _nc_status unknown
       exit 0
     fi
     trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT HUP INT TERM
     if [ "$1" = restore ]; then
-      NC_ENABLED=0; _nc_probe_battery; _nc_boot; _nc_discover || true
+      NC_ENABLED=0; _nc_load_window || true; _nc_probe_battery; _nc_boot; _nc_discover || true
       if _nc_stale_boot; then rm -f "$LEDGER" 2>/dev/null; fi
       _r="$(_nc_release)"
       case "$_r" in failed|invalid) _nc_status restore_failed ;; *) _nc_status off ;; esac

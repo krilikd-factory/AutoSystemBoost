@@ -729,8 +729,12 @@ start_full_day() {
     return 0
   fi
 
+  # A loaded CI runner may not schedule the detached recorder within the old 3 s
+  # handoff even though it is alive and owns the lock. Keep the wait bounded, but allow
+  # 10 s and poll at 100 ms so a prompt claim still returns immediately. This is a
+  # one-shot launch handshake, not a persistent worker; timeout remains fail-closed.
   _wait=0
-  while [ "$_wait" -lt 3 ]; do
+  while [ "$_wait" -lt 100 ]; do
     _claim="$(pid_from_file "$PIDFILE" 2>/dev/null || true)"
     if [ "$_claim" = "$_pid" ] && pid_is_live "$_pid"; then
       echo 'status=started'
@@ -748,7 +752,7 @@ start_full_day() {
       tail -n 4 "$RUNLOG" 2>/dev/null || true
       return 8
     fi
-    sleep 1
+    sleep 0.1
     _wait=$(( _wait + 1 ))
   done
 
