@@ -7394,6 +7394,14 @@ assert [x[0] for x in specs] == ['firmware','soc','cpu_policy','gpu','memory','b
 groups = [x[2] for x in specs]
 assert groups == sorted(groups, key=['hw','sw','kernel','root','asb'].index), 'a group is split: ' + str(groups)
 assert specs[0][1] == 'dev_sec_device' and specs[6][1] == 'dev_sec_firmware', 'the phone identity opens the hardware group'
+# Every visible Device destination needs its own semantic glyph. In particular Hardware is
+# the phone/board, while Kernel is the CPU die; sharing one chip made adjacent tabs ambiguous.
+nav_fn = h[h.index('function deviceInfoNav(d) {'):h.index('function deviceInfoOverview(d) {')]
+nav_icons = dict(re.findall(r"(hw|sw|kernel|root|asb):'([^']+)'", nav_fn))
+assert nav_icons == {'hw':'hardware', 'sw':'panel', 'kernel':'kernel', 'root':'zygisk_guard', 'asb':'switches'}, nav_icons
+assert len(set(nav_icons.values())) == len(nav_icons) == 5
+for glyph in nav_icons.values():
+    assert re.search(r'^  ' + re.escape(glyph) + r": '", h, re.M), 'missing Device glyph: ' + glyph
 keys = set(json.loads((root/'webroot/i18n/en.json').read_text(encoding='utf-8')))
 for p in (root/'webroot/i18n').glob('*.json'):
     d = json.loads(p.read_text(encoding='utf-8'))
@@ -7602,6 +7610,10 @@ const d3 = parseDeviceInfo([
 ].join('\n'));
 deviceInfoRender(d3);
 const d3dump = (function walk(n) { return [n.textContent || ''].concat((n.children || []).flatMap(walk)); })(body).join('\n');
+const deviceDocks = []; (function walk(n) { if (String(n.className || '').split(/\s+/).includes('dev-page-nav')) deviceDocks.push(n); (n.children || []).forEach(walk); })(body);
+const deviceGlyphs = []; (function walk(n) { if (String(n.className || '').split(/\s+/).includes('asb-tab-ico')) deviceGlyphs.push(n.innerHTML); (n.children || []).forEach(walk); })(deviceDocks[0] || mk('div'));
+chk(JSON.stringify(deviceGlyphs) === JSON.stringify(['svg:hardware','svg:panel','svg:kernel','svg:zygisk_guard','svg:switches']), 'Device dock glyph assignment: ' + JSON.stringify(deviceGlyphs));
+chk(new Set(deviceGlyphs).size === 5, 'Device dock reuses an icon for different destinations');
 chk(d3dump.includes('ASB runtime') && d3dump.includes('battery') && d3dump.includes('collection limits, not proof'), 'fix255: ASB snapshot and unknown-evidence caveat render');
 chk(countDeviceClass(body, 'dev-unknown') === 1 && countDeviceClass(body, 'dev-group-guide') === 5, 'fix255: unknown values stay neutral and all five group guides render');
 chk(deviceValueClass('kernel_external', 'status', 'not_observable').includes('dev-unknown') && deviceInfoEvidence(parseDeviceInfo('D\tkernel_external\tstatus\tnot_observable')).limited === 1, 'fix255: not observable never becomes proof of stock voltage or a healthy value');
@@ -8387,7 +8399,8 @@ assert 'background:var(--glass-nav-wash),var(--glass-nav-surface) !important' in
 assert '.log-menu' not in nav and '.hdr-cap' not in nav
 assert b.index(nav_selector + ' {') > b.index('html:root[data-asb-glass="1"] :is(.asb-tabbar')
 # The Zygisk note's logical gutter survives the more specific lgr-note reset, including RTL.
-assert '#zygiskPage .zy-controls-card > .dev-evidence { padding-inline-start:12px; }' in b
+assert '#zygiskPage .dev-evidence { padding-inline-start:12px; }' in b
+assert '#zygiskPage .zy-controls-card > .dev-evidence' not in b
 # Nested report evidence must not double the parent's blur/shadow.
 nested = re.search(r'html:root\[data-asb-glass="1"\] :is\(\.lgr-sec,\.cfg-zygisk-card\) :is\(\.lgr-hero,\.lgr-quality,\.live-info-now,\.live-info-src\) \{([^}]*)\}', b)
 assert nested and '-webkit-backdrop-filter:none' in nested.group(1)
@@ -8560,7 +8573,8 @@ assert 'pre && pre.state' in smart and smart.count('runBatch([')==1
 assert 'smart_pending' in smart and "kv._smartPending = 1" in smart
 warm=body('function asbStartupWarmCaches() {')
 assert 'probe.then(warm' in warm and 'if (introShown || document.hidden) return;' in warm
-assert 'cfgLoad();' in warm and 'zygiskHeaderRefresh();' in warm and 'setTimeout(' not in warm
+assert 'cfgLoad();' not in warm and 'openConfigPage() on demand' in warm
+assert 'zygiskHeaderRefresh();' in warm and 'setTimeout(' not in warm
 assert 'setTimeout(zygiskHeaderRefresh, 2500)' not in s
 load=s[s.index("window.addEventListener('load', function () {",s.index('function asbStartupWarmCaches')):s.index('function asbNavCurrent')]
 assert 'homeMeterRefresh(true)' not in load
@@ -8616,13 +8630,13 @@ const flush=()=>new Promise(r=>setImmediate(r));
   global.document={hidden:false};global.window={};
   eval(grab('function asbStartupWarmCaches() {')+';globalThis.warm=asbStartupWarmCaches;');
   window._asbBootIntroProbe=Promise.resolve(false);warm();await flush();
-  chk(cfg===1&&zy===1,'ordinary opening did not warm caches');
+  chk(cfg===0&&zy===1,'ordinary opening ran eager Config work or missed Zygisk');
   window._asbBootIntroProbe=Promise.resolve(true);warm();await flush();
-  chk(cfg===1&&zy===1,'boot intro collectors were duplicated');
+  chk(cfg===0&&zy===1,'boot intro collectors were duplicated');
   document.hidden=true;window._asbBootIntroProbe=Promise.resolve(false);warm();await flush();
-  chk(cfg===1&&zy===1,'hidden page performed speculative root work');
+  chk(cfg===0&&zy===1,'hidden page performed speculative root work');
   document.hidden=false;window._asbBootIntroProbe=null;warm();
-  chk(cfg===2&&zy===2,'missing probe did not retain ordinary warm-up');
+  chk(cfg===0&&zy===2,'missing probe did not retain lightweight ordinary warm-up');
 
   global._selectedProfile='stock';
   const starts=[],gates=[];
@@ -9606,7 +9620,7 @@ def body(sig):
     i=h.index(sig); return h[i:h.index('\n}\n',i)]
 for token in ('.report-nav, .zy-page-nav, .dev-page-nav, .cfg-page-nav { display: none; position: fixed; left: 12px; right: 12px;',
               'bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);', 'overflow-x: auto;',
-              'scrollbar-width: none;', 'flex: 0 0 72px; min-width: 64px; min-height: 60px;',
+              'scrollbar-width: none;', 'flex:0 0 104px; width:104px; min-width:104px; min-height:68px; padding:6px 8px;',
               "b.setAttribute('aria-current', 'location')", "page.addEventListener('scroll', onScroll, { passive: true })",
               'padding-bottom: calc(102px / var(--asb-ui-scale) + env(safe-area-inset-bottom, 0px));',
               'if (prevScroll > 0) el.scrollTop = prevScroll;',
@@ -9922,6 +9936,82 @@ JS
 out="$(node "$T/test.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 echo 'PASS WebUI fix331: six rendered category docks with icons/jumps/scroll-spy/cleanup, modern Device contract, horizontal docks, larger tiles and Glass-safe coloured SVG tools'
+)
+
+t_webui_fix334_ufo_navigation_repeat() (
+# fix334: one detailed colour SVG in preview/all headers, two-way Easter-egg morph,
+# complete subsection labels, universal evidence-note gutters and lighter repeat openings.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI fix334 UFO/navigation/repeat: $*" >&2; exit 1; }
+python3 - "$H" <<'PY' || fail 'source/layout/security contract'
+import re, sys
+s=open(sys.argv[1],encoding='utf-8').read()
+assert s.count('id="asbUfoArt"')==1
+assert s.count('class="logo-glyph" aria-hidden="true"><svg class="asb-ufo-art"')==6
+assert '<span class="logo-glyph">🛸</span>' not in s
+assert 'asb-boot-chip' not in s
+assert '<div class="asb-boot-ufo"><svg class="asb-ufo-art"' in s
+assert '<div class="asb-boot-brand app-name">AutoSystem<b>Boost</b></div>' in s
+art=s[s.index('<symbol id="asbUfoArt"'):s.index('</symbol>',s.index('<symbol id="asbUfoArt"'))]
+for token in ('url(#asbUfoDome)','url(#asbUfoHull)','url(#asbUfoUnder)','url(#asbUfoCore)',
+              '#FF658D','#FFD166','#57F1D0','#63CFFF','#C38AFF','stroke="white"'):
+    assert token in art, token
+assert len(re.findall(r'<(?:linearGradient|radialGradient)\s',s)) >= 7
+assert 'animation: asbSweep 5.5s' in s and 'class="asb-boot-brand app-name"' in s
+css=':is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav)'
+assert css+' .lgr-jump-btn { flex:0 0 104px; width:104px; min-width:104px; min-height:68px; padding:6px 8px; }' in s
+label=s[s.index(css+' .asb-tab-label'):]
+label=label[:label.index('}')]
+for token in ('white-space:normal','overflow:visible','text-overflow:clip','overflow-wrap:anywhere','text-align:center'):
+    assert token in label, token
+assert '#zygiskPage .dev-evidence { padding-inline-start:12px; }' in s
+assert '#zygiskPage .zy-controls-card > .dev-evidence' not in s
+start=s.index('/* Ten quick taps on the logo:')
+flight=s[start:s.index('</script>',start)]
+for token in ("drawn.className = 'ufo-drawn'","emoji.className = 'ufo-emoji'",
+              "emoji.textContent = '🛸'",'href="#asbUfoArt"','var emojiK = smoother(t / 0.85)',
+              '1 - smoother((t - (DUR - 1.05)) / 0.85)',"drawn.style.opacity = '1'",
+              "document.body.classList.remove('ufo-flying')",'el.parentNode.removeChild(el)'):
+    assert token in flight, token
+assert 'setInterval(' not in flight
+warm=s[s.index('function asbStartupWarmCaches()'):s.index('/* fix328:',s.index('function asbStartupWarmCaches()'))]
+assert 'cfgLoad();' not in warm and 'openConfigPage() on demand' in warm
+assert 'zygiskHeaderRefresh();' in warm
+intro=s[s.index('async function asbBootIntroStart()'):s.index('let _asbHomeRevealed',s.index('async function asbBootIntroStart()'))]
+assert "return cfgLoad();" in intro  # the real once-per-boot preview retains its useful work
+for forbidden in ('serial','imei','account','android_id'):
+    assert forbidden not in art.lower(), forbidden
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI fix334 morph runtime: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cat > "$T/test.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+function E(tag){this.tag=tag;this.children=[];this.parentNode=null;this.attrs={};this.style={setProperty:(k,v)=>this.style[k]=v};this.textContent='';this.innerHTML='';this.className='';this.classList={_s:new Set(),add:c=>this.classList._s.add(c),remove:c=>this.classList._s.delete(c),contains:c=>this.classList._s.has(c)};}
+E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};
+E.prototype.appendChild=function(c){c.parentNode=this;this.children.push(c);return c};
+E.prototype.removeChild=function(c){this.children=this.children.filter(x=>x!==c);c.parentNode=null};
+E.prototype.querySelector=function(s){return s==='.logo-glyph'?this.glyph:null};
+E.prototype.getBoundingClientRect=function(){if(this.className==='logo-glyph')return{left:100,top:100,width:56,height:46};const m=/translate\(([-\d.]+)px,([-\d.]+)px\)/.exec(this.style.transform||'');const x=m?+m[1]:0,y=m?+m[2]:0;return{left:x,top:y,width:56,height:46}};
+const body=new E('body'),listeners={};let raf=[];
+global.document={body,hidden:false,createElement:t=>new E(t),addEventListener:(n,f)=>{(listeners[n]||(listeners[n]=[])).push(f)},removeEventListener:(n,f)=>{listeners[n]=(listeners[n]||[]).filter(x=>x!==f)}};
+global.window={innerWidth:412,innerHeight:915};global.getComputedStyle=()=>({fontSize:'32px'});global.requestAnimationFrame=f=>{raf.push(f);return raf.length};global.performance={now:()=>0};
+const start=h.indexOf('/* Ten quick taps on the logo:'),a=h.indexOf('(function () {',start),b=h.indexOf('\n})();',a)+6;eval(h.slice(a,b));
+const logo=new E('div'),glyph=new E('span');glyph.className='logo-glyph';logo.glyph=glyph;
+const ev={target:{closest:s=>s==='.logo-c'?logo:null}};for(let i=0;i<10;i++)listeners.click[0](ev);
+if(body.children.length!==1)throw Error('flight overlay missing');const el=body.children[0],box=el.children[1],drawn=box.children[0],emoji=box.children[1];
+function frame(ms){const q=raf;raf=[];q.forEach(f=>f(ms));}
+frame(0);if(drawn.style.opacity!=='1.000'||emoji.style.opacity!=='0.000')throw Error('takeoff did not begin as SVG');
+frame(1000);if(drawn.style.opacity!=='0.000'||emoji.style.opacity!=='1.000')throw Error('free flight is not emoji');
+frame(5000);if(emoji.style.opacity!=='1.000')throw Error('emoji did not own free flight');
+frame(9300);if(!(+drawn.style.opacity>0&&+drawn.style.opacity<1))throw Error('landing morph did not begin');
+frame(10000);if(drawn.style.opacity!=='1'||emoji.style.opacity!=='0'||body.classList.contains('ufo-flying'))throw Error('SVG/header return failed');
+setTimeout(()=>{if(el.parentNode||body.children.length)throw Error('overlay cleanup failed');console.log('ok')},360);
+JS
+out="$(node "$T/test.js" "$H" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo 'PASS WebUI fix334: detailed multicolor SVG in preview/six headers, two-way SVG/emoji flight, wrapped full dock labels, universal note gutters and no eager repeat Config batch'
 )
 
 t_webui_night_charge_runtime() (
