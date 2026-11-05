@@ -2053,9 +2053,9 @@ body.config-active #configPage .cfg-list {
   width: 100%; overflow-x: auto; overflow-y: hidden; overscroll-behavior-inline: contain;
   -webkit-overflow-scrolling: touch; scrollbar-width: none; scroll-padding-inline: 4px; }
 :is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .lgr-jump-track::-webkit-scrollbar { display: none; }
-:is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .lgr-jump-btn { flex: 0 0 72px; min-width: 64px; min-height: 60px; }
+:is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .lgr-jump-btn { flex:0 0 104px; width:104px; min-width:104px; min-height:68px; padding:6px 8px; }
 :is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .asb-tab-ico { flex: 0 0 32px; }
-:is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .asb-tab-label { width: 100%; text-align: center; }
+:is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .asb-tab-label { width:100%; max-width:none; overflow:visible; text-align:center; white-space:normal; text-overflow:clip; overflow-wrap:anywhere; line-height:12px; letter-spacing:0; }
 .lgr-jump-track.ind-anim .asb-tab-ind { transition: transform .34s cubic-bezier(.3,.8,.25,1), width .34s ease; }
 #reportPage .lgr-sec[id], #zygiskPage .lgr-sec[id], #reportPage .lgr-details-anchor,
 #devicePage .dev-group[id], #configPage .cfg-section[id] {
@@ -4247,6 +4247,14 @@ html[data-asb-theme="light"] .cfg-profile-sheet {
   z-index: 1;
   filter: drop-shadow(0 6px 18px rgba(0,0,0,.55)) drop-shadow(0 0 var(--ufo-glow, 0px) rgba(0,255,200,.75));
 }
+.ufo-fly .ufo-body { width:1.75em; height:1.4375em; }
+.ufo-fly .ufo-drawn,.ufo-fly .ufo-emoji {
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  transform-origin:50% 50%; will-change:opacity,transform;
+}
+.ufo-fly .ufo-drawn { opacity:1; }
+.ufo-fly .ufo-drawn .asb-ufo-art { display:block; width:100%; height:100%; overflow:visible; }
+.ufo-fly .ufo-emoji { opacity:0; font-size:1em; line-height:1; transform:scale(.78); }
 /* Tractor beam: shown while the saucer leaves its nest and while it comes back to it. */
 .ufo-fly .ufo-beam {
   position: absolute;
@@ -4263,7 +4271,9 @@ html[data-asb-theme="light"] .cfg-profile-sheet {
 }
 /* Only the glyph leaves the header: the ring, glow and box stay, so nothing reflows and the
  * nest is still there to come back to. */
-.logo-glyph { display: inline-block; transition: opacity .28s ease; }
+.logo-glyph { display:flex; align-items:center; justify-content:center; width:56px; height:46px; transition:opacity .28s ease; }
+.logo-glyph .asb-ufo-art { display:block; width:56px; height:42px; overflow:visible; filter:drop-shadow(0 3px 4px rgba(0,0,0,.42)); }
+.asb-ufo-defs { position:absolute; pointer-events:none; overflow:hidden; }
 body.ufo-flying .logo-glyph { opacity: 0; }
 
 /* ── fix168: Home and Settings as full as Monitor ─────────────────────────────────────────
@@ -4777,7 +4787,7 @@ html:root[data-asb-glass="1"] .log-menu { border-radius:20px; }
 /* #zygiskPage .lgr-note used to reset all padding after .dev-evidence had created
  * its gutter. Restore only this note's logical gutter; physical left/right assumptions
  * would put the text back against the line in RTL. */
-#zygiskPage .zy-controls-card > .dev-evidence { padding-inline-start:12px; }
+#zygiskPage .dev-evidence { padding-inline-start:12px; }
 html:root[data-asb-glass="1"] :is(.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet,.cfg-fm-box) {
   background:var(--glass-wash),var(--glass-surface-strong) !important;
   border-color:var(--glass-edge) !important;
@@ -5001,7 +5011,7 @@ html[data-asb-theme="light"] .cfg-lang-pop.cfg-reboot-pop button.armed {
   content:""; width:28px; height:1px; background:currentColor; opacity:.45;
 }
 .asb-boot-core { position:relative; width:172px; height:172px; margin:38px auto 29px; }
-.asb-boot-orbit,.asb-boot-ring,.asb-boot-chip { position:absolute; inset:0; margin:auto; }
+.asb-boot-orbit,.asb-boot-ring,.asb-boot-ufo { position:absolute; inset:0; margin:auto; }
 .asb-boot-orbit { border:1px solid rgba(0,240,180,.20); border-radius:50%; }
 .asb-boot-orbit::before,.asb-boot-orbit::after {
   content:""; position:absolute; width:6px; height:6px; border-radius:50%;
@@ -5013,14 +5023,14 @@ html[data-asb-theme="light"] .cfg-lang-pop.cfg-reboot-pop button.armed {
 .asb-boot-orbit.b { inset:15px; border-style:dashed; border-color:rgba(0,212,255,.27); animation:asbBootSpin 10s linear infinite reverse; }
 .asb-boot-ring { inset:31px; border:1px solid rgba(0,240,180,.38); transform:rotate(45deg); border-radius:25px; }
 .asb-boot-ring.b { inset:40px; border-color:rgba(0,212,255,.23); transform:rotate(22.5deg); }
-.asb-boot-chip {
-  inset:50px; display:grid; place-items:center; border:1px solid rgba(0,240,180,.56);
-  border-radius:22px; background:linear-gradient(145deg,rgba(0,240,180,.16),rgba(0,212,255,.055));
-  box-shadow:0 0 32px rgba(0,240,180,.17),inset 0 0 22px rgba(0,240,180,.07);
+.asb-boot-ufo {
+  inset:37px 24px; display:grid; place-items:center; border:1px solid rgba(0,240,180,.40);
+  border-radius:26px; background:linear-gradient(145deg,rgba(0,240,180,.10),rgba(91,104,210,.08));
+  box-shadow:0 0 32px rgba(0,240,180,.14),inset 0 0 22px rgba(76,201,255,.06);
   animation:asbBootPulse 2.2s ease-in-out infinite;
 }
-.asb-boot-chip svg { width:40px; height:40px; color:var(--boot-accent); filter:drop-shadow(0 0 8px rgba(0,240,180,.38)); }
-.asb-boot-brand { font-size:25px; line-height:1.1; font-weight:740; letter-spacing:-.8px; }
+.asb-boot-ufo svg { width:94px; height:71px; overflow:visible; filter:drop-shadow(0 5px 8px rgba(0,0,0,.40)); }
+.asb-boot-brand { margin-bottom:0; font-size:25px; line-height:1.1; font-weight:740; letter-spacing:-.8px; }
 .asb-boot-brand b { color:var(--boot-accent); font-weight:inherit; }
 .asb-boot-status { min-height:20px; margin-top:13px; color:var(--boot-muted); font-size:12px; font-weight:550; }
 .asb-boot-progress {
@@ -5043,14 +5053,14 @@ html[data-asb-theme="light"] .asb-boot-intro {
   background:#edf4f1;
 }
 html[data-asb-theme="light"] .asb-boot-grid { opacity:.16; }
-html[data-asb-theme="light"] .asb-boot-chip { background:rgba(255,255,255,.56); }
+html[data-asb-theme="light"] .asb-boot-ufo { background:rgba(255,255,255,.56); }
 html[dir="rtl"] .asb-boot-progress > i { transform-origin:right center; }
 @keyframes asbBootSpin { to { transform:rotate(360deg); } }
 @keyframes asbBootPulse { 50% { transform:scale(.92); opacity:.76; } }
 @keyframes asbBootScan { 0%,100% { transform:translateY(8vh); opacity:0; } 15%,85% { opacity:.52; } 50% { transform:translateY(82vh); } }
 @media (max-height:640px) {
   .asb-boot-core { width:142px; height:142px; margin:24px auto 20px; }
-  .asb-boot-chip { inset:42px; }
+  .asb-boot-ufo { inset:31px 18px; }
   .asb-boot-orbit.b { inset:12px; }
   .asb-boot-ring { inset:25px; }
   .asb-boot-ring.b { inset:33px; }
@@ -5058,14 +5068,14 @@ html[dir="rtl"] .asb-boot-progress > i { transform-origin:right center; }
 }
 @media (prefers-reduced-motion:reduce) {
   .asb-boot-intro,.asb-boot-progress > i,.asb-boot-stage { transition:none !important; }
-  .asb-boot-scan,.asb-boot-orbit,.asb-boot-chip { animation:none !important; }
+  .asb-boot-scan,.asb-boot-orbit,.asb-boot-ufo { animation:none !important; }
 }
 @media (forced-colors:active) {
   .asb-boot-intro { background:Canvas !important; color:CanvasText !important; }
   .asb-boot-grid,.asb-boot-scan { display:none; }
   .asb-boot-kicker,.asb-boot-status,.asb-boot-count,.asb-boot-stage { color:CanvasText !important; }
-  .asb-boot-orbit,.asb-boot-ring,.asb-boot-chip,.asb-boot-progress { border-color:CanvasText !important; }
-  .asb-boot-chip { background:Canvas !important; color:CanvasText !important; box-shadow:none; }
+  .asb-boot-orbit,.asb-boot-ring,.asb-boot-ufo,.asb-boot-progress { border-color:CanvasText !important; }
+  .asb-boot-ufo { background:Canvas !important; color:CanvasText !important; box-shadow:none; }
   .asb-boot-progress > i { background:Highlight !important; box-shadow:none; }
 }
 
@@ -5195,6 +5205,53 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
 </style>
 </head>
 <body>
+<svg class="asb-ufo-defs" width="0" height="0" viewBox="0 0 96 72" fill="none" aria-hidden="true" focusable="false">
+  <defs>
+    <radialGradient id="asbUfoAura" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(48 40) rotate(90) scale(31 46)">
+      <stop stop-color="#36E6F5" stop-opacity=".30"/><stop offset=".58" stop-color="#6877F6" stop-opacity=".12"/><stop offset="1" stop-color="#6877F6" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="asbUfoDome" x1="35" y1="9" x2="65" y2="34" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E8FDFF"/><stop offset=".22" stop-color="#8CECF7"/><stop offset=".58" stop-color="#3EA7D4"/><stop offset="1" stop-color="#245078"/>
+    </linearGradient>
+    <linearGradient id="asbUfoDomeShade" x1="48" y1="19" x2="48" y2="35" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#173C63" stop-opacity="0"/><stop offset="1" stop-color="#102A4B" stop-opacity=".72"/>
+    </linearGradient>
+    <linearGradient id="asbUfoHull" x1="25" y1="29" x2="66" y2="51" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F7F4FF"/><stop offset=".20" stop-color="#C9C8E7"/><stop offset=".43" stop-color="#9498BC"/><stop offset=".64" stop-color="#E4E3F2"/><stop offset=".82" stop-color="#8C91B0"/><stop offset="1" stop-color="#555D83"/>
+    </linearGradient>
+    <linearGradient id="asbUfoRim" x1="48" y1="37" x2="48" y2="53" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#AEB4D2"/><stop offset=".38" stop-color="#656D98"/><stop offset=".55" stop-color="#353E66"/><stop offset="1" stop-color="#202844"/>
+    </linearGradient>
+    <linearGradient id="asbUfoUnder" x1="48" y1="45" x2="48" y2="65" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#535D89"/><stop offset=".45" stop-color="#30395E"/><stop offset="1" stop-color="#151D36"/>
+    </linearGradient>
+    <radialGradient id="asbUfoCore" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(48 55) rotate(90) scale(8 17)">
+      <stop stop-color="#E9FFFF"/><stop offset=".25" stop-color="#66F6EB"/><stop offset=".65" stop-color="#19BAD4"/><stop offset="1" stop-color="#24719A"/>
+    </radialGradient>
+    <symbol id="asbUfoArt" viewBox="0 0 96 72">
+      <ellipse cx="48" cy="40" rx="46" ry="31" fill="url(#asbUfoAura)"/>
+      <path d="M30 32C31.5 16.2 38.1 7 48.3 7C59.2 7 66.1 16.4 67 32H30Z" fill="url(#asbUfoDome)" stroke="#B8F7FF" stroke-opacity=".72" stroke-width="1.1"/>
+      <path d="M31.2 27.5C39.4 22.4 56.8 21.7 65.8 28.1L67 32H30L31.2 27.5Z" fill="url(#asbUfoDomeShade)"/>
+      <path d="M37.2 22.5C38.7 15.4 42.2 11.4 47 10.4" stroke="white" stroke-opacity=".86" stroke-width="3.1" stroke-linecap="round"/>
+      <path d="M34.8 27.4C36 25.2 37.2 23.8 38.7 22.6" stroke="white" stroke-opacity=".42" stroke-width="1.5" stroke-linecap="round"/>
+      <ellipse cx="55.8" cy="16.5" rx="3.2" ry="2" fill="#D8FFFF" fill-opacity=".54"/>
+      <path d="M17 44C22.5 54.8 34.8 63 48 63C61.7 63 73.4 55 79.2 44H17Z" fill="url(#asbUfoUnder)" stroke="#7983AA" stroke-opacity=".52" stroke-width=".8"/>
+      <path d="M28 52.5C36.8 57.7 58.6 59.2 68.5 52.2C64.1 59.4 56.6 63 48 63C39.7 63 32.4 59.2 28 52.5Z" fill="#10182E" fill-opacity=".52"/>
+      <ellipse cx="48" cy="55.2" rx="16.2" ry="6.7" fill="url(#asbUfoCore)" stroke="#8BFFF1" stroke-opacity=".52" stroke-width=".8"/>
+      <ellipse cx="48" cy="53.7" rx="8.8" ry="2.4" fill="#D5FFFF" fill-opacity=".42"/>
+      <path d="M7 40.2C12.6 33.2 28.2 28.6 47.9 28.6C67.9 28.6 83.4 33.2 89 40.2C82.2 48.1 66.1 51.2 48 51.2C29.8 51.2 13.7 48.1 7 40.2Z" fill="url(#asbUfoHull)" stroke="#E2E4F5" stroke-opacity=".78" stroke-width="1"/>
+      <path d="M12.2 38.2C24.6 30.9 63.5 28.6 81.7 37.1C66.3 33.8 30.7 34.5 12.2 38.2Z" fill="white" fill-opacity=".64"/>
+      <path d="M7.4 41C19.4 45.7 32.4 47.6 48 47.6C64 47.6 78.5 45.2 88.6 40.7C82.2 48.3 66.1 52 48 52C29.5 52 13.4 48.3 7.4 41Z" fill="url(#asbUfoRim)"/>
+      <path d="M13.2 42.4C29.6 47.8 67.3 48 83.4 41.9" stroke="#B9C4E2" stroke-opacity=".45" stroke-width=".8"/>
+      <path d="M24.5 34.3C35.5 31.4 59.4 30.8 71.7 34" stroke="#6D7297" stroke-opacity=".58" stroke-width="1" stroke-linecap="round"/>
+      <g stroke="#E9FFFF" stroke-opacity=".72" stroke-width=".65">
+        <circle cx="20.5" cy="42.1" r="3.1" fill="#FF658D"/><circle cx="34.2" cy="45.3" r="3.1" fill="#FFD166"/>
+        <circle cx="48" cy="46.2" r="3.1" fill="#57F1D0"/><circle cx="61.8" cy="45.3" r="3.1" fill="#63CFFF"/><circle cx="75.5" cy="42.1" r="3.1" fill="#C38AFF"/>
+      </g>
+      <g fill="white" fill-opacity=".8"><circle cx="19.7" cy="41.2" r=".9"/><circle cx="33.4" cy="44.4" r=".9"/><circle cx="47.2" cy="45.3" r=".9"/><circle cx="61" cy="44.4" r=".9"/><circle cx="74.7" cy="41.2" r=".9"/></g>
+    </symbol>
+  </defs>
+</svg>
 <div class="asb-boot-intro" id="asbBootIntro" hidden aria-hidden="true" role="status" aria-live="polite">
   <div class="asb-boot-grid" aria-hidden="true"></div>
   <div class="asb-boot-scan" aria-hidden="true"></div>
@@ -5203,12 +5260,9 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
     <div class="asb-boot-core" aria-hidden="true">
       <div class="asb-boot-orbit a"></div><div class="asb-boot-orbit b"></div>
       <div class="asb-boot-ring a"></div><div class="asb-boot-ring b"></div>
-      <div class="asb-boot-chip"><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" focusable="false">
-        <rect x="17" y="17" width="30" height="30" rx="7"/><rect x="25" y="25" width="14" height="14" rx="3"/>
-        <path d="M24 7v10M32 7v10M40 7v10M24 47v10M32 47v10M40 47v10M7 24h10M7 32h10M7 40h10M47 24h10M47 32h10M47 40h10"/>
-      </svg></div>
+      <div class="asb-boot-ufo"><svg class="asb-ufo-art" viewBox="0 0 96 72" focusable="false"><use href="#asbUfoArt"></use></svg></div>
     </div>
-    <div class="asb-boot-brand">AutoSystem<b>Boost</b></div>
+    <div class="asb-boot-brand app-name">AutoSystem<b>Boost</b></div>
     <div class="asb-boot-status" id="asbBootIntroStatus">Preloading ASB metrics…</div>
     <div class="asb-boot-progress" id="asbBootIntroProgress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="asbBootIntroBar"></i></div>
     <div class="asb-boot-count" id="asbBootIntroCount">0 / 4</div>
@@ -5237,7 +5291,7 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
     <div class="logo-c">
       <div class="logo-glow"></div>
       <div class="logo-ring"></div>
-      <div class="logo-inner"><span class="logo-glyph">🛸</span></div>
+      <div class="logo-inner"><span class="logo-glyph" aria-hidden="true"><svg class="asb-ufo-art" viewBox="0 0 96 72" focusable="false"><use href="#asbUfoArt"></use></svg></span></div>
     </div>
     <div class="app-name">AutoSystemBoost</div>
     <div class="device-line" id="deviceLine">OnePlus · —</div>
@@ -5396,7 +5450,7 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
     <div class="logo-c">
       <div class="logo-glow"></div>
       <div class="logo-ring"></div>
-      <div class="logo-inner"><span class="logo-glyph">🛸</span></div>
+      <div class="logo-inner"><span class="logo-glyph" aria-hidden="true"><svg class="asb-ufo-art" viewBox="0 0 96 72" focusable="false"><use href="#asbUfoArt"></use></svg></span></div>
     </div>
     <div class="app-name">AutoSystemBoost</div>
     <div class="device-line" id="liveDeviceLine">OnePlus Device · Qualcomm Snapdragon</div>
@@ -5604,7 +5658,7 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
     <div class="logo-c">
       <div class="logo-glow"></div>
       <div class="logo-ring"></div>
-      <div class="logo-inner"><span class="logo-glyph">🛸</span></div>
+      <div class="logo-inner"><span class="logo-glyph" aria-hidden="true"><svg class="asb-ufo-art" viewBox="0 0 96 72" focusable="false"><use href="#asbUfoArt"></use></svg></span></div>
     </div>
     <div class="app-name">AutoSystemBoost</div>
     <div class="device-line" id="cfgDeviceLine">OnePlus Device &middot; Qualcomm Snapdragon</div>
@@ -5732,7 +5786,7 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
     <div class="logo-c">
       <div class="logo-glow"></div>
       <div class="logo-ring"></div>
-      <div class="logo-inner"><span class="logo-glyph">🛸</span></div>
+      <div class="logo-inner"><span class="logo-glyph" aria-hidden="true"><svg class="asb-ufo-art" viewBox="0 0 96 72" focusable="false"><use href="#asbUfoArt"></use></svg></span></div>
     </div>
     <div class="app-name">AutoSystemBoost</div>
     <div class="device-line" id="rpDeviceLine">OnePlus Device &middot; Qualcomm Snapdragon</div>
@@ -5813,7 +5867,7 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
       <div class="logo-c">
         <div class="logo-glow"></div>
         <div class="logo-ring"></div>
-        <div class="logo-inner"><span class="logo-glyph">🛸</span></div>
+        <div class="logo-inner"><span class="logo-glyph" aria-hidden="true"><svg class="asb-ufo-art" viewBox="0 0 96 72" focusable="false"><use href="#asbUfoArt"></use></svg></span></div>
       </div>
       <div class="app-name">AutoSystemBoost</div>
       <div class="device-line" id="devDeviceLine">OnePlus Device &middot; Qualcomm Snapdragon</div>
@@ -5866,7 +5920,7 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
       <div class="logo-c">
         <div class="logo-glow"></div>
         <div class="logo-ring"></div>
-        <div class="logo-inner"><span class="logo-glyph">🛸</span></div>
+        <div class="logo-inner"><span class="logo-glyph" aria-hidden="true"><svg class="asb-ufo-art" viewBox="0 0 96 72" focusable="false"><use href="#asbUfoArt"></use></svg></span></div>
       </div>
       <div class="app-name">AutoSystemBoost</div>
       <div class="device-line" id="zyDeviceLine">OnePlus Device &middot; Qualcomm Snapdragon</div>
@@ -6007,6 +6061,9 @@ const TECH_ICON_PATHS = {
   memhold: '<rect x="5" y="7" width="14" height="11" rx="2"/><path d="M9 7V4.5M15 7V4.5M9 20.5V18M15 20.5V18"/><path d="M12 10l2.2.9v1.5c0 1.4-.9 2.3-2.2 2.9-1.3-.6-2.2-1.5-2.2-2.9v-1.5z"/>'
          + '<path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"></path>'
          + '<path d="M9.5 12.5l1.8 1.8 3.4-3.6"></path>',
+  /* Device hardware is the phone/board as a whole; `kernel` remains the exposed CPU die.
+   * Separate silhouettes keep the two adjacent Device destinations distinguishable. */
+  hardware: '<rect x="4" y="2.5" width="16" height="19" rx="2.8"/><path d="M9 5.2h6M8 9h3v3H8zM13 12h3v3h-3zM11 10.5h2M12 10.5V8M9.5 12v3.5h2.5"/><circle cx="12" cy="18.4" r=".8" fill="currentColor" stroke="none"/>',
   kernel: '<rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 9h6v6H9zM9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>',
   /* Completed ASB vector system: centred silhouettes, 4–20px optical frame and one coherent rounded-line language. */
   /* Smart: a bespoke top-down brain with two rounded hemispheres, a central processor
@@ -14840,7 +14897,7 @@ function deviceInfoNav(d) {
     const group = spec[3];
     if (!seen[group] && d.sections[spec[0]] && DEVICE_GROUPS[group]) {
       seen[group] = true;
-      const icons = { hw:'kernel', sw:'panel', kernel:'kernel', root:'zygisk_guard', asb:'switches' };
+      const icons = { hw:'hardware', sw:'panel', kernel:'kernel', root:'zygisk_guard', asb:'switches' };
       items.push(['dev-group-' + group, T(DEVICE_GROUPS[group][0], DEVICE_GROUPS[group][1]), icons[group] || 'panel']);
     }
   });
@@ -18776,7 +18833,8 @@ window.addEventListener('orientationchange', function () { requestAnimationFrame
 function asbStartupWarmCaches() {
   const warm = function (introShown) {
     if (introShown || document.hidden) return;
-    if (!_cfgOpen) cfgLoad();
+    /* Config is read by openConfigPage() on demand. Its ten-part shell and follow-up
+     * evidence reads blocked every ordinary repeat opening without warming the next WebView. */
     zygiskHeaderRefresh();
   };
   const probe = window._asbBootIntroProbe;
@@ -21122,7 +21180,11 @@ window._asbBootIntroProbe = I18N_READY.then(asbBootIntroStart, asbBootIntroStart
     el.style.fontSize = fs + 'px';
     var beam = document.createElement('div'); beam.className = 'ufo-beam';
     var body = document.createElement('span'); body.className = 'ufo-body';
-    body.textContent = '🛸';
+    var drawn = document.createElement('span'); drawn.className = 'ufo-drawn';
+    drawn.innerHTML = '<svg class="asb-ufo-art" viewBox="0 0 96 72" focusable="false"><use href="#asbUfoArt"></use></svg>';
+    var emoji = document.createElement('span'); emoji.className = 'ufo-emoji'; emoji.textContent = '🛸';
+    body.appendChild(drawn); body.appendChild(emoji);
+    el.setAttribute('aria-hidden', 'true');
     el.appendChild(beam); el.appendChild(body);
     document.body.appendChild(el);
     /* Map screen coordinates into the overlay's own space. The WebUI zooms <body> on narrow
@@ -21151,7 +21213,10 @@ window._asbBootIntroProbe = I18N_READY.then(asbBootIntroStart, asbBootIntroStart
       if (ended) return; ended = true;
       document.removeEventListener('visibilitychange', onVis);
       if (snd) snd.stop(fast ? 0.15 : 0.7);
-      /* cross-fade in place: the header glyph fades in while the overlay fades out */
+      /* The normal path has already morphed back to the drawing. A hidden-page shortcut
+       * also restores that layer before returning it to the header. */
+      drawn.style.opacity = '1'; drawn.style.transform = 'scale(1)';
+      emoji.style.opacity = '0';
       document.body.classList.remove('ufo-flying');
       el.style.opacity = '0';
       setTimeout(function () {
@@ -21197,6 +21262,13 @@ window._asbBootIntroProbe = I18N_READY.then(asbBootIntroStart, asbBootIntroStart
       el.style.transform =
         'translate(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px) translate(-50%,-50%) ' +
         'scale(' + sc.toFixed(3) + ') rotate(' + tilt.toFixed(2) + 'deg)';
+      /* One deliberate morph on take-off and its exact reverse on landing. The emoji owns
+       * free flight; both layers otherwise stay in the same measured header/flight box. */
+      var emojiK = smoother(t / 0.85) * (1 - smoother((t - (DUR - 1.05)) / 0.85));
+      drawn.style.opacity = (1 - emojiK).toFixed(3);
+      drawn.style.transform = 'scale(' + (1 - 0.18 * emojiK).toFixed(3) + ')';
+      emoji.style.opacity = emojiK.toFixed(3);
+      emoji.style.transform = 'scale(' + (0.78 + 0.22 * emojiK).toFixed(3) + ')';
       var beamK = up * (1 - b);
       beam.style.opacity = (0.85 * beamK).toFixed(3);
       beam.style.transform = 'scaleY(' + (0.3 + 0.7 * beamK).toFixed(3) + ')';
