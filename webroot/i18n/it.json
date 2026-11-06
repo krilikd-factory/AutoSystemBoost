@@ -2775,5 +2775,11 @@
   "lr_sm_feedback_unknown": "Delta di questa cattura sconosciuto",
   "lr_sm_feedback_note": "Il log fornisce solo prove di jank prolungato. Smart rilegge le statistiche dei frame di Android e gestisce finestre A/B, plateau e cooldown; le raccomandazioni del report non vengono mai eseguite come impostazioni.",
   "boot_intro_warm": "Precaricamento metriche ASB…",
-  "boot_intro_ready": "Interfaccia pronta"
+  "boot_intro_ready": "Interfaccia pronta",
+  "lr_sum_drain_mixed_segments": "Consumo medio su {segments} intervalli senza ricarica in {h}, schermo acceso per il {on}% della cattura: a questo ritmo una carica completa durerebbe circa {est}.",
+  "lr_brief_drain_segments": "Senza caricabatterie, il consumo totale è stato del {drop}% in {h} su {segments} intervalli, con una media del {pct}%/h. È la somma di più intervalli, non una singola carica. Ultimo intervallo: {lastdrop}% in {lasth} ({lastpct}%/h). A questo ritmo medio, una carica completa durerebbe circa {est}.",
+  "lr_brief_drain_segments_short": "Senza caricabatterie, il consumo totale è stato del {drop}% in {h} su {segments} intervalli ({pct}%/h). È la somma di più intervalli, non una singola carica. Ultimo intervallo: {lastdrop}% in {lasth} ({lastpct}%/h).",
+  "lr_drain_sum_windows": "Somma di {n} intervalli senza ricarica: −{drop}% (non una singola carica)",
+  "lr_drain_latest_window": "Ultimo intervallo senza ricarica: {drop}% in {h} ({pct}%/h)",
+  "lr_detail_drain_windows": "Il totale somma intervalli distinti tra le ricariche, quindi può superare il 100%. Non è il consumo di una singola carica della batteria."
 }

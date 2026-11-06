@@ -2634,5 +2634,11 @@
   "lr_sm_feedback_unknown": "In-capture delta unknown",
   "lr_sm_feedback_note": "The log supplies sustained-jank evidence only. Smart re-reads Android frame statistics and owns A/B windows, plateau and cooldown decisions; report recommendations are never executed as settings.",
   "boot_intro_warm": "Preloading ASB metrics…",
-  "boot_intro_ready": "Interface ready"
+  "boot_intro_ready": "Interface ready",
+  "lr_sum_drain_mixed_segments": "Average drain across {segments} off-charger windows over {h}, screen on {on}% of the capture: about {est} from a full charge at this pace.",
+  "lr_brief_drain_segments": "Off the charger, total consumption was {drop}% over {h} across {segments} windows - {pct}%/h on average. This is a sum across windows, not one charge. Latest window: {lastdrop}% over {lasth} ({lastpct}%/h). At this average pace, a full charge would last about {est}.",
+  "lr_brief_drain_segments_short": "Off the charger, total consumption was {drop}% over {h} across {segments} windows ({pct}%/h). This is a sum across windows, not one charge. Latest window: {lastdrop}% over {lasth} ({lastpct}%/h).",
+  "lr_drain_sum_windows": "Sum across {n} off-charger windows: −{drop}% (not one charge)",
+  "lr_drain_latest_window": "Latest off-charger window: {drop}% over {h} ({pct}%/h)",
+  "lr_detail_drain_windows": "The total is a sum of separate windows between charging sessions, so it can exceed 100%. It is not the drop of one battery charge."
 }

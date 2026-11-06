@@ -2775,5 +2775,11 @@
   "lr_sm_feedback_unknown": "Delta tangkapan ini tidak diketahui",
   "lr_sm_feedback_note": "Log hanya memberikan bukti jank berkelanjutan. Smart membaca ulang statistik frame Android dan mengendalikan jendela A/B, plateau, serta cooldown; rekomendasi laporan tidak pernah dijalankan sebagai pengaturan.",
   "boot_intro_warm": "Memuat metrik ASB…",
-  "boot_intro_ready": "Antarmuka siap"
+  "boot_intro_ready": "Antarmuka siap",
+  "lr_sum_drain_mixed_segments": "Rata-rata konsumsi pada {segments} rentang tanpa pengisian selama {h}, layar aktif {on}% dari perekaman: pada laju ini, baterai penuh bertahan sekitar {est}.",
+  "lr_brief_drain_segments": "Tanpa pengisi daya, total konsumsi adalah {drop}% selama {h} dalam {segments} rentang — rata-rata {pct}%/jam. Ini adalah jumlah beberapa rentang, bukan satu pengisian penuh. Rentang terakhir: {lastdrop}% selama {lasth} ({lastpct}%/jam). Pada laju rata-rata ini, baterai penuh akan bertahan sekitar {est}.",
+  "lr_brief_drain_segments_short": "Tanpa pengisi daya, total konsumsi adalah {drop}% selama {h} dalam {segments} rentang ({pct}%/jam). Ini adalah jumlah beberapa rentang, bukan satu pengisian penuh. Rentang terakhir: {lastdrop}% selama {lasth} ({lastpct}%/jam).",
+  "lr_drain_sum_windows": "Jumlah {n} rentang tanpa pengisian: −{drop}% (bukan satu pengisian penuh)",
+  "lr_drain_latest_window": "Rentang terakhir tanpa pengisian: {drop}% selama {h} ({pct}%/jam)",
+  "lr_detail_drain_windows": "Total adalah jumlah rentang terpisah di antara sesi pengisian, sehingga dapat melebihi 100%. Ini bukan konsumsi dari satu siklus baterai penuh."
 }

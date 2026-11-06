@@ -2775,5 +2775,11 @@
   "lr_sm_feedback_unknown": "Bu yakalamanın deltası bilinmiyor",
   "lr_sm_feedback_note": "Günlük yalnızca sürekli jank kanıtı sağlar. Smart, Android kare istatistiklerini yeniden okur ve A/B pencerelerini, platoyu ve bekleme süresini kendisi yönetir; rapor önerileri asla ayar olarak uygulanmaz.",
   "boot_intro_warm": "ASB ölçümleri önceden yükleniyor…",
-  "boot_intro_ready": "Arayüz hazır"
+  "boot_intro_ready": "Arayüz hazır",
+  "lr_sum_drain_mixed_segments": "{h} boyunca şarj dışı {segments} aralıkta ortalama tüketim; ekran kaydın {on}% kadarında açık: bu tempoda tam şarj yaklaşık {est} yeter.",
+  "lr_brief_drain_segments": "Şarj cihazı olmadan {segments} aralıkta {h} sürede toplam {drop}% tüketildi — ortalama {pct}%/sa. Bu, farklı aralıkların toplamıdır; tek bir şarj değildir. Son aralık: {lasth} sürede {lastdrop}% ({lastpct}%/sa). Bu ortalama tempoda tam şarj yaklaşık {est} yeterdi.",
+  "lr_brief_drain_segments_short": "Şarj cihazı olmadan {segments} aralıkta {h} sürede toplam {drop}% tüketildi ({pct}%/sa). Bu, farklı aralıkların toplamıdır; tek bir şarj değildir. Son aralık: {lasth} sürede {lastdrop}% ({lastpct}%/sa).",
+  "lr_drain_sum_windows": "{n} şarj dışı aralığın toplamı: −{drop}% (tek şarj değil)",
+  "lr_drain_latest_window": "Son şarj dışı aralık: {h} sürede {drop}% ({pct}%/sa)",
+  "lr_detail_drain_windows": "Toplam, şarj oturumları arasındaki ayrı aralıkların toplamıdır ve %100 değerini aşabilir. Tek bir pil şarjının tüketimi değildir."
 }

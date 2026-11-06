@@ -2775,5 +2775,11 @@
   "lr_sm_feedback_unknown": "Delta de esta captura desconocido",
   "lr_sm_feedback_note": "El registro solo aporta evidencia de jank sostenido. Smart vuelve a leer las estadísticas de fotogramas de Android y controla las ventanas A/B, la meseta y el cooldown; las recomendaciones del informe nunca se ejecutan como ajustes.",
   "boot_intro_warm": "Cargando métricas de ASB…",
-  "boot_intro_ready": "Interfaz lista"
+  "boot_intro_ready": "Interfaz lista",
+  "lr_sum_drain_mixed_segments": "Consumo medio en {segments} tramos sin carga durante {h}, pantalla encendida el {on}% de la captura: a este ritmo, una carga completa duraría unas {est}.",
+  "lr_brief_drain_segments": "Sin el cargador, el consumo total fue del {drop}% en {h}, repartido en {segments} tramos: media del {pct}%/h. Es la suma de varios tramos, no una sola carga. Último tramo: {lastdrop}% en {lasth} ({lastpct}%/h). A este ritmo medio, una carga completa duraría unas {est}.",
+  "lr_brief_drain_segments_short": "Sin el cargador, el consumo total fue del {drop}% en {h}, repartido en {segments} tramos ({pct}%/h). Es la suma de varios tramos, no una sola carga. Último tramo: {lastdrop}% en {lasth} ({lastpct}%/h).",
+  "lr_drain_sum_windows": "Suma de {n} tramos sin carga: −{drop}% (no es una sola carga)",
+  "lr_drain_latest_window": "Último tramo sin carga: {drop}% en {h} ({pct}%/h)",
+  "lr_detail_drain_windows": "El total suma tramos separados entre sesiones de carga, por lo que puede superar el 100%. No es el consumo de una única carga de batería."
 }

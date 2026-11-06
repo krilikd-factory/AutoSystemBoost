@@ -2775,5 +2775,11 @@
   "lr_sm_feedback_unknown": "Delta de cette capture inconnu",
   "lr_sm_feedback_note": "Le journal fournit uniquement des preuves de jank soutenu. Smart relit les statistiques de frames Android et gère lui-même les fenêtres A/B, le plateau et le cooldown ; les recommandations du rapport ne sont jamais exécutées comme réglages.",
   "boot_intro_warm": "Préchargement des métriques ASB…",
-  "boot_intro_ready": "Interface prête"
+  "boot_intro_ready": "Interface prête",
+  "lr_sum_drain_mixed_segments": "Consommation moyenne sur {segments} périodes hors charge pendant {h}, écran allumé {on}% de la capture : à ce rythme, une charge complète durerait environ {est}.",
+  "lr_brief_drain_segments": "Hors charge, la consommation totale est de {drop}% sur {h}, répartie en {segments} périodes, soit {pct}%/h en moyenne. Il s’agit de la somme de plusieurs périodes, pas d’une seule charge. Dernière période : {lastdrop}% sur {lasth} ({lastpct}%/h). À ce rythme moyen, une charge complète durerait environ {est}.",
+  "lr_brief_drain_segments_short": "Hors charge, la consommation totale est de {drop}% sur {h}, répartie en {segments} périodes ({pct}%/h). Il s’agit de la somme de plusieurs périodes, pas d’une seule charge. Dernière période : {lastdrop}% sur {lasth} ({lastpct}%/h).",
+  "lr_drain_sum_windows": "Somme de {n} périodes hors charge : −{drop}% (pas une seule charge)",
+  "lr_drain_latest_window": "Dernière période hors charge : {drop}% sur {h} ({pct}%/h)",
+  "lr_detail_drain_windows": "Le total additionne des périodes distinctes entre les charges et peut donc dépasser 100 %. Ce n’est pas la consommation d’une seule charge de batterie."
 }

@@ -2775,5 +2775,11 @@
   "lr_sm_feedback_unknown": "本次采集的增量未知",
   "lr_sm_feedback_note": "日志仅提供持续卡顿的证据。Smart 会重新读取 Android 帧统计，并自行管理 A/B 窗口、平台期和冷却时间；报告建议绝不会作为设置执行。",
   "boot_intro_warm": "正在预载 ASB 指标…",
-  "boot_intro_ready": "界面已就绪"
+  "boot_intro_ready": "界面已就绪",
+  "lr_sum_drain_mixed_segments": "在 {h} 内 {segments} 个未充电区间的平均耗电，录屏期间屏幕开启时间占 {on}%：按此速度，满电约可使用 {est}。",
+  "lr_brief_drain_segments": "未充电时，在 {segments} 个区间内共消耗 {drop}%，历时 {h}，平均 {pct}%/小时。这是多个区间的总和，并非一次满电的消耗。最近区间：{lasth} 内消耗 {lastdrop}%（{lastpct}%/小时）。按此平均速度，满电约可使用 {est}。",
+  "lr_brief_drain_segments_short": "未充电时，在 {segments} 个区间内共消耗 {drop}%，历时 {h}（{pct}%/小时）。这是多个区间的总和，并非一次满电的消耗。最近区间：{lasth} 内消耗 {lastdrop}%（{lastpct}%/小时）。",
+  "lr_drain_sum_windows": "{n} 个未充电区间的总和：−{drop}%（并非一次满电）",
+  "lr_drain_latest_window": "最近未充电区间：{h} 内消耗 {drop}%（{pct}%/小时）",
+  "lr_detail_drain_windows": "总数是各次充电之间多个独立区间的耗电总和，因此可能超过 100%。它不是一次电池满电的消耗。"
 }

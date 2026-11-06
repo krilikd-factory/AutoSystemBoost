@@ -2775,5 +2775,11 @@
   "lr_sm_feedback_unknown": "Delta dieser Aufzeichnung unbekannt",
   "lr_sm_feedback_note": "Das Protokoll liefert nur Belege für anhaltenden Jank. Smart liest Androids Frame-Statistik erneut und steuert selbst A/B-Fenster, Plateau und Cooldown; Berichtsempfehlungen werden nie als Einstellungen ausgeführt.",
   "boot_intro_warm": "ASB-Metriken werden vorgeladen…",
-  "boot_intro_ready": "Oberfläche bereit"
+  "boot_intro_ready": "Oberfläche bereit",
+  "lr_sum_drain_mixed_segments": "Durchschnittlicher Verbrauch über {segments} Abschnitte ohne Laden in {h}, Bildschirm bei {on}% der Aufzeichnung aktiv: Bei diesem Tempo reicht eine volle Ladung etwa {est}.",
+  "lr_brief_drain_segments": "Ohne Ladegerät wurden in {segments} Abschnitten über {h} insgesamt {drop}% verbraucht — durchschnittlich {pct}%/h. Dies ist die Summe mehrerer Abschnitte, nicht eine Ladung. Letzter Abschnitt: {lastdrop}% in {lasth} ({lastpct}%/h). Bei diesem Durchschnittstempo würde eine volle Ladung etwa {est} reichen.",
+  "lr_brief_drain_segments_short": "Ohne Ladegerät wurden in {segments} Abschnitten über {h} insgesamt {drop}% verbraucht ({pct}%/h). Dies ist die Summe mehrerer Abschnitte, nicht eine Ladung. Letzter Abschnitt: {lastdrop}% in {lasth} ({lastpct}%/h).",
+  "lr_drain_sum_windows": "Summe über {n} Abschnitte ohne Laden: −{drop}% (nicht eine Ladung)",
+  "lr_drain_latest_window": "Letzter Abschnitt ohne Laden: {drop}% in {h} ({pct}%/h)",
+  "lr_detail_drain_windows": "Die Summe umfasst getrennte Abschnitte zwischen Ladevorgängen und kann daher über 100% liegen. Sie ist nicht der Verbrauch einer einzigen Akkuladung."
 }
