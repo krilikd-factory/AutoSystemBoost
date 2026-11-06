@@ -2038,7 +2038,7 @@ html[data-asb-theme="light"] .lgr-chip { background: #f7f9fa; }
 body.report-active > .report-nav, body.zygisk-active > .zy-page-nav,
 body.device-active > .dev-page-nav, body.config-active > .cfg-page-nav { display: flex; }
 #reportPage .lgr-body, #zygiskPage .lgr-body, #devicePage .lgr-body,
-body.config-active #configPage .cfg-list {
+body.config-category-active #configPage .cfg-list {
   padding-bottom: calc(102px / var(--asb-ui-scale) + env(safe-area-inset-bottom, 0px)); }
 /* The drill-in dock is the main tab bar's visual component, not a second capsule:
  * identical insets, width, 31 px outline, material, 60 px targets and icon-top labels. */
@@ -2053,9 +2053,10 @@ body.config-active #configPage .cfg-list {
   width: 100%; overflow-x: auto; overflow-y: hidden; overscroll-behavior-inline: contain;
   -webkit-overflow-scrolling: touch; scrollbar-width: none; scroll-padding-inline: 4px; }
 :is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .lgr-jump-track::-webkit-scrollbar { display: none; }
-:is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .lgr-jump-btn { flex:0 0 104px; width:104px; min-width:104px; min-height:68px; padding:6px 8px; }
-:is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .asb-tab-ico { flex: 0 0 32px; }
-:is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .asb-tab-label { width:100%; max-width:none; overflow:visible; text-align:center; white-space:normal; text-overflow:clip; overflow-wrap:anywhere; line-height:12px; letter-spacing:0; }
+:is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .lgr-jump-btn { flex:0 0 auto; width:auto; min-width:104px; max-width:176px; min-height:60px; padding:4px 8px; }
+:is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .asb-tab-ico { flex: 0 0 28px; }
+:is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .asb-tab-label { width:100%; max-width:none; overflow:visible; text-align:center; white-space:normal; text-overflow:clip; overflow-wrap:break-word; word-break:normal; line-height:11px; letter-spacing:0; }
+:is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .asb-tab-ind::before { top:4px; height:28px; border-radius:14px; }
 .lgr-jump-track.ind-anim .asb-tab-ind { transition: transform .34s cubic-bezier(.3,.8,.25,1), width .34s ease; }
 #reportPage .lgr-sec[id], #zygiskPage .lgr-sec[id], #reportPage .lgr-details-anchor,
 #devicePage .dev-group[id], #configPage .cfg-section[id] {
@@ -9126,6 +9127,15 @@ function cfgRenderGroup(list, groupId) {
 
 // null = the hub is showing; a group id = that group's screen is.
 var _cfgGroup = null;
+/* A category and the hub are different reading positions, not two states of one list.
+ * Reset only on that navigation: ordinary same-screen repaints must preserve the user's
+ * place, while a long category must never leave the hub's header above the viewport. */
+function cfgShowGroup(groupId) {
+  _cfgGroup = groupId || null;
+  const page = _el('configPage');
+  if (page) page.scrollTop = 0;
+  cfgRender();
+}
 
 function cfgCatClass(key){ return CFG_CAT[key] ? ('cat-' + CFG_CAT[key]) : 'cat-system'; }
 // Toast skin for a config key: same category, same colour as its card icon.
@@ -9837,7 +9847,7 @@ function cfgRenderHub(list) {
     });
     const tile = document.createElement('button');
     tile.className = 'cfg-tile cat-' + (g.id === 'ui' ? 'ux' : g.id);
-    tile.onclick = () => { uiSound('nav'); _cfgGroup = g.id; cfgRender(); };
+    tile.onclick = () => { uiSound('nav'); cfgShowGroup(g.id); };
 
     const ic = document.createElement('div');
     ic.className = 'cfg-tile-ico';
@@ -10626,6 +10636,9 @@ function asbTabbarVisibility() {
                   document.body.classList.contains('zygisk-active') ||
                   document.body.classList.contains('device-active');
   const hideBar = inCategory || drillIn;
+  /* Only a real Config category owns a bottom subsection dock. On the six-tile hub the
+   * main bar is visible, so reserving another 102 px there creates phantom page scroll. */
+  document.body.classList.toggle('config-category-active', !!inCategory);
   const bar = document.querySelector('.asb-tabbar');
   if (bar) bar.style.display = hideBar ? 'none' : '';
   document.documentElement.style.setProperty('--tabbar-space', hideBar ? '16px' : '82px');
@@ -13906,9 +13919,11 @@ function logReportAnalyze(d) {
     const share = Math.max(0, Math.min(100, +cover.on_pct || 0)) / 100;
     const v = +drain.pctph || 0;
     const good = share * 8 + (1 - share), bad = share * 15 + (1 - share) * 1.5;
+    const segments = Math.max(1, +drain.segments || 1);
+    const vars = { h: logReportDur(Math.round((+drain.hours || 0) * 60)), on: String(+cover.on_pct || 0),
+      est: logReportFullCharge(v), segments: String(segments) };
     verdict('drain', v > bad ? 'problem' : v <= good ? 'good' : 'normal', v.toFixed(1) + perHour,
-      'lr_sum_drain_mixed', { h: logReportDur(Math.round((+drain.hours || 0) * 60)), on: String(+cover.on_pct || 0),
-        est: logReportFullCharge(v) }, 'whole_discharge_mixed');
+      segments > 1 ? 'lr_sum_drain_mixed_segments' : 'lr_sum_drain_mixed', vars, 'whole_discharge_mixed');
     drainDone = true;
   }
   if (!drainDone && night && (+night.dur_min || 0) >= 120) {
@@ -15377,7 +15392,7 @@ async function zygiskControlSet(key, val, ctl) {
 function zygiskOpenSettings() {
   closeZygiskPage();
   if (typeof asbNavGo === 'function') asbNavGo('config'); else if (!_cfgOpen) openConfigPage();
-  _cfgSearch = ''; _cfgGroup = 'ui'; cfgRender(); requestAnimationFrame(asbFitPages);
+  _cfgSearch = ''; cfgShowGroup('ui'); requestAnimationFrame(asbFitPages);
 }
 function zygiskOffCard() {
   const card = logReportSec(T('zy_off_title', 'ASB Zygisk is off'), 'zygisk_master');
@@ -16588,6 +16603,7 @@ function logReportAnalysisT(key, vars) {
     lr_sum_drain_off: 'All eligible screen-off phases over {min}.',
     lr_sum_drain_idle: 'Screen-off idle without music over {min}.',
     lr_sum_drain_mixed: 'Whole discharge over {h}, screen on {on}% of the time: about {est} from a full charge at this pace.',
+    lr_sum_drain_mixed_segments: 'Average drain across {segments} off-charger windows over {h}, screen on {on}% of the capture: about {est} from a full charge at this pace.',
     lr_sum_need_time: 'Needs a longer matching discharge window.',
     lr_sum_thermal_detail: 'CPU above 45 °C: {warm}; throttling periods: {clamps}.',
     lr_sum_no_sensor: 'No usable thermal samples in this capture.',
@@ -16685,9 +16701,17 @@ function logReportBrief(d, analysis) {
   const lines = [];
   const add = function (key, vars, warn) { lines.push({ key: key, vars: vars || {}, warn: !!warn }); };
   if (drain && (+drain.hours || 0) > 0 && (+drain.total_drop || 0) > 0) {
-    const v = { drop: String(drain.total_drop), h: logReportDur(Math.round((+drain.hours || 0) * 60)), pct: String(drain.pctph) };
-    if ((+drain.hours || 0) >= 1 && (+drain.total_drop || 0) >= 3) { v.est = logReportFullCharge(drain.pctph); add('lr_brief_drain', v); }
-    else add('lr_brief_drain_short', v);
+    const segments = Math.max(1, +drain.segments || 1);
+    const v = { drop: String(drain.total_drop), h: logReportDur(Math.round((+drain.hours || 0) * 60)), pct: String(drain.pctph),
+      segments: String(segments),
+      lastdrop: String(drain.latest_drop !== undefined ? drain.latest_drop : drain.total_drop),
+      lasth: logReportDur(Math.round((+(drain.latest_hours !== undefined ? drain.latest_hours : drain.hours) || 0) * 60)),
+      lastpct: String(drain.latest_pctph !== undefined ? drain.latest_pctph : drain.pctph) };
+    const enough = (+drain.hours || 0) >= 1 && (+drain.total_drop || 0) >= 3;
+    if (enough) v.est = logReportFullCharge(drain.pctph);
+    const key = segments > 1 ? (enough ? 'lr_brief_drain_segments' : 'lr_brief_drain_segments_short') :
+      (enough ? 'lr_brief_drain' : 'lr_brief_drain_short');
+    add(key, v);
   }
   let offRate = 0;
   const quiet = night ? +night.dur_min || 0 : 0;
@@ -16742,6 +16766,8 @@ function logReportBrief(d, analysis) {
   const fb = {
     lr_brief_drain: 'Off the charger the battery fell {drop}% over {h} - {pct}%/h on average, about {est} from a full charge at this pace.',
     lr_brief_drain_short: 'Off the charger the battery fell {drop}% over {h} ({pct}%/h).',
+    lr_brief_drain_segments: 'Off the charger, total consumption was {drop}% over {h} across {segments} windows - {pct}%/h on average. This is a sum across windows, not one charge. Latest window: {lastdrop}% over {lasth} ({lastpct}%/h). At this average pace, a full charge would last about {est}.',
+    lr_brief_drain_segments_short: 'Off the charger, total consumption was {drop}% over {h} across {segments} windows ({pct}%/h). This is a sum across windows, not one charge. Latest window: {lastdrop}% over {lasth} ({lastpct}%/h).',
     lr_brief_split: 'Screen on for {on}: {onr}%/h. Screen off for {off}: {offr}%/h.',
     lr_brief_split_short: 'Screen on for {on}: {onr}%/h. The screen was off only {off} in short pauses - too little to judge drain at rest.',
     lr_brief_data: 'Mobile data: {mib}, {on} of it with the screen on; the most by {app} ({amib}).',
@@ -17716,14 +17742,24 @@ function logReportRender(d) {
       if ((+drain.ma || 0) > 0) dsub.push(String(drain.ma) + ' mA');
       if ((+drain.hours || 0) >= 1 && (+drain.total_drop || 0) >= 3)
         dsub.push(logReportT('lr_drain_est', '≈{h} from 100%', { h: logReportFullCharge(drain.pctph) }));
+      const drainSegments = Math.max(1, +drain.segments || 1);
+      const dlines = [T('lr_th_time', 'Time') + ': ' + logReportDur(Math.round((+drain.hours || 0) * 60))];
+      if (drainSegments > 1) {
+        dlines.push(logReportT('lr_drain_sum_windows', 'Sum across {n} off-charger windows: −{drop}% (not one charge)',
+          { n: String(drainSegments), drop: String(drain.total_drop || 0) }));
+        dlines.push(logReportT('lr_drain_latest_window', 'Latest off-charger window: {drop}% over {h} ({pct}%/h)', {
+          drop: String(drain.latest_drop !== undefined ? drain.latest_drop : drain.total_drop),
+          h: logReportDur(Math.round((+(drain.latest_hours !== undefined ? drain.latest_hours : drain.hours) || 0) * 60)),
+          pct: String(drain.latest_pctph !== undefined ? drain.latest_pctph : drain.pctph) }));
+        dlines.push(T('lr_detail_drain_windows', 'The total is a sum of separate windows between charging sessions, so it can exceed 100%. It is not the drop of one battery charge.'));
+      } else dlines.push(T('lr_th_drop', 'Drain') + ': −' + String(drain.total_drop || 0) + '%');
+      dlines.push(logReportAnalysisT('lr_actions_verify', {}));
       g.appendChild(logReportHero('📉', T('lr_overall', 'Average drain'),
         String(drain.pctph) + T('lr_per_hour', '%/h'), dsub.join(' · '), false, {
           title: T('lr_overall', 'Average drain'), value: String(drain.pctph) + T('lr_per_hour', '%/h'),
           nowLabel: T('lr_detail_capture', 'In this capture'),
           text: T('lr_detail_drain', 'Battery percentage lost divided by eligible off-charger time. Charging is excluded. The estimate from a full charge is only this capture’s pace projected forward, not a promise of battery life or proof that a tweak caused the result.'),
-          lines: [T('lr_th_time', 'Time') + ': ' + logReportDur(Math.round((+drain.hours || 0) * 60)),
-            T('lr_th_drop', 'Drain') + ': −' + String(drain.total_drop || 0) + '%',
-            logReportAnalysisT('lr_actions_verify', {})] }));
+          lines: dlines }));
       heroes++;
     }
     if (night) {
@@ -18371,7 +18407,9 @@ function logReportRender(d) {
       if (night) trow('lr_trend_night', 'Night: {was} %/h \u2192 {now} %/h', h0.night, +night.pctph);
       /* fix242: the day-drain figure changed its method (zero-step phases now count); an
          older history line used the inflated one and would fake an improvement. */
-      if (drain && String(h0.dm || '') === '2') trow('lr_trend_day', 'Day drain: {was} %/h \u2192 {now} %/h', h0.drain, +drain.pctph);
+      /* fix338: dm=3 excludes charge gains hidden inside non-charging phase rows. Older
+         day-drain values remain visible as history, but are not numerically compared. */
+      if (drain && String(h0.dm || '') === '3') trow('lr_trend_day', 'Day drain: {was} %/h \u2192 {now} %/h', h0.drain, +drain.pctph);
       if (jank) trow('lr_trend_jank', 'Jank: {was}% \u2192 {now}%', h0.jank, +jank.pct);
       if (trows > 0) {
         s.appendChild(logReportNote(logReportAnalysisT('lr_trend_matched')));
@@ -19169,7 +19207,7 @@ function cfgSyncChrome() {
 
 function cfgBack() {
   uiSound('nav');
-  if (_cfgGroup) { _cfgGroup = null; cfgRender(); requestAnimationFrame(asbFitPages); return; }
+  if (_cfgGroup) { cfgShowGroup(null); requestAnimationFrame(asbFitPages); return; }
   closeConfigPage(true);
 }
 
