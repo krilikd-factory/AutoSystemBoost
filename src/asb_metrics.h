@@ -2117,6 +2117,7 @@ static pid_t             g_cam_pid = 0;      /* first match; 0 = rescan needed *
 #define ASB_CAM_PID_MAX 8
 static pid_t             g_cam_pids[ASB_CAM_PID_MAX];
 static int               g_cam_npid = 0;
+static int               g_cam_set_stale = 0; /* a member exited; discover its replacement */
 static time_t            g_cam_scan_ts = 0;
 static unsigned long long g_cam_jif_prev = 0;
 static struct timespec   g_cam_ts_prev = {0};
@@ -2152,6 +2153,7 @@ static pid_t cam_find_pid(void) {
     struct dirent *e;
     pid_t found = 0;
     g_cam_npid = 0;
+    g_cam_set_stale = 0;
     while ((e = readdir(d)) != NULL) {
         const char *nm = e->d_name;
         if (nm[0] < '1' || nm[0] > '9') continue;
@@ -2196,14 +2198,18 @@ static unsigned long long cam_read_jiffies(pid_t pid) {
     return ut + st;
 }
 
-/* Sum over every camera process found at the last scan. 0 only when ALL of them are gone,
- * which is what triggers a rescan; one exited helper does not throw the others away. */
+/* Sum over every camera process found at the last scan. 0 only when ALL of them are gone.
+ * One exited helper does not throw away the survivors' CPU time, but it DOES make the set
+ * stale: cameraserver often survives a vendor-provider restart, so without this signal the
+ * replacement provider would be absent from the sum until the five-minute refresh. */
 static unsigned long long cam_read_jiffies_all(void) {
     unsigned long long sum = 0ULL;
     int alive = 0;
+    g_cam_set_stale = 0;
     for (int i = 0; i < g_cam_npid; i++) {
         unsigned long long j = cam_read_jiffies(g_cam_pids[i]);
         if (j) { sum += j; alive++; }
+        else g_cam_set_stale = 1;
     }
     return alive ? sum : 0ULL;
 }
@@ -2267,6 +2273,19 @@ static int metrics_camera_active(const struct timespec *now) {
     if (g_cam_pid <= 0) return 0;
 
     unsigned long long jif = g_cam_npid > 0 ? cam_read_jiffies_all() : cam_read_jiffies(g_cam_pid);
+    /* A surviving cameraserver must not hide a provider that exited and restarted. Refresh
+       on that process-exit/read-loss event and only outside an active hold: no additional
+       periodic /proc walk and no mid-session baseline change. The existing five-second
+       screen-on cooldown also bounds the pathological case of a persistently unreadable or
+       zero-jiffies member; the next tick baselines the new set before judging its CPU delta. */
+    if (g_cam_set_stale && wall >= g_cam_hold_until) {
+        if (wall - g_cam_scan_ts >= ASB_CAM_RESCAN_SCREEN_ON_S) {
+            g_cam_scan_ts = wall;
+            g_cam_pid = cam_find_pid();
+            g_cam_jif_prev = 0ULL;
+            return 0;
+        }
+    }
     if (jif == 0ULL) {
         g_cam_pid      = 0;
         g_cam_jif_prev = 0ULL;
