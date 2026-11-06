@@ -2899,12 +2899,16 @@ M="$ROOT/src/asb_metrics.h"
 grep -q 'g_cam_pids\[g_cam_npid++\] = pid;' "$M" || fail "camera scan still stops at the first match"
 grep -q 'cam_read_jiffies_all() : cam_read_jiffies(g_cam_pid)' "$M" || fail "camera load not summed"
 grep -q 'wall - g_cam_scan_ts >= 300 && wall >= g_cam_hold_until' "$M" || fail "camera set never refreshed"
+# fix338: a dead member must schedule a new scan even while cameraserver survives. Otherwise
+# a restarted vendor provider is absent from the CPU sum for up to five minutes.
+grep -q 'if (g_cam_set_stale && wall >= g_cam_hold_until)' "$M" || fail "a partial camera PID-set loss does not request a rescan"
+grep -q 'wall - g_cam_scan_ts >= ASB_CAM_RESCAN_SCREEN_ON_S' "$M" || fail "a stale/unreadable camera PID can cause an unthrottled /proc rescan loop"
 CC=""; for c in gcc clang cc; do command -v "$c" >/dev/null 2>&1 && { CC="$c"; break; }; done
 [ -n "$CC" ] || { echo "PASS: fix102 contract (source pins only)"; exit 0; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 {
   printf '#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <unistd.h>\n#include <fcntl.h>\n#include <sys/types.h>\n'
-  printf '#define ASB_CAM_PID_MAX 8\nstatic pid_t g_cam_pids[ASB_CAM_PID_MAX]; static int g_cam_npid = 0;\n'
+  printf '#define ASB_CAM_PID_MAX 8\nstatic pid_t g_cam_pids[ASB_CAM_PID_MAX]; static int g_cam_npid = 0; static int g_cam_set_stale = 0;\n'
   sed -n '/^static unsigned long long cam_read_jiffies(pid_t pid) {/,/^}$/p' "$M"
   sed -n '/^static unsigned long long cam_read_jiffies_all(void) {/,/^}$/p' "$M"
   cat <<'X'
@@ -2914,8 +2918,13 @@ int main(void) {
     g_cam_pids[0] = 999999; g_cam_pids[1] = getpid(); g_cam_npid = 2;
     unsigned long long all = cam_read_jiffies_all();
     if (all < self) { printf("sum %llu < self %llu\n", all, self); return 1; }
-    g_cam_pids[1] = 999998;
+    if (!g_cam_set_stale) { puts("one dead member must mark the surviving set stale"); return 1; }
+    g_cam_set_stale = 0;
+    g_cam_pids[0] = getpid(); g_cam_npid = 1;
+    if (cam_read_jiffies_all() < self || g_cam_set_stale) { puts("a fully live set must not request a rescan"); return 1; }
+    g_cam_pids[0] = 999999; g_cam_pids[1] = 999998; g_cam_npid = 2;
     if (cam_read_jiffies_all() != 0ULL) { puts("all dead must read 0"); return 1; }
+    if (!g_cam_set_stale) { puts("an entirely dead set must also be stale"); return 1; }
     return 0;
 }
 X

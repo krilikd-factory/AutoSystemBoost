@@ -5064,7 +5064,9 @@ for pre in ('', 'live', 'cfg', 'rp', 'dev'):
     if not re.search(blk, h): bad.append('%s/%s are not one capsule' % (soc, ver))
 need('.hdr-cap, .theme-toggle, .status-row {\n  background: var(--cap-wash), var(--tabbar-bg, #000000);\n  border: 1px solid var(--cap-edge);\n  box-shadow: var(--cap-shadow);', 'header capsules do not use the shared material')
 need('    var(--cap-wash),\n    var(--tabbar-bg, #000000);\n  border: 1px solid var(--cap-edge);', 'the bar no longer uses the shared material')
-bar = h[h.index('.asb-tab-ind::before {'):h.index('}', h.index('.asb-tab-ind::before {'))]
+# Anchor the base rule at a line start; fix337 also has a prefixed dock-indicator override.
+bar_at = h.index('\n.asb-tab-ind::before {')
+bar = h[bar_at:h.index('}', bar_at)]
 if 'var(--pill-wash)' not in bar: bad.append('the bar indicator is not the shared pill')
 tt = h[h.index('.theme-toggle::before {'):h.index('}', h.index('.theme-toggle::before {'))]
 if 'var(--pill-wash)' not in tt or 'transition: transform' not in tt: bad.append('the theme switch has no sliding pill')
@@ -5351,8 +5353,33 @@ printf 'Cmdline: com.maps.only\nmemory map:\n7a00000000-7a00010000 r-xp /vendor/
 out="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state0" sh "$D" "$CAP")" || fail "digest exit"
 printf '%s\n' "$out" | grep -Eq '^meta	elapsed_min=720	target_h=24	running=0	started=[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}	profile=smart$' || fail "meta line: $(printf '%s' "$out" | head -1)"
 printf '%s\n' "$out" | grep -qF "capture	dir=$CAP" || fail "capture path for report.json export"
-printf '%s\n' "$out" | grep -q '^drain	pctph=2.0	total_drop=22	hours=10.8	ma=99$' || fail "drain line"
+printf '%s\n' "$out" | grep -q '^drain	pctph=2.0	total_drop=22	hours=10.8	ma=99	segments=2	latest_drop=8	latest_hours=2.0	latest_pctph=4.0$' || fail "drain line with off-charger segments: $(printf '%s\n' "$out" | grep '^drain')"
 printf '%s\n' "$out" | grep -q '^night	dur_min=469	drop=8	pctph=1.0	awake=8$' || fail "night chain"
+# fix338: 181% can be a valid SUM over separate off-charger windows, never one battery
+# cycle. The latest window is projected separately; charging gains are not netted against it.
+CYC="$T/multi-cycle"; mkdir -p "$CYC"
+cat > "$CYC/phase_ledger.tsv" <<'EOF'
+active	1000	4600	100	20
+charging	4600	8200	20	100
+active	8200	11800	100	30
+idle	11800	13600	30	30
+charging	13600	15400	30	100
+idle	15400	19000	100	69
+EOF
+cycout="$(ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state0" ASB_CFG_FILE="$T/no-config" sh "$D" "$CYC")"
+printf '%s\n' "$cycout" | grep -q '^drain	pctph=51.7	total_drop=181	hours=3.5	ma=0	segments=3	latest_drop=31	latest_hours=1.0	latest_pctph=31.0$' \
+  || fail "multi-cycle drain must retain the honest sum and name the latest window: $(printf '%s\n' "$cycout" | grep '^drain')"
+# A non-charging phase can still contain a charger connection (the raw report marks such
+# rows explicitly). Its positive gain is neither consumption nor off-charger elapsed time.
+NEG="$T/mixed-phase-charge"; mkdir -p "$NEG"
+cat > "$NEG/phase_ledger.tsv" <<'EOF'
+active	1000	4600	100	99
+post_wake	4600	8200	99	100
+active	8200	11800	100	95
+EOF
+negout="$(ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state0" ASB_CFG_FILE="$T/no-config" sh "$D" "$NEG")"
+printf '%s\n' "$negout" | grep -q '^drain	pctph=3.0	total_drop=6	hours=2.0	ma=0	segments=2	latest_drop=5	latest_hours=1.0	latest_pctph=5.0$' \
+  || fail "a charge gain inside a non-charging phase must not be netted: $(printf '%s\n' "$negout" | grep '^drain')"
 # fix207: the night chain's detail rides along - weighted average current, mobile
 # traffic, peak temperatures and the wakeup-source peak of the SAME best chain.
 printf '%s\n' "$out" | grep -q '^nightd	ma=36	radio_mib=1.1	cpu_t=31	skin_t=29	wake_pk=5$' || fail "night detail: $(printf '%s\n' "$out" | grep '^nightd')"
@@ -5577,13 +5604,13 @@ ra="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST
 printf '%s\n' "$ra" | grep -q '^hist	' && fail "the first finished capture must not invent a trend"
 [ -s "$HST/report_history.tsv" ] || fail "a finished capture left no history line"
 rb="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST" sh "$D" "$CB")"
-printf '%s\n' "$rb" | grep -Eq '^hist	started=[0-9-]+ [0-9:]+	night=1.0	drain=2.0	jank=5.1	cpu=41	clamps=2	device=OP611FL1	rom=CPH2745_16.0.10.601\(EX01\)	mod=V65-test	elapsed=720	on_pct=0	off_min=1036	dm=2$' || fail "the second capture must name the first with comparison context: $(printf '%s\n' "$rb" | grep '^hist')"
+printf '%s\n' "$rb" | grep -Eq '^hist	started=[0-9-]+ [0-9:]+	night=1.0	drain=2.0	jank=5.1	cpu=41	clamps=2	device=OP611FL1	rom=CPH2745_16.0.10.601\(EX01\)	mod=V65-test	elapsed=720	on_pct=0	off_min=1036	dm=3$' || fail "the second capture must name the first with comparison context: $(printf '%s\n' "$rb" | grep '^hist')"
 ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST" sh "$D" "$CAP" >/dev/null
 [ "$(wc -l < "$HST/report_history.tsv")" -eq 2 ] || fail "re-opening the same capture must rewrite its line, not duplicate it"
 rc="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$HST" sh "$D" "$CAP")"
 # capture B has no report and no throttle trace: its trend line carries dashes, and a
 # dash must not break the row or count as a number.
-printf '%s\n' "$rc" | grep -Eq '^hist	started=[0-9-]+ [0-9:]+	night=1.0	drain=2.0	jank=-	cpu=41	clamps=-	device=-	rom=-	mod=-	elapsed=2866	on_pct=-	off_min=-	dm=2$' || fail "a capture without jank data still trends, with dashes and explicit unknown context: $(printf '%s\n' "$rc" | grep '^hist')"
+printf '%s\n' "$rc" | grep -Eq '^hist	started=[0-9-]+ [0-9:]+	night=1.0	drain=2.0	jank=-	cpu=41	clamps=-	device=-	rom=-	mod=-	elapsed=2866	on_pct=-	off_min=-	dm=3$' || fail "a capture without jank data still trends, with dashes and explicit unknown context: $(printf '%s\n' "$rc" | grep '^hist')"
 
 # Existing observer snapshots expose more independent evidence without adding a device read.
 ZC="$T/zygisk-counters"; mkdir -p "$ZC"
@@ -5982,6 +6009,17 @@ const mixA = logReportAnalyze(mixDay);
 const mixDrain = mixA.verdicts.find(v => v.domain === 'drain');
 chk(mixA.scenario === 'mixed' && mixDrain.reason === 'whole_discharge_mixed' && mixDrain.state === 'normal' && mixDrain.metric === '6.3%/h', 'a mixed day is judged on the whole discharge: ' + JSON.stringify(mixDrain));
 chk(mixDrain.vars.est === logReportDur(16 * 60), 'the verdict names how long a full charge lasts: ' + mixDrain.vars.est);
+/* fix338: a continuous capture can contain several off-charger windows. The sum remains
+   useful for the normalized pace, but neither the brief nor the verdict may call 181% one
+   battery charge. The latest window is named separately. */
+const multiDay = JSON.parse(JSON.stringify(mixDay));
+multiDay.sections.drain = { pctph: '3.1', total_drop: '181', hours: '58.3', ma: '420',
+  segments: '4', latest_drop: '42', latest_hours: '15.2', latest_pctph: '2.8' };
+const multiA = logReportAnalyze(multiDay);
+const multiDrain = multiA.verdicts.find(v => v.domain === 'drain');
+chk(multiDrain.detail_key === 'lr_sum_drain_mixed_segments' && multiDrain.vars.segments === '4',
+  'a multi-window mixed verdict explains its scope: ' + JSON.stringify(multiDrain));
+chk(mixDrain.detail_key === 'lr_sum_drain_mixed', 'a legacy digest keeps its original mixed verdict wording');
 chk(mixA.actions.some(t => t.key === 'lr_tip_sysui_netspeed' && t.vars.n === '81'), 'the redraw action names the network-speed meter: ' + JSON.stringify(mixA.actions.map(t => t.key)));
 chk(mixA.chains.some(c => c.key === 'lr_chain_sysui') && mixA.chains.some(c => c.key === 'lr_chain_music_off'), 'redraw and screen-off music are explained: ' + JSON.stringify(mixA.chains.map(c => c.key)));
 chk(logReportAnalyze(parseLogReport('meta\telapsed_min=120\nscr\ton_pctph=0\toff_pctph=2.4\ton_min=0\toff_min=120\tidle_pctph=0.6\tidle_min=60\tmusic_min=60\n')).verdicts.find(v => v.domain === 'drain').state === 'good', 'screen-off music does not paint the idle verdict');
@@ -6039,6 +6077,8 @@ function techIcon() { return ''; }
 function asbPageJumpIcon() { return 'panel'; }
 function asbPageJumpIndicator() {}
 function logReportDetailBind(el) { return el; }
+const multiBrief = logReportBrief(multiDay, multiA);
+const singleBrief = logReportBrief(mixDay, mixA);
 const impactDay = parseLogReport(txt + '\njcap_main\tyes=2.5\tyes_f=20000\tyes_jps=1.68\tno=3.6\tno_f=30000\tno_jps=1.74');
 const impactCard = logReportTweakEvidence(impactDay), impactText = asbPageText(impactCard);
 chk(impactCard && impactCard.id === 'lgr-impact', 'per-tweak evidence card renders');
@@ -6049,6 +6089,12 @@ chk(impactText.indexOf('A/B') >= 0 && impactText.indexOf('не означает'
 chk(logReportTweakEvidence(parseLogReport('meta\telapsed_min=10\n')) === null, 'no empty evidence card');
 global.window = {};
 function allText(e) { return (e.textContent || '') + e.children.map(allText).join('|'); }
+const multiBriefText = allText(multiBrief), singleBriefText = allText(singleBrief);
+chk(multiBriefText.indexOf('181') >= 0 && multiBriefText.indexOf('42') >= 0 &&
+  multiBriefText.indexOf('не один заряд') >= 0 && multiBriefText.indexOf('Последний участок') >= 0,
+  'the brief separates the multi-window sum from the latest window: ' + multiBriefText);
+chk(singleBriefText.indexOf('Без зарядки') >= 0 && singleBriefText.indexOf('сумма разных участков') < 0,
+  'a legacy/single-window digest keeps the concise one-window wording: ' + singleBriefText);
 function countClass(e, name) { return (String(e.className).split(/\s+/).indexOf(name) >= 0 ? 1 : 0) + e.children.reduce((n,c) => n + countClass(c,name), 0); }
 logReportRender(early);
 chk(countClass(reportBody, 'lgr-verdict') === 5, 'summary renders all five verdict rows');
@@ -6228,7 +6274,11 @@ const oldMethod = parseLogReport(trendText + 'hist\tstarted=2026-10-20 09:10\tni
 logReportRender(oldMethod);
 trendSec = reportBody.children.find(e => e.children[0] && e.children[0].textContent === I18N.ru.lr_sec_trend);
 chk(!trendSec || allText(trendSec).indexOf('3.0') < 0, 'an old-method day drain is not compared against the new one');
-const compatible = parseLogReport(trendText + 'hist\tstarted=2026-10-20 09:10\tnight=-\tdrain=3.0\tjank=-\tcpu=-\tclamps=-\tdevice=OP611FL1\trom=TESTBUILD\tmod=old\telapsed=120\ton_pct=40\toff_min=60\tdm=2\n');
+const method2 = parseLogReport(trendText + 'hist\tstarted=2026-10-20 09:10\tnight=-\tdrain=3.0\tjank=-\tcpu=-\tclamps=-\tdevice=OP611FL1\trom=TESTBUILD\tmod=old\telapsed=120\ton_pct=40\toff_min=60\tdm=2\n');
+logReportRender(method2);
+trendSec = reportBody.children.find(e => e.children[0] && e.children[0].textContent === I18N.ru.lr_sec_trend);
+chk(!trendSec || allText(trendSec).indexOf('3.0') < 0, 'fix242 dm=2 drain is not compared after the mixed-phase correction in dm=3');
+const compatible = parseLogReport(trendText + 'hist\tstarted=2026-10-20 09:10\tnight=-\tdrain=3.0\tjank=-\tcpu=-\tclamps=-\tdevice=OP611FL1\trom=TESTBUILD\tmod=old\telapsed=120\ton_pct=40\toff_min=60\tdm=3\n');
 chk(logReportHistoryComparable(compatible, logReportAnalyze(compatible), compatible.hist[0]), 'render fixture history is comparable: ' + JSON.stringify(compatible.hist[0]) + ' / ' + JSON.stringify(compatible.sections.meta2));
 logReportRender(compatible);
 trendSec = reportBody.children.find(e => e.children[0] && e.children[0].textContent === I18N.ru.lr_sec_trend);
@@ -9620,7 +9670,7 @@ def body(sig):
     i=h.index(sig); return h[i:h.index('\n}\n',i)]
 for token in ('.report-nav, .zy-page-nav, .dev-page-nav, .cfg-page-nav { display: none; position: fixed; left: 12px; right: 12px;',
               'bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);', 'overflow-x: auto;',
-              'scrollbar-width: none;', 'flex:0 0 104px; width:104px; min-width:104px; min-height:68px; padding:6px 8px;',
+              'scrollbar-width: none;', 'flex:0 0 auto; width:auto; min-width:104px; max-width:176px; min-height:60px; padding:4px 8px;',
               "b.setAttribute('aria-current', 'location')", "page.addEventListener('scroll', onScroll, { passive: true })",
               'padding-bottom: calc(102px / var(--asb-ui-scale) + env(safe-area-inset-bottom, 0px));',
               'if (prevScroll > 0) el.scrollTop = prevScroll;',
@@ -9961,10 +10011,10 @@ for token in ('url(#asbUfoDome)','url(#asbUfoHull)','url(#asbUfoUnder)','url(#as
 assert len(re.findall(r'<(?:linearGradient|radialGradient)\s',s)) >= 7
 assert 'animation: asbSweep 5.5s' in s and 'class="asb-boot-brand app-name"' in s
 css=':is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav)'
-assert css+' .lgr-jump-btn { flex:0 0 104px; width:104px; min-width:104px; min-height:68px; padding:6px 8px; }' in s
+assert css+' .lgr-jump-btn { flex:0 0 auto; width:auto; min-width:104px; max-width:176px; min-height:60px; padding:4px 8px; }' in s
 label=s[s.index(css+' .asb-tab-label'):]
 label=label[:label.index('}')]
-for token in ('white-space:normal','overflow:visible','text-overflow:clip','overflow-wrap:anywhere','text-align:center'):
+for token in ('white-space:normal','overflow:visible','text-overflow:clip','overflow-wrap:break-word','word-break:normal','text-align:center'):
     assert token in label, token
 assert '#zygiskPage .dev-evidence { padding-inline-start:12px; }' in s
 assert '#zygiskPage .zy-controls-card > .dev-evidence' not in s
@@ -10012,6 +10062,122 @@ JS
 out="$(node "$T/test.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 echo 'PASS WebUI fix334: detailed multicolor SVG in preview/six headers, two-way SVG/emoji flight, wrapped full dock labels, universal note gutters and no eager repeat Config batch'
+)
+
+t_webui_fix336_config_dock_geometry() (
+# fix336: returning from a long category is a new reading position. Do not carry its scroll
+# offset into the short hub, and do not break a dock word merely to preserve a 104 px tile.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI fix336: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'PY'
+import json, sys
+from pathlib import Path
+r=Path(sys.argv[1]); h=(r/'webroot/index.html').read_text()
+css=':is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav)'
+button=css+' .lgr-jump-btn { flex:0 0 auto; width:auto; min-width:104px; max-width:176px; min-height:60px; padding:4px 8px; }'
+assert button in h
+label=h[h.index(css+' .asb-tab-label'):]
+label=label[:label.index('}')]
+for token in ('width:100%','white-space:normal','overflow:visible','text-overflow:clip',
+              'overflow-wrap:break-word','word-break:normal'):
+    assert token in label, token
+assert 'overflow-wrap:anywhere' not in label
+show=h[h.index('function cfgShowGroup(groupId) {'):]
+show=show[:show.index('\n}\n')]
+assert "_cfgGroup = groupId || null;" in show
+assert "if (page) page.scrollTop = 0;" in show
+assert 'cfgRender();' in show
+assert "tile.onclick = () => { uiSound('nav'); cfgShowGroup(g.id); };" in h
+assert "if (_cfgGroup) { cfgShowGroup(null); requestAnimationFrame(asbFitPages); return; }" in h
+assert "_cfgSearch = ''; cfgShowGroup('ui'); requestAnimationFrame(asbFitPages);" in h
+# The screenshot's DSP spelling was verified against the source: keep the correct Russian ж.
+ru=json.loads((r/'webroot/i18n/ru.json').read_text())
+assert ru['cfg_audio_section_dsp']=='DSP-движок ASB'
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI fix336 runtime: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+{
+  cat <<'EOF'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+let _cfgGroup=null,renders=0,sounds=0,fits=0;
+const page={scrollTop:0};
+function _el(id){return id==='configPage'?page:null}
+function cfgRender(){renders++} function uiSound(){sounds++}
+function requestAnimationFrame(f){f()} function asbFitPages(){fits++}
+function closeConfigPage(){throw Error('category back must not close Config')}
+function grab(name){const a=h.indexOf('function '+name+'(');if(a<0)throw Error('missing '+name);const b=h.indexOf('\n}\n',a);return h.slice(a,b+3)}
+eval(grab('cfgShowGroup'));eval(grab('cfgBack'));
+page.scrollTop=73;cfgShowGroup('battery');
+if(page.scrollTop!==0||_cfgGroup!=='battery'||renders!==1)throw Error('hub -> category retained scroll');
+page.scrollTop=500;cfgBack();
+if(page.scrollTop!==0||_cfgGroup!==null||renders!==2||fits!==1)throw Error('category -> hub retained scroll');
+page.scrollTop=42;cfgShowGroup('audio');
+if(page.scrollTop!==0||_cfgGroup!=='audio'||renders!==3)throw Error('second category entry failed');
+page.scrollTop=91;cfgShowGroup(null);
+if(page.scrollTop!==0||_cfgGroup!==null||renders!==4)throw Error('direct hub transition failed');
+console.log('ok');
+EOF
+} > "$T/t.js"
+out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo 'PASS WebUI fix336: category/hub reset only on navigation, adaptive word-boundary docks and verified Russian DSP label'
+)
+
+t_webui_fix337_dock_alignment_hub_fit() (
+# fix337: the drill-in dock shares the main bar's 60 px target geometry, including two-line
+# labels. The hub has no subsection dock and therefore must not reserve space for one.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI fix337: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'PY'
+import sys
+from pathlib import Path
+h=(Path(sys.argv[1])/'webroot/index.html').read_text()
+css=':is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav)'
+for token in (
+    css+' .lgr-jump-btn { flex:0 0 auto; width:auto; min-width:104px; max-width:176px; min-height:60px; padding:4px 8px; }',
+    css+' .asb-tab-ico { flex: 0 0 28px; }',
+    css+' .asb-tab-ind::before { top:4px; height:28px; border-radius:14px; }',
+    'overflow-wrap:break-word; word-break:normal; line-height:11px; letter-spacing:0;',
+    'bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);'):
+    assert token in h, token
+assert 'body.config-category-active #configPage .cfg-list {' in h
+assert 'body.config-active #configPage .cfg-list {' not in h
+vis=h[h.index('function asbTabbarVisibility() {'):]
+vis=vis[:vis.index('\n}\n')]
+assert "document.body.classList.toggle('config-category-active', !!inCategory);" in vis
+assert vis.index("classList.toggle('config-category-active'") < vis.index("const bar = document.querySelector('.asb-tabbar')")
+# The six-tile hub still uses the measured fitter; no overflow:hidden hack hides a real overflow.
+assert 'function asbFitPagesNow()' in h and 'sizeCards();' in h
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI fix337 runtime: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+cat > "$T/t.js" <<'EOF'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+const classes=new Set(['config-active']),props={};
+const cls={contains:c=>classes.has(c),toggle:(c,on)=>{if(on)classes.add(c);else classes.delete(c)}};
+const bar={style:{display:''}};
+global.document={body:{classList:cls},documentElement:{style:{setProperty:(k,v)=>props[k]=v}},querySelector:s=>s==='.asb-tabbar'?bar:null};
+global._cfgGroup=null;global._deviceOpen=false;global._rpOpen=false;global.asbNavIndicator=()=>{};
+const a=h.indexOf('function asbTabbarVisibility()'),b=h.indexOf('\n}\n',a);eval(h.slice(a,b+3));
+asbTabbarVisibility();
+if(classes.has('config-category-active')||bar.style.display==='none'||props['--tabbar-space']!=='82px')throw Error('hub reserves a hidden dock');
+_cfgGroup='battery';asbTabbarVisibility();
+if(!classes.has('config-category-active')||bar.style.display!=='none'||props['--tabbar-space']!=='16px')throw Error('category lost dock spacing');
+_deviceOpen=true;asbTabbarVisibility();
+if(classes.has('config-category-active')||bar.style.display==='none')throw Error('Device overlay left Config spacing active');
+_deviceOpen=false;_cfgGroup=null;asbTabbarVisibility();
+if(classes.has('config-category-active'))throw Error('hub return retained category class');
+_cfgGroup='audio';classes.delete('config-active');asbTabbarVisibility();
+if(classes.has('config-category-active'))throw Error('closed Config retained category class');
+console.log('ok');
+EOF
+out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo 'PASS WebUI fix337: 60 px aligned dock targets, category-only bottom reserve and clean hub/category/overlay class transitions'
 )
 
 t_webui_night_charge_runtime() (
