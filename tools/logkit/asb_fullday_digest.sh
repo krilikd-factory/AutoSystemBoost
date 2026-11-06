@@ -13,6 +13,9 @@
 #   capture  dir=<absolute capture path>             (report.json export target, fix225)
 #   cover    on_min=<n>  off_min=<n>  on_pct=<n>
 #   drain    pctph=<x.x>  total_drop=<n>  hours=<x.x>  ma=<n>
+#            segments=<n>  latest_drop=<n>  latest_hours=<x.x>  latest_pctph=<x.x>
+#            total_drop is the SUM over separate off-charger windows, not one battery
+#            cycle; the latest_* fields describe only the last such window (fix338).
 #   night    dur_min=<n>  drop=<n>  pctph=<x.x>  awake=<n>
 #   nightd   ma=<n>  radio_mib=<x.x>  cpu_t=<n>  skin_t=<n>  wake_pk=<n>
 #   idlemax  awake=<n>  phase=<name>  dur_min=<n>
@@ -340,26 +343,56 @@ if [ -s "$_DIR/battery_trace.txt" ]; then
   [ -n "$_h_cover_line" ] && printf '%s\n' "$_h_cover_line"
 fi
 
-# ----- drain (discharging phases only) --------------------------------------
+# ----- drain (off-charger windows only) --------------------------------------
 # Charging rows have a negative drop and would cancel real drain out of the average.
-# mA is the duration-weighted mean of the per-phase averages, reported only where the
-# recorder itself trusted its sensor readings (it already blanks the unusable ones).
+# A continuous capture can cross the charger several times, so total_drop is a SUM of
+# consumption over separate windows and may legitimately exceed 100. It is NOT the drop
+# of one battery charge. Keep that sum for the normalized whole-capture rate, but project
+# the latest window separately so the UI never has to present 181% as one lost charge.
+#
+# A phase not named charging* can still gain percentage when the cable was attached inside
+# it (the raw report marks those rows). Such a mixed row is excluded completely: adding its
+# negative delta would net charging energy against consumption, while keeping its duration
+# would contaminate off-charger time. A level increase between rows also starts a new window.
+# mA is the duration-weighted mean of trusted per-phase averages in eligible rows only.
 if [ "$_HAVE_LEDGER" = "1" ]; then
   # fix213: the line is captured, not printed straight, so the history block at the end
   # can lift the headline figure for the trend without recomputing it.
   _h_drain_line="$(_cat_ledger | awk -F'\t' '
+    function close_window() {
+      if (!in_window) return
+      latest_drop = window_drop; latest_sec = window_sec
+      in_window = 0
+    }
     /^#/ { next }
     NF >= 5 {
+      charging = ($1 ~ /^charging/)
       d = $4 - $5; dur = $3 - $2
-      if ($1 ~ /^charging/ || dur <= 0) next
+      if (charging) {
+        close_window(); previous_end = -1
+        next
+      }
+      if (dur <= 0) next
+      if (d < 0) {
+        close_window(); previous_end = $5
+        next
+      }
+      if (in_window && previous_end >= 0 && $4 > previous_end) close_window()
+      if (!in_window) {
+        in_window = 1; window_drop = 0; window_sec = 0; segments++
+      }
       drop += d; sec += dur
+      window_drop += d; window_sec += dur
       if (($13 + 0) > 0) { ma += $13 * dur; maw += dur }
+      previous_end = $5
     }
     END {
+      close_window()
       if (drop < 0) drop = 0
       if (sec > 0 && drop > 0)
-        printf "drain\tpctph=%.1f\ttotal_drop=%d\thours=%.1f\tma=%d\n", \
-          drop * 3600 / sec, drop, sec / 3600, (maw > 0 ? ma / maw : 0)
+        printf "drain\tpctph=%.1f\ttotal_drop=%d\thours=%.1f\tma=%d\tsegments=%d\tlatest_drop=%d\tlatest_hours=%.1f\tlatest_pctph=%.1f\n", \
+          drop * 3600 / sec, drop, sec / 3600, (maw > 0 ? ma / maw : 0), segments, \
+          latest_drop, latest_sec / 3600, (latest_sec > 0 ? latest_drop * 3600 / latest_sec : 0)
     }' 2>/dev/null)"
   [ -n "$_h_drain_line" ] && printf '%s\n' "$_h_drain_line"
 
@@ -1404,7 +1437,7 @@ if [ "$_running" = 0 ] && [ -n "${_started:-}" ] && { [ -n "$_h_dp" ] || [ -n "$
   if mkdir -p "$_STATE" 2>/dev/null && touch "$_HF" 2>/dev/null; then
     { awk -F'\t' -v k="$_started" '$1 != k' "$_HF" 2>/dev/null
       printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$_started" "${_h_np:--}" "${_h_dp:--}" "${_jp:--}" "${_h_cp:--}" "${_h_tc:--}" \
-        "${_h_device:--}" "${_h_rom:--}" "${_h_mod:--}" "${_el:-0}" "${_h_on:--}" "${_h_off:--}" 2
+        "${_h_device:--}" "${_h_rom:--}" "${_h_mod:--}" "${_el:-0}" "${_h_on:--}" "${_h_off:--}" 3
     } | tail -n 12 > "$_HF.tmp" 2>/dev/null && mv "$_HF.tmp" "$_HF" 2>/dev/null || rm -f "$_HF.tmp"
   fi
 fi
