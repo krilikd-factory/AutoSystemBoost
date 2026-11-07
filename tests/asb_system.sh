@@ -8900,9 +8900,10 @@ grep -Fq 'else if (k >= minn)' "$Z" || fail 'common measured threshold missing'
 grep -Fq 'one hooked slow launch must keep the normal lift' "$ROOT/tests/asb_zygisk.sh" || fail 'hooked outlier regression missing'
 grep -Fq 't_smart_log_capture_state_runtime' "$ROOT/tests/asb_smart.sh" || fail 'Smart digest runtime regression missing'
 grep -Fq 't_webui_log_report_runtime' "$ROOT/tests/asb_ui.sh" || fail 'WebUI report runtime regression missing'
-# Live state belongs only to a running capture. Saved captures use their own snapshots,
-# monotonic in-capture deltas and explicit unknown/reset states.
-grep -Fq 'if [ "$_running" = 1 ] && [ -r "${ASB_GOV_STATE_FILE:-/dev/.asb/state}" ]' "$D" || fail 'saved report can read current live state'
+# Live state belongs only to a capture whose recorder process is still alive. A stale
+# capture may expose that independent current fact, while fix339 separately makes every
+# analytical verdict unknown. Saved captures use their own snapshots and explicit deltas.
+grep -Fq 'if [ "$_process_alive" = 1 ] && [ -r "${ASB_GOV_STATE_FILE:-/dev/.asb/state}" ]' "$D" || fail 'saved report can read current live state'
 grep -Fq 'state="adapting"' "$D" || fail 'positive accepted delta is not distinguished'
 grep -Fq 'deltas",hs && hl ? (reset ? "counter_reset_or_restart"' "$D" || fail 'counter-reset bound missing'
 grep -Fq 'const smartLive = d.sections.smartlive || null;' "$H" || fail 'WebUI does not consume smartlive'
@@ -9224,6 +9225,70 @@ for state in both arm64 arm32 none; do
   printf '%s\n' "$out" | grep -q 'PREPARED COMPONENTS' && fail "$state: rejected list printed"
 done
 echo 'PASS installer presentation fix331: detailed sections kept, no duplicate checklist, four honest Zygisk ABI states and 13 locales'
+)
+
+t_logkit_recorder_freshness_runtime() (
+# fix339: execute the real monotonic heartbeat and bounded dumpsys collector. The incident
+# had a live PID but no new samples; these contracts pin stage evidence, timeout recovery,
+# bounded event history and operation without a timeout binary.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+C="$ROOT/tools/logkit/_asb_logkit_common.sh"
+F="$ROOT/tools/logkit/asb_log_full_day.sh"
+D="$ROOT/runtime/asb_debug_support.sh"
+fail() { echo "FAIL logkit recorder freshness: $*" >&2; exit 1; }
+for f in "$C" "$F" "$D" "$ROOT/tools/logkit/asb_fullday_digest.sh"; do sh -n "$f" || fail "shell syntax: $f"; done
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+mkdir -p "$T/cap" "$T/bin"
+sed -n '/^lk_run_bounded() {$/,/^lk_have_dumpsys() {/p' "$C" | sed '$d' > "$T/collector.sh"
+sed -n '/^lk_uptime_s() {$/,/^lk_mono_s() {$/p' "$F" | sed '$d' > "$T/heartbeat.sh"
+[ -s "$T/collector.sh" ] && [ -s "$T/heartbeat.sh" ] || fail 'real functions not extracted'
+grep -q '^lk_stage() {' "$T/heartbeat.sh" || fail 'heartbeat function missing'
+! sed -n '/^lk_stage() {$/,/^}/p' "$T/heartbeat.sh" | grep -qE 'sleep|&$|while ' || fail 'heartbeat created a polling worker'
+printf '1000.25 2000.50\n' > "$T/uptime"
+out="$(sh -c '. "$1"; LK_OUT_DIR="$2"; LK_TICK_COUNT=4; LK_POLL_S=90; ASB_LK_UPTIME_FILE="$3"; ASB_DEBUG_SUPPORT_BOOT_ID=boot-test; lk_stage "dumpsys:power"; cat "$2/recorder_heartbeat.env"' x "$T/heartbeat.sh" "$T/cap" "$T/uptime")"
+printf '%s\n' "$out" | grep -qx 'mono=1000' || fail "heartbeat is not monotonic uptime: $out"
+printf '%s\n' "$out" | grep -qx 'stage=dumpsys:power' || fail 'current collector stage missing'
+printf '%s\n' "$out" | grep -qx 'tick=4' || fail 'recorder tick missing'
+printf '%s\n' "$out" | grep -qx 'boot_id=boot-test' || fail 'boot identity missing'
+find "$T/cap" -name 'recorder_heartbeat.env.tmp.*' | grep -q . && fail 'atomic heartbeat temporary file remained'
+cat > "$T/bin/dumpsys" <<'X'
+#!/bin/sh
+[ "${1:-}" != hang ] || { sleep 5; exit 0; }
+printf 'collector-ok\n'
+X
+chmod +x "$T/bin/dumpsys"
+# Normal Android/toybox path (host timeout stands in for it).
+set +e
+out="$(PATH="$T/bin:$PATH" LK_OUT_DIR="$T/cap" ASB_LK_UPTIME_FILE="$T/uptime" ASB_LK_DUMPSYS_TIMEOUT_S=1 sh -c '. "$1"; lk_dumpsys hang' x "$T/collector.sh" 2>/dev/null)"
+rc=$?
+set -e
+case "$rc" in 124|137|143) ;; *) fail "hung dumpsys was not bounded: rc=$rc out=$out" ;; esac
+[ -z "$out" ] || fail 'a timed-out collector invented sample output'
+grep -Eq '^[0-9]+\|1000\|dumpsys:hang\|(124|137|143)$' "$T/cap/collector_events.tsv" || fail 'timeout gap was not journaled'
+out="$(PATH="$T/bin:$PATH" LK_OUT_DIR="$T/cap" ASB_LK_UPTIME_FILE="$T/uptime" sh -c '. "$1"; lk_dumpsys power' x "$T/collector.sh")"
+[ "$out" = collector-ok ] || fail "quick collector output regressed: $out"
+# Fallback path: hide timeout, retain only the utilities used by the functions/fixture.
+mkdir -p "$T/fallback"
+for x in sleep awk tail cut tr date mv rm; do ln -s "$(command -v "$x")" "$T/fallback/$x"; done
+ln -s "$T/bin/dumpsys" "$T/fallback/dumpsys"
+set +e
+PATH="$T/fallback" LK_OUT_DIR="$T/cap" ASB_LK_UPTIME_FILE="$T/uptime" ASB_LK_DUMPSYS_TIMEOUT_S=1 /bin/sh -c '. "$1"; lk_dumpsys hang' x "$T/collector.sh" >/dev/null 2>&1
+rc=$?
+set -e
+case "$rc" in 124|137|143) ;; *) fail "watchdog fallback did not bound dumpsys: rc=$rc" ;; esac
+[ "$(wc -l < "$T/cap/collector_events.tsv")" -eq 2 ] || fail 'fallback timeout was not recorded'
+# Infinite logging must not turn repeated collector failures into an unbounded file.
+i=0; while [ $i -lt 210 ]; do
+  LK_OUT_DIR="$T/cap" ASB_LK_UPTIME_FILE="$T/uptime" sh -c '. "$1"; lk_collector_event dumpsys:test 124' x "$T/collector.sh"
+  i=$((i+1))
+done
+[ "$(wc -l < "$T/cap/collector_events.tsv")" -eq 200 ] || fail 'collector event log is not bounded to 200 rows'
+for token in 'lk_stage sampling' 'lk_stage phase_detection' 'lk_stage power_traces' 'lk_stage display_jank' 'lk_stage report' 'lk_stage hourly_snapshot' 'lk_stage sleep' 'lk_stage wake' 'lk_stage finalize'; do
+  grep -Fq "$token" "$F" || fail "main loop lost stage: $token"
+done
+grep -Fq 'full_day_progress_fields "$_pid"' "$D" || fail 'process status has no separate capture progress fields'
+echo 'PASS logkit recorder freshness: atomic monotonic stage heartbeat, bounded dumpsys with/without timeout, 200-row gap evidence and loop stages'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

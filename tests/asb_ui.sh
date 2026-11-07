@@ -1196,6 +1196,72 @@ grep -Fq "if (_asbDebugActionBusy) { toast(T('dbg_log_stop_busy'" "$H" || fail "
 echo "PASS debug stop fast: one-pass descendants (three generations), the helper leaves the app's cgroup first, the recorder wakes on TERM at once, the page answers the second tap immediately"
 )
 
+t_debug_support_capture_freshness_runtime() (
+# fix339: process liveness keeps Stop available, but only a same-PID, same-boot monotonic
+# heartbeat may make the capture green. Exercise the REAL full_day_status CLI in all three
+# progress states, including the already-running response used by a repeated Start tap.
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+HELPER="$ROOT/runtime/asb_debug_support.sh"
+TMP="$(mktemp -d)"; trap 'kill $(jobs -p) 2>/dev/null; pkill -f "$TMP" 2>/dev/null; rm -rf "$TMP"' EXIT HUP INT TERM
+fail() { echo "FAIL debug capture freshness: $*" >&2; exit 1; }
+DBG="$TMP/mod"; mkdir -p "$DBG/tools/logkit"
+printf 'id=AutoSystemBoost\nversion=V65\nversionCode=65339\n' > "$DBG/module.prop"
+cat > "$DBG/tools/logkit/asb_log_full_day.sh" <<'EOF_REC'
+set -u
+_lock="${ASB_DEBUG_SUPPORT_LOCKDIR:-}"; _token="${ASB_DEBUG_SUPPORT_LOCK_TOKEN:-}"
+[ -d "$_lock" ] && [ "$(cat "$_lock/token")" = "$_token" ] || exit 91
+printf '%s\n' "$$" > "$_lock/pid"
+_out="$(dirname "$_lock")/asb_log_full_day_$$"; mkdir -p "$_out"
+printf '%s\n' "$_out" > "$_lock/output_dir"
+trap 'rm -rf "$_lock"; exit 0' TERM
+while :; do sleep 60; done
+EOF_REC
+ENV=(ASB_DEBUG_SUPPORT_MODDIR="$DBG" ASB_DEBUG_SUPPORT_STATE_DIR="$TMP/state"
+     ASB_DEBUG_SUPPORT_RUNLOG="$TMP/run.out" ASB_DEBUG_SUPPORT_STOP_WAIT_S=2)
+H() { env "${ENV[@]}" sh "$HELPER" "$@" 2>/dev/null || true; }
+OUT="$(H full-day-start)"; printf '%s\n' "$OUT" | grep -q 'status=started' || fail "start: $OUT"
+LOCK="$TMP/state/full_day_webui.lock"
+n=0; while [ ! -s "$LOCK/output_dir" ] && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
+[ -s "$LOCK/output_dir" ] && [ -s "$LOCK/pid" ] || fail 'recorder did not publish its lock/output'
+CAP="$(cat "$LOCK/output_dir")"; PID="$(tr -dc 0-9 < "$LOCK/pid")"; BOOT="$(cat "$LOCK/boot_id")"
+OUT="$(H status)"
+printf '%s\n' "$OUT" | grep -qx 'status=running' || fail "live process lost Stop-capable status: $OUT"
+printf '%s\n' "$OUT" | grep -qx 'capture_state=unknown' || fail "missing heartbeat was not unknown: $OUT"
+printf '%s\n' "$OUT" | grep -qx 'heartbeat_age_s=-1' || fail "missing heartbeat invented an age: $OUT"
+UP="$(awk '{printf "%d", $1}' /proc/uptime)"
+cat > "$CAP/recorder_heartbeat.env" <<EOF_HB
+schema=1
+pid=$PID
+epoch=$(date +%s)
+mono=$UP
+tick=3
+poll_s=45
+stage=sampling
+boot_id=$BOOT
+EOF_HB
+OUT="$(H status)"
+printf '%s\n' "$OUT" | grep -qx 'capture_state=running' || fail "fresh heartbeat was not running: $OUT"
+printf '%s\n' "$OUT" | grep -qx 'stage=sampling' || fail "fresh stage missing: $OUT"
+printf '1600.00 3200.00\n' > "$TMP/uptime"
+sed -i 's/^mono=.*/mono=1000/;s/^stage=.*/stage=dumpsys:batterystats/' "$CAP/recorder_heartbeat.env"
+HS() { env "${ENV[@]}" ASB_DEBUG_SUPPORT_UPTIME_FILE="$TMP/uptime" sh "$HELPER" "$@" 2>/dev/null || true; }
+OUT="$(HS status)"
+printf '%s\n' "$OUT" | grep -qx 'status=running' || fail "stale process must retain Stop: $OUT"
+printf '%s\n' "$OUT" | grep -qx 'capture_state=stale' || fail "old heartbeat was not stale: $OUT"
+printf '%s\n' "$OUT" | grep -qx 'heartbeat_age_s=600' || fail "wrong stale age: $OUT"
+printf '%s\n' "$OUT" | grep -qx 'stage=dumpsys:batterystats' || fail "stale stage missing: $OUT"
+OUT="$(HS full-day)"
+printf '%s\n' "$OUT" | grep -qx 'status=already_running' || fail "repeated start did not preserve the single recorder: $OUT"
+printf '%s\n' "$OUT" | grep -qx 'capture_state=stale' || fail "already_running hid stale progress: $OUT"
+sed -i 's/^mono=.*/mono=10x00/' "$CAP/recorder_heartbeat.env"
+OUT="$(HS status)"; printf '%s\n' "$OUT" | grep -qx 'capture_state=unknown' || fail "malformed monotonic evidence was repaired into a timestamp: $OUT"
+rm -f "$CAP/recorder_heartbeat.env"
+OUT="$(HS status)"; printf '%s\n' "$OUT" | grep -qx 'capture_state=unknown' || fail "deleted heartbeat did not return to unknown: $OUT"
+OUT="$(H full-day-stop)"; printf '%s\n' "$OUT" | grep -qx 'status=stopping' || fail "stale/unknown capture could not be stopped: $OUT"
+echo 'PASS debug capture freshness: real status CLI separates fresh/stale/unknown progress from live-process Stop and repeated Start'
+)
+
 t_debug_support_resume_runtime() (
 # Runtime (fix244): a session log started from the WebUI survives a reboot.
 #
@@ -5571,6 +5637,17 @@ printf '%s\n' "$_lp" > "$T/lock2/pid"
 touch -d "@$((NOW-600))" "$T/lock2/pid"   # launched ten minutes ago
 printf 'Cmdline: com.oplus.screenshot\n' > "$T/tomb/tombstone_07"; touch -d "@$((NOW-4000))" "$T/tomb/tombstone_07"
 printf 'Cmdline: fresh.crash\n' > "$T/tomb/tombstone_08"; touch -d "@$((NOW-300))" "$T/tomb/tombstone_08"
+UP="$(awk '{printf "%d", $1}' /proc/uptime)"
+cat > "$FRESH/recorder_heartbeat.env" <<EOF
+schema=1
+pid=$_lp
+epoch=$NOW
+mono=$UP
+tick=1
+poll_s=45
+stage=sleep
+boot_id=
+EOF
 fout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" ASB_LK_STATE_DIR="$T/state3" sh "$D" "$FRESH")"
 # fix244: a lock from an earlier boot, or a pid that is not the recorder (reused after a
 # reboot), is not a running capture - capture 549 read "recording" long after it ended.
@@ -5582,9 +5659,67 @@ sleep 30 & _lq=$!
 printf '%s\n' "$_lq" > "$T/lock2/pid.other"
 rout="$(cp "$T/lock2/pid" "$T/lock2/pid.rec"; cp "$T/lock2/pid.other" "$T/lock2/pid"; ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" ASB_LK_STATE_DIR="$T/state3c" sh "$D" "$FRESH" | head -n 1; cp "$T/lock2/pid.rec" "$T/lock2/pid")"
 printf '%s\n' "$rout" | grep -q '	running=0	' || fail "a pid that is not the recorder reads as running: $rout"
+touch -d "@$((NOW-600))" "$T/lock2/pid"   # the PID-reuse fixture's cp must not move capture start
+# fix339: a live recorder PID with no monotonic progress is stale, not running. Keep the
+# historical traces and the independently fresh crash row, but never write this live capture
+# into finished-capture history. A missing heartbeat (an older recorder) is unknown instead.
+cat > "$FRESH/recorder_heartbeat.env" <<EOF
+schema=1
+pid=$_lp
+epoch=$((NOW-600))
+mono=$((UP-600))
+tick=7
+poll_s=45
+stage=dumpsys:batterystats
+boot_id=
+EOF
+printf '%s|%s|dumpsys:batterystats|124\n' "$((NOW-600))" "$((UP-600))" > "$FRESH/collector_events.tsv"
+stallout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" ASB_LK_STATE_DIR="$T/state3-stale" sh "$D" "$FRESH")"
+printf '%s\n' "$stallout" | grep -q '^meta	elapsed_min=0	target_h=0	running=0' || fail "a live PID without progress still reads as running: $(printf '%s' "$stallout" | head -1)"
+printf '%s\n' "$stallout" | grep -Eq '^recorder	state=stale	process_alive=1	heartbeat_age_s=59[5-9]|^recorder	state=stale	process_alive=1	heartbeat_age_s=60[0-9]' || fail "stale recorder age/state missing: $(printf '%s' "$stallout" | grep '^recorder')"
+printf '%s\n' "$stallout" | grep -q '	stage=dumpsys:batterystats	tick=7	collector_timeouts=1	last_collector=dumpsys:batterystats$' || fail "stale stage/timeout evidence missing"
+printf '%s\n' "$stallout" | grep -Eq '^crash	count=1	asb=0	latest=fresh.crash' || fail "a fresh crash was discarded with stale measurements: $(printf '%s' "$stallout" | grep '^crash')"
+[ ! -e "$T/state3-stale/report_history.tsv" ] || fail "a live but stalled capture entered finished history"
+rm -f "$FRESH/recorder_heartbeat.env"
+unknownout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" ASB_LK_STATE_DIR="$T/state3-unknown" sh "$D" "$FRESH")"
+printf '%s\n' "$unknownout" | grep -q '^meta	elapsed_min=0	target_h=0	running=0' || fail "a legacy live PID without heartbeat reads as running"
+printf '%s\n' "$unknownout" | grep -q '^recorder	state=unknown	process_alive=1	heartbeat_age_s=-1' || fail "a legacy live PID is not explicit unknown"
+cat > "$FRESH/recorder_heartbeat.env" <<EOF
+schema=1
+pid=$_lp
+epoch=$NOW
+mono=10x00
+tick=8
+poll_s=45
+stage=sampling
+boot_id=
+EOF
+malformedout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" ASB_LK_STATE_DIR="$T/state3-malformed" sh "$D" "$FRESH")"
+printf '%s\n' "$malformedout" | grep -q '^recorder	state=unknown	process_alive=1	heartbeat_age_s=-1' || fail "malformed monotonic evidence was repaired into a timestamp"
+rm -f "$FRESH/recorder_heartbeat.env"
+# Reboot/resume: only a heartbeat from the new boot and the new recorder PID can revive the
+# live state. If that resumed recorder then stalls, the same capture becomes stale again.
+printf 'boot-new\n' > "$T/lock2/boot_id"
+cat > "$FRESH/recorder_heartbeat.env" <<EOF
+schema=1
+pid=$_lp
+epoch=$NOW
+mono=$UP
+tick=9
+poll_s=90
+stage=sleep
+boot_id=boot-new
+EOF
+resumeout="$(ASB_LK_BOOT_ID_FILE="$T/bootid" ASB_LK_UPTIME_FILE=/proc/uptime ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" ASB_LK_STATE_DIR="$T/state3-resume" sh "$D" "$FRESH")"
+printf '%s\n' "$resumeout" | grep -q '^recorder	state=running	process_alive=1' || fail "same-boot resumed heartbeat did not restore live state"
+sed -i "s/^mono=.*/mono=$((UP-600))/;s/^stage=.*/stage=sampling/" "$FRESH/recorder_heartbeat.env"
+resumestale="$(ASB_LK_BOOT_ID_FILE="$T/bootid" ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" ASB_LK_STATE_DIR="$T/state3-resume-stale" sh "$D" "$FRESH")"
+printf '%s\n' "$resumestale" | grep -q '^recorder	state=stale	process_alive=1' || fail "resumed recorder stall was not detected"
+rm -f "$T/lock2/boot_id"
 kill "$_lq" 2>/dev/null || true; wait "$_lq" 2>/dev/null || true
 kill "$_lp" 2>/dev/null || true; wait "$_lp" 2>/dev/null || true
 printf '%s\n' "$fout" | grep -q '^meta	elapsed_min=0	target_h=0	running=1' || fail "the fresh capture must read as running: $(printf '%s' "$fout" | head -1)"
+printf '%s\n' "$fout" | grep -q '^recorder	state=running	process_alive=1	heartbeat_age_s=0	stage=sleep	tick=1' || fail "fresh monotonic heartbeat was not projected"
 printf '%s\n' "$fout" | grep -Eq '^crash	count=1	asb=0	latest=fresh.crash	ltime=[0-9]{2}:[0-9]{2}$' || fail "a fresh capture's crash window must start at its launch, not 24h ago: $(printf '%s' "$fout" | grep '^crash')"
 # The ledger may lead with a "# phase ..." comment: the window must read the first DATA
 # row, not the comment. The main fixture's ledger has no comment, so pin it here.
@@ -5660,7 +5795,7 @@ let ASB_LANG = 'ru';
 function T(k, d) { const L = I18N[ASB_LANG]; return (L && typeof L[k] === 'string') ? L[k] : d; }
 EOF
   for fn in Tcfg parseLogReport logReportT logReportDur logReportDurSec logReportAuthority logReportHolderWhat logReportIdleAwake logReportHolderName logReportTips \
-    logReportSysuiSteady logReportJwhyShare logReportJwhyCause logReportJwhyTop logReportMiB logReportNetFix logReportLteIdle logReportFullCharge logReportScreenOnDrainState logReportAnalyze logReportHistoryComparable logReportMachineDigest logReportAnalysisT \
+    logReportSysuiSteady logReportJwhyShare logReportJwhyCause logReportJwhyTop logReportMiB logReportNetFix logReportLteIdle logReportFullCharge logReportScreenOnDrainState logReportRecorderGap logReportAnalyze logReportHistoryComparable logReportMachineDigest logReportAnalysisT \
     logReportTipText logReportRow logReportSec logReportNote logReportHero logReportTable logReportTweakEvidence logReportZygiskGovernor logReportZygisk \
     deviceVal deviceFill deviceZygiskLinkState deviceZygiskLinkVerdict deviceZygiskLink \
     logReportBrief logReportDxT logReportSelfPush logReportDiagnose logReportDiagSection logReportQualityPanel logReportRef logReportDomainRef logReportTipRef logReportDiagRef logReportAppendAnalysis logReportRender asbPageJumpClear asbPageJumpActive asbPageJump asbPageReference shQuote \
@@ -5963,6 +6098,18 @@ chk(machine.quality.level === analysis.quality.level && machine.scenario.family 
 chk(machine.verdicts.length === 5 && machine.facts.every(c => c.kind === 'fact') && machine.hypotheses.every(c => c.kind === 'hypothesis'), 'machine digest separates facts and hypotheses');
 chk(machine.actions.length <= 3 && machine.asb_overhead.native_cpu_ms_per_wakeup > 3.7 && machine.asb_overhead.native_cpu_ms_per_wakeup < 3.8, 'machine digest actions and overhead');
 chk(JSON.parse(JSON.stringify(machine)).schema === 2, 'machine digest is JSON serializable');
+// fix339: a live PID plus an old heartbeat is not a current healthy capture. Preserve the
+// historical evidence and the previous state for export, but make every current verdict unknown.
+const staleReport = JSON.parse(JSON.stringify(d));
+staleReport.sections.meta.running = '0';
+staleReport.sections.recorder = { state: 'stale', process_alive: '1', heartbeat_age_s: '8580', stage: 'dumpsys:batterystats', collector_timeouts: '1' };
+const staleAnalysis = logReportAnalyze(staleReport);
+chk(staleAnalysis.quality.level === 'low' && staleAnalysis.quality.reasons.indexOf('recorder_stale') >= 0, 'stale capture quality was not downgraded');
+chk(staleAnalysis.verdicts.every(v => v.state === 'unknown' && v.metric === '—' && v.historical_state), 'stale measurements retained a current green/red verdict: ' + JSON.stringify(staleAnalysis.verdicts));
+chk(logReportRecorderGap(staleReport) && logReportMachineDigest(staleReport).capture.recorder_state === 'stale', 'machine export hides recorder staleness');
+const unknownReport = JSON.parse(JSON.stringify(staleReport));
+unknownReport.sections.recorder.state = 'unknown'; unknownReport.sections.recorder.heartbeat_age_s = '-1';
+chk(logReportAnalyze(unknownReport).verdicts.every(v => v.state === 'unknown'), 'unknown recorder progress produced a current verdict');
 const early = parseLogReport('meta\telapsed_min=10\ttarget_h=24\trunning=1\nwl\tnone=1\n');
 const earlyA = logReportAnalyze(early);
 chk(earlyA.quality.level === 'low' && earlyA.verdicts.every(v => v.state === 'unknown'), 'meta-only capture yields no healthy verdict');
