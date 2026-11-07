@@ -6977,8 +6977,13 @@ async function asbDebugAction(action) {
       toast(T('dbg_diag_saved', 'asbdiag saved') + (done.info.path ? ': ' + done.info.path : ''), 'good');
     } else if (info.status === 'already_running') {
       _asbLogRunning = true;
+      _asbLogCaptureState = info.capture_state || 'unknown';
       asbLogMenuPaint();
-      toast(T('dbg_log_running', 'The infinite log is already running') + (info.pid ? ' · PID ' + info.pid : '') +
+      const alreadyKey = info.capture_state === 'stale' ? 'dbg_log_stale_toast' :
+        info.capture_state === 'unknown' ? 'dbg_log_unknown_toast' : 'dbg_log_running';
+      const alreadyFb = info.capture_state === 'stale' ? 'The recorder is alive but sampling has stalled; open the report for its last stage' :
+        info.capture_state === 'unknown' ? 'The recorder is alive but sampling progress is unknown; open the report for saved evidence' : 'The infinite log is already running';
+      toast(T(alreadyKey, alreadyFb) + (info.pid ? ' · PID ' + info.pid : '') +
           (info.output ? ' · ' + info.output.replace(/^\/(sdcard|storage\/emulated\/0)\//, '') : '') + ' — ' + T('dbg_log_running_hint', 'open this menu again to stop it'), 'warn');
     } else if (info.status === 'started') {
       const started = await debugFullDayPoll();
@@ -13860,6 +13865,10 @@ function logReportScreenOnDrainState(value, scenario) {
   const goodThrough = heavy ? 15 : audio ? 10 : 8;
   return v > problemAbove ? 'problem' : v <= goodThrough ? 'good' : 'normal';
 }
+function logReportRecorderGap(d) {
+  const r = d && d.sections ? d.sections.recorder : null;
+  return !!(r && String(r.process_alive) === '1' && (r.state === 'stale' || r.state === 'unknown'));
+}
 /* fix225: one analytical model drives the executive summary, causal explanations, priority
  * actions and report.json. It deliberately uses qualitative confidence: a numeric 87/100
  * would look calibrated without a calibration corpus. Every verdict has its own evidence
@@ -13897,6 +13906,11 @@ function logReportAnalyze(d) {
   else quality.reasons.push('limited_capture_or_sensors');
   if (s.gauge && (+s.gauge.factor || 1) <= .75 && (+s.gauge.windows || 0) >= 10)
     quality.reasons.push('current_sensor_lower_bound');
+  const recorderGap = logReportRecorderGap(d);
+  if (recorderGap) {
+    quality.level = 'low';
+    quality.reasons.push(s.recorder && s.recorder.state === 'stale' ? 'recorder_stale' : 'recorder_progress_unknown');
+  }
 
   const verdicts = [];
   function verdict(domain, state, metric, detailKey, vars, reason) {
@@ -13983,6 +13997,14 @@ function logReportAnalyze(d) {
       'lr_sum_asb_cost', { ms: String(cost.cpu_msh || 0), per: msPerWake === null ? '—' : msPerWake.toFixed(1) }, 'overhead_not_net_benefit');
   } else verdict('asb', 'unknown', '—', 'lr_sum_asb_unknown', {}, 'no_overhead_samples');
 
+  /* A fresh tombstone can sit beside hours-old measurements. Keep every raw/historical row,
+     but never present those measurements as a current green verdict when progress stopped. */
+  if (recorderGap) verdicts.forEach(function (v) {
+    v.historical_state = v.state;
+    v.state = 'unknown'; v.metric = '—';
+    v.reason = s.recorder.state === 'stale' ? 'recorder_stale' : 'recorder_progress_unknown';
+  });
+
   const chains = [];
   function chain(weight, kind, key, vars) { chains.push({ weight: weight, kind: kind, key: key, vars: vars || {} }); }
   if (crash && (+crash.asb || 0) > 0) chain(100, 'fact', 'lr_chain_asb_crash', { n: String(crash.asb) });
@@ -14063,9 +14085,11 @@ function logReportHistoryComparable(d, analysis, h) {
 }
 
 function logReportMachineDigest(d) {
-  const a = d.analysis || logReportAnalyze(d), m = d.sections.meta || {}, m2 = d.sections.meta2 || {};
+  const a = d.analysis || logReportAnalyze(d), m = d.sections.meta || {}, m2 = d.sections.meta2 || {}, r = d.sections.recorder || {};
   return { schema: 2,
-    capture: { started: m.started || '', elapsed_min: +m.elapsed_min || 0, running: String(m.running) === '1', profile: m.profile || '' },
+    capture: { started: m.started || '', elapsed_min: +m.elapsed_min || 0, running: String(m.running) === '1', profile: m.profile || '',
+      recorder_state: r.state || 'unknown', heartbeat_age_s: r.heartbeat_age_s !== undefined ? +r.heartbeat_age_s : null,
+      stage: r.stage || '', collector_timeouts: +r.collector_timeouts || 0 },
     device: { model: m2.model || '', device: m2.device || '', soc: m2.soc || '', rom: m2.rom || '', module: m2.mod || '' },
     quality: a.quality, scenario: { name: a.scenario, family: a.scenario_family }, verdicts: a.verdicts,
     facts: a.chains.filter(function (c) { return c.kind === 'fact'; }),
@@ -17644,12 +17668,18 @@ function logReportRender(d) {
   const body = _el('reportBody');
   const status = _el('reportStatus');
   const meta = d.sections.meta || {};
+  const rec = d.sections.recorder || {};
   const h = String(meta.target_h || '0');
   body.textContent = '';
   const analysis = logReportAnalyze(d);
   d.analysis = analysis;
   window._asbLogReportData = d;
-  if (String(meta.running) === '1') {
+  if (rec.state === 'stale') {
+    status.textContent = logReportT('lr_stale_open', 'recording stalled · no progress for {age} · stage: {stage}', {
+      age: logReportDurSec(rec.heartbeat_age_s), stage: String(rec.stage || 'unknown') });
+  } else if (rec.state === 'unknown' && String(rec.process_alive) === '1') {
+    status.textContent = T('lr_unknown_open', 'recorder progress unknown · saved measurements only');
+  } else if (String(meta.running) === '1') {
     status.textContent = h === '0'
       ? logReportT('lr_running_open', 'recording · {min} min · until you stop it', { min: String(meta.elapsed_min || '0') })
       : logReportT('lr_running', 'recording · {min} min of {h} h', { min: String(meta.elapsed_min || '0'), h: h });
@@ -17662,6 +17692,13 @@ function logReportRender(d) {
     });
   } else {
     status.textContent = T('lr_done', 'capture finished');
+  }
+  if (logReportRecorderGap(d)) {
+    const stale = rec.state === 'stale';
+    body.appendChild(logReportNote(stale
+      ? logReportT('lr_stale_note', 'The recorder process is alive, but its monotonic heartbeat has stopped advancing at stage “{stage}”. Measurement values below are historical, not current; raw traces are preserved and missing intervals are not filled. Newly found events, such as crashes, can be newer. Timed-out collectors: {n}.', {
+        stage: String(rec.stage || 'unknown'), n: String(+rec.collector_timeouts || 0) })
+      : T('lr_unknown_note', 'The recorder process is alive, but this build or capture has no usable monotonic heartbeat. Live progress and current verdicts are unknown; only the saved evidence below is shown.'), true));
   }
   /* fix213 (audit 8.1): which device, ROM and module build this day was measured on.
      The advice below reads differently on another SoC, and a saved capture must say what
@@ -18436,6 +18473,7 @@ function logReportRender(d) {
 }
 
 let _asbLogRunning = false;
+let _asbLogCaptureState = 'unknown';
 let _asbLogStopArmed = 0;
 /* fix287: a stop was sent, and the recorder is finishing its report (a minute or more on a long
  * capture). The status said "running" all that time, so the menu offered Stop again - and the
@@ -18447,13 +18485,16 @@ function asbLogMenuPaint() {
   const label = document.getElementById('logMenuSessionLabel');
   if (!item || !label) return;
   const armed = _asbLogRunning && !_asbLogStopping && _asbLogStopArmed && Date.now() - _asbLogStopArmed < 4000;
-  item.classList.toggle('is-recording', _asbLogRunning && !_asbLogStopping);
+  const degraded = _asbLogCaptureState === 'stale' || _asbLogCaptureState === 'unknown';
+  item.classList.toggle('is-recording', _asbLogRunning && !_asbLogStopping && !degraded);
   item.classList.toggle('is-stopping', _asbLogStopping);
   item.classList.toggle('is-armed', !!armed);
   label.removeAttribute('data-i18n');
   label.textContent = _asbLogStopping ? T('dbg_log_stopping_menu', 'Stopping · finishing the report…') :
     !_asbLogRunning ? T('dbg_log_btn', 'Infinite log') :
-    (armed ? T('dbg_log_stop_confirm', 'Tap again to stop') : T('dbg_log_stop_btn', 'Stop infinite log'));
+    armed ? T('dbg_log_stop_confirm', 'Tap again to stop') :
+    _asbLogCaptureState === 'stale' ? T('dbg_log_stale_btn', 'Infinite log stalled · tap to stop') :
+    degraded ? T('dbg_log_unknown_btn', 'Infinite log progress unknown · tap to stop') : T('dbg_log_stop_btn', 'Stop infinite log');
 }
 async function asbLogStopWatch(output) {
   if (_asbLogStopWatch) return;
@@ -18462,7 +18503,7 @@ async function asbLogStopWatch(output) {
   try { done = await debugFullDayStopPoll(); } catch (e) { done = false; }
   _asbLogStopWatch = false;
   if (done) {
-    _asbLogStopping = false; _asbLogRunning = false;
+    _asbLogStopping = false; _asbLogRunning = false; _asbLogCaptureState = 'stopped';
     asbLogMenuPaint();
     uiSound('success');
     const out = output ? ' · ' + output.replace(/^\/(sdcard|storage\/emulated\/0)\//, '') : '';
@@ -18479,6 +18520,7 @@ async function asbLogMenuSync() {
     const info = debugActionText(r);
     _asbLogStopping = !!(r && r.errno === 0 && info.status === 'stopping');
     _asbLogRunning = !!(r && r.errno === 0 && (info.status === 'running' || info.status === 'starting' || info.status === 'resuming' || info.status === 'stopping'));
+    _asbLogCaptureState = info.capture_state || (_asbLogRunning ? 'unknown' : 'stopped');
     if (_asbLogStopping) asbLogStopWatch('');
     /* fix279: a recorder lost in the same boot (the Android framework restarted under it) is
        continued on its own folder at once instead of waiting for the next service tick. */
@@ -18486,7 +18528,7 @@ async function asbLogMenuSync() {
       const rv = debugActionText(await run('sh ' + MD + '/runtime/asb_debug_support.sh full-day-revive 2>/dev/null'));
       if (rv.status === 'started') toast(T('dbg_log_revived', 'The infinite log stopped when Android restarted - recording continues in the same folder'), 'warn');
     }
-  } catch (e) { _asbLogRunning = false; }
+  } catch (e) { _asbLogRunning = false; _asbLogCaptureState = 'unknown'; }
   asbLogMenuPaint();
 }
 function asbLogMenuPick(action) {
