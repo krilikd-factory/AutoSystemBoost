@@ -44,6 +44,7 @@ _asb_zygisk_info() {
   _zi_spawn=0; _zi_l_events=0; _zi_l_ok=0; _zi_l_veto=0; _zi_l_none=0; _zi_l_thr=0; _zi_l_off=0
   _zi_ledger_n=0; _zi_absent=0; _zi_seen_gen=0; _zi_ledger_rows=''
   _zi_l_long=0; _zi_l_short=0; _zi_l_fb=0; _zi_cls_on=0; _zi_cls_slow=0; _zi_cls_fast=0; _zi_deny=0; _zi_h_off=0
+  _zi_o_req=0; _zi_o_ret=0; _zi_o_fd=0; _zi_o_none=0; _zi_o_watch=0; _zi_x_fd=0; _zi_x_peer=0; _zi_o_seen=0
   for _zi_file in "$_zi_run/state.arm64-v8a.tsv" "$_zi_run/state.armeabi-v7a.tsv"; do
     [ -r "$_zi_file" ] || continue
     _zi_state=1
@@ -53,7 +54,7 @@ _asb_zygisk_info() {
       case "$_zi_type" in
         Z)
           case "$_zi_a" in
-            events_total|events_dropped_total|events_dropped_rate_limit|events_dropped_duplicate|events_dropped_invalid|events_dropped_capacity|ipc_cpu_ms|ipc_wakeups|policy_hints|hints_accepted|hints_vetoed|hints_unavailable|hints_throttled|updated_monotonic_ms|updated_boottime_ms|spawn_events|launch_events|launch_accepted|launch_vetoed|launch_unavailable|launch_throttled|launch_screen_off|ledger_events|events_policy_absent|policy_generation_seen|launch_long|launch_short|launch_class_fallback|classes_loaded|classes_slow|classes_fast|denylist_spawns|hints_screen_off)
+            events_total|events_dropped_total|events_dropped_rate_limit|events_dropped_duplicate|events_dropped_invalid|events_dropped_capacity|ipc_cpu_ms|ipc_wakeups|policy_hints|hints_accepted|hints_vetoed|hints_unavailable|hints_throttled|updated_monotonic_ms|updated_boottime_ms|spawn_events|launch_events|launch_accepted|launch_vetoed|launch_unavailable|launch_throttled|launch_screen_off|ledger_events|events_policy_absent|policy_generation_seen|launch_long|launch_short|launch_class_fallback|classes_loaded|classes_slow|classes_fast|denylist_spawns|hints_screen_off|observe_requested|observe_retained|observe_pidfd|observe_untracked|observe_watching|exits_pidfd|exits_peer)
               case "$_zi_b" in ''|*[!0-9]*) continue ;; esac
               [ "${#_zi_b}" -le 18 ] || continue
               case "$_zi_a" in
@@ -90,6 +91,13 @@ _asb_zygisk_info() {
                 classes_fast) [ "$_zi_b" -gt "$_zi_cls_fast" ] && _zi_cls_fast="$_zi_b" ;;
                 denylist_spawns) _zi_deny=$((_zi_deny + _zi_b)) ;;
                 hints_screen_off) _zi_h_off=$((_zi_h_off + _zi_b)) ;;
+                observe_requested) _zi_o_req=$((_zi_o_req + _zi_b)); _zi_o_seen=1 ;;
+                observe_retained) _zi_o_ret=$((_zi_o_ret + _zi_b)) ;;
+                observe_pidfd) _zi_o_fd=$((_zi_o_fd + _zi_b)) ;;
+                observe_untracked) _zi_o_none=$((_zi_o_none + _zi_b)) ;;
+                observe_watching) _zi_o_watch=$((_zi_o_watch + _zi_b)) ;;
+                exits_pidfd) _zi_x_fd=$((_zi_x_fd + _zi_b)) ;;
+                exits_peer) _zi_x_peer=$((_zi_x_peer + _zi_b)) ;;
               esac ;;
           esac ;;
         L)
@@ -231,12 +239,23 @@ _asb_zygisk_info() {
   _emit zygisk_observer launch_classes_loaded "$_zi_cls_on"
   _emit zygisk_observer launch_classes "slow $_zi_cls_slow, fast $_zi_cls_fast"
   _emit zygisk_observer denylist_spawns "$_zi_deny"
+  if [ "$_zi_o_seen" = 1 ]; then
+    _emit zygisk_observer observe_requested "$_zi_o_req"
+    _emit zygisk_observer observe_retained "$_zi_o_ret"
+    _emit zygisk_observer observe_pidfd "$_zi_o_fd"
+    _emit zygisk_observer observe_untracked "$_zi_o_none"
+    _emit zygisk_observer observe_watching "$_zi_o_watch"
+    _emit zygisk_observer exits_pidfd "$_zi_x_fd"
+    _emit zygisk_observer exits_peer "$_zi_x_peer"
+  else
+    _emit zygisk_observer observe_requested unknown
+  fi
   _emit zygisk_observer ledger_events "$_zi_ledger_n"
   _emit zygisk_observer ledger_top_screen_off "$_zi_ledger_top"
   _emit zygisk_observer ledger_restart_loops "$_zi_loops"
   _emit zygisk_observer hints_status 'accepted means governor acknowledged fresh-evidence evaluation; never proof of a cap change or energy saving'
   _emit zygisk_observer hint_bounds 'screen on; at least 2 s between requests; at most 8 per minute per companion; no package or cap sent'
-  _emit zygisk_observer lifecycle_coverage 'process start and peer-disconnect exit only; neither proves foreground visibility'
+  _emit zygisk_observer lifecycle_coverage 'process start, and exit through a process fd or the app socket closing; neither proves foreground visibility'
   _emit zygisk_observer foreground_events 'not exposed without global hooks; is_top_app is not tracking'
   _emit zygisk_observer media_camera_audio_navigation 'not exposed in observer-only stage'
   _emit zygisk_observer overhead_confidence "$([ "$_zi_state" = 1 ] && echo 'measured event counters; snapshot only' || echo 'unknown: no event state')"
