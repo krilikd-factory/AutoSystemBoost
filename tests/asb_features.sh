@@ -6880,6 +6880,8 @@ run reconcile
 n=0; while ! grep -q 'fallback armed' "$TMP/state/wifi_fallback.log" 2>/dev/null && [ "$n" -lt 100 ]; do sleep 0.1; n=$((n + 1)); done
 dump -50 false
 wait_count 'wifi disable' 1 200 || fail "unusable rung did not release an unvalidated link"
+# The watcher writes this line just after svc returns, so a loaded runner can read the log first.
+n=0; while ! grep -q 'released unvalidated Wi-Fi default route' "$TMP/state/wifi_fallback.log" 2>/dev/null && [ "$n" -lt 50 ]; do sleep 0.1; n=$((n + 1)); done
 grep -q 'released unvalidated Wi-Fi default route' "$TMP/state/wifi_fallback.log" || fail "validation release not logged"
 
 # 7. off stops the watcher.

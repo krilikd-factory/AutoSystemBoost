@@ -9252,6 +9252,23 @@ printf '%s\n' "$out" | grep -qx 'stage=dumpsys:power' || fail 'current collector
 printf '%s\n' "$out" | grep -qx 'tick=4' || fail 'recorder tick missing'
 printf '%s\n' "$out" | grep -qx 'boot_id=boot-test' || fail 'boot identity missing'
 find "$T/cap" -name 'recorder_heartbeat.env.tmp.*' | grep -q . && fail 'atomic heartbeat temporary file remained'
+# The heartbeat runs about a dozen times per poll, so its own cost is pinned: after the first
+# stage of a recorder only `date` and the atomic `mv` start a process. The boot identity is
+# read once, the uptime is read by the shell, and an odd stage name is still sanitized.
+mkdir -p "$T/count" "$T/hb"
+for x in date mv cat tr cut awk rm; do
+  printf '#!/bin/sh\necho %s >> "%s"\nexec %s "$@"\n' "$x" "$T/count/log" "$(command -v "$x")" > "$T/count/$x"
+  chmod +x "$T/count/$x"
+done
+printf 'boot-one\n' > "$T/boot_id"; printf '1234.75 99.00' > "$T/uptime.nonl"
+out="$(PATH="$T/count" /bin/sh -c '. "$1"; LK_OUT_DIR="$2"; ASB_LK_UPTIME_FILE="$3"; ASB_LK_BOOT_ID_FILE="$4"
+  lk_stage init; : > "$5"; lk_stage sampling; lk_stage dumpsys:media.audio_flinger; lk_stage wake
+  printf "boot-two\n" > "$4"; lk_stage "bad|stage	x"; cat "$2/recorder_heartbeat.env"' x "$T/heartbeat.sh" "$T/hb" "$T/uptime.nonl" "$T/boot_id" "$T/count/log")"
+[ "$(sed -n 1,6p "$T/count/log" | sort | uniq -c | awk '{printf "%s:%s ", $2, $1}')" = 'date:3 mv:3 ' ] \
+  || fail "a heartbeat stage starts more than date and mv: $(sed -n 1,6p "$T/count/log" | tr '\n' ' ')"
+printf '%s\n' "$out" | grep -qx 'mono=1234' || fail "uptime without a trailing newline: $out"
+printf '%s\n' "$out" | grep -qx 'boot_id=boot-one' || fail "boot identity re-read inside one recorder: $out"
+printf '%s\n' "$out" | grep -qx 'stage=badstagex' || fail "unsafe stage text reached the heartbeat: $out"
 cat > "$T/bin/dumpsys" <<'X'
 #!/bin/sh
 [ "${1:-}" != hang ] || { sleep 5; exit 0; }
@@ -9288,7 +9305,7 @@ for token in 'lk_stage sampling' 'lk_stage phase_detection' 'lk_stage power_trac
   grep -Fq "$token" "$F" || fail "main loop lost stage: $token"
 done
 grep -Fq 'full_day_progress_fields "$_pid"' "$D" || fail 'process status has no separate capture progress fields'
-echo 'PASS logkit recorder freshness: atomic monotonic stage heartbeat, bounded dumpsys with/without timeout, 200-row gap evidence and loop stages'
+echo 'PASS logkit recorder freshness: atomic monotonic stage heartbeat at two process starts per stage, bounded dumpsys with/without timeout, 200-row gap evidence and loop stages'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

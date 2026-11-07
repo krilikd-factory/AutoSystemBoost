@@ -1489,7 +1489,9 @@ _c_thermal_socd_validation() {
 #include <time.h>
 #include <unistd.h>
 
+#ifndef THERMAL_BASE
 #define THERMAL_BASE "/tmp/asb_p0_thermal_fixture"
+#endif
 #include "asb_metrics.h"
 
 /* asb_metrics.h references this governor-owned config from other static helpers. */
@@ -4178,7 +4180,9 @@ CCX="${HOST_CC:-${CC:-}}"
 [ -n "$CCX" ] || { echo "FAIL thermal_socd_validation: no host C compiler" >&2; exit 1; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 _c_thermal_socd_validation > "$T/t.c"
-"$CCX" -D_GNU_SOURCE -std=c11 -O2 -Wno-unused-function -I "$ROOT/src" "$T/t.c" -lm -o "$T/t"
+# The synthetic zones live in this run's own directory: a fixed /tmp path collided with a
+# directory left by another user or a concurrent run.
+"$CCX" -D_GNU_SOURCE -std=c11 -O2 -Wno-unused-function -I "$ROOT/src" -DTHERMAL_BASE="\"$T/thermal\"" "$T/t.c" -lm -o "$T/t"
 "$T/t"
 )
 

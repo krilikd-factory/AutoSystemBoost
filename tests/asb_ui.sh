@@ -5637,7 +5637,12 @@ printf '%s\n' "$_lp" > "$T/lock2/pid"
 touch -d "@$((NOW-600))" "$T/lock2/pid"   # launched ten minutes ago
 printf 'Cmdline: com.oplus.screenshot\n' > "$T/tomb/tombstone_07"; touch -d "@$((NOW-4000))" "$T/tomb/tombstone_07"
 printf 'Cmdline: fresh.crash\n' > "$T/tomb/tombstone_08"; touch -d "@$((NOW-300))" "$T/tomb/tombstone_08"
-UP="$(awk '{printf "%d", $1}' /proc/uptime)"
+# The heartbeat ages below are measured against a fixed uptime, not the host's: a freshly
+# booted CI runner has less than the ten minutes the stale fixture subtracts, and a real
+# clock can also tick between writing the fresh heartbeat and reading it.
+UP=100000
+printf '%s.25 1.00\n' "$UP" > "$T/uptime.fixed"
+export ASB_LK_UPTIME_FILE="$T/uptime.fixed"
 cat > "$FRESH/recorder_heartbeat.env" <<EOF
 schema=1
 pid=$_lp
@@ -5710,12 +5715,13 @@ poll_s=90
 stage=sleep
 boot_id=boot-new
 EOF
-resumeout="$(ASB_LK_BOOT_ID_FILE="$T/bootid" ASB_LK_UPTIME_FILE=/proc/uptime ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" ASB_LK_STATE_DIR="$T/state3-resume" sh "$D" "$FRESH")"
+resumeout="$(ASB_LK_BOOT_ID_FILE="$T/bootid" ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" ASB_LK_STATE_DIR="$T/state3-resume" sh "$D" "$FRESH")"
 printf '%s\n' "$resumeout" | grep -q '^recorder	state=running	process_alive=1' || fail "same-boot resumed heartbeat did not restore live state"
 sed -i "s/^mono=.*/mono=$((UP-600))/;s/^stage=.*/stage=sampling/" "$FRESH/recorder_heartbeat.env"
 resumestale="$(ASB_LK_BOOT_ID_FILE="$T/bootid" ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/lock2" ASB_LK_STATE_DIR="$T/state3-resume-stale" sh "$D" "$FRESH")"
 printf '%s\n' "$resumestale" | grep -q '^recorder	state=stale	process_alive=1' || fail "resumed recorder stall was not detected"
 rm -f "$T/lock2/boot_id"
+unset ASB_LK_UPTIME_FILE
 kill "$_lq" 2>/dev/null || true; wait "$_lq" 2>/dev/null || true
 kill "$_lp" 2>/dev/null || true; wait "$_lp" 2>/dev/null || true
 printf '%s\n' "$fout" | grep -q '^meta	elapsed_min=0	target_h=0	running=1' || fail "the fresh capture must read as running: $(printf '%s' "$fout" | head -1)"

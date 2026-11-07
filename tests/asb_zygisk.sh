@@ -57,7 +57,7 @@ int main() {
   assert(asb_observer_frame_valid(sp));
   sp.flags=ASB_OBSERVER_FLAG_LAUNCH; assert(!asb_observer_frame_valid(sp)); // launch needs top-app
   sp.flags=ASB_OBSERVER_FLAG_TOP_APP; assert(!asb_observer_frame_valid(sp)); // nothing requested
-  sp.flags=ASB_OBSERVER_FLAG_TOP_APP|ASB_OBSERVER_FLAG_LAUNCH|16u; assert(!asb_observer_frame_valid(sp)); // unknown bit
+  sp.flags=ASB_OBSERVER_FLAG_TOP_APP|ASB_OBSERVER_FLAG_LAUNCH|32u; assert(!asb_observer_frame_valid(sp)); // unknown bit
   sp.flags=ASB_OBSERVER_FLAG_TOP_APP|ASB_OBSERVER_FLAG_LAUNCH|ASB_OBSERVER_FLAG_DENYLIST; assert(asb_observer_frame_valid(sp));
   sp.flags=ASB_OBSERVER_FLAG_TOP_APP|ASB_OBSERVER_FLAG_LAUNCH; snprintf(sp.package,sizeof(sp.package),"com.example.app");
   assert(asb_observer_frame_valid(sp)); // fix286: a launch-only record may name its package for the class lookup
@@ -69,6 +69,15 @@ int main() {
   sp.version=1; snprintf(sp.package,sizeof(sp.package),"com.example.app"); assert(!asb_observer_frame_valid(sp));
   auto spawn_as_start=frame(21,"com.example.app",6000); spawn_as_start.kind=ASB_OBSERVER_EVENT_SPAWN; spawn_as_start.flags=ASB_OBSERVER_FLAG_LEDGER;
   AsbObserverCore s2; assert(s2.start(spawn_as_start,6000)==AsbObserverResult::invalid && s2.loaded()==0);
+  // fix339: an allowlisted app's SPAWN frame (OBSERVE) starts the record; it must name a valid,
+  // unprotected package. An exit counts once and only for the instance that was started.
+  spawn_as_start.flags=ASB_OBSERVER_FLAG_OBSERVE; assert(asb_observer_frame_valid(spawn_as_start));
+  spawn_as_start.flags=ASB_OBSERVER_FLAG_OBSERVE|ASB_OBSERVER_FLAG_LEDGER|ASB_OBSERVER_FLAG_DENYLIST; assert(asb_observer_frame_valid(spawn_as_start));
+  auto obs_empty=spawn_as_start; obs_empty.package[0]=0; assert(!asb_observer_frame_valid(obs_empty));
+  auto obs_denied=spawn_as_start; snprintf(obs_denied.package,sizeof(obs_denied.package),"com.android.systemui"); assert(!asb_observer_frame_valid(obs_denied));
+  assert(s2.start(spawn_as_start,6000)==AsbObserverResult::accepted && s2.loaded()==1 && s2.events_total()==1);
+  assert(s2.has(21,99) && !s2.has(21,98) && !s2.exit_if(21,98) && s2.loaded()==1);
+  assert(s2.exit_if(21,99) && !s2.exit_if(21,99) && !s2.exit(21) && s2.loaded()==0 && s2.events_total()==2);
   AsbObserverCore lc;
   assert(!lc.launch_permit(0) && lc.launch_permit(1000) && !lc.launch_permit(1999) && lc.launch_permit(2000));
   int granted=2; for (int64_t t=3000;t<60000;t+=1000) if (lc.launch_permit(t)) ++granted;
@@ -173,6 +182,11 @@ t_zygisk_native_contract() (
   [ "$(grep -c 'write_all(sock,' "$S")" = 1 ] || fail 'more than the single one-shot spawn send exists'
   grep -q 'std::lock_guard<std::mutex>' "$S" || fail 'parallel companion handlers are not serialized'
   grep -q 'SO_PEERCRED' "$S" && grep -q 'process_start_ticks(frame.pid)' "$S" || fail 'peer/PID reuse validation missing'
+  # fix339: exits are watched by the companion through process fds in one poll() without a
+  # timeout - an event wait, not a periodic loop - and the watch set is bounded.
+  grep -q 'const int pidfd = open_pidfd(frame.pid);' "$S" || fail 'allowlisted exits still depend on the app keeping its socket'
+  grep -q 'poll(fds.data(), static_cast<nfds_t>(fds.size()), -1)' "$S" || fail 'the exit watcher is not a pure event wait'
+  grep -q 'watches_.size() >= ASB_OBSERVER_MAX_PROCESSES' "$S" || fail 'the process-fd watch set is unbounded'
   G="$ROOT/src/asb_governor.c"
   sed -n '/else if (strcmp(cmd, "zygisk-refresh") == 0)/,/else if (strcmp(cmd, "status")/p' "$G" > "$T.hint"
   grep -q 'g_asb_cfg.zygisk_enabled' "$T.hint" && grep -q 'g_asb_cfg.zygisk_hints' "$T.hint" || fail 'governor hint opt-in gates missing'
@@ -282,12 +296,14 @@ std::string g_nice;
 #include <chrono>
 #include <fstream>
 #include <iostream>
+#include <sys/wait.h>
 #include <thread>
 #include <vector>
 using namespace zygisk::internal;
 static module_abi *g_abi; static int g_connects=0, g_dlclose=0, g_exempt=0, g_peer=-1;
 static bool reg(api_table*, module_abi *abi){ g_abi=abi; return true; }
-static bool exempt(int){ ++g_exempt; return true; }
+static bool g_exempt_ok=true;
+static bool exempt(int){ ++g_exempt; return g_exempt_ok; }
 static int connect_c(void*){ ++g_connects; int sv[2]; if (socketpair(AF_UNIX,SOCK_STREAM|SOCK_CLOEXEC,0,sv)) return -1; g_peer=sv[1]; return sv[0]; }
 static void setopt(void*, zygisk::Option o){ if (o==zygisk::DLCLOSE_MODULE_LIBRARY) ++g_dlclose; }
 static int moddir(void*){ return -1; }
@@ -305,6 +321,32 @@ static void governor(int fd,int n){ for(int i=0;i<n;i++){ char b[64]{}; sockaddr
   ssize_t r=recvfrom(fd,b,sizeof(b)-1,0,reinterpret_cast<sockaddr*>(&src),&l); if(r<=0) return; gov_cmds.push_back(b);
   sendto(fd,"ok",2,0,reinterpret_cast<sockaddr*>(&src),l);} }
 static std::string state(){ std::ifstream f(std::string(ASB_ZYGISK_RUN_DIR)+"/state.arm64-v8a.tsv"); return std::string((std::istreambuf_iterator<char>(f)),{}); }
+static long zval(const std::string &s, const char *key){ std::string k=std::string("Z\t")+key+"\t"; size_t at=s.find(k);
+  return at==std::string::npos ? -1 : std::atol(s.c_str()+at+k.size()); }
+static bool has_proc(const std::string &s, pid_t pid){ return s.find("\nP\t"+std::to_string(pid)+"\t")!=std::string::npos; }
+static bool wait_state(bool (*ok)(const std::string&)){ for(int i=0;i<400;i++){ if(ok(state())) return true; std::this_thread::sleep_for(std::chrono::milliseconds(5)); } return false; }
+// fix339: a real child process stands in for an allowlisted app. Its own connection gives
+// SO_PEERCRED its PID, as the loader's companion socket does; "keep" is an app whose socket the
+// loader let it keep (a START follows), otherwise the socket is gone right after SPAWN.
+struct App { pid_t pid; int go; };
+static std::string g_comp_path;
+static App start_app(const char *pkg, bool keep){
+  AsbObserverFrame sp=make_frame(ASB_OBSERVER_EVENT_SPAWN,ASB_OBSERVER_FLAG_OBSERVE|ASB_OBSERVER_FLAG_LEDGER,pkg);
+  AsbObserverFrame st=make_frame(ASB_OBSERVER_EVENT_PROCESS_START,0,pkg);
+  sockaddr_un a{}; a.sun_family=AF_UNIX; snprintf(a.sun_path,sizeof(a.sun_path),"%s",g_comp_path.c_str());
+  int go[2]; assert(!pipe(go));
+  pid_t pid=fork(); assert(pid>=0);
+  if(pid==0){ close(go[1]);
+    sp.pid=st.pid=getpid(); sp.process_start_ticks=st.process_start_ticks=process_start_ticks(sp.pid);
+    int c=socket(AF_UNIX,SOCK_STREAM|SOCK_CLOEXEC,0);
+    if(c<0 || connect(c,reinterpret_cast<sockaddr*>(&a),sizeof(a))) _exit(2);
+    if(!write_all(c,&sp,sizeof(sp))) _exit(3);
+    if(keep){ if(!write_all(c,&st,sizeof(st))) _exit(4); } else close(c);
+    char b; while(read(go[0],&b,1)<0 && errno==EINTR){}
+    _exit(0); }
+  close(go[0]); return App{pid,go[1]};
+}
+static void stop_app(const App &app){ char z=1; assert(write(app.go,&z,1)==1); close(app.go); int st=0; assert(waitpid(app.pid,&st,0)==app.pid && WIFEXITED(st) && WEXITSTATUS(st)==0); }
 static void companion_send(const AsbObserverFrame &f){ int sv[2]; assert(!socketpair(AF_UNIX,SOCK_STREAM|SOCK_CLOEXEC,0,sv));
   std::thread t(zygisk_companion_entry,sv[1]); assert(write_all(sv[0],&f,sizeof(f))); close(sv[0]); t.join(); }
 int main(){
@@ -335,9 +377,23 @@ int main(){
   // Allowlisted process: fd exempted, a START frame after specialize, library kept.
   put_policy("v=2\ngen=9\nobserver=1\nhints=0\nlaunch=1\nledger=0\npkg=com.example.app\n");
   g_nice="com.example.app"; top=1; dl=g_dlclose; pre(); assert(g_exempt==1 && g_dlclose==dl);
-  f=take(); assert(f.kind==ASB_OBSERVER_EVENT_SPAWN && (f.flags&ASB_OBSERVER_FLAG_LAUNCH));
+  f=take(); assert(f.kind==ASB_OBSERVER_EVENT_SPAWN && (f.flags&ASB_OBSERVER_FLAG_LAUNCH) && (f.flags&ASB_OBSERVER_FLAG_OBSERVE));
+  assert(std::string(f.package)=="com.example.app" && asb_observer_frame_valid(f));
   g_abi->postAppSpecialize(g_abi->impl,&args); f=take(); assert(f.kind==ASB_OBSERVER_EVENT_PROCESS_START && std::string(f.package)=="com.example.app");
   close(g_peer); g_peer=-1;
+  // fix339: a loader that refuses exemptFd. The SPAWN frame already carries OBSERVE, so the
+  // companion records the app itself; the library unloads and nothing is sent after specialize.
+  g_exempt_ok=false; int ex1=g_exempt; dl=g_dlclose; pre();
+  assert(g_exempt==ex1+1 && g_dlclose==dl+1);
+  f=take(); assert(f.kind==ASB_OBSERVER_EVENT_SPAWN && (f.flags&ASB_OBSERVER_FLAG_OBSERVE));
+  g_abi->postAppSpecialize(g_abi->impl,&args); assert(recv(g_peer,&extra,1,0)==0); close(g_peer); g_peer=-1;
+  g_exempt_ok=true;
+  // Observer only (no ledger, no cold-start lift): the allowlisted start still sends SPAWN first.
+  put_policy("v=2\ngen=10\nobserver=1\nhints=0\nlaunch=0\nledger=0\npkg=com.example.app\n");
+  top=0; pre(); f=take(); assert(f.kind==ASB_OBSERVER_EVENT_SPAWN && f.flags==ASB_OBSERVER_FLAG_OBSERVE && asb_observer_frame_valid(f));
+  g_abi->postAppSpecialize(g_abi->impl,&args); f=take(); assert(f.kind==ASB_OBSERVER_EVENT_PROCESS_START);
+  close(g_peer); g_peer=-1; top=1;
+  put_policy("v=2\ngen=9\nobserver=1\nhints=0\nlaunch=1\nledger=0\npkg=com.example.app\n");
   // fix287: the root manager's unmount flag (KernelSU sets it for every app without root) is
   // counted in the one-shot record and never stops an allowlisted app from being observed.
   g_flags=zygisk::PROCESS_ON_DENYLIST; int ex0=g_exempt; dl=g_dlclose; pre();
@@ -457,6 +513,38 @@ int main(){
   ht.join(); assert(gov_cmds.size()==1 && gov_cmds[0]=="zygisk-refresh");
   s=state(); assert(s.find("Z\thints_screen_off\t2\n")!=std::string::npos);
   close(gfd);
+  // fix339: exit tracking without the app's help. An app whose socket is gone right after SPAWN
+  // is still recorded, watched through a process fd, and its exit is counted once it dies. An
+  // app that kept its socket is confirmed by its START and its exit is still counted once, not
+  // twice (socket EOF and process fd). A rate-limited start opens no watch.
+  put_policy("v=2\ngen=15\nobserver=1\nhints=0\nlaunch=0\nledger=1\npkg=com.example.watch\npkg=com.example.keep\n");
+  g_comp_path=std::string(ASB_ZYGISK_RUN_DIR)+"/comp.sock"; unlink(g_comp_path.c_str());
+  int lfd=socket(AF_UNIX,SOCK_STREAM|SOCK_CLOEXEC,0); sockaddr_un la{}; la.sun_family=AF_UNIX;
+  snprintf(la.sun_path,sizeof(la.sun_path),"%s",g_comp_path.c_str());
+  assert(bind(lfd,reinterpret_cast<sockaddr*>(&la),sizeof(la))==0 && listen(lfd,4)==0);
+  s=state(); const long ev0=zval(s,"events_total"), ret0=zval(s,"observe_retained"), dup0=zval(s,"events_dropped_duplicate"), peer0=zval(s,"exits_peer");
+  assert(zval(s,"observe_pidfd")==0 && zval(s,"observe_watching")==0 && zval(s,"exits_pidfd")==0);
+  App a=start_app("com.example.watch",false);
+  { int c=accept(lfd,nullptr,nullptr); assert(c>=0); std::thread t(zygisk_companion_entry,c); t.join(); }
+  s=state(); assert(has_proc(s,a.pid) && zval(s,"observe_requested")==1 && zval(s,"observe_pidfd")==1);
+  assert(zval(s,"observe_watching")==1 && zval(s,"observe_retained")==ret0 && zval(s,"events_total")==ev0+1 && zval(s,"exits_peer")==peer0);
+  stop_app(a);
+  assert(wait_state([](const std::string &x){ return zval(x,"exits_pidfd")==1 && zval(x,"observe_watching")==0; }));
+  s=state(); assert(!has_proc(s,a.pid) && zval(s,"events_total")==ev0+2);
+  App b=start_app("com.example.keep",true);
+  int bc=accept(lfd,nullptr,nullptr); assert(bc>=0); std::thread bt2(zygisk_companion_entry,bc);
+  assert(wait_state([](const std::string &x){ return zval(x,"observe_pidfd")==2; }));
+  for(int i=0;i<400 && zval(state(),"observe_retained")!=ret0+1;i++) std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  s=state(); assert(has_proc(s,b.pid) && zval(s,"observe_retained")==ret0+1 && zval(s,"events_total")==ev0+3);
+  App c=start_app("com.example.keep",false); // inside one second of b: rate-limited, no watch
+  { int cc=accept(lfd,nullptr,nullptr); assert(cc>=0); std::thread t(zygisk_companion_entry,cc); t.join(); }
+  s=state(); assert(!has_proc(s,c.pid) && zval(s,"observe_requested")==3 && zval(s,"observe_watching")==1);
+  stop_app(c);
+  stop_app(b); bt2.join();
+  assert(wait_state([](const std::string &x){ return zval(x,"observe_watching")==0; }));
+  s=state(); assert(!has_proc(s,b.pid) && zval(s,"events_total")==ev0+4 && zval(s,"events_dropped_duplicate")==dup0);
+  assert(zval(s,"exits_pidfd")+zval(s,"exits_peer")-peer0==2 && zval(s,"observe_untracked")==0);
+  close(lfd); unlink(g_comp_path.c_str());
   // No policy: the companion ignores late one-shot frames instead of acting on stale state.
   unlink(ASB_ZYGISK_POLICY_ABS); companion_send(g); s=state();
   assert(s.find("Z\tevents_policy_absent\t1\n")!=std::string::npos);
@@ -472,7 +560,7 @@ CPP
   out="$("$T/hot")" || fail "runtime: $out"
   printf '%s\n' "$out" | grep -qx 'hot path ok' || fail "$out"
   ns="$(printf '%s\n' "$out" | sed -n 's/^dormant_ns=//p')"
-  echo "PASS observer hot path: dormant ${ns} ns/fork on this host, uid/child prefilter, cold start with class lookup, unmount flag counted and never silencing the allowlist, ledger, allowlist fd, companion launch/class opcodes/old-governor fallback/screen-off launch veto without IPC or budget use/screen-off refresh skipped/throttle/spoof/ledger/no-policy"
+  echo "PASS observer hot path: dormant ${ns} ns/fork on this host, uid/child prefilter, cold start with class lookup, unmount flag counted and never silencing the allowlist, ledger, allowlist fd, refused fd and observer-only start, companion exit by process fd or socket counted once, companion launch/class opcodes/old-governor fallback/screen-off launch veto without IPC or budget use/screen-off refresh skipped/throttle/spoof/ledger/no-policy"
 )
 
 t_zygisk_allowlist_runtime() (
@@ -763,6 +851,9 @@ EOF
   printf 'L\tcom.example.sync\t5\t0\t0\t9\nZ\tlaunch_accepted\t1\n' > "$T/run/state.armeabi-v7a.tsv"
   printf 'Z\tlaunch_long\t4\nZ\tlaunch_short\t2\nZ\tlaunch_class_fallback\t1\nZ\tclasses_loaded\t1\nZ\tclasses_slow\t5\nZ\tclasses_fast\t3\nZ\tdenylist_spawns\t6\nZ\tlaunch_long\tx\nZ\thints_screen_off\t9\nZ\tlaunch_screen_off\t1\n' >> "$T/run/state.arm64-v8a.tsv"
   printf 'Z\tlaunch_long\t1\nZ\tdenylist_spawns\t2\nZ\tlaunch_screen_off\t1\n' >> "$T/run/state.armeabi-v7a.tsv"
+  mkdir -p "$T/run_old"; cp "$T/run/state.arm64-v8a.tsv" "$T/run_old/"
+  printf 'Z\tobserve_requested\t5\nZ\tobserve_retained\t0\nZ\tobserve_pidfd\t4\nZ\tobserve_untracked\t1\nZ\tobserve_watching\t2\nZ\texits_pidfd\t2\nZ\texits_peer\t0\n' >> "$T/run/state.arm64-v8a.tsv"
+  printf 'Z\tobserve_requested\t1\nZ\tobserve_pidfd\t1\nZ\tobserve_watching\tx\n' >> "$T/run/state.armeabi-v7a.tsv"
   . "$ROOT/runtime/asb_zygisk_info.sh"; _asb_zygisk_info
   want() { grep -Fqx "zygisk_observer	$1	$2" "$T/out" || fail "missing $1=$2: $(cat "$T/out")"; }
   want launch_long 5; want launch_short 2; want launch_class_fallback 1; want launch_classes_loaded 1
@@ -776,6 +867,14 @@ EOF
   want spawn_events 30; want launch_events 9; want launch_accepted 7; want launch_vetoed 2; want launch_throttled 1
   want ledger_events 21; want ledger_top_screen_off 'com.example.sync 17/3, com.example.mail 2/5'
   want ledger_restart_loops 'com.example.sync 9/5min'
+  # fix339: exit tracking per ABI is summed; a companion built before it reads as unknown, not as
+  # zero tracked processes.
+  want observe_requested 6; want observe_retained 0; want observe_pidfd 5; want observe_untracked 1
+  want observe_watching 2; want exits_pidfd 2; want exits_peer 0
+  : > "$T/out.old"
+  ( _emit() { printf '%s\t%s\t%s\n' "$1" "$2" "$3" >> "$T/out.old"; }; ASB_ZYGISK_RUN_DIR="$T/run_old"; _asb_zygisk_info )
+  grep -Fqx "$(printf 'zygisk_observer\tobserve_requested\tunknown')" "$T/out.old" && ! grep -q 'observe_pidfd' "$T/out.old" \
+    || fail "an older companion's state reads as tracked counters: $(grep observe "$T/out.old")"
   ! grep -q 'bad;pkg\|com.example.idle 0' "$T/out" || fail 'malformed or screen-on-only ledger rows leaked into the top list'
   # A reused PID with different start ticks and malformed rows never contributes RSS/processes.
   ! grep -q '9999\|com.example.stale\|com.example.bad' "$T/out" || fail 'stale/malformed process leaked into diagnostics'
