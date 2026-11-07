@@ -212,6 +212,39 @@ full_day_output_missing() {
   [ -n "$_fdom_path" ] && [ ! -d "$_fdom_path" ]
 }
 
+# Additional status fields, deliberately separate from status=running: the latter keeps the
+# stop control available for a live process, while capture_state says whether samples advance.
+full_day_progress_fields() {
+  _fpf_pid="${1:-}"
+  _fpf_out="$(full_day_output_path 2>/dev/null || true)"
+  _fpf_hb="${_fpf_out:+$_fpf_out/recorder_heartbeat.env}"
+  _fpf_state=unknown; _fpf_age=-1; _fpf_stage=unknown
+  [ -n "$_fpf_pid" ] && [ -n "$_fpf_out" ] && [ -s "$_fpf_hb" ] || {
+    printf 'capture_state=%s\nheartbeat_age_s=%s\nstage=%s\n' "$_fpf_state" "$_fpf_age" "$_fpf_stage"; return 0;
+  }
+  _fpf_hpid="$(sed -n 's/^pid=//p' "$_fpf_hb" 2>/dev/null | head -n 1 | tr -d '\t\r\n')"
+  _fpf_mono="$(sed -n 's/^mono=//p' "$_fpf_hb" 2>/dev/null | head -n 1 | tr -d '\t\r\n')"
+  _fpf_boot="$(sed -n 's/^boot_id=//p' "$_fpf_hb" 2>/dev/null | head -n 1 | tr -d ' \r\n')"
+  _fpf_poll="$(sed -n 's/^poll_s=//p' "$_fpf_hb" 2>/dev/null | head -n 1 | tr -d '\t\r\n')"
+  case "$_fpf_hpid" in ''|*[!0-9]*) _fpf_hpid= ;; esac
+  case "$_fpf_mono" in ''|*[!0-9]*) _fpf_mono= ;; esac
+  _fpf_stage="$(sed -n 's/^stage=//p' "$_fpf_hb" 2>/dev/null | head -n 1 | tr -d '\t\r\n' | cut -c1-80)"
+  _fpf_now="$(awk '{printf "%d", $1}' "${ASB_DEBUG_SUPPORT_UPTIME_FILE:-/proc/uptime}" 2>/dev/null || echo 0)"
+  _fpf_lockboot="$(cat "$BOOTIDFILE" 2>/dev/null | tr -d ' \r\n')"
+  case "$_fpf_now" in ''|*[!0-9]*) _fpf_now=0 ;; esac
+  if [ "$_fpf_hpid" = "$_fpf_pid" ] && [ -n "$_fpf_mono" ] && [ "$_fpf_now" -ge "$_fpf_mono" ] && \
+     { [ -z "$_fpf_lockboot" ] || [ -z "$_fpf_boot" ] || [ "$_fpf_boot" = "$_fpf_lockboot" ]; }; then
+    _fpf_age=$(( _fpf_now - _fpf_mono ))
+    _fpf_limit="${ASB_DEBUG_SUPPORT_STALE_AFTER_S:-180}"
+    case "$_fpf_limit" in ''|*[!0-9]*|0) _fpf_limit=180 ;; esac
+    case "$_fpf_poll" in ''|*[!0-9]*) _fpf_poll=0 ;; esac
+    [ $(( _fpf_poll * 3 )) -le "$_fpf_limit" ] || _fpf_limit=$(( _fpf_poll * 3 ))
+    if [ "$_fpf_age" -le "$_fpf_limit" ]; then _fpf_state=running; else _fpf_state=stale; fi
+  fi
+  [ -n "$_fpf_stage" ] || _fpf_stage=unknown
+  printf 'capture_state=%s\nheartbeat_age_s=%s\nstage=%s\n' "$_fpf_state" "$_fpf_age" "$_fpf_stage"
+}
+
 full_day_pid_matches_recorder() {
   _fdpm_pid="${1:-}"
   [ -n "$_fdpm_pid" ] || return 1
@@ -380,6 +413,7 @@ full_day_status() {
     echo "status=running"
     echo "pid=$_pid"
     echo "log=$RUNLOG"
+    full_day_progress_fields "$_pid"
     return 0
   fi
   rm -f "$STOPFILE" 2>/dev/null || true
@@ -388,6 +422,7 @@ full_day_status() {
     echo "status=running"
     echo "pid=$_pid"
     echo "log=$RUNLOG"
+    full_day_progress_fields "$_pid"
     return 0
   fi
   if [ -d "$LOCKDIR" ]; then
@@ -622,6 +657,7 @@ start_full_day() {
       _ar_out="$(full_day_output_path 2>/dev/null || true)"
       [ -n "$_ar_out" ] && echo "output=$_ar_out"
       echo "log=$RUNLOG"
+      full_day_progress_fields "$_pid"
       return 0
     fi
   fi
