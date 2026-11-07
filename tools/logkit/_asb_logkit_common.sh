@@ -330,7 +330,11 @@ lk_dumpsys() {
   if command -v dumpsys >/dev/null 2>&1; then _ld_bin=dumpsys
   elif [ -x /system/bin/dumpsys ]; then _ld_bin=/system/bin/dumpsys
   else return 1; fi
-  _ld_service="$(printf '%s' "${1:-unknown}" | tr -d '|\r\n' | cut -c1-60)"
+  _ld_service="${1:-unknown}"
+  case "$_ld_service" in
+    *[!A-Za-z0-9_:.-]*) _ld_service="$(printf '%s' "$_ld_service" | tr -d '|\r\n' | cut -c1-60)" ;;
+    *) [ "${#_ld_service}" -le 60 ] || _ld_service="$(printf '%s' "$_ld_service" | cut -c1-60)" ;;
+  esac
   # The full-day recorder publishes the exact service before entering the binder call.
   # Other logkit users simply retain the bounded collector without a heartbeat file.
   if command -v lk_stage >/dev/null 2>&1; then lk_stage "dumpsys:${_ld_service}"; fi

@@ -497,17 +497,26 @@ lk_uptime_s() {
 # There is no heartbeat daemon and no wall-clock freshness decision across a reboot.
 lk_stage() {
   [ -n "${LK_OUT_DIR:-}" ] && [ -d "$LK_OUT_DIR" ] || return 0
-  _lhs_stage="$(printf '%s' "${1:-unknown}" | tr -d '\t|\r\n' | cut -c1-80)"
+  _lhs_stage="${1:-unknown}"
+  case "$_lhs_stage" in
+    *[!A-Za-z0-9_:.-]*) _lhs_stage="$(printf '%s' "$_lhs_stage" | tr -d '\t|\r\n' | cut -c1-80)" ;;
+    *) [ "${#_lhs_stage}" -le 80 ] || _lhs_stage="$(printf '%s' "$_lhs_stage" | cut -c1-80)" ;;
+  esac
   _lhs_file="$LK_OUT_DIR/recorder_heartbeat.env"
   _lhs_tmp="$_lhs_file.tmp.$$"
-  _lhs_boot="${ASB_DEBUG_SUPPORT_BOOT_ID:-}"
-  if [ -z "$_lhs_boot" ]; then
-    _lhs_boot="$(cat "${ASB_LK_BOOT_ID_FILE:-/proc/sys/kernel/random/boot_id}" 2>/dev/null | tr -d ' \r\n')"
+  if [ -z "${LK_HB_BOOT_ID:-}" ]; then
+    LK_HB_BOOT_ID="${ASB_DEBUG_SUPPORT_BOOT_ID:-}"
+    [ -n "$LK_HB_BOOT_ID" ] || LK_HB_BOOT_ID="$(cat "${ASB_LK_BOOT_ID_FILE:-/proc/sys/kernel/random/boot_id}" 2>/dev/null | tr -d ' \r\n')"
+    [ -n "$LK_HB_BOOT_ID" ] || LK_HB_BOOT_ID=unknown
   fi
+  _lhs_up=0
+  read -r _lhs_up _lhs_rest 2>/dev/null < "${ASB_LK_UPTIME_FILE:-/proc/uptime}" || :
+  _lhs_up="${_lhs_up%%.*}"
+  case "$_lhs_up" in ''|*[!0-9]*) _lhs_up=0 ;; esac
   {
     printf '%s\n' 'schema=1' "pid=$$" "epoch=$(date +%s 2>/dev/null || echo 0)" \
-      "mono=$(lk_uptime_s)" "tick=${LK_TICK_COUNT:-0}" "poll_s=${LK_POLL_S:-45}" \
-      "stage=${_lhs_stage:-unknown}" "boot_id=${_lhs_boot:-unknown}"
+      "mono=$_lhs_up" "tick=${LK_TICK_COUNT:-0}" "poll_s=${LK_POLL_S:-45}" \
+      "stage=${_lhs_stage:-unknown}" "boot_id=$LK_HB_BOOT_ID"
   } > "$_lhs_tmp" 2>/dev/null && mv -f "$_lhs_tmp" "$_lhs_file" 2>/dev/null || rm -f "$_lhs_tmp" 2>/dev/null || true
 }
 
