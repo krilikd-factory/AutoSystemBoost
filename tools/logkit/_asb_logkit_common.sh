@@ -281,10 +281,66 @@ lk_cmd_wifi_status() {
   elif [ -x /system/bin/cmd ]; then /system/bin/cmd wifi status 2>/dev/null
   fi
 }
+# A framework collector must not be able to stop an infinite capture forever. Prefer the
+# Android/toybox timeout binary; the short-lived shell watchdog is a fallback for ROMs that
+# do not expose it. Neither path starts a persistent worker, and a timed-out dump is simply
+# absent from that sample - no value is reused or invented to fill the gap.
+lk_run_bounded() {
+  _lbr_s="${1:-12}"
+  case "$_lbr_s" in ''|*[!0-9]*) _lbr_s=12 ;; esac
+  [ "$_lbr_s" -ge 1 ] 2>/dev/null || _lbr_s=12
+  shift
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$_lbr_s" "$@"
+    return $?
+  elif [ -x /system/bin/timeout ]; then
+    /system/bin/timeout "$_lbr_s" "$@"
+    return $?
+  fi
+  "$@" &
+  _lbr_pid=$!
+  (
+    sleep "$_lbr_s"
+    if kill -0 "$_lbr_pid" 2>/dev/null; then
+      kill -TERM "$_lbr_pid" 2>/dev/null || true
+      sleep 1
+      kill -KILL "$_lbr_pid" 2>/dev/null || true
+    fi
+  ) &
+  _lbr_watch=$!
+  wait "$_lbr_pid" 2>/dev/null
+  _lbr_rc=$?
+  kill "$_lbr_watch" 2>/dev/null || true
+  wait "$_lbr_watch" 2>/dev/null || true
+  return "$_lbr_rc"
+}
+lk_collector_event() {
+  [ -n "${LK_OUT_DIR:-}" ] && [ -d "$LK_OUT_DIR" ] || return 0
+  _lce_file="$LK_OUT_DIR/collector_events.tsv"
+  _lce_tmp="$_lce_file.tmp.$$"
+  _lce_collector="$(printf '%s' "${1:-unknown}" | tr -d '|\r\n' | cut -c1-80)"
+  _lce_rc="$(printf '%s' "${2:-unknown}" | tr -dc '0-9')"
+  _lce_mono="$(awk '{printf "%d", $1}' "${ASB_LK_UPTIME_FILE:-/proc/uptime}" 2>/dev/null || echo 0)"
+  {
+    [ ! -s "$_lce_file" ] || tail -n 199 "$_lce_file" 2>/dev/null || true
+    printf '%s|%s|%s|%s\n' "$(date +%s 2>/dev/null || echo 0)" "${_lce_mono:-0}" "$_lce_collector" "${_lce_rc:-0}"
+  } > "$_lce_tmp" 2>/dev/null && mv -f "$_lce_tmp" "$_lce_file" 2>/dev/null || rm -f "$_lce_tmp" 2>/dev/null || true
+}
 lk_dumpsys() {
-  if command -v dumpsys >/dev/null 2>&1; then dumpsys "$@"
-  elif [ -x /system/bin/dumpsys ]; then /system/bin/dumpsys "$@"
+  if command -v dumpsys >/dev/null 2>&1; then _ld_bin=dumpsys
+  elif [ -x /system/bin/dumpsys ]; then _ld_bin=/system/bin/dumpsys
   else return 1; fi
+  _ld_service="$(printf '%s' "${1:-unknown}" | tr -d '|\r\n' | cut -c1-60)"
+  # The full-day recorder publishes the exact service before entering the binder call.
+  # Other logkit users simply retain the bounded collector without a heartbeat file.
+  if command -v lk_stage >/dev/null 2>&1; then lk_stage "dumpsys:${_ld_service}"; fi
+  _ld_to="${ASB_LK_DUMPSYS_TIMEOUT_S:-12}"
+  case "$_ld_to" in ''|*[!0-9]*|0) _ld_to=12 ;; esac
+  [ "$_ld_to" -le 120 ] 2>/dev/null || _ld_to=12
+  lk_run_bounded "$_ld_to" "$_ld_bin" "$@"
+  _ld_rc=$?
+  case "$_ld_rc" in 124|137|143) lk_collector_event "dumpsys:${_ld_service}" "$_ld_rc" ;; esac
+  return "$_ld_rc"
 }
 lk_have_dumpsys() {
   command -v dumpsys >/dev/null 2>&1 || [ -x /system/bin/dumpsys ]

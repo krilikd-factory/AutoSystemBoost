@@ -148,8 +148,57 @@ if [ "$_HAVE_LEDGER" = "1" ]; then
        [ -z "$_el" ] && _el="$_el_live" ;;
   esac
 fi
+# A live PID proves only process existence. Freshness requires a same-recorder, same-boot
+# monotonic heartbeat; an old build without one is explicitly unknown, never green/running.
+_process_alive=0
+_lock_runs && _process_alive=1
 _running=0
-_lock_runs && _running=1
+_recorder_state=stopped
+_hb_age=-1
+_hb_stage=-
+_hb_tick=0
+_hb_poll=0
+_HB="$_DIR/recorder_heartbeat.env"
+_hb_value() { sed -n "s/^$1=//p" "$_HB" 2>/dev/null | head -n 1 | tr -d '\t\r\n'; }
+if [ "$_process_alive" = 1 ]; then
+  _recorder_state=unknown
+  _hb_pid="$(_hb_value pid)"
+  _hb_mono="$(_hb_value mono)"
+  _hb_boot="$(_hb_value boot_id | tr -d ' \r\n')"
+  _hb_poll="$(_hb_value poll_s)"
+  _hb_tick="$(_hb_value tick)"
+  # Do not repair malformed evidence by deleting its bad characters: `mono=12x3` is
+  # unknown, not timestamp 123. Only an actually numeric same-PID heartbeat can run green.
+  case "$_hb_pid" in ''|*[!0-9]*) _hb_pid= ;; esac
+  case "$_hb_mono" in ''|*[!0-9]*) _hb_mono= ;; esac
+  case "$_hb_tick" in ''|*[!0-9]*) _hb_tick=0 ;; esac
+  _hb_stage="$(_hb_value stage | cut -c1-80)"
+  [ -n "$_hb_stage" ] || _hb_stage=unknown
+  _now_mono="$(awk '{printf "%d", $1}' "${ASB_LK_UPTIME_FILE:-/proc/uptime}" 2>/dev/null || echo 0)"
+  case "$_now_mono" in ''|*[!0-9]*) _now_mono=0 ;; esac
+  if [ -s "$_HB" ] && [ -n "$_hb_pid" ] && [ "$_hb_pid" = "${_lrp:-}" ] && \
+     [ -n "$_hb_mono" ] && [ "$_now_mono" -ge "$_hb_mono" ] && \
+     { [ -z "${_lrb:-}" ] || [ -z "$_hb_boot" ] || [ "$_hb_boot" = "$_lrb" ]; }; then
+    _hb_age=$(( _now_mono - _hb_mono ))
+    _stale_after="${ASB_LK_STALE_AFTER_S:-180}"
+    case "$_stale_after" in ''|*[!0-9]*|0) _stale_after=180 ;; esac
+    case "$_hb_poll" in ''|*[!0-9]*) _hb_poll=0 ;; esac
+    [ $(( _hb_poll * 3 )) -le "$_stale_after" ] || _stale_after=$(( _hb_poll * 3 ))
+    if [ "$_hb_age" -le "$_stale_after" ]; then
+      _recorder_state=running
+      _running=1
+    else
+      _recorder_state=stale
+    fi
+  fi
+fi
+_collector_timeouts=0
+_last_collector=-
+if [ -s "$_DIR/collector_events.tsv" ]; then
+  _collector_timeouts="$(awk -F'|' '$3 ~ /^dumpsys:/ && ($4 == 124 || $4 == 137 || $4 == 143) { n++ } END { print n+0 }' "$_DIR/collector_events.tsv" 2>/dev/null)"
+  _last_collector="$(awk -F'|' '$3 ~ /^dumpsys:/ && ($4 == 124 || $4 == 137 || $4 == 143) { c=$3 } END { print c }' "$_DIR/collector_events.tsv" 2>/dev/null | tr -d '\t\r\n' | cut -c1-80)"
+  [ -n "$_last_collector" ] || _last_collector=-
+fi
 # fix200: when the capture started and under which profile, so the sheet can name a SAVED
 # capture ("started 2026-10-20 23:10, smart") instead of pretending it is live.
 _started=""
@@ -163,6 +212,8 @@ fi
 _prof="$(sed -n 's/^current_profile:[[:space:]]*//p' "$_DIR/env.txt" 2>/dev/null | head -n 1 | tr -cd 'a-z')"
 printf 'meta\telapsed_min=%s\ttarget_h=%s\trunning=%d\tstarted=%s\tprofile=%s\n' \
   "${_el:-0}" "${_th:-0}" "$_running" "${_started:-}" "${_prof:-}"
+printf 'recorder\tstate=%s\tprocess_alive=%d\theartbeat_age_s=%d\tstage=%s\ttick=%s\tcollector_timeouts=%s\tlast_collector=%s\n' \
+  "$_recorder_state" "$_process_alive" "$_hb_age" "${_hb_stage:--}" "${_hb_tick:-0}" "$_collector_timeouts" "$_last_collector"
 # The structured report export belongs beside the capture, not in an unrelated global state
 # directory. This is a path, not device content; the WebUI shell-quotes it before writing.
 printf 'capture\tdir=%s\n' "$_DIR"
@@ -945,7 +996,7 @@ case "$_start" in
   ''|*[!0-9]*)
     if [ -n "$_el" ]; then
       _start=$(( $(date +%s) - _el * 60 ))
-    elif [ "$_running" = "1" ]; then
+    elif [ "$_process_alive" = "1" ]; then
       _start="$(stat -c %Y "$_LOCK/pid" 2>/dev/null || date -r "$_LOCK/pid" +%s 2>/dev/null)"
       case "$_start" in ''|*[!0-9]*) _start="$(date +%s)" ;; esac
     else
@@ -1332,7 +1383,7 @@ fi
 # cumulative values as work done by this capture.
 _SM_S="$_DIR/before.txt"
 _SM_L=""
-if [ "$_running" = 1 ] && [ -r "${ASB_GOV_STATE_FILE:-/dev/.asb/state}" ]; then
+if [ "$_process_alive" = 1 ] && [ -r "${ASB_GOV_STATE_FILE:-/dev/.asb/state}" ]; then
   _SM_L="${ASB_GOV_STATE_FILE:-/dev/.asb/state}"
 elif [ -r "$_DIR/after.txt" ]; then
   _SM_L="$_DIR/after.txt"
@@ -1433,7 +1484,7 @@ if [ -s "$_HF" ]; then
       }
     }' "$_HF" 2>/dev/null
 fi
-if [ "$_running" = 0 ] && [ -n "${_started:-}" ] && { [ -n "$_h_dp" ] || [ -n "$_h_np" ]; }; then
+if [ "$_running" = 0 ] && [ "$_process_alive" = 0 ] && [ -n "${_started:-}" ] && { [ -n "$_h_dp" ] || [ -n "$_h_np" ]; }; then
   if mkdir -p "$_STATE" 2>/dev/null && touch "$_HF" 2>/dev/null; then
     { awk -F'\t' -v k="$_started" '$1 != k' "$_HF" 2>/dev/null
       printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$_started" "${_h_np:--}" "${_h_dp:--}" "${_jp:--}" "${_h_cp:--}" "${_h_tc:--}" \

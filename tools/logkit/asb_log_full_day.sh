@@ -488,7 +488,27 @@ LK_PH_WAKEPEAK=0
 LK_PH_START_UP=0
 
 lk_uptime_s() {
-  awk '{printf "%d", $1}' /proc/uptime 2>/dev/null || echo 0
+  awk '{printf "%d", $1}' "${ASB_LK_UPTIME_FILE:-/proc/uptime}" 2>/dev/null || echo 0
+}
+
+# Process liveness is not capture progress. Publish an atomic monotonic heartbeat in the
+# existing recorder loop, plus the stage about to run. If a binder call or snapshot blocks,
+# the file deliberately stops advancing and its stage names the last operation entered.
+# There is no heartbeat daemon and no wall-clock freshness decision across a reboot.
+lk_stage() {
+  [ -n "${LK_OUT_DIR:-}" ] && [ -d "$LK_OUT_DIR" ] || return 0
+  _lhs_stage="$(printf '%s' "${1:-unknown}" | tr -d '\t|\r\n' | cut -c1-80)"
+  _lhs_file="$LK_OUT_DIR/recorder_heartbeat.env"
+  _lhs_tmp="$_lhs_file.tmp.$$"
+  _lhs_boot="${ASB_DEBUG_SUPPORT_BOOT_ID:-}"
+  if [ -z "$_lhs_boot" ]; then
+    _lhs_boot="$(cat "${ASB_LK_BOOT_ID_FILE:-/proc/sys/kernel/random/boot_id}" 2>/dev/null | tr -d ' \r\n')"
+  fi
+  {
+    printf '%s\n' 'schema=1' "pid=$$" "epoch=$(date +%s 2>/dev/null || echo 0)" \
+      "mono=$(lk_uptime_s)" "tick=${LK_TICK_COUNT:-0}" "poll_s=${LK_POLL_S:-45}" \
+      "stage=${_lhs_stage:-unknown}" "boot_id=${_lhs_boot:-unknown}"
+  } > "$_lhs_tmp" 2>/dev/null && mv -f "$_lhs_tmp" "$_lhs_file" 2>/dev/null || rm -f "$_lhs_tmp" 2>/dev/null || true
 }
 
 lk_mono_s() {
@@ -2095,6 +2115,7 @@ lk_smart_feedback_observe() {
 }
 
 lk_init
+lk_stage init
 LK_SF_CAPTURE="${LK_START_EPOCH}_$$"
 renice -n 10 -p $$ >/dev/null 2>&1 || true
 # Publish after lk_init created the per-capture directory. If the user later deletes this
@@ -2134,6 +2155,7 @@ lk_oem_toggle_row
 lk_finalize() {
   [ "${LK_FINALIZED:-0}" = "1" ] && return 0
   LK_FINALIZED=1
+  lk_stage finalize
   lk_smart_feedback_clear
   lk_wl_release
   lk_bt_reconnect_snapshot "end"
@@ -2209,13 +2231,16 @@ while : ; do
   _elapsed=$(( _now - LK_START_EPOCH ))
   [ "$LK_MAX_SEC" -gt 0 ] && [ "$_elapsed" -ge "$LK_MAX_SEC" ] && break
 
+  lk_stage sampling
   lk_wl_acquire
   lk_sample_gpu_busy
   lk_sample_audio
 
   # detect phase; on change, flush the ledger and re-open
+  lk_stage phase_detection
   lk_detect_phase "$_now"; _new_phase="$LK_PHASE_OUT"
   if [ "$_new_phase" != "$_phase" ]; then
+    lk_stage phase_transition
     lk_phase_ledger_accumulate
     lk_phase_ledger_flush
     echo "${_now}|$(date '+%Y-%m-%d %H:%M:%S')|${_new_phase}|from:${_phase}" >> "$LK_OUT_DIR/phase_timeline.txt"
@@ -2251,13 +2276,16 @@ while : ; do
     LK_POLL_S="$(lk_poll_for_phase "$_phase")"
   fi
 
-  # per-poll capture
+  # per-poll capture. Dumpsys calls replace this group stage with their own service name.
+  lk_stage power_traces
   lk_capture_perf_trace_row
   lk_capture_battery_trace_row
+  lk_stage display_jank
   lk_capture_display_trace_row "$_phase"
   # After the display row: it has just read the wakefulness this needs (fix121).
   lk_capture_jank_row "$_phase" "${_dscr:-0}"
   lk_smart_feedback_observe
+  lk_stage feature_traces
   lk_capture_screenoff_class_row "$_phase"
   lk_capture_fsm_media_trace_row "$_phase"
   lk_wakelock_live_row
@@ -2272,18 +2300,21 @@ while : ; do
   lk_asb_feature_row
   lk_charge_idle_observe "$_phase"
   lk_wifi_leave_collect
+  lk_stage ledger
   lk_phase_ledger_accumulate
   lk_phase_ledger_live
   LK_TICK_COUNT=$((LK_TICK_COUNT + 1))
 
   # periodic heavier wake snapshot
   if [ $(( _now - _last_wakesnap )) -ge "$LK_WAKE_SNAP_S" ]; then
+    lk_stage wake_snapshot
     lk_wakelock_kernel_snapshot "periodic"
     _last_wakesnap=$_now
   fi
 
   # every 15 min: keep the report current for a folder collected at any moment
   if [ $(( _now - _last_report )) -ge "$LK_REPORT_S" ]; then
+    lk_stage report
     lk_zygisk_snapshot latest
     lk_emit_phase_summary 2>/dev/null || true
     lk_emit_full_day_report 2>/dev/null || true
@@ -2291,6 +2322,7 @@ while : ; do
   fi
   # hourly: full state snapshot + interim reports
   if [ $(( _now - _last_snapshot )) -ge "$LK_SNAPSHOT_S" ]; then
+    lk_stage hourly_snapshot
     lk_snapshot_state "snapshot_${_now}"
     # Refresh the per-UID counters every hour, not only at the very end.
     #
@@ -2315,10 +2347,15 @@ while : ; do
   fi
 
   lk_wl_release
+  lk_stage sleep
   sleep "$LK_POLL_S" &
   LK_SLEEP_PID=$!
   wait "$LK_SLEEP_PID" 2>/dev/null
   LK_SLEEP_PID=""
+  # Publish progress at the wake boundary as well as before sleeping. After a normal
+  # suspend this immediately replaces the old sleep-stage heartbeat; a recorder that
+  # never resumes still becomes stale instead of receiving an unlimited sleep grace.
+  lk_stage wake
 done
 
 # finalize
