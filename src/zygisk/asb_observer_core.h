@@ -26,7 +26,10 @@ public:
     };
 
     AsbObserverResult start(const AsbObserverFrame &frame, int64_t now_ms) {
-        if (!asb_observer_frame_valid(frame) || frame.kind != ASB_OBSERVER_EVENT_PROCESS_START) {
+        /* fix339: an allowlisted app's SPAWN frame starts the record too; the companion then
+         * watches the exit through a process fd instead of relying on the app keeping a socket. */
+        const bool observe_spawn = frame.kind == ASB_OBSERVER_EVENT_SPAWN && (frame.flags & ASB_OBSERVER_FLAG_OBSERVE);
+        if (!asb_observer_frame_valid(frame) || (frame.kind != ASB_OBSERVER_EVENT_PROCESS_START && !observe_spawn)) {
             ++invalid_; ++dropped_; return AsbObserverResult::invalid;
         }
         if (processes_.count(frame.pid)) { ++duplicate_; ++dropped_; return AsbObserverResult::duplicate; }
@@ -53,6 +56,21 @@ public:
         processes_.erase(it);
         ++events_total_;
         return true;
+    }
+
+    /* fix339: an exit seen twice (socket EOF and process fd) or for a reused PID counts once,
+     * and only for the process instance that was started. */
+    bool exit_if(int pid, uint64_t start_ticks) {
+        auto it = processes_.find(pid);
+        if (it == processes_.end() || it->second.start_ticks != start_ticks) return false;
+        processes_.erase(it);
+        ++events_total_;
+        return true;
+    }
+
+    bool has(int pid, uint64_t start_ticks) const {
+        auto it = processes_.find(pid);
+        return it != processes_.end() && it->second.start_ticks == start_ticks;
     }
 
     /* A lifecycle hint is a request for fresh governor evidence, never a policy decision.

@@ -50,7 +50,8 @@
 #define ASB_OBSERVER_FLAG_LAUNCH 2u          /* ask the governor to cover the launch */
 #define ASB_OBSERVER_FLAG_LEDGER 4u          /* count it in the process-start ledger */
 #define ASB_OBSERVER_FLAG_DENYLIST 8u        /* the root manager unmounts modules for this app */
-#define ASB_OBSERVER_FLAGS_KNOWN 15u
+#define ASB_OBSERVER_FLAG_OBSERVE 16u        /* allowlisted: the companion watches its exit itself */
+#define ASB_OBSERVER_FLAGS_KNOWN 31u
 #define ASB_OBSERVER_MAX_PROCESSES 64u
 #define ASB_OBSERVER_MAX_EVENTS_PER_MINUTE 64u
 #define ASB_OBSERVER_HINT_MAX_PER_MINUTE 8u
@@ -152,12 +153,14 @@ inline bool asb_observer_frame_valid(const AsbObserverFrame &frame) {
     if (frame.kind == ASB_OBSERVER_EVENT_PROCESS_START)
         return asb_observer_package_valid(package) && !asb_observer_package_denied(package);
     if (frame.kind != ASB_OBSERVER_EVENT_SPAWN) return false;
-    if (!(frame.flags & (ASB_OBSERVER_FLAG_LAUNCH | ASB_OBSERVER_FLAG_LEDGER))) return false;
+    if (!(frame.flags & (ASB_OBSERVER_FLAG_LAUNCH | ASB_OBSERVER_FLAG_LEDGER | ASB_OBSERVER_FLAG_OBSERVE)))
+        return false;
     if ((frame.flags & ASB_OBSERVER_FLAG_LAUNCH) && !(frame.flags & ASB_OBSERVER_FLAG_TOP_APP))
         return false;
-    /* A ledger event must name a valid package. fix286: a launch-only event may name one too,
-     * for the launch-class lookup only (never stored, never sent on); empty is still valid. */
-    if (!(frame.flags & ASB_OBSERVER_FLAG_LEDGER) && package.empty()) return true;
+    /* A ledger or observe event must name a valid package. fix286: a launch-only event may
+     * name one too, for the launch-class lookup only (never stored, never sent on); empty is
+     * still valid. */
+    if (!(frame.flags & (ASB_OBSERVER_FLAG_LEDGER | ASB_OBSERVER_FLAG_OBSERVE)) && package.empty()) return true;
     return asb_observer_package_valid(package) && !asb_observer_package_denied(package);
 }
 

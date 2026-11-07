@@ -6,10 +6,15 @@
 #include <fcntl.h>
 #include <map>
 #include <mutex>
+#include <vector>
+#include <poll.h>
+#include <pthread.h>
 #include <sstream>
 #include <string>
+#include <sys/eventfd.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/un.h>
@@ -25,6 +30,9 @@
 #define ASB_GOVERNOR_CLIENT_DIR "/dev/.asb"
 #endif
 #define ASB_GOVERNOR_HINT_TIMEOUT_US 100000
+#ifndef __NR_pidfd_open
+#define __NR_pidfd_open 434
+#endif
 
 namespace {
 
@@ -139,6 +147,13 @@ int read_frame(int fd, AsbObserverFrame &frame) {
     return 1;
 }
 
+/* fix339: a process fd (Linux 5.3+) turns readable when that process exits. It needs no
+ * cooperation from the app, so an exit is seen even when the loader would not let the app
+ * keep the companion socket. -1 on an older kernel. */
+int open_pidfd(int pid) {
+    return static_cast<int>(syscall(__NR_pidfd_open, pid, 0));
+}
+
 AsbObserverFrame make_frame(uint16_t kind, uint32_t flags, const std::string &package) {
     AsbObserverFrame frame {};
     frame.magic = ASB_OBSERVER_MAGIC;
@@ -218,6 +233,8 @@ public:
 
     void handle(int client) {
         int owned_pid = -1;
+        uint64_t owned_ticks = 0;
+        SpawnTrack spawned = SpawnTrack::none;
         for (;;) {
             const uint64_t cpu_before = cpu_us();
             AsbObserverFrame frame {};
@@ -239,52 +256,38 @@ public:
                     if (!peer_ok || peer.pid != frame.pid || !start_ok || !asb_observer_frame_valid(frame)) {
                         core_.reject_invalid();
                     } else if (frame.kind == ASB_OBSERVER_EVENT_SPAWN) {
-                        request = spawn_locked(frame, policy, now);
+                        request = spawn_locked(frame, policy, now, spawned);
+                    } else if (spawned == SpawnTrack::tracked && core_.has(frame.pid, frame.process_start_ticks)) {
+                        /* fix339: the SPAWN frame already started this record and a process fd
+                         * watches its exit; the START only proves the app kept the socket. */
+                        ++observe_retained_;
+                        owned_pid = frame.pid;
+                        owned_ticks = frame.process_start_ticks;
+                    } else if (spawned == SpawnTrack::dropped) {
+                        /* Rate limit, capacity or a duplicate was already counted at SPAWN. */
                     } else if (!policy.valid || !policy.observer) {
                         ++policy_absent_;
                     } else {
                         policy_generation_ = policy.generation;
                         const auto accepted = core_.start(frame, now);
                         const bool changed = accepted == AsbObserverResult::accepted;
-                        if (changed) owned_pid = frame.pid;
+                        if (changed) {
+                            owned_pid = frame.pid;
+                            owned_ticks = frame.process_start_ticks;
+                            ++observe_retained_;
+                        }
                         request = refresh_locked(changed, policy, now);
                     }
                 } else {
                     if (result < 0) core_.reject_invalid();
-                    const bool changed = owned_pid > 0 && core_.exit(owned_pid);
+                    const bool changed = owned_pid > 0 && core_.exit_if(owned_pid, owned_ticks);
+                    if (changed) ++exits_peer_;
                     core_.prune(now);
                     request = refresh_locked(changed, policy, now);
                 }
                 ipc_cpu_us_ += cpu_us() - cpu_before;
             }
-            /* The governor round trip (<= 100 ms) runs outside the state lock, so a slow
-             * governor never stalls another app's start or exit record. */
-            const uint64_t cpu_ipc = cpu_us();
-            GovernorHintResult outcome = GovernorHintResult::unavailable;
-            bool fell_back = false;
-            if (request != Request::none) {
-                std::lock_guard<std::mutex> ipc(ipc_mutex_);
-                if (request == Request::launch_long) outcome = request_governor_launch_long();
-                else if (request == Request::launch_short) outcome = request_governor_launch_short();
-                else if (request == Request::launch) outcome = request_governor_launch();
-                else outcome = request_governor_refresh();
-                /* A governor built before fix286 does not answer the class opcodes: the
-                 * plain cold-start request still gets the usual lift. */
-                if (outcome == GovernorHintResult::unavailable &&
-                    (request == Request::launch_long || request == Request::launch_short)) {
-                    outcome = request_governor_launch();
-                    fell_back = true;
-                }
-            }
-            {
-                std::lock_guard<std::mutex> lock(mutex_);
-                if (fell_back) ++launch_class_fallback_;
-                if (request == Request::launch || request == Request::launch_long || request == Request::launch_short)
-                    count(outcome, launch_accepted_, launch_vetoed_, launch_unavailable_);
-                if (request == Request::refresh) count(outcome, hints_accepted_, hints_vetoed_, hints_unavailable_);
-                ipc_cpu_us_ += cpu_us() - cpu_ipc;
-                persist_locked(now, policy);
-            }
+            dispatch(request, policy, now);
             if (result != 1) break;
         }
         close(client);
@@ -292,6 +295,133 @@ public:
 
 private:
     enum class Request { none, refresh, launch, launch_long, launch_short };
+    enum class SpawnTrack { none, tracked, dropped, untracked };
+    struct Watch { int pid; uint64_t start_ticks; };
+
+    /* The governor round trip (<= 100 ms) runs outside the state lock, so a slow governor
+     * never stalls another app's start or exit record. */
+    void dispatch(Request request, const AsbObserverPolicy &policy, int64_t now) {
+        const uint64_t cpu_ipc = cpu_us();
+        GovernorHintResult outcome = GovernorHintResult::unavailable;
+        bool fell_back = false;
+        if (request != Request::none) {
+            std::lock_guard<std::mutex> ipc(ipc_mutex_);
+            if (request == Request::launch_long) outcome = request_governor_launch_long();
+            else if (request == Request::launch_short) outcome = request_governor_launch_short();
+            else if (request == Request::launch) outcome = request_governor_launch();
+            else outcome = request_governor_refresh();
+            /* A governor built before fix286 does not answer the class opcodes: the
+             * plain cold-start request still gets the usual lift. */
+            if (outcome == GovernorHintResult::unavailable &&
+                (request == Request::launch_long || request == Request::launch_short)) {
+                outcome = request_governor_launch();
+                fell_back = true;
+            }
+        }
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (fell_back) ++launch_class_fallback_;
+            if (request == Request::launch || request == Request::launch_long || request == Request::launch_short)
+                count(outcome, launch_accepted_, launch_vetoed_, launch_unavailable_);
+            if (request == Request::refresh) count(outcome, hints_accepted_, hints_vetoed_, hints_unavailable_);
+            ipc_cpu_us_ += cpu_us() - cpu_ipc;
+            persist_locked(now, policy);
+        }
+    }
+
+    /* fix339: one thread for the whole companion, blocked in poll() on the process fds of the
+     * observed apps and an eventfd that announces a new one. No timeout: it runs only when an
+     * observed app exits or starts. */
+    static void *reap_entry(void *self) {
+        static_cast<Broker *>(self)->reap();
+        return nullptr;
+    }
+
+    bool reaper_locked() {
+        if (wake_fd_ < 0) {
+            wake_fd_ = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
+            if (wake_fd_ < 0) return false;
+        }
+        if (reaper_running_) return true;
+        pthread_attr_t attr;
+        if (pthread_attr_init(&attr) != 0) return false;
+        pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+        pthread_t thread;
+        const bool ok = pthread_create(&thread, &attr, &Broker::reap_entry, this) == 0;
+        pthread_attr_destroy(&attr);
+        reaper_running_ = ok;
+        return ok;
+    }
+
+    void wake_reaper_locked() {
+        const uint64_t one = 1;
+        if (write(wake_fd_, &one, sizeof(one)) < 0) { /* already pending: the reaper rescans */ }
+    }
+
+    void reap() {
+        std::vector<struct pollfd> fds;
+        for (;;) {
+            fds.clear();
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                fds.push_back(pollfd{wake_fd_, POLLIN, 0});
+                for (const auto &watch : watches_) fds.push_back(pollfd{watch.first, POLLIN, 0});
+            }
+            const int rc = poll(fds.data(), static_cast<nfds_t>(fds.size()), -1);
+            if (rc < 0) {
+                if (errno == EINTR) continue;
+                std::lock_guard<std::mutex> lock(mutex_);
+                reaper_running_ = false;
+                return;
+            }
+            if (fds[0].revents & POLLIN) {
+                uint64_t pending = 0;
+                if (read(wake_fd_, &pending, sizeof(pending)) < 0) { /* nothing queued */ }
+            }
+            bool exited = false;
+            for (size_t i = 1; i < fds.size(); ++i) if (fds[i].revents) { exited = true; break; }
+            if (!exited) continue;
+            const uint64_t cpu_before = cpu_us();
+            const int64_t now = asb_observer_boottime_ms();
+            AsbObserverPolicy policy;
+            load_policy_root(policy);
+            Request request = Request::none;
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                ++wakeups_;
+                bool changed = false;
+                for (size_t i = 1; i < fds.size(); ++i) {
+                    if (!fds[i].revents) continue;
+                    auto it = watches_.find(fds[i].fd);
+                    if (it == watches_.end()) continue;
+                    if (core_.exit_if(it->second.pid, it->second.start_ticks)) { changed = true; ++exits_pidfd_; }
+                    close(it->first);
+                    watches_.erase(it);
+                }
+                core_.prune(now);
+                request = refresh_locked(changed, policy, now);
+                ipc_cpu_us_ += cpu_us() - cpu_before;
+            }
+            dispatch(request, policy, now);
+        }
+    }
+
+    /* fix339: start an allowlisted app's record at SPAWN and watch its exit through a process
+     * fd. Field captures had every allowlisted start come back without the socket kept in the
+     * app (events_total=0), so the observer saw no process at all. */
+    SpawnTrack observe_locked(const AsbObserverFrame &frame, int64_t now) {
+        ++observe_requested_;
+        if (watches_.size() >= ASB_OBSERVER_MAX_PROCESSES) { ++observe_untracked_; return SpawnTrack::untracked; }
+        const int pidfd = open_pidfd(frame.pid);
+        if (pidfd < 0) { ++observe_untracked_; return SpawnTrack::untracked; }
+        if (process_start_ticks(frame.pid) != frame.process_start_ticks) { close(pidfd); return SpawnTrack::dropped; }
+        if (!reaper_locked()) { close(pidfd); ++observe_untracked_; return SpawnTrack::untracked; }
+        if (core_.start(frame, now) != AsbObserverResult::accepted) { close(pidfd); return SpawnTrack::dropped; }
+        watches_[pidfd] = Watch{frame.pid, frame.process_start_ticks};
+        ++observe_pidfd_;
+        wake_reaper_locked();
+        return SpawnTrack::tracked;
+    }
 
     static uint64_t cpu_us() {
         struct timespec ts {};
@@ -318,7 +448,8 @@ private:
         return Request::refresh;
     }
 
-    Request spawn_locked(const AsbObserverFrame &frame, const AsbObserverPolicy &policy, int64_t now) {
+    Request spawn_locked(const AsbObserverFrame &frame, const AsbObserverPolicy &policy, int64_t now,
+                         SpawnTrack &track) {
         ++spawn_events_;
         if (!policy.valid) { ++policy_absent_; return Request::none; }
         policy_generation_ = policy.generation;
@@ -326,7 +457,12 @@ private:
         if ((frame.flags & ASB_OBSERVER_FLAG_LEDGER) && policy.ledger)
             core_.ledger_record(frame.package, governor_screen_on(), top, now);
         if (frame.flags & ASB_OBSERVER_FLAG_DENYLIST) ++denylist_spawns_;
-        if (!(frame.flags & ASB_OBSERVER_FLAG_LAUNCH) || !policy.launch) return Request::none;
+        bool started = false;
+        if ((frame.flags & ASB_OBSERVER_FLAG_OBSERVE) && policy.observer && policy.selected(frame.package)) {
+            track = observe_locked(frame, now);
+            started = track == SpawnTrack::tracked;
+        }
+        if (!(frame.flags & ASB_OBSERVER_FLAG_LAUNCH) || !policy.launch) return refresh_locked(started, policy, now);
         ++launch_events_;
         /* A published screen-off state already proves that the governor will veto a launch
          * lift. Do not wake it for that fixed answer: count a local veto, keep the ledger,
@@ -336,7 +472,7 @@ private:
             ++launch_screen_off_; ++launch_vetoed_;
             return Request::none;
         }
-        if (!core_.launch_permit(now)) { ++launch_throttled_; return Request::none; }
+        if (!core_.launch_permit(now)) { ++launch_throttled_; return refresh_locked(started, policy, now); }
         classes_locked();
         switch (classes_.lookup(frame.package)) {
             case ASB_LAUNCH_LONG: ++launch_long_; return Request::launch_long;
@@ -415,6 +551,13 @@ private:
         out << "Z\tclasses_fast\t" << (classes_.valid ? classes_.fast : 0u) << "\n";
         out << "Z\tclasses_reads\t" << classes_reads_ << "\n";
         out << "Z\tdenylist_spawns\t" << denylist_spawns_ << "\n";
+        out << "Z\tobserve_requested\t" << observe_requested_ << "\n";
+        out << "Z\tobserve_retained\t" << observe_retained_ << "\n";
+        out << "Z\tobserve_pidfd\t" << observe_pidfd_ << "\n";
+        out << "Z\tobserve_untracked\t" << observe_untracked_ << "\n";
+        out << "Z\tobserve_watching\t" << watches_.size() << "\n";
+        out << "Z\texits_pidfd\t" << exits_pidfd_ << "\n";
+        out << "Z\texits_peer\t" << exits_peer_ << "\n";
         out << "Z\tledger_events\t" << core_.ledger_events() << "\n";
         out << "Z\tledger_evicted\t" << core_.ledger_evicted() << "\n";
         out << "Z\trss_reads\t" << rss_reads_ << "\n";
@@ -476,6 +619,11 @@ private:
     uint64_t launch_unavailable_ = 0, launch_throttled_ = 0, launch_screen_off_ = 0, policy_absent_ = 0;
     uint64_t launch_long_ = 0, launch_short_ = 0, launch_class_fallback_ = 0, denylist_spawns_ = 0;
     uint64_t classes_reads_ = 0, classes_ino_ = 0;
+    uint64_t observe_requested_ = 0, observe_retained_ = 0, observe_pidfd_ = 0, observe_untracked_ = 0;
+    uint64_t exits_pidfd_ = 0, exits_peer_ = 0;
+    std::map<int, Watch> watches_;
+    int wake_fd_ = -1;
+    bool reaper_running_ = false;
     int64_t classes_size_ = -1, classes_mtime_ns_ = -1;
     AsbObserverClasses classes_;
     unsigned long policy_generation_ = 0;
@@ -520,16 +668,16 @@ public:
         if (!observe && !launch && !ledger) return skip();
         const int sock = api_->connectCompanion();
         if (sock < 0) return skip();
-        if (launch || ledger) {
-            const uint32_t flags = (top ? ASB_OBSERVER_FLAG_TOP_APP : 0u) |
-                                   (launch ? ASB_OBSERVER_FLAG_LAUNCH : 0u) |
-                                   (ledger ? ASB_OBSERVER_FLAG_LEDGER : 0u) |
-                                   (hidden ? ASB_OBSERVER_FLAG_DENYLIST : 0u);
-            /* The launch class is looked up by the companion; the name is not stored for a
-             * launch-only record and never reaches the governor. */
-            const AsbObserverFrame frame = make_frame(ASB_OBSERVER_EVENT_SPAWN, flags, base);
-            if (!write_all(sock, &frame, sizeof(frame))) { close(sock); return skip(); }
-        }
+        const uint32_t flags = (top ? ASB_OBSERVER_FLAG_TOP_APP : 0u) |
+                               (launch ? ASB_OBSERVER_FLAG_LAUNCH : 0u) |
+                               (ledger ? ASB_OBSERVER_FLAG_LEDGER : 0u) |
+                               (hidden ? ASB_OBSERVER_FLAG_DENYLIST : 0u) |
+                               (observe ? ASB_OBSERVER_FLAG_OBSERVE : 0u);
+        /* The launch class is looked up by the companion; the name is not stored for a
+         * launch-only record and never reaches the governor. fix339: an allowlisted app is
+         * recorded from this frame, so its start and exit no longer depend on exemptFd. */
+        const AsbObserverFrame frame = make_frame(ASB_OBSERVER_EVENT_SPAWN, flags, base);
+        if (!write_all(sock, &frame, sizeof(frame))) { close(sock); return skip(); }
         /* Not allowlisted: the one-shot record is sent; nothing stays in the process. */
         if (!observe || !api_->exemptFd(sock)) { close(sock); return skip(); }
         socket_ = sock;
