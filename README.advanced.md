@@ -853,18 +853,18 @@ The implemented event path is deliberately narrow:
 
 ```text
 preAppSpecialize: uid/app-zygote filter + generated zygisk/policy (allowlist/exclusion checks)
-  → bounded companion connection and exemptFd()
-postAppSpecialize: one PROCESS_START frame
+  → bounded companion connection, one SPAWN frame with the OBSERVE flag
   → peer credential + /proc/<pid>/stat start_ticks validation
-  → bounded aggregate state
-peer socket disconnect → process exit
+  → bounded aggregate state + a process fd (pidfd) watched by the companion
+  → exemptFd(); where the loader allows it, postAppSpecialize sends one PROCESS_START frame
+pidfd readable or peer socket disconnect → process exit (counted once)
 ```
 
-There are no JNI or PLT hooks. A selected process retains the library only to own its process-lifetime socket. The fixed-size versioned frame has no policy opcode. Shared aggregation is mutex-protected; live state is capped at 64 processes, package history at 64 events per minute with a 60-second TTL, duplicate starts are suppressed, and same-package starts are rate-limited. Invalid, duplicate, rate-limited and capacity drops are counted separately. State publication uses a temporary file and atomic rename; arm64 and arm32 companions have separate state files. No per-app daemon, timer or polling loop exists.
+There are no JNI or PLT hooks. A selected process retains the library only to own its process-lifetime socket, and only where the loader honours `exemptFd()`. The start is recorded from the SPAWN frame and the exit from a process fd held by the companion, because field captures showed loaders that never let the app keep the socket (`events_total=0` with every allowlisted start). One companion thread waits in `poll()` without a timeout on at most 64 process fds plus an eventfd; on a kernel without `pidfd_open` (before 5.3) the start is counted as `observe_untracked` and the socket path remains the only exit signal. The fixed-size versioned frame has no policy opcode. Shared aggregation is mutex-protected; live state is capped at 64 processes, package history at 64 events per minute with a 60-second TTL, duplicate starts are suppressed, and same-package starts are rate-limited. Invalid, duplicate, rate-limited and capacity drops are counted separately. State publication uses a temporary file and atomic rename; arm64 and arm32 companions have separate state files. No per-app daemon, timer or polling loop exists.
 
 With `zygisk_hints=1`, an accepted start/exit may additionally open a short datagram round trip to `/dev/.asb/ctl.sock`. Its only opcode is `zygisk-refresh`, with a 100 ms receive timeout and no package, PID, profile or tuning payload. A per-companion budget enforces 2-second spacing and 8 requests per rolling minute. The governor independently checks both opt-in keys, safe mode and screen-on state, then invalidates the foreground cache and schedules fresh metrics. It does not force a write, clear reassert dwell, select a profile or override thermal/vendor ownership. Screen-off requests are vetoed without a metrics probe; missing/old governors time out fail-open.
 
-Lifecycle coverage is **process start and peer-disconnect exit only**. `is_top_app` is not persistent foreground tracking. Foreground/background, media, camera, audio and navigation events are `not exposed` in this stage. The safe-disable file is `/data/adb/asb/zygisk_observer/disable`; it is checked before companion connection. Failure to connect or publish state leaves application execution and governor policy unaffected.
+Lifecycle coverage is **process start and process exit only** (exit through the process fd or the app socket closing; `exits_pidfd` and `exits_peer` count which one saw it first). `is_top_app` is not persistent foreground tracking. Foreground/background, media, camera, audio and navigation events are `not exposed` in this stage. The safe-disable file is `/data/adb/asb/zygisk_observer/disable`; it is checked before companion connection. Failure to connect or publish state leaves application execution and governor policy unaffected.
 
 Management is available in Device diagnostics or through the source-shipped helper:
 

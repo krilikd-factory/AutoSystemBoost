@@ -853,18 +853,18 @@ Allowlist пуст. Поэтому включение настройки без 
 
 ```text
 preAppSpecialize: uid/app-zygote filter + generated zygisk/policy (allowlist/exclusion checks)
-  → bounded companion connection и exemptFd()
-postAppSpecialize: один PROCESS_START frame
+  → bounded companion connection, один SPAWN frame с флагом OBSERVE
   → peer credential + /proc/<pid>/stat start_ticks validation
-  → bounded aggregate state
-peer socket disconnect → process exit
+  → bounded aggregate state + process fd (pidfd), за которым следит companion
+  → exemptFd(); если загрузчик это разрешает, postAppSpecialize шлёт один PROCESS_START frame
+pidfd стал читаемым или peer socket disconnect → process exit (считается один раз)
 ```
 
-JNI и PLT hooks отсутствуют. Выбранный процесс сохраняет библиотеку только ради process-lifetime socket. Fixed-size versioned frame не содержит policy opcode. Shared aggregation защищена mutex; live state ограничен 64 процессами, package history — 64 событиями в минуту с TTL 60 секунд, duplicate starts подавляются, same-package starts ограничены по частоте. Invalid, duplicate, rate-limited и capacity drops считаются отдельно. State publication использует temporary file и atomic rename; arm64 и arm32 companion имеют разные state files. Per-app daemon, timer и polling loop отсутствуют.
+JNI и PLT hooks отсутствуют. Выбранный процесс сохраняет библиотеку только ради process-lifetime socket и только там, где загрузчик выполняет `exemptFd()`. Запуск записывается по SPAWN frame, а выход — по process fd, который держит companion: полевые логи показали загрузчики, которые никогда не оставляют сокет в приложении (`events_total=0` при каждом запуске из allowlist). Один поток companion ждёт в `poll()` без таймаута максимум 64 process fd и eventfd; на ядре без `pidfd_open` (до 5.3) запуск считается как `observe_untracked`, и единственным сигналом выхода остаётся сокет. Fixed-size versioned frame не содержит policy opcode. Shared aggregation защищена mutex; live state ограничен 64 процессами, package history — 64 событиями в минуту с TTL 60 секунд, duplicate starts подавляются, same-package starts ограничены по частоте. Invalid, duplicate, rate-limited и capacity drops считаются отдельно. State publication использует temporary file и atomic rename; arm64 и arm32 companion имеют разные state files. Per-app daemon, timer и polling loop отсутствуют.
 
 При `zygisk_hints=1` подтверждённый start/exit может дополнительно открыть короткий datagram round trip к `/dev/.asb/ctl.sock`. Единственный opcode — `zygisk-refresh`, receive timeout 100 мс; package, PID, profile и tuning payload не передаются. Budget на companion задаёт паузу 2 секунды и максимум 8 запросов за скользящую минуту. Governor независимо проверяет оба opt-in ключа, safe mode и включённый экран, затем сбрасывает foreground cache и планирует fresh metrics. Он не форсирует запись, не сбрасывает reassert dwell, не выбирает профиль и не обходит thermal/vendor ownership. При выключенном экране запрос отклоняется без metrics probe; отсутствующий или старый governor завершает запрос timeout fail-open.
 
-Lifecycle coverage — **только process start и peer-disconnect exit**. `is_top_app` не является постоянным foreground tracking. Foreground/background, media, camera, audio и navigation events в этой стадии — `not exposed`. Safe-disable file: `/data/adb/asb/zygisk_observer/disable`; он проверяется до companion connection. Сбой подключения или state publication не влияет на выполнение приложения и governor policy.
+Lifecycle coverage — **только process start и process exit** (выход через process fd или закрытие сокета приложения; `exits_pidfd` и `exits_peer` показывают, что увидело выход первым). `is_top_app` не является постоянным foreground tracking. Foreground/background, media, camera, audio и navigation events в этой стадии — `not exposed`. Safe-disable file: `/data/adb/asb/zygisk_observer/disable`; он проверяется до companion connection. Сбой подключения или state publication не влияет на выполнение приложения и governor policy.
 
 Управление доступно в Device diagnostics и через поставляемый helper:
 
