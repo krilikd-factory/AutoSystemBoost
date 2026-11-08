@@ -153,6 +153,45 @@ cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS asbdiag wake paths: the display path counts in the wake total, status-bar keys are matched by name, the active codec, the Wi-Fi band and the multicast holders are named"
 )
 
+t_asbdiag_throttle_point_runtime() (
+# Runtime: the throttle-point check of tools/asb_diag.sh. An OP15 asbdiag read FAIL=1 for
+# "throttle point below live CPU sensor" because a core reached 71 C under the load of the
+# report itself while the automatic point was 65 C - the clamp working as asked, not a setting
+# ASB got wrong. With the screen on it is a note; with the screen off (a hot phone at rest)
+# it stays a FAIL; a manual point stays a WARN. The REAL block runs over fake thermal zones.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+D="$ROOT/tools/asb_diag.sh"
+fail() { echo "FAIL asbdiag throttle point: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+awk '/^  _tp_set="\$\(cfg sustained_temp_enter\)"$/ { f = 1 } f { print } f && /^esac$/ { exit }' "$D" \
+  | sed "s#/sys/class/thermal/thermal_zone\*#$T/tz/thermal_zone*#" > "$T/b.sh"
+grep -q 'headroom ok' "$T/b.sh" && grep -q "$T/tz" "$T/b.sh" || fail "throttle block not found"
+mkdir -p "$T/tz/thermal_zone0" "$T/tz/thermal_zone1"
+echo cpu-1-1-0 > "$T/tz/thermal_zone0/type"; echo 71000 > "$T/tz/thermal_zone0/temp"
+echo cpu-hw-trip-0 > "$T/tz/thermal_zone1/type"; echo 95000 > "$T/tz/thermal_zone1/temp"
+run() {  # $1 mode, $2 point, $3 screen
+  printf 'sustained_temp_mode=%s\nsustained_temp_enter=%s\n' "$1" "$2" > "$T/conf"
+  { echo 'P() { echo "$*"; }; NOTE() { echo "(i) $1"; }'
+    echo 'V() { if [ "$3" = "$2" ]; then echo "[PASS] $1"; else echo "[FAIL] $1 want=$2 live=$3"; fi; }'
+    echo "cfg() { grep -E \"^\$1=\" '$T/conf' | head -1 | sed 's/^[^=]*=//'; }"
+    echo "_pl_scr='$3'"; cat "$T/b.sh"; } > "$T/r.sh"
+  sh "$T/r.sh"
+}
+out="$(run smart 65 1)"
+printf '%s\n' "$out" | grep -q '\[FAIL\]' && fail "load with the screen on still fails the install: $out"
+printf '%s\n' "$out" | grep -q 'hottest live CPU sensor 71C with the screen on.*intended behaviour' || fail "screen-on note: $out"
+out="$(run smart 65 0)"
+printf '%s\n' "$out" | grep -q '\[FAIL\] *throttle point below live CPU sensor with the screen off want=point >= 71C live=65C' || fail "a hot phone at rest is no longer a FAIL: $out"
+out="$(run manual 65 1)"
+printf '%s\n' "$out" | grep -q '\[WARN\] throttle point below live CPU sensor (manual 65C, live 71C)' || fail "manual point: $out"
+out="$(run smart 75 1)"
+printf '%s\n' "$out" | grep -q 'headroom ok' || fail "headroom: $out"
+printf '%s\n' "$out" | grep -q '95C' && fail "a hardware trip point was read as a sensor: $out"
+cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS asbdiag throttle point: load with the screen on is a note, a hot phone at rest a FAIL, a manual point a WARN, trip zones ignored"
+)
+
 t_asbdiag_write_ratio_runtime() (
 # Runtime (fix179): "writes per transition" is judged against the phone's own cpufreq slots,
 # and chatter by how often the state changes. A CPH2691 read "13 (8+ ... suggests the ladder
@@ -2496,13 +2535,17 @@ grep -qx "dir=$O" "$T/full_day_resume" && grep -qx "boot=boot-b" "$T/full_day_re
 r 'lk_resume_owned' || fail "the recorder does not recognise its own marker"
 r 'LK_MAX_SEC=3600; LK_RESUME_FILE='"'$T/other'"'; lk_resume_mark'
 [ -e "$T/other" ] && fail "a bounded capture must not ask to be resumed"
-r 'ASB_LK_SHUTDOWN=1 lk_on_signal'
+r ': > "$LK_OUT_DIR/zygisk_observer_latest.tsv.tmp.$$"; ASB_LK_SHUTDOWN=1 lk_on_signal'
 tail -n 1 "$O/phase_timeline.txt" | grep -q '|idle|shutdown$' || fail "the shutdown was not marked in the timeline"
+ls "$O" | grep -q '\.tmp\.' && fail "a shutdown during an atomic write left its temporary file: $(ls "$O")"
 [ -e "$O/finalized" ] && fail "a shutdown ran the full finalisation"
 [ -s "$T/full_day_resume" ] || fail "a shutdown dropped the resume marker"
 [ -s "$O/.phase_live.tsv" ] || fail "a shutdown lost the open phase"
+: > "$O/zygisk_observer_latest.tsv.tmp.16060"; : > "$O/recorder_heartbeat.env.tmp.2534"; : > "$O/zygisk_observer_latest.tsv"
 r 'lk_resume_merge'
 [ "$(grep -vc '^#' "$O/phase_ledger.tsv")" = 3 ] || fail "the open phase was not folded into the ledger on resume"
+ls "$O" | grep -q '\.tmp\.[0-9]' && fail "the resumed capture kept temporaries of the recorder that died: $(ls "$O")"
+[ -e "$O/zygisk_observer_latest.tsv" ] || fail "the resume cleanup removed a real capture file"
 [ -e "$O/.phase_live.tsv" ] && fail "the folded live row stayed"
 L="$(grep -v '^#' "$O/reboots.txt")"
 _down="$(printf '%s\n' "$L" | cut -d'|' -f3)"
@@ -2766,6 +2809,18 @@ out="$(v <<'T'
 T
 )"
 [ "$out" = "killed by lowmemorykiller" ] || fail "lmk: $out"
+# A SystemUI customization tool writes its options with `settings put` and SystemUI restarts to
+# read them (an SM8650 capture: 16 restarts, one window led by twenty oost_systemui_* writes).
+# Without a crash record the verdict names the writes; a stale write and other keys do not count.
+out="$(v <<'T'
+@@SINCE@@ 2026-11-07 13:46:35|11-07 13:46:35
+11-07 13:40:00.000  6788  7741 V SettingsShellCmd: putForUser(userId=0, table=global, key=oost_systemui_old, value=0, tag=null, makeDefault=false)
+11-07 13:51:25.098  6788  7741 V SettingsShellCmd: putForUser(userId=0, table=global, key=oost_systemui_aosp_back_panel, value=0, tag=null, makeDefault=false)
+11-07 13:51:25.169  6788  7741 V SettingsShellCmd: putForUser(userId=0, table=global, key=oost_systemui_hide_disconnected_bluetooth, value=0, tag=null, makeDefault=false)
+11-07 13:51:26.000  6788  7741 V SettingsShellCmd: putForUser(userId=0, table=global, key=wifi_on, value=1, tag=null, makeDefault=false)
+T
+)"
+[ "$out" = "no SystemUI crash - restarted after 2 SystemUI setting(s) were written from a shell just before (first: oost_systemui_aosp_back_panel), the way a customization tool applies its options" ] || fail "settings writes: $out"
 # fix243 (capture 549): seven SystemUI restarts read "no SystemUI crash in the crash buffer"
 # while the dropbox native crash record held SIGABRT in libdexkit.so loaded from another
 # app's APK, BootMonitorClient reported type=crash and an Xposed bridge logged its hooks.
@@ -2812,7 +2867,7 @@ grep -q "printf '@@SINCE@@ %s|%s" "$C" || fail "the restart block does not bound
 grep -qF '@@DROPBOX_NATIVE@@' "$C" || fail "restart block does not hand the dropbox record to the verdict"
 grep -q 'echo "verdict: $(printf' "$C" || fail "restart block does not record the verdict"
 grep -q '/^verdict: / { print "      " $0 }' "$FD" || fail "report does not print the verdict"
-echo "PASS logkit sysui verdict: native, Java, other-process, low-memory and injected-code cases"
+echo "PASS logkit sysui verdict: native, Java, other-process, low-memory, injected-code and shell settings-write cases"
 )
 
 t_logkit_traffic_edge_runtime() (
@@ -5608,6 +5663,10 @@ EOF
 sout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state7" sh "$D" "$SUI")" || fail "sysui fixture digest exit"
 printf '%s\n' "$sout" | grep -q '^sysui	count=4$' || fail "sysui fixture count: $(printf '%s\n' "$sout" | grep '^sysui')"
 printf '%s\n' "$sout" | grep -q '^sysuiinj	pkg=com.example.hooker	n=2	hooks=HookOne, Hook Two$' || fail "injected-code line: $(printf '%s\n' "$sout" | grep '^sysuiinj')"
+printf '%s\n' "$sout" | grep -q '^sysuiset' && fail "restarts without settings writes were attributed to them"
+printf '===== SYSTEMUI RESTART 2026-10-28 22:00:00 pid 5000 -> 6000 phase=active fsm=ACTIVE =====\nverdict: no SystemUI crash - restarted after 20 SystemUI setting(s) were written from a shell just before (first: oost_systemui_x), the way a customization tool applies its options\n' >> "$SUI/sysui_restarts.txt"
+sout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state7" sh "$D" "$SUI")" || fail "sysui fixture digest exit"
+printf '%s\n' "$sout" | grep -q '^sysui	count=5$' && printf '%s\n' "$sout" | grep -q '^sysuiset	n=1$' || fail "settings-write restarts: $(printf '%s\n' "$sout" | grep '^sysui')"
 THR="$T/asb_log_full_day_thr"; mkdir -p "$THR"
 cat > "$THR/throttle_trace.txt" <<EOF
 $((NOW-10000))|active|cap_owner=vendor|x
@@ -5801,7 +5860,7 @@ let ASB_LANG = 'ru';
 function T(k, d) { const L = I18N[ASB_LANG]; return (L && typeof L[k] === 'string') ? L[k] : d; }
 EOF
   for fn in Tcfg parseLogReport logReportT logReportDur logReportDurSec logReportAuthority logReportHolderWhat logReportIdleAwake logReportHolderName logReportTips \
-    logReportSysuiSteady logReportJwhyShare logReportJwhyCause logReportJwhyTop logReportMiB logReportNetFix logReportLteIdle logReportFullCharge logReportScreenOnDrainState logReportRecorderGap logReportAnalyze logReportHistoryComparable logReportMachineDigest logReportAnalysisT \
+    logReportSysuiSteady logReportJwhyShare logReportJwhyCause logReportJwhyTop logReportMiB logReportNetFix logReportLteIdle logReportFullCharge logReportScreenOnDrainState logReportRecorderGap logReportAnalyze logReportHighRefresh logReportHistoryComparable logReportMachineDigest logReportAnalysisT \
     logReportTipText logReportRow logReportSec logReportNote logReportHero logReportTable logReportTweakEvidence logReportZygiskGovernor logReportZygisk \
     deviceVal deviceFill deviceZygiskLinkState deviceZygiskLinkVerdict deviceZygiskLink \
     logReportBrief logReportDxT logReportSelfPush logReportDiagnose logReportDiagSection logReportQualityPanel logReportRef logReportDomainRef logReportTipRef logReportDiagRef logReportAppendAnalysis logReportRender asbPageJumpClear asbPageJumpActive asbPageJump asbPageReference shQuote \
@@ -6178,6 +6237,10 @@ chk(mixA.chains.some(c => c.key === 'lr_chain_sysui') && mixA.chains.some(c => c
 chk(logReportAnalyze(parseLogReport('meta\telapsed_min=120\nscr\ton_pctph=0\toff_pctph=2.4\ton_min=0\toff_min=120\tidle_pctph=0.6\tidle_min=60\tmusic_min=60\n')).verdicts.find(v => v.domain === 'drain').state === 'good', 'screen-off music does not paint the idle verdict');
 /* fix243: SystemUI restarts inside code an installed app injects - the action and the chain
    name that app; hooks alone or no restart draw no action. */
+const setDay = parseLogReport('meta\telapsed_min=910\ttarget_h=0\trunning=0\tprofile=smart\nsysui\tcount=16\nsysuiset\tn=3\n');
+const setDx = logReportDiagnose(setDay).filter(function (x) { return x.area === 'stab'; });
+chk(setDx.length === 1 && setDx[0].cause === 'lr_dx_sysui_set' && setDx[0].state === 'normal' && setDx[0].cv.m === '3' && setDx[0].cv.n === '16',
+  'restarts after SystemUI settings writes are not explained: ' + JSON.stringify(setDx));
 const injDay = parseLogReport('meta\telapsed_min=131\ttarget_h=0\trunning=0\tprofile=battery\nsysui\tcount=7\nsysuiinj\tpkg=com.example.hooker\tn=1\thooks=HookOne, Hook Two\n');
 const injA = logReportAnalyze(injDay);
 chk(injA.actions.some(t => t.key === 'lr_tip_sysui_inj' && t.vars.n === '7' && t.vars.m === '1' && t.vars.pkg === 'com.example.hooker'), 'the restart action names the injecting app: ' + JSON.stringify(injA.actions.map(t => t.key)));
@@ -6332,6 +6395,16 @@ chk(allText(reportBody).indexOf(logReportT('lr_mwake_fmt', '', {n:'14',per:'2.6'
   (function walk(e) { if (String(e.className).indexOf('lgr-warn') >= 0) warnRows.push(e.textContent); e.children.forEach(walk); })(reportBody);
   chk(!warnRows.some(function (t) { return /62%/.test(t); }) && warnRows.some(function (t) { return /68%/.test(t); }), 'only holds of a minute or more are marked: ' + JSON.stringify(warnRows));
 }
+{
+  // An OP15 capture marked LIGHT_IDLE "10.4% (!)" over 212 frames - three intervals. A state or
+  // moment needs 2000 frames before its share is flagged; a large sample above 6% still is.
+  logReportRender(parseLogReport(['meta\telapsed_min=784\tprofile=smart', 'jank\tpct=2.4\tjps=0.98\tframes=407377',
+    'jstate\tstate=MODERATE\tintv=165\tframes=342644\tpct=7.2\tjps=1.00', 'jstate\tstate=LIGHT_IDLE\tintv=3\tframes=212\tpct=10.4\tjps=0.15',
+    'jphase\tphase=gap\tintv=1\tframes=1131\tpct=8.5\tjps=0.47'].join('\n')));
+  const jw = [];
+  (function walk(e) { if (String(e.className).indexOf('lgr-warn') >= 0) jw.push(e.textContent); e.children.forEach(walk); })(reportBody);
+  chk(jw.indexOf('7.2%') >= 0 && jw.indexOf('10.4%') < 0 && jw.indexOf('8.5%') < 0, 'a jank share over a few hundred frames is flagged: ' + JSON.stringify(jw));
+}
 logReportRender(mixDay);
 const mixText = allText(reportBody);
 chk(mixText.indexOf(I18N.ru.lr_sec_smart) < 0, 'the Smart learner card stays off a Battery day');
@@ -6413,6 +6486,30 @@ chk(allText(reportBody).indexOf(I18N.ru.lr_reboots.split('{n}').join('2')) >= 0,
       jwText.indexOf(I18N.ru.lr_jwhy_cap.split('{mhz}').join('160')) >= 0 && jwText.indexOf(I18N.ru.lr_jwhy_cap.split('{mhz}').join('500')) >= 0,
     'fix288: the per-state GPU line names both ceilings');
   chk(logReportJwhyShare(5, 3) === '100%' && logReportJwhyShare(1, 0) === '-', 'fix288: shares are capped and guarded');
+  // A 165 Hz panel gives a frame 6.1 ms: the smoothness card says so, and a 120 Hz day does not
+  // get the line (an OP15 capture ran 99% of its screen time at 165 Hz).
+  const hzDay = parseLogReport(jwRows.concat(['hz\tmode=144\tshare=0\tma=292', 'hz\tmode=165\tshare=99\tma=455', 'hz\tmode=120\tshare=1\tma=497']).join('\n'));
+  const hzAlso = logReportDiagnose(hzDay).filter(function (x) { return x.area === 'smooth'; })
+    .map(function (x) { return x.also.filter(function (a) { return a.key === 'lr_dx_also_hz'; })[0]; }).filter(Boolean)[0];
+  chk(hzAlso && hzAlso.v.hz === '165' && hzAlso.v.share === '99' && hzAlso.v.ms === '6.1', 'the 165 Hz day did not explain its frame budget: ' + JSON.stringify(hzAlso));
+  chk(logReportDxT('lr_dx_also_hz', hzAlso.v).indexOf('6.1') >= 0 && logReportDxT('lr_dx_also_hz', hzAlso.v).indexOf('{') < 0, 'the refresh note does not fill its placeholders');
+  const hz120 = parseLogReport(jwRows.concat(['hz\tmode=120\tshare=60\tma=497', 'hz\tmode=60\tshare=40\tma=300']).join('\n'));
+  chk(logReportHighRefresh(hz120) === null && logReportHighRefresh(parseLogReport(jwRows.concat(['hz\tmode=165\tshare=30\tma=455']).join('\n'))) === null,
+    'a 120 Hz day or a short 165 Hz share got the high-refresh note');
+}
+{
+  // The summary tile and the heat card in "Causes" read the same CPU minutes: a warm surface
+  // (an OP15 capture: 2 h 8 min mostly on the charger, CPU 15 min) is named in the detail and
+  // no longer paints the tile red under a value its own detail does not mention.
+  const skinDay = parseLogReport('meta\telapsed_min=1371\nthermal\tcpu=65\tsurf=50\nheat\tpeak_phase=audio_spk_scr\tpeak_c=54\twarm_min=15\tskin_min=128\twarm_episodes=15\twarm_run_min=3\nthrottle\tclamps=12\towner=asb');
+  const tv = logReportAnalyze(skinDay).verdicts.find(function (v) { return v.domain === 'thermal'; });
+  chk(tv && tv.state === 'normal' && tv.metric === logReportDur(15), 'the thermal tile disagrees with its own detail: ' + JSON.stringify(tv));
+  const hd = logReportDiagnose(skinDay).find(function (x) { return x.area === 'heat'; });
+  chk(hd && hd.state === 'normal', 'the heat card and the tile disagree: ' + JSON.stringify(hd));
+  const hotCpu = parseLogReport('meta\telapsed_min=600\nthermal\tcpu=73\tsurf=45\nheat\tpeak_phase=active\tpeak_c=68\twarm_min=371\tskin_min=220\twarm_episodes=39\twarm_run_min=183');
+  chk(logReportAnalyze(hotCpu).verdicts.find(function (v) { return v.domain === 'thermal'; }).state === 'problem', 'six hours of hot CPU stopped being a problem');
+  chk(I18N.ru.lr_sum_thermal_detail_skin.indexOf('{skin}') > 0 && I18N.en.lr_ph_gap === 'Short pause, screen off' && I18N.ru.lr_ph_gap.indexOf('Разрыв') < 0,
+    'a sub-two-minute screen-off pause is still called a capture gap');
 }
 logReportRender(typicalScreen);
 chk(countClass(reportBody, 'lgr-state-problem') === 0 && countClass(reportBody, 'lgr-warn') === 0, 'neither summary nor detail paints 10.1%/h red');
@@ -6772,7 +6869,7 @@ KEYS += ['lr_sec_summary','lr_sec_causes','lr_sec_actions','lr_sec_observations'
          'lr_scenario_screen_off_idle','lr_scenario_screen_off_network_active',
          'lr_scenario_screen_on_light','lr_scenario_mixed','lr_kind_fact','lr_kind_hypothesis',
          'lr_sum_drain_on','lr_sum_drain_night','lr_sum_drain_off','lr_sum_need_time',
-         'lr_sum_thermal_detail','lr_sum_no_sensor','lr_sum_smooth_detail','lr_sum_need_frames',
+         'lr_sum_thermal_detail','lr_sum_thermal_detail_skin','lr_sum_no_sensor','lr_sum_smooth_detail','lr_sum_need_frames',
          'lr_sum_sleep_detail','lr_sum_need_night','lr_sum_asb_crash','lr_sum_asb_cost',
          'lr_sum_asb_unknown','lr_quality_short','lr_quality_full',
          'lr_chain_asb_crash','lr_chain_heat','lr_chain_aod','lr_chain_radio','lr_chain_holder',
@@ -6814,7 +6911,7 @@ PH = {'lr_running': ['{min}', '{h}'], 'lr_running_open': ['{min}'], 'lr_crash_n'
       'lr_tip_jank_wake': ['{pct}', '{ord}', '{who}'], 'lr_tip_jank_wake_wh': ['{pct}', '{ord}'],
       'lr_tip_awake_aod': ['{awake}', '{lit}', '{of}'], 'lr_tip_sradio': ['{mib}', '{set}'], 'zy_auto_current': ['%s']}
 PH.update({'lr_sum_drain_on':['{min}'], 'lr_sum_drain_night':['{min}','{deep}'],
-      'lr_sum_drain_off':['{min}'], 'lr_sum_thermal_detail':['{warm}','{clamps}'],
+      'lr_sum_drain_off':['{min}'], 'lr_sum_thermal_detail':['{warm}','{clamps}'], 'lr_sum_thermal_detail_skin':['{warm}','{skin}','{clamps}'],
       'lr_sum_smooth_detail':['{frames}','{wake}'], 'lr_sum_sleep_detail':['{awake}','{min}'],
       'lr_sum_asb_cost':['{ms}','{per}'], 'lr_quality_short':['{min}'],
       'lr_chain_asb_crash':['{n}'], 'lr_chain_heat':['{min}','{clamps}','{owner}','{phase}'],
@@ -6839,7 +6936,7 @@ KEYS += ['lr_sec_dx','lr_dx_fix_label','lr_dx_send','lr_dx_send_btn','lr_dx_area
          'lr_dx_idle_asleep','lr_dx_idle_alarm','lr_dx_idle_unknown','lr_dx_fix_sync','lr_dx_fix_aod','lr_dx_fix_bg','lr_dx_fix_wl',
          'lr_dx_fix_lte','lr_dx_fix_radio','lr_dx_fix_asleep','lr_dx_fix_alarm','lr_dx_fix_send','lr_dx_also_holder','lr_dx_bgheat',
          'lr_dx_fix_bgheat','lr_dx_screen_ok','lr_dx_screen_heavy','lr_dx_fix_screen_heavy','lr_dx_screen_perf','lr_dx_fix_screen_perf',
-         'lr_dx_screen_hz','lr_dx_fix_screen_hz','lr_dx_screen_unknown','lr_dx_smooth_sysui','lr_dx_src_netspeed','lr_dx_src_clocksec',
+         'lr_dx_screen_hz','lr_dx_fix_screen_hz','lr_dx_also_hz','lr_dx_sysui_set','lr_dx_screen_unknown','lr_dx_smooth_sysui','lr_dx_src_netspeed','lr_dx_src_clocksec',
          'lr_dx_src_livewp','lr_dx_src_hooks','lr_dx_src_other','lr_dx_fix_netspeed','lr_dx_fix_clocksec','lr_dx_fix_livewp',
          'lr_dx_fix_hooks','lr_dx_fix_sysui','lr_dx_smooth_app','lr_dx_fix_smooth_app','lr_dx_smooth_ok','lr_dx_smooth_unknown',
          'lr_dx_smooth_cap','lr_dx_smooth_cap_bat','lr_dx_fix_cap_bat','lr_dx_smooth_wake','lr_dx_also_cap_ok','lr_dx_also_bhold','lr_dx_also_vendor',
@@ -6852,7 +6949,7 @@ PH.update({'lr_dx_idle_short':['{min}'], 'lr_dx_idle_good':['{pct}','{deep}'], '
       'lr_dx_idle_alarm':['{pct}','{awake}','{who}','{n}'], 'lr_dx_idle_unknown':['{pct}','{awake}'], 'lr_dx_fix_sync':['{app}','{what}'],
       'lr_dx_fix_bg':['{app}'], 'lr_dx_fix_wl':['{set}'], 'lr_dx_fix_lte':['{set}'], 'lr_dx_also_holder':['{who}','{hpct}'], 'lr_dx_bgheat':['{cpu}'],
       'lr_dx_screen_ok':['{pct}','{est}'], 'lr_dx_screen_heavy':['{pct}','{min}'], 'lr_dx_screen_perf':['{pct}','{prof}'],
-      'lr_dx_screen_hz':['{pct}','{share}'], 'lr_dx_screen_unknown':['{pct}'], 'lr_dx_smooth_sysui':['{pct}','{n}','{of}','{spct}','{src}'],
+      'lr_dx_screen_hz':['{pct}','{share}'], 'lr_dx_also_hz':['{share}','{hz}','{ms}'], 'lr_dx_sysui_set':['{n}','{m}'], 'lr_dx_screen_unknown':['{pct}'], 'lr_dx_smooth_sysui':['{pct}','{n}','{of}','{spct}','{src}'],
       'lr_dx_src_hooks':['{hooks}'], 'lr_dx_smooth_app':['{pct}','{app}','{apct}'], 'lr_dx_smooth_ok':['{pct}'], 'lr_dx_smooth_unknown':['{pct}'],
       'lr_dx_smooth_cap':['{cl}','{yes}','{no}'], 'lr_dx_smooth_cap_bat':['{cl}','{yes}','{no}','{prof}'], 'lr_dx_smooth_wake':['{pct}','{ord}'],
       'lr_dx_also_cap_ok':['{yes}','{no}'], 'lr_dx_also_bhold':['{k}','{r}','{t}'], 'lr_dx_also_vendor':['{n}','{of}'], 'lr_dx_heat_long':['{min}','{phase}','{cpu}'],

@@ -1266,6 +1266,15 @@ EOF_GOV_AFTER
     printf '%s\n' "$gov" | grep -q "	$field" || fail "governor action projection: $field: $gov"
   done
   ! printf '%s\n' "$gov" | grep -q '999\|unrelated_counter' || fail 'state-block allowlist leaked decoy evidence'
+  # A capture zipped while the recorder still runs has no after.txt yet: the newest hourly
+  # snapshot is its latest point, as it already is for the Smart counters.
+  mv "$CAP/after.txt" "$CAP/after.hold"
+  cp "$CAP/after.hold" "$CAP/snapshot_1794000100.txt"
+  sed 's/^zygisk_launch_accepted=15$/zygisk_launch_accepted=12/' "$CAP/after.hold" > "$CAP/snapshot_1794000000.txt"
+  gov="$(ASB_LK_LOCK="$T/no-lock" ASB_LK_STATE_DIR="$T/state" ASB_CFG_FILE="$T/no-config" sh "$ROOT/tools/logkit/asb_fullday_digest.sh" "$CAP" | awk -F '\t' '$1 == "zygov"')"
+  printf '%s\n' "$gov" | grep -q $'^zygov\tcoverage=start_latest' && printf '%s\n' "$gov" | grep -q $'\tzygisk_launch_accepted_delta=5\t' \
+    || fail "a live export without after.txt did not read the newest snapshot: $gov"
+  rm -f "$CAP"/snapshot_*.txt; mv "$CAP/after.hold" "$CAP/after.txt"
   sed -i 's/^unlock_cold_lifts=7$/unlock_cold_lifts=3/' "$CAP/after.txt"
   gov="$(ASB_LK_LOCK="$T/no-lock" ASB_LK_STATE_DIR="$T/state" ASB_CFG_FILE="$T/no-config" sh "$ROOT/tools/logkit/asb_fullday_digest.sh" "$CAP" | awk -F '\t' '$1 == "zygov"')"
   for k in zygisk_launch_accepted zygisk_launch_vetoed zygisk_refresh_accepted zygisk_refresh_vetoed unlock_cold_lifts unlock_cold_extends unlock_cold_long unlock_cold_trims; do
@@ -1306,7 +1315,7 @@ EOF_GOV_AFTER
   legacy="$(ASB_LK_LOCK="$T/no-lock" ASB_LK_STATE_DIR="$T/state" ASB_CFG_FILE="$T/no-config" sh "$ROOT/tools/logkit/asb_fullday_digest.sh" "$CAP")"
   ! printf '%s\n' "$legacy" | grep -q '^zygisk' || fail 'legacy capture gained fake Zygisk evidence'
   ! printf '%s\n' "$legacy" | grep -q '^zygov' || fail 'legacy capture gained fake Governor action evidence'
-  echo 'PASS observer capture digest: companion/Governor start/latest verdicts, monotonic deltas, full-family resets, single-snapshot and legacy-capture honesty'
+  echo 'PASS observer capture digest: companion/Governor start/latest verdicts, newest hourly snapshot for a live export, monotonic deltas, full-family resets, single-snapshot and legacy-capture honesty'
 )
 
 t_zygisk_link_runtime() (

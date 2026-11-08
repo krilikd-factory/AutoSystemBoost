@@ -2569,9 +2569,18 @@ if printf '%s\n' "$_boundary_out" | grep -q '^V:'; then
   printf '%s\n' 'FAIL asbdiag equality invoked red verdict' >&2
   exit 1
 fi
-_tp_set=60 _tp_now=61 _tp_n=1 _tp_mode=auto
+# The red verdict needs the screen off: with the screen on the report's own load can heat a
+# core past an automatic point, which is the clamp doing its job, so that case is a note.
+_tp_set=60 _tp_now=61 _tp_n=1 _tp_mode=auto _pl_scr=0
 _over_out="$(. "$TMP/throttle_boundary.sh")"
-printf '%s\n' "$_over_out" | grep -Fq 'V:  throttle point below live CPU sensor' || { printf '%s\n' 'FAIL asbdiag strictly-over-threshold sensor lost verdict' >&2; exit 1; }
+printf '%s\n' "$_over_out" | grep -Fq 'V:  throttle point below live CPU sensor with the screen off' || { printf '%s\n' 'FAIL asbdiag strictly-over-threshold sensor lost verdict' >&2; exit 1; }
+_tp_set=60 _tp_now=61 _tp_n=1 _tp_mode=auto _pl_scr=1
+_on_out="$(. "$TMP/throttle_boundary.sh")"
+if printf '%s\n' "$_on_out" | grep -q '^V:'; then
+  printf '%s\n' 'FAIL asbdiag screen-on load still emits a red throttle verdict' >&2
+  exit 1
+fi
+printf '%s\n' "$_on_out" | grep -Fq 'intended behaviour' || { printf '%s\n' 'FAIL asbdiag screen-on throttle note missing' >&2; exit 1; }
 _tp_set=60 _tp_now=61 _tp_n=1 _tp_mode=manual
 _manual_out="$(. "$TMP/throttle_boundary.sh")"
 if printf '%s\n' "$_manual_out" | grep -q '^V:'; then
