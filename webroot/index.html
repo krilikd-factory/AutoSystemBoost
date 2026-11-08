@@ -13965,9 +13965,12 @@ function logReportAnalyze(d) {
   if (thermal || heat) {
     const wm = heat ? +heat.warm_min || 0 : 0, sm = heat ? +heat.skin_min || 0 : 0;
     const peak = thermal ? +thermal.cpu || 0 : 0, clamps = throttle ? +throttle.clamps || 0 : 0;
-    const state = wm >= 30 || sm >= 30 ? 'problem' : (wm >= 10 || sm >= 10 || peak >= 45 || clamps > 0) ? 'normal' : 'good';
-    verdict('thermal', state, logReportDur(Math.max(wm, sm)), 'lr_sum_thermal_detail',
-      { warm: logReportDur(wm), clamps: String(clamps) }, 'hot_duration_and_throttle');
+    /* The tile follows the same CPU rule as the heat card in "Causes": a warm surface (often
+       the charger) is shown in the detail and keeps the tile from "good", but it no longer
+       turns the tile red under a value that the detail line does not name. */
+    const state = wm >= 30 ? 'problem' : (wm >= 10 || sm >= 30 || peak >= 45 || clamps > 0) ? 'normal' : 'good';
+    verdict('thermal', state, logReportDur(wm), sm > 0 ? 'lr_sum_thermal_detail_skin' : 'lr_sum_thermal_detail',
+      { warm: logReportDur(wm), skin: logReportDur(sm), clamps: String(clamps) }, 'hot_duration_and_throttle');
   } else verdict('thermal', 'unknown', '—', 'lr_sum_no_sensor', {}, 'no_thermal_samples');
 
   if (jank && (+jank.frames || 0) >= 20000) {
@@ -14071,6 +14074,20 @@ function logReportAnalyze(d) {
     asb_overhead: { native_cpu_ms_h: cost ? +cost.cpu_msh || 0 : null,
       physical_writes_h: cost ? +cost.writes_h || 0 : null, timer_wakeups_h: cost ? +cost.wakes_h || 0 : null,
       native_cpu_ms_per_wakeup: msPerWake } };
+}
+
+/* Share of the screen time above 120 Hz and the rate that carried most of it. A 165 Hz panel
+ * gives a frame 6.1 ms, so its late-frame percentage is not comparable with a 120 Hz day. */
+function logReportHighRefresh(d) {
+  let share = 0, top = null;
+  (d.hzs || []).forEach(function (z) {
+    const mode = +z.mode || 0, sh = +z.share || 0;
+    if (mode <= 120 || sh <= 0) return;
+    share += sh;
+    if (!top || sh > top.share) top = { mode: mode, share: sh };
+  });
+  if (!top || share < 50) return null;
+  return { share: String(Math.min(100, share)), hz: String(top.mode), ms: (1000 / top.mode).toFixed(1) };
 }
 
 function logReportHistoryComparable(d, analysis, h) {
@@ -16630,6 +16647,7 @@ function logReportAnalysisT(key, vars) {
     lr_sum_drain_mixed_segments: 'Average drain across {segments} off-charger windows over {h}, screen on {on}% of the capture: about {est} from a full charge at this pace.',
     lr_sum_need_time: 'Needs a longer matching discharge window.',
     lr_sum_thermal_detail: 'CPU above 45 °C: {warm}; throttling periods: {clamps}.',
+    lr_sum_thermal_detail_skin: 'CPU above 45 °C: {warm}; skin above 40 °C: {skin}; throttling periods: {clamps}.',
     lr_sum_no_sensor: 'No usable thermal samples in this capture.',
     lr_sum_smooth_detail: '{frames} frames; wake windows: {wake}.',
     lr_sum_need_frames: 'Fewer than 20,000 frames: no stable verdict.',
@@ -16889,6 +16907,7 @@ function logReportDxT(key, vars) {
     lr_dx_frames_thin: "Only {frames} HWUI frames were usable, so no stable smoothness verdict is made. A thin sample is unknown evidence, not proof of smoothness; GL/Vulkan game surfaces can be outside this metric.",
     lr_dx_frames_absent: "No usable HWUI frame sample was collected during substantial screen-on time. Smoothness remains unknown, not zero-jank; missing counters can reflect unsupported collection or non-HWUI surfaces.",
     lr_dx_also_jwhy: "Most late frames: {app} in {state}, {pct} of its frames. {cause}",
+    lr_dx_also_hz: "The panel ran above 120 Hz for {share}% of the screen time, mostly at {hz} Hz: a frame there lasts {ms} ms against 8.3 ms at 120 Hz, so the same work is late more often. Compare late-frame figures only between captures at the same refresh rate.",
     lr_dx_also_bhold: "Battery scroll hold, measured per app: kept where it cut the stutter (apps: {k}), released where it did not help (apps: {r}), under test: {t}.",
     lr_dx_also_vendor: "The firmware held the prime cores below ASB's ceiling in {n} of {of} checks (PowerHAL or kernel thermal) - ASB does not override it.",
     lr_dx_heat_long: "The CPU spent {min} above 45 °C in total; the hottest named phase was {phase}, with peak {cpu}°.",
@@ -16905,6 +16924,7 @@ function logReportDxT(key, vars) {
     lr_dx_sysui_inj: "SystemUI restarted {n} times; the stack for {m} recorded restarts points to code injected by {pkg}. Stack attribution is a lead, not proof of the sole cause.",
     lr_dx_fix_inj: "Update or disable {pkg} - every restart rebuilds the status bar, drops frames and costs battery.",
     lr_dx_crashes: "{n} native crashes during the capture, none in ASB code.",
+    lr_dx_sysui_set: "SystemUI restarted {n} times; {m} of them right after SystemUI settings were written from a shell, the way a customization tool applies its options. No crash was recorded for those, and ASB does not restart SystemUI.",
     lr_dx_fix_crashes: "If an app misbehaves, update it; the crash list is in the full report.",
     lr_dx_gauge: "The current sensor on this phone reads about {x}× low - mA figures are a lower bound. Battery-counter %/h figures use whole-percent steps and eligible windows, so treat them as estimates rather than exact rates.",
     lr_dx_screen_net: "With the screen on: {pct}%/h; the modem moved {mib} meanwhile ({ph} an hour). This is measured radio context, not proof that mobile data caused the drain.",
@@ -17124,6 +17144,8 @@ function logReportDiagnose(d) {
     if (it && jwt) it.also.push({ key: 'lr_dx_also_jwhy', v: { app: jwt.pkg, state: jwt.state,
       pct: logReportJwhyShare(jwt.janky, jwt.frames), cause: logReportJwhyCause(jwt) } });
     if (it && vendorLine && jp >= 6) it.also.push(vendorLine);
+    const hzHigh = logReportHighRefresh(d);
+    if (it && hzHigh) it.also.push({ key: 'lr_dx_also_hz', v: hzHigh });
     if (capBad) {
       const cv = { cl: logReportDxT('lr_dx_cl_' + capBad[0], {}), yes: String(capBad[1].yes), no: String(capBad[1].no),
         prof: T('prof_' + prof, prof) };
@@ -17183,8 +17205,11 @@ function logReportDiagnose(d) {
     }
   }
 
+  const sset = s.sysuiset || null;
   if (sinj && sinj.pkg && (+sinj.n || 0) > 0 && sysui && (+sysui.count || 0) > 0)
     item('stab', 'problem', 'lr_dx_sysui_inj', { n: String(sysui.count), m: String(sinj.n), pkg: String(sinj.pkg) }, 'app', 'lr_dx_fix_inj', { pkg: String(sinj.pkg) });
+  else if (sset && (+sset.n || 0) > 0 && sysui && (+sysui.count || 0) > 0)
+    item('stab', 'normal', 'lr_dx_sysui_set', { n: String(sysui.count), m: String(Math.min(+sset.n || 0, +sysui.count || 0)) }, 'app');
   else if (crash && (+crash.count || 0) > 2 && !((+crash.asb || 0) > 0))
     item('stab', 'normal', 'lr_dx_crashes', { n: String(crash.count) }, 'rom', 'lr_dx_fix_crashes');
 
@@ -18122,7 +18147,7 @@ function logReportRender(d) {
         [T('lr_th_phase', 'Phase'), T('lr_th_frames', 'Frames'), T('lr_th_jank', 'Jank'), T('lr_th_jps', 'Janky/s')],
         d.jphases.map(function (p) {
           return [T('lr_ph_' + p.phase, p.phase), String(p.frames),
-                  { txt: String(p.pct) + '%', warn: p.pct >= 6 }, String(p.jps)];
+                  { txt: String(p.pct) + '%', warn: p.pct >= 6 && p.frames >= 2000 }, String(p.jps)];
         }), [2]));
     }
     if (d.jstates.length) {
@@ -18131,7 +18156,7 @@ function logReportRender(d) {
         [T('lr_th_state', 'ASB state'), T('lr_th_frames', 'Frames'), T('lr_th_jank', 'Jank'), T('lr_th_jps', 'Janky/s')],
         d.jstates.map(function (p) {
           return [String(p.state), String(p.frames),
-                  { txt: String(p.pct) + '%', warn: p.pct >= 6 }, String(p.jps)];
+                  { txt: String(p.pct) + '%', warn: p.pct >= 6 && p.frames >= 2000 }, String(p.jps)];
         }), [2]));
     }
     /* fix288: why the late frames were late, per app and ASB state, and - for an app seen in
