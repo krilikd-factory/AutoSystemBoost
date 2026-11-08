@@ -31,7 +31,7 @@
 | Session capture | fixed-length log | **Infinite Log**: survives reboots and framework restarts, progress heartbeat |
 | Day report | list of sections | **verdicts, causes with their owner, at most three priority actions** |
 | Zygisk | — | **optional observer**: dormant hot path, cold-start lift, start ledger, exit tracking |
-| `versionCode` | 640 | **65339**, monotonic (`major × 1000 + build`) |
+| `versionCode` | 640 | **650**, monotonic (`major × 1000 + build`) |
 | Host regression | separate scripts | **317 cases in 6 suites**, sharded CI |
 
 ### Measured on the reference phone
