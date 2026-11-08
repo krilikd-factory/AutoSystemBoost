@@ -3,7 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Release-V65-16a34a?style=for-the-badge" alt="Release V65">
   <img src="https://img.shields.io/badge/Previous-V64-6b7280?style=for-the-badge" alt="Previous V64">
-  <img src="https://img.shields.io/badge/versionCode-65339-0ea5e9?style=for-the-badge" alt="versionCode 65339">
+  <img src="https://img.shields.io/badge/versionCode-65339-0ea5e9?style=for-the-badge" alt="versionCode 650">
 </p>
 
 <p align="center">
