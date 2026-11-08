@@ -3083,11 +3083,13 @@ case "$_tp_set" in
         NOTE "  manual threshold, so the sustained clamp engaging is the requested behaviour."
         NOTE "  Raise the point or switch the mode to auto if the clamp is not what you want."
         if [ "${_tp_up:-99999}" -lt 600 ] 2>/dev/null; then NOTE "  phone booted ${_tp_up:-?}s ago: post-boot dexopt/indexing heat, not a steady-state reading - re-check after ~10 min."; fi
-      else
-      V "  throttle point below live CPU sensor" "< ${_tp_now}C" "${_tp_set}C" eq
-      NOTE "  a real CPU sensor is already above the selected point; sustained policy may engage."
-      NOTE "  Check workload/cooling before raising the threshold."
+      elif [ "${_pl_scr:-}" = "0" ]; then
+      V "  throttle point below live CPU sensor with the screen off" "point >= ${_tp_now}C" "${_tp_set}C" eq
+      NOTE "  a real CPU sensor is above the selected point while the screen is off; the sustained clamp holds at rest."
+      NOTE "  Check what keeps the phone busy or warm before raising the threshold."
       if [ "${_tp_up:-99999}" -lt 600 ] 2>/dev/null; then NOTE "  phone booted ${_tp_up:-?}s ago: post-boot dexopt/indexing heat, not a steady-state reading - re-check after ~10 min."; fi
+      else
+      NOTE "throttle point ${_tp_set}C vs hottest live CPU sensor ${_tp_now}C with the screen on - load (this report included) heats the cores, and the sustained clamp engaging above the point is its intended behaviour, not a failed setting"
       fi
     elif [ "$_tp_now" -gt 0 ] && [ "$_tp_set" -eq "$_tp_now" ]; then
       NOTE "throttle point ${_tp_set}C equals live CPU max ${_tp_now}C across ${_tp_n} sensor(s) - boundary observed, not a failure"
