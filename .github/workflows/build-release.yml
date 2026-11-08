@@ -294,23 +294,6 @@ jobs:
             echo "Release identity: version=$BASE_VER versionCode=$BASE_CODE manual-ref=${TAG:-unknown}"
           fi
 
-      - name: Validate OTA manifest (update.json)
-        run: |
-          # fix215: this check gates PUBLISHING, never building. It lived in the always-run
-          # host test suite since fix213, so any checkout whose metadata had not been bumped
-          # yet (a fork or main between releases) failed CI on a metadata file.
-          # Here in the release pipeline it still guarantees the manifest the managers fetch
-          # via updateJson describes exactly the build this run publishes.
-          BASE_VER="$(sed -n 's/^version=//p' module.prop | head -n 1)"
-          BASE_CODE="$(sed -n 's/^versionCode=//p' module.prop | head -n 1)"
-          [ -f update.json ] || { echo "::error::update.json missing at repo root"; exit 1; }
-          grep -qF "\"version\": \"${BASE_VER%%-*}\"" update.json || { echo "::error::update.json version != module.prop (${BASE_VER%%-*})"; exit 1; }
-          grep -qF "\"versionCode\": ${BASE_CODE}" update.json || { echo "::error::update.json versionCode != module.prop ($BASE_CODE)"; exit 1; }
-          MAJ="$(printf '%s' "${BASE_VER%%-*}" | sed -n 's/^V\([0-9][0-9]*\).*/\1/p')"
-          [ -n "$MAJ" ] || { echo "::error::module version is not V<major>: $BASE_VER"; exit 1; }
-          grep -qF "/releases/download/${MAJ}/" update.json || { echo "::error::update.json zipUrl does not name the $MAJ release"; exit 1; }
-          echo "OTA manifest matches: ${BASE_VER%%-*} / $BASE_CODE / release $MAJ"
-
       - name: Normalize DSP source path for Linux CI
         run: |
           if [ -d src/DSP ] && [ ! -e src/dsp ]; then
@@ -802,6 +785,38 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ env.ZIP_REL }}
+
+      - name: OTA manifest check (update.json, advisory)
+        run: |
+          # update.json tells root managers where the published release lives, so it can only
+          # name an asset that already exists: it is edited after this build is published and
+          # never gates building or attaching. A gate before packaging failed every release run
+          # whose manifest still (correctly) described the previous public release.
+          # This step only reports what the manifest should say for the build just made.
+          BASE_VER="$(sed -n 's/^version=//p' module.prop | head -n 1)"
+          BASE_CODE="$(sed -n 's/^versionCode=//p' module.prop | head -n 1)"
+          VER="${BASE_VER%%-*}"
+          MAJ="$(printf '%s' "$VER" | sed -n 's/^V\([0-9][0-9]*\).*/\1/p')"
+          URL="https://github.com/${GITHUB_REPOSITORY:-owner/repo}/releases/download/${MAJ}/${ZIP_REL:-ASB-${VER}.zip}"
+          OTA_OK=1
+          [ -f update.json ] || OTA_OK=0
+          [ "$OTA_OK" = 1 ] && grep -qF "\"version\": \"${VER}\"" update.json || OTA_OK=0
+          [ "$OTA_OK" = 1 ] && grep -qF "\"versionCode\": ${BASE_CODE}" update.json || OTA_OK=0
+          [ "$OTA_OK" = 1 ] && grep -qF "/releases/download/${MAJ}/" update.json || OTA_OK=0
+          if [ "$OTA_OK" = 1 ]; then
+            echo "::notice::update.json already describes ${VER} / ${BASE_CODE} / release ${MAJ}"
+          else
+            echo "::warning::update.json does not describe this build yet. Once release ${MAJ} carries ${ZIP_REL:-the zip}, set version ${VER}, versionCode ${BASE_CODE} and zipUrl ${URL}."
+          fi
+          if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+            {
+              echo "### update.json for this build"
+              echo '```json'
+              printf '{\n  "version": "%s",\n  "versionCode": %s,\n  "zipUrl": "%s",\n  "changelog": "https://raw.githubusercontent.com/%s/main/CHANGELOG.md"\n}\n' \
+                "$VER" "$BASE_CODE" "$URL" "${GITHUB_REPOSITORY:-owner/repo}"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Build summary
         if: always()
