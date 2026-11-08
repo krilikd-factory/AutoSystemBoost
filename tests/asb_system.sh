@@ -4511,9 +4511,37 @@ fail() { echo "FAIL fix213: $*" >&2; exit 1; }
 [ -f "$UJ" ] || fail 'update.json missing at repo root'
 grep -qF -- "--exclude 'update.json'" "$ROOT/.github/workflows/build-test.yml" || fail "the test build stopped excluding update.json"
 grep -qF -- "--exclude 'update.json'" "$ROOT/.github/workflows/build-release.yml" || fail "the release build stopped excluding update.json"
-grep -qF 'Validate OTA manifest (update.json)' "$ROOT/.github/workflows/build-release.yml" || fail "the release workflow lost the update.json manifest gate"
-grep -qF '\"versionCode\": ${BASE_CODE}' "$ROOT/.github/workflows/build-release.yml" || fail "the release gate must compare versionCode against module.prop"
-grep -qF '/releases/download/${MAJ}/' "$ROOT/.github/workflows/build-release.yml" || fail "the release gate must validate the zipUrl release dir"
+# The manifest can only name an asset that already exists, so the owner edits it after the
+# release is published. A gate before packaging failed the V65 release run on a manifest that
+# still (correctly) described V64. The release workflow now reports, after building and
+# attaching, what update.json should say - as a notice or a warning, never as a failure.
+RW="$ROOT/.github/workflows/build-release.yml"
+grep -qF 'Validate OTA manifest (update.json)' "$RW" && fail "the update.json gate before packaging is back"
+grep -qF '\"versionCode\": ${BASE_CODE}' "$RW" || fail "the manifest check must compare versionCode against module.prop"
+grep -qF '/releases/download/${MAJ}/' "$RW" || fail "the manifest check must look at the zipUrl release dir"
+_ota_at="$(grep -n -- '- name: OTA manifest check (update.json, advisory)$' "$RW" | cut -d: -f1)"
+_pkg_at="$(grep -n -- '- name: Package RELEASE zip$' "$RW" | cut -d: -f1)"
+_att_at="$(grep -n -- '- name: Attach to GitHub release$' "$RW" | cut -d: -f1)"
+[ -n "$_ota_at" ] && [ -n "$_pkg_at" ] && [ -n "$_att_at" ] && [ "$_ota_at" -gt "$_pkg_at" ] && [ "$_ota_at" -gt "$_att_at" ] \
+  || fail "the manifest check must run after the zip is built and attached ($_ota_at/$_pkg_at/$_att_at)"
+_OT="$(mktemp -d)"
+sed -n '/^      - name: OTA manifest check (update.json, advisory)$/,/^      - name: Build summary$/p' "$RW" | sed '1,2d;$d' | sed 's/^          //' > "$_OT/ota.sh"
+grep -q 'exit 1' "$_OT/ota.sh" && fail "the manifest check can still fail the release run"
+mkdir -p "$_OT/r"
+printf 'id=AutoSystemBoost\nversion=V65\nversionCode=650\n' > "$_OT/r/module.prop"
+printf '{\n  "version": "V64",\n  "versionCode": 640,\n  "zipUrl": "https://github.com/o/r/releases/download/64/ASB-V64.zip"\n}\n' > "$_OT/r/update.json"
+_ota_out="$(cd "$_OT/r" && GITHUB_REPOSITORY=o/r ZIP_REL=ASB-V65.zip GITHUB_STEP_SUMMARY="$_OT/sum" bash -e "$_OT/ota.sh" 2>&1)" \
+  || { rm -rf "$_OT"; fail "a manifest that still names the previous release failed the run: $_ota_out"; }
+printf '%s\n' "$_ota_out" | grep -q '^::warning::update.json does not describe this build yet.*versionCode 650 and zipUrl https://github.com/o/r/releases/download/65/ASB-V65.zip' \
+  || { rm -rf "$_OT"; fail "the warning does not say what to set: $_ota_out"; }
+grep -q '"versionCode": 650,' "$_OT/sum" && grep -q '"zipUrl": "https://github.com/o/r/releases/download/65/ASB-V65.zip"' "$_OT/sum" \
+  || { rm -rf "$_OT"; fail "the run summary lacks the manifest for this build: $(cat "$_OT/sum")"; }
+printf '{\n  "version": "V65",\n  "versionCode": 650,\n  "zipUrl": "https://github.com/o/r/releases/download/65/ASB-V65.zip"\n}\n' > "$_OT/r/update.json"
+_ota_out="$(cd "$_OT/r" && GITHUB_REPOSITORY=o/r ZIP_REL=ASB-V65.zip bash -e "$_OT/ota.sh" 2>&1)" || { rm -rf "$_OT"; fail "a matching manifest failed: $_ota_out"; }
+printf '%s\n' "$_ota_out" | grep -q '^::notice::update.json already describes V65 / 650 / release 65$' || { rm -rf "$_OT"; fail "matching manifest: $_ota_out"; }
+rm -f "$_OT/r/update.json"
+(cd "$_OT/r" && bash -e "$_OT/ota.sh" >/dev/null 2>&1) || { rm -rf "$_OT"; fail "a missing manifest failed the run"; }
+rm -rf "$_OT"
 # Audit K3: a profile's GPU intent is GPU_MAX_PCT alone. thermal_pwrlevel belongs to the
 # vendor thermal engine - the governor reads it back as a vendor cap, so the profile's
 # static level (battery 7, balanced/performance 2) looked like one and double-capped the
