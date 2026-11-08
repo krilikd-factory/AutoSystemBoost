@@ -980,14 +980,12 @@ if [ -f "$_mp" ]; then
   _mp_code="$(grep '^versionCode=' "$_mp" | head -1 | cut -d= -f2)"
   if [ -n "$_mp_ver" ] && [ -n "$_mp_code" ]; then
     ok "module identity present: version=$_mp_ver versionCode=$_mp_code"
-    # update.json identity is a HARD contract, but only where it belongs: since fix215 it
-    # lives in .github/workflows/build-release.yml ("Validate OTA manifest"), the pipeline
-    # that PUBLISHES the manifest - version and versionCode must match module.prop exactly,
-    # the zip URL must name the same major. It was a host-test gate since fix213, and that
-    # failed CI builds whose checkout simply had not merged a version bump yet: a metadata
-    # file must never block building (fix83's lesson, re-learned). Lint only reports the
-    # identity above and never compares - a lint-only run on a developer machine must not
-    # block local experiments.
+    # update.json is compared with module.prop only after the release zip is built and
+    # attached (.github/workflows/build-release.yml, "OTA manifest check"), and only as a
+    # notice or warning that prints the manifest for that build: the owner edits it after the
+    # release is published. It was a host-test gate (fix213) and then a release gate before
+    # packaging (fix215); both failed builds over a metadata file that correctly still named
+    # the previous release. Lint only reports the identity above and never compares.
     # The changelog is not consulted either (fix199): the owner keeps it by hand, and a
     # stale or missing one must never fail - or even warn on - a build.
   else
