@@ -297,6 +297,8 @@ fi
 # every governor-side delta instead of producing a partly reconciled interval.
 _ZG_S="$_DIR/before.txt"
 _ZG_L="$_DIR/after.txt"
+[ -r "$_ZG_L" ] || _ZG_L="$(ls -1 "$_DIR"/snapshot_*.txt 2>/dev/null | sort | tail -n 1)"
+[ -n "$_ZG_L" ] || _ZG_L="$_DIR/after.txt"
 if [ -f "$_ZG_S" ] || [ -f "$_ZG_L" ]; then
   set --
   [ -f "$_ZG_S" ] && set -- "$@" "$_ZG_S"
@@ -1041,6 +1043,9 @@ fi
 case "$_sn" in ''|*[!0-9]*) _sn=0 ;; esac
 printf 'sysui\tcount=%d\n' "$_sn"
 if [ "$_sn" -gt 0 ] 2>/dev/null; then
+  _ss="$(grep -c '^verdict: no SystemUI crash - restarted after .* written from a shell' "$_DIR/sysui_restarts.txt" 2>/dev/null)"
+  case "$_ss" in ''|*[!0-9]*) _ss=0 ;; esac
+  [ "$_ss" -gt 0 ] && printf 'sysuiset\tn=%d\n' "$_ss"
   awk '
     function pkgof(line,   l, p) {
       l = line; sub(/.*\/data\/app\//, "", l)

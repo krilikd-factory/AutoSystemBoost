@@ -2708,6 +2708,7 @@ lk_sysui_verdict() {
       jx = l; jv = 2
     }
     /lowmemorykiller/ && /[Kk]ill.*com\.android\.systemui/ && lfresh($0) { lmk = 1 }
+    /SettingsShellCmd: putForUser\(/ && /key=[^,]*systemui/ && lfresh($0) { k = $0; sub(/.*key=/, "", k); sub(/,.*/, "", k); if (setn == 0) setk = k; setn++ }
     END {
       tail = (hooks != "" ? " · loaded into SystemUI: " hooks : "")
       if (nat != "" && natinj != "") print nat " - " natlib " injected by " natinj ", code an installed app loads into SystemUI" tail
@@ -2718,6 +2719,7 @@ lk_sysui_verdict() {
       else if (bmcrash && dinj != "") print "crash reported by the system; the latest native crash is in " dlib " injected by " dinj ", code an installed app loads into SystemUI" tail
       else if (lmk)       print "killed by lowmemorykiller" tail
       else if (bmcrash)   print "crash reported by the system, no crash record kept" tail
+      else if (setn > 0)  print "no SystemUI crash - restarted after " setn " SystemUI setting(s) were written from a shell just before (first: " setk "), the way a customization tool applies its options" tail
       else                print "no SystemUI crash in the crash buffer - restarted by the system (kill, ANR, theme or settings change)" tail
     }'
 }

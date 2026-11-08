@@ -2058,6 +2058,7 @@ lk_resume_merge() {
     rm -f "$LK_OUT_DIR/.phase_live.tsv" 2>/dev/null
   fi
   rm -f "$LK_OUT_DIR/.phase_live.tsv.tmp" "$LK_OUT_DIR/.phase_open.tsv" 2>/dev/null
+  rm -f "$LK_OUT_DIR"/*.tmp.[0-9]* 2>/dev/null
   _rmg_last="$(awk -F'|' '$1 ~ /^[0-9]+$/ { e = $1 } END { print e }' "$LK_OUT_DIR/battery_trace.txt" 2>/dev/null)"
   case "$_rmg_last" in ''|*[!0-9]*) _rmg_down=-1 ;; *) _rmg_down=$(( _rmg_now - _rmg_last )) ;; esac
   _rmg_ver="$(sed -n 's/^version=//p' "$MODDIR/module.prop" 2>/dev/null | head -n 1 | tr -d '|\r')"
@@ -2193,6 +2194,7 @@ lk_on_signal() {
     lk_wl_release
     lk_bt_reconnect_stop
     lk_webui_guard_release
+    rm -f "$LK_OUT_DIR"/*.tmp."$$" 2>/dev/null
     exit 0
   fi
   trap '' TERM INT HUP
