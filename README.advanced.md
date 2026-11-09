@@ -749,6 +749,8 @@ Every original package mode, uid mode, exemption and list membership is recorded
 
 **Measurement.** The five-minute service tick reads `wm_activity_launch_time` and `am_proc_start` from the events buffer (the ActivityTaskManager "Displayed" lines as fallback) and keeps the last 400 launches; a launch is cold when Android started the app's process for it. The card and asbdiag (`launch_art`) show each app's cold-start median and, for an app ASB compiled, the median before and after. Compiled code is the state Android's own maintenance produces, so disabling or uninstalling has nothing to restore; the feature's files are removed.
 
+**Excluding an app** (V66). Every listed app has an **Exclude** button. An excluded app is never ranked or compiled by ASB again, and a running batch skips it. If ASB compiled it, its compile state is reset in the background to the one Android installed it with (`pm compile --reset`); the event list shows `reset` with the filter before and after, or that Android refused. An app that Android compiled itself is not reset. **Allow again** takes the app off the list. Use it when an app behaves differently after compilation, for example a banking app that stops at its logo. Android's own nightly maintenance may still compile the app; if the problem returns with the app excluded, the cause is outside ASB.
+
 ### 🌙 11.9. Night wakers and screen-off period summaries
 
 The restart-loop guard (11.7) has a second level, **Loops + night wakers**. An app whose process starts 8 or more times during one screen-off period, at any pace, is restricted the same way as a loop until the screen turns on; the count runs from the first screen-off sample of the period. The same protections apply, and "Restrain loops" is unchanged.
@@ -802,6 +804,34 @@ Before the first automatic enable ASB saves the previous package list, four obse
 **Per-tweak evidence, not invented attribution.** The infinite-log report's **Tweak evidence** card projects existing capture facts without another collector: cap-readback observations, at-cap/below-cap jank associations with both frame populations, Zygisk/Governor action deltas, LTPO lowered time, Wi-Fi Leave counters, Smart learner decisions and ASB overhead. Direct actions prove only that an action/readback occurred; at-cap figures remain associations across different workloads; Smart counters retain governor-session scope. Battery, temperature and smoothness benefits require a comparable on-device A/B with one changed variable. A missing row means the capture exposes no evidence for that tweak, not that it is unsupported or had zero effect.
 
 **Infinite-log report snapshot.** A non-empty digest below 600,000 characters is kept in this WebView for up to 7 days. Opening the page parses and paints it immediately with its timestamp and stale styling, then refreshes through one coalesced digest call. With no snapshot, `asbPaintYield()` lets the animated loading card reach the screen before the synchronous root bridge. A failed refresh keeps the complete last good report; `no_capture` clears it. A completion after page close can update the cache but cannot repaint the closed page.
+
+### 🪶 11.16. A lighter LSPosed (V66)
+
+**What ASB reads.** The ZYGISK page has an **LSPosed** card. It reads LSPosed's own module and scope database (`asb --lspd modules`) and joins it with several sources:
+- Android's usage history (when each hooked app was last opened);
+- the Zygisk start ledger (background starts per day);
+- crash and ANR records whose stack runs through a module's code.
+
+Each module gets its reach (the Android framework, SystemUI or apps only), a verdict (**costly**, **worth checking**, **light**, **off**) and the reasons for it. LSPosed reports no energy per hook, so a verdict is an evidence-based estimate. The evidence is read in the background, at most every 6 hours while the card is in use.
+
+**Lighten, by tap.** **Lighten** removes a module's scope only from the apps listed under it:
+- apps not opened for 21 days that still start in the background;
+- apps whose crashes run through that module.
+
+The framework, SystemUI and the module itself are never touched. **Switch off** clears LSPosed's own enabled flag. Every change needs a second tap within 5 s. Every change is journaled with **Undo** and **Undo all**, and uninstalling ASB undoes them. LSPosed reads its database when it starts, so changes take effect after a reboot.
+
+**Automatic (opt-in).** Once a day ASB applies the same scope removals by itself, with narrower conditions:
+- an unused app with at least 4 background starts a day;
+- a crash loop of at least 5 crashes through the module.
+
+These apps are never touched: messengers, mail, authenticators, wearables, alarms, navigation, the Doze keep list and notification-fixed apps. No module is ever switched off automatically.
+
+**A/B test.** For one module ASB measures:
+- a day with the module (at least 6 h with the screen off and 1 h on);
+- then switches it off and waits for your reboot;
+- then measures a day without it, and switches the module back on.
+
+The comparison covers the screen-off and screen-on drain (%/h) and the CPU time of the apps it hooks. A difference counts only above 15 % and a fixed floor: 0.10 %/h with the screen off, 0.5 %/h on, 20 s/h of CPU. Two days still differ in usage, signal and temperature, and the card says so.
 
 ## 🔐 12. Device information, privacy and evidence quality
 

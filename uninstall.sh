@@ -311,7 +311,11 @@ rm -f /data/adb/asb/zygisk_guard /data/adb/asb/zygisk_guard_active /data/adb/asb
 if [ -f "$MODDIR/runtime/asb_zygisk_aot.sh" ]; then
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_aot.sh" restore-all >/dev/null 2>&1
 fi
-rm -rf /data/adb/asb/zygisk_aot /data/adb/asb/zygisk_aot_apps /data/adb/asb/zygisk_aot_count /data/adb/asb/zygisk_aot_launch /data/adb/asb/zygisk_aot_scan /data/adb/asb/zygisk_aot_log /data/adb/asb/zygisk_aot.lock 2>/dev/null
+if [ -f "$MODDIR/runtime/asb_lsposed_lite.sh" ]; then
+  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_lsposed_lite.sh" restore-all >/dev/null 2>&1
+fi
+rm -rf /data/adb/asb/lsp_lite 2>/dev/null
+rm -rf /data/adb/asb/zygisk_aot /data/adb/asb/zygisk_aot_apps /data/adb/asb/zygisk_aot_count /data/adb/asb/zygisk_aot_launch /data/adb/asb/zygisk_aot_scan /data/adb/asb/zygisk_aot_log /data/adb/asb/zygisk_aot_exclude /data/adb/asb/zygisk_aot.lock 2>/dev/null
 if [ -f "$MODDIR/runtime/asb_zygisk_link.sh" ]; then
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_link.sh" restore-all >/dev/null 2>&1
 fi

@@ -1363,7 +1363,7 @@ echo ""
 # The version from module.prop, not a literal: the header said "V65" on every build, so a
 # screenshot could not tell a tester's debug3 from a release.
 _mver="$(sed -n 's/^version=//p' "$MODDIR/module.prop" 2>/dev/null | head -1)"
-echo "  🚀  AutoSystemBoost ${_mver:-V65}"
+echo "  🚀  AutoSystemBoost ${_mver:-V66}"
 if [ "$_smart_enabled" = "1" ]; then
   _conf_pct=$((_smart_conf / 10))
   # 1-based, the same numbering the "WHAT SMART HAS LEARNED" block uses ("7 of 12") - the
