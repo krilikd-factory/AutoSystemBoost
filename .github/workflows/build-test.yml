@@ -179,6 +179,7 @@ jobs:
             runtime/asb_notif_fix.sh \
             runtime/asb_zygisk_guard.sh \
             runtime/asb_zygisk_aot.sh \
+            runtime/asb_lsposed_lite.sh \
             runtime/asb_zygisk_link.sh \
             runtime/asb_ltpo_video.sh \
             runtime/asb_odm_rebind.sh \
@@ -694,6 +695,7 @@ jobs:
             "runtime/asb_notif_fix.sh" \
             "runtime/asb_zygisk_guard.sh" \
             "runtime/asb_zygisk_aot.sh" \
+            "runtime/asb_lsposed_lite.sh" \
             "runtime/asb_zygisk_link.sh" \
             "runtime/asb_ltpo_video.sh" \
             "runtime/asb_odm_rebind.sh" \
