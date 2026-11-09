@@ -20,6 +20,7 @@ html[data-asb-theme="light"],html[data-asb-theme="light"] body{background:#f3f7f
 </style>
 <script>(function(){try{var t=localStorage.getItem('asb_theme'),b=localStorage.getItem('asb_glass_base');if(t==='light'||(t==='glass'&&b==='light'))document.documentElement.setAttribute('data-asb-theme','light');if(t==='glass')document.documentElement.setAttribute('data-asb-glass','1');}catch(e){}})();</script>
 <script>document.documentElement.classList.add('asb-home-pending');</script>
+<script>(function(){try{var L=['ru','uk','de','es','pt','tr','id','it','fr','ar','zh','hy'],w='en',s=null,i,l;try{s=localStorage.getItem('asb_lang');}catch(e){}if(s&&(s==='en'||L.indexOf(s)>=0))w=s;else{l=(navigator.language||navigator.userLanguage||'en').toLowerCase();for(i=0;i<L.length;i++)if(l.indexOf(L[i])===0){w=L[i];break;}}window.__asbI18nEarly={code:w,p:new Promise(function(r){var d=0,f=function(v){if(!d){d=1;r(v);}};try{var x=new XMLHttpRequest();x.open('GET','i18n/'+w+'.json',true);x.onload=function(){f((x.status===200||x.status===0)&&x.responseText?x.responseText:null);};x.onerror=x.onabort=x.ontimeout=function(){f(null);};x.send(null);}catch(e){f(null);}})};}catch(e){}})();</script>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <script>
@@ -1921,6 +1922,8 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .zy-ghost { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; border-top: 1px solid var(--border); }
 .zy-ghost .dev-zygisk-btn, .zy-ghost-all { align-self: flex-end; }
 .zy-ghost-all { display: block; margin: 6px 0 2px auto; }
+.zy-lsp-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.zy-ghost .zy-lsp-actions .dev-zygisk-btn { align-self: auto; }
 html[data-asb-theme="light"] .lgr-quality { background: #f7f9fa; }
 @media (max-width: 400px) {
   .lgr-quality { padding: 10px; }
@@ -5299,7 +5302,7 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
     <div class="badges">
       <div class="hdr-cap hdr-info">
       <button class="badge badge-a" id="socBadge" type="button" onclick="openDevicePage()" aria-label="Open device diagnostics" title="Device diagnostics">DEVICE</button>
-      <div class="badge badge-a" id="verBadge">V65</div>
+      <div class="badge badge-a" id="verBadge">V66</div>
       </div>
       <div class="theme-toggle" role="group" data-theme-toggle="verBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button><button class="theme-choice" type="button" data-theme-choice="glass" onclick="asbSetTheme('glass')" aria-label="Liquid Glass theme"><span data-tech-icon="theme_glass"></span></button></div>
     </div>
@@ -5458,7 +5461,7 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
     <div class="badges">
       <div class="hdr-cap hdr-info">
       <button class="badge badge-a" id="liveSocBadge" type="button" onclick="openDevicePage()" aria-label="Open device diagnostics" title="Device diagnostics">DEVICE</button>
-      <div class="badge badge-a" id="liveVerBadge">V65</div>
+      <div class="badge badge-a" id="liveVerBadge">V66</div>
       </div>
       <div class="theme-toggle" role="group" data-theme-toggle="liveVerBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button><button class="theme-choice" type="button" data-theme-choice="glass" onclick="asbSetTheme('glass')" aria-label="Liquid Glass theme"><span data-tech-icon="theme_glass"></span></button></div>
     </div>
@@ -5666,7 +5669,7 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
     <div class="badges">
       <div class="hdr-cap hdr-info">
       <button class="badge badge-a" id="cfgSocBadge" type="button" onclick="openDevicePage()" aria-label="Open device diagnostics" title="Device diagnostics">DEVICE</button>
-      <div class="badge badge-a" id="cfgVerBadge">V65</div>
+      <div class="badge badge-a" id="cfgVerBadge">V66</div>
       </div>
       <div class="theme-toggle" role="group" data-theme-toggle="cfgVerBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button><button class="theme-choice" type="button" data-theme-choice="glass" onclick="asbSetTheme('glass')" aria-label="Liquid Glass theme"><span data-tech-icon="theme_glass"></span></button></div>
     </div>
@@ -5794,7 +5797,7 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
     <div class="badges">
       <div class="hdr-cap hdr-info">
       <button class="badge badge-a" id="rpSocBadge" type="button" onclick="openDevicePage()" aria-label="Open device diagnostics" title="Device diagnostics">DEVICE</button>
-      <div class="badge badge-a" id="rpVerBadge">V65</div>
+      <div class="badge badge-a" id="rpVerBadge">V66</div>
       </div>
       <div class="theme-toggle" role="group" data-theme-toggle="rpVerBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button><button class="theme-choice" type="button" data-theme-choice="glass" onclick="asbSetTheme('glass')" aria-label="Liquid Glass theme"><span data-tech-icon="theme_glass"></span></button></div>
     </div>
@@ -5875,7 +5878,7 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
       <div class="badges">
         <div class="hdr-cap hdr-info">
           <button class="badge badge-a" id="devSocBadge" type="button" onclick="openDevicePage()" aria-label="Open device diagnostics" title="Device diagnostics">DEVICE</button>
-          <div class="badge badge-a" id="devVerBadge">V65</div>
+          <div class="badge badge-a" id="devVerBadge">V66</div>
         </div>
         <div class="theme-toggle" role="group" data-theme-toggle="devVerBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button><button class="theme-choice" type="button" data-theme-choice="glass" onclick="asbSetTheme('glass')" aria-label="Liquid Glass theme"><span data-tech-icon="theme_glass"></span></button></div>
       </div>
@@ -5928,7 +5931,7 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
       <div class="badges">
         <div class="hdr-cap hdr-info">
           <button class="badge badge-a" id="zySocBadge" type="button" onclick="openDevicePage()" aria-label="Open device diagnostics" title="Device diagnostics">DEVICE</button>
-          <div class="badge badge-a" id="zyVerBadge">V65</div>
+          <div class="badge badge-a" id="zyVerBadge">V66</div>
         </div>
         <div class="theme-toggle" role="group" data-theme-toggle="zyVerBadge"><button class="theme-choice" type="button" data-theme-choice="dark" onclick="asbSetTheme('dark')" aria-label="Dark theme"><span data-tech-icon="theme_moon"></span></button><button class="theme-choice" type="button" data-theme-choice="light" onclick="asbSetTheme('light')" aria-label="Light theme"><span data-tech-icon="sun"></span></button><button class="theme-choice" type="button" data-theme-choice="glass" onclick="asbSetTheme('glass')" aria-label="Liquid Glass theme"><span data-tech-icon="theme_glass"></span></button></div>
       </div>
@@ -6228,6 +6231,7 @@ const TECH_ICON_PATHS = {
   zygisk_activity: '<path d="M2.8 12h3.4l2-5 3.8 10 2.2-5h3.3"/><path d="M5 4.5h14M5 19.5h14" opacity=".45"/>',
   zygisk_engine: '<rect x="9" y="9" width="6" height="6" rx="1.2"/><path d="M12 4.5V9M5 17.5 9 14M19 17.5 15 14"/><circle cx="12" cy="3" r="1.5"/><circle cx="4" cy="18.5" r="1.5"/><circle cx="20" cy="18.5" r="1.5"/>',
   zygisk_guard: '<path d="M12 2.8 20 6v5.2c0 4.7-3.3 8-8 10-4.7-2-8-5.3-8-10V6z"/><path d="m8.3 12 2.3 2.3 5.1-5.1"/>',
+  zygisk_hooks: '<path d="M15 4.5v8a4.5 4.5 0 0 1-9 0v-1.5"/><path d="M6 11 3.6 13.4M6 11l2.4 2.4"/><circle cx="15" cy="3.2" r="1.4"/><path d="M18 8h3M18 12h2" opacity=".55"/>',
   zygisk_apps: '<rect x="4" y="4" width="6" height="6" rx="1.4"/><rect x="14" y="4" width="6" height="6" rx="1.4"/><rect x="4" y="14" width="6" height="6" rx="1.4"/><rect x="14" y="14" width="6" height="6" rx="1.4"/><path d="m15.3 17 1.2 1.2 2.3-2.4"/>',
   /* DocumentsUI picker: a document with an explicit selection check. */
   documents_picker: '<path d="M6 3.5h8l4 4V20H6z"/><path d="M14 3.5V8h4M9 12h5M9 15.5h2"/><path d="m13 16 1.5 1.5L18 14"/>',
@@ -6246,6 +6250,49 @@ function renderStaticTechIcons() {
   });
 }
 
+/* V66: background reads after the first frame, one at a time, never under a finger.
+ *
+ * A root call blocks this page for its whole run (a new root shell plus the command), and
+ * an opening used to start three of them before the home screen could reach the display:
+ * the Zygisk header, the first Live pass and, 1.2 s in, a dumpsys audio look. A browser
+ * model of the opening (4x CPU, each call blocking as the bridge does) put 270 ms of
+ * blocked thread before the first frame. These reads now wait for the first frame of the
+ * revealed home screen, run in priority order with a gap between them, and step aside
+ * while the user is touching the screen. What they read and how often is unchanged. */
+let _asbFirstFrameDone = null;
+const asbFirstFrame = new Promise(function (resolve) { _asbFirstFrameDone = resolve; });
+setTimeout(function () { _asbFirstFrameDone(); }, 2500);
+function asbFirstFrameMark() {
+  try { requestAnimationFrame(function () { setTimeout(_asbFirstFrameDone, 0); }); } catch (e) { _asbFirstFrameDone(); }
+}
+let _asbInputAt = -1e9;
+['pointerdown', 'touchstart', 'keydown', 'wheel'].forEach(function (t) {
+  try { window.addEventListener(t, function () { _asbInputAt = performance.now(); }, { passive: true, capture: true }); } catch (e) {}
+});
+const ASB_LATER_QUIET_MS = 500;
+let _asbLater = [], _asbLaterBusy = false, _asbLaterSeq = 0;
+function asbStartupLater(fn, gap, prio) {
+  if (_asbLater.some(function (j) { return j.fn === fn; })) return;
+  _asbLater.push({ fn: fn, gap: gap || 0, prio: prio || 0, seq: ++_asbLaterSeq });
+  _asbLater.sort(function (a, b) { return a.prio - b.prio || a.seq - b.seq; });
+  asbLaterPump();
+}
+function asbLaterPump() {
+  if (_asbLaterBusy || !_asbLater.length) return;
+  _asbLaterBusy = true;
+  asbFirstFrame.then(function () {
+    const job = _asbLater.shift();
+    const go = function () {
+      const quiet = performance.now() - _asbInputAt;
+      if (quiet < ASB_LATER_QUIET_MS) { setTimeout(go, ASB_LATER_QUIET_MS - quiet + 16); return; }
+      Promise.resolve().then(job.fn).catch(function () {}).then(function () {
+        _asbLaterBusy = false;
+        asbLaterPump();
+      });
+    };
+    setTimeout(go, job.gap);
+  });
+}
 /* Contextual sonic feedback. It is intentionally a compact synthesised cue rather than
  * spoken TTS: no language mismatch, no network/assets, and it stays unobtrusive in a
  * tuning interface. DSP gain/bass sliders never call this function. */
@@ -6287,7 +6334,7 @@ function uiAudioRelease(ctx, endAt) {
 document.addEventListener('visibilitychange', function () {
   if (document.hidden && _uiAudioCtx) { try { _uiAudioCtx.suspend(); } catch (e) { /* already gone */ } }
   // Coming back: someone may have started music meanwhile (fix145).
-  if (!document.hidden && _uiSoundOn) uiOtherAudioRefresh();
+  if (!document.hidden && _uiSoundOn) uiOtherAudioLater();
 });
 /* Interface sounds: switchable, and quiet while another app is playing (fix145).
  *
@@ -6307,13 +6354,24 @@ function uiOtherAudioRefresh() {
   if (_uiAudioCtx && _uiAudioCtx.state === 'running') return;
   if (performance.now() - _uiLastCueAt < 4000) return;
   _uiOtherAudioBusy = true;
-  run("dumpsys audio 2>/dev/null | grep -cE 'AudioPlaybackConfiguration .*state:started .*usage=USAGE_(MEDIA|GAME|UNKNOWN|VOICE_COMMUNICATION) ' || true")
+  return run("dumpsys audio 2>/dev/null | grep -cE 'AudioPlaybackConfiguration .*state:started .*usage=USAGE_(MEDIA|GAME|UNKNOWN|VOICE_COMMUNICATION) ' || true")
     .then(function (r) {
       _uiOtherAudio = parseInt(((r && r.stdout) || '0').trim(), 10) > 0;
       _uiOtherAudioAt = performance.now();
     })
     .catch(function () {})
     .then(function () { _uiOtherAudioBusy = false; });
+}
+/* The look waits until this page's own stream is closed (a cue in the last 4 s, or the
+ * context still running), so it can never count itself; it then runs through the queue. */
+function uiOtherAudioLater() { asbStartupLater(uiOtherAudioLook, 700, 2); }
+function uiOtherAudioLook() {
+  const own = Math.max(0, _uiLastCueAt + 4000 - performance.now());
+  if (own > 0 || (_uiAudioCtx && _uiAudioCtx.state === 'running')) {
+    setTimeout(uiOtherAudioLater, Math.max(own, 1600));
+    return;
+  }
+  return uiOtherAudioRefresh();
 }
 function uiSoundPaintBtn() {
   const b = _el('cfgSoundBtn');
@@ -6330,11 +6388,15 @@ function uiSoundToggle() {
   toast(_uiSoundOn ? T('ui_sound_on', 'Interface sounds on - quiet while music, video or a call is playing')
                    : T('ui_sound_off', 'Interface sounds off'));
 }
-// One look shortly after the page opens, so the first tap does not play over music (fix145).
-if (_uiSoundOn) setTimeout(function () { try { uiOtherAudioRefresh(); } catch (e) {} }, 1200);
+// One look after the page opens, so a cue does not play over music (fix145). V66: the look
+// is queued after the first frame instead of a fixed 1.2 s timer, and a stale look is
+// renewed after the tap instead of inside it - dumpsys audio held every first tap. Until
+// the first look has finished no cue plays at all.
+if (_uiSoundOn) uiOtherAudioLater();
 function uiSound(kind) {
   if (!_uiSoundOn) return;
-  if (performance.now() - _uiOtherAudioAt > 15000) uiOtherAudioRefresh();
+  if (_uiOtherAudioAt < 0) { uiOtherAudioLater(); return; }
+  if (performance.now() - _uiOtherAudioAt > 15000) uiOtherAudioLater();
   if (_uiOtherAudio) return;
   _uiLastCueAt = performance.now();
   const seq = UI_SONIC[kind] || UI_SONIC.option;
@@ -6436,14 +6498,29 @@ const ASB_LANG = (function() {
 asbApplyDirection(ASB_LANG);
 
 // Translations live in webroot/i18n/<lang>.json, one file per language.
-// Keep the first paint non-blocking: English and the selected overlay load in
-// parallel, then localized boot runs once.  A missing locale never leaves blank
-// labels: T() still falls back to the English dictionary, key by key.
+/* V66: one locale file, requested from <head>. Every shipped locale carries every key of
+ * en.json (tests/asb_ui.sh checks the nested key paths), so English was a second 200 KB
+ * read and parse on the critical path that no lookup ever reached. The request also
+ * starts before the 1.3 MB document is parsed instead of after it. English is read only
+ * when English is the language, or when the chosen locale cannot be read. */
 var I18N = { en: {} };
 var I18N_READY;
 
 (function loadI18N() {
+  function readEarly(code) {
+    var early = window.__asbI18nEarly;
+    if (!early || early.code !== code || !early.p) return null;
+    window.__asbI18nEarly = null;
+    return early.p.then(function (text) {
+      try { return text ? JSON.parse(text) : null; } catch (e) { return null; }
+    }, function () { return null; });
+  }
   function readLang(code) {
+    var early = readEarly(code);
+    if (early) return early.then(function (v) { return v || readLangNet(code); });
+    return readLangNet(code);
+  }
+  function readLangNet(code) {
     return new Promise(function (resolve) {
       var settled = false;
       function done(value) {
@@ -6485,15 +6562,17 @@ var I18N_READY;
     } catch (e) {}
     return 'en';
   })();
-  I18N_READY = Promise.all([readLang('en'), want === 'en' ? Promise.resolve(null) : readLang(want)])
-    .then(function (langs) {
-      if (langs[0]) I18N.en = langs[0];
+  function readEnglish() {
+    return readLang('en').then(function (en) {
+      if (en) I18N.en = en;
       else { try { console.warn('ASB: English locale could not be read'); } catch (e) {} }
-      if (want !== 'en') {
-        if (langs[1]) I18N[want] = langs[1];
-        else { try { console.warn('ASB: i18n/' + want + '.json could not be read; using English'); } catch (e) {} }
-      }
     });
+  }
+  I18N_READY = want === 'en' ? readEnglish() : readLang(want).then(function (loc) {
+    if (loc) { I18N[want] = loc; return; }
+    try { console.warn('ASB: i18n/' + want + '.json could not be read; using English'); } catch (e) {}
+    return readEnglish();
+  });
 })();
 
 // Any language, with English as the fallback for anything not yet translated.
@@ -6535,7 +6614,8 @@ function Topt(o, key) {
   // Turkish, Chinese ... device I18N.ru is undefined and every one of those lines threw
   // a TypeError. Topt is called from cfgRender for each option button, so the whole
   // Config screen died before it painted - for nine of the eleven shipped languages.
-  // English is the correct fallback here anyway: en.json is always loaded.
+  // English is the correct fallback here anyway: it is loaded whenever the chosen locale is
+  // missing, and a complete locale never reaches this line.
   if (key && L && L.optFor && L.optFor[key] && L.optFor[key][o] != null) return L.optFor[key][o];
   if (L && L.opt && L.opt[o] != null) return L.opt[o];
   var E = I18N.en;
@@ -13840,6 +13920,15 @@ function logReportJwhyTop(d) {
     return w.pkg !== 'com.android.systemui' && w.janky >= 30 && w.cause !== 'few';
   }).sort(function (a, b) { return b.janky - a.janky; })[0] || null;
 }
+function logReportWakeBad(jw) {
+  return !!(jw && (+jw.wakes || 0) >= 5 && (+jw.pct || 0) >= 6 && (+jw.pct || 0) >= (+jw.ord || 0) + 0.8);
+}
+/* V66: a prime-core cap the vendor power HAL holds in most checks is not ASB's ceiling, and ASB's
+ * touch boost cannot lift it. Two release captures (OnePlus 15, ColorOS 16) flagged wake stutter
+ * as ASB's problem while the firmware held the prime cores in 92 of 140 and 143 of 146 checks. */
+function logReportVendorHeld(vc) {
+  return !!(vc && (+vc.n || 0) >= 10 && (+vc.prime_vendor || 0) * 2 > (+vc.n || 0));
+}
 function logReportSysuiSteady(sd) {
   return !!(sd && (+sd.of || 0) >= 10 && (+sd.intv || 0) * 10 >= (+sd.of || 0) * 8);
 }
@@ -13975,11 +14064,10 @@ function logReportAnalyze(d) {
 
   if (jank && (+jank.frames || 0) >= 20000) {
     const jp = +jank.pct || 0;
-    const wakeBad = jwake && (+jwake.wakes || 0) >= 5 && (+jwake.pct || 0) >= 6 &&
-      (+jwake.pct || 0) >= (+jwake.ord || 0) + .8;
-    verdict('smoothness', wakeBad || jp >= 6 ? 'problem' : jp <= 2 ? 'good' : 'normal', jp.toFixed(1) + '%',
+    const wakeBad = logReportWakeBad(jwake), wakeOwn = wakeBad && !logReportVendorHeld(s.vcap || null);
+    verdict('smoothness', wakeOwn || jp >= 6 ? 'problem' : jp <= 2 && !wakeBad ? 'good' : 'normal', jp.toFixed(1) + '%',
       'lr_sum_smooth_detail', { frames: String(jank.frames), wake: jwake ? String(jwake.pct) + '%' : '—' },
-      wakeBad ? 'wake_jank_concentration' : 'frame_deadlines');
+      wakeOwn ? 'wake_jank_concentration' : wakeBad ? 'wake_jank_vendor_cap' : 'frame_deadlines');
   } else verdict('smoothness', 'unknown', '—', 'lr_sum_need_frames', {}, 'under_20000_frames');
 
   if (night && (+night.dur_min || 0) >= 120) {
@@ -14417,7 +14505,7 @@ function asbPageJumpIcon(id) {
     'lgr-smooth': 'zygisk_activity', 'lgr-thermal': 'thermal_point', 'lgr-zygisk': 'zygisk_observer',
     'lgr-details': 'log_detail', 'zy-mode': 'zygisk_mode', 'zy-auto': 'zygisk_auto',
     'zy-controls': 'switches', 'zy-activity': 'zygisk_activity', 'zy-guard': 'zygisk_guard',
-    'zy-aot': 'zygisk_art', 'zy-apps': 'zygisk_apps'
+    'zy-aot': 'zygisk_art', 'zy-apps': 'zygisk_apps', 'zy-lsp': 'zygisk_hooks'
   };
   return icons[id] || 'panel';
 }
@@ -15565,13 +15653,14 @@ function zygiskPageRender(d) {
   body.appendChild(st);
   if (deviceVal(d, 'zygisk_observer', 'enabled') === '0') {
     body.appendChild(zygiskOffCard());
+    const lspOff = lspLiteCard(); lspOff.id = 'zy-lsp'; body.appendChild(lspOff);
     if (_el('zygiskPage') && y) _el('zygiskPage').scrollTop = y;
     return;
   }
   body.appendChild(asbPageJump([
     ['zy-mode', T('zy_nav_mode', 'Mode')], ['zy-auto', T('zy_nav_auto', 'Automatic')],
     ['zy-controls', T('zy_nav_controls', 'Controls')], ['zy-activity', T('zy_nav_activity', 'Activity')],
-    ['zy-guard', T('zy_nav_guard', 'Guard')], ['zy-aot', T('zy_nav_art', 'ART')],
+    ['zy-guard', T('zy_nav_guard', 'Guard')], ['zy-lsp', T('zy_nav_lsp', 'LSPosed')], ['zy-aot', T('zy_nav_art', 'ART')],
     ['zy-apps', T('zy_nav_apps', 'Apps')]
   ], T('dev_nav_title', 'Jump to'), 'zy-page-nav'));
   const mode = zygiskModeCard(d); mode.id = 'zy-mode'; body.appendChild(mode);
@@ -15584,6 +15673,7 @@ function zygiskPageRender(d) {
   body.appendChild(act);
   const engine = zygiskLinkCard(); engine.id = 'zy-engine'; body.appendChild(engine);
   const guard = zygiskGuardCard(); guard.id = 'zy-guard'; body.appendChild(guard);
+  const lsp = lspLiteCard(); lsp.id = 'zy-lsp'; body.appendChild(lsp);
   const aot = zygiskAotCard(); aot.id = 'zy-aot'; body.appendChild(aot);
   const apps = logReportSec(T('zy_sec_apps', 'Observed apps and safe mode'), 'zygisk_apps');
   apps.id = 'zy-apps';
@@ -15868,7 +15958,7 @@ async function zygiskGuardSet(level) {
  * shows each app's cold-start median from Android's launch log before and after. */
 let _zyAot = null;
 function zygiskAotParse(out) {
-  const g = { ok: false, enabled: false, ledger: false, charging: false, screen: true, running: false, checked: 0, launches: 0, apps: [], events: [] };
+  const g = { ok: false, enabled: false, ledger: false, charging: false, screen: true, running: false, checked: 0, launches: 0, apps: [], events: [], excluded: [] };
   const num = function (v) { const n = parseInt(v, 10); return isFinite(n) && n > 0 ? n : 0; };
   String(out || '').split('\n').forEach(function (ln) {
     ln = ln.trim();
@@ -15886,6 +15976,8 @@ function zygiskAotParse(out) {
         g.apps.push({ pkg: f[1], n: num(f[2]), filter: f[3], reason: /^[A-Za-z0-9_.-]+$/.test(f[4]) ? f[4] : '-',
           tried: num(f[5]), result: /^[a-z_-]+$/.test(f[6]) ? f[6] : '-', at: num(f[7]), before: /^[a-z-]+$/.test(f[8]) ? f[8] : '-',
           coldN: num(f[9]), cold: num(f[10]), preN: num(f[11]), pre: num(f[12]), postN: num(f[13]), post: num(f[14]) });
+      else if (f[0] === 'exclude' && f.length === 2 && dozePkgOk(f[1] || '') && g.excluded.indexOf(f[1]) < 0)
+        g.excluded.push(f[1]);
       else if (f[0] === 'event' && dozePkgOk(f[2] || '') && /^[a-z_]+$/.test(f[3] || ''))
         g.events.push({ at: num(f[1]), pkg: f[2], what: f[3], detail: /^[a-z>-]+$/.test(f[4] || '') ? f[4] : '' });
     }
@@ -15928,10 +16020,19 @@ function zygiskAotCard() {
     else if (weak) card.appendChild(logReportNote(T('zy_aot_waiting', '%s app(s) without AOT code wait for the charger with the screen off.').replace('%s', String(weak))));
     else card.appendChild(logReportNote(T('zy_aot_all_good', 'Every listed app already has compiled code; nothing to do.')));
   }
-  const names = dozeKeepLabels(g.apps.map(function (a) { return a.pkg; }).concat(g.events.map(function (e) { return e.pkg; })));
+  const names = dozeKeepLabels(g.apps.map(function (a) { return a.pkg; }).concat(g.events.map(function (e) { return e.pkg; }), g.excluded));
   const nm = function (p) { return names[p] || p; };
   if (g.apps.length) card.appendChild(logReportNote(T('zy_aot_list_scope', 'Observed apps below: waiting, compiled and unknown states are listed together.')));
-  g.apps.forEach(function (a) { card.appendChild(logReportRow(nm(a.pkg), zygiskAotValue(a), false)); });
+  if (g.apps.length) card.appendChild(logReportNote(T('zy_aot_exclude_hint', 'If an app misbehaves after compilation, exclude it: ASB will never compile it again and, if ASB compiled it, returns it to the compile state Android installed it with.')));
+  g.apps.forEach(function (a) {
+    card.appendChild(zygiskGuardActionRow(nm(a.pkg), zygiskAotValue(a), T('zy_aot_exclude_btn', 'Exclude'), function () { zygiskAotPackage('exclude', a.pkg); }));
+  });
+  if (g.excluded.length) {
+    card.appendChild(logReportNote(T('zy_aot_excluded_title', 'Excluded by you (%s): ASB does not compile these apps.').replace('%s', String(g.excluded.length))));
+    g.excluded.forEach(function (p) {
+      card.appendChild(zygiskGuardActionRow(nm(p), T('zy_aot_excluded_v', 'excluded'), T('zy_aot_include_btn', 'Allow again'), function () { zygiskAotPackage('include', p); }));
+    });
+  }
   if (g.apps.length) card.appendChild(logReportNote(T('zy_aot_note', 'Times come from Android\'s launch log (until the first frame); a cold start is one where Android had to start the app\'s process. They vary with what the app loads - compare medians over several starts.')));
   if (g.events.length) {
     const ev = document.createElement('details');
@@ -15963,6 +16064,254 @@ async function zygiskAotSet(on) {
   if (b && b.aot && b.aot.errno === 0) _zyAot = zygiskAotParse(b.aot.stdout);
   toast(ok ? (on ? T('zy_aot_set_on', 'Compiling while charging: on') : T('zy_aot_set_off', 'Compiling while charging: off'))
            : T('zy_mode_failed', 'Could not change the mode'), ok ? 'good' : 'bad');
+  if (_zygiskOpen) zygiskPageRender(window._asbZygiskLinkData || null);
+}
+async function zygiskAotPackage(action, pkg) {
+  if (_zygiskModeBusy || ['exclude', 'include'].indexOf(action) < 0 || !dozePkgOk(pkg)) return;
+  _zygiskModeBusy = true;
+  uiSound(action === 'exclude' ? 'toggle_off' : 'toggle_on');
+  if (_zygiskOpen) zygiskPageRender(window._asbZygiskLinkData || null);
+  await asbPaintYield();
+  let b = null;
+  try {
+    b = await runBatch([['set', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_aot.sh') + ' ' + action + ' ' + shQuote(pkg)],
+      ['aot', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_aot.sh') + ' status']]);
+  } catch (e) { b = null; }
+  _zygiskModeBusy = false;
+  if (b && b.aot && b.aot.errno === 0) _zyAot = zygiskAotParse(b.aot.stdout);
+  const out = b && b.set ? (b.set.stdout || '') : '';
+  const ok = /result=(excluded|included)/.test(out);
+  let msg = T('zy_mode_failed', 'Could not change the mode');
+  if (ok && action === 'include') msg = T('zy_aot_included', 'ASB may compile this app again');
+  else if (ok && /reset=started/.test(out)) msg = T('zy_aot_excluded_reset', 'Excluded · its compile state is being returned to how Android installed it');
+  else if (ok) msg = T('zy_aot_excluded_done', 'Excluded · ASB will not compile this app');
+  toast(msg, ok ? 'good' : 'bad');
+  if (_zygiskOpen) zygiskPageRender(window._asbZygiskLinkData || null);
+}
+/* V66: a lighter LSPosed. runtime/asb_lsposed_lite.sh reads LSPosed's own module/scope
+ * database and joins it with Android's usage history, the Zygisk start ledger and crash
+ * records whose stack runs through a module. Each module gets its reach (the framework,
+ * SystemUI or apps), a verdict and the reasons for it. Lightening removes the scope of a
+ * module from apps it should not run in - apps unused for weeks that still start in the
+ * background, and apps its hooks keep crashing - or switches a module off; every change is
+ * journaled, undone with one tap, takes effect after a reboot and is given back on
+ * uninstall. The automatic pass is opt-in, daily, and only ever removes such scopes from
+ * unprotected apps; it never switches a whole module off. The A/B test measures one module:
+ * a day with it, a reboot, a day without it, and the module given back. */
+let _zyLsp = null, _lspArm = '', _lspArmAt = 0, _lspRefreshAsked = false;
+function lspLiteParse(out) {
+  const g = { ok: false, lspd: false, db: 'unknown', auto: false, pending: false, age: -1, refreshing: false, unusedDays: 21,
+    usage: 'unknown', ledger: false, mods: [], cands: [], journal: [], ab: {}, events: [] };
+  const num = function (v) { const n = parseInt(v, 10); return isFinite(n) ? n : 0; };
+  const pk = function (v) { return /^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)+$/.test(v || ''); };
+  String(out || '').split('\n').forEach(function (ln) {
+    ln = ln.trim();
+    let m = /^([a-z_]+)=([A-Za-z0-9_-]*)$/.exec(ln);
+    if (m) {
+      const k = m[1], v = m[2];
+      if (k === 'version' && v === '1') g.ok = true;
+      else if (k === 'lspd') g.lspd = v === '1';
+      else if (k === 'database') g.db = /^[a-z_]+$/.test(v) ? v : 'unknown';
+      else if (k === 'auto') g.auto = v === '1';
+      else if (k === 'pending_reboot') g.pending = v === '1';
+      else if (k === 'evidence_age') g.age = /^-?\d+$/.test(v) ? num(v) : -1;
+      else if (k === 'refreshing') g.refreshing = v === '1';
+      else if (k === 'unused_days') g.unusedDays = num(v) || 21;
+      else if (k === 'usage') g.usage = v === 'ok' ? 'ok' : 'unknown';
+      else if (k === 'ledger') g.ledger = v === '1';
+      return;
+    }
+    const f = ln.split('|');
+    if (f[0] === 'mod' && f.length === 10 && pk(f[1]) && /^(heavy|watch|light|off)$/.test(f[5]))
+      g.mods.push({ pkg: f[1], on: f[2] === '1', apps: num(f[3]), reach: /^(framework|systemui|apps)$/.test(f[4]) ? f[4] : 'apps', verdict: f[5],
+        reasons: f[6] === '-' ? [] : f[6].split(',').filter(function (r) { return /^[a-z_]+$/.test(r); }), bg: num(f[7]), unused: num(f[8]), crash: num(f[9]) });
+    else if (f[0] === 'cand' && f.length === 9 && pk(f[1]) && pk(f[2]) && /^(unused|crash)$/.test(f[4]))
+      g.cands.push({ mod: f[1], app: f[2], why: f[4], bg: num(f[5]), idle: num(f[6]), crash: num(f[7]), auto: f[8] === '1' });
+    else if (f[0] === 'j' && f.length === 10 && /^\d+$/.test(f[1]) && /^(user|auto|ab)$/.test(f[3]) && /^(scope_del|module_off|module_on)$/.test(f[4]) && pk(f[5]))
+      g.journal.push({ id: f[1], at: num(f[2]), kind: f[3], action: f[4], mod: f[5], app: pk(f[6]) ? f[6] : '', active: f[9] === 'active' });
+    else if (f[0] === 'ab' && f.length === 3 && /^[a-z_0-9]+$/.test(f[1]))
+      g.ab[f[1]] = f[2];
+  });
+  const rank = { heavy: 0, watch: 1, light: 2, off: 3 };
+  g.mods.sort(function (a, b) { return rank[a.verdict] - rank[b.verdict] || b.apps - a.apps || (a.pkg < b.pkg ? -1 : 1); });
+  return g;
+}
+function lspLiteAutoRefresh() {
+  const g = _zyLsp;
+  if (!g || !g.lspd || g.db !== 'ok' || g.refreshing || _lspRefreshAsked) return;
+  if (g.age >= 0 && g.age < 21600) return;
+  _lspRefreshAsked = true;
+  lspLiteAct('refresh');
+}
+function lspLiteVerdictText(m) {
+  return T('lsp_v_' + m.verdict, ({ heavy: 'costly', watch: 'worth checking', light: 'light', off: 'off' })[m.verdict]);
+}
+function lspLiteReasonText(r, m) {
+  const fb = { crash: 'its hooks crash an app', framework: 'hooks the Android framework (every app)', systemui: 'hooks SystemUI',
+    wide: 'hooks many apps', bgheavy: 'its apps start often in the background', unused: 'hooks apps you do not open',
+    ab_worse: 'A/B test: it costs battery or CPU', ab_neutral: 'A/B test: no measurable cost' };
+  return T('lsp_r_' + r, fb[r] || r.replace(/_/g, ' '));
+}
+function lspLiteArmed(key) { return _lspArm === key && Date.now() - _lspArmAt < 5000; }
+function lspLiteButton(label, key, run, confirmText) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'dev-zygisk-btn';
+  b.textContent = lspLiteArmed(key) ? confirmText : label;
+  b.onclick = function () {
+    if (!lspLiteArmed(key)) {
+      _lspArm = key; _lspArmAt = Date.now();
+      b.textContent = confirmText;
+      setTimeout(function () { if (_lspArm === key && !lspLiteArmed(key)) { _lspArm = ''; b.textContent = label; } }, 5100);
+      return;
+    }
+    _lspArm = '';
+    run();
+  };
+  return b;
+}
+function lspLiteHours(sec) { return String(Math.max(0, Math.round(sec / 3600))); }
+function lspLiteAbBlock(g, nm) {
+  const a = g.ab, box = document.createElement('div');
+  if (!a.module || !/^[A-Za-z0-9_.]+$/.test(a.module)) return null;
+  const now = Math.floor(Date.now() / 1000), t0 = parseInt(a.t0, 10) || now;
+  const rate = function (v) { return ((parseInt(v, 10) || 0) / 100).toFixed(2) + T('lr_per_hour', '%/h'); };
+  let txt = '';
+  if (a.phase === 'a') txt = T('lsp_ab_a', 'A/B test of %m: day with the module, %h h so far. It needs 24 h with at least 6 h of screen-off and 1 h of screen-on.');
+  else if (a.phase === 'b_wait') txt = T('lsp_ab_b_wait', 'A/B test of %m: the first day is measured and the module is switched off. Reboot to start the day without it.');
+  else if (a.phase === 'b') txt = T('lsp_ab_b', 'A/B test of %m: day without the module, %h h so far.');
+  else if (a.phase === 'done') txt = (a.result === 'worse' ? T('lsp_ab_done_worse', 'A/B test of %m: without it the phone used measurably less. The module is switched back on (after a reboot); consider lightening it.')
+    : T('lsp_ab_done_neutral', 'A/B test of %m: no measurable difference between the two days. The module is switched back on (after a reboot).'));
+  else if (a.phase === 'aborted') txt = T('lsp_ab_aborted', 'A/B test of %m stopped: %r. The module is switched back on (after a reboot).')
+    .replace('%r', a.reason === 'coverage' ? T('lsp_ab_r_coverage', 'not enough screen-off and screen-on time within 4 days') : a.reason === 'user' ? T('lsp_ab_r_user', 'stopped by you') : T('lsp_ab_r_write', 'LSPosed could not be changed'));
+  if (!txt) return null;
+  box.appendChild(logReportNote(txt.replace('%m', nm(a.module)).replace('%h', lspLiteHours(now - t0))));
+  if (a.phase === 'done') {
+    box.appendChild(logReportRow(T('lsp_ab_off', 'Screen off, with → without'), rate(a.a_off) + ' → ' + rate(a.b_off), false));
+    box.appendChild(logReportRow(T('lsp_ab_on', 'Screen on, with → without'), rate(a.a_on) + ' → ' + rate(a.b_on), false));
+    box.appendChild(logReportRow(T('lsp_ab_cpu', 'CPU of its apps, with → without'), Math.round((parseInt(a.a_cpu, 10) || 0) / 1000) + ' → ' + Math.round((parseInt(a.b_cpu, 10) || 0) / 1000) + T('lsp_ab_cpu_unit', ' s/h'), false));
+    if (a.profile_changed === '1') box.appendChild(logReportNote(T('lsp_ab_profile', 'The profile changed between the two days, so the comparison is weaker.'), true));
+    box.appendChild(logReportNote(T('lsp_ab_honest', 'Two different days: usage, signal and temperature differ too. A difference counts only above 15 % and a fixed floor.')));
+  }
+  const busy = /^(a|b_wait|b)$/.test(a.phase || '');
+  const w = document.createElement('div'); w.className = 'zy-ghost';
+  w.appendChild(lspLiteButton(busy ? T('lsp_ab_stop', 'Stop the test') : T('lsp_ab_clear', 'Clear the result'), 'abstop', function () { lspLiteAct('ab-stop'); },
+    T('lsp_confirm', 'Tap again to confirm')));
+  box.appendChild(w);
+  return box;
+}
+function lspLiteCard() {
+  const g = _zyLsp || lspLiteParse('');
+  const card = logReportSec(T('lsp_title', 'LSPosed: modules and their cost'), 'zygisk_hooks');
+  if (!g.ok) { card.appendChild(logReportNote(T('lsp_unread', 'The LSPosed state has not been read yet.'))); return card; }
+  if (!g.lspd) { card.appendChild(logReportNote(T('lsp_none', 'LSPosed is not installed.'))); return card; }
+  if (g.db !== 'ok') { card.appendChild(logReportNote(T('lsp_db', 'LSPosed\'s database could not be read (%s); nothing is changed.').replace('%s', g.db), true)); return card; }
+  card.appendChild(logReportNote(T('lsp_desc', 'Which modules are on, what they hook and what that costs: from LSPosed\'s own database, Android\'s usage history, the Zygisk start ledger and crash records that pass through a module. LSPosed reports no energy per hook, so a verdict is a reasoned estimate; the A/B test measures one module directly.')));
+  const names = dozeKeepLabels(g.mods.map(function (m) { return m.pkg; }).concat(g.cands.map(function (c) { return c.app; }), g.journal.map(function (j) { return j.app; }).filter(Boolean)));
+  const nm = function (p) { return names[p] || p; };
+  if (g.refreshing) card.appendChild(logReportNote(T('lsp_refreshing', 'Reading the evidence in the background…')));
+  else if (g.age < 0) card.appendChild(logReportNote(T('lsp_no_evidence', 'No evidence read yet: verdicts use the scopes only.')));
+  else if (g.age < 3600) card.appendChild(logReportNote(T('lsp_age_fresh', 'Evidence read less than an hour ago.')));
+  else card.appendChild(logReportNote(T('lsp_age', 'Evidence read %s h ago.').replace('%s', lspLiteHours(g.age))));
+  if (g.usage !== 'ok') card.appendChild(logReportNote(T('lsp_no_usage', 'Android\'s usage history could not be read, so unused apps are not detected.'), true));
+  if (g.pending) card.appendChild(logReportNote(T('lsp_pending', 'Changes are written to LSPosed and take effect after a reboot.'), true));
+  const seg = document.createElement('div');
+  seg.className = 'cfg-seg zy-mode-seg';
+  [['off', T('lsp_auto_off', 'By tap')], ['on', T('lsp_auto_on', 'Automatic')]].forEach(function (o) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = o[1];
+    if ((o[0] === 'on') === g.auto) b.classList.add('on');
+    b.onclick = function () { if ((o[0] === 'on') !== g.auto) lspLiteAct('auto', o[0]); };
+    seg.appendChild(b);
+  });
+  card.appendChild(seg);
+  card.appendChild(logReportNote(g.auto ? T('lsp_auto_desc', 'Once a day ASB removes a module\'s scope from apps you have not opened for %d days that still start in the background, and from apps its hooks keep crashing. Messengers, mail, authenticators, wearables, alarms, navigation, your Doze keep list and notification-fixed apps are never touched, and no module is switched off. Every change is listed below with Undo.').replace('%d', String(g.unusedDays))
+    : T('lsp_manual_desc', 'Nothing changes until you confirm it. Lighten removes a module\'s scope only from apps listed under it; the framework, SystemUI and the module itself are never touched.')));
+  const ab = lspLiteAbBlock(g, nm);
+  if (ab) card.appendChild(ab);
+  const abBusy = /^(a|b_wait|b)$/.test(g.ab.phase || '');
+  if (!g.mods.length) card.appendChild(logReportNote(T('lsp_no_mods', 'No LSPosed modules are installed.')));
+  g.mods.forEach(function (m) {
+    const parts = [lspLiteVerdictText(m), T('lsp_apps', '%s scope(s)').replace('%s', String(m.apps))];
+    if (m.reach === 'framework') parts.push(T('lsp_reach_framework', 'framework'));
+    else if (m.reach === 'systemui') parts.push(T('lsp_reach_systemui', 'SystemUI'));
+    if (m.bg > 0) parts.push(T('lsp_bg', '%s background starts/day').replace('%s', String(m.bg)));
+    const w = document.createElement('div'); w.className = 'zy-ghost';
+    w.appendChild(logReportRow(nm(m.pkg), parts.join(' · '), m.verdict === 'heavy'));
+    m.reasons.forEach(function (r) { w.appendChild(logReportNote(lspLiteReasonText(r, m), r === 'crash' || r === 'ab_worse')); });
+    g.cands.filter(function (c) { return c.mod === m.pkg; }).forEach(function (c) {
+      const why = c.why === 'crash' ? T('lsp_c_crash', '%a: %n crash(es) through this module').replace('%n', String(c.crash))
+        : c.idle >= 9999 ? T('lsp_c_never', '%a: not opened, %b background starts/day').replace('%b', c.bg >= 0 ? String(c.bg) : '?')
+        : T('lsp_c_unused', '%a: not opened for %d days, %b background starts/day').replace('%d', String(c.idle)).replace('%b', c.bg >= 0 ? String(c.bg) : '?');
+      w.appendChild(logReportNote(why.replace('%a', nm(c.app))));
+    });
+    const n = g.cands.filter(function (c) { return c.mod === m.pkg; }).length;
+    const acts = document.createElement('div'); acts.className = 'zy-lsp-actions';
+    if (!abBusy || g.ab.module !== m.pkg) {
+      if (m.on && n) acts.appendChild(lspLiteButton(T('lsp_lighten', 'Lighten (%s)').replace('%s', String(n)), 'trim:' + m.pkg, function () { lspLiteAct('trim', m.pkg); }, T('lsp_confirm', 'Tap again to confirm')));
+      acts.appendChild(lspLiteButton(m.on ? T('lsp_disable', 'Switch off') : T('lsp_enable', 'Switch on'), 'mod:' + m.pkg, function () { lspLiteAct(m.on ? 'disable' : 'enable', m.pkg); }, T('lsp_confirm', 'Tap again to confirm')));
+      if (m.on && !abBusy) acts.appendChild(lspLiteButton(T('lsp_ab_start', 'A/B test'), 'ab:' + m.pkg, function () { lspLiteAct('ab-start', m.pkg); }, T('lsp_ab_confirm', 'Tap again: 2 days, 2 reboots')));
+    }
+    if (acts.childNodes.length) w.appendChild(acts);
+    card.appendChild(w);
+  });
+  const active = g.journal.filter(function (j) { return j.active && j.kind !== 'ab'; });
+  if (g.journal.length) {
+    const det = document.createElement('details'); det.className = 'zy-evidence';
+    const sm = document.createElement('summary');
+    sm.textContent = T('lsp_journal', 'Changes made by ASB (%s active)').replace('%s', String(active.length));
+    det.appendChild(sm);
+    g.journal.slice().reverse().forEach(function (j) {
+      const what = j.action === 'scope_del' ? T('lsp_j_scope', '%m no longer in %a').replace('%a', nm(j.app))
+        : j.action === 'module_off' ? T('lsp_j_off', '%m switched off') : T('lsp_j_on', '%m switched on');
+      const by = T('lsp_by_' + j.kind, ({ user: 'by you', auto: 'automatic', ab: 'A/B test' })[j.kind]);
+      const label = zygiskGuardClock(j.at) + ' · ' + by;
+      const value = what.replace('%m', nm(j.mod)) + (j.active ? '' : ' · ' + T('lsp_undone', 'undone'));
+      if (j.active && j.kind !== 'ab') det.appendChild(zygiskGuardActionRow(label, value, T('lsp_undo', 'Undo'), function () { lspLiteAct('undo', j.id); }));
+      else det.appendChild(logReportRow(label, value, false));
+    });
+    if (active.length > 1) {
+      const w = document.createElement('div'); w.className = 'zy-ghost';
+      w.appendChild(lspLiteButton(T('lsp_undo_all', 'Undo all'), 'undoall', function () { lspLiteAct('undo-all'); }, T('lsp_confirm', 'Tap again to confirm')));
+      det.appendChild(w);
+    }
+    card.appendChild(det);
+  }
+  const rw = document.createElement('div'); rw.className = 'zy-ghost';
+  const rb = document.createElement('button'); rb.type = 'button'; rb.className = 'dev-zygisk-btn';
+  rb.textContent = T('lsp_refresh', 'Read the evidence again');
+  rb.disabled = g.refreshing;
+  rb.onclick = function () { lspLiteAct('refresh'); };
+  rw.appendChild(rb);
+  card.appendChild(rw);
+  return card;
+}
+async function lspLiteAct(cmd, a1) {
+  if (_zygiskModeBusy) return;
+  if (['refresh', 'trim', 'disable', 'enable', 'undo', 'undo-all', 'auto', 'ab-start', 'ab-stop'].indexOf(cmd) < 0) return;
+  if (a1 !== undefined && !/^[A-Za-z0-9_.]+$/.test(String(a1))) return;
+  _zygiskModeBusy = true;
+  if (cmd !== 'refresh') uiSound(cmd === 'disable' || cmd === 'trim' ? 'toggle_off' : 'toggle_on');
+  await asbPaintYield();
+  const S = 'sh ' + shQuote(MD + '/runtime/asb_lsposed_lite.sh');
+  let b = null;
+  try { b = await runBatch([['act', S + ' ' + cmd + (a1 !== undefined ? ' ' + shQuote(String(a1)) : '')], ['lsp', S + ' status']]); } catch (e) { b = null; }
+  _zygiskModeBusy = false;
+  if (b && b.lsp && b.lsp.errno === 0) _zyLsp = lspLiteParse(b.lsp.stdout);
+  const out = b && b.act ? (b.act.stdout || '') : '';
+  const ok = /result=(ok|on|off|started|stopped|cleared)/.test(out);
+  if (cmd === 'refresh') {
+    if (ok) setTimeout(function () { if (_zygiskOpen) lspLiteReload(); }, 12000);
+  } else if (/result=busy_ab/.test(out)) toast(T('lsp_t_busy', 'This module is in an A/B test'), 'warn');
+  else if (/result=not_enabled/.test(out)) toast(T('lsp_t_not_enabled', 'Switch the module on first'), 'warn');
+  else toast(ok ? T('lsp_t_done', 'Done · takes effect after a reboot') : T('zy_mode_failed', 'Could not change the mode'), ok ? 'good' : 'bad');
+  if (_zygiskOpen) zygiskPageRender(window._asbZygiskLinkData || null);
+}
+async function lspLiteReload() {
+  let b = null;
+  try { b = await runBatch([['lsp', 'sh ' + shQuote(MD + '/runtime/asb_lsposed_lite.sh') + ' status']]); } catch (e) { b = null; }
+  if (b && b.lsp && b.lsp.errno === 0) _zyLsp = lspLiteParse(b.lsp.stdout);
+  if (_zyLsp && _zyLsp.refreshing) { setTimeout(function () { if (_zygiskOpen) lspLiteReload(); }, 8000); return; }
   if (_zygiskOpen) zygiskPageRender(window._asbZygiskLinkData || null);
 }
 /* fix286: one engine. runtime/asb_zygisk_link.sh joins what each part of ASB knows about an app:
@@ -16070,10 +16419,12 @@ async function zygiskPageLoad(user) {
     b = await runBatch([['link', 'sh ' + shQuote(MD + '/runtime/asb_zygisk.sh') + ' link-status'],
       ['guard', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_guard.sh') + ' status'],
       ['aot', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_aot.sh') + ' status'],
-      ['engine', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_link.sh') + ' status']]);
+      ['engine', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_link.sh') + ' status'],
+      ['lsp', 'sh ' + shQuote(MD + '/runtime/asb_lsposed_lite.sh') + ' status']]);
   } catch (e) { b = null; }
   if (seq !== _zygiskLoadSeq) return;
   if (b && b.engine && b.engine.errno === 0) _zyLink = zygiskLinkParse(b.engine.stdout);
+  if (b && b.lsp && b.lsp.errno === 0) { _zyLsp = lspLiteParse(b.lsp.stdout); lspLiteAutoRefresh(); }
   if (btn) btn.disabled = false;
   const r = b ? b.link : null;
   if (b && b.guard && b.guard.errno === 0) _zyGuard = zygiskGuardParse(b.guard.stdout);
@@ -16903,6 +17254,7 @@ function logReportDxT(key, vars) {
     lr_dx_fix_cap_bat: "If the stutter bothers you, switch to Smart or Balanced for heavy apps.",
     lr_dx_smooth_wake: "Stutter concentrates at unlocks and app opens: {pct}% of frames late there against {ord}% over the day - the touch boost does not lift the clocks enough on this device.",
     lr_dx_also_cap_ok: "In this capture, at-cap jank is not higher: {yes}% at the ceiling versus {no}% below it. This is correlation, not controlled proof that ceilings never affect smoothness.",
+    lr_dx_smooth_wake_external: "Stutter concentrates at unlocks and app opens: {pct}% of frames late there against {ord}% over the day. The firmware held the prime cores below ASB's ceiling in {n} of {of} checks, so ASB's touch boost cannot lift them; this capture does not show that ASB caused these late frames.",
     lr_dx_smooth_cap_external: "At the {cl} ceiling jank was {yes}% versus {no}% below it, but the ROM held that cluster in most checks. This correlation does not establish that an ASB ceiling caused the jank; do not raise it from this capture alone.",
     lr_dx_frames_thin: "Only {frames} HWUI frames were usable, so no stable smoothness verdict is made. A thin sample is unknown evidence, not proof of smoothness; GL/Vulkan game surfaces can be outside this metric.",
     lr_dx_frames_absent: "No usable HWUI frame sample was collected during substantial screen-on time. Smoothness remains unknown, not zero-jank; missing counters can reflect unsupported collection or non-HWUI surfaces.",
@@ -16977,7 +17329,7 @@ function logReportDiagnose(d) {
     return it;
   };
   const sysPkg = function (p) { return !p || p === 'android' || p === 'com.android.systemui' || /^system uid/.test(p); };
-  const vendorHeld = !!(vcap && (+vcap.n || 0) >= 10 && (+vcap.prime_vendor || 0) * 2 > (+vcap.n || 0));
+  const vendorHeld = logReportVendorHeld(vcap);
   const vendorLine = vendorHeld ? { key: 'lr_dx_also_vendor', v: { n: String(vcap.prime_vendor), of: String(vcap.n) } } : null;
 
   if (scr && (+scr.off_min || 0) >= 30) {
@@ -17113,7 +17465,7 @@ function logReportDiagnose(d) {
   if (jank && (+jank.frames || 0) >= 20000) {
     const jp = +jank.pct || 0;
     const pv = { pct: String(jank.pct) };
-    const wakeBad = !!(jwake && (+jwake.wakes || 0) >= 5 && (+jwake.pct || 0) >= 6 && (+jwake.pct || 0) >= (+jwake.ord || 0) + 0.8);
+    const wakeBad = logReportWakeBad(jwake);
     const measured = function (c) { return !!(c && (+c.yes_f || 0) >= 10000 && (+c.no_f || 0) >= 10000); };
     const worse = function (c) { return measured(c) && (+c.yes || 0) >= (+c.no || 0) + 1.5 && (+c.yes_jps || 0) >= (+c.no_jps || 0) * 1.2; };
     const cm = s.jcap_main || null, cp = s.jcap_prime || null;
@@ -17154,7 +17506,10 @@ function logReportDiagnose(d) {
       else if (prof === 'battery') item('smooth', 'normal', 'lr_dx_smooth_cap_bat', cv, 'user', 'lr_dx_fix_cap_bat');
       else item('smooth', 'problem', 'lr_dx_smooth_cap', cv, 'asb', 'lr_dx_fix_send', {}, true);
     }
-    if (wakeBad)
+    if (wakeBad && vendorHeld)
+      item('smooth', 'normal', 'lr_dx_smooth_wake_external', { pct: String(jwake.pct), ord: String(jwake.ord),
+        n: String(vcap.prime_vendor), of: String(vcap.n) }, 'rom');
+    else if (wakeBad)
       item('smooth', 'problem', 'lr_dx_smooth_wake', { pct: String(jwake.pct), ord: String(jwake.ord) }, 'asb', 'lr_dx_fix_send', {}, true);
     const bh = s.bhold || null;
     const bhIt = it || out.filter(function (x) { return x.area === 'smooth'; }).pop();
@@ -18939,8 +19294,9 @@ function asbStartupWarmCaches() {
   const warm = function (introShown) {
     if (introShown || document.hidden) return;
     /* Config is read by openConfigPage() on demand. Its ten-part shell and follow-up
-     * evidence reads blocked every ordinary repeat opening without warming the next WebView. */
-    zygiskHeaderRefresh();
+     * evidence reads blocked every ordinary repeat opening without warming the next WebView.
+     * V66: the Zygisk header read waits behind the first Live pass (asbStartupLater). */
+    asbStartupLater(zygiskHeaderRefresh, 700, 1);
   };
   const probe = window._asbBootIntroProbe;
   if (probe && typeof probe.then === 'function') probe.then(warm, function () { warm(false); });
@@ -20997,7 +21353,9 @@ async function pollLive(visible) {
 
 _liveBgTimer = setInterval(() => { if (!_liveOpen) pollLive(false); }, 30000);
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) pollLive(_liveOpen);
+  if (document.hidden) return;
+  if (_liveOpen) pollLive(true);
+  else asbStartupLater(asbStartupLive, 300, 0);
 });
 
 /* Once per Android boot, hide the first cold-cache reads behind a short ASB preview.
@@ -21092,6 +21450,7 @@ function asbHomeReveal() {
   const home = document.querySelector('.page:not(.live-page)');
   if (!root || !home) return;
   _asbHomeRevealed = true;
+  asbFirstFrameMark();
   const reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   if (!reduced && typeof home.animate === 'function') {
     /* Monitor uses opacity + .985 → 1 scale over 260 ms after a 60 ms delay. Home uses the
@@ -21144,12 +21503,15 @@ setTimeout(asbHomeReveal, 1600);
   });
 })();
 /* Coordinate the ordinary cold read with the boot preview: no duplicate governor/ROM
- * batch while the same metrics are being warmed, and no delay after a normal opening. */
+ * batch while the same metrics are being warmed, and no delay after a normal opening.
+ * V66: the first Live pass is the first read after the home screen's first frame, once the
+ * 60 + 260 ms entrance has played. */
+function asbStartupLive() { return pollLive(false); }
 requestAnimationFrame(() => setTimeout(() => {
   const probe = window._asbBootIntroProbe;
   if (probe && typeof probe.then === 'function') {
-    probe.then(function (shown) { if (!shown) pollLive(false); }, function () { pollLive(false); });
-  } else pollLive(false);
+    probe.then(function (shown) { if (!shown) asbStartupLater(asbStartupLive, 340, 0); }, function () { asbStartupLater(asbStartupLive, 340, 0); });
+  } else asbStartupLater(asbStartupLive, 340, 0);
 }, 0));
 window._asbBootIntroProbe = I18N_READY.then(asbBootIntroStart, asbBootIntroStart);
 
