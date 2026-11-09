@@ -1660,7 +1660,17 @@ else
 fi
 # hi-res
 APOL="$(firstf '/vendor/etc/audio_policy_configuration*.xml' '/odm/etc/audio_policy_configuration*.xml' '/vendor/etc/audio/audio_policy_configuration*.xml')"
-[ -n "$APOL" ] && V "Hi-res 384000 present in audio policy" "1" "$(grep -c '384000' "$APOL" 2>/dev/null)" ge || NOTE "audio_policy_configuration not found"
+_hr_t="$(awk -F'|' '$1 ~ /audio_policy_configuration[^\/]*\.xml$/ { print $1; exit }' /data/adb/asb/odm_bind_manifest.txt 2>/dev/null)"
+_hr_vov="$(grep -E '^[[:space:]]*VENDOR_OVERLAY=' "$MODDIR/features.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r' | cut -d'#' -f1)"
+if [ -n "$_hr_t" ] && [ -f "$_hr_t" ]; then
+  V "Hi-res 384000 present in audio policy" "1" "$(grep -c '384000' "$_hr_t" 2>/dev/null)" ge
+elif [ -n "$APOL" ] && [ "${_hr_vov:-0}" = 1 ] && [ -f "$MODDIR/system$APOL" ]; then
+  V "Hi-res 384000 present in audio policy" "1" "$(grep -c '384000' "$APOL" 2>/dev/null)" ge
+elif [ -n "$APOL" ]; then
+  NOTE "Hi-res 384000 in audio policy: $(grep -c '384000' "$APOL" 2>/dev/null) line(s) in stock $APOL - ASB does not deliver the audio policy on this install (audio tweaks off or no overlay), not checked"
+else
+  NOTE "audio_policy_configuration not found"
+fi
 # runtime audio props
 #
 # The last four are the audio path's power-relevant knobs: how long a track must be to
@@ -4698,13 +4708,15 @@ if [ -r "$MODDIR/tools/asb_device_info.sh" ]; then
     if [ -f "$MODDIR/runtime/asb_zygisk_aot.sh" ]; then
       _za_out="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_aot.sh" status 2>/dev/null)"
       _za_kv() { printf '%s\n' "$_za_out" | sed -n "s/^$1=//p" | head -1; }
-      P "     launch_art : enabled=$(_za_kv enabled) charging=$(_za_kv charging) compiling=$(_za_kv running) launches_recorded=$(_za_kv launches) apps=$(printf '%s\n' "$_za_out" | grep -c '^app|')"
+      P "     launch_art : enabled=$(_za_kv enabled) charging=$(_za_kv charging) compiling=$(_za_kv running) launches_recorded=$(_za_kv launches) apps=$(printf '%s\n' "$_za_out" | grep -c '^app|') excluded=$(printf '%s\n' "$_za_out" | grep -c '^exclude|')"
       printf '%s\n' "$_za_out" | awk -F'|' '$1 == "app" {
           printf "       %s: %s launches, ART %s (%s), last result %s", $2, $3, $4, $5, $7
           if ($10 > 0) printf ", cold start median %s ms over %s", $11, $10; else printf ", no cold start recorded"
           if ($8 > 0) printf "; before compile %s ms over %s, after %s ms over %s", ($13 > 0 ? $13 : "-"), $12, ($15 > 0 ? $15 : "-"), $14
           printf "\n"
-        }' | while IFS= read -r _za_l; do P "$_za_l"; done
+        }
+        $1 == "exclude" { printf "       excluded by the owner: %s (never compiled by ASB)\n", $2 }
+        $1 == "event" && ($4 == "reset" || $4 == "reset_failed") { printf "       compile state reset for %s: %s%s\n", $3, $5, ($4 == "reset_failed" ? " (Android refused the reset)" : "") }' | while IFS= read -r _za_l; do P "$_za_l"; done
     fi
     if [ -f "$MODDIR/runtime/asb_zygisk_link.sh" ]; then
       _zl_out="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_link.sh" status 2>/dev/null)"
@@ -4753,6 +4765,17 @@ if [ -r "$MODDIR/tools/asb_device_info.sh" ]; then
       P "     problems   : crash_anr=$(_asb_ldiag_field crash_hooked) module_errors=$(_asb_ldiag_field error_modules)"
       P "     cost       : cpu=$(_asb_ldiag_field cpu_hooked_top) screen_off_starts=$(_asb_ldiag_field churn_hooked_top)"
       NOTE "   LSPosed exposes no per-hook call count or energy. Confirm a finding by disabling one module for that one app and comparing."
+      if [ -f "$MODDIR/runtime/asb_lsposed_lite.sh" ]; then
+        _ll_out="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_lsposed_lite.sh" status 2>/dev/null)"
+        _ll_kv() { printf '%s\n' "$_ll_out" | sed -n "s/^$1=//p" | head -1; }
+        P "     lighter    : auto=$(_ll_kv auto) pending_reboot=$(_ll_kv pending_reboot) evidence_age_s=$(_ll_kv evidence_age) usage=$(_ll_kv usage) ledger=$(_ll_kv ledger) changes_active=$(printf '%s\n' "$_ll_out" | awk -F'|' '$1 == "j" && $10 == "active"' | wc -l | tr -d ' ')"
+        printf '%s\n' "$_ll_out" | awk -F'|' '
+            $1 == "mod" { printf "       module %s: %s, %s scope(s), reach %s, verdict %s (%s), background starts/day %s, unused scopes %s, hook crashes %s\n", $2, ($3 == 1 ? "on" : "off"), $4, $5, $6, $7, ($8 < 0 ? "unknown" : $8), $9, $10 }
+            $1 == "cand" { printf "       lighten %s in %s: %s (background starts/day %s, days unused %s, crashes %s, automatic %s)\n", $2, $3, $5, ($6 < 0 ? "unknown" : $6), ($7 == 9999 ? "never" : $7), $8, ($9 == 1 ? "yes" : "no") }
+            $1 == "j" { printf "       change #%s %s by %s: %s %s %s (%s)\n", $2, $3, $4, $5, $6, $7, $10 }
+            $1 == "ab" && $2 ~ /^(module|phase|result|a_off|b_off|a_on|b_on|a_cpu|b_cpu|reason|profile_changed)$/ { ab = ab (ab ? " " : "") $2 "=" $3 }
+            END { if (ab) printf "       A/B: %s\n", ab }' | head -n 40 | while IFS= read -r _ll_l; do P "$_ll_l"; done
+      fi
     else
       P "  LSPOSED HOOKS: not installed"
     fi
