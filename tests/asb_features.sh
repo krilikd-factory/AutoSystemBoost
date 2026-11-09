@@ -6533,9 +6533,11 @@ class FakeCtx {
   createGain() { return { gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {} }; }
 }
 global.window = { AudioContext: FakeCtx };
+global.asbStartupLater = () => {};
 eval(fs.readFileSync(process.argv[2], 'utf8') + fs.readFileSync(process.argv[3], 'utf8') +
   `
   const out = [];
+  _uiOtherAudioAt = performance.now();
   uiSound('nav');
   advance(1.0); out.push('t1=' + suspends);
   advance(1.0); out.push('t2=' + suspends);
@@ -7694,6 +7696,172 @@ rm -rf "$T/lspd"; echo 'lsposed_verbose=off' > "$T/mod/config/governor.conf"
 out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=absent' || fail "no LSPosed: $out"
 out="$(run sweep)"; printf '%s\n' "$out" | grep -qx 'result=absent' || fail "sweep without LSPosed: $out"
 echo "PASS lsposed verbose: LSPosed's own switch written as Java's Boolean, remembered and put back; old logs and the modules log freed; sweep only while the card says off; foreign layouts untouched"
+)
+
+t_lsposed_lite_runtime() (
+# Runtime (V66): a lighter LSPosed. The owner asked that ASB understand LSPosed modules - which
+# are on, what they hook, which ones cost battery or smoothness - show it, and lighten the
+# load, by tap with confirmation and as an opted-in automatic pass, with a journal and undo.
+# The REAL C helper edits a database laid out like LSPosed's own; the REAL script decides
+# from Android's usage history, the Zygisk start ledger and crash records whose stack passes
+# through a module, and runs the two-phase A/B test over fake drain-meter and CPU counters.
+set -u
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL lsposed lite: $*" >&2; exit 1; }
+CC="${CC:-cc}"; command -v "$CC" >/dev/null 2>&1 || CC=gcc
+command -v "$CC" >/dev/null 2>&1 || { echo "SKIP lsposed lite: no C compiler"; exit 0; }
+python3 -c 'import sqlite3' 2>/dev/null || { echo "SKIP lsposed lite: no sqlite3 module"; exit 0; }
+LIB="$(python3 -c 'import ctypes.util; print(ctypes.util.find_library("sqlite3") or "")')"
+[ -n "$LIB" ] || { echo "SKIP lsposed lite: no libsqlite3 on this host"; exit 0; }
+S="$ROOT/runtime/asb_lsposed_lite.sh"
+sh -n "$S" || fail "syntax"
+sed 1d "$S" | grep -qE '^[[:space:]]*#' && fail "comments in module shell code"
+cat > "$T/m.c" <<CSRC
+#define ASB_LSPD_SQLITE_LIB "$LIB"
+#include "$ROOT/src/asb_lspd.h"
+int main(int argc, char **argv) { if (argc >= 3 && strcmp(argv[1], "--lspd") == 0) return asb_lspd_cli(argc - 2, argv + 2); return 9; }
+CSRC
+mkdir -p "$T/gov" "$T/bin" "$T/run" "$T/lspd/config" "$T/asb" "$T/mod"
+"$CC" -std=gnu11 -Wall -Wextra -Werror -o "$T/gov/asb" "$T/m.c" -ldl || fail "helper does not compile"
+D="$T/lspd/config/modules_config.db"
+python3 - "$D" <<'P'
+import sqlite3, sys
+db = sqlite3.connect(sys.argv[1])
+db.executescript("""
+CREATE TABLE modules (mid integer PRIMARY KEY AUTOINCREMENT, module_pkg_name text NOT NULL UNIQUE, apk_path text NOT NULL, enabled BOOLEAN DEFAULT 0);
+CREATE TABLE scope (mid integer, app_pkg_name text NOT NULL, user_id integer NOT NULL, PRIMARY KEY (mid, app_pkg_name, user_id));
+INSERT INTO modules (module_pkg_name, apk_path, enabled) VALUES ('lspd', '/x', 1), ('com.mod.alpha', '/a', 1), ('com.mod.beta', '/b', 1), ('com.mod.off', '/c', 0);
+INSERT INTO scope VALUES (2, 'system', 0), (2, 'com.android.systemui', 0), (2, 'com.mod.alpha', 0), (2, 'com.app.one', 0), (2, 'com.app.idle', 0),
+  (2, 'com.app.two', 0), (2, 'com.app.gone', 0), (3, 'com.app.one', 0), (3, 'com.app.crash', 0), (4, 'com.app.idle', 0);
+""")
+db.commit()
+P
+rows() { python3 -c "
+import sqlite3; db=sqlite3.connect('$D')
+print(' '.join(m+':'+a for m,a in db.execute('SELECT m.module_pkg_name, s.app_pkg_name FROM scope s JOIN modules m ON m.mid=s.mid ORDER BY 1,2')))
+print(' '.join(m+'='+str(e) for m,e in db.execute('SELECT module_pkg_name, enabled FROM modules ORDER BY 1')))"; }
+orig="$(rows)"
+now=$(date +%s)
+ts() { date -d "@$1" '+%Y-%m-%d %H:%M:%S'; }
+cat > "$T/bin/pm" <<X
+#!/bin/sh
+printf 'package:com.app.one uid:10101\npackage:com.app.idle uid:10102\npackage:com.app.two uid:10103\npackage:com.app.crash uid:10104\npackage:com.android.systemui uid:10050\npackage:com.mod.alpha uid:10200\n'
+X
+cat > "$T/bin/dumpsys" <<X
+#!/bin/sh
+if [ "\$1" = usagestats ]; then
+  echo "In-memory yearly stats"
+  echo "    package=com.app.one totalTimeUsed=\"00:10\" lastTimeUsed=\"$(ts $((now - 3600)))\" totalTimeVisible=\"00:11\""
+  echo "    package=com.app.idle totalTimeUsed=\"00:00\" lastTimeUsed=\"$(ts $((now - 40 * 86400)))\""
+  echo "    package=com.app.two totalTimeUsed=\"00:01\" lastTimeUsed=\"$(ts $((now - 30 * 86400)))\""
+  echo "    package=com.app.crash totalTimeUsed=\"00:03\" lastTimeUsed=\"$(ts $((now - 7200)))\""
+  exit 0
+fi
+if [ "\$1" = dropbox ] && [ "\$3" = data_app_crash ]; then
+  i=0; while [ \$i -lt 6 ]; do
+    printf 'Process: com.app.crash\nFlags: 0x1\njava.lang.NullPointerException\n    at com.mod.beta.Hook.after(Hook.java:10)\n    at android.app.Activity.onCreate(Activity.java:1)\n\n'
+    i=\$((i + 1))
+  done
+  printf 'Process: com.app.one\njava.lang.IllegalStateException\n    at com.app.one.Main.run(Main.java:3)\n\n'
+fi
+exit 0
+X
+chmod +x "$T/bin/"*
+printf 'L\tcom.app.idle\t30\t10\t0\t2\nL\tcom.app.one\t2\t9\t5\t0\nL\tcom.app.two\t8\t2\t0\t0\nL\tcom.app.crash\t1\t3\t3\t0\n' > "$T/run/state.arm64-v8a.tsv"
+echo '86400.00 1000.00' > "$T/up"; echo boot-1 > "$T/bootid"; echo smart > "$T/mod/current_profile"
+echo com.app.two > "$T/asb/keep"
+echo 'smart 0 0 0 0 0' > "$T/dm"
+printf '1000: 0 0\n10101: 0 0\n10102: 0 0\n10103: 0 0\n' > "$T/cpu"
+run() { PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_LL_DIR="$T/ll" ASB_LSPD_DIR="$T/lspd" ASB_GOV_BIN="$T/gov/asb" ASB_ZYGISK_RUN_DIR="$T/run" \
+  ASB_LL_BOOTID="$T/bootid" ASB_LL_UPTIME="$T/up" ASB_LL_DM="$T/dm" ASB_LL_UIDCPU="$T/cpu" ASB_LL_KEEP="$T/asb/keep" ASB_LL_NOTIF="$T/asb/nf" \
+  ASB_LL_SYNC=1 ASB_LL_AB_H=0 ASB_LL_AB_OFF_S=20000 ASB_LL_AB_ON_S=3000 sh "$S" "$@"; }
+st="$(run status)"
+printf '%s\n' "$st" | grep -qx 'database=ok' && printf '%s\n' "$st" | grep -qx 'evidence_age=-1' || fail "status before evidence: $st"
+[ -d "$T/ll" ] && fail "a status read created state"
+out="$(run refresh)"; [ "$out" = result=started ] || fail "refresh: $out"
+grep -q '^us=ok$' "$T/ll/evidence" && grep -q '^c|com.mod.beta|com.app.crash|6$' "$T/ll/evidence" && grep -q '^i|com.app.one|10101$' "$T/ll/evidence" \
+  || fail "evidence: $(cat "$T/ll/evidence")"
+grep -q 'com.app.one|' "$T/ll/evidence" | grep -q '^c|' && fail "a crash without a module frame was attributed"
+st="$(run status)"
+printf '%s\n' "$st" | grep -q '^mod|com.mod.alpha|1|7|framework|watch|framework,systemui,unused|' || fail "alpha row: $(printf '%s\n' "$st" | grep '^mod|com.mod.alpha')"
+printf '%s\n' "$st" | grep -q '^mod|com.mod.beta|1|2|apps|heavy|crash|' || fail "beta row: $(printf '%s\n' "$st" | grep '^mod|com.mod.beta')"
+printf '%s\n' "$st" | grep -q '^mod|com.mod.off|0|1|apps|off|' || fail "off row: $st"
+printf '%s\n' "$st" | grep -q '^cand|com.mod.alpha|com.app.idle|0|unused|40|40|0|1$' || fail "idle candidate: $(printf '%s\n' "$st" | grep '^cand')"
+printf '%s\n' "$st" | grep -q '^cand|com.mod.alpha|com.app.two|0|unused|10|30|0|0$' || fail "a protected app was offered to the automatic pass: $(printf '%s\n' "$st" | grep '^cand')"
+printf '%s\n' "$st" | grep -q '^cand|com.mod.beta|com.app.crash|0|crash|' || fail "crash candidate: $(printf '%s\n' "$st" | grep '^cand')"
+printf '%s\n' "$st" | grep -qE '^cand\|[^|]*\|(system|android|com.android.systemui|com.mod.alpha|com.app.one|com.app.gone)\|' && fail "a protected, used or missing scope became a candidate"
+printf '%s\n' "$st" | grep -q '^cand|com.mod.off|' && fail "a disabled module got a candidate for the automatic pass"
+out="$(run trim com.mod.alpha)"; printf '%s\n' "$out" | grep -qx 'trimmed=2' || fail "trim: $out"
+rows | sed -n 1p | grep -q 'com.mod.alpha:com.app.idle\|com.mod.alpha:com.app.two' && fail "trim left the unused scopes: $(rows)"
+rows | sed -n 1p | grep -q 'com.mod.alpha:system' && rows | sed -n 1p | grep -q 'com.mod.alpha:com.android.systemui' && rows | sed -n 1p | grep -q 'com.mod.alpha:com.app.one' \
+  || fail "trim removed a protected or used scope: $(rows)"
+run status | grep -qx 'pending_reboot=1' || fail "no reboot notice after a write"
+id="$(run status | awk -F'|' '$1 == "j" && $7 == "com.app.two" { print $2 }')"
+out="$(run undo "$id")"; [ "$out" = result=ok ] || fail "undo: $out"
+rows | sed -n 1p | grep -q 'com.mod.alpha:com.app.two' || fail "undo did not put the scope back"
+out="$(run disable com.mod.beta)"; [ "$out" = result=ok ] && rows | tail -1 | grep -q 'com.mod.beta=0' || fail "disable: $out $(rows)"
+out="$(run undo-all)"; printf '%s\n' "$out" | grep -qx 'undone=2' || fail "undo-all: $out"
+[ "$(rows)" = "$orig" ] || fail "undo-all did not restore LSPosed exactly: $(rows)"
+for bad in 'com.x;id' '../x' 'lspd' ''; do out="$(run trim "$bad")"; [ "$out" = result=bad_request ] || [ "$bad" = lspd ] || fail "unsafe name accepted: $bad"; done
+out="$(run drop com.mod.alpha system 0)"; [ "$out" = result=bad_request ] && rows | sed -n 1p | grep -q 'com.mod.alpha:system' || fail "the framework scope could be dropped: $out"
+out="$(run drop com.mod.alpha com.android.systemui 0)"; [ "$out" = result=failed ] && rows | sed -n 1p | grep -q 'com.mod.alpha:com.android.systemui' || fail "the SystemUI scope could be dropped: $out"
+run auto on >/dev/null; run tick
+rows | sed -n 1p | grep -q 'com.mod.alpha:com.app.idle' && fail "the automatic pass kept an unused, busy scope: $(rows)"
+rows | sed -n 1p | grep -q 'com.mod.beta:com.app.crash' && fail "the automatic pass kept a crash-loop scope: $(rows)"
+rows | sed -n 1p | grep -q 'com.mod.alpha:com.app.two' || fail "the automatic pass touched a protected app: $(rows)"
+rows | tail -1 | grep -q 'com.mod.alpha=1 com.mod.beta=1' || fail "the automatic pass disabled a module: $(rows)"
+n1="$(grep -c 'active$' "$T/ll/journal")"
+run tick; [ "$(grep -c 'active$' "$T/ll/journal")" = "$n1" ] || fail "a second automatic pass ran within a day"
+run status | grep -q '^j|[0-9]*|[0-9]*|auto|scope_del|com.mod.alpha|com.app.idle|0|1|active$' || fail "automatic change not journaled: $(cat "$T/ll/journal")"
+run undo-all >/dev/null; [ "$(rows)" = "$orig" ] || fail "automatic changes not undone: $(rows)"
+run auto off >/dev/null
+out="$(run ab-start com.mod.off)"; [ "$out" = result=not_enabled ] || fail "A/B on a disabled module: $out"
+out="$(run ab-start com.mod.alpha)"; [ "$out" = result=started ] || fail "ab-start: $out"
+grep -q '^uids=' "$T/ll/ab" && grep -q '^uids=.*1000' "$T/ll/ab" || fail "A/B reach: $(cat "$T/ll/ab")"
+echo 'smart 4000 1000 30000 2000 3' > "$T/dm"; printf '1000: 90000000 10000000\n10101: 0 0\n10102: 0 0\n10103: 0 0\n' > "$T/cpu"
+out="$(run trim com.mod.alpha)"; [ "$out" = result=busy_ab ] || fail "a trim ran during the A/B test: $out"
+run tick
+grep -q '^phase=b_wait$' "$T/ll/ab" && rows | tail -1 | grep -q 'com.mod.alpha=0' || fail "phase A did not end with the module off: $(cat "$T/ll/ab") $(rows)"
+grep -q '^a_off=240$' "$T/ll/ab" || fail "phase A rate: $(cat "$T/ll/ab")"
+run tick; grep -q '^phase=b_wait$' "$T/ll/ab" || fail "phase B started without a reboot"
+echo boot-2 > "$T/bootid"; printf '1000: 0 0\n10101: 0 0\n' > "$T/cpu"; run tick
+grep -q '^phase=b$' "$T/ll/ab" || fail "phase B did not start after the reboot: $(cat "$T/ll/ab")"
+echo 'smart 8000 2000 60000 3000 6' > "$T/dm"; printf '1000: 1000000 0\n10101: 0 0\n' > "$T/cpu"; run tick
+grep -q '^phase=done$' "$T/ll/ab" && grep -q '^result=worse$' "$T/ll/ab" && grep -q '^b_off=120$' "$T/ll/ab" || fail "A/B result: $(cat "$T/ll/ab")"
+rows | tail -1 | grep -q 'com.mod.alpha=1' || fail "the module was not given back after the A/B test: $(rows)"
+run status | grep -q '^mod|com.mod.alpha|1|7|framework|heavy|.*ab_worse' || fail "the A/B result does not reach the verdict: $(run status | grep '^mod|com.mod.alpha')"
+H="$ROOT/webroot/index.html"
+if command -v node >/dev/null 2>&1; then
+  run status > "$T/st.txt"
+  { echo "const T = (k, d) => d;"; sed -n '/^function lspLiteParse(/,/^}/p' "$H"; cat <<'JS'
+const g = lspLiteParse(require('fs').readFileSync(process.argv[2], 'utf8') + '\nmod|bad;mod|1|1|apps|light|-|0|0|0\ncand|com.a.b|x y|0|unused|1|1|0|1\nj|1|2|root|scope_del|com.a.b|c.d|0|1|active\n');
+let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
+chk(g.ok && g.lspd && g.db === 'ok' && g.usage === 'ok', 'header: ' + JSON.stringify(g));
+const a = g.mods.filter(m => m.pkg === 'com.mod.alpha')[0];
+chk(a && a.verdict === 'heavy' && a.reach === 'framework' && a.reasons.indexOf('ab_worse') >= 0 && a.apps === 7, 'alpha: ' + JSON.stringify(a));
+chk(g.mods[0].verdict === 'heavy' && g.mods[g.mods.length - 1].verdict === 'off', 'order: ' + g.mods.map(m => m.verdict));
+chk(g.cands.some(c => c.mod === 'com.mod.alpha' && c.app === 'com.app.idle' && c.why === 'unused' && c.auto && c.idle === 40), 'cands: ' + JSON.stringify(g.cands));
+chk(g.ab.phase === 'done' && g.ab.result === 'worse' && g.ab.a_off === '240', 'ab: ' + JSON.stringify(g.ab));
+chk(g.journal.length > 0 && g.journal.every(j => j.kind !== 'root'), 'journal: ' + JSON.stringify(g.journal));
+chk(!g.mods.some(m => m.pkg === 'bad;mod') && !g.cands.some(c => c.app === 'x y'), 'unsafe rows were taken');
+process.exit(bad ? 1 : 0);
+JS
+  } > "$T/p.js"
+  node "$T/p.js" "$T/st.txt" || fail "WebUI parse"
+fi
+grep -Fq "['lsp', 'sh ' + shQuote(MD + '/runtime/asb_lsposed_lite.sh') + ' status']" "$H" || fail "the Zygisk page does not read it"
+grep -Fq "(a1 !== undefined ? ' ' + shQuote(String(a1)) : '')" "$H" || fail "the WebUI does not quote what it sends"
+sed -n '/^function lspLiteCard(/,/^}/p' "$H" | grep -q 'confirm(' && fail "a browser confirm() is used"
+sed -n '/^function lspLiteButton(/,/^}/p' "$H" | grep -q 'lspLiteArmed(key)' || fail "no second-tap confirmation"
+run ab-start com.mod.beta >/dev/null; run disable com.mod.alpha >/dev/null
+run restore-all; [ -d "$T/ll" ] && fail "uninstall left state"
+[ "$(rows)" = "$orig" ] || fail "uninstall did not give LSPosed back: $(rows)"
+grep -q 'asb_lsposed_lite.sh" restore-all' "$ROOT/uninstall.sh" || fail "uninstall does not restore"
+grep -q 'asb_lsposed_lite.sh" tick' "$ROOT/service.sh" || fail "no service tick"
+grep -q 'runtime/asb_lsposed_lite.sh' "$ROOT/.github/workflows/build-test.yml" && grep -q 'runtime/asb_lsposed_lite.sh' "$ROOT/.github/workflows/build-release.yml" || fail "not in the workflow file lists"
+grep -q 'asb_lsposed_lite.sh" status' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not show it"
+echo "PASS lsposed lite: per-module reach and cost from usage history, start ledger and hook crash stacks; unused or crashing scopes lightened by tap and by the opted-in daily pass (never framework, SystemUI, self, used or protected apps, never a whole module); journal, undo and uninstall restore LSPosed exactly; two-phase A/B over a reboot measures and gives the module back"
 )
 
 t_lsposed_hooks_runtime() (
@@ -9123,6 +9291,115 @@ EOF
   printf 'app|com.yt.app|3|speed-profile|bg-dexopt|0|-|0|-|1|650|0|0|0|0\napp|com.np.app|2|verify|install|%s|no_profile|0|verify|0|0|0|0|0|0\n' "$ca"; } > "$T/st.txt"
 node "$T/aot.js" "$T/st.txt" || fail "WebUI parse/format"
 echo "PASS zygisk aot: ledger-ranked apps without AOT code compiled at background priority only on a cool charger with the screen off, cold-start medians before and after from Android's launch log, bounded retries, clean uninstall"
+)
+
+t_zygisk_aot_exclude_runtime() (
+# Runtime (V66): a banking app hung on its logo after every night the launch-ART feature compiled
+# it on the charger, and the owner asked how to take one app out. The REAL script keeps an owner
+# exclusion list: an excluded app is never ranked or compiled again, and if ASB compiled it, its
+# compile state is reset to the one Android installed it with. Stubs stand in for Android.
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+S="$ROOT/runtime/asb_zygisk_aot.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL zygisk aot exclude: $*" >&2; exit 1; }
+sh -n "$S" || fail "syntax"
+mkdir -p "$T/bin" "$T/d" "$T/run" "$T/pw"
+printf 'com.bank.app verify install\ncom.yt.app speed-profile bg-dexopt\ncom.mail.app quicken -\ncom.np.app verify install\n' > "$T/dex"
+printf 'com.bank.app\ncom.mail.app\ncom.np.app\n' > "$T/prof"
+cat > "$T/bin/dumpsys" <<'X'
+#!/bin/sh
+if [ "$1" = power ]; then echo "  mWakefulness=Asleep"; exit 0; fi
+if [ "$1" = package ]; then
+  l="$(grep "^$2 " "$ZA_T/dex")"; [ -n "$l" ] || exit 0
+  set -- $l
+  echo "Dexopt state:"; echo "  [$1]"; echo "      arm64: [status=$2] [reason=$3] [primary-abi]"; echo "Compiler stats:"
+fi
+X
+cat > "$T/bin/pm" <<'X'
+#!/bin/sh
+echo "pm $*" >> "$ZA_T/pm.log"
+if [ "$1" = compile ] && [ "$2" = --reset ]; then
+  if grep -qx "$3" "$ZA_T/refuse" 2>/dev/null; then echo "Failure: $3"; exit 1; fi
+  awk -v p="$3" '$1 == p { $2 = "verify"; $3 = "install" } { print }' "$ZA_T/dex" > "$ZA_T/dex.t" && mv "$ZA_T/dex.t" "$ZA_T/dex"
+  echo Success; exit 0
+fi
+if [ "$1" = compile ]; then
+  for p in "$@"; do :; done
+  if grep -qx "$p" "$ZA_T/prof"; then
+    awk -v p="$p" '$1 == p { $2 = "speed-profile"; $3 = "cmdline" } { print }' "$ZA_T/dex" > "$ZA_T/dex.t" && mv "$ZA_T/dex.t" "$ZA_T/dex"
+  fi
+  echo Success
+fi
+exit 0
+X
+printf '#!/bin/sh\nexit 0\n' > "$T/bin/logcat"
+chmod +x "$T/bin/"*
+echo Charging > "$T/pw/status"; echo 300 > "$T/pw/temp"; echo boot-1 > "$T/bootid"; echo screen=0 > "$T/state"
+sleep 3600 & _gov=$!; echo "$_gov" > "$T/govpid"
+trap 'kill $_gov 2>/dev/null; rm -rf "$T"' EXIT
+printf 'L\tcom.bank.app\t3\t9\t6\t1\nL\tcom.yt.app\t0\t4\t5\t0\nL\tcom.mail.app\t1\t1\t4\t0\nL\tcom.np.app\t0\t2\t3\t0\n' > "$T/run/state.arm64-v8a.tsv"
+run() { PATH="$T/bin:$PATH" ZA_T="$T" MODDIR="$T/mod" ASB_ZA_DIR="$T/d" ASB_ZYGISK_RUN_DIR="$T/run" ASB_ZA_POWER="$T/pw" ASB_ZA_BOOTID="$T/bootid" ASB_ZA_STATE="$T/state" ASB_ZA_GOVPID="$T/govpid" ASB_ZA_SYNC=1 sh "$S" "$@"; }
+compiles() { grep -c "^pm compile -r bg-dexopt $1\$" "$T/pm.log" 2>/dev/null || true; }
+newcharge() { echo Discharging > "$T/pw/status"; run tick; echo Charging > "$T/pw/status"; ASB_ZA_RETRY_S=0 ASB_ZA_REFRESH_S=0 run tick; }
+run enable >/dev/null
+echo com.np.app > "$T/d/zygisk_aot_exclude"
+run tick
+[ "$(compiles com.bank.app)" = 1 ] && [ "$(compiles com.mail.app)" = 1 ] || fail "the batch before any owner exclusion: $(cat "$T/pm.log")"
+[ "$(compiles com.np.app)" = 0 ] || fail "an app on the exclusion list was compiled"
+grep -q '|com.np.app|' "$T/d/zygisk_aot_apps" && fail "an excluded app took a ranking slot: $(cat "$T/d/zygisk_aot_apps")"
+grep -q '^com.bank.app|[0-9]*|speed-profile|' "$T/d/zygisk_aot_apps" || fail "compiled row: $(cat "$T/d/zygisk_aot_apps")"
+out="$(run exclude com.bank.app)"
+printf '%s\n' "$out" | grep -qx 'reset=ok' && printf '%s\n' "$out" | grep -qx 'result=excluded' || fail "exclude of an app ASB compiled: $out"
+grep -qx 'pm compile --reset com.bank.app' "$T/pm.log" || fail "the compile state was not reset: $(cat "$T/pm.log")"
+grep -q '|com.bank.app|reset|speed-profile>verify$' "$T/d/zygisk_aot_log" || fail "reset event: $(cat "$T/d/zygisk_aot_log")"
+grep -q '^com.bank.app|' "$T/d/zygisk_aot_apps" && fail "the excluded app stayed in the list"
+st="$(run status)"
+printf '%s\n' "$st" | grep -qx 'exclude|com.bank.app' && printf '%s\n' "$st" | grep -qx 'exclude|com.np.app' || fail "status exclusions: $st"
+printf '%s\n' "$st" | grep -q '^event|[0-9]*|com.bank.app|reset|speed-profile>verify$' || fail "status reset event: $st"
+newcharge
+[ "$(compiles com.bank.app)" = 1 ] || fail "an excluded app was compiled again in a later charging session: $(cat "$T/pm.log")"
+grep -q '^com.bank.app|' "$T/d/zygisk_aot_apps" && fail "a refresh brought the excluded app back"
+out="$(run exclude com.yt.app)"
+printf '%s\n' "$out" | grep -qx 'reset=skipped' || fail "an app ASB never compiled was reset: $out"
+grep -q -- '--reset com.yt.app' "$T/pm.log" && fail "Android's own compile was undone"
+[ "$(grep -c '^com.bank.app$' "$T/d/zygisk_aot_exclude")" = 1 ] || fail "a duplicate exclusion"
+run exclude com.bank.app >/dev/null; [ "$(grep -c '^com.bank.app$' "$T/d/zygisk_aot_exclude")" = 1 ] || fail "excluding twice duplicated the entry"
+for badp in '' 'com.x;reboot' '../etc' 'com..x' 'nopkg' '$(id)'; do
+  out="$(run exclude "$badp")"; rc=$?
+  [ "$rc" = 2 ] && [ "$out" = result=bad_request ] || fail "an unsafe package name was accepted: '$badp' -> $rc $out"
+done
+out="$(run reset 'com.a;b')"; [ $? = 2 ] && [ "$out" = result=bad_request ] || fail "reset took an unsafe name: $out"
+grep -qv '^[A-Za-z0-9_.]*$' "$T/d/zygisk_aot_exclude" && fail "the exclusion list holds an unsafe line: $(cat "$T/d/zygisk_aot_exclude")"
+echo com.mail.app > "$T/refuse"
+out="$(run exclude com.mail.app)"
+printf '%s\n' "$out" | grep -qx 'reset=failed' && printf '%s\n' "$out" | grep -qx 'result=excluded' || fail "a refused reset: $out"
+grep -q '|com.mail.app|reset_failed|speed-profile>speed-profile$' "$T/d/zygisk_aot_log" || fail "refused reset event: $(cat "$T/d/zygisk_aot_log")"
+out="$(run include com.bank.app)"; [ "$out" = result=included ] || fail "include: $out"
+grep -qx com.bank.app "$T/d/zygisk_aot_exclude" && fail "include left the entry"
+newcharge
+[ "$(compiles com.bank.app)" = 2 ] || fail "an app allowed again was not compiled in the next charging session: $(cat "$T/pm.log")"
+for p in com.np.app com.yt.app com.mail.app; do run include "$p" >/dev/null; done
+[ -e "$T/d/zygisk_aot_exclude" ] && fail "an empty exclusion list was left behind"
+run exclude com.np.app >/dev/null
+run restore-all; ls "$T/d" | grep -q zygisk_aot && fail "uninstall left files: $(ls "$T/d")"
+grep -q '/data/adb/asb/zygisk_aot_exclude' "$ROOT/uninstall.sh" || fail "uninstall does not remove the exclusion list"
+grep -q 'excluded by the owner' "$ROOT/tools/asb_diag.sh" && grep -q 'compile state reset for' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not show exclusions and resets"
+H="$ROOT/webroot/index.html"
+grep -Fq "' ' + action + ' ' + shQuote(pkg)]" "$H" && grep -Fq "zygiskAotPackage('exclude', a.pkg)" "$H" && grep -Fq "zygiskAotPackage('include', p)" "$H" || fail "the WebUI does not offer exclusion with a quoted package"
+{
+  echo "const T = (k, d) => d;"
+  for fn in dozePkgOk zygiskAotParse; do sed -n "/^function $fn(/,/^}/p" "$H"; done
+  cat <<'EOF2'
+const g = zygiskAotParse('version=1\nexclude|com.bank.app\nexclude|com.bank.app\nexclude|com.x;y\nexclude|com.a.b|extra\nevent|1700000000|com.bank.app|reset|speed-profile>verify\n');
+let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
+chk(JSON.stringify(g.excluded) === '["com.bank.app"]', 'exclusions parsed once, unsafe rows dropped: ' + JSON.stringify(g.excluded));
+chk(g.events.length === 1 && g.events[0].what === 'reset' && g.events[0].detail === 'speed-profile>verify', 'reset event: ' + JSON.stringify(g.events));
+process.exit(bad ? 1 : 0);
+EOF2
+} > "$T/aotx.js"
+node "$T/aotx.js" || fail "WebUI parse"
+echo "PASS zygisk aot exclude: an owner-excluded app is never ranked or compiled again, ASB's own compile is reset to the installed state (Android's is left alone), refused resets are recorded, names are validated, allow-again restores compilation, clean uninstall"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

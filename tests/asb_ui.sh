@@ -192,6 +192,52 @@ cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
 echo "PASS asbdiag throttle point: load with the screen on is a note, a hot phone at rest a FAIL, a manual point a WARN, trip zones ignored"
 )
 
+t_asbdiag_hires_owner_runtime() (
+# Runtime (V66): a release asbdiag on a OnePlus 15 read 92% with one FAIL, "Hi-res 384000 present
+# in audio policy: want 1, live 0", on an install whose audio tweaks were off: ASB never delivered
+# that file, so the stock policy is not ASB's verdict. The check is a verdict only when ASB
+# delivers the policy (an odm bind queued for it, or the /vendor overlay carrying it). The REAL
+# block of tools/asb_diag.sh runs over fake paths.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+D="$ROOT/tools/asb_diag.sh"
+fail() { echo "FAIL asbdiag hi-res owner: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+awk '/^# hi-res$/ { f = 1 } f && /^# runtime audio props$/ { exit } f { print }' "$D" \
+  | sed -e "s#'/vendor/etc/#'$T/vendor/etc/#g" -e "s#'/odm/etc/#'$T/odm/etc/#g" -e "s#/data/adb/asb/odm_bind_manifest.txt#$T/man#" > "$T/b.sh"
+grep -q '_hr_t' "$T/b.sh" && grep -q "$T/man" "$T/b.sh" && grep -q "$T/vendor/etc" "$T/b.sh" || fail "hi-res block not found"
+mkdir -p "$T/vendor/etc" "$T/odm/etc/audio" "$T/mod"
+printf '<mixPort samplingRates="44100,48000"/>\n' > "$T/vendor/etc/audio_policy_configuration.xml"
+run() {
+  { echo 'P() { echo "$*"; }; NOTE() { echo "(i) $1"; }'
+    echo 'V() { if [ "$3" -ge "$2" ]; then echo "[PASS] $1"; else echo "[FAIL] $1 want=$2 live=$3"; fi; }'
+    echo 'firstf() { for _g in $@; do for _f in $_g; do [ -f "$_f" ] && { printf "%s" "$_f"; return 0; }; done; done; return 1; }'
+    echo "MODDIR='$T/mod'"; cat "$T/b.sh"; } > "$T/r.sh"
+  sh "$T/r.sh"
+}
+out="$(run)"
+printf '%s\n' "$out" | grep -q '\[FAIL\]' && fail "a stock policy ASB never delivered failed the install: $out"
+printf '%s\n' "$out" | grep -q '(i) Hi-res 384000 in audio policy: 0 line(s) in stock .*not checked' || fail "stock note: $out"
+printf 'VENDOR_OVERLAY=0\n' > "$T/mod/features.conf"; mkdir -p "$T/mod/system$T/vendor/etc"; : > "$T/mod/system$T/vendor/etc/audio_policy_configuration.xml"
+printf '%s\n' "$(run)" | grep -q '\[FAIL\]' && fail "a disabled overlay counted as delivery"
+printf 'VENDOR_OVERLAY=1\n' > "$T/mod/features.conf"
+printf '%s\n' "$(run)" | grep -q '\[FAIL\] Hi-res 384000 present in audio policy want=1 live=0' || fail "an overlay that carries the policy but is stock live is no longer a FAIL: $(run)"
+printf '<mixPort samplingRates="44100,48000,384000"/>\n' > "$T/vendor/etc/audio_policy_configuration.xml"
+printf '%s\n' "$(run)" | grep -q '\[PASS\] Hi-res 384000 present in audio policy' || fail "overlay pass: $(run)"
+printf 'VENDOR_OVERLAY=0\n' > "$T/mod/features.conf"; printf '<mixPort samplingRates="44100,48000"/>\n' > "$T/vendor/etc/audio_policy_configuration.xml"
+printf '<mixPort samplingRates="48000,384000"/>\n' > "$T/odm/etc/audio/audio_policy_configuration.xml"
+printf '%s|/data/adb/asb/odm_patched/x\n' "$T/odm/etc/audio/audio_policy_configuration.xml" > "$T/man"
+printf '%s\n' "$(run)" | grep -q '\[PASS\] Hi-res 384000 present in audio policy' || fail "the odm-bound policy is not the one checked: $(run)"
+printf '<mixPort samplingRates="48000"/>\n' > "$T/odm/etc/audio/audio_policy_configuration.xml"
+printf '%s\n' "$(run)" | grep -q '\[FAIL\] Hi-res 384000 present in audio policy want=1 live=0' || fail "a queued odm bind that is stock live no longer fails: $(run)"
+printf '/odm/etc/camera/media_profiles.xml|/x\n' > "$T/man"
+printf '%s\n' "$(run)" | grep -q '\[FAIL\]' && fail "a camera bind counted as audio policy delivery"
+rm -f "$T/vendor/etc/audio_policy_configuration.xml"
+printf '%s\n' "$(run)" | grep -q '(i) audio_policy_configuration not found' || fail "missing policy: $(run)"
+cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail "asbdiag copies differ"
+echo "PASS asbdiag hi-res owner: the 384000 policy check is a verdict only where ASB delivers the policy (odm bind or overlay); a stock file is a note"
+)
+
 t_asbdiag_write_ratio_runtime() (
 # Runtime (fix179): "writes per transition" is judged against the phone's own cpufreq slots,
 # and chatter by how often the state changes. A CPH2691 read "13 (8+ ... suggests the ladder
@@ -3549,6 +3595,184 @@ out="$(node "$T/t.js" 2>&1)" || fail "$out"
 echo "PASS webui monitor compact: drain pair first in the card on every profile, heat against the phone's own norm, restarts in one accessible toolbar menu"
 )
 
+t_webui_v66_startup_locale_runtime() (
+# Runtime (V66): the WebUI opening reads one locale file, requested from <head>.
+# It used to read en.json and the chosen locale in parallel, both only after the whole
+# 1.3 MB document was parsed, and the home screen waited for both. Every shipped locale
+# carries every key path of en.json, so English is read only when it is the language or
+# when the chosen file cannot be read. The REAL head loader and loadI18N run in node over
+# a fake XMLHttpRequest.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui v66 startup locale: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'PY' || fail 'source/locale contract'
+import sys, json, re, pathlib
+root = pathlib.Path(sys.argv[1]); s = (root / 'webroot/index.html').read_text(encoding='utf-8')
+head = s[:s.index('<style>\n:root {')]
+assert "window.__asbI18nEarly={code:w," in head and "x.open('GET','i18n/'+w+'.json',true)" in head
+hl = re.search(r"var L=\[([^\]]*)\]", head).group(1)
+ml = re.search(r"const ASB_LANGS = \[([^\]]*)\];", s).group(1)
+assert [x.strip(" '") for x in hl.split(',')] == [x.strip(" '") for x in ml.split(',')], (hl, ml)
+assert "Promise.all([readLang('en')" not in s
+def paths(o, p=''):
+    out = set()
+    for k, v in o.items():
+        out |= paths(v, p + '/' + k) if isinstance(v, dict) else {p + '/' + k}
+    return out
+en = paths(json.loads((root / 'webroot/i18n/en.json').read_text(encoding='utf-8')))
+files = sorted((root / 'webroot/i18n').glob('*.json')); assert len(files) == 13
+for f in files:
+    miss = en - paths(json.loads(f.read_text(encoding='utf-8')))
+    assert not miss, (f.name, sorted(miss)[:5])
+PY
+command -v node >/dev/null 2>&1 || { echo "SKIP webui v66 startup locale runtime: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cat > "$T/t.js" <<'JS'
+const fs = require('fs'), h = fs.readFileSync(process.argv[2], 'utf8');
+const headJs = h.slice(h.indexOf('<script>(function(){try{var L=') + 8, h.indexOf('</script>', h.indexOf('<script>(function(){try{var L=')));
+const a = h.indexOf("const ASB_LANGS = ["), b = h.indexOf('\n', a);
+const langs = h.slice(a, b);
+const loader = h.slice(h.indexOf('var I18N = { en: {} };'), h.indexOf('// Any language, with English as the fallback'));
+let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
+async function scenario(saved, nav, broken) {
+  const reqs = [];
+  const store = saved ? { asb_lang: saved } : {};
+  const ctx = {
+    localStorage: { getItem: k => (k in store ? store[k] : null) },
+    navigator: { language: nav },
+    console: { warn() {} }, JSON, Promise
+  };
+  ctx.window = ctx;
+  ctx.XMLHttpRequest = function () {
+    const x = this;
+    x.open = (m, u) => { x.url = u; };
+    x.send = () => { reqs.push(x.url); setImmediate(() => {
+      const code = x.url.replace(/^i18n\/|\.json$/g, '');
+      if (broken.indexOf(code) >= 0) { x.status = 404; x.responseText = ''; }
+      else { x.status = 200; x.responseText = JSON.stringify({ hello: code }); }
+      x.onload();
+    }); };
+  };
+  const fn = new Function('window', 'localStorage', 'navigator', 'XMLHttpRequest', 'console',
+    headJs + '\n' + langs + '\n' + loader + '\nreturn { ready: I18N_READY, I18N: I18N };');
+  const r = fn(ctx, ctx.localStorage, ctx.navigator, ctx.XMLHttpRequest, ctx.console);
+  await r.ready;
+  return { reqs, I18N: r.I18N };
+}
+(async () => {
+  let r = await scenario('ru', 'en-US', []);
+  chk(JSON.stringify(r.reqs) === '["i18n/ru.json"]', 'ru opening read: ' + JSON.stringify(r.reqs));
+  chk(r.I18N.ru && r.I18N.ru.hello === 'ru' && Object.keys(r.I18N.en).length === 0, 'ru dictionary: ' + JSON.stringify(r.I18N));
+  r = await scenario('en', 'ru-RU', []);
+  chk(JSON.stringify(r.reqs) === '["i18n/en.json"]' && r.I18N.en.hello === 'en', 'en opening: ' + JSON.stringify(r.reqs));
+  r = await scenario(null, 'de-DE', []);
+  chk(JSON.stringify(r.reqs) === '["i18n/de.json"]' && r.I18N.de.hello === 'de', 'device language: ' + JSON.stringify(r.reqs));
+  r = await scenario('xx', 'tr-TR', []);
+  chk(JSON.stringify(r.reqs) === '["i18n/tr.json"]', 'invalid stored language: ' + JSON.stringify(r.reqs));
+  r = await scenario('uk', 'en', ['uk']);
+  chk(JSON.stringify(r.reqs) === '["i18n/uk.json","i18n/uk.json","i18n/en.json"]' && r.I18N.en.hello === 'en' && !r.I18N.uk,
+    'a missing locale falls back to English: ' + JSON.stringify(r.reqs));
+  r = await scenario('fr', 'en', ['fr', 'en']);
+  chk(r.reqs.length === 3 && Object.keys(r.I18N.en).length === 0, 'nothing readable still resolves: ' + JSON.stringify(r.reqs));
+  process.exit(bad ? 1 : 0);
+})().catch(e => { console.log('FAIL ' + (e && e.stack || e)); process.exit(1); });
+JS
+node "$T/t.js" "$H" || fail "runtime"
+echo "PASS webui v66 startup locale: one locale read started in <head>, English only when chosen or as the fallback, every locale carries every English key path"
+)
+
+t_webui_v66_startup_queue_runtime() (
+# Runtime (V66): the opening's background root reads wait for the first frame of the home
+# screen, run one at a time in priority order (Live pass, Zygisk header, other-audio look)
+# with their gaps, and step aside while a finger is on the screen. The REAL queue runs in
+# node over fake timers.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui v66 startup queue: $*" >&2; exit 1; }
+python3 - "$H" <<'PY' || fail 'source contract'
+import sys
+s = open(sys.argv[1], encoding='utf-8').read()
+reveal = s[s.index('function asbHomeReveal() {'):s.index('// ── localized boot:')]
+assert 'asbFirstFrameMark();' in reveal and 'run(' not in reveal
+for token in ('asbStartupLater(zygiskHeaderRefresh, 700, 1);', 'if (!shown) asbStartupLater(asbStartupLive, 340, 0);',
+              'function uiOtherAudioLater() { asbStartupLater(uiOtherAudioLook, 700, 2); }', 'if (_uiSoundOn) uiOtherAudioLater();',
+              "else asbStartupLater(asbStartupLive, 300, 0);"):
+    assert token in s, token
+assert "setTimeout(function () { try { uiOtherAudioRefresh(); } catch (e) {} }, 1200);" not in s
+snd = s[s.index('function uiSound(kind) {'):s.index('function uiSound(kind) {') + 600]
+assert ' uiOtherAudioRefresh()' not in snd, 'a look inside the tap'
+PY
+command -v node >/dev/null 2>&1 || { echo "SKIP webui v66 startup queue runtime: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cat > "$T/t.js" <<'JS'
+const fs = require('fs'), h = fs.readFileSync(process.argv[2], 'utf8');
+const code = h.slice(h.indexOf('let _asbFirstFrameDone = null;'), h.indexOf('\n/* Contextual sonic feedback.'));
+let now = 0; const timers = []; const listeners = {}; let rafs = [];
+global.setTimeout = (fn, ms) => { timers.push({ at: now + (ms || 0), fn, live: true }); };
+global.performance = { now: () => now };
+global.requestAnimationFrame = fn => rafs.push(fn);
+global.window = { addEventListener: (t, fn) => { listeners[t] = fn; } };
+const flush = () => new Promise(r => setImmediate(r));
+async function advance(ms) {
+  const end = now + ms;
+  for (;;) {
+    await flush();
+    const due = timers.filter(t => t.live && t.at <= end).sort((a, b) => a.at - b.at)[0];
+    if (!due) break;
+    now = Math.max(now, due.at); due.live = false; due.fn();
+  }
+  now = end; await flush();
+}
+eval(code + '\nglobal.Q = { later: asbStartupLater, mark: asbFirstFrameMark };');
+let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
+(async () => {
+  const log = []; let release = null;
+  const zy = () => { log.push('zygisk@' + now); };
+  const live = () => { log.push('live@' + now); return new Promise(r => { release = r; }); };
+  const audio = () => { log.push('audio@' + now); };
+  Q.later(zy, 700, 1); Q.later(audio, 700, 2); Q.later(live, 0, 0); Q.later(zy, 700, 1);
+  await advance(1000);
+  chk(log.length === 0, 'a read ran before the first frame: ' + log);
+  Q.mark(); rafs.splice(0).forEach(f => f()); await advance(1);
+  chk(log.join() === 'live@1000', 'the Live pass is not first after the frame: ' + log);
+  await advance(3000);
+  chk(log.length === 1, 'a second read started while the first was still running: ' + log);
+  release(); await advance(600);
+  chk(log.length === 1, 'the gap after the Live pass was not kept: ' + log);
+  listeners.pointerdown(); await advance(400);
+  chk(log.length === 1, 'a read ran under a finger: ' + log);
+  await advance(800);
+  chk(log.length === 2 && /^zygisk@/.test(log[1]), 'the Zygisk header did not follow: ' + log);
+  await advance(1000);
+  chk(log.length === 3 && /^audio@/.test(log[2]), 'the audio look did not follow: ' + log);
+  chk(log.filter(x => /^zygisk/.test(x)).length === 1, 'a duplicate request ran twice: ' + log);
+  Q.later(zy, 0, 1); await advance(50);
+  chk(log.length === 4, 'a later request after the frame did not run: ' + log);
+  process.exit(bad ? 1 : 0);
+})().catch(e => { console.log('FAIL ' + (e && e.stack || e)); process.exit(1); });
+JS
+node "$T/t.js" "$H" || fail "runtime"
+cat > "$T/f.js" <<'JS'
+const fs = require('fs'), h = fs.readFileSync(process.argv[2], 'utf8');
+const code = h.slice(h.indexOf('let _asbFirstFrameDone = null;'), h.indexOf('\n/* Contextual sonic feedback.'));
+let now = 0; const timers = [];
+global.setTimeout = (fn, ms) => { timers.push({ at: now + (ms || 0), fn }); };
+global.performance = { now: () => now };
+global.window = { addEventListener() {} };
+eval(code + '\nglobal.later = asbStartupLater;');
+let ran = 0; later(() => { ran++; }, 0, 0);
+(async () => {
+  for (const t of timers.sort((a, b) => a.at - b.at).slice()) { if (t.at > 2600) break; now = t.at; t.fn(); await new Promise(r => setImmediate(r)); }
+  for (let i = 0; i < 5; i++) { const due = timers.filter(t => t.at <= 2600 && !t.done); for (const t of due) { if (t.done) continue; t.done = 1; now = Math.max(now, t.at); t.fn(); } await new Promise(r => setImmediate(r)); }
+  if (ran !== 1) { console.log('FAIL a missing reveal held the reads forever: ran=' + ran); process.exit(1); }
+})();
+JS
+node "$T/f.js" "$H" || fail "fallback"
+echo "PASS webui v66 startup queue: background reads wait for the first frame, run one at a time in priority order with gaps, yield to touch, dedupe, and a missing reveal releases them after 2.5 s"
+)
+
 t_webui_quiet_ui_runtime() (
 # Runtime (fix145): the WebUI keeps still and quiet where it should.
 #
@@ -3604,30 +3828,37 @@ global.window = { AudioContext: FakeCtx };
 let playing = '0', looks = [];
 global.run = (cmd) => { looks.push(cmd); return Promise.resolve({ stdout: playing + '\n' }); };
 global._el = () => null; global.T = (k, d) => d; global.toast = () => {};
+// V66: the look goes through the startup queue (after the first frame, never inside a tap).
+const queued = [];
+global.asbStartupLater = (fn, gap) => { if (queued.indexOf(fn) >= 0) return; queued.push(fn); setTimeout(() => { queued.splice(queued.indexOf(fn), 1); fn(); }, gap || 0); };
 eval(fs.readFileSync(process.argv[2], 'utf8') + fs.readFileSync(process.argv[3], 'utf8') + `
 (async () => {
   const flush = () => new Promise(r => setImmediate(r));
   const out = [];
-  advance(2); await flush();                                    // the look taken at page open completes
+  uiSound('nav');
+  out.push('silentBeforeLook=' + (oscs === 0 && looks.length === 0));
+  advance(2); await flush();                                    // the look queued at page open completes
   advance(18);
-  uiSound('nav'); await flush();
-  out.push('first=' + oscs + '/' + looks.length);           // looked at open (nothing playing) and again at the cue 15 s+ later
+  uiSound('nav');
+  out.push('tapNotHeld=' + (looks.length === 1));
+  await flush(); advance(5); await flush();
+  out.push('first=' + oscs + '/' + looks.length);           // looked at open (nothing playing) and again after the cue 15 s+ later
   advance(30);                                                  // own context suspended, cue long ago
   playing = '1';
-  uiSound('nav'); await flush();
+  uiSound('nav'); await flush(); advance(5); await flush();
   const afterLook = oscs;
   out.push('lookedWhilePlaying=' + looks.length);
   uiSound('nav');
   out.push('mutedWhilePlaying=' + (oscs === afterLook));
   advance(20); playing = '0';
-  uiSound('nav'); await flush();
+  uiSound('nav'); await flush(); advance(5); await flush();
   uiSound('nav');
   out.push('backAfterStop=' + (oscs > afterLook));
   // Never look while this page's own stream is the likely player.
-  const n = looks.length; _uiOtherAudioAt = -1e9; uiSound('nav');
+  const n = looks.length; _uiOtherAudioAt = -1e9; uiSound('nav'); advance(1); await flush();
   out.push('noLookRightAfterOwnCue=' + (looks.length === n));
   // Switched off: nothing plays, the choice is stored.
-  advance(30); _uiOtherAudio = false; const o = oscs;
+  advance(30); await flush(); _uiOtherAudio = false; const o = oscs;
   uiSoundToggle(); uiSound('nav');
   out.push('off=' + (oscs === o) + '/' + store.asb_ui_sound);
   uiSoundToggle();
@@ -3638,6 +3869,8 @@ eval(fs.readFileSync(process.argv[2], 'utf8') + fs.readFileSync(process.argv[3],
 `);
 X
 r="$(node "$T/run.js" "$T/u.js" "$T/s.js")"
+printf '%s\n' "$r" | grep -q 'silentBeforeLook=true' || fail "a cue played before the first look at other audio: $r"
+printf '%s\n' "$r" | grep -q 'tapNotHeld=true' || fail "V66: a stale look ran inside the tap: $r"
 printf '%s\n' "$r" | grep -q 'first=4/2' || fail "first cue: $r"
 printf '%s\n' "$r" | grep -q 'lookedWhilePlaying=3' || fail "no second look after 15 s: $r"
 printf '%s\n' "$r" | grep -q 'mutedWhilePlaying=true' || fail "a cue played over another app's audio: $r"
@@ -5181,7 +5414,7 @@ def absent(x, why):
 for pre in ('', 'live', 'cfg', 'rp', 'dev'):
     soc = (pre + 'SocBadge') if pre else 'socBadge'
     ver = (pre + 'VerBadge') if pre else 'verBadge'
-    blk = r'<div class="hdr-cap hdr-info">\s*<button class="badge badge-a" id="%s" type="button" onclick="openDevicePage\(\)" aria-label="Open device diagnostics" title="Device diagnostics">DEVICE</button>\s*<div class="badge badge-a" id="%s">V65</div>\s*</div>' % (soc, ver)
+    blk = r'<div class="hdr-cap hdr-info">\s*<button class="badge badge-a" id="%s" type="button" onclick="openDevicePage\(\)" aria-label="Open device diagnostics" title="Device diagnostics">DEVICE</button>\s*<div class="badge badge-a" id="%s">V\d+</div>\s*</div>' % (soc, ver)
     if not re.search(blk, h): bad.append('%s/%s are not one capsule' % (soc, ver))
 need('.hdr-cap, .theme-toggle, .status-row {\n  background: var(--cap-wash), var(--tabbar-bg, #000000);\n  border: 1px solid var(--cap-edge);\n  box-shadow: var(--cap-shadow);', 'header capsules do not use the shared material')
 need('    var(--cap-wash),\n    var(--tabbar-bg, #000000);\n  border: 1px solid var(--cap-edge);', 'the bar no longer uses the shared material')
@@ -5860,7 +6093,7 @@ let ASB_LANG = 'ru';
 function T(k, d) { const L = I18N[ASB_LANG]; return (L && typeof L[k] === 'string') ? L[k] : d; }
 EOF
   for fn in Tcfg parseLogReport logReportT logReportDur logReportDurSec logReportAuthority logReportHolderWhat logReportIdleAwake logReportHolderName logReportTips \
-    logReportSysuiSteady logReportJwhyShare logReportJwhyCause logReportJwhyTop logReportMiB logReportNetFix logReportLteIdle logReportFullCharge logReportScreenOnDrainState logReportRecorderGap logReportAnalyze logReportHighRefresh logReportHistoryComparable logReportMachineDigest logReportAnalysisT \
+    logReportSysuiSteady logReportWakeBad logReportVendorHeld logReportJwhyShare logReportJwhyCause logReportJwhyTop logReportMiB logReportNetFix logReportLteIdle logReportFullCharge logReportScreenOnDrainState logReportRecorderGap logReportAnalyze logReportHighRefresh logReportHistoryComparable logReportMachineDigest logReportAnalysisT \
     logReportTipText logReportRow logReportSec logReportNote logReportHero logReportTable logReportTweakEvidence logReportZygiskGovernor logReportZygisk \
     deviceVal deviceFill deviceZygiskLinkState deviceZygiskLinkVerdict deviceZygiskLink \
     logReportBrief logReportDxT logReportSelfPush logReportDiagnose logReportDiagSection logReportQualityPanel logReportRef logReportDomainRef logReportTipRef logReportDiagRef logReportAppendAnalysis logReportRender asbPageJumpClear asbPageJumpActive asbPageJump asbPageReference shQuote \
@@ -6654,6 +6887,27 @@ capExternal.sections.jcap_prime = { yes:'9.5', yes_f:'20000', yes_jps:'3.50', no
 capExternal.sections.vcap = { n:'10', prime_vendor:'10', prime_asb:'0', main_vendor:'0', main_asb:'0' };
 const externalDx = logReportDiagnose(capExternal).find(x => x.cause === 'lr_dx_smooth_cap_external');
 chk(externalDx && externalDx.owner === 'rom' && !externalDx.send && !logReportDiagnose(capExternal).some(x => x.cause === 'lr_dx_smooth_cap'), 'ROM-owned prime-cap correlation is not blamed on ASB');
+/* V66: wake stutter while the firmware held the prime cores in most checks (two OnePlus 15
+   release captures: 7.5% against 4.5% with 92 of 140 checks vendor-held, 6.1% against 3.3% with
+   143 of 146) is the ROM's side; the same wake numbers without vendor caps stay ASB's. */
+const wakeRows = ['meta\telapsed_min=600\ttarget_h=0\trunning=1\tprofile=smart', 'jank\tpct=2.4\tjps=1.10\tframes=405195',
+  'jwake\twakes=51\tpct=7.5\tord=4.5\tframes=405195\ttop=com.android.systemui\ttop_pct=15.3'];
+const wakeVendor = parseLogReport(wakeRows.concat(['vcap\tn=140\tmain_vendor=0\tmain_asb=16\tprime_vendor=92\tprime_asb=48']).join('\n'));
+const wvDx = logReportDiagnose(wakeVendor).filter(x => x.area === 'smooth');
+const wvExt = wvDx.find(x => x.cause === 'lr_dx_smooth_wake_external');
+chk(wvExt && wvExt.owner === 'rom' && !wvExt.send && wvExt.state === 'normal' && wvExt.cv.n === '92' && wvExt.cv.of === '140' && wvExt.cv.pct === '7.5',
+  'V66: vendor-held wake stutter is not ASB\'s: ' + JSON.stringify(wvDx));
+chk(!wvDx.some(x => x.cause === 'lr_dx_smooth_wake'), 'V66: vendor-held wake stutter still asks for the developer log');
+chk(logReportDxT('lr_dx_smooth_wake_external', wvExt.cv).indexOf('{') < 0 && logReportDxT('lr_dx_smooth_wake_external', wvExt.cv).indexOf('92') >= 0, 'V66: the external wake card does not fill its placeholders');
+const wvSum = logReportAnalyze(wakeVendor).verdicts.find(v => v.domain === 'smoothness');
+chk(wvSum && wvSum.state === 'normal', 'V66: the smoothness tile turned red on vendor-held wake stutter: ' + JSON.stringify(wvSum));
+const wakeOwn = parseLogReport(wakeRows.concat(['vcap\tn=140\tmain_vendor=0\tmain_asb=140\tprime_vendor=3\tprime_asb=137']).join('\n'));
+const woDx = logReportDiagnose(wakeOwn).find(x => x.cause === 'lr_dx_smooth_wake');
+chk(woDx && woDx.owner === 'asb' && woDx.send && woDx.state === 'problem' && !logReportDiagnose(wakeOwn).some(x => x.cause === 'lr_dx_smooth_wake_external'),
+  'V66: wake stutter under ASB\'s own caps is still ASB\'s');
+chk(logReportAnalyze(wakeOwn).verdicts.find(v => v.domain === 'smoothness').state === 'problem', 'V66: wake stutter under ASB\'s caps no longer marks the tile');
+const wakeFew = parseLogReport(wakeRows.concat(['vcap\tn=6\tprime_vendor=6']).join('\n'));
+chk(logReportDiagnose(wakeFew).some(x => x.cause === 'lr_dx_smooth_wake'), 'V66: six cap checks are not enough to hand the wake stutter to the ROM');
 const capFairDay = parseLogReport('meta\telapsed_min=390\tprofile=battery\njank\tpct=6.6\tjps=3.35\tframes=1009444\njcap_main\tyes=5.6\tyes_f=188151\tyes_jps=2.90\tno=6.8\tno_f=821293\tno_jps=3.45\nvcap\tn=10\tprime_vendor=10\n');
 chk(logReportTips(capFairDay, true).some(t => t.key === 'lr_tip_jank_bad_evidence') && !logReportTips(capFairDay, true).some(t => t.key === 'lr_tip_jank_bad_bat'), 'measured at-cap evidence suppresses unsupported higher-ceiling advice');
 const thinDay = parseLogReport('meta\telapsed_min=180\tprofile=battery\nscr\ton_min=120\toff_min=60\ton_pctph=5\njank\tpct=6.0\tframes=1200\n');
@@ -6939,7 +7193,7 @@ KEYS += ['lr_sec_dx','lr_dx_fix_label','lr_dx_send','lr_dx_send_btn','lr_dx_area
          'lr_dx_screen_hz','lr_dx_fix_screen_hz','lr_dx_also_hz','lr_dx_sysui_set','lr_dx_screen_unknown','lr_dx_smooth_sysui','lr_dx_src_netspeed','lr_dx_src_clocksec',
          'lr_dx_src_livewp','lr_dx_src_hooks','lr_dx_src_other','lr_dx_fix_netspeed','lr_dx_fix_clocksec','lr_dx_fix_livewp',
          'lr_dx_fix_hooks','lr_dx_fix_sysui','lr_dx_smooth_app','lr_dx_fix_smooth_app','lr_dx_smooth_ok','lr_dx_smooth_unknown',
-         'lr_dx_smooth_cap','lr_dx_smooth_cap_bat','lr_dx_fix_cap_bat','lr_dx_smooth_wake','lr_dx_also_cap_ok','lr_dx_also_bhold','lr_dx_also_vendor',
+         'lr_dx_smooth_cap','lr_dx_smooth_cap_bat','lr_dx_fix_cap_bat','lr_dx_smooth_wake','lr_dx_smooth_wake_external','lr_dx_also_cap_ok','lr_dx_also_bhold','lr_dx_also_vendor',
          'lr_dx_heat_long','lr_dx_fix_heat','lr_dx_fix_heat_set','lr_dx_heat_some','lr_dx_heat_ok','lr_dx_also_clamps','lr_dx_asb_crash',
          'lr_dx_fix_asbdiag','lr_dx_asb_cost','lr_dx_asb_ok','lr_dx_sysui_inj','lr_dx_fix_inj','lr_dx_crashes','lr_dx_fix_crashes',
          'lr_dx_gauge','lr_dx_short']
@@ -6952,7 +7206,7 @@ PH.update({'lr_dx_idle_short':['{min}'], 'lr_dx_idle_good':['{pct}','{deep}'], '
       'lr_dx_screen_hz':['{pct}','{share}'], 'lr_dx_also_hz':['{share}','{hz}','{ms}'], 'lr_dx_sysui_set':['{n}','{m}'], 'lr_dx_screen_unknown':['{pct}'], 'lr_dx_smooth_sysui':['{pct}','{n}','{of}','{spct}','{src}'],
       'lr_dx_src_hooks':['{hooks}'], 'lr_dx_smooth_app':['{pct}','{app}','{apct}'], 'lr_dx_smooth_ok':['{pct}'], 'lr_dx_smooth_unknown':['{pct}'],
       'lr_dx_smooth_cap':['{cl}','{yes}','{no}'], 'lr_dx_smooth_cap_bat':['{cl}','{yes}','{no}','{prof}'], 'lr_dx_smooth_wake':['{pct}','{ord}'],
-      'lr_dx_also_cap_ok':['{yes}','{no}'], 'lr_dx_also_bhold':['{k}','{r}','{t}'], 'lr_dx_also_vendor':['{n}','{of}'], 'lr_dx_heat_long':['{min}','{phase}','{cpu}'],
+      'lr_dx_smooth_wake_external':['{pct}','{ord}','{n}','{of}'], 'lr_dx_also_cap_ok':['{yes}','{no}'], 'lr_dx_also_bhold':['{k}','{r}','{t}'], 'lr_dx_also_vendor':['{n}','{of}'], 'lr_dx_heat_long':['{min}','{phase}','{cpu}'],
       'lr_dx_fix_heat_set':['{set}'], 'lr_dx_heat_some':['{min}','{cpu}'], 'lr_dx_heat_ok':['{cpu}'], 'lr_dx_also_clamps':['{n}'],
       'lr_dx_asb_crash':['{n}'], 'lr_dx_asb_cost':['{ms}','{per}'], 'lr_dx_asb_ok':['{ms}','{per}'], 'lr_dx_sysui_inj':['{n}','{m}','{pkg}'],
       'lr_dx_fix_inj':['{pkg}'], 'lr_dx_crashes':['{n}'], 'lr_dx_gauge':['{x}'], 'lr_dx_short':['{min}']})
@@ -8782,7 +9036,8 @@ for token in ('Promise.resolve(pollLive(true))','return cfgLoad();',
 for forbidden in ('serial','imei','account','android_id','setInterval('):
     assert forbidden not in js.lower(), forbidden
 assert 'window._asbBootIntroProbe = I18N_READY.then(asbBootIntroStart, asbBootIntroStart);' in s
-assert 'if (!shown) pollLive(false);' in s
+assert 'if (!shown) asbStartupLater(asbStartupLive, 340, 0);' in s
+assert 'function asbStartupLive() { return pollLive(false); }' in s
 loader=s[s.index('async function asbDeviceInfoLoad()'):s.index('async function asbLogReportLoad()')]
 assert 'const background = arguments[0] === true;' in loader
 assert 'if (background) {' in loader and 'deviceInfoCacheSet(window._asbDeviceInfoRaw);' in loader
@@ -8874,7 +9129,7 @@ assert 'smart_pending' in smart and "kv._smartPending = 1" in smart
 warm=body('function asbStartupWarmCaches() {')
 assert 'probe.then(warm' in warm and 'if (introShown || document.hidden) return;' in warm
 assert 'cfgLoad();' not in warm and 'openConfigPage() on demand' in warm
-assert 'zygiskHeaderRefresh();' in warm and 'setTimeout(' not in warm
+assert 'asbStartupLater(zygiskHeaderRefresh, 700, 1);' in warm and 'setTimeout(' not in warm
 assert 'setTimeout(zygiskHeaderRefresh, 2500)' not in s
 load=s[s.index("window.addEventListener('load', function () {",s.index('function asbStartupWarmCaches')):s.index('function asbNavCurrent')]
 assert 'homeMeterRefresh(true)' not in load
@@ -8886,7 +9141,7 @@ assert schedule in s and s.index(schedule) < s.index("window.addEventListener('l
 assert s.count('homeMeterRefresh(true);')==1  # only the intentional post-profile-switch refresh
 initial=s[s.index('/* Coordinate the ordinary cold read'):s.index('window._asbBootIntroProbe =',s.index('/* Coordinate the ordinary cold read'))]
 assert 'requestAnimationFrame(() => setTimeout(() => {' in initial and '}, 0));' in initial
-assert 'if (!shown) pollLive(false);' in initial and ', 250);' not in initial
+assert 'if (!shown) asbStartupLater(asbStartupLive, 340, 0);' in initial and ', 250);' not in initial
 poll=body('async function pollLive(visible) {')
 for token in ('if (_livePollRun) {','if (!visible || _livePollVisible) return _livePollRun;',
               'if (!_livePollFollow) {','return pollLive(true);','} finally {',
@@ -8926,7 +9181,7 @@ const flush=()=>new Promise(r=>setImmediate(r));
   chk(await refresh()===true&&rendered.smart_mode==='1'&&!('_smartPending' in rendered),'active Smart was marked pending');
   chk(batches.length===2&&batches[1].length===2,'post-switch Smart read was not one batch');
 
-  let cfg=0,zy=0,hidden=false;global._cfgOpen=false;global.cfgLoad=()=>{cfg++};global.zygiskHeaderRefresh=()=>{zy++};
+  let cfg=0,zy=0,hidden=false;global._cfgOpen=false;global.cfgLoad=()=>{cfg++};global.zygiskHeaderRefresh=()=>{zy++};global.asbStartupLater=fn=>fn();
   global.document={hidden:false};global.window={};
   eval(grab('function asbStartupWarmCaches() {')+';globalThis.warm=asbStartupWarmCaches;');
   window._asbBootIntroProbe=Promise.resolve(false);warm();await flush();
@@ -9233,7 +9488,7 @@ const home={style:{transition:''},offsetWidth:412,animate:(frames,options)=>{eve
 global.document={documentElement:root,querySelector:s=>s==='.page:not(.live-page)'?home:null};
 global.window={matchMedia:()=>({matches:false}),addEventListener:()=>{}};
 global.setTimeout=()=>{};global.requestAnimationFrame=fn=>{events.push('raf');fn()};
-global.asbNavAnimMark=()=>events.push('mark');
+global.asbNavAnimMark=()=>events.push('mark');global.asbFirstFrameMark=()=>{};
 global.asbFitPagesNow=()=>{events.push('fit');chk(!rootClasses.has('asb-home-pending'),'fit ran before final layout state');chk(home.style.transition==='none','CSS transition conflicts with WAAPI fit')};
 global.asbFitPages=()=>events.push('fit-queued');
 eval(grab('let _asbHomeRevealed = false;','// ── localized boot:'));
@@ -9988,7 +10243,7 @@ function logReportNote(t) { const n=el('div','lgr-note'); n.textContent=t; retur
 function deviceZygiskLink() { return el('div','dev-zygisk-link'); }
 function zygiskOffCard() { return el('div','zy-off'); }
 function techIcon() { return ''; }
-for (const name of ['zygiskModeCard','zygiskAutoCard','zygiskControlsCard','zygiskLinkCard','zygiskGuardCard','zygiskAotCard'])
+for (const name of ['zygiskModeCard','zygiskAutoCard','zygiskControlsCard','zygiskLinkCard','zygiskGuardCard','zygiskAotCard','lspLiteCard'])
   global[name]=function () { return el('div','lgr-sec '+name); };
 for (const name of ['deviceZygiskOverview','zygiskPageRows','deviceZygiskEditor','zygiskEvidenceCard'])
   global[name]=function () { return el(name==='zygiskEvidenceCard'?'details':'div',name); }
@@ -10006,19 +10261,19 @@ zygiskPageRender(null);
 chk(body.children.length===1 && navs().length===0,'loading state grew populated-page navigation');
 const off={sections:{zygisk_observer:{enabled:'0'}}};
 zygiskPageRender(off);
-chk(body.children.length===2 && body.children[0].id==='zy-status' && navs().length===0,'Off state grew irrelevant navigation');
+chk(body.children.length===3 && body.children[0].id==='zy-status' && body.children[2].id==='zy-lsp' && navs().length===0,'Off state grew irrelevant navigation or lost the LSPosed card');
 page.scrollTop=417;
 zygiskPageRender({sections:{zygisk_observer:{enabled:'1'}}});
 chk(navs().length===1,'populated state must have exactly one section map');
 const ids=body.children.filter(c=>c.id).map(c=>c.id);
-const expected=['zy-status','zy-mode','zy-auto','zy-controls','zy-activity','zy-engine','zy-guard','zy-aot','zy-apps','zy-evidence'];
+const expected=['zy-status','zy-mode','zy-auto','zy-controls','zy-activity','zy-engine','zy-guard','zy-lsp','zy-aot','zy-apps','zy-evidence'];
 chk(JSON.stringify(ids)===JSON.stringify(expected),'section order/IDs regressed: '+JSON.stringify(ids));
 chk(page.scrollTop===417,'an unchanged refresh lost the reading position');
 const nav=navs()[0], buttons=nav._asbJumpButtons;
-chk(buttons.length===7,'the populated section map lost a control');
+chk(buttons.length===8,'the populated section map lost a control');
 chk(nav.attrs.role==='navigation' && buttons.every(b=>b.attrs['aria-controls']),'navigation semantics/controlled section missing');
 chk(buttons[0].attrs['aria-current']==='location' && buttons[0].classList.contains('is-active'),'initial active section is not exposed');
-chk(nav._asbJumpCurrent.textContent===buttons[0]._asbJumpLabel && nav._asbJumpTrack.children.length===7,'dock header/track did not render');
+chk(nav._asbJumpCurrent.textContent===buttons[0]._asbJumpLabel && nav._asbJumpTrack.children.length===8,'dock header/track did not render');
 chk(buttons.every(b=>String(b.className).split(/\s+/).includes('asb-tab') && b.children[0].className==='asb-tab-ico' && b.children[1].className==='asb-tab-label'),'dock does not reuse the main tab structure');
 buttons.forEach(b=>{ chk(typeof b.onclick==='function','jump has no handler: '+b._asbJumpLabel); b.onclick(); });
 chk(buttons.filter(b=>b.attrs['aria-current']==='location'&&b.classList.contains('is-active')).length===1,'active section is ambiguous after jumps');
@@ -10049,7 +10304,7 @@ console.log('ok');
 JS
 out="$(node "$T/render.js" "$H" 2>&1)" || { echo "FAIL fix311 presentation: $out" >&2; exit 1; }
 [ "$out" = ok ] || { echo "FAIL fix311 presentation: $out" >&2; exit 1; }
-echo "PASS fix311 drill-in presentation: real loading/Off/populated rendering, stable anchors and scroll restoration, seven working jumps, conditional report map, progressive disclosure and 13 complete locales"
+echo "PASS fix311 drill-in presentation: real loading/Off/populated rendering, stable anchors and scroll restoration, eight working jumps, conditional report map, progressive disclosure and 13 complete locales"
 )
 
 
@@ -10278,7 +10533,7 @@ for token in ("drawn.className = 'ufo-drawn'","emoji.className = 'ufo-emoji'",
 assert 'setInterval(' not in flight
 warm=s[s.index('function asbStartupWarmCaches()'):s.index('/* fix328:',s.index('function asbStartupWarmCaches()'))]
 assert 'cfgLoad();' not in warm and 'openConfigPage() on demand' in warm
-assert 'zygiskHeaderRefresh();' in warm
+assert 'asbStartupLater(zygiskHeaderRefresh, 700, 1);' in warm
 intro=s[s.index('async function asbBootIntroStart()'):s.index('let _asbHomeRevealed',s.index('async function asbBootIntroStart()'))]
 assert "return cfgLoad();" in intro  # the real once-per-boot preview retains its useful work
 for forbidden in ('serial','imei','account','android_id'):

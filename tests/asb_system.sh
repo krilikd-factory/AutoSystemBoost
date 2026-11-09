@@ -2376,7 +2376,8 @@ H="$(cd "$(dirname "$0")/.." && pwd)/webroot/index.html"
 fail=0
 sed -n '/^async function pollLive(visible) {/,/^  try {/p' "$H" | grep -q 'if (document.hidden) return;' \
   || { echo "FAIL webui: pollLive runs while hidden" >&2; fail=1; }
-grep -q "if (!document.hidden) pollLive(_liveOpen);" "$H" \
+sed -n "/^document.addEventListener('visibilitychange', () => {/,/^});/p" "$H" | tr '\n' ' ' \
+  | grep -q "if (document.hidden) return;   if (_liveOpen) pollLive(true);   else asbStartupLater(asbStartupLive, 300, 0);" \
   || { echo "FAIL webui: no catch-up poll when the page is shown again" >&2; fail=1; }
 [ "$fail" = 0 ] && echo "PASS webui hidden poll"
 exit "$fail"
@@ -7137,9 +7138,9 @@ absent "$WEB" "toggleAttribute('data-asb-glass'"
 # fix192: the pair is one segmented capsule in the bottom bar's material; the selected icon
 # sits on the bar's tonal pill (which follows html[data-asb-theme]) - never a full green fill.
 need "$WEB" '.theme-choice { position:relative; z-index:1; display:grid; place-items:center; width:38px; height:24px;'
-need "$WEB" '<div class="badge badge-a" id="verBadge">V65</div>'
-need "$WEB" '<div class="badge badge-a" id="liveVerBadge">V65</div>'
-need "$WEB" '<div class="badge badge-a" id="cfgVerBadge">V65</div>'
+need "$WEB" '<div class="badge badge-a" id="verBadge">V66</div>'
+need "$WEB" '<div class="badge badge-a" id="liveVerBadge">V66</div>'
+need "$WEB" '<div class="badge badge-a" id="cfgVerBadge">V66</div>'
 need "$WEB" '.theme-choice.active { color:var(--accent); }'
 need "$WEB" 'html[data-asb-theme="light"] .theme-toggle::before { transform: translateX(38px); }'
 need "$WEB" 'html[data-asb-glass="1"] .theme-toggle::before { transform: translateX(76px); }'
@@ -7544,12 +7545,12 @@ release_identity_valid() (
 for _manual_ref in '' main develop maintenance/V64; do
   release_identity_valid "$_manual_ref" workflow_dispatch branch || { echo "FAIL: manual branch build rejected: $_manual_ref" >&2; exit 1; }
 done
-# GitHub Release and tag-ref runs may publish an asset, so only spellings for V64 are valid.
-for _valid_tag in V65 v65 65; do
+# GitHub Release and tag-ref runs may publish an asset, so only spellings of the module.prop version are valid.
+for _valid_tag in V66 v66 66; do
   release_identity_valid "$_valid_tag" release tag || { echo "FAIL: accepted release tag rejected: $_valid_tag" >&2; exit 1; }
   release_identity_valid "$_valid_tag" push tag || { echo "FAIL: accepted tag ref rejected: $_valid_tag" >&2; exit 1; }
 done
-for _invalid_tag in '' main V64 v64 64 V66 v66 66 debug10 'V65 '; do
+for _invalid_tag in '' main V65 v65 65 V67 v67 67 debug10 'V66 '; do
   if release_identity_valid "$_invalid_tag" release tag >"$TMP_RELEASE_GATE/invalid-tag.out" 2>&1; then
     echo "FAIL: mismatched release tag accepted: $_invalid_tag" >&2
     exit 1
