@@ -7,6 +7,9 @@
  *     asb --lspd verbose-unset [db]         -> removes the row (LSPosed's default again)
  *     asb --lspd modules [db]               -> fix277: read-only module/scope inventory
  *                                              "module|pkg|enabled|scopes" and "scope|module|app|user"
+ *     asb --lspd scope-del MOD APP USER [db] -> V66: removes one scope row, "result=removed|absent"
+ *     asb --lspd scope-add MOD APP USER [db] -> V66: puts one back, "result=added|present|no_module"
+ *     asb --lspd module-set MOD 0|1 [db]     -> V66: LSPosed's own enabled flag, "before=/after="
  *
  * Asked for by a user whose LSPosed had written 31 MB of verbose logs. LSPosed keeps the
  * switch in its own SQLite database, /data/adb/lspd/config/modules_config.db, table configs,
@@ -190,12 +193,141 @@ static int asb_lspd_modules(asb_sqlite_t *s, sqlite3_h *db) {
     return 0;
 }
 
+/* V66: the lighter-LSPosed edits. Only on the owner's tap or the opted-in automatic pass
+ * (runtime/asb_lsposed_lite.sh), each one journaled there so it can be put back exactly. The
+ * rows are the ones LSPosed's own manager writes (modules.enabled, scope(mid, app_pkg_name,
+ * user_id)); the daemon reads them when it starts, so an edit takes effect at the next boot.
+ * Names are plain package identifiers (asb_lspd_name_ok) before they reach a statement, and
+ * a database without these columns is left untouched. */
+static int asb_lspd_int(asb_sqlite_t *s, sqlite3_h *db, const char *q, int *out) {
+    sqlite3_stmt_h *st = NULL;
+    if (s->prepare_v2(db, q, -1, &st, NULL) != ASB_SQLITE_OK || !st) {
+        if (st) s->finalize(st);
+        return -1;
+    }
+    int rc = s->step(st);
+    if (rc == ASB_SQLITE_ROW) *out = s->column_int(st, 0);
+    s->finalize(st);
+    return rc == ASB_SQLITE_ROW ? 1 : (rc == ASB_SQLITE_DONE ? 0 : -1);
+}
+static int asb_lspd_schema_ok(asb_sqlite_t *s, sqlite3_h *db) {
+    static const char *const q[] = {
+        "SELECT mid, module_pkg_name, enabled FROM modules LIMIT 0",
+        "SELECT mid, app_pkg_name, user_id FROM scope LIMIT 0"
+    };
+    for (size_t i = 0; i < sizeof(q) / sizeof(q[0]); i++) {
+        sqlite3_stmt_h *st = NULL;
+        int rc = s->prepare_v2(db, q[i], -1, &st, NULL);
+        if (st) s->finalize(st);
+        if (rc != ASB_SQLITE_OK) return 0;
+    }
+    return 1;
+}
+static int asb_lspd_edit(int argc, char **argv) {
+    const char *cmd = argv[0];
+    int is_mod = strcmp(cmd, "module-set") == 0;
+    int need = is_mod ? 3 : 4;
+    if (argc < need) return 2;
+    const char *mod = argv[1];
+    const char *app = is_mod ? NULL : argv[2];
+    const char *num = is_mod ? argv[2] : argv[3];
+    if (!asb_lspd_name_ok((const unsigned char *)mod) || strcmp(mod, "lspd") == 0 ||
+        (app && !asb_lspd_name_ok((const unsigned char *)app))) {
+        puts("result=bad_request");
+        return 2;
+    }
+    int val = 0;
+    for (const char *c = num; ; c++) {
+        if (!*c) break;
+        if (*c < '0' || *c > '9' || c - num > 5) { puts("result=bad_request"); return 2; }
+        val = val * 10 + (*c - '0');
+    }
+    if (!*num || (is_mod && val > 1)) { puts("result=bad_request"); return 2; }
+    const char *path = (argc > need) ? argv[need] : ASB_LSPD_DB;
+    FILE *probe = fopen(path, "rb");
+    if (!probe) { puts("result=unknown\nreason=no_database"); return 3; }
+    fclose(probe);
+    asb_sqlite_t s;
+    memset(&s, 0, sizeof(s));
+    if (asb_sqlite_load(&s) != 0) { puts("result=unknown\nreason=no_sqlite"); return 4; }
+    sqlite3_h *db = NULL;
+    if (s.open_v2(path, &db, ASB_SQLITE_OPEN_READWRITE, NULL) != ASB_SQLITE_OK || !db) {
+        if (db) s.close(db);
+        puts("result=unknown\nreason=open_failed");
+        return 5;
+    }
+    s.busy_timeout(db, 3000);
+    if (!asb_lspd_schema_ok(&s, db)) {
+        s.close(db);
+        puts("result=unknown\nreason=unexpected_schema");
+        return 6;
+    }
+    char q[512];
+    int mid = -1;
+    snprintf(q, sizeof(q), "SELECT mid FROM modules WHERE module_pkg_name='%s'", mod);
+    int found = asb_lspd_int(&s, db, q, &mid);
+    if (found < 0) { s.close(db); puts("result=unknown\nreason=read_failed"); return 7; }
+    if (found == 0) { s.close(db); puts("result=no_module"); return 0; }
+    if (s.exec(db, "BEGIN IMMEDIATE", NULL, NULL, NULL) != ASB_SQLITE_OK) {
+        s.close(db);
+        puts("result=unknown\nreason=busy");
+        return 7;
+    }
+    int before = -1, after = -1, rc = 0;
+    const char *res = "ok";
+    if (is_mod) {
+        snprintf(q, sizeof(q), "SELECT enabled FROM modules WHERE mid=%d", mid);
+        if (asb_lspd_int(&s, db, q, &before) != 1) rc = 7;
+        if (!rc) {
+            snprintf(q, sizeof(q), "UPDATE modules SET enabled=%d WHERE mid=%d", val, mid);
+            if (s.exec(db, q, NULL, NULL, NULL) != ASB_SQLITE_OK) rc = 7;
+        }
+        if (!rc) {
+            snprintf(q, sizeof(q), "SELECT enabled FROM modules WHERE mid=%d", mid);
+            if (asb_lspd_int(&s, db, q, &after) != 1 || (after ? 1 : 0) != val) rc = 8;
+        }
+    } else {
+        int add = strcmp(cmd, "scope-add") == 0;
+        snprintf(q, sizeof(q), "SELECT COUNT(*) FROM scope WHERE mid=%d AND app_pkg_name='%s' AND user_id=%d", mid, app, val);
+        if (asb_lspd_int(&s, db, q, &before) != 1) rc = 7;
+        if (!rc && add && before == 0) {
+            snprintf(q, sizeof(q), "INSERT INTO scope(mid, app_pkg_name, user_id) VALUES(%d, '%s', %d)", mid, app, val);
+            if (s.exec(db, q, NULL, NULL, NULL) != ASB_SQLITE_OK) rc = 7;
+        } else if (!rc && !add && before > 0) {
+            snprintf(q, sizeof(q), "DELETE FROM scope WHERE mid=%d AND app_pkg_name='%s' AND user_id=%d", mid, app, val);
+            if (s.exec(db, q, NULL, NULL, NULL) != ASB_SQLITE_OK) rc = 7;
+        }
+        if (!rc) {
+            snprintf(q, sizeof(q), "SELECT COUNT(*) FROM scope WHERE mid=%d AND app_pkg_name='%s' AND user_id=%d", mid, app, val);
+            if (asb_lspd_int(&s, db, q, &after) != 1 || (add ? after != 1 : after != 0)) rc = 8;
+        }
+        res = add ? (before > 0 ? "present" : "added") : (before > 0 ? "removed" : "absent");
+    }
+    if (rc) {
+        s.exec(db, "ROLLBACK", NULL, NULL, NULL);
+        s.close(db);
+        puts(rc == 8 ? "result=unknown\nreason=not_written" : "result=unknown\nreason=write_failed");
+        return rc;
+    }
+    if (s.exec(db, "COMMIT", NULL, NULL, NULL) != ASB_SQLITE_OK) {
+        s.exec(db, "ROLLBACK", NULL, NULL, NULL);
+        s.close(db);
+        puts("result=unknown\nreason=write_failed");
+        return 7;
+    }
+    s.close(db);
+    printf("result=%s\nbefore=%d\nafter=%d\n", res, before ? 1 : 0, after ? 1 : 0);
+    return 0;
+}
+
 static int asb_lspd_cli(int argc, char **argv) {
     if (argc < 1) {
-        fprintf(stderr, "usage: asb --lspd verbose-get|verbose-set on|off|verbose-unset|modules [db]\n");
+        fprintf(stderr, "usage: asb --lspd verbose-get|verbose-set on|off|verbose-unset|modules|scope-del|scope-add|module-set ... [db]\n");
         return 2;
     }
     const char *cmd = argv[0];
+    if (strcmp(cmd, "scope-del") == 0 || strcmp(cmd, "scope-add") == 0 || strcmp(cmd, "module-set") == 0)
+        return asb_lspd_edit(argc, argv);
     if (strcmp(cmd, "modules") == 0) {
         const char *mpath = (argc > 1) ? argv[1] : ASB_LSPD_DB;
         FILE *mp = fopen(mpath, "rb");
