@@ -10,6 +10,7 @@ SCAN="$D/zygisk_aot_scan"
 LOG="$D/zygisk_aot_log"
 LOCK="$D/zygisk_aot.lock"
 CHARGE="$D/zygisk_aot_charge"
+EXCL="$D/zygisk_aot_exclude"
 CLASSES="${ASB_ZYGISK_CLASSES:-$MODDIR/zygisk/classes}"
 POWER="${ASB_ZA_POWER:-/sys/class/power_supply/battery}"
 BOOTID="${ASB_ZA_BOOTID:-/proc/sys/kernel/random/boot_id}"
@@ -80,6 +81,9 @@ _note() {
   mkdir -p "$D" 2>/dev/null
   { [ -f "$LOG" ] && tail -n 39 "$LOG"; printf '%s|%s|%s|%s\n' "$(_now)" "$1" "$2" "$3"; } > "$LOG.tmp" 2>/dev/null \
     && mv -f "$LOG.tmp" "$LOG"
+}
+_excluded() {
+  [ -s "$EXCL" ] && grep -qxF "$1" "$EXCL" 2>/dev/null
 }
 _ledger_top() {
   cat "$RUN"/state.*.tsv 2>/dev/null | awk -F'\t' '$1 == "L" && $2 ~ /^[A-Za-z0-9_.]+$/ { t[$2] += $5 } END { for (p in t) if (t[p] > 0) print p, t[p] }'
@@ -172,14 +176,15 @@ _strong() {
   return 1
 }
 _ranked() {
-  awk -v cf="$CUM" -v lf="$LAUNCH" -v kf="$CLASSES" '
+  awk -v cf="$CUM" -v lf="$LAUNCH" -v kf="$CLASSES" -v xf="$EXCL" '
     BEGIN {
+      while ((getline ln < xf) > 0) x[ln] = 1
       while ((getline ln < cf) > 0) { n = split(ln, f, " "); if (n == 3 && f[1] ~ /^[A-Za-z0-9_.]+$/) z[f[1]] = f[2] + 0 }
       while ((getline ln < lf) > 0) { n = split(ln, f, "|"); if (n == 4 && f[2] ~ /^[A-Za-z0-9_.]+$/) e[f[2]]++ }
       while ((getline ln < kf) > 0) if (ln ~ /^slow=[A-Za-z0-9_.]+$/) sl[substr(ln, 6)] = 1
       for (p in z) sc[p] = z[p]
       for (p in e) if (!(p in sc) || e[p] > sc[p]) sc[p] = e[p]
-      for (p in sc) print p, sc[p], (p in sl) ? 1 : 0
+      for (p in sc) if (!(p in x)) print p, sc[p], (p in sl) ? 1 : 0
     }' | awk '$2 >= 2' | sort -k3,3nr -k2,2nr | head -n "$TOP" | awk '{ print $1, $2 }'
 }
 _refresh() {
@@ -207,8 +212,9 @@ _due() {
 }
 _candidates() {
   _cn="$(_now)"
-  awk -F'|' -v now="$_cn" -v retry="$RETRY" '
-    $3 ~ /^(verify|quicken|extract|assume-verified|run-from-apk|run-from-apk-fallback|run-from-vdex-fallback|space|space-profile|error)$/ && (now - $6 >= retry) { print $1 }' "$APPS" 2>/dev/null
+  awk -F'|' -v now="$_cn" -v retry="$RETRY" -v xf="$EXCL" '
+    BEGIN { while ((getline ln < xf) > 0) x[ln] = 1 }
+    !($1 in x) && $3 ~ /^(verify|quicken|extract|assume-verified|run-from-apk|run-from-apk-fallback|run-from-vdex-fallback|space|space-profile|error)$/ && (now - $6 >= retry) { print $1 }' "$APPS" 2>/dev/null
 }
 _set_row() {
   awk -F'|' -v OFS='|' -v p="$1" -v f="$2" -v r="$3" -v tr="$4" -v res="$5" -v ca="$6" -v bf="$7" -v ck="$(_now)" '
@@ -227,6 +233,7 @@ _compile_run() {
   for _cp in $(_candidates); do
     [ "$_done" -lt "$MAXRUN" ] || break
     _pkgok "$_cp" || continue
+    _excluded "$_cp" && continue
     [ -f "$ON" ] || break
     if ! _charging || ! _screen_off || ! _cool; then _note "$_cp" stopped -; break; fi
     _b="$(_filter "$_cp")"; _bf="${_b%% *}"
@@ -252,6 +259,51 @@ _compile_run() {
     _done=$((_done + 1))
   done
   rm -rf "$LOCK" 2>/dev/null
+}
+_asb_compiled() {
+  [ "$(awk -F'|' -v p="$1" '$1 == p { print $7; exit }' "$APPS" 2>/dev/null)" = compiled ] && return 0
+  [ -s "$LOG" ] && awk -F'|' -v p="$1" '$2 == p && $3 == "compiled" { f = 1 } END { exit !f }' "$LOG" 2>/dev/null
+}
+_reset() {
+  _rb="$(_filter "$1")"; _rbf="${_rb%% *}"
+  if command -v timeout >/dev/null 2>&1; then
+    _ro="$(timeout "$CTIME" pm compile --reset "$1" 2>&1)"
+  else
+    _ro="$(pm compile --reset "$1" 2>&1)"
+  fi
+  _ra="$(_filter "$1")"; _raf="${_ra%% *}"
+  case "$_rbf" in ''|*[!a-z-]*) _rbf=unknown ;; esac
+  case "$_raf" in ''|*[!a-z-]*) _raf=unknown ;; esac
+  case "$_ro" in
+    *Success*) _note "$1" reset "$_rbf>$_raf"; echo 'reset=ok' ;;
+    *) _note "$1" reset_failed "$_rbf>$_raf"; echo 'reset=failed' ;;
+  esac
+}
+_exclude() {
+  _pkgok "$1" || { echo 'result=bad_request'; return 2; }
+  mkdir -p "$D" 2>/dev/null
+  { [ -s "$EXCL" ] && grep -vxF "$1" "$EXCL"; echo "$1"; } | tail -n 64 > "$EXCL.tmp" 2>/dev/null && mv -f "$EXCL.tmp" "$EXCL" \
+    || { rm -f "$EXCL.tmp" 2>/dev/null; echo 'result=failed'; return 1; }
+  if ! _asb_compiled "$1"; then
+    echo 'reset=skipped'
+  elif [ "${ASB_ZA_SYNC:-0}" = 1 ]; then
+    _reset "$1"
+  else
+    MODDIR="$MODDIR" sh "$0" reset "$1" >/dev/null 2>&1 &
+    echo 'reset=started'
+  fi
+  if [ -f "$APPS" ]; then
+    awk -F'|' -v p="$1" '$1 != p' "$APPS" > "$APPS.t" 2>/dev/null && mv -f "$APPS.t" "$APPS"
+  fi
+  echo 'result=excluded'
+}
+_include() {
+  _pkgok "$1" || { echo 'result=bad_request'; return 2; }
+  if [ -s "$EXCL" ]; then
+    grep -vxF "$1" "$EXCL" > "$EXCL.tmp" 2>/dev/null
+    if [ -s "$EXCL.tmp" ]; then mv -f "$EXCL.tmp" "$EXCL"; else rm -f "$EXCL.tmp" "$EXCL" 2>/dev/null; fi
+  fi
+  echo 'result=included'
 }
 _tick() {
   [ -f "$ON" ] || return 0
@@ -302,6 +354,9 @@ _status() {
       pre = (ca > 0) ? med($1, 0, ca) : "0|0"; post = (ca > 0) ? med($1, ca, 9999999999) : "0|0"
       printf "app|%s|%s|%s|%s|%s|%s|%d|%s|%s|%s|%s\n", $1, $2, $3, $4, ($6 == "" ? 0 : $6), ($7 == "" ? "-" : $7), ca, ($9 == "" ? "-" : $9), med($1, 0, 9999999999), pre, post
     }' "$APPS" 2>/dev/null
+  [ -s "$EXCL" ] && while IFS= read -r _xp; do
+    _pkgok "$_xp" && printf 'exclude|%s\n' "$_xp"
+  done < "$EXCL"
   [ -s "$LOG" ] && tail -n 12 "$LOG" | while IFS='|' read -r _le _lp _lw _ld; do
     _pkgok "$_lp" && printf 'event|%s|%s|%s|%s\n' "$_le" "$_lp" "$_lw" "$_ld"
   done
@@ -315,7 +370,10 @@ case "${1:-status}" in
   tick) _tick ;;
   scan) _launch_scan ;;
   compile-run) _compile_run ;;
-  restore-all) rm -rf "$ON" "$APPS" "$APPS.new" "$APPS.t" "$CUM" "$CUM.tmp" "$CUM.new" "$LAUNCH" "$LAUNCH.tmp" "$SCAN" "$LOG" "$LOG.tmp" "$LOCK" "$CHARGE" "$CHARGE.tmp" 2>/dev/null ;;
+  exclude) _exclude "${2:-}" || exit $? ;;
+  include) _include "${2:-}" || exit $? ;;
+  reset) _pkgok "${2:-}" || { echo 'result=bad_request'; exit 2; }; _reset "$2" ;;
+  restore-all) rm -rf "$EXCL" "$EXCL.tmp" "$ON" "$APPS" "$APPS.new" "$APPS.t" "$CUM" "$CUM.tmp" "$CUM.new" "$LAUNCH" "$LAUNCH.tmp" "$SCAN" "$LOG" "$LOG.tmp" "$LOCK" "$CHARGE" "$CHARGE.tmp" 2>/dev/null ;;
   *) echo 'result=bad_request'; exit 2 ;;
 esac
 exit 0
