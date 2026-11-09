@@ -600,6 +600,23 @@ listed here because Device diagnostics, the WebUI and host fixtures consume them
   `batch=1` prevents another package batch in the same charging session, including after the
   ordinary seven-day per-package retry expires. A missing or malformed battery temperature is
   unknown and blocks compilation; it is never treated as cool.
+- `/data/adb/asb/lsp_lite/` (V66, runtime/asb_lsposed_lite.sh) exists once the LSPosed card has
+  read its evidence. `evidence` holds `at=EPOCH`, `i|PKG|UID` (installed), `us=ok|none` with
+  `u|PKG|LAST_USED_EPOCH` (dumpsys usagestats), `c|MODULE|APP|COUNT` (crash/ANR stacks through
+  the module). `journal` lines are `ID|EPOCH|user|auto|ab|scope_del|module_off|module_on|MODULE|APP|USER|PREV|active|undone`
+  (nine fields: id, time, kind, action, module, app or `-`, user, previous value, state).
+  `written` is the epoch of the last write (`pending_reboot=1` while it is newer than the boot),
+  `auto` switches the daily pass on, `auto_at` is its last run, `events` the last 40
+  `EPOCH|KIND|WHAT|MODULE|APP` lines and `ab` the A/B state (`module phase t0 dm0 uids cpu_acc
+  a_off a_on a_cpu b_off b_on b_cpu result reason profile_changed`, rates x100 %/h, CPU ms/h).
+  Status rows: `mod|PKG|ENABLED|SCOPES|REACH|VERDICT|REASONS|BG_PER_DAY|UNUSED|CRASHES` and
+  `cand|MODULE|APP|USER|unused|crash|BG_PER_DAY|DAYS_UNUSED|CRASHES|AUTO`.
+- `/data/adb/asb/zygisk_aot_exclude` (V66) holds one owner-excluded package per line (at most
+  64). ART status adds `exclude|PKG` rows. Commands: `exclude PKG` prints `reset=skipped|started`
+  (or `ok|failed` with `ASB_ZA_SYNC=1`) and `result=excluded`; `include PKG` prints
+  `result=included`; an invalid name prints `result=bad_request` and exits 2. The reset writes
+  `event|AT|PKG|reset|BEFORE>AFTER` or `reset_failed`. Only an app whose row says `compiled`, or
+  whose compile is in the event log, is reset.
 
 Host fixtures validate parsing, gating and rollback only. They do not prove Android framework
 behavior, vendor AppOps semantics, real Zygisk loading, notification latency, thermal response or
