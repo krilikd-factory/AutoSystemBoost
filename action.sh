@@ -864,6 +864,7 @@ T_CPR_PROFILE="profile rail"
 T_CPR_ENV="efficiency envelope"
 T_CPR_HEAT="heat budget (%s)"
 T_CPR_FLOOR="efficiency rail asked %s MHz - the responsiveness floor keeps it higher"
+T_CPR_TAIL="a lift or burst has just ended - the ceiling comes down on the next pass (the rail asks %s MHz)"
 T_PRIME_CEIL="prime ceiling: %s MHz · %s"
 T_BURST_ON="⚡ burst boost ACTIVE - prime lifted for heavy work (max 20 s)"
 T_BURST_N="burst boosts this session: %s"
@@ -1614,7 +1615,12 @@ if [ -n "$_g_state" ]; then
       *)                   _cpr_t="$_cpr" ;;
     esac
     if [ "${_cprq:-0}" -gt "$_cpe_s" ] 2>/dev/null && [ "$(_st prime_escape)" != 1 ] && [ "$(_st unlock_lift)" != 1 ]; then
-      _cpr_t="$(_s "$T_CPR_FLOOR" "$((_cpe_s / 1000))")"
+      _cpr_hw="$(cat "/sys/devices/system/cpu/cpufreq/policy${_sp_top}/cpuinfo_max_freq" 2>/dev/null)"
+      if [ -n "$_sp_top" ] && [ "${_cpr_hw:-0}" -gt 0 ] 2>/dev/null && [ $(( _cprq * 2 )) -gt "$_cpr_hw" ]; then
+        _cpr_t="$(_s "$T_CPR_TAIL" "$((_cpe_s / 1000))")"
+      else
+        _cpr_t="$(_s "$T_CPR_FLOOR" "$((_cpe_s / 1000))")"
+      fi
       _cpe_s="$_cprq"
     fi
     _f "       $T_PRIME_CEIL" "$((_cpe_s / 1000))" "$_cpr_t"

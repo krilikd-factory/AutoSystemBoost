@@ -862,6 +862,30 @@ Heavy work, app launches, a fresh touch, the camera, the unlock lift, a thermal 
 
 The ZYGISK page shows all of this under **What Smart learned**. asbdiag and the full-day report print the same figures.
 
+### 🧪 11.18. Smart lab (V66)
+
+The Smart records learn the screen-off CPU ceilings and the screen-on lean of six situations. The lab (`smart_lab=1`, Smart profile only) runs the same kind of side-by-side experiment for more settings, one at a time:
+
+| Knob | What is compared | When it runs |
+|---|---|---|
+| `radio` | "5G Only When Needed" (LTE on light traffic) against 5G allowed | screen on, mobile data, `net_lte_light=1` |
+| `wake_lift` | the unlock lift at `unlock_lift_pct` against 15 points less | glances (screen-on stretches of 90 s or less), with SystemUI's frame counts |
+| `membus_on` | the CPU's memory-bus votes free, at 75 % or at 55 % of the bus maximum | screen on, applied only while calm: no touch for 10 s, no lift, no burst, nothing heavy, no camera |
+| `membus_off` | the same votes free, at 50 % or at the lowest step | quiet deep idle |
+| `app1`..`app3` | the situation's lean, 0.1 toward economy, 0.1 toward headroom | while one of the three apps that cost the most with the screen on is in front |
+
+How a setting wins: blocks alternate the best setting so far and one challenger, and each challenger block is compared with the champion block next to it (within 4 hours - 12 for glances -, 2.5 C of battery temperature, 25 points of charge, the same brightness band, and for the radio a mobile traffic volume within a factor of two). The challenger takes over at 3 % cheaper or more with t >= 2.5, but only when it does not keep the cores at their ceiling more often (+8 points), make the counted frames jankier (+1 point) or warm the battery faster (+1.5 C an hour). A challenger 15 % dearer after three pairs is dropped; no verdict after 16 pairs (12 screen off) keeps the champion.
+
+One screen-on experiment runs at a time, and none while the records are still trying a setting for the same situation. An app with its own slot is left out of the records' situations.
+
+Dynamics: after a verdict the best setting keeps being measured in the blocks no experiment needs. When it costs 15 % more than when it won, four blocks running, the knob is tested again at once instead of waiting for the 21-day re-check.
+
+Memory bus (`smart_lab_mem=1`): the voters are each directory under `/sys/devices/system/cpu/bus_dcvs/DDR` and `.../LLCC` with a writable `max_freq` (else a DDR devfreq device). The display, GPU, video and modem vote through their own interconnect paths, which are never touched. A cap is the lowest listed step at or above its share, written only under the voter's own value, read back, and given back when the cap ends and at shutdown. A voter whose value someone else changed, or that refused three writes, is left alone until the next boot.
+
+Also in V66 dev8: screen-off records blocks drop from 40 to 20 minutes once three pairs or more sit within 4 % and the drain is at least 75 mA - a drain the 1 mAh gauge can still resolve in 20 minutes; a quiet night keeps its 40-minute blocks. "Panel maximum on touch" (`ltpo_peak_force=1`, with Force LTPO) asks SurfaceFlinger for the panel's highest reported mode at the resolution in use while the screen is touched (165 Hz on panels that list it) and releases it when the touch watcher goes idle.
+
+Files: `/data/adb/asb/smart_lab.bin` (store), `/dev/.asb/smart_lab.txt` (summary: `knob|...`, `mem|...`, `now|...`), `/dev/.asb/lab_radio` (`nr` while 5G is allowed by the lab). Results are shown under "What Smart learned" and in asbdiag.
+
 ## 🔐 12. Device information, privacy and evidence quality
 
 ### 🕵️ 12.1. Read-only, on-demand collection
