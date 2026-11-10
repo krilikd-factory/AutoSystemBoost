@@ -4,6 +4,17 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev10 - a lab test that depended on directory order
+
+CI failed `t_smart_lab_native_runtime`: "external value overwritten or own cap not given back:
+2092000 4224000". The engine did the right thing. The test wrote the "external" value to the
+first voter the bus probe found, then checked a fixed path for it, and the probe lists voters
+in readdir order. That order is creation order on one filesystem and reversed on another (the
+CI runner's, and tmpfs here).
+
+The harness now reports the two voters by the index the engine uses. The check passes with
+both orders, and the old check fails on tmpfs exactly as in CI. No module code changed.
+
 ## V66 dev9 - a smaller package, the ZYGISK note gutter
 
 Input: the owner asked for a smaller module with nothing lost, an opinion on pruning old Smart
