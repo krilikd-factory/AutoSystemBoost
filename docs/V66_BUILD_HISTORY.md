@@ -4,6 +4,245 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev9 - a smaller package, the ZYGISK note gutter
+
+Input: the owner asked for a smaller module with nothing lost, an opinion on pruning old Smart
+sessions, and noticed notes on the ZYGISK page sitting against their green line.
+
+**Smaller package, same behaviour.** A host build of the release tree came to 7.4 MB unpacked,
+2.25 MB zipped, without the native binaries.
+- `tools/asb_slim_package.py` runs on the staged package in both workflows:
+  - translations are written without indentation (-181 KB): each file must parse to the same
+    object;
+  - comment lines come out of the page's script and style blocks (-264 KB): only lines that
+    are nothing but a comment, so no string, regex or URL can be cut. The step is skipped if
+    the page ever gains a template literal or a continued string;
+  - every script block must still compile;
+  - asbdiag's own settings-registry reader must read the same rows. If anything differs, the
+    originals are restored and the build fails.
+  - In a browser, 3 locales show the same DOM, the same CSSOM hash and the same global
+    functions, with no page errors.
+- `tools/asb_diag.sh` was shipped next to the byte-identical `system/bin/asbdiag` (316 KB).
+  The package now carries it once, and the installer links `tools/asb_diag.sh` to it after the
+  tool prune, so both paths still run.
+- The Zygisk observer is linked with section GC and `--exclude-libs,ALL`. The static C++
+  runtime it carried was whole and exported from inside every observed app process. On the
+  host compiler the same flags took the library from 1.46 MB to 0.61 MB and the dynamic table
+  from 4128 symbols to 9, with both Zygisk entries still exported. The NDK figure will show in
+  the CI log (`ls -lh` added); the existing `llvm-nm` export check still gates the build.
+- Expected effect without the binaries: about -760 KB unpacked and about -230 KB zipped. The
+  observer libraries come on top of that.
+
+**ZYGISK page.** dev4's two-line clamp set `padding: 0` on folded notes. That also took the
+12 px gutter from the notes with an accent line, so their text touched the line again; this
+had been fixed once before. The clamp now resets only the block padding, and folded evidence
+notes keep `padding-inline-start: 12px`. Measured in Chromium: before 0 px, after 12 px.
+
+**Sessions.** Nothing was changed, so old sessions are not pruned. Each of the 12 slots learns
+from a session at 8 %, so a session 50 sessions back weighs 1.5 %. Full confidence is reached at
+8 effective sessions. A slot not seen for 7 days loses confidence, down to 30 % at 37 days.
+Unreliable sessions are already dropped, and the history file is rotated at 500 entries.
+Dropping "inefficient" sessions would teach Smart only from good outcomes and hide the bad
+settings it must avoid.
+
+**Native**: `src/build_ndk_release.sh` (Zygisk flags), so a CI rebuild is needed for the
+smaller observer libraries. No C source changed.
+
+**Tests**: `t_webui_slim_package_runtime` (tool equivalence, template-literal no-op, workflow
+and build pins); the installer prune test now checks the restored `tools/asb_diag.sh`.
+
+## V66 dev8 - Smart lab, memory bus, panel maximum, audit items
+
+Input: the owner's request to implement the four dev7 proposals plus memory-bus control, more
+control points and adaptation to how the metrics move, to let forced LTPO reach 165 Hz on
+panels that have it, and to act on an external audit of dev7.
+
+**Smart lab** (`src/asb_lab.h`, `smart_lab=1`, Smart only). It runs paired experiments for
+seven knobs:
+- `radio` - 5G only when needed against 5G allowed;
+- `wake_lift` - the unlock lift against 15 points less, over glances, with SystemUI frames;
+- `membus_on` - CPU bus votes free / 75 % / 55 % while the screen is calm;
+- `membus_off` - free / 50 % / the lowest step on quiet deep idle;
+- `app1`..`app3` - its own lean for the three apps that cost the most with the screen on.
+
+How it decides:
+- Rules shared with the records: neighbouring pairs, at least 3 % and t >= 2.5 to win,
+  15 % dearer is dropped, no verdict means no change.
+- New guards: at-ceiling share (+8 pt), janky frames (+1 pt where counted), battery warming
+  (+1.5 C/h).
+- One screen-on experiment at a time, and none while the records still test the same
+  situation. Lab apps are left out of the records' situations (`lab_owned`).
+- Dynamics: a champion is still measured after its verdict; 15 % above its winning cost for
+  four blocks re-opens the knob at once. A verdict drops any block of the knob still under
+  way, and a sample whose arm no longer matches is discarded.
+
+**Memory bus**:
+- Discovery covers every voter directory under `bus_dcvs/DDR` and `bus_dcvs/LLCC` with a
+  writable `max_freq`, or a DDR devfreq device.
+- A cap is the lowest listed step at or above the share, written only under the voter's own
+  value and read back. It is given back when it ends and at shutdown.
+- A value someone else wrote is left to them: a readback every 30 s while capped.
+- Display, GPU, video and modem paths are never written.
+- Nothing has been measured on a device yet. The lab keeps a cap only if it measures cheaper.
+
+**Records**: screen-off blocks of 20 instead of 40 minutes once three or more pairs sit
+within 4 % and the drain is at least 75 mA. With 1 mAh gauge steps, a 26 mA night would draw
+under 9 mAh in 20 minutes, so it keeps 40-minute blocks.
+
+**Forced LTPO, panel maximum on touch** (`ltpo_peak_force=0` by default):
+- While touched, `service call SurfaceFlinger 1035 i32 <mode>` asks for the panel's highest
+  reported mode at the resolution in use. An FHD setting picks the FHD 165 Hz mode, never the
+  1.5K one.
+- It is released with an invalid id when the watcher goes idle or stops.
+- Three refusals mark the ROM unsupported.
+- On OP15 the 165 Hz modes are listed (ids 5 and 11). On other models it depends on what
+  the panel reports, so it is untested there.
+
+**Audit items implemented**:
+- strict warnings 60 -> 48 (headroom 14 under the 62 budget);
+- the DSP fixture's misleading indentation fixed;
+- an hourly budget of 240 optional forks (app-lookup dumpsys fallbacks, frame probes), with
+  none while the camera runs (`fork_budget_*`);
+- energy meter confidence (`windows=`, `confidence=`, `basis=`);
+- WebUI cards for `profile_class_auto` and `smart_records_balanced` (now user keys);
+- Smart V7 undo reports `restored` / `external` / `failed`, and a change someone else already
+  reversed is journaled `external` instead of `undone`;
+- the night-charge switch hold releases charging when the charge level cannot be read, and the
+  WebUI names it "charging paused (charge switch, not a charge limit)".
+
+**Audit items not taken, with reasons** (in the reply to the owner):
+- the DSP prebuilts are excluded from the review archive on purpose;
+- a unified evidence scheduler (each refresh is already TTL-bound to 6 h);
+- a separate radio/screen/CPU drain split (no per-rail meter on these phones);
+- fixed minimum A/B durations (pairs are the unit);
+- user energy budgets (that is what the profiles are);
+- a report.json schema rewrite;
+- a freeze on new writers (the owner asked for more control points; the new writer is owned,
+  read back and A/B-gated).
+
+**Native**: `asb_lab.h` (new), `asb_record.h`, `asb_energy.h`, `asb_smart.h`, `asb_config.h`,
+`asb_writer.h`, `asb_metrics.h` and `asb_governor.c` changed, so the governor needs a CI rebuild.
+
+**Tests**:
+- `t_smart_lab_native_runtime` - a simulated phone:
+  - the radio wins and is re-opened by a cost rise;
+  - a bus cap that pins the cores loses;
+  - a cheaper wake lift wins, and the same lift with jankier SystemUI frames loses;
+  - app slots and records exclusion;
+  - bus voters found, capped, given back and yielded;
+  - the store reloads.
+- `t_ltpo_peak_force_runtime`;
+- external undo cases in `t_smart7_budget_data_runtime`;
+- the lab file in `t_lte_bulk_runtime`;
+- the unreadable charge level in `t_night_charge_sysfs_runtime`.
+
+## V66 dev7 - 5G stays off for feed bursts
+
+Input: the same OnePlus 15 day (CPH2745, SM8850, dev5), with the request to review the V66 Smart
+and Zygisk work, fix what is wrong, and make ASB itself cut the drain further.
+
+Review of dev1-dev6: no new native fault was found in the writer, FSM, records, energy or
+config changes, nor in the Smart V7, LSPosed, night-charge and launch-compile scripts or their
+uninstall hooks. On this phone the Smart records measure on_light_dim 13.1 % below the original
+setting, side by side; the other situations are still testing or sit on their old setting.
+
+**5G only when needed: a feed burst is not a download.** The day's "5G only when needed" log
+gave 5G back 9 times with the screen on.
+- 7 of the 9 came from two busy 10 s windows at 3.4-9.5 Mbit/s. LTE carried 15.8 and
+  21.4 Mbit/s in single windows the same day, so LTE was not what held those apps back.
+- Four of the LTE stints before them lasted 61-203 s, and that doubled the 5G holds to 20 and
+  40 minutes. Roughly 4 of the 9 logged hours ran with 5G allowed.
+- A feed loads its next videos in bursts of 10-30 s and then waits. A download keeps the link
+  busy.
+
+Change:
+- 5G now comes back for demand in 4 of the last 6 windows (3 Mbit/s or more), or for two
+  windows in a row over 12 Mbit/s.
+- A download still gets 5G back within 40 s, against 20 s before.
+- When the watcher stops, the log says how many busy windows stayed on LTE, and asbdiag
+  sums them.
+- What this saves on a given network is not measured: the modem's own draw is not readable.
+  Fewer switches and fewer long 5G holds is what the change guarantees.
+
+**The keyboard is not the app in front.** Typing in a system window (a notification reply,
+Settings, the lock screen) leaves the keyboard as the only app process in the top-app
+cgroup. The lookup took it: this phone's per-app energy table billed 16 screen-on minutes to
+the keyboard.
+- Keyboards are now left out by name: `inputmethod`, `keyboard`, `swiftkey`, `honeyboard`,
+  `baidu.input`, `.ime`.
+- A cgroup holding only a keyboard goes to the dumpsys chain, which names the real window.
+- A keyboard at adj 0 beside the app no longer makes the answer ambiguous.
+- New state key `probe_topapp_keyboard_only`.
+
+**Night charge learning** wrote its plug flag to /data on every tick (every 2-10 minutes). It
+now writes it only when the flag changes.
+
+**Native:** `src/asb_smart.h` and `src/asb_governor.c` changed (the keyboard rule and its
+counter), so the governor needs a CI rebuild. The 5G rule and the night-charge write are
+shell and need none.
+
+**Tests:**
+- `t_lte_bulk_runtime`, `t_lte_light_runtime` and `t_lte_light_flap_runtime` drive the real
+  `_light_tick`: a 20 s burst and single fast windows stay on LTE, 4 of 5 busy windows and
+  two fast windows give 5G back, and kept windows are counted;
+- keyboard cases in `t_topapp_pkg_runtime`;
+- the no-rewrite case in `t_night_charge_learn_runtime`.
+
+## V66 dev6 - a WebUI that stops drawing when nobody looks
+
+Input: the owner's 7 h 46 min Infinite Log, three asbdiag runs and the action screen of a
+OnePlus 15 (CPH2745, SM8850) on dev5, with the request to cut heat and drain and to improve
+performance and smoothness on every supported model.
+
+What the capture shows:
+- **The day's costs are mostly the use itself.**
+  - Screen on was 7.5 %/h, with 1.5 GiB of mobile data (1.3 GiB with the screen on) and video
+    feeds in front.
+  - Bluetooth audio with the screen on was 12.1 %/h while 274 MiB moved in 44 minutes.
+- **The caps are not what janks.** 2.3 % of frames were late: 1.7 % with the main cores at
+  ASB's ceiling against 2.5 % below it. The late frames were the apps' own UI threads.
+- **SystemUI** missed deadlines in 264 of 283 screen-on intervals because the status-bar
+  network-speed meter redraws every second. That is a phone setting, and the report already
+  names it.
+- **The heat episode.** The 67 C peak came from 7 minutes of a feed loading every core. The
+  surface comfort trim engaged at 48 C, as designed.
+
+**ASB's own page was the dearest thing on screen per minute.**
+- The manager hosting the WebUI drew 4.1 W while in front, against 2.3-3.3 W for the feeds.
+- 52-59 % of its frames spent 8 ms or more on the GPU, against 2-6 % for every other app.
+- In the browser model the idle home screen ran 31 endless animations and drew 60 frames a
+  second. Five of the animated headers belonged to closed pages. The rotating glows are
+  blurred, and the wordmark sweep repaints text on every frame.
+
+**Change.** The decorative loops now stop on closed pages, under an open page, and ten
+seconds after the last touch. The next touch starts them again.
+- The loops are the logo glow and ring, the wordmark sweep, the status dots, the Smart glow,
+  the Zygisk link pulse, the charge shimmer and the recording pulse.
+- The sweep and the dot stop at rest, not mid-stroke.
+- Progress spinners are never paused.
+- Same model, after the calm: 0 running animations and 0 frames a second, against 31 and 60.
+  The phone's own figure will differ.
+
+**Smaller fixes:**
+- **The usual-charge drain (dev4 bug).** The screen-on share counted only gaps of 30 s or less
+  between governor ticks. With the screen off the ticks are rarer than that, so this phone
+  read 96-97 % screen on for a day with 60 %. The whole gap now counts, in the state the phone
+  was in during it. The energy store is version 3; a version 2 store keeps its per-app figures
+  and restarts only the share.
+- **The action screen** called a lifted prime ceiling "the responsiveness floor" when a lift
+  or burst had just ended (3648 MHz on the CPH2745, where the floor is 40 % of 4608). Above
+  half the hardware maximum it now says that a lift or burst has just ended and the ceiling
+  comes down on the next pass. It does this in all 13 languages.
+- **The memory-bus figure.** asbdiag and the WebUI now say that each DDR read is taken at the
+  governor's own wake. That makes it an upper bound, not the residency while asleep.
+- **Native:** `src/asb_energy.h` changed, so the governor needs a CI rebuild for the share fix.
+  The WebUI and the action screen need none.
+- **Tests:**
+  - `t_webui_v66_calm_decor_runtime` (the real calm timer over fake timers, and what the CSS
+    rule pauses and never pauses);
+  - the long-gap case in `t_smart_v7_native_runtime`;
+  - the lift-tail line in the fix196 contract.
+
 ## V66 dev5 - the V7 badge, real milliwatts per app
 
 Input: the owner's asbdiag of a OnePlus 15 (CPH2745, SM8850) on the dev4 build, and his
