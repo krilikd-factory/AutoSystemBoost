@@ -335,6 +335,42 @@ body::before, body::after {
 .profiles > *:nth-child(5) { animation-delay: .20s; }
 .profiles > *:nth-child(6) { animation-delay: .25s; }
 
+/* V66 dev6: decoration only moves while someone is using the page.
+ *
+ * A capture of an OnePlus 15 (CPH2745) had the manager hosting this page at 4.1 W while it was
+ * in front - the dearest "app" of the day per minute, against 2.3-3.3 W for the feeds - and
+ * 52-59 % of its frames spent 8 ms or more on the GPU, against 2-6 % for every other app.
+ * The page asked for that: 31 endless animations ran on an idle home screen, five page
+ * headers among them on pages that were closed, and the browser drew a new frame every
+ * vsync (60 a second in the desktop model, the panel's 120 on the phone) for a still page.
+ * The rotating glows are blurred, and the wordmark's sweep repaints its text on every frame.
+ *
+ * So the decorative loops (logo glow and ring, the wordmark sweep, the status dots, the Smart
+ * glow, the Zygisk link pulse, the charge shimmer, the recording pulse) stop where they stand
+ * on a closed page, under an open one, and ten seconds after the last touch; the next touch
+ * starts them again. Progress spinners keep turning - they say that something is running. */
+.live-page:not(.open) .logo-glow, .live-page:not(.open) .logo-ring, .live-page:not(.open) .app-name,
+.live-page:not(.open) .dot, .live-page:not(.open) .dot::after,
+body.live-active .page:not(.live-page) .logo-glow, body.live-active .page:not(.live-page) .logo-ring,
+body.live-active .page:not(.live-page) .app-name, body.live-active .page:not(.live-page) .dot,
+body.live-active .page:not(.live-page) .dot::after, body.live-active .page:not(.live-page) .ai-glow,
+html.asb-calm .logo-glow, html.asb-calm .logo-ring, html.asb-calm .app-name, html.asb-calm .dot,
+html.asb-calm .dot::after, html.asb-calm .ai-glow,
+html.asb-calm .zygisk-header-dot, html.asb-calm .zygisk-header-dot::after,
+html.asb-calm .dev-zygisk-link-dot, html.asb-calm .dev-zygisk-link-dot::after,
+html.asb-calm .metric-charge, html.asb-calm .log-menu-item.is-recording::before {
+  animation-play-state: paused !important;
+}
+/* The sweep and the dot stop at rest rather than mid-stroke: no band frozen across the
+ * wordmark, no dot frozen half-faded. The next touch starts them from the beginning. */
+.live-page:not(.open) .app-name, body.live-active .page:not(.live-page) .app-name, html.asb-calm .app-name {
+  animation: none !important; background-position: -70% 0, 0 0;
+}
+.live-page:not(.open) .dot, .live-page:not(.open) .dot::after, body.live-active .page:not(.live-page) .dot,
+body.live-active .page:not(.live-page) .dot::after, html.asb-calm .dot, html.asb-calm .dot::after {
+  animation: none !important;
+}
+
 /* The sweep is decoration; the wordmark has to hold up without it. */
 @media (prefers-reduced-motion: reduce) {
   .live-page, .live-page.open, body.config-active #livePage.open { transform: translateX(-50%) !important; }
@@ -1923,7 +1959,10 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .zy-ghost .dev-zygisk-btn, .zy-ghost-all { align-self: flex-end; }
 .zy-ghost-all { display: block; margin: 6px 0 2px auto; }
 .zy-lsp-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 4px; }
-#zygiskPage .lgr-note.zy-clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; padding: 0; margin: 2px 0; }
+#zygiskPage .lgr-note.zy-clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; padding-block: 0; margin: 2px 0; }
+/* V66 dev9: the clamp only folds a note; it must not take away the gutter a note with an
+ * accent line has (dev4's "padding: 0" put that text against the line again). */
+#zygiskPage .lgr-note.dev-evidence.zy-clamp { padding-inline-start: 12px; }
 #zygiskPage .zy-btn-inline { margin-top: 6px; padding: 5px 12px; font-size: 12px; min-height: 0; }
 #zygiskPage .lgr-note.zy-clamp.open { display: block; -webkit-line-clamp: unset; overflow: visible; }
 #zygiskPage .zy-fold[hidden] { display: none !important; }
@@ -6110,6 +6149,14 @@ const TECH_ICON_PATHS = {
   prime_rest: '<circle cx="12" cy="12" r="8.5"/><path d="M10 8.8v6.4M14 8.8v6.4"/>',
   fitness_pulse: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/><path d="M7.5 12h2.5l1.2-2.2 1.6 4 1.2-1.8h2.5"/>',
   ltpo: '<rect x="4" y="3.5" width="16" height="17" rx="2.5"/><path d="M7.3 11.5h2l1.2-3.4 1.8 6.8 1.2-3.4h3.2"/>',
+  /* V66 dev8: a memory module with an arrow capped by a bar - the CPU's bus votes held under a ceiling. */
+  membus_cap: '<rect x="3" y="9" width="18" height="9" rx="1.5"/><path d="M6 18v2M10 18v2M14 18v2M18 18v2"/><path d="M12 15.5V5.8M9.6 8.2 12 5.8l2.4 2.4"/><path d="M8.5 3.3h7"/>',
+  /* two app cards of different weight, each with its own gauge - the profile follows the kind of app. */
+  kind_profile: '<rect x="3" y="4" width="8" height="16" rx="2"/><rect x="13" y="8" width="8" height="12" rx="2"/><path d="M5.5 14.5l2-2.5M15.5 16.5l2.5-2"/>',
+  /* a balance beam with a small spark on one pan - Balanced borrowing what Smart found. */
+  balance_spark: '<path d="M12 4v15M7 20h10M5 8h14"/><path d="M5 8l-2.5 5h5zM19 8l-2.5 5h5z"/><path d="M19 3.2v2M18 4.2h2"/>',
+  /* a display with a waveform rising to a top line - the panel's maximum while touched. */
+  refresh_peak: '<rect x="4" y="3.5" width="16" height="17" rx="2.5"/><path d="M7.3 14.5l2.2-2.2 2 1.6 3-4.4 2.2 1.2"/><path d="M7 6.8h10"/>',
   /* mmfeed: a telemetry bar-chart struck through - the feedback collector being shut
      off. Not an eye: this kills event reporting and dumps, not visibility. */
   mmfeed: '<path d="M3.5 3.5l17 17"/><path d="M6 20v-6"/><path d="M12 20v-9"/><path d="M18 20v-4"/>',
@@ -6272,9 +6319,29 @@ function asbFirstFrameMark() {
   try { requestAnimationFrame(function () { setTimeout(_asbFirstFrameDone, 0); }); } catch (e) { _asbFirstFrameDone(); }
 }
 let _asbInputAt = -1e9;
+/* V66 dev6: the decorative loops stop ten seconds after the last touch (html.asb-calm, see the
+ * CSS) and start again at the next one. One timer, re-armed only when it has fired, so a scroll
+ * does not set a timer per event. */
+const ASB_CALM_MS = 10000;
+let _asbCalmTimer = 0;
+function asbCalmArm() {
+  if (_asbCalmTimer) return;
+  _asbCalmTimer = setTimeout(function calmCheck() {
+    const idle = performance.now() - _asbInputAt;
+    if (idle < ASB_CALM_MS) { _asbCalmTimer = setTimeout(calmCheck, ASB_CALM_MS - idle + 50); return; }
+    _asbCalmTimer = 0;
+    try { document.documentElement.classList.add('asb-calm'); } catch (e) {}
+  }, ASB_CALM_MS);
+}
+function asbCalmWake() {
+  _asbInputAt = performance.now();
+  try { document.documentElement.classList.remove('asb-calm'); } catch (e) {}
+  asbCalmArm();
+}
 ['pointerdown', 'touchstart', 'keydown', 'wheel'].forEach(function (t) {
-  try { window.addEventListener(t, function () { _asbInputAt = performance.now(); }, { passive: true, capture: true }); } catch (e) {}
+  try { window.addEventListener(t, asbCalmWake, { passive: true, capture: true }); } catch (e) {}
 });
+asbCalmArm();
 /* dev4: a job never runs while another page is open or opening. In dev2 the Live pass and the
  * Zygisk header waited for gaps that ended right when the user tapped MONITOR or SETTINGS, and
  * the page's own reads then queued behind them. Jobs above priority 0 wait for the home screen;
@@ -8602,7 +8669,12 @@ const SNAP_KEYS = [
   'prime_escape_rest_s',
   'wakelock_fitness',
   'ltpo_video',
+  'ltpo_peak_force',
   'smart_media_guard',
+  'smart_lab',
+  'smart_lab_mem',
+  'profile_class_auto',
+  'smart_records_balanced',
   'bt_absvol_mode',
   'bt_link_stability',
   'BG_TRIM_LEVEL',
@@ -8788,6 +8860,14 @@ const CFG_ITEMS = [
     desc:'How long one prime-core lift may last, in seconds. Longer lets a long heavy task finish sooner; shorter keeps heat and drain down. 20 is the default. Used only while Prime Core Lift is on.' },
   { key:'prime_escape_rest_s', type:'range', def:'40', stock:'40', min:10, max:300, step:10, name:'Pause Between Lifts',
     desc:'How long ASB waits after a lift before another one may start, in seconds. Longer = cooler and more economical under sustained heavy work; shorter = snappier. 40 is the default. Used only while Prime Core Lift is on.' },
+  { key:'smart_lab', type:'bool', def:'1', stock:'0', name:'Smart Lab',
+    desc:'Smart tries more settings for itself, one at a time and side by side with the best one so far, and keeps a setting only when the battery measured it cheaper without the cores at their ceiling more often, more janky frames or faster warming. It tests "5G Only When Needed" against 5G allowed (only when that switch is on), the unlock lift against 15 points less, and its own lean for the three apps that cost the most with the screen on. A best setting whose cost climbs by 15 % is tested again at once. Smart profile only; results appear under What Smart learned.' },
+  { key:'smart_lab_mem', type:'bool', def:'1', stock:'0', name:'Smart Lab: Memory Bus',
+    desc:'Lets the lab also cap the CPU\'s votes on the memory bus: 75 % or 55 % of the bus maximum while the screen is calm (no touch for 10 seconds, nothing heavy, no camera), 50 % or the lowest step on quiet deep idle. Only the voters this kernel exposes are used; display, GPU, video and modem votes are never touched. Every write is read back and given back, and a value another component changed is left to it. A cap stays only if it measured cheaper.' },
+  { key:'profile_class_auto', type:'bool', def:'1', stock:'0', name:'Profiles by Kind of Use',
+    desc:'Performance holds the CPU ceilings at 80 % of the maximum while a light app (messenger, settings, reader) runs at ordinary load; Battery lifts them to at least 70 % while a game runs, where its own are lower. App launches, heavy work, the camera, the unlock lift, a thermal cap and the cooldown are untouched.' },
+  { key:'smart_records_balanced', type:'bool', def:'1', stock:'0', name:'Balanced Uses Smart\'s Findings',
+    desc:'With the screen off on quiet deep idle, Balanced applies the screen-off CPU ceiling setting Smart measured as cheaper on this phone and kept through its check, when it is below Balanced\'s own. Nothing is tried or measured under Balanced; the ceilings are given back on wake and never raised.' },
   { key:'smart_media_guard', type:'bool', def:'0', stock:'0', name:'Smart Media Guard',
     desc:'An opt-in guard for a narrow case: a known video, feed or browser app stays in game-like CPU + GPU load for a full minute while you use it on battery. In Smart only, ASB then keeps the effective GPU ceiling at the same 70% media envelope already used for video. It never limits a known game, an unknown app, charging, thermal protection, CPU ceilings or frequency floors. Start with the 12-hour trial; if a high-refresh stream stutters, turn it back off.' },
   // --- Power & battery ---,
@@ -8851,6 +8931,8 @@ const CFG_ITEMS = [
     desc:'A one-time repair for a missing or broken system file picker on affected ColorOS/DSU setups. It enables and unhides DocumentsUI, returns its picker and files activities to their default state, and disables com.coloros.filemanager for user 0. THE COST: the ColorOS File Manager disappears until you turn this fix off. Only states ASB actually changed are recorded and restored on Off or uninstall. Nothing is re-applied at boot, and this card does not request ART compilation.' },
   { key:'ltpo_force', type:'bool', def:'0', stock:'0', name:'Force LTPO Refresh',
     desc:'Applies a patch prepared from the device\'s own oplus_vrr_config.json: it enables supported panel power-saving paths left off by the OEM and disables selected display telemetry. The stock file is not modified. If no suitable table or change is found, the switch does nothing and the status badge explains why. Applying the table requires a reboot.\n\nThe Android refresh range is also opened: ASB removes its floor, uses the highest reported panel mode, restores the maximum on touch and selects 60 Hz after two quiet seconds so panel adaptation can continue. Camera, game and video ownership are preserved, and previous range values are restored on handback. If the verified OnePlus15-165HZ-LTPO writer is present, ASB yields unless you explicitly give ASB priority. A same-target bind from another module always keeps ownership: ASB neither stacks over it nor removes it. Power savings and low-idle rates depend on the panel and ROM; neither is guaranteed.' },
+  { key:'ltpo_peak_force', type:'bool', def:'0', stock:'0', name:'Panel Maximum on Touch',
+    desc:'Works with Force LTPO Refresh. While the screen is being touched, SurfaceFlinger is asked for the highest mode the panel itself reports (165 Hz on panels that list it), past a ROM that keeps ordinary apps at 120 Hz. The request is released as soon as the touch watcher goes idle, so the idle rate and the panel\'s own frame drop come back. Costs more power while you touch the screen. A ROM that refuses the request is left alone and the badge says so.' },
   { key:'ltpo_video', type:'bool', def:'0', stock:'0', name:'Lowest Refresh for Video',
     desc:'During eligible video playback, limits the panel peak to the lowest reported mode that matches 30 or 60 fps content, such as 60 Hz for either rate. ASB acts only with the screen on, audio playing, a compatible video layer, no high-smoothness request and no touch for three seconds. Touch, playback end or screen-off restores the previous value; the first instant after touch can still use the lower rate. Other frame rates are left unchanged. Matching modes avoids unnecessary refreshes without changing the video\'s frame rate.' },
   { key:'phantom_procs', type:'seg', def:'relaxed', stock:'stock', opts:['stock','relaxed','strict'], name:'Background Process Limit',
@@ -8957,6 +9039,7 @@ const CFG_CAT = {
   mglru_hold: 'battery',
   perf_ceiling_pct:'battery', wakelock_action:'battery', gnss_trim:'battery',
   night_modem_idle:'net', net_screen_off_lte:'net', net_lte_light:'net', smart_media_guard:'battery',
+  smart_lab:'battery', smart_lab_mem:'battery', profile_class_auto:'battery', smart_records_balanced:'battery', ltpo_peak_force:'system',
   net_rps:'net', net_txqueue:'net',
   athena_service:'system', heytap_mcs:'system', documentsui_fix:'system', ltpo_force:'system', ltpo_video:'system', mmfeed_off:'system',
   heavy_prime_escape:'battery', prime_escape_burst_s:'battery', prime_escape_rest_s:'battery', wakelock_fitness:'battery',
@@ -9021,6 +9104,7 @@ const CFG_GROUP_OF = {
      the other RAM tweaks - sit under battery for exactly this reason. */
   mglru_hold:'battery', kernel_sched_stats:'ui',
   night_modem_idle:'net', net_screen_off_lte:'net', net_lte_light:'net', smart_media_guard:'battery',
+  smart_lab:'battery', smart_lab_mem:'battery', profile_class_auto:'battery', smart_records_balanced:'battery', ltpo_peak_force:'ui',
   net_rps:'net', net_txqueue:'net',
   athena_service:'ui', heytap_mcs:'ui', documentsui_fix:'ui', zygisk_enabled:'ui', zygisk_hints:'ui', zygisk_launch:'ui', zygisk_ledger:'ui', ltpo_force:'ui', ltpo_video:'ui', mmfeed_off:'ui',
   heavy_prime_escape:'battery', prime_escape_burst_s:'battery', prime_escape_rest_s:'battery', wakelock_fitness:'battery',
@@ -9066,7 +9150,7 @@ const CFG_GROUP_SECTIONS = {
     { id:'smart', icon:'smart', titleKey:'cfg_battery_section_smart',
       title:'Smart & Auto Profile', hintKey:'cfg_battery_section_smart_hint',
       hint:'How Smart balances battery against performance and when it switches profile.',
-      keys:['auto_battery_enable','smart_battery_bias','heavy_prime_escape','prime_escape_burst_s','prime_escape_rest_s','smart_media_guard'] },
+      keys:['auto_battery_enable','smart_battery_bias','heavy_prime_escape','prime_escape_burst_s','prime_escape_rest_s','smart_media_guard','smart_lab','smart_lab_mem','profile_class_auto','smart_records_balanced'] },
     { id:'charging', icon:'charge_aware', titleKey:'cfg_battery_section_charging',
       title:'Charging', hintKey:'cfg_battery_section_charging_hint',
       hint:'Performance while charging and an optional fixed overnight charge ceiling.',
@@ -9114,7 +9198,7 @@ const CFG_GROUP_SECTIONS = {
     { id:'feel', icon:'haptic_touch', titleKey:'cfg_ui_section_feel',
       title:'Display & Haptics', hintKey:'cfg_ui_section_feel_hint',
       hint:'Refresh-rate behaviour and how vibration and touch feedback feel.',
-      keys:['ltpo_force','ltpo_video','haptic_strength','haptic_touch_strength'] },
+      keys:['ltpo_force','ltpo_peak_force','ltpo_video','haptic_strength','haptic_touch_strength'] },
     { id:'diag', icon:'log_detail', titleKey:'cfg_ui_section_diag',
       title:'Diagnostics', hintKey:'cfg_ui_section_diag_hint',
       hint:'How much the module - and LSPosed - write to their logs.',
@@ -9374,7 +9458,7 @@ const CFG_ICONS = {
   UX_MANAGE_TIMEOUTS:'timeout', anim_speed:'anim_speed', UX_ANIM_FORCE_RESTART:'anim_restart', disable_blur:'blur', ui_effects_level:'effects',
   net_congestion:'congestion', net_congestion_wifi:'wifi_congestion', net_congestion_mobile:'mobile_congestion', net_qdisc:'qdisc', net_qdisc_wifi:'wifi_queue', net_qdisc_mobile:'mobile_queue',
   net_rps:'rps', net_txqueue:'txqueue', net_route_tune:'route', net_mtu_probing:'mtu_probe', wifi_country:'globe_pin', wifi_scan_throttle:'radar', radio_policy_enable:'cellular_controls',
-  auto_battery_enable:'battery_auto', smart_battery_bias:'battery_bias', smart_media_guard:'media_guard', charge_aware_enable:'charge_aware', night_charge_enable:'night_charge', night_charge_start:'night_charge_start', night_charge_end:'night_charge_end', doze_level:'doze', doze_trim_whitelist:'whitelist',
+  auto_battery_enable:'battery_auto', smart_battery_bias:'battery_bias', smart_media_guard:'media_guard', smart_lab:'smart', smart_lab_mem:'membus_cap', profile_class_auto:'kind_profile', smart_records_balanced:'balance_spark', ltpo_peak_force:'refresh_peak', charge_aware_enable:'charge_aware', night_charge_enable:'night_charge', night_charge_start:'night_charge_start', night_charge_end:'night_charge_end', doze_level:'doze', doze_trim_whitelist:'whitelist',
   wakelock_action:'wakelock', gnss_trim:'satellite', night_modem_idle:'radio_moon', net_screen_off_lte:'lte_screenoff', net_lte_light:'lte_light', night_quiet_enable:'quiet_moon', sustained_temp_mode:'thermal_mode', sustained_temp_enter:'thermal_point',
   perf_ceiling_pct:'perf_cap', cool_gaming:'cool_game', bat_suppress_gaming:'game_battery', BG_TRIM_LEVEL:'cleaner', gms_trim:'service_trim', gms_freeze:'service_freeze',
   UX_MANAGE_OEM_TOGGLES:'oem_switches', athena_service:'athena', phantom_procs:'phantom', haptic_strength:'haptic_power', haptic_touch_strength:'haptic_touch', log_level:'log_detail', lsposed_verbose:'log_hook', ltpo_force:'ltpo', ltpo_video:'ltpo_video', mmfeed_off:'mmfeed',
@@ -9391,7 +9475,7 @@ let _netResult = {};
 // LTPO patch status: the staged state word (ready/already/unsupported) and the live bind
 // verdict from the apply script. Loaded with the config so the card can say "active",
 // "waiting for a reboot" or "nothing to patch on this device" instead of just "Enabled".
-let _ltpoStatus = '', _ltpoState = '', _ltpoVideoStatus = '';
+let _ltpoStatus = '', _ltpoState = '', _ltpoVideoStatus = '', _ltpoPeak = { state: '', hz: '-' };
 /* Fitness wakelock limit, as the watcher last found it (fix176): how many step/fitness
  * apps the limit covers, and how many of them this ROM lets hold the CPU anyway - the
  * WAKE_LOCK app-op is not enforced on ColorOS/OxygenOS 16, so "limit" can be set and
@@ -9446,7 +9530,9 @@ function nightChargeBadge(state) {
   switch (state) {
     case 'off': return { cls:'neutral', text:T('nc_state_off', 'Disabled') };
     case 'waiting': return { cls:'neutral', text:T('nc_state_waiting', 'waiting for charging / below 80%') };
-    case 'holding': return { cls:'good', text:T('nc_state_holding', '80% ceiling active') };
+    case 'holding': return _nightCharge.interface === 'switch'
+      ? { cls:'good', text:T('nc_state_holding_switch', 'charging paused at 80% (charge switch, not a charge limit)') }
+      : { cls:'good', text:T('nc_state_holding', '80% ceiling active') };
     case 'released': return { cls:'good', text:T('nc_state_released', 'released at window end') };
     case 'invalid_window': return { cls:'bad', text:T('nc_state_invalid_window', 'invalid interval: start and end must differ') };
     case 'not_exposed': return { cls:'warn', text:T('nc_state_not_exposed', 'not exposed by this kernel') };
@@ -9474,7 +9560,7 @@ async function loadNetResult() {
 // while nothing is mounted is exactly the dishonesty the ledger keys above were built
 // against; this keeps the LTPO card to the same standard.
 function ltpoStatusCmd() {
-  return 'sh ' + MD + '/runtime/asb_ltpo_apply.sh status 2>/dev/null; echo ---; cat /data/adb/asb/ltpo_state 2>/dev/null; echo ---; sh ' + MD + '/runtime/asb_ltpo_video.sh status 2>/dev/null';
+  return 'sh ' + MD + '/runtime/asb_ltpo_apply.sh status 2>/dev/null; echo ---; cat /data/adb/asb/ltpo_state 2>/dev/null; echo ---; sh ' + MD + '/runtime/asb_ltpo_video.sh status 2>/dev/null; echo ---; sh ' + MD + '/runtime/asb_ltpo_apply.sh peak 2>/dev/null';
 }
 async function loadLtpoStatus(pre) {
   try {
@@ -9485,7 +9571,9 @@ async function loadLtpoStatus(pre) {
     /* "state=lowered:60.0 lowers=.. " - only the state word matters for the badge. */
     const _vm = /state=([a-z_]+)(?::([0-9.]+))?/.exec(parts[2] || '');
     _ltpoVideoStatus = _vm ? (_vm[1] + (_vm[2] ? ':' + Math.round(parseFloat(_vm[2])) : '')) : '';
-  } catch (e) { _ltpoStatus = ''; _ltpoState = ''; _ltpoVideoStatus = ''; }
+    const _pk = /peak_force=([a-z_]+) hz=([0-9-]+)/.exec(parts[3] || '');
+    _ltpoPeak = _pk ? { state: _pk[1], hz: _pk[2] } : { state: '', hz: '-' };
+  } catch (e) { _ltpoStatus = ''; _ltpoState = ''; _ltpoVideoStatus = ''; _ltpoPeak = { state: '', hz: '-' }; }
 }
 
 /* fix177: the watcher's own fitness-status (installed apps, limit in force as Android reads
@@ -9788,6 +9876,14 @@ function cfgStatus(it, cur) {
     if (_ltpoVideoStatus === 'not_running') return { cls:'warn', text:T('st_not_running', 'not running') };
     return { cls:'warn', text:T('st_pending', 'pending') };
   }
+  if (it.key === 'ltpo_peak_force') {
+    if (cur !== '1') return { cls:'neutral', text:T('st_off', 'Disabled') };
+    if (_cfgVals['ltpo_force'] !== '1') return { cls:'warn', text:T('st_ltpo_needs_force', 'needs Force LTPO') };
+    if (_ltpoPeak.state === 'unsupported') return { cls:'warn', text:T('st_ltpo_peak_refused', 'ROM refused the mode') };
+    if (_ltpoPeak.state === 'forced' || _ltpoPeak.state === 'idle')
+      return { cls:'good', text:T('st_on', 'Enabled') + (/^\d+$/.test(_ltpoPeak.hz) ? ' \u00b7 ' + _ltpoPeak.hz + ' Hz' : '') };
+    return { cls:'warn', text:T('st_pending', 'pending') };
+  }
   if (it.key === 'ltpo_force') {
     if (_ltpoStatus === 'ltpo_external_owner' || _ltpoStatus === 'ltpo_external_bind')
       return { cls:'neutral', text:T('st_ltpo_external', 'external module active') };
@@ -10058,7 +10154,8 @@ const APPLY_MODE = {
   net_route_tune:APPLY_LIVE, net_mtu_probing:APPLY_LIVE, wifi_country:APPLY_LIVE, net_wifi_leave:APPLY_LIVE, wifi_scan_throttle:APPLY_LIVE, radio_policy_enable:APPLY_LIVE, log_level:APPLY_LIVE,
   smart_battery_bias:APPLY_LIVE, smart_media_guard:APPLY_LIVE, auto_battery_enable:APPLY_LIVE,
   heavy_prime_escape:APPLY_LIVE, prime_escape_burst_s:APPLY_LIVE, prime_escape_rest_s:APPLY_LIVE,
-  wakelock_fitness:APPLY_LIVE, ltpo_video:APPLY_LIVE,
+  wakelock_fitness:APPLY_LIVE, ltpo_video:APPLY_LIVE, ltpo_peak_force:APPLY_LIVE,
+  smart_lab:APPLY_LIVE, smart_lab_mem:APPLY_LIVE, profile_class_auto:APPLY_LIVE, smart_records_balanced:APPLY_LIVE,
   charge_aware_enable:APPLY_LIVE, night_charge_enable:APPLY_LIVE, night_charge_start:APPLY_LIVE, night_charge_end:APPLY_LIVE, cool_gaming:APPLY_LIVE, bat_suppress_gaming:APPLY_LIVE,
   night_quiet_enable:APPLY_LIVE, night_modem_idle:APPLY_LIVE, net_screen_off_lte:APPLY_LIVE, net_lte_light:APPLY_LIVE, sustained_temp_mode:APPLY_LIVE,
   sustained_temp_enter:APPLY_LIVE, BG_TRIM_LEVEL:APPLY_LIVE, doze_level:APPLY_LIVE,
@@ -11256,6 +11353,16 @@ async function cfgSet(key, val, ctl) {
         await loadWlFitStatus(true);
         toast(cfgToastText(key, val) + (String(val) === 'limit' && _wlFitIgnored > 0
           ? T('t_wlf_ignored', ' \u00b7 this ROM ignores the limit')
+          : T('t_cfg_live', ' \u00b7 applied')), cfgToastType(key));
+        cfgRender();
+        if (ctl) ctl.classList.remove('busy');
+        return;
+      }
+      if (key === 'ltpo_peak_force') {
+        try { await run('sh ' + MD + '/runtime/asb_ltpo_apply.sh touch-restart >/dev/null 2>&1; sleep 1'); } catch (e) {}
+        await loadLtpoStatus();
+        toast(cfgToastText(key, val) + (String(val) === '1' && _cfgVals['ltpo_force'] !== '1'
+          ? T('t_cfg_needs_ltpo', ' \u00b7 works once Force LTPO Refresh is on')
           : T('t_cfg_live', ' \u00b7 applied')), cfgToastType(key));
         cfgRender();
         if (ctl) ctl.classList.remove('busy');
@@ -16425,7 +16532,7 @@ function smart7Parse(out, nc) {
     if (f[0] === 'cand' && f.length === 7 && /^(budget|data)$/.test(f[1]) && pk(f[2]) && /^\d+$/.test(f[3]))
       g.cands.push({ engine: f[1], pkg: f[2], idle: num(f[4]), val: num(f[5]), auto: f[6] === '1' });
     else if (f[0] === 'j' && f.length === 9 && /^\d+$/.test(f[1]) && /^(user|auto)$/.test(f[3]) && /^(budget|data)$/.test(f[4]) && pk(f[5]))
-      g.journal.push({ id: f[1], at: num(f[2]), kind: f[3], engine: f[4], pkg: f[5], active: f[8] === 'active' });
+      g.journal.push({ id: f[1], at: num(f[2]), kind: f[3], engine: f[4], pkg: f[5], active: f[8] === 'active', external: f[8] === 'external' });
   });
   String(nc || '').split('\n').forEach(function (ln) {
     const m = /^([a-z_]+)=([0-9:a-z_]*)$/.exec(ln.trim());
@@ -16454,18 +16561,37 @@ function smart7Seg(on, onSet) {
  * makes of it, how sure each records result is, the look-ahead and the profile adjustments.
  * One read of three files when the Zygisk page loads; shown folded. */
 let _zyS7L = null;
-const ASB_S7L_READ = "cat /dev/.asb/smart_energy.txt 2>/dev/null; grep '^conf|' /dev/.asb/smart_records.txt 2>/dev/null; "
+const ASB_S7L_READ = "cat /dev/.asb/smart_energy.txt 2>/dev/null; grep '^conf|' /dev/.asb/smart_records.txt 2>/dev/null; grep -E '^(knob|mem|now)[|]' /dev/.asb/smart_lab.txt 2>/dev/null; "
   + "grep -E '^(therm_proj_c|perf_proj_lead_c|class_auto|rec_replay|smooth_lsp_skips|en_class|en_plug_eta_min|en_budget_plug|ddr_[a-z_]+)=' /dev/.asb/state 2>/dev/null; true";
 function smart7LearnParse(txt) {
-  const g = { apps: [], classes: [], plug: null, conf: [], kv: {}, gauge: null };
+  const g = { apps: [], classes: [], plug: null, conf: [], kv: {}, gauge: null, lab: [], labMem: null, labNow: null };
   const num = function (v) { const n = parseFloat(v); return isFinite(n) ? n : 0; };
   String(txt || '').split('\n').forEach(function (ln) {
     ln = ln.trim();
     const m = /^([a-z_0-9]+)=(-?[0-9a-z_]*)$/.exec(ln);
     if (m) { g.kv[m[1]] = m[2]; return; }
     const f = ln.split('|');
-    const gm = f[0] === 'meter' && f.length === 2 ? /^gauge_x100=(-?\d+)$/.exec(f[1]) : null;
+    const gm = f[0] === 'meter' && f.length >= 2 ? /^gauge_x100=(-?\d+)$/.exec(f[1]) : null;
     if (gm) { g.gauge = parseInt(gm[1], 10); return; }
+    if (f[0] === 'knob' && f.length === 18 && /^(radio|wake_lift|membus_on|membus_off|app[123])$/.test(f[1]) &&
+        /^(off|free|best|testing|watching)$/.test(f[2])) {
+      g.lab.push({ name: f[1], state: f[2], best: f[3], trying: f[4], pairs: num(f[5]), diff: num(f[6]) / 10,
+        gain: num(f[10]) / 10, wins: num(f[11]), reopen: num(f[13]), blocks: num(f[14]),
+        pkg: /^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)+$/.test(f[17]) ? f[17] : '' });
+      return;
+    }
+    if (f[0] === 'mem' && f.length >= 9) {
+      const mk = {};
+      f.slice(2).forEach(function (x) { const i = x.indexOf('='); if (i > 0) mk[x.slice(0, i)] = x.slice(i + 1); });
+      g.labMem = { kind: f[1], voters: num(mk.voters), active: num(mk.active), cap: num(mk.cap_now), yields: num(mk.yields) };
+      return;
+    }
+    if (f[0] === 'now' && f.length >= 8) {
+      const nk = {};
+      f.slice(1).forEach(function (x) { const i = x.indexOf('='); if (i > 0) nk[x.slice(0, i)] = x.slice(i + 1); });
+      g.labNow = { wins: num(nk.wins), reopened: num(nk.reopened), kept: num(nk.kept) };
+      return;
+    }
     if (f[0] === 'app' && f.length === 5 && /^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)+$/.test(f[1]))
       g.apps.push({ pkg: f[1], min: num(f[2]), mw: num(f[3]), share: num(f[4]) });
     else if (f[0] === 'class' && f.length === 5 && /^(glance|light|media|heavy|game)$/.test(f[1]))
@@ -16539,13 +16665,62 @@ function smart7LearnBlock(g, nm) {
   if (n('rec_replay') === 1) look.push(T('s7l_replay', 'Balanced: the screen-off setting Smart won is in use'));
   if (n('smooth_lsp_skips') > 0) look.push(T('s7l_lsp', 'Smoothness tests skipped in apps hooked by a costly LSPosed module: %s').replace('%s', String(n('smooth_lsp_skips'))));
   if (n('ddr_idle_samples') >= 10 && n('ddr_idle_at_min_pct') !== null && n('ddr_idle_at_min_pct') >= 0)
-    look.push(T('s7l_ddr', 'Memory bus on quiet screen-off: at its lowest step %1 % of the time, average %2 MHz (lowest %3 MHz)')
+    look.push(T('s7l_ddr', "Memory bus on quiet screen-off: at its lowest step in %1 % of the governor's reads, average %2 MHz (lowest %3 MHz). Each read is taken at the governor's own wake, so this is an upper bound.")
       .replace('%1', String(n('ddr_idle_at_min_pct'))).replace('%2', String(n('ddr_idle_avg_mhz'))).replace('%3', String(n('ddr_min_mhz'))));
   if (look.length) {
     det.appendChild(row(T('s7l_look', 'Look-ahead and profiles'), '', false));
     look.forEach(function (t) { det.appendChild(logReportNote(t)); });
   }
+  smart7LabRows(g, nm).forEach(function (el) { det.appendChild(el); });
   return det;
+}
+/* V66 dev8: the Smart lab - each knob, what it uses now and what it is trying. */
+function smart7LabArm(a) {
+  const m = /^bus (\d+)%$/.exec(a || '');
+  if (m) return T('s7l_arm_bus_pct', 'bus capped at %s %').replace('%s', m[1]);
+  const map = {
+    'LTE on light traffic': ['s7l_arm_lte', 'LTE on light traffic'], '5G allowed': ['s7l_arm_5g', '5G allowed'],
+    'lift as set': ['s7l_arm_lift_set', 'lift as set'], 'lift -15': ['s7l_arm_lift_less', 'lift 15 points lower'],
+    'bus free': ['s7l_arm_bus_free', 'bus not capped'], 'bus lowest': ['s7l_arm_bus_low', 'bus at its lowest step'],
+    'lean as situation': ['s7l_arm_lean_sit', "the situation's lean"], 'lean +0.1': ['s7l_arm_lean_eco', 'lean 0.1 toward economy'],
+    'lean -0.1': ['s7l_arm_lean_head', 'lean 0.1 toward headroom'] };
+  const t = map[a];
+  return t ? T(t[0], t[1]) : String(a || '\u2014');
+}
+function smart7LabRows(g, nm) {
+  const out = [];
+  if (!g.lab || !g.lab.length) return out;
+  const pct = function (v) { return (Math.round(v * 10) / 10).toString().replace(/\.0$/, ''); };
+  const label = function (k) {
+    if (k.name === 'radio') return T('s7l_lab_radio', '5G only when needed');
+    if (k.name === 'wake_lift') return T('s7l_lab_lift', 'Wake lift');
+    if (k.name === 'membus_on') return T('s7l_lab_mem_on', 'Memory bus, screen on');
+    if (k.name === 'membus_off') return T('s7l_lab_mem_off', 'Memory bus, screen off');
+    return T('s7l_lab_app', 'App: %s').replace('%s', k.pkg ? nm(k.pkg) : k.name);
+  };
+  out.push(logReportRow(T('s7l_lab', 'Smart lab: settings tried side by side'), '', false));
+  let any = false;
+  g.lab.forEach(function (k) {
+    if (k.state === 'free') return;
+    let v;
+    if (k.state === 'off') v = k.name === 'radio' ? T('s7l_lab_off_radio', 'waits for the "5G Only When Needed" switch')
+      : T('s7l_lab_off_mem', 'no memory-bus voter this kernel lets ASB write');
+    else if (k.state === 'testing') v = T('s7l_lab_st_testing', 'testing %1 against %2: %3 pair(s), %4 % so far')
+      .replace('%1', smart7LabArm(k.trying)).replace('%2', smart7LabArm(k.best)).replace('%3', String(k.pairs)).replace('%4', (k.diff > 0 ? '+' : '') + pct(k.diff));
+    else if (k.state === 'best') v = T('s7l_lab_st_best', 'best: %s').replace('%s', smart7LabArm(k.best));
+    else v = T('s7l_lab_st_watching', '%s in use, measuring').replace('%s', smart7LabArm(k.best));
+    if (k.wins > 0 && k.gain > 0) v += T('s7l_lab_won', ' · won %s % cheaper').replace('%s', pct(k.gain));
+    if (k.reopen > 0) v += T('s7l_lab_reopen', ' · tested again after its cost rose (%s×)').replace('%s', String(k.reopen));
+    if (k.state !== 'off') any = any || k.blocks > 0;
+    out.push(logReportRow(label(k), v, false));
+  });
+  if (g.labMem && g.labMem.voters > 0)
+    out.push(logReportNote(T('s7l_lab_mem', 'Memory bus: %1 voter(s) found (%2), cap now %3').replace('%1', String(g.labMem.active))
+      .replace('%2', g.labMem.kind).replace('%3', g.labMem.cap === 0 ? T('s7l_arm_bus_free', 'bus not capped')
+        : (g.labMem.cap < 0 ? T('s7l_arm_bus_low', 'bus at its lowest step') : T('s7l_arm_bus_pct', 'bus capped at %s %').replace('%s', String(g.labMem.cap))))));
+  if (!any) out.push(logReportNote(T('s7l_lab_none', 'No experiment has finished a block yet: each needs several pairs of blocks off the charger.')));
+  else out.push(logReportNote(T('s7l_lab_note', 'A setting wins only when the battery measured it at least 3 % cheaper, side by side, without the cores at their ceiling more often, more janky frames or faster warming.')));
+  return out;
 }
 function smart7Card() {
   const g = _zyS7 || smart7Parse('', '');
@@ -16582,7 +16757,7 @@ function smart7Card() {
       const what = (j.engine === 'budget' ? T('s7_j_budget', '%a: rare bucket') : T('s7_j_data', '%a: no background data')).replace('%a', nm(j.pkg));
       const label = zygiskGuardClock(j.at) + ' · ' + (j.kind === 'auto' ? T('lsp_by_auto', 'automatic') : T('lsp_by_user', 'by you'));
       if (j.active) det.appendChild(zygiskGuardActionRow(label, what, T('lsp_undo', 'Undo'), function () { smart7Act('undo', j.id); }));
-      else det.appendChild(logReportRow(label, what + ' · ' + T('lsp_undone', 'undone'), false));
+      else det.appendChild(logReportRow(label, what + ' · ' + (j.external ? T('s7_external', 'already changed by another component - left as it is') : T('lsp_undone', 'undone')), false));
     });
     if (active.length > 1) {
       const w = document.createElement('div'); w.className = 'zy-ghost';
