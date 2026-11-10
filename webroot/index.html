@@ -16457,13 +16457,15 @@ let _zyS7L = null;
 const ASB_S7L_READ = "cat /dev/.asb/smart_energy.txt 2>/dev/null; grep '^conf|' /dev/.asb/smart_records.txt 2>/dev/null; "
   + "grep -E '^(therm_proj_c|perf_proj_lead_c|class_auto|rec_replay|smooth_lsp_skips|en_class|en_plug_eta_min|en_budget_plug|ddr_[a-z_]+)=' /dev/.asb/state 2>/dev/null; true";
 function smart7LearnParse(txt) {
-  const g = { apps: [], classes: [], plug: null, conf: [], kv: {} };
+  const g = { apps: [], classes: [], plug: null, conf: [], kv: {}, gauge: null };
   const num = function (v) { const n = parseFloat(v); return isFinite(n) ? n : 0; };
   String(txt || '').split('\n').forEach(function (ln) {
     ln = ln.trim();
     const m = /^([a-z_0-9]+)=(-?[0-9a-z_]*)$/.exec(ln);
     if (m) { g.kv[m[1]] = m[2]; return; }
     const f = ln.split('|');
+    const gm = f[0] === 'meter' && f.length === 2 ? /^gauge_x100=(-?\d+)$/.exec(f[1]) : null;
+    if (gm) { g.gauge = parseInt(gm[1], 10); return; }
     if (f[0] === 'app' && f.length === 5 && /^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)+$/.test(f[1]))
       g.apps.push({ pkg: f[1], min: num(f[2]), mw: num(f[3]), share: num(f[4]) });
     else if (f[0] === 'class' && f.length === 5 && /^(glance|light|media|heavy|game)$/.test(f[1]))
@@ -16490,7 +16492,8 @@ function smart7LearnBlock(g, nm) {
   const kv = g.kv || {};
   const pct = function (v) { return (Math.round(v * 10) / 10).toString().replace(/\.0$/, ''); };
   const apps = g.apps.slice(0, 8), cls = g.classes.filter(function (c) { return c.n >= 0.5; });
-  if (!apps.length && !cls.length && !(g.plug && g.plug.charges > 0)) det.appendChild(logReportNote(T('s7l_none', 'Nothing learned yet: the figures appear after some use off the charger.')));
+  if (g.gauge === -1) det.appendChild(logReportNote(T('s7l_wait_gauge', 'The cost per app waits for the battery gauge check: ASB first compares the current reading with the real drain over a few screen-on stretches.')));
+  else if (!apps.length && !cls.length && !(g.plug && g.plug.charges > 0)) det.appendChild(logReportNote(T('s7l_none', 'Nothing learned yet: the figures appear after some use off the charger.')));
   if (apps.length) {
     det.appendChild(row(T('s7l_apps', 'Cost per app, screen on'), '', false));
     apps.forEach(function (a) {
