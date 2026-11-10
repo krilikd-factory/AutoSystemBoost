@@ -4557,6 +4557,11 @@ EOF
 	  chmod 0755 "$MODPATH/tools/asb_kernel_uv_coexist.sh" 2>/dev/null || true
 	  chmod 0755 "$MODPATH/tools/asb_device_info.sh" 2>/dev/null || true
 	fi
+	if [ ! -e "$MODPATH/tools/asb_diag.sh" ] && [ -f "$MODPATH/system/bin/asbdiag" ]; then
+	  mkdir -p "$MODPATH/tools" 2>/dev/null
+	  ln -s ../system/bin/asbdiag "$MODPATH/tools/asb_diag.sh" 2>/dev/null \
+	    || cp -f "$MODPATH/system/bin/asbdiag" "$MODPATH/tools/asb_diag.sh" 2>/dev/null || true
+	fi
 # asb_tools_prune_end
 
 	# Vendor log cleanup - explicit paths, and only when asked for.
