@@ -2924,6 +2924,7 @@ if [ -r "$_srf" ]; then
     case "$_c" in off_*|on_*) : ;; *) continue ;; esac
     case "$_st" in
       measuring) _sts="measuring - ${_bl:-0} block(s) so far, no figure yet" ;;
+      confirming) _sts="second check of the new best $_best against $_test, which it beat: ${_pairs:-0} pair(s), the old one ${_pdiff:-0} % against it so far" ;;
       testing)   _sts="testing $_test against the best $_best: ${_pairs:-0} pair(s) side by side, the neighbour ${_pdiff:-0} % against it so far"
                  case "$_rmw" in ''|0) : ;; *) _sts="$_sts · best $_rmw mW" ;; esac ;;
       holding)   _sts="best $_best at $_rmw mW ($_rma mA) over $_rn block(s)" ;;
@@ -2958,6 +2959,16 @@ if [ -r "$_srf" ]; then
     _slsm="$(sed -n 's/^last_smooth=//p' "$_srf" | head -1)"
     [ -n "$_slsm" ] && NOTE "last smoothness decision: $_slsm"
   fi
+  while IFS='|' read -r _c _cx _cck _ccf _crb _clast _clo _chi _cts _csib; do
+    [ "$_c" = conf ] || continue
+    case "$_cx" in off_*|on_*) : ;; *) continue ;; esac
+    [ "${_ccf:-0}" = 0 ] && [ "${_crb:-0}" = 0 ] && [ "${_cck:-0}" = 0 ] && [ "${_csib:-0}" = 0 ] && continue
+    _cl="second checks: confirmed ${_ccf:-0}, rolled back ${_crb:-0}"
+    [ "${_cck:-0}" = 1 ] && _cl="$_cl, one running now"
+    case "$_clast" in ''|-) : ;; *) _cl="$_cl · last verdict $_clast, the setting in force ${_clo}..${_chi} % cheaper than the other (interval)" ;; esac
+    [ "${_csib:-0}" = 1 ] && _cl="$_cl · first trial started on the side its sibling situation won"
+    P "    $_cx: $_cl"
+  done < "$_srf"
   _slast="$(sed -n 's/^last=//p' "$_srf" | head -1)"
   [ -n "$_slast" ] && NOTE "last records decision: $_slast"
 else
@@ -2987,6 +2998,34 @@ if [ -r "$_ccp" ]; then
 else
   P "  smart meter          : no charge_counter node on this device - Smart V6 cannot measure power here; the learned settings stay at their shipped values and everything else in Smart still works"
 fi
+# Smart V7 (V66): cost per app and kind of use, the usual charge, the look-ahead, the profile
+# adjustments and the memory bus on quiet screen-off.
+_sef=/dev/.asb/smart_energy.txt
+if [ -r "$_sef" ]; then
+  _sea="$(awk -F'|' '$1 == "app" && NF == 5 { n++; if (n <= 5) printf "%s%s %s min %s mW (%s %%)", (n > 1 ? "; " : ""), $2, $3, $4, $5 }' "$_sef")"
+  P "  Smart energy         : smart_energy=$(cfg smart_energy) · per app, screen on: ${_sea:-nothing measured yet}"
+  _sec="$(awk -F'|' '$1 == "class" && NF == 5 && $3 + 0 >= 0.5 { printf "%s%s %.0fx %s min %s mW", (n++ ? "; " : ""), $2, $3, $4, $5 }' "$_sef")"
+  [ -n "$_sec" ] && P "    by kind of use: $_sec"
+  _sep="$(sed -n 's/^plug|//p' "$_sef" | head -1)"
+  [ -n "$_sep" ] && P "    usual charge: $(echo "$_sep" | tr '|' ' ')"
+  case "$(_rget en_budget_plug /dev/.asb/state 2>/dev/null)" in
+    1) NOTE "the battery will not last until the usual charge at the current drain - Smart leans to economy" ;;
+    -1) NOTE "the battery lasts until the usual charge with room to spare - the low-battery warning lean is not used" ;;
+  esac
+else
+  P "  Smart energy         : no summary yet (smart_energy=$(cfg smart_energy))"
+fi
+P "  Smart V7 look-ahead  : heat in 2 min $(_rget therm_proj_c /dev/.asb/state 2>/dev/null) C (Smart) · Performance lead $(_rget perf_proj_lead_c /dev/.asb/state 2>/dev/null) C, $(_rget perf_proj_early_ticks /dev/.asb/state 2>/dev/null) early tick(s) · kind of use $(_rget en_class /dev/.asb/state 2>/dev/null) · class_auto=$(_rget class_auto /dev/.asb/state 2>/dev/null) (profile_class_auto=$(cfg profile_class_auto)) · Balanced replay $(_rget rec_replay /dev/.asb/state 2>/dev/null) (smart_records_balanced=$(cfg smart_records_balanced)) · smoothness tests skipped for LSPosed-hooked apps $(_rget smooth_lsp_skips /dev/.asb/state 2>/dev/null)"
+_ddn="$(_rget ddr_node /dev/.asb/state 2>/dev/null)"
+_dds="$(_rget ddr_idle_samples /dev/.asb/state 2>/dev/null)"
+case "$_ddn" in
+  ''|-) P "  memory bus (DDR)     : no readable DDR clock node - not measured" ;;
+  *) if [ "${_dds:-0}" -ge 10 ] 2>/dev/null; then
+       P "  memory bus (DDR)     : $_ddn · quiet screen-off: at its lowest step $(_rget ddr_idle_at_min_pct /dev/.asb/state)% of $_dds reads, average $(_rget ddr_idle_avg_mhz /dev/.asb/state) MHz, lowest $(_rget ddr_min_mhz /dev/.asb/state) MHz (measured only, not steered)"
+     else
+       P "  memory bus (DDR)     : $_ddn · ${_dds:-0} quiet screen-off read(s) so far (measured only, not steered)"
+     fi ;;
+esac
 _scg="$(_rget smart_cold_guard /dev/.asb/state 2>/dev/null)"
 [ "$_scg" = 1 ] && NOTE "cold battery under 40 %: Smart holds the CPU peaks down until it warms up or charges (smart_cold_guard=$(cfg smart_cold_guard))"
 _scl="$(_rget ses_climate /dev/.asb/state 2>/dev/null)"
