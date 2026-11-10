@@ -3696,19 +3696,21 @@ import sys
 s = open(sys.argv[1], encoding='utf-8').read()
 reveal = s[s.index('function asbHomeReveal() {'):s.index('// ── localized boot:')]
 assert 'asbFirstFrameMark();' in reveal and 'run(' not in reveal
-for token in ('asbStartupLater(zygiskHeaderRefresh, 700, 1);', 'if (!shown) asbStartupLater(asbStartupLive, 340, 0);',
-              'function uiOtherAudioLater() { asbStartupLater(uiOtherAudioLook, 700, 2); }', 'if (_uiSoundOn) uiOtherAudioLater();',
+for token in ('asbStartupLater(zygiskHeaderRefresh, 150, 1);', 'if (!shown) asbStartupLater(asbStartupLive, 0, 0);',
+              'function asbStartupLive() { if (!_liveOpen) return pollLive(false); }', 'if (job.prio > 0 && asbPageBusy())',
+              'function uiOtherAudioLater() { asbStartupLater(uiOtherAudioLook, 150, 2); }', 'if (_uiSoundOn) uiOtherAudioLater();',
               "else asbStartupLater(asbStartupLive, 300, 0);"):
     assert token in s, token
 assert "setTimeout(function () { try { uiOtherAudioRefresh(); } catch (e) {} }, 1200);" not in s
 snd = s[s.index('function uiSound(kind) {'):s.index('function uiSound(kind) {') + 600]
-assert ' uiOtherAudioRefresh()' not in snd, 'a look inside the tap'
+assert ' uiOtherAudioRefresh()' not in snd and 'uiOtherAudioLater' not in snd.split('if (_uiOtherAudioAt < 0)')[1][:200].split('\n', 1)[1], 'a look started by a tap'
 PY
 command -v node >/dev/null 2>&1 || { echo "SKIP webui v66 startup queue runtime: no node"; exit 0; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 cat > "$T/t.js" <<'JS'
 const fs = require('fs'), h = fs.readFileSync(process.argv[2], 'utf8');
 const code = h.slice(h.indexOf('let _asbFirstFrameDone = null;'), h.indexOf('\n/* Contextual sonic feedback.'));
+global._liveOpen = false; global._cfgOpen = false; global._rpOpen = false; global._deviceOpen = false; global._zygiskOpen = false;
 let now = 0; const timers = []; const listeners = {}; let rafs = [];
 global.setTimeout = (fn, ms) => { timers.push({ at: now + (ms || 0), fn, live: true }); };
 global.performance = { now: () => now };
@@ -3739,13 +3741,17 @@ let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; 
   chk(log.join() === 'live@1000', 'the Live pass is not first after the frame: ' + log);
   await advance(3000);
   chk(log.length === 1, 'a second read started while the first was still running: ' + log);
-  release(); await advance(600);
+  global._liveOpen = false; global._cfgOpen = true;
+  release(); await advance(100);
   chk(log.length === 1, 'the gap after the Live pass was not kept: ' + log);
-  listeners.pointerdown(); await advance(400);
+  await advance(3000);
+  chk(log.length === 1, 'a background read ran while SETTINGS was open: ' + log);
+  global._cfgOpen = false;
+  listeners.pointerdown(); await advance(200);
   chk(log.length === 1, 'a read ran under a finger: ' + log);
-  await advance(800);
-  chk(log.length === 2 && /^zygisk@/.test(log[1]), 'the Zygisk header did not follow: ' + log);
-  await advance(1000);
+  await advance(2600);
+  chk(log.length >= 2 && /^zygisk@/.test(log[1]) && +log[1].split('@')[1] >= 7400, 'the Zygisk header did not follow the finger: ' + log);
+  await advance(1500);
   chk(log.length === 3 && /^audio@/.test(log[2]), 'the audio look did not follow: ' + log);
   chk(log.filter(x => /^zygisk/.test(x)).length === 1, 'a duplicate request ran twice: ' + log);
   Q.later(zy, 0, 1); await advance(50);
@@ -3771,6 +3777,31 @@ let ran = 0; later(() => { ran++; }, 0, 0);
 JS
 node "$T/f.js" "$H" || fail "fallback"
 echo "PASS webui v66 startup queue: background reads wait for the first frame, run one at a time in priority order with gaps, yield to touch, dedupe, and a missing reveal releases them after 2.5 s"
+)
+
+t_webui_zygisk_compact_contract() (
+# dev4: the ZYGISK page was too long. Nothing may be cut: an explanation longer than the clamp
+# opens in place on a tap, and a run of more than four rows keeps three visible with a "show
+# N more" button; both stay open across refreshes. Action buttons sit under the app name.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+python3 - "$H" <<'PY' || { echo "FAIL webui zygisk compact" >&2; exit 1; }
+import sys
+s = open(sys.argv[1], encoding='utf-8').read()
+r = s[s.index('function zygiskPageRender(d) {'):s.index('const _zyFoldOpen = new Set();')]
+assert r.count('zyCompact(body);') == 2
+c = s[s.index('function zyCompact(body) {'):]
+c = c[:c.index('\n}\n') + 3]
+for t in ("String(n.textContent || '').length <= ZY_NOTE_CLAMP", "if (run.length > 4) {", "const rest = run.slice(3);",
+          "_zyFoldOpen.has(key)", "T('zy_more', 'Show %s more')", "T('zy_less', 'Show less')", "fold.hidden = !o;"):
+    assert t in c, t
+assert 'remove()' not in c and 'removeChild' not in c and 'textContent = ' not in c.replace('btn.textContent = ', ''), 'compaction must not cut content'
+assert '#zygiskPage .lgr-note.zy-clamp.open { display: block; -webkit-line-clamp: unset; overflow: visible; }' in s
+g = s[s.index('function zygiskGuardActionRow('):s.index('function zygiskGuardCard()')]
+assert "k.appendChild(b);" in g and 'zy-btn-inline' in g
+PY
+echo "PASS webui zygisk compact: long explanations open in place, long lists show three with show-more, open state kept, buttons inline, nothing removed"
 )
 
 t_webui_quiet_ui_runtime() (
@@ -3842,16 +3873,16 @@ eval(fs.readFileSync(process.argv[2], 'utf8') + fs.readFileSync(process.argv[3],
   uiSound('nav');
   out.push('tapNotHeld=' + (looks.length === 1));
   await flush(); advance(5); await flush();
-  out.push('first=' + oscs + '/' + looks.length);           // looked at open (nothing playing) and again after the cue 15 s+ later
+  out.push('first=' + oscs + '/' + looks.length);           // looked at open only; a tap never looks (dev4)
   advance(30);                                                  // own context suspended, cue long ago
   playing = '1';
-  uiSound('nav'); await flush(); advance(5); await flush();
+  uiOtherAudioLater(); await flush(); advance(5); await flush(); // what coming back from the background does
   const afterLook = oscs;
   out.push('lookedWhilePlaying=' + looks.length);
   uiSound('nav');
   out.push('mutedWhilePlaying=' + (oscs === afterLook));
   advance(20); playing = '0';
-  uiSound('nav'); await flush(); advance(5); await flush();
+  uiOtherAudioLater(); await flush(); advance(5); await flush();
   uiSound('nav');
   out.push('backAfterStop=' + (oscs > afterLook));
   // Never look while this page's own stream is the likely player.
@@ -3871,8 +3902,8 @@ X
 r="$(node "$T/run.js" "$T/u.js" "$T/s.js")"
 printf '%s\n' "$r" | grep -q 'silentBeforeLook=true' || fail "a cue played before the first look at other audio: $r"
 printf '%s\n' "$r" | grep -q 'tapNotHeld=true' || fail "V66: a stale look ran inside the tap: $r"
-printf '%s\n' "$r" | grep -q 'first=4/2' || fail "first cue: $r"
-printf '%s\n' "$r" | grep -q 'lookedWhilePlaying=3' || fail "no second look after 15 s: $r"
+printf '%s\n' "$r" | grep -q 'first=4/1' || fail "first cue: $r"
+printf '%s\n' "$r" | grep -q 'lookedWhilePlaying=2' || fail "no fresh look when the page came back: $r"
 printf '%s\n' "$r" | grep -q 'mutedWhilePlaying=true' || fail "a cue played over another app's audio: $r"
 printf '%s\n' "$r" | grep -q 'backAfterStop=true' || fail "cues did not come back once playback stopped: $r"
 printf '%s\n' "$r" | grep -q 'noLookRightAfterOwnCue=true' || fail "looked while its own stream could be counted: $r"
@@ -9036,8 +9067,8 @@ for token in ('Promise.resolve(pollLive(true))','return cfgLoad();',
 for forbidden in ('serial','imei','account','android_id','setInterval('):
     assert forbidden not in js.lower(), forbidden
 assert 'window._asbBootIntroProbe = I18N_READY.then(asbBootIntroStart, asbBootIntroStart);' in s
-assert 'if (!shown) asbStartupLater(asbStartupLive, 340, 0);' in s
-assert 'function asbStartupLive() { return pollLive(false); }' in s
+assert 'if (!shown) asbStartupLater(asbStartupLive, 0, 0);' in s
+assert 'function asbStartupLive() { if (!_liveOpen) return pollLive(false); }' in s
 loader=s[s.index('async function asbDeviceInfoLoad()'):s.index('async function asbLogReportLoad()')]
 assert 'const background = arguments[0] === true;' in loader
 assert 'if (background) {' in loader and 'deviceInfoCacheSet(window._asbDeviceInfoRaw);' in loader
@@ -9129,7 +9160,7 @@ assert 'smart_pending' in smart and "kv._smartPending = 1" in smart
 warm=body('function asbStartupWarmCaches() {')
 assert 'probe.then(warm' in warm and 'if (introShown || document.hidden) return;' in warm
 assert 'cfgLoad();' not in warm and 'openConfigPage() on demand' in warm
-assert 'asbStartupLater(zygiskHeaderRefresh, 700, 1);' in warm and 'setTimeout(' not in warm
+assert 'asbStartupLater(zygiskHeaderRefresh, 150, 1);' in warm and 'setTimeout(' not in warm
 assert 'setTimeout(zygiskHeaderRefresh, 2500)' not in s
 load=s[s.index("window.addEventListener('load', function () {",s.index('function asbStartupWarmCaches')):s.index('function asbNavCurrent')]
 assert 'homeMeterRefresh(true)' not in load
@@ -9141,7 +9172,7 @@ assert schedule in s and s.index(schedule) < s.index("window.addEventListener('l
 assert s.count('homeMeterRefresh(true);')==1  # only the intentional post-profile-switch refresh
 initial=s[s.index('/* Coordinate the ordinary cold read'):s.index('window._asbBootIntroProbe =',s.index('/* Coordinate the ordinary cold read'))]
 assert 'requestAnimationFrame(() => setTimeout(() => {' in initial and '}, 0));' in initial
-assert 'if (!shown) asbStartupLater(asbStartupLive, 340, 0);' in initial and ', 250);' not in initial
+assert 'if (!shown) asbStartupLater(asbStartupLive, 0, 0);' in initial and ', 250);' not in initial
 poll=body('async function pollLive(visible) {')
 for token in ('if (_livePollRun) {','if (!visible || _livePollVisible) return _livePollRun;',
               'if (!_livePollFollow) {','return pollLive(true);','} finally {',
@@ -10243,8 +10274,9 @@ function logReportNote(t) { const n=el('div','lgr-note'); n.textContent=t; retur
 function deviceZygiskLink() { return el('div','dev-zygisk-link'); }
 function zygiskOffCard() { return el('div','zy-off'); }
 function techIcon() { return ''; }
-for (const name of ['zygiskModeCard','zygiskAutoCard','zygiskControlsCard','zygiskLinkCard','zygiskGuardCard','zygiskAotCard','lspLiteCard'])
+for (const name of ['zygiskModeCard','zygiskAutoCard','zygiskControlsCard','zygiskLinkCard','zygiskGuardCard','zygiskAotCard','lspLiteCard','smart7Card'])
   global[name]=function () { return el('div','lgr-sec '+name); };
+global.zyCompact=function () {};
 for (const name of ['deviceZygiskOverview','zygiskPageRows','deviceZygiskEditor','zygiskEvidenceCard'])
   global[name]=function () { return el(name==='zygiskEvidenceCard'?'details':'div',name); }
 eval(grab('asbPageJumpIcon'));
@@ -10261,19 +10293,19 @@ zygiskPageRender(null);
 chk(body.children.length===1 && navs().length===0,'loading state grew populated-page navigation');
 const off={sections:{zygisk_observer:{enabled:'0'}}};
 zygiskPageRender(off);
-chk(body.children.length===3 && body.children[0].id==='zy-status' && body.children[2].id==='zy-lsp' && navs().length===0,'Off state grew irrelevant navigation or lost the LSPosed card');
+chk(body.children.length===4 && body.children[0].id==='zy-status' && body.children[2].id==='zy-lsp' && body.children[3].id==='zy-s7' && navs().length===0,'Off state grew irrelevant navigation or lost the LSPosed/Smart cards');
 page.scrollTop=417;
 zygiskPageRender({sections:{zygisk_observer:{enabled:'1'}}});
 chk(navs().length===1,'populated state must have exactly one section map');
 const ids=body.children.filter(c=>c.id).map(c=>c.id);
-const expected=['zy-status','zy-mode','zy-auto','zy-controls','zy-activity','zy-engine','zy-guard','zy-lsp','zy-aot','zy-apps','zy-evidence'];
+const expected=['zy-status','zy-mode','zy-auto','zy-controls','zy-activity','zy-engine','zy-guard','zy-lsp','zy-s7','zy-aot','zy-apps','zy-evidence'];
 chk(JSON.stringify(ids)===JSON.stringify(expected),'section order/IDs regressed: '+JSON.stringify(ids));
 chk(page.scrollTop===417,'an unchanged refresh lost the reading position');
 const nav=navs()[0], buttons=nav._asbJumpButtons;
-chk(buttons.length===8,'the populated section map lost a control');
+chk(buttons.length===9,'the populated section map lost a control');
 chk(nav.attrs.role==='navigation' && buttons.every(b=>b.attrs['aria-controls']),'navigation semantics/controlled section missing');
 chk(buttons[0].attrs['aria-current']==='location' && buttons[0].classList.contains('is-active'),'initial active section is not exposed');
-chk(nav._asbJumpCurrent.textContent===buttons[0]._asbJumpLabel && nav._asbJumpTrack.children.length===8,'dock header/track did not render');
+chk(nav._asbJumpCurrent.textContent===buttons[0]._asbJumpLabel && nav._asbJumpTrack.children.length===9,'dock header/track did not render');
 chk(buttons.every(b=>String(b.className).split(/\s+/).includes('asb-tab') && b.children[0].className==='asb-tab-ico' && b.children[1].className==='asb-tab-label'),'dock does not reuse the main tab structure');
 buttons.forEach(b=>{ chk(typeof b.onclick==='function','jump has no handler: '+b._asbJumpLabel); b.onclick(); });
 chk(buttons.filter(b=>b.attrs['aria-current']==='location'&&b.classList.contains('is-active')).length===1,'active section is ambiguous after jumps');
@@ -10304,7 +10336,7 @@ console.log('ok');
 JS
 out="$(node "$T/render.js" "$H" 2>&1)" || { echo "FAIL fix311 presentation: $out" >&2; exit 1; }
 [ "$out" = ok ] || { echo "FAIL fix311 presentation: $out" >&2; exit 1; }
-echo "PASS fix311 drill-in presentation: real loading/Off/populated rendering, stable anchors and scroll restoration, eight working jumps, conditional report map, progressive disclosure and 13 complete locales"
+echo "PASS fix311 drill-in presentation: real loading/Off/populated rendering, stable anchors and scroll restoration, nine working jumps, conditional report map, progressive disclosure and 13 complete locales"
 )
 
 
@@ -10533,7 +10565,7 @@ for token in ("drawn.className = 'ufo-drawn'","emoji.className = 'ufo-emoji'",
 assert 'setInterval(' not in flight
 warm=s[s.index('function asbStartupWarmCaches()'):s.index('/* fix328:',s.index('function asbStartupWarmCaches()'))]
 assert 'cfgLoad();' not in warm and 'openConfigPage() on demand' in warm
-assert 'asbStartupLater(zygiskHeaderRefresh, 700, 1);' in warm
+assert 'asbStartupLater(zygiskHeaderRefresh, 150, 1);' in warm
 intro=s[s.index('async function asbBootIntroStart()'):s.index('let _asbHomeRevealed',s.index('async function asbBootIntroStart()'))]
 assert "return cfgLoad();" in intro  # the real once-per-boot preview retains its useful work
 for forbidden in ('serial','imei','account','android_id'):

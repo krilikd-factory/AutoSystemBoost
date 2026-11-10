@@ -7698,6 +7698,128 @@ out="$(run sweep)"; printf '%s\n' "$out" | grep -qx 'result=absent' || fail "swe
 echo "PASS lsposed verbose: LSPosed's own switch written as Java's Boolean, remembered and put back; old logs and the modules log freed; sweep only while the card says off; foreign layouts untouched"
 )
 
+t_smart7_budget_data_runtime() (
+# Runtime (V66, Smart V7 ideas 6 and 12 and the Battery profile's soft default): background
+# budgets and background mobile data. A rarely opened app that keeps starting in the background
+# goes to Android's "rare" standby bucket; one that moves mobile data in the background while
+# unopened loses background data on metered networks. Both by tap, by an opted-in daily pass,
+# and - for budgets only, with stricter limits - on the Battery profile. Protected classes are
+# never touched; every change is journaled, undone and given back on uninstall. The REAL script
+# runs over stubbed am/cmd/pm/dumpsys.
+set -u
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL smart7 budget/data: $*" >&2; exit 1; }
+S="$ROOT/runtime/asb_smart7.sh"
+sh -n "$S" || fail "syntax"
+sed 1d "$S" | grep -qE '^[[:space:]]*#' && fail "comments in module shell code"
+mkdir -p "$T/bin" "$T/run" "$T/mod"
+now=$(date +%s)
+ts() { date -d "@$1" '+%Y-%m-%d %H:%M:%S'; }
+printf 'com.game.idle 10\ncom.shop.rare 10\ncom.news.used 10\norg.telegram.messenger 10\ncom.feed.data 20\n' > "$T/buckets"
+: > "$T/deny"
+cat > "$T/bin/pm" <<'X'
+#!/bin/sh
+printf 'package:com.game.idle uid:10301\npackage:com.shop.rare uid:10302\npackage:com.news.used uid:10303\npackage:org.telegram.messenger uid:10304\npackage:com.feed.data uid:10305\n'
+X
+cat > "$T/bin/am" <<'X'
+#!/bin/sh
+if [ "$1" = get-standby-bucket ]; then awk -v p="$2" '$1 == p { print $2 }' "$S7_T/buckets"; exit 0; fi
+if [ "$1" = set-standby-bucket ]; then
+  case "$3" in rare) v=40 ;; *) v=$3 ;; esac
+  awk -v p="$2" -v v="$v" '$1 == p { $2 = v } { print }' "$S7_T/buckets" > "$S7_T/b.t" && mv "$S7_T/b.t" "$S7_T/buckets"; echo "set $2 $3" >> "$S7_T/am.log"
+fi
+X
+cat > "$T/bin/cmd" <<'X'
+#!/bin/sh
+[ "$1" = netpolicy ] || exit 0
+case "$2" in
+  list) printf 'Restrict background blacklisted UIDs: %s\n' "$(tr '\n' ' ' < "$S7_T/deny")" ;;
+  add) echo "$4" >> "$S7_T/deny" ;;
+  remove) grep -vx "$4" "$S7_T/deny" > "$S7_T/d.t"; mv "$S7_T/d.t" "$S7_T/deny" ;;
+esac
+X
+cat > "$T/bin/dumpsys" <<X
+#!/bin/sh
+if [ "\$1" = usagestats ]; then
+  echo "    package=com.game.idle totalTimeUsed=\"00:01\" lastTimeUsed=\"$(ts $((now - 20 * 86400)))\""
+  echo "    package=com.shop.rare totalTimeUsed=\"00:01\" lastTimeUsed=\"$(ts $((now - 9 * 86400)))\""
+  echo "    package=com.news.used totalTimeUsed=\"00:30\" lastTimeUsed=\"$(ts $((now - 3600)))\""
+  echo "    package=org.telegram.messenger totalTimeUsed=\"00:30\" lastTimeUsed=\"$(ts $((now - 30 * 86400)))\""
+  echo "    package=com.feed.data totalTimeUsed=\"00:30\" lastTimeUsed=\"$(ts $((now - 5 * 86400)))\""
+  exit 0
+fi
+if [ "\$1" = netstats ]; then
+  echo "UID stats:"
+  echo "  ident=[{type=0, ratType=13, metered=true}] uid=10305 set=DEFAULT tag=0x0"
+  echo "    NetworkStatsHistory: bucketDuration=7200"
+  echo "      st=$((now - 86400)) rb=40000000 rp=1 tb=8000000 tp=1 op=0"
+  echo "  ident=[{type=0, ratType=13, metered=true}] uid=10305 set=FOREGROUND tag=0x0"
+  echo "      st=$((now - 86400)) rb=900000000 rp=1 tb=1 tp=1 op=0"
+  echo "  ident=[{type=0, ratType=13, metered=true}] uid=10304 set=DEFAULT tag=0x0"
+  echo "      st=$((now - 86400)) rb=90000000 rp=1 tb=1 tp=1 op=0"
+  echo "  ident=[{type=1, metered=false}] uid=10303 set=DEFAULT tag=0x0"
+  echo "      st=$((now - 86400)) rb=90000000 rp=1 tb=1 tp=1 op=0"
+  echo "Dev stats:"
+fi
+X
+chmod +x "$T/bin/"*
+printf 'L\tcom.game.idle\t20\t5\t0\t0\nL\tcom.shop.rare\t7\t1\t0\t0\nL\tcom.news.used\t30\t10\t5\t0\nL\torg.telegram.messenger\t40\t0\t0\t0\n' > "$T/run/state.arm64-v8a.tsv"
+echo '86400.00 1.00' > "$T/up"; echo smart > "$T/mod/current_profile"
+run() { PATH="$T/bin:$PATH" S7_T="$T" MODDIR="$T/mod" ASB_S7_DIR="$T/s7" ASB_ZYGISK_RUN_DIR="$T/run" ASB_S7_UPTIME="$T/up" \
+  ASB_S7_KEEP="$T/keep" ASB_S7_NOTIF="$T/nf" ASB_S7_SYNC=1 sh "$S" "$@"; }
+run tick; [ -d "$T/s7" ] && fail "a tick created state without the opt-in or the Battery profile"
+out="$(run refresh)"; [ "$out" = result=started ] || fail "refresh: $out"
+st="$(run status)"
+printf '%s\n' "$st" | grep -qx 'usage=ok' && printf '%s\n' "$st" | grep -qx 'netstats=ok' && printf '%s\n' "$st" | grep -qx 'ledger=1' || fail "status head: $st"
+printf '%s\n' "$st" | grep -qx 'cand|budget|com.game.idle|10301|20|25|0' || fail "budget candidate: $(printf '%s\n' "$st" | grep '^cand')"
+printf '%s\n' "$st" | grep -qx 'cand|budget|com.shop.rare|10302|9|8|0' || fail "second budget candidate: $(printf '%s\n' "$st" | grep '^cand')"
+printf '%s\n' "$st" | grep -q '^cand|[a-z]*|com.news.used|' && fail "a used app became a candidate"
+printf '%s\n' "$st" | grep -q '^cand|[a-z]*|org.telegram.messenger|' && fail "a messenger became a candidate"
+printf '%s\n' "$st" | grep -qx 'cand|data|com.feed.data|10305|5|15|1' || fail "data candidate (background mobile only): $(printf '%s\n' "$st" | grep '^cand|data')"
+out="$(run apply budget com.game.idle)"; [ "$out" = result=ok ] && grep -qx 'com.game.idle 40' "$T/buckets" || fail "apply budget: $out $(cat "$T/buckets")"
+out="$(run apply data com.feed.data)"; [ "$out" = result=ok ] && grep -qx 10305 "$T/deny" || fail "apply data: $out"
+run status | grep -q '^cand|budget|com.game.idle|' && fail "an applied app is still offered"
+id="$(run status | awk -F'|' '$1 == "j" && $6 == "com.game.idle" { print $2 }')"
+out="$(run undo "$id")"; [ "$out" = result=ok ] && grep -qx 'com.game.idle 10' "$T/buckets" || fail "undo budget: $out $(cat "$T/buckets")"
+out="$(run undo-all)"; printf '%s\n' "$out" | grep -qx 'undone=1' && [ ! -s "$T/deny" ] || fail "undo-all: $out $(cat "$T/deny")"
+for bad in 'com.x;id' '' 'x'; do out="$(run apply budget "$bad")"; [ "$out" = result=bad_request ] || fail "unsafe name accepted: $bad"; done
+out="$(run apply nope com.game.idle)"; [ "$out" = result=bad_request ] || fail "unknown engine accepted"
+run auto data on >/dev/null; rm -f "$T/s7/auto_at"; run tick
+grep -qx 10305 "$T/deny" || fail "the opted-in data pass did not restrict the background data waker"
+grep -q 'com.game.idle 40' "$T/buckets" && fail "budgets ran automatically without opt-in or Battery"
+run undo-all >/dev/null
+echo battery > "$T/mod/current_profile"; rm -f "$T/s7/auto_at"; run auto data off >/dev/null; run tick
+grep -qx 'com.game.idle 40' "$T/buckets" || fail "the Battery profile's soft budget did not apply to a 20-day-idle busy app: $(cat "$T/buckets")"
+grep -qx 'com.shop.rare 10' "$T/buckets" || fail "the soft budget used the full limits: $(cat "$T/buckets")"
+[ -s "$T/deny" ] && fail "background data was restricted without its own opt-in"
+n1="$(grep -c active "$T/s7/journal")"; run tick; [ "$(grep -c active "$T/s7/journal")" = "$n1" ] || fail "a second pass ran within a day"
+run status | grep -q '^j|[0-9]*|[0-9]*|auto|budget|com.game.idle|10301|10|active$' || fail "automatic change not journaled: $(cat "$T/s7/journal")"
+H="$ROOT/webroot/index.html"
+if command -v node >/dev/null 2>&1; then
+  run status > "$T/st.txt"
+  printf 'version=1\nenabled=1\nlearn=1\nlearned_end=06:02\nunplug_samples=9\n' > "$T/nc.txt"
+  { echo "const T = (k, d) => d;"; sed -n '/^function smart7Parse(/,/^}/p' "$H"; cat <<'JS'
+const fs = require('fs');
+const g = smart7Parse(fs.readFileSync(process.argv[2], 'utf8') + '\ncand|budget|x;y|1|1|1|1\nj|1|2|root|budget|com.a.b|1|10|active\n', fs.readFileSync(process.argv[3], 'utf8'));
+let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
+chk(g.ok && g.profile === 'battery' && g.usage === 'ok' && g.netstats === 'ok' && g.ledger, 'header: ' + JSON.stringify(g));
+chk(g.journal.some(j => j.engine === 'budget' && j.pkg === 'com.game.idle' && j.kind === 'auto' && j.active), 'journal: ' + JSON.stringify(g.journal));
+chk(!g.cands.some(c => c.pkg === 'x;y') && !g.journal.some(j => j.kind === 'root'), 'unsafe rows were taken');
+chk(g.learn && g.learnedEnd === '06:02' && g.samples === 9 && g.ncEnabled, 'charge learn: ' + JSON.stringify(g));
+process.exit(bad ? 1 : 0);
+JS
+  } > "$T/p.js"
+  node "$T/p.js" "$T/st.txt" "$T/nc.txt" || fail "WebUI parse"
+fi
+grep -Fq "['s7', 'sh ' + shQuote(MD + '/runtime/asb_smart7.sh') + ' status']" "$H" && grep -Fq "args.map(function (v) { return ' ' + shQuote(String(v)); })" "$H" || fail "the WebUI does not read it or does not quote what it sends"
+run restore-all; [ -d "$T/s7" ] && fail "uninstall left state"
+grep -qx 'com.game.idle 10' "$T/buckets" || fail "uninstall did not give the bucket back"
+grep -q 'asb_smart7.sh" restore-all' "$ROOT/uninstall.sh" && grep -q 'asb_smart7.sh" tick' "$ROOT/service.sh" || fail "not wired into service/uninstall"
+grep -q 'runtime/asb_smart7.sh' "$ROOT/.github/workflows/build-test.yml" && grep -q 'runtime/asb_smart7.sh' "$ROOT/.github/workflows/build-release.yml" || fail "not in the workflow file lists"
+echo "PASS smart7 budget/data: rarely used busy apps to the rare bucket, background mobile-data wakers restricted, by tap, opt-in daily pass and Battery soft limits; protected apps untouched; journal, undo, uninstall restore"
+)
+
 t_lsposed_lite_runtime() (
 # Runtime (V66): a lighter LSPosed. The owner asked that ASB understand LSPosed modules - which
 # are on, what they hook, which ones cost battery or smoothness - show it, and lighten the
@@ -7775,7 +7897,7 @@ echo 'smart 0 0 0 0 0' > "$T/dm"
 printf '1000: 0 0\n10101: 0 0\n10102: 0 0\n10103: 0 0\n' > "$T/cpu"
 run() { PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_LL_DIR="$T/ll" ASB_LSPD_DIR="$T/lspd" ASB_GOV_BIN="$T/gov/asb" ASB_ZYGISK_RUN_DIR="$T/run" \
   ASB_LL_BOOTID="$T/bootid" ASB_LL_UPTIME="$T/up" ASB_LL_DM="$T/dm" ASB_LL_UIDCPU="$T/cpu" ASB_LL_KEEP="$T/asb/keep" ASB_LL_NOTIF="$T/asb/nf" \
-  ASB_LL_SYNC=1 ASB_LL_AB_H=0 ASB_LL_AB_OFF_S=20000 ASB_LL_AB_ON_S=3000 sh "$S" "$@"; }
+  ASB_LL_HEAVY_OUT="$T/run/heavy" ASB_LL_SYNC=1 ASB_LL_AB_H=0 ASB_LL_AB_OFF_S=20000 ASB_LL_AB_ON_S=3000 sh "$S" "$@"; }
 st="$(run status)"
 printf '%s\n' "$st" | grep -qx 'database=ok' && printf '%s\n' "$st" | grep -qx 'evidence_age=-1' || fail "status before evidence: $st"
 [ -d "$T/ll" ] && fail "a status read created state"
@@ -7787,6 +7909,10 @@ st="$(run status)"
 printf '%s\n' "$st" | grep -q '^mod|com.mod.alpha|1|7|framework|watch|framework,systemui,unused|' || fail "alpha row: $(printf '%s\n' "$st" | grep '^mod|com.mod.alpha')"
 printf '%s\n' "$st" | grep -q '^mod|com.mod.beta|1|2|apps|heavy|crash|' || fail "beta row: $(printf '%s\n' "$st" | grep '^mod|com.mod.beta')"
 printf '%s\n' "$st" | grep -q '^mod|com.mod.off|0|1|apps|off|' || fail "off row: $st"
+[ "$(sort "$T/run/heavy" | tr '\n' ' ')" = 'com.app.crash com.app.one ' ] || fail "Smart's list of apps hooked by a costly module: $(cat "$T/run/heavy" 2>/dev/null)"
+printf '%s\n' "$st" | grep -qx 'heavy_apps=2' || fail "status does not count the hooked apps: $(printf '%s\n' "$st" | grep heavy_apps)"
+rm -f "$T/run/heavy"; run tick; [ -s "$T/run/heavy" ] || fail "the tick did not write the list again after a reboot"
+grep -q 'lsp_heavy_apps' "$ROOT/src/asb_governor.c" || fail "the governor does not read the list"
 printf '%s\n' "$st" | grep -q '^cand|com.mod.alpha|com.app.idle|0|unused|40|40|0|1$' || fail "idle candidate: $(printf '%s\n' "$st" | grep '^cand')"
 printf '%s\n' "$st" | grep -q '^cand|com.mod.alpha|com.app.two|0|unused|10|30|0|0$' || fail "a protected app was offered to the automatic pass: $(printf '%s\n' "$st" | grep '^cand')"
 printf '%s\n' "$st" | grep -q '^cand|com.mod.beta|com.app.crash|0|crash|' || fail "crash candidate: $(printf '%s\n' "$st" | grep '^cand')"
@@ -7856,6 +7982,7 @@ sed -n '/^function lspLiteCard(/,/^}/p' "$H" | grep -q 'confirm(' && fail "a bro
 sed -n '/^function lspLiteButton(/,/^}/p' "$H" | grep -q 'lspLiteArmed(key)' || fail "no second-tap confirmation"
 run ab-start com.mod.beta >/dev/null; run disable com.mod.alpha >/dev/null
 run restore-all; [ -d "$T/ll" ] && fail "uninstall left state"
+[ -f "$T/run/heavy" ] && fail "uninstall left the hooked-app list"
 [ "$(rows)" = "$orig" ] || fail "uninstall did not give LSPosed back: $(rows)"
 grep -q 'asb_lsposed_lite.sh" restore-all' "$ROOT/uninstall.sh" || fail "uninstall does not restore"
 grep -q 'asb_lsposed_lite.sh" tick' "$ROOT/service.sh" || fail "no service tick"

@@ -4652,8 +4652,8 @@ grep -q '#define ASB_LAUNCH_LIFT_GAP_MS 5000L' "$G" || fail "launch rate limit m
 grep -q 'static long g_launch_prev_hash = 0;' "$G" || fail "app-switch detection not wired in the tick"
 grep -q '_launch_kick,' "$G" || fail "the launch kick does not reach the update"
 grep -q 'g_unlock_arm_why,' "$G" || fail "the log line does not say what armed the lift"
-grep -Fq 'const int manual_lift     = manual_profile && g_unlock_lift_now && !thermal_cap &&' "$W" || fail "the writer clamps the borrowed ceilings"
-grep -Fq 'int manual_cap_skip = manual_profile && !manual_override && !manual_lift;' "$W" || fail "manual_cap_skip does not yield to the lift"
+grep -Fq 'const int manual_lift     = manual_profile && (g_unlock_lift_now || g_writer_class_lift > 0) &&' "$W" || fail "the writer clamps the borrowed ceilings"
+grep -Fq 'int manual_cap_skip = manual_profile && !manual_override && !manual_lift && !manual_replay;' "$W" || fail "manual_cap_skip does not yield to the lift"
 grep -Fq '!g_fsm_cooldown_active && !g_unlock_lift_now;' "$G" || fail "the lift would classify its own ceilings as the shell's"
 # fix220: the lock press reaches the update, is answered after the decision, and the wake keys
 # stay in epoll with the screen on - except the touch panel's own gesture node.
@@ -5898,6 +5898,408 @@ X
 "$CC" -std=gnu11 -Wall -Werror -Wno-unused-function -o "$T/t" "$T/t.c" || fail "harness does not compile"
 "$T/t" || fail "behaviour"
 echo "PASS smart records: power compared side by side - the climate is not credited, charging and its aftermath are set aside, the plateau stops it, night checks carry over and unconfirmed nights close on their own"
+)
+
+t_smart_v7_native_runtime() (
+# Runtime (V66, Smart V7): the governor's new parts, each on its REAL code.
+#  - Records: a new champion is checked once more against the one it beat; when the old one now
+#    comes out cheaper it is put back (rollback), otherwise it is confirmed; every verdict keeps
+#    a gain interval; counts live in a side file, so the V65 store loads unchanged; a first
+#    trial starts on the side its sibling situation won; Balanced replays the screen-off
+#    setting Smart won and measures nothing.
+#  - Energy: cost per app and per kind of use from current x voltage, the charging habit by
+#    half hour, the mixed drain until then; it fades and survives a restart.
+#  - Budget: Smart leans when the battery will not last until the usual charge and relaxes the
+#    warning when it will with room to spare; the emergency level is never relaxed.
+#  - Thermal: Smart's pre-lean and Performance's trip point look two minutes ahead.
+#  - LSPosed: apps hooked by a costly module are read from the list lsposed_lite writes.
+#  - Profiles by kind of use: Performance holds light apps at 80 %, Battery lifts games to 70 %.
+set -eu
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+R="$ROOT/src/asb_record.h"; E="$ROOT/src/asb_energy.h"; G="$ROOT/src/asb_governor.c"; F="$ROOT/src/asb_fsm.h"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL smart v7 native: $*" >&2; exit 1; }
+CC="${CC:-cc}"; command -v "$CC" >/dev/null 2>&1 || CC=gcc
+command -v "$CC" >/dev/null 2>&1 || { echo "SKIP smart v7 native: no C compiler"; exit 0; }
+cat > "$T/rec.c" <<X
+#define ASB_REC_FILE "$T/rec.bin"
+#define ASB_REC_SUMMARY "$T/rec.txt"
+#define ASB_REC7_FILE "$T/rec7.bin"
+#include "$R"
+#include <stdlib.h>
+#define CAP_UAH 7000000.0
+static double g_uah = 3500000.0;
+static long fake_cc(void) { return ((long)(g_uah / 1000.0)) * 1000L; }
+static int fake_bright(void) { return 20; }
+static unsigned g_seed = 777;
+static double noise(void) { g_seed = g_seed * 1103515245u + 12345u; return ((double)((g_seed >> 16) % 2001) / 1000.0) - 1.0; }
+static long long g_ms = 0; static long g_wall = 1792368000L;
+static int g_flip = 0, g_ev4 = 0, g_ev5 = 0, g_saw_confirming = 0;
+static char g_msg4[200];
+static int soc(void) { int p = (int)(g_uah * 100.0 / CAP_UAH); return p < 0 ? 0 : p > 100 ? 100 : p; }
+static double volts(void) { return 3.50 + 0.80 * soc() / 100.0; }
+static double night_mw(int s) { switch (s) { case 750: return 183.0; case 875: return 177.0; case 1000: return 192.0; case 1250: return 200.0; default: return 212.0; } }
+static double day_mw(int s) {
+    if (!g_flip) { switch (s) { case 875: return 177.0; case 1000: return 192.0; default: return 205.0; } }
+    switch (s) { case 875: return 205.0; case 1000: return 185.0; case 1250: return 200.0; default: return 212.0; }
+}
+static void run(asb_rec_in_t *in, int ticks) {
+    for (int i = 0; i < ticks; i++) {
+        if (g_rec.ctx[ASB_REC_OFF_DAY].confirming) g_flip = 1;
+        double mw = in->night ? night_mw(g_rec_off_scale) : day_mw(g_rec_off_scale);
+        mw *= 1.0 + noise() * 0.012;
+        g_uah -= mw / volts() * 60 / 3.6;
+        if (soc() < 30) g_uah = CAP_UAH * 0.9;
+        g_ms += 60000; g_wall += 60;
+        in->now_ms = g_ms; in->wall = g_wall; in->soc = soc(); in->voltage_uv = (int)(volts() * 1e6);
+        in->bat_temp_dc = 250; in->unplug_age_s = 1000000L;
+        asb_rec_tick(in);
+        if (g_rec.ctx[ASB_REC_OFF_NIGHT].confirming && !strcmp(asb_rec_status_name(&g_rec.ctx[ASB_REC_OFF_NIGHT]), "confirming") &&
+            g_rec.ctx[ASB_REC_OFF_NIGHT].challenger == ASB_REC_ARM_DEFAULT) g_saw_confirming = 1;
+        if (g_rec_event == 4) { g_ev4++; snprintf(g_msg4, sizeof(g_msg4), "%s", g_rec_event_msg); }
+        if (g_rec_event == 5) g_ev5++;
+        g_rec_event = 0;
+    }
+}
+int main(void) {
+    int bad = 0;
+    g_rec_read_cc = fake_cc; g_rec_read_bright_pct = fake_bright;
+    if (asb_rec_load() != 0 || g_rec7.ctx[0].confirms != 0) { puts("fresh start expected"); bad = 1; }
+    asb_rec_in_t in; memset(&in, 0, sizeof(in));
+    in.enabled = 1; in.explore = 1; in.idle_state = 1; in.night = 1;
+    float lo = 0, hi = 0; int saw_ci = 0;
+    for (int n = 0; n < 900 && !g_rec.ctx[ASB_REC_OFF_NIGHT].converged; n++) {
+        run(&in, 41);
+        if (!saw_ci && g_rec7.ctx[ASB_REC_OFF_NIGHT].last_kind == REC7_CONFIRMED) {
+            saw_ci = 1; lo = g_rec7.ctx[ASB_REC_OFF_NIGHT].gain_lo; hi = g_rec7.ctx[ASB_REC_OFF_NIGHT].gain_hi;
+        }
+    }
+    asb_rec_ctx_t *c = &g_rec.ctx[ASB_REC_OFF_NIGHT];
+    if (!c->converged || g_rec_off_scale_x1000[c->champion] != 875) { printf("night: champion %d converged %d\n", c->champion, c->converged); bad = 1; }
+    if (!g_saw_confirming) { puts("the new champion was never checked against the one it beat"); bad = 1; }
+    if (g_rec7.ctx[ASB_REC_OFF_NIGHT].confirms != 1 || g_rec7.ctx[ASB_REC_OFF_NIGHT].rollbacks != 0 || g_ev5 != 1) { printf("night confirms %u rollbacks %u ev5 %d\n", g_rec7.ctx[0].confirms, g_rec7.ctx[0].rollbacks, g_ev5); bad = 1; }
+    if (!saw_ci || !(lo > 0.03f && hi < 0.16f && lo < hi)) { printf("confirmation interval %.3f..%.3f (about 8.5 %% expected)\n", lo, hi); bad = 1; }
+    if (c->wins != 1 || c->gain_total > 0.96f || c->gain_total < 0.88f) { printf("night wins %u gain %.3f\n", c->wins, c->gain_total); bad = 1; }
+    /* By day the cheap setting stops being cheap right after it won (a ROM update, say): its
+     * check finds the old one cheaper and puts it back. */
+    in.night = 0;
+    for (int n = 0; n < 900 && !g_rec.ctx[ASB_REC_OFF_DAY].converged; n++) run(&in, 41);
+    asb_rec_ctx_t *d = &g_rec.ctx[ASB_REC_OFF_DAY];
+    if (!g_flip) { puts("the day setting never won, the rollback was not exercised"); bad = 1; }
+    if (d->champion != ASB_REC_ARM_DEFAULT || g_rec7.ctx[ASB_REC_OFF_DAY].rollbacks != 1 || g_ev4 != 1) { printf("day: champion %d rollbacks %u ev4 %d\n", d->champion, g_rec7.ctx[ASB_REC_OFF_DAY].rollbacks, g_ev4); bad = 1; }
+    if (d->wins != 0 || d->gain_total < 0.98f || d->gain_total > 1.02f) { printf("a rollback left a win behind: wins %u gain %.3f\n", d->wins, d->gain_total); bad = 1; }
+    if (!strstr(g_msg4, "off_day rolled back to x1.000")) { printf("rollback event: %s\n", g_msg4); bad = 1; }
+    if (!d->converged || d->prev_champion != 1) { printf("after the rollback the search did not turn: converged %d prev %d\n", d->converged, d->prev_champion); bad = 1; }
+    asb_rec_summary_write();
+    FILE *f = fopen("$T/rec.txt", "r"); char line[400]; int s1 = 0, s2 = 0, sh = 0;
+    while (f && fgets(line, sizeof(line), f)) {
+        if (!strncmp(line, "conf|off_night|0|1|0|", 21)) s1 = 1;
+        if (!strncmp(line, "conf|off_day|0|0|1|", 19)) s2 = 1;
+        if (!strncmp(line, "# conf|ctx|confirming|confirms|rollbacks|last|gain_lo_pct|gain_hi_pct|", 70)) sh = 1;
+    }
+    if (f) fclose(f);
+    if (!s1 || !s2 || !sh) { printf("summary confidence lines %d %d %d\n", s1, s2, sh); bad = 1; }
+    /* The counts are in the side file: they survive a restart; a broken side file costs only them. */
+    if (asb_rec_save() != 0) { puts("save"); bad = 1; }
+    memset(&g_rec7, 0, sizeof(g_rec7)); memset(&g_rec, 0, sizeof(g_rec)); g_rec_loaded = 0;
+    if (asb_rec_load() != 1 || g_rec7.ctx[ASB_REC_OFF_NIGHT].confirms != 1 || g_rec7.ctx[ASB_REC_OFF_DAY].rollbacks != 1) { puts("confidence lost across a restart"); bad = 1; }
+    f = fopen("$T/rec7.bin", "r+b"); fputc(0x55, f); fclose(f);
+    memset(&g_rec, 0, sizeof(g_rec)); g_rec_loaded = 0;
+    if (asb_rec_load() != 1 || g_rec7.ctx[ASB_REC_OFF_DAY].rollbacks != 0 || g_rec.ctx[ASB_REC_OFF_NIGHT].champion != 1) { puts("a broken side file took the records with it, or was used"); bad = 1; }
+    /* A store whose check flag cannot be right is started over for that situation. */
+    g_rec.ctx[ASB_REC_ON_LIGHT_DIM].confirming = 1;
+    if (asb_rec_save() != 0) { puts("save 2"); bad = 1; }
+    memset(&g_rec, 0, sizeof(g_rec)); g_rec_loaded = 0; asb_rec_load();
+    if (g_rec.ctx[ASB_REC_ON_LIGHT_DIM].confirming != 0 || g_rec.ctx[ASB_REC_OFF_NIGHT].champion != 1) { puts("an impossible check flag was kept"); bad = 1; }
+    /* Sibling prior: by night x1.25 won, so the first day trial goes up, not down. */
+    asb_rec_store_init(&g_rec); memset(&g_rec7, 0, sizeof(g_rec7));
+    g_rec.ctx[ASB_REC_OFF_NIGHT].champion = g_rec.ctx[ASB_REC_OFF_NIGHT].challenger = 3; g_rec.ctx[ASB_REC_OFF_NIGHT].wins = 1;
+    asb_rec_ctx_t *dd = &g_rec.ctx[ASB_REC_OFF_DAY];
+    if (dd->dir != -1) { puts("screen off no longer starts downward"); bad = 1; }
+    asb_rec_sibling_prior(dd, ASB_REC_OFF_DAY); asb_rec_setup_trial(dd, 1, g_wall);
+    if (dd->challenger != 3 || g_rec7.ctx[ASB_REC_OFF_DAY].sibling_start != 1) { printf("sibling prior: challenger %d\n", dd->challenger); bad = 1; }
+    asb_rec_ctx_init(dd, ASB_REC_OFF_DAY); g_rec.ctx[ASB_REC_OFF_NIGHT].confirming = 1;
+    asb_rec_sibling_prior(dd, ASB_REC_OFF_DAY);
+    if (dd->dir != -1) { puts("a sibling still in its check steered a first trial"); bad = 1; }
+    /* Balanced: the won setting on quiet deep idle, nothing measured, nothing else. */
+    asb_rec_store_init(&g_rec);
+    g_rec.ctx[ASB_REC_OFF_NIGHT].champion = g_rec.ctx[ASB_REC_OFF_NIGHT].challenger = 1; g_rec.ctx[ASB_REC_OFF_NIGHT].wins = 1;
+    memset(&in, 0, sizeof(in)); in.replay = 1; in.idle_state = 1; in.night = 1; in.now_ms = g_ms; in.wall = g_wall;
+    asb_rec_tick(&in);
+    if (g_rec_off_scale != 875 || !g_rec_replay || g_rec_blk.active || g_rec.ctx[ASB_REC_OFF_NIGHT].blocks != 0) { printf("Balanced replay: scale %d replay %d active %d\n", g_rec_off_scale, g_rec_replay, g_rec_blk.active); bad = 1; }
+    in.night = 0; asb_rec_tick(&in);
+    if (g_rec_off_scale != 1000 || g_rec_replay) { puts("Balanced applied a setting the day situation never won"); bad = 1; }
+    in.night = 1; in.idle_state = 0; asb_rec_tick(&in);
+    if (g_rec_off_scale != 1000) { puts("Balanced replay under screen-off music"); bad = 1; }
+    in.idle_state = 1; in.thermal_cap = 1; asb_rec_tick(&in);
+    if (g_rec_off_scale != 1000) { puts("Balanced replay under a thermal cap"); bad = 1; }
+    in.thermal_cap = 0; g_rec.ctx[ASB_REC_OFF_NIGHT].confirming = 1; g_rec.ctx[ASB_REC_OFF_NIGHT].challenger = 2; asb_rec_tick(&in);
+    if (g_rec_off_scale != 1000) { puts("Balanced replayed a setting still in its check"); bad = 1; }
+    g_rec.ctx[ASB_REC_OFF_NIGHT].confirming = 0; g_rec.ctx[ASB_REC_OFF_NIGHT].champion = g_rec.ctx[ASB_REC_OFF_NIGHT].challenger = 3; asb_rec_tick(&in);
+    if (g_rec_off_scale != 1000 || g_rec_replay) { puts("Balanced replayed a setting above x1, over the shell's ceilings"); bad = 1; }
+    g_rec.ctx[ASB_REC_OFF_NIGHT].champion = g_rec.ctx[ASB_REC_OFF_NIGHT].challenger = 1; in.replay = 0; asb_rec_tick(&in);
+    if (g_rec_off_scale != 1000) { puts("replay without Balanced"); bad = 1; }
+    in.replay = 1; in.screen_on = 1; asb_rec_tick(&in);
+    if (g_rec_off_scale != 1000 || g_rec_on_offset != 0) { puts("Balanced replay with the screen on"); bad = 1; }
+    return bad;
+}
+X
+"$CC" -std=gnu11 -Wall -Werror -Wno-unused-function -o "$T/rec" "$T/rec.c" || fail "records harness does not compile"
+"$T/rec" || fail "records: confirmation, rollback, interval, priors, Balanced"
+
+cat > "$T/en.c" <<X
+#define ASB_EN_FILE "$T/en.bin"
+#define ASB_EN_SUMMARY "$T/en.txt"
+#include "$E"
+#include <stdlib.h>
+static long long g_ms = 0; static long g_wall = 1792368000L;   /* Monday 2026-10-19 00:00 UTC */
+static asb_en_in_t in;
+static void step(int s) { g_ms += (long long)s * 1000; g_wall += s; in.now_ms = g_ms; in.wall = g_wall; asb_en_tick(&in); }
+static void stay(int secs, int every) { for (int t = 0; t < secs; t += every) step(every); }
+static void use(uint64_t h, const char *p, int hint, int ma, int secs) {
+    in.screen_on = 1; in.app_hash = h; in.pkg = p; in.hint = hint; in.ma = ma; stay(secs, 5);
+    in.screen_on = 0; in.app_hash = 0; in.pkg = ""; in.hint = 0; in.ma = 60; step(5);
+}
+static void until(int hh, int mm) { long day0 = g_wall - g_wall % 86400L; long t = day0 + hh * 3600L + mm * 60L; if (t <= g_wall) t += 86400L; stay((int)(t - g_wall), 30); }
+int main(void) {
+    int bad = 0;
+    if (asb_en_load() != 0) { puts("fresh start expected"); bad = 1; }
+    memset(&in, 0, sizeof(in)); in.voltage_uv = 4000000; in.pkg = ""; in.ma = 60;
+    step(30);
+    for (int dday = 0; dday < 5; dday++) {
+        until(8, 0);
+        use(0x1111, "com.light.reader", 1, 400, 1200);
+        step(60);
+        use(0x1111, "com.light.reader", 1, 500, 60);
+        until(9, 0);
+        use(0x2222, "com.game.b", 4, 1500, 1800);
+        until(23, 0);
+        in.charging = 1; step(30);
+        if (dday == 4) { in.charging = 0; step(300); in.charging = 1; step(30); }
+        until(6, 0);
+        in.charging = 0; step(30);
+    }
+    asb_en_app_t *a = 0, *b = 0;
+    for (int i = 0; i < ASB_EN_APPS; i++) { if (g_en.app[i].hash == 0x1111) a = &g_en.app[i]; if (g_en.app[i].hash == 0x2222) b = &g_en.app[i]; }
+    if (!a || !b) { puts("apps not tracked"); return 1; }
+    float amw = a->j * 1000.0f / a->s, bmw = b->j * 1000.0f / b->s;
+    if (bmw < 5800 || bmw > 6200 || amw < 1550 || amw > 1700) { printf("per-app power %.0f / %.0f mW\n", amw, bmw); bad = 1; }
+    if (g_en.cls[EN_GAME].n < 4.5f || g_en.cls[EN_LIGHT].n < 4.5f || g_en.cls[EN_GLANCE].n < 4.5f || g_en.cls[EN_MEDIA].n > 0.1f) {
+        printf("classes glance %.1f light %.1f media %.1f game %.1f\n", g_en.cls[EN_GLANCE].n, g_en.cls[EN_LIGHT].n, g_en.cls[EN_MEDIA].n, g_en.cls[EN_GAME].n); bad = 1; }
+    float gmw = g_en.cls[EN_GAME].j * 1000.0f / g_en.cls[EN_GAME].s;
+    if (gmw < 5800 || gmw > 6200) { printf("game class %.0f mW\n", gmw); bad = 1; }
+    if (g_en.plugs != 5) { printf("charges counted %u (a charger back within 10 minutes is the same charge)\n", g_en.plugs); bad = 1; }
+    until(20, 0);
+    long fri = g_wall - 86400L;   /* the loop ended on Saturday: Friday 20:00 */
+    int eta = asb_en_plug_eta(fri);
+    if (eta < 179 || eta > 180) { printf("eta on Friday at 20:00: %d min, 180 expected\n", eta); bad = 1; }
+    if (asb_en_plug_eta(fri + 3 * 3600 + 600) != 0) { puts("inside the usual half hour the eta is not 0"); bad = 1; }
+    if (asb_en_plug_eta(g_wall) != -1) { puts("the weekday habit was applied to a Saturday"); bad = 1; }
+    int mix = asb_en_mix_rate(100, 50);
+    if (mix < 7 || mix > 13) { printf("mixed drain %d (about 1 %%/h expected)\n", mix); bad = 1; }
+    if (asb_en_mix_rate(100, -1) <= mix) { puts("without a screen-off figure the mix must not be lower"); bad = 1; }
+    asb_en_summary_write();
+    FILE *f = fopen("$T/en.txt", "r"); char line[300]; int first = 1, sa = 0, sc = 0, sp = 0;
+    while (f && fgets(line, sizeof(line), f)) {
+        if (!strncmp(line, "app|", 4)) { if (first && !strncmp(line, "app|com.game.b|", 15)) sa = 1; first = 0; }
+        if (!strncmp(line, "class|game|", 11)) sc = 1;
+        if (!strncmp(line, "plug|charges=5|weekday=23:00|weekend=-", 38)) sp = 1;
+    }
+    if (f) fclose(f);
+    if (!sa || !sc || !sp) { printf("summary %d %d %d\n", sa, sc, sp); bad = 1; }
+    rename("$T/en.txt", "$T/en0.txt");
+    if (asb_en_save() != 0) { puts("save"); bad = 1; }
+    float bj = b->j;
+    memset(&g_en, 0, sizeof(g_en)); g_en_loaded = 0;
+    if (asb_en_load() != 1 || g_en.plugs != 5) { puts("lost across a restart"); bad = 1; }
+    in.screen_on = 0; g_wall += 30L * 86400L; g_ms += 1000; in.wall = g_wall; in.now_ms = g_ms; asb_en_tick(&in);
+    for (int i = 0; i < ASB_EN_APPS; i++) if (g_en.app[i].hash == 0x2222) b = &g_en.app[i];
+    if (b->j > bj * 0.45f || b->j < bj * 0.35f) { printf("30 days did not fade it: %.0f of %.0f\n", b->j, bj); bad = 1; }
+    f = fopen("$T/en.bin", "r+b"); fseek(f, 16 + 72, SEEK_SET); { float nan = -1.0f; fwrite(&nan, sizeof(nan), 1, f); } fclose(f);
+    memset(&g_en, 0, sizeof(g_en)); g_en_loaded = 0;
+    if (asb_en_load() != 0 || g_en.plugs != 0) { puts("a broken store was used"); bad = 1; }
+    return bad;
+}
+X
+"$CC" -std=gnu11 -Wall -Werror -Wno-unused-function -o "$T/en" "$T/en.c" || fail "energy harness does not compile"
+TZ=UTC "$T/en" || fail "energy: per app, per kind of use, charging habit"
+
+cat > "$T/bud.c" <<'X'
+#include "asb_smart.h"
+int main(void) {
+    int bad = 0; asb_smart_runtime_t rt; time_t t0 = 1792368000;
+    memset(&rt, 0, sizeof(rt));
+    asb_smart_apply_energy_budget(30, 0, 60, t0, &rt);
+    if (rt.budget_severity != 0) { puts("5 h left without a habit is not a warning"); bad = 1; }
+    g_en_plug_eta_min = 8 * 60; g_en_mix_rate_x10 = 50;
+    asb_smart_apply_energy_budget(30, 0, 60, t0 + 1, &rt);
+    if (rt.budget_severity != 1 || g_en_budget_plug != 1) { printf("6 h left, the charger in 8 h: severity %d plug %d\n", rt.budget_severity, g_en_budget_plug); bad = 1; }
+    g_smart_budget_sev = 0; memset(&rt, 0, sizeof(rt));
+    g_en_plug_eta_min = 120; g_en_mix_rate_x10 = 20;
+    asb_smart_apply_energy_budget(30, 0, 100, t0 + 2, &rt);
+    if (rt.budget_severity != 0 || g_en_budget_plug != -1) { printf("15 h left, the charger in 2 h: severity %d plug %d\n", rt.budget_severity, g_en_budget_plug); bad = 1; }
+    g_en_plug_eta_min = 30; g_en_mix_rate_x10 = 10;
+    asb_smart_apply_energy_budget(10, 0, 100, t0 + 3, &rt);
+    if (rt.budget_severity != 2) { puts("the emergency level was relaxed"); bad = 1; }
+    g_smart_budget_sev = 0; memset(&rt, 0, sizeof(rt));
+    g_en_plug_eta_min = 8 * 60; g_en_mix_rate_x10 = 50;
+    asb_smart_apply_energy_budget(80, 0, 60, t0 + 4, &rt);
+    if (rt.budget_severity != 0) { puts("a warning above 50 %"); bad = 1; }
+    g_smart_trend_slope_mc_min = 2000;
+    if (asb_smart_thermal_projection(40, 0) != 44 || asb_smart_thermal_projection(40, 1) != 41) { puts("projection two minutes ahead"); bad = 1; }
+    g_smart_trend_slope_mc_min = 9000;
+    if (asb_smart_thermal_projection(40, 0) != 46) { puts("the rise is not capped at 6"); bad = 1; }
+    g_smart_trend_slope_mc_min = -3000;
+    if (asb_smart_thermal_projection(40, 0) != 40) { puts("a cooling phone was projected"); bad = 1; }
+    return bad;
+}
+X
+"$CC" -std=gnu11 -D_GNU_SOURCE -Wall -Wno-unused-function -Wno-unused-variable -Wno-unused-parameter -I"$ROOT/src" -o "$T/bud" "$T/bud.c" || fail "budget harness does not compile"
+"$T/bud" || fail "budget against the usual charge, thermal projection"
+grep -Fq 'int proj = asb_smart_thermal_projection(dtemp, se >= 0);' "$ROOT/src/asb_smart.h" && grep -Fq 'if (proj > soft_lo && soft_hi > soft_lo) {' "$ROOT/src/asb_smart.h" \
+  || fail "the pre-lean does not use the projection"
+
+{ echo '#include <time.h>'; echo '#include <stdio.h>'
+  sed -n '/^#define ASB_PERF_PROJ_WINDOW_S/,/^}/p' "$F"
+  cat <<'X'
+int main(void) {
+    int bad = 0; time_t t = 1000;
+    if (asb_perf_thermal_lead(54, 60, t) != 0) { puts("a first reading gave a lead"); bad = 1; }
+    if (asb_perf_thermal_lead(55, 60, t + 30) != 0) { puts("one window at 2 C/min, halved into the slope, is under 1.5 C/min"); bad = 1; }
+    int l = asb_perf_thermal_lead(56, 60, t + 60);
+    if (l != 3) { printf("lead %d after two windows at 2 C/min (slope %d)\n", l, g_perf_proj_slope); bad = 1; }
+    if (asb_perf_thermal_lead(46, 60, t + 90) != 0) { puts("a lead far below the trip point"); bad = 1; }
+    g_perf_proj_prev_ts = 0; asb_perf_thermal_lead(40, 60, t);
+    asb_perf_thermal_lead(52, 60, t + 30); l = asb_perf_thermal_lead(64, 60, t + 60);
+    if (l != 4) { printf("lead %d not capped at 4\n", l); bad = 1; }
+    if (asb_perf_thermal_lead(64, 60, t + 400) != 0) { puts("a stale slope gave a lead"); bad = 1; }
+    return bad;
+}
+X
+} > "$T/perf.c"
+"$CC" -std=gnu11 -Wall -Werror -Wno-unused-variable -o "$T/perf" "$T/perf.c" || fail "performance harness does not compile"
+"$T/perf" || fail "performance trip point lead"
+grep -Fq 'if (fsm->profile_idx == PROFILE_PERFORMANCE) {' "$F" && grep -Fq 'sustained_temp_enter -= _heat_lead;' "$F" || fail "the lead does not move Performance's trip point"
+
+{ echo '#include <stdio.h>'; echo '#include <string.h>'; echo '#include <sys/stat.h>'
+  sed -n '/^#define ASB_LSP_HEAVY_FILE/,/^}/p' "$G" | sed "s|\"/dev/.asb/lsp_heavy_apps\"|\"$T/heavy\"|"
+  cat <<'X'
+int main(void) {
+    int bad = 0;
+    if (asb_lsp_heavy_app("com.a.b", 100)) { puts("no list, yet a match"); bad = 1; }
+    FILE *f = fopen(HEAVY_PATH, "w"); fputs("com.a.bc\ncom.x.y\n", f); fclose(f);
+    if (asb_lsp_heavy_app("com.x.y", 130)) { puts("the list was read again before a minute"); bad = 1; }
+    if (!asb_lsp_heavy_app("com.x.y", 170)) { puts("a listed app was not matched"); bad = 1; }
+    if (asb_lsp_heavy_app("com.a.b", 170) || asb_lsp_heavy_app("a.b", 170) || asb_lsp_heavy_app("", 170)) { puts("a partial name matched"); bad = 1; }
+    remove(HEAVY_PATH);
+    if (asb_lsp_heavy_app("com.x.y", 240)) { puts("a removed list still matched"); bad = 1; }
+    return bad;
+}
+X
+} | sed "s|HEAVY_PATH|\"$T/heavy\"|" > "$T/lsp.c"
+"$CC" -std=gnu11 -Wall -Werror -Wno-unused-variable -o "$T/lsp" "$T/lsp.c" || fail "LSPosed harness does not compile"
+"$T/lsp" || fail "hooked-app list"
+grep -Fq 'if (on && asb_lsp_heavy_app(g_smart_rt.app_pkg_cached, now)) {' "$G" || fail "the smoothness test does not skip hooked apps"
+
+{ cat <<'X'
+#include <stdio.h>
+#include <string.h>
+enum { PROFILE_BATTERY = 0, PROFILE_BALANCED = 1, PROFILE_PERFORMANCE = 2, PROFILE_SMART = 3 };
+enum { ASB_STATE_DEEP_IDLE = 0, ASB_STATE_LIGHT_IDLE, ASB_STATE_MODERATE, ASB_STATE_HEAVY };
+enum { ASB_APP_IDLE = 0, ASB_APP_LIGHT, ASB_APP_MEDIUM, ASB_APP_HEAVY, ASB_APP_GAMING };
+typedef struct { int cpu_max[3], cpu_min[3]; } asb_profile_caps_t;
+typedef struct { int profile_idx, state, thermal_cap; } asb_fsm_t;
+typedef struct { struct { int screen_on, camera_active; } misc; } asb_metrics_t;
+static struct { int profile_class_auto; } g_asb_cfg = { 1 };
+static struct { int app_hint; } g_smart_rt;
+static int g_fsm_cooldown_active, g_pkg_detect_ok = 1, g_unlock_lift_now, g_touch_kick, g_writer_class_lift;
+static int g_cpu_slot_hwmax[3] = { 2000000, 3000000, 0 };
+static char g_cpu_max_paths[3][64] = { "/c/policy0/scaling_max_freq", "/c/policy4/scaling_max_freq", "" };
+static int g_shell[8] = { 1100000, 0, 0, 0, 1700000, 0, 0, 0 };
+static int asb_policy_id_of_path(const char *p) { return p[9] - '0'; }
+static int asb_shell_cap_for_policy(int prof, int pol) { return prof == PROFILE_BATTERY && pol >= 0 && pol < 8 ? g_shell[pol] : 0; }
+X
+  sed -n '/^static int g_class_auto_now = 0;/,/^}/p' "$G"
+  cat <<'X'
+int main(void) {
+    int bad = 0;
+    asb_profile_caps_t c = { { 2000000, 3000000, 0 }, { 300000, 300000, 0 } };
+    asb_fsm_t f = { PROFILE_PERFORMANCE, ASB_STATE_MODERATE, 0 };
+    asb_metrics_t m; memset(&m, 0, sizeof(m)); m.misc.screen_on = 1;
+    g_smart_rt.app_hint = ASB_APP_LIGHT;
+    asb_class_auto_apply(&c, &f, &m);
+    if (c.cpu_max[0] != 1600000 || c.cpu_max[1] != 2400000 || c.cpu_max[2] != 0 || g_class_auto_now != 1) { printf("Performance light: %d %d\n", c.cpu_max[0], c.cpu_max[1]); bad = 1; }
+    asb_profile_caps_t k = { { 2000000, 3000000, 0 }, { 0, 0, 0 } };
+    f.state = ASB_STATE_HEAVY; asb_class_auto_apply(&k, &f, &m);
+    if (k.cpu_max[0] != 2000000 || g_class_auto_now) { puts("heavy work was held down"); bad = 1; }
+    f.state = ASB_STATE_MODERATE; g_touch_kick = 1; asb_class_auto_apply(&k, &f, &m);
+    if (k.cpu_max[0] != 2000000) { puts("a fresh touch was held down"); bad = 1; }
+    g_touch_kick = 0; g_unlock_lift_now = 1; asb_class_auto_apply(&k, &f, &m);
+    if (k.cpu_max[0] != 2000000) { puts("the unlock lift was held down"); bad = 1; }
+    g_unlock_lift_now = 0; g_smart_rt.app_hint = ASB_APP_GAMING; asb_class_auto_apply(&k, &f, &m);
+    if (k.cpu_max[0] != 2000000) { puts("a game on Performance was held down"); bad = 1; }
+    /* Battery: the shell owns the ceilings; the writer is told to lift them to 70 % where the
+     * shell's are lower (policy0 at 55 %), and the FSM's caps are not touched. */
+    asb_profile_caps_t b = { { 800000, 900000, 0 }, { 0, 0, 0 } };
+    f.profile_idx = PROFILE_BATTERY; asb_class_auto_apply(&b, &f, &m);
+    if (g_writer_class_lift != 70 || g_class_auto_now != 2 || b.cpu_max[0] != 800000) { printf("Battery game: lift %d mode %d\n", g_writer_class_lift, g_class_auto_now); bad = 1; }
+    g_shell[0] = 1500000; g_shell[4] = 2200000; asb_class_auto_apply(&b, &f, &m);
+    if (g_writer_class_lift != 0 || g_class_auto_now != 0) { puts("a lift where the shell's ceilings are already at 70 %"); bad = 1; }
+    g_shell[0] = 1100000; g_shell[4] = 1700000;
+    f.thermal_cap = 1; asb_class_auto_apply(&b, &f, &m);
+    if (g_writer_class_lift) { puts("a thermal cap was lifted"); bad = 1; }
+    f.thermal_cap = 0; g_fsm_cooldown_active = 1; asb_class_auto_apply(&b, &f, &m);
+    if (g_writer_class_lift) { puts("the cooldown was lifted"); bad = 1; }
+    g_fsm_cooldown_active = 0; f.profile_idx = PROFILE_BALANCED; asb_class_auto_apply(&b, &f, &m);
+    if (g_writer_class_lift || g_class_auto_now) { puts("Balanced was changed"); bad = 1; }
+    f.profile_idx = PROFILE_BATTERY; m.misc.screen_on = 0; asb_class_auto_apply(&b, &f, &m);
+    if (g_writer_class_lift) { puts("a change with the screen off"); bad = 1; }
+    m.misc.screen_on = 1; g_smart_rt.app_hint = ASB_APP_LIGHT; asb_class_auto_apply(&b, &f, &m);
+    if (g_writer_class_lift) { puts("Battery lifted a light app"); bad = 1; }
+    g_smart_rt.app_hint = ASB_APP_GAMING; g_asb_cfg.profile_class_auto = 0; asb_class_auto_apply(&b, &f, &m);
+    if (g_writer_class_lift) { puts("profile_class_auto=0 ignored"); bad = 1; }
+    return bad;
+}
+X
+} > "$T/cls.c"
+"$CC" -std=gnu11 -Wall -Werror -o "$T/cls" "$T/cls.c" || fail "class harness does not compile"
+"$T/cls" || fail "profiles by kind of use"
+[ "$(grep -c 'asb_class_auto_apply(&_effective_caps, &fsm, &metrics);' "$G")" -ge 2 ] || fail "a write path skips the kind of use"
+W="$ROOT/src/asb_writer.h"
+grep -Fq 'const int manual_lift     = manual_profile && (g_unlock_lift_now || g_writer_class_lift > 0) &&' "$W" || fail "the writer does not take Battery's game lift"
+grep -Fq 'int manual_cap_skip = manual_profile && !manual_override && !manual_lift && !manual_replay;' "$W" || fail "the writer stays off Balanced's replay"
+grep -Fq 'cmax[_k] = (int)(_sh * g_writer_replay_scale / 1000);' "$W" || fail "the replay is not taken from the shell's own ceiling"
+grep -Fq 'g_writer_replay_scale = g_rec_off_scale;' "$G" || fail "the governor does not hand the replay to the writer"
+grep -Fq '_ri.replay      = g_asb_cfg.smart_records && g_asb_cfg.smart_records_balanced &&' "$G" || fail "Balanced does not replay"
+grep -Fq 'if (fsm->profile_idx == PROFILE_BALANCED) {' "$G" || fail "the screen-off setting is not written under Balanced"
+grep -Fq 'if (g_asb_cfg.smart_energy) asb_en_tick(&_ei);' "$G" || fail "no energy tick"
+grep -Fq 'g_en_mix_rate_x10 = g_asb_cfg.smart_energy ? asb_en_mix_rate(_budget_rate, g_offdrain_x100) : -1;' "$G" || fail "the budget does not get the mixed drain"
+H="$ROOT/webroot/index.html"
+if command -v node >/dev/null 2>&1; then
+  { cat "$T/en0.txt"; grep '^conf|' "$T/rec.txt"; printf 'therm_proj_c=47\nclass_auto=1\nrec_replay=1\nsmooth_lsp_skips=3\nddr_idle_samples=40\nddr_idle_at_min_pct=55\nddr_idle_avg_mhz=900\nddr_min_mhz=547\napp|bad;pkg|1|1|1\n'; } > "$T/s7l.txt"
+  { echo "const T = (k, d) => d;"; sed -n '/^function smart7LearnParse(/,/^}/p' "$H"; cat <<'JS'
+const g = smart7LearnParse(require('fs').readFileSync(process.argv[2], 'utf8'));
+let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
+chk(g.apps.length >= 2 && g.apps[0].pkg === 'com.game.b' && g.apps[0].mw > 5800, 'apps: ' + JSON.stringify(g.apps));
+chk(!g.apps.some(a => a.pkg === 'bad;pkg'), 'an unsafe row was taken');
+chk(g.classes.some(c => c.name === 'game' && c.n > 4) && g.classes.some(c => c.name === 'glance'), 'classes: ' + JSON.stringify(g.classes));
+chk(g.plug && g.plug.weekday === '23:00' && g.plug.weekend === '' && g.plug.charges === 5, 'plug: ' + JSON.stringify(g.plug));
+chk(g.conf.some(c => c.ctx === 'off_day' && c.rollbacks === 1) && g.conf.some(c => c.ctx === 'off_night' && c.confirms === 1), 'conf: ' + JSON.stringify(g.conf));
+chk(g.kv.therm_proj_c === '47' && g.kv.class_auto === '1' && g.kv.ddr_idle_at_min_pct === '55', 'state: ' + JSON.stringify(g.kv));
+process.exit(bad ? 1 : 0);
+JS
+  } > "$T/s7l.js"
+  node "$T/s7l.js" "$T/s7l.txt" || fail "WebUI parse of the governor's own summaries"
+fi
+grep -Fq "['s7l', ASB_S7L_READ]" "$H" || fail "the Zygisk page does not read what Smart learned"
+grep -Fq "if (_zyS7L) card.appendChild(smart7LearnBlock(_zyS7L, nm));" "$H" || fail "the Smart card does not show what it learned"
+grep -q 'smart_records_v7.bin' "$ROOT/runtime/asb_smart_reset.sh" && grep -q 'smart_energy.bin' "$ROOT/runtime/asb_smart_reset.sh" || fail "the Smart reset keeps the V7 stores"
+grep -q 'smart_energy.txt' "$ROOT/docs/log_schemas.md" && grep -q 'en_budget_plug' "$ROOT/docs/log_schemas.md" || fail "undocumented"
+grep -q 'Smart energy' "$ROOT/tools/asb_diag.sh" && cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag does not show it"
+for k in smart_records_balanced smart_energy profile_class_auto; do
+  grep -q "^$k=1$" "$ROOT/config/governor.conf" && grep -q "^$k|internal|" "$ROOT/config/key_ownership.tsv" && grep -q "\"$k\"" "$ROOT/src/asb_config.h" || fail "$k not shipped, registered or parsed"
+done
+echo "PASS smart v7 native: records checked once more and rolled back when the old setting wins, with a gain interval and a side file; first trials follow the sibling situation; Balanced replays without measuring; cost per app and kind of use; the budget asks whether the battery lasts until the usual charge; thermal look-ahead in Smart and Performance; hooked apps skip the smoothness test; Performance and Battery follow the kind of use"
 )
 
 t_smart_smoothness_runtime() (

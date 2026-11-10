@@ -731,8 +731,8 @@ awk -F'|' '
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
-[ "$(wc -l < "$TMP/conf")" = "218" ] || fail "expected 218 config keys, got $(wc -l < "$TMP/conf")"
-[ "$(wc -l < "$TMP/registry")" = "218" ] || fail "expected 218 registry keys, got $(wc -l < "$TMP/registry")"
+[ "$(wc -l < "$TMP/conf")" = "221" ] || fail "expected 221 config keys, got $(wc -l < "$TMP/conf")"
+[ "$(wc -l < "$TMP/registry")" = "221" ] || fail "expected 221 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
 grep -qx 'kernel_sched_stats|advanced|webui_sensitive|shell' "$REG" || fail 'kernel_sched_stats consumer is not pinned to shell'
@@ -796,7 +796,7 @@ for _c in $(grep -oE "\{ key:'[A-Za-z_][A-Za-z_0-9]*'" "$ROOT/webroot/index.html
 done
 [ -z "$_missing" ] || fail "cards missing from the install.sh settings snapshot:$_missing"
 
-echo 'PASS config ownership registry contract (216 keys; 34 user, 53 advanced, 129 internal)'
+echo 'PASS config ownership registry contract (221 keys; 36 user, 53 advanced, 132 internal)'
 )
 
 t_config_restore_outcome_runtime() (
@@ -4482,8 +4482,8 @@ grep -qF 'g_unlock_arm_why = "screen on";' "$G" || fail "the wake arm lost its r
 grep -qF 'static long g_launch_prev_hash = 0;' "$G" || fail "no foreground-hash baseline in the tick"
 grep -qF 'uint64_t _fh = g_smart_rt.app_hash;' "$G" || fail "the launch kick does not read the foreground hash"
 grep -qF '!g_fsm_cooldown_active && !g_unlock_lift_now;' "$G" || fail "the shell-ownership rule does not yield during the lift"
-grep -qF 'const int manual_lift     = manual_profile && g_unlock_lift_now && !thermal_cap &&' "$W" || fail "the writer still clamps the borrowed ceilings"
-grep -qF 'int manual_cap_skip = manual_profile && !manual_override && !manual_lift;' "$W" || fail "manual_cap_skip does not yield to the lift"
+grep -qF 'const int manual_lift     = manual_profile && (g_unlock_lift_now || g_writer_class_lift > 0) &&' "$W" || fail "the writer still clamps the borrowed ceilings"
+grep -qF 'int manual_cap_skip = manual_profile && !manual_override && !manual_lift && !manual_replay;' "$W" || fail "manual_cap_skip does not yield to the lift"
 # The pinned fix183 line must survive verbatim next to the new flag.
 grep -qF 'const int manual_override = manual_profile && (thermal_cap || g_fsm_cooldown_active);' "$W" || fail "the thermal/cooldown override line changed"
 grep -qF 't_unlock_lift_runtime' "$T" || fail "the runtime test is not registered"
@@ -4860,9 +4860,9 @@ grep -qF 'time(NULL) - g_touch_last_ts <= ASB_TOUCH_RECENT_S;' "$G" || fail "the
 # ceiling is the governor's own lowest step); only the CPU pin escalation keeps it out.
 [ "$(grep -cF '!fsm_profile_is_battery && !m->misc.camera_active' "$F")" -eq 1 ] \
   || fail "Battery's quiet-screen FSM exclusions changed"
-grep -qF 'const int manual_lift     = manual_profile && g_unlock_lift_now && !thermal_cap &&' "$W" \
+grep -qF 'const int manual_lift     = manual_profile && (g_unlock_lift_now || g_writer_class_lift > 0) &&' "$W" \
   || fail "the writer does not borrow the manual-profile ceilings"
-grep -qF 'int manual_cap_skip = manual_profile && !manual_override && !manual_lift;' "$W" \
+grep -qF 'int manual_cap_skip = manual_profile && !manual_override && !manual_lift && !manual_replay;' "$W" \
   || fail "manual_cap_skip does not yield to the lift"
 grep -qF 'writer_manual_handback' "$W" || fail "manual-profile ceiling handback is missing"
 grep -q '^unlock_lift_s=3$' "$ROOT/config/governor.conf" || fail "the lift duration changed"
@@ -9084,6 +9084,45 @@ out="$(run_nc restore)"; [ "$(state "$out")" = off ] || fail "restore command: $
 grep -Fq 'asb_night_charge.sh restore' "$ROOT/uninstall.sh" || fail 'uninstall does not invoke restore'
 
 echo 'PASS night charge sysfs: default/custom same-day/overnight windows, exact handback, invalid fail-safe, limit/switch, unplug and uninstall'
+)
+
+t_night_charge_learn_runtime() (
+# Runtime (V66, Smart V7 idea 9): the night charge limit learns when the phone comes off the
+# charger and lets it finish charging 90 minutes before that, instead of at a fixed hour. Unplug
+# times come from the charger's own online flag (a held limit reads "Not charging" while still
+# plugged), between 03:00 and 12:00, kept for 28 days, weekdays and weekends apart. The REAL
+# helper runs against a temporary power-supply tree.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/runtime/asb_night_charge.sh"
+T="$(mktemp -d "${TMPDIR:-/tmp}/asb_nc_learn.XXXXXX")"
+trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL night charge learn: $*" >&2; exit 1; }
+mkdir -p "$T/mod/config" "$T/psy/battery" "$T/psy/usb" "$T/state"
+printf 'night_charge_enable=1\n' > "$T/mod/config/governor.conf"
+printf 'boot-a\n' > "$T/boot"; printf '80\n' > "$T/psy/battery/capacity"; printf 'Not charging\n' > "$T/psy/battery/status"
+printf '100\n' > "$T/psy/battery/charge_control_limit_max"; printf '100\n' > "$T/psy/battery/charge_control_limit"
+run() { MODDIR="$T/mod" ASB_NC_PSY="$T/psy/battery" ASB_NC_STATE="$T/state" ASB_NC_BOOTID="$T/boot" ASB_NC_NOW_MIN="$NOW" ASB_NC_NOW_WK="$WK" sh "$H" "$@"; }
+kv() { printf '%s\n' "$1" | sed -n "s/^$2=//p" | head -1; }
+NOW=420; WK=2
+out="$(run status)"; [ "$(kv "$out" learn)" = 0 ] && [ "$(kv "$out" learned_end)" = none ] || fail "default status: $out"
+[ "$(run learn on)" = result=on ] || fail "learn on"
+for d in 1 2 3 4; do
+  echo 1 > "$T/psy/usb/online"; NOW=$((420 + d)); run tick >/dev/null
+  echo 0 > "$T/psy/usb/online"; NOW=$((450 + d)); run tick >/dev/null
+done
+[ "$(wc -l < "$T/state/night_charge.unplug" | tr -d ' ')" = 4 ] || fail "unplugs not recorded: $(cat "$T/state/night_charge.unplug")"
+echo 1 > "$T/psy/usb/online"; NOW=840; run tick >/dev/null; echo 0 > "$T/psy/usb/online"; run tick >/dev/null
+[ "$(wc -l < "$T/state/night_charge.unplug" | tr -d ' ')" = 4 ] || fail "an afternoon unplug was learned"
+echo 1 > "$T/psy/usb/online"; echo 'Charging' > "$T/psy/battery/status"; NOW=1380; run tick >/dev/null
+[ "$(cat "$T/psy/battery/charge_control_limit")" = 80 ] || fail "the limit did not hold at 23:00"
+NOW=200; out="$(run status)"; [ "$(kv "$out" learned_end)" = 06:02 ] && [ "$(kv "$out" window)" = 22:00-06:02 ] || fail "learned end (median 07:32 - 90 min): $out"
+NOW=361; run tick >/dev/null; [ "$(cat "$T/psy/battery/charge_control_limit")" = 80 ] || fail "released before the learned end"
+NOW=362; run tick >/dev/null; [ "$(cat "$T/psy/battery/charge_control_limit")" = 100 ] || fail "not released at the learned end to finish charging"
+WK=7; NOW=200; out="$(run status)"; [ "$(kv "$out" learned_end)" = none ] && [ "$(kv "$out" window)" = 22:00-06:00 ] || fail "weekend used weekday unplugs: $out"
+WK=2; [ "$(run learn off)" = result=off ] || fail "learn off"
+NOW=200; out="$(run status)"; [ "$(kv "$out" window)" = 22:00-06:00 ] || fail "learn off kept the learned end: $out"
+echo "PASS night charge learn: unplug times from the charger flag, weekdays apart, finish 90 min before the usual unplug, fixed window back when off"
 )
 
 t_night_charge_failure_runtime() (
