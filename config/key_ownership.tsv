@@ -176,6 +176,9 @@ unlock_lift_pct|internal|engine_or_derived|both
 smart_night_awake|internal|engine_or_derived|both
 smart_records|internal|engine_or_derived|both
 smart_records_explore|internal|engine_or_derived|native
+smart_records_balanced|internal|engine_or_derived|native
+smart_energy|internal|engine_or_derived|native
+profile_class_auto|internal|engine_or_derived|native
 smart_microwake|internal|engine_or_derived|native
 smart_smooth|internal|engine_or_derived|native
 smart_cold_guard|internal|engine_or_derived|native

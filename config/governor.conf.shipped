@@ -574,6 +574,23 @@ smart_night_awake=1
 # 1 = on (default), 0 = off.
 smart_records=1
 smart_records_explore=1
+# Balanced with Smart's records (V66): with the screen off on quiet deep idle, Balanced applies
+# the screen-off CPU ceiling setting Smart won on this phone and kept through its check, when it
+# is below x1 (Balanced's own ceilings times it, given back on wake; never raised). Nothing is
+# measured or tried under Balanced. 1 = on (default), 0 = off.
+smart_records_balanced=1
+# Smart energy (V66): what an hour in each app and each kind of use (glance, light, media,
+# heavy, game) costs with the screen on - battery current x voltage, screen included - and when
+# the charger usually goes in. Smart's battery budget then asks whether the battery lasts
+# until that usual charge, instead of assuming the screen stays on until empty.
+# 1 = on (default), 0 = off.
+smart_energy=1
+# Profiles by kind of use (V66): Performance holds the CPU ceilings at 80 % of the hardware
+# maximum while a light app (messenger, settings, reader) runs at ordinary load; Battery lifts
+# them to at least 70 % while a game runs, where its own are lower. Heavy work, app launches,
+# the camera, the unlock lift, a thermal cap and the cooldown are untouched.
+# 1 = on (default), 0 = off.
+profile_class_auto=1
 # Smart night wakes: learns the short check-ins of a night (a few minutes on the phone, then
 # back to sleep) and keeps the night radio mode through them instead of switching the modem
 # to day mode and back. A screen-on that lasts longer is a real wake as before.
