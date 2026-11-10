@@ -467,6 +467,26 @@
     "zygisk_ledger": {
       "name": "Catatan Start Proses (Zygisk)",
       "desc": "Menghitung, sejak boot ini, berapa banyak proses yang dimulai setiap aplikasi biasa saat layar mati dan menyala. Aplikasi yang terus memulai pekerjaan di malam hari adalah penguras baterai tersembunyi yang umum; yang teratas tampil di diagnostik perangkat dan asbdiag. Hanya nama paket dan penghitung, disimpan di memori (tmpfs); tidak ada yang dibatasi otomatis. Biayanya satu koneksi singkat ke companion per start proses aplikasi selama aktif. Memerlukan sakelar Pengamat Proses Zygisk."
+    },
+    "smart_lab": {
+      "name": "Lab Smart",
+      "desc": "Smart mencoba sendiri lebih banyak setelan, satu per satu dan berdampingan dengan yang terbaik sejauh ini, lalu hanya mempertahankan setelan bila baterai mengukurnya lebih hemat tanpa inti lebih sering di batas, frame tersendat lebih banyak, atau panas lebih cepat. Ia membandingkan \"5G hanya saat perlu\" dengan 5G diizinkan (hanya bila sakelar itu aktif), dorongan saat membuka kunci dengan 15 poin lebih rendah, dan kecenderungannya sendiri untuk tiga aplikasi yang paling boros saat layar menyala. Setelan terbaik yang biayanya naik 15 % langsung diuji ulang. Hanya profil Smart; hasilnya ada di \"Yang dipelajari Smart\"."
+    },
+    "smart_lab_mem": {
+      "name": "Lab Smart: bus memori",
+      "desc": "Mengizinkan lab juga membatasi permintaan CPU ke bus memori: 75 % atau 55 % dari maksimum bus saat layar tenang (10 detik tanpa sentuhan, tidak ada yang berat, tanpa kamera), 50 % atau langkah terendah saat diam dalam yang tenang. Hanya simpul yang disediakan kernel ini yang dipakai; permintaan layar, GPU, video, dan modem tidak pernah disentuh. Setiap penulisan dibaca ulang dan dikembalikan, dan nilai yang diubah komponen lain dibiarkan untuknya. Batas hanya bertahan bila terukur lebih hemat."
+    },
+    "profile_class_auto": {
+      "name": "Profil menurut jenis penggunaan",
+      "desc": "Performance menahan batas atas CPU di 80 % dari maksimum selama aplikasi ringan (pesan, setelan, pembaca) berjalan dengan beban biasa; Battery menaikkannya minimal ke 70 % selama game berjalan, bila miliknya lebih rendah. Pembukaan aplikasi, kerja berat, kamera, dorongan saat membuka kunci, batas suhu, dan pendinginan tidak disentuh."
+    },
+    "smart_records_balanced": {
+      "name": "Balanced memakai temuan Smart",
+      "desc": "Dengan layar mati saat diam dalam yang tenang, Balanced menerapkan batas atas CPU layar mati yang diukur Smart lebih hemat di ponsel ini dan dikonfirmasi lewat pemeriksaannya, bila lebih rendah dari milik Balanced. Di bawah Balanced tidak ada yang dicoba atau diukur; batas dikembalikan saat bangun dan tidak pernah dinaikkan."
+    },
+    "ltpo_peak_force": {
+      "name": "Maksimum panel saat disentuh",
+      "desc": "Bekerja bersama Paksa LTPO. Selama layar disentuh, SurfaceFlinger diminta mode tertinggi yang dilaporkan panel itu sendiri (165 Hz pada panel yang mencantumkannya), melewati ROM yang menahan aplikasi biasa di 120 Hz. Permintaan dilepas begitu pemantau sentuhan kembali diam, sehingga laju diam dan penurunan frame milik panel kembali. Lebih boros daya selama Anda menyentuh layar. ROM yang menolak permintaan dibiarkan, dan lencana memberitahukannya."
     }
   },
   "nav_live": "Monitor",
@@ -2942,7 +2962,38 @@
   "s7l_class_bat": "Baterai: game dinaikkan ke 70 % maksimum CPU",
   "s7l_replay": "Seimbang: pengaturan layar mati yang ditemukan Smart sedang dipakai",
   "s7l_lsp": "Tes kelancaran dilewati di aplikasi yang di-hook modul LSPosed yang boros: %s",
-  "s7l_ddr": "Bus memori saat layar mati dan diam: di tingkat terendah %1 % waktu, rata-rata %2 MHz (terendah %3 MHz)",
+  "s7l_ddr": "Bus memori saat layar mati dan diam: di tingkat terendah pada %1 % bacaan governor, rata-rata %2 MHz (terendah %3 MHz). Setiap bacaan diambil saat governor sendiri bangun, jadi ini batas atas.",
   "s7l_look": "Prakiraan dan profil",
-  "s7l_wait_gauge": "Biaya per aplikasi menunggu pemeriksaan pengukur arus: ASB terlebih dahulu membandingkan bacaannya dengan pemakaian nyata selama beberapa periode layar menyala."
+  "s7l_wait_gauge": "Biaya per aplikasi menunggu pemeriksaan pengukur arus: ASB terlebih dahulu membandingkan bacaannya dengan pemakaian nyata selama beberapa periode layar menyala.",
+  "st_ltpo_needs_force": "perlu Paksa LTPO",
+  "st_ltpo_peak_refused": "ROM menolak mode",
+  "t_cfg_needs_ltpo": " · berlaku setelah Paksa LTPO aktif",
+  "nc_state_holding_switch": "pengisian dijeda di 80% (sakelar pengisian, bukan batas pengisian)",
+  "s7_external": "sudah diubah komponen lain - dibiarkan apa adanya",
+  "s7l_arm_bus_pct": "bus dibatasi %s %",
+  "s7l_arm_lte": "LTE saat lalu lintas ringan",
+  "s7l_arm_5g": "5G diizinkan",
+  "s7l_arm_lift_set": "dorongan sesuai setelan",
+  "s7l_arm_lift_less": "dorongan 15 poin lebih rendah",
+  "s7l_arm_bus_free": "bus tidak dibatasi",
+  "s7l_arm_bus_low": "bus di langkah terendah",
+  "s7l_arm_lean_sit": "kecenderungan situasi",
+  "s7l_arm_lean_eco": "condong 0.1 ke hemat",
+  "s7l_arm_lean_head": "condong 0.1 ke cadangan",
+  "s7l_lab_radio": "5G hanya saat perlu",
+  "s7l_lab_lift": "Dorongan saat bangun",
+  "s7l_lab_mem_on": "Bus memori, layar menyala",
+  "s7l_lab_mem_off": "Bus memori, layar mati",
+  "s7l_lab_app": "Aplikasi: %s",
+  "s7l_lab": "Lab Smart: setelan diuji berdampingan",
+  "s7l_lab_off_radio": "menunggu sakelar \"5G hanya saat perlu\"",
+  "s7l_lab_off_mem": "kernel ini tidak memberi ASB simpul bus memori yang bisa ditulis",
+  "s7l_lab_st_testing": "menguji %1 melawan %2: %3 pasang, sejauh ini %4 %",
+  "s7l_lab_st_best": "terbaik: %s",
+  "s7l_lab_st_watching": "%s dipakai, sedang diukur",
+  "s7l_lab_won": " · menang, %s % lebih hemat",
+  "s7l_lab_reopen": " · diuji lagi setelah biayanya naik (%s×)",
+  "s7l_lab_mem": "Bus memori: %1 simpul ditemukan (%2), sekarang %3",
+  "s7l_lab_none": "Belum ada eksperimen yang menyelesaikan satu blok: masing-masing butuh beberapa pasang blok tanpa pengisi daya.",
+  "s7l_lab_note": "Sebuah setelan menang hanya jika baterai mengukurnya minimal 3 % lebih hemat secara berdampingan, tanpa inti lebih sering di batas, frame tersendat lebih banyak, atau panas lebih cepat."
 }

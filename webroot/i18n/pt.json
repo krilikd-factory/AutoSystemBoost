@@ -467,6 +467,26 @@
     "zygisk_ledger": {
       "name": "Registro de inícios de processos (Zygisk)",
       "desc": "Conta, desde esta inicialização, quantos processos cada app comum inicia com a tela desligada e ligada. Apps que disparam trabalho sem parar à noite são um gasto oculto de bateria frequente; os primeiros aparecem no diagnóstico do dispositivo e no asbdiag. Apenas nomes de pacote e contadores, na memória (tmpfs); nada é restringido automaticamente. Custa uma conexão curta com o companion por início de processo de app enquanto ativo. Exige o interruptor \"Observador de processos Zygisk\"."
+    },
+    "smart_lab": {
+      "name": "Laboratório Smart",
+      "desc": "O Smart testa sozinho mais ajustes, um de cada vez e lado a lado com o melhor até agora, e só mantém um ajuste quando a bateria o mediu mais barato, sem núcleos mais vezes no teto, mais quadros travados ou aquecimento mais rápido. Compara «5G só quando necessário» com o 5G permitido (só se esse interruptor estiver ligado), o impulso ao desbloquear com 15 pontos a menos e uma tendência própria para as três apps que mais gastam com o ecrã ligado. Um melhor ajuste cujo custo sobe 15 % é testado de novo de imediato. Só no perfil Smart; resultados em «O que o Smart aprendeu»."
+    },
+    "smart_lab_mem": {
+      "name": "Laboratório Smart: barramento de memória",
+      "desc": "Permite também ao laboratório limitar os pedidos da CPU ao barramento de memória: 75 % ou 55 % do máximo do barramento enquanto o ecrã está calmo (10 segundos sem toque, nada pesado, sem câmara), 50 % ou o degrau mais baixo no repouso profundo calmo. Só se usam os nós que este kernel expõe; os pedidos do ecrã, GPU, vídeo e modem nunca são tocados. Cada escrita é relida e devolvida, e um valor alterado por outro componente fica com ele. Um limite só fica se foi medido mais barato."
+    },
+    "profile_class_auto": {
+      "name": "Perfis por tipo de uso",
+      "desc": "O Performance mantém os tetos da CPU em 80 % do máximo enquanto uma app leve (mensagens, definições, leitor) corre com carga normal; o Battery sobe-os para pelo menos 70 % durante um jogo, onde os seus são mais baixos. Arranques de apps, trabalho pesado, a câmara, o impulso ao desbloquear, um teto térmico e o arrefecimento não são tocados."
+    },
+    "smart_records_balanced": {
+      "name": "Balanced usa as descobertas do Smart",
+      "desc": "Com o ecrã desligado em repouso profundo calmo, o Balanced aplica o teto de CPU de ecrã desligado que o Smart mediu mais barato neste telefone e confirmou na sua verificação, quando é mais baixo que o próprio do Balanced. Nada é testado nem medido sob o Balanced; os tetos são devolvidos ao acordar e nunca são subidos."
+    },
+    "ltpo_peak_force": {
+      "name": "Máximo do painel ao tocar",
+      "desc": "Funciona com Forçar LTPO. Enquanto o ecrã é tocado, pede-se ao SurfaceFlinger o modo mais alto que o próprio painel indica (165 Hz nos painéis que o listam), acima de uma ROM que mantém as apps normais a 120 Hz. O pedido é libertado assim que o vigia de toques fica em repouso, e voltam a frequência de repouso e a redução de quadros própria do painel. Gasta mais energia enquanto toca no ecrã. Uma ROM que recusa o pedido é deixada em paz e o selo indica-o."
     }
   },
   "nav_live": "Monitor",
@@ -2942,7 +2962,38 @@
   "s7l_class_bat": "Bateria: jogo elevado a 70 % do máximo da CPU",
   "s7l_replay": "Equilibrado: a configuração de tela desligada encontrada pelo Smart está em uso",
   "s7l_lsp": "Testes de fluidez ignorados em apps com hooks de um módulo LSPosed custoso: %s",
-  "s7l_ddr": "Barramento de memória com tela desligada em repouso: no degrau mais baixo %1 % do tempo, em média %2 MHz (mais baixo %3 MHz)",
+  "s7l_ddr": "Barramento de memória com tela desligada em repouso: no degrau mais baixo em %1 % das leituras do governor, em média %2 MHz (mais baixo %3 MHz). Cada leitura ocorre no próprio despertar do governor, por isso é um limite superior.",
   "s7l_look": "Previsão e perfis",
-  "s7l_wait_gauge": "O custo por app aguarda a verificação do medidor de corrente: o ASB primeiro compara a leitura com o consumo real em alguns períodos de tela ligada."
+  "s7l_wait_gauge": "O custo por app aguarda a verificação do medidor de corrente: o ASB primeiro compara a leitura com o consumo real em alguns períodos de tela ligada.",
+  "st_ltpo_needs_force": "precisa de Forçar LTPO",
+  "st_ltpo_peak_refused": "a ROM recusou o modo",
+  "t_cfg_needs_ltpo": " · funciona quando Forçar LTPO estiver ligado",
+  "nc_state_holding_switch": "carga pausada em 80% (interruptor de carga, não um limite de carga)",
+  "s7_external": "já alterado por outro componente - deixado como está",
+  "s7l_arm_bus_pct": "barramento limitado a %s %",
+  "s7l_arm_lte": "LTE com tráfego leve",
+  "s7l_arm_5g": "5G permitido",
+  "s7l_arm_lift_set": "impulso como definido",
+  "s7l_arm_lift_less": "impulso 15 pontos mais baixo",
+  "s7l_arm_bus_free": "barramento sem limite",
+  "s7l_arm_bus_low": "barramento no degrau mais baixo",
+  "s7l_arm_lean_sit": "a tendência da situação",
+  "s7l_arm_lean_eco": "tendência de 0.1 para a economia",
+  "s7l_arm_lean_head": "tendência de 0.1 para a margem",
+  "s7l_lab_radio": "5G só quando necessário",
+  "s7l_lab_lift": "Impulso ao acordar",
+  "s7l_lab_mem_on": "Barramento de memória, ecrã ligado",
+  "s7l_lab_mem_off": "Barramento de memória, ecrã desligado",
+  "s7l_lab_app": "App: %s",
+  "s7l_lab": "Laboratório Smart: ajustes testados lado a lado",
+  "s7l_lab_off_radio": "aguarda o interruptor «5G só quando necessário»",
+  "s7l_lab_off_mem": "este kernel não dá ao ASB nenhum nó do barramento de memória com escrita",
+  "s7l_lab_st_testing": "a testar %1 contra %2: %3 par(es), %4 % até agora",
+  "s7l_lab_st_best": "melhor: %s",
+  "s7l_lab_st_watching": "%s em uso, a medir",
+  "s7l_lab_won": " · venceu, %s % mais barato",
+  "s7l_lab_reopen": " · testado de novo após o custo subir (%s×)",
+  "s7l_lab_mem": "Barramento de memória: %1 nó(s) encontrado(s) (%2), agora %3",
+  "s7l_lab_none": "Nenhuma experiência terminou ainda um bloco: cada uma precisa de vários pares de blocos fora do carregador.",
+  "s7l_lab_note": "Um ajuste só vence quando a bateria o mediu pelo menos 3 % mais barato, lado a lado, sem núcleos mais vezes no teto, mais quadros travados ou aquecimento mais rápido."
 }

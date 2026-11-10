@@ -516,6 +516,26 @@
     },
     "ltpo_video": {
       "desc": "During eligible video playback, limits the panel peak to the lowest reported mode that matches 30 or 60 fps content, such as 60 Hz for either rate. ASB acts only with the screen on, audio playing, a compatible video layer, no high-smoothness request and no touch for three seconds. Touch, playback end or screen-off restores the previous value; the first instant after touch can still use the lower rate. Other frame rates are left unchanged. Matching modes avoids unnecessary refreshes without changing the video's frame rate."
+    },
+    "smart_lab": {
+      "name": "Smart Lab",
+      "desc": "Smart tries more settings for itself, one at a time and side by side with the best one so far, and keeps a setting only when the battery measured it cheaper without the cores at their ceiling more often, more janky frames or faster warming. It tests \"5G Only When Needed\" against 5G allowed (only when that switch is on), the unlock lift against 15 points less, and its own lean for the three apps that cost the most with the screen on. A best setting whose cost climbs by 15 % is tested again at once. Smart profile only; results appear under What Smart learned."
+    },
+    "smart_lab_mem": {
+      "name": "Smart Lab: Memory Bus",
+      "desc": "Lets the lab also cap the CPU's votes on the memory bus: 75 % or 55 % of the bus maximum while the screen is calm (no touch for 10 seconds, nothing heavy, no camera), 50 % or the lowest step on quiet deep idle. Only the voters this kernel exposes are used; display, GPU, video and modem votes are never touched. Every write is read back and given back, and a value another component changed is left to it. A cap stays only if it measured cheaper."
+    },
+    "profile_class_auto": {
+      "name": "Profiles by Kind of Use",
+      "desc": "Performance holds the CPU ceilings at 80 % of the maximum while a light app (messenger, settings, reader) runs at ordinary load; Battery lifts them to at least 70 % while a game runs, where its own are lower. App launches, heavy work, the camera, the unlock lift, a thermal cap and the cooldown are untouched."
+    },
+    "smart_records_balanced": {
+      "name": "Balanced Uses Smart's Findings",
+      "desc": "With the screen off on quiet deep idle, Balanced applies the screen-off CPU ceiling setting Smart measured as cheaper on this phone and kept through its check, when it is below Balanced's own. Nothing is tried or measured under Balanced; the ceilings are given back on wake and never raised."
+    },
+    "ltpo_peak_force": {
+      "name": "Panel Maximum on Touch",
+      "desc": "Works with Force LTPO Refresh. While the screen is being touched, SurfaceFlinger is asked for the highest mode the panel itself reports (165 Hz on panels that list it), past a ROM that keeps ordinary apps at 120 Hz. The request is released as soon as the touch watcher goes idle, so the idle rate and the panel's own frame drop come back. Costs more power while you touch the screen. A ROM that refuses the request is left alone and the badge says so."
     }
   },
   "cfg_search": "Search",
@@ -2801,7 +2821,38 @@
   "s7l_class_bat": "Battery: game lifted to 70 % of the CPU maximum",
   "s7l_replay": "Balanced: the screen-off setting Smart won is in use",
   "s7l_lsp": "Smoothness tests skipped in apps hooked by a costly LSPosed module: %s",
-  "s7l_ddr": "Memory bus on quiet screen-off: at its lowest step %1 % of the time, average %2 MHz (lowest %3 MHz)",
+  "s7l_ddr": "Memory bus on quiet screen-off: at its lowest step in %1 % of the governor's reads, average %2 MHz (lowest %3 MHz). Each read is taken at the governor's own wake, so this is an upper bound.",
   "s7l_look": "Look-ahead and profiles",
-  "s7l_wait_gauge": "The cost per app waits for the battery gauge check: ASB first compares the current reading with the real drain over a few screen-on stretches."
+  "s7l_wait_gauge": "The cost per app waits for the battery gauge check: ASB first compares the current reading with the real drain over a few screen-on stretches.",
+  "st_ltpo_needs_force": "needs Force LTPO",
+  "st_ltpo_peak_refused": "ROM refused the mode",
+  "t_cfg_needs_ltpo": " · works once Force LTPO Refresh is on",
+  "nc_state_holding_switch": "charging paused at 80% (charge switch, not a charge limit)",
+  "s7_external": "already changed by another component - left as it is",
+  "s7l_arm_bus_pct": "bus capped at %s %",
+  "s7l_arm_lte": "LTE on light traffic",
+  "s7l_arm_5g": "5G allowed",
+  "s7l_arm_lift_set": "lift as set",
+  "s7l_arm_lift_less": "lift 15 points lower",
+  "s7l_arm_bus_free": "bus not capped",
+  "s7l_arm_bus_low": "bus at its lowest step",
+  "s7l_arm_lean_sit": "the situation's lean",
+  "s7l_arm_lean_eco": "lean 0.1 toward economy",
+  "s7l_arm_lean_head": "lean 0.1 toward headroom",
+  "s7l_lab_radio": "5G only when needed",
+  "s7l_lab_lift": "Wake lift",
+  "s7l_lab_mem_on": "Memory bus, screen on",
+  "s7l_lab_mem_off": "Memory bus, screen off",
+  "s7l_lab_app": "App: %s",
+  "s7l_lab": "Smart lab: settings tried side by side",
+  "s7l_lab_off_radio": "waits for the \"5G Only When Needed\" switch",
+  "s7l_lab_off_mem": "no memory-bus voter this kernel lets ASB write",
+  "s7l_lab_st_testing": "testing %1 against %2: %3 pair(s), %4 % so far",
+  "s7l_lab_st_best": "best: %s",
+  "s7l_lab_st_watching": "%s in use, measuring",
+  "s7l_lab_won": " · won %s % cheaper",
+  "s7l_lab_reopen": " · tested again after its cost rose (%s×)",
+  "s7l_lab_mem": "Memory bus: %1 voter(s) found (%2), cap now %3",
+  "s7l_lab_none": "No experiment has finished a block yet: each needs several pairs of blocks off the charger.",
+  "s7l_lab_note": "A setting wins only when the battery measured it at least 3 % cheaper, side by side, without the cores at their ceiling more often, more janky frames or faster warming."
 }

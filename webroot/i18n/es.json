@@ -467,6 +467,26 @@
     "zygisk_ledger": {
       "name": "Registro de inicios de procesos (Zygisk)",
       "desc": "Cuenta, desde este arranque, cuántos procesos inicia cada app normal con la pantalla apagada y encendida. Las apps que lanzan trabajo una y otra vez de noche son un gasto oculto de batería frecuente; las primeras aparecen en el diagnóstico del dispositivo y en asbdiag. Solo nombres de paquete y contadores, en memoria (tmpfs); no se restringe nada automáticamente. Cuesta una conexión corta al companion por cada inicio de proceso de app mientras está activo. Requiere el interruptor «Observador de procesos Zygisk»."
+    },
+    "smart_lab": {
+      "name": "Laboratorio Smart",
+      "desc": "Smart prueba por sí mismo más ajustes, uno a la vez y lado a lado con el mejor hasta ahora, y solo conserva un ajuste cuando la batería lo midió más barato sin núcleos más a menudo en su techo, más fotogramas a tirones ni calentamiento más rápido. Compara «5G solo cuando hace falta» con el 5G permitido (solo si ese interruptor está activado), el impulso al desbloquear con 15 puntos menos y su propia inclinación para las tres apps que más cuestan con la pantalla encendida. Un mejor ajuste cuyo coste sube un 15 % se vuelve a probar enseguida. Solo en el perfil Smart; resultados en «Lo que aprendió Smart»."
+    },
+    "smart_lab_mem": {
+      "name": "Laboratorio Smart: bus de memoria",
+      "desc": "Permite además al laboratorio limitar las peticiones de la CPU al bus de memoria: 75 % o 55 % del máximo del bus mientras la pantalla está tranquila (10 segundos sin tocar, nada pesado, sin cámara), 50 % o el escalón más bajo en reposo profundo tranquilo. Solo se usan los nodos que expone este kernel; las peticiones de pantalla, GPU, vídeo y módem no se tocan nunca. Cada escritura se vuelve a leer y se devuelve, y un valor cambiado por otro componente se le deja. Un límite solo se queda si se midió más barato."
+    },
+    "profile_class_auto": {
+      "name": "Perfiles según el uso",
+      "desc": "Performance mantiene los techos de CPU en el 80 % del máximo mientras una app ligera (mensajería, ajustes, lector) funciona con carga normal; Battery los sube al menos al 70 % durante un juego, donde los suyos son más bajos. Los inicios de apps, el trabajo pesado, la cámara, el impulso al desbloquear, un techo térmico y el enfriamiento no se tocan."
+    },
+    "smart_records_balanced": {
+      "name": "Balanced usa los hallazgos de Smart",
+      "desc": "Con la pantalla apagada en reposo profundo tranquilo, Balanced aplica el techo de CPU de pantalla apagada que Smart midió más barato en este teléfono y confirmó en su comprobación, cuando es más bajo que el propio de Balanced. Bajo Balanced no se prueba ni se mide nada; los techos se devuelven al despertar y nunca se suben."
+    },
+    "ltpo_peak_force": {
+      "name": "Máximo del panel al tocar",
+      "desc": "Funciona con Forzar LTPO. Mientras se toca la pantalla, se pide a SurfaceFlinger el modo más alto que el propio panel informa (165 Hz en paneles que lo listan), por encima de una ROM que mantiene las apps normales a 120 Hz. La petición se libera en cuanto el vigilante de toques queda en reposo, así que vuelven la frecuencia de reposo y la bajada de fotogramas propia del panel. Gasta más energía mientras tocas la pantalla. Una ROM que rechaza la petición se deja en paz y la insignia lo indica."
     }
   },
   "nav_live": "Monitor",
@@ -2942,7 +2962,38 @@
   "s7l_class_bat": "Batería: juego elevado al 70 % del máximo de la CPU",
   "s7l_replay": "Equilibrado: se usa el ajuste de pantalla apagada que encontró Smart",
   "s7l_lsp": "Pruebas de fluidez omitidas en apps enganchadas por un módulo LSPosed costoso: %s",
-  "s7l_ddr": "Bus de memoria con la pantalla apagada en reposo: en el escalón más bajo el %1 % del tiempo, de media %2 MHz (el más bajo %3 MHz)",
+  "s7l_ddr": "Bus de memoria con la pantalla apagada en reposo: en el escalón más bajo en el %1 % de las lecturas del governor, de media %2 MHz (el más bajo %3 MHz). Cada lectura cae en el propio despertar del governor, así que es un límite superior.",
   "s7l_look": "Previsión y perfiles",
-  "s7l_wait_gauge": "El coste por app espera la comprobación del medidor de corriente: ASB compara primero su lectura con el consumo real durante algunos periodos con la pantalla encendida."
+  "s7l_wait_gauge": "El coste por app espera la comprobación del medidor de corriente: ASB compara primero su lectura con el consumo real durante algunos periodos con la pantalla encendida.",
+  "st_ltpo_needs_force": "necesita Forzar LTPO",
+  "st_ltpo_peak_refused": "la ROM rechazó el modo",
+  "t_cfg_needs_ltpo": " · actúa cuando Forzar LTPO esté activado",
+  "nc_state_holding_switch": "carga en pausa al 80% (interruptor de carga, no un límite de carga)",
+  "s7_external": "ya cambiado por otro componente - se deja como está",
+  "s7l_arm_bus_pct": "bus limitado al %s %",
+  "s7l_arm_lte": "LTE con tráfico ligero",
+  "s7l_arm_5g": "5G permitido",
+  "s7l_arm_lift_set": "impulso como está ajustado",
+  "s7l_arm_lift_less": "impulso 15 puntos más bajo",
+  "s7l_arm_bus_free": "bus sin límite",
+  "s7l_arm_bus_low": "bus en su escalón más bajo",
+  "s7l_arm_lean_sit": "la inclinación de la situación",
+  "s7l_arm_lean_eco": "inclinación de 0.1 hacia el ahorro",
+  "s7l_arm_lean_head": "inclinación de 0.1 hacia el margen",
+  "s7l_lab_radio": "5G solo cuando hace falta",
+  "s7l_lab_lift": "Impulso al encender",
+  "s7l_lab_mem_on": "Bus de memoria, pantalla encendida",
+  "s7l_lab_mem_off": "Bus de memoria, pantalla apagada",
+  "s7l_lab_app": "App: %s",
+  "s7l_lab": "Laboratorio Smart: ajustes probados lado a lado",
+  "s7l_lab_off_radio": "espera el interruptor «5G solo cuando hace falta»",
+  "s7l_lab_off_mem": "este kernel no da a ASB ningún nodo del bus de memoria con escritura",
+  "s7l_lab_st_testing": "probando %1 contra %2: %3 par(es), %4 % por ahora",
+  "s7l_lab_st_best": "mejor: %s",
+  "s7l_lab_st_watching": "%s en uso, midiendo",
+  "s7l_lab_won": " · ganó, %s % más barato",
+  "s7l_lab_reopen": " · probado de nuevo tras subir su coste (%s×)",
+  "s7l_lab_mem": "Bus de memoria: %1 nodo(s) encontrado(s) (%2), ahora %3",
+  "s7l_lab_none": "Ningún experimento ha terminado aún un bloque: cada uno necesita varios pares de bloques sin cargador.",
+  "s7l_lab_note": "Un ajuste gana solo si la batería lo midió al menos un 3 % más barato, lado a lado, sin núcleos más a menudo en su techo, más fotogramas a tirones ni calentamiento más rápido."
 }

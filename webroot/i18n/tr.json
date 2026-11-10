@@ -467,6 +467,26 @@
     "zygisk_ledger": {
       "name": "Zygisk Süreç Başlatma Kaydı",
       "desc": "Bu açılıştan beri her sıradan uygulamanın ekran kapalı ve açıkken kaç süreç başlattığını sayar. Gece durmadan iş başlatan uygulamalar sık görülen gizli pil tüketicileridir; ilk sıradakiler cihaz tanılamasında ve asbdiag içinde görünür. Yalnızca paket adları ve sayaçlar, bellekte (tmpfs) tutulur; hiçbir şey otomatik kısıtlanmaz. Açıkken uygulama süreci başlatma başına kısa bir companion bağlantısı maliyeti vardır. Zygisk Süreç Gözlemcisi anahtarı gerekir."
+    },
+    "smart_lab": {
+      "name": "Smart Laboratuvarı",
+      "desc": "Smart daha fazla ayarı kendisi dener; her seferinde bir tane, o ana kadarki en iyiyle yan yana. Bir ayarı yalnızca pil onu daha ucuz ölçtüğünde ve çekirdekler daha sık sınırda çalışmadığında, takılan kareler artmadığında ve ısınma hızlanmadığında tutar. \"Gerektiğinde 5G\" ile izinli 5G (yalnızca bu anahtar açıksa), kilit açmada yükseltme ile 15 puan düşüğü ve ekran açıkken en çok harcayan üç uygulama için kendi eğilimini karşılaştırır. Maliyeti yüzde 15 artan en iyi ayar hemen yeniden denenir. Yalnızca Smart profili; sonuçlar \"Smart ne öğrendi\" altında."
+    },
+    "smart_lab_mem": {
+      "name": "Smart Laboratuvarı: bellek veri yolu",
+      "desc": "Laboratuvarın CPU'nun bellek veri yolu isteklerini de sınırlamasına izin verir: ekran sakinken (10 saniye dokunma yok, ağır iş yok, kamera yok) veri yolu azamisinin yüzde 75 ya da 55'i, sessiz derin boştayken yüzde 50 ya da en düşük kademe. Yalnızca bu çekirdeğin sunduğu düğümler kullanılır; ekran, GPU, video ve modem isteklerine asla dokunulmaz. Her yazma geri okunur ve geri verilir; başka bir bileşenin değiştirdiği değer ona bırakılır. Sınır yalnızca daha ucuz ölçüldüyse kalır."
+    },
+    "profile_class_auto": {
+      "name": "Kullanım türüne göre profiller",
+      "desc": "Performance, hafif bir uygulama (mesajlaşma, ayarlar, okuyucu) olağan yükte çalışırken CPU tavanlarını azaminin yüzde 80'inde tutar; Battery bir oyun sürerken kendi tavanları daha düşükse onları en az yüzde 70'e çıkarır. Uygulama açılışları, ağır iş, kamera, kilit açma yükseltmesi, ısıl sınır ve soğuma etkilenmez."
+    },
+    "smart_records_balanced": {
+      "name": "Balanced, Smart'ın bulgularını kullanır",
+      "desc": "Ekran kapalıyken sessiz derin boşta, Balanced; Smart'ın bu telefonda daha ucuz ölçüp kontrolünde doğruladığı ekran kapalı CPU tavanını, Balanced'ın kendi tavanından düşükse uygular. Balanced altında hiçbir şey denenmez ya da ölçülmez; tavanlar uyanınca geri verilir ve asla yükseltilmez."
+    },
+    "ltpo_peak_force": {
+      "name": "Dokunuşta panel azamisi",
+      "desc": "LTPO Zorla ile birlikte çalışır. Ekrana dokunulurken SurfaceFlinger'dan panelin kendisinin bildirdiği en yüksek mod istenir (listeleyen panellerde 165 Hz); sıradan uygulamaları 120 Hz'de tutan bir ROM'un ötesinde. Dokunma izleyicisi boşa geçer geçmez istek bırakılır; boştaki hız ve panelin kendi kare düşürmesi geri gelir. Ekrana dokunurken daha fazla güç harcar. İsteği reddeden bir ROM'a dokunulmaz ve rozet bunu söyler."
     }
   },
   "nav_live": "İzleme",
@@ -2942,7 +2962,38 @@
   "s7l_class_bat": "Pil: oyun CPU azamisinin yüzde 70'ine çıkarıldı",
   "s7l_replay": "Dengeli: Smart'ın bulduğu ekran kapalı ayarı kullanılıyor",
   "s7l_lsp": "Maliyetli bir LSPosed modülünün kancaladığı uygulamalarda akıcılık testleri atlandı: %s",
-  "s7l_ddr": "Sessiz ekran kapalıyken bellek veriyolu: zamanın %1 %'inde en alt basamakta, ortalama %2 MHz (en alt %3 MHz)",
+  "s7l_ddr": "Sessiz ekran kapalıyken bellek veriyolu: governor okumalarının %1 %'inde en alt basamakta, ortalama %2 MHz (en alt %3 MHz). Her okuma governor'ın kendi uyanışında alınır, bu yüzden bir üst sınırdır.",
   "s7l_look": "Öngörü ve profiller",
-  "s7l_wait_gauge": "Uygulama başına tüketim akım ölçerin kontrolünü bekliyor: ASB önce okumasını birkaç ekran açık dönemde gerçek tüketimle karşılaştırır."
+  "s7l_wait_gauge": "Uygulama başına tüketim akım ölçerin kontrolünü bekliyor: ASB önce okumasını birkaç ekran açık dönemde gerçek tüketimle karşılaştırır.",
+  "st_ltpo_needs_force": "LTPO Zorla gerekli",
+  "st_ltpo_peak_refused": "ROM modu reddetti",
+  "t_cfg_needs_ltpo": " · LTPO Zorla açılınca çalışır",
+  "nc_state_holding_switch": "şarj yüzde 80 seviyesinde duraklatıldı (şarj anahtarı, şarj sınırı değil)",
+  "s7_external": "başka bir bileşen zaten değiştirmiş - olduğu gibi bırakıldı",
+  "s7l_arm_bus_pct": "veri yolu yüzde %s ile sınırlı",
+  "s7l_arm_lte": "hafif trafikte LTE",
+  "s7l_arm_5g": "5G izinli",
+  "s7l_arm_lift_set": "ayarlandığı gibi yükseltme",
+  "s7l_arm_lift_less": "15 puan düşük yükseltme",
+  "s7l_arm_bus_free": "veri yolu sınırsız",
+  "s7l_arm_bus_low": "veri yolu en düşük kademede",
+  "s7l_arm_lean_sit": "durumun eğilimi",
+  "s7l_arm_lean_eco": "tasarrufa doğru 0.1 eğilim",
+  "s7l_arm_lean_head": "pay tarafına doğru 0.1 eğilim",
+  "s7l_lab_radio": "Gerektiğinde 5G",
+  "s7l_lab_lift": "Uyanışta yükseltme",
+  "s7l_lab_mem_on": "Bellek veri yolu, ekran açık",
+  "s7l_lab_mem_off": "Bellek veri yolu, ekran kapalı",
+  "s7l_lab_app": "Uygulama: %s",
+  "s7l_lab": "Smart laboratuvarı: yan yana denenen ayarlar",
+  "s7l_lab_off_radio": "\"Gerektiğinde 5G\" anahtarını bekliyor",
+  "s7l_lab_off_mem": "bu çekirdek ASB'ye yazılabilir bir bellek veri yolu düğümü vermiyor",
+  "s7l_lab_st_testing": "%1, %2 ile deneniyor: %3 çift, şimdilik yüzde %4",
+  "s7l_lab_st_best": "en iyi: %s",
+  "s7l_lab_st_watching": "%s kullanımda, ölçülüyor",
+  "s7l_lab_won": " · kazandı, yüzde %s daha ucuz",
+  "s7l_lab_reopen": " · maliyeti artınca yeniden denendi (%s×)",
+  "s7l_lab_mem": "Bellek veri yolu: %1 düğüm bulundu (%2), şu an %3",
+  "s7l_lab_none": "Henüz hiçbir deney bir bloğu bitirmedi: her biri şarj dışında birkaç blok çifti ister.",
+  "s7l_lab_note": "Bir ayar yalnızca pil onu yan yana ölçümde en az yüzde 3 daha ucuz bulduğunda kazanır; çekirdekler daha sık sınırda çalışmadan, daha fazla takılan kare ya da daha hızlı ısınma olmadan."
 }

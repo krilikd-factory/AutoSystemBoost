@@ -467,6 +467,26 @@
     "zygisk_ledger": {
       "name": "Zygisk-Prozessstart-Protokoll",
       "desc": "Zählt seit dem aktuellen Start, wie viele Prozesse jede normale App bei aus- und eingeschaltetem Bildschirm startet. Apps, die nachts immer wieder Arbeit anstoßen, sind ein häufiger versteckter Akkuverbrauch; die Spitzenreiter erscheinen in der Gerätediagnose und in asbdiag. Nur Paketnamen und Zähler, im Speicher (tmpfs); nichts wird automatisch eingeschränkt. Kostet eine kurze Companion-Verbindung pro App-Prozessstart, solange aktiv. Benötigt den Schalter „Zygisk-Prozessbeobachter“."
+    },
+    "smart_lab": {
+      "name": "Smart-Labor",
+      "desc": "Smart testet selbst weitere Einstellungen, jeweils eine und im direkten Vergleich mit der bisher besten, und behält eine Einstellung nur, wenn der Akku sie günstiger gemessen hat, ohne dass die Kerne öfter am Limit laufen, mehr Frames ruckeln oder das Gerät schneller warm wird. Getestet werden \"5G nur bei Bedarf\" gegen erlaubtes 5G (nur wenn dieser Schalter an ist), die Anhebung beim Entsperren gegen 15 Punkte weniger und eine eigene Neigung für die drei Apps, die bei eingeschaltetem Bildschirm am meisten kosten. Steigen die Kosten der besten Einstellung um 15 %, wird sie sofort erneut getestet. Nur im Smart-Profil; Ergebnisse unter \"Was Smart gelernt hat\"."
+    },
+    "smart_lab_mem": {
+      "name": "Smart-Labor: Speicherbus",
+      "desc": "Erlaubt dem Labor zusätzlich, die Anforderungen der CPU an den Speicherbus zu begrenzen: 75 % oder 55 % des Bus-Maximums bei ruhigem Bildschirm (10 Sekunden ohne Berührung, nichts Schweres, keine Kamera), 50 % oder die niedrigste Stufe im ruhigen Tiefschlaf. Nur die Knoten, die dieser Kernel bereitstellt, werden genutzt; Anforderungen von Display, GPU, Video und Modem werden nie angefasst. Jeder Schreibvorgang wird zurückgelesen und wieder zurückgegeben, ein von einer anderen Komponente geänderter Wert bleibt bei ihr. Eine Begrenzung bleibt nur, wenn sie günstiger gemessen wurde."
+    },
+    "profile_class_auto": {
+      "name": "Profile nach Nutzungsart",
+      "desc": "Performance hält die CPU-Obergrenzen bei 80 % des Maximums, solange eine leichte App (Messenger, Einstellungen, Reader) mit normaler Last läuft; Battery hebt sie während eines Spiels auf mindestens 70 %, wo die eigenen niedriger sind. App-Starts, schwere Arbeit, die Kamera, die Anhebung beim Entsperren, eine thermische Grenze und die Abkühlung bleiben unberührt."
+    },
+    "smart_records_balanced": {
+      "name": "Balanced nutzt die Erkenntnisse von Smart",
+      "desc": "Bei ausgeschaltetem Bildschirm im ruhigen Tiefschlaf wendet Balanced die CPU-Obergrenze an, die Smart auf diesem Telefon als günstiger gemessen und in der Nachprüfung bestätigt hat, sofern sie unter der eigenen von Balanced liegt. Unter Balanced wird nichts getestet oder gemessen; die Grenzen werden beim Aufwecken zurückgegeben und nie angehoben."
+    },
+    "ltpo_peak_force": {
+      "name": "Panel-Maximum bei Berührung",
+      "desc": "Funktioniert zusammen mit \"LTPO erzwingen\". Solange der Bildschirm berührt wird, wird SurfaceFlinger um den höchsten Modus gebeten, den das Panel selbst meldet (165 Hz bei Panels, die ihn aufführen), vorbei an einem ROM, das normale Apps bei 120 Hz hält. Die Anforderung wird freigegeben, sobald der Berührungswächter in den Leerlauf geht, sodass die Leerlaufrate und die eigene Bildratenabsenkung des Panels zurückkehren. Kostet mehr Strom, solange Sie den Bildschirm berühren. Ein ROM, das die Anforderung ablehnt, wird in Ruhe gelassen, und das Abzeichen sagt es."
     }
   },
   "nav_live": "Monitor",
@@ -2942,7 +2962,38 @@
   "s7l_class_bat": "Akku: Spiel auf 70 % des CPU-Maximums angehoben",
   "s7l_replay": "Ausgewogen: die von Smart gefundene Einstellung für den ausgeschalteten Bildschirm ist aktiv",
   "s7l_lsp": "Flüssigkeitstests übersprungen in Apps mit Hooks eines teuren LSPosed-Moduls: %s",
-  "s7l_ddr": "Speicherbus bei ruhigem, ausgeschaltetem Bildschirm: %1 % der Zeit auf der untersten Stufe, im Schnitt %2 MHz (unterste %3 MHz)",
+  "s7l_ddr": "Speicherbus bei ruhigem, ausgeschaltetem Bildschirm: in %1 % der Governor-Messungen auf der untersten Stufe, im Schnitt %2 MHz (unterste %3 MHz). Jede Messung fällt in das eigene Aufwachen des Governors, daher ist das eine Obergrenze.",
   "s7l_look": "Vorausschau und Profile",
-  "s7l_wait_gauge": "Der Verbrauch pro App wartet auf die Prüfung des Strommessers: ASB vergleicht zuerst dessen Anzeige über einige Bildschirmphasen mit dem echten Verbrauch."
+  "s7l_wait_gauge": "Der Verbrauch pro App wartet auf die Prüfung des Strommessers: ASB vergleicht zuerst dessen Anzeige über einige Bildschirmphasen mit dem echten Verbrauch.",
+  "st_ltpo_needs_force": "braucht LTPO erzwingen",
+  "st_ltpo_peak_refused": "ROM hat den Modus abgelehnt",
+  "t_cfg_needs_ltpo": " · wirkt, sobald LTPO erzwingen an ist",
+  "nc_state_holding_switch": "Laden bei 80% pausiert (Ladeschalter, kein Ladelimit)",
+  "s7_external": "bereits von einer anderen Komponente geändert - so belassen",
+  "s7l_arm_bus_pct": "Bus auf %s % begrenzt",
+  "s7l_arm_lte": "LTE bei wenig Datenverkehr",
+  "s7l_arm_5g": "5G erlaubt",
+  "s7l_arm_lift_set": "Anhebung wie eingestellt",
+  "s7l_arm_lift_less": "Anhebung 15 Punkte niedriger",
+  "s7l_arm_bus_free": "Bus nicht begrenzt",
+  "s7l_arm_bus_low": "Bus auf der niedrigsten Stufe",
+  "s7l_arm_lean_sit": "Neigung der Situation",
+  "s7l_arm_lean_eco": "Neigung 0.1 Richtung Sparen",
+  "s7l_arm_lean_head": "Neigung 0.1 Richtung Reserve",
+  "s7l_lab_radio": "5G nur bei Bedarf",
+  "s7l_lab_lift": "Anhebung beim Aufwecken",
+  "s7l_lab_mem_on": "Speicherbus, Bildschirm an",
+  "s7l_lab_mem_off": "Speicherbus, Bildschirm aus",
+  "s7l_lab_app": "App: %s",
+  "s7l_lab": "Smart-Labor: Einstellungen im direkten Vergleich",
+  "s7l_lab_off_radio": "wartet auf den Schalter \"5G nur bei Bedarf\"",
+  "s7l_lab_off_mem": "dieser Kernel gibt ASB keinen beschreibbaren Speicherbus-Knoten",
+  "s7l_lab_st_testing": "teste %1 gegen %2: %3 Paar(e), bisher %4 %",
+  "s7l_lab_st_best": "beste: %s",
+  "s7l_lab_st_watching": "%s in Gebrauch, wird gemessen",
+  "s7l_lab_won": " · gewonnen, %s % günstiger",
+  "s7l_lab_reopen": " · erneut getestet, nachdem die Kosten stiegen (%s×)",
+  "s7l_lab_mem": "Speicherbus: %1 Knoten gefunden (%2), jetzt %3",
+  "s7l_lab_none": "Noch kein Experiment hat einen Block beendet: jedes braucht mehrere Blockpaare ohne Ladegerät.",
+  "s7l_lab_note": "Eine Einstellung gewinnt nur, wenn der Akku sie im direkten Vergleich mindestens 3 % günstiger gemessen hat, ohne dass die Kerne öfter am Limit laufen, mehr Frames ruckeln oder das Gerät schneller warm wird."
 }
