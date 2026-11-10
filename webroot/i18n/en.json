@@ -2802,5 +2802,6 @@
   "s7l_replay": "Balanced: the screen-off setting Smart won is in use",
   "s7l_lsp": "Smoothness tests skipped in apps hooked by a costly LSPosed module: %s",
   "s7l_ddr": "Memory bus on quiet screen-off: at its lowest step %1 % of the time, average %2 MHz (lowest %3 MHz)",
-  "s7l_look": "Look-ahead and profiles"
+  "s7l_look": "Look-ahead and profiles",
+  "s7l_wait_gauge": "The cost per app waits for the battery gauge check: ASB first compares the current reading with the real drain over a few screen-on stretches."
 }

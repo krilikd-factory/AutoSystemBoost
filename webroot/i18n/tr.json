@@ -2943,5 +2943,6 @@
   "s7l_replay": "Dengeli: Smart'ın bulduğu ekran kapalı ayarı kullanılıyor",
   "s7l_lsp": "Maliyetli bir LSPosed modülünün kancaladığı uygulamalarda akıcılık testleri atlandı: %s",
   "s7l_ddr": "Sessiz ekran kapalıyken bellek veriyolu: zamanın %1 %'inde en alt basamakta, ortalama %2 MHz (en alt %3 MHz)",
-  "s7l_look": "Öngörü ve profiller"
+  "s7l_look": "Öngörü ve profiller",
+  "s7l_wait_gauge": "Uygulama başına tüketim akım ölçerin kontrolünü bekliyor: ASB önce okumasını birkaç ekran açık dönemde gerçek tüketimle karşılaştırır."
 }

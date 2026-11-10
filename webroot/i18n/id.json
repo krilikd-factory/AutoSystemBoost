@@ -2943,5 +2943,6 @@
   "s7l_replay": "Seimbang: pengaturan layar mati yang ditemukan Smart sedang dipakai",
   "s7l_lsp": "Tes kelancaran dilewati di aplikasi yang di-hook modul LSPosed yang boros: %s",
   "s7l_ddr": "Bus memori saat layar mati dan diam: di tingkat terendah %1 % waktu, rata-rata %2 MHz (terendah %3 MHz)",
-  "s7l_look": "Prakiraan dan profil"
+  "s7l_look": "Prakiraan dan profil",
+  "s7l_wait_gauge": "Biaya per aplikasi menunggu pemeriksaan pengukur arus: ASB terlebih dahulu membandingkan bacaannya dengan pemakaian nyata selama beberapa periode layar menyala."
 }

@@ -2943,5 +2943,6 @@
   "s7l_replay": "Ausgewogen: die von Smart gefundene Einstellung für den ausgeschalteten Bildschirm ist aktiv",
   "s7l_lsp": "Flüssigkeitstests übersprungen in Apps mit Hooks eines teuren LSPosed-Moduls: %s",
   "s7l_ddr": "Speicherbus bei ruhigem, ausgeschaltetem Bildschirm: %1 % der Zeit auf der untersten Stufe, im Schnitt %2 MHz (unterste %3 MHz)",
-  "s7l_look": "Vorausschau und Profile"
+  "s7l_look": "Vorausschau und Profile",
+  "s7l_wait_gauge": "Der Verbrauch pro App wartet auf die Prüfung des Strommessers: ASB vergleicht zuerst dessen Anzeige über einige Bildschirmphasen mit dem echten Verbrauch."
 }

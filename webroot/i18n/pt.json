@@ -2943,5 +2943,6 @@
   "s7l_replay": "Equilibrado: a configuração de tela desligada encontrada pelo Smart está em uso",
   "s7l_lsp": "Testes de fluidez ignorados em apps com hooks de um módulo LSPosed custoso: %s",
   "s7l_ddr": "Barramento de memória com tela desligada em repouso: no degrau mais baixo %1 % do tempo, em média %2 MHz (mais baixo %3 MHz)",
-  "s7l_look": "Previsão e perfis"
+  "s7l_look": "Previsão e perfis",
+  "s7l_wait_gauge": "O custo por app aguarda a verificação do medidor de corrente: o ASB primeiro compara a leitura com o consumo real em alguns períodos de tela ligada."
 }

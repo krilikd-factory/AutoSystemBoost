@@ -2943,5 +2943,6 @@
   "s7l_replay": "Bilanciato: è in uso l'impostazione a schermo spento trovata da Smart",
   "s7l_lsp": "Test di fluidità saltati nelle app agganciate da un modulo LSPosed costoso: %s",
   "s7l_ddr": "Bus di memoria a schermo spento e in quiete: al gradino più basso il %1 % del tempo, in media %2 MHz (il più basso %3 MHz)",
-  "s7l_look": "Previsione e profili"
+  "s7l_look": "Previsione e profili",
+  "s7l_wait_gauge": "Il costo per app attende la verifica del sensore di corrente: ASB confronta prima la sua lettura con il consumo reale su alcuni periodi a schermo acceso."
 }

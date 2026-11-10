@@ -2943,5 +2943,6 @@
   "s7l_replay": "Équilibré : le réglage écran éteint trouvé par Smart est utilisé",
   "s7l_lsp": "Tests de fluidité ignorés dans les applications accrochées par un module LSPosed coûteux : %s",
   "s7l_ddr": "Bus mémoire écran éteint au repos : au palier le plus bas %1 % du temps, en moyenne %2 MHz (le plus bas %3 MHz)",
-  "s7l_look": "Anticipation et profils"
+  "s7l_look": "Anticipation et profils",
+  "s7l_wait_gauge": "Le coût par application attend la vérification de la jauge de courant : ASB compare d'abord sa lecture à la consommation réelle sur quelques périodes écran allumé."
 }

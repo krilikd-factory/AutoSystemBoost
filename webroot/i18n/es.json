@@ -2943,5 +2943,6 @@
   "s7l_replay": "Equilibrado: se usa el ajuste de pantalla apagada que encontró Smart",
   "s7l_lsp": "Pruebas de fluidez omitidas en apps enganchadas por un módulo LSPosed costoso: %s",
   "s7l_ddr": "Bus de memoria con la pantalla apagada en reposo: en el escalón más bajo el %1 % del tiempo, de media %2 MHz (el más bajo %3 MHz)",
-  "s7l_look": "Previsión y perfiles"
+  "s7l_look": "Previsión y perfiles",
+  "s7l_wait_gauge": "El coste por app espera la comprobación del medidor de corriente: ASB compara primero su lectura con el consumo real durante algunos periodos con la pantalla encendida."
 }
