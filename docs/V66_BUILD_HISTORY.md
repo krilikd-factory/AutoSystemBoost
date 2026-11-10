@@ -4,6 +4,96 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev4 - Smart V7, faster page switches, a shorter ZYGISK page
+
+The owner's requests:
+- implement the Smart V7 ideas and the profile ideas, except per-app refresh rate (idea 4);
+- switching from the home screen to MONITOR or SETTINGS had become slower in dev2/dev3;
+- the ZYGISK page had become too long: shorter at first, with buttons that open the rest,
+  and no information removed.
+
+**Page switches (WebUI).** The background reads queued after the first frame (the first Live
+pass at +340 ms, the Zygisk header and the other-audio look at +700 ms) ran while the user was
+already opening MONITOR or SETTINGS. The KernelSU bridge blocks the page during each of them,
+and MONITOR's own first poll waited behind the Live pass. Changes:
+- the Live pass now runs right after the first frame and is skipped when MONITOR is open;
+- the other background reads wait while any page is open;
+- the queue waits 300 ms after a touch;
+- a tap no longer triggers the other-audio look; it runs at startup and on return only.
+
+**ZYGISK page.**
+- Explanations longer than 90 characters show two lines and open on tap.
+- A list with more than four rows shows three and a **Show N more** button.
+- Action buttons sit inside their rows.
+- Each LSPosed module's reasons and apps are under a **Why** fold.
+
+Nothing is removed. In the browser model with the test fixture the page is 4747 px instead
+of 6904 px.
+
+**Smart V7 - scripts (no rebuild needed):**
+- **Background budgets (idea 6), soft on Battery (B):** `runtime/asb_smart7.sh`.
+  - A rarely opened app that keeps starting in the background goes to Android's `rare` standby
+    bucket.
+  - Automatic (opt-in): unused 7+ days and 6+ background starts a day. On Battery also without
+    the switch, at 14+ days and 10+ starts.
+- **Modem wakers (idea 12):** an unopened app moving mobile data in the background loses
+  background data on metered networks (Android's per-app switch). Automatic (opt-in) from
+  10 MB a day.
+- **Both:** protected classes are never touched; every change is journaled, undone by tap and
+  given back on uninstall.
+- **Learned unplug time (idea 9):** `runtime/asb_night_charge.sh learn on`. The night charge
+  hold ends 90 minutes before the usual unplug: the median of the last 4 weeks, weekdays and
+  weekends apart, clamped to 03:00-10:00.
+
+**Smart V7 - governor (CI rebuild of `bin/asb` needed):**
+- **Second check and rollback (idea 8).**
+  - A new records champion is measured once more against the setting it beat. If the old one
+    comes out significantly cheaper, it is put back and the trials turn to the other side;
+    otherwise the win is confirmed.
+  - Each verdict keeps an interval (± 2.5 standard errors).
+  - The counts are in `smart_records_v7.bin`, beside the V65 store, which loads unchanged.
+- **Priors (idea 11).** A first trial starts on the side the sibling situation already won on
+  this phone (night/day, dim/bright). No per-SoC table: two OnePlus 15 (SM8850) captures
+  disagree, ×1.0 against ×1.25 for the screen-off night.
+- **Balanced (A).** It replays the screen-off setting Smart won and confirmed, on quiet deep
+  idle; nothing is measured or tried (`smart_records_balanced=1`). Only a setting below ×1 is
+  used: the profile script owns Balanced's ceilings, so the writer multiplies those by it and
+  hands them back on wake, and never raises them.
+- **Cost per app and per kind of use (ideas 1 and 10).** `src/asb_energy.h`: screen on and off
+  the charger, current × voltage per app in front. A stretch is a glance, light, media,
+  heavy or game. The figures fade by 3 % a day (`smart_energy=1`).
+- **Prediction (idea 2).** The usual charge time, learned by half hour. The budget compares
+  the hours left at a drain mixed from screen-on and screen-off with the hours to that charge.
+  - Short of it under 50 %: the warning lean.
+  - Half as much again in hand: no warning lean.
+  - The emergency level is never relaxed.
+- **Thermal model (idea 3, C).**
+  - Smart's soft pre-lean is judged on the reading two minutes ahead.
+  - Performance's SUSTAINED trip point moves down by the projected rise, at most 4 °C, when the
+    die heats at 1.5 °C/min or faster near it.
+- **Profiles by kind of use (D, `profile_class_auto=1`).**
+  - Performance holds a light app at 80 % of the CPU maximum.
+  - Battery lifts a game to 70 % where its own ceilings are lower; the writer hands Battery's
+    values back afterwards, as it does after the unlock lift.
+  - Heavy work, launches, touches, the camera, the unlock lift, thermal caps and the cooldown
+    are untouched.
+  - The effect has not been measured on a phone yet.
+- **LSPosed link (idea 7).** `asb_lsposed_lite.sh` writes the apps scoped by a costly module
+  to `/dev/.asb/lsp_heavy_apps`, and Smart's smoothness test skips them.
+- **Memory bus (idea 5), measured only.** The DDR clock on quiet screen-off is read and compared
+  with its lowest step. Nothing is written to the bus until captures show where it is held.
+
+All of it is in the Smart card on the ZYGISK page (**What Smart learned**), in asbdiag and in
+the full-day report, in 13 languages. The Smart learning reset clears the new stores.
+
+**Tests:**
+- `t_smart_v7_native_runtime`: the real records, energy, budget, Performance-lead,
+  hooked-app and class code, plus the WebUI parser on the governor's own summaries;
+- `t_smart7_budget_data_runtime`, `t_night_charge_learn_runtime`;
+- `t_lsposed_lite_runtime` (hooked-app list);
+- `t_webui_zygisk_compact_contract`;
+- `t_webui_v66_startup_queue_runtime` (page-busy rule).
+
 ## V66 dev3 - a lighter LSPosed
 
 The owner's request:
