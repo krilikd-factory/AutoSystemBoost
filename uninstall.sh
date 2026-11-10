@@ -315,6 +315,10 @@ if [ -f "$MODDIR/runtime/asb_lsposed_lite.sh" ]; then
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_lsposed_lite.sh" restore-all >/dev/null 2>&1
 fi
 rm -rf /data/adb/asb/lsp_lite 2>/dev/null
+if [ -f "$MODDIR/runtime/asb_smart7.sh" ]; then
+  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_smart7.sh" restore-all >/dev/null 2>&1
+fi
+rm -rf /data/adb/asb/smart7 2>/dev/null
 rm -rf /data/adb/asb/zygisk_aot /data/adb/asb/zygisk_aot_apps /data/adb/asb/zygisk_aot_count /data/adb/asb/zygisk_aot_launch /data/adb/asb/zygisk_aot_scan /data/adb/asb/zygisk_aot_log /data/adb/asb/zygisk_aot_exclude /data/adb/asb/zygisk_aot.lock 2>/dev/null
 if [ -f "$MODDIR/runtime/asb_zygisk_link.sh" ]; then
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_zygisk_link.sh" restore-all >/dev/null 2>&1

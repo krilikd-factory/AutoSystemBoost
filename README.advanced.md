@@ -833,6 +833,35 @@ These apps are never touched: messengers, mail, authenticators, wearables, alarm
 
 The comparison covers the screen-off and screen-on drain (%/h) and the CPU time of the apps it hooks. A difference counts only above 15 % and a fixed floor: 0.10 %/h with the screen off, 0.5 %/h on, 20 s/h of CPU. Two days still differ in usage, signal and temperature, and the card says so.
 
+### 🧠 11.17. Smart V7 (V66)
+
+**Second check and rollback.** When a records trial finds a cheaper setting, the new best is measured once more against the setting it beat, under the same pairing rules. If the old one now comes out significantly cheaper (for example after a ROM update), it is put back, the win is withdrawn and the trials turn to the other side. Otherwise the new best is confirmed and the search goes on in the same direction. Every verdict keeps an interval: the mean of the pairs ± 2.5 standard errors. The counts live in a side file (`smart_records_v7.bin`), so a V65 records store loads unchanged.
+
+**Priors from the phone itself.** A situation's first trial starts on the side its sibling has already won on this phone: night and day with the screen off, dim and bright of the same kind of use. Only the order of the trials changes. No per-SoC table ships: two OnePlus 15 (SM8850) in the captures disagree (screen-off night plateau ×1.0 on one, ×1.25 on the other).
+
+**Balanced without exploring.** With `smart_records_balanced=1`, Balanced applies the screen-off setting Smart won on this phone and kept through its check, on quiet deep idle only. Nothing is measured or tried under Balanced. Only a setting below ×1 is used: Balanced's own ceilings (set by the profile script) are multiplied by it and given back when the phone wakes. ASB never raises Balanced's ceilings this way. The setting was measured under Smart's deep-idle ceilings and is applied to Balanced's as the same scale.
+
+**Cost per app and per kind of use (`smart_energy=1`).** With the screen on and off the charger, battery current × voltage is credited to the app in front, the screen included. A screen-on stretch under 90 s is a glance; a longer one takes the kind of app it spent most of its time in: light, media and feeds, heavy work or a game. The figures fade by 3 % a day. They are what an hour in an app costs on this phone, not what the app alone draws.
+
+**The usual charge.** The governor learns when the charger usually goes in, by half hour, weekdays and weekends apart. Smart's battery budget asks whether the battery lasts until then, at a drain mixed from the screen-on rate for the share of time the screen is usually on and the screen-off rate for the rest:
+- under 50 % and short of the usual charge, the warning lean starts even with more than 4 h left;
+- with half as much again in hand, the warning lean is not used;
+- the emergency level is never relaxed.
+
+**Heat, two minutes ahead.** Smart's soft pre-lean is judged on the reading projected from the die's slope (the skin at a third of the rise, at most +6 °C). The veto still fires only on a measured reading. On Performance the SUSTAINED trip point moves down by the projected rise when the die heats at 1.5 °C/min or faster and is within 6 °C of it, by at most 4 °C. That is the same lead a known-hot app gets, and the two do not add up.
+
+**Profiles by kind of use (`profile_class_auto=1`).**
+- Performance holds the CPU ceilings at 80 % of the hardware maximum while a light app runs at ordinary load.
+- Battery lifts them to at least 70 % while a game runs, where its own ceilings are lower, and gives its own back afterwards.
+
+Heavy work, app launches, a fresh touch, the camera, the unlock lift, a thermal cap and the cooldown are untouched. The energy and smoothness effect of this has not been measured on a phone yet.
+
+**LSPosed link.** Apps scoped by a module the LSPosed card rates costly (crashes or heavy background starts) are written to `/dev/.asb/lsp_heavy_apps`. Smart skips its smoothness test there: their stutter comes from the hook, which more CPU headroom does not remove.
+
+**Memory bus, measured only.** On quiet screen-off deep idle the governor reads the DDR clock (Qualcomm `bus_dcvs`, or a DDR devfreq device) at most every 30 s and reports how often it sits at its lowest step. Nothing is written to the bus: its voters differ by SoC and kernel, and a wrong floor stalls the phone.
+
+The ZYGISK page shows all of this under **What Smart learned**. asbdiag and the full-day report print the same figures.
+
 ## 🔐 12. Device information, privacy and evidence quality
 
 ### 🕵️ 12.1. Read-only, on-demand collection
