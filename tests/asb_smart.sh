@@ -203,26 +203,32 @@ static void test_store_seed_validate(void) {
     s.buckets[5].interactive_bonus_x1000 = -50;  /* below min */
     EXPECT(asb_smart_store_validate(&s) != 0, "negative interactive_bonus → invalid");
 
-    /* Smart V6: V4/V5 stores keep what they learned; older schemas reset as before. */
-    EXPECT(ASB_SMART_VER == 6, "Smart engine is V6");
+    /* Smart V7: V4-V6 stores keep what they learned; older schemas reset as before. */
+    EXPECT(ASB_SMART_VER == 7, "Smart engine is V7");
     asb_smart_store_seed_defaults(&s);
     s.version = 4; s.buckets[3].alpha_battery_x1000 = 731; s.buckets[3].sleep_bias_x1000 = 222;
     EXPECT(asb_smart_store_validate(&s) == 0, "a V4 store validates");
     asb_smart_store_migrate(&s);
-    EXPECT(s.version == ASB_SMART_VER, "V4 -> V6");
+    EXPECT(s.version == ASB_SMART_VER, "V4 -> V7");
     EXPECT(s.buckets[3].alpha_battery_x1000 == 731 && s.buckets[3].sleep_bias_x1000 == 222,
-           "V4 -> V6 keeps the learned outputs");
+           "V4 -> V7 keeps the learned outputs");
     asb_smart_store_seed_defaults(&s);
     s.version = 5; s.buckets[3].alpha_battery_x1000 = 712; s.buckets[3].sleep_bias_x1000 = 223;
     EXPECT(asb_smart_store_validate(&s) == 0, "a V5 store validates");
     asb_smart_store_migrate(&s);
     EXPECT(s.version == ASB_SMART_VER && s.buckets[3].alpha_battery_x1000 == 712 &&
-           s.buckets[3].sleep_bias_x1000 == 223, "V5 -> V6 keeps the learned outputs");
+           s.buckets[3].sleep_bias_x1000 == 223, "V5 -> V7 keeps the learned outputs");
+    asb_smart_store_seed_defaults(&s);
+    s.version = 6; s.buckets[3].alpha_battery_x1000 = 705; s.buckets[3].sleep_bias_x1000 = 224;
+    EXPECT(asb_smart_store_validate(&s) == 0, "a V6 store validates");
+    asb_smart_store_migrate(&s);
+    EXPECT(s.version == ASB_SMART_VER && s.buckets[3].alpha_battery_x1000 == 705 &&
+           s.buckets[3].sleep_bias_x1000 == 224, "V6 -> V7 keeps the learned outputs");
     asb_smart_store_seed_defaults(&s);
     s.version = 3; s.buckets[3].alpha_battery_x1000 = 731;
     asb_smart_store_migrate(&s);
     EXPECT(s.version == ASB_SMART_VER && s.buckets[3].alpha_battery_x1000 == 500,
-           "V3 -> V6 still resets the outputs");
+           "V3 -> V7 still resets the outputs");
 }
 
 static void test_clamps(void) {
@@ -6099,14 +6105,15 @@ int main(void) {
     if (mix < 7 || mix > 13) { printf("mixed drain %d (about 1 %%/h expected)\n", mix); bad = 1; }
     if (asb_en_mix_rate(100, -1) <= mix) { puts("without a screen-off figure the mix must not be lower"); bad = 1; }
     asb_en_summary_write();
-    FILE *f = fopen("$T/en.txt", "r"); char line[300]; int first = 1, sa = 0, sc = 0, sp = 0;
+    FILE *f = fopen("$T/en.txt", "r"); char line[300]; int first = 1, sa = 0, sc = 0, sp = 0, sm = 0;
     while (f && fgets(line, sizeof(line), f)) {
         if (!strncmp(line, "app|", 4)) { if (first && !strncmp(line, "app|com.game.b|", 15)) sa = 1; first = 0; }
         if (!strncmp(line, "class|game|", 11)) sc = 1;
-        if (!strncmp(line, "plug|charges=5|weekday=23:00|weekend=-", 38)) sp = 1;
+        if (!strncmp(line, "plug|charges=5|weekday=23:00|weekend=-|", 39)) sp = 1;
+        if (!strncmp(line, "meter|gauge_x100=-1", 19)) sm = 1;
     }
     if (f) fclose(f);
-    if (!sa || !sc || !sp) { printf("summary %d %d %d\n", sa, sc, sp); bad = 1; }
+    if (!sa || !sc || !sp || !sm) { printf("summary %d %d %d %d\n", sa, sc, sp, sm); bad = 1; }
     rename("$T/en.txt", "$T/en0.txt");
     if (asb_en_save() != 0) { puts("save"); bad = 1; }
     float bj = b->j;
@@ -6273,6 +6280,24 @@ grep -Fq 'g_writer_replay_scale = g_rec_off_scale;' "$G" || fail "the governor d
 grep -Fq '_ri.replay      = g_asb_cfg.smart_records && g_asb_cfg.smart_records_balanced &&' "$G" || fail "Balanced does not replay"
 grep -Fq 'if (fsm->profile_idx == PROFILE_BALANCED) {' "$G" || fail "the screen-off setting is not written under Balanced"
 grep -Fq 'if (g_asb_cfg.smart_energy) asb_en_tick(&_ei);' "$G" || fail "no energy tick"
+grep -Fq '_ei.ma         = asb_ma_real(metrics.bat.current_ma);' "$G" || fail "the energy figures are not on the real current scale"
+{ echo '#include <stdio.h>'; echo 'static int g_curscale_x100 = -1, g_curscale_n = 0;'; sed -n '/^static int asb_ma_real(int raw_ma) {/,/^}/p' "$G"
+  cat <<'X'
+int main(void) {
+    int bad = 0;
+    if (asb_ma_real(500) != 0) { puts("a figure before the gauge ratio is on record"); bad = 1; }
+    g_curscale_x100 = 42; g_curscale_n = 4;
+    if (asb_ma_real(500) != 0) { puts("a figure from fewer than five windows"); bad = 1; }
+    g_curscale_n = 330;
+    if (asb_ma_real(420) != 1000) { printf("x0.42 gauge: 420 mA read is %d, 1000 real expected\n", asb_ma_real(420)); bad = 1; }
+    g_curscale_x100 = 900;
+    if (asb_ma_real(420) != 0) { puts("a nonsense ratio was used"); bad = 1; }
+    return bad;
+}
+X
+} > "$T/real.c"
+"$CC" -std=gnu11 -Wall -Werror -o "$T/real" "$T/real.c" || fail "gauge harness does not compile"
+"$T/real" || fail "real current scale"
 grep -Fq 'g_en_mix_rate_x10 = g_asb_cfg.smart_energy ? asb_en_mix_rate(_budget_rate, g_offdrain_x100) : -1;' "$G" || fail "the budget does not get the mixed drain"
 H="$ROOT/webroot/index.html"
 if command -v node >/dev/null 2>&1; then
@@ -6286,6 +6311,7 @@ chk(g.classes.some(c => c.name === 'game' && c.n > 4) && g.classes.some(c => c.n
 chk(g.plug && g.plug.weekday === '23:00' && g.plug.weekend === '' && g.plug.charges === 5, 'plug: ' + JSON.stringify(g.plug));
 chk(g.conf.some(c => c.ctx === 'off_day' && c.rollbacks === 1) && g.conf.some(c => c.ctx === 'off_night' && c.confirms === 1), 'conf: ' + JSON.stringify(g.conf));
 chk(g.kv.therm_proj_c === '47' && g.kv.class_auto === '1' && g.kv.ddr_idle_at_min_pct === '55', 'state: ' + JSON.stringify(g.kv));
+chk(g.gauge === -1, 'the gauge line was not read: ' + g.gauge);
 process.exit(bad ? 1 : 0);
 JS
   } > "$T/s7l.js"

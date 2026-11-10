@@ -4172,7 +4172,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 fail() { echo "FAIL fix185: $*"; exit 1; }
 asb_has_test test_smart_records_runtime.sh || fail "test_smart_records_runtime.sh missing"
 asb_has_test test_smart_smoothness_runtime.sh || fail "test_smart_smoothness_runtime.sh missing"
-grep -q '#define ASB_SMART_VER         6' "$ROOT/src/asb_smart_defs.h" || fail "Smart engine is not V6"
+grep -q '#define ASB_SMART_VER         7' "$ROOT/src/asb_smart_defs.h" || fail "Smart engine is not V7"
 grep -q 'if (st->version >= ASB_SMART_VER_KEEP) {' "$ROOT/src/asb_smart.h" || fail "a V4 store would lose what it learned"
 grep -q '#define ASB_REC_VERSION     2' "$ROOT/src/asb_record.h" || fail "records store version"
 grep -q 'static void asb_rec_pair(asb_rec_ctx_t \*c, int slot, const asb_rec_last_t \*me) {' "$ROOT/src/asb_record.h" || fail "no side-by-side pairing"

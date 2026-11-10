@@ -5070,7 +5070,7 @@ H="$ROOT/webroot/index.html"; D="$ROOT/src/asb_smart_defs.h"
 fail() { echo "FAIL webui Smart engine badge: $*" >&2; exit 1; }
 command -v node >/dev/null 2>&1 || { echo "SKIP webui Smart engine badge: no node"; exit 0; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
-grep -q '^#define ASB_SMART_VER         6$' "$D" || fail "native Smart engine is not V6"
+grep -q '^#define ASB_SMART_VER         7$' "$D" || fail "native Smart engine is not V7"
 grep -q 'id="smartEngineTag" style="display:none"></span>' "$H" || fail "badge is not empty and initially hidden"
 {
   sed -n '/^function renderSmartSubLine(/,/^}/p' "$H"
@@ -5081,8 +5081,8 @@ const tag = { textContent: '', style: { display: 'none' } };
 global._el = function (id) { return id === 'smartSubLine' ? sub : null; };
 global.document = { getElementById: function (id) { return id === 'smartEngineTag' ? tag : null; } };
 global.T = function (k, d) { return d; };
-renderSmartSubLine({ smart_mode: '1', smart_engine_ver: '6' });
-chk(tag.textContent === 'V6' && tag.style.display === '', 'native V6 is not shown: ' + JSON.stringify(tag));
+renderSmartSubLine({ smart_mode: '1', smart_engine_ver: '7' });
+chk(tag.textContent === 'V7' && tag.style.display === '', 'native V7 is not shown: ' + JSON.stringify(tag));
 renderSmartSubLine({ smart_mode: '1', smart_engine_ver: '0' });
 chk(tag.style.display === 'none', 'an unknown engine version leaves a stale badge visible');
 if (bad) process.exit(1);
@@ -5091,7 +5091,7 @@ EOF
 } > "$T/badge.js"
 out="$(node "$T/badge.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo "PASS webui Smart engine badge: home card shows native V6 and hides an unknown version"
+echo "PASS webui Smart engine badge: home card shows native V7 and hides an unknown version"
 )
 
 t_webui_smart_basis_runtime() (
@@ -5122,7 +5122,7 @@ for l in en ru uk de es fr it pt tr id ar hy zh; do
   grep -q '"lvi_basis": "[^"]*{rec}[^"]*{trial}[^"]*{cold}' "$J" || fail "$l.json lvi_basis does not explain the new values"
 done
 cat > "$T/rec.txt" <<'E'
-# Smart records (Smart V6): power per situation, charge counter x battery voltage
+# Smart records (Smart V7): power per situation, charge counter x battery voltage
 counter=ok blocks_ok=57 blocks_rejected=6
 rejected|meter=0|charge=2|radio=1|busy=1|climate=2|other=0
 # ctx|status|best|record_mW|record_mA|record_n|gain_pct|testing|pairs|pair_diff_pct|trials|wins|blocks|first_mW
