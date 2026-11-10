@@ -1923,6 +1923,12 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .zy-ghost .dev-zygisk-btn, .zy-ghost-all { align-self: flex-end; }
 .zy-ghost-all { display: block; margin: 6px 0 2px auto; }
 .zy-lsp-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+#zygiskPage .lgr-note.zy-clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; padding: 0; margin: 2px 0; }
+#zygiskPage .zy-btn-inline { margin-top: 6px; padding: 5px 12px; font-size: 12px; min-height: 0; }
+#zygiskPage .lgr-note.zy-clamp.open { display: block; -webkit-line-clamp: unset; overflow: visible; }
+#zygiskPage .zy-fold[hidden] { display: none !important; }
+#zygiskPage .zy-more { display: block; margin: 6px 0 2px auto; }
+#zygiskPage .zy-lsp-why > summary { font-size: 12.5px; color: var(--text-secondary); cursor: pointer; padding: 2px 0; }
 .zy-ghost .zy-lsp-actions .dev-zygisk-btn { align-self: auto; }
 html[data-asb-theme="light"] .lgr-quality { background: #f7f9fa; }
 @media (max-width: 400px) {
@@ -6269,8 +6275,15 @@ let _asbInputAt = -1e9;
 ['pointerdown', 'touchstart', 'keydown', 'wheel'].forEach(function (t) {
   try { window.addEventListener(t, function () { _asbInputAt = performance.now(); }, { passive: true, capture: true }); } catch (e) {}
 });
-const ASB_LATER_QUIET_MS = 500;
+/* dev4: a job never runs while another page is open or opening. In dev2 the Live pass and the
+ * Zygisk header waited for gaps that ended right when the user tapped MONITOR or SETTINGS, and
+ * the page's own reads then queued behind them. Jobs above priority 0 wait for the home screen;
+ * the Live pass is dropped when MONITOR is open, which polls by itself. */
+const ASB_LATER_QUIET_MS = 300;
 let _asbLater = [], _asbLaterBusy = false, _asbLaterSeq = 0;
+function asbPageBusy() {
+  try { return !!(_liveOpen || _cfgOpen || _rpOpen || _deviceOpen || _zygiskOpen); } catch (e) { return false; }
+}
 function asbStartupLater(fn, gap, prio) {
   if (_asbLater.some(function (j) { return j.fn === fn; })) return;
   _asbLater.push({ fn: fn, gap: gap || 0, prio: prio || 0, seq: ++_asbLaterSeq });
@@ -6285,6 +6298,7 @@ function asbLaterPump() {
     const go = function () {
       const quiet = performance.now() - _asbInputAt;
       if (quiet < ASB_LATER_QUIET_MS) { setTimeout(go, ASB_LATER_QUIET_MS - quiet + 16); return; }
+      if (job.prio > 0 && asbPageBusy()) { setTimeout(go, 1000); return; }
       Promise.resolve().then(job.fn).catch(function () {}).then(function () {
         _asbLaterBusy = false;
         asbLaterPump();
@@ -6364,7 +6378,7 @@ function uiOtherAudioRefresh() {
 }
 /* The look waits until this page's own stream is closed (a cue in the last 4 s, or the
  * context still running), so it can never count itself; it then runs through the queue. */
-function uiOtherAudioLater() { asbStartupLater(uiOtherAudioLook, 700, 2); }
+function uiOtherAudioLater() { asbStartupLater(uiOtherAudioLook, 150, 2); }
 function uiOtherAudioLook() {
   const own = Math.max(0, _uiLastCueAt + 4000 - performance.now());
   if (own > 0 || (_uiAudioCtx && _uiAudioCtx.state === 'running')) {
@@ -6389,14 +6403,13 @@ function uiSoundToggle() {
                    : T('ui_sound_off', 'Interface sounds off'));
 }
 // One look after the page opens, so a cue does not play over music (fix145). V66: the look
-// is queued after the first frame instead of a fixed 1.2 s timer, and a stale look is
-// renewed after the tap instead of inside it - dumpsys audio held every first tap. Until
-// the first look has finished no cue plays at all.
+// is queued after the first frame instead of a fixed 1.2 s timer, and it is renewed when the
+// page comes back from the background, never on a tap: dumpsys audio held the tap and, in
+// dev2, the page that tap opened. Until the first look has finished no cue plays at all.
 if (_uiSoundOn) uiOtherAudioLater();
 function uiSound(kind) {
   if (!_uiSoundOn) return;
   if (_uiOtherAudioAt < 0) { uiOtherAudioLater(); return; }
-  if (performance.now() - _uiOtherAudioAt > 15000) uiOtherAudioLater();
   if (_uiOtherAudio) return;
   _uiLastCueAt = performance.now();
   const seq = UI_SONIC[kind] || UI_SONIC.option;
@@ -7951,6 +7964,8 @@ function lvRecLine(ctx, st, best, test, pairs, need, n, gain10, blocks, max) {
   if (st === 'holding') return gain10 >= 5
     ? T('lvr_holding', 'best so far: %1, %2 cheaper than the original setting').replace('%1', lvRecArm(ctx, best)).replace('%2', g)
     : T('lvr_holding0', 'the original setting holds');
+  if (st === 'confirming') return T('lvr_confirming', 'check: %1 once more against %2, which it beat, %3 of %4 pairs')
+    .replace('%1', lvRecArm(ctx, best)).replace('%2', lvRecArm(ctx, test)).replace('%3', pairs).replace('%4', pairs >= need ? (max || need) : need);
   if (st === 'testing') return (pairs >= need
       ? T('lvr_testing_more', 'trial: %1 against %2, %3 pairs - not a clear result yet, up to %4')
       : T('lvr_testing', 'trial: %1 against %2, %3 of %4 pairs'))
@@ -8005,9 +8020,9 @@ function lvBasisPaint(kv, fb, dp, we, conf, night, veto) {
     else if (_rOn) {
       /* Pairs done of the minimum; past it, the count alone (up to the maximum - the sheet
        * says so). The word gives way to an icon where a language's word does not fit. */
-      const _nums = _rs === 'testing' ? (_rPairs < _rNeed ? _rPairs + '/' + _rNeed : String(_rPairs))
+      const _nums = (_rs === 'testing' || _rs === 'confirming') ? (_rPairs < _rNeed ? _rPairs + '/' + _rNeed : String(_rPairs))
                                        : Math.min(_rN, _rNeed) + '/' + _rNeed;
-      if (_rs === 'testing') { bTxt = T('lvb_trial', 'trial %s').replace('%s', _nums); bShort = '\ud83e\uddea ' + _nums; }
+      if (_rs === 'testing' || _rs === 'confirming') { bTxt = T('lvb_trial', 'trial %s').replace('%s', _nums); bShort = '\ud83e\uddea ' + _nums; }
       else if (_rs === 'measuring') { bTxt = T('lvb_measure', 'measure %s').replace('%s', _nums); bShort = '\u23f3 ' + _nums; }
       else if (_rG >= 5) { bTxt = T('lvb_record', '\ud83c\udfc6 %s').replace('%s', '\u2212' + Math.max(1, Math.round(_rG / 10)) + '%'); bCls = ' cap-raised'; }
       else bTxt = T('lvb_record_ok', 'record \u2713');
@@ -14505,7 +14520,7 @@ function asbPageJumpIcon(id) {
     'lgr-smooth': 'zygisk_activity', 'lgr-thermal': 'thermal_point', 'lgr-zygisk': 'zygisk_observer',
     'lgr-details': 'log_detail', 'zy-mode': 'zygisk_mode', 'zy-auto': 'zygisk_auto',
     'zy-controls': 'switches', 'zy-activity': 'zygisk_activity', 'zy-guard': 'zygisk_guard',
-    'zy-aot': 'zygisk_art', 'zy-apps': 'zygisk_apps', 'zy-lsp': 'zygisk_hooks'
+    'zy-aot': 'zygisk_art', 'zy-apps': 'zygisk_apps', 'zy-lsp': 'zygisk_hooks', 'zy-s7': 'zygisk_activity'
   };
   return icons[id] || 'panel';
 }
@@ -15654,13 +15669,15 @@ function zygiskPageRender(d) {
   if (deviceVal(d, 'zygisk_observer', 'enabled') === '0') {
     body.appendChild(zygiskOffCard());
     const lspOff = lspLiteCard(); lspOff.id = 'zy-lsp'; body.appendChild(lspOff);
+    const s7Off = smart7Card(); s7Off.id = 'zy-s7'; body.appendChild(s7Off);
+    zyCompact(body);
     if (_el('zygiskPage') && y) _el('zygiskPage').scrollTop = y;
     return;
   }
   body.appendChild(asbPageJump([
     ['zy-mode', T('zy_nav_mode', 'Mode')], ['zy-auto', T('zy_nav_auto', 'Automatic')],
     ['zy-controls', T('zy_nav_controls', 'Controls')], ['zy-activity', T('zy_nav_activity', 'Activity')],
-    ['zy-guard', T('zy_nav_guard', 'Guard')], ['zy-lsp', T('zy_nav_lsp', 'LSPosed')], ['zy-aot', T('zy_nav_art', 'ART')],
+    ['zy-guard', T('zy_nav_guard', 'Guard')], ['zy-lsp', T('zy_nav_lsp', 'LSPosed')], ['zy-s7', T('zy_nav_s7', 'Budgets')], ['zy-aot', T('zy_nav_art', 'ART')],
     ['zy-apps', T('zy_nav_apps', 'Apps')]
   ], T('dev_nav_title', 'Jump to'), 'zy-page-nav'));
   const mode = zygiskModeCard(d); mode.id = 'zy-mode'; body.appendChild(mode);
@@ -15674,13 +15691,64 @@ function zygiskPageRender(d) {
   const engine = zygiskLinkCard(); engine.id = 'zy-engine'; body.appendChild(engine);
   const guard = zygiskGuardCard(); guard.id = 'zy-guard'; body.appendChild(guard);
   const lsp = lspLiteCard(); lsp.id = 'zy-lsp'; body.appendChild(lsp);
+  const s7 = smart7Card(); s7.id = 'zy-s7'; body.appendChild(s7);
   const aot = zygiskAotCard(); aot.id = 'zy-aot'; body.appendChild(aot);
   const apps = logReportSec(T('zy_sec_apps', 'Observed apps and safe mode'), 'zygisk_apps');
   apps.id = 'zy-apps';
   apps.appendChild(deviceZygiskEditor(d, function () { zygiskPageLoad(true); }));
   body.appendChild(apps);
   const evidence = zygiskEvidenceCard(d); evidence.id = 'zy-evidence'; body.appendChild(evidence);
+  zyCompact(body);
   if (_el('zygiskPage') && y) _el('zygiskPage').scrollTop = y;
+}
+/* dev4: the ZYGISK page grew past a dozen screens. Nothing is removed: an explanation longer
+ * than two lines shows two lines and opens in place on a tap, and a list of more than four
+ * rows shows three with a "show N more" button. What is open stays open across refreshes. */
+const _zyFoldOpen = new Set();
+const ZY_NOTE_CLAMP = 90;
+function zyCompact(body) {
+  if (!body || !body.querySelectorAll) return;
+  Array.prototype.forEach.call(body.querySelectorAll('.lgr-note'), function (n, i) {
+    if (n.classList.contains('zy-clamp') || String(n.textContent || '').length <= ZY_NOTE_CLAMP) return;
+    const sec = n.closest ? n.closest('.lgr-sec') : null;
+    const key = 'n:' + (sec && sec.id ? sec.id : '') + ':' + String(n.textContent).slice(0, 40);
+    n.classList.add('zy-clamp');
+    n.setAttribute('role', 'button'); n.tabIndex = 0;
+    const paint = function () { const o = _zyFoldOpen.has(key); n.classList.toggle('open', o); n.setAttribute('aria-expanded', o ? 'true' : 'false'); };
+    n.addEventListener('click', function () { if (_zyFoldOpen.has(key)) _zyFoldOpen.delete(key); else _zyFoldOpen.add(key); paint(); });
+    paint();
+  });
+  Array.prototype.forEach.call(body.querySelectorAll('.lgr-sec'), function (sec, si) {
+    const kids = Array.prototype.slice.call(sec.children);
+    let run = [], runNo = 0;
+    const flush = function () {
+      if (run.length > 4) {
+        const key = 'r:' + (sec.id || ('s' + si)) + ':' + runNo;
+        const rest = run.slice(3);
+        const fold = document.createElement('div'); fold.className = 'zy-fold';
+        sec.insertBefore(fold, rest[0]);
+        rest.forEach(function (el) { fold.appendChild(el); });
+        const btn = document.createElement('button');
+        btn.type = 'button'; btn.className = 'dev-zygisk-btn zy-more';
+        const paint = function () {
+          const o = _zyFoldOpen.has(key);
+          fold.hidden = !o;
+          btn.textContent = o ? T('zy_less', 'Show less') : T('zy_more', 'Show %s more').replace('%s', String(rest.length));
+          btn.setAttribute('aria-expanded', o ? 'true' : 'false');
+        };
+        btn.onclick = function () { if (_zyFoldOpen.has(key)) _zyFoldOpen.delete(key); else _zyFoldOpen.add(key); paint(); };
+        paint();
+        sec.insertBefore(btn, fold.nextSibling);
+      }
+      if (run.length) runNo++;
+      run = [];
+    };
+    kids.forEach(function (el) {
+      if (el.classList && (el.classList.contains('lgr-row') || el.classList.contains('zy-ghost'))) run.push(el);
+      else flush();
+    });
+    flush();
+  });
 }
 /* fix280: the restart-loop guard - the Zygisk start ledger drives an action. With the screen
  * off, an app that starts again and again (runtime/asb_zygisk_guard.sh: 6+ process starts in
@@ -15762,14 +15830,19 @@ function zygiskGuardHeldText(h) {
 }
 function zygiskGuardActionRow(label, value, btnText, onTap) {
   const w = document.createElement('div');
-  w.className = 'zy-ghost';
-  w.appendChild(logReportRow(label, value, false));
+  w.className = 'zy-ghost zy-ghost-inline';
+  const row = logReportRow(label, value, false);
   const b = document.createElement('button');
   b.type = 'button';
-  b.className = 'dev-zygisk-btn';
+  b.className = 'dev-zygisk-btn zy-btn-inline';
   b.textContent = btnText;
   b.onclick = onTap;
-  w.appendChild(b);
+  /* dev4: the button sits under the app name, beside a value that wraps anyway, instead of
+     taking a line of its own under every row. */
+  const k = row.querySelector ? row.querySelector('.lgr-k') : null;
+  if (k) { k.appendChild(document.createElement('br')); k.appendChild(b); }
+  else w.appendChild(b);
+  w.appendChild(row);
   return w;
 }
 function zygiskGuardCard() {
@@ -16238,13 +16311,19 @@ function lspLiteCard() {
     if (m.bg > 0) parts.push(T('lsp_bg', '%s background starts/day').replace('%s', String(m.bg)));
     const w = document.createElement('div'); w.className = 'zy-ghost';
     w.appendChild(logReportRow(nm(m.pkg), parts.join(' · '), m.verdict === 'heavy'));
-    m.reasons.forEach(function (r) { w.appendChild(logReportNote(lspLiteReasonText(r, m), r === 'crash' || r === 'ab_worse')); });
-    g.cands.filter(function (c) { return c.mod === m.pkg; }).forEach(function (c) {
-      const why = c.why === 'crash' ? T('lsp_c_crash', '%a: %n crash(es) through this module').replace('%n', String(c.crash))
+    const mc = g.cands.filter(function (c) { return c.mod === m.pkg; });
+    const why = document.createElement('details'); why.className = 'zy-lsp-why';
+    const ws = document.createElement('summary');
+    ws.textContent = T('lsp_why', 'Why, and which apps (%s)').replace('%s', String(m.reasons.length + mc.length));
+    why.appendChild(ws);
+    m.reasons.forEach(function (r) { why.appendChild(logReportNote(lspLiteReasonText(r, m), r === 'crash' || r === 'ab_worse')); });
+    mc.forEach(function (c) {
+      const txt = c.why === 'crash' ? T('lsp_c_crash', '%a: %n crash(es) through this module').replace('%n', String(c.crash))
         : c.idle >= 9999 ? T('lsp_c_never', '%a: not opened, %b background starts/day').replace('%b', c.bg >= 0 ? String(c.bg) : '?')
         : T('lsp_c_unused', '%a: not opened for %d days, %b background starts/day').replace('%d', String(c.idle)).replace('%b', c.bg >= 0 ? String(c.bg) : '?');
-      w.appendChild(logReportNote(why.replace('%a', nm(c.app))));
+      why.appendChild(logReportNote(txt.replace('%a', nm(c.app))));
     });
+    if (m.reasons.length + mc.length) w.appendChild(why);
     const n = g.cands.filter(function (c) { return c.mod === m.pkg; }).length;
     const acts = document.createElement('div'); acts.className = 'zy-lsp-actions';
     if (!abBusy || g.ab.module !== m.pkg) {
@@ -16312,6 +16391,228 @@ async function lspLiteReload() {
   try { b = await runBatch([['lsp', 'sh ' + shQuote(MD + '/runtime/asb_lsposed_lite.sh') + ' status']]); } catch (e) { b = null; }
   if (b && b.lsp && b.lsp.errno === 0) _zyLsp = lspLiteParse(b.lsp.stdout);
   if (_zyLsp && _zyLsp.refreshing) { setTimeout(function () { if (_zygiskOpen) lspLiteReload(); }, 8000); return; }
+  if (_zygiskOpen) zygiskPageRender(window._asbZygiskLinkData || null);
+}
+/* V66 Smart V7: background budgets, background mobile data and the learned charge end.
+ * runtime/asb_smart7.sh puts a rarely opened app that keeps starting in the background into
+ * Android's "rare" standby bucket, and takes background data on metered networks from an
+ * unopened app that keeps moving mobile data; asb_night_charge.sh learns the usual unplug
+ * time. Each is by tap or opt-in automatic (budgets also, with stricter limits, on the
+ * Battery profile), journaled, undone with one tap and given back on uninstall. */
+let _zyS7 = null;
+function smart7Parse(out, nc) {
+  const g = { ok: false, autoBudget: false, autoData: false, profile: '', age: -1, refreshing: false, usage: 'unknown', netstats: 'unknown',
+    ledger: false, cands: [], journal: [], learn: false, learnedEnd: '', samples: 0, ncEnabled: false };
+  const num = function (v) { const n = parseInt(v, 10); return isFinite(n) ? n : 0; };
+  const pk = function (v) { return /^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)+$/.test(v || ''); };
+  String(out || '').split('\n').forEach(function (ln) {
+    ln = ln.trim();
+    const m = /^([a-z_]+)=([A-Za-z0-9_-]*)$/.exec(ln);
+    if (m) {
+      const k = m[1], v = m[2];
+      if (k === 'version' && v === '1') g.ok = true;
+      else if (k === 'auto_budget') g.autoBudget = v === '1';
+      else if (k === 'auto_data') g.autoData = v === '1';
+      else if (k === 'profile') g.profile = v;
+      else if (k === 'evidence_age') g.age = /^-?\d+$/.test(v) ? num(v) : -1;
+      else if (k === 'refreshing') g.refreshing = v === '1';
+      else if (k === 'usage') g.usage = v === 'ok' ? 'ok' : 'unknown';
+      else if (k === 'netstats') g.netstats = v === 'ok' ? 'ok' : 'unknown';
+      else if (k === 'ledger') g.ledger = v === '1';
+      return;
+    }
+    const f = ln.split('|');
+    if (f[0] === 'cand' && f.length === 7 && /^(budget|data)$/.test(f[1]) && pk(f[2]) && /^\d+$/.test(f[3]))
+      g.cands.push({ engine: f[1], pkg: f[2], idle: num(f[4]), val: num(f[5]), auto: f[6] === '1' });
+    else if (f[0] === 'j' && f.length === 9 && /^\d+$/.test(f[1]) && /^(user|auto)$/.test(f[3]) && /^(budget|data)$/.test(f[4]) && pk(f[5]))
+      g.journal.push({ id: f[1], at: num(f[2]), kind: f[3], engine: f[4], pkg: f[5], active: f[8] === 'active' });
+  });
+  String(nc || '').split('\n').forEach(function (ln) {
+    const m = /^([a-z_]+)=([0-9:a-z_]*)$/.exec(ln.trim());
+    if (!m) return;
+    if (m[1] === 'learn') g.learn = m[2] === '1';
+    else if (m[1] === 'learned_end') g.learnedEnd = /^\d\d:\d\d$/.test(m[2]) ? m[2] : '';
+    else if (m[1] === 'unplug_samples') g.samples = num(m[2]);
+    else if (m[1] === 'enabled') g.ncEnabled = m[2] === '1';
+  });
+  return g;
+}
+function smart7Seg(on, onSet) {
+  const seg = document.createElement('div');
+  seg.className = 'cfg-seg zy-mode-seg';
+  [[false, T('s7_off', 'Off')], [true, T('s7_auto', 'Automatic')]].forEach(function (o) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = o[1];
+    if (o[0] === on) b.classList.add('on');
+    b.onclick = function () { if (o[0] !== on) onSet(o[0]); };
+    seg.appendChild(b);
+  });
+  return seg;
+}
+/* Smart V7 (V66): what the governor learned - cost per app and per kind of use (screen on,
+ * off the charger, current x voltage, screen included), the usual charge and what the budget
+ * makes of it, how sure each records result is, the look-ahead and the profile adjustments.
+ * One read of three files when the Zygisk page loads; shown folded. */
+let _zyS7L = null;
+const ASB_S7L_READ = "cat /dev/.asb/smart_energy.txt 2>/dev/null; grep '^conf|' /dev/.asb/smart_records.txt 2>/dev/null; "
+  + "grep -E '^(therm_proj_c|perf_proj_lead_c|class_auto|rec_replay|smooth_lsp_skips|en_class|en_plug_eta_min|en_budget_plug|ddr_[a-z_]+)=' /dev/.asb/state 2>/dev/null; true";
+function smart7LearnParse(txt) {
+  const g = { apps: [], classes: [], plug: null, conf: [], kv: {} };
+  const num = function (v) { const n = parseFloat(v); return isFinite(n) ? n : 0; };
+  String(txt || '').split('\n').forEach(function (ln) {
+    ln = ln.trim();
+    const m = /^([a-z_0-9]+)=(-?[0-9a-z_]*)$/.exec(ln);
+    if (m) { g.kv[m[1]] = m[2]; return; }
+    const f = ln.split('|');
+    if (f[0] === 'app' && f.length === 5 && /^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)+$/.test(f[1]))
+      g.apps.push({ pkg: f[1], min: num(f[2]), mw: num(f[3]), share: num(f[4]) });
+    else if (f[0] === 'class' && f.length === 5 && /^(glance|light|media|heavy|game)$/.test(f[1]))
+      g.classes.push({ name: f[1], n: num(f[2]), min: num(f[3]), mw: num(f[4]) });
+    else if (f[0] === 'plug' && f.length >= 5) {
+      const p = {};
+      f.slice(1).forEach(function (kvp) { const k = kvp.indexOf('='); if (k > 0) p[kvp.slice(0, k)] = kvp.slice(k + 1); });
+      g.plug = { charges: num(p.charges), weekday: /^\d\d:\d\d$/.test(p.weekday || '') ? p.weekday : '',
+        weekend: /^\d\d:\d\d$/.test(p.weekend || '') ? p.weekend : '', eta: /^-?\d+$/.test(p.eta_min || '') ? num(p.eta_min) : -1,
+        budget: /^-?\d$/.test(p.budget || '') ? num(p.budget) : 0 };
+    } else if (f[0] === 'conf' && f.length >= 9 && /^(off|on)_[a-z_]+$/.test(f[1]))
+      g.conf.push({ ctx: f[1], checking: f[2] === '1', confirms: num(f[3]), rollbacks: num(f[4]), last: f[5], lo: num(f[6]), hi: num(f[7]) });
+  });
+  return g;
+}
+function smart7LearnBlock(g, nm) {
+  /* A number and its unit stay on one line. */
+  const keep = function (t) { return String(t).replace(/(\d) (%|\u00d7|\u043c\u0438\u043d|min|mW)/g, '$1\u00a0$2'); };
+  const row = function (k, v, w) { return logReportRow(k, keep(v), w); };
+  const det = document.createElement('details'); det.className = 'zy-evidence';
+  const sm = document.createElement('summary');
+  sm.textContent = T('s7l_title', 'What Smart learned');
+  det.appendChild(sm);
+  const kv = g.kv || {};
+  const pct = function (v) { return (Math.round(v * 10) / 10).toString().replace(/\.0$/, ''); };
+  const apps = g.apps.slice(0, 8), cls = g.classes.filter(function (c) { return c.n >= 0.5; });
+  if (!apps.length && !cls.length && !(g.plug && g.plug.charges > 0)) det.appendChild(logReportNote(T('s7l_none', 'Nothing learned yet: the figures appear after some use off the charger.')));
+  if (apps.length) {
+    det.appendChild(row(T('s7l_apps', 'Cost per app, screen on'), '', false));
+    apps.forEach(function (a) {
+      det.appendChild(row(nm(a.pkg), T('s7l_app_row', '%1 min · %2 mW · %3 %')
+        .replace('%1', String(Math.round(a.min))).replace('%2', String(Math.round(a.mw))).replace('%3', pct(a.share)), false));
+    });
+    det.appendChild(logReportNote(T('s7l_apps_note', 'Battery current × voltage while the app was in front, the screen included; fades by 3 % a day.')));
+  }
+  if (cls.length) {
+    det.appendChild(row(T('s7l_classes', 'By kind of use'), '', false));
+    const cn = { glance: T('s7l_cls_glance', 'Glances (under 90 s)'), light: T('s7l_cls_light', 'Light apps'), media: T('s7l_cls_media', 'Media and feeds'),
+      heavy: T('s7l_cls_heavy', 'Heavy work'), game: T('s7l_cls_game', 'Games') };
+    cls.forEach(function (c) {
+      det.appendChild(row(cn[c.name] || c.name, T('s7l_cls_row', '%1 × · %2 min · %3 mW')
+        .replace('%1', String(Math.round(c.n))).replace('%2', String(Math.round(c.min))).replace('%3', String(Math.round(c.mw))), false));
+    });
+  }
+  if (g.plug) {
+    const p = g.plug;
+    const when = (p.weekday || p.weekend)
+      ? T('s7l_plug_val', 'weekdays %1 · weekends %2').replace('%1', p.weekday || '\u2014').replace('%2', p.weekend || '\u2014')
+      : T('s7l_plug_none', 'not clear yet (%s charges seen)').replace('%s', String(p.charges));
+    det.appendChild(row(T('s7l_plug', 'Usual charge'), when + (p.eta >= 0 ? ' · ' + T('s7l_plug_eta', 'next in %s').replace('%s', Math.floor(p.eta / 60) + ':' + String(p.eta % 60).padStart(2, '0')) : ''), false));
+    if (p.budget === 1) det.appendChild(logReportNote(T('s7l_budget_lean', 'At the current drain the battery will not last until then: Smart leans to economy.'), true));
+    else if (p.budget === -1) det.appendChild(logReportNote(T('s7l_budget_relax', 'The battery lasts until then with room to spare: no low-battery lean.')));
+  }
+  const conf = g.conf.filter(function (c) { return c.checking || c.confirms > 0 || c.rollbacks > 0; });
+  if (conf.length) {
+    det.appendChild(row(T('s7l_conf', 'Records: second checks'), '', false));
+    conf.forEach(function (c) {
+      let v = c.checking ? T('s7l_conf_checking', 'checking the new best setting once more')
+        : T('s7l_conf_row', 'confirmed %1, rolled back %2').replace('%1', String(c.confirms)).replace('%2', String(c.rollbacks));
+      if (!c.checking && c.last !== '-' && (c.lo || c.hi)) v += ' · ' + T('s7l_conf_gain', 'last result %1…%2 %').replace('%1', pct(c.lo)).replace('%2', pct(c.hi));
+      det.appendChild(row(lvRecCtxName(c.ctx), v, false));
+    });
+  }
+  const look = [];
+  const n = function (k) { return /^-?\d+$/.test(kv[k] || '') ? parseInt(kv[k], 10) : null; };
+  if (n('therm_proj_c') > 0) look.push(T('s7l_therm', 'Heat in 2 min, projected: %s °C').replace('%s', String(n('therm_proj_c'))));
+  if (n('perf_proj_lead_c') > 0) look.push(T('s7l_perf_lead', 'Performance: heat protection %s °C earlier').replace('%s', String(n('perf_proj_lead_c'))));
+  if (n('class_auto') === 1) look.push(T('s7l_class_perf', 'Performance: light app held at 80 % of the CPU maximum'));
+  if (n('class_auto') === 2) look.push(T('s7l_class_bat', 'Battery: game lifted to 70 % of the CPU maximum'));
+  if (n('rec_replay') === 1) look.push(T('s7l_replay', 'Balanced: the screen-off setting Smart won is in use'));
+  if (n('smooth_lsp_skips') > 0) look.push(T('s7l_lsp', 'Smoothness tests skipped in apps hooked by a costly LSPosed module: %s').replace('%s', String(n('smooth_lsp_skips'))));
+  if (n('ddr_idle_samples') >= 10 && n('ddr_idle_at_min_pct') !== null && n('ddr_idle_at_min_pct') >= 0)
+    look.push(T('s7l_ddr', 'Memory bus on quiet screen-off: at its lowest step %1 % of the time, average %2 MHz (lowest %3 MHz)')
+      .replace('%1', String(n('ddr_idle_at_min_pct'))).replace('%2', String(n('ddr_idle_avg_mhz'))).replace('%3', String(n('ddr_min_mhz'))));
+  if (look.length) {
+    det.appendChild(row(T('s7l_look', 'Look-ahead and profiles'), '', false));
+    look.forEach(function (t) { det.appendChild(logReportNote(t)); });
+  }
+  return det;
+}
+function smart7Card() {
+  const g = _zyS7 || smart7Parse('', '');
+  const card = logReportSec(T('s7_title', 'Smart: background, data and charging'), 'zygisk_activity');
+  if (!g.ok) { card.appendChild(logReportNote(T('s7_unread', 'Not read yet.'))); return card; }
+  const names = dozeKeepLabels(g.cands.map(function (c) { return c.pkg; }).concat(g.journal.map(function (j) { return j.pkg; })));
+  const nm = function (p) { return names[p] || p; };
+  card.appendChild(logReportRow(T('s7_budget', 'Background budgets'), g.autoBudget ? T('s7_auto', 'Automatic') : g.profile === 'battery' ? T('s7_soft', 'Battery profile: soft') : T('s7_off', 'Off'), false));
+  card.appendChild(smart7Seg(g.autoBudget, function (v) { smart7Act('auto', 'budget', v ? 'on' : 'off'); }));
+  card.appendChild(logReportNote(T('s7_budget_desc', 'A rarely opened app that keeps starting in the background goes to Android\'s "rare" standby bucket; opening it brings it back. Automatic: unused 7+ days and 6+ background starts a day; on the Battery profile also without this switch, at 14+ days and 10+ starts. Messengers, mail, 2FA, wearables, alarms, navigation, keyboards, launchers, system apps and your Doze keep list are never touched.')));
+  card.appendChild(logReportRow(T('s7_data', 'Background mobile data'), g.autoData ? T('s7_auto', 'Automatic') : T('s7_off', 'Off'), false));
+  card.appendChild(smart7Seg(g.autoData, function (v) { smart7Act('auto', 'data', v ? 'on' : 'off'); }));
+  card.appendChild(logReportNote(T('s7_data_desc', 'An app you have not opened for 3+ days that still moves mobile data in the background loses background data on metered networks (Android\'s own per-app switch). Automatic from 10 MB a day; Wi-Fi and the app in use are not affected.')));
+  card.appendChild(logReportRow(T('s7_charge', 'Charge end learned from your mornings'),
+    g.learn ? (g.learnedEnd ? T('s7_charge_at', 'until %s').replace('%s', g.learnedEnd) : T('s7_charge_learning', 'learning (%s unplugs)').replace('%s', String(g.samples))) : T('s7_off', 'Off'), false));
+  card.appendChild(smart7Seg(g.learn, function (v) { smart7Act('learn', v ? 'on' : 'off'); }));
+  card.appendChild(logReportNote(T('s7_charge_desc', 'With the night charge limit on, the hold ends 90 minutes before the time you usually unplug (median of the last 4 weeks, weekdays and weekends apart), so the phone is full when you take it.')));
+  if (g.age < 0) card.appendChild(logReportNote(T('s7_no_evidence', 'No usage data read yet; candidates appear after a refresh.')));
+  if (g.usage !== 'ok' || !g.ledger) card.appendChild(logReportNote(T('s7_need', 'Budgets need Android\'s usage history and the Zygisk start ledger; data needs network statistics.'), true));
+  const cands = g.cands.filter(function (c) { return c.engine === 'budget' || c.engine === 'data'; });
+  cands.forEach(function (c) {
+    const idle = c.idle >= 9999 ? T('s7_never', 'never opened') : T('s7_idle', 'not opened for %s days').replace('%s', String(c.idle));
+    const val = c.engine === 'budget' ? T('s7_bg', '%s background starts/day').replace('%s', String(c.val)) : T('s7_mb', '%s MB/day mobile data in the background').replace('%s', String(c.val));
+    card.appendChild(zygiskGuardActionRow(nm(c.pkg), idle + ' · ' + val, c.engine === 'budget' ? T('s7_apply_budget', 'Rare bucket') : T('s7_apply_data', 'No background data'),
+      function () { smart7Act('apply', c.engine, c.pkg); }));
+  });
+  const active = g.journal.filter(function (j) { return j.active; });
+  if (g.journal.length) {
+    const det = document.createElement('details'); det.className = 'zy-evidence';
+    const sm = document.createElement('summary');
+    sm.textContent = T('s7_journal', 'Changes made by Smart (%s active)').replace('%s', String(active.length));
+    det.appendChild(sm);
+    g.journal.slice().reverse().forEach(function (j) {
+      const what = (j.engine === 'budget' ? T('s7_j_budget', '%a: rare bucket') : T('s7_j_data', '%a: no background data')).replace('%a', nm(j.pkg));
+      const label = zygiskGuardClock(j.at) + ' · ' + (j.kind === 'auto' ? T('lsp_by_auto', 'automatic') : T('lsp_by_user', 'by you'));
+      if (j.active) det.appendChild(zygiskGuardActionRow(label, what, T('lsp_undo', 'Undo'), function () { smart7Act('undo', j.id); }));
+      else det.appendChild(logReportRow(label, what + ' · ' + T('lsp_undone', 'undone'), false));
+    });
+    if (active.length > 1) {
+      const w = document.createElement('div'); w.className = 'zy-ghost';
+      w.appendChild(lspLiteButton(T('lsp_undo_all', 'Undo all'), 's7undoall', function () { smart7Act('undo-all'); }, T('lsp_confirm', 'Tap again to confirm')));
+      det.appendChild(w);
+    }
+    card.appendChild(det);
+  }
+  const rw = document.createElement('div'); rw.className = 'zy-ghost';
+  const rb = document.createElement('button'); rb.type = 'button'; rb.className = 'dev-zygisk-btn';
+  rb.textContent = T('lsp_refresh', 'Read the evidence again'); rb.disabled = g.refreshing;
+  rb.onclick = function () { smart7Act('refresh'); };
+  rw.appendChild(rb); card.appendChild(rw);
+  if (_zyS7L) card.appendChild(smart7LearnBlock(_zyS7L, nm));
+  return card;
+}
+async function smart7Act(cmd, a1, a2) {
+  if (_zygiskModeBusy) return;
+  if (['refresh', 'apply', 'undo', 'undo-all', 'auto', 'learn'].indexOf(cmd) < 0) return;
+  const args = [a1, a2].filter(function (v) { return v !== undefined; });
+  if (args.some(function (v) { return !/^[A-Za-z0-9_.]+$/.test(String(v)); })) return;
+  _zygiskModeBusy = true;
+  if (cmd !== 'refresh') uiSound('toggle_on');
+  await asbPaintYield();
+  const S7 = 'sh ' + shQuote(MD + '/runtime/asb_smart7.sh'), NC = 'sh ' + shQuote(MD + '/runtime/asb_night_charge.sh');
+  const act = (cmd === 'learn' ? NC + ' learn' : S7 + ' ' + cmd) + args.map(function (v) { return ' ' + shQuote(String(v)); }).join('');
+  let b = null;
+  try { b = await runBatch([['act', act], ['s7', S7 + ' status'], ['nc', NC + ' status']]); } catch (e) { b = null; }
+  _zygiskModeBusy = false;
+  if (b && b.s7 && b.s7.errno === 0) _zyS7 = smart7Parse(b.s7.stdout, b.nc && b.nc.errno === 0 ? b.nc.stdout : '');
+  const ok = /result=(ok|on|off|started)/.test(b && b.act ? (b.act.stdout || '') : '');
+  if (cmd === 'refresh') { if (ok) setTimeout(function () { if (_zygiskOpen) zygiskPageLoad(true); }, 12000); }
+  else toast(ok ? T('s7_t_done', 'Done') : T('zy_mode_failed', 'Could not change the mode'), ok ? 'good' : 'bad');
   if (_zygiskOpen) zygiskPageRender(window._asbZygiskLinkData || null);
 }
 /* fix286: one engine. runtime/asb_zygisk_link.sh joins what each part of ASB knows about an app:
@@ -16420,9 +16721,14 @@ async function zygiskPageLoad(user) {
       ['guard', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_guard.sh') + ' status'],
       ['aot', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_aot.sh') + ' status'],
       ['engine', 'sh ' + shQuote(MD + '/runtime/asb_zygisk_link.sh') + ' status'],
-      ['lsp', 'sh ' + shQuote(MD + '/runtime/asb_lsposed_lite.sh') + ' status']]);
+      ['lsp', 'sh ' + shQuote(MD + '/runtime/asb_lsposed_lite.sh') + ' status'],
+      ['s7', 'sh ' + shQuote(MD + '/runtime/asb_smart7.sh') + ' status'],
+      ['nc', 'sh ' + shQuote(MD + '/runtime/asb_night_charge.sh') + ' status'],
+      ['s7l', ASB_S7L_READ]]);
   } catch (e) { b = null; }
   if (seq !== _zygiskLoadSeq) return;
+  if (b && b.s7 && b.s7.errno === 0) _zyS7 = smart7Parse(b.s7.stdout, b.nc && b.nc.errno === 0 ? b.nc.stdout : '');
+  if (b && b.s7l) _zyS7L = smart7LearnParse(b.s7l.stdout || '');
   if (b && b.engine && b.engine.errno === 0) _zyLink = zygiskLinkParse(b.engine.stdout);
   if (b && b.lsp && b.lsp.errno === 0) { _zyLsp = lspLiteParse(b.lsp.stdout); lspLiteAutoRefresh(); }
   if (btn) btn.disabled = false;
@@ -19296,7 +19602,7 @@ function asbStartupWarmCaches() {
     /* Config is read by openConfigPage() on demand. Its ten-part shell and follow-up
      * evidence reads blocked every ordinary repeat opening without warming the next WebView.
      * V66: the Zygisk header read waits behind the first Live pass (asbStartupLater). */
-    asbStartupLater(zygiskHeaderRefresh, 700, 1);
+    asbStartupLater(zygiskHeaderRefresh, 150, 1);
   };
   const probe = window._asbBootIntroProbe;
   if (probe && typeof probe.then === 'function') probe.then(warm, function () { warm(false); });
@@ -21506,12 +21812,12 @@ setTimeout(asbHomeReveal, 1600);
  * batch while the same metrics are being warmed, and no delay after a normal opening.
  * V66: the first Live pass is the first read after the home screen's first frame, once the
  * 60 + 260 ms entrance has played. */
-function asbStartupLive() { return pollLive(false); }
+function asbStartupLive() { if (!_liveOpen) return pollLive(false); }
 requestAnimationFrame(() => setTimeout(() => {
   const probe = window._asbBootIntroProbe;
   if (probe && typeof probe.then === 'function') {
-    probe.then(function (shown) { if (!shown) asbStartupLater(asbStartupLive, 340, 0); }, function () { asbStartupLater(asbStartupLive, 340, 0); });
-  } else asbStartupLater(asbStartupLive, 340, 0);
+    probe.then(function (shown) { if (!shown) asbStartupLater(asbStartupLive, 0, 0); }, function () { asbStartupLater(asbStartupLive, 0, 0); });
+  } else asbStartupLater(asbStartupLive, 0, 0);
 }, 0));
 window._asbBootIntroProbe = I18N_READY.then(asbBootIntroStart, asbBootIntroStart);
 
