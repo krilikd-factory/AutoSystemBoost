@@ -71,8 +71,73 @@ _wait_event() {
   CHILD=""
   return "$_rc"
 }
+SFSTATE="$STATE_DIR/ltpo_peak_force.state"
+SFUNSUP="$STATE_DIR/ltpo_peak_force.unsupported"
+PEAK_FORCE=0
+SFID=""
+SFHZ=""
+SFTS=0
+SFON=0
+SFFAIL=0
+_sf_mode() {
+  if [ -n "$DISPLAY_DUMP" ]; then cat "$DISPLAY_DUMP" 2>/dev/null
+  else dumpsys display 2>/dev/null; fi | awk '
+    function field(s, k,   r) { r = ""; if (match(s, k "=[0-9.]+")) r = substr(s, RSTART + length(k) + 1, RLENGTH - length(k) - 1); return r }
+    /mActiveSfDisplayMode=DisplayMode\{/ { aw = field($0, "width") "x" field($0, "height"); next }
+    /DisplayMode\{id=[0-9]+, width=/ {
+      id = field($0, "id"); wh = field($0, "width") "x" field($0, "height"); pk = field($0, "peakRefreshRate") + 0
+      if (id != "" && !((id SUBSEP wh) in seen)) { seen[id SUBSEP wh] = 1; n++; ids[n] = id; whs[n] = wh; pks[n] = pk }
+    }
+    END {
+      if (aw == "" || aw == "x") exit
+      b = 0; bp = 0
+      for (i = 1; i <= n; i++) if (whs[i] == aw && pks[i] > bp) { bp = pks[i]; b = i }
+      if (b > 0) printf "%s %d\n", ids[b], int(bp + 0.5)
+    }'
+}
+_sf_force() {
+  _now_s="$(date +%s 2>/dev/null || echo 0)"
+  if [ -z "$SFID" ] || [ $(( _now_s - SFTS )) -ge 30 ] 2>/dev/null; then
+    _sm="$(_sf_mode)"
+    SFTS="$_now_s"
+    SFID="${_sm%% *}"; SFHZ="${_sm##* }"
+    case "$SFID$SFHZ" in ''|*[!0-9]*) SFID=""; SFHZ="" ;; esac
+  fi
+  [ -n "$SFID" ] || return 1
+  _sr="$(service call SurfaceFlinger 1035 i32 "$SFID" 2>&1)"
+  case "$_sr" in
+    *rror*|*xception*|'') SFFAIL=$((SFFAIL + 1))
+      if [ "$SFFAIL" -ge 3 ]; then
+        PEAK_FORCE=0
+        printf 'reason=refused\n' > "$SFUNSUP" 2>/dev/null
+        printf 'state=unsupported\n' > "$SFSTATE" 2>/dev/null
+      fi
+      return 1 ;;
+  esac
+  SFFAIL=0
+  SFON=1
+  printf 'state=forced\nmode=%s\nhz=%s\n' "$SFID" "$SFHZ" > "$SFSTATE" 2>/dev/null
+  return 0
+}
+_sf_release() {
+  [ "$SFON" = 1 ] || return 0
+  service call SurfaceFlinger 1035 i32 -1 >/dev/null 2>&1
+  SFON=0
+  [ "$PEAK_FORCE" = 1 ] && printf 'state=idle\nmode=%s\nhz=%s\n' "$SFID" "$SFHZ" > "$SFSTATE" 2>/dev/null
+  return 0
+}
+_active() {
+  _peak_write "$MAX.0" && touch "$HEARTBEAT" 2>/dev/null || true
+  [ "$PEAK_FORCE" = 1 ] && _sf_force
+  return 0
+}
+_idle() {
+  _sf_release
+  _peak_write "$IDLE.0" && touch "$HEARTBEAT" 2>/dev/null || true
+}
 _cleanup() {
   [ -n "$CHILD" ] && kill "$CHILD" 2>/dev/null || true
+  _sf_release
   rm -f "$PIDFILE" "$STOPFILE" "$HEARTBEAT" 2>/dev/null
   exit 0
 }
@@ -103,13 +168,20 @@ case "$TIMEOUT" in ''|*[!0-9]*) TIMEOUT=2 ;; esac
 [ "$TIMEOUT" -ge 1 ] 2>/dev/null || TIMEOUT=1
 [ "$TIMEOUT" -le 15 ] 2>/dev/null || TIMEOUT=15
 
+if [ "$(_cfg ltpo_peak_force)" = 1 ] && [ ! -f "$SFUNSUP" ] && command -v service >/dev/null 2>&1; then
+  PEAK_FORCE=1
+  SFON=1
+  _sf_release
+elif [ "$(_cfg ltpo_peak_force)" != 1 ]; then
+  rm -f "$SFSTATE" "$SFUNSUP" 2>/dev/null
+fi
 state=active
-_peak_write "$MAX.0" && touch "$HEARTBEAT" 2>/dev/null || true
+_active
 while [ ! -f "$STOPFILE" ] && [ -e "$DEV" ]; do
   if [ "$state" = idle ]; then
     if _wait_event ""; then
       state=active
-      _peak_write "$MAX.0" && touch "$HEARTBEAT" 2>/dev/null || true
+      _active
     fi
   else
     if _wait_event "$TIMEOUT"; then
@@ -122,7 +194,7 @@ while [ ! -f "$STOPFILE" ] && [ -e "$DEV" ]; do
         continue
       fi
       state=idle
-      _peak_write "$IDLE.0" && touch "$HEARTBEAT" 2>/dev/null || true
+      _idle
     fi
   fi
 done

@@ -185,16 +185,27 @@ _undo() {
   _uu="$(printf '%s' "$_ul" | cut -d'|' -f6)"; _uv="$(printf '%s' "$_ul" | cut -d'|' -f7)"
   _pkgok "$_up" || return 1
   case "$_uu" in ''|*[!0-9]*) return 1 ;; esac
+  _uo=undone
   case "$_ue" in
     budget)
       case "$_uv" in 10|20|30) ;; *) return 1 ;; esac
-      [ "$(_bucket "$_up")" = 40 ] && am set-standby-bucket "$_up" "$_uv" >/dev/null 2>&1 ;;
+      if [ "$(_bucket "$_up")" = 40 ]; then
+        am set-standby-bucket "$_up" "$_uv" >/dev/null 2>&1
+        [ "$(_bucket "$_up")" = 40 ] && return 1
+      else
+        _uo=external
+      fi ;;
     data)
-      _np remove "$_uu" >/dev/null
-      _denied | grep -qx "$_uu" && return 1 ;;
+      if _denied | grep -qx "$_uu"; then
+        _np remove "$_uu" >/dev/null
+        _denied | grep -qx "$_uu" && return 1
+      else
+        _uo=external
+      fi ;;
     *) return 1 ;;
   esac
-  awk -F'|' -v OFS='|' -v i="$1" '$1 == i { $8 = "undone" } { print }' "$JOUR" > "$JOUR.t" 2>/dev/null && mv -f "$JOUR.t" "$JOUR"
+  awk -F'|' -v OFS='|' -v i="$1" -v o="$_uo" '$1 == i { $8 = o } { print }' "$JOUR" > "$JOUR.t" 2>/dev/null && mv -f "$JOUR.t" "$JOUR"
+  UNDO_RESULT="$_uo"
   return 0
 }
 _auto_pass() {
@@ -232,7 +243,12 @@ case "${1:-status}" in
     _apply "$2" "$3" user && echo 'result=ok' || { echo 'result=failed'; exit 1; } ;;
   undo)
     case "${2:-}" in ''|*[!0-9]*) echo 'result=bad_request'; exit 2 ;; esac
-    _undo "$2" && echo 'result=ok' || { echo 'result=failed'; exit 1; } ;;
+    if _undo "$2"; then
+      [ "$UNDO_RESULT" = external ] && echo 'restore=external' || echo 'restore=restored'
+      echo 'result=ok'
+    else
+      echo 'restore=failed'; echo 'result=failed'; exit 1
+    fi ;;
   undo-all)
     _un=0
     [ -s "$JOUR" ] && for _ri in $(awk -F'|' '$8 == "active" { print $1 }' "$JOUR" | sort -rn); do _undo "$_ri" && _un=$((_un + 1)); done

@@ -97,6 +97,7 @@ _nc_learn_note() {
   [ -f "$LEARN" ] || return 0
   _pl=0; _nc_plugged && _pl=1
   _po="$(cat "$PLUG" 2>/dev/null)"
+  [ "$_po" = "$_pl" ] && return 0
   echo "$_pl" > "$PLUG" 2>/dev/null
   [ "$_po" = 1 ] && [ "$_pl" = 0 ] || return 0
   _cl="$(_nc_clock)" || return 0
@@ -304,6 +305,7 @@ _nc_reconcile() {
     # also the normal result of our own limit/switch and must not cause a release/
     # apply oscillation on the next maintenance tick.
     if [ "$NC_BATTERY_STATUS" = Discharging ] || \
+       { [ "$NC_KIND" = switch ] && [ "$NC_CAPACITY" = unknown ]; } || \
        { [ "$NC_KIND" = switch ] && [ "$NC_CAPACITY" != unknown ] \
          && [ "$NC_CAPACITY" -lt "$TARGET" ] 2>/dev/null; }; then
       _r="$(_nc_release)"

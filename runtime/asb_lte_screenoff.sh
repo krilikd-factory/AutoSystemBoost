@@ -83,8 +83,11 @@ LPIDF="$STATE_DIR/lte_light.pid"                 # light-traffic watcher (screen
 LHOLD="$STATE_DIR/lte_light.hold"               # epoch before which light must not re-apply
 LIGHT_LOW_KBPS="${ASB_LTE_LIGHT_LOW_KBPS:-2000}"     # drop to LTE below this (fix131: was 4000)
 LIGHT_BUSY_KBPS="${ASB_LTE_LIGHT_BUSY_KBPS:-3000}"   # sustained demand on LTE: 5G back
-LIGHT_BUSY_TICKS="${ASB_LTE_LIGHT_BUSY_TICKS:-2}"
+LIGHT_BUSY_TICKS="${ASB_LTE_LIGHT_BUSY_TICKS:-4}"
+LIGHT_BUSY_SPAN="${ASB_LTE_LIGHT_BUSY_SPAN:-6}"
+[ "$LIGHT_BUSY_SPAN" -lt "$LIGHT_BUSY_TICKS" ] 2>/dev/null && LIGHT_BUSY_SPAN="$LIGHT_BUSY_TICKS"
 LIGHT_HIGH_KBPS="${ASB_LTE_LIGHT_HIGH_KBPS:-12000}"
+LIGHT_HIGH_TICKS="${ASB_LTE_LIGHT_HIGH_TICKS:-2}"
 LIGHT_TICK_S="${ASB_LTE_LIGHT_TICK_S:-30}"
 # Faster sampling while LTE is held for light traffic: a download has to be noticed in
 # seconds, not minutes. Never slower than the normal tick (tests shorten that one).
@@ -95,6 +98,7 @@ LIGHT_HOLD_S="${ASB_LTE_LIGHT_HOLD_S:-600}"
 LIGHT_HOLD_MAX_S="${ASB_LTE_LIGHT_HOLD_MAX_S:-2400}"
 LIGHT_FLAP_S="${ASB_LTE_LIGHT_FLAP_S:-300}"
 LHOLDN="$STATE_DIR/lte_light.holdlen"
+LABF="${ASB_LTE_LAB_FILE:-/dev/.asb/lab_radio}"
 # Screen off: a window at this rate is a transfer (a download, an update, a backup), which
 # finishes sooner on 5G - not the stream this mode is for (fix131).
 OFF_BULK_KBPS="${ASB_LTE_OFF_BULK_KBPS:-3000}"
@@ -575,15 +579,24 @@ _light_tick() {   # $1 = kbit/s over the last window; streaks in/out via _lowN a
   _kb="$1"
   if [ -f "$SAVE" ] && [ "$(_saved_reason)" = "light" ]; then
     _lowN=0
-    # Sustained demand (fix131): LTE caps what can be measured on LTE, so a download held
-    # there may never reach the 12 Mbit/s mark - two windows in a row at the busy mark are
-    # enough to say the user wants the bandwidth.
-    if [ "$_kb" -ge "$LIGHT_BUSY_KBPS" ] 2>/dev/null; then _busyN=$(( ${_busyN:-0} + 1 )); else _busyN=0; fi
+    _bf=0
+    [ "$_kb" -ge "$LIGHT_BUSY_KBPS" ] 2>/dev/null && _bf=1
+    _bhist="${_bhist:-}$_bf"
+    while [ "${#_bhist}" -gt "$LIGHT_BUSY_SPAN" ]; do _bhist="${_bhist#?}"; done
+    _busyN=0; _bt="$_bhist"
+    while [ -n "$_bt" ]; do
+      case "$_bt" in 1*) _busyN=$((_busyN + 1)) ;; esac
+      _bt="${_bt#?}"
+    done
+    if [ "$_kb" -gt "$LIGHT_HIGH_KBPS" ] 2>/dev/null; then _highN=$(( ${_highN:-0} + 1 )); else _highN=0; fi
     _why=""
-    if [ "$_kb" -gt "$LIGHT_HIGH_KBPS" ] 2>/dev/null; then _why="${_kb} kbit/s"
-    elif [ "$_busyN" -ge "$LIGHT_BUSY_TICKS" ] 2>/dev/null; then _why="${_kb} kbit/s sustained over ${_busyN} windows"
+    if [ "$_highN" -ge "$LIGHT_HIGH_TICKS" ] 2>/dev/null; then _why="${_kb} kbit/s over ${_highN} windows in a row"
+    elif [ "$_busyN" -ge "$LIGHT_BUSY_TICKS" ] 2>/dev/null; then _why="${_kb} kbit/s sustained, busy in ${_busyN} of the last ${#_bhist} windows"
     fi
-    [ -n "$_why" ] || return 0
+    if [ -z "$_why" ]; then
+      [ "$_bf" = 1 ] && _lbursts=$(( ${_lbursts:-0} + 1 ))
+      return 0
+    fi
     _hn="$LIGHT_HOLD_S"
     _flap=""
     _st0="$(cat "$SINCE" 2>/dev/null)"
@@ -599,14 +612,15 @@ _light_tick() {   # $1 = kbit/s over the last window; streaks in/out via _lowN a
          fi ;;
     esac
     do_restore
-    _busyN=0
+    _busyN=0; _bhist=""; _highN=0
     echo "$_hn" > "$LHOLDN" 2>/dev/null
     echo $(( $(date +%s) + _hn )) > "$LHOLD" 2>/dev/null
     _log "light: ${_why} - 5G back for at least ${_hn}s${_flap}"
     return 0
   fi
-  _busyN=0
+  _busyN=0; _bhist=""; _highN=0
   [ -f "$SAVE" ] && { _lowN=0; return 0; }   # a screen-off record is not ours to touch
+  [ "$(cat "$LABF" 2>/dev/null)" = nr ] && { _lowN=0; return 0; }
   if [ "$_kb" -lt "$LIGHT_LOW_KBPS" ] 2>/dev/null; then _lowN=$(( _lowN + 1 )); else _lowN=0; fi
   [ "$_lowN" -ge "$LIGHT_LOW_TICKS" ] || return 0
   _hu="$(cat "$LHOLD" 2>/dev/null)"; case "$_hu" in ''|*[!0-9]*) _hu=0 ;; esac
@@ -618,8 +632,13 @@ _light_tick() {   # $1 = kbit/s over the last window; streaks in/out via _lowN a
   _lowN=0
 }
 
+_light_bursts_note() {
+  [ "${_lbursts:-0}" -gt 0 ] 2>/dev/null && _log "light: ${_lbursts} busy window(s) of a feed burst stayed on LTE"
+  _lbursts=0
+}
+
 do_light_loop() {
-  _prev="$(_rmnet_kib)"; _lowN=0; _busyN=0
+  _prev="$(_rmnet_kib)"; _lowN=0; _busyN=0; _bhist=""; _highN=0; _lbursts=0
   while :; do
     _tk="$LIGHT_TICK_S"
     [ -f "$SAVE" ] && [ "$(_saved_reason)" = "light" ] && _tk="$LIGHT_TICK_LTE_S"
@@ -636,10 +655,17 @@ do_light_loop() {
     case "$_cur" in ''|*[!0-9]*) _cur="$_prev" ;; esac
     _d=$(( _cur - _prev )); _prev="$_cur"
     [ "$_d" -lt 0 ] && _d=0           # an interface went away and its counters with it
-    if ! _on_mobile; then _lowN=0; _busyN=0; continue; fi
+    if ! _on_mobile; then _lowN=0; _busyN=0; _bhist=""; _highN=0; continue; fi
+    if [ -f "$SAVE" ] && [ "$(_saved_reason)" = "light" ] && [ "$(cat "$LABF" 2>/dev/null)" = nr ]; then
+      do_restore
+      _log "light: Smart lab block with 5G allowed - 5G back"
+      _lowN=0; _busyN=0; _bhist=""; _highN=0
+      continue
+    fi
     # KiB per window -> kbit/s (x8; the 1.024 is noise next to the 2/3/12 Mbit/s marks).
     _light_tick $(( _d * 8 / _tk ))
   done
+  _light_bursts_note
   rm -f "$LPIDF"
 }
 
@@ -655,7 +681,7 @@ do_light_start() {
   [ -f "$MODDIR/runtime/asb_cgroup.sh" ] && . "$MODDIR/runtime/asb_cgroup.sh" && asb_cgroup_detach $$ >/dev/null 2>&1
   (
     exec </dev/null >/dev/null 2>&1
-    trap 'kill "$_sp" 2>/dev/null; exit 0' TERM INT
+    trap 'kill "$_sp" 2>/dev/null; _light_bursts_note; exit 0' TERM INT
     do_light_loop
   ) &
   printf '%s\n' "$!" > "$LPIDF" 2>/dev/null

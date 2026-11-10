@@ -312,6 +312,10 @@ _ltpo_touch_stop() {
     kill -TERM "$_tp" 2>/dev/null || true
   fi
   rm -f "$TOUCH_PID" 2>/dev/null
+  if grep -q '^state=forced' "$STATE_DIR/ltpo_peak_force.state" 2>/dev/null; then
+    [ -n "${ASB_LTPO_DISPLAY_DUMP:-}" ] || service call SurfaceFlinger 1035 i32 -1 >/dev/null 2>&1
+    printf 'state=idle\n' > "$STATE_DIR/ltpo_peak_force.state" 2>/dev/null
+  fi
 }
 
 case "${1:-apply}" in
@@ -374,6 +378,22 @@ case "${1:-apply}" in
     [ -n "$_rec" ] || _rec="none"
     printf 'max_mode=%s peak=%s min=%s original: %s\n' "$(_ltpo_max_mode)" \
       "${_pk:-unset}" "${_mn:-none (floor open)}" "$_rec"
+    ;;
+  touch-restart)
+    _ltpo_touch_stop
+    if [ "$(_cfg ltpo_force)" = "1" ] && ! _ltpo_external_bind; then
+      rm -f "$STATE_DIR/ltpo_peak_force.unsupported" 2>/dev/null
+      _ltpo_touch_start && echo 'touch=restarted' || echo 'touch=failed'
+    else
+      echo 'touch=off'
+    fi
+    ;;
+  peak)
+    _pf="$(sed -n 's/^state=//p' "$STATE_DIR/ltpo_peak_force.state" 2>/dev/null | head -1)"
+    _pm="$(sed -n 's/^hz=//p' "$STATE_DIR/ltpo_peak_force.state" 2>/dev/null | head -1)"
+    [ -f "$STATE_DIR/ltpo_peak_force.unsupported" ] && _pf=unsupported
+    [ "$(_cfg ltpo_peak_force)" = "1" ] || _pf=off
+    printf 'peak_force=%s hz=%s max_mode=%s\n' "${_pf:-waiting}" "${_pm:--}" "$(_ltpo_max_mode)"
     ;;
   status)
     if _ltpo_external_bind; then
