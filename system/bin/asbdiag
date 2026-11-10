@@ -776,6 +776,7 @@ NOTE "LTPO evidence limit: a matching table and the Android refresh range do not
 # Refresh range (ltpo_force range half) and the video watcher.
 if [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_ltpo_apply.sh ]; then
   NOTE "refresh range: $(MODDIR=/data/adb/modules/AutoSystemBoost sh /data/adb/modules/AutoSystemBoost/runtime/asb_ltpo_apply.sh range 2>/dev/null)"
+  NOTE "panel maximum on touch (ltpo_peak_force=$(cfg ltpo_peak_force)): $(MODDIR=/data/adb/modules/AutoSystemBoost sh /data/adb/modules/AutoSystemBoost/runtime/asb_ltpo_apply.sh peak 2>/dev/null)"
 fi
 if [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_ltpo_video.sh ]; then
   NOTE "video refresh (ltpo_video=$(cfg ltpo_video)): $(MODDIR=/data/adb/modules/AutoSystemBoost sh /data/adb/modules/AutoSystemBoost/runtime/asb_ltpo_video.sh status 2>/dev/null)"
@@ -2759,10 +2760,11 @@ if { [ "$(cfg net_screen_off_lte)" = 1 ] || [ "$(cfg net_lte_light)" = 1 ]; } &&
   NOTE "screen-off LTE: applied $(printf '%s\n' "$_lst" | sed -n 's/^applies=//p') time(s), restored $(printf '%s\n' "$_lst" | sed -n 's/^restores=//p'), $(printf '%s\n' "$_lst" | sed -n 's/^lte_minutes=//p') min on LTE in total; now applied=$(printf '%s\n' "$_lst" | sed -n 's/^applied=//p') unsupported=$(printf '%s\n' "$_lst" | sed -n 's/^unsupported=//p')"
   NOTE "screen-off LTE: 5G kept in $(printf '%s\n' "$_lst" | sed -n 's/^quiet_windows=//p') screen-off window(s) with no mobile data moving - nothing to save there, and no switch back at the unlock (fix122)"
   # fix131: downloads keep 5G - how often a transfer was seen, on each side of the screen.
-  _lbs="$(grep -c 'sustained over' /data/adb/asb/lte_screenoff.log 2>/dev/null)"
+  _lbs="$(grep -cE 'light: .*(sustained|in a row).* 5G back' /data/adb/asb/lte_screenoff.log 2>/dev/null)"
+  _lbb="$(sed -n 's/.*light: \([0-9][0-9]*\) busy window(s) of a feed burst stayed on LTE.*/\1/p' /data/adb/asb/lte_screenoff.log 2>/dev/null | awk '{ t += $1 } END { print t + 0 }')"
   _lbo="$(grep -c '^.* bulk: ' /data/adb/asb/lte_screenoff.log 2>/dev/null)"
   _lbk="$(grep -c 'is a transfer - 5G kept' /data/adb/asb/lte_screenoff.log 2>/dev/null)"
-  NOTE "transfers and 5G (fix131): given back for a download held on LTE ${_lbs:-0}x (screen on) / ${_lbo:-0}x (screen off) · LTE not chosen during a screen-off transfer ${_lbk:-0}x"
+  NOTE "transfers and 5G (fix131): given back for a download held on LTE ${_lbs:-0}x (screen on) / ${_lbo:-0}x (screen off) · LTE not chosen during a screen-off transfer ${_lbk:-0}x · busy 10 s windows of feed bursts left on LTE ${_lbb:-0} (V66: 5G comes back only for demand in 4 of 6 windows, or 2 fast windows in a row)"
   # Whether 5G is allowed on the data SIM right now - the thing that matters if a restore
   # ever failed. Read the same way the script reads it.
   _l5="$(sh /data/adb/modules/AutoSystemBoost/runtime/asb_lte_screenoff.sh nr 2>/dev/null)"
@@ -3003,10 +3005,12 @@ fi
 _sef=/dev/.asb/smart_energy.txt
 if [ -r "$_sef" ]; then
   _sea="$(awk -F'|' '$1 == "app" && NF == 5 { n++; if (n <= 5) printf "%s%s %s min %s mW (%s %%)", (n > 1 ? "; " : ""), $2, $3, $4, $5 }' "$_sef")"
-  _seg="$(sed -n 's/^meter|gauge_x100=//p' "$_sef" | head -1)"
+  _seg="$(sed -n 's/^meter|gauge_x100=\(-\{0,1\}[0-9]*\).*/\1/p' "$_sef" | head -1)"
+  _sec="$(sed -n 's/^meter|.*|confidence=\([a-z]*\).*/\1/p' "$_sef" | head -1)"
+  _sew="$(sed -n 's/^meter|.*|windows=\([0-9]*\).*/\1/p' "$_sef" | head -1)"
   case "$_seg" in
     ''|-1) _seg="the current gauge is not checked against the real drain yet - nothing is credited until it is" ;;
-    *) _seg="current gauge x$(awk -v v="$_seg" 'BEGIN { printf "%.2f", v / 100 }') of the real drain, corrected" ;;
+    *) _seg="current gauge x$(awk -v v="$_seg" 'BEGIN { printf "%.2f", v / 100 }') of the real drain, corrected${_sec:+ (confidence $_sec over ${_sew:-?} window(s))}" ;;
   esac
   P "  Smart energy         : smart_energy=$(cfg smart_energy) · $_seg · per app, screen on: ${_sea:-nothing measured yet}"
   _sec="$(awk -F'|' '$1 == "class" && NF == 5 && $3 + 0 >= 0.5 { printf "%s%s %.0fx %s min %s mW", (n++ ? "; " : ""), $2, $3, $4, $5 }' "$_sef")"
@@ -3026,11 +3030,29 @@ _dds="$(_rget ddr_idle_samples /dev/.asb/state 2>/dev/null)"
 case "$_ddn" in
   ''|-) P "  memory bus (DDR)     : no readable DDR clock node - not measured" ;;
   *) if [ "${_dds:-0}" -ge 10 ] 2>/dev/null; then
-       P "  memory bus (DDR)     : $_ddn · quiet screen-off: at its lowest step $(_rget ddr_idle_at_min_pct /dev/.asb/state)% of $_dds reads, average $(_rget ddr_idle_avg_mhz /dev/.asb/state) MHz, lowest $(_rget ddr_min_mhz /dev/.asb/state) MHz (measured only, not steered)"
+       P "  memory bus (DDR)     : $_ddn · quiet screen-off: at its lowest step in $(_rget ddr_idle_at_min_pct /dev/.asb/state)% of $_dds reads, average $(_rget ddr_idle_avg_mhz /dev/.asb/state) MHz, lowest $(_rget ddr_min_mhz /dev/.asb/state) MHz (measured only, not steered)"
+       NOTE "each read is taken when the governor wakes for its own tick, and the bus is often still up from that wake - an upper bound on the bus clock, not its residency while the phone sleeps"
      else
        P "  memory bus (DDR)     : $_ddn · ${_dds:-0} quiet screen-off read(s) so far (measured only, not steered)"
      fi ;;
 esac
+_slf=/dev/.asb/smart_lab.txt
+if [ -r "$_slf" ]; then
+  P "  Smart lab            : smart_lab=$(cfg smart_lab) smart_lab_mem=$(cfg smart_lab_mem) · $(sed -n 's/^now|//p' "$_slf" | head -1 | tr '|' ' ')"
+  awk -F'|' '$1 == "knob" && NF == 18 && $3 != "free" {
+      line = sprintf("    %-11s %-8s best: %s", $2, $3, $4)
+      if ($3 == "testing") line = line sprintf(" · trying %s, %d pair(s), %+.1f %% so far, ceiling %+.1f pt, jank %+.2f pt, heat %+d dC/h", $5, $6, $7 / 10, $8 / 10, $9 / 100, $10)
+      if ($12 > 0) line = line sprintf(" · won %d time(s), last %.1f %% cheaper", $12, $11 / 10)
+      if ($14 > 0) line = line sprintf(" · tested again %d time(s) after its cost rose", $14)
+      line = line sprintf(" · %d block(s), now %s mW, reference %s mW", $15, $16, $17)
+      if ($18 != "-") line = line " · " $18
+      print line }' "$_slf" | while IFS= read -r _sll; do P "$_sll"; done
+  P "    $(sed -n 's/^mem|//p' "$_slf" | head -1 | tr '|' ' ')"
+  NOTE "a lab setting wins only at least 3 % cheaper side by side (t >= 2.5) without more ceiling time (+8 pt), janky frames (+1 pt) or faster warming (+15 dC/h); the memory bus is capped only through the CPU's own voters, read back and given back"
+else
+  P "  Smart lab            : no summary yet (smart_lab=$(cfg smart_lab))"
+fi
+P "  optional forks       : $(_rget fork_budget_hour /dev/.asb/state 2>/dev/null) this hour (budget 240), $(_rget fork_budget_skips /dev/.asb/state 2>/dev/null) skipped (budget or camera), $(_rget fork_budget_total /dev/.asb/state 2>/dev/null) since start · top-app answers with only a keyboard: $(_rget probe_topapp_keyboard_only /dev/.asb/state 2>/dev/null)"
 _scg="$(_rget smart_cold_guard /dev/.asb/state 2>/dev/null)"
 [ "$_scg" = 1 ] && NOTE "cold battery under 40 %: Smart holds the CPU peaks down until it warms up or charges (smart_cold_guard=$(cfg smart_cold_guard))"
 _scl="$(_rget ses_climate /dev/.asb/state 2>/dev/null)"
