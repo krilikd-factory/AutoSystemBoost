@@ -11,6 +11,12 @@ LEDGER="$STATE/night_charge.ledger"
 STATUS="$STATE/night_charge.status"
 LOCK="$STATE/night_charge.lock"
 BOOTID_FILE="${ASB_NC_BOOTID:-/proc/sys/kernel/random/boot_id}"
+PSYROOT="${ASB_NC_PSYROOT:-${PSY%/*}}"
+LEARN="$STATE/night_charge.learn"
+UNPLUG="$STATE/night_charge.unplug"
+PLUG="$STATE/night_charge.plug"
+LEAD="${ASB_NC_LEAD_MIN:-90}"
+NC_LEARNED=none
 TARGET=80
 START_MIN=1320
 END_MIN=360
@@ -67,7 +73,50 @@ _nc_load_window() {
   # Equal endpoints are rejected rather than silently becoming a 24-hour hold.
   [ "$_sm" != "$_em" ] || return 1
   START_MIN="$_sm"; END_MIN="$_em"; NC_START="$_s"; NC_END="$_e"
+  NC_LEARNED=none
+  if [ -f "$LEARN" ]; then
+    _le="$(_nc_learned_end)"
+    if _nc_num "$_le" && [ "$_le" != "$START_MIN" ]; then
+      END_MIN="$_le"; NC_LEARNED="$(printf '%02d:%02d' $((_le / 60)) $((_le % 60)))"; NC_END="$NC_LEARNED"
+    fi
+  fi
   return 0
+}
+_nc_plugged() {
+  for _pn in usb ac wireless dc; do [ "$(_nc_read "$PSYROOT/$_pn/online")" = 1 ] && return 0; done
+  return 1
+}
+_nc_clock() {
+  if [ -n "${ASB_NC_NOW_MIN:-}" ]; then echo "$ASB_NC_NOW_MIN ${ASB_NC_NOW_WK:-1}"; return 0; fi
+  _ck="$(date +'%H %M %u' 2>/dev/null)"
+  set -- $_ck
+  case "$1$2$3" in ''|*[!0-9]*) return 1 ;; esac
+  echo "$((1$1 * 60 + 1$2 - 6100)) $3"
+}
+_nc_learn_note() {
+  [ -f "$LEARN" ] || return 0
+  _pl=0; _nc_plugged && _pl=1
+  _po="$(cat "$PLUG" 2>/dev/null)"
+  echo "$_pl" > "$PLUG" 2>/dev/null
+  [ "$_po" = 1 ] && [ "$_pl" = 0 ] || return 0
+  _cl="$(_nc_clock)" || return 0
+  set -- $_cl
+  [ "$1" -ge 180 ] && [ "$1" -le 720 ] || return 0
+  _wk=0; [ "$2" -ge 6 ] && _wk=1
+  { [ -f "$UNPLUG" ] && tail -n 27 "$UNPLUG"; printf '%s|%s|%s\n' "$(date +%s)" "$1" "$_wk"; } > "$UNPLUG.tmp" 2>/dev/null && mv -f "$UNPLUG.tmp" "$UNPLUG"
+}
+_nc_learned_end() {
+  [ -s "$UNPLUG" ] || { echo none; return 0; }
+  _cl="$(_nc_clock)" || { echo none; return 0; }
+  set -- $_cl
+  _wk=0; [ "$2" -ge 6 ] && _wk=1
+  awk -F'|' -v now="$(date +%s)" -v wk="$_wk" -v lead="$LEAD" '
+    function med(a, n,   i, j, x) { for (i = 2; i <= n; i++) { x = a[i]; j = i - 1; while (j >= 1 && a[j] > x) { a[j + 1] = a[j]; j-- } a[j + 1] = x } return (n % 2) ? a[(n + 1) / 2] : int((a[n / 2] + a[n / 2 + 1]) / 2) }
+    NF == 3 && $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ && now - $1 <= 28 * 86400 { all[++na] = $2 + 0; if ($3 == wk) cls[++nc] = $2 + 0 }
+    END {
+      if (nc >= 4) m = med(cls, nc); else if (na >= 5) m = med(all, na); else { print "none"; exit }
+      e = m - lead; if (e < 180) e = 180; if (e > 600) e = 600
+      print e }' "$UNPLUG"
 }
 _nc_read() { cat "$1" 2>/dev/null | head -1 | tr -d ' \r\n'; }
 _nc_boot() {
@@ -211,6 +260,7 @@ _nc_apply_new() {
   _nc_status holding
 }
 _nc_reconcile() {
+  _nc_learn_note
   NC_ENABLED=0
   [ "$(_nc_cfg)" = 1 ] && NC_ENABLED=1
   _window_ok=1; _nc_load_window || _window_ok=0
@@ -305,10 +355,18 @@ _nc_status_only() {
   fi
   printf '%s\n' "version=1" "enabled=$NC_ENABLED" "state=$_st" "result=$_st" \
     "interface=$NC_KIND" "capacity=$NC_CAPACITY" "charging=$NC_CHARGING" \
-    "target=$TARGET" "window=$NC_START-$NC_END"
+    "target=$TARGET" "window=$NC_START-$NC_END" "learn=$( [ -f "$LEARN" ] && echo 1 || echo 0)" "learned_end=$NC_LEARNED" \
+    "unplug_samples=$( [ -s "$UNPLUG" ] && wc -l < "$UNPLUG" | tr -d ' ' || echo 0)"
 }
 case "${1:-apply}" in
   status) _nc_status_only ;;
+  learn)
+    mkdir -p "$STATE" 2>/dev/null || true
+    case "${2:-}" in
+      on) true > "$LEARN" && echo 'result=on' ;;
+      off) rm -f "$LEARN" "$PLUG" 2>/dev/null; echo 'result=off' ;;
+      *) echo 'result=bad_request'; exit 2 ;;
+    esac ;;
   apply|tick|restore)
     mkdir -p "$STATE" 2>/dev/null || true
     if ! mkdir "$LOCK" 2>/dev/null; then

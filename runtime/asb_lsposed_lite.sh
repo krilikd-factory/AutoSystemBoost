@@ -31,6 +31,7 @@ AB="$D/ab"
 WROTE="$D/written"
 EV="$D/events"
 LOCK="$D/refresh.lock"
+HEAVY="${ASB_LL_HEAVY_OUT:-/dev/.asb/lsp_heavy_apps}"
 
 _now() { date +%s 2>/dev/null || echo 0; }
 _pkgok() {
@@ -107,6 +108,20 @@ _refresh_now() {
     _crashes "$_rm"
   } > "$EVID.tmp" 2>/dev/null && mv -f "$EVID.tmp" "$EVID"
 }
+_heavy_out() {
+  _hi="$(_inv)"
+  mkdir -p "${HEAVY%/*}" 2>/dev/null
+  { printf '%s\n' "$_hi"; _assess "$_hi"; } | awk -F'|' '
+    $1 == "scope" && NF == 4 { s[++n] = $2 "|" $3; next }
+    $1 == "mod" && $3 == 1 && ($6 == "heavy" || ($6 == "watch" && $7 ~ /(^|,)(crash|bgheavy)(,|$)/)) { h[$2] = 1 }
+    END {
+      for (i = 1; i <= n; i++) {
+        split(s[i], f, "|"); a = f[2]
+        if (!(f[1] in h) || a == f[1] || a == "system" || a == "android" || a == "com.android.systemui" || (a in o)) continue
+        o[a] = 1; print a
+      }
+    }' > "$HEAVY.tmp" 2>/dev/null && mv -f "$HEAVY.tmp" "$HEAVY"
+}
 _refresh() {
   mkdir -p "$D" 2>/dev/null
   if ! mkdir "$LOCK" 2>/dev/null; then
@@ -116,6 +131,7 @@ _refresh() {
   fi
   echo $$ > "$LOCK/pid"
   _refresh_now
+  _heavy_out
   rm -rf "$LOCK" 2>/dev/null
 }
 _evid_age() {
@@ -392,6 +408,7 @@ _status() {
   echo "evidence_age=$(_evid_age)"
   [ -d "$LOCK" ] && echo 'refreshing=1' || echo 'refreshing=0'
   echo "unused_days=$UNUSED_D"
+  if [ -f "$HEAVY" ]; then echo "heavy_apps=$(grep -c . "$HEAVY" 2>/dev/null)"; else echo 'heavy_apps=-1'; fi
   _assess "$_si"
   [ -s "$JOUR" ] && tail -n 30 "$JOUR" | awk -F'|' 'NF == 9 { print "j|" $0 }'
   [ -s "$AB" ] && awk -F= 'NF == 2 && $1 ~ /^[a-z_0-9]+$/ && $2 ~ /^[A-Za-z0-9_.:,-]*$/ { print "ab|" $1 "|" $2 }' "$AB"
@@ -453,8 +470,9 @@ case "${1:-status}" in
     if [ "$_age" -lt 0 ] || [ "$_age" -ge "$TTL" ]; then
       if [ "${ASB_LL_SYNC:-0}" = 1 ]; then _refresh; else MODDIR="$MODDIR" sh "$0" refresh-now >/dev/null 2>&1 & fi
     fi
-    _auto_pass ;;
-  restore-all) _restore_all ;;
+    _auto_pass
+    [ -f "$HEAVY" ] || _heavy_out ;;
+  restore-all) _restore_all; rm -f "$HEAVY" 2>/dev/null ;;
   *) echo 'result=bad_request'; exit 2 ;;
 esac
 exit 0
