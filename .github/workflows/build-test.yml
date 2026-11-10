@@ -155,6 +155,7 @@ jobs:
             src/asb_smart.h \
             src/asb_smart_defs.h \
             src/asb_record.h \
+            src/asb_energy.h \
             src/asb_log_feedback.h \
             src/asb_lspd.h \
             src/build_ndk_release.sh \
@@ -180,6 +181,7 @@ jobs:
             runtime/asb_zygisk_guard.sh \
             runtime/asb_zygisk_aot.sh \
             runtime/asb_lsposed_lite.sh \
+            runtime/asb_smart7.sh \
             runtime/asb_zygisk_link.sh \
             runtime/asb_ltpo_video.sh \
             runtime/asb_odm_rebind.sh \
@@ -696,6 +698,7 @@ jobs:
             "runtime/asb_zygisk_guard.sh" \
             "runtime/asb_zygisk_aot.sh" \
             "runtime/asb_lsposed_lite.sh" \
+            "runtime/asb_smart7.sh" \
             "runtime/asb_zygisk_link.sh" \
             "runtime/asb_ltpo_video.sh" \
             "runtime/asb_odm_rebind.sh" \
