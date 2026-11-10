@@ -4,6 +4,34 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev5 - the V7 badge, real milliwatts per app
+
+Input: the owner's asbdiag of a OnePlus 15 (CPH2745, SM8850) on the dev4 build, and his
+report that the Smart badge on the home screen still said V6.
+
+- **The badge.** It shows `smart_engine_ver`, the version of the learned store
+  (`ASB_SMART_VER`), and dev4 added Smart V7 without raising it. It is 7 now. V4-V6 stores
+  carry over with everything they learned, as V4 and V5 did before; only V3 and older still
+  have their learned outputs reset.
+- **Cost per app was about 40 % of the real figure on that phone.** dev4 credited the apps with
+  the current on the reference scale the thresholds use (the OP15 gauge, x0.38 of the real
+  drain). That is right for a threshold, but a figure in mW needs the real drain. The same
+  asbdiag has this phone's gauge at x0.42.
+  - The reading is now divided by the phone's own ratio.
+  - Nothing is credited until that ratio is on record (5 screen-on windows).
+  - The store version is 2, so dev4's figures are dropped once.
+  - The summary prints `meter|gauge_x100=`; asbdiag and the WebUI say when the gauge is not
+    checked yet.
+- **The usual charge line** prints `-` until a half hour holds about three charges (dev4 printed
+  a guess behind a dash, `-10:00`).
+- **Native:** `src/asb_smart_defs.h`, `asb_smart.h`, `asb_record.h`, `asb_energy.h` and
+  `asb_governor.c` changed, so the governor needs a CI rebuild.
+- **Tests:**
+  - the store migration cases (V6 -> V7 keeps the outputs);
+  - the badge test (V7);
+  - `t_smart_v7_native_runtime` (the real `asb_ma_real` on a x0.42 gauge, before the ratio is
+    known and with a nonsense ratio, the gauge line in the WebUI parser).
+
 ## V66 dev4 - Smart V7, faster page switches, a shorter ZYGISK page
 
 The owner's requests:
