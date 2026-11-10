@@ -527,6 +527,13 @@ jobs:
             echo "::error::tools/release_tools.list missing - the release tool set has no source of truth"
             exit 1
           fi
+          # V66 dev9: tools/asb_diag.sh and system/bin/asbdiag are the same 316 KB. The
+          # package carries one; common/install.sh links tools/asb_diag.sh to it on the device,
+          # so both paths keep working.
+          if cmp -s "$PKG_REL/tools/asb_diag.sh" system/bin/asbdiag; then
+            rm -f "$PKG_REL/tools/asb_diag.sh"
+            echo "  = tools/asb_diag.sh left out (same bytes as system/bin/asbdiag; linked at install)"
+          fi
 
           # Session, battery, audio and Smart logkit are normal on-device support tools.
           # They are POSIX shell scripts and are used to collect the user reports ASB is tuned
@@ -585,6 +592,10 @@ jobs:
           chmod 0755 "$PKG_REL/webroot" "$PKG_REL/webroot/i18n" 2>/dev/null || true
           find "$PKG_REL/webroot" -type f -exec chmod 0644 {} + 2>/dev/null || true
           find "$PKG_REL/webroot" -type d -exec chmod 0755 {} + 2>/dev/null || true
+          # V66 dev9: translations without indentation and the page without its comment lines -
+          # the same objects, rules and code (tools/asb_slim_package.py checks it and restores the
+          # originals on any difference).
+          python3 tools/asb_slim_package.py "$PKG_REL" || { echo "::error::package slimming check failed"; exit 1; }
           ( cd "$PKG_REL" && zip -rq "../$ZIP_REL" . -x "*.DS_Store" )
           echo "ZIP_REL=$ZIP_REL"   >> $GITHUB_ENV
           echo "ASB_VER=$ASB_VER"   >> $GITHUB_ENV
@@ -685,7 +696,6 @@ jobs:
             "runtime/asb_device_pack_manifest.sh" \
             "runtime/asb_device_tier.sh" \
             "runtime/asb_device_bounds.sh" \
-            "tools/asb_diag.sh" \
             "tools/asb_kernel_uv_coexist.sh" \
             "tools/asb_device_info.sh" \
             "tools/asb_effective_policy.sh" \
