@@ -2985,7 +2985,7 @@ if [ -r "$_ccp" ]; then
   _ccv="$(cat "$_ccp" 2>/dev/null)"
   case "$_ccv" in
     ''|*[!0-9]*)
-      P "  smart meter          : charge_counter reads '${_ccv:-empty}' - the gauge gives no usable figure, so Smart V6 cannot measure power on this device" ;;
+      P "  smart meter          : charge_counter reads '${_ccv:-empty}' - the gauge gives no usable figure, so Smart cannot measure power on this device" ;;
     0)
       P "  smart meter          : charge_counter reads 0 - present but not reporting yet; Smart V5 learns once it moves" ;;
     *)
@@ -2996,14 +2996,19 @@ if [ -r "$_ccp" ]; then
       fi ;;
   esac
 else
-  P "  smart meter          : no charge_counter node on this device - Smart V6 cannot measure power here; the learned settings stay at their shipped values and everything else in Smart still works"
+  P "  smart meter          : no charge_counter node on this device - Smart cannot measure power here; the learned settings stay at their shipped values and everything else in Smart still works"
 fi
 # Smart V7 (V66): cost per app and kind of use, the usual charge, the look-ahead, the profile
 # adjustments and the memory bus on quiet screen-off.
 _sef=/dev/.asb/smart_energy.txt
 if [ -r "$_sef" ]; then
   _sea="$(awk -F'|' '$1 == "app" && NF == 5 { n++; if (n <= 5) printf "%s%s %s min %s mW (%s %%)", (n > 1 ? "; " : ""), $2, $3, $4, $5 }' "$_sef")"
-  P "  Smart energy         : smart_energy=$(cfg smart_energy) · per app, screen on: ${_sea:-nothing measured yet}"
+  _seg="$(sed -n 's/^meter|gauge_x100=//p' "$_sef" | head -1)"
+  case "$_seg" in
+    ''|-1) _seg="the current gauge is not checked against the real drain yet - nothing is credited until it is" ;;
+    *) _seg="current gauge x$(awk -v v="$_seg" 'BEGIN { printf "%.2f", v / 100 }') of the real drain, corrected" ;;
+  esac
+  P "  Smart energy         : smart_energy=$(cfg smart_energy) · $_seg · per app, screen on: ${_sea:-nothing measured yet}"
   _sec="$(awk -F'|' '$1 == "class" && NF == 5 && $3 + 0 >= 0.5 { printf "%s%s %.0fx %s min %s mW", (n++ ? "; " : ""), $2, $3, $4, $5 }' "$_sef")"
   [ -n "$_sec" ] && P "    by kind of use: $_sec"
   _sep="$(sed -n 's/^plug|//p' "$_sef" | head -1)"
