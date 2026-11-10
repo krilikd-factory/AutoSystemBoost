@@ -1565,6 +1565,22 @@ static void asb_smart_apply_low_battery_override(
     }
 }
 
+/* Smart V7 (V66): the soft pre-lean looks two minutes ahead. The die's own slope (m°C/min,
+ * computed below for the trend bump) projects the reading the pre-lean band is judged on, so a
+ * phone heating fast starts leaning before it arrives instead of on arrival. The skin follows
+ * the die roughly three times slower, so its projection uses a third of the rise; the rise is
+ * capped at 6 °C, and the veto itself still fires only on a measured reading. */
+static int g_smart_trend_slope_mc_min;
+static int g_smart_therm_proj_c = 0;
+#define ASB_SMART_PROJ_HORIZON_MIN 2
+#define ASB_SMART_PROJ_MAX_RISE_C  6
+static int asb_smart_thermal_projection(int dtemp, int skin) {
+    if (g_smart_trend_slope_mc_min <= 0) return dtemp;
+    int rise = (g_smart_trend_slope_mc_min * ASB_SMART_PROJ_HORIZON_MIN) / 1000;
+    if (skin) rise /= 3;
+    if (rise > ASB_SMART_PROJ_MAX_RISE_C) rise = ASB_SMART_PROJ_MAX_RISE_C;
+    return dtemp + (rise > 0 ? rise : 0);
+}
 static void asb_smart_apply_thermal_veto(
         int cpu_max_c,
         int skin_temp_c,
@@ -1631,9 +1647,11 @@ static void asb_smart_apply_thermal_veto(
      * a junction reading the veto itself would ignore. */
     int soft_lo = dlo;
     int soft_hi = dhi;
-    if (dtemp > soft_lo && soft_hi > soft_lo) {
+    int proj = asb_smart_thermal_projection(dtemp, se >= 0);
+    g_smart_therm_proj_c = proj;
+    if (proj > soft_lo && soft_hi > soft_lo) {
         int span = soft_hi - soft_lo;
-        int over = dtemp - soft_lo;
+        int over = proj - soft_lo;
         if (over > span) over = span;
         int bump = (150 * over) / span;
         int target = rt->alpha_battery_x1000 + bump;
@@ -1792,6 +1810,13 @@ static int g_smart_trend_slope_mc_min = 0;
 
 static int g_smart_budget_sev = 0;
 static time_t g_smart_budget_since = 0;
+#ifndef ASB_EN_PLUG_ETA_DECLARED
+#define ASB_EN_PLUG_ETA_DECLARED
+static int g_en_plug_eta_min = -1;
+static int g_en_mix_rate_x10 = -1;
+static int g_en_budget_plug = 0;
+#endif
+#define ASB_SMART_PLUG_MARGIN_X10 15   /* relax only with half as much again in hand */
 
 static void asb_smart_apply_energy_budget(
         int battery_pct,
@@ -1818,6 +1843,19 @@ static void asb_smart_apply_energy_budget(
     if (battery_pct <= ASB_SMART_BUDGET_MAX_PCT) {
         if (pred < ASB_SMART_BUDGET_EMERG_H_X10) want = 2;
         else if (pred < ASB_SMART_BUDGET_WARN_H_X10) want = 1;
+    }
+    /* Smart V7 (V66): the usual charge. The forecast above assumes the screen stays on until
+     * the battery is empty; what matters is whether it lasts until the charger usually goes
+     * in. With that habit known, the hours left at the mixed drain (screen on for the share of
+     * time it usually is, off for the rest) are set against the hours to the usual charge:
+     * short of it, the warning lean starts even above 4 h left; with half as much again in
+     * hand, the warning is not needed. The emergency level is never relaxed. */
+    g_en_budget_plug = 0;
+    if (g_en_plug_eta_min >= 0 && g_en_mix_rate_x10 > 0 && battery_pct <= ASB_SMART_BUDGET_MAX_PCT && want < 2) {
+        long left_x10 = ((long)battery_pct * 100L) / g_en_mix_rate_x10;
+        long need_x10 = ((long)g_en_plug_eta_min * 10L) / 60L;
+        if (want == 0 && left_x10 < need_x10) { want = 1; g_en_budget_plug = 1; }
+        else if (want == 1 && left_x10 * 10L >= need_x10 * ASB_SMART_PLUG_MARGIN_X10) { want = 0; g_en_budget_plug = -1; }
     }
 
     if (want > g_smart_budget_sev) {

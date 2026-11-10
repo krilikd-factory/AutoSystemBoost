@@ -36,6 +36,7 @@ static int g_unlock_lift_now;
 #include "asb_writer.h"
 #include "asb_socket.h"
 #include "asb_config.h"
+#include "asb_energy.h"
 #include "asb_smart.h"
 #include "asb_record.h"
 #include "asb_log_feedback.h"
@@ -1786,6 +1787,35 @@ static void asb_smooth_window_reset(uint64_t hash, const char *pkg) {
     g_smooth_win_arm = -1;
 }
 
+/* Smart V7 (V66): apps hooked by an LSPosed module ASB rated costly (runtime/
+ * asb_lsposed_lite.sh writes them, one package per line). Their stutter comes from the hook,
+ * not from too little headroom, so Smart neither tests nor keeps more headroom for them:
+ * raising clocks there spends energy on a cost clocks cannot remove. Read at most once a
+ * minute, and only again when the file changed. */
+#define ASB_LSP_HEAVY_FILE "/dev/.asb/lsp_heavy_apps"
+static unsigned long g_smooth_lsp_skips = 0;
+static int asb_lsp_heavy_app(const char *pkg, long now) {
+    static long checked = 0, seen_mtime = -1;
+    static char buf[4096];
+    if (checked == 0 || now - checked >= 60 || now < checked) {
+        checked = now;
+        struct stat st;
+        if (stat(ASB_LSP_HEAVY_FILE, &st) != 0) { buf[0] = 0; seen_mtime = -1; }
+        else if ((long)st.st_mtime != seen_mtime) {
+            seen_mtime = (long)st.st_mtime;
+            FILE *f = fopen(ASB_LSP_HEAVY_FILE, "re");
+            size_t n = f ? fread(buf, 1, sizeof(buf) - 1, f) : 0;
+            if (f) fclose(f);
+            buf[n] = 0;
+        }
+    }
+    if (!pkg || !pkg[0] || !buf[0]) return 0;
+    size_t len = strlen(pkg);
+    for (const char *p = buf; (p = strstr(p, pkg)) != NULL; p += len)
+        if ((p == buf || p[-1] == '\n') && (p[len] == '\n' || p[len] == 0)) return 1;
+    return 0;
+}
+
 /* fix258: the opt-in infinite logger may ask for an earlier NATIVE probe after two
  * comparable, sufficiently large jank intervals. It never supplies an A/B window:
  * GraphicsStats is read again below and counted exactly once. All freshness,
@@ -1883,6 +1913,10 @@ static void asb_smooth_probe_tick(const asb_fsm_t *fsm, const asb_metrics_t *m) 
              m->misc.screen_on && g_pkg_detect_ok && g_smart_rt.app_hash != 0 &&
              g_smart_rt.app_hint < ASB_APP_GAMING && !m->misc.camera_active &&
              g_smart_rt.app_pkg_cached[0] && !asb_smart_is_system_ui(g_smart_rt.app_pkg_cached);
+    if (on && asb_lsp_heavy_app(g_smart_rt.app_pkg_cached, now)) {
+        on = 0;
+        g_smooth_lsp_skips++;
+    }
     if (!on) {
         g_smooth_lean = 0; g_rec_smooth_testing = 0; g_smooth_log_due = 0;
         if (g_smooth_win_hash) asb_smooth_window_reset(0, NULL);
@@ -1955,7 +1989,18 @@ static void asb_smooth_probe_tick(const asb_fsm_t *fsm, const asb_metrics_t *m) 
  * records already return x1 while the CPU is kept awake (music). */
 static void asb_rec_apply_offcaps(asb_profile_caps_t *caps, const asb_fsm_t *fsm, int screen_on) {
     g_writer_floor_pct = 0;
+    g_writer_replay_scale = 0;
     if (!caps || !fsm || screen_on || g_rec_off_scale == 1000 || g_rec_off_scale <= 0) return;
+    /* Balanced (V66): the shell owns its ceilings; the writer applies the won setting to the
+     * shell's own values (g_writer_replay_scale), so the FSM's caps are left as they are. */
+    if (fsm->profile_idx == PROFILE_BALANCED) {
+        if (g_rec_replay && g_rec_off_scale < 1000 && !fsm->thermal_cap && !g_fsm_cooldown_active &&
+            fsm->state == ASB_STATE_DEEP_IDLE) {
+            g_writer_replay_scale = g_rec_off_scale;
+            g_writer_floor_pct = 25;
+        }
+        return;
+    }
     if (fsm->profile_idx != PROFILE_SMART || fsm->thermal_cap || g_fsm_cooldown_active) return;
     if (fsm->state != ASB_STATE_DEEP_IDLE) return;   /* busy screen-off (LIGHT_IDLE, music) untouched */
     for (int i = 0; i < 3; i++) {
@@ -1970,6 +2015,118 @@ static void asb_rec_apply_offcaps(asb_profile_caps_t *caps, const asb_fsm_t *fsm
         if (caps->cpu_min[i] > caps->cpu_max[i]) caps->cpu_min[i] = caps->cpu_max[i];
     }
     if (g_rec_off_scale < 1000) g_writer_floor_pct = 25;
+}
+
+/* Smart V7 (V66): the memory bus with the screen off - measured, not steered yet. On quiet
+ * deep idle the DDR clock is read at most every 30 s (Qualcomm's bus_dcvs node, else a devfreq
+ * device named for DDR) and compared with its lowest step. A phone whose bus sits above that
+ * floor while nothing runs has a vote holding it, and that is drain the CPU ceilings cannot
+ * touch. Writing the bus's own limits is left for when captures show where it is held: the
+ * voters and their nodes differ by SoC and kernel, and a wrong floor stalls the whole phone. */
+static char  g_ddr_path[192];
+static int   g_ddr_probe = 0;               /* 0 not tried, 1 found, -1 none */
+static const char *g_ddr_kind = "-";
+static long  g_ddr_min_khz = -1;
+static unsigned long g_ddr_idle_n = 0, g_ddr_idle_at_min = 0;
+static double g_ddr_idle_khz_sum = 0.0;
+static long asb_ddr_min_of(const char *avail) {
+    char buf[512] = {0};
+    FILE *f = fopen(avail, "re");
+    if (!f) return -1;
+    size_t n = fread(buf, 1, sizeof(buf) - 1, f);
+    fclose(f);
+    buf[n] = 0;
+    long lo = -1;
+    for (char *p = buf; *p; ) {
+        while (*p == ' ' || *p == '\n' || *p == '\t') p++;
+        if (!*p) break;
+        char *e = NULL;
+        long v = strtol(p, &e, 10);
+        if (e == p) break;
+        if (v > 0 && (lo < 0 || v < lo)) lo = v;
+        p = e;
+    }
+    return lo;
+}
+static void asb_ddr_probe(void) {
+    g_ddr_probe = -1;
+    const char *bd = "/sys/devices/system/cpu/bus_dcvs/DDR";
+    char cur[192], av[192];
+    snprintf(cur, sizeof(cur), "%s/cur_freq", bd);
+    if (access(cur, R_OK) == 0) {
+        snprintf(g_ddr_path, sizeof(g_ddr_path), "%s", cur);
+        snprintf(av, sizeof(av), "%s/hw_min_freq", bd);
+        g_ddr_min_khz = sysfs_read_long(av, -1);
+        if (g_ddr_min_khz <= 0) { snprintf(av, sizeof(av), "%s/available_frequencies", bd); g_ddr_min_khz = asb_ddr_min_of(av); }
+        g_ddr_kind = "bus_dcvs"; g_ddr_probe = 1;
+        return;
+    }
+    DIR *d = opendir("/sys/class/devfreq");
+    if (!d) return;
+    struct dirent *de;
+    while ((de = readdir(d)) != NULL) {
+        if (de->d_name[0] == '.' || !strstr(de->d_name, "ddr") || strstr(de->d_name, "bw")) continue;
+        if (snprintf(cur, sizeof(cur), "/sys/class/devfreq/%s/cur_freq", de->d_name) >= (int)sizeof(cur)) continue;
+        if (access(cur, R_OK) != 0) continue;
+        snprintf(g_ddr_path, sizeof(g_ddr_path), "%s", cur);
+        if (snprintf(av, sizeof(av), "/sys/class/devfreq/%s/available_frequencies", de->d_name) < (int)sizeof(av))
+            g_ddr_min_khz = asb_ddr_min_of(av);
+        g_ddr_kind = "devfreq"; g_ddr_probe = 1;
+        break;
+    }
+    closedir(d);
+}
+static void asb_ddr_observe(int quiet_idle, long now) {
+    static long last = 0;
+    if (!quiet_idle) return;
+    if (g_ddr_probe == 0) asb_ddr_probe();
+    if (g_ddr_probe != 1) return;
+    if (last && now >= last && now - last < 30) return;
+    last = now;
+    long f = sysfs_read_long(g_ddr_path, -1);
+    if (f <= 0) return;
+    g_ddr_idle_n++;
+    g_ddr_idle_khz_sum += (double)f;
+    if (g_ddr_min_khz > 0 && f <= g_ddr_min_khz) g_ddr_idle_at_min++;
+}
+
+/* Smart V7 (V66): the fixed profiles follow the kind of use (profile_class_auto=1).
+ *  - Performance in a light app (a messenger, settings, a reader - the package table's light
+ *    class) at ordinary load: the CPU ceilings stop at 80 % of the hardware maximum. Such an app
+ *    never needs the top steps, and they are the dearest per unit of work. A heavy page, an app
+ *    launch, a game, the camera, the unlock lift and the first seconds of a touch are untouched.
+ *  - Battery in a game: where the shell's Battery ceiling is under 70 % of the hardware
+ *    maximum, the writer lifts it to 70 % for as long as the game runs (g_writer_class_lift),
+ *    so the game does not stutter on Battery's light-use ceilings, and hands the shell's
+ *    values back afterwards. A thermal cap or the cooldown still wins over it.
+ * Balanced and Smart are left alone, and so is everything with the screen off. */
+static int g_class_auto_now = 0;   /* 1 Performance held down for a light app, 2 Battery lifted for a game */
+static void asb_class_auto_apply(asb_profile_caps_t *caps, const asb_fsm_t *fsm, const asb_metrics_t *m) {
+    g_class_auto_now = 0;
+    g_writer_class_lift = 0;
+    if (!caps || !fsm || !m || !g_asb_cfg.profile_class_auto || !m->misc.screen_on) return;
+    if (fsm->thermal_cap || g_fsm_cooldown_active || m->misc.camera_active || !g_pkg_detect_ok) return;
+    if (fsm->profile_idx == PROFILE_PERFORMANCE && g_smart_rt.app_hint == ASB_APP_LIGHT &&
+        fsm->state <= ASB_STATE_MODERATE && !g_unlock_lift_now && !g_touch_kick) {
+        int changed = 0;
+        for (int i = 0; i < 3; i++) {
+            long hw = g_cpu_slot_hwmax[i];
+            if (hw <= 0 || caps->cpu_max[i] <= 0) continue;
+            int lim = (int)(hw * 80 / 100);
+            if (caps->cpu_max[i] > lim) {
+                caps->cpu_max[i] = lim; changed = 1;
+                if (caps->cpu_min[i] > caps->cpu_max[i]) caps->cpu_min[i] = caps->cpu_max[i];
+            }
+        }
+        if (changed) g_class_auto_now = 1;
+    } else if (fsm->profile_idx == PROFILE_BATTERY && g_smart_rt.app_hint == ASB_APP_GAMING) {
+        for (int i = 0; i < 3; i++) {
+            long hw = g_cpu_slot_hwmax[i];
+            if (hw <= 0 || caps->cpu_max[i] <= 0 || !g_cpu_max_paths[i][0]) continue;
+            int sh = asb_shell_cap_for_policy(PROFILE_BATTERY, asb_policy_id_of_path(g_cpu_max_paths[i]));
+            if (sh > 0 && sh < (int)(hw * 70 / 100)) { g_writer_class_lift = 70; g_class_auto_now = 2; break; }
+        }
+    }
 }
 
 /*
@@ -4207,6 +4364,16 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             g_mw_active, g_mw_holds, g_rec.mw.total,
             g_smooth_lean, g_rec_smooth_testing, g_smooth_probes, g_smooth_windows,
             g_smart_cold_guard, g_ses_climate_last, g_unplug_age_s);
+    fprintf(f, "smooth_lsp_skips=%lu\ntherm_proj_c=%d\nperf_proj_lead_c=%d\nperf_proj_early_ticks=%lu\n"
+               "rec_replay=%d\nclass_auto=%d\nen_class=%s\nen_plug_eta_min=%d\nen_mix_rate_x10=%d\nen_budget_plug=%d\n",
+            g_smooth_lsp_skips, g_smart_therm_proj_c, g_perf_proj_lead_c, g_perf_proj_early_ticks,
+            g_rec_replay, g_class_auto_now,
+            (g_en_class_now >= 0 && g_en_class_now < EN_CLASSES) ? g_en_class_names[g_en_class_now] : "-",
+            g_en_plug_eta_min, g_en_mix_rate_x10, g_en_budget_plug);
+    fprintf(f, "ddr_node=%s\nddr_min_mhz=%ld\nddr_idle_samples=%lu\nddr_idle_at_min_pct=%d\nddr_idle_avg_mhz=%ld\n",
+            g_ddr_kind, g_ddr_min_khz > 0 ? g_ddr_min_khz / 1000 : -1, g_ddr_idle_n,
+            g_ddr_idle_n ? (int)(g_ddr_idle_at_min * 100 / g_ddr_idle_n) : -1,
+            g_ddr_idle_n ? (long)(g_ddr_idle_khz_sum / (double)g_ddr_idle_n / 1000.0) : -1);
     fprintf(f, "smooth_log_status=%s\nsmooth_log_accepted=%lu\nsmooth_log_rejected=%lu\n"
                "smooth_log_suppressed=%lu\nsmooth_log_checks=%lu\nsmooth_log_reads=%lu\n"
                "smooth_log_changes=%lu\nsmooth_log_unchanged=%lu\n"
@@ -7690,6 +7857,8 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
         }
         g_drain_spike_bump = (g_drain_spike_until > now) ? 1 : 0;
         g_smart_budget_rate_x10 = _budget_rate;
+        g_en_mix_rate_x10 = g_asb_cfg.smart_energy ? asb_en_mix_rate(_budget_rate, g_offdrain_x100) : -1;
+        if (!g_asb_cfg.smart_energy) g_en_plug_eta_min = -1;
         asb_smart_apply_energy_budget(battery_pct, charging,
                                       _budget_rate, now, &g_smart_rt);
         /*
@@ -8182,6 +8351,9 @@ static int asb_smart_init(void) {
     {
         int _rl = asb_rec_load();
         asb_rec_summary_write();
+        int _el = asb_en_load();
+        asb_en_summary_write();
+        asb_log("smart energy: %s, %u charge(s) learned", _el ? "loaded" : "fresh start", g_en.plugs);
         asb_log("records: %s (%s); night wakes learned: %u over %u night(s)",
                 _rl == 1 ? "loaded" : _rl == 2 ? "fix184 store: night checks kept, situations re-measured as power"
                          : "fresh start", asb_rec_cc_file() > 0 ? "charge counter readable"
@@ -9031,6 +9203,7 @@ int main(int argc, char **argv) {
                             /* A heartbeat refresh inside the unlock window keeps the lift (fix150). */
                             if (g_unlock_lift_now && !fsm.thermal_cap && metrics.misc.screen_on)
                                 asb_unlock_lift_apply(&_effective_caps);
+                            asb_class_auto_apply(&_effective_caps, &fsm, &metrics);
                             asb_rec_apply_offcaps(&_effective_caps, &fsm, metrics.misc.screen_on);   /* fix184 */
                             int _w = writer_apply_caps(&_effective_caps, 1, fsm.state, fsm.thermal_cap);
                             g_writer_floor_pct = 0;
@@ -10676,6 +10849,8 @@ int main(int argc, char **argv) {
                 _ri.enabled     = g_asb_cfg.smart_records && fsm.profile_idx == PROFILE_SMART &&
                                   g_smart_rt.enabled;
                 _ri.explore     = g_asb_cfg.smart_records_explore;
+                _ri.replay      = g_asb_cfg.smart_records && g_asb_cfg.smart_records_balanced &&
+                                  fsm.profile_idx == PROFILE_BALANCED;
                 _ri.screen_on   = metrics.misc.screen_on;
                 _ri.charging    = metrics.bat.charging;
                 /* Quiet deep idle: DEEP_IDLE with the CPU asleep most of the time. Screen-off
@@ -10730,6 +10905,21 @@ int main(int argc, char **argv) {
                         g_ses_post_unplug = 1;
                 }
                 asb_rec_tick(&_ri);
+                {
+                    asb_en_in_t _ei;
+                    memset(&_ei, 0, sizeof(_ei));
+                    _ei.screen_on  = metrics.misc.screen_on;
+                    _ei.charging   = metrics.bat.charging;
+                    _ei.ma         = asb_ma_ref(metrics.bat.current_ma);
+                    _ei.voltage_uv = metrics.bat.voltage_uv;
+                    _ei.hint       = g_smart_rt.app_hint;
+                    _ei.app_hash   = g_pkg_detect_ok ? g_smart_rt.app_hash : 0;
+                    _ei.pkg        = g_smart_rt.app_pkg_cached;
+                    _ei.now_ms     = _ri.now_ms;
+                    _ei.wall       = _ri.wall;
+                    if (g_asb_cfg.smart_energy) asb_en_tick(&_ei);
+                    asb_ddr_observe(_ri.idle_state && !metrics.misc.screen_on, _ri.wall);
+                }
                 asb_smooth_probe_tick(&fsm, &metrics);
                 asb_bhold_tick(&fsm, &metrics);
                 asb_battery_jank_guard_tick(&fsm, &metrics);
@@ -11047,6 +11237,7 @@ int main(int argc, char **argv) {
                     _effective_caps.uclamp_top_max > 0 &&
                     _effective_caps.uclamp_top_max < ASB_BALANCED_FLOOR_UCLAMP_TOP)
                     _effective_caps.uclamp_top_max = ASB_BALANCED_FLOOR_UCLAMP_TOP;
+                asb_class_auto_apply(&_effective_caps, &fsm, &metrics);
                 asb_rec_apply_offcaps(&_effective_caps, &fsm, metrics.misc.screen_on);   /* fix184 */
                 g_last_caps_reassert = time(NULL);
                 int writes = writer_apply_caps(&_effective_caps, force_write, fsm.state, fsm.thermal_cap);
@@ -11807,6 +11998,7 @@ int main(int argc, char **argv) {
     }
     /* fix184: the records and night wakes, which save at most every 15 minutes otherwise. */
     if (g_rec_loaded && g_rec_dirty && asb_rec_save() == 0) asb_log("smart records flushed on shutdown");
+    if (g_en_loaded && g_en_dirty && asb_en_save() == 0) asb_log("smart energy flushed on shutdown");
     asb_log("persistent stats saved: sessions=%d degrade=%d", g_pstats.session_count, g_pstats.degrade_count);
     unlink(ASB_SOCK_PATH);
     unlink(PID_FILE);

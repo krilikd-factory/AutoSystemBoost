@@ -113,6 +113,9 @@ static const int g_rec_on_offset_x1000[ASB_REC_ARMS] = { -200, -100, 0, 100, 200
 #define ASB_REC_PAIR_DT_S       (4L * 3600)
 #define ASB_REC_PAIR_TEMP_DC    25
 #define ASB_REC_PAIR_SOC        25
+/* Smart V7 (V66): the interval drawn around a verdict, in standard errors of the paired mean.
+ * The same t as the significance test, so "cheaper" and "the interval clears zero" agree. */
+#define ASB_REC_CI_K            2.5
 
 /* Why a block was set aside (counted, shown in asbdiag and the full-day report). */
 enum { REJ_METER = 0, REJ_CHARGE, REJ_RADIO, REJ_BUSY, REJ_CLIMATE, REJ_OTHER, REJ_N };
@@ -145,7 +148,7 @@ typedef struct {
     int8_t   dir;            /* next neighbour to try: -1 / +1 */
     uint8_t  fails;          /* lost challenges from this champion */
     uint8_t  prev_champion;  /* the one it beat (255 = none), never re-tried as a challenger */
-    uint8_t  pad;
+    uint8_t  confirming;     /* V66: 1 = a new champion is checked once more against the one it beat */
     uint32_t trials, wins, converged_ts, last_ts, blocks;
     asb_rec_stat_t trial[2]; /* [0] champion, [1] challenger, this trial only */
     asb_rec_last_t last[2];  /* the latest unpaired block of each, for pairing */
@@ -221,7 +224,31 @@ typedef struct {
     long      unplug_age_s;/* seconds since the charger came off; large when long ago */
     long long now_ms;      /* CLOCK_BOOTTIME */
     long      wall;        /* time(NULL) */
+    int       replay;      /* V66: Balanced - the learned screen-off setting only, nothing measured or tried */
 } asb_rec_in_t;
+
+/* Smart V7 (V66): how sure each situation's result is. Kept beside the records file, not in
+ * it, so the V65 layout loads unchanged and a lost side file costs only these counts. */
+#ifndef ASB_REC7_FILE
+#define ASB_REC7_FILE       "/data/adb/asb/smart_records_v7.bin"
+#endif
+#define ASB_REC7_MAGIC      0x41535237u
+#define ASB_REC7_VERSION    1
+enum { REC7_NONE = 0, REC7_PROMOTED, REC7_HELD, REC7_PLATEAU, REC7_ROLLED_BACK, REC7_CONFIRMED };
+typedef struct {
+    uint16_t confirms, rollbacks;
+    uint32_t decided_ts;
+    float    gain_lo, gain_hi;   /* the setting in force against the other one: 0.05 = 5 % cheaper */
+    uint8_t  last_kind;
+    uint8_t  sibling_start;      /* 1 = its first trial went the way its sibling situation had won */
+    uint8_t  pad[2];
+} asb_rec7_ctx_t;
+typedef struct {
+    uint32_t magic, version, size, pad;
+    asb_rec7_ctx_t ctx[ASB_REC_CTX_N];
+} asb_rec7_store_t;
+static asb_rec7_store_t g_rec7;
+static int g_rec_replay = 0;            /* V66: Balanced is replaying a learned screen-off setting */
 
 static long      (*g_rec_read_cc)(void);
 static long long (*g_rec_read_net)(void);
@@ -248,6 +275,7 @@ static int    g_rec_kctx = -1;           /* fix186: the situation in force now (
 static int asb_rec_is_off(int ctx) { return ctx == ASB_REC_OFF_NIGHT || ctx == ASB_REC_OFF_DAY; }
 static const char *asb_rec_status_name(const asb_rec_ctx_t *c) {
     return c->converged ? "plateau"
+         : (c->confirming && c->challenger != c->champion) ? "confirming"
          : (c->challenger != c->champion) ? "testing"
          : (c->record_n > 0) ? "holding" : "measuring";
 }
@@ -288,6 +316,31 @@ static void asb_rec_stat_add(asb_rec_stat_t *st, double mw, double ma, double pr
     st->mean    += (mw - st->mean) / st->n;
     st->mean_ma += (ma - st->mean_ma) / st->n;
     st->press   += (press - st->press) / st->n;
+}
+
+/* Smart V7 (V66): the situation measured the same way under the other light or time of day.
+ * A first trial starts on the side that one already won on this phone: the screen-off night
+ * and day, and dim and bright of the same kind of use, share the hardware and most of the
+ * habit. Only the order of the trials changes; every verdict is still measured here. */
+static int asb_rec_sibling(int ctx) {
+    switch (ctx) {
+    case ASB_REC_OFF_NIGHT:        return ASB_REC_OFF_DAY;
+    case ASB_REC_OFF_DAY:          return ASB_REC_OFF_NIGHT;
+    case ASB_REC_ON_LIGHT_DIM:     return ASB_REC_ON_LIGHT_BRIGHT;
+    case ASB_REC_ON_LIGHT_BRIGHT:  return ASB_REC_ON_LIGHT_DIM;
+    case ASB_REC_ON_MEDIUM_DIM:    return ASB_REC_ON_MEDIUM_BRIGHT;
+    case ASB_REC_ON_MEDIUM_BRIGHT: return ASB_REC_ON_MEDIUM_DIM;
+    default:                       return -1;
+    }
+}
+static void asb_rec_sibling_prior(asb_rec_ctx_t *c, int ctx) {
+    if (c->trials != 0 || c->champion != ASB_REC_ARM_DEFAULT || c->challenger != c->champion) return;
+    int sb = asb_rec_sibling(ctx);
+    if (sb < 0) return;
+    const asb_rec_ctx_t *o = &g_rec.ctx[sb];
+    if (o->champion == ASB_REC_ARM_DEFAULT || o->wins == 0 || o->confirming) return;
+    int8_t d = (int8_t)(o->champion > ASB_REC_ARM_DEFAULT ? 1 : -1);
+    if (c->dir != d) { c->dir = d; g_rec7.ctx[ctx].sibling_start = 1; }
 }
 
 /* Start the next challenge from the current champion, if there is one to start. */
@@ -338,7 +391,37 @@ static void asb_rec_pair(asb_rec_ctx_t *c, int slot, const asb_rec_last_t *me) {
     c->last[0].ts = 0; c->last[1].ts = 0;   /* each block in one pair only */
 }
 
-/* After each accepted block. 0 nothing yet, 1 challenger won, 2 champion held, 3 plateau. */
+/* No libm in the governor: Newton's square root, enough for a standard error. */
+static double asb_rec_sqrt(double x) {
+    if (!(x > 0.0)) return 0.0;
+    double r = x > 1.0 ? x : 1.0;
+    for (int i = 0; i < 48; i++) r = 0.5 * (r + x / r);
+    return r;
+}
+/* Smart V7 (V66): what a verdict says and how sure it is. took_over: the challenger is now in
+ * force, so the interval is turned to read "the setting in force against the other one". */
+static void asb_rec7_note(int ctx, int kind, double m, double se, int took_over, long now) {
+    if (ctx < 0 || ctx >= ASB_REC_CTX_N) return;
+    asb_rec7_ctx_t *s = &g_rec7.ctx[ctx];
+    double k = ASB_REC_CI_K * se;
+    if (took_over) { s->gain_lo = (float)(-(m + k)); s->gain_hi = (float)(-(m - k)); }
+    else           { s->gain_lo = (float)(m - k);    s->gain_hi = (float)(m + k); }
+    s->last_kind = (uint8_t)kind;
+    s->decided_ts = (uint32_t)now;
+    if (kind == REC7_ROLLED_BACK && s->rollbacks < 65535) s->rollbacks++;
+    if (kind == REC7_CONFIRMED && s->confirms < 65535) s->confirms++;
+}
+
+/* After each accepted block. 0 nothing yet, 1 challenger won, 2 champion held, 3 plateau,
+ * 4 a new champion lost its check and the one it beat is back (V66), 5 it passed (V66).
+ *
+ * Smart V7 (V66): a win is checked once. Every look at the pairs is a chance for a setting
+ * that is no better to clear the bar by luck (about one in twenty at t >= 2.5), and a change
+ * the phone went through in the meantime - a ROM update, a new app - can make the old result
+ * stale. So the new champion is measured once more against the one it beat, by the same
+ * rules. When the old one now comes out significantly cheaper, it is put back (a rollback)
+ * and the trials turn to the other side; otherwise the new champion is confirmed and the
+ * search goes on in the direction that won. */
 static int asb_rec_decide(asb_rec_ctx_t *c, int ctx, long now) {
     asb_rec_stat_t *a = &c->trial[0], *b = &c->trial[1];
     const int off  = asb_rec_is_off(ctx);
@@ -370,6 +453,35 @@ static int asb_rec_decide(asb_rec_ctx_t *c, int ctx, long now) {
     }
     if (!verdict) return 0;
     c->trials++;
+    double se = 0.0;
+    if (c->pairs > 1) se = asb_rec_sqrt(c->pr_m2 / (double)(c->pairs - 1) / (double)c->pairs);
+    if (c->confirming) {
+        int ev;
+        c->confirming = 0;
+        if (verdict == 1) {
+            int bad = c->champion, old = c->challenger;
+            c->champion = (uint8_t)old;
+            c->prev_champion = (uint8_t)bad;
+            if (c->last_gain > -0.9f && c->last_gain < 0.9f) c->gain_total /= (float)(1.0 - c->last_gain);
+            c->last_gain = 0.0f;
+            c->record_mw = (float)b->mean; c->record_ma = (float)b->mean_ma;
+            c->record_n = b->n; c->record_press = (float)b->press;
+            if (c->wins > 0) c->wins--;
+            c->fails = 1;
+            c->dir = (int8_t)(bad > old ? -1 : 1);
+            asb_rec7_note(ctx, REC7_ROLLED_BACK, c->pr_mean, se, 1, now);
+            ev = 4;
+        } else {
+            c->record_mw = (float)a->mean; c->record_ma = (float)a->mean_ma;
+            c->record_n = a->n; c->record_press = (float)a->press;
+            c->fails = 0;
+            asb_rec7_note(ctx, REC7_CONFIRMED, c->pr_mean, se, 0, now);
+            ev = 5;
+        }
+        c->challenger = c->champion;
+        asb_rec_trial_reset(c);
+        return ev;
+    }
     if (verdict == 1) {
         c->prev_champion = c->champion;
         c->champion = c->challenger;
@@ -384,12 +496,23 @@ static int asb_rec_decide(asb_rec_ctx_t *c, int ctx, long now) {
         c->fails++;
         c->dir = (int8_t)-c->dir;
     }
+    double m_won = c->pr_mean;
     c->challenger = c->champion;
     asb_rec_trial_reset(c);
-    if (verdict == 2 && c->fails >= 2) {
+    if (verdict == 1) {
+        asb_rec7_note(ctx, REC7_PROMOTED, m_won, se, 1, now);
+        if (c->prev_champion < ASB_REC_ARMS) {
+            c->challenger = c->prev_champion;
+            c->confirming = 1;
+        }
+        return 1;
+    }
+    if (c->fails >= 2) {
         c->converged = 1; c->converged_ts = (uint32_t)now;
+        asb_rec7_note(ctx, REC7_PLATEAU, m_won, se, 0, now);
         return 3;
     }
+    asb_rec7_note(ctx, REC7_HELD, m_won, se, 0, now);
     return verdict;
 }
 
@@ -499,6 +622,14 @@ static void asb_rec_block_finish(const asb_rec_in_t *in) {
             snprintf(g_rec_event_msg, sizeof(g_rec_event_msg),
                      "records: %s %s holds at %.0f mW - the neighbour was not cheaper side by side",
                      g_rec_ctx_names[ctx], ch_s, c->record_mw);
+        else if (ev == 4)
+            snprintf(g_rec_event_msg, sizeof(g_rec_event_msg),
+                     "records: %s rolled back to %s at %.0f mW - %s lost its check against it side by side",
+                     g_rec_ctx_names[ctx], ch_s, c->record_mw, pv_s);
+        else if (ev == 5)
+            snprintf(g_rec_event_msg, sizeof(g_rec_event_msg),
+                     "records: %s %s confirmed at %.0f mW - checked once more against the setting it beat",
+                     g_rec_ctx_names[ctx], ch_s, c->record_mw);
         else
             snprintf(g_rec_event_msg, sizeof(g_rec_event_msg),
                      "records: %s plateau - %s is the best found (%.0f mW, %u win(s), %.1f %% below today's setting); re-check in 21 days",
@@ -513,6 +644,7 @@ static void asb_rec_block_start(const asb_rec_in_t *in, int ctx) {
     long cc0 = g_rec_read_cc ? g_rec_read_cc() : -1;
     if (cc0 <= 0) { g_rec_cc_state = -1; g_rec_cc_retry_ts = in->wall; return; }
     asb_rec_ctx_t *c = &g_rec.ctx[ctx];
+    asb_rec_sibling_prior(c, ctx);
     asb_rec_setup_trial(c, in->explore, in->wall);
     memset(k, 0, sizeof(*k));
     k->active = 1;
@@ -542,9 +674,23 @@ static void asb_rec_tick(const asb_rec_in_t *in) {
     int old_scale = g_rec_off_scale;
     g_rec_on_offset = 0;
     g_rec_off_scale = 1000;
+    g_rec_replay = 0;
     if (!in->enabled || !g_rec_loaded) {
         g_rec_blk.active = 0;
         g_rec_kctx = -1;
+        /* Smart V7 (V66), Balanced: Smart without exploring. The screen-off setting Smart won
+         * on this phone, and kept through its check, applies on quiet deep idle; nothing is
+         * measured or tried. Only a setting under x1: the shell owns Balanced's ceilings and
+         * the writer may take them down, never above them. A situation still in a check, never
+         * won, or won above x1 stays at x1. */
+        if (in->replay && g_rec_loaded && !in->screen_on && !in->thermal_cap && !in->cooldown && in->idle_state) {
+            int rc = in->night ? ASB_REC_OFF_NIGHT : ASB_REC_OFF_DAY;
+            const asb_rec_ctx_t *c = &g_rec.ctx[rc];
+            if (c->champion < ASB_REC_ARM_DEFAULT && c->wins > 0 && !c->confirming) {
+                g_rec_off_scale = asb_rec_arm_value(rc, c->champion);
+                g_rec_replay = 1;
+            }
+        }
         g_rec_knob_changed |= (old_scale != g_rec_off_scale);
         asb_rec_maybe_save(in->wall);   /* night wakes are learned in every profile */
         return;
@@ -822,7 +968,34 @@ static int asb_rec_save(void) {
     int ok = (w == sizeof(g_rec));
     fclose(f);
     if (!ok || rename(tmp, ASB_REC_FILE) != 0) { remove(tmp); return -1; }
+    snprintf(tmp, sizeof(tmp), "%s.tmp", ASB_REC7_FILE);
+    f = fopen(tmp, "wb");
+    if (f) {
+        g_rec7.magic = ASB_REC7_MAGIC; g_rec7.version = ASB_REC7_VERSION; g_rec7.size = sizeof(g_rec7);
+        w = fwrite(&g_rec7, 1, sizeof(g_rec7), f);
+        fflush(f);
+        ok = (w == sizeof(g_rec7));
+        fclose(f);
+        if (!ok || rename(tmp, ASB_REC7_FILE) != 0) remove(tmp);
+    }
     return 0;
+}
+static void asb_rec7_load(void) {
+    static asb_rec7_store_t s;
+    memset(&g_rec7, 0, sizeof(g_rec7));
+    FILE *f = fopen(ASB_REC7_FILE, "rb");
+    if (!f) return;
+    memset(&s, 0, sizeof(s));
+    size_t n = fread(&s, 1, sizeof(s), f);
+    fclose(f);
+    if (n != sizeof(s) || s.magic != ASB_REC7_MAGIC || s.version != ASB_REC7_VERSION || s.size != sizeof(s)) return;
+    for (int i = 0; i < ASB_REC_CTX_N; i++) {
+        asb_rec7_ctx_t *c = &s.ctx[i];
+        if (c->last_kind > REC7_CONFIRMED || c->sibling_start > 1 ||
+            !(c->gain_lo > -10.0f && c->gain_lo < 10.0f) || !(c->gain_hi > -10.0f && c->gain_hi < 10.0f))
+            memset(c, 0, sizeof(*c));
+    }
+    g_rec7 = s;
 }
 /* fix184's layout (version 1), only to carry the night-check habit across: it is learned
  * the same way in both. Its situations measured milliamps one block at a time, which the
@@ -856,6 +1029,7 @@ static int asb_rec_load(void) {
     static union { asb_rec_store_t v2; asb_rec_store_v1_t v1; } u;
     static asb_rec_store_t s;
     int got = 0;
+    asb_rec7_load();
     FILE *f = fopen(ASB_REC_FILE, "rb");
     if (f) {
         memset(&u, 0, sizeof(u));
@@ -881,7 +1055,8 @@ static int asb_rec_load(void) {
         for (int i = 0; i < ASB_REC_CTX_N; i++) {
             asb_rec_ctx_t *c = &s.ctx[i];
             if (c->champion >= ASB_REC_ARMS || c->challenger >= ASB_REC_ARMS ||
-                (c->dir != 1 && c->dir != -1) || c->alt > 1 ||
+                (c->dir != 1 && c->dir != -1) || c->alt > 1 || c->confirming > 1 ||
+                (c->confirming && c->challenger == c->champion) ||
                 !(c->gain_total > 0.1f && c->gain_total < 10.0f)) asb_rec_ctx_init(c, i);
         }
         for (int i = 0; i < ASB_SMOOTH_APPS; i++)
@@ -918,6 +1093,15 @@ static void asb_rec_summary_write(void) {
                 g_rec_ctx_names[i], st, best, c->record_mw, c->record_ma, c->record_n,
                 (1.0 - c->gain_total) * 100.0, test, c->pairs, c->pr_mean * 100.0,
                 c->trials, c->wins, c->blocks, c->baseline_mw);
+    }
+    fprintf(f, "# conf|ctx|confirming|confirms|rollbacks|last|gain_lo_pct|gain_hi_pct|decided|sibling_start\n");
+    for (int i = 0; i < ASB_REC_CTX_N; i++) {
+        static const char *const kinds[] = { "-", "promoted", "held", "plateau", "rolled_back", "confirmed" };
+        const asb_rec7_ctx_t *s7 = &g_rec7.ctx[i];
+        int k = s7->last_kind <= REC7_CONFIRMED ? s7->last_kind : 0;
+        fprintf(f, "conf|%s|%d|%u|%u|%s|%.1f|%.1f|%u|%u\n", g_rec_ctx_names[i],
+                g_rec.ctx[i].confirming ? 1 : 0, s7->confirms, s7->rollbacks, kinds[k],
+                k ? s7->gain_lo * 100.0 : 0.0, k ? s7->gain_hi * 100.0 : 0.0, s7->decided_ts, s7->sibling_start);
     }
     const asb_microwake_t *w = &g_rec.mw;
     int top = -1; float topw = 0;

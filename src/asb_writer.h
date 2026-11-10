@@ -801,6 +801,15 @@ static void writer_profile_baseline_record_path(const char *path) {
 /* fix184: a lower race-to-idle floor for one write, set by the Smart records while they try
  * screen-off idle ceilings under x1 (asb_rec_apply_offcaps); 0 = the 40 % above. */
 static int g_writer_floor_pct = 0;
+/* Smart V7 (V66), set by the governor just before a write. In a manual profile the shell owns
+ * the CPU ceilings and the writer stays off them; these two are the exceptions it may take:
+ *  - g_writer_replay_scale: Balanced on quiet deep idle replays the screen-off setting Smart
+ *    won (x1000, below 1000 only) - the shell's own ceiling times it, never above it;
+ *  - g_writer_class_lift: Battery while a game runs - each ceiling at least this share of the
+ *    hardware maximum and never under the shell's own (percent, 0 = none).
+ * Both are handed back to the shell's values when they end, as the unlock lift is. */
+static int g_writer_replay_scale = 0;
+static int g_writer_class_lift = 0;
 
 static int cpu_floor_ceiling(int path_idx, int want, int thermal_emergency) {
     if (want <= 0 || thermal_emergency) return want;
@@ -1787,9 +1796,18 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
      * ceilings ABOVE the shell's caps - that is the lift's whole point, so it must not pass
      * writer_manual_clamp. The writes mark the paths held (fix183), and the first pass after
      * the window hands the shell's values back (writer_manual_handback). */
-    const int manual_lift     = manual_profile && g_unlock_lift_now && !thermal_cap &&
-                                !g_fsm_cooldown_active;
-    int manual_cap_skip = manual_profile && !manual_override && !manual_lift;
+    const int manual_lift     = manual_profile && (g_unlock_lift_now || g_writer_class_lift > 0) &&
+                                !thermal_cap && !g_fsm_cooldown_active;
+    int manual_replay = 0;
+    if (manual_profile && manual_prof_idx == PROFILE_BALANCED && !manual_override && !manual_lift &&
+        g_writer_replay_scale > 0 && g_writer_replay_scale < 1000 && state == ASB_STATE_DEEP_IDLE) {
+        manual_replay = 1;
+        for (int _k = 0; _k < 3; _k++)
+            if (g_cpu_max_paths[_k][0] && caps->cpu_max[_k] > 0 &&
+                asb_shell_cap_for_policy(PROFILE_BALANCED, asb_policy_id_of_path(g_cpu_max_paths[_k])) <= 0)
+                manual_replay = 0;
+    }
+    int manual_cap_skip = manual_profile && !manual_override && !manual_lift && !manual_replay;
     /* Smart and Performance own every ceiling they write; nothing is waiting to be handed
      * back while one of them runs. */
     if (!manual_profile) memset(g_writer_path_held, 0, sizeof(g_writer_path_held));
@@ -1843,6 +1861,17 @@ static int writer_apply_caps(const asb_profile_caps_t *caps, int force, asb_stat
             if (state == ASB_STATE_GAMING && g_asb_cfg.gaming_cpu_max_ceiling_khz > 0
                 && cmax[_k] > g_asb_cfg.gaming_cpu_max_ceiling_khz) {
                 cmax[_k] = g_asb_cfg.gaming_cpu_max_ceiling_khz;
+            }
+            if ((manual_replay || (manual_lift && g_writer_class_lift > 0 && !g_unlock_lift_now)) &&
+                cmax[_k] > 0 && g_cpu_max_paths[_k][0]) {
+                long _sh = asb_shell_cap_for_policy(manual_prof_idx, asb_policy_id_of_path(g_cpu_max_paths[_k]));
+                if (manual_replay) {
+                    cmax[_k] = (int)(_sh * g_writer_replay_scale / 1000);
+                } else {
+                    long _want = (long)g_cpu_slot_hwmax[_k] * g_writer_class_lift / 100;
+                    long _base = _sh > 0 ? _sh : (long)cmax[_k];
+                    cmax[_k] = (int)(_base > _want ? _base : _want);
+                }
             }
         }
         /* Snap BEFORE anything is compared or written.

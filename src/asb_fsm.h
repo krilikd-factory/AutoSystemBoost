@@ -1956,6 +1956,47 @@ static void fsm_sustained_edges(asb_fsm_t *fsm, time_t now) {
     }
 }
 
+/* Smart V7 (V66), Performance: the trip point looks two minutes ahead.
+ *
+ * Smart's lean already projects the die's slope; Performance had only the measured reading,
+ * so on a phone heating fast it reached SUSTAINED at the trip point and then spent the session
+ * climbing down, or met the vendor's own, harsher throttle first. Here the die's slope over
+ * 30 s windows (halved into the last value, as Smart does) projects the reading two minutes
+ * on; at 1.5 C/min or faster, and within six degrees of the trip point, the trip point moves
+ * down by the projected rise, at most four degrees, the same lead a known-hot app gets. The
+ * two leads do not add up. The two-tick debounce, the HEAVY-or-above condition and the exit
+ * temperature are unchanged, and a phone that is not heating fast is untouched. */
+#define ASB_PERF_PROJ_WINDOW_S   30
+#define ASB_PERF_PROJ_STALE_S    180
+#define ASB_PERF_PROJ_MIN_SLOPE  1500
+#define ASB_PERF_PROJ_NEAR_C     6
+#define ASB_PERF_PROJ_MAX_LEAD_C 4
+static int g_perf_proj_prev_c = 0;
+static time_t g_perf_proj_prev_ts = 0;
+static int g_perf_proj_slope = 0;
+static int g_perf_proj_lead_c = 0;
+static unsigned long g_perf_proj_early_ticks = 0;
+static int asb_perf_thermal_lead(int cpu_c, int enter_c, time_t now) {
+    if (cpu_c <= 0 || enter_c <= 0) { g_perf_proj_prev_ts = 0; g_perf_proj_slope = 0; return 0; }
+    if (g_perf_proj_prev_ts == 0 || now < g_perf_proj_prev_ts ||
+        (long)(now - g_perf_proj_prev_ts) > ASB_PERF_PROJ_STALE_S) {
+        g_perf_proj_prev_c = cpu_c; g_perf_proj_prev_ts = now; g_perf_proj_slope = 0;
+        return 0;
+    }
+    long dt = (long)(now - g_perf_proj_prev_ts);
+    if (dt >= ASB_PERF_PROJ_WINDOW_S) {
+        long raw = ((long)(cpu_c - g_perf_proj_prev_c) * 60000L) / dt;
+        if (raw > 60000L) raw = 60000L;
+        if (raw < -60000L) raw = -60000L;
+        g_perf_proj_slope = (g_perf_proj_slope + (int)raw) / 2;
+        g_perf_proj_prev_c = cpu_c; g_perf_proj_prev_ts = now;
+    }
+    if (g_perf_proj_slope < ASB_PERF_PROJ_MIN_SLOPE || cpu_c < enter_c - ASB_PERF_PROJ_NEAR_C) return 0;
+    int lead = (g_perf_proj_slope * 2) / 1000;
+    if (lead > ASB_PERF_PROJ_MAX_LEAD_C) lead = ASB_PERF_PROJ_MAX_LEAD_C;
+    return lead > 0 ? lead : 0;
+}
+
 static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
     fsm->state_changed = 0;
     fsm->caps_changed  = 0;
@@ -2088,9 +2129,18 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
          * a large shift would make a known-hot app feel slower than an unknown one, which
          * users would notice long before they noticed the temperature.
          */
-        if (g_asb_appheat_hot && sustained_temp_enter > 48) {
-            sustained_temp_enter -= 4;
+        int _heat_lead = (g_asb_appheat_hot && sustained_temp_enter > 48) ? 4 : 0;
+        g_perf_proj_lead_c = 0;
+        if (fsm->profile_idx == PROFILE_PERFORMANCE) {
+            int _pl = asb_perf_thermal_lead(m->therm.cpu_max_c, sustained_temp_enter, time(NULL));
+            if (_pl > _heat_lead && sustained_temp_enter > 48) {
+                g_perf_proj_lead_c = _pl;
+                if (m->therm.cpu_max_c >= sustained_temp_enter - _pl && m->therm.cpu_max_c < sustained_temp_enter)
+                    g_perf_proj_early_ticks++;
+                _heat_lead = _pl;
+            }
         }
+        sustained_temp_enter -= _heat_lead;
 
         int sustained_temp_exit = asb_config_profile_sustained_temp_exit(&g_asb_cfg, fsm->profile_idx);
         int perf_hot_guard_temp = asb_config_profile_hot_guard_temp(&g_asb_cfg, fsm->profile_idx);
