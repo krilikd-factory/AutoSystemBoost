@@ -5847,6 +5847,16 @@ for _n in $(sed 's/#.*//; s/[ \t\r]//g; /^$/d' "$MF"); do
   [ -f "$TMP/tools/$_n" ] || fail "installer prune deletes CI-shipped tool: $_n"
 done
 [ ! -e "$TMP/tools/zz_dev_only.py" ] || fail 'installer prune keeps a dev-only tool'
+# V66 dev9: the package carries asbdiag once (system/bin/asbdiag); the installer gives the old
+# tools/asb_diag.sh path back as a link to it, after the prune, so neither path is lost.
+rm -f "$TMP/tools/asb_diag.sh"; mkdir -p "$TMP/system/bin"; printf '#!/system/bin/sh\necho diag-ok\n' > "$TMP/system/bin/asbdiag"
+MODPATH="$TMP" sh "$TMP/prune.sh" || fail 'third prune run did not run'
+[ -L "$TMP/tools/asb_diag.sh" ] || [ -f "$TMP/tools/asb_diag.sh" ] || fail 'tools/asb_diag.sh not restored from system/bin/asbdiag'
+[ "$(sh "$TMP/tools/asb_diag.sh")" = diag-ok ] || fail 'tools/asb_diag.sh does not run the shipped asbdiag'
+for WF in "$REL" "$TEST"; do
+  need "$WF" 'if cmp -s "$PKG_'
+  need "$WF" 'python3 tools/asb_slim_package.py "$PKG_'
+done
 
 # Both workflows must preserve and verify the exact helpers in their flashable packages.
 for WF in "$REL" "$TEST"; do

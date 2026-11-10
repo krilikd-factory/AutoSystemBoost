@@ -10873,6 +10873,62 @@ grep -Fq "time.type = 'time'; time.className = 'cfg-time';" "$H" || fail 'native
 echo 'PASS WebUI night charge: parser, honest badges, custom time controls, immediate apply/toasts and all 13 locales'
 )
 
+t_webui_slim_package_runtime() (
+# Runtime (V66 dev9): the packaging step that makes the module smaller must not change what
+# the WebUI is. tools/asb_slim_package.py runs on a copy of webroot here exactly as the
+# workflows run it on the staged package:
+#  - every translation file parses to the same object it parsed to before;
+#  - the page's script blocks still compile, and the ZYGISK note gutter fix is still there;
+#  - asbdiag's own reader of the settings registry (_ux_web_rows from tools/asb_diag.sh)
+#    prints the same rows from the slim page as from the source page;
+#  - the build marker survives, and the result is smaller;
+#  - a page that uses a template literal is left as it is (the comment-line rule could cut one).
+set -eu
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL slim package: $*" >&2; exit 1; }
+command -v python3 >/dev/null 2>&1 || { echo "SKIP slim package: no python3"; exit 0; }
+mkdir -p "$T/pkg" "$T/src"
+cp -r "$ROOT/webroot" "$T/pkg/webroot"; cp -r "$ROOT/webroot" "$T/src/webroot"
+out="$(python3 "$ROOT/tools/asb_slim_package.py" "$T/pkg")" || fail "the tool failed: $out"
+echo "$out" | grep -q 'translations -[1-9][0-9]* bytes, page -[1-9][0-9]* bytes (ok;' || fail "nothing was saved: $out"
+python3 - "$T/src/webroot/i18n" "$T/pkg/webroot/i18n" <<'PY' || fail "a translation changed"
+import json, os, sys
+a, b = sys.argv[1], sys.argv[2]
+for n in sorted(os.listdir(a)):
+    if n.endswith('.json') and json.load(open(os.path.join(a, n))) != json.load(open(os.path.join(b, n))):
+        print(n); sys.exit(1)
+PY
+sed -n '/^_ux_web_rows() {/,/^}/p' "$ROOT/tools/asb_diag.sh" > "$T/rows.sh"
+[ -s "$T/rows.sh" ] || fail "asbdiag registry reader not found"
+rows() { _ux_web="$1" sh -c '. "$1"; _ux_web_rows' _ "$T/rows.sh"; }
+rows "$T/src/webroot/index.html" > "$T/r_src"; rows "$T/pkg/webroot/index.html" > "$T/r_pkg"
+[ "$(wc -l < "$T/r_src")" -gt 100 ] || fail "the registry reader read nothing: $(wc -l < "$T/r_src")"
+cmp -s "$T/r_src" "$T/r_pkg" || fail "asbdiag reads the settings differently from the slim page: $(diff "$T/r_src" "$T/r_pkg" | head -5)"
+grep -q 'ASB_UI_BUILD=light-surface-contract-1' "$T/pkg/webroot/index.html" || fail "the build marker was stripped"
+grep -Fq '#zygiskPage .lgr-note.dev-evidence.zy-clamp { padding-inline-start: 12px; }' "$T/pkg/webroot/index.html" || fail "the note gutter rule was lost"
+[ "$(wc -c < "$T/pkg/webroot/index.html")" -lt "$(wc -c < "$T/src/webroot/index.html")" ] || fail "the page did not shrink"
+if command -v node >/dev/null 2>&1; then
+  python3 - "$T/pkg/webroot/index.html" "$T" <<'PY' || fail "a slim script block does not compile"
+import re, subprocess, sys
+h = open(sys.argv[1], encoding='utf-8').read()
+for i, m in enumerate(re.findall(r'<script[^>]*>([\s\S]*?)</script>', h)):
+    f = '%s/s%d.js' % (sys.argv[2], i); open(f, 'w', encoding='utf-8').write(m)
+    if subprocess.run(['node', '--check', f]).returncode: sys.exit(1)
+PY
+fi
+mkdir -p "$T/tpl/webroot/i18n"
+printf '<html><script>\n// a comment\nconst a = `x\n// not a comment\n`;\n</script></html>\n' > "$T/tpl/webroot/index.html"
+cp "$T/tpl/webroot/index.html" "$T/tpl/orig.html"
+python3 "$ROOT/tools/asb_slim_package.py" "$T/tpl" >/dev/null || fail "the template-literal page made the tool fail"
+cmp -s "$T/tpl/webroot/index.html" "$T/tpl/orig.html" || fail "a page with a template literal was changed"
+grep -q 'python3 tools/asb_slim_package.py "$PKG_REL"' "$ROOT/.github/workflows/build-release.yml" || fail "the release package is not slimmed"
+grep -q 'python3 tools/asb_slim_package.py "$PKG_TEST"' "$ROOT/.github/workflows/build-test.yml" || fail "the test package is not slimmed"
+grep -q -- '-ffunction-sections -fdata-sections -Wl,--gc-sections -Wl,--exclude-libs,ALL' "$ROOT/src/build_ndk_release.sh" || fail "the Zygisk libraries keep the whole static C++ runtime"
+grep -q "llvm-nm\" -D --defined-only \"\$_zout/\$_zabi.so\" | grep -q ' zygisk_module_entry\$'" "$ROOT/src/build_ndk_release.sh" || fail "the Zygisk entry export check is gone"
+echo "PASS slim package: translations re-serialised to the same objects, comment lines out of the page, scripts compile, asbdiag reads the same settings, template literals left alone"
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;
