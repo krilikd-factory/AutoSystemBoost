@@ -31,8 +31,12 @@
  * smoothness test per app, the cold-battery guard, and drain learning that no longer takes
  * credit for the climate. None of it changes what a V4 bucket learned or how, so a V4
  * store is carried over untouched; only older stores have their outputs reset, as before. */
-#define ASB_SMART_VER         6
-#define ASB_SMART_VER_KEEP    4     /* V4/V5 stores keep their outputs on migration to V6 */
+/* V7 (V66): second checks and rollbacks of the records, priors from the sibling situation,
+ * cost per app and per kind of use, the usual charge in the battery budget, the two-minute
+ * thermal look-ahead, the LSPosed link and the profiles by kind of use. None of it changes
+ * what a bucket learned or how, so V4-V6 stores are carried over untouched. */
+#define ASB_SMART_VER         7
+#define ASB_SMART_VER_KEEP    4     /* V4-V6 stores keep their outputs on migration to V7 */
 #define ASB_SMART_VER_LEGACY  1
 #define ASB_SMART_MAGIC       0x41534253u
 #define ASB_SMART_BUCKETS     12

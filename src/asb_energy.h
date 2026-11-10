@@ -27,7 +27,7 @@
 #define ASB_EN_SUMMARY      "/dev/.asb/smart_energy.txt"
 #endif
 #define ASB_EN_MAGIC        0x4153454eu
-#define ASB_EN_VERSION      1
+#define ASB_EN_VERSION      2     /* 2 (dev5): mW on the real scale; dev4's figures are dropped */
 #define ASB_EN_APPS         32
 #define ASB_EN_SLOTS        48
 #define ASB_EN_GLANCE_S     90
@@ -43,6 +43,8 @@ static int g_en_plug_eta_min = -1;   /* minutes until the usual charge, -1 unkno
 static int g_en_mix_rate_x10 = -1;   /* the drain until then, %/h x10, screen on and off mixed */
 static int g_en_budget_plug = 0;     /* 1 the usual charge is too far, -1 near enough to relax */
 #endif
+
+static int g_en_gauge_x100 = -1;     /* this phone's current reading as x100 of the real drain, -1 not known yet */
 
 enum { EN_GLANCE = 0, EN_LIGHT, EN_MEDIA, EN_HEAVY, EN_GAME, EN_CLASSES };
 static const char *const g_en_class_names[EN_CLASSES] = { "glance", "light", "media", "heavy", "game" };
@@ -302,7 +304,8 @@ static void asb_en_summary_write(void) {
     snprintf(tmp, sizeof(tmp), "%s.tmp", ASB_EN_SUMMARY);
     FILE *f = fopen(tmp, "w");
     if (!f) return;
-    fprintf(f, "# Smart V7 energy: screen on, off the charger; battery current x voltage; fades 3 %% a day\n");
+    fprintf(f, "# Smart V7 energy: screen on, off the charger; battery current x voltage on the real scale; fades 3 %% a day\n");
+    fprintf(f, "meter|gauge_x100=%d\n", g_en_gauge_x100);
     float total = 0.0f;
     for (int i = 0; i < ASB_EN_APPS; i++) total += g_en.app[i].j;
     fprintf(f, "# app|pkg|minutes|avg_mW|share_pct\n");
@@ -329,10 +332,11 @@ static void asb_en_summary_write(void) {
         if (g_en.plug[0][i] > wm) { wm = g_en.plug[0][i]; ws = i; }
         if (g_en.plug[1][i] > wmw) { wmw = g_en.plug[1][i]; wsw = i; }
     }
-    fprintf(f, "plug|charges=%u|weekday=%s%02d:%02d|weekend=%s%02d:%02d|eta_min=%d|mix_x10=%d|budget=%d|on_pct=%.0f\n", g_en.plugs,
-            (ws >= 0 && wm >= ASB_EN_PLUG_MIN_W) ? "" : "-", ws >= 0 ? ws / 2 : 0, ws >= 0 ? (ws % 2) * 30 : 0,
-            (wsw >= 0 && wmw >= ASB_EN_PLUG_MIN_W) ? "" : "-", wsw >= 0 ? wsw / 2 : 0, wsw >= 0 ? (wsw % 2) * 30 : 0,
-            g_en_plug_eta_min, g_en_mix_rate_x10, g_en_budget_plug,
+    char wd[16] = "-", we[16] = "-";
+    if (ws >= 0 && wm >= ASB_EN_PLUG_MIN_W) snprintf(wd, sizeof(wd), "%02d:%02d", ws / 2, (ws % 2) * 30);
+    if (wsw >= 0 && wmw >= ASB_EN_PLUG_MIN_W) snprintf(we, sizeof(we), "%02d:%02d", wsw / 2, (wsw % 2) * 30);
+    fprintf(f, "plug|charges=%u|weekday=%s|weekend=%s|eta_min=%d|mix_x10=%d|budget=%d|on_pct=%.0f\n", g_en.plugs,
+            wd, we, g_en_plug_eta_min, g_en_mix_rate_x10, g_en_budget_plug,
             (g_en.on_s + g_en.off_s) > 0.0f ? g_en.on_s * 100.0f / (g_en.on_s + g_en.off_s) : 0.0f);
     fclose(f);
     rename(tmp, ASB_EN_SUMMARY);

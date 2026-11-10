@@ -2715,6 +2715,17 @@ static int asb_ma_ref(int raw_ma) {
     return (int)((long)raw_ma * ASB_CURSCALE_REF_X100 / g_curscale_x100);
 }
 
+/* Smart V7 (V66 dev5): battery current on the real scale, for the energy figures in mW.
+ * asb_ma_ref converts to the reference the thresholds were tuned on (the OP15 gauge, x0.38 of
+ * the real drain), which is right for a threshold and wrong for a figure: dev4 credited the
+ * apps with that, and an OP15 at x0.42 showed about 40 % of what they cost. The real drain is
+ * the reading divided by this phone's own ratio; 0 until that ratio is on record, so no
+ * figure off by an unknown factor is ever kept. */
+static int asb_ma_real(int raw_ma) {
+    if (raw_ma <= 0 || g_curscale_n < 5 || g_curscale_x100 < 15 || g_curscale_x100 > 400) return 0;
+    return (int)((long)raw_ma * 100L / g_curscale_x100);
+}
+
 /* A fast trend on a cool body is a burst, not heat (fix160).
  *
  * The trend sums the last rises of the hottest CPU sensor, and that hotspot follows load, not
@@ -10910,7 +10921,8 @@ int main(int argc, char **argv) {
                     memset(&_ei, 0, sizeof(_ei));
                     _ei.screen_on  = metrics.misc.screen_on;
                     _ei.charging   = metrics.bat.charging;
-                    _ei.ma         = asb_ma_ref(metrics.bat.current_ma);
+                    _ei.ma         = asb_ma_real(metrics.bat.current_ma);
+                    g_en_gauge_x100 = (g_curscale_n >= 5 && g_curscale_x100 >= 15 && g_curscale_x100 <= 400) ? g_curscale_x100 : -1;
                     _ei.voltage_uv = metrics.bat.voltage_uv;
                     _ei.hint       = g_smart_rt.app_hint;
                     _ei.app_hash   = g_pkg_detect_ok ? g_smart_rt.app_hash : 0;

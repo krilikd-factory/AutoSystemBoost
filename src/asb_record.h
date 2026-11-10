@@ -1076,7 +1076,7 @@ static void asb_rec_summary_write(void) {
     if (!f) return;
     const char *cc = g_rec_cc_state == 1 ? "ok" : g_rec_cc_state == -1 ? "unavailable"
                    : g_rec_cc_state == -2 ? "not_moving" : "waiting";
-    fprintf(f, "# Smart records (Smart V6): power per situation, charge counter x battery voltage\n");
+    fprintf(f, "# Smart records (Smart V7): power per situation, charge counter x battery voltage\n");
     fprintf(f, "counter=%s blocks_ok=%lu blocks_rejected=%lu\n", cc, g_rec_blocks_ok, g_rec_blocks_rejected);
     fprintf(f, "rejected");
     for (int r = 0; r < REJ_N; r++) fprintf(f, "|%s=%lu", g_rec_rej_names[r], g_rec_rej[r]);
