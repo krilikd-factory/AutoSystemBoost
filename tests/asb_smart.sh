@@ -7326,6 +7326,7 @@ int main(int argc, char **argv) {
         asb_mem_apply(-1, 400);
         printf("yield yields=%lu\n", g_mem_yields);
         asb_mem_apply(0, 500);
+        printf("after external=%ld own=%ld\n", asb_mem_read(g_mem_v[0].path), asb_mem_read(g_mem_v[1].path));
         return 0;
     }
     if (!strcmp(mode, "reload")) {
@@ -7364,8 +7365,8 @@ echo "$out" | grep -q 'probe=1 voters=2 doms=1 kind=bus_dcvs' || fail "mem: vote
 echo "$out" | grep -q 'cap75 writes=2' || fail "mem: cap not written: $out"
 echo "$out" | grep -q 'free restores=2' || fail "mem: cap not given back: $out"
 echo "$out" | grep -q 'yield yields=1' || fail "mem: an external value was fought over: $out"
-[ "$(cat "$T/bus/DDR/soc:qcom,memlat:ddr:gold/max_freq" "$T/bus/DDR/19091000.qcom,bwmon-ddr/max_freq" | tr '\n' ' ')" = "2092000 4224000 " ] || \
-  fail "mem: external value overwritten or own cap not given back: $(cat "$T"/bus/DDR/*/max_freq | tr '\n' ' ')"
+echo "$out" | grep -q 'after external=2092000 own=4224000' || \
+  fail "mem: external value overwritten or own cap not given back: $out"
 H="$ROOT/webroot/index.html"
 if command -v node >/dev/null 2>&1; then
   { echo "const T = (k, d) => d;"; echo "const logReportRow = (a, b) => ({ row: a + ' = ' + b });"; echo "const logReportNote = (a) => ({ note: a });"
