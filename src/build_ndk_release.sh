@@ -65,13 +65,20 @@ for _zabi in arm64-v8a armeabi-v7a; do
   fi
   _zout="$ROOT_DIR/zygisk"
   mkdir -p "$_zout"
+  # V66 dev9: the static C++ runtime is linked in whole by default and its symbols exported
+  # from a library that lives inside every observed app process. Section GC drops the parts
+  # the observer never calls, and --exclude-libs keeps the runtime's symbols private so they
+  # can neither bloat the dynamic table nor collide with the app's own C++ runtime. The two
+  # Zygisk entry points are ours and stay exported; the llvm-nm check below still proves it.
   "$_zxx" -std=c++17 -O2 -fPIC -shared -fstack-protector-strong \
     -D_FORTIFY_SOURCE=2 -Wall -Wextra -Werror -Wno-unused-parameter \
+    -ffunction-sections -fdata-sections -Wl,--gc-sections -Wl,--exclude-libs,ALL \
     -fvisibility=hidden -static-libstdc++ -I"$SCRIPT_DIR/zygisk" \
     -DASB_ABI_TAG=\"$_zabi\" "$SCRIPT_DIR/zygisk/asb_observer.cpp" \
     -o "$_zout/$_zabi.so"
   "$STRIP" "$_zout/$_zabi.so" || true
   chmod 0644 "$_zout/$_zabi.so"
+  ls -lh "$_zout/$_zabi.so"
   if command -v "$TOOLCHAIN/llvm-nm" >/dev/null 2>&1; then
     "$TOOLCHAIN/llvm-nm" -D --defined-only "$_zout/$_zabi.so" | grep -q ' zygisk_module_entry$' \
       || { echo "[ASB] ERROR: zygisk_module_entry missing for $_zabi" >&2; exit 1; }
