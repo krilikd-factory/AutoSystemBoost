@@ -219,6 +219,13 @@ ltpo_video=0
 # No polling worker; camera/games stay active. Values are bounds-checked by the watcher.
 ltpo_idle_s=2
 ltpo_idle_rate=60
+# Panel maximum on touch (V66 dev8), only with ltpo_force=1: while the screen is being
+# touched, SurfaceFlinger is asked for the panel's highest mode by its own mode id (165 Hz on
+# panels that list it), past a ROM that keeps ordinary apps at 120 Hz. Released the moment the
+# touch watcher goes idle, so the idle rate and the panel's own frame drop come back. Only
+# modes the panel itself reports are used; a ROM that refuses the request is left alone.
+#   0 = off (default). 1 = on.
+ltpo_peak_force=0
 
 # Multimedia telemetry off (OPlus feedback collector: audio/video/display diag events).
 #   0 = stock behaviour (default). 1 = bind a patched copy of THIS device's own
@@ -591,6 +598,19 @@ smart_energy=1
 # the camera, the unlock lift, a thermal cap and the cooldown are untouched.
 # 1 = on (default), 0 = off.
 profile_class_auto=1
+# Smart lab (V66 dev8): Smart tries more settings for itself, one at a time, side by side with
+# the best one so far, and keeps a setting only when the battery measured it cheaper without
+# the cores at their ceiling more often, more janky frames or faster warming: "5G only when
+# needed" against 5G allowed (only when that switch is on), the unlock lift against 15 points
+# less, and the lean of the three apps that cost the most with the screen on. A best setting
+# whose cost climbs 15 % is tested again at once. Smart profile only. 1 = on (default), 0 = off.
+smart_lab=1
+# Smart lab memory bus (V66 dev8): the lab may also cap the CPU's votes on the memory bus -
+# 75 % or 55 % of the bus maximum while the screen is calm, 50 % or the lowest step on quiet
+# deep idle - through the voters this kernel exposes (Qualcomm bus_dcvs, else a DDR devfreq).
+# Display, GPU, video and modem votes are never touched. Every write is read back and given
+# back; a value someone else changed is left to them. 1 = on (default), 0 = off.
+smart_lab_mem=1
 # Smart night wakes: learns the short check-ins of a night (a few minutes on the phone, then
 # back to sleep) and keeps the night radio mode through them instead of switching the modem
 # to day mode and back. A screen-on that lasts longer is a real wake as before.
