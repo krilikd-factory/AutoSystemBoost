@@ -225,6 +225,7 @@ typedef struct {
     long long now_ms;      /* CLOCK_BOOTTIME */
     long      wall;        /* time(NULL) */
     int       replay;      /* V66: Balanced - the learned screen-off setting only, nothing measured or tried */
+    int       lab_owned;   /* V66 dev8: the app in front has its own lean in the Smart lab */
 } asb_rec_in_t;
 
 /* Smart V7 (V66): how sure each situation's result is. Kept beside the records file, not in
@@ -536,12 +537,30 @@ static int asb_rec_ctx_of(const asb_rec_in_t *in, int ignore_conditions) {
         if (!ignore_conditions && in->cooldown) return -1;
         return in->night ? ASB_REC_OFF_NIGHT : ASB_REC_OFF_DAY;
     }
-    if (in->microwake || in->heavy_state) return -1;
+    if (in->microwake || in->heavy_state || in->lab_owned) return -1;
     if (!ignore_conditions && (in->veto || in->lowbat || g_rec_smooth_testing)) return -1;
     int bright = (g_rec_bright_band == 1);
     if (g_rec_bright_band < 0) return -1;
     if (in->app_medium) return bright ? ASB_REC_ON_MEDIUM_BRIGHT : ASB_REC_ON_MEDIUM_DIM;
     return bright ? ASB_REC_ON_LIGHT_BRIGHT : ASB_REC_ON_LIGHT_DIM;
+}
+
+/* V66 dev8: screen-off blocks of 20 minutes instead of 40 once the drain is steady and large
+ * enough to measure in 20 minutes. The spread of the paired differences decides how many pairs
+ * a verdict needs: when three pairs or more sit within 4 % of each other (standard deviation),
+ * a 20-minute block still resolves the difference and the situation reaches its verdict in
+ * about half the time. The gauge counts whole mAh, so the drain must also be at least 75 mA
+ * (25 mAh in 20 minutes, a 4 % step): a quiet night at 26 mA would draw under 9 mAh a block and
+ * the rounding alone would swamp the setting - it keeps its 40-minute blocks. A spread that
+ * grows again goes back to 40 minutes on its own. */
+static long asb_rec_off_block_s(int ctx) {
+    if (ctx < 0 || ctx >= ASB_REC_CTX_N) return ASB_REC_OFF_BLOCK_S;
+    const asb_rec_ctx_t *c = &g_rec.ctx[ctx];
+    if (c->challenger == c->champion || c->pairs < 3) return ASB_REC_OFF_BLOCK_S;
+    double ma = c->trial[0].n ? c->trial[0].mean_ma : (double)c->record_ma;
+    if (ma < 75.0) return ASB_REC_OFF_BLOCK_S;
+    double var = c->pr_m2 / (double)(c->pairs - 1);
+    return var < 0.0016 ? ASB_REC_OFF_BLOCK_S / 2 : ASB_REC_OFF_BLOCK_S;
 }
 
 static void asb_rec_summary_write(void);
@@ -554,7 +573,7 @@ static void asb_rec_block_finish(const asb_rec_in_t *in) {
     int ctx = k->ctx;
     long dur_s = (long)((in->now_ms - k->t0_ms) / 1000);
     int off = asb_rec_is_off(ctx);
-    if (dur_s < (off ? ASB_REC_OFF_MIN_S : ASB_REC_ON_MIN_S)) return;   /* too short to mean anything */
+    if (dur_s < (off ? asb_rec_off_block_s(ctx) / 2 : ASB_REC_ON_MIN_S)) return;   /* too short to mean anything */
     long cc1 = g_rec_read_cc ? g_rec_read_cc() : -1;
     if (k->cc0_uah <= 0 || cc1 <= 0) { g_rec_cc_state = -1; asb_rec_reject(REJ_METER); return; }
     if (cc1 > k->cc0_uah) { asb_rec_reject(REJ_CHARGE); return; }     /* charge came in */
@@ -706,7 +725,7 @@ static void asb_rec_tick(const asb_rec_in_t *in) {
     int ctx = asb_rec_ctx_of(in, 0);
     if (g_rec_blk.active) {
         long dur_s = (long)((in->now_ms - g_rec_blk.t0_ms) / 1000);
-        long max_s = asb_rec_is_off(g_rec_blk.ctx) ? ASB_REC_OFF_BLOCK_S : ASB_REC_ON_BLOCK_S;
+        long max_s = asb_rec_is_off(g_rec_blk.ctx) ? asb_rec_off_block_s(g_rec_blk.ctx) : ASB_REC_ON_BLOCK_S;
         if (ctx != g_rec_blk.ctx || dur_s >= max_s) asb_rec_block_finish(in);
         else {
             asb_rec_block_t *k = &g_rec_blk;

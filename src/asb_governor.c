@@ -39,6 +39,7 @@ static int g_unlock_lift_now;
 #include "asb_energy.h"
 #include "asb_smart.h"
 #include "asb_record.h"
+#include "asb_lab.h"
 #include "asb_log_feedback.h"
 #include "asb_lspd.h"   /* fix187 */
 
@@ -1977,10 +1978,140 @@ static void asb_smooth_probe_tick(const asb_fsm_t *fsm, const asb_metrics_t *m) 
             ok = ((*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') ||
                   (*c >= '0' && *c <= '9') || *c == '.' || *c == '_');
         g_smooth_probe_ts = now;
-        if (!ok) return;
+        if (!ok || !asb_fork_budget_take(now)) return;
         g_smooth_probes++;
         asb_run_modscript("runtime/asb_gfx_probe.sh", pk);
     }
+}
+
+/* V66 dev8: the Smart lab's frame counts - the same probe and file as the smoothness check,
+ * asked at the start and the end of a block that counts frames, at most every 20 s. */
+static long g_lab_gfx_last_ask = 0;
+static unsigned long g_lab_gfx_asks = 0;
+static void asb_lab_gfx_ask_impl(const char *pkg) {
+    long now = (long)time(NULL);
+    if (!pkg || !*pkg) return;
+    if (g_lab_gfx_last_ask && now >= g_lab_gfx_last_ask && now - g_lab_gfx_last_ask < 20) return;
+    for (const char *c = pkg; *c; c++)
+        if (!((*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') || (*c >= '0' && *c <= '9') || *c == '.' || *c == '_'))
+            return;
+    if (!asb_fork_budget_take(now)) return;
+    g_lab_gfx_last_ask = now;
+    g_lab_gfx_asks++;
+    asb_run_modscript("runtime/asb_gfx_probe.sh", pkg);
+}
+static int asb_lab_gfx_read_impl(const char *pkg, long since, long *fr, long *jk) {
+    struct stat st;
+    if (stat(ASB_GFX_FILE, &st) != 0 || (long)st.st_mtime < since) return -1;
+    return asb_gfx_read_pkg(pkg, fr, jk);
+}
+
+/* V66 dev8: one tick of the Smart lab - its inputs, the knobs it hands back, the bus cap. */
+static int  g_lab_radio_ok = 0, g_lab_calm = 0;
+static long g_lab_mobile_ts = 0, g_lab_wifi_ts = 0, g_lab_radio_ts = 0;
+static int asb_lab_radio_watcher_live(long now) {
+    if (g_lab_radio_ts && now >= g_lab_radio_ts && now - g_lab_radio_ts < 60) return g_lab_radio_ok;
+    g_lab_radio_ts = now;
+    g_lab_radio_ok = 0;
+    FILE *f = fopen("/data/adb/asb/lte_light.pid", "re");
+    if (!f) return 0;
+    long pid = 0;
+    if (fscanf(f, "%ld", &pid) != 1) pid = 0;
+    fclose(f);
+    if (pid > 1 && kill((pid_t)pid, 0) == 0) g_lab_radio_ok = 1;
+    return g_lab_radio_ok;
+}
+static void asb_lab_pick_from_energy(long wall);
+static void asb_lab_run(const asb_fsm_t *fsm, const asb_metrics_t *m, const asb_rec_in_t *ri, int ma,
+                        int on_busy, int off_busy, int app_base) {
+    static long pick_ts = 0;
+    static unsigned seq_seen = 0;
+    asb_lab_in_t li;
+    memset(&li, 0, sizeof(li));
+    long now = ri->wall;
+    g_fork_camera = m->misc.camera_active;
+    li.enabled = g_asb_cfg.smart_lab && fsm->profile_idx == PROFILE_SMART && g_smart_rt.enabled;
+    li.explore = g_asb_cfg.smart_records_explore;
+    li.screen_on = m->misc.screen_on;
+    li.charging = m->bat.charging;
+    li.soc = m->bat.capacity_pct;
+    li.bat_temp_dc = m->bat.temp_dC;
+    li.voltage_uv = m->bat.voltage_uv;
+    li.ma = ma;
+    li.at_ceiling = ri->at_ceiling;
+    li.idle_quiet = !m->misc.screen_on && ri->idle_state;
+    li.idle_busy = !m->misc.screen_on && !ri->idle_state;
+    long mob = m->misc.rmnet_rx_bps + m->misc.rmnet_tx_bps;
+    long wif = m->misc.wlan_rx_bps + m->misc.wlan_tx_bps;
+    if (mob > 1024 && mob > wif * 4) g_lab_mobile_ts = now;
+    if (wif > 2048 && wif > mob) g_lab_wifi_ts = now;
+    li.on_mobile = g_lab_mobile_ts > 0 && now - g_lab_mobile_ts <= 120 && g_lab_mobile_ts >= g_lab_wifi_ts;
+    li.mobile_bytes = (long long)g_rmnet_rx_prev + (long long)g_rmnet_tx_prev;
+    li.radio_ok = li.enabled && m->misc.screen_on && asb_lab_radio_watcher_live(now);
+    li.mem_ok = li.enabled && g_asb_cfg.smart_lab_mem;
+    li.rec_on_busy = on_busy;
+    li.rec_off_busy = off_busy;
+    li.bright_band = g_rec_bright_band;
+    li.thermal_cap = fsm->thermal_cap;
+    li.cooldown = g_fsm_cooldown_active;
+    li.veto = g_smart_rt.thermal_veto;
+    li.lowbat = g_smart_rt.low_battery_override;
+    li.heavy = ri->heavy_state || g_smart_rt.app_hint >= ASB_APP_GAMING;
+    li.smooth_testing = g_rec_smooth_testing;
+    li.unplug_age_s = ri->unplug_age_s;
+    li.app_hash = g_pkg_detect_ok ? g_smart_rt.app_hash : 0;
+    li.app_pkg = g_smart_rt.app_pkg_cached;
+    li.app_base_x1000 = app_base;
+    li.lift_cfg_pct = g_asb_cfg.unlock_lift_pct;
+    li.now_ms = ri->now_ms;
+    li.wall = now;
+    g_lab_calm = m->misc.screen_on && (fsm->state == ASB_STATE_LIGHT_IDLE || fsm->state == ASB_STATE_MODERATE) &&
+                 !g_unlock_lift_now && !fsm->prime_escape && !m->misc.camera_active &&
+                 g_smart_rt.app_hint < ASB_APP_HEAVY && !g_touch_kick &&
+                 !(g_touch_last_ts > 0 && time(NULL) - g_touch_last_ts < 10);
+    li.calm = g_lab_calm;
+    if (li.mem_ok && g_mem_probe == 0) asb_mem_probe_run();
+    if (li.enabled && (pick_ts == 0 || now - pick_ts >= 600 || now < pick_ts)) {
+        pick_ts = now;
+        asb_lab_pick_from_energy(now);
+    }
+    if (g_en_ses_seq != seq_seen) {
+        seq_seen = g_en_ses_seq;
+        if (li.enabled) asb_lab_glance((int)g_en_ses_last_dur, g_en_ses_last_j, g_en_ses_last_s, &li);
+    }
+    asb_lab_tick(&li);
+    if (g_lab_event) { asb_log("%s", g_lab_event_msg); g_lab_event = 0; }
+    int pct = 0;
+    if (li.mem_ok) {
+        if (m->misc.screen_on) pct = g_lab_calm ? g_lab_mem_on_pct : 0;
+        else pct = li.idle_quiet ? g_lab_mem_off_pct : 0;
+    }
+    asb_mem_apply(pct, now);
+}
+
+/* The three apps that cost the most with the screen on, from the energy table - keyboards and
+ * the system's own surfaces are not apps the user runs. */
+static void asb_lab_pick_from_energy(long wall) {
+    asb_lab_app_cand_t c[LAB_APPS];
+    int n = 0;
+    int used[ASB_EN_APPS];
+    memset(used, 0, sizeof(used));
+    for (int r = 0; r < LAB_APPS; r++) {
+        int best = -1;
+        for (int i = 0; i < ASB_EN_APPS; i++) {
+            const asb_en_app_t *a = &g_en.app[i];
+            if (used[i] || !a->hash || a->s < 1800.0f || a->j <= 0.0f || !a->pkg[0]) continue;
+            if (asb_smart_is_system_ui(a->pkg) || asb_smart_is_ime_pkg(a->pkg)) continue;
+            if (best < 0 || a->j > g_en.app[best].j) best = i;
+        }
+        if (best < 0) break;
+        used[best] = 1;
+        c[n].hash = g_en.app[best].hash;
+        c[n].pkg = g_en.app[best].pkg;
+        c[n].j = g_en.app[best].j;
+        n++;
+    }
+    asb_lab_pick_apps(c, n, wall);
 }
 
 /* Screen-off deep-idle ceilings scaled by the records' setting (x0.75..x1.5 of what Smart and
@@ -3537,6 +3668,7 @@ static int asb_unlock_lift_update(int screen_on, int touch_kick, int touch_activ
  * table. A share, so it follows each cluster's own maximum; never below the 50 % floor. */
 static int asb_unlock_lift_share(int profile_idx) {
     int pct = g_asb_cfg.unlock_lift_pct;
+    if (profile_idx == PROFILE_SMART && g_lab_lift_pct > 0) pct = g_lab_lift_pct;   /* V66 dev8: the lab's wake-lift test */
     if (pct < 50) pct = 50;
     if (pct > 100) pct = 100;
     if (profile_idx == PROFILE_BATTERY) {
@@ -4235,8 +4367,8 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     fprintf(f, "probe_cache_hits=%lu\nprobe_cache_misses=%lu\n",
             g_stat_probe_hits, g_stat_probe_misses);
     /* Foreground answered from the top-app cgroup, no fork (fix124). */
-    fprintf(f, "probe_topapp=%lu\nprobe_topapp_empty=%lu\nprobe_topapp_ambiguous=%lu\n",
-            g_stat_probe_topapp, g_stat_probe_topapp_empty, g_stat_probe_topapp_ambig);
+    fprintf(f, "probe_topapp=%lu\nprobe_topapp_empty=%lu\nprobe_topapp_ambiguous=%lu\nprobe_topapp_keyboard_only=%lu\n",
+            g_stat_probe_topapp, g_stat_probe_topapp_empty, g_stat_probe_topapp_ambig, g_stat_probe_topapp_ime);
     fprintf(f, "zygisk_refresh_accepted=%lu\nzygisk_refresh_vetoed=%lu\n",
             g_zygisk_refresh_accepted, g_zygisk_refresh_vetoed);
     fprintf(f, "zygisk_launch_accepted=%lu\nzygisk_launch_vetoed=%lu\n"
@@ -4381,6 +4513,12 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
             g_rec_replay, g_class_auto_now,
             (g_en_class_now >= 0 && g_en_class_now < EN_CLASSES) ? g_en_class_names[g_en_class_now] : "-",
             g_en_plug_eta_min, g_en_mix_rate_x10, g_en_budget_plug);
+    fprintf(f, "lab_on=%d\nlab_radio_arm=%d\nlab_lift_pct=%d\nlab_mem_on_pct=%d\nlab_mem_off_pct=%d\nlab_mem_cap_now=%d\n"
+               "lab_mem_kind=%s\nlab_mem_voters=%d\nlab_app_front=%d\nlab_calm=%d\nlab_wins=%u\nlab_gfx_asks=%lu\n"
+               "fork_budget_hour=%d\nfork_budget_skips=%lu\nfork_budget_total=%lu\n",
+            g_asb_cfg.smart_lab, g_lab_radio_arm, g_lab_lift_pct, g_lab_mem_on_pct, g_lab_mem_off_pct, g_mem_cap_now,
+            g_mem_probe == 1 ? g_mem_kind : (g_mem_probe == 0 ? "unprobed" : "none"), g_mem_nv, g_lab_app_front,
+            g_lab_calm, g_lab.wins_total, g_lab_gfx_asks, g_fork_budget_n, g_fork_budget_skips, g_fork_budget_total);
     fprintf(f, "ddr_node=%s\nddr_min_mhz=%ld\nddr_idle_samples=%lu\nddr_idle_at_min_pct=%d\nddr_idle_avg_mhz=%ld\n",
             g_ddr_kind, g_ddr_min_khz > 0 ? g_ddr_min_khz / 1000 : -1, g_ddr_idle_n,
             g_ddr_idle_n ? (int)(g_ddr_idle_at_min * 100 / g_ddr_idle_n) : -1,
@@ -5534,7 +5672,7 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
             if (_ce < 0) _ce = 0;
             if (_ce > 100) _ce = 100;
         }
-        snprintf(out + strlen(out) - 1, outlen - (int)strlen(out),
+        snprintf(out + strlen(out) - 1, (size_t)(outlen - (int)strlen(out)),
             ",\"sus_pct\":%d,\"idle_q\":%d,\"cap_eff\":%d,"
             "\"mem_psi_peak\":%d,\"mem_press_ticks\":%d,"
             "\"eff_sus_lvl\":%.2f,\"eff_sus_temp\":%d,\"eff_gr_cd\":%d,\"eff_gr_temp\":%d,"
@@ -5550,7 +5688,7 @@ static void build_status_json(const asb_fsm_t *fsm, const asb_metrics_t *m,
             g_asb_cfg.bat_light_idle_gpu);
         int _pidx = fsm->profile_idx;
         if (_pidx < 0 || _pidx > 2) _pidx = 1;
-        snprintf(out + strlen(out) - 1, outlen - (int)strlen(out),
+        snprintf(out + strlen(out) - 1, (size_t)(outlen - (int)strlen(out)),
             ",\"intent\":\"%s\",\"hot_fail\":%d,\"deg_age\":%ld,"
             "\"auto_bat\":%d,\"auto_bat_restore\":%d,\"qn_active\":%d,"
             "\"auto_bat_reason\":\"%s\",\"auto_bat_since\":%lld,"
@@ -7146,7 +7284,7 @@ static int make_uevent_fd(void) {
     if (fd < 0) return -1;
     struct sockaddr_nl addr = {
         .nl_family = AF_NETLINK,
-        .nl_pid    = getpid(),
+        .nl_pid    = (__u32)getpid(),
         .nl_groups = 1
     };
     if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
@@ -7760,8 +7898,8 @@ static int asb_smart_tick(const asb_metrics_t *m, const asb_fsm_t *fsm) {
     g_rec_on_applied = 0;
     /* fix185: plus the smoothness lean of the app in front (more headroom, only where a test
      * showed it helps, or the test itself). */
-    if (screen_on && (g_rec_on_offset != 0 || g_smooth_lean != 0)) {
-        int _off = g_rec_on_offset + g_smooth_lean;
+    if (screen_on && (g_rec_on_offset != 0 || g_smooth_lean != 0 || g_lab_app_offset != 0)) {
+        int _off = g_rec_on_offset + g_smooth_lean + (g_lab_app_front ? g_lab_app_offset : 0);
         int _ra = (int)g_smart_rt.alpha_battery_x1000 + _off;
         if (_ra < ASB_SMART_ALPHA_BATTERY_MIN_X1000) _ra = ASB_SMART_ALPHA_BATTERY_MIN_X1000;
         if (_ra > ASB_SMART_ALPHA_BATTERY_MAX_X1000) _ra = ASB_SMART_ALPHA_BATTERY_MAX_X1000;
@@ -8357,6 +8495,9 @@ static int asb_smart_init(void) {
     g_smart_store_loaded = 1;
     /* fix184: the Smart records and the night-wake habit. */
     g_rec_read_cc = asb_rec_cc_file;
+    g_lab_read_cc = asb_rec_cc_file;
+    g_lab_gfx_ask = asb_lab_gfx_ask_impl;
+    g_lab_gfx_read = asb_lab_gfx_read_impl;
     g_rec_read_net = asb_rec_net_bytes;
     g_rec_read_bright_pct = asb_rec_bright_pct;
     {
@@ -8364,6 +8505,10 @@ static int asb_smart_init(void) {
         asb_rec_summary_write();
         int _el = asb_en_load();
         asb_en_summary_write();
+        int _ll = asb_lab_load();
+        asb_lab_summary_write(NULL);
+        asb_log("smart lab: %s, %u win(s) so far", _ll == 0 ? "loaded" : (_ll == 2 ? "store from another build, fresh start" : "fresh start"),
+                g_lab.wins_total);
         asb_log("smart energy: %s, %u charge(s) learned", _el ? "loaded" : "fresh start", g_en.plugs);
         asb_log("records: %s (%s); night wakes learned: %u over %u night(s)",
                 _rl == 1 ? "loaded" : _rl == 2 ? "fix184 store: night checks kept, situations re-measured as power"
@@ -10915,6 +11060,26 @@ int main(int argc, char **argv) {
                         _ri.unplug_age_s < ASB_REC_SETTLE_S)
                         g_ses_post_unplug = 1;
                 }
+                /* V66 dev8: the Smart lab. An app with its own lean there is left out of the
+                 * records' situations, and the lab waits while the records still try a setting
+                 * for the situation the phone is in. */
+                int _lab_on_busy = 0, _lab_off_busy = 0, _lab_app_base = 0, _lab_front = 0;
+                {
+                    asb_rec_in_t _rq = _ri;
+                    _rq.lab_owned = 0;
+                    int _sc = asb_rec_ctx_of(&_rq, 1);
+                    if (_ri.enabled && _sc >= 0 && !asb_rec_is_off(_sc))
+                        _lab_app_base = asb_rec_arm_value(_sc, g_rec.ctx[_sc].champion);
+                    int _bc = asb_rec_ctx_of(&_rq, 0);
+                    if (_ri.enabled && _ri.explore && _bc >= 0 && !g_rec.ctx[_bc].converged) {
+                        if (asb_rec_is_off(_bc)) _lab_off_busy = 1; else _lab_on_busy = 1;
+                    }
+                    int _sl = asb_lab_app_slot(g_pkg_detect_ok ? g_smart_rt.app_hash : 0);
+                    _lab_front = g_asb_cfg.smart_lab && fsm.profile_idx == PROFILE_SMART && g_smart_rt.enabled &&
+                                 metrics.misc.screen_on && _sl >= 0 &&
+                                 !strcmp(g_smart_rt.app_pkg_cached, g_lab.k[LAB_APP0 + _sl].pkg);
+                }
+                _ri.lab_owned = _lab_front;
                 asb_rec_tick(&_ri);
                 {
                     asb_en_in_t _ei;
@@ -10930,7 +11095,9 @@ int main(int argc, char **argv) {
                     _ei.now_ms     = _ri.now_ms;
                     _ei.wall       = _ri.wall;
                     if (g_asb_cfg.smart_energy) asb_en_tick(&_ei);
+                    g_en_gauge_windows = g_curscale_n;
                     asb_ddr_observe(_ri.idle_state && !metrics.misc.screen_on, _ri.wall);
+                    asb_lab_run(&fsm, &metrics, &_ri, _ei.ma, _lab_on_busy, _lab_off_busy, _lab_app_base);
                 }
                 asb_smooth_probe_tick(&fsm, &metrics);
                 asb_bhold_tick(&fsm, &metrics);
@@ -12011,6 +12178,8 @@ int main(int argc, char **argv) {
     /* fix184: the records and night wakes, which save at most every 15 minutes otherwise. */
     if (g_rec_loaded && g_rec_dirty && asb_rec_save() == 0) asb_log("smart records flushed on shutdown");
     if (g_en_loaded && g_en_dirty && asb_en_save() == 0) asb_log("smart energy flushed on shutdown");
+    asb_mem_apply(0, (long)time(NULL));
+    if (g_lab_loaded && g_lab_dirty && asb_lab_save() == 0) asb_log("smart lab flushed on shutdown");
     asb_log("persistent stats saved: sessions=%d degrade=%d", g_pstats.session_count, g_pstats.degrade_count);
     unlink(ASB_SOCK_PATH);
     unlink(PID_FILE);

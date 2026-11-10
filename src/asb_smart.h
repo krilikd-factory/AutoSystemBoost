@@ -424,6 +424,40 @@ static unsigned long g_stat_probe_topapp = 0;
  * window), or two apps at adj 0 (split screen, a picture-in-picture video). Published so the
  * next capture says which one sends the governor to the dumpsys fallback. */
 static unsigned long g_stat_probe_topapp_empty = 0, g_stat_probe_topapp_ambig = 0;
+/* V66: a keyboard is never the app in front. Typing in a system window (a notification
+ * reply, Settings, the lock screen) leaves the keyboard as the only app-uid process in the
+ * cgroup, and the first pass took it: an OP15 day billed 16 screen-on minutes to the keyboard in
+ * the per-app energy table, as if it were an app the user had opened. Keyboards are left
+ * out by name; a cgroup holding nothing else sends the lookup to the dumpsys chain. */
+static unsigned long g_stat_probe_topapp_ime = 0;
+/* V66 dev8: an hourly budget for the optional forks - the dumpsys fallbacks of the app
+ * lookup and the frame-count probes. A field day needed about 75 an hour; 240 is room for
+ * a busy one, and a loop that went wrong (a ROM whose cgroup never answers, a probe that
+ * keeps failing) stops at that instead of turning the governor into a fork source. Nothing
+ * optional is forked while the camera runs: its pipeline is the last place for a dumpsys.
+ * A lookup that hits the budget keeps the last answer. */
+#define ASB_FORK_BUDGET_H 240
+static long g_fork_budget_t0 = 0;
+static int  g_fork_budget_n = 0, g_fork_camera = 0;
+static unsigned long g_fork_budget_skips = 0, g_fork_budget_total = 0;
+static int asb_fork_budget_take(long now) {
+    if (g_fork_budget_t0 == 0 || now - g_fork_budget_t0 >= 3600 || now < g_fork_budget_t0) {
+        g_fork_budget_t0 = now;
+        g_fork_budget_n = 0;
+    }
+    if (g_fork_camera || g_fork_budget_n >= ASB_FORK_BUDGET_H) { g_fork_budget_skips++; return 0; }
+    g_fork_budget_n++;
+    g_fork_budget_total++;
+    return 1;
+}
+static int asb_smart_is_ime_pkg(const char *p) {
+    static const char *const k[] = { "inputmethod", "keyboard", "swiftkey", "honeyboard",
+                                     "baidu.input", ".ime.", NULL };
+    if (!p || !*p) return 0;
+    for (int i = 0; k[i]; i++) if (strstr(p, k[i])) return 1;
+    size_t n = strlen(p);
+    return n > 4 && strcmp(p + n - 4, ".ime") == 0;
+}
 static int asb_read_small(const char *path, char *buf, size_t bufsz) {
     int fd = open(path, O_RDONLY | O_CLOEXEC);
     if (fd < 0) return -1;
@@ -445,6 +479,7 @@ static int asb_smart_pkg_via_topapp(char *out_pkg, size_t outsz) {
     int  cadj[MAXC];
     int  nc = 0;
     char *cur = pids;
+    int ime = 0;
     while (*cur && nc < MAXC) {
         char *endp = NULL;
         long pid = strtol(cur, &endp, 10);
@@ -465,6 +500,7 @@ static int asb_smart_pkg_via_topapp(char *out_pkg, size_t outsz) {
         char *colon = strchr(name, ':');
         if (colon) *colon = '\0';
         if (!strchr(name, '.')) continue;          /* not a package-shaped process name */
+        if (asb_smart_is_ime_pkg(name)) { ime = 1; continue; }
         snprintf(path, sizeof(path), ASB_PROC_ROOT "/%ld/oom_score_adj", pid);
         int adj = 1000;
         if (asb_read_small(path, buf, sizeof(buf)) > 0) adj = (int)strtol(buf, NULL, 10);
@@ -472,7 +508,11 @@ static int asb_smart_pkg_via_topapp(char *out_pkg, size_t outsz) {
         cadj[nc] = adj;
         nc++;
     }
-    if (nc == 0) { g_stat_probe_topapp_empty++; return 0; }
+    if (nc == 0) {
+        if (ime) g_stat_probe_topapp_ime++;
+        else g_stat_probe_topapp_empty++;
+        return 0;
+    }
     /* One package among all candidates, or among the adj-0 ones. */
     for (int pass = 0; pass < 2; pass++) {
         const char *pick = NULL;
@@ -660,7 +700,8 @@ static asb_pkg_status_t asb_smart_detect_foreground_pkg(
     g_stat_probe_misses++;   /* cache did not answer: the fork chain runs */
     /* No `dumpsys activity top` any more (fix124): it makes the app dump its views on its
      * UI thread. Both fallbacks stay inside system_server. */
-    if (asb_smart_pkg_via_resumed(pkg, sizeof(pkg))) source = 2;
+    if (!asb_fork_budget_take((long)now)) pkg[0] = '\0';
+    else if (asb_smart_pkg_via_resumed(pkg, sizeof(pkg))) source = 2;
     else if (asb_smart_pkg_via_window_focus(pkg, sizeof(pkg))) source = 3;
     else pkg[0] = '\0';
     }   /* !_topapp */

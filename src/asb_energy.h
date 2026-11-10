@@ -27,7 +27,8 @@
 #define ASB_EN_SUMMARY      "/dev/.asb/smart_energy.txt"
 #endif
 #define ASB_EN_MAGIC        0x4153454eu
-#define ASB_EN_VERSION      2     /* 2 (dev5): mW on the real scale; dev4's figures are dropped */
+#define ASB_EN_VERSION      3     /* 2 (dev5): mW on the real scale; 3 (dev6): the screen-on share counts long gaps */
+#define ASB_EN_GAP_MAX_MS   (6LL * 3600 * 1000)
 #define ASB_EN_APPS         32
 #define ASB_EN_SLOTS        48
 #define ASB_EN_GLANCE_S     90
@@ -45,6 +46,7 @@ static int g_en_budget_plug = 0;     /* 1 the usual charge is too far, -1 near e
 #endif
 
 static int g_en_gauge_x100 = -1;     /* this phone's current reading as x100 of the real drain, -1 not known yet */
+static int g_en_gauge_windows = 0;   /* how many drain windows that factor stands on */
 
 enum { EN_GLANCE = 0, EN_LIGHT, EN_MEDIA, EN_HEAVY, EN_GAME, EN_CLASSES };
 static const char *const g_en_class_names[EN_CLASSES] = { "glance", "light", "media", "heavy", "game" };
@@ -89,6 +91,9 @@ static long      g_en_unplug_ts = 0;
 static long long g_en_ses_t0_ms = 0;
 static float     g_en_ses_j = 0.0f, g_en_ses_s = 0.0f, g_en_ses_hint_s[5];
 static int       g_en_class_now = -1;          /* the kind of use so far in this stretch */
+/* V66 dev8: the stretch that just ended, for the Smart lab's wake-lift test. */
+static unsigned  g_en_ses_seq = 0;
+static float     g_en_ses_last_dur = 0.0f, g_en_ses_last_j = 0.0f, g_en_ses_last_s = 0.0f;
 
 static void asb_en_init(asb_en_store_t *s) {
     memset(s, 0, sizeof(*s));
@@ -149,6 +154,8 @@ static void asb_en_session_close(long long now_ms) {
     float dur = (float)((double)(now_ms - g_en_ses_t0_ms) / 1000.0);
     g_en_ses_t0_ms = 0;
     g_en_class_now = -1;
+    g_en_ses_last_dur = dur; g_en_ses_last_j = g_en_ses_j; g_en_ses_last_s = g_en_ses_s;
+    g_en_ses_seq++;
     if (g_en_ses_s < 10.0f) return;   /* mostly on the charger: no figure */
     int c = asb_en_class_of(dur, g_en_ses_hint_s);
     g_en.cls[c].n += 1.0f;
@@ -198,9 +205,19 @@ static int asb_en_save(void);
 static void asb_en_tick(const asb_en_in_t *in) {
     if (!g_en_loaded) return;
     asb_en_decay_to(in->wall);
-    long long dt_ms = (g_en_prev_ms > 0) ? in->now_ms - g_en_prev_ms : 0;
+    long long gap_ms = (g_en_prev_ms > 0) ? in->now_ms - g_en_prev_ms : 0;
+    long long dt_ms = gap_ms;
     g_en_prev_ms = in->now_ms;
     if (dt_ms <= 0 || dt_ms > ASB_EN_TICK_MAX_MS) dt_ms = 0;
+    /* dev6: the share of time with the screen on takes the whole gap since the last tick, in
+     * the state the phone was in during it. dev4 counted only gaps of 30 s or less, and with the
+     * screen off the governor ticks far less often than that - an OP15 day read 96-97 % screen
+     * on for a capture that had it on 60 % of the time, which made the drain until the usual
+     * charge look like a day of screen-on use. Suspend counts as screen-off time, as it is. */
+    if (gap_ms > 0 && gap_ms <= ASB_EN_GAP_MAX_MS && g_en_prev_chg == 0 && g_en_prev_on >= 0) {
+        if (g_en_prev_on == 1) g_en.on_s += (float)gap_ms / 1000.0f;
+        else                   g_en.off_s += (float)gap_ms / 1000.0f;
+    }
 
     if (g_en_prev_chg == 0 && in->charging) {
         if (!(g_en_unplug_ts > 0 && in->wall - g_en_unplug_ts < ASB_EN_REPLUG_S)) {
@@ -228,10 +245,6 @@ static void asb_en_tick(const asb_en_in_t *in) {
     }
     g_en_prev_on = in->screen_on ? 1 : 0;
 
-    if (!in->charging && dt_ms > 0) {
-        if (in->screen_on) g_en.on_s += (float)dt_ms / 1000.0f;
-        else               g_en.off_s += (float)dt_ms / 1000.0f;
-    }
     if (in->screen_on && !in->charging && dt_ms > 0 && in->ma > 0 && in->ma < 8000 &&
         in->voltage_uv > 3000000 && in->voltage_uv < 4800000) {
         float dt = (float)dt_ms / 1000.0f;
@@ -281,7 +294,9 @@ static int asb_en_load(void) {
         memset(&s, 0, sizeof(s));
         size_t n = fread(&s, 1, sizeof(s), f);
         fclose(f);
-        if (n == sizeof(s) && s.magic == ASB_EN_MAGIC && s.version == ASB_EN_VERSION && s.size == sizeof(s)) {
+        if (n == sizeof(s) && s.magic == ASB_EN_MAGIC && (s.version == ASB_EN_VERSION || s.version == 2) &&
+            s.size == sizeof(s)) {
+            if (s.version == 2) { s.on_s = 0.0f; s.off_s = 0.0f; s.version = ASB_EN_VERSION; }
             got = 1;
             for (int i = 0; i < ASB_EN_APPS && got; i++) {
                 s.app[i].pkg[sizeof(s.app[i].pkg) - 1] = 0;
@@ -305,7 +320,9 @@ static void asb_en_summary_write(void) {
     FILE *f = fopen(tmp, "w");
     if (!f) return;
     fprintf(f, "# Smart V7 energy: screen on, off the charger; battery current x voltage on the real scale; fades 3 %% a day\n");
-    fprintf(f, "meter|gauge_x100=%d\n", g_en_gauge_x100);
+    fprintf(f, "meter|gauge_x100=%d|windows=%d|confidence=%s|basis=%s\n", g_en_gauge_x100, g_en_gauge_windows,
+            g_en_gauge_x100 <= 0 ? "low" : (g_en_gauge_windows >= 30 ? "high" : (g_en_gauge_windows >= 5 ? "medium" : "low")),
+            g_en_gauge_x100 > 0 ? "gauge_corrected" : "current_raw");
     float total = 0.0f;
     for (int i = 0; i < ASB_EN_APPS; i++) total += g_en.app[i].j;
     fprintf(f, "# app|pkg|minutes|avg_mW|share_pct\n");

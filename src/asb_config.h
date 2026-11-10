@@ -211,6 +211,8 @@ typedef struct {
     int   smart_records_balanced;    /* 1=Balanced applies the screen-off setting Smart won, without measuring (V66) */
     int   smart_energy;              /* 1=cost per app and per kind of use, and the charging habit for the budget (V66) */
     int   profile_class_auto;        /* 1=Performance holds light apps at 80 %, Battery lifts games to 70 % (V66) */
+    int   smart_lab;                 /* 1=Smart tries more settings side by side: radio, wake lift, three apps (V66 dev8) */
+    int   smart_lab_mem;             /* 1=the lab may cap the CPU's memory-bus votes (V66 dev8) */
     int   smart_microwake;           /* 1=Smart learns short night wakes and keeps the night radio mode through them */
     int   smart_smooth;              /* 1=Smart reads per-app janky frames and tests more headroom where they pile up */
     int   smart_cold_guard;          /* 1=Smart leans to lower peaks with a cold pack (<5 C) under 40 % */
@@ -391,6 +393,8 @@ static inline void asb_config_defaults(asb_runtime_config_t *c) {
     c->smart_records_balanced       = 1;
     c->smart_energy                 = 1;
     c->profile_class_auto           = 1;
+    c->smart_lab                    = 1;
+    c->smart_lab_mem                = 1;
     c->smart_microwake              = 1;
     c->smart_smooth                 = 1;
     c->smart_cold_guard             = 1;
@@ -634,6 +638,8 @@ static inline void asb_cfg_apply_kv(asb_runtime_config_t *c, const char *k, cons
     else if (!strcmp(k, "smart_records_balanced"))  c->smart_records_balanced  = atoi(v) ? 1 : 0;
     else if (!strcmp(k, "smart_energy"))            c->smart_energy            = atoi(v) ? 1 : 0;
     else if (!strcmp(k, "profile_class_auto"))      c->profile_class_auto      = atoi(v) ? 1 : 0;
+    else if (!strcmp(k, "smart_lab"))               c->smart_lab               = atoi(v) ? 1 : 0;
+    else if (!strcmp(k, "smart_lab_mem"))           c->smart_lab_mem           = atoi(v) ? 1 : 0;
     else if (!strcmp(k, "smart_microwake"))         c->smart_microwake         = atoi(v) ? 1 : 0;
     else if (!strcmp(k, "battery_jank_guard"))       c->battery_jank_guard       = atoi(v) ? 1 : 0;
     else if (!strcmp(k, "battery_hold_learn"))       c->battery_hold_learn       = atoi(v) ? 1 : 0;

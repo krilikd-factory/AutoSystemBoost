@@ -1510,7 +1510,7 @@ static int msm_perf_write_caps(int c0_freq, int c1_freq, int c2_freq) {
         if (s < 0) continue;
         int v = g_msm_cur_max[s] > 0 ? g_msm_cur_max[s] : g_cpu_slot_hwmax[s];
         if (v <= 0) continue;
-        pos += snprintf(buf + pos, sizeof(buf) - pos, "%d:%d ", c, v);
+        pos += snprintf(buf + pos, sizeof(buf) - (size_t)pos, "%d:%d ", c, v);
         put[s] = v;
         any = 1;
     }

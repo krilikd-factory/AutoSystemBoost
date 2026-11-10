@@ -2077,13 +2077,13 @@ static void metrics_read_network(asb_misc_t *m, const struct timespec *now) {
     long mtx = rmnet_read_total("tx_bytes");
     long mrx = rmnet_read_total("rx_bytes");
     if (g_wlan_ts_prev.tv_sec > 0) {
-        double dt = (now->tv_sec - g_wlan_ts_prev.tv_sec) +
-                    (now->tv_nsec - g_wlan_ts_prev.tv_nsec) * 1e-9;
+        double dt = (double)(now->tv_sec - g_wlan_ts_prev.tv_sec) +
+                    (double)(now->tv_nsec - g_wlan_ts_prev.tv_nsec) * 1e-9;
         if (dt > 0.1) {
-            m->wlan_tx_bps = (long)((tx - g_wlan_tx_prev) / dt);
-            m->wlan_rx_bps = (long)((rx - g_wlan_rx_prev) / dt);
-            m->rmnet_tx_bps = (long)((mtx - g_rmnet_tx_prev) / dt);
-            m->rmnet_rx_bps = (long)((mrx - g_rmnet_rx_prev) / dt);
+            m->wlan_tx_bps = (long)((double)(tx - g_wlan_tx_prev) / dt);
+            m->wlan_rx_bps = (long)((double)(rx - g_wlan_rx_prev) / dt);
+            m->rmnet_tx_bps = (long)((double)(mtx - g_rmnet_tx_prev) / dt);
+            m->rmnet_rx_bps = (long)((double)(mrx - g_rmnet_rx_prev) / dt);
             /* A link that went away takes its counters with it (fix122): no negative rate. */
             if (m->rmnet_tx_bps < 0) m->rmnet_tx_bps = 0;
             if (m->rmnet_rx_bps < 0) m->rmnet_rx_bps = 0;
@@ -2294,8 +2294,8 @@ static int metrics_camera_active(const struct timespec *now) {
 
     int busy = 0;
     if (g_cam_jif_prev > 0ULL && g_cam_ts_prev.tv_sec > 0 && jif >= g_cam_jif_prev) {
-        double dt = (now->tv_sec - g_cam_ts_prev.tv_sec) +
-                    (now->tv_nsec - g_cam_ts_prev.tv_nsec) * 1e-9;
+        double dt = (double)(now->tv_sec - g_cam_ts_prev.tv_sec) +
+                    (double)(now->tv_nsec - g_cam_ts_prev.tv_nsec) * 1e-9;
         if (dt > 0.2) {
             long hz = sysconf(_SC_CLK_TCK);
             if (hz <= 0) hz = 100;
