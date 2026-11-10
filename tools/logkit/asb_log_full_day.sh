@@ -1362,6 +1362,12 @@ lk_emit_smart_records() {
   fi
   grep '^microwake|' "$_srf" | sed 's/^microwake|/night wakes: /; s/|/  /g'
   grep '^smooth|' "$_srf" | sed 's/^smooth|/smoothness: /; s/|/  /g'
+  grep '^conf|' "$_srf" | awk -F'|' 'NF >= 9 && $3 + $4 + $5 > 0 { printf "second checks %s: confirmed %s, rolled back %s, running %s, last %s %s..%s %%\n", $2, $4, $5, $3, $6, $7, $8 }'
+  _sef="${ASB_LK_ENERGY_FILE:-/dev/.asb/smart_energy.txt}"
+  if [ -r "$_sef" ]; then
+    cp "$_sef" "$LK_OUT_DIR/smart_energy.txt" 2>/dev/null
+    grep -E '^(app|class|plug)[|]' "$_sef" | sed 's/^/energy: /; s/|/  /g'
+  fi
   echo "infinite-log Smart feedback: status=$(lk_state_kv smooth_log_status); accepted=$(lk_state_kv smooth_log_accepted); suppressed=$(lk_state_kv smooth_log_suppressed); rejected=$(lk_state_kv smooth_log_rejected)"
   echo "The log sends only sustained-jank probe hints. The native governor re-reads frames once, owns every A/B window and keeps plateau/recheck decisions."
   [ -r "$LK_SF_FILE" ] && cp "$LK_SF_FILE" "$LK_OUT_DIR/smart_log_feedback.env" 2>/dev/null || true
