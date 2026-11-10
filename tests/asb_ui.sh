@@ -3682,6 +3682,73 @@ node "$T/t.js" "$H" || fail "runtime"
 echo "PASS webui v66 startup locale: one locale read started in <head>, English only when chosen or as the fallback, every locale carries every English key path"
 )
 
+t_webui_v66_calm_decor_runtime() (
+# Runtime (V66 dev6): the WebUI's decorative loops stop ten seconds after the last touch and
+# on closed pages, and start again at the next touch; progress spinners are never paused.
+# An OP15 capture had the manager hosting the page at 4.1 W in front with 52-59 % of its
+# frames over 8 ms of GPU work, and the idle home screen ran 31 endless animations. The
+# REAL calm timer runs in node over fake timers; the CSS rule is checked for what it pauses.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui v66 calm decor: $*" >&2; exit 1; }
+python3 - "$H" <<'PY' || fail 'CSS contract'
+import sys, re
+s = open(sys.argv[1], encoding='utf-8').read()
+i = s.index('/* V66 dev6: decoration only moves while someone is using the page.')
+blk = s[i:s.index('}', s.index('animation-play-state: paused !important;', i)) + 1]
+sel = blk[blk.index('*/') + 2:blk.index('{', blk.index('*/'))]
+for need in ('.live-page:not(.open) .logo-glow', '.live-page:not(.open) .app-name', '.live-page:not(.open) .dot::after',
+             'body.live-active .page:not(.live-page) .logo-ring', 'body.live-active .page:not(.live-page) .ai-glow',
+             'html.asb-calm .logo-glow', 'html.asb-calm .logo-ring', 'html.asb-calm .app-name', 'html.asb-calm .dot::after',
+             'html.asb-calm .ai-glow', 'html.asb-calm .zygisk-header-dot::after', 'html.asb-calm .dev-zygisk-link-dot',
+             'html.asb-calm .metric-charge', 'html.asb-calm .log-menu-item.is-recording::before'):
+    assert need in sel, need
+for spinner in ('busy', 'spinner', 'is-running', 'orbit', 'loading', 'ld .pchk', 'stock-restoring'):
+    assert spinner not in sel, 'a progress indicator would stop: ' + spinner
+# every decorative loop named above still exists as an endless animation the rule can reach
+for cls, anim in (('.logo-glow', 'rotate 8s linear infinite'), ('.app-name', 'asbSweep 5.5s'), ('.dot', 'pulse 2.5s ease-in-out infinite')):
+    assert anim in s, anim
+PY
+command -v node >/dev/null 2>&1 || { echo "SKIP webui v66 calm decor runtime: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cat > "$T/t.js" <<'JS'
+const fs = require('fs'), h = fs.readFileSync(process.argv[2], 'utf8');
+const code = h.slice(h.indexOf('let _asbInputAt = -1e9;'), h.indexOf('\n/* dev4: a job never runs while another page is open or opening.'));
+let now = 0; const timers = []; const listeners = {};
+global.setTimeout = (fn, ms) => { const t = { at: now + (ms || 0), fn, live: true }; timers.push(t); return timers.length; };
+global.performance = { now: () => now };
+const cls = new Set();
+global.document = { documentElement: { classList: { add: c => cls.add(c), remove: c => cls.delete(c) } } };
+global.window = { addEventListener: (t, fn) => { listeners[t] = fn; } };
+function advance(ms) {
+  const end = now + ms;
+  for (;;) {
+    const due = timers.filter(t => t.live && t.at <= end).sort((a, b) => a.at - b.at)[0];
+    if (!due) break;
+    now = due.at; due.live = false; due.fn();
+  }
+  now = end;
+}
+const live = () => timers.filter(t => t.live).length;
+eval(code);
+let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
+chk(['pointerdown', 'touchstart', 'keydown', 'wheel'].every(t => typeof listeners[t] === 'function'), 'input listeners');
+chk(!cls.has('asb-calm') && live() === 1, 'one calm timer at load');
+advance(9900); chk(!cls.has('asb-calm'), 'calm before ten seconds');
+advance(200); chk(cls.has('asb-calm'), 'not calm after ten seconds');
+chk(live() === 0, 'a timer kept running on a calm page');
+listeners.touchstart(); chk(!cls.has('asb-calm') && live() === 1, 'a touch did not wake the decoration');
+for (let i = 0; i < 50; i++) { advance(100); listeners.wheel(); }
+chk(live() === 1, 'a scroll armed a timer per event: ' + live());
+advance(9000); chk(!cls.has('asb-calm'), 'calm nine seconds after the last scroll');
+advance(1200); chk(cls.has('asb-calm'), 'not calm ten seconds after the last scroll');
+process.exit(bad ? 1 : 0);
+JS
+node "$T/t.js" "$H" || fail 'calm timer'
+echo "PASS webui v66 calm decor: decorative loops stop ten seconds after the last touch and on closed pages, one timer however much the user scrolls, spinners untouched"
+)
+
 t_webui_v66_startup_queue_runtime() (
 # Runtime (V66): the opening's background root reads wait for the first frame of the home
 # screen, run one at a time in priority order (Live pass, Zygisk header, other-audio look)

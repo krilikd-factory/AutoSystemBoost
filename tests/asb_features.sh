@@ -2960,8 +2960,9 @@ t_lte_bulk_runtime() (
 # 17-minute download at 2-7 Mbit/s - the give-back wanted one window over 12 Mbit/s, which an
 # LTE cell near its own limit never shows - and the screen-off mode switched to LTE in the
 # middle of a 5-9 Mbit/s download. Checked here with the REAL script:
-#   light mode: drop only under 2 Mbit/s; two windows in a row at 3 Mbit/s give 5G back;
-#               one busy window alone does not; the LTE-held tick is 10 s;
+#   light mode: drop only under 2 Mbit/s; demand in 4 of the last 6 windows at 3 Mbit/s,
+#               or two windows in a row over 12 Mbit/s, give 5G back (V66: a 10-30 s feed
+#               burst does not); the LTE-held tick is 10 s;
 #   screen off: a transfer window keeps 5G; a stream still switches; a transfer starting
 #               on LTE gives 5G back and holds it; a light record kept at screen-off is
 #               watched the same way.
@@ -3014,9 +3015,29 @@ ticks 1500 1500 1500
 ticks 3500 800 3500 900
 [ "$(mask)" = "$NR_OFF" ] || f "single busy windows (not in a row) gave 5G back"
 ticks 3500 3500
-[ "$(mask)" = "$NR_ON" ] || f "two busy windows in a row (a download held on LTE) did not give 5G back"
-grep -q 'light: 3500 kbit/s sustained over 2 windows - 5G back' "$T/st/lte_screenoff.log" || f "sustained give-back not logged"
+[ "$(mask)" = "$NR_OFF" ] || f "a 20 s feed burst (two busy windows) gave 5G back"
+ticks 20000 4000 20000 900
+[ "$(mask)" = "$NR_OFF" ] || f "single fast windows (a feed prefetch) gave 5G back"
+ticks 3500 3500 900 3500 3500
+[ "$(mask)" = "$NR_ON" ] || f "demand in 4 of 5 windows (a download held on LTE) did not give 5G back"
+grep -q 'light: 3500 kbit/s sustained, busy in 4 of the last 5 windows - 5G back' "$T/st/lte_screenoff.log" || f "sustained give-back not logged: $(tail -n 2 "$T/st/lte_screenoff.log")"
 [ -s "$T/st/lte_light.hold" ] || f "no hold after the sustained give-back"
+rm -f "$T/st/lte_light.hold"; ticks 1500 1500 1500
+[ "$(mask)" = "$NR_OFF" ] || f "light traffic after the hold did not drop to LTE again"
+ticks 20000 20000
+[ "$(mask)" = "$NR_ON" ] || f "two fast windows in a row did not give 5G back"
+grep -q 'light: 20000 kbit/s over 2 windows in a row - 5G back' "$T/st/lte_screenoff.log" || f "fast give-back not logged"
+rm -f "$T/st/lte_light.hold"; ticks 1500 1500 1500
+bs="$(sh -c '. "$1/hdr.sh"; _lbursts=0; for k in 3500 900 3500 900; do _light_tick "$k"; done; _light_bursts_note' _ "$T"; grep -c 'light: 2 busy window(s) of a feed burst stayed on LTE' "$T/st/lte_screenoff.log")"
+[ "$bs" = 1 ] || f "short bursts kept on LTE not counted"
+[ "$(mask)" = "$NR_OFF" ] || f "the burst count changed the link"
+fresh; echo nr > "$T/labradio"
+ASB_LTE_LAB_FILE="$T/labradio" sh -c '. "$1/hdr.sh"; _lowN=0; for k in 100 100 100 100; do _light_tick "$k"; done' _ "$T"
+[ "$(mask)" = "$NR_ON" ] || f "LTE chosen during a Smart lab block with 5G allowed"
+rm -f "$T/labradio"
+ASB_LTE_LAB_FILE="$T/labradio" sh -c '. "$1/hdr.sh"; _lowN=0; for k in 100 100 100; do _light_tick "$k"; done' _ "$T"
+[ "$(mask)" = "$NR_OFF" ] || f "light traffic did not choose LTE once the lab block ended"
+grep -q 'if \[ -f "\$SAVE" \] && \[ "\$(_saved_reason)" = "light" \] && \[ "\$(cat "\$LABF" 2>/dev/null)" = nr \]; then' "$L" || f "a held LTE record is not given back for a lab 5G block"
 ltk="$(sh -c '. "$1/hdr.sh"; echo "$LIGHT_TICK_LTE_S"' _ "$T")"
 [ "$ltk" = 10 ] || f "LTE-held tick is $ltk s, want 10"
 ltk="$(ASB_LTE_LIGHT_TICK_S=1 sh -c '. "$1/hdr.sh"; echo "$LIGHT_TICK_LTE_S"' _ "$T")"
@@ -3072,6 +3093,67 @@ sh "$L" restore >/dev/null 2>&1
 exit "$fail"
 )
 
+t_ltpo_peak_force_runtime() (
+# Runtime (V66 dev8): "Panel maximum on touch" with Force LTPO - the REAL helpers of
+# runtime/asb_ltpo_touch.sh on a mocked `service`. The SurfaceFlinger mode asked for is the
+# panel's highest one at the resolution in use (an FHD setting must not switch the phone back
+# to 1.5K), released with an invalid id so the display manager's own policy returns, and a ROM
+# that refuses three times is marked unsupported and left alone.
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail=0; f() { echo "FAIL ltpo peak force: $*" >&2; fail=1; }
+H="$ROOT/runtime/asb_ltpo_touch.sh"
+mkdir -p "$T/bin" "$T/st"
+cat > "$T/bin/service" <<'S'
+#!/bin/sh
+echo "$*" >> "$SVC_LOG"
+case "$4" in -1) echo "Result: Parcel(Error: 0xffffffea \"Invalid argument\")" ;; *) [ -f "$SVC_REFUSE" ] && echo "Result: Parcel(Error: 0xffffffff)" || echo "Result: Parcel(NULL)" ;; esac
+S
+chmod +x "$T/bin/service"
+dump() {
+  printf '    mActiveSfDisplayMode=DisplayMode{id=%s, width=%s, height=%s, xDpi=455.0, peakRefreshRate=60.000004, vsyncRate=60.000004}\n' "$1" "$2" "$3"
+  printf '      DisplayMode{id=0, width=1272, height=2772, xDpi=455.0, peakRefreshRate=120.00001, vsyncRate=120.00001}\n'
+  printf '      DisplayMode{id=1, width=1272, height=2772, xDpi=455.0, peakRefreshRate=60.000004, vsyncRate=60.000004}\n'
+  printf '      DisplayMode{id=5, width=1272, height=2772, xDpi=455.0, peakRefreshRate=165.0, vsyncRate=165.0}\n'
+  printf '      DisplayMode{id=6, width=1080, height=2354, xDpi=386.3, peakRefreshRate=120.00001, vsyncRate=120.00001}\n'
+  printf '      DisplayMode{id=11, width=1080, height=2354, xDpi=386.3, peakRefreshRate=165.0, vsyncRate=165.0}\n'
+  printf '      DisplayModeRecord{mMode={id=1, parentModeId=-1, sfModeId=0, flags=, width=1272, height=2772, fps=120.00001}}\n'
+}
+dump 1 1272 2772 > "$T/d15k.txt"; dump 7 1080 2354 > "$T/dfhd.txt"
+sed -n '/^SFSTATE=/,/^_cleanup() {$/p' "$H" | sed '$d' > "$T/fns.sh"
+grep -q '^_sf_force()' "$T/fns.sh" && grep -q '^_sf_release()' "$T/fns.sh" || f "helpers not extracted"
+run() {   # $1 dump file, rest = shell
+  _d="$1"; shift
+  PATH="$T/bin:$PATH" SVC_LOG="$T/svc.log" SVC_REFUSE="$T/refuse" STATE_DIR="$T/st" DISPLAY_DUMP="$_d" \
+    sh -c '. "$1"; shift; eval "$*"' _ "$T/fns.sh" "$@"
+}
+[ "$(run "$T/d15k.txt" _sf_mode)" = "5 165" ] || f "1.5K: wrong mode $(run "$T/d15k.txt" _sf_mode)"
+[ "$(run "$T/dfhd.txt" _sf_mode)" = "11 165" ] || f "FHD: the mode would switch the resolution: $(run "$T/dfhd.txt" _sf_mode)"
+: > "$T/svc.log"
+run "$T/d15k.txt" 'PEAK_FORCE=1; _sf_force; echo "rc=$? on=$SFON"' > "$T/o.txt"
+grep -qx 'rc=0 on=1' "$T/o.txt" || f "force did not report success: $(cat "$T/o.txt")"
+grep -qx 'call SurfaceFlinger 1035 i32 5' "$T/svc.log" || f "wrong SurfaceFlinger call: $(cat "$T/svc.log")"
+grep -qx 'state=forced' "$T/st/ltpo_peak_force.state" && grep -qx 'hz=165' "$T/st/ltpo_peak_force.state" || f "state not published: $(cat "$T/st/ltpo_peak_force.state")"
+: > "$T/svc.log"
+run "$T/d15k.txt" 'PEAK_FORCE=1; _sf_force; _sf_release; echo "on=$SFON"' > "$T/o.txt"
+grep -qx 'on=0' "$T/o.txt" && grep -qx 'call SurfaceFlinger 1035 i32 -1' "$T/svc.log" || f "release did not clear the forced mode: $(cat "$T/svc.log")"
+: > "$T/svc.log"
+run "$T/d15k.txt" '_sf_release; echo ok' >/dev/null
+[ -s "$T/svc.log" ] && f "a release without a force called SurfaceFlinger"
+touch "$T/refuse"
+run "$T/d15k.txt" 'PEAK_FORCE=1; _sf_force; _sf_force; _sf_force; echo "pf=$PEAK_FORCE"' > "$T/o.txt"
+grep -qx 'pf=0' "$T/o.txt" && [ -f "$T/st/ltpo_peak_force.unsupported" ] || f "a refusing ROM was not marked unsupported: $(cat "$T/o.txt")"
+grep -qx 'state=unsupported' "$T/st/ltpo_peak_force.state" || f "unsupported not published"
+grep -q '^  _sf_release$' "$H" || f "the watcher does not release the mode on exit"
+grep -q "if \[ \"\$(_cfg ltpo_peak_force)\" = 1 \] && \[ ! -f \"\$SFUNSUP\" \]" "$H" || f "peak force not gated by its switch and the unsupported marker"
+A="$ROOT/runtime/asb_ltpo_apply.sh"
+grep -q "service call SurfaceFlinger 1035 i32 -1" "$A" || f "stopping the watcher does not release a forced mode"
+grep -q '^  touch-restart)$' "$A" && grep -q '^  peak)$' "$A" || f "apply script lacks touch-restart/peak"
+[ "$fail" = 0 ] && echo "PASS ltpo peak force: highest mode at the resolution in use, released by an invalid id, refusals marked unsupported, released on exit"
+exit "$fail"
+)
+
 t_lte_light_flap_runtime() (
 # Runtime (fix154): "5G only when needed" stops flapping while the phone is in active use.
 #
@@ -3118,8 +3200,8 @@ stint() {   # seconds the LTE stint lasted before the heavy window
   ticks 100 100 100
   [ -f "$SAVE" ] || { f "light traffic did not choose LTE"; return; }
   echo $(( $(date +%s) - $1 )) > "$T/st/lte_screenoff.since"
-  ticks 20000
-  [ -f "$SAVE" ] && f "a heavy window did not give 5G back"
+  ticks 20000 20000
+  [ -f "$SAVE" ] && f "two heavy windows did not give 5G back"
 }
 in_range() { [ "$1" -ge $(( $2 - 3 )) ] && [ "$1" -le "$2" ]; }
 stint 40
@@ -3198,9 +3280,11 @@ sh "$L" screen_on; sh "$L" arm >/dev/null 2>&1
 
 # Heavy window: 5G back at once and held.
 ticks 20000
-[ "$(mask)" = "$NR_ON" ] || f "a heavy window did not give 5G back"
+[ "$(mask)" = "$NR_OFF" ] || f "one heavy window (a feed burst) gave 5G back"
+ticks 20000 20000
+[ "$(mask)" = "$NR_ON" ] || f "two heavy windows did not give 5G back"
 [ -f "$SAVE" ] && f "record kept after the heavy-window restore"
-[ -s "$T/st/lte_light.hold" ] || f "no hold after a heavy window"
+[ -s "$T/st/lte_light.hold" ] || f "no hold after heavy windows"
 ticks 100 100 100
 [ "$(mask)" = "$NR_ON" ] || f "re-applied inside the hold"
 rm -f "$T/st/lte_light.hold"
@@ -7781,8 +7865,14 @@ out="$(run apply budget com.game.idle)"; [ "$out" = result=ok ] && grep -qx 'com
 out="$(run apply data com.feed.data)"; [ "$out" = result=ok ] && grep -qx 10305 "$T/deny" || fail "apply data: $out"
 run status | grep -q '^cand|budget|com.game.idle|' && fail "an applied app is still offered"
 id="$(run status | awk -F'|' '$1 == "j" && $6 == "com.game.idle" { print $2 }')"
-out="$(run undo "$id")"; [ "$out" = result=ok ] && grep -qx 'com.game.idle 10' "$T/buckets" || fail "undo budget: $out $(cat "$T/buckets")"
+out="$(run undo "$id")"; [ "$out" = "$(printf 'restore=restored\nresult=ok')" ] && grep -qx 'com.game.idle 10' "$T/buckets" || fail "undo budget: $out $(cat "$T/buckets")"
 out="$(run undo-all)"; printf '%s\n' "$out" | grep -qx 'undone=1' && [ ! -s "$T/deny" ] || fail "undo-all: $out $(cat "$T/deny")"
+out="$(run apply budget com.game.idle)"; [ "$out" = result=ok ] || fail "re-apply budget: $out"
+sed -i 's/^com.game.idle 40$/com.game.idle 20/' "$T/buckets"
+id="$(run status | awk -F'|' '$1 == "j" && $6 == "com.game.idle" && $9 == "active" { print $2 }')"
+out="$(run undo "$id")"; [ "$out" = "$(printf 'restore=external\nresult=ok')" ] && grep -qx 'com.game.idle 20' "$T/buckets" || fail "undo over an external bucket change: $out $(cat "$T/buckets")"
+grep -q "|budget|com.game.idle|10301|10|external\$" "$T/s7/journal" || fail "external handback not journaled: $(cat "$T/s7/journal")"
+sed -i 's/^com.game.idle 20$/com.game.idle 10/' "$T/buckets"
 for bad in 'com.x;id' '' 'x'; do out="$(run apply budget "$bad")"; [ "$out" = result=bad_request ] || fail "unsafe name accepted: $bad"; done
 out="$(run apply nope com.game.idle)"; [ "$out" = result=bad_request ] || fail "unknown engine accepted"
 run auto data on >/dev/null; rm -f "$T/s7/auto_at"; run tick
@@ -7801,11 +7891,12 @@ if command -v node >/dev/null 2>&1; then
   printf 'version=1\nenabled=1\nlearn=1\nlearned_end=06:02\nunplug_samples=9\n' > "$T/nc.txt"
   { echo "const T = (k, d) => d;"; sed -n '/^function smart7Parse(/,/^}/p' "$H"; cat <<'JS'
 const fs = require('fs');
-const g = smart7Parse(fs.readFileSync(process.argv[2], 'utf8') + '\ncand|budget|x;y|1|1|1|1\nj|1|2|root|budget|com.a.b|1|10|active\n', fs.readFileSync(process.argv[3], 'utf8'));
+const g = smart7Parse(fs.readFileSync(process.argv[2], 'utf8') + '\ncand|budget|x;y|1|1|1|1\nj|1|2|root|budget|com.a.b|1|10|active\nj|77|2|user|budget|com.ext.one|1|10|external\n', fs.readFileSync(process.argv[3], 'utf8'));
 let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
 chk(g.ok && g.profile === 'battery' && g.usage === 'ok' && g.netstats === 'ok' && g.ledger, 'header: ' + JSON.stringify(g));
 chk(g.journal.some(j => j.engine === 'budget' && j.pkg === 'com.game.idle' && j.kind === 'auto' && j.active), 'journal: ' + JSON.stringify(g.journal));
 chk(!g.cands.some(c => c.pkg === 'x;y') && !g.journal.some(j => j.kind === 'root'), 'unsafe rows were taken');
+chk(g.journal.some(j => j.id === '77' && j.external && !j.active), 'external handback not parsed: ' + JSON.stringify(g.journal));
 chk(g.learn && g.learnedEnd === '06:02' && g.samples === 9 && g.ncEnabled, 'charge learn: ' + JSON.stringify(g));
 process.exit(bad ? 1 : 0);
 JS
@@ -8507,7 +8598,8 @@ int main(void) {
     float peak=0;for(int i=0;i<N;i++)if(fabsf(out[i])>peak)peak=fabsf(out[i]);
     if(peak>asb_core_mb_to_lin(-100)+0.0002f){printf("FAIL sample ceiling %.6f\n",peak);bad++;}
     cfg(&a,1,1,99,99); if(!a.clarity_on||a.rumble_on){puts("FAIL effect clamp/validation");bad++;}
-    if(bad)return 1; puts("NEW_DSP_HOST_TEST_PASS"); return 0;
+    if(bad)return 1;
+    puts("NEW_DSP_HOST_TEST_PASS"); return 0;
 }
 X
 "$CC" -std=c99 -O2 -Wall -Wextra -I"$ROOT/src/DSP_AIDL" "$T/t.c" -lm -o "$T/t"

@@ -731,8 +731,8 @@ awk -F'|' '
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
-[ "$(wc -l < "$TMP/conf")" = "221" ] || fail "expected 221 config keys, got $(wc -l < "$TMP/conf")"
-[ "$(wc -l < "$TMP/registry")" = "221" ] || fail "expected 221 registry keys, got $(wc -l < "$TMP/registry")"
+[ "$(wc -l < "$TMP/conf")" = "224" ] || fail "expected 224 config keys, got $(wc -l < "$TMP/conf")"
+[ "$(wc -l < "$TMP/registry")" = "224" ] || fail "expected 224 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
 grep -qx 'kernel_sched_stats|advanced|webui_sensitive|shell' "$REG" || fail 'kernel_sched_stats consumer is not pinned to shell'
@@ -752,7 +752,7 @@ done > "$TMP/consumer_bad"
 
 sed -n '/const CFG_ITEMS = \[/,/^\];/p' "$ROOT/webroot/index.html" \
   | grep -oE "key:'[A-Za-z_][A-Za-z0-9_]*'" | sed "s/key:'//;s/'//" | sort -u > "$TMP/cards"
-[ "$(wc -l < "$TMP/cards")" = "89" ] || fail "expected 89 WebUI cards, got $(wc -l < "$TMP/cards")"
+[ "$(wc -l < "$TMP/cards")" = "94" ] || fail "expected 94 WebUI cards, got $(wc -l < "$TMP/cards")"
 _card_bad="$(while IFS= read -r key; do
   cls="$(awk -F'|' -v k="$key" '$1==k {print $2; exit}' "$REG")"
   case "$cls" in user|advanced) : ;; *) printf '%s ' "$key" ;; esac
@@ -796,7 +796,7 @@ for _c in $(grep -oE "\{ key:'[A-Za-z_][A-Za-z_0-9]*'" "$ROOT/webroot/index.html
 done
 [ -z "$_missing" ] || fail "cards missing from the install.sh settings snapshot:$_missing"
 
-echo 'PASS config ownership registry contract (221 keys; 36 user, 53 advanced, 132 internal)'
+echo 'PASS config ownership registry contract (224 keys; 41 user, 53 advanced, 130 internal)'
 )
 
 t_config_restore_outcome_runtime() (
@@ -4330,7 +4330,10 @@ grep -q 'awk -F: -v p="$PROFILE"' "$ROOT/action.sh" || fail "action.sh does not 
 for _l in "$ROOT"/runtime/i18n/action_*.sh; do
   grep -q '^T_CPR_FLOOR=' "$_l" || fail "${_l##*/} lacks T_CPR_FLOOR"
   [ "$(sed -n 's/^T_CPR_FLOOR=//p' "$_l" | grep -c '%s')" -eq 1 ] || fail "${_l##*/} T_CPR_FLOOR lost its %s"
+  [ "$(sed -n 's/^T_CPR_TAIL=//p' "$_l" | grep -o '%s' | wc -l)" -eq 1 ] || fail "${_l##*/} lacks T_CPR_TAIL with one %s"
 done
+grep -q '^T_CPR_TAIL=' "$ROOT/action.sh" || fail "action.sh has no English lift-tail line"
+grep -Fq '[ $(( _cprq * 2 )) -gt "$_cpr_hw" ]' "$ROOT/action.sh" || fail "a lifted ceiling is still called the responsiveness floor"
 grep -q 'T_CPR_FLOOR="эффективный минимум' "$ROOT/runtime/i18n/action_ru.sh" && fail "the misleading ru wording is back"
 # OP12's uag/qcom-cpufreq-hw boosts the minimum on touches exactly like walt - a NOTE, not a WARN.
 grep -q '\*scmi\*|\*walt\*|\*uag\*|\*qcom-cpufreq-hw\*)' "$ROOT/tools/asb_diag.sh" || fail "asbdiag still warns on a uag platform floor boost"
@@ -9065,6 +9068,11 @@ out="$(run_nc tick)"; [ "$(state "$out")" = holding ] || fail "switch above 80: 
 printf 'Discharging\n' > "$T/case/psy/status"
 out="$(run_nc tick)"; [ "$(state "$out")" = waiting ] || fail "explicit unplug: $out"
 [ "$(cat "$T/case/psy/charging_enabled")" = 1 ] || fail 'unplug did not hand the switch back'
+printf 'Charging\n' > "$T/case/psy/status"; printf '82\n' > "$T/case/psy/capacity"
+out="$(run_nc tick)"; [ "$(state "$out")" = holding ] || fail "switch hold before an unreadable charge level: $out"
+printf 'garbage\n' > "$T/case/psy/capacity"
+out="$(run_nc tick)"; [ "$(state "$out")" = waiting ] || fail "an unreadable charge level kept charging switched off: $out"
+[ "$(cat "$T/case/psy/charging_enabled")" = 1 ] || fail 'charging stayed off with no charge level to hold it at'
 
 # Unsupported hardware and an external owner are explicit, never false success.
 setup_case
@@ -9114,6 +9122,8 @@ done
 [ "$(wc -l < "$T/state/night_charge.unplug" | tr -d ' ')" = 4 ] || fail "unplugs not recorded: $(cat "$T/state/night_charge.unplug")"
 echo 1 > "$T/psy/usb/online"; NOW=840; run tick >/dev/null; echo 0 > "$T/psy/usb/online"; run tick >/dev/null
 [ "$(wc -l < "$T/state/night_charge.unplug" | tr -d ' ')" = 4 ] || fail "an afternoon unplug was learned"
+touch -d '2001-01-01 00:00:00' "$T/state/night_charge.plug"; NOW=845; run tick >/dev/null
+[ "$(stat -c %Y "$T/state/night_charge.plug")" = "$(date -d '2001-01-01 00:00:00' +%s)" ] || fail "the plug state was rewritten on a tick with no change"
 echo 1 > "$T/psy/usb/online"; echo 'Charging' > "$T/psy/battery/status"; NOW=1380; run tick >/dev/null
 [ "$(cat "$T/psy/battery/charge_control_limit")" = 80 ] || fail "the limit did not hold at 23:00"
 NOW=200; out="$(run status)"; [ "$(kv "$out" learned_end)" = 06:02 ] && [ "$(kv "$out" window)" = 22:00-06:02 ] || fail "learned end (median 07:32 - 90 min): $out"

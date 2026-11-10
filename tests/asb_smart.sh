@@ -4283,6 +4283,8 @@ proc 2003  99123 0    com.google.android.webview:sandboxed_process0
 proc 2004  10150 100  com.google.android.inputmethod.latin
 proc 2005  10300 0    com.netflix.mediaclient
 proc 3001  1010234 0  com.whatsapp                        # work profile (user 10)
+proc 2006  10151 0    com.touchtype.swiftkey
+proc 2007  10152 100  com.baidu.input_oppo
 {
   cat <<X
 #include <stdio.h>
@@ -4308,7 +4310,7 @@ int main(int argc, char **argv) {
     (void)argc;
     char pkg[128];
     int r = asb_smart_pkg_via_topapp(pkg, sizeof(pkg));
-    printf("%s|%s|%lu\n", r ? "1" : "0", r ? pkg : "-", g_stat_probe_topapp);
+    printf("%s|%s|%lu|%lu\n", r ? "1" : "0", r ? pkg : "-", g_stat_probe_topapp, g_stat_probe_topapp_ime);
     return 0;
     (void)argv;
 }
@@ -4336,7 +4338,17 @@ printf '1000\n' > "$T/cpuctl.procs"
 # A vanished pid is skipped.
 printf '4242\n2005\n' > "$T/cpuctl.procs"
 [ "$(run | cut -d'|' -f1-2)" = "1|com.netflix.mediaclient" ] || fail "a vanished pid broke the lookup: $(run)"
-echo "PASS foreground app from the top-app cgroup (no dumpsys activity top)"
+# V66: a keyboard is never the app in front - not at adj 0 next to the app (that used to be
+# "two packages", sent to dumpsys), and not alone over a system window (that used to name it).
+printf '2001\n2006\n' > "$T/cpuctl.procs"
+[ "$(run | cut -d'|' -f1-2)" = "1|com.instagram.android" ] || fail "a keyboard at adj 0 made the front app ambiguous: $(run)"
+printf '1000\n2004\n' > "$T/cpuctl.procs"
+[ "$(run | cut -d'|' -f1)" = 0 ] || fail "a keyboard over a system window was taken for the front app: $(run)"
+[ "$(run | cut -d'|' -f4)" = 1 ] || fail "keyboard-only answer not counted: $(run)"
+printf '2007\n2005\n' > "$T/cpuctl.procs"
+[ "$(run | cut -d'|' -f1-2)" = "1|com.netflix.mediaclient" ] || fail "an OEM keyboard was taken for an app: $(run)"
+grep -q 'probe_topapp_keyboard_only=%lu' "$ROOT/src/asb_governor.c" || fail "keyboard-only answers not published"
+echo "PASS foreground app from the top-app cgroup (no dumpsys activity top; keyboards left out)"
 )
 
 t_touch_watch_runtime() (
@@ -4689,6 +4701,7 @@ enum { PROFILE_BATTERY, PROFILE_BALANCED, PROFILE_PERFORMANCE, PROFILE_SMART };
 typedef struct { int cpu_max[3]; int cpu_min[3]; int uclamp_top_max; int uclamp_bg_max; int gpu_max_pct; } asb_profile_caps_t;
 #define ASB_BATTERY_FLOOR_GPU_MAX_PCT 40
 static struct { int unlock_lift_s, unlock_lift_pct, bat_comfort_temp, main_capacity_parity; } g_asb_cfg = { 3, 80, 48, 1 };
+static int g_lab_lift_pct = 0;
 static int g_cpu_slot_hwmax[3] = { 3628800, 4608000, 0 };
 static int g_cpu_all_count = 2;
 static int g_cpu_policy_ids[3] = { 0, 6, -1 };
@@ -5662,7 +5675,7 @@ grep -Fq '_ri.soc         = metrics.bat.capacity_pct;' "$G" || fail "no charge l
 grep -Fq 'if (_rc_prev_chg == 1 && !metrics.bat.charging) _rc_unplug_ms = _ri.now_ms;' "$G" || fail "the unplug moment is not tracked"
 grep -Fq 'asb_rec_apply_offcaps(&_effective_caps, &fsm, metrics.misc.screen_on);   /* fix184 */' "$G" || fail "screen-off setting not applied before the writer"
 [ "$(grep -c 'asb_rec_apply_offcaps(&_effective_caps, &fsm, metrics.misc.screen_on)' "$G")" -ge 2 ] || fail "the heartbeat write would undo the screen-off setting"
-grep -Fq 'if (screen_on && (g_rec_on_offset != 0 || g_smooth_lean != 0)) {' "$G" || fail "screen-on lean not applied in the Smart tick"
+grep -Fq 'if (screen_on && (g_rec_on_offset != 0 || g_smooth_lean != 0 || g_lab_app_offset != 0)) {' "$G" || fail "screen-on lean not applied in the Smart tick"
 awk '/g_rec_on_applied = _off;/{a=NR} /4\. Safety overrides/{if(a) {print "ok"; exit}}' "$G" | grep -qx ok || fail "the lean must come before the safety layers"
 grep -Fq '(!metrics.misc.screen_on || g_mw_active) &&' "$G" || fail "night checks do not keep the night radio mode"
 grep -Fq 'asb_mw_note((long)g_night_on_since, (long)(now - g_night_on_since));' "$G" || fail "night checks are not learned"
@@ -6095,6 +6108,10 @@ int main(void) {
     float gmw = g_en.cls[EN_GAME].j * 1000.0f / g_en.cls[EN_GAME].s;
     if (gmw < 5800 || gmw > 6200) { printf("game class %.0f mW\n", gmw); bad = 1; }
     if (g_en.plugs != 5) { printf("charges counted %u (a charger back within 10 minutes is the same charge)\n", g_en.plugs); bad = 1; }
+    float sh0 = g_en.on_s / (g_en.on_s + g_en.off_s);
+    if (sh0 < 0.03f || sh0 > 0.08f) { printf("screen-on share %.3f, about 0.05 expected\n", sh0); bad = 1; }
+    { float off0 = g_en.off_s; in.screen_on = 0; in.charging = 0; step(7200);
+      if (g_en.off_s - off0 < 7100.0f) { puts("a two-hour screen-off gap between ticks was not counted"); bad = 1; } }
     until(20, 0);
     long fri = g_wall - 86400L;   /* the loop ended on Saturday: Friday 20:00 */
     int eta = asb_en_plug_eta(fri);
@@ -6322,8 +6339,9 @@ grep -Fq "if (_zyS7L) card.appendChild(smart7LearnBlock(_zyS7L, nm));" "$H" || f
 grep -q 'smart_records_v7.bin' "$ROOT/runtime/asb_smart_reset.sh" && grep -q 'smart_energy.bin' "$ROOT/runtime/asb_smart_reset.sh" || fail "the Smart reset keeps the V7 stores"
 grep -q 'smart_energy.txt' "$ROOT/docs/log_schemas.md" && grep -q 'en_budget_plug' "$ROOT/docs/log_schemas.md" || fail "undocumented"
 grep -q 'Smart energy' "$ROOT/tools/asb_diag.sh" && cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail "asbdiag does not show it"
-for k in smart_records_balanced smart_energy profile_class_auto; do
-  grep -q "^$k=1$" "$ROOT/config/governor.conf" && grep -q "^$k|internal|" "$ROOT/config/key_ownership.tsv" && grep -q "\"$k\"" "$ROOT/src/asb_config.h" || fail "$k not shipped, registered or parsed"
+for k in smart_records_balanced smart_energy profile_class_auto smart_lab smart_lab_mem; do
+  _cls=user; [ "$k" = smart_energy ] && _cls=internal
+  grep -q "^$k=1$" "$ROOT/config/governor.conf" && grep -q "^$k|$_cls|" "$ROOT/config/key_ownership.tsv" && grep -q "\"$k\"" "$ROOT/src/asb_config.h" || fail "$k not shipped, registered or parsed"
 done
 echo "PASS smart v7 native: records checked once more and rolled back when the old setting wins, with a gain interval and a side file; first trials follow the sibling situation; Balanced replays without measuring; cost per app and kind of use; the budget asks whether the battery lasts until the usual charge; thermal look-ahead in Smart and Performance; hooked apps skip the smoothness test; Performance and Battery follow the kind of use"
 )
@@ -6356,7 +6374,7 @@ grep -Fq 'if (!enough && !full) return 0;' "$R" || fail "fix198: a full test mus
 grep -Fq 'else if (g_smooth_win_arm != arm) g_smooth_win_arm = -2;' "$G" || fail "a window whose arm changed would be counted"
 grep -Fq 'g_smart_rt.app_hint < ASB_APP_GAMING && !m->misc.camera_active &&' "$G" || fail "games / the camera are not left out"
 grep -Fq '!asb_smart_is_system_ui(g_smart_rt.app_pkg_cached)' "$G" || fail "the system UI is not left out"
-grep -Fq 'int _off = g_rec_on_offset + g_smooth_lean;' "$G" || fail "the smoothness lean is not applied"
+grep -Fq 'int _off = g_rec_on_offset + g_smooth_lean + (g_lab_app_front ? g_lab_app_offset : 0);' "$G" || fail "the smoothness lean is not applied"
 grep -q '^smart_smooth=1$' "$ROOT/config/governor.conf" || fail "not shipped on"
 grep -q '^smart_smooth|internal|' "$ROOT/config/key_ownership.tsv" || fail "key not registered"
 # The probe: a fake dumpsys with two entries for the app (live + a past day) and a neighbour.
@@ -7176,6 +7194,209 @@ kill "$_live_pid" 2>/dev/null || true; wait "$_live_pid" 2>/dev/null || true
 printf '%s\n' "$out" | grep -q '^smartlive	state=adapting	profile=smart	smart_mode=1	feedback=accepted	coverage=start_latest' || fail "running capture did not use its live state: $out"
 printf '%s\n' "$out" | grep -q '	accepted_delta=2	' || fail 'running capture live delta is wrong'
 echo 'PASS Smart capture state: live/manual/disabled/adapting separation, monotonic deltas, reset, single-snapshot and live-capture source ownership'
+)
+
+t_smart_lab_native_runtime() (
+# Runtime (V66 dev8): the Smart lab on its REAL code (src/asb_lab.h) and the records' two
+# changes. A simulated phone runs for days: each knob's settings cost what the fixture says,
+# and the lab has to find the cheaper one by itself, in pairs.
+#  - radio: 5G allowed costs 14 % less here -> it wins, the radio file says nr, the knob converges;
+#  - membus_on: the 75 % cap is 10 % cheaper but keeps the cores at their ceiling 20 points
+#    more often -> it loses on the guard, the bus is never left capped;
+#  - dynamics: after its verdict the best radio setting costs 25 % more four blocks running ->
+#    the knob is tested again at once;
+#  - wake lift: 15 points less is cheaper over glances with SystemUI's frames no jankier -> 65 %;
+#    with its frames 3 points jankier the same saving loses;
+#  - apps: the three dearest apps get slots, a lab app in front takes the lean (situation + arm)
+#    and the records step aside (asb_rec_ctx_of returns -1);
+#  - memory bus: voters found under bus_dcvs, a cap written as the lowest listed step at or above
+#    its share, read back, given back; a value someone else wrote is theirs (yield);
+#  - the store survives a restart; the records shorten steady screen-off blocks to 20 minutes.
+set -eu
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+L="$ROOT/src/asb_lab.h"; R="$ROOT/src/asb_record.h"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail() { echo "FAIL smart lab native: $*" >&2; exit 1; }
+CC="${CC:-cc}"; command -v "$CC" >/dev/null 2>&1 || CC=gcc
+command -v "$CC" >/dev/null 2>&1 || { echo "SKIP smart lab native: no C compiler"; exit 0; }
+mkdir -p "$T/bus/DDR/soc:qcom,memlat:ddr:gold" "$T/bus/DDR/19091000.qcom,bwmon-ddr" "$T/bus/LLCC" "$T/devfreq"
+printf '4224000\n' > "$T/bus/DDR/hw_max_freq"; printf '547000\n' > "$T/bus/DDR/hw_min_freq"
+printf '547000 1555000 2092000 3196000 4224000\n' > "$T/bus/DDR/available_frequencies"
+printf '4224000\n' > "$T/bus/DDR/soc:qcom,memlat:ddr:gold/max_freq"
+printf '4224000\n' > "$T/bus/DDR/19091000.qcom,bwmon-ddr/max_freq"
+cat > "$T/lab.c" <<X
+#define ASB_LAB_FILE "$T/lab.bin"
+#define ASB_LAB_SUMMARY "$T/lab.txt"
+#define ASB_LAB_RADIO_FILE "$T/lab_radio"
+#define ASB_MEM_ROOT "$T/bus"
+#define ASB_MEM_DEVFREQ "$T/devfreq"
+#include "$L"
+X
+cat >> "$T/lab.c" <<'X'
+static long long g_ms = 0; static long g_wall = 1792368000L;
+static unsigned g_seed = 4242;
+static double noise(void) { g_seed = g_seed * 1103515245u + 12345u; return ((double)((g_seed >> 16) % 2001) / 1000.0) - 1.0; }
+static long g_fr = 100000, g_jk = 1000; static int g_jank_extra = 0;
+static void ask(const char *p) { (void)p; }
+static int rd(const char *p, long since, long *fr, long *jk) { (void)p; (void)since; *fr = g_fr; *jk = g_jk; return 0; }
+static asb_lab_in_t base(void) {
+    asb_lab_in_t in; memset(&in, 0, sizeof(in));
+    in.enabled = 1; in.explore = 1; in.screen_on = 1; in.soc = 60; in.bat_temp_dc = 300; in.voltage_uv = 4000000;
+    in.bright_band = 0; in.unplug_age_s = 100000; in.lift_cfg_pct = 80; in.mobile_bytes = 0;
+    return in;
+}
+static void step(asb_lab_in_t *in, int sec) { g_ms += (long long)sec * 1000; g_wall += sec; in->now_ms = g_ms; in->wall = g_wall; }
+int main(int argc, char **argv) {
+    (void)argc;
+    g_lab_gfx_ask = ask; g_lab_gfx_read = rd;
+    const char *mode = argv[1];
+    int lr = asb_lab_load();
+    if (lr != (strcmp(mode, "reload") ? 1 : 0)) { printf("load_rc=%d\n", lr); return 1; }
+    if (!strcmp(mode, "radio")) {
+        asb_lab_in_t in = base(); in.radio_ok = 1; in.on_mobile = 1;
+        long long bytes = 0; int reopened = 0, file_at_verdict = -1;
+        for (int t = 0; t < 6 * 3600 * 20 && !reopened; t += 10) {
+            step(&in, 10);
+            int five = g_lab_radio_arm;
+            double ma = (five ? 602.0 : 700.0) * (1.0 + 0.02 * noise());
+            if (g_lab.k[LAB_RADIO].converged && g_lab.k[LAB_RADIO].champion == 1) ma = 760.0 * (1.0 + 0.01 * noise());
+            in.ma = (int)ma;
+            bytes += 200 * 1024; in.mobile_bytes = bytes;
+            asb_lab_tick(&in);
+            if (file_at_verdict < 0 && g_lab.k[LAB_RADIO].converged) file_at_verdict = access(ASB_LAB_RADIO_FILE, F_OK) == 0;
+            if (g_lab.k[LAB_RADIO].reopen > 0) reopened = 1;
+        }
+        asb_lab_knob_t *k = &g_lab.k[LAB_RADIO];
+        printf("radio champion=%d wins=%u reopen=%u converged=%d gain=%.3f\n", k->champion, k->wins, k->reopen, k->converged, (double)k->gain);
+        printf("radio_file_at_verdict=%s retest_challenger=%d\n", file_at_verdict == 1 ? "nr" : "none", k->challenger);
+        asb_lab_save();
+        return 0;
+    }
+    if (!strcmp(mode, "mem_guard")) {
+        asb_lab_in_t in = base(); in.mem_ok = 1;
+        asb_mem_probe_run();
+        for (int t = 0; t < 3600 * 40 && g_lab.k[LAB_MEM_ON].trials < 2 && !g_lab.k[LAB_MEM_ON].converged; t += 10) {
+            step(&in, 10);
+            int capped = g_lab_mem_on_pct != 0;
+            in.ma = (int)((capped ? 630.0 : 700.0) * (1.0 + 0.02 * noise()));
+            in.at_ceiling = capped ? (t % 100 < 40) : (t % 100 < 20);
+            asb_lab_tick(&in);
+        }
+        asb_lab_knob_t *k = &g_lab.k[LAB_MEM_ON];
+        printf("mem champion=%d wins=%u fails=%u converged=%d voters=%d\n", k->champion, k->wins, k->fails, k->converged, g_mem_nv);
+        return 0;
+    }
+    if (!strcmp(mode, "lift")) {
+        g_jank_extra = argv[2] ? atoi(argv[2]) : 0;
+        asb_lab_in_t in = base(); in.screen_on = 0;
+        for (int g = 0; g < 400 && !g_lab.k[LAB_LIFT].converged; g++) {
+            step(&in, 600); in.screen_on = 0; asb_lab_tick(&in);
+            int pct = g_lab_lift_pct;
+            step(&in, 30); in.screen_on = 1; asb_lab_tick(&in);
+            double mw = (pct < 80 ? 2900.0 : 3400.0) * (1.0 + 0.02 * noise());
+            g_fr += 1500; g_jk += (pct < 80) ? 15 + g_jank_extra * 15 : 15;
+            asb_lab_glance(30, (float)(mw * 30.0 / 1000.0), 30.0f, &in);
+            step(&in, 2); in.screen_on = 0; asb_lab_tick(&in);
+            step(&in, 5); asb_lab_tick(&in);
+        }
+        asb_lab_knob_t *k = &g_lab.k[LAB_LIFT];
+        printf("lift champion=%d pct=%d wins=%u converged=%d jank_pairs=%u\n", k->champion, g_lab_lift_pct, k->wins, k->converged, k->jank_pairs);
+        return 0;
+    }
+    if (!strcmp(mode, "apps")) {
+        asb_lab_app_cand_t c[3] = { { 11, "com.feed.one", 900.0f }, { 22, "com.feed.two", 700.0f }, { 33, "org.chat.three", 300.0f } };
+        asb_lab_pick_apps(c, 3, g_wall);
+        asb_lab_in_t in = base(); in.app_hash = 22; in.app_pkg = "com.feed.two"; in.app_base_x1000 = 100;
+        step(&in, 10); asb_lab_tick(&in);
+        printf("apps slot2=%d front=%d offset=%d on_block=%s\n", asb_lab_app_slot(22), g_lab_app_front, g_lab_app_offset,
+               g_lab_on.active ? g_lab_names[g_lab_on.knob] : "-");
+        in.app_pkg = "com.other"; step(&in, 10); asb_lab_tick(&in);
+        printf("apps_mismatch front=%d\n", g_lab_app_front);
+        return 0;
+    }
+    if (!strcmp(mode, "mem")) {
+        asb_mem_probe_run();
+        printf("probe=%d voters=%d doms=%d kind=%s\n", g_mem_probe, g_mem_nv, g_mem_ndom, g_mem_kind);
+        asb_mem_apply(75, 100);
+        printf("cap75 writes=%lu\n", g_mem_writes);
+        asb_mem_apply(0, 200);
+        printf("free restores=%lu\n", g_mem_restores);
+        asb_mem_apply(-1, 300);
+        FILE *f = fopen(g_mem_v[0].path, "w"); fputs("2092000\n", f); fclose(f);
+        asb_mem_apply(-1, 400);
+        printf("yield yields=%lu\n", g_mem_yields);
+        asb_mem_apply(0, 500);
+        return 0;
+    }
+    if (!strcmp(mode, "reload")) {
+        printf("reload champion=%d converged=%d\n", g_lab.k[LAB_RADIO].champion, g_lab.k[LAB_RADIO].converged);
+        return 0;
+    }
+    return 2;
+}
+X
+"$CC" -O2 -Wall -Wextra -Werror -Wno-unused-function -o "$T/lab" "$T/lab.c" || fail "lab fixture did not compile"
+out="$("$T/lab" radio)" || fail "radio run failed"
+echo "$out" | grep -q 'radio champion=1 wins=1 reopen=1' || fail "radio: 5G allowed did not win, or the rise did not re-open it: $out"
+echo "$out" | grep -q 'radio_file_at_verdict=nr retest_challenger=0' || fail "radio: the lab file does not say 5G allowed, or the re-test did not try LTE again: $out"
+grep -q '^knob|radio|' "$T/lab.txt" || fail "no radio line in the summary"
+cp "$T/lab.txt" "$T/lab_radio.txt"
+out="$("$T/lab" reload)"; echo "$out" | grep -q 'reload champion=1 converged=0' || fail "the store did not survive a restart: $out"
+rm -f "$T/lab.bin" "$T/lab.bin.tmp"
+out="$("$T/lab" mem_guard)" || fail "mem guard run failed"
+echo "$out" | grep -q 'mem champion=0 wins=0 fails=1' || fail "membus_on: a cap that pins the cores won: $out"
+[ "$(cat "$T/bus/DDR/soc:qcom,memlat:ddr:gold/max_freq")" = 4224000 ] || fail "membus_on: the bus was left capped"
+rm -f "$T/lab.bin"
+out="$("$T/lab" lift 0)" || fail "lift run failed"
+echo "$out" | grep -q 'lift champion=1 pct=65 wins=1 converged=1' || fail "lift: 15 points less did not win: $out"
+echo "$out" | grep -q 'jank_pairs=[1-9]' || fail "lift: SystemUI frames were not compared: $out"
+rm -f "$T/lab.bin"
+out="$("$T/lab" lift 2)" || fail "lift jank run failed"
+echo "$out" | grep -q 'lift champion=0 pct=80 wins=0' || fail "lift: a jankier wake won on energy alone: $out"
+rm -f "$T/lab.bin"
+out="$("$T/lab" apps)"
+echo "$out" | grep -q 'apps slot2=1 front=1 offset=200 on_block=app2' || fail "apps: lab app in front not owned: $out"
+echo "$out" | grep -q 'apps_mismatch front=0' || fail "apps: another package under the same hash was taken"
+printf '4224000\n' > "$T/bus/DDR/soc:qcom,memlat:ddr:gold/max_freq"
+rm -f "$T/lab.bin"
+out="$("$T/lab" mem)"
+echo "$out" | grep -q 'probe=1 voters=2 doms=1 kind=bus_dcvs' || fail "mem: voters not found: $out"
+echo "$out" | grep -q 'cap75 writes=2' || fail "mem: cap not written: $out"
+echo "$out" | grep -q 'free restores=2' || fail "mem: cap not given back: $out"
+echo "$out" | grep -q 'yield yields=1' || fail "mem: an external value was fought over: $out"
+[ "$(cat "$T/bus/DDR/soc:qcom,memlat:ddr:gold/max_freq" "$T/bus/DDR/19091000.qcom,bwmon-ddr/max_freq" | tr '\n' ' ')" = "2092000 4224000 " ] || \
+  fail "mem: external value overwritten or own cap not given back: $(cat "$T"/bus/DDR/*/max_freq | tr '\n' ' ')"
+H="$ROOT/webroot/index.html"
+if command -v node >/dev/null 2>&1; then
+  { echo "const T = (k, d) => d;"; echo "const logReportRow = (a, b) => ({ row: a + ' = ' + b });"; echo "const logReportNote = (a) => ({ note: a });"
+    sed -n '/^function smart7LearnParse(/,/^}/p' "$H"; sed -n '/^function smart7LabArm(/,/^}/p' "$H"; sed -n '/^function smart7LabRows(/,/^}/p' "$H"
+    cat <<'JS'
+const txt = require('fs').readFileSync(process.argv[2], 'utf8') + 'knob|app1|testing|lean as situation|lean +0.1|3|-52|10|0|2|0|0|1|0|7|0|0|bad;pkg\n';
+const g = smart7LearnParse(txt);
+let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
+const r = g.lab.find(k => k.name === 'radio');
+chk(r && r.wins === 1 && r.reopen === 1 && r.gain > 13, 'radio knob: ' + JSON.stringify(g.lab));
+chk(g.lab.some(k => k.name === 'app1' && k.pkg === ''), 'an unsafe package name was kept');
+chk(g.labMem && g.labNow && g.labNow.wins >= 1, 'mem/now lines: ' + JSON.stringify([g.labMem, g.labNow]));
+const rows = smart7LabRows(g, x => x).map(x => x.row || x.note).join('\n');
+chk(/5G only when needed = .*won 1[34](\.\d)? % cheaper/.test(rows) && /tested again after its cost rose \(1×\)/.test(rows), 'rows: ' + rows);
+chk(/testing lean 0.1 toward economy against the situation's lean: 3 pair\(s\), -5.2 % so far/.test(rows), 'testing row: ' + rows);
+process.exit(bad ? 1 : 0);
+JS
+  } > "$T/lab.js"
+  node "$T/lab.js" "$T/lab_radio.txt" || fail "WebUI does not read or show the lab summary"
+fi
+grep -Fq "grep -E '^(knob|mem|now)[|]' /dev/.asb/smart_lab.txt" "$H" || fail "the WebUI does not read the lab summary"
+grep -q 'in->microwake || in->heavy_state || in->lab_owned' "$R" || fail "records do not step aside for a lab app"
+grep -q 'return var < 0.0016 ? ASB_REC_OFF_BLOCK_S / 2 : ASB_REC_OFF_BLOCK_S;' "$R" || fail "steady screen-off blocks are not shortened"
+grep -q 'if (ma < 75.0) return ASB_REC_OFF_BLOCK_S;' "$R" || fail "short blocks are not limited to a drain the mAh gauge can resolve"
+grep -q 'asb_rec_off_block_s(ctx) / 2' "$R" || fail "the shortened block's minimum is not half of it"
+G="$ROOT/src/asb_governor.c"
+grep -q 'if (profile_idx == PROFILE_SMART && g_lab_lift_pct > 0) pct = g_lab_lift_pct;' "$G" || fail "the lift share ignores the lab"
+grep -q '(g_lab_app_front ? g_lab_app_offset : 0)' "$G" || fail "the lean ignores the lab app"
+grep -q 'asb_mem_apply(0, (long)time(NULL));' "$G" || fail "the bus cap is not given back at shutdown"
+grep -q 'if (!asb_fork_budget_take((long)now)) pkg\[0\]' "$ROOT/src/asb_smart.h" || fail "app-lookup forks are not budgeted"
+echo "PASS smart lab native: radio, wake lift, apps and memory bus tried in pairs with ceiling/frame/heat guards, dynamics re-open, owned bus writes with yield, store reload"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
