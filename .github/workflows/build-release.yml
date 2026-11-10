@@ -144,6 +144,7 @@ jobs:
             src/asb_smart_defs.h \
             src/asb_record.h \
             src/asb_energy.h \
+            src/asb_lab.h \
             src/asb_log_feedback.h \
             src/asb_lspd.h \
             src/build_ndk_release.sh \
