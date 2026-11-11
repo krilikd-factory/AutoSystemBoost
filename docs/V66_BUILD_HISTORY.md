@@ -4,6 +4,46 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev12 - re-checks that run, a surface sensor learned once
+
+Input: the owner asked to keep improving after dev11. No new logs; the work comes from a
+second pass over the dev10 day log and a review of the lab code.
+
+Bugs fixed:
+
+- **Lab re-checks that could not run.** A converged knob is tested again after 21 days, or at
+  once when its best setting's cost climbs 15 %. For the memory bus with its deepest cap as the
+  best setting, and for an app whose changed lean had won, the re-check found nothing left to
+  try: only the step further was considered, never the step back. The knob converged again
+  in the same tick and the re-test never happened. A champion away from the base setting is now
+  tried against the step back toward it. The first exploration is unchanged, since the step
+  back has always been tried by then.
+- **A surface sensor that never moves, learned again every boot.** On the OnePlus 15
+  sys-therm-6 reads 40 C whatever the phone does. ASB already dropped such a zone, but only
+  after 300 ticks. Screen-off ticks are sparse, so the dev10 day log read "surface 40 C" from
+  04:17 to 09:16 beside a board at 24-27 C. The report counted that as warm time ("body above
+  40 C"), and the CPU-peer check saw a hot peer at night. The verdict now also comes after 60
+  ticks over 90 minutes, and it is kept in `/data/adb/asb/surface_pinned` (zone type and
+  value). The next start drops the zone from the first tick while it reads that value. A zone
+  that moves 3 C away from it counts again, and the file is removed.
+- **The surface's cold baseline after that verdict.** The baseline was averaged while the
+  zone still read 40 C. With the surface then following the board, the surface vote of the
+  thermal advisory (40 % of its score) could not rise until the board passed 40 C. A change of
+  verdict now takes the board's baseline.
+
+Improvements:
+
+- Screen-off bus blocks in the lab carry their mobile traffic, and two of them are compared
+  only when the traffic is alike: within a factor of two, above 1 KiB/s. Under the 15 KiB/s
+  cut a 40-minute block could still move 30 MiB.
+- The lab summary reported the radio knob "off" whenever the screen was off. It now says
+  "off" only when the light-traffic watcher is not running.
+- asbdiag: a settings key skipped because it was refused on an earlier boot reads "wanted X,
+  not asked this boot" instead of "X -> ?". The surface line says when the dedicated zone is
+  pinned, at what value, and whether that came from an earlier boot.
+
+Native code changed: CI rebuild needed.
+
 ## V66 dev11 - fixes from the first day with the lab
 
 Input: the owner installed dev10 on a OnePlus 15 and sent a full-day log, a report, an asbdiag
