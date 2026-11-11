@@ -912,6 +912,24 @@ static int g_thermal_cpu_zone     = -1;
 static int g_thermal_skin_zone    = -1;  /* literal shell_front/frame/back only */
 static int g_thermal_surface_zone = -1;  /* hottest body-adjacent zone (sys-therm-6 etc) */
 static int g_surface_from_skin = 0;        /* 1 = no surface/board zone, shell sensor stands in */
+/* V66 dev12: a surface zone that never moves, remembered across boots (see the reader). */
+#ifndef ASB_SURFACE_PIN_FILE
+#define ASB_SURFACE_PIN_FILE "/data/adb/asb/surface_pinned"
+#endif
+static char g_thermal_surface_type[32] = "";
+static int g_surface_pinned = 0;           /* 1 = the zone is pinned: the surface follows the board */
+static int g_surface_pin_c = 0;            /* the value it sits at */
+static int g_surface_pin_boot = 0;         /* 1 = known from an earlier boot, not re-learned */
+static unsigned long g_surface_pin_revived = 0;
+static int    g_surf_lo = 1000, g_surf_hi = -1000, g_surf_blo = 1000, g_surf_bhi = -1000;
+static int    g_surf_ticks = 0, g_surf_boot_checked = 0;
+static time_t g_surf_t0 = 0;
+/* What a fresh daemon start sees; the file is the only thing carried over. */
+static inline void asb_surface_pin_reset(void) {
+    g_surface_pinned = 0; g_surface_pin_c = 0; g_surface_pin_boot = 0;
+    g_surf_lo = g_surf_blo = 1000; g_surf_hi = g_surf_bhi = -1000;
+    g_surf_ticks = 0; g_surf_boot_checked = 0; g_surf_t0 = 0;
+}
 static int g_thermal_board_zone  = -1;
 static int g_thermal_cpu_fallback_zone = -1;
 static char g_thermal_cpu_fallback_type[64] = "";
@@ -1180,6 +1198,7 @@ int cpu_prio = -1;
             if (thermal_sensor_validate(z)) {
                 g_thermal_surface_zone = z;
                 best_surface_prio = surface_prio;
+                snprintf(g_thermal_surface_type, sizeof(g_thermal_surface_type), "%s", type);
             }
         }
         /* track board_temp zone separately for surface_hotspot = max(sys-therm-6, board_temp) */
@@ -1664,19 +1683,56 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
      * measured against a baseline the surface never left.
      *
      * Range is tracked over a long window, using the board value just read. If the zone
-     * stays within 1 C while the board moves by 4 C or more, it is dropped for the rest of
-     * the session and the surface follows the board. A live sensor moves with the board,
-     * so it is never dropped. */
+     * stays within 1 C while the board moves by 4 C or more, it is dropped and the surface
+     * follows the board. A live sensor moves with the board, so it is never dropped.
+     *
+     * V66 dev12: the verdict needed 300 ticks, and screen-off ticks are sparse: an OP15 boot
+     * at 04:00 read "surface 40 C" all night beside a 24 C board and dropped the zone only at
+     * 09:17, after the morning's first use - every boot again. Now 60 ticks over 90 minutes
+     * are enough too, and the verdict is kept in ASB_SURFACE_PIN_FILE (zone type and value):
+     * the next boot starts with the zone dropped if it reads that value, and a zone that
+     * moves 3 C away from it is live again (the file goes). */
     {
-        static int s_lo = 1000, s_hi = -1000, b_lo = 1000, b_hi = -1000, s_ticks = 0, s_dead = 0;
-        if (!s_dead && _surf_raw > 0 && t->board_temp_c > 0) {
-            if (_surf_raw < s_lo) s_lo = _surf_raw;
-            if (_surf_raw > s_hi) s_hi = _surf_raw;
-            if (t->board_temp_c < b_lo) b_lo = t->board_temp_c;
-            if (t->board_temp_c > b_hi) b_hi = t->board_temp_c;
-            if (++s_ticks >= 300 && (s_hi - s_lo) <= 1 && (b_hi - b_lo) >= 4) s_dead = 1;
+        time_t s_now = time(NULL);
+        if (!g_surf_boot_checked && g_thermal_surface_zone >= 0 && _surf_raw > 0 && g_thermal_surface_type[0]) {
+            g_surf_boot_checked = 1;
+            FILE *pf = fopen(ASB_SURFACE_PIN_FILE, "re");
+            if (pf) {
+                char pty[32] = "";
+                int pv = 0;
+                if (fscanf(pf, "%31s %d", pty, &pv) == 2 && strcmp(pty, g_thermal_surface_type) == 0 &&
+                    _surf_raw - pv <= 1 && pv - _surf_raw <= 1) {
+                    g_surface_pinned = 1; g_surface_pin_c = pv; g_surface_pin_boot = 1;
+                }
+                fclose(pf);
+            }
         }
-        if (s_dead && t->board_temp_c > 0) t->surface_hotspot_c = t->board_temp_c;
+        if (g_surface_pinned) {
+            if (_surf_raw > 0 && (_surf_raw - g_surface_pin_c >= 3 || g_surface_pin_c - _surf_raw >= 3)) {
+                g_surface_pinned = 0; g_surface_pin_boot = 0; g_surface_pin_revived++;
+                unlink(ASB_SURFACE_PIN_FILE);
+                g_surf_lo = g_surf_blo = 1000; g_surf_hi = g_surf_bhi = -1000; g_surf_ticks = 0; g_surf_t0 = 0;
+            }
+        } else if (_surf_raw > 0 && t->board_temp_c > 0) {
+            if (!g_surf_t0 || s_now < g_surf_t0) g_surf_t0 = s_now;
+            if (_surf_raw < g_surf_lo) g_surf_lo = _surf_raw;
+            if (_surf_raw > g_surf_hi) g_surf_hi = _surf_raw;
+            if (t->board_temp_c < g_surf_blo) g_surf_blo = t->board_temp_c;
+            if (t->board_temp_c > g_surf_bhi) g_surf_bhi = t->board_temp_c;
+            ++g_surf_ticks;
+            if ((g_surf_hi - g_surf_lo) <= 1 && (g_surf_bhi - g_surf_blo) >= 4 &&
+                (g_surf_ticks >= 300 || (g_surf_ticks >= 60 && s_now - g_surf_t0 >= 5400))) {
+                g_surface_pinned = 1; g_surface_pin_c = g_surf_lo; g_surface_pin_boot = 0;
+                FILE *pf = fopen(ASB_SURFACE_PIN_FILE ".tmp", "we");
+                if (pf) {
+                    int ok = fprintf(pf, "%s %d\n", g_thermal_surface_type[0] ? g_thermal_surface_type : "zone", g_surf_lo) > 0;
+                    if (fclose(pf) != 0) ok = 0;
+                    if (ok) rename(ASB_SURFACE_PIN_FILE ".tmp", ASB_SURFACE_PIN_FILE);
+                    else unlink(ASB_SURFACE_PIN_FILE ".tmp");
+                }
+            }
+        }
+        if (g_surface_pinned && t->board_temp_c > 0) t->surface_hotspot_c = t->board_temp_c;
     }
     /* No sys-therm and no board_temp zone at all: use the shell sensor.
      *

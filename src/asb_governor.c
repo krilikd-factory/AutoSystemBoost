@@ -2047,7 +2047,8 @@ static void asb_lab_run(const asb_fsm_t *fsm, const asb_metrics_t *m, const asb_
     if (wif > 2048 && wif > mob) g_lab_wifi_ts = now;
     li.on_mobile = g_lab_mobile_ts > 0 && now - g_lab_mobile_ts <= 120 && g_lab_mobile_ts >= g_lab_wifi_ts;
     li.mobile_bytes = (long long)g_rmnet_rx_prev + (long long)g_rmnet_tx_prev;
-    li.radio_ok = li.enabled && m->misc.screen_on && asb_lab_radio_watcher_live(now);
+    li.radio_watch = li.enabled && asb_lab_radio_watcher_live(now);
+    li.radio_ok = li.radio_watch && m->misc.screen_on;
     li.mem_ok = li.enabled && g_asb_cfg.smart_lab_mem;
     li.rec_on_busy = on_busy;
     li.rec_off_busy = off_busy;
@@ -4996,7 +4997,11 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     fprintf(f, "device_bounds_applied=%d\ndevice_bounds_status=%s\ndevice_bounds_reason=%s\n",
             g_device_bounds_applied, g_device_bounds_status, g_device_bounds_reason);
     fprintf(f, "surface_source=%s\n", g_surface_from_skin ? "skin" :
-               (g_thermal_surface_zone >= 0 ? "zone" : (g_thermal_board_zone >= 0 ? "board" : "none")));
+               (g_thermal_surface_zone >= 0 ? (g_surface_pinned ? "zone_pinned" : "zone")
+                                            : (g_thermal_board_zone >= 0 ? "board" : "none")));
+    fprintf(f, "surface_pinned=%d\nsurface_pin_c=%d\nsurface_pin_boot=%d\nsurface_pin_revived=%lu\nsurface_zone_type=%s\n",
+            g_surface_pinned, g_surface_pin_c, g_surface_pin_boot, g_surface_pin_revived,
+            g_thermal_surface_type[0] ? g_thermal_surface_type : "-");
     fprintf(f, "vendor_ceiling_ticks=%lu\nvendor_ceiling_used_ticks=%lu\nown_ceiling_ticks=%lu\n",
             g_leak_ceiling_ticks, g_leak_used_ticks, g_own_ceiling_ticks);
     fprintf(f, "trend_trim_held_cool=%lu\n", g_trend_held_cool);

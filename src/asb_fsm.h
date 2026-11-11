@@ -2267,6 +2267,17 @@ static int fsm_update(asb_fsm_t *fsm, const asb_metrics_t *m) {
             }
         }
 
+        /* V66 dev12: the surface's cold baseline was averaged while a pinned zone still read
+         * 40 C; once the surface follows the board, a 40 C baseline would mute the surface vote
+         * until the board passed 40. A change of verdict takes the board's baseline. */
+        {
+            static int s_pin_seen = 0;
+            if (g_surface_pinned != s_pin_seen) {
+                s_pin_seen = g_surface_pinned;
+                if (fsm->cold_baseline_ticks >= 30 && fsm->cold_baseline_board > 0)
+                    fsm->cold_baseline_surface = fsm->cold_baseline_board;
+            }
+        }
         if (fsm->cold_baseline_ticks < 30) {
             if (m->therm.skin_temp_c > 0)
                 fsm->cold_baseline_sum_skin += m->therm.skin_temp_c;

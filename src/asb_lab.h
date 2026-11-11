@@ -24,7 +24,7 @@
  *  - blocks alternate the best setting so far and one challenger; each challenger block is
  *    compared with the champion block next to it, within 4 hours (12 for glances), 2.5 C of
  *    battery temperature and 25 points of charge, the same screen brightness band, and for
- *    the radio a mobile traffic volume within a factor of two;
+ *    the radio and the screen-off bus a mobile traffic volume within a factor of two;
  *  - it takes over when the pairs say it is at least 3 % cheaper with t >= 2.5 AND it does
  *    not make the cores sit at their ceiling more often (+8 points), the frames jankier (+1
  *    point where they are counted) or the battery warm faster (+1.5 C an hour); a challenger
@@ -170,6 +170,7 @@ typedef struct {
     int       on_mobile;        /* mobile data is the route */
     long long mobile_bytes;     /* cumulative mobile rx+tx, -1 unknown */
     int       radio_ok;         /* the light-traffic watcher is on and can act */
+    int       radio_watch;      /* the light-traffic watcher runs (screen on or off) */
     int       mem_ok;           /* lab memory-bus control allowed (smart_lab_mem=1) */
     int       rec_on_busy;      /* the records try a setting for this screen-on situation now */
     int       rec_off_busy;     /* ... for this screen-off situation */
@@ -252,15 +253,23 @@ static const char *asb_lab_arm_name(int k, int arm) {
 
 /* The next setting to try from this champion, or -1: none left (a plateau). The bus caps
  * go one step further only after the softer step won; the app lean tries economy first,
- * then headroom. */
+ * then headroom.
+ *
+ * V66 dev12: a champion away from the base setting is also tried against the step back
+ * toward it. Without that, a re-check (the 21-day one, or a cost that climbed 15 %) found
+ * nothing left to try when the bus cap at its deepest step or an app's changed lean had won:
+ * tried held only the champion, the next step was "none", and the knob converged again at
+ * once - the re-test never ran. The first exploration is unchanged, since the step back has
+ * always been tried by then. */
 static int asb_lab_next(const asb_lab_knob_t *kn, int k) {
     int c = kn->champion, t = kn->tried;
     if (k == LAB_MEM_ON || k == LAB_MEM_OFF) {
         if (c < 2 && !(t & (1 << (c + 1)))) return c + 1;
+        if (c > 0 && !(t & (1 << (c - 1)))) return c - 1;
         return -1;
     }
     if (asb_lab_is_app(k)) {
-        if (c != 0) return -1;
+        if (c != 0) return (t & 1) ? -1 : 0;
         if (!(t & 2)) return 1;
         if (!(t & 4)) return 2;
         return -1;
@@ -429,10 +438,15 @@ static int asb_lab_pairable(int k, const asb_lab_last_t *a, const asb_lab_last_t
     if (dsoc < 0) dsoc = -dsoc;
     if (dsoc > ASB_LAB_PAIR_SOC) return 0;
     if (a->band != b->band) return 0;
+    /* V66 dev12: screen-off bus blocks carry their mobile traffic too. Under the 15 KiB/s
+     * cut a 40-minute block can still move 30 MiB, and at a 100 mW idle that is a sizeable
+     * part of the block's energy; two blocks are compared only when their traffic is alike
+     * (within a factor of two above 1 KiB/s - 2.3 MiB in 40 minutes). */
     if (a->traffic >= 0.0f && b->traffic >= 0.0f) {
         float lo = a->traffic < b->traffic ? a->traffic : b->traffic;
         float hi = a->traffic < b->traffic ? b->traffic : a->traffic;
-        if (hi > 2.0f && hi > lo * 2.0f) return 0;
+        float floor_kibps = (k == LAB_MEM_OFF) ? 1.0f : 2.0f;
+        if (hi > floor_kibps && hi > lo * 2.0f) return 0;
     }
     return 1;
 }
@@ -575,6 +589,7 @@ static void asb_lab_blk_end(asb_lab_blk_t *b, const asb_lab_in_t *in) {
                 g_lab_blocks_radio++;
                 return;
             }
+            if (n1 >= b->net0) s.traffic = (float)((double)(n1 - b->net0) / 1024.0 / (double)dur);
         }
         double ma = ((double)(b->cc0 - cc1) / 1000.0) / ((double)dur / 3600.0);
         double v = ((double)b->v_sum / (double)b->v_n) / 1e6;
@@ -942,7 +957,7 @@ static int asb_lab_save(void) {
 static const char *asb_lab_state_name(int k, const asb_lab_in_t *in) {
     const asb_lab_knob_t *kn = &g_lab.k[k];
     if (asb_lab_is_app(k) && !kn->key) return "free";
-    if (k == LAB_RADIO && in && !in->radio_ok) return "off";
+    if (k == LAB_RADIO && in && !in->radio_ok && !in->radio_watch) return "off";
     if ((k == LAB_MEM_ON || k == LAB_MEM_OFF) && (g_mem_probe == -1 || (in && !in->mem_ok))) return "off";
     if (kn->converged) return "best";
     if (kn->challenger != kn->champion) return "testing";
