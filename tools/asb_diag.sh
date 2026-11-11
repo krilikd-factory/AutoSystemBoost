@@ -4893,9 +4893,9 @@ if [ -s "$_ux_led" ]; then
   # refusals - "the ROM blocks this write" sent people chasing a permission problem that
   # is not there. The summary names the count only when there is one, so a device with
   # no absent keys prints exactly the line it always did.
-  _ux_ls="$(awk -F'|' '$2 != "reconcile" { k = $2 "/" $3; last[k] = $7; req[k] = $4; now[k] = $6 }
+  _ux_ls="$(awk -F'|' '$2 != "reconcile" { k = $2 "/" $3; last[k] = $7; req[k] = $4; now[k] = $6; why[k] = $8 }
     END { for (k in last) { c[last[k]]++;
-            if (last[k] == "not_writable" || last[k] == "readback_mismatch") printf "X|%s|%s|%s\n", k, req[k], now[k];
+            if (last[k] == "not_writable" || last[k] == "readback_mismatch") printf "X|%s|%s|%s|%s\n", k, req[k], now[k], (why[k] ~ /not retried/ ? "skip" : "");
             else if (last[k] == "unsupported" && k ~ /^settings\//) { u++; printf "U|%s|%s\n", k, req[k] } }
           printf "C|%d|%d|%d|%d\n", c["applied"], c["already_set"], c["not_writable"] + c["readback_mismatch"], u }' "$_ux_led" 2>/dev/null)"
   _ux_c="$(printf '%s\n' "$_ux_ls" | grep '^C|')"
@@ -4903,8 +4903,12 @@ if [ -s "$_ux_led" ]; then
   case "$_ux_refused" in ''|*[!0-9]*) _ux_refused=0 ;; esac
   _ux_na="$(printf '%s' "$_ux_c" | cut -d'|' -f5)"
   P "     system settings ASB writes (by key, last result): applied $(printf '%s' "$_ux_c" | cut -d'|' -f2) · already set $(printf '%s' "$_ux_c" | cut -d'|' -f3) · refused by Android $(printf '%s' "$_ux_c" | cut -d'|' -f4)$(case "${_ux_na:-0}" in ''|*[!0-9]*|0) ;; *) printf ' · not on this ROM %s' "$_ux_na" ;; esac)"
-  printf '%s\n' "$_ux_ls" | grep '^X|' | sort | head -10 | while IFS='|' read -r _x _xk _xr _xn; do
-    P "       refused, not in effect: $_xk (wanted ${_xr:-?}, device keeps ${_xn:-?}) - the ROM blocks this write"
+  printf '%s\n' "$_ux_ls" | grep '^X|' | sort | head -10 | while IFS='|' read -r _x _xk _xr _xn _xs; do
+    if [ "$_xs" = skip ]; then
+      P "       refused, not in effect: $_xk (wanted ${_xr:-?}) - refused on an earlier boot of this ROM build, not asked again until an OTA or a reinstall"
+    else
+      P "       refused, not in effect: $_xk (wanted ${_xr:-?}, device keeps ${_xn:-?}) - the ROM blocks this write"
+    fi
   done
   printf '%s\n' "$_ux_ls" | grep '^U|' | sort | head -5 | while IFS='|' read -r _u _uk _ur; do
     P "       not on this ROM: $_uk (wanted ${_ur:-?}) - this ROM has no such setting; nothing is wrong"
