@@ -1368,6 +1368,14 @@ lk_emit_smart_records() {
     cp "$_sef" "$LK_OUT_DIR/smart_energy.txt" 2>/dev/null
     grep -E '^(app|class|plug)[|]' "$_sef" | sed 's/^/energy: /; s/|/  /g'
   fi
+  _slf="${ASB_LK_LAB_FILE:-/dev/.asb/smart_lab.txt}"
+  if [ -r "$_slf" ]; then
+    cp "$_slf" "$LK_OUT_DIR/smart_lab.txt" 2>/dev/null
+    awk -F'|' '$1 == "knob" && NF == 18 && $3 != "free" {
+        t = ($3 == "testing") ? sprintf("trying %s, %d pair(s), %+.1f %%", $5, $6, $7 / 10) : "-"
+        printf "lab: %-11s %-8s best: %-22s %s%s\n", $2, $3, $4, t, ($18 != "-" ? "  " $18 : "") }' "$_slf"
+    sed -n 's/^mem|/lab bus: /p; s/^now|/lab now: /p' "$_slf" | tr '|' ' '
+  fi
   echo "infinite-log Smart feedback: status=$(lk_state_kv smooth_log_status); accepted=$(lk_state_kv smooth_log_accepted); suppressed=$(lk_state_kv smooth_log_suppressed); rejected=$(lk_state_kv smooth_log_rejected)"
   echo "The log sends only sustained-jank probe hints. The native governor re-reads frames once, owns every A/B window and keeps plateau/recheck decisions."
   [ -r "$LK_SF_FILE" ] && cp "$LK_SF_FILE" "$LK_OUT_DIR/smart_log_feedback.env" 2>/dev/null || true
