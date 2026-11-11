@@ -7880,6 +7880,14 @@ id="$(run status | awk -F'|' '$1 == "j" && $6 == "com.game.idle" && $9 == "activ
 out="$(run undo "$id")"; [ "$out" = "$(printf 'restore=external\nresult=ok')" ] && grep -qx 'com.game.idle 20' "$T/buckets" || fail "undo over an external bucket change: $out $(cat "$T/buckets")"
 grep -q "|budget|com.game.idle|10301|10|external\$" "$T/s7/journal" || fail "external handback not journaled: $(cat "$T/s7/journal")"
 sed -i 's/^com.game.idle 20$/com.game.idle 10/' "$T/buckets"
+# V66 dev14: undo-all counts what ASB put back apart from what another component had already
+# changed (audit P2), and asbdiag summarises the journal the same way.
+out="$(run apply budget com.game.idle)"; [ "$out" = result=ok ] || fail "re-apply for undo-all: $out"
+out="$(run apply data com.feed.data)"; [ "$out" = result=ok ] || fail "re-apply data for undo-all: $out"
+sed -i 's/^com.game.idle 40$/com.game.idle 20/' "$T/buckets"
+out="$(run undo-all)"; printf '%s\n' "$out" | grep -qx 'undone=1' && printf '%s\n' "$out" | grep -qx 'external=1' || fail "undo-all does not separate an external change: $out"
+sed -i 's/^com.game.idle 20$/com.game.idle 10/' "$T/buckets"
+grep -q '_s7c="$(awk' "$ROOT/tools/asb_diag.sh" && grep -q 'left as another component had already changed them' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not summarise the Smart background/data journal"
 for bad in 'com.x;id' '' 'x'; do out="$(run apply budget "$bad")"; [ "$out" = result=bad_request ] || fail "unsafe name accepted: $bad"; done
 out="$(run apply nope com.game.idle)"; [ "$out" = result=bad_request ] || fail "unknown engine accepted"
 run auto data on >/dev/null; rm -f "$T/s7/auto_at"; run tick
@@ -8112,10 +8120,11 @@ grep -q '"lsposed_hooks"' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not re
 grep -qE 'appops set|pm (disable|clear|uninstall)|am (force-stop|kill)|rm -|> *"?\$_ls_' "$C" && fail "the collector must stay read-only"
 cat > "$T/m.c" <<CSRC
 #define ASB_LSPD_SQLITE_LIB "$LIB"
+#define ASB_LSPD_TMP "$T/lsptmp"
 #include "$ROOT/src/asb_lspd.h"
 int main(int argc, char **argv) { if (argc >= 3 && strcmp(argv[1], "--lspd") == 0) return asb_lspd_cli(argc - 2, argv + 2); return 9; }
 CSRC
-mkdir -p "$T/gov" "$T/fb" "$T/run" "$T/lspd/config" "$T/lspd/log"
+mkdir -p "$T/gov" "$T/fb" "$T/run" "$T/lspd/config" "$T/lspd/log" "$T/lsptmp"
 "$CC" -std=gnu11 -Wall -Werror -o "$T/gov/asb" "$T/m.c" -ldl || fail "helper does not compile"
 D="$T/lspd/config/modules_config.db"
 python3 - "$D" <<'P'
@@ -8158,6 +8167,37 @@ open(sys.argv[2], 'w').close(); time.sleep(6)" "$T/locked.db" "$T/locked.ready" 
 _lk=$!; for _i in 1 2 3 4 5 6 7 8 9 10; do [ -f "$T/locked.ready" ] && break; sleep 0.2; done
 out="$("$T/gov/asb" --lspd modules "$T/locked.db" || true)"; wait "$_lk" || :
 printf '%s\n' "$out" | grep -qx 'reason=read_failed' || fail "a locked database read as a foreign layout or an empty inventory: $out"
+# V66 dev13: Vector (the maintained LSPosed fork) runs the database in WAL mode. Once its daemon
+# has closed the file there is no -shm index, and a read-only connection that may not create one
+# fails (SQLITE_READONLY / CANTOPEN) - two Android 17 users read that as "unexpected_schema". The
+# inventory and the verbose switch are then read from a private copy; LSPosed's directory is not
+# written and the copy is gone afterwards. A non-root run is needed for the directory to refuse.
+if [ "$(id -u)" != 0 ]; then
+  mkdir -p "$T/wal/config"
+  python3 - "$T/wal/config/modules_config.db" <<'P'
+import sqlite3, sys
+db = sqlite3.connect(sys.argv[1])
+db.execute("PRAGMA journal_mode=WAL")
+db.executescript("""
+CREATE TABLE modules (mid integer PRIMARY KEY AUTOINCREMENT, module_pkg_name text NOT NULL UNIQUE, apk_path text NOT NULL, enabled BOOLEAN DEFAULT 0);
+CREATE TABLE scope (mid integer, app_pkg_name text NOT NULL, user_id integer NOT NULL, PRIMARY KEY (mid, app_pkg_name, user_id));
+CREATE TABLE configs (module_pkg_name text NOT NULL, user_id integer NOT NULL, `group` text NOT NULL, `key` text NOT NULL, data blob NOT NULL,
+  PRIMARY KEY (module_pkg_name, user_id, `group`, `key`));
+INSERT INTO modules (module_pkg_name, apk_path, enabled) VALUES ('lspd', '/x', 1), ('com.mod.alpha', '/a', 1);
+INSERT INTO scope VALUES (2, 'com.app.one', 0);
+""")
+db.commit(); db.close()
+P
+  chmod 555 "$T/wal/config"
+  out="$("$T/gov/asb" --lspd modules "$T/wal/config/modules_config.db" || true)"
+  printf '%s\n' "$out" | grep -qx 'module|com.mod.alpha|1|1' || { chmod 755 "$T/wal/config"; fail "a WAL database that cannot be read in place was not read from a copy: $out"; }
+  printf '%s\n' "$out" | grep -qx 'read_from=copy' && printf '%s\n' "$out" | grep -q '^sqlite_rc=' || { chmod 755 "$T/wal/config"; fail "the copy and its cause are not named: $out"; }
+  out="$("$T/gov/asb" --lspd verbose-get "$T/wal/config/modules_config.db" || true)"
+  printf '%s\n' "$out" | grep -qx 'verbose=default_on' || { chmod 755 "$T/wal/config"; fail "verbose switch not read from the copy: $out"; }
+  [ "$(ls "$T/wal/config")" = modules_config.db ] || { chmod 755 "$T/wal/config"; fail "LSPosed's directory was written: $(ls "$T/wal/config")"; }
+  [ -z "$(ls -A "$T/lsptmp")" ] || { chmod 755 "$T/wal/config"; fail "the private copy was left behind: $(ls -A "$T/lsptmp")"; }
+  chmod 755 "$T/wal/config"
+fi
 cat > "$T/fb/pm" <<'S'
 #!/bin/sh
 printf 'package:com.app.one uid:10100\npackage:com.app.two uid:10101\npackage:com.mod.alpha uid:10200\n'

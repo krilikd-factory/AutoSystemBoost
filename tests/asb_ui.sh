@@ -2197,6 +2197,10 @@ _grouped="$(awk -F'|' '
 printf '%s\n' "$_grouped" | grep -Fqx 'owner=vendor samples=2 epoch=100..160' || { echo 'FAIL logkit capture-quality: vendor period grouping' >&2; exit 1; }
 printf '%s\n' "$_grouped" | grep -Fqx 'owner=asb samples=1 epoch=400..400' || { echo 'FAIL logkit capture-quality: ASB period grouping' >&2; exit 1; }
 case "$_grouped" in *'\\n'*) echo 'FAIL logkit capture-quality: literal \\n in fixture output' >&2; exit 1 ;; esac
+# V66 dev14 (audit 8.5): the verdict states the shares, on the real function.
+sed -n '/^lk_emit_cap_ownership_verdict() {/,/^}/p' "$LOGKIT" > "$TMP/own.sh"
+_own="$(sh -c '. "$1"; LK_OUT_DIR="$2"; lk_emit_cap_ownership_verdict' x "$TMP/own.sh" "$TMP")"
+printf '%s\n' "$_own" | grep -Fq 'share of the samples under a ceiling: ASB 33 %, ASB manual profile 0 %, vendor 66 % of 3' || { echo "FAIL logkit capture-quality: ownership shares missing: $_own" >&2; exit 1; }
 need "$LOGKIT" '----- CHARGING-IDLE AWAKE VERDICT -----'
 need "$LOGKIT" 'ASB does not alter charge current or kill apps automatically.'
 need "$LOGKIT" 'lk_charge_idle_observe "$_phase"'
@@ -6199,6 +6203,8 @@ EOF
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
   sed -n '/^async function asbSaveTextFile(/,/^}/p' "$H"
+  sed -n '/^const ASB_SAVE_PAGES = {/,/^};/p' "$H"
+  sed -n '/^function asbSaveExpand(/,/^}/p' "$H"
   sed -n '/^async function asbSavePage(/,/^}/p' "$H"
   cat <<'EOF'
 let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
@@ -8019,8 +8025,8 @@ assert 'setInterval' not in loader and 'setTimeout' not in loader
 assert 'seq !== _deviceLoadSeq' in loader and 'Nothing was changed' in loader
 assert loader.index('window._asbDeviceInfoData = null') < loader.index('await run(')
 assert 'window._asbDeviceInfoData = d;' in loader
-save_fn = h[h.index('async function asbSavePage('):h.index('async function asbDeviceInfoLoad()')]
-assert "'/sdcard/Download/'" in save_fn and 'asb_device_' in save_fn and 'asb_report_' in save_fn
+save_fn = h[h.index('const ASB_SAVE_PAGES = {'):h.index('async function asbDeviceInfoLoad()')]
+assert "'/sdcard/Download/'" in save_fn and 'asb_device_' in save_fn and 'asb_report_' in save_fn and 'asb_zygisk_' in save_fn
 assert 'asb_device_info.sh' not in save_fn and 'setInterval' not in save_fn
 assert 'window._asbDeviceInfoRaw = runText(r);' in loader
 segment = h[h.index('function parseDeviceInfo('):h.index('function openDevicePage()')]
@@ -8123,6 +8129,8 @@ EOF
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
   sed -n '/^async function asbSaveTextFile(/,/^}/p' "$H"
+  sed -n '/^const ASB_SAVE_PAGES = {/,/^};/p' "$H"
+  sed -n '/^function asbSaveExpand(/,/^}/p' "$H"
   sed -n '/^async function asbSavePage(/,/^}/p' "$H"
   cat <<'EOF'
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
@@ -8332,6 +8340,139 @@ EOF
 out="$(node "$T/t.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 echo "PASS webui device page: five SoC buttons/theme groups, safe TSV parser/renderer, five section groups in reading order with the identity card first, metamodule metadata, independent NoMount evidence and read-only loader"
+)
+
+t_webui_zygisk_save_runtime() (
+# Runtime (dev16): the Zygisk page saves like Device diagnostics and the report: the page as
+# shown, folded rows and the lazily built evidence list included, then every status output.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui zygisk save: $*" >&2; exit 1; }
+command -v node >/dev/null 2>&1 || { echo "SKIP webui zygisk save: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+python3 - "$ROOT" <<'PY' || fail "static wiring"
+import sys
+from pathlib import Path
+h = (Path(sys.argv[1])/'webroot/index.html').read_text(encoding='utf-8')
+page = h[h.index('id="zygiskPage"'):h.index('id="zygiskBody"')]
+assert 'id="zySave"' in page and "asbSavePage('zygisk')" in page and 'data-i18n="page_save"' in page, 'the Zygisk page has no Save button'
+assert page.index('id="zySave"') < page.index('id="zyRefresh"'), 'Save is not placed like on the other pages'
+load = h[h.index('async function zygiskPageLoad(user) {'):h.index('function zygiskRawDigest(b) {')]
+assert 'window._asbZygiskRaw = zygiskRawDigest(b);' in load and "_el('zySave')" in load
+assert load.count('runBatch(') == 1, 'saving must not add a read to the page load'
+openp = h[h.index('function openZygiskPage() {'):h.index('function closeZygiskPage() {')]
+assert "_el('zySave')" in openp and 'run(' not in openp
+PY
+{
+  cat <<'EOF'
+const window = globalThis;
+function T(k, d) { return d; }
+function techIcon(kind) { return ''; }
+function mk(tag) {
+  const e = { tagName: String(tag).toUpperCase(), className: '', children: [], _text: '', attrs: {}, parentNode: null, ev: {},
+    appendChild(c) { if (c.parentNode) c.parentNode.removeChild(c); c.parentNode = e; e.children.push(c); return c; },
+    removeChild(c) { const i = e.children.indexOf(c); if (i >= 0) e.children.splice(i, 1); c.parentNode = null; return c; },
+    insertBefore(c, ref) { if (c.parentNode) c.parentNode.removeChild(c); c.parentNode = e; const i = ref ? e.children.indexOf(ref) : -1; if (i < 0) e.children.push(c); else e.children.splice(i, 0, c); return c; },
+    setAttribute(k, v) { e.attrs[k] = String(v); }, getAttribute(k) { return k in e.attrs ? e.attrs[k] : null; },
+    addEventListener(t, fn) { e.ev[t] = fn; },
+    querySelectorAll(sel) { const want = sel.slice(1), out = [];
+      (function walk(n) { (n.children || []).forEach(function (c) { if (String(c.className).split(/\s+/).includes(want)) out.push(c); walk(c); }); })(e);
+      return out; },
+    querySelector(sel) { return e.querySelectorAll(sel)[0] || null; },
+    closest(sel) { const want = sel.slice(1); let n = e; while (n) { if (String(n.className).split(/\s+/).includes(want)) return n; n = n.parentNode; } return null; }
+  };
+  e.classList = {
+    add(c) { const a = new Set(e.className.split(/\s+/).filter(Boolean)); a.add(c); e.className = Array.from(a).join(' '); },
+    remove(c) { e.className = e.className.split(/\s+/).filter(function (x) { return x && x !== c; }).join(' '); },
+    contains(c) { return e.className.split(/\s+/).includes(c); },
+    toggle(c, on) { if (on) e.classList.add(c); else e.classList.remove(c); }
+  };
+  Object.defineProperty(e, 'textContent', { get() { return e._text + e.children.map(function (c) { return c.textContent; }).join(''); },
+    set(v) { e._text = String(v); e.children.forEach(function (c) { c.parentNode = null; }); e.children = []; } });
+  Object.defineProperty(e, 'innerHTML', { set(v) { e._text = ''; e.children = []; }, get() { return ''; } });
+  return e;
+}
+const document = { createElement: mk };
+const body = mk('div'), status = mk('span'), line = mk('div'), saveBtn = { disabled: false };
+status.textContent = 'Current snapshot · read-only';
+line.textContent = 'OnePlus 15 · SM8850';
+function _el(id) { return id === 'zygiskBody' ? body : id === 'zySave' ? saveBtn : id === 'zygiskStatus' ? status : id === 'deviceLine' ? line : null; }
+function logReportNote(text, warn) { const n = mk('div'); n.className = 'lgr-note' + (warn ? ' lgr-warn' : ''); n.textContent = text; return n; }
+function logReportSec(title) { const n = mk('section'); n.className = 'lgr-sec'; const h = mk('h3'); h.className = 'lgr-sec-t'; h.textContent = title; n.appendChild(h); return n; }
+function logReportRow(key, value) { const r = mk('div'), k = mk('span'), v = mk('span'); r.className = 'lgr-row'; k.className = 'lgr-k'; k.textContent = key; v.className = 'lgr-v'; v.textContent = value; r.appendChild(k); r.appendChild(v); return r; }
+function logReportT(key, fb, vars) { let s = T(key, fb); const v = vars || {}; for (const k in v) s = s.split('{' + k + '}').join(v[k]); return s; }
+function deviceLabel(sec, k) { return 'EV ' + k; }
+function deviceDisplayValue(sec, k, raw) { return raw; }
+let _zyGuard = { enabled: true, level: 'wakers' };
+let _zygiskAutoBusy = '', _zygiskModeBusy = false;
+EOF
+  sed -n '/^const ZYGISK_MODES = \[/,/^\];/p' "$H"
+  for fn in deviceVal zygiskModeOf zygiskButtonIcon zygiskModeCard zygiskEvidenceCard zygiskRawDigest shQuote \
+    asbPageClasses asbPageHas asbPageKids asbPageTxt asbPageWarn asbPageText asbPageStamp zyCompact; do
+    sed -n "/^function $fn(/,/^}/p" "$H"
+  done
+  sed -n '/^const _zyFoldOpen = new Set();/p;/^const ZY_NOTE_CLAMP = /p' "$H"
+  sed -n '/^async function asbSaveTextFile(/,/^}/p' "$H"
+  sed -n '/^const ASB_SAVE_PAGES = {/,/^};/p' "$H"
+  sed -n '/^function asbSaveExpand(/,/^}/p' "$H"
+  sed -n '/^async function asbSavePage(/,/^}/p' "$H"
+  cat <<'EOF'
+let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
+const obs = { enabled: '1', auto_mode: '1', auto_profile: 'auto', lifecycle_hints: '1', launch_hints: '1', spawn_ledger: '1', safe_mode: 'off', EVLAST: 'tail-value' };
+const d = { sections: { zygisk_observer: obs } };
+body.appendChild(zygiskModeCard(d));
+const act = logReportSec('Activity and cost');
+for (let i = 1; i <= 6; i++) act.appendChild(logReportRow('Metric ' + i, String(i * 11)));
+body.appendChild(act);
+const ctl = logReportSec('ASB Zygisk controls');
+const row = mk('div'); row.className = 'cfg-row is-on';
+const top = mk('div'); top.className = 'cfg-row-top';
+const main = mk('div'); main.className = 'cfg-main';
+const nm = mk('div'); nm.className = 'cfg-name'; nm.textContent = 'Cold-start lift';
+const caret = mk('span'); caret.className = 'cfg-caret'; caret.textContent = '▾'; nm.appendChild(caret);
+const st = mk('div'); st.className = 'cfg-status on'; st.textContent = 'Enabled';
+main.appendChild(nm); main.appendChild(st); top.appendChild(main); row.appendChild(top); ctl.appendChild(row);
+body.appendChild(ctl);
+const ed = mk('textarea'); ed.className = 'dev-zygisk-input'; ed.value = 'com.example.one\ncom.example.two';
+body.appendChild(ed);
+const ev = zygiskEvidenceCard(d); body.appendChild(ev);
+zyCompact(body);
+const fold = act.children.filter(function (c) { return c.className === 'zy-fold'; })[0];
+chk(fold && fold.hidden === true && fold.children.length === 3, 'rows 4-6 were not folded as on screen');
+chk(!ev._built, 'the evidence list was built before it was opened or saved');
+window._asbZygiskLinkData = d;
+window._asbZygiskRaw = zygiskRawDigest({ link: { errno: 0, stdout: 'D\tzygisk_observer\tenabled\t1\nRAWZY\n' }, guard: { errno: 1, stdout: '' }, aot: { errno: 0, stdout: 'aot\t1' } });
+(async function () {
+  const commands = [], notices = [];
+  globalThis.run = async function (cmd) { commands.push(cmd); return { errno: 0, stdout: '', stderr: '' }; };
+  globalThis.toast = function (text, kind) { notices.push({ text, kind }); };
+  await asbSavePage('zygisk');
+  const writes = commands.filter(function (c) { return c.indexOf("printf '%s' ") >= 0; });
+  const saved = Buffer.from(writes.map(function (c) { return c.match(/printf '%s' '([^']*)'/)[1]; }).join(''), 'base64').toString('utf8');
+  chk(/^AutoSystemBoost - Zygisk\nCurrent snapshot · read-only\nOnePlus 15 · SM8850\n/.test(saved), 'header: ' + saved.slice(0, 120));
+  chk(saved.includes('== Mode ==') && saved.includes('  [Auto] / Battery / Performance'), 'the chosen mode is not in the file');
+  chk(saved.includes('  Metric 6: 66') && saved.includes('  Metric 1: 11'), 'folded rows were left out');
+  chk(saved.includes('  Cold-start lift: Enabled') && !saved.includes('▾'), 'a switch row lost its state or kept the caret');
+  chk(saved.includes('  com.example.one, com.example.two'), 'the observed app list was left out');
+  chk(ev._built && saved.includes('  EV EVLAST: tail-value') && saved.includes('  EV auto_profile: auto'), 'the unopened evidence list was not expanded into the file');
+  chk(saved.includes('== Raw data (for the developer) ==\n--- asb_zygisk.sh link-status ---\nD\tzygisk_observer\tenabled\t1\nRAWZY'), 'the link-status output is missing');
+  chk(saved.includes('--- asb_zygisk_guard.sh status (rc=1) ---') && saved.includes('--- asb_zygisk_aot.sh status ---\naot\t1'), 'a failed or later read is not labelled');
+  chk(!saved.includes('asb_lsposed_lite.sh'), 'an output that was never read is listed');
+  chk(commands.some(function (c) { return /'\/sdcard\/Download\/asb_zygisk_\d{8}_\d{6}\.txt'/.test(c); }), 'wrong path');
+  chk(!commands.some(function (c) { return /asb_zygisk\.sh|asb_zygisk_guard|link-status/.test(c); }), 'saving ran a new read');
+  chk(!saveBtn.disabled && notices.some(function (n) { return n.kind === 'ok' && n.text.includes('/sdcard/Download/asb_zygisk_'); }), 'no confirmation or the button stayed disabled');
+  window._asbZygiskLinkData = null;
+  const before = commands.length;
+  await asbSavePage('zygisk');
+  chk(commands.length === before && notices.some(function (n) { return n.kind === 'error'; }), 'a page without data was saved');
+  if (bad) process.exit(1); console.log('ok');
+})().catch(function (e) { console.error(e); process.exit(1); });
+EOF
+} > "$T/t.js"
+out="$(node "$T/t.js" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo "PASS webui zygisk save: Save button beside Refresh, the page as shown with folds, switch states, chosen mode and the unopened evidence list, plus every status output, in Download, without a new read"
 )
 
 t_device_info_runtime() (

@@ -1773,7 +1773,10 @@ static void case_pinned_surface_remembered(void) {
     check_i("pinned: the surface follows the board", t.surface_hotspot_c, 25);
     FILE *f = fopen(ASB_SURFACE_PIN_FILE, "r");
     if (f) { if (!fgets(buf, sizeof(buf), f)) buf[0] = 0; fclose(f); }
-    check_s("pinned: the verdict is kept with zone type and value", buf, "sys-therm-6 40\n");
+    char want[96];
+    snprintf(want, sizeof(want), "sys-therm-6 40 %d %lx\n", g_thermal_zones_seen, asb_surface_pin_build());
+    check_s("pinned: the verdict is kept with zone type, value, zone count and kernel build", buf, want);
+    check_i("pinned: the fixture's zones were counted", g_thermal_zones_seen, 6);
 
     asb_surface_pin_reset();
     pinned_tick(&t, 40000, 26000);
@@ -1785,8 +1788,22 @@ static void case_pinned_surface_remembered(void) {
     check_i("pinned: ... and the file goes", access(ASB_SURFACE_PIN_FILE, F_OK), -1);
     check_i("pinned: ... and the surface reads the zone", t.surface_hotspot_c, 44);
 
+    /* dev13: a verdict written for another kernel or another thermal map is learned again;
+     * so is one in dev12's two-field format. */
+    asb_surface_pin_reset();
+    f = fopen(ASB_SURFACE_PIN_FILE, "w"); fprintf(f, "sys-therm-6 40 %d %lx\n", g_thermal_zones_seen, asb_surface_pin_build() ^ 1UL); fclose(f);
+    pinned_tick(&t, 40000, 30000);
+    check_i("pinned: a verdict from another kernel is not applied", g_surface_pinned, 0);
+    asb_surface_pin_reset();
+    f = fopen(ASB_SURFACE_PIN_FILE, "w"); fprintf(f, "sys-therm-6 40 %d %lx\n", g_thermal_zones_seen + 3, asb_surface_pin_build()); fclose(f);
+    pinned_tick(&t, 40000, 30000);
+    check_i("pinned: a verdict from another thermal map is not applied", g_surface_pinned, 0);
     asb_surface_pin_reset();
     f = fopen(ASB_SURFACE_PIN_FILE, "w"); fputs("sys-therm-6 40\n", f); fclose(f);
+    pinned_tick(&t, 40000, 30000);
+    check_i("pinned: a two-field verdict is learned again", g_surface_pinned, 0);
+    asb_surface_pin_reset();
+    f = fopen(ASB_SURFACE_PIN_FILE, "w"); fprintf(f, "sys-therm-6 40 %d %lx\n", g_thermal_zones_seen, asb_surface_pin_build()); fclose(f);
     pinned_tick(&t, 35000, 30000);
     check_i("pinned: a file for another value does not drop a live zone", g_surface_pinned, 0);
     check_i("pinned: ... which keeps reading the zone", t.surface_hotspot_c, 35);
@@ -2304,6 +2321,130 @@ X
 out="$("$T/t")" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 echo "PASS battery touch light idle: a touch leaves Battery's lowest-step GPU light idle at once, holds while touching, quiet reading still idles, Smart unchanged"
+)
+
+t_gpu_bound_gaming_runtime() (
+# Runtime (V66 dev13): a GPU that stays saturated is a game-like workload, package table or not.
+#
+# OP15 dev12 day: a 3D benchmark scene held the GPU at 93-99 % busy, pinned at 500-646 MHz of
+# 1200, for minutes with load1 at this phone's resting level. GAMING needed the package table
+# and a CPU above the quiet floor, so the FSM read "GPU busy, CPU idle = video" and stayed in
+# MODERATE. The REAL governor translation unit is compiled and fsm_desired_base driven: three
+# ticks at 90 %+ latch GAMING on Smart with an unknown package and a light CPU; the latch holds
+# at 60 % (the clock was lifted) and clears below the gaming exit mark; a feed at 60 % never
+# latches; the camera, an unreadable GPU and Battery's suppress_gaming keep it out.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL gpu bound gaming: $*" >&2; exit 1; }
+CC=""; for c in gcc clang cc; do command -v "$c" >/dev/null 2>&1 && { CC="$c"; break; }; done
+[ -n "$CC" ] || { echo "SKIP gpu bound gaming: no C compiler"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+grep -q 'gpu_bound_streak=%d' "$ROOT/src/asb_governor.c" || fail "the latch is not published in the state file"
+# dev15: which app the latch last fired for, so a video player latching by mistake shows in a log.
+grep -q 'gpu_bound_pkg=%s' "$ROOT/src/asb_governor.c" && grep -q 'last for \$(_rget gpu_bound_pkg' "$ROOT/tools/asb_diag.sh" || fail "the latch's app is not published or not shown"
+cat > "$T/t.c" <<'X'
+#define main asb_governor_main_unused
+#include "asb_governor.c"
+#undef main
+static int bad = 0;
+#define CHECK(c, ...) do { if (!(c)) { printf("FAIL "); printf(__VA_ARGS__); printf("\n"); bad++; } } while (0)
+static asb_metrics_t scene(int gpu) {
+    asb_metrics_t m;
+    memset(&m, 0, sizeof(m));
+    m.misc.screen_on = 1;
+    m.misc.app_hint = ASB_APP_MEDIUM;
+    m.cpu.load1 = 1.0f;
+    m.cpu.awake_tick_pct = 100;
+    m.gpu.load_pct = gpu;
+    m.gpu.load_valid = 1;
+    m.therm.cpu_max_c = 45;
+    m.therm.source_confidence = 2;
+    m.bat.current_ma = 600;
+    return m;
+}
+static void profile(int p) {
+    fsm_profile_is_battery = (p == PROFILE_BATTERY);
+    fsm_profile_is_smart = (p == PROFILE_SMART);
+    fsm_profile_is_performance = (p == PROFILE_PERFORMANCE);
+    g_screen_on_since = time(NULL) - 600;
+    g_gpu_bound_streak = 0;
+    g_gaming_confirm_streak = 0;
+}
+int main(void) {
+    asb_config_defaults(&g_asb_cfg);
+    asb_metrics_t m = scene(97);
+    profile(PROFILE_SMART);
+    asb_state_t d1 = fsm_desired_base(&m), d2 = fsm_desired_base(&m), d3 = fsm_desired_base(&m);
+    CHECK(d1 != ASB_STATE_GAMING && d2 != ASB_STATE_GAMING, "GAMING before three saturated ticks: %s %s", asb_state_names[d1], asb_state_names[d2]);
+    CHECK(d3 == ASB_STATE_GAMING, "three saturated ticks did not latch GAMING: %s", asb_state_names[d3]);
+    CHECK(g_gpu_bound_entries == 1, "the latch was not counted once: %lu", g_gpu_bound_entries);
+    m = scene(60);
+    asb_state_t d4 = fsm_desired_base(&m);
+    CHECK(d4 == ASB_STATE_GAMING, "the latch did not hold at 60 %%: %s", asb_state_names[d4]);
+    m = scene(30);
+    asb_state_t d5 = fsm_desired_base(&m);
+    CHECK(d5 != ASB_STATE_GAMING && g_gpu_bound_streak == 0, "the latch did not clear below the exit mark: %s", asb_state_names[d5]);
+    CHECK(g_gpu_bound_entries == 1, "a held latch was counted again");
+    CHECK(g_gpu_bound_need == 6, "a latch gone after two ticks did not back off: %d", g_gpu_bound_need);
+
+    /* dev15: a latch that falls apart at once (the lift was all the work needed - a video at
+     * the lowest GPU step) doubles the ticks the next one needs; one that holds resets them. */
+    profile(PROFILE_SMART);
+    g_gpu_bound_need = ASB_GPU_BOUND_TICKS; g_gpu_bound_held = 0; g_gpu_bound_cleared = 0;
+    unsigned long bo0 = g_gpu_bound_backoffs;
+    m = scene(97);
+    for (int i = 0; i < 3; i++) fsm_desired_base(&m);
+    m = scene(30); fsm_desired_base(&m);
+    CHECK(g_gpu_bound_need == 6 && g_gpu_bound_backoffs == bo0 + 1, "a latch gone at once did not double the need: %d", g_gpu_bound_need);
+    m = scene(97);
+    int early = 0;
+    for (int i = 0; i < 5; i++) early |= (fsm_desired_base(&m) == ASB_STATE_GAMING);
+    CHECK(!early, "re-latched before the doubled count");
+    CHECK(fsm_desired_base(&m) == ASB_STATE_GAMING, "the sixth saturated tick did not latch");
+    for (int i = 0; i < 8; i++) fsm_desired_base(&m);
+    m = scene(30); fsm_desired_base(&m);
+    CHECK(g_gpu_bound_need == ASB_GPU_BOUND_TICKS, "a latch that held did not reset the need: %d", g_gpu_bound_need);
+    g_gpu_bound_need = 12; g_gpu_bound_cleared = time(NULL) - ASB_GPU_BOUND_DECAY_S - 1; g_gpu_bound_streak = 0;
+    m = scene(30); fsm_desired_base(&m);
+    CHECK(g_gpu_bound_need == ASB_GPU_BOUND_TICKS, "ten quiet minutes did not reset the need: %d", g_gpu_bound_need);
+
+    profile(PROFILE_SMART);
+    g_gpu_bound_need = ASB_GPU_BOUND_TICKS;
+    m = scene(60);
+    int any = 0;
+    for (int i = 0; i < 20; i++) any |= (fsm_desired_base(&m) == ASB_STATE_GAMING);
+    CHECK(!any, "a feed at 60 %% reached GAMING");
+
+    profile(PROFILE_SMART);
+    m = scene(97); m.misc.camera_active = 1;
+    any = 0;
+    for (int i = 0; i < 6; i++) any |= (fsm_desired_base(&m) == ASB_STATE_GAMING);
+    CHECK(!any, "the camera latched GAMING");
+
+    profile(PROFILE_SMART);
+    m = scene(97); m.gpu.load_valid = 0;
+    any = 0;
+    for (int i = 0; i < 6; i++) any |= (g_gpu_bound_streak > 0);
+    for (int i = 0; i < 6; i++) { fsm_desired_base(&m); any |= (g_gpu_bound_streak > 0); }
+    CHECK(!any, "an unreadable GPU counted towards the latch");
+
+    profile(PROFILE_BATTERY);
+    g_asb_cfg.bat_suppress_gaming = 1;
+    m = scene(97);
+    any = 0;
+    for (int i = 0; i < 6; i++) any |= (fsm_desired_base(&m) == ASB_STATE_GAMING);
+    CHECK(!any, "Battery with suppress_gaming latched GAMING");
+
+    if (bad) return 1;
+    printf("ok\n");
+    return 0;
+}
+X
+"$CC" -std=gnu11 -O0 -w -I"$ROOT/src" -DASB_DEBUG_BUILD=0 -o "$T/t" "$T/t.c" -lm -ldl -lpthread 2>"$T/cc.err" \
+  || { cat "$T/cc.err" >&2; fail "fixture does not compile"; }
+out="$("$T/t")" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo "PASS gpu bound gaming: three saturated GPU ticks latch GAMING without the package table, held while the GPU stays busy, cleared below the exit mark; feeds, the camera, an unreadable GPU and Battery stay out"
 )
 
 t_budget_current_scale_runtime() (
@@ -6351,7 +6492,7 @@ grep -Fq 'cmax[_k] = (int)(_sh * g_writer_replay_scale / 1000);' "$W" || fail "t
 grep -Fq 'g_writer_replay_scale = g_rec_off_scale;' "$G" || fail "the governor does not hand the replay to the writer"
 grep -Fq '_ri.replay      = g_asb_cfg.smart_records && g_asb_cfg.smart_records_balanced &&' "$G" || fail "Balanced does not replay"
 grep -Fq 'if (fsm->profile_idx == PROFILE_BALANCED) {' "$G" || fail "the screen-off setting is not written under Balanced"
-grep -Fq 'if (g_asb_cfg.smart_energy) asb_en_tick(&_ei);' "$G" || fail "no energy tick"
+awk '/if \(g_asb_cfg.smart_energy\) \{/ { o = NR } o && NR <= o + 3 && /asb_en_tick\(&_ei\);/ { f = 1 } END { exit !f }' "$G" || fail "no energy tick"
 grep -Fq '_ei.ma         = asb_ma_real(metrics.bat.current_ma);' "$G" || fail "the energy figures are not on the real current scale"
 { echo '#include <stdio.h>'; echo 'static int g_curscale_x100 = -1, g_curscale_n = 0;'; sed -n '/^static int asb_ma_real(int raw_ma) {/,/^}/p' "$G"
   cat <<'X'
@@ -7274,7 +7415,8 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 fail() { echo "FAIL smart lab native: $*" >&2; exit 1; }
 CC="${CC:-cc}"; command -v "$CC" >/dev/null 2>&1 || CC=gcc
 command -v "$CC" >/dev/null 2>&1 || { echo "SKIP smart lab native: no C compiler"; exit 0; }
-mkdir -p "$T/bus/DDR/soc:qcom,memlat:ddr:gold" "$T/bus/DDR/19091000.qcom,bwmon-ddr" "$T/bus/LLCC" "$T/devfreq"
+mkdir -p "$T/bus/DDR/soc:qcom,memlat:ddr:gold" "$T/bus/DDR/19091000.qcom,bwmon-ddr" "$T/bus/DDR/soc:qcom,gpubw" "$T/bus/LLCC" "$T/devfreq"
+printf '4224000\n' > "$T/bus/DDR/soc:qcom,gpubw/max_freq"
 printf '4224000\n' > "$T/bus/DDR/hw_max_freq"; printf '547000\n' > "$T/bus/DDR/hw_min_freq"
 printf '547000 1555000 2092000 3196000 4224000\n' > "$T/bus/DDR/available_frequencies"
 printf '4224000\n' > "$T/bus/DDR/soc:qcom,memlat:ddr:gold/max_freq"
@@ -7285,6 +7427,7 @@ cat > "$T/lab.c" <<X
 #define ASB_LAB_RADIO_FILE "$T/lab_radio"
 #define ASB_MEM_ROOT "$T/bus"
 #define ASB_MEM_DEVFREQ "$T/devfreq"
+#define ASB_MEM_FIXTURE_ROUND 1555000
 #include "$L"
 X
 cat >> "$T/lab.c" <<'X'
@@ -7387,7 +7530,7 @@ int main(int argc, char **argv) {
             asb_lab_tick(&in);
         }
         asb_lab_knob_t *k = &g_lab.k[LAB_MEM_ON];
-        printf("mem champion=%d wins=%u fails=%u converged=%d voters=%d early=%lu\n", k->champion, k->wins, k->fails, k->converged, g_mem_nv, g_lab_early_stops);
+        printf("mem champion=%d wins=%u fails=%u converged=%d voters=%d early=%lu last=%s\n", k->champion, k->wins, k->fails, k->converged, g_mem_nv, g_lab_early_stops, g_lab_verdict_names[k->last_verdict]);
         return 0;
     }
     if (!strcmp(mode, "off_net")) {
@@ -7422,7 +7565,7 @@ int main(int argc, char **argv) {
             step(&in, 5); asb_lab_tick(&in);
         }
         asb_lab_knob_t *k = &g_lab.k[LAB_LIFT];
-        printf("lift champion=%d pct=%d wins=%u converged=%d jank_pairs=%u early=%lu\n", k->champion, g_lab_lift_pct, k->wins, k->converged, k->jank_pairs, g_lab_early_stops);
+        printf("lift champion=%d pct=%d wins=%u converged=%d jank_pairs=%u early=%lu last=%s\n", k->champion, g_lab_lift_pct, k->wins, k->converged, k->jank_pairs, g_lab_early_stops, g_lab_verdict_names[k->last_verdict]);
         return 0;
     }
     if (!strcmp(mode, "apps")) {
@@ -7434,6 +7577,76 @@ int main(int argc, char **argv) {
                g_lab_on.active ? g_lab_names[g_lab_on.knob] : "-");
         in.app_pkg = "com.other"; step(&in, 10); asb_lab_tick(&in);
         printf("apps_mismatch front=%d\n", g_lab_app_front);
+        return 0;
+    }
+    if (!strcmp(mode, "glance")) {
+        asb_lab_app_cand_t c[3] = { { 11, "com.feed.one", 900.0f }, { 22, "com.feed.two", 700.0f }, { 33, "org.chat.three", 300.0f } };
+        asb_lab_pick_apps(c, 3, g_wall);
+        asb_lab_in_t in = base(); in.ma = 300; in.app_hash = 22; in.app_pkg = "com.feed.two";
+        step(&in, 10); asb_lab_tick(&in);
+        int at_start = g_lab_on.active;
+        in.screen_on = 0; step(&in, 600); asb_lab_tick(&in);
+        in.screen_on = 1;
+        int in_glance = 0;
+        for (int t = 0; t < 80; t += 10) { step(&in, 10); asb_lab_tick(&in); in_glance |= g_lab_on.active; }
+        step(&in, 20); asb_lab_tick(&in);
+        printf("glance at_start=%d in_glance=%d after=%d\n", at_start, in_glance, g_lab_on.active);
+        return 0;
+    }
+    if (!strcmp(mode, "build")) {
+        g_lab_build_id = 111;
+        asb_lab_init();
+        asb_lab_knob_t *r = &g_lab.k[LAB_RADIO];
+        r->champion = r->challenger = 1; r->converged = 1; r->conv_ts = (uint32_t)(g_wall - 86400 * 5); r->wins = 1; r->ref_mw = 900.0f;
+        r->last_verdict = LAB_V_WON;
+        asb_lab_knob_t *m = &g_lab.k[LAB_MEM_ON];
+        m->champion = 0; m->challenger = 1; m->pairs = 3; m->pr_mean = -0.05;
+        if (asb_lab_save() != 0) return 1;
+        int same = asb_lab_load();
+        int same_ok = (same == 0 && g_lab.k[LAB_RADIO].converged == 1 && g_lab.k[LAB_MEM_ON].pairs == 3 && g_lab_build_retests == 0);
+        asb_lab_in_t in = base(); in.wall = g_wall;
+        asb_lab_summary_write(&in);
+        FILE *sf = fopen(ASB_LAB_SUMMARY, "r"); char ln[512]; int won_line = 0;
+        while (sf && fgets(ln, sizeof(ln), sf)) if (!strncmp(ln, "knob|radio|", 11) && strstr(ln, "|won_energy|16\n")) won_line = 1;
+        if (sf) fclose(sf);
+        g_lab_build_id = 222;
+        int other = asb_lab_load();
+        printf("build same_ok=%d won_line=%d other_rc=%d radio_conv=%d radio_best=%d radio_last=%s reopen=%u ref=%.0f mem_pairs=%u mem_best=%d mem_last=%s retests=%d stored=%u\n",
+               same_ok, won_line, other, g_lab.k[LAB_RADIO].converged, g_lab.k[LAB_RADIO].champion,
+               g_lab_verdict_names[g_lab.k[LAB_RADIO].last_verdict], g_lab.k[LAB_RADIO].reopen, (double)g_lab.k[LAB_RADIO].ref_mw,
+               g_lab.k[LAB_MEM_ON].pairs, g_lab.k[LAB_MEM_ON].champion, g_lab_verdict_names[g_lab.k[LAB_MEM_ON].last_verdict],
+               g_lab_build_retests, g_lab.build);
+        g_lab.build = 0;
+        if (asb_lab_save() != 0) return 1;
+        g_lab_build_id = 333;
+        asb_lab_load();
+        printf("legacy adopted=%u retests=%d conv=%d\n", g_lab.build, g_lab_build_retests, g_lab.k[LAB_RADIO].converged);
+        return 0;
+    }
+    if (!strcmp(mode, "pause")) {
+        asb_lab_app_cand_t c[3] = { { 11, "com.feed.one", 900.0f }, { 22, "com.feed.two", 700.0f }, { 33, "org.chat.three", 300.0f } };
+        asb_lab_pick_apps(c, 3, g_wall);
+        int k = LAB_APP0 + asb_lab_app_slot(22);
+        asb_lab_in_t in = base(); in.ma = 300; in.app_base_x1000 = 100;
+        in.app_hash = 22; in.app_pkg = "com.feed.two";
+        for (int t = 0; t < 60; t += 10) { step(&in, 10); asb_lab_tick(&in); }
+        int run_arm = asb_lab_arm_in_force(k);
+        in.app_hash = 99; in.app_pkg = "com.other";
+        for (int t = 0; t < 30; t += 10) { step(&in, 10); asb_lab_tick(&in); }
+        int pause_arm = asb_lab_arm_in_force(k), paused = g_lab_on.active && g_lab_on.paused_at > 0;
+        in.app_hash = 22; in.app_pkg = "com.feed.two";
+        for (int t = 0; t < 90; t += 10) { step(&in, 10); asb_lab_tick(&in); }
+        long active_s = asb_lab_blk_active_s(&g_lab_on, in.now_ms);
+        in.app_hash = 99; in.app_pkg = "com.other";
+        for (int t = 0; t < 80; t += 10) { step(&in, 10); asb_lab_tick(&in); }
+        unsigned kept_blocks = g_lab.k[k].blocks;
+        in.app_hash = 22; in.app_pkg = "com.feed.two";
+        for (int t = 0; t < 30; t += 10) { step(&in, 10); asb_lab_tick(&in); }
+        in.app_hash = 11; in.app_pkg = "com.feed.one";
+        step(&in, 10); asb_lab_tick(&in);
+        printf("pause run_arm_is_test=%d pause_arm_is_best=%d paused=%d active_s=%ld kept=%u short_app=%lu pauses=%lu resumes=%lu taken_over=%d\n",
+               run_arm == g_lab.k[k].challenger, pause_arm == g_lab.k[k].champion, paused, active_s, kept_blocks,
+               g_lab_short_kind[1], g_lab_pauses, g_lab_resumes, g_lab_on.active && g_lab_on.knob == LAB_APP0 + asb_lab_app_slot(11));
         return 0;
     }
     if (!strcmp(mode, "mem")) {
@@ -7449,10 +7662,40 @@ int main(int argc, char **argv) {
         printf("yield yields=%lu\n", g_mem_yields);
         asb_mem_apply(0, 500);
         printf("after external=%ld own=%ld\n", asb_mem_read(g_mem_v[0].path), asb_mem_read(g_mem_v[1].path));
+        /* dev14: a voter whose cap reads back as another value gets its own value back and is
+         * left alone for the session. */
+        int before_y = (int)g_mem_yields;
+        long own0 = asb_mem_read(g_mem_v[1].path);
+        asb_mem_apply(30, 600);
+        printf("rounded back=%d yielded=%d own_after=%ld active=%d\n", asb_mem_read(g_mem_v[1].path) == own0,
+               g_mem_v[1].yielded, (long)g_mem_yields - before_y, asb_mem_active_voters());
+        asb_lab_summary_write(NULL);
         return 0;
     }
     if (!strcmp(mode, "reload")) {
         printf("reload champion=%d converged=%d\n", g_lab.k[LAB_RADIO].champion, g_lab.k[LAB_RADIO].converged);
+        return 0;
+    }
+    if (!strcmp(mode, "share")) {
+        /* V66 dev16: on mobile data the radio knob is eligible all the time; the bus knob must
+         * still get its share of screen-on blocks, and a half-pair gets its other arm next. */
+        asb_lab_in_t in = base(); in.radio_ok = 1; in.on_mobile = 1; in.mem_ok = 1;
+        asb_mem_probe_run();
+        long long bytes = 0, last_t0 = -1; unsigned max_streak = 0, streak = 0; int last_k = -1;
+        for (int t = 0; t < 8 * 3600; t += 10) {
+            step(&in, 10);
+            in.ma = (int)(700.0 * (1.0 + 0.02 * noise()));
+            bytes += 200 * 1024; in.mobile_bytes = bytes;
+            asb_lab_tick(&in);
+            if (g_lab_on.active && g_lab_on.t0_ms != last_t0) {
+                if (g_lab_on.knob == last_k) streak++; else streak = 1;
+                if (streak > max_streak) max_streak = streak;
+                last_k = g_lab_on.knob; last_t0 = g_lab_on.t0_ms;
+            }
+        }
+        printf("share radio_blocks=%u mem_blocks=%u radio_pairs=%u mem_pairs=%u max_streak=%u followups=%lu\n",
+               g_lab.k[LAB_RADIO].blocks, g_lab.k[LAB_MEM_ON].blocks, g_lab.k[LAB_RADIO].pairs, g_lab.k[LAB_MEM_ON].pairs,
+               max_streak, g_lab_followups);
         return 0;
     }
     return 2;
@@ -7465,6 +7708,14 @@ echo "$out" | grep -q 'radio_file_at_verdict=nr retest_challenger=0' || fail "ra
 grep -q '^knob|radio|' "$T/lab.txt" || fail "no radio line in the summary"
 cp "$T/lab.txt" "$T/lab_radio.txt"
 out="$("$T/lab" reload)"; echo "$out" | grep -q 'reload champion=1 converged=0' || fail "the store did not survive a restart: $out"
+rm -f "$T/lab.bin" "$T/lab.bin.tmp"
+out="$("$T/lab" share)" || fail "share run failed: $out"
+rb="$(echo "$out" | sed -n 's/.*radio_blocks=\([0-9]*\).*/\1/p')"; mb="$(echo "$out" | sed -n 's/.*mem_blocks=\([0-9]*\).*/\1/p')"
+rp="$(echo "$out" | sed -n 's/.*radio_pairs=\([0-9]*\).*/\1/p')"; mp="$(echo "$out" | sed -n 's/.*mem_pairs=\([0-9]*\).*/\1/p')"
+ms="$(echo "$out" | sed -n 's/.*max_streak=\([0-9]*\).*/\1/p')"; fu="$(echo "$out" | sed -n 's/.*followups=\([0-9]*\).*/\1/p')"
+[ "${mb:-0}" -ge 8 ] && [ "${rb:-0}" -ge 8 ] && [ $((mb * 2)) -ge "$rb" ] && [ $((rb * 2)) -ge "$mb" ] || fail "screen-on blocks not shared between the radio and the bus: $out"
+[ "${rp:-0}" -ge 3 ] && [ "${mp:-0}" -ge 3 ] && [ "${ms:-9}" -le 2 ] && [ "${fu:-0}" -ge 3 ] || fail "half-pairs not completed by one follow-up, or one knob ran three in a row: $out"
+grep -q '|followups=[0-9]*$' "$T/lab.txt" || fail "the now line lacks followups"
 # V66 dev11: a version-1 store keeps every knob but membus_off, whose pairs may hold busy-radio blocks.
 rm -f "$T/lab.bin"
 "$T/lab" mk_v1 || fail "could not write a version-1 store"
@@ -7476,6 +7727,28 @@ rm -f "$T/lab.bin" "$T/lab.bin.tmp"
 # it did (bus: a lost first step converges on "free"; app: a won economy lean converges).
 # V66 dev12: screen-off bus blocks pair only with alike mobile traffic (factor 2 above 1 KiB/s);
 # the radio keeps its 2 KiB/s floor; a block without a traffic reading is not held back.
+# V66 dev13: a screen-on block pauses over a switch to another app and back (the pause is not
+# measured and the setting under test is not in force meanwhile), ends kept when a pause runs
+# out after enough running time, ends short when it had too little, and gives way at once to
+# another lab app.
+# V66 dev14: no screen-on block starts in the first 90 s after the screen comes on (a glance the
+# wake-lift trial measures); the governor starting with the screen on is not a glance.
+rm -f "$T/lab.bin" "$T/lab.bin.tmp"
+out="$("$T/lab" glance)" || fail "glance run failed: $out"
+echo "$out" | grep -q 'glance at_start=1 in_glance=0 after=1' || fail "a screen-on block started inside a glance window, or never after it: $out"
+# V66 dev14: verdicts are bound to the ROM/kernel build. Same build: nothing moves, and the
+# summary names the last decision and the days to the 21-day re-test. Another build: a decided
+# knob is tested again (its best setting stays in force), a trial under way starts its pairs
+# again, the drift reference is dropped. A store from before dev14 adopts the build silently.
+rm -f "$T/lab.bin" "$T/lab.bin.tmp"
+out="$("$T/lab" build)" || fail "build run failed: $out"
+echo "$out" | grep -q 'build same_ok=1 won_line=1 other_rc=0 radio_conv=0 radio_best=1 radio_last=retest_build reopen=1 ref=0 mem_pairs=0 mem_best=0 mem_last=retest_build retests=1 stored=222' || fail "build binding wrong: $out"
+echo "$out" | grep -q 'legacy adopted=333 retests=0 conv=0' || fail "a store without a build was not adopted quietly: $out"
+grep -q '^# knob|.*|pkg|last|recheck_days$' "$T/lab.txt" || fail "summary header lacks the new fields"
+rm -f "$T/lab.bin" "$T/lab.bin.tmp"
+out="$("$T/lab" pause)" || fail "pause run failed: $out"
+echo "$out" | grep -q 'pause run_arm_is_test=1 pause_arm_is_best=1 paused=1 active_s=140 kept=1 short_app=1 pauses=2 resumes=1 taken_over=1' || fail "screen-on block pause/resume wrong: $out"
+rm -f "$T/lab.bin" "$T/lab.bin.tmp"
 out="$("$T/lab" pairable)" || fail "pairable run failed: $out"
 echo "$out" | grep -q 'pairable off_far=0 off_near=1 radio_low=1 off_mid=0 off_unknown=1' || fail "traffic-matched pairing wrong: $out"
 rm -f "$T/lab.bin" "$T/lab.bin.tmp"
@@ -7485,7 +7758,7 @@ rm -f "$T/lab.bin" "$T/lab.bin.tmp"
 out="$("$T/lab" mem_guard)" || fail "mem guard run failed"
 echo "$out" | grep -q 'mem champion=0 wins=0 fails=1' || fail "membus_on: a cap that pins the cores won: $out"
 # V66 dev11: 20 points more time at the ceiling ends the trial after three pairs, not six.
-echo "$out" | grep -q 'early=1' || fail "membus_on: the pinned-cores challenger was run to the full count: $out"
+echo "$out" | grep -q 'early=1 last=lost_ceiling' || fail "membus_on: the pinned-cores challenger was run to the full count or not filed as lost_ceiling: $out"
 [ "$(cat "$T/bus/DDR/soc:qcom,memlat:ddr:gold/max_freq")" = 4224000 ] || fail "membus_on: the bus was left capped"
 rm -f "$T/lab.bin"
 # V66 dev11: a screen-off bus block that moved 40 KiB/s of mobile data measures the radio, not
@@ -7504,7 +7777,7 @@ rm -f "$T/lab.bin"
 # V66 dev11: 3 points more janky frames end the trial after two pairs instead of five.
 out="$("$T/lab" lift 3)" || fail "lift early-stop run failed"
 echo "$out" | grep -q 'lift champion=0 pct=80 wins=0' || fail "lift: a much jankier wake won: $out"
-echo "$out" | grep -q 'jank_pairs=2 early=1' || fail "lift: 3 points more janky frames did not stop the trial at two pairs: $out"
+echo "$out" | grep -q 'jank_pairs=2 early=1 last=lost_jank' || fail "lift: 3 points more janky frames did not stop the trial at two pairs, filed as lost_jank: $out"
 rm -f "$T/lab.bin"
 out="$("$T/lab" apps)"
 echo "$out" | grep -q 'apps slot2=1 front=1 offset=200 on_block=app2' || fail "apps: lab app in front not owned: $out"
@@ -7518,6 +7791,14 @@ echo "$out" | grep -q 'free restores=2' || fail "mem: cap not given back: $out"
 echo "$out" | grep -q 'yield yields=1' || fail "mem: an external value was fought over: $out"
 echo "$out" | grep -q 'after external=2092000 own=4224000' || \
   fail "mem: external value overwritten or own cap not given back: $out"
+echo "$out" | grep -q 'rounded back=1 yielded=1 own_after=1 active=0' || fail "mem: a cap that read back as another value was kept or left in place: $out"
+# dev14: only the CPU's own voters are capped - the GPU voter in the fixture is never added
+# (voters=2 above) and keeps its value through every cap.
+[ "$(cat "$T/bus/DDR/soc:qcom,gpubw/max_freq")" = 4224000 ] || fail "mem: a GPU voter was written"
+# dev15: the summary lists the voters by domain and name with their state; the GPU one is absent.
+grep -qx 'voter|DDR|soc:qcom,memlat:ddr:gold|yielded' "$T/lab.txt" && grep -qx 'voter|DDR|19091000.qcom,bwmon-ddr|yielded' "$T/lab.txt" \
+  || fail "mem: the voters are not listed in the summary: $(grep '^voter' "$T/lab.txt")"
+grep -q '^voter|.*gpubw' "$T/lab.txt" && fail "mem: a filtered voter was listed"
 H="$ROOT/webroot/index.html"
 if command -v node >/dev/null 2>&1; then
   { echo "const T = (k, d) => d;"; echo "const logReportRow = (a, b) => ({ row: a + ' = ' + b });"; echo "const logReportNote = (a) => ({ note: a });"
@@ -7552,6 +7833,9 @@ grep -q 'if (!asb_fork_budget_take((long)now)) pkg\[0\]' "$ROOT/src/asb_smart.h"
 # WebUI total matches the bucket observations; the bus lab reads mobile bytes for its filter.
 grep -q 'g_smart_store.buckets\[bid\].observations_raw != _obs_before' "$G" || fail "refused sessions are still counted"
 grep -q 'g_lab_read_net = asb_rec_net_bytes;' "$G" || fail "the bus lab cannot see mobile traffic"
+# dev15: the lab's and the energy table's own CPU time are measured around their calls and published.
+grep -q 'g_cost_lab_us += asb_thread_cpu_us() - _c0;' "$G" && grep -q 'g_cost_en_us += asb_thread_cpu_us() - _c0;' "$G" \
+  && grep -q 'lab_cpu_ms=%llu' "$G" || fail "the lab/energy CPU cost is not measured or not published"
 # V66 dev11: the day log carries the lab summary (copy + readable lines), on the real function.
 F="$ROOT/tools/logkit/asb_log_full_day.sh"
 sed -n '/^lk_emit_smart_records() {/,/^}/p' "$F" > "$T/emit.sh"
@@ -7562,6 +7846,8 @@ cat > "$T/lab_sum.txt" <<'EOF'
 knob|radio|testing|lte_only|nr_allowed|3|-82|10|0|2|0|0|1|0|8|1420.0|0.0|-
 knob|membus_off|free|-|-|0|0|0|0|0|0|0|0|0|0|0.0|0.0|-
 mem|bus_dcvs|voters=10|active=10|doms=2|cap_now=0|writes=47|restores=47|yields=0|fails=0
+voter|DDR|soc:qcom,memlat:ddr:gold|free
+voter|LLCC|soc:qcom,memlat:llcc:gold|capped
 now|radio_arm=1|lift_pct=0|mem_on=0|mem_off=0|app_front=0|on_block=radio|off_block=-|glances=0|kept=8|short=2|rejected=1|wins=0|reopened=0|radio_set_aside=3|early_stops=1
 EOF
 out="$(sh -c '. "$1"; lk_state_kv() { :; }; LK_OUT_DIR="$2"; LK_SF_FILE="$2/none"; ASB_LK_RECORDS_FILE="$3"; ASB_LK_LAB_FILE="$4"; lk_emit_smart_records' x "$T/emit.sh" "$T/out" "$T/rec.txt" "$T/lab_sum.txt")" || fail "day-log Smart section failed: $out"
@@ -7570,6 +7856,7 @@ echo "$out" | grep -q '^lab: radio .*testing .*trying nr_allowed, 3 pair(s), -8.
 echo "$out" | grep -q '^lab: membus_off' && fail "a free knob was listed: $out"
 echo "$out" | grep -q '^lab bus: bus_dcvs voters=10' || fail "the bus line is missing: $out"
 echo "$out" | grep -q '^lab now: .*radio_set_aside=3 early_stops=1' || fail "the now line is missing: $out"
+echo "$out" | grep -qx 'lab voters: DDR:soc:qcom,memlat:ddr:gold (free), LLCC:soc:qcom,memlat:llcc:gold (capped)' || fail "the voters line is missing: $out"
 echo "PASS smart lab native: radio, wake lift, apps and memory bus tried in pairs with ceiling/frame/heat guards, dynamics re-open, owned bus writes with yield, store reload"
 )
 

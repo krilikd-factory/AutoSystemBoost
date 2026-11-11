@@ -32,7 +32,14 @@ int main() {
   assert(c.start(a,1000)==AsbObserverResult::accepted && c.loaded()==1 && c.events_total()==1);
   assert(c.start(a,1001)==AsbObserverResult::duplicate && c.dropped()==1);
   auto b=frame(11,"com.example.app",1500);
-  assert(c.start(b,1500)==AsbObserverResult::rate_limited && c.rate_limited()==1);
+  assert(c.start(b,1500)==AsbObserverResult::accepted && c.rate_limited()==0); // a sibling process in the same second
+  b=frame(14,"com.example.app",1600);
+  assert(c.start(b,1600)==AsbObserverResult::accepted && c.rate_limited()==0);
+  b=frame(15,"com.example.app",1700);
+  assert(c.start(b,1700)==AsbObserverResult::rate_limited && c.rate_limited()==1); // a fourth start in one second
+  b=frame(15,"com.example.app",2600);
+  assert(c.start(b,2600)==AsbObserverResult::accepted); // the second has passed
+  assert(c.exit(11) && c.exit(14) && c.exit(15));
   auto bad=frame(12,"system_server",3000);
   assert(c.start(bad,3000)==AsbObserverResult::invalid && c.invalid()==1);
   bad=frame(13,"com.example.app",3000); bad.magic=0;
@@ -536,14 +543,23 @@ int main(){
   assert(wait_state([](const std::string &x){ return zval(x,"observe_pidfd")==2; }));
   for(int i=0;i<400 && zval(state(),"observe_retained")!=ret0+1;i++) std::this_thread::sleep_for(std::chrono::milliseconds(5));
   s=state(); assert(has_proc(s,b.pid) && zval(s,"observe_retained")==ret0+1 && zval(s,"events_total")==ev0+3);
-  App c=start_app("com.example.keep",false); // inside one second of b: rate-limited, no watch
+  // V66 dev16: two sibling processes inside one second of b are watched; a fourth start is
+  // rate-limited and opens no watch.
+  const long rl0=zval(s,"events_dropped_rate_limit");
+  App c=start_app("com.example.keep",false);
   { int cc=accept(lfd,nullptr,nullptr); assert(cc>=0); std::thread t(zygisk_companion_entry,cc); t.join(); }
-  s=state(); assert(!has_proc(s,c.pid) && zval(s,"observe_requested")==3 && zval(s,"observe_watching")==1);
-  stop_app(c);
+  s=state(); assert(has_proc(s,c.pid) && zval(s,"observe_requested")==3 && zval(s,"observe_watching")==2);
+  App d=start_app("com.example.keep",false);
+  { int cc=accept(lfd,nullptr,nullptr); assert(cc>=0); std::thread t(zygisk_companion_entry,cc); t.join(); }
+  s=state(); assert(has_proc(s,d.pid) && zval(s,"observe_requested")==4 && zval(s,"observe_watching")==3);
+  App e=start_app("com.example.keep",false);
+  { int cc=accept(lfd,nullptr,nullptr); assert(cc>=0); std::thread t(zygisk_companion_entry,cc); t.join(); }
+  s=state(); assert(!has_proc(s,e.pid) && zval(s,"observe_requested")==5 && zval(s,"observe_watching")==3 && zval(s,"events_dropped_rate_limit")==rl0+1);
+  stop_app(e); stop_app(d); stop_app(c);
   stop_app(b); bt2.join();
   assert(wait_state([](const std::string &x){ return zval(x,"observe_watching")==0; }));
-  s=state(); assert(!has_proc(s,b.pid) && zval(s,"events_total")==ev0+4 && zval(s,"events_dropped_duplicate")==dup0);
-  assert(zval(s,"exits_pidfd")+zval(s,"exits_peer")-peer0==2 && zval(s,"observe_untracked")==0);
+  s=state(); assert(!has_proc(s,b.pid) && zval(s,"events_total")==ev0+8 && zval(s,"events_dropped_duplicate")==dup0);
+  assert(zval(s,"exits_pidfd")+zval(s,"exits_peer")-peer0==4 && zval(s,"observe_untracked")==0);
   close(lfd); unlink(g_comp_path.c_str());
   // No policy: the companion ignores late one-shot frames instead of acting on stale state.
   unlink(ASB_ZYGISK_POLICY_ABS); companion_send(g); s=state();
