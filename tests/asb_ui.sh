@@ -3704,10 +3704,16 @@ blk = s[i:s.index('}', s.index('animation-play-state: paused !important;', i)) +
 sel = blk[blk.index('*/') + 2:blk.index('{', blk.index('*/'))]
 for need in ('.live-page:not(.open) .logo-glow', '.live-page:not(.open) .app-name', '.live-page:not(.open) .dot::after',
              'body.live-active .page:not(.live-page) .logo-ring', 'body.live-active .page:not(.live-page) .ai-glow',
-             'html.asb-calm .logo-glow', 'html.asb-calm .logo-ring', 'html.asb-calm .app-name', 'html.asb-calm .dot::after',
-             'html.asb-calm .ai-glow', 'html.asb-calm .zygisk-header-dot::after', 'html.asb-calm .dev-zygisk-link-dot',
-             'html.asb-calm .metric-charge', 'html.asb-calm .log-menu-item.is-recording::before'):
+             'html.asb-calm .app-name'):
     assert need in sel, need
+# dev17: ten seconds of idle no longer freezes the header on the page in front. Only the
+# wordmark sweep (a per-frame text repaint) calms there; the composited logo rotations and
+# the indicator dots keep moving, so the interface still reads as alive. The closed/background
+# rules above are unchanged. Guard against the header liveness being pulled back into calm.
+for gone in ('html.asb-calm .logo-glow', 'html.asb-calm .logo-ring', 'html.asb-calm .dot',
+             'html.asb-calm .ai-glow', 'html.asb-calm .zygisk-header-dot', 'html.asb-calm .dev-zygisk-link-dot',
+             'html.asb-calm .metric-charge', 'html.asb-calm .log-menu-item.is-recording'):
+    assert gone not in sel, 'the idle page must keep this alive now: ' + gone
 for spinner in ('busy', 'spinner', 'is-running', 'orbit', 'loading', 'ld .pchk', 'stock-restoring'):
     assert spinner not in sel, 'a progress indicator would stop: ' + spinner
 # every decorative loop named above still exists as an endless animation the rule can reach
@@ -8340,6 +8346,202 @@ EOF
 out="$(node "$T/t.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 echo "PASS webui device page: five SoC buttons/theme groups, safe TSV parser/renderer, five section groups in reading order with the identity card first, metamodule metadata, independent NoMount evidence and read-only loader"
+)
+
+t_webui_boot_fly_runtime() (
+# dev17: the boot preview hands off to the home screen by flying the saucer into the header
+# and lifting the orbit spheres into place, instead of a flat fade. Static contract first,
+# then the flight logic over a DOM mock: compositor-only, reversible, reduced-motion safe.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui boot fly: $*" >&2; exit 1; }
+python3 - "$H" <<'PY' || fail 'static wiring'
+import sys
+h = open(sys.argv[1], encoding='utf-8').read()
+assert 'async function asbBootFlyToHeader(overlay) {' in h, 'flight function missing'
+assert '.asb-boot-intro.asb-boot-warp {' in h and 'body.asb-boot-flying .logo-glyph { opacity:0; }' in h, 'warp/flying CSS missing'
+# The leaving path tries the flight and keeps the old fade as the fallback.
+_s = h.index("if (status) status.textContent = T('boot_intro_ready'")
+lv = h[_s:_s + 700]
+assert 'flew = await asbBootFlyToHeader(overlay)' in lv and "overlay.classList.add('is-leaving')" in lv and 'if (!flew)' in lv, 'leaving path does not fall back to the fade'
+# finally cleans up both classes.
+_f = h.index('} finally {', _s)
+fin = h[_f:_f + 500]
+assert "overlay.classList.remove('asb-boot-warp')" in fin and "document.body.classList.remove('asb-boot-flying')" in fin, 'finally does not clear warp/flying'
+# Reduced motion returns before touching anything.
+fn = h[h.index('async function asbBootFlyToHeader(overlay) {'):h.index('async function asbBootIntroStart()')]
+assert 'prefers-reduced-motion: reduce' in fn and 'if (reduced || !overlay) return false;' in fn, 'no reduced-motion guard'
+# Compositor-only: the flight keyframes animate transform/opacity, never layout props.
+for bad in ('.style.top', '.style.left', "top:'", "left:'", 'width:', 'height:'):
+    assert bad not in fn, 'non-compositor property in the flight: ' + bad
+PY
+command -v node >/dev/null 2>&1 || { echo "SKIP webui boot fly runtime: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+{
+  cat <<'EOF'
+let REDUCED = false;
+global.window = { matchMedia: function () { return { matches: REDUCED }; } };
+global.requestAnimationFrame = function (fn) { return setTimeout(fn, 0); };
+const calls = [];
+function el(id) {
+  const e = { id: id, _cls: new Set(), _rect: { left: 0, top: 0, width: 0, height: 0 } };
+  e.classList = { add: function (c) { e._cls.add(c); }, remove: function (c) { e._cls.delete(c); }, contains: function (c) { return e._cls.has(c); } };
+  e.animate = function (kf, opts) { calls.push({ id: id, kf: kf }); return { finished: Promise.resolve(), cancel: function () {}, set onfinish(f) {} }; };
+  e.getBoundingClientRect = function () { return e._rect; };
+  return e;
+}
+const core = el('core');
+const flyer = el('flyer'); flyer._rect = { left: 120, top: 420, width: 94, height: 71 };
+const target = el('target'); target._rect = { left: 24, top: 36, width: 56, height: 46 };
+const orbits = [el('o0'), el('o1'), el('o2'), el('o3')];
+const overlay = el('overlay');
+overlay.querySelector = function (sel) { return sel === '.asb-boot-core' ? core : sel === '.asb-boot-ufo svg' ? flyer : null; };
+overlay.querySelectorAll = function (sel) { return orbits; };
+const bodyEl = el('body');
+global.document = { body: bodyEl, querySelector: function (sel) { return /logo-glyph/.test(sel) ? target : null; } };
+function asbHomeReveal() {}
+EOF
+  sed -n '/^function _asbAnimFinished(anim, ms) {/,/^async function asbBootIntroStart()/p' "$H" | sed '/^async function asbBootIntroStart()/d'
+  cat <<'EOF'
+let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
+(async function () {
+  // Reduced motion: the flight declines cleanly and touches nothing.
+  REDUCED = true;
+  const r0 = await asbBootFlyToHeader(overlay);
+  chk(r0 === false, 'reduced motion should decline the flight');
+  chk(!overlay._cls.has('asb-boot-warp') && !bodyEl._cls.has('asb-boot-flying'), 'reduced motion still touched classes');
+  REDUCED = false;
+  calls.length = 0;
+  const r1 = await asbBootFlyToHeader(overlay);
+  chk(r1 === true, 'the flight did not run with motion allowed');
+  chk(overlay._cls.has('asb-boot-warp'), 'overlay did not enter the warp state');
+  chk(!bodyEl._cls.has('asb-boot-flying'), 'the header logo was not released after landing');
+  const flight = calls.filter(function (c) { return c.id === 'flyer'; });
+  chk(flight.length === 1, 'the saucer did not fly exactly once');
+  const kf = flight[0].kf;
+  chk(kf.length >= 4 && kf.every(function (f) { return /translate\(/.test(f.transform) && /scale\(/.test(f.transform); }), 'the flight is not a translate+scale arc');
+  chk(kf.some(function (f) { return /rotate\(/.test(f.transform); }), 'the saucer did not wobble');
+  chk(kf.every(function (f) { return !('top' in f) && !('left' in f) && !('width' in f); }), 'a layout property crept into the flight');
+  chk(calls.filter(function (c) { return /^o[0-9]$/.test(c.id); }).length === 4, 'the orbit spheres did not lift');
+  chk(calls.some(function (c) { return c.id === 'target'; }), 'the header logo did not pop in on landing');
+  if (bad) process.exit(1);
+  console.log('ok');
+})().catch(function (e) { console.error(e); process.exit(1); });
+EOF
+} > "$T/t.js"
+out="$(node "$T/t.js" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo "PASS webui boot fly: saucer flies a translate/scale/rotate arc into the header, spheres lift, header logo pops on landing, warp/flying classes clean up, reduced motion declines"
+)
+
+t_webui_infirmary_runtime() (
+# dev17: the Infirmary is a screen of its own, opened by the pharmacy button beside Reset. It
+# holds the Battery Fix card plus the two repairs moved out of System Services. Static wiring
+# first, then the Battery Fix card's gate/arm/reboot/cancel logic over a scripted shell.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui infirmary: $*" >&2; exit 1; }
+python3 - "$H" <<'PY' || fail 'static wiring'
+import sys
+h = open(sys.argv[1], encoding='utf-8').read()
+# Pharmacy button, right of Reset, opening the Infirmary.
+row = h[h.index('id="cfgActionsRow"'):h.index('<div class="cfg-list"')]
+assert 'cfgResetDialogOpen()' in row and 'id="cfgInfirmaryBtn"' in row and 'cfgOpenInfirmary()' in row, 'pharmacy button missing from the actions row'
+assert row.index('cfgResetDialogOpen()') < row.index('cfgOpenInfirmary()'), 'pharmacy button is not to the right of Reset'
+assert 'repeat(4, minmax(0, 1fr))' in h, 'actions row still a 3-column grid'
+# Infirmary is a group for rendering/nav only, not a 7th hub tile.
+assert 'const CFG_EXTRA_GROUPS = {' in h and "infirmary: { id:'infirmary'" in h, 'CFG_EXTRA_GROUPS.infirmary missing'
+assert 'function cfgGroupMeta(' in h and 'cfgGroupMeta(_cfgGroup)' in h and 'cfgGroupMeta(cfgGroupOf(it.key))' in h, 'cfgGroupMeta not used for headers/badges'
+groups = h[h.index('const CFG_GROUPS = ['):h.index('const CFG_EXTRA_GROUPS')]
+assert "id:'infirmary'" not in groups, 'infirmary must not be a hub tile'
+# The two repairs moved into the Infirmary and left System Services.
+gof = h[h.index('const CFG_GROUP_OF = {'):h.index('function cfgGroupOf')]
+assert "heytap_mcs:'infirmary'" in gof and "documentsui_fix:'infirmary'" in gof, 'the two fixes were not re-pointed to infirmary'
+svc = h[h.index("keys:['UX_MANAGE_OEM_TOGGLES'"):].split(']', 1)[0]
+assert 'heytap_mcs' not in svc and 'documentsui_fix' not in svc, 'the fixes still sit in System Services'
+inf = h[h.index('infirmary: ['):h.index('function cfgGroupMeta') if h.index('function cfgGroupMeta') > h.index('infirmary: [') else len(h)]
+# the infirmary sections block ends at the CFG_GROUP_SECTIONS close
+inf = h[h.index('  infirmary: ['):h.index('\n};', h.index('  infirmary: ['))]
+assert "card:'batteryfix'" in inf and "keys:['heytap_mcs','documentsui_fix']" in inf, 'infirmary sections incomplete'
+for fn in ('function cfgRenderBatteryFixCard(', 'function cfgOpenInfirmary(', 'async function batteryFixPaint(', 'async function batteryFixRun(', 'async function batteryFixCancel('):
+    assert fn in h, 'missing ' + fn
+assert "cfgShowGroup('infirmary')" in h, 'cfgOpenInfirmary does not open the infirmary group'
+# card-only sections are allowed to render with no ordinary rows
+assert '!sectionItems.length && !section.card' in h, 'cfgRenderGroup still skips a card-only section'
+PY
+command -v node >/dev/null 2>&1 || { echo "SKIP webui infirmary runtime: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+{
+  cat <<'EOF'
+let MD = '/m';
+let _bfxArmed = 0;
+function shQuote(v) { return "'" + String(v) + "'"; }
+function T(k, d) { return d; }
+function uiSound() {}
+const toasts = [];
+function toast(m, t) { toasts.push({ m: m, t: t }); }
+const fakes = {};
+function fake() { return { textContent: '', className: '', disabled: false, hidden: false, dataset: {} }; }
+['bfxState', 'bfxRun', 'bfxCancel'].forEach(function (id) { fakes[id] = fake(); });
+function _el(id) { return fakes[id] || null; }
+const cmds = [];
+const scripted = { status: '', run: '', cancel: '' };
+async function run(cmd) {
+  cmds.push(cmd);
+  if (/ status$/.test(cmd)) return { errno: 0, stdout: scripted.status };
+  if (/ run$/.test(cmd)) return { errno: 0, stdout: scripted.run };
+  if (/ cancel$/.test(cmd)) return { errno: 0, stdout: scripted.cancel };
+  return { errno: 0, stdout: '' };
+}
+EOF
+  sed -n '/^const BATTERY_FIX_SCRIPT = MD/p' "$H"
+  sed -n '/^function bfxParse(txt) {/,/^function cfgOpenInfirmary() {/p' "$H" | sed '/^function cfgOpenInfirmary() {/d'
+  cat <<'EOF'
+let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
+(async function () {
+  // Not on charge: the action is disabled and the reason (with level) is shown.
+  scripted.status = 'eligible=0 reason=not_charging level=57 reset=none last_removed=-';
+  await batteryFixPaint();
+  chk(fakes.bfxRun.disabled === true && fakes.bfxRun.dataset.mode === 'run', 'discharging did not disable the run button');
+  chk(/57%/.test(fakes.bfxState.textContent), 'the charge level is not shown: ' + fakes.bfxState.textContent);
+  chk(fakes.bfxCancel.hidden === true, 'cancel shown with nothing scheduled');
+  // 95% on charge: still blocked.
+  scripted.status = 'eligible=0 reason=not_full level=95 reset=none last_removed=-';
+  await batteryFixPaint();
+  chk(fakes.bfxRun.disabled === true, '95% not blocked');
+  // Full on charge: enabled.
+  scripted.status = 'eligible=1 level=100 reset=none last_removed=-';
+  await batteryFixPaint();
+  chk(fakes.bfxRun.disabled === false && fakes.bfxRun.dataset.mode === 'run', 'full-on-charge did not enable run');
+  // Two-tap confirm: the first tap only arms, the second runs.
+  const before = cmds.length;
+  await batteryFixRun();
+  chk(cmds.length === before && toasts.length && toasts[toasts.length - 1].t === 'perf', 'first tap should only arm a confirm');
+  scripted.run = 'result=armed reset_on=reboot dexopt=started';
+  await batteryFixRun();
+  chk(cmds.some(function (c) { return / run$/.test(c); }), 'second tap did not run the fix');
+  chk(toasts.some(function (t) { return t.t === 'ok'; }), 'no success toast after arming');
+  // Pending: the button becomes Reboot and cancel appears.
+  scripted.status = 'eligible=1 level=100 reset=pending last_removed=-';
+  await batteryFixPaint();
+  chk(fakes.bfxRun.dataset.mode === 'reboot' && fakes.bfxCancel.hidden === false, 'pending state did not switch to reboot/cancel');
+  const rb = cmds.length;
+  await batteryFixRun();
+  chk(cmds.slice(rb).some(function (c) { return /reboot/.test(c); }), 'reboot mode did not reboot');
+  // Cancel clears the schedule.
+  scripted.cancel = 'result=cancelled';
+  await batteryFixCancel();
+  chk(cmds.some(function (c) { return / cancel$/.test(c); }), 'cancel did not call the script');
+  if (bad) process.exit(1);
+  console.log('ok');
+})().catch(function (e) { console.error(e); process.exit(1); });
+EOF
+} > "$T/t.js"
+out="$(node "$T/t.js" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo "PASS webui infirmary: pharmacy button beside Reset opens the Infirmary; the two repairs moved there; Battery Fix gates on 100%-on-charge, two-tap arms a one-shot, then offers reboot, and cancel clears it"
 )
 
 t_webui_zygisk_save_runtime() (

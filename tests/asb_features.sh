@@ -4109,6 +4109,125 @@ sh "$A" apply
 exit "$fail"
 )
 
+t_ltpo_extreme_runtime() (
+# Runtime (dev17): with Panel Maximum on Touch on, ASB unlocks OnePlus's extreme-refresh
+# AVAILABILITY globals so the panel's top mode is reachable past the ROM's 120 Hz app cap,
+# records what was there first, and hands it back exactly on Off or when the master goes off.
+# It never writes a force-global-on key (that would pin the panel high and defeat on-touch).
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail=0; f() { echo "FAIL ltpo extreme: $*" >&2; fail=1; }
+mkdir -p "$T/bin" "$T/mod/config" "$T/mod/runtime" "$T/d" "$T/s"
+cp "$ROOT/runtime/asb_ltpo_apply.sh" "$ROOT/runtime/asb_ltpo_lock.sh" "$T/mod/runtime/"
+touch "$T/mod/module.prop"
+cat > "$T/disp" <<'X'
+      DisplayMode{id=5, width=1272, height=2772, peakRefreshRate=165.0, vsyncRate=165.0, group=0}
+X
+cat > "$T/bin/settings" <<'S'
+#!/bin/sh
+case "$1" in
+  get) [ -f "$SD/$3" ] && cat "$SD/$3" || echo null ;;
+  put) echo "$4" > "$SD/$3" ;;
+  delete) rm -f "$SD/$3" ;;
+esac
+S
+chmod +x "$T/bin/settings"
+export PATH="$T/bin:$PATH" SD="$T/s" MODDIR="$T/mod" ASB_LTPO_STATE_DIR="$T/d" ASB_LTPO_DISPLAY_DUMP="$T/disp"
+A="$T/mod/runtime/asb_ltpo_apply.sh"
+# One global already present (value 0), the other absent: both must be recorded as-found.
+echo 0 > "$T/s/oost_extreme_refresh_165"
+
+printf 'ltpo_force=1\nltpo_peak_force=1\n' > "$T/mod/config/governor.conf"; sh "$A" apply
+[ "$(cat "$T/s/oost_settings_unlock_refresh_rate" 2>/dev/null)" = 1 ] || f "availability unlock not set"
+[ "$(cat "$T/s/oost_extreme_refresh_165" 2>/dev/null)" = 1 ] || f "extreme 165 not set"
+[ -f "$T/s/oost_settings_force_global_extreme_refresh_rate" ] && f "a force-global-on key must never be written"
+grep -qx 'oost_settings_unlock_refresh_rate=__unset' "$T/d/ltpo_extreme.orig" || f "absent global not recorded as unset: $(cat "$T/d/ltpo_extreme.orig" 2>/dev/null)"
+grep -qx 'oost_extreme_refresh_165=0' "$T/d/ltpo_extreme.orig" || f "prior value 0 not recorded"
+case "$(sh "$A" peak)" in *extreme=on*) : ;; *) f "peak status does not report the unlock: $(sh "$A" peak)" ;; esac
+# Re-apply keeps the baseline (never records ASB's own 1s as the user's values).
+sh "$A" apply
+grep -qx 'oost_extreme_refresh_165=0' "$T/d/ltpo_extreme.orig" || f "baseline overwritten on re-apply"
+
+# Peak off, master still on: availability handed back exactly, record cleared.
+printf 'ltpo_force=1\nltpo_peak_force=0\n' > "$T/mod/config/governor.conf"; sh "$A" apply
+[ -f "$T/s/oost_settings_unlock_refresh_rate" ] && f "an absent global was left behind on restore"
+[ "$(cat "$T/s/oost_extreme_refresh_165" 2>/dev/null)" = 0 ] || f "prior value not restored"
+[ -f "$T/d/ltpo_extreme.orig" ] && f "record kept after restore"
+case "$(sh "$A" peak)" in *extreme=off*) : ;; *) f "peak status still reports the unlock after restore" ;; esac
+
+# Re-enable, then drop the master: the off path restores the unlock too.
+printf 'ltpo_force=1\nltpo_peak_force=1\n' > "$T/mod/config/governor.conf"; sh "$A" apply
+[ "$(cat "$T/s/oost_settings_unlock_refresh_rate" 2>/dev/null)" = 1 ] || f "unlock not re-set on re-enable"
+echo ltpo_force=0 > "$T/mod/config/governor.conf"; sh "$A" apply
+[ -f "$T/s/oost_settings_unlock_refresh_rate" ] && f "unlock not handed back when the master went off"
+[ -f "$T/d/ltpo_extreme.orig" ] && f "record kept after master off"
+
+# The source must not carry a force-global-on key at all.
+grep -q 'force_global_extreme_refresh_rate' "$ROOT/runtime/asb_ltpo_apply.sh" && f "force-global-on key present in the runtime"
+
+[ "$fail" = 0 ] && echo "PASS ltpo extreme runtime"
+exit "$fail"
+)
+
+t_battery_fix_runtime() (
+# Runtime (dev17): Infirmary Battery Fix. Offered only at 100% on charge; `run` arms a
+# one-shot flag, `boot` (post-fs-data, next boot) deletes exactly the three batterystats
+# files under /data/system and nothing else, then clears the flag. No battery claim here -
+# this only resets Android's stored usage record.
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail=0; f() { echo "FAIL battery fix: $*" >&2; fail=1; }
+A="$ROOT/runtime/asb_battery_fix.sh"
+[ -f "$A" ] || { echo "FAIL battery fix: runtime missing" >&2; exit 1; }
+mkdir -p "$T/d" "$T/sys"
+export ASB_BFIX_STATE_DIR="$T/d" ASB_BFIX_SYSDIR="$T/sys" ASB_BFIX_NO_DEXOPT=1
+# Seed the three real targets plus a decoy that must survive.
+for b in batterystats.bin batterystats-checkin.bin batterystats-daily.xml packages.xml; do echo seed > "$T/sys/$b"; done
+
+# Eligibility gate.
+ASB_BFIX_FAKE_PLUGGED=0 ASB_BFIX_FAKE_LEVEL=100 sh "$A" eligible | grep -q 'eligible=0 reason=not_charging' || f "discharging at 100 not blocked"
+ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=95  sh "$A" eligible | grep -q 'eligible=0 reason=not_full' || f "95% on charge not blocked"
+ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=100 sh "$A" eligible | grep -q 'eligible=1' || f "100% on charge not eligible"
+
+# run refused when not eligible: no flag armed.
+ASB_BFIX_FAKE_PLUGGED=0 ASB_BFIX_FAKE_LEVEL=100 sh "$A" run | grep -q 'result=refused' || f "run not refused while discharging"
+[ -f "$T/d/battery_fix.pending" ] && f "a refused run still armed the reset"
+
+# run armed when eligible.
+ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=100 sh "$A" run | grep -q 'result=armed reset_on=reboot' || f "eligible run did not arm"
+[ -f "$T/d/battery_fix.pending" ] || f "armed run wrote no pending flag"
+sh "$A" status | grep -q 'reset=pending' || f "status does not show the pending reset"
+
+# boot deletes exactly the three files, keeps the decoy, clears the flag.
+sh "$A" boot
+for b in batterystats.bin batterystats-checkin.bin batterystats-daily.xml; do
+  [ -e "$T/sys/$b" ] && f "$b was not deleted at boot"
+done
+[ -e "$T/sys/packages.xml" ] || f "boot deleted a file it must never touch"
+[ -f "$T/d/battery_fix.pending" ] && f "pending flag not cleared after boot"
+sh "$A" status | grep -q 'reset=none' || f "status still pending after boot"
+grep -q 'batterystats.bin' "$T/d/battery_fix.last" || f "last log did not record what was removed"
+
+# boot is a no-op without a flag (idempotent across reboots).
+echo keep > "$T/sys/batterystats.bin"
+sh "$A" boot
+[ -e "$T/sys/batterystats.bin" ] || f "a second boot deleted stats with no pending flag"
+
+# cancel clears an armed reset.
+ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=100 sh "$A" run >/dev/null
+sh "$A" cancel | grep -q 'result=cancelled' || f "cancel did not report cancelled"
+[ -f "$T/d/battery_fix.pending" ] && f "cancel left the pending flag"
+
+# post-fs-data wires the one-shot boot, gated on the flag.
+grep -q 'asb_battery_fix.sh" boot' "$ROOT/post-fs-data.sh" || f "post-fs-data never runs the boot reset"
+grep -q 'battery_fix.pending' "$ROOT/post-fs-data.sh" || f "post-fs-data boot not gated by the pending flag"
+
+[ "$fail" = 0 ] && echo "PASS battery fix runtime"
+exit "$fail"
+)
+
 t_ltpo_video_runtime() (
 # Runtime: ltpo_video lowers the peak refresh only during quiet video playback and gives
 # it back at once - on the first touch, when playback stops, when switched off, and after
