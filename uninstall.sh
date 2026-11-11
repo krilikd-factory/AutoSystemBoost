@@ -654,6 +654,30 @@ if [ -n "$_rr_peak$_rr_min" ]; then
   ) &
 fi
 
+# OEM extreme-refresh unlock (dev17): the two OnePlus "extreme refresh" globals the Panel
+# Maximum on Touch tweak flips live in global Settings, which outlives the module. The live
+# remove above puts them back when the phone is up; this waiter covers an uninstall applied
+# at the next boot. Both read into the detached shell before /data/adb/asb is removed.
+if [ -f /data/adb/asb/ltpo_extreme.orig ]; then
+  _xtr_rec="$(cat /data/adb/asb/ltpo_extreme.orig 2>/dev/null)"
+  if [ -n "$_xtr_rec" ]; then
+    (
+      exec </dev/null >/dev/null 2>&1
+      _w=0
+      until [ "$(getprop sys.boot_completed 2>/dev/null)" = "1" ] || [ "$_w" -ge 600 ]; do
+        sleep 5; _w=$((_w + 5))
+      done
+      printf '%s\n' "$_xtr_rec" | while IFS='=' read -r _xk _xv; do
+        [ -n "$_xk" ] || continue
+        case "$_xv" in
+          ''|__unset) settings delete global "$_xk" >/dev/null 2>&1 ;;
+          *) settings put global "$_xk" "$_xv" >/dev/null 2>&1 ;;
+        esac
+      done
+    ) &
+  fi
+fi
+
 # If the active fallback had temporarily released Wi-Fi, restore it before its state is
 # removed; the helper targets only its exact watcher argv and never touches other network tasks.
 [ -f "$MODDIR/runtime/asb_wifi_fallback.sh" ] && MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wifi_fallback.sh" stop >/dev/null 2>&1 || true
