@@ -6012,6 +6012,10 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
     <div class="rpt-meta-row">
       <span class="lgr-status" id="zygiskStatus" role="status" aria-live="polite"></span>
       <div class="rpt-actions">
+        <button class="live-chip" id="zySave" type="button" onclick="asbSavePage('zygisk')" aria-label="Save the whole page as a text file" disabled>
+          <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"></path><path d="M7 10l5 5 5-5"></path><path d="M5 20h14"></path></svg>
+          <span data-i18n="page_save">Save</span>
+        </button>
         <button class="live-chip rpt-refresh" id="zyRefresh" type="button" onclick="zygiskPageLoad(true)">
           <svg class="live-chip-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 6.3"></path><path d="M20 5v6h-6"></path></svg>
           <span data-i18n="dev_refresh">Refresh</span>
@@ -14398,6 +14402,27 @@ function asbPageText(root) {
       if (t) out.push('    ' + t);
       return;
     }
+    if (asbPageHas(e, 'cfg-row')) {
+      const nm = e.querySelector ? e.querySelector('.cfg-name') : null, st = e.querySelector ? e.querySelector('.cfg-status') : null;
+      const clean = function (x) { return String((x && x.textContent) || '').replace(/\u25BE/g, '').replace(/\s+/g, ' ').trim(); };
+      const n = clean(nm), s = clean(st);
+      if (n) out.push('  ' + n + (s ? ': ' + s : ''));
+      return;
+    }
+    if (asbPageHas(e, 'cfg-seg')) {
+      const opts = asbPageKids(e).map(function (b) {
+        const t = String(b.textContent || '').replace(/\s+/g, ' ').trim();
+        const on = asbPageHas(b, 'on') || (b.getAttribute && b.getAttribute('aria-checked') === 'true');
+        return t ? (on ? '[' + t + ']' : t) : '';
+      }).filter(function (x) { return x; });
+      if (opts.length) out.push('  ' + opts.join(' / '));
+      return;
+    }
+    if (String(e.tagName || e.tag || '').toLowerCase() === 'textarea') {
+      const v = String(e.value != null ? e.value : e.textContent || '').trim();
+      if (v) out.push('  ' + v.split(/\s*\n\s*/).join(', '));
+      return;
+    }
     if (String(e.tagName || e.tag || '').toLowerCase() === 'button') return;
     if (asbPageHas(e, 'lgr-note') || asbPageHas(e, 'lgr-tip')) {
       out.push('  ' + (asbPageHas(e, 'lgr-warn') ? '(!) ' : '') + asbPageTxt(e));
@@ -14447,28 +14472,48 @@ async function asbSaveTextFile(path, text) {
   const r = await run('base64 -d < ' + shQuote(tmp) + ' > ' + shQuote(path) + ' && rm -f ' + shQuote(tmp));
   if (!r || r.errno !== 0) { await run('rm -f ' + shQuote(tmp)); throw new Error((r && r.stderr) || 'decode failed'); }
 }
+/* dev16: the Zygisk page saves the same way. Its folded rows and the evidence list that is
+ * built only when opened are expanded into the file, and the raw digest is every status
+ * output the page was painted from, so the file holds more than one screen shows. */
+const ASB_SAVE_PAGES = {
+  device: { body: 'deviceBody', status: 'deviceStatus', btn: 'devSave', prefix: 'asb_device_', title: ['dev_title', 'Device diagnostics'],
+    data: function () { return window._asbDeviceInfoData; }, raw: function () { return window._asbDeviceInfoRaw; } },
+  report: { body: 'reportBody', status: 'reportStatus', btn: 'rpSave', prefix: 'asb_report_', title: ['lr_menu', 'Infinite log report'],
+    data: function () { return window._asbLogReportData; }, raw: function () { return window._asbLogReportRaw; }, always: true },
+  zygisk: { body: 'zygiskBody', status: 'zygiskStatus', btn: 'zySave', prefix: 'asb_zygisk_', title: ['zy_title', 'Zygisk'],
+    data: function () { return window._asbZygiskLinkData; }, raw: function () { return window._asbZygiskRaw; } }
+};
+function asbSaveExpand(root) {
+  const walk = function (e) {
+    if (!e) return;
+    if (typeof e._asbBuild === 'function') e._asbBuild();
+    asbPageKids(e).forEach(walk);
+  };
+  walk(root);
+}
 async function asbSavePage(kind) {
-  const isDev = kind === 'device';
-  const body = _el(isDev ? 'deviceBody' : 'reportBody');
-  const raw = isDev ? window._asbDeviceInfoRaw : window._asbLogReportRaw;
-  const ready = isDev ? !!window._asbDeviceInfoData : !!window._asbLogReportData;
+  const k = ASB_SAVE_PAGES[kind] || ASB_SAVE_PAGES.report;
+  const body = _el(k.body);
+  const raw = k.raw();
+  const ready = !!k.data();
   if (!body || !ready) { toast(T('page_save_empty', 'Nothing to save yet - wait until the page has loaded.'), 'error'); return; }
-  const btn = _el(isDev ? 'devSave' : 'rpSave'); if (btn) btn.disabled = true;
+  const btn = _el(k.btn); if (btn) btn.disabled = true;
   try {
     const now = new Date();
-    const status = _el(isDev ? 'deviceStatus' : 'reportStatus');
+    const status = _el(k.status);
     const line = _el('deviceLine');
-    const head = ['AutoSystemBoost - ' + (isDev ? T('dev_title', 'Device diagnostics') : T('lr_menu', 'Infinite log report')),
+    asbSaveExpand(body);
+    const head = ['AutoSystemBoost - ' + T(k.title[0], k.title[1]),
       asbPageTxt(status), line ? asbPageTxt(line) : '', now.toString()].filter(function (x) { return x; });
     let text = head.join('\n') + '\n\n' + asbPageText(body) + '\n';
     if (raw) text += '\n\n== ' + T('page_save_raw', 'Raw data (for the developer)') + ' ==\n' + String(raw).replace(/\s+$/, '') + '\n';
-    const path = '/sdcard/Download/' + (isDev ? 'asb_device_' : 'asb_report_') + asbPageStamp(now) + '.txt';
+    const path = '/sdcard/Download/' + k.prefix + asbPageStamp(now) + '.txt';
     await asbSaveTextFile(path, text);
     toast(logReportT('page_saved', 'Saved: {path}', { path: path }), 'ok');
   } catch (e) {
     toast(T('page_save_error', 'Could not save the page.'), 'error');
   } finally {
-    if (btn) btn.disabled = isDev ? !window._asbDeviceInfoData : false;
+    if (btn) btn.disabled = k.always ? false : !k.data();
   }
 }
 
@@ -15741,8 +15786,8 @@ function zygiskEvidenceCard(d) {
   sum.textContent = T('zy_evidence_show', 'All Zygisk evidence (%s values)').replace('%s', String(keys.length));
   det.appendChild(sum);
   /* Built on first open only: most visits never expand it, and 60 rows are not free. */
-  det.addEventListener('toggle', function () {
-    if (!det.open || det._built) return;
+  det._asbBuild = function () {
+    if (det._built) return;
     det._built = true;
     keys.forEach(function (k) {
       const raw = String(sec[k]);
@@ -15754,7 +15799,8 @@ function zygiskEvidenceCard(d) {
       }
       det.appendChild(row);
     });
-  });
+  };
+  det.addEventListener('toggle', function () { if (det.open) det._asbBuild(); });
   return det;
 }
 function zygiskPageRender(d) {
@@ -16573,7 +16619,7 @@ function smart7LearnParse(txt) {
     const f = ln.split('|');
     const gm = f[0] === 'meter' && f.length >= 2 ? /^gauge_x100=(-?\d+)$/.exec(f[1]) : null;
     if (gm) { g.gauge = parseInt(gm[1], 10); return; }
-    if (f[0] === 'knob' && f.length === 18 && /^(radio|wake_lift|membus_on|membus_off|app[123])$/.test(f[1]) &&
+    if (f[0] === 'knob' && (f.length === 18 || f.length === 20) && /^(radio|wake_lift|membus_on|membus_off|app[123])$/.test(f[1]) &&
         /^(off|free|best|testing|watching)$/.test(f[2])) {
       g.lab.push({ name: f[1], state: f[2], best: f[3], trying: f[4], pairs: num(f[5]), diff: num(f[6]) / 10,
         gain: num(f[10]) / 10, wins: num(f[11]), reopen: num(f[13]), blocks: num(f[14]),
@@ -16916,6 +16962,7 @@ async function zygiskPageLoad(user) {
   const d = parseDeviceInfo(r ? runText(r) : '');
   if (r && r.errno === 0 && d.count) {
     _zygiskHeaderAt = Date.now();
+    window._asbZygiskRaw = zygiskRawDigest(b);
     zygiskHeaderPublish(d);
     if (_zygiskOpen) zygiskPageRender(d);
     if (status) status.textContent = T('zy_status_ready', 'Current snapshot · read-only');
@@ -16923,6 +16970,18 @@ async function zygiskPageLoad(user) {
     if (_zygiskOpen && user) zygiskPageRender(window._asbZygiskLinkData || null);
     if (status) status.textContent = T('zy_status_failed', 'Could not read the state; the last snapshot is shown');
   }
+  const save = _el('zySave'); if (save) save.disabled = !window._asbZygiskLinkData;
+}
+function zygiskRawDigest(b) {
+  const order = [['link', 'asb_zygisk.sh link-status'], ['engine', 'asb_zygisk_link.sh status'], ['guard', 'asb_zygisk_guard.sh status'],
+    ['aot', 'asb_zygisk_aot.sh status'], ['lsp', 'asb_lsposed_lite.sh status'], ['s7', 'asb_smart7.sh status'],
+    ['nc', 'asb_night_charge.sh status'], ['s7l', 'smart_energy / smart_records / smart_lab']];
+  return order.map(function (o) {
+    const r = b && b[o[0]];
+    if (!r) return '';
+    const t = String(r.stdout || '').replace(/\s+$/, '');
+    return '--- ' + o[1] + (r.errno === 0 ? '' : ' (rc=' + r.errno + ')') + ' ---' + (t ? '\n' + t : '');
+  }).filter(function (x) { return x; }).join('\n\n');
 }
 function openZygiskPage() {
   if (_zygiskOpen) { zygiskPageLoad(true); return; }
@@ -16943,6 +17002,7 @@ function openZygiskPage() {
   asbTabbarVisibility();
   p.classList.add('open');
   zygiskPageRender(window._asbZygiskLinkData || null);
+  const save = _el('zySave'); if (save) save.disabled = !window._asbZygiskLinkData;
   const status = _el('zygiskStatus');
   if (status) status.textContent = window._asbZygiskLinkData ? T('zy_status_cached', 'Last snapshot · refreshing…') : T('zy_status_loading', 'Reading…');
   asbAfterNavAnim(function () { if (_zygiskOpen) zygiskPageLoad(false); }, 30);
