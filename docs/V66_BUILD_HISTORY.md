@@ -4,6 +4,42 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev17 - no idle freeze, the saucer flies into the header, the Infirmary
+
+- **WebUI no longer freezes after ten seconds.** The dev6 "calm" rule stopped every
+  decorative loop ten seconds after the last touch, the header logo and the status/record/
+  charge/link indicators included, so the open interface looked hung until it was tapped. On
+  the page in front the logo glow and ring (composited rotations) and the indicator dots now
+  keep moving; only the wordmark's specular sweep, which repaints its text every frame and was
+  the measured cost behind the rule, still pauses while idle. Closed and backgrounded pages
+  stop everything as before.
+- **Boot preview hands off into the header.** At the end of the once-per-boot preview the
+  saucer flies a wobbling, shrinking arc into the header logo, the orbit spheres lift toward
+  the header and dissolve, and the overlay turns transparent so the home screen forms under
+  it; the header logo pops in on landing. Transform/opacity only; reduced motion and any
+  missing piece fall back to the old fade.
+- **Panel Maximum on Touch.** The OP15's own display dump lists 60/90/120/144/165 Hz and
+  nothing above, so 165 is the ceiling there; a rate the panel does not list cannot be
+  selected and ASB does not invent one. The tweak still asks for the highest listed mode, and
+  now also unlocks OnePlus's own extreme-refresh availability globals
+  (`oost_settings_unlock_refresh_rate`, `oost_extreme_refresh_165`) so that mode is reachable
+  past the ROM's 120 Hz app cap. It never writes a force-always-high key, so the panel still
+  drops on idle. Values found are recorded and restored on Off, master Off or uninstall.
+  Effect not measured on device.
+- **Infirmary.** A pharmacy button right of Reset opens a separate Infirmary screen (not a
+  seventh hub tile). It holds:
+  - **Battery Fix**, offered only at 100% on a charger. It arms a one-shot that deletes
+    `batterystats.bin`, `batterystats-checkin.bin` and `batterystats-daily.xml` from
+    `/data/system` at post-fs-data on the next boot, and starts an in-place speed-profile
+    recompile with the background dexopt job. Unlike a wipe-and-recompile it does not delete
+    dalvik-cache or `.odex/.art`. This resets Android's usage record and learned estimate; it
+    adds no capacity or runtime. A pending reset can be cancelled.
+  - The HeyTap/OPPO push and DocumentsUI/DSU picker repairs, moved out of System Services.
+
+Not added: a fix that hides root, Zygisk or memory traces from TEE attestation or app checks.
+
+No native code changed: no CI rebuild needed.
+
 ## V66 dev16 - the ZYGISK page saves, the lab shares its screen-on time
 
 Input: the owner asked for the ZYGISK page to save like Device diagnostics and the log report,
