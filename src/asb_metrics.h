@@ -5,6 +5,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/utsname.h>
 #include <errno.h>
 #include <time.h>
 #include <math.h>
@@ -917,6 +918,7 @@ static int g_surface_from_skin = 0;        /* 1 = no surface/board zone, shell s
 #define ASB_SURFACE_PIN_FILE "/data/adb/asb/surface_pinned"
 #endif
 static char g_thermal_surface_type[32] = "";
+static int g_thermal_zones_seen = 0;       /* zones with a readable type at the last discovery */
 static int g_surface_pinned = 0;           /* 1 = the zone is pinned: the surface follows the board */
 static int g_surface_pin_c = 0;            /* the value it sits at */
 static int g_surface_pin_boot = 0;         /* 1 = known from an earlier boot, not re-learned */
@@ -924,6 +926,25 @@ static unsigned long g_surface_pin_revived = 0;
 static int    g_surf_lo = 1000, g_surf_hi = -1000, g_surf_blo = 1000, g_surf_bhi = -1000;
 static int    g_surf_ticks = 0, g_surf_boot_checked = 0;
 static time_t g_surf_t0 = 0;
+/* The build a learned verdict belongs to: the kernel release, and the ROM's fingerprint when
+ * the governor has handed over its reader (it is a long property on OnePlus builds and needs
+ * the callback reader in asb_fsm.h). An OTA or another kernel may keep a zone's name and change
+ * what feeds it, so a verdict from another build is learned again rather than applied on the
+ * first tick (V66 dev13 kernel, dev14 fingerprint). */
+static int (*g_asb_fingerprint_fn)(char *out, size_t out_size) = NULL;
+static unsigned long asb_build_hash(void) {
+    struct utsname u;
+    unsigned long h = 2166136261UL;
+    if (uname(&u) == 0)
+        for (const char *c = u.release; *c; c++) { h ^= (unsigned char)*c; h = (h * 16777619UL) & 0xffffffffUL; }
+    if (g_asb_fingerprint_fn) {
+        char fp[256] = "";
+        if (g_asb_fingerprint_fn(fp, sizeof(fp)) > 0)
+            for (const char *c = fp; *c; c++) { h ^= (unsigned char)*c; h = (h * 16777619UL) & 0xffffffffUL; }
+    }
+    return h;
+}
+static unsigned long asb_surface_pin_build(void) { return asb_build_hash(); }
 /* What a fresh daemon start sees; the file is the only thing carried over. */
 static inline void asb_surface_pin_reset(void) {
     g_surface_pinned = 0; g_surface_pin_c = 0; g_surface_pin_boot = 0;
@@ -1043,9 +1064,11 @@ int preserve_cpu = (g_thermal_cpu_zone >= 0 && g_thermal_cpu_type[0] != '\0');
     g_thermal_surface_zone = -1;
     g_thermal_board_zone = -1;
 
+    g_thermal_zones_seen = 0;
     for (int z = 0; z < THERMAL_MAX_ZONES; z++) {
         snprintf(path, sizeof(path), THERMAL_BASE "/thermal_zone%d/type", z);
         if (sysfs_read_str(path, type, sizeof(type)) < 0) continue;
+        g_thermal_zones_seen++;
         /* strip trailing newline. sysfs reads return "socd\n" not "socd",
          * and the embedded \n later breaks JSON parsing when thermal_cpu_type is
          * emitted into the status payload. */
@@ -1691,7 +1714,9 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
      * 09:17, after the morning's first use - every boot again. Now 60 ticks over 90 minutes
      * are enough too, and the verdict is kept in ASB_SURFACE_PIN_FILE (zone type and value):
      * the next boot starts with the zone dropped if it reads that value, and a zone that
-     * moves 3 C away from it is live again (the file goes). */
+     * moves 3 C away from it is live again (the file goes). V66 dev13: the file also names
+     * the kernel release and the number of thermal zones, and a verdict from another build
+     * is learned again instead of applied; V66 dev14 adds the ROM fingerprint to that hash. */
     {
         time_t s_now = time(NULL);
         if (!g_surf_boot_checked && g_thermal_surface_zone >= 0 && _surf_raw > 0 && g_thermal_surface_type[0]) {
@@ -1699,8 +1724,10 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
             FILE *pf = fopen(ASB_SURFACE_PIN_FILE, "re");
             if (pf) {
                 char pty[32] = "";
-                int pv = 0;
-                if (fscanf(pf, "%31s %d", pty, &pv) == 2 && strcmp(pty, g_thermal_surface_type) == 0 &&
+                int pv = 0, pz = -1;
+                unsigned long pk = 0;
+                if (fscanf(pf, "%31s %d %d %lx", pty, &pv, &pz, &pk) == 4 && strcmp(pty, g_thermal_surface_type) == 0 &&
+                    pz == g_thermal_zones_seen && pk == asb_surface_pin_build() &&
                     _surf_raw - pv <= 1 && pv - _surf_raw <= 1) {
                     g_surface_pinned = 1; g_surface_pin_c = pv; g_surface_pin_boot = 1;
                 }
@@ -1725,7 +1752,8 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
                 g_surface_pinned = 1; g_surface_pin_c = g_surf_lo; g_surface_pin_boot = 0;
                 FILE *pf = fopen(ASB_SURFACE_PIN_FILE ".tmp", "we");
                 if (pf) {
-                    int ok = fprintf(pf, "%s %d\n", g_thermal_surface_type[0] ? g_thermal_surface_type : "zone", g_surf_lo) > 0;
+                    int ok = fprintf(pf, "%s %d %d %lx\n", g_thermal_surface_type[0] ? g_thermal_surface_type : "zone", g_surf_lo,
+                                     g_thermal_zones_seen, asb_surface_pin_build()) > 0;
                     if (fclose(pf) != 0) ok = 0;
                     if (ok) rename(ASB_SURFACE_PIN_FILE ".tmp", ASB_SURFACE_PIN_FILE);
                     else unlink(ASB_SURFACE_PIN_FILE ".tmp");

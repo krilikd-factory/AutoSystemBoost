@@ -110,6 +110,7 @@ static const char *const g_lab_names[LAB_N] = {
 #define ASB_LAB_JANK_MIN_FRAMES 200
 #define ASB_LAB_SETTLE_S        1200
 #define ASB_LAB_TICK_MAX_MS     30000LL
+#define ASB_LAB_PAUSE_MAX_S     60       /* a screen-on block waits this long for its conditions */
 
 typedef struct {
     uint32_t ts;            /* when the block ended; 0 = none or already paired */
@@ -127,7 +128,7 @@ typedef struct {
     uint64_t key;           /* app slots: the app's hash */
     char     pkg[48];       /* app slots: the package, for its frame counters */
     uint8_t  champion, challenger, converged, alt;
-    uint8_t  tried, fails, pad0, pad1;
+    uint8_t  tried, fails, last_verdict, pad1;   /* last_verdict: LAB_V_* (dev14) */
     uint32_t trials, wins, pairs, blocks, conv_ts, last_ts, reopen, jank_pairs;
     double   pr_mean, pr_m2, pr_press, pr_jank, pr_heat;
     asb_lab_last_t last[2];
@@ -137,7 +138,7 @@ typedef struct {
 } asb_lab_knob_t;
 
 typedef struct {
-    uint32_t magic, version, size, pad;
+    uint32_t magic, version, size, build;   /* build: the ROM/kernel hash the verdicts were made on (dev14; 0 = not recorded) */
     asb_lab_knob_t k[LAB_N];
     uint32_t wins_total, reopen_total;
 } asb_lab_store_t;
@@ -156,6 +157,7 @@ typedef struct {
     long      fr0, jk0, fr_req;
     char      pkg[48];
     int       glances;
+    long long pause_ms, paused_at;   /* V66 dev13: time spent waiting, and since when (0 = running) */
 } asb_lab_blk_t;
 
 typedef struct {
@@ -200,6 +202,7 @@ static int   g_lab_loaded = 0, g_lab_dirty = 0;
 static long  g_lab_saved_ts = 0;
 static asb_lab_blk_t g_lab_on, g_lab_off, g_lab_lift;
 static int   g_lab_prev_on = -1;
+static long long g_lab_on_since_ms = 0;   /* when this screen-on spell began (1 = before the governor started) */
 static unsigned long g_lab_blocks_kept = 0, g_lab_blocks_short = 0, g_lab_blocks_rejected = 0;
 static int   g_lab_radio_written = -1;
 
@@ -208,6 +211,29 @@ static long long (*g_lab_read_net)(void) = NULL;
 #define ASB_LAB_NET_KIBPS_MAX 15     /* screen off: the records' rule - above it the radio, not the bus, sets the drain */
 static unsigned long g_lab_blocks_radio = 0;
 static unsigned long g_lab_early_stops = 0;
+/* V66 dev14: why each knob's last decision went the way it did, kept in the store (the spare
+ * byte of the knob record, so the layout and the version do not change) and printed in the
+ * summary; and the build the verdicts were made on. */
+enum { LAB_V_NONE = 0, LAB_V_WON, LAB_V_DEARER, LAB_V_JANK, LAB_V_CEILING, LAB_V_HEAT, LAB_V_NO_GAIN,
+       LAB_V_RETEST_COST, LAB_V_RETEST_AGE, LAB_V_RETEST_BUILD, LAB_V_N };
+static const char *const g_lab_verdict_names[LAB_V_N] = {
+    "-", "won_energy", "lost_dearer", "lost_jank", "lost_ceiling", "lost_heat", "no_clear_saving",
+    "retest_cost", "retest_age", "retest_build"
+};
+static const char *const g_lab_verdict_text[LAB_V_N] = {
+    "-", "cheaper", "dearer", "more janky frames", "cores at their ceiling more often", "warms faster",
+    "no clear saving", "costs more than when it won", "three weeks since the verdict", "another ROM or kernel"
+};
+static uint32_t g_lab_build_id = 0;      /* set by the governor before asb_lab_load; 0 = unknown */
+static int      g_lab_build_retests = 0; /* knobs re-opened at load because the build changed */
+/* V66 dev13: short blocks by kind, and screen-on blocks that waited out a pause. */
+static unsigned long g_lab_short_kind[4] = {0, 0, 0, 0};   /* on, app, off, lift */
+static unsigned long g_lab_pauses = 0, g_lab_resumes = 0;
+/* V66 dev16: which screen-on knob started last, whether it was a follow-up for its own open
+ * half-pair, and when each knob last started a block (this run only). */
+static int g_lab_on_last_k = -1, g_lab_on_follow = 0;
+static long g_lab_on_started[LAB_N];
+static unsigned long g_lab_followups = 0;
 static void  (*g_lab_gfx_ask)(const char *pkg) = NULL;
 static int   (*g_lab_gfx_read)(const char *pkg, long since, long *frames, long *janky) = NULL;
 
@@ -223,6 +249,16 @@ static const int g_lab_app_arm[3]     = { 0, 100, -100 };
 
 static int asb_lab_narms(int k) { return (k == LAB_RADIO || k == LAB_LIFT) ? 2 : 3; }
 static int asb_lab_is_app(int k) { return k >= LAB_APP0 && k < LAB_APP0 + LAB_APPS; }
+static void asb_lab_short(int k) {
+    g_lab_blocks_short++;
+    g_lab_short_kind[k == LAB_MEM_OFF ? 2 : (k == LAB_LIFT ? 3 : (asb_lab_is_app(k) ? 1 : 0))]++;
+}
+/* Seconds a block has run, without the time it spent paused. */
+static long asb_lab_blk_active_s(const asb_lab_blk_t *b, long long now_ms) {
+    long long ms = now_ms - b->t0_ms - b->pause_ms;
+    if (b->paused_at > 0) ms -= now_ms - b->paused_at;
+    return ms > 0 ? (long)(ms / 1000) : 0;
+}
 
 static int asb_lab_lift_value(int arm, int cfg) {
     if (cfg < 50) cfg = 50;
@@ -312,6 +348,7 @@ static void asb_lab_setup(int k, int explore, long wall) {
     if (kn->converged) {
         if (wall - (long)kn->conv_ts < ASB_LAB_RECHECK_S) return;
         asb_lab_reopen(kn);
+        kn->last_verdict = LAB_V_RETEST_AGE;
     }
     if (!explore) { kn->challenger = kn->champion; return; }
     if (kn->challenger != kn->champion) return;
@@ -327,11 +364,13 @@ static void asb_lab_setup(int k, int explore, long wall) {
  * trial that just ended, and it is dropped so the new best setting applies at once. */
 static void asb_lab_drop_blocks(int k) {
     asb_lab_blk_t *bs[3] = { &g_lab_on, &g_lab_off, &g_lab_lift };
-    for (int i = 0; i < 3; i++) if (bs[i]->active && bs[i]->knob == k) { bs[i]->active = 0; g_lab_blocks_short++; }
+    for (int i = 0; i < 3; i++) if (bs[i]->active && bs[i]->knob == k) { bs[i]->active = 0; asb_lab_short(k); }
 }
 
-static void asb_lab_lose(int k, const char *why, long wall) {
+static void asb_lab_lose(int k, int code, long wall) {
     asb_lab_knob_t *kn = &g_lab.k[k];
+    const char *why = g_lab_verdict_text[(code > 0 && code < LAB_V_N) ? code : LAB_V_NO_GAIN];
+    kn->last_verdict = (uint8_t)code;
     char a[24];
     snprintf(a, sizeof(a), "%s", asb_lab_arm_name(k, kn->challenger));
     snprintf(g_lab_event_msg, sizeof(g_lab_event_msg), "lab: %s - %s not better (%s) after %u pair(s), kept %s",
@@ -352,6 +391,7 @@ static void asb_lab_win(int k, long wall) {
     char a[24];
     snprintf(a, sizeof(a), "%s", asb_lab_arm_name(k, kn->challenger));
     kn->gain = (float)(-kn->pr_mean);
+    kn->last_verdict = LAB_V_WON;
     snprintf(g_lab_event_msg, sizeof(g_lab_event_msg), "lab: %s - %s beat %s by %.1f %% over %u pair(s)",
              g_lab_names[k], a, asb_lab_arm_name(k, old), -kn->pr_mean * 100.0, kn->pairs);
     g_lab_event = 1;
@@ -375,17 +415,17 @@ static void asb_lab_verdict(int k, long wall) {
     int off = (k == LAB_MEM_OFF);
     unsigned nmin = off ? 5u : 6u, nmax = off ? 12u : 16u;
     if (k == LAB_LIFT) { nmin = 5u; nmax = 14u; }
-    if (n >= 3 && mean >= ASB_LAB_DEARER) { asb_lab_lose(k, "dearer", wall); return; }
+    if (n >= 3 && mean >= ASB_LAB_DEARER) { asb_lab_lose(k, LAB_V_DEARER, wall); return; }
     /* A challenger that is plainly worse to use is not run to the full count: these stops
      * cost at most two or three blocks of it, the guards below would cost up to nmax. */
     if (kn->jank_pairs >= 2 && kn->pr_jank / (double)kn->jank_pairs >= ASB_LAB_JANK_STOP) {
-        g_lab_early_stops++; asb_lab_lose(k, "more janky frames", wall); return;
+        g_lab_early_stops++; asb_lab_lose(k, LAB_V_JANK, wall); return;
     }
     if (n >= 3 && kn->pr_press / (double)n >= ASB_LAB_PRESS_STOP) {
-        g_lab_early_stops++; asb_lab_lose(k, "cores at their ceiling more often", wall); return;
+        g_lab_early_stops++; asb_lab_lose(k, LAB_V_CEILING, wall); return;
     }
     if (n >= 3 && !off && k != LAB_LIFT && kn->pr_heat / (double)n >= ASB_LAB_HEAT_STOP) {
-        g_lab_early_stops++; asb_lab_lose(k, "warms faster", wall); return;
+        g_lab_early_stops++; asb_lab_lose(k, LAB_V_HEAT, wall); return;
     }
     if (n < nmin) return;
     double var = (n > 1) ? kn->pr_m2 / (double)(n - 1) : 0.0;
@@ -395,11 +435,10 @@ static void asb_lab_verdict(int k, long wall) {
     int heat_ok  = off || k == LAB_LIFT || (kn->pr_heat / (double)n) <= ASB_LAB_HEAT_SLACK;
     if (mean <= -ASB_LAB_GAIN_MIN && t2 >= ASB_LAB_T2) {
         if (press_ok && jank_ok && heat_ok) asb_lab_win(k, wall);
-        else asb_lab_lose(k, !press_ok ? "cores at their ceiling more often" :
-                             (!jank_ok ? "more janky frames" : "warms faster"), wall);
+        else asb_lab_lose(k, !press_ok ? LAB_V_CEILING : (!jank_ok ? LAB_V_JANK : LAB_V_HEAT), wall);
         return;
     }
-    if (n >= nmax) asb_lab_lose(k, "no clear saving", wall);
+    if (n >= nmax) asb_lab_lose(k, LAB_V_NO_GAIN, wall);
 }
 
 /* The champion keeps being measured after a verdict: a cost that climbs away from it tests
@@ -419,6 +458,7 @@ static void asb_lab_dynamics(int k, float mw) {
             kn->reopen++;
             g_lab.reopen_total++;
             asb_lab_reopen(kn);
+            kn->last_verdict = LAB_V_RETEST_COST;
             g_lab_saved_ts = 0;
         }
     } else {
@@ -453,7 +493,7 @@ static int asb_lab_pairable(int k, const asb_lab_last_t *a, const asb_lab_last_t
 
 static void asb_lab_sample(int k, int slot, int arm, const asb_lab_last_t *s, long wall) {
     asb_lab_knob_t *kn = &g_lab.k[k];
-    if (arm != (slot ? kn->challenger : kn->champion)) { g_lab_blocks_short++; return; }
+    if (arm != (slot ? kn->challenger : kn->champion)) { asb_lab_short(k); return; }
     kn->blocks++;
     kn->last_ts = (uint32_t)wall;
     g_lab_blocks_kept++;
@@ -565,10 +605,10 @@ static void asb_lab_blk_end(asb_lab_blk_t *b, const asb_lab_in_t *in) {
     if (!b->active) return;
     b->active = 0;
     int k = b->knob;
-    long dur = (long)((in->now_ms - b->t0_ms) / 1000);
+    long dur = asb_lab_blk_active_s(b, in->now_ms);
     long min_s = (k == LAB_MEM_OFF) ? ASB_LAB_OFF_MIN_S :
                  (asb_lab_is_app(k) ? ASB_LAB_APP_MIN_S : (k == LAB_RADIO ? ASB_LAB_RADIO_MIN_S : ASB_LAB_ON_MIN_S));
-    if (dur < min_s) { g_lab_blocks_short++; return; }
+    if (dur < min_s) { asb_lab_short(k); return; }
     asb_lab_last_t s;
     memset(&s, 0, sizeof(s));
     s.ts = (uint32_t)in->wall;
@@ -637,7 +677,7 @@ static void asb_lab_lift_close(const asb_lab_in_t *in) {
     int done = b->glances >= ASB_LAB_LIFT_GLANCES ||
                (b->glances >= ASB_LAB_LIFT_MIN_GL && age >= ASB_LAB_LIFT_MAX_S);
     if (!done) {
-        if (age >= ASB_LAB_LIFT_DROP_S || age < 0) { b->active = 0; g_lab_blocks_short++; }
+        if (age >= ASB_LAB_LIFT_DROP_S || age < 0) { b->active = 0; asb_lab_short(LAB_LIFT); }
         return;
     }
     b->active = 0;
@@ -746,6 +786,9 @@ static long asb_mem_read(const char *p) {
 static int asb_mem_write(const char *p, long v) {
     FILE *f = fopen(p, "we");
     if (!f) return -1;
+#ifdef ASB_MEM_FIXTURE_ROUND
+    if (v == ASB_MEM_FIXTURE_ROUND) v += 1;   /* host fixture: a kernel that rounds this step */
+#endif
     int rc = fprintf(f, "%ld\n", v) > 0 ? 0 : -1;
     if (fclose(f) != 0) rc = -1;
     return rc;
@@ -787,6 +830,16 @@ static void asb_mem_add_voter(const char *path, int dom) {
     snprintf(m->path, sizeof(m->path), "%s", path);
     m->orig = -1; m->written = -1; m->dom = dom;
 }
+/* bus_dcvs lives under /sys/devices/system/cpu and its voters are the CPU's own (memlat per
+ * cluster, the CPU bandwidth monitors). A voter named for another client - GPU, display,
+ * video, camera, DSP/NPU, modem - is never capped, whatever a ROM puts there (V66 dev14, an
+ * audit asked for the owner check; none of these appear on the OP15). */
+static int asb_mem_cpu_voter(const char *name) {
+    static const char *const other[] = { "gpu", "kgsl", "disp", "mdss", "dpu", "venus", "video", "vidc", "cam",
+                                         "cdsp", "adsp", "npu", "nsp", "modem", "mss", "ipa", NULL };
+    for (int i = 0; other[i]; i++) if (strstr(name, other[i])) return 0;
+    return 1;
+}
 static void asb_mem_probe_run(void) {
     g_mem_probe = -1;
     g_mem_nv = 0; g_mem_ndom = 0;
@@ -806,7 +859,7 @@ static void asb_mem_probe_run(void) {
         int before = g_mem_nv;
         struct dirent *de;
         while ((de = readdir(d)) != NULL) {
-            if (de->d_name[0] == '.') continue;
+            if (de->d_name[0] == '.' || !asb_mem_cpu_voter(de->d_name)) continue;
             char vp[256];
             if (snprintf(vp, sizeof(vp), "%s/%s/%s/max_freq", ASB_MEM_ROOT, doms[di], de->d_name) >= (int)sizeof(vp)) continue;
             asb_mem_add_voter(vp, g_mem_ndom);
@@ -892,8 +945,20 @@ static void asb_mem_apply(int pct, long now) {
             if (m->owned && asb_mem_write(m->path, m->orig) == 0) { m->owned = 0; g_mem_restores++; }
             continue;
         }
-        if (asb_mem_write(m->path, t) == 0 && asb_mem_read(m->path) == t) {
-            m->written = t; m->owned = 1; g_mem_writes++;
+        if (asb_mem_write(m->path, t) == 0) {
+            long rb = asb_mem_read(m->path);
+            if (rb == t) {
+                m->written = t; m->owned = 1; g_mem_writes++;
+            } else {
+                /* V66 dev14: the write was taken but a different value reads back - the kernel
+                 * moved it, or another writer was there at the same moment. The value before
+                 * ASB is put back and the voter is not used again this session: a cap ASB
+                 * cannot read back is a cap it cannot account for. Until now an unowned voter
+                 * was left at that value, never given back. */
+                g_mem_fails++;
+                if (rb != m->orig) asb_mem_write(m->path, m->orig);
+                m->owned = 0; m->yielded = 1; g_mem_yields++;
+            }
         } else {
             g_mem_fails++;
             if (m->owned && asb_mem_read(m->path) != m->written) { m->owned = 0; }
@@ -913,7 +978,30 @@ static int asb_mem_active_voters(void) {
 static void asb_lab_init(void) {
     memset(&g_lab, 0, sizeof(g_lab));
     g_lab.magic = ASB_LAB_MAGIC; g_lab.version = ASB_LAB_VERSION; g_lab.size = (uint32_t)sizeof(g_lab);
+    g_lab.build = g_lab_build_id;
     for (int k = 0; k < LAB_N; k++) g_lab.k[k].tried = 1;
+}
+/* A verdict is a measurement on one ROM and kernel (V66 dev14). After an OTA or a kernel swap
+ * every decided knob is tested again against its neighbour - the best setting stays in force
+ * until the new pairs say otherwise - and a trial under way starts its pairs again, since its
+ * old pairs were measured on the other build. The energy reference the drift check compares
+ * against is dropped too. A store from before dev14 carries no build: it adopts this one. */
+static void asb_lab_build_check(void) {
+    g_lab_build_retests = 0;
+    if (!g_lab_build_id) return;
+    if (!g_lab.build) { g_lab.build = g_lab_build_id; g_lab_dirty = 1; return; }
+    if (g_lab.build == g_lab_build_id) return;
+    for (int k = 0; k < LAB_N; k++) {
+        asb_lab_knob_t *kn = &g_lab.k[k];
+        if (asb_lab_is_app(k) && !kn->key) continue;
+        if (kn->converged) { asb_lab_reopen(kn); kn->reopen++; g_lab.reopen_total++; g_lab_build_retests++; }
+        else if (kn->challenger != kn->champion) asb_lab_trial_reset(kn);
+        else continue;
+        kn->last_verdict = LAB_V_RETEST_BUILD;
+        kn->ref_mw = 0.0f; kn->ewma_mw = 0.0f; kn->drift_n = 0;
+    }
+    g_lab.build = g_lab_build_id;
+    g_lab_dirty = 1;
 }
 static int asb_lab_load(void) {
     asb_lab_init();
@@ -941,6 +1029,7 @@ static int asb_lab_load(void) {
         g_lab_dirty = 1;
     }
     g_lab = tmp;
+    asb_lab_build_check();
     return migrated ? 3 : 0;
 }
 static int asb_lab_save(void) {
@@ -970,11 +1059,16 @@ static void asb_lab_summary_write(const asb_lab_in_t *in) {
     FILE *f = fopen(tmpn, "w");
     if (!f) return;
     fprintf(f, "# Smart lab: one setting at a time, side by side with the best so far\n");
-    fprintf(f, "# knob|name|state|best|trying|pairs|diff_pct_x10|press_x1000|jank_x10000|heat_dch|gain_pct_x10|wins|trials|reopen|blocks|now_mw|ref_mw|pkg\n");
+    fprintf(f, "# knob|name|state|best|trying|pairs|diff_pct_x10|press_x1000|jank_x10000|heat_dch|gain_pct_x10|wins|trials|reopen|blocks|now_mw|ref_mw|pkg|last|recheck_days\n");
     for (int k = 0; k < LAB_N; k++) {
         const asb_lab_knob_t *kn = &g_lab.k[k];
         unsigned n = kn->pairs;
-        fprintf(f, "knob|%s|%s|%s|%s|%u|%d|%d|%d|%d|%d|%u|%u|%u|%u|%.0f|%.0f|%s\n",
+        long rd = -1;
+        if (kn->converged && in) {
+            long left = (long)kn->conv_ts + ASB_LAB_RECHECK_S - in->wall;
+            rd = left > 0 ? (left + 86399) / 86400 : 0;
+        }
+        fprintf(f, "knob|%s|%s|%s|%s|%u|%d|%d|%d|%d|%d|%u|%u|%u|%u|%.0f|%.0f|%s|%s|%ld\n",
                 g_lab_names[k], asb_lab_state_name(k, in),
                 asb_lab_arm_name(k, kn->champion),
                 kn->challenger != kn->champion ? asb_lab_arm_name(k, kn->challenger) : "-",
@@ -983,16 +1077,35 @@ static void asb_lab_summary_write(const asb_lab_in_t *in) {
                 kn->jank_pairs ? (int)(kn->pr_jank / (double)kn->jank_pairs * 10000.0) : 0,
                 n ? (int)(kn->pr_heat / (double)n) : 0,
                 (int)(kn->gain * 1000.0f), kn->wins, kn->trials, kn->reopen, kn->blocks,
-                (double)kn->ewma_mw, (double)kn->ref_mw, kn->pkg[0] ? kn->pkg : "-");
+                (double)kn->ewma_mw, (double)kn->ref_mw, kn->pkg[0] ? kn->pkg : "-",
+                g_lab_verdict_names[kn->last_verdict < LAB_V_N ? kn->last_verdict : 0], rd);
     }
     fprintf(f, "mem|%s|voters=%d|active=%d|doms=%d|cap_now=%d|writes=%lu|restores=%lu|yields=%lu|fails=%lu\n",
             g_mem_probe == 1 ? g_mem_kind : (g_mem_probe == 0 ? "unprobed" : "none"), g_mem_nv,
             asb_mem_active_voters(), g_mem_ndom, g_mem_cap_now, g_mem_writes, g_mem_restores, g_mem_yields, g_mem_fails);
-    fprintf(f, "now|radio_arm=%d|lift_pct=%d|mem_on=%d|mem_off=%d|app_front=%d|on_block=%s|off_block=%s|glances=%d|kept=%lu|short=%lu|rejected=%lu|wins=%u|reopened=%u|radio_set_aside=%lu|early_stops=%lu\n",
+    /* V66 dev15: the voters themselves, so a log from another SoC shows which clients the
+     * bus lab would cap (the dev14 audit asked how the name filter fares off the OP15). */
+    for (int i = 0; i < g_mem_nv; i++) {
+        const asb_mem_voter_t *m = &g_mem_v[i];
+        const char *e = strrchr(m->path, '/'), *b = m->path;
+        char nm[96];
+        if (e && e > m->path) {
+            for (b = e - 1; b > m->path && *b != '/'; b--) ;
+            if (*b == '/') b++;
+            snprintf(nm, sizeof(nm), "%.*s", (int)(e - b), b);
+        } else {
+            snprintf(nm, sizeof(nm), "%.95s", m->path);
+        }
+        for (char *c = nm; *c; c++) if (*c == '|' || *c == '\n') *c = '_';
+        fprintf(f, "voter|%s|%s|%s\n", (m->dom >= 0 && m->dom < g_mem_ndom) ? g_mem_dom[m->dom].name : "-", nm,
+                m->yielded ? "yielded" : (m->owned ? "capped" : "free"));
+    }
+    fprintf(f, "now|radio_arm=%d|lift_pct=%d|mem_on=%d|mem_off=%d|app_front=%d|on_block=%s|off_block=%s|glances=%d|kept=%lu|short=%lu|rejected=%lu|wins=%u|reopened=%u|radio_set_aside=%lu|early_stops=%lu|short_on=%lu|short_app=%lu|short_off=%lu|short_lift=%lu|pauses=%lu|resumes=%lu|followups=%lu\n",
             g_lab_radio_arm, g_lab_lift_pct, g_lab_mem_on_pct, g_lab_mem_off_pct, g_lab_app_front,
             g_lab_on.active ? g_lab_names[g_lab_on.knob] : "-", g_lab_off.active ? g_lab_names[g_lab_off.knob] : "-",
             g_lab_lift.active ? g_lab_lift.glances : 0, g_lab_blocks_kept, g_lab_blocks_short,
-            g_lab_blocks_rejected, g_lab.wins_total, g_lab.reopen_total, g_lab_blocks_radio, g_lab_early_stops);
+            g_lab_blocks_rejected, g_lab.wins_total, g_lab.reopen_total, g_lab_blocks_radio, g_lab_early_stops,
+            g_lab_short_kind[0], g_lab_short_kind[1], g_lab_short_kind[2], g_lab_short_kind[3], g_lab_pauses, g_lab_resumes, g_lab_followups);
     fclose(f);
     rename(tmpn, ASB_LAB_SUMMARY);
 }
@@ -1020,7 +1133,10 @@ static int asb_lab_value(int k, int arm, const asb_lab_in_t *in) {
     }
 }
 static int asb_lab_arm_in_force(int k) {
-    if (g_lab_on.active && g_lab_on.knob == k) return g_lab_on.arm;
+    /* A paused screen-on block is not measuring: its setting is not in force meanwhile,
+     * except the radio's, which would otherwise switch networks for a minute and back. */
+    if (g_lab_on.active && g_lab_on.knob == k)
+        return (g_lab_on.paused_at > 0 && k != LAB_RADIO) ? g_lab.k[k].champion : g_lab_on.arm;
     if (g_lab_off.active && g_lab_off.knob == k) return g_lab_off.arm;
     if (k == LAB_LIFT && g_lab_lift.active) return g_lab_lift.arm;
     return g_lab.k[k].champion;
@@ -1035,6 +1151,36 @@ static int asb_lab_on_eligible(int k, const asb_lab_in_t *in, int app_slot) {
     if (k == LAB_RADIO) return in->radio_ok && in->on_mobile;
     if (k == LAB_MEM_ON) return in->mem_ok && g_mem_probe == 1 && asb_mem_active_voters() > 0;
     return 0;
+}
+
+/* V66 dev16: a knob's last kept block waits for the other arm, and the pair window is open. */
+static int asb_lab_open_half(int k, long wall) {
+    const asb_lab_knob_t *kn = &g_lab.k[k];
+    if (kn->converged || kn->challenger == kn->champion) return 0;
+    long open = (long)kn->last[1 - kn->alt].ts;
+    return open > 0 && wall >= open && wall - open <= ASB_LAB_PAIR_DT_S;
+}
+
+/* V66 dev16: the screen-on knob that runs next when no lab app is in front.
+ * The first unconverged knob in a fixed order (radio, then the bus) used to win every time.
+ * On mobile data the radio knob is eligible nearly always, so the bus knob starved: an OP15
+ * day ran the radio 5 blocks and the bus 1. Now the knob that ran last gets one follow-up
+ * block when its half-pair waits for the other arm (the pair is made while conditions are
+ * alike); otherwise the unconverged knob that started longest ago runs. Converged knobs are
+ * re-checked least recently first, as before. */
+static int asb_lab_pick_on(const int *c, int n, long wall) {
+    int want = -1;
+    if (!g_lab_on_follow)
+        for (int i = 0; i < n; i++)
+            if (c[i] == g_lab_on_last_k && asb_lab_open_half(c[i], wall)) return c[i];
+    for (int i = 0; i < n; i++) {
+        if (g_lab.k[c[i]].converged) continue;
+        if (want < 0 || g_lab_on_started[c[i]] < g_lab_on_started[want]) want = c[i];
+    }
+    if (want >= 0) return want;
+    for (int i = 0; i < n; i++)
+        if (want < 0 || g_lab.k[c[i]].last_ts < g_lab.k[want].last_ts) want = c[i];
+    return want;
 }
 
 static void asb_lab_reset_outputs(void) {
@@ -1053,27 +1199,63 @@ static void asb_lab_tick(const asb_lab_in_t *in) {
         return;
     }
     asb_lab_frames_poll(in->wall);
+    /* V66 dev14: no screen-on block starts in the first ASB_LAB_GLANCE_S of a screen-on spell.
+     * Those seconds may be a glance, and glances are what the wake-lift trial measures: a bus
+     * cap or an app lean in force then would be counted as the lift's. A block started there
+     * would also be cut short by the glance ending (it needs 120-240 s), so nothing is lost.
+     * The governor starting with the screen already on is not a glance. */
+    if (!in->screen_on) g_lab_on_since_ms = 0;
+    else if (g_lab_prev_on == 0 || !g_lab_on_since_ms) g_lab_on_since_ms = (g_lab_prev_on == -1) ? 1 : in->now_ms;
+    int glance_window = in->screen_on && g_lab_on_since_ms > 1 &&
+                        in->now_ms - g_lab_on_since_ms < (long long)ASB_LAB_GLANCE_S * 1000;
     int app_slot = in->screen_on ? asb_lab_app_slot(in->app_hash) : -1;
     if (app_slot >= 0 && (!in->app_pkg || strcmp(in->app_pkg, g_lab.k[LAB_APP0 + app_slot].pkg) != 0)) app_slot = -1;
 
+    /* V66 dev13: a screen-on block pauses instead of ending when its conditions lapse with
+     * the screen still on - a switch to another app and back, a HEAVY spell, a veto - and
+     * resumes when they return within ASB_LAB_PAUSE_MAX_S. The pause is not measured (energy,
+     * time and the duration limits count running time only). A dev12 OP15 day kept 3 blocks
+     * and cut 26 short over two long screen-on stretches: the blocks ended at every app switch
+     * even though the user came straight back. A pause that runs out ends the block as before,
+     * keeping it if it already ran long enough. */
     if (g_lab_on.active) {
-        long dur = (long)((in->now_ms - g_lab_on.t0_ms) / 1000);
+        long dur = asb_lab_blk_active_s(&g_lab_on, in->now_ms);
         long max_s = asb_lab_is_app(g_lab_on.knob) ? ASB_LAB_APP_BLOCK_S : ASB_LAB_ON_BLOCK_S;
-        if (!asb_lab_on_eligible(g_lab_on.knob, in, app_slot) || dur >= max_s) asb_lab_blk_end(&g_lab_on, in);
-        else asb_lab_blk_track(&g_lab_on, in);
+        int elig = asb_lab_on_eligible(g_lab_on.knob, in, app_slot);
+        if (!in->screen_on || dur >= max_s) {
+            asb_lab_blk_end(&g_lab_on, in);
+        } else if (!elig) {
+            int other_app = app_slot >= 0 && LAB_APP0 + app_slot != g_lab_on.knob &&
+                            asb_lab_on_eligible(LAB_APP0 + app_slot, in, app_slot);
+            if (other_app) asb_lab_blk_end(&g_lab_on, in);
+            else if (!g_lab_on.paused_at) { g_lab_on.paused_at = in->now_ms > 0 ? in->now_ms : 1; g_lab_pauses++; }
+            else if (in->now_ms - g_lab_on.paused_at >= ASB_LAB_PAUSE_MAX_S * 1000LL) asb_lab_blk_end(&g_lab_on, in);
+        } else {
+            if (g_lab_on.paused_at) {
+                g_lab_on.pause_ms += in->now_ms - g_lab_on.paused_at;
+                g_lab_on.paused_at = 0;
+                g_lab_on.last_ms = in->now_ms;
+                g_lab_resumes++;
+            }
+            asb_lab_blk_track(&g_lab_on, in);
+        }
     }
-    if (!g_lab_on.active) {
+    if (!g_lab_on.active && !glance_window) {
         int want = -1;
         if (app_slot >= 0 && asb_lab_on_eligible(LAB_APP0 + app_slot, in, app_slot)) want = LAB_APP0 + app_slot;
         else {
             int cands[2], nc = 0;
             if (asb_lab_on_eligible(LAB_RADIO, in, app_slot)) cands[nc++] = LAB_RADIO;
             if (asb_lab_on_eligible(LAB_MEM_ON, in, app_slot)) cands[nc++] = LAB_MEM_ON;
-            for (int i = 0; i < nc && want < 0; i++) if (!g_lab.k[cands[i]].converged) want = cands[i];
-            for (int i = 0; i < nc; i++)
-                if (want < 0 || (g_lab.k[want].converged && g_lab.k[cands[i]].last_ts < g_lab.k[want].last_ts)) want = cands[i];
+            want = asb_lab_pick_on(cands, nc, in->wall);
         }
-        if (want >= 0) asb_lab_blk_begin(&g_lab_on, want, in, asb_lab_is_app(want) ? g_lab.k[want].pkg : NULL);
+        if (want >= 0) {
+            g_lab_on_follow = (want == g_lab_on_last_k && asb_lab_open_half(want, in->wall)) ? 1 : 0;
+            if (g_lab_on_follow) g_lab_followups++;
+            g_lab_on_last_k = want;
+            g_lab_on_started[want] = in->wall;
+            asb_lab_blk_begin(&g_lab_on, want, in, asb_lab_is_app(want) ? g_lab.k[want].pkg : NULL);
+        }
     }
 
     int off_ok = !in->screen_on && !in->charging && in->mem_ok && g_mem_probe == 1 && !in->rec_off_busy &&

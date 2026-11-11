@@ -2008,6 +2008,17 @@ static int asb_lab_gfx_read_impl(const char *pkg, long since, long *fr, long *jk
 
 /* V66 dev8: one tick of the Smart lab - its inputs, the knobs it hands back, the bus cap. */
 static int  g_lab_radio_ok = 0, g_lab_calm = 0;
+/* V66 dev15: what the lab and the energy table cost the governor (its own thread CPU time),
+ * and which app the GPU-bound latch last fired for - both asked for by the dev14 audit, which
+ * could not measure either from the source. */
+static unsigned long long g_cost_lab_us = 0, g_cost_en_us = 0;
+static unsigned long g_gpu_bound_seen = 0;
+static char g_gpu_bound_pkg[96] = "";
+static unsigned long long asb_thread_cpu_us(void) {
+    struct timespec t;
+    if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &t) != 0) return 0;
+    return (unsigned long long)t.tv_sec * 1000000ULL + (unsigned long long)t.tv_nsec / 1000ULL;
+}
 static long g_lab_mobile_ts = 0, g_lab_wifi_ts = 0, g_lab_radio_ts = 0;
 static int asb_lab_radio_watcher_live(long now) {
     if (g_lab_radio_ts && now >= g_lab_radio_ts && now - g_lab_radio_ts < 60) return g_lab_radio_ok;
@@ -4999,6 +5010,10 @@ static void write_state(const asb_fsm_t *fsm, const asb_metrics_t *m,
     fprintf(f, "surface_source=%s\n", g_surface_from_skin ? "skin" :
                (g_thermal_surface_zone >= 0 ? (g_surface_pinned ? "zone_pinned" : "zone")
                                             : (g_thermal_board_zone >= 0 ? "board" : "none")));
+    fprintf(f, "gpu_bound_streak=%d\ngpu_bound_entries=%lu\ngpu_bound_pkg=%s\ngpu_bound_need=%d\ngpu_bound_backoffs=%lu\n",
+            g_gpu_bound_streak, g_gpu_bound_entries, g_gpu_bound_pkg[0] ? g_gpu_bound_pkg : "-",
+            g_gpu_bound_need, g_gpu_bound_backoffs);
+    fprintf(f, "lab_cpu_ms=%llu\nenergy_cpu_ms=%llu\n", g_cost_lab_us / 1000ULL, g_cost_en_us / 1000ULL);
     fprintf(f, "surface_pinned=%d\nsurface_pin_c=%d\nsurface_pin_boot=%d\nsurface_pin_revived=%lu\nsurface_zone_type=%s\n",
             g_surface_pinned, g_surface_pin_c, g_surface_pin_boot, g_surface_pin_revived,
             g_thermal_surface_type[0] ? g_thermal_surface_type : "-");
@@ -8519,8 +8534,12 @@ static int asb_smart_init(void) {
         asb_rec_summary_write();
         int _el = asb_en_load();
         asb_en_summary_write();
+        g_lab_build_id = (uint32_t)asb_build_hash();
         int _ll = asb_lab_load();
         asb_lab_summary_write(NULL);
+        if (g_lab_build_retests > 0)
+            asb_log("smart lab: another ROM or kernel than the verdicts were made on - %d decided setting(s) tested again, the best one stays until then",
+                    g_lab_build_retests);
         asb_log("smart lab: %s, %u win(s) so far", _ll == 0 ? "loaded" : (_ll == 3 ? "loaded, membus_off measured again" :
                     (_ll == 2 ? "store from another build, fresh start" : "fresh start")),
                 g_lab.wins_total);
@@ -8586,6 +8605,8 @@ int main(int argc, char **argv) {
         if (reply[0]) puts(reply);
         return 0;
     }
+    /* V66 dev14: learned verdicts (the pinned surface zone, the lab) are bound to this build. */
+    g_asb_fingerprint_fn = asb_device_bounds_current_fingerprint;
 
     {
         char pidbuf[16] = {0};
@@ -11109,10 +11130,23 @@ int main(int argc, char **argv) {
                     _ei.pkg        = g_smart_rt.app_pkg_cached;
                     _ei.now_ms     = _ri.now_ms;
                     _ei.wall       = _ri.wall;
-                    if (g_asb_cfg.smart_energy) asb_en_tick(&_ei);
+                    if (g_asb_cfg.smart_energy) {
+                        unsigned long long _c0 = asb_thread_cpu_us();
+                        asb_en_tick(&_ei);
+                        g_cost_en_us += asb_thread_cpu_us() - _c0;
+                    }
                     g_en_gauge_windows = g_curscale_n;
                     asb_ddr_observe(_ri.idle_state && !metrics.misc.screen_on, _ri.wall);
-                    asb_lab_run(&fsm, &metrics, &_ri, _ei.ma, _lab_on_busy, _lab_off_busy, _lab_app_base);
+                    {
+                        unsigned long long _c0 = asb_thread_cpu_us();
+                        asb_lab_run(&fsm, &metrics, &_ri, _ei.ma, _lab_on_busy, _lab_off_busy, _lab_app_base);
+                        g_cost_lab_us += asb_thread_cpu_us() - _c0;
+                    }
+                    if (g_gpu_bound_entries != g_gpu_bound_seen) {
+                        g_gpu_bound_seen = g_gpu_bound_entries;
+                        snprintf(g_gpu_bound_pkg, sizeof(g_gpu_bound_pkg), "%s",
+                                 g_pkg_detect_ok && g_smart_rt.app_pkg_cached[0] ? g_smart_rt.app_pkg_cached : "-");
+                    }
                 }
                 asb_smooth_probe_tick(&fsm, &metrics);
                 asb_bhold_tick(&fsm, &metrics);

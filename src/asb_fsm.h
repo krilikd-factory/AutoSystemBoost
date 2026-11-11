@@ -630,6 +630,20 @@ static float asb_load_per_core(const asb_metrics_t *m) {
  * state classifier is a pure function of the metrics and does not receive the fsm. */
 static time_t g_screen_on_since = 0;
 
+/* GPU-bound rendering without the package table (V66 dev13, see fsm_desired_base). */
+#define ASB_GPU_BOUND_PCT   90
+#define ASB_GPU_BOUND_TICKS 3
+static int           g_gpu_bound_streak = 0;
+static unsigned long g_gpu_bound_entries = 0;
+/* V66 dev15: ticks the latch needs now (3, doubled up to 24 after latches that fell apart at
+ * once), ticks the current latch has held, and when the last one cleared. */
+#define ASB_GPU_BOUND_NEED_MAX 24
+#define ASB_GPU_BOUND_DECAY_S  600
+static int           g_gpu_bound_need = ASB_GPU_BOUND_TICKS;
+static int           g_gpu_bound_held = 0;
+static time_t        g_gpu_bound_cleared = 0;
+static unsigned long g_gpu_bound_backoffs = 0;
+
 static const float g_state_level[ASB_STATE_COUNT] = {
     [ASB_STATE_DEEP_IDLE]  = 0.0f,
     [ASB_STATE_LIGHT_IDLE] = 0.15f,
@@ -1540,6 +1554,57 @@ static asb_state_t fsm_desired_base(const asb_metrics_t *m) {
     int _gpu_gate = g_asb_cfg.gaming_gpu_enter;
 /* A known game relaxes the GPU gate: many are CPU-bound and never push it high. */
     if (m->misc.app_hint >= ASB_APP_GAMING && _gpu_gate > 25) _gpu_gate = 25;
+
+    /* A GPU that stays saturated is rendering, whatever the package table says (V66 dev13).
+     *
+     * GAMING needed the package table's agreement and a CPU above this phone's quiet level,
+     * so a game missing from the table, or one that leaves the CPU light, was read as
+     * "GPU busy, CPU idle = video" and held at MODERATE. An OP15 day on dev12 shows it with a
+     * 3D benchmark scene: the GPU at 93-99 % busy, pinned at 500-646 MHz of its 1200 MHz,
+     * for minutes, with load1 6-8 (this phone's resting level) - MODERATE throughout, and the
+     * GPU score at about 70 % of the phone's published result.
+     *
+     * Video cannot do this: decoding is fixed-function, and the GPU only composites its
+     * output - a feed with autoplay reaches about 60 %, and in the two OP15 day logs on file
+     * nothing but the benchmark's 3D scenes got to 80 %. Three ticks in a row at 90 % or more latch the workload as GPU-bound; it stays latched
+     * while the GPU stays above the gaming exit mark, so a game whose busy share falls once
+     * the clock is lifted keeps its state, and the first drop below that mark (a menu, a
+     * loading screen, a scene change) clears it. The camera is never a game, and Battery's
+     * suppress_gaming still applies. Everything GAMING carries comes with it - the gaming
+     * CPU ceiling, cool_gaming, the gap and temperature exits to SUSTAINED. */
+    /* V66 dev15: a latch that falls apart within two ticks was light work starved by
+     * a low GPU ceiling - a video composited at the lowest step, say: once the ceiling lifts,
+     * the busy share drops under the exit mark at once. Re-latching it every half minute would
+     * swing the GPU up and down for as long as it plays, so the next latch needs twice as many
+     * saturated ticks (up to 24). A latch that holds - a game, a benchmark scene - resets the
+     * count to 3, and so do ten minutes without one. */
+    {
+        time_t _gb_now = time(NULL);
+        if (g_gpu_bound_need > ASB_GPU_BOUND_TICKS && g_gpu_bound_streak == 0 && g_gpu_bound_cleared > 0 &&
+            (_gb_now - g_gpu_bound_cleared >= ASB_GPU_BOUND_DECAY_S || _gb_now < g_gpu_bound_cleared))
+            g_gpu_bound_need = ASB_GPU_BOUND_TICKS;
+        if (m->misc.screen_on && !m->misc.camera_active && m->gpu.load_valid &&
+            m->gpu.load_pct >= ASB_GPU_BOUND_PCT) {
+            if (g_gpu_bound_streak < 10000 && ++g_gpu_bound_streak == g_gpu_bound_need) g_gpu_bound_entries++;
+        } else if (!m->misc.screen_on || m->misc.camera_active || m->gpu.load_pct < g_asb_cfg.gaming_gpu_exit) {
+            if (g_gpu_bound_streak >= g_gpu_bound_need) {
+                if (g_gpu_bound_held <= 2) {
+                    g_gpu_bound_need = g_gpu_bound_need * 2 > ASB_GPU_BOUND_NEED_MAX ? ASB_GPU_BOUND_NEED_MAX : g_gpu_bound_need * 2;
+                    g_gpu_bound_backoffs++;
+                } else {
+                    g_gpu_bound_need = ASB_GPU_BOUND_TICKS;
+                }
+                g_gpu_bound_cleared = _gb_now;
+            }
+            g_gpu_bound_streak = 0;
+            g_gpu_bound_held = 0;
+        }
+    }
+    if (g_gpu_bound_streak >= g_gpu_bound_need &&
+        !(g_asb_cfg.bat_suppress_gaming && fsm_profile_is_battery)) {
+        g_gpu_bound_held++;
+        return ASB_STATE_GAMING;
+    }
 
     if (m->gpu.load_pct >= _gpu_gate) {
         if (g_gaming_confirm_streak < 10000) g_gaming_confirm_streak++;

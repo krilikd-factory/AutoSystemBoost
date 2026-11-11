@@ -29,12 +29,18 @@
 #include <dlfcn.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #ifndef ASB_LSPD_DB
 #define ASB_LSPD_DB "/data/adb/lspd/config/modules_config.db"
 #endif
 #ifndef ASB_LSPD_SQLITE_LIB
 #define ASB_LSPD_SQLITE_LIB "libsqlite.so"
+#endif
+/* Where a private copy of the database is read when LSPosed's own file cannot be (below). */
+#ifndef ASB_LSPD_TMP
+#define ASB_LSPD_TMP "/dev/.asb"
 #endif
 
 typedef struct sqlite3_ sqlite3_h;
@@ -120,6 +126,112 @@ static int asb_lspd_read(asb_sqlite_t *s, sqlite3_h *db) {
     }
     s->finalize(st);
     return v;
+}
+
+/* Reading LSPosed's file in place, and when that cannot work (V66 dev13).
+ *
+ * Two users on Android 17 (CPH2769, LSPosed in /data/adb/lspd) saw "unexpected_schema" for
+ * both the verbose switch and the module inventory, while the tables are the ones this file
+ * reads: the maintained fork (Vector) keeps modules(mid, module_pkg_name, enabled),
+ * scope(mid, app_pkg_name, user_id) and configs(..., data) with Java-serialized values. What
+ * it also does is run the database in WAL mode. A read-only connection to a WAL database needs
+ * the -shm index next to it, and has to create one when the daemon has closed the file; where
+ * the directory or its SELinux label does not let the module's domain create files, every
+ * statement fails with SQLITE_CANTOPEN - and this code printed any failure that was not
+ * BUSY/LOCKED as a foreign schema.
+ *
+ * So a statement is tried on the file first; if the file cannot be opened or read (CANTOPEN,
+ * IOERR, READONLY, PERM), the database and its -wal are copied to a private directory under
+ * ASB_LSPD_TMP and the copy is read - LSPosed's directory is never written by a read. BUSY and
+ * LOCKED stay "read_failed": a copy taken during LSPosed's own write could be torn. The SQLite
+ * code is printed (sqlite_rc=) so the next report names the cause instead of guessing it. */
+static int g_lspd_sqlite_rc = 0;
+static char g_lspd_copy_dir[256] = "";
+
+static int asb_lspd_probe(asb_sqlite_t *s, sqlite3_h *db) {
+    sqlite3_stmt_h *st = NULL;
+    int rc = s->prepare_v2(db, "SELECT count(*) FROM sqlite_master", -1, &st, NULL);
+    if (rc != ASB_SQLITE_OK || !st) { if (st) s->finalize(st); return rc ? rc : 1; }
+    rc = s->step(st);
+    s->finalize(st);
+    return rc == ASB_SQLITE_ROW ? 0 : rc;
+}
+
+static int asb_lspd_copy_file(const char *src, const char *dst) {
+    FILE *in = fopen(src, "rb");
+    if (!in) return 1;
+    FILE *out = fopen(dst, "wb");
+    if (!out) { fclose(in); return -1; }
+    char buf[16384];
+    size_t n;
+    int ok = 1;
+    while ((n = fread(buf, 1, sizeof(buf), in)) > 0)
+        if (fwrite(buf, 1, n, out) != n) { ok = 0; break; }
+    if (ferror(in)) ok = 0;
+    fclose(in);
+    if (fclose(out) != 0) ok = 0;
+    return ok ? 0 : -1;
+}
+
+static void asb_lspd_copy_drop(void) {
+    if (!g_lspd_copy_dir[0]) return;
+    static const char *const sfx[] = { "", "-wal", "-shm", "-journal" };
+    char f[320];
+    for (size_t i = 0; i < sizeof(sfx) / sizeof(sfx[0]); i++) {
+        snprintf(f, sizeof(f), "%s/m.db%s", g_lspd_copy_dir, sfx[i]);
+        unlink(f);
+    }
+    rmdir(g_lspd_copy_dir);
+    g_lspd_copy_dir[0] = 0;
+}
+
+/* 0 with *db open for reading (the file itself, or a private copy of it), or the CLI's own
+ * return code: 7 read_failed (busy, or neither the file nor a copy could be read), 6 a file
+ * that opens but is no SQLite database LSPosed would write. */
+static int asb_lspd_open_read(asb_sqlite_t *s, const char *path, sqlite3_h **db) {
+    sqlite3_h *d = NULL;
+    *db = NULL;
+    g_lspd_sqlite_rc = 0;
+    int rc = s->open_v2(path, &d, ASB_SQLITE_OPEN_READONLY, NULL);
+    if (rc == ASB_SQLITE_OK && d) {
+        s->busy_timeout(d, 3000);
+        rc = asb_lspd_probe(s, d);
+        if (rc == 0) { *db = d; return 0; }
+    }
+    if (d) s->close(d);
+    d = NULL;
+    g_lspd_sqlite_rc = rc;
+    int p = rc & 0xff;
+    if (p == 5 || p == 6) return 7;
+    if (p != 3 && p != 8 && p != 10 && p != 14) return 6;
+    snprintf(g_lspd_copy_dir, sizeof(g_lspd_copy_dir), "%s/lspd_ro.%d", ASB_LSPD_TMP, (int)getpid());
+    mkdir(g_lspd_copy_dir, 0700);
+    char dst[320], src[320];
+    snprintf(dst, sizeof(dst), "%s/m.db", g_lspd_copy_dir);
+    if (asb_lspd_copy_file(path, dst) != 0) { asb_lspd_copy_drop(); return 7; }
+    snprintf(src, sizeof(src), "%s-wal", path);
+    snprintf(dst, sizeof(dst), "%s/m.db-wal", g_lspd_copy_dir);
+    if (asb_lspd_copy_file(src, dst) < 0) { asb_lspd_copy_drop(); return 7; }
+    snprintf(dst, sizeof(dst), "%s/m.db", g_lspd_copy_dir);
+    if (s->open_v2(dst, &d, ASB_SQLITE_OPEN_READWRITE, NULL) != ASB_SQLITE_OK || !d) {
+        if (d) s->close(d);
+        asb_lspd_copy_drop();
+        return 7;
+    }
+    s->busy_timeout(d, 3000);
+    if (asb_lspd_probe(s, d) != 0) { s->close(d); asb_lspd_copy_drop(); return 7; }
+    *db = d;
+    return 0;
+}
+
+static void asb_lspd_close_read(asb_sqlite_t *s, sqlite3_h *db) {
+    if (db) s->close(db);
+    asb_lspd_copy_drop();
+}
+
+static void asb_lspd_print_rc(void) {
+    if (g_lspd_sqlite_rc) printf("sqlite_rc=%d\n", g_lspd_sqlite_rc);
+    if (g_lspd_copy_dir[0]) puts("read_from=copy");
 }
 
 static const char *asb_lspd_name(int v) {
@@ -337,14 +449,15 @@ static int asb_lspd_cli(int argc, char **argv) {
         memset(&ms, 0, sizeof(ms));
         if (asb_sqlite_load(&ms) != 0) { puts("modules=unknown\nreason=no_sqlite"); return 4; }
         sqlite3_h *mdb = NULL;
-        if (ms.open_v2(mpath, &mdb, ASB_SQLITE_OPEN_READONLY, NULL) != ASB_SQLITE_OK || !mdb) {
-            if (mdb) ms.close(mdb);
-            puts("modules=unknown\nreason=open_failed");
-            return 5;
+        int orc = asb_lspd_open_read(&ms, mpath, &mdb);
+        if (orc != 0) {
+            puts(orc == 6 ? "modules=unknown\nreason=unexpected_schema" : "modules=unknown\nreason=read_failed");
+            asb_lspd_print_rc();
+            return orc;
         }
-        ms.busy_timeout(mdb, 3000);
         int mrc = asb_lspd_modules(&ms, mdb);
-        ms.close(mdb);
+        asb_lspd_print_rc();
+        asb_lspd_close_read(&ms, mdb);
         return mrc;
     }
     int set = -1, unset = 0;
@@ -368,19 +481,29 @@ static int asb_lspd_cli(int argc, char **argv) {
     memset(&s, 0, sizeof(s));
     if (asb_sqlite_load(&s) != 0) { puts("verbose=unknown\nreason=no_sqlite"); return 4; }
     sqlite3_h *db = NULL;
-    int flags = (set >= 0 || unset) ? ASB_SQLITE_OPEN_READWRITE : ASB_SQLITE_OPEN_READONLY;
-    if (s.open_v2(path, &db, flags, NULL) != ASB_SQLITE_OK || !db) {
-        if (db) s.close(db);
-        puts("verbose=unknown\nreason=open_failed");
-        return 5;
+    int writing = (set >= 0 || unset);
+    if (writing) {
+        if (s.open_v2(path, &db, ASB_SQLITE_OPEN_READWRITE, NULL) != ASB_SQLITE_OK || !db) {
+            if (db) s.close(db);
+            puts("verbose=unknown\nreason=open_failed");
+            return 5;
+        }
+        s.busy_timeout(db, 3000);
+    } else {
+        int orc = asb_lspd_open_read(&s, path, &db);
+        if (orc != 0) {
+            puts(orc == 6 ? "verbose=unknown\nreason=unexpected_schema" : "verbose=unknown\nreason=read_failed");
+            asb_lspd_print_rc();
+            return orc;
+        }
     }
-    s.busy_timeout(db, 3000);
     int before = asb_lspd_read(&s, db);
     if (before < 0) {
         /* Not the layout this was written against (another fork, a newer schema): touch
          * nothing. */
-        s.close(db);
+        asb_lspd_close_read(&s, db);
         puts("verbose=unknown\nreason=unexpected_schema");
+        asb_lspd_print_rc();
         return 6;
     }
     int rc = 0;
@@ -412,7 +535,8 @@ static int asb_lspd_cli(int argc, char **argv) {
         printf("verbose=%s\nbefore=%s\nformat=%s\n", asb_lspd_name(after), asb_lspd_name(before), ASB_LSPD_FORMAT);
     } else {
         printf("verbose=%s\nformat=%s\n", asb_lspd_name(before), ASB_LSPD_FORMAT);
+        asb_lspd_print_rc();
     }
-    s.close(db);
+    asb_lspd_close_read(&s, db);
     return rc;
 }
