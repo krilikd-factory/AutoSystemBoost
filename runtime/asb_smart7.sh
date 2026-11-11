@@ -251,8 +251,13 @@ case "${1:-status}" in
     fi ;;
   undo-all)
     _un=0
-    [ -s "$JOUR" ] && for _ri in $(awk -F'|' '$8 == "active" { print $1 }' "$JOUR" | sort -rn); do _undo "$_ri" && _un=$((_un + 1)); done
-    echo "undone=$_un"; echo 'result=ok' ;;
+    _ux=0
+    [ -s "$JOUR" ] && for _ri in $(awk -F'|' '$8 == "active" { print $1 }' "$JOUR" | sort -rn); do
+      if _undo "$_ri"; then
+        if [ "$UNDO_RESULT" = external ]; then _ux=$((_ux + 1)); else _un=$((_un + 1)); fi
+      fi
+    done
+    echo "undone=$_un"; echo "external=$_ux"; echo 'result=ok' ;;
   auto)
     case "${2:-}" in budget|data) ;; *) echo 'result=bad_request'; exit 2 ;; esac
     case "${3:-}" in
