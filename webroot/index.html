@@ -347,18 +347,23 @@ body::before, body::after {
  *
  * So the decorative loops (logo glow and ring, the wordmark sweep, the status dots, the Smart
  * glow, the Zygisk link pulse, the charge shimmer, the recording pulse) stop where they stand
- * on a closed page, under an open one, and ten seconds after the last touch; the next touch
- * starts them again. Progress spinners keep turning - they say that something is running. */
+ * on a closed page and under an open one. Progress spinners keep turning - they say that
+ * something is running.
+ *
+ * dev17: the idle freeze is gone from the page in front. A user reported that ten seconds
+ * after the last touch the header and the indicators froze until the screen was tapped -
+ * which is this very mechanism, and it read as a hung interface. On the visible page the
+ * header now stays alive: the logo glow and ring are composited transforms (the blur is
+ * baked into their layer once, so rotating costs almost nothing) and the status, record,
+ * charge and link dots are tiny. Only the wordmark's specular sweep - which repaints the
+ * clipped text every frame and is the 4.1 W offender measured above - still stops while
+ * idle. A closed or backgrounded page continues to stop everything. */
 .live-page:not(.open) .logo-glow, .live-page:not(.open) .logo-ring, .live-page:not(.open) .app-name,
 .live-page:not(.open) .dot, .live-page:not(.open) .dot::after,
 body.live-active .page:not(.live-page) .logo-glow, body.live-active .page:not(.live-page) .logo-ring,
 body.live-active .page:not(.live-page) .app-name, body.live-active .page:not(.live-page) .dot,
 body.live-active .page:not(.live-page) .dot::after, body.live-active .page:not(.live-page) .ai-glow,
-html.asb-calm .logo-glow, html.asb-calm .logo-ring, html.asb-calm .app-name, html.asb-calm .dot,
-html.asb-calm .dot::after, html.asb-calm .ai-glow,
-html.asb-calm .zygisk-header-dot, html.asb-calm .zygisk-header-dot::after,
-html.asb-calm .dev-zygisk-link-dot, html.asb-calm .dev-zygisk-link-dot::after,
-html.asb-calm .metric-charge, html.asb-calm .log-menu-item.is-recording::before {
+html.asb-calm .app-name {
   animation-play-state: paused !important;
 }
 /* The sweep and the dot stop at rest rather than mid-stroke: no band frozen across the
@@ -367,7 +372,7 @@ html.asb-calm .metric-charge, html.asb-calm .log-menu-item.is-recording::before 
   animation: none !important; background-position: -70% 0, 0 0;
 }
 .live-page:not(.open) .dot, .live-page:not(.open) .dot::after, body.live-active .page:not(.live-page) .dot,
-body.live-active .page:not(.live-page) .dot::after, html.asb-calm .dot, html.asb-calm .dot::after {
+body.live-active .page:not(.live-page) .dot::after {
   animation: none !important;
 }
 
@@ -3306,7 +3311,10 @@ html[data-asb-theme="light"] .nf-sel-row.warn .nf-sel-why { color: #8a5a00 !impo
 #cfgToolsRow   { width: 100%; align-self: stretch; display: flex; gap: 7px; margin: 0 0 6px; align-items: stretch; min-width: 0; }
 /* All profile actions intentionally share one row. Their compact labels stay readable in
  * Russian while releasing a complete row for the footer to align with the other pages. */
-#cfgActionsRow { width: 100%; align-self: stretch; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin: 0 0 10px; align-items: stretch; min-width: 0; }
+#cfgActionsRow { width: 100%; align-self: stretch; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; margin: 0 0 10px; align-items: stretch; min-width: 0; }
+#cfgActionsRow .cfg-infirmary-btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; color: var(--accent); border-color: rgba(76,232,193,0.34); }
+#cfgActionsRow .cfg-infirmary-btn .cfg-infirmary-ico { flex: 0 0 auto; }
+html[data-asb-theme="light"] #cfgActionsRow .cfg-infirmary-btn { color: var(--accent); }
 #cfgActionsRow .cfg-backup { min-width: 0; min-height: 40px; padding: 8px 5px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Named-profile manager: an in-page sheet avoids the opaque KernelSU browser prompt and lets
  * saved configurations be selected by tapping a row rather than retyping an exact identifier. */
@@ -5127,6 +5135,29 @@ html[dir="rtl"] .asb-boot-progress > i { transform-origin:right center; }
   .asb-boot-ufo { background:Canvas !important; color:CanvasText !important; box-shadow:none; }
   .asb-boot-progress > i { background:Highlight !important; box-shadow:none; }
 }
+/* dev17: the hand-off from the boot preview to the home screen.
+ *
+ * Instead of a plain fade, the saucer flies up into the header and becomes the header's own
+ * logo (asbBootFlyToHeader drives the flight in JS, all transform/opacity). The warp state
+ * dissolves everything that is NOT flying - the panel text, the grid, the scan, the saucer's
+ * pod, and the overlay's own background - so the already-revealed home screen shows through
+ * behind the saucer and the orbit spheres as they lift into place. The reduced-motion branch
+ * never enters this path; the old opacity fade (is-leaving) stays as the fallback. */
+.asb-boot-intro.asb-boot-warp {
+  background:transparent !important; transition:background .5s ease;
+}
+.asb-boot-warp .asb-boot-grid, .asb-boot-warp .asb-boot-scan, .asb-boot-warp .asb-boot-kicker,
+.asb-boot-warp .asb-boot-brand, .asb-boot-warp .asb-boot-status, .asb-boot-warp .asb-boot-progress,
+.asb-boot-warp .asb-boot-count, .asb-boot-warp .asb-boot-stages {
+  opacity:0 !important; transition:opacity .34s ease;
+}
+/* The saucer's pod (its bordered capsule) dissolves so only the saucer art flies. */
+.asb-boot-warp .asb-boot-ufo {
+  border-color:transparent !important; background:transparent !important; box-shadow:none !important;
+  animation:none !important; transition:border-color .3s ease, background .3s ease, box-shadow .3s ease;
+}
+/* While the saucer is in flight the header's own logo waits, then pops in on landing. */
+body.asb-boot-flying .logo-glyph { opacity:0; }
 
 
 /* ── fix328/fix329: settled Home content and a coherent six-category hub ─────────────
@@ -5796,6 +5827,10 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
       <button class="cfg-backup" onclick="cfgExport()" data-i18n="cfg_profile_save_short">↑ Save</button>
       <button class="cfg-backup" onclick="cfgImport()" data-i18n="cfg_profile_load_short">↓ Open</button>
       <button class="cfg-backup" onclick="cfgResetDialogOpen()" data-i18n="cfg_smart_reset">↺ Reset</button>
+      <button class="cfg-backup cfg-infirmary-btn" id="cfgInfirmaryBtn" type="button" onclick="cfgOpenInfirmary()" aria-label="Infirmary" title="Infirmary">
+        <svg class="cfg-infirmary-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7.5v9M7.5 12h9"></path><rect x="4" y="4" width="16" height="16" rx="4"></rect></svg>
+        <span data-i18n="inf_title">Infirmary</span>
+      </button>
     </div>
 
     <div class="cfg-list" id="cfgList"></div>
@@ -6161,6 +6196,8 @@ const TECH_ICON_PATHS = {
   balance_spark: '<path d="M12 4v15M7 20h10M5 8h14"/><path d="M5 8l-2.5 5h5zM19 8l-2.5 5h5z"/><path d="M19 3.2v2M18 4.2h2"/>',
   /* a display with a waveform rising to a top line - the panel's maximum while touched. */
   refresh_peak: '<rect x="4" y="3.5" width="16" height="17" rx="2.5"/><path d="M7.3 14.5l2.2-2.2 2 1.6 3-4.4 2.2 1.2"/><path d="M7 6.8h10"/>',
+  pharmacy: '<rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><path d="M12 8v8M8 12h8"/>',
+  wrench: '<path d="M14.7 6.3a4 4 0 0 0-5.2 5.2L4 17l3 3 5.5-5.5a4 4 0 0 0 5.2-5.2l-2.3 2.3-2.4-.6-.6-2.4z"/>',
   /* mmfeed: a telemetry bar-chart struck through - the feedback collector being shut
      off. Not an eye: this kills event reporting and dumps, not visibility. */
   mmfeed: '<path d="M3.5 3.5l17 17"/><path d="M6 20v-6"/><path d="M12 20v-9"/><path d="M18 20v-4"/>',
@@ -8936,7 +8973,7 @@ const CFG_ITEMS = [
   { key:'ltpo_force', type:'bool', def:'0', stock:'0', name:'Force LTPO Refresh',
     desc:'Applies a patch prepared from the device\'s own oplus_vrr_config.json: it enables supported panel power-saving paths left off by the OEM and disables selected display telemetry. The stock file is not modified. If no suitable table or change is found, the switch does nothing and the status badge explains why. Applying the table requires a reboot.\n\nThe Android refresh range is also opened: ASB removes its floor, uses the highest reported panel mode, restores the maximum on touch and selects 60 Hz after two quiet seconds so panel adaptation can continue. Camera, game and video ownership are preserved, and previous range values are restored on handback. If the verified OnePlus15-165HZ-LTPO writer is present, ASB yields unless you explicitly give ASB priority. A same-target bind from another module always keeps ownership: ASB neither stacks over it nor removes it. Power savings and low-idle rates depend on the panel and ROM; neither is guaranteed.' },
   { key:'ltpo_peak_force', type:'bool', def:'0', stock:'0', name:'Panel Maximum on Touch',
-    desc:'Works with Force LTPO Refresh. While the screen is being touched, SurfaceFlinger is asked for the highest mode the panel itself reports (165 Hz on panels that list it), past a ROM that keeps ordinary apps at 120 Hz. The request is released as soon as the touch watcher goes idle, so the idle rate and the panel\'s own frame drop come back. Costs more power while you touch the screen. A ROM that refuses the request is left alone and the badge says so.' },
+    desc:'Works with Force LTPO Refresh. While the screen is being touched, SurfaceFlinger is asked for the highest mode the panel itself reports, past a ROM that keeps ordinary apps at 120 Hz. The ceiling is whatever the panel advertises - 165 Hz on the OnePlus 15; a rate the panel does not list in its mode table cannot be selected, so ASB never invents one. To make that top mode actually reachable, ASB also unlocks OnePlus\'s own extreme-refresh availability toggles; it never forces the panel high all the time, so the request is still released the moment the touch watcher goes idle and the panel\'s own frame drop comes back. The unlocked toggles and the refresh range are recorded and restored on Off or uninstall. Costs more power while you touch the screen. A ROM that refuses the request, or has no such toggles, is left alone and the badge says so.' },
   { key:'ltpo_video', type:'bool', def:'0', stock:'0', name:'Lowest Refresh for Video',
     desc:'During eligible video playback, limits the panel peak to the lowest reported mode that matches 30 or 60 fps content, such as 60 Hz for either rate. ASB acts only with the screen on, audio playing, a compatible video layer, no high-smoothness request and no touch for three seconds. Touch, playback end or screen-off restores the previous value; the first instant after touch can still use the lower rate. Other frame rates are left unchanged. Matching modes avoids unnecessary refreshes without changing the video\'s frame rate.' },
   { key:'phantom_procs', type:'seg', def:'relaxed', stock:'stock', opts:['stock','relaxed','strict'], name:'Background Process Limit',
@@ -9095,6 +9132,15 @@ const CFG_GROUPS = [
   { id:'battery', icon:'battery_cell',    name:'Battery',   ru:'\u0411\u0430\u0442\u0430\u0440\u0435\u044F' },
   { id:'ui',      icon:'switches',   name:'System',    ru:'\u0421\u0438\u0441\u0442\u0435\u043C\u0430' }
 ];
+/* dev17: the Infirmary is a screen of its own, reached from the pharmacy button beside Reset
+ * rather than a seventh hub tile - it holds one-tap repairs, not everyday tunables. It is a
+ * group for rendering and navigation only, so it is kept out of CFG_GROUPS (the hub) and in
+ * this side table. cfgGroupMeta is the one lookup both the hub groups and the Infirmary pass
+ * through, so a header or a search badge resolves for either. */
+const CFG_EXTRA_GROUPS = {
+  infirmary: { id:'infirmary', icon:'pharmacy', name:'Infirmary', ru:'\u041B\u0435\u0447\u0435\u0431\u043D\u0438\u0446\u0430' }
+};
+function cfgGroupMeta(id) { return CFG_GROUPS.filter(x => x.id === id)[0] || CFG_EXTRA_GROUPS[id] || null; }
 // Where each tunable lives. BG_TRIM and cool_gaming sit under Battery rather than their
 // own colour category: both are battery-vs-something trades, and that is what someone is
 // deciding when they open that screen.
@@ -9110,7 +9156,9 @@ const CFG_GROUP_OF = {
   night_modem_idle:'net', net_screen_off_lte:'net', net_lte_light:'net', smart_media_guard:'battery',
   smart_lab:'battery', smart_lab_mem:'battery', profile_class_auto:'battery', smart_records_balanced:'battery', ltpo_peak_force:'ui',
   net_rps:'net', net_txqueue:'net',
-  athena_service:'ui', heytap_mcs:'ui', documentsui_fix:'ui', zygisk_enabled:'ui', zygisk_hints:'ui', zygisk_launch:'ui', zygisk_ledger:'ui', ltpo_force:'ui', ltpo_video:'ui', mmfeed_off:'ui',
+  athena_service:'ui', zygisk_enabled:'ui', zygisk_hints:'ui', zygisk_launch:'ui', zygisk_ledger:'ui', ltpo_force:'ui', ltpo_video:'ui', mmfeed_off:'ui',
+  /* dev17: these two are repairs, not everyday tweaks - they now live on the Infirmary screen. */
+  heytap_mcs:'infirmary', documentsui_fix:'infirmary',
   heavy_prime_escape:'battery', prime_escape_burst_s:'battery', prime_escape_rest_s:'battery', wakelock_fitness:'battery',
   sustained_temp_mode:'battery', doze_level:'battery', doze_trim_whitelist:'battery', wakelock_action:'battery', gnss_trim:'battery',
   camera_hold_enable:'camera', bt_a2dp_offload:'audio',
@@ -9198,7 +9246,7 @@ const CFG_GROUP_SECTIONS = {
     { id:'services', icon:'oem_switches', titleKey:'cfg_ui_section_services',
       title:'System Services', hintKey:'cfg_ui_section_services_hint',
       hint:'Vendor background services and process limits.',
-      keys:['UX_MANAGE_OEM_TOGGLES','athena_service','heytap_mcs','documentsui_fix','phantom_procs','mmfeed_off'] },
+      keys:['UX_MANAGE_OEM_TOGGLES','athena_service','phantom_procs','mmfeed_off'] },
     { id:'feel', icon:'haptic_touch', titleKey:'cfg_ui_section_feel',
       title:'Display & Haptics', hintKey:'cfg_ui_section_feel_hint',
       hint:'Refresh-rate behaviour and how vibration and touch feedback feel.',
@@ -9227,6 +9275,16 @@ const CFG_GROUP_SECTIONS = {
       title:'Visual Effects', hintKey:'cfg_iface_section_effects_hint',
       hint:'Blur and system animation effects.',
       keys:['disable_blur','ui_effects_level'] }
+  ],
+  infirmary: [
+    { id:'battery', icon:'battery_cell', titleKey:'cfg_inf_section_battery',
+      title:'Battery', hintKey:'cfg_inf_section_battery_hint',
+      hint:'A one-time reset of Android’s stored battery statistics, offered only at a full charge.',
+      keys:[], card:'batteryfix' },
+    { id:'repairs', icon:'wrench', titleKey:'cfg_inf_section_repairs',
+      title:'System Repairs', hintKey:'cfg_inf_section_repairs_hint',
+      hint:'One-tap, reversible repairs for specific OxygenOS/ColorOS problems.',
+      keys:['heytap_mcs','documentsui_fix'] }
   ]
 };
 
@@ -9291,6 +9349,125 @@ function cfgRenderZygiskCard(list, items) {
   list.appendChild(card);
 }
 
+/* Infirmary → Battery Fix (dev17).
+ *
+ * Honest by construction. The action resets Android's stored battery statistics - the three
+ * files under /data/system that hold the per-app usage history and the learned capacity
+ * estimate - so the percentage curve and the usage breakdown relearn from a full charge. It
+ * does NOT add capacity or runtime and the card says so. Because those files are read early
+ * in boot, the delete runs at the next boot: the button arms a one-shot and asks for a
+ * reboot, and it is offered only at 100% on a charger (the only correct point to reset from).
+ * It also kicks off an in-place ART speed-profile recompile, which can make launches smoother
+ * at the cost of a slower first boot - no dalvik-cache wipe, so no risky cold recompile. */
+const BATTERY_FIX_SCRIPT = MD + '/runtime/asb_battery_fix.sh';
+let _bfxArmed = 0;
+function cfgRenderBatteryFixCard(list) {
+  const row = document.createElement('div');
+  row.className = 'cfg-row cat-battery bfx-card';
+  row.id = 'bfxCard';
+  const top = document.createElement('div');
+  top.className = 'cfg-row-top';
+  const ic = document.createElement('div');
+  ic.className = 'cfg-icon cat-battery';
+  ic.innerHTML = techIcon('battery_cell');
+  top.appendChild(ic);
+  const main = document.createElement('div');
+  main.className = 'cfg-main';
+  const nm = document.createElement('div');
+  nm.className = 'cfg-name';
+  nm.textContent = T('bfx_title', 'Battery Fix');
+  main.appendChild(nm);
+  const st = document.createElement('div');
+  st.className = 'cfg-status';
+  st.id = 'bfxState';
+  main.appendChild(st);
+  top.appendChild(main);
+  row.appendChild(top);
+  const ds = document.createElement('div');
+  ds.className = 'nf-card-desc';
+  ds.textContent = T('bfx_desc', 'Resets Android’s stored battery statistics: the per-app usage history and the learned capacity estimate relearn from a full charge. This does not add capacity or battery life - it only clears a skewed record. It also recompiles apps in place for smoother launches. Available only at 100% on charge; the reset is applied on the next reboot.');
+  row.appendChild(ds);
+  const runBtn = document.createElement('button');
+  runBtn.className = 'doze-edit-btn';
+  runBtn.type = 'button';
+  runBtn.id = 'bfxRun';
+  runBtn.textContent = T('bfx_run', 'Run Battery Fix');
+  runBtn.onclick = function (e) { e.stopPropagation(); batteryFixRun(); };
+  row.appendChild(runBtn);
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'doze-edit-btn bfx-cancel';
+  cancelBtn.type = 'button';
+  cancelBtn.id = 'bfxCancel';
+  cancelBtn.hidden = true;
+  cancelBtn.textContent = T('bfx_cancel', 'Cancel scheduled reset');
+  cancelBtn.onclick = function (e) { e.stopPropagation(); batteryFixCancel(); };
+  row.appendChild(cancelBtn);
+  list.appendChild(row);
+  batteryFixPaint();
+}
+function bfxParse(txt) {
+  const f = {};
+  String(txt || '').trim().split(/\s+/).forEach(function (p) { const i = p.indexOf('='); if (i > 0) f[p.slice(0, i)] = p.slice(i + 1); });
+  return f;
+}
+async function batteryFixPaint() {
+  const st = _el('bfxState'), runBtn = _el('bfxRun'), cancelBtn = _el('bfxCancel');
+  if (!st || !runBtn) return;
+  let txt = '';
+  try { const r = await run('sh ' + shQuote(BATTERY_FIX_SCRIPT) + ' status'); txt = String((r && (r.stdout || r)) || ''); } catch (e) {}
+  const f = bfxParse(txt);
+  const pending = f.reset === 'pending';
+  const eligible = f.eligible === '1';
+  if (cancelBtn) cancelBtn.hidden = !pending;
+  if (pending) {
+    st.textContent = T('bfx_st_pending', 'Scheduled — reboot to apply the reset');
+    st.className = 'cfg-status on';
+    runBtn.textContent = T('bfx_reboot', 'Reboot now');
+    runBtn.disabled = false; runBtn.dataset.mode = 'reboot';
+  } else if (eligible) {
+    st.textContent = T('bfx_st_ready', 'Ready — battery full on charge');
+    st.className = 'cfg-status on';
+    runBtn.textContent = T('bfx_run', 'Run Battery Fix');
+    runBtn.disabled = false; runBtn.dataset.mode = 'run';
+  } else {
+    const reason = f.reason === 'not_full' ? T('bfx_need_full', 'Charge to 100% to use this')
+      : f.reason === 'not_charging' ? T('bfx_need_charge', 'Plug in the charger to use this')
+      : T('bfx_need', 'Available only at 100% on charge');
+    st.textContent = reason + (/^[0-9]+$/.test(f.level || '') ? ' (' + f.level + '%)' : '');
+    st.className = 'cfg-status';
+    runBtn.textContent = T('bfx_run', 'Run Battery Fix');
+    runBtn.disabled = true; runBtn.dataset.mode = 'run';
+  }
+}
+async function batteryFixRun() {
+  const runBtn = _el('bfxRun');
+  if (runBtn && runBtn.dataset.mode === 'reboot') {
+    uiSound('success'); toast(T('t_rebooting', 'Rebooting…'), 'perf');
+    await run('svc power reboot 2>/dev/null || reboot');
+    return;
+  }
+  const now = Date.now();
+  if (now - _bfxArmed > 4000) {
+    _bfxArmed = now; uiSound('capture');
+    toast(T('bfx_confirm', 'Tap again to run Battery Fix'), 'perf');
+    return;
+  }
+  _bfxArmed = 0;
+  uiSound('success');
+  let out = '';
+  try { const r = await run('sh ' + shQuote(BATTERY_FIX_SCRIPT) + ' run'); out = String((r && (r.stdout || r)) || ''); } catch (e) {}
+  if (/result=armed/.test(out)) toast(T('bfx_armed', 'Scheduled — reboot to reset the statistics'), 'ok');
+  else toast(T('bfx_refused', 'Not available right now — needs 100% on charge'), 'error');
+  batteryFixPaint();
+}
+async function batteryFixCancel() {
+  try { await run('sh ' + shQuote(BATTERY_FIX_SCRIPT) + ' cancel'); } catch (e) {}
+  _bfxArmed = 0;
+  toast(T('bfx_cancelled', 'Scheduled reset cancelled'), 'ok');
+  batteryFixPaint();
+}
+function cfgOpenInfirmary() { uiSound('nav'); cfgShowGroup('infirmary'); }
+
 function cfgRenderGroup(list, groupId) {
   const items = CFG_ITEMS.filter(it => cfgGroupOf(it.key) === groupId);
   const sections = CFG_GROUP_SECTIONS[groupId];
@@ -9298,11 +9475,14 @@ function cfgRenderGroup(list, groupId) {
   const rendered = {}, navItems = [];
   sections.forEach(section => {
     const sectionItems = section.keys.map(key => items.find(it => it.key === key)).filter(Boolean);
-    if (!sectionItems.length) return;
-    cfgRenderSection(list, section, sectionItems[0].key, groupId);
+    // A section may host a custom card with no ordinary rows (the Infirmary's Battery Fix);
+    // such a section declares section.card and still draws its header.
+    if (!sectionItems.length && !section.card) return;
+    cfgRenderSection(list, section, (sectionItems[0] && sectionItems[0].key) || section.id, groupId);
     navItems.push(['cfg-sec-' + groupId + '-' + section.id, T(section.titleKey, section.title), section.icon]);
     sectionItems.forEach(it => { rendered[it.key] = true; });
-    if (section.id === 'zygisk') cfgRenderZygiskCard(list, sectionItems);
+    if (section.card === 'batteryfix') cfgRenderBatteryFixCard(list);
+    else if (section.id === 'zygisk') cfgRenderZygiskCard(list, sectionItems);
     else sectionItems.forEach(it => cfgRenderRow(list, it, false));
     if (groupId === 'battery' && section.id === 'standby') cfgRenderNotifCard(list);
   });
@@ -10754,7 +10934,7 @@ const _unav = ASB_CAP_REQUIRES[it.key];
   if (showCat) {
     const tag = document.createElement("div");
     tag.className = "cfg-row-cat";
-    const g = CFG_GROUPS.filter(x => x.id === cfgGroupOf(it.key))[0];
+    const g = cfgGroupMeta(cfgGroupOf(it.key));
     tag.textContent = grpName(g);
     row.appendChild(tag);
   }
@@ -20141,7 +20321,7 @@ function cfgSyncChrome() {
   const lbl = document.querySelector('#configPage .sec-label');
   if (lbl) {
     if (_cfgGroup) {
-      const g = CFG_GROUPS.filter(x => x.id === _cfgGroup)[0];
+      const g = cfgGroupMeta(_cfgGroup);
       lbl.textContent = grpName(g);
     } else {
       lbl.textContent = T('sec_config', 'Configuration');
@@ -21928,6 +22108,83 @@ function asbBootIntroPaint(done, total) {
     el.classList.toggle('is-active', i === done && done < total);
   });
 }
+/* Resolve when a WAAPI animation finishes, or after a hard timeout - a dropped onfinish must
+ * never strand the hand-off with the overlay still up. */
+function _asbAnimFinished(anim, ms) {
+  return new Promise(function (resolve) {
+    let done = false;
+    const fin = function () { if (done) return; done = true; resolve(); };
+    try { if (anim && anim.finished && typeof anim.finished.then === 'function') anim.finished.then(fin, fin); } catch (e) {}
+    if (anim) { try { anim.onfinish = fin; } catch (e) {} }
+    setTimeout(fin, ms);
+  });
+}
+function _asbRaf2() { return new Promise(function (r) { try { requestAnimationFrame(function () { requestAnimationFrame(r); }); } catch (e) { setTimeout(r, 32); } }); }
+/* dev17: fly the boot saucer up into the header and let the orbit spheres lift into place,
+ * revealing the home screen underneath. Compositor-only (transform/opacity). Returns false on
+ * reduced motion or if anything needed is missing, so the caller keeps the plain fade. */
+async function asbBootFlyToHeader(overlay) {
+  const reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  if (reduced || !overlay) return false;
+  const core = overlay.querySelector('.asb-boot-core');
+  const flyer = overlay.querySelector('.asb-boot-ufo svg');
+  if (!core || !flyer || typeof flyer.animate !== 'function') return false;
+  // The home screen has to be laid out so the header logo has a real position to fly to.
+  try { asbHomeReveal(); } catch (e) {}
+  await _asbRaf2();
+  const target = document.querySelector('.page:not(.live-page) .logo-c .logo-glyph') ||
+                 document.querySelector('.logo-glyph');
+  if (!target) return false;
+  const fr = flyer.getBoundingClientRect();
+  const tr = target.getBoundingClientRect();
+  if (!fr.width || !tr.width) return false;
+  const dx = (tr.left + tr.width / 2) - (fr.left + fr.width / 2);
+  const dy = (tr.top + tr.height / 2) - (fr.top + fr.height / 2);
+  const sc = Math.max(0.16, Math.min(1, tr.width / fr.width));
+  document.body.classList.add('asb-boot-flying');
+  overlay.classList.add('asb-boot-warp');
+  // The orbit spheres and rings lift toward the header and dissolve.
+  overlay.querySelectorAll('.asb-boot-orbit, .asb-boot-ring').forEach(function (o, i) {
+    try {
+      o.animate([
+        { transform: 'translate(0,0) scale(1)', opacity: 1 },
+        { transform: 'translate(' + (dx * 0.5) + 'px,' + (dy * 0.5 - 40) + 'px) scale(.3)', opacity: 0 }
+      ], { duration: 620 + i * 70, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'forwards' });
+    } catch (e) {}
+  });
+  const k = function (fx, fy, s, rot) {
+    return 'translate(' + (dx * fx) + 'px,' + (dy * fy) + 'px) scale(' + s + ') rotate(' + rot + 'deg)';
+  };
+  const lin = function (p) { return 1 - (1 - sc) * p; };
+  let flight = null;
+  try {
+    flight = flyer.animate([
+      { transform: k(0, 0, 1, 0), offset: 0 },
+      { transform: k(0.26, 0.14, lin(.2), -10), offset: 0.22 },
+      { transform: k(0.5, 0.42, lin(.46), 12), offset: 0.46 },
+      { transform: k(0.76, 0.72, lin(.72), -7), offset: 0.72 },
+      { transform: k(0.93, 0.9, lin(.9), 4), offset: 0.9 },
+      { transform: k(1, 1, sc, 0), offset: 1 }
+    ], { duration: 980, easing: 'cubic-bezier(.5,.05,.25,1)', fill: 'forwards' });
+  } catch (e) {
+    document.body.classList.remove('asb-boot-flying');
+    overlay.classList.remove('asb-boot-warp');
+    return false;
+  }
+  await _asbAnimFinished(flight, 1200);
+  try { flight.cancel(); } catch (e) {}
+  // The header's own logo appears with a short pop as the saucer arrives.
+  document.body.classList.remove('asb-boot-flying');
+  try {
+    const pop = target.animate([
+      { transform: 'scale(.62)', opacity: 0.25 },
+      { transform: 'scale(1.12)', opacity: 1, offset: 0.6 },
+      { transform: 'scale(1)', opacity: 1 }
+    ], { duration: 300, easing: 'cubic-bezier(.2,.8,.2,1)' });
+    await _asbAnimFinished(pop, 360);
+  } catch (e) {}
+  return true;
+}
 async function asbBootIntroStart() {
   const overlay = _el('asbBootIntro');
   if (!overlay || window._asbBootIntroActive) return false;
@@ -21972,14 +22229,20 @@ async function asbBootIntroStart() {
     const remaining = ASB_BOOT_INTRO_MIN_MS - (Date.now() - started);
     if (remaining > 0) await new Promise(function (resolve) { setTimeout(resolve, remaining); });
     if (status) status.textContent = T('boot_intro_ready', 'Interface ready');
-    overlay.classList.add('is-leaving');
-    await new Promise(function (resolve) { setTimeout(resolve, 360); });
+    let flew = false;
+    try { flew = await asbBootFlyToHeader(overlay); } catch (e) { flew = false; }
+    if (!flew) {
+      overlay.classList.add('is-leaving');
+      await new Promise(function (resolve) { setTimeout(resolve, 360); });
+    }
   } catch (e) {
     /* Fail-safe below always returns the ordinary interface. */
   } finally {
     overlay.hidden = true;
     overlay.setAttribute('aria-hidden', 'true');
     overlay.classList.remove('is-leaving');
+    overlay.classList.remove('asb-boot-warp');
+    document.body.classList.remove('asb-boot-flying');
     window._asbBootIntroActive = false;
     if (oldBusy === null) document.body.removeAttribute('aria-busy');
     else document.body.setAttribute('aria-busy', oldBusy);
