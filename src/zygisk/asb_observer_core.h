@@ -35,7 +35,14 @@ public:
         if (processes_.count(frame.pid)) { ++duplicate_; ++dropped_; return AsbObserverResult::duplicate; }
         auto &history = history_[frame.package];
         while (!history.empty() && now_ms - history.front() >= 60000) history.pop_front();
-        if ((!history.empty() && now_ms - history.back() < 1000) ||
+        /* V66 dev16: an app often starts its main process and a sibling (":push", ":remote")
+         * within the same second. The old rule kept one start per package per second, so the
+         * sibling was dropped as rate-limited (15 of 144 events in an OP15 capture). A
+         * different PID is a different process: up to three starts per second are taken, and
+         * the per-minute cap still bounds a restart storm. */
+        size_t last_second = 0;
+        for (auto t = history.rbegin(); t != history.rend() && now_ms - *t < 1000; ++t) ++last_second;
+        if (last_second >= ASB_OBSERVER_STARTS_PER_SECOND ||
             history.size() >= ASB_OBSERVER_MAX_EVENTS_PER_MINUTE) {
             ++rate_limited_; ++dropped_; return AsbObserverResult::rate_limited;
         }
