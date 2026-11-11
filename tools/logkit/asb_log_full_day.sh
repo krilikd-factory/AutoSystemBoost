@@ -1371,10 +1371,14 @@ lk_emit_smart_records() {
   _slf="${ASB_LK_LAB_FILE:-/dev/.asb/smart_lab.txt}"
   if [ -r "$_slf" ]; then
     cp "$_slf" "$LK_OUT_DIR/smart_lab.txt" 2>/dev/null
-    awk -F'|' '$1 == "knob" && NF == 18 && $3 != "free" {
-        t = ($3 == "testing") ? sprintf("trying %s, %d pair(s), %+.1f %%", $5, $6, $7 / 10) : "-"
-        printf "lab: %-11s %-8s best: %-22s %s%s\n", $2, $3, $4, t, ($18 != "-" ? "  " $18 : "") }' "$_slf"
+    awk -F'|' '$1 == "knob" && (NF == 18 || NF == 20) && $3 != "free" {
+        t = ($3 == "testing") ? sprintf("trying %s, %d pair(s), %+.1f %% energy, ceiling %+.1f pt, jank %+.2f pt, heat %+d dC/h", $5, $6, $7 / 10, $8 / 10, $9 / 100, $10) : "-"
+        x = ""
+        if (NF == 20 && $19 != "-") x = x "  last: " $19
+        if (NF == 20 && $20 >= 0) x = x sprintf("  re-test in %d d", $20)
+        printf "lab: %-11s %-8s best: %-22s %s%s%s\n", $2, $3, $4, t, ($18 != "-" ? "  " $18 : ""), x }' "$_slf"
     sed -n 's/^mem|/lab bus: /p; s/^now|/lab now: /p' "$_slf" | tr '|' ' '
+    awk -F'|' '$1 == "voter" && NF == 4 { s = s (s ? ", " : "") $2 ":" $3 " (" $4 ")" } END { if (s != "") print "lab voters: " s }' "$_slf"
   fi
   echo "infinite-log Smart feedback: status=$(lk_state_kv smooth_log_status); accepted=$(lk_state_kv smooth_log_accepted); suppressed=$(lk_state_kv smooth_log_suppressed); rejected=$(lk_state_kv smooth_log_rejected)"
   echo "The log sends only sustained-jank probe hints. The native governor re-reads frames once, owns every A/B window and keeps plateau/recheck decisions."
@@ -1984,6 +1988,10 @@ lk_emit_cap_ownership_verdict() {
   _lc_own=$(( _lc_asb + _lc_shell ))
   echo "----- CAP OWNERSHIP VERDICT -----"
   echo "observed throttle owners: vendor=$_lc_vendor shell=$_lc_shell asb=$_lc_asb (shell = ASB's manual-profile caps)"
+  _lc_tot=$(( ${_lc_vendor:-0} + ${_lc_shell:-0} + ${_lc_asb:-0} ))
+  if [ "$_lc_tot" -gt 0 ] 2>/dev/null; then
+    echo "share of the samples under a ceiling: ASB $(( _lc_asb * 100 / _lc_tot )) %, ASB manual profile $(( _lc_shell * 100 / _lc_tot )) %, vendor $(( _lc_vendor * 100 / _lc_tot )) % of $_lc_tot - where the vendor's share leads, the clock and its savings are the vendor's, not ASB's"
+  fi
   _lc_sw=$(grep -c '|writer=shell' "$_lc_trace" 2>/dev/null)
   case "$_lc_sw" in ''|*[!0-9]*) _lc_sw=0 ;; esac
   if [ "$_lc_sw" -gt 0 ]; then
