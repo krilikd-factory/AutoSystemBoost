@@ -4,6 +4,56 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev11 - fixes from the first day with the lab
+
+Input: the owner installed dev10 on a OnePlus 15 and sent a full-day log, a report, an asbdiag
+and a screenshot of the monitor page.
+
+What the logs show working: the memory-bus writer found 10 voters under `bus_dcvs` and made 47
+writes with 47 give-backs, 0 yields and 0 failures. The lab ran blocks on every knob. The night
+measured 0.77 %/h with the phone awake 12.6 % of the time.
+
+Bugs found and fixed:
+
+- **membus_off measured the radio.** A screen-off bus block that overlapped a burst of mobile
+  data (one app moved about 146 MiB overnight) counted the modem's drain against the bus
+  setting. The lab showed the 50 % cap "29.8 % cheaper" after two pairs, which is not a bus
+  effect. A screen-off bus block that moved 15 KiB/s or more of mobile data is now set aside
+  (`radio_set_aside=` in the summary). The store goes to version 2; a version-1 store is loaded
+  with only its membus_off knob started again, the other knobs keep what they learned.
+- **The Smart session counter ran ahead of the learning.** A session was counted before the
+  bucket decided whether to take it; quarantined and unreliable sessions were counted and then
+  vanished at the next start, when the total is rebuilt from the stored observations (932 in
+  the evening, 928 the next morning after the night's reboots). A session now counts only
+  when the bucket's observation count actually changed.
+- **Two settings shown as "refused by the ROM" that were not.** A key refused on an earlier boot
+  is not asked again on the same ROM build, but the skip was always filed as `not_writable`,
+  including for a key that does not exist on this ROM. The remembered line now carries its
+  class (`unsupported` or `not_writable`, a fifth field; a four-field line from an older build
+  still means refused), the skip reports the same class, and asbdiag words a skipped refusal as
+  "refused on an earlier boot of this ROM build" instead of quoting a device value it did not read.
+
+Improvement:
+
+- **Early stops in the lab.** A challenger that is plainly worse to use no longer runs to the
+  full count (up to 14-16 pairs). Two pairs with janky frames 2 points or more above the
+  champion, three pairs with the cores at their ceiling 15 points more often, or three pairs
+  warming 30 dC/h faster (screen-on knobs) end the trial at once (`early_stops=`). The
+  ordinary guards (+1 pt, +8 pt, +15 dC/h) still decide at the normal count.
+- The day log copies `smart_lab.txt` and prints the lab knobs, the bus line and the now line.
+
+Observed, not changed:
+
+- The red "Vendor" owner on the monitor during HEAVY is one status reading in which a live
+  ceiling sat below ASB's request. The clamp counter beside it comes from the state file read
+  just before that status was built, so it still said 0. The day log found no foreign owner:
+  cap checks 8 of 8 on ASB's value, owner verdict "no foreign-owner dominance"; the governor's
+  tick accounting saw the ROM raise a ceiling in 6 ticks and counted no slow clamps.
+- The 67 °C screen-off CPU peak in the report is the first sample of the capture, two minutes
+  after a reboot, with a load average of 18 (boot work).
+
+Native code changed: CI rebuild needed.
+
 ## V66 dev10 - a lab test that depended on directory order
 
 CI failed `t_smart_lab_native_runtime`: "external value overwritten or own cap not given back:
