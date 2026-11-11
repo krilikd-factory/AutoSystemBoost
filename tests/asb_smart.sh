@@ -1498,6 +1498,7 @@ _c_thermal_socd_validation() {
 #ifndef THERMAL_BASE
 #define THERMAL_BASE "/tmp/asb_p0_thermal_fixture"
 #endif
+#define ASB_SURFACE_PIN_FILE THERMAL_BASE "_surface_pinned"
 #include "asb_metrics.h"
 
 /* asb_metrics.h references this governor-owned config from other static helpers. */
@@ -1745,6 +1746,59 @@ static void case_periodic_socd_revalidation_recovers(void) {
  * On a cold boot the cores sit near 30 C, so "25 C" was inside the agreement band and the
  * percentage became the control temperature. Scale alone must reject it, and the CPU
  * fallback that agrees with its peers must not be left at confidence 1 for it. */
+/* V66 dev12, OP15 capture 13572: sys-therm-6 read 40 C all night beside a board at 24-27 C and
+ * was dropped only at 09:17, after 300 ticks; every boot learned it again. The verdict is now
+ * kept in a file: the next start drops the zone at once while it reads that value, and a zone
+ * that moves 3 C is live again. 60 ticks over 90 minutes are enough on their own. */
+static void pinned_tick(asb_thermal_t *t, int surf, int board) {
+    write_temp(5, surf); write_temp(6, board);
+    metrics_read_thermal(t, 0);
+}
+static void case_pinned_surface_remembered(void) {
+    asb_thermal_t t;
+    char buf[64] = "";
+    unlink(ASB_SURFACE_PIN_FILE);
+    fixture_reset();
+    asb_surface_pin_reset();
+    add_zone(0, "socd\n", 30000);
+    add_three_cpu_peers(30000, 30000, 31000);
+    add_zone(5, "sys-therm-6\n", 41000);
+    add_zone(6, "board_temp\n", 41000);
+    thermal_discover();
+    for (int i = 0; i < 59; i++) pinned_tick(&t, i ? 40000 : 41000, (41 - (i % 18)) * 1000);
+    check_i("pinned: 59 ticks are not enough", g_surface_pinned, 0);
+    g_surf_t0 = time(NULL) - 5401;
+    pinned_tick(&t, 40000, 25000);
+    check_i("pinned: 60 ticks over 90 minutes drop the zone", g_surface_pinned, 1);
+    check_i("pinned: the surface follows the board", t.surface_hotspot_c, 25);
+    FILE *f = fopen(ASB_SURFACE_PIN_FILE, "r");
+    if (f) { if (!fgets(buf, sizeof(buf), f)) buf[0] = 0; fclose(f); }
+    check_s("pinned: the verdict is kept with zone type and value", buf, "sys-therm-6 40\n");
+
+    asb_surface_pin_reset();
+    pinned_tick(&t, 40000, 26000);
+    check_i("pinned: the next start drops the zone at once", g_surface_pinned, 1);
+    check_i("pinned: ... and says it came from an earlier boot", g_surface_pin_boot, 1);
+    check_i("pinned: ... and the surface is the board from the first tick", t.surface_hotspot_c, 26);
+    pinned_tick(&t, 44000, 30000);
+    check_i("pinned: a zone that moves 3 C is live again", g_surface_pinned, 0);
+    check_i("pinned: ... and the file goes", access(ASB_SURFACE_PIN_FILE, F_OK), -1);
+    check_i("pinned: ... and the surface reads the zone", t.surface_hotspot_c, 44);
+
+    asb_surface_pin_reset();
+    f = fopen(ASB_SURFACE_PIN_FILE, "w"); fputs("sys-therm-6 40\n", f); fclose(f);
+    pinned_tick(&t, 35000, 30000);
+    check_i("pinned: a file for another value does not drop a live zone", g_surface_pinned, 0);
+    check_i("pinned: ... which keeps reading the zone", t.surface_hotspot_c, 35);
+
+    asb_surface_pin_reset();
+    unlink(ASB_SURFACE_PIN_FILE);
+    for (int i = 0; i < 400; i++) pinned_tick(&t, (30 + (i % 8)) * 1000, (28 + (i % 8)) * 1000);
+    check_i("pinned: a zone that moves with the board is never dropped", g_surface_pinned, 0);
+    asb_surface_pin_reset();
+    unlink(ASB_SURFACE_PIN_FILE);
+}
+
 static void case_percentage_socd_rejected_on_scale(void) {
     fixture_reset();
     add_zone(0, "socd\n", 25);
@@ -1945,6 +1999,7 @@ int main(void) {
     case_consensus_clears_when_peers_disappear();
     case_periodic_socd_revalidation_recovers();
     case_percentage_socd_rejected_on_scale();
+    case_pinned_surface_remembered();
     case_percentage_socd_disputed_fallback_stays_low();
     case_disputed_fallback_promoted_at_runtime();
     case_mediatek_lvts_names();
@@ -7262,6 +7317,40 @@ int main(int argc, char **argv) {
         g_lab.version = 1;
         return asb_lab_save() == 0 ? 0 : 1;
     }
+    if (!strcmp(mode, "pairable")) {
+        asb_lab_last_t a, b;
+        memset(&a, 0, sizeof(a)); memset(&b, 0, sizeof(b));
+        a.ts = b.ts = 1000; a.temp_dc = b.temp_dc = 300; a.soc = b.soc = 60; a.band = b.band = -1;
+        a.traffic = 0.3f; b.traffic = 3.0f;
+        int off_far = asb_lab_pairable(LAB_MEM_OFF, &a, &b);
+        b.traffic = 0.5f;
+        int off_near = asb_lab_pairable(LAB_MEM_OFF, &a, &b);
+        b.traffic = 1.5f;
+        int radio_low = asb_lab_pairable(LAB_RADIO, &a, &b);
+        int off_mid = asb_lab_pairable(LAB_MEM_OFF, &a, &b);
+        a.traffic = -1.0f;
+        int off_unknown = asb_lab_pairable(LAB_MEM_OFF, &a, &b);
+        printf("pairable off_far=%d off_near=%d radio_low=%d off_mid=%d off_unknown=%d\n", off_far, off_near, radio_low, off_mid, off_unknown);
+        return 0;
+    }
+    if (!strcmp(mode, "recheck")) {
+        uint32_t old = (uint32_t)(g_wall - ASB_LAB_RECHECK_S - 10);
+        asb_lab_knob_t *m = &g_lab.k[LAB_MEM_ON];
+        m->champion = m->challenger = 2; m->converged = 1; m->conv_ts = old; m->tried = 7;
+        asb_lab_setup(LAB_MEM_ON, 1, g_wall);
+        asb_lab_knob_t *a = &g_lab.k[LAB_APP0];
+        a->champion = a->challenger = 1; a->converged = 1; a->conv_ts = old; a->tried = 3;
+        asb_lab_setup(LAB_APP0, 1, g_wall);
+        asb_lab_knob_t *f = &g_lab.k[LAB_MEM_OFF];
+        f->champion = f->challenger = 0; f->converged = 0; f->tried = 3;
+        asb_lab_setup(LAB_MEM_OFF, 1, g_wall);
+        asb_lab_knob_t *w = &g_lab.k[LAB_APP1];
+        w->champion = w->challenger = 1; w->converged = 0; w->tried = 3;
+        asb_lab_setup(LAB_APP1, 1, g_wall);
+        printf("recheck mem=%d/%d app=%d/%d first_off=%d/%d first_app=%d/%d\n", m->challenger, m->converged,
+               a->challenger, a->converged, f->challenger, f->converged, w->challenger, w->converged);
+        return 0;
+    }
     if (!strcmp(mode, "migrate")) {
         printf("migrate radio=%d wins=%u memoff_pairs=%u memoff_blocks=%u version=%u dirty=%d\n", g_lab.k[LAB_RADIO].champion,
                g_lab.k[LAB_RADIO].wins, g_lab.k[LAB_MEM_OFF].pairs, g_lab.k[LAB_MEM_OFF].blocks, g_lab.version, g_lab_dirty);
@@ -7381,6 +7470,17 @@ rm -f "$T/lab.bin"
 "$T/lab" mk_v1 || fail "could not write a version-1 store"
 out="$("$T/lab" migrate)" || fail "a version-1 store was not loaded: $out"
 echo "$out" | grep -q 'migrate radio=1 wins=1 memoff_pairs=0 memoff_blocks=0 version=2 dirty=1' || fail "version-1 store not migrated knob by knob: $out"
+rm -f "$T/lab.bin" "$T/lab.bin.tmp"
+# V66 dev12: a re-check of a bus cap at its deepest step tries the softer step, and one of an
+# app's changed lean tries the situation's lean again; the first exploration still stops where
+# it did (bus: a lost first step converges on "free"; app: a won economy lean converges).
+# V66 dev12: screen-off bus blocks pair only with alike mobile traffic (factor 2 above 1 KiB/s);
+# the radio keeps its 2 KiB/s floor; a block without a traffic reading is not held back.
+out="$("$T/lab" pairable)" || fail "pairable run failed: $out"
+echo "$out" | grep -q 'pairable off_far=0 off_near=1 radio_low=1 off_mid=0 off_unknown=1' || fail "traffic-matched pairing wrong: $out"
+rm -f "$T/lab.bin" "$T/lab.bin.tmp"
+out="$("$T/lab" recheck)" || fail "recheck run failed: $out"
+echo "$out" | grep -q 'recheck mem=1/0 app=0/0 first_off=0/1 first_app=1/1' || fail "re-checks of a moved champion do not run, or the first exploration changed: $out"
 rm -f "$T/lab.bin" "$T/lab.bin.tmp"
 out="$("$T/lab" mem_guard)" || fail "mem guard run failed"
 echo "$out" | grep -q 'mem champion=0 wins=0 fails=1' || fail "membus_on: a cap that pins the cores won: $out"
