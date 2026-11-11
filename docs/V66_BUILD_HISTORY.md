@@ -4,6 +4,232 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev16 - the ZYGISK page saves, the lab shares its screen-on time
+
+Input: the owner asked for the ZYGISK page to save like Device diagnostics and the log report,
+and for further work on Smart, the Zygisk integration and the fit to other OnePlus phones and
+kernels. The evidence used is the owner's OP15 day log and diagnostics and two other owners'
+reports (a CPH2769 on its stock 6.12 kernel, a PLQ110 on a custom 6.6 kernel), all on V66-test1.
+
+- **ZYGISK page: Save.** A Save button beside Refresh writes the page to
+  `/sdcard/Download/asb_zygisk_<date>_<time>.txt` the same way as the other two pages: the page as
+  shown, then the raw outputs it was painted from (link status, link classes, guard, ART, LSPosed,
+  budgets, night charge and the Smart learning files, each under its own heading, a failed read
+  marked with its exit code). Rows folded behind "show N more" and the evidence list that is
+  built only when it is opened are written out in full. A switch row is written as its name and
+  state, the mode control as its choices with the active one in brackets. Saving reads nothing
+  new. The button stays disabled until the page has read the state once.
+- **Smart lab: screen-on time shared between the knobs.** With no lab app in front, the first
+  undecided knob in a fixed order (radio, then the memory bus) always took the next block. On
+  mobile data the radio knob qualifies nearly all the time, so the bus knob waited: the OP15 day
+  ran the radio 5 blocks and the bus 1. Now the knob that ran last gets one more block when its
+  last block is waiting for the other setting (the pair is made while conditions are still
+  alike); otherwise the undecided knob that started longest ago runs. In a simulated 8 h on
+  mobile data the radio and the bus ran 24 and 23 blocks (12 and 11 pairs), never more than two
+  in a row; the old order ran the radio 32 blocks in a row and the bus 15 after it. The now line
+  of `smart_lab.txt` counts these follow-up blocks (`followups=`). Effect on drain: not measured.
+- **Zygisk observer: sibling processes are kept.** The companion took one process start per
+  package per second, so an app's second process started in the same second (`:push`,
+  `:remote`) was dropped as rate-limited: 15 of 144 events in the OP15 diagnostics, with no
+  duplicates and no capacity drops. Up to three starts per package per second are now taken; the
+  64-per-minute cap still bounds a restart storm. These processes are now in the observed set
+  (their memory and their exit). The start ledger was never affected.
+- **asbdiag on other kernels.**
+  - The GPU block read only devfreq nodes, which the OP15's Adreno 840 does not have: governor,
+    clocks and the frequency list came out empty. It now falls back to the kgsl nodes (`gpuclk`,
+    `min_gpuclk`, `max_gpuclk`, `gpu_available_frequencies`) and names the pwrlevel backend, as the
+    Device page already did.
+  - The cluster section lists more walt policy tunables (`hispeed_load`, `hispeed_freq`,
+    `rtg_boost_freq`, `pl`, `boost`, the adaptive frequencies, `target_load_thresh`) where the
+    kernel has them, and says that on a walt cluster the profiles' schedutil rate limits have no
+    node. All three phones above run walt with both rate limits at 0, stock and custom kernel
+    alike. ASB does not write walt's per-policy rate limits: the values the vendor ships are
+    tuned for walt, and nothing measured says another value is better.
+
+Not changed: the CPH2769 report was taken minutes after its governor started (15 forks since
+start) and shows no lab block yet; the PLQ110 report is healthy (FAIL=0) and its lab had one
+membus pair. Neither shows a device-specific fault.
+
+Native code changed (governor lab, Zygisk companion): CI rebuild needed.
+
+## V66 dev15 - the dev14 audit: what it could not measure, now measured
+
+Input: a diff audit of dev14 against fix315 (score 9.5/10, findings R1-R7, and a list of what
+"needs a runtime check"). The owner asked to take the right items and keep improving.
+
+Taken:
+
+- **R3 and "check the GPU latch on real video": both made visible in a log.** The lab summary
+  lists every bus voter it may cap, by domain and name, with its state (free, capped, yielded),
+  and asbdiag and the day log print them. A log from another SoC then shows exactly which
+  clients the name filter let through. The state names the app the GPU-bound latch last fired
+  for (`gpu_bound_pkg`), and asbdiag says a video player or a feed named there is a false latch.
+- **The GPU latch guarded against its own failure mode.** A video composited at the lowest GPU
+  step could, in principle, read 90 % busy, latch GAMING, drop under the exit mark once the
+  ceiling lifts, and do it again half a minute later, swinging the GPU for as long as it plays.
+  A latch that clears within two ticks now doubles the saturated ticks the next one needs (3,
+  6, 12, up to 24). One that holds, or ten minutes without one, sets it back to 3. A game or a
+  benchmark scene holds and is not affected. Published as `gpu_bound_need` and
+  `gpu_bound_backoffs`.
+- **"Cost of the energy sampling and the lab blocks per tick": measured.** The governor thread's
+  own CPU time is taken around the lab and the energy table each tick and published as
+  `lab_cpu_ms` and `energy_cpu_ms`; asbdiag prints both next to the lab.
+
+Not taken:
+
+- R1 (update.json on V65/650): the owner's rule - update.json follows the published release
+  until V66 is published.
+- R2 (the lab on by default): unchanged for the dev series. The decision belongs to the release,
+  and the measurements above are what it should be made on.
+- R4 (pre-compressed webroot): the module WebUI is served by the root manager's own local
+  server, which nothing shows to send Content-Encoding for .gz/.br. The packaged page and
+  translations are already slimmed in CI, and the download is a zip.
+- R5 (envelopes for lahaina/taro/MediaTek): a SoC outside the named families already gets the
+  capability baseline (the smallest percent/uclamp envelope, no fixed clocks), and inactive
+  without topology/GPU/thermal capability. Tuned values need a log from such a phone. (The audit
+  also pairs the names with the wrong phones: lahaina is the OnePlus 9 series, taro the 10 Pro.)
+- R6 (two copies of asbdiag): the source tree keeps both on purpose; since dev9 the packaging
+  leaves `tools/asb_diag.sh` out when it matches `system/bin/asbdiag` byte for byte, and the
+  installer links it.
+- R7: information only.
+
+Native code changed: CI rebuild needed.
+
+## V66 dev14 - the dev12 audit, item by item
+
+Input: the owner sent the dev12 audit again (the same document as in the dev13 bundle) and
+asked which items are right, which are not, and to implement the right ones. dev13 had already
+taken the first part of P1 (the pinned zone bound to the kernel and the thermal map).
+
+Taken:
+
+- **P1 thermal pin binding, finished.** The build hash behind `surface_pinned` now also covers
+  the ROM fingerprint. It is a long property on OnePlus builds, so the governor hands the
+  callback reader from `asb_fsm.h` to the metrics code. A dev13 pin file is learned once more.
+  Not taken from the same item: an expiry after 7-14 days. A pinned zone is checked on every
+  tick (3 C away and it counts again), and every boot checks its value, so age adds nothing but
+  hours of wrong surface readings each time it runs out.
+- **P1 memory bus confidence (in part).** Voters named for another client (GPU, display, video,
+  camera, DSP/NPU, modem) are never added; none exist under bus_dcvs on the OP15. A write that
+  is taken but reads back as another value now puts the earlier value back and leaves that
+  voter alone for the session. Until now an unowned voter was left at the moved value and
+  never given back.
+- **P2 external undo as its own result.** The WebUI already shows it. Now `undo-all` also counts
+  `external=` apart from `undone=`, and asbdiag summarises the background/data journal: active
+  by kind, undone by ASB, left because another component had already changed it.
+- **P2 Smart Lab hardening (in part).** Every verdict is bound to the build: after an OTA or a
+  kernel swap each decided knob is tested again against its neighbour (the best setting stays
+  in force meanwhile). A trial under way restarts its pairs, and the drift reference is
+  dropped. A store from before dev14 adopts the current build quietly. The hash lives in the
+  header's spare word, so the layout and the version stay.
+- **Stage 2 global experiment budget (in part).** No screen-on block starts in the first 90 s of
+  a screen-on spell. Those seconds may be a glance, which is what the wake-lift trial measures:
+  a bus cap or an app lean in force there was counted as the lift's. A block started there was
+  cut short by the glance ending anyway. The governor starting with the screen on is not a
+  glance.
+- **Stage 2 reason codes, 8.6 Smart Lab fields.** Each knob keeps the reason for its last
+  decision (`won_energy`, `lost_dearer`, `lost_jank`, `lost_ceiling`, `lost_heat`,
+  `no_clear_saving`, `retest_cost`, `retest_age`, `retest_build`) and the days to its 21-day
+  re-test; the summary carries both as fields 19 and 20 (the WebUI, asbdiag and the day log
+  accept 18 or 20 fields). The day log's lab lines now show the ceiling, jank and heat deltas
+  as asbdiag already did.
+- **8.5 vendor against ASB ownership.** The day log's ownership verdict now states the shares of
+  the samples under a ceiling: ASB, ASB's manual profile, vendor.
+
+Already in place (no change): uninstall removes `/data/adb/asb` as a whole and `/dev/.asb` is
+tmpfs; the release workflow runs the regression without `ASB_DSP_REFERENCE_OPTIONAL`; the
+lab never runs during the camera, games or HEAVY (`heavy_state` includes the camera); app slots
+are limited to three, go stale after 14 days unused, are re-tested after 21 days or when their
+cost rises 15 %; two pairs with 2 points more janky frames end a trial (dev11); the log report
+already opens with a verdict, separates facts from possible causes and actions, grades
+measurement quality, and compares with the previous log.
+
+Not taken:
+
+- `smart_lab_mem=0` by default: on the OP15 the bus writer made 47 writes and 47 give-backs with no
+  yields or failures, and it reads back, yields and gives back at shutdown; the change above
+  closes the one hole found.
+- Invalidating an app verdict on an app update: it needs a package manager query per app,
+  and the cost-drift re-test catches an update that matters.
+- A capability confidence score, portable/device/build stores, a native snapshot exporter,
+  batched telemetry, power-normalised metrics, confidence intervals, five health scores: each
+  is a redesign, not a fix, and none answers a fault seen in a log; the build binding above is
+  the part of the store split that a log could show to matter.
+- Fixtures for 5 CPU policies and MediaTek rules: no OnePlus part has 5 policies. The 2-, 3- and
+  4-policy fixtures exist, and the policies are mapped from what the kernel lists rather than
+  assumed. Rules for a MediaTek part need a log from one.
+
+Native code changed: CI rebuild needed.
+
+## V66 dev13 - a saturated GPU, LSPosed in WAL mode, lab blocks that survive an app switch
+
+Input: the owner's dev12 day log and diags around an AnTuTu run on a OnePlus 15 (Smart, the
+owner's economy bias +60 %, ROM CPH2745_17.0.1.201), two other users' reports on a CPH2769
+(Android 17) whose LSPosed card read "unexpected_schema", and an audit of dev12.
+
+What the benchmark log shows:
+
+- **GPU part, ASB's own doing.** The 3D scenes held the GPU at 93-99 % busy, pinned at
+  500-646 MHz of its 1200 MHz, for minutes, with load1 6-8: this phone's resting level. GAMING
+  needed the package table's agreement and a CPU above the quiet floor, so the FSM read
+  "GPU busy, CPU idle = video" and sat in MODERATE (once HEAVY, then SUSTAINED, then MODERATE).
+- **CPU part, mostly not ASB.** During the CPU/MEM/UX tests the ceilings were 1113600 /
+  1017600 kHz (31 % / 22 % of hardware) at a 39-44 C die, below ASB's own 1785600-1996800 /
+  1862400 request; the owner trace marks them vendor-held, and section 10 of asbdiag shows the
+  vendor's perf service writing msm_performance (2361600 / 1632000 in ordinary use). ASB does
+  not write that node outside HEAVY/GAMING and does not fight a vendor ceiling. Smart's own
+  MODERATE-HEAVY guard (55 % main, 35 % prime on a 6+2 part) and the +60 % economy bias would
+  have held the CPU well under the stock score even without it.
+- **Heat before the runs.** Six reboots between 14:06 and 15:17 (a mainline update among them),
+  each followed by a boot storm: the governor's first ticks read the die at 64-86 C with load1
+  26-45, and SUSTAINED took over within seconds each time. The kernel command line starts every
+  CPU on the performance governor until the ROM switches to walt. ASB's ART compile runs only
+  on the charger (compiling=0 in the log).
+
+Changes:
+
+- **A saturated GPU is a game-like workload (`asb_fsm.h`).** Three ticks in a row at 90 % busy
+  or more latch GAMING without the package table or a busy CPU. The latch holds while the GPU
+  stays above `gaming_gpu_exit`, so a game whose busy share falls once its clock is lifted
+  keeps its state. The first drop below that mark clears it. The camera, an unreadable GPU and
+  Battery's `suppress_gaming` stay out. GAMING brings its own limits with it: the gaming CPU
+  ceiling, cool_gaming, and the gap and temperature exits to SUSTAINED. Video never gets
+  there: a feed with autoplay reaches about 60 %. Published as `gpu_bound_streak` /
+  `gpu_bound_entries`, and asbdiag names it.
+- **LSPosed's database read from a private copy when it cannot be read in place
+  (`asb_lspd.h`).** The maintained fork (Vector) keeps the same tables but runs the database in
+  WAL mode. A read-only connection then needs a -shm index next to the file. Where the
+  module's domain may not create one, every statement failed (SQLITE_READONLY / CANTOPEN,
+  reproduced on the host), and anything that was not BUSY/LOCKED was printed as
+  "unexpected_schema". Now the file is tried first; on CANTOPEN, IOERR, READONLY or PERM the
+  database and its -wal are copied under `/dev/.asb`, the copy is read, and it is removed
+  afterwards. LSPosed's directory is never written by a read. BUSY/LOCKED stay "read_failed",
+  since a copy taken during LSPosed's own write could be torn. The SQLite code is printed
+  (`sqlite_rc=`, `read_from=copy`).
+- **Lab blocks pause instead of ending (`asb_lab.h`).** The dev12 day kept 3 lab blocks and cut
+  26 short over two long screen-on stretches: a block ended at every app switch, a HEAVY spell
+  or a veto, even when the user came straight back. A screen-on block now pauses for up to 60
+  s when its conditions lapse with the screen on, and resumes when they return. Running time
+  only counts towards its limits; energy and time are not measured during the pause; its
+  setting is not in force meanwhile (the radio's is, so the network does not switch for a
+  minute and back). A pause that runs out ends the block, which is kept if it already ran long
+  enough. Another lab app coming to the front takes over at once. The summary counts short
+  blocks by kind and the pauses.
+- **The pinned surface verdict is bound to the build (`asb_metrics.h`, from the audit).** The
+  file now also holds the number of thermal zones and a hash of the kernel release. A verdict
+  from another kernel, another thermal map or in dev12's two-field form is learned again
+  instead of applied on the first tick.
+
+Audit items not taken: an uninstall cleanup of `surface_pinned` (uninstall already removes
+`/data/adb/asb` as a whole, and `/dev/.asb` is tmpfs); turning `smart_lab_mem` off by default
+(the OP15 logs show 47 writes, 47 give-backs, no yields or failures, with read-back and yield
+already in place); a separate verdict for an undo that found the setting changed by someone
+else (the WebUI already shows it as "already changed by another component"); a strict DSP gate
+for releases (the release workflow already runs the regression without
+`ASB_DSP_REFERENCE_OPTIONAL`).
+
+Native code changed: CI rebuild needed.
+
 ## V66 dev12 - re-checks that run, a surface sensor learned once
 
 Input: the owner asked to keep improving after dev11. No new logs; the work comes from a
