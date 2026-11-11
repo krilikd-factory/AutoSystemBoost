@@ -3244,6 +3244,12 @@ if [ -n "$_trej" ]; then
 fi
 case "$(_rget surface_source /dev/.asb/state)" in
   zone)  NOTE "surface (body) temperature: dedicated zone (sys-therm)" ;;
+  zone_pinned)
+    if [ "$(_rget surface_pin_boot /dev/.asb/state)" = 1 ]; then
+      NOTE "surface (body) temperature: board_temp - the dedicated zone ($(_rget surface_zone_type /dev/.asb/state)) sits at $(_rget surface_pin_c /dev/.asb/state) C whatever the board does; known from an earlier boot, it counts again if it moves 3 C"
+    else
+      NOTE "surface (body) temperature: board_temp - the dedicated zone ($(_rget surface_zone_type /dev/.asb/state)) stayed at $(_rget surface_pin_c /dev/.asb/state) C while the board moved 4 C or more; remembered for the next boots, it counts again if it moves 3 C"
+    fi ;;
   board) NOTE "surface (body) temperature: board_temp zone" ;;
   skin)  NOTE "surface (body) temperature: shell sensor - this phone has no sys-therm/board zone, so the shell reading stands in" ;;
   none)  NOTE "surface (body) temperature: NOT AVAILABLE - surface-based heat trims cannot engage on this phone" ;;
@@ -3457,7 +3463,10 @@ if [ -s "$_led" ]; then
     if [ -n "$_badk" ]; then
       NOTE "-> $(printf '%s\n' "$_badk" | grep -c .) key(s) the device did not accept - not in effect (key: result - wanted -> device has):"
       printf '%s\n' "$_badk" | head -15 | while IFS='|' read -r _bk _br _bw _bq _bn _bc; do
-        P "    ${_bk}: ${_br}${_bw:+ (${_bw})} - ${_bq:-?} -> ${_bn:-?}  [${_bc}x]"
+        case "$_bw" in
+          *"not retried"*) P "    ${_bk}: ${_br} (${_bw}) - wanted ${_bq:-?}, not asked this boot  [${_bc}x]" ;;
+          *) P "    ${_bk}: ${_br}${_bw:+ (${_bw})} - ${_bq:-?} -> ${_bn:-?}  [${_bc}x]" ;;
+        esac
       done
     else
       NOTE "-> ${_bad} earlier rejection(s), all applied on a later attempt - nothing is outstanding"
@@ -4893,9 +4902,9 @@ if [ -s "$_ux_led" ]; then
   # refusals - "the ROM blocks this write" sent people chasing a permission problem that
   # is not there. The summary names the count only when there is one, so a device with
   # no absent keys prints exactly the line it always did.
-  _ux_ls="$(awk -F'|' '$2 != "reconcile" { k = $2 "/" $3; last[k] = $7; req[k] = $4; now[k] = $6 }
+  _ux_ls="$(awk -F'|' '$2 != "reconcile" { k = $2 "/" $3; last[k] = $7; req[k] = $4; now[k] = $6; why[k] = $8 }
     END { for (k in last) { c[last[k]]++;
-            if (last[k] == "not_writable" || last[k] == "readback_mismatch") printf "X|%s|%s|%s\n", k, req[k], now[k];
+            if (last[k] == "not_writable" || last[k] == "readback_mismatch") printf "X|%s|%s|%s|%s\n", k, req[k], now[k], (why[k] ~ /not retried/ ? "skip" : "");
             else if (last[k] == "unsupported" && k ~ /^settings\//) { u++; printf "U|%s|%s\n", k, req[k] } }
           printf "C|%d|%d|%d|%d\n", c["applied"], c["already_set"], c["not_writable"] + c["readback_mismatch"], u }' "$_ux_led" 2>/dev/null)"
   _ux_c="$(printf '%s\n' "$_ux_ls" | grep '^C|')"
@@ -4903,8 +4912,12 @@ if [ -s "$_ux_led" ]; then
   case "$_ux_refused" in ''|*[!0-9]*) _ux_refused=0 ;; esac
   _ux_na="$(printf '%s' "$_ux_c" | cut -d'|' -f5)"
   P "     system settings ASB writes (by key, last result): applied $(printf '%s' "$_ux_c" | cut -d'|' -f2) · already set $(printf '%s' "$_ux_c" | cut -d'|' -f3) · refused by Android $(printf '%s' "$_ux_c" | cut -d'|' -f4)$(case "${_ux_na:-0}" in ''|*[!0-9]*|0) ;; *) printf ' · not on this ROM %s' "$_ux_na" ;; esac)"
-  printf '%s\n' "$_ux_ls" | grep '^X|' | sort | head -10 | while IFS='|' read -r _x _xk _xr _xn; do
-    P "       refused, not in effect: $_xk (wanted ${_xr:-?}, device keeps ${_xn:-?}) - the ROM blocks this write"
+  printf '%s\n' "$_ux_ls" | grep '^X|' | sort | head -10 | while IFS='|' read -r _x _xk _xr _xn _xs; do
+    if [ "$_xs" = skip ]; then
+      P "       refused, not in effect: $_xk (wanted ${_xr:-?}) - refused on an earlier boot of this ROM build, not asked again until an OTA or a reinstall"
+    else
+      P "       refused, not in effect: $_xk (wanted ${_xr:-?}, device keeps ${_xn:-?}) - the ROM blocks this write"
+    fi
   done
   printf '%s\n' "$_ux_ls" | grep '^U|' | sort | head -5 | while IFS='|' read -r _u _uk _ur; do
     P "       not on this ROM: $_uk (wanted ${_ur:-?}) - this ROM has no such setting; nothing is wrong"
