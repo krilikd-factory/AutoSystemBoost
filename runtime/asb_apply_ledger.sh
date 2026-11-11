@@ -87,10 +87,17 @@ asb_ledger_settings() {
     asb_ledger_note settings "$_ls_k" "$_ls_v" "" "" unsupported "settings binary absent" ""
     return 1
   }
-  if [ -s "$ASB_SETTINGS_REJECTED" ] && \
-     grep -Fqx "$_ls_ns|$_ls_k|$_ls_v|$(_asb_ledger_rom)" "$ASB_SETTINGS_REJECTED" 2>/dev/null; then
-    asb_ledger_note settings "$_ls_k" "$_ls_v" "" "" not_writable "rejected before on this ROM build - not retried" ""
-    return 1
+  if [ -s "$ASB_SETTINGS_REJECTED" ]; then
+    _ls_rc0="$(awk -F'|' -v n="$_ls_ns" -v k="$_ls_k" -v v="$_ls_v" -v r="$(_asb_ledger_rom)" \
+      '$1 == n && $2 == k && $3 == v && $4 == r { c = ($5 == "" ? "not_writable" : $5) } END { print c }' "$ASB_SETTINGS_REJECTED" 2>/dev/null)"
+    case "$_ls_rc0" in
+      unsupported)
+        asb_ledger_note settings "$_ls_k" "$_ls_v" "" "" unsupported "key absent on this ROM - not retried" ""
+        return 1 ;;
+      ?*)
+        asb_ledger_note settings "$_ls_k" "$_ls_v" "" "" not_writable "rejected before on this ROM build - not retried" ""
+        return 1 ;;
+    esac
   fi
 
   _ls_prev="$(settings get "$_ls_ns" "$_ls_k" 2>/dev/null)"
@@ -141,14 +148,16 @@ asb_ledger_settings() {
     # back as 1) did take, and must not be skipped later.
     if [ "$_ls_now" = "$_ls_prev" ]; then
       mkdir -p "${ASB_SETTINGS_REJECTED%/*}" 2>/dev/null
-      printf '%s|%s|%s|%s\n' "$_ls_ns" "$_ls_k" "$_ls_v" "$(_asb_ledger_rom)" >> "$ASB_SETTINGS_REJECTED" 2>/dev/null
+      _ls_cls=not_writable
+      [ "$_ls_absent" = "1" ] && _ls_cls=unsupported
+      printf '%s|%s|%s|%s|%s\n' "$_ls_ns" "$_ls_k" "$_ls_v" "$(_asb_ledger_rom)" "$_ls_cls" >> "$ASB_SETTINGS_REJECTED" 2>/dev/null
     fi
   elif [ "$_ls_absent" = "1" ]; then
     # Silently ignored write to a key this ROM does not have: remember it too, or the
     # boot path and every reinforce pass will keep paying three `settings` calls for it.
     asb_ledger_note settings "$_ls_k" "$_ls_v" "$_ls_prev" "$_ls_now" unsupported "key absent on this ROM" ""
     mkdir -p "${ASB_SETTINGS_REJECTED%/*}" 2>/dev/null
-    printf '%s|%s|%s|%s\n' "$_ls_ns" "$_ls_k" "$_ls_v" "$(_asb_ledger_rom)" >> "$ASB_SETTINGS_REJECTED" 2>/dev/null
+    printf '%s|%s|%s|%s|%s\n' "$_ls_ns" "$_ls_k" "$_ls_v" "$(_asb_ledger_rom)" unsupported >> "$ASB_SETTINGS_REJECTED" 2>/dev/null
   else
     asb_ledger_note settings "$_ls_k" "$_ls_v" "$_ls_prev" "$_ls_now" readback_mismatch \
       "accepted but device reports a different value" ""
