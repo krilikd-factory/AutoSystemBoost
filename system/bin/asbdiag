@@ -1168,6 +1168,8 @@ if [ -r "$_state" ]; then
   fi
   _pe="$(grep -m1 '^prime_escape=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
   _pec="$(grep -m1 '^prime_escape_count=' /dev/.asb/state 2>/dev/null | cut -d= -f2)"
+  _gbe="$(_rget gpu_bound_entries /dev/.asb/state 2>/dev/null)"
+  [ -n "$_gbe" ] && NOTE "GPU-bound rendering: GAMING reached ${_gbe} time(s) this session without the package table (GPU 90 % busy or more for 3 ticks; latch now $(_rget gpu_bound_streak /dev/.asb/state 2>/dev/null || echo 0); last for $(_rget gpu_bound_pkg /dev/.asb/state 2>/dev/null || echo -); $(_rget gpu_bound_backoffs /dev/.asb/state 2>/dev/null || echo 0) latch(es) that fell apart at once, now $(_rget gpu_bound_need /dev/.asb/state 2>/dev/null || echo 3) ticks needed) - a game or 3D app the table does not list; a video player or a feed named here would be a false latch worth reporting"
   [ -n "$_pe" ] && NOTE "HEAVY prime escape: $([ "$_pe" = 1 ] && echo ACTIVE || echo idle) · bursts this session: ${_pec:-0} · lifted $(_rget prime_escape_total_s /dev/.asb/state 2>/dev/null || echo 0) s in total (heavy_prime_escape=$(cfg heavy_prime_escape), burst $(cfg prime_escape_burst_s) s / rest $(cfg prime_escape_rest_s) s)"
   # Bursts the gates kept shut (fix126) - a pinned prime the escape deliberately left alone.
   _psw="$(_rget prime_escape_skip_warm /dev/.asb/state 2>/dev/null)"
@@ -3024,6 +3026,13 @@ if [ -r "$_sef" ]; then
 else
   P "  Smart energy         : no summary yet (smart_energy=$(cfg smart_energy))"
 fi
+_s7j="${ASB_S7_DIR:-/data/adb/asb/smart7}/journal"
+if [ -s "$_s7j" ]; then
+  _s7c="$(awk -F'|' 'NF == 8 { n[$8]++; if ($8 == "active") a[$4]++ }
+    END { printf "%d active (background budget %d, mobile data %d) · %d undone by ASB · %d left as another component had already changed them", n["active"], a["budget"], a["data"], n["undone"], n["external"] }' "$_s7j")"
+  P "  Smart background/data: $_s7c"
+  NOTE "\"left as another component had already changed them\": at undo time the app's standby bucket or data restriction was no longer ASB's value, so ASB did not write over it - not an undo by ASB"
+fi
 P "  Smart V7 look-ahead  : heat in 2 min $(_rget therm_proj_c /dev/.asb/state 2>/dev/null) C (Smart) · Performance lead $(_rget perf_proj_lead_c /dev/.asb/state 2>/dev/null) C, $(_rget perf_proj_early_ticks /dev/.asb/state 2>/dev/null) early tick(s) · kind of use $(_rget en_class /dev/.asb/state 2>/dev/null) · class_auto=$(_rget class_auto /dev/.asb/state 2>/dev/null) (profile_class_auto=$(cfg profile_class_auto)) · Balanced replay $(_rget rec_replay /dev/.asb/state 2>/dev/null) (smart_records_balanced=$(cfg smart_records_balanced)) · smoothness tests skipped for LSPosed-hooked apps $(_rget smooth_lsp_skips /dev/.asb/state 2>/dev/null)"
 _ddn="$(_rget ddr_node /dev/.asb/state 2>/dev/null)"
 _dds="$(_rget ddr_idle_samples /dev/.asb/state 2>/dev/null)"
@@ -3039,15 +3048,20 @@ esac
 _slf=/dev/.asb/smart_lab.txt
 if [ -r "$_slf" ]; then
   P "  Smart lab            : smart_lab=$(cfg smart_lab) smart_lab_mem=$(cfg smart_lab_mem) · $(sed -n 's/^now|//p' "$_slf" | head -1 | tr '|' ' ')"
-  awk -F'|' '$1 == "knob" && NF == 18 && $3 != "free" {
+  awk -F'|' '$1 == "knob" && (NF == 18 || NF == 20) && $3 != "free" {
       line = sprintf("    %-11s %-8s best: %s", $2, $3, $4)
       if ($3 == "testing") line = line sprintf(" · trying %s, %d pair(s), %+.1f %% so far, ceiling %+.1f pt, jank %+.2f pt, heat %+d dC/h", $5, $6, $7 / 10, $8 / 10, $9 / 100, $10)
       if ($12 > 0) line = line sprintf(" · won %d time(s), last %.1f %% cheaper", $12, $11 / 10)
       if ($14 > 0) line = line sprintf(" · tested again %d time(s) after its cost rose", $14)
       line = line sprintf(" · %d block(s), now %s mW, reference %s mW", $15, $16, $17)
       if ($18 != "-") line = line " · " $18
+      if (NF == 20 && $19 != "-") line = line " · last decision: " $19
+      if (NF == 20 && $20 >= 0) line = line sprintf(" · re-tested in %d day(s)", $20)
       print line }' "$_slf" | while IFS= read -r _sll; do P "$_sll"; done
   P "    $(sed -n 's/^mem|//p' "$_slf" | head -1 | tr '|' ' ')"
+  _slv="$(awk -F'|' '$1 == "voter" && NF == 4 { s = s (s ? ", " : "") $2 ":" $3 " (" $4 ")" } END { print s }' "$_slf")"
+  [ -n "$_slv" ] && P "    bus voters: $_slv"
+  P "    cost: lab $(_rget lab_cpu_ms /dev/.asb/state 2>/dev/null || echo ?) ms, energy table $(_rget energy_cpu_ms /dev/.asb/state 2>/dev/null || echo ?) ms of the governor's CPU since it started"
   NOTE "a lab setting wins only at least 3 % cheaper side by side (t >= 2.5) without more ceiling time (+8 pt), janky frames (+1 pt) or faster warming (+15 dC/h); the memory bus is capped only through the CPU's own voters, read back and given back"
 else
   P "  Smart lab            : no summary yet (smart_lab=$(cfg smart_lab))"
@@ -4363,9 +4377,14 @@ for _pol in /sys/devices/system/cpu/cpufreq/policy*; do
   # governor tunables that shape responsiveness (schedutil / walt)
   for _t in schedutil/rate_limit_us schedutil/up_rate_limit_us \
             schedutil/down_rate_limit_us schedutil/hispeed_freq \
-            walt/target_loads walt/up_rate_limit_us walt/down_rate_limit_us; do
+            walt/target_loads walt/up_rate_limit_us walt/down_rate_limit_us \
+            walt/hispeed_load walt/hispeed_freq walt/rtg_boost_freq walt/pl walt/boost \
+            walt/adaptive_low_freq walt/adaptive_high_freq walt/target_load_thresh; do
     [ -r "$_pol/$_t" ] && P "        tunable $_t = $(cat "$_pol/$_t" 2>/dev/null)"
   done
+  if [ "$_gov" = walt ] && [ ! -d "$_pol/schedutil" ]; then
+    P "        (walt: the profiles' schedutil rate limits have no node here; walt keeps the values above, and ASB tunes it through /proc/sys/walt and the caps)"
+  fi
   # boost / scaling driver
   [ -r "$_pol/scaling_driver" ] && P "        driver   = $(cat "$_pol/scaling_driver" 2>/dev/null)"
 done
@@ -4484,10 +4503,20 @@ P "  GPU (Adreno):"
 _kg=/sys/class/kgsl/kgsl-3d0
 if [ -d "$_kg" ]; then
   P "    model          = $(cat $_kg/gpu_model 2>/dev/null)"
-  P "    governor       = $(cat $_kg/devfreq/governor 2>/dev/null)"
-  P "    cur_freq       = $(cat $_kg/devfreq/cur_freq 2>/dev/null)"
-  P "    min/max_freq   = $(cat $_kg/devfreq/min_freq 2>/dev/null) / $(cat $_kg/devfreq/max_freq 2>/dev/null)"
-  P "    available_freq = $(cat $_kg/devfreq/available_frequencies 2>/dev/null)"
+  _g_gov="$(cat $_kg/devfreq/governor 2>/dev/null)"
+  _g_cur="$(cat $_kg/devfreq/cur_freq 2>/dev/null)"
+  _g_min="$(cat $_kg/devfreq/min_freq 2>/dev/null)"
+  _g_max="$(cat $_kg/devfreq/max_freq 2>/dev/null)"
+  _g_av="$(cat $_kg/devfreq/available_frequencies 2>/dev/null)"
+  [ -n "$_g_cur" ] || _g_cur="$(cat $_kg/gpuclk 2>/dev/null)"
+  [ -n "$_g_min" ] || _g_min="$(cat $_kg/min_gpuclk 2>/dev/null)"
+  [ -n "$_g_max" ] || _g_max="$(cat $_kg/max_gpuclk 2>/dev/null)"
+  [ -n "$_g_av" ] || _g_av="$(cat $_kg/gpu_available_frequencies 2>/dev/null)"
+  if [ -z "$_g_gov" ] && [ -e "$_kg/max_pwrlevel" ]; then _g_gov="pwrlevel (no devfreq node; ASB caps through max_pwrlevel)"; fi
+  P "    governor       = $_g_gov"
+  P "    cur_freq       = $_g_cur"
+  P "    min/max_freq   = $_g_min / $_g_max"
+  P "    available_freq = $_g_av"
   P "    max_pwrlevel   = $(cat $_kg/max_pwrlevel 2>/dev/null)  (num_pwrlevels=$(cat $_kg/num_pwrlevels 2>/dev/null))"
   P "    min_pwrlevel   = $(cat $_kg/min_pwrlevel 2>/dev/null)"
   P "    default_pwr    = $(cat $_kg/default_pwrlevel 2>/dev/null)"
