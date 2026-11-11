@@ -7246,12 +7246,27 @@ static asb_lab_in_t base(void) {
     return in;
 }
 static void step(asb_lab_in_t *in, int sec) { g_ms += (long long)sec * 1000; g_wall += sec; in->now_ms = g_ms; in->wall = g_wall; }
+static long g_cc = 4000000; static long long g_net = 0;
+static long rcc(void) { return g_cc; }
+static long long rnet(void) { return g_net; }
 int main(int argc, char **argv) {
     (void)argc;
     g_lab_gfx_ask = ask; g_lab_gfx_read = rd;
     const char *mode = argv[1];
     int lr = asb_lab_load();
-    if (lr != (strcmp(mode, "reload") ? 1 : 0)) { printf("load_rc=%d\n", lr); return 1; }
+    int want_rc = !strcmp(mode, "reload") ? 0 : (!strcmp(mode, "migrate") ? 3 : 1);
+    if (lr != want_rc) { printf("load_rc=%d\n", lr); return 1; }
+    if (!strcmp(mode, "mk_v1")) {
+        g_lab.k[LAB_RADIO].champion = 1; g_lab.k[LAB_RADIO].wins = 1;
+        g_lab.k[LAB_MEM_OFF].pairs = 7; g_lab.k[LAB_MEM_OFF].pr_mean = -0.2; g_lab.k[LAB_MEM_OFF].blocks = 14;
+        g_lab.version = 1;
+        return asb_lab_save() == 0 ? 0 : 1;
+    }
+    if (!strcmp(mode, "migrate")) {
+        printf("migrate radio=%d wins=%u memoff_pairs=%u memoff_blocks=%u version=%u dirty=%d\n", g_lab.k[LAB_RADIO].champion,
+               g_lab.k[LAB_RADIO].wins, g_lab.k[LAB_MEM_OFF].pairs, g_lab.k[LAB_MEM_OFF].blocks, g_lab.version, g_lab_dirty);
+        return 0;
+    }
     if (!strcmp(mode, "radio")) {
         asb_lab_in_t in = base(); in.radio_ok = 1; in.on_mobile = 1;
         long long bytes = 0; int reopened = 0, file_at_verdict = -1;
@@ -7283,7 +7298,25 @@ int main(int argc, char **argv) {
             asb_lab_tick(&in);
         }
         asb_lab_knob_t *k = &g_lab.k[LAB_MEM_ON];
-        printf("mem champion=%d wins=%u fails=%u converged=%d voters=%d\n", k->champion, k->wins, k->fails, k->converged, g_mem_nv);
+        printf("mem champion=%d wins=%u fails=%u converged=%d voters=%d early=%lu\n", k->champion, k->wins, k->fails, k->converged, g_mem_nv, g_lab_early_stops);
+        return 0;
+    }
+    if (!strcmp(mode, "off_net")) {
+        g_lab_read_cc = rcc; g_lab_read_net = rnet;
+        asb_lab_in_t in = base(); in.mem_ok = 1; in.screen_on = 0;
+        asb_mem_probe_run();
+        for (int t = 0; t < 3 * 3600; t += 30) {
+            step(&in, 30); g_cc -= 1000L * 30 * 60 / 3600; g_net += 40LL * 1024 * 30;
+            asb_lab_tick(&in);
+        }
+        unsigned heavy_blocks = g_lab.k[LAB_MEM_OFF].blocks;
+        unsigned long heavy_aside = g_lab_blocks_radio;
+        for (int t = 0; t < 3 * 3600; t += 30) {
+            step(&in, 30); g_cc -= 1000L * 30 * 60 / 3600; g_net += 2LL * 1024 * 30;
+            asb_lab_tick(&in);
+        }
+        printf("off_net heavy_blocks=%u heavy_aside=%lu light_blocks=%u aside=%lu\n", heavy_blocks, heavy_aside,
+               g_lab.k[LAB_MEM_OFF].blocks, g_lab_blocks_radio);
         return 0;
     }
     if (!strcmp(mode, "lift")) {
@@ -7300,7 +7333,7 @@ int main(int argc, char **argv) {
             step(&in, 5); asb_lab_tick(&in);
         }
         asb_lab_knob_t *k = &g_lab.k[LAB_LIFT];
-        printf("lift champion=%d pct=%d wins=%u converged=%d jank_pairs=%u\n", k->champion, g_lab_lift_pct, k->wins, k->converged, k->jank_pairs);
+        printf("lift champion=%d pct=%d wins=%u converged=%d jank_pairs=%u early=%lu\n", k->champion, g_lab_lift_pct, k->wins, k->converged, k->jank_pairs, g_lab_early_stops);
         return 0;
     }
     if (!strcmp(mode, "apps")) {
@@ -7343,10 +7376,23 @@ echo "$out" | grep -q 'radio_file_at_verdict=nr retest_challenger=0' || fail "ra
 grep -q '^knob|radio|' "$T/lab.txt" || fail "no radio line in the summary"
 cp "$T/lab.txt" "$T/lab_radio.txt"
 out="$("$T/lab" reload)"; echo "$out" | grep -q 'reload champion=1 converged=0' || fail "the store did not survive a restart: $out"
+# V66 dev11: a version-1 store keeps every knob but membus_off, whose pairs may hold busy-radio blocks.
+rm -f "$T/lab.bin"
+"$T/lab" mk_v1 || fail "could not write a version-1 store"
+out="$("$T/lab" migrate)" || fail "a version-1 store was not loaded: $out"
+echo "$out" | grep -q 'migrate radio=1 wins=1 memoff_pairs=0 memoff_blocks=0 version=2 dirty=1' || fail "version-1 store not migrated knob by knob: $out"
 rm -f "$T/lab.bin" "$T/lab.bin.tmp"
 out="$("$T/lab" mem_guard)" || fail "mem guard run failed"
 echo "$out" | grep -q 'mem champion=0 wins=0 fails=1' || fail "membus_on: a cap that pins the cores won: $out"
+# V66 dev11: 20 points more time at the ceiling ends the trial after three pairs, not six.
+echo "$out" | grep -q 'early=1' || fail "membus_on: the pinned-cores challenger was run to the full count: $out"
 [ "$(cat "$T/bus/DDR/soc:qcom,memlat:ddr:gold/max_freq")" = 4224000 ] || fail "membus_on: the bus was left capped"
+rm -f "$T/lab.bin"
+# V66 dev11: a screen-off bus block that moved 40 KiB/s of mobile data measures the radio, not
+# the bus: it is set aside; at 2 KiB/s the blocks count again.
+out="$("$T/lab" off_net)" || fail "off_net run failed"
+echo "$out" | grep -q 'off_net heavy_blocks=0 heavy_aside=[1-9]' || fail "membus_off: a busy-radio block was counted: $out"
+echo "$out" | grep -Eq 'light_blocks=[1-9]' || fail "membus_off: quiet blocks were not counted: $out"
 rm -f "$T/lab.bin"
 out="$("$T/lab" lift 0)" || fail "lift run failed"
 echo "$out" | grep -q 'lift champion=1 pct=65 wins=1 converged=1' || fail "lift: 15 points less did not win: $out"
@@ -7354,6 +7400,11 @@ echo "$out" | grep -q 'jank_pairs=[1-9]' || fail "lift: SystemUI frames were not
 rm -f "$T/lab.bin"
 out="$("$T/lab" lift 2)" || fail "lift jank run failed"
 echo "$out" | grep -q 'lift champion=0 pct=80 wins=0' || fail "lift: a jankier wake won on energy alone: $out"
+rm -f "$T/lab.bin"
+# V66 dev11: 3 points more janky frames end the trial after two pairs instead of five.
+out="$("$T/lab" lift 3)" || fail "lift early-stop run failed"
+echo "$out" | grep -q 'lift champion=0 pct=80 wins=0' || fail "lift: a much jankier wake won: $out"
+echo "$out" | grep -q 'jank_pairs=2 early=1' || fail "lift: 3 points more janky frames did not stop the trial at two pairs: $out"
 rm -f "$T/lab.bin"
 out="$("$T/lab" apps)"
 echo "$out" | grep -q 'apps slot2=1 front=1 offset=200 on_block=app2' || fail "apps: lab app in front not owned: $out"
@@ -7397,6 +7448,28 @@ grep -q 'if (profile_idx == PROFILE_SMART && g_lab_lift_pct > 0) pct = g_lab_lif
 grep -q '(g_lab_app_front ? g_lab_app_offset : 0)' "$G" || fail "the lean ignores the lab app"
 grep -q 'asb_mem_apply(0, (long)time(NULL));' "$G" || fail "the bus cap is not given back at shutdown"
 grep -q 'if (!asb_fork_budget_take((long)now)) pkg\[0\]' "$ROOT/src/asb_smart.h" || fail "app-lookup forks are not budgeted"
+# V66 dev11: a session the bucket did not take (too short, filtered) is not counted, so the
+# WebUI total matches the bucket observations; the bus lab reads mobile bytes for its filter.
+grep -q 'g_smart_store.buckets\[bid\].observations_raw != _obs_before' "$G" || fail "refused sessions are still counted"
+grep -q 'g_lab_read_net = asb_rec_net_bytes;' "$G" || fail "the bus lab cannot see mobile traffic"
+# V66 dev11: the day log carries the lab summary (copy + readable lines), on the real function.
+F="$ROOT/tools/logkit/asb_log_full_day.sh"
+sed -n '/^lk_emit_smart_records() {/,/^}/p' "$F" > "$T/emit.sh"
+[ -s "$T/emit.sh" ] || fail "lk_emit_smart_records not found in the day log"
+mkdir -p "$T/out"
+printf 'counter=charge\n' > "$T/rec.txt"
+cat > "$T/lab_sum.txt" <<'EOF'
+knob|radio|testing|lte_only|nr_allowed|3|-82|10|0|2|0|0|1|0|8|1420.0|0.0|-
+knob|membus_off|free|-|-|0|0|0|0|0|0|0|0|0|0|0.0|0.0|-
+mem|bus_dcvs|voters=10|active=10|doms=2|cap_now=0|writes=47|restores=47|yields=0|fails=0
+now|radio_arm=1|lift_pct=0|mem_on=0|mem_off=0|app_front=0|on_block=radio|off_block=-|glances=0|kept=8|short=2|rejected=1|wins=0|reopened=0|radio_set_aside=3|early_stops=1
+EOF
+out="$(sh -c '. "$1"; lk_state_kv() { :; }; LK_OUT_DIR="$2"; LK_SF_FILE="$2/none"; ASB_LK_RECORDS_FILE="$3"; ASB_LK_LAB_FILE="$4"; lk_emit_smart_records' x "$T/emit.sh" "$T/out" "$T/rec.txt" "$T/lab_sum.txt")" || fail "day-log Smart section failed: $out"
+cmp -s "$T/lab_sum.txt" "$T/out/smart_lab.txt" || fail "the lab summary was not copied into the day log"
+echo "$out" | grep -q '^lab: radio .*testing .*trying nr_allowed, 3 pair(s), -8.2 %' || fail "the testing knob is not shown: $out"
+echo "$out" | grep -q '^lab: membus_off' && fail "a free knob was listed: $out"
+echo "$out" | grep -q '^lab bus: bus_dcvs voters=10' || fail "the bus line is missing: $out"
+echo "$out" | grep -q '^lab now: .*radio_set_aside=3 early_stops=1' || fail "the now line is missing: $out"
 echo "PASS smart lab native: radio, wake lift, apps and memory bus tried in pairs with ceiling/frame/heat guards, dynamics re-open, owned bus writes with yield, store reload"
 )
 

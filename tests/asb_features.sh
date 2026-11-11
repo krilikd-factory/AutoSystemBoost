@@ -5404,12 +5404,19 @@ run() { sh -c '. "$1"; asb_ledger_settings "$2" "$3" "$4"; echo "rc=$?"' x "$ROO
 
 r="$(run global network_recommendations_enabled 0)"
 [ "$r" = rc=1 ] || fail "rejected write reported as success: $r"
-grep -qx 'global|network_recommendations_enabled|0|OnePlus/CPH2745/OP611FL1:16/A' "$T/state/settings_rejected" || fail "refusal not remembered"
+grep -qx 'global|network_recommendations_enabled|0|OnePlus/CPH2745/OP611FL1:16/A|unsupported' "$T/state/settings_rejected" || fail "refusal not remembered with its class: $(cat "$T/state/settings_rejected")"
 : > "$T/calls"
 r="$(run global network_recommendations_enabled 0)"
 [ "$r" = rc=1 ] || fail "skipped write reported as success: $r"
 [ -s "$T/calls" ] && fail "settings called again for a known refusal: $(cat "$T/calls")"
-tail -1 "$T/state/apply_ledger" | grep -q 'not_writable|rejected before on this ROM build - not retried' || fail "skip not in the ledger"
+tail -1 "$T/state/apply_ledger" | grep -q 'unsupported|key absent on this ROM - not retried' || fail "skip of an absent key not filed as unsupported: $(tail -1 "$T/state/apply_ledger")"
+# V66 dev11: a refusal of a key that exists keeps its class on the skipped boots too, and a
+# list written by an older build (four fields) still means "refused".
+printf 'global|older_key|1|OnePlus/CPH2745/OP611FL1:16/A\nglobal|refused_key|0|OnePlus/CPH2745/OP611FL1:16/A|not_writable\n' >> "$T/state/settings_rejected"
+: > "$T/calls"
+run global older_key 1 >/dev/null; tail -1 "$T/state/apply_ledger" | grep -q 'not_writable|rejected before on this ROM build - not retried' || fail "an old-format entry was not honoured"
+run global refused_key 0 >/dev/null; tail -1 "$T/state/apply_ledger" | grep -q 'not_writable|rejected before on this ROM build - not retried' || fail "a refusal lost its class"
+[ -s "$T/calls" ] && fail "settings called for remembered keys: $(cat "$T/calls")"
 # Other keys are unaffected.
 r="$(run global wifi_scan_throttle_enabled 1)"
 [ "$r" = rc=0 ] || fail "accepted write broken: $r"
