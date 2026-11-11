@@ -486,7 +486,7 @@
     },
     "ltpo_peak_force": {
       "name": "Máximo do painel ao tocar",
-      "desc": "Funciona com Forçar LTPO. Enquanto o ecrã é tocado, pede-se ao SurfaceFlinger o modo mais alto que o próprio painel indica (165 Hz nos painéis que o listam), acima de uma ROM que mantém as apps normais a 120 Hz. O pedido é libertado assim que o vigia de toques fica em repouso, e voltam a frequência de repouso e a redução de quadros própria do painel. Gasta mais energia enquanto toca no ecrã. Uma ROM que recusa o pedido é deixada em paz e o selo indica-o."
+      "desc": "Funciona com «Forçar LTPO». Enquanto a tela é tocada, pede-se ao SurfaceFlinger o modo mais alto que o próprio painel informa, contornando uma ROM que mantém os apps comuns a 120 Hz. O teto é o que o painel anuncia — 165 Hz no OnePlus 15; uma taxa que o painel não lista em sua tabela de modos não pode ser selecionada, então o ASB nunca inventa uma. Para tornar esse modo máximo realmente alcançável, o ASB também desbloqueia os próprios interruptores de disponibilidade de «atualização extrema» da OnePlus; ele nunca força o painel alto o tempo todo, então o pedido é liberado assim que o monitor de toque fica ocioso e a redução de quadros do próprio painel retorna. Os interruptores desbloqueados e a faixa de atualização são registrados e restaurados ao desligar ou desinstalar. Consome mais energia enquanto você toca a tela. Uma ROM que recusa o pedido, ou que não tem tais interruptores, é deixada intacta e o selo informa isso."
     }
   },
   "nav_live": "Monitor",
@@ -2995,5 +2995,25 @@
   "s7l_lab_reopen": " · testado de novo após o custo subir (%s×)",
   "s7l_lab_mem": "Barramento de memória: %1 nó(s) encontrado(s) (%2), agora %3",
   "s7l_lab_none": "Nenhuma experiência terminou ainda um bloco: cada uma precisa de vários pares de blocos fora do carregador.",
-  "s7l_lab_note": "Um ajuste só vence quando a bateria o mediu pelo menos 3 % mais barato, lado a lado, sem núcleos mais vezes no teto, mais quadros travados ou aquecimento mais rápido."
+  "s7l_lab_note": "Um ajuste só vence quando a bateria o mediu pelo menos 3 % mais barato, lado a lado, sem núcleos mais vezes no teto, mais quadros travados ou aquecimento mais rápido.",
+  "inf_title": "Enfermaria",
+  "grp_infirmary": "Enfermaria",
+  "cfg_inf_section_battery": "Bateria",
+  "cfg_inf_section_battery_hint": "Uma redefinição única das estatísticas de bateria armazenadas pelo Android, oferecida apenas com carga completa.",
+  "cfg_inf_section_repairs": "Reparos do sistema",
+  "cfg_inf_section_repairs_hint": "Reparos reversíveis com um toque para problemas específicos do OxygenOS/ColorOS.",
+  "bfx_title": "Correção de bateria",
+  "bfx_desc": "Redefine as estatísticas de bateria armazenadas pelo Android: o histórico de uso por app e a estimativa de capacidade aprendida reaprendem a partir de uma carga completa. Isso não adiciona capacidade nem autonomia — apenas limpa um registro distorcido. Também recompila os apps no lugar para inícios mais suaves. Disponível apenas a 100% na carga; a redefinição é aplicada na próxima reinicialização.",
+  "bfx_run": "Executar correção de bateria",
+  "bfx_cancel": "Cancelar a redefinição agendada",
+  "bfx_reboot": "Reiniciar agora",
+  "bfx_st_pending": "Agendado — reinicie para aplicar",
+  "bfx_st_ready": "Pronto — bateria cheia na carga",
+  "bfx_need_full": "Carregue até 100% para usar",
+  "bfx_need_charge": "Conecte o carregador para usar",
+  "bfx_need": "Disponível apenas a 100% na carga",
+  "bfx_confirm": "Toque novamente para executar a correção",
+  "bfx_armed": "Agendado — reinicie para redefinir as estatísticas",
+  "bfx_refused": "Indisponível agora — precisa de 100% na carga",
+  "bfx_cancelled": "Redefinição agendada cancelada"
 }

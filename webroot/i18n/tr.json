@@ -486,7 +486,7 @@
     },
     "ltpo_peak_force": {
       "name": "Dokunuşta panel azamisi",
-      "desc": "LTPO Zorla ile birlikte çalışır. Ekrana dokunulurken SurfaceFlinger'dan panelin kendisinin bildirdiği en yüksek mod istenir (listeleyen panellerde 165 Hz); sıradan uygulamaları 120 Hz'de tutan bir ROM'un ötesinde. Dokunma izleyicisi boşa geçer geçmez istek bırakılır; boştaki hız ve panelin kendi kare düşürmesi geri gelir. Ekrana dokunurken daha fazla güç harcar. İsteği reddeden bir ROM'a dokunulmaz ve rozet bunu söyler."
+      "desc": "«LTPO’yu Zorla» ile çalışır. Ekrana dokunulurken, sıradan uygulamaları 120 Hz’de tutan bir ROM’u aşarak SurfaceFlinger’dan panelin kendi bildirdiği en yüksek mod istenir. Tavan, panelin ilan ettiği değerdir — OnePlus 15’te 165 Hz; panelin mod tablosunda listelemediği bir hız seçilemez, bu yüzden ASB asla uydurmaz. O en üst modun gerçekten erişilebilir olması için ASB, OnePlus’ın kendi «aşırı yenileme» kullanılabilirlik anahtarlarını da açar; paneli hiçbir zaman sürekli yüksek tutmaz, bu nedenle dokunma gözcüsü boşa geçtiği anda istek bırakılır ve panelin kendi kare düşürmesi geri gelir. Açılan anahtarlar ve yenileme aralığı kaydedilir ve Kapat’ta veya kaldırmada geri yüklenir. Ekrana dokunduğunuz sürece daha fazla güç harcar. İsteği reddeden veya böyle anahtarları olmayan bir ROM’a dokunulmaz ve rozet bunu belirtir."
     }
   },
   "nav_live": "İzleme",
@@ -2995,5 +2995,25 @@
   "s7l_lab_reopen": " · maliyeti artınca yeniden denendi (%s×)",
   "s7l_lab_mem": "Bellek veri yolu: %1 düğüm bulundu (%2), şu an %3",
   "s7l_lab_none": "Henüz hiçbir deney bir bloğu bitirmedi: her biri şarj dışında birkaç blok çifti ister.",
-  "s7l_lab_note": "Bir ayar yalnızca pil onu yan yana ölçümde en az yüzde 3 daha ucuz bulduğunda kazanır; çekirdekler daha sık sınırda çalışmadan, daha fazla takılan kare ya da daha hızlı ısınma olmadan."
+  "s7l_lab_note": "Bir ayar yalnızca pil onu yan yana ölçümde en az yüzde 3 daha ucuz bulduğunda kazanır; çekirdekler daha sık sınırda çalışmadan, daha fazla takılan kare ya da daha hızlı ısınma olmadan.",
+  "inf_title": "Revir",
+  "grp_infirmary": "Revir",
+  "cfg_inf_section_battery": "Pil",
+  "cfg_inf_section_battery_hint": "Android’in sakladığı pil istatistiklerinin tek seferlik sıfırlanması; yalnızca tam şarjda sunulur.",
+  "cfg_inf_section_repairs": "Sistem onarımları",
+  "cfg_inf_section_repairs_hint": "Belirli OxygenOS/ColorOS sorunları için tek dokunuşla geri alınabilir onarımlar.",
+  "bfx_title": "Pil Onarımı",
+  "bfx_desc": "Android’in sakladığı pil istatistiklerini sıfırlar: uygulama bazlı kullanım geçmişi ve öğrenilen kapasite tahmini tam şarjdan yeniden öğrenir. Bu, kapasite veya pil ömrü eklemez; yalnızca çarpık bir kaydı temizler. Ayrıca daha akıcı açılışlar için uygulamaları yerinde yeniden derler. Yalnızca şarjda %100’de kullanılabilir; sıfırlama bir sonraki yeniden başlatmada uygulanır.",
+  "bfx_run": "Pil Onarımını çalıştır",
+  "bfx_cancel": "Planlanan sıfırlamayı iptal et",
+  "bfx_reboot": "Şimdi yeniden başlat",
+  "bfx_st_pending": "Planlandı — uygulamak için yeniden başlatın",
+  "bfx_st_ready": "Hazır — şarjda pil dolu",
+  "bfx_need_full": "Kullanmak için %100 şarj edin",
+  "bfx_need_charge": "Kullanmak için şarj cihazını takın",
+  "bfx_need": "Yalnızca şarjda %100’de kullanılabilir",
+  "bfx_confirm": "Pil Onarımını çalıştırmak için tekrar dokunun",
+  "bfx_armed": "Planlandı — istatistikleri sıfırlamak için yeniden başlatın",
+  "bfx_refused": "Şu anda kullanılamıyor — şarjda %100 gerekir",
+  "bfx_cancelled": "Planlanan sıfırlama iptal edildi"
 }

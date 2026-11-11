@@ -581,7 +581,7 @@
     },
     "ltpo_peak_force": {
       "name": "Maximum de l'écran au toucher",
-      "desc": "Fonctionne avec Forcer LTPO. Tant que l'écran est touché, SurfaceFlinger reçoit la demande du mode le plus élevé que la dalle annonce elle-même (165 Hz sur les dalles qui le listent), au-delà d'une ROM qui garde les applis ordinaires à 120 Hz. La demande est levée dès que le guetteur de toucher passe au repos, si bien que la fréquence de repos et la baisse d'images propre à la dalle reviennent. Consomme davantage pendant que vous touchez l'écran. Une ROM qui refuse la demande est laissée tranquille et le badge l'indique."
+      "desc": "Fonctionne avec « Forcer LTPO ». Pendant que l’écran est touché, SurfaceFlinger se voit demander le mode le plus élevé que la dalle elle-même signale, en contournant une ROM qui maintient les applications ordinaires à 120 Hz. Le plafond est ce que la dalle annonce — 165 Hz sur le OnePlus 15 ; une fréquence absente de la table des modes de la dalle ne peut pas être sélectionnée, donc ASB n’en invente jamais. Pour rendre ce mode maximal réellement accessible, ASB déverrouille aussi les propres bascules de disponibilité « rafraîchissement extrême » de OnePlus ; il ne force jamais la dalle en permanence, la demande est donc relâchée dès que le surveillant du toucher passe au repos et la baisse d’images propre à la dalle revient. Les bascules déverrouillées et la plage de rafraîchissement sont enregistrées et restaurées à l’arrêt ou à la désinstallation. Consomme plus d’énergie tant que vous touchez l’écran. Une ROM qui refuse la demande, ou qui n’a pas ces bascules, est laissée telle quelle et le badge l’indique."
     }
   },
   "opt": {
@@ -2995,5 +2995,25 @@
   "s7l_lab_reopen": " · retesté après une hausse de son coût (%s×)",
   "s7l_lab_mem": "Bus mémoire : %1 nœud(s) trouvé(s) (%2), maintenant %3",
   "s7l_lab_none": "Aucune expérience n'a encore terminé un bloc : chacune a besoin de plusieurs paires de blocs hors charge.",
-  "s7l_lab_note": "Un réglage ne gagne que si la batterie l'a mesuré au moins 3 % moins cher, côte à côte, sans cœurs plus souvent au plafond, sans plus d'images saccadées ni d'échauffement plus rapide."
+  "s7l_lab_note": "Un réglage ne gagne que si la batterie l'a mesuré au moins 3 % moins cher, côte à côte, sans cœurs plus souvent au plafond, sans plus d'images saccadées ni d'échauffement plus rapide.",
+  "inf_title": "Infirmerie",
+  "grp_infirmary": "Infirmerie",
+  "cfg_inf_section_battery": "Batterie",
+  "cfg_inf_section_battery_hint": "Une réinitialisation unique des statistiques de batterie stockées par Android, proposée uniquement à pleine charge.",
+  "cfg_inf_section_repairs": "Réparations système",
+  "cfg_inf_section_repairs_hint": "Réparations réversibles en un geste pour des problèmes précis d’OxygenOS/ColorOS.",
+  "bfx_title": "Correctif batterie",
+  "bfx_desc": "Réinitialise les statistiques de batterie stockées par Android : l’historique d’usage par application et l’estimation de capacité apprise réapprennent à partir d’une charge pleine. Cela n’ajoute ni capacité ni autonomie — cela efface seulement un relevé faussé. Il recompile aussi les applications sur place pour des lancements plus fluides. Disponible uniquement à 100% en charge ; la réinitialisation s’applique au prochain redémarrage.",
+  "bfx_run": "Lancer le correctif batterie",
+  "bfx_cancel": "Annuler la réinitialisation prévue",
+  "bfx_reboot": "Redémarrer maintenant",
+  "bfx_st_pending": "Programmé — redémarrez pour appliquer",
+  "bfx_st_ready": "Prêt — batterie pleine en charge",
+  "bfx_need_full": "Chargez à 100% pour l’utiliser",
+  "bfx_need_charge": "Branchez le chargeur pour l’utiliser",
+  "bfx_need": "Disponible uniquement à 100% en charge",
+  "bfx_confirm": "Touchez à nouveau pour lancer le correctif",
+  "bfx_armed": "Programmé — redémarrez pour réinitialiser les statistiques",
+  "bfx_refused": "Indisponible pour l’instant — nécessite 100% en charge",
+  "bfx_cancelled": "Réinitialisation prévue annulée"
 }

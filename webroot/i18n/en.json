@@ -535,7 +535,7 @@
     },
     "ltpo_peak_force": {
       "name": "Panel Maximum on Touch",
-      "desc": "Works with Force LTPO Refresh. While the screen is being touched, SurfaceFlinger is asked for the highest mode the panel itself reports (165 Hz on panels that list it), past a ROM that keeps ordinary apps at 120 Hz. The request is released as soon as the touch watcher goes idle, so the idle rate and the panel's own frame drop come back. Costs more power while you touch the screen. A ROM that refuses the request is left alone and the badge says so."
+      "desc": "Works with Force LTPO Refresh. While the screen is being touched, SurfaceFlinger is asked for the highest mode the panel itself reports, past a ROM that keeps ordinary apps at 120 Hz. The ceiling is whatever the panel advertises - 165 Hz on the OnePlus 15; a rate the panel does not list in its mode table cannot be selected, so ASB never invents one. To make that top mode actually reachable, ASB also unlocks OnePlus's own extreme-refresh availability toggles; it never forces the panel high all the time, so the request is still released the moment the touch watcher goes idle and the panel's own frame drop comes back. The unlocked toggles and the refresh range are recorded and restored on Off or uninstall. Costs more power while you touch the screen. A ROM that refuses the request, or has no such toggles, is left alone and the badge says so."
     }
   },
   "cfg_search": "Search",
@@ -2854,5 +2854,25 @@
   "s7l_lab_reopen": " · tested again after its cost rose (%s×)",
   "s7l_lab_mem": "Memory bus: %1 voter(s) found (%2), cap now %3",
   "s7l_lab_none": "No experiment has finished a block yet: each needs several pairs of blocks off the charger.",
-  "s7l_lab_note": "A setting wins only when the battery measured it at least 3 % cheaper, side by side, without the cores at their ceiling more often, more janky frames or faster warming."
+  "s7l_lab_note": "A setting wins only when the battery measured it at least 3 % cheaper, side by side, without the cores at their ceiling more often, more janky frames or faster warming.",
+  "inf_title": "Infirmary",
+  "grp_infirmary": "Infirmary",
+  "cfg_inf_section_battery": "Battery",
+  "cfg_inf_section_battery_hint": "A one-time reset of Android’s stored battery statistics, offered only at a full charge.",
+  "cfg_inf_section_repairs": "System Repairs",
+  "cfg_inf_section_repairs_hint": "One-tap, reversible repairs for specific OxygenOS/ColorOS problems.",
+  "bfx_title": "Battery Fix",
+  "bfx_desc": "Resets Android’s stored battery statistics: the per-app usage history and the learned capacity estimate relearn from a full charge. This does not add capacity or battery life - it only clears a skewed record. It also recompiles apps in place for smoother launches. Available only at 100% on charge; the reset is applied on the next reboot.",
+  "bfx_run": "Run Battery Fix",
+  "bfx_cancel": "Cancel scheduled reset",
+  "bfx_reboot": "Reboot now",
+  "bfx_st_pending": "Scheduled — reboot to apply the reset",
+  "bfx_st_ready": "Ready — battery full on charge",
+  "bfx_need_full": "Charge to 100% to use this",
+  "bfx_need_charge": "Plug in the charger to use this",
+  "bfx_need": "Available only at 100% on charge",
+  "bfx_confirm": "Tap again to run Battery Fix",
+  "bfx_armed": "Scheduled — reboot to reset the statistics",
+  "bfx_refused": "Not available right now — needs 100% on charge",
+  "bfx_cancelled": "Scheduled reset cancelled"
 }

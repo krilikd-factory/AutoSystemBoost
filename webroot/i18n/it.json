@@ -513,7 +513,7 @@
     },
     "ltpo_peak_force": {
       "name": "Massimo del pannello al tocco",
-      "desc": "Funziona con Forza LTPO. Mentre lo schermo viene toccato, a SurfaceFlinger viene chiesta la modalità più alta che il pannello stesso riporta (165 Hz sui pannelli che la elencano), oltre una ROM che tiene le app normali a 120 Hz. La richiesta viene rilasciata appena il controllo dei tocchi torna a riposo, così tornano la frequenza di riposo e la riduzione dei fotogrammi propria del pannello. Consuma di più mentre tocchi lo schermo. Una ROM che rifiuta la richiesta viene lasciata stare e il badge lo dice."
+      "desc": "Funziona con «Forza LTPO». Mentre lo schermo viene toccato, a SurfaceFlinger viene richiesta la modalità più alta che il pannello stesso dichiara, aggirando una ROM che tiene le app normali a 120 Hz. Il limite è ciò che il pannello dichiara: 165 Hz sul OnePlus 15; una frequenza che il pannello non elenca nella sua tabella delle modalità non può essere selezionata, quindi ASB non la inventa mai. Per rendere davvero raggiungibile quella modalità massima, ASB sblocca anche gli interruttori di disponibilità del «refresh estremo» di OnePlus; non forza mai il pannello in alto di continuo, perciò la richiesta viene rilasciata non appena il controllo del tocco passa a riposo e torna il calo di fotogrammi proprio del pannello. Gli interruttori sbloccati e l’intervallo di refresh vengono registrati e ripristinati allo spegnimento o alla disinstallazione. Consuma più energia mentre tocchi lo schermo. Una ROM che rifiuta la richiesta, o che non ha tali interruttori, viene lasciata intatta e il badge lo segnala."
     }
   },
   "optFor": {
@@ -2995,5 +2995,25 @@
   "s7l_lab_reopen": " · riprovato dopo l'aumento del suo costo (%s×)",
   "s7l_lab_mem": "Bus di memoria: %1 nodo/i trovato/i (%2), ora %3",
   "s7l_lab_none": "Nessun esperimento ha ancora chiuso un blocco: ciascuno richiede diverse coppie di blocchi fuori carica.",
-  "s7l_lab_note": "Un'impostazione vince solo se la batteria l'ha misurata almeno il 3 % più economica, fianco a fianco, senza core più spesso al limite, più fotogrammi a scatti o riscaldamento più rapido."
+  "s7l_lab_note": "Un'impostazione vince solo se la batteria l'ha misurata almeno il 3 % più economica, fianco a fianco, senza core più spesso al limite, più fotogrammi a scatti o riscaldamento più rapido.",
+  "inf_title": "Infermeria",
+  "grp_infirmary": "Infermeria",
+  "cfg_inf_section_battery": "Batteria",
+  "cfg_inf_section_battery_hint": "Un azzeramento una tantum delle statistiche della batteria memorizzate da Android, offerto solo a carica piena.",
+  "cfg_inf_section_repairs": "Riparazioni di sistema",
+  "cfg_inf_section_repairs_hint": "Riparazioni reversibili con un tocco per problemi specifici di OxygenOS/ColorOS.",
+  "bfx_title": "Correzione batteria",
+  "bfx_desc": "Azzera le statistiche della batteria memorizzate da Android: la cronologia d’uso per app e la stima di capacità appresa riapprendono da una carica piena. Questo non aggiunge capacità né autonomia: cancella solo un registro distorto. Ricompila anche le app sul posto per avvii più fluidi. Disponibile solo al 100% sotto carica; l’azzeramento si applica al prossimo riavvio.",
+  "bfx_run": "Esegui la correzione batteria",
+  "bfx_cancel": "Annulla l’azzeramento pianificato",
+  "bfx_reboot": "Riavvia ora",
+  "bfx_st_pending": "Pianificato — riavvia per applicare",
+  "bfx_st_ready": "Pronto — batteria piena sotto carica",
+  "bfx_need_full": "Carica al 100% per usarlo",
+  "bfx_need_charge": "Collega il caricabatterie per usarlo",
+  "bfx_need": "Disponibile solo al 100% sotto carica",
+  "bfx_confirm": "Tocca di nuovo per eseguire la correzione",
+  "bfx_armed": "Pianificato — riavvia per azzerare le statistiche",
+  "bfx_refused": "Non disponibile ora — serve il 100% sotto carica",
+  "bfx_cancelled": "Azzeramento pianificato annullato"
 }

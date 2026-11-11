@@ -486,7 +486,7 @@
     },
     "ltpo_peak_force": {
       "name": "Panel-Maximum bei Berührung",
-      "desc": "Funktioniert zusammen mit \"LTPO erzwingen\". Solange der Bildschirm berührt wird, wird SurfaceFlinger um den höchsten Modus gebeten, den das Panel selbst meldet (165 Hz bei Panels, die ihn aufführen), vorbei an einem ROM, das normale Apps bei 120 Hz hält. Die Anforderung wird freigegeben, sobald der Berührungswächter in den Leerlauf geht, sodass die Leerlaufrate und die eigene Bildratenabsenkung des Panels zurückkehren. Kostet mehr Strom, solange Sie den Bildschirm berühren. Ein ROM, das die Anforderung ablehnt, wird in Ruhe gelassen, und das Abzeichen sagt es."
+      "desc": "Arbeitet mit „LTPO erzwingen“. Während der Bildschirm berührt wird, wird bei SurfaceFlinger der höchste Modus angefordert, den das Panel selbst meldet – vorbei an einem ROM, das normale Apps bei 120 Hz hält. Die Obergrenze ist das, was das Panel angibt – 165 Hz beim OnePlus 15; eine Rate, die das Panel nicht in seiner Modustabelle führt, kann nicht gewählt werden, also erfindet ASB keine. Damit dieser höchste Modus tatsächlich erreichbar ist, entsperrt ASB zusätzlich OnePlus’ eigene Verfügbarkeitsschalter für „Extreme-Bildwiederholrate“; das Panel wird nie dauerhaft hochgehalten, die Anforderung wird also freigegeben, sobald die Berührungsüberwachung in den Leerlauf geht, und das panel­eigene Absenken der Bildrate kehrt zurück. Die entsperrten Schalter und der Frequenzbereich werden gesichert und bei „Aus“ oder Deinstallation wiederhergestellt. Kostet mehr Energie, solange du den Bildschirm berührst. Ein ROM, das die Anforderung ablehnt oder keine solchen Schalter hat, bleibt unangetastet, und das Abzeichen sagt das."
     }
   },
   "nav_live": "Monitor",
@@ -2995,5 +2995,25 @@
   "s7l_lab_reopen": " · erneut getestet, nachdem die Kosten stiegen (%s×)",
   "s7l_lab_mem": "Speicherbus: %1 Knoten gefunden (%2), jetzt %3",
   "s7l_lab_none": "Noch kein Experiment hat einen Block beendet: jedes braucht mehrere Blockpaare ohne Ladegerät.",
-  "s7l_lab_note": "Eine Einstellung gewinnt nur, wenn der Akku sie im direkten Vergleich mindestens 3 % günstiger gemessen hat, ohne dass die Kerne öfter am Limit laufen, mehr Frames ruckeln oder das Gerät schneller warm wird."
+  "s7l_lab_note": "Eine Einstellung gewinnt nur, wenn der Akku sie im direkten Vergleich mindestens 3 % günstiger gemessen hat, ohne dass die Kerne öfter am Limit laufen, mehr Frames ruckeln oder das Gerät schneller warm wird.",
+  "inf_title": "Krankenstation",
+  "grp_infirmary": "Krankenstation",
+  "cfg_inf_section_battery": "Akku",
+  "cfg_inf_section_battery_hint": "Ein einmaliges Zurücksetzen der von Android gespeicherten Akkustatistik, nur bei voller Ladung verfügbar.",
+  "cfg_inf_section_repairs": "Systemreparaturen",
+  "cfg_inf_section_repairs_hint": "Umkehrbare Reparaturen mit einem Tippen für bestimmte OxygenOS/ColorOS-Probleme.",
+  "bfx_title": "Akku-Fix",
+  "bfx_desc": "Setzt die von Android gespeicherte Akkustatistik zurück: der app-bezogene Verbrauchsverlauf und die gelernte Kapazitätsschätzung lernen ab einer vollen Ladung neu. Das fügt keine Kapazität oder Laufzeit hinzu – es löscht nur einen verzerrten Datensatz. Zusätzlich werden Apps an Ort und Stelle neu kompiliert, für flüssigere Starts. Nur bei 100% am Ladegerät verfügbar; das Zurücksetzen wird beim nächsten Neustart angewendet.",
+  "bfx_run": "Akku-Fix ausführen",
+  "bfx_cancel": "Geplantes Zurücksetzen abbrechen",
+  "bfx_reboot": "Jetzt neu starten",
+  "bfx_st_pending": "Geplant – zum Anwenden neu starten",
+  "bfx_st_ready": "Bereit – Akku voll am Ladegerät",
+  "bfx_need_full": "Zum Nutzen auf 100% laden",
+  "bfx_need_charge": "Ladegerät anschließen, um dies zu nutzen",
+  "bfx_need": "Nur bei 100% am Ladegerät verfügbar",
+  "bfx_confirm": "Erneut tippen, um den Akku-Fix auszuführen",
+  "bfx_armed": "Geplant – zum Zurücksetzen der Statistik neu starten",
+  "bfx_refused": "Derzeit nicht verfügbar – 100% am Ladegerät nötig",
+  "bfx_cancelled": "Geplantes Zurücksetzen abgebrochen"
 }
