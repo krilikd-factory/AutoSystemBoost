@@ -247,6 +247,48 @@ _ltpo_range_restore() {
   asb_ltpo_unlock
 }
 
+# --- OEM extreme-refresh unlock (dev17) ------------------------------------------------
+#
+# What the panel can do is a fact of the panel, not a wish: the OnePlus 15 advertises
+# 60/90/120/144/165 to SurfaceFlinger and nothing above, so 165 is the ceiling and a rate
+# the panel does not list (185 Hz, say) has no mode to select - ASB cannot invent one.
+#
+# The ROM is the other half. ColorOS keeps ordinary apps at 120 unless OnePlus's own
+# "extreme refresh" switch is unlocked; the two globals below are that switch, read from a
+# device's own settings dump. ASB flips ONLY the availability keys, never a force-global-on
+# key: the top mode becomes reachable, and the on-touch controller still drops the panel on
+# idle, so this stays an on-touch peak and not an always-high panel. The values present
+# before ASB touched them are recorded once and put back on Off or uninstall.
+XTR_ORIG="$STATE_DIR/ltpo_extreme.orig"
+ASB_LTPO_XTR_KEYS='oost_settings_unlock_refresh_rate oost_extreme_refresh_165'
+_xtr_get() { command -v asb_set_get >/dev/null 2>&1 && asb_set_get global "$1" || settings get global "$1" 2>/dev/null | sed 's/^null$//'; }
+_xtr_put() { command -v asb_set_put >/dev/null 2>&1 && asb_set_put global "$1" "$2" || settings put global "$1" "$2" >/dev/null 2>&1; }
+_xtr_del() { command -v asb_set_del >/dev/null 2>&1 && asb_set_del global "$1" || settings delete global "$1" >/dev/null 2>&1; }
+_ltpo_extreme_apply() {
+  _ltpo_framework_up || return 0
+  if [ ! -f "$XTR_ORIG" ]; then
+    true > "$XTR_ORIG" 2>/dev/null
+    for _xk in $ASB_LTPO_XTR_KEYS; do
+      _xv="$(_xtr_get "$_xk")"; [ -n "$_xv" ] || _xv="__unset"
+      printf '%s=%s\n' "$_xk" "$_xv" >> "$XTR_ORIG" 2>/dev/null
+    done
+  fi
+  for _xk in $ASB_LTPO_XTR_KEYS; do
+    [ "$(_xtr_get "$_xk")" = "1" ] || _xtr_put "$_xk" 1
+  done
+  _log 'action=ltpo_extreme result=unlocked'
+}
+_ltpo_extreme_restore() {
+  [ -f "$XTR_ORIG" ] || return 0
+  _ltpo_framework_up || return 0
+  while IFS='=' read -r _xk _xv; do
+    [ -n "$_xk" ] || continue
+    case "$_xv" in __unset|'') _xtr_del "$_xk" ;; *) _xtr_put "$_xk" "$_xv" ;; esac
+  done < "$XTR_ORIG"
+  rm -f "$XTR_ORIG" 2>/dev/null
+  _log 'action=ltpo_extreme result=restored'
+}
+
 # Explicit ASB ownership: pause only the verified external writer process, never edit or
 # disable the other module. Its bind/config stay untouched. If ASB is later switched off,
 # resume the external service only when we actually paused it.
@@ -327,6 +369,7 @@ case "${1:-apply}" in
         _ltpo_touch_stop
         rm -f "$ACTIVE" 2>/dev/null
         _ltpo_framework_up && _ltpo_range_restore
+        _ltpo_extreme_restore
         _log 'action=ltpo_bind result=yielded owner=external_module'
       else
         # Explicit ASB enable has priority only after its independent touch controller is
@@ -339,6 +382,7 @@ case "${1:-apply}" in
         fi
         if _ltpo_framework_up; then
           _ltpo_range_open
+          if [ "$(_cfg ltpo_peak_force)" = "1" ]; then _ltpo_extreme_apply; else _ltpo_extreme_restore; fi
           if _ltpo_touch_start; then
             _ltpo_external_pause
           else
@@ -355,6 +399,7 @@ case "${1:-apply}" in
         _ltpo_unbind_all && _log 'action=ltpo_bind result=removed'
       fi
       _ltpo_framework_up && _ltpo_range_restore
+      _ltpo_extreme_restore
       _ltpo_external_resume
     fi
     ;;
@@ -367,6 +412,7 @@ case "${1:-apply}" in
       _ltpo_unbind_all && _log 'action=ltpo_bind result=removed reason=uninstall'
     fi
     _ltpo_framework_up && _ltpo_range_restore
+    _ltpo_extreme_restore
     _ltpo_external_resume
     ;;
   range)
@@ -393,7 +439,8 @@ case "${1:-apply}" in
     _pm="$(sed -n 's/^hz=//p' "$STATE_DIR/ltpo_peak_force.state" 2>/dev/null | head -1)"
     [ -f "$STATE_DIR/ltpo_peak_force.unsupported" ] && _pf=unsupported
     [ "$(_cfg ltpo_peak_force)" = "1" ] || _pf=off
-    printf 'peak_force=%s hz=%s max_mode=%s\n' "${_pf:-waiting}" "${_pm:--}" "$(_ltpo_max_mode)"
+    _xtr=off; [ -f "$XTR_ORIG" ] && _xtr=on
+    printf 'peak_force=%s hz=%s max_mode=%s extreme=%s\n' "${_pf:-waiting}" "${_pm:--}" "$(_ltpo_max_mode)" "$_xtr"
     ;;
   status)
     if _ltpo_external_bind; then
