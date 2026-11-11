@@ -3244,6 +3244,12 @@ if [ -n "$_trej" ]; then
 fi
 case "$(_rget surface_source /dev/.asb/state)" in
   zone)  NOTE "surface (body) temperature: dedicated zone (sys-therm)" ;;
+  zone_pinned)
+    if [ "$(_rget surface_pin_boot /dev/.asb/state)" = 1 ]; then
+      NOTE "surface (body) temperature: board_temp - the dedicated zone ($(_rget surface_zone_type /dev/.asb/state)) sits at $(_rget surface_pin_c /dev/.asb/state) C whatever the board does; known from an earlier boot, it counts again if it moves 3 C"
+    else
+      NOTE "surface (body) temperature: board_temp - the dedicated zone ($(_rget surface_zone_type /dev/.asb/state)) stayed at $(_rget surface_pin_c /dev/.asb/state) C while the board moved 4 C or more; remembered for the next boots, it counts again if it moves 3 C"
+    fi ;;
   board) NOTE "surface (body) temperature: board_temp zone" ;;
   skin)  NOTE "surface (body) temperature: shell sensor - this phone has no sys-therm/board zone, so the shell reading stands in" ;;
   none)  NOTE "surface (body) temperature: NOT AVAILABLE - surface-based heat trims cannot engage on this phone" ;;
@@ -3457,7 +3463,10 @@ if [ -s "$_led" ]; then
     if [ -n "$_badk" ]; then
       NOTE "-> $(printf '%s\n' "$_badk" | grep -c .) key(s) the device did not accept - not in effect (key: result - wanted -> device has):"
       printf '%s\n' "$_badk" | head -15 | while IFS='|' read -r _bk _br _bw _bq _bn _bc; do
-        P "    ${_bk}: ${_br}${_bw:+ (${_bw})} - ${_bq:-?} -> ${_bn:-?}  [${_bc}x]"
+        case "$_bw" in
+          *"not retried"*) P "    ${_bk}: ${_br} (${_bw}) - wanted ${_bq:-?}, not asked this boot  [${_bc}x]" ;;
+          *) P "    ${_bk}: ${_br}${_bw:+ (${_bw})} - ${_bq:-?} -> ${_bn:-?}  [${_bc}x]" ;;
+        esac
       done
     else
       NOTE "-> ${_bad} earlier rejection(s), all applied on a later attempt - nothing is outstanding"
