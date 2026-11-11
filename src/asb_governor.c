@@ -6759,10 +6759,18 @@ static void session_history_append_ex(const asb_fsm_t *fsm, const char *reason) 
 
         /* Find current bucket and update */
         int bid = (int)asb_smart_bucket_id(g_smart_rt.daypart, g_smart_rt.is_weekend);
+        /* V66 dev11: a session counts only when its bucket really took it. Quarantined and
+         * unreliable sessions were counted here and then vanished at the next start, when the
+         * total is rebuilt from the stored observations: one OnePlus 15 showed 932 sessions in
+         * the evening and 928 the next morning, after six reboots - none of them lost, four
+         * of them never learned. */
+        uint32_t _obs_before = (bid >= 0 && bid < ASB_SMART_BUCKETS) ? g_smart_store.buckets[bid].observations_raw : 0;
         if (bid >= 0 && bid < ASB_SMART_BUCKETS) {
             asb_smart_bucket_update_from_session_ex(
                 &g_smart_store.buckets[bid], &sin, time(NULL),
                 asb_smart_therm_median_x10(&g_smart_store) / 10);
+        }
+        if (bid >= 0 && bid < ASB_SMART_BUCKETS && g_smart_store.buckets[bid].observations_raw != _obs_before) {
             g_smart_sessions_since_save++;
             /* separate Smart-specific accounting */
             g_smart_sessions_total++;
@@ -8496,6 +8504,7 @@ static int asb_smart_init(void) {
     /* fix184: the Smart records and the night-wake habit. */
     g_rec_read_cc = asb_rec_cc_file;
     g_lab_read_cc = asb_rec_cc_file;
+    g_lab_read_net = asb_rec_net_bytes;
     g_lab_gfx_ask = asb_lab_gfx_ask_impl;
     g_lab_gfx_read = asb_lab_gfx_read_impl;
     g_rec_read_net = asb_rec_net_bytes;
@@ -8507,7 +8516,8 @@ static int asb_smart_init(void) {
         asb_en_summary_write();
         int _ll = asb_lab_load();
         asb_lab_summary_write(NULL);
-        asb_log("smart lab: %s, %u win(s) so far", _ll == 0 ? "loaded" : (_ll == 2 ? "store from another build, fresh start" : "fresh start"),
+        asb_log("smart lab: %s, %u win(s) so far", _ll == 0 ? "loaded" : (_ll == 3 ? "loaded, membus_off measured again" :
+                    (_ll == 2 ? "store from another build, fresh start" : "fresh start")),
                 g_lab.wins_total);
         asb_log("smart energy: %s, %u charge(s) learned", _el ? "loaded" : "fresh start", g_en.plugs);
         asb_log("records: %s (%s); night wakes learned: %u over %u night(s)",

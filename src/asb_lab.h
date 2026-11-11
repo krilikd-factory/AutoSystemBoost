@@ -67,7 +67,7 @@
 #define ASB_MEM_DEVFREQ     "/sys/class/devfreq"
 #endif
 #define ASB_LAB_MAGIC       0x4153424cu
-#define ASB_LAB_VERSION     1
+#define ASB_LAB_VERSION     2
 
 enum { LAB_RADIO = 0, LAB_LIFT, LAB_MEM_ON, LAB_MEM_OFF, LAB_APP0, LAB_APP1, LAB_APP2, LAB_N };
 static const char *const g_lab_names[LAB_N] = {
@@ -93,6 +93,9 @@ static const char *const g_lab_names[LAB_N] = {
 #define ASB_LAB_PRESS_SLACK     0.08
 #define ASB_LAB_JANK_SLACK      0.01
 #define ASB_LAB_HEAT_SLACK      15.0     /* tenths of a degree per hour */
+#define ASB_LAB_JANK_STOP       0.02     /* early stop: the challenger is clearly worse to use */
+#define ASB_LAB_PRESS_STOP      0.15
+#define ASB_LAB_HEAT_STOP       30.0
 #define ASB_LAB_PAIR_DT_S       (4L * 3600)
 #define ASB_LAB_PAIR_DT_LIFT_S  (12L * 3600)
 #define ASB_LAB_PAIR_TEMP_DC    25
@@ -200,6 +203,10 @@ static unsigned long g_lab_blocks_kept = 0, g_lab_blocks_short = 0, g_lab_blocks
 static int   g_lab_radio_written = -1;
 
 static long  (*g_lab_read_cc)(void) = NULL;
+static long long (*g_lab_read_net)(void) = NULL;
+#define ASB_LAB_NET_KIBPS_MAX 15     /* screen off: the records' rule - above it the radio, not the bus, sets the drain */
+static unsigned long g_lab_blocks_radio = 0;
+static unsigned long g_lab_early_stops = 0;
 static void  (*g_lab_gfx_ask)(const char *pkg) = NULL;
 static int   (*g_lab_gfx_read)(const char *pkg, long since, long *frames, long *janky) = NULL;
 
@@ -360,6 +367,17 @@ static void asb_lab_verdict(int k, long wall) {
     unsigned nmin = off ? 5u : 6u, nmax = off ? 12u : 16u;
     if (k == LAB_LIFT) { nmin = 5u; nmax = 14u; }
     if (n >= 3 && mean >= ASB_LAB_DEARER) { asb_lab_lose(k, "dearer", wall); return; }
+    /* A challenger that is plainly worse to use is not run to the full count: these stops
+     * cost at most two or three blocks of it, the guards below would cost up to nmax. */
+    if (kn->jank_pairs >= 2 && kn->pr_jank / (double)kn->jank_pairs >= ASB_LAB_JANK_STOP) {
+        g_lab_early_stops++; asb_lab_lose(k, "more janky frames", wall); return;
+    }
+    if (n >= 3 && kn->pr_press / (double)n >= ASB_LAB_PRESS_STOP) {
+        g_lab_early_stops++; asb_lab_lose(k, "cores at their ceiling more often", wall); return;
+    }
+    if (n >= 3 && !off && k != LAB_LIFT && kn->pr_heat / (double)n >= ASB_LAB_HEAT_STOP) {
+        g_lab_early_stops++; asb_lab_lose(k, "warms faster", wall); return;
+    }
     if (n < nmin) return;
     double var = (n > 1) ? kn->pr_m2 / (double)(n - 1) : 0.0;
     double t2 = (var > 0.0) ? mean * mean * (double)n / var : (mean != 0.0 ? 1e9 : 0.0);
@@ -500,7 +518,7 @@ static void asb_lab_blk_begin(asb_lab_blk_t *b, int k, const asb_lab_in_t *in, c
     b->t0_dc = b->tlast_dc = b->tmin_dc = b->tmax_dc = in->bat_temp_dc;
     b->soc0 = in->soc;
     b->band = (k == LAB_RADIO || k == LAB_MEM_ON || asb_lab_is_app(k)) ? in->bright_band : -1;
-    b->net0 = (k == LAB_RADIO) ? in->mobile_bytes : -1;
+    b->net0 = (k == LAB_RADIO) ? in->mobile_bytes : ((k == LAB_MEM_OFF && g_lab_read_net) ? g_lab_read_net() : -1);
     b->cc0 = (k == LAB_MEM_OFF && g_lab_read_cc) ? g_lab_read_cc() : -1;
     b->fr0 = b->jk0 = -1;
     if (pkg && *pkg) {
@@ -550,6 +568,14 @@ static void asb_lab_blk_end(asb_lab_blk_t *b, const asb_lab_in_t *in) {
         long cc1 = g_lab_read_cc ? g_lab_read_cc() : -1;
         if (b->cc0 <= 0 || cc1 <= 0 || cc1 >= b->cc0 || b->v_n == 0) { g_lab_blocks_rejected++; return; }
         if (b->ticks >= 4 && b->ticks_busy * 4 > b->ticks) { g_lab_blocks_rejected++; return; }
+        if (b->net0 >= 0 && g_lab_read_net) {
+            long long n1 = g_lab_read_net();
+            if (n1 >= b->net0 && (n1 - b->net0) / 1024 / dur >= ASB_LAB_NET_KIBPS_MAX) {
+                g_lab_blocks_rejected++;
+                g_lab_blocks_radio++;
+                return;
+            }
+        }
         double ma = ((double)(b->cc0 - cc1) / 1000.0) / ((double)dur / 3600.0);
         double v = ((double)b->v_sum / (double)b->v_n) / 1e6;
         s.mw = (float)(ma * v);
@@ -882,7 +908,8 @@ static int asb_lab_load(void) {
     asb_lab_store_t tmp;
     size_t n = fread(&tmp, 1, sizeof(tmp), f);
     fclose(f);
-    if (n != sizeof(tmp) || tmp.magic != ASB_LAB_MAGIC || tmp.version != ASB_LAB_VERSION || tmp.size != sizeof(tmp))
+    if (n != sizeof(tmp) || tmp.magic != ASB_LAB_MAGIC || tmp.size != sizeof(tmp) ||
+        (tmp.version != ASB_LAB_VERSION && tmp.version != 1))
         return 2;
     for (int k = 0; k < LAB_N; k++) {
         asb_lab_knob_t *kn = &tmp.k[k];
@@ -890,8 +917,16 @@ static int asb_lab_load(void) {
         if (kn->champion >= na || kn->challenger >= na) return 2;
         kn->pkg[sizeof(kn->pkg) - 1] = 0;
     }
+    /* Version 1 counted screen-off bus blocks during which the radio was busy: that knob alone
+     * starts again, the other knobs keep what they learned. */
+    int migrated = (tmp.version == 1);
+    if (migrated) {
+        tmp.k[LAB_MEM_OFF] = g_lab.k[LAB_MEM_OFF];
+        tmp.version = ASB_LAB_VERSION;
+        g_lab_dirty = 1;
+    }
     g_lab = tmp;
-    return 0;
+    return migrated ? 3 : 0;
 }
 static int asb_lab_save(void) {
     char tmpn[256];
@@ -938,11 +973,11 @@ static void asb_lab_summary_write(const asb_lab_in_t *in) {
     fprintf(f, "mem|%s|voters=%d|active=%d|doms=%d|cap_now=%d|writes=%lu|restores=%lu|yields=%lu|fails=%lu\n",
             g_mem_probe == 1 ? g_mem_kind : (g_mem_probe == 0 ? "unprobed" : "none"), g_mem_nv,
             asb_mem_active_voters(), g_mem_ndom, g_mem_cap_now, g_mem_writes, g_mem_restores, g_mem_yields, g_mem_fails);
-    fprintf(f, "now|radio_arm=%d|lift_pct=%d|mem_on=%d|mem_off=%d|app_front=%d|on_block=%s|off_block=%s|glances=%d|kept=%lu|short=%lu|rejected=%lu|wins=%u|reopened=%u\n",
+    fprintf(f, "now|radio_arm=%d|lift_pct=%d|mem_on=%d|mem_off=%d|app_front=%d|on_block=%s|off_block=%s|glances=%d|kept=%lu|short=%lu|rejected=%lu|wins=%u|reopened=%u|radio_set_aside=%lu|early_stops=%lu\n",
             g_lab_radio_arm, g_lab_lift_pct, g_lab_mem_on_pct, g_lab_mem_off_pct, g_lab_app_front,
             g_lab_on.active ? g_lab_names[g_lab_on.knob] : "-", g_lab_off.active ? g_lab_names[g_lab_off.knob] : "-",
             g_lab_lift.active ? g_lab_lift.glances : 0, g_lab_blocks_kept, g_lab_blocks_short,
-            g_lab_blocks_rejected, g_lab.wins_total, g_lab.reopen_total);
+            g_lab_blocks_rejected, g_lab.wins_total, g_lab.reopen_total, g_lab_blocks_radio, g_lab_early_stops);
     fclose(f);
     rename(tmpn, ASB_LAB_SUMMARY);
 }
