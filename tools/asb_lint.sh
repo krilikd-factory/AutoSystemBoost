@@ -244,7 +244,7 @@ else
   # the six known groups, so the card survives solely through search. net_wifi_leave sat in
   # a bogus 'wifileave' group for a release - an icon name pasted into the group column.
   if [ -f "$MODDIR/webroot/index.html" ]; then
-    _grp_ids="$(sed -n '/const CFG_GROUPS = \[/,/\];/p' "$MODDIR/webroot/index.html" | grep -oE "id:'[a-z]+'" | sed "s/id:'//;s/'//" | sort -u)"
+    _grp_ids="$( { sed -n '/const CFG_GROUPS = \[/,/\];/p' "$MODDIR/webroot/index.html"; sed -n '/const CFG_EXTRA_GROUPS = {/,/};/p' "$MODDIR/webroot/index.html"; } | grep -oE "id:'[a-z]+'" | sed "s/id:'//;s/'//" | sort -u)"
     _grp_bad="$(sed -n '/const CFG_GROUP_OF = {/,/};/p' "$MODDIR/webroot/index.html" | grep -oE ":'[a-z]+'" | sed "s/:'//;s/'//" | sort -u | while IFS= read -r _g; do echo "$_grp_ids" | grep -Fqx "$_g" || printf '%s ' "$_g"; done)"
     # every card key must also HAVE a group entry (default 'ui' hides omissions)
     _gof_keys="$(sed -n '/const CFG_GROUP_OF = {/,/};/p' "$MODDIR/webroot/index.html" | grep -oE "[A-Za-z_][A-Za-z0-9_]*:'[a-z]+'" | sed "s/:.*//" | sort -u)"
