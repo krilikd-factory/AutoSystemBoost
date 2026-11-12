@@ -83,10 +83,21 @@ _prog_write() {
     printf 'boot=%s\n' "$(_bootid)"
   } > "$_t" 2>/dev/null && mv -f "$_t" "$PROG" 2>/dev/null
 }
+_bf_worker_cleanup() {
+  # A killed worker must not leave a package list or a half-published progress file.
+  # Keep the last complete progress record: status will honestly report it as interrupted.
+  [ -n "${_pk:-}" ] && rm -f "$_pk" 2>/dev/null
+  [ -n "${_t:-}" ] && rm -f "$_t" 2>/dev/null
+  rmdir "$LOCK" 2>/dev/null
+}
 _bf_worker() {
   mkdir -p "$STATE_DIR" 2>/dev/null
   mkdir "$LOCK" 2>/dev/null || exit 0
-  trap 'rmdir "$LOCK" 2>/dev/null' EXIT
+  _pk=""; _t=""
+  trap '_bf_worker_cleanup' EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
   rm -f "$STOPF" 2>/dev/null
   _pk="$STATE_DIR/battery_fix.pkgs.$$"
   _bf_packages > "$_pk" 2>/dev/null
@@ -123,6 +134,9 @@ _bf_compile_state() {
     _b="$(_kv boot "$PROG")"
     _pid="$(_kv pid "$PROG")"
     if [ -n "$_b" ] && [ "$_b" != "$(_bootid)" ]; then echo interrupted; return; fi
+    # The record is published only after the lock exists. A missing lock therefore means
+    # that the worker exited; it also avoids treating a reused PID as the old worker.
+    [ -d "$LOCK" ] || { echo interrupted; return; }
     if [ -n "$_pid" ] && ! kill -0 "$_pid" 2>/dev/null; then echo interrupted; return; fi
   fi
   echo "${_s:-idle}"

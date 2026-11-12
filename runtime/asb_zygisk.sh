@@ -156,7 +156,8 @@ _zygisk_sync() {
       if [ -n "$_s_p" ]; then printf 'pkg=%s\n' "$_s_p"; fi
     done
   } > "$POLICY.tmp" 2>/dev/null || { rm -f "$POLICY.tmp" 2>/dev/null; _zygisk_sync_done; echo 'policy=write_failed'; return 1; }
-  chmod 644 "$POLICY.tmp" 2>/dev/null || true
+  # Only the root-side zygote/companion reads this policy; no world-readable package list.
+  chmod 600 "$POLICY.tmp" 2>/dev/null || true
   chcon u:object_r:system_file:s0 "$POLICY.tmp" 2>/dev/null || true
   mv -f "$POLICY.tmp" "$POLICY" 2>/dev/null || { rm -f "$POLICY.tmp" 2>/dev/null; _zygisk_sync_done; echo 'policy=write_failed'; return 1; }
   if ! _zygisk_classes; then
