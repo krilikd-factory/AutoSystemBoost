@@ -10229,6 +10229,139 @@ node "$T/aotx.js" || fail "WebUI parse"
 echo "PASS zygisk aot exclude: an owner-excluded app is never ranked or compiled again, ASB's own compile is reset to the installed state (Android's is left alone), refused resets are recorded, names are validated, allow-again restores compilation, clean uninstall"
 )
 
+
+t_junk_cleanup_runtime() (
+# dev32: the Infirmary cleanup is a fixed, manual owner. It previews metadata and deletes only
+# bounded residue classes; exact /data/local/tmp names and the 24-hour journal barrier matter.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+A="$ROOT/runtime/asb_junk_cleanup.sh"
+fail() { echo "FAIL junk cleanup runtime: $*" >&2; exit 1; }
+sh -n "$A" || fail "syntax"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+R="$T/root"; S="$T/state"
+mkdir -p "$R/data/system/dropbox/sub" "$R/data/tombstones" "$R/data/anr" \
+  "$R/cache/environment/sub" "$R/data/system/package_cache" \
+  "$R/data/log/gaia/gaialog_history/sub" "$R/cache" "$R/data/backup/pending" \
+  "$R/data/local/tmp/google_shelf_controller" "$R/storage/emulated/0/.trash-storage/sub" \
+  "$R/storage/emulated/0/Pictures/Screenshots" "$R/storage/emulated/0/ColorOS/ThemeStore" "$T/bin"
+printf x > "$R/data/system/dropbox/sub/event.txt"
+printf xx > "$R/data/tombstones/tombstone_00"
+printf keep > "$R/data/tombstones/other"
+printf xxx > "$R/data/anr/traces.txt"
+printf xxxx > "$R/cache/environment/sub/env.bin"
+printf x > "$R/data/system/package_cache/package.bin"
+printf xx > "$R/data/log/gaia/gaialog_history/sub/history.log"
+printf xxx > "$R/cache/magisk.log"
+printf xxxx > "$R/data/backup/pending/journal1.tmp"
+touch -d '2 days ago' "$R/data/backup/pending/journal1.tmp"
+printf recent > "$R/data/backup/pending/journal2.tmp"
+for n in asb_diag_report.txt asb_full_day.out uninstall.log soterfix.log webui_info.txt google_shelf_ui.html; do
+  printf z > "$R/data/local/tmp/$n"
+done
+printf z > "$R/data/local/tmp/google_shelf_controller/controller.log"
+printf keep > "$R/data/local/tmp/oost_test.flag"
+printf keep > "$R/data/local/tmp/unknown.bin"
+printf keep > "$R/data/local/tmp/google_shelf_controller/settings.conf"
+printf x > "$R/storage/emulated/0/.trash-storage/sub/item"
+printf xx > "$R/storage/emulated/0/Pictures/Screenshots/.trashed-one"
+printf keep > "$R/storage/emulated/0/Pictures/Screenshots/normal.jpg"
+printf xxx > "$R/storage/emulated/0/ColorOS/ui crash@2026.txt"
+printf xxxx > "$R/storage/emulated/0/ColorOS/system crash@2026.txt.gz"
+printf keep > "$R/storage/emulated/0/ColorOS/ThemeStore/settings"
+run() { ASB_JUNK_ROOT="$R" ASB_JUNK_STATE_DIR="$S" sh "$A" "$@"; }
+out="$(run status)"
+grep -Fqx 'junk_cleanup|status|total_count=19|total_bytes=37|failed_categories=0' <<<"$out" || fail "scan total: $out"
+[ "$(grep -c '^junk_category|' <<<"$out")" = 11 ] || fail "not all eleven categories were returned"
+grep -Fq 'junk_category|backup|count=1|bytes=4|state=ready' <<<"$out" || fail "recent journal was not excluded"
+grep -Fq 'junk_category|local|count=7|bytes=7|state=ready' <<<"$out" || fail "exact local allowlist: $out"
+[ -d "$S" ] && fail "a read-only scan created state or a lock"
+out="$(run run)"
+grep -Fqx 'junk_cleanup|result|state=cleaned|removed_count=19|freed_bytes=37|failed_categories=0' <<<"$out" || fail "cleanup result: $out"
+[ "$(grep -c '^junk_category|.*|state=cleaned$' <<<"$out")" = 11 ] || fail "a category did not report cleaned: $out"
+for f in \
+  data/tombstones/other data/backup/pending/journal2.tmp data/local/tmp/oost_test.flag \
+  data/local/tmp/unknown.bin data/local/tmp/google_shelf_controller/settings.conf \
+  storage/emulated/0/Pictures/Screenshots/normal.jpg storage/emulated/0/ColorOS/ThemeStore/settings; do
+  [ -f "$R/$f" ] || fail "protected file removed: $f"
+done
+for f in data/system/dropbox/sub/event.txt data/tombstones/tombstone_00 data/anr/traces.txt \
+  cache/environment/sub/env.bin data/system/package_cache/package.bin cache/magisk.log \
+  data/backup/pending/journal1.tmp data/local/tmp/asb_diag_report.txt \
+  data/local/tmp/google_shelf_controller/controller.log storage/emulated/0/.trash-storage/sub/item \
+  storage/emulated/0/Pictures/Screenshots/.trashed-one 'storage/emulated/0/ColorOS/ui crash@2026.txt' \
+  'storage/emulated/0/ColorOS/system crash@2026.txt.gz'; do
+  [ ! -e "$R/$f" ] || fail "target survived: $f"
+done
+out="$(run run)"
+grep -Fqx 'junk_cleanup|result|state=empty|removed_count=0|freed_bytes=0|failed_categories=0' <<<"$out" || fail "second run not idempotent: $out"
+[ ! -d "$S/run.lock" ] || fail "run lock was not released"
+
+# A pre-existing lock is busy, not a second deletion pass; lock creation failure is explicit.
+mkdir -p "$S/run.lock"
+printf x > "$R/cache/magisk.log"
+out="$(run run)"
+grep -Fqx 'junk_cleanup|result|state=busy' <<<"$out" || fail "busy state: $out"
+[ -f "$R/cache/magisk.log" ] || fail "busy run still deleted"
+rmdir "$S/run.lock"
+printf x > "$T/not-a-dir"
+out="$(ASB_JUNK_ROOT="$R" ASB_JUNK_STATE_DIR="$T/not-a-dir" sh "$A" run)"
+grep -Fqx 'junk_cleanup|result|state=lock_error' <<<"$out" || fail "lock error: $out"
+run run >/dev/null
+
+# Force only rm of magisk.log to fail. Other categories must still run and the result must
+# name one failed category instead of claiming complete success.
+printf x > "$R/data/system/dropbox/new-event"
+printf xx > "$R/cache/magisk.log"
+cat > "$T/bin/rm" <<'X'
+#!/bin/sh
+for p in "$@"; do case "$p" in */cache/magisk.log) exit 1 ;; esac; done
+exec /bin/rm "$@"
+X
+chmod +x "$T/bin/rm"
+out="$(PATH="$T/bin:$PATH" run run)"
+grep -Fqx 'junk_cleanup|result|state=partial|removed_count=1|freed_bytes=1|failed_categories=1' <<<"$out" || fail "partial result: $out"
+grep -Fq 'junk_category|logs|removed=0|freed=0|remaining=1|state=partial' <<<"$out" || fail "failed exact file not counted: $out"
+[ -f "$R/cache/magisk.log" ] && [ ! -e "$R/data/system/dropbox/new-event" ] || fail "partial fixture result wrong"
+run run >/dev/null
+
+# Neither a symlinked category root nor an exact-name symlink may widen deletion to its target.
+printf outside > "$T/outside"
+mkdir -p "$T/external"
+printf outside > "$T/external/event"
+ln -s "$T/external" "$R/data/system/dropbox-link"
+# Replace a real fixed root with a symlink after its previous successful cleanup.
+rmdir "$R/data/system/dropbox/sub" 2>/dev/null || true
+rmdir "$R/data/system/dropbox" 2>/dev/null || true
+ln -s "$T/external" "$R/data/system/dropbox"
+ln -s "$T/outside" "$R/data/local/tmp/asb_diag_report.txt"
+out="$(run status)"
+grep -Fq 'junk_category|dropbox|count=0|bytes=0|state=not_readable' <<<"$out" || fail "symlink root not rejected: $out"
+grep -Fq 'junk_category|local|count=0|bytes=0|state=not_readable' <<<"$out" || fail "symlink exact file not rejected: $out"
+out="$(run run)"
+grep -Fq 'junk_cleanup|result|state=partial|' <<<"$out" || fail "symlink run not partial: $out"
+[ "$(cat "$T/outside")" = outside ] && [ "$(cat "$T/external/event")" = outside ] || fail "symlink target was deleted"
+[ -L "$R/data/system/dropbox" ] && [ -L "$R/data/local/tmp/asb_diag_report.txt" ] || fail "symlink itself was removed"
+
+set +e
+out="$(run 'status; rm -rf /' 2>&1)"; rc=$?
+set -e
+[ "$rc" = 2 ] && grep -Fqx 'junk_cleanup|error|state=unknown_command' <<<"$out" || fail "unknown command was accepted: rc=$rc $out"
+for f in service.sh post-fs-data.sh action.sh; do
+  grep -Fq 'asb_junk_cleanup' "$ROOT/$f" && fail "persistent/boot integration appeared in $f"
+done
+python3 - "$A" <<'PY2' || fail "fixed find boundary missing"
+import sys
+s=open(sys.argv[1], encoding='utf-8').read()
+assert 'set -- $' in s  # fixed numeric protocol only; no predicate is evaluated as shell text
+assert 'eval ' not in s and 'cat ' not in s and 'grep ' not in s
+for token in ('all)', 'tombstones)', 'backup)', 'screenshots)', 'coloros)'):
+    assert token in s
+assert s.count('-xdev') >= 11 and "-mtime +0" in s
+PY2
+echo "PASS junk cleanup runtime: eleven bounded categories, 19-file scan/delete with exact byte accounting, 24-hour journal barrier, protected files, idempotence, busy/lock/partial states, symlink and unknown-command safety, no worker"
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;

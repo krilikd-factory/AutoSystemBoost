@@ -11798,6 +11798,136 @@ P
 echo "PASS tests pipefail grep -q: no test pipes into grep -q while pipefail is set"
 )
 
+t_webui_junk_cleanup_runtime() (
+# dev32: a manual, localized Infirmary card around the fixed status/run protocol. No polling,
+# arbitrary path or HTML injection; deletion needs a second tap and every failure stays visible.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui junk cleanup: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'PY' || fail 'static wiring and locales'
+from pathlib import Path
+import json, re, sys
+root=Path(sys.argv[1]); h=(root/'webroot/index.html').read_text(encoding='utf-8')
+start=h.index('/* Infirmary → Junk Cleanup')
+end=h.index('function cfgRenderGroup(', start)
+b=h[start:end]
+assert "id:'cleanup'" in h and "card:'junkcleanup'" in h
+assert "else if (section.card === 'junkcleanup') cfgRenderJunkCleanupCard(list);" in h
+assert "const JUNK_CLEANUP_SCRIPT = MD + '/runtime/asb_junk_cleanup.sh';" in b
+assert b.count("run('sh ' + shQuote(JUNK_CLEANUP_SCRIPT) + ' status')") == 1
+assert b.count("run('sh ' + shQuote(JUNK_CLEANUP_SCRIPT) + ' run')") == 1
+assert 'setInterval(' not in b and 'setTimeout(' not in b
+assert b.count('innerHTML =') == 1 and "em.innerHTML = techIcon('cleaner')" in b
+assert 'now - _junkArmed > 5000' in b and "state === 'lock_error'" in b
+assert "junkButtons(false); return true;" in b
+for css in ('.junk-total', '.junk-cats', '.junk-cat.is-warn', '.junk-card .bfx-btn'):
+    assert css in h, css
+keys=set('cfg_inf_section_cleanup cfg_inf_section_cleanup_hint junk_title junk_desc junk_scan junk_run junk_refresh junk_confirm junk_running junk_partial_toast junk_cat_dropbox junk_cat_tombstones junk_cat_anr junk_cat_environment junk_cat_installer junk_cat_logs junk_cat_backup junk_cat_local junk_cat_trash junk_cat_screenshots junk_cat_coloros junk_unavailable junk_result_meta junk_remaining junk_meta junk_unavailable_short junk_failed junk_found junk_empty junk_ready junk_check junk_clean junk_skipped junk_busy_chip junk_busy junk_done junk_partial junk_partial_chip junk_cleaned'.split())
+locales=sorted((root/'webroot/i18n').glob('*.json'))
+assert len(locales)==13
+base=json.loads((root/'webroot/i18n/en.json').read_text(encoding='utf-8'))
+for p in locales:
+    d=json.loads(p.read_text(encoding='utf-8'))
+    assert not keys-set(d), (p.name, keys-set(d))
+    for k in keys:
+        assert set(re.findall(r'\{[^}]+\}',base[k])) == set(re.findall(r'\{[^}]+\}',d[k])), (p.name,k)
+assert json.loads((root/'webroot/i18n/ru.json').read_text(encoding='utf-8'))['junk_title']=='Чистка от шлаков'
+PY
+command -v node >/dev/null 2>&1 || { echo "SKIP webui junk cleanup runtime: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+{
+cat <<'EOF'
+const fs = require('fs');
+const h = fs.readFileSync(process.argv[2], 'utf8');
+let MD='/m', ASB_LANG='en', now=10000;
+const realNow=Date.now; Date.now=function(){ return now; };
+function shQuote(v){ return "'"+String(v)+"'"; }
+function T(k,d){ return d; }
+function bfxT(k,d,v){ return String(d).replace(/\{([^}]+)\}/g,function(m,n){ return v[n] == null ? m : v[n]; }); }
+function techIcon(){ return '<svg></svg>'; }
+function uiSound(){}
+const toasts=[]; function toast(m,t){ toasts.push({m:m,t:t}); }
+const reg={};
+function mk(tag){
+  const e={tag:tag,children:[],className:'',hidden:false,disabled:false,dataset:{},style:{},innerHTML:'',_text:''};
+  Object.defineProperty(e,'id',{get:function(){return e._id;},set:function(v){e._id=v;reg[v]=e;}});
+  Object.defineProperty(e,'textContent',{get:function(){return e._text;},set:function(v){e._text=String(v == null ? '' : v);if(v==='')e.children=[];}});
+  e.appendChild=function(c){e.children.push(c);c.parent=e;return c;};
+  return e;
+}
+function bfxEl(tag,cls,text){const e=mk(tag);e.className=cls||'';if(text!=null)e.textContent=text;return e;}
+function _el(id){return reg[id]||null;}
+const cats=['dropbox','tombstones','anr','environment','installer','logs','backup','local','trash','screenshots','coloros'];
+function status(count){
+  const rows=cats.map(function(id){
+    if(id==='dropbox'&&count)return 'junk_category|dropbox|count=2|bytes=1024|state=ready';
+    if(id==='tombstones'&&count)return 'junk_category|tombstones|count=1|bytes=2048|state=ready';
+    if(id==='anr')return 'junk_category|anr|count=0|bytes=0|state=not_readable';
+    return 'junk_category|'+id+'|count=0|bytes=0|state=ready';
+  });
+  rows.push('junk_cleanup|status|total_count='+(count?3:0)+'|total_bytes='+(count?3072:0)+'|failed_categories=1');
+  return rows.join('\n');
+}
+const scripted={status:status(true),run:'junk_cleanup|result|state=cleaned|removed_count=3|freed_bytes=3072|failed_categories=0'};
+const cmds=[];
+async function run(cmd){cmds.push(cmd);return {stdout:/ status$/.test(cmd)?scripted.status:scripted.run};}
+const block=h.slice(h.indexOf('const JUNK_CLEANUP_SCRIPT'),h.indexOf('function cfgRenderGroup(',h.indexOf('const JUNK_CLEANUP_SCRIPT')));
+eval(block);
+let bad=0;function chk(c,m){if(!c){console.log('FAIL '+m);bad++;}}
+async function flush(){await Promise.resolve();await Promise.resolve();await Promise.resolve();}
+async function confirmRun(){await junkCleanupRun();now+=4000;await junkCleanupRun();}
+(async function(){
+  const list=mk('div');cfgRenderJunkCleanupCard(list);await flush();
+  chk(reg.junkCard&&reg.junkCats.children.length===11,'card or eleven categories not rendered');
+  chk(cmds[0]==="sh '/m/runtime/asb_junk_cleanup.sh' status",'unexpected scan command: '+cmds[0]);
+  chk(reg.junkTotal.textContent==='Found: 3 · 3 KB'&&!reg.junkRun.disabled,'ready scan not painted');
+  chk(reg.junkNote.textContent==='Unreadable categories are skipped: 1','unreadable category not explained');
+  chk(reg.junkCats.children[2].className==='junk-cat is-warn'&&reg.junkCats.children[2].children[1].textContent==='Not readable — skipped','category warning missing');
+  chk(reg.junkCats.children.every(function(r){return r.children[0].tag==='div';}),'category value became markup');
+
+  await junkCleanupRun();
+  chk(cmds.filter(function(c){return / run$/.test(c);}).length===0&&/Tap again/.test(toasts[toasts.length-1].m),'first tap deleted or did not confirm');
+  now+=5001;await junkCleanupRun();
+  chk(cmds.filter(function(c){return / run$/.test(c);}).length===0,'expired confirmation was accepted');
+  now+=4000;await junkCleanupRun();
+  chk(cmds[cmds.length-1]==="sh '/m/runtime/asb_junk_cleanup.sh' run",'unexpected run command');
+  chk(reg.junkChip.textContent==='Cleaned'&&reg.junkTotal.textContent==='Removed: 3 · freed 3 KB'&&reg.junkRun.disabled,'cleaned result wrong');
+  chk(toasts[toasts.length-1].t==='ok','success not reported');
+
+  scripted.status=status(true);await junkCleanupPaint(true);
+  scripted.run=cats.map(function(id){return 'junk_category|'+id+'|removed='+(id==='dropbox'?1:0)+'|freed='+(id==='dropbox'?10:0)+'|remaining='+(id==='dropbox'?1:0)+'|state='+(id==='dropbox'?'partial':'cleaned');}).join('\n')+'\njunk_cleanup|result|state=partial|removed_count=1|freed_bytes=10|failed_categories=1';
+  await confirmRun();
+  chk(reg.junkChip.textContent==='Partial'&&/failed categories: 1/.test(reg.junkNote.textContent)&&/left: 1/.test(reg.junkCats.children[0].children[1].textContent),'partial result not visible');
+  chk(!reg.junkRun.disabled&&toasts[toasts.length-1].t==='error','partial cleanup did not remain retryable');
+
+  scripted.status=status(true);await junkCleanupPaint(true);
+  scripted.run='junk_cleanup|result|state=busy';await confirmRun();
+  chk(reg.junkChip.textContent==='Busy'&&reg.junkRun.disabled&&!reg.junkRefresh.disabled,'busy state permits deletion or blocks rescan');
+  chk(toasts[toasts.length-1].t==='perf','busy not reported distinctly');
+
+  scripted.status=status(true);await junkCleanupPaint(true);
+  scripted.run='junk_cleanup|result|state=lock_error';await confirmRun();
+  chk(reg.junkChip.textContent==='Unavailable'&&reg.junkRun.disabled&&toasts[toasts.length-1].t==='error','lock error was shown as success');
+
+  scripted.status='not a cleanup status';await junkCleanupPaint(true);
+  chk(reg.junkRun.disabled&&reg.junkCats.children.length===0&&reg.junkNote.textContent==='Could not scan the supported locations','invalid status left stale rows or actions');
+  scripted.status=status(false);await junkCleanupPaint(true);
+  chk(reg.junkChip.textContent==='Check'&&reg.junkRun.disabled&&/No supported/.test(reg.junkTotal.textContent),'empty with unreadable category wrong');
+  scripted.status=status(false).replace('failed_categories=1','failed_categories=0').replace('state=not_readable','state=ready');await junkCleanupPaint(true);
+  chk(reg.junkChip.textContent==='Clean'&&reg.junkRun.disabled&&reg.junkNote.textContent==='','clean empty state wrong');
+  const parsed=junkParse('junk_category|<img src=x onerror=1>|count=9|bytes=9|state=ready\njunk_cleanup|status|total_count=0|total_bytes=x|failed_categories=0');
+  chk(Object.keys(parsed.cats).length===0&&parsed.head.total_bytes==='x','unknown category or malformed byte parser wrong');
+  chk(junkBytes(parsed.head.total_bytes)==='0 B','non-numeric byte count was accepted');
+  if(bad)process.exit(1);console.log('ok');
+})().catch(function(e){console.error(e);process.exit(1);}).finally(function(){Date.now=realNow;});
+EOF
+} > "$T/t.js"
+out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo "PASS webui junk cleanup: all 13 locales and 39 keys, fixed status/run commands, eleven safe textContent rows, five-second double confirmation, cleaned/partial/busy/lock/unreadable/empty states, no polling or arbitrary path"
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;
