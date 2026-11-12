@@ -280,7 +280,7 @@ full_day_pid_owns_lock() {
   full_day_pid_matches_recorder "$_fpol_pid" && return 0
   _fpol_cmd=""
   [ -r "$PROC_ROOT/$_fpol_pid/cmdline" ] && _fpol_cmd="$(tr '\000' ' ' < "$PROC_ROOT/$_fpol_pid/cmdline" 2>/dev/null || true)"
-  case "$_fpol_cmd" in *asb_debug_support.sh*|'') return 0 ;; esac
+  case "$_fpol_cmd" in *asb_debug_support.sh*|*asb_log_full_day.sh*|'') return 0 ;; esac
   return 1
 }
 
@@ -783,7 +783,7 @@ start_full_day() {
     if ! pid_is_live "$_pid"; then
       # The sole launched process exited before ownership claim. No recorder can begin later,
       # so cleanup is safe and a future tap can retry.
-      rm -rf "$LOCKDIR" 2>/dev/null || true
+      [ "$(cat "$TOKENFILE" 2>/dev/null || true)" = "$_token" ] && rm -rf "$LOCKDIR" 2>/dev/null || true
       echo 'error=recorder_exited'
       tail -n 4 "$RUNLOG" 2>/dev/null || true
       return 8
