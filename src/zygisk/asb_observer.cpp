@@ -702,20 +702,86 @@ public:
     void preServerSpecialize(zygisk::ServerSpecializeArgs *) override { skip(); }
 
 private:
-    /* Absent policy = dormant: one failed open, nothing parsed, no IPC. */
-    bool read_policy(AsbObserverPolicy &policy) {
+    struct PolicyStamp {
+        dev_t dev = 0;
+        ino_t ino = 0;
+        off_t size = -1;
+        time_t mtime_s = 0;
+        long mtime_ns = 0;
+    };
+
+    static PolicyStamp policy_stamp(const struct stat &st) {
+        return PolicyStamp{st.st_dev, st.st_ino, st.st_size, st.st_mtim.tv_sec, st.st_mtim.tv_nsec};
+    }
+
+    static bool same_stamp(const PolicyStamp &a, const PolicyStamp &b) {
+        return a.dev == b.dev && a.ino == b.ino && a.size == b.size &&
+               a.mtime_s == b.mtime_s && a.mtime_ns == b.mtime_ns;
+    }
+
+    bool stat_policy(struct stat &st) {
+        if (abs_path_) {
+            if (stat(ASB_ZYGISK_POLICY_ABS, &st) == 0) return true;
+            if (errno == ENOENT) return false;
+        }
+        const int dir = api_->getModuleDir();
+        return dir >= 0 && fstatat(dir, ASB_ZYGISK_POLICY_REL, &st, 0) == 0;
+    }
+
+    int open_policy() {
         int fd = -1;
         if (abs_path_) {
             fd = open(ASB_ZYGISK_POLICY_ABS, O_RDONLY | O_CLOEXEC);
-            if (fd < 0 && errno == ENOENT) return false;
+            if (fd < 0 && errno == ENOENT) return -1;
         }
         if (fd < 0) {
             const int dir = api_->getModuleDir();
-            if (dir < 0) return false;
+            if (dir < 0) return -1;
             fd = openat(dir, ASB_ZYGISK_POLICY_REL, O_RDONLY | O_CLOEXEC);
-            if (fd < 0) return false;
         }
-        return load_policy_fd(fd, policy);
+        return fd;
+    }
+
+    /* V66 dev23: atomic policy replacement gives a new inode. An unchanged policy needs one
+     * stat, not another open/read/parse on every regular app fork. Every terminal error
+     * invalidates the cache and returns an empty policy: a removed, denied or malformed file never leaves a
+     * stale active policy in use. */
+    bool read_policy(AsbObserverPolicy &policy) {
+        struct stat st {};
+        if (!stat_policy(st)) {
+            policy = AsbObserverPolicy();
+            policy_cached_ = false;
+            return false;
+        }
+        const PolicyStamp current = policy_stamp(st);
+        if (policy_cached_ && same_stamp(current, policy_stamp_)) {
+            policy = cached_policy_;
+            return true;
+        }
+        const int fd = open_policy();
+        if (fd < 0) {
+            policy = AsbObserverPolicy();
+            policy_cached_ = false;
+            return false;
+        }
+        struct stat opened {};
+        if (fstat(fd, &opened) != 0) {
+            close(fd);
+            policy = AsbObserverPolicy();
+            policy_cached_ = false;
+            return false;
+        }
+        AsbObserverPolicy fresh;
+        if (!load_policy_fd(fd, fresh)) {
+            policy = AsbObserverPolicy();
+            policy_cached_ = false;
+            return false;
+        }
+        cached_policy_ = fresh;
+        policy_stamp_ = policy_stamp(opened);
+        policy_cached_ = true;
+        policy = fresh;
+        return true;
     }
 
     void skip() { api_->setOption(zygisk::DLCLOSE_MODULE_LIBRARY); }
@@ -724,6 +790,9 @@ private:
     bool abs_path_ = true;
     int socket_ = -1;
     std::string package_;
+    bool policy_cached_ = false;
+    PolicyStamp policy_stamp_ {};
+    AsbObserverPolicy cached_policy_ {};
 };
 
 void companion_handler(int client) { Broker::instance().handle(client); }
