@@ -4,6 +4,40 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev28 - the Infinite Log start race behind the dev27 CI failure
+
+Input: the failed GitHub Actions run for dev27. Shards features and system-smart passed; the
+ui-zygisk-package shard failed one test, `debug_support_contract`, at "concurrent start count
+round=2": one start request answered `status=starting`, the other `error=recorder_exited`, and
+no request answered `status=started`. No dev27 change touches that helper; the test passed in
+every local full run because the window is narrow and opens mainly under the CI's eight
+parallel jobs on four vCPUs.
+
+- **A live launcher could look foreign.** `full_day_pid_owns_lock` read the launcher's command
+  line twice: once inside `full_day_pid_matches_recorder`, then again for the "helper still
+  forking" case. When the exec into `nohup setsid sh .../asb_log_full_day.sh` happened between
+  the two reads, the first saw the helper (not a recorder), the second saw the recorder (not
+  the helper), and the PID was declared not to own the lock. `lock_known_dead` then said "dead",
+  the second tap renamed the winner's lock away and launched a second recorder. The second read
+  now accepts the recorder's command line as well.
+- **A failed start removed someone else's lock.** The request whose recorder exited before
+  claiming ran `rm -rf` on the lock directory, which by then belonged to the other request;
+  that request's recorder kept running without a lock, so it answered `status=starting` after
+  its 10 s handshake. The lock is now removed only while it still carries the request's own
+  token.
+- On the phone the same pair needed two Infinite Log start taps within a few milliseconds;
+  rare, but it could leave a recorder running outside the lock that Stop uses.
+- **Test flakes under parallel load.** `debug_support_contract` and `net_verdict_contract`
+  piped `echo "$x"` into `grep -q` under `pipefail`; grep exits at the first match and the
+  writer can then fail with EPIPE (CI ignores SIGPIPE: its log shows "echo: write error:
+  Broken pipe"). Measured 1 false failure in 20000 under load and 2 failures in 80 parallel
+  runs of the test; after the change 0 in 80. Both tests use here-strings, the diag waits allow
+  10 s instead of 3 s, and a static check rejects the pattern in any test that sets pipefail.
+
+Regression: a deterministic test serves the two command-line reads in order (helper, then
+recorder) and fails on the dev27 helper; a second case has a recorder hand the lock to another
+token before it exits and checks that the lock survives. No native code changed.
+
 ## V66 dev27 - one MGLRU owner for real, localized kernel verdicts, 200+ translations
 
 Input: the owner's dev26 source, reviewed file by file against dev20, plus the earlier
