@@ -2362,7 +2362,7 @@ apply_kernel() {
   [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
   sysctlw kernel.perf_cpu_time_max_percent 25
   sysctlw kernel.sched_schedstats 0
-  sysctlw kernel.timer_migration 0
+  # timer_migration and sched_nr_migrate are applied by the bounded control owner below.
   # kernel.panic and kernel.panic_on_oops are NOT touched any more.
   #
   # Both were written to 0. panic=0 means "after a kernel panic, never reboot - wait
@@ -2374,7 +2374,6 @@ apply_kernel() {
   # cause of that night, a phone must not be left wedged by this module - the vendor
   # values apply again from the next boot.
   sysctlw vm.panic_on_oom 0
-  [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 4
   writef_retry /proc/sys/kernel/printk_devkmsg off 1 0 || true
   writef_retry /proc/sys/kernel/printk "3 4 1 7" 1 0 || true
   [ -e /proc/sys/kernel/printk_ratelimit ] && \
@@ -2406,9 +2405,7 @@ apply_kernel() {
   case "$ASB_PROFILE" in
     battery)
       [ -e /proc/sys/kernel/sched_energy_aware ] && sysctlw kernel.sched_energy_aware 1 || true
-      [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 2 || true
       [ -e /proc/sys/kernel/hrtimer_migration ] && writef_retry /proc/sys/kernel/hrtimer_migration 0 1 0 || true
-      [ -e /proc/sys/kernel/timer_migration ] && sysctlw kernel.timer_migration 0 || true
       [ -e /proc/sys/walt/sched_conservative_pl ] && writef_retry /proc/sys/walt/sched_conservative_pl 1 1 0 || true
       [ -e /proc/sys/walt/sched_suppress_region2_cpus ] && writef_retry /proc/sys/walt/sched_suppress_region2_cpus 1 1 0 || true
       writef /sys/module/lpm_levels/parameters/sleep_disabled 0 || true
@@ -2420,15 +2417,17 @@ apply_kernel() {
       ;;
     performance)
       [ -e /proc/sys/kernel/sched_energy_aware ] && sysctlw kernel.sched_energy_aware 0 || true
-      [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 8 || true
       [ -e /proc/sys/walt/sched_conservative_pl ] && writef_retry /proc/sys/walt/sched_conservative_pl 0 1 0 || true
       [ -e /proc/sys/walt/sched_suppress_region2_cpus ] && writef_retry /proc/sys/walt/sched_suppress_region2_cpus 0 1 0 || true
       ;;
     *)
       [ -e /proc/sys/kernel/sched_energy_aware ] && sysctlw kernel.sched_energy_aware 1 || true
-      [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 4 || true
       ;;
   esac
+  if [ -f "$MODDIR/runtime/asb_kernel_controls.sh" ]; then
+    sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_timer_migration >/dev/null 2>&1 || true
+    sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_sched_nr_migrate >/dev/null 2>&1 || true
+  fi
   tune_io_queues
 }
 asb_feature_enabled KERNEL && asb_log "boot: kernel/DSP policy deferred until boot_completed"
@@ -4280,8 +4279,10 @@ fi
   asb_load_profile
   if asb_feature_enabled KERNEL; then
     sysctlw kernel.sched_schedstats 0
-    sysctlw kernel.timer_migration 0
-    [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 4
+    if [ -f "$MODDIR/runtime/asb_kernel_controls.sh" ]; then
+      sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_timer_migration >/dev/null 2>&1 || true
+      sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_sched_nr_migrate >/dev/null 2>&1 || true
+    fi
   fi
   if asb_feature_enabled CPU; then
     if [ "$ASB_GOV_ENABLED" != "1" ] || ! asb_governor_running; then
@@ -4303,8 +4304,10 @@ fi
   asb_load_profile
   if asb_feature_enabled KERNEL; then
     sysctlw kernel.sched_schedstats 0
-    sysctlw kernel.timer_migration 0
-    [ -e /proc/sys/kernel/sched_nr_migrate ] && sysctlw kernel.sched_nr_migrate 4
+    if [ -f "$MODDIR/runtime/asb_kernel_controls.sh" ]; then
+      sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_timer_migration >/dev/null 2>&1 || true
+      sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_sched_nr_migrate >/dev/null 2>&1 || true
+    fi
   fi
   asb_log "full reinforce 5m profile=$ASB_PROFILE"
   if [ "$ASB_GOV_ENABLED" != "1" ] || ! asb_governor_running; then

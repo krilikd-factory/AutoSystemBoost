@@ -518,6 +518,9 @@ The following tables mirror the WebUI's six configuration groups. Defaults descr
 | `bat_suppress_gaming` | No Game Mode on Battery Profile | `1` | Preserves Battery's distinct efficiency policy under game load. |
 | `BG_TRIM_LEVEL` | Background Trim Level | `safe` | Controls background trimming intensity; aggressive trimming can reload apps. |
 | `mglru_hold` | Keep Apps In Memory | `stock` | Adjusts app-retention policy where MGLRU-related interfaces support it. |
+| `mglru_mode` | MGLRU Mode | `smart` | Stock/off/on/smart through one baseline/readback owner; only Smart permits dynamic 5/7 requests. |
+| `kernel_timer_migration` | Timer Migration | `off` | Standard 0/1 control; default off preserves prior ASB behaviour, stock restores the captured value. |
+| `kernel_sched_nr_migrate` | Scheduler Migration Batch | `4` | Bounded stock/1/2/4/8/16 control; default 4 preserves prior balanced behaviour. |
 | `kernel_sched_stats` | Scheduler Debug Accounting | `stock` | Controls optional scheduler accounting overhead; availability is kernel-dependent. |
 | `gms_trim` | Google Services Trim | `stock` | Lite/strict background trimming for selected Google Services behaviour. |
 | `gms_freeze` | Freeze Google Components | `off` | Safe/more/max component restraint; test push, location, casting and account-dependent functions. |

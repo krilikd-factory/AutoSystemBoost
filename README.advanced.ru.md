@@ -518,6 +518,9 @@ Budget не заменяет vendor thermal engine. Если платформа 
 | `bat_suppress_gaming` | No Game Mode on Battery Profile | `1` | Сохраняет самостоятельную efficiency-политику Battery под игровой нагрузкой. |
 | `BG_TRIM_LEVEL` | Background Trim Level | `safe` | Интенсивность background trimming; aggressive может перезапускать приложения. |
 | `mglru_hold` | Keep Apps In Memory | `stock` | Меняет app-retention там, где поддерживаются MGLRU-related интерфейсы. |
+| `mglru_mode` | Режим MGLRU | `smart` | Stock/off/on/smart через одного владельца с baseline/readback; только Smart разрешает динамические 5/7. |
+| `kernel_timer_migration` | Миграция таймеров | `off` | Штатный контрол 0/1; off сохраняет прежнее поведение ASB, stock возвращает записанное исходное значение. |
+| `kernel_sched_nr_migrate` | Пакет миграций планировщика | `4` | Закрытый выбор stock/1/2/4/8/16; 4 сохраняет прежнее поведение Balanced. |
 | `kernel_sched_stats` | Scheduler Debug Accounting | `stock` | Управляет дополнительной стоимостью scheduler accounting; зависит от ядра. |
 | `gms_trim` | Google Services Trim | `stock` | Lite/strict background trimming отдельного поведения Google Services. |
 | `gms_freeze` | Freeze Google Components | `off` | Safe/more/max component restraint; проверять push, геолокацию, casting и account-функции. |
