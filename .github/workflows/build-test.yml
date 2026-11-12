@@ -195,6 +195,7 @@ jobs:
             config/key_ownership.tsv \
             tools/asb_intent.sh \
             tools/asb_config_backup.sh \
+            tools/asb_ci_summary.py \
             tools/asb_native_warning_budget.sh \
             tools/asb_native_warning_baseline.txt \
             tools/asb_native_warning_inventory.gcc.txt \
@@ -818,6 +819,7 @@ jobs:
       # and common/install.sh set every mode they need (bin/asb, bin/asb_dsp_attach,
       # system/bin/*, runtime/*.sh, tools/*.sh) during installation.
       - name: Upload test artifact (flashable, not double-zipped)
+        id: upload-artifact
         uses: actions/upload-artifact@v4
         with:
           name: ASB-${{ env.ASB_VER }}
@@ -826,19 +828,19 @@ jobs:
 
       - name: Build summary
         if: always()
+        shell: bash
+        env:
+          ASB_JOB_STATUS: ${{ job.status }}
+          ASB_REGRESSION_RESULT: ${{ needs.regression.result }}
+          ASB_UPLOAD_OUTCOME: ${{ steps.upload-artifact.outcome }}
         run: |
-          echo ""
-          echo "========================================"
-          echo "  ASB Test Build Summary"
-          echo "========================================"
-          echo "  Trigger : ${{ github.event_name }}"
-          echo "  Ref     : ${GITHUB_REF_NAME:-unknown}"
-          echo "  Version : ${ASB_VER:-unknown}"
-          if [ -f "${ZIP_TEST:-}" ]; then
-            echo "  ZIP     : $ZIP_TEST ($(du -sh $ZIP_TEST | cut -f1))"
-            BINSZ=$(unzip -p "$ZIP_TEST" bin/asb 2>/dev/null | wc -c)
-            SOSZ=$(unzip -p "$ZIP_TEST" bin/libasbdsp.so 2>/dev/null | wc -c)
-            echo "  Binary  : ${BINSZ} bytes (unified diagnostics)"
-            echo "  DSP .so : ${SOSZ} bytes"
+          SUMMARY_OUT="/tmp/asb-test-summary.md"
+          python3 -I tools/asb_ci_summary.py \
+            --mode test --workspace "$GITHUB_WORKSPACE" --zip "${ZIP_TEST:-}" \
+            --output "$SUMMARY_OUT" --job-status "$ASB_JOB_STATUS" \
+            --regression-result "$ASB_REGRESSION_RESULT" \
+            --upload-outcome "$ASB_UPLOAD_OUTCOME"
+          cat "$SUMMARY_OUT"
+          if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+            cat "$SUMMARY_OUT" >> "$GITHUB_STEP_SUMMARY"
           fi
-          echo "========================================"
