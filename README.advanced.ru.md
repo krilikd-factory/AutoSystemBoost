@@ -492,7 +492,7 @@ Budget не заменяет vendor thermal engine. Если платформа 
 
 ## 🎛️ 10. Полный указатель настроек WebUI
 
-Следующие таблицы повторяют шесть конфигурационных групп WebUI. Значения по умолчанию описывают обычную начальную политику, а не рекомендацию сбросить уже удачную настройку. Доступность и момент применения зависят от устройства.
+Следующие таблицы повторяют семь конфигурационных групп WebUI. Значения по умолчанию описывают обычную начальную политику, а не рекомендацию сбросить уже удачную настройку. Доступность и момент применения зависят от устройства.
 
 ### 🔋 10.1. Батарея
 
@@ -518,10 +518,6 @@ Budget не заменяет vendor thermal engine. Если платформа 
 | `bat_suppress_gaming` | No Game Mode on Battery Profile | `1` | Сохраняет самостоятельную efficiency-политику Battery под игровой нагрузкой. |
 | `BG_TRIM_LEVEL` | Background Trim Level | `safe` | Интенсивность background trimming; aggressive может перезапускать приложения. |
 | `mglru_hold` | Keep Apps In Memory | `stock` | Меняет app-retention там, где поддерживаются MGLRU-related интерфейсы. |
-| `mglru_mode` | Режим MGLRU | `smart` | Stock/off/on/smart через одного владельца с baseline/readback; только Smart разрешает динамические 5/7. |
-| `kernel_timer_migration` | Миграция таймеров | `off` | Штатный контрол 0/1; off сохраняет прежнее поведение ASB, stock возвращает записанное исходное значение. |
-| `kernel_sched_nr_migrate` | Пакет миграций планировщика | `4` | Закрытый выбор stock/1/2/4/8/16; 4 сохраняет прежнее поведение Balanced. |
-| `kernel_sched_stats` | Scheduler Debug Accounting | `stock` | Управляет дополнительной стоимостью scheduler accounting; зависит от ядра. |
 | `gms_trim` | Google Services Trim | `stock` | Lite/strict background trimming отдельного поведения Google Services. |
 | `gms_freeze` | Freeze Google Components | `off` | Safe/more/max component restraint; проверять push, геолокацию, casting и account-функции. |
 
@@ -657,6 +653,21 @@ Vendor-service и process controls требуют особой осторожн�
 
 ART helper для HeyTap является ограниченным one-shot, а не boot service: `pending → running → done|failed|cancelled`, lock от параллельного запуска, задержка после boot и timeout 1800 секунд по умолчанию. Ошибка компиляции всех пакетов автоматически не повторяется. Повторное применение того же Off не активирует завершённый запрос заново; последовательность Stock → Off осознанно создаёт новый. Uninstall отменяет ожидающую работу, но не выполняет массовый `pm compile --reset`.
 
+### 🧠 10.7. Ядро
+
+| Ключ | Название в WebUI | По умолчанию | Поведение / фокус тестирования |
+|:---|:---|:---:|:---|
+| `mglru_mode` | Режим MGLRU | `smart` | Stock/off/on/smart через одного владельца с baseline/readback; только Smart разрешает динамические 5/7. |
+| `kernel_timer_migration` | Миграция таймеров | `off` | Штатный контрол 0/1; off сохраняет прежнее поведение ASB, stock возвращает записанное исходное значение. |
+| `kernel_sched_nr_migrate` | Пакет миграций планировщика | `4` | Закрытый выбор stock/1/2/4/8/16; 4 сохраняет прежнее поведение Balanced. |
+| `kernel_sched_stats` | Scheduler Debug Accounting | `stock` | Stock/off через того же ограниченного владельца; доступность и права зависят от запущенного ядра. |
+
+**Настройки → Ядро** загружает эти контролы по запросу и явно отмечает недоступный, read-only, нечитаемый интерфейс или mismatch readback вместо показа успешного применения. Сохранённое значение конфигурации не является доказательством runtime-состояния.
+
+Карточка **«Источники пробуждения»** управляет только опциональным exact-name ABI KRILIKD. Принимаются не более 16 уникальных printable-ASCII имён длиной 1–63 байта; сохранённые и текущие правила ядра показываются раздельно, а счётчик заблокированных событий читается только при его доступности. По умолчанию список пуст. На ядре без ABI запрошенная policy может сохраниться для будущего применения, но UI сообщает `not exposed`, а не успех. Блокировка источника может повлиять на suspend, modem, Wi-Fi, alarms, calls или charging и требует проверки на устройстве.
+
+Read-only карточка **«Поддержка ядра»** сообщает evidence для CAKE, IP sets, Re-Kernel и SDP 900 mA, не создавая фиктивных переключателей. CAKE по-прежнему настраивается в разделе «Сеть» после прохождения runtime-проверок. Re-Kernel является источником событий для совместимого внешнего freezer, а не собственным freezer ASB. SDP 900 mA остаётся `not exposed`, пока не подтверждён OPlus control/readback ABI.
+
 ## 📊 11. WebUI, Monitor и смысл effective-state
 
 ### 📑 11.1. Страницы
@@ -665,7 +676,7 @@ ART helper для HeyTap является ограниченным one-shot, а 
 |:---|:---|
 | **Profiles** | Выбор Smart, Performance, Balanced, Battery или Stock и просмотр общего текущего состояния. |
 | **Monitor** | Live workload, clocks, thermal/battery state, Smart evidence, плавность и владелец лимита. |
-| **Config** | 84 настройки из указателя выше, с capability и reboot/apply feedback. |
+| **Config** | Настройки из указателя выше, с capability и reboot/apply feedback; раздел «Ядро» также содержит wakeup-policy и read-only evidence поддержки. |
 | **Device** | Read-only hardware, kernel, root и capability facts по запросу. |
 | **Zygisk** | Открывается с пилюли Zygisk в шапке любой страницы или из Настройки → Система: вердикт связи, «Режим», полный пульт ASB из четырёх переключателей, автоматическая настройка, активность и затраты, наблюдаемые приложения и безопасный режим. Одно чтение (`asb_zygisk.sh link-status`). |
 | **Reports** | Support diagnostics и user-triggered extended reports. |

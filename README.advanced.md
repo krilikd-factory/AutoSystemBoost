@@ -492,7 +492,7 @@ Do not infer that thermal protection is broken just because a current clock is b
 
 ## 🎛️ 10. Complete WebUI control index
 
-The following tables mirror the WebUI's six configuration groups. Defaults describe the normal initial policy, not a recommendation to reset a working setup. Availability and apply timing remain device-dependent.
+The following tables mirror the WebUI's seven configuration groups. Defaults describe the normal initial policy, not a recommendation to reset a working setup. Availability and apply timing remain device-dependent.
 
 ### 🔋 10.1. Battery
 
@@ -518,10 +518,6 @@ The following tables mirror the WebUI's six configuration groups. Defaults descr
 | `bat_suppress_gaming` | No Game Mode on Battery Profile | `1` | Preserves Battery's distinct efficiency policy under game load. |
 | `BG_TRIM_LEVEL` | Background Trim Level | `safe` | Controls background trimming intensity; aggressive trimming can reload apps. |
 | `mglru_hold` | Keep Apps In Memory | `stock` | Adjusts app-retention policy where MGLRU-related interfaces support it. |
-| `mglru_mode` | MGLRU Mode | `smart` | Stock/off/on/smart through one baseline/readback owner; only Smart permits dynamic 5/7 requests. |
-| `kernel_timer_migration` | Timer Migration | `off` | Standard 0/1 control; default off preserves prior ASB behaviour, stock restores the captured value. |
-| `kernel_sched_nr_migrate` | Scheduler Migration Batch | `4` | Bounded stock/1/2/4/8/16 control; default 4 preserves prior balanced behaviour. |
-| `kernel_sched_stats` | Scheduler Debug Accounting | `stock` | Controls optional scheduler accounting overhead; availability is kernel-dependent. |
 | `gms_trim` | Google Services Trim | `stock` | Lite/strict background trimming for selected Google Services behaviour. |
 | `gms_freeze` | Freeze Google Components | `off` | Safe/more/max component restraint; test push, location, casting and account-dependent functions. |
 
@@ -657,6 +653,21 @@ Vendor-service and process controls require particular care. “More aggressive�
 
 The HeyTap ART helper is a bounded one-shot, not a boot service: `pending → running → done|failed|cancelled`, a lock against parallel execution, a post-boot delay and a 1800-second default timeout. A failed all-package compile is not retried automatically. Reapplying the same Off value does not re-arm a completed request; Stock → Off deliberately creates a new one. Uninstall cancels pending work but does not run a mass `pm compile --reset`.
 
+### 🧠 10.7. Kernel
+
+| Key | WebUI name | Default | Advanced behaviour / test focus |
+|:---|:---|:---:|:---|
+| `mglru_mode` | MGLRU Mode | `smart` | Stock/off/on/smart through one baseline/readback owner; only Smart permits dynamic 5/7 requests. |
+| `kernel_timer_migration` | Timer Migration | `off` | Standard 0/1 control; default off preserves prior ASB behaviour, stock restores the captured value. |
+| `kernel_sched_nr_migrate` | Scheduler Migration Batch | `4` | Bounded stock/1/2/4/8/16 control; default 4 preserves prior balanced behaviour. |
+| `kernel_sched_stats` | Scheduler Debug Accounting | `stock` | Stock/off through the same bounded owner; availability and access depend on the running kernel. |
+
+**Settings → Kernel** loads these controls on demand and marks an unavailable, read-only, unreadable or mismatched interface explicitly instead of displaying a successful apply. A saved configuration value is not runtime proof.
+
+The **Wakeup sources** card manages only the optional exact-name KRILIKD ABI. It accepts at most 16 unique printable-ASCII names of 1–63 bytes, shows saved and current kernel rules separately, and reads the blocked-event counter when exposed. Empty is the default. Saving on a kernel without the ABI can preserve the requested policy for later, but the UI reports `not exposed`, not success. Blocking a source can affect suspend, modem, Wi-Fi, alarms, calls or charging and requires an on-device test.
+
+The read-only **Kernel support** card reports CAKE, IP sets, Re-Kernel and SDP 900 mA evidence without inventing switches. CAKE remains configurable under Network when its runtime prerequisites pass. Re-Kernel is an event source for a compatible external freezer, not an ASB freezer. SDP 900 mA remains `not exposed` until a confirmed OPlus control/readback ABI exists.
+
 ## 📊 11. WebUI, monitor and effective-state semantics
 
 ### 📑 11.1. Pages
@@ -665,7 +676,7 @@ The HeyTap ART helper is a bounded one-shot, not a boot service: `pending → ru
 |:---|:---|
 | **Profiles** | Select Smart, Performance, Balanced, Battery or Stock and inspect current high-level state. |
 | **Monitor** | Inspect live workload, clocks, thermal/battery state, Smart evidence, smoothness and limit ownership. |
-| **Config** | Change the 84 controls indexed above, with capability and reboot/apply feedback. |
+| **Config** | Change the controls indexed above, with capability and reboot/apply feedback; Kernel also exposes wakeup policy and read-only support evidence. |
 | **Device** | Request read-only hardware, kernel, root and capability facts. |
 | **Zygisk** | Opened from the Zygisk pill in every header or from Settings → System: connection verdict, Mode, the complete four-switch ASB panel, Automatic setup, activity and cost, observed apps and safe mode. One read (`asb_zygisk.sh link-status`). |
 | **Reports** | Generate support diagnostics and user-triggered extended reports. |
