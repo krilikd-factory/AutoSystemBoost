@@ -49,6 +49,7 @@ jobs:
             runtime/asb_heytap_mcs.sh \
             runtime/asb_art_compile.sh \
             runtime/asb_documentsui_fix.sh \
+            runtime/asb_junk_cleanup.sh \
             tools/asb_kernel_uv_coexist.sh \
             tools/asb_device_info.sh
 
@@ -116,6 +117,7 @@ jobs:
             runtime/asb_heytap_mcs.sh \
             runtime/asb_art_compile.sh \
             runtime/asb_documentsui_fix.sh \
+            runtime/asb_junk_cleanup.sh \
             tools/asb_kernel_uv_coexist.sh \
             tools/asb_device_info.sh
 
@@ -670,6 +672,7 @@ jobs:
             "runtime/asb_art_compile.sh" \
             "runtime/asb_documentsui_fix.sh" \
             "runtime/asb_battery_fix.sh" \
+            "runtime/asb_junk_cleanup.sh" \
             "runtime/asb_rom_telemetry.sh" \
             "runtime/asb_dsp_live.sh" \
             "runtime/asb_cgroup.sh" \
