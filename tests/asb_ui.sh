@@ -9095,6 +9095,20 @@ printf '%s\n' "$out" | grep -Eq '^D	asb_caps	(android_api|kernel|model)	' && fai
 printf '%s\n' "$out" | grep -q 'DO_NOT_COLLECT' && fail "a sensitive identifier was collected"
 [ "$(wc -l < "$T/susfs.log")" = 3 ] || fail "SuSFS called more than the three show reads"
 grep -Ev '^show (version|variant|enabled_features)$' "$T/susfs.log" && fail "a state-changing SuSFS command ran"
+# dev31: Settings → Kernel runs the real bounded collector mode. It must expose the
+# scheduler node/config verdicts and stop before package, display, battery and thermal work.
+mkdir -p "$T/proc/sys/kernel"; printf '1\n' > "$T/proc/sys/kernel/sched_stats"
+printf '\nCONFIG_SCHEDSTATS=y\n' >> "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
+out="$(run --kernel)"
+want kernel_features sched_stats 'writable; live=1'
+want kernel_features oplus_sdp_900ma 'not exposed; no confirmed OPlus SDP current-control ABI'
+printf '%s\n' "$out" | awk -F '\t' '$2 !~ /^(meta|firmware|soc|kernel|susfs|kernel_external|kernel_config|kernel_origin|kernel_btf|kernel_ebpf|kernel_fuse_bpf|kernel_features|metamodule)$/ { bad = 1 } END { exit bad }' || fail "--kernel ran full-collector sections: $out"
+printf '%s\n' "$out" | grep -q 'DO_NOT_COLLECT' && fail "--kernel collected a sensitive identifier"
+rm -f "$T/proc/sys/kernel/sched_stats"
+sed -i 's/^CONFIG_SCHEDSTATS=y$/# CONFIG_SCHEDSTATS is not set/' "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
+out="$(run --kernel)"; want kernel_features sched_stats disabled
+sed -i '/^# CONFIG_SCHEDSTATS is not set$/d' "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
+out="$(run)"; want kernel_features droidspaces 'core config present; runtime not verified'
 # fix246: an Adreno driven by power levels has no devfreq node; the row read "—" for every
 # frequency on a OnePlus 15. The kgsl clock files fill it.
 K="$T/sys/class/kgsl/kgsl-3d0"; mkdir -p "$K"
@@ -9226,7 +9240,7 @@ if command -v bash >/dev/null 2>&1; then
   printf 'not gzip\n' > "$T/proc/config.gz"
   out="$(run)"; want kernel_config available 'present; not decodable here'; want kernel_features lto unknown
 fi
-echo "PASS device info: read-only TSV, metamodule/root implementation variants, bounded ksud evidence, built-in/LKM NoMount and version, kernel feature evidence and missing-config semantics, a 140 KB+ config read with an external printf (Android), VPN Hide / USB gadget / WireGuard / BBRv3 / CAKE / OverlayFS evidence"
+echo "PASS device info: read-only TSV, metamodule/root implementation variants, bounded ksud evidence, built-in/LKM NoMount and version, kernel feature evidence and missing-config semantics, the bounded --kernel probe with sched_stats config/node states, a 140 KB+ config read with an external printf (Android), VPN Hide / USB gadget / WireGuard / BBRv3 / CAKE / OverlayFS evidence"
 )
 
 t_webui_tcp_algorithms_runtime() (
@@ -9322,11 +9336,11 @@ H="$ROOT/webroot/index.html"
 python3 - "$H" <<'P'
 import sys
 h = open(sys.argv[1], encoding='utf-8').read()
-keys = ('mglru_mode', 'kernel_timer_migration', 'kernel_sched_nr_migrate')
+keys = ('mglru_mode', 'kernel_timer_migration', 'kernel_sched_nr_migrate', 'kernel_sched_stats')
 for key in keys:
     assert "'" + key + "'," in h, 'snapshot key missing: ' + key
     assert key + ': APPLY_LIVE' in h, 'live mode missing: ' + key
-branch = "['mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate'].indexOf(key) >= 0"
+branch = "['mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate','kernel_sched_stats'].indexOf(key) >= 0"
 pos = h.index(branch)
 end = h.index("} else if (key === 'mglru_hold'", pos)
 body = h[pos:end]
@@ -9336,6 +9350,69 @@ assert 'innerHTML' not in body and 'outerHTML' not in body
 assert "readback_mismatch" not in body or "kp[1]" in body
 P
 echo 'PASS WebUI kernel controls: awaited owner verdict, applied/restored only on success, mismatch/error path and text-only values'
+)
+
+t_webui_kernel_panel_runtime() (
+# dev31: the Kernel screen exposes only registered owners, distinguishes capability states,
+# and round-trips exact wakeup names without treating a saved policy as kernel success.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui kernel panel: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'P' || fail 'static contract'
+import json, pathlib, re, sys
+root = pathlib.Path(sys.argv[1]); h = (root / 'webroot/index.html').read_text(encoding='utf-8')
+groups = h[h.index('const CFG_GROUPS = ['):h.index('const CFG_EXTRA_GROUPS')]
+assert groups.count("id:'") == 7 and "id:'kernel'" in groups
+sections = h[h.index('  kernel: ['):h.index('  audio: [', h.index('  kernel: ['))]
+for key in ('mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate','kernel_sched_stats'):
+    assert key in sections and re.search(key + r":'kernel'", h)
+assert "card:'wakeup'" in sections and "card:'capabilities'" in sections
+assert "asb_device_info.sh') + ' --kernel'" in h
+assert 'kernelPanelEnsure();' in h and 'kernelPanelLoad(true)' in h
+assert '/sys/kernel/asb_wakeup' not in h and 'ASB_WAKEUP_BLOCKLIST_NODE' not in h
+assert "asb_wakeup_blocker.sh') + ' set'" in h
+assert "kernelWakeupChipList" in h and "textContent" in h
+assert 'setInterval' not in h[h.index('const ASB_KERNEL_STATUS_KEYS'):h.index('function cfgToastText')]
+en = json.loads((root / 'webroot/i18n/en.json').read_text(encoding='utf-8'))
+new = [k for k in en if k.startswith('kernel_') or k.startswith('cfg_kernel_') or k.startswith('grp_kernel')]
+assert len(new) >= 43, len(new)
+for p in (root / 'webroot/i18n').glob('*.json'):
+    d = json.loads(p.read_text(encoding='utf-8'))
+    for k in new:
+        assert isinstance(d.get(k), str) and d[k], (p.name, k)
+        if p.stem != 'en' and k != 'grp_kernel': assert d[k] != en[k], (p.name, k, 'untranslated')
+P
+command -v node >/dev/null 2>&1 || { echo 'SKIP webui kernel panel runtime: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+cat > "$T/test.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+function grab(name){const m=h.match(new RegExp('(?:async )?function '+name+'\\([^)]*\\) \\{[\\s\\S]*?\\n\\}'));if(!m)throw Error('missing '+name);return m[0];}
+for(const n of ['kernelControlParse','kernelWakeupParse','kernelCapabilityState','kernelWakeupValidName','kernelWakeupDraft','kernelWakeupSave','shQuote'])eval(grab(n));
+global.ASB_KERNEL_STATUS_KEYS=['mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate','kernel_sched_stats'];
+const c=kernelControlParse('mglru_mode|writable|smart|7|1\nkernel_sched_stats|not_exposed|off||none\n');
+if(c.mglru_mode.state!=='writable'||c.mglru_mode.live!=='7'||c.kernel_sched_stats.state!=='not_exposed')throw Error('control status parse');
+const wb=kernelWakeupParse('wakeup_blocker|status|blocked_events=17|node=writable|policy=ready|saved_count=2|current_count=1\nwakeup_rule|saved|NETLINK\nwakeup_rule|saved|qcom|rx\nwakeup_rule|current|NETLINK\n');
+if(wb.events!=='17'||wb.saved.length!==2||wb.saved[1]!=='qcom|rx'||wb.current[0]!=='NETLINK')throw Error('wakeup status parse '+JSON.stringify(wb));
+for(const n of ['NETLINK','a|b',"a'b",'!','-e'])if(!kernelWakeupValidName(n))throw Error('valid exact name rejected '+n);
+for(const n of ['','bad name','bad/name','bad\\name','é','a\nb'])if(kernelWakeupValidName(n))throw Error('unsafe name accepted '+JSON.stringify(n));
+if(kernelCapabilityState('built-in; binder/signal/network')!=='available'||kernelCapabilityState('module loaded')!=='available'||kernelCapabilityState('not exposed; no ABI')!=='not_exposed'||kernelCapabilityState('unknown')!=='unknown')throw Error('capability mapping');
+let MD='/m',_wbDraft=null,_wbBusy=false,_kernelPanel={wakeup:wb},runs=[],toasts=[],refreshed=0;
+global.ASB_KERNEL_STATUS_KEYS=[];global.T=(k,f)=>f||k;global.uiSound=()=>{};global.haptic=()=>{};global.toast=(m,t)=>toasts.push([m,t]);global.cfgRender=()=>{};
+global.kernelWakeupVerdict=(v,n)=>v+':'+n;global.kernelPanelLoad=async()=>{refreshed++};
+global.run=async cmd=>{runs.push(cmd);return{errno:0,stdout:'wakeup_blocker|applied|2|'}};
+(async()=>{
+ _wbDraft=['NETLINK',"a'b"];await kernelWakeupSave(false);
+ if(runs.length!==1||!runs[0].includes(" set 'NETLINK' 'a'\\''b'"))throw Error('unsafe/wrong set command '+runs[0]);
+ if(_wbDraft!==null||_wbBusy||refreshed!==1||toasts[0][1]!=='good')throw Error('successful apply did not reconcile');
+ await kernelWakeupSave(true);if(!runs[1].endsWith(' set'))throw Error('clear did not replace policy with an empty set '+runs[1]);
+ _wbDraft=['bad name'];const before=runs.length;await kernelWakeupSave(false);if(runs.length!==before)throw Error('invalid draft reached shell');
+ console.log('ok');
+})().catch(e=>{console.error(e&&e.stack||e);process.exit(1)});
+JS
+out="$(node "$T/test.js" "$H" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo 'PASS webui kernel panel: seven groups, four owned controls, bounded exact-name set/clear, honest states, safe arguments and 43 translated strings in 13 locales'
 )
 
 t_webui_card_i18n_coverage_runtime() (
@@ -11183,6 +11260,9 @@ const body=E('body'),doc={createElement:E,body};global.document=doc;global.windo
 global.T=(k,d)=>d;global.techIcon=k=>'svg:'+k;global.ASB_GRADE={};global.cfgEnsureCaps=()=>{};global.cfgLoadGrade=()=>Promise.resolve();
 global.cfgRenderRow=(list,it)=>{const n=E('div','cfg-row');n.datasetKey=it.key;list.appendChild(n)};
 global.cfgRenderZygiskCard=list=>list.appendChild(E('section','cfg-zygisk-card'));global.cfgRenderNotifCard=()=>{};
+global.kernelPanelEnsure=()=>{};global.kernelDecorateControlRow=()=>{};
+global.cfgRenderWakeupBlockerCard=list=>list.appendChild(E('section','kernel-card'));
+global.cfgRenderKernelCapabilitiesCard=list=>list.appendChild(E('section','kernel-card'));
 eval(between('const CFG_GROUP_OF = {','function cfgGroupOf').replace(/^const /gm,'var '));
 eval(grab('cfgGroupOf'));eval(between('const CFG_ITEMS = [','// Icon + status hints').replace(/^const /gm,'var '));
 eval(between('const CFG_CAT = {','function cfgGroupOf').replace(/^const /gm,'var '));
@@ -11193,7 +11273,7 @@ cfgRenderZygiskCard=list=>list.appendChild(E('section','cfg-zygisk-card'));cfgRe
 eval(grab('cfgCatClass'));eval(grab('cfgRenderSection'));eval(grab('cfgRenderGroup'));
 for(const n of ['asbPageJumpIsDock','asbPageJumpIndicator','asbPageJumpActive','asbPageJumpClear','asbPageJumpWatch','asbPageJumpIcon','asbPageJump'])eval(grab(n));
 function find(n,id){if(n.id===id)return n;for(const c of n.children){const x=find(c,id);if(x)return x}return null;}
-const expected={audio:['dsp','playback','safety'],camera:['processing','perf'],iface:['speed','effects'],net:['cellular','wifi','speed','stack'],battery:['smart','charging','standby','thermal','memory'],ui:['zygisk','services','feel','diag']};
+const expected={kernel:['controls','wakeup','capabilities'],audio:['dsp','playback','safety'],camera:['processing','perf'],iface:['speed','effects'],net:['cellular','wifi','speed','stack'],battery:['smart','charging','standby','thermal','memory'],ui:['zygisk','services','feel','diag']};
 for(const [group,sections] of Object.entries(expected)){
  const page=E('div','live-page config-page');page.id='configPage';page.clientHeight=600;page.scrollHeight=2400;page.scrollTop=0;page.scrollCalls=[];
  page.addEventListener=(t,f)=>{if(t==='scroll')page._scroll=f};page.removeEventListener=(t,f)=>{if(t==='scroll'&&page._scroll===f)page._scroll=null};page.scrollTo=o=>{page.scrollTop=o.top;page.scrollCalls.push(o.top)};
@@ -11214,7 +11294,7 @@ console.log('ok');
 JS
 out="$(node "$T/test.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo 'PASS WebUI fix331: six rendered category docks with icons/jumps/scroll-spy/cleanup, modern Device contract, horizontal docks, larger tiles and Glass-safe coloured SVG tools'
+echo 'PASS WebUI fix331: seven rendered category docks with icons/jumps/scroll-spy/cleanup, modern Device contract, horizontal docks, larger tiles and Glass-safe coloured SVG tools'
 )
 
 t_webui_fix334_ufo_navigation_repeat() (
@@ -11615,7 +11695,7 @@ for n in sorted(os.listdir(sys.argv[2])):
         v = loc.get('kc_verdict_' + s)
         assert v and v != js[s], (n, s)
     assert '{v}' in loc.get('kc_live', ''), n
-i = h.index("['mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate'].indexOf(key) >= 0")
+i = h.index("['mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate','kernel_sched_stats'].indexOf(key) >= 0")
 seg = h[i:i + 1800]
 assert 'asbKernelControlVerdict(kp[1], kp[3])' in seg
 assert "' · live '" not in seg and "toast(key + ': '" not in seg

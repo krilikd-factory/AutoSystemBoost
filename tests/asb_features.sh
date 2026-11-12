@@ -5398,12 +5398,11 @@ ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
 fail() { echo "FAIL kernel sched_stats: $*" >&2; exit 1; }
 mkdir -p "$T/mod/config" "$T/mod/runtime"
-cp "$ROOT/runtime/asb_baseline.sh" "$T/mod/runtime/"
+cp "$ROOT/runtime/asb_kernel_controls.sh" "$T/mod/runtime/"
 run() {
-  printf 'kernel_sched_stats=%s\nphantom_procs=stock\nmglru_hold=stock\n' "$1" > "$T/mod/config/governor.conf"
-  MODDIR="$T/mod" ASB_BASELINE="$T/baseline" ASB_PROFILE_BASELINE="$T/profile" \
-    ASB_SCHED_STATS_NODE="$T/sched_stats" ASB_SCHED_STATS_PREV="$T/state/sched.prev" \
-    sh "$ROOT/runtime/asb_system_tweaks.sh" >/dev/null 2>&1
+  printf 'kernel_sched_stats=%s\n' "$1" > "$T/mod/config/governor.conf"
+  MODDIR="$T/mod" ASB_SCHED_STATS_NODE="$T/sched_stats" ASB_SCHED_STATS_PREV="$T/state/sched.prev" \
+    sh "$ROOT/runtime/asb_kernel_controls.sh" apply kernel_sched_stats >/dev/null 2>&1 || true
 }
 printf '1\n' > "$T/sched_stats"
 run off
@@ -5672,6 +5671,28 @@ printf 'wlan_wow_wl\nNETLINK\n' > "$T/expected"
 cmp -s "$T/state" "$T/expected" || fail 'exact names were not applied in order'
 printf 'wlan_wow_wl\nwlan_wow_wl\nNETLINK\n' > "$T/mod/config/wakeup_blocklist.conf"
 out="$(run apply)"; [ "$out" = 'wakeup_blocker|applied|2|' ] || fail 'duplicates were not bounded'
+out="$(run set NETLINK wlan_wow_wl NETLINK)"
+[ "$out" = 'wakeup_blocker|applied|2|' ] || fail "bounded policy update failed: $out"
+printf 'NETLINK\nwlan_wow_wl\n' > "$T/expected"
+cmp -s "$T/mod/config/wakeup_blocklist.conf" "$T/expected" || fail 'policy update was not saved and deduplicated'
+out="$(run status)"
+printf '%s\n' "$out" | grep -q 'node=writable|policy=ready|saved_count=2|current_count=2' || fail "status lacks saved/live counts: $out"
+[ "$(printf '%s\n' "$out" | grep -c '^wakeup_rule|saved|')" -eq 2 ] || fail 'saved policy readback missing'
+[ "$(printf '%s\n' "$out" | grep -c '^wakeup_rule|current|')" -eq 2 ] || fail 'kernel rule readback missing'
+set +e; out="$(run set bad/name)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && [ "$out" = 'wakeup_blocker|invalid_name||' ] || fail 'unsafe policy update accepted'
+cmp -s "$T/mod/config/wakeup_blocklist.conf" "$T/expected" || fail 'invalid update replaced the previous policy'
+# Printable exact names may begin with '-'; grep must never consume one as an option.
+out="$(run set -e -v NETLINK -e)"
+[ "$out" = 'wakeup_blocker|applied|3|' ] || fail "dash-led policy update failed: $out"
+printf '%s\n' '-e' '-v' 'NETLINK' > "$T/expected"
+cmp -s "$T/mod/config/wakeup_blocklist.conf" "$T/expected" || fail 'dash-led set was not saved exactly'
+printf '%s\n' '-e' '-v' '-e' 'NETLINK' > "$T/mod/config/wakeup_blocklist.conf"
+out="$(run apply)"; [ "$out" = 'wakeup_blocker|applied|3|' ] || fail "dash-led apply/dedupe failed: $out"
+cmp -s "$T/state" "$T/expected" || fail 'dash-led apply readback differs'
+out="$(run set)"
+[ "$out" = 'wakeup_blocker|applied|0|' ] && [ ! -s "$T/mod/config/wakeup_blocklist.conf" ] && [ ! -s "$T/state" ] || fail 'empty policy update did not clear saved and live rules'
+out="$(run set wlan_wow_wl NETLINK)"; [ "$out" = 'wakeup_blocker|applied|2|' ] || fail 'policy update recovery failed'
 printf 'bad/name\n' > "$T/mod/config/wakeup_blocklist.conf"
 set +e; out="$(run apply)"; rc=$?; set -e
 [ "$rc" -ne 0 ] && [ "$out" = 'wakeup_blocker|invalid_name||' ] || fail "unsafe name accepted: $out"
@@ -5688,6 +5709,10 @@ i=0; : > "$T/mod/config/wakeup_blocklist.conf"
 while [ "$i" -lt 17 ]; do printf 'rule%s\n' "$i" >> "$T/mod/config/wakeup_blocklist.conf"; i=$((i+1)); done
 set +e; out="$(run apply)"; rc=$?; set -e
 [ "$rc" -ne 0 ] && [ "$out" = 'wakeup_blocker|too_many_rules||' ] || fail 'rule limit not enforced'
+cp "$T/mod/config/wakeup_blocklist.conf" "$T/seventeen"
+set +e; out="$(run set rule0 rule1 rule2 rule3 rule4 rule5 rule6 rule7 rule8 rule9 rule10 rule11 rule12 rule13 rule14 rule15 rule16)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && [ "$out" = 'wakeup_blocker|too_many_rules||' ] || fail 'policy update rule limit not enforced'
+cmp -s "$T/mod/config/wakeup_blocklist.conf" "$T/seventeen" || fail 'oversized update replaced the previous policy'
 [ ! -s "$ROOT/config/wakeup_blocklist.conf" ] || fail 'shipped default policy is not empty'
 grep -Fq 'asb_wakeup_blocker.sh" clear' "$ROOT/uninstall.sh" "$ROOT/runtime/asb_watchdog.sh" "$ROOT/service.sh" || fail 'Safe mode/uninstall clear path missing'
 grep -Fq 'asb_wakeup_blocker.sh" apply' "$ROOT/service.sh" || fail 'boot apply path missing'
