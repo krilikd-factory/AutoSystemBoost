@@ -731,12 +731,12 @@ awk -F'|' '
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
-[ "$(wc -l < "$TMP/conf")" = "228" ] || fail "expected 228 config keys, got $(wc -l < "$TMP/conf")"
-[ "$(wc -l < "$TMP/registry")" = "228" ] || fail "expected 228 registry keys, got $(wc -l < "$TMP/registry")"
+[ "$(wc -l < "$TMP/conf")" = "230" ] || fail "expected 230 config keys, got $(wc -l < "$TMP/conf")"
+[ "$(wc -l < "$TMP/registry")" = "230" ] || fail "expected 230 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
 grep -qx 'kernel_sched_stats|advanced|webui_sensitive|shell' "$REG" || fail 'kernel_sched_stats consumer is not pinned to shell'
-for _kc_key in mglru_mode kernel_timer_migration kernel_sched_nr_migrate; do
+for _kc_key in mglru_mode kernel_timer_migration kernel_sched_nr_migrate kernel_sched_autogroup kernel_sched_child_runs_first; do
   grep -qx "$_kc_key|advanced|webui_sensitive|shell" "$REG" || fail "$_kc_key consumer is not pinned to shell"
 done
 grep -qx 'net_mtu_probing|advanced|webui_sensitive|shell' "$REG" || fail 'net_mtu_probing consumer is not pinned to shell'
@@ -755,7 +755,7 @@ done > "$TMP/consumer_bad"
 
 sed -n '/const CFG_ITEMS = \[/,/^\];/p' "$ROOT/webroot/index.html" \
   | grep -oE "key:'[A-Za-z_][A-Za-z0-9_]*'" | sed "s/key:'//;s/'//" | sort -u > "$TMP/cards"
-[ "$(wc -l < "$TMP/cards")" = "97" ] || fail "expected 97 WebUI cards, got $(wc -l < "$TMP/cards")"
+[ "$(wc -l < "$TMP/cards")" = "99" ] || fail "expected 99 WebUI cards, got $(wc -l < "$TMP/cards")"
 _card_bad="$(while IFS= read -r key; do
   cls="$(awk -F'|' -v k="$key" '$1==k {print $2; exit}' "$REG")"
   case "$cls" in user|advanced) : ;; *) printf '%s ' "$key" ;; esac
@@ -799,7 +799,7 @@ for _c in $(grep -oE "\{ key:'[A-Za-z_][A-Za-z_0-9]*'" "$ROOT/webroot/index.html
 done
 [ -z "$_missing" ] || fail "cards missing from the install.sh settings snapshot:$_missing"
 
-echo 'PASS config ownership registry contract (228 keys; 41 user, 56 advanced, 131 internal)'
+echo 'PASS config ownership registry contract (230 keys; 41 user, 58 advanced, 131 internal)'
 )
 
 t_config_restore_outcome_runtime() (

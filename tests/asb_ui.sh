@@ -9095,7 +9095,7 @@ printf '%s\n' "$out" | grep -Eq '^D	asb_caps	(android_api|kernel|model)	' && fai
 printf '%s\n' "$out" | grep -q 'DO_NOT_COLLECT' && fail "a sensitive identifier was collected"
 [ "$(wc -l < "$T/susfs.log")" = 3 ] || fail "SuSFS called more than the three show reads"
 grep -Ev '^show (version|variant|enabled_features)$' "$T/susfs.log" && fail "a state-changing SuSFS command ran"
-# dev31: Settings → Kernel runs the real bounded collector mode. It must expose the
+# Device Diagnostics runs the real bounded collector mode. It must expose the
 # scheduler node/config verdicts and stop before package, display, battery and thermal work.
 mkdir -p "$T/proc/sys/kernel"; printf '1\n' > "$T/proc/sys/kernel/sched_stats"
 printf '\nCONFIG_SCHEDSTATS=y\n' >> "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
@@ -9336,15 +9336,15 @@ H="$ROOT/webroot/index.html"
 python3 - "$H" <<'P'
 import sys
 h = open(sys.argv[1], encoding='utf-8').read()
-keys = ('mglru_mode', 'kernel_timer_migration', 'kernel_sched_nr_migrate', 'kernel_sched_stats')
+keys = ('mglru_mode', 'kernel_timer_migration', 'kernel_sched_nr_migrate', 'kernel_sched_stats', 'kernel_sched_autogroup', 'kernel_sched_child_runs_first')
 for key in keys:
     assert "'" + key + "'," in h, 'snapshot key missing: ' + key
     assert key + ': APPLY_LIVE' in h, 'live mode missing: ' + key
-branch = "['mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate','kernel_sched_stats'].indexOf(key) >= 0"
-pos = h.index(branch)
+branch = "ASB_KERNEL_STATUS_KEYS.indexOf(key) >= 0"
+pos = h.rindex(branch)
 end = h.index("} else if (key === 'mglru_hold'", pos)
 body = h[pos:end]
-for token in ('await run(', 'asb_kernel_controls.sh', 'kr.errno === 0', "'applied','restored','stock_unowned'", "uiSound('error')", "kp[1]", "kp[3]"):
+for token in ('await run(', 'asb_kernel_controls.sh', 'kr.errno === 0', "'applied','restored','stock_unowned'", "uiSound('error')", "kp[1]", "kp[3]", 'await kernelPanelLoad(true)'):
     assert token in body, 'verdict branch lost ' + token
 assert 'innerHTML' not in body and 'outerHTML' not in body
 assert "readback_mismatch" not in body or "kp[1]" in body
@@ -9353,8 +9353,8 @@ echo 'PASS WebUI kernel controls: awaited owner verdict, applied/restored only o
 )
 
 t_webui_kernel_panel_runtime() (
-# dev31: the Kernel screen exposes only registered owners, distinguishes capability states,
-# and round-trips exact wakeup names without treating a saved policy as kernel success.
+# dev33: System owns kernel management and wakeup rules. Read-only kernel evidence remains
+# on Device Diagnostics instead of being probed and rendered a second time here.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 H="$ROOT/webroot/index.html"
@@ -9363,40 +9363,51 @@ python3 - "$ROOT" <<'P' || fail 'static contract'
 import json, pathlib, re, sys
 root = pathlib.Path(sys.argv[1]); h = (root / 'webroot/index.html').read_text(encoding='utf-8')
 groups = h[h.index('const CFG_GROUPS = ['):h.index('const CFG_EXTRA_GROUPS')]
-assert groups.count("id:'") == 7 and "id:'kernel'" in groups
-sections = h[h.index('  kernel: ['):h.index('  audio: [', h.index('  kernel: ['))]
-for key in ('mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate','kernel_sched_stats'):
-    assert key in sections and re.search(key + r":'kernel'", h)
-assert "card:'wakeup'" in sections and "card:'capabilities'" in sections
-assert "asb_device_info.sh') + ' --kernel'" in h
-assert 'kernelPanelEnsure();' in h and 'kernelPanelLoad(true)' in h
+assert groups.count("id:'") == 6 and "id:'kernel'" not in groups
+sections = h[h.index('  ui: ['):h.index('  infirmary: [', h.index('  ui: ['))]
+keys = ('mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first')
+for key in keys:
+    assert key in sections and re.search(key + r":'ui'", h)
+assert "card:'wakeup'" in sections and 'capabilities' not in sections
+panel = h[h.index('const ASB_KERNEL_STATUS_KEYS'):h.index('function cfgToastText')]
+assert 'asb_device_info.sh' not in panel and '_kernelPanel.caps' not in panel
+assert 'cfgRenderKernelControlsHelp' in h and 'kernelControlsRefresh' in h and 'kernelOpenDiagnostics' in h
+assert 'diagnostics.onclick = openDevicePage' in h
+assert "groupId === 'ui') kernelPanelEnsure()" in h and "if (_cfgGroup === 'ui')" in panel
+assert 'kernelCapabilityState' not in h and 'cfgRenderKernelCapabilitiesCard' not in h
+assert 'kernelPanelLoad(true)' in h and "await kernelPanelLoad(true)" in h
 assert '/sys/kernel/asb_wakeup' not in h and 'ASB_WAKEUP_BLOCKLIST_NODE' not in h
 assert "asb_wakeup_blocker.sh') + ' set'" in h
 assert "kernelWakeupChipList" in h and "textContent" in h
-assert 'setInterval' not in h[h.index('const ASB_KERNEL_STATUS_KEYS'):h.index('function cfgToastText')]
+assert 'setInterval' not in panel
 en = json.loads((root / 'webroot/i18n/en.json').read_text(encoding='utf-8'))
-new = [k for k in en if k.startswith('kernel_') or k.startswith('cfg_kernel_') or k.startswith('grp_kernel')]
-assert len(new) >= 43, len(new)
+new = [k for k in en if k.startswith('kernel_') or k.startswith('cfg_kernel_')]
+assert len(new) == 37, len(new)
+assert not any(k.startswith('grp_kernel') or k.startswith('kernel_caps') for k in en)
 for p in (root / 'webroot/i18n').glob('*.json'):
     d = json.loads(p.read_text(encoding='utf-8'))
     for k in new:
         assert isinstance(d.get(k), str) and d[k], (p.name, k)
-        if p.stem != 'en' and k != 'grp_kernel': assert d[k] != en[k], (p.name, k, 'untranslated')
+        if p.stem != 'en': assert d[k] != en[k], (p.name, k, 'untranslated')
+    for key in keys[-2:]:
+        card = d['cfg'][key]
+        assert card['name'] and card['desc']
+        assert set(card['descOpt']) == {'stock','off','on'}
+        if p.stem != 'en': assert card != en['cfg'][key], (p.name, key, 'untranslated')
 P
 command -v node >/dev/null 2>&1 || { echo 'SKIP webui kernel panel runtime: no node'; exit 0; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
 cat > "$T/test.js" <<'JS'
 const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
 function grab(name){const m=h.match(new RegExp('(?:async )?function '+name+'\\([^)]*\\) \\{[\\s\\S]*?\\n\\}'));if(!m)throw Error('missing '+name);return m[0];}
-for(const n of ['kernelControlParse','kernelWakeupParse','kernelCapabilityState','kernelWakeupValidName','kernelWakeupDraft','kernelWakeupSave','shQuote'])eval(grab(n));
-global.ASB_KERNEL_STATUS_KEYS=['mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate','kernel_sched_stats'];
-const c=kernelControlParse('mglru_mode|writable|smart|7|1\nkernel_sched_stats|not_exposed|off||none\n');
-if(c.mglru_mode.state!=='writable'||c.mglru_mode.live!=='7'||c.kernel_sched_stats.state!=='not_exposed')throw Error('control status parse');
+for(const n of ['kernelControlParse','kernelWakeupParse','kernelWakeupValidName','kernelWakeupDraft','kernelWakeupSave','shQuote'])eval(grab(n));
+global.ASB_KERNEL_STATUS_KEYS=['mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first'];
+const c=kernelControlParse('mglru_mode|writable|smart|7|1\nkernel_sched_stats|not_exposed|off||none\nkernel_sched_autogroup|writable|on|1|0\nkernel_sched_child_runs_first|not_writable|stock|1|none\narbitrary_path|writable|on|1|none\n');
+if(c.mglru_mode.state!=='writable'||c.mglru_mode.live!=='7'||c.kernel_sched_stats.state!=='not_exposed'||c.kernel_sched_autogroup.live!=='1'||c.kernel_sched_child_runs_first.state!=='not_writable'||c.arbitrary_path)throw Error('control status parse');
 const wb=kernelWakeupParse('wakeup_blocker|status|blocked_events=17|node=writable|policy=ready|saved_count=2|current_count=1\nwakeup_rule|saved|NETLINK\nwakeup_rule|saved|qcom|rx\nwakeup_rule|current|NETLINK\n');
 if(wb.events!=='17'||wb.saved.length!==2||wb.saved[1]!=='qcom|rx'||wb.current[0]!=='NETLINK')throw Error('wakeup status parse '+JSON.stringify(wb));
 for(const n of ['NETLINK','a|b',"a'b",'!','-e'])if(!kernelWakeupValidName(n))throw Error('valid exact name rejected '+n);
 for(const n of ['','bad name','bad/name','bad\\name','é','a\nb'])if(kernelWakeupValidName(n))throw Error('unsafe name accepted '+JSON.stringify(n));
-if(kernelCapabilityState('built-in; binder/signal/network')!=='available'||kernelCapabilityState('module loaded')!=='available'||kernelCapabilityState('not exposed; no ABI')!=='not_exposed'||kernelCapabilityState('unknown')!=='unknown')throw Error('capability mapping');
 let MD='/m',_wbDraft=null,_wbBusy=false,_kernelPanel={wakeup:wb},runs=[],toasts=[],refreshed=0;
 global.ASB_KERNEL_STATUS_KEYS=[];global.T=(k,f)=>f||k;global.uiSound=()=>{};global.haptic=()=>{};global.toast=(m,t)=>toasts.push([m,t]);global.cfgRender=()=>{};
 global.kernelWakeupVerdict=(v,n)=>v+':'+n;global.kernelPanelLoad=async()=>{refreshed++};
@@ -9412,7 +9423,7 @@ global.run=async cmd=>{runs.push(cmd);return{errno:0,stdout:'wakeup_blocker|appl
 JS
 out="$(node "$T/test.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo 'PASS webui kernel panel: seven groups, four owned controls, bounded exact-name set/clear, honest states, safe arguments and 43 translated strings in 13 locales'
+echo 'PASS webui kernel panel: six hubs, six owned controls under System, no duplicate diagnostics probe, refresh/navigation actions, bounded wakeup set/clear and 37 translated strings in 13 locales'
 )
 
 t_webui_card_i18n_coverage_runtime() (
@@ -9442,7 +9453,7 @@ for m in re.finditer(r"\{\s*key:'(\w+)',\s*type:'(\w+)'(.*?)(?=\n\s*\{\s*key:'|\
     dm = re.search(r"desc:'((?:[^'\\]|\\.)*)'", rest)
     items[k] = {'type': t, 'opts': re.findall(r"'([^']*)'", om.group(1)) if om else [], 'name': nm.group(1) if nm else '', 'desc': dm.group(0) if dm else ''}
 assert len(items) >= 70, 'CFG_ITEMS parse: %d' % len(items)
-for k in ('dsp_clarity', 'dsp_rumble', 'dsp_headroom', 'kernel_sched_stats', 'mglru_mode', 'kernel_timer_migration', 'kernel_sched_nr_migrate', 'athena_service', 'net_rps'):
+for k in ('dsp_clarity', 'dsp_rumble', 'dsp_headroom', 'kernel_sched_stats', 'kernel_sched_autogroup', 'kernel_sched_child_runs_first', 'mglru_mode', 'kernel_timer_migration', 'kernel_sched_nr_migrate', 'athena_service', 'net_rps'):
     assert k in items, 'CFG_ITEMS lost ' + k
 files = sorted((root / 'webroot' / 'i18n').glob('*.json'))
 assert len(files) == 13, len(files)
@@ -10162,19 +10173,19 @@ for token in ('html .cfg-tile-ico {','place-items:center;','align-self:center;',
     assert token in s, token
 assert 'grid-template-columns: repeat(3, 1fr);' in s
 expected={
-'en':['DSP, volume, Bluetooth','Presets, processing, detail','Animations, blur','Wi-Fi, LTE, queues','Smart, Doze, heat, RAM','Services, LTPO, haptics'],
-'ru':['DSP, громкость, Bluetooth','Пресеты, обработка, детали','Анимации, размытие','Wi-Fi, LTE, очереди','Smart, Doze, нагрев, RAM','Службы, LTPO, вибрация'],
-'uk':['DSP, гучність, Bluetooth','Пресети, обробка, деталі','Анімації, розмиття','Wi-Fi, LTE, черги','Smart, Doze, нагрів, RAM','Служби, LTPO, вібрація'],
-'de':['DSP, Lautstärke, Bluetooth','Presets, Verarbeitung, Details','Animationen, Weichzeichnung','WLAN, LTE, Warteschlangen','Smart, Doze, Wärme, RAM','Dienste, LTPO, Haptik'],
-'es':['DSP, volumen, Bluetooth','Presets, procesado, detalle','Animaciones, desenfoque','Wi-Fi, LTE, colas','Smart, Doze, calor, RAM','Servicios, LTPO, vibración'],
-'fr':['DSP, volume, Bluetooth','Préréglages, traitement, détails','Animations, flou','Wi-Fi, LTE, files','Smart, Doze, chaleur, RAM','Services, LTPO, vibrations'],
-'it':['DSP, volume, Bluetooth','Preset, elaborazione, dettagli','Animazioni, sfocatura','Wi-Fi, LTE, code','Smart, Doze, calore, RAM','Servizi, LTPO, vibrazione'],
-'pt':['DSP, volume, Bluetooth','Presets, processamento, detalhe','Animações, desfoque','Wi-Fi, LTE, filas','Smart, Doze, calor, RAM','Serviços, LTPO, vibração'],
-'tr':['DSP, ses, Bluetooth','Ön ayarlar, işleme, detay','Animasyonlar, bulanıklık','Wi-Fi, LTE, kuyruklar','Smart, Doze, ısı, RAM','Servisler, LTPO, titreşim'],
-'id':['DSP, volume, Bluetooth','Preset, pemrosesan, detail','Animasi, blur','Wi-Fi, LTE, antrean','Smart, Doze, panas, RAM','Layanan, LTPO, getaran'],
-'ar':['DSP والصوت وبلوتوث','إعدادات ومعالجة وتفاصيل','الحركات والتمويه','Wi-Fi وLTE والإرسال','Smart وDoze والحرارة وRAM','الخدمات وLTPO والاهتزاز'],
-'hy':['DSP, ձայն, Bluetooth','Պրեսետներ, մշակում','Անիմացիա, լղոզում','Wi-Fi, LTE, հերթեր','Smart, Doze, տաքացում, RAM','Ծառայություններ, LTPO, թրթռում'],
-'zh':['DSP、音量、蓝牙','预设、处理、细节','动画、模糊效果','Wi-Fi、LTE、队列','智能、Doze、发热、内存','服务、LTPO、振动']}
+'en':['DSP, volume, Bluetooth','Presets, processing, detail','Animations, blur','Wi-Fi, LTE, queues','Smart, Doze, heat, RAM','Kernel, services, LTPO, haptics'],
+'ru':['DSP, громкость, Bluetooth','Пресеты, обработка, детали','Анимации, размытие','Wi-Fi, LTE, очереди','Smart, Doze, нагрев, RAM','Ядро, службы, LTPO, вибрация'],
+'uk':['DSP, гучність, Bluetooth','Пресети, обробка, деталі','Анімації, розмиття','Wi-Fi, LTE, черги','Smart, Doze, нагрів, RAM','Ядро, служби, LTPO, вібрація'],
+'de':['DSP, Lautstärke, Bluetooth','Presets, Verarbeitung, Details','Animationen, Weichzeichnung','WLAN, LTE, Warteschlangen','Smart, Doze, Wärme, RAM','Kernel, Dienste, LTPO, Haptik'],
+'es':['DSP, volumen, Bluetooth','Presets, procesado, detalle','Animaciones, desenfoque','Wi-Fi, LTE, colas','Smart, Doze, calor, RAM','Kernel, servicios, LTPO, háptica'],
+'fr':['DSP, volume, Bluetooth','Préréglages, traitement, détails','Animations, flou','Wi-Fi, LTE, files','Smart, Doze, chaleur, RAM','Noyau, services, LTPO, retour haptique'],
+'it':['DSP, volume, Bluetooth','Preset, elaborazione, dettagli','Animazioni, sfocatura','Wi-Fi, LTE, code','Smart, Doze, calore, RAM','Kernel, servizi, LTPO, vibrazione'],
+'pt':['DSP, volume, Bluetooth','Presets, processamento, detalhe','Animações, desfoque','Wi-Fi, LTE, filas','Smart, Doze, calor, RAM','Kernel, serviços, LTPO, resposta tátil'],
+'tr':['DSP, ses, Bluetooth','Ön ayarlar, işleme, detay','Animasyonlar, bulanıklık','Wi-Fi, LTE, kuyruklar','Smart, Doze, ısı, RAM','Çekirdek, hizmetler, LTPO, dokunsal geri bildirim'],
+'id':['DSP, volume, Bluetooth','Preset, pemrosesan, detail','Animasi, blur','Wi-Fi, LTE, antrean','Smart, Doze, panas, RAM','Kernel, layanan, LTPO, haptik'],
+'ar':['DSP والصوت وبلوتوث','إعدادات ومعالجة وتفاصيل','الحركات والتمويه','Wi-Fi وLTE والإرسال','Smart وDoze والحرارة وRAM','النواة والخدمات وLTPO والاستجابة اللمسية'],
+'hy':['DSP, ձայն, Bluetooth','Պրեսետներ, մշակում','Անիմացիա, լղոզում','Wi-Fi, LTE, հերթեր','Smart, Doze, տաքացում, RAM','Միջուկ, ծառայություններ, LTPO, շոշափման արձագանք'],
+'zh':['DSP、音量、蓝牙','预设、处理、细节','动画、模糊效果','Wi-Fi、LTE、队列','智能、Doze、发热、内存','内核、服务、LTPO、触感']}
 files=sorted((root/'webroot/i18n').glob('*.json'))
 assert len(files)==13
 keys=['audio','camera','iface','net','battery','ui']
@@ -10211,7 +10222,7 @@ E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};
   global.CFG_GROUPS=['audio','camera','iface','net','battery','ui'].map(id=>({id,icon:id,name:id}));
   global.CFG_ITEMS=CFG_GROUPS.map(g=>({key:g.id,def:'0'}));
   global.cfgGroupOf=k=>k;global._cfgVals={audio:'1'};global.cfgIsActive=(it,cur)=>String(cur)==='1';
-  global.CFG_GROUP_DESC={audio:'DSP, volume, Bluetooth',camera:'Presets, processing, detail',iface:'Animations, blur',net:'Wi-Fi, LTE, queues',battery:'Smart, Doze, heat, RAM',ui:'Services, LTPO, haptics'};
+  global.CFG_GROUP_DESC={audio:'DSP, volume, Bluetooth',camera:'Presets, processing, detail',iface:'Animations, blur',net:'Wi-Fi, LTE, queues',battery:'Smart, Doze, heat, RAM',ui:'Kernel, services, LTPO, haptics'};
   global.grpName=g=>g.name;global.T=(k,f)=>f;global.techIcon=k=>'<svg data-kind="'+k+'"></svg>';
   global.uiSound=()=>{};global._cfgGroup='';global.cfgRender=()=>{};global.requestAnimationFrame=()=>{};global.asbFitPages=()=>{};
   eval(grab('function cfgRenderHub(list) {','// Settings whose effect lands in a file')+';globalThis.renderHub=cfgRenderHub;');
@@ -11261,8 +11272,9 @@ global.T=(k,d)=>d;global.techIcon=k=>'svg:'+k;global.ASB_GRADE={};global.cfgEnsu
 global.cfgRenderRow=(list,it)=>{const n=E('div','cfg-row');n.datasetKey=it.key;list.appendChild(n)};
 global.cfgRenderZygiskCard=list=>list.appendChild(E('section','cfg-zygisk-card'));global.cfgRenderNotifCard=()=>{};
 global.kernelPanelEnsure=()=>{};global.kernelDecorateControlRow=()=>{};
+global.ASB_KERNEL_STATUS_KEYS=['mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first'];
 global.cfgRenderWakeupBlockerCard=list=>list.appendChild(E('section','kernel-card'));
-global.cfgRenderKernelCapabilitiesCard=list=>list.appendChild(E('section','kernel-card'));
+global.cfgRenderKernelControlsHelp=list=>list.appendChild(E('section','kernel-card'));
 eval(between('const CFG_GROUP_OF = {','function cfgGroupOf').replace(/^const /gm,'var '));
 eval(grab('cfgGroupOf'));eval(between('const CFG_ITEMS = [','// Icon + status hints').replace(/^const /gm,'var '));
 eval(between('const CFG_CAT = {','function cfgGroupOf').replace(/^const /gm,'var '));
@@ -11273,7 +11285,7 @@ cfgRenderZygiskCard=list=>list.appendChild(E('section','cfg-zygisk-card'));cfgRe
 eval(grab('cfgCatClass'));eval(grab('cfgRenderSection'));eval(grab('cfgRenderGroup'));
 for(const n of ['asbPageJumpIsDock','asbPageJumpIndicator','asbPageJumpActive','asbPageJumpClear','asbPageJumpWatch','asbPageJumpIcon','asbPageJump'])eval(grab(n));
 function find(n,id){if(n.id===id)return n;for(const c of n.children){const x=find(c,id);if(x)return x}return null;}
-const expected={kernel:['controls','wakeup','capabilities'],audio:['dsp','playback','safety'],camera:['processing','perf'],iface:['speed','effects'],net:['cellular','wifi','speed','stack'],battery:['smart','charging','standby','thermal','memory'],ui:['zygisk','services','feel','diag']};
+const expected={audio:['dsp','playback','safety'],camera:['processing','perf'],iface:['speed','effects'],net:['cellular','wifi','speed','stack'],battery:['smart','charging','standby','thermal','memory'],ui:['controls','wakeup','zygisk','services','feel','diag']};
 for(const [group,sections] of Object.entries(expected)){
  const page=E('div','live-page config-page');page.id='configPage';page.clientHeight=600;page.scrollHeight=2400;page.scrollTop=0;page.scrollCalls=[];
  page.addEventListener=(t,f)=>{if(t==='scroll')page._scroll=f};page.removeEventListener=(t,f)=>{if(t==='scroll'&&page._scroll===f)page._scroll=null};page.scrollTo=o=>{page.scrollTop=o.top;page.scrollCalls.push(o.top)};
@@ -11294,7 +11306,7 @@ console.log('ok');
 JS
 out="$(node "$T/test.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo 'PASS WebUI fix331: seven rendered category docks with icons/jumps/scroll-spy/cleanup, modern Device contract, horizontal docks, larger tiles and Glass-safe coloured SVG tools'
+echo 'PASS WebUI fix331: six rendered category docks including System kernel management, icons/jumps/scroll-spy/cleanup, modern Device contract and Glass-safe coloured SVG tools'
 )
 
 t_webui_fix334_ufo_navigation_repeat() (
@@ -11695,7 +11707,7 @@ for n in sorted(os.listdir(sys.argv[2])):
         v = loc.get('kc_verdict_' + s)
         assert v and v != js[s], (n, s)
     assert '{v}' in loc.get('kc_live', ''), n
-i = h.index("['mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate','kernel_sched_stats'].indexOf(key) >= 0")
+i = h.rindex("ASB_KERNEL_STATUS_KEYS.indexOf(key) >= 0")
 seg = h[i:i + 1800]
 assert 'asbKernelControlVerdict(kp[1], kp[3])' in seg
 assert "' · live '" not in seg and "toast(key + ': '" not in seg

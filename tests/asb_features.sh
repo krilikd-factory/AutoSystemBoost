@@ -5518,6 +5518,111 @@ cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail 'diagnostic 
 echo 'PASS kernel controls: allowlist, baseline, numeric readback, clamp rejection, Smart ownership, exact stock/uninstall restore'
 )
 
+t_kernel_scheduler_policy_controls_runtime() (
+# dev33: two opt-in generic scheduler switches share the established bounded owner.
+# Stock is the default; writes are fixed 0/1, reversible and verified against live readback.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+K="$ROOT/runtime/asb_kernel_controls.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL scheduler policy controls: $*" >&2; exit 1; }
+mkdir -p "$T/mod/config" "$T/state"
+printf '1\n' > "$T/autogroup"; printf '0\n' > "$T/child"
+run() {
+  if [ "$#" -eq 1 ]; then
+    _rc=0
+    MODDIR="$T/mod" ASB_KERNEL_STATE_DIR="$T/state" ASB_SCHED_AUTOGROUP_NODE="$T/autogroup" ASB_SCHED_CHILD_RUNS_FIRST_NODE="$T/child" sh "$K" "$1" kernel_sched_autogroup || _rc=1
+    MODDIR="$T/mod" ASB_KERNEL_STATE_DIR="$T/state" ASB_SCHED_AUTOGROUP_NODE="$T/autogroup" ASB_SCHED_CHILD_RUNS_FIRST_NODE="$T/child" sh "$K" "$1" kernel_sched_child_runs_first || _rc=1
+    return "$_rc"
+  fi
+  MODDIR="$T/mod" ASB_KERNEL_STATE_DIR="$T/state" \
+    ASB_SCHED_AUTOGROUP_NODE="$T/autogroup" ASB_SCHED_CHILD_RUNS_FIRST_NODE="$T/child" \
+    sh "$K" "$@"
+}
+mode() { printf 'kernel_sched_autogroup=%s\nkernel_sched_child_runs_first=%s\n' "$1" "$2" > "$T/mod/config/governor.conf"; }
+# Defaults are genuinely inert: no baseline and no write when both controls are stock.
+mode stock stock
+out="$(run apply)"
+printf '%s\n' "$out" | grep -q '^kernel_sched_autogroup|stock_unowned|stock|unknown|none$' || fail "stock autogroup: $out"
+printf '%s\n' "$out" | grep -q '^kernel_sched_child_runs_first|stock_unowned|stock|unknown|none$' || fail "stock child-first: $out"
+[ ! -d "$T/state" ] || [ -z "$(find "$T/state" -type f -print -quit)" ] || fail 'stock created restore evidence'
+# Initial baselines survive a mode reversal and a repeated apply.
+mode off on
+out="$(run apply)"
+printf '%s\n' "$out" | grep -q '^kernel_sched_autogroup|applied|off|0|1$' || fail "autogroup off: $out"
+printf '%s\n' "$out" | grep -q '^kernel_sched_child_runs_first|applied|on|1|0$' || fail "child-first on: $out"
+[ "$(cat "$T/autogroup")" = 0 ] && [ "$(cat "$T/child")" = 1 ] || fail 'requested scheduler values not written'
+[ "$(cat "$T/state/kernel_sched_autogroup.prev")" = 1 ] || fail 'autogroup baseline not captured'
+[ "$(cat "$T/state/kernel_sched_child_runs_first.prev")" = 0 ] || fail 'child-first baseline not captured'
+mode on off
+run apply >/dev/null
+[ "$(cat "$T/state/kernel_sched_autogroup.prev")" = 1 ] && [ "$(cat "$T/state/kernel_sched_child_runs_first.prev")" = 0 ] || fail 'repeat apply replaced original baseline'
+out="$(run status)"
+printf '%s\n' "$out" | grep -q '^kernel_sched_autogroup|writable|on|1|1$' || fail "autogroup status: $out"
+printf '%s\n' "$out" | grep -q '^kernel_sched_child_runs_first|writable|off|0|0$' || fail "child-first status: $out"
+mode stock stock
+out="$(run apply)"
+printf '%s\n' "$out" | grep -q '^kernel_sched_autogroup|restored|stock|1|none$' || fail "autogroup restore: $out"
+printf '%s\n' "$out" | grep -q '^kernel_sched_child_runs_first|restored|stock|0|none$' || fail "child-first restore: $out"
+[ ! -e "$T/state/kernel_sched_autogroup.prev" ] && [ ! -e "$T/state/kernel_sched_child_runs_first.prev" ] || fail 'verified restore retained baselines'
+# Missing, unreadable and read-only interfaces fail closed and do not capture/write a baseline.
+rm -f "$T/autogroup"; mode off stock
+set +e; out="$(run apply kernel_sched_autogroup 2>/dev/null)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^kernel_sched_autogroup|not_exposed|off|unknown|none$' || fail "missing autogroup: $out"
+[ ! -e "$T/state/kernel_sched_autogroup.prev" ] || fail 'missing node created baseline'
+printf '1\n' > "$T/autogroup"; chmod 000 "$T/autogroup"
+set +e; out="$(run apply kernel_sched_autogroup 2>/dev/null)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^kernel_sched_autogroup|not_readable|off|unknown|none$' || fail "unreadable autogroup: $out"
+chmod 444 "$T/autogroup"
+out="$(run status kernel_sched_autogroup)"
+printf '%s\n' "$out" | grep -q '^kernel_sched_autogroup|not_writable|off|1|none$' || fail "read-only status: $out"
+set +e; out="$(run apply kernel_sched_autogroup 2>/dev/null)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^kernel_sched_autogroup|not_writable|off|unknown|none$' || fail "read-only apply: $out"
+[ "$(cat "$T/autogroup")" = 1 ] && [ ! -e "$T/state/kernel_sched_autogroup.prev" ] || fail 'read-only node changed or captured baseline'
+chmod 644 "$T/autogroup"
+# A successful write syscall with different readback is a mismatch, and Stock can still restore.
+printf '0\n' > "$T/autogroup"
+mode on stock
+mkdir -p "$T/bin"; REAL_CAT="$(command -v cat)"
+cat > "$T/bin/cat" <<'S'
+#!/bin/sh
+if [ -f "$CLAMP_FLAG" ] && [ "${1:-}" = "$CLAMP_NODE" ]; then printf '0\n'; exit 0; fi
+exec "$REAL_CAT" "$@"
+S
+chmod +x "$T/bin/cat"; : > "$T/clamp"
+set +e
+out="$(PATH="$T/bin:$PATH" REAL_CAT="$REAL_CAT" CLAMP_FLAG="$T/clamp" CLAMP_NODE="$T/autogroup" run apply kernel_sched_autogroup 2>/dev/null)"
+rc=$?
+set -e
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^kernel_sched_autogroup|readback_mismatch|on|0|0$' || fail "mismatch verdict: $out"
+[ -f "$T/state/kernel_sched_autogroup.prev" ] || fail 'mismatch consumed baseline'
+rm -f "$T/clamp"; mode stock stock; run apply kernel_sched_autogroup >/dev/null
+[ "$(cat "$T/autogroup")" = 0 ] && [ ! -e "$T/state/kernel_sched_autogroup.prev" ] || fail 'restore after mismatch failed'
+# The safe config writer accepts only stock/off/on and preserves both keys across updates.
+mkdir -p "$T/cmod/config" "$T/cmod/runtime"
+cp "$ROOT/config/governor.conf" "$ROOT/config/governor.conf.shipped" "$T/cmod/config/"
+cp "$ROOT/runtime/asb_config_safe.sh" "$T/cmod/runtime/"
+for key in kernel_sched_autogroup kernel_sched_child_runs_first; do
+  for val in stock off on; do
+    MODDIR="$T/cmod" ASB_CONFIG_STATE="$T/cfgstate" sh "$T/cmod/runtime/asb_config_safe.sh" set "$key" "$val" >/dev/null
+    grep -qx "$key=$val" "$T/cmod/config/governor.conf" || fail "safe writer lost $key=$val"
+  done
+  set +e
+  MODDIR="$T/cmod" ASB_CONFIG_STATE="$T/cfgstate" sh "$T/cmod/runtime/asb_config_safe.sh" set "$key" 2 >/dev/null 2>&1
+  rc=$?
+  set -e
+  [ "$rc" -ne 0 ] || fail "safe writer accepted $key=2"
+  grep -qx "$key=stock" "$ROOT/config/governor.conf" || fail "$key default is not stock"
+  grep -qx "$key=stock" "$ROOT/config/governor.conf.shipped" || fail "$key shipped default is not stock"
+done
+for key in kernel_sched_autogroup kernel_sched_child_runs_first; do
+  grep -Fq "$key" "$ROOT/runtime/asb_system_tweaks.sh" || fail "$key not routed through profile apply"
+done
+_direct="$(grep -RInE '> */proc/sys/kernel/(sched_autogroup_enabled|sched_child_runs_first)|sysctlw kernel\.(sched_autogroup_enabled|sched_child_runs_first)' "$ROOT/service.sh" "$ROOT/post-fs-data.sh" "$ROOT/runtime" "$ROOT/profiles" "$ROOT/common" 2>/dev/null | grep -v 'runtime/asb_kernel_controls.sh' || true)"
+[ -z "$_direct" ] || fail "competing direct scheduler writer: $_direct"
+echo 'PASS scheduler policy controls: stock defaults, off/on, stable baselines, status/readback, exact restore, access/mismatch failures, safe config and single owner'
+)
+
 t_kernel_controls_single_owner_runtime() (
 # dev27. Three gaps in the dev24 single-owner contract:
 #  - service.sh apply_vm still ran `echo 7 > /sys/kernel/mm/lru_gen/enabled` at boot, on
