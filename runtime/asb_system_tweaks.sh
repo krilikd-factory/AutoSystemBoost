@@ -34,8 +34,8 @@ _changed=""
 _kc_helper="$MODDIR/runtime/asb_kernel_controls.sh"
 if [ -f "$_kc_helper" ]; then
   case "$(_cfg mglru_mode):$(cat "$MODDIR/current_profile" 2>/dev/null)" in
-    smart:smart|:smart) _kc_keys="kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats" ;;
-    *) _kc_keys="mglru_mode kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats" ;;
+    smart:smart|:smart) _kc_keys="kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_sched_autogroup kernel_sched_child_runs_first" ;;
+    *) _kc_keys="mglru_mode kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_sched_autogroup kernel_sched_child_runs_first" ;;
   esac
   for _kc_key in $_kc_keys; do
     MODDIR="$MODDIR" ASB_CONF="$CONF" sh "$_kc_helper" apply "$_kc_key" >/dev/null 2>&1 || true
