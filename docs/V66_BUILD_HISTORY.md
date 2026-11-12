@@ -4,6 +4,78 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev30 - bounded kernel wakeup policy and a retryable MGLRU memo
+
+Input: the dev29 source, the KRILIKD v8 build framework and current OnePlus 15 diagnostics. The
+running kernel reported `CONFIG_NET_SCH_CAKE` and `CONFIG_IP_SET` as not set, with `fq_codel` in
+force; ASB's `disabled` verdict was therefore correct. The kernel source requested those options,
+but requested lines were not proof of the final resolved configuration. KRILIKD v9 adds a
+fail-closed final-config gate; ASB still requires real runtime `tc`/`ipset` validation.
+
+- **One bounded owner for the new KRILIKD wakeup ABI.** `runtime/asb_wakeup_blocker.sh` applies
+  `config/wakeup_blocklist.conf` to `/sys/kernel/asb_wakeup/blocklist`. The file is empty by
+  default and contains one exact wakeup-source name per line: no comments, whitespace, paths,
+  glob/regex patterns or arbitrary values. At most 16 unique printable-ASCII names of 1–63 bytes
+  are accepted; duplicates are removed before apply.
+- **Apply is verified and failure-safe.** ASB clears the old list, adds the normalized policy,
+  compares the kernel readback byte-for-byte and clears a partial or mismatched result. A missing
+  node is `not_exposed`, not success. Boot performs one apply; Safe mode, level-3 recovery and
+  uninstall clear the list. There is no polling worker, automatic rule generator or attempt to
+  force-release a lock that is already active. `/sys/kernel/debug/wakeup_sources` remains
+  read-only statistics and is not treated as a blocking interface.
+- **The OP15 MGLRU memo no longer hides transient failures.** The Smart tuner saves a per-boot
+  memo only after an applied result or the known stable `0x0001` readback clamp. `write_failed`,
+  `baseline_failed` and other mismatches are retried on the next pass instead of being silently
+  remembered as completed.
+- **Diagnostics distinguish build evidence from runtime support.** The device report recognizes
+  `CONFIG_REKERNEL`, its network transport and `CONFIG_ASB_WAKEUP_BLOCKER`, and reads the current
+  rules/counter only when exposed. Re-Kernel compatibility with a particular third-party freezer
+  remains unproven until an on-device event/unfreeze test.
+- **No invented SDP charging control.** `oplus_sdp_900ma` is reported as `not exposed; no confirmed
+  OPlus SDP current-control ABI`. No unknown vendor node is written and 900 mA charging is not
+  claimed.
+
+Regression adds a transient-first/successful-second MGLRU case and a stateful kernel-node fixture
+covering empty default, exact apply/readback, dedupe, malformed and excess rules, mid-apply
+rollback, clear/status/counter, missing ABI and lifecycle integration. No native source changed;
+the existing two-ABI NDK gate is unchanged. Host fixtures do not prove physical suspend, modem,
+Wi-Fi, alarm, call, charging, battery or freezer behavior.
+
+## V66 dev29 - the Zygisk policy read without the dev23 cache, narrower kernel verdicts
+
+Input: an external review of the dev27 findings. It confirmed the policy-cache analysis for
+Magisk, asked to limit "never" to what is shown, and to word the kernel verdict by what the
+helper actually checks.
+
+- **The dev23 policy cache is removed.** `read_policy` runs from `preAppSpecialize`, which the
+  Zygisk API defines as running in the app process just forked from zygote, so a copy stored
+  there cannot reach the next fork with a loader that follows the API. Under Magisk the module is moreover dlopened and
+  constructed anew in each app process (`ZygiskContext::app_specialize_pre` ->
+  `run_modules_pre`). The fixture's 20 hits came from repeated calls in one process, which
+  `preAppSpecialize` never makes. Each read is again one open and one parse with no `stat` or
+  `fstat`; every failure still leaves an empty, inactive policy, and EACCES on the absolute
+  path still falls back to the loader's module directory. The `onLoad` comment no longer says
+  "runs once in zygote": under Magisk it runs per app process, under a loader that calls it in
+  zygote it runs once; its probe is unchanged.
+- **Kernel-control verdicts say what is known.** The helper checks one registered path per
+  control, so `not_exposed` now reads "interface not exposed" instead of "not in this kernel",
+  and `not_writable` "interface is read-only". For `sched_nr_migrate` the parameter may still
+  exist as `/sys/kernel/debug/sched/nr_migrate` (Linux 5.13, commit 8a99b6833c88) or in a vendor
+  backport; ASB does not write debugfs, which would need its own baseline, readback and device
+  check.
+- **History.** dev23 carries a correction note; the dev24 input line no longer names the
+  settings-export app. VPN Hide (ownership boundary) and the dev23 reference module
+  (attribution) stay named.
+
+Regression: the policy-cache fixture is replaced by a policy-read fixture on the real Observer
+with wrapped libc calls (one open and one parse per read, no stat/fstat, replacement, removal,
+malformed and inactive policies, fail-closed errors, EACCES fallback, `-Werror=narrowing`), and a
+static check rejects a returning cross-fork cache.
+
+**Native code changed** (`src/zygisk/asb_observer.cpp`, comment in
+`asb_observer_protocol.h`): both Zygisk ABIs need the CI NDK build before a binary module.
+The read path is the dev22 one, which already built for both ABIs.
+
 ## V66 dev28 - the Infinite Log start race behind the dev27 CI failure
 
 Input: the failed GitHub Actions run for dev27. Shards features and system-smart passed; the
@@ -84,10 +156,12 @@ Found and deliberately not changed:
   calling `read_policy` repeatedly, which a phone never does. The code is correct and
   fail-closed, and the added cost is two syscalls, so native code is left as built;
   reverting it is optional at the next rebuild. The `onLoad` comment "runs once in zygote"
-  is likewise not true under Magisk.
+  is likewise not true under Magisk. (dev29: the cache is removed; the claim is narrowed to
+  what holds for every loader, see there.)
 - **`kernel_sched_nr_migrate` will most likely read "not in this kernel" on 6.x kernels**:
   since Linux 5.13 `sched_nr_migrate` lives in debugfs, not `/proc/sys/kernel`. The helper
-  reports that honestly; no other path was added.
+  reports that honestly; no other path was added. (dev29: the phrase now says the interface
+  is not exposed, which is what the helper actually knows.)
 - **Stepped LTPO decay (dev22) costs time at high refresh.** This panel advertises
   60/90/120/144/165 Hz (display_config.txt), so after the 2 s quiet delay the panel passes
   144, 120 and 90 Hz for 1 s each: 60 Hz is reached after 5 s instead of 2 s, with four
@@ -132,7 +206,7 @@ required before packaging a binary module. Host tests do not claim a physical-de
 
 ## V66 dev24 - bounded standard-kernel controls
 
-Input: verified dev23 source, two fresh KRILIKD CI bundles and five SetEdit exports. CI proves a
+Input: verified dev23 source, two fresh KRILIKD CI bundles and five settings-database exports. CI proves a
 successful 6.12.69-android16-2026-03 build with VPN Hide 1.3.1 `full`, zero rejected patches and
 `LTO=NONE`; it does not prove physical boot or runtime support. No account, serial, IMEI or
 network identifier was read from the settings exports, and no new settings-database tweak was
@@ -176,6 +250,9 @@ Input: the verified dev22 source and the external `Force ltpo` v1.0.1 reference 
   device, inode, size and nanosecond mtime match. The runtime writer already uses temporary
   file + atomic rename, so a replacement has a new inode. The stamp cached after a reload is
   taken from the opened fd, not only from the earlier path lookup.
+  *Correction (dev29): this did not hold on a phone. `read_policy` runs from
+  `preAppSpecialize` in the forked app process, so the cached copy never reached the next
+  fork; under Magisk the module object is new in every app process. The cache was removed.*
 - **Policy failures remain fail-closed.** Removal, malformed input, stat/open/fstat/read/parse
   failure, or loss of the loader's module-directory fd withdraw the active policy for that
   read instead of returning a stale cached copy. Absolute-path EACCES retains the existing
