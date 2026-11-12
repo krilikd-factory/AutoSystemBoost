@@ -3702,23 +3702,33 @@ s = open(sys.argv[1], encoding='utf-8').read()
 i = s.index('/* V66 dev6: decoration only moves while someone is using the page.')
 blk = s[i:s.index('}', s.index('animation-play-state: paused !important;', i)) + 1]
 sel = blk[blk.index('*/') + 2:blk.index('{', blk.index('*/'))]
-for need in ('.live-page:not(.open) .logo-glow', '.live-page:not(.open) .app-name', '.live-page:not(.open) .dot::after',
-             'body.live-active .page:not(.live-page) .logo-ring', 'body.live-active .page:not(.live-page) .ai-glow',
+# dev18: the header logo is the boot sphere (two counter-rotating shells and a pulsing pod);
+# all three layers stop on a closed Live page and behind an open one, like the old glow/ring.
+for need in ('.live-page:not(.open) .logo-sphere-a', '.live-page:not(.open) .logo-sphere-b',
+             '.live-page:not(.open) .logo-inner', '.live-page:not(.open) .app-name', '.live-page:not(.open) .dot::after',
+             'body.live-active .page:not(.live-page) .logo-sphere-a', 'body.live-active .page:not(.live-page) .logo-sphere-b',
+             'body.live-active .page:not(.live-page) .logo-inner', 'body.live-active .page:not(.live-page) .ai-glow',
              'html.asb-calm .app-name'):
     assert need in sel, need
 # dev17: ten seconds of idle no longer freezes the header on the page in front. Only the
 # wordmark sweep (a per-frame text repaint) calms there; the composited logo rotations and
 # the indicator dots keep moving, so the interface still reads as alive. The closed/background
 # rules above are unchanged. Guard against the header liveness being pulled back into calm.
-for gone in ('html.asb-calm .logo-glow', 'html.asb-calm .logo-ring', 'html.asb-calm .dot',
+assert '.logo-glow' not in sel and '.logo-ring' not in sel, 'the retired header layers are still listed'
+for gone in ('html.asb-calm .logo-sphere-a', 'html.asb-calm .logo-sphere-b', 'html.asb-calm .logo-inner',
+             'html.asb-calm .logo-glow', 'html.asb-calm .logo-ring', 'html.asb-calm .dot',
              'html.asb-calm .ai-glow', 'html.asb-calm .zygisk-header-dot', 'html.asb-calm .dev-zygisk-link-dot',
              'html.asb-calm .metric-charge', 'html.asb-calm .log-menu-item.is-recording'):
     assert gone not in sel, 'the idle page must keep this alive now: ' + gone
 for spinner in ('busy', 'spinner', 'is-running', 'orbit', 'loading', 'ld .pchk', 'stock-restoring'):
     assert spinner not in sel, 'a progress indicator would stop: ' + spinner
 # every decorative loop named above still exists as an endless animation the rule can reach
-for cls, anim in (('.logo-glow', 'rotate 8s linear infinite'), ('.app-name', 'asbSweep 5.5s'), ('.dot', 'pulse 2.5s ease-in-out infinite')):
+for cls, anim in (('.logo-sphere-a', 'asbBootSpin 7s linear infinite'), ('.logo-sphere-b', 'asbBootSpin 10s linear infinite reverse'),
+                  ('.logo-inner', 'asbBootPulse 2.2s'), ('.app-name', 'asbSweep 5.5s'), ('.dot', 'pulse 2.5s ease-in-out infinite')):
     assert anim in s, anim
+    if cls.startswith('.logo-'):
+        rule = re.search(r'(?m)^' + re.escape(cls) + r' \{[^}]*\}', s)
+        assert rule and anim in rule.group(0), (cls, anim)
 PY
 command -v node >/dev/null 2>&1 || { echo "SKIP webui v66 calm decor runtime: no node"; exit 0; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
@@ -8349,31 +8359,48 @@ echo "PASS webui device page: five SoC buttons/theme groups, safe TSV parser/ren
 )
 
 t_webui_boot_fly_runtime() (
-# dev17: the boot preview hands off to the home screen by flying the saucer into the header
-# and lifting the orbit spheres into place, instead of a flat fade. Static contract first,
-# then the flight logic over a DOM mock: compositor-only, reversible, reduced-motion safe.
+# dev18: the boot preview hands off by flying the spinning sphere itself into the header, where
+# the same sphere is the logo on every page. dev17 replaced the orbits' CSS rotation with WAAPI
+# transforms, set the pod to animation:none, transitioned a full-screen background colour and
+# cancelled the flight before the overlay was hidden - the saucer snapped back and showed twice.
+# Static contract first, then the REAL flight functions over a DOM mock.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 H="$ROOT/webroot/index.html"
 fail() { echo "FAIL webui boot fly: $*" >&2; exit 1; }
 python3 - "$H" <<'PY' || fail 'static wiring'
-import sys
+import re, sys
 h = open(sys.argv[1], encoding='utf-8').read()
-assert 'async function asbBootFlyToHeader(overlay) {' in h, 'flight function missing'
-assert '.asb-boot-intro.asb-boot-warp {' in h and 'body.asb-boot-flying .logo-glyph { opacity:0; }' in h, 'warp/flying CSS missing'
+# One sphere design: every header copy carries the boot sphere's layers, the old glow/ring are gone.
+assert h.count('<div class="logo-sphere-a"></div><div class="logo-sphere-b"></div>') == 6, 'a header copy lacks the sphere'
+assert h.count('<div class="logo-frame-a"></div><div class="logo-frame-b"></div>') == 6, 'a header copy lacks the frames'
+assert 'logo-glow' not in h and 'logo-ring' not in h, 'the retired header layers are still present'
+# Same geometry at a different scale: both are 172px x --k, so the landing is pixel-aligned.
+assert re.search(r'\.logo-c \{[^}]*width: calc\(172px \* var\(--k\)\)', h), 'header sphere is not on the shared scale'
+assert '.asb-boot-core { --k:1; position:relative; width:calc(172px * var(--k));' in h, 'boot core is not on the shared scale'
+# The backdrop is its own layer, faded by opacity; the overlay itself paints nothing.
+assert '<div class="asb-boot-bg" aria-hidden="true"></div>' in h
+intro = re.search(r'\n\.asb-boot-intro \{([^}]*)\}', h).group(1)
+assert 'background:transparent' in intro, 'overlay still paints the full-screen background'
+assert '.asb-boot-bg { position:absolute; inset:0; z-index:-3; background:#000; pointer-events:none; }' in h
+warp = h[h.index('.asb-boot-warp .asb-boot-grid'):]
+warp = warp[:warp.index('}') + 1]
+assert 'opacity:0 !important' in warp and 'transform' not in warp and 'animation' not in warp and 'background' not in warp, 'warp state does more than fade text'
+assert 'body.asb-boot-flying .page:not(.live-page) .logo-c { opacity:0; }' in h
 # The leaving path tries the flight and keeps the old fade as the fallback.
 _s = h.index("if (status) status.textContent = T('boot_intro_ready'")
 lv = h[_s:_s + 700]
-assert 'flew = await asbBootFlyToHeader(overlay)' in lv and "overlay.classList.add('is-leaving')" in lv and 'if (!flew)' in lv, 'leaving path does not fall back to the fade'
-# finally cleans up both classes.
+assert 'flew = await asbBootFlyToHeader(overlay)' in lv and "overlay.classList.add('is-leaving')" in lv and 'if (!flew)' in lv
+# Held end states are released only after the overlay is hidden.
 _f = h.index('} finally {', _s)
-fin = h[_f:_f + 500]
-assert "overlay.classList.remove('asb-boot-warp')" in fin and "document.body.classList.remove('asb-boot-flying')" in fin, 'finally does not clear warp/flying'
-# Reduced motion returns before touching anything.
-fn = h[h.index('async function asbBootFlyToHeader(overlay) {'):h.index('async function asbBootIntroStart()')]
-assert 'prefers-reduced-motion: reduce' in fn and 'if (reduced || !overlay) return false;' in fn, 'no reduced-motion guard'
-# Compositor-only: the flight keyframes animate transform/opacity, never layout props.
-for bad in ('.style.top', '.style.left', "top:'", "left:'", 'width:', 'height:'):
+fin = h[_f:_f + 600]
+assert fin.index('overlay.hidden = true;') < fin.index('asbBootFlightRelease(overlay)'), 'held animations released before the overlay is hidden'
+assert "overlay.classList.remove('asb-boot-warp')" in fin and "document.body.classList.remove('asb-boot-flying')" in fin
+fn = h[h.index('async function asbBootFlyToHeader(overlay) {'):h.index('function asbBootFlightRelease(overlay) {')]
+assert 'prefers-reduced-motion: reduce' in fn and 'if (reduced || !overlay' in fn, 'no reduced-motion guard'
+assert fn.count('.cancel()') == 1 and 'fadeIn.cancel()' in fn, 'the flight cancels something before the overlay is hidden'
+assert "'.asb-boot-orbit" not in fn and 'animation:none' not in fn and "animation = 'none'" not in fn, 'the flight touches the orbit rotation'
+for bad in ('.style.top', '.style.left', "top:'", "left:'", 'width:', 'height:', 'background'):
     assert bad not in fn, 'non-compositor property in the flight: ' + bad
 PY
 command -v node >/dev/null 2>&1 || { echo "SKIP webui boot fly runtime: no node"; exit 0; }
@@ -8381,50 +8408,77 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 {
   cat <<'EOF'
 let REDUCED = false;
-global.window = { matchMedia: function () { return { matches: REDUCED }; } };
+global.window = { innerHeight: 900, matchMedia: function () { return { matches: REDUCED }; } };
 global.requestAnimationFrame = function (fn) { return setTimeout(fn, 0); };
 const calls = [];
-function el(id) {
-  const e = { id: id, _cls: new Set(), _rect: { left: 0, top: 0, width: 0, height: 0 } };
+function anim(t) { return { currentTime: t, cancelled: false, cancel: function () { this.cancelled = true; } }; }
+function el(id, kids) {
+  const e = { id: id, _cls: new Set(), style: {}, _rect: { left: 0, top: 0, width: 0, height: 0 }, _anims: [] };
   e.classList = { add: function (c) { e._cls.add(c); }, remove: function (c) { e._cls.delete(c); }, contains: function (c) { return e._cls.has(c); } };
-  e.animate = function (kf, opts) { calls.push({ id: id, kf: kf }); return { finished: Promise.resolve(), cancel: function () {}, set onfinish(f) {} }; };
+  e.animate = function (kf, opts) {
+    const a = { id: id, kf: kf, opts: opts, cancelled: false, finished: Promise.resolve() };
+    a.cancel = function () { a.cancelled = true; };
+    calls.push(a); return a;
+  };
+  e.getAnimations = function () { return e._anims; };
   e.getBoundingClientRect = function () { return e._rect; };
+  e.querySelector = function (sel) { return (kids || {})[sel] || null; };
   return e;
 }
-const core = el('core');
-const flyer = el('flyer'); flyer._rect = { left: 120, top: 420, width: 94, height: 71 };
-const target = el('target'); target._rect = { left: 24, top: 36, width: 56, height: 46 };
-const orbits = [el('o0'), el('o1'), el('o2'), el('o3')];
-const overlay = el('overlay');
-overlay.querySelector = function (sel) { return sel === '.asb-boot-core' ? core : sel === '.asb-boot-ufo svg' ? flyer : null; };
-overlay.querySelectorAll = function (sel) { return orbits; };
+const orbA = el('orbA'), orbB = el('orbB'), pod = el('pod'), saucer = el('saucer');
+orbA._anims = [anim(4321)]; orbB._anims = [anim(987)]; pod._anims = [anim(1500)];
+const core = el('core', { '.asb-boot-orbit.a': orbA, '.asb-boot-orbit.b': orbB, '.asb-boot-ufo': pod, '.asb-boot-ufo svg': saucer });
+core._rect = { left: 120, top: 380, width: 172, height: 172 };
+const sphA = el('sphA'), sphB = el('sphB'), inner = el('inner');
+sphA._anims = [anim(0)]; sphB._anims = [anim(0)]; inner._anims = [anim(0)];
+const target = el('target', { '.logo-sphere-a': sphA, '.logo-sphere-b': sphB, '.logo-inner': inner });
+target._rect = { left: 160, top: 40, width: 92, height: 92 };
+const bg = el('bg');
+const overlay = el('overlay', { '.asb-boot-core': core, '.asb-boot-bg': bg });
+const home = el('home', { '.logo-c': target });
 const bodyEl = el('body');
-global.document = { body: bodyEl, querySelector: function (sel) { return /logo-glyph/.test(sel) ? target : null; } };
-function asbHomeReveal() {}
+global.document = { body: bodyEl, querySelector: function (sel) { return sel === '.page:not(.live-page)' ? home : null; } };
+let revealed = 0;
+function asbHomeReveal() { revealed++; }
 EOF
   sed -n '/^function _asbAnimFinished(anim, ms) {/,/^async function asbBootIntroStart()/p' "$H" | sed '/^async function asbBootIntroStart()/d'
   cat <<'EOF'
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
+const num = function (s) { return (s.match(/-?[0-9.]+/g) || []).map(Number); };
 (async function () {
-  // Reduced motion: the flight declines cleanly and touches nothing.
   REDUCED = true;
-  const r0 = await asbBootFlyToHeader(overlay);
-  chk(r0 === false, 'reduced motion should decline the flight');
-  chk(!overlay._cls.has('asb-boot-warp') && !bodyEl._cls.has('asb-boot-flying'), 'reduced motion still touched classes');
+  chk(await asbBootFlyToHeader(overlay) === false, 'reduced motion should decline the flight');
+  chk(!overlay._cls.has('asb-boot-warp') && !bodyEl._cls.has('asb-boot-flying') && calls.length === 0, 'reduced motion still touched something');
   REDUCED = false;
-  calls.length = 0;
+  target._rect = { left: 160, top: 1200, width: 92, height: 92 };
+  chk(await asbBootFlyToHeader(overlay) === false && calls.length === 0 && !overlay._cls.has('asb-boot-warp'), 'flew to a header out of view');
+  target._rect = { left: 160, top: 40, width: 92, height: 92 };
   const r1 = await asbBootFlyToHeader(overlay);
-  chk(r1 === true, 'the flight did not run with motion allowed');
-  chk(overlay._cls.has('asb-boot-warp'), 'overlay did not enter the warp state');
-  chk(!bodyEl._cls.has('asb-boot-flying'), 'the header logo was not released after landing');
-  const flight = calls.filter(function (c) { return c.id === 'flyer'; });
-  chk(flight.length === 1, 'the saucer did not fly exactly once');
-  const kf = flight[0].kf;
-  chk(kf.length >= 4 && kf.every(function (f) { return /translate\(/.test(f.transform) && /scale\(/.test(f.transform); }), 'the flight is not a translate+scale arc');
-  chk(kf.some(function (f) { return /rotate\(/.test(f.transform); }), 'the saucer did not wobble');
-  chk(kf.every(function (f) { return !('top' in f) && !('left' in f) && !('width' in f); }), 'a layout property crept into the flight');
-  chk(calls.filter(function (c) { return /^o[0-9]$/.test(c.id); }).length === 4, 'the orbit spheres did not lift');
-  chk(calls.some(function (c) { return c.id === 'target'; }), 'the header logo did not pop in on landing');
+  chk(r1 === true && revealed >= 1, 'the flight did not run with motion allowed');
+  chk(overlay._cls.has('asb-boot-warp') && !bodyEl._cls.has('asb-boot-flying'), 'warp/flying classes wrong after landing');
+  const by = function (id) { return calls.filter(function (c) { return c.id === id; }); };
+  chk(by('orbA').length === 0 && by('orbB').length === 0 && by('pod').length === 0, 'the orbit rotation or pod pulse was overridden');
+  const coreA = by('core');
+  chk(coreA.length === 2, 'core should animate exactly twice (flight, fade): ' + coreA.length);
+  const kf = coreA[0].kf;
+  chk(kf.length >= 20 && coreA[0].opts.fill === 'forwards', 'the flight is not a held, sampled path');
+  chk(kf.every(function (f) { return Object.keys(f).every(function (k) { return k === 'transform' || k === 'offset'; }); }), 'the flight animates more than transform');
+  const first = num(kf[0].transform), last = num(kf[kf.length - 1].transform);
+  chk(first[0] === 0 && first[1] === 0 && first[2] === 1, 'the flight does not start in place: ' + kf[0].transform);
+  const dx = (160 + 46) - (120 + 86), dy = (40 + 46) - (380 + 86), sc = 92 / 172;
+  chk(Math.abs(last[0] - dx) < .01 && Math.abs(last[1] - dy) < .01 && Math.abs(last[2] - sc) < .0001, 'the flight does not land on the header sphere: ' + kf[kf.length - 1].transform);
+  chk(kf.some(function (f) { return Math.abs(num(f.transform)[0]) > Math.abs(dx) + 5; }), 'the path is a straight line');
+  chk(by('bg').length === 1 && by('bg')[0].kf[by('bg')[0].kf.length - 1].opacity === 0, 'the backdrop is not faded by its own layer');
+  chk(by('saucer').length === 1, 'the saucer does not sway in flight');
+  chk(by('target').length === 1, 'the header sphere should appear exactly once');
+  chk(sphA._anims[0].currentTime === 4321 && sphB._anims[0].currentTime === 987 && inner._anims[0].currentTime === 1500, 'rotation phase not handed to the header');
+  const held = overlay._asbFlight || [];
+  chk(held.length === 4 && held.every(function (a) { return !a.cancelled; }), 'a held end state was released before the overlay was hidden');
+  chk(by('target')[0].cancelled === true, 'the header fade-in should end on the plain CSS state');
+  chk(core.style.willChange === 'transform, opacity', 'core not promoted for the flight');
+  asbBootFlightRelease(overlay);
+  chk(held.every(function (a) { return a.cancelled; }) && overlay._asbFlight === null && core.style.willChange === '', 'release did not clear the held animations');
+  asbBootFlightRelease({ hidden: true });
   if (bad) process.exit(1);
   console.log('ok');
 })().catch(function (e) { console.error(e); process.exit(1); });
@@ -8432,116 +8486,193 @@ EOF
 } > "$T/t.js"
 out="$(node "$T/t.js" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo "PASS webui boot fly: saucer flies a translate/scale/rotate arc into the header, spheres lift, header logo pops on landing, warp/flying classes clean up, reduced motion declines"
+echo "PASS webui boot fly: the boot sphere itself flies a curved transform-only path onto the header sphere (same 172px x --k geometry), orbits keep their CSS spin with phase handed over, backdrop fades on its own layer, one landing, held states released only after the overlay hides, reduced motion and off-screen header decline"
 )
 
 t_webui_infirmary_runtime() (
 # dev17: the Infirmary is a screen of its own, opened by the pharmacy button beside Reset. It
-# holds the Battery Fix card plus the two repairs moved out of System Services. Static wiring
-# first, then the Battery Fix card's gate/arm/reboot/cancel logic over a scripted shell.
+# holds the Battery Fix card plus the two repairs moved out of System Services.
+# dev18: users could not tell whether the recompile ran or whether the fix worked at all. The
+# card is now a three-step checklist (condition, ART recompile with live progress, statistics
+# reset with its verified outcome) under one status chip, and the button follows the state
+# (run / stop / reboot to finish). The pharmacy button is a designed control in every theme.
+# Static wiring first, then the REAL card code over a mini DOM and a scripted shell.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 H="$ROOT/webroot/index.html"
 fail() { echo "FAIL webui infirmary: $*" >&2; exit 1; }
 python3 - "$H" <<'PY' || fail 'static wiring'
-import sys
+import re, sys
 h = open(sys.argv[1], encoding='utf-8').read()
-# Pharmacy button, right of Reset, opening the Infirmary.
 row = h[h.index('id="cfgActionsRow"'):h.index('<div class="cfg-list"')]
 assert 'cfgResetDialogOpen()' in row and 'id="cfgInfirmaryBtn"' in row and 'cfgOpenInfirmary()' in row, 'pharmacy button missing from the actions row'
 assert row.index('cfgResetDialogOpen()') < row.index('cfgOpenInfirmary()'), 'pharmacy button is not to the right of Reset'
-assert 'repeat(4, minmax(0, 1fr))' in h, 'actions row still a 3-column grid'
-# Infirmary is a group for rendering/nav only, not a 7th hub tile.
+btn = row[row.index('id="cfgInfirmaryBtn"'):]
+btn = btn[:btn.index('</button>')]
+assert 'class="cfg-inf-emblem" aria-hidden="true"' in btn and 'fill="url(#asbInfBtnGrad)"' in btn, 'pharmacy emblem missing'
+assert 'class="cfg-inf-label" data-i18n="inf_title"' in btn, 'button label not localized'
+assert 'aria-label=' not in btn, 'a fixed aria-label would hide the localized label from screen readers'
+assert 'grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.32fr)' in h, 'the Infirmary button has no wider column'
+# The themes restyle every .cfg-backup with !important; the button keeps its own paint by id.
+base = re.search(r'\n#cfgActionsRow \.cfg-infirmary-btn \{([^}]*)\}', h).group(1)
+for prop in ('color:', 'background:', 'border:', 'box-shadow:'):
+    decl = [d for d in base.split(';') if d.strip().startswith(prop)]
+    assert decl and '!important' in decl[0], 'theme overrides would flatten the button: ' + prop
+light = re.search(r'html\[data-asb-theme="light"\] #cfgActionsRow \.cfg-infirmary-btn \{([^}]*)\}', h).group(1)
+assert light.count('!important') >= 4, 'light theme paint not enforced'
 assert 'const CFG_EXTRA_GROUPS = {' in h and "infirmary: { id:'infirmary'" in h, 'CFG_EXTRA_GROUPS.infirmary missing'
-assert 'function cfgGroupMeta(' in h and 'cfgGroupMeta(_cfgGroup)' in h and 'cfgGroupMeta(cfgGroupOf(it.key))' in h, 'cfgGroupMeta not used for headers/badges'
+assert 'function cfgGroupMeta(' in h and 'cfgGroupMeta(_cfgGroup)' in h and 'cfgGroupMeta(cfgGroupOf(it.key))' in h
 groups = h[h.index('const CFG_GROUPS = ['):h.index('const CFG_EXTRA_GROUPS')]
 assert "id:'infirmary'" not in groups, 'infirmary must not be a hub tile'
-# The two repairs moved into the Infirmary and left System Services.
 gof = h[h.index('const CFG_GROUP_OF = {'):h.index('function cfgGroupOf')]
-assert "heytap_mcs:'infirmary'" in gof and "documentsui_fix:'infirmary'" in gof, 'the two fixes were not re-pointed to infirmary'
+assert "heytap_mcs:'infirmary'" in gof and "documentsui_fix:'infirmary'" in gof
 svc = h[h.index("keys:['UX_MANAGE_OEM_TOGGLES'"):].split(']', 1)[0]
-assert 'heytap_mcs' not in svc and 'documentsui_fix' not in svc, 'the fixes still sit in System Services'
-inf = h[h.index('infirmary: ['):h.index('function cfgGroupMeta') if h.index('function cfgGroupMeta') > h.index('infirmary: [') else len(h)]
-# the infirmary sections block ends at the CFG_GROUP_SECTIONS close
+assert 'heytap_mcs' not in svc and 'documentsui_fix' not in svc
 inf = h[h.index('  infirmary: ['):h.index('\n};', h.index('  infirmary: ['))]
-assert "card:'batteryfix'" in inf and "keys:['heytap_mcs','documentsui_fix']" in inf, 'infirmary sections incomplete'
-for fn in ('function cfgRenderBatteryFixCard(', 'function cfgOpenInfirmary(', 'async function batteryFixPaint(', 'async function batteryFixRun(', 'async function batteryFixCancel('):
+assert "card:'batteryfix'" in inf and "keys:['heytap_mcs','documentsui_fix']" in inf
+for fn in ('function cfgRenderBatteryFixCard(', 'function bfxPaintFrom(', 'async function batteryFixPaint(',
+           'async function batteryFixRun(', 'async function batteryFixCancel(', 'function cfgRenderInfirmaryHero(',
+           'function asbPharmacyCross(', 'function cfgOpenInfirmary('):
     assert fn in h, 'missing ' + fn
-assert "cfgShowGroup('infirmary')" in h, 'cfgOpenInfirmary does not open the infirmary group'
-# card-only sections are allowed to render with no ordinary rows
-assert '!sectionItems.length && !section.card' in h, 'cfgRenderGroup still skips a card-only section'
+assert "cfgShowGroup('infirmary')" in h
+assert '!sectionItems.length && !section.card' in h
+assert "if (groupId === 'infirmary') cfgRenderInfirmaryHero(list);" in h
 PY
 command -v node >/dev/null 2>&1 || { echo "SKIP webui infirmary runtime: no node"; exit 0; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 {
   cat <<'EOF'
-let MD = '/m';
-let _bfxArmed = 0;
+let MD = '/m', ASB_LANG = 'en';
 function shQuote(v) { return "'" + String(v) + "'"; }
 function T(k, d) { return d; }
 function uiSound() {}
 const toasts = [];
 function toast(m, t) { toasts.push({ m: m, t: t }); }
-const fakes = {};
-function fake() { return { textContent: '', className: '', disabled: false, hidden: false, dataset: {} }; }
-['bfxState', 'bfxRun', 'bfxCancel'].forEach(function (id) { fakes[id] = fake(); });
-function _el(id) { return fakes[id] || null; }
+const reg = {};
+function mk(tag) {
+  const e = { tag: tag, children: [], className: '', textContent: '', hidden: false, disabled: false, dataset: {}, style: {}, innerHTML: '' };
+  Object.defineProperty(e, 'id', { get: function () { return e._id; }, set: function (v) { e._id = v; reg[v] = e; } });
+  e.appendChild = function (c) { e.children.push(c); c.parent = e; return c; };
+  e.querySelector = function (sel) {
+    const cls = sel.replace(/^\./, '');
+    const walk = function (n) { for (const c of n.children) { if ((' ' + c.className + ' ').indexOf(' ' + cls + ' ') >= 0) return c; const r = walk(c); if (r) return r; } return null; };
+    return walk(e);
+  };
+  return e;
+}
+let onScreen = true;
+global.document = { createElement: mk, body: { contains: function () { return onScreen; } } };
+function _el(id) { return reg[id] || null; }
+const timers = [];
+global.setTimeout = function (fn, ms) { timers.push({ fn: fn, ms: ms, live: true }); return timers.length; };
+global.clearTimeout = function (id) { if (timers[id - 1]) timers[id - 1].live = false; };
 const cmds = [];
-const scripted = { status: '', run: '', cancel: '' };
+const scripted = { status: '', run: '', cancel: '', stop: '' };
 async function run(cmd) {
   cmds.push(cmd);
-  if (/ status$/.test(cmd)) return { errno: 0, stdout: scripted.status };
-  if (/ run$/.test(cmd)) return { errno: 0, stdout: scripted.run };
-  if (/ cancel$/.test(cmd)) return { errno: 0, stdout: scripted.cancel };
+  for (const k of ['status', 'run', 'cancel', 'stop']) if (new RegExp(' ' + k + '$').test(cmd)) return { errno: 0, stdout: scripted[k] };
   return { errno: 0, stdout: '' };
 }
 EOF
-  sed -n '/^const BATTERY_FIX_SCRIPT = MD/p' "$H"
-  sed -n '/^function bfxParse(txt) {/,/^function cfgOpenInfirmary() {/p' "$H" | sed '/^function cfgOpenInfirmary() {/d'
+  sed -n '/^const BATTERY_FIX_SCRIPT = MD/,/^function cfgOpenInfirmary() {/p' "$H" | sed '/^function cfgOpenInfirmary() {/d'
   cat <<'EOF'
 let bad = 0; function chk(c, m) { if (!c) { console.log('FAIL ' + m); bad++; } }
+const B = 'eligible=1 reason=- level=100 charging=1 ';
+const tail = ' now=2000 last_reset=- removed= missing= fresh=-';
+const idle = 'reset=none compile=idle phase= total= done= ok= fail= cur= started= finished=';
+const step = function (id) { return { cls: reg[id].className, text: reg[id + 'S'].textContent }; };
+const lastTimer = function () { const l = timers.filter(function (t) { return t.live; }); return l.length ? l[l.length - 1].ms : 0; };
+async function paint(st) { scripted.status = st; await batteryFixPaint(); }
 (async function () {
-  // Not on charge: the action is disabled and the reason (with level) is shown.
-  scripted.status = 'eligible=0 reason=not_charging level=57 reset=none last_removed=-';
-  await batteryFixPaint();
-  chk(fakes.bfxRun.disabled === true && fakes.bfxRun.dataset.mode === 'run', 'discharging did not disable the run button');
-  chk(/57%/.test(fakes.bfxState.textContent), 'the charge level is not shown: ' + fakes.bfxState.textContent);
-  chk(fakes.bfxCancel.hidden === true, 'cancel shown with nothing scheduled');
-  // 95% on charge: still blocked.
-  scripted.status = 'eligible=0 reason=not_full level=95 reset=none last_removed=-';
-  await batteryFixPaint();
-  chk(fakes.bfxRun.disabled === true, '95% not blocked');
-  // Full on charge: enabled.
-  scripted.status = 'eligible=1 level=100 reset=none last_removed=-';
-  await batteryFixPaint();
-  chk(fakes.bfxRun.disabled === false && fakes.bfxRun.dataset.mode === 'run', 'full-on-charge did not enable run');
-  // Two-tap confirm: the first tap only arms, the second runs.
-  const before = cmds.length;
+  const list = mk('div');
+  scripted.status = 'eligible=0 reason=not_charging level=57 charging=0 ' + idle + tail;
+  cfgRenderBatteryFixCard(list);
+  await new Promise(function (r) { setImmediate(r); });
+  const card = list.children[0];
+  chk(card && card.id === 'bfxCard', 'card not rendered');
+  const ol = card.children.filter(function (c) { return c.tag === 'ol'; })[0];
+  chk(ol && ol.children.map(function (c) { return c.id; }).join() === 'bfxStepCond,bfxStepArt,bfxStepReset', 'the three steps are missing or out of order');
+  chk(reg.bfxRun.disabled && reg.bfxRun.dataset.mode === 'run', 'discharging did not disable the run button');
+  chk(step('bfxStepCond').cls === 'bfx-step is-off' && step('bfxStepCond').text === '57% · not on charge', 'condition not shown: ' + step('bfxStepCond').text);
+  chk(reg.bfxChip.className === 'bfx-chip is-off' && reg.bfxNote.textContent !== '', 'unavailable state not explained');
+  chk(step('bfxStepArt').text === 'Not run yet' && reg.bfxBarWrap.hidden, 'idle compile state wrong');
+  chk(reg.bfxCancel.hidden && lastTimer() === 8000, 'idle poll should be slow');
+
+  await paint(B + idle + tail);
+  chk(!reg.bfxRun.disabled && reg.bfxChip.className === 'bfx-chip is-ready' && step('bfxStepCond').cls === 'bfx-step is-ok', 'full on charge not ready');
+  chk(reg.bfxNote.textContent === '', 'a stale reason stayed visible');
+
+  const n0 = cmds.length;
   await batteryFixRun();
-  chk(cmds.length === before && toasts.length && toasts[toasts.length - 1].t === 'perf', 'first tap should only arm a confirm');
-  scripted.run = 'result=armed reset_on=reboot dexopt=started';
+  chk(cmds.length === n0 && toasts[toasts.length - 1].t === 'perf', 'first tap should only arm a confirm');
+  scripted.run = 'result=armed reset_on=reboot compile=started';
   await batteryFixRun();
-  chk(cmds.some(function (c) { return / run$/.test(c); }), 'second tap did not run the fix');
-  chk(toasts.some(function (t) { return t.t === 'ok'; }), 'no success toast after arming');
-  // Pending: the button becomes Reboot and cancel appears.
-  scripted.status = 'eligible=1 level=100 reset=pending last_removed=-';
-  await batteryFixPaint();
-  chk(fakes.bfxRun.dataset.mode === 'reboot' && fakes.bfxCancel.hidden === false, 'pending state did not switch to reboot/cancel');
+  chk(cmds.some(function (c) { return / run$/.test(c); }) && toasts[toasts.length - 1].t === 'ok', 'second tap did not start the fix');
+
+  await paint(B + 'reset=pending compile=running phase=compile total=300 done=150 ok=148 fail=2 cur=com.example.app started=1000 finished=-' + ' now=1300 last_reset=- removed= missing= fresh=-');
+  chk(reg.bfxChip.className === 'bfx-chip is-run', 'running chip not shown');
+  const art = step('bfxStepArt');
+  chk(art.cls === 'bfx-step is-run' && art.text === '150 of 300 · failed: 2 · about 5 min left', 'progress text wrong: ' + art.text);
+  chk(reg.bfxArtNow.textContent === 'Now: com.example.app', 'current app not shown');
+  chk(!reg.bfxBarWrap.hidden && reg.bfxBar.style.transform === 'scaleX(0.5000)', 'progress bar wrong: ' + reg.bfxBar.style.transform);
+  chk(reg.bfxRun.dataset.mode === 'stop' && !reg.bfxRun.disabled, 'running state does not offer stop');
+  chk(!reg.bfxCancel.hidden && step('bfxStepReset').cls === 'bfx-step is-wait', 'scheduled reset not shown while compiling');
+  chk(lastTimer() === 2000, 'running poll should be fast');
+  scripted.stop = 'result=stopping';
+  await batteryFixRun();
+  chk(cmds.some(function (c) { return / stop$/.test(c); }) && /current app/.test(toasts[toasts.length - 1].m), 'stop did not reach the script');
+
+  await paint(B + 'reset=pending compile=running phase=finishing total=300 done=300 ok=297 fail=3 cur=- started=1000 finished=-' + tail);
+  chk(step('bfxStepArt').text === 'Final background optimisation…' && reg.bfxBar.style.transform === 'scaleX(1.0000)', 'finishing phase not shown');
+
+  await paint(B + 'reset=pending compile=done phase=done total=300 done=300 ok=297 fail=3 cur=- started=1000 finished=1600' + tail);
+  chk(step('bfxStepArt').cls === 'bfx-step is-ok' && step('bfxStepArt').text === 'Done: 297 succeeded, failed: 3 · 10 min', 'compile result wrong: ' + step('bfxStepArt').text);
+  chk(reg.bfxChip.className === 'bfx-chip is-wait' && reg.bfxRun.dataset.mode === 'reboot' && !reg.bfxCancel.hidden, 'pending state does not ask for a reboot');
+  chk(reg.bfxArtNow.textContent === '' && lastTimer() === 8000, 'stale current app or fast poll after compile');
   const rb = cmds.length;
   await batteryFixRun();
   chk(cmds.slice(rb).some(function (c) { return /reboot/.test(c); }), 'reboot mode did not reboot');
-  // Cancel clears the schedule.
+
+  await paint('eligible=0 reason=not_full level=98 charging=1 reset=none compile=done phase=done total=300 done=300 ok=297 fail=3 cur=- started=1000 finished=1600 now=9000 last_reset=1700 removed=batterystats.bin,batterystats-checkin.bin,batterystats-daily.xml missing=- fresh=1');
+  const rs = step('bfxStepReset');
+  chk(rs.cls === 'bfx-step is-ok' && /3 of 3 files removed/.test(rs.text) && /started a new record/.test(rs.text), 'verified reset not shown: ' + rs.text);
+  chk(reg.bfxChip.className === 'bfx-chip is-ok' && reg.bfxCancel.hidden, 'done chip not shown');
+  chk(reg.bfxRun.disabled && reg.bfxRun.dataset.mode === 'run', 'the run button should rest after a finished fix below 100%');
+  await paint('eligible=0 reason=not_full level=98 charging=1 reset=none compile=done phase=done total=300 done=300 ok=297 fail=3 cur=- started=1000 finished=1600 now=9000 last_reset=1700 removed=- missing=batterystats.bin fresh=0');
+  chk(step('bfxStepReset').cls === 'bfx-step is-wait' && /0 of 3/.test(step('bfxStepReset').text) && /write the new record/.test(step('bfxStepReset').text), 'an empty reset was shown as success');
+
+  await paint(B + 'reset=none compile=interrupted phase=compile total=300 done=40 ok=40 fail=0 cur=x started=1000 finished=-' + tail);
+  chk(step('bfxStepArt').cls === 'bfx-step is-wait' && step('bfxStepArt').text === 'Interrupted at 40 of 300' && reg.bfxArtNow.textContent === '', 'interrupted run not shown');
+  await paint(B + 'reset=none compile=stopped phase=stopped total=300 done=70 ok=70 fail=0 cur=- started=1000 finished=1200' + tail);
+  chk(step('bfxStepArt').text === 'Stopped at 70 of 300', 'stopped run not shown');
+  await paint(B + 'reset=none compile=failed phase=no_packages total=0 done=0 ok=0 fail=0 cur=- started=1000 finished=1000' + tail);
+  chk(step('bfxStepArt').cls === 'bfx-step is-fail' && reg.bfxBarWrap.hidden, 'failed list not shown');
+
+  scripted.run = 'result=armed reset_on=reboot compile=busy';
+  await batteryFixRun(); await batteryFixRun();
+  chk(/already running/.test(toasts[toasts.length - 1].m), 'busy not reported');
+  scripted.run = 'result=refused reason=not_full level=97';
+  await batteryFixRun(); await batteryFixRun();
+  chk(toasts[toasts.length - 1].t === 'error', 'refusal not reported as an error');
+
   scripted.cancel = 'result=cancelled';
   await batteryFixCancel();
-  chk(cmds.some(function (c) { return / cancel$/.test(c); }), 'cancel did not call the script');
+  chk(cmds.some(function (c) { return / cancel$/.test(c); }) && toasts[toasts.length - 1].t === 'ok', 'cancel did not call the script');
+
+  await paint('');
+  chk(reg.bfxRun.disabled && step('bfxStepCond').text === '—% · not on charge', 'an unreadable status enabled the fix');
+  onScreen = false;
+  timers.forEach(function (t) { t.live = false; });
+  await paint(B + idle + tail);
+  chk(lastTimer() === 0, 'the card kept polling after it left the screen');
   if (bad) process.exit(1);
   console.log('ok');
 })().catch(function (e) { console.error(e); process.exit(1); });
 EOF
 } > "$T/t.js"
-out="$(node "$T/t.js" 2>&1)" || fail "$out"
+out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo "PASS webui infirmary: pharmacy button beside Reset opens the Infirmary; the two repairs moved there; Battery Fix gates on 100%-on-charge, two-tap arms a one-shot, then offers reboot, and cancel clears it"
+echo "PASS webui infirmary: designed pharmacy button beside Reset in every theme; Battery Fix is a live three-step checklist (condition, app-by-app ART progress with ETA, verified statistics reset) whose button follows the state: run, stop, reboot to finish; stopped/interrupted/failed are named; polls fast only while compiling and only on screen"
 )
 
 t_webui_zygisk_save_runtime() (

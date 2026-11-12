@@ -4175,6 +4175,9 @@ t_battery_fix_runtime() (
 # one-shot flag, `boot` (post-fs-data, next boot) deletes exactly the three batterystats
 # files under /data/system and nothing else, then clears the flag. No battery claim here -
 # this only resets Android's stored usage record.
+# dev18: `run` also starts a background recompile whose progress (total/done/ok/fail/current
+# app), stop, busy, interruption and failure are visible in `status`, and the reset reports
+# whether Android has written a new record since.
 set -u
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
@@ -4223,6 +4226,60 @@ sh "$A" cancel | grep -q 'result=cancelled' || f "cancel did not report cancelle
 # post-fs-data wires the one-shot boot, gated on the flag.
 grep -q 'asb_battery_fix.sh" boot' "$ROOT/post-fs-data.sh" || f "post-fs-data never runs the boot reset"
 grep -q 'battery_fix.pending' "$ROOT/post-fs-data.sh" || f "post-fs-data boot not gated by the pending flag"
+grep -q 'rm -rf /data/adb/asb/battery_fix.lock' "$ROOT/post-fs-data.sh" || f "a lock left by a reboot mid-compile is never cleared"
+
+# dev18: the recompile reports real progress. A scripted compiler stands in for
+# `cmd package compile`; "Success" in its output is the only thing counted as success.
+unset ASB_BFIX_NO_DEXOPT
+export ASB_BFIX_NO_BGJOB=1 ASB_BFIX_FAKE_PLUGGED=1 ASB_BFIX_FAKE_LEVEL=100
+cat > "$T/fc.sh" <<'EOF'
+[ -n "${FC_SLEEP:-}" ] && sleep "$FC_SLEEP"
+case "$1" in *bad*) echo 'Failure: compile error' ;; *) echo 'Success' ;; esac
+EOF
+export ASB_BFIX_COMPILE_CMD="sh $T/fc.sh"
+st() { sh "$A" status; }
+kv() { st | tr ' ' '\n' | sed -n "s/^$1=//p"; }
+out="$(ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS='a.one b.bad c.three' sh "$A" run)"
+echo "$out" | grep -q 'result=armed reset_on=reboot compile=started' || f "eligible run did not start the recompile: $out"
+[ "$(kv compile)" = done ] || f "finished recompile not reported done: $(st)"
+[ "$(kv total)/$(kv done)/$(kv ok)/$(kv fail)" = 3/3/2/1 ] || f "progress counts wrong: $(st)"
+[ "$(kv cur)" = - ] || f "a finished run still names a current app"
+case "$(kv finished)" in ''|-|*[!0-9]*) f "finished time missing" ;; esac
+[ -d "$T/d/battery_fix.lock" ] && f "the worker left its lock behind"
+ls "$T/d"/battery_fix.pkgs.* >/dev/null 2>&1 && f "the worker left its package list behind"
+for k in eligible reason level charging reset compile phase total done ok fail cur started finished now last_reset removed missing fresh; do
+  st | grep -q "\(^\| \)$k=" || f "status lacks $k"
+done
+
+out="$(ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS='' sh "$A" run)"
+[ "$(kv compile)/$(kv phase)" = failed/no_packages ] || f "an empty app list was not reported as failed: $(st)"
+
+FC_SLEEP=1 ASB_BFIX_FAKE_PKGS='p.1 p.2 p.3 p.4 p.5 p.6' sh "$A" run >/dev/null
+i=0; while [ "$i" -lt 30 ] && [ "$(kv done)" != 1 ]; do sleep 0.2; i=$((i + 1)); done
+[ "$(kv compile)" = running ] || f "a running recompile is not reported running: $(st)"
+case "$(kv cur)" in p.*) : ;; *) f "the current app is not named: $(st)" ;; esac
+[ "$(kv total)" = 6 ] || f "total not known while running"
+sh "$A" run | grep -q 'compile=busy' || f "a second run started another worker"
+sh "$A" stop | grep -q 'result=stopping' || f "stop not accepted while running"
+i=0; while [ "$i" -lt 40 ] && [ "$(kv compile)" = running ]; do sleep 0.2; i=$((i + 1)); done
+[ "$(kv compile)" = stopped ] || f "stop did not end the recompile: $(st)"
+d="$(kv done)"; [ "$d" -ge 1 ] && [ "$d" -lt 6 ] || f "stop did not take effect after the current app: done=$d"
+sh "$A" stop | grep -q 'result=idle' || f "stop reported work when nothing runs"
+[ -f "$T/d/battery_fix.stop" ] && f "the stop request outlived the run"
+
+printf 'state=running\nphase=compile\ntotal=9\ndone=4\nok=4\nfail=0\ncur=x\nstarted=1\nfinished=-\npid=%s\nboot=old-boot\n' "$$" > "$T/d/battery_fix.compile"
+[ "$(ASB_BFIX_BOOT_ID=new-boot sh "$A" status | tr ' ' '\n' | sed -n 's/^compile=//p')" = interrupted ] || f "a run from a previous boot still shows as running"
+dead="$(sh -c 'echo $$')"
+printf 'state=running\nphase=compile\ntotal=9\ndone=4\nok=4\nfail=0\ncur=x\nstarted=1\nfinished=-\npid=%s\nboot=same\n' "$dead" > "$T/d/battery_fix.compile"
+[ "$(ASB_BFIX_BOOT_ID=same sh "$A" status | tr ' ' '\n' | sed -n 's/^compile=//p')" = interrupted ] || f "a dead worker still shows as running"
+
+# The reset's outcome is read back: fresh=1 only once Android has written a new record.
+sh "$A" boot
+echo old > "$T/sys/batterystats.bin"; touch -d '@1000' "$T/sys/batterystats.bin"
+[ "$(kv fresh)" = 0 ] || f "an old record was reported as a fresh one: $(st)"
+touch "$T/sys/batterystats.bin"
+[ "$(kv fresh)" = 1 ] || f "a new record was not detected: $(st)"
+[ "$(kv reset)" = none ] || f "the reset stayed pending after boot"
 
 [ "$fail" = 0 ] && echo "PASS battery fix runtime"
 exit "$fail"
