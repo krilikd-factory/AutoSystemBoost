@@ -4,6 +4,34 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev21 - Infirmary interruption cleanup and root-only observer policy files
+
+Input: the dev20 source, current device/Zygisk/asbdiag exports and detector screenshots. The
+source audit and host regression found a narrow file-lifecycle issue, not evidence that ASB
+caused the external TEE or mount findings.
+
+- **Battery Fix cleans up after interruption as well as after Stop.** The worker's EXIT path
+  now removes its package-list and atomic-progress temporaries on normal exit, TERM, INT and
+  HUP. The last complete progress record is retained and reads as interrupted; the lock is
+  released. A missing lock also prevents a reused PID from keeping an old run visually alive.
+  Post-fs-data removes only the same transient patterns after a reboot, while retaining the
+  progress evidence and the pending-reset semantics.
+- **Observer policy and launch classes are root-only.** Both are written `0600`, not `0644`;
+  an unchanged launch-class pass also tightens a legacy file without rewriting its content.
+  Only the root-side zygote/companion consumes them. The observer's DenyList behavior is
+  unchanged: the flag is counted, not used to silence the allowlist, and ASB does not edit
+  the root manager's DenyList or any separately installed hiding setup.
+- **No new mount, service, polling worker, native component or app-specific policy.** The
+  current field export's zero module-name mount entries and absent `skip_mount` are recorded
+  as observations of that export, not as a universal guarantee for optional overlay features.
+
+Not added: root/Zygisk/memory hiding, renaming or repacking the observer to evade detectors,
+TEE/attestation manipulation, or suppression of another module's findings. The mapped
+`zygisk/arm64-v8a.so` path is not made invisible by file-permission cleanup. Host tests and
+Chromium checks are not physical ColorOS WebView, TEE or battery validation.
+
+No native code changed: no CI rebuild needed.
+
 ## V66 dev20 - the kernel page reads the kernel, an honest video-refresh count, a correct sensor after boot
 
 Input: an 11 h 11 min capture with a night, active use and seven reboots in 25 minutes at the
