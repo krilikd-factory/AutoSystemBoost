@@ -2548,6 +2548,7 @@ html[data-asb-theme="light"] .cfg-zygisk-card { background:#fff; }
 .cfg-section.cat-net     { --cat: #4cd3e8; }
 .cfg-section.cat-iface   { --cat: #c6a3f5; }
 .cfg-section.cat-system  { --cat: #a7b7c6; }
+.cfg-section.cat-kernel  { --cat: #82b8ff; }
 .cfg-section[class*="cat-"] { --section-accent: var(--cat); --tech-icon: var(--cat); }
 
 .cfg-tile.cat-audio   { --cat: #f98d9e; }
@@ -2556,6 +2557,7 @@ html[data-asb-theme="light"] .cfg-zygisk-card { background:#fff; }
 .cfg-tile.cat-ux      { --cat: #f0b76b; }
 .cfg-tile.cat-net     { --cat: #4cd3e8; }
 .cfg-tile.cat-iface   { --cat: #c6a3f5; }
+.cfg-tile.cat-kernel  { --cat: #82b8ff; }
 .cfg-tile[class*="cat-"] { --tech-icon: var(--cat); }
 
 .cfg-tile-name {
@@ -3462,6 +3464,48 @@ html[data-asb-theme="light"] .bfx-step.is-ok .bfx-step-s { color: #06704f; }
 html[data-asb-theme="light"] .bfx-step.is-wait .bfx-step-s { color: #8a5a00; }
 html[data-asb-theme="light"] .bfx-step.is-fail .bfx-step-s { color: #b3261e; }
 @media (prefers-reduced-motion: reduce) { .bfx-step.is-run .bfx-mark { animation: none; } .bfx-bar > i { transition: none; } }
+
+/* Settings → Kernel: compact evidence and an exact-name editor. All device strings enter
+ * through textContent in the renderer; these styles only provide the layout. */
+.kernel-card { display:block; padding:14px; }
+.kernel-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+.kernel-card-title { color:var(--text); font:700 14px/1.3 var(--sans); }
+.kernel-card-sub { margin-top:4px; color:var(--text-secondary); font-size:11.5px; line-height:1.4; }
+.kernel-state { flex:0 0 auto; max-width:48%; padding:4px 9px; border:1px solid var(--border); border-radius:99px;
+  color:var(--text-secondary); font:650 10.5px/1.3 var(--sans); text-align:center; box-sizing:border-box; }
+.kernel-state.good { color:#7dffc4; border-color:rgba(96,242,178,.38); background:rgba(46,214,140,.10); }
+.kernel-state.warn { color:#ffd27a; border-color:rgba(255,200,90,.34); background:rgba(255,180,40,.08); }
+.kernel-state.bad { color:#ff9b9b; border-color:rgba(255,107,107,.34); background:rgba(255,80,80,.08); }
+.kernel-evidence { margin-top:11px; display:grid; gap:6px; }
+.kernel-evidence-row { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:30px;
+  padding:7px 9px; border-radius:10px; background:var(--surface); }
+.kernel-evidence-name { min-width:0; color:var(--text); font-size:12px; overflow-wrap:anywhere; }
+.kernel-evidence-value { flex:0 0 auto; max-width:55%; color:var(--text-secondary); font:600 11px/1.35 var(--sans); text-align:right; overflow-wrap:anywhere; }
+.kernel-editor { margin-top:12px; }
+.kernel-input-row { display:flex; gap:8px; }
+.kernel-input { min-width:0; flex:1 1 auto; min-height:42px; box-sizing:border-box; padding:10px 12px;
+  border:1px solid var(--border-active); border-radius:12px; outline:none; color:var(--text); background:var(--surface);
+  font:500 12px/1.3 var(--mono); }
+.kernel-input:focus { border-color:rgba(0,240,180,.52); box-shadow:0 0 0 2px rgba(0,240,180,.08); }
+.kernel-add { flex:0 0 auto; min-width:76px; }
+.kernel-chips { display:flex; flex-wrap:wrap; gap:7px; margin-top:10px; }
+.kernel-chip { display:inline-flex; align-items:center; gap:6px; max-width:100%; min-height:32px; padding:4px 5px 4px 10px;
+  box-sizing:border-box; border:1px solid var(--border); border-radius:10px; background:var(--surface); }
+.kernel-chip-name { min-width:0; color:var(--text); font:500 11px/1.3 var(--mono); overflow-wrap:anywhere; }
+.kernel-chip-remove { flex:0 0 auto; width:26px; height:26px; padding:0; border:0; border-radius:8px;
+  color:var(--text-secondary); background:transparent; font:700 17px/1 var(--sans); cursor:pointer; }
+.kernel-chip-remove:hover { color:var(--text); background:var(--surface-hover); }
+.kernel-empty { color:var(--text-tertiary); font-size:11.5px; line-height:1.4; }
+.kernel-meta { display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:11px; color:var(--text-secondary); font-size:11px; }
+.kernel-note { margin-top:10px; color:var(--text-tertiary); font-size:11px; line-height:1.45; }
+.kernel-readback { margin-top:11px; padding-top:10px; border-top:1px dashed var(--border); }
+.kernel-readback-title { color:var(--text-secondary); font-size:11px; font-weight:650; }
+.kernel-readback-list { margin-top:5px; color:var(--text); font:500 11px/1.55 var(--mono); overflow-wrap:anywhere; white-space:pre-wrap; }
+html[data-asb-theme="light"] .kernel-state.good { color:#06704f; }
+html[data-asb-theme="light"] .kernel-state.warn { color:#8a5a00; }
+html[data-asb-theme="light"] .kernel-state.bad { color:#b3261e; }
+@media (max-width:350px) { .kernel-input-row { flex-wrap:wrap; } .kernel-add { width:100%; } .kernel-evidence-value { max-width:50%; } }
+@media (forced-colors:active) { .kernel-state,.kernel-chip,.kernel-input { border-color:ButtonText; } }
 #cfgActionsRow .cfg-backup { min-width: 0; min-height: 40px; padding: 8px 5px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Named-profile manager: an in-page sheet avoids the opaque KernelSU browser prompt and lets
  * saved configurations be selected by tapping a row rather than retyping an exact identifier. */
@@ -9229,7 +9273,7 @@ async function cfgLoadNow() {
 const CFG_CAT = {
   wifi_powersave:'net',
   net_wifi_leave:'net',
-  /* battery, not memory: CFG_GROUPS renders six groups and memory is not one of them,
+  /* battery, not memory: CFG_GROUPS renders seven groups and memory is not one of them,
      so the card existed and was never drawn. BG_TRIM and gms_trim - the other RAM tweaks -
      live under battery for the same reason. */
   mglru_hold: 'battery', mglru_mode:'battery',
@@ -9278,9 +9322,11 @@ const CFG_GROUP_DESC = {
   iface: 'Animations, blur',
   net: 'Wi-Fi, LTE, queues',
   battery: 'Smart, Doze, heat, RAM',
-  ui: 'Services, LTPO, haptics'
+  ui: 'Services, LTPO, haptics',
+  kernel: 'Live controls, wakeup rules, support'
 };
 const CFG_GROUPS = [
+  { id:'kernel',  icon:'kernel',     name:'Kernel',    ru:'\u042F\u0434\u0440\u043E' },
   { id:'audio',   icon:'headphones', name:'Audio',     ru:'\u0410\u0443\u0434\u0438\u043E' },
   { id:'camera',  icon:'camera',     name:'Camera',    ru:'\u041A\u0430\u043C\u0435\u0440\u0430' },
   { id:'iface',   icon:'panel',      name:'Interface', ru:'\u0418\u043D\u0442\u0435\u0440\u0444\u0435\u0439\u0441' },
@@ -9305,10 +9351,10 @@ const CFG_GROUP_OF = {
   /* Was 'wifileave' - an icon name, not a group. The card matched no CFG_GROUPS entry,
    * so it never rendered on the hub or in any category; search was the only way in. */
   net_wifi_leave:'net',
-  /* battery, not memory: CFG_GROUPS renders six groups and memory is not one of them,
+  /* battery, not memory: CFG_GROUPS renders seven groups and memory is not one of them,
      so the card existed in CFG_ITEMS and was never drawn. BG_TRIM_LEVEL and gms_trim -
      the other RAM tweaks - sit under battery for exactly this reason. */
-  mglru_hold:'battery', mglru_mode:'battery', kernel_timer_migration:'battery', kernel_sched_nr_migrate:'battery', kernel_sched_stats:'ui',
+  mglru_hold:'battery', mglru_mode:'kernel', kernel_timer_migration:'kernel', kernel_sched_nr_migrate:'kernel', kernel_sched_stats:'kernel',
   night_modem_idle:'net', net_screen_off_lte:'net', net_lte_light:'net', smart_media_guard:'battery',
   smart_lab:'battery', smart_lab_mem:'battery', profile_class_auto:'battery', smart_records_balanced:'battery', ltpo_peak_force:'ui',
   net_rps:'net', net_txqueue:'net',
@@ -9340,6 +9386,20 @@ const ZYGISK_CONTROL_KEYS = ['zygisk_enabled', 'zygisk_hints', 'zygisk_launch', 
 const ZYGISK_PANEL_ONLY_KEYS = ZYGISK_CONTROL_KEYS.slice(1);
 
 const CFG_GROUP_SECTIONS = {
+  kernel: [
+    { id:'controls', icon:'kernel', titleKey:'cfg_kernel_section_controls',
+      title:'Live kernel controls', hintKey:'cfg_kernel_section_controls_hint',
+      hint:'Availability comes from the actual kernel interface, not from the selected value.',
+      keys:['mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate','kernel_sched_stats'] },
+    { id:'wakeup', icon:'doze', titleKey:'cfg_kernel_section_wakeup',
+      title:'Wakeup-source blocker', hintKey:'cfg_kernel_section_wakeup_hint',
+      hint:'An optional exact-name list for a kernel with the ASB wakeup interface. Empty by default.',
+      keys:[], card:'wakeup' },
+    { id:'capabilities', icon:'log_detail', titleKey:'cfg_kernel_section_caps',
+      title:'Kernel facilities', hintKey:'cfg_kernel_section_caps_hint',
+      hint:'Read-only support evidence. These are not switches and do not prove that a facility is active.',
+      keys:[], card:'capabilities' }
+  ],
   audio: [
     { id:'dsp', icon:'dsp', titleKey:'cfg_audio_section_dsp',
       title:'ASB DSP Engine', hintKey:'cfg_audio_section_dsp_hint',
@@ -9374,7 +9434,7 @@ const CFG_GROUP_SECTIONS = {
     { id:'memory', icon:'cleaner', titleKey:'cfg_battery_section_memory',
       title:'Memory & Apps', hintKey:'cfg_battery_section_memory_hint',
       hint:'How long apps stay in memory and how hard background services are limited.',
-      keys:['BG_TRIM_LEVEL','mglru_hold','mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate','kernel_sched_stats','gms_trim','gms_freeze'] }
+      keys:['BG_TRIM_LEVEL','mglru_hold','gms_trim','gms_freeze'] }
   ],
   net: [
     { id:'cellular', icon:'cellular_controls', titleKey:'cfg_net_section_cellular',
@@ -9729,6 +9789,7 @@ function asbPharmacyCross(gid) {
 function cfgOpenInfirmary() { uiSound('nav'); cfgShowGroup('infirmary'); }
 
 function cfgRenderGroup(list, groupId) {
+  if (groupId === 'kernel') kernelPanelEnsure();
   const items = CFG_ITEMS.filter(it => cfgGroupOf(it.key) === groupId);
   const sections = CFG_GROUP_SECTIONS[groupId];
   if (!sections) { items.forEach(it => cfgRenderRow(list, it, false)); return; }
@@ -9743,8 +9804,13 @@ function cfgRenderGroup(list, groupId) {
     navItems.push(['cfg-sec-' + groupId + '-' + section.id, T(section.titleKey, section.title), section.icon]);
     sectionItems.forEach(it => { rendered[it.key] = true; });
     if (section.card === 'batteryfix') cfgRenderBatteryFixCard(list);
+    else if (section.card === 'wakeup') cfgRenderWakeupBlockerCard(list);
+    else if (section.card === 'capabilities') cfgRenderKernelCapabilitiesCard(list);
     else if (section.id === 'zygisk') cfgRenderZygiskCard(list, sectionItems);
-    else sectionItems.forEach(it => cfgRenderRow(list, it, false));
+    else sectionItems.forEach(it => {
+      cfgRenderRow(list, it, false);
+      if (groupId === 'kernel') kernelDecorateControlRow(list.lastChild, it.key);
+    });
     if (groupId === 'battery' && section.id === 'standby') cfgRenderNotifCard(list);
   });
   // Future cards still appear rather than silently disappearing when a maintainer forgets
@@ -9794,6 +9860,249 @@ function asbKernelControlVerdict(status, live) {
   const lv = String(live || '').replace(/[^0-9A-Za-zx]/g, '').slice(0, 12);
   if (lv && lv !== 'unknown') txt += ' · ' + T('kc_live', 'kernel: {v}').replace('{v}', lv);
   return txt;
+}
+/* Settings → Kernel. One on-demand batch reads the registered control owner, the wakeup
+ * owner and the short read-only device probe. No timer, polling worker or direct sysfs write. */
+const ASB_KERNEL_STATUS_KEYS = ['mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate','kernel_sched_stats'];
+let _kernelPanel = { loaded:false, loading:false, controls:Object.create(null), wakeup:null, caps:null };
+let _wbDraft = null, _wbBusy = false;
+function kernelPanelEnsure() { if (!_kernelPanel.loaded && !_kernelPanel.loading) kernelPanelLoad(false); }
+function kernelControlParse(txt) {
+  const out = Object.create(null);
+  String(txt || '').split(/\r?\n/).forEach(function (line) {
+    const p = line.split('|');
+    if (p.length < 5 || ASB_KERNEL_STATUS_KEYS.indexOf(p[0]) < 0) return;
+    out[p[0]] = { state:p[1], mode:p[2], live:p[3], baseline:p[4] };
+  });
+  return out;
+}
+function kernelWakeupParse(txt) {
+  const wb = { node:'unknown', policy:'unknown', events:'unknown', saved:[], current:[], seen:false };
+  String(txt || '').split(/\r?\n/).forEach(function (line) {
+    if (line.indexOf('wakeup_blocker|status|') === 0) {
+      line.split('|').slice(2).forEach(function (field) {
+        const i = field.indexOf('='); if (i < 1) return;
+        const k = field.slice(0, i), v = field.slice(i + 1);
+        if (k === 'blocked_events') wb.events = /^\d{1,20}$/.test(v) ? v : 'unknown';
+        else if (k === 'node') wb.node = v;
+        else if (k === 'policy') wb.policy = v;
+      });
+      wb.seen = true;
+    } else if (line.indexOf('wakeup_rule|saved|') === 0 && wb.saved.length < 64) {
+      wb.saved.push(line.slice(18));
+    } else if (line.indexOf('wakeup_rule|current|') === 0 && wb.current.length < 64) {
+      wb.current.push(line.slice(20));
+    }
+  });
+  return wb.seen ? wb : null;
+}
+async function kernelPanelLoad(force) {
+  if (_kernelPanel.loading || (_kernelPanel.loaded && !force)) return;
+  _kernelPanel.loading = true;
+  if (_cfgGroup === 'kernel') { try { cfgRender(); } catch (e) {} }
+  let b = null;
+  try {
+    b = await runBatch([
+      ['controls', 'sh ' + shQuote(MD + '/runtime/asb_kernel_controls.sh') + ' status'],
+      ['wakeup', 'sh ' + shQuote(MD + '/runtime/asb_wakeup_blocker.sh') + ' status'],
+      ['caps', 'sh ' + shQuote(MD + '/tools/asb_device_info.sh') + ' --kernel']
+    ]);
+  } catch (e) {}
+  _kernelPanel.controls = b && b.controls && b.controls.errno === 0 ? kernelControlParse(b.controls.stdout) : Object.create(null);
+  _kernelPanel.wakeup = b && b.wakeup && b.wakeup.errno === 0 ? kernelWakeupParse(b.wakeup.stdout) : null;
+  _kernelPanel.caps = b && b.caps && b.caps.errno === 0 ? parseDeviceInfo(b.caps.stdout) : null;
+  _kernelPanel.loaded = true;
+  _kernelPanel.loading = false;
+  if (_cfgGroup === 'kernel') { try { cfgRender(); } catch (e) {} }
+}
+function kernelStateText(state) {
+  const fallback = {
+    available:'Available', not_exposed:'Not exposed by this kernel', not_readable:'Not readable',
+    read_only:'Read-only', unknown:'Unknown — no read-only evidence', disabled:'Disabled in kernel configuration',
+    configured:'Configured; runtime state unknown', module_unloaded:'Configured; module not loaded', loading:'Checking…'
+  };
+  return T('kernel_state_' + state, fallback[state] || fallback.unknown);
+}
+function kernelStateClass(state) {
+  if (state === 'available' || state === 'configured') return 'good';
+  if (state === 'read_only' || state === 'module_unloaded' || state === 'unknown' || state === 'loading') return 'warn';
+  return 'bad';
+}
+function kernelControlAvailability(key) {
+  if (ASB_KERNEL_STATUS_KEYS.indexOf(key) >= 0) {
+    const c = _kernelPanel.controls[key];
+    if (!c) return { state:_kernelPanel.loading ? 'loading' : 'unknown', live:'' };
+    return { state:c.state === 'writable' ? 'available' : (c.state === 'not_writable' ? 'read_only' : c.state), live:c.live };
+  }
+  return { state:_kernelPanel.loading ? 'loading' : 'unknown', live:'' };
+}
+function kernelDecorateControlRow(row, key) {
+  if (!row) return;
+  const a = kernelControlAvailability(key);
+  const badge = row.querySelector('.cfg-status');
+  if (badge) {
+    badge.textContent = kernelStateText(a.state) + (a.live && a.state !== 'not_readable' ? ' · ' + String(a.live).slice(0, 16) : '');
+    badge.className = 'cfg-status ' + (a.state === 'available' ? 'on' : 'na');
+    badge.title = a.live ? T('kc_live', 'kernel: {v}').replace('{v}', a.live) : kernelStateText(a.state);
+  }
+  if (['not_exposed','not_readable','read_only','disabled'].indexOf(a.state) >= 0) {
+    row.classList.add('kernel-unavailable');
+    row.querySelectorAll('.cfg-seg button,.cfg-sel-btn').forEach(function (b) { b.disabled = true; b.setAttribute('aria-disabled','true'); });
+    const sw = row.querySelector('.cfg-switch'); if (sw) sw.disabled = true;
+  }
+}
+function kernelStateBadge(state) {
+  return bfxEl('span', 'kernel-state ' + kernelStateClass(state), kernelStateText(state));
+}
+function kernelEvidenceRow(name, state, detail) {
+  const row = bfxEl('div', 'kernel-evidence-row');
+  row.appendChild(bfxEl('div', 'kernel-evidence-name', name));
+  const value = kernelStateText(state) + (detail ? ' · ' + detail : '');
+  row.appendChild(bfxEl('div', 'kernel-evidence-value', value));
+  return row;
+}
+function kernelCapabilityState(v) {
+  const s = String(v || '');
+  if (/^(built-in|available|writable|driver present|module loaded|filesystem registered)/.test(s)) return 'available';
+  if (/^read-only/.test(s)) return 'read_only';
+  if (/^module not loaded/.test(s)) return 'module_unloaded';
+  if (/^configured/.test(s)) return 'configured';
+  if (/^(disabled)/.test(s)) return 'disabled';
+  if (/^(absent|not exposed|not_exposed)/.test(s)) return 'not_exposed';
+  if (/^not_readable/.test(s)) return 'not_readable';
+  return 'unknown';
+}
+function cfgRenderKernelCapabilitiesCard(list) {
+  const card = bfxEl('div', 'cfg-row kernel-card'); card.id = 'kernelCapabilitiesCard';
+  const head = bfxEl('div', 'kernel-card-head');
+  const titles = bfxEl('div');
+  titles.appendChild(bfxEl('div', 'kernel-card-title', T('kernel_caps_title', 'Support on this kernel')));
+  titles.appendChild(bfxEl('div', 'kernel-card-sub', T('kernel_caps_sub', 'Read once when this page opens. Build configuration and runtime use are different facts.')));
+  head.appendChild(titles); head.appendChild(kernelStateBadge(_kernelPanel.loading ? 'loading' : (_kernelPanel.caps ? 'available' : 'unknown')));
+  card.appendChild(head);
+  const grid = bfxEl('div', 'kernel-evidence');
+  [
+    ['net_sch_cake', 'CAKE · ' + T('kernel_cap_support', 'kernel support')],
+    ['ip_set', 'IP sets · ' + T('kernel_cap_support', 'kernel support')],
+    ['rekernel', 'Re-Kernel'],
+    ['oplus_sdp_900ma', 'SDP 900 mA']
+  ].forEach(function (spec) {
+    const raw = deviceVal(_kernelPanel.caps, 'kernel_features', spec[0]);
+    grid.appendChild(kernelEvidenceRow(spec[1], raw === '—' ? (_kernelPanel.loading ? 'loading' : 'unknown') : kernelCapabilityState(raw), ''));
+  });
+  card.appendChild(grid);
+  card.appendChild(bfxEl('div', 'kernel-note', T('kernel_caps_note', 'CAKE is configured in Network settings. Re-Kernel is used by a compatible external freezer. SDP has no confirmed writable interface, so ASB does not offer a current switch.')));
+  const actions = bfxEl('div', 'bfx-actions');
+  const refresh = bfxEl('button', 'bfx-btn bfx-secondary', T('kernel_refresh', 'Refresh status'));
+  refresh.type = 'button'; refresh.disabled = _kernelPanel.loading;
+  refresh.onclick = function () { kernelPanelLoad(true); };
+  actions.appendChild(refresh); card.appendChild(actions); list.appendChild(card);
+}
+function kernelWakeupValidName(name) {
+  const s = String(name || '');
+  return s.length > 0 && s.length <= 63 && !/[^\x21-\x7e]/.test(s) && !/[\/\\]/.test(s);
+}
+function kernelWakeupDraft() {
+  if (_wbDraft) return _wbDraft;
+  return (_kernelPanel.wakeup && _kernelPanel.wakeup.saved ? _kernelPanel.wakeup.saved : []).slice();
+}
+function kernelWakeupChipList(card, rules, editable) {
+  const wrap = bfxEl('div', 'kernel-chips');
+  if (!rules.length) { wrap.appendChild(bfxEl('span', 'kernel-empty', T('kernel_wb_empty', 'No rules — nothing is blocked by ASB.'))); card.appendChild(wrap); return; }
+  rules.forEach(function (name, index) {
+    const chip = bfxEl('span', 'kernel-chip');
+    chip.appendChild(bfxEl('span', 'kernel-chip-name', name));
+    if (editable) {
+      const del = bfxEl('button', 'kernel-chip-remove', '×'); del.type = 'button';
+      del.disabled = _wbBusy; del.setAttribute('aria-label', T('kernel_wb_remove', 'Remove {name}').replace('{name}', name));
+      del.onclick = function () { _wbDraft = kernelWakeupDraft(); _wbDraft.splice(index, 1); cfgRender(); };
+      chip.appendChild(del);
+    }
+    wrap.appendChild(chip);
+  });
+  card.appendChild(wrap);
+}
+function cfgRenderWakeupBlockerCard(list) {
+  const wb = _kernelPanel.wakeup;
+  const card = bfxEl('div', 'cfg-row kernel-card'); card.id = 'kernelWakeupCard';
+  const head = bfxEl('div', 'kernel-card-head');
+  const titles = bfxEl('div');
+  titles.appendChild(bfxEl('div', 'kernel-card-title', T('kernel_wb_title', 'Exact-name wakeup rules')));
+  titles.appendChild(bfxEl('div', 'kernel-card-sub', T('kernel_wb_sub', 'Up to 16 names, 1–63 printable ASCII characters each. No spaces, paths, patterns or automatic rules.')));
+  head.appendChild(titles);
+  head.appendChild(kernelStateBadge(wb ? (wb.node === 'writable' ? 'available' : (wb.node === 'not_writable' ? 'read_only' : wb.node)) : (_kernelPanel.loading ? 'loading' : 'unknown')));
+  card.appendChild(head);
+  card.appendChild(bfxEl('div', 'kernel-note', T('kernel_wb_warning', 'Only add a name after diagnosing a concrete wakeup source. Blocking can delay notifications, networking or sensors. Existing locks are not force-released.')));
+  const editor = bfxEl('div', 'kernel-editor');
+  const inputRow = bfxEl('div', 'kernel-input-row');
+  const input = bfxEl('input', 'kernel-input'); input.type = 'text'; input.id = 'kernelWakeupName'; input.maxLength = 63;
+  input.autocomplete = 'off'; input.spellcheck = false; input.disabled = !wb || _wbBusy;
+  input.placeholder = T('kernel_wb_placeholder', 'Exact kernel wakeup-source name');
+  input.setAttribute('aria-label', input.placeholder);
+  const add = bfxEl('button', 'bfx-btn bfx-secondary kernel-add', T('kernel_wb_add', 'Add')); add.type = 'button'; add.disabled = !wb || _wbBusy;
+  add.onclick = function () { kernelWakeupAdd(input.value); };
+  input.onkeydown = function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); kernelWakeupAdd(input.value); } };
+  inputRow.appendChild(input); inputRow.appendChild(add); editor.appendChild(inputRow); card.appendChild(editor);
+  kernelWakeupChipList(card, kernelWakeupDraft(), true);
+  const same = wb && JSON.stringify(wb.saved) === JSON.stringify(wb.current);
+  const meta = bfxEl('div', 'kernel-meta');
+  meta.appendChild(bfxEl('span', '', T('kernel_wb_saved_count', 'Saved: {n}').replace('{n}', wb ? wb.saved.length : '—')));
+  meta.appendChild(bfxEl('span', '', T('kernel_wb_current_count', 'In kernel: {n}').replace('{n}', wb && wb.node !== 'not_exposed' && wb.node !== 'not_readable' ? wb.current.length : '—')));
+  meta.appendChild(bfxEl('span', '', T('kernel_wb_events', 'Blocked events: {n}').replace('{n}', wb ? wb.events : 'unknown')));
+  card.appendChild(meta);
+  if (wb && !same && wb.node !== 'not_exposed' && wb.node !== 'not_readable') {
+    card.appendChild(bfxEl('div', 'kernel-note', T('kernel_wb_diff', 'Saved policy and kernel readback differ. Apply the policy or refresh after another owner changes it.')));
+  }
+  const readback = bfxEl('div', 'kernel-readback');
+  readback.appendChild(bfxEl('div', 'kernel-readback-title', T('kernel_wb_readback', 'Kernel readback')));
+  readback.appendChild(bfxEl('div', 'kernel-readback-list', wb && wb.current.length ? wb.current.join('\n') : T('kernel_wb_none', 'None or not readable')));
+  card.appendChild(readback);
+  const actions = bfxEl('div', 'bfx-actions');
+  const apply = bfxEl('button', 'bfx-btn bfx-primary', T('kernel_wb_apply', 'Save and apply')); apply.type = 'button'; apply.disabled = !wb || _wbBusy;
+  apply.onclick = function () { kernelWakeupSave(false); };
+  const clear = bfxEl('button', 'bfx-btn bfx-secondary', T('kernel_wb_clear', 'Clear saved and live rules')); clear.type = 'button'; clear.disabled = !wb || _wbBusy;
+  clear.onclick = function () { kernelWakeupSave(true); };
+  const refresh = bfxEl('button', 'bfx-btn bfx-secondary', T('kernel_refresh', 'Refresh status')); refresh.type = 'button'; refresh.disabled = _wbBusy || _kernelPanel.loading;
+  refresh.onclick = function () { kernelPanelLoad(true); };
+  actions.appendChild(apply); actions.appendChild(clear); actions.appendChild(refresh); card.appendChild(actions);
+  list.appendChild(card);
+}
+function kernelWakeupAdd(raw) {
+  const name = String(raw || '').trim();
+  if (!kernelWakeupValidName(name)) { uiSound('error'); toast(T('kernel_wb_invalid', 'Use one exact printable ASCII name without spaces, slashes or backslashes'), 'err'); return; }
+  const draft = kernelWakeupDraft().slice();
+  if (draft.indexOf(name) >= 0) { toast(T('kernel_wb_duplicate', 'This name is already in the list'), 'warn'); return; }
+  if (draft.length >= 16) { uiSound('error'); toast(T('kernel_wb_limit', 'The kernel accepts at most 16 rules'), 'err'); return; }
+  draft.push(name); _wbDraft = draft; cfgRender();
+}
+function kernelWakeupVerdict(v, count) {
+  if (v === 'applied') return T('kernel_wb_applied', 'Kernel readback matches · {n} rules').replace('{n}', count || '0');
+  const map = {
+    not_exposed:'kernel_state_not_exposed', not_writable:'kernel_state_read_only', not_readable:'kernel_state_not_readable',
+    invalid_name:'kernel_wb_invalid', too_many_rules:'kernel_wb_limit',
+    write_failed:'kc_verdict_write_failed', readback_mismatch:'kc_verdict_readback_mismatch',
+    policy_missing:'kernel_wb_policy_missing', policy_error:'kernel_wb_policy_error'
+  };
+  return T(map[v] || 't_cfg_err', map[v] ? (kernelStateText(v === 'not_writable' ? 'read_only' : v)) : 'Apply failed');
+}
+async function kernelWakeupSave(clearAll) {
+  if (_wbBusy) return;
+  const rules = clearAll ? [] : kernelWakeupDraft().slice();
+  if (rules.length > 16 || rules.some(function (n) { return !kernelWakeupValidName(n); })) {
+    toast(T('kernel_wb_invalid', 'Use one exact printable ASCII name without spaces, slashes or backslashes'), 'err'); return;
+  }
+  _wbBusy = true; cfgRender();
+  let r = null;
+  try {
+    r = await run('sh ' + shQuote(MD + '/runtime/asb_wakeup_blocker.sh') + ' set' + rules.map(function (n) { return ' ' + shQuote(n); }).join(''));
+  } catch (e) {}
+  const line = String(r && r.stdout || '').split(/\r?\n/).filter(function (x) { return x.indexOf('wakeup_blocker|') === 0; })[0] || '';
+  const p = line.split('|'), verdict = p[1] || 'failed';
+  if (!(verdict === 'invalid_name' || verdict === 'too_many_rules')) _wbDraft = null;
+  _wbBusy = false;
+  if (r && r.errno === 0 && verdict === 'applied') { haptic(); toast(kernelWakeupVerdict(verdict, p[2]), 'good'); }
+  else { uiSound('error'); toast(kernelWakeupVerdict(verdict, p[2]), verdict === 'not_exposed' ? 'warn' : 'err'); }
+  await kernelPanelLoad(true);
 }
 function cfgToastText(key, val) {
   var name = Tcfg(key, 'name', '') || key;
@@ -11976,7 +12285,7 @@ async function cfgSet(key, val, ctl) {
       // immediate and the popup confirmed nothing. Not a contradiction, but the one
       // place a user cannot tell a working setting from a silently ignored one.
       toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
-    } else if (['mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate'].indexOf(key) >= 0) {
+    } else if (['mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate','kernel_sched_stats'].indexOf(key) >= 0) {
       /* The kernel, not the saved config, decides whether this was applied. The helper's
        * scalar verdict is rendered as text; unsupported/read-only/mismatch never become success. */
       let kr = null;
@@ -11993,14 +12302,9 @@ async function cfgSet(key, val, ctl) {
         uiSound('error');
         toast(cfgToastText(key, val).replace(/^✓\s*/, '') + ' · ' + (kp[1] ? kst : T('t_cfg_err', 'apply failed')), 'err');
       }
-    } else if (key === 'mglru_hold' || key === 'kernel_sched_stats') {
-      /* Run the script that owns the node, then say it applied.
-       *
-       * Without its own branch this key fell through to the default, which prints "reboot
-       * to apply" - contradicting the card, which correctly says APPLY_LIVE. The card was
-       * right: asb_system_tweaks writes /sys/kernel/mm/lru_gen/min_ttl_ms directly and the
-       * value is readable back immediately. Nothing here needs a reboot; the popup was
-       * simply the only branch that had not been told. */
+    } else if (key === 'mglru_hold') {
+      /* MGLRU working-set protection remains owned by asb_system_tweaks. The four registered
+       * controls above use asb_kernel_controls and its explicit readback verdict instead. */
       try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_system_tweaks.sh >/dev/null 2>&1'); } catch (e) {}
       toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
     } else if (BLUR_KEYS.indexOf(key) >= 0) {
