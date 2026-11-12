@@ -4,6 +4,39 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev22 - panel-advertised LTPO decay and fatal-input handling
+
+Input: six older Infinite Log bundles, eight diagnostic/device exports and user reports about
+abrupt 165-to-60 Hz switching. The reports predate this source; each repeated symptom was
+checked against dev21 before changing code.
+
+- **Stepped idle decay uses only modes advertised by the current panel.** After the existing
+  quiet delay, the touch controller descends through unique advertised rates above the idle
+  target, highest first, with one blocking input wait per step. A panel reporting
+  60/90/120/165 can therefore follow 165 → 120 → 90 → 60; a panel reporting only 60/165 keeps
+  the direct transition. No 90/120 Hz mode is invented. `ltpo_idle_step_s` is internal,
+  defaults to one second and is bounded to 1–5 seconds. A touch at any step restores the panel
+  maximum immediately. Video ownership, camera/game guards and SurfaceFlinger release are
+  retained, including when camera/game state appears in the middle of decay.
+- **A broken input command is not inactivity.** `timeout` is required before ASB publishes
+  touch ownership. The watcher now distinguishes timeout status 124 from exec/device errors;
+  the latter restore the active peak and terminate instead of causing a false idle write or a
+  tight retry loop. Stop and cleanup still remove the PID, stop and heartbeat markers and
+  release a forced SurfaceFlinger mode.
+- **Old findings not patched again.** Repeated `60.0 -> 60 Hz` video records are already
+  rejected by dev21's locked current-value guard. `REFUSED=1` in the reports names the ROM's
+  non-writable `network_recommendations_enabled`, not an LTPO write failure. The aggregate
+  `readback_mismatch=1` does not identify a separate live defect in these exports. Unknown
+  screen-on refresh samples remain unknown rather than being filled with a guessed rate.
+
+Regression covers stepped and flat panels, duplicate modes, touch during decay, stepped video
+ownership, camera before and during decay, active/idle input errors, missing `timeout`,
+SurfaceFlinger force/release, cleanup and portable sleep. No new service, polling worker,
+mount, native component or per-app/SoC writer was added.
+
+This is host/runtime-fixture verification, not proof of a physical 1 Hz mode, measured power
+savings, or field validation on every ColorOS panel. No native source changed.
+
 ## V66 dev21 - Infirmary interruption cleanup and root-only observer policy files
 
 Input: the dev20 source, current device/Zygisk/asbdiag exports and detector screenshots. The
