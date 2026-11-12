@@ -900,6 +900,14 @@ Also in V66 dev8: screen-off records blocks drop from 40 to 20 minutes once thre
 
 Files: `/data/adb/asb/smart_lab.bin` (store), `/dev/.asb/smart_lab.txt` (summary: `knob|...`, `mem|...`, `now|...`), `/dev/.asb/lab_radio` (`nr` while 5G is allowed by the lab). Results are shown under "What Smart learned" and in asbdiag.
 
+### 🧹 11.19. Infirmary: Junk Cleanup (V66 dev32)
+
+**Settings → Infirmary → Cleanup → Junk Cleanup** is a manual scan-and-confirm repair, not a background cleaner. The WebUI calls only `sh runtime/asb_junk_cleanup.sh status` and `... run`; it accepts no path, filename or arbitrary shell argument. Scanning reads file metadata (`stat -c '%s'`), not file contents. Eleven result rows cover DropBox records, `tombstone_*`, ANR traces, `/cache/environment`, the package installer cache, the fixed Gaia/Magisk log paths, backup journals older than 24 hours, seven exact temporary-report names in `/data/local/tmp`, Linux trash, `.trashed-*` screenshots and ColorOS `*crash@*.txt[.gz]` records.
+
+Fixed roots are not accepted from the browser. `find` does not follow symlinks and uses `-xdev`; `/data/local/tmp` is never removed wholesale. Ordinary screenshots, recent tasks, unknown temporary files, OOST flags, controller settings, module state and working files are preserved. Trashed screenshots are permanently deleted only after a second tap within five seconds. A run lock rejects concurrent deletion; unreadable, busy, lock, empty, cleaned and partial outcomes remain distinct. No service, boot task or polling worker is added.
+
+Cleanup can recover the displayed number of bytes and remove diagnostic clutter. It is **not** evidence of a universal anti-lag repair: no FPS, responsiveness, battery or performance improvement is claimed without a comparable on-device A/B measurement. Host fixtures and browser tests do not establish physical ColorOS WebView behaviour.
+
 ## 🔐 12. Device information, privacy and evidence quality
 
 ### 🕵️ 12.1. Read-only, on-demand collection
