@@ -247,18 +247,6 @@ _ltpo_range_restore() {
   asb_ltpo_unlock
 }
 
-# --- OEM extreme-refresh unlock (dev17) ------------------------------------------------
-#
-# What the panel can do is a fact of the panel, not a wish: the OnePlus 15 advertises
-# 60/90/120/144/165 to SurfaceFlinger and nothing above, so 165 is the ceiling and a rate
-# the panel does not list (185 Hz, say) has no mode to select - ASB cannot invent one.
-#
-# The ROM is the other half. ColorOS keeps ordinary apps at 120 unless OnePlus's own
-# "extreme refresh" switch is unlocked; the two globals below are that switch, read from a
-# device's own settings dump. ASB flips ONLY the availability keys, never a force-global-on
-# key: the top mode becomes reachable, and the on-touch controller still drops the panel on
-# idle, so this stays an on-touch peak and not an always-high panel. The values present
-# before ASB touched them are recorded once and put back on Off or uninstall.
 XTR_ORIG="$STATE_DIR/ltpo_extreme.orig"
 ASB_LTPO_XTR_KEYS='oost_settings_unlock_refresh_rate oost_extreme_refresh_165'
 _xtr_get() { command -v asb_set_get >/dev/null 2>&1 && asb_set_get global "$1" || settings get global "$1" 2>/dev/null | sed 's/^null$//'; }
