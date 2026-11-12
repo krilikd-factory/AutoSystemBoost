@@ -487,6 +487,18 @@
     "ltpo_peak_force": {
       "name": "Maksimum panel saat disentuh",
       "desc": "Bekerja dengan «Paksa LTPO». Selama layar disentuh, SurfaceFlinger diminta mode tertinggi yang dilaporkan panel itu sendiri, melewati ROM yang menahan aplikasi biasa di 120 Hz. Batas atasnya adalah apa yang diumumkan panel — 165 Hz pada OnePlus 15; laju yang tidak tercantum dalam tabel mode panel tidak bisa dipilih, jadi ASB tidak pernah mengarangnya. Agar mode tertinggi itu benar-benar dapat dicapai, ASB juga membuka sakelar ketersediaan «refresh ekstrem» milik OnePlus; ASB tidak pernah memaksa panel tinggi sepanjang waktu, sehingga permintaan dilepas begitu pemantau sentuhan menganggur dan penurunan frame milik panel kembali. Sakelar yang dibuka dan rentang refresh direkam dan dipulihkan saat Nonaktif atau pencopotan. Memakai lebih banyak daya selama Anda menyentuh layar. ROM yang menolak permintaan, atau tidak memiliki sakelar seperti itu, dibiarkan apa adanya dan lencana menyatakannya."
+    },
+    "mglru_mode": {
+      "name": "Mode MGLRU",
+      "desc": "Hanya untuk node MGLRU yang dapat ditulis. Off meminta 0, On meminta 7, dan Smart memilih 5 atau 7 sesuai beban. Stock dan penghapusan memulihkan nilai awal yang tersimpan. Hasil baca yang berbeda dilaporkan sebagai kegagalan, bukan keberhasilan."
+    },
+    "kernel_timer_migration": {
+      "name": "Migrasi Timer",
+      "desc": "Mengontrol timer_migration melalui satu pemilik terbatas. Off meminta 0 dan On meminta 1. Stock dan penghapusan memulihkan nilai tersimpan. Node yang hilang, hanya-baca, atau hasil bacanya tidak cocok tidak disebut berhasil."
+    },
+    "kernel_sched_nr_migrate": {
+      "name": "Batch Migrasi Penjadwal",
+      "desc": "Membatasi tugas yang dipindahkan scheduler per tahap ke 1, 2, 4, 8, atau 16. Nilai 4 mempertahankan perilaku sebelumnya. Stock dan penghapusan memulihkan bilangan awal; node yang tidak tersedia dan hasil baca yang keluar ditampilkan apa adanya."
     }
   },
   "nav_live": "Monitor",
@@ -681,6 +693,25 @@
     "heytap_mcs": {
       "stock": "Standar",
       "off": "Mati"
+    },
+    "mglru_mode": {
+      "stock": "stock",
+      "off": "off",
+      "on": "on",
+      "smart": "Smart"
+    },
+    "kernel_timer_migration": {
+      "stock": "stock",
+      "off": "off",
+      "on": "on"
+    },
+    "kernel_sched_nr_migrate": {
+      "1": "1",
+      "2": "2",
+      "4": "4",
+      "8": "8",
+      "16": "16",
+      "stock": "stock"
     }
   },
   "prof_none": "belum dipilih",

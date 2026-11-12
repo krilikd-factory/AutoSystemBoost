@@ -514,6 +514,18 @@
     "ltpo_peak_force": {
       "name": "Massimo del pannello al tocco",
       "desc": "Funziona con «Forza LTPO». Mentre lo schermo viene toccato, a SurfaceFlinger viene richiesta la modalità più alta che il pannello stesso dichiara, aggirando una ROM che tiene le app normali a 120 Hz. Il limite è ciò che il pannello dichiara: 165 Hz sul OnePlus 15; una frequenza che il pannello non elenca nella sua tabella delle modalità non può essere selezionata, quindi ASB non la inventa mai. Per rendere davvero raggiungibile quella modalità massima, ASB sblocca anche gli interruttori di disponibilità del «refresh estremo» di OnePlus; non forza mai il pannello in alto di continuo, perciò la richiesta viene rilasciata non appena il controllo del tocco passa a riposo e torna il calo di fotogrammi proprio del pannello. Gli interruttori sbloccati e l’intervallo di refresh vengono registrati e ripristinati allo spegnimento o alla disinstallazione. Consuma più energia mentre tocchi lo schermo. Una ROM che rifiuta la richiesta, o che non ha tali interruttori, viene lasciata intatta e il badge lo segnala."
+    },
+    "mglru_mode": {
+      "name": "Modalità MGLRU",
+      "desc": "Funziona solo con un nodo MGLRU scrivibile. Off richiede 0, On richiede 7 e Smart sceglie 5 o 7 in base al carico. Stock e disinstallazione ripristinano il valore iniziale salvato. Una rilettura diversa è un errore, non un successo."
+    },
+    "kernel_timer_migration": {
+      "name": "Migrazione dei timer",
+      "desc": "Controlla timer_migration tramite un unico proprietario limitato. Off richiede 0 e On richiede 1. Stock e disinstallazione ripristinano il valore salvato. Nodo assente, sola lettura o rilettura errata non vengono presentati come applicazione riuscita."
+    },
+    "kernel_sched_nr_migrate": {
+      "name": "Batch di migrazione dello scheduler",
+      "desc": "Limita i task migrati per passaggio a 1, 2, 4, 8 o 16. Il valore 4 conserva il comportamento precedente. Stock e disinstallazione ripristinano l’intero iniziale; nodi non disponibili e riletture errate vengono segnalati chiaramente."
     }
   },
   "optFor": {
@@ -681,6 +693,25 @@
     "heytap_mcs": {
       "stock": "Predefinito",
       "off": "Disattivato"
+    },
+    "mglru_mode": {
+      "stock": "stock",
+      "off": "off",
+      "on": "on",
+      "smart": "Smart"
+    },
+    "kernel_timer_migration": {
+      "stock": "stock",
+      "off": "off",
+      "on": "on"
+    },
+    "kernel_sched_nr_migrate": {
+      "1": "1",
+      "2": "2",
+      "4": "4",
+      "8": "8",
+      "16": "16",
+      "stock": "stock"
     }
   },
   "prof_none": "non selezionato",

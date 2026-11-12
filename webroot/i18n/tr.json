@@ -487,6 +487,18 @@
     "ltpo_peak_force": {
       "name": "Dokunuşta panel azamisi",
       "desc": "«LTPO’yu Zorla» ile çalışır. Ekrana dokunulurken, sıradan uygulamaları 120 Hz’de tutan bir ROM’u aşarak SurfaceFlinger’dan panelin kendi bildirdiği en yüksek mod istenir. Tavan, panelin ilan ettiği değerdir — OnePlus 15’te 165 Hz; panelin mod tablosunda listelemediği bir hız seçilemez, bu yüzden ASB asla uydurmaz. O en üst modun gerçekten erişilebilir olması için ASB, OnePlus’ın kendi «aşırı yenileme» kullanılabilirlik anahtarlarını da açar; paneli hiçbir zaman sürekli yüksek tutmaz, bu nedenle dokunma gözcüsü boşa geçtiği anda istek bırakılır ve panelin kendi kare düşürmesi geri gelir. Açılan anahtarlar ve yenileme aralığı kaydedilir ve Kapat’ta veya kaldırmada geri yüklenir. Ekrana dokunduğunuz sürece daha fazla güç harcar. İsteği reddeden veya böyle anahtarları olmayan bir ROM’a dokunulmaz ve rozet bunu belirtir."
+    },
+    "mglru_mode": {
+      "name": "MGLRU Modu",
+      "desc": "Yalnızca yazılabilir MGLRU düğümünde çalışır. Kapalı 0, Açık 7 ister; Smart yüke göre 5 veya 7 seçer. Stok ve kaldırma kaydedilen ilk değeri geri yükler. Farklı okunan değer başarı değil hata olarak gösterilir."
+    },
+    "kernel_timer_migration": {
+      "name": "Zamanlayıcı Taşıma",
+      "desc": "timer_migration tek bir sınırlı sahip üzerinden yönetilir. Kapalı 0, Açık 1 ister. Stok ve kaldırma kaydedilen değeri geri yükler. Eksik, salt okunur veya yanlış okunan düğüm uygulanmış gibi gösterilmez."
+    },
+    "kernel_sched_nr_migrate": {
+      "name": "Zamanlayıcı Taşıma Grubu",
+      "desc": "Zamanlayıcının bir geçişte taşıdığı görevleri 1, 2, 4, 8 veya 16 ile sınırlar. 4 önceki davranışı korur. Stok ve kaldırma ilk tam sayıyı geri yükler; kullanılamayan düğümler ve okuma uyuşmazlıkları açıkça bildirilir."
     }
   },
   "nav_live": "İzleme",
@@ -681,6 +693,25 @@
     "heytap_mcs": {
       "stock": "Varsayılan",
       "off": "Kapalı"
+    },
+    "mglru_mode": {
+      "stock": "stok",
+      "off": "kapalı",
+      "on": "açık",
+      "smart": "Smart"
+    },
+    "kernel_timer_migration": {
+      "stock": "stok",
+      "off": "kapalı",
+      "on": "açık"
+    },
+    "kernel_sched_nr_migrate": {
+      "1": "1",
+      "2": "2",
+      "4": "4",
+      "8": "8",
+      "16": "16",
+      "stock": "stok"
     }
   },
   "prof_none": "seçilmedi",

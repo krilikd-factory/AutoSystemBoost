@@ -487,6 +487,18 @@
     "ltpo_peak_force": {
       "name": "Máximo del panel al tocar",
       "desc": "Funciona con «Forzar LTPO». Mientras se toca la pantalla, se pide a SurfaceFlinger el modo más alto que informa el propio panel, sorteando una ROM que mantiene las apps normales a 120 Hz. El techo es lo que anuncia el panel: 165 Hz en el OnePlus 15; una frecuencia que el panel no lista en su tabla de modos no puede seleccionarse, así que ASB nunca la inventa. Para que ese modo máximo sea realmente alcanzable, ASB también desbloquea los propios interruptores de disponibilidad de «frecuencia extrema» de OnePlus; nunca fuerza el panel alto todo el tiempo, por lo que la solicitud se libera en cuanto el vigilante del toque queda inactivo y vuelve la bajada de fotogramas propia del panel. Los interruptores desbloqueados y el rango de refresco se registran y se restauran al desactivar o desinstalar. Consume más energía mientras tocas la pantalla. Una ROM que rechaza la solicitud, o que no tiene esos interruptores, se deja intacta y la insignia lo indica."
+    },
+    "mglru_mode": {
+      "name": "Modo MGLRU",
+      "desc": "Solo con un nodo MGLRU escribible. Off solicita 0, On solicita 7 y Smart elige 5 o 7 según la carga. Stock y la desinstalación restauran el valor original guardado. Una lectura distinta se informa como error, no como éxito."
+    },
+    "kernel_timer_migration": {
+      "name": "Migración de temporizadores",
+      "desc": "Controla timer_migration mediante un único propietario limitado. Off solicita 0 y On solicita 1. Stock y la desinstalación restauran el valor guardado. Un nodo ausente, de solo lectura o con lectura incorrecta no se presenta como aplicado."
+    },
+    "kernel_sched_nr_migrate": {
+      "name": "Lote de migración del planificador",
+      "desc": "Limita las tareas migradas por pasada a 1, 2, 4, 8 o 16. El valor 4 conserva el comportamiento anterior. Stock y la desinstalación restauran el entero original; los nodos no disponibles y las lecturas incorrectas se muestran con honestidad."
     }
   },
   "nav_live": "Monitor",
@@ -681,6 +693,25 @@
     "heytap_mcs": {
       "stock": "Original",
       "off": "Desactivado"
+    },
+    "mglru_mode": {
+      "stock": "stock",
+      "off": "off",
+      "on": "on",
+      "smart": "Smart"
+    },
+    "kernel_timer_migration": {
+      "stock": "stock",
+      "off": "off",
+      "on": "on"
+    },
+    "kernel_sched_nr_migrate": {
+      "1": "1",
+      "2": "2",
+      "4": "4",
+      "8": "8",
+      "16": "16",
+      "stock": "stock"
     }
   },
   "prof_none": "sin seleccionar",

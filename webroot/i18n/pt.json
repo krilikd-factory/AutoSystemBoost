@@ -487,6 +487,18 @@
     "ltpo_peak_force": {
       "name": "Máximo do painel ao tocar",
       "desc": "Funciona com «Forçar LTPO». Enquanto a tela é tocada, pede-se ao SurfaceFlinger o modo mais alto que o próprio painel informa, contornando uma ROM que mantém os apps comuns a 120 Hz. O teto é o que o painel anuncia — 165 Hz no OnePlus 15; uma taxa que o painel não lista em sua tabela de modos não pode ser selecionada, então o ASB nunca inventa uma. Para tornar esse modo máximo realmente alcançável, o ASB também desbloqueia os próprios interruptores de disponibilidade de «atualização extrema» da OnePlus; ele nunca força o painel alto o tempo todo, então o pedido é liberado assim que o monitor de toque fica ocioso e a redução de quadros do próprio painel retorna. Os interruptores desbloqueados e a faixa de atualização são registrados e restaurados ao desligar ou desinstalar. Consome mais energia enquanto você toca a tela. Uma ROM que recusa o pedido, ou que não tem tais interruptores, é deixada intacta e o selo informa isso."
+    },
+    "mglru_mode": {
+      "name": "Modo MGLRU",
+      "desc": "Funciona apenas com um nó MGLRU gravável. Off solicita 0, On solicita 7 e Smart escolhe 5 ou 7 conforme a carga. Stock e a desinstalação restauram o valor original guardado. Uma leitura diferente é falha, não sucesso."
+    },
+    "kernel_timer_migration": {
+      "name": "Migração de temporizadores",
+      "desc": "Controla timer_migration por um único proprietário limitado. Off solicita 0 e On solicita 1. Stock e a desinstalação restauram o valor guardado. Nó ausente, só de leitura ou leitura incorreta não são apresentados como aplicação concluída."
+    },
+    "kernel_sched_nr_migrate": {
+      "name": "Lote de migração do agendador",
+      "desc": "Limita as tarefas migradas por passagem a 1, 2, 4, 8 ou 16. O valor 4 mantém o comportamento anterior. Stock e a desinstalação restauram o inteiro original; nós indisponíveis e leituras incorretas são mostrados honestamente."
     }
   },
   "nav_live": "Monitor",
@@ -681,6 +693,25 @@
     "heytap_mcs": {
       "stock": "Padrão",
       "off": "Desativado"
+    },
+    "mglru_mode": {
+      "stock": "stock",
+      "off": "off",
+      "on": "on",
+      "smart": "Smart"
+    },
+    "kernel_timer_migration": {
+      "stock": "stock",
+      "off": "off",
+      "on": "on"
+    },
+    "kernel_sched_nr_migrate": {
+      "1": "1",
+      "2": "2",
+      "4": "4",
+      "8": "8",
+      "16": "16",
+      "stock": "stock"
     }
   },
   "prof_none": "não selecionado",

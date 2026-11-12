@@ -582,6 +582,18 @@
     "ltpo_peak_force": {
       "name": "Maximum de l'écran au toucher",
       "desc": "Fonctionne avec « Forcer LTPO ». Pendant que l’écran est touché, SurfaceFlinger se voit demander le mode le plus élevé que la dalle elle-même signale, en contournant une ROM qui maintient les applications ordinaires à 120 Hz. Le plafond est ce que la dalle annonce — 165 Hz sur le OnePlus 15 ; une fréquence absente de la table des modes de la dalle ne peut pas être sélectionnée, donc ASB n’en invente jamais. Pour rendre ce mode maximal réellement accessible, ASB déverrouille aussi les propres bascules de disponibilité « rafraîchissement extrême » de OnePlus ; il ne force jamais la dalle en permanence, la demande est donc relâchée dès que le surveillant du toucher passe au repos et la baisse d’images propre à la dalle revient. Les bascules déverrouillées et la plage de rafraîchissement sont enregistrées et restaurées à l’arrêt ou à la désinstallation. Consomme plus d’énergie tant que vous touchez l’écran. Une ROM qui refuse la demande, ou qui n’a pas ces bascules, est laissée telle quelle et le badge l’indique."
+    },
+    "mglru_mode": {
+      "name": "Mode MGLRU",
+      "desc": "Fonctionne uniquement avec un nœud MGLRU accessible en écriture. Off demande 0, On demande 7 et Smart choisit 5 ou 7 selon la charge. Stock et la désinstallation restaurent la valeur initiale enregistrée. Une relecture différente est un échec, pas un succès."
+    },
+    "kernel_timer_migration": {
+      "name": "Migration des minuteurs",
+      "desc": "Contrôle timer_migration via un propriétaire unique et limité. Off demande 0 et On demande 1. Stock et la désinstallation restaurent la valeur enregistrée. Un nœud absent, en lecture seule ou mal relu ne sera pas présenté comme appliqué."
+    },
+    "kernel_sched_nr_migrate": {
+      "name": "Lot de migration de l’ordonnanceur",
+      "desc": "Limite les tâches migrées par passage à 1, 2, 4, 8 ou 16. La valeur 4 conserve le comportement précédent. Stock et la désinstallation restaurent l’entier initial ; les nœuds indisponibles et les relectures incorrectes sont signalés."
     }
   },
   "opt": {
@@ -771,6 +783,25 @@
     "heytap_mcs": {
       "stock": "stock",
       "off": "off"
+    },
+    "mglru_mode": {
+      "stock": "stock",
+      "off": "off",
+      "on": "on",
+      "smart": "Smart"
+    },
+    "kernel_timer_migration": {
+      "stock": "stock",
+      "off": "off",
+      "on": "on"
+    },
+    "kernel_sched_nr_migrate": {
+      "1": "1",
+      "2": "2",
+      "4": "4",
+      "8": "8",
+      "16": "16",
+      "stock": "stock"
     }
   },
   "prof_none": "non sélectionné",

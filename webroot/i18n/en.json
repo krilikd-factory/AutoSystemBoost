@@ -199,6 +199,25 @@
       "30": "−0.30 dB",
       "50": "−0.50 dB",
       "100": "−1.00 dB"
+    },
+    "mglru_mode": {
+      "stock": "stock",
+      "off": "off",
+      "on": "on",
+      "smart": "Smart"
+    },
+    "kernel_timer_migration": {
+      "stock": "stock",
+      "off": "off",
+      "on": "on"
+    },
+    "kernel_sched_nr_migrate": {
+      "1": "1",
+      "2": "2",
+      "4": "4",
+      "8": "8",
+      "16": "16",
+      "stock": "stock"
     }
   },
   "prof_none": "not selected",
@@ -536,6 +555,18 @@
     "ltpo_peak_force": {
       "name": "Panel Maximum on Touch",
       "desc": "Works with Force LTPO Refresh. While the screen is being touched, SurfaceFlinger is asked for the highest mode the panel itself reports, past a ROM that keeps ordinary apps at 120 Hz. The ceiling is whatever the panel advertises - 165 Hz on the OnePlus 15; a rate the panel does not list in its mode table cannot be selected, so ASB never invents one. To make that top mode actually reachable, ASB also unlocks OnePlus's own extreme-refresh availability toggles; it never forces the panel high all the time, so the request is still released the moment the touch watcher goes idle and the panel's own frame drop comes back. The unlocked toggles and the refresh range are recorded and restored on Off or uninstall. Costs more power while you touch the screen. A ROM that refuses the request, or has no such toggles, is left alone and the badge says so."
+    },
+    "mglru_mode": {
+      "name": "MGLRU Mode",
+      "desc": "Controls the standard MGLRU enabled bitmask only when the running kernel exposes it writable. Off requests 0, On requests 7, and Smart alone lets the Smart engine request 5 or 7 by load. Stock and uninstall restore the value captured before ASB first wrote it. Hex readback is compared numerically; a clamped value is reported as a mismatch, not success."
+    },
+    "kernel_timer_migration": {
+      "name": "Timer Migration",
+      "desc": "Controls /proc/sys/kernel/timer_migration through one bounded owner. Off requests 0 and preserves the previous ASB default; On requests 1. Stock and uninstall restore the captured pre-ASB value. The running kernel may not expose or permit the node; readback failure is shown instead of an applied claim."
+    },
+    "kernel_sched_nr_migrate": {
+      "name": "Scheduler Migration Batch",
+      "desc": "Bounds how many tasks the scheduler moves in one migration pass through the standard sched_nr_migrate node. Default 4 preserves the former balanced value; lower is not automatically better and higher is not automatically faster. Stock and uninstall restore the captured pre-ASB integer. Missing, read-only and mismatched nodes are reported honestly."
     }
   },
   "cfg_search": "Search",
