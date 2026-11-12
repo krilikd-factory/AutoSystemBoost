@@ -1323,9 +1323,14 @@ if [ -f "$_RPT" ]; then
   [ -n "$_ct" ] && printf 'charge\ttypes=%s\n' "$_ct"
   # LTPO video drop (fix206): "ltpo_video (lifetime): lowered N times, M min at the
   # lower rate, ..." - proof the panel savings actually engage.
-  _lt="$(sed -n 's/^ltpo_video (lifetime): lowered \([0-9][0-9]*\) times, \([0-9][0-9]*\) min at the lower rate.*/\1 \2/p' "$_RPT" 2>/dev/null | head -n 1)"
+  _lt="$(sed -n 's/^ltpo_video (capture): lowered \([0-9][0-9]*\) times, \([0-9][0-9]*\) min at the lower rate.*/\1 \2/p' "$_RPT" 2>/dev/null | head -n 1)"
+  _ltb=capture
+  if [ -z "$_lt" ]; then
+    _lt="$(sed -n 's/^ltpo_video (lifetime): lowered \([0-9][0-9]*\) times, \([0-9][0-9]*\) min at the lower rate.*/\1 \2/p' "$_RPT" 2>/dev/null | head -n 1)"
+    _ltb=lifetime
+  fi
   if [ -n "$_lt" ]; then
-    printf 'ltpo\tn=%s\tmin=%s\n' "${_lt% *}" "${_lt#* }"
+    printf 'ltpo\tn=%s\tmin=%s\tbasis=%s\n' "${_lt% *}" "${_lt#* }" "$_ltb"
   fi
   # Wi-Fi Leave's own action counters. A recovered failing streak is not a release and
   # none of these numbers proves a network or battery benefit.

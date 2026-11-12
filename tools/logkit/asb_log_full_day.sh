@@ -1493,6 +1493,18 @@ lk_emit_display_summary() {
     IFS='|' read -r _lvl _lvt _lvs < /data/adb/asb/ltpo_video.stats 2>/dev/null
     printf 'ltpo_video (lifetime): lowered %s times, %s min at the lower rate, %s restored by touch\n' \
       "${_lvl:-0}" "$(( ${_lvs:-0} / 60 ))" "${_lvt:-0}"
+    if [ -s "$LK_OUT_DIR/ltpo_video_stats_start.txt" ]; then
+      IFS='|' read -r _l0l _l0t _l0s < "$LK_OUT_DIR/ltpo_video_stats_start.txt" 2>/dev/null
+      case "${_lvl:-0}${_lvt:-0}${_lvs:-0}${_l0l:-0}${_l0t:-0}${_l0s:-0}" in
+        *[!0-9]*) : ;;
+        *)
+          _dl=$(( ${_lvl:-0} - ${_l0l:-0} )); _dt2=$(( ${_lvt:-0} - ${_l0t:-0} )); _ds=$(( ${_lvs:-0} - ${_l0s:-0} ))
+          if [ "$_dl" -ge 0 ] && [ "$_dt2" -ge 0 ] && [ "$_ds" -ge 0 ]; then
+            printf 'ltpo_video (capture): lowered %s times, %s min at the lower rate, %s restored by touch\n' \
+              "$_dl" "$(( _ds / 60 ))" "$_dt2"
+          fi ;;
+      esac
+    fi
   fi
   echo ""
 }
@@ -2175,6 +2187,10 @@ lk_fresh phase_ledger.tsv && printf '# phase\tstart\tend\tstart_pct\tend_pct\tma
 LK_TAG_BEFORE=before; LK_TAG_START=start
 [ "$LK_RESUME" = 1 ] && { LK_TAG_BEFORE=resume; LK_TAG_START=resume; }
 [ -s "$LK_OUT_DIR/zygisk_observer_start.tsv" ] || lk_zygisk_snapshot start
+if [ ! -s "$LK_OUT_DIR/ltpo_video_stats_start.txt" ]; then
+  if [ -s /data/adb/asb/ltpo_video.stats ]; then cp /data/adb/asb/ltpo_video.stats "$LK_OUT_DIR/ltpo_video_stats_start.txt" 2>/dev/null
+  else printf '0|0|0\n' > "$LK_OUT_DIR/ltpo_video_stats_start.txt" 2>/dev/null; fi
+fi
 lk_zygisk_snapshot latest
 
 # wakelock baseline + reset
