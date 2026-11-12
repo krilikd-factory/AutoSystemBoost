@@ -5552,6 +5552,7 @@ cat > "$T/mod/runtime/asb_kernel_controls.sh" <<'S'
 #!/bin/sh
 echo "$*" >> "$KC_LOG"
 printf '0x0001\n' > "$ASB_MGLRU_ENABLED_NODE"
+printf 'mglru_mode|readback_mismatch|smart|0x0001|0x0000\n'
 S
 tune() {
   ( MODE=smart HINT="$1" MODDIR="$T/mod" ASB_CONF="$T/mod/config/governor.conf" \
@@ -5574,6 +5575,124 @@ printf '0x0000\n' > "$T/node"
 tune 4
 [ "$(grep -c . "$T/kc.log")" -eq 3 ] || fail 'the tuner touched a manual MGLRU mode'
 echo 'PASS kernel controls single owner: no direct MGLRU writer, apply_vm/tweaks leave Smart to the tuner, clamped node not rewritten per run, Smart default 7'
+)
+
+t_kernel_controls_transient_retry_runtime() (
+# A failed first write must not poison the per-boot memo and suppress the retry.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL MGLRU transient retry: $*" >&2; exit 1; }
+mkdir -p "$T/mod/config" "$T/mod/runtime" "$T/memo"
+printf 'mglru_mode=smart\n' > "$T/mod/config/governor.conf"
+printf '0x0000\n' > "$T/node"
+sed -n '/^if \[ "\$MODE" != manual \] && \[ "\$(_cfg mglru_mode)" = smart \]; then$/,/^fi$/p' "$ROOT/runtime/smart_dynamic_tune.sh" > "$T/block.sh"
+cat > "$T/mod/runtime/asb_kernel_controls.sh" <<'S'
+#!/bin/sh
+echo "$*" >> "$KC_LOG"
+if [ ! -f "$KC_FAILED_ONCE" ]; then
+  : > "$KC_FAILED_ONCE"
+  printf 'mglru_mode|write_failed|smart|0x0000|0x0000\n'
+  exit 1
+fi
+printf '5\n' > "$ASB_MGLRU_ENABLED_NODE"
+printf 'mglru_mode|applied|smart|5|0x0000\n'
+S
+: > "$T/kc.log"
+tune() {
+  ( MODE=smart HINT=1 MODDIR="$T/mod" ASB_CONF="$T/mod/config/governor.conf"
+    ASB_MGLRU_ENABLED_NODE="$T/node" ASB_MGLRU_MEMO_DIR="$T/memo"
+    KC_LOG="$T/kc.log" KC_FAILED_ONCE="$T/failed-once"
+    export MODDIR ASB_CONF ASB_MGLRU_ENABLED_NODE KC_LOG KC_FAILED_ONCE
+    _cfg() { grep -E "^[[:space:]]*$1=" "$ASB_CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r'; }
+    . "$T/block.sh" )
+}
+tune
+[ "$(cat "$T/node")" = 0x0000 ] && [ ! -e "$T/memo/lru_gen_took_5" ] || fail 'failure was memoized'
+tune
+[ "$(cat "$T/node")" = 5 ] && [ "$(cat "$T/memo/lru_gen_took_5")" = 5 ] || fail 'the retry did not apply and memoize 5'
+tune
+[ "$(grep -c . "$T/kc.log")" -eq 2 ] || fail "a stable success was not memoized: $(cat "$T/kc.log")"
+echo 'PASS MGLRU transient retry: write_failed is not memoized, the second pass applies 5, the third is a no-op'
+)
+
+t_wakeup_blocker_runtime() (
+# Emulate the bounded kernel command node while running the production shell owner.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+W="$ROOT/runtime/asb_wakeup_blocker.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL wakeup blocker: $*" >&2; exit 1; }
+mkdir -p "$T/mod/config" "$T/mod/runtime"
+cp "$W" "$T/mod/runtime/"
+: > "$T/mod/config/wakeup_blocklist.conf"
+: > "$T/node"; : > "$T/state"; printf '0\n' > "$T/events"
+cat > "$T/env.sh" <<'S'
+printf() {
+  if [ "${1:-}" = 'clear\n' ]; then
+    : > "$WB_STATE"
+    return 0
+  fi
+  case "${1:-}" in
+    'add %s\n')
+      if [ -n "${WB_FAIL_ON:-}" ] && [ "$2" = "$WB_FAIL_ON" ]; then return 1; fi
+      command printf '%s\n' "$2" >> "$WB_STATE"
+      return 0
+      ;;
+  esac
+  command printf "$@"
+}
+cmp() {
+  if [ "${3:-}" = "$ASB_WAKEUP_BLOCKLIST_NODE" ]; then
+    command cmp -s "$2" "$WB_STATE"
+  else
+    command cmp "$@"
+  fi
+}
+cat() {
+  if [ "${1:-}" = "$ASB_WAKEUP_BLOCKLIST_NODE" ]; then
+    command cat "$WB_STATE"
+  else
+    command cat "$@"
+  fi
+}
+S
+run() {
+  BASH_ENV="$T/env.sh" WB_STATE="$T/state" WB_FAIL_ON="${WB_FAIL_ON:-}" \
+    MODDIR="$T/mod" ASB_WAKEUP_BLOCKLIST_NODE="$T/node" \
+    ASB_WAKEUP_POLICY="$T/mod/config/wakeup_blocklist.conf" \
+    ASB_WAKEUP_EVENTS_NODE="$T/events" bash "$W" "$@"
+}
+out="$(run apply)"
+[ "$out" = 'wakeup_blocker|applied|0|' ] && [ ! -s "$T/state" ] || fail "empty default apply: $out"
+printf 'wlan_wow_wl\nNETLINK\n' > "$T/mod/config/wakeup_blocklist.conf"
+out="$(run apply)"
+[ "$out" = 'wakeup_blocker|applied|2|' ] || fail "apply verdict: $out"
+printf 'wlan_wow_wl\nNETLINK\n' > "$T/expected"
+cmp -s "$T/state" "$T/expected" || fail 'exact names were not applied in order'
+printf 'wlan_wow_wl\nwlan_wow_wl\nNETLINK\n' > "$T/mod/config/wakeup_blocklist.conf"
+out="$(run apply)"; [ "$out" = 'wakeup_blocker|applied|2|' ] || fail 'duplicates were not bounded'
+printf 'bad/name\n' > "$T/mod/config/wakeup_blocklist.conf"
+set +e; out="$(run apply)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && [ "$out" = 'wakeup_blocker|invalid_name||' ] || fail "unsafe name accepted: $out"
+printf 'wlan_wow_wl\nNETLINK\n' > "$T/mod/config/wakeup_blocklist.conf"
+WB_FAIL_ON=NETLINK run apply >/dev/null 2>&1 && fail 'injected write failure returned success' || true
+[ ! -s "$T/state" ] || fail 'a partial apply was not rolled back to empty'
+out="$(run apply)"; [ "$out" = 'wakeup_blocker|applied|2|' ] || fail 'recovery after rollback failed'
+out="$(run clear)"; [ "$out" = 'wakeup_blocker|cleared|empty|' ] && [ ! -s "$T/state" ] || fail 'clear/readback failed'
+printf '17\n' > "$T/events"; out="$(run status)"
+printf '%s\n' "$out" | grep -q 'blocked_events=17' || fail "status omitted kernel counter: $out"
+set +e; out="$(MODDIR="$T/mod" ASB_WAKEUP_BLOCKLIST_NODE="$T/missing" sh "$W" apply)"; rc=$?; set -e
+[ "$rc" -eq 2 ] && [ "$out" = 'wakeup_blocker|not_exposed||' ] || fail "unsupported kernel was reported as applied: $rc $out"
+i=0; : > "$T/mod/config/wakeup_blocklist.conf"
+while [ "$i" -lt 17 ]; do printf 'rule%s\n' "$i" >> "$T/mod/config/wakeup_blocklist.conf"; i=$((i+1)); done
+set +e; out="$(run apply)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && [ "$out" = 'wakeup_blocker|too_many_rules||' ] || fail 'rule limit not enforced'
+[ ! -s "$ROOT/config/wakeup_blocklist.conf" ] || fail 'shipped default policy is not empty'
+grep -Fq 'asb_wakeup_blocker.sh" clear' "$ROOT/uninstall.sh" "$ROOT/runtime/asb_watchdog.sh" "$ROOT/service.sh" || fail 'Safe mode/uninstall clear path missing'
+grep -Fq 'asb_wakeup_blocker.sh" apply' "$ROOT/service.sh" || fail 'boot apply path missing'
+! grep -Eq 'sleep|while true' "$W" || fail 'a polling worker appeared'
+echo 'PASS wakeup blocker: empty default, exact apply/readback, dedupe, bounds, rollback, clear, status and not_exposed'
 )
 
 t_phantom_stock_restore_runtime() (
