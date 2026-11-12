@@ -1023,7 +1023,7 @@ if [ -d "$_tdir" ]; then
     fi
     if [ "$_mt" -gt "$_clt" ]; then
       _clt="$_mt"
-      _cl="$(grep -m1 '^Cmdline:' "$_f" 2>/dev/null | sed 's/^Cmdline:[ ]*//' | tr '\t' ' ' | cut -c1-40)"
+      _cl="$(grep -m1 '^Cmdline:' "$_f" 2>/dev/null | sed 's/^Cmdline:[ ]*//' | awk '{ print $1 }' | cut -c1-60)"
     fi
   done
 fi
