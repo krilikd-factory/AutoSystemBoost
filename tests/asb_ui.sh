@@ -8675,6 +8675,88 @@ out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
 echo "PASS webui infirmary: designed pharmacy button beside Reset in every theme; Battery Fix is a live three-step checklist (condition, app-by-app ART progress with ETA, verified statistics reset) whose button follows the state: run, stop, reboot to finish; stopped/interrupted/failed are named; polls fast only while compiling and only on screen"
 )
 
+t_webui_home_fit_after_parse_runtime() (
+# dev19: on opening, the profile cards were a fifth of the tab bar's height too tall (the last
+# one under the bar) and shrank a few seconds later. The locale can settle while the parser is
+# still behind the main script, before the tab bar <nav> after it exists; the Home reveal's fit
+# then found no bar and measured to the window bottom. A second, already queued fit then ran
+# inside the entrance animation and measured its scale. Measured in Chromium at 424x924: cards
+# 100 px, then 86 px; now 86 px from the first frame. The REAL functions run over mocks.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui home fit after parse: $*" >&2; exit 1; }
+python3 - "$H" <<'PY' || fail 'source contract'
+import sys
+s = open(sys.argv[1], encoding='utf-8').read()
+assert s.index('<nav class="asb-tabbar"') > s.index('function asbHomeReveal() {'), 'layout premise changed: the bar now precedes the script'
+rv = s[s.index('function asbHomeReveal() {'):s.index('// ── localized boot:')]
+assert rv.index("document.readyState === 'loading'") < rv.index('_asbHomeRevealed = true;'), 'the reveal can still run before the document is parsed'
+fit = s[s.index('function asbFitPagesNow() {'):s.index('const sizeCards = function', s.index('function asbFitPagesNow() {'))]
+assert "if (!bar && document.readyState === 'loading')" in fit, 'the fit still measures without a parsed bar'
+q = s[s.index('function asbFitPages() {'):s.index('function asbFitPagesNow() {')]
+assert q.count('_asbNavAnimUntil') == 2, 'the queued fit does not re-check a transition that started meanwhile'
+PY
+command -v node >/dev/null 2>&1 || { echo "SKIP webui home fit after parse runtime: no node"; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cat > "$T/t.js" <<'JS'
+const fs = require('fs'), h = fs.readFileSync(process.argv[2], 'utf8');
+let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
+const grab = (a, b) => { const i = h.indexOf(a); return h.slice(i, h.indexOf(b, i)); };
+let now = 0; const timers = [], rafs = [], dcl = [];
+global.performance = { now: () => now };
+global.setTimeout = (fn, ms) => { timers.push({ at: now + (ms || 0), fn }); };
+global.requestAnimationFrame = fn => { rafs.push(fn); };
+const rootCls = new Set(['asb-home-pending']), props = {};
+const home = { style: { transition: '' }, offsetWidth: 424, animate: () => { events.push('animate'); return { cancel() {}, set onfinish(f) {} }; } };
+let barParsed = false; const events = [];
+global.document = {
+  readyState: 'loading',
+  documentElement: { classList: { remove: c => rootCls.delete(c), add: c => rootCls.add(c), toggle() {} }, style: { setProperty: (k, v) => { props[k] = v; } } },
+  querySelector: sel => sel === '.page:not(.live-page)' ? home : (sel === '.asb-tabbar' && barParsed ? { getBoundingClientRect: () => ({ top: 840 }) } : null),
+  addEventListener: (t, fn) => { if (t === 'DOMContentLoaded') dcl.push(fn); },
+  body: { classList: { contains: () => false } }
+};
+global.window = { matchMedia: () => ({ matches: false }), addEventListener() {}, innerHeight: 924 };
+global.asbFirstFrameMark = () => {};
+global._pageAnimMs = () => 320;
+const parse = () => { document.readyState = 'interactive'; barParsed = true; dcl.splice(0).forEach(f => f()); };
+
+eval(grab('var _asbNavAnimUntil = 0;', 'function asbFitPagesNow() {'));
+let fits = [];
+global.asbFitPagesNow = () => { fits.push({ t: now, bar: !!document.querySelector('.asb-tabbar'), pending: rootCls.has('asb-home-pending') }); events.push('fit'); };
+eval(grab('let _asbHomeRevealed = false;', '// ── localized boot:'));
+asbHomeReveal(); asbHomeReveal();
+chk(fits.length === 0 && rootCls.has('asb-home-pending') && events.length === 0, 'Home was revealed and fitted before the document was parsed');
+chk(dcl.length === 1, 'the deferred reveal registered ' + dcl.length + ' waits');
+asbFitPages();
+parse();
+chk(fits.length === 1 && fits[0].bar && !fits[0].pending, 'the reveal fit did not run once, after parsing, with the bar present');
+chk(events.join('|') === 'fit|animate', 'fit must precede the entrance: ' + events.join('|'));
+const animEnd = _asbNavAnimUntil;
+for (let i = 0; i < 40 && (rafs.length || timers.length); i++) {
+  if (rafs.length) { now += 16; rafs.splice(0).forEach(f => f()); continue; }
+  const due = timers.sort((a, b) => a.at - b.at).shift();
+  now = Math.max(now, due.at); due.fn();
+}
+chk(animEnd >= 320, 'the entrance did not mark its transition window');
+chk(fits.length === 2 && fits[1].t >= animEnd - 8, 'the queued fit ran inside the entrance (at ' + (fits[1] && fits[1].t) + ' ms, entrance until ' + animEnd + ') or not at all: ' + fits.length);
+
+document.readyState = 'loading'; barParsed = false;
+global.getComputedStyle = () => ({ paddingBottom: '0', rowGap: '8', gap: '8' });
+eval(h.match(/^function asbFitPagesNow\(\) \{[\s\S]*?^\}/m)[0]);
+asbFitPagesNow(); asbFitPagesNow();
+chk(!('--pbtn-h' in props) && dcl.length === 1, 'the fit sized cards without a parsed bar, or queued several waits');
+let reran = 0; const real = asbFitPagesNow;
+global.asbFitPagesNow = asbFitPagesNow = function () { reran++; return real(); };
+parse();
+chk(reran === 1, 'the fit was not repeated once the document was parsed');
+process.exit(bad ? 1 : 0);
+JS
+node "$T/t.js" "$H" || fail 'runtime'
+echo "PASS webui home fit after parse: Home is revealed and fitted only once the tab bar is parsed (cards 86 px from the first frame, not 100 px then 86), a queued fit waits out the entrance animation"
+)
+
 t_webui_zygisk_save_runtime() (
 # Runtime (dev16): the Zygisk page saves like Device diagnostics and the report: the page as
 # shown, folded rows and the lazily built evidence list included, then every status output.
