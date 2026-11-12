@@ -12,6 +12,9 @@ MODDIR=${0%/*}
 if [ -f "$MODDIR/runtime/asb_kernel_controls.sh" ]; then
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_kernel_controls.sh" restore >/dev/null 2>&1 || true
 fi
+if [ -f "$MODDIR/runtime/asb_wakeup_blocker.sh" ]; then
+  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wakeup_blocker.sh" clear >/dev/null 2>&1 || true
+fi
 
 _ASB_FWQ=/data/local/tmp/asb_uninstall_fw.sh
 rm -f "$_ASB_FWQ" 2>/dev/null

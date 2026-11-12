@@ -67,6 +67,16 @@ elif [ -f /data/adb/asb/v56_learning_reset_done ] && [ ! -f /data/adb/asb/v56_re
   true > /data/adb/asb/v56_resurrect_sweep_done 2>/dev/null
 fi
 
+# Explicit kernel wakeup-source policy: one boot-time apply, no worker. Safe mode
+# always returns the kernel list to empty; an unsupported kernel reports not_exposed.
+if [ -f "$MODDIR/runtime/asb_wakeup_blocker.sh" ]; then
+  if [ -f /dev/.asb/safe_mode ]; then
+    MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wakeup_blocker.sh" clear >/dev/null 2>&1 || true
+  else
+    MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wakeup_blocker.sh" apply >/dev/null 2>&1 || true
+  fi
+fi
+
 # Build capability-derived policy before asb_utils.sh starts the native governor.  These
 # probes are read-only and bounded; a failed probe leaves the derived manifest inactive.
 [ -f "$MODDIR/tools/asb_discover.sh" ] && sh "$MODDIR/tools/asb_discover.sh" >/dev/null 2>&1
