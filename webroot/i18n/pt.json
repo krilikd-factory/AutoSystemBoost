@@ -499,6 +499,24 @@
     "kernel_sched_nr_migrate": {
       "name": "Lote de migração do agendador",
       "desc": "Limita as tarefas migradas por passagem a 1, 2, 4, 8 ou 16. O valor 4 mantém o comportamento anterior. Stock e a desinstalação restauram o inteiro original; nós indisponíveis e leituras incorretas são mostrados honestamente."
+    },
+    "kernel_sched_autogroup": {
+      "name": "Autogrupo do agendador",
+      "desc": "Controla sched_autogroup_enabled apenas quando gravável. Ligado ativa o agrupamento automático de tarefas e Desligado desativa-o. A resposta e as tarefas em segundo plano podem mudar, sem ganhos garantidos. Stock e a desinstalação restauram o valor 0/1 anterior ao ASB.",
+      "descOpt": {
+        "stock": "Não alterar o agrupamento automático do agendador.",
+        "off": "Desativar o agrupamento automático de tarefas.",
+        "on": "Ativar o agrupamento automático de tarefas."
+      }
+    },
+    "kernel_sched_child_runs_first": {
+      "name": "Processo filho primeiro",
+      "desc": "Controla sched_child_runs_first apenas quando gravável. Ligado executa o novo processo filho antes do pai; Desligado escolhe a política oposta. Pode afetar a latência e o arranque de processos, mas não é uma melhoria universal. Stock e a desinstalação restauram o valor 0/1 anterior ao ASB.",
+      "descOpt": {
+        "stock": "Não alterar a política do processo filho.",
+        "off": "Não solicitar a execução prioritária do processo filho.",
+        "on": "Executar o processo filho antes do pai."
+      }
     }
   },
   "nav_live": "Monitor",
@@ -1367,7 +1385,7 @@
   "grp_iface_desc": "Animações, desfoque",
   "grp_net_desc": "Wi-Fi, LTE, filas",
   "grp_battery_desc": "Smart, Doze, calor, RAM",
-  "grp_ui_desc": "Serviços, LTPO, vibração",
+  "grp_ui_desc": "Kernel, serviços, LTPO, resposta tátil",
   "stock_cpu_ceiling": "Teto da CPU",
   "stock_gpu_clock": "Clock da GPU",
   "stock_bat_temp": "Temp. bateria",
@@ -3115,14 +3133,10 @@
   "dev_kernel_features_usb_arsenal": "USB Arsenal (suporte a gadget)",
   "dev_kernel_features_net_sch_cake": "Disciplina de fila CAKE",
   "lr_ltpo_life": "LTPO para vídeo (desde sempre)",
-  "grp_kernel": "Kernel",
-  "grp_kernel_desc": "Controles, despertares e suporte",
-  "cfg_kernel_section_controls": "Controles do kernel em tempo real",
-  "cfg_kernel_section_controls_hint": "A disponibilidade vem da interface real do kernel, não do valor selecionado.",
+  "cfg_kernel_section_controls": "Gestão do kernel",
+  "cfg_kernel_section_controls_hint": "Apenas interfaces registadas e graváveis são controladas aqui. A disponibilidade e a leitura real vêm do kernel em execução.",
   "cfg_kernel_section_wakeup": "Bloqueio de fontes de despertar",
   "cfg_kernel_section_wakeup_hint": "Lista opcional de nomes exatos para um kernel com interface ASB. Vazia por padrão.",
-  "cfg_kernel_section_caps": "Recursos do kernel",
-  "cfg_kernel_section_caps_hint": "Evidência somente de leitura. Não são interruptores nem provam que um recurso está ativo.",
   "kernel_state_available": "Disponível",
   "kernel_state_not_exposed": "Este kernel não expõe a interface",
   "kernel_state_not_readable": "Não legível",
@@ -3132,10 +3146,6 @@
   "kernel_state_configured": "Configurado; estado de execução desconhecido",
   "kernel_state_module_unloaded": "Configurado; módulo não carregado",
   "kernel_state_loading": "Verificando…",
-  "kernel_caps_title": "Suporte neste kernel",
-  "kernel_caps_sub": "Lido uma vez ao abrir esta página. Configuração da compilação e uso em execução são fatos diferentes.",
-  "kernel_cap_support": "suporte do kernel",
-  "kernel_caps_note": "O CAKE é configurado nos ajustes de Rede. O Re-Kernel é usado por um congelador externo compatível. O SDP não tem interface de escrita confirmada, portanto o ASB não oferece uma chave de corrente.",
   "kernel_refresh": "Atualizar estado",
   "kernel_wb_title": "Regras de despertar por nome exato",
   "kernel_wb_sub": "Até 16 nomes, cada um com 1–63 caracteres ASCII imprimíveis. Sem espaços, caminhos, padrões ou regras automáticas.",
@@ -3196,5 +3206,7 @@
   "junk_done": "Removidos: {count} · {size} libertados",
   "junk_partial": "Nem tudo foi removido; categorias com falha: {count}",
   "junk_partial_chip": "Parcial",
-  "junk_cleaned": "Limpo"
+  "junk_cleaned": "Limpo",
+  "kernel_controls_help": "Cada interruptor escreve apenas na interface padrão do kernel indicada. Stock restaura o valor guardado antes da primeira escrita do ASB. Interfaces ausentes ou só de leitura ficam desativadas; uma leitura diferente é relatada como divergência, não como sucesso.",
+  "kernel_open_diagnostics": "Abrir diagnóstico do dispositivo"
 }

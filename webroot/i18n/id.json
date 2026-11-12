@@ -499,6 +499,24 @@
     "kernel_sched_nr_migrate": {
       "name": "Batch Migrasi Penjadwal",
       "desc": "Membatasi tugas yang dipindahkan scheduler per tahap ke 1, 2, 4, 8, atau 16. Nilai 4 mempertahankan perilaku sebelumnya. Stock dan penghapusan memulihkan bilangan awal; node yang tidak tersedia dan hasil baca yang keluar ditampilkan apa adanya."
+    },
+    "kernel_sched_autogroup": {
+      "name": "Autogroup penjadwal",
+      "desc": "Mengendalikan sched_autogroup_enabled hanya jika dapat ditulis. Aktif mengaktifkan pengelompokan tugas otomatis, Nonaktif mematikannya. Respons dan tugas latar dapat berubah, tetapi peningkatan performa atau baterai tidak dijamin. Stock dan pencopotan memulihkan nilai 0/1 sebelum ASB.",
+      "descOpt": {
+        "stock": "Biarkan pengelompokan otomatis tidak berubah.",
+        "off": "Nonaktifkan pengelompokan tugas otomatis.",
+        "on": "Aktifkan pengelompokan tugas otomatis."
+      }
+    },
+    "kernel_sched_child_runs_first": {
+      "name": "Proses anak lebih dulu",
+      "desc": "Mengendalikan sched_child_runs_first hanya jika dapat ditulis. Aktif menjalankan proses anak baru sebelum induknya; Nonaktif memilih kebijakan sebaliknya. Latensi dan permulaan proses dapat terpengaruh, tetapi ini bukan peningkatan universal. Stock dan pencopotan memulihkan nilai 0/1 sebelum ASB.",
+      "descOpt": {
+        "stock": "Biarkan kebijakan proses anak tidak berubah.",
+        "off": "Jangan meminta proses anak berjalan lebih dulu.",
+        "on": "Jalankan proses anak sebelum proses induk."
+      }
     }
   },
   "nav_live": "Monitor",
@@ -1367,7 +1385,7 @@
   "grp_iface_desc": "Animasi, blur",
   "grp_net_desc": "Wi-Fi, LTE, antrean",
   "grp_battery_desc": "Smart, Doze, panas, RAM",
-  "grp_ui_desc": "Layanan, LTPO, getaran",
+  "grp_ui_desc": "Kernel, layanan, LTPO, haptik",
   "stock_cpu_ceiling": "Batas CPU",
   "stock_gpu_clock": "Clock GPU",
   "stock_bat_temp": "Suhu baterai",
@@ -3115,14 +3133,10 @@
   "dev_kernel_features_usb_arsenal": "USB Arsenal (dukungan gadget)",
   "dev_kernel_features_net_sch_cake": "Disiplin antrean CAKE",
   "lr_ltpo_life": "LTPO untuk video (sepanjang waktu)",
-  "grp_kernel": "Kernel",
-  "grp_kernel_desc": "Kontrol langsung, wakeup, dukungan",
-  "cfg_kernel_section_controls": "Kontrol kernel langsung",
-  "cfg_kernel_section_controls_hint": "Ketersediaan berasal dari antarmuka kernel sebenarnya, bukan dari nilai yang dipilih.",
+  "cfg_kernel_section_controls": "Pengelolaan kernel",
+  "cfg_kernel_section_controls_hint": "Hanya antarmuka terdaftar yang dapat ditulis yang dikendalikan di sini. Ketersediaan dan nilai aktual dibaca dari kernel yang berjalan.",
   "cfg_kernel_section_wakeup": "Pemblokir sumber wakeup",
   "cfg_kernel_section_wakeup_hint": "Daftar nama persis opsional untuk kernel dengan antarmuka wakeup ASB. Kosong secara default.",
-  "cfg_kernel_section_caps": "Fasilitas kernel",
-  "cfg_kernel_section_caps_hint": "Bukti dukungan hanya-baca. Ini bukan sakelar dan tidak membuktikan fasilitas sedang aktif.",
   "kernel_state_available": "Tersedia",
   "kernel_state_not_exposed": "Kernel ini tidak menyediakan antarmuka",
   "kernel_state_not_readable": "Tidak dapat dibaca",
@@ -3132,10 +3146,6 @@
   "kernel_state_configured": "Dikonfigurasi; status runtime tidak diketahui",
   "kernel_state_module_unloaded": "Dikonfigurasi; modul belum dimuat",
   "kernel_state_loading": "Memeriksa…",
-  "kernel_caps_title": "Dukungan pada kernel ini",
-  "kernel_caps_sub": "Dibaca sekali saat halaman dibuka. Konfigurasi build dan penggunaan runtime adalah fakta berbeda.",
-  "kernel_cap_support": "dukungan kernel",
-  "kernel_caps_note": "CAKE diatur di pengaturan Jaringan. Re-Kernel digunakan oleh freezer eksternal yang kompatibel. SDP tidak memiliki antarmuka tulis terkonfirmasi, jadi ASB tidak menawarkan sakelar arus.",
   "kernel_refresh": "Segarkan status",
   "kernel_wb_title": "Aturan wakeup dengan nama persis",
   "kernel_wb_sub": "Hingga 16 nama, masing-masing 1–63 karakter ASCII yang dapat dicetak. Tanpa spasi, path, pola, atau aturan otomatis.",
@@ -3196,5 +3206,7 @@
   "junk_done": "Dihapus: {count} · ruang dibebaskan {size}",
   "junk_partial": "Tidak semua terhapus; kategori gagal: {count}",
   "junk_partial_chip": "Sebagian",
-  "junk_cleaned": "Dibersihkan"
+  "junk_cleaned": "Dibersihkan",
+  "kernel_controls_help": "Setiap sakelar hanya menulis ke antarmuka kernel standar yang disebutkan. Stock memulihkan nilai yang disimpan sebelum ASB pertama kali menulis. Antarmuka yang hilang atau hanya-baca dinonaktifkan; hasil baca berbeda dilaporkan sebagai ketidakcocokan, bukan keberhasilan.",
+  "kernel_open_diagnostics": "Buka Diagnostik Perangkat"
 }

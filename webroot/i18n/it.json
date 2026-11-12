@@ -526,6 +526,24 @@
     "kernel_sched_nr_migrate": {
       "name": "Batch di migrazione dello scheduler",
       "desc": "Limita i task migrati per passaggio a 1, 2, 4, 8 o 16. Il valore 4 conserva il comportamento precedente. Stock e disinstallazione ripristinano l’intero iniziale; nodi non disponibili e riletture errate vengono segnalati chiaramente."
+    },
+    "kernel_sched_autogroup": {
+      "name": "Autogroup dello scheduler",
+      "desc": "Controlla sched_autogroup_enabled solo se scrivibile. Attivo abilita il raggruppamento automatico dei task, Disattivo lo disabilita. Reattività e attività in background possono cambiare, senza garanzia di prestazioni o autonomia migliori. Stock e disinstallazione ripristinano il valore 0/1 precedente ad ASB.",
+      "descOpt": {
+        "stock": "Non modificare il raggruppamento automatico.",
+        "off": "Disabilita il raggruppamento automatico dei task.",
+        "on": "Abilita il raggruppamento automatico dei task."
+      }
+    },
+    "kernel_sched_child_runs_first": {
+      "name": "Processo figlio per primo",
+      "desc": "Controlla sched_child_runs_first solo se scrivibile. Attivo esegue il nuovo processo figlio prima del padre; Disattivo sceglie la politica opposta. Può influire su latenza e avvio dei processi, ma non è un miglioramento universale. Stock e disinstallazione ripristinano il valore 0/1 precedente ad ASB.",
+      "descOpt": {
+        "stock": "Non modificare la priorità del processo figlio.",
+        "off": "Non richiedere l’esecuzione prioritaria del processo figlio.",
+        "on": "Esegue il processo figlio prima del padre."
+      }
     }
   },
   "optFor": {
@@ -1367,7 +1385,7 @@
   "grp_iface_desc": "Animazioni, sfocatura",
   "grp_net_desc": "Wi-Fi, LTE, code",
   "grp_battery_desc": "Smart, Doze, calore, RAM",
-  "grp_ui_desc": "Servizi, LTPO, vibrazione",
+  "grp_ui_desc": "Kernel, servizi, LTPO, vibrazione",
   "stock_cpu_ceiling": "Tetto CPU",
   "stock_gpu_clock": "Frequenza GPU",
   "stock_bat_temp": "Temp. batteria",
@@ -3115,14 +3133,10 @@
   "dev_kernel_features_usb_arsenal": "USB Arsenal (supporto gadget)",
   "dev_kernel_features_net_sch_cake": "Disciplina di coda CAKE",
   "lr_ltpo_life": "LTPO per video (da sempre)",
-  "grp_kernel": "Kernel",
-  "grp_kernel_desc": "Controlli live, wakeup e supporto",
-  "cfg_kernel_section_controls": "Controlli del kernel in tempo reale",
-  "cfg_kernel_section_controls_hint": "La disponibilità deriva dall’interfaccia effettiva del kernel, non dal valore selezionato.",
+  "cfg_kernel_section_controls": "Gestione del kernel",
+  "cfg_kernel_section_controls_hint": "Qui vengono controllate solo interfacce registrate e scrivibili. Disponibilità e valore reale provengono dal kernel in esecuzione.",
   "cfg_kernel_section_wakeup": "Blocco delle sorgenti di wakeup",
   "cfg_kernel_section_wakeup_hint": "Elenco opzionale di nomi esatti per kernel con interfaccia wakeup ASB. Vuoto per impostazione predefinita.",
-  "cfg_kernel_section_caps": "Funzionalità del kernel",
-  "cfg_kernel_section_caps_hint": "Evidenze di supporto in sola lettura. Non sono interruttori e non provano che una funzione sia attiva.",
   "kernel_state_available": "Disponibile",
   "kernel_state_not_exposed": "Questo kernel non espone l’interfaccia",
   "kernel_state_not_readable": "Non leggibile",
@@ -3132,10 +3146,6 @@
   "kernel_state_configured": "Configurato; stato runtime sconosciuto",
   "kernel_state_module_unloaded": "Configurato; modulo non caricato",
   "kernel_state_loading": "Verifica…",
-  "kernel_caps_title": "Supporto in questo kernel",
-  "kernel_caps_sub": "Letto una volta all’apertura della pagina. Configurazione di build e uso runtime sono fatti distinti.",
-  "kernel_cap_support": "supporto del kernel",
-  "kernel_caps_note": "CAKE si configura nelle impostazioni Rete. Re-Kernel è usato da un freezer esterno compatibile. SDP non ha un’interfaccia scrivibile confermata, quindi ASB non offre un interruttore di corrente.",
   "kernel_refresh": "Aggiorna stato",
   "kernel_wb_title": "Regole wakeup con nomi esatti",
   "kernel_wb_sub": "Fino a 16 nomi, ciascuno di 1–63 caratteri ASCII stampabili. Senza spazi, percorsi, schemi o regole automatiche.",
@@ -3196,5 +3206,7 @@
   "junk_done": "Rimossi: {count} · liberati {size}",
   "junk_partial": "Non tutto è stato rimosso; categorie non riuscite: {count}",
   "junk_partial_chip": "Parziale",
-  "junk_cleaned": "Pulito"
+  "junk_cleaned": "Pulito",
+  "kernel_controls_help": "Ogni interruttore scrive solo nella propria interfaccia kernel standard indicata. Stock ripristina il valore salvato prima della prima scrittura di ASB. Le interfacce assenti o di sola lettura sono disattivate; una rilettura diversa è segnalata come mancata corrispondenza, non come successo.",
+  "kernel_open_diagnostics": "Apri diagnostica dispositivo"
 }

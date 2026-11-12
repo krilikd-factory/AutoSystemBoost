@@ -499,6 +499,24 @@
     "kernel_sched_nr_migrate": {
       "name": "Zamanlayıcı Taşıma Grubu",
       "desc": "Zamanlayıcının bir geçişte taşıdığı görevleri 1, 2, 4, 8 veya 16 ile sınırlar. 4 önceki davranışı korur. Stok ve kaldırma ilk tam sayıyı geri yükler; kullanılamayan düğümler ve okuma uyuşmazlıkları açıkça bildirilir."
+    },
+    "kernel_sched_autogroup": {
+      "name": "Zamanlayıcı otomatik grubu",
+      "desc": "sched_autogroup_enabled anahtarını yalnızca yazılabilir olduğunda denetler. Açık otomatik görev gruplandırmasını etkinleştirir, Kapalı devre dışı bırakır. Yanıt ve arka plan görevleri değişebilir; performans veya pil kazancı garanti edilmez. Stock ve kaldırma, ASB öncesi 0/1 değerini geri yükler.",
+      "descOpt": {
+        "stock": "Otomatik zamanlayıcı gruplandırmasını değiştirme.",
+        "off": "Otomatik görev gruplandırmasını kapat.",
+        "on": "Otomatik görev gruplandırmasını aç."
+      }
+    },
+    "kernel_sched_child_runs_first": {
+      "name": "Alt işlem önce çalışır",
+      "desc": "sched_child_runs_first anahtarını yalnızca yazılabilir olduğunda denetler. Açık, yeni alt işlemin üst işlemden önce çalışmasını ister; Kapalı ters ilkeyi seçer. Gecikme ve işlem başlangıcı etkilenebilir, ancak bu evrensel bir iyileştirme değildir. Stock ve kaldırma, ASB öncesi 0/1 değerini geri yükler.",
+      "descOpt": {
+        "stock": "Alt işlem önceliği ilkesini değiştirme.",
+        "off": "Alt işlemin önce çalışmasını isteme.",
+        "on": "Alt işlemi üst işlemden önce çalıştır."
+      }
     }
   },
   "nav_live": "İzleme",
@@ -1367,7 +1385,7 @@
   "grp_iface_desc": "Animasyonlar, bulanıklık",
   "grp_net_desc": "Wi-Fi, LTE, kuyruklar",
   "grp_battery_desc": "Smart, Doze, ısı, RAM",
-  "grp_ui_desc": "Servisler, LTPO, titreşim",
+  "grp_ui_desc": "Çekirdek, hizmetler, LTPO, dokunsal geri bildirim",
   "stock_cpu_ceiling": "CPU tavanı",
   "stock_gpu_clock": "GPU saati",
   "stock_bat_temp": "Pil sıcaklığı",
@@ -3115,14 +3133,10 @@
   "dev_kernel_features_usb_arsenal": "USB Arsenal (gadget desteği)",
   "dev_kernel_features_net_sch_cake": "CAKE kuyruk disiplini",
   "lr_ltpo_life": "Video için LTPO (tüm zamanlar)",
-  "grp_kernel": "Çekirdek",
-  "grp_kernel_desc": "Canlı kontroller, uyandırmalar, destek",
-  "cfg_kernel_section_controls": "Canlı çekirdek kontrolleri",
-  "cfg_kernel_section_controls_hint": "Kullanılabilirlik seçilen değerden değil, gerçek çekirdek arayüzünden gelir.",
+  "cfg_kernel_section_controls": "Çekirdek yönetimi",
+  "cfg_kernel_section_controls_hint": "Burada yalnızca kayıtlı ve yazılabilir arayüzler denetlenir. Kullanılabilirlik ve gerçek değer çalışan çekirdekten okunur.",
   "cfg_kernel_section_wakeup": "Uyandırma kaynağı engelleyici",
   "cfg_kernel_section_wakeup_hint": "ASB uyandırma arayüzü olan çekirdekler için isteğe bağlı tam ad listesi. Varsayılan olarak boş.",
-  "cfg_kernel_section_caps": "Çekirdek olanakları",
-  "cfg_kernel_section_caps_hint": "Salt okunur destek kanıtı. Bunlar anahtar değildir ve bir özelliğin etkin olduğunu kanıtlamaz.",
   "kernel_state_available": "Kullanılabilir",
   "kernel_state_not_exposed": "Bu çekirdek arayüzü sunmuyor",
   "kernel_state_not_readable": "Okunamıyor",
@@ -3132,10 +3146,6 @@
   "kernel_state_configured": "Yapılandırılmış; çalışma durumu bilinmiyor",
   "kernel_state_module_unloaded": "Yapılandırılmış; modül yüklü değil",
   "kernel_state_loading": "Kontrol ediliyor…",
-  "kernel_caps_title": "Bu çekirdekteki destek",
-  "kernel_caps_sub": "Bu sayfa açıldığında bir kez okunur. Derleme yapılandırması ve çalışma zamanı kullanımı farklı gerçeklerdir.",
-  "kernel_cap_support": "çekirdek desteği",
-  "kernel_caps_note": "CAKE, Ağ ayarlarında yapılandırılır. Re-Kernel, uyumlu bir harici dondurucu tarafından kullanılır. SDP için doğrulanmış yazılabilir arayüz yok; bu yüzden ASB akım anahtarı sunmaz.",
   "kernel_refresh": "Durumu yenile",
   "kernel_wb_title": "Tam adlı uyandırma kuralları",
   "kernel_wb_sub": "Her biri 1–63 yazdırılabilir ASCII karakterli en fazla 16 ad. Boşluk, yol, desen veya otomatik kural yok.",
@@ -3196,5 +3206,7 @@
   "junk_done": "Kaldırıldı: {count} · açılan alan {size}",
   "junk_partial": "Her şey kaldırılamadı; başarısız kategoriler: {count}",
   "junk_partial_chip": "Kısmi",
-  "junk_cleaned": "Temizlendi"
+  "junk_cleaned": "Temizlendi",
+  "kernel_controls_help": "Aşağıdaki her anahtar yalnızca belirtilen standart çekirdek arayüzüne yazar. Stock, ASB ilk yazmadan önce kaydedilen değeri geri yükler. Eksik veya salt okunur arayüzler devre dışıdır; farklı geri okuma başarı değil, uyumsuzluk olarak bildirilir.",
+  "kernel_open_diagnostics": "Cihaz tanılamasını aç"
 }

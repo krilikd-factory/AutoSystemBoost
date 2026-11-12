@@ -607,6 +607,24 @@
     "kernel_sched_nr_migrate": {
       "name": "Lot de migration de l’ordonnanceur",
       "desc": "Limite les tâches migrées par passage à 1, 2, 4, 8 ou 16. La valeur 4 conserve le comportement précédent. Stock et la désinstallation restaurent l’entier initial ; les nœuds indisponibles et les relectures incorrectes sont signalés."
+    },
+    "kernel_sched_autogroup": {
+      "name": "Autogroup de l’ordonnanceur",
+      "desc": "Contrôle sched_autogroup_enabled uniquement s’il est accessible en écriture. Activé groupe automatiquement les tâches, Désactivé supprime ce regroupement. La réactivité et les tâches en arrière-plan peuvent changer, sans gain garanti. Stock et la désinstallation restaurent la valeur 0/1 initiale.",
+      "descOpt": {
+        "stock": "Ne pas modifier le regroupement automatique.",
+        "off": "Désactiver le regroupement automatique des tâches.",
+        "on": "Activer le regroupement automatique des tâches."
+      }
+    },
+    "kernel_sched_child_runs_first": {
+      "name": "Processus enfant prioritaire",
+      "desc": "Contrôle sched_child_runs_first uniquement s’il est accessible en écriture. Activé exécute le nouveau processus enfant avant son parent ; Désactivé choisit la politique inverse. La latence et le démarrage des processus peuvent changer, sans amélioration universelle. Stock et la désinstallation restaurent la valeur 0/1 initiale.",
+      "descOpt": {
+        "stock": "Ne pas modifier la priorité du processus enfant.",
+        "off": "Ne pas demander l’exécution prioritaire du processus enfant.",
+        "on": "Exécuter le processus enfant avant son parent."
+      }
     }
   },
   "opt": {
@@ -1367,7 +1385,7 @@
   "grp_iface_desc": "Animations, flou",
   "grp_net_desc": "Wi-Fi, LTE, files",
   "grp_battery_desc": "Smart, Doze, chaleur, RAM",
-  "grp_ui_desc": "Services, LTPO, vibrations",
+  "grp_ui_desc": "Noyau, services, LTPO, retour haptique",
   "stock_cpu_ceiling": "Plafond CPU",
   "stock_gpu_clock": "Fréquence GPU",
   "stock_bat_temp": "Temp. batterie",
@@ -3115,14 +3133,10 @@
   "dev_kernel_features_usb_arsenal": "USB Arsenal (prise en charge gadget)",
   "dev_kernel_features_net_sch_cake": "Discipline de file CAKE",
   "lr_ltpo_life": "LTPO vidéo (depuis toujours)",
-  "grp_kernel": "Noyau",
-  "grp_kernel_desc": "Réglages, réveils et prise en charge",
-  "cfg_kernel_section_controls": "Réglages du noyau en direct",
-  "cfg_kernel_section_controls_hint": "La disponibilité vient de l’interface réelle du noyau, pas de la valeur choisie.",
+  "cfg_kernel_section_controls": "Gestion du noyau",
+  "cfg_kernel_section_controls_hint": "Seules les interfaces enregistrées et accessibles en écriture sont pilotées ici. La disponibilité et la valeur réelle proviennent du noyau en cours.",
   "cfg_kernel_section_wakeup": "Blocage des sources de réveil",
   "cfg_kernel_section_wakeup_hint": "Liste facultative de noms exacts pour un noyau doté de l’interface ASB. Vide par défaut.",
-  "cfg_kernel_section_caps": "Fonctions du noyau",
-  "cfg_kernel_section_caps_hint": "Preuves en lecture seule. Ce ne sont pas des interrupteurs et cela ne prouve pas qu’une fonction est active.",
   "kernel_state_available": "Disponible",
   "kernel_state_not_exposed": "Ce noyau n’expose pas l’interface",
   "kernel_state_not_readable": "Lecture impossible",
@@ -3132,10 +3146,6 @@
   "kernel_state_configured": "Configuré ; état d’exécution inconnu",
   "kernel_state_module_unloaded": "Configuré ; module non chargé",
   "kernel_state_loading": "Vérification…",
-  "kernel_caps_title": "Prise en charge par ce noyau",
-  "kernel_caps_sub": "Lu une fois à l’ouverture de cette page. Configuration de compilation et utilisation à l’exécution sont deux faits distincts.",
-  "kernel_cap_support": "prise en charge par le noyau",
-  "kernel_caps_note": "CAKE se configure dans les réglages Réseau. Re-Kernel est utilisé par un freezer externe compatible. SDP n’a pas d’interface inscriptible confirmée, ASB ne propose donc pas d’interrupteur de courant.",
   "kernel_refresh": "Actualiser l’état",
   "kernel_wb_title": "Règles de réveil par nom exact",
   "kernel_wb_sub": "Jusqu’à 16 noms de 1 à 63 caractères ASCII imprimables. Sans espaces, chemins, motifs ni règles automatiques.",
@@ -3196,5 +3206,7 @@
   "junk_done": "Supprimés : {count} · {size} libérés",
   "junk_partial": "Suppression incomplète ; catégories en échec : {count}",
   "junk_partial_chip": "Partiel",
-  "junk_cleaned": "Nettoyé"
+  "junk_cleaned": "Nettoyé",
+  "kernel_controls_help": "Chaque interrupteur écrit uniquement dans son interface noyau standard indiquée. Stock restaure la valeur enregistrée avant la première écriture ASB. Les interfaces absentes ou en lecture seule sont désactivées ; une relecture différente est signalée comme une discordance, pas comme un succès.",
+  "kernel_open_diagnostics": "Ouvrir le diagnostic de l’appareil"
 }

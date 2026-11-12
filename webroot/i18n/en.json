@@ -567,6 +567,24 @@
     "kernel_sched_nr_migrate": {
       "name": "Scheduler Migration Batch",
       "desc": "Bounds how many tasks the scheduler moves in one migration pass through the standard sched_nr_migrate node. Default 4 preserves the former balanced value; lower is not automatically better and higher is not automatically faster. Stock and uninstall restore the captured pre-ASB integer. Missing, read-only and mismatched nodes are reported honestly."
+    },
+    "kernel_sched_autogroup": {
+      "name": "Scheduler Autogroup",
+      "desc": "Controls sched_autogroup_enabled only when writable. On enables automatic task grouping; Off disables it. This can change responsiveness and background tasks without guaranteeing performance or battery gains. Stock and uninstall restore the pre-ASB 0/1.",
+      "descOpt": {
+        "stock": "Leave automatic scheduler grouping unchanged.",
+        "off": "Disable automatic task grouping.",
+        "on": "Enable automatic task grouping."
+      }
+    },
+    "kernel_sched_child_runs_first": {
+      "name": "Child Task Runs First",
+      "desc": "Controls sched_child_runs_first only when writable. On runs a newly forked child before its parent; Off selects the opposite policy. This can affect latency and process startup, but is not a universal improvement. Stock and uninstall restore the pre-ASB 0/1.",
+      "descOpt": {
+        "stock": "Leave child-first scheduler policy unchanged.",
+        "off": "Do not request the child to run first.",
+        "on": "Run the child before its parent."
+      }
     }
   },
   "cfg_search": "Search",
@@ -1228,7 +1246,7 @@
   "grp_iface_desc": "Animations, blur",
   "grp_net_desc": "Wi-Fi, LTE, queues",
   "grp_battery_desc": "Smart, Doze, heat, RAM",
-  "grp_ui_desc": "Services, LTPO, haptics",
+  "grp_ui_desc": "Kernel, services, LTPO, haptics",
   "stock_cpu_ceiling": "CPU ceiling",
   "stock_gpu_clock": "GPU clock",
   "stock_bat_temp": "Battery temp",
@@ -2974,14 +2992,10 @@
   "dev_kernel_features_usb_arsenal": "USB Arsenal (gadget support)",
   "dev_kernel_features_net_sch_cake": "CAKE queue discipline",
   "lr_ltpo_life": "LTPO video drop (lifetime)",
-  "grp_kernel": "Kernel",
-  "grp_kernel_desc": "Live controls, wakeup rules, support",
-  "cfg_kernel_section_controls": "Live kernel controls",
-  "cfg_kernel_section_controls_hint": "Availability comes from the actual kernel interface, not from the selected value.",
+  "cfg_kernel_section_controls": "Kernel management",
+  "cfg_kernel_section_controls_hint": "Only registered writable interfaces are controlled here. Availability and live readback come from the running kernel.",
   "cfg_kernel_section_wakeup": "Wakeup-source blocker",
   "cfg_kernel_section_wakeup_hint": "An optional exact-name list for a kernel with the ASB wakeup interface. Empty by default.",
-  "cfg_kernel_section_caps": "Kernel facilities",
-  "cfg_kernel_section_caps_hint": "Read-only support evidence. These are not switches and do not prove that a facility is active.",
   "kernel_state_available": "Available",
   "kernel_state_not_exposed": "Not exposed by this kernel",
   "kernel_state_not_readable": "Not readable",
@@ -2991,10 +3005,6 @@
   "kernel_state_configured": "Configured; runtime state unknown",
   "kernel_state_module_unloaded": "Configured; module not loaded",
   "kernel_state_loading": "Checking…",
-  "kernel_caps_title": "Support on this kernel",
-  "kernel_caps_sub": "Read once when this page opens. Build configuration and runtime use are different facts.",
-  "kernel_cap_support": "kernel support",
-  "kernel_caps_note": "CAKE is configured in Network settings. Re-Kernel is used by a compatible external freezer. SDP has no confirmed writable interface, so ASB does not offer a current switch.",
   "kernel_refresh": "Refresh status",
   "kernel_wb_title": "Exact-name wakeup rules",
   "kernel_wb_sub": "Up to 16 names, 1–63 printable ASCII characters each. No spaces, paths, patterns or automatic rules.",
@@ -3055,5 +3065,7 @@
   "junk_done": "Removed: {count} · freed {size}",
   "junk_partial": "Not everything was removed; failed categories: {count}",
   "junk_partial_chip": "Partial",
-  "junk_cleaned": "Cleaned"
+  "junk_cleaned": "Cleaned",
+  "kernel_controls_help": "Each switch below writes only its named standard kernel interface. Stock restores the value captured before ASB first wrote it. Missing or read-only interfaces are disabled; a different readback is reported as a mismatch, not as success.",
+  "kernel_open_diagnostics": "Open Device Diagnostics"
 }

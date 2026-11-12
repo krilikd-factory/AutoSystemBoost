@@ -526,6 +526,24 @@
     "kernel_sched_nr_migrate": {
       "name": "调度器迁移批次",
       "desc": "将每次调度器迁移的任务数限制为 1、2、4、8 或 16。默认值 4 保持原有行为。原厂模式和卸载会恢复初始整数；不可用节点和回读不一致都会如实显示。"
+    },
+    "kernel_sched_autogroup": {
+      "name": "调度器自动分组",
+      "desc": "仅在可写时控制 sched_autogroup_enabled。开启会启用任务自动分组，关闭则禁用。这可能改变交互响应和后台任务行为，但不保证提升性能或续航。“原厂”和卸载会恢复 ASB 修改前的 0/1。",
+      "descOpt": {
+        "stock": "不更改调度器自动分组。",
+        "off": "禁用任务自动分组。",
+        "on": "启用任务自动分组。"
+      }
+    },
+    "kernel_sched_child_runs_first": {
+      "name": "子进程优先运行",
+      "desc": "仅在可写时控制 sched_child_runs_first。开启要求调度器先运行 fork 新建子进程，再运行父进程；关闭选择相反策略。这可能影响延迟和进程启动，但并非普遍适用的改进。“原厂”和卸载会恢复 ASB 修改前的 0/1。",
+      "descOpt": {
+        "stock": "不更改子进程优先调度策略。",
+        "off": "不要求子进程优先运行。",
+        "on": "要求子进程先于父进程运行。"
+      }
     }
   },
   "optFor": {
@@ -1367,7 +1385,7 @@
   "grp_iface_desc": "动画、模糊效果",
   "grp_net_desc": "Wi-Fi、LTE、队列",
   "grp_battery_desc": "智能、Doze、发热、内存",
-  "grp_ui_desc": "服务、LTPO、振动",
+  "grp_ui_desc": "内核、服务、LTPO、触感",
   "stock_cpu_ceiling": "CPU 上限",
   "stock_gpu_clock": "GPU 频率",
   "stock_bat_temp": "电池温度",
@@ -3115,14 +3133,10 @@
   "dev_kernel_features_usb_arsenal": "USB Arsenal（gadget 支持）",
   "dev_kernel_features_net_sch_cake": "CAKE 队列规则",
   "lr_ltpo_life": "视频 LTPO（累计）",
-  "grp_kernel": "内核",
-  "grp_kernel_desc": "实时控制、唤醒规则与支持情况",
-  "cfg_kernel_section_controls": "内核实时控制",
-  "cfg_kernel_section_controls_hint": "可用性取决于实际内核接口，而不是所选数值。",
+  "cfg_kernel_section_controls": "内核管理",
+  "cfg_kernel_section_controls_hint": "这里只控制已注册且可写的接口。可用性与实时回读值均来自当前运行的内核。",
   "cfg_kernel_section_wakeup": "唤醒源阻止器",
   "cfg_kernel_section_wakeup_hint": "适用于具有 ASB 唤醒接口的内核，使用可选的精确名称列表。默认为空。",
-  "cfg_kernel_section_caps": "内核功能",
-  "cfg_kernel_section_caps_hint": "只读支持证据。这些不是开关，也不能证明功能正在运行。",
   "kernel_state_available": "可用",
   "kernel_state_not_exposed": "此内核未提供接口",
   "kernel_state_not_readable": "无法读取",
@@ -3132,10 +3146,6 @@
   "kernel_state_configured": "已配置；运行状态未知",
   "kernel_state_module_unloaded": "已配置；模块未加载",
   "kernel_state_loading": "正在检查…",
-  "kernel_caps_title": "此内核的支持情况",
-  "kernel_caps_sub": "打开此页面时读取一次。构建配置与运行时使用是两个不同事实。",
-  "kernel_cap_support": "内核支持",
-  "kernel_caps_note": "CAKE 在“网络”设置中配置。Re-Kernel 由兼容的外部冻结器使用。SDP 没有已确认的可写接口，因此 ASB 不提供电流开关。",
   "kernel_refresh": "刷新状态",
   "kernel_wb_title": "精确名称唤醒规则",
   "kernel_wb_sub": "最多 16 个名称，每个为 1–63 个可打印 ASCII 字符。不允许空格、路径、模式或自动规则。",
@@ -3196,5 +3206,7 @@
   "junk_done": "已移除：{count} · 释放 {size}",
   "junk_partial": "未全部移除；失败类别：{count}",
   "junk_partial_chip": "部分完成",
-  "junk_cleaned": "已清理"
+  "junk_cleaned": "已清理",
+  "kernel_controls_help": "下方每个开关只写入其注明的标准内核接口。“原厂”恢复 ASB 首次写入前保存的值。缺失或只读接口会禁用；回读值不同会显示为不匹配，而不会声称成功。",
+  "kernel_open_diagnostics": "打开设备诊断"
 }

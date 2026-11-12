@@ -499,6 +499,24 @@
     "kernel_sched_nr_migrate": {
       "name": "Scheduler-Migrationsbatch",
       "desc": "Begrenzt Scheduler-Migrationen pro Durchlauf auf 1, 2, 4, 8 oder 16. Der Wert 4 erhält das bisherige Verhalten. Standard und Deinstallation stellen die ursprüngliche Zahl wieder her; fehlende Knoten und Rücklesefehler werden ehrlich gemeldet."
+    },
+    "kernel_sched_autogroup": {
+      "name": "Scheduler-Autogroup",
+      "desc": "Steuert sched_autogroup_enabled nur bei Schreibzugriff. Ein aktiviert die automatische Prozessgruppierung, Aus deaktiviert sie. Reaktion und Hintergrundverhalten können sich ändern; Leistungs- oder Akkugewinne sind nicht garantiert. Standard und Deinstallation stellen den ursprünglichen Wert 0/1 wieder her.",
+      "descOpt": {
+        "stock": "Automatische Scheduler-Gruppierung unverändert lassen.",
+        "off": "Automatische Prozessgruppierung deaktivieren.",
+        "on": "Automatische Prozessgruppierung aktivieren."
+      }
+    },
+    "kernel_sched_child_runs_first": {
+      "name": "Kindprozess zuerst",
+      "desc": "Steuert sched_child_runs_first nur bei Schreibzugriff. Ein lässt einen neu erzeugten Kindprozess vor dem Elternprozess laufen, Aus wählt die entgegengesetzte Politik. Latenz und Prozessstart können sich ändern; eine universelle Verbesserung ist nicht garantiert. Standard und Deinstallation stellen den ursprünglichen Wert 0/1 wieder her.",
+      "descOpt": {
+        "stock": "Kind-zuerst-Scheduling unverändert lassen.",
+        "off": "Keinen vorrangigen Start des Kindprozesses anfordern.",
+        "on": "Kindprozess vor dem Elternprozess starten lassen."
+      }
     }
   },
   "nav_live": "Monitor",
@@ -1367,7 +1385,7 @@
   "grp_iface_desc": "Animationen, Weichzeichnung",
   "grp_net_desc": "WLAN, LTE, Warteschlangen",
   "grp_battery_desc": "Smart, Doze, Wärme, RAM",
-  "grp_ui_desc": "Dienste, LTPO, Haptik",
+  "grp_ui_desc": "Kernel, Dienste, LTPO, Haptik",
   "stock_cpu_ceiling": "CPU-Obergrenze",
   "stock_gpu_clock": "GPU-Takt",
   "stock_bat_temp": "Akkutemperatur",
@@ -3115,14 +3133,10 @@
   "dev_kernel_features_usb_arsenal": "USB Arsenal (Gadget-Unterstützung)",
   "dev_kernel_features_net_sch_cake": "CAKE-Warteschlangendisziplin",
   "lr_ltpo_life": "LTPO bei Video (gesamt)",
-  "grp_kernel": "Kernel",
-  "grp_kernel_desc": "Live-Regler, Wakeups, Unterstützung",
-  "cfg_kernel_section_controls": "Live-Kernel-Regler",
-  "cfg_kernel_section_controls_hint": "Die Verfügbarkeit kommt von der tatsächlichen Kernel-Schnittstelle, nicht vom gewählten Wert.",
+  "cfg_kernel_section_controls": "Kernel-Verwaltung",
+  "cfg_kernel_section_controls_hint": "Hier werden nur registrierte schreibbare Schnittstellen gesteuert. Verfügbarkeit und Live-Rücklesung stammen vom laufenden Kernel.",
   "cfg_kernel_section_wakeup": "Wakeup-Quellen blockieren",
   "cfg_kernel_section_wakeup_hint": "Optionale Liste exakter Namen für einen Kernel mit ASB-Wakeup-Schnittstelle. Standardmäßig leer.",
-  "cfg_kernel_section_caps": "Kernel-Funktionen",
-  "cfg_kernel_section_caps_hint": "Nur-Lese-Nachweise. Dies sind keine Schalter und kein Beleg für eine aktive Funktion.",
   "kernel_state_available": "Verfügbar",
   "kernel_state_not_exposed": "Dieser Kernel stellt keine Schnittstelle bereit",
   "kernel_state_not_readable": "Nicht lesbar",
@@ -3132,10 +3146,6 @@
   "kernel_state_configured": "Konfiguriert; Laufzeitstatus unbekannt",
   "kernel_state_module_unloaded": "Konfiguriert; Modul nicht geladen",
   "kernel_state_loading": "Wird geprüft…",
-  "kernel_caps_title": "Unterstützung durch diesen Kernel",
-  "kernel_caps_sub": "Wird beim Öffnen dieser Seite einmal gelesen. Build-Konfiguration und Laufzeitnutzung sind unterschiedliche Fakten.",
-  "kernel_cap_support": "Kernel-Unterstützung",
-  "kernel_caps_note": "CAKE wird in den Netzwerk-Einstellungen konfiguriert. Re-Kernel wird von einem kompatiblen externen Freezer verwendet. Für SDP gibt es keine bestätigte Schreibschnittstelle, daher bietet ASB keinen Stromschalter an.",
   "kernel_refresh": "Status aktualisieren",
   "kernel_wb_title": "Wakeup-Regeln mit exakten Namen",
   "kernel_wb_sub": "Bis zu 16 Namen mit je 1–63 druckbaren ASCII-Zeichen. Keine Leerzeichen, Pfade, Muster oder automatischen Regeln.",
@@ -3196,5 +3206,7 @@
   "junk_done": "Entfernt: {count} · {size} freigegeben",
   "junk_partial": "Nicht alles entfernt; fehlgeschlagene Kategorien: {count}",
   "junk_partial_chip": "Teilweise",
-  "junk_cleaned": "Bereinigt"
+  "junk_cleaned": "Bereinigt",
+  "kernel_controls_help": "Jeder Schalter schreibt nur in seine genannte Standard-Kernel-Schnittstelle. Standard stellt den vor dem ersten ASB-Zugriff gespeicherten Wert wieder her. Fehlende oder schreibgeschützte Schnittstellen sind deaktiviert; eine abweichende Rücklesung wird als Abweichung und nicht als Erfolg gemeldet.",
+  "kernel_open_diagnostics": "Gerätediagnose öffnen"
 }
