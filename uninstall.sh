@@ -9,8 +9,6 @@
 
 MODDIR=${0%/*}
 
-# Restore every captured standard-kernel control before its state directory is removed.
-# The helper accepts no external path/value and keeps a baseline when restore cannot verify it.
 if [ -f "$MODDIR/runtime/asb_kernel_controls.sh" ]; then
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_kernel_controls.sh" restore >/dev/null 2>&1 || true
 fi

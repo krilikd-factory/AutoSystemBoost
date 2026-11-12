@@ -1022,7 +1022,13 @@ apply_vm() {
     esac
   fi
 
-  [ -w /sys/kernel/mm/lru_gen/enabled ] && echo 7 > /sys/kernel/mm/lru_gen/enabled 2>/dev/null
+  if [ -f "$MODDIR/runtime/asb_kernel_controls.sh" ]; then
+    _vm_lgm="$(grep -E '^[[:space:]]*mglru_mode=' "$MODDIR/config/governor.conf" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r')"
+    case "$_vm_lgm:$ASB_PROFILE" in
+      smart:smart|:smart) : ;;
+      *) MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_kernel_controls.sh" apply mglru_mode >/dev/null 2>&1 || true ;;
+    esac
+  fi
 
   [ -e /proc/sys/vm/stat_interval ] && sysctlw vm.stat_interval $_P_STATINT
   # VM_PAGE_CLUSTER belongs to the selected profile. Hardcoding another value here
@@ -2362,7 +2368,6 @@ apply_kernel() {
   [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
   sysctlw kernel.perf_cpu_time_max_percent 25
   sysctlw kernel.sched_schedstats 0
-  # timer_migration and sched_nr_migrate are applied by the bounded control owner below.
   # kernel.panic and kernel.panic_on_oops are NOT touched any more.
   #
   # Both were written to 0. panic=0 means "after a kernel panic, never reboot - wait
