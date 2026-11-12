@@ -4,6 +4,37 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev23 - metadata-cached Zygisk policy
+
+Input: the verified dev22 source and the external `Force ltpo` v1.0.1 reference module.
+
+- **The reference contains no separate 1 Hz writer.** It bind-mounts an
+  `oplus_vrr_config.json`; that JSON is byte-identical to the previously captured live table.
+  ASB already clones the current device's table and enables only flags exposed by that table.
+  No foreign backlight/app rules, hardcoded 1/30 Hz mode or universal 1 Hz claim was added.
+  Dev22's panel-advertised touch decay and video/camera/game ownership remain unchanged.
+- **An unchanged Zygisk policy is no longer opened, read and parsed for every regular app
+  fork.** The zygote side stats the small generated policy and reuses its parsed copy while
+  device, inode, size and nanosecond mtime match. The runtime writer already uses temporary
+  file + atomic rename, so a replacement has a new inode. The stamp cached after a reload is
+  taken from the opened fd, not only from the earlier path lookup.
+- **Policy failures remain fail-closed.** Removal, malformed input, stat/open/fstat/read/parse
+  failure, or loss of the loader's module-directory fd withdraw the active policy for that
+  read instead of returning a stale cached copy. Absolute-path EACCES retains the existing
+  module-dir fallback. Valid but inactive policies are cached as inactive.
+- **No profile numbers were changed.** Existing captures already showed low governor cost and
+  96–98% unchanged-JSON suppression; they do not justify new frequency, boost, polling, thermal
+  or per-app values. No persistent worker, hook, hardware writer or governor opcode was added.
+
+The native fixture wraps the real Observer's libc calls and verifies 20 consecutive cache hits
+with zero additional policy open/read/parse calls, same-size atomic replacement, generation /
+flag / package changes, inactive caching, removal, malformed replacement, terminal I/O errors
+and EACCES fallback. The existing ABI hot-path and companion suites remain in the full gate.
+
+Native source changed: both Zygisk ABIs require the separate CI NDK build before a binary
+module release. This source archive contains no rebuilt or newly added `.so`. Host fixtures do not prove a physical 1 Hz
+panel mode, measured power savings, or field validation on every device/ROM.
+
 ## V66 dev22 - panel-advertised LTPO decay and fatal-input handling
 
 Input: six older Infinite Log bundles, eight diagnostic/device exports and user reports about
