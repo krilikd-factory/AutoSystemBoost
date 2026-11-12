@@ -4227,6 +4227,8 @@ sh "$A" cancel | grep -q 'result=cancelled' || f "cancel did not report cancelle
 grep -q 'asb_battery_fix.sh" boot' "$ROOT/post-fs-data.sh" || f "post-fs-data never runs the boot reset"
 grep -q 'battery_fix.pending' "$ROOT/post-fs-data.sh" || f "post-fs-data boot not gated by the pending flag"
 grep -q 'rm -rf /data/adb/asb/battery_fix.lock' "$ROOT/post-fs-data.sh" || f "a lock left by a reboot mid-compile is never cleared"
+grep -q 'battery_fix.pkgs\.\*' "$ROOT/post-fs-data.sh" || f "a reboot leaves the worker package list behind"
+grep -q 'battery_fix.compile\.tmp\.\*' "$ROOT/post-fs-data.sh" || f "a reboot leaves an atomic progress temp behind"
 
 # dev18: the recompile reports real progress. A scripted compiler stands in for
 # `cmd package compile`; "Success" in its output is the only thing counted as success.
@@ -4266,6 +4268,19 @@ i=0; while [ "$i" -lt 40 ] && [ "$(kv compile)" = running ]; do sleep 0.2; i=$((
 d="$(kv done)"; [ "$d" -ge 1 ] && [ "$d" -lt 6 ] || f "stop did not take effect after the current app: done=$d"
 sh "$A" stop | grep -q 'result=idle' || f "stop reported work when nothing runs"
 [ -f "$T/d/battery_fix.stop" ] && f "the stop request outlived the run"
+
+# dev21: an externally terminated worker runs the same cleanup as normal Stop. Its last
+# complete record remains visible as interrupted; no package list, atomic temp or lock stays.
+FC_SLEEP=2 ASB_BFIX_FAKE_PKGS='term.one term.two term.three' sh "$A" run >/dev/null
+i=0; while [ "$i" -lt 30 ] && [ "$(kv compile)" != running ]; do sleep 0.2; i=$((i + 1)); done
+[ "$(kv compile)" = running ] || f "termination fixture never started: $(st)"
+_term_pid="$(sed -n 's/^pid=//p' "$T/d/battery_fix.compile" | head -1)"
+case "$_term_pid" in ''|*[!0-9]*) f "termination fixture has no worker pid" ;; *) kill -TERM "$_term_pid" 2>/dev/null ;; esac
+i=0; while [ "$i" -lt 50 ] && [ "$(kv compile)" = running ]; do sleep 0.2; i=$((i + 1)); done
+[ "$(kv compile)" = interrupted ] || f "a terminated worker is not reported interrupted: $(st)"
+ls "$T/d"/battery_fix.pkgs.* "$T/d"/battery_fix.compile.tmp.* >/dev/null 2>&1 && f "a terminated worker left temporary files"
+[ -d "$T/d/battery_fix.lock" ] && f "a terminated worker left its lock behind"
+[ -f "$T/d/battery_fix.compile" ] || f "termination discarded the last useful progress evidence"
 
 printf 'state=running\nphase=compile\ntotal=9\ndone=4\nok=4\nfail=0\ncur=x\nstarted=1\nfinished=-\npid=%s\nboot=old-boot\n' "$$" > "$T/d/battery_fix.compile"
 [ "$(ASB_BFIX_BOOT_ID=new-boot sh "$A" status | tr ' ' '\n' | sed -n 's/^compile=//p')" = interrupted ] || f "a run from a previous boot still shows as running"

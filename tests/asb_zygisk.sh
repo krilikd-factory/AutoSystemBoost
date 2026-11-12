@@ -714,6 +714,7 @@ t_zygisk_policy_sync_runtime() (
   sed -i 's/^zygisk_launch=0/zygisk_launch=1/' "$T/mod/config/governor.conf"
   run sync | grep -q '^policy=written .*launch=1 ledger=0' || fail 'cold-start policy not written'
   grep -qx 'v=2' "$P" && grep -qx 'launch=1' "$P" && grep -qx 'observer=0' "$P" || fail "policy content: $(cat "$P")"
+  [ "$(stat -c %a "$P")" = 600 ] || fail "policy is not root-only: $(stat -c %a "$P")"
   ! grep -q '^pkg=' "$P" || fail 'launch-only policy names packages'
   run set-packages com.example.app org.example.game
   grep -qx 'pkg=com.example.app' "$P" && grep -qx 'pkg=org.example.game' "$P" && grep -qx 'observer=1' "$P" \
@@ -1407,6 +1408,7 @@ E
     ASB_GOV_BIN="$T/bin/asb" ASB_ZL_MODULES="$T/mods" ASB_ZL_GOV_STATE="$T/gstate" ASB_ZL_TMP="$T/tmp" ASB_DOZE_KEEP="$T/asb/keep" sh "$S" "$@"; }
   out="$(run classes)"; [ "$out" = 'result=written slow=1 fast=2' ] || fail "classes: $out"
   C="$T/mod/zygisk/classes"
+  [ "$(stat -c %a "$C")" = 600 ] || fail "launch classes are not root-only: $(stat -c %a "$C")"
   [ "$(cat "$C")" = "$(printf 'v=1\nslow=com.example.slowapp\nfast=com.example.fastapp\nfast=com.example.hookedfast')" ] \
     || fail "classes file: $(cat "$C")"
   grep -q 'systemui\|android$\|=system$\|settings\|offonly\|midapp\|hookednolaunch' "$C" && fail 'a protected, unhooked-by-enabled, usual or never-measured hooked app was classed'
@@ -1429,8 +1431,9 @@ CPP
     g++ -std=c++17 -Wall -Wextra -Werror -I"$ROOT/src/zygisk" "$T/p.cpp" -o "$T/p" || fail 'parser fixture build'
     [ "$("$T/p" "$C")" = parsed ] || fail 'the native parser refused the generated classes'
   fi
-  m0="$(stat -c %Y.%i "$C")"; sleep 1
+  m0="$(stat -c %Y.%i "$C")"; chmod 644 "$C"; sleep 1
   out="$(run classes)"; [ "$out" = 'result=unchanged slow=1 fast=2' ] && [ "$(stat -c %Y.%i "$C")" = "$m0" ] || fail "an unchanged pass rewrote the file: $out"
+  [ "$(stat -c %a "$C")" = 600 ] || fail 'an unchanged pass kept legacy world-readable classes'
   ls "$T/asb" | grep -q 'zygisk_link\.' && fail "temporary files left: $(ls "$T/asb")"
   st="$(run status)"
   for want in version=1 classes=on classes_slow=1 classes_fast=2 comp_state=1 comp_supported=1 comp_long=5 comp_short=3 comp_classes_loaded=1 \
