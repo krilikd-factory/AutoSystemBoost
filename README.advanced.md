@@ -661,12 +661,14 @@ The HeyTap ART helper is a bounded one-shot, not a boot service: `pending → ru
 | `kernel_timer_migration` | Timer Migration | `off` | Standard 0/1 control; default off preserves prior ASB behaviour, stock restores the captured value. |
 | `kernel_sched_nr_migrate` | Scheduler Migration Batch | `4` | Bounded stock/1/2/4/8/16 control; default 4 preserves prior balanced behaviour. |
 | `kernel_sched_stats` | Scheduler Debug Accounting | `stock` | Stock/off through the same bounded owner; availability and access depend on the running kernel. |
+| `kernel_sched_autogroup` | Scheduler Autogroup | `stock` | Opt-in stock/off/on for the standard autogroup switch; no profile owner is duplicated. |
+| `kernel_sched_child_runs_first` | Child Task Runs First | `stock` | Opt-in stock/off/on for post-fork scheduling order; readback and exact restore are mandatory. |
 
-**Settings → Kernel** loads these controls on demand and marks an unavailable, read-only, unreadable or mismatched interface explicitly instead of displaying a successful apply. A saved configuration value is not runtime proof.
+**Settings → System → Kernel management** loads these six controls on demand and marks an unavailable, read-only, unreadable or mismatched interface explicitly instead of displaying a successful apply. Refresh rereads the owner after an apply or on demand. A saved configuration value is not runtime proof.
 
 The **Wakeup sources** card manages only the optional exact-name KRILIKD ABI. It accepts at most 16 unique printable-ASCII names of 1–63 bytes, shows saved and current kernel rules separately, and reads the blocked-event counter when exposed. Empty is the default. Saving on a kernel without the ABI can preserve the requested policy for later, but the UI reports `not exposed`, not success. Blocking a source can affect suspend, modem, Wi-Fi, alarms, calls or charging and requires an on-device test.
 
-The read-only **Kernel support** card reports CAKE, IP sets, Re-Kernel and SDP 900 mA evidence without inventing switches. CAKE remains configurable under Network when its runtime prerequisites pass. Re-Kernel is an event source for a compatible external freezer, not an ASB freezer. SDP 900 mA remains `not exposed` until a confirmed OPlus control/readback ABI exists.
+Read-only kernel build, feature and runtime evidence is not duplicated in Config: **Open Device Diagnostics** leads to the existing Device sections, including custom kernel features. CAKE remains configurable under Network when its runtime prerequisites pass. Re-Kernel is an event source for a compatible external freezer, not an ASB freezer. SDP 900 mA remains `not exposed` until a confirmed OPlus control/readback ABI exists. `vm.block_dump` deliberately has no second WebUI owner because the Battery profile already writes it.
 
 ## 📊 11. WebUI, monitor and effective-state semantics
 
@@ -676,7 +678,7 @@ The read-only **Kernel support** card reports CAKE, IP sets, Re-Kernel and SDP 9
 |:---|:---|
 | **Profiles** | Select Smart, Performance, Balanced, Battery or Stock and inspect current high-level state. |
 | **Monitor** | Inspect live workload, clocks, thermal/battery state, Smart evidence, smoothness and limit ownership. |
-| **Config** | Change the controls indexed above, with capability and reboot/apply feedback; Kernel also exposes wakeup policy and read-only support evidence. |
+| **Config** | Change the controls indexed above, with availability and reboot/apply feedback; System contains kernel management and wakeup policy, with a link to Device Diagnostics for read-only evidence. |
 | **Device** | Request read-only hardware, kernel, root and capability facts. |
 | **Zygisk** | Opened from the Zygisk pill in every header or from Settings → System: connection verdict, Mode, the complete four-switch ASB panel, Automatic setup, activity and cost, observed apps and safe mode. One read (`asb_zygisk.sh link-status`). |
 | **Reports** | Generate support diagnostics and user-triggered extended reports. |
