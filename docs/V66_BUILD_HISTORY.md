@@ -4,6 +4,32 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev32 - manual Infirmary junk cleanup
+
+Input: the dev31 source and screenshots of diagnostic residue. The new **Infirmary → Cleanup →
+Junk Cleanup** card is localized in all thirteen WebUI languages and uses one fixed shell owner,
+`runtime/asb_junk_cleanup.sh`, with only `status` and `run` commands.
+
+- **Bounded targets, not a blanket cleaner.** Eleven rows cover DropBox records, tombstones, ANR,
+  environment and installer caches, fixed diagnostic logs, backup journals older than 24 hours,
+  seven exact `/data/local/tmp` report names, Linux trash, trashed screenshots and ColorOS crash
+  logs. Ordinary screenshots, recent tasks, unknown temporary files, OOST flags, controller
+  settings and module working state survive. Symlinks are not followed and `-xdev` bounds roots.
+- **Metadata preview and explicit deletion.** The scan reports file counts and bytes from `stat`,
+  never reads file contents and creates no state. Deletion requires a second tap within five
+  seconds. An atomic run lock rejects concurrent work. Cleaned, empty, partial, unreadable, busy
+  and lock-error states are separate; the UI neither enables deletion while busy nor calls a lock
+  error success.
+- **No hidden worker or anti-lag promise.** Nothing is hooked into boot, service or a polling
+  loop. The feature can recover storage and remove clutter, but does not claim a universal fix for
+  lag, improved FPS, battery life or responsiveness.
+
+Runtime regression exercises all eleven categories, exact count/byte accounting, recent-journal and
+protected-file survival, idempotence, busy/lock/partial results, symlink rejection and unknown
+commands. WebUI regression covers thirteen locales, the fixed command protocol, five-second
+confirmation, result parsing, text-only rows and every visible failure state. Host and browser
+verification remain distinct from physical ColorOS WebView and field validation.
+
 ## V66 dev31 - visible kernel controls and explicit unsupported states
 
 Input: the dev30 source and the KRILIKD v9 build framework. The goal is one visible WebUI
