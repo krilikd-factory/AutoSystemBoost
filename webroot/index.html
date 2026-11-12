@@ -228,47 +228,81 @@ body::before, body::after {
   gap: 0;
 }
 
+/* dev18: the header logo is the boot preview's sphere.
+ *
+ * The boot preview's spinning sphere (two orbits with their lights, two tilted frames and the
+ * saucer in its pod) is the ASB emblem now, on every page header. It is the same geometry as
+ * .asb-boot-core, written in the core's own 172-unit coordinates and scaled by --k, so at the
+ * end of the boot hand-off the flying core lands exactly on top of this one and the swap
+ * cannot be seen. The orbits and the pod use the very same keyframes (asbBootSpin,
+ * asbBootPulse) and durations as the preview. Everything that moves is a transform on its own
+ * layer; the halo behind it is still. */
 .logo-c {
+  --k: .5349;
+  --sph-c1: #00f0b4;
+  --sph-c2: #00d4ff;
   position: relative;
-  width: 72px;
-  height: 72px;
-  margin-bottom: 20px;
+  width: calc(172px * var(--k));
+  height: calc(172px * var(--k));
+  margin-bottom: 8px;
 }
-
-.logo-glow {
+.logo-c::before {
+  content: "";
   position: absolute;
-  inset: -8px;
-  border-radius: 24px;
-  background: conic-gradient(from 0deg, var(--accent), var(--accent2), var(--accent), transparent, var(--accent));
-  opacity: 0.35;
-  animation: rotate 8s linear infinite;
-  filter: blur(8px);
+  inset: 12%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0,240,180,.15) 0%, rgba(0,212,255,.06) 46%, transparent 70%);
+  pointer-events: none;
 }
-
-.logo-ring {
+.logo-sphere-a, .logo-sphere-b, .logo-frame-a, .logo-frame-b, .logo-inner {
   position: absolute;
-  inset: -2px;
-  border-radius: 22px;
-  background: conic-gradient(from 180deg, var(--accent), var(--accent2), var(--accent));
-  opacity: 0.55;
-  animation: rotate 4s linear infinite;
+  margin: auto;
 }
-
+.logo-sphere-a {
+  inset: 0;
+  border: 1px solid rgba(0,240,180,.24);
+  border-radius: 50%;
+  animation: asbBootSpin 7s linear infinite;
+}
+.logo-sphere-b {
+  inset: calc(15px * var(--k));
+  border: 1px dashed rgba(0,212,255,.32);
+  border-radius: 50%;
+  animation: asbBootSpin 10s linear infinite reverse;
+}
+.logo-sphere-a::before, .logo-sphere-a::after, .logo-sphere-b::before, .logo-sphere-b::after {
+  content: "";
+  position: absolute;
+  width: max(2.5px, calc(6px * var(--k)));
+  height: max(2.5px, calc(6px * var(--k)));
+  border-radius: 50%;
+  background: var(--sph-c1);
+  box-shadow: 0 0 calc(14px * var(--k)) var(--sph-c1);
+}
+.logo-sphere-a::before, .logo-sphere-b::before { top: calc(13px * var(--k)); left: calc(27px * var(--k)); }
+.logo-sphere-a::after, .logo-sphere-b::after { right: calc(9px * var(--k)); bottom: calc(43px * var(--k)); background: var(--sph-c2); }
+.logo-frame-a {
+  inset: calc(31px * var(--k));
+  border: 1px solid rgba(0,240,180,.38);
+  border-radius: calc(25px * var(--k));
+  transform: rotate(45deg);
+}
+.logo-frame-b {
+  inset: calc(40px * var(--k));
+  border: 1px solid rgba(0,212,255,.23);
+  border-radius: calc(25px * var(--k));
+  transform: rotate(22.5deg);
+}
 .logo-inner {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  border-radius: 20px;
-  background: linear-gradient(135deg, rgba(0,240,180,0.12), rgba(0,212,255,0.06));
-  border: 1px solid rgba(255,255,255,0.12);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 32px;
+  inset: calc(37px * var(--k)) calc(24px * var(--k));
+  display: grid;
+  place-items: center;
   z-index: 1;
-  box-shadow: 
-    inset 0 1px 1px rgba(255,255,255,0.1),
-    0 8px 32px rgba(0,0,0,0.5);
+  border: 1px solid rgba(0,240,180,.40);
+  border-radius: calc(26px * var(--k));
+  background: linear-gradient(145deg, rgba(0,240,180,.10), rgba(91,104,210,.08));
+  box-shadow: 0 0 calc(32px * var(--k)) rgba(0,240,180,.14), inset 0 0 calc(22px * var(--k)) rgba(76,201,255,.06);
+  animation: asbBootPulse 2.2s ease-in-out infinite;
 }
 
 @keyframes rotate {
@@ -358,9 +392,10 @@ body::before, body::after {
  * charge and link dots are tiny. Only the wordmark's specular sweep - which repaints the
  * clipped text every frame and is the 4.1 W offender measured above - still stops while
  * idle. A closed or backgrounded page continues to stop everything. */
-.live-page:not(.open) .logo-glow, .live-page:not(.open) .logo-ring, .live-page:not(.open) .app-name,
-.live-page:not(.open) .dot, .live-page:not(.open) .dot::after,
-body.live-active .page:not(.live-page) .logo-glow, body.live-active .page:not(.live-page) .logo-ring,
+.live-page:not(.open) .logo-sphere-a, .live-page:not(.open) .logo-sphere-b, .live-page:not(.open) .logo-inner,
+.live-page:not(.open) .app-name, .live-page:not(.open) .dot, .live-page:not(.open) .dot::after,
+body.live-active .page:not(.live-page) .logo-sphere-a, body.live-active .page:not(.live-page) .logo-sphere-b,
+body.live-active .page:not(.live-page) .logo-inner,
 body.live-active .page:not(.live-page) .app-name, body.live-active .page:not(.live-page) .dot,
 body.live-active .page:not(.live-page) .dot::after, body.live-active .page:not(.live-page) .ai-glow,
 html.asb-calm .app-name {
@@ -382,6 +417,11 @@ body.live-active .page:not(.live-page) .dot::after {
   body.live-active .page:not(.live-page), .page:not(.live-page) { transform: none !important; }
   .app-name { animation: none; background-position: -70% 0, 0 0; }
   .cfg-stagger > *, .profiles > * { animation: none !important; }
+  .logo-sphere-a, .logo-sphere-b, .logo-inner { animation: none !important; }
+}
+@media (forced-colors: active) {
+  .logo-sphere-a, .logo-sphere-b, .logo-frame-a, .logo-frame-b, .logo-inner { border-color: CanvasText !important; }
+  .logo-sphere-a::before, .logo-sphere-a::after, .logo-sphere-b::before, .logo-sphere-b::after { background: CanvasText !important; box-shadow: none !important; }
 }
 
 .device-line {
@@ -2281,7 +2321,7 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
     max-width: 560px !important;
   }
   .header { max-width: 560px !important; }
-  .logo-c { width: 88px; height: 88px; }
+  .logo-c { --k: .6512; }
   .app-name { font-size: 32px; }
   .device-line { font-size: 14px; }
   .badge { font-size: 11px; }
@@ -2319,7 +2359,7 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
 
 @media (max-height: 500px) and (orientation: landscape) {
   .header { margin-bottom: 12px; padding-top: 8px; }
-  .logo-c { width: 48px; height: 48px; margin-bottom: 4px; }
+  .logo-c { --k: .3256; margin-bottom: 2px; }
   .app-name { font-size: 20px; }
   /* Landscape overrides the shared value once, instead of each page separately. */
   :root { --page-top: 32px; }
@@ -3311,10 +3351,117 @@ html[data-asb-theme="light"] .nf-sel-row.warn .nf-sel-why { color: #8a5a00 !impo
 #cfgToolsRow   { width: 100%; align-self: stretch; display: flex; gap: 7px; margin: 0 0 6px; align-items: stretch; min-width: 0; }
 /* All profile actions intentionally share one row. Their compact labels stay readable in
  * Russian while releasing a complete row for the footer to align with the other pages. */
-#cfgActionsRow { width: 100%; align-self: stretch; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; margin: 0 0 10px; align-items: stretch; min-width: 0; }
-#cfgActionsRow .cfg-infirmary-btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; color: var(--accent); border-color: rgba(76,232,193,0.34); }
-#cfgActionsRow .cfg-infirmary-btn .cfg-infirmary-ico { flex: 0 0 auto; }
-html[data-asb-theme="light"] #cfgActionsRow .cfg-infirmary-btn { color: var(--accent); }
+#cfgActionsRow { width: 100%; align-self: stretch; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.32fr); gap: 7px; margin: 0 0 10px; align-items: stretch; min-width: 0; }
+/* dev18: the Infirmary button is the one special entry in this row, so it reads as one: a
+ * green pharmacy cross with its own glow on a lit green glass capsule, a little wider than
+ * its neighbours so the name never collapses into an ellipsis. Everything here is static. */
+.inf-stop-a { stop-color: #b6ffcf; }
+.inf-stop-b { stop-color: #16d39b; }
+#cfgActionsRow .cfg-infirmary-btn {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding-left: 6px; padding-right: 8px;
+  color: #a6ffd6 !important; font-weight: 750; letter-spacing: .15px;
+  background: linear-gradient(135deg, rgba(46,214,140,.24) 0%, rgba(0,190,170,.11) 55%, rgba(0,150,210,.09) 100%), rgba(4,14,10,.92) !important;
+  border: 1px solid rgba(96,242,178,.52) !important;
+  box-shadow: inset 0 1px 0 rgba(210,255,235,.20), 0 0 0 1px rgba(46,214,140,.05), 0 5px 18px rgba(26,200,140,.18) !important;
+  transition: transform .12s ease, box-shadow .2s ease;
+}
+#cfgActionsRow .cfg-infirmary-btn::after {
+  content: ""; position: absolute; left: 1px; right: 1px; top: 1px; height: 46%;
+  border-radius: 11px 11px 6px 6px; pointer-events: none;
+  background: linear-gradient(180deg, rgba(255,255,255,.11), rgba(255,255,255,0));
+}
+#cfgActionsRow .cfg-infirmary-btn:active { transform: scale(.965); }
+.cfg-inf-emblem {
+  flex: 0 0 auto; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 8px;
+  background: radial-gradient(circle at 50% 45%, rgba(110,255,190,.26), rgba(110,255,190,0) 72%);
+}
+.cfg-inf-emblem svg { width: 17px; height: 17px; display: block; filter: drop-shadow(0 0 3px rgba(70,240,160,.70)) drop-shadow(0 1px 1px rgba(0,0,0,.35)); }
+.cfg-inf-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-asb-theme="light"] .inf-stop-a { stop-color: #33d07f; }
+html[data-asb-theme="light"] .inf-stop-b { stop-color: #08906c; }
+html[data-asb-theme="light"] #cfgActionsRow .cfg-infirmary-btn {
+  color: #06704f !important; background: linear-gradient(135deg, #dcfaea 0%, #d2f4ec 60%, #d4ecf7 100%) !important;
+  border-color: rgba(8,150,100,.50) !important; box-shadow: inset 0 1px 0 #fff, 0 4px 14px rgba(8,150,100,.20) !important;
+}
+html[data-asb-theme="light"] .cfg-inf-emblem svg { filter: drop-shadow(0 1px 1px rgba(0,80,50,.25)); }
+@media (forced-colors: active) {
+  #cfgActionsRow .cfg-infirmary-btn { border-color: ButtonText !important; box-shadow: none !important; background: ButtonFace !important; color: ButtonText !important; }
+  .inf-stop-a, .inf-stop-b { stop-color: ButtonText; }
+}
+
+/* dev18: Infirmary page - the hero line and the Battery Fix stepper card. */
+.inf-hero {
+  display: flex; align-items: center; gap: 12px; margin: 2px 0 14px; padding: 12px 14px;
+  border-radius: 16px; border: 1px solid rgba(96,242,178,.30);
+  background: linear-gradient(135deg, rgba(46,214,140,.14), rgba(0,150,210,.06));
+}
+.inf-hero-emblem { flex: 0 0 auto; width: 42px; height: 42px; display: grid; place-items: center; border-radius: 13px;
+  background: radial-gradient(circle at 50% 45%, rgba(110,255,190,.24), rgba(110,255,190,0) 74%); }
+.inf-hero-emblem svg { width: 30px; height: 30px; filter: drop-shadow(0 0 5px rgba(70,240,160,.6)); }
+.inf-hero-title { font-weight: 760; font-size: 16px; color: var(--text); }
+.inf-hero-sub { margin-top: 2px; font-size: 12px; line-height: 1.35; color: var(--text-secondary); }
+.bfx-card { display: block; padding: 14px; }
+.bfx-head { display: flex; align-items: center; gap: 11px; }
+.bfx-emblem { flex: 0 0 auto; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 12px;
+  color: #6ff3c0; background: rgba(46,214,140,.12); border: 1px solid rgba(96,242,178,.30); }
+.bfx-emblem svg { width: 24px; height: 24px; }
+.bfx-titles { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.bfx-title { font-weight: 740; font-size: 15px; color: var(--text); }
+.bfx-chip { flex: 0 0 auto; padding: 3px 9px; border-radius: 99px; font: 650 10.5px/1.3 var(--sans); letter-spacing: .2px; border: 1px solid transparent; white-space: nowrap; }
+.bfx-chip.is-off { color: var(--text-tertiary); border-color: var(--border); }
+.bfx-chip.is-ready { color: #7dffc4; background: rgba(46,214,140,.14); border-color: rgba(96,242,178,.40); }
+.bfx-chip.is-run { color: #8fe3ff; background: rgba(0,170,230,.14); border-color: rgba(90,200,255,.40); }
+.bfx-chip.is-wait { color: #ffd27a; background: rgba(255,180,40,.13); border-color: rgba(255,200,90,.40); }
+.bfx-chip.is-ok { color: #7dffc4; background: rgba(46,214,140,.18); border-color: rgba(96,242,178,.50); }
+.bfx-desc { margin: 10px 0 12px; font-size: 12px; line-height: 1.45; color: var(--text-secondary); }
+.bfx-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.bfx-step { position: relative; display: flex; gap: 11px; padding: 0 0 12px; }
+.bfx-step:not(:last-child)::after { content: ""; position: absolute; left: 10px; top: 24px; bottom: 2px; width: 2px; border-radius: 2px; background: var(--border); }
+.bfx-step.is-ok:not(:last-child)::after { background: rgba(96,242,178,.45); }
+.bfx-mark { position: relative; flex: 0 0 auto; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+  border: 2px solid var(--border-active); font: 800 12px/1 var(--sans); box-sizing: border-box; }
+.bfx-step.is-off .bfx-mark::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--text-tertiary); opacity: .6; }
+.bfx-step.is-ok .bfx-mark { border-color: #3fe0a0; background: #3fe0a0; color: #04261a; }
+.bfx-step.is-ok .bfx-mark::before { content: "\2713"; }
+.bfx-step.is-wait .bfx-mark { border-color: #ffc14d; color: #ffc14d; }
+.bfx-step.is-wait .bfx-mark::before { content: "\2026"; transform: translateY(-3px); }
+.bfx-step.is-fail .bfx-mark { border-color: #ff6b6b; color: #ff6b6b; }
+.bfx-step.is-fail .bfx-mark::before { content: "!"; }
+.bfx-step.is-run .bfx-mark { border-color: rgba(90,200,255,.25); border-top-color: #5ac8ff; animation: asbBfxSpin .9s linear infinite; }
+@keyframes asbBfxSpin { to { transform: rotate(360deg); } }
+.bfx-step-body { flex: 1 1 auto; min-width: 0; padding-top: 1px; }
+.bfx-step-t { font-size: 13px; font-weight: 680; color: var(--text); }
+.bfx-step.is-off .bfx-step-t { color: var(--text-secondary); }
+.bfx-step-s { margin-top: 2px; font-size: 12px; line-height: 1.4; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.bfx-step.is-ok .bfx-step-s { color: #7dffc4; }
+.bfx-step.is-wait .bfx-step-s { color: #ffd27a; }
+.bfx-step.is-fail .bfx-step-s { color: #ff8a8a; }
+.bfx-step-now { margin-top: 3px; font: 500 11px/1.3 var(--mono); color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bfx-step-now:empty { display: none; }
+.bfx-bar { margin-top: 7px; height: 6px; border-radius: 99px; overflow: hidden; background: rgba(120,150,139,.20); }
+.bfx-bar[hidden] { display: none; }
+.bfx-bar > i { display: block; height: 100%; border-radius: inherit; transform: scaleX(0); transform-origin: left center;
+  background: linear-gradient(90deg, #00d4ff, #3fe0a0); box-shadow: 0 0 10px rgba(63,224,160,.35); transition: transform .45s ease; }
+html[dir="rtl"] .bfx-bar > i { transform-origin: right center; }
+.bfx-actions { display: flex; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
+.bfx-btn { flex: 1 1 auto; min-height: 40px; padding: 9px 14px; border-radius: 12px; font: 700 13px/1.2 var(--sans); cursor: pointer; }
+.bfx-primary { color: #04261a; border: 1px solid rgba(96,242,178,.65); background: linear-gradient(135deg, #6cf2b8, #2fd3a6); box-shadow: 0 4px 14px rgba(26,200,140,.22); }
+.bfx-primary:disabled { color: var(--text-tertiary); background: var(--surface-hover, rgba(255,255,255,.05)); border-color: var(--border); box-shadow: none; cursor: default; }
+.bfx-primary[data-mode="stop"] { color: #fff; background: linear-gradient(135deg, #ff8a6b, #e2574c); border-color: rgba(255,140,120,.6); box-shadow: 0 4px 14px rgba(226,87,76,.22); }
+.bfx-primary[data-mode="reboot"] { color: #2a1b00; background: linear-gradient(135deg, #ffd27a, #ffb43c); border-color: rgba(255,200,90,.7); box-shadow: 0 4px 14px rgba(255,180,60,.22); }
+.bfx-secondary { color: var(--text-secondary); background: transparent; border: 1px solid var(--border-active); }
+.bfx-secondary[hidden] { display: none; }
+.bfx-note { margin-top: 8px; font-size: 11.5px; color: var(--text-tertiary); }
+.bfx-note:empty { display: none; }
+html[data-asb-theme="light"] .bfx-emblem { color: #08906c; }
+html[data-asb-theme="light"] .bfx-chip.is-ready, html[data-asb-theme="light"] .bfx-chip.is-ok { color: #06704f; }
+html[data-asb-theme="light"] .bfx-chip.is-run { color: #0a6f99; }
+html[data-asb-theme="light"] .bfx-chip.is-wait { color: #8a5a00; }
+html[data-asb-theme="light"] .bfx-step.is-ok .bfx-step-s { color: #06704f; }
+html[data-asb-theme="light"] .bfx-step.is-wait .bfx-step-s { color: #8a5a00; }
+html[data-asb-theme="light"] .bfx-step.is-fail .bfx-step-s { color: #b3261e; }
+@media (prefers-reduced-motion: reduce) { .bfx-step.is-run .bfx-mark { animation: none; } .bfx-bar > i { transition: none; } }
 #cfgActionsRow .cfg-backup { min-width: 0; min-height: 40px; padding: 8px 5px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Named-profile manager: an in-page sheet avoids the opaque KernelSU browser prompt and lets
  * saved configurations be selected by tapping a row rather than retyping an exact identifier. */
@@ -3836,7 +3983,6 @@ html[data-asb-theme="light"] :is(.cfg-tile-ico,.cfg-icon,.pbtn .pico) { box-shad
 html[data-asb-theme="light"] .cfg-pending { color:#765000; background:#fff5d6; border-color:#d89d24; }
 html[data-asb-theme="light"] :is(.cfg-profile-title,.cfg-reset-title,.debug-action-wait-title) { color:var(--text) !important; }
 html[data-asb-theme="light"] :is(.cfg-profile-close,.cfg-reset-close) { color:var(--text-secondary) !important; background:#fff !important; border-color:var(--border) !important; }
-html[data-asb-theme="light"] .logo-inner { filter:drop-shadow(0 4px 8px rgba(0,124,99,.28)); }
 /* Light theme harmony pass (fix159).
  *
  * The light theme had drifted into green: green-grey text tokens, every Monitor value and
@@ -3859,10 +4005,16 @@ html[data-asb-theme="light"] .app-name {
   -webkit-text-fill-color: transparent !important;
   filter: none !important;
 }
-html[data-asb-theme="light"] .logo-glow { opacity:.16; filter:blur(10px); }
-html[data-asb-theme="light"] .logo-ring { opacity:.38; }
-html[data-asb-theme="light"] .logo-inner { background:linear-gradient(135deg,#e9f6f2,#e4f1f6); border-color:rgba(16,24,32,.10);
-  box-shadow:inset 0 1px 1px rgba(255,255,255,.9),0 6px 18px rgba(16,24,32,.12); filter:none; }
+/* dev18: the header sphere and the boot sphere take the same light palette, so the hand-off
+ * matches in the light theme too. */
+html[data-asb-theme="light"] .logo-c { --sph-c1:#007c63; --sph-c2:#087f9a; }
+html[data-asb-theme="light"] .logo-c::before { background:radial-gradient(circle, rgba(0,124,99,.12) 0%, rgba(8,127,154,.05) 46%, transparent 70%); }
+html[data-asb-theme="light"] :is(.logo-sphere-a,.asb-boot-orbit.a) { border-color:rgba(0,124,99,.30); }
+html[data-asb-theme="light"] :is(.logo-sphere-b,.asb-boot-orbit.b) { border-color:rgba(8,127,154,.34); }
+html[data-asb-theme="light"] :is(.logo-frame-a,.asb-boot-ring.a) { border-color:rgba(0,124,99,.40); }
+html[data-asb-theme="light"] :is(.logo-frame-b,.asb-boot-ring.b) { border-color:rgba(8,127,154,.28); }
+html[data-asb-theme="light"] :is(.logo-inner,.asb-boot-ufo) { background:linear-gradient(145deg,rgba(255,255,255,.78),rgba(228,241,246,.70)); border-color:rgba(0,124,99,.38);
+  box-shadow:0 0 calc(32px * var(--k, 1)) rgba(0,124,99,.12), inset 0 0 calc(22px * var(--k, 1)) rgba(8,127,154,.06); }
 html[data-asb-theme="light"] .device-line { color:var(--text-secondary) !important; }
 html[data-asb-theme="light"] .sec-label { color:var(--text-tertiary) !important; }
 html[data-asb-theme="light"] .sec-line { background:linear-gradient(90deg,transparent,rgba(16,24,32,.18),transparent) !important; }
@@ -4328,8 +4480,8 @@ html[data-asb-theme="light"] .cfg-profile-sheet {
 }
 /* Only the glyph leaves the header: the ring, glow and box stay, so nothing reflows and the
  * nest is still there to come back to. */
-.logo-glyph { display:flex; align-items:center; justify-content:center; width:56px; height:46px; transition:opacity .28s ease; }
-.logo-glyph .asb-ufo-art { display:block; width:56px; height:42px; overflow:visible; filter:drop-shadow(0 3px 4px rgba(0,0,0,.42)); }
+.logo-glyph { display:flex; align-items:center; justify-content:center; width:calc(94px * var(--k, .6)); height:calc(71px * var(--k, .6)); transition:opacity .28s ease; }
+.logo-glyph .asb-ufo-art { display:block; width:calc(94px * var(--k, .6)); height:calc(71px * var(--k, .6)); overflow:visible; filter:drop-shadow(0 calc(5px * var(--k, .6)) calc(8px * var(--k, .6)) rgba(0,0,0,.40)); }
 .asb-ufo-defs { position:absolute; pointer-events:none; overflow:hidden; }
 body.ufo-flying .logo-glyph { opacity: 0; }
 
@@ -4698,10 +4850,7 @@ html[data-asb-font="device"] .sec-label { letter-spacing: 2.4px; }
  * a small margin, so the layout cannot flip-flop at a boundary). If even tier 2
  * overflows, the fix201 scroll remains as the fallback: nothing is ever clipped away. */
 html.asb-fit-c1 { --page-top: clamp(30px, 5vh, 48px); }
-html.asb-fit-c1 .logo-c { width: 56px; height: 56px; margin-bottom: 12px; }
-html.asb-fit-c1 .logo-inner { font-size: 26px; border-radius: 16px; }
-html.asb-fit-c1 .logo-glow { border-radius: 20px; }
-html.asb-fit-c1 .logo-ring { border-radius: 18px; }
+html.asb-fit-c1 .logo-c { --k: .4186; margin-bottom: 6px; }
 html.asb-fit-c1 .app-name { font-size: 23px; margin-bottom: 4px; }
 html.asb-fit-c1 .device-line { margin-bottom: 10px; }
 html.asb-fit-c1 .badges { margin-bottom: 12px; }
@@ -4721,10 +4870,8 @@ html.asb-fit-c1 .smart-drain-half { padding: 11px 10px; }
 html.asb-fit-c1 .tg-link-wrap { padding-top: 14px; gap: 10px; }
 
 html.asb-fit-c2 { --page-top: 22px; }
-html.asb-fit-c2 .logo-c { width: 44px; height: 44px; margin-bottom: 8px; }
-html.asb-fit-c2 .logo-inner { font-size: 21px; border-radius: 13px; }
-html.asb-fit-c2 .logo-glow { border-radius: 16px; }
-html.asb-fit-c2 .logo-ring { border-radius: 14px; }
+html.asb-fit-c2 .logo-c { --k: .3256; margin-bottom: 4px; }
+body.asb-boot-flying .page:not(.live-page) .logo-c { opacity:0; }
 html.asb-fit-c2 .app-name { font-size: 20px; margin-bottom: 3px; }
 html.asb-fit-c2 .device-line { margin-bottom: 8px; }
 html.asb-fit-c2 .badges { margin-bottom: 8px; }
@@ -5038,10 +5185,13 @@ html[data-asb-theme="light"] .cfg-lang-pop.cfg-reboot-pop button.armed {
   --boot-accent:#00f0b4; --boot-accent2:#00d4ff; --boot-text:#eefcf7; --boot-muted:#78968b;
   position:fixed; inset:0; z-index:20000; display:grid; place-items:center;
   padding:max(28px,env(safe-area-inset-top,0px)) 22px max(28px,env(safe-area-inset-bottom,0px));
-  overflow:hidden; isolation:isolate; background:#000; color:var(--boot-text);
+  overflow:hidden; isolation:isolate; background:transparent; color:var(--boot-text);
   opacity:1; transition:opacity .36s ease;
 }
 .asb-boot-intro[hidden] { display:none !important; }
+/* dev18: the preview's backdrop is its own layer, so the hand-off can fade it with opacity
+ * (composited) instead of transitioning a full-screen background colour (a repaint per frame). */
+.asb-boot-bg { position:absolute; inset:0; z-index:-3; background:#000; pointer-events:none; }
 .asb-boot-intro.is-leaving { opacity:0; pointer-events:none; }
 .asb-boot-grid {
   position:absolute; inset:-12%; z-index:-2; opacity:.22;
@@ -5067,26 +5217,28 @@ html[data-asb-theme="light"] .cfg-lang-pop.cfg-reboot-pop button.armed {
 .asb-boot-kicker::before,.asb-boot-kicker::after {
   content:""; width:28px; height:1px; background:currentColor; opacity:.45;
 }
-.asb-boot-core { position:relative; width:172px; height:172px; margin:38px auto 29px; }
+/* dev18: the sphere's geometry is written in 172 units and scaled by --k - the same formulas
+ * the header logo uses, so the core that flies into the header lands on an identical shape. */
+.asb-boot-core { --k:1; position:relative; width:calc(172px * var(--k)); height:calc(172px * var(--k)); margin:38px auto 29px; }
 .asb-boot-orbit,.asb-boot-ring,.asb-boot-ufo { position:absolute; inset:0; margin:auto; }
 .asb-boot-orbit { border:1px solid rgba(0,240,180,.20); border-radius:50%; }
 .asb-boot-orbit::before,.asb-boot-orbit::after {
-  content:""; position:absolute; width:6px; height:6px; border-radius:50%;
-  background:var(--boot-accent); box-shadow:0 0 14px var(--boot-accent);
+  content:""; position:absolute; width:max(2.5px, calc(6px * var(--k))); height:max(2.5px, calc(6px * var(--k))); border-radius:50%;
+  background:var(--boot-accent); box-shadow:0 0 calc(14px * var(--k)) var(--boot-accent);
 }
-.asb-boot-orbit::before { top:13px; left:27px; }
-.asb-boot-orbit::after { right:9px; bottom:43px; background:var(--boot-accent2); }
+.asb-boot-orbit::before { top:calc(13px * var(--k)); left:calc(27px * var(--k)); }
+.asb-boot-orbit::after { right:calc(9px * var(--k)); bottom:calc(43px * var(--k)); background:var(--boot-accent2); }
 .asb-boot-orbit.a { animation:asbBootSpin 7s linear infinite; }
-.asb-boot-orbit.b { inset:15px; border-style:dashed; border-color:rgba(0,212,255,.27); animation:asbBootSpin 10s linear infinite reverse; }
-.asb-boot-ring { inset:31px; border:1px solid rgba(0,240,180,.38); transform:rotate(45deg); border-radius:25px; }
-.asb-boot-ring.b { inset:40px; border-color:rgba(0,212,255,.23); transform:rotate(22.5deg); }
+.asb-boot-orbit.b { inset:calc(15px * var(--k)); border-style:dashed; border-color:rgba(0,212,255,.27); animation:asbBootSpin 10s linear infinite reverse; }
+.asb-boot-ring { inset:calc(31px * var(--k)); border:1px solid rgba(0,240,180,.38); transform:rotate(45deg); border-radius:calc(25px * var(--k)); }
+.asb-boot-ring.b { inset:calc(40px * var(--k)); border-color:rgba(0,212,255,.23); transform:rotate(22.5deg); }
 .asb-boot-ufo {
-  inset:37px 24px; display:grid; place-items:center; border:1px solid rgba(0,240,180,.40);
-  border-radius:26px; background:linear-gradient(145deg,rgba(0,240,180,.10),rgba(91,104,210,.08));
-  box-shadow:0 0 32px rgba(0,240,180,.14),inset 0 0 22px rgba(76,201,255,.06);
+  inset:calc(37px * var(--k)) calc(24px * var(--k)); display:grid; place-items:center; border:1px solid rgba(0,240,180,.40);
+  border-radius:calc(26px * var(--k)); background:linear-gradient(145deg,rgba(0,240,180,.10),rgba(91,104,210,.08));
+  box-shadow:0 0 calc(32px * var(--k)) rgba(0,240,180,.14),inset 0 0 calc(22px * var(--k)) rgba(76,201,255,.06);
   animation:asbBootPulse 2.2s ease-in-out infinite;
 }
-.asb-boot-ufo svg { width:94px; height:71px; overflow:visible; filter:drop-shadow(0 5px 8px rgba(0,0,0,.40)); }
+.asb-boot-ufo svg { width:calc(94px * var(--k)); height:calc(71px * var(--k)); overflow:visible; filter:drop-shadow(0 calc(5px * var(--k)) calc(8px * var(--k)) rgba(0,0,0,.40)); }
 .asb-boot-brand { margin-bottom:0; font-size:25px; line-height:1.1; font-weight:740; letter-spacing:-.8px; }
 .asb-boot-brand b { color:var(--boot-accent); font-weight:inherit; }
 .asb-boot-status { min-height:20px; margin-top:13px; color:var(--boot-muted); font-size:12px; font-weight:550; }
@@ -5107,20 +5259,15 @@ html[data-asb-theme="light"] .cfg-lang-pop.cfg-reboot-pop button.armed {
 .asb-boot-stage.is-done { color:var(--boot-accent); opacity:1; }
 html[data-asb-theme="light"] .asb-boot-intro {
   --boot-accent:#007c63; --boot-accent2:#087f9a; --boot-text:#10211c; --boot-muted:#5d746b;
-  background:#edf4f1;
 }
+html[data-asb-theme="light"] .asb-boot-bg { background:#edf4f1; }
 html[data-asb-theme="light"] .asb-boot-grid { opacity:.16; }
-html[data-asb-theme="light"] .asb-boot-ufo { background:rgba(255,255,255,.56); }
 html[dir="rtl"] .asb-boot-progress > i { transform-origin:right center; }
 @keyframes asbBootSpin { to { transform:rotate(360deg); } }
 @keyframes asbBootPulse { 50% { transform:scale(.92); opacity:.76; } }
 @keyframes asbBootScan { 0%,100% { transform:translateY(8vh); opacity:0; } 15%,85% { opacity:.52; } 50% { transform:translateY(82vh); } }
 @media (max-height:640px) {
-  .asb-boot-core { width:142px; height:142px; margin:24px auto 20px; }
-  .asb-boot-ufo { inset:31px 18px; }
-  .asb-boot-orbit.b { inset:12px; }
-  .asb-boot-ring { inset:25px; }
-  .asb-boot-ring.b { inset:33px; }
+  .asb-boot-core { --k:.8256; margin:24px auto 20px; }
   .asb-boot-stages { margin-top:20px; }
 }
 @media (prefers-reduced-motion:reduce) {
@@ -5128,36 +5275,28 @@ html[dir="rtl"] .asb-boot-progress > i { transform-origin:right center; }
   .asb-boot-scan,.asb-boot-orbit,.asb-boot-ufo { animation:none !important; }
 }
 @media (forced-colors:active) {
-  .asb-boot-intro { background:Canvas !important; color:CanvasText !important; }
+  .asb-boot-intro { color:CanvasText !important; }
+  .asb-boot-bg { background:Canvas !important; }
   .asb-boot-grid,.asb-boot-scan { display:none; }
   .asb-boot-kicker,.asb-boot-status,.asb-boot-count,.asb-boot-stage { color:CanvasText !important; }
   .asb-boot-orbit,.asb-boot-ring,.asb-boot-ufo,.asb-boot-progress { border-color:CanvasText !important; }
   .asb-boot-ufo { background:Canvas !important; color:CanvasText !important; box-shadow:none; }
   .asb-boot-progress > i { background:Highlight !important; box-shadow:none; }
 }
-/* dev17: the hand-off from the boot preview to the home screen.
+/* dev18: the hand-off from the boot preview to the home screen.
  *
- * Instead of a plain fade, the saucer flies up into the header and becomes the header's own
- * logo (asbBootFlyToHeader drives the flight in JS, all transform/opacity). The warp state
- * dissolves everything that is NOT flying - the panel text, the grid, the scan, the saucer's
- * pod, and the overlay's own background - so the already-revealed home screen shows through
- * behind the saucer and the orbit spheres as they lift into place. The reduced-motion branch
- * never enters this path; the old opacity fade (is-leaving) stays as the fallback. */
-.asb-boot-intro.asb-boot-warp {
-  background:transparent !important; transition:background .5s ease;
-}
+ * The spinning sphere itself - orbits, frames, pod and saucer, as one block - flies into the
+ * header and becomes the header logo, which is the same sphere (see .logo-c). Only the core's
+ * own transform is animated: its orbits keep their CSS rotation and the pod keeps its pulse,
+ * so nothing inside snaps. The warp state fades the preview's text with opacity; the backdrop
+ * layer is faded by the flight itself. While the core is in the air the home header's sphere
+ * waits invisible, then the two cross-fade in place with their rotation phase locked. The
+ * reduced-motion branch never enters this path; the old opacity fade (is-leaving) remains. */
 .asb-boot-warp .asb-boot-grid, .asb-boot-warp .asb-boot-scan, .asb-boot-warp .asb-boot-kicker,
 .asb-boot-warp .asb-boot-brand, .asb-boot-warp .asb-boot-status, .asb-boot-warp .asb-boot-progress,
 .asb-boot-warp .asb-boot-count, .asb-boot-warp .asb-boot-stages {
-  opacity:0 !important; transition:opacity .34s ease;
+  opacity:0 !important; transition:opacity .3s ease;
 }
-/* The saucer's pod (its bordered capsule) dissolves so only the saucer art flies. */
-.asb-boot-warp .asb-boot-ufo {
-  border-color:transparent !important; background:transparent !important; box-shadow:none !important;
-  animation:none !important; transition:border-color .3s ease, background .3s ease, box-shadow .3s ease;
-}
-/* While the saucer is in flight the header's own logo waits, then pops in on landing. */
-body.asb-boot-flying .logo-glyph { opacity:0; }
 
 
 /* ── fix328/fix329: settled Home content and a coherent six-category hub ─────────────
@@ -5333,6 +5472,7 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
   </defs>
 </svg>
 <div class="asb-boot-intro" id="asbBootIntro" hidden aria-hidden="true" role="status" aria-live="polite">
+  <div class="asb-boot-bg" aria-hidden="true"></div>
   <div class="asb-boot-grid" aria-hidden="true"></div>
   <div class="asb-boot-scan" aria-hidden="true"></div>
   <div class="asb-boot-panel">
@@ -5369,8 +5509,8 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
   <!-- HEADER -->
   <div class="header">
     <div class="logo-c">
-      <div class="logo-glow"></div>
-      <div class="logo-ring"></div>
+      <div class="logo-sphere-a"></div><div class="logo-sphere-b"></div>
+      <div class="logo-frame-a"></div><div class="logo-frame-b"></div>
       <div class="logo-inner"><span class="logo-glyph" aria-hidden="true"><svg class="asb-ufo-art" viewBox="0 0 96 72" focusable="false"><use href="#asbUfoArt"></use></svg></span></div>
     </div>
     <div class="app-name">AutoSystemBoost</div>
@@ -5528,8 +5668,8 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
 
   <div class="header">
     <div class="logo-c">
-      <div class="logo-glow"></div>
-      <div class="logo-ring"></div>
+      <div class="logo-sphere-a"></div><div class="logo-sphere-b"></div>
+      <div class="logo-frame-a"></div><div class="logo-frame-b"></div>
       <div class="logo-inner"><span class="logo-glyph" aria-hidden="true"><svg class="asb-ufo-art" viewBox="0 0 96 72" focusable="false"><use href="#asbUfoArt"></use></svg></span></div>
     </div>
     <div class="app-name">AutoSystemBoost</div>
@@ -5736,8 +5876,8 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
 
   <div class="header">
     <div class="logo-c">
-      <div class="logo-glow"></div>
-      <div class="logo-ring"></div>
+      <div class="logo-sphere-a"></div><div class="logo-sphere-b"></div>
+      <div class="logo-frame-a"></div><div class="logo-frame-b"></div>
       <div class="logo-inner"><span class="logo-glyph" aria-hidden="true"><svg class="asb-ufo-art" viewBox="0 0 96 72" focusable="false"><use href="#asbUfoArt"></use></svg></span></div>
     </div>
     <div class="app-name">AutoSystemBoost</div>
@@ -5827,9 +5967,9 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
       <button class="cfg-backup" onclick="cfgExport()" data-i18n="cfg_profile_save_short">↑ Save</button>
       <button class="cfg-backup" onclick="cfgImport()" data-i18n="cfg_profile_load_short">↓ Open</button>
       <button class="cfg-backup" onclick="cfgResetDialogOpen()" data-i18n="cfg_smart_reset">↺ Reset</button>
-      <button class="cfg-backup cfg-infirmary-btn" id="cfgInfirmaryBtn" type="button" onclick="cfgOpenInfirmary()" aria-label="Infirmary" title="Infirmary">
-        <svg class="cfg-infirmary-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 7.5v9M7.5 12h9"></path><rect x="4" y="4" width="16" height="16" rx="4"></rect></svg>
-        <span data-i18n="inf_title">Infirmary</span>
+      <button class="cfg-backup cfg-infirmary-btn" id="cfgInfirmaryBtn" type="button" onclick="cfgOpenInfirmary()">
+        <span class="cfg-inf-emblem" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><defs><linearGradient id="asbInfBtnGrad" x1="0" y1="0" x2="1" y2="1"><stop class="inf-stop-a" offset="0"/><stop class="inf-stop-b" offset="1"/></linearGradient></defs><path d="M9.4 3h5.2A1.4 1.4 0 0 1 16 4.4V8h3.6A1.4 1.4 0 0 1 21 9.4v5.2a1.4 1.4 0 0 1-1.4 1.4H16v3.6a1.4 1.4 0 0 1-1.4 1.4H9.4A1.4 1.4 0 0 1 8 19.6V16H4.4A1.4 1.4 0 0 1 3 14.6V9.4A1.4 1.4 0 0 1 4.4 8H8V4.4A1.4 1.4 0 0 1 9.4 3z" fill="url(#asbInfBtnGrad)"/></svg></span>
+        <span class="cfg-inf-label" data-i18n="inf_title">Infirmary</span>
       </button>
     </div>
 
@@ -5868,8 +6008,8 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
 
   <div class="header">
     <div class="logo-c">
-      <div class="logo-glow"></div>
-      <div class="logo-ring"></div>
+      <div class="logo-sphere-a"></div><div class="logo-sphere-b"></div>
+      <div class="logo-frame-a"></div><div class="logo-frame-b"></div>
       <div class="logo-inner"><span class="logo-glyph" aria-hidden="true"><svg class="asb-ufo-art" viewBox="0 0 96 72" focusable="false"><use href="#asbUfoArt"></use></svg></span></div>
     </div>
     <div class="app-name">AutoSystemBoost</div>
@@ -5949,8 +6089,8 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
   <div class="live-inner">
     <div class="header">
       <div class="logo-c">
-        <div class="logo-glow"></div>
-        <div class="logo-ring"></div>
+        <div class="logo-sphere-a"></div><div class="logo-sphere-b"></div>
+        <div class="logo-frame-a"></div><div class="logo-frame-b"></div>
         <div class="logo-inner"><span class="logo-glyph" aria-hidden="true"><svg class="asb-ufo-art" viewBox="0 0 96 72" focusable="false"><use href="#asbUfoArt"></use></svg></span></div>
       </div>
       <div class="app-name">AutoSystemBoost</div>
@@ -6002,8 +6142,8 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
   <div class="live-inner">
     <div class="header">
       <div class="logo-c">
-        <div class="logo-glow"></div>
-        <div class="logo-ring"></div>
+        <div class="logo-sphere-a"></div><div class="logo-sphere-b"></div>
+        <div class="logo-frame-a"></div><div class="logo-frame-b"></div>
         <div class="logo-inner"><span class="logo-glyph" aria-hidden="true"><svg class="asb-ufo-art" viewBox="0 0 96 72" focusable="false"><use href="#asbUfoArt"></use></svg></span></div>
       </div>
       <div class="app-name">AutoSystemBoost</div>
@@ -9349,60 +9489,82 @@ function cfgRenderZygiskCard(list, items) {
   list.appendChild(card);
 }
 
-/* Infirmary → Battery Fix (dev17).
+/* Infirmary → Battery Fix (dev18).
  *
- * Honest by construction. The action resets Android's stored battery statistics - the three
- * files under /data/system that hold the per-app usage history and the learned capacity
- * estimate - so the percentage curve and the usage breakdown relearn from a full charge. It
- * does NOT add capacity or runtime and the card says so. Because those files are read early
- * in boot, the delete runs at the next boot: the button arms a one-shot and asks for a
- * reboot, and it is offered only at 100% on a charger (the only correct point to reset from).
- * It also kicks off an in-place ART speed-profile recompile, which can make launches smoother
- * at the cost of a slower first boot - no dalvik-cache wipe, so no risky cold recompile. */
+ * The card says at every moment what is happening and whether it worked. It is a three-step
+ * stepper fed by `asb_battery_fix.sh status`:
+ *   1. the condition (level and charger, read live);
+ *   2. the in-place ART recompile, app by app, with a progress bar, failures counted, the app
+ *      being compiled now and a time estimate from the measured pace - or how it ended (done,
+ *      stopped, interrupted by a reboot);
+ *   3. the battery-statistics reset: scheduled for the next boot, or done - when, how many of
+ *      the three files were removed, and whether Android has since started a new record.
+ * A chip in the corner sums it up. The card polls every 2 s while the compile runs and every
+ * 8 s otherwise, only while it is on screen. Honest wording: the reset clears a skewed usage
+ * record and the learned estimate; it adds no capacity or runtime. */
 const BATTERY_FIX_SCRIPT = MD + '/runtime/asb_battery_fix.sh';
-let _bfxArmed = 0;
+let _bfxArmed = 0, _bfxTimer = 0;
+function bfxT(key, fb, vars) {
+  let s = T(key, fb);
+  const v = vars || {};
+  Object.keys(v).forEach(function (k) { s = String(s).split('{' + k + '}').join(String(v[k])); });
+  return s;
+}
+function bfxEl(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+function bfxStep(id, titleKey, titleFb) {
+  const li = bfxEl('li', 'bfx-step is-off');
+  li.id = id;
+  li.appendChild(bfxEl('span', 'bfx-mark'));
+  const body = bfxEl('div', 'bfx-step-body');
+  body.appendChild(bfxEl('div', 'bfx-step-t', T(titleKey, titleFb)));
+  const sub = bfxEl('div', 'bfx-step-s'); sub.id = id + 'S';
+  body.appendChild(sub);
+  li.appendChild(body);
+  return li;
+}
 function cfgRenderBatteryFixCard(list) {
-  const row = document.createElement('div');
-  row.className = 'cfg-row cat-battery bfx-card';
-  row.id = 'bfxCard';
-  const top = document.createElement('div');
-  top.className = 'cfg-row-top';
-  const ic = document.createElement('div');
-  ic.className = 'cfg-icon cat-battery';
-  ic.innerHTML = techIcon('battery_cell');
-  top.appendChild(ic);
-  const main = document.createElement('div');
-  main.className = 'cfg-main';
-  const nm = document.createElement('div');
-  nm.className = 'cfg-name';
-  nm.textContent = T('bfx_title', 'Battery Fix');
-  main.appendChild(nm);
-  const st = document.createElement('div');
-  st.className = 'cfg-status';
-  st.id = 'bfxState';
-  main.appendChild(st);
-  top.appendChild(main);
-  row.appendChild(top);
-  const ds = document.createElement('div');
-  ds.className = 'nf-card-desc';
-  ds.textContent = T('bfx_desc', 'Resets Android’s stored battery statistics: the per-app usage history and the learned capacity estimate relearn from a full charge. This does not add capacity or battery life - it only clears a skewed record. It also recompiles apps in place for smoother launches. Available only at 100% on charge; the reset is applied on the next reboot.');
-  row.appendChild(ds);
-  const runBtn = document.createElement('button');
-  runBtn.className = 'doze-edit-btn';
-  runBtn.type = 'button';
-  runBtn.id = 'bfxRun';
-  runBtn.textContent = T('bfx_run', 'Run Battery Fix');
+  const card = bfxEl('div', 'cfg-row bfx-card');
+  card.id = 'bfxCard';
+  const head = bfxEl('div', 'bfx-head');
+  const em = bfxEl('div', 'bfx-emblem');
+  em.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="16" height="11" rx="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M21 10.5v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M11 9.6v5.8M8.1 12.5h5.8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+  head.appendChild(em);
+  const titles = bfxEl('div', 'bfx-titles');
+  titles.appendChild(bfxEl('div', 'bfx-title', T('bfx_title', 'Battery Fix')));
+  const chip = bfxEl('span', 'bfx-chip is-off'); chip.id = 'bfxChip';
+  titles.appendChild(chip);
+  head.appendChild(titles);
+  card.appendChild(head);
+  card.appendChild(bfxEl('div', 'bfx-desc', T('bfx_desc', 'Two steps. First every app is recompiled in place (speed-profile), with progress shown below app by app. Then, on the next reboot, Android’s stored battery statistics are reset, so the per-app usage history and the learned capacity estimate start again from a full charge. This clears a skewed record; it does not add capacity or battery life. Available only at 100% on charge.')));
+  const steps = bfxEl('ol', 'bfx-steps');
+  steps.appendChild(bfxStep('bfxStepCond', 'bfx_step_cond', 'Condition: 100% on charge'));
+  const art = bfxStep('bfxStepArt', 'bfx_step_art', 'Recompile apps (ART)');
+  const bar = bfxEl('div', 'bfx-bar'); bar.id = 'bfxBarWrap'; bar.hidden = true;
+  const fill = bfxEl('i'); fill.id = 'bfxBar'; bar.appendChild(fill);
+  art.querySelector('.bfx-step-body').appendChild(bar);
+  const now = bfxEl('div', 'bfx-step-now'); now.id = 'bfxArtNow';
+  art.querySelector('.bfx-step-body').appendChild(now);
+  steps.appendChild(art);
+  steps.appendChild(bfxStep('bfxStepReset', 'bfx_step_reset', 'Reset battery statistics'));
+  card.appendChild(steps);
+  const actions = bfxEl('div', 'bfx-actions');
+  const runBtn = bfxEl('button', 'bfx-btn bfx-primary', T('bfx_run', 'Run Battery Fix'));
+  runBtn.type = 'button'; runBtn.id = 'bfxRun'; runBtn.dataset.mode = 'run'; runBtn.disabled = true;
   runBtn.onclick = function (e) { e.stopPropagation(); batteryFixRun(); };
-  row.appendChild(runBtn);
-  const cancelBtn = document.createElement('button');
-  cancelBtn.className = 'doze-edit-btn bfx-cancel';
-  cancelBtn.type = 'button';
-  cancelBtn.id = 'bfxCancel';
-  cancelBtn.hidden = true;
-  cancelBtn.textContent = T('bfx_cancel', 'Cancel scheduled reset');
+  actions.appendChild(runBtn);
+  const cancelBtn = bfxEl('button', 'bfx-btn bfx-secondary', T('bfx_cancel', 'Cancel scheduled reset'));
+  cancelBtn.type = 'button'; cancelBtn.id = 'bfxCancel'; cancelBtn.hidden = true;
   cancelBtn.onclick = function (e) { e.stopPropagation(); batteryFixCancel(); };
-  row.appendChild(cancelBtn);
-  list.appendChild(row);
+  actions.appendChild(cancelBtn);
+  card.appendChild(actions);
+  const note = bfxEl('div', 'bfx-note'); note.id = 'bfxNote';
+  card.appendChild(note);
+  list.appendChild(card);
   batteryFixPaint();
 }
 function bfxParse(txt) {
@@ -9410,53 +9572,119 @@ function bfxParse(txt) {
   String(txt || '').trim().split(/\s+/).forEach(function (p) { const i = p.indexOf('='); if (i > 0) f[p.slice(0, i)] = p.slice(i + 1); });
   return f;
 }
-async function batteryFixPaint() {
-  const st = _el('bfxState'), runBtn = _el('bfxRun'), cancelBtn = _el('bfxCancel');
-  if (!st || !runBtn) return;
-  let txt = '';
-  try { const r = await run('sh ' + shQuote(BATTERY_FIX_SCRIPT) + ' status'); txt = String((r && (r.stdout || r)) || ''); } catch (e) {}
-  const f = bfxParse(txt);
-  const pending = f.reset === 'pending';
+function bfxNum(v) { const n = parseInt(v, 10); return isFinite(n) ? n : 0; }
+function bfxWhen(sec) {
+  const d = new Date(bfxNum(sec) * 1000);
+  try { return d.toLocaleString(ASB_LANG || undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }); }
+  catch (e) { return d.toISOString().slice(0, 16).replace('T', ' '); }
+}
+function bfxSetStep(id, state, text) {
+  const li = _el(id), sub = _el(id + 'S');
+  if (li) li.className = 'bfx-step is-' + state;
+  if (sub) sub.textContent = text;
+}
+function bfxPaintFrom(f) {
+  const chip = _el('bfxChip'), runBtn = _el('bfxRun'), cancelBtn = _el('bfxCancel'), note = _el('bfxNote');
+  const bar = _el('bfxBar'), barWrap = _el('bfxBarWrap'), now = _el('bfxArtNow');
+  if (!runBtn) return 'idle';
   const eligible = f.eligible === '1';
-  if (cancelBtn) cancelBtn.hidden = !pending;
-  if (pending) {
-    st.textContent = T('bfx_st_pending', 'Scheduled — reboot to apply the reset');
-    st.className = 'cfg-status on';
-    runBtn.textContent = T('bfx_reboot', 'Reboot now');
-    runBtn.disabled = false; runBtn.dataset.mode = 'reboot';
-  } else if (eligible) {
-    st.textContent = T('bfx_st_ready', 'Ready — battery full on charge');
-    st.className = 'cfg-status on';
-    runBtn.textContent = T('bfx_run', 'Run Battery Fix');
-    runBtn.disabled = false; runBtn.dataset.mode = 'run';
-  } else {
-    const reason = f.reason === 'not_full' ? T('bfx_need_full', 'Charge to 100% to use this')
-      : f.reason === 'not_charging' ? T('bfx_need_charge', 'Plug in the charger to use this')
-      : T('bfx_need', 'Available only at 100% on charge');
-    st.textContent = reason + (/^[0-9]+$/.test(f.level || '') ? ' (' + f.level + '%)' : '');
-    st.className = 'cfg-status';
-    runBtn.textContent = T('bfx_run', 'Run Battery Fix');
-    runBtn.disabled = true; runBtn.dataset.mode = 'run';
+  const level = /^[0-9]+$/.test(f.level || '') ? f.level : '—';
+  const plug = f.charging === '1' ? T('bfx_plug_on', 'on charge') : T('bfx_plug_off', 'not on charge');
+  bfxSetStep('bfxStepCond', eligible ? 'ok' : 'off', bfxT('bfx_cond_state', '{level}% · {plug}', { level: level, plug: plug }));
+  const cs = f.compile || 'idle';
+  const total = bfxNum(f.total), done = bfxNum(f.done), ok = bfxNum(f.ok), fail = bfxNum(f.fail);
+  const started = bfxNum(f.started), finished = bfxNum(f.finished), tnow = bfxNum(f.now);
+  const running = cs === 'running';
+  let artText = T('bfx_art_idle', 'Not run yet'), artState = 'off', ratio = -1, nowText = '';
+  if (running && f.phase === 'finishing') {
+    artState = 'run'; ratio = 1;
+    artText = T('bfx_art_finishing', 'Final background optimisation…');
+  } else if (running) {
+    artState = 'run'; ratio = total ? done / total : 0;
+    artText = bfxT('bfx_art_run', '{done} of {total} · failed: {fail}', { done: done, total: total, fail: fail });
+    if (done >= 3 && tnow > started) {
+      const left = Math.max(1, Math.ceil(((tnow - started) / done) * (total - done) / 60));
+      artText += ' · ' + bfxT('bfx_art_eta', 'about {min} min left', { min: left });
+    }
+    if (f.cur && f.cur !== '-') nowText = bfxT('bfx_art_now', 'Now: {pkg}', { pkg: f.cur });
+  } else if (cs === 'done') {
+    artState = 'ok'; ratio = 1;
+    artText = bfxT('bfx_art_done', 'Done: {ok} succeeded, failed: {fail} · {min} min', { ok: ok, fail: fail, min: Math.max(1, Math.round((finished - started) / 60)) });
+  } else if (cs === 'stopped') {
+    artState = 'wait'; ratio = total ? done / total : 0;
+    artText = bfxT('bfx_art_stopped', 'Stopped at {done} of {total}', { done: done, total: total });
+  } else if (cs === 'interrupted') {
+    artState = 'wait'; ratio = total ? done / total : 0;
+    artText = bfxT('bfx_art_interrupted', 'Interrupted at {done} of {total}', { done: done, total: total });
+  } else if (cs === 'failed') {
+    artState = 'fail';
+    artText = T('bfx_art_failed', 'Could not read the list of apps');
   }
+  bfxSetStep('bfxStepArt', artState, artText);
+  if (barWrap) barWrap.hidden = ratio < 0;
+  if (bar) bar.style.transform = 'scaleX(' + Math.max(0, Math.min(1, ratio < 0 ? 0 : ratio)).toFixed(4) + ')';
+  if (now) now.textContent = nowText;
+  const pending = f.reset === 'pending';
+  const lastReset = f.last_reset && f.last_reset !== '-' ? f.last_reset : '';
+  const removed = f.removed && f.removed !== '-' ? f.removed.split(',').filter(Boolean).length : 0;
+  if (pending) bfxSetStep('bfxStepReset', 'wait', T('bfx_reset_pending', 'Scheduled — applied at the next reboot'));
+  else if (lastReset) {
+    const fresh = f.fresh === '1' ? T('bfx_reset_fresh', 'Android has started a new record') : T('bfx_reset_wait', 'Android will write the new record by itself shortly');
+    bfxSetStep('bfxStepReset', removed ? 'ok' : 'wait', bfxT('bfx_reset_done', 'Done {when}: {n} of 3 files removed', { when: bfxWhen(lastReset), n: removed }) + ' · ' + fresh);
+  } else bfxSetStep('bfxStepReset', 'off', T('bfx_reset_none', 'Not scheduled'));
+  let chipState = 'off', chipText = T('bfx_chip_off', 'Unavailable');
+  if (running) { chipState = 'run'; chipText = T('bfx_chip_run', 'Running'); }
+  else if (pending) { chipState = 'wait'; chipText = T('bfx_chip_reboot', 'Reboot needed'); }
+  else if (lastReset && cs === 'done') { chipState = 'ok'; chipText = T('bfx_chip_done', 'Done'); }
+  else if (eligible) { chipState = 'ready'; chipText = T('bfx_chip_ready', 'Ready'); }
+  if (chip) { chip.className = 'bfx-chip is-' + chipState; chip.textContent = chipText; }
+  if (cancelBtn) cancelBtn.hidden = !pending;
+  if (running) {
+    runBtn.textContent = T('bfx_stop', 'Stop recompiling'); runBtn.dataset.mode = 'stop'; runBtn.disabled = false;
+  } else if (pending) {
+    runBtn.textContent = T('bfx_reboot_finish', 'Reboot to finish'); runBtn.dataset.mode = 'reboot'; runBtn.disabled = false;
+  } else {
+    runBtn.textContent = T('bfx_run', 'Run Battery Fix'); runBtn.dataset.mode = 'run'; runBtn.disabled = !eligible;
+  }
+  if (note) note.textContent = (!running && !pending && !eligible) ? T('bfx_need', 'Available only at 100% on charge') : '';
+  return running ? 'running' : (pending ? 'pending' : 'idle');
+}
+async function batteryFixPaint() {
+  if (_bfxTimer) { clearTimeout(_bfxTimer); _bfxTimer = 0; }
+  if (!_el('bfxRun')) return;
+  let txt = '';
+  try { const r = await run('sh ' + shQuote(BATTERY_FIX_SCRIPT) + ' status'); txt = String((r && (r.stdout != null ? r.stdout : r)) || ''); } catch (e) {}
+  const mode = bfxPaintFrom(bfxParse(txt));
+  const card = _el('bfxCard');
+  const onScreen = !!(card && (typeof document === 'undefined' || !document.body || !document.body.contains || document.body.contains(card)));
+  if (onScreen) _bfxTimer = setTimeout(batteryFixPaint, mode === 'running' ? 2000 : 8000);
 }
 async function batteryFixRun() {
   const runBtn = _el('bfxRun');
-  if (runBtn && runBtn.dataset.mode === 'reboot') {
+  const mode = runBtn ? runBtn.dataset.mode : 'run';
+  if (mode === 'reboot') {
     uiSound('success'); toast(T('t_rebooting', 'Rebooting…'), 'perf');
     await run('svc power reboot 2>/dev/null || reboot');
     return;
   }
-  const now = Date.now();
-  if (now - _bfxArmed > 4000) {
-    _bfxArmed = now; uiSound('capture');
+  if (mode === 'stop') {
+    try { await run('sh ' + shQuote(BATTERY_FIX_SCRIPT) + ' stop'); } catch (e) {}
+    toast(T('bfx_stopping', 'Recompiling stops after the current app'), 'perf');
+    batteryFixPaint();
+    return;
+  }
+  const t = Date.now();
+  if (t - _bfxArmed > 4000) {
+    _bfxArmed = t; uiSound('capture');
     toast(T('bfx_confirm', 'Tap again to run Battery Fix'), 'perf');
     return;
   }
   _bfxArmed = 0;
   uiSound('success');
   let out = '';
-  try { const r = await run('sh ' + shQuote(BATTERY_FIX_SCRIPT) + ' run'); out = String((r && (r.stdout || r)) || ''); } catch (e) {}
-  if (/result=armed/.test(out)) toast(T('bfx_armed', 'Scheduled — reboot to reset the statistics'), 'ok');
+  try { const r = await run('sh ' + shQuote(BATTERY_FIX_SCRIPT) + ' run'); out = String((r && (r.stdout != null ? r.stdout : r)) || ''); } catch (e) {}
+  if (/compile=busy/.test(out)) toast(T('bfx_busy', 'Recompiling is already running'), 'perf');
+  else if (/result=armed/.test(out)) toast(T('bfx_started', 'Started: apps are being recompiled; the statistics reset follows the reboot'), 'ok');
   else toast(T('bfx_refused', 'Not available right now — needs 100% on charge'), 'error');
   batteryFixPaint();
 }
@@ -9466,6 +9694,22 @@ async function batteryFixCancel() {
   toast(T('bfx_cancelled', 'Scheduled reset cancelled'), 'ok');
   batteryFixPaint();
 }
+function cfgRenderInfirmaryHero(list) {
+  const hero = bfxEl('div', 'inf-hero');
+  const em = bfxEl('div', 'inf-hero-emblem');
+  em.innerHTML = asbPharmacyCross('asbInfHeroGrad');
+  hero.appendChild(em);
+  const tx = bfxEl('div', 'inf-hero-text');
+  tx.appendChild(bfxEl('div', 'inf-hero-title', T('inf_title', 'Infirmary')));
+  tx.appendChild(bfxEl('div', 'inf-hero-sub', T('inf_hero_sub', 'One-time repairs for specific problems. Each one shows its progress and what it changed.')));
+  hero.appendChild(tx);
+  list.appendChild(hero);
+}
+function asbPharmacyCross(gid) {
+  return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="1" y2="1"><stop class="inf-stop-a" offset="0"/><stop class="inf-stop-b" offset="1"/></linearGradient></defs>'
+    + '<path d="M9.4 3h5.2A1.4 1.4 0 0 1 16 4.4V8h3.6A1.4 1.4 0 0 1 21 9.4v5.2a1.4 1.4 0 0 1-1.4 1.4H16v3.6a1.4 1.4 0 0 1-1.4 1.4H9.4A1.4 1.4 0 0 1 8 19.6V16H4.4A1.4 1.4 0 0 1 3 14.6V9.4A1.4 1.4 0 0 1 4.4 8H8V4.4A1.4 1.4 0 0 1 9.4 3z" fill="url(#' + gid + ')"/>'
+    + '<path d="M9.6 4.4h4.8M4.6 9.4" stroke="rgba(255,255,255,.55)" stroke-width="1" stroke-linecap="round"/></svg>';
+}
 function cfgOpenInfirmary() { uiSound('nav'); cfgShowGroup('infirmary'); }
 
 function cfgRenderGroup(list, groupId) {
@@ -9473,6 +9717,7 @@ function cfgRenderGroup(list, groupId) {
   const sections = CFG_GROUP_SECTIONS[groupId];
   if (!sections) { items.forEach(it => cfgRenderRow(list, it, false)); return; }
   const rendered = {}, navItems = [];
+  if (groupId === 'infirmary') cfgRenderInfirmaryHero(list);
   sections.forEach(section => {
     const sectionItems = section.keys.map(key => items.find(it => it.key === key)).filter(Boolean);
     // A section may host a custom card with no ordinary rows (the Infirmary's Battery Fix);
@@ -22120,70 +22365,103 @@ function _asbAnimFinished(anim, ms) {
   });
 }
 function _asbRaf2() { return new Promise(function (r) { try { requestAnimationFrame(function () { requestAnimationFrame(r); }); } catch (e) { setTimeout(r, 32); } }); }
-/* dev17: fly the boot saucer up into the header and let the orbit spheres lift into place,
- * revealing the home screen underneath. Compositor-only (transform/opacity). Returns false on
- * reduced motion or if anything needed is missing, so the caller keeps the plain fade. */
+/* dev18: the boot sphere flies into the header and becomes its logo.
+ *
+ * One block moves: .asb-boot-core, the whole spinning sphere with the saucer in its pod. Only
+ * the core's own transform is animated, so the orbits keep turning and the pod keeps pulsing
+ * through the flight - no inner element is re-transformed, nothing snaps. The path is sampled
+ * from one smooth curve (an eased glide with a sideways bow that is zero at both ends), so
+ * there are no corners between keyframes; the saucer sways inside the pod and settles level.
+ * The backdrop fades by opacity under the flight, so the home screen forms behind the sphere
+ * instead of appearing at the end. On landing the core sits exactly on the header sphere (the
+ * same geometry at the header's --k); their rotations are phase-locked and they cross-fade in
+ * place. Every animation is left holding its end state until the caller has hidden the
+ * overlay - cancelling earlier is what made the dev17 saucer jump back and appear twice.
+ * Returns false (plain fade) on reduced motion, a missing piece, or a header out of view. */
+function asbSphereSync(core, target) {
+  try {
+    [['.asb-boot-orbit.a', '.logo-sphere-a'], ['.asb-boot-orbit.b', '.logo-sphere-b'], ['.asb-boot-ufo', '.logo-inner']].forEach(function (p) {
+      const a = core.querySelector(p[0]), b = target.querySelector(p[1]);
+      if (!a || !b || typeof a.getAnimations !== 'function' || typeof b.getAnimations !== 'function') return;
+      const src = a.getAnimations()[0], dst = b.getAnimations()[0];
+      if (src && dst && src.currentTime != null) dst.currentTime = src.currentTime;
+    });
+  } catch (e) {}
+}
+function asbBootFlightPath(dx, dy, sc, n) {
+  const frames = [];
+  const glide = function (t) { return (1 - Math.cos(Math.PI * t)) / 2; };
+  const settle = function (t) { return 1 - Math.pow(1 - t, 3); };
+  const c2 = 1.25 * 1.525;
+  const lift = function (t) {
+    return t < .5 ? (Math.pow(2 * t, 2) * ((c2 + 1) * 2 * t - c2)) / 2
+                  : (Math.pow(2 * t - 2, 2) * ((c2 + 1) * (t * 2 - 2) + c2) + 2) / 2;
+  };
+  const bow = Math.max(22, Math.min(64, Math.abs(dy) * .16)) * (dx > 0 ? -1 : 1);
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, e = glide(t);
+    const x = dx * e + bow * Math.sin(Math.PI * e);
+    const y = dy * lift(t);
+    const k = 1 + (sc - 1) * settle(t);
+    frames.push({ transform: 'translate(' + x.toFixed(2) + 'px,' + y.toFixed(2) + 'px) scale(' + k.toFixed(4) + ')', offset: t });
+  }
+  return frames;
+}
 async function asbBootFlyToHeader(overlay) {
   const reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  if (reduced || !overlay) return false;
+  if (reduced || !overlay || typeof overlay.querySelector !== 'function') return false;
   const core = overlay.querySelector('.asb-boot-core');
-  const flyer = overlay.querySelector('.asb-boot-ufo svg');
-  if (!core || !flyer || typeof flyer.animate !== 'function') return false;
-  // The home screen has to be laid out so the header logo has a real position to fly to.
+  if (!core || typeof core.animate !== 'function') return false;
   try { asbHomeReveal(); } catch (e) {}
   await _asbRaf2();
-  const target = document.querySelector('.page:not(.live-page) .logo-c .logo-glyph') ||
-                 document.querySelector('.logo-glyph');
-  if (!target) return false;
-  const fr = flyer.getBoundingClientRect();
-  const tr = target.getBoundingClientRect();
-  if (!fr.width || !tr.width) return false;
-  const dx = (tr.left + tr.width / 2) - (fr.left + fr.width / 2);
-  const dy = (tr.top + tr.height / 2) - (fr.top + fr.height / 2);
-  const sc = Math.max(0.16, Math.min(1, tr.width / fr.width));
+  const home = document.querySelector('.page:not(.live-page)');
+  const target = home && home.querySelector('.logo-c');
+  if (!target || typeof target.animate !== 'function') return false;
+  const cr = core.getBoundingClientRect(), tr = target.getBoundingClientRect();
+  if (!cr.width || !tr.width) return false;
+  const vh = window.innerHeight || 0;
+  if (tr.bottom <= 0 || (vh && tr.top >= vh)) return false;
+  const dx = (tr.left + tr.width / 2) - (cr.left + cr.width / 2);
+  const dy = (tr.top + tr.height / 2) - (cr.top + cr.height / 2);
+  const sc = tr.width / cr.width;
+  const D = 1150, X = 220;
+  const held = overlay._asbFlight = [];
   document.body.classList.add('asb-boot-flying');
   overlay.classList.add('asb-boot-warp');
-  // The orbit spheres and rings lift toward the header and dissolve.
-  overlay.querySelectorAll('.asb-boot-orbit, .asb-boot-ring').forEach(function (o, i) {
-    try {
-      o.animate([
-        { transform: 'translate(0,0) scale(1)', opacity: 1 },
-        { transform: 'translate(' + (dx * 0.5) + 'px,' + (dy * 0.5 - 40) + 'px) scale(.3)', opacity: 0 }
-      ], { duration: 620 + i * 70, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'forwards' });
-    } catch (e) {}
-  });
-  const k = function (fx, fy, s, rot) {
-    return 'translate(' + (dx * fx) + 'px,' + (dy * fy) + 'px) scale(' + s + ') rotate(' + rot + 'deg)';
-  };
-  const lin = function (p) { return 1 - (1 - sc) * p; };
-  let flight = null;
-  try {
-    flight = flyer.animate([
-      { transform: k(0, 0, 1, 0), offset: 0 },
-      { transform: k(0.26, 0.14, lin(.2), -10), offset: 0.22 },
-      { transform: k(0.5, 0.42, lin(.46), 12), offset: 0.46 },
-      { transform: k(0.76, 0.72, lin(.72), -7), offset: 0.72 },
-      { transform: k(0.93, 0.9, lin(.9), 4), offset: 0.9 },
-      { transform: k(1, 1, sc, 0), offset: 1 }
-    ], { duration: 980, easing: 'cubic-bezier(.5,.05,.25,1)', fill: 'forwards' });
-  } catch (e) {
-    document.body.classList.remove('asb-boot-flying');
-    overlay.classList.remove('asb-boot-warp');
-    return false;
+  core.style.willChange = 'transform, opacity';
+  const bg = overlay.querySelector('.asb-boot-bg');
+  if (bg && typeof bg.animate === 'function') {
+    held.push(bg.animate([{ opacity: 1 }, { opacity: 1, offset: .04 }, { opacity: 0, offset: .7 }, { opacity: 0 }],
+      { duration: D, easing: 'linear', fill: 'forwards' }));
   }
-  await _asbAnimFinished(flight, 1200);
-  try { flight.cancel(); } catch (e) {}
-  // The header's own logo appears with a short pop as the saucer arrives.
+  const flight = core.animate(asbBootFlightPath(dx, dy, sc, 28), { duration: D, easing: 'linear', fill: 'forwards' });
+  held.push(flight);
+  const saucer = core.querySelector('.asb-boot-ufo svg');
+  if (saucer && typeof saucer.animate === 'function') {
+    held.push(saucer.animate([
+      { transform: 'translate(0,0) rotate(0deg)' },
+      { transform: 'translate(-3px,-2px) rotate(-8deg)', offset: .22 },
+      { transform: 'translate(4px,2px) rotate(7deg)', offset: .48 },
+      { transform: 'translate(-2px,-1px) rotate(-4deg)', offset: .72 },
+      { transform: 'translate(0,0) rotate(0deg)' }
+    ], { duration: D, easing: 'ease-in-out', fill: 'forwards' }));
+  }
+  await _asbAnimFinished(flight, D + 400);
+  asbSphereSync(core, target);
+  const fadeIn = target.animate([{ opacity: 0 }, { opacity: 1 }], { duration: X, easing: 'linear', fill: 'forwards' });
+  held.push(core.animate([{ opacity: 1 }, { opacity: 0 }], { duration: X, easing: 'linear', fill: 'forwards' }));
+  await _asbAnimFinished(fadeIn, X + 200);
   document.body.classList.remove('asb-boot-flying');
-  try {
-    const pop = target.animate([
-      { transform: 'scale(.62)', opacity: 0.25 },
-      { transform: 'scale(1.12)', opacity: 1, offset: 0.6 },
-      { transform: 'scale(1)', opacity: 1 }
-    ], { duration: 300, easing: 'cubic-bezier(.2,.8,.2,1)' });
-    await _asbAnimFinished(pop, 360);
-  } catch (e) {}
+  try { fadeIn.cancel(); } catch (e) {}
   return true;
+}
+/* Called once the overlay is hidden: only then may the held end states be released. */
+function asbBootFlightRelease(overlay) {
+  if (!overlay) return;
+  (overlay._asbFlight || []).forEach(function (a) { try { a.cancel(); } catch (e) {} });
+  overlay._asbFlight = null;
+  const core = typeof overlay.querySelector === 'function' ? overlay.querySelector('.asb-boot-core') : null;
+  if (core) core.style.willChange = '';
 }
 async function asbBootIntroStart() {
   const overlay = _el('asbBootIntro');
@@ -22243,6 +22521,7 @@ async function asbBootIntroStart() {
     overlay.classList.remove('is-leaving');
     overlay.classList.remove('asb-boot-warp');
     document.body.classList.remove('asb-boot-flying');
+    try { asbBootFlightRelease(overlay); } catch (e) {}
     window._asbBootIntroActive = false;
     if (oldBusy === null) document.body.removeAttribute('aria-busy');
     else document.body.setAttribute('aria-busy', oldBusy);
