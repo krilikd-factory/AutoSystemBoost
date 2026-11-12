@@ -31,12 +31,15 @@ _put() {
 
 _changed=""
 
-# Standard kernel controls share one bounded owner. The helper emits a per-key verdict;
-# this compatibility caller only records that the pass ran, never that an unsupported
-# node accepted a write. WebUI calls the helper directly for the three new keys.
 _kc_helper="$MODDIR/runtime/asb_kernel_controls.sh"
 if [ -f "$_kc_helper" ]; then
-  MODDIR="$MODDIR" ASB_CONF="$CONF" sh "$_kc_helper" apply >/dev/null 2>&1 || true
+  case "$(_cfg mglru_mode):$(cat "$MODDIR/current_profile" 2>/dev/null)" in
+    smart:smart|:smart) _kc_keys="kernel_timer_migration kernel_sched_nr_migrate" ;;
+    *) _kc_keys="mglru_mode kernel_timer_migration kernel_sched_nr_migrate" ;;
+  esac
+  for _kc_key in $_kc_keys; do
+    MODDIR="$MODDIR" ASB_CONF="$CONF" sh "$_kc_helper" apply "$_kc_key" >/dev/null 2>&1 || true
+  done
   _changed="${_changed}kernel_controls=processed "
 fi
 

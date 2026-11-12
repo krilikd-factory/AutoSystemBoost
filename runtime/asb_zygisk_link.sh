@@ -126,13 +126,11 @@ _classes() {
     return 0
   fi
   if cmp -s "$_tmp" "$CLASSES" 2>/dev/null; then
-    # Also tighten a file left by an older build; unchanged content is no reason to keep 0644.
     chmod 600 "$CLASSES" 2>/dev/null || true
     rm -f "$_tmp"
     echo "result=unchanged slow=$_ns fast=$_nf"
     return 0
   fi
-  # Launch classes are consumed by the root companion, not by app processes.
   chmod 600 "$_tmp" 2>/dev/null || true
   chcon u:object_r:system_file:s0 "$_tmp" 2>/dev/null || true
   mv -f "$_tmp" "$CLASSES" 2>/dev/null || { rm -f "$_tmp"; echo 'result=write_failed'; return 1; }

@@ -41,19 +41,19 @@ for b in /sys/block/sd* /sys/block/mmcblk* /sys/block/dm-*; do
   writef "$b/queue/nr_requests"   "$nrq"
 done
 
-# MGLRU mode has exactly one owner. Smart requests 7 for heavy/gaming and 5 otherwise,
-# but only when mglru_mode=smart. Manual on/off/stock bypass this tuner completely.
-# The shared helper captures baseline once, avoids an unchanged write and rejects a
-# clamped readback instead of recording a request that the kernel did not honour.
 if [ "$MODE" != manual ] && [ "$(_cfg mglru_mode)" = smart ]; then
   case "$HINT" in
     3|4) _lg=7 ;;
     *)   _lg=5 ;;
   esac
   _kc_mod="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
-  if [ -r "$_kc_mod/runtime/asb_kernel_controls.sh" ]; then
+  _lgn="${ASB_MGLRU_ENABLED_NODE:-/sys/kernel/mm/lru_gen/enabled}"
+  _lgf="${ASB_MGLRU_MEMO_DIR:-/dev/.asb}/lru_gen_took_$_lg"
+  _lgc="$(cat "$_lgn" 2>/dev/null)"
+  if [ -r "$_kc_mod/runtime/asb_kernel_controls.sh" ] && { [ -z "$_lgc" ] || [ "$_lgc" != "$(cat "$_lgf" 2>/dev/null)" ]; }; then
     MODDIR="$_kc_mod" ASB_CONF="${ASB_CONF:-$_kc_mod/config/governor.conf}" \
       sh "$_kc_mod/runtime/asb_kernel_controls.sh" apply mglru_mode "$_lg" >/dev/null 2>&1 || true
+    cat "$_lgn" > "$_lgf" 2>/dev/null || true
   fi
 fi
 

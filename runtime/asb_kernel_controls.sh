@@ -1,12 +1,4 @@
 #!/system/bin/sh
-# Bounded controls for existing Linux kernel interfaces.
-#
-# There is deliberately no path or value argument: callers choose a registered key,
-# and every requested value comes from that key's closed allowlist. Each non-stock
-# write requires a readable/writable node and an atomically captured pre-ASB value.
-# Readback is numeric so MGLRU's 0x0007 and decimal 7 are equivalent; a clamped
-# 0x0001 is a readback_mismatch, never an applied 5/7. Stock/uninstall replay the
-# captured value and consume its state only after successful readback.
 
 ASB_KC_MODDIR="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
 ASB_KC_CONF="${ASB_CONF:-$ASB_KC_MODDIR/config/governor.conf}"
@@ -79,7 +71,6 @@ asb_kc_same() {
 asb_kc_prev() { printf '%s/%s.prev\n' "$ASB_KC_STATE" "$1"; }
 
 asb_kc_emit() {
-  # key|status|request|live|baseline — scalar values only, consumed as text by WebUI.
   printf '%s|%s|%s|%s|%s\n' "$1" "$2" "$3" "${4:-unknown}" "${5:-none}"
 }
 
@@ -133,7 +124,7 @@ asb_kc_apply() {
     mglru_mode:off) _aka_want=0 ;;
     mglru_mode:on) _aka_want=7 ;;
     mglru_mode:smart)
-      case "$_aka_smart" in 5|7) _aka_want="$_aka_smart" ;; *) _aka_want=5 ;; esac
+      case "$_aka_smart" in 5|7) _aka_want="$_aka_smart" ;; *) _aka_want=7 ;; esac
       ;;
     kernel_timer_migration:off) _aka_want=0 ;;
     kernel_timer_migration:on) _aka_want=1 ;;

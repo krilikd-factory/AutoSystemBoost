@@ -1,11 +1,5 @@
 #!/system/bin/sh
 # ASB integrated LTPO interaction controller (fix236).
-#
-# Independent Android-range implementation: touch opens the panel's highest advertised
-# mode; quiet intervals descend through intermediate modes actually advertised by that
-# panel before selecting the normal 60 Hz ADFR-capable mode (configurable). It waits in
-# blocking getevent, never polls display/foreground state, and writes Settings only on
-# an actual active/idle transition. Camera and game frames are not lowered.
 # The install-time oplus_vrr_config bind remains a separate, stock-safe ADFR enabler.
 set -u
 
@@ -34,7 +28,6 @@ _max_mode() {
   _display_modes | awk '{ v=int($1+0.5); if(v>m)m=v } END { if(m>=30 && m<=480) print m }'
 }
 _idle_modes() {
-  # No synthetic 90/120 Hz steps: use each advertised rate once, highest first.
   _display_modes | awk -v max="$MAX" -v idle="$IDLE" '
     { v=int($1+0.5); if(v>=30 && v<=480 && v<max && v>idle && !seen[v]++) print v }
   ' | sort -rn
@@ -78,7 +71,6 @@ _wait_event() {
   wait "$CHILD" 2>/dev/null
   _rc=$?
   CHILD=""
-  # Event=0, quiet timeout=1. A missing/broken input command is not inactivity.
   case "$_rc" in
     0) return 0 ;;
     124) return 1 ;;
@@ -165,7 +157,6 @@ rm -f "$STOPFILE" 2>/dev/null
 # uses this PID as the handover barrier: an early failure must leave the external LTPO
 # writer running instead of pausing it and then silently losing touch switching.
 DEV="$(_find_touch)" || exit 1
-# Without timeout a quiet wait cannot be distinguished from a dead input command.
 command -v timeout >/dev/null 2>&1 || exit 1
 MAX="$(_max_mode)"
 case "$MAX" in ''|*[!0-9]*) exit 1 ;; esac
@@ -222,7 +213,7 @@ while [ ! -f "$STOPFILE" ] && [ -e "$DEV" ]; do
       ;;
     1)
       # Camera and games can animate without touch. The governor state is read only at
-      # a transition, never in a polling loop. If either starts mid-decay, restore first.
+      # this transition, never in a polling loop.
       if grep -Eq '^camera_hold=1$|^state=GAMING$' "$RSTATE" 2>/dev/null; then
         if [ "$state" = settling ]; then state=active; step=0; _active; fi
         continue
@@ -238,7 +229,6 @@ while [ ! -f "$STOPFILE" ] && [ -e "$DEV" ]; do
       fi
       ;;
     *)
-      # Do not spin on a dead input device or misread an exec error as inactivity.
       _active
       _cleanup 1
       ;;
