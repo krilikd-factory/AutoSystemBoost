@@ -109,6 +109,9 @@ night_quiet_hour_start|internal|engine_or_derived|both
 night_quiet_hour_end|internal|engine_or_derived|both
 BG_TRIM_LEVEL|user|webui_standard|shell
 mglru_hold|user|webui_standard|shell
+mglru_mode|advanced|webui_sensitive|shell
+kernel_timer_migration|advanced|webui_sensitive|shell
+kernel_sched_nr_migrate|advanced|webui_sensitive|shell
 kernel_sched_stats|advanced|webui_sensitive|shell
 gms_trim|advanced|webui_sensitive|shell
 gms_freeze|advanced|webui_sensitive|shell
