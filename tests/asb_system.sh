@@ -4542,8 +4542,8 @@ _ota_out="$(cd "$_OT/r" && GITHUB_REPOSITORY=o/r ZIP_REL=ASB-V65.zip GITHUB_STEP
   || { rm -rf "$_OT"; fail "a manifest that still names the previous release failed the run: $_ota_out"; }
 printf '%s\n' "$_ota_out" | grep -q '^::warning::update.json does not describe this build yet.*versionCode 650 and zipUrl https://github.com/o/r/releases/download/65/ASB-V65.zip' \
   || { rm -rf "$_OT"; fail "the warning does not say what to set: $_ota_out"; }
-grep -q '"versionCode": 650,' "$_OT/sum" && grep -q '"zipUrl": "https://github.com/o/r/releases/download/65/ASB-V65.zip"' "$_OT/sum" \
-  || { rm -rf "$_OT"; fail "the run summary lacks the manifest for this build: $(cat "$_OT/sum")"; }
+grep -q 'GITHUB_STEP_SUMMARY' "$_OT/ota.sh" && { rm -rf "$_OT"; fail "the advisory still writes a separate OTA summary block"; }
+[ ! -e "$_OT/sum" ] || { rm -rf "$_OT"; fail "the advisory still duplicates update.json in the job summary"; }
 printf '{\n  "version": "V65",\n  "versionCode": 650,\n  "zipUrl": "https://github.com/o/r/releases/download/65/ASB-V65.zip"\n}\n' > "$_OT/r/update.json"
 _ota_out="$(cd "$_OT/r" && GITHUB_REPOSITORY=o/r ZIP_REL=ASB-V65.zip bash -e "$_OT/ota.sh" 2>&1)" || { rm -rf "$_OT"; fail "a matching manifest failed: $_ota_out"; }
 printf '%s\n' "$_ota_out" | grep -q '^::notice::update.json already describes V65 / 650 / release 65$' || { rm -rf "$_OT"; fail "matching manifest: $_ota_out"; }
@@ -7871,6 +7871,112 @@ for name in build-test.yml build-release.yml; do
 done
 
 echo "PASS workflow required-files shell contract"
+)
+
+t_ci_build_summary_contract() (
+# V66 dev26: one package-derived report, no separate/duplicated OTA summary block.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+fail() { echo "FAIL CI build summary: $*" >&2; exit 1; }
+for WF in "$ROOT/.github/workflows/build-test.yml" "$ROOT/.github/workflows/build-release.yml"; do
+  grep -Fq 'python3 -I tools/asb_ci_summary.py' "$WF" || fail "generator missing from $WF"
+  [ "$(grep -Fc 'cat "$SUMMARY_OUT" >> "$GITHUB_STEP_SUMMARY"' "$WF")" = 1 ] \
+    || fail "summary is absent or appended more than once in $WF"
+  grep -Fq 'ASB_REGRESSION_RESULT: ${{ needs.regression.result }}' "$WF" \
+    || fail "matrix result is not passed to the summary in $WF"
+  grep -Fq 'id: upload-artifact' "$WF" || fail "artifact outcome is not observable in $WF"
+done
+python3 - "$ROOT" "$TMP" <<'ASB_CI_SUMMARY_TEST'
+import hashlib
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+from zipfile import ZipFile
+
+root = Path(sys.argv[1])
+tmp = Path(sys.argv[2])
+repo = tmp / "repo"
+repo.mkdir()
+(repo / "module.prop").write_text("id=AutoSystemBoost\nname=-ASB\nversion=V66\nversionCode=660\n", encoding="utf-8")
+(repo / "update.json").write_text(json.dumps({
+    "version": "V65", "versionCode": 650,
+    "zipUrl": "https://github.com/krilikd-factory/AutoSystemBoost/releases/download/65/ASB-V65.zip",
+    "changelog": "https://raw.githubusercontent.com/krilikd-factory/AutoSystemBoost/main/CHANGELOG.md",
+}), encoding="utf-8")
+payloads = {
+    "bin/asb": b"governor-arm64", "bin/asb_dsp_attach": b"attacher-arm64",
+    "bin/libasbdsp_v2.so": b"dsp-v2-64", "bin/libasbdsp_v2_32.so": b"dsp-v2-32",
+    "bin/libasbdsp_v3.so": b"dsp-v3-64", "bin/libasbdsp_v3_32.so": b"dsp-v3-32",
+    "zygisk/arm64-v8a.so": b"observer-64", "zygisk/armeabi-v7a.so": b"observer-32",
+}
+
+def make_zip(name, version):
+    path = repo / name
+    manifest = {
+        "schema": 1, "distribution": "flashable-module", "version": version,
+        "versionCode": 660, "source_commit": "abc123def456", "dsp_reference_present": True,
+        "dsp_aidl_built": True, "dsp_runtime_verified": False,
+        "dsp_runtime_evidence": "not_run_on_host",
+    }
+    with ZipFile(path, "w") as z:
+        z.writestr("module.prop", f"id=AutoSystemBoost\nversion={version}\nversionCode=660\n")
+        z.writestr("release-manifest.json", json.dumps(manifest))
+        for filename, data in payloads.items():
+            z.writestr(filename, data)
+    return path
+
+def run_summary(mode, zip_path, output, job="success", regression="success", upload="success"):
+    env = dict(os.environ,
+        GITHUB_REPOSITORY="krilikd-factory/AutoSystemBoost", GITHUB_EVENT_NAME="workflow_dispatch",
+        GITHUB_REF_NAME="main", GITHUB_SHA="a" * 40, GITHUB_RUN_ID="12345", ASB_VER="V66")
+    subprocess.run([
+        "python3", "-I", str(root / "tools/asb_ci_summary.py"), "--mode", mode,
+        "--workspace", str(repo), "--zip", str(zip_path), "--output", str(output),
+        "--job-status", job, "--regression-result", regression, "--upload-outcome", upload,
+    ], check=True, env=env, stdout=subprocess.DEVNULL)
+    return output.read_text(encoding="utf-8")
+
+test_zip = make_zip("ASB-V66-test2.zip", "V66-test2")
+test = run_summary("test", test_zip, tmp / "test.md")
+for needle in ("# ⚡ AutoSystemBoost", "Test build", "V66-test2", "All 3 shards passed",
+               hashlib.sha256(test_zip.read_bytes()).hexdigest(), "CRC", "zygisk/armeabi-v7a.so",
+               "Not run on host", "Device validation remains separate", "Test artifact only"):
+    assert needle in test, needle
+assert "## 🔄 OTA manifest" not in test
+assert '"zipUrl"' not in test
+assert "owner/repo" not in test
+for name, data in payloads.items():
+    assert hashlib.sha256(data).hexdigest() in test, name
+
+release_zip = make_zip("ASB-V66.zip", "V66")
+release = run_summary("release", release_zip, tmp / "release.md")
+assert release.count("## 🔄 OTA manifest") == 1
+assert release.count('"versionCode": 660') == 1
+assert release.count('"zipUrl"') == 1
+assert "https://github.com/krilikd-factory/AutoSystemBoost/releases/download/66/ASB-V66.zip" in release
+assert "Publish the release asset first" in release
+assert "owner/repo" not in release
+
+candidate = {
+    "version": "V66", "versionCode": 660,
+    "zipUrl": "https://github.com/krilikd-factory/AutoSystemBoost/releases/download/66/ASB-V66.zip",
+    "changelog": "https://raw.githubusercontent.com/krilikd-factory/AutoSystemBoost/main/CHANGELOG.md",
+}
+(repo / "update.json").write_text(json.dumps(candidate), encoding="utf-8")
+matching = run_summary("release", release_zip, tmp / "release-matching.md")
+assert "already matches this build" in matching
+
+failed = run_summary("test", repo / "missing.zip", tmp / "failed.md", job="failure", regression="failure", upload="")
+assert "Failed / incomplete" in failed
+assert "not found: missing.zip" in failed
+assert "Regression result: failure" in failed
+assert "✅ Success" not in failed
+print("PASS CI build summary: test/release, hashes, gates, single OTA and failed-build fallback")
+ASB_CI_SUMMARY_TEST
 )
 
 t_session_lifecycle_runtime() (
