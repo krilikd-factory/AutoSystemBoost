@@ -9,6 +9,7 @@ asb_kc_node() {
     mglru_mode) printf '%s\n' "${ASB_MGLRU_ENABLED_NODE:-/sys/kernel/mm/lru_gen/enabled}" ;;
     kernel_timer_migration) printf '%s\n' "${ASB_TIMER_MIGRATION_NODE:-/proc/sys/kernel/timer_migration}" ;;
     kernel_sched_nr_migrate) printf '%s\n' "${ASB_SCHED_NR_MIGRATE_NODE:-/proc/sys/kernel/sched_nr_migrate}" ;;
+    kernel_sched_stats) printf '%s\n' "${ASB_SCHED_STATS_NODE:-/proc/sys/kernel/sched_stats}" ;;
     *) return 1 ;;
   esac
 }
@@ -24,6 +25,8 @@ asb_kc_mode() {
     kernel_timer_migration:*) _akm_v=off ;;
     kernel_sched_nr_migrate:stock|kernel_sched_nr_migrate:1|kernel_sched_nr_migrate:2|kernel_sched_nr_migrate:4|kernel_sched_nr_migrate:8|kernel_sched_nr_migrate:16) ;;
     kernel_sched_nr_migrate:*) _akm_v=4 ;;
+    kernel_sched_stats:stock|kernel_sched_stats:off) ;;
+    kernel_sched_stats:*) _akm_v=stock ;;
     *) return 1 ;;
   esac
   printf '%s\n' "$_akm_v"
@@ -32,7 +35,7 @@ asb_kc_mode() {
 asb_kc_valid_value() {
   _akv_key="$1" _akv_v="$2"
   case "$_akv_key" in
-    kernel_timer_migration) case "$_akv_v" in 0|1) return 0 ;; *) return 1 ;; esac ;;
+    kernel_timer_migration|kernel_sched_stats) case "$_akv_v" in 0|1) return 0 ;; *) return 1 ;; esac ;;
     kernel_sched_nr_migrate)
       case "$_akv_v" in ''|*[!0-9]*) return 1 ;; esac
       [ "${#_akv_v}" -le 9 ]
@@ -68,7 +71,13 @@ asb_kc_same() {
   [ "$_aks_a" = "$_aks_b" ]
 }
 
-asb_kc_prev() { printf '%s/%s.prev\n' "$ASB_KC_STATE" "$1"; }
+asb_kc_prev() {
+  if [ "$1" = kernel_sched_stats ] && [ -z "${ASB_KERNEL_STATE_DIR+x}" ]; then
+    printf '%s\n' "${ASB_SCHED_STATS_PREV:-/data/adb/asb/kernel_sched_stats.prev}"
+  else
+    printf '%s/%s.prev\n' "$ASB_KC_STATE" "$1"
+  fi
+}
 
 asb_kc_emit() {
   printf '%s|%s|%s|%s|%s\n' "$1" "$2" "$3" "${4:-unknown}" "${5:-none}"
@@ -83,7 +92,7 @@ asb_kc_capture() {
   fi
   _akc_orig="$(asb_kc_clean "$(cat "$_akc_node" 2>/dev/null)")"
   asb_kc_valid_value "$_akc_key" "$_akc_orig" || return 1
-  mkdir -p "$ASB_KC_STATE" 2>/dev/null || return 1
+  mkdir -p "${_akc_prev%/*}" 2>/dev/null || return 1
   _akc_tmp="$_akc_prev.tmp.$$"
   (umask 077; printf '%s\n' "$_akc_orig" > "$_akc_tmp" 2>/dev/null) || { rm -f "$_akc_tmp" 2>/dev/null; return 1; }
   mv -f "$_akc_tmp" "$_akc_prev" 2>/dev/null || { rm -f "$_akc_tmp" 2>/dev/null; return 1; }
@@ -128,6 +137,7 @@ asb_kc_apply() {
       ;;
     kernel_timer_migration:off) _aka_want=0 ;;
     kernel_timer_migration:on) _aka_want=1 ;;
+    kernel_sched_stats:off) _aka_want=0 ;;
     kernel_sched_nr_migrate:1|kernel_sched_nr_migrate:2|kernel_sched_nr_migrate:4|kernel_sched_nr_migrate:8|kernel_sched_nr_migrate:16)
       _aka_want="$_aka_mode" ;;
     *) asb_kc_emit "$_aka_key" invalid_request "$_aka_mode" "" "$_aka_saved"; return 1 ;;
@@ -167,7 +177,7 @@ asb_kc_status() {
 
 asb_kc_each() {
   _ake_action="$1" _ake_rc=0
-  for _ake_key in mglru_mode kernel_timer_migration kernel_sched_nr_migrate; do
+  for _ake_key in mglru_mode kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats; do
     "asb_kc_$_ake_action" "$_ake_key" || _ake_rc=1
   done
   return "$_ake_rc"
