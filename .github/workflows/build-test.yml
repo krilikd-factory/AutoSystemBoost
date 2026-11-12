@@ -40,6 +40,7 @@ jobs:
             runtime/asb_active_efficiency_envelope.sh \
             runtime/asb_boot_timeline.sh \
             runtime/asb_debug_support.sh \
+            runtime/asb_kernel_controls.sh \
             runtime/asb_stock_policy.sh \
             runtime/asb_overlay_guard.sh \
             runtime/asb_wifi_fallback.sh \
@@ -105,6 +106,7 @@ jobs:
             runtime/asb_active_efficiency_envelope.sh \
             runtime/asb_boot_timeline.sh \
             runtime/asb_debug_support.sh \
+            runtime/asb_kernel_controls.sh \
             runtime/asb_stock_policy.sh \
             runtime/asb_overlay_guard.sh \
             runtime/asb_wifi_fallback.sh \
@@ -186,6 +188,7 @@ jobs:
             runtime/asb_zygisk_link.sh \
             runtime/asb_ltpo_video.sh \
             runtime/asb_odm_rebind.sh \
+            runtime/asb_kernel_controls.sh \
             runtime/asb_stock_policy.sh \
             runtime/asb_overlay_guard.sh \
             tools/asb_schema_sync.sh \
@@ -715,6 +718,7 @@ jobs:
             "runtime/asb_zygisk_link.sh" \
             "runtime/asb_ltpo_video.sh" \
             "runtime/asb_odm_rebind.sh" \
+            "runtime/asb_kernel_controls.sh" \
             "runtime/asb_stock_policy.sh" \
             "runtime/asb_overlay_guard.sh" \
             "runtime/asb_device_pack_manifest.sh" \
