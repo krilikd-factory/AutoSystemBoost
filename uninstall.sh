@@ -654,10 +654,6 @@ if [ -n "$_rr_peak$_rr_min" ]; then
   ) &
 fi
 
-# OEM extreme-refresh unlock (dev17): the two OnePlus "extreme refresh" globals the Panel
-# Maximum on Touch tweak flips live in global Settings, which outlives the module. The live
-# remove above puts them back when the phone is up; this waiter covers an uninstall applied
-# at the next boot. Both read into the detached shell before /data/adb/asb is removed.
 if [ -f /data/adb/asb/ltpo_extreme.orig ]; then
   _xtr_rec="$(cat /data/adb/asb/ltpo_extreme.orig 2>/dev/null)"
   if [ -n "$_xtr_rec" ]; then

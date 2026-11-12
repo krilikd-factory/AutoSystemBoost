@@ -91,9 +91,7 @@ fi
 rm -f /data/adb/asb/ltpo_video.lock/pid 2>/dev/null
 rmdir /data/adb/asb/ltpo_video.lock 2>/dev/null
 rm -rf /data/adb/asb/heytap_art_compile.lock 2>/dev/null
-# Infirmary Battery Fix: a one-shot battery-stats reset armed from the WebUI. system_server
-# reads these files early, so the delete must happen here, before it starts. No-op unless the
-# user armed it at 100% on charge; the script clears its own flag.
+rm -rf /data/adb/asb/battery_fix.lock 2>/dev/null
 [ -f /data/adb/asb/battery_fix.pending ] && [ -f "$MODDIR/runtime/asb_battery_fix.sh" ] && \
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_battery_fix.sh" boot >/dev/null 2>&1 || true
 if [ -f "$MODDIR/runtime/asb_zygisk.sh" ]; then
