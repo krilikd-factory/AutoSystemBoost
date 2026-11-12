@@ -4288,6 +4288,13 @@ if [ -r /proc/sys/kernel/sched_stats ]; then
 else
   NOTE "kernel_sched_stats = $(cfg kernel_sched_stats)  ·  live: not exposed"
 fi
+if [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_kernel_controls.sh ]; then
+  while IFS= read -r _kc_diag; do
+    [ -n "$_kc_diag" ] && NOTE "kernel_control: $_kc_diag"
+  done <<EOF_KC_DIAG
+$(sh /data/adb/modules/AutoSystemBoost/runtime/asb_kernel_controls.sh status 2>/dev/null)
+EOF_KC_DIAG
+fi
 NOTE "lockscreen_shortcuts = $(cfg lockscreen_shortcuts)"
 # The property that caused a bootloop. Worth naming explicitly in every report: if it is
 # ever back in system.prop, that is the first thing to look at.
