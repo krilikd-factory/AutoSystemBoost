@@ -113,6 +113,8 @@ mglru_mode|advanced|webui_sensitive|shell
 kernel_timer_migration|advanced|webui_sensitive|shell
 kernel_sched_nr_migrate|advanced|webui_sensitive|shell
 kernel_sched_stats|advanced|webui_sensitive|shell
+kernel_sched_autogroup|advanced|webui_sensitive|shell
+kernel_sched_child_runs_first|advanced|webui_sensitive|shell
 gms_trim|advanced|webui_sensitive|shell
 gms_freeze|advanced|webui_sensitive|shell
 UX_ANIM_FORCE_RESTART|user|webui_standard|shell
