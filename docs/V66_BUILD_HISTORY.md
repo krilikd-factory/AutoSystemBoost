@@ -4,6 +4,55 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev25 - 32-bit NDK observer build fix
+
+Input: the failed GitHub Actions bundle for dev24. All three host-regression shards completed;
+the separate NDK job built arm64-v8a and then stopped on armeabi-v7a. Bionic's 32-bit `stat`
+fields are wider than `dev_t`, `ino_t` and `off_t`, so Clang rejected three narrowing conversions
+in the dev23 policy-fingerprint aggregate. This was an ABI-specific compile failure, not a runtime
+policy-cache failure.
+
+- `PolicyStamp` now makes all five `stat`-to-fingerprint conversions explicit. No policy, cache,
+  IPC, observer-selection or restore semantics changed.
+- The policy-cache regression checks the 32-bit conversion boundary and compiles the real observer
+  fixture with C++11 narrowing promoted to an error. The workflow's actual two-ABI NDK build remains
+  the authoritative Android compile gate.
+
+This source release contains no rebuilt observer `.so`; a successful two-ABI CI NDK build is still
+required before packaging a binary module. Host tests do not claim a physical-device validation.
+
+## V66 dev24 - bounded standard-kernel controls
+
+Input: verified dev23 source, two fresh KRILIKD CI bundles and five SetEdit exports. CI proves a
+successful 6.12.69-android16-2026-03 build with VPN Hide 1.3.1 `full`, zero rejected patches and
+`LTO=NONE`; it does not prove physical boot or runtime support. No account, serial, IMEI or
+network identifier was read from the settings exports, and no new settings-database tweak was
+inferred from key names alone.
+
+- **ASB now controls three existing Linux interfaces**, not a invented KRILIKD ABI:
+  `mglru_mode=stock|off|on|smart`, `kernel_timer_migration=stock|off|on` and
+  `kernel_sched_nr_migrate=stock|1|2|4|8|16`. Defaults smart/off/4 preserve the previous Smart,
+  timer=0 and balanced migration=4 policy. The former battery=2/performance=8 hidden overrides
+  are intentionally replaced by the single user-visible value.
+- **One bounded owner performs discovery, atomic baseline capture, allowlisted write and numeric
+  readback.** Missing/read-only nodes and baseline/write/readback failures are distinct verdicts.
+  MGLRU `0x0007` and decimal `7` are equivalent; a clamped `0x0001` is not reported as an applied
+  5/7. Stock and uninstall replay the captured value and remove its state only after verified
+  restore. Stock profile releases these controls as well.
+- **Smart cannot fight manual MGLRU.** Its 5/7 requests run only in `mglru_mode=smart` and pass
+  through the same helper. Service profile/reinforce no longer writes timer migration or
+  `sched_nr_migrate` directly. BBR/qdisc/network ownership is unchanged; VPN Hide remains owned
+  exclusively by its matching app/companion.
+- **WebUI shows the helper's actual verdict** for the three controls instead of translating a
+  saved config value into success. Config validation, snapshots/update carry-over, ownership,
+  diagnostics and all 13 locale files include the new closed schemas. Kernel values enter UI as
+  text. No persistent polling worker, arbitrary path/value writer or new native component exists.
+
+Host fixtures use temporary nodes/state only. They do not establish physical OnePlus 15 support,
+boot, battery/performance gains or ColorOS WebView validation. On an upgrade from a build that
+already wrote these nodes without a ledger, the first newly captured value is the then-current
+value; ASB cannot reconstruct an older factory value that was never recorded.
+
 ## V66 dev23 - metadata-cached Zygisk policy
 
 Input: the verified dev22 source and the external `Force ltpo` v1.0.1 reference module.
