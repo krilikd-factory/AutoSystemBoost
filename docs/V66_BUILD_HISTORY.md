@@ -4,6 +4,49 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev20 - the kernel page reads the kernel, an honest video-refresh count, a correct sensor after boot
+
+Input: an 11 h 11 min capture with a night, active use and seven reboots in 25 minutes at the
+end, plus the device, Zygisk, report and asbdiag exports, on the owner's new kernel
+(6.12.69-android16-6-krilikd, with VPN Hide and USB Arsenal built in).
+
+- **Kernel configuration was never read on a phone.** Every device export since the page
+  existed (stock, Wild and this kernel; six exports checked) said `/proc/config.gz: yes` and
+  listed not one `CONFIG_` line, so LTO, BTF, BPF, NTSync, BBG, the Droidspaces namespaces and
+  the kernel's origin all fell back to "unknown" or "missing". Cause: a GKI config is
+  200-300 KB decompressed, Android's shell has no `printf` builtin, and the kernel refuses a
+  single argument over 128 KB, so every `printf "$config" | sed` lookup got nothing. A host
+  shell's builtin `printf` hid it from the tests. Now the collector keeps only the whitelisted
+  lines in one pass, checks that the decoder really produced a kernel config (else tries the
+  next one), and reports how many options it read and with what.
+- **New kernel features on the device page**, read-only, from the configuration and sysfs:
+  VPN Hide (built-in, network only or network and filesystem), USB Arsenal's gadget functions
+  (mass storage, HID, NCM, NAT), BBRv3, WireGuard, CAKE, OverlayFS, CIFS/SMB and IP sets.
+  ASB does not switch any of them.
+- **Video refresh lowering counted no-ops.** The capture's log had "lowered peak 60.0 -> 60 Hz":
+  the watcher caches the peak setting for 30 s, another writer had already set 60 Hz, and the
+  lower still counted, logged and armed a touch guard. It now re-reads the peak under the
+  lock and does nothing when it is already at or below the target. The report's "5 times ·
+  0 min" was the watcher's lifetime counter shown in the table of numbers measured in this
+  capture; the logger now records the counters at capture start, the table shows only this
+  capture's delta, and the lifetime figure is labelled as such.
+- **The wrong temperature source for the first minute after boot.** After the reboots the
+  governor started on `socd` in one session ("cpu=socd ... 46C") while the cores read 80 C,
+  and switched only at the next rescan a minute later. On these phones `socd` is a percentage,
+  not degrees; the existing scale check needed three readable core zones, and right after boot
+  fewer exist. Now a percentage `socd` is rejected whenever the board, skin or surface zone of
+  the same pass reports millidegrees and a live core zone can take over, and while the source is
+  still provisional in the first five minutes the zones are rescanned every 10 s instead of 60 s.
+  The heat after those boots itself came from Android's start-up work (load average 35-53) on
+  a phone rebooted seven times in 25 minutes; the governor's own start cost 109 ms of CPU.
+- **Checked and left alone**, with the reason: SystemUI's late frames on unlock come with three
+  LSPosed modules loaded into it (the report already names them); the prime cluster was held by
+  the firmware in 10 of 17 checks, which ASB does not override; the night (0.3 %/h, deep sleep
+  96 %) and ASB's own cost (2046 ms CPU per hour) need nothing; the memory-bus lab has one
+  comparison pair and keeps testing.
+
+Native code changed (`src/asb_metrics.h`): the governor needs a CI rebuild.
+
 ## V66 dev19 - Home cards the right height from the first frame
 
 Input: the owner's two screenshots of Home on an OP15, nine seconds apart: just after opening
