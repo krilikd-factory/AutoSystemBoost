@@ -215,9 +215,12 @@ ltpo_force=0
 #   restores the previous value at once. 24/25/50 fps video has no lower judder-free mode,
 #   so it is left alone. Never acts while any layer asks for a high frame-rate category.
 ltpo_video=0
-# Integrated interaction LTPO: blocking input wait, active panel maximum, quiet 60 Hz ADFR.
-# No polling worker; camera/games stay active. Values are bounds-checked by the watcher.
+# Integrated interaction LTPO: blocking input wait, active panel maximum, quiet stepped ADFR.
+# After ltpo_idle_s, descend through advertised panel modes, one per ltpo_idle_step_s, then
+# reach ltpo_idle_rate. No synthetic 90/120 modes, no polling worker; touch restores at once.
+# Camera/games stay active. Values are bounds-checked by the watcher.
 ltpo_idle_s=2
+ltpo_idle_step_s=1
 ltpo_idle_rate=60
 # Panel maximum on touch (V66 dev8), only with ltpo_force=1: while the screen is being
 # touched, SurfaceFlinger is asked for the panel's highest mode by its own mode id (165 Hz on
