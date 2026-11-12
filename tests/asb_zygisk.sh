@@ -274,9 +274,249 @@ CPP
   echo 'PASS observer native contract: fail-open, no hooks/cap writer, bounded refresh IPC, two ABIs, suspend-aware windows and synchronized diagnostics'
 )
 
+t_zygisk_policy_cache_runtime() (
+  # V66 dev23: drive the real Observer loader with wrapped libc calls. A cache hit must perform
+  # no policy open/read/parse; atomic replacement, removal, malformed input and every I/O error
+  # must invalidate it. The same fixture covers the loader's module-dir fallback under EACCES.
+  set -eu
+  ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+  fail() { echo "FAIL observer policy cache: $*" >&2; exit 1; }
+  command -v g++ >/dev/null 2>&1 || { echo 'SKIP observer policy cache: no g++'; exit 0; }
+  T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+  mkdir -p "$T/inc" "$T/mod/zygisk"
+  cat > "$T/inc/jni.h" <<'JNI'
+#pragma once
+#include <cstdint>
+typedef int32_t jint; typedef int64_t jlong; typedef uint8_t jboolean; typedef void* jobject; typedef jobject jstring; typedef jobject jintArray; typedef jobject jobjectArray;
+struct JNINativeMethod { const char* name; const char* signature; void* fnPtr; };
+struct JNIEnv { const char* GetStringUTFChars(jstring, void*){return nullptr;} void ReleaseStringUTFChars(jstring,const char*){} };
+JNI
+  cat > "$T/cache.cpp" <<'CPP'
+#include <string>
+static std::string g_policy_abs, g_policy_rel, g_run_dir, g_classes, g_gov_state, g_socket, g_client_dir;
+#define ASB_ZYGISK_POLICY_ABS (g_policy_abs.c_str())
+#define ASB_ZYGISK_POLICY_REL (g_policy_rel.c_str())
+#define ASB_ZYGISK_RUN_DIR (g_run_dir.c_str())
+#define ASB_ZYGISK_CLASSES_ABS (g_classes.c_str())
+#define ASB_GOVERNOR_STATE (g_gov_state.c_str())
+#define ASB_GOVERNOR_SOCKET (g_socket.c_str())
+#define ASB_GOVERNOR_CLIENT_DIR (g_client_dir.c_str())
+#include "zygisk.hpp"
+#include "asb_observer_core.h"
+#include <cassert>
+#include <cerrno>
+#include <cstdarg>
+#include <cstdlib>
+#include <fcntl.h>
+#include <fstream>
+#include <map>
+#include <mutex>
+#include <poll.h>
+#include <pthread.h>
+#include <set>
+#include <sstream>
+#include <string>
+#include <sys/eventfd.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/syscall.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/un.h>
+#include <unistd.h>
+#include <vector>
+
+static bool g_deny_abs = false, g_fail_stat = false, g_fail_open = false, g_fail_fstat = false;
+static bool g_fail_fstatat = false, g_no_moddir = false;
+static int g_moddir = -1;
+static zygisk::internal::module_abi *g_abi = nullptr;
+static bool register_module(zygisk::internal::api_table *, zygisk::internal::module_abi *abi) { g_abi = abi; return true; }
+static int g_opens = 0, g_openats = 0, g_reads = 0, g_parses = 0, g_stats = 0, g_fstatats = 0;
+static std::set<int> g_policy_fds;
+static bool is_abs(const char *p) { return p && g_policy_abs == p; }
+static bool is_rel(const char *p) { return p && g_policy_rel == p; }
+[[maybe_unused]] static int test_open(const char *path, int flags, ...) {
+  if (is_abs(path) && g_deny_abs) { errno = EACCES; return -1; }
+  if (is_abs(path) && g_fail_open) { errno = EIO; return -1; }
+  mode_t mode = 0;
+  if (flags & O_CREAT) { va_list ap; va_start(ap, flags); mode = static_cast<mode_t>(va_arg(ap, int)); va_end(ap); }
+  const int fd = open(path, flags, mode);
+  if (fd >= 0 && is_abs(path)) { ++g_opens; g_policy_fds.insert(fd); }
+  return fd;
+}
+[[maybe_unused]] static int test_openat(int dir, const char *path, int flags, ...) {
+  mode_t mode = 0;
+  if (flags & O_CREAT) { va_list ap; va_start(ap, flags); mode = static_cast<mode_t>(va_arg(ap, int)); va_end(ap); }
+  const int fd = openat(dir, path, flags, mode);
+  if (fd >= 0 && is_rel(path)) { ++g_openats; g_policy_fds.insert(fd); }
+  return fd;
+}
+[[maybe_unused]] static int test_stat(const char *path, struct stat *st) {
+  if (is_abs(path)) {
+    ++g_stats;
+    if (g_deny_abs) { errno = EACCES; return -1; }
+    if (g_fail_stat) { errno = EIO; return -1; }
+  }
+  return stat(path, st);
+}
+[[maybe_unused]] static int test_fstatat(int dir, const char *path, struct stat *st, int flags) {
+  if (is_rel(path)) {
+    ++g_fstatats;
+    if (g_fail_fstatat) { errno = EIO; return -1; }
+  }
+  return fstatat(dir, path, st, flags);
+}
+[[maybe_unused]] static int test_fstat(int fd, struct stat *st) {
+  if (g_policy_fds.count(fd) && g_fail_fstat) { errno = EIO; return -1; }
+  return fstat(fd, st);
+}
+static ssize_t test_read(int fd, void *buf, size_t cap) {
+  if (g_policy_fds.count(fd)) ++g_reads;
+  return read(fd, buf, cap);
+}
+[[maybe_unused]] static int test_close(int fd) { g_policy_fds.erase(fd); return close(fd); }
+static bool test_parse(const char *text, size_t len, AsbObserverPolicy &out) {
+  ++g_parses;
+  return asb_observer_policy_parse(text, len, out);
+}
+#define private public
+#define open(...) test_open(__VA_ARGS__)
+#define openat(...) test_openat(__VA_ARGS__)
+#define stat(path, st) test_stat(path, st)
+#define fstatat(dir, path, st, flags) test_fstatat(dir, path, st, flags)
+#define fstat(fd, st) test_fstat(fd, st)
+#define read(fd, buf, cap) test_read(fd, buf, cap)
+#define close(fd) test_close(fd)
+#define asb_observer_policy_parse(text, len, out) test_parse(text, len, out)
+#include "asb_observer.cpp"
+#undef asb_observer_policy_parse
+#undef close
+#undef read
+#undef fstat
+#undef fstatat
+#undef stat
+#undef openat
+#undef open
+#undef private
+
+static void put_policy(const std::string &text) {
+  const std::string tmp = g_policy_abs + ".tmp";
+  { std::ofstream f(tmp, std::ios::trunc); f << text; f.close(); assert(f); }
+  assert(rename(tmp.c_str(), g_policy_abs.c_str()) == 0);
+}
+static void reset_counts() {
+  g_opens = g_openats = g_reads = g_parses = g_stats = g_fstatats = 0;
+}
+static void assert_no_io(int opens, int openats, int reads, int parses) {
+  assert(g_opens == opens && g_openats == openats && g_reads == reads && g_parses == parses);
+}
+int main(int argc, char **argv) {
+  assert(argc == 2);
+  g_policy_abs = std::string(argv[1]) + "/zygisk/policy";
+  g_policy_rel = "zygisk/policy";
+  g_run_dir = std::string(argv[1]) + "/run";
+  g_classes = std::string(argv[1]) + "/zygisk/classes";
+  g_gov_state = std::string(argv[1]) + "/state";
+  g_socket = std::string(argv[1]) + "/ctl.sock";
+  g_client_dir = argv[1];
+  g_moddir = open(argv[1], O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+  assert(g_moddir >= 0);
+  zygisk::internal::api_table table{};
+  table.registerModule = register_module;
+  table.getModuleDir = [](void *) { return g_no_moddir ? -1 : g_moddir; };
+  zygisk_module_entry(&table, nullptr); // absent absolute path: ordinary absolute-path mode
+  assert(g_abi);
+  Observer &observer = *static_cast<Observer *>(g_abi->impl);
+  AsbObserverPolicy p;
+  assert(!observer.read_policy(p) && !p.valid && !p.active());
+  reset_counts();
+  put_policy("v=2\ngen=1\nobserver=1\nhints=0\nlaunch=0\nledger=0\npkg=com.example.aa\n");
+  assert(observer.read_policy(p) && p.active() && p.generation == 1 && p.selected("com.example.aa"));
+  assert(g_opens == 1 && g_openats == 0 && g_reads == 2 && g_parses == 1); // data read + EOF
+  for (int i = 0; i < 20; ++i) {
+    assert(observer.read_policy(p) && p.generation == 1 && p.selected("com.example.aa"));
+    assert_no_io(1, 0, 2, 1);
+  }
+  assert(g_stats == 21);
+
+  // Same-size atomic replacement: generation, flags and package all change with the inode.
+  put_policy("v=2\ngen=2\nobserver=1\nhints=1\nlaunch=0\nledger=0\npkg=com.example.bb\n");
+  assert(observer.read_policy(p) && p.generation == 2 && p.hints && p.selected("com.example.bb"));
+  assert(!p.selected("com.example.aa") && g_opens == 2 && g_reads == 4 && g_parses == 2);
+  assert(unlink(g_policy_abs.c_str()) == 0);
+  assert(!observer.read_policy(p) && !p.valid && !p.active() && p.packages == 0);
+
+  put_policy("v=2\ngen=3\nobserver=1\nhints=0\nlaunch=0\nledger=0\npkg=com.example.cc\n");
+  assert(observer.read_policy(p) && p.generation == 3 && p.selected("com.example.cc"));
+  put_policy("v=2\nlaunch=1\ncap=1\n");
+  assert(!observer.read_policy(p) && !p.valid && !p.active() && p.packages == 0);
+  assert(!observer.read_policy(p) && !p.active()); // malformed input is never replaced by stale cache
+
+  put_policy("v=2\ngen=4\nobserver=0\nhints=0\nlaunch=0\nledger=0\n");
+  assert(observer.read_policy(p) && p.valid && !p.active());
+  const int inactive_opens = g_opens, inactive_reads = g_reads, inactive_parses = g_parses;
+  assert(observer.read_policy(p) && p.valid && !p.active());
+  assert_no_io(inactive_opens, 0, inactive_reads, inactive_parses);
+
+  put_policy("v=2\ngen=5\nobserver=1\nhints=0\nlaunch=0\nledger=0\npkg=com.example.dd\n");
+  assert(observer.read_policy(p) && p.generation == 5);
+  g_fail_stat = true; g_no_moddir = true;
+  assert(!observer.read_policy(p) && !p.valid && !p.active());
+  g_fail_stat = false; g_no_moddir = false;
+  assert(observer.read_policy(p) && p.generation == 5 && p.selected("com.example.dd"));
+
+  put_policy("v=2\ngen=6\nobserver=1\nhints=0\nlaunch=0\nledger=0\npkg=com.example.ee\n");
+  g_fail_open = true; g_no_moddir = true;
+  assert(!observer.read_policy(p) && !p.valid && !p.active());
+  g_fail_open = false; g_no_moddir = false;
+  assert(observer.read_policy(p) && p.generation == 6 && p.selected("com.example.ee"));
+  put_policy("v=2\ngen=7\nobserver=1\nhints=0\nlaunch=0\nledger=0\npkg=com.example.ff\n");
+  g_fail_fstat = true;
+  assert(!observer.read_policy(p) && !p.valid && !p.active());
+  g_fail_fstat = false;
+  assert(observer.read_policy(p) && p.generation == 7 && p.selected("com.example.ff"));
+
+  // EACCES after onLoad still reaches the module dir; an unchanged fallback file is cached too.
+  g_deny_abs = true;
+  const int before_openats = g_openats, before_reads = g_reads, before_parses = g_parses;
+  assert(observer.read_policy(p) && p.generation == 7);
+  assert_no_io(g_opens, before_openats, before_reads, before_parses);
+  put_policy("v=2\ngen=8\nobserver=1\nhints=0\nlaunch=0\nledger=0\npkg=com.example.gg\n");
+  assert(observer.read_policy(p) && p.generation == 8 && p.selected("com.example.gg"));
+  assert(g_openats == before_openats + 1 && g_reads == before_reads + 2 && g_parses == before_parses + 1);
+  g_no_moddir = true;
+  assert(!observer.read_policy(p) && !p.valid && !p.active());
+  g_no_moddir = false;
+  assert(observer.read_policy(p) && p.generation == 8);
+
+  // Initial EACCES selects the loader fd in onLoad itself.
+  Observer fallback;
+  fallback.onLoad(observer.api_, nullptr);
+  reset_counts();
+  assert(fallback.read_policy(p) && p.generation == 8 && p.selected("com.example.gg"));
+  assert(g_opens == 0 && g_openats == 1 && g_reads == 2 && g_parses == 1 && g_fstatats == 1);
+  assert(fallback.read_policy(p) && p.generation == 8);
+  assert_no_io(0, 1, 2, 1);
+  assert(g_stats == 0 && g_fstatats == 2);
+  g_fail_fstatat = true;
+  assert(!fallback.read_policy(p) && !p.valid && !p.active());
+  g_fail_fstatat = false;
+  assert(fallback.read_policy(p) && p.generation == 8 && g_openats == 2 && g_parses == 2);
+  assert(unlink(g_policy_abs.c_str()) == 0);
+  assert(!fallback.read_policy(p) && !p.valid && !p.active() && p.packages == 0);
+  close(g_moddir);
+  return 0;
+}
+CPP
+  g++ -std=c++17 -Wall -Wextra -Werror -Wno-unused-parameter -pthread -I"$T/inc" -I"$ROOT/src/zygisk" \
+    -DASB_ABI_TAG='"arm64-v8a"' "$T/cache.cpp" -o "$T/cache" || fail 'cache fixture build'
+  "$T/cache" "$T/mod" || fail 'cache runtime assertions'
+  echo 'PASS observer policy cache: stat-only hits, atomic invalidation, fail-closed errors and EACCES module-dir fallback'
+)
+
 t_zygisk_hot_path_runtime() (
   # fix272: the REAL module and companion, driven through the Zygisk ABI on the host with a
-  # fake loader table. Dormant = one failed open and DLCLOSE, no companion; isolated/system
+  # fake loader table. Dormant = no policy, DLCLOSE and no companion; isolated/system
   # uids and app-zygote children never reach the policy; a top-app cold start sends one
   # package-free frame; the ledger names the package; an allowlisted process keeps its fd.
   # The companion turns those into a governor "zygisk-launch", a tmpfs ledger and counters.
