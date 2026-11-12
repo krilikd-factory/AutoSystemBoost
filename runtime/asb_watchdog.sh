@@ -95,6 +95,9 @@ asb_recovery_level3_safe_mode() {
   asb_log "recovery: level=3 SAFE_MODE entry (count=$_recovery_count reason=$_last_recovery_reason)"
   echo "1" > "$ASB_SAFE_MODE_FILE" 2>/dev/null
   echo "$_last_recovery_ts" > "$ASB_RECOVERY_DISABLED_MARKER" 2>/dev/null
+  if [ -f "$MODDIR/runtime/asb_wakeup_blocker.sh" ]; then
+    MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_wakeup_blocker.sh" clear >/dev/null 2>&1 || true
+  fi
   _gpid="$(cat /dev/.asb/governor.pid 2>/dev/null)"
   [ -n "$_gpid" ] && kill "$_gpid" 2>/dev/null
   # Safe mode falls back to balanced only if a profile was actually running. On a phone

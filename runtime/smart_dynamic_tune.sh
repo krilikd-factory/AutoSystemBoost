@@ -51,9 +51,18 @@ if [ "$MODE" != manual ] && [ "$(_cfg mglru_mode)" = smart ]; then
   _lgf="${ASB_MGLRU_MEMO_DIR:-/dev/.asb}/lru_gen_took_$_lg"
   _lgc="$(cat "$_lgn" 2>/dev/null)"
   if [ -r "$_kc_mod/runtime/asb_kernel_controls.sh" ] && { [ -z "$_lgc" ] || [ "$_lgc" != "$(cat "$_lgf" 2>/dev/null)" ]; }; then
-    MODDIR="$_kc_mod" ASB_CONF="${ASB_CONF:-$_kc_mod/config/governor.conf}" \
-      sh "$_kc_mod/runtime/asb_kernel_controls.sh" apply mglru_mode "$_lg" >/dev/null 2>&1 || true
-    cat "$_lgn" > "$_lgf" 2>/dev/null || true
+    _kc_result="$(MODDIR="$_kc_mod" ASB_CONF="${ASB_CONF:-$_kc_mod/config/governor.conf}" \
+      sh "$_kc_mod/runtime/asb_kernel_controls.sh" apply mglru_mode "$_lg" 2>/dev/null || true)"
+    case "$_kc_result" in
+      mglru_mode\|applied\|*)
+        cat "$_lgn" > "$_lgf" 2>/dev/null || true
+        ;;
+      mglru_mode\|readback_mismatch\|*\|0x0001\|*)
+        # OP15's known clamp stays at 0x0001. Memoize that stable answer only;
+        # write_failed/baseline_failed/other mismatches must be retried.
+        cat "$_lgn" > "$_lgf" 2>/dev/null || true
+        ;;
+    esac
   fi
 fi
 
