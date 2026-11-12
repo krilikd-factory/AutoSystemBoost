@@ -4,6 +4,88 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev19 - Home cards the right height from the first frame
+
+Input: the owner's two screenshots of Home on an OP15, nine seconds apart: just after opening
+the profile cards were taller, the last one running under the tab bar; later they were back
+to normal.
+
+- **Cause.** The tab bar's markup comes after the main script. The locale file is requested
+  at the top of the page and can arrive while the parser is still on that script, so the
+  Home reveal ran before the bar existed. Its fit found no bar, measured down to the window
+  bottom and gave each of the five cards a fifth of the bar's height too much; a later fit
+  put them right. A fit queued before the reveal could also run inside the entrance
+  animation and measure its scale (a 1 px change on small screens).
+- **Fix.** Home is revealed and fitted once the document is parsed (it stays hidden until
+  then, as before); a fit that finds no bar while the page is still loading waits for it; a
+  queued fit re-checks for a transition that started in the meantime. In Chromium at
+  424x924 the cards were 100 px for the first moments and then 86 px; now they are 86 px from
+  the first frame, and on 360x640, 412x760, 424x924 and 800x1280 the card size is set exactly
+  once. On a small screen the compact header tier is now also set at the first frame; before,
+  it switched on about half a second after Home appeared. Home still appears about 150 ms
+  after loading starts, as before.
+
+No native code changed: no CI rebuild needed.
+
+## V66 dev18 - one sphere from the preview to the header, a Battery Fix you can follow
+
+Input: the owner found the Battery Fix silent (no way to tell whether the recompile ran or the
+fix worked), the Infirmary button unfinished, the preview hand-off late and jerky with the
+saucer shown twice, and asked for the preview's spinning sphere to become the header.
+
+- **The header is the preview's sphere.** All six page headers now carry the same sphere as
+  the boot preview: two counter-rotating shells (7 s and 10 s) with their marker dots, the two
+  square frames, the pulsing pod and the saucer. Both are drawn from one geometry (172 px times
+  a scale), so the header is the preview sphere at a smaller scale, set per size tier (phone,
+  tablet, compact, very compact, landscape). The old glow and ring layers are gone. Closed and
+  backgrounded pages pause the new layers like the old ones; the ten-second idle rule still
+  pauses only the wordmark sweep. Reduced motion stops the spin, forced colours draw outlines.
+- **Hand-off rebuilt.** Causes of the dev17 jerk and double saucer, as found in the code:
+  - the flight animated the orbit spheres with their own transforms, which replaced their CSS
+    rotation, so they snapped to a new angle at the start and again at the end;
+  - the pod's pulse was switched off for the flight;
+  - the overlay's full-screen background faded by a colour transition (a repaint per frame) and
+    only at the end, so the home screen appeared late;
+  - the flight was cancelled before the overlay was hidden, so for a frame the saucer jumped
+    back to the centre while the header copy was already visible: the doubled saucer.
+
+  Now the sphere flies as one block on a curved transform-only path (1.15 s), its shells keep
+  their CSS spin and the pod keeps its pulse. The backdrop is its own layer and fades by
+  opacity from the first frames of the flight, so the home screen forms under the sphere
+  instead of after it. It lands exactly on the header sphere; their rotation phase is handed
+  over and the two cross-fade in place (0.22 s). Every end state is held until the overlay is
+  hidden. Reduced motion, a missing piece or a header out of view fall back to the old fade.
+  Checked frame by frame in headless Chromium; not timed on a phone.
+- **Infirmary button.** A green glass button with a pharmacy-cross emblem in a slightly wider
+  fourth column. The light and Glass themes restyled every action button with `!important`,
+  which turned it into a plain white button there; it now keeps its own paint in dark, light
+  and both Glass themes. Its accessible name is the localized label (it was a fixed English
+  `aria-label`). The Infirmary screen opens with a header card.
+- **Battery Fix you can follow.** dev17 started one `cmd package compile ... -a` for all apps in
+  the background with its output discarded, so nothing could say whether it ran, how far it
+  was or whether it finished. Now:
+  - ASB runs the recompile itself, one app at a time (`cmd package compile -m speed-profile
+    -f <app>`; an app counts as done only when the command answers "Success"), and records
+    total, done, succeeded, failed, the current app and the start/end time. One run at a time;
+    Stop ends it after the current app; a run cut by a reboot or a dead worker shows as
+    interrupted; an unreadable app list shows as failed. The background dexopt job still runs
+    at the end. A lock left by a reboot mid-run is cleared at boot.
+  - The card is a three-step checklist under one status chip: the condition (charge level and
+    charger), the recompile (n of total, failures, an estimate of the minutes left, the app
+    being compiled, a progress bar, then the result and how long it took) and the statistics
+    reset (scheduled, then when it ran, how many of the three files were removed and whether
+    Android has written a new record since). The button follows the state: Run, Stop while
+    compiling, Reboot to finish while the reset is pending; a pending reset can still be
+    cancelled. The card refreshes every 2 s while compiling and every 8 s otherwise, only while
+    it is on screen.
+  - The description says plainly what each step does; it still claims no capacity or runtime.
+- **Texts.** 31 new strings and 2 rewritten ones in all 13 languages; 6 strings of the old
+  card removed.
+- **Shell comments.** dev17 added comment blocks to module shell code (the Battery Fix
+  runtime, `post-fs-data.sh`, `uninstall.sh`, the LTPO apply script); they are removed.
+
+No native code changed: no CI rebuild needed.
+
 ## V66 dev17 - no idle freeze, the saucer flies into the header, the Infirmary
 
 - **WebUI no longer freezes after ten seconds.** The dev6 "calm" rule stopped every
