@@ -274,25 +274,19 @@ CPP
   echo 'PASS observer native contract: fail-open, no hooks/cap writer, bounded refresh IPC, two ABIs, suspend-aware windows and synchronized diagnostics'
 )
 
-t_zygisk_policy_cache_runtime() (
-  # V66 dev23: drive the real Observer loader with wrapped libc calls. A cache hit must perform
-  # no policy open/read/parse; atomic replacement, removal, malformed input and every I/O error
-  # must invalidate it. The same fixture covers the loader's module-dir fallback under EACCES.
+t_zygisk_policy_read_runtime() (
+  # V66 dev29. dev23 added a stat-keyed policy cache to the Observer object. read_policy runs
+  # from preAppSpecialize, i.e. in the freshly forked app process, so whatever it stores stays in
+  # that process; under Magisk the module is even dlopened and constructed anew in every app
+  # process. The cache could never serve the next fork and only added a stat and an fstat, so the
+  # simple read is back. This drives the REAL Observer with wrapped libc calls: one open, one
+  # parse, no stat/fstat per read; replacement, removal, malformed and inactive policies; every
+  # failure leaves an empty inactive policy; EACCES falls back to the loader's module dir.
   set -eu
   ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-  fail() { echo "FAIL observer policy cache: $*" >&2; exit 1; }
-  command -v g++ >/dev/null 2>&1 || { echo 'SKIP observer policy cache: no g++'; exit 0; }
-  # NDK r28c arm64 accepts the wider Bionic stat fields in this aggregate, but its
-  # armeabi-v7a Clang rejects three narrowing conversions. Keep the explicit boundary
-  # conversions covered even on a host whose stat typedefs cannot reproduce that ABI.
-  for cast in \
-    'static_cast<dev_t>(st.st_dev)' \
-    'static_cast<ino_t>(st.st_ino)' \
-    'static_cast<off_t>(st.st_size)' \
-    'static_cast<time_t>(st.st_mtim.tv_sec)' \
-    'static_cast<long>(st.st_mtim.tv_nsec)'; do
-    grep -qF "$cast" "$ROOT/src/zygisk/asb_observer.cpp" || fail "missing 32-bit NDK stat conversion: $cast"
-  done
+  fail() { echo "FAIL observer policy read: $*" >&2; exit 1; }
+  command -v g++ >/dev/null 2>&1 || { echo 'SKIP observer policy read: no g++'; exit 0; }
+  ! grep -Eq 'policy_cached_|PolicyStamp|cached_policy_' "$ROOT/src/zygisk/asb_observer.cpp" || fail 'a cross-fork policy cache is back'
   T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
   mkdir -p "$T/inc" "$T/mod/zygisk"
   cat > "$T/inc/jni.h" <<'JNI'
@@ -302,7 +296,7 @@ typedef int32_t jint; typedef int64_t jlong; typedef uint8_t jboolean; typedef v
 struct JNINativeMethod { const char* name; const char* signature; void* fnPtr; };
 struct JNIEnv { const char* GetStringUTFChars(jstring, void*){return nullptr;} void ReleaseStringUTFChars(jstring,const char*){} };
 JNI
-  cat > "$T/cache.cpp" <<'CPP'
+  cat > "$T/read.cpp" <<'CPP'
 #include <string>
 static std::string g_policy_abs, g_policy_rel, g_run_dir, g_classes, g_gov_state, g_socket, g_client_dir;
 #define ASB_ZYGISK_POLICY_ABS (g_policy_abs.c_str())
@@ -342,7 +336,7 @@ static bool g_fail_fstatat = false, g_no_moddir = false;
 static int g_moddir = -1;
 static zygisk::internal::module_abi *g_abi = nullptr;
 static bool register_module(zygisk::internal::api_table *, zygisk::internal::module_abi *abi) { g_abi = abi; return true; }
-static int g_opens = 0, g_openats = 0, g_reads = 0, g_parses = 0, g_stats = 0, g_fstatats = 0;
+static int g_opens = 0, g_openats = 0, g_reads = 0, g_parses = 0, g_stats = 0, g_fstatats = 0, g_fstats = 0;
 static std::set<int> g_policy_fds;
 static bool is_abs(const char *p) { return p && g_policy_abs == p; }
 static bool is_rel(const char *p) { return p && g_policy_rel == p; }
@@ -378,7 +372,7 @@ static bool is_rel(const char *p) { return p && g_policy_rel == p; }
   return fstatat(dir, path, st, flags);
 }
 [[maybe_unused]] static int test_fstat(int fd, struct stat *st) {
-  if (g_policy_fds.count(fd) && g_fail_fstat) { errno = EIO; return -1; }
+  if (g_policy_fds.count(fd)) { ++g_fstats; if (g_fail_fstat) { errno = EIO; return -1; } }
   return fstat(fd, st);
 }
 static ssize_t test_read(int fd, void *buf, size_t cap) {
@@ -416,10 +410,7 @@ static void put_policy(const std::string &text) {
   assert(rename(tmp.c_str(), g_policy_abs.c_str()) == 0);
 }
 static void reset_counts() {
-  g_opens = g_openats = g_reads = g_parses = g_stats = g_fstatats = 0;
-}
-static void assert_no_io(int opens, int openats, int reads, int parses) {
-  assert(g_opens == opens && g_openats == openats && g_reads == reads && g_parses == parses);
+  g_opens = g_openats = g_reads = g_parses = g_stats = g_fstatats = g_fstats = 0;
 }
 int main(int argc, char **argv) {
   assert(argc == 2);
@@ -435,94 +426,67 @@ int main(int argc, char **argv) {
   zygisk::internal::api_table table{};
   table.registerModule = register_module;
   table.getModuleDir = [](void *) { return g_no_moddir ? -1 : g_moddir; };
-  zygisk_module_entry(&table, nullptr); // absent absolute path: ordinary absolute-path mode
+  zygisk_module_entry(&table, nullptr);
   assert(g_abi);
   Observer &observer = *static_cast<Observer *>(g_abi->impl);
   AsbObserverPolicy p;
-  assert(!observer.read_policy(p) && !p.valid && !p.active());
   reset_counts();
-  put_policy("v=2\ngen=1\nobserver=1\nhints=0\nlaunch=0\nledger=0\npkg=com.example.aa\n");
-  assert(observer.read_policy(p) && p.active() && p.generation == 1 && p.selected("com.example.aa"));
-  assert(g_opens == 1 && g_openats == 0 && g_reads == 2 && g_parses == 1); // data read + EOF
-  for (int i = 0; i < 20; ++i) {
-    assert(observer.read_policy(p) && p.generation == 1 && p.selected("com.example.aa"));
-    assert_no_io(1, 0, 2, 1);
-  }
-  assert(g_stats == 21);
+  assert(!observer.read_policy(p) && !p.valid && !p.active());
+  assert(g_opens == 0 && g_openats == 0 && g_parses == 0);
 
-  // Same-size atomic replacement: generation, flags and package all change with the inode.
+  put_policy("v=2\ngen=1\nobserver=1\nhints=0\nlaunch=0\nledger=0\npkg=com.example.aa\n");
+  reset_counts();
+  assert(observer.read_policy(p) && p.active() && p.generation == 1 && p.selected("com.example.aa"));
+  assert(g_opens == 1 && g_openats == 0 && g_reads == 2 && g_parses == 1);
+  assert(g_stats == 0 && g_fstats == 0 && g_fstatats == 0);
+  for (int i = 0; i < 3; ++i) assert(observer.read_policy(p) && p.generation == 1);
+  assert(g_opens == 4 && g_parses == 4 && g_stats == 0 && g_fstats == 0);
+
   put_policy("v=2\ngen=2\nobserver=1\nhints=1\nlaunch=0\nledger=0\npkg=com.example.bb\n");
   assert(observer.read_policy(p) && p.generation == 2 && p.hints && p.selected("com.example.bb"));
-  assert(!p.selected("com.example.aa") && g_opens == 2 && g_reads == 4 && g_parses == 2);
+  assert(!p.selected("com.example.aa"));
   assert(unlink(g_policy_abs.c_str()) == 0);
   assert(!observer.read_policy(p) && !p.valid && !p.active() && p.packages == 0);
 
   put_policy("v=2\ngen=3\nobserver=1\nhints=0\nlaunch=0\nledger=0\npkg=com.example.cc\n");
-  assert(observer.read_policy(p) && p.generation == 3 && p.selected("com.example.cc"));
+  assert(observer.read_policy(p) && p.generation == 3);
   put_policy("v=2\nlaunch=1\ncap=1\n");
   assert(!observer.read_policy(p) && !p.valid && !p.active() && p.packages == 0);
-  assert(!observer.read_policy(p) && !p.active()); // malformed input is never replaced by stale cache
 
   put_policy("v=2\ngen=4\nobserver=0\nhints=0\nlaunch=0\nledger=0\n");
   assert(observer.read_policy(p) && p.valid && !p.active());
-  const int inactive_opens = g_opens, inactive_reads = g_reads, inactive_parses = g_parses;
-  assert(observer.read_policy(p) && p.valid && !p.active());
-  assert_no_io(inactive_opens, 0, inactive_reads, inactive_parses);
 
   put_policy("v=2\ngen=5\nobserver=1\nhints=0\nlaunch=0\nledger=0\npkg=com.example.dd\n");
-  assert(observer.read_policy(p) && p.generation == 5);
-  g_fail_stat = true; g_no_moddir = true;
-  assert(!observer.read_policy(p) && !p.valid && !p.active());
-  g_fail_stat = false; g_no_moddir = false;
-  assert(observer.read_policy(p) && p.generation == 5 && p.selected("com.example.dd"));
-
-  put_policy("v=2\ngen=6\nobserver=1\nhints=0\nlaunch=0\nledger=0\npkg=com.example.ee\n");
   g_fail_open = true; g_no_moddir = true;
-  assert(!observer.read_policy(p) && !p.valid && !p.active());
-  g_fail_open = false; g_no_moddir = false;
-  assert(observer.read_policy(p) && p.generation == 6 && p.selected("com.example.ee"));
-  put_policy("v=2\ngen=7\nobserver=1\nhints=0\nlaunch=0\nledger=0\npkg=com.example.ff\n");
-  g_fail_fstat = true;
-  assert(!observer.read_policy(p) && !p.valid && !p.active());
-  g_fail_fstat = false;
-  assert(observer.read_policy(p) && p.generation == 7 && p.selected("com.example.ff"));
+  assert(!observer.read_policy(p) && !p.valid && !p.active() && p.packages == 0);
+  g_no_moddir = false;
+  reset_counts();
+  assert(observer.read_policy(p) && p.generation == 5 && g_opens == 0 && g_openats == 1);
+  g_fail_open = false;
 
-  // EACCES after onLoad still reaches the module dir; an unchanged fallback file is cached too.
   g_deny_abs = true;
-  const int before_openats = g_openats, before_reads = g_reads, before_parses = g_parses;
-  assert(observer.read_policy(p) && p.generation == 7);
-  assert_no_io(g_opens, before_openats, before_reads, before_parses);
-  put_policy("v=2\ngen=8\nobserver=1\nhints=0\nlaunch=0\nledger=0\npkg=com.example.gg\n");
-  assert(observer.read_policy(p) && p.generation == 8 && p.selected("com.example.gg"));
-  assert(g_openats == before_openats + 1 && g_reads == before_reads + 2 && g_parses == before_parses + 1);
+  reset_counts();
+  assert(observer.read_policy(p) && p.generation == 5 && g_opens == 0 && g_openats == 1);
   g_no_moddir = true;
   assert(!observer.read_policy(p) && !p.valid && !p.active());
   g_no_moddir = false;
-  assert(observer.read_policy(p) && p.generation == 8);
 
-  // Initial EACCES selects the loader fd in onLoad itself.
   Observer fallback;
   fallback.onLoad(observer.api_, nullptr);
   reset_counts();
-  assert(fallback.read_policy(p) && p.generation == 8 && p.selected("com.example.gg"));
-  assert(g_opens == 0 && g_openats == 1 && g_reads == 2 && g_parses == 1 && g_fstatats == 1);
-  assert(fallback.read_policy(p) && p.generation == 8);
-  assert_no_io(0, 1, 2, 1);
-  assert(g_stats == 0 && g_fstatats == 2);
-  g_fail_fstatat = true;
-  assert(!fallback.read_policy(p) && !p.valid && !p.active());
-  g_fail_fstatat = false;
-  assert(fallback.read_policy(p) && p.generation == 8 && g_openats == 2 && g_parses == 2);
+  assert(fallback.read_policy(p) && p.generation == 5 && p.selected("com.example.dd"));
+  assert(g_opens == 0 && g_openats == 1 && g_reads == 2 && g_parses == 1 && g_stats == 0 && g_fstatats == 0);
   assert(unlink(g_policy_abs.c_str()) == 0);
   assert(!fallback.read_policy(p) && !p.valid && !p.active() && p.packages == 0);
+  g_deny_abs = false;
   close(g_moddir);
   return 0;
 }
 CPP
   g++ -std=c++17 -Wall -Wextra -Werror -Werror=narrowing -Wno-unused-parameter -pthread -I"$T/inc" -I"$ROOT/src/zygisk" \
-    -DASB_ABI_TAG='"arm64-v8a"' "$T/cache.cpp" -o "$T/cache" || fail 'cache fixture build'
-  "$T/cache" "$T/mod" || fail 'cache runtime assertions'
-  echo 'PASS observer policy cache: stat-only hits, atomic invalidation, fail-closed errors and EACCES module-dir fallback'
+    -DASB_ABI_TAG='"arm64-v8a"' "$T/read.cpp" -o "$T/read" || fail 'policy read fixture build'
+  "$T/read" "$T/mod" || fail 'policy read runtime assertions'
+  echo 'PASS observer policy read: one open and one parse per read, no stat/fstat, replacement, removal, malformed and inactive policies, fail-closed errors, EACCES module-dir fallback'
 )
 
 t_zygisk_hot_path_runtime() (
