@@ -2,9 +2,10 @@
 # ASB integrated LTPO interaction controller (fix236).
 #
 # Independent Android-range implementation: touch opens the panel's highest advertised
-# mode; a short quiet interval selects the normal 60 Hz ADFR-capable mode (configurable).
-# It waits in blocking getevent, never polls display/foreground state, and writes Settings
-# only on an actual active/idle transition. Camera and game frames are not lowered.
+# mode; quiet intervals descend through intermediate modes actually advertised by that
+# panel before selecting the normal 60 Hz ADFR-capable mode (configurable). It waits in
+# blocking getevent, never polls display/foreground state, and writes Settings only on
+# an actual active/idle transition. Camera and game frames are not lowered.
 # The install-time oplus_vrr_config bind remains a separate, stock-safe ADFR enabler.
 set -u
 
@@ -24,11 +25,19 @@ CHILD=""
 _cfg() {
   grep -E "^$1=" "$CONF" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d ' \r'
 }
-_max_mode() {
+_display_modes() {
   if [ -n "$DISPLAY_DUMP" ]; then cat "$DISPLAY_DUMP" 2>/dev/null
   else dumpsys display 2>/dev/null; fi \
-    | sed -n 's/.*DisplayMode{id=[0-9]*,.*peakRefreshRate=\([0-9.]*\).*/\1/p' \
-    | awk '{ v=int($1+0.5); if(v>m)m=v } END { if(m>=30 && m<=480) print m }'
+    | sed -n 's/.*DisplayMode{id=[0-9]*,.*peakRefreshRate=\([0-9.]*\).*/\1/p'
+}
+_max_mode() {
+  _display_modes | awk '{ v=int($1+0.5); if(v>m)m=v } END { if(m>=30 && m<=480) print m }'
+}
+_idle_modes() {
+  # No synthetic 90/120 Hz steps: use each advertised rate once, highest first.
+  _display_modes | awk -v max="$MAX" -v idle="$IDLE" '
+    { v=int($1+0.5); if(v>=30 && v<=480 && v<max && v>idle && !seen[v]++) print v }
+  ' | sort -rn
 }
 _get() { command -v asb_set_get >/dev/null 2>&1 && asb_set_get system "$1" || settings get system "$1" 2>/dev/null | sed 's/^null$//'; }
 _put() { command -v asb_set_put >/dev/null 2>&1 && asb_set_put system "$1" "$2" || settings put system "$1" "$2" >/dev/null 2>&1; }
@@ -69,7 +78,12 @@ _wait_event() {
   wait "$CHILD" 2>/dev/null
   _rc=$?
   CHILD=""
-  return "$_rc"
+  # Event=0, quiet timeout=1. A missing/broken input command is not inactivity.
+  case "$_rc" in
+    0) return 0 ;;
+    124) return 1 ;;
+    *) return 2 ;;
+  esac
 }
 SFSTATE="$STATE_DIR/ltpo_peak_force.state"
 SFUNSUP="$STATE_DIR/ltpo_peak_force.unsupported"
@@ -131,15 +145,16 @@ _active() {
   [ "$PEAK_FORCE" = 1 ] && _sf_force
   return 0
 }
-_idle() {
+_idle_rate() {
   _sf_release
-  _peak_write "$IDLE.0" && touch "$HEARTBEAT" 2>/dev/null || true
+  _peak_write "$1.0" && touch "$HEARTBEAT" 2>/dev/null || true
 }
 _cleanup() {
+  _clean_rc="${1:-0}"
   [ -n "$CHILD" ] && kill "$CHILD" 2>/dev/null || true
   _sf_release
   rm -f "$PIDFILE" "$STOPFILE" "$HEARTBEAT" 2>/dev/null
-  exit 0
+  exit "$_clean_rc"
 }
 trap _cleanup TERM INT HUP
 
@@ -150,6 +165,8 @@ rm -f "$STOPFILE" 2>/dev/null
 # uses this PID as the handover barrier: an early failure must leave the external LTPO
 # writer running instead of pausing it and then silently losing touch switching.
 DEV="$(_find_touch)" || exit 1
+# Without timeout a quiet wait cannot be distinguished from a dead input command.
+command -v timeout >/dev/null 2>&1 || exit 1
 MAX="$(_max_mode)"
 case "$MAX" in ''|*[!0-9]*) exit 1 ;; esac
 printf '%s\n' "$$" > "$PIDFILE" 2>/dev/null || exit 1
@@ -167,6 +184,11 @@ TIMEOUT="$(_cfg ltpo_idle_s)"; [ -n "$TIMEOUT" ] || TIMEOUT=2
 case "$TIMEOUT" in ''|*[!0-9]*) TIMEOUT=2 ;; esac
 [ "$TIMEOUT" -ge 1 ] 2>/dev/null || TIMEOUT=1
 [ "$TIMEOUT" -le 15 ] 2>/dev/null || TIMEOUT=15
+STEP_TIMEOUT="$(_cfg ltpo_idle_step_s)"; [ -n "$STEP_TIMEOUT" ] || STEP_TIMEOUT=1
+case "$STEP_TIMEOUT" in ''|*[!0-9]*) STEP_TIMEOUT=1 ;; esac
+[ "$STEP_TIMEOUT" -ge 1 ] 2>/dev/null || STEP_TIMEOUT=1
+[ "$STEP_TIMEOUT" -le 5 ] 2>/dev/null || STEP_TIMEOUT=5
+STEPS="$(_idle_modes)"
 
 if [ "$(_cfg ltpo_peak_force)" = 1 ] && [ ! -f "$SFUNSUP" ] && command -v service >/dev/null 2>&1; then
   PEAK_FORCE=1
@@ -176,26 +198,50 @@ elif [ "$(_cfg ltpo_peak_force)" != 1 ]; then
   rm -f "$SFSTATE" "$SFUNSUP" 2>/dev/null
 fi
 state=active
+step=0
 _active
 while [ ! -f "$STOPFILE" ] && [ -e "$DEV" ]; do
   if [ "$state" = idle ]; then
-    if _wait_event ""; then
-      state=active
-      _active
-    fi
+    _wait_event ""
+    _event_rc=$?
+  elif [ "$state" = settling ]; then
+    _wait_event "$STEP_TIMEOUT"
+    _event_rc=$?
   else
-    if _wait_event "$TIMEOUT"; then
+    _wait_event "$TIMEOUT"
+    _event_rc=$?
+  fi
+  [ ! -f "$STOPFILE" ] || break
+  case "$_event_rc" in
+    0)
+      state=active
+      step=0
+      _active
       # Consume a complete gesture at a bounded rate; this is an event wait, not a timer.
       sleep "$SLEEP_STEP"
-    else
+      ;;
+    1)
       # Camera and games can animate without touch. The governor state is read only at
-      # this transition, never in a polling loop.
+      # a transition, never in a polling loop. If either starts mid-decay, restore first.
       if grep -Eq '^camera_hold=1$|^state=GAMING$' "$RSTATE" 2>/dev/null; then
+        if [ "$state" = settling ]; then state=active; step=0; _active; fi
         continue
       fi
-      state=idle
-      _idle
-    fi
-  fi
+      if [ "$state" = active ]; then step=1; else step=$((step + 1)); fi
+      _next="$(printf '%s\n' "$STEPS" | sed -n "${step}p")"
+      if [ -n "$_next" ]; then
+        state=settling
+        _idle_rate "$_next"
+      else
+        state=idle
+        _idle_rate "$IDLE"
+      fi
+      ;;
+    *)
+      # Do not spin on a dead input device or misread an exec error as inactivity.
+      _active
+      _cleanup 1
+      ;;
+  esac
 done
 _cleanup
