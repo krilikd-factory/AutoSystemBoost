@@ -92,6 +92,10 @@ rm -f /data/adb/asb/ltpo_video.lock/pid 2>/dev/null
 rmdir /data/adb/asb/ltpo_video.lock 2>/dev/null
 rm -rf /data/adb/asb/heytap_art_compile.lock 2>/dev/null
 rm -rf /data/adb/asb/battery_fix.lock 2>/dev/null
+# A reboot cannot run the worker's EXIT trap. Remove only its own transient files;
+# keep battery_fix.compile so the UI can report the interrupted run and its last counts.
+rm -f /data/adb/asb/battery_fix.pkgs.* /data/adb/asb/battery_fix.compile.tmp.* \
+      /data/adb/asb/battery_fix.stop 2>/dev/null
 [ -f /data/adb/asb/battery_fix.pending ] && [ -f "$MODDIR/runtime/asb_battery_fix.sh" ] && \
   MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_battery_fix.sh" boot >/dev/null 2>&1 || true
 if [ -f "$MODDIR/runtime/asb_zygisk.sh" ]; then
