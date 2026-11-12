@@ -3464,6 +3464,16 @@ html[data-asb-theme="light"] .bfx-step.is-ok .bfx-step-s { color: #06704f; }
 html[data-asb-theme="light"] .bfx-step.is-wait .bfx-step-s { color: #8a5a00; }
 html[data-asb-theme="light"] .bfx-step.is-fail .bfx-step-s { color: #b3261e; }
 @media (prefers-reduced-motion: reduce) { .bfx-step.is-run .bfx-mark { animation: none; } .bfx-bar > i { transition: none; } }
+.junk-total { margin:10px 0 8px; color:var(--text); font-size:13px; font-weight:700; line-height:1.4; }
+.junk-cats { display:grid; gap:2px; margin-bottom:10px; }
+.junk-cat { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:7px 0; border-bottom:1px solid var(--border); }
+.junk-cat:last-child { border-bottom:0; }
+.junk-cat-name { min-width:0; color:var(--text-secondary); font-size:12px; line-height:1.4; }
+.junk-cat-meta { flex:0 0 auto; max-width:52%; color:var(--text); font-size:11.5px; line-height:1.4; text-align:right; font-variant-numeric:tabular-nums; }
+.junk-cat.is-warn .junk-cat-meta { color:#ffd27a; }
+.junk-card .bfx-btn { min-height:54px; }
+html[dir="rtl"] .junk-cat-meta { text-align:left; }
+html[data-asb-theme="light"] .junk-cat.is-warn .junk-cat-meta { color:#8a5a00; }
 
 /* Settings → Kernel: compact evidence and an exact-name editor. All device strings enter
  * through textContent in the renderer; these styles only provide the layout. */
@@ -9493,6 +9503,10 @@ const CFG_GROUP_SECTIONS = {
       keys:['disable_blur','ui_effects_level'] }
   ],
   infirmary: [
+    { id:'cleanup', icon:'cleaner', titleKey:'cfg_inf_section_cleanup',
+      title:'Cleanup', hintKey:'cfg_inf_section_cleanup_hint',
+      hint:'Manual removal of diagnostic residue and files already placed in a trash state.',
+      keys:[], card:'junkcleanup' },
     { id:'battery', icon:'battery_cell', titleKey:'cfg_inf_section_battery',
       title:'Battery', hintKey:'cfg_inf_section_battery_hint',
       hint:'A one-time reset of Android’s stored battery statistics, offered only at a full charge.',
@@ -9788,6 +9802,163 @@ function asbPharmacyCross(gid) {
 }
 function cfgOpenInfirmary() { uiSound('nav'); cfgShowGroup('infirmary'); }
 
+/* Infirmary → Junk Cleanup (dev32). A manual dry-run/readback flow around one bounded shell
+ * owner. The card never accepts a path from the browser and never starts a polling worker. */
+const JUNK_CLEANUP_SCRIPT = MD + '/runtime/asb_junk_cleanup.sh';
+const JUNK_CLEANUP_CATS = ['dropbox','tombstones','anr','environment','installer','logs','backup','local','trash','screenshots','coloros'];
+let _junkArmed = 0, _junkBusy = false, _junkSeq = 0;
+function junkNum(v) { const n = Number(v); return isFinite(n) && n >= 0 ? Math.floor(n) : 0; }
+function junkBytes(v) {
+  let n = junkNum(v), u = 0;
+  while (n >= 1024 && u < 3) { n /= 1024; u++; }
+  return (u ? n.toFixed(n >= 10 ? 1 : 2).replace(/\.0+$|([.,][0-9])0$/, '$1') : String(n)) + ' ' + ['B','KB','MB','GB'][u];
+}
+function junkParse(txt) {
+  const out = { head:null, cats:{} };
+  String(txt || '').split('\n').forEach(function (line) {
+    const p = line.split('|');
+    if (p[0] === 'junk_cleanup' && (p[1] === 'status' || p[1] === 'result')) {
+      const f = { kind:p[1] };
+      p.slice(2).forEach(function (s) { const i = s.indexOf('='); if (i > 0) f[s.slice(0, i)] = s.slice(i + 1); });
+      out.head = f;
+    } else if (p[0] === 'junk_category' && JUNK_CLEANUP_CATS.indexOf(p[1]) >= 0) {
+      const f = { state:'' };
+      p.slice(2).forEach(function (s) { const i = s.indexOf('='); if (i > 0) f[s.slice(0, i)] = s.slice(i + 1); });
+      out.cats[p[1]] = f;
+    }
+  });
+  return out;
+}
+function junkChip(state, text) {
+  const chip = _el('junkChip');
+  if (chip) { chip.className = 'bfx-chip is-' + state; chip.textContent = text; }
+}
+function junkRows(parsed, result) {
+  const host = _el('junkCats');
+  if (!host) return;
+  host.textContent = '';
+  JUNK_CLEANUP_CATS.forEach(function (id) {
+    const f = parsed.cats[id] || {};
+    const row = bfxEl('div', 'junk-cat' + (f.state === 'partial' || f.state === 'not_readable' ? ' is-warn' : ''));
+    const name = bfxEl('div', 'junk-cat-name', T('junk_cat_' + id, id));
+    const meta = bfxEl('div', 'junk-cat-meta');
+    if (f.state === 'not_readable') meta.textContent = T('junk_unavailable', 'Not readable — skipped');
+    else if (result) {
+      meta.textContent = bfxT('junk_result_meta', 'Removed {removed} · {size}', { removed:junkNum(f.removed), size:junkBytes(f.freed) });
+      if (junkNum(f.remaining)) meta.textContent += ' · ' + bfxT('junk_remaining', 'left: {count}', { count:junkNum(f.remaining) });
+    } else meta.textContent = bfxT('junk_meta', '{count} · {size}', { count:junkNum(f.count), size:junkBytes(f.bytes) });
+    row.appendChild(name); row.appendChild(meta); host.appendChild(row);
+  });
+}
+function junkButtons(canRun) {
+  const runBtn = _el('junkRun'), refresh = _el('junkRefresh');
+  if (runBtn) runBtn.disabled = !canRun || _junkBusy;
+  if (refresh) refresh.disabled = _junkBusy;
+}
+function junkStatusPaint(parsed) {
+  const h = parsed.head;
+  if (!h || h.kind !== 'status') {
+    junkChip('wait', T('junk_unavailable_short', 'Unavailable'));
+    const total = _el('junkTotal'); if (total) total.textContent = T('junk_failed', 'Could not scan the supported locations');
+    const rows = _el('junkCats'); if (rows) rows.textContent = '';
+    const note = _el('junkNote'); if (note) note.textContent = T('junk_failed', 'Could not scan the supported locations');
+    junkButtons(false); return;
+  }
+  const count = junkNum(h.total_count), failed = junkNum(h.failed_categories);
+  junkRows(parsed, false);
+  const total = _el('junkTotal');
+  if (total) total.textContent = count ? bfxT('junk_found', 'Found: {count} · {size}', { count:count, size:junkBytes(h.total_bytes) }) : T('junk_empty', 'No supported junk files found');
+  junkChip(count ? 'ready' : (failed ? 'wait' : 'ok'), count ? T('junk_ready', 'Ready') : (failed ? T('junk_check', 'Check') : T('junk_clean', 'Clean')));
+  junkButtons(count > 0);
+  const note = _el('junkNote');
+  if (note) note.textContent = failed ? bfxT('junk_skipped', 'Unreadable categories are skipped: {count}', { count:failed }) : '';
+}
+function junkResultPaint(parsed) {
+  const h = parsed.head;
+  if (!h || h.kind !== 'result') return false;
+  const state = h.state || 'failed';
+  if (state === 'busy') {
+    junkChip('wait', T('junk_busy_chip', 'Busy'));
+    const note = _el('junkNote'); if (note) note.textContent = T('junk_busy', 'Another cleanup is already running');
+    junkButtons(false); return true;
+  }
+  if (state === 'lock_error') {
+    junkChip('wait', T('junk_unavailable_short', 'Unavailable'));
+    const total = _el('junkTotal'); if (total) total.textContent = T('junk_failed', 'Could not scan the supported locations');
+    const note = _el('junkNote'); if (note) note.textContent = T('junk_failed', 'Could not scan the supported locations');
+    junkButtons(false); return true;
+  }
+  junkRows(parsed, true);
+  const count = junkNum(h.removed_count), failed = junkNum(h.failed_categories);
+  const summary = bfxT('junk_done', 'Removed: {count} · freed {size}', { count:count, size:junkBytes(h.freed_bytes) });
+  const total = _el('junkTotal'); if (total) total.textContent = summary;
+  const note = _el('junkNote');
+  if (note) note.textContent = state === 'partial' ? bfxT('junk_partial', 'Not everything was removed; failed categories: {count}', { count:failed }) : '';
+  junkChip(state === 'partial' ? 'wait' : 'ok', state === 'partial' ? T('junk_partial_chip', 'Partial') : T('junk_cleaned', 'Cleaned'));
+  junkButtons(state === 'partial');
+  return true;
+}
+function cfgRenderJunkCleanupCard(list) {
+  const card = bfxEl('div', 'cfg-row bfx-card junk-card'); card.id = 'junkCard';
+  const head = bfxEl('div', 'bfx-head');
+  const em = bfxEl('div', 'bfx-emblem'); em.innerHTML = techIcon('cleaner'); head.appendChild(em);
+  const titles = bfxEl('div', 'bfx-titles');
+  titles.appendChild(bfxEl('div', 'bfx-title', T('junk_title', 'Junk Cleanup')));
+  const chip = bfxEl('span', 'bfx-chip is-off'); chip.id = 'junkChip'; titles.appendChild(chip);
+  head.appendChild(titles); card.appendChild(head);
+  card.appendChild(bfxEl('div', 'bfx-desc', T('junk_desc', 'Removes crash reports, ANR traces, diagnostic and installer caches, stale backup journals and files already in a trash state. Ordinary screenshots, recent tasks, module settings and working files are preserved. This frees storage; it does not prove or guarantee a fix for lag.')));
+  const total = bfxEl('div', 'junk-total', T('junk_scan', 'Scanning…')); total.id = 'junkTotal'; card.appendChild(total);
+  const cats = bfxEl('div', 'junk-cats'); cats.id = 'junkCats'; card.appendChild(cats);
+  const actions = bfxEl('div', 'bfx-actions');
+  const runBtn = bfxEl('button', 'bfx-btn bfx-primary', T('junk_run', 'Clean up'));
+  runBtn.type = 'button'; runBtn.id = 'junkRun'; runBtn.disabled = true; runBtn.onclick = junkCleanupRun; actions.appendChild(runBtn);
+  const refresh = bfxEl('button', 'bfx-btn bfx-secondary', T('junk_refresh', 'Rescan'));
+  refresh.type = 'button'; refresh.id = 'junkRefresh'; refresh.disabled = true; refresh.onclick = function () { junkCleanupPaint(true); }; actions.appendChild(refresh);
+  card.appendChild(actions);
+  const note = bfxEl('div', 'bfx-note'); note.id = 'junkNote'; card.appendChild(note);
+  list.appendChild(card);
+  junkCleanupPaint(false);
+}
+async function junkCleanupPaint(manual) {
+  if (!_el('junkCard') || _junkBusy) return;
+  const seq = ++_junkSeq;
+  _junkArmed = 0; junkButtons(false);
+  junkChip('run', T('junk_scan', 'Scanning…'));
+  if (manual) uiSound('nav');
+  let response = null;
+  try { response = await run('sh ' + shQuote(JUNK_CLEANUP_SCRIPT) + ' status'); } catch (e) {}
+  if (seq !== _junkSeq || !_el('junkCard')) return;
+  const text = response && response.stdout != null ? String(response.stdout) : '';
+  junkStatusPaint(junkParse(text));
+}
+async function junkCleanupRun() {
+  if (_junkBusy || !_el('junkRun') || _el('junkRun').disabled) return;
+  const now = Date.now();
+  if (now - _junkArmed > 5000) {
+    _junkArmed = now; uiSound('capture');
+    toast(T('junk_confirm', 'Tap again to delete the listed files permanently, including trashed screenshots'), 'perf');
+    return;
+  }
+  _junkArmed = 0; _junkBusy = true; const seq = ++_junkSeq;
+  junkButtons(false); junkChip('run', T('junk_running', 'Cleaning…'));
+  let response = null;
+  try { response = await run('sh ' + shQuote(JUNK_CLEANUP_SCRIPT) + ' run'); } catch (e) {}
+  if (seq !== _junkSeq || !_el('junkCard')) { _junkBusy = false; return; }
+  _junkBusy = false;
+  const parsed = junkParse(response && response.stdout != null ? String(response.stdout) : '');
+  if (!junkResultPaint(parsed)) {
+    junkChip('wait', T('junk_unavailable_short', 'Unavailable'));
+    const note = _el('junkNote'); if (note) note.textContent = T('junk_failed', 'Could not scan the supported locations');
+    junkButtons(false); toast(T('junk_failed', 'Could not scan the supported locations'), 'error');
+    return;
+  }
+  const state = parsed.head.state;
+  if (state === 'partial') toast(T('junk_partial_toast', 'Cleanup finished with remaining files'), 'error');
+  else if (state === 'busy') toast(T('junk_busy', 'Another cleanup is already running'), 'perf');
+  else if (state === 'lock_error') toast(T('junk_failed', 'Could not scan the supported locations'), 'error');
+  else { uiSound('success'); toast(bfxT('junk_done', 'Removed: {count} · freed {size}', { count:junkNum(parsed.head.removed_count), size:junkBytes(parsed.head.freed_bytes) }), 'ok'); }
+}
+
 function cfgRenderGroup(list, groupId) {
   if (groupId === 'kernel') kernelPanelEnsure();
   const items = CFG_ITEMS.filter(it => cfgGroupOf(it.key) === groupId);
@@ -9804,6 +9975,7 @@ function cfgRenderGroup(list, groupId) {
     navItems.push(['cfg-sec-' + groupId + '-' + section.id, T(section.titleKey, section.title), section.icon]);
     sectionItems.forEach(it => { rendered[it.key] = true; });
     if (section.card === 'batteryfix') cfgRenderBatteryFixCard(list);
+    else if (section.card === 'junkcleanup') cfgRenderJunkCleanupCard(list);
     else if (section.card === 'wakeup') cfgRenderWakeupBlockerCard(list);
     else if (section.card === 'capabilities') cfgRenderKernelCapabilitiesCard(list);
     else if (section.id === 'zygisk') cfgRenderZygiskCard(list, sectionItems);
