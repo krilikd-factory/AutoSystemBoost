@@ -631,8 +631,11 @@ private:
 
 class Observer final : public zygisk::ModuleBase {
 public:
-    /* Runs once in zygote. If the absolute policy path is blocked (EACCES under SELinux),
-     * every fork uses the loader's module-directory fd instead of repeating a denied open. */
+    /* Where this runs depends on the loader. Magisk forks first and then dlopens the module
+     * in the child, so onLoad runs once per app process (ZygiskContext::app_specialize_pre ->
+     * run_modules_pre) and this probe is one open/close per process. A loader that calls onLoad
+     * in zygote runs it once. Either way, if the absolute path is blocked (EACCES under
+     * SELinux), read_policy goes straight to the loader's module-directory fd. */
     void onLoad(zygisk::Api *api, JNIEnv *env) override {
         api_ = api; env_ = env;
         const int fd = open(ASB_ZYGISK_POLICY_ABS, O_RDONLY | O_CLOEXEC);
@@ -702,95 +705,27 @@ public:
     void preServerSpecialize(zygisk::ServerSpecializeArgs *) override { skip(); }
 
 private:
-    struct PolicyStamp {
-        dev_t dev = 0;
-        ino_t ino = 0;
-        off_t size = -1;
-        time_t mtime_s = 0;
-        long mtime_ns = 0;
-    };
-
-    static PolicyStamp policy_stamp(const struct stat &st) {
-        // Bionic's 32-bit stat fields are wider than dev_t/ino_t/off_t. Aggregate
-        // initialization therefore trips Clang's C++11 narrowing error on armeabi-v7a
-        // even though the same source is valid for arm64. The conversions are explicit:
-        // this stamp is only an in-process equality fingerprint, never a persisted id.
-        return PolicyStamp{
-            static_cast<dev_t>(st.st_dev),
-            static_cast<ino_t>(st.st_ino),
-            static_cast<off_t>(st.st_size),
-            static_cast<time_t>(st.st_mtim.tv_sec),
-            static_cast<long>(st.st_mtim.tv_nsec)};
-    }
-
-    static bool same_stamp(const PolicyStamp &a, const PolicyStamp &b) {
-        return a.dev == b.dev && a.ino == b.ino && a.size == b.size &&
-               a.mtime_s == b.mtime_s && a.mtime_ns == b.mtime_ns;
-    }
-
-    bool stat_policy(struct stat &st) {
-        if (abs_path_) {
-            if (stat(ASB_ZYGISK_POLICY_ABS, &st) == 0) return true;
-            if (errno == ENOENT) return false;
-        }
-        const int dir = api_->getModuleDir();
-        return dir >= 0 && fstatat(dir, ASB_ZYGISK_POLICY_REL, &st, 0) == 0;
-    }
-
-    int open_policy() {
+    /* Absent policy = dormant: one failed open, nothing parsed, no IPC. Called from
+     * preAppSpecialize, which runs in the freshly forked app process, so anything stored here
+     * stays in that process: the V66 dev23 stat-keyed cache could not carry over to the next
+     * fork (under Magisk the object itself is new in every process) and only added a stat and
+     * an fstat to each read. Every failure leaves an empty, inactive policy. */
+    bool read_policy(AsbObserverPolicy &policy) {
+        policy = AsbObserverPolicy();
         int fd = -1;
         if (abs_path_) {
             fd = open(ASB_ZYGISK_POLICY_ABS, O_RDONLY | O_CLOEXEC);
-            if (fd < 0 && errno == ENOENT) return -1;
+            if (fd < 0 && errno == ENOENT) return false;
         }
         if (fd < 0) {
             const int dir = api_->getModuleDir();
-            if (dir < 0) return -1;
+            if (dir < 0) return false;
             fd = openat(dir, ASB_ZYGISK_POLICY_REL, O_RDONLY | O_CLOEXEC);
+            if (fd < 0) return false;
         }
-        return fd;
-    }
-
-    /* V66 dev23: atomic policy replacement gives a new inode. An unchanged policy needs one
-     * stat, not another open/read/parse on every regular app fork. Every terminal error
-     * invalidates the cache and returns an empty policy: a removed, denied or malformed file never leaves a
-     * stale active policy in use. */
-    bool read_policy(AsbObserverPolicy &policy) {
-        struct stat st {};
-        if (!stat_policy(st)) {
-            policy = AsbObserverPolicy();
-            policy_cached_ = false;
-            return false;
-        }
-        const PolicyStamp current = policy_stamp(st);
-        if (policy_cached_ && same_stamp(current, policy_stamp_)) {
-            policy = cached_policy_;
-            return true;
-        }
-        const int fd = open_policy();
-        if (fd < 0) {
-            policy = AsbObserverPolicy();
-            policy_cached_ = false;
-            return false;
-        }
-        struct stat opened {};
-        if (fstat(fd, &opened) != 0) {
-            close(fd);
-            policy = AsbObserverPolicy();
-            policy_cached_ = false;
-            return false;
-        }
-        AsbObserverPolicy fresh;
-        if (!load_policy_fd(fd, fresh)) {
-            policy = AsbObserverPolicy();
-            policy_cached_ = false;
-            return false;
-        }
-        cached_policy_ = fresh;
-        policy_stamp_ = policy_stamp(opened);
-        policy_cached_ = true;
-        policy = fresh;
-        return true;
+        if (load_policy_fd(fd, policy)) return true;
+        policy = AsbObserverPolicy();
+        return false;
     }
 
     void skip() { api_->setOption(zygisk::DLCLOSE_MODULE_LIBRARY); }
@@ -799,9 +734,6 @@ private:
     bool abs_path_ = true;
     int socket_ = -1;
     std::string package_;
-    bool policy_cached_ = false;
-    PolicyStamp policy_stamp_ {};
-    AsbObserverPolicy cached_policy_ {};
 };
 
 void companion_handler(int client) { Broker::instance().handle(client); }
