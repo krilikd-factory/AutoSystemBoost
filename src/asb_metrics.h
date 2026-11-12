@@ -1286,7 +1286,35 @@ int cpu_prio = -1;
             int socd_raw = sysfs_read_int(sp, 0);
             int socd_c = thermal_raw_to_c(socd_raw);
 
-            if (np < 3) {
+            /* V66 dev20: right after boot the core zones are not all readable yet, so fewer
+             * than three peers exist and socd was kept. On the OP15 it is a percentage, not a
+             * temperature: a boot session logged "cpu=socd ... 46C" while the cores were at
+             * 80 C, and the governor controlled on it until the next rescan a minute later.
+             * Scale alone settles it whenever any other sensor reports millidegrees - the
+             * board, skin or surface zone found in this same pass - and a live core zone is
+             * there to take over. */
+            int sys_milli = peers_milli;
+            if (!sys_milli) {
+                int oz[3] = { g_thermal_board_zone, g_thermal_skin_zone, g_thermal_surface_zone };
+                for (int i = 0; i < 3 && !sys_milli; i++) {
+                    char op[128];
+                    if (oz[i] < 0) continue;
+                    snprintf(op, sizeof(op), THERMAL_BASE "/thermal_zone%d/temp", oz[i]);
+                    if (sysfs_read_int(op, 0) >= 1000) sys_milli = 1;
+                }
+            }
+            if (np < 3 && socd_raw > 0 && socd_raw < 1000 && sys_milli && fallback_zone >= 0) {
+                snprintf(g_thermal_rejected_type, sizeof(g_thermal_rejected_type), "socd");
+                g_thermal_rejected_raw = socd_raw;
+                g_thermal_cpu_zone = fallback_zone;
+                snprintf(g_thermal_cpu_type, sizeof(g_thermal_cpu_type), "%s", fallback_type);
+                snprintf(g_thermal_cpu_reason, sizeof(g_thermal_cpu_reason),
+                         "socd rejected (scale: raw %d beside millidegree zones, %d CPU peers); live fallback %s at zone%d",
+                         socd_raw, np, fallback_type, fallback_zone);
+                g_thermal_source_confidence = 1;
+                g_thermal_cpu_fallback_zone = -1;
+                g_thermal_cpu_fallback_type[0] = '\0';
+            } else if (np < 3) {
                 g_thermal_source_confidence = 1;
                 snprintf(g_thermal_cpu_reason, sizeof(g_thermal_cpu_reason),
                          "socd=%dC retained: only %d validated CPU peers for cross-check", socd_c, np);
@@ -1457,10 +1485,19 @@ static void metrics_read_thermal(asb_thermal_t *t, int need_headroom) {
      * source can become implausible after boot; actual fallback zones remain stable. */
     {
         time_t now = time(NULL);
+        /* V66 dev20: the boot-time source is provisional while socd still controls, or while
+         * it was rejected with fewer than three core peers (the fallback cannot earn full
+         * confidence without them, and no other condition would ever rescan). In the first
+         * five minutes - the core zones come up during boot - look again every 10 s. */
+        int early_src = strcmp(g_thermal_cpu_type, "socd") == 0 ||
+                        (g_thermal_source_confidence == 1 && g_thermal_cpu_peer_n < 3 &&
+                         strcmp(g_thermal_rejected_type, "socd") == 0);
         int need_rescan = (g_thermal_skin_zone < 0 || g_thermal_cpu_zone < 0 ||
-                           g_thermal_surface_zone < 0 ||
-                           strcmp(g_thermal_cpu_type, "socd") == 0);
-        if (need_rescan && now - g_last_thermal_rescan >= 60) {
+                           g_thermal_surface_zone < 0 || early_src);
+        static time_t s_first_read = 0;
+        if (s_first_read == 0) s_first_read = now;
+        int rescan_s = (early_src && now - s_first_read < 300) ? 10 : 60;
+        if (need_rescan && now - g_last_thermal_rescan >= rescan_s) {
             g_last_thermal_rescan = now;
             thermal_discover();
         }
