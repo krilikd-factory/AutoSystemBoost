@@ -18985,7 +18985,9 @@ function logReportTweakEvidence(d) {
         T('lr_impact_direct', 'Measured actions · performance/energy benefit needs A/B')]);
     }
   }
-  const lt = s.ltpo || null;
+  /* dev20: older captures carried only the watcher's lifetime counters, shown here as if
+     measured in this capture. Only a capture delta belongs in this table. */
+  const lt = (s.ltpo && s.ltpo.basis === 'capture') ? s.ltpo : null;
   if (lt) rows.push([T('lr_ltpo', 'LTPO video drop'),
     logReportT('lr_ltpo_fmt', '{n} times · {min} at the lower rate', { n: num(lt.n), min: logReportDur(lt.min) }),
     T('lr_impact_direct', 'Measured actions · performance/energy benefit needs A/B')]);
@@ -19524,7 +19526,7 @@ function logReportRender(d) {
     /* fix206: proof the LTPO video drop actually engages - "lowered N times, M min at
        the lower rate". */
     if (ltpo && (+ltpo.n || 0) > 0) {
-      s.appendChild(logReportRow(T('lr_ltpo', 'LTPO video drop'),
+      s.appendChild(logReportRow(ltpo.basis === 'capture' ? T('lr_ltpo', 'LTPO video drop') : T('lr_ltpo_life', 'LTPO video drop (lifetime)'),
         logReportT('lr_ltpo_fmt', '{n} times · {min} at the lower rate', {
           n: String(ltpo.n), min: logReportDur(ltpo.min) })));
     }
