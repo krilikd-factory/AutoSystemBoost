@@ -5901,7 +5901,14 @@ printf '%s\n' "$out" | grep -q '^wlive	tag=AudioMix	pct=9	min=3	pkg=com.google.a
 printf '%s\n' "$out" | grep -q '^prof	name=p	on_min=3	off_min=3	on_pctph=36.0	off_pctph=18.0$' || fail "per-profile row p: $(printf '%s\n' "$out" | grep '^prof' | head -1)"
 printf '%s\n' "$out" | grep -q '^prof	name=b	on_min=3	off_min=0	on_pctph=36.0	off_pctph=0.0$' || fail "per-profile row b"
 printf '%s\n' "$out" | grep -q '^chg	min=60	gain=14	sess=1$' || fail "charging sessions: $(printf '%s\n' "$out" | grep '^chg')"
-printf '%s\n' "$out" | grep -q '^ltpo	n=79	min=11$' || fail "ltpo line"
+printf '%s\n' "$out" | grep -q '^ltpo	n=79	min=11	basis=lifetime$' || fail "ltpo line"
+# dev20: a capture-start snapshot gives this capture's own counts; the lifetime line is then
+# only the fallback for captures that have none.
+cp "$CAP/_full_day_report.txt" "$T/report.saved"
+printf 'ltpo_video (capture): lowered 4 times, 2 min at the lower rate, 4 restored by touch\n' >> "$CAP/_full_day_report.txt"
+ltout="$(ASB_TOMBSTONE_DIR="$T/tomb" ASB_LK_LOCK="$T/nolock" ASB_LK_STATE_DIR="$T/state0" sh "$D" "$CAP")" || fail "digest exit (capture ltpo)"
+printf '%s\n' "$ltout" | grep -q '^ltpo	n=4	min=2	basis=capture$' || fail "capture ltpo line: $(printf '%s\n' "$ltout" | grep '^ltpo')"
+cp "$T/report.saved" "$CAP/_full_day_report.txt"
 printf '%s\n' "$out" | grep -q '^capcheck	total=9	ok=4	vendor=4	other=1$' || fail "cap readback observations: $(printf '%s\n' "$out" | grep '^capcheck')"
 printf '%s\n' "$out" | grep -q '^wifileave	releases=2	out_of_range=1	no_internet=1	returned=2	failed=0	recovered=3$' || fail "Wi-Fi Leave action counters"
 printf '%s\n' "$out" | grep -q '^aod	lit=11	of=520$' || fail "aod line"
@@ -6245,7 +6252,7 @@ const txt = [
   'prof\tname=performance\ton_min=236\toff_min=296\ton_pctph=6.1\toff_pctph=0.6',
   'prof\tname=balanced\ton_min=116\toff_min=118\ton_pctph=5.2\toff_pctph=3.0',
   'chg\tmin=402\tgain=63\tsess=10',
-  'ltpo\tn=79\tmin=11',
+  'ltpo\tn=79\tmin=11\tbasis=lifetime',
   'aod\tlit=11\tof=520',
   'scr\ton_pctph=5.7\toff_pctph=1.8\ton_min=401\toff_min=478',
   'phase\tname=sleep\tmin=304\tdrop=8\tpctph=1.6',
@@ -6310,7 +6317,7 @@ chk(d.wlive.length === 2 && d.wlive[0].pkg === 'com.amurcanov.tgwsproxy' && d.wl
 chk(d.wlive[1].pkg === '' && d.wlive[1].tag === 'com.android.server.MountServiceIdler', 'a system holder keeps the tag and no package');
 chk(d.profs.length === 2 && d.profs[0].name === 'performance' && d.profs[0].onP === 6.1 && d.profs[1].offP === 3, 'per-profile rows: ' + JSON.stringify(d.profs));
 chk(d.sections.chg.min === '402' && d.sections.chg.gain === '63' && d.sections.chg.sess === '10', 'charging line parses');
-chk(d.sections.ltpo.n === '79' && d.sections.ltpo.min === '11', 'ltpo line parses');
+chk(d.sections.ltpo.n === '79' && d.sections.ltpo.min === '11' && d.sections.ltpo.basis === 'lifetime', 'ltpo line parses');
 chk(d.sections.aod.lit === '11' && d.sections.aod.of === '520', 'aod line parses');
 /* fix207: the screen split, the phase table and the kernel charger holders parse. */
 chk(d.sections.scr.on_pctph === '5.7' && d.sections.scr.off_pctph === '1.8' && d.sections.scr.off_min === '478', 'screen split parses');
@@ -6653,7 +6660,12 @@ const impactCard = logReportTweakEvidence(impactDay), impactText = asbPageText(i
 chk(impactCard && impactCard.id === 'lgr-impact', 'per-tweak evidence card renders');
 chk(impactText.indexOf('4/9') >= 0 && (impactText.indexOf('4 external overrides') >= 0 || impactText.indexOf('внешних переопределений: 4') >= 0), 'cap readback observations render: ' + impactText);
 chk(impactText.indexOf('2.5%') >= 0 && impactText.indexOf('3.6%') >= 0 && impactText.indexOf('50000') >= 0, 'at-cap association keeps both samples and frame count: ' + impactText);
-chk(impactText.indexOf('79') >= 0 && impactText.indexOf('11') >= 0 && impactText.indexOf('1851') >= 0, 'LTPO and ASB cost render');
+/* dev20: the lifetime LTPO counter is not a measurement of this capture and stays out of this
+   table; a capture delta (basis=capture) is shown. */
+chk(impactText.indexOf('1851') >= 0, 'ASB cost renders');
+chk(impactText.indexOf('79 ') < 0 && impactText.indexOf('LTPO') < 0, 'a lifetime LTPO counter is kept out of the capture table: ' + impactText);
+const ltCapText = asbPageText(logReportTweakEvidence(parseLogReport(txt.replace('ltpo\tn=79\tmin=11\tbasis=lifetime', 'ltpo\tn=4\tmin=2\tbasis=capture'))));
+chk(/LTPO/.test(ltCapText) && ltCapText.indexOf('4') >= 0, 'a capture LTPO delta renders: ' + ltCapText);
 chk(impactText.indexOf('A/B') >= 0 && impactText.indexOf('не означает') >= 0, 'A/B and not-exposed caveats render');
 chk(logReportTweakEvidence(parseLogReport('meta\telapsed_min=10\n')) === null, 'no empty evidence card');
 global.window = {};
@@ -9182,7 +9194,36 @@ printf '%s\n' "$out" | awk -F '\t' '$2 != "meta" && $2 != "lsposed_hooks" { bad 
 want lsposed_hooks present 1
 printf '%s\n' "$out" | grep -q '^D	lsposed_hooks	basis	' || fail "--lsposed did not run the collector: $out"
 rmdir "$T/data/lspd"
-echo "PASS device info: read-only TSV, metamodule/root implementation variants, bounded ksud evidence, built-in/LKM NoMount and version, kernel feature evidence and missing-config semantics"
+# dev20: a GKI config is 200-300 KB decompressed. Android's shell has no printf builtin and
+# execve refuses one argument over 128 KB, so piping the whole text through printf returned
+# nothing on every phone (kernel_config never listed a single CONFIG_ line in any export) while
+# a host shell's builtin printf worked. Run the collector with printf forced external.
+if command -v bash >/dev/null 2>&1; then
+  {
+    i=0; while [ "$i" -lt 9000 ]; do printf 'CONFIG_FILLER_OPTION_NUMBER_%05d=y\n' "$i"; i=$((i + 1)); done
+    printf 'CONFIG_HZ=250\nCONFIG_LTO_CLANG_THIN=y\nCONFIG_KSU=y\nCONFIG_VPNHIDE=y\n# CONFIG_VPNHIDE_FS_HIDING is not set\n'
+    printf 'CONFIG_USB_CONFIGFS_MASS_STORAGE=y\nCONFIG_USB_CONFIGFS_F_HID=y\nCONFIG_USB_CONFIGFS_NCM=y\nCONFIG_IP_NF_TARGET_MASQUERADE=y\n'
+    printf 'CONFIG_TCP_CONG_BBR3=y\nCONFIG_WIREGUARD=y\nCONFIG_NET_SCH_CAKE=y\nCONFIG_OVERLAY_FS=y\n'
+  } > "$T/config.big"
+  [ "$(wc -c < "$T/config.big")" -gt 140000 ] || fail 'big config fixture is not over the 128 KB argument limit'
+  gzip -c "$T/config.big" > "$T/proc/config.gz"
+  printf 'reno cubic bbr bbr3\n' > "$T/proc/sys/net/ipv4/tcp_available_congestion_control"
+  out="$(ASB_DEVINFO_MODDIR="$T/mod" ASB_DEVINFO_SYS="$T/sys" ASB_DEVINFO_PROC="$T/proc" \
+    ASB_DEVINFO_DATA="$T/data" ASB_DEVINFO_PROP_FILE="$T/props" ASB_DEVINFO_SUSFS="$T/susfs" \
+    ASB_DEVINFO_STATE="$T/state" ASB_DEVINFO_KSUD="$T/ksud" ASB_DEVINFO_DEV="$T/dev" \
+    KSUD_LOG="$T/ksud.log" SUSFS_LOG="$T/susfs.log" bash -c 'enable -n printf; . "$1"' devinfo "$D")"
+  want kernel_config available yes; want kernel_config entries 9012
+  want kernel_config CONFIG_HZ 250; want kernel_config CONFIG_VPNHIDE y; want kernel_config CONFIG_VPNHIDE_FS_HIDING 'not set'
+  want kernel_features lto 'ThinLTO (Clang)'; want kernel_origin assessment custom-like
+  want kernel_features vpn_hide 'built-in; network only'
+  want kernel_features usb_arsenal 'gadget functions: mass-storage, hid, ncm, nat'
+  want kernel_features bbr_v3 available; want kernel_features wireguard built-in; want kernel_features net_sch_cake built-in
+  want kernel_features overlayfs built-in; want kernel_features cifs absent
+  printf '%s\n' "$out" | grep -q '^D	kernel_config	CONFIG_FILLER' && fail 'non-whitelisted config lines were emitted'
+  printf 'not gzip\n' > "$T/proc/config.gz"
+  out="$(run)"; want kernel_config available 'present; not decodable here'; want kernel_features lto unknown
+fi
+echo "PASS device info: read-only TSV, metamodule/root implementation variants, bounded ksud evidence, built-in/LKM NoMount and version, kernel feature evidence and missing-config semantics, a 140 KB+ config read with an external printf (Android), VPN Hide / USB gadget / WireGuard / BBRv3 / CAKE / OverlayFS evidence"
 )
 
 t_webui_tcp_algorithms_runtime() (

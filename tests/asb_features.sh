@@ -4423,6 +4423,27 @@ grep -q 'LOWERED_RECHECK_S="${ASB_LTPO_RECHECK_S:-30}"' "$ROOT/runtime/asb_ltpo_
 grep -q '{ \[ -n "$_sf_pick" \] && \[ "$_sf_ts" -lt "$_qt0" \]; }' "$ROOT/runtime/asb_ltpo_video.sh" || f "a stale SurfaceFlinger pick can still lower"
 grep -q '^    _audio_live || continue$' "$ROOT/runtime/asb_ltpo_video.sh" || f "lowers without re-checking the audio"
 
+# dev20: the loop caches the peak for 30 s, and another writer (touch boost, the user) can
+# set 60 Hz inside that window. A capture logged "lowered peak 60.0 -> 60 Hz" five times:
+# counted as lowers, a touch guard armed, nothing changed. The lower re-reads the peak under
+# the lock and does nothing when it is already at or below the target.
+_lw=0
+while [ "$_lw" -lt 100 ] && [ -f "$T/d/ltpo_video.pid" ] && kill -0 "$(cat "$T/d/ltpo_video.pid" 2>/dev/null | tr -dc '0-9')" 2>/dev/null; do
+  sleep 0.1; _lw=$((_lw + 1))
+done
+rm -f "$T/d/ltpo_video.lowered" "$T/d/ltpo_video.touch_at"
+_lowers0="$(cut -d'|' -f1 "$T/d/ltpo_video.stats" 2>/dev/null)"
+echo "165.0" > "$T/peak"
+echo ltpo_video=1 > "$T/mod/config/governor.conf"
+sh "$V" reconcile
+sleep 0.4
+echo "60.0" > "$T/peak"
+sleep 3
+[ "$(cat "$T/peak")" = 60.0 ] || f "the peak someone set to 60 Hz was rewritten: $(cat "$T/peak")"
+[ -f "$T/d/ltpo_video.lowered" ] && f "a lower was recorded although the peak was already 60 Hz"
+[ "$(cut -d'|' -f1 "$T/d/ltpo_video.stats" 2>/dev/null)" = "$_lowers0" ] || f "a no-op lower was counted"
+grep -q 'lowered peak 60.0 -> 60 Hz' "$T/d/ltpo_video.log" 2>/dev/null && f "a no-op lower was logged"
+
 grep -q 'asb_ltpo_video.sh" stop' "$ROOT/uninstall.sh" || f "uninstall does not stop the watcher"
 grep -q 'asb_ltpo_video.sh" reconcile' "$ROOT/service.sh" || f "boot does not reconcile the watcher"
 

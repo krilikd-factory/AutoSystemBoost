@@ -2005,8 +2005,65 @@ static void case_single_peer_cannot_hold_spike(void) {
     check_i("one independent peer: no spike hold", (int)g_thermal_spike_holds, 0);
 }
 
+/* V66 dev20: right after boot only some core zones read; a percentage socd must not stay
+ * the control source until the next minute's rescan when a board zone already proves the
+ * system reports millidegrees. */
+static void case_boot_percentage_socd_with_two_peers_rebinds(void) {
+    fixture_reset();
+    add_zone(0, "socd\n", 44);
+    add_zone(1, "cpu-1-1-0\n", 80000);
+    add_zone(2, "cpu-0-5-0\n", 0);
+    add_zone(5, "board_temp\n", 54000);
+    thermal_discover();
+    check_i("boot: percentage socd with 1 peer rebinds", g_thermal_cpu_zone, 1);
+    check_s("boot: control is the live core zone", g_thermal_cpu_type, "cpu-1-1-0");
+    check_s("boot: socd rejection published", g_thermal_rejected_type, "socd");
+    check_i("boot: rejected raw kept as evidence", g_thermal_rejected_raw, 44);
+    check_i("boot: confidence stays provisional", g_thermal_source_confidence, 1);
+}
+
+static void case_boot_percentage_socd_without_core_zone_retained(void) {
+    fixture_reset();
+    add_zone(0, "socd\n", 44);
+    add_zone(5, "board_temp\n", 54000);
+    thermal_discover();
+    check_i("boot: no core zone keeps socd", g_thermal_cpu_zone, 0);
+    check_i("boot: retained socd is low confidence", g_thermal_source_confidence, 1);
+}
+
+static void case_boot_fallback_promoted_when_peers_appear(void) {
+    asb_thermal_t t;
+    fixture_reset();
+    add_zone(0, "socd\n", 44);
+    add_zone(1, "cpu-1-1-0\n", 80000);
+    add_zone(5, "board_temp\n", 54000);
+    thermal_discover();
+    check_i("boot rescan setup: on the core zone", g_thermal_cpu_zone, 1);
+    add_zone(2, "cpu-0-5-0\n", 79000);
+    add_zone(3, "cpullc-0-0\n", 78000);
+    g_last_thermal_rescan = time(NULL) - 11;
+    metrics_read_thermal(&t, 0);
+    check_i("boot rescan after 10 s: three peers seen", g_thermal_cpu_peer_n, 3);
+    check_i("boot rescan: fallback earns full confidence", g_thermal_source_confidence, 2);
+    check_i("boot rescan: control is not socd", strcmp(g_thermal_cpu_type, "socd") != 0, 1);
+}
+
+static void case_boot_degree_socd_with_two_peers_unchanged(void) {
+    fixture_reset();
+    add_zone(0, "socd\n", 58000);
+    add_zone(1, "cpu-1-1-0\n", 56000);
+    add_zone(5, "board_temp\n", 40000);
+    thermal_discover();
+    check_i("boot: a millidegree socd with 1 peer stays", g_thermal_cpu_zone, 0);
+    check_s("boot: no rejection for a real temperature", g_thermal_rejected_type, "");
+}
+
 int main(void) {
     puts("P0 thermal socd validation fixtures");
+    case_boot_percentage_socd_with_two_peers_rebinds();
+    case_boot_percentage_socd_without_core_zone_retained();
+    case_boot_fallback_promoted_when_peers_appear();
+    case_boot_degree_socd_with_two_peers_unchanged();
     case_high_socd_rebinds_to_live_peer();
     case_valid_socd_is_retained();
     case_low_socd_rebinds_symmetrically();
