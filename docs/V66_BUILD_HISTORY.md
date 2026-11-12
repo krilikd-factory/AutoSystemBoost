@@ -4,6 +4,64 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev27 - one MGLRU owner for real, localized kernel verdicts, 200+ translations
+
+Input: the owner's dev26 source, reviewed file by file against dev20, plus the earlier
+Infinite Log bundles. Host regression of dev26 as received: 493/493 PASS.
+
+- **The dev24 single-owner contract had a second writer.** `apply_vm` in service.sh still ran
+  `echo 7 > /sys/kernel/mm/lru_gen/enabled` at boot, on every profile apply and on the
+  5-minute reinforce. It undid `mglru_mode=off` and `stock` within five minutes, fought
+  Smart's 5, and at boot ran before `asb_system_tweaks.sh` (deferred core boot, then
+  tweaks), so the helper's "pre-ASB" baseline was ASB's own 7 on every kernel that keeps
+  that value; Stock and uninstall would then "restore" 7. The regression's grep looked for
+  `sysctlw`/`writef` forms and missed `echo`. `apply_vm` now calls the helper and leaves
+  Smart profile + `mglru_mode=smart` to the Smart tuner; `asb_system_tweaks.sh` does the
+  same, so neither overwrites the tuner's 5/7 choice.
+- **fix138 came back.** On the OP15 the node reads `0x0001` whatever is requested. dev20
+  remembered each request's readback for the boot and skipped an unchanged node; dev24
+  dropped that, so every Smart tuner pass started the helper and wrote the node again,
+  only to log another readback mismatch. The per-boot readback memo is restored in front of
+  the helper.
+- **Smart without a load request asks for 7**, the value every non-Smart profile had until
+  dev24, instead of quietly moving Battery/Balanced/Performance to 5. In the Smart profile
+  the tuner still chooses 5 or 7 by load.
+- **The kernel-control toast spoke machine words.** `not_exposed`, `readback_mismatch` and
+  `live 0x0001` were shown raw and in English in all 13 locales. Every verdict the helper
+  can return now has a phrase in every locale, and a clamped request says what the kernel
+  kept.
+- **Translations.** 186 strings (Infinite Log digest and its legends, the device and kernel
+  pages, system load, wakelock freezer, Zygisk observer) were English in eleven locales, and
+  about twenty short labels (Summary/Actions/Details, Safe mode, load bands, Restore, GPU
+  busy) in all of them. All translated; the Russian "У потолка {cl}" sentence no longer breaks
+  the case of the cluster name. A regression now fails on English prose left in any locale.
+- **Crash line in the digest.** The latest crash showed `/system/bin/keystore2 /data/misc/keystor`:
+  the command line with its arguments, cut at 40 characters. Only the process path is kept.
+- **Shell comments** added in dev21-dev26 to module shell code were removed, per the
+  project's rule; no code line changed with them.
+
+Found and deliberately not changed:
+
+- **The dev23 Zygisk policy cache cannot hit on a phone.** `preAppSpecialize` runs in the
+  forked app process, and Magisk dlopens the module there and calls `onLoad` per process
+  (`ZygiskContext::app_specialize_pre` -> `run_modules_pre`, child only). Each process starts
+  with an empty cache and reads the policy once, so every fork still opens, reads and parses
+  it, now with one extra `stat` and `fstat`. The host fixture's 20 hits come from one process
+  calling `read_policy` repeatedly, which a phone never does. The code is correct and
+  fail-closed, and the added cost is two syscalls, so native code is left as built;
+  reverting it is optional at the next rebuild. The `onLoad` comment "runs once in zygote"
+  is likewise not true under Magisk.
+- **`kernel_sched_nr_migrate` will most likely read "not in this kernel" on 6.x kernels**:
+  since Linux 5.13 `sched_nr_migrate` lives in debugfs, not `/proc/sys/kernel`. The helper
+  reports that honestly; no other path was added.
+- **Stepped LTPO decay (dev22) costs time at high refresh.** This panel advertises
+  60/90/120/144/165 Hz (display_config.txt), so after the 2 s quiet delay the panel passes
+  144, 120 and 90 Hz for 1 s each: 60 Hz is reached after 5 s instead of 2 s, with four
+  Settings writes instead of one per pause. Kept as the owner chose it; not measured here.
+
+No native code changed: no CI rebuild needed beyond the one dev23's observer change already
+requires. Host fixtures are not device validation.
+
 ## V66 dev26 - structured CI build summary
 
 Input: the GitHub Actions Summary screenshot for the test build. The useful package information was
