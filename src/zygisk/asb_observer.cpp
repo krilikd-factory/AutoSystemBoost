@@ -711,7 +711,16 @@ private:
     };
 
     static PolicyStamp policy_stamp(const struct stat &st) {
-        return PolicyStamp{st.st_dev, st.st_ino, st.st_size, st.st_mtim.tv_sec, st.st_mtim.tv_nsec};
+        // Bionic's 32-bit stat fields are wider than dev_t/ino_t/off_t. Aggregate
+        // initialization therefore trips Clang's C++11 narrowing error on armeabi-v7a
+        // even though the same source is valid for arm64. The conversions are explicit:
+        // this stamp is only an in-process equality fingerprint, never a persisted id.
+        return PolicyStamp{
+            static_cast<dev_t>(st.st_dev),
+            static_cast<ino_t>(st.st_ino),
+            static_cast<off_t>(st.st_size),
+            static_cast<time_t>(st.st_mtim.tv_sec),
+            static_cast<long>(st.st_mtim.tv_nsec)};
     }
 
     static bool same_stamp(const PolicyStamp &a, const PolicyStamp &b) {
