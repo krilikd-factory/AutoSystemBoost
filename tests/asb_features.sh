@@ -5140,31 +5140,31 @@ grep -q 'net_congestion_mobile' "$TMP/map.sh" || fail 'verdict mapper extracted 
 map_verdicts() { ( _out="$1"; . "$TMP/map.sh" ); }
 
 v="$(map_verdicts 'congestion=bbr cc[mobile]=bbr(global)')"
-echo "$v" | grep -qx 'net_congestion=ok' || fail 'global congestion not ok'
-echo "$v" | grep -qx 'net_congestion_mobile=ok' || fail 'global-covered mobile not ok'
+grep -qx 'net_congestion=ok' <<<"$v" || fail 'global congestion not ok'
+grep -qx 'net_congestion_mobile=ok' <<<"$v" || fail 'global-covered mobile not ok'
 
 v="$(map_verdicts 'congestion=bbr cc[mobile]=cubic-unsupported')"
-echo "$v" | grep -qx 'net_congestion_mobile=unsupported' || fail 'unsupported mobile not mapped'
+grep -qx 'net_congestion_mobile=unsupported' <<<"$v" || fail 'unsupported mobile not mapped'
 
 v="$(map_verdicts 'cc[mobile:rmnet_data3]=bbr(global-fallback)')"
-echo "$v" | grep -qx 'net_congestion_mobile=ok' || fail 'fallback-served mobile not ok'
+grep -qx 'net_congestion_mobile=ok' <<<"$v" || fail 'fallback-served mobile not ok'
 
 v="$(map_verdicts 'cc[wifi:wlan0]=bbr(global)')"
-echo "$v" | grep -qx 'net_congestion_wifi=ok' || fail 'global-covered wifi not ok'
+grep -qx 'net_congestion_wifi=ok' <<<"$v" || fail 'global-covered wifi not ok'
 
 v="$(map_verdicts 'cc[wifi]=cubic-unavailable')"
-echo "$v" | grep -qx 'net_congestion_wifi=unavailable' || fail 'unavailable wifi regressed'
+grep -qx 'net_congestion_wifi=unavailable' <<<"$v" || fail 'unavailable wifi regressed'
 
 v="$(map_verdicts 'qdisc[mobile:rmnet_data3]=fq_codel-noqueue-unsupported')"
-echo "$v" | grep -qx 'net_qdisc_mobile=unsupported' || fail 'noqueue mobile not unsupported'
+grep -qx 'net_qdisc_mobile=unsupported' <<<"$v" || fail 'noqueue mobile not unsupported'
 
 # Regression: the pre-V65-40 vocabulary must keep its meaning.
 v="$(map_verdicts 'qdisc[mobile:rmnet_data3]=fq_codel-not-applied')"
-echo "$v" | grep -qx 'net_qdisc_mobile=failed' || fail 'not-applied mobile regressed'
+grep -qx 'net_qdisc_mobile=failed' <<<"$v" || fail 'not-applied mobile regressed'
 v="$(map_verdicts 'congestion=FAILED')"
-echo "$v" | grep -qx 'net_congestion=failed' || fail 'global FAILED regressed'
+grep -qx 'net_congestion=failed' <<<"$v" || fail 'global FAILED regressed'
 v="$(map_verdicts 'qdisc=fq_codel-unavailable')"
-echo "$v" | grep -qx 'net_qdisc=unavailable' || fail 'qdisc unavailable not mapped'
+grep -qx 'net_qdisc=unavailable' <<<"$v" || fail 'qdisc unavailable not mapped'
 
 # --- tc binary resolution pins (CPH2745 field log: boot PATH gave a limited applet
 # that rejected the qdisc grammar while /system/bin/tc worked) ---

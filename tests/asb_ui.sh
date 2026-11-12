@@ -713,7 +713,7 @@ ENV=(ASB_DEBUG_SUPPORT_MODDIR="$DBG" ASB_DEBUG_SUPPORT_STATE_DIR="$TMP/state" AS
 # named, and the real problem was invisible. The helper legitimately returns non-zero for
 # conditions this test is meant to observe, so its status is data here, not an error.
 DIAG_OUT="$(env "${ENV[@]}" sh "$HELPER" diag || true)"
-echo "$DIAG_OUT" | grep -Fq 'status=saved'
+grep -Fq 'status=saved' <<<"$DIAG_OUT"
 DIAG_PATH="$(printf '%s\n' "$DIAG_OUT" | sed -n 's/^path=//p')"
 [ -f "$DIAG_PATH" ] && grep -Fq 'diagnostic-ok' "$DIAG_PATH" || { echo 'FAIL debug support: diag export' >&2; exit 1; }
 
@@ -721,17 +721,17 @@ DIAG_PATH="$(printf '%s\n' "$DIAG_OUT" | sed -n 's/^path=//p')"
 # The async action must acknowledge a delayed worker immediately, remain observable via
 # fixed status command, and publish a complete saved record after the worker exits.
 ASYNC_DIAG="$(ASB_DEBUG_SUPPORT_TEST_DIAG_DELAY=1 env "${ENV[@]}" sh "$HELPER" diag-start || true)"
-printf '%s\n' "$ASYNC_DIAG" | grep -Fqx 'status=started' || { echo 'FAIL debug support: async diag did not return started' >&2; exit 1; }
+grep -Fqx 'status=started' <<<"$ASYNC_DIAG" || { echo 'FAIL debug support: async diag did not return started' >&2; exit 1; }
 ASYNC_PID="$(printf '%s\n' "$ASYNC_DIAG" | sed -n 's/^pid=//p')"
 [ -n "$ASYNC_PID" ] && kill -0 "$ASYNC_PID" 2>/dev/null || { echo 'FAIL debug support: async diag worker missing' >&2; exit 1; }
 ASYNC_STATUS="$(env "${ENV[@]}" sh "$HELPER" diag-status || true)"
-printf '%s\n' "$ASYNC_STATUS" | grep -Eq '^status=(starting|running)$' || { echo 'FAIL debug support: async diag status not live' >&2; exit 1; }
-for _diag_try in $(seq 1 30); do
+grep -Eq '^status=(starting|running)$' <<<"$ASYNC_STATUS" || { echo 'FAIL debug support: async diag status not live' >&2; exit 1; }
+for _diag_try in $(seq 1 100); do
   sleep 0.1
   ASYNC_STATUS="$(env "${ENV[@]}" sh "$HELPER" diag-status || true)"
-  printf '%s\n' "$ASYNC_STATUS" | grep -Fqx 'status=saved' && break
+  grep -Fqx 'status=saved' <<<"$ASYNC_STATUS" && break
 done
-printf '%s\n' "$ASYNC_STATUS" | grep -Fqx 'status=saved' || { echo 'FAIL debug support: async diag never reached saved' >&2; exit 1; }
+grep -Fqx 'status=saved' <<<"$ASYNC_STATUS" || { echo 'FAIL debug support: async diag never reached saved' >&2; exit 1; }
 ASYNC_PATH="$(printf '%s\n' "$ASYNC_STATUS" | sed -n 's/^path=//p')"
 [ -f "$ASYNC_PATH" ] && grep -Fq 'diagnostic-ok' "$ASYNC_PATH" || { echo 'FAIL debug support: async diag saved output missing' >&2; exit 1; }
 
@@ -740,26 +740,26 @@ ASYNC_PATH="$(printf '%s\n' "$ASYNC_STATUS" | sed -n 's/^path=//p')"
 mkdir -p "$TMP/state/asbdiag_webui.lock"
 printf '999999\n' > "$TMP/state/asbdiag_webui.lock/pid"
 STALE_DIAG="$(env "${ENV[@]}" sh "$HELPER" diag-start || true)"
-printf '%s\n' "$STALE_DIAG" | grep -Fqx 'status=started' || { echo 'FAIL debug support: known-dead diag lock not reclaimed' >&2; exit 1; }
-for _diag_try in $(seq 1 30); do sleep 0.1; env "${ENV[@]}" sh "$HELPER" diag-status | grep -Fqx 'status=saved' && break; done
+grep -Fqx 'status=started' <<<"$STALE_DIAG" || { echo 'FAIL debug support: known-dead diag lock not reclaimed' >&2; exit 1; }
+for _diag_try in $(seq 1 100); do sleep 0.1; env "${ENV[@]}" sh "$HELPER" diag-status | grep -Fqx 'status=saved' && break; done
 FAIL_DIAG="$(ASB_DEBUG_SUPPORT_TEST_DIAG_FAIL=1 env "${ENV[@]}" sh "$HELPER" diag-start || true)"
-printf '%s\n' "$FAIL_DIAG" | grep -Fqx 'status=started' || { echo 'FAIL debug support: failing diag did not launch' >&2; exit 1; }
-for _diag_try in $(seq 1 30); do
+grep -Fqx 'status=started' <<<"$FAIL_DIAG" || { echo 'FAIL debug support: failing diag did not launch' >&2; exit 1; }
+for _diag_try in $(seq 1 100); do
   sleep 0.1
   FAIL_DIAG_STATUS="$(env "${ENV[@]}" sh "$HELPER" diag-status || true)"
-  printf '%s\n' "$FAIL_DIAG_STATUS" | grep -Fqx 'status=failed' && break
+  grep -Fqx 'status=failed' <<<"$FAIL_DIAG_STATUS" && break
 done
-printf '%s\n' "$FAIL_DIAG_STATUS" | grep -Fqx 'status=failed' || { echo 'FAIL debug support: nonzero diag did not reach failed state' >&2; exit 1; }
-printf '%s\n' "$FAIL_DIAG_STATUS" | grep -Fqx 'error=asbdiag_exit_9' || { echo 'FAIL debug support: nonzero diag exit was not surfaced' >&2; exit 1; }
+grep -Fqx 'status=failed' <<<"$FAIL_DIAG_STATUS" || { echo 'FAIL debug support: nonzero diag did not reach failed state' >&2; exit 1; }
+grep -Fqx 'error=asbdiag_exit_9' <<<"$FAIL_DIAG_STATUS" || { echo 'FAIL debug support: nonzero diag exit was not surfaced' >&2; exit 1; }
 START1="$(env "${ENV[@]}" sh "$HELPER" full-day || true)"
-echo "$START1" | grep -Fq 'status=started'
-echo "$START1" | grep -Fq 'hours=0'
-echo "$START1" | grep -Fq 'limit=until_stopped'
+grep -Fq 'status=started' <<<"$START1"
+grep -Fq 'hours=0' <<<"$START1"
+grep -Fq 'limit=until_stopped' <<<"$START1"
 REC_PID="$(printf '%s\n' "$START1" | sed -n 's/^pid=//p')"
 [ -n "$REC_PID" ] && kill -0 "$REC_PID" 2>/dev/null || { echo 'FAIL debug support: recorder did not stay alive' >&2; exit 1; }
 START2="$(env "${ENV[@]}" sh "$HELPER" full-day || true)"
-echo "$START2" | grep -Fq 'status=already_running'
-echo "$START2" | grep -Fq "pid=$REC_PID"
+grep -Fq 'status=already_running' <<<"$START2"
+grep -Fq "pid=$REC_PID" <<<"$START2"
 
 # Deleting the exact directory published by the live recorder is an explicit cancellation.
 # The helper may stop ONLY that recorder, clear its lock and launch a new single capture.
@@ -790,7 +790,7 @@ case "$RECOVERED" in
     RECOVERED="$RECOVERED
 $(PATH="$TMP/ps-truncated:$PATH" env "${ENV[@]}" sh "$HELPER" full-day || true)" ;;
 esac
-printf '%s\n' "$RECOVERED" | grep -Fq 'status=started' || {
+grep -Fq 'status=started' <<<"$RECOVERED" || {
   echo 'FAIL debug support: removed output dir did not recover capture slot' >&2
   # What the helper answered and why (fix146: a CI run failed here with nothing to read).
   printf '  helper: %s\n' "$RECOVERED" >&2
@@ -865,7 +865,7 @@ while [ "$_dk" -lt 150 ]; do
   sleep 0.1; _dk=$((_dk + 1))
 done
 STALE="$(env "${ENV[@]}" sh "$HELPER" full-day || true)"
-echo "$STALE" | grep -Fq 'status=started' || {
+grep -Fq 'status=started' <<<"$STALE" || {
   printf 'FAIL debug support: known-dead lock not reclaimed after %s waits; recorder=%s launcher=%s\n%s\n' \
     "$_dk" "$REC_PID" "${_dead_launcher:-missing}" "$STALE" >&2
   exit 1
@@ -11622,6 +11622,100 @@ assert "' · live '" not in seg and "toast(key + ': '" not in seg
 P
 rm -f "${TMPDIR:-/tmp}/kc_st.$$"
 echo "PASS webui kernel control verdicts: every helper verdict has a phrase in 13 locales, the live value is labelled, no raw machine words in the toast"
+)
+
+t_debug_support_lock_handoff_runtime() (
+# dev27, from the dev27 CI run: "concurrent start count round=2" with one helper answering
+# status=starting and the other error=recorder_exited, no status=started at all. Two defects:
+#  - full_day_pid_owns_lock read the launcher's command line twice. The first read (in
+#    full_day_pid_matches_recorder) could still show the forked helper, the second the exec'd
+#    `nohup setsid sh .../asb_log_full_day.sh`, which matched neither pattern of the second
+#    check. A live launcher then looked foreign, lock_known_dead said "dead", and the second
+#    request renamed the winner's lock away and launched its own recorder. Eight parallel
+#    regression jobs on four vCPUs widen that window.
+#  - The loser of that race saw its recorder exit (its token no longer matched) and ran
+#    rm -rf on the lock directory, which by then belonged to the other request.
+# Both are deterministic here: a counting stub serves the two command-line reads in order, and
+# a fixture recorder replaces the token before it exits.
+set -euo pipefail
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+HELPER="$ROOT/runtime/asb_debug_support.sh"
+TMP="$(mktemp -d)"
+SLEEPER=""
+trap 'kill $SLEEPER 2>/dev/null || true; rm -rf "$TMP"' EXIT
+fail() { echo "FAIL debug support lock handoff: $*" >&2; exit 1; }
+awk '/^pid_is_live\(\) \{/,/^}/; /^full_day_pid_matches_recorder\(\) \{/,/^}/; /^full_day_pid_owns_lock\(\) \{/,/^}/' "$HELPER" > "$TMP/fn.sh"
+[ "$(grep -c '() {' "$TMP/fn.sh")" -eq 3 ] || fail "helper functions not found"
+sleep 60 & SLEEPER=$!
+mkdir -p "$TMP/proc/$SLEEPER"
+printf 'unused\n' > "$TMP/proc/$SLEEPER/cmdline"
+rc=0
+( MODDIR=/m PROC_ROOT="$TMP/proc"; . "$TMP/fn.sh"
+  tr() {
+    if [ "${1:-}" = '\000' ]; then
+      _c="$(cat "$TMP/reads" 2>/dev/null || echo 0)"; echo $((_c + 1)) > "$TMP/reads"
+      cat > /dev/null
+      if [ "$_c" -eq 0 ]; then printf 'sh /m/runtime/asb_debug_support.sh full-day'
+      else printf 'nohup setsid sh /m/tools/logkit/asb_log_full_day.sh 0'; fi
+    else command tr "$@"; fi
+  }
+  full_day_pid_owns_lock "$SLEEPER" ) || rc=$?
+[ "$(cat "$TMP/reads" 2>/dev/null)" = 2 ] || fail "expected two command-line reads, saw $(cat "$TMP/reads" 2>/dev/null)"
+[ "$rc" -eq 0 ] || fail "a live launcher that exec'd between the two command-line reads was treated as foreign"
+DBG="$TMP/debug"; mkdir -p "$DBG/tools/logkit" "$TMP/state"
+printf 'id=AutoSystemBoost\nversion=V66\n' > "$DBG/module.prop"
+cat > "$DBG/tools/logkit/asb_log_full_day.sh" <<'EOF_REC'
+#!/bin/sh
+printf 'other-request\n' > "$ASB_DEBUG_SUPPORT_LOCKDIR/token"
+exit 92
+EOF_REC
+chmod 0755 "$DBG/tools/logkit/asb_log_full_day.sh"
+OUT="$(ASB_DEBUG_SUPPORT_MODDIR="$DBG" ASB_DEBUG_SUPPORT_STATE_DIR="$TMP/state" ASB_DEBUG_SUPPORT_RUNLOG="$TMP/run.out" sh "$HELPER" full-day || true)"
+grep -Fqx 'error=recorder_exited' <<<"$OUT" || fail "fixture recorder did not exit as planned: $OUT"
+[ -d "$TMP/state/full_day_webui.lock" ] || fail "the helper removed a lock that another request had taken over"
+grep -Fqx 'other-request' "$TMP/state/full_day_webui.lock/token" || fail "foreign token lost"
+rm -rf "$TMP/state/full_day_webui.lock"
+cat > "$DBG/tools/logkit/asb_log_full_day.sh" <<'EOF_REC'
+#!/bin/sh
+exit 91
+EOF_REC
+OUT="$(ASB_DEBUG_SUPPORT_MODDIR="$DBG" ASB_DEBUG_SUPPORT_STATE_DIR="$TMP/state" ASB_DEBUG_SUPPORT_RUNLOG="$TMP/run.out" sh "$HELPER" full-day || true)"
+grep -Fqx 'error=recorder_exited' <<<"$OUT" || fail "own failed recorder not reported: $OUT"
+[ ! -d "$TMP/state/full_day_webui.lock" ] || fail "the helper kept its own lock after its recorder died"
+echo "PASS debug support lock handoff: a launcher seen mid-exec still owns its lock; a failed start removes only its own lock"
+)
+
+t_tests_pipefail_grep_q_contract() (
+# dev27: under `set -o pipefail`, `echo "$x" | grep -q pattern` can fail although the pattern is
+# there: grep -q exits at the first match and a writer that is still writing gets EPIPE (CI runs
+# with SIGPIPE ignored: its log shows "echo: write error: Broken pipe"). Reproduced here as 1 in
+# 20000 under load, and as two debug-support failures in 80 parallel runs. Tests that set
+# pipefail use here-strings instead.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL tests pipefail grep -q: $*" >&2; exit 1; }
+python3 - "$ROOT"/tests/asb_*.sh <<'P' || fail "pipe into grep -q under pipefail"
+import re, sys
+start = re.compile(r"^t_([a-z0-9_]+)\(\) \($")
+pipefail = re.compile(r"set -[a-z]*o pipefail")
+piped = re.compile(r"(^|[;&(]\s*|\|\|\s*|&&\s*)(echo|printf) [^|]*\| *grep -[A-Za-z]*q")
+bad = []
+for p in sys.argv[1:]:
+    cur = None; pf = False
+    for n, l in enumerate(open(p, encoding='utf-8').read().split('\n'), 1):
+        m = start.match(l)
+        if m:
+            cur = m.group(1); pf = False; continue
+        if l.lstrip().startswith('#'):
+            continue
+        if cur and pipefail.search(l):
+            pf = True
+        if cur and pf and piped.search(l.strip()):
+            bad.append('%s:%d %s' % (p.rsplit('/', 1)[-1], n, cur))
+if bad:
+    print(len(bad), bad[:10]); sys.exit(1)
+P
+echo "PASS tests pipefail grep -q: no test pipes into grep -q while pipefail is set"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
