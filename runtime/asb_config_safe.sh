@@ -240,6 +240,9 @@ _validate() {
   _handover_fast="$(awk -F= '$1 ~ "^[[:space:]]*net_handover_fast[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
   _handover_active="$(awk -F= '$1 ~ "^[[:space:]]*net_handover_active[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
   _net_mtu="$(awk -F= '$1 ~ "^[[:space:]]*net_mtu_probing[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
+  _mglru_mode="$(awk -F= '$1 ~ "^[[:space:]]*mglru_mode[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
+  _timer_migration="$(awk -F= '$1 ~ "^[[:space:]]*kernel_timer_migration[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
+  _nr_migrate="$(awk -F= '$1 ~ "^[[:space:]]*kernel_sched_nr_migrate[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
   _night_charge="$(awk -F= '$1 ~ "^[[:space:]]*night_charge_enable[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
   _night_start="$(awk -F= '$1 ~ "^[[:space:]]*night_charge_start[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
   _night_end="$(awk -F= '$1 ~ "^[[:space:]]*night_charge_end[[:space:]]*$" {v=$2; sub(/#.*/,"",v); gsub(/[[:space:]]/,"",v); print v; exit}' "$_f")"
@@ -298,6 +301,9 @@ _validate() {
   case "$_handover_fast" in ''|0|1) : ;; *) _die "net_handover_fast must be 0 or 1" ;; esac
   case "$_handover_active" in ''|0|1) : ;; *) _die "net_handover_active must be 0 or 1" ;; esac
   case "$_net_mtu" in ''|stock|on) : ;; *) _die "net_mtu_probing must be stock or on" ;; esac
+  case "$_mglru_mode" in ''|stock|off|on|smart) : ;; *) _die "mglru_mode must be stock, off, on or smart" ;; esac
+  case "$_timer_migration" in ''|stock|off|on) : ;; *) _die "kernel_timer_migration must be stock, off or on" ;; esac
+  case "$_nr_migrate" in ''|stock|1|2|4|8|16) : ;; *) _die "kernel_sched_nr_migrate must be stock, 1, 2, 4, 8 or 16" ;; esac
   case "$_night_charge" in ''|0|1) : ;; *) _die "night_charge_enable must be 0 or 1" ;; esac
   case "$_night_start" in [0-1][0-9]:[0-5][0-9]|2[0-3]:[0-5][0-9]) : ;; *) _die "night_charge_start must be HH:MM" ;; esac
   case "$_night_end" in [0-1][0-9]:[0-5][0-9]|2[0-3]:[0-5][0-9]) : ;; *) _die "night_charge_end must be HH:MM" ;; esac

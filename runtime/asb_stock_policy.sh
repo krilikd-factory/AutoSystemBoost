@@ -39,6 +39,9 @@ asb_stock_restore_profile_runtime() {
   # only values that a power profile itself changed.
   command -v asb_profile_baseline_restore >/dev/null 2>&1 && \
     asb_profile_baseline_restore || true
+  _asp_moddir="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
+  [ -f "$_asp_moddir/runtime/asb_kernel_controls.sh" ] && \
+    MODDIR="$_asp_moddir" sh "$_asp_moddir/runtime/asb_kernel_controls.sh" restore >/dev/null 2>&1 || true
 }
 
 asb_stock_enter() {
@@ -66,6 +69,9 @@ asb_stock_enter_fast() {
   asb_stock_release_profile_leases
   command -v asb_profile_baseline_restore >/dev/null 2>&1 && \
     asb_profile_baseline_restore path || true
+  _asp_moddir="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
+  [ -f "$_asp_moddir/runtime/asb_kernel_controls.sh" ] && \
+    MODDIR="$_asp_moddir" sh "$_asp_moddir/runtime/asb_kernel_controls.sh" restore >/dev/null 2>&1 || true
   command -v asb_log >/dev/null 2>&1 && \
     asb_log 'stock profile: native governor stopped, profile sysfs values restored; settings follow in the background'
 }

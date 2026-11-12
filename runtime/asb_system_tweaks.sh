@@ -31,6 +31,15 @@ _put() {
 
 _changed=""
 
+# Standard kernel controls share one bounded owner. The helper emits a per-key verdict;
+# this compatibility caller only records that the pass ran, never that an unsupported
+# node accepted a write. WebUI calls the helper directly for the three new keys.
+_kc_helper="$MODDIR/runtime/asb_kernel_controls.sh"
+if [ -f "$_kc_helper" ]; then
+  MODDIR="$MODDIR" ASB_CONF="$CONF" sh "$_kc_helper" apply >/dev/null 2>&1 || true
+  _changed="${_changed}kernel_controls=processed "
+fi
+
 # --- MGLRU working-set protection ------------------------------------------
 #
 # min_ttl_ms is how long a page generation is protected from reclaim. At 0 - the value on

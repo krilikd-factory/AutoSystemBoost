@@ -8,7 +8,7 @@ set -u
 # wifi_powersave=screen_off/always never took effect - found by running the tuner under a
 # built mksh with the module present.
 _cfg() {
-  grep -E "^[[:space:]]*$1=" /data/adb/modules/AutoSystemBoost/config/governor.conf 2>/dev/null \
+  grep -E "^[[:space:]]*$1=" "${ASB_CONF:-/data/adb/modules/AutoSystemBoost/config/governor.conf}" 2>/dev/null \
     | head -1 | sed 's/.*=//' | tr -d ' \r'
 }
 
@@ -41,23 +41,19 @@ for b in /sys/block/sd* /sys/block/mmcblk* /sys/block/dm-*; do
   writef "$b/queue/nr_requests"   "$nrq"
 done
 
-# MGLRU enable + behaviour. 7 = full LRU gen tracking, used during heavy/gaming
-# where reclaim accuracy matters. 5 = relaxed for idle/screen-off.
-#
-# Written only when the node moved (fix138). The kernel keeps the bits it supports: on the
-# OP15 the node reads 0x0001 whatever was asked - yet the tuner rewrote it on every
-# run, dozens of times a day, for no change. The read-back of each request is remembered for
-# this boot; a write happens again only when the node no longer shows it.
-if [ "$MODE" != manual ] && [ -w /sys/kernel/mm/lru_gen/enabled ]; then
+# MGLRU mode has exactly one owner. Smart requests 7 for heavy/gaming and 5 otherwise,
+# but only when mglru_mode=smart. Manual on/off/stock bypass this tuner completely.
+# The shared helper captures baseline once, avoids an unchanged write and rejects a
+# clamped readback instead of recording a request that the kernel did not honour.
+if [ "$MODE" != manual ] && [ "$(_cfg mglru_mode)" = smart ]; then
   case "$HINT" in
     3|4) _lg=7 ;;
     *)   _lg=5 ;;
   esac
-  _lgf="/dev/.asb/lru_gen_took_$_lg"
-  _lgc="$(cat /sys/kernel/mm/lru_gen/enabled 2>/dev/null)"
-  if [ -z "$_lgc" ] || [ "$_lgc" != "$(cat "$_lgf" 2>/dev/null)" ]; then
-    writef /sys/kernel/mm/lru_gen/enabled "$_lg"
-    cat /sys/kernel/mm/lru_gen/enabled > "$_lgf" 2>/dev/null || true
+  _kc_mod="${MODDIR:-/data/adb/modules/AutoSystemBoost}"
+  if [ -r "$_kc_mod/runtime/asb_kernel_controls.sh" ]; then
+    MODDIR="$_kc_mod" ASB_CONF="${ASB_CONF:-$_kc_mod/config/governor.conf}" \
+      sh "$_kc_mod/runtime/asb_kernel_controls.sh" apply mglru_mode "$_lg" >/dev/null 2>&1 || true
   fi
 fi
 
