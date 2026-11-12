@@ -4,6 +4,23 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev26 - structured CI build summary
+
+Input: the GitHub Actions Summary screenshot for the test build. The useful package information was
+limited to log text, while the release workflow emitted OTA JSON separately from its build summary.
+
+- Test and release workflows now use one package-derived Markdown report with build identity, real
+  ZIP size/CRC/SHA-256, native payload hashes, all three regression shards, native warning/NDK/package
+  gates, artifact upload outcome and a separate device-validation boundary.
+- Release OTA JSON appears once inside that report. The advisory step still never gates building or
+  publishing, but no longer appends a second summary block. Test builds show no release OTA manifest.
+- DSP reference presence, AIDL package checks and runtime verification remain distinct. Staged DSP
+  binaries are not described as rebuilt by the NDK job, and host success is not physical ColorOS,
+  WebView, charging, LTPO or audioserver validation.
+
+No module runtime, profile, kernel-control, native source, DSP payload or packaging policy changed.
+GitHub's own action/runner annotations remain outside the custom Summary.
+
 ## V66 dev25 - 32-bit NDK observer build fix
 
 Input: the failed GitHub Actions bundle for dev24. All three host-regression shards completed;
