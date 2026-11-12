@@ -4,6 +4,45 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev31 - visible kernel controls and explicit unsupported states
+
+Input: the dev30 source and the KRILIKD v9 build framework. The goal is one visible WebUI
+location for the existing standard kernel controls and the optional wakeup policy without
+turning saved configuration or build-time config evidence into a runtime success claim.
+
+- **Settings → Kernel is a seventh configuration group.** It contains MGLRU mode, timer
+  migration, scheduler migration batch and the newly visible scheduler debug accounting
+  control. The four controls use the existing bounded owner, baseline capture, readback and
+  exact Stock restore. `kernel_sched_stats` moved from the old independent system-tweak writer
+  into `runtime/asb_kernel_controls.sh`; its legacy baseline path remains compatible.
+- **Unavailable states stay visible.** Each control distinguishes applied/readback success from
+  `not_exposed`, read-only, unreadable, failed and mismatched states. The Kernel page reads its
+  controls, wakeup status and capability evidence on demand in one batch. It starts no polling
+  worker and writes no sysfs or policy file directly from JavaScript.
+- **The wakeup card has a transactional full-list command.** `asb_wakeup_blocker.sh set
+  [NAME...]` validates and deduplicates at most 16 exact names, atomically replaces the saved
+  policy, applies it through the existing owner and verifies current kernel readback. Invalid
+  or excessive updates leave the previous policy untouched. Saved/current rules and the
+  blocked-event counter are separate. Empty `set` and the Clear action remove both saved and
+  live rules. A missing ABI remains `not_exposed`, never applied success.
+- **Read-only support evidence, not dummy switches.** The capability card reports CAKE, IP
+  sets, Re-Kernel and SDP 900 mA. CAKE control remains in Network; Re-Kernel remains a channel
+  for a compatible external freezer; SDP has no writer without a confirmed OPlus ABI.
+  `tools/asb_device_info.sh --kernel` stops before the full package/display/thermal collector,
+  and `CONFIG_SCHEDSTATS` is now included in its bounded config whitelist so an explicit
+  disabled state can actually be reported.
+- **Thirteen locales cover the new page and verdicts.** Device, app and kernel values continue
+  to be inserted through `textContent`; exact wakeup names are shell-quoted as separate
+  arguments and validated again by the shell owner.
+
+Regression covers the four-control ownership/apply contract, full-list wakeup replacement and
+rollback, legacy scheduler baseline restore, all thirteen locales, seven-group navigation,
+Kernel page parsers and interactions (including loaded-module evidence and dash-led exact
+names), and the real short `--kernel` collector with node/config states. No native source
+changed; existing native warning and DSP gates remain mandatory.
+Host and browser fixtures do not prove physical ColorOS WebView behavior, safe blocking of a
+particular wakeup source, charging behavior, battery savings or freezer compatibility.
+
 ## V66 dev30 - bounded kernel wakeup policy and a retryable MGLRU memo
 
 Input: the dev29 source, the KRILIKD v8 build framework and current OnePlus 15 diagnostics. The
