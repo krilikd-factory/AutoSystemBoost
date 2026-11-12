@@ -5430,6 +5430,95 @@ cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail 'diagnostic 
 echo 'PASS kernel sched_stats: guarded opt-in, idempotent baseline, exact stock/uninstall restore'
 )
 
+t_kernel_controls_runtime() (
+# Runtime: three standard-kernel controls are bounded, reversible and honestly reported.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+K="$ROOT/runtime/asb_kernel_controls.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL kernel controls: $*" >&2; exit 1; }
+mkdir -p "$T/mod/config"
+printf 'mglru_mode=on\nkernel_timer_migration=off\nkernel_sched_nr_migrate=8\n' > "$T/mod/config/governor.conf"
+printf '0x0001\n' > "$T/mglru"; printf '1\n' > "$T/timer"; printf '32\n' > "$T/nr"
+run() {
+  MODDIR="$T/mod" ASB_KERNEL_STATE_DIR="$T/state" \
+    ASB_MGLRU_ENABLED_NODE="$T/mglru" ASB_TIMER_MIGRATION_NODE="$T/timer" \
+    ASB_SCHED_NR_MIGRATE_NODE="$T/nr" sh "$K" "$@"
+}
+out="$(run apply)"
+printf '%s\n' "$out" | grep -q '^mglru_mode|applied|on|7|0x0001$' || fail "MGLRU apply verdict: $out"
+printf '%s\n' "$out" | grep -q '^kernel_timer_migration|applied|off|0|1$' || fail "timer apply verdict: $out"
+printf '%s\n' "$out" | grep -q '^kernel_sched_nr_migrate|applied|8|8|32$' || fail "migration apply verdict: $out"
+[ "$(cat "$T/mglru")" = 7 ] && [ "$(cat "$T/timer")" = 0 ] && [ "$(cat "$T/nr")" = 8 ] || fail 'allowlisted values were not written'
+run apply >/dev/null
+[ "$(cat "$T/state/mglru_mode.prev")" = 0x0001 ] || fail 'repeat apply replaced MGLRU baseline'
+# The baseline filename is the full key, not a shortened display label.
+[ -f "$T/state/kernel_timer_migration.prev" ] || fail 'timer baseline key path missing'
+[ "$(cat "$T/state/kernel_timer_migration.prev")" = 1 ] || fail 'timer baseline changed'
+[ "$(cat "$T/state/kernel_sched_nr_migrate.prev")" = 32 ] || fail 'migration baseline changed'
+# Explicit Smart values are accepted only in Smart mode; a caller cannot turn manual off into 7.
+printf 'mglru_mode=off\nkernel_timer_migration=off\nkernel_sched_nr_migrate=8\n' > "$T/mod/config/governor.conf"
+run apply mglru_mode 7 >/dev/null
+[ "$(cat "$T/mglru")" = 0 ] || fail 'manual off accepted a Smart override'
+printf 'mglru_mode=smart\nkernel_timer_migration=off\nkernel_sched_nr_migrate=8\n' > "$T/mod/config/governor.conf"
+run apply mglru_mode 7 >/dev/null
+[ "$(cat "$T/mglru")" = 7 ] || fail 'Smart heavy request was not applied'
+# Simulate a kernel that clamps every request to bit 0. The write may succeed, but readback must fail.
+mkdir -p "$T/bin"
+REAL_CAT="$(command -v cat)"
+cat > "$T/bin/cat" <<'S'
+#!/bin/sh
+if [ -f "$CLAMP_FLAG" ] && [ "${1:-}" = "$CLAMP_NODE" ]; then printf '0x0001\n'; exit 0; fi
+exec "$REAL_CAT" "$@"
+S
+chmod +x "$T/bin/cat"
+: > "$T/clamp"
+set +e
+out="$(PATH="$T/bin:$PATH" REAL_CAT="$REAL_CAT" CLAMP_FLAG="$T/clamp" CLAMP_NODE="$T/mglru" run apply mglru_mode 7 2>/dev/null)"
+rc=$?
+set -e
+[ "$rc" -ne 0 ] || fail "clamped MGLRU returned success: $out"
+printf '%s\n' "$out" | grep -q '^mglru_mode|readback_mismatch|smart|0x0001|0x0001$' || fail "clamped verdict wrong: $out"
+[ -f "$T/state/mglru_mode.prev" ] || fail 'mismatch consumed restore evidence'
+rm -f "$T/clamp"
+# Stock restores the captured representation/value even after an external change.
+printf '9\n' > "$T/nr"; printf 'mglru_mode=stock\nkernel_timer_migration=stock\nkernel_sched_nr_migrate=stock\n' > "$T/mod/config/governor.conf"
+out="$(run apply)"
+printf '%s\n' "$out" | grep -q '^mglru_mode|restored|stock|0x0001|none$' || fail "MGLRU restore verdict: $out"
+[ "$(cat "$T/mglru")" = 0x0001 ] && [ "$(cat "$T/timer")" = 1 ] && [ "$(cat "$T/nr")" = 32 ] || fail 'exact baseline restore failed'
+[ ! -e "$T/state/mglru_mode.prev" ] && [ ! -e "$T/state/kernel_timer_migration.prev" ] && [ ! -e "$T/state/kernel_sched_nr_migrate.prev" ] || fail 'verified restore retained state'
+# A missing node keeps an existing baseline; malformed evidence blocks all writes.
+printf '0x0001\n' > "$T/mglru"; printf 'mglru_mode=on\nkernel_timer_migration=off\nkernel_sched_nr_migrate=4\n' > "$T/mod/config/governor.conf"
+run apply mglru_mode >/dev/null
+rm -f "$T/mglru"
+set +e; out="$(run apply mglru_mode 2>/dev/null)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && [ -f "$T/state/mglru_mode.prev" ] || fail 'missing node destroyed baseline'
+printf '%s\n' "$out" | grep -q '^mglru_mode|not_exposed|' || fail "missing node verdict: $out"
+printf '0x0001\n' > "$T/mglru"; printf 'garbage\n' > "$T/state/mglru_mode.prev"
+set +e; out="$(run apply mglru_mode 2>/dev/null)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && [ "$(cat "$T/mglru")" = 0x0001 ] || fail 'invalid baseline permitted a write'
+printf '%s\n' "$out" | grep -q '^mglru_mode|baseline_failed|' || fail "invalid baseline verdict: $out"
+# Config writer has the same closed vocabulary, including upgrades where a key is initially absent.
+mkdir -p "$T/cmod/config" "$T/cmod/runtime"
+cp "$ROOT/config/governor.conf" "$ROOT/config/governor.conf.shipped" "$T/cmod/config/"
+cp "$ROOT/runtime/asb_config_safe.sh" "$T/cmod/runtime/"
+set +e
+MODDIR="$T/cmod" ASB_CONFIG_STATE="$T/cfgstate" sh "$T/cmod/runtime/asb_config_safe.sh" set mglru_mode 3 >/dev/null 2>&1
+rc=$?
+set -e
+[ "$rc" -ne 0 ] || fail 'config writer accepted arbitrary MGLRU bitmask'
+MODDIR="$T/cmod" ASB_CONFIG_STATE="$T/cfgstate" sh "$T/cmod/runtime/asb_config_safe.sh" set kernel_sched_nr_migrate 16 >/dev/null
+# One writer everywhere: no direct service/Smart writes can bypass the user's mode.
+! grep -q 'sysctlw kernel.timer_migration' "$ROOT/service.sh" || fail 'direct timer writer remains'
+! grep -q 'sysctlw kernel.sched_nr_migrate' "$ROOT/service.sh" || fail 'direct migration writer remains'
+! grep -q 'writef /sys/kernel/mm/lru_gen/enabled' "$ROOT/runtime/smart_dynamic_tune.sh" || fail 'direct Smart MGLRU writer remains'
+grep -Fq '[ "$(_cfg mglru_mode)" = smart ]' "$ROOT/runtime/smart_dynamic_tune.sh" || fail 'Smart MGLRU ownership guard missing'
+grep -Fq 'asb_kernel_controls.sh" restore' "$ROOT/uninstall.sh" || fail 'uninstall does not restore controls'
+grep -Fq 'asb_kernel_controls.sh" restore' "$ROOT/runtime/asb_stock_policy.sh" || fail 'Stock profile does not release controls'
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail 'diagnostic copies diverged'
+echo 'PASS kernel controls: allowlist, baseline, numeric readback, clamp rejection, Smart ownership, exact stock/uninstall restore'
+)
+
 t_phantom_stock_restore_runtime() (
 # Runtime: phantom_procs strict/relaxed -> stock puts the original value back.
 # The stock branch read profile_runtime_baseline.v1, but asb_settings_put records in

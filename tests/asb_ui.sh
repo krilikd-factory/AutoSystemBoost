@@ -5057,7 +5057,10 @@ python3 - "$ROOT/webroot/i18n" <<'P' || fail "locales"
 import json, sys, pathlib
 need = {'bt_link_stability': ['stable'], 'net_wifi_leave': ['weak', 'unusable'],
         'wifi_powersave': ['screen_off', 'always'], 'wakelock_action': ['0', '1'],
-        'gnss_trim': ['0', '1'], 'mglru_hold': ['hold']}
+        'gnss_trim': ['0', '1'], 'mglru_hold': ['hold'],
+        'mglru_mode': ['stock', 'off', 'on', 'smart'],
+        'kernel_timer_migration': ['stock', 'off', 'on'],
+        'kernel_sched_nr_migrate': ['stock']}
 files = sorted(pathlib.Path(sys.argv[1]).glob('*.json'))
 assert len(files) == 13
 for p in files:
@@ -9311,6 +9314,30 @@ EOF
 echo 'PASS WebUI camera coverage: zero keys = not exposed, multi-file stats summed, missing = unknown'
 )
 
+t_webui_kernel_control_verdict() (
+# Contract: kernel controls render the owner's verdict, never a saved-value success claim.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+python3 - "$H" <<'P'
+import sys
+h = open(sys.argv[1], encoding='utf-8').read()
+keys = ('mglru_mode', 'kernel_timer_migration', 'kernel_sched_nr_migrate')
+for key in keys:
+    assert "'" + key + "'," in h, 'snapshot key missing: ' + key
+    assert key + ': APPLY_LIVE' in h, 'live mode missing: ' + key
+branch = "['mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate'].indexOf(key) >= 0"
+pos = h.index(branch)
+end = h.index("} else if (key === 'mglru_hold'", pos)
+body = h[pos:end]
+for token in ('await run(', 'asb_kernel_controls.sh', 'kr.errno === 0', "'applied','restored','stock_unowned'", "uiSound('error')", "kp[1]", "kp[3]"):
+    assert token in body, 'verdict branch lost ' + token
+assert 'innerHTML' not in body and 'outerHTML' not in body
+assert "readback_mismatch" not in body or "kp[1]" in body
+P
+echo 'PASS WebUI kernel controls: awaited owner verdict, applied/restored only on success, mismatch/error path and text-only values'
+)
+
 t_webui_card_i18n_coverage_runtime() (
 # Runtime (fix240): every Config card has a name and a description in every language.
 #
@@ -9338,7 +9365,7 @@ for m in re.finditer(r"\{\s*key:'(\w+)',\s*type:'(\w+)'(.*?)(?=\n\s*\{\s*key:'|\
     dm = re.search(r"desc:'((?:[^'\\]|\\.)*)'", rest)
     items[k] = {'type': t, 'opts': re.findall(r"'([^']*)'", om.group(1)) if om else [], 'name': nm.group(1) if nm else '', 'desc': dm.group(0) if dm else ''}
 assert len(items) >= 70, 'CFG_ITEMS parse: %d' % len(items)
-for k in ('dsp_clarity', 'dsp_rumble', 'dsp_headroom', 'kernel_sched_stats', 'athena_service', 'net_rps'):
+for k in ('dsp_clarity', 'dsp_rumble', 'dsp_headroom', 'kernel_sched_stats', 'mglru_mode', 'kernel_timer_migration', 'kernel_sched_nr_migrate', 'athena_service', 'net_rps'):
     assert k in items, 'CFG_ITEMS lost ' + k
 files = sorted((root / 'webroot' / 'i18n').glob('*.json'))
 assert len(files) == 13, len(files)
@@ -9353,7 +9380,8 @@ net_congestion_mobile net_qdisc net_rps net_txqueue net_route_tune wifi_country
 wifi_scan_throttle net_wifi_leave wifi_powersave doze_level doze_trim_whitelist
 wakelock_action wakelock_fitness gnss_trim night_quiet_enable sustained_temp_enter
 perf_ceiling_pct cool_gaming BG_TRIM_LEVEL gms_trim athena_service ltpo_force ltpo_video
-phantom_procs mmfeed_off log_level lsposed_verbose'''.split())
+phantom_procs mmfeed_off log_level lsposed_verbose mglru_mode kernel_timer_migration
+kernel_sched_nr_migrate'''.split())
 def jsq(v):
     return "desc:'" + v.replace('\\', '\\\\').replace("'", "\\'").replace('\n', '\\n') + "'"
 for k in audited:

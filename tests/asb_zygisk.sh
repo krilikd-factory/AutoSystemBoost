@@ -282,6 +282,17 @@ t_zygisk_policy_cache_runtime() (
   ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
   fail() { echo "FAIL observer policy cache: $*" >&2; exit 1; }
   command -v g++ >/dev/null 2>&1 || { echo 'SKIP observer policy cache: no g++'; exit 0; }
+  # NDK r28c arm64 accepts the wider Bionic stat fields in this aggregate, but its
+  # armeabi-v7a Clang rejects three narrowing conversions. Keep the explicit boundary
+  # conversions covered even on a host whose stat typedefs cannot reproduce that ABI.
+  for cast in \
+    'static_cast<dev_t>(st.st_dev)' \
+    'static_cast<ino_t>(st.st_ino)' \
+    'static_cast<off_t>(st.st_size)' \
+    'static_cast<time_t>(st.st_mtim.tv_sec)' \
+    'static_cast<long>(st.st_mtim.tv_nsec)'; do
+    grep -qF "$cast" "$ROOT/src/zygisk/asb_observer.cpp" || fail "missing 32-bit NDK stat conversion: $cast"
+  done
   T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
   mkdir -p "$T/inc" "$T/mod/zygisk"
   cat > "$T/inc/jni.h" <<'JNI'
@@ -508,7 +519,7 @@ int main(int argc, char **argv) {
   return 0;
 }
 CPP
-  g++ -std=c++17 -Wall -Wextra -Werror -Wno-unused-parameter -pthread -I"$T/inc" -I"$ROOT/src/zygisk" \
+  g++ -std=c++17 -Wall -Wextra -Werror -Werror=narrowing -Wno-unused-parameter -pthread -I"$T/inc" -I"$ROOT/src/zygisk" \
     -DASB_ABI_TAG='"arm64-v8a"' "$T/cache.cpp" -o "$T/cache" || fail 'cache fixture build'
   "$T/cache" "$T/mod" || fail 'cache runtime assertions'
   echo 'PASS observer policy cache: stat-only hits, atomic invalidation, fail-closed errors and EACCES module-dir fallback'

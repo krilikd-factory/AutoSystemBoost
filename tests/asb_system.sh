@@ -731,11 +731,14 @@ awk -F'|' '
   {print $1}
   END {exit bad}
 ' "$REG" | sort > "$TMP/registry" || fail 'registry row format/class vocabulary'
-[ "$(wc -l < "$TMP/conf")" = "225" ] || fail "expected 225 config keys, got $(wc -l < "$TMP/conf")"
-[ "$(wc -l < "$TMP/registry")" = "225" ] || fail "expected 225 registry keys, got $(wc -l < "$TMP/registry")"
+[ "$(wc -l < "$TMP/conf")" = "228" ] || fail "expected 228 config keys, got $(wc -l < "$TMP/conf")"
+[ "$(wc -l < "$TMP/registry")" = "228" ] || fail "expected 228 registry keys, got $(wc -l < "$TMP/registry")"
 [ "$(uniq -d "$TMP/registry" | wc -l)" = "0" ] || fail "duplicate registry keys: $(uniq -d "$TMP/registry" | tr '\n' ' ')"
 diff -u "$TMP/conf" "$TMP/registry" >/dev/null || fail 'registry key set differs from governor.conf'
 grep -qx 'kernel_sched_stats|advanced|webui_sensitive|shell' "$REG" || fail 'kernel_sched_stats consumer is not pinned to shell'
+for _kc_key in mglru_mode kernel_timer_migration kernel_sched_nr_migrate; do
+  grep -qx "$_kc_key|advanced|webui_sensitive|shell" "$REG" || fail "$_kc_key consumer is not pinned to shell"
+done
 grep -qx 'net_mtu_probing|advanced|webui_sensitive|shell' "$REG" || fail 'net_mtu_probing consumer is not pinned to shell'
 grep -oE '!strcmp\(k, "[A-Za-z_][A-Za-z0-9_]*"\)' "$ROOT/src/asb_config.h" \
   | sed 's/.*"\([A-Za-z_][A-Za-z0-9_]*\)".*/\1/' | sort -u > "$TMP/native"
@@ -752,7 +755,7 @@ done > "$TMP/consumer_bad"
 
 sed -n '/const CFG_ITEMS = \[/,/^\];/p' "$ROOT/webroot/index.html" \
   | grep -oE "key:'[A-Za-z_][A-Za-z0-9_]*'" | sed "s/key:'//;s/'//" | sort -u > "$TMP/cards"
-[ "$(wc -l < "$TMP/cards")" = "94" ] || fail "expected 94 WebUI cards, got $(wc -l < "$TMP/cards")"
+[ "$(wc -l < "$TMP/cards")" = "97" ] || fail "expected 97 WebUI cards, got $(wc -l < "$TMP/cards")"
 _card_bad="$(while IFS= read -r key; do
   cls="$(awk -F'|' -v k="$key" '$1==k {print $2; exit}' "$REG")"
   case "$cls" in user|advanced) : ;; *) printf '%s ' "$key" ;; esac
@@ -796,7 +799,7 @@ for _c in $(grep -oE "\{ key:'[A-Za-z_][A-Za-z_0-9]*'" "$ROOT/webroot/index.html
 done
 [ -z "$_missing" ] || fail "cards missing from the install.sh settings snapshot:$_missing"
 
-echo 'PASS config ownership registry contract (225 keys; 41 user, 53 advanced, 131 internal)'
+echo 'PASS config ownership registry contract (228 keys; 41 user, 56 advanced, 131 internal)'
 )
 
 t_config_restore_outcome_runtime() (
@@ -3526,7 +3529,8 @@ grep -qF 'qdisc\[wifi*-pending*)' "$N" || fail "mapper has no pending for the Wi
 w="$(grep -nF 'qdisc\[wifi*-pending*)' "$N" | cut -d: -f1)"; g="$(grep -nF 'qdisc\[wifi*)' "$N" | head -1 | cut -d: -f1)"
 [ "$w" -lt "$g" ] || fail "qdisc pending line after the generic ok line"
 grep -q "case \"\$_pv\" in ''|\*=unsupported)" "$N" || fail "congestion kind without a verdict not filed as pending"
-grep -q '_lgf="/dev/.asb/lru_gen_took_\$_lg"' "$ROOT/runtime/smart_dynamic_tune.sh" || fail "MGLRU node rewritten on every tuner run"
+grep -qF 'if ! asb_kc_same "$_aka_want" "$_aka_before"; then' "$ROOT/runtime/asb_kernel_controls.sh" || fail "MGLRU readback-equal value is still rewritten"
+! grep -q 'lru_gen_took_' "$ROOT/runtime/smart_dynamic_tune.sh" || fail "obsolete per-value MGLRU marker returned"
 grep -q 'a bit missing here is one this kernel does not keep' "$ROOT/tools/asb_diag.sh" || fail "MGLRU bits not explained"
 grep -q 'In detail: only an app that held the CPU for 10+ minutes' "$ROOT/webroot/index.html" || fail "wakelock card does not describe the fix137 rule"
 for f in "$ROOT"/webroot/i18n/*.json; do
@@ -7775,7 +7779,7 @@ set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-_helpers='runtime/asb_active_efficiency_envelope.sh runtime/asb_boot_timeline.sh runtime/asb_debug_support.sh runtime/asb_stock_policy.sh runtime/asb_overlay_guard.sh runtime/asb_wifi_fallback.sh runtime/asb_package_state.sh runtime/asb_heytap_mcs.sh runtime/asb_art_compile.sh runtime/asb_documentsui_fix.sh tools/asb_kernel_uv_coexist.sh tools/asb_device_info.sh'
+_helpers='runtime/asb_active_efficiency_envelope.sh runtime/asb_boot_timeline.sh runtime/asb_debug_support.sh runtime/asb_kernel_controls.sh runtime/asb_stock_policy.sh runtime/asb_overlay_guard.sh runtime/asb_wifi_fallback.sh runtime/asb_package_state.sh runtime/asb_heytap_mcs.sh runtime/asb_art_compile.sh runtime/asb_documentsui_fix.sh tools/asb_kernel_uv_coexist.sh tools/asb_device_info.sh'
 fail() { echo "FAIL workflow executable modes: $*" >&2; exit 1; }
 
 for WF in "$ROOT/.github/workflows/build-test.yml" "$ROOT/.github/workflows/build-release.yml"; do
@@ -7833,7 +7837,7 @@ for WF in "$ROOT/.github/workflows/build-test.yml" "$ROOT/.github/workflows/buil
   done
 done
 
-echo 'PASS workflow shard/mode contract: six suites covered once, packaging gated, four real CI blocks restore 12 helpers'
+echo 'PASS workflow shard/mode contract: six suites covered once, packaging gated, four real CI blocks restore 13 helpers'
 )
 
 t_workflow_required_files_shell() (
