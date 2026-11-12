@@ -127,11 +127,21 @@ if [ -r "$MODDIR/tools/asb_kernel_uv_coexist.sh" ]; then
 fi
 
 # A bounded whitelist of useful kernel configuration features, when the kernel exposes it.
+_cfg_keys='CONFIG_LOCALVERSION CONFIG_PREEMPT CONFIG_PREEMPT_DYNAMIC CONFIG_HZ CONFIG_SCHED_WALT CONFIG_SCHEDUTIL CONFIG_CPU_FREQ_GOV_SCHEDUTIL CONFIG_CPU_FREQ_GOV_PERFORMANCE CONFIG_CPU_FREQ_GOV_POWERSAVE CONFIG_CPU_BOOST CONFIG_LRU_GEN CONFIG_LRU_GEN_ENABLED CONFIG_ZRAM CONFIG_ZSWAP CONFIG_ZSMALLOC CONFIG_DEVFREQ_GOV_SIMPLE_ONDEMAND CONFIG_DEVFREQ_GOV_MSM_ADRENO_TZ CONFIG_KGSL CONFIG_TCP_CONG_BBR CONFIG_TCP_CONG_BBR2 CONFIG_TCP_CONG_BBRV2 CONFIG_TCP_CONG_WESTWOOD CONFIG_KSU CONFIG_KSU_SUSFS CONFIG_NOMOUNT CONFIG_NTSYNC CONFIG_NAMESPACES CONFIG_SYSVIPC CONFIG_POSIX_MQUEUE CONFIG_IPC_NS CONFIG_PID_NS CONFIG_NET_NS CONFIG_UTS_NS CONFIG_USER_NS CONFIG_CGROUPS CONFIG_DEVTMPFS CONFIG_DROIDSPACES CONFIG_DROIDSPACE CONFIG_UNICODE CONFIG_UNICODE_BYPASS_FIX CONFIG_UNICODE_BYPASS CONFIG_TMPFS CONFIG_TMPFS_XATTR CONFIG_TMPFS_POSIX_ACL CONFIG_TMPFS_INODE64 CONFIG_LTO CONFIG_LTO_CLANG CONFIG_LTO_CLANG_THIN CONFIG_LTO_CLANG_FULL CONFIG_LTO_NONE CONFIG_BBG CONFIG_SECURITY_BASEBAND_GUARD CONFIG_BASEBAND_GUARD CONFIG_LSM CONFIG_DEBUG_INFO_BTF CONFIG_DEBUG_INFO_BTF_MODULES CONFIG_BPF CONFIG_BPF_SYSCALL CONFIG_BPF_JIT CONFIG_BPF_JIT_ALWAYS_ON CONFIG_BPF_JIT_DEFAULT_ON CONFIG_BPF_LSM CONFIG_CGROUP_BPF CONFIG_NET_CLS_BPF CONFIG_NET_ACT_BPF CONFIG_FUSE_FS CONFIG_FUSE_BPF CONFIG_FUSE_PASSTHROUGH CONFIG_VPNHIDE CONFIG_VPNHIDE_FS_HIDING CONFIG_USB_CONFIGFS CONFIG_USB_CONFIGFS_MASS_STORAGE CONFIG_USB_CONFIGFS_F_HID CONFIG_USB_CONFIGFS_NCM CONFIG_IP_NF_NAT CONFIG_IP_NF_TARGET_MASQUERADE CONFIG_TCP_CONG_BBR3 CONFIG_WIREGUARD CONFIG_NET_SCH_CAKE CONFIG_NET_SCH_FQ CONFIG_IP_SET CONFIG_OVERLAY_FS CONFIG_CIFS CONFIG_BINFMT_MISC CONFIG_MACVLAN CONFIG_KPROBES CONFIG_UPROBES'
 _cfg=''
+_cfg_lines=0
+_cfg_decoder=''
+_cfg_re="^(# )?($(echo $_cfg_keys | tr ' ' '|'))[= ]"
 if [ -r "$PROC/config.gz" ]; then
-  if command -v zcat >/dev/null 2>&1; then _cfg="$(zcat "$PROC/config.gz" 2>/dev/null)"
-  elif command -v gzip >/dev/null 2>&1; then _cfg="$(gzip -dc "$PROC/config.gz" 2>/dev/null)"
-  elif command -v toybox >/dev/null 2>&1; then _cfg="$(toybox zcat "$PROC/config.gz" 2>/dev/null)"; fi
+  for _dec in zcat 'gzip -dc' 'toybox zcat' 'busybox zcat'; do
+    command -v "${_dec%% *}" >/dev/null 2>&1 || continue
+    _n="$($_dec "$PROC/config.gz" 2>/dev/null | grep -c '^CONFIG_')"
+    case "$_n" in ''|*[!0-9]*) continue ;; esac
+    [ "$_n" -gt 0 ] || continue
+    _cfg="$($_dec "$PROC/config.gz" 2>/dev/null | grep -E "$_cfg_re")"
+    _cfg_lines="$_n"; _cfg_decoder="${_dec%% *}"
+    break
+  done
 fi
 _cfg_val() {
   [ -n "$_cfg" ] || return 0
@@ -139,13 +149,16 @@ _cfg_val() {
   if [ -z "$_cv" ] && printf '%s\n' "$_cfg" | grep -q "^# $1 is not set$"; then _cv='not set'; fi
   printf '%s\n' "$_cv"
 }
-_cfg_keys='CONFIG_LOCALVERSION CONFIG_PREEMPT CONFIG_PREEMPT_DYNAMIC CONFIG_HZ CONFIG_SCHED_WALT CONFIG_SCHEDUTIL CONFIG_CPU_FREQ_GOV_SCHEDUTIL CONFIG_CPU_FREQ_GOV_PERFORMANCE CONFIG_CPU_FREQ_GOV_POWERSAVE CONFIG_CPU_BOOST CONFIG_LRU_GEN CONFIG_LRU_GEN_ENABLED CONFIG_ZRAM CONFIG_ZSWAP CONFIG_ZSMALLOC CONFIG_DEVFREQ_GOV_SIMPLE_ONDEMAND CONFIG_DEVFREQ_GOV_MSM_ADRENO_TZ CONFIG_KGSL CONFIG_TCP_CONG_BBR CONFIG_TCP_CONG_BBR2 CONFIG_TCP_CONG_BBRV2 CONFIG_TCP_CONG_WESTWOOD CONFIG_KSU CONFIG_KSU_SUSFS CONFIG_NOMOUNT CONFIG_NTSYNC CONFIG_NAMESPACES CONFIG_SYSVIPC CONFIG_POSIX_MQUEUE CONFIG_IPC_NS CONFIG_PID_NS CONFIG_NET_NS CONFIG_UTS_NS CONFIG_USER_NS CONFIG_CGROUPS CONFIG_DEVTMPFS CONFIG_DROIDSPACES CONFIG_DROIDSPACE CONFIG_UNICODE CONFIG_UNICODE_BYPASS_FIX CONFIG_UNICODE_BYPASS CONFIG_TMPFS CONFIG_TMPFS_XATTR CONFIG_TMPFS_POSIX_ACL CONFIG_TMPFS_INODE64 CONFIG_LTO CONFIG_LTO_CLANG CONFIG_LTO_CLANG_THIN CONFIG_LTO_CLANG_FULL CONFIG_LTO_NONE CONFIG_BBG CONFIG_SECURITY_BASEBAND_GUARD CONFIG_BASEBAND_GUARD CONFIG_LSM CONFIG_DEBUG_INFO_BTF CONFIG_DEBUG_INFO_BTF_MODULES CONFIG_BPF CONFIG_BPF_SYSCALL CONFIG_BPF_JIT CONFIG_BPF_JIT_ALWAYS_ON CONFIG_BPF_JIT_DEFAULT_ON CONFIG_BPF_LSM CONFIG_CGROUP_BPF CONFIG_NET_CLS_BPF CONFIG_NET_ACT_BPF CONFIG_FUSE_FS CONFIG_FUSE_BPF CONFIG_FUSE_PASSTHROUGH'
-if [ -n "$_cfg" ]; then
+if [ "$_cfg_lines" -gt 0 ]; then
   _emit kernel_config available yes
+  _emit kernel_config entries "$_cfg_lines"
+  _emit kernel_config decoder "$_cfg_decoder"
   for _k in $_cfg_keys; do
     _v="$(_cfg_val "$_k")"
     [ -n "$_v" ] && _emit kernel_config "$_k" "$_v"
   done
+elif [ -r "$PROC/config.gz" ]; then
+  _emit kernel_config available 'present; not decodable here'
 else
   _emit kernel_config available unavailable
 fi
@@ -375,6 +388,57 @@ if [ "$_bbr2" = 'unknown' ]; then
 fi
 _emit kernel_features bbr_v1 "$_bbr1"
 _emit kernel_features bbr_v2 "$_bbr2"
+
+_bbr3='unknown'
+case "$_tcp_avail" in *' bbr3 '*) _bbr3='available' ;; esac
+if [ "$_bbr3" = 'unknown' ]; then
+  case "$(_cfg_val CONFIG_TCP_CONG_BBR3)" in y|m) _bbr3='configured' ;; 'not set') _bbr3='disabled' ;; esac
+fi
+_emit kernel_features bbr_v3 "$_bbr3"
+
+_cfg_state() {
+  case "$(_cfg_val "$1")" in
+    y) printf 'built-in\n' ;;
+    m) if [ -d "$2" ]; then printf 'module loaded\n'; else printf 'module not loaded\n'; fi ;;
+    'not set') printf 'disabled\n' ;;
+    *)
+      if [ -n "$2" ] && [ -d "$2" ]; then printf 'driver present\n'
+      elif [ "$_cfg_lines" -gt 0 ]; then printf 'absent\n'
+      else printf 'unknown\n'; fi ;;
+  esac
+}
+_vh="$(_cfg_state CONFIG_VPNHIDE "$SYS/module/vpnhide")"
+if [ "$_vh" = 'built-in' ]; then
+  case "$(_cfg_val CONFIG_VPNHIDE_FS_HIDING)" in
+    y) _vh='built-in; network and filesystem' ;;
+    *) _vh='built-in; network only' ;;
+  esac
+fi
+_emit kernel_features vpn_hide "$_vh"
+
+_ua=''; _ua_miss=''
+for _spec in USB_CONFIGFS_MASS_STORAGE:mass-storage USB_CONFIGFS_F_HID:hid USB_CONFIGFS_NCM:ncm IP_NF_TARGET_MASQUERADE:nat; do
+  case "$(_cfg_val "CONFIG_${_spec%%:*}")" in
+    y|m) _ua="${_ua:+$_ua, }${_spec#*:}" ;;
+    *) _ua_miss="${_ua_miss:+$_ua_miss, }${_spec#*:}" ;;
+  esac
+done
+if [ "$_cfg_lines" -eq 0 ]; then _emit kernel_features usb_arsenal unknown
+elif [ -z "$_ua_miss" ]; then _emit kernel_features usb_arsenal "gadget functions: $_ua"
+elif [ -n "$_ua" ]; then _emit kernel_features usb_arsenal "partial: $_ua; missing: $_ua_miss"
+else _emit kernel_features usb_arsenal absent; fi
+
+_fs_list=" $(tr '\t\n' '  ' < "$PROC/filesystems" 2>/dev/null) "
+_wg="$(_cfg_state CONFIG_WIREGUARD "$SYS/module/wireguard")"
+_emit kernel_features wireguard "$_wg"
+_emit kernel_features net_sch_cake "$(_cfg_state CONFIG_NET_SCH_CAKE "$SYS/module/sch_cake")"
+_ov="$(_cfg_state CONFIG_OVERLAY_FS "$SYS/module/overlay")"
+case "$_fs_list" in *' overlay '*) [ "$_ov" = 'built-in' ] || _ov='filesystem registered' ;; esac
+_emit kernel_features overlayfs "$_ov"
+_cifs="$(_cfg_state CONFIG_CIFS "$SYS/module/cifs")"
+case "$_fs_list" in *' cifs '*) [ "$_cifs" = 'built-in' ] || _cifs='filesystem registered' ;; esac
+_emit kernel_features cifs "$_cifs"
+_emit kernel_features ip_set "$(_cfg_state CONFIG_IP_SET "$SYS/module/ip_set")"
 
 _bbg='unknown'; _bbg_all_not_set=1
 for _k in BBG SECURITY_BASEBAND_GUARD BASEBAND_GUARD; do
