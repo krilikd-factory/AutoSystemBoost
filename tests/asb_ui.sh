@@ -11554,6 +11554,76 @@ grep -q "llvm-nm\" -D --defined-only \"\$_zout/\$_zabi.so\" | grep -q ' zygisk_m
 echo "PASS slim package: translations re-serialised to the same objects, comment lines out of the page, scripts compile, asbdiag reads the same settings, template literals left alone"
 )
 
+t_webui_i18n_untranslated_prose() (
+# dev27: 186 strings (Infinite Log digest, device page, wakelock freezer, system load, Zygisk
+# observer) were English sentences copied verbatim into eleven locales, plus short labels
+# such as Summary/Actions/Details and Safe mode. Any value still identical to English that
+# reads as prose (three lowercase words in a row) is a forgotten translation. Technical
+# labels (CONFIG_ names, product names) never match the pattern.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL webui untranslated prose: $*" >&2; exit 1; }
+python3 - "$ROOT/webroot/i18n" <<'P' || fail "English prose left in a locale"
+import json, os, re, sys
+d = sys.argv[1]
+en = json.load(open(os.path.join(d, 'en.json'), encoding='utf-8'))
+prose = re.compile(r'[a-z]{3,}[,;:]? [a-z]{2,} [a-z]{3,}')
+short = ('lr_nav_summary', 'lr_nav_actions', 'lr_nav_details', 'dev_zygisk_link_safe',
+         'dev_zygisk_observer_safe_mode', 'dev_load_band_light', 'dev_load_band_high', 'wl_manual_restore')
+bad = []
+for n in sorted(os.listdir(d)):
+    if not n.endswith('.json') or n == 'en.json':
+        continue
+    loc = json.load(open(os.path.join(d, n), encoding='utf-8'))
+    for k, v in en.items():
+        if isinstance(v, str) and loc.get(k) == v and (prose.search(v) or (k in short and n != 'ru.json')):
+            bad.append('%s:%s' % (n, k))
+if bad:
+    print(len(bad), bad[:12]); sys.exit(1)
+P
+echo "PASS webui untranslated prose: no locale carries an English sentence or the fixed short labels verbatim"
+)
+
+t_webui_kernel_control_verdicts() (
+# dev27: the kernel-control toast printed the helper's machine words ("not_exposed",
+# "readback_mismatch", "live 0x0001") in English in every locale. Every verdict the helper
+# can emit on apply/restore has a localized phrase; the JS fallback equals en.json.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui kernel control verdicts: $*" >&2; exit 1; }
+grep -o 'asb_kc_emit "\$[a-z_]*" [a-z_]*' "$ROOT/runtime/asb_kernel_controls.sh" | awk '{print $3}' | sort -u | grep -vx writable > "${TMPDIR:-/tmp}/kc_st.$$"
+python3 - "$H" "$ROOT/webroot/i18n" "${TMPDIR:-/tmp}/kc_st.$$" <<'P' || { rm -f "${TMPDIR:-/tmp}/kc_st.$$"; fail "verdict map"; }
+import json, os, re, sys
+h = open(sys.argv[1], encoding='utf-8').read()
+m = re.search(r'const ASB_KC_VERDICTS = \{([\s\S]*?)\};', h)
+assert m, 'ASB_KC_VERDICTS missing'
+js = dict(re.findall(r"([a-z_]+): '([^']*)'", m.group(1)))
+st = [l.strip() for l in open(sys.argv[3]) if l.strip()]
+assert len(st) >= 10, st
+miss = [s for s in st if s not in js]
+assert not miss, ('no phrase for', miss)
+en = json.load(open(os.path.join(sys.argv[2], 'en.json'), encoding='utf-8'))
+for s, v in js.items():
+    assert en.get('kc_verdict_' + s) == v, ('fallback differs', s)
+assert "T('kc_live', 'kernel: {v}')" in h and en.get('kc_live') == 'kernel: {v}'
+for n in sorted(os.listdir(sys.argv[2])):
+    if not n.endswith('.json') or n == 'en.json':
+        continue
+    loc = json.load(open(os.path.join(sys.argv[2], n), encoding='utf-8'))
+    for s in js:
+        v = loc.get('kc_verdict_' + s)
+        assert v and v != js[s], (n, s)
+    assert '{v}' in loc.get('kc_live', ''), n
+i = h.index("['mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate'].indexOf(key) >= 0")
+seg = h[i:i + 1800]
+assert 'asbKernelControlVerdict(kp[1], kp[3])' in seg
+assert "' · live '" not in seg and "toast(key + ': '" not in seg
+P
+rm -f "${TMPDIR:-/tmp}/kc_st.$$"
+echo "PASS webui kernel control verdicts: every helper verdict has a phrase in 13 locales, the live value is labelled, no raw machine words in the toast"
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;

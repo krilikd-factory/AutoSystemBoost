@@ -5519,6 +5519,63 @@ cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail 'diagnostic 
 echo 'PASS kernel controls: allowlist, baseline, numeric readback, clamp rejection, Smart ownership, exact stock/uninstall restore'
 )
 
+t_kernel_controls_single_owner_runtime() (
+# dev27. Three gaps in the dev24 single-owner contract:
+#  - service.sh apply_vm still ran `echo 7 > /sys/kernel/mm/lru_gen/enabled` at boot, on
+#    every profile apply and on the 5-minute reinforce. It undid mglru_mode=off/stock, fought
+#    Smart's 5, and ran BEFORE asb_system_tweaks at boot, so the helper's "pre-ASB" baseline
+#    was ASB's own 7 on kernels that keep it. apply_vm now routes through the helper and
+#    leaves Smart+smart to the tuner; asb_system_tweaks does the same.
+#  - fix138 (an OP15 node reads 0x0001 whatever is asked) was lost: the tuner re-wrote the
+#    node and spawned the helper on every run. The per-boot readback memo is back.
+#  - Smart without an explicit request now asks for 7, the value every non-Smart profile
+#    had before dev24, instead of silently changing manual profiles to 5.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL kernel controls single owner: $*" >&2; exit 1; }
+_direct="$(grep -n '> */sys/kernel/mm/lru_gen/enabled' "$ROOT/service.sh" "$ROOT"/runtime/*.sh 2>/dev/null | grep -v 'asb_kernel_controls.sh' || true)"
+[ -z "$_direct" ] || fail "a direct MGLRU writer bypasses the helper: $_direct"
+grep -Fq 'smart:smart|:smart) : ;;' "$ROOT/service.sh" || fail 'apply_vm does not leave Smart+smart to the tuner'
+grep -Fq 'asb_kernel_controls.sh" apply mglru_mode >/dev/null' "$ROOT/service.sh" || fail 'apply_vm does not route MGLRU through the helper'
+grep -Fq 'smart:smart|:smart) _kc_keys=' "$ROOT/runtime/asb_system_tweaks.sh" || fail 'system tweaks stomp on the Smart tuner'
+! grep -q '^[[:space:]]*#' <(tail -n +2 "$ROOT/runtime/asb_kernel_controls.sh") || fail 'comment lines in the helper'
+mkdir -p "$T/mod/config" "$T/mod/runtime" "$T/state" "$T/memo"
+cp "$ROOT/runtime/asb_kernel_controls.sh" "$T/mod/runtime/"
+printf 'mglru_mode=smart\n' > "$T/mod/config/governor.conf"
+printf '0x0000\n' > "$T/node"
+out="$(MODDIR="$T/mod" ASB_KERNEL_STATE_DIR="$T/state" ASB_MGLRU_ENABLED_NODE="$T/node" sh "$T/mod/runtime/asb_kernel_controls.sh" apply mglru_mode)"
+printf '%s\n' "$out" | grep -q '^mglru_mode|applied|smart|7|0x0000$' || fail "Smart without a request is not 7: $out"
+sed -n '/^if \[ "\$MODE" != manual \] && \[ "\$(_cfg mglru_mode)" = smart \]; then$/,/^fi$/p' "$ROOT/runtime/smart_dynamic_tune.sh" > "$T/block.sh"
+[ "$(wc -l < "$T/block.sh")" -ge 8 ] || fail 'Smart MGLRU block not found'
+cat > "$T/mod/runtime/asb_kernel_controls.sh" <<'S'
+#!/bin/sh
+echo "$*" >> "$KC_LOG"
+printf '0x0001\n' > "$ASB_MGLRU_ENABLED_NODE"
+S
+tune() {
+  ( MODE=smart HINT="$1" MODDIR="$T/mod" ASB_CONF="$T/mod/config/governor.conf" \
+    ASB_MGLRU_ENABLED_NODE="$T/node" ASB_MGLRU_MEMO_DIR="$T/memo" KC_LOG="$T/kc.log"
+    export MODDIR ASB_CONF ASB_MGLRU_ENABLED_NODE KC_LOG
+    _cfg() { grep -E "^[[:space:]]*$1=" "$ASB_CONF" 2>/dev/null | head -1 | sed 's/.*=//' | tr -d ' \r'; }
+    . "$T/block.sh" )
+}
+: > "$T/kc.log"
+tune 1; tune 1; tune 1
+[ "$(grep -c . "$T/kc.log")" -eq 1 ] || fail "a clamped node was rewritten on every run: $(cat "$T/kc.log")"
+grep -qx 'apply mglru_mode 5' "$T/kc.log" || fail "idle request not 5: $(cat "$T/kc.log")"
+tune 4; tune 4
+[ "$(grep -c . "$T/kc.log")" -eq 2 ] && grep -qx 'apply mglru_mode 7' "$T/kc.log" || fail "heavy request handling wrong: $(cat "$T/kc.log")"
+printf '0x0000\n' > "$T/node"
+tune 1
+[ "$(grep -c . "$T/kc.log")" -eq 3 ] || fail 'an external change was not corrected'
+printf 'mglru_mode=off\n' > "$T/mod/config/governor.conf"
+printf '0x0000\n' > "$T/node"
+tune 4
+[ "$(grep -c . "$T/kc.log")" -eq 3 ] || fail 'the tuner touched a manual MGLRU mode'
+echo 'PASS kernel controls single owner: no direct MGLRU writer, apply_vm/tweaks leave Smart to the tuner, clamped node not rewritten per run, Smart default 7'
+)
+
 t_phantom_stock_restore_runtime() (
 # Runtime: phantom_procs strict/relaxed -> stock puts the original value back.
 # The stock branch read profile_runtime_baseline.v1, but asb_settings_put records in
