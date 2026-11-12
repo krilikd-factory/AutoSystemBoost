@@ -20022,7 +20022,12 @@ function asbFitPages() {
   const go = function () {
     const wait = (_asbNavAnimUntil || 0) - performance.now();
     if (wait > 8) { setTimeout(go, wait); return; }
-    requestAnimationFrame(function () { asbFitPages._q = false; asbFitPagesNow(); });
+    requestAnimationFrame(function () {
+      /* dev19: a transition can start between the check above and this frame (the Home
+       * entrance does, right after parsing). Its scale would be measured into the cards. */
+      if ((_asbNavAnimUntil || 0) - performance.now() > 8) { go(); return; }
+      asbFitPages._q = false; asbFitPagesNow();
+    });
   };
   go();
 }
@@ -20030,6 +20035,15 @@ function asbFitPagesNow() {
   try {
     const z = window._asbUiScale || 1;
     const bar = document.querySelector('.asb-tabbar');
+    /* dev19: no bar yet means the document is still being parsed, not that the bar is
+     * hidden; measuring now would size the cards to the window bottom. Measure once parsed. */
+    if (!bar && document.readyState === 'loading') {
+      if (!asbFitPagesNow._wait) {
+        asbFitPagesNow._wait = true;
+        document.addEventListener('DOMContentLoaded', function () { asbFitPagesNow._wait = false; asbFitPagesNow(); }, { once:true });
+      }
+      return;
+    }
     const barTop = bar ? bar.getBoundingClientRect().top : 0;
     /* The bar hides inside a settings category (its rect reads 0): the page then owns the
      * whole height. The fit line sits a little above the bar so content never slides
@@ -22532,6 +22546,17 @@ async function asbBootIntroStart() {
 let _asbHomeRevealed = false;
 function asbHomeReveal() {
   if (_asbHomeRevealed) return;
+  /* dev19: the locale can settle while the parser is still behind this script, before the
+   * tab bar (the <nav> after it) exists. The reveal's fit then measured down to the window
+   * bottom and gave every profile card a fifth of the bar's height too much, until a later
+   * fit shrank them seconds afterwards. Home stays hidden until the document is parsed. */
+  if (document.readyState === 'loading') {
+    if (!asbHomeReveal._wait) {
+      asbHomeReveal._wait = true;
+      document.addEventListener('DOMContentLoaded', function () { asbHomeReveal(); }, { once:true });
+    }
+    return;
+  }
   const root = document.documentElement;
   const home = document.querySelector('.page:not(.live-page)');
   if (!root || !home) return;
