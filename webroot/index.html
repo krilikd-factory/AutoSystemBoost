@@ -9781,7 +9781,7 @@ function cfgCatClass(key){ return CFG_CAT[key] ? ('cat-' + CFG_CAT[key]) : 'cat-
  * returned one, so a clamped MGLRU request says what the kernel actually kept. */
 const ASB_KC_VERDICTS = {
   applied: 'applied', restored: 'stock value restored', stock_unowned: 'already stock',
-  not_exposed: 'not in this kernel', not_readable: 'not readable', not_writable: 'read-only in this kernel',
+  not_exposed: 'interface not exposed', not_readable: 'not readable', not_writable: 'interface is read-only',
   write_failed: 'kernel refused the write', readback_mismatch: 'kernel kept another value',
   baseline_failed: 'original value could not be saved; nothing written',
   baseline_invalid: 'saved original value is invalid', state_cleanup_failed: 'restored; state file not removed',
