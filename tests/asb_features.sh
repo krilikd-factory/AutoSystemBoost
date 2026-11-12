@@ -8585,7 +8585,8 @@ echo "PASS asbdiag lsposed modlog: the modules log is reported apart, with the a
 
 
 t_ltpo_touch_runtime() (
-# Integrated LTPO: event-driven active/idle transitions, guards and video ownership.
+# Integrated LTPO: event-driven active/idle transitions, advertised stepped decay,
+# guards, video ownership and fatal-input handling.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 W="$ROOT/runtime/asb_ltpo_touch.sh"
@@ -8595,7 +8596,7 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/bin" "$T/mod/config" "$T/mod/runtime" "$T/state"
 cp "$ROOT/runtime/asb_ltpo_lock.sh" "$T/mod/runtime/"
 : > "$T/event0"
-printf 'ltpo_force=1\nltpo_idle_s=2\nltpo_idle_rate=60\n' > "$T/mod/config/governor.conf"
+printf 'ltpo_force=1\nltpo_idle_s=2\nltpo_idle_step_s=1\nltpo_idle_rate=60\n' > "$T/mod/config/governor.conf"
 printf 'mDisplayState=ON DisplayMode{id=1, width=1440, peakRefreshRate=165.0}\n' > "$T/display"
 cat > "$T/bin/getevent" <<'X'
 #!/bin/sh
@@ -8603,17 +8604,22 @@ if [ "$1" = "-pl" ]; then echo 'ABS_MT_POSITION_X'; exit 0; fi
 n=0; [ ! -f "$ASB_TEST_COUNT" ] || n="$(cat "$ASB_TEST_COUNT")"
 n=$((n + 1)); printf '%s\n' "$n" > "$ASB_TEST_COUNT"
 case "${ASB_TEST_MODE:-normal}:$n" in
-  normal:1|video:1) exit 1 ;;
-  normal:2|video:2) exit 0 ;;
-  normal:3|video:3) : > "$ASB_LTPO_STATE_DIR/ltpo_touch.stop"; exit 1 ;;
-  guard:2) : > "$ASB_LTPO_STATE_DIR/ltpo_touch.stop" ;;
+  normal:1|normal:3|video:1|video:3|guard:1|flat:1|idleerr:1) exit 42 ;;
+  normal:2|video:2|steps:2) exit 0 ;;
+  steps:1|steps:3|steps:4|steps:5|stepsvideo:1|stepsvideo:2|stepsvideo:3) exit 42 ;;
+  midguard:1) exit 42 ;;
+  midguard:2) printf 'camera_hold=1\nstate=LIGHT_IDLE\n' > "$ASB_LTPO_RSTATE"; exit 42 ;;
+  normal:4|video:4|guard:2|steps:6|stepsvideo:4|flat:2|midguard:3)
+    : > "$ASB_LTPO_STATE_DIR/ltpo_touch.stop"; exit 1 ;;
 esac
 exit 1
 X
 cat > "$T/bin/timeout" <<'X'
 #!/bin/sh
 shift
-"$@"
+"$@"; rc=$?
+[ "$rc" != 42 ] || exit 124
+exit "$rc"
 X
 cat > "$T/bin/settings" <<'X'
 #!/bin/sh
@@ -8633,33 +8639,86 @@ run_case() {
   mode="$1"
   rm -rf "$T/state"; mkdir -p "$T/state"
   : > "$T/current"; : > "$T/writes"; : > "$T/count"; : > "$T/rstate"
-  [ "$mode" != guard ] || printf 'camera_hold=1\nstate=LIGHT_IDLE\n' > "$T/rstate"
-  if [ "$mode" = video ]; then printf 'orig=165.0\nowner=fixture\n' > "$T/state/ltpo_video.lowered"; fi
+  case "$mode" in guard) printf 'camera_hold=1\nstate=LIGHT_IDLE\n' > "$T/rstate" ;; esac
+  case "$mode" in video|stepsvideo) printf 'orig=165.0\nowner=fixture\n' > "$T/state/ltpo_video.lowered" ;; esac
+  case "$mode" in
+    steps|stepsvideo|midguard)
+      cat > "$T/display" <<'MODES'
+mDisplayState=ON DisplayMode{id=1, width=1440, peakRefreshRate=165.0}
+DisplayMode{id=2, width=1440, peakRefreshRate=120.0}
+DisplayMode{id=3, width=1440, peakRefreshRate=90.0}
+DisplayMode{id=4, width=1440, peakRefreshRate=60.0}
+DisplayMode{id=5, width=1440, peakRefreshRate=120.0}
+MODES
+      ;;
+    flat)
+      printf 'DisplayMode{id=1, peakRefreshRate=165.0}\nDisplayMode{id=2, peakRefreshRate=60.0}\n' > "$T/display"
+      ;;
+    *) printf 'mDisplayState=ON DisplayMode{id=1, width=1440, peakRefreshRate=165.0}\n' > "$T/display" ;;
+  esac
   ASB_TEST_MODE="$mode" ASB_TEST_COUNT="$T/count" ASB_TEST_CURRENT="$T/current" \
     ASB_TEST_WRITES="$T/writes" ASB_LTPO_TOUCH_DEVICE="$T/event0" \
     ASB_LTPO_STATE_DIR="$T/state" ASB_LTPO_RSTATE="$T/rstate" \
     ASB_LTPO_DISPLAY_DUMP="$T/display" MODDIR="$T/mod" PATH="$T/bin:$PATH" \
-    sh "$W" || fail "$mode watcher exited unsuccessfully"
+    sh "$W"
 }
-run_case normal
-[ "$(cat "$T/count")" = 3 ] || fail 'normal case did not block on exactly three input events'
+run_case normal || fail 'normal watcher exited unsuccessfully'
+[ "$(cat "$T/count")" = 4 ] || fail 'normal case did not block on exactly four input events'
 printf 'peak_refresh_rate=165.0\npeak_refresh_rate=60.0\npeak_refresh_rate=165.0\npeak_refresh_rate=60.0\n' > "$T/expect"
 cmp -s "$T/writes" "$T/expect" || { cat "$T/writes"; fail 'active/idle write sequence is wrong'; }
 [ ! -e "$T/state/ltpo_touch.pid" ] && [ ! -e "$T/state/ltpo_touch.stop" ] && [ ! -e "$T/state/ltpo_touch.heartbeat" ] || fail 'cleanup left lifecycle files'
 [ ! -e "$T/state/ltpo_video.lock" ] || fail 'touch left the video ownership lock held'
-run_case guard
+run_case guard || fail 'guard watcher exited unsuccessfully'
 printf 'peak_refresh_rate=165.0\n' > "$T/expect"
 cmp -s "$T/writes" "$T/expect" || fail 'camera guard lowered the panel'
 [ "$(cat "$T/count")" = 2 ] || fail 'camera guard did not return to blocking input wait'
-run_case video
+run_case video || fail 'video watcher exited unsuccessfully'
 [ ! -s "$T/writes" ] || fail 'touch watcher fought the video owner through Settings'
 grep -q '^orig=60.0$' "$T/state/ltpo_video.lowered" || fail 'video restore target did not follow idle state'
 grep -q '^owner=fixture$' "$T/state/ltpo_video.lowered" || fail 'video ownership metadata was damaged'
 printf 'peak_refresh_rate=165.0\npeak_refresh_rate=60.0\npeak_refresh_rate=165.0\npeak_refresh_rate=60.0\n' > "$T/expect"
-ASB_TEST_FRACTIONAL=0 run_case normal
+ASB_TEST_FRACTIONAL=0 run_case normal || fail 'fallback watcher exited unsuccessfully'
 cmp -s "$T/writes" "$T/expect" || fail 'fractional-sleep fallback changed active/idle transitions'
 [ ! -e "$T/state/ltpo_touch.heartbeat" ] || fail 'fallback case left heartbeat behind'
-echo "PASS LTPO touch runtime: event waits, ownership lock, liveness marker and portable sleep"
+
+# A touch in the middle of decay returns to MAX immediately; after quiet, only unique
+# advertised intermediate modes are used, then IDLE. No invented 90/120 on a flat panel.
+run_case steps || fail 'stepped watcher exited unsuccessfully'
+printf 'peak_refresh_rate=165.0\npeak_refresh_rate=120.0\npeak_refresh_rate=165.0\npeak_refresh_rate=120.0\npeak_refresh_rate=90.0\npeak_refresh_rate=60.0\n' > "$T/expect"
+cmp -s "$T/writes" "$T/expect" || { cat "$T/writes"; fail 'advertised stepped decay/mid-touch restore is wrong'; }
+[ "$(cat "$T/count")" = 6 ] || fail 'stepped case did not use bounded event waits'
+run_case flat || fail 'flat-panel watcher exited unsuccessfully'
+printf 'peak_refresh_rate=165.0\npeak_refresh_rate=60.0\n' > "$T/expect"
+cmp -s "$T/writes" "$T/expect" || fail 'flat panel received an unadvertised intermediate mode'
+run_case stepsvideo || fail 'stepped video watcher exited unsuccessfully'
+[ ! -s "$T/writes" ] || fail 'stepped decay fought the video owner through Settings'
+grep -q '^orig=60.0$' "$T/state/ltpo_video.lowered" || fail 'stepped video restore target is wrong'
+grep -q '^owner=fixture$' "$T/state/ltpo_video.lowered" || fail 'stepped video metadata was damaged'
+run_case midguard || fail 'mid-decay guard watcher exited unsuccessfully'
+printf 'peak_refresh_rate=165.0\npeak_refresh_rate=120.0\npeak_refresh_rate=165.0\n' > "$T/expect"
+cmp -s "$T/writes" "$T/expect" || fail 'camera starting mid-decay did not restore MAX'
+
+# A broken input command is not inactivity and cannot cause a tight idle retry loop.
+run_case inputerr && fail 'active input failure returned success'
+printf 'peak_refresh_rate=165.0\n' > "$T/expect"
+cmp -s "$T/writes" "$T/expect" || fail 'active input failure caused a false idle write'
+run_case idleerr && fail 'idle input failure returned success'
+printf 'peak_refresh_rate=165.0\npeak_refresh_rate=60.0\npeak_refresh_rate=165.0\n' > "$T/expect"
+cmp -s "$T/writes" "$T/expect" || fail 'idle input failure did not restore MAX exactly once'
+[ "$(cat "$T/count")" = 2 ] || fail 'idle input failure caused a retry loop'
+[ ! -e "$T/state/ltpo_touch.pid" ] && [ ! -e "$T/state/ltpo_touch.stop" ] && [ ! -e "$T/state/ltpo_touch.heartbeat" ] || fail 'input-error cleanup left lifecycle files'
+
+# Preflight refuses to claim ownership when quiet timeouts are unavailable.
+mkdir -p "$T/no-timeout"
+for _cmd in grep tail cut tr mkdir rm; do cp "$(command -v "$_cmd")" "$T/no-timeout/$_cmd"; done
+: > "$T/current"; : > "$T/writes"; : > "$T/count"
+ASB_TEST_MODE=normal ASB_TEST_COUNT="$T/count" ASB_TEST_CURRENT="$T/current" \
+  ASB_TEST_WRITES="$T/writes" ASB_LTPO_TOUCH_DEVICE="$T/event0" \
+  ASB_LTPO_STATE_DIR="$T/state" ASB_LTPO_RSTATE="$T/rstate" \
+  ASB_LTPO_DISPLAY_DUMP="$T/display" MODDIR="$T/mod" PATH="$T/no-timeout" \
+  /bin/sh "$W" && fail 'watcher started without timeout'
+[ ! -s "$T/writes" ] || fail 'missing timeout caused a Settings write'
+echo "PASS LTPO touch runtime: advertised steps, instant touch restore, guards, ownership and fatal-input handling"
 )
 
 
