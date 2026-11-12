@@ -4,6 +4,39 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev33 - kernel management inside System
+
+Input: the dev32 source and Monitor screenshots. The separate Config hub tile **Kernel** is
+removed. Its actionable content now opens under **Settings → System → Kernel management**;
+read-only kernel capabilities are not rendered as a second diagnostics card.
+
+- **Six registered controls in one existing owner.** MGLRU, timer migration, migration batch and
+  scheduler statistics retain their previous defaults and behavior. New `kernel_sched_autogroup`
+  and `kernel_sched_child_runs_first` controls default to `stock` and expose only stock/off/on.
+  Both use fixed standard nodes, baseline capture, bounded 0/1 writes, numeric readback and exact
+  Stock/uninstall restore. Neither claims a universal responsiveness, performance or battery gain.
+- **No competing writer was added.** `vm.block_dump` was rejected as a new control because the
+  Battery profile already writes it in `service.sh`; adding another owner or changing that default
+  would violate the single-owner contract. `swappiness`, `stat_interval` and `sched_energy_aware`
+  likewise remain with their existing profile owners.
+- **Management is separate from evidence.** The management help explains Stock, availability and
+  mismatch semantics. Refresh rereads both registered owners after apply and on demand; Open
+  Device Diagnostics uses the real existing navigation handler. The Config panel no longer calls
+  `asb_device_info.sh --kernel`. Device Diagnostics retains its independent kernel feature,
+  origin, BTF, eBPF, FUSE-BPF, runtime, external-evidence and config sections.
+- **Wakeup behavior is unchanged.** The exact-name editor moves with the subsection and retains
+  its full-list validation, saved/current readback, blocked-event counter, empty default and
+  explicit unsupported states. No polling worker or browser-provided sysfs path is introduced.
+- **Upgrade and locale coverage.** Both new keys are present in shipped/default config, the
+  ownership registry and both update/snapshot lists. Thirteen locales include section wording,
+  management help, diagnostics navigation and both controls with per-option explanations.
+
+Regression covers six-hub rendering, System subsection targets, six-control parsing and live mode,
+absence of the old capabilities card/probe, all thirteen locales, safe-config acceptance and
+rejection, stable baselines across mode changes, missing/unreadable/read-only/mismatch states,
+exact restore, single-owner checks and unchanged wakeup set/clear. Host and browser verification
+remain distinct from physical ColorOS WebView and kernel/device field validation.
+
 ## V66 dev32 - manual Infirmary junk cleanup
 
 Input: the dev31 source and screenshots of diagnostic residue. The new **Infirmary → Cleanup →
