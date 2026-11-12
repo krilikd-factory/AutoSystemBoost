@@ -194,6 +194,15 @@ _lower() {   # $1 = mode Hz, $2 = content rate(s)
   # A touch/range writer may have changed the peak immediately before this lock.
   _orig="$(_get)"
   [ -n "$_orig" ] || _orig=__unset
+  case "$_orig" in
+    __unset) : ;;
+    *)
+      _oi="$(_int "$_orig")"
+      if [ "${_oi:-0}" -gt 0 ] 2>/dev/null && [ "$_oi" -le "$1" ] 2>/dev/null; then
+        asb_ltpo_unlock
+        return 2
+      fi ;;
+  esac
   mkdir -p "$STATE_DIR" 2>/dev/null
   if ! printf 'orig=%s\nset=%s.0\ncontent=%s\nsince=%s\n' "$_orig" "$1" "$(printf '%s' "$2" | tr '\n' ',' | sed 's/,$//')" "$(_now)" \
     > "$LOWERED" 2>/dev/null; then
