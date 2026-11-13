@@ -677,6 +677,9 @@ _emit kernel_features susfs_version "${_sv:-not exposed}"
 for _spec in \
   'mglru_enabled:/sys/kernel/mm/lru_gen/enabled' \
   'mglru_min_ttl_ms:/sys/kernel/mm/lru_gen/min_ttl_ms' \
+  'hrtimer_migration:/proc/sys/kernel/hrtimer_migration' \
+  'lpm_prediction:/sys/module/lpm_levels/parameters/lpm_prediction' \
+  'usb_autosuspend:/sys/module/usbcore/parameters/autosuspend' \
   'sched_clamp_min:/proc/sys/kernel/sched_util_clamp_min' \
   'sched_clamp_max:/proc/sys/kernel/sched_util_clamp_max' \
   'swappiness:/proc/sys/vm/swappiness' \
