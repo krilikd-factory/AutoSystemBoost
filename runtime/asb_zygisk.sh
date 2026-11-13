@@ -14,6 +14,7 @@ AUTO_BACKUP="$ZDIR/packages.before_auto"
 AUTO_PREV="$ZDIR/auto.before"
 AUTO_RUN="${ASB_ZYGISK_RUN_DIR:-/dev/.asb/zygisk}"
 AUTO_COUNT="${ASB_ZYGISK_AOT_COUNT:-${ZDIR%/*}/zygisk_aot_count}"
+EXCL="${ASB_ZYGISK_AOT_EXCLUDE:-${ZDIR%/*}/zygisk_aot_exclude}"
 CLASSES="${ASB_ZYGISK_CLASSES:-${POLICY%/*}/classes}"
 
 _zygisk_prepare() {
@@ -58,6 +59,14 @@ _zygisk_set_conf() {
 _zygisk_list() {
   [ -r "$LIST" ] || return 0
   sed 's/[[:space:]]//g' "$LIST" 2>/dev/null | while IFS= read -r _p; do
+    case "$_p" in ''|\#*) continue ;; esac
+    _zygisk_package_invalid "$_p" && printf '%s\n' "$_p"
+  done
+}
+
+_zygisk_exclusions() {
+  [ -r "$EXCL" ] || return 0
+  sed 's/[[:space:]]//g' "$EXCL" 2>/dev/null | while IFS= read -r _p; do
     case "$_p" in ''|\#*) continue ;; esac
     _zygisk_package_invalid "$_p" && printf '%s\n' "$_p"
   done
@@ -131,6 +140,7 @@ _zygisk_sync() {
   [ "$_s_launch" = 1 ] || _s_launch=0
   [ "$_s_ledger" = 1 ] || _s_ledger=0
   _s_pkgs="$(_zygisk_list)"
+  _s_excl="$(_zygisk_exclusions)"
   _s_obs=0
   [ -n "$_s_pkgs" ] && _s_obs=1
   _zygisk_sync_backup || { echo 'policy=backup_failed'; return 1; }
@@ -154,6 +164,9 @@ _zygisk_sync() {
       "$_s_gen" "$_s_obs" "$_s_hints" "$_s_launch" "$_s_ledger"
     printf '%s\n' "$_s_pkgs" | while IFS= read -r _s_p; do
       if [ -n "$_s_p" ]; then printf 'pkg=%s\n' "$_s_p"; fi
+    done
+    printf '%s\n' "$_s_excl" | while IFS= read -r _s_x; do
+      if [ -n "$_s_x" ]; then printf 'xpkg=%s\n' "$_s_x"; fi
     done
   } > "$POLICY.tmp" 2>/dev/null || { rm -f "$POLICY.tmp" 2>/dev/null; _zygisk_sync_done; echo 'policy=write_failed'; return 1; }
   chmod 600 "$POLICY.tmp" 2>/dev/null || true

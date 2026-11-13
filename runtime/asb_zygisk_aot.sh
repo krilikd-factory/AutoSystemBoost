@@ -85,6 +85,18 @@ _note() {
 _excluded() {
   [ -s "$EXCL" ] && grep -qxF "$1" "$EXCL" 2>/dev/null
 }
+_observer_policy_sync() {
+  _ops="$MODDIR/runtime/asb_zygisk.sh"
+  [ -f "$_ops" ] || { echo 'observer_policy=unavailable'; return 1; }
+  if ASB_ZYGISK_MODDIR="$MODDIR" MODDIR="$MODDIR" ASB_ZYGISK_DIR="${ASB_ZYGISK_DIR:-$D/zygisk_observer}" \
+     ASB_ZYGISK_AOT_EXCLUDE="$EXCL" ASB_ZYGISK_AOT_COUNT="$CUM" \
+     sh "$_ops" sync >/dev/null 2>&1; then
+    echo 'observer_policy=synced'
+    return 0
+  fi
+  echo 'observer_policy=failed'
+  return 1
+}
 _ledger_top() {
   cat "$RUN"/state.*.tsv 2>/dev/null | awk -F'\t' '$1 == "L" && $2 ~ /^[A-Za-z0-9_.]+$/ { t[$2] += $5 } END { for (p in t) if (t[p] > 0) print p, t[p] }'
 }
@@ -295,7 +307,12 @@ _exclude() {
   if [ -f "$APPS" ]; then
     awk -F'|' -v p="$1" '$1 != p' "$APPS" > "$APPS.t" 2>/dev/null && mv -f "$APPS.t" "$APPS"
   fi
-  echo 'result=excluded'
+  if _observer_policy_sync; then
+    echo 'result=excluded'
+  else
+    echo 'result=partial reason=observer_policy'
+    return 1
+  fi
 }
 _include() {
   _pkgok "$1" || { echo 'result=bad_request'; return 2; }
@@ -303,7 +320,12 @@ _include() {
     grep -vxF "$1" "$EXCL" > "$EXCL.tmp" 2>/dev/null
     if [ -s "$EXCL.tmp" ]; then mv -f "$EXCL.tmp" "$EXCL"; else rm -f "$EXCL.tmp" "$EXCL" 2>/dev/null; fi
   fi
-  echo 'result=included'
+  if _observer_policy_sync; then
+    echo 'result=included'
+  else
+    echo 'result=partial reason=observer_policy'
+    return 1
+  fi
 }
 _tick() {
   [ -f "$ON" ] || return 0
@@ -373,7 +395,7 @@ case "${1:-status}" in
   exclude) _exclude "${2:-}" || exit $? ;;
   include) _include "${2:-}" || exit $? ;;
   reset) _pkgok "${2:-}" || { echo 'result=bad_request'; exit 2; }; _reset "$2" ;;
-  restore-all) rm -rf "$EXCL" "$EXCL.tmp" "$ON" "$APPS" "$APPS.new" "$APPS.t" "$CUM" "$CUM.tmp" "$CUM.new" "$LAUNCH" "$LAUNCH.tmp" "$SCAN" "$LOG" "$LOG.tmp" "$LOCK" "$CHARGE" "$CHARGE.tmp" 2>/dev/null ;;
+  restore-all) rm -rf "$EXCL" "$EXCL.tmp" "$ON" "$APPS" "$APPS.new" "$APPS.t" "$CUM" "$CUM.tmp" "$CUM.new" "$LAUNCH" "$LAUNCH.tmp" "$SCAN" "$LOG" "$LOG.tmp" "$LOCK" "$CHARGE" "$CHARGE.tmp" 2>/dev/null; _observer_policy_sync >/dev/null 2>&1 || true ;;
   *) echo 'result=bad_request'; exit 2 ;;
 esac
 exit 0

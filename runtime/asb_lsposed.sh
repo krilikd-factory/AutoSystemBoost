@@ -60,9 +60,11 @@ _pending() {   # 1 when ASB's last write came after this boot started
   case "$_at$_now$_up" in ''|*[!0-9]*) echo 0; return ;; esac
   [ "$_at" -ge $((_now - _up)) ] && echo 1 || echo 0
 }
-_get() { _lspd verbose-get | sed -n 's/^verbose=//p' | head -1; }
-_reason() { _lspd verbose-get | sed -n 's/^reason=//p' | head -1; }
-_format() { _lspd verbose-get | sed -n 's/^format=//p' | head -1; }
+_lspd_read() { _lspd_out="$(_lspd verbose-get)"; }
+_field() { printf '%s\n' "$_lspd_out" | sed -n "s/^$1=//p" | head -1; }
+_get() { _field verbose; }
+_reason() { _field reason; }
+_format() { _field format; }
 
 present=0
 [ -d "$LSPD" ] && [ -f "$DB" ] && present=1
@@ -130,11 +132,17 @@ case "${1:-status}" in
     echo "present=$present"
     echo "setting=$(_cfg lsposed_verbose)"
     if [ "$present" = 1 ]; then
+      # One database read supplies the whole status. Three independent verbose-get calls made
+      # a WAL/permission problem look intermittent and tripled the diagnostic I/O.
+      _lspd_read
       _v="$(_get)"; echo "verbose=${_v:-unknown}"
       [ "${_v:-unknown}" = unknown ] && echo "reason=$(_reason)"
       # fix213 (audit K8): the serialization layout the CLI parsed, so a future LSPosed
       # schema change is visible here and in the WebUI instead of failing silently.
       _f="$(_format)"; [ -n "$_f" ] && echo "format=$_f"
+      for _k in sqlite_rc read_from; do
+        _x="$(_field "$_k")"; [ -n "$_x" ] && echo "$_k=$_x"
+      done
       echo "log_kib=$(_kib "$LSPD"/log/*.log "$LSPD"/log/*/*.log)"
       echo "verbose_kib=$(_kib "$LSPD"/log/verbose_*.log)"
       # fix189: the modules log is what LSPosed modules write themselves (XposedBridge.log,
@@ -153,6 +161,7 @@ case "${1:-status}" in
     case "$_want" in
       off)
         [ "$present" = 1 ] || { echo "result=absent"; exit 0; }
+        _lspd_read
         _cur="$(_get)"
         case "$_cur" in on|off|default_on) : ;; *) echo "result=unsupported reason=$(_reason)"; exit 0 ;; esac
         if [ "$_cur" != off ]; then
