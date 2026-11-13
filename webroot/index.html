@@ -9464,12 +9464,8 @@ const CFG_GROUP_SECTIONS = {
   ui: [
     { id:'controls', icon:'kernel', titleKey:'cfg_kernel_section_controls',
       title:'Kernel management', hintKey:'cfg_kernel_section_controls_hint',
-      hint:'Only registered writable interfaces are controlled here. Availability and live readback come from the running kernel.',
-      keys:['mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first'] },
-    { id:'wakeup', icon:'doze', titleKey:'cfg_kernel_section_wakeup',
-      title:'Wakeup-source blocker', hintKey:'cfg_kernel_section_wakeup_hint',
-      hint:'An optional exact-name list for a kernel with the ASB wakeup interface. Empty by default.',
-      keys:[], card:'wakeup' },
+      hint:'Registered kernel controls and the optional exact-name wakeup list live together. Availability and live readback come from the running kernel.',
+      keys:['mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first'], card:'wakeup' },
     { id:'zygisk', icon:'zygisk_observer', titleKey:'cfg_ui_section_zygisk',
       title:'Zygisk', hintKey:'cfg_ui_section_zygisk_hint',
       hint:'One master switch and connection status. Modes, features and app selection live on the ZYGISK page.',
@@ -9982,7 +9978,15 @@ function cfgRenderGroup(list, groupId) {
     if (groupId === 'ui' && section.id === 'controls') cfgRenderKernelControlsHelp(list);
     if (section.card === 'batteryfix') cfgRenderBatteryFixCard(list);
     else if (section.card === 'junkcleanup') cfgRenderJunkCleanupCard(list);
-    else if (section.card === 'wakeup') cfgRenderWakeupBlockerCard(list);
+    else if (section.card === 'wakeup') {
+      // Kernel management is one reading flow: ordinary bounded controls first,
+      // then their optional wakeup-list companion, without a second page section.
+      sectionItems.forEach(it => {
+        cfgRenderRow(list, it, false);
+        if (ASB_KERNEL_STATUS_KEYS.indexOf(it.key) >= 0) kernelDecorateControlRow(list.lastChild, it.key);
+      });
+      cfgRenderWakeupBlockerCard(list);
+    }
     else if (section.id === 'zygisk') cfgRenderZygiskCard(list, sectionItems);
     else sectionItems.forEach(it => {
       cfgRenderRow(list, it, false);
@@ -15806,12 +15810,20 @@ const DEVICE_SECTION_GUIDES = {
   asb_caps: ['dev_guide_asb_caps', 'Only exposed, discovered control paths are listed. Missing evidence is not proof that the hardware lacks a feature.'],
   root: ['dev_guide_root', 'The KSU interface family and the exact root implementation are separate facts. A variant is named only when version evidence names it.']
 };
-/* Reverse the feature groups from the original collector presentation while keeping each
- * driver's version directly below its main row. SuSFS leads, NoMount closes the section.
+/* Keep each feature next to its own evidence instead of mixing config and runtime
+ * into one verdict. CAKE and Sched Stats deliberately expose all supporting rows.
  * Unknown future keys remain visible after this explicit, device-independent order. */
 const DEVICE_KERNEL_FEATURE_ORDER = [
-  'susfs', 'susfs_version', 'bbg_baseband_guard', 'bbr_v2', 'bbr_v1', 'lto',
-  'tmpfs_xattr_posix_acl', 'unicode_bypass_fix', 'unicode_bypass_evidence', 'droidspaces', 'ntsync', 'nomount', 'nomount_version'
+  'susfs', 'susfs_version', 'bbg_baseband_guard', 'rekernel',
+  'bbr_v1', 'bbr_v2', 'bbr_v3',
+  'net_sch_cake', 'net_sch_cake_config', 'net_sch_cake_module',
+  'net_sch_cake_symbols', 'net_sch_cake_qdisc', 'net_sch_cake_evidence',
+  'wireguard', 'vpn_hide', 'ip_set', 'cifs', 'usb_arsenal', 'oplus_sdp_900ma',
+  'lto', 'tmpfs_xattr_posix_acl', 'unicode_bypass_fix', 'unicode_bypass_evidence',
+  'droidspaces', 'ntsync', 'overlayfs',
+  'sched_stats', 'sched_stats_config', 'sched_stats_node',
+  'wakeup_blocker', 'wakeup_blocker_rules', 'wakeup_blocker_blocked_events',
+  'nomount', 'nomount_version'
 ];
 function parseDeviceInfo(txt) {
   const d = { sections: Object.create(null), count: 0, malformed: 0 };
@@ -15853,7 +15865,10 @@ function deviceIsLimitedValue(value) {
   const v = String(value == null ? '' : value).trim().toLowerCase().replace(/_/g, ' ');
   return v === '—' || v === 'unknown' || v === 'not exposed' || v === 'not runtime-discoverable' ||
     v === 'not observable' || v === 'unavailable' || v === 'not available' ||
-    v.indexOf('not exposed ') === 0 || v.indexOf('unknown ') === 0;
+    v.indexOf('not exposed ') === 0 || v.indexOf('unknown ') === 0 ||
+    v.indexOf('not runtime-') === 0 || v.indexOf('not observed') === 0 ||
+    v.indexOf('not readable') === 0 || v.indexOf('unreadable') === 0 ||
+    v.indexOf('not listed') === 0 || v.indexOf('not detected') === 0;
 }
 function deviceValueClass(sec, key, value) {
   const v = String(value || '').toLowerCase();
@@ -15861,6 +15876,7 @@ function deviceValueClass(sec, key, value) {
   if (key === 'uname_consistency') return v === 'mismatch' ? ' dev-warn' : (v === 'match' ? ' dev-good' : '');
   if ((sec === 'susfs' && key === 'interface') || (sec === 'kernel_config' && key === 'available'))
     return (v === 'available' || v === 'yes') ? ' dev-good' : '';
+  if (sec === 'kernel_features' && key === 'net_sch_cake') return v.indexOf('available;') === 0 ? ' dev-good' : '';
   if (sec === 'kernel_external' && key === 'status' && /conflict|error|unsafe/.test(v)) return ' dev-bad';
   if (sec === 'lsposed_hooks' && key === 'findings') return v === '0' ? ' dev-good' : ' dev-warn';
   if (sec === 'zygisk_observer' && key === 'ledger_restart_loops' && v !== 'none') return ' dev-warn';
