@@ -520,7 +520,7 @@
     },
     "kernel_hrtimer_migration": {
       "name": "HR-Timer-Migration",
-      "desc": "Steuert die Migration hochauflösender Timer. Auto fordert nur im Akkuprofil 0 an und stellt sonst den erfassten Wert wieder her. Latenz- und Stromspareffekte sind nicht garantiert."
+      "desc": "Verwendet /proc/sys/kernel/hrtimer_migration nur bei einem echten Vendor-Interface. Standard-Linux 6.12 besitzt dieses unabhängige Sysctl nicht: ASB kennzeichnet die Zeile dann als durch Timer-Migration abgedeckt und schreibt kein zweites Mal. Bei einem echten separaten Knoten fordert Auto nur im Akkuprofil 0 an. Latenz- und Stromspareffekte sind nicht garantiert."
     },
     "kernel_lpm_prediction": {
       "name": "Leerlauf-Vorhersage (LPM)",
@@ -827,6 +827,7 @@
   "kc_verdict_baseline_failed": "Originalwert konnte nicht gesichert werden; nichts geschrieben",
   "kc_verdict_baseline_invalid": "gesicherter Originalwert ist ungültig",
   "kc_verdict_state_cleanup_failed": "wiederhergestellt; Statusdatei nicht entfernt",
+  "kc_verdict_covered_by_timer_migration": "durch die allgemeine Timer-Migration abgedeckt; kein separates Schreiben",
   "kc_verdict_invalid_request": "ungültige Anfrage",
   "kc_live": "Kernel: {v}",
   "t_reboot_confirm": "Nochmal tippen",
@@ -2450,7 +2451,7 @@
   "dev_zygisk_link_off_detail": "Observer ist für neue Prozesse deaktiviert.",
   "dev_zygisk_link_unknown_detail": "Unzureichende Daten; Zygisk-Unterstützung ist damit nicht ausgeschlossen.",
   "cfg_ui_section_zygisk": "Zygisk",
-  "cfg_ui_section_zygisk_hint": "Ein Hauptschalter und der Verbindungsstatus. Modi, Funktionen und App-Auswahl befinden sich auf der Seite ZYGISK.",
+  "cfg_ui_section_zygisk_hint": "Der Hauptschalter und drei Funktionsschalter sind hier verfügbar. Funktionen lassen sich nur bei aktiver ASB-Zygisk-Verbindung ändern; Modi und App-Auswahl befinden sich auf der ZYGISK-Seite.",
   "dev_zygisk_metric_injection": "Validierte Injektion",
   "dev_zygisk_metric_processes": "{n} Live-Prozess(e)",
   "dev_zygisk_metric_channel": "Companion-Kanal",
@@ -2850,6 +2851,10 @@
   "zy_settings_open": "ZYGISK-Steuerung öffnen",
   "zy_sec_controls": "ASB-Zygisk-Steuerung",
   "zy_controls_note": "Diese Schalter verfeinern den aktuellen Modus. Abweichungen werden als Benutzerdefiniert angezeigt und nicht heimlich zurückgesetzt. Änderungen an Master, Kaltstart und Protokoll gelten für neu gestartete App-Prozesse.",
+  "zy_controls_reveal": "4 Schalter anzeigen",
+  "zy_controls_hide": "Schalter ausblenden",
+  "zy_feature_master_off": "Hauptschalter ist aus",
+  "zy_feature_master_off_why": "Aktiviere die ASB-Zygisk-Verbindung, um diese Funktion zu ändern. Ihr gespeicherter Wert bleibt erhalten.",
   "zy_control_failed": "Zygisk-Einstellung wurde nicht geändert; aktuellen Status prüfen",
   "zy_off_title": "ASB Zygisk ist aus",
   "zy_off_desc": "ASB verbindet sich in neu gestarteten App-Prozessen nicht mit Zygisk. Bereits laufende Apps behalten ihren bisherigen Zustand bis zum Neustart.",
@@ -3163,6 +3168,7 @@
   "cfg_kernel_section_controls_hint": "Registrierte Kernel-Regler und die optionale Liste exakter Wakeup-Namen stehen gemeinsam hier. Verfügbarkeit und Live-Rücklesung kommen vom laufenden Kernel; Stock stellt nur einen erfassten Baseline-Wert wieder her.",
   "cfg_kernel_section_wakeup": "Wakeup-Quellen blockieren",
   "cfg_kernel_section_wakeup_hint": "Optionale Liste exakter Namen für einen Kernel mit ASB-Wakeup-Schnittstelle. Standardmäßig leer.",
+  "kernel_state_covered_by_timer_migration": "Durch Timer-Migration verwaltet",
   "kernel_state_available": "Verfügbar",
   "kernel_state_not_exposed": "Dieser Kernel stellt keine Schnittstelle bereit",
   "kernel_state_not_readable": "Nicht lesbar",

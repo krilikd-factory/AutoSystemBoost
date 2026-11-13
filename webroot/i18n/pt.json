@@ -520,7 +520,7 @@
     },
     "kernel_hrtimer_migration": {
       "name": "Migração de temporizadores HR",
-      "desc": "Controla a migração de temporizadores de alta resolução. Auto solicita 0 apenas no perfil Bateria e restaura o valor capturado nos demais. Efeitos de latência e consumo não são garantidos."
+      "desc": "Usa /proc/sys/kernel/hrtimer_migration apenas quando o fornecedor expõe essa interface não upstream. O Linux 6.12 padrão não possui esse sysctl independente: o ASB marca a linha como coberta por Migração de temporizadores e não grava uma segunda vez. Com um nó separado real, Auto solicita 0 apenas no perfil Bateria. Os efeitos não são garantidos."
     },
     "kernel_lpm_prediction": {
       "name": "Previsão de inatividade (LPM)",
@@ -827,6 +827,7 @@
   "kc_verdict_baseline_failed": "não foi possível salvar o valor original; nada foi escrito",
   "kc_verdict_baseline_invalid": "o valor original salvo é inválido",
   "kc_verdict_state_cleanup_failed": "restaurado; arquivo de estado não removido",
+  "kc_verdict_covered_by_timer_migration": "coberto pela migração geral de temporizadores; sem gravação separada",
   "kc_verdict_invalid_request": "pedido inválido",
   "kc_live": "kernel: {v}",
   "t_reboot_confirm": "Toque novamente",
@@ -2450,7 +2451,7 @@
   "dev_zygisk_link_off_detail": "Observer está desativado para novos processos.",
   "dev_zygisk_link_unknown_detail": "Evidência insuficiente; o suporte ao Zygisk não é descartado.",
   "cfg_ui_section_zygisk": "Zygisk",
-  "cfg_ui_section_zygisk_hint": "Um interruptor principal e o estado da ligação. Modos, funcionalidades e seleção de aplicações estão na página ZYGISK.",
+  "cfg_ui_section_zygisk_hint": "O interruptor principal e os três interruptores de funcionalidades estão disponíveis aqui. As funcionalidades só podem ser alteradas com a ligação ASB Zygisk ativa; os modos e a seleção de aplicações estão na página ZYGISK.",
   "dev_zygisk_metric_injection": "Injeção validada",
   "dev_zygisk_metric_processes": "{n} processo(s) ativo(s)",
   "dev_zygisk_metric_channel": "Canal companion",
@@ -2850,6 +2851,10 @@
   "zy_settings_open": "Abrir painel de controlo do ZYGISK",
   "zy_sec_controls": "Controlos do ASB Zygisk",
   "zy_controls_note": "Estes interruptores ajustam o modo atual. Uma diferença aparece como Personalizado e nunca é revertida em segredo. Alterações de master, arranque a frio e registo aplicam-se a processos novos ou reiniciados.",
+  "zy_controls_reveal": "Mostrar 4 interruptores",
+  "zy_controls_hide": "Ocultar interruptores",
+  "zy_feature_master_off": "principal desativado",
+  "zy_feature_master_off_why": "Ative a ligação ASB Zygisk para alterar esta funcionalidade. O valor guardado é preservado.",
   "zy_control_failed": "A definição do Zygisk não foi alterada; verifique o estado atual",
   "zy_off_title": "ASB Zygisk está desativado",
   "zy_off_desc": "O ASB não se ligará ao Zygisk em novos processos de aplicações. As aplicações já em execução mantêm o estado anterior até serem reiniciadas.",
@@ -3163,6 +3168,7 @@
   "cfg_kernel_section_controls_hint": "Os controlos registados do kernel e a lista opcional de nomes exatos de ativação estão reunidos aqui. A disponibilidade e a releitura real vêm do kernel em execução; Stock restaura apenas uma baseline capturada.",
   "cfg_kernel_section_wakeup": "Bloqueio de fontes de despertar",
   "cfg_kernel_section_wakeup_hint": "Lista opcional de nomes exatos para um kernel com interface ASB. Vazia por padrão.",
+  "kernel_state_covered_by_timer_migration": "Gerenciado por Migração de temporizadores",
   "kernel_state_available": "Disponível",
   "kernel_state_not_exposed": "Este kernel não expõe a interface",
   "kernel_state_not_readable": "Não legível",

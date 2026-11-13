@@ -520,7 +520,7 @@
     },
     "kernel_hrtimer_migration": {
       "name": "HR Zamanlayıcı Taşıma",
-      "desc": "Yüksek çözünürlüklü zamanlayıcı taşımayı denetler. Auto yalnızca Pil profilinde 0 ister ve diğerlerinde kaydedilen değeri geri yükler. Gecikme ve güç etkileri garanti edilmez."
+      "desc": "/proc/sys/kernel/hrtimer_migration yolunu yalnızca satıcı bu upstream dışı arayüzü gerçekten sunarsa kullanır. Standart Linux 6.12'de bağımsız HR sysctl yoktur: ASB satırı Zamanlayıcı taşıma tarafından kapsandı olarak işaretler ve ikinci yazmayı yapmaz. Gerçek ayrı düğüm varsa Auto yalnızca Pil profilinde 0 ister. Etkiler garanti edilmez."
     },
     "kernel_lpm_prediction": {
       "name": "Boşta Kalma Tahmini (LPM)",
@@ -827,6 +827,7 @@
   "kc_verdict_baseline_failed": "orijinal değer kaydedilemedi; hiçbir şey yazılmadı",
   "kc_verdict_baseline_invalid": "kaydedilen orijinal değer geçersiz",
   "kc_verdict_state_cleanup_failed": "geri yüklendi; durum dosyası silinmedi",
+  "kc_verdict_covered_by_timer_migration": "genel Zamanlayıcı taşıma tarafından kapsanıyor; ayrı yazma yok",
   "kc_verdict_invalid_request": "geçersiz istek",
   "kc_live": "çekirdekte: {v}",
   "t_reboot_confirm": "Tekrar dokun",
@@ -2450,7 +2451,7 @@
   "dev_zygisk_link_off_detail": "Observer yeni işlemler için kapalı.",
   "dev_zygisk_link_unknown_detail": "Yetersiz kanıt; Zygisk desteği dışlanmıyor.",
   "cfg_ui_section_zygisk": "Zygisk",
-  "cfg_ui_section_zygisk_hint": "Tek ana anahtar ve bağlantı durumu. Modlar, özellikler ve uygulama seçimi ZYGISK sayfasındadır.",
+  "cfg_ui_section_zygisk_hint": "Ana anahtar ve üç özellik anahtarı burada kullanılabilir. Özellikler yalnızca ASB Zygisk bağlantısı açıkken değiştirilebilir; modlar ve uygulama seçimi ZYGISK sayfasındadır.",
   "dev_zygisk_metric_injection": "Doğrulanmış enjeksiyon",
   "dev_zygisk_metric_processes": "{n} canlı işlem",
   "dev_zygisk_metric_channel": "Companion kanalı",
@@ -2850,6 +2851,10 @@
   "zy_settings_open": "ZYGISK kontrol panelini aç",
   "zy_sec_controls": "ASB Zygisk kontrolleri",
   "zy_controls_note": "Bu anahtarlar geçerli modu hassas ayarlar. Farklılık Özel olarak gösterilir ve asla gizlice geri alınmaz. Master, soğuk başlatma ve kayıt değişiklikleri yeni ya da yeniden başlatılan uygulama süreçlerini etkiler.",
+  "zy_controls_reveal": "4 anahtarı göster",
+  "zy_controls_hide": "Anahtarları gizle",
+  "zy_feature_master_off": "ana anahtar kapalı",
+  "zy_feature_master_off_why": "Bu özelliği değiştirmek için ASB Zygisk bağlantısını etkinleştirin. Kayıtlı değeri korunur.",
   "zy_control_failed": "Zygisk ayarı değiştirilmedi; geçerli durumu kontrol edin",
   "zy_off_title": "ASB Zygisk kapalı",
   "zy_off_desc": "ASB, yeni başlatılan uygulama süreçlerinde Zygisk’e bağlanmayacak. Zaten çalışan uygulamalar yeniden başlatılana kadar önceki durumlarını korur.",
@@ -3163,6 +3168,7 @@
   "cfg_kernel_section_controls_hint": "Kayıtlı kernel denetimleri ve isteğe bağlı tam ad uyandırma listesi burada birliktedir. Kullanılabilirlik ve canlı geri okuma çalışan kernelden gelir; Stock yalnızca kaydedilmiş başlangıç değerini geri yükler.",
   "cfg_kernel_section_wakeup": "Uyandırma kaynağı engelleyici",
   "cfg_kernel_section_wakeup_hint": "ASB uyandırma arayüzü olan çekirdekler için isteğe bağlı tam ad listesi. Varsayılan olarak boş.",
+  "kernel_state_covered_by_timer_migration": "Zamanlayıcı taşıma tarafından yönetiliyor",
   "kernel_state_available": "Kullanılabilir",
   "kernel_state_not_exposed": "Bu çekirdek arayüzü sunmuyor",
   "kernel_state_not_readable": "Okunamıyor",

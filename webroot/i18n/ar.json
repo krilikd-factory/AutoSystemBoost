@@ -550,7 +550,7 @@
     },
     "kernel_hrtimer_migration": {
       "name": "ترحيل مؤقتات HR",
-      "desc": "يتحكم في ترحيل المؤقتات عالية الدقة. يطلب Auto القيمة 0 في ملف البطارية فقط ويستعيد القيمة المحفوظة في بقية الملفات. لا تُضمن تأثيرات زمن الاستجابة أو الطاقة."
+      "desc": "يستخدم /proc/sys/kernel/hrtimer_migration فقط عندما يوفر المورّد هذه الواجهة غير القياسية فعلاً. لا يحتوي Linux 6.12 القياسي على sysctl مستقل لمؤقتات HR: يضع ASB عندها علامة «تغطيه إدارة ترحيل المؤقتات» ولا يكتب مرة ثانية. مع عقدة منفصلة حقيقية يطلب Auto القيمة 0 في ملف البطارية فقط. لا تُضمن التأثيرات."
     },
     "kernel_lpm_prediction": {
       "name": "توقع الخمول (LPM)",
@@ -827,6 +827,7 @@
   "kc_verdict_baseline_failed": "تعذّر حفظ القيمة الأصلية؛ لم يُكتب شيء",
   "kc_verdict_baseline_invalid": "القيمة الأصلية المحفوظة غير صالحة",
   "kc_verdict_state_cleanup_failed": "تمت الاستعادة؛ لم يُحذف ملف الحالة",
+  "kc_verdict_covered_by_timer_migration": "تغطيه إدارة ترحيل المؤقتات العامة؛ لا كتابة منفصلة",
   "kc_verdict_invalid_request": "طلب غير صالح",
   "kc_live": "في النواة: {v}",
   "t_reboot_confirm": "اضغط مرة أخرى",
@@ -2450,7 +2451,7 @@
   "dev_zygisk_link_off_detail": "Observer معطّل للعمليات الجديدة.",
   "dev_zygisk_link_unknown_detail": "الدليل غير كافٍ؛ ولا ينفي ذلك دعم Zygisk.",
   "cfg_ui_section_zygisk": "Zygisk",
-  "cfg_ui_section_zygisk_hint": "مفتاح رئيسي واحد وحالة الاتصال. توجد الأوضاع والميزات واختيار التطبيقات في صفحة ZYGISK.",
+  "cfg_ui_section_zygisk_hint": "يتوفر هنا المفتاح الرئيسي ومفاتيح الوظائف الثلاثة. لا يمكن تغيير الوظائف إلا عند تفعيل اتصال ASB Zygisk؛ وتوجد الأوضاع واختيار التطبيقات في صفحة ZYGISK.",
   "dev_zygisk_metric_injection": "حقن تم التحقق منه",
   "dev_zygisk_metric_processes": "{n} عملية حية",
   "dev_zygisk_metric_channel": "قناة companion",
@@ -2850,6 +2851,10 @@
   "zy_settings_open": "فتح لوحة تحكم ZYGISK",
   "zy_sec_controls": "عناصر تحكم ASB Zygisk",
   "zy_controls_note": "تضبط هذه المفاتيح الوضع الحالي بدقة. يظهر أي اختلاف باسم «مخصص» ولا يتم التراجع عنه سرًا. تؤثر تغييرات المفتاح الرئيسي والبدء البارد والسجل في عمليات التطبيقات الجديدة أو المعاد تشغيلها.",
+  "zy_controls_reveal": "إظهار المفاتيح الأربعة",
+  "zy_controls_hide": "إخفاء المفاتيح",
+  "zy_feature_master_off": "المفتاح الرئيسي متوقف",
+  "zy_feature_master_off_why": "فعّل اتصال ASB Zygisk لتغيير هذه الوظيفة. سيبقى معناها المحفوظ دون تغيير.",
   "zy_control_failed": "لم يتغير إعداد Zygisk؛ تحقق من الحالة الحالية",
   "zy_off_title": "ASB Zygisk متوقف",
   "zy_off_desc": "لن يرتبط ASB بـ Zygisk في عمليات التطبيقات الجديدة. تحتفظ التطبيقات العاملة بالفعل بحالتها السابقة حتى إعادة تشغيلها.",
@@ -3163,6 +3168,7 @@
   "cfg_kernel_section_controls_hint": "تجتمع عناصر تحكم النواة المسجلة وقائمة أسماء الاستيقاظ الدقيقة الاختيارية هنا. تأتي الإتاحة والقراءة الحية من النواة العاملة؛ ولا يستعيد Stock إلا القيمة الأساسية المحفوظة.",
   "cfg_kernel_section_wakeup": "حاجب مصادر الاستيقاظ",
   "cfg_kernel_section_wakeup_hint": "قائمة اختيارية بالأسماء الدقيقة لنواة تتوفر فيها واجهة ASB للاستيقاظ. فارغة افتراضياً.",
+  "kernel_state_covered_by_timer_migration": "تغطيه إدارة ترحيل المؤقتات",
   "kernel_state_available": "متاح",
   "kernel_state_not_exposed": "هذه النواة لا توفر الواجهة",
   "kernel_state_not_readable": "غير قابل للقراءة",

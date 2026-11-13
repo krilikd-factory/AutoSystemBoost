@@ -117,6 +117,7 @@
   "kc_verdict_baseline_failed": "valeur d’origine non sauvegardée ; rien n’a été écrit",
   "kc_verdict_baseline_invalid": "valeur d’origine sauvegardée invalide",
   "kc_verdict_state_cleanup_failed": "rétabli ; fichier d’état non supprimé",
+  "kc_verdict_covered_by_timer_migration": "couvert par la migration générale des minuteurs ; aucune écriture séparée",
   "kc_verdict_invalid_request": "requête invalide",
   "kc_live": "noyau : {v}",
   "t_reboot_confirm": "Appuyez à nouveau",
@@ -628,7 +629,7 @@
     },
     "kernel_hrtimer_migration": {
       "name": "Migration des minuteurs HR",
-      "desc": "Contrôle la migration des minuteurs haute résolution. Auto demande 0 uniquement en profil Batterie et restaure la valeur capturée ailleurs. Les effets sur latence et consommation ne sont pas garantis."
+      "desc": "Utilise /proc/sys/kernel/hrtimer_migration uniquement si le fournisseur expose réellement cette interface non upstream. Linux 6.12 standard ne possède pas ce sysctl indépendant : ASB indique alors que la migration générale des minuteurs couvre ce réglage et n’écrit pas une seconde fois. Avec un vrai nœud séparé, Auto demande 0 uniquement en profil Batterie. Les effets ne sont pas garantis."
     },
     "kernel_lpm_prediction": {
       "name": "Prédiction d’inactivité (LPM)",
@@ -2450,7 +2451,7 @@
   "dev_zygisk_link_off_detail": "Observer est désactivé pour les nouveaux processus.",
   "dev_zygisk_link_unknown_detail": "Preuves insuffisantes ; la prise en charge de Zygisk n’est pas exclue.",
   "cfg_ui_section_zygisk": "Zygisk",
-  "cfg_ui_section_zygisk_hint": "Un interrupteur principal et l’état de la connexion. Les modes, fonctions et la sélection des applications se trouvent sur la page ZYGISK.",
+  "cfg_ui_section_zygisk_hint": "Le commutateur principal et les trois commutateurs de fonctions sont disponibles ici. Les fonctions ne sont modifiables que lorsque la connexion ASB Zygisk est activée ; les modes et la sélection des applications se trouvent sur la page ZYGISK.",
   "dev_zygisk_metric_injection": "Injection validée",
   "dev_zygisk_metric_processes": "{n} processus actif(s)",
   "dev_zygisk_metric_channel": "Canal companion",
@@ -2850,6 +2851,10 @@
   "zy_settings_open": "Ouvrir le panneau de contrôle ZYGISK",
   "zy_sec_controls": "Contrôles ASB Zygisk",
   "zy_controls_note": "Ces interrupteurs affinent le mode actuel. Tout écart est affiché comme Personnalisé et n’est jamais annulé secrètement. Les changements de master, démarrage à froid et journal concernent les processus nouveaux ou redémarrés.",
+  "zy_controls_reveal": "Afficher les 4 commutateurs",
+  "zy_controls_hide": "Masquer les commutateurs",
+  "zy_feature_master_off": "principal désactivé",
+  "zy_feature_master_off_why": "Activez la connexion ASB Zygisk pour modifier cette fonction. Sa valeur enregistrée est conservée.",
   "zy_control_failed": "Le réglage Zygisk n’a pas changé ; vérifiez l’état actuel",
   "zy_off_title": "ASB Zygisk est désactivé",
   "zy_off_desc": "ASB ne s’attachera pas à Zygisk dans les nouveaux processus d’application. Les applications déjà actives conservent leur état précédent jusqu’au redémarrage.",
@@ -3163,6 +3168,7 @@
   "cfg_kernel_section_controls_hint": "Les contrôles noyau enregistrés et la liste facultative de noms exacts de réveil sont réunis ici. La disponibilité et la relecture réelle viennent du noyau actif ; Stock restaure uniquement une référence capturée.",
   "cfg_kernel_section_wakeup": "Blocage des sources de réveil",
   "cfg_kernel_section_wakeup_hint": "Liste facultative de noms exacts pour un noyau doté de l’interface ASB. Vide par défaut.",
+  "kernel_state_covered_by_timer_migration": "Géré par Migration des minuteurs",
   "kernel_state_available": "Disponible",
   "kernel_state_not_exposed": "Ce noyau n’expose pas l’interface",
   "kernel_state_not_readable": "Lecture impossible",

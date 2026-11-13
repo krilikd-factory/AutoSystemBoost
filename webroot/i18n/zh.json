@@ -550,7 +550,7 @@
     },
     "kernel_hrtimer_migration": {
       "name": "高分辨率定时器迁移",
-      "desc": "控制高分辨率定时器迁移。自动模式仅在省电配置中请求 0，其他配置恢复捕获的原值。对延迟和功耗的影响不作保证。"
+      "desc": "仅在供应商确实提供非上游 /proc/sys/kernel/hrtimer_migration 接口时使用它。标准 Linux 6.12 没有独立的 HR 定时器 sysctl：ASB 会将此行标记为由“定时器迁移”统一管理，不会重复写入。若存在真实独立节点，自动模式仅在省电配置中请求 0，其他配置恢复捕获值。延迟和功耗效果不作保证。"
     },
     "kernel_lpm_prediction": {
       "name": "空闲状态预测（LPM）",
@@ -827,6 +827,7 @@
   "kc_verdict_baseline_failed": "无法保存原始值；未写入任何内容",
   "kc_verdict_baseline_invalid": "保存的原始值无效",
   "kc_verdict_state_cleanup_failed": "已恢复；状态文件未删除",
+  "kc_verdict_covered_by_timer_migration": "已由通用定时器迁移控制覆盖；不单独写入",
   "kc_verdict_invalid_request": "无效请求",
   "kc_live": "内核值：{v}",
   "t_reboot_confirm": "再次点击",
@@ -2450,7 +2451,7 @@
   "dev_zygisk_link_off_detail": "Observer 已对新进程停用。",
   "dev_zygisk_link_unknown_detail": "证据不足；并不排除支持 Zygisk。",
   "cfg_ui_section_zygisk": "Zygisk",
-  "cfg_ui_section_zygisk_hint": "仅保留一个总开关和连接状态。模式、功能与应用选择均位于 ZYGISK 页面。",
+  "cfg_ui_section_zygisk_hint": "此处提供总开关和三个功能开关。只有启用 ASB Zygisk 连接后才能更改功能；模式和应用选择位于 ZYGISK 页面。",
   "dev_zygisk_metric_injection": "已验证注入",
   "dev_zygisk_metric_processes": "{n} 个活跃进程",
   "dev_zygisk_metric_channel": "Companion 通道",
@@ -2850,6 +2851,10 @@
   "zy_settings_open": "打开 ZYGISK 控制面板",
   "zy_sec_controls": "ASB Zygisk 控制",
   "zy_controls_note": "这些开关用于微调当前模式。与预设不一致时会显示为“自定义”，且绝不会暗中回滚。总开关、冷启动和日志的更改适用于新启动或重新启动的应用进程。",
+  "zy_controls_reveal": "显示 4 个开关",
+  "zy_controls_hide": "隐藏开关",
+  "zy_feature_master_off": "总开关已关闭",
+  "zy_feature_master_off_why": "请启用 ASB Zygisk 连接以更改此功能。已保存的值会保留。",
   "zy_control_failed": "Zygisk 设置未更改；请检查当前状态",
   "zy_off_title": "ASB Zygisk 已关闭",
   "zy_off_desc": "ASB 不会在新启动的应用进程中接入 Zygisk。已运行的应用会保留先前状态，直到重新启动。",
@@ -3163,6 +3168,7 @@
   "cfg_kernel_section_controls_hint": "已注册的内核控件和可选的精确唤醒名称列表集中在此处。可用性和实时回读来自正在运行的内核；“Stock”仅恢复已捕获的基线值。",
   "cfg_kernel_section_wakeup": "唤醒源阻止器",
   "cfg_kernel_section_wakeup_hint": "适用于具有 ASB 唤醒接口的内核，使用可选的精确名称列表。默认为空。",
+  "kernel_state_covered_by_timer_migration": "由定时器迁移统一管理",
   "kernel_state_available": "可用",
   "kernel_state_not_exposed": "此内核未提供接口",
   "kernel_state_not_readable": "无法读取",

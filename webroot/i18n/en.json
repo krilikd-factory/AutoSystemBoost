@@ -562,7 +562,7 @@
     },
     "kernel_timer_migration": {
       "name": "Timer Migration",
-      "desc": "Controls whether the kernel may migrate timers between CPUs. On can move timers from idle CPUs to already active ones and avoid some wake-ups; Off keeps timers in place, which can behave differently under load. Depending on CPU idle behavior, either mode may help or hurt latency and power use. Off preserves the previous ASB request; Stock and uninstall restore the captured value after verified readback."
+      "desc": "Controls whether the kernel may migrate timers, including high-resolution timers, between CPUs. On can move timers from idle CPUs to already active ones and avoid some wake-ups; Off keeps timers in place, which can behave differently under load. Depending on CPU idle behavior, either mode may help or hurt latency and power use. Off preserves the previous ASB request; Stock and uninstall restore the captured value after verified readback."
     },
     "kernel_sched_nr_migrate": {
       "name": "Scheduler Migration Batch",
@@ -588,7 +588,7 @@
     },
     "kernel_hrtimer_migration": {
       "name": "High-resolution Timer Migration",
-      "desc": "Controls high-resolution timer migration. Auto requests 0 only on Battery and restores the captured value on other profiles; Off and On override the profile. Latency and power effects depend on the workload. Stock and uninstall restore only an ASB-owned baseline after matching readback."
+      "desc": "Uses a separate /proc/sys/kernel/hrtimer_migration only when a vendor actually exposes that non-upstream interface. Standard Linux 6.12 has no such independent sysctl: ASB then marks this row as covered by Timer migration and performs no second write. On a kernel with a real separate node, Auto requests 0 only on Battery and other profiles restore the captured value. Neither latency nor power benefit is guaranteed."
     },
     "kernel_lpm_prediction": {
       "name": "Idle Prediction (LPM)",
@@ -692,6 +692,7 @@
   "kc_verdict_baseline_failed": "original value could not be saved; nothing written",
   "kc_verdict_baseline_invalid": "saved original value is invalid",
   "kc_verdict_state_cleanup_failed": "restored; state file not removed",
+  "kc_verdict_covered_by_timer_migration": "covered by the general Timer migration control; no separate write",
   "kc_verdict_invalid_request": "invalid request",
   "kc_live": "kernel: {v}",
   "t_cfg_live": " · applied",
@@ -2309,7 +2310,7 @@
   "dev_zygisk_link_off_detail": "Observer is off for new processes.",
   "dev_zygisk_link_unknown_detail": "Insufficient evidence; Zygisk support is not ruled out.",
   "cfg_ui_section_zygisk": "Zygisk",
-  "cfg_ui_section_zygisk_hint": "One master switch and connection status. Modes, features and app selection live on the ZYGISK page.",
+  "cfg_ui_section_zygisk_hint": "The master and three feature switches are available here. Features can be changed only while ASB Zygisk is connected; modes and app selection live on the ZYGISK page.",
   "dev_zygisk_metric_injection": "Validated injection",
   "dev_zygisk_metric_processes": "{n} live process(es)",
   "dev_zygisk_metric_channel": "Companion channel",
@@ -2709,6 +2710,10 @@
   "zy_settings_open": "Open ZYGISK control panel",
   "zy_sec_controls": "ASB Zygisk controls",
   "zy_controls_note": "These switches fine-tune the current mode. A mismatch is shown as Custom and is never silently rolled back. Master, cold-start and ledger changes affect newly started or restarted app processes.",
+  "zy_controls_reveal": "Show 4 switches",
+  "zy_controls_hide": "Hide switches",
+  "zy_feature_master_off": "master is off",
+  "zy_feature_master_off_why": "Enable ASB Zygisk connection to change this feature. Its saved value is preserved.",
   "zy_control_failed": "Zygisk setting was not changed; check the current state",
   "zy_off_title": "ASB Zygisk is off",
   "zy_off_desc": "ASB will not attach to Zygisk in newly started app processes. Apps that are already running keep their previous state until they are restarted.",
@@ -3022,6 +3027,7 @@
   "cfg_kernel_section_controls_hint": "Registered kernel controls and the optional exact-name wakeup list are together here. Availability and live readback come from the running kernel; Stock restores only a captured baseline.",
   "cfg_kernel_section_wakeup": "Wakeup-source blocker",
   "cfg_kernel_section_wakeup_hint": "An optional exact-name list for a kernel with the ASB wakeup interface. Empty by default.",
+  "kernel_state_covered_by_timer_migration": "Managed by Timer migration",
   "kernel_state_available": "Available",
   "kernel_state_not_exposed": "Not exposed by this kernel",
   "kernel_state_not_readable": "Not readable",
