@@ -2482,15 +2482,9 @@ html[data-asb-theme="light"] .cfg-zygisk-card { background:#fff; }
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.035), 0 1px 4px rgba(0,0,0,0.22);
   transition: border-color 0.2s ease, background 0.2s ease;
 }
-/*
- * ── Category hub ─────────────────────────────────────────────────────────── Four tiles, one
- * row of two on any phone width.
- */
+/* ── Category hub: nine task-oriented categories in one symmetric 3 × 3 grid. */
 .cfg-hub {
   display: grid;
-  /*
-   * Six categories in the footprint four used to take.
-   */
   grid-template-columns: repeat(3, 1fr);
   gap: 9px;
   margin-top: 2px;
@@ -2619,6 +2613,16 @@ html[data-asb-theme="light"] .cfg-zygisk-card { background:#fff; }
   justify-content: flex-end;
 }
 .cfg-sub-seg-row.disabled { opacity: 0.45; pointer-events: none; }
+/* A missing/read-only kernel ABI must look and behave unavailable, not merely carry
+ * a warning badge above a control that still appears actionable. The description remains
+ * expandable on the row; only the value editor is disabled. */
+.kernel-unavailable .cfg-seg,
+.kernel-unavailable .cfg-sel-wrap,
+.kernel-unavailable .cfg-switch { opacity: 0.42; pointer-events: none; }
+.kernel-unavailable .cfg-seg button,
+.kernel-unavailable .cfg-sel-btn,
+.kernel-unavailable .cfg-sel-pop button { cursor: not-allowed; }
+.kernel-unavailable .cfg-sel-pop { display: none; }
 .cfg-row-top {
   display: flex;
   align-items: center;
@@ -5175,7 +5179,7 @@ html:root[data-asb-glass="1"][data-asb-theme="light"] .pbtn.on .pchk {
 }
 html:root[data-asb-glass="1"][data-asb-theme="light"] .pbtn.on .pchk svg { fill:#fff; }
 /* The restart row is now a small toolbar menu. Its freed height is assigned by
- * asbFitPagesNow(); these slightly softer tiles use that space without changing 3 × 2. */
+ * asbFitPagesNow(); these slightly softer tiles use that space in the complete 3 × 3 hub. */
 .cfg-tile { border-radius:20px; gap:7px; padding:14px 9px 12px; }
 .cfg-tile-ico { width:54px; height:54px; border-radius:18px; }
 .cfg-tile-ico .tech-icon { width:30px; height:30px; }
@@ -9293,7 +9297,7 @@ async function cfgLoadNow() {
 const CFG_CAT = {
   wifi_powersave:'net',
   net_wifi_leave:'net',
-  /* battery, not memory: CFG_GROUPS renders seven groups and memory is not one of them,
+  /* battery, not memory: CFG_GROUPS renders nine groups and memory is not one of them,
      so the card existed and was never drawn. BG_TRIM and gms_trim - the other RAM tweaks -
      live under battery for the same reason. */
   mglru_hold: 'battery', mglru_mode:'battery',
@@ -9342,15 +9346,23 @@ const CFG_GROUP_DESC = {
   iface: 'Animations, blur',
   net: 'Wi-Fi, LTE, queues',
   battery: 'Smart, Doze, heat, RAM',
-  ui: 'Kernel, services, LTPO, haptics'
+  kernel: 'Scheduler, MGLRU, wakeups',
+  feel: 'LTPO, vibration, touch',
+  zygisk: 'Master switch and status',
+  ui: 'Services, processes, diagnostics'
 };
+/* Nine task-oriented categories make a complete 3 × 3 hub. Advanced facilities no longer
+ * compete inside System, and Monitor gets no extra shortcut or duplicate control owner. */
 const CFG_GROUPS = [
-  { id:'audio',   icon:'headphones', name:'Audio',     ru:'\u0410\u0443\u0434\u0438\u043E' },
-  { id:'camera',  icon:'camera',     name:'Camera',    ru:'\u041A\u0430\u043C\u0435\u0440\u0430' },
-  { id:'iface',   icon:'panel',      name:'Interface', ru:'\u0418\u043D\u0442\u0435\u0440\u0444\u0435\u0439\u0441' },
-  { id:'net',     icon:'network',    name:'Network',   ru:'\u0421\u0435\u0442\u044C' },
-  { id:'battery', icon:'battery_cell',    name:'Battery',   ru:'\u0411\u0430\u0442\u0430\u0440\u0435\u044F' },
-  { id:'ui',      icon:'switches',   name:'System',    ru:'\u0421\u0438\u0441\u0442\u0435\u043C\u0430' }
+  { id:'audio',   icon:'headphones',     name:'Audio',             ru:'\u0410\u0443\u0434\u0438\u043E' },
+  { id:'camera',  icon:'camera',         name:'Camera',            ru:'\u041A\u0430\u043C\u0435\u0440\u0430' },
+  { id:'iface',   icon:'panel',          name:'Interface',         ru:'\u0418\u043D\u0442\u0435\u0440\u0444\u0435\u0439\u0441' },
+  { id:'net',     icon:'network',        name:'Network',           ru:'\u0421\u0435\u0442\u044C' },
+  { id:'battery', icon:'battery_cell',   name:'Battery',           ru:'\u0411\u0430\u0442\u0430\u0440\u0435\u044F' },
+  { id:'kernel',  icon:'kernel',         name:'Kernel',            ru:'\u042F\u0434\u0440\u043E' },
+  { id:'feel',    icon:'haptic_touch',   name:'Display & Haptics', ru:'\u042D\u043A\u0440\u0430\u043D \u0438 \u043E\u0442\u043A\u043B\u0438\u043A' },
+  { id:'zygisk',  icon:'zygisk_observer',name:'Zygisk',            ru:'Zygisk' },
+  { id:'ui',      icon:'switches',       name:'System',            ru:'\u0421\u0438\u0441\u0442\u0435\u043C\u0430' }
 ];
 /* dev17: the Infirmary is a screen of its own, reached from the pharmacy button beside Reset
  * rather than a seventh hub tile - it holds one-tap repairs, not everyday tunables. It is a
@@ -9369,17 +9381,18 @@ const CFG_GROUP_OF = {
   /* Was 'wifileave' - an icon name, not a group. The card matched no CFG_GROUPS entry,
    * so it never rendered on the hub or in any category; search was the only way in. */
   net_wifi_leave:'net',
-  /* battery, not memory: CFG_GROUPS renders six groups and memory is not one of them,
+  /* battery, not memory: CFG_GROUPS renders nine groups and memory is not one of them,
      so the card existed in CFG_ITEMS and was never drawn. BG_TRIM_LEVEL and gms_trim -
      the other RAM tweaks - sit under battery for exactly this reason. */
   mglru_hold:'battery',
-  /* Kernel management is a System subsection, not a duplicate diagnostics hub. */
-  mglru_mode:'ui', kernel_timer_migration:'ui', kernel_sched_nr_migrate:'ui', kernel_sched_stats:'ui',
-  kernel_sched_autogroup:'ui', kernel_sched_child_runs_first:'ui',
+  /* Each advanced owner has one hub destination; diagnostics remains a separate read-only page. */
+  mglru_mode:'kernel', kernel_timer_migration:'kernel', kernel_sched_nr_migrate:'kernel', kernel_sched_stats:'kernel',
+  kernel_sched_autogroup:'kernel', kernel_sched_child_runs_first:'kernel',
   night_modem_idle:'net', net_screen_off_lte:'net', net_lte_light:'net', smart_media_guard:'battery',
-  smart_lab:'battery', smart_lab_mem:'battery', profile_class_auto:'battery', smart_records_balanced:'battery', ltpo_peak_force:'ui',
+  smart_lab:'battery', smart_lab_mem:'battery', profile_class_auto:'battery', smart_records_balanced:'battery', ltpo_peak_force:'feel',
   net_rps:'net', net_txqueue:'net',
-  athena_service:'ui', zygisk_enabled:'ui', zygisk_hints:'ui', zygisk_launch:'ui', zygisk_ledger:'ui', ltpo_force:'ui', ltpo_video:'ui', mmfeed_off:'ui',
+  athena_service:'ui', zygisk_enabled:'zygisk', zygisk_hints:'zygisk', zygisk_launch:'zygisk', zygisk_ledger:'zygisk',
+  ltpo_force:'feel', ltpo_video:'feel', mmfeed_off:'ui',
   /* dev17: these two are repairs, not everyday tweaks - they now live on the Infirmary screen. */
   heytap_mcs:'infirmary', documentsui_fix:'infirmary',
   heavy_prime_escape:'battery', prime_escape_burst_s:'battery', prime_escape_rest_s:'battery', wakelock_fitness:'battery',
@@ -9396,7 +9409,7 @@ const CFG_GROUP_OF = {
   UX_MANAGE_OEM_TOGGLES:'ui', UX_MANAGE_TIMEOUTS:'iface', anim_speed:'iface', UX_ANIM_FORCE_RESTART:'iface',
   net_congestion:'net', net_qdisc:'net', net_route_tune:'net', net_mtu_probing:'net',
   net_congestion_wifi:'net', net_congestion_mobile:'net', net_qdisc_wifi:'net', net_qdisc_mobile:'net', wifi_country:'net', wifi_scan_throttle:'net', radio_policy_enable:'net',
-  disable_blur:'iface', ui_effects_level:'iface', haptic_strength:'ui', haptic_touch_strength:'ui'
+  disable_blur:'iface', ui_effects_level:'iface', haptic_strength:'feel', haptic_touch_strength:'feel'
 };
 function cfgGroupOf(key){ return CFG_GROUP_OF[key] || 'ui'; }
 
@@ -9461,23 +9474,29 @@ const CFG_GROUP_SECTIONS = {
       hint:'Advanced: how network work is spread across cores and buffered.',
       keys:['net_rps','net_txqueue','net_route_tune','net_mtu_probing'] }
   ],
-  ui: [
+  kernel: [
     { id:'controls', icon:'kernel', titleKey:'cfg_kernel_section_controls',
       title:'Kernel management', hintKey:'cfg_kernel_section_controls_hint',
       hint:'Registered kernel controls and the optional exact-name wakeup list live together. Availability and live readback come from the running kernel.',
-      keys:['mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first'], card:'wakeup' },
+      keys:['mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first'], card:'wakeup' }
+  ],
+  zygisk: [
     { id:'zygisk', icon:'zygisk_observer', titleKey:'cfg_ui_section_zygisk',
       title:'Zygisk', hintKey:'cfg_ui_section_zygisk_hint',
       hint:'One master switch and connection status. Modes, features and app selection live on the ZYGISK page.',
-      keys:['zygisk_enabled'] },
+      keys:['zygisk_enabled'] }
+  ],
+  feel: [
+    { id:'feel', icon:'haptic_touch', titleKey:'cfg_ui_section_feel',
+      title:'Display & Haptics', hintKey:'cfg_ui_section_feel_hint',
+      hint:'Refresh-rate behaviour and how vibration and touch feedback feel.',
+      keys:['ltpo_force','ltpo_peak_force','ltpo_video','haptic_strength','haptic_touch_strength'] }
+  ],
+  ui: [
     { id:'services', icon:'oem_switches', titleKey:'cfg_ui_section_services',
       title:'System Services', hintKey:'cfg_ui_section_services_hint',
       hint:'Vendor background services and process limits.',
       keys:['UX_MANAGE_OEM_TOGGLES','athena_service','phantom_procs','mmfeed_off'] },
-    { id:'feel', icon:'haptic_touch', titleKey:'cfg_ui_section_feel',
-      title:'Display & Haptics', hintKey:'cfg_ui_section_feel_hint',
-      hint:'Refresh-rate behaviour and how vibration and touch feedback feel.',
-      keys:['ltpo_force','ltpo_peak_force','ltpo_video','haptic_strength','haptic_touch_strength'] },
     { id:'diag', icon:'log_detail', titleKey:'cfg_ui_section_diag',
       title:'Diagnostics', hintKey:'cfg_ui_section_diag_hint',
       hint:'How much the module - and LSPosed - write to their logs.',
@@ -9961,7 +9980,7 @@ async function junkCleanupRun() {
 }
 
 function cfgRenderGroup(list, groupId) {
-  if (groupId === 'ui') kernelPanelEnsure();
+  if (groupId === 'kernel') kernelPanelEnsure();
   const items = CFG_ITEMS.filter(it => cfgGroupOf(it.key) === groupId);
   const sections = CFG_GROUP_SECTIONS[groupId];
   if (!sections) { items.forEach(it => cfgRenderRow(list, it, false)); return; }
@@ -9975,7 +9994,7 @@ function cfgRenderGroup(list, groupId) {
     cfgRenderSection(list, section, (sectionItems[0] && sectionItems[0].key) || section.id, groupId);
     navItems.push(['cfg-sec-' + groupId + '-' + section.id, T(section.titleKey, section.title), section.icon]);
     sectionItems.forEach(it => { rendered[it.key] = true; });
-    if (groupId === 'ui' && section.id === 'controls') cfgRenderKernelControlsHelp(list);
+    if (groupId === 'kernel' && section.id === 'controls') cfgRenderKernelControlsHelp(list);
     if (section.card === 'batteryfix') cfgRenderBatteryFixCard(list);
     else if (section.card === 'junkcleanup') cfgRenderJunkCleanupCard(list);
     else if (section.card === 'wakeup') {
@@ -10081,7 +10100,7 @@ function kernelWakeupParse(txt) {
 async function kernelPanelLoad(force) {
   if (_kernelPanel.loading || (_kernelPanel.loaded && !force)) return;
   _kernelPanel.loading = true;
-  if (_cfgGroup === 'ui') { try { cfgRender(); } catch (e) {} }
+  if (_cfgGroup === 'kernel') { try { cfgRender(); } catch (e) {} }
   let b = null;
   try {
     b = await runBatch([
@@ -10093,7 +10112,7 @@ async function kernelPanelLoad(force) {
   _kernelPanel.wakeup = b && b.wakeup && b.wakeup.errno === 0 ? kernelWakeupParse(b.wakeup.stdout) : null;
   _kernelPanel.loaded = true;
   _kernelPanel.loading = false;
-  if (_cfgGroup === 'ui') { try { cfgRender(); } catch (e) {} }
+  if (_cfgGroup === 'kernel') { try { cfgRender(); } catch (e) {} }
 }
 function kernelStateText(state) {
   const fallback = {
@@ -10121,14 +10140,19 @@ function kernelDecorateControlRow(row, key) {
   const a = kernelControlAvailability(key);
   const badge = row.querySelector('.cfg-status');
   if (badge) {
-    badge.textContent = kernelStateText(a.state) + (a.live && a.state !== 'not_readable' ? ' · ' + String(a.live).slice(0, 16) : '');
+    const showLive = a.live && a.live !== 'unknown' && a.state !== 'not_readable';
+    badge.textContent = kernelStateText(a.state) + (showLive ? ' · ' + String(a.live).slice(0, 16) : '');
     badge.className = 'cfg-status ' + (a.state === 'available' ? 'on' : 'na');
-    badge.title = a.live ? T('kc_live', 'kernel: {v}').replace('{v}', a.live) : kernelStateText(a.state);
+    badge.title = showLive ? T('kc_live', 'kernel: {v}').replace('{v}', a.live) : kernelStateText(a.state);
   }
   if (['not_exposed','not_readable','read_only','disabled'].indexOf(a.state) >= 0) {
     row.classList.add('kernel-unavailable');
-    row.querySelectorAll('.cfg-seg button,.cfg-sel-btn').forEach(function (b) { b.disabled = true; b.setAttribute('aria-disabled','true'); });
-    const sw = row.querySelector('.cfg-switch'); if (sw) sw.disabled = true;
+    row.querySelectorAll('.cfg-seg button,.cfg-sel-btn,.cfg-sel-pop button').forEach(function (b) {
+      b.disabled = true; b.setAttribute('aria-disabled','true');
+    });
+    const pop = row.querySelector('.cfg-sel-pop'); if (pop) pop.hidden = true;
+    const sw = row.querySelector('.cfg-switch');
+    if (sw) { sw.disabled = true; sw.setAttribute('aria-disabled','true'); }
   }
 }
 function kernelStateBadge(state) {
@@ -10964,7 +10988,8 @@ function cfgRenderHub(list) {
       if (cfgIsActive(it, cur)) on++;
     });
     const tile = document.createElement('button');
-    tile.className = 'cfg-tile cat-' + (g.id === 'ui' ? 'ux' : g.id);
+    const tileCat = g.id === 'ui' ? 'ux' : (g.id === 'zygisk' ? 'system' : (g.id === 'feel' ? 'iface' : g.id));
+    tile.className = 'cfg-tile cat-' + tileCat;
     tile.onclick = () => { uiSound('nav'); cfgShowGroup(g.id); };
 
     const ic = document.createElement('div');
@@ -11950,6 +11975,16 @@ function cfgRuleNotice(key, fixed, notes) {
 }
 
 async function cfgSet(key, val, ctl) {
+  /* Disable the editor at the mutation boundary too. Otherwise a synthetic click or a
+   * stale event could save an unsupported kernel value before the owner rejected its apply. */
+  if (typeof ASB_KERNEL_STATUS_KEYS !== 'undefined' && ASB_KERNEL_STATUS_KEYS.indexOf(key) >= 0) {
+    const ka = kernelControlAvailability(key);
+    if (['not_exposed','not_readable','read_only','disabled'].indexOf(ka.state) >= 0) {
+      uiSound('error');
+      toast(Tcfg(key, 'name', key) + ' · ' + kernelStateText(ka.state), 'err');
+      return;
+    }
+  }
   /* Conflicts are settled before the write so the writer commits one coherent set. */
   const _fix = cfgConflictResolve(key, val, cfgCurVal);
   const _notes = cfgRequireNotes(key, val, cfgCurVal);
@@ -16632,7 +16667,7 @@ async function zygiskControlSet(key, val, ctl) {
 function zygiskOpenSettings() {
   closeZygiskPage();
   if (typeof asbNavGo === 'function') asbNavGo('config'); else if (!_cfgOpen) openConfigPage();
-  _cfgSearch = ''; cfgShowGroup('ui'); requestAnimationFrame(asbFitPages);
+  _cfgSearch = ''; cfgShowGroup('zygisk'); requestAnimationFrame(asbFitPages);
 }
 function zygiskOffCard() {
   const card = logReportSec(T('zy_off_title', 'ASB Zygisk is off'), 'zygisk_master');
@@ -20654,16 +20689,14 @@ function asbFitPagesNow() {
     const need = Math.max(56, Math.round(vh * 0.2));
 
     /* fix205: the tiers compress the shared header, the profile cards, the config tiles
-     * and the monitor cells - nothing else. On the pages whose content is a long list BY
-     * DESIGN (the log report, an open tweak category) that content is not tier-styled at
-     * all: a tier there buys zero room and only squashes the header, while the list keeps
-     * scrolling regardless (the owner saw the report's header squeezed flat on exactly
-     * such a page). Those are the scroll surfaces - the chrome stays exactly as drawn,
-     * and a tier carried over from another page comes off. */
+     * and the monitor cells - nothing else. Long lists and the complete 3 × 3 Settings hub
+     * are scroll surfaces: compacting them buys little or no room but visibly squeezes the
+     * shared header. Config therefore always keeps tier 0; its own tile fitter still shares
+     * available height, and a short screen scrolls instead of changing the chrome. */
     const fittable = !document.body.classList.contains('device-active') &&
       !document.body.classList.contains('zygisk-active') &&
       !document.body.classList.contains('report-active') &&
-      !(document.body.classList.contains('config-active') && _cfgGroup);
+      !document.body.classList.contains('config-active');
     if (!fittable) { tier = 0; applyTier(0); }
 
     /* Measure the page as it asks to be, not as the last pass left it: with the fitted
