@@ -4,6 +4,41 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev34 - real Linux 6.12 scheduler nodes and explicit trade-offs
+
+Input: the dev33 source, device diagnostics, WebUI screenshots and the successful KRILIKD v13
+build logs. Three controls were available on the device; two unnecessary `not exposed` verdicts
+were caused by userspace bindings, not by a failed kernel build.
+
+- **Correct fixed interfaces.** `kernel_sched_nr_migrate` now uses
+  `/sys/kernel/debug/sched/nr_migrate`, where Linux 6.12 exposes the scheduler migration batch,
+  and `kernel_sched_stats` uses `/proc/sys/kernel/sched_schedstats`. Device Diagnostics and the
+  standalone diagnostic report use the same stats node. Debugfs mount, SELinux and access checks
+  still happen on the device: a corrected path is not a promise of writability.
+- **One stats owner, honest Stock.** Legacy unconditional `sysctlw kernel.sched_schedstats 0`
+  calls in boot and reinforce paths were removed. They contradicted the visible `stock` default.
+  Boot, profile and reinforce now use the registered helper; uninstall has no duplicate legacy
+  writer and retains the helper's exact baseline/readback restore. Stock without a baseline does
+  not write, while Off captures and restores the original 0/1.
+- **Upgrade behavior is stated plainly.** The existing `kernel_sched_nr_migrate=4` request is
+  preserved. After the path correction it can become a real write where debugfs is available;
+  an earlier `not exposed` verdict did not mean it had been applied. `kernel_sched_stats=stock`
+  no longer implies the old hidden automatic Off. Users who want stats disabled must select Off.
+- **Explanations describe mechanisms, not invented gains.** All thirteen locales and the built-in
+  English fallback explain memory reclaim, timer placement, balancing batches, scheduler debug
+  accounting, session-group fairness and post-fork ordering. Each card distinguishes possible
+  responsiveness/performance effects from power effects and names the opposing trade-off. No
+  battery or performance percentage is claimed.
+- **Autogroup remains evidence-led.** `/proc/sys/kernel/sched_autogroup_enabled` is unchanged. If
+  it is not exposed, ASB reports that fact; the kernel's autogroup config is not forced on merely
+  to make the sixth card operational.
+
+Regression pins both corrected default paths, rejects the obsolete proc names in runtime,
+diagnostics and restore code, verifies the existing `4` request can apply after upgrade, checks
+that Stock is inert without ownership, and retains stable baseline, numeric readback, mismatch,
+access-failure and exact-restore coverage. Host fixtures and browser checks remain separate from
+physical debugfs/SELinux, scheduler, power and ColorOS WebView validation.
+
 ## V66 dev33 - kernel management inside System
 
 Input: the dev32 source and Monitor screenshots. The separate Config hub tile **Kernel** is
