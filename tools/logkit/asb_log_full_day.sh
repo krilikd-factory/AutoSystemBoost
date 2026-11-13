@@ -2009,14 +2009,22 @@ lk_emit_cap_ownership_verdict() {
   if [ "$_lc_sw" -gt 0 ]; then
     echo "  $_lc_sw sample(s) were taken in a manual profile: there the reference is the ceiling the shell wrote, so each one is a live ceiling under the profile's own cap."
   fi
-  if [ "$_lc_foreign" -gt "$_lc_own" ] && [ "$_lc_foreign" -ge 3 ]; then
-    echo "verdict: foreign cap ownership dominated this capture; ASB does not raise universal frequencies. Native vendor holddown/detente remains responsible for suppressing losing idle writes."
-  else
-    echo "verdict: no foreign-owner dominance established in this capture."
-  fi
   _lc_n=$(grep -c 'prime_by=' "$_lc_trace" 2>/dev/null)
   _lc_pv=$(grep -c 'prime_by=vendor' "$_lc_trace" 2>/dev/null)
   _lc_mv=$(grep -c 'main_by=vendor' "$_lc_trace" 2>/dev/null)
+  if [ "$_lc_foreign" -gt "$_lc_own" ] && [ "$_lc_foreign" -ge 3 ]; then
+    echo "verdict: foreign cap ownership dominated this capture; ASB does not raise universal frequencies. Native vendor holddown/detente remains responsible for suppressing losing idle writes."
+  elif [ "${_lc_n:-0}" -ge 3 ] 2>/dev/null &&
+       { [ $(( _lc_pv * 2 )) -gt "$_lc_n" ] || [ $(( _lc_mv * 2 )) -gt "$_lc_n" ]; }; then
+    # cap_owner is one whole-device writer/owner label. It can remain ASB while the live
+    # prime ceiling is below ASB's request (main_by=-/asb_trim, prime_by=vendor). In that
+    # mixed state "no foreign-owner dominance" was technically about the global label but
+    # read as "no vendor clamp anywhere". Keep the two scopes explicit; never turn this
+    # diagnostic into a reason to raise every ceiling or to fight thermal ownership.
+    echo "verdict: mixed cap ownership - a foreign ceiling leads on at least one cluster despite the whole-device owner counts. Do not read the ASB share as every cluster being ASB-owned; no universal frequency raise is justified."
+  else
+    echo "verdict: no foreign-owner dominance established in this capture."
+  fi
   if [ "${_lc_n:-0}" -ge 3 ] 2>/dev/null; then
     [ $(( _lc_pv * 2 )) -gt "$_lc_n" ] && echo "per cluster: the prime sat under a ceiling ASB did not write in $_lc_pv of $_lc_n samples - there the prime clock is the vendor's (PowerHAL or kernel thermal), not ASB's."
     if grep -q '^little=' "$LK_OUT_DIR/cluster_layout.txt" 2>/dev/null; then _lc_mn="little cores"; else _lc_mn="main cores"; fi
