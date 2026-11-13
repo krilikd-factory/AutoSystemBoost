@@ -107,12 +107,33 @@ static int asb_sqlite_load(asb_sqlite_t *s) {
             s->finalize && s->sfree) ? 0 : -1;
 }
 
+static const char g_lspd_verbose_query[] =
+    "SELECT data FROM configs WHERE module_pkg_name='lspd' AND user_id=0 "
+    "AND `group`='config' AND `key`='enable_verbose_log'";
+static const char g_lspd_modules_query[] =
+    "SELECT m.module_pkg_name, m.enabled, "
+    "(SELECT COUNT(*) FROM scope sc WHERE sc.mid = m.mid) "
+    "FROM modules m ORDER BY m.module_pkg_name";
+static const char g_lspd_scope_query[] =
+    "SELECT m.module_pkg_name, sc.app_pkg_name, sc.user_id "
+    "FROM scope sc JOIN modules m ON m.mid = sc.mid ORDER BY 1, 2";
+
+/* The first SQLite error explains a private-copy fallback. The separate last-read code
+ * distinguishes a malformed Boolean from an I/O error without erasing that original cause. */
+static int g_lspd_sqlite_rc = 0;
+static int g_lspd_last_read_rc = 0;
+static char g_lspd_copy_dir[256] = "";
+
 /* 1 on, 0 off, 2 no row (LSPosed's default: on), -1 unreadable / not a Boolean. */
 static int asb_lspd_read(asb_sqlite_t *s, sqlite3_h *db) {
     sqlite3_stmt_h *st = NULL;
-    const char *q = "SELECT data FROM configs WHERE module_pkg_name='lspd' AND user_id=0 "
-                    "AND `group`='config' AND `key`='enable_verbose_log'";
-    if (s->prepare_v2(db, q, -1, &st, NULL) != ASB_SQLITE_OK || !st) return -1;
+    g_lspd_last_read_rc = 0;
+    int prc = s->prepare_v2(db, g_lspd_verbose_query, -1, &st, NULL);
+    if (prc != ASB_SQLITE_OK || !st) {
+        if (st) s->finalize(st);
+        g_lspd_last_read_rc = prc ? prc : 1;
+        return -1;
+    }
     int rc = s->step(st), v = -1;
     if (rc == ASB_SQLITE_DONE) {
         v = 2;
@@ -123,6 +144,8 @@ static int asb_lspd_read(asb_sqlite_t *s, sqlite3_h *db) {
             memcmp(b, g_lspd_bool_prefix, sizeof(g_lspd_bool_prefix)) == 0 &&
             (b[n - 1] == 0 || b[n - 1] == 1))
             v = b[n - 1];
+    } else {
+        g_lspd_last_read_rc = rc;
     }
     s->finalize(st);
     return v;
@@ -145,16 +168,28 @@ static int asb_lspd_read(asb_sqlite_t *s, sqlite3_h *db) {
  * ASB_LSPD_TMP and the copy is read - LSPosed's directory is never written by a read. BUSY and
  * LOCKED stay "read_failed": a copy taken during LSPosed's own write could be torn. The SQLite
  * code is printed (sqlite_rc=) so the next report names the cause instead of guessing it. */
-static int g_lspd_sqlite_rc = 0;
-static char g_lspd_copy_dir[256] = "";
-
-static int asb_lspd_probe(asb_sqlite_t *s, sqlite3_h *db) {
+/* Probe the statements the caller will actually use. sqlite_master can remain readable when
+ * a WAL-backed configs/modules/scope SELECT still fails with CANTOPEN; probing only the former
+ * used to skip the private-copy fallback and misreport the failure as a new schema. */
+static int asb_lspd_probe_query(asb_sqlite_t *s, sqlite3_h *db, const char *q) {
     sqlite3_stmt_h *st = NULL;
-    int rc = s->prepare_v2(db, "SELECT count(*) FROM sqlite_master", -1, &st, NULL);
+    int rc = s->prepare_v2(db, q, -1, &st, NULL);
     if (rc != ASB_SQLITE_OK || !st) { if (st) s->finalize(st); return rc ? rc : 1; }
-    rc = s->step(st);
+    int n = 0;
+    while ((rc = s->step(st)) == ASB_SQLITE_ROW && ++n < 4096) { }
     s->finalize(st);
-    return rc == ASB_SQLITE_ROW ? 0 : rc;
+    return (rc == ASB_SQLITE_DONE || rc == ASB_SQLITE_ROW) ? 0 : rc;
+}
+
+static int asb_lspd_probe(asb_sqlite_t *s, sqlite3_h *db, int inventory) {
+    int rc = asb_lspd_probe_query(s, db, inventory ? g_lspd_modules_query : g_lspd_verbose_query);
+    if (rc == 0 && inventory) rc = asb_lspd_probe_query(s, db, g_lspd_scope_query);
+    return rc;
+}
+
+static int asb_lspd_read_error(int rc) {
+    int p = rc & 0xff;
+    return (p == 1 || p == 26) ? 6 : 7; /* SQL/schema mismatch versus an operational read failure. */
 }
 
 static int asb_lspd_copy_file(const char *src, const char *dst) {
@@ -188,22 +223,25 @@ static void asb_lspd_copy_drop(void) {
 /* 0 with *db open for reading (the file itself, or a private copy of it), or the CLI's own
  * return code: 7 read_failed (busy, or neither the file nor a copy could be read), 6 a file
  * that opens but is no SQLite database LSPosed would write. */
-static int asb_lspd_open_read(asb_sqlite_t *s, const char *path, sqlite3_h **db) {
+static int asb_lspd_open_read(asb_sqlite_t *s, const char *path, sqlite3_h **db, int inventory) {
     sqlite3_h *d = NULL;
     *db = NULL;
     g_lspd_sqlite_rc = 0;
+    g_lspd_copy_dir[0] = 0;
     int rc = s->open_v2(path, &d, ASB_SQLITE_OPEN_READONLY, NULL);
     if (rc == ASB_SQLITE_OK && d) {
         s->busy_timeout(d, 3000);
-        rc = asb_lspd_probe(s, d);
+        rc = asb_lspd_probe(s, d, inventory);
         if (rc == 0) { *db = d; return 0; }
+    } else if (rc == ASB_SQLITE_OK) {
+        rc = 1;
     }
     if (d) s->close(d);
     d = NULL;
     g_lspd_sqlite_rc = rc;
     int p = rc & 0xff;
     if (p == 5 || p == 6) return 7;
-    if (p != 3 && p != 8 && p != 10 && p != 14) return 6;
+    if (p != 3 && p != 8 && p != 10 && p != 14) return asb_lspd_read_error(rc);
     snprintf(g_lspd_copy_dir, sizeof(g_lspd_copy_dir), "%s/lspd_ro.%d", ASB_LSPD_TMP, (int)getpid());
     mkdir(g_lspd_copy_dir, 0700);
     char dst[320], src[320];
@@ -213,13 +251,21 @@ static int asb_lspd_open_read(asb_sqlite_t *s, const char *path, sqlite3_h **db)
     snprintf(dst, sizeof(dst), "%s/m.db-wal", g_lspd_copy_dir);
     if (asb_lspd_copy_file(src, dst) < 0) { asb_lspd_copy_drop(); return 7; }
     snprintf(dst, sizeof(dst), "%s/m.db", g_lspd_copy_dir);
-    if (s->open_v2(dst, &d, ASB_SQLITE_OPEN_READWRITE, NULL) != ASB_SQLITE_OK || !d) {
+    rc = s->open_v2(dst, &d, ASB_SQLITE_OPEN_READWRITE, NULL);
+    if (rc != ASB_SQLITE_OK || !d) {
         if (d) s->close(d);
+        if (rc != ASB_SQLITE_OK) g_lspd_sqlite_rc = rc;
         asb_lspd_copy_drop();
         return 7;
     }
     s->busy_timeout(d, 3000);
-    if (asb_lspd_probe(s, d) != 0) { s->close(d); asb_lspd_copy_drop(); return 7; }
+    rc = asb_lspd_probe(s, d, inventory);
+    if (rc != 0) {
+        s->close(d);
+        g_lspd_sqlite_rc = rc;
+        asb_lspd_copy_drop();
+        return asb_lspd_read_error(rc);
+    }
     *db = d;
     return 0;
 }
@@ -255,15 +301,12 @@ static int asb_lspd_name_ok(const unsigned char *t) {
 
 static int asb_lspd_modules(asb_sqlite_t *s, sqlite3_h *db) {
     sqlite3_stmt_h *st = NULL;
-    const char *qm = "SELECT m.module_pkg_name, m.enabled, "
-                     "(SELECT COUNT(*) FROM scope sc WHERE sc.mid = m.mid) "
-                     "FROM modules m ORDER BY m.module_pkg_name";
-    int prc = s->prepare_v2(db, qm, -1, &st, NULL);
+    int prc = s->prepare_v2(db, g_lspd_modules_query, -1, &st, NULL);
     if (prc != ASB_SQLITE_OK || !st) {
         if (st) s->finalize(st);
-        /* SQLITE_BUSY / SQLITE_LOCKED: LSPosed holds a write lock; that is not a foreign layout. */
-        puts((prc == 5 || prc == 6) ? "modules=unknown\nreason=read_failed" : "modules=unknown\nreason=unexpected_schema");
-        return (prc == 5 || prc == 6) ? 7 : 6;
+        int erc = asb_lspd_read_error(prc ? prc : 1);
+        puts(erc == 6 ? "modules=unknown\nreason=unexpected_schema" : "modules=unknown\nreason=read_failed");
+        return erc;
     }
     int n = 0, rc;
     puts("format=v1");
@@ -280,13 +323,12 @@ static int asb_lspd_modules(asb_sqlite_t *s, sqlite3_h *db) {
         puts("modules=unknown\nreason=read_failed");
         return 7;
     }
-    const char *qs = "SELECT m.module_pkg_name, sc.app_pkg_name, sc.user_id "
-                     "FROM scope sc JOIN modules m ON m.mid = sc.mid ORDER BY 1, 2";
-    prc = s->prepare_v2(db, qs, -1, &st, NULL);
+    prc = s->prepare_v2(db, g_lspd_scope_query, -1, &st, NULL);
     if (prc != ASB_SQLITE_OK || !st) {
         if (st) s->finalize(st);
-        puts((prc == 5 || prc == 6) ? "scope=unknown\nreason=read_failed" : "scope=unknown\nreason=unexpected_schema");
-        return (prc == 5 || prc == 6) ? 7 : 6;
+        int erc = asb_lspd_read_error(prc ? prc : 1);
+        puts(erc == 6 ? "scope=unknown\nreason=unexpected_schema" : "scope=unknown\nreason=read_failed");
+        return erc;
     }
     int k = 0;
     while ((rc = s->step(st)) == ASB_SQLITE_ROW && k < 4096) {
@@ -449,7 +491,7 @@ static int asb_lspd_cli(int argc, char **argv) {
         memset(&ms, 0, sizeof(ms));
         if (asb_sqlite_load(&ms) != 0) { puts("modules=unknown\nreason=no_sqlite"); return 4; }
         sqlite3_h *mdb = NULL;
-        int orc = asb_lspd_open_read(&ms, mpath, &mdb);
+        int orc = asb_lspd_open_read(&ms, mpath, &mdb, 1);
         if (orc != 0) {
             puts(orc == 6 ? "modules=unknown\nreason=unexpected_schema" : "modules=unknown\nreason=read_failed");
             asb_lspd_print_rc();
@@ -490,7 +532,7 @@ static int asb_lspd_cli(int argc, char **argv) {
         }
         s.busy_timeout(db, 3000);
     } else {
-        int orc = asb_lspd_open_read(&s, path, &db);
+        int orc = asb_lspd_open_read(&s, path, &db, 0);
         if (orc != 0) {
             puts(orc == 6 ? "verbose=unknown\nreason=unexpected_schema" : "verbose=unknown\nreason=read_failed");
             asb_lspd_print_rc();
@@ -499,12 +541,14 @@ static int asb_lspd_cli(int argc, char **argv) {
     }
     int before = asb_lspd_read(&s, db);
     if (before < 0) {
-        /* Not the layout this was written against (another fork, a newer schema): touch
-         * nothing. */
-        asb_lspd_close_read(&s, db);
-        puts("verbose=unknown\nreason=unexpected_schema");
+        /* A malformed Boolean is a schema mismatch; a failed SQLite statement is an I/O or
+         * locking problem. Neither path writes anything, but only the former is a new layout. */
+        int erc = g_lspd_last_read_rc ? asb_lspd_read_error(g_lspd_last_read_rc) : 6;
+        if (g_lspd_last_read_rc && !g_lspd_sqlite_rc) g_lspd_sqlite_rc = g_lspd_last_read_rc;
+        puts(erc == 6 ? "verbose=unknown\nreason=unexpected_schema" : "verbose=unknown\nreason=read_failed");
         asb_lspd_print_rc();
-        return 6;
+        asb_lspd_close_read(&s, db);
+        return erc;
     }
     int rc = 0;
     if (set >= 0 || unset) {
