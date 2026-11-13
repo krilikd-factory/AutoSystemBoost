@@ -547,6 +547,18 @@
         "off": "不要求子进程优先运行。",
         "on": "要求子进程先于父进程运行。"
       }
+    },
+    "kernel_hrtimer_migration": {
+      "name": "高分辨率定时器迁移",
+      "desc": "控制高分辨率定时器迁移。自动模式仅在省电配置中请求 0，其他配置恢复捕获的原值。对延迟和功耗的影响不作保证。"
+    },
+    "kernel_lpm_prediction": {
+      "name": "空闲状态预测（LPM）",
+      "desc": "在内核提供该节点时控制 LPM 空闲状态预测器。自动模式仅在省电配置中请求 1；手动模式优先于配置。"
+    },
+    "kernel_usb_autosuspend": {
+      "name": "USB 自动挂起",
+      "desc": "设置新检测到的 USB 外设的默认自动挂起延迟：开启为 2 秒，关闭为 −1。不更改充电、ADB、gadget、网络共享或 VPN Hide。"
     }
   },
   "optFor": {
@@ -1748,6 +1760,9 @@
   "dev_kernel_config_CONFIG_KSU_SUSFS": "CONFIG_KSU_SUSFS",
   "dev_kernel_runtime_mglru_enabled": "MGLRU 已启用",
   "dev_kernel_runtime_mglru_min_ttl_ms": "MGLRU 最小 TTL（毫秒）",
+  "dev_kernel_runtime_hrtimer_migration": "高分辨率定时器迁移",
+  "dev_kernel_runtime_lpm_prediction": "LPM 空闲状态预测",
+  "dev_kernel_runtime_usb_autosuspend": "USB 自动挂起延迟（秒）",
   "dev_kernel_runtime_sched_clamp_min": "调度 util clamp 最小值",
   "dev_kernel_runtime_sched_clamp_max": "调度 util clamp 最大值",
   "dev_kernel_runtime_swappiness": "Swappiness",
@@ -2533,6 +2548,11 @@
   "zy_status_ready": "当前快照 · 只读",
   "zy_status_cached": "上次快照 · 正在刷新…",
   "zy_status_failed": "无法读取状态，显示上次快照",
+  "zy_loading_sub": "正在打开通往 companion、guard 和进程观察器的只读通道。不会更改任何应用或模块。",
+  "zy_stage_companion": "Companion",
+  "zy_stage_guard": "Guard",
+  "zy_stage_apps": "应用",
+  "zy_status_failed_empty": "无法读取 Zygisk 状态。没有可用快照；请点按“刷新”重试。",
   "zy_guide_title": "如何选择",
   "zy_guide_response": "响应速度",
   "zy_guide_response_text": "启动辅助：仅冷启动。响应：冷启动 + 生命周期提示。完整会增加进程日志。这些选项只启用请求，不保证设备更快。",

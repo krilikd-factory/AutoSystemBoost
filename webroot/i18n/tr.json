@@ -517,6 +517,18 @@
         "off": "Alt işlemin önce çalışmasını isteme.",
         "on": "Alt işlemi üst işlemden önce çalıştır."
       }
+    },
+    "kernel_hrtimer_migration": {
+      "name": "HR Zamanlayıcı Taşıma",
+      "desc": "Yüksek çözünürlüklü zamanlayıcı taşımayı denetler. Auto yalnızca Pil profilinde 0 ister ve diğerlerinde kaydedilen değeri geri yükler. Gecikme ve güç etkileri garanti edilmez."
+    },
+    "kernel_lpm_prediction": {
+      "name": "Boşta Kalma Tahmini (LPM)",
+      "desc": "Çekirdek sunuyorsa LPM boşta kalma tahmincisini denetler. Auto yalnızca Pil profilinde 1 ister; manuel modlar profili geçersiz kılar."
+    },
+    "kernel_usb_autosuspend": {
+      "name": "USB otomatik askıya alma",
+      "desc": "Yeni USB çevre birimleri için varsayılan autosuspend gecikmesini ayarlar: Açık = 2 saniye, Kapalı = −1. Şarjı, ADB’yi, gadget’ı, tethering’i veya VPN Hide’ı değiştirmez."
     }
   },
   "nav_live": "İzleme",
@@ -1748,6 +1760,9 @@
   "dev_kernel_config_CONFIG_KSU_SUSFS": "CONFIG_KSU_SUSFS",
   "dev_kernel_runtime_mglru_enabled": "MGLRU etkin",
   "dev_kernel_runtime_mglru_min_ttl_ms": "MGLRU asgari TTL (ms)",
+  "dev_kernel_runtime_hrtimer_migration": "HR zamanlayıcı taşıma",
+  "dev_kernel_runtime_lpm_prediction": "LPM boşta kalma tahmini",
+  "dev_kernel_runtime_usb_autosuspend": "USB autosuspend gecikmesi (sn)",
   "dev_kernel_runtime_sched_clamp_min": "Zamanlayıcı util clamp en az",
   "dev_kernel_runtime_sched_clamp_max": "Zamanlayıcı util clamp en çok",
   "dev_kernel_runtime_swappiness": "Swappiness",
@@ -2533,6 +2548,11 @@
   "zy_status_ready": "Güncel anlık görüntü · salt okunur",
   "zy_status_cached": "Son anlık görüntü · yenileniyor…",
   "zy_status_failed": "Durum okunamadı; son anlık görüntü gösteriliyor",
+  "zy_loading_sub": "Companion, guard ve işlem gözlemcisine salt okunur bir kanal açılıyor. Hiçbir uygulama veya modül değiştirilmiyor.",
+  "zy_stage_companion": "Companion",
+  "zy_stage_guard": "Guard",
+  "zy_stage_apps": "Uygulamalar",
+  "zy_status_failed_empty": "Zygisk durumu okunamadı. Anlık görüntü yok; yeniden denemek için Yenile’ye dokunun.",
   "zy_guide_title": "Ne seçmeli?",
   "zy_guide_response": "Tepki hızı",
   "zy_guide_response_text": "Başlatma yardımı: yalnızca soğuk başlatmalar. Tepki: soğuk başlatmalar + yaşam döngüsü ipuçları. Tam, süreç kaydını ekler. Bunlar istekleri etkinleştirir; daha hızlı bir cihazı garanti etmez.",

@@ -517,6 +517,18 @@
         "off": "Keinen vorrangigen Start des Kindprozesses anfordern.",
         "on": "Kindprozess vor dem Elternprozess starten lassen."
       }
+    },
+    "kernel_hrtimer_migration": {
+      "name": "HR-Timer-Migration",
+      "desc": "Steuert die Migration hochauflösender Timer. Auto fordert nur im Akkuprofil 0 an und stellt sonst den erfassten Wert wieder her. Latenz- und Stromspareffekte sind nicht garantiert."
+    },
+    "kernel_lpm_prediction": {
+      "name": "Leerlauf-Vorhersage (LPM)",
+      "desc": "Steuert die LPM-Leerlaufvorhersage, falls der Kernel sie bereitstellt. Auto fordert nur im Akkuprofil 1 an; manuelle Modi haben Vorrang."
+    },
+    "kernel_usb_autosuspend": {
+      "name": "USB-Autosuspend",
+      "desc": "Legt die Standard-Autosuspend-Verzögerung neu erkannter USB-Peripherie fest: Ein = 2 Sekunden, Aus = −1. Laden, ADB, Gadget, Tethering und VPN Hide bleiben unverändert."
     }
   },
   "nav_live": "Monitor",
@@ -1748,6 +1760,9 @@
   "dev_kernel_config_CONFIG_KSU_SUSFS": "CONFIG_KSU_SUSFS",
   "dev_kernel_runtime_mglru_enabled": "MGLRU aktiv",
   "dev_kernel_runtime_mglru_min_ttl_ms": "MGLRU-Mindest-TTL (ms)",
+  "dev_kernel_runtime_hrtimer_migration": "HR-Timer-Migration",
+  "dev_kernel_runtime_lpm_prediction": "LPM-Leerlaufvorhersage",
+  "dev_kernel_runtime_usb_autosuspend": "USB-Autosuspend-Verzögerung (s)",
   "dev_kernel_runtime_sched_clamp_min": "Scheduler-Util-Clamp min.",
   "dev_kernel_runtime_sched_clamp_max": "Scheduler-Util-Clamp max.",
   "dev_kernel_runtime_swappiness": "Swappiness",
@@ -2533,6 +2548,11 @@
   "zy_status_ready": "Aktueller Schnappschuss · nur lesend",
   "zy_status_cached": "Letzter Schnappschuss · wird aktualisiert…",
   "zy_status_failed": "Status nicht lesbar; der letzte Schnappschuss wird angezeigt",
+  "zy_loading_sub": "Öffne einen schreibgeschützten Kanal zu Companion, Guard und Prozessbeobachter. Apps und Module werden nicht verändert.",
+  "zy_stage_companion": "Companion",
+  "zy_stage_guard": "Guard",
+  "zy_stage_apps": "Apps",
+  "zy_status_failed_empty": "Zygisk-Status konnte nicht gelesen werden. Kein Snapshot vorhanden; zum Wiederholen aktualisieren.",
   "zy_guide_title": "Was wählen?",
   "zy_guide_response": "Reaktionsfähigkeit",
   "zy_guide_response_text": "Starthilfe: nur Kaltstarts. Reaktion: Kaltstarts + Lifecycle-Hinweise. Voll ergänzt das Prozessprotokoll. Dies aktiviert Anfragen und garantiert kein schnelleres Gerät.",

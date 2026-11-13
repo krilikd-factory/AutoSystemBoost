@@ -517,6 +517,18 @@
         "off": "Jangan meminta proses anak berjalan lebih dulu.",
         "on": "Jalankan proses anak sebelum proses induk."
       }
+    },
+    "kernel_hrtimer_migration": {
+      "name": "Migrasi Timer HR",
+      "desc": "Mengontrol migrasi timer resolusi tinggi. Auto meminta 0 hanya di profil Baterai dan memulihkan nilai tersimpan di profil lain. Dampak latensi dan daya tidak dijamin."
+    },
+    "kernel_lpm_prediction": {
+      "name": "Prediksi Idle (LPM)",
+      "desc": "Mengontrol prediktor idle LPM jika disediakan kernel. Auto meminta 1 hanya di profil Baterai; mode manual mengesampingkan profil."
+    },
+    "kernel_usb_autosuspend": {
+      "name": "Autosuspend USB",
+      "desc": "Mengatur jeda autosuspend default untuk periferal USB baru: Aktif = 2 detik, Nonaktif = −1. Tidak mengubah pengisian, ADB, gadget, tethering, atau VPN Hide."
     }
   },
   "nav_live": "Monitor",
@@ -1748,6 +1760,9 @@
   "dev_kernel_config_CONFIG_KSU_SUSFS": "CONFIG_KSU_SUSFS",
   "dev_kernel_runtime_mglru_enabled": "MGLRU aktif",
   "dev_kernel_runtime_mglru_min_ttl_ms": "TTL minimum MGLRU (ms)",
+  "dev_kernel_runtime_hrtimer_migration": "Migrasi timer HR",
+  "dev_kernel_runtime_lpm_prediction": "Prediksi idle LPM",
+  "dev_kernel_runtime_usb_autosuspend": "Jeda autosuspend USB (dtk)",
   "dev_kernel_runtime_sched_clamp_min": "Util clamp minimum penjadwal",
   "dev_kernel_runtime_sched_clamp_max": "Util clamp maksimum penjadwal",
   "dev_kernel_runtime_swappiness": "Swappiness",
@@ -2533,6 +2548,11 @@
   "zy_status_ready": "Snapshot terkini · hanya baca",
   "zy_status_cached": "Snapshot terakhir · menyegarkan…",
   "zy_status_failed": "Status tidak terbaca; snapshot terakhir ditampilkan",
+  "zy_loading_sub": "Membuka kanal hanya-baca ke companion, guard, dan pengamat proses. Tidak ada aplikasi atau modul yang diubah.",
+  "zy_stage_companion": "Companion",
+  "zy_stage_guard": "Guard",
+  "zy_stage_apps": "Aplikasi",
+  "zy_status_failed_empty": "Status Zygisk tidak dapat dibaca. Belum ada snapshot; ketuk Segarkan untuk mencoba lagi.",
   "zy_guide_title": "Apa yang dipilih",
   "zy_guide_response": "Responsivitas",
   "zy_guide_response_text": "Bantuan peluncuran: hanya cold start. Respons: cold start + petunjuk siklus hidup. Penuh menambahkan catatan proses. Ini mengaktifkan permintaan, bukan jaminan perangkat lebih cepat.",

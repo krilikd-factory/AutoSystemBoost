@@ -517,6 +517,18 @@
         "off": "No solicitar que el proceso hijo se ejecute primero.",
         "on": "Ejecutar el proceso hijo antes que el padre."
       }
+    },
+    "kernel_hrtimer_migration": {
+      "name": "Migración de temporizadores HR",
+      "desc": "Controla la migración de temporizadores de alta resolución. Auto solicita 0 solo en Batería y restaura el valor capturado en los demás perfiles. No se garantizan efectos de latencia o consumo."
+    },
+    "kernel_lpm_prediction": {
+      "name": "Predicción de inactividad (LPM)",
+      "desc": "Controla el predictor de inactividad LPM si el kernel lo expone. Auto solicita 1 solo en Batería; los modos manuales prevalecen."
+    },
+    "kernel_usb_autosuspend": {
+      "name": "Autosuspensión USB",
+      "desc": "Define la espera de autosuspensión para nuevos periféricos USB: Activado = 2 segundos, Desactivado = −1. No cambia carga, ADB, gadget, tethering ni VPN Hide."
     }
   },
   "nav_live": "Monitor",
@@ -1748,6 +1760,9 @@
   "dev_kernel_config_CONFIG_KSU_SUSFS": "CONFIG_KSU_SUSFS",
   "dev_kernel_runtime_mglru_enabled": "MGLRU activo",
   "dev_kernel_runtime_mglru_min_ttl_ms": "TTL mínimo de MGLRU (ms)",
+  "dev_kernel_runtime_hrtimer_migration": "Migración de temporizadores HR",
+  "dev_kernel_runtime_lpm_prediction": "Predicción de inactividad LPM",
+  "dev_kernel_runtime_usb_autosuspend": "Espera de autosuspensión USB (s)",
   "dev_kernel_runtime_sched_clamp_min": "Util clamp mínimo del planificador",
   "dev_kernel_runtime_sched_clamp_max": "Util clamp máximo del planificador",
   "dev_kernel_runtime_swappiness": "Swappiness",
@@ -2533,6 +2548,11 @@
   "zy_status_ready": "Instantánea actual · solo lectura",
   "zy_status_cached": "Última instantánea · actualizando…",
   "zy_status_failed": "No se pudo leer el estado; se muestra la última instantánea",
+  "zy_loading_sub": "Abriendo un canal de solo lectura con el companion, guard y observador de procesos. No se modifican apps ni módulos.",
+  "zy_stage_companion": "Companion",
+  "zy_stage_guard": "Guard",
+  "zy_stage_apps": "Apps",
+  "zy_status_failed_empty": "No se pudo leer el estado de Zygisk. No hay instantánea; pulsa Actualizar para reintentar.",
   "zy_guide_title": "Qué elegir",
   "zy_guide_response": "Capacidad de respuesta",
   "zy_guide_response_text": "Asistencia de inicio: solo arranques en frío. Respuesta: arranques en frío + señales del ciclo de vida. Completo añade el registro de procesos. Activan solicitudes; no garantizan un dispositivo más rápido.",

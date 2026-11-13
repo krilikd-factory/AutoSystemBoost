@@ -585,6 +585,18 @@
         "off": "Do not request the child to run first.",
         "on": "Run the child before its parent."
       }
+    },
+    "kernel_hrtimer_migration": {
+      "name": "High-resolution Timer Migration",
+      "desc": "Controls high-resolution timer migration. Auto requests 0 only on Battery and restores the captured value on other profiles; Off and On override the profile. Latency and power effects depend on the workload. Stock and uninstall restore only an ASB-owned baseline after matching readback."
+    },
+    "kernel_lpm_prediction": {
+      "name": "Idle Prediction (LPM)",
+      "desc": "Controls the low-power-mode idle-state predictor when exposed by the kernel. Auto requests 1 only on Battery and restores the captured value on other profiles; Off and On override the profile. Power and wake-up latency effects are not guaranteed. Stock and uninstall require verified restoration."
+    },
+    "kernel_usb_autosuspend": {
+      "name": "USB Autosuspend",
+      "desc": "Sets the default autosuspend delay for newly detected USB peripherals: On requests 2 seconds, Off requests -1. This does not change charging, ADB, gadget mode, tethering or VPN Hide. Stock restores the captured signed integer when ASB owns it."
     }
   },
   "cfg_search": "Search",
@@ -1630,6 +1642,9 @@
   "dev_kernel_config_CONFIG_KSU_SUSFS": "CONFIG_KSU_SUSFS",
   "dev_kernel_runtime_mglru_enabled": "MGLRU enabled",
   "dev_kernel_runtime_mglru_min_ttl_ms": "MGLRU minimum TTL (ms)",
+  "dev_kernel_runtime_hrtimer_migration": "High-resolution timer migration",
+  "dev_kernel_runtime_lpm_prediction": "LPM idle prediction",
+  "dev_kernel_runtime_usb_autosuspend": "USB autosuspend delay (s)",
   "dev_kernel_runtime_sched_clamp_min": "Scheduler util clamp min",
   "dev_kernel_runtime_sched_clamp_max": "Scheduler util clamp max",
   "dev_kernel_runtime_swappiness": "Swappiness",
@@ -2392,6 +2407,11 @@
   "zy_status_ready": "Current snapshot · read-only",
   "zy_status_cached": "Last snapshot · refreshing…",
   "zy_status_failed": "Could not read the state; the last snapshot is shown",
+  "zy_loading_sub": "Opening a read-only channel to the companion, guard and process observer. No app or module is being changed.",
+  "zy_stage_companion": "Companion",
+  "zy_stage_guard": "Guard",
+  "zy_stage_apps": "Apps",
+  "zy_status_failed_empty": "Could not read the Zygisk state. No snapshot is available; tap Refresh to try again.",
   "zy_guide_title": "What to choose",
   "zy_guide_response": "Responsiveness",
   "zy_guide_response_text": "Launch assist: cold starts only. Response: cold starts + lifecycle hints. Full adds the process journal. These enable requests; they do not guarantee a faster device.",
