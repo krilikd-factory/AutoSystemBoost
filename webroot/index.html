@@ -14918,6 +14918,11 @@ function logReportTips(d, all) {
   const audio = s.audio || null;
   const cost = s.asbcost || null;
   const cfg = d.cfg || {};
+  // Only a confirmed package-table game produces this phase in current logkits. An inferred
+  // GPU-bound FSM state stays ordinary activity, so it cannot trigger game-specific advice.
+  const confirmedGamingMin = (d.phases || []).reduce(function (n, p) {
+    return n + (p.name === 'gaming' ? Math.max(0, +p.min || 0) : 0);
+  }, 0);
   const _holderTipped = {};
   if (crash && (+crash.asb || 0) > 0) tips.push({ ic: 'warn', key: 'lr_tip_crash', vars: {} });
   /* fix220: the night verdict needs a night. One battery-percent step over 40 idle minutes
@@ -15018,7 +15023,9 @@ function logReportTips(d, all) {
           const cap = fairCap || badCap[1];
           tips.push({ ic: 'info', key: 'lr_tip_jank_bad_evidence', vars: { pct: String(jank.pct), yes: String(cap.yes), no: String(cap.no) } });
         } else
-          tips.push({ ic: 'warn', key: jp === 'battery' ? 'lr_tip_jank_bad_bat' : (jp === 'balanced' || jp === 'performance' || jp === 'stock') ? 'lr_tip_jank_bad_man' : 'lr_tip_jank_bad', vars: { pct: String(jank.pct) } });
+          tips.push({ ic: 'warn', key: jp === 'battery' ? 'lr_tip_jank_bad_bat' :
+            (jp === 'balanced' || jp === 'performance' || jp === 'stock') ? 'lr_tip_jank_bad_man' :
+              confirmedGamingMin > 0 ? 'lr_tip_jank_bad_game' : 'lr_tip_jank_bad', vars: { pct: String(jank.pct) } });
       }
     }
     else if ((+jank.pct || 0) <= 2) tips.push({ ic: 'ok', key: 'lr_tip_jank_ok', vars: { pct: String(jank.pct) } });
@@ -15414,7 +15421,7 @@ function logReportAnalyze(d) {
     lr_tip_crashes: 88, lr_tip_awake_aod: 86, lr_tip_awake_who: 84, lr_tip_awake_alarm: 84,
     lr_tip_awake_sync: 87, lr_tip_awake_worker: 84, lr_tip_sync_loop: 80, lr_tip_worker: 60,
     lr_tip_awake_hold: 84, lr_tip_awake: 80, lr_tip_sradio: 82, lr_tip_night_modem: 78,
-    lr_tip_night: 76, lr_tip_jank_bad: 72, lr_tip_jank_bad_bat: 72, lr_tip_jank_bad_man: 72, lr_tip_jank_bad_pace: 72, lr_tip_jank_bad_evidence: 72, lr_tip_jank_wake: 70, lr_tip_jank_wake_wh: 70,
+    lr_tip_night: 76, lr_tip_jank_bad: 72, lr_tip_jank_bad_game: 72, lr_tip_jank_bad_bat: 72, lr_tip_jank_bad_man: 72, lr_tip_jank_bad_pace: 72, lr_tip_jank_bad_evidence: 72, lr_tip_jank_wake: 70, lr_tip_jank_wake_wh: 70,
     lr_tip_sysui_netspeed: 68, lr_tip_sysui_clocksec: 68, lr_tip_sysui_livewp: 66, lr_tip_sysui_hooks: 50, lr_tip_sysui_other: 30,
     lr_tip_sysui_inj: 90,
     lr_tip_wl_enable: 64, lr_tip_app: 62, lr_tip_audio: 45, lr_tip_ltpo: 15,
@@ -17444,12 +17451,12 @@ function zygiskAotCard() {
   const names = dozeKeepLabels(g.apps.map(function (a) { return a.pkg; }).concat(g.events.map(function (e) { return e.pkg; }), g.excluded));
   const nm = function (p) { return names[p] || p; };
   if (g.apps.length) card.appendChild(logReportNote(T('zy_aot_list_scope', 'Observed apps below: waiting, compiled and unknown states are listed together.')));
-  if (g.apps.length) card.appendChild(logReportNote(T('zy_aot_exclude_hint', 'If an app misbehaves after compilation, exclude it: ASB will never compile it again and, if ASB compiled it, returns it to the compile state Android installed it with.')));
+  if (g.apps.length) card.appendChild(logReportNote(T('zy_aot_exclude_hint', 'If an app misbehaves, exclude it: ASB will not compile it or handle its new processes through the Zygisk observer, ledger or launch assistant. If ASB compiled it, the compile state returns to the one Android installed it with. Restart an already running app.')));
   g.apps.forEach(function (a) {
     card.appendChild(zygiskGuardActionRow(nm(a.pkg), zygiskAotValue(a), T('zy_aot_exclude_btn', 'Exclude'), function () { zygiskAotPackage('exclude', a.pkg); }));
   });
   if (g.excluded.length) {
-    card.appendChild(logReportNote(T('zy_aot_excluded_title', 'Excluded by you (%s): ASB does not compile these apps.').replace('%s', String(g.excluded.length))));
+    card.appendChild(logReportNote(T('zy_aot_excluded_title', 'Excluded by you (%s): no ART compilation or ASB Zygisk handling for new processes.').replace('%s', String(g.excluded.length))));
     g.excluded.forEach(function (p) {
       card.appendChild(zygiskGuardActionRow(nm(p), T('zy_aot_excluded_v', 'excluded'), T('zy_aot_include_btn', 'Allow again'), function () { zygiskAotPackage('include', p); }));
     });
@@ -17501,11 +17508,13 @@ async function zygiskAotPackage(action, pkg) {
   _zygiskModeBusy = false;
   if (b && b.aot && b.aot.errno === 0) _zyAot = zygiskAotParse(b.aot.stdout);
   const out = b && b.set ? (b.set.stdout || '') : '';
-  const ok = /result=(excluded|included)/.test(out);
+  const policyFailed = /result=partial reason=observer_policy|observer_policy=(failed|unavailable)/.test(out);
+  const ok = /result=(excluded|included)/.test(out) && !policyFailed;
   let msg = T('zy_mode_failed', 'Could not change the mode');
-  if (ok && action === 'include') msg = T('zy_aot_included', 'ASB may compile this app again');
-  else if (ok && /reset=started/.test(out)) msg = T('zy_aot_excluded_reset', 'Excluded · its compile state is being returned to how Android installed it');
-  else if (ok) msg = T('zy_aot_excluded_done', 'Excluded · ASB will not compile this app');
+  if (policyFailed) msg = T('zy_aot_policy_failed', 'The change was saved, but the Zygisk policy was not updated. It fully applies after a successful sync or reboot.');
+  else if (ok && action === 'include') msg = T('zy_aot_included', 'ASB may compile this app and handle its new processes again');
+  else if (ok && /reset=started/.test(out)) msg = T('zy_aot_excluded_reset', 'Excluded · its compile state is being returned to how Android installed it; new processes are left to Android');
+  else if (ok) msg = T('zy_aot_excluded_done', 'Excluded · no ART compilation or ASB Zygisk handling for new processes');
   toast(msg, ok ? 'good' : 'bad');
   if (_zygiskOpen) zygiskPageRender(window._asbZygiskLinkData || null);
 }
@@ -18807,7 +18816,8 @@ function logReportTipText(tip) {
     lr_tip_app: '{app} held the phone awake for {min} min - consider restricting its background activity.',
     lr_tip_wl_enable: '{app} held the phone awake for {min} min - turn on "{set}" in Settings and ASB will rein such apps in for you.',
     lr_tip_night_modem: 'Overnight the phone lost ~{pct}%/h - try "{set}" in Settings, it quiets the modem in your own sleeping hours.',
-    lr_tip_jank_bad: 'About {pct}% of frames missed their deadline - stutter is visible. On Smart the learner is already testing the worst apps; heavy games do better on Performance.',
+    lr_tip_jank_bad: 'About {pct}% of frames missed their deadline - stutter is visible. On Smart the learner is already testing the worst apps; the Smoothness section lists where frames are lost.',
+    lr_tip_jank_bad_game: 'About {pct}% of frames missed their deadline - stutter is visible. On Smart the learner is already testing the worst apps; heavy games do better on Performance.',
     lr_tip_jank_bad_bat: 'About {pct}% of frames missed their deadline - stutter is visible. Battery keeps the ceilings low on purpose; for heavy apps Smart or Balanced give more room. The Smoothness section lists the apps that drop the most.',
     lr_tip_jank_bad_pace: "About {pct}% of frames missed their deadline, most of them in {app}. Android's own frame times put neither the GPU nor the UI thread at fault there: the app paces those frames itself, so a profile with higher ceilings would not remove them. The Smoothness section has the breakdown.",
     lr_tip_jank_bad_man: 'About {pct}% of frames missed their deadline - stutter is visible. The Smoothness section lists the apps that drop the most; Smart adapts the ceilings to them.',
