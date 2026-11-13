@@ -4283,8 +4283,8 @@ else
 fi
 NOTE "ui_effects_level = $(cfg ui_effects_level)  ·  anim_level prop = $(gp persist.sys.oplus.anim_level)"
 NOTE "phantom_procs = $(cfg phantom_procs)  ·  live: $(settings get global settings_enable_monitor_phantom_procs 2>/dev/null)"
-if [ -r /proc/sys/kernel/sched_stats ]; then
-  NOTE "kernel_sched_stats = $(cfg kernel_sched_stats)  ·  live: $(cat /proc/sys/kernel/sched_stats 2>/dev/null)  ·  saved baseline: $(cat /data/adb/asb/kernel_sched_stats.prev 2>/dev/null || echo none)"
+if [ -r /proc/sys/kernel/sched_schedstats ]; then
+  NOTE "kernel_sched_stats = $(cfg kernel_sched_stats)  ·  live: $(cat /proc/sys/kernel/sched_schedstats 2>/dev/null)  ·  saved baseline: $(cat /data/adb/asb/kernel_sched_stats.prev 2>/dev/null || echo none)"
 else
   NOTE "kernel_sched_stats = $(cfg kernel_sched_stats)  ·  live: not exposed"
 fi
