@@ -8072,8 +8072,15 @@ assert "s.id = 'lgr-thermal';" in h and "s.id = 'lgr-asb';" in h
 feature_order = re.search(r'const DEVICE_KERNEL_FEATURE_ORDER = \[(.*?)\];', h, re.S)
 assert feature_order, 'explicit custom-kernel feature order missing'
 ordered_features = re.findall(r"'([^']+)'", feature_order.group(1))
-assert ordered_features == ['susfs','susfs_version','bbg_baseband_guard','bbr_v2','bbr_v1','lto',
-                            'tmpfs_xattr_posix_acl','unicode_bypass_fix','unicode_bypass_evidence','droidspaces','ntsync','nomount','nomount_version'], ordered_features
+assert ordered_features == ['susfs','susfs_version','bbg_baseband_guard','rekernel',
+                            'bbr_v1','bbr_v2','bbr_v3',
+                            'net_sch_cake','net_sch_cake_config','net_sch_cake_module',
+                            'net_sch_cake_symbols','net_sch_cake_qdisc','net_sch_cake_evidence',
+                            'wireguard','vpn_hide','ip_set','cifs','usb_arsenal','oplus_sdp_900ma',
+                            'lto','tmpfs_xattr_posix_acl','unicode_bypass_fix','unicode_bypass_evidence',
+                            'droidspaces','ntsync','overlayfs','sched_stats','sched_stats_config','sched_stats_node',
+                            'wakeup_blocker','wakeup_blocker_rules','wakeup_blocker_blocked_events',
+                            'nomount','nomount_version'], ordered_features
 # fix252: five groups in reading order - hardware, firmware and system, kernel, root, ASB.
 order = re.search(r'const DEVICE_SECTION_ORDER = \[(.*?)\n\];', h, re.S).group(1)
 specs = re.findall(r"\['([a-z_]+)', '(dev_sec_[a-z_]+)', '[^']*', '([a-z]+)'", order)
@@ -8110,13 +8117,22 @@ for p in (root/'webroot/i18n').glob('*.json'):
                 'dev_sec_kernel_origin','dev_sec_kernel_btf','dev_sec_kernel_ebpf','dev_sec_kernel_fuse_bpf',
                 'dev_kernel_origin_assessment','dev_kernel_btf_summary','dev_kernel_ebpf_summary','dev_kernel_fuse_bpf_summary',
                 'dev_guide_kernel_origin','dev_guide_kernel_btf','dev_guide_kernel_ebpf','dev_guide_kernel_fuse_bpf','dev_insight_kernel_origin',
-                'dev_sec_lsposed_hooks','dev_guide_lsposed_hooks','dev_lsposed_hooks_findings','dev_zygisk_observer_ledger_restart_loops'):
+                'dev_sec_lsposed_hooks','dev_guide_lsposed_hooks','dev_lsposed_hooks_findings','dev_zygisk_observer_ledger_restart_loops',
+                'dev_kernel_config_evidence_scope','dev_kernel_features_net_sch_cake_config',
+                'dev_kernel_features_net_sch_cake_module','dev_kernel_features_net_sch_cake_symbols',
+                'dev_kernel_features_net_sch_cake_qdisc','dev_kernel_features_net_sch_cake_evidence',
+                'dev_kernel_features_sched_stats','dev_kernel_features_sched_stats_config','dev_kernel_features_sched_stats_node',
+                'dev_kernel_features_rekernel','dev_kernel_features_wakeup_blocker','dev_kernel_features_wakeup_blocker_rules',
+                'dev_kernel_features_wakeup_blocker_blocked_events','dev_kernel_features_oplus_sdp_900ma'):
         assert d.get(key), '%s: %s missing' % (p.name, key)
 ru = json.loads((root/'webroot/i18n/ru.json').read_text(encoding='utf-8'))
 assert 'NoMount' in ru['dev_kernel_features_nomount'] and 'NTSync' in ru['dev_kernel_features_ntsync']
 assert 'BBRv2' in ru['dev_kernel_features_bbr_v2'] and 'SuSFS' in ru['dev_kernel_features_susfs']
 assert 'Метамодуль' in ru['dev_sec_metamodule'] and 'NoMount' in ru['dev_metamodule_nomount_driver_version']
 assert 'возможен форк' in ru['dev_root_fork_possible'] and 'ниже' not in ru['lr_tip_jank_bad_bat']
+assert 'подмен' in ru['dev_guide_kernel_features'] and 'read-only' in ru['dev_guide_kernel_features']
+assert 'приоритет' in ru['dev_guide_kernel_features'] and 'qdisc' in ru['dev_guide_kernel_features']
+assert 'Sched Stats' in ru['dev_kernel_features_sched_stats'] and 'CAKE' in ru['dev_kernel_features_net_sch_cake_module']
 en = json.loads((root/'webroot/i18n/en.json').read_text(encoding='utf-8'))
 assert 'above' not in en['lr_tip_net_heavy'] and 'below' not in en['lr_tip_jank_bad_man']
 for f in ('tools/release_tools.list','common/install.sh','.github/workflows/build-release.yml','.github/workflows/build-test.yml'):
@@ -9045,10 +9061,22 @@ DO_NOT_READ_SECOND_LINE
 esac
 EOF
 chmod +x "$T/ksud"
+cat > "$T/tc" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$TC_LOG"
+[ "${1:-} ${2:-}" = 'qdisc show' ] || exit 2
+case "${TC_MODE:-none}" in
+  active) printf 'qdisc cake 8001: root refcnt 2 bandwidth unlimited diffserv3\n' ;;
+  fail) exit 1 ;;
+  *) printf 'qdisc fq_codel 0: root refcnt 2\n' ;;
+esac
+EOF
+chmod +x "$T/tc"
 run() {
   ASB_DEVINFO_MODDIR="$T/mod" ASB_DEVINFO_SYS="$T/sys" ASB_DEVINFO_PROC="$T/proc" \
   ASB_DEVINFO_DATA="$T/data" ASB_DEVINFO_PROP_FILE="$T/props" ASB_DEVINFO_SUSFS="$T/susfs" \
-  ASB_DEVINFO_STATE="$T/state" ASB_DEVINFO_KSUD="$T/ksud" ASB_DEVINFO_DEV="$T/dev" KSUD_MODE="${KSUD_MODE:-empty}" \
+  ASB_DEVINFO_STATE="$T/state" ASB_DEVINFO_KSUD="$T/ksud" ASB_DEVINFO_DEV="$T/dev" ASB_DEVINFO_TC="$T/tc" \
+  KSUD_MODE="${KSUD_MODE:-empty}" TC_MODE="${TC_MODE:-none}" TC_LOG="$T/tc.log" \
   KSUD_LOG="$T/ksud.log" SUSFS_LOG="$T/susfs.log" sh "$D" "$@"
 }
 want() {
@@ -9066,17 +9094,17 @@ want kernel_ebpf bpfs 'directory exposed'; want kernel_ebpf pinned_objects '1 to
 want kernel_ebpf jit_enable 1; want kernel_ebpf jit_harden 0; want kernel_ebpf jit_kallsyms 1
 want kernel_fuse_bpf summary 'config=y; runtime interface exposed'; want kernel_fuse_bpf prog_type_interface 'exposed; type=33'
 want kernel_fuse_bpf fuse_device 'not exposed at standard path'; want kernel_fuse_bpf connections '0 connections exposed'
-want kernel_features nomount built-in; want kernel_features nomount_version '22 (105)'; want kernel_features ntsync built-in
+want kernel_features nomount 'driver present; exposed config says built-in'; want kernel_features nomount_version '22 (105)'; want kernel_features ntsync 'driver present; exposed config says built-in'
 want metamodule status 'detected at standard path'; want metamodule id MetaCore; want metamodule name 'MetaCore Metamodule'
 want metamodule version 1.4.0; want metamodule version_code 140
-want metamodule nomount_driver built-in; want metamodule nomount_driver_version '22 (105)'
+want metamodule nomount_driver 'driver present; exposed config says built-in'; want metamodule nomount_driver_version '22 (105)'
 want metamodule nomount_evidence 'kernel config/sysfs; driver ownership not inferred'
 want kernel_features droidspaces 'core config present; runtime not verified'
 # Generic CONFIG_UNICODE is not evidence of the patch.
 want kernel_features unicode_bypass_fix 'not runtime-discoverable'
-want kernel_features tmpfs_xattr_posix_acl supported; want kernel_features lto 'ThinLTO (Clang)'
+want kernel_features tmpfs_xattr_posix_acl 'options present in exposed config; runtime not independently verified'; want kernel_features lto 'ThinLTO (Clang); exposed config only'
 want kernel_features bbr_v1 available; want kernel_features bbr_v2 available
-want kernel_features bbg_baseband_guard 'active in LSM; built-in'
+want kernel_features bbg_baseband_guard 'LSM list in exposed config includes baseband_guard; built-in config; runtime not independently confirmed'
 want kernel_features susfs 'interface available'; want kernel_features susfs_version v2.3.0
 want asb_caps cpu_policy_count 2; want asb device_bounds_status applied
 want asb_caps policy0 'hwmin=384000; hwmax=3628800; lowest=384000; steps=23; min_writable=1'
@@ -9101,12 +9129,46 @@ mkdir -p "$T/proc/sys/kernel"; printf '1\n' > "$T/proc/sys/kernel/sched_schedsta
 printf '\nCONFIG_SCHEDSTATS=y\n' >> "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
 out="$(run --kernel)"
 want kernel_features sched_stats 'writable; live=1'
+want kernel_features sched_stats_config y
+want kernel_features sched_stats_node "$T/proc/sys/kernel/sched_schedstats"
 want kernel_features oplus_sdp_900ma 'not exposed; no confirmed OPlus SDP current-control ABI'
 printf '%s\n' "$out" | awk -F '\t' '$2 !~ /^(meta|firmware|soc|kernel|susfs|kernel_external|kernel_config|kernel_origin|kernel_btf|kernel_ebpf|kernel_fuse_bpf|kernel_features|metamodule)$/ { bad = 1 } END { exit bad }' || fail "--kernel ran full-collector sections: $out"
 printf '%s\n' "$out" | grep -q 'DO_NOT_COLLECT' && fail "--kernel collected a sensitive identifier"
 rm -f "$T/proc/sys/kernel/sched_schedstats"
 sed -i 's/^CONFIG_SCHEDSTATS=y$/# CONFIG_SCHEDSTATS is not set/' "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
-out="$(run --kernel)"; want kernel_features sched_stats disabled
+out="$(run --kernel)"; want kernel_features sched_stats 'not observed; exposed config says not set'
+want kernel_features sched_stats_config 'not set'
+# A stock/spoofed config must not hide positive CAKE runtime evidence. Every probe is read-only.
+printf '\n# CONFIG_NET_SCH_CAKE is not set\n' >> "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
+mkdir -p "$T/sys/module/sch_cake"; out="$(run --kernel)"
+want kernel_features net_sch_cake 'available; module loaded'
+want kernel_features net_sch_cake_config 'not set'
+want kernel_features net_sch_cake_module 'sysfs module directory present'
+rmdir "$T/sys/module/sch_cake"
+printf 'sch_cake 20480 0 - Live 0x0\n' > "$T/proc/modules"; out="$(run --kernel)"
+want kernel_features net_sch_cake 'available; module loaded'
+want kernel_features net_sch_cake_module 'listed in /proc/modules'
+rm -f "$T/proc/modules"
+printf '0000000000000000 t cake_enqueue\n' > "$T/proc/kallsyms"; out="$(run --kernel)"
+want kernel_features net_sch_cake 'available; kernel symbols present'
+want kernel_features net_sch_cake_symbols 'CAKE symbol present in readable /proc/kallsyms'
+rm -f "$T/proc/kallsyms"; TC_MODE=active out="$(run --kernel)"
+want kernel_features net_sch_cake 'available; active qdisc observed'
+want kernel_features net_sch_cake_qdisc 'active CAKE qdisc observed'
+TC_MODE=none out="$(run --kernel)"
+want kernel_features net_sch_cake 'not runtime-confirmed; exposed config says not set'
+want kernel_features net_sch_cake_qdisc 'tc read succeeded; no CAKE qdisc observed'
+sed -i 's/^# CONFIG_NET_SCH_CAKE is not set$/CONFIG_NET_SCH_CAKE=y/' "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
+out="$(run --kernel)"; want kernel_features net_sch_cake 'built-in config; runtime not independently confirmed'
+sed -i 's/^CONFIG_NET_SCH_CAKE=y$/CONFIG_NET_SCH_CAKE=m/' "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
+out="$(run --kernel)"; want kernel_features net_sch_cake 'module configured; runtime not independently confirmed'
+sed -i '/^CONFIG_NET_SCH_CAKE=m$/d' "$T/config"; printf 'malformed\n' > "$T/proc/kallsyms"; gzip -c "$T/config" > "$T/proc/config.gz"
+TC_MODE=fail out="$(run --kernel)"
+want kernel_features net_sch_cake 'unknown; not runtime-discoverable'
+want kernel_features net_sch_cake_symbols 'readable; no usable symbol rows'
+want kernel_features net_sch_cake_qdisc 'tc qdisc show failed'
+rm -f "$T/proc/kallsyms"
+grep -Ev '^qdisc show$' "$T/tc.log" && fail 'a CAKE probe ran a state-changing tc command'
 sed -i '/^# CONFIG_SCHEDSTATS is not set$/d' "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
 out="$(run)"; want kernel_features droidspaces 'core config present; runtime not verified'
 # fix246: an Adreno driven by power levels has no devfreq node; the row read "—" for every
@@ -9126,15 +9188,15 @@ rm -rf "$T/sys/class/kgsl"
 printf 'id=MetaCore\nname=MetaCore Metamodule\n' > "$T/data/metamodule/module.prop"
 out="$(run)"
 want metamodule status 'detected at standard path'; want metamodule version 'not exposed'; want metamodule version_code 'not exposed'
-want metamodule nomount_driver built-in; want metamodule nomount_driver_version '22 (105)'
+want metamodule nomount_driver 'driver present; exposed config says built-in'; want metamodule nomount_driver_version '22 (105)'
 # A directory without readable metadata is not reported as a complete installation.
 rm -f "$T/data/metamodule/module.prop"; out="$(run)"
 want metamodule status 'standard path present; module.prop not readable'; want metamodule version 'not exposed'
-want metamodule nomount_driver built-in; want metamodule nomount_driver_version '22 (105)'
+want metamodule nomount_driver 'driver present; exposed config says built-in'; want metamodule nomount_driver_version '22 (105)'
 # No standard path is not universal proof of absence, and does not hide a running NoMount driver.
 rmdir "$T/data/metamodule"; out="$(run)"
 want metamodule status 'not detected at standard path'
-want metamodule nomount_driver built-in; want metamodule nomount_driver_version '22 (105)'
+want metamodule nomount_driver 'driver present; exposed config says built-in'; want metamodule nomount_driver_version '22 (105)'
 # Runtime bbr2 spelling is accepted as BBRv2 too.
 printf 'reno bbr bbr2\n' > "$T/proc/sys/net/ipv4/tcp_available_congestion_control"
 out="$(run)"; want kernel_features bbr_v2 available
@@ -9172,10 +9234,10 @@ cat > "$T/susfs" <<'EOF'
 exit 0
 EOF
 chmod +x "$T/susfs"
-out="$(run)"; want susfs interface present_no_read_response; want kernel_features susfs built-in; want kernel_features susfs_version 'not exposed'
+out="$(run)"; want susfs interface present_no_read_response; want kernel_features susfs 'built-in config; runtime not independently confirmed'; want kernel_features susfs_version 'not exposed'
 # Explicit specialized config is the only positive Unicode Bypass evidence in this fixture.
 printf '\nCONFIG_UNICODE_BYPASS_FIX=y\n' >> "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
-out="$(run)"; want kernel_features unicode_bypass_fix built-in
+out="$(run)"; want kernel_features unicode_bypass_fix 'built-in config; runtime not independently confirmed'
 ! grep -Eq 'set_uname|add_sus_path|add_sus_map|add_sus_kstat|add_sus_' "$D" || fail "a SuSFS writer entered the collector"
 # Locked/green/user without positive patch markers is stock-like, never proven stock.
 printf 'Linux version 6.12.30-oplus (builder@host) #1 SMP PREEMPT\n' > "$T/proc/version"
@@ -9231,11 +9293,12 @@ if command -v bash >/dev/null 2>&1; then
     KSUD_LOG="$T/ksud.log" SUSFS_LOG="$T/susfs.log" bash -c 'enable -n printf; . "$1"' devinfo "$D")"
   want kernel_config available yes; want kernel_config entries 9012
   want kernel_config CONFIG_HZ 250; want kernel_config CONFIG_VPNHIDE y; want kernel_config CONFIG_VPNHIDE_FS_HIDING 'not set'
-  want kernel_features lto 'ThinLTO (Clang)'; want kernel_origin assessment custom-like
-  want kernel_features vpn_hide 'built-in; network only'
-  want kernel_features usb_arsenal 'gadget functions: mass-storage, hid, ncm, nat'
-  want kernel_features bbr_v3 available; want kernel_features wireguard built-in; want kernel_features net_sch_cake built-in
-  want kernel_features overlayfs built-in; want kernel_features cifs absent
+  want kernel_features lto 'ThinLTO (Clang); exposed config only'; want kernel_origin assessment custom-like
+  want kernel_features vpn_hide 'built-in config; network option only; runtime not independently confirmed'
+  want kernel_features usb_arsenal 'gadget options in exposed config: mass-storage, hid, ncm, nat; runtime not verified'
+  want kernel_features bbr_v3 available; want kernel_features wireguard 'built-in config; runtime not independently confirmed'
+  want kernel_features net_sch_cake 'built-in config; runtime not independently confirmed'
+  want kernel_features overlayfs 'built-in config; runtime not independently confirmed'; want kernel_features cifs 'not exposed in config; runtime not confirmed'
   printf '%s\n' "$out" | grep -q '^D	kernel_config	CONFIG_FILLER' && fail 'non-whitelisted config lines were emitted'
   printf 'not gzip\n' > "$T/proc/config.gz"
   out="$(run)"; want kernel_config available 'present; not decodable here'; want kernel_features lto unknown
@@ -9369,6 +9432,10 @@ keys = ('mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate','kernel_
 for key in keys:
     assert key in sections and re.search(key + r":'ui'", h)
 assert "card:'wakeup'" in sections and 'capabilities' not in sections
+assert "id:'wakeup'" not in sections, 'wakeup must share Kernel management, not a separate subsection'
+controls = sections[sections.index("{ id:'controls'"):sections.index("    { id:'zygisk'")]
+assert "card:'wakeup'" in controls and all(key in controls for key in keys)
+assert "else if (section.card === 'wakeup') {" in h and 'sectionItems.forEach' in h[h.index("else if (section.card === 'wakeup') {"):h.index("else if (section.id === 'zygisk')")]
 panel = h[h.index('const ASB_KERNEL_STATUS_KEYS'):h.index('function cfgToastText')]
 assert 'asb_device_info.sh' not in panel and '_kernelPanel.caps' not in panel
 assert 'cfgRenderKernelControlsHelp' in h and 'kernelControlsRefresh' in h and 'kernelOpenDiagnostics' in h
@@ -11290,12 +11357,18 @@ cfgRenderZygiskCard=list=>list.appendChild(E('section','cfg-zygisk-card'));cfgRe
 eval(grab('cfgCatClass'));eval(grab('cfgRenderSection'));eval(grab('cfgRenderGroup'));
 for(const n of ['asbPageJumpIsDock','asbPageJumpIndicator','asbPageJumpActive','asbPageJumpClear','asbPageJumpWatch','asbPageJumpIcon','asbPageJump'])eval(grab(n));
 function find(n,id){if(n.id===id)return n;for(const c of n.children){const x=find(c,id);if(x)return x}return null;}
-const expected={audio:['dsp','playback','safety'],camera:['processing','perf'],iface:['speed','effects'],net:['cellular','wifi','speed','stack'],battery:['smart','charging','standby','thermal','memory'],ui:['controls','wakeup','zygisk','services','feel','diag']};
+const expected={audio:['dsp','playback','safety'],camera:['processing','perf'],iface:['speed','effects'],net:['cellular','wifi','speed','stack'],battery:['smart','charging','standby','thermal','memory'],ui:['controls','zygisk','services','feel','diag']};
+function countMatching(n,p){return (p(n)?1:0)+n.children.reduce((v,c)=>v+countMatching(c,p),0)}
 for(const [group,sections] of Object.entries(expected)){
  const page=E('div','live-page config-page');page.id='configPage';page.clientHeight=600;page.scrollHeight=2400;page.scrollTop=0;page.scrollCalls=[];
  page.addEventListener=(t,f)=>{if(t==='scroll')page._scroll=f};page.removeEventListener=(t,f)=>{if(t==='scroll'&&page._scroll===f)page._scroll=null};page.scrollTo=o=>{page.scrollTop=o.top;page.scrollCalls.push(o.top)};
  const list=E('div','cfg-list');list.parentNode=page;page.appendChild(list);global._el=id=>id==='configPage'?page:find(page,id);
  cfgRenderGroup(list,group);flush();
+ if(group==='ui'){
+  const owned=['mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first'];
+  if(countMatching(list,n=>owned.includes(n.datasetKey))!==6)throw Error('ui: unified Kernel management lost ordinary controls');
+  if(countMatching(list,n=>String(n.className).split(/\s+/).includes('kernel-card'))<2)throw Error('ui: controls help or wakeup companion missing');
+ }
  const nav=page._asbJumpNav;if(!nav)throw Error(group+': dock missing');
  if(nav.parentNode!==body)throw Error(group+': dock not portalled');
  if(nav._asbJumpButtons.length!==sections.length)throw Error(group+': wrong dock count');
