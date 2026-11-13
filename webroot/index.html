@@ -1968,6 +1968,65 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 @keyframes devEvidencePulse { to { opacity:.38; transform:scale(.72); } }
 @keyframes devEvidenceStep { 0%,100% { opacity:.45; } 45% { opacity:1; border-color:var(--border-active); color:var(--text-secondary); } }
 @media (prefers-reduced-motion:reduce) { .dev-loading-orbit::before,.dev-loading-orbit::after,.dev-loading-step { animation:none; } }
+/* On-demand Device/Zygisk reads: a bounded orbital scene, removed with the loading card.
+   The scanner is decorative, not a percentage or a claim about individual collector stages. */
+.asb-cosmic-loading { position:relative; isolation:isolate; min-height:326px; padding:26px 18px 20px;
+  border-color:rgba(133,157,190,.24); border-radius:22px;
+  background:radial-gradient(ellipse at 50% 18%,rgba(50,69,255,.18),transparent 52%),
+    radial-gradient(ellipse at 16% 88%,rgba(75,243,200,.075),transparent 44%),
+    linear-gradient(155deg,rgba(20,25,40,.96),rgba(13,15,20,.985));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.055),0 16px 42px rgba(4,8,18,.16); }
+.asb-cosmic-sky { position:absolute; inset:0; z-index:-1; overflow:hidden; border-radius:inherit; pointer-events:none; }
+.asb-cosmic-sky::before { content:''; position:absolute; width:220px; height:220px; left:50%; top:18px;
+  transform:translateX(-50%); border-radius:50%; background:radial-gradient(circle,rgba(150,102,255,.13),transparent 67%); }
+.asb-cosmic-star { position:absolute; width:2px; height:2px; border-radius:50%; background:#b9fff0;
+  box-shadow:0 0 8px rgba(75,243,200,.65); opacity:.34; animation:asbCosmicStar 2.8s ease-in-out infinite; }
+.asb-cosmic-star:nth-child(1) { left:12%; top:16%; }
+.asb-cosmic-star:nth-child(2) { left:84%; top:24%; animation-delay:.7s; }
+.asb-cosmic-star:nth-child(3) { left:20%; top:52%; animation-delay:1.4s; }
+.asb-cosmic-star:nth-child(4) { left:77%; top:62%; animation-delay:2s; }
+.asb-cosmic-star:nth-child(5) { left:36%; top:9%; animation-delay:1s; }
+.asb-cosmic-star:nth-child(6) { left:65%; top:42%; animation-delay:1.8s; }
+.asb-cosmic-scan { position:absolute; z-index:-1; left:12%; right:12%; top:54px; height:58px; pointer-events:none;
+  background:linear-gradient(180deg,transparent,rgba(75,243,200,.065) 62%,rgba(75,243,200,.32) 78%,transparent 80%);
+  filter:blur(.2px); opacity:0; animation:asbCosmicScan 3.4s ease-in-out infinite; }
+.asb-cosmic-scene { position:relative; width:156px; height:156px; margin:0 auto 18px; }
+.asb-cosmic-scene::before { content:''; position:absolute; inset:42px; border-radius:50%;
+  background:radial-gradient(circle,rgba(75,243,200,.13),rgba(50,69,255,.055) 48%,transparent 72%);
+  box-shadow:0 0 34px rgba(75,243,200,.1); }
+.asb-cosmic-ring { position:absolute; border-radius:50%; transform-origin:center; pointer-events:none; }
+.asb-cosmic-ring-one { inset:4px; border:1px solid rgba(75,243,200,.3); border-left-color:rgba(50,69,255,.72);
+  border-bottom-color:rgba(150,102,255,.45); animation:devEvidenceSpin 8s linear infinite; }
+.asb-cosmic-ring-two { inset:21px; border:1px dashed rgba(185,205,235,.3); border-top-color:rgba(150,102,255,.85);
+  animation:asbCosmicReverse 11s linear infinite; }
+.asb-cosmic-ring-three { inset:38px; border:1px solid rgba(75,243,200,.18); }
+.asb-cosmic-satellite { position:absolute; left:50%; top:-3px; width:6px; height:6px; margin-left:-3px; border-radius:50%;
+  background:#4bf3c8; box-shadow:0 0 10px rgba(75,243,200,.9),0 0 22px rgba(75,243,200,.32); }
+.asb-cosmic-ring-two .asb-cosmic-satellite { top:auto; bottom:-2px; width:4px; height:4px; background:#b38aff;
+  box-shadow:0 0 10px rgba(150,102,255,.9); }
+.asb-cosmic-ufo { position:absolute; left:50%; top:50%; width:82px; height:62px; transform:translate(-50%,-50%);
+  color:#b9fff0; filter:drop-shadow(0 0 9px rgba(75,243,200,.26)); animation:asbCosmicHover 3.2s ease-in-out infinite; }
+.asb-cosmic-loading .dev-loading-title { position:relative; color:#edf7f5; font-size:15px; line-height:1.4; letter-spacing:.01em; }
+.asb-cosmic-loading .dev-loading-sub { position:relative; max-width:340px; margin:7px auto 0; color:#b2bfca; font-size:11.5px; line-height:1.55; }
+.asb-cosmic-loading .dev-loading-steps { position:relative; max-width:340px; margin:18px auto 0; gap:8px; }
+.asb-cosmic-loading .dev-loading-step { padding:8px 5px; border-color:rgba(164,187,212,.17); border-radius:10px;
+  color:#b9c8d4; background:rgba(255,255,255,.025); font-size:9px; animation:none; }
+.asb-cosmic-loading[data-cosmic="zygisk"] { background:radial-gradient(ellipse at 50% 18%,rgba(150,102,255,.17),transparent 52%),
+    radial-gradient(ellipse at 84% 86%,rgba(75,243,200,.07),transparent 44%),linear-gradient(155deg,rgba(20,24,39,.96),rgba(13,15,20,.985)); }
+html[data-asb-theme="light"] .asb-cosmic-loading { border-color:rgba(60,84,119,.2);
+  background:radial-gradient(ellipse at 50% 18%,rgba(50,69,255,.11),transparent 52%),
+    radial-gradient(ellipse at 16% 88%,rgba(20,169,139,.09),transparent 44%),linear-gradient(155deg,#f4f7fb,#eaf0f5);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.8),0 12px 30px rgba(35,57,77,.08); }
+html[data-asb-theme="light"] .asb-cosmic-loading .dev-loading-title { color:#1c2938; }
+html[data-asb-theme="light"] .asb-cosmic-loading .dev-loading-sub { color:#4c5e70; }
+html[data-asb-theme="light"] .asb-cosmic-loading .dev-loading-step { color:#405468; background:rgba(255,255,255,.48); border-color:rgba(60,84,119,.15); }
+html[data-asb-theme="light"] .asb-cosmic-ufo { color:#167c70; filter:drop-shadow(0 0 8px rgba(22,124,112,.18)); }
+@keyframes asbCosmicReverse { to { transform:rotate(-360deg); } }
+@keyframes asbCosmicHover { 0%,100% { transform:translate(-50%,-50%); } 50% { transform:translate(-50%,calc(-50% - 5px)); } }
+@keyframes asbCosmicStar { 0%,100% { opacity:.22; } 50% { opacity:.85; } }
+@keyframes asbCosmicScan { 0% { opacity:0; transform:translateY(-12px); } 18% { opacity:.8; } 72% { opacity:.45; } 100% { opacity:0; transform:translateY(116px); } }
+@media (prefers-reduced-motion:reduce) { .asb-cosmic-ring,.asb-cosmic-ufo,.asb-cosmic-star,.asb-cosmic-scan { animation:none; }
+  .asb-cosmic-scan { opacity:.2; transform:translateY(42px); } .asb-cosmic-star { opacity:.48; } }
 .device-page .dev-pressure { margin: 2px 0 12px; padding: 12px; border: 1px solid var(--border); border-radius: 14px; background: rgba(255,255,255,.025); }
 .device-page .dev-pressure-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .device-page .dev-pressure-score { font: 750 25px/1 var(--mono); color: var(--accent); }
@@ -2543,6 +2602,8 @@ html[data-asb-theme="light"] .cfg-zygisk-card { background:#fff; }
 .cfg-section.cat-iface   { --cat: #c6a3f5; }
 .cfg-section.cat-system  { --cat: #a7b7c6; }
 .cfg-section.cat-kernel  { --cat: #82b8ff; }
+.cfg-section.cat-feel    { --cat: #e6b8a2; }
+.cfg-section.cat-zygisk  { --cat: #a7b7c6; }
 .cfg-section[class*="cat-"] { --section-accent: var(--cat); --tech-icon: var(--cat); }
 
 .cfg-tile.cat-audio   { --cat: #f98d9e; }
@@ -2551,7 +2612,12 @@ html[data-asb-theme="light"] .cfg-zygisk-card { background:#fff; }
 .cfg-tile.cat-ux      { --cat: #f0b76b; }
 .cfg-tile.cat-net     { --cat: #4cd3e8; }
 .cfg-tile.cat-iface   { --cat: #c6a3f5; }
+.cfg-tile.cat-system  { --cat: #a7b7c6; }
 .cfg-tile.cat-kernel  { --cat: #82b8ff; }
+.cfg-tile.cat-feel    { --cat: #e6b8a2; }
+/* Zygisk is an advanced utility, not a second primary action: quiet slate glass instead
+ * of falling back to the bright ASB accent when the old cat-system tile token was absent. */
+.cfg-tile.cat-zygisk  { --cat: #a7b7c6; }
 .cfg-tile[class*="cat-"] { --tech-icon: var(--cat); }
 
 .cfg-tile-name {
@@ -4121,7 +4187,10 @@ html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-battery {
 html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-ux      { --cat:#9a5a00; }
 html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-net     { --cat:#0b6f86; }
 html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-iface   { --cat:#7442b8; }
-html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-system  { --cat:#4a5f75; }
+html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-system,
+html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-zygisk { --cat:#4a5f75; }
+html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-kernel  { --cat:#346aa8; }
+html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-feel    { --cat:#9a5b43; }
 html[data-asb-theme="light"] .cfg-section-title { color:var(--section-accent,#a52620) !important; }
 html[data-asb-theme="light"] .cfg-row:not(.is-on) { box-shadow:0 1px 2px rgba(16,24,32,.05); }
 html[data-asb-theme="light"] .cfg-row.is-on { background:linear-gradient(160deg,rgba(0,124,99,.07),#fff 70%) !important; border-color:rgba(0,124,99,.30) !important; }
@@ -5396,9 +5465,9 @@ html[data-asb-theme="light"] .asb-value-pending {
 }
 html .cfg-tile {
   align-items:center;
-  justify-content:flex-start;
+  justify-content:center;
   gap:0;
-  padding:14px 12px 12px;
+  padding:5px 7px;
   text-align:center;
   background:linear-gradient(155deg,color-mix(in srgb,var(--cat,var(--accent)) 10%,transparent),color-mix(in srgb,var(--cat,var(--accent)) 3%,transparent) 62%,transparent),rgba(255,255,255,.018);
   border-color:color-mix(in srgb,var(--cat,var(--accent)) 24%,var(--border));
@@ -5409,36 +5478,43 @@ html .cfg-tile-ico {
   place-items:center;
   align-self:center;
   flex:0 0 auto;
-  width:42px;
-  height:42px;
-  margin:0 0 12px;
-  border-radius:14px;
+  width:34px;
+  height:34px;
+  margin:0 0 2px;
+  border-radius:12px;
 }
-html .cfg-tile-ico .tech-icon { width:24px; height:24px; margin:0; }
+html .cfg-tile-ico .tech-icon { width:21px; height:21px; margin:0; }
 html .cfg-tile-name {
   width:100%;
-  min-height:1.25em;
+  min-height:1.1em;
   color:var(--text);
-  font-size:14px;
+  font-size:11.5px;
   font-weight:650;
-  line-height:1.25;
+  line-height:1.1;
   letter-spacing:0;
   overflow-wrap:anywhere;
 }
 html .cfg-tile-desc {
   width:100%;
-  min-height:2.6em;
-  margin-top:5px;
+  min-height:2.2em;
+  margin-top:2px;
   color:var(--text-tertiary);
-  font-size:10.5px;
-  line-height:1.3;
+  font-size:8.8px;
+  line-height:1.1;
   letter-spacing:0;
-  -webkit-line-clamp:3;
+  -webkit-line-clamp:2;
   overflow-wrap:anywhere;
 }
-html .cfg-tile-foot { align-items:stretch; gap:7px; padding-top:10px; }
-html .cfg-tile-count { font:600 10.5px/1.2 var(--mono); letter-spacing:.02em; text-align:center; }
-html .cfg-tile-bar { width:100%; height:3px; }
+html .cfg-tile-foot {
+  flex-direction:row;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  margin:4px 0 0;
+  padding:0;
+}
+html .cfg-tile-count { flex:0 0 auto; font:600 8.5px/1.2 var(--mono); letter-spacing:.02em; text-align:center; }
+html .cfg-tile-bar { flex:1 1 auto; width:auto; min-width:18px; max-width:56px; height:3px; }
 html[data-asb-theme="light"] .cfg-tile {
   background:linear-gradient(155deg,color-mix(in srgb,var(--cat) 8%,transparent),transparent 70%),#fff !important;
   border-color:color-mix(in srgb,var(--cat) 24%,var(--border)) !important;
@@ -6353,6 +6429,9 @@ const TECH_ICON_PATHS = {
   kernel: '<rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 9h6v6H9zM9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/>',
   mglru_mode: '<path d="M5 4h14v4H5zM5 10h14v4H5zM5 16h14v4H5z"/><path d="M8 6h.01M8 12h.01M8 18h.01M11 6h5M11 12h5M11 18h5"/>',
   timer_migration: '<circle cx="10" cy="12" r="7"/><path d="M10 8v4l3 2M16 5h5v5M21 5l-5 5"/>',
+  hrtimer_migration: '<circle cx="10" cy="12" r="7"/><path d="M10 7v5l4 2M10 2v2M3 12H1M19 12h-2M16 4h5v5M21 4l-5 5"/>',
+  lpm_prediction: '<path d="M4 17a8 8 0 1 1 13 2M4 17v-5M4 17h5"/><path d="M8 13l3-3 3 2 4-5"/><path d="M18 7h-3M18 7v3"/>',
+  usb_autosuspend: '<path d="M12 3v12M12 5l-3 3M12 8l3-3"/><circle cx="12" cy="18" r="3"/><path d="M7 10v4a3 3 0 0 0 3 3M17 10v4a3 3 0 0 1-3 3"/><circle cx="7" cy="9" r="1.5"/><rect x="15.5" y="6.5" width="3" height="3" rx=".5"/>',
   sched_migration: '<rect x="3" y="5" width="5" height="5" rx="1"/><rect x="16" y="14" width="5" height="5" rx="1"/><path d="M8 7.5h5a3 3 0 0 1 3 3V14M13 11l3 3 3-3M5.5 10v4a3 3 0 0 0 3 3H16"/>',
   sched_autogroup: '<rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/><rect x="16" y="16" width="5" height="5" rx="1"/><path d="M12 8v4M5.5 16v-2a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v2M12 12v4"/>',
   sched_child_first: '<rect x="3" y="4" width="7" height="6" rx="1"/><rect x="14" y="14" width="7" height="6" rx="1"/><path d="M10 7h4a3 3 0 0 1 3 3v4M14 11l3 3 3-3M6.5 13v4a3 3 0 0 0 3 3H14"/>',
@@ -8929,6 +9008,9 @@ const SNAP_KEYS = [
   'kernel_sched_stats',
   'kernel_sched_autogroup',
   'kernel_sched_child_runs_first',
+  'kernel_hrtimer_migration',
+  'kernel_lpm_prediction',
+  'kernel_usb_autosuspend',
   'cool_gaming',
   'auto_battery_enable',
   'charge_aware_enable',
@@ -9162,6 +9244,12 @@ const CFG_ITEMS = [
   { key:'kernel_timer_migration', type:'seg', def:'off', stock:'stock',
     opts:['stock','off','on'], name:'Timer Migration', cat:'system',
     desc:'Controls whether the kernel may migrate timers between CPUs. On can move timers from idle CPUs to already active ones and avoid some wake-ups; Off keeps timers in place, which can behave differently under load. Depending on CPU idle behavior, either mode may help or hurt latency and power use. Off preserves the previous ASB request; Stock and uninstall restore the captured value after verified readback.' },
+  { key:'kernel_hrtimer_migration', type:'seg', def:'auto', stock:'stock',
+    opts:['auto','stock','off','on'], name:'High-resolution Timer Migration', cat:'system',
+    desc:'Controls migration of high-resolution timers through /proc/sys/kernel/hrtimer_migration. Auto requests 0 only on Battery and restores the exact captured value on other profiles; Off and On override the profile. Keeping timers local can help cache locality, while migration can change idle wake-ups; neither latency nor power benefit is guaranteed. Stock and uninstall restore only an ASB-owned baseline after matching readback.' },
+  { key:'kernel_lpm_prediction', type:'seg', def:'auto', stock:'stock',
+    opts:['auto','stock','off','on'], name:'Idle Prediction (LPM)', cat:'system',
+    desc:'Controls the low-power-mode idle-state predictor through /sys/module/lpm_levels/parameters/lpm_prediction when the kernel exposes it. Auto requests 1 only on Battery and restores the exact captured value on other profiles; Off and On override the profile. Prediction can affect which idle state is selected, but power and wake-up latency depend on the workload and firmware. Stock and uninstall require verified restoration.' },
   { key:'kernel_sched_nr_migrate', type:'seg', def:'4', stock:'stock',
     opts:['stock','1','2','4','8','16'], name:'Scheduler Migration Batch', cat:'system',
     desc:'Sets the maximum tasks moved in one scheduler balancing pass through /sys/kernel/debug/sched/nr_migrate. Lower values reduce migration work per pass but can leave cores imbalanced for longer; higher values can balance load sooner at the cost of more migrations and cache disruption. Performance and battery effects depend on the workload. Default 4 is the previous Balanced request, not a proven optimum; Stock and uninstall restore the captured integer.' },
@@ -9174,6 +9262,9 @@ const CFG_ITEMS = [
   { key:'kernel_sched_child_runs_first', type:'seg', def:'stock', stock:'stock',
     opts:['stock','off','on'], name:'Child Task Runs First', cat:'system',
     desc:'After fork(), On asks the scheduler to run the child before its parent; Off selects the opposite order. This can change process-start latency and copy-on-write behavior in some workloads, while others may see no benefit or a regression. It is not a general FPS, performance or battery optimization. Stock and uninstall restore the captured 0/1, and readback must match before ASB reports success.' },
+  { key:'kernel_usb_autosuspend', type:'seg', def:'stock', stock:'stock',
+    opts:['stock','off','on'], name:'USB Autosuspend', cat:'system',
+    desc:'Sets usbcore\'s default autosuspend delay for newly detected USB peripheral devices. On requests 2 seconds; Off requests -1 to prevent that default autosuspend. It does not change charging current, ADB, USB gadget mode, tethering or VPN Hide. Already connected devices can keep their own power policy. Stock is inert when unowned and otherwise restores the captured signed integer after readback.' },
   { key:'gms_trim', type:'seg', def:'stock', stock:'stock', opts:['stock','lite','strict'], name:'Google Services Trim',
     desc:'Reduces selected Google Play services background activity without disabling Play services itself. Lite limits location reporting and search-widget background work. Strict also removes Play services from the Doze exemption list, which can delay push notifications, sync and other background jobs. Choose Lite or Stock if timely delivery is essential. Changed permissions and exemptions are recorded and restored when ASB is removed.' },
   { key:'gms_freeze', type:'seg', def:'off', stock:'off', opts:['off','safe','more','max'], name:'Freeze Google Components',
@@ -9302,6 +9393,7 @@ const CFG_CAT = {
      live under battery for the same reason. */
   mglru_hold: 'battery', mglru_mode:'battery',
   kernel_timer_migration:'system', kernel_sched_nr_migrate:'system',
+  kernel_hrtimer_migration:'system', kernel_lpm_prediction:'system', kernel_usb_autosuspend:'system',
   perf_ceiling_pct:'battery', wakelock_action:'battery', gnss_trim:'battery',
   night_modem_idle:'net', net_screen_off_lte:'net', net_lte_light:'net', smart_media_guard:'battery',
   smart_lab:'battery', smart_lab_mem:'battery', profile_class_auto:'battery', smart_records_balanced:'battery', ltpo_peak_force:'system',
@@ -9351,16 +9443,17 @@ const CFG_GROUP_DESC = {
   zygisk: 'Master switch and status',
   ui: 'Services, processes, diagnostics'
 };
-/* Nine task-oriented categories make a complete 3 × 3 hub. Advanced facilities no longer
- * compete inside System, and Monitor gets no extra shortcut or duplicate control owner. */
+/* Nine task-oriented categories make a complete 3 × 3 hub. The rows progress from
+ * everyday sensory settings through connectivity/power to advanced system ownership.
+ * Monitor gets no extra shortcut or duplicate control owner. */
 const CFG_GROUPS = [
+  { id:'iface',   icon:'panel',          name:'Interface',         ru:'\u0418\u043D\u0442\u0435\u0440\u0444\u0435\u0439\u0441' },
+  { id:'feel',    icon:'haptic_touch',   name:'Display & Haptics', ru:'\u042D\u043A\u0440\u0430\u043D \u0438 \u043E\u0442\u043A\u043B\u0438\u043A' },
   { id:'audio',   icon:'headphones',     name:'Audio',             ru:'\u0410\u0443\u0434\u0438\u043E' },
   { id:'camera',  icon:'camera',         name:'Camera',            ru:'\u041A\u0430\u043C\u0435\u0440\u0430' },
-  { id:'iface',   icon:'panel',          name:'Interface',         ru:'\u0418\u043D\u0442\u0435\u0440\u0444\u0435\u0439\u0441' },
   { id:'net',     icon:'network',        name:'Network',           ru:'\u0421\u0435\u0442\u044C' },
   { id:'battery', icon:'battery_cell',   name:'Battery',           ru:'\u0411\u0430\u0442\u0430\u0440\u0435\u044F' },
   { id:'kernel',  icon:'kernel',         name:'Kernel',            ru:'\u042F\u0434\u0440\u043E' },
-  { id:'feel',    icon:'haptic_touch',   name:'Display & Haptics', ru:'\u042D\u043A\u0440\u0430\u043D \u0438 \u043E\u0442\u043A\u043B\u0438\u043A' },
   { id:'zygisk',  icon:'zygisk_observer',name:'Zygisk',            ru:'Zygisk' },
   { id:'ui',      icon:'switches',       name:'System',            ru:'\u0421\u0438\u0441\u0442\u0435\u043C\u0430' }
 ];
@@ -9386,8 +9479,8 @@ const CFG_GROUP_OF = {
      the other RAM tweaks - sit under battery for exactly this reason. */
   mglru_hold:'battery',
   /* Each advanced owner has one hub destination; diagnostics remains a separate read-only page. */
-  mglru_mode:'kernel', kernel_timer_migration:'kernel', kernel_sched_nr_migrate:'kernel', kernel_sched_stats:'kernel',
-  kernel_sched_autogroup:'kernel', kernel_sched_child_runs_first:'kernel',
+  mglru_mode:'kernel', kernel_timer_migration:'kernel', kernel_hrtimer_migration:'kernel', kernel_lpm_prediction:'kernel',
+  kernel_sched_nr_migrate:'kernel', kernel_sched_stats:'kernel', kernel_sched_autogroup:'kernel', kernel_sched_child_runs_first:'kernel', kernel_usb_autosuspend:'kernel',
   night_modem_idle:'net', net_screen_off_lte:'net', net_lte_light:'net', smart_media_guard:'battery',
   smart_lab:'battery', smart_lab_mem:'battery', profile_class_auto:'battery', smart_records_balanced:'battery', ltpo_peak_force:'feel',
   net_rps:'net', net_txqueue:'net',
@@ -9478,7 +9571,7 @@ const CFG_GROUP_SECTIONS = {
     { id:'controls', icon:'kernel', titleKey:'cfg_kernel_section_controls',
       title:'Kernel management', hintKey:'cfg_kernel_section_controls_hint',
       hint:'Registered kernel controls and the optional exact-name wakeup list live together. Availability and live readback come from the running kernel.',
-      keys:['mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first'], card:'wakeup' }
+      keys:['mglru_mode','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend'], card:'wakeup' }
   ],
   zygisk: [
     { id:'zygisk', icon:'zygisk_observer', titleKey:'cfg_ui_section_zygisk',
@@ -10057,14 +10150,14 @@ function asbKernelControlVerdict(status, live) {
   const s = String(status || '');
   const fb = Object.prototype.hasOwnProperty.call(ASB_KC_VERDICTS, s) ? ASB_KC_VERDICTS[s] : s;
   let txt = T('kc_verdict_' + s, fb);
-  const lv = String(live || '').replace(/[^0-9A-Za-zx]/g, '').slice(0, 12);
+  const lv = String(live || '').replace(/[^0-9A-Za-zx-]/g, '').slice(0, 12);
   if (lv && lv !== 'unknown') txt += ' · ' + T('kc_live', 'kernel: {v}').replace('{v}', lv);
   return txt;
 }
 /* Settings → System → Kernel management. One on-demand batch reads only the registered
  * control owner and wakeup owner. Read-only kernel evidence belongs to Device Diagnostics.
  * No timer, polling worker, duplicate diagnostics probe or direct browser sysfs write. */
-const ASB_KERNEL_STATUS_KEYS = ['mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first'];
+const ASB_KERNEL_STATUS_KEYS = ['mglru_mode','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend'];
 let _kernelPanel = { loaded:false, loading:false, controls:Object.create(null), wakeup:null };
 let _wbDraft = null, _wbBusy = false;
 function kernelPanelEnsure() { if (!_kernelPanel.loaded && !_kernelPanel.loading) kernelPanelLoad(false); }
@@ -10398,6 +10491,7 @@ const CFG_ICONS = {
   net_wifi_leave:'wifileave',
   mglru_hold:'memhold', mglru_mode:'mglru_mode', kernel_timer_migration:'timer_migration', kernel_sched_nr_migrate:'sched_migration', kernel_sched_stats:'kernel',
   kernel_sched_autogroup:'sched_autogroup', kernel_sched_child_runs_first:'sched_child_first',
+  kernel_hrtimer_migration:'hrtimer_migration', kernel_lpm_prediction:'lpm_prediction', kernel_usb_autosuspend:'usb_autosuspend',
   audio_profile:'audio_profile', audio_dac_hifi:'dac', media_loudness:'media_volume', bt_absvol_mode:'volume_sync', bt_a2dp_offload:'bluetooth_offload',
   dsp_loudness:'loudness', dsp_bass:'bass', dsp_voice:'voice', dsp_width:'stereo_width', dsp_clarity:'clarity', dsp_rumble:'rumble_filter', dsp_compressor:'compressor', dsp_headroom:'headroom', dsp_outputs:'audio_route', audio_remove_volume_limit:'ear_safe', audio_resampler:'resampler', media_vol_steps:'vol_steps',
   CAMERA_LEVEL:'camera_level', CAMERA_CONTRAST:'contrast', CAMERA_GRAIN:'grain', CAMERA_PORTRAIT:'portrait', CAMERA_LOWLIGHT:'lowlight', camera_hold_enable:'camera_hold', CAMERA_AGGRESSIVE:'camera_aggressive', CAMERA_AGGRESSIVE_INJECT:'camera_inject',
@@ -10988,7 +11082,7 @@ function cfgRenderHub(list) {
       if (cfgIsActive(it, cur)) on++;
     });
     const tile = document.createElement('button');
-    const tileCat = g.id === 'ui' ? 'ux' : (g.id === 'zygisk' ? 'system' : (g.id === 'feel' ? 'iface' : g.id));
+    const tileCat = g.id === 'ui' ? 'ux' : g.id;
     tile.className = 'cfg-tile cat-' + tileCat;
     tile.onclick = () => { uiSound('nav'); cfgShowGroup(g.id); };
 
@@ -11093,6 +11187,7 @@ const APPLY_MODE = {
      straight back from /sys/kernel/mm/lru_gen/min_ttl_ms - no reboot, verifiable. */
   mglru_hold: APPLY_LIVE, mglru_mode: APPLY_LIVE, kernel_timer_migration: APPLY_LIVE, kernel_sched_nr_migrate: APPLY_LIVE, kernel_sched_stats: APPLY_LIVE,
   kernel_sched_autogroup: APPLY_LIVE, kernel_sched_child_runs_first: APPLY_LIVE,
+  kernel_hrtimer_migration: APPLY_LIVE, kernel_lpm_prediction: APPLY_LIVE, kernel_usb_autosuspend: APPLY_LIVE,
   // Live: these have a runtime script that runs on save and is verified afterwards.
   audio_profile:APPLY_LIVE, dsp_loudness:APPLY_LIVE, dsp_bass:APPLY_LIVE, dsp_voice:APPLY_LIVE, dsp_width:APPLY_LIVE, dsp_clarity:APPLY_LIVE, dsp_rumble:APPLY_LIVE,
   dsp_compressor:APPLY_LIVE, dsp_headroom:APPLY_LIVE, bt_absvol_mode:APPLY_LIVE, bt_link_stability:APPLY_LIVE, bt_a2dp_offload:APPLY_LIVE,
@@ -16782,16 +16877,23 @@ function zygiskEvidenceCard(d) {
   det.addEventListener('toggle', function () { if (det.open) det._asbBuild(); });
   return det;
 }
-function zygiskPageRender(d) {
+function zygiskPageRender(d, state) {
   const page = _el('zygiskPage'); asbPageJumpClear(page);
   const body = _el('zygiskBody');
   if (!body) return;
   const y = _el('zygiskPage') ? _el('zygiskPage').scrollTop : 0;
   body.textContent = '';
   if (!d || !d.sections || !d.sections.zygisk_observer) {
-    const card = logReportSec(T('zy_sec_status', 'Connection'), 'zygisk_observer');
-    card.appendChild(logReportNote(T('zy_loading', 'Reading the Zygisk state…')));
-    body.appendChild(card);
+    if (state === 'error') {
+      const card = logReportSec(T('zy_sec_status', 'Connection'), 'zygisk_observer');
+      card.appendChild(logReportNote(T(window._asbZygiskLinkData ? 'zy_status_failed' : 'zy_status_failed_empty',
+        window._asbZygiskLinkData ? 'Could not read the state; the last snapshot is shown' : 'Could not read the Zygisk state. No snapshot is available; tap Refresh to try again.'), true));
+      body.appendChild(card);
+    } else {
+      asbCosmicLoading(body, { kind:'zygisk', titleKey:'zy_loading', title:'Reading the Zygisk state…',
+        subKey:'zy_loading_sub', sub:'Opening a read-only channel to the companion, guard and process observer. No app or module is being changed.',
+        steps:[['zy_stage_companion','Companion'],['zy_stage_guard','Guard'],['zy_stage_apps','Apps']] });
+    }
     return;
   }
   const st = logReportSec(T('zy_sec_status', 'Connection'), 'zygisk_observer');
@@ -17916,6 +18018,7 @@ async function zygiskPageLoad(user) {
   const status = _el('zygiskStatus'), btn = _el('zyRefresh');
   if (btn) btn.disabled = true;
   if (status) status.textContent = T('zy_status_loading', 'Reading…');
+  if (_zygiskOpen && !window._asbZygiskLinkData) zygiskPageRender(null);
   await asbPaintYield();
   if (seq !== _zygiskLoadSeq) return;
   let b = null;
@@ -17946,8 +18049,9 @@ async function zygiskPageLoad(user) {
     if (_zygiskOpen) zygiskPageRender(d);
     if (status) status.textContent = T('zy_status_ready', 'Current snapshot · read-only');
   } else {
-    if (_zygiskOpen && user) zygiskPageRender(window._asbZygiskLinkData || null);
-    if (status) status.textContent = T('zy_status_failed', 'Could not read the state; the last snapshot is shown');
+    if (_zygiskOpen && (user || !window._asbZygiskLinkData)) zygiskPageRender(window._asbZygiskLinkData || null, 'error');
+    if (status) status.textContent = T(window._asbZygiskLinkData ? 'zy_status_failed' : 'zy_status_failed_empty',
+      window._asbZygiskLinkData ? 'Could not read the state; the last snapshot is shown' : 'Could not read the Zygisk state. No snapshot is available; tap Refresh to try again.');
   }
   const save = _el('zySave'); if (save) save.disabled = !window._asbZygiskLinkData;
 }
@@ -18232,23 +18336,36 @@ function closeDevicePage() {
   navSyncSoon();
   requestAnimationFrame(asbFitPages);
 }
-function deviceInfoLoading(body) {
+function asbCosmicLoading(body, options) {
   body.textContent = '';
   const card = document.createElement('div');
-  card.className = 'dev-loading';
-  card.setAttribute('role', 'status');
-  const orbit = document.createElement('div'); orbit.className = 'dev-loading-orbit'; orbit.setAttribute('aria-hidden', 'true');
-  const title = document.createElement('div'); title.className = 'dev-loading-title';
-  title.textContent = T('dev_loading', 'Reading device, firmware and kernel evidence…');
-  const sub = document.createElement('div'); sub.className = 'dev-loading-sub';
-  sub.textContent = T('dev_loading_sub', 'The page is already open. Nothing is being changed; each group appears after the read-only snapshot returns.');
-  const steps = document.createElement('div'); steps.className = 'dev-loading-steps';
-  ['dev_stage_system', 'dev_stage_kernel', 'dev_stage_battery'].forEach(function (k, i) {
-    const e = document.createElement('div'); e.className = 'dev-loading-step';
-    e.textContent = T(k, ['System', 'Kernel', 'Battery'][i]); steps.appendChild(e);
+  card.className = 'dev-loading asb-cosmic-loading';
+  card.dataset.cosmic = options.kind;
+  card.setAttribute('role', 'status'); card.setAttribute('aria-live', 'polite'); card.setAttribute('aria-busy', 'true');
+  const sky = document.createElement('div'); sky.className = 'asb-cosmic-sky'; sky.setAttribute('aria-hidden', 'true');
+  for (let i = 0; i < 6; i++) { const star = document.createElement('span'); star.className = 'asb-cosmic-star'; sky.appendChild(star); }
+  const scan = document.createElement('div'); scan.className = 'asb-cosmic-scan'; scan.setAttribute('aria-hidden', 'true'); sky.appendChild(scan);
+  const scene = document.createElement('div'); scene.className = 'asb-cosmic-scene'; scene.setAttribute('aria-hidden', 'true');
+  ['one','two','three'].forEach(function (name) {
+    const ring = document.createElement('div'); ring.className = 'asb-cosmic-ring asb-cosmic-ring-' + name;
+    if (name !== 'three') { const dot = document.createElement('span'); dot.className = 'asb-cosmic-satellite'; ring.appendChild(dot); }
+    scene.appendChild(ring);
   });
-  card.appendChild(orbit); card.appendChild(title); card.appendChild(sub); card.appendChild(steps);
-  body.appendChild(card);
+  const ufo = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  ufo.setAttribute('class', 'asb-cosmic-ufo'); ufo.setAttribute('viewBox', '0 0 96 72'); ufo.setAttribute('focusable', 'false');
+  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use'); use.setAttribute('href', '#asbUfoArt'); ufo.appendChild(use); scene.appendChild(ufo);
+  const title = document.createElement('div'); title.className = 'dev-loading-title'; title.textContent = T(options.titleKey, options.title);
+  const sub = document.createElement('div'); sub.className = 'dev-loading-sub'; sub.textContent = T(options.subKey, options.sub);
+  const steps = document.createElement('div'); steps.className = 'dev-loading-steps';
+  options.steps.forEach(function (step) {
+    const e = document.createElement('div'); e.className = 'dev-loading-step'; e.textContent = T(step[0], step[1]); steps.appendChild(e);
+  });
+  card.appendChild(sky); card.appendChild(scene); card.appendChild(title); card.appendChild(sub); card.appendChild(steps); body.appendChild(card);
+}
+function deviceInfoLoading(body) {
+  asbCosmicLoading(body, { kind:'device', titleKey:'dev_loading', title:'Reading device, firmware and kernel evidence…',
+    subKey:'dev_loading_sub', sub:'The page is already open. Nothing is being changed; each group appears after the read-only snapshot returns.',
+    steps:[['dev_stage_system','System'],['dev_stage_kernel','Kernel'],['dev_stage_battery','Battery']] });
 }
 /* fix287: the Device page stayed blank for the whole collection on a phone: its loading card
  * was in the DOM, but the root call that followed blocked the page before a frame could show
@@ -20631,7 +20748,11 @@ function asbFitPagesNow() {
         const top = hub.getBoundingClientRect().top + page.scrollTop;
         const gap = parseFloat(getComputedStyle(hub).rowGap || getComputedStyle(hub).gap) || 9;
         let h = ((stop - top) / z - gap * (rows - 1)) / rows;
-        h = Math.max([112, 96, 84][tier], Math.min(184, Math.floor(h)));
+        /* dev38: compact tiles keep the complete 3 × 3 hub above the floating bar on the
+         * owner's phone. Their real content now fits this floor; lowering only the variable
+         * would leave the old 176 px content height in force. Tall screens stop at 124 px
+         * instead of recreating oversized cards, and Config still never compacts its header. */
+        h = Math.max([100, 88, 76][tier], Math.min(124, Math.floor(h)));
         root.style.setProperty('--cfg-tile-h', h + 'px');
       }
     };
