@@ -2502,12 +2502,13 @@ html[data-asb-theme="light"] .smart-banner-pill.we { color: #007c63; background:
   font: 500 11px/1.35 var(--sans);
 }
 .cfg-zygisk-card {
+  --cat:#a7b7c6;
   width: 100%;
   box-sizing: border-box;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--bat) 26%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--cat) 26%, var(--border));
   border-radius: 18px;
-  background: linear-gradient(160deg, color-mix(in srgb, var(--bat) 8%, transparent), rgba(255,255,255,0.018));
+  background: linear-gradient(160deg, color-mix(in srgb, var(--cat) 8%, transparent), rgba(255,255,255,0.018));
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.035), 0 1px 4px rgba(0,0,0,0.22);
 }
 .cfg-zygisk-card > .cfg-row {
@@ -2591,33 +2592,22 @@ html[data-asb-theme="light"] .cfg-zygisk-card { background:#fff; }
 }
 .cfg-tile-ico .tech-icon { width: 23px; height: 23px; }
 /* One --cat per category (fix193): the tile, the section heading, the tweak icons and
- * the toast all derive from it with color-mix, the way fix192's --cap-*/--pill-* keep
+ * the toast all derive from it with color-mix, the way fix192's cap/pill tokens keep
  * the bar and the header from drifting. The hues are a quieter family than the old
  * neon set - same identity, pastel over the near-black capsule instead of a slab. */
-.cfg-section.cat-audio   { --cat: #f98d9e; }
-.cfg-section.cat-camera  { --cat: #7eb4f7; }
-.cfg-section.cat-battery { --cat: #63daa3; }
-.cfg-section.cat-ux      { --cat: #f0b76b; }
-.cfg-section.cat-net     { --cat: #4cd3e8; }
-.cfg-section.cat-iface   { --cat: #c6a3f5; }
-.cfg-section.cat-system  { --cat: #a7b7c6; }
-.cfg-section.cat-kernel  { --cat: #82b8ff; }
-.cfg-section.cat-feel    { --cat: #e6b8a2; }
-.cfg-section.cat-zygisk  { --cat: #a7b7c6; }
+/* Tile and heading share one literal rule, so neither can lose or drift from the hue.
+ * Zygisk stays quiet slate rather than falling back to the bright ASB accent. */
+:is(.cfg-section,.cfg-tile).cat-audio   { --cat: #f98d9e; }
+:is(.cfg-section,.cfg-tile).cat-camera  { --cat: #7eb4f7; }
+:is(.cfg-section,.cfg-tile).cat-battery { --cat: #63daa3; }
+:is(.cfg-section,.cfg-tile).cat-ux      { --cat: #f0b76b; }
+:is(.cfg-section,.cfg-tile).cat-net     { --cat: #4cd3e8; }
+:is(.cfg-section,.cfg-tile).cat-iface   { --cat: #c6a3f5; }
+:is(.cfg-section,.cfg-tile).cat-system  { --cat: #a7b7c6; }
+:is(.cfg-section,.cfg-tile).cat-kernel  { --cat: #82b8ff; }
+:is(.cfg-section,.cfg-tile).cat-feel    { --cat: #e6b8a2; }
+:is(.cfg-section,.cfg-tile).cat-zygisk  { --cat: #a7b7c6; }
 .cfg-section[class*="cat-"] { --section-accent: var(--cat); --tech-icon: var(--cat); }
-
-.cfg-tile.cat-audio   { --cat: #f98d9e; }
-.cfg-tile.cat-camera  { --cat: #7eb4f7; }
-.cfg-tile.cat-battery { --cat: #63daa3; }
-.cfg-tile.cat-ux      { --cat: #f0b76b; }
-.cfg-tile.cat-net     { --cat: #4cd3e8; }
-.cfg-tile.cat-iface   { --cat: #c6a3f5; }
-.cfg-tile.cat-system  { --cat: #a7b7c6; }
-.cfg-tile.cat-kernel  { --cat: #82b8ff; }
-.cfg-tile.cat-feel    { --cat: #e6b8a2; }
-/* Zygisk is an advanced utility, not a second primary action: quiet slate glass instead
- * of falling back to the bright ASB accent when the old cat-system tile token was absent. */
-.cfg-tile.cat-zygisk  { --cat: #a7b7c6; }
 .cfg-tile[class*="cat-"] { --tech-icon: var(--cat); }
 
 .cfg-tile-name {
@@ -2787,6 +2777,9 @@ html[data-asb-theme="light"] .cfg-zygisk-card { background:#fff; }
 :is(.cfg-icon,.cfg-row).cat-blur    { --cat: #b9a5ff; }
 :is(.cfg-icon,.cfg-row).cat-motion  { --cat: #ff8fc0; }
 :is(.cfg-icon,.cfg-row).cat-haptic  { --cat: #f5b45e; }
+:is(.cfg-icon,.cfg-row).cat-kernel  { --cat: #82b8ff; }
+:is(.cfg-icon,.cfg-row).cat-feel    { --cat: #e6b8a2; }
+:is(.cfg-icon,.cfg-row).cat-zygisk  { --cat: #a7b7c6; }
 .cfg-icon[class*="cat-"] { --tech-icon: var(--cat); }
 /* Enabled tweak cards wear the same category-hue gradient and glow as the six hub
  * tiles (fix217): the row carries its cat-* class, so the whole card lights up in its
@@ -3376,6 +3369,62 @@ html[data-asb-theme="light"] .nf-sel-row.warn .nf-sel-why { color: #8a5a00 !impo
   text-align: right;
   color: var(--accent, #00e1c8);
 }
+/* Category-owned controls (dev42): the row's canonical --cat reaches every interactive
+ * accent, not only the icon and enabled card. Neutral OFF tracks, warning/error badges
+ * and destructive actions deliberately keep their independent semantic colours. */
+.cfg-row[class*="cat-"] .cfg-switch.on {
+  background:linear-gradient(135deg,color-mix(in srgb,var(--cat) 62%,transparent),color-mix(in srgb,var(--cat) 46%,transparent)),var(--tabbar-bg,#000);
+  border-color:color-mix(in srgb,var(--cat) 62%,transparent);
+  box-shadow:0 0 16px color-mix(in srgb,var(--cat) 28%,transparent),inset 0 1px 0 rgba(255,255,255,.18);
+}
+.cfg-row[class*="cat-"] .cfg-seg button.on {
+  color:var(--cat);
+  background:linear-gradient(135deg,color-mix(in srgb,var(--cat) 24%,transparent),color-mix(in srgb,var(--cat) 14%,transparent));
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--cat) 36%,transparent),inset 0 1px 0 rgba(255,255,255,.10);
+}
+.cfg-row[class*="cat-"] .cfg-range input[type="range"]::-webkit-slider-thumb {
+  background:var(--cat);
+  box-shadow:0 0 10px color-mix(in srgb,var(--cat) 32%,transparent);
+}
+.cfg-row[class*="cat-"] .cfg-range input[type="range"]::-moz-range-thumb {
+  background:var(--cat);
+  box-shadow:0 0 10px color-mix(in srgb,var(--cat) 32%,transparent);
+}
+.cfg-row[class*="cat-"] .cfg-range-val { color:var(--cat) !important; }
+.cfg-row[class*="cat-"] :is(.cfg-status.good,.cfg-status.on) {
+  color:var(--cat);
+  background:color-mix(in srgb,var(--cat) 11%,transparent);
+}
+.cfg-row[class*="cat-"] .cfg-sel-btn::after,
+.cfg-row[class*="cat-"] .cfg-sel-pop button.active,
+.cfg-row[class*="cat-"] .cfg-desc-opt.is-cur .cfg-desc-opt-k { color:var(--cat) !important; }
+.cfg-row[class*="cat-"] .cfg-sel-pop button.active { background:color-mix(in srgb,var(--cat) 10%,transparent) !important; }
+.cfg-row[class*="cat-"] .cfg-apply-live { color:var(--cat); }
+.cfg-zygisk-card .cfg-zygisk-open {
+  --tech-icon:var(--cat);
+  color:var(--cat) !important;
+  border-color:color-mix(in srgb,var(--cat) 34%,var(--border)) !important;
+}
+/* Kernel's ordinary actions belong to the same blue chain. Clearing live wakeup rules is
+ * destructive and therefore deliberately keeps an independent warning hue. */
+.kernel-card.cat-kernel .bfx-primary:not(.kernel-clear):not(:disabled) {
+  color:#07111d;
+  border-color:color-mix(in srgb,var(--cat) 70%,#fff);
+  background:linear-gradient(135deg,color-mix(in srgb,var(--cat) 82%,#fff),var(--cat));
+  box-shadow:0 4px 14px color-mix(in srgb,var(--cat) 22%,transparent);
+}
+.kernel-card.cat-kernel .bfx-secondary:not(.kernel-clear):not(:disabled) {
+  color:var(--cat);
+  border-color:color-mix(in srgb,var(--cat) 48%,var(--border));
+  background:color-mix(in srgb,var(--cat) 7%,transparent);
+}
+.kernel-card.cat-kernel .kernel-clear:not(:disabled) {
+  color:#ff9b9b;
+  border-color:color-mix(in srgb,#ff7f87 46%,var(--border));
+  background:color-mix(in srgb,#ff7f87 6%,transparent);
+}
+html[data-asb-theme="light"] .kernel-card.cat-kernel .bfx-primary:not(.kernel-clear):not(:disabled) { color:#fff; }
+html[data-asb-theme="light"] .kernel-card.cat-kernel .kernel-clear:not(:disabled) { color:#b3261e; }
 .cfg-reboot {
   width: 100%;
   margin-top: 14px;
@@ -4205,6 +4254,9 @@ html[data-asb-theme="light"] .cfg-row.cat-ux      { --cat:#9a5a00; }
 html[data-asb-theme="light"] .cfg-row.cat-net     { --cat:#0b6f86; }
 html[data-asb-theme="light"] .cfg-row.cat-iface   { --cat:#7442b8; }
 html[data-asb-theme="light"] .cfg-row.cat-system  { --cat:#4a5f75; }
+html[data-asb-theme="light"] .cfg-row.cat-kernel  { --cat:#346aa8; }
+html[data-asb-theme="light"] .cfg-row.cat-feel    { --cat:#9a5b43; }
+html[data-asb-theme="light"] :is(.cfg-row.cat-zygisk,.cfg-zygisk-card) { --cat:#4a5f75; }
 html[data-asb-theme="light"] .cfg-row.is-on[class*="cat-"] {
   background: linear-gradient(160deg, color-mix(in srgb, var(--cat) 13%, #ffffff) 0%, color-mix(in srgb, var(--cat) 6%, #ffffff) 55%, color-mix(in srgb, var(--cat) 3%, #ffffff) 100%) !important;
   border-color: color-mix(in srgb, var(--cat) 34%, var(--border)) !important;
@@ -9443,15 +9495,15 @@ const CFG_GROUP_DESC = {
   zygisk: 'Master switch and status',
   ui: 'Services, processes, diagnostics'
 };
-/* Nine task-oriented categories make a complete 3 × 3 hub. The rows progress from
- * everyday sensory settings through connectivity/power to advanced system ownership.
- * Monitor gets no extra shortcut or duplicate control owner. */
+/* Nine task-oriented categories make a complete 3 × 3 hub. Camera and Audio share
+ * the second row; frequently used Audio takes the easier centre position. Network
+ * moves to the first row without adding a tile or a duplicate control owner. */
 const CFG_GROUPS = [
   { id:'iface',   icon:'panel',          name:'Interface',         ru:'\u0418\u043D\u0442\u0435\u0440\u0444\u0435\u0439\u0441' },
   { id:'feel',    icon:'haptic_touch',   name:'Display & Haptics', ru:'\u042D\u043A\u0440\u0430\u043D \u0438 \u043E\u0442\u043A\u043B\u0438\u043A' },
-  { id:'audio',   icon:'headphones',     name:'Audio',             ru:'\u0410\u0443\u0434\u0438\u043E' },
-  { id:'camera',  icon:'camera',         name:'Camera',            ru:'\u041A\u0430\u043C\u0435\u0440\u0430' },
   { id:'net',     icon:'network',        name:'Network',           ru:'\u0421\u0435\u0442\u044C' },
+  { id:'camera',  icon:'camera',         name:'Camera',            ru:'\u041A\u0430\u043C\u0435\u0440\u0430' },
+  { id:'audio',   icon:'headphones',     name:'Audio',             ru:'\u0410\u0443\u0434\u0438\u043E' },
   { id:'battery', icon:'battery_cell',   name:'Battery',           ru:'\u0411\u0430\u0442\u0430\u0440\u0435\u044F' },
   { id:'kernel',  icon:'kernel',         name:'Kernel',            ru:'\u042F\u0434\u0440\u043E' },
   { id:'zygisk',  icon:'zygisk_observer',name:'Zygisk',            ru:'Zygisk' },
@@ -9655,7 +9707,7 @@ function cfgRenderSection(list, section, catKey, groupId) {
    *
    * The category comes from the section's own first card, so a heading is always the
    * colour of what it introduces and there is no second table to keep in step. */
-  head.className = 'cfg-section' + (catKey ? ' ' + cfgCatClass(catKey) : '');
+  head.className = 'cfg-section' + (groupId ? ' ' + cfgGroupCatClass(groupId) : (catKey ? ' ' + cfgCatClass(catKey) : ''));
   if (groupId) head.id = 'cfg-sec-' + groupId + '-' + section.id;
   const ico = document.createElement('span');
   ico.className = 'cfg-section-ico';
@@ -9674,7 +9726,7 @@ function cfgRenderSection(list, section, catKey, groupId) {
 
 function cfgRenderZygiskCard(list, items) {
   const card = document.createElement('section');
-  card.className = 'cfg-zygisk-card';
+  card.className = 'cfg-zygisk-card cat-zygisk';
   card.id = 'cfgZygiskCard';
   card.setAttribute('aria-label', T('cfg_ui_section_zygisk', 'Zygisk'));
   const evidence = window._asbZygiskLinkData || window._asbDeviceInfoData || null;
@@ -10125,7 +10177,15 @@ function cfgShowGroup(groupId) {
   cfgRender();
 }
 
-function cfgCatClass(key){ return CFG_CAT[key] ? ('cat-' + CFG_CAT[key]) : 'cat-system'; }
+/* One navigation category owns the whole visual chain: hub tile, subsection heading,
+ * tweak row, icon, controls, search result and toast. CFG_CAT is retained only as
+ * historical metadata; deriving colours from it used to make Kernel green/grey and
+ * Display & Haptics grey instead of matching their hub tiles. */
+function cfgGroupCatClass(groupId) {
+  const cat = groupId === 'ui' ? 'ux' : (groupId === 'infirmary' ? 'system' : groupId);
+  return 'cat-' + (cat || 'system');
+}
+function cfgCatClass(key){ return cfgGroupCatClass(cfgGroupOf(key)); }
 // Toast skin for a config key: same category, same colour as its card icon.
 /*
  * Short, human toast text for a config change.
@@ -10252,7 +10312,7 @@ function kernelStateBadge(state) {
   return bfxEl('span', 'kernel-state ' + kernelStateClass(state), kernelStateText(state));
 }
 function cfgRenderKernelControlsHelp(list) {
-  const card = bfxEl('div', 'cfg-row kernel-card'); card.id = 'kernelControlsHelp';
+  const card = bfxEl('div', 'cfg-row kernel-card cat-kernel'); card.id = 'kernelControlsHelp';
   card.appendChild(bfxEl('div', 'kernel-note', T('kernel_controls_help', 'Each switch below writes only its named standard kernel interface. Stock restores the value captured before ASB first wrote it. Missing or read-only interfaces are disabled; a different readback is reported as a mismatch, not as success.')));
   const actions = bfxEl('div', 'bfx-actions');
   const refresh = bfxEl('button', 'bfx-btn bfx-secondary', T('kernel_refresh', 'Refresh status'));
@@ -10288,7 +10348,7 @@ function kernelWakeupChipList(card, rules, editable) {
 }
 function cfgRenderWakeupBlockerCard(list) {
   const wb = _kernelPanel.wakeup;
-  const card = bfxEl('div', 'cfg-row kernel-card'); card.id = 'kernelWakeupCard';
+  const card = bfxEl('div', 'cfg-row kernel-card cat-kernel'); card.id = 'kernelWakeupCard';
   const head = bfxEl('div', 'kernel-card-head');
   const titles = bfxEl('div');
   titles.appendChild(bfxEl('div', 'kernel-card-title', T('kernel_wb_title', 'Exact-name wakeup rules')));
@@ -10324,7 +10384,7 @@ function cfgRenderWakeupBlockerCard(list) {
   const actions = bfxEl('div', 'bfx-actions');
   const apply = bfxEl('button', 'bfx-btn bfx-primary', T('kernel_wb_apply', 'Save and apply')); apply.type = 'button'; apply.disabled = !wb || _wbBusy;
   apply.onclick = function () { kernelWakeupSave(false); };
-  const clear = bfxEl('button', 'bfx-btn bfx-secondary', T('kernel_wb_clear', 'Clear saved and live rules')); clear.type = 'button'; clear.disabled = !wb || _wbBusy;
+  const clear = bfxEl('button', 'bfx-btn bfx-secondary kernel-clear', T('kernel_wb_clear', 'Clear saved and live rules')); clear.type = 'button'; clear.disabled = !wb || _wbBusy;
   clear.onclick = function () { kernelWakeupSave(true); };
   const refresh = bfxEl('button', 'bfx-btn bfx-secondary', T('kernel_refresh', 'Refresh status')); refresh.type = 'button'; refresh.disabled = _wbBusy || _kernelPanel.loading;
   refresh.onclick = function () { kernelPanelLoad(true); };
