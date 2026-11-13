@@ -121,7 +121,7 @@ int governor_screen_on() {
     return -1;
 }
 
-bool write_all(int fd, const void *data, size_t size) {
+[[maybe_unused]] bool write_all(int fd, const void *data, size_t size) {
     const char *p = static_cast<const char *>(data);
     while (size) {
         const ssize_t n = send(fd, p, size, MSG_NOSIGNAL);
@@ -131,6 +131,17 @@ bool write_all(int fd, const void *data, size_t size) {
         size -= static_cast<size_t>(n);
     }
     return true;
+}
+
+/* dev46: app startup must never wait for optional telemetry. A full companion queue can
+ * drop this one small frame; it must not block preAppSpecialize. A partial frame is also
+ * abandoned, and the companion rejects it as truncated instead of acting on corrupt data. */
+bool send_spawn(int fd, const void *data, size_t size) {
+    for (;;) {
+        const ssize_t n = send(fd, data, size, MSG_NOSIGNAL | MSG_DONTWAIT);
+        if (n < 0 && errno == EINTR) continue;
+        return n >= 0 && static_cast<size_t>(n) == size;
+    }
 }
 
 // 1 = complete frame, 0 = orderly disconnect, -1 = malformed/truncated stream.
@@ -267,6 +278,9 @@ public:
                         /* Rate limit, capacity or a duplicate was already counted at SPAWN. */
                     } else if (!policy.valid || !policy.observer) {
                         ++policy_absent_;
+                    } else if (policy.excluded(frame.package)) {
+                        /* Rolling update: an older app-side library is denied here too. */
+                        ++excluded_spawns_;
                     } else {
                         policy_generation_ = policy.generation;
                         const auto accepted = core_.start(frame, now);
@@ -452,6 +466,13 @@ private:
                          SpawnTrack &track) {
         ++spawn_events_;
         if (!policy.valid) { ++policy_absent_; return Request::none; }
+        if (policy.excluded(frame.package)) {
+            /* One owner exclusion covers observation, the ledger and launch assistance. Do not
+             * even consult a launch class or wake the governor for an excluded process. */
+            ++excluded_spawns_;
+            track = SpawnTrack::untracked;
+            return Request::none;
+        }
         policy_generation_ = policy.generation;
         const bool top = (frame.flags & ASB_OBSERVER_FLAG_TOP_APP) != 0;
         if ((frame.flags & ASB_OBSERVER_FLAG_LEDGER) && policy.ledger)
@@ -551,6 +572,7 @@ private:
         out << "Z\tclasses_fast\t" << (classes_.valid ? classes_.fast : 0u) << "\n";
         out << "Z\tclasses_reads\t" << classes_reads_ << "\n";
         out << "Z\tdenylist_spawns\t" << denylist_spawns_ << "\n";
+        out << "Z\texcluded_spawns\t" << excluded_spawns_ << "\n";
         out << "Z\tobserve_requested\t" << observe_requested_ << "\n";
         out << "Z\tobserve_retained\t" << observe_retained_ << "\n";
         out << "Z\tobserve_pidfd\t" << observe_pidfd_ << "\n";
@@ -618,6 +640,7 @@ private:
     uint64_t spawn_events_ = 0, launch_events_ = 0, launch_accepted_ = 0, launch_vetoed_ = 0;
     uint64_t launch_unavailable_ = 0, launch_throttled_ = 0, launch_screen_off_ = 0, policy_absent_ = 0;
     uint64_t launch_long_ = 0, launch_short_ = 0, launch_class_fallback_ = 0, denylist_spawns_ = 0;
+    uint64_t excluded_spawns_ = 0;
     uint64_t classes_reads_ = 0, classes_ino_ = 0;
     uint64_t observe_requested_ = 0, observe_retained_ = 0, observe_pidfd_ = 0, observe_untracked_ = 0;
     uint64_t exits_pidfd_ = 0, exits_peer_ = 0;
@@ -664,6 +687,9 @@ public:
             }
             if (!asb_observer_package_valid(base) || asb_observer_package_denied(base)) base.clear();
         }
+        /* dev46: an owner exclusion is a process-compatibility boundary, not only an ART flag.
+         * Return before connectCompanion for observation, ledger and cold-start assistance alike. */
+        if (!base.empty() && policy.excluded(base.c_str())) return skip();
         const bool observe = !base.empty() && policy.selected(base.c_str());
         const bool ledger = !base.empty() && policy.ledger;
         if (!observe && !launch && !ledger) return skip();
@@ -680,7 +706,7 @@ public:
          * start tick and watches process exit itself. No post-specialize frame or retained app
          * descriptor is needed. */
         const AsbObserverFrame frame = make_frame(ASB_OBSERVER_EVENT_SPAWN, flags, base);
-        if (!write_all(sock, &frame, sizeof(frame))) { close(sock); return skip(); }
+        if (!send_spawn(sock, &frame, sizeof(frame))) { close(sock); return skip(); }
         close(sock);
         /* Real lifecycle hygiene, not name hiding: no hooks and no resident app-side state.
          * The one-shot stream is queued before close; the companion's pidfd owns exit tracking.

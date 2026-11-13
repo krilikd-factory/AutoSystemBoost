@@ -63,7 +63,7 @@
 #define ASB_OBSERVER_BURST_WINDOW_MS 300000
 #define ASB_OBSERVER_BURST_KEEP 32u
 #define ASB_OBSERVER_RSS_TTL_MS 30000
-#define ASB_OBSERVER_POLICY_MAX_BYTES 12288u
+#define ASB_OBSERVER_POLICY_MAX_BYTES 24576u
 #define ASB_OBSERVER_CLASS_MAX 64u
 #define ASB_OBSERVER_CLASSES_MAX_BYTES 18432u
 
@@ -226,18 +226,26 @@ inline bool asb_observer_classes_parse(const char *text, size_t len, AsbObserver
     return true;
 }
 
-/* The generated policy: "key=value" lines, at most 64 "pkg=" lines. Anything malformed
- * makes the whole policy invalid, and an invalid policy observes nothing. */
+/* The generated policy: "key=value" lines, at most 64 "pkg=" and 64 "xpkg=" lines.
+ * Anything malformed or duplicated makes the whole policy invalid; an invalid policy observes
+ * nothing. An xpkg compatibility exclusion wins over observation, ledger and launch assistance. */
 struct AsbObserverPolicy {
     bool valid = false;
     bool observer = false, hints = false, launch = false, ledger = false;
     unsigned long generation = 0;
-    unsigned packages = 0;
+    unsigned packages = 0, excluded_packages = 0;
     char package[ASB_OBSERVER_MAX_PROCESSES][128] {};
+    char excluded_package[ASB_OBSERVER_MAX_PROCESSES][128] {};
 
     bool active() const { return valid && ((observer && packages) || launch || ledger); }
+    bool excluded(const char *base) const {
+        if (!valid || !base || !*base) return false;
+        for (unsigned i = 0; i < excluded_packages; ++i)
+            if (std::strcmp(excluded_package[i], base) == 0) return true;
+        return false;
+    }
     bool selected(const char *base) const {
-        if (!valid || !observer || !base || !*base) return false;
+        if (!valid || !observer || !base || !*base || excluded(base)) return false;
         for (unsigned i = 0; i < packages; ++i) if (std::strcmp(package[i], base) == 0) return true;
         return false;
     }
@@ -288,9 +296,22 @@ inline bool asb_observer_policy_parse(const char *text, size_t len, AsbObserverP
             if (out.packages >= ASB_OBSERVER_MAX_PROCESSES || vn >= sizeof(out.package[0])) return false;
             const std::string p(v, vn);
             if (!asb_observer_package_valid(p) || asb_observer_package_denied(p)) return false;
+            for (unsigned i = 0; i < out.packages; ++i)
+                if (std::strcmp(out.package[i], p.c_str()) == 0) return false;
             std::memcpy(out.package[out.packages], v, vn);
             out.package[out.packages][vn] = 0;
             ++out.packages;
+        } else if (kn == 4 && std::memcmp(line, "xpkg", 4) == 0) {
+            /* dev46: the owner's compatibility exclusion also covers new Zygisk processes.
+             * Older libraries reject this key and become dormant, never partially observing. */
+            if (out.excluded_packages >= ASB_OBSERVER_MAX_PROCESSES || vn >= sizeof(out.excluded_package[0])) return false;
+            const std::string p(v, vn);
+            if (!asb_observer_package_valid(p) || asb_observer_package_denied(p)) return false;
+            for (unsigned i = 0; i < out.excluded_packages; ++i)
+                if (std::strcmp(out.excluded_package[i], p.c_str()) == 0) return false;
+            std::memcpy(out.excluded_package[out.excluded_packages], v, vn);
+            out.excluded_package[out.excluded_packages][vn] = 0;
+            ++out.excluded_packages;
         } else {
             return false;
         }
