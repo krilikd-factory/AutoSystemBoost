@@ -2377,7 +2377,9 @@ tune_io_queues() {
 apply_kernel() {
   [ "${ASB_STOCK_PROFILE:-0}" = "1" ] && return 0
   sysctlw kernel.perf_cpu_time_max_percent 25
-  sysctlw kernel.sched_schedstats 0
+  if [ -f "$MODDIR/runtime/asb_kernel_controls.sh" ]; then
+    sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_sched_stats >/dev/null 2>&1 || true
+  fi
   # kernel.panic and kernel.panic_on_oops are NOT touched any more.
   #
   # Both were written to 0. panic=0 means "after a kernel panic, never reboot - wait
@@ -4293,8 +4295,8 @@ fi
   sleep 60
   asb_load_profile
   if asb_feature_enabled KERNEL; then
-    sysctlw kernel.sched_schedstats 0
     if [ -f "$MODDIR/runtime/asb_kernel_controls.sh" ]; then
+      sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_sched_stats >/dev/null 2>&1 || true
       sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_timer_migration >/dev/null 2>&1 || true
       sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_sched_nr_migrate >/dev/null 2>&1 || true
     fi
@@ -4318,8 +4320,8 @@ fi
   sleep 240
   asb_load_profile
   if asb_feature_enabled KERNEL; then
-    sysctlw kernel.sched_schedstats 0
     if [ -f "$MODDIR/runtime/asb_kernel_controls.sh" ]; then
+      sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_sched_stats >/dev/null 2>&1 || true
       sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_timer_migration >/dev/null 2>&1 || true
       sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_sched_nr_migrate >/dev/null 2>&1 || true
     fi

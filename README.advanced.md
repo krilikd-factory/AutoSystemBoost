@@ -657,14 +657,14 @@ The HeyTap ART helper is a bounded one-shot, not a boot service: `pending → ru
 
 | Key | WebUI name | Default | Advanced behaviour / test focus |
 |:---|:---|:---:|:---|
-| `mglru_mode` | MGLRU Mode | `smart` | Stock/off/on/smart through one baseline/readback owner; only Smart permits dynamic 5/7 requests. |
-| `kernel_timer_migration` | Timer Migration | `off` | Standard 0/1 control; default off preserves prior ASB behaviour, stock restores the captured value. |
-| `kernel_sched_nr_migrate` | Scheduler Migration Batch | `4` | Bounded stock/1/2/4/8/16 control; default 4 preserves prior balanced behaviour. |
-| `kernel_sched_stats` | Scheduler Debug Accounting | `stock` | Stock/off through the same bounded owner; availability and access depend on the running kernel. |
-| `kernel_sched_autogroup` | Scheduler Autogroup | `stock` | Opt-in stock/off/on for the standard autogroup switch; no profile owner is duplicated. |
-| `kernel_sched_child_runs_first` | Child Task Runs First | `stock` | Opt-in stock/off/on for post-fork scheduling order; readback and exact restore are mandatory. |
+| `mglru_mode` | MGLRU Mode | `smart` | Stock/off/on/smart through one baseline/readback owner. A suitable reclaim policy can help responsiveness under memory pressure; an unsuitable one can increase reloads and stutter. No battery gain is guaranteed. |
+| `kernel_timer_migration` | Timer Migration | `off` | Controls timer placement between CPUs. Migration can avoid some idle-CPU wake-ups, but either mode can help or hurt latency and power depending on load and CPU idle behavior. |
+| `kernel_sched_nr_migrate` | Scheduler Migration Batch | `4` | `/sys/kernel/debug/sched/nr_migrate`; lower values reduce work per balancing pass but can prolong imbalance, higher values balance sooner with more migration/cache cost. Default 4 preserves the previous request, not a proven optimum. |
+| `kernel_sched_stats` | Scheduler Debug Accounting | `stock` | `/proc/sys/kernel/sched_schedstats`; Off removes the small debug-accounting overhead and its diagnostics, not scheduler policy. No unmeasured performance/battery gain is claimed. |
+| `kernel_sched_autogroup` | Scheduler Autogroup | `stock` | Changes session-group fairness and background CPU share, not a direct performance or power mode. Absence remains `not exposed`; no kernel option is forced for the card. |
+| `kernel_sched_child_runs_first` | Child Task Runs First | `stock` | Changes post-fork parent/child order; workload-specific startup/COW effects are possible, but no general FPS, performance or battery benefit is promised. |
 
-**Settings → System → Kernel management** loads these six controls on demand and marks an unavailable, read-only, unreadable or mismatched interface explicitly instead of displaying a successful apply. Refresh rereads the owner after an apply or on demand. A saved configuration value is not runtime proof.
+**Settings → System → Kernel management** loads these six controls on demand and marks an unavailable, read-only, unreadable or mismatched interface explicitly instead of displaying a successful apply. Refresh rereads the owner after an apply or on demand. A saved configuration value is not runtime proof. Legacy unconditional `sched_schedstats=0` writes were removed: Stock is genuinely inert when ASB has no baseline, while Off explicitly captures and later restores the original 0/1. Correcting the migration path can make the existing `4` request effective on devices that expose debugfs; an earlier `not exposed` result was not evidence that this request had been applied.
 
 The **Wakeup sources** card manages only the optional exact-name KRILIKD ABI. It accepts at most 16 unique printable-ASCII names of 1–63 bytes, shows saved and current kernel rules separately, and reads the blocked-event counter when exposed. Empty is the default. Saving on a kernel without the ABI can preserve the requested policy for later, but the UI reports `not exposed`, not success. Blocking a source can affect suspend, modem, Wi-Fi, alarms, calls or charging and requires an on-device test.
 
