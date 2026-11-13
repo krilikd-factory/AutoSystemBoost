@@ -4,6 +4,71 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev46 - owner exclusions are a real Zygisk compatibility boundary
+
+Input: the dev45 source, a full-day capture, asbdiag and screenshots showing that an owner-excluded
+application ran with the ASB Zygisk master switch off but stalled with it on. The capture does not
+prove the native root cause: its final diagnostic snapshot was taken after Zygisk had been disabled.
+It did prove that the old exclusion covered ART ranking/reset only, while ledger and launch policy
+still allowed an app-side entry. The fix is generic; no bank package name or hiding rule was added.
+
+- **One exclusion now covers all optional ASB Zygisk work for new processes.** The generated policy
+  carries up to 64 `xpkg=` rows beside the 64 `pkg=` rows. Exclusion wins over the allowlist and
+  returns before `connectCompanion()` for observation, ledger and cold-start assistance, including
+  `:worker` processes. The companion independently rejects excluded `SPAWN` and legacy
+  `PROCESS_START` frames before class lookup, ledger writes, pidfd tracking or governor IPC. An old
+  native library rejects the unknown key and becomes dormant instead of partially observing.
+  Duplicate package rows and more than 64 exclusions invalidate the complete policy.
+- **Optional telemetry cannot wait on a full companion queue.** The one-shot app-side send uses
+  `MSG_NOSIGNAL | MSG_DONTWAIT`. A full queue or partial send drops that small frame and closes the
+  socket; the companion rejects truncated input. `DLCLOSE_MODULE_LIBRARY`, one-shot IPC, peer/start
+  tick validation and event-driven pidfd reaping remain. No timer, retry loop or persistent polling
+  worker was introduced. Losing one diagnostic frame is accepted; delaying app startup is not.
+- **ART and native policy cannot silently diverge.** Exclude/include calls the existing policy sync
+  with the explicit module directory and exclusion path. A failed or missing writer returns
+  `observer_policy=failed|unavailable` plus `result=partial reason=observer_policy` and nonzero.
+  The WebUI shows the saved-but-not-synchronized warning instead of a success toast; a later retry
+  or boot can synchronize it. Restore-all retains only best-effort cleanup semantics.
+- **The result is measurable without inflated claims.** `excluded_spawns` is emitted per companion,
+  summed across ABI by observer/asbdiag and documented. It does not mean that root, other Zygisk
+  modules or memory mappings are hidden. The advanced guides now describe the actual one-shot/
+  `DLCLOSE` lifecycle rather than the removed resident-socket design.
+- **LSPosed read failures are no longer guessed to be a foreign schema.** The read-only probe now
+  executes the real `configs` query for verbose status, or both `modules` and `scope` queries for
+  inventory. CANTOPEN/IOERR/READONLY/PERM on those statements retries from the existing private
+  DB+WAL copy; SQL/schema mismatches stay fail-closed and busy/locked/I/O failures remain
+  `read_failed`. Status performs one verbose read, preserving `sqlite_rc` and `read_from=copy`.
+  The maintained Vector schema itself was not changed and LSPosed writes still require the known
+  schema.
+- **GPU inference is not reported as a played game.** A new capture contained an 18-second
+  `gaming` report phase while its package-independent `app_hint=4` had `app_hint_inferred=1`.
+  Logkit now requires `app_hint >= 4` together with explicit `app_hint_inferred=0`; missing
+  provenance also stays `active`. The native GPU-bound GAMING latch is unchanged for unknown 3D
+  workloads. `fsm_media_trace.tsv` appends `app_hint_inferred` without moving old columns, a zero
+  `class|game|0.0|0|0` row is explicitly not a session, and game-specific jank advice requires a
+  confirmed gaming phase.
+- **The logs did not justify another performance or thermal writer.** The two captures came from
+  different device/SoC runtimes and were not merged. In the new capture Smart already recorded
+  three unhelpful app ceiling trials, the leading Kimi intervals were predominantly slow-draw,
+  and raised vendor ceilings were not rejected ASB writes. Consequently no frequency increase,
+  fixed CPU mask, IRQ affinity, thermal override or SoC-specific writer was added from correlation.
+
+Regression drives the real native module through exclusion and suffix cases, a deliberately full
+socket with an alarm around `preAppSpecialize()`, forged/legacy companion frames, duplicate and
+65-row policies, shell-to-native `xpkg=` agreement, failed/missing sync recovery and WebUI partial
+handling. LSPosed fixtures include a database whose legacy `sqlite_master` probe succeeds while
+its real queries require the WAL-copy fallback. Logkit/UI fixtures cover inferred versus confirmed
+games, zero game totals, appended provenance and neutral jank wording in 13 locales. The current
+source release does not rebuild native libraries locally: both Zygisk ABIs and the governor must be
+rebuilt by the owner's workflow because their sources changed. AOSP/AIDL DSP and attach prebuilts
+are not described as rebuilt either.
+
+Not proven: physical OnePlus 15/ColorOS loader behavior, the excluded application's next launch,
+absence of conflicts with other Zygisk/LSPosed modules, physical Vector database access or better
+battery/thermal/smoothness outcomes. Host fixtures are not bank-specific or on-device validation.
+No root/Zygisk concealment, application-attestation bypass, per-bank exception, governor writer,
+thermal change or battery/performance percentage was added.
+
 ## V66 dev45 - real Zygisk unloading and honest OP15 kernel pairing
 
 Input: the dev44 source, the OP15 kernel-control screenshot, KRILIKD v13 source/build evidence and
