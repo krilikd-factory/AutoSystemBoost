@@ -106,6 +106,19 @@ asb_kc_emit() {
   printf '%s|%s|%s|%s|%s\n' "$1" "$2" "$3" "${4:-unknown}" "${5:-none}"
 }
 
+asb_kc_hrtimer_covered() {
+  _ahc_mode="$1" _ahc_base="$2"
+  _ahc_node="${ASB_TIMER_MIGRATION_NODE:-/proc/sys/kernel/timer_migration}"
+  if [ -e "$_ahc_node" ]; then
+    _ahc_live="$(asb_kc_clean "$(cat "$_ahc_node" 2>/dev/null)")"
+    asb_kc_emit kernel_hrtimer_migration covered_by_timer_migration "$_ahc_mode" "$_ahc_live" "$_ahc_base"
+  else
+    asb_kc_emit kernel_hrtimer_migration not_exposed "$_ahc_mode" "" "$_ahc_base"
+    return 1
+  fi
+  return 0
+}
+
 asb_kc_capture() {
   _akc_key="$1" _akc_node="$2" _akc_prev="$3"
   if [ -f "$_akc_prev" ]; then
@@ -124,6 +137,10 @@ asb_kc_capture() {
 asb_kc_restore() {
   _akr_key="$1"
   _akr_node="$(asb_kc_node "$_akr_key")" || return 1
+  if [ "$_akr_key" = kernel_hrtimer_migration ] && [ ! -e "$_akr_node" ]; then
+    asb_kc_hrtimer_covered stock none
+    return $?
+  fi
   _akr_prev="$(asb_kc_prev "$_akr_key")"
   [ -f "$_akr_prev" ] || { asb_kc_emit "$_akr_key" stock_unowned stock "" none; return 0; }
   _akr_orig="$(asb_kc_clean "$(cat "$_akr_prev" 2>/dev/null)")"
@@ -145,6 +162,10 @@ asb_kc_apply() {
   _aka_key="$1" _aka_smart="${2:-}" _aka_profile="${3:-${ASB_PROFILE:-}}"
   _aka_node="$(asb_kc_node "$_aka_key")" || return 1
   _aka_mode="$(asb_kc_mode "$_aka_key")" || return 1
+  if [ "$_aka_key" = kernel_hrtimer_migration ] && [ ! -e "$_aka_node" ]; then
+    asb_kc_hrtimer_covered "$_aka_mode" none
+    return $?
+  fi
   [ "$_aka_mode" != stock ] || { asb_kc_restore "$_aka_key"; return $?; }
   if [ -z "$_aka_profile" ]; then
     _aka_profile="$(cat "$ASB_KC_MODDIR/current_profile" 2>/dev/null | tr -d ' \t\r\n')"
@@ -198,7 +219,14 @@ asb_kc_status() {
   _akst_prev="$(asb_kc_prev "$_akst_key")"
   _akst_base=none
   [ -f "$_akst_prev" ] && _akst_base="$(asb_kc_clean "$(cat "$_akst_prev" 2>/dev/null)")"
-  [ -e "$_akst_node" ] || { asb_kc_emit "$_akst_key" not_exposed "$_akst_mode" "" "$_akst_base"; return 0; }
+  if [ ! -e "$_akst_node" ]; then
+    if [ "$_akst_key" = kernel_hrtimer_migration ]; then
+      asb_kc_hrtimer_covered "$_akst_mode" "$_akst_base"
+    else
+      asb_kc_emit "$_akst_key" not_exposed "$_akst_mode" "" "$_akst_base"
+    fi
+    return 0
+  fi
   _akst_live="$(asb_kc_clean "$(cat "$_akst_node" 2>/dev/null)")"
   if [ -r "$_akst_node" ] && [ -w "$_akst_node" ]; then
     asb_kc_emit "$_akst_key" writable "$_akst_mode" "$_akst_live" "$_akst_base"
