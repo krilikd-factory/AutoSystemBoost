@@ -44,8 +44,8 @@
 
 #define ASB_OBSERVER_MAGIC 0x4153425au /* "ASBZ" */
 #define ASB_OBSERVER_VERSION 2u
-#define ASB_OBSERVER_EVENT_PROCESS_START 1u  /* allowlisted process; connection kept for exit */
-#define ASB_OBSERVER_EVENT_SPAWN 2u          /* one-shot: cold-start and/or ledger record */
+#define ASB_OBSERVER_EVENT_PROCESS_START 1u  /* legacy retained-socket confirmation; not sent by dev45+ */
+#define ASB_OBSERVER_EVENT_SPAWN 2u          /* one-shot: observe/cold-start/ledger; app then unloads */
 #define ASB_OBSERVER_FLAG_TOP_APP 1u         /* zygote started it as the top app */
 #define ASB_OBSERVER_FLAG_LAUNCH 2u          /* ask the governor to cover the launch */
 #define ASB_OBSERVER_FLAG_LEDGER 4u          /* count it in the process-start ledger */

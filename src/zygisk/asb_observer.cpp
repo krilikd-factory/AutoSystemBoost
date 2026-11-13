@@ -644,8 +644,6 @@ public:
     }
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
-        socket_ = -1;
-        package_.clear();
         if (!args || (args->is_child_zygote && *args->is_child_zygote) ||
             !asb_observer_regular_app_uid(args->uid)) return skip();
         AsbObserverPolicy policy;
@@ -677,29 +675,18 @@ public:
                                (hidden ? ASB_OBSERVER_FLAG_DENYLIST : 0u) |
                                (observe ? ASB_OBSERVER_FLAG_OBSERVE : 0u);
         /* The launch class is looked up by the companion; the name is not stored for a
-         * launch-only record and never reaches the governor. fix339: an allowlisted app is
-         * recorded from this frame, so its start and exit no longer depend on exemptFd. */
+         * launch-only record and never reaches the governor. An allowlisted app's SPAWN also
+         * carries everything the root companion needs: it opens a pidfd, verifies the process
+         * start tick and watches process exit itself. No post-specialize frame or retained app
+         * descriptor is needed. */
         const AsbObserverFrame frame = make_frame(ASB_OBSERVER_EVENT_SPAWN, flags, base);
         if (!write_all(sock, &frame, sizeof(frame))) { close(sock); return skip(); }
-        /* Not allowlisted: the one-shot record is sent; nothing stays in the process. */
-        if (!observe || !api_->exemptFd(sock)) { close(sock); return skip(); }
-        socket_ = sock;
-        package_ = base;
-        // Selected processes retain the library only to own this fd. No hooks are installed.
-    }
-
-    void postAppSpecialize(const zygisk::AppSpecializeArgs *) override {
-        if (socket_ < 0) return;
-        if (!asb_observer_package_valid(package_) || package_.size() >= sizeof(AsbObserverFrame::package)) {
-            close(socket_);
-            socket_ = -1;
-            return;
-        }
-        const AsbObserverFrame frame = make_frame(ASB_OBSERVER_EVENT_PROCESS_START, 0u, package_);
-        if (!write_all(socket_, &frame, sizeof(frame))) {
-            close(socket_);
-            socket_ = -1;
-        }
+        close(sock);
+        /* Real lifecycle hygiene, not name hiding: no hooks and no resident app-side state.
+         * The one-shot stream is queued before close; the companion's pidfd owns exit tracking.
+         * PROCESS_START remains accepted by the companion only for rolling-update compatibility
+         * with an older app-side library. */
+        return skip();
     }
 
     void preServerSpecialize(zygisk::ServerSpecializeArgs *) override { skip(); }
@@ -732,8 +719,6 @@ private:
     zygisk::Api *api_ = nullptr;
     JNIEnv *env_ = nullptr;
     bool abs_path_ = true;
-    int socket_ = -1;
-    std::string package_;
 };
 
 void companion_handler(int client) { Broker::instance().handle(client); }
