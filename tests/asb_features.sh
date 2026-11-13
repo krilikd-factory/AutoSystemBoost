@@ -8540,7 +8540,16 @@ out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=off_after_reboot fre
 [ "$(cat "$T/asb/prev")" = default_on ] || fail "LSPosed's earlier value not remembered"
 out="$(run apply)"; printf '%s\n' "$out" | grep -q '^result=already_off' || fail "second apply: $out"
 [ "$(cat "$T/asb/prev")" = default_on ] || fail "the remembered value was overwritten by ASB's own"
+mv "$T/bin/asb" "$T/bin/asb.real"
+cat > "$T/bin/asb" <<X
+#!/bin/sh
+printf '%s\n' "\$*" >> "$T/lspd.calls"
+exec "$T/bin/asb.real" "\$@"
+X
+chmod 755 "$T/bin/asb"
 out="$(run status)"; printf '%s\n' "$out" | grep -qx 'verbose=off' && printf '%s\n' "$out" | grep -qx 'present=1' || fail "status: $out"
+[ "$(grep -c 'verbose-get' "$T/lspd.calls")" = 1 ] || fail "status repeated the same database read: $(cat "$T/lspd.calls")"
+rm -f "$T/bin/asb"; mv "$T/bin/asb.real" "$T/bin/asb"
 # fix213 (audit K8): the status passes the parsed schema version through to the WebUI.
 printf '%s\n' "$out" | grep -qx 'format=v1' || fail "status does not name the schema: $out"
 printf '%s\n' "$out" | grep -qx 'modules_kib=0' && printf '%s\n' "$out" | grep -qx 'oldlog_kib=0' || fail "the modules log is not reported apart: $out"
@@ -8999,6 +9008,63 @@ P
   [ -z "$(ls -A "$T/lsptmp")" ] || { chmod 755 "$T/wal/config"; fail "the private copy was left behind: $(ls -A "$T/lsptmp")"; }
   chmod 755 "$T/wal/config"
 fi
+# V66 dev46: the old sqlite_master probe could succeed while the real configs/modules/scope
+# SELECT failed. This wrapper reproduces exactly that split without relying on host permissions:
+# direct real queries return CANTOPEN(14), the private copy uses the host SQLite normally.
+cat > "$T/probe_sqlite.c" <<CSRC
+#include <dlfcn.h>
+#include <string.h>
+typedef struct sqlite3 sqlite3;
+typedef struct sqlite3_stmt sqlite3_stmt;
+static void *real_lib;
+static int direct_db;
+static void *sym(const char *name) {
+    if (!real_lib) real_lib = dlopen("$LIB", RTLD_NOW | RTLD_LOCAL);
+    return real_lib ? dlsym(real_lib, name) : 0;
+}
+int sqlite3_open_v2(const char *path, sqlite3 **db, int flags, const char *vfs) {
+    static int (*fn)(const char *, sqlite3 **, int, const char *);
+    if (!fn) fn = (int (*)(const char *, sqlite3 **, int, const char *))sym("sqlite3_open_v2");
+    direct_db = strstr(path, "/lspd_ro.") == 0;
+    return fn ? fn(path, db, flags, vfs) : 14;
+}
+int sqlite3_prepare_v2(sqlite3 *db, const char *sql, int n, sqlite3_stmt **st, const char **tail) {
+    static int (*fn)(sqlite3 *, const char *, int, sqlite3_stmt **, const char **);
+    if (st) *st = 0;
+    if (direct_db && (strstr(sql, "FROM configs") || strstr(sql, "FROM modules") || strstr(sql, "FROM scope"))) return 14;
+    if (!fn) fn = (int (*)(sqlite3 *, const char *, int, sqlite3_stmt **, const char **))sym("sqlite3_prepare_v2");
+    return fn ? fn(db, sql, n, st, tail) : 14;
+}
+int sqlite3_close(sqlite3 *db) { static int (*fn)(sqlite3 *); if (!fn) fn = (int (*)(sqlite3 *))sym("sqlite3_close"); return fn ? fn(db) : 0; }
+int sqlite3_busy_timeout(sqlite3 *db, int ms) { static int (*fn)(sqlite3 *, int); if (!fn) fn = (int (*)(sqlite3 *, int))sym("sqlite3_busy_timeout"); return fn ? fn(db, ms) : 0; }
+int sqlite3_exec(sqlite3 *db, const char *sql, int (*cb)(void *, int, char **, char **), void *arg, char **err) {
+    static int (*fn)(sqlite3 *, const char *, int (*)(void *, int, char **, char **), void *, char **);
+    if (!fn) fn = (int (*)(sqlite3 *, const char *, int (*)(void *, int, char **, char **), void *, char **))sym("sqlite3_exec");
+    return fn ? fn(db, sql, cb, arg, err) : 14;
+}
+int sqlite3_step(sqlite3_stmt *st) { static int (*fn)(sqlite3_stmt *); if (!fn) fn = (int (*)(sqlite3_stmt *))sym("sqlite3_step"); return fn ? fn(st) : 14; }
+const void *sqlite3_column_blob(sqlite3_stmt *st, int col) { static const void *(*fn)(sqlite3_stmt *, int); if (!fn) fn = (const void *(*)(sqlite3_stmt *, int))sym("sqlite3_column_blob"); return fn ? fn(st, col) : 0; }
+int sqlite3_column_bytes(sqlite3_stmt *st, int col) { static int (*fn)(sqlite3_stmt *, int); if (!fn) fn = (int (*)(sqlite3_stmt *, int))sym("sqlite3_column_bytes"); return fn ? fn(st, col) : 0; }
+const unsigned char *sqlite3_column_text(sqlite3_stmt *st, int col) { static const unsigned char *(*fn)(sqlite3_stmt *, int); if (!fn) fn = (const unsigned char *(*)(sqlite3_stmt *, int))sym("sqlite3_column_text"); return fn ? fn(st, col) : 0; }
+int sqlite3_column_int(sqlite3_stmt *st, int col) { static int (*fn)(sqlite3_stmt *, int); if (!fn) fn = (int (*)(sqlite3_stmt *, int))sym("sqlite3_column_int"); return fn ? fn(st, col) : 0; }
+int sqlite3_finalize(sqlite3_stmt *st) { static int (*fn)(sqlite3_stmt *); if (!fn) fn = (int (*)(sqlite3_stmt *))sym("sqlite3_finalize"); return fn ? fn(st) : 0; }
+void sqlite3_free(void *p) { static void (*fn)(void *); if (!fn) fn = (void (*)(void *))sym("sqlite3_free"); if (fn) fn(p); }
+CSRC
+"$CC" -std=gnu11 -Wall -Werror -shared -fPIC -o "$T/libprobe_sqlite.so" "$T/probe_sqlite.c" -ldl || fail "SQLite probe fixture does not compile"
+cat > "$T/probe.c" <<CSRC
+#define ASB_LSPD_SQLITE_LIB "$T/libprobe_sqlite.so"
+#define ASB_LSPD_TMP "$T/lsptmp"
+#include "$ROOT/src/asb_lspd.h"
+int main(int argc, char **argv) { if (argc >= 3 && strcmp(argv[1], "--lspd") == 0) return asb_lspd_cli(argc - 2, argv + 2); return 9; }
+CSRC
+"$CC" -std=gnu11 -Wall -Werror -o "$T/gov/asb_probe" "$T/probe.c" -ldl || fail "probe helper does not compile"
+sum0="$(cksum < "$D")"
+out="$("$T/gov/asb_probe" --lspd modules "$D" || true)"
+printf '%s\n' "$out" | grep -qx 'module|com.mod.alpha|1|4' && printf '%s\n' "$out" | grep -qx 'read_from=copy' && printf '%s\n' "$out" | grep -qx 'sqlite_rc=14' || fail "real module SQL did not retry from the copy: $out"
+out="$("$T/gov/asb_probe" --lspd verbose-get "$D" || true)"
+printf '%s\n' "$out" | grep -qx 'verbose=default_on' && printf '%s\n' "$out" | grep -qx 'read_from=copy' && printf '%s\n' "$out" | grep -qx 'sqlite_rc=14' || fail "real verbose SQL did not retry from the copy: $out"
+[ "$(cksum < "$D")" = "$sum0" ] || fail "the query-fallback fixture changed the original database"
+[ -z "$(ls -A "$T/lsptmp")" ] || fail "query-fallback copies were left behind"
 cat > "$T/fb/pm" <<'S'
 #!/bin/sh
 printf 'package:com.app.one uid:10100\npackage:com.app.two uid:10101\npackage:com.mod.alpha uid:10200\n'
@@ -10430,7 +10496,9 @@ S="$ROOT/runtime/asb_zygisk_aot.sh"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 fail() { echo "FAIL zygisk aot exclude: $*" >&2; exit 1; }
 sh -n "$S" || fail "syntax"
-mkdir -p "$T/bin" "$T/d" "$T/run" "$T/pw"
+mkdir -p "$T/bin" "$T/d" "$T/run" "$T/pw" "$T/mod/runtime" "$T/mod/config" "$T/mod/zygisk"
+cp "$ROOT/runtime/asb_zygisk.sh" "$T/mod/runtime/asb_zygisk.sh"
+printf 'zygisk_enabled=1\nzygisk_mode=observer\nzygisk_hints=0\nzygisk_launch=1\nzygisk_ledger=1\n' > "$T/mod/config/governor.conf"
 printf 'com.bank.app verify install\ncom.yt.app speed-profile bg-dexopt\ncom.mail.app quicken -\ncom.np.app verify install\n' > "$T/dex"
 printf 'com.bank.app\ncom.mail.app\ncom.np.app\n' > "$T/prof"
 cat > "$T/bin/dumpsys" <<'X'
@@ -10476,7 +10544,8 @@ run tick
 grep -q '|com.np.app|' "$T/d/zygisk_aot_apps" && fail "an excluded app took a ranking slot: $(cat "$T/d/zygisk_aot_apps")"
 grep -q '^com.bank.app|[0-9]*|speed-profile|' "$T/d/zygisk_aot_apps" || fail "compiled row: $(cat "$T/d/zygisk_aot_apps")"
 out="$(run exclude com.bank.app)"
-printf '%s\n' "$out" | grep -qx 'reset=ok' && printf '%s\n' "$out" | grep -qx 'result=excluded' || fail "exclude of an app ASB compiled: $out"
+printf '%s\n' "$out" | grep -qx 'reset=ok' && printf '%s\n' "$out" | grep -qx 'observer_policy=synced' && printf '%s\n' "$out" | grep -qx 'result=excluded' || fail "exclude of an app ASB compiled: $out"
+grep -qx 'xpkg=com.bank.app' "$T/mod/zygisk/policy" || fail "owner exclusion did not reach the native policy: $(cat "$T/mod/zygisk/policy")"
 grep -qx 'pm compile --reset com.bank.app' "$T/pm.log" || fail "the compile state was not reset: $(cat "$T/pm.log")"
 grep -q '|com.bank.app|reset|speed-profile>verify$' "$T/d/zygisk_aot_log" || fail "reset event: $(cat "$T/d/zygisk_aot_log")"
 grep -q '^com.bank.app|' "$T/d/zygisk_aot_apps" && fail "the excluded app stayed in the list"
@@ -10501,18 +10570,38 @@ echo com.mail.app > "$T/refuse"
 out="$(run exclude com.mail.app)"
 printf '%s\n' "$out" | grep -qx 'reset=failed' && printf '%s\n' "$out" | grep -qx 'result=excluded' || fail "a refused reset: $out"
 grep -q '|com.mail.app|reset_failed|speed-profile>speed-profile$' "$T/d/zygisk_aot_log" || fail "refused reset event: $(cat "$T/d/zygisk_aot_log")"
-out="$(run include com.bank.app)"; [ "$out" = result=included ] || fail "include: $out"
+out="$(run include com.bank.app)"
+printf '%s\n' "$out" | grep -qx 'observer_policy=synced' && printf '%s\n' "$out" | grep -qx 'result=included' || fail "include: $out"
 grep -qx com.bank.app "$T/d/zygisk_aot_exclude" && fail "include left the entry"
+grep -qx 'xpkg=com.bank.app' "$T/mod/zygisk/policy" && fail "include left the native exclusion"
 newcharge
 [ "$(compiles com.bank.app)" = 2 ] || fail "an app allowed again was not compiled in the next charging session: $(cat "$T/pm.log")"
 for p in com.np.app com.yt.app com.mail.app; do run include "$p" >/dev/null; done
 [ -e "$T/d/zygisk_aot_exclude" ] && fail "an empty exclusion list was left behind"
+# dev46: saving the owner list is not enough. A failed or missing policy writer is an
+# explicit partial result, never a success toast; a later successful retry closes the gap.
+cp "$T/mod/runtime/asb_zygisk.sh" "$T/zygisk policy.real"
+printf '#!/bin/sh\nexit 1\n' > "$T/mod/runtime/asb_zygisk.sh"
+out="$(run exclude com.example.policy)"; rc=$?
+[ "$rc" = 1 ] && printf '%s\n' "$out" | grep -qx 'observer_policy=failed' && printf '%s\n' "$out" | grep -qx 'result=partial reason=observer_policy' || fail "policy failure was masked: rc=$rc $out"
+grep -qx 'com.example.policy' "$T/d/zygisk_aot_exclude" || fail 'partial result lost the saved owner exclusion'
+cp "$T/zygisk policy.real" "$T/mod/runtime/asb_zygisk.sh"
+out="$(run exclude com.example.policy)"
+printf '%s\n' "$out" | grep -qx 'observer_policy=synced' && printf '%s\n' "$out" | grep -qx 'result=excluded' || fail "policy retry did not recover: $out"
+grep -qx 'xpkg=com.example.policy' "$T/mod/zygisk/policy" || fail 'retry did not publish the exclusion'
+run include com.example.policy >/dev/null || fail 'cleanup after policy retry'
+mv "$T/mod/runtime/asb_zygisk.sh" "$T/zygisk policy.offline"
+out="$(run exclude com.example.missing)"; rc=$?
+[ "$rc" = 1 ] && printf '%s\n' "$out" | grep -qx 'observer_policy=unavailable' && printf '%s\n' "$out" | grep -qx 'result=partial reason=observer_policy' || fail "missing policy writer was masked: rc=$rc $out"
+mv "$T/zygisk policy.offline" "$T/mod/runtime/asb_zygisk.sh"
+run include com.example.missing >/dev/null || fail 'cleanup after missing policy writer'
 run exclude com.np.app >/dev/null
 run restore-all; ls "$T/d" | grep -q zygisk_aot && fail "uninstall left files: $(ls "$T/d")"
 grep -q '/data/adb/asb/zygisk_aot_exclude' "$ROOT/uninstall.sh" || fail "uninstall does not remove the exclusion list"
 grep -q 'excluded by the owner' "$ROOT/tools/asb_diag.sh" && grep -q 'compile state reset for' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not show exclusions and resets"
 H="$ROOT/webroot/index.html"
 grep -Fq "' ' + action + ' ' + shQuote(pkg)]" "$H" && grep -Fq "zygiskAotPackage('exclude', a.pkg)" "$H" && grep -Fq "zygiskAotPackage('include', p)" "$H" || fail "the WebUI does not offer exclusion with a quoted package"
+grep -Fq 'result=partial reason=observer_policy|observer_policy=(failed|unavailable)' "$H" && grep -Fq 'result=(excluded|included)/.test(out) && !policyFailed' "$H" || fail 'the WebUI can still turn a policy partial into a success toast'
 {
   echo "const T = (k, d) => d;"
   for fn in dozePkgOk zygiskAotParse; do sed -n "/^function $fn(/,/^}/p" "$H"; done
@@ -10525,7 +10614,7 @@ process.exit(bad ? 1 : 0);
 EOF2
 } > "$T/aotx.js"
 node "$T/aotx.js" || fail "WebUI parse"
-echo "PASS zygisk aot exclude: an owner-excluded app is never ranked or compiled again, ASB's own compile is reset to the installed state (Android's is left alone), refused resets are recorded, names are validated, allow-again restores compilation, clean uninstall"
+echo "PASS zygisk aot exclude: owner exclusion reaches native policy and is never ranked or compiled again, ASB's own compile is reset (Android's is left alone), failed/missing policy sync is partial and retryable, refused resets are recorded, names are validated, allow-again restores compilation, clean uninstall"
 )
 
 

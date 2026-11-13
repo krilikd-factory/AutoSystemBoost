@@ -114,6 +114,15 @@ int main() {
   AsbObserverPolicy pol; const char ok[]="v=2\ngen=1730000000\nobserver=1\nhints=0\nlaunch=1\nledger=0\npkg=com.example.app\npkg=org.example.game\n";
   assert(asb_observer_policy_parse(ok,sizeof(ok)-1,pol) && pol.active() && pol.launch && !pol.ledger && pol.packages==2);
   assert(pol.generation==1730000000UL && pol.selected("org.example.game") && !pol.selected("com.example"));
+  const char xok[]="v=2\ngen=1730000001\nobserver=1\nhints=1\nlaunch=1\nledger=1\npkg=com.example.app\npkg=org.example.game\nxpkg=com.example.compat\nxpkg=org.example.game\n";
+  assert(asb_observer_policy_parse(xok,sizeof(xok)-1,pol) && pol.active() && pol.excluded_packages==2);
+  assert(pol.excluded("com.example.compat") && pol.excluded("org.example.game") && !pol.excluded("com.example.app"));
+  assert(pol.selected("com.example.app") && !pol.selected("org.example.game")); // exclusion wins over allowlist
+  const char xbad[]="v=2\nlaunch=1\nxpkg=com.android.systemui\n"; assert(!asb_observer_policy_parse(xbad,sizeof(xbad)-1,pol));
+  const char xdup[]="v=2\nlaunch=1\nxpkg=com.example.compat\nxpkg=com.example.compat\n"; assert(!asb_observer_policy_parse(xdup,sizeof(xdup)-1,pol));
+  const char pdup[]="v=2\nobserver=1\npkg=com.example.app\npkg=com.example.app\n"; assert(!asb_observer_policy_parse(pdup,sizeof(pdup)-1,pol));
+  std::string xmany="v=2\nlaunch=1\n"; for (int i=0;i<65;i++) xmany+="xpkg=com.example.x"+std::to_string(i)+"\n";
+  assert(!asb_observer_policy_parse(xmany.data(),xmany.size(),pol));
   const char nover[]="observer=1\npkg=com.example.app\n"; assert(!asb_observer_policy_parse(nover,sizeof(nover)-1,pol) && !pol.active());
   const char badpkg[]="v=2\nobserver=1\npkg=com.android.systemui\n"; assert(!asb_observer_policy_parse(badpkg,sizeof(badpkg)-1,pol));
   const char unknown[]="v=2\nlaunch=1\ncap=3000000\n"; assert(!asb_observer_policy_parse(unknown,sizeof(unknown)-1,pol));
@@ -184,12 +193,16 @@ t_zygisk_native_contract() (
   [ "$(grep -c 'classes_locked()' "$S")" = 2 ] || fail 'launch classes are read outside the companion'
   sed -n '/void preAppSpecialize/,/void preServerSpecialize/p' "$S" | grep -q 'CLASSES' && fail 'the zygote side reads the launch classes'
   grep -q 'ASB_ZYGISK_CLASSES_ABS "/data/adb/modules/AutoSystemBoost/zygisk/classes"' "$ROOT/src/zygisk/asb_observer_protocol.h" || fail 'classes path'
-  ! grep -q 'slow=\|fast=' "$ROOT/runtime/asb_zygisk.sh" || fail 'the policy file gained keys an older library would reject'
+  ! grep -q 'slow=\|fast=' "$ROOT/runtime/asb_zygisk.sh" || fail 'launch classes leaked into the process policy'
+  grep -q "printf 'xpkg=%s" "$ROOT/runtime/asb_zygisk.sh" || fail 'owner exclusions do not reach the generated policy'
   ! grep -q 'fsync' "$S" || fail 'companion state is fsynced to flash on every event'
   grep -q 'ASB_GOVERNOR_HINT_TIMEOUT_US 100000' "$S" || fail 'governor round trip is not bounded to 100 ms'
   ! grep -q 'profile:\|start-session:\|zygisk-refresh:' "$S" || fail 'observer gained a profile/policy command'
   ! grep -q 'write_all(socket_' "$S" || fail 'the removed retained-socket START send returned'
-  [ "$(grep -c 'write_all(sock,' "$S")" = 1 ] || fail 'more than the single one-shot spawn send exists'
+  [ "$(grep -c 'send_spawn(sock,' "$S")" = 1 ] || fail 'more than the single one-shot spawn send exists'
+  grep -q 'MSG_NOSIGNAL | MSG_DONTWAIT' "$S" || fail 'optional spawn telemetry can still block app startup'
+  grep -q 'policy.excluded(base.c_str())' "$S" && grep -q 'policy.excluded(frame.package)' "$S" \
+    || fail 'owner exclusion is not enforced on both app and companion sides'
   grep -q 'std::lock_guard<std::mutex>' "$S" || fail 'parallel companion handlers are not serialized'
   grep -q 'SO_PEERCRED' "$S" && grep -q 'process_start_ticks(frame.pid)' "$S" || fail 'peer/PID reuse validation missing'
   # fix339: exits are watched by the companion through process fds in one poll() without a
@@ -526,9 +539,19 @@ std::string g_nice;
 #include <vector>
 using namespace zygisk::internal;
 static module_abi *g_abi; static int g_connects=0, g_dlclose=0, g_exempt=0, g_peer=-1;
+static bool g_fill_socket=false;
 static bool reg(api_table*, module_abi *abi){ g_abi=abi; return true; }
 static bool exempt(int){ ++g_exempt; return true; }
-static int connect_c(void*){ ++g_connects; int sv[2]; if (socketpair(AF_UNIX,SOCK_STREAM|SOCK_CLOEXEC,0,sv)) return -1; g_peer=sv[1]; return sv[0]; }
+static int connect_c(void*){
+  ++g_connects; int sv[2]; if (socketpair(AF_UNIX,SOCK_STREAM|SOCK_CLOEXEC,0,sv)) return -1;
+  if(g_fill_socket){
+    int small=4096; setsockopt(sv[0],SOL_SOCKET,SO_SNDBUF,&small,sizeof(small));
+    int fl=fcntl(sv[0],F_GETFL,0); assert(fl>=0 && fcntl(sv[0],F_SETFL,fl|O_NONBLOCK)==0);
+    char fill[4096]{}; while(send(sv[0],fill,sizeof(fill),MSG_NOSIGNAL)>0){}
+    assert(errno==EAGAIN || errno==EWOULDBLOCK); assert(fcntl(sv[0],F_SETFL,fl)==0);
+  }
+  g_peer=sv[1]; return sv[0];
+}
 static void setopt(void*, zygisk::Option o){ if (o==zygisk::DLCLOSE_MODULE_LIBRARY) ++g_dlclose; }
 static int moddir(void*){ return -1; }
 static uint32_t g_flags=0;
@@ -598,6 +621,21 @@ int main(){
   top=0; g_nice="com.example.sync:worker"; pre(); f=take();
   assert(f.flags==ASB_OBSERVER_FLAG_LEDGER && std::string(f.package)=="com.example.sync"); close(g_peer); g_peer=-1;
   g_nice="com.android.settings"; uid=10200; pre(); assert(g_connects==2); uid=10123; // protected name: nothing sent
+  // dev46: the owner's compatibility exclusion covers even a package also present in the
+  // allowlist, and its process suffix. No companion connection, ledger or launch frame is made.
+  put_policy("v=2\ngen=81\nobserver=1\nhints=1\nlaunch=1\nledger=1\npkg=com.example.compat\nxpkg=com.example.compat\n");
+  g_nice="com.example.compat"; top=1; int xc=g_connects, xd=g_dlclose; pre();
+  assert(g_connects==xc && g_dlclose==xd+1);
+  g_nice="com.example.compat:worker"; top=0; pre(); assert(g_connects==xc && g_dlclose==xd+2);
+  // A full companion queue used to block the blocking send in preAppSpecialize forever. The
+  // child alarm makes the old defect fail in two seconds instead of hanging the whole suite.
+  put_policy("v=2\ngen=82\nobserver=0\nhints=0\nlaunch=1\nledger=0\n");
+  g_nice="com.example.app"; top=1; g_fill_socket=true;
+  pid_t full_child=fork(); assert(full_child>=0);
+  if(full_child==0){ alarm(2); pre(); _exit(0); }
+  int full_status=0; assert(waitpid(full_child,&full_status,0)==full_child);
+  g_fill_socket=false;
+  assert(WIFEXITED(full_status) && WEXITSTATUS(full_status)==0); // optional telemetry never stalls startup
   // Allowlisted process: one SPAWN, no exemptFd, socket EOF and an explicit unload request.
   // post-specialize is intentionally silent; the root companion's pidfd owns exit tracking.
   put_policy("v=2\ngen=9\nobserver=1\nhints=0\nlaunch=1\nledger=0\npkg=com.example.app\n");
@@ -628,7 +666,7 @@ int main(){
   // Companion: a published screen-off state vetoes locally without a datagram and without
   // consuming the one-second launch budget. The next screen-on start must reach the governor;
   // only the following start inside that second is throttled. The ledger still keeps both sides.
-  put_policy("v=2\ngen=11\nobserver=0\nhints=0\nlaunch=1\nledger=1\n");
+  put_policy("v=2\ngen=11\nobserver=1\nhints=0\nlaunch=1\nledger=1\npkg=com.example.app\nxpkg=com.example.compat\n");
   { std::ofstream st(ASB_GOVERNOR_STATE); st<<"state=IDLE\nprofile=battery\nscreen=0\n"; }
   int gfd=socket(AF_UNIX,SOCK_DGRAM|SOCK_CLOEXEC,0); sockaddr_un ga{}; ga.sun_family=AF_UNIX;
   snprintf(ga.sun_path,sizeof(ga.sun_path),"%s",ASB_GOVERNOR_SOCKET); unlink(ga.sun_path);
@@ -647,7 +685,14 @@ int main(){
   companion_send(l); // inside one second after the real screen-on launch: throttled locally
   AsbObserverFrame spoof=l; spoof.pid=1234567; companion_send(spoof); // peer/PID mismatch
   AsbObserverFrame g=make_frame(ASB_OBSERVER_EVENT_SPAWN,ASB_OBSERVER_FLAG_LEDGER,"com.example.sync"); companion_send(g);
+  // Companion-side enforcement closes the rolling-update and forged-frame paths as well: no
+  // pidfd, ledger row, launch-class lookup, governor datagram or legacy PROCESS_START record.
+  companion_send(make_frame(ASB_OBSERVER_EVENT_SPAWN,ASB_OBSERVER_FLAG_TOP_APP|ASB_OBSERVER_FLAG_LAUNCH|ASB_OBSERVER_FLAG_LEDGER|ASB_OBSERVER_FLAG_OBSERVE,"com.example.compat"));
+  companion_send(make_frame(ASB_OBSERVER_EVENT_PROCESS_START,0,"com.example.compat"));
+  assert(gov_cmds.size()==1);
   std::string s=state();
+  assert(s.find("Z\texcluded_spawns\t2\n")!=std::string::npos);
+  assert(s.find("com.example.compat")==std::string::npos);
   assert(s.find("Z\tlaunch_accepted\t1\n")!=std::string::npos);
   assert(s.find("Z\tlaunch_vetoed\t1\n")!=std::string::npos);
   assert(s.find("Z\tlaunch_screen_off\t1\n")!=std::string::npos);
@@ -791,7 +836,7 @@ CPP
     fail 'app-side retained socket state returned'
   fi
   ns="$(printf '%s\n' "$out" | sed -n 's/^dormant_ns=//p')"
-  echo "PASS observer hot path: dormant ${ns} ns/fork on this host, uid/child prefilter, cold start with class lookup, unmount flag counted and never silencing the allowlist, ledger, allowlisted/observer-only one-shot SPAWN with socket close and DLCLOSE and no exemptFd, legacy START compatibility, companion exit by process fd or legacy socket counted once, companion launch/class opcodes/old-governor fallback/screen-off launch veto without IPC or budget use/screen-off refresh skipped/throttle/spoof/ledger/no-policy"
+  echo "PASS observer hot path: dormant ${ns} ns/fork on this host, uid/child prefilter, owner exclusions before companion IPC, full-socket nonblocking spawn, cold start with class lookup, unmount flag counted and never silencing the allowlist, ledger, allowlisted/observer-only one-shot SPAWN with socket close and DLCLOSE and no exemptFd, legacy START compatibility, companion exit by process fd or legacy socket counted once, companion launch/class opcodes/old-governor fallback/screen-off launch veto without IPC or budget use/screen-off refresh skipped/throttle/spoof/ledger/no-policy"
 )
 
 t_zygisk_allowlist_runtime() (
@@ -920,7 +965,7 @@ t_zygisk_policy_sync_runtime() (
   T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
   mkdir -p "$T/mod/config" "$T/mod/zygisk" "$T/state"
   printf 'zygisk_enabled=0\nzygisk_mode=observer\nzygisk_hints=0\nzygisk_launch=0\nzygisk_ledger=0\n' > "$T/mod/config/governor.conf"
-  run() { ASB_ZYGISK_MODDIR="$T/mod" ASB_ZYGISK_DIR="$T/state" sh "$ROOT/runtime/asb_zygisk.sh" "$@"; }
+  run() { ASB_ZYGISK_MODDIR="$T/mod" ASB_ZYGISK_DIR="$T/state" ASB_ZYGISK_AOT_EXCLUDE="$T/state/zygisk_aot_exclude" sh "$ROOT/runtime/asb_zygisk.sh" "$@"; }
   P="$T/mod/zygisk/policy"
   run sync | grep -qx 'policy=absent' || fail 'disabled master wrote a policy'
   [ ! -e "$P" ] || fail 'policy exists while disabled'
@@ -934,8 +979,9 @@ t_zygisk_policy_sync_runtime() (
   run set-packages com.example.app org.example.game
   grep -qx 'pkg=com.example.app' "$P" && grep -qx 'pkg=org.example.game' "$P" && grep -qx 'observer=1' "$P" \
     || fail 'allowlist change did not reach the policy'
-  sed -i 's/^zygisk_ledger=0/zygisk_ledger=1/' "$T/mod/config/governor.conf"; run sync >/dev/null
-  grep -qx 'ledger=1' "$P" || fail 'ledger switch did not reach the policy'
+  sed -i 's/^zygisk_ledger=0/zygisk_ledger=1/' "$T/mod/config/governor.conf"
+  printf 'com.example.compat\n' > "$T/state/zygisk_aot_exclude"; run sync >/dev/null
+  grep -qx 'ledger=1' "$P" && grep -qx 'xpkg=com.example.compat' "$P" || fail 'ledger or owner exclusion did not reach the policy'
   run set-packages com.android.shellx >/dev/null 2>&1 && fail 'a name the native module denies was accepted'
   if command -v g++ >/dev/null 2>&1; then
     cat > "$T/parse.cpp" <<'CPP'
@@ -945,11 +991,12 @@ t_zygisk_policy_sync_runtime() (
 int main(int, char **argv) {
   std::ifstream f(argv[1]); std::string s((std::istreambuf_iterator<char>(f)), {});
   AsbObserverPolicy p; if (!asb_observer_policy_parse(s.data(), s.size(), p) || !p.active()) return 1;
-  std::cout << p.observer << p.launch << p.ledger << ' ' << p.packages << "\n"; return 0;
+  if (!p.excluded("com.example.compat") || p.selected("com.example.compat")) return 2;
+  std::cout << p.observer << p.launch << p.ledger << ' ' << p.packages << ' ' << p.excluded_packages << "\n"; return 0;
 }
 CPP
     g++ -std=c++17 -Wall -Wextra -Werror -I"$ROOT/src/zygisk" "$T/parse.cpp" -o "$T/parse" || fail 'parser build'
-    [ "$("$T/parse" "$P")" = '111 2' ] || fail "native parser rejected the shell policy: $(cat "$P")"
+    [ "$("$T/parse" "$P")" = '111 2 1' ] || fail "native parser rejected the shell policy: $(cat "$P")"
   fi
   run safe-mode on
   [ ! -e "$P" ] || fail 'safe mode left the policy for new processes'
@@ -1081,15 +1128,15 @@ EOF
   _emit() { printf '%s\t%s\t%s\n' "$1" "$2" "$3" >> "$T/out"; }
   MODDIR="$T/mod"; PROC="$T/proc"; DATA="$T/data"; ASB_ZYGISK_DIR="$T/data/asb/zygisk_observer"; ASB_ZYGISK_RUN_DIR="$T/run"
   printf 'L\tcom.example.sync\t5\t0\t0\t9\nZ\tlaunch_accepted\t1\n' > "$T/run/state.armeabi-v7a.tsv"
-  printf 'Z\tlaunch_long\t4\nZ\tlaunch_short\t2\nZ\tlaunch_class_fallback\t1\nZ\tclasses_loaded\t1\nZ\tclasses_slow\t5\nZ\tclasses_fast\t3\nZ\tdenylist_spawns\t6\nZ\tlaunch_long\tx\nZ\thints_screen_off\t9\nZ\tlaunch_screen_off\t1\n' >> "$T/run/state.arm64-v8a.tsv"
-  printf 'Z\tlaunch_long\t1\nZ\tdenylist_spawns\t2\nZ\tlaunch_screen_off\t1\n' >> "$T/run/state.armeabi-v7a.tsv"
+  printf 'Z\tlaunch_long\t4\nZ\tlaunch_short\t2\nZ\tlaunch_class_fallback\t1\nZ\tclasses_loaded\t1\nZ\tclasses_slow\t5\nZ\tclasses_fast\t3\nZ\tdenylist_spawns\t6\nZ\texcluded_spawns\t4\nZ\tlaunch_long\tx\nZ\thints_screen_off\t9\nZ\tlaunch_screen_off\t1\n' >> "$T/run/state.arm64-v8a.tsv"
+  printf 'Z\tlaunch_long\t1\nZ\tdenylist_spawns\t2\nZ\texcluded_spawns\t3\nZ\tlaunch_screen_off\t1\n' >> "$T/run/state.armeabi-v7a.tsv"
   mkdir -p "$T/run_old"; cp "$T/run/state.arm64-v8a.tsv" "$T/run_old/"
   printf 'Z\tobserve_requested\t5\nZ\tobserve_retained\t0\nZ\tobserve_pidfd\t4\nZ\tobserve_untracked\t1\nZ\tobserve_watching\t2\nZ\texits_pidfd\t2\nZ\texits_peer\t0\n' >> "$T/run/state.arm64-v8a.tsv"
   printf 'Z\tobserve_requested\t1\nZ\tobserve_pidfd\t1\nZ\tobserve_watching\tx\n' >> "$T/run/state.armeabi-v7a.tsv"
   . "$ROOT/runtime/asb_zygisk_info.sh"; _asb_zygisk_info
   want() { grep -Fqx "zygisk_observer	$1	$2" "$T/out" || fail "missing $1=$2: $(cat "$T/out")"; }
   want launch_long 5; want launch_short 2; want launch_class_fallback 1; want launch_classes_loaded 1
-  want launch_classes 'slow 5, fast 3'; want denylist_spawns 8; want hints_screen_off 9; want launch_screen_off 2
+  want launch_classes 'slow 5, fast 3'; want denylist_spawns 8; want excluded_spawns 7; want hints_screen_off 9; want launch_screen_off 2
   want enabled 1; want enabled_packages 1; want loaded_processes 1; want events_total 10; want link_state connected
   want auto_mode 0
   want events_dropped_rate_limit 1; want ipc_cpu_ms 3; want ipc_wakeups 12; want memory_kb 2222

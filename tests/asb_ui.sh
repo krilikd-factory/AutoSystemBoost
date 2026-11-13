@@ -2152,6 +2152,45 @@ LK_POLL_FAST=15 LK_POLL_NORMAL=45 LK_POLL_SLOW=90 LK_POLL_CHARGING_IDLE=60
 [ "$(lk_poll_for_phase charging_active)" = 15 ] || { echo 'FAIL logkit capture-quality: visible charging cadence' >&2; exit 1; }
 [ "$(lk_poll_for_phase gaming)" = 15 ] || { echo 'FAIL logkit capture-quality: gaming cadence' >&2; exit 1; }
 [ "$(lk_poll_for_phase sleep)" = 90 ] || { echo 'FAIL logkit capture-quality: sleep cadence' >&2; exit 1; }
+
+# dev46: a GPU-bound native FSM state is not package-confirmed gameplay in the human report.
+need "$LOGKIT" 'lk_game_hint_confirmed()'
+need "$LOGKIT" "'^app_hint_inferred='"
+sed -n '/^lk_game_hint_confirmed() {/,/^}/p' "$LOGKIT" > "$TMP/game_hint.sh"
+. "$TMP/game_hint.sh"
+ASB_LK_STATE_FILE="$TMP/state"
+printf 'app_hint=4\napp_hint_inferred=0\n' > "$ASB_LK_STATE_FILE"
+lk_game_hint_confirmed || { echo 'FAIL logkit capture-quality: package-table game rejected' >&2; exit 1; }
+printf 'app_hint=4\napp_hint_inferred=1\n' > "$ASB_LK_STATE_FILE"
+lk_game_hint_confirmed && { echo 'FAIL logkit capture-quality: inferred GPU load named a game' >&2; exit 1; }
+printf 'app_hint=4\n' > "$ASB_LK_STATE_FILE"
+lk_game_hint_confirmed && { echo 'FAIL logkit capture-quality: missing provenance named a game' >&2; exit 1; }
+printf 'app_hint=2\napp_hint_inferred=0\n' > "$ASB_LK_STATE_FILE"
+lk_game_hint_confirmed && { echo 'FAIL logkit capture-quality: ordinary app named a game' >&2; exit 1; }
+
+# The zero Smart energy class is a category total, not a session detector.
+sed -n '/^lk_emit_smart_energy_rows() {/,/^}/p' "$LOGKIT" > "$TMP/energy.sh"
+. "$TMP/energy.sh"
+printf 'class|game|0.0|0|0\nclass|media|1.5|2|30\n' > "$TMP/energy.txt"
+energy_out="$(lk_emit_smart_energy_rows "$TMP/energy.txt")"
+printf '%s\n' "$energy_out" | grep -Fq 'energy: class  game  0.0  0  0' || { echo 'FAIL logkit capture-quality: energy row missing' >&2; exit 1; }
+printf '%s\n' "$energy_out" | grep -Fq 'zero category row is not gameplay detection' || { echo 'FAIL logkit capture-quality: zero game category unexplained' >&2; exit 1; }
+printf 'class|game|2.0|1|30\n' > "$TMP/energy.txt"
+lk_emit_smart_energy_rows "$TMP/energy.txt" | grep -Fq 'not gameplay detection' && { echo 'FAIL logkit capture-quality: real game total disclaimed' >&2; exit 1; }
+printf 'class|game|-|-|-\n' > "$TMP/energy.txt"
+lk_emit_smart_energy_rows "$TMP/energy.txt" | grep -Fq 'not gameplay detection' && { echo 'FAIL logkit capture-quality: unknown game total presented as zero' >&2; exit 1; }
+
+# Provenance is appended, so every old fsm_media_trace column keeps its index.
+COMMON="$ROOT/tools/logkit/_asb_logkit_common.sh"
+need "$COMMON" '|guard_reason|app_hint_inferred'
+{ sed -n '/^lk_fsm_media_trace_header() {/,/^}/p' "$COMMON"; sed -n '/^lk_capture_fsm_media_trace_row() {/,/^}/p' "$COMMON"; } > "$TMP/fsm.sh"
+. "$TMP/fsm.sh"
+lk_state_kv() { case "$1" in smart_app_hint) echo 4 ;; smart_app_hint_inferred) echo 1 ;; esac; }
+LK_OUT_DIR="$TMP/fsm"; mkdir -p "$LK_OUT_DIR"
+lk_fsm_media_trace_header
+lk_capture_fsm_media_trace_row active
+awk -F'|' 'NF == 16 && $10 == 4 && $16 == 1 { ok=1 } END { exit !ok }' "$LK_OUT_DIR/fsm_media_trace.tsv" || { echo 'FAIL logkit capture-quality: inference provenance missing from FSM trace' >&2; exit 1; }
+
 lk_stabilize_charging_phase charging_active 100
 [ "$LK_CHG_PHASE_OUT" = charging_active ] || { echo "FAIL logkit capture-quality: first active sample" >&2; exit 1; }
 lk_stabilize_charging_phase charging_idle 115
@@ -6622,7 +6661,9 @@ chk(injA.chains.some(c => c.key === 'lr_chain_sysui_inj' && c.kind === 'hypothes
 const jkTip = function (prof) { return logReportTips(parseLogReport('meta\telapsed_min=200\tprofile=' + prof + '\njank\tpct=8.0\tjps=3.00\tframes=30000\n'), true).map(function (t) { return t.key; }); };
 chk(jkTip('battery').indexOf('lr_tip_jank_bad_bat') >= 0 && jkTip('battery').indexOf('lr_tip_jank_bad') < 0, 'a Battery day is not told about the Smart learner: ' + jkTip('battery'));
 chk(jkTip('balanced').indexOf('lr_tip_jank_bad_man') >= 0, 'a Balanced day gets the manual-profile wording');
-chk(jkTip('smart').indexOf('lr_tip_jank_bad') >= 0, 'a Smart day keeps the learner wording');
+chk(jkTip('smart').indexOf('lr_tip_jank_bad') >= 0 && jkTip('smart').indexOf('lr_tip_jank_bad_game') < 0, 'a Smart day without confirmed gaming gets neutral learner wording');
+const jkGameTip = logReportTips(parseLogReport('meta\telapsed_min=200\tprofile=smart\njank\tpct=8.0\tjps=3.00\tframes=30000\nphase\tname=gaming\tmin=18\tdrop=1\tpctph=3.3\n'), true).map(function (t) { return t.key; });
+chk(jkGameTip.indexOf('lr_tip_jank_bad_game') >= 0 && jkGameTip.indexOf('lr_tip_jank_bad') < 0, 'game advice requires a confirmed gaming phase: ' + jkGameTip.join(','));
 const mixInj = JSON.parse(JSON.stringify(injDay)); mixInj.sections.sysuiinj.pkg = ''; mixInj.sections.sysuiinj.n = '0';
 chk(!logReportTips(mixInj, true).some(t => t.key === 'lr_tip_sysui_inj'), 'hooks alone draw no restart action');
 mixInj.sections.sysuiinj.pkg = 'com.example.hooker'; mixInj.sections.sysuiinj.n = '1'; mixInj.sections.sysui.count = '0';
@@ -7369,8 +7410,8 @@ PH.update({'lr_brief_drain':['{drop}','{h}','{pct}','{est}'], 'lr_brief_drain_sh
       'lr_tip_sync_loop':['{app}','{what}','{pct}'], 'lr_tip_worker':['{app}','{name}','{pct}'],
       'lr_chain_sync':['{awake}','{who}','{pct}']})
 KEYS += ['lr_tip_sysui_inj','lr_chain_sysui_inj','lr_sysui_inj_note','lr_sysui_hooks_note',
-         'lr_reboots','lr_reboots_mod','dbg_log_started_hint','lr_tip_jank_bad_bat','lr_tip_jank_bad_man']
-PH.update({'lr_tip_jank_bad_bat':['{pct}'], 'lr_tip_jank_bad_man':['{pct}']})
+         'lr_reboots','lr_reboots_mod','dbg_log_started_hint','lr_tip_jank_bad_bat','lr_tip_jank_bad_man','lr_tip_jank_bad_game']
+PH.update({'lr_tip_jank_bad_bat':['{pct}'], 'lr_tip_jank_bad_man':['{pct}'], 'lr_tip_jank_bad_game':['{pct}']})
 KEYS += ['lr_ms','lr_ms_wake','lr_drain_est','lr_drain_idle','lr_drain_short_note','lr_drain_short_note0',
          'lr_idle_fmt','lr_peak','lr_clamp_brief_note','lr_sum_drain_idle','lr_sum_drain_mixed',
          'lr_chain_sysui','lr_chain_music_off','lr_tip_sysui_netspeed','lr_tip_sysui_clocksec',
@@ -8223,6 +8264,7 @@ assert 'NoMount' in ru['dev_kernel_features_nomount'] and 'NTSync' in ru['dev_ke
 assert 'BBRv2' in ru['dev_kernel_features_bbr_v2'] and 'SuSFS' in ru['dev_kernel_features_susfs']
 assert 'Метамодуль' in ru['dev_sec_metamodule'] and 'NoMount' in ru['dev_metamodule_nomount_driver_version']
 assert 'возможен форк' in ru['dev_root_fork_possible'] and 'ниже' not in ru['lr_tip_jank_bad_bat']
+assert 'игр' not in ru['lr_tip_jank_bad'] and 'игр' in ru['lr_tip_jank_bad_game']
 assert 'подмен' in ru['dev_guide_kernel_features'] and 'read-only' in ru['dev_guide_kernel_features']
 assert 'приоритет' in ru['dev_guide_kernel_features'] and 'qdisc' in ru['dev_guide_kernel_features']
 assert 'Sched Stats' in ru['dev_kernel_features_sched_stats'] and 'CAKE' in ru['dev_kernel_features_net_sch_cake_module']
