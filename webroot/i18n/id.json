@@ -434,7 +434,7 @@
     },
     "kernel_sched_stats": {
       "name": "Statistik Debug Penjadwal",
-      "desc": "Tweak kernel generik opsional. Nonaktif mematikan statistik debug penjadwal hanya jika /proc/sys/kernel/sched_stats tersedia dan dapat ditulis. Kebijakan penjadwalan, frekuensi CPU, dan driver SoC tidak berubah. Stock dan penghapusan memulihkan nilai 0/1 asli. Tidak ada persentase penghematan baterai yang belum diukur yang diklaim.",
+      "desc": "Off menonaktifkan statistik scheduler tambahan melalui /proc/sys/kernel/sched_schedstats. Ini menghilangkan overhead kecil pencatatan debug tersebut, tetapi juga menghilangkan diagnostik schedstats; kebijakan penjadwalan dan frekuensi CPU tidak berubah. Dampak performa atau baterai hanya terkait pencatatan ini dan tidak diklaim tanpa pengukuran. Stock tidak menulis tanpa baseline dan setelah Off memulihkan 0/1 awal; penghapusan melakukan hal yang sama.",
       "descOpt": {
         "stock": "Jangan ubah akuntansi debug scheduler.",
         "off": "Nonaktifkan hanya node sched_stats yang tersedia dan dapat ditulis; pulihkan nilai tercatat pada Stock atau penghapusan."
@@ -490,19 +490,19 @@
     },
     "mglru_mode": {
       "name": "Mode MGLRU",
-      "desc": "Hanya untuk node MGLRU yang dapat ditulis. Off meminta 0, On meminta 7, dan Smart memilih 5 atau 7 sesuai beban. Stock dan penghapusan memulihkan nilai awal yang tersimpan. Hasil baca yang berbeda dilaporkan sebagai kegagalan, bukan keberhasilan."
+      "desc": "Mengubah cara MGLRU memilih dan merebut kembali halaman memori: Off meminta 0, On 7, dan Smart 5 atau 7 sesuai beban. Saat memori tertekan, kebijakan yang sesuai dapat mengurangi kerja reclaim dan memperbaiki respons atau retensi aplikasi; kebijakan yang tidak sesuai dapat menambah reclaim, pemuatan ulang, dan tersendat. Dampak baterai bergantung pada beban dan tidak dijamin. Stock dan penghapusan memulihkan mask tersimpan; readback yang terpotong dianggap ketidakcocokan, bukan keberhasilan."
     },
     "kernel_timer_migration": {
       "name": "Migrasi Timer",
-      "desc": "Mengontrol timer_migration melalui satu pemilik terbatas. Off meminta 0 dan On meminta 1. Stock dan penghapusan memulihkan nilai tersimpan. Node yang hilang, hanya-baca, atau hasil bacanya tidak cocok tidak disebut berhasil."
+      "desc": "Mengatur apakah kernel boleh memindahkan timer antar-CPU. On dapat memindahkan timer dari CPU idle ke CPU yang sudah aktif dan menghindari sebagian wake-up; Off mempertahankan posisi timer, dengan hasil yang dapat berbeda saat berbeban. Tergantung perilaku CPU idle, kedua mode dapat memperbaiki atau memperburuk latensi dan konsumsi daya. Off mempertahankan permintaan ASB sebelumnya; Stock dan penghapusan memulihkan nilai tersimpan setelah readback terverifikasi."
     },
     "kernel_sched_nr_migrate": {
       "name": "Batch Migrasi Penjadwal",
-      "desc": "Membatasi tugas yang dipindahkan scheduler per tahap ke 1, 2, 4, 8, atau 16. Nilai 4 mempertahankan perilaku sebelumnya. Stock dan penghapusan memulihkan bilangan awal; node yang tidak tersedia dan hasil baca yang keluar ditampilkan apa adanya."
+      "desc": "Membatasi jumlah maksimum tugas yang dipindahkan dalam satu tahap penyeimbangan scheduler melalui /sys/kernel/debug/sched/nr_migrate. Nilai lebih kecil mengurangi kerja migrasi per tahap tetapi dapat mempertahankan ketimpangan beban lebih lama; nilai lebih besar menyeimbangkan lebih cepat dengan biaya migrasi dan gangguan cache tambahan. Dampak performa dan baterai bergantung pada beban. 4 adalah permintaan Balanced sebelumnya, bukan nilai optimum yang terbukti; Stock dan penghapusan memulihkan bilangan bulat awal."
     },
     "kernel_sched_autogroup": {
       "name": "Autogroup penjadwal",
-      "desc": "Mengendalikan sched_autogroup_enabled hanya jika dapat ditulis. Aktif mengaktifkan pengelompokan tugas otomatis, Nonaktif mematikannya. Respons dan tugas latar dapat berubah, tetapi peningkatan performa atau baterai tidak dijamin. Stock dan pencopotan memulihkan nilai 0/1 sebelum ASB.",
+      "desc": "On mengelompokkan tugas berdasarkan sesi untuk pembagian CPU yang adil, Off menonaktifkan pengelompokan itu. Dengan beban latar yang bersaing, ini dapat mengubah respons interaktif dan jatah CPU pekerjaan latar. Ini bukan pendorong performa atau mode hemat daya; manfaat baterai tidak dijamin. Stock dan penghapusan memulihkan 0/1 tersimpan. Jika antarmuka tidak ada, ASB melaporkan «not exposed», bukan mengaktifkan opsi kernel hanya demi kartu ini.",
       "descOpt": {
         "stock": "Biarkan pengelompokan otomatis tidak berubah.",
         "off": "Nonaktifkan pengelompokan tugas otomatis.",
@@ -511,7 +511,7 @@
     },
     "kernel_sched_child_runs_first": {
       "name": "Proses anak lebih dulu",
-      "desc": "Mengendalikan sched_child_runs_first hanya jika dapat ditulis. Aktif menjalankan proses anak baru sebelum induknya; Nonaktif memilih kebijakan sebaliknya. Latensi dan permulaan proses dapat terpengaruh, tetapi ini bukan peningkatan universal. Stock dan pencopotan memulihkan nilai 0/1 sebelum ASB.",
+      "desc": "Setelah fork(), On meminta scheduler menjalankan proses anak sebelum induk; Off memilih urutan sebaliknya. Pada sebagian beban ini dapat mengubah latensi mulai proses dan perilaku copy-on-write; pada beban lain mungkin tidak bermanfaat atau memperburuk hasil. Ini bukan optimasi umum untuk FPS, performa, atau baterai. Stock dan penghapusan memulihkan 0/1 tersimpan; keberhasilan hanya dilaporkan jika readback cocok.",
       "descOpt": {
         "stock": "Biarkan kebijakan proses anak tidak berubah.",
         "off": "Jangan meminta proses anak berjalan lebih dulu.",

@@ -434,7 +434,7 @@
     },
     "kernel_sched_stats": {
       "name": "Zamanlayıcı Hata Ayıklama İstatistikleri",
-      "desc": "İsteğe bağlı genel çekirdek ayarı. Kapalı, yalnızca /proc/sys/kernel/sched_stats kullanılabilir ve yazılabilir olduğunda zamanlayıcı hata ayıklama istatistiklerini kapatır. Zamanlama politikası, CPU frekansları ve SoC sürücüleri değişmez. Stock ve kaldırma, özgün 0/1 değerini geri yükler. Ölçülmemiş pil tasarrufu yüzdesi iddia edilmez.",
+      "desc": "Kapalı, /proc/sys/kernel/sched_schedstats üzerinden ek zamanlayıcı istatistiklerini devre dışı bırakır. Bu, hata ayıklama muhasebesinin küçük ek yükünü kaldırır ama schedstats tanılamasını da kaldırır; zamanlama politikası ve CPU frekansları değişmez. Performans veya pil etkisi bu muhasebeyle sınırlıdır ve ölçüm olmadan iddia edilmez. Stock baseline yokken yazma yapmaz, Kapalı sonrasında özgün 0/1 değerini geri yükler; kaldırma da aynısını yapar.",
       "descOpt": {
         "stock": "Zamanlayıcı hata ayıklama hesaplamasını değiştirme.",
         "off": "Yalnızca sunulan yazılabilir sched_stats düğümünü kapat; Stock veya kaldırmada kayıtlı değeri geri yükle."
@@ -490,19 +490,19 @@
     },
     "mglru_mode": {
       "name": "MGLRU Modu",
-      "desc": "Yalnızca yazılabilir MGLRU düğümünde çalışır. Kapalı 0, Açık 7 ister; Smart yüke göre 5 veya 7 seçer. Stok ve kaldırma kaydedilen ilk değeri geri yükler. Farklı okunan değer başarı değil hata olarak gösterilir."
+      "desc": "MGLRU’nun bellek sayfalarını seçme ve geri kazanma biçimini değiştirir: Kapalı 0, Açık 7, Smart ise yüke göre 5 veya 7 ister. Bellek baskısında uygun politika reclaim işini azaltıp yanıtı veya uygulama tutmayı iyileştirebilir; uygun olmayan politika reclaim, yeniden yükleme ve takılmayı artırabilir. Pil etkisi yüke bağlıdır ve garanti edilmez. Stock ve kaldırma kaydedilen maskeyi geri yükler; kırpılmış readback başarı değil uyumsuzluktur."
     },
     "kernel_timer_migration": {
       "name": "Zamanlayıcı Taşıma",
-      "desc": "timer_migration tek bir sınırlı sahip üzerinden yönetilir. Kapalı 0, Açık 1 ister. Stok ve kaldırma kaydedilen değeri geri yükler. Eksik, salt okunur veya yanlış okunan düğüm uygulanmış gibi gösterilmez."
+      "desc": "Çekirdeğin zamanlayıcıları CPU’lar arasında taşıyıp taşıyamayacağını denetler. Açık, zamanlayıcıları boştaki CPU’lardan zaten etkin olanlara taşıyıp bazı uyanışları önleyebilir; Kapalı konumlarını korur, ancak yük altında sonuç farklı olabilir. CPU idle davranışına bağlı olarak iki mod da gecikmeyi ve güç tüketimini iyileştirebilir veya kötüleştirebilir. Kapalı önceki ASB isteğini korur; Stock ve kaldırma, doğrulanmış readback sonrası kaydedilen değeri geri yükler."
     },
     "kernel_sched_nr_migrate": {
       "name": "Zamanlayıcı Taşıma Grubu",
-      "desc": "Zamanlayıcının bir geçişte taşıdığı görevleri 1, 2, 4, 8 veya 16 ile sınırlar. 4 önceki davranışı korur. Stok ve kaldırma ilk tam sayıyı geri yükler; kullanılamayan düğümler ve okuma uyuşmazlıkları açıkça bildirilir."
+      "desc": "/sys/kernel/debug/sched/nr_migrate üzerinden zamanlayıcının bir dengeleme geçişinde taşıyacağı en fazla görev sayısını belirler. Düşük değerler geçiş başına taşıma işini azaltır ama yük dengesizliğini daha uzun sürdürebilir; yüksek değerler yükü daha erken dengelerken daha fazla taşıma ve önbellek kaybına yol açar. Performans ve pil etkileri yüke bağlıdır. 4, önceki Balanced isteğidir, kanıtlanmış bir optimum değildir; Stock ve kaldırma kaydedilen tamsayıyı geri yükler."
     },
     "kernel_sched_autogroup": {
       "name": "Zamanlayıcı otomatik grubu",
-      "desc": "sched_autogroup_enabled anahtarını yalnızca yazılabilir olduğunda denetler. Açık otomatik görev gruplandırmasını etkinleştirir, Kapalı devre dışı bırakır. Yanıt ve arka plan görevleri değişebilir; performans veya pil kazancı garanti edilmez. Stock ve kaldırma, ASB öncesi 0/1 değerini geri yükler.",
+      "desc": "Açık, görevleri adil CPU paylaşımı için oturumlara göre gruplar; Kapalı bu gruplamayı kaldırır. Rekabet eden arka plan yükünde etkileşimli yanıtı ve arka plan işlerinin CPU payını değiştirebilir. Bu bir performans artırıcı veya güç tasarrufu modu değildir; pil kazancı garanti edilmez. Stock ve kaldırma kaydedilen 0/1 değerini geri yükler. Arayüz yoksa ASB, sırf bu kart için çekirdek seçeneğini açmak yerine «not exposed» bildirir.",
       "descOpt": {
         "stock": "Otomatik zamanlayıcı gruplandırmasını değiştirme.",
         "off": "Otomatik görev gruplandırmasını kapat.",
@@ -511,7 +511,7 @@
     },
     "kernel_sched_child_runs_first": {
       "name": "Alt işlem önce çalışır",
-      "desc": "sched_child_runs_first anahtarını yalnızca yazılabilir olduğunda denetler. Açık, yeni alt işlemin üst işlemden önce çalışmasını ister; Kapalı ters ilkeyi seçer. Gecikme ve işlem başlangıcı etkilenebilir, ancak bu evrensel bir iyileştirme değildir. Stock ve kaldırma, ASB öncesi 0/1 değerini geri yükler.",
+      "desc": "fork() sonrasında Açık, zamanlayıcıdan alt süreci üst süreçten önce çalıştırmasını ister; Kapalı ters sırayı seçer. Bazı yüklerde süreç başlatma gecikmesini ve copy-on-write davranışını değiştirebilir, bazılarında yarar sağlamaz veya sonucu kötüleştirir. Genel bir FPS, performans veya pil iyileştirmesi değildir. Stock ve kaldırma kaydedilen 0/1 değerini geri yükler; başarı yalnızca readback eşleştiğinde bildirilir.",
       "descOpt": {
         "stock": "Alt işlem önceliği ilkesini değiştirme.",
         "off": "Alt işlemin önce çalışmasını isteme.",

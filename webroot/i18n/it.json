@@ -461,7 +461,7 @@
     },
     "kernel_sched_stats": {
       "name": "Statistiche di debug dello scheduler",
-      "desc": "Ottimizzazione generica opzionale del kernel. Off disattiva le statistiche di debug solo se /proc/sys/kernel/sched_stats è esposto e scrivibile. Politica dello scheduler, frequenze CPU e driver SoC restano invariati. Stock e disinstallazione ripristinano il valore 0/1 originale. Nessuna percentuale di risparmio non misurata viene dichiarata.",
+      "desc": "Off disattiva le statistiche aggiuntive dello scheduler tramite /proc/sys/kernel/sched_schedstats. Elimina il piccolo overhead di questa contabilità di debug, ma anche la diagnostica schedstats; politica di scheduling e frequenze CPU non cambiano. Qualsiasi effetto su prestazioni o batteria è limitato a questa contabilità e non viene dichiarato senza misure. Stock non scrive senza baseline e, dopo Off, ripristina il valore 0/1 originale; la disinstallazione fa lo stesso.",
       "descOpt": {
         "stock": "Non modificare la contabilità debug dello scheduler.",
         "off": "Disattiva solo un nodo sched_stats esposto e scrivibile; ripristina il valore registrato con Stock o disinstallazione."
@@ -517,19 +517,19 @@
     },
     "mglru_mode": {
       "name": "Modalità MGLRU",
-      "desc": "Funziona solo con un nodo MGLRU scrivibile. Off richiede 0, On richiede 7 e Smart sceglie 5 o 7 in base al carico. Stock e disinstallazione ripristinano il valore iniziale salvato. Una rilettura diversa è un errore, non un successo."
+      "desc": "Cambia come MGLRU seleziona e recupera le pagine di memoria: Off richiede 0, On 7 e Smart 5 o 7 in base al carico. Sotto pressione di memoria, una politica adatta può ridurre il lavoro di reclaim e migliorare reattività o conservazione delle app; una inadatta può aumentare reclaim, ricaricamenti e scatti. L’effetto sulla batteria dipende dal carico e non è garantito. Stock e disinstallazione ripristinano la maschera salvata; un readback limitato è un errore, non un successo."
     },
     "kernel_timer_migration": {
       "name": "Migrazione dei timer",
-      "desc": "Controlla timer_migration tramite un unico proprietario limitato. Off richiede 0 e On richiede 1. Stock e disinstallazione ripristinano il valore salvato. Nodo assente, sola lettura o rilettura errata non vengono presentati come applicazione riuscita."
+      "desc": "Controlla se il kernel può migrare i timer tra CPU. On può spostarli da CPU inattive a CPU già attive ed evitare alcuni risvegli; Off mantiene la loro posizione, con risultati diversi sotto carico. A seconda del comportamento di CPU idle, entrambe le modalità possono migliorare o peggiorare latenza e consumo. Off conserva la precedente richiesta ASB; Stock e disinstallazione ripristinano il valore salvato dopo un readback verificato."
     },
     "kernel_sched_nr_migrate": {
       "name": "Batch di migrazione dello scheduler",
-      "desc": "Limita i task migrati per passaggio a 1, 2, 4, 8 o 16. Il valore 4 conserva il comportamento precedente. Stock e disinstallazione ripristinano l’intero iniziale; nodi non disponibili e riletture errate vengono segnalati chiaramente."
+      "desc": "Limita tramite /sys/kernel/debug/sched/nr_migrate quanti task sposta ogni passaggio di bilanciamento dello scheduler. Valori minori riducono il lavoro per passaggio ma possono prolungare lo sbilanciamento; valori maggiori bilanciano prima al costo di più migrazioni e perdite di cache. Gli effetti su prestazioni e batteria dipendono dal carico. 4 è la precedente richiesta Balanced, non un ottimo dimostrato; Stock e disinstallazione ripristinano l’intero originale."
     },
     "kernel_sched_autogroup": {
       "name": "Autogroup dello scheduler",
-      "desc": "Controlla sched_autogroup_enabled solo se scrivibile. Attivo abilita il raggruppamento automatico dei task, Disattivo lo disabilita. Reattività e attività in background possono cambiare, senza garanzia di prestazioni o autonomia migliori. Stock e disinstallazione ripristinano il valore 0/1 precedente ad ASB.",
+      "desc": "On raggruppa i task per sessione per una distribuzione equa della CPU, Off disattiva il raggruppamento. Con carichi di background concorrenti può cambiare la reattività interattiva e la quota CPU dei processi secondari. Non è un acceleratore né una modalità di risparmio; il guadagno di batteria non è garantito. Stock e disinstallazione ripristinano il valore 0/1 salvato. Se l’interfaccia manca, ASB segnala «not exposed» invece di attivare un’opzione del kernel solo per questa scheda.",
       "descOpt": {
         "stock": "Non modificare il raggruppamento automatico.",
         "off": "Disabilita il raggruppamento automatico dei task.",
@@ -538,7 +538,7 @@
     },
     "kernel_sched_child_runs_first": {
       "name": "Processo figlio per primo",
-      "desc": "Controlla sched_child_runs_first solo se scrivibile. Attivo esegue il nuovo processo figlio prima del padre; Disattivo sceglie la politica opposta. Può influire su latenza e avvio dei processi, ma non è un miglioramento universale. Stock e disinstallazione ripristinano il valore 0/1 precedente ad ASB.",
+      "desc": "Dopo fork(), On chiede allo scheduler di eseguire il figlio prima del genitore; Off sceglie l’ordine opposto. In alcuni carichi può cambiare la latenza di avvio e il comportamento copy-on-write, in altri non portare benefici o peggiorare il risultato. Non è un’ottimizzazione generale di FPS, prestazioni o batteria. Stock e disinstallazione ripristinano il valore 0/1 salvato; il successo viene dichiarato solo se il readback coincide.",
       "descOpt": {
         "stock": "Non modificare la priorità del processo figlio.",
         "off": "Non richiedere l’esecuzione prioritaria del processo figlio.",

@@ -434,7 +434,7 @@
     },
     "kernel_sched_stats": {
       "name": "Estadísticas de depuración del planificador",
-      "desc": "Ajuste genérico opcional del kernel. Desactivado desactiva las estadísticas de depuración solo si /proc/sys/kernel/sched_stats está disponible y se puede escribir. No cambia la política del planificador, las frecuencias de CPU ni los controladores del SoC. Stock y la desinstalación restauran el 0/1 original. No se afirma un porcentaje de ahorro sin medir.",
+      "desc": "Desactivado apaga las estadísticas adicionales del planificador mediante /proc/sys/kernel/sched_schedstats. Elimina el pequeño coste de esa contabilidad de depuración, pero también el diagnóstico schedstats; no cambia la política de planificación ni las frecuencias CPU. Cualquier efecto en rendimiento o batería se limita a esta contabilidad y no se afirma sin mediciones. Stock no escribe sin baseline y, tras Desactivado, restaura el 0/1 original; la desinstalación hace lo mismo.",
       "descOpt": {
         "stock": "No cambiar la contabilidad de depuración del planificador.",
         "off": "Desactivar solo un nodo sched_stats expuesto y escribible; restaurar el valor registrado con Stock o al desinstalar."
@@ -490,19 +490,19 @@
     },
     "mglru_mode": {
       "name": "Modo MGLRU",
-      "desc": "Solo con un nodo MGLRU escribible. Off solicita 0, On solicita 7 y Smart elige 5 o 7 según la carga. Stock y la desinstalación restauran el valor original guardado. Una lectura distinta se informa como error, no como éxito."
+      "desc": "Cambia cómo MGLRU selecciona y recupera páginas de memoria: Desactivado pide 0, Activado 7 y Smart 5 o 7 según la carga. Bajo presión de memoria, una política adecuada puede reducir el trabajo de reclaim y mejorar la respuesta o retención de apps; una inadecuada puede aumentar reclaim, recargas y tirones. El efecto en batería depende de la carga y no está garantizado. Stock y la desinstalación restauran la máscara guardada; un readback recortado es un error, no un éxito."
     },
     "kernel_timer_migration": {
       "name": "Migración de temporizadores",
-      "desc": "Controla timer_migration mediante un único propietario limitado. Off solicita 0 y On solicita 1. Stock y la desinstalación restauran el valor guardado. Un nodo ausente, de solo lectura o con lectura incorrecta no se presenta como aplicado."
+      "desc": "Controla si el kernel puede migrar temporizadores entre CPU. Activado puede moverlos desde CPU inactivas a otras ya activas y evitar algunos despertares; Desactivado mantiene su ubicación, con un resultado distinto según la carga. Según el comportamiento de CPU idle, cualquier modo puede mejorar o empeorar latencia y consumo. Desactivado conserva la solicitud anterior de ASB; Stock y la desinstalación restauran el valor capturado tras verificar readback."
     },
     "kernel_sched_nr_migrate": {
       "name": "Lote de migración del planificador",
-      "desc": "Limita las tareas migradas por pasada a 1, 2, 4, 8 o 16. El valor 4 conserva el comportamiento anterior. Stock y la desinstalación restauran el entero original; los nodos no disponibles y las lecturas incorrectas se muestran con honestidad."
+      "desc": "Limita mediante /sys/kernel/debug/sched/nr_migrate cuántas tareas mueve cada pasada de equilibrio del planificador. Valores menores reducen el trabajo por pasada, pero pueden mantener el desequilibrio más tiempo; valores mayores equilibran antes a costa de más migraciones y pérdidas de caché. Los efectos en rendimiento y batería dependen de la carga. 4 es la solicitud anterior de Balanced, no un óptimo demostrado; Stock y la desinstalación restauran el entero original."
     },
     "kernel_sched_autogroup": {
       "name": "Autogrupo del planificador",
-      "desc": "Controla sched_autogroup_enabled solo cuando permite escritura. Activado habilita la agrupación automática de tareas y Desactivado la deshabilita. Puede cambiar la respuesta y las tareas en segundo plano, sin garantizar mejoras de rendimiento o batería. Stock y la desinstalación restauran el 0/1 previo a ASB.",
+      "desc": "Activado agrupa tareas por sesión para repartir la CPU con equidad; Desactivado elimina esa agrupación. Con carga de fondo competidora puede cambiar la respuesta interactiva y la cuota de CPU del trabajo secundario. No es un acelerador ni un modo de ahorro; la mejora de batería no está garantizada. Stock y la desinstalación restauran el 0/1 capturado. Si falta la interfaz, ASB informa «not exposed» en lugar de activar una opción del kernel solo para esta tarjeta.",
       "descOpt": {
         "stock": "No cambiar la agrupación automática del planificador.",
         "off": "Deshabilitar la agrupación automática de tareas.",
@@ -511,7 +511,7 @@
     },
     "kernel_sched_child_runs_first": {
       "name": "Proceso hijo primero",
-      "desc": "Controla sched_child_runs_first solo cuando permite escritura. Activado ejecuta el proceso hijo recién creado antes que el padre; Desactivado elige la política contraria. Puede afectar a la latencia y al inicio de procesos, pero no es una mejora universal. Stock y la desinstalación restauran el 0/1 previo a ASB.",
+      "desc": "Tras fork(), Activado pide al planificador ejecutar el hijo antes que el padre; Desactivado elige el orden contrario. En algunas cargas puede cambiar la latencia de inicio y el comportamiento copy-on-write; en otras no aporta beneficios o empeora el resultado. No es una optimización general de FPS, rendimiento o batería. Stock y la desinstalación restauran el 0/1 capturado; solo se declara éxito si readback coincide.",
       "descOpt": {
         "stock": "No cambiar la política del proceso hijo.",
         "off": "No solicitar que el proceso hijo se ejecute primero.",

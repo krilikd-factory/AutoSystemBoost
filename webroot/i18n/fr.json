@@ -542,7 +542,7 @@
     },
     "kernel_sched_stats": {
       "name": "Statistiques de débogage du planificateur",
-      "desc": "Réglage noyau générique et facultatif. Désactivé coupe les statistiques de débogage uniquement si /proc/sys/kernel/sched_stats est accessible en écriture. La politique d’ordonnancement, les fréquences CPU et les pilotes SoC ne changent pas. Stock et la désinstallation restaurent la valeur 0/1 d’origine. Aucun gain de batterie non mesuré n’est annoncé.",
+      "desc": "Off désactive les statistiques supplémentaires de l’ordonnanceur via /proc/sys/kernel/sched_schedstats. Cela supprime le faible surcoût de cette comptabilité de débogage, mais aussi le diagnostic schedstats ; la politique d’ordonnancement et les fréquences CPU ne changent pas. Tout effet sur performances ou batterie se limite à cette comptabilité et n’est pas affirmé sans mesure. Stock n’écrit rien sans baseline et restaure le 0/1 initial après Off ; la désinstallation fait de même.",
       "descOpt": {
         "stock": "Ne pas changer la comptabilité de débogage du planificateur.",
         "off": "Désactiver seulement un nœud sched_stats exposé et accessible en écriture ; restaurer la valeur enregistrée avec Stock ou à la désinstallation."
@@ -598,19 +598,19 @@
     },
     "mglru_mode": {
       "name": "Mode MGLRU",
-      "desc": "Fonctionne uniquement avec un nœud MGLRU accessible en écriture. Off demande 0, On demande 7 et Smart choisit 5 ou 7 selon la charge. Stock et la désinstallation restaurent la valeur initiale enregistrée. Une relecture différente est un échec, pas un succès."
+      "desc": "Modifie la sélection et la récupération des pages mémoire par MGLRU : Off demande 0, On 7 et Smart 5 ou 7 selon la charge. Sous pression mémoire, une politique adaptée peut réduire le reclaim et améliorer la réactivité ou la conservation des apps ; une politique inadaptée peut augmenter reclaim, rechargements et à-coups. L’effet sur la batterie dépend de la charge et n’est pas garanti. Stock et la désinstallation restaurent le masque enregistré ; un readback tronqué est un échec, pas un succès."
     },
     "kernel_timer_migration": {
       "name": "Migration des minuteurs",
-      "desc": "Contrôle timer_migration via un propriétaire unique et limité. Off demande 0 et On demande 1. Stock et la désinstallation restaurent la valeur enregistrée. Un nœud absent, en lecture seule ou mal relu ne sera pas présenté comme appliqué."
+      "desc": "Contrôle si le noyau peut migrer les minuteurs entre CPU. On peut les déplacer de CPU inactifs vers des CPU déjà actifs et éviter certains réveils ; Off conserve leur placement, avec un résultat différent selon la charge. Selon le comportement de CPU idle, chaque mode peut améliorer ou dégrader latence et consommation. Off conserve l’ancienne demande ASB ; Stock et la désinstallation restaurent la valeur enregistrée après vérification du readback."
     },
     "kernel_sched_nr_migrate": {
       "name": "Lot de migration de l’ordonnanceur",
-      "desc": "Limite les tâches migrées par passage à 1, 2, 4, 8 ou 16. La valeur 4 conserve le comportement précédent. Stock et la désinstallation restaurent l’entier initial ; les nœuds indisponibles et les relectures incorrectes sont signalés."
+      "desc": "Limite via /sys/kernel/debug/sched/nr_migrate le nombre de tâches déplacées par passe d’équilibrage. Des valeurs faibles réduisent le travail par passe mais peuvent prolonger le déséquilibre ; des valeurs élevées équilibrent plus tôt au prix de migrations et pertes de cache supplémentaires. Les effets sur performances et batterie dépendent de la charge. 4 est l’ancienne demande Balanced, pas un optimum prouvé ; Stock et la désinstallation restaurent l’entier initial."
     },
     "kernel_sched_autogroup": {
       "name": "Autogroup de l’ordonnanceur",
-      "desc": "Contrôle sched_autogroup_enabled uniquement s’il est accessible en écriture. Activé groupe automatiquement les tâches, Désactivé supprime ce regroupement. La réactivité et les tâches en arrière-plan peuvent changer, sans gain garanti. Stock et la désinstallation restaurent la valeur 0/1 initiale.",
+      "desc": "On regroupe les tâches par session pour un partage équitable du CPU, Off désactive ce regroupement. Avec une charge de fond concurrente, cela peut modifier la réactivité interactive et la part de CPU des tâches de fond. Ce n’est ni un accélérateur ni un mode d’économie ; le gain de batterie n’est pas garanti. Stock et la désinstallation restaurent le 0/1 enregistré. Si l’interface est absente, ASB indique « not exposed » au lieu d’activer une option du noyau juste pour cette carte.",
       "descOpt": {
         "stock": "Ne pas modifier le regroupement automatique.",
         "off": "Désactiver le regroupement automatique des tâches.",
@@ -619,7 +619,7 @@
     },
     "kernel_sched_child_runs_first": {
       "name": "Processus enfant prioritaire",
-      "desc": "Contrôle sched_child_runs_first uniquement s’il est accessible en écriture. Activé exécute le nouveau processus enfant avant son parent ; Désactivé choisit la politique inverse. La latence et le démarrage des processus peuvent changer, sans amélioration universelle. Stock et la désinstallation restaurent la valeur 0/1 initiale.",
+      "desc": "Après fork(), On demande à l’ordonnanceur d’exécuter l’enfant avant le parent ; Off choisit l’ordre inverse. Selon la charge, cela peut modifier la latence de démarrage et le copy-on-write, être sans effet ou dégrader le résultat. Ce n’est pas une optimisation générale des FPS, des performances ou de la batterie. Stock et la désinstallation restaurent le 0/1 enregistré ; le succès exige un readback concordant.",
       "descOpt": {
         "stock": "Ne pas modifier la priorité du processus enfant.",
         "off": "Ne pas demander l’exécution prioritaire du processus enfant.",

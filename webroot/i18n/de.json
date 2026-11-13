@@ -434,7 +434,7 @@
     },
     "kernel_sched_stats": {
       "name": "Scheduler-Debugstatistik",
-      "desc": "Optionaler generischer Kernel-Tweak. Aus deaktiviert die Scheduler-Debugstatistik nur bei einem beschreibbaren /proc/sys/kernel/sched_stats. Scheduler-Richtlinie, CPU-Frequenzen und SoC-Treiber bleiben unverändert. Stock und Deinstallation stellen den ursprünglichen Wert 0/1 wieder her. Kein ungemessener Akkuvorteil wird behauptet.",
+      "desc": "Aus deaktiviert zusätzliche Scheduler-Statistiken über /proc/sys/kernel/sched_schedstats. Dadurch entfällt der kleine Overhead dieser Debug-Buchführung, aber auch die schedstats-Diagnose; Scheduling-Politik und CPU-Frequenzen bleiben unverändert. Leistungs- oder Akku-Effekte beschränken sich auf diese Buchführung und werden ohne Messung nicht behauptet. Stock schreibt ohne Baseline nichts und stellt nach Aus die ursprünglichen 0/1 wieder her; die Deinstallation handelt ebenso.",
       "descOpt": {
         "stock": "Scheduler-Debug-Abrechnung unverändert lassen.",
         "off": "Nur einen verfügbaren beschreibbaren sched_stats-Knoten deaktivieren; bei Stock oder Deinstallation aufgezeichneten Wert wiederherstellen."
@@ -490,19 +490,19 @@
     },
     "mglru_mode": {
       "name": "MGLRU-Modus",
-      "desc": "Nur für einen schreibbaren MGLRU-Knoten. Aus fordert 0, Ein 7; Smart wählt je nach Last 5 oder 7. Standard und Deinstallation stellen den erfassten Ausgangswert wieder her. Eine abweichende Rücklesung gilt nicht als Erfolg."
+      "desc": "Ändert, wie MGLRU Speicherseiten auswählt und freigibt: Aus fordert 0, Ein 7 und Smart je nach Last 5 oder 7 an. Bei Speicherdruck kann eine passende Politik Reclaim-Arbeit verringern und Reaktion oder App-Erhaltung verbessern; eine unpassende kann Reclaim, Nachladen und Ruckler erhöhen. Der Akku-Effekt hängt von der Last ab und ist nicht garantiert. Stock und Deinstallation stellen die gespeicherte Maske wieder her; ein begrenzter Readback gilt als Fehler, nicht als Erfolg."
     },
     "kernel_timer_migration": {
       "name": "Timer-Migration",
-      "desc": "Steuert timer_migration über einen einzigen begrenzten Owner. Aus fordert 0, Ein 1. Standard und Deinstallation stellen den Ausgangswert wieder her. Fehlende oder schreibgeschützte Knoten und Rücklesefehler werden angezeigt."
+      "desc": "Steuert, ob der Kernel Timer zwischen CPUs verschieben darf. Ein kann Timer von inaktiven auf bereits aktive CPUs verlagern und manche Aufwachvorgänge vermeiden; Aus belässt Timer am Ort, was unter Last anders wirken kann. Je nach CPU-Idle-Verhalten kann jeder Modus Latenz und Verbrauch verbessern oder verschlechtern. Aus behält die bisherige ASB-Anforderung; Stock und Deinstallation stellen nach geprüftem Readback den Ausgangswert wieder her."
     },
     "kernel_sched_nr_migrate": {
       "name": "Scheduler-Migrationsbatch",
-      "desc": "Begrenzt Scheduler-Migrationen pro Durchlauf auf 1, 2, 4, 8 oder 16. Der Wert 4 erhält das bisherige Verhalten. Standard und Deinstallation stellen die ursprüngliche Zahl wieder her; fehlende Knoten und Rücklesefehler werden ehrlich gemeldet."
+      "desc": "Begrenzt über /sys/kernel/debug/sched/nr_migrate, wie viele Tasks ein Scheduler-Balancing-Durchlauf höchstens verschiebt. Kleinere Werte reduzieren Migrationsarbeit pro Durchlauf, können Ungleichgewichte aber länger bestehen lassen; größere gleichen früher aus, verursachen jedoch mehr Migrationen und Cache-Verluste. Leistungs- und Akku-Effekte hängen von der Last ab. 4 ist die bisherige Balanced-Anforderung, kein bewiesenes Optimum; Stock und Deinstallation stellen die Ausgangszahl wieder her."
     },
     "kernel_sched_autogroup": {
       "name": "Scheduler-Autogroup",
-      "desc": "Steuert sched_autogroup_enabled nur bei Schreibzugriff. Ein aktiviert die automatische Prozessgruppierung, Aus deaktiviert sie. Reaktion und Hintergrundverhalten können sich ändern; Leistungs- oder Akkugewinne sind nicht garantiert. Standard und Deinstallation stellen den ursprünglichen Wert 0/1 wieder her.",
+      "desc": "Ein gruppiert Tasks nach Sitzungen für faire CPU-Verteilung, Aus deaktiviert diese Gruppierung. Bei konkurrierender Hintergrundlast kann dies die interaktive Reaktion und den CPU-Anteil Hintergrundaufgaben verändern. Es ist weder ein Leistungs- noch ein Energiesparmodus; ein Akku-Gewinn ist nicht garantiert. Stock und Deinstallation stellen die gespeicherten 0/1 wieder her. Fehlt die Schnittstelle, meldet ASB „not exposed“, statt nur für diese Karte eine Kernel-Option zu aktivieren.",
       "descOpt": {
         "stock": "Automatische Scheduler-Gruppierung unverändert lassen.",
         "off": "Automatische Prozessgruppierung deaktivieren.",
@@ -511,7 +511,7 @@
     },
     "kernel_sched_child_runs_first": {
       "name": "Kindprozess zuerst",
-      "desc": "Steuert sched_child_runs_first nur bei Schreibzugriff. Ein lässt einen neu erzeugten Kindprozess vor dem Elternprozess laufen, Aus wählt die entgegengesetzte Politik. Latenz und Prozessstart können sich ändern; eine universelle Verbesserung ist nicht garantiert. Standard und Deinstallation stellen den ursprünglichen Wert 0/1 wieder her.",
+      "desc": "Nach fork() bittet Ein den Scheduler, den Kindprozess vor dem Elternprozess auszuführen; Aus wählt die umgekehrte Reihenfolge. Das kann in manchen Lasten Startlatenz und Copy-on-Write-Verhalten ändern, in anderen nutzlos oder nachteilig sein. Es ist keine allgemeine FPS-, Leistungs- oder Akku-Optimierung. Stock und Deinstallation stellen die gespeicherten 0/1 wieder her; Erfolg wird nur bei übereinstimmendem Readback gemeldet.",
       "descOpt": {
         "stock": "Kind-zuerst-Scheduling unverändert lassen.",
         "off": "Keinen vorrangigen Start des Kindprozesses anfordern.",

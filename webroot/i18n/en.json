@@ -433,10 +433,10 @@
     },
     "kernel_sched_stats": {
       "name": "Scheduler Debug Accounting",
-      "desc": "Opt-in generic kernel tweak. Off disables scheduler debug statistics only when /proc/sys/kernel/sched_stats is exposed and writable. Scheduling policy, CPU frequencies and SoC drivers are untouched. Stock and uninstall restore the exact original 0/1. No unmeasured battery percentage is claimed.",
+      "desc": "Off disables extra scheduler statistics through /proc/sys/kernel/sched_schedstats. This removes the small overhead of that debug accounting, but also removes schedstats diagnostics; scheduling policy and CPU frequencies do not change. Any performance or battery effect is limited to this accounting and is not claimed without measurement. Stock is inert when unowned and restores the original 0/1 after Off; uninstall does the same.",
       "descOpt": {
         "stock": "Leave scheduler debug accounting unchanged.",
-        "off": "Disable only an exposed writable sched_stats node; restore its recorded value on Stock or uninstall."
+        "off": "Disable only an exposed writable sched_schedstats node; restore its recorded value on Stock or uninstall."
       }
     },
     "zygisk_enabled": {
@@ -558,19 +558,19 @@
     },
     "mglru_mode": {
       "name": "MGLRU Mode",
-      "desc": "Controls the standard MGLRU enabled bitmask only when the running kernel exposes it writable. Off requests 0, On requests 7, and Smart alone lets the Smart engine request 5 or 7 by load. Stock and uninstall restore the value captured before ASB first wrote it. Hex readback is compared numerically; a clamped value is reported as a mismatch, not success."
+      "desc": "Changes how MGLRU selects and reclaims memory pages: Off requests 0, On 7, and Smart 5 or 7 by load. Under memory pressure a suitable policy can reduce reclaim work and improve responsiveness or app retention; an unsuitable one can increase reclaim, reloads and stutter. Battery impact depends on the workload and is not guaranteed. Stock and uninstall restore the captured mask; clamped readback is a mismatch, not success."
     },
     "kernel_timer_migration": {
       "name": "Timer Migration",
-      "desc": "Controls /proc/sys/kernel/timer_migration through one bounded owner. Off requests 0 and preserves the previous ASB default; On requests 1. Stock and uninstall restore the captured pre-ASB value. The running kernel may not expose or permit the node; readback failure is shown instead of an applied claim."
+      "desc": "Controls whether the kernel may migrate timers between CPUs. On can move timers from idle CPUs to already active ones and avoid some wake-ups; Off keeps timers in place, which can behave differently under load. Depending on CPU idle behavior, either mode may help or hurt latency and power use. Off preserves the previous ASB request; Stock and uninstall restore the captured value after verified readback."
     },
     "kernel_sched_nr_migrate": {
       "name": "Scheduler Migration Batch",
-      "desc": "Bounds how many tasks the scheduler moves in one migration pass through the standard sched_nr_migrate node. Default 4 preserves the former balanced value; lower is not automatically better and higher is not automatically faster. Stock and uninstall restore the captured pre-ASB integer. Missing, read-only and mismatched nodes are reported honestly."
+      "desc": "Sets the maximum tasks moved in one scheduler balancing pass through /sys/kernel/debug/sched/nr_migrate. Lower values reduce migration work per pass but can leave cores imbalanced for longer; higher values can balance load sooner at the cost of more migrations and cache disruption. Performance and battery effects depend on the workload. Default 4 is the previous Balanced request, not a proven optimum; Stock and uninstall restore the captured integer."
     },
     "kernel_sched_autogroup": {
       "name": "Scheduler Autogroup",
-      "desc": "Controls sched_autogroup_enabled only when writable. On enables automatic task grouping; Off disables it. This can change responsiveness and background tasks without guaranteeing performance or battery gains. Stock and uninstall restore the pre-ASB 0/1.",
+      "desc": "On groups tasks by session for scheduler fairness; Off disables that grouping. Under competing background load this can change interactive responsiveness and the CPU share given to background work. It is neither a performance booster nor a power-saving mode, and battery impact is not guaranteed. Stock and uninstall restore the captured 0/1. If the interface is absent, ASB reports not exposed instead of enabling a kernel option just for this card.",
       "descOpt": {
         "stock": "Leave automatic scheduler grouping unchanged.",
         "off": "Disable automatic task grouping.",
@@ -579,7 +579,7 @@
     },
     "kernel_sched_child_runs_first": {
       "name": "Child Task Runs First",
-      "desc": "Controls sched_child_runs_first only when writable. On runs a newly forked child before its parent; Off selects the opposite policy. This can affect latency and process startup, but is not a universal improvement. Stock and uninstall restore the pre-ASB 0/1.",
+      "desc": "After fork(), On asks the scheduler to run the child before its parent; Off selects the opposite order. This can change process-start latency and copy-on-write behavior in some workloads, while others may see no benefit or a regression. It is not a general FPS, performance or battery optimization. Stock and uninstall restore the captured 0/1, and readback must match before ASB reports success.",
       "descOpt": {
         "stock": "Leave child-first scheduler policy unchanged.",
         "off": "Do not request the child to run first.",

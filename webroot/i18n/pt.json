@@ -434,7 +434,7 @@
     },
     "kernel_sched_stats": {
       "name": "Estatísticas de depuração do agendador",
-      "desc": "Ajuste genérico opcional do kernel. Desativado desliga as estatísticas de depuração apenas quando /proc/sys/kernel/sched_stats está exposto e gravável. A política de agendamento, as frequências do CPU e os controladores do SoC não mudam. Stock e a desinstalação restauram o valor 0/1 original. Não se declara qualquer percentagem de poupança não medida.",
+      "desc": "Desligado desativa as estatísticas adicionais do escalonador por /proc/sys/kernel/sched_schedstats. Isso remove o pequeno custo dessa contabilidade de depuração, mas também o diagnóstico schedstats; a política de escalonamento e as frequências da CPU não mudam. Qualquer efeito em desempenho ou bateria limita-se a essa contabilidade e não é afirmado sem medição. Stock não escreve sem baseline e, após Desligado, restaura o 0/1 original; a desinstalação faz o mesmo.",
       "descOpt": {
         "stock": "Não alterar a contabilidade de depuração do escalonador.",
         "off": "Desativar apenas um nó sched_stats exposto e gravável; restaurar o valor registado com Stock ou desinstalação."
@@ -490,19 +490,19 @@
     },
     "mglru_mode": {
       "name": "Modo MGLRU",
-      "desc": "Funciona apenas com um nó MGLRU gravável. Off solicita 0, On solicita 7 e Smart escolhe 5 ou 7 conforme a carga. Stock e a desinstalação restauram o valor original guardado. Uma leitura diferente é falha, não sucesso."
+      "desc": "Muda como o MGLRU seleciona e recupera páginas de memória: Desligado pede 0, Ligado 7 e Smart 5 ou 7 conforme a carga. Sob pressão de memória, uma política adequada pode reduzir o trabalho de reclaim e melhorar a resposta ou retenção de apps; uma inadequada pode aumentar reclaim, recargas e engasgos. O efeito na bateria depende da carga e não é garantido. Stock e a desinstalação restauram a máscara guardada; um readback truncado é erro, não sucesso."
     },
     "kernel_timer_migration": {
       "name": "Migração de temporizadores",
-      "desc": "Controla timer_migration por um único proprietário limitado. Off solicita 0 e On solicita 1. Stock e a desinstalação restauram o valor guardado. Nó ausente, só de leitura ou leitura incorreta não são apresentados como aplicação concluída."
+      "desc": "Controla se o kernel pode migrar temporizadores entre CPUs. Ligado pode movê-los de CPUs inativas para CPUs já ativas e evitar alguns despertares; Desligado mantém sua posição, com resultado diferente sob carga. Conforme o comportamento de CPU idle, qualquer modo pode melhorar ou piorar latência e consumo. Desligado preserva o pedido anterior do ASB; Stock e a desinstalação restauram o valor capturado após readback verificado."
     },
     "kernel_sched_nr_migrate": {
       "name": "Lote de migração do agendador",
-      "desc": "Limita as tarefas migradas por passagem a 1, 2, 4, 8 ou 16. O valor 4 mantém o comportamento anterior. Stock e a desinstalação restauram o inteiro original; nós indisponíveis e leituras incorretas são mostrados honestamente."
+      "desc": "Limita por /sys/kernel/debug/sched/nr_migrate quantas tarefas cada passada de balanceamento do escalonador move. Valores menores reduzem o trabalho por passada, mas podem manter o desequilíbrio por mais tempo; valores maiores equilibram antes ao custo de mais migrações e perdas de cache. Os efeitos em desempenho e bateria dependem da carga. 4 é o pedido anterior do Balanced, não um ótimo comprovado; Stock e a desinstalação restauram o inteiro original."
     },
     "kernel_sched_autogroup": {
       "name": "Autogrupo do agendador",
-      "desc": "Controla sched_autogroup_enabled apenas quando gravável. Ligado ativa o agrupamento automático de tarefas e Desligado desativa-o. A resposta e as tarefas em segundo plano podem mudar, sem ganhos garantidos. Stock e a desinstalação restauram o valor 0/1 anterior ao ASB.",
+      "desc": "Ligado agrupa tarefas por sessão para distribuir a CPU com equidade; Desligado remove esse agrupamento. Com carga de fundo concorrente, isso pode mudar a resposta interativa e a fatia de CPU dos processos secundários. Não é um acelerador nem um modo de economia; ganho de bateria não é garantido. Stock e a desinstalação restauram o 0/1 capturado. Se a interface estiver ausente, o ASB informa «not exposed» em vez de ativar uma opção do kernel só por causa deste cartão.",
       "descOpt": {
         "stock": "Não alterar o agrupamento automático do agendador.",
         "off": "Desativar o agrupamento automático de tarefas.",
@@ -511,7 +511,7 @@
     },
     "kernel_sched_child_runs_first": {
       "name": "Processo filho primeiro",
-      "desc": "Controla sched_child_runs_first apenas quando gravável. Ligado executa o novo processo filho antes do pai; Desligado escolhe a política oposta. Pode afetar a latência e o arranque de processos, mas não é uma melhoria universal. Stock e a desinstalação restauram o valor 0/1 anterior ao ASB.",
+      "desc": "Após fork(), Ligado pede ao escalonador para executar o filho antes do pai; Desligado escolhe a ordem oposta. Em algumas cargas isso pode mudar a latência de arranque e o comportamento copy-on-write; noutras pode não ajudar ou piorar o resultado. Não é uma otimização geral de FPS, desempenho ou bateria. Stock e a desinstalação restauram o 0/1 capturado; o sucesso só é declarado quando o readback coincide.",
       "descOpt": {
         "stock": "Não alterar a política do processo filho.",
         "off": "Não solicitar a execução prioritária do processo filho.",
