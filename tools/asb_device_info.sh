@@ -453,7 +453,7 @@ if [ -r "$SYS/kernel/asb_wakeup/blocked_events" ]; then
   _emit kernel_features wakeup_blocker_blocked_events "$(_read "$SYS/kernel/asb_wakeup/blocked_events")"
 fi
 _emit kernel_features oplus_sdp_900ma 'not exposed; no confirmed OPlus SDP current-control ABI'
-_ss_node="$PROC/sys/kernel/sched_stats"
+_ss_node="$PROC/sys/kernel/sched_schedstats"
 if [ -e "$_ss_node" ]; then
   if [ -r "$_ss_node" ] && [ -w "$_ss_node" ]; then _ss="writable; live=$(_read "$_ss_node")"
   elif [ -r "$_ss_node" ]; then _ss="read-only; live=$(_read "$_ss_node")"
