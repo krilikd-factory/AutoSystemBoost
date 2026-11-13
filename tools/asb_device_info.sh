@@ -128,7 +128,7 @@ if [ -r "$MODDIR/tools/asb_kernel_uv_coexist.sh" ]; then
 fi
 
 # A bounded whitelist of useful kernel configuration features, when the kernel exposes it.
-_cfg_keys='CONFIG_LOCALVERSION CONFIG_PREEMPT CONFIG_PREEMPT_DYNAMIC CONFIG_HZ CONFIG_SCHEDSTATS CONFIG_SCHED_WALT CONFIG_SCHEDUTIL CONFIG_CPU_FREQ_GOV_SCHEDUTIL CONFIG_CPU_FREQ_GOV_PERFORMANCE CONFIG_CPU_FREQ_GOV_POWERSAVE CONFIG_CPU_BOOST CONFIG_LRU_GEN CONFIG_LRU_GEN_ENABLED CONFIG_ZRAM CONFIG_ZSWAP CONFIG_ZSMALLOC CONFIG_DEVFREQ_GOV_SIMPLE_ONDEMAND CONFIG_DEVFREQ_GOV_MSM_ADRENO_TZ CONFIG_KGSL CONFIG_TCP_CONG_BBR CONFIG_TCP_CONG_BBR2 CONFIG_TCP_CONG_BBRV2 CONFIG_TCP_CONG_WESTWOOD CONFIG_KSU CONFIG_KSU_SUSFS CONFIG_NOMOUNT CONFIG_NTSYNC CONFIG_NAMESPACES CONFIG_SYSVIPC CONFIG_POSIX_MQUEUE CONFIG_IPC_NS CONFIG_PID_NS CONFIG_NET_NS CONFIG_UTS_NS CONFIG_USER_NS CONFIG_CGROUPS CONFIG_DEVTMPFS CONFIG_DROIDSPACES CONFIG_DROIDSPACE CONFIG_UNICODE CONFIG_UNICODE_BYPASS_FIX CONFIG_UNICODE_BYPASS CONFIG_TMPFS CONFIG_TMPFS_XATTR CONFIG_TMPFS_POSIX_ACL CONFIG_TMPFS_INODE64 CONFIG_LTO CONFIG_LTO_CLANG CONFIG_LTO_CLANG_THIN CONFIG_LTO_CLANG_FULL CONFIG_LTO_NONE CONFIG_BBG CONFIG_SECURITY_BASEBAND_GUARD CONFIG_BASEBAND_GUARD CONFIG_LSM CONFIG_DEBUG_INFO_BTF CONFIG_DEBUG_INFO_BTF_MODULES CONFIG_BPF CONFIG_BPF_SYSCALL CONFIG_BPF_JIT CONFIG_BPF_JIT_ALWAYS_ON CONFIG_BPF_JIT_DEFAULT_ON CONFIG_BPF_LSM CONFIG_CGROUP_BPF CONFIG_NET_CLS_BPF CONFIG_NET_ACT_BPF CONFIG_FUSE_FS CONFIG_FUSE_BPF CONFIG_FUSE_PASSTHROUGH CONFIG_VPNHIDE CONFIG_VPNHIDE_FS_HIDING CONFIG_USB_CONFIGFS CONFIG_USB_CONFIGFS_MASS_STORAGE CONFIG_USB_CONFIGFS_F_HID CONFIG_USB_CONFIGFS_NCM CONFIG_IP_NF_NAT CONFIG_IP_NF_TARGET_MASQUERADE CONFIG_TCP_CONG_BBR3 CONFIG_WIREGUARD CONFIG_NET_SCH_CAKE CONFIG_NET_SCH_FQ CONFIG_IP_SET CONFIG_REKERNEL CONFIG_REKERNEL_NETWORK CONFIG_REKERNEL_LEGACY_NETLINK CONFIG_ASB_WAKEUP_BLOCKER CONFIG_OVERLAY_FS CONFIG_CIFS CONFIG_BINFMT_MISC CONFIG_MACVLAN CONFIG_KPROBES CONFIG_UPROBES'
+_cfg_keys='CONFIG_LOCALVERSION CONFIG_PREEMPT CONFIG_PREEMPT_DYNAMIC CONFIG_HZ CONFIG_SCHEDSTATS CONFIG_SCHED_WALT CONFIG_SCHEDUTIL CONFIG_CPU_FREQ_GOV_SCHEDUTIL CONFIG_CPU_FREQ_GOV_PERFORMANCE CONFIG_CPU_FREQ_GOV_POWERSAVE CONFIG_CPU_BOOST CONFIG_LRU_GEN CONFIG_LRU_GEN_ENABLED CONFIG_ZRAM CONFIG_ZSWAP CONFIG_ZSMALLOC CONFIG_DEVFREQ_GOV_SIMPLE_ONDEMAND CONFIG_DEVFREQ_GOV_MSM_ADRENO_TZ CONFIG_KGSL CONFIG_TCP_CONG_BBR CONFIG_TCP_CONG_BBR2 CONFIG_TCP_CONG_BBRV2 CONFIG_TCP_CONG_WESTWOOD CONFIG_KSU CONFIG_KSU_SUSFS CONFIG_NOMOUNT CONFIG_NTSYNC CONFIG_NAMESPACES CONFIG_SYSVIPC CONFIG_POSIX_MQUEUE CONFIG_IPC_NS CONFIG_PID_NS CONFIG_NET_NS CONFIG_UTS_NS CONFIG_USER_NS CONFIG_CGROUPS CONFIG_DEVTMPFS CONFIG_DROIDSPACES CONFIG_DROIDSPACE CONFIG_UNICODE CONFIG_UNICODE_BYPASS_FIX CONFIG_UNICODE_BYPASS CONFIG_TMPFS CONFIG_TMPFS_XATTR CONFIG_TMPFS_POSIX_ACL CONFIG_TMPFS_INODE64 CONFIG_LTO CONFIG_LTO_CLANG CONFIG_LTO_CLANG_THIN CONFIG_LTO_CLANG_FULL CONFIG_LTO_NONE CONFIG_BBG CONFIG_SECURITY_BASEBAND_GUARD CONFIG_BASEBAND_GUARD CONFIG_LSM CONFIG_DEBUG_INFO_BTF CONFIG_DEBUG_INFO_BTF_MODULES CONFIG_BPF CONFIG_BPF_SYSCALL CONFIG_BPF_JIT CONFIG_BPF_JIT_ALWAYS_ON CONFIG_BPF_JIT_DEFAULT_ON CONFIG_BPF_LSM CONFIG_CGROUP_BPF CONFIG_NET_CLS_BPF CONFIG_NET_ACT_BPF CONFIG_FUSE_FS CONFIG_FUSE_BPF CONFIG_FUSE_PASSTHROUGH CONFIG_VPNHIDE CONFIG_VPNHIDE_FS_HIDING CONFIG_USB_CONFIGFS CONFIG_USB_CONFIGFS_MASS_STORAGE CONFIG_USB_CONFIGFS_F_HID CONFIG_USB_CONFIGFS_NCM CONFIG_IP_NF_NAT CONFIG_IP_NF_TARGET_MASQUERADE CONFIG_TCP_CONG_BBR3 CONFIG_WIREGUARD CONFIG_NET_SCH_CAKE CONFIG_NET_SCH_FQ CONFIG_IP_SET CONFIG_REKERNEL CONFIG_REKERNEL_NETWORK CONFIG_REKERNEL_LEGACY_NETLINK CONFIG_ASB_WAKEUP_BLOCKER CONFIG_OVERLAY_FS CONFIG_CIFS CONFIG_BINFMT_MISC CONFIG_MACVLAN CONFIG_KPROBES CONFIG_UPROBES CONFIG_OPLUS_SDP_900MA CONFIG_DEBUG_FS CONFIG_SCHED_DEBUG CONFIG_SCHED_AUTOGROUP'
 _cfg=''
 _cfg_lines=0
 _cfg_decoder=''
@@ -626,7 +626,50 @@ fi
 if [ -r "$SYS/kernel/asb_wakeup/blocked_events" ]; then
   _emit kernel_features wakeup_blocker_blocked_events "$(_read "$SYS/kernel/asb_wakeup/blocked_events")"
 fi
-_emit kernel_features oplus_sdp_900ma 'not exposed; no confirmed OPlus SDP current-control ABI'
+# The reviewed KRILIKD/WildKernels driver exposes a read-only early-boot DT result.
+# It is evidence about the configured SDP budget, never a live charge-current measurement
+# and never a runtime writer. Do not collapse a present but NOT APPLIED report into success.
+_sdp_node="$PROC/sdp900ma"
+_sdp_cfg="$(_cfg_val CONFIG_OPLUS_SDP_900MA)"
+_sdp_report=''
+if [ -f "$_sdp_node" ] && [ -r "$_sdp_node" ]; then
+  _sdp_report="$(_read "$_sdp_node" | tr '\t\r\n' '   ' | head -c 1200)"
+  case "$_sdp_report" in
+    *'enabled=0'*) _sdp_state='interface present; disabled by boot parameter; no runtime writer' ;;
+    *'NOT APPLIED'*) _sdp_state='interface present; 900 mA not confirmed by its own readback' ;;
+    *'[OK]'*'enabled=1'*) _sdp_state='configured SDP limit reported applied; actual USB input current not measured' ;;
+    *) _sdp_state='interface present; configured result needs review; actual USB input current not measured' ;;
+  esac
+elif [ -e "$_sdp_node" ]; then
+  _sdp_state='node present but unreadable'
+else
+  case "$_sdp_cfg" in
+    y) _sdp_state='built-in config; /proc/sdp900ma not observed' ;;
+    'not set') _sdp_state='not observed; exposed config says not set' ;;
+    *) _sdp_state='not exposed; runtime support unknown' ;;
+  esac
+fi
+_emit kernel_features oplus_sdp_900ma "$_sdp_state"
+_emit kernel_features oplus_sdp_900ma_node "$_sdp_node"
+_emit kernel_features oplus_sdp_900ma_config "${_sdp_cfg:-not exposed}"
+[ -n "$_sdp_report" ] && _emit kernel_features oplus_sdp_900ma_report "$_sdp_report"
+_emit kernel_features oplus_sdp_900ma_control 'none; early boot only; disable with oplus_sdp_900ma=0; ASB has no current/voltage writer'
+
+_nm_node="$SYS/kernel/debug/sched/nr_migrate"
+_nm_debug_cfg="$(_cfg_val CONFIG_DEBUG_FS)"
+_nm_sched_cfg="$(_cfg_val CONFIG_SCHED_DEBUG)"
+if [ -e "$_nm_node" ]; then
+  if [ -r "$_nm_node" ] && [ -w "$_nm_node" ]; then _nm_state="writable; live=$(_read "$_nm_node")"
+  elif [ -r "$_nm_node" ]; then _nm_state="read-only; live=$(_read "$_nm_node")"
+  else _nm_state='present; not readable'; fi
+else
+  _nm_state='not exposed at the registered debugfs path; mount/SELinux/config not inferred'
+fi
+_emit kernel_features sched_nr_migrate "$_nm_state"
+_emit kernel_features sched_nr_migrate_node "$_nm_node"
+_emit kernel_features sched_nr_migrate_debug_config "${_nm_debug_cfg:-not exposed}"
+_emit kernel_features sched_nr_migrate_sched_config "${_nm_sched_cfg:-not exposed}"
+
 _ss_node="$PROC/sys/kernel/sched_schedstats"
 _ss_cfg="$(_cfg_val CONFIG_SCHEDSTATS)"
 if [ -e "$_ss_node" ]; then
