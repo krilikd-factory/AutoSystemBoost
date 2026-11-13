@@ -4746,7 +4746,7 @@ assert '#07090b' not in _strip(re.search(r'\.cfg-row \{([^}]*)\}', s).group(1)),
 assert 'linear-gradient(160deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018))' in s, "tweak cards lost the Monitor cell material"
 assert 'color-mix(in srgb, var(--cat) 13%, #ffffff)' in s, "light hub tiles lost their category tint"
 for _cat in ('audio', 'camera', 'battery', 'ux', 'net', 'iface'):
-    assert re.search(r'\.cfg-tile\.cat-%s\s*\{ --cat: #[0-9a-f]{6}; \}' % _cat, s), 'category %s lost its hue token' % _cat
+    assert re.search(r':is\(\.cfg-section,\.cfg-tile\)\.cat-%s\s*\{ --cat: #[0-9a-f]{6}; \}' % _cat, s), 'category %s lost its shared tile/heading hue token' % _cat
 assert '.cfg-row.is-on .cfg-icon[class*="cat-"]' in s, "active tweak icons lost the category pill"
 # fix217: an enabled tweak card lights up like its hub tile - the row carries its
 # cat-* class, shares the hue map with the icon and wears the same gradient and glow.
@@ -9624,13 +9624,13 @@ python3 - "$ROOT" <<'P' || fail 'static contract'
 import json, pathlib, re, sys
 root = pathlib.Path(sys.argv[1]); h = (root / 'webroot/index.html').read_text(encoding='utf-8')
 groups = h[h.index('const CFG_GROUPS = ['):h.index('const CFG_EXTRA_GROUPS')]
-assert re.findall(r"\{ id:'([^']+)'", groups) == ['iface','feel','audio','camera','net','battery','kernel','zygisk','ui']
+assert re.findall(r"\{ id:'([^']+)'", groups) == ['iface','feel','net','camera','audio','battery','kernel','zygisk','ui']
 # dev40: every hub group owns an explicit dark/light hue. In particular Zygisk must not
 # silently inherit the primary mint accent through the old, undefined cat-system tile alias.
 for token in (
-    ".cfg-tile.cat-feel    { --cat: #e6b8a2; }",
-    ".cfg-tile.cat-zygisk  { --cat: #a7b7c6; }",
-    ".cfg-tile.cat-system  { --cat: #a7b7c6; }",
+    ":is(.cfg-section,.cfg-tile).cat-feel    { --cat: #e6b8a2; }",
+    ":is(.cfg-section,.cfg-tile).cat-zygisk  { --cat: #a7b7c6; }",
+    ":is(.cfg-section,.cfg-tile).cat-system  { --cat: #a7b7c6; }",
     "const tileCat = g.id === 'ui' ? 'ux' : g.id;",
     "cat-zygisk { --cat:#4a5f75; }",
     "cat-feel    { --cat:#9a5b43; }"
@@ -10611,7 +10611,7 @@ E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};
   chk(!('raw' in saved)&&!('serial' in saved)&&!('imei' in saved),'header cache stored unrelated device data');
 
   const created=[];global.document={createElement:t=>{const e=new E(t);created.push(e);return e}};
-  global.CFG_GROUPS=['iface','feel','audio','camera','net','battery','kernel','zygisk','ui'].map(id=>({id,icon:id,name:id}));
+  global.CFG_GROUPS=['iface','feel','net','camera','audio','battery','kernel','zygisk','ui'].map(id=>({id,icon:id,name:id}));
   global.CFG_ITEMS=CFG_GROUPS.map(g=>({key:g.id,def:'0'}));
   global.cfgGroupOf=k=>k;global._cfgVals={iface:'1'};global.cfgIsActive=(it,cur)=>String(cur)==='1';
   global.CFG_GROUP_DESC={audio:'DSP, volume, Bluetooth',camera:'Presets, processing, detail',iface:'Animations, blur',net:'Wi-Fi, LTE, queues',battery:'Smart, Doze, heat, RAM',kernel:'Scheduler, MGLRU, wakeups',feel:'LTPO, vibration, touch',zygisk:'Master switch and status',ui:'Services, processes, diagnostics'};
@@ -11677,7 +11677,7 @@ eval(between('const ZYGISK_CONTROL_KEYS =','const CFG_GROUP_SECTIONS =').replace
 eval(between('const CFG_GROUP_SECTIONS = {','function cfgRenderSection').replace(/^const /gm,'var '));
 cfgEnsureCaps=function(){};ASB_GRADE={};cfgRenderRow=(list,it)=>{const n=E('div','cfg-row');n.datasetKey=it.key;list.appendChild(n)};
 cfgRenderZygiskCard=list=>list.appendChild(E('section','cfg-zygisk-card'));cfgRenderNotifCard=()=>{};
-eval(grab('cfgCatClass'));eval(grab('cfgRenderSection'));eval(grab('cfgRenderGroup'));
+eval(grab('cfgGroupCatClass'));eval(grab('cfgCatClass'));eval(grab('cfgRenderSection'));eval(grab('cfgRenderGroup'));
 for(const n of ['asbPageJumpIsDock','asbPageJumpIndicator','asbPageJumpActive','asbPageJumpClear','asbPageJumpWatch','asbPageJumpIcon','asbPageJump'])eval(grab(n));
 function find(n,id){if(n.id===id)return n;for(const c of n.children){const x=find(c,id);if(x)return x}return null;}
 const expected={audio:['dsp','playback','safety'],camera:['processing','perf'],iface:['speed','effects'],net:['cellular','wifi','speed','stack'],battery:['smart','charging','standby','thermal','memory'],kernel:['controls'],feel:['feel'],zygisk:['zygisk'],ui:['services','diag']};
@@ -12351,6 +12351,82 @@ EOF
 out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 echo "PASS webui junk cleanup: all 13 locales and 39 keys, fixed status/run commands, eleven safe textContent rows, five-second double confirmation, cleaned/partial/busy/lock/unreadable/empty states, no polling or arbitrary path"
+)
+
+t_webui_category_color_consistency() (
+# dev42: navigation category is the single colour owner for every ordinary tweak.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI category colour consistency: $*" >&2; exit 1; }
+python3 - "$H" <<'PY' || fail 'source contract'
+import sys
+s=open(sys.argv[1],encoding='utf-8').read()
+for token in (
+ "function cfgGroupCatClass(groupId)",
+ "function cfgCatClass(key){ return cfgGroupCatClass(cfgGroupOf(key)); }",
+ "groupId ? ' ' + cfgGroupCatClass(groupId)",
+ "card.className = 'cfg-zygisk-card cat-zygisk';",
+ ":is(.cfg-section,.cfg-tile).cat-audio   { --cat: #f98d9e; }",
+ ":is(.cfg-section,.cfg-tile).cat-kernel  { --cat: #82b8ff; }",
+ ":is(.cfg-section,.cfg-tile).cat-feel    { --cat: #e6b8a2; }",
+ ":is(.cfg-section,.cfg-tile).cat-zygisk  { --cat: #a7b7c6; }",
+ "bfxEl('div', 'cfg-row kernel-card cat-kernel')",
+ ':is(.cfg-icon,.cfg-row).cat-kernel  { --cat: #82b8ff; }',
+ ':is(.cfg-icon,.cfg-row).cat-feel    { --cat: #e6b8a2; }',
+ ':is(.cfg-icon,.cfg-row).cat-zygisk  { --cat: #a7b7c6; }',
+ 'html[data-asb-theme="light"] .cfg-row.cat-kernel  { --cat:#346aa8; }',
+ 'html[data-asb-theme="light"] .cfg-row.cat-feel    { --cat:#9a5b43; }',
+ '.cfg-row[class*="cat-"] .cfg-switch.on',
+ '.cfg-row[class*="cat-"] .cfg-seg button.on',
+ '.cfg-row[class*="cat-"] .cfg-range input[type="range"]::-webkit-slider-thumb',
+ '.cfg-row[class*="cat-"] .cfg-range input[type="range"]::-moz-range-thumb',
+ '.cfg-row[class*="cat-"] .cfg-range-val { color:var(--cat) !important; }',
+ '.cfg-row[class*="cat-"] :is(.cfg-status.good,.cfg-status.on)',
+ '.cfg-row[class*="cat-"] .cfg-sel-pop button.active',
+ '.cfg-row[class*="cat-"] .cfg-apply-live { color:var(--cat); }',
+ '.kernel-card.cat-kernel .bfx-primary:not(.kernel-clear):not(:disabled)',
+ '.kernel-card.cat-kernel .bfx-secondary:not(.kernel-clear):not(:disabled)',
+ '.kernel-card.cat-kernel .kernel-clear:not(:disabled)',
+ "bfxEl('button', 'bfx-btn bfx-secondary kernel-clear'",
+ '.cfg-zygisk-card .cfg-zygisk-open'):
+    assert token in s, token
+# Availability is a normal state; actual warnings/errors must remain distinguishable.
+assert '.cfg-status.warn {' in s and '.cfg-status.bad {' in s and '.cfg-status.na {' in s
+assert '--cap-*/--pill-*' not in s, 'comment terminator must not swallow the Audio section rule'
+print('source contract ok')
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI category colour runtime: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+cat > "$T/test.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+function grab(name){const line=h.match(new RegExp('^function '+name+'\\([^\\n]*$','m'));if(line&&line[0].includes('}'))return line[0];const m=h.match(new RegExp('function '+name+'\\([^)]*\\) \\{[\\s\\S]*?\\n\\}'));if(!m)throw Error('missing '+name);return m[0];}
+function between(a,b){const i=h.indexOf(a),j=h.indexOf(b,i);if(i<0||j<0)throw Error('missing '+a);return h.slice(i,j);}
+eval(between('const CFG_GROUP_OF = {','function cfgGroupOf').replace(/^const /gm,'var '));
+eval(grab('cfgGroupOf'));eval(grab('cfgGroupCatClass'));eval(grab('cfgCatClass'));
+const alias={ui:'ux',infirmary:'system'};
+for(const key of Object.keys(CFG_GROUP_OF)){
+ const group=cfgGroupOf(key),expected='cat-'+(alias[group]||group);
+ if(cfgCatClass(key)!==expected)throw Error(key+': '+cfgCatClass(key)+' != '+expected);
+}
+for(const [key,expected] of Object.entries({mglru_mode:'cat-kernel',kernel_usb_autosuspend:'cat-kernel',ltpo_force:'cat-feel',haptic_strength:'cat-feel',UX_MANAGE_OEM_TOGGLES:'cat-ux',zygisk_enabled:'cat-zygisk',dsp_bass:'cat-audio'})){
+ if(cfgCatClass(key)!==expected)throw Error(key+' retained a foreign semantic colour');
+}
+function E(tag,cls){return {tag,className:cls||'',children:[],style:{},setAttribute(){},appendChild(c){this.children.push(c);return c}};}
+global.document={createElement:E};global.T=(k,d)=>d;global.techIcon=k=>'svg:'+k;
+global.ASB_GRADE={};global.cfgEnsureCaps=()=>{};global.cfgLoadGrade=()=>Promise.resolve();global.cfgRender=()=>{};
+eval(grab('cfgRenderSection'));
+for(const group of ['iface','feel','net','camera','audio','battery','kernel','zygisk','ui']){
+ const list=E('div'),section={id:'s',icon:'kernel',titleKey:'x',title:'x',hintKey:'y',hint:'y'};
+ cfgRenderSection(list,section,'mglru_mode',group);
+ const expected='cfg-section '+cfgGroupCatClass(group);
+ if(list.children[0].className!==expected)throw Error(group+' heading: '+list.children[0].className+' != '+expected);
+}
+console.log('ok');
+JS
+out="$(node "$T/test.js" "$H" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo 'PASS WebUI category colours: canonical group mapping for every tweak and heading, category-owned switches/segments/ranges/dropdowns/statuses, light/dark Kernel/Feel/Zygisk hues, semantic warnings preserved'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

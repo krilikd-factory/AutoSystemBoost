@@ -4491,6 +4491,12 @@ mkdir -p "$T/o"; cp "$T/tt" "$T/o/throttle_trace.txt"
 v="$(LK_OUT_DIR="$T/o" sh -c '. "$1"; lk_emit_cap_ownership_verdict' x "$T/v.sh" 2>&1)"
 printf '%s\n' "$v" | grep -q 'per cluster: the prime sat under a ceiling ASB did not write in 2 of 3 samples' || f "verdict ignores the per-cluster cause: $v"
 printf '%s\n' "$v" | grep -q 'main cores sat under a ceiling' && f "main cores wrongly blamed on the vendor: $v"
+# dev43: cap_owner=asb on every row does not erase a prime vendor majority. The old
+# global verdict denied foreign ownership immediately before printing the opposite
+# per-cluster evidence, which could send a later tuning pass in the wrong direction.
+printf '%s\n' "$v" | grep -q 'verdict: mixed cap ownership - a foreign ceiling leads on at least one cluster' || f "mixed global/per-cluster ownership was not named: $v"
+printf '%s\n' "$v" | grep -q 'verdict: no foreign-owner dominance established' && f "global ASB labels hid the prime vendor ceiling: $v"
+printf '%s\n' "$v" | grep -q 'no universal frequency raise is justified' || f "mixed-owner verdict lost its conservative runtime boundary: $v"
 
 # The recorder and the governor.
 grep -q 'lk_state_kv desired_cpu_max_prime' "$FD" || f "prime compared with slot 1, not the prime"
