@@ -12,6 +12,9 @@ asb_kc_node() {
     kernel_sched_stats) printf '%s\n' "${ASB_SCHED_STATS_NODE:-/proc/sys/kernel/sched_schedstats}" ;;
     kernel_sched_autogroup) printf '%s\n' "${ASB_SCHED_AUTOGROUP_NODE:-/proc/sys/kernel/sched_autogroup_enabled}" ;;
     kernel_sched_child_runs_first) printf '%s\n' "${ASB_SCHED_CHILD_RUNS_FIRST_NODE:-/proc/sys/kernel/sched_child_runs_first}" ;;
+    kernel_hrtimer_migration) printf '%s\n' "${ASB_HRTIMER_MIGRATION_NODE:-/proc/sys/kernel/hrtimer_migration}" ;;
+    kernel_lpm_prediction) printf '%s\n' "${ASB_LPM_PREDICTION_NODE:-/sys/module/lpm_levels/parameters/lpm_prediction}" ;;
+    kernel_usb_autosuspend) printf '%s\n' "${ASB_USB_AUTOSUSPEND_NODE:-/sys/module/usbcore/parameters/autosuspend}" ;;
     *) return 1 ;;
   esac
 }
@@ -33,6 +36,12 @@ asb_kc_mode() {
     kernel_sched_autogroup:*) _akm_v=stock ;;
     kernel_sched_child_runs_first:stock|kernel_sched_child_runs_first:off|kernel_sched_child_runs_first:on) ;;
     kernel_sched_child_runs_first:*) _akm_v=stock ;;
+    kernel_hrtimer_migration:stock|kernel_hrtimer_migration:auto|kernel_hrtimer_migration:off|kernel_hrtimer_migration:on) ;;
+    kernel_hrtimer_migration:*) _akm_v=auto ;;
+    kernel_lpm_prediction:stock|kernel_lpm_prediction:auto|kernel_lpm_prediction:off|kernel_lpm_prediction:on) ;;
+    kernel_lpm_prediction:*) _akm_v=auto ;;
+    kernel_usb_autosuspend:stock|kernel_usb_autosuspend:off|kernel_usb_autosuspend:on) ;;
+    kernel_usb_autosuspend:*) _akm_v=stock ;;
     *) return 1 ;;
   esac
   printf '%s\n' "$_akm_v"
@@ -41,7 +50,14 @@ asb_kc_mode() {
 asb_kc_valid_value() {
   _akv_key="$1" _akv_v="$2"
   case "$_akv_key" in
-    kernel_timer_migration|kernel_sched_stats|kernel_sched_autogroup|kernel_sched_child_runs_first) case "$_akv_v" in 0|1) return 0 ;; *) return 1 ;; esac ;;
+    kernel_timer_migration|kernel_sched_stats|kernel_sched_autogroup|kernel_sched_child_runs_first|kernel_hrtimer_migration|kernel_lpm_prediction) case "$_akv_v" in 0|1) return 0 ;; *) return 1 ;; esac ;;
+    kernel_usb_autosuspend)
+      case "$_akv_v" in
+        -1) return 0 ;;
+        ''|*[!0-9]*) return 1 ;;
+        *) [ "${#_akv_v}" -le 9 ] ;;
+      esac
+      ;;
     kernel_sched_nr_migrate)
       case "$_akv_v" in ''|*[!0-9]*) return 1 ;; esac
       [ "${#_akv_v}" -le 9 ]
@@ -66,6 +82,7 @@ asb_kc_number() {
   _akn_v="$1"
   case "$_akn_v" in
     0[xX]*) printf '%d\n' "$_akn_v" 2>/dev/null ;;
+    -1) printf '%s\n' -1 ;;
     ''|*[!0-9]*) return 1 ;;
     *) printf '%d\n' "$_akn_v" 2>/dev/null ;;
   esac
@@ -125,10 +142,17 @@ asb_kc_restore() {
 }
 
 asb_kc_apply() {
-  _aka_key="$1" _aka_smart="${2:-}"
+  _aka_key="$1" _aka_smart="${2:-}" _aka_profile="${3:-${ASB_PROFILE:-}}"
   _aka_node="$(asb_kc_node "$_aka_key")" || return 1
   _aka_mode="$(asb_kc_mode "$_aka_key")" || return 1
   [ "$_aka_mode" != stock ] || { asb_kc_restore "$_aka_key"; return $?; }
+  if [ -z "$_aka_profile" ]; then
+    _aka_profile="$(cat "$ASB_KC_MODDIR/current_profile" 2>/dev/null | tr -d ' \t\r\n')"
+  fi
+  case "$_aka_key:$_aka_mode:$_aka_profile" in
+    kernel_hrtimer_migration:auto:battery|kernel_lpm_prediction:auto:battery) ;;
+    kernel_hrtimer_migration:auto:*|kernel_lpm_prediction:auto:*) asb_kc_restore "$_aka_key"; return $? ;;
+  esac
   _aka_prev="$(asb_kc_prev "$_aka_key")"
   _aka_saved=none
   [ -f "$_aka_prev" ] && _aka_saved="$(asb_kc_clean "$(cat "$_aka_prev" 2>/dev/null)")"
@@ -141,8 +165,10 @@ asb_kc_apply() {
     mglru_mode:smart)
       case "$_aka_smart" in 5|7) _aka_want="$_aka_smart" ;; *) _aka_want=7 ;; esac
       ;;
-    kernel_timer_migration:off) _aka_want=0 ;;
-    kernel_timer_migration:on) _aka_want=1 ;;
+    kernel_timer_migration:off|kernel_hrtimer_migration:off|kernel_hrtimer_migration:auto|kernel_lpm_prediction:off) _aka_want=0 ;;
+    kernel_timer_migration:on|kernel_hrtimer_migration:on|kernel_lpm_prediction:on|kernel_lpm_prediction:auto) _aka_want=1 ;;
+    kernel_usb_autosuspend:off) _aka_want=-1 ;;
+    kernel_usb_autosuspend:on) _aka_want=2 ;;
     kernel_sched_stats:off|kernel_sched_child_runs_first:off) _aka_want=0 ;;
     kernel_sched_autogroup:off|kernel_sched_child_runs_first:off) _aka_want=0 ;;
     kernel_sched_autogroup:on|kernel_sched_child_runs_first:on) _aka_want=1 ;;
@@ -185,7 +211,7 @@ asb_kc_status() {
 
 asb_kc_each() {
   _ake_action="$1" _ake_rc=0
-  for _ake_key in mglru_mode kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_sched_autogroup kernel_sched_child_runs_first; do
+  for _ake_key in mglru_mode kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend; do
     "asb_kc_$_ake_action" "$_ake_key" || _ake_rc=1
   done
   return "$_ake_rc"
@@ -195,7 +221,7 @@ case "${0##*/}" in
   asb_kernel_controls.sh)
     _akc_cmd="${1:-status}" _akc_one="${2:-}"
     case "$_akc_cmd" in
-      apply) if [ -z "$_akc_one" ]; then asb_kc_each apply; else asb_kc_apply "$_akc_one" "${3:-}"; fi ;;
+      apply) if [ -z "$_akc_one" ]; then asb_kc_each apply; else asb_kc_apply "$_akc_one" "${3:-}" "${4:-}"; fi ;;
       restore) if [ -z "$_akc_one" ]; then asb_kc_each restore; else asb_kc_restore "$_akc_one"; fi ;;
       status) if [ -z "$_akc_one" ]; then asb_kc_each status; else asb_kc_status "$_akc_one"; fi ;;
       *) printf 'usage: asb_kernel_controls.sh apply|restore|status [registered_key]\n' >&2; exit 2 ;;
