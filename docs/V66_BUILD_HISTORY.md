@@ -4,6 +4,48 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev45 - real Zygisk unloading and honest OP15 kernel pairing
+
+Input: the dev44 source, the OP15 kernel-control screenshot, KRILIKD v13 source/build evidence and
+read-only device diagnostics. The objective is a smaller app-side lifetime and a precise kernel
+contract, not memory-name concealment or another owner for vendor charging/VPN policy.
+
+- **The app-side observer now asks the loader to unload.** An allowlisted, observer-only or
+  denylisted process sends one bounded `SPAWN` frame, closes its stream socket and returns
+  `DLCLOSE_MODULE_LIBRARY`. It installs no hooks, calls no `exemptFd`, retains no package/socket
+  field and sends no `PROCESS_START`. The companion validates peer credentials and process start
+  ticks, creates a `pidfd` where allowed and uses the existing event-driven reaper. Legacy
+  `PROCESS_START` remains accepted only for rolling-update compatibility with an older library.
+  This is lifecycle hygiene; it does not make an already injected mapping invisible to a detector.
+- **HR timers no longer acquire a second writer.** A separate vendor
+  `/proc/sys/kernel/hrtimer_migration` keeps its previous bounded baseline/readback behavior when
+  it actually exists. Standard Linux 6.12 does not expose that independent sysctl: with only
+  `/proc/sys/kernel/timer_migration`, ASB reports `covered_by_timer_migration`, disables the row,
+  captures no HR baseline and performs no second write. If neither interface exists, apply fails
+  with `not_exposed`; status remains a read-only report. All thirteen locales distinguish this
+  state from an applied tweak.
+- **Kernel evidence follows the paired OP15 source.** Device Diagnostics reads the registered
+  `/sys/kernel/debug/sched/nr_migrate` path and reports `CONFIG_DEBUG_FS`/`CONFIG_SCHED_DEBUG`
+  separately. A missing path does not assert which of mount, SELinux, permissions or config is
+  responsible. Autogroup is not force-enabled and the old Qualcomm `lpm_prediction` control is not
+  replaced by an invented SM8850 writer.
+- **SDP reporting is runtime-aware and read-only.** `/proc/sdp900ma`, its config and its bounded
+  report are exposed in Device Diagnostics. `enabled=0`, `NOT APPLIED`, a mixed report, an
+  unreadable/missing node and a positive `[OK]`/`enabled=1` report are different states. A positive
+  report means only that the early-boot driver confirmed its configured SDP budget; it is not a
+  physical current measurement. ASB exposes no USB current/voltage writer and no runtime toggle.
+- **Native build evidence is real.** NDK r28c built both `arm64-v8a` and `armeabi-v7a` observer
+  libraries with the existing `-Werror` gate and verified both exported Zygisk entry points. Host
+  ABI fixtures check one-shot EOF, no `exemptFd`, unload requests for every lifecycle branch,
+  legacy companion compatibility and synchronized diagnostics. The separate AOSP/AIDL DSP and
+  attach prebuilts are not claimed as rebuilt by this NDK job.
+
+Not added: hiding `zygisk/arm64-v8a.so` from `/proc/*/maps`, a `dl_iterate_phdr` interceptor,
+interference with another hiding scheme, an ASB VPN policy owner, arbitrary sysfs/path writes,
+thermal/SELinux/KMI bypasses or unsupported battery/performance percentages. Host/browser and NDK
+verification do not prove physical ColorOS WebView behavior, actual USB input current, VPN hiding,
+scheduler gains, boot success or battery life.
+
 ## V66 dev34 - real Linux 6.12 scheduler nodes and explicit trade-offs
 
 Input: the dev33 source, device diagnostics, WebUI screenshots and the successful KRILIKD v13
