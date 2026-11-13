@@ -5711,7 +5711,7 @@ printf '1\n' > "$T/hrtimer"; printf '0\n' > "$T/lpm"; printf '%s\n' -1 > "$T/usb
 run() {
   MODDIR="$T/mod" ASB_KERNEL_STATE_DIR="$T/state" \
     ASB_HRTIMER_MIGRATION_NODE="$T/hrtimer" ASB_LPM_PREDICTION_NODE="$T/lpm" \
-    ASB_USB_AUTOSUSPEND_NODE="$T/usb" sh "$K" "$@"
+    ASB_TIMER_MIGRATION_NODE="$T/timer" ASB_USB_AUTOSUSPEND_NODE="$T/usb" sh "$K" "$@"
 }
 mode() { printf 'kernel_hrtimer_migration=%s\nkernel_lpm_prediction=%s\nkernel_usb_autosuspend=%s\n' "$1" "$2" "$3" > "$T/mod/config/governor.conf"; }
 mode auto auto stock
@@ -5734,6 +5734,25 @@ run apply kernel_hrtimer_migration '' performance >/dev/null; run apply kernel_l
 mode stock stock stock
 run apply kernel_hrtimer_migration >/dev/null; run apply kernel_lpm_prediction >/dev/null
 [ "$(cat "$T/hrtimer")" = 1 ] && [ "$(cat "$T/lpm")" = 0 ] || fail 'manual Stock did not restore exactly'
+# Upstream Linux 6.12 has no independent hrtimer_migration sysctl. When the vendor
+# node is absent, the general timer migration control owns the mechanism: report
+# coverage, never create a second baseline and never write the general node again.
+printf '1\n' > "$T/timer"; mv "$T/hrtimer" "$T/hrtimer.vendor"
+mode auto auto stock
+out="$(run apply kernel_hrtimer_migration '' battery; run status kernel_hrtimer_migration)"
+printf '%s\n' "$out" | grep -q '^kernel_hrtimer_migration|covered_by_timer_migration|auto|1|none$' || fail "covered HR timer Auto/status: $out"
+[ "$(cat "$T/timer")" = 1 ] && [ ! -e "$T/state/kernel_hrtimer_migration.prev" ] || fail 'covered HR timer wrote or captured a baseline'
+mode off auto stock
+out="$(run apply kernel_hrtimer_migration '' performance)"
+printf '%s\n' "$out" | grep -q '^kernel_hrtimer_migration|covered_by_timer_migration|off|1|none$' || fail "covered HR timer manual Off: $out"
+mode stock stock stock
+out="$(run apply kernel_hrtimer_migration; run restore kernel_hrtimer_migration)"
+printf '%s\n' "$out" | grep -q '^kernel_hrtimer_migration|covered_by_timer_migration|stock|1|none$' || fail "covered HR timer Stock/restore: $out"
+[ "$(cat "$T/timer")" = 1 ] && [ ! -e "$T/state/kernel_hrtimer_migration.prev" ] || fail 'covered HR timer Stock changed ownership'
+rm -f "$T/timer"; mode auto auto stock
+set +e; out="$(run apply kernel_hrtimer_migration '' battery 2>/dev/null)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^kernel_hrtimer_migration|not_exposed|auto|unknown|none$' || fail "HR timer without either interface: $out"
+mv "$T/hrtimer.vendor" "$T/hrtimer"; mode stock stock stock
 # USB is inert by default; on=2, off=-1, repeated apply keeps the captured -1.
 mode auto auto on
 out="$(run apply kernel_usb_autosuspend)"

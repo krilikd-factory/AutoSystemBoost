@@ -4673,7 +4673,7 @@ fail() { echo "FAIL fix217: $*" >&2; exit 1; }
 # the row, and the enabled card takes the tile's category gradient, border tint and
 # glow - in both themes. The classless teal .cfg-row.is-on rules stay as the fallback
 # for rows without a category.
-grep -qF "row.className = 'cfg-row ' + cfgCatClass(it.key) + (isOn ? ' is-on' : '');" "$H" || fail "tweak rows lost their category class"
+grep -qF "row.className = 'cfg-row ' + cfgCatClass(it.key) + (isOn ? ' is-on' : '') + (zyLocked ? ' zy-master-off' : '');" "$H" || fail "tweak rows lost their category class"
 grep -qF ':is(.cfg-icon,.cfg-row).cat-audio' "$H" || fail "the hue map no longer feeds tweak rows"
 grep -qF '.cfg-row.is-on[class*="cat-"] {' "$H" || fail "enabled cards lost the category rule"
 grep -qF 'color-mix(in srgb, var(--cat, var(--accent)) 17%, transparent) 0%' "$H" || fail "enabled cards lost the hub-tile gradient"

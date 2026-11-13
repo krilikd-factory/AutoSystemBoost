@@ -4750,7 +4750,7 @@ for _cat in ('audio', 'camera', 'battery', 'ux', 'net', 'iface'):
 assert '.cfg-row.is-on .cfg-icon[class*="cat-"]' in s, "active tweak icons lost the category pill"
 # fix217: an enabled tweak card lights up like its hub tile - the row carries its
 # cat-* class, shares the hue map with the icon and wears the same gradient and glow.
-assert "row.className = 'cfg-row ' + cfgCatClass(it.key) + (isOn ? ' is-on' : '');" in s, "tweak rows no longer carry their category class"
+assert "row.className = 'cfg-row ' + cfgCatClass(it.key) + (isOn ? ' is-on' : '') + (zyLocked ? ' zy-master-off' : '');" in s, "tweak rows no longer carry their category class"
 assert ':is(.cfg-icon,.cfg-row).cat-audio' in s and ':is(.cfg-icon,.cfg-row).cat-system' in s, "the category hue map does not feed tweak rows"
 oncard = re.search(r'\.cfg-row\.is-on\[class\*="cat-"\] \{([^}]*)\}', s)
 assert oncard and 'color-mix(in srgb, var(--cat, var(--accent)) 17%, transparent) 0%' in oncard.group(1), "enabled tweak cards lost the hub-tile gradient"
@@ -9229,7 +9229,38 @@ out="$(run --kernel)"
 want kernel_features sched_stats 'writable; live=1'
 want kernel_features sched_stats_config y
 want kernel_features sched_stats_node "$T/proc/sys/kernel/sched_schedstats"
-want kernel_features oplus_sdp_900ma 'not exposed; no confirmed OPlus SDP current-control ABI'
+want kernel_features oplus_sdp_900ma 'not exposed; runtime support unknown'
+want kernel_features oplus_sdp_900ma_config 'not exposed'
+want kernel_features oplus_sdp_900ma_node "$T/proc/sdp900ma"
+want kernel_features oplus_sdp_900ma_control 'none; early boot only; disable with oplus_sdp_900ma=0; ASB has no current/voltage writer'
+want kernel_features sched_nr_migrate 'not exposed at the registered debugfs path; mount/SELinux/config not inferred'
+want kernel_features sched_nr_migrate_debug_config 'not exposed'
+want kernel_features sched_nr_migrate_sched_config 'not exposed'
+# Positive config evidence is subordinate to the driver's own readback. A mixed
+# NOT APPLIED/[OK] report must never be collapsed into charging success.
+printf '\nCONFIG_OPLUS_SDP_900MA=y\nCONFIG_DEBUG_FS=y\nCONFIG_SCHED_DEBUG=y\n' >> "$T/config"
+gzip -c "$T/config" > "$T/proc/config.gz"
+mkdir -p "$T/sys/kernel/debug/sched"; printf '32\n' > "$T/sys/kernel/debug/sched/nr_migrate"
+printf '[OK] qcom,input_current_usb_ma=900 enabled=1\n' > "$T/proc/sdp900ma"
+out="$(run --kernel)"
+want kernel_features oplus_sdp_900ma 'configured SDP limit reported applied; actual USB input current not measured'
+want kernel_features oplus_sdp_900ma_config y
+want kernel_features oplus_sdp_900ma_report '[OK] qcom,input_current_usb_ma=900 enabled=1'
+want kernel_features sched_nr_migrate 'writable; live=32'
+want kernel_features sched_nr_migrate_node "$T/sys/kernel/debug/sched/nr_migrate"
+want kernel_features sched_nr_migrate_debug_config y
+want kernel_features sched_nr_migrate_sched_config y
+printf 'NOT APPLIED oplus_spec,input-power-mw [OK] qcom,input_current_usb_ma=900 enabled=1\n' > "$T/proc/sdp900ma"
+out="$(run --kernel)"; want kernel_features oplus_sdp_900ma 'interface present; 900 mA not confirmed by its own readback'
+printf 'enabled=0\n' > "$T/proc/sdp900ma"
+out="$(run --kernel)"; want kernel_features oplus_sdp_900ma 'interface present; disabled by boot parameter; no runtime writer'
+rm -f "$T/proc/sdp900ma"; out="$(run --kernel)"
+want kernel_features oplus_sdp_900ma 'built-in config; /proc/sdp900ma not observed'
+mkdir "$T/proc/sdp900ma"; out="$(run --kernel)"
+want kernel_features oplus_sdp_900ma 'node present but unreadable'
+rmdir "$T/proc/sdp900ma"
+sed -i 's/^CONFIG_OPLUS_SDP_900MA=y$/# CONFIG_OPLUS_SDP_900MA is not set/' "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
+out="$(run --kernel)"; want kernel_features oplus_sdp_900ma 'not observed; exposed config says not set'
 printf '%s\n' "$out" | awk -F '\t' '$2 !~ /^(meta|firmware|soc|kernel|susfs|kernel_external|kernel_config|kernel_origin|kernel_btf|kernel_ebpf|kernel_fuse_bpf|kernel_features|metamodule)$/ { bad = 1 } END { exit bad }' || fail "--kernel ran full-collector sections: $out"
 printf '%s\n' "$out" | grep -q 'DO_NOT_COLLECT' && fail "--kernel collected a sensitive identifier"
 rm -f "$T/proc/sys/kernel/sched_schedstats"
@@ -9664,7 +9695,7 @@ assert "kernelWakeupChipList" in h and "textContent" in h
 assert 'setInterval' not in panel
 en = json.loads((root / 'webroot/i18n/en.json').read_text(encoding='utf-8'))
 new = [k for k in en if k.startswith('kernel_') or k.startswith('cfg_kernel_')]
-assert len(new) == 37, len(new)
+assert len(new) == 38, len(new)
 assert en.get('grp_kernel') == 'Kernel' and en.get('grp_kernel_desc') and not any(k.startswith('kernel_caps') for k in en)
 for p in (root / 'webroot/i18n').glob('*.json'):
     d = json.loads(p.read_text(encoding='utf-8'))
@@ -9690,8 +9721,8 @@ const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
 function grab(name){const m=h.match(new RegExp('(?:async )?function '+name+'\\([^)]*\\) \\{[\\s\\S]*?\\n\\}'));if(!m)throw Error('missing '+name);return m[0];}
 for(const n of ['kernelControlParse','kernelWakeupParse','kernelWakeupValidName','kernelWakeupDraft','kernelWakeupSave','kernelStateText','kernelControlAvailability','kernelDecorateControlRow','cfgSet','shQuote'])eval(grab(n));
 global.ASB_KERNEL_STATUS_KEYS=['mglru_mode','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend'];
-const c=kernelControlParse('mglru_mode|writable|smart|7|1\nkernel_sched_nr_migrate|not_exposed|4|unknown|none\nkernel_sched_stats|not_exposed|off||none\nkernel_sched_autogroup|writable|on|1|0\nkernel_sched_child_runs_first|not_writable|stock|1|none\narbitrary_path|writable|on|1|none\n');
-if(c.mglru_mode.state!=='writable'||c.mglru_mode.live!=='7'||c.kernel_sched_stats.state!=='not_exposed'||c.kernel_sched_autogroup.live!=='1'||c.kernel_sched_child_runs_first.state!=='not_writable'||c.arbitrary_path)throw Error('control status parse');
+const c=kernelControlParse('mglru_mode|writable|smart|7|1\nkernel_sched_nr_migrate|not_exposed|4|unknown|none\nkernel_hrtimer_migration|covered_by_timer_migration|auto|0|none\nkernel_sched_stats|not_exposed|off||none\nkernel_sched_autogroup|writable|on|1|0\nkernel_sched_child_runs_first|not_writable|stock|1|none\narbitrary_path|writable|on|1|none\n');
+if(c.mglru_mode.state!=='writable'||c.mglru_mode.live!=='7'||c.kernel_hrtimer_migration.state!=='covered_by_timer_migration'||c.kernel_hrtimer_migration.live!=='0'||c.kernel_sched_stats.state!=='not_exposed'||c.kernel_sched_autogroup.live!=='1'||c.kernel_sched_child_runs_first.state!=='not_writable'||c.arbitrary_path)throw Error('control status parse');
 const wb=kernelWakeupParse('wakeup_blocker|status|blocked_events=17|node=writable|policy=ready|saved_count=2|current_count=1\nwakeup_rule|saved|NETLINK\nwakeup_rule|saved|qcom|rx\nwakeup_rule|current|NETLINK\n');
 if(wb.events!=='17'||wb.saved.length!==2||wb.saved[1]!=='qcom|rx'||wb.current[0]!=='NETLINK')throw Error('wakeup status parse '+JSON.stringify(wb));
 for(const n of ['NETLINK','a|b',"a'b",'!','-e'])if(!kernelWakeupValidName(n))throw Error('valid exact name rejected '+n);
@@ -9705,9 +9736,13 @@ const nrBadge={textContent:'',className:'',title:''},nrPop={hidden:false};
 const nrClasses=[];const nrRow={querySelector:function(s){return s==='.cfg-status'?nrBadge:s==='.cfg-sel-pop'?nrPop:null;},querySelectorAll:function(){return nrButtons;},classList:{add:function(c){nrClasses.push(c);}}};
 kernelDecorateControlRow(nrRow,'kernel_sched_nr_migrate');
 if(!nrButtons.every(b=>b.disabled&&b['aria-disabled']==='true')||!nrPop.hidden||!nrClasses.includes('kernel-unavailable')||!/Not exposed/.test(nrBadge.textContent)||/unknown/.test(nrBadge.textContent)||/unknown/.test(nrBadge.title))throw Error('not_exposed control remains actionable or exposes an unknown-value suffix '+JSON.stringify({buttons:nrButtons,pop:nrPop,classes:nrClasses,badge:nrBadge,availability:kernelControlAvailability('kernel_sched_nr_migrate'),controls:_kernelPanel.controls,keys:ASB_KERNEL_STATUS_KEYS}));
+nrButtons.forEach(b=>{b.disabled=false;b['aria-disabled']='false'});nrPop.hidden=false;nrBadge.textContent='';nrBadge.title='';
+kernelDecorateControlRow(nrRow,'kernel_hrtimer_migration');
+if(!nrButtons.every(b=>b.disabled&&b['aria-disabled']==='true')||!nrPop.hidden||!/Managed by Timer migration/.test(nrBadge.textContent)||nrBadge.title!=='kernel: 0')throw Error('covered HR timer control remains actionable or has the wrong state '+JSON.stringify({buttons:nrButtons,pop:nrPop,badge:nrBadge,availability:kernelControlAvailability('kernel_hrtimer_migration')}));
 (async()=>{
  await cfgSet('kernel_sched_nr_migrate','stock',null);
- if(runs.length!==0)throw Error('not_exposed mutation reached the config writer before rejection');
+ await cfgSet('kernel_hrtimer_migration','on',null);
+ if(runs.length!==0)throw Error('unsupported/covered mutation reached the config writer before rejection');
  _wbDraft=['NETLINK',"a'b"];await kernelWakeupSave(false);
  if(runs.length!==1||!runs[0].includes(" set 'NETLINK' 'a'\\''b'"))throw Error('unsafe/wrong set command '+runs[0]);
  if(_wbDraft!==null||_wbBusy||refreshed!==1||toasts[toasts.length-1][1]!=='good')throw Error('successful apply did not reconcile');
@@ -12097,7 +12132,7 @@ set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 H="$ROOT/webroot/index.html"
 fail() { echo "FAIL webui kernel control verdicts: $*" >&2; exit 1; }
-grep -o 'asb_kc_emit "\$[a-z_]*" [a-z_]*' "$ROOT/runtime/asb_kernel_controls.sh" | awk '{print $3}' | sort -u | grep -vx writable > "${TMPDIR:-/tmp}/kc_st.$$"
+{ grep -o 'asb_kc_emit "\$[a-z_]*" [a-z_]*' "$ROOT/runtime/asb_kernel_controls.sh"; grep -o 'asb_kc_emit kernel_hrtimer_migration [a-z_]*' "$ROOT/runtime/asb_kernel_controls.sh"; } | awk '{print $3}' | sort -u | grep -vx writable > "${TMPDIR:-/tmp}/kc_st.$$"
 python3 - "$H" "$ROOT/webroot/i18n" "${TMPDIR:-/tmp}/kc_st.$$" <<'P' || { rm -f "${TMPDIR:-/tmp}/kc_st.$$"; fail "verdict map"; }
 import json, os, re, sys
 h = open(sys.argv[1], encoding='utf-8').read()
@@ -12368,13 +12403,16 @@ for token in (
  "groupId ? ' ' + cfgGroupCatClass(groupId)",
  "card.className = 'cfg-zygisk-card cat-zygisk';",
  ":is(.cfg-section,.cfg-tile).cat-audio   { --cat: #f98d9e; }",
+ ":is(.cfg-section,.cfg-tile).cat-camera  { --cat: #efa8e2; }",
  ":is(.cfg-section,.cfg-tile).cat-kernel  { --cat: #82b8ff; }",
  ":is(.cfg-section,.cfg-tile).cat-feel    { --cat: #e6b8a2; }",
  ":is(.cfg-section,.cfg-tile).cat-zygisk  { --cat: #a7b7c6; }",
  "bfxEl('div', 'cfg-row kernel-card cat-kernel')",
+ ':is(.cfg-icon,.cfg-row).cat-camera  { --cat: #efa8e2; }',
  ':is(.cfg-icon,.cfg-row).cat-kernel  { --cat: #82b8ff; }',
  ':is(.cfg-icon,.cfg-row).cat-feel    { --cat: #e6b8a2; }',
  ':is(.cfg-icon,.cfg-row).cat-zygisk  { --cat: #a7b7c6; }',
+ 'html[data-asb-theme="light"] .cfg-row.cat-camera  { --cat:#9c3f86; }',
  'html[data-asb-theme="light"] .cfg-row.cat-kernel  { --cat:#346aa8; }',
  'html[data-asb-theme="light"] .cfg-row.cat-feel    { --cat:#9a5b43; }',
  '.cfg-row[class*="cat-"] .cfg-switch.on',
@@ -12389,8 +12427,13 @@ for token in (
  '.kernel-card.cat-kernel .bfx-secondary:not(.kernel-clear):not(:disabled)',
  '.kernel-card.cat-kernel .kernel-clear:not(:disabled)',
  "bfxEl('button', 'bfx-btn bfx-secondary kernel-clear'",
+ '.toast.t-cat-camera',
+ 'color: #f2b5e6;',
+ "kernel_sched_stats:'sched_stats'",
+ "sched_stats: '<rect",
  '.cfg-zygisk-card .cfg-zygisk-open'):
     assert token in s, token
+assert "kernel_sched_nr_migrate:'sched_migration', kernel_sched_stats:'kernel'" not in s, 'scheduler statistics reused the Kernel category glyph'
 # Availability is a normal state; actual warnings/errors must remain distinguishable.
 assert '.cfg-status.warn {' in s and '.cfg-status.bad {' in s and '.cfg-status.na {' in s
 assert '--cap-*/--pill-*' not in s, 'comment terminator must not swallow the Audio section rule'
@@ -12427,6 +12470,139 @@ JS
 out="$(node "$T/test.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 echo 'PASS WebUI category colours: canonical group mapping for every tweak and heading, category-owned switches/segments/ranges/dropdowns/statuses, light/dark Kernel/Feel/Zygisk hues, semantic warnings preserved'
+)
+
+t_webui_dev44_zygisk_dependency_disclosure() (
+# dev44: all four existing Zygisk controls are reachable in the category; the three feature
+# values survive master-off but cannot be written. The standalone panel starts collapsed,
+# preserves its disclosure state across repaints and cannot re-enable a locked switch.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL WebUI dev44 Zygisk dependency/disclosure: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'PY' || fail 'source/localization contract'
+import json, sys
+from pathlib import Path
+r=Path(sys.argv[1]); h=(r/'webroot/index.html').read_text()
+for token in (
+ 'const ZYGISK_FEATURE_KEYS = ZYGISK_CONTROL_KEYS.slice(1);',
+ 'keys:ZYGISK_CONTROL_KEYS',
+ 'function zygiskFeatureLocked(key)',
+ "r.key === key && r.needs === 'zygisk_enabled'",
+ "row.className = 'cfg-row ' + cfgCatClass(it.key) + (isOn ? ' is-on' : '') + (zyLocked ? ' zy-master-off' : '')",
+ "if (zyLocked) sw.setAttribute('aria-disabled', 'true');",
+ "else sw.onclick = (e) => { e.stopPropagation(); cfgSet(it.key",
+ "if (typeof zygiskFeatureLocked === 'function' && zygiskFeatureLocked(key)) {",
+ "let _zygiskControlsExpanded = false;",
+ "reveal.setAttribute('aria-controls', 'zyControlsPanel');",
+ "panel.hidden = !_zygiskControlsExpanded;",
+ "reveal.setAttribute('aria-expanded', _zygiskControlsExpanded ? 'true' : 'false');",
+ "if (sw && sw.getAttribute('aria-disabled') !== 'true') sw.onclick",
+ '.cfg-row.zy-master-off .cfg-switch',
+ '.zygisk-page .zy-controls-panel:not([hidden])',
+ '@media (prefers-reduced-motion:reduce) { .zygisk-page .zy-controls-panel:not([hidden]) { animation:none; } }'):
+    assert token in h, token
+assert 'ZYGISK_PANEL_ONLY_KEYS' not in h, 'feature controls are still suppressed from category/search'
+for p in sorted((r/'webroot/i18n').glob('*.json')):
+    d=json.loads(p.read_text())
+    assert len(list((r/'webroot/i18n').glob('*.json')))==13
+    for k in ('zy_controls_reveal','zy_controls_hide','zy_feature_master_off','zy_feature_master_off_why'):
+        assert isinstance(d.get(k),str) and d[k].strip(), (p,k)
+    hint=d['cfg_ui_section_zygisk_hint']
+    assert len(hint)>25 and 'ZYGISK' in hint, (p,'updated category hint')
+print('source/localization contract ok')
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI dev44 Zygisk runtime: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+cat > "$T/test.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+function grab(name){const m=h.match(new RegExp('(?:async )?function '+name+'\\([^)]*\\) \\{[\\s\\S]*?\\n\\}'));if(!m)throw Error('missing '+name);return m[0];}
+function between(a,b){const i=h.indexOf(a),j=h.indexOf(b,i);if(i<0||j<0)throw Error('missing '+a);return h.slice(i,j);}
+function E(tag,cls){
+ const n={tag,className:cls||'',children:[],attrs:{},hidden:false,_text:'',style:{}};
+ n.setAttribute=(k,v)=>{n.attrs[k]=String(v);};n.getAttribute=k=>Object.prototype.hasOwnProperty.call(n.attrs,k)?n.attrs[k]:null;
+ n.appendChild=c=>{n.children.push(c);c.parentNode=n;return c;};
+ n.insertBefore=(c,b)=>{const i=b?n.children.indexOf(b):-1;if(i<0)n.children.push(c);else n.children.splice(i,0,c);c.parentNode=n;return c;};
+ Object.defineProperty(n,'firstChild',{get(){return n.children[0]||null;}});
+ Object.defineProperty(n,'textContent',{get(){return n._text;},set(v){n._text=String(v);n.children=[];}});
+ n.classList={
+  add(...cs){const s=new Set(n.className.split(/\s+/).filter(Boolean));cs.forEach(c=>s.add(c));n.className=Array.from(s).join(' ');},
+  remove(...cs){const s=new Set(n.className.split(/\s+/).filter(Boolean));cs.forEach(c=>s.delete(c));n.className=Array.from(s).join(' ');},
+  contains(c){return n.className.split(/\s+/).includes(c);},
+  toggle(c){const s=new Set(n.className.split(/\s+/).filter(Boolean));if(s.has(c))s.delete(c);else s.add(c);n.className=Array.from(s).join(' ');}
+ };
+ n.querySelectorAll=sel=>{const out=[],cls=sel.slice(1);(function walk(x){for(const c of x.children){if(c.classList.contains(cls))out.push(c);walk(c);}})(n);return out;};
+ n.querySelector=sel=>n.querySelectorAll(sel)[0]||null;
+ return n;
+}
+function byId(n,id){if(n.id===id)return n;for(const c of n.children){const hit=byId(c,id);if(hit)return hit;}return null;}
+const chk=(c,m)=>{if(!c)throw Error(m);};
+global.document={createElement:E};global.window={};
+global.T=(k,f)=>f;global.Tcfg=(k,p,f)=>f;global.Topt=(v)=>String(v);
+global.techIcon=()=>'';global.cfgCatClass=()=> 'cat-zygisk';global.cfgIsActive=(it,v)=>String(v)==='1';
+global.cfgStatus=(it,v)=>({cls:String(v)==='1'?'on':'off',text:String(v)});
+global.CFG_ICONS={zygisk_enabled:'zygisk_master',zygisk_hints:'hints',zygisk_launch:'launch',zygisk_ledger:'ledger'};
+global.ASB_NEEDS_REBOOT={};global.ASB_CAP_REQUIRES={};global.ASB_CAPS={};global.VERIFY_KEYS=[];global.TRIAL_KEYS=[];
+global.cfgCameraPending=()=>false;global.cfgCameraNotExposed=()=>false;global.applyModeOf=()=>'live';global.applyModeLabel=()=>'';
+global.willBreakOf=()=>'';global.ledgerBadge=()=>null;
+global.CFG_ITEMS=[
+ {key:'zygisk_enabled',type:'bool',def:'0',name:'Master',desc:'Master'},
+ {key:'zygisk_hints',type:'bool',def:'1',name:'Hints',desc:'Hints'},
+ {key:'zygisk_launch',type:'bool',def:'0',name:'Launch',desc:'Launch'},
+ {key:'zygisk_ledger',type:'bool',def:'1',name:'Ledger',desc:'Ledger'}
+];
+global._cfgVals={zygisk_enabled:'0',zygisk_hints:'1',zygisk_launch:'0',zygisk_ledger:'1'};
+eval(between('const ZYGISK_CONTROL_KEYS','const CFG_GROUP_SECTIONS').replace(/^const /gm,'var '));
+eval(between('const CFG_REQUIRES = [','/* What else must change').replace(/^const /gm,'var '));
+eval(between('function cfgRenderRow','let _cfgSearch'));eval(grab('cfgRenderZygiskCard'));
+global.deviceZygiskLink=()=>E('div','dev-zygisk-link');global.openZygiskPage=()=>{};
+global.zygiskButtonIcon=b=>b;global.logReportSec=()=>E('div','lgr-sec');global.logReportNote=t=>{const n=E('div','lgr-note');n.textContent=t;return n;};
+function deviceVal(d,s,k){return String((((d||{}).sections||{})[s]||{})[k]||'');}
+global.deviceVal=deviceVal;
+global.uiSound=()=>{};global.toasts=[];global.toast=(t,k)=>toasts.push({t,k});
+let backendCalls=0;global.run=async()=>{backendCalls++;return {errno:0,stdout:''};};
+eval(grab('cfgSet'));
+eval("var _zygiskControlBusy = ''; var _zygiskControlsExpanded = false;");
+eval(grab('zygiskControlsCard'));eval(grab('zygiskControlSet'));
+let writes=[];global._zygiskOpen=false;global.asbPaintYield=async()=>{};
+(async()=>{
+ chk(ZYGISK_CONTROL_KEYS.length===4&&ZYGISK_FEATURE_KEYS.length===3,'the four-control/master-plus-three model regressed');
+ const saved=JSON.stringify(_cfgVals);
+ const refused=await cfgSet('zygisk_hints','0',null);
+ chk(refused===false&&backendCalls===0&&JSON.stringify(_cfgVals)===saved,'mutation boundary wrote a master-off feature');
+ cfgSet=async(key,val)=>{writes.push([key,val]);_cfgVals[key]=String(val);};
+ const category=E('div');cfgRenderZygiskCard(category,CFG_ITEMS);
+ const catRows=category.querySelectorAll('.cfg-row');
+ chk(catRows.length===4,'category does not render all four existing controls');
+ chk(catRows[0].querySelector('.cfg-switch').getAttribute('aria-disabled')!=='true','master was locked by its own dependency');
+ for(const row of catRows.slice(1)){
+  const sw=row.querySelector('.cfg-switch');
+  chk(row.classList.contains('zy-master-off')&&sw.getAttribute('aria-disabled')==='true'&&sw.onclick===undefined,'category feature is editable with master off');
+ }
+ chk(JSON.stringify(_cfgVals)===saved,'rendering erased saved feature values');
+ const off={sections:{zygisk_observer:{enabled:'0',lifecycle_hints:'1',launch_hints:'0',spawn_ledger:'1'}}};
+ let card=zygiskControlsCard(off),reveal=byId(card,'zyControlsReveal'),panel=byId(card,'zyControlsPanel');
+ chk(panel.hidden&&reveal.getAttribute('aria-expanded')==='false','standalone controls are not collapsed by default');
+ chk(panel.querySelectorAll('.cfg-row').length===4,'collapsed panel lost a control');
+ reveal.onclick();chk(!panel.hidden&&reveal.getAttribute('aria-expanded')==='true','reveal button did not expose the panel');
+ card=zygiskControlsCard(off);reveal=byId(card,'zyControlsReveal');panel=byId(card,'zyControlsPanel');
+ chk(!panel.hidden&&reveal.getAttribute('aria-expanded')==='true','same-page repaint collapsed the panel again');
+ const locked=panel.querySelectorAll('.cfg-switch')[1];
+ chk(locked.getAttribute('aria-disabled')==='true'&&locked.onclick===undefined,'standalone override resurrected a locked switch');
+ chk(await zygiskControlSet('zygisk_hints','0',locked)===false&&writes.length===0,'standalone setter bypassed the master gate');
+ const on={sections:{zygisk_observer:{enabled:'1',lifecycle_hints:'1',launch_hints:'0',spawn_ledger:'1'}}};
+ card=zygiskControlsCard(on);panel=byId(card,'zyControlsPanel');
+ const switches=panel.querySelectorAll('.cfg-switch');
+ chk(switches.every(sw=>sw.getAttribute('aria-disabled')!=='true'&&typeof sw.onclick==='function'),'master-on did not restore editing');
+ switches[1].onclick({stopPropagation(){}});await new Promise(resolve=>setImmediate(resolve));
+ chk(writes.length===1&&writes[0][0]==='zygisk_hints'&&writes[0][1]==='0','enabled standalone switch did not use its real setter');
+ reveal=byId(card,'zyControlsReveal');reveal.onclick();chk(byId(card,'zyControlsPanel').hidden,'collapse button did not hide the panel');
+ console.log('ok');
+})().catch(e=>{console.error(e&&e.stack||e);process.exit(1);});
+JS
+out="$(node "$T/test.js" "$H" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo 'PASS WebUI dev44 Zygisk: four category controls, three master-gated writes with preserved values, blocked alternate setters, accessible default-collapsed panel and repaint-stable disclosure in 13 locales'
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

@@ -165,7 +165,10 @@ t_zygisk_native_contract() (
     || fail 'app processes still parse governor.conf, the allowlist file or /data/adb/asb'
   grep -q 'asb_observer_regular_app_uid(args->uid)' "$S" && grep -q 'is_child_zygote' "$S" \
     || fail 'isolated/system/app-zygote processes are not filtered before any syscall'
-  grep -q 'api_->exemptFd(sock)' "$S" || fail 'process-lifetime socket is not retained'
+  ! grep -q 'api_->exemptFd\|socket_ = sock\|package_ = base' "$S" \
+    || fail 'an app-side retained socket/state returned'
+  grep -q 'close(sock);' "$S" && grep -q 'return skip();' "$S" \
+    || fail 'one-shot app lifecycle does not close and request unload'
   grep -q 'rm -f "$POLICY"' "$ROOT/runtime/asb_zygisk.sh" || fail 'safe mode/disable does not withdraw the policy'
   ! grep -q 'api_->hookJniNativeMethods\|api_->pltHook\|scaling_\|APP_FOREGROUND\|APP_CAMERA' "$S" \
     || fail 'observer gained hooks, hardware writes or unimplemented events'
@@ -179,13 +182,13 @@ t_zygisk_native_contract() (
   grep -q 'const bool observe = !base.empty() && policy.selected(base.c_str());' "$S" \
     || fail 'the unmount flag (every app without root on KernelSU) still silences the allowlist'
   [ "$(grep -c 'classes_locked()' "$S")" = 2 ] || fail 'launch classes are read outside the companion'
-  sed -n '/void preAppSpecialize/,/void postAppSpecialize/p' "$S" | grep -q 'CLASSES' && fail 'the zygote side reads the launch classes'
+  sed -n '/void preAppSpecialize/,/void preServerSpecialize/p' "$S" | grep -q 'CLASSES' && fail 'the zygote side reads the launch classes'
   grep -q 'ASB_ZYGISK_CLASSES_ABS "/data/adb/modules/AutoSystemBoost/zygisk/classes"' "$ROOT/src/zygisk/asb_observer_protocol.h" || fail 'classes path'
   ! grep -q 'slow=\|fast=' "$ROOT/runtime/asb_zygisk.sh" || fail 'the policy file gained keys an older library would reject'
   ! grep -q 'fsync' "$S" || fail 'companion state is fsynced to flash on every event'
   grep -q 'ASB_GOVERNOR_HINT_TIMEOUT_US 100000' "$S" || fail 'governor round trip is not bounded to 100 ms'
   ! grep -q 'profile:\|start-session:\|zygisk-refresh:' "$S" || fail 'observer gained a profile/policy command'
-  [ "$(grep -c 'write_all(socket_' "$S")" = 1 ] || fail 'more than the single process-start send exists'
+  ! grep -q 'write_all(socket_' "$S" || fail 'the removed retained-socket START send returned'
   [ "$(grep -c 'write_all(sock,' "$S")" = 1 ] || fail 'more than the single one-shot spawn send exists'
   grep -q 'std::lock_guard<std::mutex>' "$S" || fail 'parallel companion handlers are not serialized'
   grep -q 'SO_PEERCRED' "$S" && grep -q 'process_start_ticks(frame.pid)' "$S" || fail 'peer/PID reuse validation missing'
@@ -524,8 +527,7 @@ std::string g_nice;
 using namespace zygisk::internal;
 static module_abi *g_abi; static int g_connects=0, g_dlclose=0, g_exempt=0, g_peer=-1;
 static bool reg(api_table*, module_abi *abi){ g_abi=abi; return true; }
-static bool g_exempt_ok=true;
-static bool exempt(int){ ++g_exempt; return g_exempt_ok; }
+static bool exempt(int){ ++g_exempt; return true; }
 static int connect_c(void*){ ++g_connects; int sv[2]; if (socketpair(AF_UNIX,SOCK_STREAM|SOCK_CLOEXEC,0,sv)) return -1; g_peer=sv[1]; return sv[0]; }
 static void setopt(void*, zygisk::Option o){ if (o==zygisk::DLCLOSE_MODULE_LIBRARY) ++g_dlclose; }
 static int moddir(void*){ return -1; }
@@ -596,32 +598,27 @@ int main(){
   top=0; g_nice="com.example.sync:worker"; pre(); f=take();
   assert(f.flags==ASB_OBSERVER_FLAG_LEDGER && std::string(f.package)=="com.example.sync"); close(g_peer); g_peer=-1;
   g_nice="com.android.settings"; uid=10200; pre(); assert(g_connects==2); uid=10123; // protected name: nothing sent
-  // Allowlisted process: fd exempted, a START frame after specialize, library kept.
+  // Allowlisted process: one SPAWN, no exemptFd, socket EOF and an explicit unload request.
+  // post-specialize is intentionally silent; the root companion's pidfd owns exit tracking.
   put_policy("v=2\ngen=9\nobserver=1\nhints=0\nlaunch=1\nledger=0\npkg=com.example.app\n");
-  g_nice="com.example.app"; top=1; dl=g_dlclose; pre(); assert(g_exempt==1 && g_dlclose==dl);
+  g_nice="com.example.app"; top=1; dl=g_dlclose; int ex0=g_exempt; pre();
+  assert(g_exempt==ex0 && g_dlclose==dl+1);
   f=take(); assert(f.kind==ASB_OBSERVER_EVENT_SPAWN && (f.flags&ASB_OBSERVER_FLAG_LAUNCH) && (f.flags&ASB_OBSERVER_FLAG_OBSERVE));
   assert(std::string(f.package)=="com.example.app" && asb_observer_frame_valid(f));
-  g_abi->postAppSpecialize(g_abi->impl,&args); f=take(); assert(f.kind==ASB_OBSERVER_EVENT_PROCESS_START && std::string(f.package)=="com.example.app");
-  close(g_peer); g_peer=-1;
-  // fix339: a loader that refuses exemptFd. The SPAWN frame already carries OBSERVE, so the
-  // companion records the app itself; the library unloads and nothing is sent after specialize.
-  g_exempt_ok=false; int ex1=g_exempt; dl=g_dlclose; pre();
-  assert(g_exempt==ex1+1 && g_dlclose==dl+1);
-  f=take(); assert(f.kind==ASB_OBSERVER_EVENT_SPAWN && (f.flags&ASB_OBSERVER_FLAG_OBSERVE));
   g_abi->postAppSpecialize(g_abi->impl,&args); assert(recv(g_peer,&extra,1,0)==0); close(g_peer); g_peer=-1;
-  g_exempt_ok=true;
-  // Observer only (no ledger, no cold-start lift): the allowlisted start still sends SPAWN first.
+  // Observer only (no ledger, no cold-start lift): exactly the same one-shot/unload lifecycle.
   put_policy("v=2\ngen=10\nobserver=1\nhints=0\nlaunch=0\nledger=0\npkg=com.example.app\n");
-  top=0; pre(); f=take(); assert(f.kind==ASB_OBSERVER_EVENT_SPAWN && f.flags==ASB_OBSERVER_FLAG_OBSERVE && asb_observer_frame_valid(f));
-  g_abi->postAppSpecialize(g_abi->impl,&args); f=take(); assert(f.kind==ASB_OBSERVER_EVENT_PROCESS_START);
+  top=0; dl=g_dlclose; pre(); assert(g_dlclose==dl+1);
+  f=take(); assert(f.kind==ASB_OBSERVER_EVENT_SPAWN && f.flags==ASB_OBSERVER_FLAG_OBSERVE && asb_observer_frame_valid(f));
+  g_abi->postAppSpecialize(g_abi->impl,&args); assert(recv(g_peer,&extra,1,0)==0);
   close(g_peer); g_peer=-1; top=1;
   put_policy("v=2\ngen=9\nobserver=1\nhints=0\nlaunch=1\nledger=0\npkg=com.example.app\n");
   // fix287: the root manager's unmount flag (KernelSU sets it for every app without root) is
   // counted in the one-shot record and never stops an allowlisted app from being observed.
-  g_flags=zygisk::PROCESS_ON_DENYLIST; int ex0=g_exempt; dl=g_dlclose; pre();
-  assert(g_exempt==ex0+1 && g_dlclose==dl);
+  g_flags=zygisk::PROCESS_ON_DENYLIST; dl=g_dlclose; pre();
+  assert(g_exempt==ex0 && g_dlclose==dl+1);
   f=take(); assert((f.flags&ASB_OBSERVER_FLAG_DENYLIST) && (f.flags&ASB_OBSERVER_FLAG_LAUNCH) && asb_observer_frame_valid(f));
-  g_abi->postAppSpecialize(g_abi->impl,&args); f=take(); assert(f.kind==ASB_OBSERVER_EVENT_PROCESS_START);
+  g_abi->postAppSpecialize(g_abi->impl,&args); assert(recv(g_peer,&extra,1,0)==0);
   close(g_peer); g_peer=-1; g_flags=0;
   // A protected name still starts with the plain, package-free launch record.
   g_nice="com.android.settings"; pre(); f=take(); assert(f.package[0]==0 && asb_observer_frame_valid(f)); close(g_peer); g_peer=-1;
@@ -790,8 +787,11 @@ CPP
     -DASB_GOVERNOR_CLIENT_DIR="\"$T/gov\"" "$T/hot.cpp" -o "$T/hot" 2>"$T/cc.log" || { cat "$T/cc.log" >&2; fail 'host harness build'; }
   out="$("$T/hot")" || fail "runtime: $out"
   printf '%s\n' "$out" | grep -qx 'hot path ok' || fail "$out"
+  if grep -q 'api_->exemptFd\|socket_ = sock\|package_ = base' "$ROOT/src/zygisk/asb_observer.cpp"; then
+    fail 'app-side retained socket state returned'
+  fi
   ns="$(printf '%s\n' "$out" | sed -n 's/^dormant_ns=//p')"
-  echo "PASS observer hot path: dormant ${ns} ns/fork on this host, uid/child prefilter, cold start with class lookup, unmount flag counted and never silencing the allowlist, ledger, allowlist fd, refused fd and observer-only start, companion exit by process fd or socket counted once, companion launch/class opcodes/old-governor fallback/screen-off launch veto without IPC or budget use/screen-off refresh skipped/throttle/spoof/ledger/no-policy"
+  echo "PASS observer hot path: dormant ${ns} ns/fork on this host, uid/child prefilter, cold start with class lookup, unmount flag counted and never silencing the allowlist, ledger, allowlisted/observer-only one-shot SPAWN with socket close and DLCLOSE and no exemptFd, legacy START compatibility, companion exit by process fd or legacy socket counted once, companion launch/class opcodes/old-governor fallback/screen-off launch veto without IPC or budget use/screen-off refresh skipped/throttle/spoof/ledger/no-policy"
 )
 
 t_zygisk_allowlist_runtime() (
@@ -1201,7 +1201,7 @@ const window=globalThis; const ASB_LANG='en'; const MD='/data/adb/modules/AutoSy
 function T(k,d){return d;} function deviceFill(k,d,v){let s=d;for(const x in v)s=s.replace('{'+x+'}',v[x]);return s;}
 function deviceFallbackLabel(k){return String(k).replace(/_/g,' ');}
 function deviceVal(d,s,k){return d&&d.sections&&d.sections[s]&&d.sections[s][k]!=null?String(d.sections[s][k]):'—';}
-function mk(tag){const e={tagName:tag,className:'',children:[],style:{},disabled:false,value:'',attrs:{},setAttribute(k,v){e.attrs[k]=String(v);},classList:{add(...cs){e.className=(e.className+' '+cs.join(' ')).trim();},remove(...cs){e.className=e.className.split(/\s+/).filter(c=>c&&!cs.includes(c)).join(' ');}},appendChild(c){e.children.push(c);c.parentNode=e;return c;},querySelector(sel){const c=sel.slice(1);return find(e,c);},replaceChild(n,o){const i=e.children.indexOf(o);if(i>=0){e.children[i]=n;n.parentNode=e;}return o;}};Object.defineProperty(e,'textContent',{get(){return e._text||''},set(v){e._text=String(v);e.children=[];}});return e;}
+function mk(tag){const e={tagName:tag,className:'',children:[],style:{},disabled:false,value:'',attrs:{},setAttribute(k,v){e.attrs[k]=String(v);},getAttribute(k){return e.attrs[k];},classList:{add(...cs){e.className=(e.className+' '+cs.join(' ')).trim();},remove(...cs){e.className=e.className.split(/\s+/).filter(c=>c&&!cs.includes(c)).join(' ');}},appendChild(c){e.children.push(c);c.parentNode=e;return c;},querySelector(sel){const c=sel.slice(1);return find(e,c);},replaceChild(n,o){const i=e.children.indexOf(o);if(i>=0){e.children[i]=n;n.parentNode=e;}return o;}};Object.defineProperty(e,'textContent',{get(){return e._text||''},set(v){e._text=String(v);e.children=[];}});return e;}
 const hosts=Array.from({length:5},()=>mk('div'));
 const document={createElement:mk,querySelectorAll(sel){if(sel==='.hdr-info')return hosts;if(sel==='.zygisk-header-link')return hosts.map(h=>find(h,'zygisk-header-link')).filter(Boolean);return [];}};
 function _el(){return null;} function openZygiskPage(){} function shQuote(s){return "'"+s+"'";} function dozePkgOk(s){return /^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)+$/.test(s||'');}
@@ -1223,7 +1223,7 @@ function cfgRenderRow(list,it){const cur=_cfgVals[it.key]===undefined?it.def:_cf
 function deviceSnapshotCard(title,value,detail,tone){const e=mk('div');e.textContent=title+' '+value+' '+detail+' '+tone;return e;} function deviceSizeKb(v){return v+' KiB';}
 let commands=[],refreshes=0,toastText=''; async function asbPaintYield(){paintYields++;} async function run(c){commands.push(c);return {errno:0,stdout:''};} function runOk(r){return r.errno===0;} function runText(r){return r.stdout||'';} function toast(t){toastText=t;} function asbDeviceInfoLoad(){refreshes++;}
 JS
-    sed -n '/^const TECH_ICON_PATHS = {/,/^};/p; /^function parseDeviceInfo(/,/^}/p; /^function devicePressureScale(/,/^}/p; /^function deviceZygiskLinkState(/,/^}/p; /^function deviceZygiskLinkVerdict(/,/^}/p; /^function deviceZygiskLink(/,/^}/p; /^let _zygiskHeaderSeq/p; /^let _zygiskHeaderAt/p; /^const ZYGISK_HEADER_TTL_MS/p; /^const _ASB_PART/p; /^function runBatchCmd(/,/^}/p; /^function runBatchSplit(/,/^}/p; /^async function runBatch(/,/^}/p; /^let _zygiskLoadSeq/p; /^const ZYGISK_MODES = \[/,/^\];/p; /^function zygiskModeOf(/,/^}/p; /^function zygiskModeLabel(/,/^}/p; /^function zygiskAutoCard(/,/^}/p; /^const ZYGISK_CONTROL_KEYS =/p; /^const ZYGISK_PANEL_ONLY_KEYS =/p; /^let _zygiskControlBusy/p; /^function zygiskControlsCard(/,/^}/p; /^async function zygiskControlSet(/,/^}/p; /^function zygiskOpenSettings(/,/^}/p; /^function zygiskOffCard(/,/^}/p; /^async function zygiskAutoSet(/,/^}/p; /^async function zygiskGuardPackage(/,/^}/p; /^function zygiskModeCard(/,/^}/p; /^async function zygiskModeSet(/,/^}/p; /^function zygiskHeaderPaint(/,/^}/p; /^function zygiskHeaderWordmark(/,/^}/p; /^function zygiskHeaderInit(/,/^}/p; /^function zygiskHeaderPublish(/,/^}/p; /^async function zygiskHeaderRefresh(/,/^}/p; /^function cfgRenderZygiskCard(/,/^}/p; /^function deviceZygiskOverview(/,/^}/p; /^function deviceZygiskEditor(/,/^}/p' "$ROOT/webroot/index.html"
+    sed -n '/^const TECH_ICON_PATHS = {/,/^};/p; /^function parseDeviceInfo(/,/^}/p; /^function devicePressureScale(/,/^}/p; /^function deviceZygiskLinkState(/,/^}/p; /^function deviceZygiskLinkVerdict(/,/^}/p; /^function deviceZygiskLink(/,/^}/p; /^let _zygiskHeaderSeq/p; /^let _zygiskHeaderAt/p; /^const ZYGISK_HEADER_TTL_MS/p; /^const _ASB_PART/p; /^function runBatchCmd(/,/^}/p; /^function runBatchSplit(/,/^}/p; /^async function runBatch(/,/^}/p; /^let _zygiskLoadSeq/p; /^const ZYGISK_MODES = \[/,/^\];/p; /^function zygiskModeOf(/,/^}/p; /^function zygiskModeLabel(/,/^}/p; /^function zygiskAutoCard(/,/^}/p; /^const ZYGISK_CONTROL_KEYS =/p; /^const ZYGISK_FEATURE_KEYS =/p; /^let _zygiskControlBusy/p; /^let _zygiskControlsExpanded/p; /^function zygiskControlsCard(/,/^}/p; /^async function zygiskControlSet(/,/^}/p; /^function zygiskOpenSettings(/,/^}/p; /^function zygiskOffCard(/,/^}/p; /^async function zygiskAutoSet(/,/^}/p; /^async function zygiskGuardPackage(/,/^}/p; /^function zygiskModeCard(/,/^}/p; /^async function zygiskModeSet(/,/^}/p; /^function zygiskHeaderPaint(/,/^}/p; /^function zygiskHeaderWordmark(/,/^}/p; /^function zygiskHeaderInit(/,/^}/p; /^function zygiskHeaderPublish(/,/^}/p; /^async function zygiskHeaderRefresh(/,/^}/p; /^function cfgRenderZygiskCard(/,/^}/p; /^function deviceZygiskOverview(/,/^}/p; /^function deviceZygiskEditor(/,/^}/p' "$ROOT/webroot/index.html"
     cat <<'JS'
 let bad=0;const chk=(c,m)=>{if(!c){console.log('FAIL '+m);bad++;}};
 function find(n,c){if(n.className&&n.className.split(/\s+/).includes(c))return n;for(const x of n.children||[]){const r=find(x,c);if(r)return r;}return null;}
@@ -1262,11 +1262,11 @@ chk(hosts.every(h=>find(h,'zygisk-header-link').attrs['data-state']==='unknown')
 zygiskHeaderPublish(linkData({state_freshness:'current',loaded_processes:'2',events_total:'2'}));
 chk(hosts.every(h=>find(h,'zygisk-header-link').attrs['data-state']==='connected'),'validated live process did not paint every header');
 zygiskHeaderPublish(linkData({}));chk(hosts.every(h=>find(h,'zygisk-header-link').attrs['data-state']==='idle'),'installed ABI files falsely connected a page header');
-const unifiedList=mk('div');cfgRenderZygiskCard(unifiedList,[{key:'zygisk_enabled',type:'bool',def:'0'}]);
-const unified=find(unifiedList,'cfg-zygisk-card');chk(!!unified&&unified.children.length===3,'Settings card must contain verdict, one master row and ZYGISK navigation');
+const unifiedList=mk('div');cfgRenderZygiskCard(unifiedList,CFG_ITEMS);
+const unified=find(unifiedList,'cfg-zygisk-card');chk(!!unified&&unified.children.length===6,'Settings card must contain verdict, four control rows and ZYGISK navigation');
 chk(unified&&!find(unified,'cfg-zygisk-preset'),'Settings still exposes a second preset panel');
-chk(unified&&unified.children.filter(r=>find(r,'cfg-switch')).length===1,'Settings does not have exactly one Zygisk switch');
-chk(unified&&unified.children[1].attrs['data-key']==='zygisk_enabled','the only Settings switch is not the master');
+chk(unified&&unified.children.filter(r=>find(r,'cfg-switch')).length===4,'Settings does not expose all four Zygisk switches');
+chk(unified&&unified.children[1].attrs['data-key']==='zygisk_enabled','the first Settings switch is not the master');
 chk(unified&&unified.children[1].querySelector('.cfg-switch').attrs['aria-checked']==='true','Settings master is not synchronized from the same evidence as its indicator');
 chk(unified&&find(unified,'cfg-zygisk-open')&&find(unified,'cfg-zygisk-open').onclick===openZygiskPage,'Settings lost its ZYGISK navigation');
 (async()=>{const ed=deviceZygiskEditor(d),input=find(ed,'dev-zygisk-input'),buttons=ed.children.flatMap(x=>x.children||[]).filter(x=>x.tagName==='button');
@@ -1313,7 +1313,9 @@ chk(seg.children.every(b=>!b.className.split(/\s+/).includes('on'))&&find(card,'
 _zyGuard={enabled:false,level:'off'};_cfgVals={zygisk_enabled:'0',zygisk_hints:'0',zygisk_launch:'0',zygisk_ledger:'0'};
 const controls=zygiskControlsCard(md({}));
 chk(controls.attrs['data-zygisk-icon']==='switches','Controls lost its dedicated sliders glyph');
-const controlRows=controls.children.filter(r=>r.attrs&&r.attrs['data-key']);
+const controlPanel=find(controls,'zy-controls-panel');
+chk(controlPanel&&controlPanel.hidden===true&&find(controls,'zy-controls-reveal').attrs['aria-expanded']==='false','ZYGISK controls are not collapsed by default');
+const controlRows=controlPanel.children.filter(r=>r.attrs&&r.attrs['data-key']);
 chk(controlRows.length===4&&controlRows.map(r=>r.attrs['data-key']).join(',')===ZYGISK_CONTROL_KEYS.join(','),'ZYGISK panel does not own all four controls in order');
 chk(controlRows[0].querySelector('.cfg-switch').attrs['aria-checked']==='true','master is not synchronized from current evidence');
 chk(controlRows[1].querySelector('.cfg-switch').attrs['aria-checked']==='false'&&controlRows[2].querySelector('.cfg-switch').attrs['aria-checked']==='true'&&controlRows[3].querySelector('.cfg-switch').attrs['aria-checked']==='true','feature switches are not synchronized from current evidence');
@@ -1420,7 +1422,7 @@ assert "T('t_cfg_next'" in writer.split("if (/^zygisk_/.test(key))", 1)[1].split
 lazy = source.split('function zygiskHeaderRefreshLazy() {', 1)[1].split('\n}', 1)[0]
 assert lazy.count('zygiskHeaderRefresh();') == 1, 'lazy header refresh must have exactly one delayed refresh call'
 PY
-  echo 'PASS observer UI: three unified presets, Custom conflicts, one Settings master, complete ZYGISK panel, preserved Off/On state, bounded evidence, 13 locales and safe editor'
+  echo 'PASS observer UI: three unified presets, Custom conflicts, four Settings controls, default-collapsed complete ZYGISK panel, preserved Off/On state, bounded evidence, 13 locales and safe editor'
 )
 
 t_zygisk_capture_digest_runtime() (
