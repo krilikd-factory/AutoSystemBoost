@@ -2422,11 +2422,9 @@ apply_kernel() {
   case "$ASB_PROFILE" in
     battery)
       [ -e /proc/sys/kernel/sched_energy_aware ] && sysctlw kernel.sched_energy_aware 1 || true
-      [ -e /proc/sys/kernel/hrtimer_migration ] && writef_retry /proc/sys/kernel/hrtimer_migration 0 1 0 || true
       [ -e /proc/sys/walt/sched_conservative_pl ] && writef_retry /proc/sys/walt/sched_conservative_pl 1 1 0 || true
       [ -e /proc/sys/walt/sched_suppress_region2_cpus ] && writef_retry /proc/sys/walt/sched_suppress_region2_cpus 1 1 0 || true
       writef /sys/module/lpm_levels/parameters/sleep_disabled 0 || true
-      [ -e /sys/module/lpm_levels/parameters/lpm_prediction ] &&         writef /sys/module/lpm_levels/parameters/lpm_prediction 1 || true
       [ -e /sys/module/printk/parameters/console_suspend ] && writef /sys/module/printk/parameters/console_suspend Y || true
       [ -e /proc/sys/kernel/printk_devkmsg ] && writef /proc/sys/kernel/printk_devkmsg ratelimit || true
       [ -e /proc/sys/vm/laptop_mode ] && writef /proc/sys/vm/laptop_mode 5 || true
@@ -2444,6 +2442,9 @@ apply_kernel() {
   if [ -f "$MODDIR/runtime/asb_kernel_controls.sh" ]; then
     sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_timer_migration >/dev/null 2>&1 || true
     sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_sched_nr_migrate >/dev/null 2>&1 || true
+    sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_hrtimer_migration "" "$ASB_PROFILE" >/dev/null 2>&1 || true
+    sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_lpm_prediction "" "$ASB_PROFILE" >/dev/null 2>&1 || true
+    sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_usb_autosuspend >/dev/null 2>&1 || true
   fi
   tune_io_queues
 }
@@ -4299,6 +4300,9 @@ fi
       sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_sched_stats >/dev/null 2>&1 || true
       sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_timer_migration >/dev/null 2>&1 || true
       sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_sched_nr_migrate >/dev/null 2>&1 || true
+      sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_hrtimer_migration "" "$ASB_PROFILE" >/dev/null 2>&1 || true
+      sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_lpm_prediction "" "$ASB_PROFILE" >/dev/null 2>&1 || true
+      sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_usb_autosuspend >/dev/null 2>&1 || true
     fi
   fi
   if asb_feature_enabled CPU; then
@@ -4324,6 +4328,9 @@ fi
       sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_sched_stats >/dev/null 2>&1 || true
       sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_timer_migration >/dev/null 2>&1 || true
       sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_sched_nr_migrate >/dev/null 2>&1 || true
+      sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_hrtimer_migration "" "$ASB_PROFILE" >/dev/null 2>&1 || true
+      sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_lpm_prediction "" "$ASB_PROFILE" >/dev/null 2>&1 || true
+      sh "$MODDIR/runtime/asb_kernel_controls.sh" apply kernel_usb_autosuspend >/dev/null 2>&1 || true
     fi
   fi
   asb_log "full reinforce 5m profile=$ASB_PROFILE"
