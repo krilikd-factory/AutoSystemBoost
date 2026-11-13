@@ -10,6 +10,7 @@ DATA="${ASB_DEVINFO_DATA:-/data/adb}"
 PROP_FILE="${ASB_DEVINFO_PROP_FILE:-}"
 SUSFS_BIN="${ASB_DEVINFO_SUSFS:-/data/adb/ksu/bin/susfs}"
 KSUD_BIN="${ASB_DEVINFO_KSUD:-}"
+TC_BIN="${ASB_DEVINFO_TC:-}"
 STATE_FILE="${ASB_DEVINFO_STATE:-/dev/.asb/state}"
 DEV="${ASB_DEVINFO_DEV:-/dev}"
 
@@ -162,6 +163,7 @@ elif [ -r "$PROC/config.gz" ]; then
 else
   _emit kernel_config available unavailable
 fi
+_emit kernel_config evidence_scope 'exposed config only; may be a compatibility/spoofed payload and is not proof of the running custom final config'
 
 # Kernel provenance is evidence, not a verdict from the word "custom" in a release
 # string. A locked green boot chain is only stock-like; a patch/config marker is only
@@ -301,9 +303,9 @@ _emit kernel_fuse_bpf evidence_note 'ordinary FUSE or eBPF alone does not prove 
 _feature_state() {
   _fs_val="$(_cfg_val "$1")"
   case "$_fs_val" in
-    y) printf 'built-in\n' ;;
-    m) if [ -d "$2" ]; then printf 'module loaded\n'; else printf 'module not loaded\n'; fi ;;
-    'not set') if [ -d "$2" ]; then printf 'driver present\n'; else printf 'disabled\n'; fi ;;
+    y) if [ -d "$2" ]; then printf 'driver present; exposed config says built-in\n'; else printf 'built-in config; runtime not independently confirmed\n'; fi ;;
+    m) if [ -d "$2" ]; then printf 'module loaded\n'; else printf 'module configured; not observed loaded\n'; fi ;;
+    'not set') if [ -d "$2" ]; then printf 'driver present; exposed config disagrees\n'; else printf 'not observed; exposed config says not set\n'; fi ;;
     *) if [ -d "$2" ]; then printf 'driver present\n'; else printf 'unknown\n'; fi ;;
   esac
 }
@@ -352,10 +354,10 @@ else
 fi
 
 _unicode_state="$(_feature_state CONFIG_UNICODE_BYPASS_FIX "$SYS/module/unicode_bypass_fix")"
-case "$_unicode_state" in built-in|module*|driver*) ;; *)
+case "$_unicode_state" in built-in*|module*|driver*) ;; *)
   _unicode_state="$(_feature_state CONFIG_UNICODE_BYPASS "$SYS/module/unicode_bypass")" ;; esac
 case "$_unicode_state" in
-  built-in|module*|driver*) _emit kernel_features unicode_bypass_fix "$_unicode_state" ;;
+  built-in*|module*|driver*) _emit kernel_features unicode_bypass_fix "$_unicode_state" ;;
   *)
     _emit kernel_features unicode_bypass_fix 'not runtime-discoverable'
     _emit kernel_features unicode_bypass_evidence 'no standard read-only indicator; CONFIG_UNICODE alone is not proof' ;;
@@ -364,16 +366,16 @@ esac
 _tmp_x="$(_cfg_val CONFIG_TMPFS_XATTR)"
 _tmp_a="$(_cfg_val CONFIG_TMPFS_POSIX_ACL)"
 if [ -z "$_cfg" ]; then _tmp_state='unknown'
-elif [ "$_tmp_x" = 'y' ] && [ "$_tmp_a" = 'y' ]; then _tmp_state='supported'
-else _tmp_state="partial; XATTR=${_tmp_x:-unknown}; POSIX_ACL=${_tmp_a:-unknown}"; fi
+elif [ "$_tmp_x" = 'y' ] && [ "$_tmp_a" = 'y' ]; then _tmp_state='options present in exposed config; runtime not independently verified'
+else _tmp_state="exposed config partial; XATTR=${_tmp_x:-unknown}; POSIX_ACL=${_tmp_a:-unknown}"; fi
 _emit kernel_features tmpfs_xattr_posix_acl "$_tmp_state"
 
 _lto='unknown'
 for _spec in 'LTO_CLANG_THIN:ThinLTO (Clang)' 'LTO_CLANG_FULL:Full LTO (Clang)' 'LTO_CLANG:LTO (Clang)' 'LTO:LTO'; do
   [ "$(_cfg_val "CONFIG_${_spec%%:*}")" = 'y' ] || continue
-  _lto="${_spec#*:}"; break
+  _lto="${_spec#*:}; exposed config only"; break
 done
-[ "$_lto" = 'unknown' ] && [ "$(_cfg_val CONFIG_LTO_NONE)" = 'y' ] && _lto='disabled'
+[ "$_lto" = 'unknown' ] && [ "$(_cfg_val CONFIG_LTO_NONE)" = 'y' ] && _lto='exposed config selects LTO_NONE; running build not independently confirmed'
 _emit kernel_features lto "$_lto"
 
 _tcp_avail=" $(_read "$PROC/sys/net/ipv4/tcp_available_congestion_control") "
@@ -381,10 +383,12 @@ _bbr1='unknown'; _bbr2='unknown'
 case "$_tcp_avail" in *' bbr '*) _bbr1='available' ;; esac
 case "$_tcp_avail" in *' bbr2 '*|*' bbrv2 '*) _bbr2='available' ;; esac
 if [ "$_bbr1" = 'unknown' ]; then
-  case "$(_cfg_val CONFIG_TCP_CONG_BBR)" in y|m) _bbr1='configured' ;; 'not set') _bbr1='disabled' ;; esac
+  if [ -n "$(printf '%s' "$_tcp_avail" | tr -d ' ')" ]; then _bbr1='not exposed in runtime algorithm list'
+  else case "$(_cfg_val CONFIG_TCP_CONG_BBR)" in y|m) _bbr1='configured' ;; 'not set') _bbr1='not observed; exposed config says not set' ;; esac; fi
 fi
 if [ "$_bbr2" = 'unknown' ]; then
-  case "$(_cfg_val CONFIG_TCP_CONG_BBR2)$(_cfg_val CONFIG_TCP_CONG_BBRV2)" in *y*|*m*) _bbr2='configured' ;; *'not set'*) _bbr2='disabled' ;; esac
+  if [ -n "$(printf '%s' "$_tcp_avail" | tr -d ' ')" ]; then _bbr2='not exposed in runtime algorithm list'
+  else case "$(_cfg_val CONFIG_TCP_CONG_BBR2)$(_cfg_val CONFIG_TCP_CONG_BBRV2)" in *y*|*m*) _bbr2='configured' ;; *'not set'*) _bbr2='not observed; exposed config says not set' ;; esac; fi
 fi
 _emit kernel_features bbr_v1 "$_bbr1"
 _emit kernel_features bbr_v2 "$_bbr2"
@@ -392,28 +396,41 @@ _emit kernel_features bbr_v2 "$_bbr2"
 _bbr3='unknown'
 case "$_tcp_avail" in *' bbr3 '*) _bbr3='available' ;; esac
 if [ "$_bbr3" = 'unknown' ]; then
-  case "$(_cfg_val CONFIG_TCP_CONG_BBR3)" in y|m) _bbr3='configured' ;; 'not set') _bbr3='disabled' ;; esac
+  if [ -n "$(printf '%s' "$_tcp_avail" | tr -d ' ')" ]; then _bbr3='not exposed in runtime algorithm list'
+  else case "$(_cfg_val CONFIG_TCP_CONG_BBR3)" in y|m) _bbr3='configured' ;; 'not set') _bbr3='not observed; exposed config says not set' ;; esac; fi
 fi
 _emit kernel_features bbr_v3 "$_bbr3"
 
 _cfg_state() {
-  case "$(_cfg_val "$1")" in
-    y) printf 'built-in\n' ;;
-    m) if [ -d "$2" ]; then printf 'module loaded\n'; else printf 'module not loaded\n'; fi ;;
-    'not set') printf 'disabled\n' ;;
+  _cs_val="$(_cfg_val "$1")"
+  # A running driver is positive evidence even when a compatibility/spoofed config
+  # disagrees. Conversely, "not set" in that file is not proof about the running kernel.
+  if [ -n "$2" ] && [ -d "$2" ]; then
+    case "$_cs_val" in
+      m) printf 'module loaded\n' ;;
+      y) printf 'driver present; exposed config says built-in\n' ;;
+      'not set') printf 'driver present; exposed config disagrees\n' ;;
+      *) printf 'driver present\n' ;;
+    esac
+    return 0
+  fi
+  case "$_cs_val" in
+    y) printf 'built-in config; runtime not independently confirmed\n' ;;
+    m) printf 'module configured; not observed loaded\n' ;;
+    'not set') printf 'not observed; exposed config says not set\n' ;;
     *)
-      if [ -n "$2" ] && [ -d "$2" ]; then printf 'driver present\n'
-      elif [ "$_cfg_lines" -gt 0 ]; then printf 'absent\n'
+      if [ "$_cfg_lines" -gt 0 ]; then printf 'not exposed in config; runtime not confirmed\n'
       else printf 'unknown\n'; fi ;;
   esac
 }
 _vh="$(_cfg_state CONFIG_VPNHIDE "$SYS/module/vpnhide")"
-if [ "$_vh" = 'built-in' ]; then
-  case "$(_cfg_val CONFIG_VPNHIDE_FS_HIDING)" in
-    y) _vh='built-in; network and filesystem' ;;
-    *) _vh='built-in; network only' ;;
-  esac
-fi
+case "$_vh" in
+  built-in\ config*)
+    case "$(_cfg_val CONFIG_VPNHIDE_FS_HIDING)" in
+      y) _vh='built-in config; network and filesystem options; runtime not independently confirmed' ;;
+      *) _vh='built-in config; network option only; runtime not independently confirmed' ;;
+    esac ;;
+esac
 _emit kernel_features vpn_hide "$_vh"
 
 _ua=''; _ua_miss=''
@@ -424,14 +441,75 @@ for _spec in USB_CONFIGFS_MASS_STORAGE:mass-storage USB_CONFIGFS_F_HID:hid USB_C
   esac
 done
 if [ "$_cfg_lines" -eq 0 ]; then _emit kernel_features usb_arsenal unknown
-elif [ -z "$_ua_miss" ]; then _emit kernel_features usb_arsenal "gadget functions: $_ua"
-elif [ -n "$_ua" ]; then _emit kernel_features usb_arsenal "partial: $_ua; missing: $_ua_miss"
-else _emit kernel_features usb_arsenal absent; fi
+elif [ -z "$_ua_miss" ]; then _emit kernel_features usb_arsenal "gadget options in exposed config: $_ua; runtime not verified"
+elif [ -n "$_ua" ]; then _emit kernel_features usb_arsenal "exposed config partial: $_ua; not set there: $_ua_miss"
+else _emit kernel_features usb_arsenal 'not observed; exposed config lacks the requested gadget options'; fi
 
-_fs_list=" $(tr '\t\n' '  ' < "$PROC/filesystems" 2>/dev/null) "
+_fs_list=" $(_read "$PROC/filesystems" | tr '\t\n' '  ') "
 _wg="$(_cfg_state CONFIG_WIREGUARD "$SYS/module/wireguard")"
 _emit kernel_features wireguard "$_wg"
-_emit kernel_features net_sch_cake "$(_cfg_state CONFIG_NET_SCH_CAKE "$SYS/module/sch_cake")"
+
+# CAKE needs runtime-aware evidence: this project's stock /proc/config.gz compatibility
+# payload can disagree with the custom kernel actually running. Only read existing state;
+# never load sch_cake, create a qdisc or change an interface for this snapshot.
+_cake_cfg="$(_cfg_val CONFIG_NET_SCH_CAKE)"
+_cake_mod='not observed'
+if [ -d "$SYS/module/sch_cake" ]; then
+  _cake_mod='sysfs module directory present'
+elif [ -r "$PROC/modules" ]; then
+  if awk '$1 == "sch_cake" { found=1 } END { exit !found }' "$PROC/modules" 2>/dev/null; then
+    _cake_mod='listed in /proc/modules'
+  else
+    _cake_mod='not listed in readable /proc/modules'
+  fi
+else
+  _cake_mod='not runtime-discoverable'
+fi
+_cake_sym='not readable'
+if [ -r "$PROC/kallsyms" ]; then
+  _cake_ks="$(awk 'NF >= 3 { rows++ } NF >= 3 && ($3 == "cake_qdisc_ops" || $3 == "cake_init" || $3 == "cake_enqueue" || $3 == "cake_dequeue") { found=1; exit } END { printf "found=%d;rows=%d", found+0, rows+0 }' "$PROC/kallsyms" 2>/dev/null)"
+  case "$_cake_ks" in
+    found=1\;*) _cake_sym='CAKE symbol present in readable /proc/kallsyms' ;;
+    *';rows=0') _cake_sym='readable; no usable symbol rows' ;;
+    found=0\;*) _cake_sym='readable; no CAKE symbol observed' ;;
+    *) _cake_sym='unreadable or malformed' ;;
+  esac
+fi
+_cake_tc_bin="$TC_BIN"
+if [ -z "$_cake_tc_bin" ] && command -v tc >/dev/null 2>&1; then _cake_tc_bin="$(command -v tc)"; fi
+_cake_qdisc='tc unavailable'
+if [ -n "$_cake_tc_bin" ] && [ -x "$_cake_tc_bin" ]; then
+  _cake_tc_out="$("$_cake_tc_bin" qdisc show 2>/dev/null)"
+  if [ "$?" -eq 0 ]; then
+    if printf '%s\n' "$_cake_tc_out" | grep -Eq '(^|[[:space:]])qdisc[[:space:]]+cake([[:space:]]|$)'; then
+      _cake_qdisc='active CAKE qdisc observed'
+    else
+      _cake_qdisc='tc read succeeded; no CAKE qdisc observed'
+    fi
+  else
+    _cake_qdisc='tc qdisc show failed'
+  fi
+fi
+if [ "$_cake_qdisc" = 'active CAKE qdisc observed' ]; then
+  _cake_state='available; active qdisc observed'
+elif [ "$_cake_mod" = 'sysfs module directory present' ] || [ "$_cake_mod" = 'listed in /proc/modules' ]; then
+  _cake_state='available; module loaded'
+elif [ "$_cake_sym" = 'CAKE symbol present in readable /proc/kallsyms' ]; then
+  _cake_state='available; kernel symbols present'
+else
+  case "$_cake_cfg" in
+    y) _cake_state='built-in config; runtime not independently confirmed' ;;
+    m) _cake_state='module configured; runtime not independently confirmed' ;;
+    'not set') _cake_state='not runtime-confirmed; exposed config says not set' ;;
+    *) _cake_state='unknown; not runtime-discoverable' ;;
+  esac
+fi
+_emit kernel_features net_sch_cake "$_cake_state"
+_emit kernel_features net_sch_cake_config "${_cake_cfg:-not exposed}"
+_emit kernel_features net_sch_cake_module "$_cake_mod"
+_emit kernel_features net_sch_cake_symbols "$_cake_sym"
+_emit kernel_features net_sch_cake_qdisc "$_cake_qdisc"
+_emit kernel_features net_sch_cake_evidence 'read-only existing state; positive runtime evidence overrides config; no qdisc/module change'
 _ov="$(_cfg_state CONFIG_OVERLAY_FS "$SYS/module/overlay")"
 case "$_fs_list" in *' overlay '*) [ "$_ov" = 'built-in' ] || _ov='filesystem registered' ;; esac
 _emit kernel_features overlayfs "$_ov"
@@ -440,9 +518,13 @@ case "$_fs_list" in *' cifs '*) [ "$_cifs" = 'built-in' ] || _cifs='filesystem r
 _emit kernel_features cifs "$_cifs"
 _emit kernel_features ip_set "$(_cfg_state CONFIG_IP_SET "$SYS/module/ip_set")"
 _rk="$(_cfg_state CONFIG_REKERNEL)"
-if [ "$_rk" = built-in ]; then
-  case "$(_cfg_val CONFIG_REKERNEL_NETWORK)" in y) _rk='built-in; binder/signal/network; generic netlink' ;; *) _rk='built-in; binder/signal; generic netlink' ;; esac
-fi
+case "$_rk" in
+  built-in\ config*)
+    case "$(_cfg_val CONFIG_REKERNEL_NETWORK)" in
+      y) _rk='built-in config; binder/signal/network and generic netlink options; runtime not independently confirmed' ;;
+      *) _rk='built-in config; binder/signal and generic netlink options; runtime not independently confirmed' ;;
+    esac ;;
+esac
 _emit kernel_features rekernel "$_rk"
 _emit kernel_features wakeup_blocker "$(_cfg_state CONFIG_ASB_WAKEUP_BLOCKER "$SYS/kernel/asb_wakeup")"
 if [ -r "$SYS/kernel/asb_wakeup/blocklist" ]; then
@@ -454,13 +536,16 @@ if [ -r "$SYS/kernel/asb_wakeup/blocked_events" ]; then
 fi
 _emit kernel_features oplus_sdp_900ma 'not exposed; no confirmed OPlus SDP current-control ABI'
 _ss_node="$PROC/sys/kernel/sched_schedstats"
+_ss_cfg="$(_cfg_val CONFIG_SCHEDSTATS)"
 if [ -e "$_ss_node" ]; then
   if [ -r "$_ss_node" ] && [ -w "$_ss_node" ]; then _ss="writable; live=$(_read "$_ss_node")"
   elif [ -r "$_ss_node" ]; then _ss="read-only; live=$(_read "$_ss_node")"
   else _ss=not_readable; fi
-elif [ "$(_cfg_val CONFIG_SCHEDSTATS)" = 'not set' ]; then _ss=disabled
+elif [ "$_ss_cfg" = 'not set' ]; then _ss='not observed; exposed config says not set'
 else _ss=not_exposed; fi
 _emit kernel_features sched_stats "$_ss"
+_emit kernel_features sched_stats_config "${_ss_cfg:-not exposed}"
+_emit kernel_features sched_stats_node "$_ss_node"
 # Settings → Kernel needs only the small read-only capability set above. Do not run the
 # full device collector (package, display and thermal probes) just to paint that page.
 [ "${1:-}" = '--kernel' ] && exit 0
@@ -469,7 +554,7 @@ _bbg='unknown'; _bbg_all_not_set=1
 for _k in BBG SECURITY_BASEBAND_GUARD BASEBAND_GUARD; do
   _bv="$(_cfg_val "CONFIG_$_k")"
   case "$_bv" in
-    y) _bbg='built-in'; break ;;
+    y) _bbg='built-in config; runtime not independently confirmed'; break ;;
     m) _bbg="$(_feature_state "CONFIG_$_k" "$SYS/module/baseband_guard")"; break ;;
     'not set') ;;
     *) _bbg_all_not_set=0 ;;
@@ -479,10 +564,10 @@ done
 # accepted BBG config name. Use it only when no explicit config evidence won above.
 if [ "$_bbg" = 'unknown' ]; then
   if [ -d "$SYS/module/baseband_guard" ]; then _bbg='driver present'
-  elif [ -n "$_cfg" ] && [ "$_bbg_all_not_set" = 1 ]; then _bbg='disabled'; fi
+  elif [ -n "$_cfg" ] && [ "$_bbg_all_not_set" = 1 ]; then _bbg='not observed; exposed config says not set'; fi
 fi
 _lsm="$(_cfg_val CONFIG_LSM)"
-case "$_lsm" in *baseband_guard*) _bbg="active in LSM; $_bbg" ;; esac
+case "$_lsm" in *baseband_guard*) _bbg="LSM list in exposed config includes baseband_guard; $_bbg" ;; esac
 _emit kernel_features bbg_baseband_guard "$_bbg"
 
 if [ "${_susfs_state:-unavailable}" = 'available' ]; then
