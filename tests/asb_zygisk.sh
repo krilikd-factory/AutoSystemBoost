@@ -1402,7 +1402,7 @@ for p in files:
     for key in unified_keys:
         assert d[key].strip(), (p, key)
 source = (pathlib.Path(sys.argv[1]).parent / 'index.html').read_text(encoding='utf-8')
-page = source.split('function zygiskPageRender(d) {', 1)[1].split('/* fix280:', 1)[0]
+page = source.split('function zygiskPageRender(d, state) {', 1)[1].split('/* fix280:', 1)[0]
 assert page.index("deviceVal(d, 'zygisk_observer', 'enabled') === '0'") < page.index('const mode = zygiskModeCard(d);')
 assert page.index('body.appendChild(zygiskOffCard());') < page.index('const mode = zygiskModeCard(d);')
 assert page.index('const mode = zygiskModeCard(d);') < page.index('const automatic = zygiskAutoCard(d);') < page.index('const controls = zygiskControlsCard(d);')

@@ -3876,7 +3876,7 @@ H="$ROOT/webroot/index.html"
 python3 - "$H" <<'PY' || { echo "FAIL webui zygisk compact" >&2; exit 1; }
 import sys
 s = open(sys.argv[1], encoding='utf-8').read()
-r = s[s.index('function zygiskPageRender(d) {'):s.index('const _zyFoldOpen = new Set();')]
+r = s[s.index('function zygiskPageRender(d, state) {'):s.index('const _zyFoldOpen = new Set();')]
 assert r.count('zyCompact(body);') == 2
 c = s[s.index('function zyCompact(body) {'):]
 c = c[:c.index('\n}\n') + 3]
@@ -4707,8 +4707,10 @@ t_webui_fill_pages_runtime() (
 #
 # Owner's request: Home and Settings looked empty next to Monitor; bigger, richer profile cards
 # and category tiles that look right on screens of different DPI. The free height is measured
-# and shared out within limits, so a short screen scrolls and a tall one stops before the
-# cards look stretched. fix203: the compaction tiers decide from the page's NATURAL height -
+# and shared out within limits. dev38 makes the tile content itself compact enough for the
+# complete 3 x 3 hub to fit the owner's phone without scrolling; only extreme short viewports
+# keep the scroll fallback, and tall screens stop before the cards look stretched.
+# fix203: the compaction tiers decide from the page's NATURAL height -
 # the fitted card heights are zeroed for the measurement, the floating bar's reserved padding
 # is not counted as overflow, a fixed overlay is unclamped for the measurement, and an
 # overflow within a fifth of the screen just scrolls (fix201) instead of squeezing the
@@ -4776,7 +4778,14 @@ for t in ('html.asb-fit-c1', 'html.asb-fit-c2'):
     assert t + ' .live-cell {' in s and t + ' .tg-link-wrap {' in s, t + ' does not compact the Monitor cells and the support rail'
     assert t + ' .cfg-tile {' in s, t + ' does not compact the Settings tiles'
 assert "classList.toggle('asb-fit-c1'" in s and "classList.toggle('asb-fit-c2'" in s, "the fit never raises a compaction tier"
-assert '[68, 58, 48][tier]' in s and '[112, 96, 84][tier]' in s, "the card/tile floors do not step down with the tier"
+assert '[68, 58, 48][tier]' in s and '[100, 88, 76][tier]' in s, "the card/tile floors do not step down with the tier"
+assert 'Math.min(124, Math.floor(h))' in s, "the compact 3 x 3 hub lost its tile-height ceiling"
+for token in ('justify-content:center;\n  gap:0;\n  padding:5px 7px;',
+              'width:34px;\n  height:34px;\n  margin:0 0 2px;',
+              'font-size:11.5px;', 'min-height:2.2em;',
+              'flex-direction:row;\n  align-items:center;\n  justify-content:center;',
+              'margin:4px 0 0;', 'max-width:56px; height:3px;'):
+    assert token in s, 'the compact tile content geometry is incomplete: ' + token
 assert 'asbFitPages._tier' in s, "the tier is not remembered between passes"
 # fix203: the tier decision reads the page as it asks to be - the fitted heights are zeroed
 # for the measurement, the floating bar's reserved padding is out of the reading, a fixed
@@ -4880,15 +4889,15 @@ chk(tierOf() === 0 && props['--pbtn-h'] === '68px', '82 px past the fit line jus
 chk(props['--cfg-tile-h'] === undefined, 'Settings closed: tiles untouched');
 cfgOpen = true; barTop = 1200; delete props['--pbtn-h']; asbFitPages();
 chk(props['--pbtn-h'] === undefined, 'Home cards are not refitted while Settings covers them');
-chk(props['--cfg-tile-h'] === '133px', 'three symmetric rows share the height freed by the restart menu: ' + props['--cfg-tile-h']);
+chk(props['--cfg-tile-h'] === '124px', 'three compact symmetric rows share height up to the ceiling: ' + props['--cfg-tile-h']);
 _cfgGroup = 'audio'; props['--cfg-tile-h'] = 'x'; asbFitPages();
 chk(props['--cfg-tile-h'] === 'x', 'an open category leaves the hub alone');
 _cfgGroup = null; barTop = 2600; asbFitPages();
-chk(props['--cfg-tile-h'] === '184px', 'upper limit on Settings: ' + props['--cfg-tile-h']);
+chk(props['--cfg-tile-h'] === '124px', 'compact upper limit on Settings: ' + props['--cfg-tile-h']);
 barTop = 900; cfgBase = 975; asbFitPages();
-chk(tierOf() === 0 && props['--cfg-tile-h'] === '112px', 'a Settings page at the allowance keeps the tier-0 floor: ' + props['--cfg-tile-h'] + ' tier ' + tierOf());
+chk(tierOf() === 0 && props['--cfg-tile-h'] === '100px', 'a Settings page at the allowance keeps the compact tier-0 floor: ' + props['--cfg-tile-h'] + ' tier ' + tierOf());
 window._asbUiScale = 0.82; barTop = 1120; asbFitPages();
-chk(props['--cfg-tile-h'] === '133px', 'a scaled UI shares out unscaled pixels across three rows: ' + props['--cfg-tile-h']);
+chk(props['--cfg-tile-h'] === '124px', 'a scaled UI shares out unscaled pixels up to the compact ceiling: ' + props['--cfg-tile-h']);
 /* fix203: a page genuinely past its viewport compacts in tiers; a page only a little past
    the fit line keeps its look and scrolls (the allowance is a fifth of the screen). */
 resetFit(); cfgOpen = false; live = false; window._asbUiScale = 1;
@@ -4912,7 +4921,7 @@ asbFitPages();
 chk(tierOf() === 1 && fitCls.has('asb-fit-c1') && !fitCls.has('asb-fit-c2'), 'past the allowance the page compacts, and stays compact: tier ' + tierOf());
 resetFit(); cfgOpen = true; clientH = 700; window.innerHeight = 700; barTop = 640; cfgBase = 1400;   /* Settings 780 px past */
 asbFitPages();
-chk(tierOf() === 0 && fitCls.size === 0 && props['--cfg-tile-h'] === '112px', 'the 3 x 3 Settings hub scrolls without compacting its header: tier ' + tierOf());
+chk(tierOf() === 0 && fitCls.size === 0 && props['--cfg-tile-h'] === '100px', 'the compact 3 x 3 Settings hub keeps its full header, with scroll only as the extreme-screen fallback: tier ' + tierOf());
 /* fix205: the scroll surfaces never take a tier. The report is 2380 px past the fit line
    on this small screen - and the header still stays exactly as drawn. */
 resetFit(); reportOpen = true; cfgOpen = false; reportBase = 3000;
@@ -7955,6 +7964,90 @@ P
 echo 'PASS webui fix287 waits: Device page paints loading or the last snapshot before the collector and keeps it on failure, Monitor cache without between-read counters and one shell per pass, picker history and other apps, busy states painted before root calls'
 )
 
+t_webui_cosmic_loading_runtime() (
+# dev41: Device and initial Zygisk reads share one accessible, paint-first cosmic loader.
+# It is presentation only: cached snapshots stay visible and the original collectors run once.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"; H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui cosmic loading: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'PY' || fail 'static structure, themes or collector wiring'
+from pathlib import Path
+import json, sys
+root=Path(sys.argv[1]); h=(root/'webroot/index.html').read_text(encoding='utf-8')
+def body(start, end='\n}\n'):
+    i=h.index(start); return h[i:h.index(end,i)+3]
+b=body('function asbCosmicLoading(body, options) {')
+for token in ("role', 'status'", "aria-live', 'polite'", "aria-busy', 'true'", "aria-hidden', 'true'", "createElementNS", "#asbUfoArt", 'options.steps.forEach'):
+    assert token in b, token
+assert 'innerHTML' not in b and 'setInterval' not in b and 'setTimeout' not in b
+for token in ('.asb-cosmic-loading', '.asb-cosmic-scan', '.asb-cosmic-ring-one', '.asb-cosmic-ring-two', '.asb-cosmic-ring-three', '.asb-cosmic-ufo', '@media (prefers-reduced-motion: reduce)', 'animation: none'):
+    assert token in h, token
+assert body('function deviceInfoLoading(body) {').count('asbCosmicLoading(body,') == 1
+zy=body('function zygiskPageRender(d, state) {')
+assert "asbCosmicLoading(body, { kind:'zygisk'" in zy and "zy_stage_companion" in zy and "zy_stage_guard" in zy and "zy_stage_apps" in zy
+load=body('async function zygiskPageLoad(user) {')
+assert load.count('runBatch(')==1 and 'setInterval' not in load
+assert load.index('zygiskPageRender(null)') < load.index('await asbPaintYield()') < load.index('await runBatch(')
+assert "user || !window._asbZygiskLinkData" in load and "zy_status_failed_empty" in load
+keys=('zy_loading_sub','zy_stage_companion','zy_stage_guard','zy_stage_apps','zy_status_failed_empty','dev_kernel_runtime_hrtimer_migration','dev_kernel_runtime_lpm_prediction','dev_kernel_runtime_usb_autosuspend')
+for p in (root/'webroot/i18n').glob('*.json'):
+    d=json.loads(p.read_text(encoding='utf-8'))
+    for k in keys: assert isinstance(d.get(k),str) and d[k], (p.name,k)
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP webui cosmic loading runtime: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+{
+cat <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+function grab(name){const m=h.match(new RegExp('(?:async )?function '+name+'\\([^)]*\\) \\{[\\s\\S]*?\\n\\}'));if(!m)throw Error('missing '+name);return m[0];}
+function mk(tag){const e={tagName:tag,className:'',dataset:{},attrs:{},children:[],_text:'',style:{},disabled:false,
+ appendChild(c){e.children.push(c);c.parentNode=e;return c;},setAttribute(k,v){e.attrs[k]=String(v);},
+ querySelectorAll(sel){const want=sel[0]==='.'?sel.slice(1):null,out=[];(function walk(n){for(const c of n.children||[]){if(want&&String(c.className).split(/\s+/).includes(want))out.push(c);walk(c);}})(e);return out;}};
+ Object.defineProperty(e,'textContent',{get(){return e._text+e.children.map(c=>c.textContent).join('');},set(v){e._text=String(v);e.children=[];}});return e;}
+const document={createElement:mk,createElementNS:(ns,tag)=>mk(tag)};const T=(k,d)=>d;
+eval(grab('asbCosmicLoading'));eval(grab('deviceInfoLoading'));
+const body=mk('div');deviceInfoLoading(body);const card=body.children[0];
+if(card.attrs.role!=='status'||card.attrs['aria-live']!=='polite'||card.attrs['aria-busy']!=='true'||card.dataset.cosmic!=='device')throw Error('accessible loader semantics');
+if(body.querySelectorAll('.asb-cosmic-star').length!==6||body.querySelectorAll('.asb-cosmic-ring').length!==3)throw Error('cosmic scene incomplete');
+if(!body.querySelectorAll('.asb-cosmic-sky')[0]||body.querySelectorAll('.asb-cosmic-sky')[0].attrs['aria-hidden']!=='true')throw Error('decorative sky exposed');
+let resolveBatch;const events=[],renders=[];const window=globalThis;const MD='/m',ASB_S7L_READ='read';
+let _zygiskOpen=true,_zygiskLoadSeq=0,_zyS7=null,_zyS7L=null,_zyLink=null,_zyLsp=null,_zyGuard=null,_zyAot=null,_zygiskHeaderAt=0;
+const els={zygiskStatus:mk('span'),zyRefresh:mk('button'),zySave:mk('button')};function _el(id){return els[id]||null;}
+function zygiskPageRender(d,state){if(d)window._asbZygiskLinkData=d;renders.push({d,state});events.push('render:'+(d?'data':state||'loading'));}
+async function asbPaintYield(){events.push('yield');}
+function runBatch(parts){events.push('collect:'+parts.length);return new Promise(r=>{resolveBatch=r;});}
+function shQuote(s){return "'"+s+"'";}function runText(r){return r.stdout||'';}
+function parseDeviceInfo(s){return {count:s?1:0,raw:s};}function zygiskRawDigest(){return 'raw';}
+function zygiskHeaderPublish(){}function smart7Parse(){return {};}function smart7LearnParse(){return {};}
+function zygiskLinkParse(){return {};}function lspLiteParse(){return {};}function lspLiteAutoRefresh(){}
+function zygiskGuardParse(){return {};}function zygiskAotParse(){return {};}
+eval(grab('zygiskPageLoad'));
+let bad=0;const chk=(c,m)=>{if(!c){console.log('FAIL '+m);bad++;}};
+(async()=>{
+ let p=zygiskPageLoad(false);await Promise.resolve();await Promise.resolve();
+ chk(events.join('|')==='render:loading|yield|collect:8','initial loader did not paint before the sole collector: '+events);
+ chk(renders.length===1&&renders[0].d===null,'initial loader missing');
+ resolveBatch({link:{errno:0,stdout:'D\tzygisk_observer\tenabled\t1'}});await p;
+ chk(renders.length===2&&renders[1].d&&renders[1].d.count===1&&!els.zyRefresh.disabled&&!els.zySave.disabled,'success did not replace loader');
+ events.length=0;p=zygiskPageLoad(true);await Promise.resolve();await Promise.resolve();
+ chk(!events.includes('render:loading')&&events[0]==='yield','cached snapshot was covered by a loader: '+events);
+ resolveBatch({link:{errno:1,stdout:''}});await p;
+ chk(renders.length===3&&renders[2].state==='error'&&renders[2].d,'cached failure lost its snapshot');
+ window._asbZygiskLinkData=null;events.length=0;p=zygiskPageLoad(false);await Promise.resolve();await Promise.resolve();
+ resolveBatch(null);await p;
+ chk(renders.length===5&&renders[4].state==='error'&&!renders[4].d&&els.zySave.disabled,'first-load failure left loader or enabled Save');
+ events.length=0;p=zygiskPageLoad(false);await Promise.resolve();await Promise.resolve();_zygiskOpen=false;
+ resolveBatch({link:{errno:0,stdout:'D\tzygisk_observer\tenabled\t1'}});await p;
+ chk(renders.length===6,'closed page repainted over another page');
+ if(bad)process.exit(1);console.log('ok');
+})().catch(e=>{console.error(e&&e.stack||e);process.exit(1);});
+JS
+} > "$T/t.js"
+out="$(node "$T/t.js" "$H" 2>&1)" || fail "$out"
+[ "$out" = ok ] || fail "$out"
+echo 'PASS webui cosmic loading: shared accessible DOM/SVG scene, dark/light/reduced-motion CSS, paint-first initial reads, one collector, success/error/cached/close lifecycle'
+)
+
 t_webui_fix290_instant_runtime() (
   set -eu
   ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"; H="$ROOT/webroot/index.html"
@@ -8933,7 +9026,8 @@ mkdir -p "$T/mod/tools" "$T/mod/runtime" "$T/mod/config" "$T/proc/sys/net/ipv4" 
   "$T/sys/module/nomount" "$T/sys/module/ntsync" "$T/sys/module/baseband_guard" \
   "$T/sys/devices/system/cpu/cpufreq/policy0" "$T/sys/class/power_supply/battery" \
   "$T/data/asb" "$T/data/modules" "$T/data/metamodule" "$T/dev" \
-  "$T/sys/kernel/btf" "$T/sys/fs/bpf" "$T/sys/fs/fuse/connections"
+  "$T/sys/kernel/btf" "$T/sys/fs/bpf" "$T/sys/fs/fuse/connections" \
+  "$T/proc/sys/kernel" "$T/sys/module/lpm_levels/parameters" "$T/sys/module/usbcore/parameters"
 printf 'BTF-FIXTURE\n' > "$T/sys/kernel/btf/vmlinux"; printf 'MODULE-BTF\n' > "$T/sys/kernel/btf/test_module"
 printf 'pinned\n' > "$T/sys/fs/bpf/prog_fixture"; printf '33\n' > "$T/sys/fs/fuse/bpf_prog_type_fuse"
 mkdir -p "$T/proc/sys/net/core"; printf '1\n' > "$T/proc/sys/net/core/bpf_jit_enable"
@@ -8941,6 +9035,9 @@ printf '0\n' > "$T/proc/sys/net/core/bpf_jit_harden"; printf '1\n' > "$T/proc/sy
 cp "$ROOT/tools/asb_kernel_uv_coexist.sh" "$T/mod/tools/"
 cp "$ROOT/runtime/asb_pressure.sh" "$ROOT/runtime/asb_zygisk.sh" "$ROOT/runtime/asb_zygisk_info.sh" "$ROOT/runtime/asb_lsposed_info.sh" "$T/mod/runtime/"
 printf 'zygisk_enabled=0\nzygisk_mode=observer\nzygisk_hints=0\n' > "$T/mod/config/governor.conf"
+printf '0\n' > "$T/proc/sys/kernel/hrtimer_migration"
+printf '1\n' > "$T/sys/module/lpm_levels/parameters/lpm_prediction"
+printf '%s\n' -1 > "$T/sys/module/usbcore/parameters/autosuspend"
 printf 'cpu 100 0 100 800 0 0 0 0 0 0\n' > "$T/proc/stat"
 printf 'id=AutoSystemBoost\nversion=V65-129-fix230\nversionCode=65230\n' > "$T/mod/module.prop"
 printf 'id=MetaCore\nname=MetaCore Metamodule\nversion=1.4.0\nversionCode=140\n' > "$T/data/metamodule/module.prop"
@@ -9119,6 +9216,7 @@ want system_load cpu_busy_pct 'not exposed'; want system_load gpu_busy_pct 'not 
 want zygisk_observer enabled 0; want zygisk_observer mode observer; want zygisk_observer enabled_packages 0
 want zygisk_observer lifecycle_hints 0; want zygisk_observer crash_count unknown; want zygisk_observer anr_count unknown
 want zygisk_observer policy_hints 0; want zygisk_observer foreground_events 'not exposed without global hooks; is_top_app is not tracking'
+want kernel_runtime hrtimer_migration 0; want kernel_runtime lpm_prediction 1; want kernel_runtime usb_autosuspend -1
 printf '%s\n' "$out" | grep -Eq '^D	asb_caps	(android_api|kernel|model)	' && fail "ASB capabilities repeat firmware/kernel identity instead of capabilities"
 printf '%s\n' "$out" | grep -q 'DO_NOT_COLLECT' && fail "a sensitive identifier was collected"
 [ "$(wc -l < "$T/susfs.log")" = 3 ] || fail "SuSFS called more than the three show reads"
@@ -9526,9 +9624,20 @@ python3 - "$ROOT" <<'P' || fail 'static contract'
 import json, pathlib, re, sys
 root = pathlib.Path(sys.argv[1]); h = (root / 'webroot/index.html').read_text(encoding='utf-8')
 groups = h[h.index('const CFG_GROUPS = ['):h.index('const CFG_EXTRA_GROUPS')]
-assert re.findall(r"\{ id:'([^']+)'", groups) == ['audio','camera','iface','net','battery','kernel','feel','zygisk','ui']
+assert re.findall(r"\{ id:'([^']+)'", groups) == ['iface','feel','audio','camera','net','battery','kernel','zygisk','ui']
+# dev40: every hub group owns an explicit dark/light hue. In particular Zygisk must not
+# silently inherit the primary mint accent through the old, undefined cat-system tile alias.
+for token in (
+    ".cfg-tile.cat-feel    { --cat: #e6b8a2; }",
+    ".cfg-tile.cat-zygisk  { --cat: #a7b7c6; }",
+    ".cfg-tile.cat-system  { --cat: #a7b7c6; }",
+    "const tileCat = g.id === 'ui' ? 'ux' : g.id;",
+    "cat-zygisk { --cat:#4a5f75; }",
+    "cat-feel    { --cat:#9a5b43; }"
+):
+    assert token in h, token
 sections = h[h.index('  kernel: ['):h.index('  zygisk: [', h.index('  kernel: ['))]
-keys = ('mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first')
+keys = ('mglru_mode','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend')
 for key in keys:
     assert key in sections and re.search(key + r":'kernel'", h)
 assert "card:'wakeup'" in sections and 'capabilities' not in sections
@@ -9564,11 +9673,12 @@ for p in (root / 'webroot/i18n').glob('*.json'):
         if p.stem != 'en': assert d[k] != en[k], (p.name, k, 'untranslated')
     for key in keys:
         card = d['cfg'][key]
-        min_desc = 120 if p.stem == 'zh' else 240
+        min_desc = (45 if p.stem == 'zh' else 100) if key in ('kernel_hrtimer_migration','kernel_lpm_prediction','kernel_usb_autosuspend') else (120 if p.stem == 'zh' else 240)
         assert card['name'] and len(card['desc']) >= min_desc, (p.name, key, 'missing mechanism/trade-off explanation')
         assert '/proc/sys/kernel/sched_stats' not in card['desc'], (p.name, key, 'obsolete stats path')
         assert '/proc/sys/kernel/sched_nr_migrate' not in card['desc'], (p.name, key, 'obsolete migration path')
-        if key in keys[-3:]: assert set(card['descOpt']) == ({'stock','off'} if key == 'kernel_sched_stats' else {'stock','off','on'})
+        if key in ('kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first'):
+            if 'descOpt' in card: assert set(card['descOpt']) == ({'stock','off'} if key == 'kernel_sched_stats' else {'stock','off','on'})
         if p.stem != 'en': assert card != en['cfg'][key], (p.name, key, 'untranslated')
     assert '/sys/kernel/debug/sched/nr_migrate' in d['cfg']['kernel_sched_nr_migrate']['desc']
     assert '/proc/sys/kernel/sched_schedstats' in d['cfg']['kernel_sched_stats']['desc']
@@ -9579,7 +9689,7 @@ cat > "$T/test.js" <<'JS'
 const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
 function grab(name){const m=h.match(new RegExp('(?:async )?function '+name+'\\([^)]*\\) \\{[\\s\\S]*?\\n\\}'));if(!m)throw Error('missing '+name);return m[0];}
 for(const n of ['kernelControlParse','kernelWakeupParse','kernelWakeupValidName','kernelWakeupDraft','kernelWakeupSave','kernelStateText','kernelControlAvailability','kernelDecorateControlRow','cfgSet','shQuote'])eval(grab(n));
-global.ASB_KERNEL_STATUS_KEYS=['mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first'];
+global.ASB_KERNEL_STATUS_KEYS=['mglru_mode','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend'];
 const c=kernelControlParse('mglru_mode|writable|smart|7|1\nkernel_sched_nr_migrate|not_exposed|4|unknown|none\nkernel_sched_stats|not_exposed|off||none\nkernel_sched_autogroup|writable|on|1|0\nkernel_sched_child_runs_first|not_writable|stock|1|none\narbitrary_path|writable|on|1|none\n');
 if(c.mglru_mode.state!=='writable'||c.mglru_mode.live!=='7'||c.kernel_sched_stats.state!=='not_exposed'||c.kernel_sched_autogroup.live!=='1'||c.kernel_sched_child_runs_first.state!=='not_writable'||c.arbitrary_path)throw Error('control status parse');
 const wb=kernelWakeupParse('wakeup_blocker|status|blocked_events=17|node=writable|policy=ready|saved_count=2|current_count=1\nwakeup_rule|saved|NETLINK\nwakeup_rule|saved|qcom|rx\nwakeup_rule|current|NETLINK\n');
@@ -9608,7 +9718,7 @@ if(!nrButtons.every(b=>b.disabled&&b['aria-disabled']==='true')||!nrPop.hidden||
 JS
 out="$(node "$T/test.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo 'PASS webui kernel panel: symmetric nine-category hub, six owned controls under Kernel, no duplicate diagnostics probe, refresh/navigation actions, bounded wakeup set/clear and translated strings in 13 locales'
+echo 'PASS webui kernel panel: symmetric nine-category hub, nine owned controls under Kernel, no duplicate diagnostics probe, refresh/navigation actions, bounded wakeup set/clear and translated strings in 13 locales'
 )
 
 t_webui_card_i18n_coverage_runtime() (
@@ -10352,8 +10462,8 @@ scale=s[s.index('asbApplyUiScale();',s.index('const ASB_UI_REFERENCE_W')):s.inde
 assert 'requestAnimationFrame(asbFitPages);' in scale
 for token in ('html .cfg-tile-ico {','place-items:center;','align-self:center;',
               'html .cfg-tile-name {','overflow-wrap:anywhere;',
-              'html .cfg-tile-desc {','min-height:2.6em;','-webkit-line-clamp:3;',
-              'text-align:center;','html .cfg-tile-bar { width:100%; height:3px; }',
+              'html .cfg-tile-desc {','min-height:2.2em;','-webkit-line-clamp:2;',
+              'text-align:center;','html .cfg-tile-bar { flex:1 1 auto; width:auto; min-width:18px; max-width:56px; height:3px; }',
               "tile.setAttribute('aria-label'", "bar.setAttribute('aria-hidden', 'true')"):
     assert token in s, token
 assert 'grid-template-columns: repeat(3, 1fr);' in s
@@ -10501,9 +10611,9 @@ E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};
   chk(!('raw' in saved)&&!('serial' in saved)&&!('imei' in saved),'header cache stored unrelated device data');
 
   const created=[];global.document={createElement:t=>{const e=new E(t);created.push(e);return e}};
-  global.CFG_GROUPS=['audio','camera','iface','net','battery','kernel','feel','zygisk','ui'].map(id=>({id,icon:id,name:id}));
+  global.CFG_GROUPS=['iface','feel','audio','camera','net','battery','kernel','zygisk','ui'].map(id=>({id,icon:id,name:id}));
   global.CFG_ITEMS=CFG_GROUPS.map(g=>({key:g.id,def:'0'}));
-  global.cfgGroupOf=k=>k;global._cfgVals={audio:'1'};global.cfgIsActive=(it,cur)=>String(cur)==='1';
+  global.cfgGroupOf=k=>k;global._cfgVals={iface:'1'};global.cfgIsActive=(it,cur)=>String(cur)==='1';
   global.CFG_GROUP_DESC={audio:'DSP, volume, Bluetooth',camera:'Presets, processing, detail',iface:'Animations, blur',net:'Wi-Fi, LTE, queues',battery:'Smart, Doze, heat, RAM',kernel:'Scheduler, MGLRU, wakeups',feel:'LTPO, vibration, touch',zygisk:'Master switch and status',ui:'Services, processes, diagnostics'};
   global.grpName=g=>g.name;global.T=(k,f)=>f;global.techIcon=k=>'<svg data-kind="'+k+'"></svg>';
   global.uiSound=()=>{};global._cfgGroup='';global.cfgRender=()=>{};global.requestAnimationFrame=()=>{};global.asbFitPages=()=>{};
@@ -10512,6 +10622,8 @@ E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};
   chk(hub.className==='cfg-hub'&&hub.children.length===9,'nine-category hub was not rendered');
   hub.children.forEach((tile,i)=>{
     chk(tile.tag==='button'&&tile.children.map(x=>x.className).join('|')==='cfg-tile-ico|cfg-tile-name|cfg-tile-desc|cfg-tile-foot','tile structure differs at '+i);
+    const wantedCat=CFG_GROUPS[i].id==='ui'?'ux':CFG_GROUPS[i].id;
+    chk(tile.className==='cfg-tile cat-'+wantedCat,'category hue alias differs at '+CFG_GROUPS[i].id+': '+tile.className);
     chk(tile.children[0].innerHTML.includes('data-kind="'+CFG_GROUPS[i].id+'"'),'icon is missing at '+i);
     chk(tile.attrs['aria-label'].includes(tile.children[2].textContent),'accessible label lacks the scope at '+i);
     const foot=tile.children[3];chk(foot.children[0].className.includes('cfg-tile-count')&&foot.children[1].attrs['aria-hidden']==='true','footer/count contract differs at '+i);
@@ -10560,7 +10672,7 @@ assert s.count('asb-value-pending') >= 8
 for token in ('html .cfg-tile {\n  align-items:center;','text-align:center;',
               'html .cfg-tile-ico {\n  display:grid;\n  place-items:center;\n  align-self:center;',
               'html .cfg-tile-name {\n  width:100%;','html .cfg-tile-desc {\n  width:100%;',
-              'html .cfg-tile-count { font:600 10.5px/1.2 var(--mono); letter-spacing:.02em; text-align:center; }'):
+              'html .cfg-tile-count { flex:0 0 auto; font:600 8.5px/1.2 var(--mono); letter-spacing:.02em; text-align:center; }'):
     assert token in s, token
 PY
 command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI fix329 runtime: no node'; exit 0; }
@@ -10651,7 +10763,7 @@ assert 'class="cfg-reboot-tile' not in s
 # Freed height goes to the existing fitter; the symmetric 3 × 3 grid never compacts the shared header.
 fit = re.search(r'^function asbFitPagesNow\(\) \{[\s\S]*?^\}', s, re.M)
 assert fit and 'cfgRebootWrap' not in fit.group(0) and 'rebH' not in fit.group(0)
-assert 'Math.max([112, 96, 84][tier], Math.min(184, Math.floor(h)))' in fit.group(0)
+assert 'Math.max([100, 88, 76][tier], Math.min(124, Math.floor(h)))' in fit.group(0)
 assert 'grid-template-columns: repeat(3, 1fr)' in s
 # Menu code delegates to the existing actions and owns no shell command or polling worker.
 start = s.index('var _cfgRebootMenuDismissArmed')
@@ -11312,7 +11424,7 @@ function grab(name) {
   return m[0];
 }
 function el(tag, cls) {
-  const n = { tag, children:[], _text:'', className:cls || '', id:'', open:false, scrollHits:0,
+  const n = { tag, children:[], _text:'', className:cls || '', id:'', open:false, scrollHits:0, dataset:{},
     set textContent(v) { this._text=String(v); this.children=[]; }, get textContent() { return this._text; },
     appendChild(c) { this.children.push(c); return c; },
     scrollIntoView() { this.scrollHits++; }
@@ -11328,7 +11440,7 @@ function el(tag, cls) {
 const body=el('div'), page=el('div'); page.scrollTop=0;
 function find(n,id) { if (n.id===id) return n; for (const c of n.children) { const hit=find(c,id); if (hit) return hit; } return null; }
 function _el(id) { return id==='zygiskBody' ? body : id==='zygiskPage' ? page : find(body,id); }
-global.document={createElement:el}; global.window={};
+global.document={createElement:el,createElementNS:(ns,tag)=>el(tag)}; global.window={};
 function T(k,f) { return f; }
 function deviceVal(d,s,k) { return String((((d||{}).sections||{})[s]||{})[k] || ''); }
 function logReportSec(title) { const c=el('div','lgr-sec'); c.appendChild(el('div','lgr-sec-t')); c.children[0].textContent=title; return c; }
@@ -11348,6 +11460,7 @@ eval(grab('asbPageJumpClear'));
 eval(grab('asbPageJumpActive'));
 eval(grab('asbPageJumpWatch'));
 eval(grab('asbPageJump'));
+eval(grab('asbCosmicLoading'));
 eval(grab('zygiskPageRender'));
 const chk=(c,m)=>{ if(!c) throw new Error(m); };
 const navs=()=>body.children.filter(c=>String(c.className).split(/\s+/).includes('zy-page-nav'));
@@ -11554,7 +11667,7 @@ global.T=(k,d)=>d;global.techIcon=k=>'svg:'+k;global.ASB_GRADE={};global.cfgEnsu
 global.cfgRenderRow=(list,it)=>{const n=E('div','cfg-row');n.datasetKey=it.key;list.appendChild(n)};
 global.cfgRenderZygiskCard=list=>list.appendChild(E('section','cfg-zygisk-card'));global.cfgRenderNotifCard=()=>{};
 global.kernelPanelEnsure=()=>{};global.kernelDecorateControlRow=()=>{};
-global.ASB_KERNEL_STATUS_KEYS=['mglru_mode','kernel_timer_migration','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first'];
+global.ASB_KERNEL_STATUS_KEYS=['mglru_mode','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend'];
 global.cfgRenderWakeupBlockerCard=list=>list.appendChild(E('section','kernel-card'));
 global.cfgRenderKernelControlsHelp=list=>list.appendChild(E('section','kernel-card'));
 eval(between('const CFG_GROUP_OF = {','function cfgGroupOf').replace(/^const /gm,'var '));

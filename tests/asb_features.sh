@@ -5685,12 +5685,117 @@ for key in kernel_sched_autogroup kernel_sched_child_runs_first; do
   grep -qx "$key=stock" "$ROOT/config/governor.conf" || fail "$key default is not stock"
   grep -qx "$key=stock" "$ROOT/config/governor.conf.shipped" || fail "$key shipped default is not stock"
 done
-for key in kernel_sched_autogroup kernel_sched_child_runs_first; do
-  grep -Fq "$key" "$ROOT/runtime/asb_system_tweaks.sh" || fail "$key not routed through profile apply"
+# Both opt-in switches must survive a reboot through the same bounded owner, in Smart and
+# non-Smart profiles; a successful live WebUI write alone is not persistence evidence.
+_kc_block="$(sed -n '/^_kc_helper=/,/^# --- MGLRU working-set protection/p' "$ROOT/runtime/asb_system_tweaks.sh")"
+for key in mglru_mode kernel_timer_migration kernel_sched_nr_migrate kernel_sched_stats kernel_sched_autogroup kernel_sched_child_runs_first kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend; do
+  printf '%s\n' "$_kc_block" | grep -Fq "$key" || fail "$key not routed through profile/boot reapply"
 done
+printf '%s\n' "$_kc_block" | grep -Fq 'smart:smart|:smart) _kc_keys=' || fail 'Smart ownership branch missing'
+grep -Fq 'sh "$MODDIR/runtime/asb_system_tweaks.sh" >/dev/null 2>&1' "$ROOT/service.sh" || fail 'post-boot system tweaks owner is not called'
 _direct="$(grep -RInE '> */proc/sys/kernel/(sched_autogroup_enabled|sched_child_runs_first)|sysctlw kernel\.(sched_autogroup_enabled|sched_child_runs_first)' "$ROOT/service.sh" "$ROOT/post-fs-data.sh" "$ROOT/runtime" "$ROOT/profiles" "$ROOT/common" 2>/dev/null | grep -v 'runtime/asb_kernel_controls.sh' || true)"
 [ -z "$_direct" ] || fail "competing direct scheduler writer: $_direct"
 echo 'PASS scheduler policy controls: stock defaults, off/on, stable baselines, status/readback, exact restore, access/mismatch failures, safe config and single owner'
+)
+
+t_kernel_power_usb_controls_runtime() (
+# dev41: Battery Auto requests two bounded low-power values; every other profile releases
+# them exactly. USB autosuspend is independent, opt-in and supports the signed -1 value.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+K="$ROOT/runtime/asb_kernel_controls.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL kernel power/USB controls: $*" >&2; exit 1; }
+mkdir -p "$T/mod/config" "$T/state"
+printf '1\n' > "$T/hrtimer"; printf '0\n' > "$T/lpm"; printf '%s\n' -1 > "$T/usb"
+run() {
+  MODDIR="$T/mod" ASB_KERNEL_STATE_DIR="$T/state" \
+    ASB_HRTIMER_MIGRATION_NODE="$T/hrtimer" ASB_LPM_PREDICTION_NODE="$T/lpm" \
+    ASB_USB_AUTOSUSPEND_NODE="$T/usb" sh "$K" "$@"
+}
+mode() { printf 'kernel_hrtimer_migration=%s\nkernel_lpm_prediction=%s\nkernel_usb_autosuspend=%s\n' "$1" "$2" "$3" > "$T/mod/config/governor.conf"; }
+mode auto auto stock
+out="$(run apply kernel_hrtimer_migration '' battery; run apply kernel_lpm_prediction '' battery)"
+printf '%s\n' "$out" | grep -q '^kernel_hrtimer_migration|applied|auto|0|1$' || fail "Battery hrtimer Auto: $out"
+printf '%s\n' "$out" | grep -q '^kernel_lpm_prediction|applied|auto|1|0$' || fail "Battery LPM Auto: $out"
+[ "$(cat "$T/hrtimer")" = 0 ] && [ "$(cat "$T/lpm")" = 1 ] && [ "$(cat "$T/usb")" = -1 ] || fail 'Battery Auto wrote an unintended value'
+run apply kernel_hrtimer_migration '' battery >/dev/null; run apply kernel_lpm_prediction '' battery >/dev/null
+[ "$(cat "$T/state/kernel_hrtimer_migration.prev")" = 1 ] && [ "$(cat "$T/state/kernel_lpm_prediction.prev")" = 0 ] || fail 'repeat Auto apply replaced a baseline'
+out="$(run apply kernel_hrtimer_migration '' performance; run apply kernel_lpm_prediction '' balanced)"
+printf '%s\n' "$out" | grep -q '^kernel_hrtimer_migration|restored|stock|1|none$' || fail "non-Battery hrtimer release: $out"
+printf '%s\n' "$out" | grep -q '^kernel_lpm_prediction|restored|stock|0|none$' || fail "non-Battery LPM release: $out"
+[ ! -e "$T/state/kernel_hrtimer_migration.prev" ] && [ ! -e "$T/state/kernel_lpm_prediction.prev" ] || fail 'Auto release retained ownership'
+out="$(run apply kernel_hrtimer_migration '' performance; run apply kernel_lpm_prediction '' balanced)"
+printf '%s\n' "$out" | grep -q 'stock_unowned' || fail "unowned Auto was not inert: $out"
+# Manual values override Auto/profile policy, while Stock still returns to the original values.
+mode off on stock
+run apply kernel_hrtimer_migration '' performance >/dev/null; run apply kernel_lpm_prediction '' performance >/dev/null
+[ "$(cat "$T/hrtimer")" = 0 ] && [ "$(cat "$T/lpm")" = 1 ] || fail 'manual override ignored the requested values'
+mode stock stock stock
+run apply kernel_hrtimer_migration >/dev/null; run apply kernel_lpm_prediction >/dev/null
+[ "$(cat "$T/hrtimer")" = 1 ] && [ "$(cat "$T/lpm")" = 0 ] || fail 'manual Stock did not restore exactly'
+# USB is inert by default; on=2, off=-1, repeated apply keeps the captured -1.
+mode auto auto on
+out="$(run apply kernel_usb_autosuspend)"
+printf '%s\n' "$out" | grep -q '^kernel_usb_autosuspend|applied|on|2|-1$' || fail "USB on: $out"
+[ "$(cat "$T/state/kernel_usb_autosuspend.prev")" = -1 ] || fail 'USB baseline lost its sign'
+mode auto auto off
+out="$(run apply kernel_usb_autosuspend; run apply kernel_usb_autosuspend)"
+printf '%s\n' "$out" | grep -q '^kernel_usb_autosuspend|applied|off|-1|-1$' || fail "USB off/readback: $out"
+[ "$(cat "$T/state/kernel_usb_autosuspend.prev")" = -1 ] || fail 'USB repeat apply replaced baseline'
+out="$(run status kernel_usb_autosuspend)"
+printf '%s\n' "$out" | grep -q '^kernel_usb_autosuspend|writable|off|-1|-1$' || fail "signed USB status: $out"
+mode auto auto stock
+out="$(run apply kernel_usb_autosuspend)"
+printf '%s\n' "$out" | grep -q '^kernel_usb_autosuspend|restored|stock|-1|none$' || fail "USB exact restore: $out"
+[ ! -e "$T/state/kernel_usb_autosuspend.prev" ] || fail 'USB restore retained ownership'
+# Missing/read-only nodes fail closed. A kernel clamp is a mismatch, never a success.
+mode auto auto on
+rm -f "$T/usb"
+set +e; out="$(run apply kernel_usb_autosuspend 2>/dev/null)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^kernel_usb_autosuspend|not_exposed|on|unknown|none$' || fail "missing USB node: $out"
+printf '2\n' > "$T/usb"; chmod 444 "$T/usb"
+set +e; out="$(run apply kernel_usb_autosuspend 2>/dev/null)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^kernel_usb_autosuspend|not_writable|on|unknown|none$' || fail "read-only USB node: $out"
+chmod 644 "$T/usb"; mkdir -p "$T/bin"; REAL_CAT="$(command -v cat)"
+cat > "$T/bin/cat" <<'S'
+#!/bin/sh
+if [ -f "$CLAMP_FLAG" ] && [ "${1:-}" = "$CLAMP_NODE" ]; then printf '%s\n' -1; exit 0; fi
+exec "$REAL_CAT" "$@"
+S
+chmod +x "$T/bin/cat"; : > "$T/clamp"
+set +e
+out="$(PATH="$T/bin:$PATH" REAL_CAT="$REAL_CAT" CLAMP_FLAG="$T/clamp" CLAMP_NODE="$T/usb" run apply kernel_usb_autosuspend 2>/dev/null)"; rc=$?
+set -e
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^kernel_usb_autosuspend|readback_mismatch|on|-1|-1$' || fail "USB clamp verdict: $out"
+rm -f "$T/clamp"; mode auto auto stock; run apply kernel_usb_autosuspend >/dev/null
+[ "$(cat "$T/usb")" = -1 ] && [ ! -e "$T/state/kernel_usb_autosuspend.prev" ] || fail 'USB restore after mismatch failed'
+# Safe config has the exact public vocabularies and preserves both shipped defaults.
+mkdir -p "$T/cmod/config" "$T/cmod/runtime"
+cp "$ROOT/config/governor.conf" "$ROOT/config/governor.conf.shipped" "$T/cmod/config/"
+cp "$ROOT/runtime/asb_config_safe.sh" "$T/cmod/runtime/"
+for key in kernel_hrtimer_migration kernel_lpm_prediction; do
+  for val in stock auto off on; do
+    MODDIR="$T/cmod" ASB_CONFIG_STATE="$T/cfgstate" sh "$T/cmod/runtime/asb_config_safe.sh" set "$key" "$val" >/dev/null
+    grep -qx "$key=$val" "$T/cmod/config/governor.conf" || fail "safe writer lost $key=$val"
+  done
+  set +e; MODDIR="$T/cmod" ASB_CONFIG_STATE="$T/cfgstate" sh "$T/cmod/runtime/asb_config_safe.sh" set "$key" 2 >/dev/null 2>&1; rc=$?; set -e
+  [ "$rc" -ne 0 ] || fail "safe writer accepted $key=2"
+  grep -qx "$key=auto" "$ROOT/config/governor.conf" || fail "$key default is not auto"
+done
+for val in stock off on; do
+  MODDIR="$T/cmod" ASB_CONFIG_STATE="$T/cfgstate" sh "$T/cmod/runtime/asb_config_safe.sh" set kernel_usb_autosuspend "$val" >/dev/null
+  grep -qx "kernel_usb_autosuspend=$val" "$T/cmod/config/governor.conf" || fail "safe writer lost USB $val"
+done
+set +e; MODDIR="$T/cmod" ASB_CONFIG_STATE="$T/cfgstate" sh "$T/cmod/runtime/asb_config_safe.sh" set kernel_usb_autosuspend -1 >/dev/null 2>&1; rc=$?; set -e
+[ "$rc" -ne 0 ] || fail 'safe writer accepted a raw USB value instead of a mode'
+grep -qx 'kernel_usb_autosuspend=stock' "$ROOT/config/governor.conf" || fail 'USB default is not stock'
+for key in kernel_hrtimer_migration kernel_lpm_prediction kernel_usb_autosuspend; do
+  [ "$(grep -c "asb_kernel_controls.sh\" apply $key" "$ROOT/service.sh")" -eq 3 ] || fail "$key missing from apply/reinforcement"
+done
+_direct="$(grep -RInE '> */proc/sys/kernel/hrtimer_migration|> */sys/module/(lpm_levels/parameters/lpm_prediction|usbcore/parameters/autosuspend)' "$ROOT/service.sh" "$ROOT/post-fs-data.sh" "$ROOT/runtime" "$ROOT/profiles" "$ROOT/common" 2>/dev/null | grep -v 'runtime/asb_kernel_controls.sh' || true)"
+[ -z "$_direct" ] || fail "competing direct writer: $_direct"
+echo 'PASS kernel power/USB controls: Battery Auto, exact profile release, manual override, signed USB values, stable baselines, failure states, safe config and one owner'
 )
 
 t_kernel_controls_single_owner_runtime() (
