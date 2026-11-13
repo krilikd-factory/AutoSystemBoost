@@ -1372,10 +1372,10 @@ html[data-asb-theme="light"] .tg-link-sub { color:#315a4f !important; }
   box-shadow: 0 0 25px rgba(249,141,158,0.14), 0 8px 32px rgba(0,0,0,0.4);
 }
 .toast.t-cat-camera {
-  background: rgba(13,20,32,0.95);
-  color: #93c2f8;
-  border-color: rgba(126,180,247,0.38);
-  box-shadow: 0 0 25px rgba(126,180,247,0.14), 0 8px 32px rgba(0,0,0,0.4);
+  background: rgba(32,15,30,0.95);
+  color: #f2b5e6;
+  border-color: rgba(239,168,226,0.38);
+  box-shadow: 0 0 25px rgba(239,168,226,0.14), 0 8px 32px rgba(0,0,0,0.4);
 }
 .toast.t-cat-battery {
   background: rgba(11,29,21,0.95);
@@ -1898,7 +1898,13 @@ html[data-asb-theme="light"] .lvs-seg.on { box-shadow: 0 0 0 1px rgba(0,0,0,.25)
 .cfg-zygisk-preset strong { color:var(--text); }
 .zygisk-page .zy-fine { margin-top: 10px; }
 .cfg-zygisk-card > .cfg-zygisk-open { margin:10px 14px 12px; max-width:calc(100% - 28px); }
-.zygisk-page .zy-controls-card > .cfg-row { margin:8px 0; padding:12px; border-radius:14px; }
+.cfg-row.zy-master-off .cfg-switch { opacity:.38; filter:saturate(.45); cursor:default; }
+.cfg-row.zy-master-off .cfg-status { opacity:.82; }
+.zygisk-page .zy-controls-reveal { width:100%; min-height:44px; margin:2px 0 4px; justify-content:center; }
+.zygisk-page .zy-controls-panel > .cfg-row { margin:8px 0; padding:12px; border-radius:14px; }
+.zygisk-page .zy-controls-panel:not([hidden]) { animation:zyControlsReveal .24s cubic-bezier(.2,.8,.2,1); }
+@keyframes zyControlsReveal { from { opacity:0; transform:translateY(-5px); } to { opacity:1; transform:translateY(0); } }
+@media (prefers-reduced-motion:reduce) { .zygisk-page .zy-controls-panel:not([hidden]) { animation:none; } }
 .zygisk-page .zy-off-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
 .zygisk-page .zy-off-actions .live-chip { flex:1 1 150px; justify-content:center; text-align:center; }
 .zygisk-page .zy-off-enable { color:var(--good); border-color:color-mix(in srgb, var(--good) 42%, var(--border)); }
@@ -2598,7 +2604,7 @@ html[data-asb-theme="light"] .cfg-zygisk-card { background:#fff; }
 /* Tile and heading share one literal rule, so neither can lose or drift from the hue.
  * Zygisk stays quiet slate rather than falling back to the bright ASB accent. */
 :is(.cfg-section,.cfg-tile).cat-audio   { --cat: #f98d9e; }
-:is(.cfg-section,.cfg-tile).cat-camera  { --cat: #7eb4f7; }
+:is(.cfg-section,.cfg-tile).cat-camera  { --cat: #efa8e2; }
 :is(.cfg-section,.cfg-tile).cat-battery { --cat: #63daa3; }
 :is(.cfg-section,.cfg-tile).cat-ux      { --cat: #f0b76b; }
 :is(.cfg-section,.cfg-tile).cat-net     { --cat: #4cd3e8; }
@@ -2764,7 +2770,7 @@ html[data-asb-theme="light"] .cfg-zygisk-card { background:#fff; }
 /* The hue map feeds both the tweak icon and (fix217) the tweak row itself: the row
  * carries its cat-* class, so an enabled card lights up in its category colour. */
 :is(.cfg-icon,.cfg-row).cat-audio   { --cat: #f98d9e; }
-:is(.cfg-icon,.cfg-row).cat-camera  { --cat: #7eb4f7; }
+:is(.cfg-icon,.cfg-row).cat-camera  { --cat: #efa8e2; }
 :is(.cfg-icon,.cfg-row).cat-battery { --cat: #63daa3; }
 :is(.cfg-icon,.cfg-row).cat-perf    { --cat: #bfa1f7; }
 :is(.cfg-icon,.cfg-row).cat-ux      { --cat: #f0b76b; }
@@ -4231,7 +4237,7 @@ html[data-asb-theme="light"] .cfg-reboot-tile.sysui { --rb:#9a7300; }
 /* Light deepens --cat once for every consumer - tile, heading and tweak icon - instead
  * of restating the same colour on each of them (fix193). */
 html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-audio   { --cat:#c0362c; }
-html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-camera  { --cat:#1f63b6; }
+html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-camera  { --cat:#9c3f86; }
 html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-battery { --cat:#127a45; }
 html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-ux      { --cat:#9a5a00; }
 html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-net     { --cat:#0b6f86; }
@@ -4248,7 +4254,7 @@ html[data-asb-theme="light"] .cfg-row.is-on { background:linear-gradient(160deg,
  * plus a soft category-coloured glow. Higher specificity + !important beats the teal
  * is-on rules above; those stay as the fallback for rows without a category. */
 html[data-asb-theme="light"] .cfg-row.cat-audio   { --cat:#c0362c; }
-html[data-asb-theme="light"] .cfg-row.cat-camera  { --cat:#1f63b6; }
+html[data-asb-theme="light"] .cfg-row.cat-camera  { --cat:#9c3f86; }
 html[data-asb-theme="light"] .cfg-row.cat-battery { --cat:#127a45; }
 html[data-asb-theme="light"] .cfg-row.cat-ux      { --cat:#9a5a00; }
 html[data-asb-theme="light"] .cfg-row.cat-net     { --cat:#0b6f86; }
@@ -6485,6 +6491,7 @@ const TECH_ICON_PATHS = {
   lpm_prediction: '<path d="M4 17a8 8 0 1 1 13 2M4 17v-5M4 17h5"/><path d="M8 13l3-3 3 2 4-5"/><path d="M18 7h-3M18 7v3"/>',
   usb_autosuspend: '<path d="M12 3v12M12 5l-3 3M12 8l3-3"/><circle cx="12" cy="18" r="3"/><path d="M7 10v4a3 3 0 0 0 3 3M17 10v4a3 3 0 0 1-3 3"/><circle cx="7" cy="9" r="1.5"/><rect x="15.5" y="6.5" width="3" height="3" rx=".5"/>',
   sched_migration: '<rect x="3" y="5" width="5" height="5" rx="1"/><rect x="16" y="14" width="5" height="5" rx="1"/><path d="M8 7.5h5a3 3 0 0 1 3 3V14M13 11l3 3 3-3M5.5 10v4a3 3 0 0 0 3 3H16"/>',
+  sched_stats: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 7h4M7 16v-3M11 16V9M15 16v-5M19 16v-2"/>',
   sched_autogroup: '<rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="5" height="5" rx="1"/><rect x="16" y="16" width="5" height="5" rx="1"/><path d="M12 8v4M5.5 16v-2a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v2M12 12v4"/>',
   sched_child_first: '<rect x="3" y="4" width="7" height="6" rx="1"/><rect x="14" y="14" width="7" height="6" rx="1"/><path d="M10 7h4a3 3 0 0 1 3 3v4M14 11l3 3 3-3M6.5 13v4a3 3 0 0 0 3 3H14"/>',
   /* Completed ASB vector system: centred silhouettes, 4–20px optical frame and one coherent rounded-line language. */
@@ -9295,10 +9302,10 @@ const CFG_ITEMS = [
     desc:'Changes how MGLRU selects and reclaims memory pages: Off requests 0, On 7, and Smart 5 or 7 by load. Under memory pressure a suitable policy can reduce reclaim work and improve responsiveness or app retention; an unsuitable one can increase reclaim, reloads and stutter. Battery impact depends on the workload and is not guaranteed. Stock and uninstall restore the captured mask; clamped readback is a mismatch, not success.' },
   { key:'kernel_timer_migration', type:'seg', def:'off', stock:'stock',
     opts:['stock','off','on'], name:'Timer Migration', cat:'system',
-    desc:'Controls whether the kernel may migrate timers between CPUs. On can move timers from idle CPUs to already active ones and avoid some wake-ups; Off keeps timers in place, which can behave differently under load. Depending on CPU idle behavior, either mode may help or hurt latency and power use. Off preserves the previous ASB request; Stock and uninstall restore the captured value after verified readback.' },
+    desc:'Controls whether the kernel may migrate timers, including high-resolution timers, between CPUs. On can move timers from idle CPUs to already active ones and avoid some wake-ups; Off keeps timers in place, which can behave differently under load. Depending on CPU idle behavior, either mode may help or hurt latency and power use. Off preserves the previous ASB request; Stock and uninstall restore the captured value after verified readback.' },
   { key:'kernel_hrtimer_migration', type:'seg', def:'auto', stock:'stock',
     opts:['auto','stock','off','on'], name:'High-resolution Timer Migration', cat:'system',
-    desc:'Controls migration of high-resolution timers through /proc/sys/kernel/hrtimer_migration. Auto requests 0 only on Battery and restores the exact captured value on other profiles; Off and On override the profile. Keeping timers local can help cache locality, while migration can change idle wake-ups; neither latency nor power benefit is guaranteed. Stock and uninstall restore only an ASB-owned baseline after matching readback.' },
+    desc:'Uses a separate /proc/sys/kernel/hrtimer_migration only when a vendor actually exposes that non-upstream interface. Standard Linux 6.12 has no such independent sysctl: ASB then marks this row as covered by Timer migration and performs no second write. On a kernel with a real separate node, Auto requests 0 only on Battery and other profiles restore the captured value. Neither latency nor power benefit is guaranteed.' },
   { key:'kernel_lpm_prediction', type:'seg', def:'auto', stock:'stock',
     opts:['auto','stock','off','on'], name:'Idle Prediction (LPM)', cat:'system',
     desc:'Controls the low-power-mode idle-state predictor through /sys/module/lpm_levels/parameters/lpm_prediction when the kernel exposes it. Auto requests 1 only on Battery and restores the exact captured value on other profiles; Off and On override the profile. Prediction can affect which idle state is selected, but power and wake-up latency depend on the workload and firmware. Stock and uninstall require verified restoration.' },
@@ -9562,7 +9569,7 @@ function cfgGroupOf(key){ return CFG_GROUP_OF[key] || 'ui'; }
  * where the whole chain runs before the user adjusts gain or tone. Playback/Bluetooth follows
  * and hearing safety remains separate. Presentation order only; setting ownership is unchanged. */
 const ZYGISK_CONTROL_KEYS = ['zygisk_enabled', 'zygisk_hints', 'zygisk_launch', 'zygisk_ledger'];
-const ZYGISK_PANEL_ONLY_KEYS = ZYGISK_CONTROL_KEYS.slice(1);
+const ZYGISK_FEATURE_KEYS = ZYGISK_CONTROL_KEYS.slice(1);
 
 const CFG_GROUP_SECTIONS = {
   audio: [
@@ -9628,8 +9635,8 @@ const CFG_GROUP_SECTIONS = {
   zygisk: [
     { id:'zygisk', icon:'zygisk_observer', titleKey:'cfg_ui_section_zygisk',
       title:'Zygisk', hintKey:'cfg_ui_section_zygisk_hint',
-      hint:'One master switch and connection status. Modes, features and app selection live on the ZYGISK page.',
-      keys:['zygisk_enabled'] }
+      hint:'The master and its three feature switches are available here. Features are editable only while ASB Zygisk is connected; modes and app selection live on the ZYGISK page.',
+      keys:ZYGISK_CONTROL_KEYS }
   ],
   feel: [
     { id:'feel', icon:'haptic_touch', titleKey:'cfg_ui_section_feel',
@@ -9733,8 +9740,7 @@ function cfgRenderZygiskCard(list, items) {
   card.appendChild(deviceZygiskLink(evidence || {}));
   const evidenceEnabled = evidence ? deviceVal(evidence, 'zygisk_observer', 'enabled') : '—';
   if (evidenceEnabled === '0' || evidenceEnabled === '1') _cfgVals.zygisk_enabled = evidenceEnabled;
-  const master = items.filter(function (it) { return it.key === 'zygisk_enabled'; })[0];
-  if (master) cfgRenderRow(card, master, false);
+  items.forEach(function (it) { cfgRenderRow(card, it, false); });
   const open = document.createElement('button'); open.type = 'button';
   open.className = 'live-chip cfg-zygisk-open';
   open.textContent = T('zy_settings_open', 'Open ZYGISK control panel');
@@ -10160,7 +10166,7 @@ function cfgRenderGroup(list, groupId) {
   });
   // Future cards still appear rather than silently disappearing when a maintainer forgets
   // to add them to a subsection. The group remains the source of truth for reachability.
-  items.filter(it => !rendered[it.key] && ZYGISK_PANEL_ONLY_KEYS.indexOf(it.key) < 0)
+  items.filter(it => !rendered[it.key])
     .forEach(it => cfgRenderRow(list, it, false));
   if (navItems.length > 1) list.appendChild(asbPageJump(navItems, T('dev_nav_title', 'Jump to'), 'cfg-page-nav'));
 }
@@ -10204,6 +10210,7 @@ const ASB_KC_VERDICTS = {
   write_failed: 'kernel refused the write', readback_mismatch: 'kernel kept another value',
   baseline_failed: 'original value could not be saved; nothing written',
   baseline_invalid: 'saved original value is invalid', state_cleanup_failed: 'restored; state file not removed',
+  covered_by_timer_migration: 'covered by the general Timer migration control; no separate write',
   invalid_request: 'invalid request'
 };
 function asbKernelControlVerdict(status, live) {
@@ -10271,13 +10278,14 @@ function kernelStateText(state) {
   const fallback = {
     available:'Available', not_exposed:'Not exposed by this kernel', not_readable:'Not readable',
     read_only:'Read-only', unknown:'Unknown — no read-only evidence', disabled:'Disabled in kernel configuration',
+    covered_by_timer_migration:'Managed by Timer migration',
     configured:'Configured; runtime state unknown', module_unloaded:'Configured; module not loaded', loading:'Checking…'
   };
   return T('kernel_state_' + state, fallback[state] || fallback.unknown);
 }
 function kernelStateClass(state) {
   if (state === 'available' || state === 'configured') return 'good';
-  if (state === 'read_only' || state === 'module_unloaded' || state === 'unknown' || state === 'loading') return 'warn';
+  if (state === 'read_only' || state === 'module_unloaded' || state === 'unknown' || state === 'loading' || state === 'covered_by_timer_migration') return 'warn';
   return 'bad';
 }
 function kernelControlAvailability(key) {
@@ -10298,7 +10306,7 @@ function kernelDecorateControlRow(row, key) {
     badge.className = 'cfg-status ' + (a.state === 'available' ? 'on' : 'na');
     badge.title = showLive ? T('kc_live', 'kernel: {v}').replace('{v}', a.live) : kernelStateText(a.state);
   }
-  if (['not_exposed','not_readable','read_only','disabled'].indexOf(a.state) >= 0) {
+  if (['not_exposed','not_readable','read_only','disabled','covered_by_timer_migration'].indexOf(a.state) >= 0) {
     row.classList.add('kernel-unavailable');
     row.querySelectorAll('.cfg-seg button,.cfg-sel-btn,.cfg-sel-pop button').forEach(function (b) {
       b.disabled = true; b.setAttribute('aria-disabled','true');
@@ -10549,7 +10557,7 @@ async function cfgLoadCaps() {
 const CFG_ICONS = {
   wifi_powersave:'wifipm',
   net_wifi_leave:'wifileave',
-  mglru_hold:'memhold', mglru_mode:'mglru_mode', kernel_timer_migration:'timer_migration', kernel_sched_nr_migrate:'sched_migration', kernel_sched_stats:'kernel',
+  mglru_hold:'memhold', mglru_mode:'mglru_mode', kernel_timer_migration:'timer_migration', kernel_sched_nr_migrate:'sched_migration', kernel_sched_stats:'sched_stats',
   kernel_sched_autogroup:'sched_autogroup', kernel_sched_child_runs_first:'sched_child_first',
   kernel_hrtimer_migration:'hrtimer_migration', kernel_lpm_prediction:'lpm_prediction', kernel_usb_autosuspend:'usb_autosuspend',
   audio_profile:'audio_profile', audio_dac_hifi:'dac', media_loudness:'media_volume', bt_absvol_mode:'volume_sync', bt_a2dp_offload:'bluetooth_offload',
@@ -11425,8 +11433,9 @@ function cfgRenderRow(list, it, showCat) {
    * and the other kept running. One body, two callers. */
     const cur = (_cfgVals[it.key] !== undefined) ? _cfgVals[it.key] : it.def;
     const isOn = cfgIsActive(it, cur);
+    const zyLocked = typeof zygiskFeatureLocked === 'function' && zygiskFeatureLocked(it.key);
     const row = document.createElement('div');
-    row.className = 'cfg-row ' + cfgCatClass(it.key) + (isOn ? ' is-on' : '');
+    row.className = 'cfg-row ' + cfgCatClass(it.key) + (isOn ? ' is-on' : '') + (zyLocked ? ' zy-master-off' : '');
     row.setAttribute('data-key', it.key);
     const top = document.createElement('div');
     top.className = 'cfg-row-top';
@@ -11479,6 +11488,12 @@ const _unav = ASB_CAP_REQUIRES[it.key];
       badge.title = T('cfg_unavailable_why', 'This phone does not expose: ') + _unav;
     }
 
+    if (zyLocked) {
+      badge.className = 'cfg-status na';
+      badge.textContent = T('zy_feature_master_off', 'master is off');
+      badge.title = T('zy_feature_master_off_why', 'Enable ASB Zygisk connection to change this feature. Its saved value is preserved.');
+    }
+
     // Verify against the DEVICE, not the config.
     // A card reads "Max" because governor.conf says 4.
     if (VERIFY_KEYS.indexOf(it.key) >= 0 && st.cls !== 'neutral') {
@@ -11492,7 +11507,8 @@ const _unav = ASB_CAP_REQUIRES[it.key];
       sw.className = 'cfg-switch' + (cur === '1' ? ' on' : '');
       sw.setAttribute('role', 'switch');
       sw.setAttribute('aria-checked', cur === '1' ? 'true' : 'false');
-      sw.onclick = (e) => { e.stopPropagation(); cfgSet(it.key, (cur === '1') ? '0' : '1', sw); };
+      if (zyLocked) sw.setAttribute('aria-disabled', 'true');
+      else sw.onclick = (e) => { e.stopPropagation(); cfgSet(it.key, (cur === '1') ? '0' : '1', sw); };
       top.appendChild(sw);
     } else if (it.type === 'range') {
       var _hapticLast = -1;
@@ -11914,8 +11930,7 @@ function cfgRenderMatches(list) {
   }
   /* Results carry their category, because the same word can land in two of them and
      "which section was this in" is half of what the user is trying to find out. */
-  hits.filter(it => ZYGISK_PANEL_ONLY_KEYS.indexOf(it.key) < 0)
-    .forEach(it => cfgRenderRow(list, it, true));
+  hits.forEach(it => cfgRenderRow(list, it, true));
 }
 
 /* Single place that decides whether the tab bar is on screen.
@@ -12070,6 +12085,13 @@ function cfgCurVal(key) {
   const it = CFG_ITEMS.filter(function(x) { return x.key === key; })[0];
   return it ? it.def : undefined;
 }
+/* The existing dependency table is the single source of truth for the Zygisk master gate.
+ * Locking a feature never rewrites its stored value: it becomes editable again with the master. */
+function zygiskFeatureLocked(key) {
+  if (ZYGISK_FEATURE_KEYS.indexOf(key) < 0) return false;
+  const rule = CFG_REQUIRES.filter(function(r) { return r.key === key && r.needs === 'zygisk_enabled'; })[0];
+  return !!(rule && !rule.ok(cfgCurVal(rule.needs)));
+}
 /* What else must change when KEY becomes VAL: [{key, val, from}] for every conflicting
  * setting that is currently on. Pure, so the contract test runs it as written. */
 function cfgConflictResolve(key, val, cur) {
@@ -12130,11 +12152,18 @@ function cfgRuleNotice(key, fixed, notes) {
 }
 
 async function cfgSet(key, val, ctl) {
+  /* Cover search, category rows and synthetic calls alike. The feature's saved value stays
+   * untouched while its master is off; only the editing capability is gated. */
+  if (typeof zygiskFeatureLocked === 'function' && zygiskFeatureLocked(key)) {
+    uiSound('error');
+    toast(T('zy_feature_master_off_why', 'Enable ASB Zygisk connection to change this feature. Its saved value is preserved.'), 'warn');
+    return false;
+  }
   /* Disable the editor at the mutation boundary too. Otherwise a synthetic click or a
    * stale event could save an unsupported kernel value before the owner rejected its apply. */
   if (typeof ASB_KERNEL_STATUS_KEYS !== 'undefined' && ASB_KERNEL_STATUS_KEYS.indexOf(key) >= 0) {
     const ka = kernelControlAvailability(key);
-    if (['not_exposed','not_readable','read_only','disabled'].indexOf(ka.state) >= 0) {
+    if (['not_exposed','not_readable','read_only','disabled','covered_by_timer_migration'].indexOf(ka.state) >= 0) {
       uiSound('error');
       toast(Tcfg(key, 'name', key) + ' · ' + kernelStateText(ka.state), 'err');
       return;
@@ -16773,9 +16802,27 @@ async function zygiskAutoSet(action, profile) {
   if (_zygiskOpen) zygiskPageRender(d.count ? d : (window._asbZygiskLinkData || null));
 }
 let _zygiskControlBusy = '';
+let _zygiskControlsExpanded = false;
 function zygiskControlsCard(d) {
   const card = logReportSec(T('zy_sec_controls', 'ASB Zygisk controls'), 'switches');
   card.classList.add('zy-controls-card');
+  const reveal = document.createElement('button');
+  reveal.type = 'button'; reveal.className = 'dev-zygisk-btn zy-controls-reveal';
+  reveal.id = 'zyControlsReveal';
+  reveal.setAttribute('aria-controls', 'zyControlsPanel');
+  const revealLabel = document.createElement('span'); reveal.appendChild(revealLabel);
+  zygiskButtonIcon(reveal, 'switches');
+  const panel = document.createElement('div');
+  panel.className = 'zy-controls-panel'; panel.id = 'zyControlsPanel';
+  const paintReveal = function () {
+    panel.hidden = !_zygiskControlsExpanded;
+    reveal.setAttribute('aria-expanded', _zygiskControlsExpanded ? 'true' : 'false');
+    revealLabel.textContent = _zygiskControlsExpanded
+      ? T('zy_controls_hide', 'Hide switches')
+      : T('zy_controls_reveal', 'Show 4 switches');
+  };
+  reveal.onclick = function () { _zygiskControlsExpanded = !_zygiskControlsExpanded; paintReveal(); };
+  card.appendChild(reveal);
   const evidenceKeys = {
     zygisk_enabled: 'enabled', zygisk_hints: 'lifecycle_hints',
     zygisk_launch: 'launch_hints', zygisk_ledger: 'spawn_ledger'
@@ -16785,24 +16832,31 @@ function zygiskControlsCard(d) {
     if (raw === '0' || raw === '1') _cfgVals[key] = raw;
     const it = CFG_ITEMS.filter(function (x) { return x.key === key; })[0];
     if (!it) return;
-    const before = card.children.length;
-    cfgRenderRow(card, it, false);
-    if (card.children.length === before) return;
-    const row = card.children[card.children.length - 1];
+    const before = panel.children.length;
+    cfgRenderRow(panel, it, false);
+    if (panel.children.length === before) return;
+    const row = panel.children[panel.children.length - 1];
     row.classList.add('zy-control-row');
     const sw = row.querySelector('.cfg-switch');
-    if (sw) sw.onclick = function (e) {
+    /* The standalone page customises the write path, but must not resurrect a switch that
+     * the shared row renderer disabled because its master dependency is unavailable. */
+    if (sw && sw.getAttribute('aria-disabled') !== 'true') sw.onclick = function (e) {
       if (e && e.stopPropagation) e.stopPropagation();
       const cur = (_cfgVals[key] !== undefined) ? String(_cfgVals[key]) : String(it.def);
       zygiskControlSet(key, cur === '1' ? '0' : '1', sw);
     };
   });
   const note = logReportNote(T('zy_controls_note', 'These switches fine-tune the current mode. A mismatch is shown as Custom and is never silently rolled back. Master, cold-start and ledger changes affect newly started or restarted app processes.'));
-  note.classList.add('dev-evidence'); card.appendChild(note);
+  note.classList.add('dev-evidence'); panel.appendChild(note);
+  card.appendChild(panel); paintReveal();
   return card;
 }
 async function zygiskControlSet(key, val, ctl) {
   if (_zygiskControlBusy || ZYGISK_CONTROL_KEYS.indexOf(key) < 0 || !/^[01]$/.test(String(val))) return false;
+  if (typeof zygiskFeatureLocked === 'function' && zygiskFeatureLocked(key)) {
+    toast(T('zy_feature_master_off_why', 'Enable ASB Zygisk connection to change this feature. Its saved value is preserved.'), 'warn');
+    return false;
+  }
   _zygiskControlBusy = key;
   if (ctl) ctl.classList.add('busy');
   await asbPaintYield();
