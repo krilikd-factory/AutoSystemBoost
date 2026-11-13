@@ -3721,9 +3721,9 @@ fail() { echo "FAIL ltpo contract: $*" >&2; exit 1; }
 [ -f "$SRC" ] || fail 'runtime/asb_ltpo_apply.sh missing'
 sh -n "$SRC"
 
-# --- WebUI wiring: card, default-off, system group, own icon, honest reboot label ---
+# --- WebUI wiring: card, default-off, Display & Haptics group, own icon, honest reboot label ---
 grep -q "key:'ltpo_force', type:'bool', def:'0'" "$WEB" || fail 'ltpo_force card missing or default not off'
-grep -q "ltpo_force:'ui'" "$WEB" || fail 'ltpo_force not in the System category group'
+grep -q "ltpo_force:'feel'" "$WEB" || fail 'ltpo_force not in the Display & Haptics category group'
 grep -q "ltpo_force:'system'" "$WEB" || fail 'ltpo_force missing category colour mapping'
 grep -q "ltpo_force:'ltpo'" "$WEB" || fail 'ltpo_force missing its icon mapping'
 grep -q "ltpo: '<rect" "$WEB" || fail 'ltpo icon glyph missing from TECH_ICON_PATHS'

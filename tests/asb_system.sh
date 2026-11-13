@@ -5034,13 +5034,14 @@ fail() { echo "FAIL fix205: $*"; exit 1; }
 # the header". The report is a long list BY DESIGN and scrolls; its content sections are
 # not tier-styled at all, so the compaction tiers there compressed only the shared header
 # (logo, title, capsules) and bought zero room. The tiers now apply only where their
-# styled content lives (Profiles, Monitor, the Settings hub): Device, the report and an open
-# tweak category always keep the chrome as drawn and scroll. The runtime behaviour (the
-# report never compacts, a carried-over tier comes off, an open category is exempt, the
-# hub still compacts) is exercised in node by t_webui_fill_pages_runtime.
+# styled content lives (Profiles and Monitor): Device, the report, the Settings hub and open
+# tweak categories always keep the chrome as drawn and scroll. The runtime behaviour (the
+# report never compacts, a carried-over tier comes off, the hub and an open category are
+# exempt) is exercised in node by t_webui_fill_pages_runtime.
 grep -qF "const fittable = !document.body.classList.contains('device-active') &&" "$H" || fail "the Device page can still take a compaction tier"
 grep -qF "!document.body.classList.contains('report-active') &&" "$H" || fail "the report page can still take a compaction tier"
-grep -qF "!(document.body.classList.contains('config-active') && _cfgGroup)" "$H" || fail "an open tweak category can still take a compaction tier"
+grep -qF "!document.body.classList.contains('config-active');" "$H" || fail "the Settings hub or an open tweak category can still take a compaction tier"
+grep -qF "the 3 x 3 Settings hub scrolls without compacting its header" "$ROOT/tests/asb_ui.sh" || fail "the runtime test lost the complete Config header exemption"
 grep -qF 'if (fittable && over > need && tier < 2)' "$H" || fail "escalation is not gated on the page having tier-styled content"
 grep -qF 'let reportOpen = false, reportBase = 3000;' "$ROOT/tests/asb_ui.sh" || fail "the fit test lost its report-page mock"
 echo "PASS: fix205 contract"
