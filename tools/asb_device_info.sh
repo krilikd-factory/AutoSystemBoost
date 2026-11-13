@@ -165,17 +165,62 @@ else
 fi
 _emit kernel_config evidence_scope 'exposed config only; may be a compatibility/spoofed payload and is not proof of the running custom final config'
 
-# Kernel provenance is evidence, not a verdict from the word "custom" in a release
-# string. A locked green boot chain is only stock-like; a patch/config marker is only
-# custom-like. Neither identifies who built the boot image, and missing evidence is unknown.
+# One bounded kallsyms pass supplies named evidence to several built-in features.
+# Built-in drivers normally have no /sys/module directory, so config-only/module-only
+# detection produces false "unknown" verdicts. Symbols prove code presence, not that
+# a userspace client, qdisc, LSM policy or hiding rule was exercised successfully.
+_ks_read='not readable'; _ks_rows=0; _ks_hits=''
+if [ -r "$PROC/kallsyms" ]; then
+  if _ks_scan="$(awk '
+    NF >= 3 {
+      rows++
+      n=$3; token=""
+      if (n ~ /^cake_(qdisc_ops|init|enqueue|dequeue)(\.|$)/) token="cake"
+      else if (n ~ /^(start_rekernel|rekernel_netlink_start|rekernel_genl_family|rekernel_genl_get_version)(\.|$)/) token="rekernel"
+      else if (n ~ /^ntsync_(init|open|release|fops|misc_device)(\.|$)/) token="ntsync"
+      else if (n ~ /^vpnhide_(init|should_hide_dev|setsockopt_bind)(\.|$)/) token="vpnhide"
+      else if (n ~ /^bbg_init(\.|$)/) token="bbg"
+      if (token != "" && !seen[token]++) hits=hits token " "
+    }
+    END { printf "rows=%d;hits=%s", rows+0, hits }
+  ' "$PROC/kallsyms" 2>/dev/null)"; then
+    case "$_ks_scan" in
+      rows=*\;hits=*)
+        _ks_rows="${_ks_scan%%;*}"; _ks_rows="${_ks_rows#rows=}"
+        _ks_hits="${_ks_scan#*;hits=}"
+        if [ "$_ks_rows" -gt 0 ] 2>/dev/null; then _ks_read='readable'; else _ks_read='no usable symbol rows'; fi ;;
+      *) _ks_read='unreadable or malformed' ;;
+    esac
+  else
+    _ks_read='unreadable or malformed'
+  fi
+fi
+_ks_has() { case " $_ks_hits " in *" $1 "*) return 0 ;; esac; return 1; }
+_runtime_lsm="$(_read "$SYS/kernel/security/lsm")"
+_runtime_lsm_words=" $(printf '%s' "$_runtime_lsm" | tr ',' ' ') "
+
+# Kernel provenance is evidence, not a verdict from boot lock/build type. Positive
+# custom build/runtime indicators win over stock-like boot indicators; neither side
+# identifies who built the boot image, and missing evidence remains unknown.
 _origin_custom=''
+_origin_add() { case "; $_origin_custom;" in *"; $1;"*) ;; *) _origin_custom="${_origin_custom:+$_origin_custom; }$1" ;; esac; }
 _origin_lower="$(printf '%s %s %s' "$_uname_r" "$_proc_version" "$(_cfg_val CONFIG_LOCALVERSION)" | tr 'A-Z' 'a-z')"
 case "$_origin_lower" in
-  *custom*|*kernelsu*|*sukisu*|*apatch*|*susfs*|*nomount*) _origin_custom='build/localversion marker' ;;
+  *custom*|*kernelsu*|*sukisu*|*apatch*|*susfs*|*nomount*|*krilikd*) _origin_add 'build/localversion marker' ;;
 esac
 for _k in KSU KSU_SUSFS NOMOUNT UNICODE_BYPASS_FIX UNICODE_BYPASS BBG SECURITY_BASEBAND_GUARD BASEBAND_GUARD; do
-  case "$(_cfg_val "CONFIG_$_k")" in y|m) _origin_custom="${_origin_custom:+$_origin_custom; }CONFIG_$_k" ;; esac
+  case "$(_cfg_val "CONFIG_$_k")" in y|m) _origin_add "CONFIG_$_k" ;; esac
 done
+[ "${_susfs_state:-unavailable}" = 'available' ] && _origin_add 'SuSFS interface'
+[ -d "$SYS/module/nomount" ] && _origin_add 'NoMount driver'
+[ -d "$SYS/kernel/asb_wakeup" ] && _origin_add 'ASB wakeup blocker'
+[ -d "$PROC/rekernel" ] && _origin_add 'Re-Kernel proc interface'
+_ks_has rekernel && _origin_add 'Re-Kernel kernel symbols'
+[ -e "$PROC/vpnhide_ctl" ] && _origin_add 'VPN Hide control interface'
+_ks_has vpnhide && _origin_add 'VPN Hide kernel symbols'
+_ks_has bbg && _origin_add 'Baseband Guard kernel symbols'
+case "$_runtime_lsm_words" in *' baseband_guard '*) _origin_add 'Baseband Guard in runtime LSM list' ;; esac
+case " $(_read "$PROC/sys/net/ipv4/tcp_available_congestion_control") " in *' bbr3 '*) _origin_add 'BBRv3 runtime algorithm' ;; esac
 _origin_stock=''
 [ "$(_prop ro.boot.verifiedbootstate)" = 'green' ] && _origin_stock='verifiedbootstate=green'
 [ "$(_prop ro.boot.flash.locked)" = '1' ] && _origin_stock="${_origin_stock:+$_origin_stock; }flash.locked=1"
@@ -183,7 +228,7 @@ _origin_stock=''
 [ "$(_prop ro.build.type)" = 'user' ] && _origin_stock="${_origin_stock:+$_origin_stock; }build.type=user"
 if [ -n "$_origin_custom" ]; then
   _origin_class='custom-like'
-  _origin_basis='positive build/config patch indicators; provenance not proven'
+  _origin_basis='positive build/config/runtime patch indicators; boot lock/build type do not override them; provenance not proven'
 elif [ -n "$_origin_stock" ]; then
   _origin_class='stock-like'
   _origin_basis='boot/build indicators only; provenance not proven'
@@ -337,20 +382,43 @@ fi
 _emit metamodule nomount_driver "$_nm_state"
 _emit metamodule nomount_driver_version "${_nm_ver:-not exposed}"
 _emit metamodule nomount_evidence 'kernel config/sysfs; driver ownership not inferred'
-_emit kernel_features ntsync "$(_feature_state CONFIG_NTSYNC "$SYS/module/ntsync")"
+_ntsync="$(_feature_state CONFIG_NTSYNC "$SYS/module/ntsync")"
+if [ -c "$DEV/ntsync" ]; then
+  _ntsync='available; /dev/ntsync character device exposed'
+elif _ks_has ntsync; then
+  _ntsync='driver code present; NTSync kernel symbols found; device not observed'
+fi
+_emit kernel_features ntsync "$_ntsync"
 
-# Droidspaces has no single standard runtime switch. Report only its core kernel
-# configuration evidence, including exactly what is missing; do not claim a container works.
+# Droidspaces has no single standard runtime switch. Existing namespace/IPC nodes are
+# stronger evidence than a compatibility config, but still do not prove a container works.
+_ds_rt_seen=0; _ds_rt_missing=''
+for _spec in NAMESPACES:. IPC_NS:ipc PID_NS:pid NET_NS:net UTS_NS:uts; do
+  _k="${_spec%%:*}"; _n="${_spec#*:}"
+  if [ -n "$_n" ]; then _p="$PROC/self/ns/$_n"; else _p="$PROC/self/ns"; fi
+  if [ -e "$_p" ]; then _ds_rt_seen=$((_ds_rt_seen + 1)); else _ds_rt_missing="$_ds_rt_missing $_k"; fi
+done
+if [ -d "$PROC/sysvipc" ]; then _ds_rt_seen=$((_ds_rt_seen + 1)); else _ds_rt_missing="$_ds_rt_missing SYSVIPC"; fi
+if [ -d "$PROC/sys/fs/mqueue" ]; then _ds_rt_seen=$((_ds_rt_seen + 1)); else _ds_rt_missing="$_ds_rt_missing POSIX_MQUEUE"; fi
+if [ -r "$PROC/mounts" ] && awk '$1 == "devtmpfs" && $2 == "/dev" { found=1; exit } END { exit !found }' "$PROC/mounts" 2>/dev/null; then
+  _ds_rt_seen=$((_ds_rt_seen + 1))
+else
+  _ds_rt_missing="$_ds_rt_missing DEVTMPFS"
+fi
 _ds_missing=''
 for _k in NAMESPACES SYSVIPC POSIX_MQUEUE IPC_NS PID_NS NET_NS UTS_NS DEVTMPFS; do
   [ "$(_cfg_val "CONFIG_$_k")" = 'y' ] || _ds_missing="$_ds_missing $_k"
 done
-if [ -z "$_cfg" ]; then
+if [ "$_ds_rt_seen" -eq 8 ] && [ -z "$_ds_rt_missing" ]; then
+  _emit kernel_features droidspaces 'core runtime interfaces exposed; container operation not tested'
+elif [ "$_ds_rt_seen" -gt 0 ]; then
+  _emit kernel_features droidspaces "partial runtime exposure; not exposed:${_ds_rt_missing}; container operation not tested"
+elif [ -z "$_cfg" ]; then
   _emit kernel_features droidspaces unknown
 elif [ -z "$_ds_missing" ]; then
   _emit kernel_features droidspaces 'core config present; runtime not verified'
 else
-  _emit kernel_features droidspaces "partial; missing:${_ds_missing}"
+  _emit kernel_features droidspaces "exposed config incomplete; runtime not verified; missing there:${_ds_missing}"
 fi
 
 _unicode_state="$(_feature_state CONFIG_UNICODE_BYPASS_FIX "$SYS/module/unicode_bypass_fix")"
@@ -376,6 +444,16 @@ for _spec in 'LTO_CLANG_THIN:ThinLTO (Clang)' 'LTO_CLANG_FULL:Full LTO (Clang)' 
   _lto="${_spec#*:}; exposed config only"; break
 done
 [ "$_lto" = 'unknown' ] && [ "$(_cfg_val CONFIG_LTO_NONE)" = 'y' ] && _lto='exposed config selects LTO_NONE; running build not independently confirmed'
+# Android compiler banners may retain the +lto build marker even when the exposed
+# compatibility config says LTO_NONE. It proves neither Thin nor Full mode by itself.
+case "$(printf '%s' "$_proc_version" | tr 'A-Z' 'a-z')" in
+  *'+lto'*)
+    case "$_lto" in
+      unknown) _lto='compiler build marker +lto; exact LTO mode not exposed' ;;
+      'exposed config selects LTO_NONE;'*) _lto='compiler build marker +lto; exposed config says LTO_NONE; exact mode not independently confirmed' ;;
+      *) _lto="$_lto; compiler build marker +lto" ;;
+    esac ;;
+esac
 _emit kernel_features lto "$_lto"
 
 _tcp_avail=" $(_read "$PROC/sys/net/ipv4/tcp_available_congestion_control") "
@@ -424,13 +502,21 @@ _cfg_state() {
   esac
 }
 _vh="$(_cfg_state CONFIG_VPNHIDE "$SYS/module/vpnhide")"
-case "$_vh" in
-  built-in\ config*)
-    case "$(_cfg_val CONFIG_VPNHIDE_FS_HIDING)" in
-      y) _vh='built-in config; network and filesystem options; runtime not independently confirmed' ;;
-      *) _vh='built-in config; network option only; runtime not independently confirmed' ;;
-    esac ;;
-esac
+_vh_cfg_note=''
+[ "$(_cfg_val CONFIG_VPNHIDE)" = 'not set' ] && _vh_cfg_note='; exposed config disagrees'
+if [ -e "$PROC/vpnhide_ctl" ]; then
+  _vh="available; /proc/vpnhide_ctl exposed${_vh_cfg_note}; hiding not tested"
+elif _ks_has vpnhide; then
+  _vh="driver code present; VPN Hide kernel symbols found${_vh_cfg_note}; control interface not observed"
+else
+  case "$_vh" in
+    built-in\ config*)
+      case "$(_cfg_val CONFIG_VPNHIDE_FS_HIDING)" in
+        y) _vh='built-in config; network and filesystem options; runtime not independently confirmed' ;;
+        *) _vh='built-in config; network option only; runtime not independently confirmed' ;;
+      esac ;;
+  esac
+fi
 _emit kernel_features vpn_hide "$_vh"
 
 _ua=''; _ua_miss=''
@@ -465,14 +551,14 @@ elif [ -r "$PROC/modules" ]; then
 else
   _cake_mod='not runtime-discoverable'
 fi
-_cake_sym='not readable'
-if [ -r "$PROC/kallsyms" ]; then
-  _cake_ks="$(awk 'NF >= 3 { rows++ } NF >= 3 && ($3 == "cake_qdisc_ops" || $3 == "cake_init" || $3 == "cake_enqueue" || $3 == "cake_dequeue") { found=1; exit } END { printf "found=%d;rows=%d", found+0, rows+0 }' "$PROC/kallsyms" 2>/dev/null)"
-  case "$_cake_ks" in
-    found=1\;*) _cake_sym='CAKE symbol present in readable /proc/kallsyms' ;;
-    *';rows=0') _cake_sym='readable; no usable symbol rows' ;;
-    found=0\;*) _cake_sym='readable; no CAKE symbol observed' ;;
-    *) _cake_sym='unreadable or malformed' ;;
+if _ks_has cake; then
+  _cake_sym='CAKE symbol present in readable /proc/kallsyms'
+else
+  case "$_ks_read" in
+    readable) _cake_sym='readable; no CAKE symbol observed' ;;
+    'no usable symbol rows') _cake_sym='readable; no usable symbol rows' ;;
+    'unreadable or malformed') _cake_sym='unreadable or malformed' ;;
+    *) _cake_sym='not readable' ;;
   esac
 fi
 _cake_tc_bin="$TC_BIN"
@@ -518,13 +604,19 @@ case "$_fs_list" in *' cifs '*) [ "$_cifs" = 'built-in' ] || _cifs='filesystem r
 _emit kernel_features cifs "$_cifs"
 _emit kernel_features ip_set "$(_cfg_state CONFIG_IP_SET "$SYS/module/ip_set")"
 _rk="$(_cfg_state CONFIG_REKERNEL)"
-case "$_rk" in
-  built-in\ config*)
-    case "$(_cfg_val CONFIG_REKERNEL_NETWORK)" in
-      y) _rk='built-in config; binder/signal/network and generic netlink options; runtime not independently confirmed' ;;
-      *) _rk='built-in config; binder/signal and generic netlink options; runtime not independently confirmed' ;;
-    esac ;;
-esac
+if [ -d "$PROC/rekernel" ]; then
+  _rk='available; legacy /proc/rekernel interface exposed; userspace transport not tested'
+elif _ks_has rekernel; then
+  _rk='available; Re-Kernel kernel symbols present; transport/userspace not tested'
+else
+  case "$_rk" in
+    built-in\ config*)
+      case "$(_cfg_val CONFIG_REKERNEL_NETWORK)" in
+        y) _rk='built-in config; binder/signal/network and generic netlink options; runtime not independently confirmed' ;;
+        *) _rk='built-in config; binder/signal and generic netlink options; runtime not independently confirmed' ;;
+      esac ;;
+  esac
+fi
 _emit kernel_features rekernel "$_rk"
 _emit kernel_features wakeup_blocker "$(_cfg_state CONFIG_ASB_WAKEUP_BLOCKER "$SYS/kernel/asb_wakeup")"
 if [ -r "$SYS/kernel/asb_wakeup/blocklist" ]; then
@@ -568,6 +660,10 @@ if [ "$_bbg" = 'unknown' ]; then
 fi
 _lsm="$(_cfg_val CONFIG_LSM)"
 case "$_lsm" in *baseband_guard*) _bbg="LSM list in exposed config includes baseband_guard; $_bbg" ;; esac
+case "$_runtime_lsm_words" in
+  *' baseband_guard '*) _bbg='active in runtime LSM list; enforcement policy not tested' ;;
+  *) if _ks_has bbg && [ "$_bbg" = 'unknown' ]; then _bbg='driver code present; BBG kernel symbols found; runtime LSM activation not confirmed'; fi ;;
+esac
 _emit kernel_features bbg_baseband_guard "$_bbg"
 
 if [ "${_susfs_state:-unavailable}" = 'available' ]; then
