@@ -320,6 +320,16 @@ mglru_mode=smart
 kernel_timer_migration=off
 kernel_sched_nr_migrate=4
 
+# Profile-aware timer/idle controls: stock|auto|off|on.
+# Auto preserves the former Battery-only requests (hrtimer=0, LPM prediction=1) and
+# exactly restores ASB-owned values in other profiles. Manual off/on overrides Auto.
+kernel_hrtimer_migration=auto
+kernel_lpm_prediction=auto
+
+# Default autosuspend delay for newly detected USB peripherals: stock|off|on.
+# on requests 2 seconds; off requests -1. This is not a charging, ADB or gadget control.
+kernel_usb_autosuspend=stock
+
 # Scheduler debug accounting: stock|off through /proc/sys/kernel/sched_schedstats only.
 # The exact original 0/1 is restored on stock and uninstall. Missing node = not exposed.
 kernel_sched_stats=stock
