@@ -5391,6 +5391,74 @@ MODDIR="$TMP/mod" sh "$TMP/mod/runtime/asb_lpm.sh" normal
 echo 'PASS: network handover and independent radio policy contract'
 )
 
+t_kernel_fixed_node_bindings_runtime() (
+# dev34: Linux 6.12 migration batch is in debugfs and scheduler stats use sched_schedstats.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+K="$ROOT/runtime/asb_kernel_controls.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL kernel fixed nodes: $*" >&2; exit 1; }
+grep -Fq 'kernel_sched_nr_migrate) printf' "$K" || fail 'migration binding missing'
+grep -Fq '${ASB_SCHED_NR_MIGRATE_NODE:-/sys/kernel/debug/sched/nr_migrate}' "$K" || fail 'migration default is not the Linux 6.12 debugfs node'
+grep -Fq '${ASB_SCHED_STATS_NODE:-/proc/sys/kernel/sched_schedstats}' "$K" || fail 'stats default is not sched_schedstats'
+_legacy="$(grep -nE '/proc/sys/kernel/(sched_nr_migrate|sched_stats)([^[:alnum:]_]|$)' \
+  "$ROOT/service.sh" "$ROOT/post-fs-data.sh" "$ROOT/uninstall.sh" "$ROOT"/runtime/*.sh \
+  "$ROOT/tools/asb_diag.sh" "$ROOT/tools/asb_device_info.sh" "$ROOT/system/bin/asbdiag" 2>/dev/null || true)"
+[ -z "$_legacy" ] || fail "obsolete fixed node remains: $_legacy"
+_direct="$(grep -RInE 'sysctlw kernel\.sched_schedstats|> */proc/sys/kernel/sched_schedstats' \
+  "$ROOT/service.sh" "$ROOT/post-fs-data.sh" "$ROOT/uninstall.sh" "$ROOT"/runtime/*.sh "$ROOT"/profiles/*.sh 2>/dev/null || true)"
+[ -z "$_direct" ] || fail "competing stats writer remains: $_direct"
+[ "$(grep -c 'asb_kernel_controls.sh" apply kernel_sched_stats' "$ROOT/service.sh")" -eq 3 ] || fail 'boot/reinforce do not share the stats owner'
+grep -Fq 'asb_kernel_controls.sh" restore' "$ROOT/uninstall.sh" || fail 'uninstall lost the bounded restore owner'
+grep -Fq '_ss_node="$PROC/sys/kernel/sched_schedstats"' "$ROOT/tools/asb_device_info.sh" || fail 'device diagnostics use a different stats node'
+grep -Fq 'if [ -r /proc/sys/kernel/sched_schedstats ]' "$ROOT/tools/asb_diag.sh" || fail 'standalone diagnostics use a different stats node'
+cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail 'diagnostic copies diverged'
+mkdir -p "$T/mod/config" "$T/state"
+printf 'kernel_sched_nr_migrate=4\nkernel_sched_stats=stock\n' > "$T/mod/config/governor.conf"
+printf '32\n' > "$T/nr"; printf '1\n' > "$T/stats"
+run() {
+  MODDIR="$T/mod" ASB_KERNEL_STATE_DIR="$T/state" \
+    ASB_SCHED_NR_MIGRATE_NODE="$T/nr" ASB_SCHED_STATS_NODE="$T/stats" sh "$K" "$@"
+}
+# The preserved upgrade request 4 can now become effective; Stock stats must not write or own it.
+out="$(run apply kernel_sched_nr_migrate; run apply kernel_sched_stats)"
+printf '%s\n' "$out" | grep -q '^kernel_sched_nr_migrate|applied|4|4|32$' || fail "upgrade request did not apply: $out"
+printf '%s\n' "$out" | grep -q '^kernel_sched_stats|stock_unowned|stock|unknown|none$' || fail "Stock stats was not inert: $out"
+[ "$(cat "$T/nr")" = 4 ] && [ "$(cat "$T/stats")" = 1 ] || fail 'fixed-node apply wrote the wrong value'
+[ "$(cat "$T/state/kernel_sched_nr_migrate.prev")" = 32 ] && [ ! -e "$T/state/kernel_sched_stats.prev" ] || fail 'upgrade baseline/stock ownership is wrong'
+run apply kernel_sched_nr_migrate >/dev/null
+[ "$(cat "$T/state/kernel_sched_nr_migrate.prev")" = 32 ] || fail 'repeat apply replaced the original migration baseline'
+# A successful write with a different live value remains a failure and keeps restore evidence.
+mkdir -p "$T/bin"; REAL_CAT="$(command -v cat)"
+cat > "$T/bin/cat" <<'S'
+#!/bin/sh
+if [ -f "$CLAMP_FLAG" ] && [ "${1:-}" = "$CLAMP_NODE" ]; then printf '32\n'; exit 0; fi
+exec "$REAL_CAT" "$@"
+S
+chmod +x "$T/bin/cat"; : > "$T/clamp"
+set +e
+out="$(PATH="$T/bin:$PATH" REAL_CAT="$REAL_CAT" CLAMP_FLAG="$T/clamp" CLAMP_NODE="$T/nr" run apply kernel_sched_nr_migrate 2>/dev/null)"
+rc=$?
+set -e
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^kernel_sched_nr_migrate|readback_mismatch|4|32|32$' || fail "migration mismatch verdict: $out"
+[ -f "$T/state/kernel_sched_nr_migrate.prev" ] || fail 'migration mismatch consumed baseline'
+rm -f "$T/clamp"
+printf 'kernel_sched_nr_migrate=stock\nkernel_sched_stats=stock\n' > "$T/mod/config/governor.conf"
+out="$(run apply kernel_sched_nr_migrate)"
+printf '%s\n' "$out" | grep -q '^kernel_sched_nr_migrate|restored|stock|32|none$' || fail "migration exact restore: $out"
+[ "$(cat "$T/nr")" = 32 ] && [ ! -e "$T/state/kernel_sched_nr_migrate.prev" ] || fail 'migration restore left wrong value/state'
+# Correct paths still report absence/access honestly rather than claiming success.
+rm -f "$T/nr"; printf 'kernel_sched_nr_migrate=4\nkernel_sched_stats=stock\n' > "$T/mod/config/governor.conf"
+out="$(run status kernel_sched_nr_migrate)"
+printf '%s\n' "$out" | grep -q '^kernel_sched_nr_migrate|not_exposed|4|unknown|none$' || fail "missing debugfs status: $out"
+set +e; out="$(run apply kernel_sched_nr_migrate 2>/dev/null)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && [ ! -e "$T/state/kernel_sched_nr_migrate.prev" ] || fail 'missing debugfs node created state or returned success'
+chmod 444 "$T/stats"
+out="$(run status kernel_sched_stats)"
+printf '%s\n' "$out" | grep -q '^kernel_sched_stats|not_writable|stock|1|none$' || fail "read-only stats status: $out"
+echo 'PASS kernel fixed nodes: debugfs/proc bindings, upgrade apply, inert Stock, stable baseline, mismatch, exact restore, honest access states and one owner'
+)
+
 t_kernel_sched_stats_runtime() (
 # Runtime: opt-in sched_stats writes are guarded, idempotent and exactly reversible.
 set -eu
@@ -5423,8 +5491,10 @@ run stock
 rm -f "$T/sched_stats"; printf '1\n' > "$T/state/sched.prev"
 run off
 [ "$(cat "$T/state/sched.prev")" = 1 ] || fail 'missing node destroyed evidence instead of leaving it for restore'
-grep -Fq '/data/adb/asb/kernel_sched_stats.prev' "$ROOT/uninstall.sh" || fail 'uninstall restore missing'
+grep -Fq 'asb_kernel_controls.sh" restore' "$ROOT/uninstall.sh" || fail 'uninstall restore owner missing'
+! grep -q '/proc/sys/kernel/sched_stats' "$ROOT/uninstall.sh" || fail 'legacy uninstall writer remains'
 grep -Fq 'kernel_sched_stats = $(cfg kernel_sched_stats)' "$ROOT/tools/asb_diag.sh" || fail 'diagnostic live state missing'
+grep -Fq '/proc/sys/kernel/sched_schedstats' "$ROOT/tools/asb_diag.sh" || fail 'diagnostic live path is obsolete'
 cmp -s "$ROOT/tools/asb_diag.sh" "$ROOT/system/bin/asbdiag" || fail 'diagnostic copies diverged'
 echo 'PASS kernel sched_stats: guarded opt-in, idempotent baseline, exact stock/uninstall restore'
 )

@@ -9097,14 +9097,14 @@ printf '%s\n' "$out" | grep -q 'DO_NOT_COLLECT' && fail "a sensitive identifier 
 grep -Ev '^show (version|variant|enabled_features)$' "$T/susfs.log" && fail "a state-changing SuSFS command ran"
 # Device Diagnostics runs the real bounded collector mode. It must expose the
 # scheduler node/config verdicts and stop before package, display, battery and thermal work.
-mkdir -p "$T/proc/sys/kernel"; printf '1\n' > "$T/proc/sys/kernel/sched_stats"
+mkdir -p "$T/proc/sys/kernel"; printf '1\n' > "$T/proc/sys/kernel/sched_schedstats"
 printf '\nCONFIG_SCHEDSTATS=y\n' >> "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
 out="$(run --kernel)"
 want kernel_features sched_stats 'writable; live=1'
 want kernel_features oplus_sdp_900ma 'not exposed; no confirmed OPlus SDP current-control ABI'
 printf '%s\n' "$out" | awk -F '\t' '$2 !~ /^(meta|firmware|soc|kernel|susfs|kernel_external|kernel_config|kernel_origin|kernel_btf|kernel_ebpf|kernel_fuse_bpf|kernel_features|metamodule)$/ { bad = 1 } END { exit bad }' || fail "--kernel ran full-collector sections: $out"
 printf '%s\n' "$out" | grep -q 'DO_NOT_COLLECT' && fail "--kernel collected a sensitive identifier"
-rm -f "$T/proc/sys/kernel/sched_stats"
+rm -f "$T/proc/sys/kernel/sched_schedstats"
 sed -i 's/^CONFIG_SCHEDSTATS=y$/# CONFIG_SCHEDSTATS is not set/' "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
 out="$(run --kernel)"; want kernel_features sched_stats disabled
 sed -i '/^# CONFIG_SCHEDSTATS is not set$/d' "$T/config"; gzip -c "$T/config" > "$T/proc/config.gz"
@@ -9389,11 +9389,16 @@ for p in (root / 'webroot/i18n').glob('*.json'):
     for k in new:
         assert isinstance(d.get(k), str) and d[k], (p.name, k)
         if p.stem != 'en': assert d[k] != en[k], (p.name, k, 'untranslated')
-    for key in keys[-2:]:
+    for key in keys:
         card = d['cfg'][key]
-        assert card['name'] and card['desc']
-        assert set(card['descOpt']) == {'stock','off','on'}
+        min_desc = 120 if p.stem == 'zh' else 240
+        assert card['name'] and len(card['desc']) >= min_desc, (p.name, key, 'missing mechanism/trade-off explanation')
+        assert '/proc/sys/kernel/sched_stats' not in card['desc'], (p.name, key, 'obsolete stats path')
+        assert '/proc/sys/kernel/sched_nr_migrate' not in card['desc'], (p.name, key, 'obsolete migration path')
+        if key in keys[-3:]: assert set(card['descOpt']) == ({'stock','off'} if key == 'kernel_sched_stats' else {'stock','off','on'})
         if p.stem != 'en': assert card != en['cfg'][key], (p.name, key, 'untranslated')
+    assert '/sys/kernel/debug/sched/nr_migrate' in d['cfg']['kernel_sched_nr_migrate']['desc']
+    assert '/proc/sys/kernel/sched_schedstats' in d['cfg']['kernel_sched_stats']['desc']
 P
 command -v node >/dev/null 2>&1 || { echo 'SKIP webui kernel panel runtime: no node'; exit 0; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
@@ -9469,7 +9474,7 @@ wifi_scan_throttle net_wifi_leave wifi_powersave doze_level doze_trim_whitelist
 wakelock_action wakelock_fitness gnss_trim night_quiet_enable sustained_temp_enter
 perf_ceiling_pct cool_gaming BG_TRIM_LEVEL gms_trim athena_service ltpo_force ltpo_video
 phantom_procs mmfeed_off log_level lsposed_verbose mglru_mode kernel_timer_migration
-kernel_sched_nr_migrate'''.split())
+kernel_sched_nr_migrate kernel_sched_stats kernel_sched_autogroup kernel_sched_child_runs_first'''.split())
 def jsq(v):
     return "desc:'" + v.replace('\\', '\\\\').replace("'", "\\'").replace('\n', '\\n') + "'"
 for k in audited:
