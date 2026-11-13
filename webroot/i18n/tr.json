@@ -546,6 +546,9 @@
   "grp_net": "Ağ",
   "grp_battery": "Pil",
   "grp_ui": "Sistem",
+  "grp_kernel": "Çekirdek",
+  "grp_feel": "Ekran ve dokunuş",
+  "grp_zygisk": "Zygisk",
   "optFor": {
     "net_mtu_probing": {
       "stock": "Stok",
@@ -1385,7 +1388,10 @@
   "grp_iface_desc": "Animasyonlar, bulanıklık",
   "grp_net_desc": "Wi-Fi, LTE, kuyruklar",
   "grp_battery_desc": "Smart, Doze, ısı, RAM",
-  "grp_ui_desc": "Çekirdek, hizmetler, LTPO, dokunsal geri bildirim",
+  "grp_ui_desc": "Hizmetler, işlemler, tanılama",
+  "grp_kernel_desc": "Görev zamanlayıcı, MGLRU, uyandırmalar",
+  "grp_feel_desc": "LTPO, titreşim, dokunma",
+  "grp_zygisk_desc": "Ana anahtar ve durum",
   "stock_cpu_ceiling": "CPU tavanı",
   "stock_gpu_clock": "GPU saati",
   "stock_bat_temp": "Pil sıcaklığı",

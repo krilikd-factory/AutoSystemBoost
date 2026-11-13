@@ -546,6 +546,9 @@
   "grp_net": "Netzwerk",
   "grp_battery": "Akku",
   "grp_ui": "System",
+  "grp_kernel": "Kernel",
+  "grp_feel": "Display & Haptik",
+  "grp_zygisk": "Zygisk",
   "optFor": {
     "net_mtu_probing": {
       "stock": "Standard",
@@ -1385,7 +1388,10 @@
   "grp_iface_desc": "Animationen, Weichzeichnung",
   "grp_net_desc": "WLAN, LTE, Warteschlangen",
   "grp_battery_desc": "Smart, Doze, Wärme, RAM",
-  "grp_ui_desc": "Kernel, Dienste, LTPO, Haptik",
+  "grp_ui_desc": "Dienste, Prozesse, Diagnose",
+  "grp_kernel_desc": "Planer, MGLRU, Wakeups",
+  "grp_feel_desc": "LTPO, Vibration, Berührung",
+  "grp_zygisk_desc": "Hauptschalter und Status",
   "stock_cpu_ceiling": "CPU-Obergrenze",
   "stock_gpu_clock": "GPU-Takt",
   "stock_bat_temp": "Akkutemperatur",

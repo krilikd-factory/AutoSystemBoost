@@ -39,6 +39,9 @@
   "grp_net": "网络",
   "grp_battery": "电池",
   "grp_ui": "系统",
+  "grp_kernel": "内核",
+  "grp_feel": "显示与触感",
+  "grp_zygisk": "Zygisk",
   "wb_handover": "屏幕开启时移动数据会保持就绪，耗电会略有增加",
   "cfg": {
     "night_charge_enable": {
@@ -1385,7 +1388,10 @@
   "grp_iface_desc": "动画、模糊效果",
   "grp_net_desc": "Wi-Fi、LTE、队列",
   "grp_battery_desc": "智能、Doze、发热、内存",
-  "grp_ui_desc": "内核、服务、LTPO、触感",
+  "grp_ui_desc": "服务、进程、诊断",
+  "grp_kernel_desc": "调度器、MGLRU、唤醒",
+  "grp_feel_desc": "LTPO、振动、触控",
+  "grp_zygisk_desc": "主开关与状态",
   "stock_cpu_ceiling": "CPU 上限",
   "stock_gpu_clock": "GPU 频率",
   "stock_bat_temp": "电池温度",

@@ -39,6 +39,9 @@
   "grp_net": "الشبكة",
   "grp_battery": "البطارية",
   "grp_ui": "النظام",
+  "grp_kernel": "النواة",
+  "grp_feel": "الشاشة والاستجابة",
+  "grp_zygisk": "Zygisk",
   "wb_handover": "تبقى بيانات الهاتف جاهزة أثناء تشغيل الشاشة، ما يستهلك قدراً بسيطاً من البطارية",
   "cfg": {
     "night_charge_enable": {
@@ -1385,7 +1388,10 @@
   "grp_iface_desc": "الحركات والتمويه",
   "grp_net_desc": "Wi-Fi وLTE والإرسال",
   "grp_battery_desc": "Smart وDoze والحرارة وRAM",
-  "grp_ui_desc": "النواة والخدمات وLTPO والاستجابة اللمسية",
+  "grp_ui_desc": "الخدمات والعمليات والتشخيص",
+  "grp_kernel_desc": "المجدول وMGLRU والاستيقاظ",
+  "grp_feel_desc": "LTPO والاهتزاز واللمس",
+  "grp_zygisk_desc": "المفتاح الرئيسي والحالة",
   "stock_cpu_ceiling": "سقف المعالج",
   "stock_gpu_clock": "تردد GPU",
   "stock_bat_temp": "حرارة البطارية",

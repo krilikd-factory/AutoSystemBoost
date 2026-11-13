@@ -39,6 +39,9 @@
   "grp_net": "Rete",
   "grp_battery": "Batteria",
   "grp_ui": "Sistema",
+  "grp_kernel": "Kernel",
+  "grp_feel": "Display e risposta",
+  "grp_zygisk": "Zygisk",
   "wb_handover": "I dati mobili restano pronti a schermo acceso e consumano un po’ più batteria",
   "cfg": {
     "night_charge_enable": {
@@ -1385,7 +1388,10 @@
   "grp_iface_desc": "Animazioni, sfocatura",
   "grp_net_desc": "Wi-Fi, LTE, code",
   "grp_battery_desc": "Smart, Doze, calore, RAM",
-  "grp_ui_desc": "Kernel, servizi, LTPO, vibrazione",
+  "grp_ui_desc": "Servizi, processi, diagnostica",
+  "grp_kernel_desc": "Scheduler, MGLRU, wakeup",
+  "grp_feel_desc": "LTPO, vibrazione, tocco",
+  "grp_zygisk_desc": "Interruttore principale e stato",
   "stock_cpu_ceiling": "Tetto CPU",
   "stock_gpu_clock": "Frequenza GPU",
   "stock_bat_temp": "Temp. batteria",

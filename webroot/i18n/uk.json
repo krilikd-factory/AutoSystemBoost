@@ -546,6 +546,9 @@
   "grp_net": "Мережа",
   "grp_battery": "Батарея",
   "grp_ui": "Система",
+  "grp_kernel": "Ядро",
+  "grp_feel": "Екран і відгук",
+  "grp_zygisk": "Zygisk",
   "optFor": {
     "net_mtu_probing": {
       "stock": "Сток",
@@ -1385,7 +1388,10 @@
   "grp_iface_desc": "Анімації, розмиття",
   "grp_net_desc": "Wi-Fi, LTE, черги",
   "grp_battery_desc": "Smart, Doze, нагрів, RAM",
-  "grp_ui_desc": "Ядро, служби, LTPO, вібрація",
+  "grp_ui_desc": "Служби, процеси, діагностика",
+  "grp_kernel_desc": "Планувальник, MGLRU, пробудження",
+  "grp_feel_desc": "LTPO, вібрація, дотики",
+  "grp_zygisk_desc": "Головний перемикач і статус",
   "stock_cpu_ceiling": "Стеля ЦП",
   "stock_gpu_clock": "Частота GPU",
   "stock_bat_temp": "Темп. батареї",

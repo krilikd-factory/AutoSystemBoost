@@ -546,6 +546,9 @@
   "grp_net": "Rede",
   "grp_battery": "Bateria",
   "grp_ui": "Sistema",
+  "grp_kernel": "Kernel",
+  "grp_feel": "Ecrã e resposta",
+  "grp_zygisk": "Zygisk",
   "optFor": {
     "net_mtu_probing": {
       "stock": "Original",
@@ -1385,7 +1388,10 @@
   "grp_iface_desc": "Animações, desfoque",
   "grp_net_desc": "Wi-Fi, LTE, filas",
   "grp_battery_desc": "Smart, Doze, calor, RAM",
-  "grp_ui_desc": "Kernel, serviços, LTPO, resposta tátil",
+  "grp_ui_desc": "Serviços, processos, diagnóstico",
+  "grp_kernel_desc": "Escalonador, MGLRU, ativações",
+  "grp_feel_desc": "LTPO, vibração, toque",
+  "grp_zygisk_desc": "Interruptor principal e estado",
   "stock_cpu_ceiling": "Teto da CPU",
   "stock_gpu_clock": "Clock da GPU",
   "stock_bat_temp": "Temp. bateria",

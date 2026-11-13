@@ -546,6 +546,9 @@
   "grp_net": "Jaringan",
   "grp_battery": "Baterai",
   "grp_ui": "Sistem",
+  "grp_kernel": "Kernel",
+  "grp_feel": "Layar & respons",
+  "grp_zygisk": "Zygisk",
   "optFor": {
     "net_mtu_probing": {
       "stock": "Bawaan",
@@ -1385,7 +1388,10 @@
   "grp_iface_desc": "Animasi, blur",
   "grp_net_desc": "Wi-Fi, LTE, antrean",
   "grp_battery_desc": "Smart, Doze, panas, RAM",
-  "grp_ui_desc": "Kernel, layanan, LTPO, haptik",
+  "grp_ui_desc": "Layanan, proses, diagnostik",
+  "grp_kernel_desc": "Penjadwal, MGLRU, wakeup",
+  "grp_feel_desc": "LTPO, getaran, sentuhan",
+  "grp_zygisk_desc": "Sakelar utama dan status",
   "stock_cpu_ceiling": "Batas CPU",
   "stock_gpu_clock": "Clock GPU",
   "stock_bat_temp": "Suhu baterai",
