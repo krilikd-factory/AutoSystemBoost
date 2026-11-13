@@ -8,8 +8,8 @@ asb_kc_node() {
   case "$1" in
     mglru_mode) printf '%s\n' "${ASB_MGLRU_ENABLED_NODE:-/sys/kernel/mm/lru_gen/enabled}" ;;
     kernel_timer_migration) printf '%s\n' "${ASB_TIMER_MIGRATION_NODE:-/proc/sys/kernel/timer_migration}" ;;
-    kernel_sched_nr_migrate) printf '%s\n' "${ASB_SCHED_NR_MIGRATE_NODE:-/proc/sys/kernel/sched_nr_migrate}" ;;
-    kernel_sched_stats) printf '%s\n' "${ASB_SCHED_STATS_NODE:-/proc/sys/kernel/sched_stats}" ;;
+    kernel_sched_nr_migrate) printf '%s\n' "${ASB_SCHED_NR_MIGRATE_NODE:-/sys/kernel/debug/sched/nr_migrate}" ;;
+    kernel_sched_stats) printf '%s\n' "${ASB_SCHED_STATS_NODE:-/proc/sys/kernel/sched_schedstats}" ;;
     kernel_sched_autogroup) printf '%s\n' "${ASB_SCHED_AUTOGROUP_NODE:-/proc/sys/kernel/sched_autogroup_enabled}" ;;
     kernel_sched_child_runs_first) printf '%s\n' "${ASB_SCHED_CHILD_RUNS_FIRST_NODE:-/proc/sys/kernel/sched_child_runs_first}" ;;
     *) return 1 ;;
