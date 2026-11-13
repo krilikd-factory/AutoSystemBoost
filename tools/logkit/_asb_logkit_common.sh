@@ -3073,7 +3073,7 @@ lk_emit_cap_cause_split() {
 lk_fsm_media_trace_header() {
   {
     echo "# FSM/media evidence — one row per recorder poll; no additional native or package-manager queries"
-    echo "# epoch|iso_time|phase|fsm_state|profile|gpu_pct|load1|pkg_detect_ok|pkg_source|app_hint|media_pkg_known|guard_setting|guard_active|guard_age_s|guard_reason"
+    echo "# epoch|iso_time|phase|fsm_state|profile|gpu_pct|load1|pkg_detect_ok|pkg_source|app_hint|media_pkg_known|guard_setting|guard_active|guard_age_s|guard_reason|app_hint_inferred"
   } > "$LK_OUT_DIR/fsm_media_trace.tsv"
 }
 
@@ -3087,11 +3087,14 @@ lk_capture_fsm_media_trace_row() {
   _hint=$(lk_state_kv smart_app_hint); _media=$(lk_state_kv smart_media_guard_pkg_known)
   _setting=$(lk_state_kv smart_media_guard_setting); _active=$(lk_state_kv smart_media_guard_active)
   _age=$(lk_state_kv smart_media_guard_age_s); _reason=$(lk_state_kv smart_media_guard_reason)
-  for _v in _phase _state _profile _gpu _load _pkgok _pkgsrc _hint _media _setting _active _age _reason; do
+  # Appended to preserve every old column index: 1 means GPU/heat inference, 0 a package-table
+  # game. The FSM state and the human report phase deliberately remain separate facts.
+  _inferred=$(lk_state_kv smart_app_hint_inferred)
+  for _v in _phase _state _profile _gpu _load _pkgok _pkgsrc _hint _media _setting _active _age _reason _inferred; do
     eval "_val=\${$_v}"; [ -n "$_val" ] || eval "$_v=-"
   done
-  printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
-    "$_e" "$_d" "$_phase" "$_state" "$_profile" "$_gpu" "$_load" "$_pkgok" "$_pkgsrc" "$_hint" "$_media" "$_setting" "$_active" "$_age" "$_reason" \
+  printf '%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s\n' \
+    "$_e" "$_d" "$_phase" "$_state" "$_profile" "$_gpu" "$_load" "$_pkgok" "$_pkgsrc" "$_hint" "$_media" "$_setting" "$_active" "$_age" "$_reason" "$_inferred" \
     >> "$LK_OUT_DIR/fsm_media_trace.tsv"
 }
 

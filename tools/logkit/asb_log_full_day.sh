@@ -202,6 +202,15 @@ lk_audio_phase_name() {
   echo "$_apn"
 }
 
+lk_game_hint_confirmed() {
+  _lk_state="${ASB_LK_STATE_FILE:-/dev/.asb/state}"
+  _lk_hint="$(grep -m1 '^app_hint=' "$_lk_state" 2>/dev/null | cut -d= -f2 | tr -dc '0-9')"
+  _lk_inferred="$(grep -m1 '^app_hint_inferred=' "$_lk_state" 2>/dev/null | cut -d= -f2 | tr -dc '0-9')"
+  # app_hint=4 can be inferred from GPU/heat. Only a package-table classification (explicit
+  # provenance 0) may name a report phase "gaming"; an old/missing provenance is not proof.
+  [ "${_lk_hint:-0}" -ge 4 ] 2>/dev/null && [ "${_lk_inferred:-1}" = "0" ]
+}
+
 lk_detect_phase() {
   _now="$1"
   # charging?
@@ -344,15 +353,12 @@ lk_detect_phase() {
   # gaming phase on a session where the user played nothing, and that phase then
   # carried its own temperature and drain figures into the report as if it were one.
   #
-  # The governor already classifies the foreground package and publishes app_hint;
-  # 4 is ASB_APP_GAMING. Requiring it means the label follows what is actually running
-  # rather than how busy the GPU happens to be. Where the hint is unavailable the
-  # phase falls through to active, which is the honest answer for an unknown workload.
-  if [ "$LK_IN_GAMING" = "1" ]; then
-    _lk_hint="$(grep -m1 '^app_hint=' /dev/.asb/state 2>/dev/null | cut -d= -f2 | tr -dc '0-9')"
-    if [ "${_lk_hint:-0}" -ge 4 ] 2>/dev/null; then
-      LK_PHASE_OUT="gaming"; return 0
-    fi
+  # The governor publishes app_hint=4 both for package-table games and for an inferred
+  # GPU/heat workload. The latter remains a useful native GAMING performance state, but it
+  # is not evidence that the owner played a game. Only explicit package provenance names
+  # this report phase; inference, an old governor and missing state all fall through.
+  if [ "$LK_IN_GAMING" = "1" ] && lk_game_hint_confirmed; then
+    LK_PHASE_OUT="gaming"; return 0
   fi
   if [ "$LK_AUDIO_PLAY" = "1" ]; then LK_PHASE_OUT="$(lk_audio_phase_name scr)"; return 0; fi
   # within 5 min of waking → post_wake (ASB ramp window of interest)
@@ -1337,6 +1343,14 @@ lk_emit_phase_summary() {
 
 # Smart records (fix184, Smart V5 in fix185): what the governor measured per situation and the
 # best setting it kept - copied from /dev/.asb/smart_records.txt at the end of the capture.
+lk_emit_smart_energy_rows() {
+  awk -F'|' '$1 ~ /^(app|class|plug)$/ {
+    line=$0; gsub(/[|]/, "  ", line); print "energy: " line
+    if ($1 == "class" && $2 == "game" && $3 ~ /^[0-9]+([.][0-9]+)?$/ && $4 ~ /^[0-9]+$/ && $5 ~ /^[0-9]+$/ && $3 + 0 == 0 && $4 + 0 == 0 && $5 + 0 == 0)
+      print "energy note: no saved game sessions; this zero category row is not gameplay detection."
+  }' "$1"
+}
+
 lk_emit_smart_records() {
   _srf="${ASB_LK_RECORDS_FILE:-/dev/.asb/smart_records.txt}"
   echo "----- SMART RECORDS (best setting per situation, power compared side by side) -----"
@@ -1366,7 +1380,7 @@ lk_emit_smart_records() {
   _sef="${ASB_LK_ENERGY_FILE:-/dev/.asb/smart_energy.txt}"
   if [ -r "$_sef" ]; then
     cp "$_sef" "$LK_OUT_DIR/smart_energy.txt" 2>/dev/null
-    grep -E '^(app|class|plug)[|]' "$_sef" | sed 's/^/energy: /; s/|/  /g'
+    lk_emit_smart_energy_rows "$_sef"
   fi
   _slf="${ASB_LK_LAB_FILE:-/dev/.asb/smart_lab.txt}"
   if [ -r "$_slf" ]; then
