@@ -4,6 +4,61 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev47 - distinct category colours, one Zygisk connection card, a Load sheet with a scale, SOTER Repair
+
+Input: the dev46 source (host regression 510/510 as received) and four owner requests.
+
+- **Nine category colours that really differ.** Audio and Camera were two pinks, Kernel and
+  Display & Haptics were cool blue and pale peach. Now Audio is a deep red towards burgundy
+  (`#d4475f`, light `#9e2441`), Camera takes the former Kernel blue (`#82b8ff` / `#2f62b0`),
+  Kernel is brown (`#b0704a` / `#7a3f24`), Display & Haptics is lime (`#b3d65a` / `#647800`) so
+  it cannot be mistaken for the brown, Zygisk moves from blue-grey slate to neutral graphite
+  (`#b1b6bc` / `#5d6167`) so it no longer sits next to the new blue Camera, and System moves from
+  amber to gold (`#f0cd4e` / `#946400`): on the large hub tiles, where a hue is only a faint
+  wash, the first draft's brown Kernel and amber System looked alike. Interface keeps the only
+  lilac. Measured, not eyeballed: the closest pair of the nine hub hues is CIEDE2000 16.9 in the
+  dark theme and 16.6 in the light theme (11.4 and 9.5 before; Interface/Camera and Kernel/Zygisk
+  were the closest), and a regression keeps every pair at 15 or more, System at least 25 hue
+  degrees away from Kernel, and exactly one pastel pink/magenta/lilac hue. Light-theme hues keep
+  at least 4.5:1 contrast on white. Tiles, headings, tweak rows, icons, controls and Kernel's buttons share
+  the hue as before. Toasts used the old fine-grained categories (a Kernel switch could toast in
+  the colour of "motion" pink); they now follow the navigation category too, with new Kernel,
+  Display & Haptics and Zygisk toast skins and a gold System skin.
+- **ZYGISK: Connection and controls are one card.** The four switches sat two cards below the
+  link they act on. They now live inside the Connection card, under a hairline, titled
+  "Connection and controls"; the embedded block is a plain inner block, so the glass and light
+  themes do not draw a card inside a card. When ASB Zygisk is off the card stays "Connection"
+  with the Off card under it, as before. The section map lists Controls first.
+- **Monitor → Load / System load sheet.** Tapping either now shows the Device diagnostics
+  pressure scale: score, band in its colour, the four-colour bar with a marker, and one bar per
+  measured component (load per core, memory used, CPU busy, GPU busy). It is measured on open by
+  the same read-only collector (`runtime/asb_pressure.sh`) through a new standalone reader,
+  `runtime/asb_pressure_snapshot.sh`; a component the phone does not expose is labelled so, a
+  failed read says so, and a reply arriving after the sheet closed is dropped. The score on the
+  Device page now also wears its band colour.
+- **Infirmary → System Repairs → SOTER Repair.** Ported from the owner-supplied reference
+  module's manual SOTER button and rebuilt on ASB's fixed-protocol pattern
+  (`runtime/asb_soter_fix.sh status|run`). Status reads `/data/system/packages.list` (falling
+  back to `pm path`) and the ROM's `init.svc.*soter*` services. Run takes an atomic lock, stops
+  only the declared SOTER services, runs `pm clear com.tencent.soter.soterserver`, starts them
+  and polls their state back for up to five seconds. Outcomes are separate: done, done without a
+  declared service, service down, clear refused, not installed, busy. The reference stopped and
+  started `vendor.soter` blindly and always reported success. Manual only: nothing at boot, no
+  loop. The card states that the repair hides neither root nor an unlocked bootloader, and the
+  second tap within five seconds confirms that fingerprint payment must then be switched on again
+  in the payment apps. Thirteen locales.
+- **Stale locks after a reboot.** A reboot during Junk Cleanup left `junk_cleanup/run.lock`, and
+  every later cleanup answered "Another cleanup is already running" until the module was
+  reinstalled. post-fs-data now removes that lock and the new SOTER lock, like Battery Fix's.
+- Russian labels for two pressure components no longer mix English ("Load на online CPU",
+  "CPU busy за замер").
+- Both new helpers are in the two workflows' required-file and executable-mode lists, and
+  README.advanced (EN/RU) gains section 11.20 for SOTER Repair.
+
+No native code changed. Host fixtures and Node renderers are not device validation; the SOTER
+service name and the payment-app behaviour after a reset are ROM-specific and were not measured
+on a phone.
+
 ## V66 dev46 - owner exclusions are a real Zygisk compatibility boundary
 
 Input: the dev45 source, a full-day capture, asbdiag and screenshots showing that an owner-excluded
