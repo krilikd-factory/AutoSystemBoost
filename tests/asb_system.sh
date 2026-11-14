@@ -2308,6 +2308,8 @@ for f in files:
     d=alld[f]
     if 'logkit' in f: d=d|alld.get('tools/logkit/_asb_logkit_common.sh',set())
     if f in ('runtime/asb_pressure.sh','runtime/asb_zygisk_info.sh','runtime/asb_lsposed_info.sh'): d=d|device_defs
+    # dev47: the Monitor's standalone pressure reader hosts the same collector itself.
+    if f == 'runtime/asb_pressure_snapshot.sh': d=d|alld.get('runtime/asb_pressure.sh',set())
     # link-status sources the read-only collector and calls its defined entry point.
     if f == 'runtime/asb_zygisk.sh': d=d|alld.get('runtime/asb_zygisk_info.sh',set())
     for i,line in enumerate(open(f).read().split('\n'),1):
@@ -4679,7 +4681,7 @@ grep -qF '.cfg-row.is-on[class*="cat-"] {' "$H" || fail "enabled cards lost the 
 grep -qF 'color-mix(in srgb, var(--cat, var(--accent)) 17%, transparent) 0%' "$H" || fail "enabled cards lost the hub-tile gradient"
 grep -qF '0 4px 16px -8px color-mix(in srgb, var(--cat, var(--accent)) 55%, transparent)' "$H" || fail "enabled cards lost the category glow"
 grep -qF 'html[data-asb-theme="light"] .cfg-row.is-on[class*="cat-"] {' "$H" || fail "the light enabled-card rule is gone"
-grep -qF 'html[data-asb-theme="light"] .cfg-row.cat-audio   { --cat:#c0362c; }' "$H" || fail "light rows lost the deepened hues"
+grep -qF 'html[data-asb-theme="light"] .cfg-row.cat-audio   { --cat:#9e2441; }' "$H" || fail "light rows lost the deepened hues"
 grep -qF 'color-mix(in srgb, var(--cat) 13%, #ffffff) 0%' "$H" || fail "light enabled cards lost the hub-tile tint"
 echo "PASS: fix217 contract"
 ) || exit 1
@@ -7780,7 +7782,7 @@ set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
-_helpers='runtime/asb_active_efficiency_envelope.sh runtime/asb_boot_timeline.sh runtime/asb_debug_support.sh runtime/asb_kernel_controls.sh runtime/asb_wakeup_blocker.sh runtime/asb_stock_policy.sh runtime/asb_overlay_guard.sh runtime/asb_wifi_fallback.sh runtime/asb_package_state.sh runtime/asb_heytap_mcs.sh runtime/asb_art_compile.sh runtime/asb_documentsui_fix.sh runtime/asb_junk_cleanup.sh tools/asb_kernel_uv_coexist.sh tools/asb_device_info.sh'
+_helpers='runtime/asb_active_efficiency_envelope.sh runtime/asb_boot_timeline.sh runtime/asb_debug_support.sh runtime/asb_kernel_controls.sh runtime/asb_wakeup_blocker.sh runtime/asb_stock_policy.sh runtime/asb_overlay_guard.sh runtime/asb_wifi_fallback.sh runtime/asb_package_state.sh runtime/asb_heytap_mcs.sh runtime/asb_art_compile.sh runtime/asb_documentsui_fix.sh runtime/asb_junk_cleanup.sh runtime/asb_pressure_snapshot.sh runtime/asb_soter_fix.sh tools/asb_kernel_uv_coexist.sh tools/asb_device_info.sh'
 fail() { echo "FAIL workflow executable modes: $*" >&2; exit 1; }
 
 for WF in "$ROOT/.github/workflows/build-test.yml" "$ROOT/.github/workflows/build-release.yml"; do
@@ -7838,7 +7840,7 @@ for WF in "$ROOT/.github/workflows/build-test.yml" "$ROOT/.github/workflows/buil
   done
 done
 
-echo 'PASS workflow shard/mode contract: six suites covered once, packaging gated, four real CI blocks restore 14 helpers'
+echo 'PASS workflow shard/mode contract: six suites covered once, packaging gated, four real CI blocks restore 17 helpers'
 )
 
 t_workflow_required_files_shell() (

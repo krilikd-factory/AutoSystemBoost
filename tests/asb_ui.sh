@@ -4796,7 +4796,7 @@ assert oncard and 'color-mix(in srgb, var(--cat, var(--accent)) 17%, transparent
 assert oncard and 'box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 16px -8px color-mix(in srgb, var(--cat, var(--accent)) 55%, transparent);' in oncard.group(1), "enabled tweak cards lost the category glow"
 lon = re.search(r'html\[data-asb-theme="light"\] \.cfg-row\.is-on\[class\*="cat-"\] \{([^}]*)\}', s, re.S)
 assert lon and 'color-mix(in srgb, var(--cat) 13%, #ffffff) 0%' in lon.group(1), "light enabled cards lost the hub-tile tint"
-assert re.search(r'html\[data-asb-theme="light"\] \.cfg-row\.cat-audio\s*\{ --cat:#c0362c; \}', s), "light tweak rows lost the deepened hues"
+assert re.search(r'html\[data-asb-theme="light"\] \.cfg-row\.cat-audio\s*\{ --cat:#9e2441; \}', s), "light tweak rows lost the deepened hues"
 assert re.search(r'\.cfg-seg button\.on \{[^}]*var\(--pill-wash\)', s), "the selected segment option is not the bar's pill"
 assert 'background: linear-gradient(135deg, rgba(255,255,255,0.065), rgba(255,255,255,0.024));' in s, "Monitor tiles lost their stronger fill"
 prim = re.search(r'\.cfg-profile-primary \{([^}]*)\}', s).group(1)
@@ -9701,12 +9701,12 @@ assert re.findall(r"\{ id:'([^']+)'", groups) == ['iface','feel','net','camera',
 # dev40: every hub group owns an explicit dark/light hue. In particular Zygisk must not
 # silently inherit the primary mint accent through the old, undefined cat-system tile alias.
 for token in (
-    ":is(.cfg-section,.cfg-tile).cat-feel    { --cat: #e6b8a2; }",
-    ":is(.cfg-section,.cfg-tile).cat-zygisk  { --cat: #a7b7c6; }",
+    ":is(.cfg-section,.cfg-tile).cat-feel    { --cat: #b3d65a; }",
+    ":is(.cfg-section,.cfg-tile).cat-zygisk  { --cat: #b1b6bc; }",
     ":is(.cfg-section,.cfg-tile).cat-system  { --cat: #a7b7c6; }",
     "const tileCat = g.id === 'ui' ? 'ux' : g.id;",
-    "cat-zygisk { --cat:#4a5f75; }",
-    "cat-feel    { --cat:#9a5b43; }"
+    "cat-zygisk  { --cat:#5d6167; }",
+    "cat-feel    { --cat:#647800; }"
 ):
     assert token in h, token
 sections = h[h.index('  kernel: ['):h.index('  zygisk: [', h.index('  kernel: ['))]
@@ -11550,8 +11550,12 @@ page.scrollTop=417;
 zygiskPageRender({sections:{zygisk_observer:{enabled:'1'}}});
 chk(navs().length===1,'populated state must have exactly one section map');
 const ids=body.children.filter(c=>c.id).map(c=>c.id);
-const expected=['zy-status','zy-mode','zy-auto','zy-controls','zy-activity','zy-engine','zy-guard','zy-lsp','zy-s7','zy-aot','zy-apps','zy-evidence'];
+const expected=['zy-status','zy-mode','zy-auto','zy-activity','zy-engine','zy-guard','zy-lsp','zy-s7','zy-aot','zy-apps','zy-evidence'];
 chk(JSON.stringify(ids)===JSON.stringify(expected),'section order/IDs regressed: '+JSON.stringify(ids));
+/* dev47: Controls live inside the Connection card, so "Connection and controls" is one card. */
+const zyStatus=body.children.find(c=>c.id==='zy-status');
+chk(zyStatus.children.some(c=>c.id==='zy-controls'),'controls are not inside the Connection card');
+chk(zyStatus.children[0]._text==='Connection and controls','merged card title missing');
 chk(page.scrollTop===417,'an unchanged refresh lost the reading position');
 const nav=navs()[0], buttons=nav._asbJumpButtons;
 chk(buttons.length===9,'the populated section map lost a control');
@@ -12444,19 +12448,19 @@ for token in (
  "function cfgCatClass(key){ return cfgGroupCatClass(cfgGroupOf(key)); }",
  "groupId ? ' ' + cfgGroupCatClass(groupId)",
  "card.className = 'cfg-zygisk-card cat-zygisk';",
- ":is(.cfg-section,.cfg-tile).cat-audio   { --cat: #f98d9e; }",
- ":is(.cfg-section,.cfg-tile).cat-camera  { --cat: #efa8e2; }",
- ":is(.cfg-section,.cfg-tile).cat-kernel  { --cat: #82b8ff; }",
- ":is(.cfg-section,.cfg-tile).cat-feel    { --cat: #e6b8a2; }",
- ":is(.cfg-section,.cfg-tile).cat-zygisk  { --cat: #a7b7c6; }",
+ ":is(.cfg-section,.cfg-tile).cat-audio   { --cat: #d4475f; }",
+ ":is(.cfg-section,.cfg-tile).cat-camera  { --cat: #82b8ff; }",
+ ":is(.cfg-section,.cfg-tile).cat-kernel  { --cat: #b0704a; }",
+ ":is(.cfg-section,.cfg-tile).cat-feel    { --cat: #b3d65a; }",
+ ":is(.cfg-section,.cfg-tile).cat-zygisk  { --cat: #b1b6bc; }",
  "bfxEl('div', 'cfg-row kernel-card cat-kernel')",
- ':is(.cfg-icon,.cfg-row).cat-camera  { --cat: #efa8e2; }',
- ':is(.cfg-icon,.cfg-row).cat-kernel  { --cat: #82b8ff; }',
- ':is(.cfg-icon,.cfg-row).cat-feel    { --cat: #e6b8a2; }',
- ':is(.cfg-icon,.cfg-row).cat-zygisk  { --cat: #a7b7c6; }',
- 'html[data-asb-theme="light"] .cfg-row.cat-camera  { --cat:#9c3f86; }',
- 'html[data-asb-theme="light"] .cfg-row.cat-kernel  { --cat:#346aa8; }',
- 'html[data-asb-theme="light"] .cfg-row.cat-feel    { --cat:#9a5b43; }',
+ ':is(.cfg-icon,.cfg-row).cat-camera  { --cat: #82b8ff; }',
+ ':is(.cfg-icon,.cfg-row).cat-kernel  { --cat: #b0704a; }',
+ ':is(.cfg-icon,.cfg-row).cat-feel    { --cat: #b3d65a; }',
+ ':is(.cfg-icon,.cfg-row).cat-zygisk  { --cat: #b1b6bc; }',
+ 'html[data-asb-theme="light"] .cfg-row.cat-camera  { --cat:#2f62b0; }',
+ 'html[data-asb-theme="light"] .cfg-row.cat-kernel  { --cat:#7a3f24; }',
+ 'html[data-asb-theme="light"] .cfg-row.cat-feel    { --cat:#647800; }',
  '.cfg-row[class*="cat-"] .cfg-switch.on',
  '.cfg-row[class*="cat-"] .cfg-seg button.on',
  '.cfg-row[class*="cat-"] .cfg-range input[type="range"]::-webkit-slider-thumb',
@@ -12470,7 +12474,7 @@ for token in (
  '.kernel-card.cat-kernel .kernel-clear:not(:disabled)',
  "bfxEl('button', 'bfx-btn bfx-secondary kernel-clear'",
  '.toast.t-cat-camera',
- 'color: #f2b5e6;',
+ 'color: #a9cdff;',
  "kernel_sched_stats:'sched_stats'",
  "sched_stats: '<rect",
  '.cfg-zygisk-card .cfg-zygisk-open'):
@@ -12645,6 +12649,260 @@ JS
 out="$(node "$T/test.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
 echo 'PASS WebUI dev44 Zygisk: four category controls, three master-gated writes with preserved values, blocked alternate setters, accessible default-collapsed panel and repaint-stable disclosure in 13 locales'
+)
+
+t_webui_category_palette_distinct() (
+# dev47: the owner found Audio and Camera too alike (two pinks) and asked for Audio towards
+# burgundy, Camera in the old Kernel blue, Kernel brown, Display & Haptics clearly apart from
+# that brown, all nine hub categories characteristically different, and only one "feminine"
+# (pastel pink/magenta/lilac) hue - Interface. This measures it instead of trusting the eye:
+# CIEDE2000 between every pair of the nine hub hues, in the dark and the light theme, and the
+# count of pastel pink/magenta/lilac hues (LCh hue >= 290 or < 25, L > 62, C > 25).
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL webui category palette: $*" >&2; exit 1; }
+python3 - "$ROOT/webroot/index.html" <<'P' || fail "palette not distinct enough"
+import math, re, sys
+h = open(sys.argv[1], encoding='utf-8').read()
+cats = ['iface', 'feel', 'net', 'camera', 'audio', 'battery', 'kernel', 'zygisk', 'ux']
+def grab(pattern):
+    out = {}
+    for c in cats:
+        m = re.search(pattern.replace('CAT', c), h)
+        assert m, ('missing hue', c, pattern)
+        out[c] = m.group(1)
+    return out
+dark = grab(r':is\(\.cfg-section,\.cfg-tile\)\.cat-CAT\s*\{ --cat: (#[0-9a-f]{6}); \}')
+light = grab(r'html\[data-asb-theme="light"\] :is\(\.cfg-section,\.cfg-tile,\.cfg-icon\)\.cat-CAT\s*\{ --cat:(#[0-9a-f]{6}); \}')
+rows = grab(r':is\(\.cfg-icon,\.cfg-row\)\.cat-CAT\s*\{ --cat: (#[0-9a-f]{6}); \}')
+assert all(rows[c] == dark[c] for c in cats if c != 'ux'), 'tile and row hues drifted apart'
+def lab(hx):
+    c = [int(hx[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+    c = [x / 12.92 if x <= 0.04045 else ((x + 0.055) / 1.055) ** 2.4 for x in c]
+    X = (c[0] * 0.4124564 + c[1] * 0.3575761 + c[2] * 0.1804375) / 0.95047
+    Y = c[0] * 0.2126729 + c[1] * 0.7151522 + c[2] * 0.0721750
+    Z = (c[0] * 0.0193339 + c[1] * 0.1191920 + c[2] * 0.9503041) / 1.08883
+    f = lambda t: t ** (1 / 3) if t > 216 / 24389 else (24389 / 27 * t + 16) / 116
+    fx, fy, fz = f(X), f(Y), f(Z)
+    return 116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)
+def de2000(c1, c2):
+    L1, a1, b1 = c1; L2, a2, b2 = c2
+    C1, C2 = math.hypot(a1, b1), math.hypot(a2, b2)
+    Cb = (C1 + C2) / 2
+    G = 0.5 * (1 - math.sqrt(Cb ** 7 / (Cb ** 7 + 25 ** 7)))
+    a1p, a2p = (1 + G) * a1, (1 + G) * a2
+    C1p, C2p = math.hypot(a1p, b1), math.hypot(a2p, b2)
+    h1p = math.degrees(math.atan2(b1, a1p)) % 360 if C1p else 0
+    h2p = math.degrees(math.atan2(b2, a2p)) % 360 if C2p else 0
+    dLp, dCp = L2 - L1, C2p - C1p
+    dh = h2p - h1p
+    if C1p * C2p == 0: dh = 0
+    elif dh > 180: dh -= 360
+    elif dh < -180: dh += 360
+    dHp = 2 * math.sqrt(C1p * C2p) * math.sin(math.radians(dh / 2))
+    Lbp, Cbp = (L1 + L2) / 2, (C1p + C2p) / 2
+    if C1p * C2p == 0: hbp = h1p + h2p
+    elif abs(h1p - h2p) <= 180: hbp = (h1p + h2p) / 2
+    elif h1p + h2p < 360: hbp = (h1p + h2p + 360) / 2
+    else: hbp = (h1p + h2p - 360) / 2
+    T = (1 - 0.17 * math.cos(math.radians(hbp - 30)) + 0.24 * math.cos(math.radians(2 * hbp))
+         + 0.32 * math.cos(math.radians(3 * hbp + 6)) - 0.20 * math.cos(math.radians(4 * hbp - 63)))
+    dth = 30 * math.exp(-(((hbp - 275) / 25) ** 2))
+    Rc = 2 * math.sqrt(Cbp ** 7 / (Cbp ** 7 + 25 ** 7))
+    Sl = 1 + 0.015 * (Lbp - 50) ** 2 / math.sqrt(20 + (Lbp - 50) ** 2)
+    Sc, Sh = 1 + 0.045 * Cbp, 1 + 0.015 * Cbp * T
+    Rt = -math.sin(math.radians(2 * dth)) * Rc
+    return math.sqrt((dLp / Sl) ** 2 + (dCp / Sc) ** 2 + (dHp / Sh) ** 2 + Rt * (dCp / Sc) * (dHp / Sh))
+assert abs(de2000((50, 2.6772, -79.7751), (50, 0, -82.7485)) - 2.0425) < 1e-3, 'CIEDE2000 reference pair'
+for name, pal, floor in (('dark', dark, 15.0), ('light', light, 15.0)):
+    pairs = sorted((de2000(lab(pal[a]), lab(pal[b])), a, b) for i, a in enumerate(cats) for b in cats[i + 1:])
+    assert pairs[0][0] >= floor, (name, 'closest pair', round(pairs[0][0], 1), pairs[0][1], pairs[0][2])
+def pastel_pink(hx):
+    L, a, b = lab(hx); C = math.hypot(a, b); hue = math.degrees(math.atan2(b, a)) % 360
+    return (hue >= 290 or hue < 25) and L > 62 and C > 25
+assert [c for c in cats if pastel_pink(dark[c])] == ['iface'], [c for c in cats if pastel_pink(dark[c])]
+assert dark['camera'] == '#82b8ff' and light['camera'] == '#2f62b0', 'Camera is no longer the former Kernel blue'
+kl = lab(dark['kernel']); assert 40 <= math.degrees(math.atan2(kl[2], kl[1])) % 360 <= 75 and kl[0] < 62, 'Kernel is not brown'
+al = lab(dark['audio']); assert math.degrees(math.atan2(al[2], al[1])) % 360 < 25 and al[0] < 56, 'Audio is not a deep red'
+# Large tiles show the hue as a faint wash, where brown Kernel and amber System merged (seen on
+# the dev47 draft); System is therefore gold, at least 25 LCh hue degrees yellower than Kernel.
+hue = lambda hx: math.degrees(math.atan2(lab(hx)[2], lab(hx)[1])) % 360
+for name, pal in (('dark', dark), ('light', light)):
+    assert hue(pal['ux']) - hue(pal['kernel']) >= 25, (name, 'System and Kernel hues too close', round(hue(pal['kernel']), 1), round(hue(pal['ux']), 1))
+for c in ('audio', 'camera', 'kernel', 'feel', 'zygisk', 'ux'):
+    assert '.toast.t-cat-' + c + ' {' in h, ('toast skin missing', c)
+assert "function cfgToastType(key){ return cfgCatClass(key); }" in h, 'toasts no longer follow the navigation category'
+P
+echo "PASS webui category palette: nine hub hues at CIEDE2000 >= 15 in dark and light, one pastel pink/lilac (Interface), burgundy Audio, blue Camera, brown Kernel, gold System, toasts follow the category"
+)
+
+t_webui_monitor_load_pressure_runtime() (
+# dev47: tapping Load (Smart) or System load (Stock) on Monitor shows the same 0-100 pressure
+# scale as Device diagnostics, measured on open by the read-only collector, plus one bar per
+# measured component. Unexposed parts say so; a failed read says so; a stale reply is dropped.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui monitor load pressure: $*" >&2; exit 1; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+mkdir -p "$T/m/runtime" "$T/proc" "$T/sys/devices/system/cpu"
+cp "$ROOT/runtime/asb_pressure.sh" "$ROOT/runtime/asb_pressure_snapshot.sh" "$T/m/runtime/"
+printf '2.00 1 1 1/1 1\n' > "$T/proc/loadavg"; printf '0-3\n' > "$T/sys/devices/system/cpu/online"
+printf 'MemTotal: 1000 kB\nMemAvailable: 400 kB\nSwapTotal: 0 kB\nSwapFree: 0 kB\n' > "$T/proc/meminfo"
+printf 'cpu 100 0 100 800 0 0 0 0 0 0\n' > "$T/proc/stat"
+OUT="$(ASB_PRESSURE_PROC="$T/proc" ASB_PRESSURE_SYS="$T/sys" ASB_PRESSURE_CPU_SAMPLE_S=0 sh "$T/m/runtime/asb_pressure_snapshot.sh")"
+grep -q $'^D\tsystem_load\tscore\t[0-9]' <<<"$OUT" || fail "standalone snapshot gave no score: $OUT"
+grep -q $'^D\tsystem_load\tload_per_core\t0.500$' <<<"$OUT" || fail 'load per core not measured'
+grep -q $'^D\tsystem_load\tmemory_used_pct\t60.0$' <<<"$OUT" || fail 'memory share not measured'
+! grep -q '^[^D]' <<<"$OUT" || fail 'snapshot printed something other than D records'
+rm -f "$T/m/runtime/asb_pressure.sh"
+OUT="$(ASB_PRESSURE_MODDIR="$T/m" sh "$T/m/runtime/asb_pressure_snapshot.sh" || true)"
+grep -qx $'D\tsystem_load\tscore\tunknown' <<<"$OUT" || fail 'a missing collector was not reported as unknown'
+! grep -q '^ *#' <(tail -n +2 "$ROOT/runtime/asb_pressure_snapshot.sh") || fail 'comment lines in module shell code'
+command -v node >/dev/null 2>&1 || { echo 'SKIP webui monitor load pressure: no node'; exit 0; }
+cat > "$T/t.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+function grab(name){const m=h.match(new RegExp('(?:async )?function '+name+'\\([^)]*\\) \\{[\\s\\S]*?\\n\\}'));if(!m)throw Error('missing '+name);return m[0];}
+function el(tag){const n={tag,children:[],className:'',hidden:false,style:{},attrs:{},_t:'',
+ set textContent(v){this._t=String(v);this.children=[];},get textContent(){return this._t+this.children.map(c=>c.textContent).join('');},
+ appendChild(c){this.children.push(c);return c;},setAttribute(k,v){this.attrs[k]=v;}};
+ n.classList={add(c){n.className=(n.className+' '+c).trim();}};return n;}
+global.document={createElement:el};
+const T=(k,f)=>f;global.T=T;
+function deviceFill(k,f,v){return String(f).replace(/\{(\w+)\}/g,(m,x)=>v[x]);}
+function deviceFallbackLabel(k){return k;}function deviceLabel(s,k){return k;}
+let _lviTok=1,open=true,cmd='',reply='';
+function liveInfoIsOpen(){return open;} function shQuote(v){return "'"+v+"'";} const MD='/m';
+async function run(c){cmd=c;return {stdout:reply};}
+eval(grab('parseDeviceInfo'));eval(grab('deviceVal'));eval(grab('devicePressureScale'));
+eval(h.slice(h.indexOf('const LVI_PRESSURE_KEYS'),h.indexOf('async function lviPressureLoad')).replace(/^const /gm,'var '));
+eval(grab('lviPressureLoad'));
+const find=(n,c,a=[])=>{if(String(n.className).split(/\s+/).includes(c))a.push(n);(n.children||[]).forEach(x=>find(x,c,a));return a;};
+(async()=>{
+ const box=el('div');
+ await lviPressureLoad(box,'cpu',1); if(!box.hidden)throw Error('a non-load sheet grew the pressure panel');
+ reply=['score\t53','band\thigh','coverage_pct\t90','load_per_core\t0.62','load_component\t31.0','memory_used_pct\t71.5','cpu_busy_pct\t44.0','gpu_busy_pct\tnot exposed'].map(x=>'D\tsystem_load\t'+x).join('\n');
+ await lviPressureLoad(box,'apphint',1);
+ if(!/asb_pressure_snapshot\.sh/.test(cmd))throw Error('wrong reader: '+cmd);
+ if(box.hidden||!find(box,'dev-pressure-high').length)throw Error('band colour class missing');
+ const m=find(box,'dev-pressure-marker')[0]; if(!m||m.style.left!=='53%')throw Error('marker');
+ if(find(box,'dev-pressure-seg').length!==4)throw Error('four band segments expected');
+ const rows=find(box,'lvp-row'); if(rows.length!==4)throw Error('four component rows expected');
+ const fills=find(box,'lvp-fill'); if(fills.length!==3)throw Error('only measured parts get a bar');
+ if(fills[0].style.width!=='31%'||!/lvp-moderate/.test(fills[0].className))throw Error('load bar');
+ if(fills[1].style.width!=='71.5%'||!/lvp-high/.test(fills[1].className))throw Error('memory bar');
+ if(!/lvp-na/.test(rows[3].className)||!/not exposed/.test(rows[3].textContent))throw Error('GPU not exposed state');
+ reply=''; await lviPressureLoad(box,'sload',1);
+ if(!/could not be measured/.test(box.textContent))throw Error('failed read not shown');
+ reply='D\tsystem_load\tscore\t5'; open=false; const b2=el('div'); await lviPressureLoad(b2,'sload',1);
+ if(find(b2,'dev-pressure').length)throw Error('a closed sheet was painted');
+ console.log('ok');
+})().catch(e=>{console.error(e.stack||e);process.exit(1);});
+JS
+node "$T/t.js" "$H" >/dev/null || fail 'renderer'
+python3 - "$ROOT" <<'P' || fail 'static wiring'
+import json, pathlib, sys
+root = pathlib.Path(sys.argv[1]); h = (root / 'webroot/index.html').read_text(encoding='utf-8')
+assert "const LVI_PRESSURE_KEYS = ['apphint', 'sload'];" in h
+assert "'<div class=\"live-info-pressure\" id=\"liveInfoPressure\" hidden></div>'" in h
+assert "lviPressureLoad(_el('liveInfoPressure'), key, tok);" in h
+assert ':is(.device-page,.live-info-sheet) .dev-pressure-track' in h
+en = json.loads((root / 'webroot/i18n/en.json').read_text(encoding='utf-8'))
+for p in sorted((root / 'webroot/i18n').glob('*.json')):
+    d = json.loads(p.read_text(encoding='utf-8'))
+    for k in ('lvi_pressure_loading', 'lvi_pressure_failed', 'lvi_pressure_na', 'dev_sec_system_load'):
+        assert isinstance(d.get(k), str) and d[k].strip(), (p.name, k)
+        if p.name != 'en.json': assert d[k] != en[k], (p.name, k)
+assert en['lvi_pressure_loading'] == 'Measuring the system load…' and en['lvi_pressure_failed'] == 'The system load could not be measured right now.' and en['lvi_pressure_na'] == 'not exposed'
+P
+echo "PASS webui monitor load pressure: standalone read-only snapshot, device-style band bar with marker, one bar per measured part, unexposed/failed/stale states, 13 locales"
+)
+
+t_webui_soter_fix_runtime() (
+# dev47: Infirmary -> System Repairs -> SOTER Repair. A fixed status/run protocol around one
+# shell owner, a second tap within five seconds before data is cleared, every result visible,
+# text-only rows, no polling, 13 locales.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL webui soter fix: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'P' || fail 'static wiring and locales'
+import json, pathlib, re, sys
+root = pathlib.Path(sys.argv[1]); h = (root / 'webroot/index.html').read_text(encoding='utf-8')
+start = h.index('/* Infirmary → System Repairs → SOTER Repair (dev47).')
+end = h.index('/* Infirmary → Junk Cleanup (dev32).', start)
+b = h[start:end]
+assert "keys:['heytap_mcs','documentsui_fix'], card:'soterfix' }" in h
+assert "if (section.card === 'soterfix') cfgRenderSoterFixCard(list);" in h
+assert "const SOTER_FIX_SCRIPT = MD + '/runtime/asb_soter_fix.sh';" in b
+assert b.count("run('sh ' + shQuote(SOTER_FIX_SCRIPT) + ' status')") == 1
+assert b.count("run('sh ' + shQuote(SOTER_FIX_SCRIPT) + ' run')") == 1
+assert 'setInterval(' not in b and 'setTimeout(' not in b
+assert b.count('innerHTML =') == 1 and "em.innerHTML = techIcon('soter_fix')" in b
+assert 'now - _soterArmed > 5000' in b and "_soterInstalled !== '1'" in b
+assert "soter_fix: '<path" in h
+en = json.loads((root / 'webroot/i18n/en.json').read_text(encoding='utf-8'))
+for k, fb in re.findall(r"T\('(soter_[a-z_]+)', '([^']*)'\)", b):
+    assert en.get(k) == fb, ('JS fallback differs from en.json', k)
+fbm = dict(re.findall(r"\n    ([a-z_]+): '([^']*)'", b[b.index('const fb = {'):b.index('};', b.index('const fb = {'))]))
+assert set(fbm) == {'done','done_no_service','service_down','clear_failed','not_installed','busy','lock_error','unknown'}
+for k, v in fbm.items(): assert en['soter_res_' + k] == v, k
+keys = sorted(k for k in en if k.startswith('soter_'))
+assert len(keys) == 28, len(keys)
+for p in sorted((root / 'webroot/i18n').glob('*.json')):
+    d = json.loads(p.read_text(encoding='utf-8'))
+    for k in keys:
+        assert isinstance(d.get(k), str) and d[k].strip(), (p.name, k)
+        if p.name != 'en.json' and k not in ('soter_row_service',): assert d[k] != en[k], (p.name, k)
+P
+command -v node >/dev/null 2>&1 || { echo 'SKIP webui soter fix: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+cat > "$T/t.js" <<'JS'
+const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
+const b=h.slice(h.indexOf('/* Infirmary → System Repairs → SOTER Repair (dev47).'),h.indexOf('/* Infirmary → Junk Cleanup (dev32).'));
+const nodes={};
+function el(tag){const n={tag,children:[],className:'',hidden:false,disabled:false,style:{},_t:'',id:'',
+ set textContent(v){this._t=String(v);this.children=[];},get textContent(){return this._t+this.children.map(c=>c.textContent).join(' ');},
+ set innerHTML(v){this._html=v;},appendChild(c){this.children.push(c);if(c.id)nodes[c.id]=c;return c;}};return n;}
+global.document={createElement:el};
+const T=(k,f)=>f;
+function bfxEl(tag,cls,text){const e=el(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e;}
+function techIcon(){return '<svg/>';} function uiSound(){} let toasts=[];function toast(t,k){toasts.push([t,k]);}
+function shQuote(v){return "'"+v+"'";} const MD='/m';
+let cmds=[],replies={};async function run(c){cmds.push(c);return {stdout:replies[c.split(' ').pop()]||''};}
+const list=el('div');
+function _el(id){const f=n=>{if(n.id===id)return n;for(const c of n.children||[]){const r=f(c);if(r)return r;}return null;};return f(list);}
+eval(b.replace(/^const /gm,'var ').replace(/^let /gm,'var '));
+const settle=()=>new Promise(r=>setImmediate(r));
+(async()=>{
+ replies.status='soter|status|installed=1|services=vendor.soter:running|last_time=0|last_result=none';
+ cfgRenderSoterFixCard(list); await settle();
+ const run_=_el('soterRun'); if(run_.disabled)throw Error('installed SOTER cannot be repaired');
+ if(!/vendor\.soter · running/.test(_el('soterRows').textContent)||!/not run yet/.test(_el('soterRows').textContent))throw Error('rows: '+_el('soterRows').textContent);
+ if(_el('soterChip').className!=='bfx-chip is-ready')throw Error('chip');
+ await soterFixRun(); if(cmds.some(c=>/ run$/.test(c)))throw Error('first tap ran the repair');
+ if(!/Tap again/.test(toasts.pop()[0]))throw Error('no confirmation toast');
+ replies.run='soter|result|state=done|cleared=1|services=vendor.soter:running';
+ await soterFixRun(); await settle();
+ if(cmds.filter(c=>/ run$/.test(c)).length!==1)throw Error('second tap did not run once');
+ if(!/service is running again/.test(_el('soterNote').textContent))throw Error('done note');
+ for(const [st,re] of [['service_down',/did not start again/],['clear_failed',/refused/],['busy',/already running/]]){
+  _soterArmed=Date.now(); replies.run='soter|result|state='+st+'|cleared=0|services=none';
+  _el('soterRun').disabled=false; await soterFixRun(); await settle();
+  if(!re.test(_el('soterNote').textContent))throw Error(st+' not shown');
+ }
+ replies.status='soter|status|installed=0|services=none|last_time=0|last_result=none';
+ await soterFixLoad(true); if(!_el('soterRun').disabled||_el('soterChip').className!=='bfx-chip is-off')throw Error('absent server still repairable');
+ replies.status='soter|status|installed=1|services=vendor.soter:stopped|last_time=1700000000|last_result=done';
+ await soterFixLoad(true); if(_el('soterChip').className!=='bfx-chip is-wait'||!/stopped/.test(_el('soterRows').textContent))throw Error('stopped service');
+ replies.status='soter|status|installed=1|services=<img src=x>:running|last_time=0|last_result=none';
+ await soterFixLoad(true); if(/</.test(_el('soterRows').textContent))throw Error('service names not sanitized');
+ replies.status='garbage'; await soterFixLoad(true);
+ if(!_el('soterRun').disabled||!/Could not read/.test(_el('soterRows').textContent))throw Error('unreadable state');
+ console.log('ok');
+})().catch(e=>{console.error(e.stack||e);process.exit(1);});
+JS
+node "$T/t.js" "$ROOT/webroot/index.html" >/dev/null || fail 'card runtime'
+echo "PASS webui soter fix: fixed status/run protocol, second tap within 5 s, done/no-service/down/refused/busy/absent/stopped/unreadable states, sanitized rows, 13 locales"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

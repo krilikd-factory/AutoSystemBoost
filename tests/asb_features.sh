@@ -10750,6 +10750,91 @@ PY2
 echo "PASS junk cleanup runtime: eleven bounded categories, 19-file scan/delete with exact byte accounting, 24-hour journal barrier, protected files, idempotence, busy/lock/partial states, symlink and unknown-command safety, no worker"
 )
 
+t_soter_fix_runtime() (
+# dev47: runtime/asb_soter_fix.sh. Status reads the package list and the ROM's init.svc.*soter*
+# services; run stops those services, clears only com.tencent.soter.soterserver, starts them
+# and reads their state back. Every outcome has its own word; a second run is refused while
+# one holds the lock; nothing is written for a status call; no comments in module shell code.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+S="$ROOT/runtime/asb_soter_fix.sh"
+fail() { echo "FAIL soter fix: $*" >&2; exit 1; }
+[ -x "$S" ] && [ -x "$ROOT/runtime/asb_pressure_snapshot.sh" ] || fail 'new dev47 helpers lost their executable mode'
+for _wf in "$ROOT/.github/workflows/build-test.yml" "$ROOT/.github/workflows/build-release.yml"; do
+  for _f in asb_soter_fix.sh asb_pressure_snapshot.sh; do
+    [ "$(sed -n '/- name: Normalize executable source script modes/,/- name: Validate required source files/p' "$_wf" | grep -c "runtime/$_f")" -ge 1 ] \
+      || fail "$_wf does not restore the executable mode of $_f"
+    grep -Fq "\"runtime/$_f\"" "$_wf" || fail "$_wf does not require $_f"
+  done
+done
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+mkdir -p "$T/bin" "$T/props"
+cat > "$T/bin/getprop" <<'SH'
+#!/bin/sh
+if [ $# -eq 0 ]; then
+  for f in "$PROPS"/init.svc.*; do [ -f "$f" ] && printf '[%s]: [%s]\n' "${f##*/}" "$(cat "$f")"; done
+  printf '[ro.build.version.sdk]: [35]\n'
+else
+  cat "$PROPS/$1" 2>/dev/null
+fi
+SH
+cat > "$T/bin/stop" <<'SH'
+#!/bin/sh
+echo "stop $1" >> "$LOG"; printf 'stopped' > "$PROPS/init.svc.$1"
+SH
+cat > "$T/bin/start" <<'SH'
+#!/bin/sh
+echo "start $1" >> "$LOG"; [ -f "$LOG.nostart" ] || printf 'running' > "$PROPS/init.svc.$1"
+SH
+cat > "$T/bin/pm" <<'SH'
+#!/bin/sh
+echo "pm $*" >> "$LOG"
+case "$1" in clear) [ -f "$LOG.clearfail" ] && { echo 'Failed'; exit 1; }; echo 'Success' ;; path) echo 'package:/x.apk' ;; esac
+SH
+cat > "$T/bin/sleep" <<'SH'
+#!/bin/sh
+exit 0
+SH
+chmod 0755 "$T/bin/"*
+export PATH="$T/bin:$PATH" PROPS="$T/props" LOG="$T/log" ASB_SOTER_STATE_DIR="$T/state" ASB_SOTER_PACKAGES_LIST="$T/packages.list" ASB_SOTER_WAIT_STEPS=3
+! grep -q '^[[:space:]]*#' <(tail -n +2 "$S") || fail 'comment lines in module shell code'
+printf 'com.android.shell 2000 0 /data/user_de/0/com.android.shell\n' > "$T/packages.list"
+OUT="$(sh "$S" status)"
+[ "$OUT" = 'soter|status|installed=0|services=none|last_time=0|last_result=none' ] || fail "absent status: $OUT"
+[ ! -e "$T/state" ] || fail 'status wrote state'
+OUT="$(sh "$S" run)"
+grep -q '^soter|result|state=not_installed|cleared=0|' <<<"$OUT" || fail "absent run: $OUT"
+! grep -q '^pm clear' "$LOG" 2>/dev/null || fail 'cleared an absent package'
+printf 'com.tencent.soter.soterserver 10123 0 /data/user/0/com.tencent.soter.soterserver\n' >> "$T/packages.list"
+printf 'running' > "$T/props/init.svc.vendor.soter"
+OUT="$(sh "$S" status)"
+grep -q '^soter|status|installed=1|services=vendor.soter:running|last_time=[0-9]*|last_result=not_installed$' <<<"$OUT" || fail "present status: $OUT"
+: > "$LOG"
+OUT="$(sh "$S" run)"
+[ "$OUT" = 'soter|result|state=done|cleared=1|services=vendor.soter:running' ] || fail "done run: $OUT"
+[ "$(cat "$LOG")" = "$(printf 'stop vendor.soter\npm clear com.tencent.soter.soterserver\nstart vendor.soter')" ] || fail "wrong sequence: $(cat "$LOG")"
+grep -qx 'result=done' "$T/state/last" || fail 'result not recorded'
+[ ! -d "$T/state/run.lock" ] || fail 'lock left behind'
+touch "$LOG.clearfail"; OUT="$(sh "$S" run)"; rm -f "$LOG.clearfail"
+grep -q '^soter|result|state=clear_failed|cleared=0|services=vendor.soter:running$' <<<"$OUT" || fail "clear failure: $OUT"
+touch "$LOG.nostart"; OUT="$(sh "$S" run)"; rm -f "$LOG.nostart"
+grep -q '^soter|result|state=service_down|cleared=1|services=vendor.soter:stopped$' <<<"$OUT" || fail "service down: $OUT"
+rm -f "$T/props/init.svc.vendor.soter"; : > "$LOG"
+OUT="$(sh "$S" run)"
+[ "$OUT" = 'soter|result|state=done_no_service|cleared=1|services=none' ] || fail "no service: $OUT"
+! grep -q '^st' "$LOG" || fail 'started or stopped a service the ROM does not declare'
+mkdir "$T/state/run.lock"; OUT="$(sh "$S" run)"
+grep -q '^soter|result|state=busy|' <<<"$OUT" || fail "busy: $OUT"
+[ -d "$T/state/run.lock" ] || fail 'a busy run removed the holder lock'
+rmdir "$T/state/run.lock"
+rm -f "$T/packages.list"; OUT="$(sh "$S" status)"
+grep -q '^soter|status|installed=1|' <<<"$OUT" || fail "pm fallback: $OUT"
+set +e; OUT="$(sh "$S" bogus)"; rc=$?; set -e
+[ "$rc" = 2 ] && [ "$OUT" = 'soter|error|unknown_command' ] || fail 'unknown command accepted'
+grep -q 'soter_fix/run.lock' "$ROOT/post-fs-data.sh" && grep -q 'junk_cleanup/run.lock' "$ROOT/post-fs-data.sh" || fail 'a reboot mid-run leaves a stale lock'
+echo "PASS soter fix: absent/present status, exact stop/clear/start sequence, done/no-service/down/refused/busy/unknown states, no writes on status, boot-time stale lock removal"
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;
