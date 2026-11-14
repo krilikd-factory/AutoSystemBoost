@@ -2735,6 +2735,7 @@ html[data-asb-theme="light"] .cfg-zygisk-card { background:#fff; }
 .kernel-unavailable .cfg-sel-btn,
 .kernel-unavailable .cfg-sel-pop button { cursor: not-allowed; }
 .kernel-unavailable .cfg-sel-pop { display: none; }
+.kernel-why { margin-top:8px; color:var(--text-secondary); font-size:11.5px; line-height:1.45; }
 .cfg-row-top {
   display: flex;
   align-items: center;
@@ -3456,6 +3457,22 @@ html[data-asb-theme="light"] .nf-sel-row.warn .nf-sel-why { color: #8a5a00 !impo
 .cfg-row[class*="cat-"] .cfg-desc-opt.is-cur .cfg-desc-opt-k { color:var(--cat) !important; }
 .cfg-row[class*="cat-"] .cfg-sel-pop button.active { background:color-mix(in srgb,var(--cat) 10%,transparent) !important; }
 .cfg-row[class*="cat-"] .cfg-apply-live { color:var(--cat); }
+/* dev49: on the black and AMOLED surfaces the two darkest category hues - Kernel copper and
+ * Audio crimson - were hard to read as text (badges, the chosen segment, slider values,
+ * section headings: about 4.3-4.7:1). Their fills and edges keep the category hue; text
+ * and line icons take a lighter ink of the same hue (about 8:1). Light theme unchanged. */
+html:not([data-asb-theme="light"]) :is(.cfg-section,.cfg-tile,.cfg-icon,.cfg-row).cat-kernel { --cat-ink:#e6a074; }
+html:not([data-asb-theme="light"]) :is(.cfg-section,.cfg-tile,.cfg-icon,.cfg-row).cat-audio  { --cat-ink:#ff8095; }
+html:not([data-asb-theme="light"]) :is(.cfg-section,.cfg-tile,.cfg-icon).cat-kernel,
+html:not([data-asb-theme="light"]) :is(.cfg-section,.cfg-tile,.cfg-icon).cat-audio { --tech-icon:var(--cat-ink); }
+html:not([data-asb-theme="light"]) .cfg-section:is(.cat-kernel,.cat-audio) { --section-accent:var(--cat-ink); }
+html:not([data-asb-theme="light"]) .cfg-row:is(.cat-kernel,.cat-audio) :is(.cfg-status.good,.cfg-status.on) {
+  color:var(--cat-ink);
+  background:color-mix(in srgb,var(--cat) 16%,transparent);
+}
+html:not([data-asb-theme="light"]) .cfg-row:is(.cat-kernel,.cat-audio) :is(.cfg-seg button.on,.cfg-range-val,.cfg-sel-pop button.active,.cfg-desc-opt.is-cur .cfg-desc-opt-k,.cfg-apply-live),
+html:not([data-asb-theme="light"]) .cfg-row:is(.cat-kernel,.cat-audio) .cfg-sel-btn::after { color:var(--cat-ink) !important; }
+html:not([data-asb-theme="light"]) .kernel-card.cat-kernel .bfx-secondary:not(.kernel-clear):not(:disabled) { color:var(--cat-ink); }
 .cfg-zygisk-card .cfg-zygisk-open {
   --tech-icon:var(--cat);
   color:var(--cat) !important;
@@ -3649,6 +3666,10 @@ html[data-asb-theme="light"] .bfx-step.is-fail .bfx-step-s { color: #b3261e; }
 .junk-card .bfx-btn { min-height:54px; }
 .soter-card .bfx-btn { min-height:50px; }
 .soter-card .junk-cats { margin-top:10px; }
+.soter-auto { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:12px; padding-top:11px; border-top:1px solid var(--border); }
+.soter-auto-text { min-width:0; }
+.soter-auto-title { font-size:13px; font-weight:680; color:var(--text); }
+.soter-auto-note { margin-top:3px; font-size:11.5px; line-height:1.4; color:var(--text-secondary); }
 html[dir="rtl"] .junk-cat-meta { text-align:left; }
 html[data-asb-theme="light"] .junk-cat.is-warn .junk-cat-meta { color:#8a5a00; }
 
@@ -9954,9 +9975,13 @@ function cfgRenderBatteryFixCard(list) {
 }
 function bfxParse(txt) {
   const f = {};
-  String(txt || '').trim().split(/\s+/).forEach(function (p) { const i = p.indexOf('='); if (i > 0) f[p.slice(0, i)] = p.slice(i + 1); });
+  String(txt || '').split('\n').forEach(function (line) {
+    if (line.indexOf('err_text=') === 0) { f.err_text = line.slice(9).replace(/[^A-Za-z0-9 _.:,()\/'-]/g, '').trim().slice(0, 120); return; }
+    line.trim().split(/\s+/).forEach(function (p) { const i = p.indexOf('='); if (i > 0) f[p.slice(0, i)] = p.slice(i + 1); });
+  });
   return f;
 }
+function bfxList(v) { return v && v !== '-' ? String(v).split(',').filter(Boolean).length : 0; }
 function bfxNum(v) { const n = parseInt(v, 10); return isFinite(n) ? n : 0; }
 function bfxWhen(sec) {
   const d = new Date(bfxNum(sec) * 1000);
@@ -10004,6 +10029,9 @@ function bfxPaintFrom(f) {
   } else if (cs === 'failed') {
     artState = 'fail';
     artText = T('bfx_art_failed', 'Could not read the list of apps');
+  } else if (cs === 'refused') {
+    artState = 'fail';
+    artText = bfxT('bfx_art_refused', 'Android refused every recompile ({fail} of {done} apps), so it was stopped early. Android said: {err}', { fail: fail, done: done, err: f.err_text || T('bfx_art_refused_none', 'no reason given') });
   }
   bfxSetStep('bfxStepArt', artState, artText);
   if (barWrap) barWrap.hidden = ratio < 0;
@@ -10011,11 +10039,15 @@ function bfxPaintFrom(f) {
   if (now) now.textContent = nowText;
   const pending = f.reset === 'pending';
   const lastReset = f.last_reset && f.last_reset !== '-' ? f.last_reset : '';
-  const removed = f.removed && f.removed !== '-' ? f.removed.split(',').filter(Boolean).length : 0;
+  const removed = bfxList(f.removed), absent = bfxList(f.absent), missing = bfxList(f.missing);
   if (pending) bfxSetStep('bfxStepReset', 'wait', T('bfx_reset_pending', 'Scheduled — applied at the next reboot'));
   else if (lastReset) {
     const fresh = f.fresh === '1' ? T('bfx_reset_fresh', 'Android has started a new record') : T('bfx_reset_wait', 'Android will write the new record by itself shortly');
-    bfxSetStep('bfxStepReset', removed ? 'ok' : 'wait', bfxT('bfx_reset_done', 'Done {when}: {n} of 3 files removed', { when: bfxWhen(lastReset), n: removed }) + ' · ' + fresh);
+    const when = /^[0-9]+$/.test(lastReset) ? bfxWhen(lastReset) : T('bfx_reset_when_boot', 'at the last reboot');
+    let rtext = bfxT('bfx_reset_done', 'Done {when}: statistics files removed: {n}', { when: when, n: removed });
+    if (absent) rtext += ' · ' + bfxT('bfx_reset_absent', 'not present on this Android: {n}', { n: absent });
+    if (missing) rtext += ' · ' + bfxT('bfx_reset_failed', 'could not be removed: {n}', { n: missing });
+    bfxSetStep('bfxStepReset', removed ? 'ok' : (missing ? 'fail' : 'wait'), rtext + ' · ' + fresh);
   } else bfxSetStep('bfxStepReset', 'off', T('bfx_reset_none', 'Not scheduled'));
   let chipState = 'off', chipText = T('bfx_chip_off', 'Unavailable');
   if (running) { chipState = 'run'; chipText = T('bfx_chip_run', 'Running'); }
@@ -10102,12 +10134,15 @@ function cfgOpenInfirmary() { uiSound('nav'); cfgShowGroup('infirmary'); }
  * When it is stuck, those apps report a failed device check although everything else is in
  * order. The fixed shell owner (runtime/asb_soter_fix.sh, status|run only) stops the ROM's
  * SOTER services, clears the SOTER server's own data so it re-provisions its keys, starts the
- * services again and reads their state back. It is manual only: nothing runs at boot or in a
- * loop. It hides nothing: a check that fails because of root or an unlocked bootloader stays
- * failed. Clearing removes the keys those apps enrolled, so fingerprint payment has to be
- * switched on again in each of them - the second tap within five seconds confirms that. */
+ * services again and reads their state back. It hides nothing: a check that fails because of
+ * root or an unlocked bootloader stays failed. Clearing removes the keys those apps enrolled,
+ * so fingerprint payment has to be switched on again in each of them.
+ * dev49: the owner saw the repair work only on the second tap-through, so one run now makes
+ * both passes and starts on the first tap. An opt-in switch (status auto=1, `auto on|off`)
+ * lets service.sh run the same repair once after every boot; the switch text says that
+ * payment then has to be switched on again after each reboot. */
 const SOTER_FIX_SCRIPT = MD + '/runtime/asb_soter_fix.sh';
-let _soterArmed = 0, _soterBusy = false, _soterSeq = 0, _soterInstalled = '';
+let _soterBusy = false, _soterSeq = 0, _soterInstalled = '', _soterAuto = '';
 function soterParse(txt) {
   const out = { kind: '', f: {} };
   String(txt || '').split('\n').some(function (line) {
@@ -10157,6 +10192,7 @@ function soterPaint(parsed) {
     soterRow(host, T('soter_row_server', 'SOTER server'), T('soter_check_failed', 'Could not read the SOTER state'), true);
     if (runBtn) runBtn.disabled = true;
     if (refresh) refresh.disabled = _soterBusy;
+    soterAutoPaint('', false);
     return;
   }
   _soterInstalled = f.installed || '';
@@ -10171,8 +10207,9 @@ function soterPaint(parsed) {
   const lt = parseInt(f.last_time, 10);
   soterRow(host, T('soter_row_last', 'Last repair'),
     (lt > 0 && f.last_result && f.last_result !== 'none')
-      ? new Date(lt * 1000).toLocaleString() + ' · ' + soterResultText(f.last_result)
+      ? new Date(lt * 1000).toLocaleString() + (f.last_trigger === 'boot' ? ' · ' + T('soter_trigger_boot', 'after reboot') : '') + ' · ' + soterResultText(f.last_result)
       : T('soter_never', 'not run yet'), false);
+  soterAutoPaint(f.auto === '1' ? '1' : f.auto === '0' ? '0' : '', f.installed === '1');
   if (chip) {
     if (f.installed === '0') { chip.className = 'bfx-chip is-off'; chip.textContent = T('soter_chip_absent', 'Not installed'); }
     else if (f.installed !== '1') { chip.className = 'bfx-chip is-wait'; chip.textContent = T('soter_chip_unknown', 'Unknown'); }
@@ -10182,6 +10219,32 @@ function soterPaint(parsed) {
   if (runBtn) runBtn.disabled = _soterBusy || f.installed !== '1';
   if (refresh) refresh.disabled = _soterBusy;
 }
+function soterAutoPaint(v, installed) {
+  const sw = _el('soterAuto');
+  _soterAuto = v;
+  if (!sw) return;
+  const on = v === '1';
+  sw.className = 'cfg-switch' + (on ? ' on' : '') + (_soterBusy ? ' busy' : '');
+  sw.setAttribute('aria-checked', on ? 'true' : 'false');
+  const locked = !v || (!on && !installed);
+  sw.setAttribute('aria-disabled', locked ? 'true' : 'false');
+  sw.style.opacity = locked ? '0.42' : '';
+}
+async function soterAutoToggle() {
+  const sw = _el('soterAuto');
+  if (!sw || _soterBusy || !_soterAuto || sw.getAttribute('aria-disabled') === 'true') return;
+  const want = _soterAuto === '1' ? 'off' : 'on';
+  _soterBusy = true; sw.className = 'cfg-switch' + (_soterAuto === '1' ? ' on' : '') + ' busy';
+  let r = null;
+  try { r = await run('sh ' + shQuote(SOTER_FIX_SCRIPT) + ' auto ' + want); } catch (e) {}
+  _soterBusy = false;
+  const m = /^soter\|auto\|state=([01])$/m.exec(r && r.stdout != null ? String(r.stdout) : '');
+  if (m && m[1] === (want === 'on' ? '1' : '0')) {
+    uiSound(want === 'on' ? 'toggle_on' : 'toggle_off');
+    toast(want === 'on' ? T('soter_auto_on', 'SOTER repair will run after every reboot') : T('soter_auto_off', 'Automatic SOTER repair is off'), want === 'on' ? 'good' : 'perf');
+  } else toast(T('soter_auto_failed', 'Could not change the automatic repair'), 'err');
+  soterFixLoad(false);
+}
 function cfgRenderSoterFixCard(list) {
   const card = bfxEl('div', 'cfg-row bfx-card soter-card'); card.id = 'soterCard';
   const head = bfxEl('div', 'bfx-head');
@@ -10190,7 +10253,7 @@ function cfgRenderSoterFixCard(list) {
   titles.appendChild(bfxEl('div', 'bfx-title', T('soter_title', 'SOTER Repair')));
   const chip = bfxEl('span', 'bfx-chip is-off', T('junk_scan', 'Scanning…')); chip.id = 'soterChip'; titles.appendChild(chip);
   head.appendChild(titles); card.appendChild(head);
-  card.appendChild(bfxEl('div', 'bfx-desc', T('soter_desc', 'SOTER is the Tencent key server behind fingerprint payments in WeChat Pay, Alipay and many Chinese banking apps. If those apps report a failed device check although everything else works, the repair stops the SOTER service, clears only the SOTER server data so it creates fresh keys, and starts the service again. Afterwards switch fingerprint payment on again in those apps. It does not hide root or an unlocked bootloader.')));
+  card.appendChild(bfxEl('div', 'bfx-desc', T('soter_desc', 'SOTER is the Tencent key server behind fingerprint payments in WeChat Pay, Alipay and many Chinese banking apps. If those apps report a failed device check although everything else works, the repair stops the SOTER service, clears only the SOTER server data so it creates fresh keys, and starts the service again. Afterwards switch fingerprint payment on again in those apps. It does not hide root or an unlocked bootloader. One run makes two passes in a row, because a single pass was not always enough.')));
   const rows = bfxEl('div', 'junk-cats'); rows.id = 'soterRows'; card.appendChild(rows);
   const actions = bfxEl('div', 'bfx-actions');
   const runBtn = bfxEl('button', 'bfx-btn bfx-primary', T('soter_run', 'Repair SOTER'));
@@ -10199,13 +10262,22 @@ function cfgRenderSoterFixCard(list) {
   refresh.type = 'button'; refresh.id = 'soterRefresh'; refresh.disabled = true; refresh.onclick = function () { soterFixLoad(true); }; actions.appendChild(refresh);
   card.appendChild(actions);
   const note = bfxEl('div', 'bfx-note'); note.id = 'soterNote'; card.appendChild(note);
+  const auto = bfxEl('div', 'soter-auto');
+  const autoText = bfxEl('div', 'soter-auto-text');
+  autoText.appendChild(bfxEl('div', 'soter-auto-title', T('soter_auto', 'Repair automatically after every reboot')));
+  autoText.appendChild(bfxEl('div', 'soter-auto-note', T('soter_auto_note', 'Runs the same repair about a minute after each boot. Every run creates new SOTER keys, so fingerprint payment has to be switched on again in those apps after each reboot.')));
+  auto.appendChild(autoText);
+  const sw = bfxEl('div', 'cfg-switch'); sw.id = 'soterAuto';
+  sw.setAttribute('role', 'switch'); sw.setAttribute('aria-checked', 'false'); sw.setAttribute('aria-disabled', 'true');
+  sw.onclick = function (e) { if (e && e.stopPropagation) e.stopPropagation(); soterAutoToggle(); };
+  auto.appendChild(sw);
+  card.appendChild(auto);
   list.appendChild(card);
   soterFixLoad(false);
 }
 async function soterFixLoad(manual) {
   if (!_el('soterCard') || _soterBusy) return;
   const seq = ++_soterSeq;
-  _soterArmed = 0;
   if (manual) uiSound('nav');
   let r = null;
   try { r = await run('sh ' + shQuote(SOTER_FIX_SCRIPT) + ' status'); } catch (e) {}
@@ -10215,13 +10287,8 @@ async function soterFixLoad(manual) {
 async function soterFixRun() {
   const btn = _el('soterRun');
   if (_soterBusy || !btn || btn.disabled || _soterInstalled !== '1') return;
-  const now = Date.now();
-  if (now - _soterArmed > 5000) {
-    _soterArmed = now; uiSound('capture');
-    toast(T('soter_confirm', 'Tap again to reset SOTER: fingerprint payment must then be switched on again in WeChat Pay, Alipay and banking apps'), 'perf');
-    return;
-  }
-  _soterArmed = 0; _soterBusy = true; const seq = ++_soterSeq;
+  _soterBusy = true; const seq = ++_soterSeq;
+  uiSound('capture');
   btn.disabled = true; if (_el('soterRefresh')) _el('soterRefresh').disabled = true;
   const chip = _el('soterChip'); if (chip) { chip.className = 'bfx-chip is-run'; chip.textContent = T('soter_running', 'Repairing…'); }
   let r = null;
@@ -10560,6 +10627,16 @@ function kernelControlAvailability(key) {
   }
   return { state:_kernelPanel.loading ? 'loading' : 'unknown', live:'' };
 }
+/* dev49: three controls read "not exposed" on the owner's phone for three different reasons;
+ * each now says which, so a kernel that cannot have the switch is not mistaken for a fault. */
+function kernelUnavailableWhy(key) {
+  const fb = {
+    kernel_sched_nr_migrate: 'Needs a kernel built with scheduler debugging (CONFIG_SCHED_DEBUG) and debugfs. ASB mounts debugfs privately only for the moment it reads or writes the value, so nothing more is needed when both are built in.',
+    kernel_sched_autogroup: 'GKI kernels are built without autogroup. Turning it on changes a kernel structure that vendor modules are compiled against, so a GKI kernel cannot gain it without breaking those modules.',
+    kernel_lpm_prediction: 'This switch belongs to the older Snapdragon lpm_levels idle driver. Newer Snapdragon kernels use another idle governor without it; the diagnostic export lists the parameters this kernel has.'
+  };
+  return Object.prototype.hasOwnProperty.call(fb, key) ? T('kc_why_' + key, fb[key]) : '';
+}
 function kernelDecorateControlRow(row, key) {
   if (!row) return;
   const a = kernelControlAvailability(key);
@@ -10570,6 +10647,8 @@ function kernelDecorateControlRow(row, key) {
     badge.className = 'cfg-status ' + (a.state === 'available' ? 'on' : 'na');
     badge.title = showLive ? T('kc_live', 'kernel: {v}').replace('{v}', a.live) : kernelStateText(a.state);
   }
+  const why = a.state === 'not_exposed' ? kernelUnavailableWhy(key) : '';
+  if (why && row.appendChild && !(row.querySelector && row.querySelector('.kernel-why'))) row.appendChild(bfxEl('div', 'kernel-why', why));
   if (['not_exposed','not_readable','read_only','disabled','covered_by_timer_migration'].indexOf(a.state) >= 0) {
     row.classList.add('kernel-unavailable');
     row.querySelectorAll('.cfg-seg button,.cfg-sel-btn,.cfg-sel-pop button').forEach(function (b) {
@@ -10902,10 +10981,10 @@ function nightChargeBadge(state) {
   switch (state) {
     case 'off': return { cls:'neutral', text:T('nc_state_off', 'Disabled') };
     case 'waiting': return { cls:'neutral', text:T('nc_state_waiting', 'waiting for charging / below 80%') };
-    case 'holding': return _nightCharge.interface === 'switch'
+    case 'holding': return ['switch', 'mmi', 'mmi_psy'].indexOf(_nightCharge.interface) >= 0
       ? { cls:'good', text:T('nc_state_holding_switch', 'charging paused at 80% (charge switch, not a charge limit)') }
       : { cls:'good', text:T('nc_state_holding', '80% ceiling active') };
-    case 'released': return { cls:'good', text:T('nc_state_released', 'released at window end') };
+    case 'released': return { cls:'good', text:T('nc_state_released', 'restriction released at window end') };
     case 'invalid_window': return { cls:'bad', text:T('nc_state_invalid_window', 'invalid interval: start and end must differ') };
     case 'not_exposed': return { cls:'warn', text:T('nc_state_not_exposed', 'not exposed by this kernel') };
     case 'write_failed': return { cls:'bad', text:T('nc_state_write_failed', 'kernel rejected the limit') };
@@ -17840,6 +17919,8 @@ function lspLiteParse(out) {
   const pk = function (v) { return /^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)+$/.test(v || ''); };
   String(out || '').split('\n').forEach(function (ln) {
     ln = ln.trim();
+    const sm = /^db_schema=([A-Za-z0-9_(),;]{1,600})$/.exec(ln);
+    if (sm) { g.schema = sm[1]; return; }
     let m = /^([a-z_]+)=([A-Za-z0-9_-]*)$/.exec(ln);
     if (m) {
       const k = m[1], v = m[2];
@@ -17939,6 +18020,14 @@ function lspLiteCard() {
   const card = logReportSec(T('lsp_title', 'LSPosed: modules and their cost'), 'zygisk_hooks');
   if (!g.ok) { card.appendChild(logReportNote(T('lsp_unread', 'The LSPosed state has not been read yet.'))); return card; }
   if (!g.lspd) { card.appendChild(logReportNote(T('lsp_none', 'LSPosed is not installed.'))); return card; }
+  if (g.db === 'unexpected_schema') {
+    /* dev49: a fork whose tables match no known layout says which tables it has, so the next
+     * report can add it; nothing is read from it or written to it meanwhile. */
+    if (g.schema === 'no_tables') card.appendChild(logReportNote(T('lsp_db_schema_empty', 'The LSPosed database ASB found holds no tables, so there is no module list to read. If LSPosed itself shows modules, it keeps them elsewhere: send the diagnostic export.'), true));
+    else card.appendChild(logReportNote(T('lsp_db_schema', 'This LSPosed build keeps its module list in a layout ASB does not know yet, so nothing is read from it or changed. Its tables: %s. Send the diagnostic export so it can be added.')
+      .replace('%s', g.schema && g.schema !== 'unreadable' ? g.schema.replace(/;/g, '; ').replace(/,/g, ', ') : T('lsp_db_schema_none', 'not readable')), true));
+    return card;
+  }
   if (g.db !== 'ok') { card.appendChild(logReportNote(T('lsp_db', 'LSPosed\'s database could not be read (%s); nothing is changed.').replace('%s', g.db), true)); return card; }
   card.appendChild(logReportNote(T('lsp_desc', 'Which modules are on, what they hook and what that costs: from LSPosed\'s own database, Android\'s usage history, the Zygisk start ledger and crash records that pass through a module. LSPosed reports no energy per hook, so a verdict is a reasoned estimate; the A/B test measures one module directly.')));
   const names = dozeKeepLabels(g.mods.map(function (m) { return m.pkg; }).concat(g.cands.map(function (c) { return c.app; }), g.journal.map(function (j) { return j.app; }).filter(Boolean)));
