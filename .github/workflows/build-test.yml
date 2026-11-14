@@ -50,6 +50,8 @@ jobs:
             runtime/asb_art_compile.sh \
             runtime/asb_documentsui_fix.sh \
             runtime/asb_junk_cleanup.sh \
+            runtime/asb_pressure_snapshot.sh \
+            runtime/asb_soter_fix.sh \
             tools/asb_kernel_uv_coexist.sh \
             tools/asb_device_info.sh
 
@@ -118,6 +120,8 @@ jobs:
             runtime/asb_art_compile.sh \
             runtime/asb_documentsui_fix.sh \
             runtime/asb_junk_cleanup.sh \
+            runtime/asb_pressure_snapshot.sh \
+            runtime/asb_soter_fix.sh \
             tools/asb_kernel_uv_coexist.sh \
             tools/asb_device_info.sh
 
@@ -215,6 +219,8 @@ jobs:
             "runtime/asb_zygisk_info.sh" \
             "runtime/asb_lsposed_info.sh" \
             "runtime/asb_pressure.sh" \
+            "runtime/asb_pressure_snapshot.sh" \
+            "runtime/asb_soter_fix.sh" \
             src/zygisk/zygisk.hpp \
             src/zygisk/asb_observer_protocol.h \
             src/zygisk/asb_observer_core.h \
