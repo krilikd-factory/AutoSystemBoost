@@ -492,6 +492,10 @@
       "name": "MGLRU Modu",
       "desc": "MGLRU’nun bellek sayfalarını seçme ve geri kazanma biçimini değiştirir: Kapalı 0, Açık 7, Smart ise yüke göre 5 veya 7 ister. Bellek baskısında uygun politika reclaim işini azaltıp yanıtı veya uygulama tutmayı iyileştirebilir; uygun olmayan politika reclaim, yeniden yükleme ve takılmayı artırabilir. Pil etkisi yüke bağlıdır ve garanti edilmez. Stock ve kaldırma kaydedilen maskeyi geri yükler; kırpılmış readback başarı değil uyumsuzluktur."
     },
+    "kernel_mglru_min_ttl": {
+      "name": "MGLRU Nesil Koruması",
+      "desc": "MGLRU nesil korumasını 1000, 2000 veya 5000 ms yapar. Uzun koruma erken geri kazanımı azaltabilir ancak bellek boşaltmayı geciktirebilir; kısa koruma refault işini artırabilir. Stock kaydedilen değeri aynen geri yükler; yazılamayan veya uyuşmayan arayüzler açıkça bildirilir."
+    },
     "kernel_timer_migration": {
       "name": "Zamanlayıcı Taşıma",
       "desc": "Çekirdeğin zamanlayıcıları CPU’lar arasında taşıyıp taşıyamayacağını denetler. Açık, zamanlayıcıları boştaki CPU’lardan zaten etkin olanlara taşıyıp bazı uyanışları önleyebilir; Kapalı konumlarını korur, ancak yük altında sonuç farklı olabilir. CPU idle davranışına bağlı olarak iki mod da gecikmeyi ve güç tüketimini iyileştirebilir veya kötüleştirebilir. Kapalı önceki ASB isteğini korur; Stock ve kaldırma, doğrulanmış readback sonrası kaydedilen değeri geri yükler."
@@ -732,6 +736,12 @@
       "off": "kapalı",
       "on": "açık",
       "smart": "Smart"
+    },
+    "kernel_mglru_min_ttl": {
+      "stock": "stok",
+      "1000": "1000 ms",
+      "2000": "2000 ms",
+      "5000": "5000 ms"
     },
     "kernel_timer_migration": {
       "stock": "stok",
@@ -3357,5 +3367,21 @@
   "kernel_wb_sec": " sn",
   "kernel_wb_min": " dk",
   "kernel_wb_hour": " sa",
-  "dev_kernel_features_wakeup_blocker_abi": "Wakeup engelleyici ABI"
+  "dev_kernel_features_wakeup_blocker_abi": "Wakeup engelleyici ABI",
+  "kernel_wb_open_sources": "Kaynakları aç",
+  "kernel_wb_no_matches": "Geçerli arama ve filtreye uyan kaynak yok.",
+  "kernel_wb_sources_shown": "Gösterilen: {shown} / {total}",
+  "kernel_wb_dialog_hint": "Sayaçlar bu gözlem penceresindeki değişimlerdir, enerji ölçümü değildir. Yüksek sayı tek başına engellemenin yararlı veya güvenli olduğunu kanıtlamaz.",
+  "kernel_wb_search": "Tam kaynak adlarını ara",
+  "kernel_wb_filter_all": "Tümü",
+  "kernel_wb_filter_unblocked": "Engellenmemiş",
+  "kernel_wb_filter_blocked": "Engellenmiş",
+  "kernel_wb_filter_reset": "Sayaç sıfırlandı",
+  "kernel_wb_sort_label": "Kaynakları sırala",
+  "kernel_wb_sort_events": "Olaylar",
+  "kernel_wb_sort_active": "Etkinleştirmeler",
+  "kernel_wb_sort_time": "Aktif süre",
+  "kernel_wb_sort_name": "Ad",
+  "kernel_wb_dialog_title": "Gözlemlenen uyandırma kaynakları",
+  "kernel_wb_close": "Kapat"
 }

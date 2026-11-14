@@ -492,6 +492,10 @@
       "name": "Modo MGLRU",
       "desc": "Cambia cómo MGLRU selecciona y recupera páginas de memoria: Desactivado pide 0, Activado 7 y Smart 5 o 7 según la carga. Bajo presión de memoria, una política adecuada puede reducir el trabajo de reclaim y mejorar la respuesta o retención de apps; una inadecuada puede aumentar reclaim, recargas y tirones. El efecto en batería depende de la carga y no está garantizado. Stock y la desinstalación restauran la máscara guardada; un readback recortado es un error, no un éxito."
     },
+    "kernel_mglru_min_ttl": {
+      "name": "Protección de generaciones MGLRU",
+      "desc": "Ajusta la protección de generaciones MGLRU a 1000, 2000 o 5000 ms. Una protección mayor puede evitar recuperación prematura, pero retrasar la liberación; una menor puede aumentar los refallos. Stock restaura el valor exacto guardado y los errores de lectura se muestran honestamente."
+    },
     "kernel_timer_migration": {
       "name": "Migración de temporizadores",
       "desc": "Controla si el kernel puede migrar temporizadores entre CPU. Activado puede moverlos desde CPU inactivas a otras ya activas y evitar algunos despertares; Desactivado mantiene su ubicación, con un resultado distinto según la carga. Según el comportamiento de CPU idle, cualquier modo puede mejorar o empeorar latencia y consumo. Desactivado conserva la solicitud anterior de ASB; Stock y la desinstalación restauran el valor capturado tras verificar readback."
@@ -732,6 +736,12 @@
       "off": "off",
       "on": "on",
       "smart": "Smart"
+    },
+    "kernel_mglru_min_ttl": {
+      "stock": "stock",
+      "1000": "1000 ms",
+      "2000": "2000 ms",
+      "5000": "5000 ms"
     },
     "kernel_timer_migration": {
       "stock": "stock",
@@ -3357,5 +3367,21 @@
   "kernel_wb_sec": " s.",
   "kernel_wb_min": " min.",
   "kernel_wb_hour": " h.",
-  "dev_kernel_features_wakeup_blocker_abi": "ABI del bloqueo de activaciones"
+  "dev_kernel_features_wakeup_blocker_abi": "ABI del bloqueo de activaciones",
+  "kernel_wb_open_sources": "Abrir fuentes",
+  "kernel_wb_no_matches": "Ninguna fuente coincide con la búsqueda y el filtro.",
+  "kernel_wb_sources_shown": "Mostradas: {shown} de {total}",
+  "kernel_wb_dialog_hint": "Los contadores son cambios durante esta ventana, no mediciones de energía. Una cifra alta no demuestra que bloquear sea útil o seguro.",
+  "kernel_wb_search": "Buscar nombres exactos de fuentes",
+  "kernel_wb_filter_all": "Todas",
+  "kernel_wb_filter_unblocked": "No bloqueadas",
+  "kernel_wb_filter_blocked": "Bloqueadas",
+  "kernel_wb_filter_reset": "Contador reiniciado",
+  "kernel_wb_sort_label": "Ordenar fuentes",
+  "kernel_wb_sort_events": "Eventos",
+  "kernel_wb_sort_active": "Activaciones",
+  "kernel_wb_sort_time": "Tiempo activo",
+  "kernel_wb_sort_name": "Nombre",
+  "kernel_wb_dialog_title": "Fuentes de activación observadas",
+  "kernel_wb_close": "Cerrar"
 }

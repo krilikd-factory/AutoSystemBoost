@@ -492,6 +492,10 @@
       "name": "MGLRU-Modus",
       "desc": "Ändert, wie MGLRU Speicherseiten auswählt und freigibt: Aus fordert 0, Ein 7 und Smart je nach Last 5 oder 7 an. Bei Speicherdruck kann eine passende Politik Reclaim-Arbeit verringern und Reaktion oder App-Erhaltung verbessern; eine unpassende kann Reclaim, Nachladen und Ruckler erhöhen. Der Akku-Effekt hängt von der Last ab und ist nicht garantiert. Stock und Deinstallation stellen die gespeicherte Maske wieder her; ein begrenzter Readback gilt als Fehler, nicht als Erfolg."
     },
+    "kernel_mglru_min_ttl": {
+      "name": "MGLRU-Generationsschutz",
+      "desc": "Setzt den Schutz von MGLRU-Generationen auf 1000, 2000 oder 5000 ms. Längerer Schutz kann vorzeitige Speicherfreigabe verringern, aber die Rückgewinnung verzögern; kürzerer Schutz kann mehr Refault-Arbeit erzeugen. Stock stellt den exakt gespeicherten Wert wieder her; fehlende oder schreibgeschützte Schnittstellen werden ehrlich gemeldet."
+    },
     "kernel_timer_migration": {
       "name": "Timer-Migration",
       "desc": "Steuert, ob der Kernel Timer zwischen CPUs verschieben darf. Ein kann Timer von inaktiven auf bereits aktive CPUs verlagern und manche Aufwachvorgänge vermeiden; Aus belässt Timer am Ort, was unter Last anders wirken kann. Je nach CPU-Idle-Verhalten kann jeder Modus Latenz und Verbrauch verbessern oder verschlechtern. Aus behält die bisherige ASB-Anforderung; Stock und Deinstallation stellen nach geprüftem Readback den Ausgangswert wieder her."
@@ -732,6 +736,12 @@
       "off": "aus",
       "on": "ein",
       "smart": "Smart"
+    },
+    "kernel_mglru_min_ttl": {
+      "stock": "Standard",
+      "1000": "1000 ms",
+      "2000": "2000 ms",
+      "5000": "5000 ms"
     },
     "kernel_timer_migration": {
       "stock": "Standard",
@@ -3357,5 +3367,21 @@
   "kernel_wb_sec": " Sek.",
   "kernel_wb_min": " Min.",
   "kernel_wb_hour": " Std.",
-  "dev_kernel_features_wakeup_blocker_abi": "Wakeup-Blocker-ABI"
+  "dev_kernel_features_wakeup_blocker_abi": "Wakeup-Blocker-ABI",
+  "kernel_wb_open_sources": "Quellen öffnen",
+  "kernel_wb_no_matches": "Keine Quellen entsprechen Suche und Filter.",
+  "kernel_wb_sources_shown": "Angezeigt: {shown} von {total}",
+  "kernel_wb_dialog_hint": "Zähler sind Änderungen im Beobachtungszeitraum, keine Energiemessungen. Eine hohe Zahl beweist weder Nutzen noch Sicherheit einer Blockierung.",
+  "kernel_wb_search": "Exakte Quellennamen suchen",
+  "kernel_wb_filter_all": "Alle",
+  "kernel_wb_filter_unblocked": "Nicht blockiert",
+  "kernel_wb_filter_blocked": "Blockiert",
+  "kernel_wb_filter_reset": "Zähler zurückgesetzt",
+  "kernel_wb_sort_label": "Quellen sortieren",
+  "kernel_wb_sort_events": "Ereignisse",
+  "kernel_wb_sort_active": "Aktivierungen",
+  "kernel_wb_sort_time": "Aktive Zeit",
+  "kernel_wb_sort_name": "Quellenname",
+  "kernel_wb_dialog_title": "Beobachtete Wakeup-Quellen",
+  "kernel_wb_close": "Schließen"
 }

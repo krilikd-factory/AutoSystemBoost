@@ -522,6 +522,10 @@
       "name": "Modalità MGLRU",
       "desc": "Cambia come MGLRU seleziona e recupera le pagine di memoria: Off richiede 0, On 7 e Smart 5 o 7 in base al carico. Sotto pressione di memoria, una politica adatta può ridurre il lavoro di reclaim e migliorare reattività o conservazione delle app; una inadatta può aumentare reclaim, ricaricamenti e scatti. L’effetto sulla batteria dipende dal carico e non è garantito. Stock e disinstallazione ripristinano la maschera salvata; un readback limitato è un errore, non un successo."
     },
+    "kernel_mglru_min_ttl": {
+      "name": "Protezione generazioni MGLRU",
+      "desc": "Imposta la protezione delle generazioni MGLRU a 1000, 2000 o 5000 ms. Una durata maggiore può ridurre il reclaim prematuro ma ritardare il recupero; una minore può aumentare i refault. Stock ripristina il valore esatto salvato e segnala interfacce assenti o non scrivibili."
+    },
     "kernel_timer_migration": {
       "name": "Migrazione dei timer",
       "desc": "Controlla se il kernel può migrare i timer tra CPU. On può spostarli da CPU inattive a CPU già attive ed evitare alcuni risvegli; Off mantiene la loro posizione, con risultati diversi sotto carico. A seconda del comportamento di CPU idle, entrambe le modalità possono migliorare o peggiorare latenza e consumo. Off conserva la precedente richiesta ASB; Stock e disinstallazione ripristinano il valore salvato dopo un readback verificato."
@@ -732,6 +736,12 @@
       "off": "off",
       "on": "on",
       "smart": "Smart"
+    },
+    "kernel_mglru_min_ttl": {
+      "stock": "stock",
+      "1000": "1000 ms",
+      "2000": "2000 ms",
+      "5000": "5000 ms"
     },
     "kernel_timer_migration": {
       "stock": "stock",
@@ -3357,5 +3367,21 @@
   "kernel_wb_sec": " sec",
   "kernel_wb_min": " min.",
   "kernel_wb_hour": " ore",
-  "dev_kernel_features_wakeup_blocker_abi": "ABI del blocco risvegli"
+  "dev_kernel_features_wakeup_blocker_abi": "ABI del blocco risvegli",
+  "kernel_wb_open_sources": "Apri sorgenti",
+  "kernel_wb_no_matches": "Nessuna sorgente corrisponde a ricerca e filtro.",
+  "kernel_wb_sources_shown": "Mostrate: {shown} di {total}",
+  "kernel_wb_dialog_hint": "I contatori sono variazioni nella finestra di osservazione, non misure energetiche. Un valore alto non dimostra che il blocco sia utile o sicuro.",
+  "kernel_wb_search": "Cerca nomi esatti delle sorgenti",
+  "kernel_wb_filter_all": "Tutte",
+  "kernel_wb_filter_unblocked": "Non bloccate",
+  "kernel_wb_filter_blocked": "Bloccate",
+  "kernel_wb_filter_reset": "Contatore azzerato",
+  "kernel_wb_sort_label": "Ordina sorgenti",
+  "kernel_wb_sort_events": "Eventi",
+  "kernel_wb_sort_active": "Attivazioni",
+  "kernel_wb_sort_time": "Tempo attivo",
+  "kernel_wb_sort_name": "Nome",
+  "kernel_wb_dialog_title": "Sorgenti di risveglio osservate",
+  "kernel_wb_close": "Chiudi"
 }

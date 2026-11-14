@@ -492,6 +492,10 @@
       "name": "Modo MGLRU",
       "desc": "Muda como o MGLRU seleciona e recupera páginas de memória: Desligado pede 0, Ligado 7 e Smart 5 ou 7 conforme a carga. Sob pressão de memória, uma política adequada pode reduzir o trabalho de reclaim e melhorar a resposta ou retenção de apps; uma inadequada pode aumentar reclaim, recargas e engasgos. O efeito na bateria depende da carga e não é garantido. Stock e a desinstalação restauram a máscara guardada; um readback truncado é erro, não sucesso."
     },
+    "kernel_mglru_min_ttl": {
+      "name": "Proteção de gerações MGLRU",
+      "desc": "Define a proteção das gerações MGLRU para 1000, 2000 ou 5000 ms. Proteção maior pode reduzir reclaim prematuro, mas atrasar a liberação; menor pode aumentar refaults. Stock restaura o valor exato salvo e informa interfaces ausentes ou somente leitura."
+    },
     "kernel_timer_migration": {
       "name": "Migração de temporizadores",
       "desc": "Controla se o kernel pode migrar temporizadores entre CPUs. Ligado pode movê-los de CPUs inativas para CPUs já ativas e evitar alguns despertares; Desligado mantém sua posição, com resultado diferente sob carga. Conforme o comportamento de CPU idle, qualquer modo pode melhorar ou piorar latência e consumo. Desligado preserva o pedido anterior do ASB; Stock e a desinstalação restauram o valor capturado após readback verificado."
@@ -732,6 +736,12 @@
       "off": "off",
       "on": "on",
       "smart": "Smart"
+    },
+    "kernel_mglru_min_ttl": {
+      "stock": "stock",
+      "1000": "1000 ms",
+      "2000": "2000 ms",
+      "5000": "5000 ms"
     },
     "kernel_timer_migration": {
       "stock": "stock",
@@ -3357,5 +3367,21 @@
   "kernel_wb_sec": " seg",
   "kernel_wb_min": " min.",
   "kernel_wb_hour": " horas",
-  "dev_kernel_features_wakeup_blocker_abi": "ABI do bloqueio de despertar"
+  "dev_kernel_features_wakeup_blocker_abi": "ABI do bloqueio de despertar",
+  "kernel_wb_open_sources": "Abrir fontes",
+  "kernel_wb_no_matches": "Nenhuma fonte corresponde à pesquisa e ao filtro.",
+  "kernel_wb_sources_shown": "Exibidas: {shown} de {total}",
+  "kernel_wb_dialog_hint": "Os contadores são mudanças nesta janela, não medições de energia. Uma contagem alta não prova que o bloqueio seja útil ou seguro.",
+  "kernel_wb_search": "Pesquisar nomes exatos de fontes",
+  "kernel_wb_filter_all": "Todas",
+  "kernel_wb_filter_unblocked": "Não bloqueadas",
+  "kernel_wb_filter_blocked": "Bloqueadas",
+  "kernel_wb_filter_reset": "Contador reiniciado",
+  "kernel_wb_sort_label": "Ordenar fontes",
+  "kernel_wb_sort_events": "Eventos",
+  "kernel_wb_sort_active": "Ativações",
+  "kernel_wb_sort_time": "Tempo ativo",
+  "kernel_wb_sort_name": "Nome",
+  "kernel_wb_dialog_title": "Fontes de ativação observadas",
+  "kernel_wb_close": "Fechar"
 }

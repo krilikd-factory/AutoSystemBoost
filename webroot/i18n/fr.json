@@ -602,6 +602,10 @@
       "name": "Mode MGLRU",
       "desc": "Modifie la sélection et la récupération des pages mémoire par MGLRU : Off demande 0, On 7 et Smart 5 ou 7 selon la charge. Sous pression mémoire, une politique adaptée peut réduire le reclaim et améliorer la réactivité ou la conservation des apps ; une politique inadaptée peut augmenter reclaim, rechargements et à-coups. L’effet sur la batterie dépend de la charge et n’est pas garanti. Stock et la désinstallation restaurent le masque enregistré ; un readback tronqué est un échec, pas un succès."
     },
+    "kernel_mglru_min_ttl": {
+      "name": "Protection des générations MGLRU",
+      "desc": "Règle la protection des générations MGLRU sur 1000, 2000 ou 5000 ms. Une protection longue peut limiter la récupération prématurée mais retarder la libération; une protection courte peut augmenter les refautes. Stock restaure la valeur exacte enregistrée et signale les interfaces indisponibles."
+    },
     "kernel_timer_migration": {
       "name": "Migration des minuteurs",
       "desc": "Contrôle si le noyau peut migrer les minuteurs entre CPU. On peut les déplacer de CPU inactifs vers des CPU déjà actifs et éviter certains réveils ; Off conserve leur placement, avec un résultat différent selon la charge. Selon le comportement de CPU idle, chaque mode peut améliorer ou dégrader latence et consommation. Off conserve l’ancienne demande ASB ; Stock et la désinstallation restaurent la valeur enregistrée après vérification du readback."
@@ -834,6 +838,12 @@
       "off": "off",
       "on": "on",
       "smart": "Smart"
+    },
+    "kernel_mglru_min_ttl": {
+      "stock": "stock",
+      "1000": "1000 ms",
+      "2000": "2000 ms",
+      "5000": "5000 ms"
     },
     "kernel_timer_migration": {
       "stock": "stock",
@@ -3357,5 +3367,21 @@
   "kernel_wb_sec": " sec",
   "kernel_wb_min": " min.",
   "kernel_wb_hour": " heures",
-  "dev_kernel_features_wakeup_blocker_abi": "ABI du blocage des réveils"
+  "dev_kernel_features_wakeup_blocker_abi": "ABI du blocage des réveils",
+  "kernel_wb_open_sources": "Ouvrir les sources",
+  "kernel_wb_no_matches": "Aucune source ne correspond à la recherche et au filtre.",
+  "kernel_wb_sources_shown": "Affichées : {shown} sur {total}",
+  "kernel_wb_dialog_hint": "Les compteurs sont des variations pendant cette fenêtre, pas des mesures d’énergie. Un nombre élevé ne prouve ni l’utilité ni la sécurité du blocage.",
+  "kernel_wb_search": "Rechercher des noms exacts de sources",
+  "kernel_wb_filter_all": "Toutes",
+  "kernel_wb_filter_unblocked": "Non bloquées",
+  "kernel_wb_filter_blocked": "Bloquées",
+  "kernel_wb_filter_reset": "Compteur réinitialisé",
+  "kernel_wb_sort_label": "Trier les sources",
+  "kernel_wb_sort_events": "Événements",
+  "kernel_wb_sort_active": "Nombre d’activations",
+  "kernel_wb_sort_time": "Temps actif",
+  "kernel_wb_sort_name": "Nom",
+  "kernel_wb_dialog_title": "Sources de réveil observées",
+  "kernel_wb_close": "Fermer"
 }

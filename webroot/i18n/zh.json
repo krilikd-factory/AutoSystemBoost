@@ -522,6 +522,10 @@
       "name": "MGLRU 模式",
       "desc": "更改 MGLRU 选择和回收内存页的方式：“关”请求 0，“开”请求 7，Smart 按负载请求 5 或 7。内存压力较大时，合适的策略可能减少回收工作并改善响应或应用保留；不合适的策略可能增加回收、重新加载和卡顿。对续航的影响取决于负载，不作保证。“Stock”和卸载会恢复保存的掩码；被内核截断的读回值视为不匹配，而不是成功。"
     },
+    "kernel_mglru_min_ttl": {
+      "name": "MGLRU 代保护",
+      "desc": "通过已注册的内核控制所有者设置 /sys/kernel/mm/lru_gen/min_ttl_ms，只允许 1000、2000 或 5000 毫秒。较长时间可保护最近使用的页面代，减少过早回收和应用重新载入，但也会延迟内存释放；较短时间可能更快回收内存，却增加缺页和重复工作。Stock 精确恢复 ASB 首次写入前保存的值。节点不存在、只读、写入失败或回读不符都会如实显示，不会伪报成功，也不承诺省电或性能提升。"
+    },
     "kernel_timer_migration": {
       "name": "定时器迁移",
       "desc": "控制内核是否可以在 CPU 之间迁移定时器。“开”可将定时器从空闲 CPU 移到已活动的 CPU，从而避免部分唤醒；“关”保持定时器位置，但负载下的结果可能不同。取决于 CPU idle 行为，任一模式都可能改善或恶化延迟与功耗。“关”保留 ASB 原先的请求；“Stock”和卸载在验证读回后恢复原值。"
@@ -732,6 +736,12 @@
       "off": "关闭",
       "on": "开启",
       "smart": "Smart"
+    },
+    "kernel_mglru_min_ttl": {
+      "stock": "原厂",
+      "1000": "1000 ms",
+      "2000": "2000 ms",
+      "5000": "5000 ms"
     },
     "kernel_timer_migration": {
       "stock": "原厂",
@@ -3357,5 +3367,21 @@
   "kernel_wb_sec": " 秒",
   "kernel_wb_min": " 分钟",
   "kernel_wb_hour": " 小时",
-  "dev_kernel_features_wakeup_blocker_abi": "唤醒阻止器 ABI"
+  "dev_kernel_features_wakeup_blocker_abi": "唤醒阻止器 ABI",
+  "kernel_wb_open_sources": "打开来源",
+  "kernel_wb_no_matches": "没有符合当前搜索和筛选条件的来源。",
+  "kernel_wb_sources_shown": "显示：{shown}/{total}",
+  "kernel_wb_dialog_hint": "计数器表示此观察窗口内的变化，并非能耗测量。数值高本身不能证明阻止它有用或安全。",
+  "kernel_wb_search": "搜索精确来源名称",
+  "kernel_wb_filter_all": "全部",
+  "kernel_wb_filter_unblocked": "未阻止",
+  "kernel_wb_filter_blocked": "已阻止",
+  "kernel_wb_filter_reset": "计数器重置",
+  "kernel_wb_sort_label": "排序来源",
+  "kernel_wb_sort_events": "事件",
+  "kernel_wb_sort_active": "激活次数",
+  "kernel_wb_sort_time": "活动时间",
+  "kernel_wb_sort_name": "名称",
+  "kernel_wb_dialog_title": "观察到的唤醒来源",
+  "kernel_wb_close": "关闭"
 }

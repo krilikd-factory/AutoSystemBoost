@@ -206,6 +206,12 @@
       "on": "on",
       "smart": "Smart"
     },
+    "kernel_mglru_min_ttl": {
+      "stock": "stock",
+      "1000": "1000 ms",
+      "2000": "2000 ms",
+      "5000": "5000 ms"
+    },
     "kernel_timer_migration": {
       "stock": "stock",
       "off": "off",
@@ -559,6 +565,10 @@
     "mglru_mode": {
       "name": "MGLRU Mode",
       "desc": "For memory pressure: Smart (5/7 by load) is the balanced starting point for responsiveness and app retention; On=7 enables more MGLRU policy, Off=0 uses legacy reclaim. Start with Smart for daily battery use and compare with Stock when diagnosing. Heat and drain effects depend on workload and are not guaranteed."
+    },
+    "kernel_mglru_min_ttl": {
+      "name": "MGLRU Generation Protection",
+      "desc": "Sets the MGLRU generation protection time to 1000, 2000 or 5000 ms. Longer protection can reduce premature reclaim but delay memory recovery; shorter protection can reclaim sooner but increase refault work. Stock restores the exact captured value; missing, read-only and mismatching interfaces are reported honestly."
     },
     "kernel_timer_migration": {
       "name": "Timer Migration",
@@ -3216,5 +3226,21 @@
   "kernel_wb_sec": " s",
   "kernel_wb_min": " min",
   "kernel_wb_hour": " h",
-  "dev_kernel_features_wakeup_blocker_abi": "Wakeup blocker ABI"
+  "dev_kernel_features_wakeup_blocker_abi": "Wakeup blocker ABI",
+  "kernel_wb_open_sources": "Open sources",
+  "kernel_wb_no_matches": "No sources match the current search and filter.",
+  "kernel_wb_sources_shown": "Shown: {shown} of {total}",
+  "kernel_wb_dialog_hint": "Counters are changes during this observation window, not energy measurements. A high count alone does not prove that blocking is useful or safe.",
+  "kernel_wb_search": "Search exact source names",
+  "kernel_wb_filter_all": "All",
+  "kernel_wb_filter_unblocked": "Not blocked",
+  "kernel_wb_filter_blocked": "Blocked",
+  "kernel_wb_filter_reset": "Counter reset",
+  "kernel_wb_sort_label": "Sort sources",
+  "kernel_wb_sort_events": "Events",
+  "kernel_wb_sort_active": "Activations",
+  "kernel_wb_sort_time": "Active time",
+  "kernel_wb_sort_name": "Name",
+  "kernel_wb_dialog_title": "Observed wakeup sources",
+  "kernel_wb_close": "Close"
 }

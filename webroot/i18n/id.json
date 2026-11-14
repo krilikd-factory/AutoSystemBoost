@@ -492,6 +492,10 @@
       "name": "Mode MGLRU",
       "desc": "Mengubah cara MGLRU memilih dan merebut kembali halaman memori: Off meminta 0, On 7, dan Smart 5 atau 7 sesuai beban. Saat memori tertekan, kebijakan yang sesuai dapat mengurangi kerja reclaim dan memperbaiki respons atau retensi aplikasi; kebijakan yang tidak sesuai dapat menambah reclaim, pemuatan ulang, dan tersendat. Dampak baterai bergantung pada beban dan tidak dijamin. Stock dan penghapusan memulihkan mask tersimpan; readback yang terpotong dianggap ketidakcocokan, bukan keberhasilan."
     },
+    "kernel_mglru_min_ttl": {
+      "name": "Perlindungan Generasi MGLRU",
+      "desc": "Mengatur perlindungan generasi MGLRU ke 1000, 2000 atau 5000 ms. Perlindungan lebih lama dapat mengurangi reclaim dini tetapi menunda pemulihan memori; lebih singkat dapat menambah refault. Stock memulihkan nilai tersimpan persis; antarmuka yang tidak tersedia dilaporkan apa adanya."
+    },
     "kernel_timer_migration": {
       "name": "Migrasi Timer",
       "desc": "Mengatur apakah kernel boleh memindahkan timer antar-CPU. On dapat memindahkan timer dari CPU idle ke CPU yang sudah aktif dan menghindari sebagian wake-up; Off mempertahankan posisi timer, dengan hasil yang dapat berbeda saat berbeban. Tergantung perilaku CPU idle, kedua mode dapat memperbaiki atau memperburuk latensi dan konsumsi daya. Off mempertahankan permintaan ASB sebelumnya; Stock dan penghapusan memulihkan nilai tersimpan setelah readback terverifikasi."
@@ -732,6 +736,12 @@
       "off": "off",
       "on": "on",
       "smart": "Smart"
+    },
+    "kernel_mglru_min_ttl": {
+      "stock": "stock",
+      "1000": "1000 ms",
+      "2000": "2000 ms",
+      "5000": "5000 ms"
     },
     "kernel_timer_migration": {
       "stock": "stock",
@@ -3357,5 +3367,21 @@
   "kernel_wb_sec": " dtk",
   "kernel_wb_min": " mnt",
   "kernel_wb_hour": " jam",
-  "dev_kernel_features_wakeup_blocker_abi": "ABI pemblokir wakeup"
+  "dev_kernel_features_wakeup_blocker_abi": "ABI pemblokir wakeup",
+  "kernel_wb_open_sources": "Buka sumber",
+  "kernel_wb_no_matches": "Tidak ada sumber yang cocok dengan pencarian dan filter.",
+  "kernel_wb_sources_shown": "Ditampilkan: {shown} dari {total}",
+  "kernel_wb_dialog_hint": "Penghitung adalah perubahan selama jendela pengamatan, bukan pengukuran energi. Jumlah besar tidak membuktikan pemblokiran berguna atau aman.",
+  "kernel_wb_search": "Cari nama sumber yang persis",
+  "kernel_wb_filter_all": "Semua",
+  "kernel_wb_filter_unblocked": "Tidak diblokir",
+  "kernel_wb_filter_blocked": "Diblokir",
+  "kernel_wb_filter_reset": "Penghitung direset",
+  "kernel_wb_sort_label": "Urutkan sumber",
+  "kernel_wb_sort_events": "Peristiwa",
+  "kernel_wb_sort_active": "Aktivasi",
+  "kernel_wb_sort_time": "Waktu aktif",
+  "kernel_wb_sort_name": "Nama",
+  "kernel_wb_dialog_title": "Sumber wakeup yang diamati",
+  "kernel_wb_close": "Tutup"
 }
