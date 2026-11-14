@@ -6189,6 +6189,44 @@ grep -Fq 'asb_wakeup_blocker.sh" apply' "$ROOT/service.sh" || fail 'boot apply p
 echo 'PASS wakeup blocker: empty default, exact apply/readback, dedupe, bounds, rollback, clear, status and not_exposed'
 )
 
+
+t_wakeup_observation_runtime() (
+# dev51: explicit idle-window deltas, not lifetime totals; no worker and no automatic policy.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+W="$ROOT/runtime/asb_wakeup_blocker.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL wakeup observation: $*" >&2; exit 1; }
+mkdir -p "$T/mod/config" "$T/state" "$T/class/wakeup0" "$T/class/wakeup1" "$T/class/wakeup2" "$T/class/wakeup3"
+: > "$T/node"; : > "$T/policy"; printf '9\n' > "$T/events"; printf '2\n' > "$T/abi"
+printf 'radio\t12\nother\t3\n' > "$T/stats"
+wk() { printf '%s\n' "$2" > "$T/class/$1/name"; printf '%s\n' "$3" > "$T/class/$1/active_count"; printf '%s\n' "$4" > "$T/class/$1/event_count"; printf '%s\n' "$5" > "$T/class/$1/total_time_ms"; }
+wk wakeup0 radio 10 20 3000; wk wakeup1 other 5 7 900; wk wakeup2 unchanged 1 1 1
+# Malformed/oversized kernel names never enter the UI protocol.
+printf 'bad name\n' > "$T/class/wakeup3/name"; printf '1\n' > "$T/class/wakeup3/active_count"; printf '1\n' > "$T/class/wakeup3/event_count"; printf '1\n' > "$T/class/wakeup3/total_time_ms"
+run() { MODDIR="$T/mod" ASB_WAKEUP_BLOCKLIST_NODE="$T/node" ASB_WAKEUP_POLICY="$T/policy" ASB_WAKEUP_EVENTS_NODE="$T/events" ASB_WAKEUP_ABI_NODE="$T/abi" ASB_WAKEUP_STATS_NODE="$T/stats" ASB_WAKEUP_CLASS="$T/class" ASB_WAKEUP_OBSERVE_DIR="$T/state" sh "$W" "$@"; }
+out="$(run status)"
+printf '%s\n' "$out" | grep -q 'abi=2|rule_stats=ready' || fail "ABI/status missing: $out"
+printf '%s\n' "$out" | grep -q '^wakeup_rule|blocked|radio|12$' || fail 'per-rule counter missing'
+printf '%s\n' "$out" | grep -q '^wakeup_observe|status|state=idle|' || fail 'initial state is not idle'
+out="$(run observe_start)"
+printf '%s\n' "$out" | grep -q 'state=measuring|.*sources=0|resets=0' || fail "start invented deltas: $out"
+[ ! -s "$T/policy" ] || fail 'observation created a policy rule'
+wk wakeup0 radio 13 26 3450; wk wakeup1 other 2 3 100; wk wakeup2 unchanged 1 1 1
+mkdir -p "$T/class/wakeup4"; wk wakeup4 new_source 2 4 80
+out="$(run status)"
+printf '%s\n' "$out" | grep -q '^wakeup_source|radio|events=6|active=3|time_ms=450|reset=0$' || fail "radio delta wrong: $out"
+printf '%s\n' "$out" | grep -q '^wakeup_source|other|events=3|active=2|time_ms=100|reset=1$' || fail "counter reset not bounded: $out"
+printf '%s\n' "$out" | grep -q '^wakeup_source|new_source|events=4|active=2|time_ms=80|reset=0$' || fail 'new source missing'
+printf '%s\n' "$out" | grep -q '^wakeup_source|unchanged|' && fail 'unchanged lifetime counter listed as idle activity'
+printf '%s\n' "$out" | grep -q '^wakeup_source|bad' && fail 'unsafe source name emitted'
+printf '%s\n' "$out" | grep -q 'sources=3|resets=1' || fail 'summary counts wrong'
+[ ! -s "$T/policy" ] || fail 'status automatically blocked a source'
+out="$(run observe_clear)"; printf '%s\n' "$out" | grep -q 'state=idle|elapsed_ms=0|started=0|sources=0|resets=0' || fail 'clear did not reset observation'
+! grep -Eq '^[[:space:]]*sleep[[:space:]]|while[[:space:]]+true' "$W" || fail 'persistent observation worker appeared'
+echo 'PASS wakeup observation: ABI 2, per-rule counters, explicit deltas, new/reset sources, no auto-block or worker'
+)
+
 t_phantom_stock_restore_runtime() (
 # Runtime: phantom_procs strict/relaxed -> stock puts the original value back.
 # The stock branch read profile_runtime_baseline.v1, but asb_settings_put records in

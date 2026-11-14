@@ -9755,7 +9755,7 @@ assert "kernelWakeupChipList" in h and "textContent" in h
 assert 'setInterval' not in panel
 en = json.loads((root / 'webroot/i18n/en.json').read_text(encoding='utf-8'))
 new = [k for k in en if k.startswith('kernel_') or k.startswith('cfg_kernel_')]
-assert len(new) == 38, len(new)
+assert len(new) == 56, len(new)
 assert en.get('grp_kernel') == 'Kernel' and en.get('grp_kernel_desc') and not any(k.startswith('kernel_caps') for k in en)
 for p in (root / 'webroot/i18n').glob('*.json'):
     d = json.loads(p.read_text(encoding='utf-8'))
@@ -9779,12 +9779,14 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
 cat > "$T/test.js" <<'JS'
 const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
 function grab(name){const m=h.match(new RegExp('(?:async )?function '+name+'\\([^)]*\\) \\{[\\s\\S]*?\\n\\}'));if(!m)throw Error('missing '+name);return m[0];}
-for(const n of ['kernelControlParse','kernelWakeupParse','kernelWakeupValidName','kernelWakeupDraft','kernelWakeupSave','kernelStateText','kernelControlAvailability','kernelUnavailableWhy','kernelDecorateControlRow','cfgSet','shQuote'])eval(grab(n));
+for(const n of ['kernelControlParse','kernelWakeupParse','kernelWakeupValidName','kernelWakeupDraft','kernelWakeupAdd','kernelWakeupBlockObserved','kernelWakeupSave','kernelStateText','kernelControlAvailability','kernelUnavailableWhy','kernelDecorateControlRow','cfgSet','shQuote'])eval(grab(n));
 global.ASB_KERNEL_STATUS_KEYS=['mglru_mode','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend'];
 const c=kernelControlParse('mglru_mode|writable|smart|7|1\nkernel_sched_nr_migrate|not_exposed|4|unknown|none\nkernel_hrtimer_migration|covered_by_timer_migration|auto|0|none\nkernel_sched_stats|not_exposed|off||none\nkernel_sched_autogroup|writable|on|1|0\nkernel_sched_child_runs_first|not_writable|stock|1|none\narbitrary_path|writable|on|1|none\n');
 if(c.mglru_mode.state!=='writable'||c.mglru_mode.live!=='7'||c.kernel_hrtimer_migration.state!=='covered_by_timer_migration'||c.kernel_hrtimer_migration.live!=='0'||c.kernel_sched_stats.state!=='not_exposed'||c.kernel_sched_autogroup.live!=='1'||c.kernel_sched_child_runs_first.state!=='not_writable'||c.arbitrary_path)throw Error('control status parse');
 const wb=kernelWakeupParse('wakeup_blocker|status|blocked_events=17|node=writable|policy=ready|saved_count=2|current_count=1\nwakeup_rule|saved|NETLINK\nwakeup_rule|saved|qcom|rx\nwakeup_rule|current|NETLINK\n');
 if(wb.events!=='17'||wb.saved.length!==2||wb.saved[1]!=='qcom|rx'||wb.current[0]!=='NETLINK')throw Error('wakeup status parse '+JSON.stringify(wb));
+const observed=kernelWakeupParse('wakeup_blocker|status|blocked_events=18|node=writable|policy=ready|saved_count=0|current_count=0|abi=2|rule_stats=ready\nwakeup_observe|status|state=measuring|elapsed_ms=65000|started=123|sources=1|resets=1\nwakeup_source|a|b|events=4|active=2|time_ms=900|reset=1\nwakeup_rule|blocked|a|b|7\n');
+if(observed.abi!=='2'||observed.observe.elapsed!==65000||observed.sources.length!==1||observed.sources[0].name!=='a|b'||observed.sources[0].events!==4||!observed.sources[0].reset||observed.blocked['a|b']!=='7')throw Error('observation parse '+JSON.stringify(observed));
 for(const n of ['NETLINK','a|b',"a'b",'!','-e'])if(!kernelWakeupValidName(n))throw Error('valid exact name rejected '+n);
 for(const n of ['','bad name','bad/name','bad\\name','é','a\nb'])if(kernelWakeupValidName(n))throw Error('unsafe name accepted '+JSON.stringify(n));
 let MD='/m',_wbDraft=null,_wbBusy=false,_kernelPanel={wakeup:wb,loading:false,controls:c},runs=[],toasts=[],refreshed=0;
@@ -9808,6 +9810,8 @@ if(!nrButtons.every(b=>b.disabled&&b['aria-disabled']==='true')||!nrPop.hidden||
  if(_wbDraft!==null||_wbBusy||refreshed!==1||toasts[toasts.length-1][1]!=='good')throw Error('successful apply did not reconcile');
  await kernelWakeupSave(true);if(!runs[1].endsWith(' set'))throw Error('clear did not replace policy with an empty set '+runs[1]);
  _wbDraft=['bad name'];const before=runs.length;await kernelWakeupSave(false);if(runs.length!==before)throw Error('invalid draft reached shell');
+ _wbDraft=null;_kernelPanel.wakeup=observed;observed.saved=[];await kernelWakeupBlockObserved('new_source');
+ if(!runs[runs.length-1].includes(" set 'new_source'"))throw Error('observed block bypassed policy owner '+runs[runs.length-1]);
  console.log('ok');
 })().catch(e=>{console.error(e&&e.stack||e);process.exit(1)});
 JS
@@ -13181,7 +13185,7 @@ _kernelPanel.controls = { kernel_sched_nr_migrate: { state: 'not_exposed', live:
   kernel_lpm_prediction: { state: 'not_exposed', live: '' }, kernel_sched_stats: { state: 'not_exposed', live: '' } };
 let r = row(); kernelDecorateControlRow(r, 'kernel_sched_nr_migrate'); kernelDecorateControlRow(r, 'kernel_sched_nr_migrate');
 chk(/CONFIG_SCHED_DEBUG/.test(why(r)) && /privately/.test(why(r)) && r.children.filter(c => c.className === 'kernel-why').length === 1, 'nr_migrate why: ' + why(r));
-r = row(); kernelDecorateControlRow(r, 'kernel_sched_autogroup'); chk(/GKI kernels are built without autogroup/.test(why(r)), 'autogroup why');
+r = row(); kernelDecorateControlRow(r, 'kernel_sched_autogroup'); chk(/KRILIKD intentionally disables CONFIG_SCHED_AUTOGROUP/.test(why(r)), 'autogroup why');
 r = row(); kernelDecorateControlRow(r, 'kernel_lpm_prediction'); chk(/lpm_levels/.test(why(r)), 'lpm why');
 r = row(); kernelDecorateControlRow(r, 'kernel_sched_stats'); chk(why(r) === '', 'a control without a reason got one');
 _kernelPanel.controls.kernel_sched_nr_migrate = { state: 'writable', live: '8' };
