@@ -3704,6 +3704,18 @@ html[data-asb-theme="light"] .junk-cat.is-warn .junk-cat-meta { color:#8a5a00; }
   color:var(--text-secondary); background:transparent; font:700 17px/1 var(--sans); cursor:pointer; }
 .kernel-chip-remove:hover { color:var(--text); background:var(--surface-hover); }
 .kernel-empty { color:var(--text-tertiary); font-size:11.5px; line-height:1.4; }
+.kernel-observe { margin-top:12px; padding-top:11px; border-top:1px dashed var(--border); }
+.kernel-observe-title { color:var(--text); font-size:12px; font-weight:700; }
+.kernel-observe-meta { margin-top:5px; color:var(--text-secondary); font-size:11px; line-height:1.45; }
+.kernel-observe-list { display:grid; gap:7px; margin-top:9px; }
+.kernel-source { display:flex; align-items:center; gap:9px; min-width:0; padding:8px 9px; border:1px solid var(--border); border-radius:11px; background:var(--surface); }
+.kernel-source-main { min-width:0; flex:1 1 auto; }
+.kernel-source-name { color:var(--text); font:600 11px/1.35 var(--mono); overflow-wrap:anywhere; }
+.kernel-source-metrics { margin-top:3px; color:var(--text-secondary); font-size:10.5px; line-height:1.35; }
+.kernel-source-block { flex:0 0 auto; min-height:32px; padding:6px 9px; font-size:10.5px; }
+.kernel-source-block.is-blocked { opacity:.62; }
+@media (max-width:350px) { .kernel-source { align-items:flex-start; flex-wrap:wrap; } .kernel-source-block { width:100%; } }
+
 .kernel-meta { display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:11px; color:var(--text-secondary); font-size:11px; }
 .kernel-note { margin-top:10px; color:var(--text-tertiary); font-size:11px; line-height:1.45; }
 .kernel-readback { margin-top:11px; padding-top:10px; border-top:1px dashed var(--border); }
@@ -9477,31 +9489,31 @@ const CFG_ITEMS = [
     cat:'battery' },
   { key:'mglru_mode', type:'seg', def:'smart', stock:'stock',
     opts:['stock','off','on','smart'], name:'MGLRU Mode', cat:'battery',
-    desc:'Changes how MGLRU selects and reclaims memory pages: Off requests 0, On 7, and Smart 5 or 7 by load. Under memory pressure a suitable policy can reduce reclaim work and improve responsiveness or app retention; an unsuitable one can increase reclaim, reloads and stutter. Battery impact depends on the workload and is not guaranteed. Stock and uninstall restore the captured mask; clamped readback is a mismatch, not success.' },
+    desc:'For memory pressure: Smart (5/7 by load) is the balanced starting point for responsiveness and app retention; On=7 enables more MGLRU policy, Off=0 uses legacy reclaim. Start with Smart for daily battery use and compare with Stock when diagnosing. Heat and drain effects depend on workload and are not guaranteed.' },
   { key:'kernel_timer_migration', type:'seg', def:'off', stock:'stock',
     opts:['stock','off','on'], name:'Timer Migration', cat:'system',
-    desc:'Controls whether the kernel may migrate timers, including high-resolution timers, between CPUs. On can move timers from idle CPUs to already active ones and avoid some wake-ups; Off keeps timers in place, which can behave differently under load. Depending on CPU idle behavior, either mode may help or hurt latency and power use. Off preserves the previous ASB request; Stock and uninstall restore the captured value after verified readback.' },
+    desc:'To test fewer idle wake-ups choose On: timers may move from idle CPUs to already active ones. Off keeps timers in place and can sometimes help loaded latency. This phone currently reads 0; test On for idle drain, but revert to Off/Stock if latency or glitches appear. Neither value is universally faster or cooler.' },
   { key:'kernel_hrtimer_migration', type:'seg', def:'auto', stock:'stock',
     opts:['auto','stock','off','on'], name:'High-resolution Timer Migration', cat:'system',
-    desc:'Uses a separate /proc/sys/kernel/hrtimer_migration only when a vendor actually exposes that non-upstream interface. Standard Linux 6.12 has no such independent sysctl: ASB then marks this row as covered by Timer migration and performs no second write. On a kernel with a real separate node, Auto requests 0 only on Battery and other profiles restore the captured value. Neither latency nor power benefit is guaranteed.' },
+    desc:'There is no independent value on KRILIKD: Linux 6.12 does not expose /proc/sys/kernel/hrtimer_migration. This row only reflects Timer migration and writes nothing. Use the shared control above for power/latency tests; Auto/On/Off here cannot have a separate effect.' },
   { key:'kernel_lpm_prediction', type:'seg', def:'auto', stock:'stock',
     opts:['auto','stock','off','on'], name:'Idle Prediction (LPM)', cat:'system',
-    desc:'Controls the low-power-mode idle-state predictor through /sys/module/lpm_levels/parameters/lpm_prediction when the kernel exposes it. Auto requests 1 only on Battery and restores the exact captured value on other profiles; Off and On override the profile. Prediction can affect which idle state is selected, but power and wake-up latency depend on the workload and firmware. Stock and uninstall require verified restoration.' },
+    desc:'The current qcom-cpu-lpm governor has no such switch; it belongs to the legacy lpm_levels driver. Leave Auto: ASB writes nothing when not exposed. On a kernel that really exposes it, Auto enables prediction only on Battery; On may save idle power at a wake-latency cost, Off tests the opposite trade-off. This is not Android LPM or radio policy.' },
   { key:'kernel_sched_nr_migrate', type:'seg', def:'4', stock:'stock',
     opts:['stock','1','2','4','8','16'], name:'Scheduler Migration Batch', cat:'system',
-    desc:'Sets the maximum tasks moved in one scheduler balancing pass through /sys/kernel/debug/sched/nr_migrate. Lower values reduce migration work per pass but can leave cores imbalanced for longer; higher values can balance load sooner at the cost of more migrations and cache disruption. Performance and battery effects depend on the workload. Default 4 is the previous Balanced request, not a proven optimum; Stock and uninstall restore the captured integer.' },
+    desc:'This caps tasks moved per balancing pass. 1–2 reduces migration work/cache disruption but can leave imbalance longer; 4 is a moderate start; 8–16 balances heavy multitasking sooner with more migrations. Start at 2–4 for battery and compare 4–8 under heavy load. This is not a CPU-frequency control; measure rather than assume. Interface: /sys/kernel/debug/sched/nr_migrate.' },
   { key:'kernel_sched_stats', type:'seg', def:'stock', stock:'stock',
     opts:['stock','off'], name:'Scheduler Debug Accounting', cat:'system',
-    desc:'Off disables extra scheduler statistics through /proc/sys/kernel/sched_schedstats. This removes the small overhead of that debug accounting, but also removes schedstats diagnostics; scheduling policy and CPU frequencies do not change. Any performance or battery effect is limited to this accounting and is not claimed without measurement. Stock is inert when unowned and restores the original 0/1 after Off; uninstall does the same.' },
+    desc:'For daily use choose Off to remove schedstats accounting overhead. It does not change scheduler policy or CPU frequencies. Restore Stock when diagnosing scheduler/latency problems, otherwise those statistics are unavailable. No battery or performance percentage is claimed. Interface: /proc/sys/kernel/sched_schedstats.' },
   { key:'kernel_sched_autogroup', type:'seg', def:'stock', stock:'stock',
     opts:['stock','off','on'], name:'Scheduler Autogroup', cat:'system',
-    desc:'On groups tasks by session for scheduler fairness; Off disables that grouping. Under competing background load this can change interactive responsiveness and the CPU share given to background work. It is neither a performance booster nor a power-saving mode, and battery impact is not guaranteed. Stock and uninstall restore the captured 0/1. If the interface is absent, ASB reports not exposed instead of enabling a kernel option just for this card.' },
+    desc:'The choice is disabled on this GKI/KRILIKD: CONFIG_SCHED_AUTOGROUP is intentionally off because signal_struct affects the vendor-module KMI. There is no value to select for battery savings. Where genuinely supported, On improves CPU fairness between sessions under background contention and Off removes grouping; it is not a direct FPS or battery tweak.' },
   { key:'kernel_sched_child_runs_first', type:'seg', def:'stock', stock:'stock',
     opts:['stock','off','on'], name:'Child Task Runs First', cat:'system',
-    desc:'After fork(), On asks the scheduler to run the child before its parent; Off selects the opposite order. This can change process-start latency and copy-on-write behavior in some workloads, while others may see no benefit or a regression. It is not a general FPS, performance or battery optimization. Stock and uninstall restore the captured 0/1, and readback must match before ASB reports success.' },
+    desc:'Only changes parent/child order after fork(). Keep Stock for ordinary use and battery. On can improve some process-launch/copy-on-write paths, Off favours the parent; regressions are possible. There is no universal game, Shelf or battery recommendation.' },
   { key:'kernel_usb_autosuspend', type:'seg', def:'stock', stock:'stock',
     opts:['stock','off','on'], name:'USB Autosuspend', cat:'system',
-    desc:'Sets usbcore\'s default autosuspend delay for newly detected USB peripheral devices. On requests 2 seconds; Off requests -1 to prevent that default autosuspend. It does not change charging current, ADB, USB gadget mode, tethering or VPN Hide. Already connected devices can keep their own power policy. Stock is inert when unowned and otherwise restores the captured signed integer after readback.' },
+    desc:'For USB peripherals, On sets a 2-second default autosuspend for newly detected devices and may reduce their power use; Off=-1 disables that default and is for compatibility problems. It does not set charging current, ADB, tethering or existing device policy. Expect no benefit when no USB peripheral is used.' },
   { key:'gms_trim', type:'seg', def:'stock', stock:'stock', opts:['stock','lite','strict'], name:'Google Services Trim',
     desc:'Reduces selected Google Play services background activity without disabling Play services itself. Lite limits location reporting and search-widget background work. Strict also removes Play services from the Doze exemption list, which can delay push notifications, sync and other background jobs. Choose Lite or Stock if timely delivery is essential. Changed permissions and exemptions are recorded and restored when ASB is removed.' },
   { key:'gms_freeze', type:'seg', def:'off', stock:'off', opts:['off','safe','more','max'], name:'Freeze Google Components',
@@ -10606,7 +10618,9 @@ function kernelControlParse(txt) {
   return out;
 }
 function kernelWakeupParse(txt) {
-  const wb = { node:'unknown', policy:'unknown', events:'unknown', saved:[], current:[], seen:false };
+  const wb = { node:'unknown', policy:'unknown', events:'unknown', abi:'legacy', ruleStats:'not_exposed',
+    saved:[], current:[], blocked:Object.create(null),
+    observe:{ state:'idle', elapsed:0, started:0, resets:0 }, sources:[], seen:false };
   String(txt || '').split(/\r?\n/).forEach(function (line) {
     if (line.indexOf('wakeup_blocker|status|') === 0) {
       line.split('|').slice(2).forEach(function (field) {
@@ -10615,12 +10629,28 @@ function kernelWakeupParse(txt) {
         if (k === 'blocked_events') wb.events = /^\d{1,20}$/.test(v) ? v : 'unknown';
         else if (k === 'node') wb.node = v;
         else if (k === 'policy') wb.policy = v;
+        else if (k === 'abi') wb.abi = /^\d{1,4}$/.test(v) ? v : (v === 'legacy' ? v : 'unknown');
+        else if (k === 'rule_stats') wb.ruleStats = v;
       });
       wb.seen = true;
     } else if (line.indexOf('wakeup_rule|saved|') === 0 && wb.saved.length < 64) {
       wb.saved.push(line.slice(18));
     } else if (line.indexOf('wakeup_rule|current|') === 0 && wb.current.length < 64) {
       wb.current.push(line.slice(20));
+    } else if (line.indexOf('wakeup_rule|blocked|') === 0) {
+      const m = /^wakeup_rule\|blocked\|(.*)\|(\d{1,20})$/.exec(line);
+      if (m && kernelWakeupValidName(m[1])) wb.blocked[m[1]] = m[2];
+    } else if (line.indexOf('wakeup_observe|status|') === 0) {
+      line.split('|').slice(2).forEach(function (field) {
+        const i = field.indexOf('='); if (i < 1) return;
+        const k = field.slice(0, i), v = field.slice(i + 1);
+        if (k === 'state') wb.observe.state = v;
+        else if ((k === 'elapsed_ms' || k === 'started') && /^\d{1,20}$/.test(v)) wb.observe[k === 'elapsed_ms' ? 'elapsed' : 'started'] = Number(v);
+        else if (k === 'resets' && /^\d{1,6}$/.test(v)) wb.observe.resets = Number(v);
+      });
+    } else if (line.indexOf('wakeup_source|') === 0 && wb.sources.length < 1024) {
+      const m = /^wakeup_source\|(.*)\|events=(\d+)\|active=(\d+)\|time_ms=(\d+)\|reset=([01])$/.exec(line);
+      if (m && kernelWakeupValidName(m[1])) wb.sources.push({ name:m[1], events:Number(m[2]), active:Number(m[3]), time:Number(m[4]), reset:m[5] === '1' });
     }
   });
   return wb.seen ? wb : null;
@@ -10669,8 +10699,8 @@ function kernelControlAvailability(key) {
 function kernelUnavailableWhy(key) {
   const fb = {
     kernel_sched_nr_migrate: 'Needs a kernel built with scheduler debugging (CONFIG_SCHED_DEBUG) and debugfs. ASB mounts debugfs privately only for the moment it reads or writes the value, so nothing more is needed when both are built in.',
-    kernel_sched_autogroup: 'GKI kernels are built without autogroup. Turning it on changes a kernel structure that vendor modules are compiled against, so a GKI kernel cannot gain it without breaking those modules.',
-    kernel_lpm_prediction: 'This switch belongs to the older Snapdragon lpm_levels idle driver. Newer Snapdragon kernels use another idle governor without it; the diagnostic export lists the parameters this kernel has.'
+    kernel_sched_autogroup: 'KRILIKD intentionally disables CONFIG_SCHED_AUTOGROUP: it changes signal_struct and the KMI against which vendor modules are built. ASB does not bypass the KMI guard just to expose this switch.',
+    kernel_lpm_prediction: 'This device uses qcom-cpu-lpm; the switch belongs to the legacy lpm_levels driver. Leave Auto: there is no independent value to choose. ASB does not invent a writer or confuse this with Android LPM.'
   };
   return Object.prototype.hasOwnProperty.call(fb, key) ? T('kc_why_' + key, fb[key]) : '';
 }
@@ -10734,6 +10764,68 @@ function kernelWakeupChipList(card, rules, editable) {
   });
   card.appendChild(wrap);
 }
+function kernelWakeupDuration(ms) {
+  let sec = Math.max(0, Math.floor(Number(ms || 0) / 1000));
+  if (sec < 60) return sec + T('kernel_wb_sec', ' s');
+  const min = Math.floor(sec / 60); sec %= 60;
+  if (min < 60) return min + T('kernel_wb_min', ' min') + (sec ? ' ' + sec + T('kernel_wb_sec', ' s') : '');
+  return Math.floor(min / 60) + T('kernel_wb_hour', ' h') + ' ' + (min % 60) + T('kernel_wb_min', ' min');
+}
+function kernelWakeupObserve(command) {
+  if (_wbBusy) return;
+  _wbBusy = true; cfgRender();
+  run('sh ' + shQuote(MD + '/runtime/asb_wakeup_blocker.sh') + ' ' + command).then(function (r) {
+    const parsed = r && r.errno === 0 ? kernelWakeupParse(r.stdout) : null;
+    if (parsed) _kernelPanel.wakeup = parsed;
+    if (!parsed) { uiSound('error'); toast(T('kernel_wb_observe_error', 'Could not read wakeup-source counters'), 'err'); }
+  }).catch(function () { toast(T('kernel_wb_observe_error', 'Could not read wakeup-source counters'), 'err'); }).finally(function () {
+    _wbBusy = false; _kernelPanel.loaded = true; cfgRender();
+  });
+}
+function kernelWakeupBlockObserved(name) {
+  if (_wbBusy || !kernelWakeupValidName(name)) return;
+  const draft = kernelWakeupDraft();
+  if (draft.indexOf(name) >= 0) return;
+  kernelWakeupAdd(name);
+  if (_wbDraft && _wbDraft.indexOf(name) >= 0) return kernelWakeupSave(false);
+  return null;
+}
+function kernelWakeupObservedList(card, wb) {
+  const wrap = bfxEl('div', 'kernel-observe');
+  wrap.appendChild(bfxEl('div', 'kernel-observe-title', T('kernel_wb_observe_title', 'Observed in the idle window')));
+  const ob = wb && wb.observe ? wb.observe : { state:'idle', elapsed:0, resets:0 };
+  let state = T('kernel_wb_observe_idle', 'No measurement has started. Start it before turning the screen off, then update after waking.');
+  if (ob.state === 'measuring') state = T('kernel_wb_observe_running', 'Window: {elapsed} · changed sources: {n}').replace('{elapsed}', kernelWakeupDuration(ob.elapsed)).replace('{n}', wb.sources.length);
+  else if (ob.state === 'not_exposed' || ob.state === 'not_readable') state = T('kernel_wb_observe_error', 'Could not read wakeup-source counters');
+  wrap.appendChild(bfxEl('div', 'kernel-observe-meta', state));
+  const actions = bfxEl('div', 'bfx-actions');
+  const start = bfxEl('button', 'bfx-btn bfx-secondary', T(ob.state === 'measuring' ? 'kernel_wb_restart' : 'kernel_wb_start', ob.state === 'measuring' ? 'Restart window' : 'Start idle window'));
+  start.type = 'button'; start.disabled = !wb || _wbBusy || ob.state === 'not_exposed';
+  start.onclick = function () { kernelWakeupObserve('observe_start'); };
+  const update = bfxEl('button', 'bfx-btn bfx-secondary', T('kernel_wb_update_sources', 'Update sources'));
+  update.type = 'button'; update.disabled = !wb || _wbBusy || ob.state !== 'measuring'; update.onclick = function () { kernelWakeupObserve('status'); };
+  const reset = bfxEl('button', 'bfx-btn bfx-secondary', T('kernel_wb_reset_window', 'Clear window'));
+  reset.type = 'button'; reset.disabled = !wb || _wbBusy || ob.state !== 'measuring'; reset.onclick = function () { kernelWakeupObserve('observe_clear'); };
+  actions.appendChild(start); actions.appendChild(update); actions.appendChild(reset); wrap.appendChild(actions);
+  if (ob.state === 'measuring' && !wb.sources.length) wrap.appendChild(bfxEl('div', 'kernel-note', T('kernel_wb_no_sources', 'No source counter has increased yet. Leave the phone idle and update later; zero is not an error.')));
+  if (ob.resets) wrap.appendChild(bfxEl('div', 'kernel-note', T('kernel_wb_counter_reset', 'Some counters restarted during the window; their values cover only the time since the reset.')));
+  const listEl = bfxEl('div', 'kernel-observe-list');
+  const draft = kernelWakeupDraft();
+  wb.sources.slice().sort(function (a,b) { return b.events-a.events || b.active-a.active || b.time-a.time || a.name.localeCompare(b.name); }).forEach(function (src) {
+    const row = bfxEl('div', 'kernel-source');
+    const main = bfxEl('div', 'kernel-source-main');
+    main.appendChild(bfxEl('div', 'kernel-source-name', src.name));
+    const metric = T('kernel_wb_source_metrics', '+{events} events · +{active} activations · +{time} active').replace('{events}', src.events).replace('{active}', src.active).replace('{time}', kernelWakeupDuration(src.time));
+    main.appendChild(bfxEl('div', 'kernel-source-metrics', metric + (src.reset ? ' · ' + T('kernel_wb_reset_short', 'counter reset') : '')));
+    row.appendChild(main);
+    const blocked = draft.indexOf(src.name) >= 0;
+    const btn = bfxEl('button', 'bfx-btn bfx-secondary kernel-source-block' + (blocked ? ' is-blocked' : ''), blocked ? T('kernel_wb_blocked', 'Blocked') : T('kernel_wb_block', 'Block'));
+    btn.type = 'button'; btn.disabled = blocked || _wbBusy || draft.length >= 16; btn.onclick = function () { kernelWakeupBlockObserved(src.name); };
+    row.appendChild(btn); listEl.appendChild(row);
+  });
+  if (wb.sources.length) wrap.appendChild(listEl);
+  card.appendChild(wrap);
+}
 function cfgRenderWakeupBlockerCard(list) {
   const wb = _kernelPanel.wakeup;
   const card = bfxEl('div', 'cfg-row kernel-card cat-kernel'); card.id = 'kernelWakeupCard';
@@ -10745,6 +10837,7 @@ function cfgRenderWakeupBlockerCard(list) {
   head.appendChild(kernelStateBadge(wb ? (wb.node === 'writable' ? 'available' : (wb.node === 'not_writable' ? 'read_only' : wb.node)) : (_kernelPanel.loading ? 'loading' : 'unknown')));
   card.appendChild(head);
   card.appendChild(bfxEl('div', 'kernel-note', T('kernel_wb_warning', 'Only add a name after diagnosing a concrete wakeup source. Blocking can delay notifications, networking or sensors. Existing locks are not force-released.')));
+  if (wb) kernelWakeupObservedList(card, wb);
   const editor = bfxEl('div', 'kernel-editor');
   const inputRow = bfxEl('div', 'kernel-input-row');
   const input = bfxEl('input', 'kernel-input'); input.type = 'text'; input.id = 'kernelWakeupName'; input.maxLength = 63;
@@ -10761,13 +10854,15 @@ function cfgRenderWakeupBlockerCard(list) {
   meta.appendChild(bfxEl('span', '', T('kernel_wb_saved_count', 'Saved: {n}').replace('{n}', wb ? wb.saved.length : '—')));
   meta.appendChild(bfxEl('span', '', T('kernel_wb_current_count', 'In kernel: {n}').replace('{n}', wb && wb.node !== 'not_exposed' && wb.node !== 'not_readable' ? wb.current.length : '—')));
   meta.appendChild(bfxEl('span', '', T('kernel_wb_events', 'Blocked events: {n}').replace('{n}', wb ? wb.events : 'unknown')));
+  meta.appendChild(bfxEl('span', '', T('kernel_wb_abi', 'KRILIKD ABI: {v}').replace('{v}', wb ? wb.abi : 'unknown')));
   card.appendChild(meta);
   if (wb && !same && wb.node !== 'not_exposed' && wb.node !== 'not_readable') {
     card.appendChild(bfxEl('div', 'kernel-note', T('kernel_wb_diff', 'Saved policy and kernel readback differ. Apply the policy or refresh after another owner changes it.')));
   }
   const readback = bfxEl('div', 'kernel-readback');
   readback.appendChild(bfxEl('div', 'kernel-readback-title', T('kernel_wb_readback', 'Kernel readback')));
-  readback.appendChild(bfxEl('div', 'kernel-readback-list', wb && wb.current.length ? wb.current.join('\n') : T('kernel_wb_none', 'None or not readable')));
+  const currentText = wb && wb.current.length ? wb.current.map(function (n) { return n + (Object.prototype.hasOwnProperty.call(wb.blocked,n) ? ' · ' + wb.blocked[n] : ''); }).join('\n') : T('kernel_wb_none', 'None or not readable');
+  readback.appendChild(bfxEl('div', 'kernel-readback-list', currentText));
   card.appendChild(readback);
   const actions = bfxEl('div', 'bfx-actions');
   const apply = bfxEl('button', 'bfx-btn bfx-primary', T('kernel_wb_apply', 'Save and apply')); apply.type = 'button'; apply.disabled = !wb || _wbBusy;
