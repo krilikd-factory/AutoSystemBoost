@@ -10986,6 +10986,8 @@ t_soter_fix_runtime() (
 # two passes (force-stop, stop and wait stopped, clear, start and wait running), stopping
 # early on a refused clear or a service that does not come back. An opt-in flag
 # (`auto on|off`) lets service.sh run the same repair once per boot (`boot`).
+# dev50: a transient `running` sample is not completion. Each pass now requires a bounded
+# run of consecutive running samples, and a crash/restart during stabilization fails honestly.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 S="$ROOT/runtime/asb_soter_fix.sh"
@@ -11024,6 +11026,9 @@ case "$1" in clear) [ -f "$LOG.clearfail" ] && { echo 'Failed'; exit 1; }; echo 
 SH
 cat > "$T/bin/sleep" <<'SH'
 #!/bin/sh
+if [ -f "$LOG.transient" ] && [ ! -f "$LOG.crashed" ]; then
+  printf 'stopped' > "$PROPS/init.svc.vendor.soter"; : > "$LOG.crashed"
+fi
 exit 0
 SH
 cat > "$T/bin/am" <<'SH'
@@ -11031,7 +11036,7 @@ cat > "$T/bin/am" <<'SH'
 echo "am $*" >> "$LOG"
 SH
 chmod 0755 "$T/bin/"*
-export PATH="$T/bin:$PATH" PROPS="$T/props" LOG="$T/log" ASB_SOTER_STATE_DIR="$T/state" ASB_SOTER_PACKAGES_LIST="$T/packages.list" ASB_SOTER_WAIT_STEPS=3
+export PATH="$T/bin:$PATH" PROPS="$T/props" LOG="$T/log" ASB_SOTER_STATE_DIR="$T/state" ASB_SOTER_PACKAGES_LIST="$T/packages.list" ASB_SOTER_WAIT_STEPS=3 ASB_SOTER_READY_STEPS=2
 ! grep -q '^[[:space:]]*#' <(tail -n +2 "$S") || fail 'comment lines in module shell code'
 printf 'com.android.shell 2000 0 /data/user_de/0/com.android.shell\n' > "$T/packages.list"
 OUT="$(sh "$S" status)"
@@ -11056,6 +11061,10 @@ grep -q '^soter|result|state=clear_failed|cleared=0|passes=1|services=vendor.sot
 [ "$(grep -c '^pm clear' "$LOG")" = 1 ] || fail 'a refused clear was repeated'
 touch "$LOG.nostart"; OUT="$(sh "$S" run)"; rm -f "$LOG.nostart"
 grep -q '^soter|result|state=service_down|cleared=1|passes=1|services=vendor.soter:stopped$' <<<"$OUT" || fail "service down: $OUT"
+printf 'running' > "$T/props/init.svc.vendor.soter"; : > "$LOG"; touch "$LOG.transient"
+OUT="$(sh "$S" run)"; rm -f "$LOG.transient" "$LOG.crashed"
+grep -q '^soter|result|state=service_down|cleared=1|passes=1|services=vendor.soter:stopped$' <<<"$OUT" || fail "transient running was accepted as stable: $OUT"
+[ "$(grep -c '^pm clear' "$LOG")" = 1 ] || fail 'an unstable service was silently cleared again'
 printf 'running' > "$T/props/init.svc.vendor.soter"
 : > "$LOG"; OUT="$(ASB_SOTER_PASSES=1 sh "$S" run)"
 [ "$OUT" = 'soter|result|state=done|cleared=1|passes=1|services=vendor.soter:running' ] && [ "$(grep -c '^pm clear' "$LOG")" = 1 ] || fail "single pass: $OUT"
@@ -11085,7 +11094,7 @@ grep -q '^soter|status|installed=1|' <<<"$OUT" || fail "pm fallback: $OUT"
 set +e; OUT="$(sh "$S" bogus)"; rc=$?; set -e
 [ "$rc" = 2 ] && [ "$OUT" = 'soter|error|unknown_command' ] || fail 'unknown command accepted'
 grep -q 'soter_fix/run.lock' "$ROOT/post-fs-data.sh" && grep -q 'junk_cleanup/run.lock' "$ROOT/post-fs-data.sh" || fail 'a reboot mid-run leaves a stale lock'
-echo "PASS soter fix: absent/present status, two-pass force-stop/stop/clear/start sequence, early stop on refusal or a dead service, opt-in boot repair, done/no-service/down/refused/busy/unknown states, no writes on status, boot-time stale lock removal"
+echo "PASS soter fix: absent/present status, two-pass force-stop/stop/clear/start sequence, bounded service stabilization, transient crash rejection, early stop on refusal or a dead service, opt-in boot repair, done/no-service/down/refused/busy/unknown states, no writes on status, boot-time stale lock removal"
 )
 
 t_wakelock_fitness_reapply_evidence_runtime() (

@@ -4366,7 +4366,7 @@ fail() { echo "FAIL webui stock monitor: $*" >&2; exit 1; }
 command -v node >/dev/null 2>&1 || { echo "SKIP webui stock monitor: no node"; exit 0; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 grep -Fq "if (Object.keys(_stockTelemetryKv).length) paintStockLive(_stockTelemetryKv);" "$H" || fail "a throttled read still leaves the cells empty"
-grep -Fq "    if (_selectedProfile === 'stock') pollStockTelemetry(true, true);" "$H" || fail "opening Monitor on Stock does not read a fresh sample"
+grep -Fq "    if (_selectedProfile === 'stock') pollStockTelemetry(true);" "$H" || fail "opening Monitor on Stock bypasses the existing freshness window"
 grep -Fq "    } else paintStockLive(_stockTelemetryKv);" "$H" || fail "opening Monitor does not paint the last ROM sample"
 # fix287: a new WebView paints the last visit's ROM snapshot at once, dimmed until fresh.
 grep -Fq "      paintStockLive(_lvMonCache.rom);" "$H" && grep -Fq "      lvStale(true);" "$H" || fail "a fresh page opens Monitor without the cached card"
@@ -4375,10 +4375,13 @@ python3 - "$H" <<'P' || fail "Monitor open order / ROM read"
 import sys
 s = open(sys.argv[1], encoding='utf-8').read()
 o = s[s.index('function openLivePage() {'):s.index('function closeLivePage() {')]
-assert o.index("paintStockLive(_stockTelemetryKv)") < o.index('setTimeout(function () {') < o.index("pollStockTelemetry(true, true)"), 'the fresh read runs before the page has slid in'
+assert o.index("paintStockLive(_stockTelemetryKv)") < o.index('setTimeout(function () {') < o.index("pollStockTelemetry(true)"), 'the freshness-aware read runs before the page has slid in'
+assert 'pollStockTelemetry(true, true)' not in o, 'a recent Stock sample is forced again on every opening'
 p = s[s.index('async function pollStockTelemetry('):s.index('async function pollLive(')]
 assert "'/runtime/asb_rom_telemetry.sh'" in p and 'thermal_zone' not in p and 'settings get' not in p, 'Stock still reads the ROM with an inline fork-per-value command'
 assert '(now - _stockSettingsAtMs) >= 60000' in p, 'the settings client is started on every pass'
+assert 'if (!force && (now - _stockTelemetryLastMs) < STOCK_TELEMETRY_MIN_INTERVAL_MS)' in p, 'the ten-second Stock freshness window is missing'
+assert "if (Object.keys(_stockTelemetryKv).length) paintStockLive(_stockTelemetryKv);" in p, 'a throttled read does not retain the current sample'
 P
 grep -Fq "const ownGrid = _selectedProfile === 'stock';" "$H" || fail "the ROM sample still repaints the governor's grid on other profiles"
 {
@@ -5442,7 +5445,7 @@ if any('aria-label' in t for t in tabs): bad.append('a tab still overrides its t
 if nav.count('class="asb-tab-ico"') != 3 or nav.count('class="f"') + nav.count('class="f" ') < 3: bad.append('every icon needs a line form and a filled form')
 if 'class="asb-tab-ind"' not in nav: bad.append('no sliding indicator')
 if '>Profiles</span>' not in nav: bad.append('the first tab is not called Profiles')
-if 'is-active::before' in h: bad.append('the old top-edge marker is back')
+if '.asb-tab.is-active::before' in h: bad.append('the old top-edge marker is back')
 fn = h[h.index('function asbNavSync()'):h.index('function asbNavGo(')]
 if 'asbNavIndicator();' not in fn or 't.offsetLeft' not in fn or 'g[on.id]' not in fn: bad.append('the pill is not placed from the active tab')
 # fix278: the tab boxes are measured once; width, scale, language and fit tier clear the cache.
@@ -10214,13 +10217,19 @@ assert 'role="status"' in mark and 'aria-live="polite"' in mark
 assert mark.count('data-boot-stage=')==4 and 'role="progressbar"' in mark
 assert '<button' not in mark
 for token in ('@keyframes asbBootSpin','@keyframes asbBootPulse','@keyframes asbBootScan',
+              '@keyframes asbBootArrive','@keyframes asbBootHalo','@keyframes asbBootBeacon',
+              '@keyframes asbBootStageLine','@keyframes asbBootTrackShine','@keyframes asbBootReady',
+              '.asb-boot-stage.is-active::before','.asb-boot-stage.is-active::after',
               '@media (prefers-reduced-motion:reduce)','@media (forced-colors:active)',
               'animation:none !important'):
     assert token in s, token
 start=s.index("const ASB_BOOT_INTRO_KEY = 'asb_boot_intro_v1'")
 end=s.index('// ── localized boot:',start)
 js=s[start:end]
-assert 'ASB_BOOT_INTRO_MIN_MS = 3200' in js and 'ASB_BOOT_INTRO_MAX_MS = 9000' in js
+assert 'ASB_BOOT_INTRO_MIN_MS = 1400' in js and 'ASB_BOOT_INTRO_MAX_MS = 6500' in js
+assert "overlay.classList.remove('is-ready');" in js
+ready = "if (completed) {\n      asbBootIntroPaint(jobs.length, jobs.length);\n      overlay.classList.add('is-ready');\n    }"
+assert ready in js
 assert 'await asbStartupSnapshot()' in js and 'startup && startup.boot' in js
 assert 'asbBootIntroSeen(boot)' in js and 'asbBootIntroRemember(boot);' in js
 assert js.index('asbBootIntroRemember(boot);') < js.index('const jobs = [')
@@ -10262,7 +10271,7 @@ global.asbStartupSnapshot=async()=>({boot:await run('boot-id')});
 global.pollLive=async v=>{calls.push('live:'+v)};global.homeMeterPaint=()=>calls.push('home-paint');global.cfgLoad=()=>{calls.push('config');return hang?new Promise(()=>{}):Promise.resolve()};
 global.loadDeviceInfo=async()=>{calls.push('device-info')};global.asbDeviceInfoLoad=async bg=>{calls.push('device:'+bg)};global.zygiskHeaderRefresh=async()=>{calls.push('zygisk')};
 let src=h.slice(h.indexOf("const ASB_BOOT_INTRO_KEY = 'asb_boot_intro_v1'"),h.indexOf('let _asbHomeRevealed = false;',h.indexOf("const ASB_BOOT_INTRO_KEY = 'asb_boot_intro_v1'")));
-src=src.replace('ASB_BOOT_INTRO_MIN_MS = 3200','ASB_BOOT_INTRO_MIN_MS = 20').replace('ASB_BOOT_INTRO_MAX_MS = 9000','ASB_BOOT_INTRO_MAX_MS = 60').replace('setTimeout(resolve, 360)','setTimeout(resolve, 5)');
+src=src.replace('ASB_BOOT_INTRO_MIN_MS = 1400','ASB_BOOT_INTRO_MIN_MS = 20').replace('ASB_BOOT_INTRO_MAX_MS = 6500','ASB_BOOT_INTRO_MAX_MS = 60').replace('setTimeout(resolve, 360)','setTimeout(resolve, 5)');
 eval(src+`\n(async()=>{
  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
  let p=asbBootIntroStart();await sleep(2);
@@ -10275,18 +10284,20 @@ eval(src+`\n(async()=>{
  failBoot=true;boot='33333333-3333-4333-8333-333333333333';if(await asbBootIntroStart()||!overlay.hidden)throw Error('unreadable boot id replayed');
  failBoot=false;hang=true;boot='44444444-4444-4444-8444-444444444444';const at=Date.now();
  if(!await asbBootIntroStart()||Date.now()-at>500||!overlay.hidden||window._asbBootIntroActive)throw Error('timeout fail-safe stuck');
- if(progress.attrs['aria-valuenow']==='100')throw Error('timed-out warm claimed complete');
+ if(progress.attrs['aria-valuenow']==='100'||overlay.classList.contains('is-ready'))throw Error('timed-out warm claimed complete');
  console.log('ok');
 })().catch(e=>{console.error(e&&e.stack||e);process.exit(1)});`);
 JS
 out="$(node "$T/test.js" "$H" 2>&1)" || { echo "FAIL WebUI fix324 intro runtime: $out" >&2; exit 1; }
 [ "$out" = ok ] || { echo "FAIL WebUI fix324 intro runtime: $out" >&2; exit 1; }
-echo "PASS WebUI fix324: black dark Glass, localized hi-tech once-per-boot preview, real Live/Config/Device/ZYGISK cache warm, no replay and bounded fail-safe"
+echo "PASS WebUI fix324: black dark Glass, shorter localized once-per-boot preview with active-stage/halo/ready motion, real Live/Config/Device/ZYGISK cache warm, no fake completion, no replay and bounded fail-safe"
 )
 
 t_webui_fix325_startup_performance() (
 # Contract (fix325): one shared startup batch, immediate post-paint cache warming without
 # duplicate intro collectors, Home meter reuse, and visibility-aware Live collector sharing.
+# dev50 also deduplicates the cold static-device fetch, reuses its valid cache and avoids a
+# forced Stock telemetry repeat when a fresh sample already exists.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 H="$ROOT/webroot/index.html"
@@ -10340,6 +10351,14 @@ assert s.count('homeMeterRefresh(true);')==1  # only the intentional post-profil
 initial=s[s.index('/* Coordinate the ordinary cold read'):s.index('window._asbBootIntroProbe =',s.index('/* Coordinate the ordinary cold read'))]
 assert 'requestAnimationFrame(() => setTimeout(() => {' in initial and '}, 0));' in initial
 assert 'if (!shown) asbStartupLater(asbStartupLive, 0, 0);' in initial and ', 250);' not in initial
+header=s[s.index("const DEVICE_HEADER_CACHE_KEY = 'asb_device_header_cache'"):s.index('function liveHeaderSync()')]
+for token in ('let _deviceHeaderLoad = null;', 'if (cached) { deviceHeaderPaint(cached.model, cached.soc, cached.chip); return; }',
+              'if (_deviceHeaderLoad) return _deviceHeaderLoad;', '_deviceHeaderLoad = (async function () {',
+              'finally { _deviceHeaderLoad = null; }'):
+    assert token in header, token
+assert header.index('if (cached)') < header.index("await fetch(")
+open_live=body('function openLivePage() {')
+assert 'pollStockTelemetry(true);' in open_live and 'pollStockTelemetry(true, true)' not in open_live
 poll=body('async function pollLive(visible) {')
 for token in ('if (_livePollRun) {','if (!visible || _livePollVisible) return _livePollRun;',
               'if (!_livePollFollow) {','return pollLive(true);','} finally {',
@@ -10380,7 +10399,7 @@ const flush=()=>new Promise(r=>setImmediate(r));
   chk(batches.length===2&&batches[1].length===2,'post-switch Smart read was not one batch');
 
   let cfg=0,zy=0,hidden=false;global._cfgOpen=false;global.cfgLoad=()=>{cfg++};global.zygiskHeaderRefresh=()=>{zy++};global.asbStartupLater=fn=>fn();
-  global.document={hidden:false};global.window={};
+  global.document={hidden:false,getElementById:()=>null};global.window={};
   eval(grab('function asbStartupWarmCaches() {')+';globalThis.warm=asbStartupWarmCaches;');
   window._asbBootIntroProbe=Promise.resolve(false);warm();await flush();
   chk(cfg===0&&zy===1,'ordinary opening ran eager Config work or missed Zygisk');
@@ -10390,6 +10409,18 @@ const flush=()=>new Promise(r=>setImmediate(r));
   chk(cfg===0&&zy===1,'hidden page performed speculative root work');
   document.hidden=false;window._asbBootIntroProbe=null;warm();
   chk(cfg===0&&zy===2,'missing probe did not retain lightweight ordinary warm-up');
+
+  const store={};let fetches=0,releaseFetch;
+  global.localStorage={getItem:k=>store[k]||null,setItem:(k,v)=>store[k]=String(v)};
+  global.prettyModel=()=> 'OnePlus 15';global.prettySoc=()=> 'Snapdragon';
+  global.fetch=()=>{fetches++;return new Promise(r=>releaseFetch=r)};
+  const hs=h.indexOf("const DEVICE_HEADER_CACHE_KEY = 'asb_device_header_cache'"),he=h.indexOf('function liveHeaderSync()',hs);
+  eval(h.slice(hs,he)+';globalThis.loadHeader=loadDeviceInfo;');
+  const hp1=loadHeader(),hp2=loadHeader();await flush();
+  chk(fetches===1,'cold concurrent device loads started duplicate fetches');
+  releaseFetch({ok:true,json:async()=>({model_code:'PLK110',name_code:'',soc_code:'SM8850'})});
+  await Promise.all([hp1,hp2]);await loadHeader();
+  chk(fetches===1&&store.asb_device_header_cache,'valid device cache was not reused');
 
   global._selectedProfile='stock';
   const starts=[],gates=[];
@@ -10412,7 +10443,7 @@ const flush=()=>new Promise(r=>setImmediate(r));
 JS
 out="$(node "$T/test.js" "$H" 2>&1)" || { echo "FAIL WebUI fix325 runtime: $out" >&2; exit 1; }
 [ "$out" = ok ] || { echo "FAIL WebUI fix325 runtime: $out" >&2; exit 1; }
-echo "PASS WebUI fix325: shared profile/Smart/boot startup, post-paint warm without intro duplicates, meter reuse, immediate Device paint and visibility-safe Live collector sharing"
+echo "PASS WebUI fix325: shared profile/Smart/boot startup, deduplicated static-device fetch with valid-cache reuse, post-paint warm without intro duplicates, fresh-sample Stock reopen, meter reuse and visibility-safe Live collector sharing"
 )
 
 t_webui_fix326_viewport_scale_runtime() (
@@ -10519,9 +10550,10 @@ echo "PASS WebUI fix327: non-blocking manager insets stay before the main style 
 )
 
 t_webui_fix328_home_frame_category_hub() (
-# Contract (fix328): the first Home frame makes no unverified profile/Smart/device claim;
-# cached header facts paint synchronously and refresh immediately, local warm-up does not
-# wait for window.load, and all nine category buttons share one accessible visual structure.
+# Contract (fix328/dev50): the first Home frame makes no unverified profile/Smart/device claim;
+# valid cached header facts paint synchronously without a duplicate fetch, a cold cache still
+# fetches and replaces them, local warm-up does not wait for window.load, and all nine category
+# buttons share one accessible visual structure.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 H="$ROOT/webroot/index.html"
@@ -10691,12 +10723,15 @@ E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};
   global.document={getElementById:id=>ids[id]||null};global.T=(k,f)=>f;
   let stored={'asb_device_header_cache':JSON.stringify({t:Date.now(),model:'OnePlus 15',soc:'Snapdragon 8 Elite Gen 5',chip:'SM8850'})};
   global.localStorage={getItem:k=>stored[k]||null,setItem:(k,v)=>{stored[k]=v}};
-  let resolveFetch;global.fetch=()=>new Promise(r=>{resolveFetch=r});
+  let resolveFetch,fetches=0;global.fetch=()=>{fetches++;return new Promise(r=>{resolveFetch=r})};
   eval(grab('const MODEL_MAP','const DEVICE_HEADER_CACHE_KEY'));
   eval(grab('const DEVICE_HEADER_CACHE_KEY','function liveHeaderSync()')+';globalThis.loadHeader=loadDeviceInfo;');
-  const loading=loadHeader();
+  await loadHeader();
   chk(ids.deviceLine.textContent==='OnePlus 15 / Snapdragon 8 Elite Gen 5'&&ids.socBadge.textContent==='SM8850','valid cached device header did not paint synchronously');
   chk(ids.zyDeviceLine.textContent===ids.deviceLine.textContent&&ids.rpSocBadge.textContent==='SM8850','cached header did not reach every page');
+  chk(fetches===0,'a valid static device cache started a redundant fetch');
+  stored={};const loading=loadHeader();await new Promise(r=>setImmediate(r));
+  chk(fetches===1&&typeof resolveFetch==='function','cold cache did not start the local JSON read');
   resolveFetch({ok:true,json:async()=>({model_code:'ONEPLUS_13',name_code:'',soc_code:'sm8650'})});await loading;
   chk(ids.deviceLine.textContent==='OnePlus 13 / Snapdragon 8 Gen 3'&&ids.socBadge.textContent==='SM8650','fresh local JSON did not replace the cached header: '+ids.deviceLine.textContent+' / '+ids.socBadge.textContent);
   const saved=JSON.parse(stored['asb_device_header_cache']);chk(saved.model==='OnePlus 13'&&saved.chip==='SM8650','fresh header cache was not saved');
@@ -10727,7 +10762,7 @@ E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};
 JS
 out="$(node "$T/test.js" "$H" 2>&1)" || { echo "FAIL WebUI fix328 runtime: $out" >&2; exit 1; }
 [ "$out" = ok ] || { echo "FAIL WebUI fix328 runtime: $out" >&2; exit 1; }
-echo "PASS WebUI fix328: neutral first Home frame, synchronous bounded header cache, pre-load warm-up and one aligned accessible nine-category structure in 13 locales"
+echo "PASS WebUI fix328: neutral first Home frame, synchronous bounded header cache without redundant fetch, verified cold fetch/replacement, pre-load warm-up and one aligned accessible nine-category structure in 13 locales"
 )
 
 t_webui_fix329_home_monitor_entrance() (
@@ -11819,8 +11854,8 @@ echo 'PASS WebUI fix331: nine rendered category docks with separated Kernel/Zygi
 )
 
 t_webui_fix334_ufo_navigation_repeat() (
-# fix334: one detailed colour SVG in preview/all headers, two-way Easter-egg morph,
-# complete subsection labels, universal evidence-note gutters and lighter repeat openings.
+# fix334/dev50: one detailed colour SVG in preview/all headers and throughout the twenty-second
+# Easter egg, a bounded cosmic canvas/content scene, complete labels and lighter repeat openings.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 H="$ROOT/webroot/index.html"
@@ -11850,12 +11885,18 @@ assert '#zygiskPage .dev-evidence { padding-inline-start:12px; }' in s
 assert '#zygiskPage .zy-controls-card > .dev-evidence' not in s
 start=s.index('/* Ten quick taps on the logo:')
 flight=s[start:s.index('</script>',start)]
-for token in ("drawn.className = 'ufo-drawn'","emoji.className = 'ufo-emoji'",
-              "emoji.textContent = '🛸'",'href="#asbUfoArt"','var emojiK = smoother(t / 0.85)',
-              '1 - smoother((t - (DUR - 1.05)) / 0.85)',"drawn.style.opacity = '1'",
-              "document.body.classList.remove('ufo-flying')",'el.parentNode.removeChild(el)'):
+for token in ("var DUR = 20.0",'UFO_PARTICLE_CAP = 150','UFO_TRAIL_CAP = 54','UFO_CONTENT_CAP = 18',
+              "drawn.className = 'ufo-drawn'",'href="#asbUfoArt"',"drawn.style.opacity = '1'",
+              "canvas.className = 'ufo-cosmos'","canvas.getContext('2d')",'Math.min(1.5',
+              'points.length > UFO_TRAIL_CAP','particles.length > UFO_PARTICLE_CAP',
+              'nodes.length < UFO_CONTENT_CAP','transition:n.style.transition',
+              'willChange:n.style.willChange','content.restore(); cosmos.destroy();',
+              "document.body.classList.remove('ufo-flying')",'el.parentNode.removeChild(el)',
+              "document.removeEventListener('visibilitychange', onVis)"):
     assert token in flight, token
+assert 'ufo-emoji' not in flight and '🛸' not in flight and 'emojiK' not in flight
 assert 'setInterval(' not in flight
+assert '.ufo-cosmos {' in s and 'pointer-events:none' in s[s.index('.ufo-cosmos {'):s.index('}',s.index('.ufo-cosmos {'))]
 warm=s[s.index('function asbStartupWarmCaches()'):s.index('/* fix328:',s.index('function asbStartupWarmCaches()'))]
 assert 'cfgLoad();' not in warm and 'openConfigPage() on demand' in warm
 assert 'asbStartupLater(zygiskHeaderRefresh, 150, 1);' in warm
@@ -11864,34 +11905,48 @@ assert "return cfgLoad();" in intro  # the real once-per-boot preview retains it
 for forbidden in ('serial','imei','account','android_id'):
     assert forbidden not in art.lower(), forbidden
 PY
-command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI fix334 morph runtime: no node'; exit 0; }
+command -v node >/dev/null 2>&1 || { echo 'SKIP WebUI fix334 cosmic runtime: no node'; exit 0; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 cat > "$T/test.js" <<'JS'
 const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
-function E(tag){this.tag=tag;this.children=[];this.parentNode=null;this.attrs={};this.style={setProperty:(k,v)=>this.style[k]=v};this.textContent='';this.innerHTML='';this.className='';this.classList={_s:new Set(),add:c=>this.classList._s.add(c),remove:c=>this.classList._s.delete(c),contains:c=>this.classList._s.has(c)};}
+let arcs=0;
+const ctx={setTransform(){},clearRect(){},createLinearGradient(){return{addColorStop(){}}},beginPath(){},moveTo(){},quadraticCurveTo(){},lineTo(){},stroke(){},arc(){arcs++},fill(){}};
+function E(tag){this.tag=tag;this.children=[];this.parentNode=null;this.attrs={};this.style={setProperty:(k,v)=>this.style[k]=v};this.textContent='';this.innerHTML='';this.className='';this.width=0;this.height=0;this.classList={_s:new Set(),add:c=>this.classList._s.add(c),remove:c=>this.classList._s.delete(c),contains:c=>this.classList._s.has(c)};}
 E.prototype.setAttribute=function(k,v){this.attrs[k]=String(v)};
 E.prototype.appendChild=function(c){c.parentNode=this;this.children.push(c);return c};
 E.prototype.removeChild=function(c){this.children=this.children.filter(x=>x!==c);c.parentNode=null};
 E.prototype.querySelector=function(s){return s==='.logo-glyph'?this.glyph:null};
-E.prototype.getBoundingClientRect=function(){if(this.className==='logo-glyph')return{left:100,top:100,width:56,height:46};const m=/translate\(([-\d.]+)px,([-\d.]+)px\)/.exec(this.style.transform||'');const x=m?+m[1]:0,y=m?+m[2]:0;return{left:x,top:y,width:56,height:46}};
-const body=new E('body'),listeners={};let raf=[];
-global.document={body,hidden:false,createElement:t=>new E(t),addEventListener:(n,f)=>{(listeners[n]||(listeners[n]=[])).push(f)},removeEventListener:(n,f)=>{listeners[n]=(listeners[n]||[]).filter(x=>x!==f)}};
-global.window={innerWidth:412,innerHeight:915};global.getComputedStyle=()=>({fontSize:'32px'});global.requestAnimationFrame=f=>{raf.push(f);return raf.length};global.performance={now:()=>0};
+E.prototype.getContext=function(){return ctx};
+E.prototype.getBoundingClientRect=function(){if(this.className==='logo-glyph')return{left:100,top:100,width:56,height:46,bottom:146};if(this.className==='pbtn')return{left:20,top:180,width:360,height:80,bottom:260};const m=/translate\(([-\d.]+)px,([-\d.]+)px\)/.exec(this.style.transform||'');const x=m?+m[1]:0,y=m?+m[2]:0;return{left:x,top:y,width:56,height:46,bottom:y+46}};
+const body=new E('body'),root=new E('html'),listeners={};let raf=[];
+const card=new E('div');card.className='pbtn';card.style.transform='translateX(2px)';card.style.opacity='.92';card.style.transition='color 1s';card.style.willChange='scroll-position';
+global.document={body,documentElement:root,hidden:false,createElement:t=>new E(t),querySelectorAll:s=>s.includes('.pbtn')?[card]:[],addEventListener:(n,f)=>{(listeners[n]||(listeners[n]=[])).push(f)},removeEventListener:(n,f)=>{listeners[n]=(listeners[n]||[]).filter(x=>x!==f)}};
+global.window={innerWidth:412,innerHeight:915,devicePixelRatio:3};global.getComputedStyle=()=>({fontSize:'32px'});global.requestAnimationFrame=f=>{raf.push(f);return raf.length};global.cancelAnimationFrame=()=>{};global.performance={now:()=>0};
 const start=h.indexOf('/* Ten quick taps on the logo:'),a=h.indexOf('(function () {',start),b=h.indexOf('\n})();',a)+6;eval(h.slice(a,b));
 const logo=new E('div'),glyph=new E('span');glyph.className='logo-glyph';logo.glyph=glyph;
-const ev={target:{closest:s=>s==='.logo-c'?logo:null}};for(let i=0;i<10;i++)listeners.click[0](ev);
-if(body.children.length!==1)throw Error('flight overlay missing');const el=body.children[0],box=el.children[1],drawn=box.children[0],emoji=box.children[1];
-function frame(ms){const q=raf;raf=[];q.forEach(f=>f(ms));}
-frame(0);if(drawn.style.opacity!=='1.000'||emoji.style.opacity!=='0.000')throw Error('takeoff did not begin as SVG');
-frame(1000);if(drawn.style.opacity!=='0.000'||emoji.style.opacity!=='1.000')throw Error('free flight is not emoji');
-frame(5000);if(emoji.style.opacity!=='1.000')throw Error('emoji did not own free flight');
-frame(9300);if(!(+drawn.style.opacity>0&&+drawn.style.opacity<1))throw Error('landing morph did not begin');
-frame(10000);if(drawn.style.opacity!=='1'||emoji.style.opacity!=='0'||body.classList.contains('ufo-flying'))throw Error('SVG/header return failed');
-setTimeout(()=>{if(el.parentNode||body.children.length)throw Error('overlay cleanup failed');console.log('ok')},360);
+const ev={target:{closest:s=>s==='.logo-c'?logo:null}};function taps(){for(let i=0;i<10;i++)listeners.click[0](ev)}
+function frame(ms){arcs=0;const q=raf;raf=[];q.forEach(f=>f(ms));}
+function restored(){return card.style.transform==='translateX(2px)'&&card.style.opacity==='.92'&&card.style.transition==='color 1s'&&card.style.willChange==='scroll-position'}
+taps();taps();
+if(body.children.length!==1||root.children.length!==1)throw Error('repeat launch stacked overlays/canvas');
+const el=body.children[0],canvas=root.children[0],box=el.children[1],drawn=box.children[0];
+if(box.children.length!==1||!drawn.innerHTML.includes('asb-ufo-art'))throw Error('the drawn SVG is not the only saucer');
+frame(0);if(drawn.style.opacity!=='1'||canvas.width!==618||!restored()&&card.style.transform!=='translateX(2px)')throw Error('takeoff/canvas DPR failed');
+frame(5000);if(drawn.style.opacity!=='1'||card.style.transform==='translateX(2px)'||arcs>193)throw Error('SVG/trail/content scene failed or particle bound broke');
+frame(19999);if(!el.parentNode||!canvas.parentNode||card.style.transform!=='translateX(2px)'||card.style.opacity!=='.92')throw Error('scene did not settle before landing');
+frame(20000);if(el.style.opacity!=='0'||canvas.parentNode||body.classList.contains('ufo-flying')||!restored()||(listeners.visibilitychange||[]).length)throw Error('normal finish cleanup failed');
+setTimeout(()=>{
+ if(el.parentNode||body.children.length)throw Error('overlay cleanup failed');
+ document.hidden=false;taps();frame(5000);const el2=body.children[0],canvas2=root.children[0];
+ if(!el2||!canvas2)throw Error('second scene did not launch');
+ document.hidden=true;listeners.visibilitychange[0]();
+ if(el2.parentNode||canvas2.parentNode||body.classList.contains('ufo-flying')||!restored()||(listeners.visibilitychange||[]).length)throw Error('hidden-page abort cleanup failed');
+ console.log('ok');
+},360);
 JS
 out="$(node "$T/test.js" "$H" 2>&1)" || fail "$out"
 [ "$out" = ok ] || fail "$out"
-echo 'PASS WebUI fix334: detailed multicolor SVG in preview/six headers, two-way SVG/emoji flight, wrapped full dock labels, universal note gutters and no eager repeat Config batch'
+echo 'PASS WebUI fix334: detailed multicolor SVG throughout a 20-second flight, bounded cosmic canvas/particles/content disturbance, smooth pre-landing settle, repeat-launch guard, full normal/hidden cleanup, wrapped dock labels and no eager repeat Config batch'
 )
 
 t_webui_fix336_config_dock_geometry() (
@@ -12839,6 +12894,7 @@ t_webui_soter_fix_runtime() (
 # text-only rows, no polling, 13 locales.
 # dev49: one tap runs the (now two-pass) repair; an opt-in switch drives `auto on|off`, shows
 # the state the script reads back, and says payment must be re-enabled after each reboot.
+# dev50: the card follows Battery Fix directly, before unrelated package repairs.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 fail() { echo "FAIL webui soter fix: $*" >&2; exit 1; }
@@ -12848,8 +12904,17 @@ root = pathlib.Path(sys.argv[1]); h = (root / 'webroot/index.html').read_text(en
 start = h.index('/* Infirmary → System Repairs → SOTER Repair (dev47).')
 end = h.index('/* Infirmary → Junk Cleanup (dev32).', start)
 b = h[start:end]
-assert "keys:['heytap_mcs','documentsui_fix'], card:'soterfix' }" in h
-assert "if (section.card === 'soterfix') cfgRenderSoterFixCard(list);" in h
+assert "keys:['heytap_mcs','documentsui_fix'] }" in h
+infirmary = h[h.index('  infirmary: ['):h.index('\n  ]', h.index('  infirmary: ['))]
+assert infirmary.index("card:'batteryfix'") < infirmary.index("id:'repairs'")
+group_start = h.index('function cfgRenderGroup(list, groupId)')
+group = h[group_start:h.index('\nfunction ', group_start + 1)]
+battery_at = group.index("if (section.card === 'batteryfix')")
+battery_render = group.index('cfgRenderBatteryFixCard(list);', battery_at)
+soter_at = group.index('cfgRenderSoterFixCard(list);', battery_render)
+assert battery_at < battery_render < soter_at < group.index("else if (section.card === 'junkcleanup')", soter_at)
+assert h.count('cfgRenderSoterFixCard(list);') == 1
+assert "card:'soterfix'" not in h
 assert "const SOTER_FIX_SCRIPT = MD + '/runtime/asb_soter_fix.sh';" in b
 assert b.count("run('sh ' + shQuote(SOTER_FIX_SCRIPT) + ' status')") == 1
 assert b.count("run('sh ' + shQuote(SOTER_FIX_SCRIPT) + ' run')") == 1
@@ -12938,7 +13003,7 @@ const settle=()=>new Promise(r=>setImmediate(r));
 })().catch(e=>{console.error(e.stack||e);process.exit(1);});
 JS
 node "$T/t.js" "$ROOT/webroot/index.html" >/dev/null || fail 'card runtime'
-echo "PASS webui soter fix: fixed status/run/auto protocol, one tap runs the repair, opt-in boot repair switch reads back its state, done/no-service/down/refused/busy/absent/stopped/unreadable states, sanitized rows, 13 locales"
+echo "PASS webui soter fix: directly below Battery Fix and before package repairs, fixed status/run/auto protocol, one tap runs the repair, opt-in boot repair switch reads back its state, done/no-service/down/refused/busy/absent/stopped/unreadable states, sanitized rows, 13 locales"
 )
 
 t_webui_device_page_dev48_runtime() (
