@@ -4,6 +4,61 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev48 - audit follow-up and fixes from the 14.11 asbdiag/device export
+
+Input: the dev47 source (host regression 515/515), an external dev47 audit (F1-F8, P0) and the
+owner's asbdiag and Device diagnostics export of 14.11.
+
+- **MGLRU readback on arm64.** `lru_gen/enabled` shows only what the hardware keeps: arm64 has
+  no non-leaf PMD young bit (0x4), so a request for 7 reads back 0x0003 (the export showed it).
+  The helper called that `readback_mismatch`, so `mglru_mode=on` stayed a mismatch for good and
+  the Smart tuner re-wrote 7 on every heavy pass (its memo only knew the 0x0001 clamp). A
+  readback that is a subset of the request and keeps the core bit is now `applied`; a dropped
+  core bit or a bit that was not asked for is still a mismatch.
+- **Junk Cleanup's 24-hour journal barrier.** The WebUI shell's `find` is toybox, which compares
+  `-mtime +0` as "older than 0 seconds" (N x 86400 against raw seconds); GNU and busybox round
+  to whole days, so host tests passed. On the phone every backup journal was eligible, however
+  fresh. Scan and delete now use `-mmin +1440` (toybox: more than 86 400 s; busybox/GNU: about
+  the same minute). The audit's F3 asked for exactly this, for a different reason.
+- **Wakeup blocker clear readback.** A sysfs attribute always reports a size, so the `[ ! -s ]`
+  readback after `clear` failed every real clear as `readback_mismatch` (only Safe mode,
+  watchdog and uninstall use it, with the result discarded). It now reads the content. With
+  F2, an empty policy on an already empty kernel list writes nothing at boot.
+- **Zygisk allowlist cut at 600 characters.** The Device diagnostics collector caps every value
+  at 600 characters; the owner's 64-app list ended mid-name ("...,com.paypal."). That page also
+  renders the manual allowlist editor, so Save could have written the cut list. The list is now
+  emitted whole (package characters only), and the editor shows but never saves a list whose
+  length disagrees with its own count.
+- **Fitness WAKE_LOCK limit.** Every asbdiag the owner sent (30 min to 10 h after boot) read
+  "limit lapsed" for all three fitness apps with the same "ASB puts it back 5-10 min after boot"
+  sentence, and the card said Enabled. Whether ASB's re-apply ran and was reset later, or the
+  ROM never kept the op, was not recorded. Each (re)apply now writes pkg, time, read-back and
+  the raw appops line to `wakelock_fitness_reapply`; asbdiag says which case it is and prints
+  what appops reads now; `fitness-status` reports `not_kept` (no extra appops client), and the
+  card shows "ROM does not keep it" instead of Enabled. The root cause still needs the next
+  export from the phone.
+- **Device diagnostics page.** 26 collector keys had no label in any locale and showed as
+  English key names ("Auto Mode", "Hints Throttled", "Smooth Log Status", "Oplus Sdp 900ma
+  Node"); a regression now checks every literal collector key against all 13 locales. Last
+  event age, CPU sample window and the automatic-list and logger epochs carry units/dates. The
+  Zygisk IPC cost card no longer carries the observed apps' own RSS (3.3 GB in the export); it
+  is a separate "Memory of observed apps" card. A full-charge value equal to the design value
+  after 391 cycles is reported as "wear not reported by the firmware", not as 100% wear health.
+- **asbdiag.** One readable line per kernel control instead of raw pipe records; the hrtimer row
+  says it is the timer-migration mechanism with one write (F1). Section 10 marks the shipped
+  rails as the fallback when device-adaptive bounds are live instead of offering the OP12 hint.
+
+Audit items not taken: F4 (taro/lahaina envelope) - those SoCs already get the universal
+capability baseline, and per-SoC numbers without a capture from such a phone would be guesses;
+F5 (duplicate asbdiag) - CI already ships one copy and install links the other (V66 dev9); F6 -
+the source stays readable, CI slims the package; F7 - Battery Fix's boot step deletes three files
+before system_server reads them and an interrupted compile is already reported as such; F8 - the
+export shows 0 GPU-bound latches that fell apart and a 3-tick need, nothing to tune yet; P0 - the
+lab cost 68 ms of governor CPU in 4 h 54 min, with no winning setting yet: an owner decision for
+the release, on more nights of data.
+
+No native code changed. Host fixtures and Node renderers are not device validation.
+
 ## V66 dev47 - distinct category colours, one Zygisk connection card, a Load sheet with a scale, SOTER Repair
 
 Input: the dev46 source (host regression 510/510 as received) and four owner requests.
