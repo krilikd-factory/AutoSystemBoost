@@ -11566,18 +11566,22 @@ int main(int argc, char **argv) {
                                  * explicit reason for every enter_sustained instead of
                                  * "unknown".
                                  */
+                                /* dev49: the owner's log read "other actual_t=63degC (thresh=54)".
+                                 * The floor test used the global threshold while the line printed
+                                 * the profile's; both now use the profile threshold the FSM uses. */
+                                const int _sus_thresh = asb_config_profile_sustained_temp_enter(&g_asb_cfg, fsm.profile_idx);
                                 const char *_sus_reason =
                                     metrics.therm.throttling       ? "thermal" :
                                     metrics.therm.hard_clamp       ? "hard_clamp" :
                                     fsm.perf_hot_guard_active      ? "perf_hot_guard" :
                                     (fsm.thermal_trend >= 6)       ? "thermal_trend" :
-                                    (metrics.therm.cpu_max_c >= g_asb_cfg.sustained_temp_enter)
+                                    (metrics.therm.cpu_max_c >= _sus_thresh)
                                                                    ? "thermal_floor" :
                                                                      "other";
                                 asb_log("enter_sustained: %s actual_t=%ddegC (thresh=%d) headroom=%d%% soft=%d hard=%d trend=%d hot_guard=%d",
                                         _sus_reason,
                                         metrics.therm.cpu_max_c,
-                                        asb_config_profile_sustained_temp_enter(&g_asb_cfg, fsm.profile_idx),
+                                        _sus_thresh,
                                         metrics.therm.headroom_pct,
                                         metrics.therm.soft_clamp,
                                         metrics.therm.hard_clamp,

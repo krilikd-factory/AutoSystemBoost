@@ -110,13 +110,136 @@ static int asb_sqlite_load(asb_sqlite_t *s) {
 static const char g_lspd_verbose_query[] =
     "SELECT data FROM configs WHERE module_pkg_name='lspd' AND user_id=0 "
     "AND `group`='config' AND `key`='enable_verbose_log'";
-static const char g_lspd_modules_query[] =
-    "SELECT m.module_pkg_name, m.enabled, "
-    "(SELECT COUNT(*) FROM scope sc WHERE sc.mid = m.mid) "
-    "FROM modules m ORDER BY m.module_pkg_name";
-static const char g_lspd_scope_query[] =
-    "SELECT m.module_pkg_name, sc.app_pkg_name, sc.user_id "
-    "FROM scope sc JOIN modules m ON m.mid = sc.mid ORDER BY 1, 2";
+/* V66 dev49: the inventory statements are built per database. LSPosed forks keep the same
+ * idea - a modules table and a per-app scope table - but not always the same column names; a
+ * user on Android 17 with Magisk saw "unexpected_schema" for the whole card. Column names are
+ * read with PRAGMA table_info and only names from the fixed candidate lists below ever reach a
+ * statement, so nothing read from the file is executed. Edits (scope-del/add, module-set) stay
+ * limited to the layout LSPosed's own manager writes (asb_lspd_schema_ok). */
+static char g_lspd_modules_query[512];
+static char g_lspd_scope_query[512];
+static int g_lspd_layout_standard = 0;
+static int g_lspd_no_configs = 0;
+static char g_lspd_schema[640] = "";
+
+static int asb_lspd_ident_ok(const unsigned char *t) {
+    if (!t || !*t) return 0;
+    size_t n = 0;
+    for (const unsigned char *c = t; *c; c++, n++) {
+        if (n >= 31) return 0;
+        if (!((*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') || (*c >= '0' && *c <= '9') || *c == '_'))
+            return 0;
+    }
+    return 1;
+}
+
+/* Column names of one table (0 rows when it does not exist). Returns the count, or a negative
+ * SQLite code when the statement itself could not run (WAL/CANTOPEN and the like). */
+static int asb_lspd_cols(asb_sqlite_t *s, sqlite3_h *db, const char *table, char cols[][32], int max) {
+    char q[96];
+    snprintf(q, sizeof(q), "PRAGMA table_info(`%s`)", table);
+    sqlite3_stmt_h *st = NULL;
+    int rc = s->prepare_v2(db, q, -1, &st, NULL);
+    if (rc != ASB_SQLITE_OK || !st) { if (st) s->finalize(st); return -(rc ? rc : 1); }
+    int n = 0;
+    while ((rc = s->step(st)) == ASB_SQLITE_ROW) {
+        const unsigned char *c = s->column_text(st, 1);
+        if (n < max && asb_lspd_ident_ok(c)) { snprintf(cols[n], 32, "%s", (const char *)c); n++; }
+    }
+    s->finalize(st);
+    return rc == ASB_SQLITE_DONE ? n : -rc;
+}
+
+static const char *asb_lspd_pick(char cols[][32], int n, const char *const *cand) {
+    for (; *cand; cand++)
+        for (int i = 0; i < n; i++)
+            if (strcmp(cols[i], *cand) == 0) return *cand;
+    return NULL;
+}
+
+/* 0 with both statements built, 1 when no known layout fits, or the SQLite code of a read
+ * that could not run. */
+static int asb_lspd_map(asb_sqlite_t *s, sqlite3_h *db) {
+    static const char *const mid_c[] = { "mid", "id", "module_id", NULL };
+    static const char *const pkg_c[] = { "module_pkg_name", "pkg_name", "package_name", "module_package", NULL };
+    static const char *const en_c[] = { "enabled", "enable", "is_enabled", "active", NULL };
+    static const char *const sct_c[] = { "scope", "scopes", "module_scope", NULL };
+    static const char *const ref_c[] = { "mid", "module_id", NULL };
+    static const char *const app_c[] = { "app_pkg_name", "app_pkg", "app_package", "package_name", "pkg_name", NULL };
+    static const char *const usr_c[] = { "user_id", "user", "userid", NULL };
+    char mc[48][32], sc[48][32];
+    int mn = asb_lspd_cols(s, db, "modules", mc, 48);
+    if (mn < 0) return -mn;
+    if (mn == 0) return 1;
+    const char *mid = asb_lspd_pick(mc, mn, mid_c);
+    const char *pkg = asb_lspd_pick(mc, mn, pkg_c);
+    const char *en = asb_lspd_pick(mc, mn, en_c);
+    if (!pkg) return 1;
+    for (const char *const *t = sct_c; *t; t++) {
+        int sn = asb_lspd_cols(s, db, *t, sc, 48);
+        if (sn < 0) return -sn;
+        if (sn == 0) continue;
+        const char *app = asb_lspd_pick(sc, sn, app_c);
+        const char *usr = asb_lspd_pick(sc, sn, usr_c);
+        const char *ref = mid ? asb_lspd_pick(sc, sn, ref_c) : NULL;
+        const char *mkey = mid;
+        if (!ref) {
+            static const char *const pref_c[] = { "module_pkg_name", "module_package", NULL };
+            ref = asb_lspd_pick(sc, sn, pref_c);
+            mkey = pkg;
+        }
+        if (!app || !ref || strcmp(app, ref) == 0) continue;
+        char enx[48], usx[48];
+        if (en) snprintf(enx, sizeof(enx), "m.`%s`", en); else snprintf(enx, sizeof(enx), "1");
+        if (usr) snprintf(usx, sizeof(usx), "sc.`%s`", usr); else snprintf(usx, sizeof(usx), "0");
+        snprintf(g_lspd_modules_query, sizeof(g_lspd_modules_query),
+                 "SELECT m.`%s`, %s, (SELECT COUNT(*) FROM `%s` sc WHERE sc.`%s` = m.`%s`) FROM modules m ORDER BY 1",
+                 pkg, enx, *t, ref, mkey);
+        snprintf(g_lspd_scope_query, sizeof(g_lspd_scope_query),
+                 "SELECT m.`%s`, sc.`%s`, %s FROM `%s` sc JOIN modules m ON m.`%s` = sc.`%s` ORDER BY 1, 2",
+                 pkg, app, usx, *t, mkey, ref);
+        g_lspd_layout_standard = mid && strcmp(mid, "mid") == 0 && strcmp(pkg, "module_pkg_name") == 0 &&
+            en && strcmp(en, "enabled") == 0 && strcmp(*t, "scope") == 0 && strcmp(ref, "mid") == 0 &&
+            strcmp(app, "app_pkg_name") == 0 && usr && strcmp(usr, "user_id") == 0;
+        return 0;
+    }
+    return 1;
+}
+
+/* What the file holds when no known layout fits: table(column,...) for at most 12 tables,
+ * plain identifiers only, so the next diagnostic names the layout instead of a guess. */
+static void asb_lspd_schema_note(asb_sqlite_t *s, sqlite3_h *db) {
+    g_lspd_schema[0] = 0;
+    sqlite3_stmt_h *st = NULL;
+    if (s->prepare_v2(db, "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' "
+                          "ORDER BY name LIMIT 12", -1, &st, NULL) != ASB_SQLITE_OK || !st) {
+        if (st) s->finalize(st);
+        snprintf(g_lspd_schema, sizeof(g_lspd_schema), "unreadable");
+        return;
+    }
+    char names[12][32];
+    int n = 0;
+    while (s->step(st) == ASB_SQLITE_ROW && n < 12) {
+        const unsigned char *t = s->column_text(st, 0);
+        if (asb_lspd_ident_ok(t)) { snprintf(names[n], 32, "%s", (const char *)t); n++; }
+    }
+    s->finalize(st);
+    if (!n) { snprintf(g_lspd_schema, sizeof(g_lspd_schema), "no_tables"); return; }
+    size_t p = 0;
+    for (int i = 0; i < n && p + 40 < sizeof(g_lspd_schema); i++) {
+        char cols[24][32];
+        int cn = asb_lspd_cols(s, db, names[i], cols, 24);
+        p += (size_t)snprintf(g_lspd_schema + p, sizeof(g_lspd_schema) - p, "%s%s(", i ? ";" : "", names[i]);
+        for (int j = 0; j < cn && p + 34 < sizeof(g_lspd_schema); j++)
+            p += (size_t)snprintf(g_lspd_schema + p, sizeof(g_lspd_schema) - p, "%s%s", j ? "," : "", cols[j]);
+        if (p + 2 < sizeof(g_lspd_schema)) p += (size_t)snprintf(g_lspd_schema + p, sizeof(g_lspd_schema) - p, ")");
+    }
+}
+
+static int asb_lspd_has_table(asb_sqlite_t *s, sqlite3_h *db, const char *table) {
+    char cols[4][32];
+    return asb_lspd_cols(s, db, table, cols, 4) > 0;
+}
 
 /* The first SQLite error explains a private-copy fallback. The separate last-read code
  * distinguishes a malformed Boolean from an I/O error without erasing that original cause. */
@@ -182,9 +305,21 @@ static int asb_lspd_probe_query(asb_sqlite_t *s, sqlite3_h *db, const char *q) {
 }
 
 static int asb_lspd_probe(asb_sqlite_t *s, sqlite3_h *db, int inventory) {
+    if (inventory) {
+        int mrc = asb_lspd_map(s, db);
+        if (mrc) return mrc;
+    }
     int rc = asb_lspd_probe_query(s, db, inventory ? g_lspd_modules_query : g_lspd_verbose_query);
     if (rc == 0 && inventory) rc = asb_lspd_probe_query(s, db, g_lspd_scope_query);
     return rc;
+}
+
+/* A schema mismatch is described while the handle is still open. */
+static void asb_lspd_note_mismatch(asb_sqlite_t *s, sqlite3_h *db, int inventory, int rc) {
+    int p = rc & 0xff;
+    if (p != 1 && p != 26) return;
+    asb_lspd_schema_note(s, db);
+    if (!inventory && !asb_lspd_has_table(s, db, "configs")) g_lspd_no_configs = 1;
 }
 
 static int asb_lspd_read_error(int rc) {
@@ -233,6 +368,7 @@ static int asb_lspd_open_read(asb_sqlite_t *s, const char *path, sqlite3_h **db,
         s->busy_timeout(d, 3000);
         rc = asb_lspd_probe(s, d, inventory);
         if (rc == 0) { *db = d; return 0; }
+        asb_lspd_note_mismatch(s, d, inventory, rc);
     } else if (rc == ASB_SQLITE_OK) {
         rc = 1;
     }
@@ -261,6 +397,7 @@ static int asb_lspd_open_read(asb_sqlite_t *s, const char *path, sqlite3_h **db,
     s->busy_timeout(d, 3000);
     rc = asb_lspd_probe(s, d, inventory);
     if (rc != 0) {
+        asb_lspd_note_mismatch(s, d, inventory, rc);
         s->close(d);
         g_lspd_sqlite_rc = rc;
         asb_lspd_copy_drop();
@@ -278,6 +415,7 @@ static void asb_lspd_close_read(asb_sqlite_t *s, sqlite3_h *db) {
 static void asb_lspd_print_rc(void) {
     if (g_lspd_sqlite_rc) printf("sqlite_rc=%d\n", g_lspd_sqlite_rc);
     if (g_lspd_copy_dir[0]) puts("read_from=copy");
+    if (g_lspd_schema[0]) printf("schema=%s\n", g_lspd_schema);
 }
 
 static const char *asb_lspd_name(int v) {
@@ -310,6 +448,7 @@ static int asb_lspd_modules(asb_sqlite_t *s, sqlite3_h *db) {
     }
     int n = 0, rc;
     puts("format=v1");
+    puts(g_lspd_layout_standard ? "layout=standard" : "layout=adapted");
     while ((rc = s->step(st)) == ASB_SQLITE_ROW && n < 256) {
         const unsigned char *name = s->column_text(st, 0);
         if (!asb_lspd_name_ok(name) || strcmp((const char *)name, "lspd") == 0) continue;
@@ -534,7 +673,8 @@ static int asb_lspd_cli(int argc, char **argv) {
     } else {
         int orc = asb_lspd_open_read(&s, path, &db, 0);
         if (orc != 0) {
-            puts(orc == 6 ? "verbose=unknown\nreason=unexpected_schema" : "verbose=unknown\nreason=read_failed");
+            puts(orc == 6 ? (g_lspd_no_configs ? "verbose=unknown\nreason=no_verbose_switch" : "verbose=unknown\nreason=unexpected_schema")
+                          : "verbose=unknown\nreason=read_failed");
             asb_lspd_print_rc();
             return orc;
         }
