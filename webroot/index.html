@@ -217,6 +217,9 @@ body::before, body::after {
   align-items: center;
   justify-content: flex-start;
 }
+:where(html.asb-bar-hidden) .page {
+  min-height: calc(100vh - var(--window-inset-top) - var(--window-inset-bottom) - 16px);
+}
 
 .header {
   width: 100%;
@@ -2165,6 +2168,9 @@ html[data-asb-theme="light"] .lgr-chip { background: #f7f9fa; }
 .lgr-sec { border-radius: 18px; padding: 13px 14px; border: 1px solid var(--border);
   background: linear-gradient(160deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018));
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.035), 0 1px 4px rgba(0,0,0,0.22); }
+/* dev55: the Device, report and Zygisk pages are long stacks of sections; only those near
+ * the viewport are laid out and painted. A section's real height is remembered once drawn. */
+:is(#devicePage, #reportPage, #zygiskPage) .lgr-sec { content-visibility: auto; contain-intrinsic-height: auto 320px; }
 .lgr-sec-t { font-size: 12px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
   color: var(--accent); margin-bottom: 9px; }
 .lgr-heros { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
@@ -3284,6 +3290,13 @@ html[data-asb-theme="light"] .nf-sel-row.warn .nf-sel-why { color: #8a5a00 !impo
  * blend, and opacity:1 overrides any inherited fade from the card or its animation. */
 /* A row whose option list is open paints above the rows after it. */
 .cfg-row.sel-open { position: relative; z-index: 60; }
+/* dev55: a category or search list lays out only the rows near the viewport. Opening the
+ * 29-row Battery category styled and laid out ~700 elements before its first frame; rows
+ * further down now keep a placeholder (remembered once drawn) until they scroll near.
+ * The containment this brings would clip an open option list, so a row with its list open
+ * is an ordinary box again. */
+#cfgList > .cfg-row { content-visibility: auto; contain-intrinsic-height: auto 90px; }
+#cfgList > .cfg-row.sel-open { content-visibility: visible; }
 
 .cfg-sel-pop {
   position: absolute; top: 42px; right: 0; z-index: 40;
@@ -3448,7 +3461,8 @@ html[data-asb-theme="light"] .nf-sel-row.warn .nf-sel-why { color: #8a5a00 !impo
   box-shadow:0 0 10px color-mix(in srgb,var(--cat) 32%,transparent);
 }
 .cfg-row[class*="cat-"] .cfg-range-val { color:var(--cat) !important; }
-.cfg-row[class*="cat-"] :is(.cfg-status.good,.cfg-status.on) {
+.cfg-row[class*="cat-"] .cfg-status.good,
+.cfg-row[class*="cat-"] .cfg-status.on {
   color:var(--cat);
   background:color-mix(in srgb,var(--cat) 11%,transparent);
 }
@@ -3466,7 +3480,8 @@ html:not([data-asb-theme="light"]) :is(.cfg-section,.cfg-tile,.cfg-icon,.cfg-row
 html:not([data-asb-theme="light"]) :is(.cfg-section,.cfg-tile,.cfg-icon).cat-kernel,
 html:not([data-asb-theme="light"]) :is(.cfg-section,.cfg-tile,.cfg-icon).cat-audio { --tech-icon:var(--cat-ink); }
 html:not([data-asb-theme="light"]) .cfg-section:is(.cat-kernel,.cat-audio) { --section-accent:var(--cat-ink); }
-html:not([data-asb-theme="light"]) .cfg-row:is(.cat-kernel,.cat-audio) :is(.cfg-status.good,.cfg-status.on) {
+html:not([data-asb-theme="light"]) .cfg-row:is(.cat-kernel,.cat-audio) .cfg-status.good,
+html:not([data-asb-theme="light"]) .cfg-row:is(.cat-kernel,.cat-audio) .cfg-status.on {
   color:var(--cat-ink);
   background:color-mix(in srgb,var(--cat) 16%,transparent);
 }
@@ -3714,6 +3729,12 @@ html[data-asb-theme="light"] .junk-cat.is-warn .junk-cat-meta { color:#8a5a00; }
 .kernel-source-metrics { margin-top:3px; color:var(--text-secondary); font-size:10.5px; line-height:1.35; }
 .kernel-source-block { flex:0 0 auto; min-height:32px; padding:6px 9px; font-size:10.5px; }
 .kernel-source-block.is-blocked { opacity:.62; }
+.kernel-source-tags { margin-top:3px; color:var(--text-secondary); font-size:10.5px; line-height:1.35; }
+.kernel-source-tags.is-critical,.kernel-chip.is-critical .kernel-chip-name { color:var(--m-warm); }
+.kernel-source-confirm { padding:9px 10px; border:1px solid var(--border); border-radius:11px; background:var(--surface-hover); }
+.kernel-source-confirm.is-critical { border-color:color-mix(in srgb, var(--m-warm) 55%, transparent); }
+.kernel-source-confirm-text { color:var(--text); font-size:11.5px; line-height:1.45; }
+.kernel-source-confirm .bfx-actions { margin-top:8px; }
 @media (max-width:350px) { .kernel-source { align-items:flex-start; flex-wrap:wrap; } .kernel-source-block { width:100%; } }
 .kernel-sources-sheet { display:flex; flex-direction:column; overflow:hidden; }
 .kernel-sources-body { display:flex; flex-direction:column; min-height:0; gap:10px; }
@@ -3723,6 +3744,8 @@ html[data-asb-theme="light"] .junk-cat.is-warn .junk-cat-meta { color:#8a5a00; }
 .kernel-sources-filter.is-active { border-color:var(--accent); color:var(--text); background:var(--surface-active); }
 .kernel-sources-sort { width:100%; min-height:38px; box-sizing:border-box; }
 .kernel-sources-scroll { min-height:0; max-height:52vh; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; display:flex; flex-direction:column; gap:7px; padding-right:2px; }
+/* dev55: up to 1024 observed sources; only the rows near the visible part of the list are laid out. */
+.kernel-sources-scroll > .kernel-source { content-visibility:auto; contain-intrinsic-height:auto 58px; }
 .kernel-sources-empty { padding:22px 10px; text-align:center; color:var(--text-secondary); font-size:12px; }
 
 .kernel-meta { display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:11px; color:var(--text-secondary); font-size:11px; }
@@ -3907,12 +3930,20 @@ html[data-asb-theme="light"] .cfg-profile-opened { color:#6b4300 !important; }
 .cfg-profile-folder span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; direction:rtl; text-align:left; }
 html[data-asb-theme="light"] .cfg-fm { background:rgba(15,31,27,.58) !important; }
 html[data-asb-theme="light"] .cfg-fm-box { background:linear-gradient(#fff,#fff) padding-box, linear-gradient(160deg,#35bb99 0%,#2aa9b3 45%,#1f7d68 100%) border-box !important; }
-html[data-asb-theme="light"] :is(.cfg-fm-btn,.cfg-fm-place,.cfg-fm-cancel) { color:var(--text-secondary) !important; background:#fff !important; border-color:var(--border) !important; }
-html[data-asb-theme="light"] :is(.cfg-fm-place.on,.cfg-fm-sort) { color:var(--accent) !important; border-color:rgba(0,143,112,.42) !important; }
-html[data-asb-theme="light"] :is(.cfg-fm-nm,.cfg-fm-seg) { color:var(--text) !important; }
-html[data-asb-theme="light"] :is(.cfg-fm-sub,.cfg-fm-hint,.cfg-fm-empty,.cfg-fm-seg:last-child) { color:var(--text-secondary) !important; }
+html[data-asb-theme="light"] .cfg-fm-btn,
+html[data-asb-theme="light"] .cfg-fm-place,
+html[data-asb-theme="light"] .cfg-fm-cancel { color:var(--text-secondary) !important; background:#fff !important; border-color:var(--border) !important; }
+html[data-asb-theme="light"] .cfg-fm-place.on,
+html[data-asb-theme="light"] .cfg-fm-sort.cfg-fm-sort { color:var(--accent) !important; border-color:rgba(0,143,112,.42) !important; }
+html[data-asb-theme="light"] .cfg-fm-nm,
+html[data-asb-theme="light"] .cfg-fm-seg { color:var(--text) !important; }
+html[data-asb-theme="light"] .cfg-fm-sub.cfg-fm-sub,
+html[data-asb-theme="light"] .cfg-fm-hint.cfg-fm-hint,
+html[data-asb-theme="light"] .cfg-fm-empty.cfg-fm-empty,
+html[data-asb-theme="light"] .cfg-fm-seg:last-child { color:var(--text-secondary) !important; }
 html[data-asb-theme="light"] .cfg-fm-ic.dir { color:var(--accent) !important; }
-html[data-asb-theme="light"] :is(.cfg-fm-list,.cfg-fm-foot) { border-color:var(--border) !important; }
+html[data-asb-theme="light"] .cfg-fm-list,
+html[data-asb-theme="light"] .cfg-fm-foot { border-color:var(--border) !important; }
 html[data-asb-theme="light"] .cfg-profile-folder { color:var(--text) !important; border-color:rgba(0,143,112,.42) !important; background:rgba(0,143,112,.07) !important; }
 /* Reset is a consequential action, so it uses a centred decision dialog instead of a
  * hidden immediate command. It shares the ASB dark/teal language but has neutral and
@@ -4059,34 +4090,96 @@ html[data-asb-glass="1"] body {
     radial-gradient(ellipse 90% 48% at 12% 0%,rgba(0,240,180,.10),transparent 68%),
     radial-gradient(ellipse 70% 42% at 100% 82%,rgba(36,58,49,.20),transparent 72%),#000;
 }
-html[data-asb-glass="1"] :is(.page,.live-page,.config-page) { background:transparent !important; color:var(--text); }
-html[data-asb-glass="1"] :is(.hdr-cap,.theme-toggle,.status-row,.live-chip,.tg-link,.debug-support-btn,
-  .cfg-backup,.cfg-lang-btn,.cfg-lang-pop,.cfg-sel-btn,.cfg-sel-pop,.cfg-tile,.cfg-row,.cfg-zygisk-card,
-  .live-cell,.stock-telemetry,.smart-banner,.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet,
-  .log-menu,.cfg-fm-box,.asb-tabbar,.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) {
+html[data-asb-glass="1"] .page,
+html[data-asb-glass="1"] .live-page,
+html[data-asb-glass="1"] .config-page { background:transparent !important; color:var(--text); }
+html[data-asb-glass="1"] .hdr-cap,
+html[data-asb-glass="1"] .theme-toggle,
+html[data-asb-glass="1"] .status-row,
+html[data-asb-glass="1"] .live-chip,
+html[data-asb-glass="1"] .tg-link,
+html[data-asb-glass="1"] .debug-support-btn,
+html[data-asb-glass="1"] .cfg-backup,
+html[data-asb-glass="1"] .cfg-lang-btn,
+html[data-asb-glass="1"] .cfg-lang-pop,
+html[data-asb-glass="1"] .cfg-sel-btn,
+html[data-asb-glass="1"] .cfg-sel-pop,
+html[data-asb-glass="1"] .cfg-tile,
+html[data-asb-glass="1"] .cfg-row,
+html[data-asb-glass="1"] .cfg-zygisk-card,
+html[data-asb-glass="1"] .live-cell,
+html[data-asb-glass="1"] .stock-telemetry,
+html[data-asb-glass="1"] .smart-banner,
+html[data-asb-glass="1"] .cfg-profile-sheet,
+html[data-asb-glass="1"] .cfg-reset-dialog,
+html[data-asb-glass="1"] .debug-action-wait-sheet,
+html[data-asb-glass="1"] .log-menu,
+html[data-asb-glass="1"] .cfg-fm-box,
+html[data-asb-glass="1"] .asb-tabbar,
+html[data-asb-glass="1"] .report-nav,
+html[data-asb-glass="1"] .zy-page-nav,
+html[data-asb-glass="1"] .dev-page-nav,
+html[data-asb-glass="1"] .cfg-page-nav {
   background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.018)),rgba(8,13,10,.90) !important;
   color:var(--text) !important; border-color:var(--border) !important;
   box-shadow:0 14px 34px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.14),inset 0 0 0 1px rgba(255,255,255,.025);
   -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
 }
-html[data-asb-glass="1"] :is(.log-menu,.cfg-fm-box,.cfg-profile-sheet,.cfg-reset-dialog) {
+html[data-asb-glass="1"] .log-menu,
+html[data-asb-glass="1"] .cfg-fm-box,
+html[data-asb-glass="1"] .cfg-profile-sheet,
+html[data-asb-glass="1"] .cfg-reset-dialog {
   border-color:var(--border-active) !important;
 }
-html[data-asb-glass="1"] :is(.pbtn,.lgr-hero,.lgr-sec,.live-info-now,.live-info-src) {
+html[data-asb-glass="1"] .pbtn,
+html[data-asb-glass="1"] .lgr-hero,
+html[data-asb-glass="1"] .lgr-sec,
+html[data-asb-glass="1"] .live-info-now,
+html[data-asb-glass="1"] .live-info-src {
   background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.018)),rgba(8,13,10,.88) !important;
   border-color:var(--border); box-shadow:inset 0 1px 0 rgba(255,255,255,.14),inset 0 0 0 1px rgba(255,255,255,.025);
   -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
 }
-html[data-asb-glass="1"] :is(.pbtn.on,.cfg-tile.active,.cfg-profile-row.selected) {
+html[data-asb-glass="1"] .pbtn.on,
+html[data-asb-glass="1"] .cfg-tile.active,
+html[data-asb-glass="1"] .cfg-profile-row.selected {
   border-color:var(--accent) !important; box-shadow:0 0 0 1px var(--accent-glow),inset 0 1px 0 rgba(255,255,255,.16);
 }
-html[data-asb-glass="1"] :is(input,select,textarea,.seg,.seg-opt,.cfg-profile-name,.cfg-reset-choice,.cfg-profile-row,.cfg-profile-actions button,
-  .cfg-fm-btn,.cfg-fm-place,.cfg-fm-cancel,.cfg-profile-close,.cfg-reset-close,.cfg-profile-dest button,.cfg-profile-check,.cfg-profile-result-reboot) {
+html[data-asb-glass="1"] input:not(.asb-spec-pad),
+html[data-asb-glass="1"] select:not(.asb-spec-pad),
+html[data-asb-glass="1"] textarea:not(.asb-spec-pad),
+html[data-asb-glass="1"] .seg:not(asb-spec-pad),
+html[data-asb-glass="1"] .seg-opt:not(asb-spec-pad),
+html[data-asb-glass="1"] .cfg-profile-name:not(asb-spec-pad),
+html[data-asb-glass="1"] .cfg-reset-choice:not(asb-spec-pad),
+html[data-asb-glass="1"] .cfg-profile-row:not(asb-spec-pad),
+html[data-asb-glass="1"] .cfg-profile-actions button,
+html[data-asb-glass="1"] .cfg-fm-btn:not(asb-spec-pad),
+html[data-asb-glass="1"] .cfg-fm-place:not(asb-spec-pad),
+html[data-asb-glass="1"] .cfg-fm-cancel:not(asb-spec-pad),
+html[data-asb-glass="1"] .cfg-profile-close:not(asb-spec-pad),
+html[data-asb-glass="1"] .cfg-reset-close:not(asb-spec-pad),
+html[data-asb-glass="1"] .cfg-profile-dest button,
+html[data-asb-glass="1"] .cfg-profile-check:not(asb-spec-pad),
+html[data-asb-glass="1"] .cfg-profile-result-reboot:not(asb-spec-pad) {
   background:rgba(8,13,10,.92) !important; color:var(--text) !important; border-color:var(--border) !important;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
 }
-html[data-asb-glass="1"] :is(.cfg-modal,.cfg-profile-modal,.cfg-reset-modal,.diag-wait-modal,.debug-action-wait,[class*="overlay"]) { background:rgba(0,0,0,.68) !important; }
-html[data-asb-glass="1"] :is(.cfg-desc,.cfg-profile-copy,.cfg-profile-row-meta,.cfg-profile-hint,.cfg-reset-copy,.cfg-reset-choice-copy,.live-cell-label,.device-line,.tg-link-sub) { color:var(--text-secondary) !important; }
+html[data-asb-glass="1"] .cfg-modal,
+html[data-asb-glass="1"] .cfg-profile-modal,
+html[data-asb-glass="1"] .cfg-reset-modal,
+html[data-asb-glass="1"] .diag-wait-modal,
+html[data-asb-glass="1"] .debug-action-wait,
+html[data-asb-glass="1"] [class*="overlay"] { background:rgba(0,0,0,.68) !important; }
+html[data-asb-glass="1"] .cfg-desc,
+html[data-asb-glass="1"] .cfg-profile-copy,
+html[data-asb-glass="1"] .cfg-profile-row-meta,
+html[data-asb-glass="1"] .cfg-profile-hint,
+html[data-asb-glass="1"] .cfg-reset-copy,
+html[data-asb-glass="1"] .cfg-reset-choice-copy,
+html[data-asb-glass="1"] .live-cell-label,
+html[data-asb-glass="1"] .device-line,
+html[data-asb-glass="1"] .tg-link-sub { color:var(--text-secondary) !important; }
 html[data-asb-glass="1"] .smart-banner-value { color:var(--text); }
 html[data-asb-glass="1"] .cfg-search::placeholder { color:var(--text-tertiary); opacity:1; }
 @media (prefers-reduced-motion:reduce) {
@@ -4121,38 +4214,95 @@ html[data-asb-theme="light"] .config-page { background:var(--bg) !important; col
    .live-cell-value and .cfg-tile-ico as separate opaque white slabs, which created the
    rectangular seams visible inside otherwise rounded cards. Only outer material surfaces
    receive a paper background; child labels retain transparent backgrounds. */
-html[data-asb-theme="light"] :is(.hdr-cap,.theme-toggle,.status-row,.live-chip,.tg-link,.debug-support-btn,
-  .cfg-backup,.cfg-lang-btn,.cfg-lang-pop,.cfg-sel-btn,.cfg-sel-pop,.cfg-tile,.cfg-row,
-  .live-cell,.stock-telemetry,.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet,
-  /* The tab bar now carries the same teal wash as .status-row, so it needs the same
+/* The tab bar now carries the same teal wash as .status-row, so it needs the same
    * light-theme override - otherwise the wash sits over white and turns the bar green. */
-  .report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav,.asb-tabbar) {
+html[data-asb-theme="light"] .hdr-cap,
+html[data-asb-theme="light"] .theme-toggle,
+html[data-asb-theme="light"] .status-row,
+html[data-asb-theme="light"] .live-chip,
+html[data-asb-theme="light"] .tg-link,
+html[data-asb-theme="light"] .debug-support-btn,
+html[data-asb-theme="light"] .cfg-backup,
+html[data-asb-theme="light"] .cfg-lang-btn,
+html[data-asb-theme="light"] .cfg-lang-pop,
+html[data-asb-theme="light"] .cfg-sel-btn,
+html[data-asb-theme="light"] .cfg-sel-pop,
+html[data-asb-theme="light"] .cfg-tile,
+html[data-asb-theme="light"] .cfg-row,
+html[data-asb-theme="light"] .live-cell,
+html[data-asb-theme="light"] .stock-telemetry,
+html[data-asb-theme="light"] .cfg-profile-sheet,
+html[data-asb-theme="light"] .cfg-reset-dialog,
+html[data-asb-theme="light"] .debug-action-wait-sheet,
+html[data-asb-theme="light"] .report-nav,
+html[data-asb-theme="light"] .zy-page-nav,
+html[data-asb-theme="light"] .dev-page-nav,
+html[data-asb-theme="light"] .cfg-page-nav,
+html[data-asb-theme="light"] .asb-tabbar {
   background:#ffffff !important; color:var(--text) !important; border-color:var(--border) !important;
   box-shadow:0 10px 28px rgba(20,50,42,.10);
 }
-html[data-asb-theme="light"] :is(input,select,textarea,.seg,.seg-opt,.cfg-profile-name,.cfg-reset-choice,.cfg-profile-row,.cfg-profile-actions button) { background:#ffffff !important; color:var(--text) !important; border-color:var(--border) !important; }
-html[data-asb-theme="light"] :is(.cfg-modal,.cfg-profile-modal,.cfg-reset-modal,.diag-wait-modal,.debug-action-wait,[class*="overlay"]) { background:rgba(15,31,27,.58) !important; }
-html[data-asb-theme="light"] :is(.cfg-profile-row.selected,.cfg-tile.active,.cfg-reset-choice.armed,.seg-opt.active,.seg button.active,.p-card.active,.profile-card.active) { border-color:var(--accent) !important; }
+html[data-asb-theme="light"] input:not(.asb-spec-pad),
+html[data-asb-theme="light"] select:not(.asb-spec-pad),
+html[data-asb-theme="light"] textarea:not(.asb-spec-pad),
+html[data-asb-theme="light"] .seg:not(asb-spec-pad),
+html[data-asb-theme="light"] .seg-opt:not(asb-spec-pad),
+html[data-asb-theme="light"] .cfg-profile-name:not(asb-spec-pad),
+html[data-asb-theme="light"] .cfg-reset-choice:not(asb-spec-pad),
+html[data-asb-theme="light"] .cfg-profile-row:not(asb-spec-pad),
+html[data-asb-theme="light"] .cfg-profile-actions button { background:#ffffff !important; color:var(--text) !important; border-color:var(--border) !important; }
+html[data-asb-theme="light"] .cfg-modal,
+html[data-asb-theme="light"] .cfg-profile-modal,
+html[data-asb-theme="light"] .cfg-reset-modal,
+html[data-asb-theme="light"] .diag-wait-modal,
+html[data-asb-theme="light"] .debug-action-wait,
+html[data-asb-theme="light"] [class*="overlay"] { background:rgba(15,31,27,.58) !important; }
+html[data-asb-theme="light"] .cfg-profile-row.selected:not(asb-spec-pad),
+html[data-asb-theme="light"] .cfg-tile.active:not(asb-spec-pad),
+html[data-asb-theme="light"] .cfg-reset-choice.armed:not(asb-spec-pad),
+html[data-asb-theme="light"] .seg-opt.active:not(asb-spec-pad),
+html[data-asb-theme="light"] .seg button.active,
+html[data-asb-theme="light"] .p-card.active:not(asb-spec-pad),
+html[data-asb-theme="light"] .profile-card.active:not(asb-spec-pad) { border-color:var(--accent) !important; }
 html[data-asb-theme="light"] .cfg-reset-choice.armed { color:#201300 !important; background:linear-gradient(135deg,#ffd166,#f6a623) !important; }
-html[data-asb-theme="light"] :is(.app-name,.status-val,.cfg-tile-count.has-on,.tg-link-main,.theme-choice.active) { color:var(--accent) !important; }
+html[data-asb-theme="light"] .app-name.app-name,
+html[data-asb-theme="light"] .status-val.status-val,
+html[data-asb-theme="light"] .cfg-tile-count.has-on,
+html[data-asb-theme="light"] .tg-link-main.tg-link-main,
+html[data-asb-theme="light"] .theme-choice.active { color:var(--accent) !important; }
 html[data-asb-theme="light"] .cfg-reset-choice.armed { color:#04120f !important; }
 /* Light counterpart of the tonal primary (fix175): deep teal ink on a pale teal wash. */
-html[data-asb-theme="light"] :is(.cfg-profile-primary,.cfg-profile-apply) { color:#00634f !important; background:linear-gradient(135deg,rgba(0,124,99,.14),rgba(0,124,99,.07)) !important; border-color:rgba(0,124,99,.32) !important; }
-html[data-asb-theme="light"] :is(.cfg-profile-copy,.cfg-profile-row-meta,.cfg-profile-hint,.cfg-reset-copy,.cfg-reset-choice-copy,.live-cell-label,.device-line,.tg-link-sub) { color:var(--text-secondary) !important; }
+html[data-asb-theme="light"] .cfg-profile-primary,
+html[data-asb-theme="light"] .cfg-profile-apply { color:#00634f !important; background:linear-gradient(135deg,rgba(0,124,99,.14),rgba(0,124,99,.07)) !important; border-color:rgba(0,124,99,.32) !important; }
+html[data-asb-theme="light"] .cfg-profile-copy,
+html[data-asb-theme="light"] .cfg-profile-row-meta,
+html[data-asb-theme="light"] .cfg-profile-hint,
+html[data-asb-theme="light"] .cfg-reset-copy,
+html[data-asb-theme="light"] .cfg-reset-choice-copy,
+html[data-asb-theme="light"] .live-cell-label,
+html[data-asb-theme="light"] .device-line,
+html[data-asb-theme="light"] .tg-link-sub { color:var(--text-secondary) !important; }
 /* Smart normally has a dark AI gradient. In light mode retain its semantic teal/cyan identity,
  * but terminate the material in a pale surface so it does not look like an unthemed dark card. */
 html[data-asb-theme="light"] .pbtn-smart { background:linear-gradient(135deg,rgba(0,143,112,.16),rgba(0,127,179,.08) 50%,#ffffff 100%) !important; border-color:rgba(0,143,112,.32) !important; }
 html[data-asb-theme="light"] .pbtn-smart::before { background:linear-gradient(120deg,rgba(0,143,112,.18),rgba(0,127,179,.08) 40%,transparent 70%) !important; }
 html[data-asb-theme="light"] .pbtn-smart.on { background:linear-gradient(135deg,rgba(0,143,112,.24),rgba(0,127,179,.12) 50%,#f3fffb 100%) !important; border-color:var(--accent) !important; box-shadow:0 0 0 1px var(--accent),0 0 24px rgba(0,143,112,.18),inset 0 1px 1px rgba(255,255,255,.84); }
-html[data-asb-theme="light"] :is(.pbtn .psub,.pbtn-stock .psub,.pbtn-smart.on .psub) { color:var(--text-secondary) !important; background:none !important; }
+html[data-asb-theme="light"] .pbtn .psub.psub,
+html[data-asb-theme="light"] .pbtn-stock .psub.psub,
+html[data-asb-theme="light"] .pbtn-smart.on .psub { color:var(--text-secondary) !important; background:none !important; }
 html[data-asb-theme="light"] .alpha-tag { color:#006e57; background:linear-gradient(90deg,rgba(0,143,112,.17),rgba(0,127,179,.12)); border-color:rgba(0,143,112,.28); }
 html[data-asb-theme="light"] .cfg-profile-dest button { color:var(--text-secondary) !important; background:#ffffff !important; border-color:var(--border) !important; }
 html[data-asb-theme="light"] .cfg-profile-dest button.active { color:var(--accent) !important; background:rgba(0,143,112,.10) !important; border-color:rgba(0,143,112,.42) !important; }
 html[data-asb-theme="light"] .cfg-profile-close { color:var(--text-secondary) !important; background:#ffffff !important; border-color:var(--border) !important; }
 html[data-asb-theme="light"] .doze-keep-off { color:#6b4300 !important; }
 html[data-asb-theme="light"] .doze-keep-tag { color:var(--text-secondary) !important; }
-html[data-asb-theme="light"] :is(.doze-keep-tag.is-trimmed,.doze-keep-tag.is-drop) { color:#8a5a00 !important; }
-html[data-asb-theme="light"] :is(.doze-keep-tag.is-granted,.doze-keep-tag.is-exempt,.doze-keep-tag.is-back,.doze-keep-tag.is-give,.doze-keep-ico) { color:var(--accent) !important; }
+html[data-asb-theme="light"] .doze-keep-tag.is-trimmed,
+html[data-asb-theme="light"] .doze-keep-tag.is-drop { color:#8a5a00 !important; }
+html[data-asb-theme="light"] .doze-keep-tag.is-granted,
+html[data-asb-theme="light"] .doze-keep-tag.is-exempt,
+html[data-asb-theme="light"] .doze-keep-tag.is-back,
+html[data-asb-theme="light"] .doze-keep-tag.is-give,
+html[data-asb-theme="light"] .doze-keep-ico.doze-keep-ico { color:var(--accent) !important; }
 html[data-asb-theme="light"] .doze-keep-legend { color:var(--text-secondary) !important; }
 html[data-asb-theme="light"] .doze-keep-legend summary { color:var(--text) !important; }
 html[data-asb-theme="light"] .doze-keep-ico.has-img { color:transparent !important; }
@@ -4219,9 +4369,16 @@ html[data-asb-theme="light"] .smart-banner { background:linear-gradient(135deg,r
 html[data-asb-theme="light"] .smart-banner-label { color:var(--text-tertiary); }
 html[data-asb-theme="light"] .smart-banner-value { color:#006c56; }
 html[data-asb-theme="light"] .smart-banner-tag { color:#006c56; background:rgba(0,124,99,.12); border-color:rgba(0,124,99,.28); }
-html[data-asb-theme="light"] :is(.cfg-section,.cfg-section-hint,.cfg-tile-count,.cfg-sub-label,.cfg-sub-hint,.cfg-trial-info,.cfg-desc-opt) { color:var(--text-secondary) !important; opacity:1; }
+html[data-asb-theme="light"] .cfg-section,
+html[data-asb-theme="light"] .cfg-section-hint,
+html[data-asb-theme="light"] .cfg-tile-count,
+html[data-asb-theme="light"] .cfg-sub-label,
+html[data-asb-theme="light"] .cfg-sub-hint,
+html[data-asb-theme="light"] .cfg-trial-info,
+html[data-asb-theme="light"] .cfg-desc-opt { color:var(--text-secondary) !important; opacity:1; }
 html[data-asb-theme="light"] .cfg-section-title { color:#a52620 !important; }
-html[data-asb-theme="light"] :is(.cfg-tile,.cfg-row) { background:#fff !important; border-color:var(--border) !important; }
+html[data-asb-theme="light"] .cfg-tile,
+html[data-asb-theme="light"] .cfg-row { background:#fff !important; border-color:var(--border) !important; }
 /* The six hub categories keep their hue on a light page too (fix174): a whisper of the
  * category colour over white, so they no longer sit in the same flat white as the three
  * restart tiles below them. Must follow the flat-white rule above to win on order. */
@@ -4251,11 +4408,17 @@ html[data-asb-theme="light"] .cfg-seg { background:#fff; border-color:var(--bord
 html[data-asb-theme="light"] .cfg-switch { background:#fff; border-color:rgba(11,56,47,.28); box-shadow:0 10px 28px rgba(20,50,42,.10); }
 html[data-asb-theme="light"] .cfg-switch::after { background:#fff; box-shadow:0 1px 3px rgba(20,50,42,.22), inset 0 1px 0 rgba(255,255,255,.82); }
 html[data-asb-theme="light"] .cfg-switch.on { background:linear-gradient(135deg,#57d9cc,#53cce8); border-color:#129f92; box-shadow:0 2px 9px rgba(0,124,99,.24), inset 0 1px 0 rgba(255,255,255,.35); }
-html[data-asb-theme="light"] :is(.live-cell-label,.stock-telemetry-title) { background:transparent !important; color:var(--text-tertiary) !important; opacity:1; }
-html[data-asb-theme="light"] :is(.cfg-tile-ico,.cfg-icon,.pbtn .pico) { box-shadow:inset 0 1px 0 rgba(255,255,255,.82); }
+html[data-asb-theme="light"] .live-cell-label,
+html[data-asb-theme="light"] .stock-telemetry-title { background:transparent !important; color:var(--text-tertiary) !important; opacity:1; }
+html[data-asb-theme="light"] .cfg-tile-ico.cfg-tile-ico,
+html[data-asb-theme="light"] .cfg-icon.cfg-icon,
+html[data-asb-theme="light"] .pbtn .pico { box-shadow:inset 0 1px 0 rgba(255,255,255,.82); }
 html[data-asb-theme="light"] .cfg-pending { color:#765000; background:#fff5d6; border-color:#d89d24; }
-html[data-asb-theme="light"] :is(.cfg-profile-title,.cfg-reset-title,.debug-action-wait-title) { color:var(--text) !important; }
-html[data-asb-theme="light"] :is(.cfg-profile-close,.cfg-reset-close) { color:var(--text-secondary) !important; background:#fff !important; border-color:var(--border) !important; }
+html[data-asb-theme="light"] .cfg-profile-title,
+html[data-asb-theme="light"] .cfg-reset-title,
+html[data-asb-theme="light"] .debug-action-wait-title { color:var(--text) !important; }
+html[data-asb-theme="light"] .cfg-profile-close,
+html[data-asb-theme="light"] .cfg-reset-close { color:var(--text-secondary) !important; background:#fff !important; border-color:var(--border) !important; }
 /* Light theme harmony pass (fix159).
  *
  * The light theme had drifted into green: green-grey text tokens, every Monitor value and
@@ -4282,11 +4445,16 @@ html[data-asb-theme="light"] .app-name {
  * matches in the light theme too. */
 html[data-asb-theme="light"] .logo-c { --sph-c1:#007c63; --sph-c2:#087f9a; }
 html[data-asb-theme="light"] .logo-c::before { background:radial-gradient(circle, rgba(0,124,99,.12) 0%, rgba(8,127,154,.05) 46%, transparent 70%); }
-html[data-asb-theme="light"] :is(.logo-sphere-a,.asb-boot-orbit.a) { border-color:rgba(0,124,99,.30); }
-html[data-asb-theme="light"] :is(.logo-sphere-b,.asb-boot-orbit.b) { border-color:rgba(8,127,154,.34); }
-html[data-asb-theme="light"] :is(.logo-frame-a,.asb-boot-ring.a) { border-color:rgba(0,124,99,.40); }
-html[data-asb-theme="light"] :is(.logo-frame-b,.asb-boot-ring.b) { border-color:rgba(8,127,154,.28); }
-html[data-asb-theme="light"] :is(.logo-inner,.asb-boot-ufo) { background:linear-gradient(145deg,rgba(255,255,255,.78),rgba(228,241,246,.70)); border-color:rgba(0,124,99,.38);
+html[data-asb-theme="light"] .logo-sphere-a.logo-sphere-a,
+html[data-asb-theme="light"] .asb-boot-orbit.a { border-color:rgba(0,124,99,.30); }
+html[data-asb-theme="light"] .logo-sphere-b.logo-sphere-b,
+html[data-asb-theme="light"] .asb-boot-orbit.b { border-color:rgba(8,127,154,.34); }
+html[data-asb-theme="light"] .logo-frame-a.logo-frame-a,
+html[data-asb-theme="light"] .asb-boot-ring.a { border-color:rgba(0,124,99,.40); }
+html[data-asb-theme="light"] .logo-frame-b.logo-frame-b,
+html[data-asb-theme="light"] .asb-boot-ring.b { border-color:rgba(8,127,154,.28); }
+html[data-asb-theme="light"] .logo-inner,
+html[data-asb-theme="light"] .asb-boot-ufo { background:linear-gradient(145deg,rgba(255,255,255,.78),rgba(228,241,246,.70)); border-color:rgba(0,124,99,.38);
   box-shadow:0 0 calc(32px * var(--k, 1)) rgba(0,124,99,.12), inset 0 0 calc(22px * var(--k, 1)) rgba(8,127,154,.06); }
 html[data-asb-theme="light"] .device-line { color:var(--text-secondary) !important; }
 html[data-asb-theme="light"] .sec-label { color:var(--text-tertiary) !important; }
@@ -4321,7 +4489,8 @@ html[data-asb-theme="light"] .smart-banner-value .load-high { color:#b42318 !imp
 html[data-asb-theme="light"] .live-drain-block { background:#f7f9fa !important; border-color:var(--border) !important; }
 html[data-asb-theme="light"] .live-drain-cmp { background:#f7f9fa !important; }
 html[data-asb-theme="light"] .live-drain-ico { color:#007c63 !important; background:rgba(0,124,99,.10) !important; }
-html[data-asb-theme="light"] :is(.cfg-tile-count,.cfg-tile-count.has-on) { color:var(--text-secondary) !important; }
+html[data-asb-theme="light"] .cfg-tile-count.cfg-tile-count,
+html[data-asb-theme="light"] .cfg-tile-count.has-on { color:var(--text-secondary) !important; }
 html[data-asb-theme="light"] .cfg-tile-name { color:var(--text) !important; }
 html[data-asb-theme="light"] .cfg-reboot-tile { background:#ffffff !important; border-color:var(--border) !important; box-shadow:0 1px 2px rgba(16,24,32,.05); }
 html[data-asb-theme="light"] .cfg-reboot-ico { background:#f3f5f7 !important; border-color:rgba(16,24,32,.08) !important; }
@@ -4356,7 +4525,8 @@ html[data-asb-theme="light"] .cfg-row.cat-iface   { --cat:#7442b8; }
 html[data-asb-theme="light"] .cfg-row.cat-system  { --cat:#4a5f75; }
 html[data-asb-theme="light"] .cfg-row.cat-kernel  { --cat:#7a3f24; }
 html[data-asb-theme="light"] .cfg-row.cat-feel    { --cat:#647800; }
-html[data-asb-theme="light"] :is(.cfg-row.cat-zygisk,.cfg-zygisk-card) { --cat:#5d6167; }
+html[data-asb-theme="light"] .cfg-row.cat-zygisk,
+html[data-asb-theme="light"] .cfg-zygisk-card.cfg-zygisk-card { --cat:#5d6167; }
 html[data-asb-theme="light"] .cfg-row.is-on[class*="cat-"] {
   background: linear-gradient(160deg, color-mix(in srgb, var(--cat) 13%, #ffffff) 0%, color-mix(in srgb, var(--cat) 6%, #ffffff) 55%, color-mix(in srgb, var(--cat) 3%, #ffffff) 100%) !important;
   border-color: color-mix(in srgb, var(--cat) 34%, var(--border)) !important;
@@ -4535,6 +4705,7 @@ html[data-asb-theme="light"] {
 /* Give every page room so its last row is never trapped under the bar. */
 /* Clear the floating bar: its own height, the lift beneath it, and the reported inset. */
 body { padding-bottom: calc(var(--tabbar-space, 82px) + env(safe-area-inset-bottom, 0px)); }
+:where(html.asb-bar-hidden) body { padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
 
 /* The old header chips are redundant now that navigation is always on screen, and two
    sets of controls for one action is how a UI starts feeling arbitrary. Hidden rather
@@ -4828,36 +4999,88 @@ html[data-asb-glass="1"][data-asb-theme="light"] body {
     radial-gradient(ellipse 90% 48% at 12% 0%,rgba(0,124,99,.10),transparent 68%),
     radial-gradient(ellipse 70% 42% at 100% 82%,rgba(101,239,201,.15),transparent 72%),#f2f4f6 !important;
 }
-html[data-asb-glass="1"][data-asb-theme="light"] :is(.page,.live-page,.config-page) { background:transparent !important; }
-html[data-asb-glass="1"][data-asb-theme="light"] :is(.hdr-cap,.theme-toggle,.status-row,.live-chip,.tg-link,.debug-support-btn,
-  .cfg-backup,.cfg-lang-btn,.cfg-lang-pop,.cfg-sel-btn,.cfg-sel-pop,.cfg-tile,.cfg-row,.cfg-zygisk-card,
-  .live-cell,.stock-telemetry,.smart-banner,.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet,
-  .log-menu,.cfg-fm-box,.asb-tabbar,.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) {
+html[data-asb-glass="1"][data-asb-theme="light"] .page,
+html[data-asb-glass="1"][data-asb-theme="light"] .live-page,
+html[data-asb-glass="1"][data-asb-theme="light"] .config-page { background:transparent !important; }
+html[data-asb-glass="1"][data-asb-theme="light"] .hdr-cap,
+html[data-asb-glass="1"][data-asb-theme="light"] .theme-toggle,
+html[data-asb-glass="1"][data-asb-theme="light"] .status-row,
+html[data-asb-glass="1"][data-asb-theme="light"] .live-chip,
+html[data-asb-glass="1"][data-asb-theme="light"] .tg-link,
+html[data-asb-glass="1"][data-asb-theme="light"] .debug-support-btn,
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-backup,
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-lang-btn,
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-lang-pop,
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-sel-btn,
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-sel-pop,
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-tile,
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-row,
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-zygisk-card,
+html[data-asb-glass="1"][data-asb-theme="light"] .live-cell,
+html[data-asb-glass="1"][data-asb-theme="light"] .stock-telemetry,
+html[data-asb-glass="1"][data-asb-theme="light"] .smart-banner,
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-profile-sheet,
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-reset-dialog,
+html[data-asb-glass="1"][data-asb-theme="light"] .debug-action-wait-sheet,
+html[data-asb-glass="1"][data-asb-theme="light"] .log-menu,
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-fm-box,
+html[data-asb-glass="1"][data-asb-theme="light"] .asb-tabbar,
+html[data-asb-glass="1"][data-asb-theme="light"] .report-nav,
+html[data-asb-glass="1"][data-asb-theme="light"] .zy-page-nav,
+html[data-asb-glass="1"][data-asb-theme="light"] .dev-page-nav,
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-page-nav {
   background:linear-gradient(145deg,rgba(255,255,255,.64),rgba(244,252,248,.36)),rgba(255,255,255,.54) !important;
   color:var(--text) !important; border-color:var(--border) !important;
   box-shadow:0 14px 34px rgba(20,50,42,.14),inset 0 1px 0 rgba(255,255,255,.76),inset 0 0 0 1px rgba(255,255,255,.20) !important;
   -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
 }
-html[data-asb-glass="1"][data-asb-theme="light"] :is(.log-menu,.cfg-fm-box,.cfg-profile-sheet,.cfg-reset-dialog) {
+html[data-asb-glass="1"][data-asb-theme="light"] .log-menu,
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-fm-box,
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-profile-sheet,
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-reset-dialog {
   border-color:var(--border-active) !important;
 }
-html[data-asb-glass="1"][data-asb-theme="light"] :is(.pbtn,.lgr-hero,.lgr-sec,.live-info-now,.live-info-src) {
+html[data-asb-glass="1"][data-asb-theme="light"] .pbtn,
+html[data-asb-glass="1"][data-asb-theme="light"] .lgr-hero,
+html[data-asb-glass="1"][data-asb-theme="light"] .lgr-sec,
+html[data-asb-glass="1"][data-asb-theme="light"] .live-info-now,
+html[data-asb-glass="1"][data-asb-theme="light"] .live-info-src {
   background:linear-gradient(145deg,rgba(255,255,255,.62),rgba(244,252,248,.32)),rgba(255,255,255,.48) !important;
   border-color:var(--border) !important; box-shadow:inset 0 1px 0 rgba(255,255,255,.68) !important;
   -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
 }
-html[data-asb-glass="1"][data-asb-theme="light"] :is(input,select,textarea,.seg,.seg-opt,.cfg-profile-name,.cfg-reset-choice,.cfg-profile-row,.cfg-profile-actions button,
-  .cfg-fm-btn,.cfg-fm-place,.cfg-fm-cancel,.cfg-profile-close,.cfg-reset-close,.cfg-profile-dest button,.cfg-profile-check,.cfg-profile-result-reboot) {
+html[data-asb-glass="1"][data-asb-theme="light"] input:not(.asb-spec-pad),
+html[data-asb-glass="1"][data-asb-theme="light"] select:not(.asb-spec-pad),
+html[data-asb-glass="1"][data-asb-theme="light"] textarea:not(.asb-spec-pad),
+html[data-asb-glass="1"][data-asb-theme="light"] .seg:not(asb-spec-pad),
+html[data-asb-glass="1"][data-asb-theme="light"] .seg-opt:not(asb-spec-pad),
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-profile-name:not(asb-spec-pad),
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-reset-choice:not(asb-spec-pad),
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-profile-row:not(asb-spec-pad),
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-profile-actions button,
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-fm-btn:not(asb-spec-pad),
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-fm-place:not(asb-spec-pad),
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-fm-cancel:not(asb-spec-pad),
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-profile-close:not(asb-spec-pad),
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-reset-close:not(asb-spec-pad),
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-profile-dest button,
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-profile-check:not(asb-spec-pad),
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-profile-result-reboot:not(asb-spec-pad) {
   background:rgba(255,255,255,.62) !important; color:var(--text) !important; border-color:var(--border) !important;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.68);
 }
-html[data-asb-glass="1"][data-asb-theme="light"] :is(.lgr-chip,.pmeta-chip,.cfg-icon) {
+html[data-asb-glass="1"][data-asb-theme="light"] .lgr-chip,
+html[data-asb-glass="1"][data-asb-theme="light"] .pmeta-chip,
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-icon {
   background:rgba(255,255,255,.46) !important; border-color:var(--border) !important;
 }
 html[data-asb-glass="1"][data-asb-theme="light"] :is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .lgr-jump-btn.is-active {
   background:var(--pill-wash) !important; border-color:transparent !important; box-shadow:var(--pill-edge);
 }
-html[data-asb-glass="1"][data-asb-theme="light"] :is(.pbtn.on,.cfg-tile.active,.cfg-profile-row.selected,.cfg-row.is-on) {
+html[data-asb-glass="1"][data-asb-theme="light"] .pbtn.on,
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-tile.active,
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-profile-row.selected,
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-row.is-on {
   border-color:var(--accent) !important; box-shadow:0 0 0 1px var(--accent-glow),inset 0 1px 0 rgba(255,255,255,.72) !important;
 }
 /* Dark Glass: an unselected profile is a quiet, nearly black material, not another luminous
@@ -4909,7 +5132,8 @@ html[data-asb-glass="1"][data-asb-theme="light"] .cfg-switch:not(.on) {
  * not repaint its embedded master switch as a second card, and the evidence area must not
  * become an opaque stripe over the parent's backdrop blur. State colours, separators and
  * the navigation button keep their own meaning; only the duplicate child material is removed. */
-html[data-asb-glass="1"] .cfg-zygisk-card > :is(.dev-zygisk-link,.cfg-row) {
+html[data-asb-glass="1"] .cfg-zygisk-card > .dev-zygisk-link,
+html[data-asb-glass="1"] .cfg-zygisk-card > .cfg-row {
   background:transparent !important;
   box-shadow:none !important;
   -webkit-backdrop-filter:none; backdrop-filter:none;
@@ -4920,7 +5144,8 @@ html[data-asb-glass="1"] .cfg-zygisk-card > .cfg-row:is(.is-on,:not(.is-on)) {
 }
 /* Light Glass adds one more attribute to its generic ON/OFF selectors. Match that
  * specificity explicitly so the embedded row stays part of the parent in this palette too. */
-html[data-asb-glass="1"][data-asb-theme="light"] .cfg-zygisk-card > :is(.dev-zygisk-link,.cfg-row) {
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-zygisk-card > .dev-zygisk-link,
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-zygisk-card > .cfg-row {
   background:transparent !important;
   box-shadow:none !important;
 }
@@ -4936,24 +5161,34 @@ html[data-asb-glass="1"][data-asb-theme="light"] .app-name {
  * inner cards, the sheets' primary button, the toast and the dialog backdrops take the
  * material too. Colours that carry meaning (drain values, metric steps, toast categories)
  * are untouched - only the fill, the edge light and the blur change. */
-html[data-asb-glass="1"] :is(#reportPage,#devicePage,#zygiskPage) {
+html[data-asb-glass="1"] #reportPage,
+html[data-asb-glass="1"] #devicePage,
+html[data-asb-glass="1"] #zygiskPage {
   background:
     radial-gradient(ellipse 90% 48% at 12% 0%,rgba(0,240,180,.10),transparent 68%),
     radial-gradient(ellipse 70% 42% at 100% 82%,rgba(36,58,49,.20),transparent 72%),#000 !important;
 }
-html[data-asb-glass="1"][data-asb-theme="light"] :is(#reportPage,#devicePage,#zygiskPage) {
+html[data-asb-glass="1"][data-asb-theme="light"] #reportPage,
+html[data-asb-glass="1"][data-asb-theme="light"] #devicePage,
+html[data-asb-glass="1"][data-asb-theme="light"] #zygiskPage {
   background:
     radial-gradient(ellipse 90% 48% at 12% 0%,rgba(0,124,99,.10),transparent 68%),
     radial-gradient(ellipse 70% 42% at 100% 82%,rgba(101,239,201,.15),transparent 72%),#f2f4f6 !important;
 }
-html[data-asb-glass="1"] :is(.smart-drain-half,.live-drain-block,.live-drain-cmp,.live-info-hist) {
+html[data-asb-glass="1"] .smart-drain-half,
+html[data-asb-glass="1"] .live-drain-block,
+html[data-asb-glass="1"] .live-drain-cmp,
+html[data-asb-glass="1"] .live-info-hist {
   background:linear-gradient(150deg,rgba(255,255,255,.085),rgba(0,240,180,.035) 55%,rgba(255,255,255,.015)),rgba(8,13,10,.72) !important;
   border-color:var(--border) !important;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.15),inset 0 0 0 1px rgba(255,255,255,.025);
   -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
 }
 html[data-asb-glass="1"] .smart-drain-half:active { background:linear-gradient(150deg,rgba(0,240,180,.18),rgba(0,240,180,.06)),rgba(8,13,10,.72) !important; }
-html[data-asb-glass="1"][data-asb-theme="light"] :is(.smart-drain-half,.live-drain-block,.live-drain-cmp,.live-info-hist) {
+html[data-asb-glass="1"][data-asb-theme="light"] .smart-drain-half,
+html[data-asb-glass="1"][data-asb-theme="light"] .live-drain-block,
+html[data-asb-glass="1"][data-asb-theme="light"] .live-drain-cmp,
+html[data-asb-glass="1"][data-asb-theme="light"] .live-info-hist {
   background:linear-gradient(150deg,rgba(255,255,255,.70),rgba(0,124,99,.045) 55%,rgba(255,255,255,.40)),rgba(255,255,255,.50) !important;
   border-color:var(--border) !important;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.80),0 6px 18px rgba(20,50,42,.08) !important;
@@ -4973,10 +5208,18 @@ html[data-asb-glass="1"] .toast:not(.stock-restoring) {
   box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 10px 30px rgba(0,0,0,.42);
   -webkit-backdrop-filter:blur(12px) saturate(1.2); backdrop-filter:blur(12px) saturate(1.2);
 }
-html[data-asb-glass="1"] :is(.cfg-modal,.cfg-profile-modal,.cfg-reset-modal,.diag-wait-modal,.debug-action-wait) {
+html[data-asb-glass="1"] .cfg-modal,
+html[data-asb-glass="1"] .cfg-profile-modal,
+html[data-asb-glass="1"] .cfg-reset-modal,
+html[data-asb-glass="1"] .diag-wait-modal,
+html[data-asb-glass="1"] .debug-action-wait {
   -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
 }
-html[data-asb-glass="1"][data-asb-theme="light"] :is(.cfg-modal,.cfg-profile-modal,.cfg-reset-modal,.diag-wait-modal,.debug-action-wait) {
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-modal,
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-profile-modal,
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-reset-modal,
+html[data-asb-glass="1"][data-asb-theme="light"] .diag-wait-modal,
+html[data-asb-glass="1"][data-asb-theme="light"] .debug-action-wait {
   background:rgba(14,32,27,.32) !important;
 }
 
@@ -5038,9 +5281,18 @@ html[data-asb-glass="1"] .smart-banner-value.metric-neutral, html[data-asb-glass
 html[data-asb-glass="1"] .smart-drain-val.metric-neutral, html[data-asb-glass="1"] .live-info-val.metric-neutral,
 html[data-asb-theme="light"] .smart-banner-value.metric-neutral, html[data-asb-theme="light"] .live-cell-value.metric-neutral,
 html[data-asb-theme="light"] .smart-drain-val.metric-neutral, html[data-asb-theme="light"] .live-info-val.metric-neutral { color:var(--text-tertiary) !important; }
-html :is(.live-cell-value,.smart-banner-value,.smart-drain-val,.live-info-val):is(.metric-normal,.metric-info),
-html[data-asb-glass="1"] :is(.live-cell-value,.smart-banner-value,.smart-drain-val,.live-info-val):is(.metric-normal,.metric-info),
-html[data-asb-theme="light"] :is(.live-cell-value,.smart-banner-value,.smart-drain-val,.live-info-val):is(.metric-normal,.metric-info) { color:var(--text) !important; }
+html .live-cell-value:is(.metric-normal,.metric-info),
+html .smart-banner-value:is(.metric-normal,.metric-info),
+html .smart-drain-val:is(.metric-normal,.metric-info),
+html .live-info-val:is(.metric-normal,.metric-info),
+html[data-asb-glass="1"] .live-cell-value:is(.metric-normal,.metric-info),
+html[data-asb-glass="1"] .smart-banner-value:is(.metric-normal,.metric-info),
+html[data-asb-glass="1"] .smart-drain-val:is(.metric-normal,.metric-info),
+html[data-asb-glass="1"] .live-info-val:is(.metric-normal,.metric-info),
+html[data-asb-theme="light"] .live-cell-value:is(.metric-normal,.metric-info),
+html[data-asb-theme="light"] .smart-banner-value:is(.metric-normal,.metric-info),
+html[data-asb-theme="light"] .smart-drain-val:is(.metric-normal,.metric-info),
+html[data-asb-theme="light"] .live-info-val:is(.metric-normal,.metric-info) { color:var(--text) !important; }
 /* Owner colours intentionally follow the neutral/quality rules: ASB is the module's green,
  * Shell is soft blue in every palette, and Vendor is orange or red-orange. These classes are
  * applied only by the non-Stock owner tile; Stock clears them before painting temperature. */
@@ -5110,7 +5362,8 @@ html[data-asb-glass="1"][data-asb-theme="light"] .cfg-tile[class*="cat-"] .cfg-t
   background:color-mix(in srgb,var(--cat) 12%,rgba(255,255,255,.68));
   box-shadow:inset 0 1px 0 rgba(255,255,255,.72),0 5px 14px -10px color-mix(in srgb,var(--cat) 38%,transparent);
 }
-html[data-asb-glass="1"][data-asb-theme="light"] .cfg-tile[class*="cat-"] :is(.cfg-tile-count,.cfg-tile-count.has-on) { color:var(--cat) !important; }
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-tile[class*="cat-"] .cfg-tile-count.cfg-tile-count,
+html[data-asb-glass="1"][data-asb-theme="light"] .cfg-tile[class*="cat-"] .cfg-tile-count.has-on { color:var(--cat) !important; }
 
 /* Device font (fix168, test variant): the variant build sets data-asb-font="device" on <html>,
  * and every text - the monospace labels included - follows the font the phone is set to.
@@ -5233,18 +5486,46 @@ html:root[data-asb-glass="1"][data-asb-theme="light"] {
   --cap-shadow:0 8px 24px rgba(40,50,65,.10),inset 0 1px 0 var(--glass-highlight);
 }
 html:root[data-asb-glass="1"] body,
-html:root[data-asb-glass="1"] :is(#reportPage,#devicePage,#zygiskPage) {
+html:root[data-asb-glass="1"] #reportPage,
+html:root[data-asb-glass="1"] #devicePage,
+html:root[data-asb-glass="1"] #zygiskPage {
   background:var(--glass-canvas-image) !important;
 }
 html:root[data-asb-glass="1"] .status-bar-scrim {
   background:var(--glass-scrim);
   -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
 }
-html:root[data-asb-glass="1"] :is(.hdr-cap,.theme-toggle,.status-row,.live-chip,.tg-link,.debug-support-btn,
-  .cfg-backup,.cfg-lang-btn,.cfg-lang-pop,.cfg-sel-btn,.cfg-sel-pop,.cfg-tile,.cfg-row,.cfg-zygisk-card,
-  .live-cell,.stock-telemetry,.smart-banner,.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet,
-  .log-menu,.cfg-fm-box,.pbtn,.lgr-sec,.dev-loading,.live-info-now,.live-info-src,
-  .smart-drain-half,.live-drain-block,.live-drain-cmp,.live-info-hist) {
+html:root[data-asb-glass="1"] .hdr-cap,
+html:root[data-asb-glass="1"] .theme-toggle,
+html:root[data-asb-glass="1"] .status-row,
+html:root[data-asb-glass="1"] .live-chip,
+html:root[data-asb-glass="1"] .tg-link,
+html:root[data-asb-glass="1"] .debug-support-btn,
+html:root[data-asb-glass="1"] .cfg-backup,
+html:root[data-asb-glass="1"] .cfg-lang-btn,
+html:root[data-asb-glass="1"] .cfg-lang-pop,
+html:root[data-asb-glass="1"] .cfg-sel-btn,
+html:root[data-asb-glass="1"] .cfg-sel-pop,
+html:root[data-asb-glass="1"] .cfg-tile,
+html:root[data-asb-glass="1"] .cfg-row,
+html:root[data-asb-glass="1"] .cfg-zygisk-card,
+html:root[data-asb-glass="1"] .live-cell,
+html:root[data-asb-glass="1"] .stock-telemetry,
+html:root[data-asb-glass="1"] .smart-banner,
+html:root[data-asb-glass="1"] .cfg-profile-sheet,
+html:root[data-asb-glass="1"] .cfg-reset-dialog,
+html:root[data-asb-glass="1"] .debug-action-wait-sheet,
+html:root[data-asb-glass="1"] .log-menu,
+html:root[data-asb-glass="1"] .cfg-fm-box,
+html:root[data-asb-glass="1"] .pbtn,
+html:root[data-asb-glass="1"] .lgr-sec,
+html:root[data-asb-glass="1"] .dev-loading,
+html:root[data-asb-glass="1"] .live-info-now,
+html:root[data-asb-glass="1"] .live-info-src,
+html:root[data-asb-glass="1"] .smart-drain-half,
+html:root[data-asb-glass="1"] .live-drain-block,
+html:root[data-asb-glass="1"] .live-drain-cmp,
+html:root[data-asb-glass="1"] .live-info-hist {
   background:var(--glass-wash),var(--glass-surface) !important;
   border-color:var(--glass-edge) !important;
   box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-highlight),inset 0 0 0 1px rgba(255,255,255,.025) !important;
@@ -5252,19 +5533,39 @@ html:root[data-asb-glass="1"] :is(.hdr-cap,.theme-toggle,.status-row,.live-chip,
 }
 /* Floating surfaces must remain legible over scrolling content; inline cards need less
  * density. These rules change material only, never the measured header/dock geometry. */
-html:root[data-asb-glass="1"] :is(.asb-tabbar,.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav,.log-menu,.cfg-lang-pop,.cfg-sel-pop) {
+html:root[data-asb-glass="1"] .asb-tabbar,
+html:root[data-asb-glass="1"] .report-nav,
+html:root[data-asb-glass="1"] .zy-page-nav,
+html:root[data-asb-glass="1"] .dev-page-nav,
+html:root[data-asb-glass="1"] .cfg-page-nav,
+html:root[data-asb-glass="1"] .log-menu,
+html:root[data-asb-glass="1"] .cfg-lang-pop,
+html:root[data-asb-glass="1"] .cfg-sel-pop {
   background:var(--glass-wash),var(--glass-surface-strong) !important;
   border-color:var(--glass-edge) !important;
   box-shadow:0 16px 38px rgba(0,0,0,.32),inset 0 1px 0 var(--glass-highlight) !important;
   -webkit-backdrop-filter:blur(26px) saturate(1.28); backdrop-filter:blur(26px) saturate(1.28);
 }
-html:root[data-asb-glass="1"] :is(.asb-tabbar,.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) {
+html:root[data-asb-glass="1"] .asb-tabbar,
+html:root[data-asb-glass="1"] .report-nav,
+html:root[data-asb-glass="1"] .zy-page-nav,
+html:root[data-asb-glass="1"] .dev-page-nav,
+html:root[data-asb-glass="1"] .cfg-page-nav {
   background:var(--glass-nav-wash),var(--glass-nav-surface) !important;
 }
-html:root[data-asb-glass="1"][data-asb-theme="light"] :is(.asb-tabbar,.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav,.log-menu,.cfg-lang-pop,.cfg-sel-pop) {
+html:root[data-asb-glass="1"][data-asb-theme="light"] .asb-tabbar,
+html:root[data-asb-glass="1"][data-asb-theme="light"] .report-nav,
+html:root[data-asb-glass="1"][data-asb-theme="light"] .zy-page-nav,
+html:root[data-asb-glass="1"][data-asb-theme="light"] .dev-page-nav,
+html:root[data-asb-glass="1"][data-asb-theme="light"] .cfg-page-nav,
+html:root[data-asb-glass="1"][data-asb-theme="light"] .log-menu,
+html:root[data-asb-glass="1"][data-asb-theme="light"] .cfg-lang-pop,
+html:root[data-asb-glass="1"][data-asb-theme="light"] .cfg-sel-pop {
   box-shadow:0 16px 38px rgba(40,50,65,.16),inset 0 1px 0 var(--glass-highlight) !important;
 }
-html:root[data-asb-glass="1"] :is(.hdr-cap,.theme-toggle,.status-row) {
+html:root[data-asb-glass="1"] .hdr-cap,
+html:root[data-asb-glass="1"] .theme-toggle,
+html:root[data-asb-glass="1"] .status-row {
   background:var(--glass-wash),var(--glass-surface-quiet) !important;
   box-shadow:var(--cap-shadow) !important;
   -webkit-backdrop-filter:blur(18px) saturate(1.2); backdrop-filter:blur(18px) saturate(1.2);
@@ -5274,29 +5575,61 @@ html:root[data-asb-glass="1"] .log-menu { border-radius:20px; }
  * its gutter. Restore only this note's logical gutter; physical left/right assumptions
  * would put the text back against the line in RTL. */
 #zygiskPage .dev-evidence { padding-inline-start:12px; }
-html:root[data-asb-glass="1"] :is(.cfg-profile-sheet,.cfg-reset-dialog,.debug-action-wait-sheet,.cfg-fm-box) {
+html:root[data-asb-glass="1"] .cfg-profile-sheet,
+html:root[data-asb-glass="1"] .cfg-reset-dialog,
+html:root[data-asb-glass="1"] .debug-action-wait-sheet,
+html:root[data-asb-glass="1"] .cfg-fm-box {
   background:var(--glass-wash),var(--glass-surface-strong) !important;
   border-color:var(--glass-edge) !important;
   box-shadow:0 24px 64px rgba(0,0,0,.42),inset 0 1px 0 var(--glass-highlight) !important;
   -webkit-backdrop-filter:blur(30px) saturate(1.25); backdrop-filter:blur(30px) saturate(1.25);
 }
-html:root[data-asb-glass="1"] :is(.cfg-modal,.cfg-profile-modal,.cfg-reset-modal,.diag-wait-modal,.debug-action-wait,.cfg-fm) {
+html:root[data-asb-glass="1"] .cfg-modal,
+html:root[data-asb-glass="1"] .cfg-profile-modal,
+html:root[data-asb-glass="1"] .cfg-reset-modal,
+html:root[data-asb-glass="1"] .diag-wait-modal,
+html:root[data-asb-glass="1"] .debug-action-wait,
+html:root[data-asb-glass="1"] .cfg-fm {
   background:rgba(0,0,0,.52) !important;
   -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
 }
-html:root[data-asb-glass="1"][data-asb-theme="light"] :is(.cfg-modal,.cfg-profile-modal,.cfg-reset-modal,.diag-wait-modal,.debug-action-wait,.cfg-fm) {
+html:root[data-asb-glass="1"][data-asb-theme="light"] .cfg-modal,
+html:root[data-asb-glass="1"][data-asb-theme="light"] .cfg-profile-modal,
+html:root[data-asb-glass="1"][data-asb-theme="light"] .cfg-reset-modal,
+html:root[data-asb-glass="1"][data-asb-theme="light"] .diag-wait-modal,
+html:root[data-asb-glass="1"][data-asb-theme="light"] .debug-action-wait,
+html:root[data-asb-glass="1"][data-asb-theme="light"] .cfg-fm {
   background:rgba(30,38,42,.30) !important;
 }
 /* Controls are inset into the parent, not a second set of floating cards. They do not
  * need their own backdrop pass; the parent already owns that material. */
-html:root[data-asb-glass="1"] :is(input,select,textarea,.seg,.seg-opt,.cfg-profile-name,.cfg-reset-choice,.cfg-profile-row,.cfg-profile-actions button,
-  .cfg-fm-btn,.cfg-fm-place,.cfg-fm-cancel,.cfg-profile-close,.cfg-reset-close,.cfg-profile-dest button,.cfg-profile-check,.cfg-profile-result-reboot,.dev-loading-step) {
+html:root[data-asb-glass="1"] input:not(.asb-spec-pad),
+html:root[data-asb-glass="1"] select:not(.asb-spec-pad),
+html:root[data-asb-glass="1"] textarea:not(.asb-spec-pad),
+html:root[data-asb-glass="1"] .seg:not(asb-spec-pad),
+html:root[data-asb-glass="1"] .seg-opt:not(asb-spec-pad),
+html:root[data-asb-glass="1"] .cfg-profile-name:not(asb-spec-pad),
+html:root[data-asb-glass="1"] .cfg-reset-choice:not(asb-spec-pad),
+html:root[data-asb-glass="1"] .cfg-profile-row:not(asb-spec-pad),
+html:root[data-asb-glass="1"] .cfg-profile-actions button,
+html:root[data-asb-glass="1"] .cfg-fm-btn:not(asb-spec-pad),
+html:root[data-asb-glass="1"] .cfg-fm-place:not(asb-spec-pad),
+html:root[data-asb-glass="1"] .cfg-fm-cancel:not(asb-spec-pad),
+html:root[data-asb-glass="1"] .cfg-profile-close:not(asb-spec-pad),
+html:root[data-asb-glass="1"] .cfg-reset-close:not(asb-spec-pad),
+html:root[data-asb-glass="1"] .cfg-profile-dest button,
+html:root[data-asb-glass="1"] .cfg-profile-check:not(asb-spec-pad),
+html:root[data-asb-glass="1"] .cfg-profile-result-reboot:not(asb-spec-pad),
+html:root[data-asb-glass="1"] .dev-loading-step:not(asb-spec-pad) {
   background:var(--glass-control) !important;
   border-color:var(--glass-edge) !important;
   box-shadow:inset 0 1px 0 var(--glass-highlight) !important;
   -webkit-backdrop-filter:none; backdrop-filter:none;
 }
-html:root[data-asb-glass="1"] :is(.lgr-chip,.pmeta-chip,.cfg-icon,.pchk) {
+html:root[data-asb-glass="1"] .lgr-chip,
+html:root[data-asb-glass="1"] .pmeta-chip,
+html:root[data-asb-glass="1"] .cfg-icon,
+html:root[data-asb-glass="1"] .pchk {
   background:rgba(128,128,128,.12) !important;
   border-color:var(--glass-edge) !important;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.10);
@@ -5331,7 +5664,8 @@ html:root[data-asb-glass="1"] .cfg-row.is-on {
   border-color:color-mix(in srgb,var(--cat,var(--accent)) 32%,var(--glass-edge)) !important;
   box-shadow:var(--glass-shadow),inset 0 1px 0 var(--glass-highlight) !important;
 }
-html:root[data-asb-glass="1"] :is(.cfg-row:not(.is-on) .cfg-icon,.cfg-switch:not(.on)) {
+html:root[data-asb-glass="1"] .cfg-row:not(.is-on) .cfg-icon,
+html:root[data-asb-glass="1"] .cfg-switch.cfg-switch:not(.on) {
   background:rgba(128,128,128,.13) !important;
   border-color:var(--glass-edge) !important;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.10);
@@ -5353,7 +5687,10 @@ html:root[data-asb-glass="1"] .cfg-reboot-tile {
 }
 /* A report section owns the outer glass. Heroes and quality evidence inside it are
  * inset regions, not additional floating glass panels with a second blur and shadow. */
-html:root[data-asb-glass="1"] :is(.lgr-sec,.cfg-zygisk-card) :is(.lgr-hero,.lgr-quality,.live-info-now,.live-info-src) {
+html:root[data-asb-glass="1"] :is(.lgr-sec,.cfg-zygisk-card) .lgr-hero,
+html:root[data-asb-glass="1"] :is(.lgr-sec,.cfg-zygisk-card) .lgr-quality,
+html:root[data-asb-glass="1"] :is(.lgr-sec,.cfg-zygisk-card) .live-info-now,
+html:root[data-asb-glass="1"] :is(.lgr-sec,.cfg-zygisk-card) .live-info-src {
   background:rgba(128,128,128,.085) !important;
   border-color:var(--glass-edge) !important;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.10) !important;
@@ -5371,7 +5708,13 @@ html:root[data-asb-glass="1"] .toast:not(.stock-restoring) {
   box-shadow:0 16px 38px rgba(0,0,0,.34),inset 0 1px 0 var(--glass-highlight);
   -webkit-backdrop-filter:blur(24px) saturate(1.25); backdrop-filter:blur(24px) saturate(1.25);
 }
-html:root[data-asb-glass="1"] :is(.pbtn,.cfg-tile,.cfg-row,.cfg-backup,.cfg-reboot-tile,.log-menu-item,.lgr-hero[role="button"]):active {
+html:root[data-asb-glass="1"] .pbtn.pbtn:active,
+html:root[data-asb-glass="1"] .cfg-tile.cfg-tile:active,
+html:root[data-asb-glass="1"] .cfg-row.cfg-row:active,
+html:root[data-asb-glass="1"] .cfg-backup.cfg-backup:active,
+html:root[data-asb-glass="1"] .cfg-reboot-tile.cfg-reboot-tile:active,
+html:root[data-asb-glass="1"] .log-menu-item.log-menu-item:active,
+html:root[data-asb-glass="1"] .lgr-hero[role="button"]:active {
   border-color:var(--border-active) !important;
   box-shadow:inset 0 2px 7px rgba(0,0,0,.16) !important;
 }
@@ -5379,7 +5722,9 @@ html:root[data-asb-glass="1"] :is(.pbtn,.cfg-tile,.cfg-row,.cfg-backup,.cfg-rebo
  * One glass layer per dock: the parent owns the material and blur, while its buttons
  * stay as transparent targets around the same moving tonal pill used by the main bar. */
 html:root[data-asb-glass="1"] { background:var(--glass-canvas-image); }
-html:root[data-asb-glass="1"] :is(.page,.live-page,.config-page) {
+html:root[data-asb-glass="1"] .page,
+html:root[data-asb-glass="1"] .live-page,
+html:root[data-asb-glass="1"] .config-page {
   background:transparent !important;
 }
 html:root[data-asb-glass="1"] :is(.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav) .lgr-jump-btn {
@@ -5715,14 +6060,42 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))) {
   html:root[data-asb-glass="1"] { --glass-surface:#151c18; --glass-surface-quiet:#101613; --glass-surface-strong:#151c18; --glass-nav-surface:#101511; --glass-control:#1b231f; }
   html:root[data-asb-glass="1"][data-asb-theme="light"] { --glass-surface:#f7f9fa; --glass-surface-quiet:#f1f4f3; --glass-surface-strong:#fff; --glass-nav-surface:#fff; --glass-control:#f3f5f7; }
-  html:root[data-asb-glass="1"] :is(.pbtn,.cfg-tile,.cfg-row,.live-cell,.lgr-sec,.asb-tabbar,.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav,.log-menu,.cfg-lang-pop,.cfg-sel-pop,.cfg-profile-sheet,.cfg-reset-dialog) {
+  html:root[data-asb-glass="1"] .pbtn,
+html:root[data-asb-glass="1"] .cfg-tile,
+html:root[data-asb-glass="1"] .cfg-row,
+html:root[data-asb-glass="1"] .live-cell,
+html:root[data-asb-glass="1"] .lgr-sec,
+html:root[data-asb-glass="1"] .asb-tabbar,
+html:root[data-asb-glass="1"] .report-nav,
+html:root[data-asb-glass="1"] .zy-page-nav,
+html:root[data-asb-glass="1"] .dev-page-nav,
+html:root[data-asb-glass="1"] .cfg-page-nav,
+html:root[data-asb-glass="1"] .log-menu,
+html:root[data-asb-glass="1"] .cfg-lang-pop,
+html:root[data-asb-glass="1"] .cfg-sel-pop,
+html:root[data-asb-glass="1"] .cfg-profile-sheet,
+html:root[data-asb-glass="1"] .cfg-reset-dialog {
     -webkit-backdrop-filter:none; backdrop-filter:none;
   }
 }
 @media (prefers-reduced-transparency:reduce) {
   html:root[data-asb-glass="1"] { --glass-surface:#151c18; --glass-surface-quiet:#101613; --glass-surface-strong:#151c18; --glass-nav-surface:#101511; --glass-control:#1b231f; }
   html:root[data-asb-glass="1"][data-asb-theme="light"] { --glass-surface:#f7f9fa; --glass-surface-quiet:#f1f4f3; --glass-surface-strong:#fff; --glass-nav-surface:#fff; --glass-control:#f3f5f7; }
-  html:root[data-asb-glass="1"] :is(.pbtn,.cfg-tile,.cfg-row,.live-cell,.lgr-sec,.asb-tabbar,.report-nav,.zy-page-nav,.dev-page-nav,.cfg-page-nav,.log-menu,.cfg-lang-pop,.cfg-sel-pop,.cfg-profile-sheet,.cfg-reset-dialog) {
+  html:root[data-asb-glass="1"] .pbtn,
+html:root[data-asb-glass="1"] .cfg-tile,
+html:root[data-asb-glass="1"] .cfg-row,
+html:root[data-asb-glass="1"] .live-cell,
+html:root[data-asb-glass="1"] .lgr-sec,
+html:root[data-asb-glass="1"] .asb-tabbar,
+html:root[data-asb-glass="1"] .report-nav,
+html:root[data-asb-glass="1"] .zy-page-nav,
+html:root[data-asb-glass="1"] .dev-page-nav,
+html:root[data-asb-glass="1"] .cfg-page-nav,
+html:root[data-asb-glass="1"] .log-menu,
+html:root[data-asb-glass="1"] .cfg-lang-pop,
+html:root[data-asb-glass="1"] .cfg-sel-pop,
+html:root[data-asb-glass="1"] .cfg-profile-sheet,
+html:root[data-asb-glass="1"] .cfg-reset-dialog {
     -webkit-backdrop-filter:none !important; backdrop-filter:none !important;
   }
 }
@@ -5735,6 +6108,11 @@ html.asb-fit-c2 .cfg-tile-foot { gap:5px; padding-top:6px; }
 </style>
 </head>
 <body>
+<script>/* dev55: the UI scale is known before the first element is styled. Applied only at the end of
+ * the main script, it changed an inherited root property and the body zoom after the whole page
+ * had been styled once, so the parser's first style and layout pass was thrown away and redone
+ * (~35 ms on a phone). asbApplyUiScale() later computes the same value and changes nothing. */
+(function(){try{var w=document.documentElement.clientWidth||window.innerWidth||440,s=w/440;if(s>1)s=1;if(s<0.82)s=0.82;s=Math.round(s*100)/100;document.documentElement.style.setProperty('--asb-ui-scale',String(s));if(s<1)document.body.classList.add('asb-scaled');window._asbUiScale=s;}catch(e){}})();</script>
 <svg class="asb-ufo-defs" width="0" height="0" viewBox="0 0 96 72" fill="none" aria-hidden="true" focusable="false">
   <defs>
     <radialGradient id="asbUfoAura" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(48 40) rotate(90) scale(31 46)">
@@ -6586,9 +6964,6 @@ function dspEngineActive() {
  * their color, silhouette and perceived size stable across Android emoji fonts, while
  * remaining crisp under display-density and font-scale changes. */
 const TECH_ICON_PATHS = {
-  /* memhold: a memory die with a retaining bracket - distinct from `cleaner`, which is a
-     brush and means the opposite action. The tweak holds pages in RAM; the icon should not
-     look like something that sweeps them out. */
   /* wifipm: the two outer Wi-Fi arcs with a crescent where the dot belongs - the radio
      is still there, the link is still up, it is just asleep between beacons. Same
      stroke weight and 24-box geometry as the other network glyphs. */
@@ -6597,9 +6972,6 @@ const TECH_ICON_PATHS = {
      the card rendered whatever the fallback is. */
   wifileave: '<path d="M3.5 9.5a12.5 12.5 0 0 1 12-1.6M6.5 13a8.2 8.2 0 0 1 7-.7M9.6 16.3a3.7 3.7 0 0 1 2.3-.3"/><circle cx="12" cy="19" r="1" fill="currentColor" stroke="none"/><path d="M15.5 8.5h6M19 6l2.5 2.5L19 11"/>',
   wifipm: '<path d="M4 9.5a12.6 12.6 0 0 1 16 0M7.2 13a8 8 0 0 1 9.6 0"/><circle cx="12" cy="16.8" r="1.3"/><path d="M17.3 17.2l2.2 2.3 2.2-2.3"/>',
-  memhold: '<rect x="5" y="7" width="14" height="11" rx="2"/><path d="M9 7V4.5M15 7V4.5M9 20.5V18M15 20.5V18"/><path d="M12 10l2.2.9v1.5c0 1.4-.9 2.3-2.2 2.9-1.3-.6-2.2-1.5-2.2-2.9v-1.5z"/>'
-         + '<path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"></path>'
-         + '<path d="M9.5 12.5l1.8 1.8 3.4-3.6"></path>',
   /* Device hardware is the phone/board as a whole; `kernel` remains the exposed CPU die.
    * Separate silhouettes keep the two adjacent Device destinations distinguishable. */
   hardware: '<rect x="4" y="2.5" width="16" height="19" rx="2.8"/><path d="M9 5.2h6M8 9h3v3H8zM13 12h3v3h-3zM11 10.5h2M12 10.5V8M9.5 12v3.5h2.5"/><circle cx="12" cy="18.4" r=".8" fill="currentColor" stroke="none"/>',
@@ -7850,12 +8222,14 @@ function openLivePage() {
   uiSound('nav');
   const p = _el('livePage');
   if (!p) return;
+  /* dev55: reset the scroll before the classes change, like every other page opener does.
+   * Written after them, scrollTop forced a full style and layout pass in the tap's task. */
+  p.scrollTop = 0;
   asbNavAnimMark();
   p.classList.add('open');
   document.body.classList.add('live-active');
   asbTabbarVisibility();
   p.setAttribute('aria-hidden', 'false');
-  p.scrollTop = 0;
   _liveOpen = true;
   liveHeaderSync();
   if (lvMonTilesRestore()) lvStale(true);
@@ -9499,17 +9873,17 @@ const CFG_ITEMS = [
     opts:['stock','off','on','smart'], name:'MGLRU Mode', cat:'battery',
     desc:'For memory pressure: Smart (5/7 by load) is the balanced starting point for responsiveness and app retention; On=7 enables more MGLRU policy, Off=0 uses legacy reclaim. Start with Smart for daily battery use and compare with Stock when diagnosing. Heat and drain effects depend on workload and are not guaranteed.' },
   { key:'kernel_mglru_min_ttl', type:'seg', def:'stock', stock:'stock',
-    opts:['stock','1000','2000','5000'], name:'MGLRU Generation Protection', cat:'system',
-    desc:'Controls /sys/kernel/mm/lru_gen/min_ttl_ms through the registered kernel owner. 1000/2000/5000 ms protect recently used generations for that long. Longer protection can reduce premature reclaim but delay memory recovery; shorter protection can reclaim sooner but increase refault work. Stock restores the exact value captured before the first ASB write. Missing, read-only or mismatching interfaces are reported honestly.' },
+    opts:['stock','1000','2000'], name:'MGLRU Generation Protection', cat:'system',
+    desc:'Protects the most recently used MGLRU generation for 1000 or 2000 ms (writes /sys/kernel/mm/lru_gen/min_ttl_ms). This is the kernel\'s thrashing guard: if that working set cannot stay in memory, the kernel OOM killer ends a process instead of reclaiming it, so a longer time trades fewer reclaim stalls for the risk of early app kills. The kernel documentation suggests 1000. Stock restores the exact value captured before the first ASB write; a missing, read-only or mismatching interface is reported.' },
   { key:'kernel_timer_migration', type:'seg', def:'off', stock:'stock',
     opts:['stock','off','on'], name:'Timer Migration', cat:'system',
-    desc:'To test fewer idle wake-ups choose On: timers may move from idle CPUs to already active ones. Off keeps timers in place and can sometimes help loaded latency. This phone currently reads 0; test On for idle drain, but revert to Off/Stock if latency or glitches appear. Neither value is universally faster or cooler.' },
+    desc:'To test fewer idle wake-ups choose On: timers may move from idle CPUs to already active ones. Off keeps timers in place and can sometimes help loaded latency. The status shows the value the kernel reports now; test On for idle drain, but revert to Off/Stock if latency or glitches appear. Neither value is universally faster or cooler.' },
   { key:'kernel_hrtimer_migration', type:'seg', def:'auto', stock:'stock',
     opts:['auto','stock','off','on'], name:'High-resolution Timer Migration', cat:'system',
-    desc:'There is no independent value on KRILIKD: Linux 6.12 does not expose /proc/sys/kernel/hrtimer_migration. This row only reflects Timer migration and writes nothing. Use the shared control above for power/latency tests; Auto/On/Off here cannot have a separate effect.' },
+    desc:'Uses a separate /proc/sys/kernel/hrtimer_migration only when the kernel exposes that non-upstream interface. Standard Linux kernels, including 6.12 GKI, have no such independent switch; this row then only reflects Timer migration and writes nothing, so use the shared control above for power and latency tests.' },
   { key:'kernel_lpm_prediction', type:'seg', def:'auto', stock:'stock',
     opts:['auto','stock','off','on'], name:'Idle Prediction (LPM)', cat:'system',
-    desc:'The current qcom-cpu-lpm governor has no such switch; it belongs to the legacy lpm_levels driver. Leave Auto: ASB writes nothing when not exposed. On a kernel that really exposes it, Auto enables prediction only on Battery; On may save idle power at a wake-latency cost, Off tests the opposite trade-off. This is not Android LPM or radio policy.' },
+    desc:'The lpm_prediction switch belongs to the older Snapdragon lpm_levels idle driver. Newer Snapdragon kernels use the qcom-cpu-lpm governor, which has no such switch, and then ASB writes nothing. On a kernel that exposes it, Auto enables prediction only on Battery; On may save idle power at a wake-latency cost, Off tests the opposite trade-off. This is not Android LPM or radio policy.' },
   { key:'kernel_sched_nr_migrate', type:'seg', def:'4', stock:'stock',
     opts:['stock','1','2','4','8','16'], name:'Scheduler Migration Batch', cat:'system',
     desc:'This caps tasks moved per balancing pass. 1–2 reduces migration work/cache disruption but can leave imbalance longer; 4 is a moderate start; 8–16 balances heavy multitasking sooner with more migrations. Start at 2–4 for battery and compare 4–8 under heavy load. This is not a CPU-frequency control; measure rather than assume. Interface: /sys/kernel/debug/sched/nr_migrate.' },
@@ -9518,7 +9892,7 @@ const CFG_ITEMS = [
     desc:'For daily use choose Off to remove schedstats accounting overhead. It does not change scheduler policy or CPU frequencies. Restore Stock when diagnosing scheduler/latency problems, otherwise those statistics are unavailable. No battery or performance percentage is claimed. Interface: /proc/sys/kernel/sched_schedstats.' },
   { key:'kernel_sched_autogroup', type:'seg', def:'stock', stock:'stock',
     opts:['stock','off','on'], name:'Scheduler Autogroup', cat:'system',
-    desc:'The choice is disabled on this GKI/KRILIKD: CONFIG_SCHED_AUTOGROUP is intentionally off because signal_struct affects the vendor-module KMI. There is no value to select for battery savings. Where genuinely supported, On improves CPU fairness between sessions under background contention and Off removes grouping; it is not a direct FPS or battery tweak.' },
+    desc:'Groups tasks by session for CPU fairness. GKI kernels are normally built without it (CONFIG_SCHED_AUTOGROUP changes signal_struct, which vendor modules are built against); then the status shows it as not exposed and nothing is written. Where a kernel does provide it, On improves fairness between sessions under background load and Off removes the grouping; it is not a direct FPS or battery tweak.' },
   { key:'kernel_sched_child_runs_first', type:'seg', def:'stock', stock:'stock',
     opts:['stock','off','on'], name:'Child Task Runs First', cat:'system',
     desc:'Only changes parent/child order after fork(). Keep Stock for ordinary use and battery. On can improve some process-launch/copy-on-write paths, Off favours the parent; regressions are possible. There is no universal game, Shelf or battery recommendation.' },
@@ -9648,10 +10022,7 @@ async function cfgLoadNow() {
 const CFG_CAT = {
   wifi_powersave:'net',
   net_wifi_leave:'net',
-  /* battery, not memory: CFG_GROUPS renders nine groups and memory is not one of them,
-     so the card existed and was never drawn. BG_TRIM and gms_trim - the other RAM tweaks -
-     live under battery for the same reason. */
-  mglru_hold: 'battery', mglru_mode:'battery', kernel_mglru_min_ttl:'system',
+  mglru_mode:'battery', kernel_mglru_min_ttl:'system',
   kernel_timer_migration:'system', kernel_sched_nr_migrate:'system',
   kernel_hrtimer_migration:'system', kernel_lpm_prediction:'system', kernel_usb_autosuspend:'system',
   perf_ceiling_pct:'battery', wakelock_action:'battery', gnss_trim:'battery',
@@ -9734,10 +10105,6 @@ const CFG_GROUP_OF = {
   /* Was 'wifileave' - an icon name, not a group. The card matched no CFG_GROUPS entry,
    * so it never rendered on the hub or in any category; search was the only way in. */
   net_wifi_leave:'net',
-  /* battery, not memory: CFG_GROUPS renders nine groups and memory is not one of them,
-     so the card existed in CFG_ITEMS and was never drawn. BG_TRIM_LEVEL and gms_trim -
-     the other RAM tweaks - sit under battery for exactly this reason. */
-  mglru_hold:'battery',
   /* Each advanced owner has one hub destination; diagnostics remains a separate read-only page. */
   mglru_mode:'kernel', kernel_mglru_min_ttl:'kernel', kernel_timer_migration:'kernel', kernel_hrtimer_migration:'kernel', kernel_lpm_prediction:'kernel',
   kernel_sched_nr_migrate:'kernel', kernel_sched_stats:'kernel', kernel_sched_autogroup:'kernel', kernel_sched_child_runs_first:'kernel', kernel_usb_autosuspend:'kernel',
@@ -10661,8 +11028,9 @@ function kernelWakeupParse(txt) {
         else if (k === 'resets' && /^\d{1,6}$/.test(v)) wb.observe.resets = Number(v);
       });
     } else if (line.indexOf('wakeup_source|') === 0 && wb.sources.length < 1024) {
-      const m = /^wakeup_source\|(.*)\|events=(\d+)\|active=(\d+)\|time_ms=(\d+)\|reset=([01])$/.exec(line);
-      if (m && kernelWakeupValidName(m[1])) wb.sources.push({ name:m[1], events:Number(m[2]), active:Number(m[3]), time:Number(m[4]), reset:m[5] === '1' });
+      const m = /^wakeup_source\|(.*)\|events=(\d+)\|active=(\d+)\|time_ms=(\d+)\|reset=([01])(?:\|shared=(\d{1,5}))?(?:\|new=([01]))?$/.exec(line);
+      if (m && kernelWakeupValidName(m[1])) wb.sources.push({ name:m[1], events:Number(m[2]), active:Number(m[3]), time:Number(m[4]), reset:m[5] === '1',
+        shared:Math.max(1, Number(m[6] || 1)), fresh:m[7] === '1' });
     }
   });
   return wb.seen ? wb : null;
@@ -10712,8 +11080,8 @@ function kernelControlAvailability(key) {
 function kernelUnavailableWhy(key) {
   const fb = {
     kernel_sched_nr_migrate: 'Needs a kernel built with scheduler debugging (CONFIG_SCHED_DEBUG) and debugfs. ASB mounts debugfs privately only for the moment it reads or writes the value, so nothing more is needed when both are built in.',
-    kernel_sched_autogroup: 'KRILIKD intentionally disables CONFIG_SCHED_AUTOGROUP: it changes signal_struct and the KMI against which vendor modules are built. ASB does not bypass the KMI guard just to expose this switch.',
-    kernel_lpm_prediction: 'This device uses qcom-cpu-lpm; the switch belongs to the legacy lpm_levels driver. Leave Auto: there is no independent value to choose. ASB does not invent a writer or confuse this with Android LPM.'
+    kernel_sched_autogroup: 'This kernel has no autogroup switch. GKI kernels are normally built without CONFIG_SCHED_AUTOGROUP because it changes signal_struct, which vendor modules are compiled against; ASB does not work around that.',
+    kernel_lpm_prediction: 'This kernel exposes no lpm_prediction switch. It belongs to the older lpm_levels idle driver; kernels with the qcom-cpu-lpm governor have none. ASB writes nothing; the diagnostic export lists the idle-driver parameters this kernel has.'
   };
   return Object.prototype.hasOwnProperty.call(fb, key) ? T('kc_why_' + key, fb[key]) : '';
 }
@@ -10765,7 +11133,7 @@ function kernelWakeupChipList(card, rules, editable) {
   const wrap = bfxEl('div', 'kernel-chips');
   if (!rules.length) { wrap.appendChild(bfxEl('span', 'kernel-empty', T('kernel_wb_empty', 'No rules — nothing is blocked by ASB.'))); card.appendChild(wrap); return; }
   rules.forEach(function (name, index) {
-    const chip = bfxEl('span', 'kernel-chip');
+    const chip = bfxEl('span', 'kernel-chip' + (kernelWakeupRisk(name, 1).critical ? ' is-critical' : ''));
     chip.appendChild(bfxEl('span', 'kernel-chip-name', name));
     if (editable) {
       const del = bfxEl('button', 'kernel-chip-remove', '×'); del.type = 'button';
@@ -10795,6 +11163,24 @@ function kernelWakeupObserve(command) {
     _wbBusy = false; _kernelPanel.loaded = true; cfgRender(); kernelWakeupSourceDialogRender();
   });
 }
+/* dev55: the kernel blocks by exact name, and names are not unique: every epoll instance
+ * with a wakeup item registers its own "eventpoll". One tap used to block every source of
+ * that name. Blocking from the observed list now asks first, says how many sources share
+ * the name, and names the system-critical ones (alarms, power manager, epoll, charging,
+ * input, keys, thermal, watchdog) whose blocking can break alarms, wake-up or charging. */
+const KERNEL_WB_CRITICAL = /^(alarmtimer|eventpoll)$|PowerManagerService|alarm|battery|charg|usb|pwrkey|power_?key|gpio.?keys?|input|touch|finger|rtc|thermal|watchdog|wdog/i;
+function kernelWakeupRisk(name, shared) {
+  const n = Math.max(1, Number(shared || 1));
+  return { critical: KERNEL_WB_CRITICAL.test(String(name || '')), shared: n };
+}
+let _wbConfirm = '';
+function kernelWakeupConfirmText(name, risk) {
+  const parts = [];
+  if (risk.shared > 1) parts.push(T('kernel_wb_confirm_shared', '{n} sources share this name; the rule blocks all of them.').replace('{n}', risk.shared));
+  if (risk.critical) parts.push(T('kernel_wb_confirm_critical', 'This looks like a system source (alarms, power manager, charging, input or thermal). Blocking it can stop alarms, wake-up or charging from working.'));
+  parts.push(T('kernel_wb_confirm_plain', 'Block “{name}” for all future events?').replace('{name}', name));
+  return parts.join(' ');
+}
 function kernelWakeupBlockObserved(name) {
   if (_wbBusy || !kernelWakeupValidName(name)) return;
   const draft = kernelWakeupDraft();
@@ -10805,7 +11191,7 @@ function kernelWakeupBlockObserved(name) {
 }
 function kernelWakeupSourceDialogClose() {
   const m = document.getElementById('kernelWakeupSourcesModal');
-  _wbSourceView.open = false;
+  _wbSourceView.open = false; _wbConfirm = '';
   if (m) { m.hidden = true; m.setAttribute('aria-hidden','true'); }
 }
 function kernelWakeupSelectSources(wb, draft, view) {
@@ -10841,11 +11227,30 @@ function kernelWakeupSourcesDrawList(m) {
     const metric = T('kernel_wb_source_metrics', '+{events} events · +{active} activations · +{time} active').replace('{events}', src.events).replace('{active}', src.active).replace('{time}', kernelWakeupDuration(src.time));
     main.appendChild(bfxEl('div', 'kernel-source-metrics', metric + (src.reset ? ' · ' + T('kernel_wb_reset_short', 'counter reset') : '')));
     row.appendChild(main);
+    const risk = kernelWakeupRisk(src.name, src.shared);
+    const tags = [];
+    if (src.fresh) tags.push(T('kernel_wb_new_short', 'new source'));
+    if (risk.shared > 1) tags.push(T('kernel_wb_shared_short', 'shared name ×{n}').replace('{n}', risk.shared));
+    if (risk.critical) tags.push(T('kernel_wb_critical_short', 'system source'));
+    if (tags.length) main.appendChild(bfxEl('div', 'kernel-source-tags' + (risk.critical ? ' is-critical' : ''), tags.join(' · ')));
     const blocked = draft.indexOf(src.name) >= 0;
     const btn = bfxEl('button', 'bfx-btn bfx-secondary kernel-source-block' + (blocked ? ' is-blocked' : ''), blocked ? T('kernel_wb_blocked', 'Blocked') : T('kernel_wb_block', 'Block'));
     btn.type = 'button'; btn.disabled = blocked || _wbBusy || (!blocked && draft.length >= 16);
-    btn.onclick = function () { kernelWakeupBlockObserved(src.name); };
+    btn.onclick = function () { _wbConfirm = _wbConfirm === src.name ? '' : src.name; kernelWakeupSourcesDrawList(m); };
     row.appendChild(btn); listEl.appendChild(row);
+    if (_wbConfirm === src.name && !blocked) {
+      const box = bfxEl('div', 'kernel-source-confirm' + (risk.critical ? ' is-critical' : ''));
+      box.setAttribute('role', 'alertdialog');
+      box.appendChild(bfxEl('div', 'kernel-source-confirm-text', kernelWakeupConfirmText(src.name, risk)));
+      const acts = bfxEl('div', 'bfx-actions');
+      const yes = bfxEl('button', 'bfx-btn bfx-primary', T('kernel_wb_block', 'Block'));
+      if (risk.critical) yes.setAttribute('data-mode', 'stop');
+      yes.type = 'button'; yes.disabled = _wbBusy;
+      yes.onclick = function () { _wbConfirm = ''; kernelWakeupBlockObserved(src.name); };
+      const no = bfxEl('button', 'bfx-btn bfx-secondary', T('cfg_fm_cancel', 'Cancel'));
+      no.type = 'button'; no.onclick = function () { _wbConfirm = ''; kernelWakeupSourcesDrawList(m); };
+      acts.appendChild(yes); acts.appendChild(no); box.appendChild(acts); listEl.appendChild(box);
+    }
   });
   if (!sources.length) listEl.appendChild(bfxEl('div', 'kernel-sources-empty', T('kernel_wb_no_matches', 'No sources match the current search and filter.')));
   const result = m.querySelector('#kernelWakeupSourcesResult');
@@ -10914,7 +11319,7 @@ function kernelWakeupObservedList(card, wb) {
   const wrap = bfxEl('div', 'kernel-observe');
   wrap.appendChild(bfxEl('div', 'kernel-observe-title', T('kernel_wb_observe_title', 'Observed in the idle window')));
   const ob = wb && wb.observe ? wb.observe : { state:'idle', elapsed:0, resets:0 };
-  let state = T('kernel_wb_observe_idle', 'No measurement has started. Start it before turning the screen off, then update after waking.');
+  let state = T('kernel_wb_observe_idle', 'No measurement has started. Start it before turning the screen off, then update after waking. The window also includes any screen-on activity.');
   if (ob.state === 'measuring') state = T('kernel_wb_observe_running', 'Window: {elapsed} · changed sources: {n}').replace('{elapsed}', kernelWakeupDuration(ob.elapsed)).replace('{n}', wb.sources.length);
   else if (ob.state === 'not_exposed' || ob.state === 'not_readable') state = T('kernel_wb_observe_error', 'Could not read wakeup-source counters');
   wrap.appendChild(bfxEl('div', 'kernel-observe-meta', state));
@@ -10962,7 +11367,7 @@ function cfgRenderWakeupBlockerCard(list) {
   meta.appendChild(bfxEl('span', '', T('kernel_wb_saved_count', 'Saved: {n}').replace('{n}', wb ? wb.saved.length : '—')));
   meta.appendChild(bfxEl('span', '', T('kernel_wb_current_count', 'In kernel: {n}').replace('{n}', wb && wb.node !== 'not_exposed' && wb.node !== 'not_readable' ? wb.current.length : '—')));
   meta.appendChild(bfxEl('span', '', T('kernel_wb_events', 'Blocked events: {n}').replace('{n}', wb ? wb.events : 'unknown')));
-  meta.appendChild(bfxEl('span', '', T('kernel_wb_abi', 'KRILIKD ABI: {v}').replace('{v}', wb ? wb.abi : 'unknown')));
+  meta.appendChild(bfxEl('span', '', T('kernel_wb_abi', 'Kernel blocker ABI: {v}').replace('{v}', wb ? wb.abi : 'unknown')));
   card.appendChild(meta);
   if (wb && !same && wb.node !== 'not_exposed' && wb.node !== 'not_readable') {
     card.appendChild(bfxEl('div', 'kernel-note', T('kernel_wb_diff', 'Saved policy and kernel readback differ. Apply the policy or refresh after another owner changes it.')));
@@ -10989,6 +11394,7 @@ function kernelWakeupAdd(raw) {
   if (draft.indexOf(name) >= 0) { toast(T('kernel_wb_duplicate', 'This name is already in the list'), 'warn'); return; }
   if (draft.length >= 16) { uiSound('error'); toast(T('kernel_wb_limit', 'The kernel accepts at most 16 rules'), 'err'); return; }
   draft.push(name); _wbDraft = draft; cfgRender();
+  if (kernelWakeupRisk(name, 1).critical) toast(T('kernel_wb_confirm_critical', 'This looks like a system source (alarms, power manager, charging, input or thermal). Blocking it can stop alarms, wake-up or charging from working.'), 'warn');
 }
 function kernelWakeupVerdict(v, count) {
   if (v === 'applied') return T('kernel_wb_applied', 'Kernel readback matches · {n} rules').replace('{n}', count || '0');
@@ -11140,7 +11546,7 @@ async function cfgLoadCaps() {
 const CFG_ICONS = {
   wifi_powersave:'wifipm',
   net_wifi_leave:'wifileave',
-  mglru_hold:'memhold', mglru_mode:'mglru_mode', kernel_mglru_min_ttl:'mglru_ttl', kernel_timer_migration:'timer_migration', kernel_sched_nr_migrate:'sched_migration', kernel_sched_stats:'sched_stats',
+  mglru_mode:'mglru_mode', kernel_mglru_min_ttl:'mglru_ttl', kernel_timer_migration:'timer_migration', kernel_sched_nr_migrate:'sched_migration', kernel_sched_stats:'sched_stats',
   kernel_sched_autogroup:'sched_autogroup', kernel_sched_child_runs_first:'sched_child_first',
   kernel_hrtimer_migration:'hrtimer_migration', kernel_lpm_prediction:'lpm_prediction', kernel_usb_autosuspend:'usb_autosuspend',
   audio_profile:'audio_profile', audio_dac_hifi:'dac', media_loudness:'media_volume', bt_absvol_mode:'volume_sync', bt_a2dp_offload:'bluetooth_offload',
@@ -12494,12 +12900,19 @@ function cfgRenderSearch(list) {
   /* Re-render on every keystroke, but put focus and the caret back afterwards: the whole
      list is rebuilt, so the input the user is typing into is a different element by the
      time the next character arrives. Without this it loses focus after one letter. */
+  /* dev55: keystrokes that arrive within 90 ms share one rebuild. Each rebuild re-creates
+   * every matching row; typing "battery" rebuilt the list seven times, each a full style and
+   * layout pass under the finger. The query itself is taken at once. */
   inp.oninput = () => {
-    const pos = inp.selectionStart;
     _cfgSearch = inp.value.trim();
-    cfgRender();
-    const again = document.querySelector('.cfg-search');
-    if (again) { again.focus(); try { again.setSelectionRange(pos, pos); } catch (e) {} }
+    if (inp._asbSearchT) clearTimeout(inp._asbSearchT);
+    inp._asbSearchT = setTimeout(function () {
+      inp._asbSearchT = 0;
+      const pos = inp.selectionStart;
+      cfgRender();
+      const again = document.querySelector('.cfg-search');
+      if (again && document.activeElement !== again) { again.focus(); try { again.setSelectionRange(pos, pos); } catch (e) {} }
+    }, 90);
   };
   wrap.appendChild(inp);
   tools.insertBefore(wrap, tools.firstChild);
@@ -12542,7 +12955,10 @@ function asbTabbarVisibility() {
   document.body.classList.toggle('config-category-active', !!inCategory);
   const bar = document.querySelector('.asb-tabbar');
   if (bar) bar.style.display = hideBar ? 'none' : '';
-  document.documentElement.style.setProperty('--tabbar-space', hideBar ? '16px' : '82px');
+  /* dev55: a class, not a root custom property: changing an inherited variable on <html>
+   * restyled every element on each category or drill-in open; the class only touches the
+   * two rules below that read the bar space (body padding and .page min-height). */
+  document.documentElement.classList.toggle('asb-bar-hidden', !!hideBar);
   if (!hideBar && typeof asbNavIndicator === 'function') asbNavIndicator();
 }
 
@@ -13257,11 +13673,6 @@ async function cfgSet(key, val, ctl) {
         toast(cfgToastText(key, val).replace(/^✓\s*/, '') + ' · ' + (kp[1] ? kst : T('t_cfg_err', 'apply failed')), 'err');
       }
       await kernelPanelLoad(true);
-    } else if (key === 'mglru_hold') {
-      /* MGLRU working-set protection remains owned by asb_system_tweaks. The six registered
-       * controls above use asb_kernel_controls and its explicit readback verdict instead. */
-      try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_system_tweaks.sh >/dev/null 2>&1'); } catch (e) {}
-      toast(cfgToastText(key, val) + T('t_cfg_live', ' \u00b7 applied'), cfgToastType(key));
     } else if (BLUR_KEYS.indexOf(key) >= 0) {
       try { run('sh /data/adb/modules/AutoSystemBoost/runtime/asb_blur_apply.sh >/dev/null 2>&1'); } catch(e) {}
       toast('\u2713 ' + key + ' = ' + val + T('t_cfg_blur', ' \u00b7 shade now, rest after reboot'), cfgToastType(key));
@@ -21498,9 +21909,19 @@ function asbFitPagesNow() {
     const root = document.documentElement;
     let tier = asbFitPages._tier || 0;
 
+    /* dev55: the fitted heights live on the two containers that use them, not on <html>.
+     * A custom property is inherited, so every write on the root restyled the whole
+     * document (~1000 elements, 10-15 ms on a phone) - and this pass wrote four of them
+     * on each page switch, twice behind a forced layout. On .profiles and #cfgList only
+     * those subtrees restyle, and only the visible page's own value is touched. */
+    const prof = document.querySelector('.page:not(.live-page) .profiles');
+    const homeOn = !!prof && !document.body.classList.contains('live-active') && !document.body.classList.contains('config-active');
+    const hubEl = document.querySelector('#configPage .cfg-hub');
+    const cfgPageEl = _el('configPage');
+    const hubOn = !!(hubEl && cfgPageEl && cfgPageEl.getAttribute('aria-hidden') === 'false' && !_cfgGroup);
+    const hubHost = hubOn ? (_el('cfgList') || hubEl.parentNode || hubEl) : null;
     const sizeCards = function () {
-      const prof = document.querySelector('.page:not(.live-page) .profiles');
-      if (prof && !document.body.classList.contains('live-active') && !document.body.classList.contains('config-active')) {
+      if (homeOn) {
         const cards = prof.querySelectorAll('.pbtn');
         if (cards.length) {
           /* fix206: home is a self-scrolling overlay now, so the profiles block's
@@ -21510,12 +21931,11 @@ function asbFitPagesNow() {
           const gap = parseFloat(getComputedStyle(prof).rowGap || getComputedStyle(prof).gap) || 8;
           let h = ((stop - top) / z - gap * (cards.length - 1)) / cards.length;
           h = Math.max([68, 58, 48][tier], Math.min(104, Math.floor(h)));
-          root.style.setProperty('--pbtn-h', h + 'px');
+          prof.style.setProperty('--pbtn-h', h + 'px');
         }
       }
-      const hub = document.querySelector('#configPage .cfg-hub');
-      const page = _el('configPage');
-      if (hub && page && page.getAttribute('aria-hidden') === 'false' && !_cfgGroup) {
+      if (hubOn) {
+        const hub = hubEl, page = cfgPageEl;
         const tiles = hub.querySelectorAll('.cfg-tile');
         const rows = Math.ceil(tiles.length / 3) || 1;
         const top = hub.getBoundingClientRect().top + page.scrollTop;
@@ -21526,7 +21946,7 @@ function asbFitPagesNow() {
          * would leave the old 176 px content height in force. Tall screens stop at 124 px
          * instead of recreating oversized cards, and Config still never compacts its header. */
         h = Math.max([100, 88, 76][tier], Math.min(124, Math.floor(h)));
-        root.style.setProperty('--cfg-tile-h', h + 'px');
+        hubHost.style.setProperty('--cfg-tile-h', h + 'px');
       }
     };
     const applyTier = function (t) {
@@ -21596,11 +22016,14 @@ function asbFitPagesNow() {
     /* Measure the page as it asks to be, not as the last pass left it: with the fitted
      * heights in place every tier reads "just fits" (the cards swallow whatever the tier
      * freed), which is how fix202 latched onto a tier and never let go. */
-    const prevPbtn = root.style.getPropertyValue ? root.style.getPropertyValue('--pbtn-h') : '';
-    const prevTile = root.style.getPropertyValue ? root.style.getPropertyValue('--cfg-tile-h') : '';
-    root.style.setProperty('--pbtn-h', '0px');
-    root.style.setProperty('--cfg-tile-h', '0px');
-    let guard = 0;
+    /* dev55: a page that never takes a tier (Settings, Device, Zygisk, report) is not
+     * measured at all - the result was discarded, and unclamping a long category or the
+     * Device page for it cost a full forced layout (~30 ms on a phone) on every open. */
+    const prevPbtn = homeOn && fittable ? prof.style.getPropertyValue('--pbtn-h') : '';
+    const prevTile = hubOn && fittable ? hubHost.style.getPropertyValue('--cfg-tile-h') : '';
+    if (homeOn && fittable) prof.style.setProperty('--pbtn-h', '0px');
+    if (hubOn && fittable) hubHost.style.setProperty('--cfg-tile-h', '0px');
+    let guard = fittable ? 0 : 6;
     for (;;) {
       if (++guard > 6) break;
       const over = naturalOverflow();
@@ -21621,8 +22044,8 @@ function asbFitPagesNow() {
     asbFitPages._tier = tier;
     /* The decision is made; hand the free space back to the cards (or restore the previous
      * fit on a page whose cards this pass does not size). */
-    root.style.setProperty('--pbtn-h', prevPbtn);
-    root.style.setProperty('--cfg-tile-h', prevTile);
+    if (homeOn && fittable) prof.style.setProperty('--pbtn-h', prevPbtn);
+    if (hubOn && fittable) hubHost.style.setProperty('--cfg-tile-h', prevTile);
     sizeCards();
   } catch (e) {}
 }
@@ -24230,7 +24653,7 @@ window._asbBootIntroProbe = I18N_READY.then(asbBootIntroStart, asbBootIntroStart
     };
   }
 
-  function ufoCosmosScene() {
+  function ufoCosmosScene(calm) {
     var canvas = document.createElement('canvas'); canvas.className = 'ufo-cosmos';
     canvas.setAttribute('aria-hidden', 'true');
     var ctx = null; try { ctx = canvas.getContext('2d'); } catch (e) {}
@@ -24274,6 +24697,7 @@ window._asbBootIntroProbe = I18N_READY.then(asbBootIntroStart, asbBootIntroStart
           ctx.globalAlpha = amount * (.12 + .20 * (.5 + .5 * Math.sin(ts * .0017 + s.p)));
           ctx.fillStyle = '#b8e9ff'; ctx.beginPath(); ctx.arc(s.x * w, s.y * h, s.r, 0, 6.283); ctx.fill();
         });
+        if (calm) { ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over'; return; }
         points.push({ x:sx, y:sy }); if (points.length > UFO_TRAIL_CAP) points.shift();
         trail(amount);
         var spawn = amount > .04 ? (Math.random() < .55 ? 2 : 1) : 0;
@@ -24304,7 +24728,11 @@ window._asbBootIntroProbe = I18N_READY.then(asbBootIntroStart, asbBootIntroStart
   function launch(logoC) {
     if (flying) return;
     /* Ten deliberate taps explicitly request this scene, including on a WebView whose system
-     * animator scale is zero. There is no automatic playback and no persistent worker. */
+     * animator scale is zero. There is no automatic playback and no persistent worker.
+     * With prefers-reduced-motion the saucer still flies its path, but the page itself stays
+     * still: no card sway or spill, no particles and no wake - only the saucer and its stars. */
+    var calm = false;
+    try { calm = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) {}
     var glyph = logoC && logoC.querySelector('.logo-glyph');
     if (!glyph) return;
     flying = true;
@@ -24314,7 +24742,7 @@ window._asbBootIntroProbe = I18N_READY.then(asbBootIntroStart, asbBootIntroStart
       return { x:r.left + r.width / 2, y:r.top + r.height / 2 };
     }
     var fs = parseFloat(getComputedStyle(glyph).fontSize) || 32;
-    var cosmos = ufoCosmosScene(), content = ufoContentScene();
+    var cosmos = ufoCosmosScene(calm), content = calm ? { update:function () {}, restore:function () {} } : ufoContentScene();
     var el = document.createElement('div'); el.className = 'ufo-fly'; el.style.fontSize = fs + 'px';
     var beam = document.createElement('div'); beam.className = 'ufo-beam';
     var body = document.createElement('span'); body.className = 'ufo-body';
