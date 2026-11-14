@@ -1860,8 +1860,19 @@ else
     on)         NOTE "verbose logging: ON (LSPosed's own setting)" ;;
     default_on) NOTE "verbose logging: ON (never set - LSPosed's default)" ;;
     off)        NOTE "verbose logging: off (LSPosed's own setting; it applies from the boot after it was written)" ;;
-    *)          NOTE "verbose logging: could not be read here (${_lsp_r:-?}) - LSPosed manager > Settings shows it" ;;
+    *)
+      case "$_lsp_r" in
+        no_verbose_switch) NOTE "verbose logging: this LSPosed build keeps no verbose switch in its database - LSPosed manager > Settings shows it" ;;
+        *) NOTE "verbose logging: could not be read here (${_lsp_r:-?}) - LSPosed manager > Settings shows it" ;;
+      esac
+      ;;
   esac
+  _lsp_inv="$("$MODDIR/bin/asb" --lspd modules 2>/dev/null)"
+  _lsp_lay="$(echo "$_lsp_inv" | sed -n 's/^layout=//p' | head -1)"
+  _lsp_sch="$(echo "$_lsp_inv" | sed -n 's/^schema=//p' | head -1)"
+  _lsp_irc="$(echo "$_lsp_inv" | sed -n 's/^sqlite_rc=//p' | head -1)"
+  [ -n "$_lsp_lay" ] && NOTE "module/scope tables: read (${_lsp_lay} layout)"
+  [ -n "$_lsp_sch" ] && NOTE "module/scope tables: no known layout (sqlite_rc=${_lsp_irc:-?}) - the database holds: ${_lsp_sch}"
   NOTE "card lsposed_verbose=$(cfg lsposed_verbose) - keep: ASB leaves LSPosed alone; off: ASB writes LSPosed's setting once, when the card is changed, and empties the modules log every 10 min (fix197)"
   # Only a value ASB actually replaced is reported: a fix187 build also recorded "off" when
   # LSPosed's log was already off, and this line then claimed ASB had switched it off.
@@ -3231,6 +3242,20 @@ if [ -n "$_conf_mtime" ] && [ -n "$_gov_start" ]; then
 fi
 [ -f /data/adb/asb/auto_battery_origin ] \
   && NOTE "auto-battery is currently active - will return to $(cat /data/adb/asb/auto_battery_origin 2>/dev/null) when charged"
+if [ "$(cfg night_charge_enable)" = 1 ] || [ -f /data/adb/asb/night_charge.status ]; then
+  _ncs=""
+  [ -n "$MODDIR" ] && [ -f "$MODDIR/runtime/asb_night_charge.sh" ] && _ncs="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_night_charge.sh" status 2>/dev/null)"
+  NOTE "night charge: enabled=$(cfg night_charge_enable) state=$(printf '%s\n' "$_ncs" | sed -n 's/^state=//p' | head -n 1) interface=$(printf '%s\n' "$_ncs" | sed -n 's/^interface=//p' | head -n 1) window=$(printf '%s\n' "$_ncs" | sed -n 's/^window=//p' | head -n 1)"
+  for _ncn in /sys/class/power_supply/battery/charge_control_limit /sys/class/power_supply/battery/charge_control_limit_max \
+              /sys/class/power_supply/battery/charging_enabled /sys/class/oplus_chg/battery/mmi_charging_enable \
+              /sys/class/power_supply/battery/mmi_charging_enable; do
+    if [ -e "$_ncn" ]; then
+      NOTE "  charge control node $_ncn = $(head -c 16 "$_ncn" 2>/dev/null | tr -d '\r\n' | tr -cd 'A-Za-z0-9 _.-')"
+    else
+      NOTE "  charge control node $_ncn: absent"
+    fi
+  done
+fi
 
 SEC "5a3b. THERMAL SOURCE PROVENANCE  (which sensor controls the governor)"
 _tcs="$(_rget thermal_control_source /dev/.asb/state | tr -d '\"')"
@@ -4321,6 +4346,16 @@ if [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_kernel_controls.sh ]; then
 $(sh /data/adb/modules/AutoSystemBoost/runtime/asb_kernel_controls.sh status 2>/dev/null)
 EOF_KC_DIAG
 fi
+NOTE "cpuidle governor: $(cat /sys/devices/system/cpu/cpuidle/current_governor 2>/dev/null || cat /sys/devices/system/cpu/cpuidle/current_governor_ro 2>/dev/null || echo unknown)"
+for _lpmm in lpm_levels qcom_lpm qcom_cpu_lpm; do
+  [ -d "/sys/module/$_lpmm/parameters" ] || continue
+  _lpmp=""
+  for _lpmf in /sys/module/$_lpmm/parameters/*; do
+    [ -f "$_lpmf" ] || continue
+    _lpmp="$_lpmp ${_lpmf##*/}=$(head -c 12 "$_lpmf" 2>/dev/null | tr -d '\r\n' | tr -cd 'A-Za-z0-9_.-')"
+  done
+  NOTE "idle driver $_lpmm parameters:${_lpmp:- none}"
+done
 NOTE "lockscreen_shortcuts = $(cfg lockscreen_shortcuts)"
 # The property that caused a bootloop. Worth naming explicitly in every report: if it is
 # ever back in system.prop, that is the first thing to look at.

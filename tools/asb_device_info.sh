@@ -663,7 +663,14 @@ if [ -e "$_nm_node" ]; then
   elif [ -r "$_nm_node" ]; then _nm_state="read-only; live=$(_read "$_nm_node")"
   else _nm_state='present; not readable'; fi
 else
-  _nm_state='not exposed at the registered debugfs path; mount/SELinux/config not inferred'
+  _nm_kc=""
+  if [ "$_nm_debug_cfg" = y ] && [ "$_nm_sched_cfg" = y ] && [ -r "$MODDIR/runtime/asb_kernel_controls.sh" ]; then
+    _nm_kc="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_kernel_controls.sh" status kernel_sched_nr_migrate 2>/dev/null)"
+  fi
+  case "$_nm_kc" in
+    'kernel_sched_nr_migrate|writable|'*) _nm_state="debugfs not mounted by Android; read through ASB's private mount; live=$(printf '%s' "$_nm_kc" | cut -d'|' -f4)" ;;
+    *) _nm_state='not exposed at the registered debugfs path; mount/SELinux/config not inferred' ;;
+  esac
 fi
 _emit kernel_features sched_nr_migrate "$_nm_state"
 _emit kernel_features sched_nr_migrate_node "$_nm_node"
