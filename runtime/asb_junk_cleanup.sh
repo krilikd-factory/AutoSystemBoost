@@ -38,7 +38,7 @@ _jc_sizes() {
     tombstones)
       _js_sizes="$(find "$_js_root" -xdev -name 'tombstone_*' -type f -exec stat -c '%s' {} + 2>/dev/null)" ;;
     backup)
-      _js_sizes="$(find "$_js_root" -xdev -maxdepth 1 -name 'journal*.tmp' -mtime +0 -type f -exec stat -c '%s' {} + 2>/dev/null)" ;;
+      _js_sizes="$(find "$_js_root" -xdev -maxdepth 1 -name 'journal*.tmp' -mmin +1440 -type f -exec stat -c '%s' {} + 2>/dev/null)" ;;
     screenshots)
       _js_sizes="$(find "$_js_root" -xdev -maxdepth 1 -name '.trashed-*' -type f -exec stat -c '%s' {} + 2>/dev/null)" ;;
     coloros)
@@ -59,7 +59,7 @@ _jc_delete_tree() {
   case "$_jd_kind" in
     all) find "$_jd_root" -xdev -type f -exec rm -f {} + 2>/dev/null ;;
     tombstones) find "$_jd_root" -xdev -name 'tombstone_*' -type f -exec rm -f {} + 2>/dev/null ;;
-    backup) find "$_jd_root" -xdev -maxdepth 1 -name 'journal*.tmp' -mtime +0 -type f -exec rm -f {} + 2>/dev/null ;;
+    backup) find "$_jd_root" -xdev -maxdepth 1 -name 'journal*.tmp' -mmin +1440 -type f -exec rm -f {} + 2>/dev/null ;;
     screenshots) find "$_jd_root" -xdev -maxdepth 1 -name '.trashed-*' -type f -exec rm -f {} + 2>/dev/null ;;
     coloros) find "$_jd_root" -xdev -maxdepth 1 \( -name '*crash@*.txt' -o -name '*crash@*.txt.gz' \) -type f -exec rm -f {} + 2>/dev/null ;;
     *) return 2 ;;

@@ -94,6 +94,14 @@ asb_kc_same() {
   [ "$_aks_a" = "$_aks_b" ]
 }
 
+asb_kc_accepts() {
+  asb_kc_same "$2" "$3" && return 0
+  [ "$1" = mglru_mode ] || return 1
+  _akx_w="$(asb_kc_number "$2")" || return 1
+  _akx_l="$(asb_kc_number "$3")" || return 1
+  [ $((_akx_l & ~_akx_w)) -eq 0 ] && [ $((_akx_l & 1)) -eq $((_akx_w & 1)) ]
+}
+
 asb_kc_prev() {
   if [ "$1" = kernel_sched_stats ] && [ -z "${ASB_KERNEL_STATE_DIR+x}" ]; then
     printf '%s\n' "${ASB_SCHED_STATS_PREV:-/data/adb/asb/kernel_sched_stats.prev}"
@@ -204,7 +212,7 @@ asb_kc_apply() {
     printf '%s\n' "$_aka_want" > "$_aka_node" 2>/dev/null || { asb_kc_emit "$_aka_key" write_failed "$_aka_mode" "$_aka_before" "$_aka_saved"; return 1; }
   fi
   _aka_live="$(asb_kc_clean "$(cat "$_aka_node" 2>/dev/null)")"
-  if asb_kc_same "$_aka_want" "$_aka_live"; then
+  if asb_kc_accepts "$_aka_key" "$_aka_want" "$_aka_live"; then
     asb_kc_emit "$_aka_key" applied "$_aka_mode" "$_aka_live" "$_aka_saved"
     return 0
   fi

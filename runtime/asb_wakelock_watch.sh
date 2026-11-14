@@ -565,6 +565,13 @@ _wl_fit_eff() {
 # ledger (pkg|mode) so protect and uninstall hand back exactly that.
 FIT_UID="$D/wakelock_fitness_uidmode"
 FIT_REF="$D/wakelock_fitness_refused"
+FIT_RA="$D/wakelock_fitness_reapply"
+_wl_fit_note() {
+  _fn_raw="$(appops get "$1" WAKE_LOCK 2>/dev/null | grep -m1 . | tr -d '|\r' | cut -c1-80)"
+  { grep -v "^$1|" "$FIT_RA" 2>/dev/null; printf '%s|%s|%s|%s\n' "$1" "$(date +%s 2>/dev/null || echo 0)" "$2" "${_fn_raw:--}"; } > "$FIT_RA.tmp" 2>/dev/null \
+    && mv -f "$FIT_RA.tmp" "$FIT_RA" 2>/dev/null
+  rm -f "$FIT_RA.tmp" 2>/dev/null
+}
 _wl_fit_uid_limit() {
   _fu="$(_wl_fit_uidmode "$1")"
   case "$_fu" in ''|default|ignore) return 0 ;; esac
@@ -593,7 +600,9 @@ _wl_fit_limit() {
       appops set "$1" WAKE_LOCK ignore >/dev/null 2>&1 || return 1
     fi
     _wl_fit_uid_limit "$1"
-    [ "$(_wl_fit_eff "$1")" = ignore ] || return 1
+    _fn_eff="$(_wl_fit_eff "$1")"
+    _wl_fit_note "$1" "${_fn_eff:-default}"
+    [ "$_fn_eff" = ignore ] || return 1
     # Any "Android does not enforce it" verdict was drawn while the op was not set.
     if [ -s "$FIT_IGN" ]; then
       grep -vxF "$1" "$FIT_IGN" > "$FIT_IGN.tmp" 2>/dev/null
@@ -626,6 +635,7 @@ _wl_fit_limit() {
     if [ -s "$FIT_REF.tmp" ]; then mv -f "$FIT_REF.tmp" "$FIT_REF"; else rm -f "$FIT_REF.tmp" "$FIT_REF"; fi
   fi
   echo "$1|$_orig" >> "$FIT"
+  _wl_fit_note "$1" ignore
   echo "wakelock: $1 may no longer hold the CPU awake (wakelock_fitness=limit)"
   return 0
 }
@@ -638,7 +648,7 @@ _wl_fit_release() {
     appops set "$_fp" WAKE_LOCK "${_fo:-default}" >/dev/null 2>&1
     _wl_fit_uid_release "$_fp"
   done < "$FIT"
-  rm -f "$FIT" "$FIT_IGN" "$FIT_UID" "$FIT_REF" 2>/dev/null
+  rm -f "$FIT" "$FIT_IGN" "$FIT_UID" "$FIT_REF" "$FIT_RA" 2>/dev/null
   echo "wakelock: fitness apps may hold wakelocks again (wakelock_fitness=protect)"
 }
 
@@ -1080,12 +1090,13 @@ if [ "${1:-}" = fitness-status ]; then
       _has appops && [ "$(_wl_fit_eff "$_fs_p")" = ignore ] && _fs_f=$((_fs_f + 1))
     done
   fi
-  _fs_l=0; _fs_i=0; _fs_r=0
+  _fs_l=0; _fs_i=0; _fs_r=0; _fs_x=0
   [ -s "$FIT" ] && _fs_l="$(grep -c '|' "$FIT" 2>/dev/null)"
+  [ -s "$FIT_RA" ] && _fs_x="$(awk -F'|' '$3 != "ignore" { n++ } END { print n + 0 }' "$FIT_RA" 2>/dev/null)"
   [ -s "$FIT_IGN" ] && _fs_i="$(grep -c . "$FIT_IGN" 2>/dev/null)"
   [ -s "$FIT_REF" ] && _fs_r="$(grep -c . "$FIT_REF" 2>/dev/null)"
-  printf 'installed=%s\npreset=%s\nlimited=%s\nignored=%s\nrefused=%s\nnames=%s\n' \
-    "$_fs_n" "$_fs_f" "${_fs_l:-0}" "${_fs_i:-0}" "${_fs_r:-0}" "$_fs_names"
+  printf 'installed=%s\npreset=%s\nlimited=%s\nignored=%s\nrefused=%s\nnot_kept=%s\nnames=%s\n' \
+    "$_fs_n" "$_fs_f" "${_fs_l:-0}" "${_fs_i:-0}" "${_fs_r:-0}" "${_fs_x:-0}" "$_fs_names"
   exit 0
 fi
 

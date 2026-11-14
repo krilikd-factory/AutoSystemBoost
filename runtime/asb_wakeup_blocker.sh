@@ -21,7 +21,7 @@ asb_wb_clear() {
   printf 'clear\n' > "$ASB_WB_NODE" 2>/dev/null || {
     printf 'wakeup_blocker|write_failed||\n'; return 1;
   }
-  [ ! -s "$ASB_WB_NODE" ] || {
+  _wb_left="$(cat "$ASB_WB_NODE" 2>/dev/null)" && [ -z "$_wb_left" ] || {
     printf 'wakeup_blocker|readback_mismatch||\n'; return 1;
   }
   printf 'wakeup_blocker|cleared|empty|\n'
@@ -53,6 +53,12 @@ asb_wb_apply() {
       rm -f "$_wb_tmp"; printf 'wakeup_blocker|policy_error||\n'; return 1;
     }
   done < "$ASB_WB_POLICY"
+
+  if [ "$_wb_count" -eq 0 ] && _wb_live="$(cat "$ASB_WB_NODE" 2>/dev/null)" && [ -z "$_wb_live" ]; then
+    rm -f "$_wb_tmp"
+    printf 'wakeup_blocker|applied|0|\n'
+    return 0
+  fi
 
   # ASB is the sole policy owner. A failed partial apply always falls back to empty.
   printf 'clear\n' > "$ASB_WB_NODE" 2>/dev/null || {

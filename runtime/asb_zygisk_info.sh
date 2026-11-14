@@ -200,7 +200,7 @@ _asb_zygisk_info() {
   _emit zygisk_observer framework_status 'not runtime-discoverable from process events alone'
   _emit zygisk_observer installed_abis "$_zi_abis"
   _emit zygisk_observer enabled_packages "$_zi_packages"
-  _emit zygisk_observer enabled_package_list "${_zi_package_list:-none}"
+  printf 'D\tzygisk_observer\tenabled_package_list\t%s\n' "$(printf '%s' "${_zi_package_list:-none}" | tr -cd 'A-Za-z0-9._,')"
   _emit zygisk_observer loaded_processes "$_zi_loaded"
   _emit zygisk_observer broker_status "$_zi_broker"
   _emit zygisk_observer link_state "$_zi_link"
