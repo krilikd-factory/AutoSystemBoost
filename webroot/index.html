@@ -1366,16 +1366,36 @@ html[data-asb-theme="light"] .tg-link-sub { color:#315a4f !important; }
   box-shadow: 0 0 25px rgba(198,163,245,0.14), 0 8px 32px rgba(0,0,0,0.4);
 }
 .toast.t-cat-audio {
-  background: rgba(34,14,18,0.95);
-  color: #fda5ae;
-  border-color: rgba(249,141,158,0.38);
-  box-shadow: 0 0 25px rgba(249,141,158,0.14), 0 8px 32px rgba(0,0,0,0.4);
+  background: rgba(34,11,16,0.95);
+  color: #ec8697;
+  border-color: rgba(212,71,95,0.42);
+  box-shadow: 0 0 25px rgba(212,71,95,0.16), 0 8px 32px rgba(0,0,0,0.4);
 }
 .toast.t-cat-camera {
-  background: rgba(32,15,30,0.95);
-  color: #f2b5e6;
-  border-color: rgba(239,168,226,0.38);
-  box-shadow: 0 0 25px rgba(239,168,226,0.14), 0 8px 32px rgba(0,0,0,0.4);
+  background: rgba(12,22,36,0.95);
+  color: #a9cdff;
+  border-color: rgba(130,184,255,0.38);
+  box-shadow: 0 0 25px rgba(130,184,255,0.14), 0 8px 32px rgba(0,0,0,0.4);
+}
+/* dev47: toasts follow the navigation category like the tile, heading and row, so Kernel,
+ * Display & Haptics and Zygisk need their own skins. */
+.toast.t-cat-kernel {
+  background: rgba(30,18,11,0.95);
+  color: #d9a07c;
+  border-color: rgba(176,112,74,0.44);
+  box-shadow: 0 0 25px rgba(176,112,74,0.16), 0 8px 32px rgba(0,0,0,0.4);
+}
+.toast.t-cat-feel {
+  background: rgba(21,28,10,0.95);
+  color: #c8e38a;
+  border-color: rgba(179,214,90,0.38);
+  box-shadow: 0 0 25px rgba(179,214,90,0.14), 0 8px 32px rgba(0,0,0,0.4);
+}
+.toast.t-cat-zygisk {
+  background: rgba(24,25,27,0.95);
+  color: #d0d4d9;
+  border-color: rgba(177,182,188,0.38);
+  box-shadow: 0 0 25px rgba(177,182,188,0.14), 0 8px 32px rgba(0,0,0,0.4);
 }
 .toast.t-cat-battery {
   background: rgba(11,29,21,0.95);
@@ -1390,10 +1410,10 @@ html[data-asb-theme="light"] .tg-link-sub { color:#315a4f !important; }
   box-shadow: 0 0 25px rgba(191,161,247,0.14), 0 8px 32px rgba(0,0,0,0.4);
 }
 .toast.t-cat-ux {
-  background: rgba(33,24,12,0.95);
-  color: #f4c483;
-  border-color: rgba(240,183,107,0.38);
-  box-shadow: 0 0 25px rgba(240,183,107,0.14), 0 8px 32px rgba(0,0,0,0.4);
+  background: rgba(31,27,10,0.95);
+  color: #f6dc7e;
+  border-color: rgba(240,205,78,0.38);
+  box-shadow: 0 0 25px rgba(240,205,78,0.14), 0 8px 32px rgba(0,0,0,0.4);
 }
 .toast.t-cat-display {
   background: rgba(26,27,30,0.95);
@@ -2034,18 +2054,40 @@ html[data-asb-theme="light"] .asb-cosmic-ufo { color:#167c70; filter:drop-shadow
 @media (prefers-reduced-motion:reduce) { .asb-cosmic-ring,.asb-cosmic-ufo,.asb-cosmic-star,.asb-cosmic-scan { animation:none; }
   .asb-cosmic-scan { opacity:.2; transform:translateY(42px); } .asb-cosmic-star { opacity:.48; } }
 .device-page .dev-pressure { margin: 2px 0 12px; padding: 12px; border: 1px solid var(--border); border-radius: 14px; background: rgba(255,255,255,.025); }
-.device-page .dev-pressure-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
-.device-page .dev-pressure-score { font: 750 25px/1 var(--mono); color: var(--accent); }
-.device-page .dev-pressure-band { color: var(--text-secondary); font-size: 12px; font-weight: 700; }
-.device-page .dev-pressure-track { position: relative; display: flex; height: 9px; margin: 12px 0 6px; overflow: visible; border-radius: 8px; background: var(--border); }
-.device-page .dev-pressure-seg { height: 100%; flex: 1; }
-.device-page .dev-pressure-seg:first-child { border-radius: 8px 0 0 8px; background: var(--bat); }
-.device-page .dev-pressure-seg:nth-child(2) { background: #a9c94a; }
-.device-page .dev-pressure-seg:nth-child(3) { background: var(--bal); }
-.device-page .dev-pressure-seg:nth-child(4) { border-radius: 0 8px 8px 0; background: var(--perf); }
-.device-page .dev-pressure-marker { position: absolute; top: -4px; width: 3px; height: 17px; margin-left: -1px; border-radius: 2px; background: var(--text); box-shadow: 0 0 0 2px var(--bg); }
-.device-page .dev-pressure-labels { display: flex; justify-content: space-between; color: var(--text-tertiary); font: 10px/1.4 var(--mono); }
-.device-page .dev-pressure-meta { margin-top: 8px; color: var(--text-secondary); font-size: 11px; line-height: 1.45; }
+:is(.device-page,.live-info-sheet) .dev-pressure-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+:is(.device-page,.live-info-sheet) .dev-pressure-score { font: 750 25px/1 var(--mono); color: var(--accent); }
+:is(.device-page,.live-info-sheet) .dev-pressure-band { color: var(--text-secondary); font-size: 12px; font-weight: 700; }
+:is(.device-page,.live-info-sheet) .dev-pressure-track { position: relative; display: flex; height: 9px; margin: 12px 0 6px; overflow: visible; border-radius: 8px; background: var(--border); }
+:is(.device-page,.live-info-sheet) .dev-pressure-seg { height: 100%; flex: 1; }
+:is(.device-page,.live-info-sheet) .dev-pressure-seg:first-child { border-radius: 8px 0 0 8px; background: var(--bat); }
+:is(.device-page,.live-info-sheet) .dev-pressure-seg:nth-child(2) { background: #a9c94a; }
+:is(.device-page,.live-info-sheet) .dev-pressure-seg:nth-child(3) { background: var(--bal); }
+:is(.device-page,.live-info-sheet) .dev-pressure-seg:nth-child(4) { border-radius: 0 8px 8px 0; background: var(--perf); }
+:is(.device-page,.live-info-sheet) .dev-pressure-marker { position: absolute; top: -4px; width: 3px; height: 17px; margin-left: -1px; border-radius: 2px; background: var(--text); box-shadow: 0 0 0 2px var(--bg); }
+:is(.device-page,.live-info-sheet) .dev-pressure-labels { display: flex; justify-content: space-between; color: var(--text-tertiary); font: 10px/1.4 var(--mono); }
+:is(.device-page,.live-info-sheet) .dev-pressure-meta { margin-top: 8px; color: var(--text-secondary); font-size: 11px; line-height: 1.45; }
+/* dev47: the score wears its band colour (the same four as the bar), on Device and Monitor. */
+:is(.device-page,.live-info-sheet) .dev-pressure-light .dev-pressure-score { color: var(--bat); }
+:is(.device-page,.live-info-sheet) .dev-pressure-moderate .dev-pressure-score { color: #a9c94a; }
+:is(.device-page,.live-info-sheet) .dev-pressure-high .dev-pressure-score { color: var(--bal); }
+:is(.device-page,.live-info-sheet) .dev-pressure-very_high .dev-pressure-score { color: var(--perf); }
+html[data-asb-theme="light"] :is(.device-page,.live-info-sheet) .dev-pressure-moderate .dev-pressure-score { color: #5f7a12; }
+/* dev47: the Monitor Load sheet - the device-page scale plus one bar per measured part. */
+.live-info-pressure { margin: 10px 0 2px; padding: 12px; border: 1px solid var(--border); border-radius: 14px; background: rgba(255,255,255,.025); }
+.live-info-pressure .lvp-cap { margin-bottom: 8px; color: var(--text-tertiary); font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.live-info-pressure .lvp-wait { color: var(--text-secondary); font-size: 12px; line-height: 1.45; }
+.live-info-pressure .dev-pressure { margin: 0; padding: 0; border: 0; background: none; }
+.live-info-pressure .lvp-parts { display: grid; gap: 7px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+.live-info-pressure .lvp-row { display: grid; grid-template-columns: minmax(0,1.25fr) minmax(0,1fr) auto; align-items: center; gap: 9px; font-size: 11.5px; }
+.live-info-pressure .lvp-lbl { min-width: 0; overflow: hidden; color: var(--text-secondary); text-overflow: ellipsis; white-space: nowrap; }
+.live-info-pressure .lvp-bar { position: relative; height: 6px; overflow: hidden; border-radius: 4px; background: var(--border); }
+.live-info-pressure .lvp-fill { position: absolute; inset: 0 auto 0 0; border-radius: 4px; }
+.live-info-pressure .lvp-light { background: var(--bat); }
+.live-info-pressure .lvp-moderate { background: #a9c94a; }
+.live-info-pressure .lvp-high { background: var(--bal); }
+.live-info-pressure .lvp-very_high { background: var(--perf); }
+.live-info-pressure .lvp-val { min-width: 48px; color: var(--text); font: 600 11.5px/1 var(--mono); text-align: end; }
+.live-info-pressure .lvp-na .lvp-val { color: var(--text-tertiary); font-family: inherit; font-weight: 500; }
 .dev-zygisk-link { --link-color: var(--text-tertiary); display: grid; grid-template-columns: 9px minmax(0,1fr); gap: 10px; align-items: start; margin: 2px 0 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: rgba(255,255,255,.025); }
 .dev-zygisk-link-connected, .dev-zygisk-link-confirmed, .dev-zygisk-link-quiet { --link-color: var(--bat); }
 .dev-zygisk-link-waiting, .dev-zygisk-link-stale, .dev-zygisk-link-safe { --link-color: var(--bal); }
@@ -2242,6 +2284,14 @@ body.config-category-active #configPage .cfg-list {
 #reportPage .lgr-table td { padding-block: 7px; line-height: 1.4; }
 #reportPage .lgr-table td.lgr-td-num { font-family: var(--mono); font-size: 11.5px; }
 #zygiskPage .zy-status-card .dev-zygisk-link { margin-bottom: 0; }
+/* dev47: Connection and controls are one card. The embedded block has no frame of its own;
+ * a hairline separates "what the link is doing" from "what you can switch". */
+#zygiskPage .zy-status-card > .zy-controls-embedded {
+  margin: 12px 0 0; padding: 12px 0 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  scroll-margin-top: calc(var(--status-scrim-top) + 20px);
+}
+#zygiskPage .zy-status-card > .zy-controls-embedded .zy-controls-reveal { margin-top: 0; }
 #zygiskPage .zy-auto-card { background: linear-gradient(145deg,color-mix(in srgb,var(--accent) 5%,transparent),transparent 62%),var(--surface); }
 #zygiskPage .zy-auto-summary { border-inline-start: 2px solid var(--accent); line-height: 1.55; }
 #zygiskPage .zy-auto-current { color: var(--text-tertiary); }
@@ -2603,16 +2653,16 @@ html[data-asb-theme="light"] .cfg-zygisk-card { background:#fff; }
  * neon set - same identity, pastel over the near-black capsule instead of a slab. */
 /* Tile and heading share one literal rule, so neither can lose or drift from the hue.
  * Zygisk stays quiet slate rather than falling back to the bright ASB accent. */
-:is(.cfg-section,.cfg-tile).cat-audio   { --cat: #f98d9e; }
-:is(.cfg-section,.cfg-tile).cat-camera  { --cat: #efa8e2; }
+:is(.cfg-section,.cfg-tile).cat-audio   { --cat: #d4475f; }
+:is(.cfg-section,.cfg-tile).cat-camera  { --cat: #82b8ff; }
 :is(.cfg-section,.cfg-tile).cat-battery { --cat: #63daa3; }
-:is(.cfg-section,.cfg-tile).cat-ux      { --cat: #f0b76b; }
+:is(.cfg-section,.cfg-tile).cat-ux      { --cat: #f0cd4e; }
 :is(.cfg-section,.cfg-tile).cat-net     { --cat: #4cd3e8; }
 :is(.cfg-section,.cfg-tile).cat-iface   { --cat: #c6a3f5; }
 :is(.cfg-section,.cfg-tile).cat-system  { --cat: #a7b7c6; }
-:is(.cfg-section,.cfg-tile).cat-kernel  { --cat: #82b8ff; }
-:is(.cfg-section,.cfg-tile).cat-feel    { --cat: #e6b8a2; }
-:is(.cfg-section,.cfg-tile).cat-zygisk  { --cat: #a7b7c6; }
+:is(.cfg-section,.cfg-tile).cat-kernel  { --cat: #b0704a; }
+:is(.cfg-section,.cfg-tile).cat-feel    { --cat: #b3d65a; }
+:is(.cfg-section,.cfg-tile).cat-zygisk  { --cat: #b1b6bc; }
 .cfg-section[class*="cat-"] { --section-accent: var(--cat); --tech-icon: var(--cat); }
 .cfg-tile[class*="cat-"] { --tech-icon: var(--cat); }
 
@@ -2769,11 +2819,11 @@ html[data-asb-theme="light"] .cfg-zygisk-card { background:#fff; }
 }
 /* The hue map feeds both the tweak icon and (fix217) the tweak row itself: the row
  * carries its cat-* class, so an enabled card lights up in its category colour. */
-:is(.cfg-icon,.cfg-row).cat-audio   { --cat: #f98d9e; }
-:is(.cfg-icon,.cfg-row).cat-camera  { --cat: #efa8e2; }
+:is(.cfg-icon,.cfg-row).cat-audio   { --cat: #d4475f; }
+:is(.cfg-icon,.cfg-row).cat-camera  { --cat: #82b8ff; }
 :is(.cfg-icon,.cfg-row).cat-battery { --cat: #63daa3; }
 :is(.cfg-icon,.cfg-row).cat-perf    { --cat: #bfa1f7; }
-:is(.cfg-icon,.cfg-row).cat-ux      { --cat: #f0b76b; }
+:is(.cfg-icon,.cfg-row).cat-ux      { --cat: #f0cd4e; }
 :is(.cfg-icon,.cfg-row).cat-display { --cat: #c9d0dd; }
 :is(.cfg-icon,.cfg-row).cat-memory  { --cat: #4ed9c8; }
 :is(.cfg-icon,.cfg-row).cat-system  { --cat: #a7b7c6; }
@@ -2783,9 +2833,9 @@ html[data-asb-theme="light"] .cfg-zygisk-card { background:#fff; }
 :is(.cfg-icon,.cfg-row).cat-blur    { --cat: #b9a5ff; }
 :is(.cfg-icon,.cfg-row).cat-motion  { --cat: #ff8fc0; }
 :is(.cfg-icon,.cfg-row).cat-haptic  { --cat: #f5b45e; }
-:is(.cfg-icon,.cfg-row).cat-kernel  { --cat: #82b8ff; }
-:is(.cfg-icon,.cfg-row).cat-feel    { --cat: #e6b8a2; }
-:is(.cfg-icon,.cfg-row).cat-zygisk  { --cat: #a7b7c6; }
+:is(.cfg-icon,.cfg-row).cat-kernel  { --cat: #b0704a; }
+:is(.cfg-icon,.cfg-row).cat-feel    { --cat: #b3d65a; }
+:is(.cfg-icon,.cfg-row).cat-zygisk  { --cat: #b1b6bc; }
 .cfg-icon[class*="cat-"] { --tech-icon: var(--cat); }
 /* Enabled tweak cards wear the same category-hue gradient and glow as the six hub
  * tiles (fix217): the row carries its cat-* class, so the whole card lights up in its
@@ -3411,10 +3461,10 @@ html[data-asb-theme="light"] .nf-sel-row.warn .nf-sel-why { color: #8a5a00 !impo
   color:var(--cat) !important;
   border-color:color-mix(in srgb,var(--cat) 34%,var(--border)) !important;
 }
-/* Kernel's ordinary actions belong to the same blue chain. Clearing live wakeup rules is
+/* Kernel's ordinary actions belong to the same brown chain. Clearing live wakeup rules is
  * destructive and therefore deliberately keeps an independent warning hue. */
 .kernel-card.cat-kernel .bfx-primary:not(.kernel-clear):not(:disabled) {
-  color:#07111d;
+  color:#1b0f07;
   border-color:color-mix(in srgb,var(--cat) 70%,#fff);
   background:linear-gradient(135deg,color-mix(in srgb,var(--cat) 82%,#fff),var(--cat));
   box-shadow:0 4px 14px color-mix(in srgb,var(--cat) 22%,transparent);
@@ -3597,6 +3647,8 @@ html[data-asb-theme="light"] .bfx-step.is-fail .bfx-step-s { color: #b3261e; }
 .junk-cat-meta { flex:0 0 auto; max-width:52%; color:var(--text); font-size:11.5px; line-height:1.4; text-align:right; font-variant-numeric:tabular-nums; }
 .junk-cat.is-warn .junk-cat-meta { color:#ffd27a; }
 .junk-card .bfx-btn { min-height:54px; }
+.soter-card .bfx-btn { min-height:50px; }
+.soter-card .junk-cats { margin-top:10px; }
 html[dir="rtl"] .junk-cat-meta { text-align:left; }
 html[data-asb-theme="light"] .junk-cat.is-warn .junk-cat-meta { color:#8a5a00; }
 
@@ -4236,16 +4288,16 @@ html[data-asb-theme="light"] .cfg-reboot-tile.soft  { --rb:#b25b00; }
 html[data-asb-theme="light"] .cfg-reboot-tile.sysui { --rb:#9a7300; }
 /* Light deepens --cat once for every consumer - tile, heading and tweak icon - instead
  * of restating the same colour on each of them (fix193). */
-html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-audio   { --cat:#c0362c; }
-html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-camera  { --cat:#9c3f86; }
+html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-audio   { --cat:#9e2441; }
+html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-camera  { --cat:#2f62b0; }
 html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-battery { --cat:#127a45; }
-html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-ux      { --cat:#9a5a00; }
+html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-ux      { --cat:#946400; }
 html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-net     { --cat:#0b6f86; }
 html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-iface   { --cat:#7442b8; }
-html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-system,
-html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-zygisk { --cat:#4a5f75; }
-html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-kernel  { --cat:#346aa8; }
-html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-feel    { --cat:#9a5b43; }
+html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-system  { --cat:#4a5f75; }
+html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-zygisk  { --cat:#5d6167; }
+html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-kernel  { --cat:#7a3f24; }
+html[data-asb-theme="light"] :is(.cfg-section,.cfg-tile,.cfg-icon).cat-feel    { --cat:#647800; }
 html[data-asb-theme="light"] .cfg-section-title { color:var(--section-accent,#a52620) !important; }
 html[data-asb-theme="light"] .cfg-row:not(.is-on) { box-shadow:0 1px 2px rgba(16,24,32,.05); }
 html[data-asb-theme="light"] .cfg-row.is-on { background:linear-gradient(160deg,rgba(0,124,99,.07),#fff 70%) !important; border-color:rgba(0,124,99,.30) !important; }
@@ -4253,16 +4305,16 @@ html[data-asb-theme="light"] .cfg-row.is-on { background:linear-gradient(160deg,
  * enabled card lights up exactly like its hub tile - same gradient, same border tint,
  * plus a soft category-coloured glow. Higher specificity + !important beats the teal
  * is-on rules above; those stay as the fallback for rows without a category. */
-html[data-asb-theme="light"] .cfg-row.cat-audio   { --cat:#c0362c; }
-html[data-asb-theme="light"] .cfg-row.cat-camera  { --cat:#9c3f86; }
+html[data-asb-theme="light"] .cfg-row.cat-audio   { --cat:#9e2441; }
+html[data-asb-theme="light"] .cfg-row.cat-camera  { --cat:#2f62b0; }
 html[data-asb-theme="light"] .cfg-row.cat-battery { --cat:#127a45; }
-html[data-asb-theme="light"] .cfg-row.cat-ux      { --cat:#9a5a00; }
+html[data-asb-theme="light"] .cfg-row.cat-ux      { --cat:#946400; }
 html[data-asb-theme="light"] .cfg-row.cat-net     { --cat:#0b6f86; }
 html[data-asb-theme="light"] .cfg-row.cat-iface   { --cat:#7442b8; }
 html[data-asb-theme="light"] .cfg-row.cat-system  { --cat:#4a5f75; }
-html[data-asb-theme="light"] .cfg-row.cat-kernel  { --cat:#346aa8; }
-html[data-asb-theme="light"] .cfg-row.cat-feel    { --cat:#9a5b43; }
-html[data-asb-theme="light"] :is(.cfg-row.cat-zygisk,.cfg-zygisk-card) { --cat:#4a5f75; }
+html[data-asb-theme="light"] .cfg-row.cat-kernel  { --cat:#7a3f24; }
+html[data-asb-theme="light"] .cfg-row.cat-feel    { --cat:#647800; }
+html[data-asb-theme="light"] :is(.cfg-row.cat-zygisk,.cfg-zygisk-card) { --cat:#5d6167; }
 html[data-asb-theme="light"] .cfg-row.is-on[class*="cat-"] {
   background: linear-gradient(160deg, color-mix(in srgb, var(--cat) 13%, #ffffff) 0%, color-mix(in srgb, var(--cat) 6%, #ffffff) 55%, color-mix(in srgb, var(--cat) 3%, #ffffff) 100%) !important;
   border-color: color-mix(in srgb, var(--cat) 34%, var(--border)) !important;
@@ -6539,6 +6591,9 @@ const TECH_ICON_PATHS = {
   refresh_peak: '<rect x="4" y="3.5" width="16" height="17" rx="2.5"/><path d="M7.3 14.5l2.2-2.2 2 1.6 3-4.4 2.2 1.2"/><path d="M7 6.8h10"/>',
   pharmacy: '<rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><path d="M12 8v8M8 12h8"/>',
   wrench: '<path d="M14.7 6.3a4 4 0 0 0-5.2 5.2L4 17l3 3 5.5-5.5a4 4 0 0 0 5.2-5.2l-2.3 2.3-2.4-.6-.6-2.4z"/>',
+  /* soter_fix (dev47): a fingerprint with a small repair arrow - the payment-biometric key
+     server being reset and restarted, not a generic wrench. */
+  soter_fix: '<path d="M6.2 9.5a6 6 0 0 1 11.6 0"/><path d="M8.3 19.5c-.9-1.6-1.3-3.3-1.3-5.2a5 5 0 0 1 10 0v1"/><path d="M12 14.2v1.6c0 1.6.4 3 1.2 4.2"/><path d="M9.6 13.8a2.4 2.4 0 0 1 4.8 0"/><path d="M16.5 18.2a2.6 2.6 0 1 0 2.4-2.9"/><path d="M19.5 13.6v1.9h-1.9"/>',
   /* mmfeed: a telemetry bar-chart struck through - the feedback collector being shut
      off. Not an eye: this kills event reporting and dumps, not visibility. */
   mmfeed: '<path d="M3.5 3.5l17 17"/><path d="M6 20v-6"/><path d="M12 20v-9"/><path d="M18 20v-4"/>',
@@ -8507,6 +8562,72 @@ function lvBasisPaint(kv, fb, dp, we, conf, night, veto) {
 /* The whole picture, read from the governor's summary when the sheet opens - once, on tap.
  * tok is the sheet's open count: an answer for a sheet that has since been replaced is dropped. */
 var _lviTok = 0;
+/* dev47: the Load sheets (Smart's foreground load and Stock's system load) show the same
+ * 0-100 pressure scale as Device diagnostics, measured on open by the same read-only
+ * collector (runtime/asb_pressure.sh through asb_pressure_snapshot.sh): a coloured band bar
+ * with the score marker, then each measured component on its own bar. A component the phone
+ * does not expose says so instead of drawing an empty bar. Nothing is written. */
+const LVI_PRESSURE_KEYS = ['apphint', 'sload'];
+const LVI_PRESSURE_PARTS = [
+  ['load_per_core', 'load_component', function (v) { return v; }],
+  ['memory_used_pct', 'memory_used_pct', function (v) { return v + ' %'; }],
+  ['cpu_busy_pct', 'cpu_busy_pct', function (v) { return v + ' %'; }],
+  ['gpu_busy_pct', 'gpu_busy_pct', function (v) { return v + ' %'; }]
+];
+function lviPressureTone(n) {
+  return n < 25 ? 'light' : n < 50 ? 'moderate' : n < 75 ? 'high' : 'very_high';
+}
+function lviPressureRender(box, d) {
+  box.textContent = '';
+  const cap = document.createElement('div'); cap.className = 'lvp-cap';
+  cap.textContent = T('dev_sec_system_load', 'Current system load');
+  box.appendChild(cap);
+  box.appendChild(devicePressureScale(d));
+  const parts = document.createElement('div'); parts.className = 'lvp-parts';
+  LVI_PRESSURE_PARTS.forEach(function (p) {
+    const raw = deviceVal(d, 'system_load', p[0]);
+    const fillRaw = deviceVal(d, 'system_load', p[1]);
+    const ok = /^\d+(\.\d+)?$/.test(raw) && /^\d+(\.\d+)?$/.test(fillRaw);
+    const row = document.createElement('div'); row.className = 'lvp-row' + (ok ? '' : ' lvp-na');
+    const lbl = document.createElement('span'); lbl.className = 'lvp-lbl'; lbl.textContent = deviceLabel('system_load', p[0]);
+    const bar = document.createElement('span'); bar.className = 'lvp-bar';
+    const val = document.createElement('span'); val.className = 'lvp-val';
+    if (ok) {
+      const pct = Math.max(0, Math.min(100, Number(fillRaw)));
+      const fill = document.createElement('span'); fill.className = 'lvp-fill lvp-' + lviPressureTone(pct);
+      fill.style.width = (pct > 0 ? Math.max(pct, 2) : 0) + '%';
+      bar.appendChild(fill);
+      val.textContent = p[2](raw);
+    } else val.textContent = T('lvi_pressure_na', 'not exposed');
+    row.appendChild(lbl); row.appendChild(bar); row.appendChild(val);
+    parts.appendChild(row);
+  });
+  box.appendChild(parts);
+  box.hidden = false;
+}
+async function lviPressureLoad(box, key, tok) {
+  if (!box) return;
+  box.textContent = '';
+  box.className = 'live-info-pressure';
+  if (LVI_PRESSURE_KEYS.indexOf(key) < 0) { box.hidden = true; return; }
+  const wait = document.createElement('div'); wait.className = 'lvp-wait';
+  wait.textContent = T('lvi_pressure_loading', 'Measuring the system load…');
+  box.appendChild(wait); box.hidden = false;
+  let d = null;
+  try {
+    const r = await run('sh ' + shQuote(MD + '/runtime/asb_pressure_snapshot.sh') + ' 2>/dev/null');
+    d = parseDeviceInfo((r && r.stdout) || '');
+  } catch (e) { d = null; }
+  if (tok !== _lviTok || !liveInfoIsOpen()) return;
+  if (!d || !d.sections || !d.sections.system_load) {
+    box.textContent = '';
+    const bad = document.createElement('div'); bad.className = 'lvp-wait';
+    bad.textContent = T('lvi_pressure_failed', 'The system load could not be measured right now.');
+    box.appendChild(bad);
+    return;
+  }
+  lviPressureRender(box, d);
+}
 async function lviRecordsAppend(src, tok) {
   try {
     const r = await run('cat /dev/.asb/smart_records.txt 2>/dev/null');
@@ -8624,6 +8745,7 @@ function liveInfoEnsure() {
     + '<button class="cfg-profile-close" id="liveInfoX" type="button" aria-label="Close">\u00d7</button></div>'
     + '<div class="live-info-now"><span class="live-drain-lbl" id="liveInfoNowLbl"></span><span class="live-info-val" id="liveInfoVal"></span></div>'
     + '<div class="live-info-scale" id="liveInfoScale" hidden></div>'
+    + '<div class="live-info-pressure" id="liveInfoPressure" hidden></div>'
     + '<div class="live-info-text" id="liveInfoText"></div>'
     + '<div class="live-info-hist" id="liveInfoHist" hidden></div>'
     + '<div class="live-info-src" id="liveInfoSrc" hidden></div>'
@@ -8953,6 +9075,7 @@ function liveInfoOpen(cell) {
   src.hidden = !lines.length;
   const tok = (typeof _lviTok === 'number') ? ++_lviTok : 0;
   if (key === 'basis' && typeof lviRecordsAppend === 'function') lviRecordsAppend(src, tok);
+  if (typeof lviPressureLoad === 'function') lviPressureLoad(_el('liveInfoPressure'), key, tok);
   _el('liveInfoDone').textContent = T('doze_keep_done', 'Done');
   m.hidden = false;
   m.setAttribute('aria-hidden', 'false');
@@ -8969,6 +9092,7 @@ function liveInfoOpenData(detail) {
   iv.className = 'live-info-val'; iv.style.color = '';
   _el('liveInfoText').textContent = String(detail.text || '');
   _el('liveInfoScale').hidden = true; _el('liveInfoScale').textContent = '';
+  const lip = _el('liveInfoPressure'); if (lip) { lip.hidden = true; lip.textContent = ''; }
   _el('liveInfoHist').hidden = true; _el('liveInfoHist').textContent = '';
   const src = _el('liveInfoSrc'), lines = Array.isArray(detail.lines) ? detail.lines : [];
   src.textContent = lines.filter(function (x) { return x !== undefined && x !== null && String(x) !== ''; }).map(String).join('\n');
@@ -9686,7 +9810,7 @@ const CFG_GROUP_SECTIONS = {
     { id:'repairs', icon:'wrench', titleKey:'cfg_inf_section_repairs',
       title:'System Repairs', hintKey:'cfg_inf_section_repairs_hint',
       hint:'One-tap, reversible repairs for specific OxygenOS/ColorOS problems.',
-      keys:['heytap_mcs','documentsui_fix'] }
+      keys:['heytap_mcs','documentsui_fix'], card:'soterfix' }
   ]
 };
 
@@ -9973,6 +10097,145 @@ function asbPharmacyCross(gid) {
 }
 function cfgOpenInfirmary() { uiSound('nav'); cfgShowGroup('infirmary'); }
 
+/* Infirmary → System Repairs → SOTER Repair (dev47). Tencent SOTER is the TEE-backed key
+ * server behind fingerprint payments in WeChat Pay, Alipay and many Chinese banking apps.
+ * When it is stuck, those apps report a failed device check although everything else is in
+ * order. The fixed shell owner (runtime/asb_soter_fix.sh, status|run only) stops the ROM's
+ * SOTER services, clears the SOTER server's own data so it re-provisions its keys, starts the
+ * services again and reads their state back. It is manual only: nothing runs at boot or in a
+ * loop. It hides nothing: a check that fails because of root or an unlocked bootloader stays
+ * failed. Clearing removes the keys those apps enrolled, so fingerprint payment has to be
+ * switched on again in each of them - the second tap within five seconds confirms that. */
+const SOTER_FIX_SCRIPT = MD + '/runtime/asb_soter_fix.sh';
+let _soterArmed = 0, _soterBusy = false, _soterSeq = 0, _soterInstalled = '';
+function soterParse(txt) {
+  const out = { kind: '', f: {} };
+  String(txt || '').split('\n').some(function (line) {
+    const p = line.split('|');
+    if (p[0] !== 'soter' || (p[1] !== 'status' && p[1] !== 'result')) return false;
+    out.kind = p[1];
+    p.slice(2).forEach(function (x) { const i = x.indexOf('='); if (i > 0) out.f[x.slice(0, i)] = x.slice(i + 1); });
+    return true;
+  });
+  return out;
+}
+function soterServices(raw) {
+  const v = String(raw || '');
+  if (!v || v === 'none') return [];
+  return v.split(',').map(function (x) {
+    const i = x.lastIndexOf(':');
+    return { name: (i > 0 ? x.slice(0, i) : x).replace(/[^A-Za-z0-9_.@-]/g, '').slice(0, 48), state: (i > 0 ? x.slice(i + 1) : 'unknown').replace(/[^a-z_]/g, '').slice(0, 20) };
+  }).filter(function (x) { return x.name; });
+}
+function soterResultText(state) {
+  const fb = {
+    done: 'SOTER data reset; its service is running again',
+    done_no_service: 'SOTER server data reset; this ROM declares no separate SOTER service',
+    service_down: 'SOTER data reset, but its service did not start again - restart the phone',
+    clear_failed: 'Android refused to clear the SOTER server data; its service was only restarted',
+    not_installed: 'The SOTER server is not installed on this ROM - nothing to repair',
+    busy: 'A SOTER repair is already running',
+    lock_error: 'The repair could not start',
+    unknown: 'Could not check whether the SOTER server is installed'
+  };
+  return T('soter_res_' + state, fb[state] || fb.lock_error);
+}
+function soterRow(host, label, value, warn) {
+  const row = bfxEl('div', 'junk-cat soter-row' + (warn ? ' is-warn' : ''));
+  row.appendChild(bfxEl('div', 'junk-cat-name', label));
+  row.appendChild(bfxEl('div', 'junk-cat-meta', value));
+  host.appendChild(row);
+}
+function soterPaint(parsed) {
+  const host = _el('soterRows'), chip = _el('soterChip'), runBtn = _el('soterRun'), refresh = _el('soterRefresh');
+  if (!host) return;
+  host.textContent = '';
+  const f = parsed.f || {};
+  if (parsed.kind !== 'status') {
+    _soterInstalled = '';
+    if (chip) { chip.className = 'bfx-chip is-wait'; chip.textContent = T('soter_chip_unknown', 'Unknown'); }
+    soterRow(host, T('soter_row_server', 'SOTER server'), T('soter_check_failed', 'Could not read the SOTER state'), true);
+    if (runBtn) runBtn.disabled = true;
+    if (refresh) refresh.disabled = _soterBusy;
+    return;
+  }
+  _soterInstalled = f.installed || '';
+  const svcs = soterServices(f.services);
+  const down = svcs.filter(function (x) { return x.state !== 'running'; });
+  soterRow(host, T('soter_row_server', 'SOTER server'),
+    f.installed === '1' ? T('soter_installed', 'installed') : f.installed === '0' ? T('soter_not_installed', 'not installed on this ROM') : T('soter_check_failed', 'Could not read the SOTER state'),
+    f.installed !== '1' && f.installed !== '0');
+  soterRow(host, T('soter_row_service', 'Service'),
+    svcs.length ? svcs.map(function (x) { return x.name + ' · ' + (x.state === 'running' ? T('soter_svc_running', 'running') : x.state === 'stopped' ? T('soter_svc_stopped', 'stopped') : x.state); }).join(', ')
+      : T('soter_no_service', 'not declared by the ROM'), down.length > 0);
+  const lt = parseInt(f.last_time, 10);
+  soterRow(host, T('soter_row_last', 'Last repair'),
+    (lt > 0 && f.last_result && f.last_result !== 'none')
+      ? new Date(lt * 1000).toLocaleString() + ' · ' + soterResultText(f.last_result)
+      : T('soter_never', 'not run yet'), false);
+  if (chip) {
+    if (f.installed === '0') { chip.className = 'bfx-chip is-off'; chip.textContent = T('soter_chip_absent', 'Not installed'); }
+    else if (f.installed !== '1') { chip.className = 'bfx-chip is-wait'; chip.textContent = T('soter_chip_unknown', 'Unknown'); }
+    else if (down.length) { chip.className = 'bfx-chip is-wait'; chip.textContent = T('soter_chip_down', 'Service stopped'); }
+    else { chip.className = 'bfx-chip is-ready'; chip.textContent = T('soter_chip_ready', 'Ready'); }
+  }
+  if (runBtn) runBtn.disabled = _soterBusy || f.installed !== '1';
+  if (refresh) refresh.disabled = _soterBusy;
+}
+function cfgRenderSoterFixCard(list) {
+  const card = bfxEl('div', 'cfg-row bfx-card soter-card'); card.id = 'soterCard';
+  const head = bfxEl('div', 'bfx-head');
+  const em = bfxEl('div', 'bfx-emblem'); em.innerHTML = techIcon('soter_fix'); head.appendChild(em);
+  const titles = bfxEl('div', 'bfx-titles');
+  titles.appendChild(bfxEl('div', 'bfx-title', T('soter_title', 'SOTER Repair')));
+  const chip = bfxEl('span', 'bfx-chip is-off', T('junk_scan', 'Scanning…')); chip.id = 'soterChip'; titles.appendChild(chip);
+  head.appendChild(titles); card.appendChild(head);
+  card.appendChild(bfxEl('div', 'bfx-desc', T('soter_desc', 'SOTER is the Tencent key server behind fingerprint payments in WeChat Pay, Alipay and many Chinese banking apps. If those apps report a failed device check although everything else works, the repair stops the SOTER service, clears only the SOTER server data so it creates fresh keys, and starts the service again. Afterwards switch fingerprint payment on again in those apps. It does not hide root or an unlocked bootloader.')));
+  const rows = bfxEl('div', 'junk-cats'); rows.id = 'soterRows'; card.appendChild(rows);
+  const actions = bfxEl('div', 'bfx-actions');
+  const runBtn = bfxEl('button', 'bfx-btn bfx-primary', T('soter_run', 'Repair SOTER'));
+  runBtn.type = 'button'; runBtn.id = 'soterRun'; runBtn.disabled = true; runBtn.onclick = soterFixRun; actions.appendChild(runBtn);
+  const refresh = bfxEl('button', 'bfx-btn bfx-secondary', T('soter_refresh', 'Check again'));
+  refresh.type = 'button'; refresh.id = 'soterRefresh'; refresh.disabled = true; refresh.onclick = function () { soterFixLoad(true); }; actions.appendChild(refresh);
+  card.appendChild(actions);
+  const note = bfxEl('div', 'bfx-note'); note.id = 'soterNote'; card.appendChild(note);
+  list.appendChild(card);
+  soterFixLoad(false);
+}
+async function soterFixLoad(manual) {
+  if (!_el('soterCard') || _soterBusy) return;
+  const seq = ++_soterSeq;
+  _soterArmed = 0;
+  if (manual) uiSound('nav');
+  let r = null;
+  try { r = await run('sh ' + shQuote(SOTER_FIX_SCRIPT) + ' status'); } catch (e) {}
+  if (seq !== _soterSeq || !_el('soterCard')) return;
+  soterPaint(soterParse(r && r.stdout != null ? String(r.stdout) : ''));
+}
+async function soterFixRun() {
+  const btn = _el('soterRun');
+  if (_soterBusy || !btn || btn.disabled || _soterInstalled !== '1') return;
+  const now = Date.now();
+  if (now - _soterArmed > 5000) {
+    _soterArmed = now; uiSound('capture');
+    toast(T('soter_confirm', 'Tap again to reset SOTER: fingerprint payment must then be switched on again in WeChat Pay, Alipay and banking apps'), 'perf');
+    return;
+  }
+  _soterArmed = 0; _soterBusy = true; const seq = ++_soterSeq;
+  btn.disabled = true; if (_el('soterRefresh')) _el('soterRefresh').disabled = true;
+  const chip = _el('soterChip'); if (chip) { chip.className = 'bfx-chip is-run'; chip.textContent = T('soter_running', 'Repairing…'); }
+  let r = null;
+  try { r = await run('sh ' + shQuote(SOTER_FIX_SCRIPT) + ' run'); } catch (e) {}
+  _soterBusy = false;
+  if (seq !== _soterSeq || !_el('soterCard')) return;
+  const res = soterParse(r && r.stdout != null ? String(r.stdout) : '');
+  const state = res.kind === 'result' ? (res.f.state || 'lock_error') : 'lock_error';
+  const note = _el('soterNote'); if (note) note.textContent = soterResultText(state);
+  if (state === 'done' || state === 'done_no_service') { uiSound('success'); toast(soterResultText(state), 'good'); }
+  else toast(soterResultText(state), state === 'busy' || state === 'not_installed' ? 'perf' : 'err');
+  soterFixLoad(false);
+}
+
 /* Infirmary → Junk Cleanup (dev32). A manual dry-run/readback flow around one bounded shell
  * owner. The card never accepts a path from the browser and never starts a polling worker. */
 const JUNK_CLEANUP_SCRIPT = MD + '/runtime/asb_junk_cleanup.sh';
@@ -10162,6 +10425,7 @@ function cfgRenderGroup(list, groupId) {
       cfgRenderRow(list, it, false);
       if (ASB_KERNEL_STATUS_KEYS.indexOf(it.key) >= 0) kernelDecorateControlRow(list.lastChild, it.key);
     });
+    if (section.card === 'soterfix') cfgRenderSoterFixCard(list);
     if (groupId === 'battery' && section.id === 'standby') cfgRenderNotifCard(list);
   });
   // Future cards still appear rather than silently disappearing when a maintainer forgets
@@ -10451,7 +10715,7 @@ function cfgToastText(key, val) {
   return '\u2713 ' + name + ': ' + v;
 }
 
-function cfgToastType(key){ return 'cat-' + (CFG_CAT[key] || 'system'); }
+function cfgToastType(key){ return cfgCatClass(key); }
 
 /* Which hardware capability each tweak actually needs.
  *
@@ -16469,6 +16733,7 @@ function devicePressureScale(d) {
   const wrap = document.createElement('div'); wrap.className = 'dev-pressure';
   const head = document.createElement('div'); head.className = 'dev-pressure-head';
   const bandRaw = deviceVal(d, 'system_load', 'band');
+  if (/^(light|moderate|high|very_high)$/.test(bandRaw)) wrap.className += ' dev-pressure-' + bandRaw;
   const band = document.createElement('span'); band.className = 'dev-pressure-band';
   band.textContent = T('dev_load_band_' + bandRaw, deviceFallbackLabel(bandRaw));
   const scoreRaw = deviceVal(d, 'system_load', 'score');
@@ -16810,9 +17075,17 @@ async function zygiskAutoSet(action, profile) {
 }
 let _zygiskControlBusy = '';
 let _zygiskControlsExpanded = false;
-function zygiskControlsCard(d) {
+/* dev47: on the ZYGISK page the controls live inside the Connection card (one card, "Connection
+ * and controls"): the switches act on exactly the link the card reports. Embedded, the block
+ * is a plain inner block (not a second .lgr-sec, so no theme paints a card inside a card),
+ * drops its own heading and sits under a hairline; standalone it is still a full card. */
+function zygiskControlsCard(d, embedded) {
   const card = logReportSec(T('zy_sec_controls', 'ASB Zygisk controls'), 'switches');
   card.classList.add('zy-controls-card');
+  if (embedded) {
+    card.className = 'zy-controls-card zy-controls-embedded';
+    if (card.firstChild) card.removeChild(card.firstChild);
+  }
   const reveal = document.createElement('button');
   reveal.type = 'button'; reveal.className = 'dev-zygisk-btn zy-controls-reveal';
   reveal.id = 'zyControlsReveal';
@@ -17017,11 +17290,16 @@ function zygiskPageRender(d, state) {
     }
     return;
   }
-  const st = logReportSec(T('zy_sec_status', 'Connection'), 'zygisk_observer');
+  const zyOn = deviceVal(d, 'zygisk_observer', 'enabled') !== '0';
+  const st = logReportSec(zyOn ? T('zy_sec_link_controls', 'Connection and controls') : T('zy_sec_status', 'Connection'), 'zygisk_observer');
   st.id = 'zy-status'; st.classList.add('zy-status-card');
   st.appendChild(deviceZygiskLink(d));
+  if (zyOn) {
+    const controls = zygiskControlsCard(d, true); controls.id = 'zy-controls';
+    st.classList.add('zy-status-merged'); st.appendChild(controls);
+  }
   body.appendChild(st);
-  if (deviceVal(d, 'zygisk_observer', 'enabled') === '0') {
+  if (!zyOn) {
     body.appendChild(zygiskOffCard());
     const lspOff = lspLiteCard(); lspOff.id = 'zy-lsp'; body.appendChild(lspOff);
     const s7Off = smart7Card(); s7Off.id = 'zy-s7'; body.appendChild(s7Off);
@@ -17030,14 +17308,13 @@ function zygiskPageRender(d, state) {
     return;
   }
   body.appendChild(asbPageJump([
-    ['zy-mode', T('zy_nav_mode', 'Mode')], ['zy-auto', T('zy_nav_auto', 'Automatic')],
-    ['zy-controls', T('zy_nav_controls', 'Controls')], ['zy-activity', T('zy_nav_activity', 'Activity')],
+    ['zy-controls', T('zy_nav_controls', 'Controls')], ['zy-mode', T('zy_nav_mode', 'Mode')],
+    ['zy-auto', T('zy_nav_auto', 'Automatic')], ['zy-activity', T('zy_nav_activity', 'Activity')],
     ['zy-guard', T('zy_nav_guard', 'Guard')], ['zy-lsp', T('zy_nav_lsp', 'LSPosed')], ['zy-s7', T('zy_nav_s7', 'Budgets')], ['zy-aot', T('zy_nav_art', 'ART')],
     ['zy-apps', T('zy_nav_apps', 'Apps')]
   ], T('dev_nav_title', 'Jump to'), 'zy-page-nav'));
   const mode = zygiskModeCard(d); mode.id = 'zy-mode'; body.appendChild(mode);
   const automatic = zygiskAutoCard(d); automatic.id = 'zy-auto'; body.appendChild(automatic);
-  const controls = zygiskControlsCard(d); controls.id = 'zy-controls'; body.appendChild(controls);
   const act = logReportSec(T('zy_sec_activity', 'Activity and cost'), 'zygisk_activity');
   act.id = 'zy-activity';
   act.appendChild(deviceZygiskOverview(d));
