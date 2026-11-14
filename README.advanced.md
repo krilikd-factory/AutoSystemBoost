@@ -910,6 +910,14 @@ Fixed roots are not accepted from the browser. `find` does not follow symlinks a
 
 Cleanup can recover the displayed number of bytes and remove diagnostic clutter. It is **not** evidence of a universal anti-lag repair: no FPS, responsiveness, battery or performance improvement is claimed without a comparable on-device A/B measurement. Host fixtures and browser tests do not establish physical ColorOS WebView behaviour.
 
+### 🔏 11.20. Infirmary: SOTER Repair (V66 dev47)
+
+**Settings → Infirmary → System Repairs → SOTER Repair** is a manual reset of the SOTER key server (`com.tencent.soter.soterserver`), the system service behind fingerprint payments in some payment apps. The WebUI calls only `sh runtime/asb_soter_fix.sh status` and `... run`; no package name, service name or other argument comes from the browser. Status reads `/data/system/packages.list` (falling back to `pm path`) and the states of the ROM's own `init.svc.*soter*` services; it changes nothing.
+
+Run takes an atomic lock (`/data/adb/asb/soter_fix/run.lock`, removed by post-fs-data after a reboot), stops only the declared SOTER services, runs `pm clear com.tencent.soter.soterserver`, starts the services again and polls their state for up to five seconds. done, done without a declared service, service down, clear refused, not installed, busy and lock error stay separate outcomes; the last outcome and its time are kept in `/data/adb/asb/soter_fix/last`. A second tap within five seconds confirms the run, because fingerprint payment has to be switched on again in the payment apps afterwards. Nothing runs at boot and no worker polls.
+
+The repair clears locally generated SOTER keys so the server can create fresh ones. It does **not** hide root, Zygisk or an unlocked bootloader. The service name and the payment-app behaviour after a reset are ROM-specific; host fixtures do not establish them on a phone.
+
 ## 🔐 12. Device information, privacy and evidence quality
 
 ### 🕵️ 12.1. Read-only, on-demand collection

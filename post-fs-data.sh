@@ -92,6 +92,7 @@ rm -f /data/adb/asb/ltpo_video.lock/pid 2>/dev/null
 rmdir /data/adb/asb/ltpo_video.lock 2>/dev/null
 rm -rf /data/adb/asb/heytap_art_compile.lock 2>/dev/null
 rm -rf /data/adb/asb/battery_fix.lock 2>/dev/null
+rmdir /data/adb/asb/junk_cleanup/run.lock /data/adb/asb/soter_fix/run.lock 2>/dev/null
 rm -f /data/adb/asb/battery_fix.pkgs.* /data/adb/asb/battery_fix.compile.tmp.* \
       /data/adb/asb/battery_fix.stop 2>/dev/null
 [ -f /data/adb/asb/battery_fix.pending ] && [ -f "$MODDIR/runtime/asb_battery_fix.sh" ] && \
