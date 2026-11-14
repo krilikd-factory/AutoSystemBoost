@@ -3607,7 +3607,25 @@ if [ -s /data/adb/asb/wakelock_fitness_limited ]; then
     # No WAKE_LOCK entry means the op is back at default: the system reset it (app update,
     # permission reset, boot sweep). The wakelock watcher re-applies it on its next pass.
     # fix143: put back about 5 and 10 minutes after boot, then by the hourly screen-off pass.
-    case "${_fnow:-default}" in ignore*) : ;; *) NOTE "  limit lapsed - the system reset this app-op (OPlus does at boot); ASB puts it back about 5-10 min after boot, otherwise on the next hourly screen-off pass" ;; esac
+    case "${_fnow:-default}" in
+      ignore*) : ;;
+      *)
+        _fra="$(grep "^$_fp|" /data/adb/asb/wakelock_fitness_reapply 2>/dev/null | tail -1)"
+        _fra_t="$(printf '%s' "$_fra" | cut -d'|' -f2)"
+        _fra_m="$(printf '%s' "$_fra" | cut -d'|' -f3)"
+        _fra_r="$(printf '%s' "$_fra" | cut -d'|' -f4-)"
+        _fra_w="$(date -d "@$_fra_t" '+%Y-%m-%d %H:%M' 2>/dev/null || echo "$_fra_t")"
+        _fraw="$(appops get "$_fp" WAKE_LOCK 2>/dev/null | grep -m1 . | cut -c1-80)"
+        if [ -z "$_fra" ]; then
+          NOTE "  limit lapsed - the system reset this app-op (OPlus does at boot); ASB puts it back about 5-10 min after boot, otherwise on the next hourly screen-off pass"
+        elif [ "$_fra_m" = ignore ]; then
+          NOTE "  limit lapsed again - ASB last put it back at $_fra_w and it read back ignore then; the system has reset it since. ASB re-applies it 5 and 10 min after boot and on each hourly screen-off pass"
+        else
+          NOTE "  not kept by Android - right after ASB set it at $_fra_w the op read back '$_fra_m' (appops: ${_fra_r:--}); this ROM does not store the WAKE_LOCK limit for this app"
+        fi
+        NOTE "  appops reads now: ${_fraw:-no output}"
+        ;;
+    esac
   done < /data/adb/asb/wakelock_fitness_limited
 fi
 if [ "$(cfg wakelock_fitness)" = limit ] && [ ! -s /data/adb/asb/wakelock_fitness_limited ] \
@@ -4289,8 +4307,16 @@ else
   NOTE "kernel_sched_stats = $(cfg kernel_sched_stats)  ·  live: not exposed"
 fi
 if [ -f /data/adb/modules/AutoSystemBoost/runtime/asb_kernel_controls.sh ]; then
-  while IFS= read -r _kc_diag; do
-    [ -n "$_kc_diag" ] && NOTE "kernel_control: $_kc_diag"
+  while IFS='|' read -r _kc_k _kc_s _kc_m _kc_l _kc_b; do
+    [ -n "$_kc_k" ] || continue
+    case "$_kc_s" in
+      covered_by_timer_migration)
+        NOTE "kernel_control: $_kc_k = $_kc_m  ·  no separate node on this kernel - the timer migration control above is the one mechanism and the one write (kernel: ${_kc_l:-unknown})" ;;
+      writable) NOTE "kernel_control: $_kc_k = $_kc_m  ·  kernel: ${_kc_l:-unknown}  ·  ASB baseline: ${_kc_b:-none}" ;;
+      not_exposed) NOTE "kernel_control: $_kc_k = $_kc_m  ·  interface not exposed by this kernel - nothing written" ;;
+      not_writable) NOTE "kernel_control: $_kc_k = $_kc_m  ·  read-only here (kernel: ${_kc_l:-unknown}) - nothing written" ;;
+      *) NOTE "kernel_control: $_kc_k = $_kc_m  ·  $_kc_s  ·  kernel: ${_kc_l:-unknown}  ·  ASB baseline: ${_kc_b:-none}" ;;
+    esac
   done <<EOF_KC_DIAG
 $(sh /data/adb/modules/AutoSystemBoost/runtime/asb_kernel_controls.sh status 2>/dev/null)
 EOF_KC_DIAG
@@ -4706,10 +4732,17 @@ else
   NOTE "no shipped bounds file found (generated.sh expected in module/config)"
 fi
 P ""
-P "  >>> TUNING HINT: compare BATTERY_CPU_MAX_* above with each cluster's real"
-P "      'available' table. If a battery cap doesn't line up with an actual"
-P "      frequency step for THIS SoC's clusters, the governor may be pinning the"
-P "      wrong cluster low (the likely cause of OP12 battery-mode sluggishness)."
+case "${_ovr_flag:-0}:${_dba:-0}" in
+  1:[1-9]*)
+    NOTE "not in force on this phone: the governor loaded ${_dba} device-adaptive value(s) at start (section 0a2 lists them); the rails above are only the fallback if that synthesis is rejected"
+    ;;
+  *)
+    P "  >>> TUNING HINT: compare BATTERY_CPU_MAX_* above with each cluster's real"
+    P "      'available' table. If a battery cap doesn't line up with an actual"
+    P "      frequency step for THIS SoC's clusters, the governor may be pinning the"
+    P "      wrong cluster low (the likely cause of OP12 battery-mode sluggishness)."
+    ;;
+esac
 
 SEC "11. YOUR SETTINGS vs WHAT IS LIVE  (the short answer)"
 _ux_ship="$MODDIR/config/governor.conf.shipped"
