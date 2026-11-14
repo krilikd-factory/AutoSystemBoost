@@ -4,6 +4,7 @@ PKG=com.tencent.soter.soterserver
 STATE="${ASB_SOTER_STATE_DIR:-/data/adb/asb/soter_fix}"
 PKGLIST="${ASB_SOTER_PACKAGES_LIST:-/data/system/packages.list}"
 WAIT_STEPS="${ASB_SOTER_WAIT_STEPS:-30}"
+READY_STEPS="${ASB_SOTER_READY_STEPS:-6}"
 PASSES="${ASB_SOTER_PASSES:-2}"
 LOCK="$STATE/run.lock"
 AUTO="$STATE/auto"
@@ -74,6 +75,16 @@ _sf_wait() {
   return 1
 }
 
+_sf_stable() {
+  _stable=0
+  while [ "$_stable" -lt "$READY_STEPS" ]; do
+    sleep 0.5 2>/dev/null || sleep 1
+    for _s in $_svcs; do [ "$(_sf_state "$_s")" = running ] || return 1; done
+    _stable=$((_stable + 1))
+  done
+  return 0
+}
+
 _sf_pass() {
   am force-stop "$PKG" >/dev/null 2>&1
   for _s in $_svcs; do stop "$_s" 2>/dev/null; done
@@ -82,7 +93,9 @@ _sf_pass() {
   case "$_clr" in *Success*) _ok=1 ;; *) _ok=0 ;; esac
   for _s in $_svcs; do start "$_s" 2>/dev/null; done
   _down=''
-  if [ -n "$_svcs" ]; then _sf_wait running || _down=1; fi
+  if [ -n "$_svcs" ]; then
+    if _sf_wait running; then _sf_stable || _down=1; else _down=1; fi
+  fi
 }
 
 _sf_run() {
@@ -100,6 +113,7 @@ _sf_run() {
   esac
   _svcs="$(_sf_services)"
   case "$PASSES" in 1|2|3) ;; *) PASSES=2 ;; esac
+  case "$READY_STEPS" in 1|2|3|4|5|6|7|8|9|10|11|12) ;; *) READY_STEPS=6 ;; esac
   _pass=0; _ok=0; _down=''
   while [ "$_pass" -lt "$PASSES" ]; do
     [ "$_pass" -gt 0 ] && sleep 2
