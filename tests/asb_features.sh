@@ -5532,22 +5532,41 @@ run apply mglru_mode 7 >/dev/null
 printf 'mglru_mode=smart\nkernel_timer_migration=off\nkernel_sched_nr_migrate=8\n' > "$T/mod/config/governor.conf"
 run apply mglru_mode 7 >/dev/null
 [ "$(cat "$T/mglru")" = 7 ] || fail 'Smart heavy request was not applied'
-# Simulate a kernel that clamps every request to bit 0. The write may succeed, but readback must fail.
+# dev48: lru_gen/enabled shows only the capabilities this hardware has. arm64 has no
+# non-leaf PMD young bit (0x4), and a core without hardware access flags has no MM walk (0x2),
+# so a 7 reads back 0x0003 or 0x0001. That is everything the kernel can keep, not a refusal:
+# the dev47 owner's device logged a permanent readback_mismatch and the Smart tuner re-wrote 7
+# on every heavy pass. A readback is accepted when it is a subset of the request that keeps the
+# core bit; a dropped core bit or a bit that was not asked for is still a mismatch.
 mkdir -p "$T/bin"
 REAL_CAT="$(command -v cat)"
 cat > "$T/bin/cat" <<'S'
 #!/bin/sh
-if [ -f "$CLAMP_FLAG" ] && [ "${1:-}" = "$CLAMP_NODE" ]; then printf '0x0001\n'; exit 0; fi
+if [ -f "$CLAMP_FLAG" ] && [ "${1:-}" = "$CLAMP_NODE" ]; then printf '%s\n' "$(command -p cat "$CLAMP_FLAG")"; exit 0; fi
 exec "$REAL_CAT" "$@"
 S
 chmod +x "$T/bin/cat"
-: > "$T/clamp"
+clamped() { printf '%s\n' "$1" > "$T/clamp"; shift
+  PATH="$T/bin:$PATH" REAL_CAT="$REAL_CAT" CLAMP_FLAG="$T/clamp" CLAMP_NODE="$T/mglru" run "$@" 2>/dev/null; }
 set +e
-out="$(PATH="$T/bin:$PATH" REAL_CAT="$REAL_CAT" CLAMP_FLAG="$T/clamp" CLAMP_NODE="$T/mglru" run apply mglru_mode 7 2>/dev/null)"
-rc=$?
+out="$(clamped 0x0001 apply mglru_mode 7)"; rc=$?
 set -e
-[ "$rc" -ne 0 ] || fail "clamped MGLRU returned success: $out"
-printf '%s\n' "$out" | grep -q '^mglru_mode|readback_mismatch|smart|0x0001|0x0001$' || fail "clamped verdict wrong: $out"
+[ "$rc" -eq 0 ] || fail "a hardware-limited MGLRU readback returned failure: $out"
+printf '%s\n' "$out" | grep -q '^mglru_mode|applied|smart|0x0001|0x0001$' || fail "hardware-limited verdict wrong: $out"
+out="$(clamped 0x0003 apply mglru_mode 7)"
+printf '%s\n' "$out" | grep -q '^mglru_mode|applied|smart|0x0003|' || fail "arm64 0x0003 for 7 not accepted: $out"
+set +e
+out="$(clamped 0x0000 apply mglru_mode 7)"; rc=$?
+set -e
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^mglru_mode|readback_mismatch|smart|0x0000|' || fail "a dropped core bit was accepted: $out"
+set +e
+out="$(clamped 0x0003 apply mglru_mode 5)"; rc=$?
+set -e
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | grep -q '^mglru_mode|readback_mismatch|smart|0x0003|' || fail "a bit that was not requested was accepted: $out"
+printf 'mglru_mode=on\nkernel_timer_migration=off\nkernel_sched_nr_migrate=8\n' > "$T/mod/config/governor.conf"
+out="$(clamped 0x0003 apply mglru_mode)"
+printf '%s\n' "$out" | grep -q '^mglru_mode|applied|on|0x0003|' || fail "mode on read back as a mismatch on an arm64 kernel: $out"
+printf 'mglru_mode=smart\nkernel_timer_migration=off\nkernel_sched_nr_migrate=8\n' > "$T/mod/config/governor.conf"
 [ -f "$T/state/mglru_mode.prev" ] || fail 'mismatch consumed restore evidence'
 rm -f "$T/clamp"
 # Stock restores the captured representation/value even after an external change.
@@ -5929,6 +5948,7 @@ cat > "$T/env.sh" <<'S'
 printf() {
   if [ "${1:-}" = 'clear\n' ]; then
     : > "$WB_STATE"
+    [ -n "${WB_CLEARS:-}" ] && command printf 'clear\n' >> "$WB_CLEARS"
     return 0
   fi
   case "${1:-}" in
@@ -5956,13 +5976,19 @@ cat() {
 }
 S
 run() {
-  BASH_ENV="$T/env.sh" WB_STATE="$T/state" WB_FAIL_ON="${WB_FAIL_ON:-}" \
+  BASH_ENV="$T/env.sh" WB_STATE="$T/state" WB_FAIL_ON="${WB_FAIL_ON:-}" WB_CLEARS="$T/clears" \
     MODDIR="$T/mod" ASB_WAKEUP_BLOCKLIST_NODE="$T/node" \
     ASB_WAKEUP_POLICY="$T/mod/config/wakeup_blocklist.conf" \
     ASB_WAKEUP_EVENTS_NODE="$T/events" bash "$W" "$@"
 }
 out="$(run apply)"
 [ "$out" = 'wakeup_blocker|applied|0|' ] && [ ! -s "$T/state" ] || fail "empty default apply: $out"
+# dev48 (audit F2): an empty policy on an already empty kernel list writes nothing at boot.
+[ ! -s "$T/clears" ] || fail 'an empty policy wrote clear to an already empty kernel list'
+printf 'stale_rule\n' > "$T/state"
+out="$(run apply)"
+[ "$out" = 'wakeup_blocker|applied|0|' ] && [ ! -s "$T/state" ] && [ -s "$T/clears" ] || fail "an empty policy left a live rule in place: $out"
+: > "$T/clears"
 printf 'wlan_wow_wl\nNETLINK\n' > "$T/mod/config/wakeup_blocklist.conf"
 out="$(run apply)"
 [ "$out" = 'wakeup_blocker|applied|2|' ] || fail "apply verdict: $out"
@@ -6000,6 +6026,19 @@ WB_FAIL_ON=NETLINK run apply >/dev/null 2>&1 && fail 'injected write failure ret
 [ ! -s "$T/state" ] || fail 'a partial apply was not rolled back to empty'
 out="$(run apply)"; [ "$out" = 'wakeup_blocker|applied|2|' ] || fail 'recovery after rollback failed'
 out="$(run clear)"; [ "$out" = 'wakeup_blocker|cleared|empty|' ] && [ ! -s "$T/state" ] || fail 'clear/readback failed'
+# dev48: a sysfs attribute always reports a size (4096) whatever it holds, so the clear
+# readback reads the content; "-s" failed every real clear as a readback mismatch.
+head -c 4096 /dev/zero | tr '\0' 'x' > "$T/node"
+out="$(run clear)"; [ "$out" = 'wakeup_blocker|cleared|empty|' ] || fail "a sized sysfs node failed the clear readback: $out"
+printf 'left\n' > "$T/state"
+cat > "$T/env2.sh" <<'S'
+. "$WB_ENV1"
+printf() { if [ "${1:-}" = 'clear\n' ]; then return 0; fi; command printf "$@"; }
+S
+set +e; out="$(WB_ENV1="$T/env.sh" BASH_ENV="$T/env2.sh" WB_STATE="$T/state" MODDIR="$T/mod" ASB_WAKEUP_BLOCKLIST_NODE="$T/node" \
+  ASB_WAKEUP_POLICY="$T/mod/config/wakeup_blocklist.conf" ASB_WAKEUP_EVENTS_NODE="$T/events" bash "$W" clear)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && [ "$out" = 'wakeup_blocker|readback_mismatch||' ] || fail "a rule the kernel kept was reported as cleared: $out"
+: > "$T/state"; : > "$T/node"
 printf '17\n' > "$T/events"; out="$(run status)"
 printf '%s\n' "$out" | grep -q 'blocked_events=17' || fail "status omitted kernel counter: $out"
 set +e; out="$(MODDIR="$T/mod" ASB_WAKEUP_BLOCKLIST_NODE="$T/missing" sh "$W" apply)"; rc=$?; set -e
@@ -10644,6 +10683,13 @@ printf xxx > "$R/cache/magisk.log"
 printf xxxx > "$R/data/backup/pending/journal1.tmp"
 touch -d '2 days ago' "$R/data/backup/pending/journal1.tmp"
 printf recent > "$R/data/backup/pending/journal2.tmp"
+# dev48 (audit F3): toybox find, which the WebUI's shell uses, compares -mtime +0 as "older
+# than 0 seconds" (N x 86400 against raw seconds); GNU and busybox round to whole days. The
+# 24-hour barrier is -mmin +1440 in every find; a 23-hour journal must survive on this host too.
+printf day > "$R/data/backup/pending/journal3.tmp"
+touch -d '23 hours ago' "$R/data/backup/pending/journal3.tmp"
+! grep -Eq -- '-(m|a|c)time [+-]?[0-9]+( |$)' "$A" || fail 'a day-unit find test is back; toybox reads it in seconds'
+[ "$(grep -c -- "-name 'journal\*.tmp' -mmin +1440 -type f" "$A")" -eq 2 ] || fail 'backup scan and delete do not share the 24-hour barrier'
 for n in asb_diag_report.txt asb_full_day.out uninstall.log soterfix.log webui_info.txt google_shelf_ui.html; do
   printf z > "$R/data/local/tmp/$n"
 done
@@ -10668,7 +10714,7 @@ out="$(run run)"
 grep -Fqx 'junk_cleanup|result|state=cleaned|removed_count=19|freed_bytes=37|failed_categories=0' <<<"$out" || fail "cleanup result: $out"
 [ "$(grep -c '^junk_category|.*|state=cleaned$' <<<"$out")" = 11 ] || fail "a category did not report cleaned: $out"
 for f in \
-  data/tombstones/other data/backup/pending/journal2.tmp data/local/tmp/oost_test.flag \
+  data/tombstones/other data/backup/pending/journal2.tmp data/backup/pending/journal3.tmp data/local/tmp/oost_test.flag \
   data/local/tmp/unknown.bin data/local/tmp/google_shelf_controller/settings.conf \
   storage/emulated/0/Pictures/Screenshots/normal.jpg storage/emulated/0/ColorOS/ThemeStore/settings; do
   [ -f "$R/$f" ] || fail "protected file removed: $f"
@@ -10745,7 +10791,7 @@ assert 'set -- $' in s  # fixed numeric protocol only; no predicate is evaluated
 assert 'eval ' not in s and 'cat ' not in s and 'grep ' not in s
 for token in ('all)', 'tombstones)', 'backup)', 'screenshots)', 'coloros)'):
     assert token in s
-assert s.count('-xdev') >= 11 and "-mtime +0" in s
+assert s.count('-xdev') >= 11 and "-mmin +1440" in s and "-mtime" not in s
 PY2
 echo "PASS junk cleanup runtime: eleven bounded categories, 19-file scan/delete with exact byte accounting, 24-hour journal barrier, protected files, idempotence, busy/lock/partial states, symlink and unknown-command safety, no worker"
 )
@@ -10833,6 +10879,91 @@ set +e; OUT="$(sh "$S" bogus)"; rc=$?; set -e
 [ "$rc" = 2 ] && [ "$OUT" = 'soter|error|unknown_command' ] || fail 'unknown command accepted'
 grep -q 'soter_fix/run.lock' "$ROOT/post-fs-data.sh" && grep -q 'junk_cleanup/run.lock' "$ROOT/post-fs-data.sh" || fail 'a reboot mid-run leaves a stale lock'
 echo "PASS soter fix: absent/present status, exact stop/clear/start sequence, done/no-service/down/refused/busy/unknown states, no writes on status, boot-time stale lock removal"
+)
+
+t_wakelock_fitness_reapply_evidence_runtime() (
+# dev48: every asbdiag the owner sent (30 min to 10 h after boot) read "limit lapsed" for all
+# three fitness apps, with the same "ASB puts it back 5-10 min after boot" sentence. Whether
+# the re-apply ran and was reset later, or this ROM never kept the op, was not recorded. Each
+# (re)apply now writes pkg|time|read-back|raw appops line, the diagnostic says which case it is,
+# and fitness-status reports how many were not kept so the card stops saying "Enabled".
+set -u
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SRC="$ROOT/runtime/asb_wakelock_watch.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+fail=0; f() { echo "FAIL wakelock fitness reapply: $*" >&2; fail=1; }
+mkdir -p "$T/bin" "$T/mod/config" "$T/d"
+printf '#!/bin/sh\ncase "$1" in deviceidle) echo false ;; esac\n' > "$T/bin/dumpsys"
+printf '#!/bin/sh\nprintf "package:com.renpho.health uid:10489\\n"\n' > "$T/bin/pm"
+printf '#!/bin/sh\necho "$*" >> "$AM_LOG"\n' > "$T/bin/am"
+cat > "$T/bin/appops" <<'A'
+#!/bin/sh
+echo "appops $*" >> "$AM_LOG"
+case "$1" in
+  get) m="$(sed -n "s/^$2 $3 //p" "$OPS" 2>/dev/null | tail -1)"
+       if [ -n "$m" ]; then echo "$3: $m; time=+1m"; else echo "No operations."; fi ;;
+  set) [ -f "$REFUSE" ] || echo "$2 $3 $4" >> "$OPS" ;;
+esac
+A
+chmod +x "$T/bin/"*
+env_run() { OPS="$T/ops" REFUSE="$T/refuse" AM_LOG="$T/am.log" PATH="$T/bin:$PATH" MODDIR="$T/mod" ASB_WL_DIR="$T/d" ASB_WL_STATE="$T/state" "$@"; }
+fit() { env_run sh "$SRC" fitness >/dev/null 2>&1; }
+st() { env_run sh "$SRC" fitness-status 2>/dev/null; }
+printf 'wakelock_action=0\nwakelock_fitness=limit\n' > "$T/mod/config/governor.conf"
+: > "$T/ops"
+fit
+grep -qx 'com.renpho.health|default' "$T/d/wakelock_fitness_limited" || f 'first limit not recorded'
+grep -Eq '^com\.renpho\.health\|[0-9]+\|ignore\|WAKE_LOCK: ignore; time=\+1m$' "$T/d/wakelock_fitness_reapply" || f "first set not noted: $(cat "$T/d/wakelock_fitness_reapply" 2>/dev/null)"
+st | grep -qx 'not_kept=0' || f "a kept limit counted as not kept: $(st)"
+: > "$T/ops"
+fit
+grep -Eq '^com\.renpho\.health\|[0-9]+\|ignore\|' "$T/d/wakelock_fitness_reapply" || f 'a successful re-apply after a reset was not noted'
+[ "$(grep -c . "$T/d/wakelock_fitness_reapply")" = 1 ] || f 'the evidence file grows instead of keeping one line per app'
+: > "$T/ops"; : > "$T/refuse"
+fit
+grep -Eq '^com\.renpho\.health\|[0-9]+\|default\|No operations\.$' "$T/d/wakelock_fitness_reapply" || f "a re-apply the ROM did not keep was not noted: $(cat "$T/d/wakelock_fitness_reapply")"
+st | grep -qx 'not_kept=1' || f "not-kept count missing: $(st)"
+: > "$T/am.log"; st >/dev/null
+grep -q 'appops get com.renpho.health' "$T/am.log" && f 'fitness-status started an appops client for a recorded app'
+printf 'wakelock_action=0\nwakelock_fitness=protect\n' > "$T/mod/config/governor.conf"
+env_run sh "$SRC" >/dev/null 2>&1
+[ -e "$T/d/wakelock_fitness_reapply" ] && f 'evidence kept after protect'
+grep -q '/data/adb/asb/wakelock_fitness_reapply' "$ROOT/uninstall.sh" || f 'uninstall leaves the evidence file'
+D="$ROOT/tools/asb_diag.sh"
+grep -Fq 'limit lapsed again - ASB last put it back at' "$D" && grep -Fq 'not kept by Android - right after ASB set it at' "$D" && grep -Fq 'appops reads now:' "$D" || f 'asbdiag does not tell a later reset from a refused op'
+cmp -s "$D" "$ROOT/system/bin/asbdiag" || f 'asbdiag copies differ'
+H="$ROOT/webroot/index.html"
+grep -Fq "notKept: parseInt(kv.not_kept, 10) || 0," "$H" && grep -Fq "if (_wlFitNotKept > 0) return { cls:'warn', text: T('st_wlf_not_kept', 'ROM does not keep it') };" "$H" || f 'the card still says Enabled for a limit Android did not keep'
+[ "$fail" = 0 ] && echo "PASS wakelock fitness reapply: each (re)apply is noted with its read-back, a refused re-apply is counted without an extra appops client, asbdiag tells reset from refusal, protect and uninstall clean up"
+exit "$fail"
+)
+
+t_diag_kernel_controls_readable_runtime() (
+# dev48 (audit F1): asbdiag printed the helper's raw pipe records, so the hrtimer row ("covered
+# by timer migration") read like a second, separate control. Each control is one readable line
+# now; the covered row says it is the same mechanism with one write. Section 10 no longer offers
+# the OP12 tuning hint for shipped rails that device-adaptive bounds replaced at start.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+D="$ROOT/tools/asb_diag.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL diag kernel controls: $*" >&2; exit 1; }
+cmp -s "$D" "$ROOT/system/bin/asbdiag" || fail 'asbdiag copies differ'
+{
+  printf '%s\n' 'NOTE() { printf "%s\n" "$*"; }'
+  sed -n "/^  while IFS='|' read -r _kc_k _kc_s _kc_m _kc_l _kc_b; do\$/,/^  done <<EOF_KC_DIAG\$/p" "$D" | sed '$d'
+  printf '%s\n' '  done <<EOF_KC_DIAG' 'mglru_mode|writable|smart|0x0003|0x0003' 'kernel_hrtimer_migration|covered_by_timer_migration|auto|0|none' \
+    'kernel_sched_nr_migrate|not_exposed|4|unknown|none' 'kernel_usb_autosuspend|readback_mismatch|on|5|2' 'EOF_KC_DIAG'
+} > "$T/kc.sh"
+[ "$(grep -c 'kernel_control' "$T/kc.sh")" -ge 4 ] || fail 'diagnostic block not found'
+OUT="$(sh "$T/kc.sh")"
+printf '%s\n' "$OUT" | grep -qx 'kernel_control: mglru_mode = smart  ·  kernel: 0x0003  ·  ASB baseline: 0x0003' || fail "writable line: $OUT"
+printf '%s\n' "$OUT" | grep -q '^kernel_control: kernel_hrtimer_migration = auto  ·  no separate node on this kernel - the timer migration control above is the one mechanism and the one write' || fail "covered line: $OUT"
+printf '%s\n' "$OUT" | grep -qx 'kernel_control: kernel_sched_nr_migrate = 4  ·  interface not exposed by this kernel - nothing written' || fail "not exposed line: $OUT"
+printf '%s\n' "$OUT" | grep -qx 'kernel_control: kernel_usb_autosuspend = on  ·  readback_mismatch  ·  kernel: 5  ·  ASB baseline: 2' || fail "other state line: $OUT"
+! printf '%s\n' "$OUT" | grep -q '|' || fail "raw pipe records still printed: $OUT"
+grep -Fq 'not in force on this phone: the governor loaded ${_dba} device-adaptive value(s) at start' "$D" || fail 'shipped rails are still presented as the live caps'
+echo "PASS diag kernel controls: one readable line per control, hrtimer explained as the same mechanism, shipped rails marked as fallback when device bounds are live"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

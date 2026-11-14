@@ -1807,6 +1807,44 @@ JS
   echo 'PASS zygisk link UI: defensive parse, sanitized module names, per-app value text'
 )
 
+t_zygisk_package_list_complete_runtime() (
+# dev48: the Device diagnostics collector cut every value at 600 characters, and the allowlist
+# is one value: the owner's 64 apps ended mid-name ("...,com.paypal."). That page also renders
+# the manual allowlist editor, so Save could have written the cut list and dropped the rest.
+# The list is now emitted whole (package characters only) and the editor refuses to save a
+# list that does not match its own count.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL zygisk package list: $*" >&2; exit 1; }
+mkdir -p "$T/m/runtime" "$T/m/config" "$T/data/asb/zygisk_observer" "$T/proc"
+cp "$ROOT/runtime/asb_zygisk_info.sh" "$T/m/runtime/"
+printf 'zygisk_enabled=1\nzygisk_mode=observer\n' > "$T/m/config/governor.conf"
+cat > "$T/m/runtime/asb_zygisk.sh" <<'Z'
+#!/bin/sh
+[ "$1" = list ] || exit 0
+i=0; while [ "$i" -lt 64 ]; do printf 'com.example.longvendorname.application%02d\n' "$i"; i=$((i + 1)); done
+Z
+{
+  sed -n '/^_clean() {$/,/^}$/p' "$ROOT/tools/asb_device_info.sh"
+  sed -n '/^_emit() {$/,/^}$/p' "$ROOT/tools/asb_device_info.sh"
+  printf '%s\n' '_read() { [ -r "$1" ] && cat "$1" 2>/dev/null; }'
+  printf '%s\n' ". \"\$MODDIR/runtime/asb_zygisk_info.sh\"" '_asb_zygisk_info'
+} > "$T/run.sh"
+grep -q 'cut -c1-600' "$T/run.sh" || fail 'collector value cap not found; the test no longer models the device page'
+OUT="$(MODDIR="$T/m" PROC="$T/proc" DATA="$T/data" sh "$T/run.sh" 2>/dev/null)"
+LIST="$(printf '%s\n' "$OUT" | awk -F'\t' '$2 == "zygisk_observer" && $3 == "enabled_package_list" { print $4 }')"
+N="$(printf '%s\n' "$OUT" | awk -F'\t' '$2 == "zygisk_observer" && $3 == "enabled_packages" { print $4 }')"
+[ "$N" = 64 ] || fail "package count: $N"
+[ "$(printf '%s' "$LIST" | tr ',' '\n' | grep -c '^com\.example\.longvendorname\.application[0-9][0-9]$')" -eq 64 ] || fail "list cut or damaged: ${#LIST} chars"
+[ "${#LIST}" -gt 600 ] || fail 'the fixture does not exceed the old cap'
+H="$ROOT/webroot/index.html"
+grep -Fq "const incomplete = isFinite(counted) && counted !== listed;" "$H" && grep -Fq "if (incomplete) { save.disabled = true; input.setAttribute('readonly', 'readonly'); }" "$H" \
+  || fail 'the editor can still save a list that does not match its count'
+grep -Fq "'dev_zygisk_list_incomplete'" "$H" || fail 'an incomplete list is not explained'
+echo "PASS zygisk package list: 64 long names survive the 600-character collector cap whole, and the editor never saves a list that disagrees with its count"
+)
+
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
 case "${1:-}" in
   --list) _asb_tests ;;

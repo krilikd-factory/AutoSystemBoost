@@ -5133,7 +5133,7 @@ function T(k, d) { const L = I18N[ASB_LANG]; return (L && typeof L[k] === 'strin
 function ledgerBadge() { return null; } function trialHoursLeft() { return 0; } function trialExpired() { return false; }
 function packageTweakBadge() { return null; }
 const _netResult = {}; const _cfgVals = {};
-let _wlFitIgnored = 0, _wlFitLimited = 0, _wlFitInstalled = 0, _wlFitProbed = false;
+let _wlFitIgnored = 0, _wlFitLimited = 0, _wlFitInstalled = 0, _wlFitProbed = false, _wlFitNotKept = 0;
 EOF
   sed -n '/^const DSP_CFG_KEYS = /p; /^function dspEngineActive()/,/^}/p' "$H"
   for fn in Topt cfgScanLabel cfgStatus; do sed -n "/^function $fn(/,/^}/p" "$H"; done
@@ -5153,6 +5153,10 @@ _wlFitIgnored = 1;
 chk(cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').cls === 'warn' && cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text === 'прошивка игнорирует', 'ROM-ignored limit badge: ' + cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text);
 _wlFitIgnored = 0; _wlFitLimited = 2;
 chk(cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').cls === 'good', 'an enforced limit badge is good');
+/* dev48: a recorded limit Android did not keep after ASB's re-apply is not "Enabled". */
+_wlFitNotKept = 1;
+chk(cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').cls === 'warn' && cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text === 'прошивка не сохраняет', 'not-kept limit badge: ' + cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text);
+_wlFitNotKept = 0;
 _wlFitLimited = 0; _wlFitProbed = true; _wlFitInstalled = 0;
 chk(cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').cls === 'neutral' && cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text === 'нет фитнес-приложений', 'no fitness apps badge: ' + cfgStatus(seg('wakelock_fitness', 'protect'), 'limit').text);
 /* fix177: two fitness apps installed, nothing limited yet - never "no fitness apps". */
@@ -8306,7 +8310,7 @@ EOF
   sed -n '/^const DEVICE_GROUP_GUIDES = {/,/^};/p' "$H"
   sed -n '/^const DEVICE_SECTION_GUIDES = {/,/^};/p' "$H"
   sed -n '/^const DEVICE_KERNEL_FEATURE_ORDER = \[/,/^\];/p' "$H"
-  for fn in parseDeviceInfo deviceVal deviceFallbackLabel deviceLabel deviceHero deviceIsLimitedValue deviceValueClass deviceNum deviceKv deviceFreqKhz deviceFreqHz deviceSizeKb deviceDuration deviceCpuCount deviceCpuList deviceYesNo deviceFill deviceBatteryMa deviceBatteryMah deviceBatteryWear deviceRootManagerDisplay deviceDisplayValue deviceInfoEvidence deviceSnapshotCard deviceInfoSnapshot deviceInfoNav deviceInfoOverview deviceInfoInsights devicePressureScale deviceZygiskLinkState deviceZygiskLinkVerdict deviceZygiskLink deviceZygiskEditor deviceInfoRender asbPageJumpIsDock asbPageJumpClear asbPageJumpActive asbPageJump asbPageReference shQuote \
+  for fn in parseDeviceInfo deviceVal deviceFallbackLabel deviceLabel deviceHero deviceIsLimitedValue deviceValueClass deviceNum deviceKv deviceFreqKhz deviceFreqHz deviceSizeKb deviceDuration deviceCpuCount deviceCpuList deviceYesNo deviceFill deviceBatteryMa deviceBatteryMah deviceBatteryWear deviceBatteryWearMirrored deviceRootManagerDisplay deviceDisplayValue deviceInfoEvidence deviceSnapshotCard deviceInfoSnapshot deviceInfoNav deviceInfoOverview deviceInfoInsights devicePressureScale deviceZygiskLinkState deviceZygiskLinkVerdict deviceZygiskLink deviceZygiskEditor deviceInfoRender asbPageJumpIsDock asbPageJumpClear asbPageJumpActive asbPageJump asbPageReference shQuote \
     asbPageClasses asbPageHas asbPageKids asbPageTxt asbPageWarn asbPageText asbPageStamp; do
     sed -n "/^function $fn(/,/^}/p" "$H"
   done
@@ -12903,6 +12907,75 @@ const settle=()=>new Promise(r=>setImmediate(r));
 JS
 node "$T/t.js" "$ROOT/webroot/index.html" >/dev/null || fail 'card runtime'
 echo "PASS webui soter fix: fixed status/run protocol, second tap within 5 s, done/no-service/down/refused/busy/absent/stopped/unreadable states, sanitized rows, 13 locales"
+)
+
+t_webui_device_page_dev48_runtime() (
+# dev48, from the owner's 14.11 device export: Russian pages showed raw English labels
+# ("Auto Mode", "Hints Throttled", "Smooth Log Status", "Oplus Sdp 900ma Node"...), raw
+# numbers without units (last event age 38536, CPU window 200, an epoch), the Zygisk IPC cost
+# card carried the observed apps' own 3.3 GB RSS, and a battery whose full-charge value equals
+# its design value after 391 cycles read "100% of design capacity" as if it were measured.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui device page dev48: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'PY' || fail 'a collector key has no label in every locale'
+import json, re, sys
+root = sys.argv[1]
+L = 'en ru uk de fr es it pt tr id zh ar hy'.split()
+D = {l: json.load(open(f'{root}/webroot/i18n/{l}.json', encoding='utf-8')) for l in L}
+src = open(f'{root}/tools/asb_device_info.sh', encoding='utf-8').read() + open(f'{root}/runtime/asb_zygisk_info.sh', encoding='utf-8').read()
+pairs = set(re.findall(r'_emit ([a-z_0-9]+) ([a-z_0-9]+)\b', src))
+loop = re.search(r'for _k in (profile state .*?); do\n\s*_v="\$\(_kv "\$STATE_FILE" "\$_k"\)"; \[ -n "\$_v" \] && _emit asb "\$_k"', src, re.S)
+assert loop, 'ASB runtime-facts loop not found'
+pairs |= {('asb', k) for k in loop.group(1).replace('\\\n', ' ').split()}
+pairs.add(('zygisk_observer', 'enabled_package_list'))
+assert ('asb', 'smooth_log_status') in pairs and ('zygisk_observer', 'auto_mode') in pairs
+missing = sorted(f'{l}:dev_{s}_{k}' for s, k in pairs for l in L if f'dev_{s}_{k}' not in D[l])
+assert not missing, missing[:20]
+for l in L:
+    assert ' · RSS' not in D[l]['dev_zygisk_metric_cost_fmt'] and '{memory}' not in D[l]['dev_zygisk_metric_cost_fmt'], (l, 'RSS still in the IPC cost')
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP webui device page dev48: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+{
+  cat <<'JS'
+const T = (k, f) => f; const ASB_LANG = 'en';
+function mk(tag) { const e = { tag, children: [], className: '', _t: '', appendChild(c) { this.children.push(c); return c; },
+  get textContent() { return this._t + this.children.map(c => c.textContent).join(' '); }, set textContent(v) { this._t = String(v); this.children = []; } };
+  e.classList = { add(c) { e.className = (e.className + ' ' + c).trim(); } }; return e; }
+const document = { createElement: mk };
+function logReportNote(t) { const n = mk('div'); n.textContent = t; return n; }
+JS
+  for fn in parseDeviceInfo deviceVal deviceNum deviceFill deviceFallbackLabel deviceDuration deviceSizeKb deviceBatteryWear deviceBatteryWearMirrored deviceDisplayValue deviceHero deviceSnapshotCard deviceZygiskLinkState deviceZygiskOverview; do
+    sed -n "/^function $fn(/,/^}/p" "$H"
+  done
+  cat <<'JS'
+let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
+const nb = s => String(s).replace(/ /g, ' ');
+chk(nb(deviceDisplayValue('zygisk_observer', 'state_age_ms', '38536')) === '38.5 s', 'event age: ' + deviceDisplayValue('zygisk_observer', 'state_age_ms', '38536'));
+chk(nb(deviceDisplayValue('zygisk_observer', 'state_age_ms', '600000')) === '10 min', 'long event age: ' + deviceDisplayValue('zygisk_observer', 'state_age_ms', '600000'));
+chk(nb(deviceDisplayValue('system_load', 'cpu_window_ms', '200')) === '200 ms', 'CPU window: ' + deviceDisplayValue('system_load', 'cpu_window_ms', '200'));
+chk(deviceDisplayValue('zygisk_observer', 'auto_mode', '1') === 'Enabled', 'automatic mode flag');
+chk(deviceDisplayValue('zygisk_observer', 'auto_updated', '1793661452') !== '1793661452', 'automatic update epoch shown raw');
+chk(deviceDisplayValue('asb', 'smooth_log_last_epoch', '0') === '0', 'a zero epoch became a date');
+const bat = (full, design, cyc) => parseDeviceInfo(['D\tbattery\tcharge_full_uah\t' + full, 'D\tbattery\tcharge_full_design_uah\t' + design, 'D\tbattery\tcycle_count\t' + cyc].join('\n'));
+chk(deviceBatteryWearMirrored(bat(7300000, 7300000, 391)) === true, 'design figure mirrored after 391 cycles not recognised');
+chk(deviceBatteryWearMirrored(bat(7300000, 7300000, 12)) === false, 'a young battery at 100% flagged');
+chk(deviceBatteryWearMirrored(bat(6650000, 7300000, 391)) === false, 'a measured capacity flagged');
+const zy = parseDeviceInfo(['enabled\t1', 'loaded_processes\t17', 'state_freshness\tcurrent', 'events_total\t217', 'spawn_events\t439', 'events_dropped_total\t0',
+  'policy_generation\t1', 'policy_seen_generation\t1', 'enabled_packages\t64', 'ipc_cpu_ms\t125', 'ipc_wakeups\t972', 'memory_kb\t3451508'].map(x => 'D\tzygisk_observer\t' + x).join('\n'));
+const ov = deviceZygiskOverview(zy).textContent;
+chk(/972 wakeups/.test(ov) && !/wakeups · RSS/.test(ov), 'IPC cost still carries the apps RSS: ' + ov);
+chk(/Memory of observed apps/.test(ov) && /not ASB overhead/.test(ov), 'observed-app memory is not its own card: ' + ov);
+process.exit(bad ? 1 : 0);
+JS
+} > "$T/t.js"
+node "$T/t.js" || fail 'renderer'
+grep -Fq "if (wear !== null && deviceBatteryWearMirrored(d)) parts.push(T('dev_bat_wear_mirrored', 'wear not reported by the firmware'));" "$H" || fail 'the battery summary still prints a mirrored 100% as wear'
+grep -Fq "'dev_battery_wear_mirrored_note'" "$H" || fail 'the battery row does not explain a mirrored design value'
+grep -Fq "if (spec[0] === 'zygisk_observer' && key === 'enabled_package_list') return;" "$H" || fail 'the 64-name list is printed twice (row and editor)'
+echo "PASS webui device page dev48: every collector key has a label in 13 locales, event age/CPU window/epochs carry units, observed-app RSS is its own card, a mirrored design capacity is not shown as wear"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }
