@@ -490,6 +490,21 @@ asb_migrate_governor_conf
 ) &
 
 (
+  [ -f /data/adb/asb/soter_fix/auto ] && [ -f "$MODDIR/runtime/asb_soter_fix.sh" ] || exit 0
+  until [ "$(getprop sys.boot_completed)" = "1" ]; do sleep 5; done
+  sleep 45
+  _sfo="$(MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_soter_fix.sh" boot 2>/dev/null | sed -n 's/^soter|result|state=\([a-z_]*\)|.*/\1/p' | head -n 1)"
+  asb_log "soter_fix: boot repair ${_sfo:-no_result}"
+) &
+
+(
+  grep -q '^done_at=$' /data/adb/asb/battery_fix.last 2>/dev/null || exit 0
+  until [ "$(getprop sys.boot_completed)" = "1" ]; do sleep 5; done
+  sleep 90
+  MODDIR="$MODDIR" sh "$MODDIR/runtime/asb_battery_fix.sh" settle >/dev/null 2>&1
+) &
+
+(
   _t=0
   while [ "$(getprop sys.boot_completed 2>/dev/null)" != "1" ] && [ "$_t" -lt 180 ]; do
     sleep 5
