@@ -4,6 +4,75 @@ Build-by-build notes of the V66 line, newest first. The V65 release summary stay
 [`CHANGELOG.md`](../CHANGELOG.md) until V66 is released; the V65 line is in
 [`V65_BUILD_HISTORY.md`](V65_BUILD_HISTORY.md).
 
+## V66 dev55 - review fixes for dev54 and a faster WebUI
+
+Input: the owner's dev54 source (host regression 525/525) and the dev54 review. No native source
+or release binary changed.
+
+- **Wakeup observation: sources that share a name.** `/sys/class/wakeup` names are not unique
+  (several epoll sources are all `eventpoll`). The dev54 window keyed its snapshot by name, so the
+  last same-named entry overwrote the others and a fresh window could show `eventpoll +95` at once.
+  - One pass reads all four fields of every entry and keys it by its `wakeupN` entry; a reused
+    entry with another name counts as new, a counter that went down as a reset.
+  - Deltas are summed per name, and each line carries `shared=<n>` and `new=0|1`. The meta file
+    is `format=2`; a dev54 window is cleared and reported idle instead of being misread.
+- **Wakeup rules: a confirmation before Block.** The kernel rule matches the name, so it covers
+  every source of that name. Block now opens an inline confirmation that says how many sources
+  share the name and warns for alarm, power-manager, charging, input, key, RTC, thermal and
+  watchdog sources; nothing is saved before it is confirmed. Rows are tagged new / shared /
+  system source. A typed system-source name gets the same warning. 6 strings in 13 languages.
+- **MGLRU generation protection.** A nonzero `min_ttl_ms` lets the kernel start the OOM killer
+  when the protected working set does not fit; the kernel documentation recommends 1000 ms. The
+  options are Stock, 1000 and 2000 ms; a saved 5000 is read as 2000. An update carries the retired
+  `mglru_hold` intent over once (Hold -> 1000, Aggressive -> 2000, an explicit TTL wins) and sets
+  the legacy key to stock. The dead WebUI handler and map entries for `mglru_hold` are gone.
+- **Kernel baselines belong to one kernel build.** A captured baseline gets a `<key>.prev.kid`
+  sidecar with `uname -r` and `uname -v`. After a kernel flash the old value is not written into
+  the new kernel: the next apply captures this kernel's own value, and Stock with only a foreign
+  baseline reports `stock_unowned` without a write. A pre-dev55 baseline is adopted.
+- **Neutral texts.** The kernel card and "why unavailable" texts for timer and hrtimer
+  migration, autogroup and LPM prediction no longer promise an effect; the autogroup reason
+  describes GKI kernels in general. 13 languages.
+- **Saucer and reduced motion.** With prefers-reduced-motion the ten-tap saucer still flies, but
+  the cards no longer sway and there is no particle wake.
+- **WebUI speed.** Measured in a host bench: headless Chromium, 4x CPU throttle, the root bridge
+  modelled as a 25 ms blocking call, median of three runs of 16 page switches. These are host
+  numbers, not phone measurements.
+  - Fitted card/tile heights and the tab-bar space were inherited custom properties on `<html>`.
+    Each write restyled the whole document (about 1000 elements), four times per page switch,
+    twice behind a forced layout. They now live on `.profiles` / `#cfgList` and as a class.
+  - Settings, Device, Zygisk and report pages are no longer unclamped and measured for a
+    compaction tier they never take.
+  - The UI scale is applied before the first element is styled (the parser's first full style
+    and layout pass was redone before). Monitor resets its scroll before its classes change.
+  - Long lists lay out only the rows near the viewport (`content-visibility`): category and
+    search rows, Device/report/Zygisk sections and the wakeup-source list. A row with its option
+    list open is an ordinary box again, so the list is not clipped.
+  - 74 selectors whose rightmost part was a bare `:is()` list were tested against every element
+    on every style recalc. `tools/asb_css_bucket.py` (host only, not shipped) rewrote them into
+    441 equivalent plain selectors with the same specificity. Every computed property of every
+    element and its `::before`/`::after` was compared before and after in 16 UI states x 4
+    themes: no difference. Selector matching of a full recalc fell by about half.
+  - Search keystrokes within 90 ms share one list rebuild.
+  - Result over the 16 steps: long-task time 4222 ms -> 501 ms, style recalculation
+    6123 ms -> 3280 ms, the sum of the longest frame per step 2783 ms -> 866 ms. Cold start
+    long tasks 1083 ms -> 697 ms. Home <-> Monitor <-> Settings and opening or closing Zygisk
+    and the report ran without a long task; a category, Device and Settings -> Home still have
+    one (69-176 ms at 4x).
+- **Tests:** `t_webui_wakeup_confirm_dev55_runtime`, `t_mglru_ttl_update_migration_dev55`,
+  `t_kernel_controls_kernel_bound_baseline_dev55`, `t_webui_render_cost_dev55`; the wakeup,
+  MGLRU TTL, fill-pages, saucer and Glass/light-theme contracts follow the new code and CSS.
+- **Kernel repository (paired):** the KernelSU-Next/SUSFS guard honours the compat step's two
+  removals only where that step makes them; the wakeup blocker fills its sysfs pages with
+  `sysfs_emit_at()`. The kernel needs a CI build for the latter.
+
+## V66 dev51-dev54 (owner builds)
+
+Built by the owner; not recorded here at the time. Seen in the dev54 review: the explicit
+wakeup observation window (start/update deltas), wakeup blocker ABI 2 (`abi_version`,
+`rule_stats`), MGLRU `min_ttl_ms` moved under the kernel-control owner, and the timer, hrtimer,
+LPM prediction and USB autosuspend controls.
+
 ## V66 dev50 - stable SOTER completion, faster WebUI reads and a cosmic saucer scene
 
 Input: the dev49 source and five owner requests. No native source or release binary changed.
