@@ -8805,11 +8805,22 @@ async function paint(st) { scripted.status = st; await batteryFixPaint(); }
 
   await paint('eligible=0 reason=not_full level=98 charging=1 reset=none compile=done phase=done total=300 done=300 ok=297 fail=3 cur=- started=1000 finished=1600 now=9000 last_reset=1700 removed=batterystats.bin,batterystats-checkin.bin,batterystats-daily.xml missing=- fresh=1');
   const rs = step('bfxStepReset');
-  chk(rs.cls === 'bfx-step is-ok' && /3 of 3 files removed/.test(rs.text) && /started a new record/.test(rs.text), 'verified reset not shown: ' + rs.text);
+  chk(rs.cls === 'bfx-step is-ok' && /statistics files removed: 3/.test(rs.text) && /started a new record/.test(rs.text) && !/not present|could not/.test(rs.text), 'verified reset not shown: ' + rs.text);
   chk(reg.bfxChip.className === 'bfx-chip is-ok' && reg.bfxCancel.hidden, 'done chip not shown');
   chk(reg.bfxRun.disabled && reg.bfxRun.dataset.mode === 'run', 'the run button should rest after a finished fix below 100%');
   await paint('eligible=0 reason=not_full level=98 charging=1 reset=none compile=done phase=done total=300 done=300 ok=297 fail=3 cur=- started=1000 finished=1600 now=9000 last_reset=1700 removed=- missing=batterystats.bin fresh=0');
-  chk(step('bfxStepReset').cls === 'bfx-step is-wait' && /0 of 3/.test(step('bfxStepReset').text) && /write the new record/.test(step('bfxStepReset').text), 'an empty reset was shown as success');
+  chk(step('bfxStepReset').cls === 'bfx-step is-fail' && /removed: 0/.test(step('bfxStepReset').text) && /could not be removed: 1/.test(step('bfxStepReset').text) && /write the new record/.test(step('bfxStepReset').text), 'an empty reset was shown as success: ' + step('bfxStepReset').text);
+  // dev49: a user saw "1 of 3 files removed" and a date months in the past. Files Android
+  // never created are named as absent, not as a partial failure, and a reset whose
+  // post-fs-data clock was not trusted reads "at the last reboot" instead of a wrong date.
+  await paint('eligible=0 reason=not_full level=98 charging=1 reset=none compile=done phase=done total=300 done=300 ok=297 fail=3 cur=- started=1000 finished=1600 now=9000 last_reset=boot removed=batterystats.bin missing=- fresh=- absent=batterystats-checkin.bin,batterystats-daily.xml');
+  const ra = step('bfxStepReset');
+  chk(ra.cls === 'bfx-step is-ok' && /^Done at the last reboot: statistics files removed: 1 · not present on this Android: 2 · /.test(ra.text) && !/could not/.test(ra.text), 'absent files or unsettled time not shown: ' + ra.text);
+  // dev49: every recompile refused - the worker stops early and the first answer is shown.
+  await paint('eligible=1 reason=- level=100 charging=1 reset=pending compile=refused phase=refused total=560 done=12 ok=0 fail=12 cur=- started=1000 finished=1010' + tail + '\nerr_text=Error: Failed to compile <x> package');
+  chk(step('bfxStepArt').cls === 'bfx-step is-fail' && step('bfxStepArt').text === 'Android refused every recompile (12 of 12 apps), so it was stopped early. Android said: Error: Failed to compile x package', 'refused recompile not explained: ' + step('bfxStepArt').text);
+  await paint('eligible=1 reason=- level=100 charging=1 reset=none compile=refused phase=refused total=560 done=12 ok=0 fail=12 cur=- started=1000 finished=1010' + tail);
+  chk(/Android said: no reason given$/.test(step('bfxStepArt').text), 'a refusal without output has no fallback');
 
   await paint(B + 'reset=none compile=interrupted phase=compile total=300 done=40 ok=40 fail=0 cur=x started=1000 finished=-' + tail);
   chk(step('bfxStepArt').cls === 'bfx-step is-wait' && step('bfxStepArt').text === 'Interrupted at 40 of 300' && reg.bfxArtNow.textContent === '', 'interrupted run not shown');
@@ -9765,7 +9776,7 @@ T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
 cat > "$T/test.js" <<'JS'
 const fs=require('fs'),h=fs.readFileSync(process.argv[2],'utf8');
 function grab(name){const m=h.match(new RegExp('(?:async )?function '+name+'\\([^)]*\\) \\{[\\s\\S]*?\\n\\}'));if(!m)throw Error('missing '+name);return m[0];}
-for(const n of ['kernelControlParse','kernelWakeupParse','kernelWakeupValidName','kernelWakeupDraft','kernelWakeupSave','kernelStateText','kernelControlAvailability','kernelDecorateControlRow','cfgSet','shQuote'])eval(grab(n));
+for(const n of ['kernelControlParse','kernelWakeupParse','kernelWakeupValidName','kernelWakeupDraft','kernelWakeupSave','kernelStateText','kernelControlAvailability','kernelUnavailableWhy','kernelDecorateControlRow','cfgSet','shQuote'])eval(grab(n));
 global.ASB_KERNEL_STATUS_KEYS=['mglru_mode','kernel_timer_migration','kernel_hrtimer_migration','kernel_lpm_prediction','kernel_sched_nr_migrate','kernel_sched_stats','kernel_sched_autogroup','kernel_sched_child_runs_first','kernel_usb_autosuspend'];
 const c=kernelControlParse('mglru_mode|writable|smart|7|1\nkernel_sched_nr_migrate|not_exposed|4|unknown|none\nkernel_hrtimer_migration|covered_by_timer_migration|auto|0|none\nkernel_sched_stats|not_exposed|off||none\nkernel_sched_autogroup|writable|on|1|0\nkernel_sched_child_runs_first|not_writable|stock|1|none\narbitrary_path|writable|on|1|none\n');
 if(c.mglru_mode.state!=='writable'||c.mglru_mode.live!=='7'||c.kernel_hrtimer_migration.state!=='covered_by_timer_migration'||c.kernel_hrtimer_migration.live!=='0'||c.kernel_sched_stats.state!=='not_exposed'||c.kernel_sched_autogroup.live!=='1'||c.kernel_sched_child_runs_first.state!=='not_writable'||c.arbitrary_path)throw Error('control status parse');
@@ -12826,6 +12837,8 @@ t_webui_soter_fix_runtime() (
 # dev47: Infirmary -> System Repairs -> SOTER Repair. A fixed status/run protocol around one
 # shell owner, a second tap within five seconds before data is cleared, every result visible,
 # text-only rows, no polling, 13 locales.
+# dev49: one tap runs the (now two-pass) repair; an opt-in switch drives `auto on|off`, shows
+# the state the script reads back, and says payment must be re-enabled after each reboot.
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 fail() { echo "FAIL webui soter fix: $*" >&2; exit 1; }
@@ -12842,7 +12855,9 @@ assert b.count("run('sh ' + shQuote(SOTER_FIX_SCRIPT) + ' status')") == 1
 assert b.count("run('sh ' + shQuote(SOTER_FIX_SCRIPT) + ' run')") == 1
 assert 'setInterval(' not in b and 'setTimeout(' not in b
 assert b.count('innerHTML =') == 1 and "em.innerHTML = techIcon('soter_fix')" in b
-assert 'now - _soterArmed > 5000' in b and "_soterInstalled !== '1'" in b
+assert '_soterArmed' not in b and 'Tap again' not in b and "_soterInstalled !== '1'" in b
+assert b.count("run('sh ' + shQuote(SOTER_FIX_SCRIPT) + ' auto ' + want)") == 1
+assert "role', 'switch'" in b and 'after each reboot' in b
 assert "soter_fix: '<path" in h
 en = json.loads((root / 'webroot/i18n/en.json').read_text(encoding='utf-8'))
 for k, fb in re.findall(r"T\('(soter_[a-z_]+)', '([^']*)'\)", b):
@@ -12851,7 +12866,8 @@ fbm = dict(re.findall(r"\n    ([a-z_]+): '([^']*)'", b[b.index('const fb = {'):b
 assert set(fbm) == {'done','done_no_service','service_down','clear_failed','not_installed','busy','lock_error','unknown'}
 for k, v in fbm.items(): assert en['soter_res_' + k] == v, k
 keys = sorted(k for k in en if k.startswith('soter_'))
-assert len(keys) == 28, len(keys)
+assert len(keys) == 33, len(keys)
+assert 'soter_confirm' not in en
 for p in sorted((root / 'webroot/i18n').glob('*.json')):
     d = json.loads(p.read_text(encoding='utf-8'))
     for k in keys:
@@ -12866,7 +12882,8 @@ const b=h.slice(h.indexOf('/* Infirmary → System Repairs → SOTER Repair (dev
 const nodes={};
 function el(tag){const n={tag,children:[],className:'',hidden:false,disabled:false,style:{},_t:'',id:'',
  set textContent(v){this._t=String(v);this.children=[];},get textContent(){return this._t+this.children.map(c=>c.textContent).join(' ');},
- set innerHTML(v){this._html=v;},appendChild(c){this.children.push(c);if(c.id)nodes[c.id]=c;return c;}};return n;}
+ set innerHTML(v){this._html=v;},attrs:{},setAttribute(k,v){this.attrs[k]=String(v);},getAttribute(k){return k in this.attrs?this.attrs[k]:null;},
+ appendChild(c){this.children.push(c);if(c.id)nodes[c.id]=c;return c;}};n.attrs={};return n;}
 global.document={createElement:el};
 const T=(k,f)=>f;
 function bfxEl(tag,cls,text){const e=el(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e;}
@@ -12883,17 +12900,32 @@ const settle=()=>new Promise(r=>setImmediate(r));
  const run_=_el('soterRun'); if(run_.disabled)throw Error('installed SOTER cannot be repaired');
  if(!/vendor\.soter · running/.test(_el('soterRows').textContent)||!/not run yet/.test(_el('soterRows').textContent))throw Error('rows: '+_el('soterRows').textContent);
  if(_el('soterChip').className!=='bfx-chip is-ready')throw Error('chip');
- await soterFixRun(); if(cmds.some(c=>/ run$/.test(c)))throw Error('first tap ran the repair');
- if(!/Tap again/.test(toasts.pop()[0]))throw Error('no confirmation toast');
- replies.run='soter|result|state=done|cleared=1|services=vendor.soter:running';
+ const sw=_el('soterAuto'); if(!sw||sw.getAttribute('aria-disabled')!=='true')throw Error('auto switch must wait for a readable status');
+ replies.run='soter|result|state=done|cleared=1|passes=2|services=vendor.soter:running';
  await soterFixRun(); await settle();
- if(cmds.filter(c=>/ run$/.test(c)).length!==1)throw Error('second tap did not run once');
+ if(cmds.filter(c=>/ run$/.test(c)).length!==1)throw Error('the first tap did not run the repair once');
  if(!/service is running again/.test(_el('soterNote').textContent))throw Error('done note');
  for(const [st,re] of [['service_down',/did not start again/],['clear_failed',/refused/],['busy',/already running/]]){
-  _soterArmed=Date.now(); replies.run='soter|result|state='+st+'|cleared=0|services=none';
+  replies.run='soter|result|state='+st+'|cleared=0|passes=1|services=none';
   _el('soterRun').disabled=false; await soterFixRun(); await settle();
   if(!re.test(_el('soterNote').textContent))throw Error(st+' not shown');
  }
+ replies.status='soter|status|installed=1|services=vendor.soter:running|last_time=1700000000|last_result=done|last_trigger=boot|auto=0';
+ await soterFixLoad(true);
+ if(_el('soterAuto').getAttribute('aria-checked')!=='false'||_el('soterAuto').getAttribute('aria-disabled')!=='false')throw Error('auto off not offered');
+ if(!/after reboot · SOTER data reset/.test(_el('soterRows').textContent))throw Error('boot trigger not shown: '+_el('soterRows').textContent);
+ replies.on='soter|auto|state=1';
+ replies.status='soter|status|installed=1|services=vendor.soter:running|last_time=0|last_result=none|last_trigger=manual|auto=1';
+ _el('soterAuto').onclick({stopPropagation(){}}); await settle(); await settle();
+ if(!cmds.some(c=>/ auto on$/.test(c)))throw Error('switch did not call auto on');
+ if(!/after every reboot/.test(toasts[toasts.length-1][0]))throw Error('auto on not confirmed');
+ if(_el('soterAuto').getAttribute('aria-checked')!=='true'||!/\bon\b/.test(_el('soterAuto').className))throw Error('auto on not painted');
+ replies.off='soter|auto|state=1';
+ _el('soterAuto').onclick({stopPropagation(){}}); await settle(); await settle();
+ if(toasts[toasts.length-1][1]!=='err')throw Error('a refused change was reported as done');
+ replies.status='soter|status|installed=0|services=none|last_time=0|last_result=none|last_trigger=manual|auto=1';
+ await soterFixLoad(true);
+ if(_el('soterAuto').getAttribute('aria-disabled')!=='false')throw Error('an enabled auto repair must stay switchable off');
  replies.status='soter|status|installed=0|services=none|last_time=0|last_result=none';
  await soterFixLoad(true); if(!_el('soterRun').disabled||_el('soterChip').className!=='bfx-chip is-off')throw Error('absent server still repairable');
  replies.status='soter|status|installed=1|services=vendor.soter:stopped|last_time=1700000000|last_result=done';
@@ -12906,7 +12938,7 @@ const settle=()=>new Promise(r=>setImmediate(r));
 })().catch(e=>{console.error(e.stack||e);process.exit(1);});
 JS
 node "$T/t.js" "$ROOT/webroot/index.html" >/dev/null || fail 'card runtime'
-echo "PASS webui soter fix: fixed status/run protocol, second tap within 5 s, done/no-service/down/refused/busy/absent/stopped/unreadable states, sanitized rows, 13 locales"
+echo "PASS webui soter fix: fixed status/run/auto protocol, one tap runs the repair, opt-in boot repair switch reads back its state, done/no-service/down/refused/busy/absent/stopped/unreadable states, sanitized rows, 13 locales"
 )
 
 t_webui_device_page_dev48_runtime() (
@@ -12976,6 +13008,169 @@ grep -Fq "if (wear !== null && deviceBatteryWearMirrored(d)) parts.push(T('dev_b
 grep -Fq "'dev_battery_wear_mirrored_note'" "$H" || fail 'the battery row does not explain a mirrored design value'
 grep -Fq "if (spec[0] === 'zygisk_observer' && key === 'enabled_package_list') return;" "$H" || fail 'the 64-name list is printed twice (row and editor)'
 echo "PASS webui device page dev48: every collector key has a label in 13 locales, event age/CPU window/epochs carry units, observed-app RSS is its own card, a mirrored design capacity is not shown as wear"
+)
+
+
+t_webui_lsposed_schema_dev49_runtime() (
+# dev49, from a user's export: the LSPosed card said "unexpected_schema" and nothing else. The
+# status now carries the database's own table/column names (db_schema=, identifiers only);
+# the card names them, names an empty database as empty, and falls back to "not readable".
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui lsposed schema: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'PY' || fail 'fallbacks and locales'
+import json, pathlib, re, sys
+root = pathlib.Path(sys.argv[1]); h = (root / 'webroot/index.html').read_text(encoding='utf-8')
+b = h[h.index('function lspLiteCard('):h.index('\n}\n', h.index('function lspLiteCard('))]
+en = json.loads((root / 'webroot/i18n/en.json').read_text(encoding='utf-8'))
+found = dict(re.findall(r"T\('(lsp_db_schema[a-z_]*)', '([^']*)'\)", b))
+assert set(found) == {'lsp_db_schema', 'lsp_db_schema_none', 'lsp_db_schema_empty'}, found
+for k, v in found.items():
+    assert en[k] == v, k
+for p in sorted((root / 'webroot/i18n').glob('*.json')):
+    d = json.loads(p.read_text(encoding='utf-8'))
+    for k in list(found) + ['dev_lsposed_hooks_db_layout']:
+        assert isinstance(d.get(k), str) and d[k].strip(), (p.name, k)
+        if p.name != 'en.json': assert d[k] != en[k], (p.name, k)
+    assert d['lsp_db_schema'].count('%s') == 1, p.name
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP webui lsposed schema: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+{
+  echo "const T = (k, d) => d; let _zyLsp = null;"
+  echo "function logReportSec(t){ return { t: t, notes: [], appendChild(n){ this.notes.push(n); return n; } }; }"
+  echo "function logReportNote(t, w){ return { text: t, warn: !!w }; }"
+  sed -n '/^function lspLiteParse(/,/^}/p' "$H"
+  sed -n '/^function lspLiteCard(/,/^}/p' "$H"
+  cat <<'JS'
+let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
+const card = (txt) => { _zyLsp = lspLiteParse(txt); return lspLiteCard(); };
+let c = card('version=1\nlspd=1\ndatabase=unexpected_schema\ndb_schema=app_list(name);settings(k,v)\n');
+chk(c.notes.length === 1 && c.notes[0].warn && /Its tables: app_list\(name\); settings\(k, v\)\. Send/.test(c.notes[0].text), 'schema not named: ' + JSON.stringify(c.notes));
+c = card('version=1\nlspd=1\ndatabase=unexpected_schema\ndb_schema=no_tables\n');
+chk(c.notes.length === 1 && /holds no tables/.test(c.notes[0].text), 'empty database not named: ' + JSON.stringify(c.notes));
+c = card('version=1\nlspd=1\ndatabase=unexpected_schema\ndb_schema=unreadable\n');
+chk(/Its tables: not readable\./.test(c.notes[0].text), 'unreadable schema: ' + JSON.stringify(c.notes));
+c = card('version=1\nlspd=1\ndatabase=unexpected_schema\n');
+chk(/Its tables: not readable\./.test(c.notes[0].text), 'no schema line: ' + JSON.stringify(c.notes));
+c = card('version=1\nlspd=1\ndatabase=unexpected_schema\ndb_schema=<img src=x>\n');
+chk(!/</.test(c.notes[0].text), 'markup reached the card: ' + c.notes[0].text);
+c = card('version=1\nlspd=1\ndatabase=read_failed\n');
+chk(/could not be read \(read_failed\)/.test(c.notes[0].text), 'other reasons changed: ' + JSON.stringify(c.notes));
+process.exit(bad ? 1 : 0);
+JS
+} > "$T/t.js"
+node "$T/t.js" || fail 'card'
+grep -q "sed -n 's/^schema=//p'" "$ROOT/runtime/asb_lsposed_lite.sh" || fail 'the status does not pass the schema on'
+echo "PASS webui lsposed schema: an unknown LSPosed layout names its tables, an empty database says so, unreadable falls back, markup never reaches the card, 13 locales"
+)
+
+
+t_webui_kernel_why_dev49_runtime() (
+# dev49, from the owner's screenshots: scheduler migration batch, autogroup and LPM prediction
+# all read "not exposed by this kernel" for three different reasons. A not_exposed row now
+# says which (debugfs + SCHED_DEBUG with ASB's private mount / GKI without autogroup / the
+# older lpm_levels driver), once per render, and only for those rows.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+H="$ROOT/webroot/index.html"
+fail() { echo "FAIL webui kernel why: $*" >&2; exit 1; }
+python3 - "$ROOT" <<'PY' || fail 'fallbacks and locales'
+import json, pathlib, re, sys
+root = pathlib.Path(sys.argv[1]); h = (root / 'webroot/index.html').read_text(encoding='utf-8')
+b = h[h.index('function kernelUnavailableWhy('):h.index('function kernelDecorateControlRow(')]
+fb = dict(re.findall(r"\n    (kernel_[a-z_]+): '([^']*)'", b))
+assert set(fb) == {'kernel_sched_nr_migrate', 'kernel_sched_autogroup', 'kernel_lpm_prediction'}, fb
+en = json.loads((root / 'webroot/i18n/en.json').read_text(encoding='utf-8'))
+for k, v in fb.items(): assert en['kc_why_' + k] == v, k
+for p in sorted((root / 'webroot/i18n').glob('*.json')):
+    d = json.loads(p.read_text(encoding='utf-8'))
+    for k in fb:
+        assert isinstance(d.get('kc_why_' + k), str) and d['kc_why_' + k].strip(), (p.name, k)
+        if p.name != 'en.json': assert d['kc_why_' + k] != en['kc_why_' + k], (p.name, k)
+assert '/proc/sys/kernel/sched_nr_migrate' not in b
+PY
+command -v node >/dev/null 2>&1 || { echo 'SKIP webui kernel why: no node'; exit 0; }
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+{
+  cat <<'JS'
+const T = (k, d) => d;
+function el(cls) { const e = { className: cls || '', children: [], textContent: '', classList: { s: new Set(), add(c) { this.s.add(c); } },
+  appendChild(c) { this.children.push(c); return c; },
+  querySelector(sel) { const c = sel.replace(/^\./, ''); const w = n => { for (const x of n.children) { if (x.className.split(' ').indexOf(c) >= 0) return x; const r = w(x); if (r) return r; } return null; }; return w(this); },
+  querySelectorAll() { return []; }, setAttribute() {} }; return e; }
+function bfxEl(tag, cls, text) { const e = el(cls); if (text != null) e.textContent = text; return e; }
+const ASB_KERNEL_STATUS_KEYS = ['kernel_sched_nr_migrate','kernel_sched_autogroup','kernel_lpm_prediction','kernel_sched_stats'];
+let _kernelPanel = { loading: false, controls: {} };
+JS
+  sed -n '/^function kernelStateText(/,/^}/p' "$H"
+  sed -n '/^function kernelControlAvailability(/,/^}/p' "$H"
+  sed -n '/^function kernelUnavailableWhy(/,/^}/p' "$H"
+  sed -n '/^function kernelDecorateControlRow(/,/^}/p' "$H"
+  cat <<'JS'
+let bad = 0; const chk = (c, m) => { if (!c) { console.log('FAIL ' + m); bad++; } };
+const row = key => { const r = el('cfg-row'); r.appendChild(el('cfg-status')); return r; };
+const why = r => { const w = r.querySelector('.kernel-why'); return w ? w.textContent : ''; };
+_kernelPanel.controls = { kernel_sched_nr_migrate: { state: 'not_exposed', live: 'unknown' }, kernel_sched_autogroup: { state: 'not_exposed', live: '' },
+  kernel_lpm_prediction: { state: 'not_exposed', live: '' }, kernel_sched_stats: { state: 'not_exposed', live: '' } };
+let r = row(); kernelDecorateControlRow(r, 'kernel_sched_nr_migrate'); kernelDecorateControlRow(r, 'kernel_sched_nr_migrate');
+chk(/CONFIG_SCHED_DEBUG/.test(why(r)) && /privately/.test(why(r)) && r.children.filter(c => c.className === 'kernel-why').length === 1, 'nr_migrate why: ' + why(r));
+r = row(); kernelDecorateControlRow(r, 'kernel_sched_autogroup'); chk(/GKI kernels are built without autogroup/.test(why(r)), 'autogroup why');
+r = row(); kernelDecorateControlRow(r, 'kernel_lpm_prediction'); chk(/lpm_levels/.test(why(r)), 'lpm why');
+r = row(); kernelDecorateControlRow(r, 'kernel_sched_stats'); chk(why(r) === '', 'a control without a reason got one');
+_kernelPanel.controls.kernel_sched_nr_migrate = { state: 'writable', live: '8' };
+r = row(); kernelDecorateControlRow(r, 'kernel_sched_nr_migrate'); chk(why(r) === '', 'an available control explained as missing');
+process.exit(bad ? 1 : 0);
+JS
+} > "$T/t.js"
+node "$T/t.js" || fail 'rows'
+grep -q "read through ASB's private mount" "$ROOT/tools/asb_device_info.sh" || fail 'the Device page still reports the mounted-elsewhere node only'
+grep -q 'idle driver $_lpmm parameters' "$ROOT/tools/asb_diag.sh" || fail 'asbdiag lists no idle-driver parameters'
+echo "PASS webui kernel why: not-exposed migration batch, autogroup and LPM rows say why, once, only when missing; Device page and asbdiag carry the evidence; 13 locales"
+)
+
+
+t_webui_category_ink_dev49() (
+# dev49, owner's request: Kernel and Audio text was hard to read on the AMOLED background.
+# In the dark and glass themes those two categories get a lighter ink of the same hue for
+# text and line icons (>= 7:1 on black, >= 6:1 on their own tinted badge); fills, edges and
+# the light theme keep the category hue; the other categories are untouched.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+fail() { echo "FAIL webui category ink: $*" >&2; exit 1; }
+python3 - "$ROOT/webroot/index.html" <<'PY' || fail 'ink contract'
+import re, sys
+h = open(sys.argv[1], encoding='utf-8').read()
+ink = dict(re.findall(r'html:not\(\[data-asb-theme="light"\]\) :is\(\.cfg-section,\.cfg-tile,\.cfg-icon,\.cfg-row\)\.cat-(kernel|audio)\s+\{ --cat-ink:(#[0-9a-f]{6}); \}', h))
+assert set(ink) == {'kernel', 'audio'}, ink
+cat = {'kernel': '#b0704a', 'audio': '#d4475f'}
+def lin(c):
+    c /= 255
+    return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+def lum(x):
+    return sum(w * lin(int(x[i:i + 2], 16)) for w, i in ((0.2126, 1), (0.7152, 3), (0.0722, 5)))
+def mix(a, b, t):
+    return '#' + ''.join('%02x' % round(int(a[i:i + 2], 16) * t + int(b[i:i + 2], 16) * (1 - t)) for i in (1, 3, 5))
+def cr(a, b):
+    x, y = sorted((lum(a), lum(b)), reverse=True)
+    return (x + 0.05) / (y + 0.05)
+for k, v in ink.items():
+    assert cr(v, '#000000') >= 7, (k, cr(v, '#000000'))
+    assert cr(v, mix(cat[k], '#17120f', 0.16)) >= 6, (k, 'badge')
+    assert cr(v, '#000000') > cr(cat[k], '#000000') + 2, (k, 'not brighter than the hue')
+    h_ink = int(v[1:3], 16) >= int(v[3:5], 16) >= 0 and int(v[1:3], 16) == max(int(v[i:i + 2], 16) for i in (1, 3, 5))
+    assert h_ink, (k, 'ink left the red/copper family')
+block = h[h.index('/* dev49: on the black and AMOLED surfaces'):h.index('.cfg-zygisk-card .cfg-zygisk-open {')]
+assert 'html[data-asb-theme="light"]' not in block
+assert '::after' not in re.sub(r'\.cfg-row:is\(\.cat-kernel,\.cat-audio\) \.cfg-sel-btn::after', '', block), 'a pseudo-element inside :is() voids the whole rule'
+for token in ('--tech-icon:var(--cat-ink)', '--section-accent:var(--cat-ink)', ':is(.cfg-status.good,.cfg-status.on)', '.cfg-range-val', '.cfg-seg button.on'):
+    assert token in block, token
+for other in ('cat-camera', 'cat-battery', 'cat-ux', 'cat-net', 'cat-feel', 'cat-zygisk'):
+    assert other not in block, other
+assert ':is(.cfg-icon,.cfg-row).cat-kernel  { --cat: #b0704a; }' in h and ':is(.cfg-icon,.cfg-row).cat-audio   { --cat: #d4475f; }' in h
+PY
+echo "PASS webui category ink: Kernel and Audio text/icons use a lighter same-hue ink on dark and glass (>=7:1), fills and the light theme keep the hue, other categories untouched"
 )
 
 _asb_tests() { declare -F | awk '$3 ~ /^t_/ { print substr($3, 3) }'; }

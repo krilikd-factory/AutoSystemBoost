@@ -9103,7 +9103,7 @@ setup_case() {
   NOW=1320
 }
 run_nc() {
-  MODDIR="$T/case/mod" ASB_NC_PSY="$T/case/psy" ASB_NC_STATE="$T/case/state" \
+  MODDIR="$T/case/mod" ASB_NC_PSY="$T/case/psy" ASB_NC_STATE="$T/case/state" ASB_NC_OPLUS="$T/case/oplus" \
     ASB_NC_BOOTID="$T/case/boot" ASB_NC_NOW_MIN="$NOW" sh "$H" "${1:-apply}"
 }
 make_limit() {
@@ -9208,13 +9208,43 @@ printf 'night_charge_enable=0\n' > "$T/case/mod/config/governor.conf"
 out="$(run_nc apply)"
 [ "$(cat "$T/case/psy/charge_control_limit")" = 100 ] || fail 'disable overwrote the external value'
 
+# dev49: a user's OnePlus (stock 6.12, OPlus charger) has neither standard node and showed
+# "not exposed". The OPlus charge switch mmi_charging_enable (1 = charge, 0 = stop) is used
+# like charging_enabled, first under oplus_chg, then under power_supply. A switch-type hold
+# is not released on "Discharging" while a charger is still online (that status is what a
+# stopped charger may report), but it is on a real unplug.
+setup_case; mkdir -p "$T/case/oplus"; printf '1\n' > "$T/case/oplus/mmi_charging_enable"; printf '1\n' > "$T/case/psy/mmi_charging_enable"
+printf '80\n' > "$T/case/psy/capacity"
+out="$(run_nc apply)"; [ "$(state "$out")" = holding ] || fail "oplus mmi hold: $out"
+printf '%s\n' "$out" | grep -qx 'interface=mmi' || fail "oplus mmi not chosen first: $out"
+[ "$(cat "$T/case/oplus/mmi_charging_enable")" = 0 ] && [ "$(cat "$T/case/psy/mmi_charging_enable")" = 1 ] || fail 'wrong mmi node written'
+grep -qx 'kind=mmi' "$T/case/state/night_charge.ledger" || fail 'mmi ownership not recorded'
+printf '%s\n' "$(run_nc status)" | grep -qx 'interface=mmi' || fail 'status lost the mmi interface'
+mkdir -p "$T/case/usb"; printf '1\n' > "$T/case/usb/online"; printf 'Discharging\n' > "$T/case/psy/status"
+out="$(run_nc tick)"; [ "$(state "$out")" = holding ] || fail "a stopped charger reporting Discharging released the hold: $out"
+printf '0\n' > "$T/case/usb/online"
+out="$(run_nc tick)"; [ "$(state "$out")" = waiting ] || fail "real unplug did not release mmi: $out"
+[ "$(cat "$T/case/oplus/mmi_charging_enable")" = 1 ] || fail 'unplug did not hand mmi back'
+printf 'Charging\n' > "$T/case/psy/status"; printf '1\n' > "$T/case/usb/online"
+out="$(run_nc tick)"; [ "$(state "$out")" = holding ] || fail "mmi re-hold: $out"
+out="$(run_nc restore)"; [ "$(state "$out")" = off ] && [ "$(cat "$T/case/oplus/mmi_charging_enable")" = 1 ] || fail "restore did not hand mmi back: $out"
+setup_case; printf '1\n' > "$T/case/psy/mmi_charging_enable"; printf '81\n' > "$T/case/psy/capacity"
+out="$(run_nc apply)"; printf '%s\n' "$out" | grep -qx 'interface=mmi_psy' && [ "$(cat "$T/case/psy/mmi_charging_enable")" = 0 ] || fail "power_supply mmi: $out"
+printf 'night_charge_enable=0\n' > "$T/case/mod/config/governor.conf"
+out="$(run_nc apply)"; [ "$(state "$out")" = off ] && [ "$(cat "$T/case/psy/mmi_charging_enable")" = 1 ] || fail "disable did not restore mmi_psy: $out"
+setup_case; make_switch; mkdir -p "$T/case/oplus"; printf '1\n' > "$T/case/oplus/mmi_charging_enable"; printf '80\n' > "$T/case/psy/capacity"
+out="$(run_nc apply)"; printf '%s\n' "$out" | grep -qx 'interface=switch' || fail "standard switch must win over mmi: $out"
+setup_case; mkdir -p "$T/case/oplus"; printf 'x\n' > "$T/case/oplus/mmi_charging_enable"
+out="$(run_nc apply)"; [ "$(state "$out")" = not_exposed ] || fail "a non-binary mmi node was used: $out"
+grep -q '/sys/class/oplus_chg/battery/mmi_charging_enable' "$ROOT/tools/asb_diag.sh" || fail 'diag shows no evidence for the OPlus switch'
+
 # Uninstall calls the same restore command and hands back an ASB-owned value.
 setup_case; make_limit; out="$(run_nc apply)"
 out="$(run_nc restore)"; [ "$(state "$out")" = off ] || fail "restore command: $out"
 [ "$(cat "$T/case/psy/charge_control_limit")" = 100 ] || fail 'restore command left 80'
 grep -Fq 'asb_night_charge.sh restore' "$ROOT/uninstall.sh" || fail 'uninstall does not invoke restore'
 
-echo 'PASS night charge sysfs: default/custom same-day/overnight windows, exact handback, invalid fail-safe, limit/switch, unplug and uninstall'
+echo 'PASS night charge sysfs: default/custom same-day/overnight windows, exact handback, invalid fail-safe, limit/switch/OPlus mmi, plug-aware unplug and uninstall'
 )
 
 t_night_charge_learn_runtime() (

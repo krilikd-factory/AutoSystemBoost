@@ -4296,6 +4296,50 @@ touch "$T/sys/batterystats.bin"
 [ "$(kv fresh)" = 1 ] || f "a new record was not detected: $(st)"
 [ "$(kv reset)" = none ] || f "the reset stayed pending after boot"
 
+# dev49, from a user's export: "succeeded 0, failed 560" with no reason, a reset dated
+# months back and "1 of 3 files removed". Every recompile refused now stops early and the
+# first answer is kept; the fallback `pm compile` runs when `cmd` rejects the options.
+cat > "$T/rf.sh" <<'EOF'
+echo "$1" >> "$RF_LOG"
+printf 'Error: Failed to compile package %s\nmore\n' "$1"
+EOF
+export RF_LOG="$T/rf.log"; : > "$RF_LOG"
+ASB_BFIX_COMPILE_CMD="sh $T/rf.sh" ASB_BFIX_REFUSE_AFTER=4 ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS='r.1 r.2 r.3 r.4 r.5 r.6 r.7 r.8' sh "$A" run >/dev/null
+[ "$(kv compile)/$(kv done)/$(kv ok)/$(kv fail)" = refused/4/0/4 ] || f "uniform refusals did not stop early: $(st)"
+[ "$(wc -l < "$RF_LOG" | tr -d ' ')" = 4 ] || f "the worker kept compiling after the refusal limit"
+[ "$(st | sed -n 's/^err_text=//p')" = 'Error: Failed to compile package r.1' ] || f "first refusal reason not kept: $(st)"
+[ "$(st | grep -c .)" = 2 ] || f "status should be one line plus the reason line"
+ASB_BFIX_COMPILE_CMD="sh $T/fc.sh" ASB_BFIX_REFUSE_AFTER=2 ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS='x.bad y.bad z.one' sh "$A" run >/dev/null
+[ "$(kv compile)" = refused ] || f "two leading failures with limit 2 should stop: $(st)"
+ASB_BFIX_COMPILE_CMD="sh $T/fc.sh" ASB_BFIX_REFUSE_AFTER=2 ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS='z.one x.bad y.bad w.bad' sh "$A" run >/dev/null
+[ "$(kv compile)/$(kv ok)/$(kv fail)" = done/1/3 ] || f "one success must keep the run going: $(st)"
+st | grep -q '^err_text=Failure: compile error$' || f "a mixed run lost its first failure reason"
+ASB_BFIX_COMPILE_CMD="sh $T/fc.sh" ASB_BFIX_SYNC=1 ASB_BFIX_FAKE_PKGS='a.ok' sh "$A" run >/dev/null
+st | grep -q '^err_text=' && f "a clean run still shows a failure reason"
+grep -q 'pm compile -m speed-profile "\$1"' "$A" || f "no pm fallback when cmd rejects the options"
+
+# Files Android never created are absent, not failures; a boot clock earlier than the arm
+# time is not written as the reset time; `settle` derives it later in the same boot.
+rm -f "$T/sys/batterystats-checkin.bin" "$T/sys/batterystats-daily.xml"; echo x > "$T/sys/batterystats.bin"
+printf 'armed_at=%s\nlevel=100\n' "$(( $(date +%s) + 100000 ))" > "$T/d/battery_fix.pending"
+ASB_BFIX_BOOT_ID=bootA ASB_BFIX_UPTIME=20 sh "$A" boot
+grep -qx 'done_at=' "$T/d/battery_fix.last" || f "a boot clock behind the arm time was recorded: $(cat "$T/d/battery_fix.last")"
+grep -qx 'absent=batterystats-checkin.bin,batterystats-daily.xml' "$T/d/battery_fix.last" && grep -qx 'missing=-' "$T/d/battery_fix.last" \
+  && grep -qx 'removed=batterystats.bin' "$T/d/battery_fix.last" || f "absent files counted as failures: $(cat "$T/d/battery_fix.last")"
+[ "$(ASB_BFIX_BOOT_ID=bootA ASB_BFIX_UPTIME=30 sh "$A" status | tr ' ' '\n' | sed -n 's/^last_reset=//p')" = boot ] || f "an unsettled reset is not reported as boot"
+sed -i "s/^armed_at=.*/armed_at=1000/" "$T/d/battery_fix.last"
+ASB_BFIX_BOOT_ID=bootB ASB_BFIX_UPTIME=500 sh "$A" settle
+grep -qx 'done_at=' "$T/d/battery_fix.last" || f "settle used uptime from another boot"
+n0="$(date +%s)"
+ASB_BFIX_BOOT_ID=bootA ASB_BFIX_UPTIME=500 sh "$A" settle
+v="$(sed -n 's/^done_at=//p' "$T/d/battery_fix.last")"
+case "$v" in ''|*[!0-9]*) f "settle did not derive the reset time" ;; *)
+  d=$(( n0 - 480 - v )); [ "$d" -ge -2 ] && [ "$d" -le 2 ] || f "settled time is off by $d s" ;; esac
+grep -q 'absent=' "$T/d/battery_fix.last" && grep -q 'removed=batterystats.bin' "$T/d/battery_fix.last" || f "settle lost the file accounting"
+st | tr ' ' '\n' | grep -q '^absent=batterystats-checkin.bin,batterystats-daily.xml$' || f "status lacks absent files"
+grep -q "grep -q '^done_at=\$' /data/adb/asb/battery_fix.last" "$ROOT/service.sh" && grep -q 'asb_battery_fix.sh" settle' "$ROOT/service.sh" || f "service.sh never settles the reset time"
+! grep -q '^[[:space:]]*#' <(tail -n +2 "$A") || f "comment lines in module shell code"
+
 [ "$fail" = 0 ] && echo "PASS battery fix runtime"
 exit "$fail"
 )
@@ -5834,6 +5878,93 @@ done
 _direct="$(grep -RInE '> */proc/sys/kernel/hrtimer_migration|> */sys/module/(lpm_levels/parameters/lpm_prediction|usbcore/parameters/autosuspend)' "$ROOT/service.sh" "$ROOT/post-fs-data.sh" "$ROOT/runtime" "$ROOT/profiles" "$ROOT/common" 2>/dev/null | grep -v 'runtime/asb_kernel_controls.sh' || true)"
 [ -z "$_direct" ] || fail "competing direct writer: $_direct"
 echo 'PASS kernel power/USB controls: Battery Auto, exact profile release, manual override, signed USB values, stable baselines, failure states, safe config and one owner'
+)
+
+t_kernel_nr_migrate_debugfs_runtime() (
+# dev49, from the owner's export: his kernel is built with CONFIG_DEBUG_FS=y and
+# CONFIG_SCHED_DEBUG=y, yet "Scheduler migration batch" read "not exposed" - Android does not
+# mount debugfs on user builds, so /sys/kernel/debug/sched/nr_migrate is never there. The
+# owner now mounts debugfs on a private root-only directory for the one read or write and
+# unmounts it at once (the value stays in the kernel); no debugfs is left mounted, no
+# /proc/sys node is guessed, and a kernel without debugfs or without the node stays
+# not_exposed with nothing written.
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+K="$ROOT/runtime/asb_kernel_controls.sh"
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT HUP INT TERM
+fail() { echo "FAIL kernel nr_migrate debugfs: $*" >&2; exit 1; }
+mkdir -p "$T/bin" "$T/mod/config" "$T/kernel"
+printf '32\n' > "$T/kernel/nr"
+printf 'nodev\tsysfs\nnodev\tdebugfs\nnodev\ttracefs\n' > "$T/fs"
+cat > "$T/bin/mount" <<'S'
+#!/bin/sh
+echo "mount $*" >> "$LOG"
+[ -f "$LOG.nomount" ] && exit 32
+[ "$1 $2 $3" = "-t debugfs debugfs" ] || exit 1
+mkdir -p "$4/sched" && [ -f "$KNR" ] && cp "$KNR" "$4/sched/nr_migrate"
+exit 0
+S
+cat > "$T/bin/umount" <<'S'
+#!/bin/sh
+echo "umount $*" >> "$LOG"
+[ -f "$1/sched/nr_migrate" ] && cp "$1/sched/nr_migrate" "$KNR"
+rm -rf "$1/sched"
+exit 0
+S
+chmod 0755 "$T/bin/"*
+run() {
+  PATH="$T/bin:$PATH" LOG="$T/log" KNR="$T/kernel/nr" MODDIR="$T/mod" ASB_KERNEL_STATE_DIR="$T/state" \
+    ASB_KC_FILESYSTEMS="$T/fs" ASB_KC_DEBUGFS_MP="$T/mp" ASB_KC_DEBUGFS_DEFAULT="$T/absent" sh "$K" "$@"
+}
+printf 'kernel_sched_nr_migrate=8\n' > "$T/mod/config/governor.conf"
+out="$(run status kernel_sched_nr_migrate)"
+[ "$out" = 'kernel_sched_nr_migrate|writable|8|32|none' ] || fail "status through the private mount: $out"
+[ ! -e "$T/mp" ] || fail 'status left the private debugfs mount point'
+out="$(run apply kernel_sched_nr_migrate)"
+[ "$out" = 'kernel_sched_nr_migrate|applied|8|8|32' ] || fail "apply through the private mount: $out"
+[ "$(cat "$T/kernel/nr")" = 8 ] && [ "$(cat "$T/state/kernel_sched_nr_migrate.prev")" = 32 ] || fail 'value or baseline wrong'
+[ ! -e "$T/mp" ] || fail 'apply left debugfs mounted'
+[ "$(grep -c '^mount -t debugfs debugfs ' "$T/log")" = "$(grep -c '^umount ' "$T/log")" ] || fail "mounts and unmounts do not pair: $(cat "$T/log")"
+out="$(run apply || true)"
+printf '%s\n' "$out" | grep -qx 'kernel_sched_nr_migrate|applied|8|8|32' || fail "the batch apply did not reach the node: $out"
+[ "$(grep -c '^mount ' "$T/log")" = 3 ] || fail "debugfs was mounted for a key that does not need it: $(cat "$T/log")"
+printf 'kernel_sched_nr_migrate=stock\n' > "$T/mod/config/governor.conf"
+out="$(run apply kernel_sched_nr_migrate)"
+[ "$out" = 'kernel_sched_nr_migrate|restored|stock|32|none' ] && [ "$(cat "$T/kernel/nr")" = 32 ] || fail "stock restore through the private mount: $out"
+out="$(run restore || true)"; printf '%s\n' "$out" | grep -q '^kernel_sched_nr_migrate|stock_unowned|' || fail "restore-all: $out"
+rm -f "$T/kernel/nr"; : > "$T/log"; printf 'kernel_sched_nr_migrate=4\n' > "$T/mod/config/governor.conf"
+set +e; out="$(run apply kernel_sched_nr_migrate)"; rc=$?; set -e
+[ "$rc" -ne 0 ] && [ "$out" = 'kernel_sched_nr_migrate|not_exposed|4|unknown|none' ] || fail "debugfs without the node (no SCHED_DEBUG): $out"
+[ ! -e "$T/mp" ] && [ ! -e "$T/state/kernel_sched_nr_migrate.prev" ] || fail 'a kernel without the node kept a mount or a baseline'
+printf '32\n' > "$T/kernel/nr"; touch "$T/log.nomount"; : > "$T/log"
+out="$(run status kernel_sched_nr_migrate)"
+[ "$out" = 'kernel_sched_nr_migrate|not_exposed|4|unknown|none' ] && [ ! -e "$T/mp" ] || fail "a refused mount: $out"
+rm -f "$T/log.nomount"; printf 'nodev\tsysfs\n' > "$T/fs"; : > "$T/log"
+out="$(run status kernel_sched_nr_migrate)"
+[ "$out" = 'kernel_sched_nr_migrate|not_exposed|4|unknown|none' ] && [ ! -s "$T/log" ] || fail "mounted without debugfs support: $out $(cat "$T/log")"
+printf 'nodev\tdebugfs\n' > "$T/fs"; mkdir -p "$T/ready"; printf '16\n' > "$T/ready/nr"; : > "$T/log"
+out="$(PATH="$T/bin:$PATH" LOG="$T/log" MODDIR="$T/mod" ASB_KERNEL_STATE_DIR="$T/state" ASB_KC_FILESYSTEMS="$T/fs" \
+  ASB_KC_DEBUGFS_MP="$T/mp" ASB_KC_DEBUGFS_DEFAULT="$T/ready/nr" ASB_SCHED_NR_MIGRATE_NODE="$T/ready/nr" sh "$K" status kernel_sched_nr_migrate)"
+[ "$out" = 'kernel_sched_nr_migrate|writable|4|16|none' ] && [ ! -s "$T/log" ] || fail "an already mounted debugfs was mounted again: $out"
+! grep -q '^[[:space:]]*#' <(tail -n +2 "$K") || fail 'comment lines in module shell code'
+echo "PASS kernel nr_migrate debugfs: private mount only for nr_migrate and only for one read/write, always unmounted, exact baseline/restore, honest not_exposed without debugfs, the node or a mount"
+)
+
+t_governor_sustained_reason_dev49() (
+# dev49, from the owner's log: "enter_sustained: other actual_t=63degC (thresh=54)". The
+# floor test compared the die temperature with the global threshold while the line printed
+# the profile's; one profile threshold now feeds both, so a reading above the printed
+# threshold can no longer be labelled "other".
+set -eu
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
+G="$ROOT/src/asb_governor.c"
+fail() { echo "FAIL governor sustained reason: $*" >&2; exit 1; }
+b="$(sed -n '/const int _sus_thresh = asb_config_profile_sustained_temp_enter(&g_asb_cfg, fsm.profile_idx);/,/fsm.perf_hot_guard_active);/p' "$G")"
+[ -n "$b" ] || fail 'the profile threshold is not computed once for the reason'
+printf '%s\n' "$b" | grep -q '(metrics.therm.cpu_max_c >= _sus_thresh)' || fail 'the floor test does not use the profile threshold'
+printf '%s\n' "$b" | grep -q 'g_asb_cfg.sustained_temp_enter' && fail 'the global threshold is still used for the reason'
+printf '%s\n' "$b" | grep -q '^ *_sus_thresh,$' || fail 'the printed threshold is not the one tested'
+echo "PASS governor sustained reason: one profile threshold feeds both the reason and the printed thresh"
 )
 
 t_kernel_controls_single_owner_runtime() (
@@ -8994,6 +9125,7 @@ P
 sum0="$(cksum < "$D")"
 out="$("$T/gov/asb" --lspd modules "$D")"
 [ "$out" = "format=v1
+layout=standard
 module|com.mod.alpha|1|4
 module|com.mod.beta|1|1
 module|com.mod.off|0|1
@@ -9008,6 +9140,55 @@ scopes=5" ] || fail "inventory: $out"
 out="$("$T/gov/asb" --lspd modules "$T/none.db" || true)"; printf '%s\n' "$out" | grep -qx 'reason=no_database' || fail "missing db: $out"
 python3 -c "import sqlite3; db=sqlite3.connect('$T/other.db'); db.execute('CREATE TABLE settings (k text)'); db.commit()"
 out="$("$T/gov/asb" --lspd modules "$T/other.db" || true)"; printf '%s\n' "$out" | grep -qx 'reason=unexpected_schema' || fail "foreign layout: $out"
+# dev49: a user's LSPosed card read "unexpected_schema" with nothing else to go on. Forks that
+# rename the columns (id/pkg_name/enable, a "scopes" table, a scope keyed by package) are now
+# mapped from PRAGMA table_info and read as an adapted layout; a database matching nothing
+# names its tables and columns (identifiers only) so the next report can add it; an empty
+# file says so. Writes (verbose switch, scope edits) stay limited to the standard layout.
+python3 - "$T" <<'PYDB'
+import sqlite3, sys
+t = sys.argv[1]
+db = sqlite3.connect(t + '/alt.db')
+db.executescript("""
+CREATE TABLE modules (id integer PRIMARY KEY, pkg_name text, enable integer);
+CREATE TABLE scopes (module_id integer, app_pkg text, user integer);
+INSERT INTO modules VALUES (1, 'com.a.mod', 1), (2, 'com.b.mod', 0);
+INSERT INTO scopes VALUES (1, 'com.app.one', 0), (2, 'com.app.two', 10);
+"""); db.commit(); db.close()
+db = sqlite3.connect(t + '/pkgref.db')
+db.executescript("""
+CREATE TABLE modules (module_pkg_name text PRIMARY KEY, enabled integer);
+CREATE TABLE scope (module_pkg_name text, app_pkg_name text, user_id integer);
+INSERT INTO modules VALUES ('com.a.mod', 1);
+INSERT INTO scope VALUES ('com.a.mod', 'com.app.one', 0);
+"""); db.commit(); db.close()
+db = sqlite3.connect(t + '/foreign.db')
+db.executescript("CREATE TABLE settings (k text, v text); CREATE TABLE app_list (name text);"); db.commit(); db.close()
+sqlite3.connect(t + '/empty.db').close()
+PYDB
+for _db in alt pkgref foreign; do cp "$T/$_db.db" "$T/$_db.orig"; done
+out="$("$T/gov/asb" --lspd modules "$T/alt.db")"
+[ "$out" = "format=v1
+layout=adapted
+module|com.a.mod|1|1
+module|com.b.mod|0|1
+scope|com.a.mod|com.app.one|0
+scope|com.b.mod|com.app.two|10
+modules=2
+scopes=2" ] || fail "renamed columns not mapped: $out"
+out="$("$T/gov/asb" --lspd modules "$T/pkgref.db")"
+printf '%s\n' "$out" | grep -qx 'layout=adapted' && printf '%s\n' "$out" | grep -qx 'module|com.a.mod|1|1' && printf '%s\n' "$out" | grep -qx 'scope|com.a.mod|com.app.one|0' || fail "scope keyed by package not mapped: $out"
+out="$("$T/gov/asb" --lspd modules "$T/foreign.db" || true)"
+printf '%s\n' "$out" | grep -qx 'reason=unexpected_schema' && printf '%s\n' "$out" | grep -qx 'schema=app_list(name);settings(k,v)' || fail "a foreign layout does not name its tables: $out"
+out="$("$T/gov/asb" --lspd modules "$T/empty.db" || true)"
+printf '%s\n' "$out" | grep -qx 'schema=no_tables' || fail "an empty database is not named: $out"
+out="$("$T/gov/asb" --lspd verbose-get "$T/alt.db" || true)"
+printf '%s\n' "$out" | grep -qx 'reason=no_verbose_switch' && printf '%s\n' "$out" | grep -q '^schema=modules(id,pkg_name,enable);scopes(' || fail "a database without configs reported something else: $out"
+out="$("$T/gov/asb" --lspd verbose-set off "$T/alt.db" || true)"
+printf '%s\n' "$out" | grep -qx 'reason=unexpected_schema' || fail "a write was attempted on an adapted layout: $out"
+for _db in alt pkgref foreign; do cmp -s "$T/$_db.db" "$T/$_db.orig" || fail "reading the $_db layout changed it"; done
+grep -q 'db_schema=' "$ROOT/runtime/asb_lsposed_lite.sh" && grep -q '_emit lsposed_hooks db_layout' "$ROOT/runtime/asb_lsposed_info.sh" || fail "the schema evidence does not reach the card or the Device page"
+grep -q 'no known layout' "$ROOT/tools/asb_diag.sh" || fail "asbdiag does not show the schema evidence"
 cp "$D" "$T/locked.db"
 python3 -c "
 import sqlite3, time, sys
@@ -10801,6 +10982,10 @@ t_soter_fix_runtime() (
 # services; run stops those services, clears only com.tencent.soter.soterserver, starts them
 # and reads their state back. Every outcome has its own word; a second run is refused while
 # one holds the lock; nothing is written for a status call; no comments in module shell code.
+# dev49: the owner saw the repair take effect only on the second run, so one run now makes
+# two passes (force-stop, stop and wait stopped, clear, start and wait running), stopping
+# early on a refused clear or a service that does not come back. An opt-in flag
+# (`auto on|off`) lets service.sh run the same repair once per boot (`boot`).
 set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 S="$ROOT/runtime/asb_soter_fix.sh"
@@ -10841,12 +11026,16 @@ cat > "$T/bin/sleep" <<'SH'
 #!/bin/sh
 exit 0
 SH
+cat > "$T/bin/am" <<'SH'
+#!/bin/sh
+echo "am $*" >> "$LOG"
+SH
 chmod 0755 "$T/bin/"*
 export PATH="$T/bin:$PATH" PROPS="$T/props" LOG="$T/log" ASB_SOTER_STATE_DIR="$T/state" ASB_SOTER_PACKAGES_LIST="$T/packages.list" ASB_SOTER_WAIT_STEPS=3
 ! grep -q '^[[:space:]]*#' <(tail -n +2 "$S") || fail 'comment lines in module shell code'
 printf 'com.android.shell 2000 0 /data/user_de/0/com.android.shell\n' > "$T/packages.list"
 OUT="$(sh "$S" status)"
-[ "$OUT" = 'soter|status|installed=0|services=none|last_time=0|last_result=none' ] || fail "absent status: $OUT"
+[ "$OUT" = 'soter|status|installed=0|services=none|last_time=0|last_result=none|last_trigger=manual|auto=0' ] || fail "absent status: $OUT"
 [ ! -e "$T/state" ] || fail 'status wrote state'
 OUT="$(sh "$S" run)"
 grep -q '^soter|result|state=not_installed|cleared=0|' <<<"$OUT" || fail "absent run: $OUT"
@@ -10854,20 +11043,38 @@ grep -q '^soter|result|state=not_installed|cleared=0|' <<<"$OUT" || fail "absent
 printf 'com.tencent.soter.soterserver 10123 0 /data/user/0/com.tencent.soter.soterserver\n' >> "$T/packages.list"
 printf 'running' > "$T/props/init.svc.vendor.soter"
 OUT="$(sh "$S" status)"
-grep -q '^soter|status|installed=1|services=vendor.soter:running|last_time=[0-9]*|last_result=not_installed$' <<<"$OUT" || fail "present status: $OUT"
+grep -q '^soter|status|installed=1|services=vendor.soter:running|last_time=[0-9]*|last_result=not_installed|last_trigger=manual|auto=0$' <<<"$OUT" || fail "present status: $OUT"
 : > "$LOG"
 OUT="$(sh "$S" run)"
-[ "$OUT" = 'soter|result|state=done|cleared=1|services=vendor.soter:running' ] || fail "done run: $OUT"
-[ "$(cat "$LOG")" = "$(printf 'stop vendor.soter\npm clear com.tencent.soter.soterserver\nstart vendor.soter')" ] || fail "wrong sequence: $(cat "$LOG")"
-grep -qx 'result=done' "$T/state/last" || fail 'result not recorded'
+[ "$OUT" = 'soter|result|state=done|cleared=1|passes=2|services=vendor.soter:running' ] || fail "done run: $OUT"
+_pass1="$(printf 'am force-stop com.tencent.soter.soterserver\nstop vendor.soter\npm clear com.tencent.soter.soterserver\nstart vendor.soter')"
+[ "$(cat "$LOG")" = "$(printf '%s\n%s' "$_pass1" "$_pass1")" ] || fail "wrong sequence: $(cat "$LOG")"
+grep -qx 'result=done' "$T/state/last" && grep -qx 'trigger=manual' "$T/state/last" && grep -qx 'passes=2' "$T/state/last" || fail 'result not recorded'
 [ ! -d "$T/state/run.lock" ] || fail 'lock left behind'
-touch "$LOG.clearfail"; OUT="$(sh "$S" run)"; rm -f "$LOG.clearfail"
-grep -q '^soter|result|state=clear_failed|cleared=0|services=vendor.soter:running$' <<<"$OUT" || fail "clear failure: $OUT"
+: > "$LOG"; touch "$LOG.clearfail"; OUT="$(sh "$S" run)"; rm -f "$LOG.clearfail"
+grep -q '^soter|result|state=clear_failed|cleared=0|passes=1|services=vendor.soter:running$' <<<"$OUT" || fail "clear failure: $OUT"
+[ "$(grep -c '^pm clear' "$LOG")" = 1 ] || fail 'a refused clear was repeated'
 touch "$LOG.nostart"; OUT="$(sh "$S" run)"; rm -f "$LOG.nostart"
-grep -q '^soter|result|state=service_down|cleared=1|services=vendor.soter:stopped$' <<<"$OUT" || fail "service down: $OUT"
+grep -q '^soter|result|state=service_down|cleared=1|passes=1|services=vendor.soter:stopped$' <<<"$OUT" || fail "service down: $OUT"
+printf 'running' > "$T/props/init.svc.vendor.soter"
+: > "$LOG"; OUT="$(ASB_SOTER_PASSES=1 sh "$S" run)"
+[ "$OUT" = 'soter|result|state=done|cleared=1|passes=1|services=vendor.soter:running' ] && [ "$(grep -c '^pm clear' "$LOG")" = 1 ] || fail "single pass: $OUT"
+OUT="$(sh "$S" boot)"
+grep -q '^soter|result|state=auto_off|cleared=0|passes=0|' <<<"$OUT" || fail "boot ran without the opt-in: $OUT"
+[ "$(grep -c '^pm clear' "$LOG")" = 1 ] || fail 'boot without the opt-in cleared data'
+[ "$(sh "$S" auto on)" = 'soter|auto|state=1' ] && [ -f "$T/state/auto" ] || fail 'auto on'
+grep -q '|auto=1$' <<<"$(sh "$S" status)" || fail 'status does not show the opt-in'
+: > "$LOG"; OUT="$(sh "$S" boot)"
+[ "$OUT" = 'soter|result|state=done|cleared=1|passes=2|services=vendor.soter:running' ] || fail "boot run: $OUT"
+grep -qx 'trigger=boot' "$T/state/last" || fail 'boot trigger not recorded'
+grep -q '|last_result=done|last_trigger=boot|auto=1$' <<<"$(sh "$S" status)" || fail 'status lacks the boot trigger'
+[ "$(sh "$S" auto off)" = 'soter|auto|state=0' ] && [ ! -e "$T/state/auto" ] || fail 'auto off'
+set +e; OUT="$(sh "$S" auto maybe)"; rc=$?; set -e
+[ "$rc" = 2 ] || fail 'bad auto value accepted'
+grep -q 'soter_fix/auto' "$ROOT/service.sh" && grep -q 'asb_soter_fix.sh" boot' "$ROOT/service.sh" || fail 'service.sh does not run the opted-in boot repair'
 rm -f "$T/props/init.svc.vendor.soter"; : > "$LOG"
 OUT="$(sh "$S" run)"
-[ "$OUT" = 'soter|result|state=done_no_service|cleared=1|services=none' ] || fail "no service: $OUT"
+[ "$OUT" = 'soter|result|state=done_no_service|cleared=1|passes=2|services=none' ] || fail "no service: $OUT"
 ! grep -q '^st' "$LOG" || fail 'started or stopped a service the ROM does not declare'
 mkdir "$T/state/run.lock"; OUT="$(sh "$S" run)"
 grep -q '^soter|result|state=busy|' <<<"$OUT" || fail "busy: $OUT"
@@ -10878,7 +11085,7 @@ grep -q '^soter|status|installed=1|' <<<"$OUT" || fail "pm fallback: $OUT"
 set +e; OUT="$(sh "$S" bogus)"; rc=$?; set -e
 [ "$rc" = 2 ] && [ "$OUT" = 'soter|error|unknown_command' ] || fail 'unknown command accepted'
 grep -q 'soter_fix/run.lock' "$ROOT/post-fs-data.sh" && grep -q 'junk_cleanup/run.lock' "$ROOT/post-fs-data.sh" || fail 'a reboot mid-run leaves a stale lock'
-echo "PASS soter fix: absent/present status, exact stop/clear/start sequence, done/no-service/down/refused/busy/unknown states, no writes on status, boot-time stale lock removal"
+echo "PASS soter fix: absent/present status, two-pass force-stop/stop/clear/start sequence, early stop on refusal or a dead service, opt-in boot repair, done/no-service/down/refused/busy/unknown states, no writes on status, boot-time stale lock removal"
 )
 
 t_wakelock_fitness_reapply_evidence_runtime() (
